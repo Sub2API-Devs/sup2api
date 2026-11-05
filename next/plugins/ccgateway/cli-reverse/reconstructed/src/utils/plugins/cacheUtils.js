@@ -3,10 +3,10 @@
  *
  * 插件版本缓存清理：为无人引用的版本目录写 .orphaned_at，超期后删除；缓存标记文件名常量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/cacheUtils.ts
- * pieces: chunk-e6aww6q8.js (20), chunk-f3qhjfah.js (2), chunk-hddjmtjj.js (1)
- * attribution: placement 10, callgraph-witnessed 2, layout 5, fingerprint 6
+ * pieces: chunk-5s0qaz1x.js (2), chunk-5xgkngpb.js (20), chunk-ndr12bqk.js (1)
+ * attribution: fingerprint 6, placement 10, callgraph-witnessed 2, layout 5
  */
 import { join, sep, resolve as resolve_2 } from "path";
 import { unlink, lstat, readdir, mkdir, copyFile } from "fs/promises";
@@ -50,7 +50,7 @@ import { writeFileAndFlush } from "../../components/agents/agentFileUtils.js";
 import { isPluginZipCacheEnabled } from "./zipCache.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { DEFAULT_MAX_PAGES, readAllPages } from "../pagedRead.js";
-import { regExp as regExp_18, regExp_2 as regExp_2_2 } from "./commandSource.js";
+import { regExp as regExp_21, regExp_2 as regExp_2_2 } from "./commandSource.js";
 import { getErrnoCode, errorMessage } from "../errors.js";
 import { loadInstalledPluginsSync, loadInstalledPlugins } from "./installedPluginsManager.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
@@ -62,7 +62,7 @@ import { isProcessRunning as isProcessRunning_2 } from "../genericProcessUtils.j
 import { getProcessCreationTimeMsAsync } from "../processIdentity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:2620-2695 fingerprint (2.1.88 match: ORPHANED_AT_FILENAME, 0.405)
+//@ chunk-5s0qaz1x.js:2721-2796 fingerprint (2.1.88 match: ORPHANED_AT_FILENAME, 0.405)
 /**
  * ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。
  */
@@ -70,14 +70,14 @@ var ORPHAN_MARKER_FILE = ".orphaned_at";
 var IN_USE_MARKER_FILE = ".in_use";
 var GCS_SHA_MARKER_FILE = ".gcs-sha";
 var LINKS_MATERIALIZED_MARKER = ".links_materialized";
-//@ chunk-f3qhjfah.js:4415-4444 placement
+//@ chunk-5s0qaz1x.js:4516-4545 placement
 var CACHE_META_FILES; // deferred: uses PLUGIN_LINK_FILE (./pluginLinks.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-f3qhjfah.js:4415", () => {
+deferInit("chunk-5s0qaz1x.js:4516", () => {
   CACHE_META_FILES = new Set([PLUGIN_LINK_FILE, IN_USE_MARKER_FILE, ORPHAN_MARKER_FILE]);
 });
-//@ chunk-e6aww6q8.js:4180809-4180828 placement
+//@ chunk-5xgkngpb.js:4287179-4287198 placement
 var ORPHANED_VERSION_TTL_MS = 1209600000;
-//@ chunk-e6aww6q8.js:4180828-4180967 placement
+//@ chunk-5xgkngpb.js:4287198-4287337 placement
 function clearPluginCachesAfterChange(storageV5, credentials, mode = "clear") {
   clearPluginCache();
   clearPluginCommands();
@@ -89,7 +89,7 @@ function clearPluginCachesAfterChange(storageV5, credentials, mode = "clear") {
   getHostState().allOutputStyles.clear();
   clearPluginWorkflows();
 }
-//@ chunk-e6aww6q8.js:4180967-4181011 placement
+//@ chunk-5xgkngpb.js:4287337-4287381 placement
 /**
  * refreshPluginCaches：刷新活动插件前清空派生缓存。
  */
@@ -97,7 +97,7 @@ function refreshPluginCaches(storageV5, credentials, mode = "clear") {
   clearPluginCachesAfterChange(storageV5, credentials, mode);
   clearPluginDerivedState();
 }
-//@ chunk-e6aww6q8.js:4181011-4181217 placement
+//@ chunk-5xgkngpb.js:4287381-4287587 placement
 /**
  * 刷新活动插件前清空派生缓存：插件命令、代理、输出样式、工作流，并让宿主状态里的命令、技能目录、markdown 文件、代理定义失效。
  */
@@ -115,7 +115,7 @@ function clearPluginDerivedState() {
   hostState.markdownFiles.clear();
   hostState.agentDefinitions.clear();
 }
-//@ chunk-e6aww6q8.js:4181217-4181423 placement
+//@ chunk-5xgkngpb.js:4287587-4287793 placement
 function getCacheRootComparable() {
   let pluginRegistry = getPluginRegistry();
   let rootPath = anchoredPluginCachePath();
@@ -134,9 +134,9 @@ function getCacheRootComparable() {
   }
   return cacheRootComparableMemo.comparable;
 }
-//@ chunk-e6aww6q8.js:4181423-4181437 placement
+//@ chunk-5xgkngpb.js:4287793-4287807 placement
 var CACHE_CLEAR_THROTTLE_MS = 30000;
-//@ chunk-e6aww6q8.js:4181437-4182126 callgraph-witnessed (2.1.88 match: markPluginVersionOrphaned, 0.224)
+//@ chunk-5xgkngpb.js:4287807-4288496 callgraph-witnessed (2.1.88 match: markPluginVersionOrphaned, 0.224)
 /**
  * 给不再被任何安装记录引用的版本缓存目录写 .orphaned_at 时间戳（拒绝符号链接与缓存根之外的路径）。
  */
@@ -185,10 +185,10 @@ async function markPluginVersionOrphaned(versionPath, storageV5) {
     logForDebugging(`Failed to write .orphaned_at: ${absolute}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:4182126-4182154 layout
+//@ chunk-5xgkngpb.js:4288496-4288524 layout
 var ORPHAN_GRACE_PERIOD_MS = 21600000;
 var ORPHAN_SWEEP_INTERVAL_MS = 600000;
-//@ chunk-e6aww6q8.js:4182154-4183321 callgraph-witnessed (2.1.88 match: cleanupOrphanedPluginVersionsInBackground, 0.277)
+//@ chunk-5xgkngpb.js:4288524-4289697 callgraph-witnessed (2.1.88 match: cleanupOrphanedPluginVersionsInBackground, 0.277)
 /**
  * 后台清理孤儿版本：没有安装记录引用的版本目录先打 .orphaned_at，超过 6 小时（会话未在使用）再删除；zip 缓存模式跳过。
  */
@@ -241,7 +241,7 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
       installedVersions,
       budget,
     )) {
-      let match = regExp_18.exec(marketplace);
+      let match = regExp_21.exec(marketplace);
       if (match) {
         let ageMs = Date.now() - Number(match[1]);
         if (
@@ -300,11 +300,11 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
     logForDebugging(`Plugin cache cleanup failed: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:4183321-4183353 layout
+//@ chunk-5xgkngpb.js:4289697-4289729 layout
 function getOrphanedAtPath(versionPath) {
   return join(versionPath, ORPHAN_MARKER_FILE);
 }
-//@ chunk-e6aww6q8.js:4183353-4183697 fingerprint (2.1.88 match: removeOrphanedAtMarker, 0.74)
+//@ chunk-5xgkngpb.js:4289729-4290073 fingerprint (2.1.88 match: removeOrphanedAtMarker, 0.739)
 async function removeOrphanedAtMarker(versionPath, storageV5) {
   if (await isSymlinkOrFalse(versionPath)) return;
   let orphanedAtPath = getOrphanedAtPath(versionPath);
@@ -326,7 +326,7 @@ async function removeOrphanedAtMarker(versionPath, storageV5) {
     logForDebugging(`Failed to remove .orphaned_at: ${versionPath}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:4183697-4183802 fingerprint (2.1.88 match: getInstalledVersionPaths, 0.744)
+//@ chunk-5xgkngpb.js:4290073-4290178 fingerprint (2.1.88 match: getInstalledVersionPaths, 0.743)
 function getInstalledVersionPaths(walkRoot) {
   try {
     return collectInstallRecordPaths(loadInstalledPluginsSync(), walkRoot);
@@ -335,7 +335,7 @@ function getInstalledVersionPaths(walkRoot) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4183802-4183922 layout
+//@ chunk-5xgkngpb.js:4290178-4290298 layout
 async function getInstalledVersionPathsAsync(storageV5, walkRoot) {
   try {
     return collectInstallRecordPaths(await loadInstalledPlugins(storageV5), walkRoot);
@@ -344,12 +344,12 @@ async function getInstalledVersionPathsAsync(storageV5, walkRoot) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4183922-4183992 layout
+//@ chunk-5xgkngpb.js:4290298-4290368 layout
 function anyStartsWith(keys, prefix) {
   for (let key of keys) if (key.startsWith(prefix)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4183992-4184293 layout
+//@ chunk-5xgkngpb.js:4290368-4290669 layout
 /**
  * 遍历 installed_plugins 的所有安装记录，收集去重后的 installPath（及其解析目标）和归一化后的路径键集合， 供孤儿版本清理判断哪些目录仍被引用。
  */
@@ -379,7 +379,7 @@ function collectInstallRecordPaths(installedPlugins, walkRoot) {
     keys,
   };
 }
-//@ chunk-e6aww6q8.js:4184293-4185266 fingerprint (2.1.88 match: processOrphanedPluginVersion, 0.389)
+//@ chunk-5xgkngpb.js:4290669-4291642 fingerprint (2.1.88 match: processOrphanedPluginVersion, 0.389)
 async function processOrphanedPluginVersion(versionPath, now, storageV5) {
   if (await isSymlinkOrFalse(versionPath)) return;
   let orphanedAtPath = getOrphanedAtPath(versionPath);
@@ -445,7 +445,7 @@ async function processOrphanedPluginVersion(versionPath, now, storageV5) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:4185266-4185783 fingerprint (2.1.88 match: removeIfEmpty, 0.302)
+//@ chunk-5xgkngpb.js:4291642-4292160 fingerprint (2.1.88 match: removeIfEmpty, 0.302)
 async function removeIfEmpty(dirPath) {
   let entries;
   try {
@@ -478,7 +478,7 @@ async function removeIfEmpty(dirPath) {
     logForDebugging(`Failed to remove empty dir: ${dirPath}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:4185783-4186343 placement
+//@ chunk-5xgkngpb.js:4292160-4292720 placement
 async function listPluginCacheForCleanup(dirPath, storageV5, installedVersions, budget) {
   let scope =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -524,7 +524,7 @@ async function listPluginCacheForCleanup(dirPath, storageV5, installedVersions, 
       return names;
   }
 }
-//@ chunk-e6aww6q8.js:4186343-4186581 placement
+//@ chunk-5xgkngpb.js:4292720-4292958 placement
 async function listSubdirectoriesSafe(dirPath) {
   try {
     let entries = await readdir(dirPath, {
@@ -544,7 +544,7 @@ async function listSubdirectoriesSafe(dirPath) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:4186581-4186787 placement (2.1.88 match: isRealPathWithinTeamDir, 0.775)
+//@ chunk-5xgkngpb.js:4292958-4293164 placement (2.1.88 match: isRealPathWithinTeamDir, 0.775)
 async function isNotFoundCause(versionPath, pid) {
   if (!(pid === 1 || isProcessRunning_2(pid))) return false;
   let realTeamDir;
@@ -558,7 +558,7 @@ async function isNotFoundCause(versionPath, pid) {
   let processCreationTimeMs = await getProcessCreationTimeMsAsync(pid);
   return processCreationTimeMs === null || processCreationTimeMs <= realTeamDir;
 }
-//@ chunk-hddjmtjj.js:10518-10744 fingerprint (2.1.88 match: readSubdirs, 0.703)
+//@ chunk-ndr12bqk.js:10551-10777 fingerprint (2.1.88 match: readSubdirs, 0.703)
 /**
  * 递归复制目录（可按名字过滤）。名字配错，见 lead 建议。
  */
@@ -578,14 +578,14 @@ async function copyDirRecursive(sourceDir, targetDir, shouldSkip) {
   }
 }
 export {
-  GCS_SHA_MARKER_FILE,
   refreshPluginCaches,
-  markPluginVersionOrphaned,
-  CACHE_META_FILES,
-  ORPHAN_MARKER_FILE,
-  cleanupOrphanedPluginVersionsInBackground,
   clearPluginDerivedState,
+  ORPHAN_MARKER_FILE,
+  CACHE_META_FILES,
+  GCS_SHA_MARKER_FILE,
+  markPluginVersionOrphaned,
   IN_USE_MARKER_FILE,
   LINKS_MATERIALIZED_MARKER,
+  cleanupOrphanedPluginVersionsInBackground,
   copyDirRecursive,
 };

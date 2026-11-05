@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：审查结果发到 GitHub/GitLab 评论与 --fix 修复段落
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (7)
  * attribution: placement 7
  */
 import { getPrintOutputFormat } from "../../bootstrap/state.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { REPORTFINDINGS } from "../../tools/ReportFindingsTool/constants.js";
 import { env } from "../../utils/env.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
@@ -19,17 +19,17 @@ import { glabMrId, glabMrProjectUrl } from "../../utils/detectRepository.js";
 import { VERIFY } from "../../skills/bundled/bundledSkillNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:79524-79601 placement
+//@ chunk-ne2890fx.js:79698-79775 placement
 var REMOTE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hantmvxa.js:79524", () => {
+deferInit("chunk-ne2890fx.js:79698", () => {
   REMOTE_ENTRYPOINTS = new Set(["remote", "remote_desktop", "remote_mobile", "remote_trigger"]);
 });
-//@ chunk-hantmvxa.js:79601-80043 placement
+//@ chunk-ne2890fx.js:79775-80216 placement
 function getReportFindingsMode(context) {
   if (context.options?.isSkillPreload || context.agentId !== undefined) return;
   let printOutputFormat = getPrintOutputFormat();
   if (printOutputFormat === "text" || printOutputFormat === "json") return;
-  if (!context.options?.tools?.some((tool) => toolMatchesName(tool, REPORTFINDINGS))) return;
+  if (!context.options?.tools?.some((tool) => matchesToolName(tool, REPORTFINDINGS))) return;
   if (env.CLAUDE_CODE_REPORT_FINDINGS) return "spawn";
   let messageClientPlatform = context.options?.messageClientPlatform;
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
@@ -43,7 +43,7 @@ function getReportFindingsMode(context) {
     ? "message"
     : undefined;
 }
-//@ chunk-hantmvxa.js:80043-80631 placement
+//@ chunk-ne2890fx.js:80216-80804 placement
 var GITHUB_COMMENT_SECTION = `
 
 ## Posting to GitHub (--comment)
@@ -56,7 +56,7 @@ is not available in this session, fall back to \`gh api\` (repos/{owner}/{repo}/
 or print the findings instead. If the target is not a PR, print the findings
 to the terminal and note that \`--comment\` was ignored.
 `;
-//@ chunk-hantmvxa.js:80631-81428 placement
+//@ chunk-ne2890fx.js:80804-81601 placement
 function buildGitLabCommentSection(target) {
   let mrId = glabMrId(target);
   let projectUrl = glabMrProjectUrl(target);
@@ -76,7 +76,7 @@ not an MR, print the findings to the terminal and note that \`--comment\` was
 ignored.
 `;
 }
-//@ chunk-hantmvxa.js:81428-82172 placement
+//@ chunk-ne2890fx.js:81601-82345 placement
 /**
  * "若之后修复了发现"的提示段与逐行结果说明（报告工具再次调用带 outcome）。
  */
@@ -97,7 +97,7 @@ stay marked unresolved.
 var REPORT_OUTCOMES_LINE_TEXT = `After the call, give one line per finding with its outcome: this session can
 also be read from a client that does not show the tool call.
 `;
-//@ chunk-hantmvxa.js:82172-82812 placement
+//@ chunk-ne2890fx.js:82345-82985 placement
 function buildFixSection(hasReportTool) {
   return `
 
@@ -116,7 +116,7 @@ and what was skipped.`
   }
 `;
 }
-//@ chunk-hantmvxa.js:82812-83163 placement
+//@ chunk-ne2890fx.js:82985-83336 placement
 var AFTER_REVIEW_SECTION = `
 
 ## After the review

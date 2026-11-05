@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/bedrock-sdk/internal/decoders/line.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-e7naa6k8.js (2)
+ * pieces: chunk-mgs2qfsy.js (2)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_google_auth_library } from "../../../../google-auth-library/build/src/index.js";
 import { AnthropicError } from "../../../sdk/core/error.mjs";
 
-//@ chunk-e7naa6k8.js:1734-2859 esm-layout
+//@ chunk-mgs2qfsy.js:1734-2859 esm-layout
 var import_google_auth_library = __toESM(require_google_auth_library(), 1);
 var __classPrivateFieldSet = function (receiver, state, value, kind, f) {
   if (kind === "m") throw TypeError("Private method is not writable");
@@ -50,7 +50,7 @@ var HTTPS_UNRESOLVED_INVALID = "https://unresolved.invalid";
 var NO_PROJECT_HINT =
   "Set `project` or the `ANTHROPIC_GOOGLE_CLOUD_PROJECT` environment variable (or provide `baseURL`).";
 var CREDENTIAL_OPTIONS = ["apiKey", "authToken", "credentials", "config", "profile"];
-//@ chunk-e7naa6k8.js:6243-6703 placement (moved: shares a binding it assigns)
+//@ chunk-mgs2qfsy.js:6243-6703 placement (moved: shares a binding it assigns)
 _AnthropicGoogleCloud_bearerTokenProvider = new WeakMap();
 _AnthropicGoogleCloud_googleAuth = new WeakMap();
 _AnthropicGoogleCloud_authClient = new WeakMap();

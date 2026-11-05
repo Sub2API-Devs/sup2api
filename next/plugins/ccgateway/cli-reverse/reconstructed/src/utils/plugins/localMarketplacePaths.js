@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地 marketplace 路径：探测与读取 marketplace 文件，校验插件源留在目录内（拒绝符号链接逃逸）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f3qhjfah.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (45)
  * attribution: placement 45
  */
 import { isAbsolute, resolve, sep, normalize, parse, basename, dirname, join } from "path";
@@ -38,7 +38,7 @@ import { foldCase_2, wslLocalhostParts, expandTildeWithHome, expandTildeWith } f
 import { toComparablePath, isPathWithin } from "../fsJunctions.js";
 import { toUncLongPath } from "../windowsUncPaths.js";
 import { realpathCacheEntry } from "../permissions/protectedDirs.js";
-import { isLocalMarketplaceSource } from "./reconciler.js";
+import { isLocalMarketplaceSource } from "./schemas.js";
 import { isSubpathOf } from "../pathPrefix.js";
 import { printableOrEmpty, printableName } from "../printableName.js";
 import { capitalize } from "../stringUtils.js";
@@ -47,14 +47,14 @@ import { logForDebugging } from "../debug.js";
 import { parsePluginIdentifier } from "./pluginIdentifier.js";
 import { jsonParse } from "../slowOperations.js";
 
-//@ chunk-f3qhjfah.js:27379-27485 placement
+//@ chunk-5s0qaz1x.js:27641-27747 placement
 function toWorkspacePathSpace(path) {
   if (isAbsolute(path)) return PathSpace.workspace(path);
   return PathSpace.workspace(
     getPlatform() === "windows" ? resolve(path) : getFsImplementation().cwd() + sep + path,
   );
 }
-//@ chunk-f3qhjfah.js:27485-27652 placement
+//@ chunk-5s0qaz1x.js:27747-27914 placement
 function makeStatEnoentError(path) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -68,7 +68,7 @@ function makeStatEnoentError(path) {
     },
   );
 }
-//@ chunk-f3qhjfah.js:27652-27820 placement
+//@ chunk-5s0qaz1x.js:27914-28082 placement
 function enoentError(path) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -82,7 +82,7 @@ function enoentError(path) {
     },
   );
 }
-//@ chunk-f3qhjfah.js:27820-27968 placement
+//@ chunk-5s0qaz1x.js:28082-28230 placement
 function storageErrorCause(error) {
   return error.code === "Failed" &&
     (errnoShapedCode(error.telemetryCode) !== undefined || /^ERR_/.test(error.telemetryCode ?? "")) &&
@@ -90,11 +90,11 @@ function storageErrorCause(error) {
     ? error.cause
     : undefined;
 }
-//@ chunk-f3qhjfah.js:27968-28031 placement
+//@ chunk-5s0qaz1x.js:28230-28293 placement
 function pathSpaceFor(space, path) {
   return space === "workspace" ? toWorkspacePathSpace(path) : PathSpace.system(resolve(path));
 }
-//@ chunk-f3qhjfah.js:28031-28485 placement
+//@ chunk-5s0qaz1x.js:28293-28747 placement
 async function probeLocalMarketplacePath(storageV5, path, space = "workspace") {
   if (isDiskless()) throw makeStatEnoentError(path);
   if (!isStorageV5Enabled() || storageV5 === undefined) return stat_2(path);
@@ -121,7 +121,7 @@ async function probeLocalMarketplacePath(storageV5, path, space = "workspace") {
     isDirectory: () => isDirectory,
   };
 }
-//@ chunk-f3qhjfah.js:28485-28838 placement
+//@ chunk-5s0qaz1x.js:28747-29100 placement
 async function readLocalMarketplaceFile(storage, space, path) {
   if (path === "" || isDiskless())
     return {
@@ -149,7 +149,7 @@ async function readLocalMarketplaceFile(storage, space, path) {
         absent: "ENOENT",
       };
 }
-//@ chunk-f3qhjfah.js:28838-29031 placement
+//@ chunk-5s0qaz1x.js:29100-29293 placement
 /**
  * 本地市场路径是否存在（v5 存储经 hostFiles.stat）。
  */
@@ -162,9 +162,9 @@ async function localMarketplacePathExists(storageV5, path, space = "workspace") 
   });
   return stats.ok && stats.value.kind !== "absent";
 }
-//@ chunk-f3qhjfah.js:29101-29186 placement
+//@ chunk-5s0qaz1x.js:29363-29448 placement
 var UNSAFE_PATH_EXPLANATION = `is on a network drive, has "." or ".." in its path, or couldn't be checked`;
-//@ chunk-f3qhjfah.js:29186-29454 placement
+//@ chunk-5s0qaz1x.js:29448-29716 placement
 /**
  * 把市场路径解析为绝对路径并判断是否可疑：位于受信根下时只检查尾部；尾部含 . / .. 段直接可疑；否则看是否网络形状或 realpath 不可信。
  */
@@ -189,7 +189,7 @@ function classifyMarketplacePath(installPath, { trustedRoots = [] } = {}) {
     suspect,
   };
 }
-//@ chunk-f3qhjfah.js:29454-29719 placement
+//@ chunk-5s0qaz1x.js:29716-29981 placement
 function splitMarketplacePath(installPath, trustedRoots) {
   if (installPath.trim() === "")
     return {
@@ -210,11 +210,11 @@ function splitMarketplacePath(installPath, trustedRoots) {
       root === undefined && (isUntrustedLinkPath(installPath) || isUntrustedLinkPath(absolute)),
   };
 }
-//@ chunk-f3qhjfah.js:29719-29760 placement
+//@ chunk-5s0qaz1x.js:29981-30022 placement
 function trustedPluginRoots(extraRoots) {
   return [getPluginsDirectory(), ...getPluginSeedDirs(), ...extraRoots];
 }
-//@ chunk-f3qhjfah.js:29760-30106 placement
+//@ chunk-5s0qaz1x.js:30022-30368 placement
 /**
  * 找到包含路径且尾部最短的受信根。
  */
@@ -242,7 +242,7 @@ function matchTrustedRoot(path, extraRoots) {
     }
   );
 }
-//@ chunk-f3qhjfah.js:30106-30208 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-5s0qaz1x.js:30368-30470 placement (2.1.88 match: getReservedShortcuts, 1)
 function normalizePathForPlatform(path) {
   switch (getPlatform()) {
     case "windows":
@@ -253,7 +253,7 @@ function normalizePathForPlatform(path) {
       return path;
   }
 }
-//@ chunk-f3qhjfah.js:30208-30288 placement
+//@ chunk-5s0qaz1x.js:30470-30550 placement
 /**
  * normalizeMarketplaceInputPath：市场输入路径规范化为绝对可比较路径。
  */
@@ -265,7 +265,7 @@ function normalizeMarketplaceInputPath(installPath) {
     }),
   );
 }
-//@ chunk-f3qhjfah.js:30288-30484 placement
+//@ chunk-5s0qaz1x.js:30550-30746 placement
 /**
  * Windows 上判断路径所在盘是否是 WSL 提供。
  */
@@ -286,7 +286,7 @@ function wslProviderOfPath(path) {
         ...parts,
       };
 }
-//@ chunk-f3qhjfah.js:30484-30648 placement
+//@ chunk-5s0qaz1x.js:30746-30910 placement
 /**
  * WSL 路径的遍历根与发行版目录。
  */
@@ -298,7 +298,7 @@ function wslWalkRootOf(path) {
     distroDir: info.rest.replace(/[\\/]+$/, "").replace(/[\\/]+/g, "/"),
   };
 }
-//@ chunk-f3qhjfah.js:30648-30769 placement
+//@ chunk-5s0qaz1x.js:30910-31031 placement
 /**
  * Windows/WSL 路径互转。
  */
@@ -315,12 +315,12 @@ function toAlternatePlatformPath(inputPath, walkRoot) {
       : toWindowsPathFromWsl(inputPath, walkRoot.walkRoot, walkRoot.distroDir))
   );
 }
-//@ chunk-f3qhjfah.js:30769-30867 placement
+//@ chunk-5s0qaz1x.js:31031-31129 placement
 function isWindowsAbsolutePath(path) {
   if (!isAbsolute(path)) return false;
   return getPlatform() !== "windows" || /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path);
 }
-//@ chunk-f3qhjfah.js:30867-30996 placement
+//@ chunk-5s0qaz1x.js:31129-31258 placement
 /**
  * 本地市场源路径规范化。
  */
@@ -335,7 +335,7 @@ function normalizeLocalMarketplaceSource(source, home) {
         path: normalized,
       };
 }
-//@ chunk-f3qhjfah.js:30996-31173 placement (2.1.88 match: getErrnoPath, 1)
+//@ chunk-5s0qaz1x.js:31258-31435 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(marketplaceSource, corroboratingSource) {
   let localSourcePath = getLocalSourcePath(marketplaceSource);
   if (
@@ -357,7 +357,7 @@ function getErrnoPath(marketplaceSource, corroboratingSource) {
     return [];
   return [localSourcePath];
 }
-//@ chunk-f3qhjfah.js:31173-31324 placement (2.1.88 match: normalizeSource, 0.757)
+//@ chunk-5s0qaz1x.js:31435-31586 placement (2.1.88 match: normalizeSource, 0.757)
 /**
  * 返回本地市场来源的路径（directory → path，file → 其所在目录…），非本地返回 undefined。
  */
@@ -371,7 +371,7 @@ function getLocalSourcePath(source) {
       return;
   }
 }
-//@ chunk-f3qhjfah.js:31324-31648 placement
+//@ chunk-5s0qaz1x.js:31586-31910 placement
 /**
  * Windows 绝对路径插件确实位于本地市场目录内（含 realpath）。
  */
@@ -399,7 +399,7 @@ async function isWindowsPluginInsideLocalMarketplace(
   ]);
   return realSource !== undefined && realPlugin !== undefined && isSubpathOf(realSource, realPlugin, true);
 }
-//@ chunk-f3qhjfah.js:31648-31751 placement
+//@ chunk-5s0qaz1x.js:31910-32013 placement
 /**
  * 插件所在市场的候选路径。
  */
@@ -409,7 +409,7 @@ function getMarketplaceCandidatePaths(pluginId, knownMarketplaces, corroborating
     ? []
     : getErrnoPath(marketplaceSources.marketplaceSource, marketplaceSources.corroboratingSource);
 }
-//@ chunk-f3qhjfah.js:31751-31844 placement
+//@ chunk-5s0qaz1x.js:32013-32106 placement
 /**
  * classifyMarketplacePathOrUndefined：市场路径不在可疑位置时返回绝对路径。
  */
@@ -419,16 +419,16 @@ function classifyMarketplacePathOrUndefined(pluginId, marketplaceSource, corrobo
   });
   return suspect ? undefined : absolute;
 }
-//@ chunk-f3qhjfah.js:31844-31969 placement
+//@ chunk-5s0qaz1x.js:32106-32231 placement
 function formatLocationRefusedMessage(location) {
   return `Marketplace directory refused: its recorded location ${printableOrEmpty(location)} ${UNSAFE_PATH_EXPLANATION}. ${capitalize(MARKETPLACE_SOURCE_FIX_HINTS["network-location"])}.`;
 }
-//@ chunk-f3qhjfah.js:31969-31995 placement
+//@ chunk-5s0qaz1x.js:32231-32257 placement
 /**
  * DOT_RELATIVE_RE：以点开头的相对路径片段。
  */
 var DOT_RELATIVE_RE = /^\.(?:[\\/]+|$)/;
-//@ chunk-f3qhjfah.js:31995-32079 placement
+//@ chunk-5s0qaz1x.js:32257-32341 placement
 /**
  * isSuspiciousRelativeMarketplacePath：去掉前导点后仍是可疑路径。
  */
@@ -442,7 +442,7 @@ function isSuspiciousRelativeMarketplacePath(entrySource) {
       hasBackslash(replaced))
   );
 }
-//@ chunk-f3qhjfah.js:32079-32181 placement
+//@ chunk-5s0qaz1x.js:32341-32443 placement
 function resolveEntryPath(rootPath, entrySource) {
   let restPath = entrySource.replace(DOT_RELATIVE_RE, "");
   if (restPath === "") return rootPath;
@@ -450,11 +450,11 @@ function resolveEntryPath(rootPath, entrySource) {
     return;
   return join(rootPath, restPath);
 }
-//@ chunk-f3qhjfah.js:32181-32353 placement
+//@ chunk-5s0qaz1x.js:32443-32615 placement
 function formatEntryRefusedMessage(entrySource) {
   return `Plugin source path refused: ${printableName(entrySource, 300)} does not stay inside its marketplace directory. Check that the marketplace entry has a plain relative path.`;
 }
-//@ chunk-f3qhjfah.js:32353-33312 placement
+//@ chunk-5s0qaz1x.js:32615-33574 placement
 /**
  * 定位市场目录并解析条目路径：位置不安全 location-refused；目录不存在/读失败 location-missing/location-error； 条目越界 entry-refused。可取身份的目录逐级 lstat 只许普通目录，否则 realpath 校验留在目录内。返回 {kind, marketplaceDir, entryPath}。
  */
@@ -540,7 +540,7 @@ async function resolveMarketplaceEntryPath(
     entryPath,
   };
 }
-//@ chunk-f3qhjfah.js:33312-33616 placement (2.1.88 match: getFileIdentity, 1)
+//@ chunk-5s0qaz1x.js:33574-33878 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity(filePath) {
   if (getPlatform() === "windows") return false;
   if (hasBackslash(filePath)) return true;
@@ -569,7 +569,7 @@ async function getFileIdentity(filePath) {
     return true;
   }
 }
-//@ chunk-f3qhjfah.js:33616-34180 placement
+//@ chunk-5s0qaz1x.js:33878-34442 placement
 /**
  * 逐级 lstat 条目路径，只允许普通目录（不存在视为通过）。
  */
@@ -599,7 +599,7 @@ async function walkEntryPlainDirectories(marketplaceDir, entrySource) {
   }
   return true;
 }
-//@ chunk-f3qhjfah.js:34180-35057 placement
+//@ chunk-5s0qaz1x.js:34442-35319 placement
 /**
  * 非 Windows：条目 realpath 后与原路径 stat 的 dev/ino 必须一致且在市场目录内；不存在视为通过，inode 为 0 或无法解析时拒绝并记日志。
  */
@@ -652,7 +652,7 @@ async function verifyEntryRealpathInside(marketplaceDir, entryPath) {
     return refuse(`it opens ${printableOrEmpty(real)}, outside the marketplace directory`);
   return true;
 }
-//@ chunk-f3qhjfah.js:35057-35470 placement
+//@ chunk-5s0qaz1x.js:35319-35732 placement
 /**
  * location-refused / entry-refused 的原因文字。
  */
@@ -661,7 +661,7 @@ function describeEntryRefusal(kind) {
     ? `its marketplace's recorded location ${UNSAFE_PATH_EXPLANATION}`
     : "its marketplace entry path does not stay inside the marketplace directory (an absolute, climbing, network-shaped, backslash-containing or link-traversing entry, an entry of a fetched marketplace that resolves or opens outside its tree \u2014 or a relative entry in a url-catalog marketplace, which has no local directory)";
 }
-//@ chunk-f3qhjfah.js:35470-35967 placement
+//@ chunk-5s0qaz1x.js:35732-36229 placement
 /**
  * 解析结果转 {entryPath, reason}（缺失目录仍给出路径）。
  */
@@ -699,7 +699,7 @@ function entryPathOrReasonLenient(pluginEntryPath) {
       };
   }
 }
-//@ chunk-f3qhjfah.js:35967-36357 placement
+//@ chunk-5s0qaz1x.js:36229-36619 placement
 /**
  * 解析结果转 {entryPath, reason}。
  */
@@ -727,7 +727,7 @@ function entryPathOrReason(pluginEntryPath) {
       };
   }
 }
-//@ chunk-f3qhjfah.js:36357-36512 placement
+//@ chunk-5s0qaz1x.js:36619-36774 placement
 /**
  * 按插件 id 取市场来源后解析条目路径。
  */
@@ -749,7 +749,7 @@ async function resolvePluginEntryPath(
     localMarketplaceSpace,
   });
 }
-//@ chunk-f3qhjfah.js:36512-36718 placement
+//@ chunk-5s0qaz1x.js:36774-36980 placement
 function getMarketplaceSources(pluginId, knownMarketplaces, marketplaces) {
   let { marketplace } = parsePluginIdentifier(pluginId);
   if (!marketplace) return;
@@ -762,16 +762,16 @@ function getMarketplaceSources(pluginId, knownMarketplaces, marketplaces) {
     corroboratingSource: source,
   };
 }
-//@ chunk-f3qhjfah.js:36718-36752 placement
+//@ chunk-5s0qaz1x.js:36980-37014 placement
 var MARKETPLACE_JSON_RE = /[\\/]marketplace\.json$/i;
-//@ chunk-f3qhjfah.js:36752-36899 placement (2.1.88 match: getServerUrl, 1)
+//@ chunk-5s0qaz1x.js:37014-37161 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(location, marketplaceSource, isDirectory) {
   if (isDirectory === true) return location;
   if (marketplaceSource?.source === "url" || (marketplaceSource === undefined && /\.json$/i.test(location)))
     return isDirectory === false ? undefined : location;
   return isDirectory === false || MARKETPLACE_JSON_RE.test(location) ? dirname(location) : location;
 }
-//@ chunk-f3qhjfah.js:36899-37423 placement
+//@ chunk-5s0qaz1x.js:37161-37685 placement
 /**
  * 解析失败转 {code, message}。
  */
@@ -801,15 +801,15 @@ function entryResolutionError(resolution, marketplaceInstallLocation, source) {
       };
   }
 }
-//@ chunk-f3qhjfah.js:37423-37714 placement
+//@ chunk-5s0qaz1x.js:37685-37976 placement
 var PLAIN_DIRECTORY_WALK_NOTE =
   " The marketplace directory's own path cannot be resolved reliably on this platform (for example, a backslash in one of its components), so only plain directories are accepted as entries there (no links); move the marketplace (or the plugins directory) to a plain path to lift that.";
-//@ chunk-f3qhjfah.js:37831-37917 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-5s0qaz1x.js:38093-38179 placement (2.1.88 match: setCwdState, 1)
 function normalizeRegistryKey(cwd) {
   let normalized = resolve(cwd).normalize("NFC");
   return getPlatform() === "windows" ? normalized.toLowerCase() : normalized;
 }
-//@ chunk-f3qhjfah.js:37917-38283 placement
+//@ chunk-5s0qaz1x.js:38179-38545 placement
 /**
  * 读小 JSON 对象注册表，逐项校验，键规范化。
  */
@@ -837,30 +837,30 @@ function parseJsonRegistryFile(fileName, text, maxBytes, parseEntry) {
   return entries;
 }
 export {
-  resolvePluginEntryPath,
-  entryPathOrReason,
-  normalizeMarketplaceInputPath,
+  wslProviderOfPath,
   classifyMarketplacePath,
-  entryResolutionError,
-  probeLocalMarketplacePath,
   getMarketplaceCandidatePaths,
   UNSAFE_PATH_EXPLANATION,
   isWindowsPluginInsideLocalMarketplace,
   resolveMarketplaceEntryPath,
+  entryResolutionError,
   localMarketplacePathExists,
   normalizeRegistryKey,
-  readLocalMarketplaceFile,
-  enoentError,
-  parseJsonRegistryFile,
-  normalizeLocalMarketplaceSource,
   wslWalkRootOf,
   normalizePathForPlatform,
   toAlternatePlatformPath,
+  normalizeLocalMarketplaceSource,
+  normalizeMarketplaceInputPath,
+  readLocalMarketplaceFile,
+  enoentError,
+  parseJsonRegistryFile,
   classifyMarketplacePathOrUndefined,
   DOT_RELATIVE_RE,
   isSuspiciousRelativeMarketplacePath,
   isWindowsAbsolutePath,
   getLocalSourcePath,
+  resolvePluginEntryPath,
+  entryPathOrReason,
   entryPathOrReasonLenient,
-  wslProviderOfPath,
+  probeLocalMarketplacePath,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：向网关 /oauth/token 交换刷新令牌，保存新 JWT（[gateway-refresh] 日志）；替换网关凭据与允许列表条目等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (19)
  * attribution: placement 19
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -36,14 +36,14 @@ import { getSecureStorage } from "../../utils/secureStorage/index.js";
 import { mutateEveryCredentialLeg } from "../../utils/secureStorage/credentialLegs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:492087-492281 placement (2.1.88 match: JwtBearerResponseSchema, 0.393)
+//@ chunk-exfmq47h.js:504081-504275 placement (2.1.88 match: JwtBearerResponseSchema, 0.394)
 /**
  * 网关令牌提前刷新的余量，以及网关令牌响应与吊销端点发现的 schema。
  */
 var GATEWAY_REFRESH_MARGIN_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var gatewayTokenResponseSchema;
 var gatewayRevocationSchema;
-deferInit("chunk-aepeg2w5.js:492087", () => {
+deferInit("chunk-exfmq47h.js:504081", () => {
   GATEWAY_REFRESH_MARGIN_MS = 300000;
   gatewayTokenResponseSchema = DoctorLazy(() =>
     create({
@@ -59,7 +59,7 @@ deferInit("chunk-aepeg2w5.js:492087", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:492281-492380 placement
+//@ chunk-exfmq47h.js:504275-504374 placement
 /**
  * 两点同源时返回该地址（否则 undefined）。
  */
@@ -70,7 +70,7 @@ function sameOriginUrl(base, candidate) {
   } catch {}
   return;
 }
-//@ chunk-aepeg2w5.js:492380-492613 placement
+//@ chunk-exfmq47h.js:504374-504607 placement
 /**
  * 网关 JWT 将过期时用 IdP 刷新令牌刷新（单飞）。
  */
@@ -90,7 +90,7 @@ function refreshGatewayToken(credentials, { force = false } = {}) {
   setGatewayRefreshInFlight(result);
   return result;
 }
-//@ chunk-aepeg2w5.js:492613-493254 placement
+//@ chunk-exfmq47h.js:504607-505248 placement
 /**
  * 读取 CLAUDE_CODE_USE_GATEWAY 配置（ANTHROPIC_BASE_URL、令牌），缺失时警告。
  */
@@ -133,14 +133,14 @@ function readGatewayEnvConfig() {
   }
   return false;
 }
-//@ chunk-aepeg2w5.js:493254-493336 placement
+//@ chunk-exfmq47h.js:505248-505330 placement
 /**
  * 网关凭据是否由宿主提供且未固定（需要重新读环境）。
  */
 function isProviderManagedUnpinnedGateway() {
   return env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && getGatewayAuth()?.unpinned === true;
 }
-//@ chunk-aepeg2w5.js:493336-494759 placement
+//@ chunk-exfmq47h.js:505330-506753 placement
 /**
  * 向网关 /oauth/token 交换刷新令牌，保存新 JWT（[gateway-refresh] 日志）。
  */
@@ -236,14 +236,14 @@ async function exchangeGatewayRefreshToken(gatewayAuth, expectedRefreshToken, cr
     }
   }
 }
-//@ chunk-aepeg2w5.js:494759-494911 placement
+//@ chunk-exfmq47h.js:506753-506905 placement
 function gatewayPinProblem(error) {
   if (pinMismatchFromError(error) !== undefined) return "certificate changed since sign-in";
   if (errorMessage(error).includes(PIN_STORE_SYMLINK_MESSAGE))
     return "pin store is a symlink and was refused";
   return;
 }
-//@ chunk-aepeg2w5.js:494911-495350 placement
+//@ chunk-exfmq47h.js:506905-507344 placement
 /**
  * 写回网关凭据（凭据已变化时不覆盖）。
  */
@@ -278,7 +278,7 @@ async function persistGatewayCredential(gatewayAuth, expectedRefreshToken, build
   }
   setGatewayAuth(nextCredential);
 }
-//@ chunk-aepeg2w5.js:495350-495567 placement
+//@ chunk-exfmq47h.js:507344-507561 placement
 /**
  * axios 响应中的 OAuth error 字段。
  */
@@ -291,7 +291,7 @@ function oauthErrorCode(error) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:495567-496050 placement
+//@ chunk-exfmq47h.js:507561-508044 placement
 /**
  * 删除保存的网关凭据。
  */
@@ -324,7 +324,7 @@ async function clearGatewayCredential(credential, credentials) {
     );
   }
 }
-//@ chunk-aepeg2w5.js:496050-496143 placement
+//@ chunk-exfmq47h.js:508044-508137 placement
 /**
  * 判断两份网关凭据是否相同（URL、token 端点、邮箱）。
  */
@@ -335,7 +335,7 @@ function isSameGatewayCredential(current, other) {
     current.email === other.email
   );
 }
-//@ chunk-aepeg2w5.js:496143-496274 placement
+//@ chunk-exfmq47h.js:508137-508268 placement
 function replaceAllowlistEntry(gatewayAllowlistEntries, hostKey, newValue) {
   let { [hostKey]: previousValue, ...rest } = gatewayAllowlistEntries ?? {};
   let entries =
@@ -351,7 +351,7 @@ function replaceAllowlistEntry(gatewayAllowlistEntries, hostKey, newValue) {
       }
     : {};
 }
-//@ chunk-aepeg2w5.js:496274-497127 placement
+//@ chunk-exfmq47h.js:508268-509121 placement
 /**
  * 替换网关凭据与允许列表条目。
  */
@@ -410,7 +410,7 @@ async function replaceGatewayCredential(previous, gatewayAuth, options, outcome)
     );
   }
 }
-//@ chunk-aepeg2w5.js:497127-497355 placement
+//@ chunk-exfmq47h.js:509121-509349 placement
 /**
  * 撤销被撤回的登录（仍登录的账号不撤销）。
  */
@@ -429,7 +429,7 @@ async function revokeUndoneSignIn(undo, gatewayAuth, credentials, outcome) {
   }
   await revokeGatewayToken(undo, credentials);
 }
-//@ chunk-aepeg2w5.js:497355-497997 placement
+//@ chunk-exfmq47h.js:509349-509991 placement
 /**
  * 登出时撤销网关令牌（找不到撤销端点则只结束本机会话）。
  */
@@ -489,7 +489,7 @@ async function revokeGatewayToken(credential, credentials) {
     });
   }
 }
-//@ chunk-aepeg2w5.js:497997-498102 placement
+//@ chunk-exfmq47h.js:509991-510096 placement
 function revokeRequestOptions(agent) {
   return {
     timeout: 5000,
@@ -500,13 +500,13 @@ function revokeRequestOptions(agent) {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:498102-498234 placement
+//@ chunk-exfmq47h.js:510096-510228 placement
 function describeRevokeError(error) {
   let errnoCode = getErrnoCode(error);
   let { kind, status } = classifyAxiosError(error);
   return `${errnoCode === "ERR_CANCELED" ? "timeout" : kind}, code=${errnoCode ?? "none"}, status=${status ?? "none"}`;
 }
-//@ chunk-aepeg2w5.js:498234-498575 placement
+//@ chunk-exfmq47h.js:510228-510569 placement
 /**
  * 从网关的 OAuth 元数据取 revocation_endpoint。
  */
@@ -530,7 +530,7 @@ async function discoverRevocationEndpoint(url, baseUrl) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:498575-498909 placement (2.1.88 match: _fetchMetricsEnabled, 0.366)
+//@ chunk-exfmq47h.js:510569-510903 placement (2.1.88 match: _fetchMetricsEnabled, 0.366)
 /**
  * 网关登出：POST 撤销网关令牌。旧版名 _fetchMetricsEnabled 为错配；应归登出/网关模块。
  */
@@ -554,15 +554,15 @@ async function revokeGatewayToken_2(url, body, agent, label) {
   }
 }
 export {
-  readGatewayEnvConfig,
   refreshGatewayToken,
+  readGatewayEnvConfig,
+  isProviderManagedUnpinnedGateway,
+  replaceAllowlistEntry,
+  revokeGatewayToken,
   sameOriginUrl,
   oauthErrorCode,
   gatewayTokenResponseSchema,
   replaceGatewayCredential,
   revokeUndoneSignIn,
-  isProviderManagedUnpinnedGateway,
-  replaceAllowlistEntry,
-  revokeGatewayToken,
   clearGatewayCredential,
 };

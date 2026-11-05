@@ -3,24 +3,24 @@
  *
  * --debug=过滤串解析（包含/排除分类）与消息分类提取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/debugFilter.ts
- * pieces: chunk-cgr0tezp.js (2)
+ * pieces: chunk-6hadbefe.js (2)
  * attribution: fingerprint 2
  */
 
-//@ chunk-cgr0tezp.js:16966-17290 fingerprint (2.1.88 match: parseDebugFilter, 1)
+//@ chunk-6hadbefe.js:4494-4818 fingerprint (2.1.88 match: shouldShowDebugCategories, 1)
 /**
  * 解析 --debug=<过滤串>：逗号分隔分类，! 前缀为排除；包含与排除混用返回 null。
  */
-function parseDebugFilter(filterString) {
+function shouldShowDebugCategories(filterString) {
   if (!filterString || filterString.trim() === "") return null;
   let filters = filterString
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
   if (filters.length === 0) return null;
-  let hasExclusive = filters.some((filter) => filter.startsWith("!"));
+  let hasExclusive = filters.some((cat) => cat.startsWith("!"));
   let hasInclusive = filters.some((filter) => !filter.startsWith("!"));
   if (hasExclusive && hasInclusive) return null;
   let cleanFilters = filters.map((filter) => filter.replace(/^!/, "").toLowerCase());
@@ -30,7 +30,7 @@ function parseDebugFilter(filterString) {
     isExclusive: hasExclusive,
   };
 }
-//@ chunk-cgr0tezp.js:17290-17797 fingerprint (2.1.88 match: extractDebugCategories, 1)
+//@ chunk-6hadbefe.js:4818-5325 fingerprint (2.1.88 match: extractDebugCategories, 1)
 /**
  * 从调试消息中提取分类（如 [MCP]、1p event: 前缀）用于过滤。
  */
@@ -54,4 +54,4 @@ function extractDebugCategories(message) {
   }
   return Array.from(new Set(categories));
 }
-export { extractDebugCategories, parseDebugFilter };
+export { shouldShowDebugCategories, extractDebugCategories };

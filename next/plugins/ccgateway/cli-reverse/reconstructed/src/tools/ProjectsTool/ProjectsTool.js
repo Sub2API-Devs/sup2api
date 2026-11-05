@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (7)
  * attribution: placement 7
  */
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
@@ -19,6 +19,7 @@ import {
 } from "./projectsAuth.js";
 import {
   localPathAvailability,
+  isSessionPinnedFeaturesOn,
   unicodeNameMatcher,
   logWriteFailure,
   ProjectSaveError,
@@ -63,10 +64,10 @@ import { redactTokenFromText, ProjectsApiError } from "../../services/projects/p
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { isStoreError, storageErrorCode } from "../../utils/storage/storageErrors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-eg496hkq.js:21910-25548 placement
+//@ chunk-y2k9w57g.js:23118-26770 placement
 /**
  * 各项目方法的权限与写入语义表。
  */
@@ -82,6 +83,7 @@ var ProjectsTool = buildTool({
   async description() {
     return projectsToolPrompt({
       localUploads: localPathAvailability(),
+      ownPath: isSessionPinnedFeaturesOn(),
       memory: !isDiskless(),
       original: isLocalUploadsEnabled(),
       versions: docVersionsOffered(),
@@ -90,6 +92,7 @@ var ProjectsTool = buildTool({
   async prompt() {
     return projectsToolPrompt({
       localUploads: localPathAvailability(),
+      ownPath: isSessionPinnedFeaturesOn(),
       memory: !isDiskless(),
       original: isLocalUploadsEnabled(),
       versions: docVersionsOffered(),
@@ -196,7 +199,7 @@ var ProjectsTool = buildTool({
         let attachedProjectUuid = getAttachedProjectUuid();
         if (!attachedProjectUuid)
           throw new ProjectsPreconditionError(
-            "No project attached to this session. Project tools are available when the session is started inside a claude.ai Project.",
+            "No project attached to this session. Project tools are available when the session is in a claude.ai Project.",
           );
         let accessToken = "";
         try {
@@ -310,16 +313,16 @@ var projectMethodRecords = {
 };
 var MAX_NAME_NORMALIZATION_FACTOR = 36;
 var MAX_NORMALIZED_NAME_CHARS = 1024;
-//@ chunk-eg496hkq.js:25548-25698 placement
+//@ chunk-y2k9w57g.js:26770-26920 placement
 function matchUniqueNormalizedName(name, candidates, form) {
   let min = Math.min(MAX_NAME_NORMALIZATION_FACTOR * name.length, MAX_NORMALIZED_NAME_CHARS);
   let normalized = name.normalize(form);
-  let [onlyMatch, secondMatch] = uniq(
+  let [onlyMatch, secondMatch] = normalizeCaseForComparison_2(
     candidates.filter((candidate) => candidate.length <= min && candidate.normalize(form) === normalized),
   );
   return secondMatch === undefined ? onlyMatch : undefined;
 }
-//@ chunk-eg496hkq.js:25698-25822 placement
+//@ chunk-y2k9w57g.js:26920-27044 placement
 function resolveRespelledName(path, knownNames, forms, isAcceptable) {
   if (knownNames.includes(path)) return path;
   for (let form of forms) {
@@ -329,7 +332,7 @@ function resolveRespelledName(path, knownNames, forms, isAcceptable) {
   }
   return path;
 }
-//@ chunk-eg496hkq.js:25822-25910 placement
+//@ chunk-y2k9w57g.js:27044-27132 placement
 /**
  * 项目内路径的候选写法（无斜杠时同时试 claude/ 前缀）。
  */
@@ -337,7 +340,7 @@ function projectPathVariants(path) {
   let replaced = path.replace(/^\.\//, "");
   return replaced.includes("/") ? [replaced] : [replaced, `claude/${replaced}`];
 }
-//@ chunk-eg496hkq.js:25910-26165 placement
+//@ chunk-y2k9w57g.js:27132-27387 placement
 function resolveListedPath(path, docNames, fileNames, isAcceptable) {
   let variants = projectPathVariants(path);
   let found = variants.find((variant) => docNames.includes(variant));
@@ -365,7 +368,7 @@ function resolveListedPath(path, docNames, fileNames, isAcceptable) {
     listed: fallbackPath,
   };
 }
-//@ chunk-eg496hkq.js:26165-26378 placement
+//@ chunk-y2k9w57g.js:27387-27600 placement
 function matchUnicodeName(path, knownNames, isAcceptable) {
   let variants = projectPathVariants(path);
   let found = variants.find((variant) => knownNames.includes(variant));
@@ -378,7 +381,7 @@ function matchUnicodeName(path, knownNames, isAcceptable) {
     }
   return path;
 }
-//@ chunk-eg496hkq.js:26378-26949 placement
+//@ chunk-y2k9w57g.js:27600-28171 placement
 function projectsPermissionContext(input, form, callOptions, toolContext) {
   let pipeline = callOptions.permissionPhase?.pipeline;
   let decisionReason = pipeline?.result.decisionReason;

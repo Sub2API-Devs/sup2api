@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验入口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (14)
  * attribution: placement 14
  */
 import * as pathModule from "path";
@@ -46,7 +46,7 @@ import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/i
 import { checkUnreachableRules } from "../../doctorContextWarnings.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-5aas12zq.js:1524-6260 placement
+//@ chunk-6vxyfwtv.js:1643-6379 placement
 /**
  * 插件目录校验的常量组（38 个绑定）：Pe 是问题码表（码 → title/severity/hold/fix，g() 以 Pe[code] 取值）；R 是清单相对路径 .claude-plugin/plugin.json；ae/nn 是 README 候选名与根级子集；tn LICENSE 候选；rn 图标候选；ee 是 README 最少词数 40；sn/ge 是插件名 kebab-case 与图标格式错误的说明文案；ne README 字节上限 262144；me 图标体积上限 2097152；ye/Se/Ee/we/Ae/on/ie 分别是列表嵌套、缩进列数、分隔符段数、分隔符字符数、方括号数、截图条数、系统文件展示条数的上限；an/ln/dn/X/ke/$e/j/K/Y/un/cn 是系统文件集合、目录名、说明文案、扫描条数/深度/父目录层数、路径截断长度、MCP+hooks 文件数 16、逐条列出的路径数 20、hooks 事件名集合、列名前几条 3；xe/fn/hn/pn/gn/mn/yn/Sn/En/wn/An 是列表空白字符与各类识别正则。
  */
@@ -90,7 +90,7 @@ var DOCS_WORD_RE;
 var UNSAFE_SVG_ELEMENT_RE;
 var SVG_EVENT_HANDLER_RE;
 var SVG_EXTERNAL_REF_RE;
-deferInit("chunk-5aas12zq.js:1524", () => {
+deferInit("chunk-6vxyfwtv.js:1643", () => {
   PLUGIN_VALIDATION_ISSUES = {
     README_MISSING: {
       title: "README missing",
@@ -292,7 +292,7 @@ deferInit("chunk-5aas12zq.js:1524", () => {
   SVG_EVENT_HANDLER_RE = /\son[a-z]+\s*=/i;
   SVG_EXTERNAL_REF_RE = /href\s*=\s*(?:["']\s*)?[^"'#\s>]/i;
 });
-//@ chunk-5aas12zq.js:6260-6384 placement
+//@ chunk-6vxyfwtv.js:6379-6503 placement
 /**
  * 校验用的插件根（无 manifest 且不在全局 .claude 时取解析路径）。
  */
@@ -302,11 +302,11 @@ function getEffectivePluginRoot(result) {
     ? result.resolvedPath
     : null;
 }
-//@ chunk-5aas12zq.js:6384-6432 placement (2.1.88 match: isInGlobalClaudeFolder, 0.775)
+//@ chunk-6vxyfwtv.js:6503-6551 placement (2.1.88 match: isInGlobalClaudeFolder, 0.775)
 function isInGlobalClaudeFolder(filePath) {
   return pathModule.basename(filePath) === ".claude";
 }
-//@ chunk-5aas12zq.js:6432-12701 placement
+//@ chunk-6vxyfwtv.js:6551-12820 placement
 /**
  * 校验插件目录：读取清单、检查 README/许可、组件文件与目录名，返回问题列表。
  */
@@ -563,7 +563,7 @@ async function validatePluginDirectory(inputDir) {
       components.hooksModuleFiles.length > 0,
   };
 }
-//@ chunk-5aas12zq.js:12701-12887 placement
+//@ chunk-6vxyfwtv.js:12820-13006 placement
 function groupFindingsByFileReason(unusable) {
   let byFileAndReason = new Map();
   for (let { rule, ...rest } of unusable) {
@@ -578,17 +578,17 @@ ${rest.reason}`;
   }
   return [...byFileAndReason.values()];
 }
-//@ chunk-5aas12zq.js:12887-13011 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-6vxyfwtv.js:13006-13130 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(items) {
   let mapped = items.slice(0, MAX_LISTED_NAMES).map((item) => extractToolInputForTelemetry(item, 100));
   let remaining = items.length - mapped.length;
   return `${mapped.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
-//@ chunk-5aas12zq.js:13011-13092 placement
+//@ chunk-6vxyfwtv.js:13130-13211 placement
 function formatIssuesSummary(items, label) {
   return items.length === 0 ? "" : `${items.length} listed for ${label} (${formatFailureDetails(items)})`;
 }
-//@ chunk-5aas12zq.js:13092-13217 placement
+//@ chunk-6vxyfwtv.js:13211-13336 placement
 /**
  * 保留会导致失败的问题码（error，strict 时含 warning）。
  */
@@ -598,13 +598,13 @@ function filterBlockingIssueCodes(codes, strict) {
     return !issue.hold && (issue.severity === "error" || (strict.strict && issue.severity === "warning"));
   });
 }
-//@ chunk-5aas12zq.js:13217-13310 placement
+//@ chunk-6vxyfwtv.js:13336-13429 placement
 function hasBlockingInvalidIssue(findings, strict) {
   return findings.some(
     (finding) => !finding.hold && (finding.blocking || (strict.strict && finding.severity === "warning")),
   );
 }
-//@ chunk-5aas12zq.js:13310-13672 placement
+//@ chunk-6vxyfwtv.js:13429-13791 placement
 /**
  * 文件夹同时有市场 manifest 的说明与内部错误说明。
  */
@@ -612,11 +612,11 @@ var MARKETPLACE_FOLDER_NOTE =
   "This folder also holds a marketplace manifest. The plugin directory treats such a folder as a plugin, so these checks cover only the plugin in this folder. To check another plugin that the marketplace lists, run validate on that plugin's folder.";
 var INTERNAL_CHECK_FAILURE_NOTE =
   "The plugin directory checks did not run because of a problem inside this command, not in your plugin.";
-//@ chunk-5aas12zq.js:13672-13835 placement
+//@ chunk-6vxyfwtv.js:13791-13954 placement
 function formatDirectoryChecksHeading(dirPath) {
   return `Plugin directory checks for ${extractToolInputForTelemetry(dirPath, MAX_PATH_DISPLAY_CHARS)}. The plugin directory is the catalog that plugins are submitted to; this is a subset of what it runs.`;
 }
-//@ chunk-5aas12zq.js:13835-13890 placement
+//@ chunk-6vxyfwtv.js:13954-14009 placement
 function directoryChecksHeaderLines(dirPath) {
   return [
     formatDirectoryChecksHeading(dirPath),
@@ -625,7 +625,7 @@ function directoryChecksHeaderLines(dirPath) {
     "",
   ];
 }
-//@ chunk-5aas12zq.js:13890-15043 placement
+//@ chunk-6vxyfwtv.js:14009-15162 placement
 /**
  * 把插件目录检查结果格式化为多行文字：分别列出会导致目录拒绝提交的问题、警告与提示，附“关于这些检查”的说明； 没有发现时给出完成提示；这些检查不影响最终结果时提示如何启用严格模式。
  */
@@ -675,7 +675,7 @@ function formatDirectoryCheckReport(pluginName, result, strictCommand) {
   lines.push("The directory also runs a safety scan and a policy review that this command does not.", "");
   return lines;
 }
-//@ chunk-5aas12zq.js:24816-24938 placement
+//@ chunk-6vxyfwtv.js:25104-25226 placement
 function formatByteSize(size) {
   if (size > 0 && size % 1048576 === 0) return `${size / 1048576} MiB`;
   if (size > 0 && size % 1024 === 0) return `${size / 1024} KiB`;

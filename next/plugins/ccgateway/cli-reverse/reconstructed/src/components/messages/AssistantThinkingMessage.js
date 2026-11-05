@@ -3,9 +3,9 @@
  *
  * 思考块：默认折叠为 "✻ Thinking…"，transcript/verbose 下显示全文（HighlightedThinkingText）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AssistantThinkingMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import {
 import { THEREFORE } from "../../constants/figures.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ah34pb7m.js:63074-64176 fingerprint (2.1.88 match: AssistantThinkingMessage, 0.517)
+//@ chunk-wjygkcr4.js:63695-64794 fingerprint (2.1.88 match: AssistantThinkingMessage, 0.516)
 /**
  * 思考块：非 verbose/transcript 时显示 "✻ Thinking…"（可 ctrl+o 展开），否则显示全文。
  */
@@ -40,11 +40,11 @@ function AssistantThinkingMessage(props) {
   let boxElement;
   if ($[0] !== withMargin || $[1] !== isTranscriptMode || $[2] !== thinking || $[3] !== verbose) {
     resultElement = EARLY_RETURN_SENTINEL;
-    Y: {
+    K: {
       let stripped = stripMemoryTags(thinking);
       if (!stripped) {
         resultElement = null;
-        break Y;
+        break K;
       }
       let isExpanded = isTranscriptMode || verbose;
       rowComponent = Box;

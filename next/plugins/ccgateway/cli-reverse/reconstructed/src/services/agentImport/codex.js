@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：从 OpenAI Codex（~/.codex/config.toml、AGENTS.md、prompts）导入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hddjmtjj.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ndr12bqk.js (20)
  * attribution: placement 20
  */
 import { lstat, readdir, writeFile, rm, mkdir } from "fs/promises";
@@ -37,11 +37,11 @@ import {
   appendImportedInstructions,
 } from "./importSafety.js";
 import { SymlinkReadRefusedError } from "../../utils/fsSafety/atomicWriteStaging.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { safeWriteFile } from "../../skills/bundledSkills.js";
 import { plural, truncateCodePoints } from "../../utils/stringUtils.js";
 import { copyDirRecursive } from "../../utils/plugins/cacheUtils.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { isENOENT } from "../../utils/errors.js";
 import { escapeShellBangs } from "../../utils/promptShellExecution.js";
@@ -60,14 +60,14 @@ import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 import { updateSettingsForSource } from "../../utils/settings/settings.js";
 import { serializeFrontmatter } from "../../utils/frontmatterParser.js";
 
-//@ chunk-hddjmtjj.js:10744-10821 placement
+//@ chunk-ndr12bqk.js:10777-10854 placement
 function normalizeSkillDirName(name) {
   return name
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[. ]+$/, "");
 }
-//@ chunk-hddjmtjj.js:10821-10921 placement
+//@ chunk-ndr12bqk.js:10854-10954 placement
 /**
  * 技能目录中会让它被当成插件的保留名。
  */
@@ -80,7 +80,7 @@ var RESERVED_SKILL_DIRS = new Set([
   "monitors",
   "workflows",
 ]);
-//@ chunk-hddjmtjj.js:10921-13742 placement
+//@ chunk-ndr12bqk.js:10954-13775 placement
 /**
  * 拷贝一个技能目录（检查保留名、SKILL.md 存在/大小/是否链接、是否会被当成插件）。
  */
@@ -143,7 +143,7 @@ async function importSkillDirectory({ name, real, targetDir, scope, projectRoot,
     return {
       skipped: `${name}: skill directory contains ${filtered.map((dirName) => `\`${dirName}/\``).join(", ")} which Claude Code would adopt as a plugin (lifecycle hooks, monitors, MCP servers) \u2014 copy it manually after reviewing those`,
     };
-  if (count(mapped, (fileName) => normalizeSkillDirName(fileName) === "skill.md") > 1)
+  if (countWhere(mapped, (fileName) => normalizeSkillDirName(fileName) === "skill.md") > 1)
     return {
       skipped: `${name}: skill directory has multiple SKILL.md case/encoding variants \u2014 copy the skill manually`,
     };
@@ -204,9 +204,9 @@ async function importSkillDirectory({ name, real, targetDir, scope, projectRoot,
   }
   return `copied skill \u2192 \`${targetDir}\``;
 }
-//@ chunk-hddjmtjj.js:13742-13781 placement
+//@ chunk-ndr12bqk.js:13775-13814 placement
 var UNSAFE_TEXT_RE = /\p{C}|\p{DI}|[\u2028\u2029]/gu;
-//@ chunk-hddjmtjj.js:13781-13868 placement
+//@ chunk-ndr12bqk.js:13814-13901 placement
 /**
  * 导出函数 `shortenDescription`：参数 n，返回 trimmed.length > 120 ? truncateCodePoints(trimmed, 117) + "\u2026" : trimmed。
  */
@@ -214,7 +214,7 @@ function shortenDescription(label) {
   let trimmed = label.replace(UNSAFE_TEXT_RE, " ").trim();
   return trimmed.length > 120 ? truncateCodePoints(trimmed, 117) + "\u2026" : trimmed;
 }
-//@ chunk-hddjmtjj.js:13868-13955 placement
+//@ chunk-ndr12bqk.js:13901-13988 placement
 /**
  * 导出函数 `shortenInstructions`：参数 n，返回 trimmed.length > 500 ? truncateCodePoints(trimmed, 497) + "\u2026" : trimmed。
  */
@@ -222,11 +222,11 @@ function shortenInstructions(text) {
   let trimmed = text.replace(UNSAFE_TEXT_RE, " ").trim();
   return trimmed.length > 500 ? truncateCodePoints(trimmed, 497) + "\u2026" : trimmed;
 }
-//@ chunk-hddjmtjj.js:13955-14009 placement
+//@ chunk-ndr12bqk.js:13988-14042 placement
 function importFallbackMarker(sourceId) {
   return `<!-- import-fallback: ${sourceId} -->`;
 }
-//@ chunk-hddjmtjj.js:14009-14716 placement
+//@ chunk-ndr12bqk.js:14042-14749 placement
 function formatImportSummaryLine(summary) {
   let filtered = summary.unmappable.filter((item) => item.scope === "user");
   let filtered_2 = summary.unmappable.filter((item) => item.scope === "project");
@@ -247,7 +247,7 @@ ${joined}`);
 
 `);
 }
-//@ chunk-hddjmtjj.js:14716-16532 placement
+//@ chunk-ndr12bqk.js:14749-16565 placement
 /**
  * 无法直接导入时安装 import-to-claude-code 回退技能（写入根被重定向时跳过）。
  */
@@ -324,11 +324,11 @@ Relevant Claude Code config locations:
   let mergeSuffix = keptSections.length > 0 ? " (merged with existing sections)" : "";
   return `wrote \`${skillPath}\`${mergeSuffix}`;
 }
-//@ chunk-hddjmtjj.js:16619-16659 placement
+//@ chunk-ndr12bqk.js:16652-16692 placement
 function parseToml(text) {
   return Bun.TOML.parse(text);
 }
-//@ chunk-hddjmtjj.js:16659-16757 placement
+//@ chunk-ndr12bqk.js:16692-16790 placement
 async function readTomlConfig(path, readFile = readCappedImportFile) {
   let text;
   try {
@@ -339,7 +339,7 @@ async function readTomlConfig(path, readFile = readCappedImportFile) {
   }
   return parseToml(text);
 }
-//@ chunk-hddjmtjj.js:16757-17538 placement
+//@ chunk-ndr12bqk.js:16790-17571 placement
 /**
  * Codex 的 MCP server 配置 schema（command/args/env/url/http_headers/bearer_token_env_var）。
  */
@@ -381,7 +381,7 @@ var codexConfigSchema = DoctorLazy(() =>
     project_doc_max_bytes: numberSchema().optional().catch(undefined),
   }).loose(),
 );
-//@ chunk-hddjmtjj.js:17538-17877 placement
+//@ chunk-ndr12bqk.js:17571-17910 placement
 function readCodexConfigSection(skills, scope, report) {
   if (skills === undefined) return [];
   if (typeof skills === "object" && skills !== null && !Array.isArray(skills)) {
@@ -396,11 +396,11 @@ function readCodexConfigSection(skills, scope, report) {
   });
   return [];
 }
-//@ chunk-hddjmtjj.js:17877-17927 placement
+//@ chunk-ndr12bqk.js:17910-17960 placement
 function codexHomeDir(options) {
   return options.homeDir ?? join(homedir(), ".codex");
 }
-//@ chunk-hddjmtjj.js:17927-18493 placement
+//@ chunk-ndr12bqk.js:17960-18526 placement
 /**
  * 读取用户/项目 .codex/config.toml。
  */
@@ -443,7 +443,7 @@ async function readCodexConfig(homeDir, scope, projectRoot, report) {
     extraKeys,
   };
 }
-//@ chunk-hddjmtjj.js:18493-19213 placement
+//@ chunk-ndr12bqk.js:18526-19246 placement
 function describeApprovalPolicyEscalation(approvalPolicy) {
   let escalation = (mode, fromMode) => ({
     mode,
@@ -469,7 +469,7 @@ function describeApprovalPolicyEscalation(approvalPolicy) {
       return escalation("auto", "unrecognised source policy");
   }
 }
-//@ chunk-hddjmtjj.js:19213-25831 placement
+//@ chunk-ndr12bqk.js:19246-25864 placement
 /**
  * 把 Codex [mcp_servers] 转换为 Claude Code 的 MCP 配置（环境变量引用、未知键提示，约 6.6 KB）。
  */
@@ -792,7 +792,7 @@ ${agent.instructions ?? ""}
       });
   }
 }
-//@ chunk-hddjmtjj.js:25831-26757 placement
+//@ chunk-ndr12bqk.js:25864-26790 placement
 async function importCodexInstructions(homeDir, cwd, scope, plan, report) {
   let claudeConfigDir = getClaudeConfigDir();
   let planItems = [];
@@ -857,7 +857,7 @@ async function importCodexInstructions(homeDir, cwd, scope, plan, report) {
     });
   }
 }
-//@ chunk-hddjmtjj.js:26757-27853 placement
+//@ chunk-ndr12bqk.js:26790-27886 placement
 async function importCodexPrompts(homeDir, scope, report) {
   let promptsDir = join(homeDir, "prompts");
   let entries = await readdir(promptsDir, {
@@ -930,7 +930,7 @@ async function importCodexPrompts(homeDir, scope, report) {
     });
   }
 }
-//@ chunk-hddjmtjj.js:27853-28952 placement
+//@ chunk-ndr12bqk.js:27886-28985 placement
 /**
  * Codex 导入源定义：检测（config.toml/AGENTS.md/prompts）、扫描与导入。
  */

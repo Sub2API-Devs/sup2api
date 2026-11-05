@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/ssh.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_md5 } from "./md5.js";
 import { require_sha1 } from "./sha1.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:293009-295373 cjs-fingerprint
+//@ chunk-qg41pqt6.js:293546-295921 cjs-fingerprint
 var require_ssh = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_aes();

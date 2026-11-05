@@ -3,9 +3,9 @@
  *
  * 远程提供工具调用日志（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (9)
  * attribution: placement 9
  */
 import { join } from "path";
@@ -34,7 +34,7 @@ import { toJsonLine, jsonParseRaw } from "../../utils/slowOperations.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:327269-327585 placement
+//@ chunk-7jxyna5q.js:251846-252162 placement
 /**
  * 判断沙箱配置是否削弱了隔离（允许 Apple Events、弱化嵌套沙箱、非 mac/Windows 允许嵌套用户命名空间、mac 弱化网络隔离、允许本地绑定、Mach lookup 白名单）。
  */
@@ -49,7 +49,7 @@ function weakensSandboxIsolation(sandbox, platform) {
     (sandbox.network?.allowMachLookup?.length ?? 0) > 0
   );
 }
-//@ chunk-s61vbvea.js:327644-327865 placement
+//@ chunk-7jxyna5q.js:252221-252442 placement
 /**
  * 远程调用日志的终态与限额：joined_retry/replaced_by_retry 等终态集合，以及日志版本、文件大小、天数、条数上限与 TTL。
  */
@@ -60,7 +60,7 @@ var DISOWNED;
 var LOST_IN_RESTART;
 var CALL_LOG_LIMITS;
 var MAX_QUERIES_SINCE_REPORT;
-deferInit("chunk-s61vbvea.js:327644", () => {
+deferInit("chunk-7jxyna5q.js:252221", () => {
   JOINED_RETRY = "joined_retry";
   REPLACED_BY_RETRY = "replaced_by_retry";
   TERMINAL_CALL_STATES = new Set(["denied_by_session", "withdrawn", REPLACED_BY_RETRY, JOINED_RETRY]);
@@ -74,7 +74,7 @@ deferInit("chunk-s61vbvea.js:327644", () => {
   };
   MAX_QUERIES_SINCE_REPORT = 10;
 });
-//@ chunk-s61vbvea.js:327865-332016 placement
+//@ chunk-7jxyna5q.js:252442-256633 placement
 /**
  * 远程提供工具调用日志的内存模型（received/running/completed/failed）
  */
@@ -368,7 +368,7 @@ function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, now = Date.now) {
     },
   };
 }
-//@ chunk-s61vbvea.js:332016-332071 placement
+//@ chunk-7jxyna5q.js:256633-256688 placement
 var CALL_LOG_VERSION = 1;
 var MAX_LOG_FILE_BYTES = 4194304;
 var MAX_LOG_DAYS = 6;
@@ -376,11 +376,11 @@ var MAX_LOG_ENTRIES = 20000;
 var MAX_CALLS_PER_SORT = 256;
 var LOG_LOAD_TIMEOUT_MS = 2000;
 var MAX_SORT_KEYS = 64;
-//@ chunk-s61vbvea.js:332071-332134 placement
+//@ chunk-7jxyna5q.js:256688-256751 placement
 function servedCallsDir() {
   return join(homedir(), ".claude", "state", "served-calls");
 }
-//@ chunk-s61vbvea.js:332134-332692 placement
+//@ chunk-7jxyna5q.js:256751-257309 placement
 /**
  * 服务调用日志文件名格式与日志行 schema（started、disowned、leg 等记录）。
  */
@@ -388,7 +388,7 @@ var SERVED_CALL_LOG_FILE_RE; // deferred: uses DoctorLazy (../../cli/handlers/ut
 var servedCallLogLineSchema;
 var servedCallCodeSchema;
 var servedCallEndedAsSchema;
-deferInit("chunk-s61vbvea.js:332134", () => {
+deferInit("chunk-7jxyna5q.js:256751", () => {
   SERVED_CALL_LOG_FILE_RE = /^\d{8}T\d{6}Z_[A-Za-z0-9-]{1,128}\.jsonl$/;
   servedCallLogLineSchema = DoctorLazy(() => {
     let shortString = stringSchema().min(1).max(512);
@@ -436,7 +436,7 @@ deferInit("chunk-s61vbvea.js:332134", () => {
   );
   servedCallEndedAsSchema = DoctorLazy(() => _enum(WITHDRAW_REASON_CODES).exclude(["unrecognized"]));
 });
-//@ chunk-s61vbvea.js:332692-335464 placement
+//@ chunk-7jxyna5q.js:257309-260104 placement
 function writeServedCallLog(options) {
   let { epoch } = options;
   let dir = options.dir ?? servedCallsDir();
@@ -632,7 +632,7 @@ function writeServedCallLog(options) {
     flush: () => resolved,
   };
 }
-//@ chunk-s61vbvea.js:335464-335573 placement
+//@ chunk-7jxyna5q.js:260104-260213 placement
 function parseServedCallLogLine(line) {
   if (line === "") return;
   try {
@@ -642,7 +642,7 @@ function parseServedCallLogLine(line) {
     return;
   }
 }
-//@ chunk-s61vbvea.js:335573-336349 placement
+//@ chunk-7jxyna5q.js:260213-260989 placement
 /**
  * 把服务端调用日志的一行（started/disowned/leg）还原为上次运行的调用记录：已完成保留 isError，失败保留 code/endedAs/ranNothing，询问中视为撤回，收到/运行中视为重启丢失。
  */
@@ -721,13 +721,13 @@ function servedCallRecordFromLogLine(call, servedAt) {
   }
 }
 export {
-  REPLACED_BY_RETRY,
-  TERMINAL_CALL_STATES,
-  DISOWNED,
-  JOINED_RETRY,
-  writeServedCallLog,
-  servedCallsDir,
   weakensSandboxIsolation,
+  servedCallsDir,
+  DISOWNED,
+  TERMINAL_CALL_STATES,
+  JOINED_RETRY,
+  REPLACED_BY_RETRY,
   LOST_IN_RESTART,
   ServedCallLog,
+  writeServedCallLog,
 };

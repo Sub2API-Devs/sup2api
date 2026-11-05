@@ -3,9 +3,9 @@
  *
  * 桌面 Client 表面运行时（claude:surface-runtime）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (52)
  * attribution: placement 52
  */
 import { relative, sep } from "path";
@@ -14,12 +14,7 @@ import { siteVersionOf, currentVersion } from "./renderDispatch.js";
 import { renderVersions } from "./renderInstances.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { UI_ENV_SITE_RULES } from "../sites/siteRules.js";
-import {
-  pluginStateRegistry,
-  renderInstanceKey,
-  burstRedrawSite,
-  dropUnheldRenderVersions,
-} from "../api/state.js";
+import { stateSession, renderInstanceKey, redrawSite, dropUnheldVersion } from "../api/state.js";
 import { modulesHookingEvent, hookMembersFor, hookOriginFromStack } from "../hookDispatch.js";
 import { matchesLiteralMatcher } from "../../../utils/hooks/functionHookMatchers.js";
 import { errorMessage } from "../../../utils/errors.js";
@@ -47,61 +42,61 @@ import { isModuleAdmitted } from "../../../utils/plugins/functionHooks/admission
 import { HooksError } from "../hooksErrors.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:642484-642502 placement
-var DESKTOP = "desktop";
-//@ chunk-s61vbvea.js:642502-642608 placement
-var desktopClientAddress = (held) => ({
+//@ chunk-7jxyna5q.js:564167-564185 placement
+var CLIENT_SURFACE = "desktop";
+//@ chunk-7jxyna5q.js:564185-564292 placement
+var clientPressArgumentOf = (held) => ({
   plugin: held.plugin,
   element: held.element,
   component: held.component,
   requestId: held.requestId,
-  surface: DESKTOP,
+  surface: CLIENT_SURFACE,
 });
-//@ chunk-s61vbvea.js:642608-642690 placement
+//@ chunk-7jxyna5q.js:564292-564375 placement
 /**
  * 桌面界面引用
  */
-var desktopSurfaceRef = ({ component, requestId }) => ({
+var desktopSiteOf = ({ component, requestId }) => ({
   surface: "desktop",
   component,
   requestId,
 });
-//@ chunk-s61vbvea.js:642690-642741 placement
+//@ chunk-7jxyna5q.js:564375-564427 placement
 /**
  * plugin\0module\0key
  */
-var drawnClientKey = (client) => [client.plugin, client.module, client.key].join("\x00");
-//@ chunk-s61vbvea.js:642741-642770 placement
+var drawnAddressKey = (client) => [client.plugin, client.module, client.key].join("\x00");
+//@ chunk-7jxyna5q.js:564427-564457 placement
 /**
  * component\0requestId
  */
-var surfaceRefKey = (component, requestId) => `${component}\x00${requestId}`;
-//@ chunk-s61vbvea.js:642770-642782 placement
+var drawnInstanceKey = (component, requestId) => `${component}\x00${requestId}`;
+//@ chunk-7jxyna5q.js:564457-564470 placement
 /**
  * 1024
  */
-var MAX_DRAWN_CLIENTS = 1024;
-//@ chunk-s61vbvea.js:642782-642809 placement
+var MAX_DRAWN_INSTANCES = 1024;
+//@ chunk-7jxyna5q.js:564470-564498 placement
 /**
  * 站点版本取值函数
  */
-var siteVersionThunk = (state, site) => () => siteVersionOf(state, site);
-//@ chunk-s61vbvea.js:642809-643837 placement
+var versionReaderOf = (state, site) => () => siteVersionOf(state, site);
+//@ chunk-7jxyna5q.js:564498-565537 placement
 /**
  * 记录各 (component, requestId) 渲染中画出的桌面 Client 及其版本、已报告失败的 Client（最多 1024 条，LRU）。
  */
-function createDrawnClientLedger() {
+function createDrawnClients() {
   let byInstance = new Map();
   let generation = 0;
   function storeEntry(instanceKey, entry) {
     byInstance.delete(instanceKey);
     byInstance.set(instanceKey, entry);
     let [oldest] = byInstance.keys();
-    if (byInstance.size > MAX_DRAWN_CLIENTS && oldest !== undefined) byInstance.delete(oldest);
+    if (byInstance.size > MAX_DRAWN_INSTANCES && oldest !== undefined) byInstance.delete(oldest);
   }
   return {
     begin(component, requestId) {
-      let instanceKey = surfaceRefKey(component, requestId);
+      let instanceKey = drawnInstanceKey(component, requestId);
       let { keys = new Map(), failed = new Map() } = byInstance.get(instanceKey) ?? {};
       generation += 1;
       storeEntry(instanceKey, {
@@ -112,9 +107,9 @@ function createDrawnClientLedger() {
       return {
         instance: instanceKey,
         generation,
-        version: siteVersionThunk(
+        version: versionReaderOf(
           renderVersions().getState(),
-          desktopSurfaceRef({
+          desktopSiteOf({
             component,
             requestId,
           }),
@@ -129,7 +124,7 @@ function createDrawnClientLedger() {
         return;
       }
       let currentVersion = version();
-      let mapped = clients.map(drawnClientKey);
+      let mapped = clients.map(drawnAddressKey);
       storeEntry(instance, {
         generation,
         keys: new Map(
@@ -146,17 +141,17 @@ function createDrawnClientLedger() {
       });
     },
     isDrawn({ component, requestId, ...address }) {
-      let instanceKey = surfaceRefKey(component, requestId);
+      let instanceKey = drawnInstanceKey(component, requestId);
       let entry = byInstance.get(instanceKey);
-      let isDrawn = entry?.keys.has(drawnClientKey(address)) === true;
+      let isDrawn = entry?.keys.has(drawnAddressKey(address)) === true;
       if (isDrawn) storeEntry(instanceKey, entry);
       return isDrawn;
     },
     toldFailed({ component, requestId, ...address }) {
-      let instanceKey = surfaceRefKey(component, requestId);
+      let instanceKey = drawnInstanceKey(component, requestId);
       let entry = byInstance.get(instanceKey);
-      let clientKey = drawnClientKey(address);
-      let siteRef = desktopSurfaceRef({
+      let clientKey = drawnAddressKey(address);
+      let siteRef = desktopSiteOf({
         component,
         requestId,
       });
@@ -172,16 +167,16 @@ function createDrawnClientLedger() {
     count: () => byInstance.size,
   };
 }
-//@ chunk-s61vbvea.js:643837-643849 placement
+//@ chunk-7jxyna5q.js:565537-565551 placement
 /**
  * 已绘制客户端账本
  */
-var drawnClientLedger; // deferred: uses createDrawnClientLedger of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:643837", () => {
-  drawnClientLedger = createDrawnClientLedger();
+var drawnDesktopClients; // deferred: uses createDrawnClients of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7jxyna5q.js:565537", () => {
+  drawnDesktopClients = createDrawnClients();
 });
-//@ chunk-s61vbvea.js:643849-644013 placement
-function requireDrawnClient(caller, address, isDrawn) {
+//@ chunk-7jxyna5q.js:565551-565716 placement
+function isToldDrawn(caller, address, isDrawn) {
   let found = isDrawn(address);
   if (!found)
     logForDebugging(
@@ -189,9 +184,9 @@ function requireDrawnClient(caller, address, isDrawn) {
     );
   return found;
 }
-//@ chunk-s61vbvea.js:644013-644098 placement
+//@ chunk-7jxyna5q.js:565716-565801 placement
 var CORE_FAULT_BOTTOM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:644013", () => {
+deferInit("chunk-7jxyna5q.js:565716", () => {
   CORE_FAULT_BOTTOM = Object.freeze({
     name: "core",
     isCore: true,
@@ -199,20 +194,20 @@ deferInit("chunk-s61vbvea.js:644013", () => {
     run: () => Promise.resolve({}),
   });
 });
-//@ chunk-s61vbvea.js:644098-644120 placement
+//@ chunk-7jxyna5q.js:565801-565823 placement
 /**
  * ui.fault 站点规则
  */
 var UI_FAULT_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:644098", () => {
+deferInit("chunk-7jxyna5q.js:565801", () => {
   UI_FAULT_RULES = UI_ENV_SITE_RULES["ui.fault"];
 });
-//@ chunk-s61vbvea.js:644120-644227 placement
+//@ chunk-7jxyna5q.js:565823-565930 placement
 function isNewFaultForSite({ site, bornAt }) {
-  let versions = pluginStateRegistry().faultRuns.get(renderInstanceKey(site))?.versions;
+  let versions = stateSession().faultRuns.get(renderInstanceKey(site))?.versions;
   return !(versions?.has(bornAt) && versions.has(currentVersion(site)));
 }
-//@ chunk-s61vbvea.js:644227-644466 placement
+//@ chunk-7jxyna5q.js:565930-566169 placement
 var faultIsHeard = (only, fault) =>
   modulesHookingEvent("ui.fault", undefined, {
     only,
@@ -227,14 +222,14 @@ var faultIsHeard = (only, fault) =>
       return true;
     }
   });
-//@ chunk-s61vbvea.js:644466-644478 placement
+//@ chunk-7jxyna5q.js:566169-566181 placement
 /**
  * 4096
  */
 var MAX_FAULT_RUNS = 4096;
-//@ chunk-s61vbvea.js:644478-644727 placement
-function recordFaultRun(site, redraw = burstRedrawSite) {
-  let { faultRuns } = pluginStateRegistry();
+//@ chunk-7jxyna5q.js:566181-566431 placement
+function recordFaultRun(site, redraw = redrawSite) {
+  let { faultRuns } = stateSession();
   let siteKey = renderInstanceKey(site);
   let run = faultRuns.get(siteKey);
   let hadVersion = run?.versions.has(currentVersion(site)) === true;
@@ -249,11 +244,11 @@ function recordFaultRun(site, redraw = burstRedrawSite) {
     let [oldest] = faultRuns;
     if (faultRuns.size > MAX_FAULT_RUNS && oldest !== undefined) {
       faultRuns.delete(oldest[0]);
-      dropUnheldRenderVersions(oldest[1].site);
+      dropUnheldVersion(oldest[1].site);
     }
   }
 }
-//@ chunk-s61vbvea.js:644727-644859 placement
+//@ chunk-7jxyna5q.js:566431-566563 placement
 var rerenderFaultSites = ({ plugin, fault, sites }, redraw) =>
   runIgnoringAbort(() => {
     for (let entry of faultIsHeard(plugin, fault) ? sites() : [])
@@ -261,7 +256,7 @@ var rerenderFaultSites = ({ plugin, fault, sites }, redraw) =>
         if (entry.site.requestId !== "" && isNewFaultForSite(entry)) recordFaultRun(entry.site, redraw);
       });
   });
-//@ chunk-s61vbvea.js:644859-645198 placement
+//@ chunk-7jxyna5q.js:566563-566902 placement
 /**
  * 运行 ui.fault 钩子链（只限出错插件），记录耗时，结束后对仍画着该 Client 的站点重新渲染。
  */
@@ -288,20 +283,20 @@ async function dispatchUiFault(request, redraw) {
     rerenderFaultSites(request, redraw);
   }
 }
-//@ chunk-s61vbvea.js:645198-645264 placement
+//@ chunk-7jxyna5q.js:566902-566969 placement
 /**
  * 按插件排队分发故障
  */
-function desktopFaultDispatcher(redraw = burstRedrawSite) {
+function desktopFaultDispatcher(redraw = redrawSite) {
   let perPluginQueues = createPerPluginQueues();
   return (request) => perPluginQueues(request.plugin)(() => dispatchUiFault(request, redraw));
 }
-//@ chunk-s61vbvea.js:645264-645275 placement
+//@ chunk-7jxyna5q.js:566969-566980 placement
 /**
  * 500
  */
 var MAX_FAULT_TEXT = 500;
-//@ chunk-s61vbvea.js:645275-645355 placement
+//@ chunk-7jxyna5q.js:566980-567059 placement
 /**
  * 去换行并截断
  */
@@ -309,12 +304,12 @@ function scrubFaultText(text) {
   let replaced = text.replace(LINE_SCRUB, " ");
   return replaced.length > MAX_FAULT_TEXT ? `${truncateToLength(replaced, MAX_FAULT_TEXT)}\u2026` : replaced;
 }
-//@ chunk-s61vbvea.js:645355-645401 placement
+//@ chunk-7jxyna5q.js:567059-567105 placement
 /**
  * 模块失败无消息
  */
 var DEFAULT_MODULE_FAILURE = "the module failed without a message";
-//@ chunk-s61vbvea.js:645401-645565 placement
+//@ chunk-7jxyna5q.js:567105-567269 placement
 /**
  * 规范化 Client 模块失败原因：去掉插件名与 "Client 模块:" 前缀，空则用默认文字。
  */
@@ -328,29 +323,29 @@ function describeClientFailure(caller, moduleName, reason) {
     : withoutCaller;
   return withoutModule.trim() === "" ? DEFAULT_MODULE_FAILURE : withoutModule;
 }
-//@ chunk-s61vbvea.js:645565-645581 placement
+//@ chunk-7jxyna5q.js:567269-567285 placement
 /**
  * "…"
  */
 var ELLIPSIS = "\u2026";
-//@ chunk-s61vbvea.js:645581-645636 placement
-var regExp_16; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:645581", () => {
-  regExp_16 = new RegExp(String.raw`[\u{2028}\u{2029}]`, "gu");
+//@ chunk-7jxyna5q.js:567285-567340 placement
+var regExp_15; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jxyna5q.js:567285", () => {
+  regExp_15 = new RegExp(String.raw`[\u{2028}\u{2029}]`, "gu");
 });
-//@ chunk-s61vbvea.js:645636-645647 placement
+//@ chunk-7jxyna5q.js:567340-567351 placement
 /**
  * 200
  */
 var MAX_VISIBLE_TEXT = 200;
-//@ chunk-s61vbvea.js:645647-645754 placement
+//@ chunk-7jxyna5q.js:567351-567457 placement
 function shortFaultReason(address, reason) {
-  let replaced = describeClientFailure(address.plugin, address.module, reason).replace(regExp_16, " ");
+  let replaced = describeClientFailure(address.plugin, address.module, reason).replace(regExp_15, " ");
   return replaced.length > MAX_VISIBLE_TEXT
     ? truncateToLength(replaced, MAX_VISIBLE_TEXT - ELLIPSIS.length) + ELLIPSIS
     : replaced;
 }
-//@ chunk-s61vbvea.js:645754-645933 placement
+//@ chunk-7jxyna5q.js:567457-567636 placement
 /**
  * 构造 ui.fault 事件：界面、组件、请求、元素、模块、阶段与简短原因，附带受影响站点。
  */
@@ -367,13 +362,13 @@ var toUiFaultEvent = (address, surface, report) => ({
   },
   sites: report.sites,
 });
-//@ chunk-s61vbvea.js:645933-646160 placement
+//@ chunk-7jxyna5q.js:567636-567867 placement
 /**
  * 处理桌面端 Client 报告的故障：仅对已画出且未报告过的 Client 分发 ui.fault。
  */
-function createDesktopFaultHandler(ledger = drawnClientLedger, dispatch = desktopFaultDispatcher()) {
+function createClientFaultRunner(ledger = drawnDesktopClients, dispatch = desktopFaultDispatcher()) {
   return async ({ address, report }) => {
-    let toldFailed = requireDrawnClient("ui.fault", address, ledger.isDrawn)
+    let toldFailed = isToldDrawn("ui.fault", address, ledger.isDrawn)
       ? ledger.toldFailed(address)
       : undefined;
     if (toldFailed === undefined) return;
@@ -384,7 +379,7 @@ function createDesktopFaultHandler(ledger = drawnClientLedger, dispatch = deskto
           ledger.isDrawn(address)
             ? [
                 {
-                  site: desktopSurfaceRef(address),
+                  site: desktopSiteOf(address),
                   bornAt: toldFailed(),
                 },
               ]
@@ -393,16 +388,16 @@ function createDesktopFaultHandler(ledger = drawnClientLedger, dispatch = deskto
     );
   };
 }
-//@ chunk-s61vbvea.js:646240-646261 placement
-var SURFACE = "surface:///";
-//@ chunk-s61vbvea.js:646261-646341 placement
+//@ chunk-7jxyna5q.js:567947-567969 placement
+var MODULE_KEY_SCHEME = "surface:///";
+//@ chunk-7jxyna5q.js:567969-568051 placement
 /**
  * 界面模块在包里的路径键
  */
-var surfaceModuleKey = (modulePath, plugin) =>
-  SURFACE + relative(plugin.pluginRoot, modulePath).split(sep).map(encodeURIComponent).join("/");
-//@ chunk-s61vbvea.js:646341-646818 placement
-function collectModuleImports(program) {
+var moduleKeyOf = (modulePath, plugin) =>
+  MODULE_KEY_SCHEME + relative(plugin.pluginRoot, modulePath).split(sep).map(encodeURIComponent).join("/");
+//@ chunk-7jxyna5q.js:568051-568529 placement
+function specifierSpansOf(program) {
   let imports = [];
   walkAst(program, ({ node }) => {
     let source =
@@ -430,21 +425,21 @@ function collectModuleImports(program) {
   });
   return imports.toSorted((a, b) => a.start - b.start);
 }
-//@ chunk-s61vbvea.js:646818-646848 placement
-var SURFACE_UNLINKED = "surface-unlinked:///";
-//@ chunk-s61vbvea.js:646848-647256 placement
+//@ chunk-7jxyna5q.js:568529-568560 placement
+var UNLINKED_KEY_SCHEME = "surface-unlinked:///";
+//@ chunk-7jxyna5q.js:568560-568971 placement
 /**
  * 把界面模块源码中的导入说明符改写为 surface:/// 或未链接的占位地址（动态导入改为拼接）。
  */
-function rewriteSurfaceImports(source, specifierFor) {
+function rewriteSpecifiers(source, specifierFor) {
   let program = acornParser().parse(source, {
     ecmaVersion: "latest",
     sourceType: "module",
   });
-  let computedPrefix = jsonStringify(`${SURFACE_UNLINKED}computed#`);
+  let computedPrefix = jsonStringify(`${UNLINKED_KEY_SCHEME}computed#`);
   let edits = [];
   let current = source;
-  for (let entry of collectModuleImports(program).toReversed()) {
+  for (let entry of specifierSpansOf(program).toReversed()) {
     let end =
       entry.end +
       edits
@@ -463,37 +458,37 @@ function rewriteSurfaceImports(source, specifierFor) {
   }
   return current;
 }
-//@ chunk-s61vbvea.js:647256-647284 placement
-var CLAUDE_HOOKS_TYPES = "claude:hooks-types";
-//@ chunk-s61vbvea.js:647284-647321 placement
+//@ chunk-7jxyna5q.js:568971-569000 placement
+var TYPES_MODULE_KEY = "claude:hooks-types";
+//@ chunk-7jxyna5q.js:569000-569039 placement
 /**
  * 未链接模块的键
  */
-var unlinkedSurfaceKey = (specifier) => SURFACE_UNLINKED + encodeURIComponent(specifier);
-//@ chunk-s61vbvea.js:647321-647567 placement
-function toSurfaceFile(file, plugin, links) {
+var unlinkedKeyOf = (specifier) => UNLINKED_KEY_SCHEME + encodeURIComponent(specifier);
+//@ chunk-7jxyna5q.js:569039-569291 placement
+function keyedFileOf(file, plugin, links) {
   let linkedBySpelled = new Map(
     links.filter((link) => link.from === file.file).map((link) => [link.spelled, link.file]),
   );
   let transpiled = transpileModule(file.file, file.source, plugin.pluginName);
   function specifierFor(specifier) {
     let linkedFile = linkedBySpelled.get(specifier);
-    let unlinked = specifier === CLAUDE_CODE ? CLAUDE_HOOKS_TYPES : unlinkedSurfaceKey(specifier);
-    return linkedFile === undefined ? unlinked : surfaceModuleKey(linkedFile, plugin);
+    let unlinked = specifier === CLAUDE_CODE ? TYPES_MODULE_KEY : unlinkedKeyOf(specifier);
+    return linkedFile === undefined ? unlinked : moduleKeyOf(linkedFile, plugin);
   }
   return {
-    key: surfaceModuleKey(file.file, plugin),
-    source: rewriteSurfaceImports(transpiled, specifierFor),
+    key: moduleKeyOf(file.file, plugin),
+    source: rewriteSpecifiers(transpiled, specifierFor),
   };
 }
-//@ chunk-s61vbvea.js:647567-647599 placement
-var CLAUDE_SURFACE_RUNTIME = "claude:surface-runtime";
-//@ chunk-s61vbvea.js:647599-660442 placement
+//@ chunk-7jxyna5q.js:569291-569324 placement
+var RUNTIME_MODULE_KEY = "claude:surface-runtime";
+//@ chunk-7jxyna5q.js:569324-582167 placement
 /**
  * 桌面 Client 表面的运行时源码（claude:surface-runtime），注入到 VM
  */
 var DESKTOP_SURFACE_RUNTIME_SOURCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:647599", () => {
+deferInit("chunk-7jxyna5q.js:569324", () => {
   DESKTOP_SURFACE_RUNTIME_SOURCE = String.raw`((host, limits) => {
   const { freeze, defineProperty, defineProperties, keys: _keys } = Object
   const _isArray = Array.isArray
@@ -850,21 +845,21 @@ deferInit("chunk-s61vbvea.js:647599", () => {
   })
 })`;
 });
-//@ chunk-s61vbvea.js:660442-660561 placement
-var SURFACE_RUNTIME_MODULE_SOURCE; // deferred: uses DESKTOP_SURFACE_RUNTIME_SOURCE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:660442", () => {
-  SURFACE_RUNTIME_MODULE_SOURCE = `const jsx = ${VM_BOOTSTRAP_SOURCE}
+//@ chunk-7jxyna5q.js:582167-582287 placement
+var RUNTIME_MODULE_SOURCE; // deferred: uses DESKTOP_SURFACE_RUNTIME_SOURCE of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7jxyna5q.js:582167", () => {
+  RUNTIME_MODULE_SOURCE = `const jsx = ${VM_BOOTSTRAP_SOURCE}
 export const h = jsx.h
 export const Fragment = jsx.Fragment
 export const install = ${DESKTOP_SURFACE_RUNTIME_SOURCE}
 `;
 });
-//@ chunk-s61vbvea.js:660561-660572 placement
+//@ chunk-7jxyna5q.js:582287-582299 placement
 /**
  * 类型声明源码
  */
-var hooksTypesSource = STATE_RESOURCE;
-//@ chunk-s61vbvea.js:660572-660643 placement
+var TYPES_MODULE_SOURCE = STATE_RESOURCE;
+//@ chunk-7jxyna5q.js:582299-582370 placement
 /**
  * 界面树/数据的限额
  */
@@ -875,25 +870,25 @@ var surfaceLimits = () => ({
   values: MAX_NODES_2,
   dataDepth: MAX_DEPTH_2,
 });
-//@ chunk-s61vbvea.js:660643-661120 placement
+//@ chunk-7jxyna5q.js:582370-582858 placement
 /**
  * 为插件的界面模块构建桌面运行包：运行时与类型模块、各模块文件（改写导入）、入口与组件、限额，并计算内容哈希。
  */
-function buildDesktopSurfaceBundle(plugin, surfaceModules) {
+function desktopModuleOf(plugin, surfaceModules) {
   let limits = surfaceLimits();
   let filesByKey = new Map([
     [
-      CLAUDE_SURFACE_RUNTIME,
+      RUNTIME_MODULE_KEY,
       {
-        key: CLAUDE_SURFACE_RUNTIME,
-        source: SURFACE_RUNTIME_MODULE_SOURCE,
+        key: RUNTIME_MODULE_KEY,
+        source: RUNTIME_MODULE_SOURCE,
       },
     ],
     [
-      CLAUDE_HOOKS_TYPES,
+      TYPES_MODULE_KEY,
       {
-        key: CLAUDE_HOOKS_TYPES,
-        source: hooksTypesSource,
+        key: TYPES_MODULE_KEY,
+        source: TYPES_MODULE_SOURCE,
       },
     ],
   ]);
@@ -906,14 +901,14 @@ function buildDesktopSurfaceBundle(plugin, surfaceModules) {
       ...surface.linked,
     ];
     for (let file of fileList) {
-      let key = surfaceModuleKey(file.file, plugin);
-      if (!filesByKey.has(key)) filesByKey.set(key, toSurfaceFile(file, plugin, surface.links));
+      let key = moduleKeyOf(file.file, plugin);
+      if (!filesByKey.has(key)) filesByKey.set(key, keyedFileOf(file, plugin, surface.links));
     }
   }
   let files = [...filesByKey.values()];
   let modules = surfaceModules.map((surface) => ({
     module: surface.module,
-    entry: surfaceModuleKey(surface.modulePath, plugin),
+    entry: moduleKeyOf(surface.modulePath, plugin),
     component: surface.component,
   }));
   return {
@@ -928,16 +923,16 @@ function buildDesktopSurfaceBundle(plugin, surfaceModules) {
       )
       .digest("hex"),
     modules,
-    runtime: CLAUDE_SURFACE_RUNTIME,
+    runtime: RUNTIME_MODULE_KEY,
     limits,
     files,
   };
 }
-//@ chunk-s61vbvea.js:661120-661480 placement
+//@ chunk-7jxyna5q.js:582858-583220 placement
 /**
  * 界面运行包缓存：插件模块变化时重建，按插件取包。
  */
-function createSurfaceBundleCache() {
+function createDesktopModules() {
   let cache = new Map();
   return {
     moduleFor(pluginName) {
@@ -950,7 +945,7 @@ function createSurfaceBundleCache() {
       let cached = cache.get(pluginName);
       if (cached?.environmentId === found.environmentId) return cached.built;
       let { pluginRoot, pluginName: pluginName_2 } = found.args;
-      let desktopSurfaceBundle = buildDesktopSurfaceBundle(
+      let built = desktopModuleOf(
         {
           pluginRoot,
           pluginName: pluginName_2,
@@ -959,36 +954,33 @@ function createSurfaceBundleCache() {
       );
       cache.set(pluginName, {
         environmentId: found.environmentId,
-        built: desktopSurfaceBundle,
+        built,
       });
-      return desktopSurfaceBundle;
+      return built;
     },
   };
 }
-//@ chunk-s61vbvea.js:661480-661492 placement
+//@ chunk-7jxyna5q.js:583220-583234 placement
 /**
  * 界面运行包缓存
  */
-var surfaceBundleCache; // deferred: uses createSurfaceBundleCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:661480", () => {
-  surfaceBundleCache = createSurfaceBundleCache();
+var desktopModules; // deferred: uses createDesktopModules of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7jxyna5q.js:583220", () => {
+  desktopModules = createDesktopModules();
 });
-//@ chunk-s61vbvea.js:661492-661504 placement
+//@ chunk-7jxyna5q.js:583234-583247 placement
 /**
  * 各插件消息队列
  */
-var messageQueues; // deferred: uses createPerPluginQueues (./interactions.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:661492", () => {
-  messageQueues = createPerPluginQueues();
+var messageQueueOf; // deferred: uses createPerPluginQueues (./interactions.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7jxyna5q.js:583234", () => {
+  messageQueueOf = createPerPluginQueues();
 });
-//@ chunk-s61vbvea.js:661504-661642 placement
+//@ chunk-7jxyna5q.js:583247-583387 placement
 /**
  * 为一组 Client 所属的插件返回其界面运行包哈希。
  */
-function surfaceBundleHashes(
-  clientElements,
-  hashOf = (pluginName) => surfaceBundleCache.moduleFor(pluginName)?.hash,
-) {
+function moduleHashesOf(clientElements, hashOf = (pluginName) => desktopModules.moduleFor(pluginName)?.hash) {
   let hashes = {};
   for (let pluginName of new Set(clientElements.map((element) => element.plugin))) {
     let hash = hashOf(pluginName);
@@ -996,7 +988,7 @@ function surfaceBundleHashes(
   }
   return hashes;
 }
-//@ chunk-s61vbvea.js:661642-661780 placement
+//@ chunk-7jxyna5q.js:583387-583525 placement
 /**
  * 构造 ui.message 事件：界面、组件、请求、元素、模块与数据。
  */
@@ -1011,15 +1003,15 @@ var toUiMessageEvent = (address, surface, data) => ({
     data,
   },
 });
-//@ chunk-s61vbvea.js:661780-661804 placement
+//@ chunk-7jxyna5q.js:583525-583549 placement
 /**
  * ui.message 站点规则
  */
 var UI_MESSAGE_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:661780", () => {
+deferInit("chunk-7jxyna5q.js:583525", () => {
   UI_MESSAGE_RULES = UI_ENV_SITE_RULES["ui.message"];
 });
-//@ chunk-s61vbvea.js:661804-662202 placement
+//@ chunk-7jxyna5q.js:583549-583947 placement
 /**
  * 运行 ui.message 钩子链（只限该插件）并记录耗时，返回结果。
  */
@@ -1049,22 +1041,24 @@ async function dispatchUiMessage({ plugin, message }) {
   );
   return outcome ?? {};
 }
-//@ chunk-s61vbvea.js:662202-662436 placement
+//@ chunk-7jxyna5q.js:583947-584185 placement
 /**
  * 桌面端 Client 发来消息：确认已画出、校验数据为纯数据后，按插件串行分发 ui.message。
  */
-async function postDesktopClientMessage(request, isDrawn = drawnClientLedger.isDrawn) {
+async function runClientMessage(request, isDrawn = drawnDesktopClients.isDrawn) {
   let { data, ...address } = request;
-  if (!requireDrawnClient("ui.message", address, isDrawn)) return;
+  if (!isToldDrawn("ui.message", address, isDrawn)) return;
   let dataProblem = checkPlainData(data);
   if (dataProblem !== undefined)
     throw new HooksError(
       `${address.plugin}: Client ${address.module}: post: the data ${dataProblem}; not sent`,
     );
-  return messageQueues(address.plugin)(() => dispatchUiMessage(toUiMessageEvent(address, DESKTOP, data)));
+  return messageQueueOf(address.plugin)(() =>
+    dispatchUiMessage(toUiMessageEvent(address, CLIENT_SURFACE, data)),
+  );
 }
-//@ chunk-s61vbvea.js:662436-663451 placement
-async function dispatchDesktopClient(request, isDrawn = drawnClientLedger.isDrawn) {
+//@ chunk-7jxyna5q.js:584185-585207 placement
+async function runClientPress(request, isDrawn = drawnDesktopClients.isDrawn) {
   let { element, event, ...address } = request;
   if (!isDrawn(address)) {
     logForDebugging(
@@ -1072,7 +1066,7 @@ async function dispatchDesktopClient(request, isDrawn = drawnClientLedger.isDraw
     );
     return;
   }
-  let pressAddress = desktopClientAddress(request);
+  let pressAddress = clientPressArgumentOf(request);
   let startTime = performance.now();
   let reached;
   async function runPress() {
@@ -1142,7 +1136,7 @@ async function dispatchDesktopClient(request, isDrawn = drawnClientLedger.isDraw
   return outcome;
 }
 export {
-  toUiMessageEvent,
+  CLIENT_SURFACE,
   dispatchUiMessage,
   describeClientFailure,
   desktopFaultDispatcher,
@@ -1150,11 +1144,33 @@ export {
   DESKTOP_SURFACE_RUNTIME_SOURCE,
   surfaceLimits,
   toUiFaultEvent,
-  drawnClientLedger,
-  surfaceBundleHashes,
-  surfaceBundleCache,
-  dispatchDesktopClient,
-  postDesktopClientMessage,
-  createDesktopFaultHandler,
-  DESKTOP,
+  toUiMessageEvent,
+  MAX_DRAWN_INSTANCES,
+  MODULE_KEY_SCHEME,
+  RUNTIME_MODULE_KEY,
+  RUNTIME_MODULE_SOURCE,
+  TYPES_MODULE_KEY,
+  TYPES_MODULE_SOURCE,
+  UNLINKED_KEY_SCHEME,
+  clientPressArgumentOf,
+  createClientFaultRunner,
+  createDesktopModules,
+  createDrawnClients,
+  desktopModuleOf,
+  desktopModules,
+  desktopSiteOf,
+  drawnAddressKey,
+  drawnDesktopClients,
+  drawnInstanceKey,
+  isToldDrawn,
+  keyedFileOf,
+  messageQueueOf,
+  moduleHashesOf,
+  moduleKeyOf,
+  rewriteSpecifiers,
+  runClientMessage,
+  runClientPress,
+  specifierSpansOf,
+  unlinkedKeyOf,
+  versionReaderOf,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：teleport 分支提议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cynvvj0d.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9q27mnca.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -19,7 +19,7 @@ import {
 import { GIT_SHA_RE, hasNonZeroHash } from "../../remote/tools/servedOwnerSettings.js";
 import { MAX_GIT_REF_CHARS, isValidGitRefName } from "../git/refNames.js";
 
-//@ chunk-cynvvj0d.js:352-518 placement
+//@ chunk-9q27mnca.js:352-518 placement
 var BRANCH_OFFER_VERSION = 1;
 var MAX_OFFER_ANCESTORS = 64;
 var OFFER = "offer";
@@ -32,7 +32,7 @@ var branchOfferSchema = DoctorLazy(() =>
     ancestors: array(unknown()).max(MAX_OFFER_ANCESTORS).pipe(array(commitShaSchema())),
   }),
 );
-//@ chunk-cynvvj0d.js:518-589 placement
+//@ chunk-9q27mnca.js:518-589 placement
 /**
  * 解析分支提议负载，非法返回 null。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：启动时探测终端能力（扩展键、kitty 键盘、XTVERSION、OSC 回复、tmux）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (15)
+ * attribution: placement 13, layout 2
  */
 import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { env } from "../utils/env.js";
@@ -31,19 +31,29 @@ import {
 import { DEC } from "./termio/dec.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:229377-229381 placement
+//@ chunk-2avr6cej.js:228972-228976 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:229377", () => {
+deferInit("chunk-2avr6cej.js:228972", () => {
   init_react_production();
 });
-//@ chunk-bzr73sfg.js:229381-229398 placement
+//@ chunk-2avr6cej.js:228976-228993 layout
+var terminalProbeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2avr6cej.js:228976", () => {
+  terminalProbeContext = createContext(null);
+});
+//@ chunk-2avr6cej.js:228993-228997 layout
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2avr6cej.js:228993", () => {
+  init_react_production();
+});
+//@ chunk-2avr6cej.js:228997-229014 placement
 var InputNowContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:229381", () => {
+deferInit("chunk-2avr6cej.js:228997", () => {
   InputNowContext = createContext(null);
 });
-//@ chunk-bzr73sfg.js:229398-229412 placement
+//@ chunk-2avr6cej.js:229014-229028 placement
 var noopCursorDeclaration = () => {};
-//@ chunk-bzr73sfg.js:229412-229482 placement
+//@ chunk-2avr6cej.js:229028-229098 placement
 /**
  * Ctrl+Z 挂起是否可用：后台会话（CLAUDE_CODE_SESSION_KIND=bg）不挂起。
  */
@@ -51,15 +61,15 @@ function isSuspendAllowed() {
   if (env.CLAUDE_CODE_SESSION_KIND === "bg") return false;
   return true;
 }
-//@ chunk-bzr73sfg.js:229482-229510 placement
+//@ chunk-2avr6cej.js:229098-229126 placement
 function settleCapabilitiesDeadline(capabilities) {
   capabilities.deadline();
 }
-//@ chunk-bzr73sfg.js:229510-229537 placement
+//@ chunk-2avr6cej.js:229126-229153 placement
 function noopRetainFinePointer() {
   return () => {};
 }
-//@ chunk-bzr73sfg.js:229537-229625 placement
+//@ chunk-2avr6cej.js:229153-229241 placement
 /**
  * 记下终端单元格像素尺寸（来自 CSI 16t/6t 应答），供像素鼠标与图片定位使用。
  */
@@ -70,12 +80,12 @@ function recordCellPixels(size) {
       height: size.height,
     };
 }
-//@ chunk-bzr73sfg.js:229625-229712 placement
+//@ chunk-2avr6cej.js:229241-229328 placement
 function describeCellPixels() {
   let cellPixels = getTerminalProbeState().cellPixels;
   return cellPixels ? `${cellPixels.width}x${cellPixels.height}px` : "size unknown";
 }
-//@ chunk-bzr73sfg.js:229712-229832 placement
+//@ chunk-2avr6cej.js:229328-229448 placement
 /**
  * 重新查询单元格像素尺寸（终端重新获得焦点后，字体/缩放可能变了）。
  */
@@ -86,16 +96,16 @@ async function reprobeCellSize(querier) {
     logForDebugging(`Cell size asked again: ${describeCellPixels()}`);
   }
 }
-//@ chunk-bzr73sfg.js:229832-229893 placement
+//@ chunk-2avr6cej.js:229448-229509 placement
 function armCapabilitiesDeadline(capabilities, ms) {
   let timer = setTimeout(settleCapabilitiesDeadline, ms, capabilities);
   timer.unref();
   return timer;
 }
-//@ chunk-bzr73sfg.js:229893-229912 placement
+//@ chunk-2avr6cej.js:229509-229528 placement
 var CAPABILITY_PROBE_TIMEOUT_MS = 2000;
 var OWED_REPLY_HOLD_MS = 250;
-//@ chunk-bzr73sfg.js:229912-230055 placement
+//@ chunk-2avr6cej.js:229528-229671 placement
 /**
  * 原始模式关闭后为等待终端未回的查询应答而暂留的原始模式，到时（250ms）释放。
  */
@@ -105,7 +115,7 @@ function releaseOwedReplyHold(app, stdin) {
   app.owedReplyHold = undefined;
   if (app.rawModeEnabledCount === 0) setRawModeSafe(stdin, false);
 }
-//@ chunk-bzr73sfg.js:230055-233477 placement
+//@ chunk-2avr6cej.js:229671-233093 placement
 /**
  * 启动时探测终端能力（扩展键、kitty 键盘、XTVERSION、OSC 回复、tmux）。
  */
@@ -257,12 +267,13 @@ async function probeTerminalCapabilities(querier, capabilities, timeoutMs = CAPA
   );
 }
 export {
-  isSuspendAllowed,
   noopRetainFinePointer,
   noopCursorDeclaration,
   InputNowContext,
+  terminalProbeContext,
   reprobeCellSize,
   probeTerminalCapabilities,
   releaseOwedReplyHold,
   OWED_REPLY_HOLD_MS,
+  isSuspendAllowed,
 };

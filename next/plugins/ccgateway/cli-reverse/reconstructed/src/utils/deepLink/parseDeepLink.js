@@ -3,9 +3,9 @@
  *
  * 并入已有模块：解析深链接中的市场参数；校验深链接中的 cwd（拒绝 UNC、..、相对路径、控制字符、网络链接）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/parseDeepLink.ts
- * pieces: chunk-8gzm4s8j.js (7)
+ * pieces: chunk-6xpnm08k.js (7)
  * attribution: placement 6, fingerprint 1
  */
 import { OFFICIAL_MARKETPLACE_SOURCE } from "../plugins/officialMarketplace.js";
@@ -19,7 +19,7 @@ import { isAnthropicsGithubRepo } from "../plugins/schemas.js";
 import { paths } from "../cachePaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8gzm4s8j.js:410-579 placement
+//@ chunk-6xpnm08k.js:443-612 placement
 function hasControlChars(text, { allowNewlineAndTab = false } = {}) {
   for (let i = 0; i < text.length; i++) {
     let code = text.charCodeAt(i);
@@ -30,7 +30,7 @@ function hasControlChars(text, { allowNewlineAndTab = false } = {}) {
   }
   return false;
 }
-//@ chunk-8gzm4s8j.js:579-795 placement
+//@ chunk-6xpnm08k.js:612-828 placement
 var REPO_SLUG_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_QUERY_LENGTH;
 var MAX_CWD_LENGTH;
@@ -39,7 +39,7 @@ var MARKETPLACE_URL_PATTERN;
 var GIT_REF_PATTERN;
 var MAX_MARKETPLACE_LENGTH;
 var DEFAULT_MARKETPLACE_REPO;
-deferInit("chunk-8gzm4s8j.js:579", () => {
+deferInit("chunk-6xpnm08k.js:612", () => {
   REPO_SLUG_PATTERN = /^[\w.-]+\/[\w.-]+$/;
   MAX_QUERY_LENGTH = 5000;
   MAX_CWD_LENGTH = 4096;
@@ -50,7 +50,7 @@ deferInit("chunk-8gzm4s8j.js:579", () => {
   MAX_MARKETPLACE_LENGTH = 256;
   DEFAULT_MARKETPLACE_REPO = OFFICIAL_MARKETPLACE_SOURCE.repo;
 });
-//@ chunk-8gzm4s8j.js:795-1861 placement
+//@ chunk-6xpnm08k.js:828-1894 placement
 /**
  * 校验深链接中的 cwd（拒绝 UNC、..、相对路径、控制字符、网络链接）。
  */
@@ -84,7 +84,7 @@ function validateDeepLinkCwd(cwd, fsApi = NodeFsOperations) {
       "Invalid cwd in deep link: the path resolves through a network link",
     );
 }
-//@ chunk-8gzm4s8j.js:1861-2110 placement
+//@ chunk-6xpnm08k.js:1894-2143 placement
 /**
  * 规范化深链接 query：Unicode 规范化、CRLF→LF、拒绝控制字符、≤5000 字符。
  */
@@ -104,7 +104,7 @@ function sanitizeDeepLinkQuery(query) {
     throw Error(`Deep link query exceeds ${MAX_QUERY_LENGTH} characters (got ${text.length})`);
   return text;
 }
-//@ chunk-8gzm4s8j.js:2110-2275 placement
+//@ chunk-6xpnm08k.js:2143-2308 placement
 /**
  * 校验深链接插件名（ASCII 字母数字 . _ -，≤100）。
  */
@@ -114,7 +114,7 @@ function validateDeepLinkPlugin(plugin) {
       'Invalid plugin in deep link: expected a plugin name of ASCII letters, digits, ".", "_" and "-" (at most 100 characters)',
     );
 }
-//@ chunk-8gzm4s8j.js:2275-3358 placement
+//@ chunk-6xpnm08k.js:2308-3391 placement
 /**
  * 解析深链接中的市场参数。
  */
@@ -147,7 +147,7 @@ function parseDeepLinkMarketplace(spec) {
   if (gitRef !== undefined && isAnthropicsGithubRepo(repoSlug))
     throw Error("Invalid marketplace in deep link: an Anthropic marketplace can't be pinned to a git ref");
 }
-//@ chunk-8gzm4s8j.js:3358-4400 fingerprint (2.1.88 match: parseDeepLink, 0.626)
+//@ chunk-6xpnm08k.js:3391-4433 fingerprint (2.1.88 match: parseDeepLink, 0.625)
 /**
  * 解析 claude-cli:// 深链接（也接受 claude-cli:）：install-plugin?plugin=&marketplace=（marketplace 缺省官方，raw # 报错）或 open?q=&cwd=&repo=；校验 cwd/repo/query/plugin/marketplace，返回 {action,…}。
  */
@@ -197,9 +197,9 @@ function parseDeepLink(uri) {
   };
 }
 export {
+  parseDeepLinkMarketplace,
   sanitizeDeepLinkQuery,
   validateDeepLinkCwd,
   parseDeepLink,
-  parseDeepLinkMarketplace,
   validateDeepLinkPlugin,
 };

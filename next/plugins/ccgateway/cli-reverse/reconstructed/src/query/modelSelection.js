@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：查询循环中的模型选择与切换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { getMainLoopModelOverride, getInitialMainLoopModel } from "../bootstrap/state.js";
@@ -28,7 +28,7 @@ import { getProviderForModel } from "../utils/model/providers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { FallbackTriggeredError } from "../services/api/withRetry.js";
 
-//@ chunk-e6aww6q8.js:2404913-2405025 placement
+//@ chunk-5xgkngpb.js:2460569-2460681 placement
 /**
  * 回合实际使用的模型：依次取拒绝覆盖、授权覆盖、实时切换覆盖、链上模型、主模型。
  */
@@ -41,14 +41,14 @@ function effectiveTurnModel(selection) {
     selection.primaryModel
   );
 }
-//@ chunk-e6aww6q8.js:2405025-2405052 placement
+//@ chunk-5xgkngpb.js:2460681-2460708 placement
 /**
  * 主循环模型覆盖
  */
 function mainLoopModelOverride() {
   return getMainLoopModelOverride();
 }
-//@ chunk-e6aww6q8.js:2405052-2405716 placement
+//@ chunk-5xgkngpb.js:2460708-2461377 placement
 /**
  * 查询循环中检查是否需要换模型：会话选择变化时采用新选择；当前模型不在可用列表时沿可用性降级链找下一个或回到会话模型。
  */
@@ -107,7 +107,7 @@ function checkModelSwitch(options) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2405716-2405967 placement
+//@ chunk-5xgkngpb.js:2461377-2461628 placement
 /**
  * 采用新模型后的可用性降级链：有配置的降级时保留原链，否则为新模型构建链。
  */
@@ -130,7 +130,7 @@ function adoptedFallbackChain(options) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2405967-2406201 placement
+//@ chunk-5xgkngpb.js:2461628-2461862 placement
 /**
  * 为当前降级位置找下一个模型：先找同族降级，否则在宿主提供的访问降级模型中选一个未用过且被策略允许的。
  */
@@ -151,7 +151,7 @@ function nextFallbackModel(modelChain, chainIndex, currentModel) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2406201-2406404 placement
+//@ chunk-5xgkngpb.js:2461862-2462065 placement
 function familyFallbackModel(modelChain, chainIndex, currentModel) {
   try {
     let previousModel = modelChain[chainIndex - 1];
@@ -173,7 +173,7 @@ function familyFallbackModel(modelChain, chainIndex, currentModel) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2406404-2406769 placement
+//@ chunk-5xgkngpb.js:2462065-2462430 placement
 /**
  * 宿主提供的访问降级模型，以及当前是否正运行在宿主模型上。
  */
@@ -211,7 +211,7 @@ function hostFallbackModels(chainIndex, currentModel) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2406769-2406846 placement
+//@ chunk-5xgkngpb.js:2462430-2462507 placement
 /**
  * 小写后同名比较
  */
@@ -219,7 +219,7 @@ function sameLowerName(modelName) {
   let lower = strip1mSuffix(modelName).toLowerCase();
   return (otherModel) => strip1mSuffix(otherModel).toLowerCase() === lower;
 }
-//@ chunk-e6aww6q8.js:2406846-2406920 placement
+//@ chunk-5xgkngpb.js:2462507-2462581 placement
 /**
  * 是否回退到该模型
  */
@@ -231,10 +231,10 @@ function isFallbackTo(accessFallbackModel, error) {
   );
 }
 export {
+  nextFallbackModel,
+  isFallbackTo,
   mainLoopModelOverride,
   effectiveTurnModel,
   checkModelSwitch,
   adoptedFallbackChain,
-  nextFallbackModel,
-  isFallbackTo,
 };

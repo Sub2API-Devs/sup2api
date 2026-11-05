@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP worker 唤醒调度：按事件唤醒后台连接的计时与去重。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1w450km7.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w6hp4crt.js (20)
  * attribution: placement 20
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -31,7 +31,7 @@ import { isTaskWorkerWakeEnabled } from "./mcpTaskWorker.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 
-//@ chunk-1w450km7.js:3626-3993 placement
+//@ chunk-w6hp4crt.js:3939-4306 placement
 /**
  * worker 唤醒接口的常量：请求超时、路径、载荷上限、策略键、请求选项与应答/错误 schema。
  */
@@ -68,7 +68,7 @@ var wakeErrorSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-1w450km7.js:3993-4565 placement
+//@ chunk-w6hp4crt.js:4306-4878 placement
 /**
  * 向 CCR 会话申请一次 worker 唤醒（POST /worker/wakes，载荷为任务恢复记录）：被策略或开关挡住时直接返回，载荷不可用或过大时不发，结果解析为 scheduled/refused/failed。
  */
@@ -107,7 +107,7 @@ async function scheduleWorkerWake({ task, delaySeconds, onTimer = false }) {
   );
   return readWakeAnswer("schedule", answer, onTimer);
 }
-//@ chunk-1w450km7.js:4565-4846 placement
+//@ chunk-w6hp4crt.js:4878-5159 placement
 async function retimeWorkerWake({ workerWakeId, delaySeconds, onTimer = false }) {
   let refusal = wakePreconditionFailure("retime", onTimer) ?? wakePolicyBlock("retime", onTimer);
   if (refusal !== undefined) return refusal;
@@ -128,7 +128,7 @@ async function retimeWorkerWake({ workerWakeId, delaySeconds, onTimer = false })
   );
   return readWakeAnswer("retime", response, onTimer);
 }
-//@ chunk-1w450km7.js:4846-5265 placement
+//@ chunk-w6hp4crt.js:5159-5578 placement
 /**
  * 取消一个 worker 唤醒（DELETE /worker/wakes/:id），返回 cancelled 或失败。
  */
@@ -152,7 +152,7 @@ async function cancelWorkerWake({ workerWakeId, onTimer = false }) {
     kind: "cancelled",
   };
 }
-//@ chunk-1w450km7.js:5265-5352 placement
+//@ chunk-w6hp4crt.js:5578-5665 placement
 /**
  * 解析任务 worker 的唤醒记录（协议不符返回 undefined）。
  */
@@ -160,7 +160,7 @@ function parseTaskWorkerWake(payload) {
   let parseResult = taskMetadataSchema(payload);
   return parseResult.success && parseResult.data.protocol === "sep2663" ? parseResult.data : undefined;
 }
-//@ chunk-1w450km7.js:5352-5877 placement
+//@ chunk-w6hp4crt.js:5665-6190 placement
 /**
  * 解析唤醒请求的应答：成功返回唤醒 id 与触发/过期时间，被拒时返回原因，其他状态视为失败。
  */
@@ -190,7 +190,7 @@ function readWakeAnswer(call, response, onTimer) {
     reason: refusal,
   };
 }
-//@ chunk-1w450km7.js:5877-6382 placement
+//@ chunk-w6hp4crt.js:6190-6695 placement
 /**
  * 从 400/404 错误应答中识别唤醒被拒的原因（不支持的主机或会话、延迟越界、已过期、已取消、关闭、未找到）。
  */
@@ -220,7 +220,7 @@ function wakeRefusalReason(call, status, body) {
     ? "not_found"
     : undefined;
 }
-//@ chunk-1w450km7.js:6382-6822 placement
+//@ chunk-w6hp4crt.js:6695-7135 placement
 /**
  * 发送唤醒请求并把异常归类为未授权、超时、网络或拒绝，未发出时返回 not_sent。
  */
@@ -252,14 +252,14 @@ async function sendWakeRequest(call, send, onTimer) {
     data: response.data,
   };
 }
-//@ chunk-1w450km7.js:6822-6857 placement
+//@ chunk-w6hp4crt.js:7135-7170 placement
 /**
  * 判断 HTTP 状态码是否成功（2xx）。
  */
 function isHttpSuccess(status) {
   return status >= 200 && status < 300;
 }
-//@ chunk-1w450km7.js:6857-7155 placement
+//@ chunk-w6hp4crt.js:7170-7468 placement
 function wakeHttpFailure(call, status, onTimer) {
   if (status === 404 || status === 405 || status === 501)
     return wakeFailure(call, "not_deployed", `http_${status}`, onTimer);
@@ -268,7 +268,7 @@ function wakeHttpFailure(call, status, onTimer) {
   if (status === 409) return wakeFailure(call, "conflict", undefined, onTimer);
   return wakeFailure(call, status >= 500 ? "server_error" : "rejected", `http_${status}`, onTimer);
 }
-//@ chunk-1w450km7.js:7155-7463 placement
+//@ chunk-w6hp4crt.js:7468-7776 placement
 /**
  * 生成唤醒失败结果并记录特性状态（可重试的失败按定时器场景区别记录）。
  */
@@ -292,7 +292,7 @@ function wakeFailure(call, reason, detail, onTimer) {
     retryable,
   };
 }
-//@ chunk-1w450km7.js:7463-7691 placement
+//@ chunk-w6hp4crt.js:7776-8004 placement
 function isRetryableWakeFailure(reason) {
   switch (reason) {
     case "rate_limited":
@@ -310,21 +310,21 @@ function isRetryableWakeFailure(reason) {
       return false;
   }
 }
-//@ chunk-1w450km7.js:7691-7737 placement
+//@ chunk-w6hp4crt.js:8004-8050 placement
 /**
  * 向上取整且至少为 1。
  */
 function ceilAtLeastOne(delaySeconds) {
   return Math.max(1, Math.ceil(delaySeconds));
 }
-//@ chunk-1w450km7.js:7737-7803 placement
+//@ chunk-w6hp4crt.js:8050-8116 placement
 /**
  * 缺会话地址时的唤醒失败。
  */
 function wakePreconditionFailure(call, onTimer) {
   return hasRemoteSdkUrl() ? undefined : wakeFailure(call, "not_sent", "no_session", onTimer);
 }
-//@ chunk-1w450km7.js:7803-8160 placement
+//@ chunk-w6hp4crt.js:8116-8473 placement
 /**
  * 检查组织策略是否允许 MCP 任务 worker 唤醒，被拒时返回 refused，策略未决时返回失败。
  */
@@ -347,7 +347,7 @@ function wakePolicyBlock(call, onTimer) {
   }
   return wakeFailure(call, "policy_pending", denyKind ?? "no_deny_kind", onTimer);
 }
-//@ chunk-1w450km7.js:8160-8274 placement
+//@ chunk-w6hp4crt.js:8473-8587 placement
 function logWakeSad(onTimer, reason, call) {
   if (onTimer)
     logFeatureSad("mcp_task_worker_wake_timer", reason, {
@@ -358,7 +358,7 @@ function logWakeSad(onTimer, reason, call) {
       call: fromEnum(call),
     });
 }
-//@ chunk-1w450km7.js:8274-8311 placement
+//@ chunk-w6hp4crt.js:8587-8624 placement
 /**
  * 最多重试轮数（h / S）。
  */
@@ -367,14 +367,14 @@ var TICK_INTERVAL_MS = DEFAULT_WAKE_HORIZON_MS / 3;
 var TICK_IDLE_MS = 60000;
 var MAX_SCHEDULE_RETRIES = 3;
 var MAX_RETRY_ROUNDS = DEFAULT_WAKE_HORIZON_MS / TICK_INTERVAL_MS;
-//@ chunk-1w450km7.js:8311-8373 placement
+//@ chunk-w6hp4crt.js:8624-8686 placement
 /**
  * 判断唤醒是否仍在推进（moving 且状态为 driving）。
  */
 function isMovingWake(task) {
   return task.wake?.moving === true && task.state === "driving";
 }
-//@ chunk-1w450km7.js:8373-12905 placement
+//@ chunk-w6hp4crt.js:8686-13218 placement
 /**
  * 后台 MCP 任务的 worker 唤醒维护器：任务转入后台时申请唤醒，在任务仍被驱动时周期性推迟唤醒时间，任务结束或暂停时取消或保留唤醒，并把唤醒 id 写入任务恢复记录。
  */
@@ -657,6 +657,6 @@ class WorkerWakeKeeper {
     await Promise.all(pending);
   }
 }
-//@ chunk-1w450km7.js:12905-12930 placement
+//@ chunk-w6hp4crt.js:13218-13243 placement
 var mcpTaskWorkerWakeKeepers = new SessionRootSlot(() => new WorkerWakeKeeper());
 export { mcpTaskWorkerWakeKeepers };

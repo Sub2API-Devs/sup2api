@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把 WebSocket 关闭码（4090–4094、401 等）和原因翻译成给用户看的断线说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4cm44bmp.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-56msakfz.js (4)
  * attribution: placement 4
  */
 import { isNonOriginSource, describeNonOriginRefusal } from "../services/api/requestIdSource.js";
@@ -13,7 +13,7 @@ import { plural } from "../utils/stringUtils.js";
 import { CLEANUP_TIMEOUT_MS } from "../utils/cleanupRegistry.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
-//@ chunk-4cm44bmp.js:28000-29580 placement
+//@ chunk-56msakfz.js:25536-27116 placement
 /**
  * 把 WebSocket 关闭码（4090–4094、401 等）和原因翻译成给用户看的断线说明。
  */
@@ -63,9 +63,9 @@ function describeBridgeCloseCode(code, reason, details) {
       return `code ${code}`;
   }
 }
-//@ chunk-4cm44bmp.js:29580-29592 placement
+//@ chunk-56msakfz.js:27116-27128 placement
 var REFRESH_MIN_INTERVAL_MS = 5000;
-//@ chunk-4cm44bmp.js:29592-29738 placement
+//@ chunk-56msakfz.js:27128-27273 placement
 var FLUSH_TIMEOUT_MS = 300;
 var ARCHIVE_AUTH_RETRY_MIN_REMAINING_MS = 200;
 var CLEANUP_FLUSH_RESERVE_MS = 300;
@@ -81,7 +81,7 @@ var MAX_CONSECUTIVE_UPLOAD_FAILURES = 8;
 var MAX_UPLOAD_BATCH_BYTES = 1048576;
 var UPLOAD_REQUEST_TIMEOUT_MS = 30000;
 var TENGU_ENCAPSULATED_DUSK = "tengu_encapsulated_dusk";
-//@ chunk-4cm44bmp.js:29738-29785 placement
+//@ chunk-56msakfz.js:27273-27320 placement
 /**
  * 决定未签名事件的处理方式：tengu_encapsulated_dusk 开则 "drop"，否则 "redact"。
  */

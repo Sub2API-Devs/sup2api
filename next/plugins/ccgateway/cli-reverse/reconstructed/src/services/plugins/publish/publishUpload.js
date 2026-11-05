@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件上传、内容扫描等待与读规则检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9cjx5pnm.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-77qzxtqv.js (38)
  * attribution: placement 38
  */
 import { randomUUID } from "crypto";
@@ -57,6 +57,7 @@ import {
   layeredReadVerdictForPaths,
   checkReadNetworkPathSafety,
   checkWritePermissionForTool,
+  normalizeCaseForComparison_2,
 } from "../../../utils/permissions/filesystem.js";
 import { getCwd } from "../../../utils/cwd.js";
 import { unreadableOnError } from "./validationCopy.js";
@@ -65,31 +66,30 @@ import { isPluginPublishAllowed } from "./publishGate.js";
 import { sortKeysDeep } from "../../../utils/settings/settingsSourceTrust.js";
 import { FileWriteTool } from "../../../tools/FileWriteTool/FileWriteTool.js";
 import { FILE_WRITE_TOOL_NAME } from "../../../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import {
-  getDenyRules,
+  deniedBashRules,
   NARROWING_RULE_SOURCES,
   getDenyRuleForTool,
 } from "../../../utils/permissions/permissions.js";
-import { uniq } from "../../../utils/collections.js";
 import { PLUGIN_MANIFEST_PATH } from "../../../utils/plugins/commandSource.js";
 
-//@ chunk-9cjx5pnm.js:21557-21634 placement
+//@ chunk-77qzxtqv.js:21625-21702 placement
 /**
  * 生成 multipart 上传的 Content-Type。
  */
 var multipartHeaders = (publishMultipart) => ({
   "Content-Type": `multipart/form-data; boundary=${publishMultipart.boundary}`,
 });
-//@ chunk-9cjx5pnm.js:21634-21690 placement
+//@ chunk-77qzxtqv.js:21702-21758 placement
 var withArchive = (archive, plan, request) => ({
   ...request,
   archive,
   manifest: plan.manifest,
 });
-//@ chunk-9cjx5pnm.js:21690-21738 placement
+//@ chunk-77qzxtqv.js:21758-21806 placement
 var SEVERITIES_APPLIED = Object.freeze(["pass", "warn", "unknown"]);
-//@ chunk-9cjx5pnm.js:21738-22110 placement
+//@ chunk-77qzxtqv.js:21806-22178 placement
 function scanStateOf(plugin, requested, prior) {
   let scanAbsent = prior ? plugin.content_scan === null : plugin.content_scan == null;
   let scanNone = requested === false && scanAbsent;
@@ -106,7 +106,7 @@ function scanStateOf(plugin, requested, prior) {
     ]) ?? "passed"
   );
 }
-//@ chunk-9cjx5pnm.js:22110-22407 placement
+//@ chunk-77qzxtqv.js:22178-22475 placement
 var toPublishedPlugin = (id, plugin, prior) => ({
   id,
   name: plugin.name,
@@ -116,7 +116,7 @@ var toPublishedPlugin = (id, plugin, prior) => ({
   verdict: plugin.content_scan?.combined_assessment ?? plugin.content_scan?.status,
   isAwaitingCurrent: plugin.awaiting_make_current === true || prior?.isAwaitingCurrent === true,
 });
-//@ chunk-9cjx5pnm.js:22407-22727 placement
+//@ chunk-77qzxtqv.js:22475-22795 placement
 var publishResponseSchema = DoctorLazy(() =>
   objectSchema({
     id: stringSchema().min(1).optional(),
@@ -133,7 +133,7 @@ var publishResponseSchema = DoctorLazy(() =>
     }).nullish(),
   }),
 );
-//@ chunk-9cjx5pnm.js:22727-22826 placement
+//@ chunk-77qzxtqv.js:22795-22894 placement
 /**
  * 从响应里取出已发布的插件信息。
  */
@@ -142,10 +142,10 @@ function publishedFromResponse(body, prior) {
   let id = prior?.id ?? parsed.id;
   return id !== undefined ? toPublishedPlugin(id, parsed, prior) : undefined;
 }
-//@ chunk-9cjx5pnm.js:22826-22934 placement
+//@ chunk-77qzxtqv.js:22894-23002 placement
 var accountUploadPath = (marketplaceId, organization, mode) =>
   `${organizationSubPath(organization, ["marketplaces", marketplaceId, "plugins", "account-upload"])}?overwrite=${String(mode === "replace")}`;
-//@ chunk-9cjx5pnm.js:22971-23092 placement
+//@ chunk-77qzxtqv.js:23039-23160 placement
 function newNameFormPart(boundary, manifest) {
   let fileName = archiveFileName(manifest);
   return fileName !== manifest.name
@@ -156,7 +156,7 @@ Content-Disposition: form-data; name="new_name"\r
 ` + fileName
     : "";
 }
-//@ chunk-9cjx5pnm.js:23092-23359 placement
+//@ chunk-77qzxtqv.js:23160-23427 placement
 function buildPublishMultipart(archive, manifest) {
   let boundary = `----PluginPublish${randomUUID()}`;
   let archiveName = archiveFileName(manifest);
@@ -178,7 +178,7 @@ Content-Type: application/zip\r
     ]),
   };
 }
-//@ chunk-9cjx5pnm.js:23359-23505 placement
+//@ chunk-77qzxtqv.js:23427-23573 placement
 function buildUploadRequest(organization, plan, mode) {
   let publishMultipart = buildPublishMultipart(plan.archive, plan.manifest);
   return {
@@ -190,7 +190,7 @@ function buildUploadRequest(organization, plan, mode) {
     signal: plan.signal,
   };
 }
-//@ chunk-9cjx5pnm.js:23505-23693 placement
+//@ chunk-77qzxtqv.js:23573-23761 placement
 async function uploadPluginArchive(organization, plan, mode) {
   let response = await publishRequestWithRetry(buildUploadRequest(organization, plan, mode));
   if ("kind" in response) return response;
@@ -199,7 +199,7 @@ async function uploadPluginArchive(organization, plan, mode) {
     ? (publishedFromResponse(response.data, undefined) ?? refusalResult("other"))
     : publishApiOutcome(response, UPLOAD_CLASSES);
 }
-//@ chunk-9cjx5pnm.js:23693-23779 placement
+//@ chunk-77qzxtqv.js:23761-23847 placement
 /**
  * 替换已存在的归档（已存在则返回 busy）。
  */
@@ -207,12 +207,12 @@ async function replaceArchive(organization, plan) {
   let result = await uploadPluginArchive(organization, plan, "replace");
   return result === "exists" ? refusalResult("busy") : result;
 }
-//@ chunk-9cjx5pnm.js:23779-23791 placement
+//@ chunk-77qzxtqv.js:23847-23859 placement
 /**
  * 轮询扫描状态的间隔（5000 毫秒）。
  */
 var POLL_DELAY_MS = 5000;
-//@ chunk-9cjx5pnm.js:23791-23912 placement
+//@ chunk-77qzxtqv.js:23859-23980 placement
 async function refreshScanStatus(request, published) {
   let response = await publishRequestOnce(
     buildOrgGetRequest(request, ["plugins", published.id, "scan-status"]),
@@ -221,12 +221,12 @@ async function refreshScanStatus(request, published) {
     ? (publishedFromResponse(response.data, published) ?? published)
     : published;
 }
-//@ chunk-9cjx5pnm.js:23912-23926 placement
+//@ chunk-77qzxtqv.js:23980-23994 placement
 /**
  * 等待内容扫描的最长时间（300000 毫秒）。
  */
 var MAX_SCAN_WAIT_MS = 300000;
-//@ chunk-9cjx5pnm.js:23926-24169 placement
+//@ chunk-77qzxtqv.js:23994-24237 placement
 /**
  * 轮询插件内容扫描状态，直到完成、超时或被中止。
  */
@@ -252,18 +252,18 @@ async function waitForContentScan(
     until: budget.until,
   });
 }
-//@ chunk-9cjx5pnm.js:24169-24246 placement
+//@ chunk-77qzxtqv.js:24237-24314 placement
 var listAccountMarketplaces = (request) =>
   requestPublishOutcome(buildOrgGetRequest(request, ["marketplaces", "list-account-marketplaces"]), () =>
     ensureUploadsMarketplace(request),
   );
-//@ chunk-9cjx5pnm.js:24246-24368 placement
+//@ chunk-77qzxtqv.js:24314-24436 placement
 async function uploadOrReplace(organization, plan) {
   let result = await uploadPluginArchive(organization, plan, "new");
   if (result !== "exists") return result;
   return plan.mode === "replace" ? replaceArchive(organization, plan) : refusalResult("exists");
 }
-//@ chunk-9cjx5pnm.js:24368-24549 placement
+//@ chunk-77qzxtqv.js:24436-24617 placement
 async function currentOrganization() {
   let organizationUuid = normalizeUuidOrNull(
     isDesktopSessionWithOwnToken() ? env.CLAUDE_CODE_ORGANIZATION_UUID : await getOrganizationUUID(),
@@ -276,14 +276,14 @@ async function currentOrganization() {
     name: (sameOrganization && storedOauthAccountInfo?.organizationName) || undefined,
   };
 }
-//@ chunk-9cjx5pnm.js:24549-24601 placement
+//@ chunk-77qzxtqv.js:24617-24669 placement
 async function ensureOrganization(organization) {
   return organization !== undefined ? undefined : currentOrganization();
 }
-//@ chunk-9cjx5pnm.js:24601-24643 placement
+//@ chunk-77qzxtqv.js:24669-24711 placement
 var organizationAvailability = () =>
   isDesktopSessionWithOwnToken() ? "no-organization" : authUnavailableReasonByMode();
-//@ chunk-9cjx5pnm.js:24643-24828 placement
+//@ chunk-77qzxtqv.js:24711-24896 placement
 var publishRequestHash = (request) =>
   computeContentHash(
     jsonStringify([
@@ -300,7 +300,7 @@ var publishRequestHash = (request) =>
       ]),
     ]),
   );
-//@ chunk-9cjx5pnm.js:24828-24948 placement
+//@ chunk-77qzxtqv.js:24896-25016 placement
 function explainUnreadable(result, context) {
   return result.refusal.kind === "unreadable" && hasReadDenyRuleInForce(context.permissions())
     ? {
@@ -312,7 +312,7 @@ function explainUnreadable(result, context) {
       }
     : result;
 }
-//@ chunk-9cjx5pnm.js:24977-25086 placement
+//@ chunk-77qzxtqv.js:25045-25154 placement
 var readDeniedFiles = (roots, listing, context) =>
   listing.files
     .map((file) => file.path)
@@ -323,16 +323,16 @@ var readDeniedFiles = (roots, listing, context) =>
         roots.map((root) => join(root, path)),
       ),
     );
-//@ chunk-9cjx5pnm.js:25086-25159 placement
+//@ chunk-77qzxtqv.js:25154-25227 placement
 function readDeniedOutcome(roots, listing, context) {
   return readDeniedFiles(roots, listing, context).length === 0 ? undefined : refusalResult("read-denied");
 }
-//@ chunk-9cjx5pnm.js:25231-25264 placement
+//@ chunk-77qzxtqv.js:25299-25332 placement
 /**
  * 表示“被规则拒绝”的分层判定结果。
  */
 var DENY_LAYERS = ["bare-deny", "path-deny"];
-//@ chunk-9cjx5pnm.js:25264-25351 placement
+//@ chunk-77qzxtqv.js:25332-25419 placement
 /**
  * 判断路径读取是否被规则拒绝。
  */
@@ -342,7 +342,7 @@ var isReadDeniedByRule = (path, context) =>
       refuseAutomounterShapes: true,
     }).layer,
   );
-//@ chunk-9cjx5pnm.js:25351-25549 placement
+//@ chunk-77qzxtqv.js:25419-25617 placement
 async function checkPublishReadRules(input, context) {
   let absPath = resolve(getCwd(), input.path);
   if (isReadDeniedByRule(absPath, context)) return refusalResult("read-denied");
@@ -351,7 +351,7 @@ async function checkPublishReadRules(input, context) {
   let listing = await unreadableOnError(scanPublishFolder(realPath));
   return "kind" in listing ? listing : readDeniedOutcome([absPath, realPath], listing, context);
 }
-//@ chunk-9cjx5pnm.js:25581-25643 placement
+//@ chunk-77qzxtqv.js:25649-25711 placement
 /**
  * 判断读取路径是否会经过网络路径。
  */
@@ -364,7 +364,7 @@ var isNetworkPathRead = (path, paths, context) =>
     context.permissions(),
     paths,
   ) !== null;
-//@ chunk-9cjx5pnm.js:25643-25803 placement
+//@ chunk-77qzxtqv.js:25711-25871 placement
 function publishPathScreenState(input, context) {
   if (isNetworkPathRead(input.path, [input.path], context)) return "network-path";
   let path = resolve(getCwd(), input.path);
@@ -375,22 +375,22 @@ function publishPathScreenState(input, context) {
       ? undefined
       : "unreadable";
 }
-//@ chunk-9cjx5pnm.js:25803-25843 placement
+//@ chunk-77qzxtqv.js:25871-25911 placement
 var publishFlagState = (input, context) =>
   isPluginPublishAllowed() ? publishPathScreenState(input, context) : "flag-off";
-//@ chunk-9cjx5pnm.js:25843-25869 placement
+//@ chunk-77qzxtqv.js:25911-25937 placement
 var hashCanonical = (shown) => computeContentHash(jsonStringify(sortKeysDeep(shown)));
-//@ chunk-9cjx5pnm.js:25869-25914 placement
+//@ chunk-77qzxtqv.js:25937-25982 placement
 var hashPublishInput = (question) =>
   hashCanonical(PUBLISH_QUESTION_SCHEMA().safeParse(question).data ?? question);
-//@ chunk-9cjx5pnm.js:25914-26049 placement
+//@ chunk-77qzxtqv.js:25982-26117 placement
 var normalizePublishInput = (input) => ({
   folder: input.path,
   destination: input.destination ?? "organization",
   description: input.description,
   mode: input.replace === true ? "replace" : "new",
 });
-//@ chunk-9cjx5pnm.js:26078-26153 placement
+//@ chunk-77qzxtqv.js:26146-26221 placement
 /**
  * 判断 manifest 的写入是否被拒绝。
  */
@@ -403,9 +403,9 @@ var isManifestWriteDenied = (filePath, permissions) =>
     },
     permissions,
   ).behavior === "deny" || hasReadDenyRuleForPath(filePath, permissions);
-//@ chunk-9cjx5pnm.js:26153-26323 placement
+//@ chunk-77qzxtqv.js:26221-26391 placement
 var PATCH_TOOL_CAPS = Object.freeze(
-  [FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME].map((name) =>
+  [FILE_WRITE_TOOL_NAME, EDIT].map((name) =>
     Object.freeze({
       name,
       mcpInfo: undefined,
@@ -415,29 +415,31 @@ var PATCH_TOOL_CAPS = Object.freeze(
     }),
   ),
 );
-//@ chunk-9cjx5pnm.js:26323-26478 placement
+//@ chunk-77qzxtqv.js:26391-26546 placement
 function hasPublishDenyRule(roots, context) {
   let permissions = context.permissions();
-  let filtered = getDenyRules(permissions).filter((rule) => !NARROWING_RULE_SOURCES.includes(rule.source));
+  let filtered = deniedBashRules(permissions).filter((rule) => !NARROWING_RULE_SOURCES.includes(rule.source));
   return (
     PATCH_TOOL_CAPS.some((toolName) => getDenyRuleForTool(permissions, toolName, filtered) !== null) ||
-    uniq(roots).some((root) => isManifestWriteDenied(join(root, PLUGIN_MANIFEST_PATH), permissions))
+    normalizeCaseForComparison_2(roots).some((root) =>
+      isManifestWriteDenied(join(root, PLUGIN_MANIFEST_PATH), permissions),
+    )
   );
 }
 export {
-  publishRequestHash,
-  listAccountMarketplaces,
-  uploadOrReplace,
-  waitForContentScan,
-  withArchive,
+  ensureOrganization,
   organizationAvailability,
-  normalizePublishInput,
+  publishRequestHash,
+  explainUnreadable,
   hashPublishInput,
   hashCanonical,
   hasPublishDenyRule,
   publishFlagState,
   checkPublishReadRules,
-  ensureOrganization,
-  explainUnreadable,
+  normalizePublishInput,
   readDeniedOutcome,
+  listAccountMarketplaces,
+  uploadOrReplace,
+  waitForContentScan,
+  withArchive,
 };

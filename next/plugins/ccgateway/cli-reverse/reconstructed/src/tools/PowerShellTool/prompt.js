@@ -3,9 +3,9 @@
  *
  * PowerShell 工具提示词：按版本（5.1/7+）的语法说明、已验证构建工具、Unix 命令对照、交互命令禁忌、后台与 sleep 规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/prompt.ts
- * pieces: chunk-mx04m55e.js (8)
+ * pieces: chunk-e6adj8n3.js (8)
  * attribution: placement 3, layout 3, fingerprint 2
  */
 import { getDefaultBashTimeoutMs, getMaxBashTimeoutMs } from "../../utils/timeouts.js";
@@ -22,33 +22,33 @@ import { getPlatform } from "../../utils/platform.js";
 import { getMaxOutputLength } from "../../utils/shell/outputLimits.js";
 import { GLOB_TOOL_NAME } from "../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { POWERSHELL_TOOL_NAME } from "./toolName.js";
 
-//@ chunk-mx04m55e.js:613-641 placement
+//@ chunk-e6adj8n3.js:644-671 placement
 /**
  * PowerShell 提示词里引用的默认超时（复用 Bash 的默认超时）。
  */
 function psDefaultTimeoutMs() {
   return getDefaultBashTimeoutMs();
 }
-//@ chunk-mx04m55e.js:641-669 placement
+//@ chunk-e6adj8n3.js:671-698 placement
 /**
  * PowerShell 提示词里引用的最大超时（复用 Bash 的最大超时）。
  */
 function psMaxTimeoutMs() {
   return getMaxBashTimeoutMs();
 }
-//@ chunk-mx04m55e.js:669-1465 layout
+//@ chunk-e6adj8n3.js:698-1494 layout
 function getBackgroundUsageNote() {
   if (isBackgroundTasksOff()) return null;
   if (!backgroundCompletionNoticeEnabled())
     return `  - You can use the \`run_in_background\` parameter to run the command in the background. Only use this if you don't need the result immediately. ${NO_FINISH_NOTIFICATION_NOTICE}`;
   return `  - You can use the \`run_in_background\` parameter to run the command in the background. ${hasBackgroundBashStopAfterReply() ? "Only use this if you don't need the result immediately; you'll be notified if it finishes while you are still working. After your reply you may not be told when it ends, and a few minutes later it is likely stopped, so if you need its result, wait for it before you reply." : "Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away - you'll be notified when it finishes."}${getBackgroundTimeoutPromptNote()}`;
 }
-//@ chunk-mx04m55e.js:1465-2348 layout
+//@ chunk-e6adj8n3.js:1494-2377 layout
 function getSleepGuidance() {
   if (isBackgroundTasksOff()) return null;
   let completionNotice = backgroundCompletionNoticeEnabled();
@@ -64,7 +64,7 @@ function getSleepGuidance() {
     - If you must poll an external process, use a check command rather than sleeping first.
     - If you must sleep, keep the duration short to avoid blocking the user.`;
 }
-//@ chunk-mx04m55e.js:2348-4157 fingerprint (2.1.88 match: getEditionSection, 1)
+//@ chunk-e6adj8n3.js:2377-4186 fingerprint (2.1.88 match: getEditionSection, 1)
 /**
  * 按 PowerShell 版本（desktop 5.1 / core 7+ / unknown）生成语法注意事项：&&/||、三元、?? 等是否可用。
  */
@@ -75,7 +75,7 @@ function getEditionSection(edition) {
     return "PowerShell edition: PowerShell 7+ (pwsh)\n   - Pipeline chain operators `&&` and `||` ARE available and work like bash. Prefer `cmd1 && cmd2` over `cmd1; cmd2` when cmd2 should only run if cmd1 succeeds.\n   - Ternary (`$cond ? $a : $b`), null-coalescing (`??`), and null-conditional (`?.`) operators are available.\n   - Default file encoding is UTF-8 without BOM.";
   return "PowerShell edition: unknown \u2014 assume Windows PowerShell 5.1 for compatibility\n   - Do NOT use `&&`, `||`, ternary `?:`, null-coalescing `??`, or null-conditional `?.`. These are PowerShell 7+ only and parser-error on 5.1.\n   - To chain commands conditionally: `A; if ($?) { B }`. Unconditionally: `A; B`.";
 }
-//@ chunk-mx04m55e.js:4157-4322 layout
+//@ chunk-e6adj8n3.js:4186-4351 layout
 /**
  * 取 PowerShell 版本与（开关 tengu_brass_sled 打开时）已验证的构建工具列表，生成 PowerShell 工具提示词。
  */
@@ -91,7 +91,7 @@ async function getPowerShellPrompt() {
     backgroundRuns: !isBackgroundTasksOff(),
   });
 }
-//@ chunk-mx04m55e.js:4322-12435 fingerprint (2.1.88 match: getPrompt, 0.812)
+//@ chunk-e6adj8n3.js:4351-12464 fingerprint (2.1.88 match: getPrompt, 0.812)
 /**
  * PowerShell 工具提示词：版本节、已验证构建工具、目录验证、语法说明、Unix 命令对照、退出码注意、交互命令禁忌、here-string 用法、超时/输出截断、专用工具优先、并行/顺序、git 规则、sleep 规则。
  */
@@ -185,8 +185,8 @@ ${
 }  - Avoid using PowerShell to run commands that have dedicated tools, unless explicitly instructed:
     - File search: Use ${GLOB_TOOL_NAME} (NOT Get-ChildItem -Recurse)
     - Content search: Use ${GREP_TOOL_NAME} (NOT Select-String)
-    - Read files: Use ${FILE_READ_TOOL_NAME} (NOT Get-Content)
-    - Edit files: Use ${FILE_EDIT_TOOL_NAME}
+    - Read files: Use ${READ} (NOT Get-Content)
+    - Edit files: Use ${EDIT}
     - Write files: Use ${FILE_WRITE_TOOL_NAME} (NOT Set-Content/Out-File)
     - Communication: Output text directly (NOT Write-Output/Write-Host)
   - When issuing multiple commands:
@@ -205,7 +205,7 @@ ${
     - Before running destructive operations (e.g., git reset --hard, git push --force, git checkout --), consider whether there is a safer alternative that achieves the same goal. Only use destructive operations when they are truly the best approach.
     - Never skip hooks (--no-verify) or bypass signing (--no-gpg-sign, -c commit.gpgsign=false) unless the user has explicitly asked for it. If a hook fails, investigate and fix the underlying issue.`;
 }
-//@ chunk-mx04m55e.js:12435-12506 placement
+//@ chunk-e6adj8n3.js:12464-12535 placement
 /**
  * PowerShell 中需要非沙箱执行才能用的输入字段。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Claude in Chrome 浏览器列表与切换：调用 list_connected_browsers/select_browser 并分类错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c8zmydch.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g3p0yaze.js (12)
  * attribution: placement 12
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -18,7 +18,7 @@ import { disconnectedAnswerCount, hasDisconnectedAnswerText } from "./phoneAnswe
 import { callMcpTool } from "../../services/mcp/mcpWireUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-c8zmydch.js:452-954 placement
+//@ chunk-g3p0yaze.js:452-954 placement
 /**
  * 浏览器列表 schema 与提示
  */
@@ -26,7 +26,7 @@ var browserListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js)
 var NO_BROWSERS_CONNECTED_TEXT;
 var CHROME_UNREACHABLE_TEXT;
 var BROWSER_NOT_LISTED_TEXT;
-deferInit("chunk-c8zmydch.js:452", () => {
+deferInit("chunk-g3p0yaze.js:452", () => {
   browserListSchema = DoctorLazy(() =>
     objectSchema({
       deviceId: stringSchema(),
@@ -41,9 +41,9 @@ deferInit("chunk-c8zmydch.js:452", () => {
   BROWSER_NOT_LISTED_TEXT =
     "That browser isn't connected right now. Make sure Chrome is open with the Claude extension on that computer, then try again.";
 });
-//@ chunk-c8zmydch.js:954-1175 placement
+//@ chunk-g3p0yaze.js:954-1175 placement
 let BrowserNotListedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c8zmydch.js:954", () => {
+deferInit("chunk-g3p0yaze.js:954", () => {
   BrowserNotListedError = class BrowserNotListedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -57,9 +57,9 @@ deferInit("chunk-c8zmydch.js:954", () => {
     }
   };
 });
-//@ chunk-c8zmydch.js:1175-1256 placement
+//@ chunk-g3p0yaze.js:1175-1256 placement
 let ChromeToolRefusedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c8zmydch.js:1175", () => {
+deferInit("chunk-g3p0yaze.js:1175", () => {
   ChromeToolRefusedError = class ChromeToolRefusedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -68,11 +68,11 @@ deferInit("chunk-c8zmydch.js:1175", () => {
     }
   };
 });
-//@ chunk-c8zmydch.js:1256-1296 placement
+//@ chunk-g3p0yaze.js:1256-1296 placement
 function isBrowserNotListed(error) {
   return error instanceof BrowserNotListedError;
 }
-//@ chunk-c8zmydch.js:1296-1583 placement
+//@ chunk-g3p0yaze.js:1296-1583 placement
 function logBrowserSwitchFailure(error) {
   if (isChromeBridgeUnreachable(error)) logFeatureSad("chrome_browser_picker", "bridge_unreachable");
   else if (isBrowserNotListed(error) && error.namedABrowser)
@@ -82,9 +82,9 @@ function logBrowserSwitchFailure(error) {
   else if (isBrowserNotListed(error)) logFeatureBad("chrome_browser_picker", "invalid_request");
   else logFeatureBad("chrome_browser_picker", "select_failed");
 }
-//@ chunk-c8zmydch.js:1583-1669 placement
+//@ chunk-g3p0yaze.js:1583-1669 placement
 let ChromeBridgeUnreachableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c8zmydch.js:1583", () => {
+deferInit("chunk-g3p0yaze.js:1583", () => {
   ChromeBridgeUnreachableError = class ChromeBridgeUnreachableError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -93,16 +93,16 @@ deferInit("chunk-c8zmydch.js:1583", () => {
     }
   };
 });
-//@ chunk-c8zmydch.js:1669-1709 placement
+//@ chunk-g3p0yaze.js:1669-1709 placement
 function isChromeBridgeUnreachable(error) {
   return error instanceof ChromeBridgeUnreachableError;
 }
-//@ chunk-c8zmydch.js:1709-1752 placement
+//@ chunk-g3p0yaze.js:1709-1752 placement
 function noBrowsersWhenUnreachable(error) {
   if (isChromeBridgeUnreachable(error)) return [];
   throw error;
 }
-//@ chunk-c8zmydch.js:1752-1909 placement
+//@ chunk-g3p0yaze.js:1752-1909 placement
 async function listConnectedBrowsers(chromeClient) {
   let rawText = await callChromeTool(chromeClient, "list_connected_browsers", {});
   if (!rawText) return [];
@@ -110,9 +110,9 @@ async function listConnectedBrowsers(chromeClient) {
   if (!parseResult.success) throw new BrowserListShapeError();
   return parseResult.data;
 }
-//@ chunk-c8zmydch.js:1909-2119 placement
+//@ chunk-g3p0yaze.js:1909-2119 placement
 let BrowserListShapeError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c8zmydch.js:1909", () => {
+deferInit("chunk-g3p0yaze.js:1909", () => {
   BrowserListShapeError = class BrowserListShapeError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -124,7 +124,7 @@ deferInit("chunk-c8zmydch.js:1909", () => {
     }
   };
 });
-//@ chunk-c8zmydch.js:2119-2446 placement
+//@ chunk-g3p0yaze.js:2119-2446 placement
 async function selectBrowser(chromeClient, deviceId, withRetry = (promise) => promise) {
   if (typeof deviceId !== "string" || deviceId === "") throw new BrowserNotListedError(false, false);
   try {
@@ -141,7 +141,7 @@ async function selectBrowser(chromeClient, deviceId, withRetry = (promise) => pr
     throw new BrowserNotListedError(browsers.length === 0, true);
   }
 }
-//@ chunk-c8zmydch.js:2446-2819 placement
+//@ chunk-g3p0yaze.js:2446-2819 placement
 async function callChromeTool(chromeClient, toolName, args) {
   let disconnectCountBefore = disconnectedAnswerCount();
   let result = await callMcpTool(

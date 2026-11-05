@@ -3,19 +3,19 @@
  *
  * 云端回收目录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (8)
  * attribution: placement 8
  */
-//@ chunk-s61vbvea.js:596669-596741 placement
+//@ chunk-7jxyna5q.js:514060-514132 placement
 /**
  * 云回收站目录里的标记文件名。
  */
 var CLOUD_TRASH_DIR = "claude-cloud-trash";
 var CLOUD_TRASH_MARKER_FILE = ".claude-cloud-trash";
 var GITIGNORE_FILE_NAME = ".gitignore";
-//@ chunk-s61vbvea.js:596741-596893 placement
+//@ chunk-7jxyna5q.js:514132-514284 placement
 function findHandleInOtherDrawings({ byDrawing, plugin, except, handle }) {
   for (let [drawingKey, drawing] of byDrawing)
     if (drawingKey !== except && drawingKey.startsWith(`${plugin}\x00`)) {
@@ -24,7 +24,7 @@ function findHandleInOtherDrawings({ byDrawing, plugin, except, handle }) {
     }
   return;
 }
-//@ chunk-s61vbvea.js:596893-597128 placement
+//@ chunk-7jxyna5q.js:514284-514519 placement
 function carryForwardHandles({ previous, handles, ...rest }) {
   let currentHandles = new Set(handles);
   return new Map([
@@ -47,23 +47,23 @@ function carryForwardHandles({ previous, handles, ...rest }) {
     }),
   ]);
 }
-//@ chunk-s61vbvea.js:597128-597201 placement
+//@ chunk-7jxyna5q.js:514519-514592 placement
 /**
  * 云回收站条目的键（文件、组件、请求 id 与面板）。
  */
 var cloudTrashEntryKey = (plugin, target) =>
   `${plugin}\x00${target.component}\x00${target.requestId}\x00${target.surface}`;
-//@ chunk-s61vbvea.js:597201-597219 placement
+//@ chunk-7jxyna5q.js:514592-514610 placement
 /**
  * 回收站随机后缀的上限（2^30）。
  */
 var TRASH_SUFFIX_RANGE_EXCLUSIVE = 1073741824;
-//@ chunk-s61vbvea.js:597219-597259 placement
+//@ chunk-7jxyna5q.js:514610-514650 placement
 /**
  * 生成回收站目录的随机后缀。
  */
 var randomTrashSuffix = () => Math.floor(Math.random() * TRASH_SUFFIX_RANGE_EXCLUSIVE);
-//@ chunk-s61vbvea.js:597259-598766 placement
+//@ chunk-7jxyna5q.js:514650-516165 placement
 function moveToCloudTrash_2() {
   let pressesByHandle = new Map();
   let byDrawing = new Map();
@@ -175,9 +175,9 @@ function moveToCloudTrash_2() {
     heldPressCount: () => pressesByHandle.size,
   };
 }
-//@ chunk-s61vbvea.js:598766-598779 placement
+//@ chunk-7jxyna5q.js:516165-516178 placement
 /**
  * 把文件移入云回收站（保留时间戳等元信息）。
  */
 var moveToCloudTrash = moveToCloudTrash_2();
-export { moveToCloudTrash, CLOUD_TRASH_DIR, CLOUD_TRASH_MARKER_FILE, GITIGNORE_FILE_NAME };
+export { CLOUD_TRASH_DIR, CLOUD_TRASH_MARKER_FILE, GITIGNORE_FILE_NAME, moveToCloudTrash };

@@ -1,13 +1,13 @@
 /**
  * @js-sdsl/ordered-map/dist/cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @js-sdsl/ordered-map@4.4.2
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-pwh5dx3n.js:44332-52023 cjs-fingerprint
+//@ chunk-3k21nfa0.js:44332-52023 cjs-fingerprint
 var require_ordered_map = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "t", {
     value: true,

@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/vertex-sdk/internal/headers.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
- * pieces: chunk-xa96axyz.js (3)
+ * pieces: chunk-1vqm62xf.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
 import { isArray_default } from "./utils/values.mjs";
 
-//@ chunk-xa96axyz.js:1139-1188 esm-fingerprint
+//@ chunk-1vqm62xf.js:1139-1188 esm-fingerprint
 var brand_privateNullableHeaders = Symbol.for("brand.privateNullableHeaders");
-//@ chunk-xa96axyz.js:1188-1617 esm-fingerprint
+//@ chunk-1vqm62xf.js:1188-1617 esm-fingerprint
 function* iterateHeaders(headers) {
   if (!headers) return;
   if (brand_privateNullableHeaders in headers) {
@@ -41,7 +41,7 @@ function* iterateHeaders(headers) {
     }
   }
 }
-//@ chunk-xa96axyz.js:1617-2219 esm-layout
+//@ chunk-1vqm62xf.js:1617-2219 esm-layout
 var clearSentinel = Symbol("clear");
 var APPEND_HEADERS = new Set(["x-stainless-helper"]);
 var appendHeaderValue = (existing, addition) => {

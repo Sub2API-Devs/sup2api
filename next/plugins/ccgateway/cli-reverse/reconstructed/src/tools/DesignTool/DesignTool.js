@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design 工具：操作目录（只读/破坏性属性）、输入 schema、调用与结果转换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-171dhyhe.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ma8ytfb3.js (27)
  * attribution: placement 27
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -75,14 +75,14 @@ import { tagObject } from "../../services/policyLimits/capabilityBlocks.js";
 import { isBase64ImageBlock_2 } from "../../utils/imageValidation.js";
 import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-171dhyhe.js:12468-12517 placement
+//@ chunk-ma8ytfb3.js:13616-13665 placement
 /**
  * 计算字符串的 UTF-8 字节数，用于校验操作参数长度。
  */
 function utf8ByteLengthShort(text) {
   return Buffer.byteLength(text, "utf8");
 }
-//@ chunk-171dhyhe.js:12517-15493 placement
+//@ chunk-ma8ytfb3.js:13665-16641 placement
 /**
  * 写类操作的参数结构（允许的顶层字段、数组元素字段、枚举取值），describeDesignOperation 用它校验参数。
  */
@@ -292,7 +292,7 @@ var READ_OP_SCHEMAS = {
     top: new Set(["project_id"]),
   },
 };
-//@ chunk-171dhyhe.js:15493-18507 placement
+//@ chunk-ma8ytfb3.js:16641-19655 placement
 function describeDesignOperation(operation, args) {
   let schema = Object.hasOwn(WRITE_OP_SCHEMAS, operation)
     ? WRITE_OP_SCHEMAS[operation]
@@ -368,14 +368,14 @@ function describeDesignOperation(operation, args) {
   }
   return null;
 }
-//@ chunk-171dhyhe.js:18507-18559 placement
+//@ chunk-ma8ytfb3.js:19655-19707 placement
 /**
  * 按操作名取 readOnly/destructive 属性（DESIGN_OPERATION_TRAITS）。
  */
 function designOperationTraits(operation) {
   return Object.hasOwn(DESIGN_OPERATION_TRAITS, operation) ? DESIGN_OPERATION_TRAITS[operation] : undefined;
 }
-//@ chunk-171dhyhe.js:18559-18731 placement
+//@ chunk-ma8ytfb3.js:19707-19879 placement
 var DESIGN_TOOL_ENTRY_SCHEMA = DoctorLazy(() =>
   looseObject({
     name: stringSchema(),
@@ -387,7 +387,7 @@ var DESIGN_TOOL_ENTRY_SCHEMA = DoctorLazy(() =>
     }).optional(),
   }),
 );
-//@ chunk-171dhyhe.js:18731-18915 placement
+//@ chunk-ma8ytfb3.js:19879-20063 placement
 class DesignHintsRegistry {
   byOperation = new Map();
   hintsFor(operation) {
@@ -403,26 +403,26 @@ class DesignHintsRegistry {
     this.byOperation.clear();
   }
 }
-//@ chunk-171dhyhe.js:18915-18940 placement
+//@ chunk-ma8ytfb3.js:20063-20088 placement
 /**
  * 按宿主隔离的“设计操作提示”注册表缓存。
  */
 var designHintsByHost; // deferred: uses DesignHintsRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-171dhyhe.js:18915", () => {
+deferInit("chunk-ma8ytfb3.js:20063", () => {
   designHintsByHost = new HostScoped(() => new DesignHintsRegistry());
 });
-//@ chunk-171dhyhe.js:18940-18977 placement
+//@ chunk-ma8ytfb3.js:20088-20125 placement
 /**
  * 取出当前根会话宿主的设计操作提示注册表。
  */
 function getDesignHints() {
   return designHintsByHost.of(getRootSession().host);
 }
-//@ chunk-171dhyhe.js:18977-19015 placement
+//@ chunk-ma8ytfb3.js:20125-20163 placement
 function designHintsFor(operation) {
   return getDesignHints().hintsFor(operation);
 }
-//@ chunk-171dhyhe.js:19015-19485 placement
+//@ chunk-ma8ytfb3.js:20163-20633 placement
 /**
  * 解析设计服务返回的操作列表，结合内置特性表确定只读/破坏性提示并登记，返回工具描述列表。
  */
@@ -457,16 +457,16 @@ function recordDesignTools(tools) {
   }
   return recordedTools;
 }
-//@ chunk-171dhyhe.js:19485-19521 placement
+//@ chunk-ma8ytfb3.js:20633-20669 placement
 function isUnknownDesignOperation(operation) {
   return !getDesignHints().knows(operation);
 }
-//@ chunk-171dhyhe.js:19521-19601 placement
+//@ chunk-ma8ytfb3.js:20669-20749 placement
 function redactToken(text, token) {
   if (!token) return text;
   return text.split(token).join("[redacted-oauth-token]");
 }
-//@ chunk-171dhyhe.js:19601-19752 placement (2.1.88 match: getOAuthHeaders, 0.875)
+//@ chunk-ma8ytfb3.js:20749-20900 placement (2.1.88 match: getOAuthHeaders, 0.875)
 function getOAuthHeaders(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -475,21 +475,21 @@ function getOAuthHeaders(accessToken) {
     "anthropic-client-platform": getClientPlatform(),
   };
 }
-//@ chunk-171dhyhe.js:19752-19815 placement
+//@ chunk-ma8ytfb3.js:20900-20963 placement
 /**
  * 把字节数格式化成 “123B / 1.2KB”，用于错误与省略提示。
  */
 function formatByteSize(bytes) {
   return bytes < 1024 ? `${bytes}B` : `${(bytes / 1024).toFixed(1)}KB`;
 }
-//@ chunk-171dhyhe.js:19815-19864 placement
+//@ chunk-ma8ytfb3.js:20963-21012 placement
 /**
  * 计算字符串的 UTF-8 字节数（与 x 相同的实现，用于输出裁剪）。
  */
 function utf8ByteLength(text) {
   return Buffer.byteLength(text, "utf8");
 }
-//@ chunk-171dhyhe.js:19864-20856 placement
+//@ chunk-ma8ytfb3.js:21012-22004 placement
 function designOperationTitle(operation) {
   switch (operation) {
     case "list":
@@ -538,13 +538,13 @@ function designOperationTitle(operation) {
       return operation ?? "";
   }
 }
-//@ chunk-171dhyhe.js:20856-21255 placement
+//@ chunk-ma8ytfb3.js:22004-22403 placement
 /**
  * Claude Design 工具的输出 schema：operation、content 块数组与 isError。
  */
 var DesignToolInputSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var designToolOutputSchema;
-deferInit("chunk-171dhyhe.js:20856", () => {
+deferInit("chunk-ma8ytfb3.js:22004", () => {
   DesignToolInputSchema = DoctorLazy(() =>
     zodStrictObject({
       operation: stringSchema()
@@ -565,7 +565,7 @@ deferInit("chunk-171dhyhe.js:20856", () => {
     }),
   );
 });
-//@ chunk-171dhyhe.js:21255-21411 placement
+//@ chunk-ma8ytfb3.js:22403-22559 placement
 function needsDesignWritePrompt(context) {
   let permissionState = context.permissions();
   return (
@@ -574,7 +574,7 @@ function needsDesignWritePrompt(context) {
     !(permissionState.mode === "plan" && permissionState.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-171dhyhe.js:21411-21883 placement
+//@ chunk-ma8ytfb3.js:22559-23031 placement
 /**
  * 分享范围到展示文案的映射（邀请成员、全组织可见、公开）。
  */
@@ -588,7 +588,7 @@ var SHARING_LABELS = {
 var MAX_PROJECT_NAME_DISPLAY_CHARS = 60;
 var UNSAFE_PROJECT_TEXT_RE =
   /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u2026\u2800\u3164\uFE00-\uFE0E\uFEFF\uFFF9-\uFFFB\uFFA0]/;
-//@ chunk-171dhyhe.js:21883-22054 placement
+//@ chunk-ma8ytfb3.js:23031-23202 placement
 function hasStrayJoiners(text) {
   return (
     /(?:^|\s)[\u200C\u200D\uFE0F]/.test(text) ||
@@ -597,14 +597,14 @@ function hasStrayJoiners(text) {
     /(?:^|[^\p{Emoji}])\uFE0F/u.test(text)
   );
 }
-//@ chunk-171dhyhe.js:22054-22238 placement
+//@ chunk-ma8ytfb3.js:23202-23386 placement
 /**
  * 匹配各种引号与破折号写法，避免被用于伪造项目名。
  */
 var TAG_CHAR_RE = /\uDB40[\uDC20-\uDC7F\uDD00-\uDDEF]|\uD834[\uDD73-\uDD7A]/;
 var QUOTE_LIKE_CHARS_RE =
   /["\u201C\u201D\u201E\u201F\uFF02\u2033\u2036\u02BA\u02DD\u02EE\u05F4\u3003\u301D-\u301F\u275D\u275E\u2014\u2015]/;
-//@ chunk-171dhyhe.js:22238-22401 placement
+//@ chunk-ma8ytfb3.js:23386-23550 placement
 function canPromptForDesign(context) {
   if (context.agentContext?.agentType !== "main") return false;
   try {
@@ -617,7 +617,7 @@ function canPromptForDesign(context) {
     return false;
   }
 }
-//@ chunk-171dhyhe.js:22401-23375 placement
+//@ chunk-ma8ytfb3.js:23550-24523 placement
 /**
  * 读取设计项目的名字、分享范围与 URL，做严格清洗（控制字符、可疑 Unicode、URL 形状），不合格返回 null。
  */
@@ -689,12 +689,12 @@ async function fetchDesignProjectInfo(toolContext, projectId, signal, credential
     return null;
   }
 }
-//@ chunk-171dhyhe.js:23375-43714 placement
+//@ chunk-ma8ytfb3.js:24523-44862 placement
 /**
  * Claude Design 工具（2.1.316 新增）：通过 /v1/design/mcp 与 claude.ai/design 的设计系统和项目交互（列出操作、读写文件、渲染预览、finalize_plan），写操作需要项目授权与同意。
  */
 var DesignTool; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-171dhyhe.js:23375", () => {
+deferInit("chunk-ma8ytfb3.js:24523", () => {
   DesignTool = buildTool({
     name: CLAUDE_DESIGN_TOOL_NAME,
     searchHint: "work with Claude Design (claude.ai/design) projects",
@@ -1485,14 +1485,14 @@ deferInit("chunk-171dhyhe.js:23375", () => {
     },
   });
 });
-//@ chunk-171dhyhe.js:43714-43772 placement
+//@ chunk-ma8ytfb3.js:44862-44920 placement
 /**
  * 单个 render_preview 图片 base64 的字符上限，超出换成说明文本。
  */
 var DESIGN_IMAGE_MEDIA_PATTERN = /^image\/(png|jpeg|gif|webp)$/;
 var MAX_PREVIEW_IMAGE_CHARS = 130000;
 var MAX_RESULT_IMAGE_CHARS = 130000;
-//@ chunk-171dhyhe.js:43772-44240 placement
+//@ chunk-ma8ytfb3.js:44920-45388 placement
 function designContentToBlocks(block) {
   if (block.type === "text" && typeof block.text === "string")
     return [
@@ -1532,7 +1532,7 @@ function designContentToBlocks(block) {
     },
   ];
 }
-//@ chunk-171dhyhe.js:44358-44646 placement
+//@ chunk-ma8ytfb3.js:45506-45794 placement
 function capDesignImageBlocks(blocks) {
   let remainingChars = MAX_RESULT_IMAGE_CHARS;
   let keptBlocks = [];

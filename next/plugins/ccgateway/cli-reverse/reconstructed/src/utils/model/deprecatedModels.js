@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：已弃用/已退役模型表（Sonnet 4.5、Opus 4.1 等的退役日期）与提示词段落
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1yv1s0pm.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x7zrvjn0.js (3)
  * attribution: placement 3
  */
 import { realpath } from "fs/promises";
@@ -16,7 +16,7 @@ import { ripGrep_2 } from "../ripgrep.js";
 import { withDeadline } from "../sleep.js";
 import { isAttachmentReadDeniedOrThrown } from "../attachments/fileAttachments.js";
 
-//@ chunk-1yv1s0pm.js:11938-13795 placement
+//@ chunk-x7zrvjn0.js:13086-14943 placement
 /**
  * 弃用/退役模型族表（名称、id、状态、日期）。
  */
@@ -124,7 +124,7 @@ var DEPRECATION_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   timeZone: "UTC",
 });
-//@ chunk-1yv1s0pm.js:13795-14902 placement
+//@ chunk-x7zrvjn0.js:14943-16050 placement
 /**
  * 用 ripgrep 在项目中查找对弃用模型 id 的引用。
  */
@@ -204,7 +204,7 @@ async function grepForDeprecatedModels(projectDir, readDenialContext, signal, ti
     cancelled,
   };
 }
-//@ chunk-1yv1s0pm.js:14902-16074 placement
+//@ chunk-x7zrvjn0.js:16050-17222 placement
 function formatDeprecatedModelsSection(
   families,
   modelStrings,

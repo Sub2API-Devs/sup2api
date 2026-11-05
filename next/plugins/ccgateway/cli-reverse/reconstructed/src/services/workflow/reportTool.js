@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流汇报工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -23,7 +23,7 @@ import { flagAgentContract, setAgentMissState } from "../../tools/AgentTool/hand
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-41w44bgm.js:38376-38491 placement
+//@ chunk-kd2wbncj.js:29178-29293 placement
 var reportInputSchema = DoctorLazy(() =>
   objectSchema({
     message: stringSchema().describe("Your full report for your caller"),
@@ -35,7 +35,7 @@ var reportOutputSchema = DoctorLazy(() =>
     message: stringSchema(),
   }),
 );
-//@ chunk-41w44bgm.js:38491-40004 placement
+//@ chunk-kd2wbncj.js:29293-30806 placement
 /**
  * 构造子代理向调用者交回最终报告的工具（SUBAGENTHANDBACK）：只对指定 agentId 有效，报告不能为空且只计第一次；附带分类器审查结果，可配置为交付后结束回合。
  */

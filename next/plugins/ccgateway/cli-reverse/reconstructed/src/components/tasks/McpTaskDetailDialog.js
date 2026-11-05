@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 服务器任务详情对话框（状态、轮询、停止、返回）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qd18c590.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e3632sxp.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -23,7 +23,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 
-//@ chunk-qd18c590.js:5186-8235 placement
+//@ chunk-e3632sxp.js:5522-8571 placement
 /**
  * MCP 服务器任务详情对话框（状态、轮询、停止、返回）。
  */

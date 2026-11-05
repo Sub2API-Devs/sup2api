@@ -3,9 +3,9 @@
  *
  * flagged-plugins.json：被下架强制卸载的插件标记的读写、已读与过期清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginFlagging.ts
- * pieces: chunk-rrq1mnv6.js (12)
+ * pieces: chunk-w8hpkj60.js (12)
  * attribution: fingerprint 5, layout 4, callgraph-witnessed 3
  */
 import { join } from "path";
@@ -23,14 +23,14 @@ import { getFsImplementation } from "../fsOperations.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rrq1mnv6.js:1040-1081 fingerprint (2.1.88 match: FLAGGED_PLUGINS_FILENAME, 1)
+//@ chunk-w8hpkj60.js:1040-1081 fingerprint (2.1.88 match: FLAGGED_PLUGINS_FILENAME, 1)
 var FLAGGED_PLUGINS_FILENAME = "flagged-plugins.json";
 var FLAGGED_RETENTION_MS = 172800000;
-//@ chunk-rrq1mnv6.js:1081-1111 layout
+//@ chunk-w8hpkj60.js:1081-1111 layout
 function getFlaggedPluginsPath() {
   return join(getPluginsDirectory(), FLAGGED_PLUGINS_FILENAME);
 }
-//@ chunk-rrq1mnv6.js:1111-1481 fingerprint (2.1.88 match: parsePluginsData, 1)
+//@ chunk-w8hpkj60.js:1111-1481 fingerprint (2.1.88 match: parsePluginsData, 1)
 function parsePluginsData(content) {
   let parsed = jsonParse(content);
   if (
@@ -53,10 +53,10 @@ function parsePluginsData(content) {
     }
   return result;
 }
-//@ chunk-rrq1mnv6.js:1481-1613 layout
+//@ chunk-w8hpkj60.js:1481-1613 layout
 var EXPECTED_FS_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXPECTED_STORAGE_ERRORS;
-deferInit("chunk-rrq1mnv6.js:1481", () => {
+deferInit("chunk-w8hpkj60.js:1481", () => {
   EXPECTED_FS_ERRORS = new Set(["ENOSPC", "EROFS", "EACCES", "ENOENT", "ENOTDIR"]);
   EXPECTED_STORAGE_ERRORS = new Set([
     ...EXPECTED_FS_ERRORS,
@@ -66,13 +66,13 @@ deferInit("chunk-rrq1mnv6.js:1481", () => {
     "UnexpectedAbsent",
   ]);
 });
-//@ chunk-rrq1mnv6.js:1613-1682 layout
+//@ chunk-w8hpkj60.js:1613-1682 layout
 function flaggedPluginIdIfStored(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined && pluginRegistrySpace("flagged") !== null
     ? storageV5
     : undefined;
 }
-//@ chunk-rrq1mnv6.js:1682-2011 callgraph-witnessed (2.1.88 match: readFromDisk, 0.395)
+//@ chunk-w8hpkj60.js:1682-2011 callgraph-witnessed (2.1.88 match: readFromDisk, 0.397)
 async function readFromDisk(storageV5) {
   let storageId = flaggedPluginIdIfStored(storageV5);
   if (storageId) {
@@ -98,7 +98,7 @@ async function readFromDisk(storageV5) {
     return {};
   }
 }
-//@ chunk-rrq1mnv6.js:2011-2670 callgraph-witnessed (2.1.88 match: writeToDisk, 0.15)
+//@ chunk-w8hpkj60.js:2011-2670 callgraph-witnessed (2.1.88 match: writeToDisk, 0.15)
 async function writeToDisk(plugins, storageV5) {
   let storageId = flaggedPluginIdIfStored(storageV5);
   if (storageId) {
@@ -151,7 +151,7 @@ async function writeToDisk(plugins, storageV5) {
     else logError(error);
   }
 }
-//@ chunk-rrq1mnv6.js:2670-2862 fingerprint (2.1.88 match: loadFlaggedPlugins, 0.77)
+//@ chunk-w8hpkj60.js:2670-2862 fingerprint (2.1.88 match: loadFlaggedPlugins, 0.77)
 /**
  * 读取 flagged-plugins.json（被下架强制卸载的插件），超过 48 小时且已看过的条目清掉。
  */
@@ -167,14 +167,14 @@ async function loadFlaggedPlugins(storageV5) {
   getPluginRegistry().flaggedPlugins = all;
   if (changed) await writeToDisk(all, storageV5);
 }
-//@ chunk-rrq1mnv6.js:2862-2908 layout
+//@ chunk-w8hpkj60.js:2862-2908 layout
 /**
  * 全局状态中的 flagged 插件表。
  */
 function getFlaggedPlugins() {
   return getPluginRegistry().flaggedPlugins ?? {};
 }
-//@ chunk-rrq1mnv6.js:2908-3104 fingerprint (2.1.88 match: addFlaggedPlugin, 0.886)
+//@ chunk-w8hpkj60.js:2908-3104 fingerprint (2.1.88 match: addFlaggedPlugin, 0.886)
 /**
  * 标记一个插件为 flagged（记录时间），持久化。
  */
@@ -190,7 +190,7 @@ async function addFlaggedPlugin(pluginId, storageV5) {
   await writeToDisk(updated, storageV5);
   logForDebugging(`Flagged plugin: ${pluginId}`);
 }
-//@ chunk-rrq1mnv6.js:3104-3341 fingerprint (2.1.88 match: markFlaggedPluginsSeen, 0.762)
+//@ chunk-w8hpkj60.js:3104-3341 fingerprint (2.1.88 match: markFlaggedPluginsSeen, 0.762)
 /**
  * 把所有 flagged 插件标为已看过（/plugin 界面展示后）。
  */
@@ -214,7 +214,7 @@ async function markFlaggedPluginsSeen(pluginIds, storageV5) {
   }
   if (changed) await writeToDisk(updated, storageV5);
 }
-//@ chunk-rrq1mnv6.js:3341-3531 callgraph-witnessed (2.1.88 match: removeFlaggedPlugin, 0)
+//@ chunk-w8hpkj60.js:3341-3531 callgraph-witnessed (2.1.88 match: removeFlaggedPlugin, 0)
 /**
  * 移除一个 flagged 标记。
  */
@@ -228,8 +228,8 @@ async function removeFlaggedPlugin(pluginId, storageV5) {
 }
 export {
   getFlaggedPlugins,
-  markFlaggedPluginsSeen,
-  removeFlaggedPlugin,
   loadFlaggedPlugins,
   addFlaggedPlugin,
+  markFlaggedPluginsSeen,
+  removeFlaggedPlugin,
 };

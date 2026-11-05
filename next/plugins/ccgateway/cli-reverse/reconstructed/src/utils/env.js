@@ -3,10 +3,10 @@
  *
  * 运行环境探测：全局配置文件位置（getGlobalClaudeFile）、终端类型、包管理器/运行时、WSL、Docker、部署环境、SSH 会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/env.ts
- * pieces: chunk-4m46mxx9.js (1), chunk-aepeg2w5.js (1), chunk-cdz6g143.js (1), chunk-cxdk9p3j.js (1), chunk-jhrww53q.js (38)
- * attribution: fingerprint 12, placement 4, facade-exports 8, layout 17, callgraph-witnessed 1
+ * pieces: chunk-08q4d92p.js (1), chunk-c4qa5qn0.js (1), chunk-exfmq47h.js (1), chunk-xjnnz630.js (38)
+ * attribution: fingerprint 12, placement 4, facade-exports 8, layout 16, callgraph-witnessed 1
  */
 import { join, resolve, delimiter } from "path";
 import { homedir } from "os";
@@ -18,16 +18,17 @@ import {
   hasUntouchableRecordSpellingStrictAsync,
   safeResolvePath_2,
 } from "./fsOperations.js";
-import { getClaudeConfigDir, isEnvTruthy } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { fileSuffixForOauthConfig, OAUTH_GLOBAL_FILE_SUFFIXES } from "../constants/oauth.js";
 import { whichAsync, bunWhichSync } from "./which.js";
 import { isNetworkishPath } from "./networkPaths.js";
 import { hasDotDotSegment } from "./pathClassification.js";
 import { getPlatform } from "./platform.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { withTimeout } from "./sleep.js";
 import { HostScoped } from "./hostScoped.js";
 import { getIsDocker } from "./envDynamic.js";
+import { isEnvTruthy } from "./envUtils.js";
 import { alwaysTrue } from "./slowOperations.js";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../services/analytics/safeMetadata.js";
 import { weakMap, createEnvAccessor, ALL_ENV_VARS } from "./env/envRegistry.js";
@@ -36,23 +37,23 @@ import { errorMessage } from "./errors.js";
 import { CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME } from "./auth.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-jhrww53q.js:49649-49673 placement
+//@ chunk-xjnnz630.js:51332-51356 placement
 /**
  * 无盘会话时直接返回真（跳过环境探测）。
  */
 function isDisklessEnvProbe() {
   return isDiskless();
 }
-//@ chunk-jhrww53q.js:49673-49764 fingerprint (2.1.88 match: isWslEnvironment, 1)
+//@ chunk-xjnnz630.js:51356-51447 fingerprint (2.1.88 match: isWslEnvironment, 1)
 function isWslEnvironment() {
   if (isDisklessEnvProbe()) return false;
   return getFsImplementation().existsSync("/proc/sys/fs/binfmt_misc/WSLInterop");
 }
-//@ chunk-jhrww53q.js:49764-49897 placement (2.1.88 match: readFileSafe, 0.594)
+//@ chunk-xjnnz630.js:51447-51580 placement
 /**
  * 读取 /sys/hypervisor/uuid（判断云主机），误归到 utils/file。
  */
-function readFileSafe() {
+function readHypervisorUuid() {
   if (isDisklessEnvProbe()) return;
   try {
     return getFsImplementation()
@@ -65,7 +66,7 @@ function readFileSafe() {
     return;
   }
 }
-//@ chunk-jhrww53q.js:49964-50152 placement
+//@ chunk-xjnnz630.js:51647-51835 placement
 /**
  * 确定全局配置文件：若 <配置目录>/.config.json 存在且非空（或可写且默认文件不存在）用它；否则用 $CLAUDE_CONFIG_DIR 或 HOME 下的 .claude<后缀>.json（后缀随 OAuth 环境：''、-staging-oauth、-local-oauth、-custom-oauth）。
  */
@@ -84,27 +85,27 @@ function resolveGlobalClaudeFile() {
   } catch {}
   return defaultGlobalClaudeFile;
 }
-//@ chunk-jhrww53q.js:50152-50243 placement
+//@ chunk-xjnnz630.js:51835-51926 placement
 function getDefaultGlobalClaudeFile() {
   let fileName = `.claude${fileSuffixForOauthConfig()}.json`;
   return join(process.env.CLAUDE_CONFIG_DIR || homedir(), fileName);
 }
-//@ chunk-jhrww53q.js:50243-50290 facade-exports
+//@ chunk-xjnnz630.js:51926-51973 facade-exports
 function getGlobalClaudeFile() {
   return getEnvProbe().getGlobalClaudeFile();
 }
-//@ chunk-jhrww53q.js:50290-50341 facade-exports
+//@ chunk-xjnnz630.js:51973-52023 facade-exports
 function describeGlobalConfigFile() {
   return isDiskless() ? "the global config" : getGlobalClaudeFile();
 }
-//@ chunk-jhrww53q.js:50341-50373 layout
+//@ chunk-xjnnz630.js:52023-52055 layout
 /**
  * 探测内网可访问性（当前恒返回 null）。
  */
 async function probeInternalNetworkAccess() {
   return null;
 }
-//@ chunk-jhrww53q.js:50373-50433 callgraph-witnessed (2.1.88 match: isCommandAvailable, 0)
+//@ chunk-xjnnz630.js:52055-52115 callgraph-witnessed (2.1.88 match: isCommandAvailable, 0)
 async function isCommandAvailable(command) {
   try {
     return !!(await whichAsync(command));
@@ -112,7 +113,7 @@ async function isCommandAvailable(command) {
     return false;
   }
 }
-//@ chunk-jhrww53q.js:50433-50571 fingerprint (2.1.88 match: detectPackageManagers, 1)
+//@ chunk-xjnnz630.js:52115-52253 fingerprint (2.1.88 match: detectPackageManagers, 1)
 async function detectPackageManagers() {
   let packageManagers = [];
   if (await isCommandAvailable("npm")) packageManagers.push("npm");
@@ -120,7 +121,7 @@ async function detectPackageManagers() {
   if (await isCommandAvailable("pnpm")) packageManagers.push("pnpm");
   return packageManagers;
 }
-//@ chunk-jhrww53q.js:50571-50709 fingerprint (2.1.88 match: detectRuntimes, 1)
+//@ chunk-xjnnz630.js:52253-52391 fingerprint (2.1.88 match: detectRuntimes, 1)
 async function detectRuntimes() {
   let runtimes = [];
   if (await isCommandAvailable("bun")) runtimes.push("bun");
@@ -128,7 +129,7 @@ async function detectRuntimes() {
   if (await isCommandAvailable("node")) runtimes.push("node");
   return runtimes;
 }
-//@ chunk-jhrww53q.js:50709-51001 layout
+//@ chunk-xjnnz630.js:52391-52683 layout
 /**
  * 构建工具名与 PATH 扫描超时。
  */
@@ -173,7 +174,7 @@ var BUILD_TOOL_NAMES = [
   "docker",
 ];
 var PATH_SCAN_TIMEOUT_MS = 1000;
-//@ chunk-jhrww53q.js:51001-51082 layout
+//@ chunk-xjnnz630.js:52683-52764 layout
 /**
  * 判断符号链接是否指向 App Installer（读不到视为否）。
  */
@@ -184,7 +185,7 @@ async function isAppInstallerLink(linkPath) {
     return false;
   }
 }
-//@ chunk-jhrww53q.js:51082-51160 layout
+//@ chunk-xjnnz630.js:52764-52842 layout
 /**
  * 判断该路径是否值得扫进 PATH 候选（跳过不安全与已有拼写的路径）。
  */
@@ -192,14 +193,14 @@ async function isScanCandidate(dirPath) {
   if (dirPath === "" || isNetworkishPath(dirPath) || hasDotDotSegment(dirPath)) return false;
   return !(await hasUntouchableRecordSpellingStrictAsync(resolve(dirPath)));
 }
-//@ chunk-jhrww53q.js:51160-51943 layout
+//@ chunk-xjnnz630.js:52842-53625 layout
 async function scanPathForExecutables(toolNames, found) {
   let isWindows = getPlatform() === "windows";
   let wanted = new Set(toolNames);
   let executableExtensions = isWindows
     ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean)
     : [];
-  let directories = uniq(
+  let directories = normalizeCaseForComparison_2(
     (process.env.PATH ?? "")
       .split(delimiter)
       .map((dir) => dir.replace(/^"|"$/g, ""))
@@ -247,7 +248,7 @@ async function scanPathForExecutables(toolNames, found) {
     }),
   );
 }
-//@ chunk-jhrww53q.js:51943-52078 layout
+//@ chunk-xjnnz630.js:53625-53760 layout
 async function detectBuildTools() {
   let found = new Set();
   try {
@@ -259,14 +260,14 @@ async function detectBuildTools() {
   } catch {}
   return BUILD_TOOL_NAMES.filter((toolName) => found.has(toolName));
 }
-//@ chunk-jhrww53q.js:52078-52128 layout
+//@ chunk-xjnnz630.js:53760-53810 layout
 /**
  * 返回探测到的构建工具列表。
  */
 function detectedBuildTools() {
   return getEnvProbe().getDetectedBuildTools();
 }
-//@ chunk-jhrww53q.js:52128-52268 fingerprint (2.1.88 match: isNpmFromWindowsPath, 0.798)
+//@ chunk-xjnnz630.js:53810-53950 fingerprint (2.1.88 match: isNpmFromWindowsPath, 0.798)
 function isNpmFromWindowsPath(probe) {
   try {
     if (!probe.isWslEnvironment()) return false;
@@ -277,11 +278,11 @@ function isNpmFromWindowsPath(probe) {
     return false;
   }
 }
-//@ chunk-jhrww53q.js:52268-52344 fingerprint (2.1.88 match: isConductor, 1)
+//@ chunk-xjnnz630.js:53950-54026 fingerprint (2.1.88 match: isConductor, 1)
 function isConductor() {
   return process.env.__CFBundleIdentifier === "com.conductor.app";
 }
-//@ chunk-jhrww53q.js:52344-52519 facade-exports (2.1.88 match: JETBRAINS_IDES, 1)
+//@ chunk-xjnnz630.js:54026-54201 facade-exports (2.1.88 match: JETBRAINS_IDES, 1)
 var JETBRAINS_IDES = [
   "pycharm",
   "intellij",
@@ -300,7 +301,7 @@ var JETBRAINS_IDES = [
   "jetbrains",
   "androidstudio",
 ];
-//@ chunk-jhrww53q.js:52519-52730 layout
+//@ chunk-xjnnz630.js:54201-54412 layout
 /**
  * 应用路径是否 Windsurf/Devin。
  */
@@ -314,7 +315,7 @@ function isWindsurfOrDevin(text) {
     /appdata[\\/]local[\\/](programs[\\/])?devin[\\/]/.test(lower)
   );
 }
-//@ chunk-jhrww53q.js:52730-54683 fingerprint (2.1.88 match: detectTerminal, 0.976)
+//@ chunk-xjnnz630.js:54412-56365 fingerprint (2.1.88 match: detectTerminal, 0.976)
 function detectTerminal() {
   if (process.env.CURSOR_TRACE_ID) return "cursor";
   let askpassPath = process.env.VSCODE_GIT_ASKPASS_MAIN?.toLowerCase() ?? "";
@@ -351,7 +352,7 @@ function detectTerminal() {
   if (process.env.MSYSTEM) return process.env.MSYSTEM.toLowerCase();
   if (process.env.ConEmuANSI || process.env.ConEmuPID || process.env.ConEmuTask) return "conemu";
   if (process.env.WSL_DISTRO_NAME) return `wsl-${process.env.WSL_DISTRO_NAME}`;
-  if (isSSHSession_2()) return "ssh-session";
+  if (isSSHSession()) return "ssh-session";
   if (process.env.TERM) {
     let term = process.env.TERM;
     if (term.includes("alacritty")) return "alacritty";
@@ -362,7 +363,7 @@ function detectTerminal() {
   if (!process.stdout.isTTY) return "non-interactive";
   return null;
 }
-//@ chunk-jhrww53q.js:54683-56364 layout
+//@ chunk-xjnnz630.js:56365-58046 layout
 class EnvProbe {
   sources;
   globalClaudeFile;
@@ -449,47 +450,47 @@ class EnvProbe {
     this.deploymentEnvironment = undefined;
   }
 }
-//@ chunk-jhrww53q.js:56364-56461 layout
+//@ chunk-xjnnz630.js:58046-58143 layout
 /**
  * 按宿主隔离的环境探测器（WSL 互操作、hypervisor UUID、dockerenv）。
  */
 var envProbeByHost; // deferred: uses EnvProbe of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jhrww53q.js:56364", () => {
+deferInit("chunk-xjnnz630.js:58046", () => {
   envProbeByHost = new HostScoped(
     () =>
       new EnvProbe({
         wslInteropExistsSync: isWslEnvironment,
-        readHypervisorUuidSync: readFileSafe,
+        readHypervisorUuidSync: readHypervisorUuid,
         dockerenvExistsSync: getIsDocker,
       }),
   );
 });
-//@ chunk-jhrww53q.js:56461-56497 layout
+//@ chunk-xjnnz630.js:58143-58179 layout
 function getEnvProbe() {
   return envProbeByHost.of(getRootSession().host);
 }
-//@ chunk-jhrww53q.js:56497-56531 layout
+//@ chunk-xjnnz630.js:58179-58213 layout
 /**
  * 预热环境探测器。
  */
 function primeEnvProbe() {
   return getEnvProbe().prime();
 }
-//@ chunk-jhrww53q.js:56531-56578 layout
+//@ chunk-xjnnz630.js:58213-58260 layout
 /**
  * 判断 /.dockerenv 是否存在。
  */
 function isDockerenvPresent() {
   return getEnvProbe().isDockerenvPresent();
 }
-//@ chunk-jhrww53q.js:56578-56632 layout
+//@ chunk-xjnnz630.js:58260-58315 layout
 /**
  * 探测部署环境。
  */
 function detectDeploymentEnvironment() {
   return getEnvProbe().detectDeploymentEnvironment();
 }
-//@ chunk-jhrww53q.js:56632-58727 fingerprint (2.1.88 match: detectDeploymentEnvironment, 0.881)
+//@ chunk-xjnnz630.js:58315-60410 fingerprint (2.1.88 match: detectDeploymentEnvironment, 0.881)
 function detectDeploymentEnvironment_2(probe) {
   if (isEnvTruthy(process.env.CODESPACES)) return "codespaces";
   if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
@@ -530,11 +531,11 @@ function detectDeploymentEnvironment_2(probe) {
   if (env_2.platform === "win32") return "unknown-win32";
   return "unknown";
 }
-//@ chunk-jhrww53q.js:58727-58822 layout (2.1.88 match: isSSHSession, 1)
-function isSSHSession_2() {
+//@ chunk-xjnnz630.js:60410-60505 fingerprint (2.1.88 match: isSSHSession, 1)
+function isSSHSession() {
   return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY);
 }
-//@ chunk-jhrww53q.js:58822-58982 layout
+//@ chunk-xjnnz630.js:60505-60665 layout
 /**
  * 由服务端或 SSH 守护进程启动。
  */
@@ -545,9 +546,9 @@ function isSpawnedByServer() {
     process.env.CLAUDE_SSH_RUN_DIR !== undefined
   );
 }
-//@ chunk-jhrww53q.js:58982-59422 fingerprint (2.1.88 match: env, 0.871)
+//@ chunk-xjnnz630.js:60665-61106 fingerprint (2.1.88 match: env, 0.871)
 var env_2; // deferred: uses isEnvTruthy (./envUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jhrww53q.js:58982", () => {
+deferInit("chunk-xjnnz630.js:60665", () => {
   env_2 = {
     probeInternalNetworkAccess,
     isCI: isEnvTruthy(false),
@@ -555,7 +556,7 @@ deferInit("chunk-jhrww53q.js:58982", () => {
     arch: "x64",
     nodeVersion: process.version,
     terminal: detectTerminal(),
-    isSSH: isSSHSession_2,
+    isSSH: isSSHSession,
     getPackageManagers() {
       return getEnvProbe().getPackageManagers();
     },
@@ -573,15 +574,15 @@ deferInit("chunk-jhrww53q.js:58982", () => {
     detectDeploymentEnvironment,
   };
 });
-//@ chunk-jhrww53q.js:59422-59550 facade-exports (2.1.88 match: getHostPlatformForAnalytics, 1)
+//@ chunk-xjnnz630.js:61106-61234 facade-exports (2.1.88 match: getHostPlatformForAnalytics, 1)
 function getHostPlatformForAnalytics() {
   let override = process.env.CLAUDE_CODE_HOST_PLATFORM;
   if (override === "win32" || override === "darwin" || override === "linux") return override;
   return env_2.platform;
 }
-//@ chunk-jhrww53q.js:59550-59689 layout
+//@ chunk-xjnnz630.js:61234-61373 layout
 var SHELL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jhrww53q.js:59550", () => {
+deferInit("chunk-xjnnz630.js:61234", () => {
   SHELL_NAMES = new Set([
     "zsh",
     "bash",
@@ -602,7 +603,7 @@ deferInit("chunk-jhrww53q.js:59550", () => {
     "ion",
   ]);
 });
-//@ chunk-jhrww53q.js:59689-59824 facade-exports
+//@ chunk-xjnnz630.js:61373-61508 facade-exports
 function normalizeShellNameForAnalytics(shellPath) {
   if (!shellPath) return fromSanitizer_SANITIZER_OUTPUT_ONLY("none");
   let replaced = shellPath
@@ -612,19 +613,16 @@ function normalizeShellNameForAnalytics(shellPath) {
     .replace(/\.exe$/, "");
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(SHELL_NAMES.has(replaced) ? replaced : "other");
 }
-//@ chunk-jhrww53q.js:59824-59894 facade-exports
+//@ chunk-xjnnz630.js:61508-61578 facade-exports
 function getShellForAnalytics() {
   return normalizeShellNameForAnalytics(process.env.SHELL || process.env.COMSPEC || "");
 }
-//@ chunk-jhrww53q.js:75963-76138 facade-exports
+//@ chunk-xjnnz630.js:77755-77822 facade-exports
 function declaredEnvVarNames(env) {
   let declared = weakMap.get(env);
-  if (declared === undefined) return [];
-  if (declared !== null) return Object.keys(declared);
-  let prototypeOf = Object.getPrototypeOf(env);
-  return Object.keys(env).filter((key) => prototypeOf === null || !(key in prototypeOf));
+  return declared === undefined ? [] : Object.keys(declared);
 }
-//@ chunk-jhrww53q.js:76138-76237 facade-exports
+//@ chunk-xjnnz630.js:77822-77921 facade-exports
 /**
  * antEnv 使用的空环境表（不声明任何变量）。
  */
@@ -633,14 +631,14 @@ var EMPTY_ANT_ENV;
 var antEnv;
 var udsInboxShape;
 var udsEnv;
-deferInit("chunk-jhrww53q.js:76138", () => {
+deferInit("chunk-xjnnz630.js:77822", () => {
   env = createEnvAccessor(ALL_ENV_VARS, env_2);
   EMPTY_ANT_ENV = {};
   antEnv = createEnvAccessor(EMPTY_ANT_ENV, null);
   udsInboxShape = require("./udsMessaging/udsInboxShape.lazy.js").udsInboxShape;
   udsEnv = createEnvAccessor(udsInboxShape, null);
 });
-//@ chunk-aepeg2w5.js:751986-752249 fingerprint (2.1.88 match: hasInternetAccess, 0.427)
+//@ chunk-exfmq47h.js:767335-767598 fingerprint (2.1.88 match: hasInternetAccess, 0.426)
 async function hasInternetAccess_2() {
   try {
     let { externalHttp } = await import("../services/http/externalHttp.lazy.js");
@@ -655,7 +653,7 @@ async function hasInternetAccess_2() {
     return false;
   }
 }
-//@ chunk-cdz6g143.js:519-632 fingerprint (2.1.88 match: getGlobalClaudeFile, 0.833)
+//@ chunk-c4qa5qn0.js:519-632 fingerprint (2.1.88 match: getGlobalClaudeFile, 0.833)
 /**
  * 带第一个 OAUTH 后缀的全局配置文件默认名（.claude<后缀>.json）。
  */
@@ -663,18 +661,13 @@ var LEGACY_CONFIG_JSON; // deferred: uses OAUTH_GLOBAL_FILE_SUFFIXES (../constan
 var OAUTH_SUFFIXED_CONFIG_FILE_NAME;
 var mapped;
 var GLOBAL_CLAUDE_FILE_NAMES;
-deferInit("chunk-cdz6g143.js:519", () => {
+deferInit("chunk-c4qa5qn0.js:519", () => {
   LEGACY_CONFIG_JSON = ".config.json";
   OAUTH_SUFFIXED_CONFIG_FILE_NAME = `.claude${OAUTH_GLOBAL_FILE_SUFFIXES[0]}.json`;
   mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((suffix) => `.claude${suffix}.json`);
   GLOBAL_CLAUDE_FILE_NAMES = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
 });
-//@ chunk-cxdk9p3j.js:1606-1705 fingerprint (2.1.88 match: isSSHSession, 1)
-function isSSHSession() {
-  if (getPlatform() !== "windows") return false;
-  return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
-}
-//@ chunk-4m46mxx9.js:12064-12238 fingerprint (2.1.88 match: JETBRAINS_IDES, 1)
+//@ chunk-08q4d92p.js:12316-12490 fingerprint (2.1.88 match: JETBRAINS_IDES, 1)
 var JETBRAINS_IDES_2 = [
   "pycharm",
   "intellij",
@@ -696,29 +689,28 @@ var JETBRAINS_IDES_2 = [
 export {
   env,
   antEnv,
-  getGlobalClaudeFile,
-  udsEnv,
-  isSpawnedByServer,
-  declaredEnvVarNames,
-  describeGlobalConfigFile,
   getHostPlatformForAnalytics,
   getShellForAnalytics,
-  scanPathForExecutables,
-  JETBRAINS_IDES,
-  BUILD_TOOL_NAMES,
-  isScanCandidate,
   JETBRAINS_IDES_2,
-  isDisklessEnvProbe,
-  hasInternetAccess_2,
-  isDockerenvPresent,
+  describeGlobalConfigFile,
+  isSpawnedByServer,
+  declaredEnvVarNames,
+  udsEnv,
+  getGlobalClaudeFile,
+  normalizeShellNameForAnalytics,
+  JETBRAINS_IDES,
+  isWindsurfOrDevin,
   mapped,
   LEGACY_CONFIG_JSON,
   getDefaultGlobalClaudeFile,
-  primeEnvProbe,
-  isSSHSession,
-  normalizeShellNameForAnalytics,
+  scanPathForExecutables,
+  isDockerenvPresent,
   detectedBuildTools,
-  isWindsurfOrDevin,
   OAUTH_SUFFIXED_CONFIG_FILE_NAME,
   GLOBAL_CLAUDE_FILE_NAMES,
+  primeEnvProbe,
+  isDisklessEnvProbe,
+  hasInternetAccess_2,
+  BUILD_TOOL_NAMES,
+  isScanCandidate,
 };

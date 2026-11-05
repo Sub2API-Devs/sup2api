@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/otlp-exporter-base/build/src/configuration/convert-legacy-node-http-options.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/otlp-exporter-base@0.208.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_index_node_http } from "../index-node-http.js";
 import { require_otlp_node_http_env_configuration } from "./otlp-node-http-env-configuration.js";
 import { require_convert_legacy_http_options } from "./convert-legacy-http-options.js";
 
-//@ chunk-798ashq9.js:265159-265981 cjs-fingerprint
+//@ chunk-vxhm2nqe.js:265159-265981 cjs-fingerprint
 var require_convert_legacy_node_http_options = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

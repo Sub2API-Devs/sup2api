@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed（推送本地设置到云会话）结果提示文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mxpjbr4y.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s1cmamfh.js (4)
  * attribution: placement 4
  */
 import { RULES_NOT_IN_FORCE, SETTINGS_STAY, formatHomeSeedLeftBehindLine } from "./planHomeSeed.js";
@@ -15,7 +15,7 @@ import { formatFailureDetails_3, settingsReadFailureText } from "../../utils/tel
 import { plural } from "../../utils/stringUtils.js";
 import { tildify } from "../../utils/path.js";
 
-//@ chunk-mxpjbr4y.js:27091-27164 placement (2.1.88 match: isResultTruncated, 1)
+//@ chunk-s1cmamfh.js:27270-27343 placement (2.1.88 match: isResultTruncated, 1)
 /**
  * 把一条 home seed 提示拼成 `${触发前缀}: ${正文}${后缀}` 一行（create 与其他触发用不同前缀）。
  */
@@ -24,7 +24,7 @@ function formatHomeSeedNoticeLine(kind, detail, deadlineMs) {
     kind === "create" ? `${RULES_NOT_IN_FORCE}: ${detail}${deadlineMs}` : `${SETTINGS_STAY}: ${detail}`,
   ];
 }
-//@ chunk-mxpjbr4y.js:27164-27872 placement
+//@ chunk-s1cmamfh.js:27343-28051 placement
 /**
  * 其他拒绝发送设置的原因文案表（设备密钥、合规、被停用、组织关闭）。
  */
@@ -43,12 +43,12 @@ var SEED_REFUSAL_REASONS = {
   switched_off_by_anthropic: "sending your settings was turned off by Anthropic for now",
   direct_sync_off: "sending your settings is turned off for your organization",
 };
-//@ chunk-mxpjbr4y.js:27872-28011 placement
+//@ chunk-s1cmamfh.js:28051-28190 placement
 function homeSeedSummary(plan) {
   if (plan.kind === "empty" && plan.reason === "nothing_to_send") return leftBehindSummary(plan);
   return plan.reason === "user_settings_disabled" ? "debug" : "warning";
 }
-//@ chunk-mxpjbr4y.js:28011-29455 placement
+//@ chunk-s1cmamfh.js:28190-29634 placement
 /**
  * 把把设置推送到云端会话（home seed）的结果转为提示行：未绑定、规则不可读、超时、已截断等。
  */

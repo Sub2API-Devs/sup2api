@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。功能遥测 tengu_feature_ok/bad/sad 记录函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8nhse09v.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-47b8txen.js (13)
  * attribution: placement 13
  */
 import { import_baseReduce } from "../../../vendor/lodash-es/_deburrLetter.js";
@@ -16,46 +16,52 @@ import { fromEnum } from "./safeMetadata.js";
 import { sanitizedFeatureErrorCodeForTelemetry } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8nhse09v.js:4731-4804 placement
+//@ chunk-47b8txen.js:4731-4804 placement
 function featureNameFactory(suffix) {
   return function (text) {
     return import_baseReduce(import_words(deburr_default(text).replace(reAposGlobal, "")), suffix, "");
   };
 }
-//@ chunk-8nhse09v.js:4804-4813 placement
+//@ chunk-47b8txen.js:4804-4813 placement
 var featureNameBuilderFactory = featureNameFactory;
-//@ chunk-8nhse09v.js:4813-4883 placement
+//@ chunk-47b8txen.js:4813-4883 placement
 /**
  * 导出常量或表 `toSnakeFeatureName`：值为 W(function (e, r, u) { return e + (u ? "_" : "") + r.toLowerCase(); }), IDn = ke。
  */
 var toSnakeFeatureName; // deferred: uses featureNameBuilderFactory of its import cycle while loading; runs once the cycle is complete
 var featureBadNameBuilder;
-deferInit("chunk-8nhse09v.js:4813", () => {
+deferInit("chunk-47b8txen.js:4813", () => {
   toSnakeFeatureName = featureNameBuilderFactory(function (name, a, b) {
     return name + (b ? "_" : "") + a.toLowerCase();
   });
   featureBadNameBuilder = toSnakeFeatureName;
 });
-//@ chunk-8nhse09v.js:4883-4922 placement
+//@ chunk-47b8txen.js:4883-4922 placement
 function toolFeature(toolName) {
   return `tool_${featureBadNameBuilder(toolName)}`;
 }
-//@ chunk-8nhse09v.js:4922-4960 placement
+//@ chunk-47b8txen.js:4922-4960 placement
 function cmdFeature(name) {
   return `cmd_${featureBadNameBuilder(name)}`;
 }
-//@ chunk-8nhse09v.js:4960-4998 placement
+//@ chunk-47b8txen.js:4960-4998 placement
 function hookFeature(hookEvent) {
   return `hook_${featureBadNameBuilder(hookEvent)}`;
 }
-//@ chunk-8nhse09v.js:4998-5061 placement
+//@ chunk-47b8txen.js:4998-5061 placement
+/**
+ * 记 tengu_feature_ok（成功）遥测，附 feature_name。
+ */
 function logFeatureOk(feature, props) {
   logEvent("tengu_feature_ok", {
     ...props,
     feature_name: fromEnum(feature),
   });
 }
-//@ chunk-8nhse09v.js:5061-5144 placement
+//@ chunk-47b8txen.js:5061-5144 placement
+/**
+ * 记 tengu_feature_bad（失败）遥测，附 feature_name 与 error_code。
+ */
 function logFeatureBad(feature, reason, props) {
   logEvent("tengu_feature_bad", {
     ...props,
@@ -63,7 +69,7 @@ function logFeatureBad(feature, reason, props) {
     error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
   });
 }
-//@ chunk-8nhse09v.js:5144-5227 placement
+//@ chunk-47b8txen.js:5144-5227 placement
 function logFeatureSad(feature, reason, props) {
   logEvent("tengu_feature_sad", {
     ...props,
@@ -71,7 +77,7 @@ function logFeatureSad(feature, reason, props) {
     error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
   });
 }
-//@ chunk-8nhse09v.js:5227-5316 placement
+//@ chunk-47b8txen.js:5227-5316 placement
 async function logFeatureOkAsync(feature, props) {
   try {
     await logEventAsync("tengu_feature_ok", {
@@ -80,7 +86,7 @@ async function logFeatureOkAsync(feature, props) {
     });
   } catch {}
 }
-//@ chunk-8nhse09v.js:5316-5425 placement
+//@ chunk-47b8txen.js:5316-5425 placement
 /**
  * 功能遥测 tengu_feature_ok/bad/sad 的记录函数，按 tool_/cmd_/hook_ 前缀归类。
  */
@@ -93,7 +99,7 @@ async function logFeatureBadAsync(feature, reason, props) {
     });
   } catch {}
 }
-//@ chunk-8nhse09v.js:5425-5534 placement
+//@ chunk-47b8txen.js:5425-5534 placement
 async function logFeatureSadAsync(feature, reason, props) {
   try {
     await logEventAsync("tengu_feature_sad", {
@@ -103,7 +109,7 @@ async function logFeatureSadAsync(feature, reason, props) {
     });
   } catch {}
 }
-//@ chunk-8nhse09v.js:5534-5632 placement
+//@ chunk-47b8txen.js:5534-5632 placement
 async function withFeatureTelemetry(feature, fn, classifyError) {
   try {
     let result = await fn();
@@ -115,15 +121,15 @@ async function withFeatureTelemetry(feature, fn, classifyError) {
   }
 }
 export {
-  logFeatureBad,
   logFeatureSad,
   logFeatureOk,
+  logFeatureBad,
   withFeatureTelemetry,
   logFeatureBadAsync,
-  logFeatureSadAsync,
   logFeatureOkAsync,
+  featureBadNameBuilder,
+  logFeatureSadAsync,
   cmdFeature,
   hookFeature,
   toolFeature,
-  featureBadNameBuilder,
 };

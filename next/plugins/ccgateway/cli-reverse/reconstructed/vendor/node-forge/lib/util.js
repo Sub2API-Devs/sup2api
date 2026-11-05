@@ -1,15 +1,15 @@
 /**
  * node-forge/lib/util.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_baseN } from "./baseN.js";
 
-//@ chunk-fq0cr76a.js:4980-28471 cjs-fingerprint
+//@ chunk-qg41pqt6.js:4847-28338 cjs-fingerprint
 var require_util = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   var baseN = require_baseN();
@@ -650,18 +650,18 @@ var require_util = __commonJS(function (cjsExports, cjsModule) {
   };
   util.xorBytes = function (s1, s2, n) {
     var s3 = "";
-    var b_2 = "";
+    var b = "";
     var t = "";
     var i = 0;
     var c = 0;
     for (; n > 0; --n, ++i) {
-      b_2 = s1.charCodeAt(i) ^ s2.charCodeAt(i);
+      b = s1.charCodeAt(i) ^ s2.charCodeAt(i);
       if (c >= 10) {
         s3 += t;
         t = "";
         c = 0;
       }
-      t += String.fromCharCode(b_2);
+      t += String.fromCharCode(b);
       ++c;
     }
     s3 += t;

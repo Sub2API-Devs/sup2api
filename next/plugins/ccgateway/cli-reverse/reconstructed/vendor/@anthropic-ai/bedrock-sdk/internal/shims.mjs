@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/bedrock-sdk/internal/shims.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (3)
+ * pieces: chunk-b8zxeazh.js (3)
  * attribution: esm-fingerprint 3
  */
 
-//@ chunk-h87x8cg3.js:5935-6155 esm-fingerprint
+//@ chunk-b8zxeazh.js:5935-6155 esm-fingerprint
 function makeReadableStream(...args) {
   let ReadableStream_2 = globalThis.ReadableStream;
   if (typeof ReadableStream_2 === "undefined")
@@ -15,7 +15,7 @@ function makeReadableStream(...args) {
     );
   return new ReadableStream_2(...args);
 }
-//@ chunk-h87x8cg3.js:6155-6389 esm-fingerprint
+//@ chunk-b8zxeazh.js:6155-6389 esm-fingerprint
 function ReadableStreamFrom(iterable) {
   let iter =
     Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
@@ -31,7 +31,7 @@ function ReadableStreamFrom(iterable) {
     },
   });
 }
-//@ chunk-h87x8cg3.js:6389-6701 esm-fingerprint
+//@ chunk-b8zxeazh.js:6389-6701 esm-fingerprint
 function ReadableStreamToAsyncIterable(stream) {
   if (stream[Symbol.asyncIterator]) return stream;
   let reader = stream.getReader();

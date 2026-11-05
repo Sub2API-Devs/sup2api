@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。记录收件箱所有者通知的投递，未读时重新提醒。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-baf1th58.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rd6zbfe7.js (6)
  * attribution: placement 6
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -26,16 +26,16 @@ import { logError } from "../utils/log.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { escapePluginTags } from "../utils/messages/pluginTags.js";
 
-//@ chunk-baf1th58.js:645-746 placement
+//@ chunk-rd6zbfe7.js:677-778 placement
 var MAX_INBOX_POINTERS = 32;
 var MAX_ANNOUNCED_INBOX_OWNERS = 64;
 var SESSION_INBOX_UNREAD = "session-inbox-unread";
 var RETRYABLE_FAILURE_REASONS = new Set(["request_failed", "http_error", "owner_unverified"]);
-//@ chunk-baf1th58.js:746-810 placement
+//@ chunk-rd6zbfe7.js:778-842 placement
 function isInboxPointerBoundaryEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_inbox_pointer_boundary", true);
 }
-//@ chunk-baf1th58.js:810-3309 placement
+//@ chunk-rd6zbfe7.js:842-3339 placement
 /**
  * 跟踪收件箱指针通知、所有者公告与重新提醒
  */
@@ -160,13 +160,13 @@ A session-inbox notification carrying file_id ${fileId} was delivered to you ear
     }
   }
 }
-//@ chunk-baf1th58.js:3309-3335 placement
+//@ chunk-rd6zbfe7.js:3339-3365 placement
 var sessionInboxPointers = new SessionRootSlot(() => new SessionInboxPointerTracker());
-//@ chunk-baf1th58.js:3335-3402 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-rd6zbfe7.js:3365-3432 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(queuedCommands) {
   return (cmd) => cmd.mode === "task-notification" && cmd.value === queuedCommands;
 }
-//@ chunk-baf1th58.js:3402-3793 placement
+//@ chunk-rd6zbfe7.js:3432-3823 placement
 /**
  * 记录收件箱所有者通知的投递，未读时重新提醒。
  */

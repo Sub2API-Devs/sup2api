@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/exporter-prometheus/build/src/PrometheusExporter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/exporter-prometheus@0.217.0..0.218.0
- * pieces: chunk-1gzy30bn.js (1)
+ * pieces: chunk-wtfhd2xp.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_core } from "../../../core/build/src/index.js";
 import { require_sdk_metrics } from "../../../sdk-metrics/build/src/index.js";
 import { require_PrometheusSerializer } from "./PrometheusSerializer.js";
 
-//@ chunk-1gzy30bn.js:3985-6866 cjs-fingerprint
+//@ chunk-wtfhd2xp.js:3985-6866 cjs-fingerprint
 var require_PrometheusExporter = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

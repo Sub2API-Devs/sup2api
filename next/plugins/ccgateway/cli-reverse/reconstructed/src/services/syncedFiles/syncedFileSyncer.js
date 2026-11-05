@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：同步文件（synced files）后台同步器：暂存、写入同步目录、记录 worker 回传的行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6zwd30tr.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y9g4rvgd.js (29)
  * attribution: placement 29
  */
 import { posix } from "path";
@@ -30,12 +30,12 @@ import { getPlatform } from "../../utils/platform.js";
 import { sleep } from "../../utils/sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6zwd30tr.js:1036-1048 placement
+//@ chunk-y9g4rvgd.js:1036-1048 placement
 /**
  * 同步文件的写入权限位。
  */
 var SYNCED_FILE_MODE = 384;
-//@ chunk-6zwd30tr.js:1048-1326 placement
+//@ chunk-y9g4rvgd.js:1048-1326 placement
 /**
  * 同步文件的工作目录常量与各类超时/重试上限（并发写入、会话满退避、监视尝试等）。
  */
@@ -58,7 +58,7 @@ var TERMINAL_REJECT_LATCH_MS = 3;
 var SESSION_FULL_OFFER_INTERVAL_MS = 600000;
 var DEFAULT_SYNCED_DIR_ENTRIES = 3600000;
 var posixPathHelpers = MAX_CONCURRENT_SYNC_WRITES;
-//@ chunk-6zwd30tr.js:1326-5118 placement
+//@ chunk-y9g4rvgd.js:1326-5118 placement
 /**
  * 同步文件推送的状态：每个文件已见的 etag/本地哈希、被逐出的 etag、mtime 闸门、连续终端拒绝（达到次数后暂停一段时间）、会话空间已满的暂停与探测、传输失败计数，以及延迟启动的同步器。
  */
@@ -252,43 +252,43 @@ class SyncedFileSyncState {
     this.startInFlight = null;
   }
 }
-//@ chunk-6zwd30tr.js:5118-5143 placement
+//@ chunk-y9g4rvgd.js:5118-5143 placement
 /**
  * 按 host 保存的同步文件状态容器。
  */
 var syncedFileSyncStateSlots; // deferred: uses SyncedFileSyncState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6zwd30tr.js:5118", () => {
+deferInit("chunk-y9g4rvgd.js:5118", () => {
   syncedFileSyncStateSlots = new HostScoped(() => new SyncedFileSyncState());
 });
-//@ chunk-6zwd30tr.js:5143-5179 placement
+//@ chunk-y9g4rvgd.js:5143-5179 placement
 /**
  * 取当前 host 的同步文件状态。
  */
 function currentSyncedFileSyncState() {
   return syncedFileSyncStateSlots.of(getRootSession().host);
 }
-//@ chunk-6zwd30tr.js:5179-5219 placement
+//@ chunk-y9g4rvgd.js:5179-5219 placement
 /**
  * 记录某文件已同步的 etag 与本地哈希。
  */
 function recordSeenFile(path, etag, contentHash) {
   currentSyncedFileSyncState().recordSeen(path, etag, contentHash);
 }
-//@ chunk-6zwd30tr.js:5219-5262 placement
+//@ chunk-y9g4rvgd.js:5219-5262 placement
 /**
  * 取某文件的已同步状态。
  */
 function seenStateOf(path) {
   return currentSyncedFileSyncState().seenState.get(path);
 }
-//@ chunk-6zwd30tr.js:5262-5308 placement (2.1.88 match: runWithAgentContext, 0.635)
+//@ chunk-y9g4rvgd.js:5262-5308 placement (2.1.88 match: runWithAgentContext, 0.635)
 /**
  * 在 inFlight 存储中运行函数。
  */
 function runInFlight(context, fn) {
   return currentSyncedFileSyncState().inFlight.run(context, fn);
 }
-//@ chunk-6zwd30tr.js:5308-5593 placement
+//@ chunk-y9g4rvgd.js:5308-5593 placement
 function relUnderSyncDir(syncDir, path) {
   if (!isAbsolute(syncDir)) throw Error("syncDir must be absolute");
   if (path.includes("\x00")) throw Error("path contains null bytes");
@@ -298,14 +298,14 @@ function relUnderSyncDir(syncDir, path) {
     throw Error("path must be under the working sync dir");
   return relPath;
 }
-//@ chunk-6zwd30tr.js:5593-5649 placement
+//@ chunk-y9g4rvgd.js:5593-5649 placement
 /**
  * 路径是绝对路径或含 .. 时视为不安全。
  */
 function isUnsafeRelativePath(relPath) {
   return isAbsolute(relPath) || relPath.split(MAX_SYNCED_DIR_ENTRIES).includes("..");
 }
-//@ chunk-6zwd30tr.js:5649-5786 placement
+//@ chunk-y9g4rvgd.js:5649-5786 placement
 function shouldIgnore(relPath) {
   for (let segment of relPath.split(MAX_SYNCED_DIR_ENTRIES))
     if (
@@ -317,7 +317,7 @@ function shouldIgnore(relPath) {
       return true;
   return false;
 }
-//@ chunk-6zwd30tr.js:5786-5999 placement
+//@ chunk-y9g4rvgd.js:5786-5999 placement
 /**
  * 同步文件的两类错误体 schema（通道被拒、限额超限）与对应错误码。
  */
@@ -325,7 +325,7 @@ var SYNCED_FILE_LIMIT_EXCEEDED; // deferred: uses DoctorLazy (../../cli/handlers
 var LANE_DENIED_REASON;
 var laneDeniedErrorSchema;
 var limitErrorSchema;
-deferInit("chunk-6zwd30tr.js:5786", () => {
+deferInit("chunk-y9g4rvgd.js:5786", () => {
   SYNCED_FILE_LIMIT_EXCEEDED = "synced_file_limit_exceeded";
   LANE_DENIED_REASON = "synced_file_lane_denied";
   laneDeniedErrorSchema = DoctorLazy(() =>
@@ -345,14 +345,14 @@ deferInit("chunk-6zwd30tr.js:5786", () => {
     }),
   );
 });
-//@ chunk-6zwd30tr.js:5999-6148 placement
+//@ chunk-y9g4rvgd.js:5999-6148 placement
 function isRetryableTransport(kind, status) {
   if (kind === "timeout" || kind === "network") return true;
   if (kind === "auth" || kind === "other") return false;
   if (status === undefined) return true;
   return status === 408 || status === 429 || status >= 500;
 }
-//@ chunk-6zwd30tr.js:6148-6551 placement
+//@ chunk-y9g4rvgd.js:6148-6551 placement
 /**
  * 把同步文件请求错误转为结果对象：分类、是否可重试、拒绝原因与资源，并更新失败计数。
  */
@@ -379,7 +379,7 @@ function syncedFileError(operation, error) {
     }),
   };
 }
-//@ chunk-6zwd30tr.js:6551-6627 placement
+//@ chunk-y9g4rvgd.js:6551-6627 placement
 /**
  * 从响应里解析出「通道被拒」的错误体。
  */
@@ -387,12 +387,12 @@ function laneDeniedErrorOf(error) {
   let body = error?.response?.data;
   return laneDeniedErrorSchema().safeParse(body).data?.error;
 }
-//@ chunk-6zwd30tr.js:6627-6816 placement
+//@ chunk-y9g4rvgd.js:6627-6816 placement
 function putRejectionReason(error) {
   if (error.errorKind === "gated") return `put_gated_${(error.gateReason ?? "unknown").replaceAll("-", "_")}`;
   return error.status !== undefined ? `put_rejected_${error.status}` : `put_rejected_${error.errorKind}`;
 }
-//@ chunk-6zwd30tr.js:6816-7476 placement
+//@ chunk-y9g4rvgd.js:6816-7476 placement
 async function putSyncedFile(relPath, content, ifMatch) {
   let state = currentSyncedFileSyncState();
   try {
@@ -440,7 +440,7 @@ async function putSyncedFile(relPath, content, ifMatch) {
     return syncedFileError("put", error);
   }
 }
-//@ chunk-6zwd30tr.js:7476-8164 placement
+//@ chunk-y9g4rvgd.js:7476-8164 placement
 async function getSyncedFile(relPath) {
   let state = currentSyncedFileSyncState();
   try {
@@ -486,7 +486,7 @@ async function getSyncedFile(relPath) {
     return syncedFileError("get", error);
   }
 }
-//@ chunk-6zwd30tr.js:8164-8719 placement
+//@ chunk-y9g4rvgd.js:8164-8719 placement
 /**
  * 写入同步目录前校验目标：上级目录不能含反斜杠、真实父目录必须在同步目录内、不能落在忽略路径或被调用方拒绝的路径、目标不能是符号链接。
  */
@@ -521,7 +521,7 @@ async function assertSafeSyncDest(syncDir, dest, refuses) {
     if (!isENOENT(error)) throw error;
   }
 }
-//@ chunk-6zwd30tr.js:8719-8866 placement
+//@ chunk-y9g4rvgd.js:8719-8866 placement
 function assertNoBackslashDirs(syncDir, dest) {
   if (hasBackslash(syncDir) || hasBackslash(dirname(dest))) {
     let error = Error("a folder on the way to dest has a backslash in its name");
@@ -529,7 +529,7 @@ function assertNoBackslashDirs(syncDir, dest) {
     throw error;
   }
 }
-//@ chunk-6zwd30tr.js:8866-9773 placement
+//@ chunk-y9g4rvgd.js:8866-9773 placement
 async function writeUnderSyncDir(syncDir, dest, content, mode = "replace", refuses) {
   assertNoBackslashDirs(syncDir, dest);
   await mkdir(syncDir).catch((error) => {
@@ -594,7 +594,7 @@ async function writeUnderSyncDir(syncDir, dest, content, mode = "replace", refus
     throw error;
   }
 }
-//@ chunk-6zwd30tr.js:9773-9910 placement
+//@ chunk-y9g4rvgd.js:9773-9910 placement
 function tempNameTaken(error) {
   if (getErrnoCode(error) !== "EEXIST") return;
   let takenError = Error("sibling tempfile name already taken", {
@@ -603,7 +603,7 @@ function tempNameTaken(error) {
   takenError.code = "WORKING_TMP_TAKEN";
   throw takenError;
 }
-//@ chunk-6zwd30tr.js:9910-12804 placement
+//@ chunk-y9g4rvgd.js:9910-12804 placement
 async function stageSyncedFile(row, fetchContent, syncDir) {
   let context;
   try {
@@ -803,7 +803,7 @@ async function stageSyncedFile(row, fetchContent, syncDir) {
     };
   });
 }
-//@ chunk-6zwd30tr.js:12804-15354 placement
+//@ chunk-y9g4rvgd.js:12804-15354 placement
 /**
  * 把同步目录中的一个文件推到云端：跳过保留路径、暂停中的、反斜杠或越界符号链接、过大文件；内容未变跳过；首次时先取远端版本（远端胜出则写回本地）；PUT 带 etag，冲突时重新取远端覆盖本地；记录各种结果遥测，返回是否已处理完毕。
  */
@@ -953,11 +953,11 @@ async function pushSyncedFile(syncDir, relPath) {
   logFeatureSad("ccr_synced_file_push", "conflict_overwritten");
   return true;
 }
-//@ chunk-6zwd30tr.js:15354-15388 placement
+//@ chunk-y9g4rvgd.js:15354-15388 placement
 function flushSyncedFiles() {
   return currentSyncedFileSyncState().flush();
 }
-//@ chunk-6zwd30tr.js:15388-15577 placement
+//@ chunk-y9g4rvgd.js:15388-15577 placement
 async function drainSyncedFiles() {
   let state = currentSyncedFileSyncState();
   await flushSyncedFiles();
@@ -967,7 +967,7 @@ async function drainSyncedFiles() {
     await new Promise((resolve) => setImmediate(resolve));
   }
 }
-//@ chunk-6zwd30tr.js:15577-20123 placement
+//@ chunk-y9g4rvgd.js:15577-20123 placement
 async function startSyncedFileSyncer(
   lateStartRoot,
   watchFn = getPlatform() === "linux" && !env.CLAUDE_CODE_DISABLE_WORKING_SYNC_WATCH ? watch : null,
@@ -1325,7 +1325,7 @@ async function startSyncedFileSyncer(
   state.syncerStarted(syncer);
   return syncer;
 }
-//@ chunk-6zwd30tr.js:20123-20247 placement
+//@ chunk-y9g4rvgd.js:20123-20247 placement
 async function readLaneRowFromWorker(relPath) {
   if (isSeedPath(relPath))
     return {
@@ -1337,7 +1337,7 @@ async function readLaneRowFromWorker(relPath) {
     };
   return getSyncedFile(relPath);
 }
-//@ chunk-6zwd30tr.js:20247-21626 placement
+//@ chunk-y9g4rvgd.js:20247-21626 placement
 async function writeLaneRowFromWorker(syncDir, context, content, ifMatch) {
   let state = currentSyncedFileSyncState();
   if (isSeedPath(context))
@@ -1442,17 +1442,17 @@ async function writeLaneRowFromWorker(syncDir, context, content, ifMatch) {
 export {
   getSyncedFile,
   putSyncedFile,
-  MAX_WORKING_FILE_BYTES,
+  SYNCED_FILE_MODE,
+  writeUnderSyncDir,
   shouldIgnore,
-  relUnderSyncDir,
+  SYNCED_FILE_ROOT,
+  MAX_WORKING_FILE_BYTES,
   WORKING_FILESTORE_PREFIX,
+  LANE_DENIED_REASON,
+  relUnderSyncDir,
   DIR_SYNC_LANE_RESERVED,
   readLaneRowFromWorker,
   writeLaneRowFromWorker,
-  SYNCED_FILE_ROOT,
-  LANE_DENIED_REASON,
-  SYNCED_FILE_MODE,
-  writeUnderSyncDir,
   drainSyncedFiles,
   flushSyncedFiles,
   stageSyncedFile,

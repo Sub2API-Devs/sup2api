@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/auto-mode-setup 命令对象：为自动模式讲解环境并生成可选规则（含 --wizard 参数）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import {
@@ -15,54 +15,52 @@ import {
 import { env } from "../../utils/env.js";
 import { alwaysTrueFlag } from "../../utils/permissions/serverClassifier/arbiter.js";
 import { getAutoModeConfigOrDefault } from "../../utils/permissions/permissionSetup.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1684623-1684651 placement
+//@ chunk-5xgkngpb.js:1759515-1759543 placement
 /**
  * getAutoModeModelSetting：dpn()：auto 模式分类器模型。
  */
 function getAutoModeModelSetting() {
   return resolveClassifierModel();
 }
-//@ chunk-e6aww6q8.js:1684651-1684681 placement
+//@ chunk-5xgkngpb.js:1759543-1759573 placement
 /**
  * 取给定模型的分类器回退模型名。
  */
 function classifierFallbackModelOf(resolved) {
   return getClassifierFallbackModel(resolved);
 }
-//@ chunk-e6aww6q8.js:1684681-1684731 placement
+//@ chunk-5xgkngpb.js:1759573-1759623 placement
 /**
  * isAutoModeSetupSurface：非 CLAUDE_CODE_REMOTE 且 yse()。
  */
 function isAutoModeSetupSurface() {
   return !env.CLAUDE_CODE_REMOTE && alwaysTrueFlag();
 }
-//@ chunk-e6aww6q8.js:1684731-1684777 placement
+//@ chunk-5xgkngpb.js:1759623-1759669 placement
 /**
  * isAutoModeSetupAvailable：/auto-mode-setup（非交互）启用条件。
  */
 function isAutoModeSetupAvailable() {
   return isAutoModeSetupSurface() && getAutoModeModelSetting().value !== "";
 }
-//@ chunk-e6aww6q8.js:1684777-1684831 placement
+//@ chunk-5xgkngpb.js:1759669-1759723 placement
 /**
  * isAutoModeOnboardingEnabled：/auto-mode-setup（交互）启用条件：tengu_auto_mode_config.envOnboarding。
  */
 function isAutoModeOnboardingEnabled() {
   return isAutoModeSetupAvailable() && getAutoModeConfigOrDefault()?.envOnboarding === true;
 }
-//@ chunk-e6aww6q8.js:1684831-1684909 placement
+//@ chunk-5xgkngpb.js:1759723-1759801 placement
 /**
  * isAutoModeSetupNotOverridden：且 skillOverrides["auto-mode-setup"] 不为 off。
  */
 function isAutoModeSetupNotOverridden() {
-  return (
-    isAutoModeOnboardingEnabled() && getInitialSettings_2().skillOverrides?.["auto-mode-setup"] !== "off"
-  );
+  return isAutoModeOnboardingEnabled() && getInitialSettings().skillOverrides?.["auto-mode-setup"] !== "off";
 }
-//@ chunk-e6aww6q8.js:1684909-1685492 placement
+//@ chunk-5xgkngpb.js:1759801-1760384 placement
 /**
  * /auto-mode-setup 命令对象（local）；描述：Teach auto mode about your environment, plus optional rule tweaks；isEnabled: ()=>p5e()&&_e()；isHidden: {return!_e()}；实现 chunk-4cndz99e.js 的 Y。
  */
@@ -77,7 +75,7 @@ var autoModeSetupNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./call_2.lazy.js"),
+  load: () => import("./call.lazy.js"),
 };
 var autoModeSetupCommandDefinition = {
   type: "local-jsx",
@@ -91,9 +89,9 @@ var autoModeSetupCommandDefinition = {
 };
 var autoModeSetupCommand = autoModeSetupCommandDefinition;
 export {
-  isAutoModeSetupNotOverridden,
   autoModeSetupCommand,
   autoModeSetupNonInteractiveCommand,
+  isAutoModeSetupNotOverridden,
   getAutoModeModelSetting,
   classifierFallbackModelOf,
 };

@@ -3,10 +3,10 @@
  *
  * RemoteTrigger 工具：管理 claude.ai 云端 routine（触发器），查看运行记录与压缩后的运行日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/RemoteTriggerTool/RemoteTriggerTool.ts
- * pieces: chunk-y8ff1x9z.js (28)
- * attribution: fingerprint 3, layout 25
+ * pieces: chunk-77w0w3nj.js (31)
+ * attribution: fingerprint 3, layout 28
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -30,7 +30,7 @@ import { formatRelativeTime } from "../../utils/format.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { getRemoteSessionUrl } from "../../constants/product.js";
 import { getPersistenceThreshold } from "../../utils/toolResultStorage.js";
-import { REMOTETRIGGER, REMOTE_TRIGGER_DESCRIPTION, REMOTE_TRIGGER_PROMPT } from "./prompt.js";
+import { REMOTETRIGGER, REMOTE_TRIGGER_DEFAULT_DESCRIPTION, REMOTE_TRIGGER_PROMPT } from "./prompt.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
@@ -43,16 +43,17 @@ import { apiClient } from "../../services/routines/routinesApi.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 
-//@ chunk-y8ff1x9z.js:4829-4861 fingerprint (2.1.88 match: TRIGGERS_BETA, 1)
+//@ chunk-77w0w3nj.js:4980-5012 fingerprint (2.1.88 match: TRIGGERS_BETA, 1)
 var TRIGGERS_BETA = "ccr-triggers-2026-01-30";
-//@ chunk-y8ff1x9z.js:4861-4936 layout
+//@ chunk-77w0w3nj.js:5012-5087 layout
 function parseValidDate(nextRunAt) {
   if (!nextRunAt) return;
   let date = new Date(nextRunAt);
   return date.getTime() > 0 ? date : undefined;
 }
-//@ chunk-y8ff1x9z.js:4936-5458 layout
+//@ chunk-77w0w3nj.js:5087-5611 layout
 /**
  * 结果截断时末尾保留的余量字符数（800）。
  */
@@ -86,11 +87,11 @@ var NON_TRANSCRIPT_SYSTEM_SUBTYPES = new Set([
   "thinking",
   "thinking_tokens",
 ]);
-//@ chunk-y8ff1x9z.js:5458-5506 layout
+//@ chunk-77w0w3nj.js:5611-5659 layout
 function truncatedStringSchema(maxChars) {
   return stringSchema().transform((value) => sanitizeAndTruncate(value, maxChars));
 }
-//@ chunk-y8ff1x9z.js:5506-6001 layout
+//@ chunk-77w0w3nj.js:5659-6154 layout
 /**
  * 运行标题的最大字符数。
  */
@@ -128,32 +129,32 @@ var resultPayloadSchema = DoctorLazy(() =>
   }),
 );
 var MAX_TITLE_CHARS = 16000;
-//@ chunk-y8ff1x9z.js:6001-6132 layout
+//@ chunk-77w0w3nj.js:6154-6283 layout
 function sanitizeAndTruncate(text, maxChars) {
   let normalized = collapseWhitespace(stripAnsi(truncateToLength(text, MAX_TITLE_CHARS)));
   if (text.length <= MAX_TITLE_CHARS) return truncateWithCount(normalized, maxChars);
   let truncated = truncateToLength(normalized, maxChars);
   return `${truncated}\u2026 [+${text.length - truncated.length} chars]`;
 }
-//@ chunk-y8ff1x9z.js:6132-6167 layout
+//@ chunk-77w0w3nj.js:6283-6318 layout
 function asRecord(value) {
   return isPlainObject_2(value) ? value : undefined;
 }
-//@ chunk-y8ff1x9z.js:6167-6239 layout
+//@ chunk-77w0w3nj.js:6318-6390 layout
 function readTruncatedString(record, fieldName, maxChars) {
   let value = record?.[fieldName];
   return typeof value === "string" ? sanitizeAndTruncate(value, maxChars) : undefined;
 }
-//@ chunk-y8ff1x9z.js:6239-6304 layout
+//@ chunk-77w0w3nj.js:6390-6455 layout
 function readNumber(record, fieldName) {
   let value = record?.[fieldName];
   return typeof value === "number" ? value : undefined;
 }
-//@ chunk-y8ff1x9z.js:6304-6352 layout
+//@ chunk-77w0w3nj.js:6455-6503 layout
 function unreadableEventLines(eventType) {
   return [`[unreadable ${eventType} event]`];
 }
-//@ chunk-y8ff1x9z.js:6352-6654 layout
+//@ chunk-77w0w3nj.js:6503-6805 layout
 function toolResultContentToText(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return content === undefined ? "" : jsonStringify(content);
@@ -167,7 +168,7 @@ function toolResultContentToText(content) {
   return lines.join(`
 `);
 }
-//@ chunk-y8ff1x9z.js:6654-7456 layout
+//@ chunk-77w0w3nj.js:6805-7607 layout
 function formatMessageEventLines(role, payload) {
   let parsed = messagePayloadSchema().safeParse(payload);
   if (!parsed.success) return unreadableEventLines(role);
@@ -216,7 +217,7 @@ function formatMessageEventLines(role, payload) {
   if (lines.length === 0 && sawThinking) lines.push(`${role}: [thinking]`);
   return lines;
 }
-//@ chunk-y8ff1x9z.js:7456-8814 layout
+//@ chunk-77w0w3nj.js:7607-8965 layout
 function formatSystemEventLines(subtype, payload) {
   let data = asRecord(payload);
   if (!data) return unreadableEventLines("system");
@@ -278,7 +279,7 @@ function formatSystemEventLines(subtype, payload) {
     }
   }
 }
-//@ chunk-y8ff1x9z.js:8814-9261 layout
+//@ chunk-77w0w3nj.js:8965-9412 layout
 function formatResultEventLines(subtype, payload) {
   let parsed = resultPayloadSchema().safeParse(payload);
   if (!parsed.success) return unreadableEventLines("result");
@@ -295,7 +296,7 @@ function formatResultEventLines(subtype, payload) {
     `result: ${subtype ?? "?"} is_error=${result.is_error ?? "?"} turns=${result.num_turns ?? "?"} duration=${durationText}${denialsNote}${errorsNote}${resultNote}`,
   ];
 }
-//@ chunk-y8ff1x9z.js:9261-10172 layout
+//@ chunk-77w0w3nj.js:9412-10323 layout
 /**
  * 把单个运行事件转成日志行（按 type/subtype 分派到消息、系统、结果、控制请求、限流等格式化函数）。
  */
@@ -348,7 +349,7 @@ function formatRunEventLines(role, subtype, payload) {
       return [];
   }
 }
-//@ chunk-y8ff1x9z.js:10172-10302 layout
+//@ chunk-77w0w3nj.js:10323-10453 layout
 function getEventKindLabel(type, subtype, payload) {
   if (type === "control_request") {
     let truncatedString = readTruncatedString(asRecord(asRecord(payload)?.request), "subtype", 60);
@@ -356,7 +357,7 @@ function getEventKindLabel(type, subtype, payload) {
   }
   return subtype ? `${type}/${subtype}` : type;
 }
-//@ chunk-y8ff1x9z.js:10302-10597 layout
+//@ chunk-77w0w3nj.js:10453-10747 layout
 function formatSkippedEventsNote(skippedByKind) {
   let totalSkipped = 0;
   for (let count of skippedByKind.values()) totalSkipped += count;
@@ -369,14 +370,14 @@ function formatSkippedEventsNote(skippedByKind) {
     mapped.push(`${sorted.length - MAX_SKIPPED_KINDS_LISTED} other kind(s)`);
   return `(${totalSkipped} non-transcript event(s) on this page skipped: ${mapped.join(", ")})`;
 }
-//@ chunk-y8ff1x9z.js:10597-10666 layout
+//@ chunk-77w0w3nj.js:10747-10816 layout
 var eventTypeSchema = DoctorLazy(() =>
   objectSchema({
     type: truncatedStringSchema(60),
     subtype: truncatedStringSchema(60).optional().catch(undefined),
   }),
 );
-//@ chunk-y8ff1x9z.js:10666-11957 layout
+//@ chunk-77w0w3nj.js:10816-12108 layout
 /**
  * 把一页运行事件压缩为可读日志：逐类事件格式化（消息、工具调用/结果、系统事件、结果、权限请求、限流），非转录事件计数跳过，在字符预算内保留最新事件，附分页与截断说明。
  */
@@ -449,7 +450,7 @@ function condenseRunLogPage(page, budgetChars) {
     eventsShown: eventTexts.length,
   };
 }
-//@ chunk-y8ff1x9z.js:11957-12713 fingerprint (2.1.88 match: inputSchema, 0.395)
+//@ chunk-77w0w3nj.js:12108-12939 fingerprint (2.1.88 match: inputSchema, 0.386)
 /**
  * RemoteTrigger 输入 schema：action（list/get/create/update/run/create_webhook_trigger/list_runs/get_run_log）、trigger_id、session_id、cursor、body；输出 {status, json, summary}；he 为触发器响应中用于摘要的字段。
  */
@@ -499,7 +500,18 @@ var triggerResponseSchema = DoctorLazy(() => {
     run_once_at: emptyToUndefined,
   }).partial();
 });
-//@ chunk-y8ff1x9z.js:12713-13321 layout
+var triggerConnectorsSchema = DoctorLazy(() =>
+  objectSchema({
+    mcp_connections: array(
+      objectSchema({
+        name: stringSchema().catch(""),
+      }).catch({
+        name: "",
+      }),
+    ),
+  }),
+);
+//@ chunk-77w0w3nj.js:12939-13547 layout
 /**
  * 触发器调度摘要：下次运行时间（相对与 UTC）、过去时间警告、已禁用说明、claude.ai 管理链接。
  */
@@ -530,7 +542,7 @@ function formatTriggerScheduleSummary(trigger, now = new Date()) {
 `)
     : undefined;
 }
-//@ chunk-y8ff1x9z.js:13321-13529 layout
+//@ chunk-77w0w3nj.js:13547-13756 layout
 /**
  * 会话行标题的最大字符数（200）。
  */
@@ -552,13 +564,13 @@ var runSessionRowSchema = DoctorLazy(() => {
     last_event_at: optionalString,
   });
 });
-//@ chunk-y8ff1x9z.js:13529-13640 layout
+//@ chunk-77w0w3nj.js:13756-13868 layout
 function formatUnexpectedPageShape(pageKind, body) {
   return `${UNTRUSTED_RUN_CONTENT_NOTE}
 (unexpected ${pageKind} page shape; the start of the body follows)
 ${sanitizeAndTruncate(jsonStringify(body ?? null), 2000)}`;
 }
-//@ chunk-y8ff1x9z.js:13640-14296 layout
+//@ chunk-77w0w3nj.js:13868-14525 layout
 /**
  * 格式化 list_runs 页：每个运行会话保留 id/标题/状态/时间与 claude.ai 链接，附空页与分页提示。
  */
@@ -604,7 +616,7 @@ function formatListRunsResult(body, triggerId, cursor) {
 `) || undefined,
   };
 }
-//@ chunk-y8ff1x9z.js:14296-14628 layout
+//@ chunk-77w0w3nj.js:14525-14858 layout
 /**
  * 格式化 get_run_log 页：按持久化阈值算预算，调用 condenseRunLogPage。
  */
@@ -634,7 +646,25 @@ function formatRunLogResult(body, sessionId) {
     summary: condensed.text,
   };
 }
-//@ chunk-y8ff1x9z.js:14628-14964 layout
+//@ chunk-77w0w3nj.js:14858-14914 layout
+var READ_ONLY_TRIGGER_ACTIONS = new Set(["list", "get", "list_runs", "get_run_log"]);
+//@ chunk-77w0w3nj.js:14914-14987 layout
+function isTriggerActionInput(input) {
+  return (
+    isPlainObject(input) && typeof input.action === "string" && READ_ONLY_TRIGGER_ACTIONS.has(input.action)
+  );
+}
+//@ chunk-77w0w3nj.js:14987-15404 layout
+var REMOTE_TRIGGER_DESCRIPTION = new Map([
+  ["create", "Claude wants to create a routine that runs Claude under your claude.ai account."],
+  ["update", "Claude wants to change a routine that runs Claude under your claude.ai account."],
+  ["run", "Claude wants to run a routine now, under your claude.ai account."],
+  [
+    "create_webhook_trigger",
+    "Claude wants to make an outside event, such as a GitHub event, start a routine under your claude.ai account.",
+  ],
+]);
+//@ chunk-77w0w3nj.js:15404-15743 layout
 /**
  * 创建/更新触发器前补全 body 里用户消息事件的 type/role 字段。
  */
@@ -672,7 +702,7 @@ function fillUserEventFields(body) {
   }
   return result;
 }
-//@ chunk-y8ff1x9z.js:14964-15323 layout
+//@ chunk-77w0w3nj.js:15743-16103 layout
 function normalizeUserMessageEvents(events, wrapperField) {
   let changed = false;
   let mapped = events.map((event) => {
@@ -703,7 +733,7 @@ function normalizeUserMessageEvents(events, wrapperField) {
   });
   return changed ? mapped : events;
 }
-//@ chunk-y8ff1x9z.js:15323-18849 fingerprint (2.1.88 match: RemoteTriggerTool, 0.482)
+//@ chunk-77w0w3nj.js:16103-20673 fingerprint (2.1.88 match: RemoteTriggerTool, 0.442)
 /**
  * RemoteTrigger 工具（shouldDefer，enablesCodeExecution，可并发；list/get/list_runs/get_run_log 为只读）。isEnabled：需要 claude.ai 订阅登录等前置（logEventTo1P_10()/vt()）、非 CLAUDE_CODE_REMOTE 环境、allow_remote_sessions 与 allow_routines 策略开关。权限：auto 模式交给分类器，否则允许。call 按 action 调 claude.ai /v1/code/triggers、/v1/code/webhook-triggers、/v1/code/sessions（anthropic-beta ccr-triggers-2026-01-30，teleport-org 认证，20 秒超时），list_runs/get_run_log 结果做压缩与不可信内容标注，create/update 后附调度摘要与管理链接。
  */
@@ -733,33 +763,44 @@ var RemoteTriggerTool = buildTool({
     return true;
   },
   isReadOnly(input) {
-    return (
-      input.action === "list" ||
-      input.action === "get" ||
-      input.action === "list_runs" ||
-      input.action === "get_run_log"
-    );
+    return READ_ONLY_TRIGGER_ACTIONS.has(input.action);
+  },
+  suppressesAlwaysAllowRule(rule) {
+    return !isTriggerActionInput(rule);
+  },
+  ignoresWholeToolAllowRule(rule) {
+    return !isTriggerActionInput(rule);
   },
   toAutoClassifierInput(input) {
     return input;
   },
-  async description() {
-    return REMOTE_TRIGGER_DESCRIPTION;
+  async description(input) {
+    let action = isPlainObject(input) ? input.action : undefined;
+    return (
+      (typeof action === "string" && REMOTE_TRIGGER_DESCRIPTION.get(action)) ||
+      REMOTE_TRIGGER_DEFAULT_DESCRIPTION
+    );
   },
   async prompt() {
     return REMOTE_TRIGGER_PROMPT;
   },
   create({ permissions, credentials }) {
     return {
-      async checkPermissions(updatedInput) {
+      async checkPermissions(input) {
         if (permissions().mode === "auto")
           return {
             behavior: "passthrough",
             message: "Remote trigger management requires classifier review.",
           };
+        if (!READ_ONLY_TRIGGER_ACTIONS.has(input.action))
+          return {
+            behavior: "ask",
+            message:
+              "Creating, changing or running a routine needs your approval: a routine runs Claude under your claude.ai account.",
+          };
         return {
           behavior: "allow",
-          updatedInput,
+          updatedInput: input,
         };
       },
       async call(input, { signal }) {
@@ -865,7 +906,8 @@ var RemoteTriggerTool = buildTool({
           action === "run" ||
           action === "create_webhook_trigger"
         ) {
-          let parsedTrigger = isOk ? triggerResponseSchema().safeParse(response.data) : undefined;
+          let trigger = isOk && isPlainObject(response.data) ? response.data.trigger : undefined;
+          let parsedTrigger = triggerResponseSchema().safeParse(trigger);
           logEvent("tengu_remote_trigger", {
             action: fromEnum(action),
             has_run_once_at: typeof body?.run_once_at === "string" && body.run_once_at !== "",
@@ -874,7 +916,7 @@ var RemoteTriggerTool = buildTool({
             success: isOk,
             trigger_id: sanitizeMarkName(
               action === "create"
-                ? parsedTrigger?.success
+                ? parsedTrigger.success
                   ? parsedTrigger.data.id
                   : undefined
                 : action === "create_webhook_trigger"
@@ -885,7 +927,28 @@ var RemoteTriggerTool = buildTool({
             ),
           });
           if (isOk && action !== "run")
-            summary = parsedTrigger?.success ? formatTriggerScheduleSummary(parsedTrigger.data) : undefined;
+            summary = parsedTrigger.success ? formatTriggerScheduleSummary(parsedTrigger.data) : undefined;
+          if (action === "create") {
+            let mcpConnections = body?.mcp_connections;
+            let askedForConnectors = Array.isArray(mcpConnections) && mcpConnections.length > 0;
+            let parsedConnections = triggerConnectorsSchema().safeParse(trigger);
+            let connectorNames = parsedConnections.success
+              ? parsedConnections.data.mcp_connections.map(
+                  (mcpConnection) =>
+                    CLAUDEAI_SERVER_PREFIX(mcpConnection.name).slice(0, 100) || "unnamed-connector",
+                )
+              : [];
+            if (connectorNames.length > 0) {
+              let joined = connectorNames.join(", ");
+              let connectorNotice = askedForConnectors
+                ? `\u2192 Connectors: ${joined}`
+                : `\u26A0 No connectors were asked for (mcp_connections is empty or absent), but this routine has: ${joined}. The server attaches the account's connected connectors when none are named, and every run of this routine can use them. Tell the user. To remove them, call update on this routine with {"clear_mcp_connections": true}, or with mcp_connections holding only the entries to keep, copied from this response. An empty mcp_connections changes nothing.`;
+              summary = summary
+                ? `${summary}
+${connectorNotice}`
+                : connectorNotice;
+            }
+          }
           if (isOk && action === "create_webhook_trigger") {
             let routineTriggerId = body?.routine_trigger_id;
             summary =
@@ -918,9 +981,10 @@ ${result.json}`;
       content,
     };
   },
-  renderToolUseMessage(input) {
+  renderToolUseMessage(input, { verbose }) {
     let subjectId = input.session_id ?? input.trigger_id;
-    return `${input.action ?? ""}${subjectId ? ` ${subjectId}` : ""}`;
+    let headline = `${input.action ?? ""}${subjectId ? ` ${subjectId}` : ""}`;
+    return verbose && input.body !== undefined ? `${headline}: ${jsonStringify(input.body)}` : headline;
   },
 });
 export { RemoteTriggerTool };

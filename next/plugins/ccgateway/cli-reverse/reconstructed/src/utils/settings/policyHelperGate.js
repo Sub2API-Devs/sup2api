@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：策略 helper 宿主回调（读取、拒绝）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (6)
  * attribution: placement 6
  */
 import { getRemoteSettingsPathOverride } from "../../services/remoteManagedSettings/remoteSettingsState.js";
@@ -27,7 +27,7 @@ import { emitExitMessage, gracefulShutdown } from "../gracefulShutdown.js";
 import { recordManagedSettingsRefusal } from "../../cli/managedConfigRefusal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cjydagjy.js:36599-36765 placement
+//@ chunk-h61dq9nz.js:38436-38602 placement
 function shouldWaitForRemotePolicy() {
   if (getRemoteSettingsPathOverride()) return false;
   if (helperInitAttempted()) return false;
@@ -40,10 +40,10 @@ function shouldWaitForRemotePolicy() {
     isRemoteManagedSettingsColdStartPending()
   );
 }
-//@ chunk-cjydagjy.js:36765-36788 placement
+//@ chunk-h61dq9nz.js:38602-38625 placement
 var HELPER_GATE_TIMEOUT_MS = 120000;
 var HELPER_GATE_HOOK_GRACE_MS = 60000;
-//@ chunk-cjydagjy.js:36788-36854 placement
+//@ chunk-h61dq9nz.js:38625-38691 placement
 function helperGateDeadline() {
   let hookTimeout = 0;
   try {
@@ -51,24 +51,24 @@ function helperGateDeadline() {
   } catch {}
   return Math.max(HELPER_GATE_TIMEOUT_MS, hookTimeout + HELPER_GATE_HOOK_GRACE_MS);
 }
-//@ chunk-cjydagjy.js:36854-36873 placement
+//@ chunk-h61dq9nz.js:38691-38710 placement
 function exitCliWithError() {
   cliError();
 }
-//@ chunk-cjydagjy.js:36873-36916 placement
+//@ chunk-h61dq9nz.js:38710-38753 placement
 /**
  * armHelperGateExit：武装 helper 闸门退出定时器。
  */
 function armHelperGateExit() {
   setTimeout(exitCliWithError, helperGateDeadline()).unref();
 }
-//@ chunk-cjydagjy.js:36916-37242 placement
+//@ chunk-h61dq9nz.js:38753-39079 placement
 /**
  * 策略 helper 宿主回调（读取、拒绝）。
  */
 var POLICY_HELPER_HOST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var POLICY_HELPER_SUBCOMMANDS;
-deferInit("chunk-cjydagjy.js:36916", () => {
+deferInit("chunk-h61dq9nz.js:38753", () => {
   POLICY_HELPER_HOST = {
     readBase: () => ({
       settings: getBasePolicySettings(),

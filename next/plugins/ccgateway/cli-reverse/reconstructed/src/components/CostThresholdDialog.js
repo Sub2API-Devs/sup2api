@@ -3,9 +3,9 @@
  *
  * API 计费会话花费达到 $5 时的一次性提醒。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CostThresholdDialog.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -18,9 +18,9 @@ import { Box, Text, Link } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:1127615-1127663 affinity
+//@ chunk-czq1j3j2.js:1158397-1158445 affinity
 var HTTPS_CODE_CLAUDE_COM_DOCS_EN_COSTS = "https://code.claude.com/docs/en/costs";
-//@ chunk-18hwfzwa.js:1127663-1128195 fingerprint (2.1.88 match: CostThresholdDialog, 0.635)
+//@ chunk-czq1j3j2.js:1158445-1158977 fingerprint (2.1.88 match: CostThresholdDialog, 0.635)
 function CostThresholdDialog(props) {
   let $ = useMemoCache(7);
   let { onDone } = props;

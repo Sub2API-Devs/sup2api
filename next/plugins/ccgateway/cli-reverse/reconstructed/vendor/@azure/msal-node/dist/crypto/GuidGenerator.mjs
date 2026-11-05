@@ -1,15 +1,15 @@
 /**
  * @azure/msal-node/dist/crypto/GuidGenerator.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { uuid } from "../../../../mermaid/dist/chunks/mermaid.esm/mindmap-definition-HWZWQOMJ.mjs";
 
-//@ chunk-mrx6y2r5.js:225695-225705 esm-layout
+//@ chunk-b5df2wx1.js:225695-225705 esm-layout
 var getRandomValues = uuid;
-//@ chunk-mrx6y2r5.js:225746-225884 esm-fingerprint
+//@ chunk-b5df2wx1.js:225746-225884 esm-fingerprint
 class GuidGenerator {
   generateGuid() {
     return getRandomValues();

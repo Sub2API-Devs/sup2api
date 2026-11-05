@@ -3,9 +3,9 @@
  *
  * 语音与输入框的集成：按住说话键位、录音状态切换、把转写文本插入光标处（输入分歧时放弃）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVoiceIntegration.tsx
- * pieces: chunk-tzghj6zv.js (19), chunk-v6kts6xw.js (1), chunk-yj65zw1g.js (1)
+ * pieces: chunk-18rrbwq1.js (19), chunk-77bb8s6j.js (1), chunk-820m5cev.js (1)
  * attribution: placement 5, layout 12, fingerprint 4
  */
 import { useVoiceStateStore, useGetVoiceState } from "../context/voice.js";
@@ -26,7 +26,7 @@ import { useVoiceEnabled } from "./useVoiceEnabled.js";
 import { hasAnthropicOAuthToken, isVoiceModeAllowed } from "../voice/voiceModeEnabled.js";
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { logEvent } from "../services/analytics/index.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { keybindingsState, getKeybindings } from "../keybindings/loadUserBindings.js";
 import { useNotifications } from "../context/notifications.js";
 import { replaceIdeographicSpace } from "../utils/stringUtils.js";
@@ -37,19 +37,17 @@ import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { useThirdOverlayKeys } from "../context/overlayContext.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { keystrokesEqual } from "../keybindings/resolver.js";
-import { keystrokeToDisplayString } from "../keybindings/parser.js";
-import { getShortcutDisplayPlatform } from "../utils/keyboardShortcuts.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-yj65zw1g.js:1203-1240 placement
+//@ chunk-77bb8s6j.js:1203-1240 placement
 /**
  * 函数 voiceSetState（取语音 store 的 setState）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。
  */
 function voiceSetState() {
   return useVoiceStateStore().setState;
 }
-//@ chunk-v6kts6xw.js:2603-2710 fingerprint (2.1.88 match: DEFAULT_VOICE_KEYSTROKE, 1)
+//@ chunk-820m5cev.js:2603-2710 fingerprint (2.1.88 match: DEFAULT_VOICE_KEYSTROKE, 1)
 function DEFAULT_VOICE_KEYSTROKE(event) {
   return (
     event.shift &&
@@ -62,12 +60,12 @@ function DEFAULT_VOICE_KEYSTROKE(event) {
     event.key <= "z"
   );
 }
-//@ chunk-tzghj6zv.js:11964-11968 placement
+//@ chunk-18rrbwq1.js:12093-12097 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:11964", () => {
+deferInit("chunk-18rrbwq1.js:12093", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:11968-12042 placement
+//@ chunk-18rrbwq1.js:12097-12171 placement
 /**
  * 函数 useVoiceLoginCompleted（语音登录完成计数）；位于「语音与输入框的集成：按住说话键位、录音状态切换、把转写文本插入光标处（输入分歧时放弃）」模块。
  */
@@ -80,7 +78,7 @@ function useVoiceLoginCompleted() {
     ) ?? 0
   );
 }
-//@ chunk-tzghj6zv.js:12042-12324 placement
+//@ chunk-18rrbwq1.js:12171-12453 placement
 /**
  * 判断语音输入是否可用（设置开启、已认证且允许语音模式），首次计算时记录初始化事件。
  */
@@ -92,7 +90,7 @@ function useVoiceAvailable() {
     if (!claimOnce().claim("voice_init_gate")) return;
     logEvent("tengu_voice_init_gate", {
       user_intent_store: userIntent,
-      user_intent_disk: useVoiceEnabled(getInitialSettings_2()),
+      user_intent_disk: useVoiceEnabled(getInitialSettings()),
       has_voice_auth: hasAnthropicOAuthToken(),
       voice_mode_allowed: isVoiceModeAllowed(),
       auth_version: voiceLoginCompleted,
@@ -100,20 +98,20 @@ function useVoiceAvailable() {
   }, []);
   return hasAuth && isVoiceModeAllowed();
 }
-//@ chunk-tzghj6zv.js:12324-12328 placement
+//@ chunk-18rrbwq1.js:12453-12457 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:12324", () => {
+deferInit("chunk-18rrbwq1.js:12453", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:12328-12365 layout
+//@ chunk-18rrbwq1.js:12457-12494 layout
 function selectVoiceState(state) {
   return state.voiceState;
 }
-//@ chunk-tzghj6zv.js:12365-12420 layout
+//@ chunk-18rrbwq1.js:12494-12549 layout
 function selectVoiceModeSetting(state) {
   return state.settings.voice?.mode ?? "hold";
 }
-//@ chunk-tzghj6zv.js:12420-12501 layout
+//@ chunk-18rrbwq1.js:12549-12630 layout
 function clearVoiceWarmingUp(state) {
   if (!state.voiceWarmingUp) {
     return state;
@@ -123,7 +121,7 @@ function clearVoiceWarmingUp(state) {
     voiceWarmingUp: false,
   };
 }
-//@ chunk-tzghj6zv.js:12501-12610 layout
+//@ chunk-18rrbwq1.js:12630-12739 layout
 function clearVoiceDoubleTap(state) {
   if (!state.awaitingVoiceSubmitDoubleTap) {
     return state;
@@ -133,7 +131,7 @@ function clearVoiceDoubleTap(state) {
     awaitingVoiceSubmitDoubleTap: false,
   };
 }
-//@ chunk-tzghj6zv.js:12610-12691 layout
+//@ chunk-18rrbwq1.js:12739-12820 layout
 function clearVoiceWarmingUp_2(state) {
   if (!state.voiceWarmingUp) {
     return state;
@@ -143,7 +141,7 @@ function clearVoiceWarmingUp_2(state) {
     voiceWarmingUp: false,
   };
 }
-//@ chunk-tzghj6zv.js:12691-12800 layout
+//@ chunk-18rrbwq1.js:12820-12929 layout
 function clearVoiceDoubleTap_2(state) {
   if (!state.awaitingVoiceSubmitDoubleTap) {
     return state;
@@ -153,7 +151,7 @@ function clearVoiceDoubleTap_2(state) {
     awaitingVoiceSubmitDoubleTap: false,
   };
 }
-//@ chunk-tzghj6zv.js:12800-12909 layout
+//@ chunk-18rrbwq1.js:12929-13038 layout
 function clearVoiceDoubleTap_3(state) {
   if (!state.awaitingVoiceSubmitDoubleTap) {
     return state;
@@ -163,7 +161,7 @@ function clearVoiceDoubleTap_3(state) {
     awaitingVoiceSubmitDoubleTap: false,
   };
 }
-//@ chunk-tzghj6zv.js:12909-12990 layout
+//@ chunk-18rrbwq1.js:13038-13119 layout
 function clearVoiceWarmingUp_3(state) {
   if (!state.voiceWarmingUp) {
     return state;
@@ -173,7 +171,7 @@ function clearVoiceWarmingUp_3(state) {
     voiceWarmingUp: false,
   };
 }
-//@ chunk-tzghj6zv.js:12990-13070 layout
+//@ chunk-18rrbwq1.js:13119-13199 layout
 function markVoiceWarmingUp(state) {
   if (state.voiceWarmingUp) {
     return state;
@@ -183,14 +181,14 @@ function markVoiceWarmingUp(state) {
     voiceWarmingUp: true,
   };
 }
-//@ chunk-tzghj6zv.js:13070-13140 layout
+//@ chunk-18rrbwq1.js:13199-13269 layout
 var voiceControllerModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var VOICE_PARTIAL_FLUSH_MS;
 var VOICE_IDLE_TIMEOUT_MS;
 var VOICE_MAX_RETRIES;
 var VOICE_MIN_CHARS;
 var VOICE_DEBOUNCE_MS;
-deferInit("chunk-tzghj6zv.js:13070", () => {
+deferInit("chunk-18rrbwq1.js:13199", () => {
   voiceControllerModule = require("./useVoice.lazy.js");
   VOICE_PARTIAL_FLUSH_MS = 120;
   VOICE_IDLE_TIMEOUT_MS = 2000;
@@ -198,7 +196,7 @@ deferInit("chunk-tzghj6zv.js:13070", () => {
   VOICE_MIN_CHARS = 2;
   VOICE_DEBOUNCE_MS = 300;
 });
-//@ chunk-tzghj6zv.js:13140-13361 fingerprint (2.1.88 match: matchesKeyboardEvent, 0.906)
+//@ chunk-18rrbwq1.js:13269-13490 fingerprint (2.1.88 match: matchesKeyboardEvent, 0.906)
 function matchesKeyboardEvent(e, target) {
   if ((e.key === "return" ? "enter" : e.key.toLowerCase()) !== target.key) return false;
   if (e.ctrl !== target.ctrl) return false;
@@ -207,15 +205,15 @@ function matchesKeyboardEvent(e, target) {
   if (e.superKey !== target.super) return false;
   return true;
 }
-//@ chunk-tzghj6zv.js:13361-13407 layout
+//@ chunk-18rrbwq1.js:13490-13536 layout
 function subscribeVoiceChanged(listener) {
   return keybindingsState.changed.subscribe(listener);
 }
-//@ chunk-tzghj6zv.js:13407-13436 layout
+//@ chunk-18rrbwq1.js:13536-13565 layout
 function voiceSnapshot() {
   return getKeybindings(keybindingsState);
 }
-//@ chunk-tzghj6zv.js:13436-16010 fingerprint (2.1.88 match: useVoiceIntegration, 0.686)
+//@ chunk-18rrbwq1.js:13565-16117 fingerprint (2.1.88 match: useVoiceIntegration, 0.686)
 /**
  * 语音集成：录音状态变化时在光标处插入/替换临时转写文本（interimRange），最终转写落地；输入在录音期间被改动则放弃插入（input_diverged）。
  */
@@ -370,12 +368,12 @@ function useVoiceIntegration({ composer, isActive = true }) {
     interimRange,
   };
 }
-//@ chunk-tzghj6zv.js:16010-20376 fingerprint (2.1.88 match: useVoiceKeybindingHandler, 0.721)
+//@ chunk-18rrbwq1.js:16117-20273 fingerprint (2.1.88 match: useVoiceKeybindingHandler, 0.737)
 /**
  * 语音快捷键：voice:pushToTalk 按住开始/松开结束，Esc 取消，处理 hold 与 toggle 两种模式。
  */
 function useVoiceKeybindingHandler(props) {
-  let $ = useMemoCache(32);
+  let $ = useMemoCache(27);
   let {
     voiceHandleKeyEvent,
     voiceCancelRecording,
@@ -424,13 +422,6 @@ function useVoiceKeybindingHandler(props) {
     pushToTalkBinding = result;
   }
   let target = pushToTalkBinding;
-  let displayLabel;
-  if ($[2] !== target) {
-    displayLabel = target ? keystrokeToDisplayString(target, getShortcutDisplayPlatform()) : null;
-    $[2] = target;
-    $[3] = displayLabel;
-  } else displayLabel = $[3];
-  let voiceKeyDisplay = displayLabel;
   let key =
     target !== null &&
     target.key.length === 1 &&
@@ -450,7 +441,7 @@ function useVoiceKeybindingHandler(props) {
   let flushTimerRef = useRef(null);
   let resetOnStateChange;
   let resetDeps;
-  if ($[4] !== setVoiceState || $[5] !== appState) {
+  if ($[2] !== setVoiceState || $[3] !== appState) {
     resetOnStateChange = () => {
       if (appState !== "recording") {
         isHoldActiveRef.current = false;
@@ -466,18 +457,18 @@ function useVoiceKeybindingHandler(props) {
       }
     };
     resetDeps = [appState, setVoiceState];
-    $[4] = setVoiceState;
-    $[5] = appState;
-    $[6] = resetOnStateChange;
-    $[7] = resetDeps;
+    $[2] = setVoiceState;
+    $[3] = appState;
+    $[4] = resetOnStateChange;
+    $[5] = resetDeps;
   } else {
-    resetOnStateChange = $[6];
-    resetDeps = $[7];
+    resetOnStateChange = $[4];
+    resetDeps = $[5];
   }
   useEffect(resetOnStateChange, resetDeps);
   let cleanupEffect;
   let cleanupDeps;
-  if ($[8] === MEMO_CACHE_SENTINEL) {
+  if ($[6] === MEMO_CACHE_SENTINEL) {
     cleanupEffect = () => () => {
       if (flushTimerRef.current) {
         flushTimerRef.current();
@@ -485,15 +476,15 @@ function useVoiceKeybindingHandler(props) {
       }
     };
     cleanupDeps = [];
-    $[8] = cleanupEffect;
-    $[9] = cleanupDeps;
+    $[6] = cleanupEffect;
+    $[7] = cleanupDeps;
   } else {
-    cleanupEffect = $[8];
-    cleanupDeps = $[9];
+    cleanupEffect = $[6];
+    cleanupDeps = $[7];
   }
   useEffect(cleanupEffect, cleanupDeps);
   let resetRapidTyping;
-  if ($[10] !== setVoiceState) {
+  if ($[8] !== setVoiceState) {
     resetRapidTyping = function resetRapidTypingImpl() {
       if (rapidCountRef.current === 0) {
         return;
@@ -506,30 +497,30 @@ function useVoiceKeybindingHandler(props) {
       charsInInputRef.current = 0;
       setVoiceState(clearVoiceWarmingUp_2);
     };
-    $[10] = setVoiceState;
-    $[11] = resetRapidTyping;
-  } else resetRapidTyping = $[11];
+    $[8] = setVoiceState;
+    $[9] = resetRapidTyping;
+  } else resetRapidTyping = $[9];
   let flushRapidTyping = resetRapidTyping;
-  let handleKeyDown;
+  let result;
   if (
-    $[12] !== key ||
-    $[13] !== clock ||
-    $[14] !== composer ||
-    $[15] !== composerTakesTypedKeysDefault ||
-    $[16] !== getVoiceState ||
-    $[17] !== isActive ||
-    $[18] !== isModalOverlayActive ||
-    $[19] !== resetAnchor ||
-    $[20] !== flushRapidTyping ||
-    $[21] !== setVoiceState ||
-    $[22] !== stripTrailing ||
-    $[23] !== voiceCancelRecording ||
-    $[24] !== voiceAvailable ||
-    $[25] !== voiceHandleKeyEvent ||
-    $[26] !== target ||
-    $[27] !== appState_2
+    $[10] !== key ||
+    $[11] !== clock ||
+    $[12] !== composer ||
+    $[13] !== composerTakesTypedKeysDefault ||
+    $[14] !== getVoiceState ||
+    $[15] !== isActive ||
+    $[16] !== isModalOverlayActive ||
+    $[17] !== resetAnchor ||
+    $[18] !== flushRapidTyping ||
+    $[19] !== setVoiceState ||
+    $[20] !== stripTrailing ||
+    $[21] !== voiceCancelRecording ||
+    $[22] !== voiceAvailable ||
+    $[23] !== voiceHandleKeyEvent ||
+    $[24] !== target ||
+    $[25] !== appState_2
   ) {
-    handleKeyDown = (prev) => {
+    let handleKeyDown = (event) => {
       if (!voiceAvailable) {
         return;
       }
@@ -537,10 +528,10 @@ function useVoiceKeybindingHandler(props) {
         return;
       }
       if (
-        (prev.key === "escape" || (prev.key === "c" && prev.ctrl && !prev.shift && !prev.meta)) &&
+        (event.key === "escape" || (event.key === "c" && event.ctrl && !event.shift && !event.meta)) &&
         getVoiceState().voiceState !== "idle"
       ) {
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         voiceCancelRecording();
         resetAnchor();
         return;
@@ -567,10 +558,10 @@ function useVoiceKeybindingHandler(props) {
         };
         let typedVoiceKey =
           key !== null &&
-          !prev.ctrl &&
-          !prev.meta &&
-          !prev.shift &&
-          (key === " " ? replaceIdeographicSpace(prev.key) : prev.key)[0] === key;
+          !event.ctrl &&
+          !event.meta &&
+          !event.shift &&
+          (key === " " ? replaceIdeographicSpace(event.key) : event.key)[0] === key;
         let isAtEnd = composer.cursorOffset === composer.value.length;
         if (!typedVoiceKey || !isAtEnd) abandonDoubleTap();
         else if (flushTimerRef.current !== null) abandonDoubleTap();
@@ -578,7 +569,7 @@ function useVoiceKeybindingHandler(props) {
           let now = Date.now();
           let lastAt = lastKeyAtRef.current;
           if (lastAt !== 0 && now - lastAt <= VOICE_DEBOUNCE_MS) {
-            prev.stopImmediatePropagation();
+            event.stopImmediatePropagation();
             lastKeyAtRef.current = 0;
             flushTimerRef.current = clock.setTimeout(() => {
               flushTimerRef.current = null;
@@ -605,16 +596,16 @@ function useVoiceKeybindingHandler(props) {
       }
       let matchedChars;
       if (key !== null) {
-        let typedKey = key === " " ? replaceIdeographicSpace(prev.key) : prev.key;
+        let typedKey = key === " " ? replaceIdeographicSpace(event.key) : event.key;
         matchedChars =
-          !prev.ctrl &&
-          !prev.meta &&
-          !prev.shift &&
+          !event.ctrl &&
+          !event.meta &&
+          !event.shift &&
           typedKey[0] === key &&
           (typedKey.length === 1 || typedKey === key.repeat(typedKey.length))
             ? typedKey.length
             : null;
-      } else matchedChars = matchesKeyboardEvent(prev, target) ? 1 : null;
+      } else matchedChars = matchesKeyboardEvent(event, target) ? 1 : null;
       if (matchedChars === null) {
         flushRapidTyping();
         return;
@@ -622,14 +613,14 @@ function useVoiceKeybindingHandler(props) {
       if (appState_2 === "tap") {
         let currentVoiceState = getVoiceState().voiceState;
         if (currentVoiceState === "processing") {
-          if (key === null) prev.stopImmediatePropagation();
+          if (key === null) event.stopImmediatePropagation();
           return;
         }
         let isIdle = currentVoiceState === "idle";
         if (isIdle && composer.value.length > 0) {
           return;
         }
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         let isFirstPress = rapidCountRef.current === 0;
         rapidCountRef.current = rapidCountRef.current + matchedChars;
         if (resetTimerRef.current) resetTimerRef.current();
@@ -666,7 +657,7 @@ function useVoiceKeybindingHandler(props) {
       }
       let voiceState = getVoiceState().voiceState;
       if (isHoldActiveRef.current && voiceState !== "idle") {
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         if (key !== null)
           stripTrailing(matchedChars, {
             char: key,
@@ -676,17 +667,17 @@ function useVoiceKeybindingHandler(props) {
         return;
       }
       if (voiceState === "recording") {
-        if (key === null) prev.stopImmediatePropagation();
+        if (key === null) event.stopImmediatePropagation();
         return;
       }
       if (voiceState === "processing" && key === null) {
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         return;
       }
       let countBefore = rapidCountRef.current;
       rapidCountRef.current = rapidCountRef.current + matchedChars;
       if (key === null || (voiceState === "idle" && rapidCountRef.current >= VOICE_MAX_RETRIES)) {
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         if (resetTimerRef.current) {
           resetTimerRef.current();
           resetTimerRef.current = null;
@@ -714,7 +705,7 @@ function useVoiceKeybindingHandler(props) {
         return;
       }
       if (countBefore >= VOICE_MIN_CHARS) {
-        prev.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         stripTrailing(matchedChars, {
           char: key,
           floor: charsInInputRef.current,
@@ -728,41 +719,33 @@ function useVoiceKeybindingHandler(props) {
         flushRapidTyping();
       }, VOICE_PARTIAL_FLUSH_MS);
     };
-    $[12] = key;
-    $[13] = clock;
-    $[14] = composer;
-    $[15] = composerTakesTypedKeysDefault;
-    $[16] = getVoiceState;
-    $[17] = isActive;
-    $[18] = isModalOverlayActive;
-    $[19] = resetAnchor;
-    $[20] = flushRapidTyping;
-    $[21] = setVoiceState;
-    $[22] = stripTrailing;
-    $[23] = voiceCancelRecording;
-    $[24] = voiceAvailable;
-    $[25] = voiceHandleKeyEvent;
-    $[26] = target;
-    $[27] = appState_2;
-    $[28] = handleKeyDown;
-  } else handleKeyDown = $[28];
-  let handleKeyDown_2 = handleKeyDown;
-  let result;
-  if ($[29] !== handleKeyDown_2 || $[30] !== voiceKeyDisplay) {
     result = {
-      handleKeyDown: handleKeyDown_2,
-      voiceKeyDisplay,
+      handleKeyDown,
     };
-    $[29] = handleKeyDown_2;
-    $[30] = voiceKeyDisplay;
-    $[31] = result;
-  } else result = $[31];
+    $[10] = key;
+    $[11] = clock;
+    $[12] = composer;
+    $[13] = composerTakesTypedKeysDefault;
+    $[14] = getVoiceState;
+    $[15] = isActive;
+    $[16] = isModalOverlayActive;
+    $[17] = resetAnchor;
+    $[18] = flushRapidTyping;
+    $[19] = setVoiceState;
+    $[20] = stripTrailing;
+    $[21] = voiceCancelRecording;
+    $[22] = voiceAvailable;
+    $[23] = voiceHandleKeyEvent;
+    $[24] = target;
+    $[25] = appState_2;
+    $[26] = result;
+  } else result = $[26];
   return result;
 }
 export {
   useVoiceAvailable,
+  DEFAULT_VOICE_KEYSTROKE,
   useVoiceLoginCompleted,
   useVoiceIntegration,
   useVoiceKeybindingHandler,
-  DEFAULT_VOICE_KEYSTROKE,
 };

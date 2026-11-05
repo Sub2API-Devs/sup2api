@@ -1,20 +1,20 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/httpHeaders.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 
-//@ chunk-mrx6y2r5.js:30140-30178 esm-layout
+//@ chunk-b5df2wx1.js:30140-30178 esm-layout
 function normalizeName(name) {
   return name.toLowerCase();
 }
-//@ chunk-mrx6y2r5.js:30178-30239 esm-fingerprint
+//@ chunk-b5df2wx1.js:30178-30239 esm-fingerprint
 function* headerIterator(map) {
   for (let entry of map.values()) yield [entry.name, entry.value];
 }
-//@ chunk-mrx6y2r5.js:30239-30845 esm-fingerprint
+//@ chunk-b5df2wx1.js:30239-30845 esm-fingerprint
 class HttpHeadersImpl {
   constructor(rawHeaders) {
     this._headersMap = new Map();

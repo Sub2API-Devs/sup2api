@@ -1,14 +1,14 @@
 /**
  * lru-cache/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lru-cache@10.3.0..11.0.2
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_yallist } from "../yallist/yallist.js";
 
-//@ chunk-1ny7cxrt.js:15716-19351 cjs-fingerprint
+//@ chunk-1hnjmk23.js:16085-19720 cjs-fingerprint
 var require_lru_cache = __commonJS(function (cjsExports, cjsModule) {
   var Yallist = require_yallist();
   var MAX = Symbol("max");

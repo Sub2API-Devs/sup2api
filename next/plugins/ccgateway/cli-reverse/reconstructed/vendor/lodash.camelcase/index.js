@@ -1,13 +1,13 @@
 /**
  * lodash.camelcase/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash.camelcase@4.3.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-pwh5dx3n.js:71132-76760 cjs-fingerprint
+//@ chunk-3k21nfa0.js:71132-76760 cjs-fingerprint
 var require_lodash_camelcase = __commonJS(function (cjsExports, cjsModule) {
   var INFINITY = 1 / 0;
   var symbolTag = "[object Symbol]";

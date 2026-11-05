@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Ansi 文本组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x6v6jz2y.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-emhzq435.js (1)
  * attribution: placement 1
  */
 import { memo } from "../../../vendor/react/cjs/react.production.js";
@@ -17,12 +17,12 @@ import { parseToSpans, hasAnyTextProps } from "../Ansi.js";
 import { StyledText } from "./ClockContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x6v6jz2y.js:14043-15379 placement (2.1.88 match: Ansi, 0.713)
+//@ chunk-emhzq435.js:13982-15316 placement (2.1.88 match: Ansi, 0.713)
 /**
  * <Ansi>：把带 ANSI 转义的字符串解析成样式片段，渲染为嵌套 <Text>（OSC 8 片段包 <Link>）；支持 dimColor/italic 统一叠加、monochrome 去色。
  */
 var Ansi; // deferred: uses BaseText (./Text.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x6v6jz2y.js:14043", () => {
+deferInit("chunk-emhzq435.js:13982", () => {
   Ansi = memo(function (props) {
     let $ = useMemoCache(21);
     let { children, dimColor, italic, monochrome, wrap } = props;
@@ -53,11 +53,11 @@ deferInit("chunk-x6v6jz2y.js:14043", () => {
     let t2;
     if ($[5] !== children || $[6] !== dimColor || $[7] !== italic || $[8] !== monochrome || $[9] !== wrap) {
       t2 = EARLY_RETURN_SENTINEL;
-      A: {
+      P: {
         let spans = parseToSpans(children);
         if (spans.length === 0) {
           t2 = null;
-          break A;
+          break P;
         }
         if (
           spans.length === 1 &&
@@ -70,7 +70,7 @@ deferInit("chunk-x6v6jz2y.js:14043", () => {
             wrap,
             children: spans[0].text,
           });
-          break A;
+          break P;
         }
         let t3;
         if ($[12] !== dimColor || $[13] !== italic || $[14] !== monochrome) {

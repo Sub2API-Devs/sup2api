@@ -1,13 +1,13 @@
 /**
  * vscode-jsonrpc/lib/common/linkedMap.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: vscode-jsonrpc@8.2.0..8.2.1
- * pieces: chunk-t4ksmxzx.js (1)
+ * pieces: chunk-mvgr3jmb.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-t4ksmxzx.js:8540-13140 cjs-fingerprint
+//@ chunk-mvgr3jmb.js:8904-13504 cjs-fingerprint
 var require_linkedMap = __commonJS(function (cjsExports) {
   var _a;
   Object.defineProperty(cjsExports, "__esModule", {

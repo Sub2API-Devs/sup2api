@@ -3,9 +3,9 @@
  *
  * 远程会话后台任务事件判定（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-08945j39.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h29vk4wn.js (10)
  * attribution: placement 10
  */
 import { toBackgroundTaskInfo } from "../services/homeSeed/firstSend.js";
@@ -14,7 +14,7 @@ import { BACKGROUND_TASKS_MOVES_BASH_V1 } from "../utils/messages/systemInit.js"
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-08945j39.js:1783-2325 placement
+//@ chunk-h29vk4wn.js:3354-3896 placement
 function toBackgroundTaskEvent(backgroundTasks, event) {
   if (event.type !== "system") return false;
   switch (event.subtype) {
@@ -43,12 +43,12 @@ function toBackgroundTaskEvent(backgroundTasks, event) {
       return false;
   }
 }
-//@ chunk-08945j39.js:2325-2370 placement
+//@ chunk-h29vk4wn.js:3896-3941 placement
 var BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-08945j39.js:2325", () => {
+deferInit("chunk-h29vk4wn.js:3896", () => {
   BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS = new Set(["local_bash", "local_agent"]);
 });
-//@ chunk-08945j39.js:2370-2987 placement
+//@ chunk-h29vk4wn.js:3941-4558 placement
 function isSystemInitMessage(trackedTaskIds, event) {
   if (event.type === "result" || (event.type === "system" && event.subtype === "init")) {
     trackedTaskIds.clear();
@@ -83,19 +83,19 @@ function isSystemInitMessage(trackedTaskIds, event) {
       return;
   }
 }
-//@ chunk-08945j39.js:2987-3000 placement
+//@ chunk-h29vk4wn.js:4558-4571 placement
 /**
  * 导出常量或表 `BASH_TASK_COUNT_DELAY_MS`：值为 2000。
  */
 var BASH_TASK_COUNT_DELAY_MS = 2000;
-//@ chunk-08945j39.js:3000-3083 placement
+//@ chunk-h29vk4wn.js:4571-4654 placement
 /**
  * 导出函数 `supportsBackgroundTasksMovesBash`：参数 e，返回 Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1)。
  */
 function supportsBackgroundTasksMovesBash(handle) {
   return Array.isArray(handle.capabilities) && handle.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1);
 }
-//@ chunk-08945j39.js:3083-3323 placement
+//@ chunk-h29vk4wn.js:4654-4894 placement
 /**
  * 取主线程助手消息中非后台运行的 Bash 工具调用 id。
  */
@@ -113,7 +113,7 @@ function getForegroundBashToolUseIds(message) {
       )
     : [];
 }
-//@ chunk-08945j39.js:3323-3506 placement
+//@ chunk-h29vk4wn.js:4894-5077 placement
 /**
  * 取用户消息中所有工具结果对应的工具调用 id。
  */
@@ -125,9 +125,9 @@ function getToolResultIds(payload) {
       )
     : [];
 }
-//@ chunk-08945j39.js:3506-3517 placement
+//@ chunk-h29vk4wn.js:5077-5088 placement
 var MAX_TRACKED_BACKGROUND_TASK_IDS = 256;
-//@ chunk-08945j39.js:3517-3898 placement
+//@ chunk-h29vk4wn.js:5088-5469 placement
 /**
  * 根据系统消息（后台任务变化、任务开始、任务更新为后台）记录需要跟踪的后台任务 id。
  */
@@ -151,7 +151,7 @@ function trackBackgroundTask(taskIds, event) {
       return;
   }
 }
-//@ chunk-08945j39.js:3898-4045 placement
+//@ chunk-h29vk4wn.js:5469-5616 placement
 function addBackgroundTaskId(taskIds, taskId, ambient) {
   if (typeof taskId !== "string" || ambient === true || taskIds.has(taskId)) return;
   if (taskIds.size >= MAX_TRACKED_BACKGROUND_TASK_IDS) {
@@ -161,11 +161,11 @@ function addBackgroundTaskId(taskIds, taskId, ambient) {
   taskIds.add(taskId);
 }
 export {
-  trackBackgroundTask,
-  isSystemInitMessage,
-  toBackgroundTaskEvent,
   supportsBackgroundTasksMovesBash,
   getForegroundBashToolUseIds,
-  BASH_TASK_COUNT_DELAY_MS,
   getToolResultIds,
+  isSystemInitMessage,
+  toBackgroundTaskEvent,
+  BASH_TASK_COUNT_DELAY_MS,
+  trackBackgroundTask,
 };

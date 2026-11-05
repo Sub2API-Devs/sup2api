@@ -3,9 +3,9 @@
  *
  * 排队命令处理：回合空闲且无本地 JSX 对话框时依次出队执行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useQueueProcessor.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import {
@@ -26,6 +26,7 @@ import {
   peekNextProcessableCommand,
   prependModeCharacterToInput_2,
   isBridgeSlashCommandUnavailable,
+  scriptAskHoldsSlot,
   neverSubscribed,
   processQueueIfReady,
 } from "../utils/queueProcessor.js";
@@ -35,14 +36,17 @@ import {
   isConsentHandoffPending,
 } from "../services/remoteManagedSettings/securityCheck.js";
 import { useSession } from "../context/session.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import { isAsyncReplEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { onLoadingScansRead } from "../plugins/functionHooks/hooksModuleLoader.js";
 import { getActiveMessageQueue } from "../query/presenceCheck.js";
 import { switchSerializerSlot } from "../utils/model/modelSwitchHooks.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
-import { isSendableQueuedCommand } from "../utils/messageQueueManager.js";
+import { isSessionOwnerDialogOpen } from "../components/dialogs/dialogKinds.js";
+import { isIdleDrainableMainThreadCommand } from "../utils/messageQueueManager.js";
 import { isPendingContinuationUuid } from "../services/quotaAutoResume/quotaAutoResume.js";
 
-//@ chunk-18hwfzwa.js:1663315-1665839 callgraph-fingerprint (2.1.88 match: useQueueProcessor, 0.225)
+//@ chunk-czq1j3j2.js:1709114-1711876 callgraph-fingerprint (2.1.88 match: useQueueProcessor, 0.225)
 function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlight }) {
   let guard = turn.guard;
   let isQueryActive = useCallback((command) => mayReachModel(command, commands), [commands]);
@@ -94,8 +98,9 @@ function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlig
     isConsentHandoffPending,
   );
   let session = useSession();
-  let queueRef = null;
-  let pendingCommand = null?.peek(session) ?? undefined;
+  let queueRef = codeModeAccepted() ? scriptAskHoldsSlot() : null;
+  let pendingCommand =
+    queueRef?.peek(session) ?? (queueRef !== null && isAsyncReplEnabled() ? queueRef.of(session) : undefined);
   let turnActive = useSyncExternalStore(
     pendingCommand?.subscribe ?? NOOP_UNSUBSCRIBE,
     pendingCommand?.getSnapshot ?? neverSubscribed,
@@ -148,7 +153,7 @@ function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlig
           switchSerializerSlot.of(session).pending === 0 &&
           !selectNonInterrupting() &&
           !isConsentHandoffPending() &&
-          true &&
+          (!codeModeAccepted() || scriptAskHoldsSlot()?.peek(session)?.getSnapshot() !== true) &&
           !(dialogStore !== null && isLocalJsxHoldingQueue(dialogStore.getState())) &&
           !peekNext() &&
           commandQueueOrDefault.getCommandQueue().length > 0
@@ -173,15 +178,25 @@ function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlig
     if (queueSnapshot || guard.isActive) return;
     if (
       hasActiveLocalJsxUI &&
-      !commandQueueOrDefault
-        .getCommandQueueSnapshot()
-        .every((queued) => !isSendableQueuedCommand(queued) || isPendingContinuationUuid(queued.uuid))
+      ((dialogStore !== null && isSessionOwnerDialogOpen(dialogStore.getState())) ||
+        !commandQueueOrDefault
+          .getCommandQueueSnapshot()
+          .every(
+            (queued) => !isIdleDrainableMainThreadCommand(queued) || isPendingContinuationUuid(queued.uuid),
+          ))
     )
       return;
     if (peekNext()) return;
-    if (hasBlockingDialog || selectNonInterrupting() || handoffPending || isConsentHandoffPending()) return;
+    if (
+      hasBlockingDialog ||
+      selectNonInterrupting() ||
+      handoffPending ||
+      isConsentHandoffPending() ||
+      (codeModeAccepted() && (turnActive || scriptAskHoldsSlot()?.peek(session)?.getSnapshot() === true))
+    )
+      return;
     if (commandQueue.length === 0) return;
-    let filtered = commandQueueOrDefault.getCommandQueueSnapshot().filter(isSendableQueuedCommand);
+    let filtered = commandQueueOrDefault.getCommandQueueSnapshot().filter(isIdleDrainableMainThreadCommand);
     if (filtered.length > 0 && filtered.every((item) => item.admissionExempt === "resurrected")) {
       let hooksPromise = turn.awaitSessionStartHooks(new AbortController().signal);
       if (hooksPromise) {
@@ -195,7 +210,7 @@ function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlig
               switchSerializerSlot.of(session).pending === 0 &&
               !selectNonInterrupting() &&
               !isConsentHandoffPending() &&
-              true &&
+              (!codeModeAccepted() || scriptAskHoldsSlot()?.peek(session)?.getSnapshot() !== true) &&
               !(dialogStore !== null && isLocalJsxHoldingQueue(dialogStore.getState())) &&
               !peekNext() &&
               commandQueueOrDefault.getCommandQueue().length > 0
@@ -218,7 +233,7 @@ function useQueueProcessor({ turn, hasActiveLocalJsxUI, commands, handOverInFlig
           serializer.pending === 0 &&
           !selectNonInterrupting() &&
           !isConsentHandoffPending() &&
-          true &&
+          (!codeModeAccepted() || scriptAskHoldsSlot()?.peek(session)?.getSnapshot() !== true) &&
           !(dialogStore !== null && isLocalJsxHoldingQueue(dialogStore.getState())) &&
           !peekNext() &&
           commandQueueOrDefault.getCommandQueue().length > 0

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具调用管道（经桥接/会话通道调用、错误分类、重试与服务器重新初始化）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-25sm7c4g.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sjeyntvz.js (30)
  * attribution: placement 28, affinity 2
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -40,14 +40,14 @@ import {
   PASSTHROUGH_MARKER_KEY,
   parsePassthroughMarker,
 } from "../../services/deviceBridge/passthroughMarker.js";
-import { count } from "../../utils/collections.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { countWhere } from "../../utils/collections.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "./protocolConstants.js";
 import { buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
 import { isValidMachineSlug } from "../../bridge/deviceRegistration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-25sm7c4g.js:1282-1351 placement
+//@ chunk-sjeyntvz.js:1349-1418 placement
 function isBridgePlumbingEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_scroll", false);
@@ -55,11 +55,11 @@ function isBridgePlumbingEnabled() {
     return false;
   }
 }
-//@ chunk-25sm7c4g.js:1351-1420 placement
+//@ chunk-sjeyntvz.js:1418-1487 placement
 function mcpClientModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-25sm7c4g.js:1420-1579 placement
+//@ chunk-sjeyntvz.js:1487-1646 placement
 class BridgeSessionRecovery {
   #e = new WeakMap();
   reinitialize(connection) {
@@ -72,9 +72,9 @@ class BridgeSessionRecovery {
     return resetPromise;
   }
 }
-//@ chunk-25sm7c4g.js:1579-1593 placement
+//@ chunk-sjeyntvz.js:1646-1660 placement
 var CONNECTION_CLOSED_ERROR_CODE = -32000;
-//@ chunk-25sm7c4g.js:1593-1815 placement
+//@ chunk-sjeyntvz.js:1660-1882 placement
 async function callWithSessionRecovery(connection, options, run) {
   let result = await callBridgeTool(connection, options, run);
   if (result.kind !== "session_expired") return evictFailedConnectMemo(connection, result);
@@ -86,7 +86,7 @@ async function callWithSessionRecovery(connection, options, run) {
       }
     : evictFailedConnectMemo(connection, retryResult);
 }
-//@ chunk-25sm7c4g.js:1815-1953 placement
+//@ chunk-sjeyntvz.js:1882-2020 placement
 async function evictFailedConnectMemo(connection, result) {
   if (result.kind === "connect_failed")
     await mcpClientModule()
@@ -94,7 +94,7 @@ async function evictFailedConnectMemo(connection, result) {
       .catch(() => {});
   return result;
 }
-//@ chunk-25sm7c4g.js:1953-2498 placement
+//@ chunk-sjeyntvz.js:2020-2565 placement
 async function callBridgeTool(connection, { deadlineAt, signal, idempotent = false }, run) {
   let mcpModule = mcpClientModule();
   let client;
@@ -135,7 +135,7 @@ async function callBridgeTool(connection, { deadlineAt, signal, idempotent = fal
         };
   }
 }
-//@ chunk-25sm7c4g.js:2498-2678 placement
+//@ chunk-sjeyntvz.js:2565-2745 placement
 function isHttpConnectionClosedError(error, client) {
   return (
     (("code" in error &&
@@ -145,7 +145,7 @@ function isHttpConnectionClosedError(error, client) {
     (client.config.type === "http" || client.config.type === "claudeai-proxy")
   );
 }
-//@ chunk-25sm7c4g.js:2678-3084 placement
+//@ chunk-sjeyntvz.js:2745-3151 placement
 /**
  * 远程调用/Office bridge 的错误归类表：请求超时与连接关闭错误码、bridge 状态码到 unreachable/dropped/timed_out 的分组、三类错误消息正则、可分类消息长度上限 200。
  */
@@ -160,7 +160,7 @@ var NOT_CONNECTED_MESSAGE_RE;
 var DISCONNECTED_MESSAGE_RE;
 var TIMEOUT_MESSAGE_RE;
 var MAX_CLASSIFIABLE_MESSAGE_LENGTH;
-deferInit("chunk-25sm7c4g.js:2678", () => {
+deferInit("chunk-sjeyntvz.js:2745", () => {
   BRIDGE_CALL_LIMITS = {
     maxRequestBytes: 4128768,
     defaultDeadlineMs: 58000,
@@ -176,7 +176,7 @@ deferInit("chunk-25sm7c4g.js:2678", () => {
   TIMEOUT_MESSAGE_RE = /did not respond within/i;
   MAX_CLASSIFIABLE_MESSAGE_LENGTH = 200;
 });
-//@ chunk-25sm7c4g.js:3084-3201 placement
+//@ chunk-sjeyntvz.js:3151-3268 placement
 function createBridgeTransport(chromeClient, recovery) {
   return {
     kind: "bridge",
@@ -187,7 +187,7 @@ function createBridgeTransport(chromeClient, recovery) {
       callBridgePlumbingTool(chromeClient, recovery, name, args, options),
   };
 }
-//@ chunk-25sm7c4g.js:3201-4041 placement
+//@ chunk-sjeyntvz.js:3268-4108 placement
 /**
  * 通过设备桥（office/device bridge）MCP 调用远程管道工具：超时、会话过期重初始化、结果信封解析。
  */
@@ -252,7 +252,7 @@ async function callBridgePlumbingTool(chromeClient, recovery, name, args, option
       return normalizeTransportFailure(classifyBridgeTransportError(callOutcome.error, capMs, undefined));
   }
 }
-//@ chunk-25sm7c4g.js:4041-4237 placement
+//@ chunk-sjeyntvz.js:4108-4304 placement
 function normalizeTransportFailure(failure) {
   switch (failure.kind) {
     case "timed_out":
@@ -268,7 +268,7 @@ function normalizeTransportFailure(failure) {
       };
   }
 }
-//@ chunk-25sm7c4g.js:4237-4944 placement
+//@ chunk-sjeyntvz.js:4304-5011 placement
 async function callRemoteToolOverBridge(chromeClient, recovery, name, args, callMeta, options) {
   let now = Date.now();
   let capMs = clampToMaxPageSize(options.deadlineMs);
@@ -330,7 +330,7 @@ async function callRemoteToolOverBridge(chromeClient, recovery, name, args, call
       return classifyBridgeTransportError(callOutcome.error, capMs, options.toolUseId);
   }
 }
-//@ chunk-25sm7c4g.js:4944-5423 placement
+//@ chunk-sjeyntvz.js:5011-5490 placement
 function readBridgeResultEnvelope(value, elapsedMs, capMs) {
   let callResult = readCallResult(value);
   switch (callResult.envelope.status) {
@@ -366,7 +366,7 @@ function readBridgeResultEnvelope(value, elapsedMs, capMs) {
     }
   }
 }
-//@ chunk-25sm7c4g.js:5423-6054 placement
+//@ chunk-sjeyntvz.js:5490-6121 placement
 function classifyBridgeError(value, messageText, capMs) {
   let officeBridgeKind = readOfficeBridgeKind(value);
   if (officeBridgeKind !== undefined && TIMED_OUT_BRIDGE_KINDS.has(officeBridgeKind))
@@ -412,7 +412,7 @@ function classifyBridgeError(value, messageText, capMs) {
     };
   return;
 }
-//@ chunk-25sm7c4g.js:6054-6266 placement
+//@ chunk-sjeyntvz.js:6121-6333 placement
 function readOfficeBridgeKind(value) {
   let _meta = value !== null && typeof value === "object" && "_meta" in value ? value._meta : undefined;
   if (_meta === null || typeof _meta !== "object") return;
@@ -421,7 +421,7 @@ function readOfficeBridgeKind(value) {
   if (typeof kind === "string") return kind;
   return meta[OFFICE_BRIDGE_BOUND_MISS] !== undefined ? "not_connected" : undefined;
 }
-//@ chunk-25sm7c4g.js:6266-6587 placement
+//@ chunk-sjeyntvz.js:6333-6654 placement
 function classifyBridgeTransportError(error, capMs, toolUseId) {
   if (getNumericErrorCode(error) === REQUEST_TIMEOUT_ERROR_CODE || getErrnoCode(error) === "REQUEST_TIMEOUT")
     return {
@@ -448,9 +448,9 @@ function classifyBridgeTransportError(error, capMs, toolUseId) {
         detail,
       };
 }
-//@ chunk-25sm7c4g.js:6587-6699 placement
+//@ chunk-sjeyntvz.js:6654-6766 placement
 var UNREACHABLE_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-25sm7c4g.js:6587", () => {
+deferInit("chunk-sjeyntvz.js:6654", () => {
   UNREACHABLE_ERROR_CODES = new Set([
     "ECONNREFUSED",
     "ConnectionRefused",
@@ -460,7 +460,7 @@ deferInit("chunk-25sm7c4g.js:6587", () => {
     "FailedToOpenSocket",
   ]);
 });
-//@ chunk-25sm7c4g.js:6699-6962 placement
+//@ chunk-sjeyntvz.js:6766-7029 placement
 function isArgsTooLargeError(error, toolUseId) {
   let data = error !== null && typeof error === "object" && "data" in error ? error.data : undefined;
   if (typeof data !== "object" || data === null) return false;
@@ -473,22 +473,22 @@ function isArgsTooLargeError(error, toolUseId) {
     record.tool_use_id === toolUseId
   );
 }
-//@ chunk-25sm7c4g.js:6962-7066 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-sjeyntvz.js:7029-7133 placement (2.1.88 match: isConnectionError, 1)
 function getNumericErrorCode(err) {
   return err !== null && typeof err === "object" && "code" in err && typeof err.code === "number"
     ? err.code
     : undefined;
 }
-//@ chunk-25sm7c4g.js:7066-7164 placement
+//@ chunk-sjeyntvz.js:7133-7231 placement
 function flattenContentText(content) {
   return typeof content === "string"
     ? content
     : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `);
 }
-//@ chunk-25sm7c4g.js:7164-7190 placement
+//@ chunk-sjeyntvz.js:7231-7257 placement
 var ATTACHED_MACHINE = "attached-machine";
-//@ chunk-25sm7c4g.js:7190-8728 placement
+//@ chunk-sjeyntvz.js:7257-8795 placement
 function adoptBridgeTargets(chromeClient, tools, recovery) {
   let mapped = tools.map((tool) => ({
     ...tool,
@@ -523,7 +523,7 @@ function adoptBridgeTargets(chromeClient, tools, recovery) {
     filtered.filter((tool) => !markedNames.has(tool.name)).map((tool) => tool.name),
   );
   let size = rejectedNames.size;
-  let unreadable = count(mapped_2, (entry) => entry.meta === undefined);
+  let unreadable = countWhere(mapped_2, (entry) => entry.meta === undefined);
   let servedNames = new Set(mapped_2.map((entry) => entry.toolName));
   let plumbingTools = new Set(
     mapped.filter((tool) => DEVICE_SYNC_FILES_TOOLS.has(tool.name)).map((tool) => tool.name),
@@ -541,11 +541,11 @@ function adoptBridgeTargets(chromeClient, tools, recovery) {
     ...flattened.map(({ marker }) => marker.target.name),
   ]);
   let reduced = mapped.reduce((acc, tool) => {
-    let normalizedName = normalizeNameForMCP(tool.name);
+    let normalizedName = CLAUDEAI_SERVER_PREFIX(tool.name);
     acc.set(normalizedName, (acc.get(normalizedName) ?? 0) + 1);
     return acc;
   }, new Map());
-  let any = filtered.some((tool) => (reduced.get(normalizeNameForMCP(tool.name)) ?? 0) > 1);
+  let any = filtered.some((tool) => (reduced.get(CLAUDEAI_SERVER_PREFIX(tool.name)) ?? 0) > 1);
   let invalidReason =
     targetNames.size > 1
       ? "two_names"
@@ -596,7 +596,7 @@ function adoptBridgeTargets(chromeClient, tools, recovery) {
     unreadableMarkers: size,
   };
 }
-//@ chunk-25sm7c4g.js:8728-8847 placement
+//@ chunk-sjeyntvz.js:8795-8914 placement
 function readPassthroughMarker(tool) {
   let passthroughMarker = parsePassthroughMarker(
     recursivelySanitizeUnicode(tool._meta?.[PASSTHROUGH_MARKER_KEY]),
@@ -607,12 +607,12 @@ function readPassthroughMarker(tool) {
     ? passthroughMarker
     : undefined;
 }
-//@ chunk-25sm7c4g.js:8847-8930 placement
+//@ chunk-sjeyntvz.js:8914-8997 placement
 function splitBridgeToolName(name) {
   let index = name.indexOf("__");
   return index < 0 ? ["", name] : [name.slice(0, index), name.slice(index + 2)];
 }
-//@ chunk-25sm7c4g.js:8930-9037 placement
+//@ chunk-sjeyntvz.js:8997-9104 placement
 function readRemoteToolRegistration(tool) {
   let registration = parseRegistration(
     recursivelySanitizeUnicode(tool._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]),
@@ -623,7 +623,7 @@ function readRemoteToolRegistration(tool) {
     ? registration
     : undefined;
 }
-//@ chunk-25sm7c4g.js:9037-9997 placement
+//@ chunk-sjeyntvz.js:9104-10085 placement
 async function callPlumbingOverSession(sender, target, name, args, options) {
   if (!DEVICE_SYNC_FILES_TOOLS.has(name)) throw Error("callPlumbing: not a plumbing tool");
   if (options.signal.aborted)
@@ -659,7 +659,7 @@ async function callPlumbingOverSession(sender, target, name, args, options) {
     call.reply.catch(() => {});
     return {
       kind: "unreachable",
-      detail: "the session stream is closed; nothing was sent",
+      detail: sender.whyNotSending?.() ?? "the session stream is closed; nothing was sent",
     };
   }
   let timedOut = false;
@@ -698,7 +698,7 @@ async function callPlumbingOverSession(sender, target, name, args, options) {
     clearTimeout(timer);
   }
 }
-//@ chunk-25sm7c4g.js:9997-10159 placement (2.1.88 match: _temp, 1)
+//@ chunk-sjeyntvz.js:10085-10247 placement (2.1.88 match: _temp, 1)
 /**
  * 从对象里取出 result 字段，只有它是带 content 数组的对象时才返回。
  */
@@ -707,7 +707,7 @@ function getMcpResultWithContent(r) {
   if (typeof result !== "object" || result === null) return;
   return Array.isArray(result.content) ? result : undefined;
 }
-//@ chunk-25sm7c4g.js:10159-10235 affinity
+//@ chunk-sjeyntvz.js:10247-10323 affinity
 function acceptsServedCallResult(reply) {
   try {
     if (isRemoteToolCallMeta(reply)) return false;
@@ -716,7 +716,7 @@ function acceptsServedCallResult(reply) {
     return false;
   }
 }
-//@ chunk-25sm7c4g.js:10235-10503 affinity
+//@ chunk-sjeyntvz.js:10323-10591 affinity
 function toPlumbingCallResult(reply) {
   let mcpResultWithContent = getMcpResultWithContent(reply);
   if (mcpResultWithContent === undefined) return;

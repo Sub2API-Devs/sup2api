@@ -3,10 +3,10 @@
  *
  * OTel 公共属性：user.id、session.id、app.version、组织/账户、OTEL_RESOURCE_ATTRIBUTES。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetryAttributes.ts
- * pieces: chunk-p52gp8zk.js (3)
- * attribution: file-last-pair 1, layout 1, fingerprint 1
+ * pieces: chunk-a0xc6evk.js (3)
+ * attribution: placement 2, fingerprint 1
  */
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getOrCreateUserID } from "./config.js";
@@ -26,21 +26,22 @@ import {
 import { getAuthenticatedAccountInfo, getOauthAccountInfo } from "./auth.js";
 import { hasRemoteOtelLogsEndpoint } from "./telemetry/otlpRelay.js";
 import { connectorScopedAgentId } from "../skills/bundled/scheduleRemoteAgents.js";
+import { anthropicSeatAttributes } from "./telemetry/seatAttributes.js";
 import { NON_INTERACTIVE_TERMINAL, envDynamicProbe } from "./envDynamic.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:2638-2759 file-last-pair
+//@ chunk-a0xc6evk.js:3563-3684 placement
 function shouldIncludeAttribute(envVar) {
-  for (let idx = 0; idx < envVar.length; idx++) {
-    let code = envVar.charCodeAt(idx);
+  for (let k = 0; k < envVar.length; k++) {
+    let code = envVar.charCodeAt(k);
     if (code < 33 || code === 44 || code === 59 || code === 92 || code > 126) return false;
   }
   return true;
 }
-//@ chunk-p52gp8zk.js:2759-3163 layout
+//@ chunk-a0xc6evk.js:3684-4088 placement
 var MAX_RESOURCE_ATTRIBUTE_LENGTH; // deferred: uses shouldIncludeAttribute of its import cycle while loading; runs once the cycle is complete
 var parseResourceAttributes;
-deferInit("chunk-p52gp8zk.js:2759", () => {
+deferInit("chunk-a0xc6evk.js:3684", () => {
   MAX_RESOURCE_ATTRIBUTE_LENGTH = 255;
   parseResourceAttributes = memoizeAlias((spec) => {
     if (!spec) return {};
@@ -67,7 +68,7 @@ deferInit("chunk-p52gp8zk.js:2759", () => {
     return result;
   });
 });
-//@ chunk-p52gp8zk.js:3163-4749 fingerprint (2.1.88 match: getTelemetryAttributes, 0.672)
+//@ chunk-a0xc6evk.js:4088-5710 fingerprint (2.1.88 match: getTelemetryAttributes, 0.672)
 /**
  * OTel 公共属性：user.id、session.id（OTEL_METRICS_INCLUDE_SESSION_ID）、app.version（OTEL_METRICS_INCLUDE_VERSION）、organization.id、user.email、user.account_uuid、terminal.type 及 OTEL_RESOURCE_ATTRIBUTES。
  */
@@ -93,10 +94,10 @@ function getTelemetryAttributes() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION;
@@ -132,6 +133,7 @@ function getTelemetryAttributes() {
       if (mergedAttributes) attributes["user.account_id"] = mergedAttributes;
     }
   }
+  if (!isDiskless() || hasRemoteOtelLogsEndpoint()) Object.assign(attributes, anthropicSeatAttributes());
   Object.assign(attributes, identityAttrs);
   let attributeEntry = isDiskless() ? NON_INTERACTIVE_TERMINAL : envDynamicProbe.terminal;
   if (attributeEntry) attributes["terminal.type"] = attributeEntry;

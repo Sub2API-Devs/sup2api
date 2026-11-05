@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。云网关登录流程界面。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gy23bf9p.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51axvchq.js (8)
  * attribution: placement 8
  */
 import { createInterface } from "readline";
@@ -31,7 +31,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { normalizeGatewayUrl } from "../services/gateway/hostCheck.js";
 
-//@ chunk-gy23bf9p.js:3682-3741 placement
+//@ chunk-51axvchq.js:4018-4077 placement
 var SIGN_IN_STATE_VERSION = 1;
 var signInStateSchema = DoctorLazy(() =>
   create({
@@ -40,12 +40,12 @@ var signInStateSchema = DoctorLazy(() =>
     accept: create_25(true),
   }),
 );
-//@ chunk-gy23bf9p.js:3741-3827 placement
+//@ chunk-51axvchq.js:4077-4163 placement
 function originPathOf(url) {
   let { origin, pathname } = new URL(url);
   return `${origin}${pathname}`.replace(/\/+$/, "");
 }
-//@ chunk-gy23bf9p.js:3827-4416 placement
+//@ chunk-51axvchq.js:4163-4752 placement
 /**
  * 按登录状态（输入网关 URL / 信任指纹 / 确认账号）给出提示框的标题、展示值、说明与确认/取消按钮文字。
  */
@@ -86,11 +86,11 @@ function describeSignInPrompt(state, target) {
       return;
   }
 }
-//@ chunk-gy23bf9p.js:4416-4467 placement
+//@ chunk-51axvchq.js:4752-4803 placement
 function validBrowserUrlHref(url) {
   return isValidBrowserUrl(url) ? new URL(url).href : undefined;
 }
-//@ chunk-gy23bf9p.js:4467-4750 placement
+//@ chunk-51axvchq.js:4803-5086 placement
 function serializeSignInState(state, described) {
   return jsonStringify({
     version: SIGN_IN_STATE_VERSION,
@@ -109,7 +109,7 @@ function serializeSignInState(state, described) {
     }),
   });
 }
-//@ chunk-gy23bf9p.js:4750-4827 placement
+//@ chunk-51axvchq.js:5086-5163 placement
 async function finishSignInWithError(write, message) {
   await write(
     serializeSignInState(
@@ -122,7 +122,7 @@ async function finishSignInWithError(write, message) {
   );
   return false;
 }
-//@ chunk-gy23bf9p.js:4827-6085 placement
+//@ chunk-51axvchq.js:5163-6421 placement
 class CloudGatewaySignInFlow {
   target;
   write;
@@ -192,7 +192,7 @@ class CloudGatewaySignInFlow {
     return promise;
   }
 }
-//@ chunk-gy23bf9p.js:6085-6277 placement
+//@ chunk-51axvchq.js:6421-6613 placement
 async function runCloudGatewaySignIn({ gateway, stdin, write, signal, credentials }) {
   if (gateway.url === undefined) return finishSignInWithError(write, NO_GATEWAY_URL_MESSAGE);
   let url;

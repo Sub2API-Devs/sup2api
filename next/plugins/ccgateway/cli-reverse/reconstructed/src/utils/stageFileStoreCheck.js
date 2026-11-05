@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。stage_file 与 filestore 内容比对（大小与 md5）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0f0jmzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b3e7f4q6.js (9)
  * attribution: placement 9
  */
 import { createHash } from "crypto";
@@ -19,14 +19,14 @@ import { classifyAxiosError } from "./errors.js";
 import { withDeadline } from "./sleep.js";
 import { openRegularFileForReadWithNoAtime } from "./fsSafety/boundOpen.js";
 
-//@ chunk-0f0jmzwa.js:522-610 placement
+//@ chunk-b3e7f4q6.js:522-610 placement
 function sameStandingFlag() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_ledger", "off");
   return featureValue_CACHED_MAY_BE_STALE === "count" || featureValue_CACHED_MAY_BE_STALE === "on"
     ? featureValue_CACHED_MAY_BE_STALE
     : "off";
 }
-//@ chunk-0f0jmzwa.js:610-700 placement
+//@ chunk-b3e7f4q6.js:610-700 placement
 /**
  * 直接比较流水线里允许的最大文件字节数（64 MiB）。
  */
@@ -42,11 +42,11 @@ var storeCheckPauseState = identity(
     state.pausedUntilMs = 0;
   },
 );
-//@ chunk-0f0jmzwa.js:700-749 placement
+//@ chunk-b3e7f4q6.js:700-749 placement
 function storeCheckPaused() {
   return Date.now() < storeCheckPauseState.pausedUntilMs;
 }
-//@ chunk-0f0jmzwa.js:749-1010 placement
+//@ chunk-b3e7f4q6.js:749-1010 placement
 function pauseStoreCheck(cause, durationMs) {
   let max = Math.max(storeCheckPauseState.pausedUntilMs, Date.now() + durationMs);
   if (max === storeCheckPauseState.pausedUntilMs) return;
@@ -59,7 +59,7 @@ function pauseStoreCheck(cause, durationMs) {
     }),
   });
 }
-//@ chunk-0f0jmzwa.js:1010-1116 placement
+//@ chunk-b3e7f4q6.js:1010-1116 placement
 /**
  * filestore 元数据响应 schema 与 md5 正则。
  */
@@ -74,7 +74,7 @@ var FILESTORE_METADATA_SCHEMA = DoctorLazy(() =>
   }),
 );
 var MD5_HEX_RE = /^[0-9a-f]{32}$/;
-//@ chunk-0f0jmzwa.js:1116-2076 placement
+//@ chunk-b3e7f4q6.js:1116-2076 placement
 /**
  * 向 filestore 询问已存文件的大小与 md5（/v1/filestore/fs/readFileMetadata），用于 stage_file 判断本地文件是否与存储一致；连续失败会暂停检查（tengu_quiet_ledger）。
  */
@@ -147,7 +147,7 @@ async function askStoreWhatItHolds(cred, path) {
     };
   }
 }
-//@ chunk-0f0jmzwa.js:2076-2212 placement
+//@ chunk-b3e7f4q6.js:2076-2212 placement
 function sameFileUntouched(openedStats, currentStats) {
   return (
     openedStats.dev === currentStats.dev &&
@@ -158,11 +158,11 @@ function sameFileUntouched(openedStats, currentStats) {
     openedStats.ctimeNs === currentStats.ctimeNs
   );
 }
-//@ chunk-0f0jmzwa.js:2212-2275 placement
+//@ chunk-b3e7f4q6.js:2212-2275 placement
 async function hashStandingFile(path, openedStats) {
   return (await withDeadline(md5IfUntouched(path, openedStats), MD5_TIMEOUT_MS)) ?? "timed_out";
 }
-//@ chunk-0f0jmzwa.js:2275-2674 placement
+//@ chunk-b3e7f4q6.js:2275-2674 placement
 /**
  * 文件未改动时计算 md5
  */

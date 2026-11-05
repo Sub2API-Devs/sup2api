@@ -1,13 +1,13 @@
 /**
  * diff/libesm/patch/create.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: diff@9.0.0
- * pieces: chunk-7vb8p3zb.js (2)
+ * pieces: chunk-9dtasr5y.js (2)
  * attribution: esm-fingerprint 2
  */
 import { diffLines } from "../diff/line.js";
 
-//@ chunk-7vb8p3zb.js:9181-10494 esm-fingerprint
+//@ chunk-9dtasr5y.js:9181-10494 esm-fingerprint
 function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
   let optionsObj;
   if (!options) optionsObj = {};
@@ -114,7 +114,7 @@ function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, ne
     };
   }
 }
-//@ chunk-7vb8p3zb.js:10494-10616 esm-fingerprint
+//@ chunk-9dtasr5y.js:10494-10616 esm-fingerprint
 function splitLines(text) {
   let hasTrailingNl = text.endsWith(`
 `);

@@ -3,19 +3,22 @@
  *
  * 2.1.316 新增：无头回合主循环、MCP 预等待与崩溃上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (47)
- * attribution: placement 47
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (47), chunk-5xgkngpb.js (1)
+ * attribution: placement 46, layout 2
  */
 import { randomUUID } from "crypto";
+import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
+import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
+import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
 import {
   isOrphanedPermissionCommand,
   shouldYieldRescueTurn,
   maybeYieldToPersonPrompt,
 } from "./commandQueueDrain.js";
-import { isRefillableCommand, isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isBatchHeadHumanCommand, isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { isGoalIdleCheckinPaused } from "../../query/goalCheckIn.js";
 import {
   isAnalyticsEventName,
@@ -25,26 +28,26 @@ import {
 import { lastTextBlockText } from "../../utils/historyFile.js";
 import { createSignal } from "../../utils/signal.js";
 import { FetchingUserFilesCounter } from "./backgroundWait.js";
-import { createAbortController, userAbortReason } from "../../utils/abortController.js";
-import { logError } from "../../utils/log.js";
-import { fetchTurnEndMemoryContext } from "../../services/accountMemory/memoryContext.js";
-import { configProbeEnv } from "../structuredIOProtocol.js";
 import {
+  releaseTurnEndSummaryOnHumanPrompt,
   TurnStartCoordinator,
   HostReturnWakeTracker,
   isHostReturnWake,
   TurnRefusedError,
 } from "./turnGate.js";
+import { createAbortController, userAbortReason } from "../../utils/abortController.js";
+import { logError } from "../../utils/log.js";
+import { fetchTurnEndMemoryContext } from "../../services/accountMemory/memoryContext.js";
+import { configProbeEnv, knownSubtypeOrUndefined } from "../structuredIOProtocol.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { toolStateSlot } from "../../services/remoteTools/backgroundCommands.js";
 import { switchSerializerSlot } from "../../utils/model/modelSwitchHooks.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { discardPollEvent, buildPollEventDelivery, getPollEventEnvelope } from "../../utils/pollEvents.js";
-import { emitLoadError } from "../print.js";
+import { emitLoadError, isInterruptOwnedInline, isImmediateInterruptRequest } from "../print.js";
 import { devIntentTracker } from "../../services/projects/devIntent.js";
 import { wrapInSystemReminder } from "../../utils/messages.js";
-import { listUnreadableToolsUsed } from "../../utils/agentListing.js";
-import { getConversationToolsUsed, getSessionId, getMcpConnectNonBlocking } from "../../bootstrap/state.js";
+import { unreadableToolsFromEntries } from "../../utils/agentListing.js";
 import {
   headlessProfilerCheckpoint,
   logHeadlessProfilerTurn,
@@ -64,12 +67,13 @@ import {
   waitForOrganizationModsOnClaim,
 } from "../../utils/plugins/hooksModulesLoadGate.js";
 import { resolveHooksModulesValue } from "../../services/analytics/growthbookCredentials.js";
+import { getSessionId, getMcpConnectNonBlocking } from "../../bootstrap/state.js";
 import { waitForCloudModsHold } from "../../utils/hooks/hookPolicyHold.js";
 import { rejudgeLoadedMods } from "../../utils/hooks.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { ERRNO_NAMES_COPY } from "../../utils/errorRedaction.js";
-import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
+import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.js";
 import { isUntrustedObject } from "../../utils/shutdown/pendingWrites.js";
 import { protoDataString } from "../../utils/gracefulShutdown.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -84,19 +88,20 @@ import { errorClassName } from "../../services/errorTracking/errorTracking.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { reportsRunningBackgroundTasks } from "./backgroundWindDown.js";
 import { maybeStartCcrRecap } from "../../services/awaySummary.js";
-import { uniq, count, stringArray } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isPluginServerConfig } from "../../services/mcp/types.js";
+import { countWhere, stringArray } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
+import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
+import { TENGU_LIMBER_FINCH } from "../../services/api/withRetry.js";
+import { chatOriginField } from "./transcriptLeaves.js";
 import { isTranscriptPersistenceDisabled } from "../../utils/sessionStorage.js";
 import { sleep } from "../../utils/sleep.js";
 import { bridgeSlashLineBuildsRequest } from "../../bridge/bridgeSlashCommands.js";
 import { recordPhase } from "../../utils/startupTiming.js";
-import { env } from "../../utils/env.js";
-import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
-import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
-import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import { isBridgeEnvironment } from "../../utils/remoteEnvironment.js";
+import { env } from "../../utils/env.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 import {
   REMOTE_CONNECT_TIMEOUT_MS,
@@ -106,7 +111,7 @@ import {
 } from "../../services/mcp/client.js";
 import {
   isToolSearchEnabledOptimistic,
-  modelSupportsToolReference,
+  supportsToolReferenceOrPelican,
   isVertexModelWithoutToolSearch,
   isToolSearchLockedOffByDefault,
   extractDiscoveredToolNames,
@@ -114,8 +119,7 @@ import {
 } from "../../utils/toolSearch.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
-import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
+import { getPrefixServerKey, mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { REMOTE_ENTRYPOINT_NAMES } from "../../utils/entrypointKinds.js";
 import { isFromBuiltinMarketplace } from "../../utils/plugins/pluginIdentifier.js";
 import { isSortedOtterOn } from "../../services/mcp/mcpGates.js";
@@ -123,7 +127,16 @@ import { coordinatorExtraToolNames, coordinatorMainThreadUsesMcpServer } from ".
 import { waitForStoreState } from "../../context/voice.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:145895-146953 placement
+//@ chunk-5xgkngpb.js:3898740-3898768 placement
+var MCP_RESOURCE_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:3898740", () => {
+  MCP_RESOURCE_TOOL_NAMES = new Set([
+    LISTMCPRESOURCESTOOL,
+    READMCPRESOURCETOOL,
+    READ_MCP_RESOURCE_DIR_TOOL_NAME,
+  ]);
+});
+//@ chunk-0yw3taqg.js:177065-178122 placement
 class QueueHeadWaiter {
   messageQueue;
   stopping;
@@ -157,7 +170,8 @@ class QueueHeadWaiter {
     this.queuedAtWait = undefined;
     return (
       (this.messageQueue.peek(
-        (queued) => isOrphanedPermissionCommand(queued) || (predicate(queued) && isRefillableCommand(queued)),
+        (queued) =>
+          isOrphanedPermissionCommand(queued) || (predicate(queued) && isBatchHeadHumanCommand(queued)),
       ) === undefined
         ? this.messageQueue.dequeue((queued) => predicate(queued) && isPausedAnalyticsHold(queued))
         : undefined) ?? fallback()
@@ -186,15 +200,15 @@ class QueueHeadWaiter {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:146953-146994 placement
+//@ chunk-0yw3taqg.js:178122-178163 placement
 function isPausedGoalCheckin(command) {
-  return isActiveMainAgentCommand(command) && isGoalIdleCheckinPaused(command.uuid);
+  return isDrainableMainThreadCommand(command) && isGoalIdleCheckinPaused(command.uuid);
 }
-//@ chunk-tyg7f3ek.js:146994-147035 placement
+//@ chunk-0yw3taqg.js:178163-178204 placement
 function isPausedAnalyticsHold(command) {
-  return isActiveMainAgentCommand(command) && isAnalyticsEventName(command.uuid);
+  return isDrainableMainThreadCommand(command) && isAnalyticsEventName(command.uuid);
 }
-//@ chunk-tyg7f3ek.js:147035-147159 placement
+//@ chunk-0yw3taqg.js:178204-178328 placement
 async function waitForSignalOr(messageQueue, signal) {
   let unsubscribe = () => {};
   let promise = new Promise((resolve) => {
@@ -206,7 +220,7 @@ async function waitForSignalOr(messageQueue, signal) {
     unsubscribe();
   }
 }
-//@ chunk-tyg7f3ek.js:147159-147293 placement
+//@ chunk-0yw3taqg.js:178328-178462 placement
 function isSlashCommandInput(command) {
   return (
     lastTextBlockText(command.value)?.startsWith("/") === true &&
@@ -215,7 +229,7 @@ function isSlashCommandInput(command) {
       command.modelScheduledOrigin === true)
   );
 }
-//@ chunk-tyg7f3ek.js:147293-156636 placement
+//@ chunk-0yw3taqg.js:178462-188099 placement
 /**
  * print/headless 主轮次循环：从队列取消息、协调闸门、运行轮次、处理崩溃（Headless turn loop crashed）与收尾。
  */
@@ -242,6 +256,7 @@ class HeadlessTurnLoop {
   session;
   sessionMirror;
   host;
+  noteWaitEndedByMessage;
   tornDown = false;
   memoryRecheckOwed = false;
   atTeardown = [];
@@ -271,6 +286,7 @@ class HeadlessTurnLoop {
     session,
     sessionMirror,
     host,
+    noteWaitEndedByMessage,
   }) {
     this.drain = drain;
     this.messageQueue = messageQueue;
@@ -294,6 +310,20 @@ class HeadlessTurnLoop {
     this.session = session;
     this.sessionMirror = sessionMirror;
     this.host = host;
+    this.noteWaitEndedByMessage = noteWaitEndedByMessage;
+    this.releaseAtTeardown(
+      messageQueue.subscribe(() => {
+        this.endHoldForFollowUp();
+      }),
+    );
+  }
+  endHoldForFollowUp() {
+    releaseTurnEndSummaryOnHumanPrompt({
+      messageQueue: this.messageQueue,
+      drain: this.drain,
+      io: this.io,
+      alsoTo: this.noteWaitEndedByMessage,
+    });
   }
   turnAbortSignal() {
     return (
@@ -438,11 +468,12 @@ class HeadlessTurnLoop {
       let runPasses = async () => {
         headWaiter = new QueueHeadWaiter(messageQueue, this.stopping);
         let headPredicate = () =>
-          drain.endSessionRequested ? this.endSessionHead : isActiveMainAgentCommand;
+          drain.endSessionRequested ? this.endSessionHead : isDrainableMainThreadCommand;
         for (;;) {
           turnStartClock.enter("session_start_wait");
           let wait = headWaiter.waitForHead(headPredicate);
           if (wait) await wait;
+          this.endHoldForFollowUp();
           let summary =
             !this.stopping() &&
             this.io.sessionState.turnEndSummaryOutstanding() &&
@@ -596,7 +627,7 @@ class HeadlessTurnLoop {
                   buildPollEventDelivery(
                     [getPollEventEnvelope(command)],
                     0,
-                    listUnreadableToolsUsed(getConversationToolsUsed().names(), []),
+                    unreadableToolsFromEntries([command], []),
                   ),
                 )
               : command.value;
@@ -673,7 +704,7 @@ class HeadlessTurnLoop {
         let summary =
           !this.stopping() &&
           this.io.sessionState.turnEndSummaryOutstanding() &&
-          messageQueue.peek(isActiveMainAgentCommand) !== undefined
+          messageQueue.peek(isDrainableMainThreadCommand) !== undefined
             ? this.io.sessionState.waitForTurnEndSummary()
             : undefined;
         if (summary !== undefined) {
@@ -682,7 +713,7 @@ class HeadlessTurnLoop {
           turnStartClock.enter("loop_top");
         }
         if (
-          messageQueue.peek(isActiveMainAgentCommand) !== undefined &&
+          messageQueue.peek(isDrainableMainThreadCommand) !== undefined &&
           !(host.holdsEvalSettles?.() ?? false)
         )
           host.onLoopTopWork();
@@ -744,7 +775,7 @@ class HeadlessTurnLoop {
     if (drain.inputClosed) await host.onInputClosed();
   }
 }
-//@ chunk-tyg7f3ek.js:156673-156746 placement
+//@ chunk-0yw3taqg.js:188136-188209 placement
 function safeAsyncCall(fn) {
   try {
     return fn()?.catch(logError) ?? null;
@@ -753,12 +784,12 @@ function safeAsyncCall(fn) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:156746-156813 placement
+//@ chunk-0yw3taqg.js:188209-188276 placement
 var MODS_LOAD_STATE_READERS = {
   isFirstReadOwed: () => isOrganizationModsLoadPending(),
   isUnreadPastItsBounds: () => isPolicyUnreadPastItsBounds(),
 };
-//@ chunk-tyg7f3ek.js:156813-156944 placement
+//@ chunk-0yw3taqg.js:188276-188407 placement
 function isFirstReadOverdue(readers = MODS_LOAD_STATE_READERS, extra = false) {
   try {
     let owed = extra || (hooksModulesGateFromPayload() && resolveHooksModulesValue());
@@ -768,7 +799,7 @@ function isFirstReadOverdue(readers = MODS_LOAD_STATE_READERS, extra = false) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:156944-157323 placement
+//@ chunk-0yw3taqg.js:188407-188786 placement
 function pluginHookReloader(host) {
   return {
     reload: async () => {
@@ -791,7 +822,7 @@ function pluginHookReloader(host) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:157323-157632 placement
+//@ chunk-0yw3taqg.js:188786-189095 placement
 function createPluginHookRefresh(host) {
   let { reload, tell, standDown } = pluginHookReloader(host);
   let waitCloud = () => safeAsyncCall(() => waitForCloudModsHold(reload, tell));
@@ -808,13 +839,13 @@ function createPluginHookRefresh(host) {
   if (first === null) return judge();
   return first.then(() => judge() ?? undefined);
 }
-//@ chunk-tyg7f3ek.js:157632-157708 placement
+//@ chunk-0yw3taqg.js:189095-189171 placement
 function reloadPluginHooksNow(host) {
   return isOrganizationModsLoadPending()
     ? runOrganizationStatusLoadOnce(pluginHookReloader(host).reload, true).catch(logError)
     : Promise.resolve();
 }
-//@ chunk-tyg7f3ek.js:157708-158051 placement
+//@ chunk-0yw3taqg.js:189171-189514 placement
 function refreshPluginHooksOnClaim(host, verdict) {
   if (verdict !== "open") {
     let refusal =
@@ -843,28 +874,28 @@ function refreshPluginHooksOnClaim(host, verdict) {
   let cleanup = registerCleanup(async () => deferred.resolve());
   return wait.finally(cleanup).then(noteTurnGatePolicyUnread);
 }
-//@ chunk-tyg7f3ek.js:158051-158166 placement
+//@ chunk-0yw3taqg.js:189514-189629 placement
 function noteTurnGatePolicyUnread(verdict) {
   if (verdict.kind === "failed" && verdict.message === ORGANIZATION_POLICY_UNREADABLE_MESSAGE)
     logFeatureBad("plugin_function_hooks_turn_gate", "policy_unread");
   return verdict;
 }
-//@ chunk-tyg7f3ek.js:158166-158242 placement
+//@ chunk-0yw3taqg.js:189629-189705 placement
 function reloadPluginHooksQuiet(host) {
   return isOrganizationModsLoadPending()
     ? runOrganizationStatusLoadOnce(pluginHookReloader(host).reload, false).catch(logError)
     : Promise.resolve();
 }
-//@ chunk-tyg7f3ek.js:158242-158351 placement
+//@ chunk-0yw3taqg.js:189705-189814 placement
 var TURN_LOOP_CRASHED; // deferred: uses ERRNO_NAMES (../../utils/errorRedaction.js) of its import cycle while loading; runs once the cycle is complete
 var ALLOWED_ERROR_NAMES;
 var ERROR_STACK_GETTER;
-deferInit("chunk-tyg7f3ek.js:158242", () => {
+deferInit("chunk-0yw3taqg.js:189705", () => {
   TURN_LOOP_CRASHED = "Headless turn loop crashed";
   ALLOWED_ERROR_NAMES = new Set(ERRNO_NAMES_COPY);
   ERROR_STACK_GETTER = Object.getOwnPropertyDescriptor(Error(), "stack")?.get;
 });
-//@ chunk-tyg7f3ek.js:158351-159588 placement
+//@ chunk-0yw3taqg.js:189814-191051 placement
 /**
  * 轮次循环崩溃时上报错误名/消息/堆栈摘要（避免读取不安全的 stack）。
  */
@@ -954,11 +985,11 @@ ${safeStack}`,
     );
   } catch {}
 }
-//@ chunk-tyg7f3ek.js:159588-159651 placement
+//@ chunk-0yw3taqg.js:191051-191114 placement
 function pickAllowedName(allowed, name) {
   return typeof name === "string" && allowed.has(name) ? name : undefined;
 }
-//@ chunk-tyg7f3ek.js:159651-159914 placement
+//@ chunk-0yw3taqg.js:191114-191377 placement
 function constructorNameOf(object) {
   if (object === null) return;
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(object, "constructor");
@@ -971,14 +1002,14 @@ function constructorNameOf(object) {
       : undefined;
   return typeof name === "string" ? name : undefined;
 }
-//@ chunk-tyg7f3ek.js:159914-160020 placement
+//@ chunk-0yw3taqg.js:191377-191483 placement
 function ownDataValue(object, key) {
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(object, key);
   return ownPropertyDescriptor !== undefined && "value" in ownPropertyDescriptor
     ? ownPropertyDescriptor.value
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:160020-160098 placement
+//@ chunk-0yw3taqg.js:191483-191561 placement
 function watchTaskChanges({ store, ...options }) {
   return createDependencyWatcher(
     [store],
@@ -986,7 +1017,7 @@ function watchTaskChanges({ store, ...options }) {
     () => maybeReportIdleWithBackgroundTasks(options),
   );
 }
-//@ chunk-tyg7f3ek.js:160098-160331 placement
+//@ chunk-0yw3taqg.js:191561-191794 placement
 function maybeReportIdleWithBackgroundTasks({ drain, io, ccrRecap, stopping, idleAllowedAtTurnEnd }) {
   try {
     if (
@@ -1003,15 +1034,15 @@ function maybeReportIdleWithBackgroundTasks({ drain, io, ccrRecap, stopping, idl
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:160331-160361 placement
+//@ chunk-0yw3taqg.js:191794-191824 placement
 var MCP_PREWAIT_BUDGET_MS = 8000;
 var MCP_PREWAIT_MAX_BUDGET_MS = 1e4;
 var MAX_PREWAIT_MCP_SERVERS = 8;
 var MAX_MCP_SERVER_NAME_CHARS = 64;
-//@ chunk-tyg7f3ek.js:160361-160564 placement
+//@ chunk-0yw3taqg.js:191824-192027 placement
 function parseMcpPrewaitServers(value, budgetMs) {
   if (value === undefined || budgetMs === 0) return;
-  let sliced = uniq(
+  let sliced = normalizeCaseForComparison_2(
     value
       .split(",")
       .map((name) => name.trim())
@@ -1023,7 +1054,7 @@ function parseMcpPrewaitServers(value, budgetMs) {
     budgetMs: Math.min(budgetMs ?? MCP_PREWAIT_BUDGET_MS, MCP_PREWAIT_MAX_BUDGET_MS),
   };
 }
-//@ chunk-tyg7f3ek.js:160564-163023 placement
+//@ chunk-0yw3taqg.js:192027-194486 placement
 /**
  * 轮次开始前等待指定 MCP 服务器连接（CLAUDE_CODE_MCP_PREWAIT_SERVERS）或连接器预等待，带截止时间。
  */
@@ -1118,7 +1149,7 @@ class McpPrewait {
     let fields = {
       namedCount: this.namedCount,
       inLaunchSetCount: this.names.size,
-      connectedCount: count(
+      connectedCount: countWhere(
         this.mcpClients(),
         (client) => client.type === "connected" && this.names.has(client.name),
       ),
@@ -1142,10 +1173,133 @@ class McpPrewait {
     else if (outcome !== "request_started") logFeatureOk("mcp_launch_named_wait", fields);
   }
 }
-//@ chunk-tyg7f3ek.js:163023-163044 placement
+//@ chunk-0yw3taqg.js:194486-194633 layout
+var BESIDE_LOOP_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LEFT_TO_NEXT_PROCESS;
+deferInit("chunk-0yw3taqg.js:194486", () => {
+  BESIDE_LOOP_SUBTYPES = new Set([
+    "cancel_async_message",
+    "mcp_reconnect",
+    "mcp_set_servers",
+    "set_model",
+    "set_permission_mode",
+  ]);
+  LEFT_TO_NEXT_PROCESS = Symbol("left to the next process");
+});
+//@ chunk-0yw3taqg.js:194633-196513 layout
+class BesideLoopRequestQueue {
+  pending = 0;
+  tail = Promise.resolve();
+  failed = false;
+  startedAtMs = 0;
+  requests = 0;
+  stop;
+  waited;
+  drain;
+  onEscapedFailure;
+  constructor({ drain, onEscapedFailure }) {
+    this.drain = drain;
+    this.onEscapedFailure = onEscapedFailure;
+  }
+  static readSwitch() {
+    return getRemoteFeatureGateState(TENGU_LIMBER_FINCH);
+  }
+  takesNext() {
+    return this.pending > 0 || BesideLoopRequestQueue.readSwitch() === "on";
+  }
+  run(start, done) {
+    let result;
+    if (this.pending === 0) {
+      let startedAtMs = performance.now();
+      let first = start();
+      if (!(first instanceof Promise)) return false;
+      result = first;
+      this.startedAtMs = startedAtMs;
+    } else result = this.tail.then(() => (isTerminalShutdown() ? LEFT_TO_NEXT_PROCESS : start()));
+    this.pending++;
+    this.requests++;
+    this.tail = result
+      .then(
+        (value) => {
+          if (value !== LEFT_TO_NEXT_PROCESS) done();
+        },
+        (error) => {
+          logFeatureBad("headless_mcp_requests_beside_loop", "handler_threw");
+          done();
+          return this.fail(error);
+        },
+      )
+      .catch((error) => this.fail(error))
+      .then(() => {
+        this.pending--;
+        if (this.pending === 0) this.reportStretch();
+      })
+      .catch((error) => this.fail(error));
+    return true;
+  }
+  fail(error) {
+    this.failed = true;
+    this.onEscapedFailure(error);
+    return heldUntilExit();
+  }
+  waitBefore(frame) {
+    if (this.failed) return this.tail;
+    if (this.pending === 0) return;
+    let atMs = performance.now();
+    if (frame.type === "control_response" || frame.type === "control_cancel_request") return;
+    if (frame.type === "control_request") {
+      if (BESIDE_LOOP_SUBTYPES.has(frame.request?.subtype)) return;
+      if (
+        frame.request?.subtype === "interrupt" &&
+        !isInterruptOwnedInline(frame.request_id, frame.request)
+      ) {
+        if (!isImmediateInterruptRequest(frame.request))
+          this.stop ??= {
+            atMs,
+            turnUnderWay: this.drain.turnUnderWay,
+            beforeFirstTurn: this.drain.abortController === undefined,
+          };
+        return;
+      }
+    }
+    this.waited ??= {
+      atMs,
+      isUserFrame: frame.type === "user",
+      subtype: frame.request?.subtype,
+    };
+    return this.tail;
+  }
+  whenIdle() {
+    return this.pending === 0 && !this.failed ? undefined : this.tail;
+  }
+  reportStretch() {
+    let startTime = performance.now();
+    let { startedAtMs, requests, stop, waited } = this;
+    this.requests = 0;
+    this.stop = undefined;
+    this.waited = undefined;
+    logFeatureOk("headless_mcp_requests_beside_loop");
+    logForDiagnosticsNoPII("info", "cli_mcp_requests_beside_loop", () => ({
+      busy_ms: Math.round(startTime - startedAtMs),
+      requests,
+      ...(stop && {
+        stop_saved_ms: Math.round(startTime - stop.atMs),
+        stop_turn_under_way: stop.turnUnderWay,
+        stop_before_first_turn: stop.beforeFirstTurn,
+      }),
+      ...(waited && {
+        waited_ms: Math.round(startTime - waited.atMs),
+        waited_user_frame: waited.isUserFrame,
+        waited_subtype: knownSubtypeOrUndefined(waited.subtype),
+      }),
+      ...chatOriginField(),
+    }));
+  }
+}
+//@ chunk-0yw3taqg.js:196513-196534 placement
 var TRANSCRIPT_UPLOAD_WAIT_MS = 150000;
 var TRANSCRIPT_SAVE_POLL_MS = 250;
-//@ chunk-tyg7f3ek.js:163044-163393 placement
+//@ chunk-0yw3taqg.js:196534-196883 placement
 function createTranscriptSaver({ io, isShuttingDown, uploadWaitMs = TRANSCRIPT_UPLOAD_WAIT_MS }) {
   let transcriptSaver = createTranscriptSaver_2();
   return {
@@ -1164,7 +1318,7 @@ function createTranscriptSaver({ io, isShuttingDown, uploadWaitMs = TRANSCRIPT_U
     lostSoFar: () => transcriptSaver.lostSoFar() + io.droppedInternalBatches,
   };
 }
-//@ chunk-tyg7f3ek.js:163393-163567 placement
+//@ chunk-0yw3taqg.js:196883-197057 placement
 function isSlashCommandPrompt(command, value, commands) {
   let text = lastTextBlockText(value);
   let isSlashLine =
@@ -1176,26 +1330,29 @@ function isSlashCommandPrompt(command, value, commands) {
         !bridgeSlashLineBuildsRequest(text, commands())));
   return command.shouldQuery !== false && !isSlashLine;
 }
-//@ chunk-tyg7f3ek.js:163567-163619 placement
+//@ chunk-0yw3taqg.js:197057-197109 placement
 function createInlineMcpTiming() {
   return {
     totalMs: 0,
     firstStartMs: undefined,
   };
 }
-//@ chunk-tyg7f3ek.js:163619-164071 placement
+//@ chunk-0yw3taqg.js:197109-197589 placement
 function recordInlineMcpSetServers(
-  inlineMcpTiming,
-  { startMs, answeredMs, mainThreadRequested, relayMarked, response },
+  initJsonSchema,
+  { startMs, answeredMs, heldLoop, mainThreadRequested, relayMarked, response },
 ) {
   let holdMs = answeredMs - startMs;
-  inlineMcpTiming.totalMs += holdMs;
-  inlineMcpTiming.firstStartMs ??= startMs;
-  recordPhase("mcp_set_servers_inline_ms", inlineMcpTiming.totalMs, inlineMcpTiming.firstStartMs);
+  if (heldLoop) {
+    initJsonSchema.totalMs += holdMs;
+    initJsonSchema.firstStartMs ??= startMs;
+    recordPhase("mcp_set_servers_inline_ms", initJsonSchema.totalMs, initJsonSchema.firstStartMs);
+  }
   let errorCount = Object.keys(response.errors).length;
   let fields = {
     after_first_main_thread_query: mainThreadRequested,
     relay_marked: relayMarked,
+    held_loop: heldLoop,
     hold_ms: Math.round(holdMs),
     added_count: response.added.length,
     removed_count: response.removed.length,
@@ -1204,14 +1361,7 @@ function recordInlineMcpSetServers(
   if (errorCount > 0) logFeatureSad("mcp_set_servers_apply", "server_errors", fields);
   else logFeatureOk("mcp_set_servers_apply", fields);
 }
-//@ chunk-tyg7f3ek.js:164071-164176 placement
-function isIdlePluginRefreshEnabled() {
-  return (
-    !env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_plugin_refresh_in_idle_enabled", false)
-  );
-}
-//@ chunk-tyg7f3ek.js:164176-164807 placement
+//@ chunk-0yw3taqg.js:197650-198281 placement
 async function waitForPluginSyncBudget(host) {
   let timedOut = false;
   try {
@@ -1243,7 +1393,7 @@ async function waitForPluginSyncBudget(host) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:164807-164943 placement
+//@ chunk-0yw3taqg.js:198281-198417 placement
 function needsPluginRefreshAfterIdle(state) {
   if (!state.idleRefreshRan) return false;
   return (
@@ -1252,29 +1402,20 @@ function needsPluginRefreshAfterIdle(state) {
     state.installNeedsRefresh
   );
 }
-//@ chunk-tyg7f3ek.js:164943-164970 placement
-var MCP_RESOURCE_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:164943", () => {
-  MCP_RESOURCE_TOOL_NAMES = new Set([
-    LISTMCPRESOURCESTOOL,
-    READMCPRESOURCETOOL,
-    READ_MCP_RESOURCE_DIR_TOOL_NAME,
-  ]);
-});
-//@ chunk-tyg7f3ek.js:164970-165076 placement
+//@ chunk-0yw3taqg.js:198417-198523 placement
 var coordinatorModeModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var teleportRelayCarrierModule;
 var relayUsabilityModule;
-deferInit("chunk-tyg7f3ek.js:164970", () => {
+deferInit("chunk-0yw3taqg.js:198417", () => {
   coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
   teleportRelayCarrierModule = require("../../utils/teleport/relayEnv.js");
   relayUsabilityModule = require("../../services/teleport/relayState.js");
 });
-//@ chunk-tyg7f3ek.js:165076-165146 placement
+//@ chunk-0yw3taqg.js:198523-198593 placement
 function mcpClientModule_6() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-tyg7f3ek.js:165146-166129 placement
+//@ chunk-0yw3taqg.js:198593-199576 placement
 function planMcpConnectorPrewait(options) {
   let isSdkUrl = Boolean(options.sdkUrl) && !isBridgeEnvironment();
   let isCoordinator = coordinatorModeModule.isCoordinatorMode();
@@ -1335,32 +1476,32 @@ function planMcpConnectorPrewait(options) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:166129-166194 placement
+//@ chunk-0yw3taqg.js:199576-199641 placement
 function isTeleportRelayCarrierPresent() {
   return teleportRelayCarrierModule !== null && teleportRelayCarrierModule.teleportRelayCarrierPresent();
 }
-//@ chunk-tyg7f3ek.js:166194-166257 placement
+//@ chunk-0yw3taqg.js:199641-199704 placement
 function isRelayStillUsable() {
   return relayUsabilityModule === null || relayUsabilityModule.relayStillUsableInProcess();
 }
-//@ chunk-tyg7f3ek.js:166257-166318 placement
+//@ chunk-0yw3taqg.js:199704-199765 placement
 function canUseToolSearch() {
   return (
     isToolSearchEnabledOptimistic() &&
-    modelSupportsToolReference(getMainLoopModel()) &&
+    supportsToolReferenceOrPelican(getMainLoopModel()) &&
     !isVertexModelWithoutToolSearch(getCanonicalName(getMainLoopModel())) &&
     !isToolSearchLockedOffByDefault()
   );
 }
-//@ chunk-tyg7f3ek.js:166318-166333 placement
+//@ chunk-0yw3taqg.js:199765-199780 placement
 var EMPTY_TOOL_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:166318", () => {
+deferInit("chunk-0yw3taqg.js:199765", () => {
   EMPTY_TOOL_SET = new Set();
 });
-//@ chunk-tyg7f3ek.js:166333-167115 placement
+//@ chunk-0yw3taqg.js:199780-200562 placement
 function discoveredToolsInConversation(messages, sortedOtter) {
   let isUnsorted = (serverName) =>
-    sortedOtter !== undefined && count(sortedOtter, (name) => name === serverName) === 1;
+    sortedOtter !== undefined && countWhere(sortedOtter, (name) => name === serverName) === 1;
   try {
     let servers = new Set();
     let discoveredToolNames = extractDiscoveredToolNames(
@@ -1409,7 +1550,7 @@ function discoveredToolsInConversation(messages, sortedOtter) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:167115-167718 placement
+//@ chunk-0yw3taqg.js:200562-201165 placement
 function pluginMcpServersRequired({ policyAllows, clients, requiredServerNames, messages }) {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   let remoteEntry =
@@ -1441,7 +1582,7 @@ function pluginMcpServersRequired({ policyAllows, clients, requiredServerNames, 
       .map((client) => client.name),
   );
 }
-//@ chunk-tyg7f3ek.js:167718-170176 placement
+//@ chunk-0yw3taqg.js:201165-203626 placement
 /**
  * 每轮开始前刷新 MCP：等待可延迟服务器、合并本地/插件/动态配置、更新工具与命令。
  */
@@ -1491,9 +1632,9 @@ async function refreshMcpForTurn(
     client.type === "pending" &&
     (isPermissionPromptServer(client) || isWaited(client) || isAlsoWaited(client));
   let mcp = getState().mcp;
-  let pendingBefore = count(mcp.clients, (client) => client.type === "pending");
-  let pendingWaited = count(mcp.clients, isCounted);
-  let pendingNamed = count(mcp.clients, isAlsoWaited);
+  let pendingBefore = countWhere(mcp.clients, (client) => client.type === "pending");
+  let pendingWaited = countWhere(mcp.clients, isCounted);
+  let pendingNamed = countWhere(mcp.clients, isAlsoWaited);
   let any = mcp.clients.some(isPermissionPromptPending);
   let toolsBefore = mcp.tools.length;
   let store = {
@@ -1546,8 +1687,8 @@ async function refreshMcpForTurn(
     waitedMs,
     permissionPromptServerPendingBefore: any,
     permissionPromptWaitedMs,
-    pendingAfter: count(mcp_2.clients, (client) => client.type === "pending"),
-    pendingWaitedAfter: count(mcp_2.clients, isCounted),
+    pendingAfter: countWhere(mcp_2.clients, (client) => client.type === "pending"),
+    pendingWaitedAfter: countWhere(mcp_2.clients, isCounted),
     permissionPromptServerPendingAfter: mcp_2.clients.some(isPermissionPromptPending),
     relayMarked,
     relayHold,
@@ -1560,18 +1701,21 @@ async function refreshMcpForTurn(
     mcpNonBlocking: getMcpConnectNonBlocking(),
     firstTurnHold: fromEnumOpt(firstTurnHold),
     pendingDeferredBefore: willDefer
-      ? count(mcp.clients, (client) => client.type === "pending" && matches(client) && !isCounted(client))
+      ? countWhere(
+          mcp.clients,
+          (client) => client.type === "pending" && matches(client) && !isCounted(client),
+        )
       : 0,
-    pendingRequiredBefore: count(mcp.clients, isRequiredPending),
+    pendingRequiredBefore: countWhere(mcp.clients, isRequiredPending),
     requiredWaitedMs,
-    pendingFullyDeferredSkippedBefore: count(
+    pendingFullyDeferredSkippedBefore: countWhere(
       mcp.clients,
       (client) =>
         client.type === "pending" && skipServerNames?.has(client.name) === true && !isCounted(client),
     ),
   });
 }
-//@ chunk-tyg7f3ek.js:170176-170268 placement
+//@ chunk-0yw3taqg.js:203626-203718 placement
 function emitOrHoldResult({ message, held, holdBackActive, emit }) {
   if (holdBackActive) {
     held.push(message);
@@ -1580,12 +1724,12 @@ function emitOrHoldResult({ message, held, holdBackActive, emit }) {
   flushHeldResults(held, emit);
   emit(message);
 }
-//@ chunk-tyg7f3ek.js:170268-170316 placement
+//@ chunk-0yw3taqg.js:203718-203766 placement
 function flushHeldResults(results, emit) {
   for (let result of results) emit(result);
   results.length = 0;
 }
-//@ chunk-tyg7f3ek.js:170316-170455 placement
+//@ chunk-0yw3taqg.js:203766-203905 placement
 function clearQueuedTurnCount(result, ending) {
   if (
     !ending ||
@@ -1615,10 +1759,11 @@ export {
   refreshPluginHooksOnClaim,
   reportTurnLoopCrash,
   watchTaskChanges,
-  isIdlePluginRefreshEnabled,
+  BesideLoopRequestQueue,
   waitForPluginSyncBudget,
   recordInlineMcpSetServers,
   emitOrHoldResult,
   flushHeldResults,
   clearQueuedTurnCount,
+  MCP_RESOURCE_TOOL_NAMES,
 };

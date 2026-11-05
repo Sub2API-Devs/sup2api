@@ -3,9 +3,9 @@
  *
  * 页脚沙箱提示：最近被沙箱拦截的操作数与查看方式（ctrl+o）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/SandboxPromptFooterHint.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:786752-787614 fingerprint (2.1.88 match: SandboxPromptFooterHint, 0.808)
+//@ chunk-czq1j3j2.js:819371-820233 fingerprint (2.1.88 match: SandboxPromptFooterHint, 0.808)
 function SandboxPromptFooterHint() {
   let $ = useMemoCache(7);
   let [recentViolationCount, setRecentViolationCount] = useState(0);

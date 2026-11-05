@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/sdk/lib/credentials/types.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-640x3zn9.js (10)
+ * pieces: chunk-bxxnnnh4.js (10)
  * attribution: esm-fingerprint 10
  */
 import { AnthropicError } from "../../core/error.mjs";
 import { classifyOAuthErrorResponse } from "../../../../../src/services/oauth/oauthErrors.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-640x3zn9.js:2962-3145 esm-fingerprint
+//@ chunk-bxxnnnh4.js:2962-3145 esm-fingerprint
 var GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 var GRANT_TYPE_REFRESH_TOKEN = "refresh_token";
 var TOKEN_ENDPOINT = "/v1/oauth/token";
@@ -19,7 +19,7 @@ var ADVISORY_REFRESH_THRESHOLD_IN_SECONDS = 120;
 var MAX_FEDERATION_TOKEN_TTL_SECONDS = 30;
 var MIN_REFRESH_MARGIN_SECONDS = 5;
 var MAX_TOKEN_RESPONSE_BYTES = 1048576;
-//@ chunk-640x3zn9.js:3145-3512 esm-fingerprint
+//@ chunk-bxxnnnh4.js:3145-3512 esm-fingerprint
 function requireSecureTokenEndpoint(baseURL) {
   if (!baseURL) return;
   let u;
@@ -33,7 +33,7 @@ function requireSecureTokenEndpoint(baseURL) {
   if (u.protocol === "http:" && (host === "localhost" || host === "127.0.0.1" || host === "::1")) return;
   throw new WorkloadIdentityError(`Refusing to send credential over non-https token endpoint "${baseURL}"`);
 }
-//@ chunk-640x3zn9.js:3512-3982 esm-fingerprint
+//@ chunk-bxxnnnh4.js:3512-3982 esm-fingerprint
 async function parseTokenResponse(resp, requestId) {
   let text = await readLimitedText(resp);
   let data;
@@ -63,14 +63,14 @@ async function parseTokenResponse(resp, requestId) {
     );
   return data;
 }
-//@ chunk-640x3zn9.js:3982-4047 esm-fingerprint
+//@ chunk-bxxnnnh4.js:3982-4047 esm-fingerprint
 var MAX_ERROR_BODY_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_ERROR_KEYS;
-deferInit("chunk-640x3zn9.js:3982", () => {
+deferInit("chunk-bxxnnnh4.js:3982", () => {
   MAX_ERROR_BODY_CHARS = 2000;
   SAFE_ERROR_KEYS = new Set(["error", "error_description", "error_uri"]);
 });
-//@ chunk-640x3zn9.js:4047-4372 esm-fingerprint
+//@ chunk-bxxnnnh4.js:4047-4372 esm-fingerprint
 function redactSensitive(body) {
   if (body == null) return body;
   if (typeof body === "string") {
@@ -90,7 +90,7 @@ function redactSensitive(body) {
   }
   return null;
 }
-//@ chunk-640x3zn9.js:4372-5111 esm-fingerprint
+//@ chunk-bxxnnnh4.js:4372-5111 esm-fingerprint
 async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
   if (typeof process === "undefined") return;
   let { fs } = await import("../../../../../src/child_process.lazy.js");
@@ -116,7 +116,7 @@ async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`an
       `credentials file at ${resolved} is owned by uid ${st.uid} (current process uid ${process.getuid()}); verify this is intentional.`,
     );
 }
-//@ chunk-640x3zn9.js:5111-5632 esm-fingerprint
+//@ chunk-bxxnnnh4.js:5111-5632 esm-fingerprint
 async function writeCredentialsFileAtomic(targetPath, data) {
   let { fs, path } = await import("../../../../../src/child_process.lazy.js");
   let dir = path.dirname(targetPath);
@@ -147,7 +147,7 @@ async function writeCredentialsFileAtomic(targetPath, data) {
     }
   } catch {}
 }
-//@ chunk-640x3zn9.js:5632-6034 esm-fingerprint
+//@ chunk-bxxnnnh4.js:5632-6034 esm-fingerprint
 async function readLimitedText(resp) {
   if (!resp.body) return "";
   let reader = resp.body.getReader();
@@ -177,9 +177,9 @@ async function readLimitedText(resp) {
   }
   return new TextDecoder("utf-8").decode(merged);
 }
-//@ chunk-640x3zn9.js:6034-6147 esm-fingerprint
+//@ chunk-bxxnnnh4.js:6034-6147 esm-fingerprint
 let WorkloadIdentityError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-640x3zn9.js:6034", () => {
+deferInit("chunk-bxxnnnh4.js:6034", () => {
   WorkloadIdentityError = class WorkloadIdentityError extends AnthropicError {
     constructor(message, statusCode = null, body = null, requestId = null) {
       super(message);
@@ -189,7 +189,7 @@ deferInit("chunk-640x3zn9.js:6034", () => {
     }
   };
 });
-//@ chunk-640x3zn9.js:6356-6485 esm-fingerprint
+//@ chunk-bxxnnnh4.js:6356-6485 esm-fingerprint
 function getWIFAccountOnHold(error) {
   if (
     !(error instanceof WorkloadIdentityError) ||
@@ -199,11 +199,12 @@ function getWIFAccountOnHold(error) {
   return classifyOAuthErrorResponse(error.body);
 }
 export {
+  getWIFAccountOnHold,
+  WorkloadIdentityError,
   ADVISORY_REFRESH_THRESHOLD_IN_SECONDS,
   MAX_FEDERATION_TOKEN_TTL_SECONDS,
   MIN_REFRESH_MARGIN_SECONDS,
   requireSecureTokenEndpoint,
-  WorkloadIdentityError,
   GRANT_TYPE_JWT_BEARER,
   TOKEN_ENDPOINT,
   OAUTH_API_BETA_HEADER,
@@ -213,5 +214,4 @@ export {
   checkCredentialsFileSafety,
   GRANT_TYPE_REFRESH_TOKEN,
   writeCredentialsFileAtomic,
-  getWIFAccountOnHold,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：每宿主一份的 AWS 区域解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (7)
  * attribution: placement 7
  */
 import { env } from "./env.js";
@@ -16,11 +16,11 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:151409-151514 placement
+//@ chunk-7kayq7nc.js:150231-150336 placement
 function awsSharedConfigCacheKey() {
   return `${env.AWS_CONFIG_FILE ?? ""}|${env.AWS_SHARED_CREDENTIALS_FILE ?? ""}|${env.AWS_PROFILE ?? ""}`;
 }
-//@ chunk-bwbq4xvm.js:151514-152077 placement
+//@ chunk-7kayq7nc.js:150336-150899 placement
 /**
  * 每个宿主一份：按 AWS_CONFIG_FILE/AWS_SHARED_CREDENTIALS_FILE/AWS_PROFILE 组合键缓存从共享配置读出的区域（懒加载 AWS SDK 配置解析器）。
  */
@@ -62,16 +62,16 @@ class AwsRegionResolver {
     return region;
   }, awsSharedConfigCacheKey);
 }
-//@ chunk-bwbq4xvm.js:152077-152102 placement
+//@ chunk-7kayq7nc.js:150899-150924 placement
 var awsRegionResolvers; // deferred: uses AwsRegionResolver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwbq4xvm.js:152077", () => {
+deferInit("chunk-7kayq7nc.js:150899", () => {
   awsRegionResolvers = new HostScoped(() => new AwsRegionResolver());
 });
-//@ chunk-bwbq4xvm.js:152102-152139 placement
+//@ chunk-7kayq7nc.js:150924-150961 placement
 function getAwsRegionResolver() {
   return awsRegionResolvers.of(getRootSession().host);
 }
-//@ chunk-bwbq4xvm.js:152139-152237 placement
+//@ chunk-7kayq7nc.js:150961-151059 placement
 /**
  * 异步解析 AWS 区域：环境变量 → ~/.aws 共享配置（缓存）→ 默认 us-east-1。
  */
@@ -80,11 +80,11 @@ async function resolveAwsRegion() {
   if (awsRegion) return awsRegion;
   return (await getAwsRegionResolver().readAwsSharedConfigRegion()) || getDefaultAwsRegion();
 }
-//@ chunk-bwbq4xvm.js:152237-152272 placement
+//@ chunk-7kayq7nc.js:151059-151094 placement
 function getAwsRegionSync() {
   return describeAwsRegion().region;
 }
-//@ chunk-bwbq4xvm.js:152272-152526 placement
+//@ chunk-7kayq7nc.js:151094-151348 placement
 /**
  * 同步返回 {region, source}：source 为 env / shared-config / env-invalid / default，供 /status 展示。
  */

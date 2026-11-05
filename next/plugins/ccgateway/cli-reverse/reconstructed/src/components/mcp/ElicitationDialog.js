@@ -3,10 +3,10 @@
  *
  * MCP elicitation 对话框：按服务器给的 JSON Schema 渲染表单（文本/数字/布尔/枚举/日期），提交/拒绝/取消。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/ElicitationDialog.tsx
- * pieces: chunk-18hwfzwa.js (10), chunk-tn4j580p.js (1)
- * attribution: placement 3, fingerprint 6, layout 1, sole-consumer 1
+ * pieces: chunk-b9vpay08.js (1), chunk-czq1j3j2.js (9)
+ * attribution: fingerprint 6, placement 2, layout 1, sole-consumer 1
  */
 import { randomUUID } from "crypto";
 import {
@@ -54,7 +54,11 @@ import {
   useEffect,
   useCallback,
 } from "../../../vendor/react/cjs/react.production.js";
-import { isWithinRecentInput, INPUT_SETTLE_MS } from "../../hooks/useRecentInputGuard.js";
+import {
+  useRecentInputStamp,
+  isWithinRecentInput,
+  INPUT_SETTLE_MS,
+} from "../../hooks/useRecentInputGuard.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { useTheme_2, useStdin } from "../design-system/ThemeProvider.js";
@@ -104,21 +108,16 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { normalizeUrlHref } from "../permissions/permissionCardKinds.js";
 import { wrapText } from "../../ink/wrap-text.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
-import { flipElicitationAction } from "../../entrypoints/sdk/controlSchemas.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Blockquote } from "../Blockquote.js";
+import { MoreItemsIndicator } from "../CustomSelect/select.js";
 import { TextInput } from "../TextInput.js";
 
-//@ chunk-tn4j580p.js:17770-17833 fingerprint (2.1.88 match: resetTypeahead, 0.475)
+//@ chunk-b9vpay08.js:18918-18981 fingerprint (2.1.88 match: resetTypeahead, 0.476)
 function resetTypeahead(ta) {
   ta.writers.delete(ta.signal);
   clearTimeout(ta.timer);
 }
-//@ chunk-18hwfzwa.js:1204791-1204824 placement
-function getNowMs() {
-  return Date.now();
-}
-//@ chunk-18hwfzwa.js:1205190-1205353 placement (2.1.88 match: filterSwarmFieldsFromSchema, 0.664)
+//@ chunk-czq1j3j2.js:1235245-1235408 placement (2.1.88 match: filterSwarmFieldsFromSchema, 0.663)
 /**
  * JSON schema 的 required 里只保留 properties 中确实存在的字段名。旧版名 filterSwarmFieldsFromSchema 为错配。
  */
@@ -128,9 +127,9 @@ function getDeclaredRequiredFields(requestedSchema) {
   let propertyNames = new Set(objectFieldEntries(requestedSchema?.properties).map(([name]) => name));
   return required.filter((name) => typeof name === "string" && propertyNames.has(name));
 }
-//@ chunk-18hwfzwa.js:1206341-1206411 fingerprint (2.1.88 match: RESOLVING_SPINNER_CHARS, 1)
+//@ chunk-czq1j3j2.js:1236396-1236466 fingerprint (2.1.88 match: RESOLVING_SPINNER_CHARS, 1)
 var RESOLVING_SPINNER_CHARS = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
-//@ chunk-18hwfzwa.js:1206411-1206722 layout
+//@ chunk-czq1j3j2.js:1236466-1236777 layout
 /**
  * 解析中的旋转指示（减少动态效果或读屏时静止）。
  */
@@ -162,7 +161,7 @@ function ResolvingSpinner() {
   } else spinner = $[4];
   return spinner;
 }
-//@ chunk-18hwfzwa.js:1206722-1207211 fingerprint (2.1.88 match: formatDateDisplay, 1)
+//@ chunk-czq1j3j2.js:1236777-1237266 fingerprint (2.1.88 match: formatDateDisplay, 1)
 function formatDateDisplay(isoValue, schema) {
   try {
     let date = new Date(isoValue);
@@ -190,12 +189,12 @@ function formatDateDisplay(isoValue, schema) {
     return isoValue;
   }
 }
-//@ chunk-18hwfzwa.js:1207211-1209040 fingerprint (2.1.88 match: ElicitationDialog, 0.354)
+//@ chunk-czq1j3j2.js:1237266-1239135 fingerprint (2.1.88 match: ElicitationDialog, 0.354)
 /**
  * MCP elicitation：form 模式按 requestedSchema 渲染字段（校验、日期格式化），URL 模式打开链接并等待；结果 accept/decline/cancel 回传服务器。
  */
 function ElicitationDialog(props) {
-  let $ = useMemoCache(28);
+  let $ = useMemoCache(29);
   let {
     serverName,
     pluginSource,
@@ -216,13 +215,13 @@ function ElicitationDialog(props) {
     $[3] !== params.requestedSchema ||
     $[4] !== params.url
   ) {
-    kt: {
+    bt: {
       if (params.mode === "url") {
         dedupeKey = `url
 ${params.elicitationId}
 ${params.url}
 ${params.message}`;
-        break kt;
+        break bt;
       }
       try {
         dedupeKey = `form
@@ -263,36 +262,37 @@ ${randomUUID()}`);
       at: Date.now(),
       generation: attemptState.generation + 1,
     });
-  let at = attemptState.at;
+  let dialogDedupeKey = useRecentInputStamp(attemptState.at);
   let onResponseOnce;
-  if ($[8] !== inputClock || $[9] !== at || $[10] !== onResponse) {
+  if ($[8] !== attemptState.at || $[9] !== dialogDedupeKey || $[10] !== inputClock || $[11] !== onResponse) {
     onResponseOnce = (...args) => {
       let args_2 = args;
-      if (args_2[0] !== "cancel" && isWithinRecentInput(inputClock, at)) {
+      if (args_2[0] !== "cancel" && isWithinRecentInput(inputClock, dialogDedupeKey(attemptState.at))) {
         return false;
       }
       return onResponse(...args_2);
     };
-    $[8] = inputClock;
-    $[9] = at;
-    $[10] = onResponse;
-    $[11] = onResponseOnce;
-  } else onResponseOnce = $[11];
+    $[8] = attemptState.at;
+    $[9] = dialogDedupeKey;
+    $[10] = inputClock;
+    $[11] = onResponse;
+    $[12] = onResponseOnce;
+  } else onResponseOnce = $[12];
   let onResponse_2 = onResponseOnce;
   if (params.mode === "url") {
     const initialPhase_2 = initialPhase ?? "prompt";
     const userConfirmsCompletion_2 = userConfirmsCompletion ?? false;
     let urlDialog;
     if (
-      $[12] !== attemptState.generation ||
-      $[13] !== onResponse_2 ||
-      $[14] !== onWaitingDismiss ||
-      $[15] !== params ||
-      $[16] !== serverName ||
-      $[17] !== initialPhase_2 ||
-      $[18] !== userConfirmsCompletion_2 ||
-      $[19] !== waitingState ||
-      $[20] !== wouldTakeAnswer
+      $[13] !== attemptState.generation ||
+      $[14] !== onResponse_2 ||
+      $[15] !== onWaitingDismiss ||
+      $[16] !== params ||
+      $[17] !== serverName ||
+      $[18] !== initialPhase_2 ||
+      $[19] !== userConfirmsCompletion_2 ||
+      $[20] !== waitingState ||
+      $[21] !== wouldTakeAnswer
     ) {
       urlDialog = jsxProd_default(
         ElicitationURLDialog,
@@ -308,26 +308,26 @@ ${randomUUID()}`);
         },
         attemptState.generation,
       );
-      $[12] = attemptState.generation;
-      $[13] = onResponse_2;
-      $[14] = onWaitingDismiss;
-      $[15] = params;
-      $[16] = serverName;
-      $[17] = initialPhase_2;
-      $[18] = userConfirmsCompletion_2;
-      $[19] = waitingState;
-      $[20] = wouldTakeAnswer;
-      $[21] = urlDialog;
-    } else urlDialog = $[21];
+      $[13] = attemptState.generation;
+      $[14] = onResponse_2;
+      $[15] = onWaitingDismiss;
+      $[16] = params;
+      $[17] = serverName;
+      $[18] = initialPhase_2;
+      $[19] = userConfirmsCompletion_2;
+      $[20] = waitingState;
+      $[21] = wouldTakeAnswer;
+      $[22] = urlDialog;
+    } else urlDialog = $[22];
     return urlDialog;
   }
   let formDialog;
   if (
-    $[22] !== attemptState.generation ||
-    $[23] !== onResponse_2 ||
-    $[24] !== params ||
-    $[25] !== pluginSource ||
-    $[26] !== serverName
+    $[23] !== attemptState.generation ||
+    $[24] !== onResponse_2 ||
+    $[25] !== params ||
+    $[26] !== pluginSource ||
+    $[27] !== serverName
   ) {
     formDialog = jsxProd_default(
       ElicitationFormDialog,
@@ -339,16 +339,16 @@ ${randomUUID()}`);
       },
       attemptState.generation,
     );
-    $[22] = attemptState.generation;
-    $[23] = onResponse_2;
-    $[24] = params;
-    $[25] = pluginSource;
-    $[26] = serverName;
-    $[27] = formDialog;
-  } else formDialog = $[27];
+    $[23] = attemptState.generation;
+    $[24] = onResponse_2;
+    $[25] = params;
+    $[26] = pluginSource;
+    $[27] = serverName;
+    $[28] = formDialog;
+  } else formDialog = $[28];
   return formDialog;
 }
-//@ chunk-18hwfzwa.js:1209040-1209724 sole-consumer
+//@ chunk-czq1j3j2.js:1239135-1239819 sole-consumer
 /**
  * 防误触：对话框刚出现或用户刚在打字时，短时间内拒绝按键提交；返回 {arrived, typed, refuses}。
  */
@@ -400,7 +400,7 @@ function useInputGuard(prefilled) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1209978-1220738 fingerprint (2.1.88 match: ElicitationFormDialog, 0.541)
+//@ chunk-czq1j3j2.js:1240073-1250831 fingerprint (2.1.88 match: ElicitationFormDialog, 0.54)
 function ElicitationFormDialog({ serverName, pluginSource, params, onResponse }) {
   let { message, requestedSchema } = params;
   let { credentials } = useTheme_2();
@@ -1188,842 +1188,426 @@ ${scrollWindow}`
     }),
   });
 }
-//@ chunk-18hwfzwa.js:1220738-1231333 fingerprint (2.1.88 match: ElicitationURLDialog, 0.683)
-function ElicitationURLDialog(props) {
-  let $ = useMemoCache(163);
-  let {
-    serverName,
-    params,
-    onResponse,
-    waitingState,
-    initialPhase,
-    onWaitingDismiss,
-    userConfirmsCompletion,
-    wouldTakeAnswer,
-  } = props;
+//@ chunk-czq1j3j2.js:1250831-1256678 fingerprint (2.1.88 match: ElicitationURLDialog, 0.673)
+function ElicitationURLDialog({
+  serverName,
+  params,
+  onResponse,
+  waitingState,
+  initialPhase,
+  onWaitingDismiss,
+  userConfirmsCompletion,
+  wouldTakeAnswer,
+}) {
   let { columns, rows } = useTerminalSize();
   let { message, url } = params;
-  let rawPayload;
-  if ($[0] !== url) {
-    rawPayload = serializeApprovalPayload(url, {
-      maxUnits: MAX_PAYLOAD_UNITS,
-      softWrap: true,
-    });
-    $[0] = url;
-    $[1] = rawPayload;
-  } else rawPayload = $[1];
-  let rawPayload_2 = rawPayload;
-  let normalizedHref;
-  if ($[2] !== url) {
-    normalizedHref = normalizeUrlHref(url);
-    $[2] = url;
-    $[3] = normalizedHref;
-  } else normalizedHref = $[3];
-  let href = normalizedHref;
-  let hrefPayload;
-  if ($[4] !== href) {
-    hrefPayload = serializeApprovalPayload(href, {
-      maxUnits: MAX_PAYLOAD_UNITS,
-      softWrap: true,
-    });
-    $[4] = href;
-    $[5] = hrefPayload;
-  } else hrefPayload = $[5];
-  let hrefPayload_2 = hrefPayload;
-  let messageText;
-  if ($[6] !== columns || $[7] !== message) {
-    messageText = truncateLines(displayField(message).text, columns);
-    $[6] = columns;
-    $[7] = message;
-    $[8] = messageText;
-  } else messageText = $[8];
-  let subtitle = `
-${messageText}`;
-  let payloadExact;
-  if (
-    $[9] !== hrefPayload_2 ||
-    $[10] !== href ||
-    $[11] !== url ||
-    $[12] !== rawPayload_2.kind ||
-    $[13] !== rawPayload_2.text
-  ) {
-    payloadExact =
-      rawPayload_2.kind === "full" &&
-      rawPayload_2.text.replaceAll(
+  let urlPayload = useMemo(
+    () =>
+      serializeApprovalPayload(url, {
+        maxUnits: MAX_PAYLOAD_UNITS,
+        softWrap: true,
+      }),
+    [url],
+  );
+  let href = useMemo(() => normalizeUrlHref(url), [url]);
+  let hrefPayload = useMemo(
+    () =>
+      serializeApprovalPayload(href, {
+        maxUnits: MAX_PAYLOAD_UNITS,
+        softWrap: true,
+      }),
+    [href],
+  );
+  let subtitle = useMemo(
+    () => `
+${truncateLines(displayField(message).text, columns)}`,
+    [message, columns],
+  );
+  let isUrlShownWhole = useMemo(
+    () =>
+      urlPayload.kind === "full" &&
+      urlPayload.text.replaceAll(
         `
 `,
         "",
       ) === url &&
       !hasDisplayUnsafeChar(url) &&
       !/[\n\r\u2028\u2029]/.test(url) &&
-      hrefPayload_2.kind === "full" &&
-      hrefPayload_2.text.replaceAll(
+      hrefPayload.kind === "full" &&
+      hrefPayload.text.replaceAll(
         `
 `,
         "",
       ) === href &&
       !hasDisplayUnsafeChar(href) &&
-      !/[\n\r\u2028\u2029]/.test(href);
-    $[9] = hrefPayload_2;
-    $[10] = href;
-    $[11] = url;
-    $[12] = rawPayload_2.kind;
-    $[13] = rawPayload_2.text;
-    $[14] = payloadExact;
-  } else payloadExact = $[14];
-  let payloadExact_2 = payloadExact;
-  let hostname;
-  let urlPrefix = "";
-  let urlSuffix = "";
-  let hasHostname;
-  if ($[15] !== href) {
-    hasHostname = false;
-    try {
-      hostname = new URL(href).hostname;
-      let domainStart = href.indexOf(hostname);
-      if (hostname !== "" && domainStart !== -1) {
-        hasHostname = true;
-        urlPrefix = href.slice(0, domainStart);
-        urlSuffix = href.slice(domainStart + hostname.length);
-      }
-    } catch {
-      hostname = href;
+      !/[\n\r\u2028\u2029]/.test(href),
+    [urlPayload, url, hrefPayload, href],
+  );
+  let hostname = "";
+  let urlBeforeDomain = "";
+  let urlAfterDomain = "";
+  let normalizedHrefPayload = false;
+  try {
+    hostname = new URL(href).hostname;
+    let domainStart = href.indexOf(hostname);
+    if (hostname !== "" && domainStart !== -1) {
+      normalizedHrefPayload = true;
+      urlBeforeDomain = href.slice(0, domainStart);
+      urlAfterDomain = href.slice(domainStart + hostname.length);
     }
-    $[15] = href;
-    $[16] = hasHostname;
-    $[17] = hostname;
-    $[18] = urlPrefix;
-    $[19] = urlSuffix;
-  } else {
-    hasHostname = $[16];
-    hostname = $[17];
-    urlPrefix = $[18];
-    urlSuffix = $[19];
+  } catch {
+    hostname = href;
   }
   let bodyRows = rows - 12;
-  hasHostname;
-  let tooLarge;
-  Ho: {
-    if (bodyRows < 1) {
-      tooLarge = true;
-      break Ho;
-    }
+  let tooLarge = useMemo(() => {
+    if (bodyRows < 1) return true;
     let contentWidth = columns - 6;
-    if (contentWidth < 20) {
-      tooLarge = true;
-      break Ho;
-    }
-    let measuredText = hasHostname ? href : hrefPayload_2.kind === "full" ? hrefPayload_2.text : href;
-    let lineBreaks;
-    if ($[20] !== contentWidth || $[21] !== measuredText) {
-      lineBreaks = countCharInString(
+    if (contentWidth < 20) return true;
+    let measuredText = normalizedHrefPayload ? href : hrefPayload.kind === "full" ? hrefPayload.text : href;
+    return (
+      countCharInString(
         wrapText(measuredText, contentWidth, "wrap"),
         `
 `,
-      );
-      $[20] = contentWidth;
-      $[21] = measuredText;
-      $[22] = lineBreaks;
-    } else lineBreaks = $[22];
-    tooLarge = lineBreaks + 1 > bodyRows;
-  }
-  let tooLarge_2 = tooLarge;
-  let canOpen = payloadExact_2 && elicitationUrlCost(href) <= MAX_URL_COST_CHARS;
+      ) +
+        1 >
+      bodyRows
+    );
+  }, [normalizedHrefPayload, hrefPayload, href, columns, bodyRows]);
+  let urlSubtitle = isUrlShownWhole && elicitationUrlCost(href) <= MAX_URL_COST_CHARS;
   let [phase, setPhase] = useState(initialPhase);
   let inputClock = useInputClock();
-  let [nowMs] = useState(getNowMs);
-  let waitingSinceRef = useRef(initialPhase === "waiting" ? nowMs : undefined);
+  let waitingSinceRef = useRef(initialPhase === "waiting" ? Date.now() : undefined);
+  let urlBodyRows = useRecentInputStamp(waitingSinceRef.current ?? 0);
   let [focus, setFocus, getFocus] = useLatestState(
     initialPhase === "waiting"
       ? "open"
-      : canOpen && !tooLarge_2
+      : urlSubtitle && !tooLarge
         ? userConfirmsCompletion
           ? "open"
           : "accept"
         : "decline",
   );
-  let downgradeEffect;
-  let downgradeDeps;
-  if ($[23] !== setFocus || $[24] !== tooLarge_2 || $[25] !== canOpen || $[26] !== userConfirmsCompletion) {
-    downgradeEffect = () => {
-      if (!canOpen || tooLarge_2)
-        setFocus((prev) =>
-          prev === "accept" || (prev === "open" && userConfirmsCompletion) ? "decline" : prev,
-        );
-    };
-    downgradeDeps = [canOpen, tooLarge_2, userConfirmsCompletion, setFocus];
-    $[23] = setFocus;
-    $[24] = tooLarge_2;
-    $[25] = canOpen;
-    $[26] = userConfirmsCompletion;
-    $[27] = downgradeEffect;
-    $[28] = downgradeDeps;
-  } else {
-    downgradeEffect = $[27];
-    downgradeDeps = $[28];
-  }
-  useEffect(downgradeEffect, downgradeDeps);
-  let inputGuard = useInputGuard(initialPhase !== "waiting" && canOpen && !tooLarge_2);
+  useEffect(() => {
+    if (!urlSubtitle || tooLarge)
+      setFocus((prev) =>
+        prev === "accept" || (prev === "open" && userConfirmsCompletion) ? "decline" : prev,
+      );
+  }, [urlSubtitle, tooLarge, userConfirmsCompletion, setFocus]);
+  let inputGuard = useInputGuard(initialPhase !== "waiting" && urlSubtitle && !tooLarge);
   let showCancel = waitingState?.showCancel ?? false;
   let { setRawMode } = useStdin();
-  let rawModeDeps;
-  let rawModeEffect;
-  if ($[29] !== setRawMode) {
-    rawModeEffect = () => {
-      setRawMode(true);
-      return () => setRawMode(false);
-    };
-    rawModeDeps = [setRawMode];
-    $[29] = setRawMode;
-    $[30] = rawModeDeps;
-    $[31] = rawModeEffect;
-  } else {
-    rawModeDeps = $[30];
-    rawModeEffect = $[31];
-  }
-  useLayoutEffect(rawModeEffect, rawModeDeps);
+  useLayoutEffect(() => {
+    setRawMode(true);
+    return () => setRawMode(false);
+  }, [setRawMode]);
   useRegisterOverlay("elicitation-url");
   let answeredRef = useRef(false);
-  let openUrl;
-  if (
-    $[32] !== href ||
-    $[33] !== onResponse ||
-    $[34] !== setFocus ||
-    $[35] !== canOpen ||
-    $[36] !== userConfirmsCompletion
-  ) {
-    openUrl = () => {
-      if (!canOpen || answeredRef.current) {
-        return;
-      }
-      if (onResponse("accept") === false) {
-        return;
-      }
-      answeredRef.current = true;
-      if (userConfirmsCompletion) {
-        return;
-      }
-      waitingSinceRef.current = Date.now();
-      openValidatedUrlSucceeded(href);
-      setPhase("waiting");
-      setFocus("open");
-    };
-    $[32] = href;
-    $[33] = onResponse;
-    $[34] = setFocus;
-    $[35] = canOpen;
-    $[36] = userConfirmsCompletion;
-    $[37] = openUrl;
-  } else openUrl = $[37];
-  let openUrl_2 = openUrl;
+  let element = useCallback(() => {
+    if (!urlSubtitle || answeredRef.current) return;
+    if (onResponse("accept") === false) return;
+    answeredRef.current = true;
+    if (userConfirmsCompletion) return;
+    waitingSinceRef.current = Date.now();
+    openValidatedUrlSucceeded(href);
+    setPhase("waiting");
+    setFocus("open");
+  }, [onResponse, href, urlSubtitle, userConfirmsCompletion, setFocus]);
   let [reopened, setReopened] = useState(false);
-  let applyExternalAnswer;
-  if (
-    $[38] !== inputGuard ||
-    $[39] !== href ||
-    $[40] !== setFocus ||
-    $[41] !== canOpen ||
-    $[42] !== wouldTakeAnswer
-  ) {
-    applyExternalAnswer = function applyExternalAnswer() {
-      if (!canOpen || answeredRef.current || wouldTakeAnswer?.() !== true) {
+  function applyExternalAnswer() {
+    if (!urlSubtitle || answeredRef.current || wouldTakeAnswer?.() !== true) return;
+    openValidatedUrlSucceeded(href);
+    setReopened(true);
+    inputGuard.arrived();
+    setFocus("accept");
+  }
+  function onKeyDown(event) {
+    if (phase === "prompt") {
+      if (event.key === "left" || event.key === "right") {
+        event.preventDefault();
+        if (urlSubtitle && userConfirmsCompletion) {
+          let promptActions = ["open", "accept", "decline"];
+          let index = promptActions.indexOf(getFocus());
+          let nextAction = promptActions[(index + (event.key === "right" ? 1 : -1) + 3) % 3];
+          if (nextAction !== "decline") inputGuard.arrived();
+          setFocus(nextAction);
+        } else if (urlSubtitle) {
+          if (getFocus() === "decline") inputGuard.arrived();
+          setFocus((prev) => (prev === "accept" ? "decline" : prev === "decline" ? "accept" : prev));
+        }
         return;
       }
-      openValidatedUrlSucceeded(href);
-      setReopened(true);
-      inputGuard.arrived();
-      setFocus("accept");
-    };
-    $[38] = inputGuard;
-    $[39] = href;
-    $[40] = setFocus;
-    $[41] = canOpen;
-    $[42] = wouldTakeAnswer;
-    $[43] = applyExternalAnswer;
-  } else applyExternalAnswer = $[43];
-  let applyExternalAnswer_2 = applyExternalAnswer;
-  let onKeyDown;
-  if (
-    $[44] !== inputGuard ||
-    $[45] !== href ||
-    $[46] !== getFocus ||
-    $[47] !== openUrl_2 ||
-    $[48] !== applyExternalAnswer_2 ||
-    $[49] !== inputClock ||
-    $[50] !== onResponse ||
-    $[51] !== onWaitingDismiss ||
-    $[52] !== phase ||
-    $[53] !== setFocus ||
-    $[54] !== showCancel ||
-    $[55] !== canOpen ||
-    $[56] !== userConfirmsCompletion
-  ) {
-    onKeyDown = function onKeyDown(prev) {
-      if (phase === "prompt") {
-        if (prev.key === "left" || prev.key === "right") {
-          prev.preventDefault();
-          if (canOpen && userConfirmsCompletion) {
-            let promptActions = ["open", "accept", "decline"];
-            let index = promptActions.indexOf(getFocus());
-            let nextAction = promptActions[(index + (prev.key === "right" ? 1 : -1) + 3) % 3];
-            if (nextAction !== "decline") inputGuard.arrived();
-            setFocus(nextAction);
-          } else if (canOpen) {
-            if (getFocus() === "decline") inputGuard.arrived();
-            setFocus(flipElicitationAction);
-          }
-          return;
-        }
-        if (prev.key === "return") {
-          prev.preventDefault();
-          let action = getFocus();
-          if (action === "open" && userConfirmsCompletion) {
-            if (inputGuard.refuses()) {
-              return;
-            }
-            applyExternalAnswer_2();
-          } else if (action === "accept") {
-            if (inputGuard.refuses()) {
-              return;
-            }
-            openUrl_2();
-          } else if (action === "decline" && !answeredRef.current) onResponse("decline");
-        }
-        if (isTextInputKey(prev)) inputGuard.typed();
-      } else {
-        let waitingActions = showCancel ? ["open", "action", "cancel"] : ["open", "action"];
-        if (prev.key === "left" || prev.key === "right") {
-          prev.preventDefault();
-          let forward = prev.key === "right";
-          setFocus((prev) => {
-            let idx = waitingActions.indexOf(prev);
-            return waitingActions[(idx + (forward ? 1 : -1) + waitingActions.length) % waitingActions.length];
-          });
-          return;
-        }
-        if (prev.key === "return") {
-          prev.preventDefault();
-          let waitingSince = waitingSinceRef.current;
-          if (waitingSince !== undefined && isWithinRecentInput(inputClock, waitingSince)) {
-            return;
-          }
-          let action = getFocus();
-          if (action === "open") {
-            if (canOpen) openValidatedUrlSucceeded(href);
-          } else if (action === "cancel") onWaitingDismiss?.("cancel");
-          else onWaitingDismiss?.(showCancel ? "retry" : "dismiss");
-        }
+      if (event.key === "return") {
+        event.preventDefault();
+        let action = getFocus();
+        if (action === "open" && userConfirmsCompletion) {
+          if (inputGuard.refuses()) return;
+          applyExternalAnswer();
+        } else if (action === "accept") {
+          if (inputGuard.refuses()) return;
+          element();
+        } else if (action === "decline" && !answeredRef.current) onResponse("decline");
       }
-    };
-    $[44] = inputGuard;
-    $[45] = href;
-    $[46] = getFocus;
-    $[47] = openUrl_2;
-    $[48] = applyExternalAnswer_2;
-    $[49] = inputClock;
-    $[50] = onResponse;
-    $[51] = onWaitingDismiss;
-    $[52] = phase;
-    $[53] = setFocus;
-    $[54] = showCancel;
-    $[55] = canOpen;
-    $[56] = userConfirmsCompletion;
-    $[57] = onKeyDown;
-  } else onKeyDown = $[57];
-  let onKeyDown_2 = onKeyDown;
+      if (isTextInputKey(event)) inputGuard.typed();
+    } else {
+      let waitingActions = showCancel ? ["open", "action", "cancel"] : ["open", "action"];
+      if (event.key === "left" || event.key === "right") {
+        event.preventDefault();
+        let forward = event.key === "right";
+        setFocus((prev) => {
+          let idx = waitingActions.indexOf(prev);
+          return waitingActions[(idx + (forward ? 1 : -1) + waitingActions.length) % waitingActions.length];
+        });
+        return;
+      }
+      if (event.key === "return") {
+        event.preventDefault();
+        let confirmed = waitingSinceRef.current;
+        if (confirmed !== undefined && isWithinRecentInput(inputClock, urlBodyRows(confirmed))) return;
+        let action = getFocus();
+        if (action === "open") {
+          if (urlSubtitle) openValidatedUrlSucceeded(href);
+        } else if (action === "cancel") onWaitingDismiss?.("cancel");
+        else onWaitingDismiss?.(showCancel ? "retry" : "dismiss");
+      }
+    }
+  }
   if (phase === "waiting") {
     let actionLabel = waitingState?.actionLabel ?? "Continue without waiting";
-    let serverLabel;
-    if ($[58] !== serverName) {
-      serverLabel = labelOrEmpty(serverName);
-      $[58] = serverName;
-      $[59] = serverLabel;
-    } else serverLabel = $[59];
-    const title = `MCP server \u201C${serverLabel}\u201D \u2014 waiting for completion`;
-    let onCancel;
-    if ($[60] !== onWaitingDismiss) {
-      onCancel = () => onWaitingDismiss?.("cancel");
-      $[60] = onWaitingDismiss;
-      $[61] = onCancel;
-    } else onCancel = $[61];
-    let cancelHint;
-    if ($[62] === MEMO_CACHE_SENTINEL) {
-      cancelHint = jsxProd_default(ConfigurableShortcutHint, {
-        action: "confirm:no",
-        context: "Confirmation",
-        fallback: "Esc",
-        description: "cancel",
-      });
-      $[62] = cancelHint;
-    } else cancelHint = $[62];
-    let inputGuide;
-    if ($[63] === MEMO_CACHE_SENTINEL) {
-      inputGuide = jsxProd_default_2(Byline, {
+    return jsxProd_default(Dialog, {
+      title: `MCP server \u201C${labelOrEmpty(serverName)}\u201D \u2014 waiting for completion`,
+      subtitle,
+      color: "permission",
+      onCancel: () => onWaitingDismiss?.("cancel"),
+      isCancelActive: true,
+      inputGuide: jsxProd_default_2(Byline, {
         children: [
-          cancelHint,
+          jsxProd_default(ConfigurableShortcutHint, {
+            action: "confirm:no",
+            context: "Confirmation",
+            fallback: "Esc",
+            description: "cancel",
+          }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: ["left", "right"],
             action: "switch",
           }),
         ],
-      });
-      $[63] = inputGuide;
-    } else inputGuide = $[63];
-    let urlBox;
-    if (
-      $[64] !== hrefPayload_2 ||
-      $[65] !== hostname ||
-      $[66] !== hasHostname ||
-      $[67] !== urlSuffix ||
-      $[68] !== urlPrefix ||
-      $[69] !== rawPayload_2.kind ||
-      $[70] !== rawPayload_2.marker ||
-      $[71] !== rawPayload_2.needsGutter ||
-      $[72] !== rawPayload_2.text ||
-      $[73] !== canOpen ||
-      $[74] !== payloadExact_2
-    ) {
-      urlBox = jsxProd_default(Box, {
-        marginBottom: 1,
-        flexDirection: "column",
-        children:
-          canOpen || payloadExact_2
-            ? jsxProd_default(Blockquote, {
-                multiline: hrefPayload_2.kind === "full" && hrefPayload_2.needsGutter,
-                children: hasHostname
-                  ? jsxProd_default_2(Text, {
-                      children: [
-                        urlPrefix,
-                        jsxProd_default(Text, {
-                          bold: true,
-                          children: hostname,
+      }),
+      children: jsxProd_default_2(FocusColumn, {
+        onKeyDown,
+        children: [
+          jsxProd_default(Box, {
+            marginBottom: 1,
+            flexDirection: "column",
+            children:
+              urlSubtitle || isUrlShownWhole
+                ? jsxProd_default(Blockquote, {
+                    multiline: hrefPayload.kind === "full" && hrefPayload.needsGutter,
+                    children: normalizedHrefPayload
+                      ? jsxProd_default_2(Text, {
+                          children: [
+                            urlBeforeDomain,
+                            jsxProd_default(Text, {
+                              bold: true,
+                              children: hostname,
+                            }),
+                            urlAfterDomain,
+                          ],
+                        })
+                      : jsxProd_default(Text, {
+                          children: hrefPayload.kind === "full" ? hrefPayload.text : null,
                         }),
-                        urlSuffix,
-                      ],
-                    })
-                  : jsxProd_default(Text, {
-                      children: hrefPayload_2.kind === "full" ? hrefPayload_2.text : null,
+                  })
+                : jsxProd_default(Blockquote, {
+                    multiline: urlPayload.kind === "full" && urlPayload.needsGutter,
+                    children: jsxProd_default(Text, {
+                      children: urlPayload.kind === "full" ? urlPayload.text : urlPayload.marker,
                     }),
-              })
-            : jsxProd_default(Blockquote, {
-                multiline: rawPayload_2.kind === "full" && rawPayload_2.needsGutter,
-                children: jsxProd_default(Text, {
-                  children: rawPayload_2.kind === "full" ? rawPayload_2.text : rawPayload_2.marker,
-                }),
+                  }),
+          }),
+          jsxProd_default(Box, {
+            marginBottom: 1,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              italic: true,
+              children: "Waiting for the server to confirm completion\u2026",
+            }),
+          }),
+          jsxProd_default_2(Box, {
+            children: [
+              jsxProd_default(Text, {
+                color: "success",
+                children: focus === "open" ? figures_default.pointer : " ",
               }),
-      });
-      $[64] = hrefPayload_2;
-      $[65] = hostname;
-      $[66] = hasHostname;
-      $[67] = urlSuffix;
-      $[68] = urlPrefix;
-      $[69] = rawPayload_2.kind;
-      $[70] = rawPayload_2.marker;
-      $[71] = rawPayload_2.needsGutter;
-      $[72] = rawPayload_2.text;
-      $[73] = canOpen;
-      $[74] = payloadExact_2;
-      $[75] = urlBox;
-    } else urlBox = $[75];
-    let waitingNotice;
-    if ($[76] === MEMO_CACHE_SENTINEL) {
-      waitingNotice = jsxProd_default(Box, {
-        marginBottom: 1,
-        children: jsxProd_default(Text, {
-          dimColor: true,
-          italic: true,
-          children: "Waiting for the server to confirm completion\u2026",
-        }),
-      });
-      $[76] = waitingNotice;
-    } else waitingNotice = $[76];
-    const children = focus === "open" ? figures_default.pointer : " ";
-    let reopenPointer;
-    if ($[77] !== children) {
-      reopenPointer = jsxProd_default(Text, {
-        color: "success",
-        children,
-      });
-      $[77] = children;
-      $[78] = reopenPointer;
-    } else reopenPointer = $[78];
-    const bold = focus === "open";
-    const color = focus === "open" ? "success" : undefined;
-    const dimColor = focus !== "open";
-    let reopenButton;
-    if ($[79] !== bold || $[80] !== color || $[81] !== dimColor) {
-      reopenButton = jsxProd_default(Text, {
-        bold,
-        color,
-        dimColor,
-        children: " Reopen URL  ",
-      });
-      $[79] = bold;
-      $[80] = color;
-      $[81] = dimColor;
-      $[82] = reopenButton;
-    } else reopenButton = $[82];
-    const children_2 = focus === "action" ? figures_default.pointer : " ";
-    let actionPointer;
-    if ($[83] !== children_2) {
-      actionPointer = jsxProd_default(Text, {
-        color: "success",
-        children: children_2,
-      });
-      $[83] = children_2;
-      $[84] = actionPointer;
-    } else actionPointer = $[84];
-    const bold_2 = focus === "action";
-    const color_2 = focus === "action" ? "success" : undefined;
-    const dimColor_2 = focus !== "action";
-    const children_3 = ` ${actionLabel}`;
-    let actionButton;
-    if ($[85] !== bold_2 || $[86] !== color_2 || $[87] !== dimColor_2 || $[88] !== children_3) {
-      actionButton = jsxProd_default(Text, {
-        bold: bold_2,
-        color: color_2,
-        dimColor: dimColor_2,
-        children: children_3,
-      });
-      $[85] = bold_2;
-      $[86] = color_2;
-      $[87] = dimColor_2;
-      $[88] = children_3;
-      $[89] = actionButton;
-    } else actionButton = $[89];
-    let cancelButton;
-    if ($[90] !== focus || $[91] !== showCancel) {
-      cancelButton =
-        showCancel &&
-        jsxProd_default_2(Fragment, {
-          children: [
-            jsxProd_default(Text, {
-              children: " ",
-            }),
-            jsxProd_default(Text, {
-              color: "error",
-              children: focus === "cancel" ? figures_default.pointer : " ",
-            }),
-            jsxProd_default(Text, {
-              bold: focus === "cancel",
-              color: focus === "cancel" ? "error" : undefined,
-              dimColor: focus !== "cancel",
-              children: " Cancel",
-            }),
-          ],
-        });
-      $[90] = focus;
-      $[91] = showCancel;
-      $[92] = cancelButton;
-    } else cancelButton = $[92];
-    let buttons;
-    if (
-      $[93] !== reopenPointer ||
-      $[94] !== reopenButton ||
-      $[95] !== actionPointer ||
-      $[96] !== actionButton ||
-      $[97] !== cancelButton
-    ) {
-      buttons = jsxProd_default_2(Box, {
-        children: [reopenPointer, reopenButton, actionPointer, actionButton, cancelButton],
-      });
-      $[93] = reopenPointer;
-      $[94] = reopenButton;
-      $[95] = actionPointer;
-      $[96] = actionButton;
-      $[97] = cancelButton;
-      $[98] = buttons;
-    } else buttons = $[98];
-    let children_4;
-    if ($[99] !== onKeyDown_2 || $[100] !== urlBox || $[101] !== buttons) {
-      children_4 = jsxProd_default_2(FocusColumn, {
-        onKeyDown: onKeyDown_2,
-        children: [urlBox, waitingNotice, buttons],
-      });
-      $[99] = onKeyDown_2;
-      $[100] = urlBox;
-      $[101] = buttons;
-      $[102] = children_4;
-    } else children_4 = $[102];
-    let waitingDialog;
-    if ($[103] !== subtitle || $[104] !== title || $[105] !== onCancel || $[106] !== children_4) {
-      waitingDialog = jsxProd_default(Dialog, {
-        title,
-        subtitle,
-        color: "permission",
-        onCancel,
-        isCancelActive: true,
-        inputGuide,
-        children: children_4,
-      });
-      $[103] = subtitle;
-      $[104] = title;
-      $[105] = onCancel;
-      $[106] = children_4;
-      $[107] = waitingDialog;
-    } else waitingDialog = $[107];
-    return waitingDialog;
-  }
-  let serverLabel;
-  if ($[108] !== serverName) {
-    serverLabel = labelOrEmpty(serverName);
-    $[108] = serverName;
-    $[109] = serverLabel;
-  } else serverLabel = $[109];
-  const title = `MCP server \u201C${serverLabel}\u201D wants to open a URL`;
-  let onCancel;
-  if ($[110] !== onResponse) {
-    onCancel = () => onResponse("cancel");
-    $[110] = onResponse;
-    $[111] = onCancel;
-  } else onCancel = $[111];
-  let cancelHint;
-  if ($[112] === MEMO_CACHE_SENTINEL) {
-    cancelHint = jsxProd_default(ConfigurableShortcutHint, {
-      action: "confirm:no",
-      context: "Confirmation",
-      fallback: "Esc",
-      description: "cancel",
+              jsxProd_default(Text, {
+                bold: focus === "open",
+                color: focus === "open" ? "success" : undefined,
+                dimColor: focus !== "open",
+                children: " Reopen URL  ",
+              }),
+              jsxProd_default(Text, {
+                color: "success",
+                children: focus === "action" ? figures_default.pointer : " ",
+              }),
+              jsxProd_default(Text, {
+                bold: focus === "action",
+                color: focus === "action" ? "success" : undefined,
+                dimColor: focus !== "action",
+                children: ` ${actionLabel}`,
+              }),
+              showCancel &&
+                jsxProd_default_2(Fragment, {
+                  children: [
+                    jsxProd_default(Text, {
+                      children: " ",
+                    }),
+                    jsxProd_default(Text, {
+                      color: "error",
+                      children: focus === "cancel" ? figures_default.pointer : " ",
+                    }),
+                    jsxProd_default(Text, {
+                      bold: focus === "cancel",
+                      color: focus === "cancel" ? "error" : undefined,
+                      dimColor: focus !== "cancel",
+                      children: " Cancel",
+                    }),
+                  ],
+                }),
+            ],
+          }),
+        ],
+      }),
     });
-    $[112] = cancelHint;
-  } else cancelHint = $[112];
-  let inputGuide;
-  if ($[113] === MEMO_CACHE_SENTINEL) {
-    inputGuide = jsxProd_default_2(Byline, {
+  }
+  return jsxProd_default(Dialog, {
+    title: `MCP server \u201C${labelOrEmpty(serverName)}\u201D wants to open a URL`,
+    subtitle,
+    color: "permission",
+    onCancel: () => onResponse("cancel"),
+    isCancelActive: true,
+    inputGuide: jsxProd_default_2(Byline, {
       children: [
-        cancelHint,
+        jsxProd_default(ConfigurableShortcutHint, {
+          action: "confirm:no",
+          context: "Confirmation",
+          fallback: "Esc",
+          description: "cancel",
+        }),
         jsxProd_default(KeyboardShortcutHint, {
           chord: ["left", "right"],
           action: "switch",
         }),
       ],
-    });
-    $[113] = inputGuide;
-  } else inputGuide = $[113];
-  let urlBox;
-  if (
-    $[114] !== hrefPayload_2 ||
-    $[115] !== hostname ||
-    $[116] !== hasHostname ||
-    $[117] !== urlSuffix ||
-    $[118] !== urlPrefix ||
-    $[119] !== rawPayload_2.kind ||
-    $[120] !== rawPayload_2.marker ||
-    $[121] !== rawPayload_2.needsGutter ||
-    $[122] !== rawPayload_2.text ||
-    $[123] !== canOpen ||
-    $[124] !== payloadExact_2
-  ) {
-    urlBox = jsxProd_default(Box, {
-      marginBottom: 1,
-      flexDirection: "column",
-      children:
-        canOpen || payloadExact_2
-          ? jsxProd_default(Blockquote, {
-              multiline: hrefPayload_2.kind === "full" && hrefPayload_2.needsGutter,
-              children: hasHostname
-                ? jsxProd_default_2(Text, {
-                    children: [
-                      urlPrefix,
-                      jsxProd_default(Text, {
-                        bold: true,
-                        children: hostname,
-                      }),
-                      urlSuffix,
-                    ],
-                  })
-                : jsxProd_default(Text, {
-                    children: hrefPayload_2.kind === "full" ? hrefPayload_2.text : null,
-                  }),
-            })
-          : jsxProd_default(Blockquote, {
-              multiline: rawPayload_2.kind === "full" && rawPayload_2.needsGutter,
-              children: jsxProd_default(Text, {
-                children: rawPayload_2.kind === "full" ? rawPayload_2.text : rawPayload_2.marker,
-              }),
-            }),
-    });
-    $[114] = hrefPayload_2;
-    $[115] = hostname;
-    $[116] = hasHostname;
-    $[117] = urlSuffix;
-    $[118] = urlPrefix;
-    $[119] = rawPayload_2.kind;
-    $[120] = rawPayload_2.marker;
-    $[121] = rawPayload_2.needsGutter;
-    $[122] = rawPayload_2.text;
-    $[123] = canOpen;
-    $[124] = payloadExact_2;
-    $[125] = urlBox;
-  } else urlBox = $[125];
-  let unsafeNotice;
-  if ($[126] !== canOpen || $[127] !== payloadExact_2) {
-    unsafeNotice =
-      !canOpen &&
-      jsxProd_default(Box, {
-        marginBottom: 1,
-        children: jsxProd_default(Text, {
-          dimColor: true,
-          children: payloadExact_2
-            ? "This URL\u2019s browser-ready form is too long to hand to a browser safely, so one-click opening is disabled. The URL above is shown in full. Decline to continue."
-            : "This URL cannot be shown exactly as it would open, so opening it is disabled. Decline to continue.",
-        }),
-      });
-    $[126] = canOpen;
-    $[127] = payloadExact_2;
-    $[128] = unsafeNotice;
-  } else unsafeNotice = $[128];
-  let truncatedNotice;
-  if ($[129] !== tooLarge_2 || $[130] !== canOpen) {
-    truncatedNotice =
-      canOpen &&
-      tooLarge_2 &&
-      jsxProd_default(Box, {
-        marginBottom: 1,
-        children: jsxProd_default(Text, {
-          dimColor: true,
+    }),
+    children: jsxProd_default_2(FocusColumn, {
+      onKeyDown,
+      children: [
+        jsxProd_default(Box, {
+          marginBottom: 1,
+          flexDirection: "column",
           children:
-            "This URL extends past this screen \u2014 its beginning is not visible here. Review it in full before you continue.",
+            urlSubtitle || isUrlShownWhole
+              ? jsxProd_default(Blockquote, {
+                  multiline: hrefPayload.kind === "full" && hrefPayload.needsGutter,
+                  children: normalizedHrefPayload
+                    ? jsxProd_default_2(Text, {
+                        children: [
+                          urlBeforeDomain,
+                          jsxProd_default(Text, {
+                            bold: true,
+                            children: hostname,
+                          }),
+                          urlAfterDomain,
+                        ],
+                      })
+                    : jsxProd_default(Text, {
+                        children: hrefPayload.kind === "full" ? hrefPayload.text : null,
+                      }),
+                })
+              : jsxProd_default(Blockquote, {
+                  multiline: urlPayload.kind === "full" && urlPayload.needsGutter,
+                  children: jsxProd_default(Text, {
+                    children: urlPayload.kind === "full" ? urlPayload.text : urlPayload.marker,
+                  }),
+                }),
         }),
-      });
-    $[129] = tooLarge_2;
-    $[130] = canOpen;
-    $[131] = truncatedNotice;
-  } else truncatedNotice = $[131];
-  let openButton;
-  if ($[132] !== focus || $[133] !== reopened || $[134] !== canOpen || $[135] !== userConfirmsCompletion) {
-    openButton =
-      canOpen &&
-      userConfirmsCompletion &&
-      jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default(Text, {
-            color: "success",
-            children: focus === "open" ? figures_default.pointer : " ",
+        !urlSubtitle &&
+          jsxProd_default(Box, {
+            marginBottom: 1,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              children: isUrlShownWhole
+                ? "This URL\u2019s browser-ready form is too long to hand " +
+                  "to a browser safely, so one-click opening is disabled. The URL above is shown in full. Decline to continue."
+                : "This URL cannot be shown exactly as it would open, so opening it is disabled. Decline to continue.",
+            }),
           }),
-          jsxProd_default(Text, {
-            bold: focus === "open",
-            color: focus === "open" ? "success" : undefined,
-            dimColor: focus !== "open",
-            children: reopened ? " Open again  " : " Open in browser  ",
+        urlSubtitle &&
+          tooLarge &&
+          jsxProd_default(Box, {
+            marginBottom: 1,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              children:
+                "This URL extends past this screen \u2014 its beginning is not visible here. Review it in full before you continue.",
+            }),
           }),
-        ],
-      });
-    $[132] = focus;
-    $[133] = reopened;
-    $[134] = canOpen;
-    $[135] = userConfirmsCompletion;
-    $[136] = openButton;
-  } else openButton = $[136];
-  let acceptButton;
-  if ($[137] !== focus || $[138] !== canOpen || $[139] !== userConfirmsCompletion) {
-    acceptButton =
-      canOpen &&
-      jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default(Text, {
-            color: "success",
-            children: focus === "accept" ? figures_default.pointer : " ",
-          }),
-          jsxProd_default(Text, {
-            bold: focus === "accept",
-            color: focus === "accept" ? "success" : undefined,
-            dimColor: focus !== "accept",
-            children: userConfirmsCompletion ? " I'm done, continue  " : " Accept  ",
-          }),
-        ],
-      });
-    $[137] = focus;
-    $[138] = canOpen;
-    $[139] = userConfirmsCompletion;
-    $[140] = acceptButton;
-  } else acceptButton = $[140];
-  const children = focus === "decline" ? figures_default.pointer : " ";
-  let declinePointer;
-  if ($[141] !== children) {
-    declinePointer = jsxProd_default(Text, {
-      color: "error",
-      children,
-    });
-    $[141] = children;
-    $[142] = declinePointer;
-  } else declinePointer = $[142];
-  const bold = focus === "decline";
-  const color = focus === "decline" ? "error" : undefined;
-  const dimColor = focus !== "decline";
-  let declineButton;
-  if ($[143] !== bold || $[144] !== color || $[145] !== dimColor) {
-    declineButton = jsxProd_default(Text, {
-      bold,
-      color,
-      dimColor,
-      children: " Decline",
-    });
-    $[143] = bold;
-    $[144] = color;
-    $[145] = dimColor;
-    $[146] = declineButton;
-  } else declineButton = $[146];
-  let buttons;
-  if (
-    $[147] !== openButton ||
-    $[148] !== acceptButton ||
-    $[149] !== declinePointer ||
-    $[150] !== declineButton
-  ) {
-    buttons = jsxProd_default_2(Box, {
-      children: [openButton, acceptButton, declinePointer, declineButton],
-    });
-    $[147] = openButton;
-    $[148] = acceptButton;
-    $[149] = declinePointer;
-    $[150] = declineButton;
-    $[151] = buttons;
-  } else buttons = $[151];
-  let children_2;
-  if (
-    $[152] !== onKeyDown_2 ||
-    $[153] !== urlBox ||
-    $[154] !== unsafeNotice ||
-    $[155] !== truncatedNotice ||
-    $[156] !== buttons
-  ) {
-    children_2 = jsxProd_default_2(FocusColumn, {
-      onKeyDown: onKeyDown_2,
-      children: [urlBox, unsafeNotice, truncatedNotice, buttons],
-    });
-    $[152] = onKeyDown_2;
-    $[153] = urlBox;
-    $[154] = unsafeNotice;
-    $[155] = truncatedNotice;
-    $[156] = buttons;
-    $[157] = children_2;
-  } else children_2 = $[157];
-  let promptDialog;
-  if ($[158] !== subtitle || $[159] !== title || $[160] !== onCancel || $[161] !== children_2) {
-    promptDialog = jsxProd_default(Dialog, {
-      title,
-      subtitle,
-      color: "permission",
-      onCancel,
-      isCancelActive: true,
-      inputGuide,
-      children: children_2,
-    });
-    $[158] = subtitle;
-    $[159] = title;
-    $[160] = onCancel;
-    $[161] = children_2;
-    $[162] = promptDialog;
-  } else promptDialog = $[162];
-  return promptDialog;
+        jsxProd_default_2(Box, {
+          children: [
+            urlSubtitle &&
+              userConfirmsCompletion &&
+              jsxProd_default_2(Fragment, {
+                children: [
+                  jsxProd_default(Text, {
+                    color: "success",
+                    children: focus === "open" ? figures_default.pointer : " ",
+                  }),
+                  jsxProd_default(Text, {
+                    bold: focus === "open",
+                    color: focus === "open" ? "success" : undefined,
+                    dimColor: focus !== "open",
+                    children: reopened ? " Open again  " : " Open in browser  ",
+                  }),
+                ],
+              }),
+            urlSubtitle &&
+              jsxProd_default_2(Fragment, {
+                children: [
+                  jsxProd_default(Text, {
+                    color: "success",
+                    children: focus === "accept" ? figures_default.pointer : " ",
+                  }),
+                  jsxProd_default(Text, {
+                    bold: focus === "accept",
+                    color: focus === "accept" ? "success" : undefined,
+                    dimColor: focus !== "accept",
+                    children: userConfirmsCompletion ? " I'm done, continue  " : " Accept  ",
+                  }),
+                ],
+              }),
+            jsxProd_default(Text, {
+              color: "error",
+              children: focus === "decline" ? figures_default.pointer : " ",
+            }),
+            jsxProd_default(Text, {
+              bold: focus === "decline",
+              color: focus === "decline" ? "error" : undefined,
+              dimColor: focus !== "decline",
+              children: " Decline",
+            }),
+          ],
+        }),
+      ],
+    }),
+  });
 }
-//@ chunk-18hwfzwa.js:1231333-1237471 placement
+//@ chunk-czq1j3j2.js:1256678-1262586 placement
 /**
  * MCP elicitation 表单：按服务器给出的 schema 渲染字段、校验输入并提交。
  */
 function ElicitationForm(props) {
-  let $ = useMemoCache(51);
+  let $ = useMemoCache(48);
   let {
     schemaFields,
     scrollWindow,
@@ -2048,67 +1632,59 @@ function ElicitationForm(props) {
   if (!schemaFields.length) {
     return null;
   }
-  let hasAbove = scrollWindow.start > 0;
-  let hasBelow = scrollWindow.end < schemaFields.length;
   let aboveHint;
-  if ($[0] !== hasAbove || $[1] !== scrollWindow.start) {
-    aboveHint =
-      hasAbove &&
-      jsxProd_default(Box, {
-        marginLeft: 2,
-        children: jsxProd_default_2(Text, {
-          dimColor: true,
-          children: [figures_default.arrowUp, " ", scrollWindow.start, " more above"],
-        }),
-      });
-    $[0] = hasAbove;
-    $[1] = scrollWindow.start;
-    $[2] = aboveHint;
-  } else aboveHint = $[2];
+  if ($[0] !== scrollWindow.start) {
+    aboveHint = jsxProd_default(MoreItemsIndicator, {
+      direction: "above",
+      count: scrollWindow.start,
+    });
+    $[0] = scrollWindow.start;
+    $[1] = aboveHint;
+  } else aboveHint = $[1];
   let fieldRows;
   if (
-    $[3] !== accordionOptionIndex ||
-    $[4] !== clampFieldRows ||
-    $[5] !== columns ||
-    $[6] !== currentFieldIndex ||
-    $[7] !== expandedAccordion ||
-    $[8] !== focusedButton ||
-    $[9] !== formValues ||
-    $[10] !== handleTextInputChange ||
-    $[11] !== handleTextInputSubmit ||
-    $[12] !== optionWindow ||
-    $[13] !== pluginSource ||
-    $[14] !== resolvingFields ||
-    $[15] !== schemaFields ||
-    $[16] !== scrollWindow.end ||
-    $[17] !== scrollWindow.start ||
-    $[18] !== serverName ||
-    $[19] !== setTextInputCursorOffset ||
-    $[20] !== textInputCursorOffset ||
-    $[21] !== textInputValue ||
-    $[22] !== validationErrors
+    $[2] !== accordionOptionIndex ||
+    $[3] !== clampFieldRows ||
+    $[4] !== columns ||
+    $[5] !== currentFieldIndex ||
+    $[6] !== expandedAccordion ||
+    $[7] !== focusedButton ||
+    $[8] !== formValues ||
+    $[9] !== handleTextInputChange ||
+    $[10] !== handleTextInputSubmit ||
+    $[11] !== optionWindow ||
+    $[12] !== pluginSource ||
+    $[13] !== resolvingFields ||
+    $[14] !== schemaFields ||
+    $[15] !== scrollWindow.end ||
+    $[16] !== scrollWindow.start ||
+    $[17] !== serverName ||
+    $[18] !== setTextInputCursorOffset ||
+    $[19] !== textInputCursorOffset ||
+    $[20] !== textInputValue ||
+    $[21] !== validationErrors
   ) {
     const sliced = schemaFields.slice(scrollWindow.start, scrollWindow.end);
     let renderField;
     if (
-      $[24] !== accordionOptionIndex ||
-      $[25] !== clampFieldRows ||
-      $[26] !== columns ||
-      $[27] !== currentFieldIndex ||
-      $[28] !== expandedAccordion ||
-      $[29] !== focusedButton ||
-      $[30] !== formValues ||
-      $[31] !== handleTextInputChange ||
-      $[32] !== handleTextInputSubmit ||
-      $[33] !== optionWindow ||
-      $[34] !== pluginSource ||
-      $[35] !== resolvingFields ||
-      $[36] !== scrollWindow.start ||
-      $[37] !== serverName ||
-      $[38] !== setTextInputCursorOffset ||
-      $[39] !== textInputCursorOffset ||
-      $[40] !== textInputValue ||
-      $[41] !== validationErrors
+      $[23] !== accordionOptionIndex ||
+      $[24] !== clampFieldRows ||
+      $[25] !== columns ||
+      $[26] !== currentFieldIndex ||
+      $[27] !== expandedAccordion ||
+      $[28] !== focusedButton ||
+      $[29] !== formValues ||
+      $[30] !== handleTextInputChange ||
+      $[31] !== handleTextInputSubmit ||
+      $[32] !== optionWindow ||
+      $[33] !== pluginSource ||
+      $[34] !== resolvingFields ||
+      $[35] !== scrollWindow.start ||
+      $[36] !== serverName ||
+      $[37] !== setTextInputCursorOffset ||
+      $[38] !== textInputCursorOffset ||
+      $[39] !== textInputValue ||
+      $[40] !== validationErrors
     ) {
       renderField = (field, sliceIndex) => {
         let fieldIndex = scrollWindow.start + sliceIndex;
@@ -2173,9 +1749,12 @@ function ElicitationForm(props) {
               marginLeft: 6,
               children: [
                 visibleWindow.showAbove &&
-                  jsxProd_default_2(Text, {
-                    dimColor: true,
-                    children: [figures_default.arrowUp, " ", visibleWindow.start, " more above"],
+                  jsxProd_default(Box, {
+                    marginLeft: 2,
+                    children: jsxProd_default(MoreItemsIndicator, {
+                      direction: "above",
+                      count: visibleWindow.start,
+                    }),
                   }),
                 multiSelectValues
                   .slice(visibleWindow.start, visibleWindow.end)
@@ -2210,15 +1789,12 @@ function ElicitationForm(props) {
                     );
                   }),
                 visibleWindow.showBelow &&
-                  jsxProd_default_2(Text, {
-                    dimColor: true,
-                    children: [
-                      figures_default.arrowDown,
-                      " ",
-                      multiSelectValues.length - visibleWindow.end,
-                      " ",
-                      "more below",
-                    ],
+                  jsxProd_default(Box, {
+                    marginLeft: 2,
+                    children: jsxProd_default(MoreItemsIndicator, {
+                      direction: "below",
+                      count: multiSelectValues.length - visibleWindow.end,
+                    }),
                   }),
               ],
             });
@@ -2273,9 +1849,12 @@ function ElicitationForm(props) {
               marginLeft: 6,
               children: [
                 visibleWindow.showAbove &&
-                  jsxProd_default_2(Text, {
-                    dimColor: true,
-                    children: [figures_default.arrowUp, " ", visibleWindow.start, " more above"],
+                  jsxProd_default(Box, {
+                    marginLeft: 2,
+                    children: jsxProd_default(MoreItemsIndicator, {
+                      direction: "above",
+                      count: visibleWindow.start,
+                    }),
                   }),
                 enumValues.slice(visibleWindow.start, visibleWindow.end).map((enumValue, optionIndex) => {
                   let absoluteIndex = visibleWindow.start + optionIndex;
@@ -2308,15 +1887,12 @@ function ElicitationForm(props) {
                   );
                 }),
                 visibleWindow.showBelow &&
-                  jsxProd_default_2(Text, {
-                    dimColor: true,
-                    children: [
-                      figures_default.arrowDown,
-                      " ",
-                      enumValues.length - visibleWindow.end,
-                      " ",
-                      "more below",
-                    ],
+                  jsxProd_default(Box, {
+                    marginLeft: 2,
+                    children: jsxProd_default(MoreItemsIndicator, {
+                      direction: "below",
+                      count: enumValues.length - visibleWindow.end,
+                    }),
                   }),
               ],
             });
@@ -2489,76 +2065,70 @@ function ElicitationForm(props) {
           name,
         );
       };
-      $[24] = accordionOptionIndex;
-      $[25] = clampFieldRows;
-      $[26] = columns;
-      $[27] = currentFieldIndex;
-      $[28] = expandedAccordion;
-      $[29] = focusedButton;
-      $[30] = formValues;
-      $[31] = handleTextInputChange;
-      $[32] = handleTextInputSubmit;
-      $[33] = optionWindow;
-      $[34] = pluginSource;
-      $[35] = resolvingFields;
-      $[36] = scrollWindow.start;
-      $[37] = serverName;
-      $[38] = setTextInputCursorOffset;
-      $[39] = textInputCursorOffset;
-      $[40] = textInputValue;
-      $[41] = validationErrors;
-      $[42] = renderField;
-    } else renderField = $[42];
+      $[23] = accordionOptionIndex;
+      $[24] = clampFieldRows;
+      $[25] = columns;
+      $[26] = currentFieldIndex;
+      $[27] = expandedAccordion;
+      $[28] = focusedButton;
+      $[29] = formValues;
+      $[30] = handleTextInputChange;
+      $[31] = handleTextInputSubmit;
+      $[32] = optionWindow;
+      $[33] = pluginSource;
+      $[34] = resolvingFields;
+      $[35] = scrollWindow.start;
+      $[36] = serverName;
+      $[37] = setTextInputCursorOffset;
+      $[38] = textInputCursorOffset;
+      $[39] = textInputValue;
+      $[40] = validationErrors;
+      $[41] = renderField;
+    } else renderField = $[41];
     fieldRows = sliced.map(renderField);
-    $[3] = accordionOptionIndex;
-    $[4] = clampFieldRows;
-    $[5] = columns;
-    $[6] = currentFieldIndex;
-    $[7] = expandedAccordion;
-    $[8] = focusedButton;
-    $[9] = formValues;
-    $[10] = handleTextInputChange;
-    $[11] = handleTextInputSubmit;
-    $[12] = optionWindow;
-    $[13] = pluginSource;
-    $[14] = resolvingFields;
-    $[15] = schemaFields;
-    $[16] = scrollWindow.end;
-    $[17] = scrollWindow.start;
-    $[18] = serverName;
-    $[19] = setTextInputCursorOffset;
-    $[20] = textInputCursorOffset;
-    $[21] = textInputValue;
-    $[22] = validationErrors;
-    $[23] = fieldRows;
-  } else fieldRows = $[23];
+    $[2] = accordionOptionIndex;
+    $[3] = clampFieldRows;
+    $[4] = columns;
+    $[5] = currentFieldIndex;
+    $[6] = expandedAccordion;
+    $[7] = focusedButton;
+    $[8] = formValues;
+    $[9] = handleTextInputChange;
+    $[10] = handleTextInputSubmit;
+    $[11] = optionWindow;
+    $[12] = pluginSource;
+    $[13] = resolvingFields;
+    $[14] = schemaFields;
+    $[15] = scrollWindow.end;
+    $[16] = scrollWindow.start;
+    $[17] = serverName;
+    $[18] = setTextInputCursorOffset;
+    $[19] = textInputCursorOffset;
+    $[20] = textInputValue;
+    $[21] = validationErrors;
+    $[22] = fieldRows;
+  } else fieldRows = $[22];
+  const count = schemaFields.length - scrollWindow.end;
   let belowHint;
-  if ($[43] !== hasBelow || $[44] !== schemaFields.length || $[45] !== scrollWindow.end) {
-    belowHint =
-      hasBelow &&
-      jsxProd_default(Box, {
-        marginLeft: 2,
-        children: jsxProd_default_2(Text, {
-          dimColor: true,
-          children: [figures_default.arrowDown, " ", schemaFields.length - scrollWindow.end, " more below"],
-        }),
-      });
-    $[43] = hasBelow;
-    $[44] = schemaFields.length;
-    $[45] = scrollWindow.end;
-    $[46] = belowHint;
-  } else belowHint = $[46];
+  if ($[42] !== count) {
+    belowHint = jsxProd_default(MoreItemsIndicator, {
+      direction: "below",
+      count,
+    });
+    $[42] = count;
+    $[43] = belowHint;
+  } else belowHint = $[43];
   let fieldsBox;
-  if ($[47] !== aboveHint || $[48] !== fieldRows || $[49] !== belowHint) {
+  if ($[44] !== aboveHint || $[45] !== fieldRows || $[46] !== belowHint) {
     fieldsBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [aboveHint, fieldRows, belowHint],
     });
-    $[47] = aboveHint;
-    $[48] = fieldRows;
-    $[49] = belowHint;
-    $[50] = fieldsBox;
-  } else fieldsBox = $[50];
+    $[44] = aboveHint;
+    $[45] = fieldRows;
+    $[46] = belowHint;
+    $[47] = fieldsBox;
+  } else fieldsBox = $[47];
   return fieldsBox;
 }
-export { ElicitationDialog, resetTypeahead };
+export { resetTypeahead, ElicitationDialog };

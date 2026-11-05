@@ -3,9 +3,9 @@
  *
  * 不依赖项目其他模块的 worktree 列表实现（execFile 版）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/getWorktreePathsPortable.ts
- * pieces: chunk-f9pzpnqt.js (2)
+ * pieces: chunk-80bdkzt1.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { promisify } from "util";
@@ -15,12 +15,12 @@ import { isGitMissingMessageSupported } from "./git/gitMissingMessage.js";
 import { identity } from "./pathClassification.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-f9pzpnqt.js:947-961 affinity
+//@ chunk-80bdkzt1.js:947-961 affinity
 var execFileAsync; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f9pzpnqt.js:947", () => {
+deferInit("chunk-80bdkzt1.js:947", () => {
   execFileAsync = promisify(execFile);
 });
-//@ chunk-f9pzpnqt.js:961-1310 fingerprint (2.1.88 match: getWorktreePathsPortable, 0.699)
+//@ chunk-80bdkzt1.js:961-1310 fingerprint (2.1.88 match: getWorktreePathsPortable, 0.698)
 /**
  * 不依赖项目其余模块的 worktree 列表实现（供可移植模块/子进程使用）。
  */

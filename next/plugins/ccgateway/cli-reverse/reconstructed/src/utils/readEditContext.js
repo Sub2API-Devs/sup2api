@@ -3,9 +3,9 @@
  *
  * 在大文件中按字节流定位匹配串并截取上下文行（UTF-8 边界、CRLF 规整、读取上限）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/readEditContext.ts
- * pieces: chunk-6zvepy0r.js (8)
+ * pieces: chunk-n0hwmqka.js (8)
  * attribution: fingerprint 3, file-local 2, layout 3
  */
 import {
@@ -16,7 +16,7 @@ import {
 } from "./settings/settingsReview.js";
 import { detectEncodingFromBom, decodeTextBuffer } from "./fileRead.js";
 
-//@ chunk-6zvepy0r.js:18882-19567 fingerprint (2.1.88 match: scanForContext, 0.932)
+//@ chunk-n0hwmqka.js:18881-19566 fingerprint (2.1.88 match: scanForContext, 0.932)
 async function scanForContext(handle, needle, contextLines) {
   if (needle === "")
     return {
@@ -82,7 +82,7 @@ async function scanForContext(handle, needle, contextLines) {
     truncated: pos >= MAX_SETTINGS_FILE_BYTES,
   };
 }
-//@ chunk-6zvepy0r.js:19567-19838 fingerprint (2.1.88 match: readCapped, 0.874)
+//@ chunk-n0hwmqka.js:19566-19836 fingerprint (2.1.88 match: readCapped, 0.873)
 async function readCapped(handle) {
   let buf = Buffer.allocUnsafe(MAX_DIFF_CONTEXT_BYTES);
   let total = 0;
@@ -101,26 +101,26 @@ async function readCapped(handle) {
   }
   return decodeTextBuffer(buf.subarray(0, total));
 }
-//@ chunk-6zvepy0r.js:19838-19909 file-local
+//@ chunk-n0hwmqka.js:19836-19907 file-local
 function indexOfWithin(buf, needle, end) {
   let at = buf.indexOf(needle);
   return at === -1 || at + needle.length > end ? -1 : at;
 }
-//@ chunk-6zvepy0r.js:19909-19982 layout
+//@ chunk-n0hwmqka.js:19907-19980 layout
 function countLineBreaksInRange(buf, start, end) {
   let n = 0;
   for (let i = start; i < end; i++) if (buf[i] === DIFF_CONTEXT_LINES_BEFORE) n++;
   return n;
 }
-//@ chunk-6zvepy0r.js:19982-20017 layout
+//@ chunk-n0hwmqka.js:19980-20015 layout
 function isUtf8ContinuationByte(byte) {
   return (byte & 192) === 128;
 }
-//@ chunk-6zvepy0r.js:20017-20068 layout
+//@ chunk-n0hwmqka.js:20015-20066 layout
 function utf8SequenceLength(byte) {
   return byte >= 240 ? 4 : byte >= 224 ? 3 : byte >= 192 ? 2 : 1;
 }
-//@ chunk-6zvepy0r.js:20068-20164 file-local
+//@ chunk-n0hwmqka.js:20066-20162 file-local
 function normalizeCRLF(buf, len) {
   let str = buf.toString("utf8", 0, len);
   return str.includes("\r")
@@ -132,7 +132,7 @@ function normalizeCRLF(buf, len) {
       )
     : str;
 }
-//@ chunk-6zvepy0r.js:20164-20776 fingerprint (2.1.88 match: sliceContext, 1)
+//@ chunk-n0hwmqka.js:20162-20774 fingerprint (2.1.88 match: sliceContext, 1)
 async function sliceContext(handle, scratch, matchStart, matchLen, contextLines, linesBeforeMatch) {
   let backChunk = Math.min(matchStart, MAX_DIFF_CONTEXT_BYTES);
   let { bytesRead: backRead } = await handle.read(scratch, 0, backChunk, matchStart - backChunk);
@@ -147,9 +147,9 @@ async function sliceContext(handle, scratch, matchStart, matchLen, contextLines,
   }
   let backOffset = matchStart - backRead;
   for (
-    let idx = 0;
-    idx < 3 && ctxStart < matchStart && isUtf8ContinuationByte(scratch[ctxStart - backOffset]);
-    idx++
+    let j = 0;
+    j < 3 && ctxStart < matchStart && isUtf8ContinuationByte(scratch[ctxStart - backOffset]);
+    j++
   )
     ctxStart++;
   let ctxLength = matchStart - ctxStart;
@@ -165,10 +165,10 @@ async function sliceContext(handle, scratch, matchStart, matchLen, contextLines,
       if (nlSeen >= contextLines + 1) break;
     }
   }
-  for (let idx = 0; idx <= 3 && stop - 1 - idx >= end; idx++) {
-    let byte = scratch[stop - 1 - idx - end];
+  for (let j = 0; j <= 3 && stop - 1 - j >= end; j++) {
+    let byte = scratch[stop - 1 - j - end];
     if (isUtf8ContinuationByte(byte)) continue;
-    if (byte >= 192 && utf8SequenceLength(byte) > idx + 1) stop -= idx + 1;
+    if (byte >= 192 && utf8SequenceLength(byte) > j + 1) stop -= j + 1;
     break;
   }
   if (stop > end && scratch[stop - 1 - end] === DIFF_CONTEXT_LINES_AFTER) stop--;
@@ -181,4 +181,4 @@ async function sliceContext(handle, scratch, matchStart, matchLen, contextLines,
     truncated: false,
   };
 }
-export { scanForContext, readCapped };
+export { readCapped, scanForContext };

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Claude in Chrome / 桌面浏览器面板的 file_upload：路径校验（网络路径、别名命名空间、读权限、凭据目录）与安全读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wn385gmf.js (47)
- * attribution: placement 47
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8nfjhq0y.js (47), chunk-z68qgrbt.js (1)
+ * attribution: placement 48
  */
 import { constants } from "fs";
 import { realpath, lstat, open, stat, readlink } from "fs/promises";
@@ -21,7 +21,7 @@ import {
   hasSuspiciousWindowsPathPattern,
   matchingRuleForInput,
   allWorkingDirectories,
-  getResolvedWorkingDirPaths,
+  getCountedWorkingDirPaths,
   pathInWorkingPath,
 } from "../permissions/filesystem.js";
 import {
@@ -51,8 +51,8 @@ import {
 } from "../errors.js";
 import { getPathsForNetworkScreen, getPathsForPermissionCheck } from "../fsOperations.js";
 import { getPlatform } from "../platform.js";
-import { getDenyRuleForTool, getAskRuleForTool } from "../permissions/permissions.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { getDenyRuleForTool, findAskRuleForTool } from "../permissions/permissions.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { foldCase_2, isNetworkRelatedPath } from "../networkPaths.js";
 import {
   classifyCredentialPath,
@@ -60,12 +60,13 @@ import {
   isInClaudeConfigDir,
 } from "../permissions/sensitivePaths.js";
 import { isReservedDeviceName } from "../windowsProfileFolders.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { isPathAllowed, isOnlyOutsideWorkingFoldersRefusal } from "../permissions/pathValidation.js";
 import { OUTSIDE_READS_BLOCKED_DENY_REASON } from "../../types/permissions.js";
 import { CCR_OAUTH_TOKEN_PATH } from "../authFileDescriptor.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wn385gmf.js:1508-1631 placement
+//@ chunk-8nfjhq0y.js:1528-1651 placement
 /**
  * --restricted 会话或"禁止读工作目录外"时判断路径是否被拒：受限模式下不在允许工作路径且内部可读检查不放行，或命中外部读阻断。
  */
@@ -80,7 +81,7 @@ function isRestrictedReadBlocked(path, permissionContext) {
     outsideReadBlocked(path, permissionContext)
   );
 }
-//@ chunk-wn385gmf.js:1631-1717 placement
+//@ chunk-8nfjhq0y.js:1651-1737 placement
 /**
  * 上传路径命中凭据名称或目录时抛出的错误类型。
  */
@@ -89,7 +90,7 @@ class CredentialPathError extends Error {
     super("the name or the place of a credential");
   }
 }
-//@ chunk-wn385gmf.js:1717-1945 placement
+//@ chunk-8nfjhq0y.js:1737-1966 placement
 /**
  * Chrome 文件上传通道的校验策略（标签、校验函数、拒绝文案与无路径说明）。
  */
@@ -104,7 +105,7 @@ var CHROME_FILE_UPLOAD_POLICY = {
   noPaths: "file_upload requires a non-empty `paths` array of files the user has shared with this session.",
   namesSource: false,
 };
-//@ chunk-wn385gmf.js:1945-2341 placement
+//@ chunk-8nfjhq0y.js:1966-2363 placement
 /**
  * 列出上传可信的暂存根目录：附件目录，远程模式或设置 CLAUDE_STAGE_FILE_ROOT 时加上暂存根（来自聊天）与输出根。
  */
@@ -134,7 +135,7 @@ async function stagingRoots(permissionContext) {
     }
   return roots;
 }
-//@ chunk-wn385gmf.js:2341-3033 placement
+//@ chunk-8nfjhq0y.js:2363-3055 placement
 async function prepareChromeFileUploadInput(
   toolName,
   args,
@@ -195,7 +196,7 @@ async function prepareChromeFileUploadInput(
         },
       };
 }
-//@ chunk-wn385gmf.js:3033-3474 placement
+//@ chunk-8nfjhq0y.js:3055-3496 placement
 async function preparePaneFileUploadInput(input, permissionContext, { hostAsksPerFile }) {
   if (isDiskless()) return UPLOAD_UNAVAILABLE_RESULT;
   if (Array.isArray(input.paths) && input.paths.length > 1)
@@ -220,7 +221,7 @@ async function preparePaneFileUploadInput(input, permissionContext, { hostAsksPe
     },
   );
 }
-//@ chunk-wn385gmf.js:3474-4057 placement
+//@ chunk-8nfjhq0y.js:3496-4079 placement
 async function passThroughChromeFileUploadInput(toolName, args, screen) {
   return routeFileUploadCalls(toolName, args, async (input) => {
     let paths = input.paths;
@@ -260,7 +261,7 @@ async function passThroughChromeFileUploadInput(toolName, args, screen) {
     };
   });
 }
-//@ chunk-wn385gmf.js:4057-5017 placement
+//@ chunk-8nfjhq0y.js:4079-5041 placement
 /**
  * 对 file_upload（含 browser_batch 中的 file_upload 子动作）调用 r 改写输入；无盘模式直接返回 s（拒绝）。
  * batch 子动作必须是带字符串名的对象、不能嵌套，伪装成 file_upload 的名字被拒。
@@ -333,44 +334,47 @@ async function routeFileUploadCalls(
     input: args,
   };
 }
-//@ chunk-wn385gmf.js:5017-5035 placement
+//@ chunk-8nfjhq0y.js:5041-5059 placement
 /**
  * 无法上传时的统一结果（带不可用原因）。
  */
-var UPLOAD_UNAVAILABLE_RESULT = {
-  error: FILE_UPLOAD_UNAVAILABLE,
-};
-//@ chunk-wn385gmf.js:5035-5121 placement
+var UPLOAD_UNAVAILABLE_RESULT; // deferred: uses BATCH_RESTRICTED_TOOLS (./common.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8nfjhq0y.js:5041", () => {
+  UPLOAD_UNAVAILABLE_RESULT = {
+    error: FILE_UPLOAD_UNAVAILABLE,
+  };
+});
+//@ chunk-8nfjhq0y.js:5059-5145 placement
 /**
  * 把引号与控制字符替换成 U+FFFD，避免提示文本被伪造。
  */
 function sanitizeForMessage(text) {
   return text.replace(/["\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "\uFFFD");
 }
-//@ chunk-wn385gmf.js:5121-5315 placement
+//@ chunk-8nfjhq0y.js:5145-5339 placement
 function notReadableUploadMessage(path) {
   return `Cannot upload "${sanitizeForMessage(path)}": only files this session is allowed to read can be uploaded. Ask the user to share the file with this session, or to add its folder with /add-dir.`;
 }
-//@ chunk-wn385gmf.js:5315-5548 placement
+//@ chunk-8nfjhq0y.js:5339-5572 placement
 function credentialPathUploadMessage(path) {
   return `Cannot upload "${sanitizeForMessage(path)}": its name or folder is one that credentials are kept under (such as .env, a .pem or .key file, or .ssh), so it is not uploaded on Claude's word alone. Tell the user it was not uploaded.`;
 }
-//@ chunk-wn385gmf.js:5548-5720 placement
+//@ chunk-8nfjhq0y.js:5572-5744 placement
 function notSharedUploadMessage(path) {
   return `Cannot upload "${sanitizeForMessage(path)}": only files this session is allowed to read can be uploaded. Ask the user to share the file or its folder with this session.`;
 }
-//@ chunk-wn385gmf.js:5720-5921 placement
+//@ chunk-8nfjhq0y.js:5744-5945 placement
 function relativeUploadPathMessage(path) {
   return `Cannot upload "${sanitizeForMessage(path)}": file_upload \`paths\` must be absolute paths as this session sees them (for example /sessions/\u2026 in a Cowork VM, or a drive-letter path on Windows).`;
 }
-//@ chunk-wn385gmf.js:5921-6009 placement
+//@ chunk-8nfjhq0y.js:5945-6034 placement
 /**
  * 构造 browser_batch 子动作名非法的错误文本。
  */
 function invalidSubActionName(name) {
   return `browser_batch sub-action name "${sanitizeForMessage(name)}" is not a valid tool name.`;
 }
-//@ chunk-wn385gmf.js:6009-7081 placement
+//@ chunk-8nfjhq0y.js:6034-7106 placement
 /**
  * 校验并读取 file_upload 的每个路径：调用 s.validate 得到真实路径与需要的摘要，按总量上限读取文件、核对摘要，
  * 把内容编码进新的输入；任一路径失败返回 {error}（凭据目录用专门文案）。
@@ -452,7 +456,7 @@ async function prepareFileUploadInput(input, permissionContext, budget, options)
     },
   };
 }
-//@ chunk-wn385gmf.js:7081-7186 placement
+//@ chunk-8nfjhq0y.js:7106-7214 placement
 async function uploadDisplayName(realPath) {
   let sessionDirReal = await realpath(sessionUploadsDir()).catch(() => {
     return;
@@ -461,7 +465,7 @@ async function uploadDisplayName(realPath) {
     ? uploadDisplayName_2(basename(realPath))
     : basename(realPath);
 }
-//@ chunk-wn385gmf.js:7186-7671 placement
+//@ chunk-8nfjhq0y.js:7214-7699 placement
 /**
  * 访问文件系统前拒绝网络路径（UNC、自动挂载）与无法核验祖先链的路径，返回绝对路径及其链。
  */
@@ -487,7 +491,7 @@ function screenNetworkPath(rawPath, permissionContext) {
     absChain: paths,
   };
 }
-//@ chunk-wn385gmf.js:7671-7933 placement
+//@ chunk-8nfjhq0y.js:7699-7961 placement
 function assertNotNetworkOrSuspicious(path, trustedNetworkDirectories) {
   if (
     isUntrustedUncPath(path, trustedNetworkDirectories) ||
@@ -503,7 +507,7 @@ function assertNotNetworkOrSuspicious(path, trustedNetworkDirectories) {
       "claudeInChrome/fileUpload: suspicious Windows path pattern rejected",
     );
 }
-//@ chunk-wn385gmf.js:7933-8218 placement
+//@ chunk-8nfjhq0y.js:7961-8246 placement
 function assertNoReadRule(paths, permissionContext, options = {}) {
   for (let checkPath of paths) {
     if (matchingRuleForInput(checkPath, permissionContext, "read", "deny", options))
@@ -518,21 +522,21 @@ function assertNoReadRule(paths, permissionContext, options = {}) {
       );
   }
 }
-//@ chunk-wn385gmf.js:8218-8241 placement
+//@ chunk-8nfjhq0y.js:8246-8269 placement
 /**
  * 上传路径的最大字符数（4096）。
  */
 var MAX_UPLOAD_PATH_CHARS = 4096;
 var MAX_PATH_ALIAS_DEPTH = 3;
 var MAX_SCREENED_PATHS = 64;
-//@ chunk-wn385gmf.js:8241-8312 placement
+//@ chunk-8nfjhq0y.js:8269-8340 placement
 /**
  * 审查单个上传路径并返回其判定结果。
  */
 async function screenUploadPath(path, permissionContext, depth = MAX_PATH_ALIAS_DEPTH, seen = new Set()) {
   return (await screenUnreadUpload(path, permissionContext, depth, seen)).judged;
 }
-//@ chunk-wn385gmf.js:8312-10450 placement
+//@ chunk-8nfjhq0y.js:8340-10482 placement
 /**
  * 审查要上传的文件路径（空白填充、过长、网络路径、别名命名空间、读权限、凭据目录），返回拒绝原因或可读句柄。
  */
@@ -573,10 +577,10 @@ async function screenUnreadUpload(path, permissionContext, depth = MAX_PATH_ALIA
     );
   if (
     getDenyRuleForTool(permissionContext, {
-      name: FILE_READ_TOOL_NAME,
+      name: READ,
     }) !== null ||
-    getAskRuleForTool(permissionContext, {
-      name: FILE_READ_TOOL_NAME,
+    findAskRuleForTool(permissionContext, {
+      name: READ,
     }) !== null
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -644,7 +648,7 @@ async function screenUnreadUpload(path, permissionContext, depth = MAX_PATH_ALIA
     linked: absChain.length > 1 || looped,
   };
 }
-//@ chunk-wn385gmf.js:10450-10494 placement
+//@ chunk-8nfjhq0y.js:10482-10527 placement
 /**
  * 判断路径是否命中凭据名称或目录。
  */
@@ -653,23 +657,23 @@ function isCredentialPath(path) {
     readable: true,
   });
 }
-//@ chunk-wn385gmf.js:10494-10609 placement
+//@ chunk-8nfjhq0y.js:10527-10643 placement
 var PASS_THROUGH_REFUSAL_NOTE =
   "a name or place reached through a link, a case- or Unicode-folded spelling, or the file before a ':stream'";
-//@ chunk-wn385gmf.js:10609-10722 placement
+//@ chunk-8nfjhq0y.js:10643-10756 placement
 function passThroughRefusal(note) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     note,
     "claudeInChrome/fileUpload: path refused by its name or place on the pass-through",
   );
 }
-//@ chunk-wn385gmf.js:10722-10831 placement
+//@ chunk-8nfjhq0y.js:10756-10865 placement
 function isAbsoluteAsSeen(judgedPath, resolvedPath) {
   if (isUncOrDevicePath(judgedPath) || isUncOrDevicePath(resolvedPath)) return true;
   if (!isAbsolute(judgedPath)) return false;
   return getPlatform() !== "windows" || /^[a-z]:[\\/]/i.test(resolvedPath);
 }
-//@ chunk-wn385gmf.js:10831-11173 placement
+//@ chunk-8nfjhq0y.js:10865-11207 placement
 /**
  * 若路径末段带 NTFS 备用数据流（name:stream），返回去掉 ":stream" 的部分（先去掉尾部的 / 和 /.）；否则返回 null。
  */
@@ -695,7 +699,7 @@ function stripStreamSuffix(path) {
   while (cursor > lastSeparator && sliced[cursor - 1] === " ") cursor -= 1;
   return sliced.slice(0, cursor);
 }
-//@ chunk-wn385gmf.js:11173-11249 placement
+//@ chunk-8nfjhq0y.js:11207-11283 placement
 /**
  * 路径不是锚定的绝对路径时抛出的错误类型。
  */
@@ -704,7 +708,7 @@ class NotAnchoredAbsolutePathError extends Error {
     super("not an anchored absolute path");
   }
 }
-//@ chunk-wn385gmf.js:11249-11406 placement
+//@ chunk-8nfjhq0y.js:11283-11440 placement
 async function realpathWithSpellings(path) {
   let resolved;
   try {
@@ -722,7 +726,7 @@ async function realpathWithSpellings(path) {
     spellings: getPathsForPermissionCheck(resolved),
   };
 }
-//@ chunk-wn385gmf.js:11406-11726 placement
+//@ chunk-8nfjhq0y.js:11440-11760 placement
 /**
  * 拒绝内核别名命名空间路径：/dev、/proc、..namedfork、:$ 类 NTFS 属性、及其他别名拼写。
  */
@@ -741,7 +745,7 @@ function assertNotAliasNamespace(path) {
       "claudeInChrome/fileUpload: kernel alias namespace path rejected on the pass-through",
     );
 }
-//@ chunk-wn385gmf.js:11726-11814 placement
+//@ chunk-8nfjhq0y.js:11760-11848 placement
 /**
  * 公共的上传路径核验（长度、通道、网络路径、读规则、凭据），失败抛错。
  */
@@ -753,7 +757,7 @@ async function assertUploadPathAllowed(absPath, realPath) {
   )
     throw new CredentialPathError();
 }
-//@ chunk-wn385gmf.js:11814-13725 placement
+//@ chunk-8nfjhq0y.js:11848-13801 placement
 /**
  * file_upload 路径的公共核验：长度上限、非暂存目录时的通道检查、网络路径、读规则、内核/设备路径或 Claude Code 凭据、Read 工具受限、外部读阻断等；
  * 返回 {absPath, realPath, pathsToCheck, sharedWithSession?}。
@@ -826,6 +830,7 @@ async function vetUploadPath(path, permissionContext) {
                 fromChat: true,
               }
             : {},
+          sessionRoot: root.kind,
         };
       }
       let sharedDigest = attachmentDigestOf(realPath);
@@ -837,16 +842,17 @@ async function vetUploadPath(path, permissionContext) {
           sharedWithSession: {
             requiredDigest: sharedDigest,
           },
+          sessionRoot: root.kind,
         };
       break;
     }
   }
   if (
     getDenyRuleForTool(permissionContext, {
-      name: FILE_READ_TOOL_NAME,
+      name: READ,
     }) !== null ||
-    getAskRuleForTool(permissionContext, {
-      name: FILE_READ_TOOL_NAME,
+    findAskRuleForTool(permissionContext, {
+      name: READ,
     }) !== null
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -872,7 +878,24 @@ async function vetUploadPath(path, permissionContext) {
     pathsToCheck,
   };
 }
-//@ chunk-wn385gmf.js:13725-14297 placement
+//@ chunk-8nfjhq0y.js:13801-13943 placement
+/**
+ * Chrome 文件上传里“会话权限不允许读该路径”的错误类型。
+ */
+let OutsideWorkingFoldersRefusal; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8nfjhq0y.js:13801", () => {
+  OutsideWorkingFoldersRefusal = class OutsideWorkingFoldersRefusal extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(checkPath) {
+      super(
+        `read not allowed: ${checkPath}`,
+        "claudeInChrome/fileUpload: path read not allowed by session permissions",
+      );
+    }
+  };
+});
+//@ chunk-8nfjhq0y.js:13943-14550 placement
 async function validateUploadPath(path, permissionContext) {
   let { absPath, realPath, pathsToCheck, sharedWithSession } = await vetUploadPath(path, permissionContext);
   if (sharedWithSession !== undefined)
@@ -887,7 +910,9 @@ async function validateUploadPath(path, permissionContext) {
     };
   }
   for (let checkPath of pathsToCheck) {
-    if (!isPathAllowed(checkPath, permissionContext, "read").allowed)
+    let result = isPathAllowed(checkPath, permissionContext, "read");
+    if (isOnlyOutsideWorkingFoldersRefusal(result)) throw new OutsideWorkingFoldersRefusal(checkPath);
+    if (!result.allowed)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `read not allowed: ${checkPath}`,
         "claudeInChrome/fileUpload: path read not allowed by session permissions",
@@ -903,7 +928,7 @@ async function validateUploadPath(path, permissionContext) {
     realPath,
   };
 }
-//@ chunk-wn385gmf.js:14297-15520 placement
+//@ chunk-8nfjhq0y.js:14550-15775 placement
 /**
  * 桌面浏览器面板的路径校验：在 vetUploadPath 基础上逐个用 isPathAllowed 判断，工作目录外的文件标记 outsideWorkingFolders / needsHostAsk，交由宿主逐个询问。
  */
@@ -972,10 +997,10 @@ async function validatePaneUploadPath(path, permissionContext, hostAsksPerFile) 
     needsHostAsk: true,
   };
 }
-//@ chunk-wn385gmf.js:15520-15654 placement
+//@ chunk-8nfjhq0y.js:15775-15909 placement
 function isInWorkingDirectory(realPath, permissionContext) {
   return Array.from(allWorkingDirectories(permissionContext))
-    .flatMap((workingDir) => getResolvedWorkingDirPaths(workingDir))
+    .flatMap((workingDir) => getCountedWorkingDirPaths(workingDir))
     .some((workingPath) =>
       pathInWorkingPath(realPath, workingPath, {
         caseFold: false,
@@ -984,7 +1009,7 @@ function isInWorkingDirectory(realPath, permissionContext) {
       }),
     );
 }
-//@ chunk-wn385gmf.js:15654-15732 placement
+//@ chunk-8nfjhq0y.js:15909-15988 placement
 /**
  * 取路径的真实值，缺失或凭据目录无权限时返回 undefined。
  */
@@ -996,7 +1021,7 @@ async function realpathOrUndefined(path) {
     throw error;
   }
 }
-//@ chunk-wn385gmf.js:15732-15824 placement
+//@ chunk-8nfjhq0y.js:15988-16082 placement
 /**
  * 判断取真实路径时的错误是否可忽略（不存在，或 CCR 凭据目录的 EACCES/EPERM）。
  */
@@ -1005,7 +1030,7 @@ function isIgnorableRealpathError(path, error) {
   let errnoCode = getErrnoCode(error);
   return path === dirname(CCR_OAUTH_TOKEN_PATH) && (errnoCode === "EACCES" || errnoCode === "EPERM");
 }
-//@ chunk-wn385gmf.js:15824-16005 placement
+//@ chunk-8nfjhq0y.js:16082-16263 placement
 async function readAtMost(handle, limit) {
   let capacity = limit + 1;
   let buf = Buffer.allocUnsafe(capacity);
@@ -1020,14 +1045,14 @@ async function readAtMost(handle, limit) {
     buf: buf.subarray(0, total),
   };
 }
-//@ chunk-wn385gmf.js:16005-16102 placement
+//@ chunk-8nfjhq0y.js:16263-16360 placement
 /**
  * 把重命名失败归类为 moved 或 fallback。
  */
 function classifyRenameFailure(error) {
   return error instanceof Error && "code" in error && error.code === "ENAMETOOLONG" ? "moved" : "fallback";
 }
-//@ chunk-wn385gmf.js:16102-16572 placement
+//@ chunk-8nfjhq0y.js:16360-16831 placement
 async function verifyHandleBinding(handle, path, stats) {
   {
     let linkedPath = null;
@@ -1048,8 +1073,8 @@ async function verifyHandleBinding(handle, path, stats) {
   if (restat === null || restat.ino !== stats.ino || restat.dev !== stats.dev) return "moved";
   return "ok";
 }
-//@ chunk-wn385gmf.js:16572-17270 placement
-async function readValidatedFileWithin(path, maxBytes) {
+//@ chunk-8nfjhq0y.js:16831-17648 placement
+async function readValidatedFileWithin(path, maxBytes, onOpen) {
   let pathStat = await lstat(path).catch(() => null);
   if (pathStat === null || !pathStat.isFile())
     return {
@@ -1079,6 +1104,17 @@ async function readValidatedFileWithin(path, maxBytes) {
       return {
         refusal: "moved",
       };
+    if (onOpen !== undefined) {
+      if (stats.size > maxBytes)
+        return {
+          refusal: "too_large",
+          size: stats.size,
+        };
+      await onOpen(handle, stats.size);
+      return {
+        buf: Buffer.alloc(0),
+      };
+    }
     if (stats.size > maxBytes)
       return {
         refusal: "too_large",
@@ -1101,7 +1137,7 @@ async function readValidatedFileWithin(path, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-wn385gmf.js:17270-17543 placement
+//@ chunk-8nfjhq0y.js:17648-17921 placement
 async function readUploadFile(path, realPath, budget, tag, errorFor) {
   let refusal = await readValidatedFileWithin(realPath, budget.remaining);
   if ("buf" in refusal) {
@@ -1119,7 +1155,7 @@ async function readUploadFile(path, realPath, budget, tag, errorFor) {
     error: uploadReadRefusalMessage(path, refusal, budget.total),
   };
 }
-//@ chunk-wn385gmf.js:17543-18636 placement
+//@ chunk-8nfjhq0y.js:17921-19014 placement
 /**
  * 把文件读取拒绝原因（非普通文件、打开失败、多硬链接、路径移动、超总量等）映射成给模型的文案。
  */
@@ -1142,7 +1178,7 @@ function uploadReadRefusalMessage(path, refusal, totalLimit = FILE_UPLOAD_MAX_TO
       return `Cannot upload "${displayPath}": failed to read file (${refusal.detail}).`;
   }
 }
-//@ chunk-wn385gmf.js:18636-19426 placement
+//@ chunk-8nfjhq0y.js:19014-19804 placement
 var FILE_MIME_BY_EXT = {
   ".pdf": "application/pdf",
   ".png": "image/png",
@@ -1171,31 +1207,32 @@ var FILE_MIME_BY_EXT = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
 };
-//@ chunk-wn385gmf.js:19426-19500 placement (2.1.88 match: guessMimeType, 1)
+//@ chunk-8nfjhq0y.js:19804-19878 placement (2.1.88 match: guessMimeType, 1)
 /**
  * 按扩展名猜 MIME（文档/图片/音视频），未知为 application/octet-stream。
  */
 function guessMimeType(filename) {
   return FILE_MIME_BY_EXT[extname(filename).toLowerCase()] ?? "application/octet-stream";
 }
-//@ chunk-wn385gmf.js:19685-19715 placement
+//@ chunk-z68qgrbt.js:868-897 placement
 /**
  * 面板上传的总字节上限（10 MiB）。
  */
 var MAX_PANE_UPLOAD_BYTES = 10485760;
 var MAX_CHROME_UPLOAD_BYTES = 134217728;
 export {
-  uploadDisplayName,
-  readValidatedFileWithin,
-  screenUnreadUpload,
-  isRestrictedReadBlocked,
-  validateUploadPath,
-  CredentialPathError,
   MAX_CHROME_UPLOAD_BYTES,
-  FILE_UPLOAD_MAX_TOTAL_BYTES,
-  prepareChromeFileUploadInput,
+  isRestrictedReadBlocked,
   verifyHandleBinding,
   preparePaneFileUploadInput,
+  FILE_UPLOAD_MAX_TOTAL_BYTES,
+  validateUploadPath,
+  uploadDisplayName,
+  prepareChromeFileUploadInput,
+  screenUnreadUpload,
+  readValidatedFileWithin,
+  CredentialPathError,
+  OutsideWorkingFoldersRefusal,
   MAX_PANE_UPLOAD_BYTES,
   passThroughChromeFileUploadInput,
 };

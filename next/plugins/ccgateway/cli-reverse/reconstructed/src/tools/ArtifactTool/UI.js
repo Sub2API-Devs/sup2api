@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：渲染 Artifact 工具结果（预览、发布、读取、评论等）；渲染 Artifact 工具调用（live-edit、preview、publish、list 等各动作）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wc0ezwp2.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2re189ca.js (17)
  * attribution: placement 17
  */
 import { basename } from "path";
@@ -113,7 +113,7 @@ import { maskScratchFolder, describeThumbnailPath } from "./thumbnails.js";
 import { WaitingLabel, RunningLabel } from "../../components/ToolStatusLabels.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { firstResultKey } from "./resultHelpers.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { renderToolUseProgressMessage } from "../WebFetchTool/UI.js";
 import { sanitizeDisplayText } from "../../services/artifacts/capabilityDeclaration.js";
 import { capResultRows } from "../../services/artifacts/artifactPeople.js";
@@ -130,7 +130,7 @@ import {
   parseContractRolloutMessage,
 } from "../../services/artifacts/contentTypes.js";
 
-//@ chunk-wc0ezwp2.js:15383-15756 placement
+//@ chunk-2re189ca.js:16588-16961 placement
 /**
  * 带图标的 artifact 链接。
  */
@@ -171,7 +171,7 @@ function ArtifactLink(props) {
   } else children = $[7];
   return children;
 }
-//@ chunk-wc0ezwp2.js:15788-15825 placement
+//@ chunk-2re189ca.js:16993-17030 placement
 /**
  * 惰性注入的渲染模块（live-edit 结果与工具调用、handlers 工具调用与结果）与单次显示行数上限。
  */
@@ -180,7 +180,7 @@ var LIVE_EDIT_TOOLUSE_MODULE = null;
 var HANDLERS_TOOLUSE_MODULE = null;
 var HANDLERS_RESULT_MODULE = null;
 var MAX_BASELINE_LINES = 8;
-//@ chunk-wc0ezwp2.js:15825-15951 placement
+//@ chunk-2re189ca.js:17030-17156 placement
 function artifactTitleForDisplay(input, slug, tag = ARTIFACT_DISPLAY_TARGET_TAG) {
   let displayTarget = input[tag];
   let title = isPlainObject(displayTarget) ? displayTarget.title : undefined;
@@ -188,7 +188,7 @@ function artifactTitleForDisplay(input, slug, tag = ARTIFACT_DISPLAY_TARGET_TAG)
     (slug !== undefined ? getShareEntry(slug)?.title : undefined) || (typeof title === "string" ? title : ""),
   );
 }
-//@ chunk-wc0ezwp2.js:15951-25974 placement
+//@ chunk-2re189ca.js:17156-27180 placement
 /**
  * 渲染 Artifact 工具调用（live-edit、preview、publish、list 等各动作）。
  */
@@ -888,7 +888,7 @@ ${roomClause}`,
     ],
   });
 }
-//@ chunk-wc0ezwp2.js:25974-26136 placement
+//@ chunk-2re189ca.js:27180-27342 placement
 function renderArtifactUseIfMeaningful(toolUse, renderOptions) {
   let input = isArtifactToolsetSplit() ? expandArtifactAction(toolUse) : toolUse;
   if (
@@ -900,14 +900,14 @@ function renderArtifactUseIfMeaningful(toolUse, renderOptions) {
     return "";
   return renderArtifactToolUse(toolUse, renderOptions);
 }
-//@ chunk-wc0ezwp2.js:26136-26163 placement
+//@ chunk-2re189ca.js:27342-27369 placement
 /**
  * 取 Artifact 展示模块。
  */
 function getArtifactDisplayModule() {
   return WaitingLabel();
 }
-//@ chunk-wc0ezwp2.js:26163-26204 placement
+//@ chunk-2re189ca.js:27369-27410 placement
 /**
  * 为某个动作生成「渲染父级 artifact 工具调用」的函数。
  */
@@ -915,14 +915,14 @@ function makeParentActionRenderer(toolName) {
   return (input, renderOptions) =>
     renderArtifactToolUse(toParentArtifactInput(toolName, input), renderOptions);
 }
-//@ chunk-wc0ezwp2.js:26204-26252 placement
+//@ chunk-2re189ca.js:27410-27458 placement
 /**
  * 按动作（comments/data/check）预生成的工具调用渲染函数。
  */
 var renderCommentsToolUse = makeParentActionRenderer("comments");
 var renderDataToolUse = makeParentActionRenderer("data");
 var renderCheckToolUse = makeParentActionRenderer("check");
-//@ chunk-wc0ezwp2.js:26252-26566 placement
+//@ chunk-2re189ca.js:27458-27772 placement
 /**
  * Artifact 发布重试中的进度提示。
  */
@@ -937,7 +937,7 @@ function renderArtifactProgress(progressMessages) {
     }),
   });
 }
-//@ chunk-wc0ezwp2.js:26566-26663 placement
+//@ chunk-2re189ca.js:27772-27869 placement
 /**
  * 判断结果是否属于 handlers 文档/结果/脚本结果。
  */
@@ -945,7 +945,7 @@ function isHandlersResultKind(result) {
   let key = firstResultKey(result);
   return key === "handlers_doc" || key === "handler_result" || key === "script_result";
 }
-//@ chunk-wc0ezwp2.js:26663-26745 placement
+//@ chunk-2re189ca.js:27869-27950 placement
 /**
  * 清洗并截断文本，超出上限时追加省略号。
  */
@@ -954,21 +954,21 @@ function sweptTruncatedText(text, max) {
   let swept = sweepAskCopy(truncated) ?? "";
   return truncated.length < text.length ? `${swept}\u2026` : swept;
 }
-//@ chunk-wc0ezwp2.js:26745-26816 placement
+//@ chunk-2re189ca.js:27950-28021 placement
 /**
  * 结果是否属于模拟器预览。
  */
 function isEmulatorPreviewResult(result) {
   return "emulatorPreview" in result && firstResultKey(result) === "emulatorPreview";
 }
-//@ chunk-wc0ezwp2.js:26816-26871 placement
+//@ chunk-2re189ca.js:28021-28076 placement
 /**
  * 结果是否属于页面预览。
  */
 function isPreviewResult(result) {
   return "preview" in result && firstResultKey(result) === "preview";
 }
-//@ chunk-wc0ezwp2.js:26871-41833 placement
+//@ chunk-2re189ca.js:28076-43035 placement
 /**
  * 渲染 Artifact 工具结果（预览、发布、读取、评论等）。
  */
@@ -1000,7 +1000,7 @@ function renderArtifactResult(result, options, renderOpts) {
       widths: result.preview.widths.slice(0, MAX_PREVIEW_WIDTHS),
       themes: result.preview.themes.slice(0, 2).map((theme) => truncateToLength(theme, 32)),
     };
-    let capturedCount = count(preview.shots, (shot) => shot.error === undefined);
+    let capturedCount = countWhere(preview.shots, (shot) => shot.error === undefined);
     let filtered = preview.issues.filter((issue) => issue.kind !== "note");
     let filtered_2 = preview.issues.filter((issue) => issue.kind === "note");
     let issueTotal = filtered.length + (preview.issuesDropped ?? 0);
@@ -1328,7 +1328,7 @@ function renderArtifactResult(result, options, renderOpts) {
   if ("asset_uploads" in result) {
     let assetUploads = isPlainObject(result.asset_uploads) ? result.asset_uploads : {};
     let { rows } = capResultRows(assetUploads.results, MAX_UPLOAD_FILE_PATHS);
-    let uploadedCount = count(rows, (row) => row.status === "uploaded");
+    let uploadedCount = countWhere(rows, (row) => row.status === "uploaded");
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -1415,7 +1415,7 @@ function renderArtifactResult(result, options, renderOpts) {
     let files = isPlainObject(result.files_read) ? result.files_read.files : undefined;
     let filesCount = Array.isArray(files) ? files.length : undefined;
     let filesArr = Array.isArray(files)
-      ? count(files, (file) => isPlainObject(file) && "saved_to" in file)
+      ? countWhere(files, (file) => isPlainObject(file) && "saved_to" in file)
       : 0;
     let savedDir = isPlainObject(result.files_read) ? result.files_read.saved_dir : undefined;
     let savedNote =
@@ -1518,12 +1518,12 @@ function renderArtifactResult(result, options, renderOpts) {
   if ("watches" in result) {
     let { watching, stopped } = splitWatchRows(result.watches);
     let arms = result.arms ?? [];
-    let armCount = count(
+    let armCount = countWhere(
       arms,
       (arm) => arm.rail === undefined && (arm.state === "arming" || arm.state === "backing_off"),
     );
-    let armingCount = count(arms, (arm) => arm.rail !== undefined && arm.state === "arming");
-    let failedCount = count(arms, (arm) => arm.state === "failed" || arm.state === "ended");
+    let armingCount = countWhere(arms, (arm) => arm.rail !== undefined && arm.state === "arming");
+    let failedCount = countWhere(arms, (arm) => arm.state === "failed" || arm.state === "ended");
     let joined = [
       armCount > 0 ? `${armCount} connecting` : "",
       armingCount > 0 ? `${armingCount} registering` : "",
@@ -1532,7 +1532,7 @@ function renderArtifactResult(result, options, renderOpts) {
       .filter((line) => line !== "")
       .join(", ");
     let rooms = Array.isArray(result.rooms) ? result.rooms : [];
-    let roomFailCount = count(rooms, (room) => room?.connected !== true);
+    let roomFailCount = countWhere(rooms, (room) => room?.connected !== true);
     let armLine =
       rooms.length > 0
         ? ` \xB7 ${rooms.length} artifact ${plural(rooms.length, "room")} joined${roomFailCount > 0 ? ` (${roomFailCount} reconnecting)` : ""}`
@@ -1617,7 +1617,7 @@ function renderArtifactResult(result, options, renderOpts) {
       : [];
     if (typeFiles.length > 0) {
       let fileCount = typeFiles.length;
-      let readOkCount = count(typeFiles, (entry) => entry.unread === undefined);
+      let readOkCount = countWhere(typeFiles, (entry) => entry.unread === undefined);
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default_2(Text, {
           dimColor: true,
@@ -1813,7 +1813,7 @@ function renderArtifactResult(result, options, renderOpts) {
     }),
   });
 }
-//@ chunk-wc0ezwp2.js:41833-42067 placement
+//@ chunk-2re189ca.js:43035-43269 placement
 var WRITE_FILE_FIRST_HINT = "content must first be written to a file";
 var TOOL_USE_ERROR_OPEN = "<tool_use_error>";
 var TOOL_USE_ERROR_CLOSE = "</tool_use_error>";
@@ -1843,7 +1843,7 @@ ${ARTIFACT_LOGIN_BEFORE_SHAPE_NOTE}
     ends: false,
   },
 ];
-//@ chunk-wc0ezwp2.js:42067-42310 placement
+//@ chunk-2re189ca.js:43269-43512 placement
 function policyUnobtainedErrorFor(text) {
   let answer = heldArtifactPolicyFetchAnswer();
   if (answer === null) return null;
@@ -1866,7 +1866,7 @@ function policyUnobtainedErrorFor(text) {
   }
   return null;
 }
-//@ chunk-wc0ezwp2.js:42310-43792 placement
+//@ chunk-2re189ca.js:43512-44994 placement
 /**
  * 渲染 Artifact 工具错误。
  */

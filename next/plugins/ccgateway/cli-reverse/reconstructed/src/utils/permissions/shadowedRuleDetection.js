@@ -3,28 +3,28 @@
  *
  * 检测被整工具 deny/ask 规则遮蔽的不可达 allow 规则并给出修复建议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/shadowedRuleDetection.ts
- * pieces: chunk-p2qwpk2k.js (6)
+ * pieces: chunk-h5wy8vq5.js (6)
  * attribution: fingerprint 5, file-last-pair 1
  */
 import {
   permissionRuleSourceDisplayString,
   getAllowRules,
-  getAskRules,
-  getDenyRules,
+  askedBashRules,
+  deniedBashRules,
 } from "./permissions.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 
-//@ chunk-p2qwpk2k.js:20259-20340 fingerprint (2.1.88 match: isSharedSettingSource, 1)
+//@ chunk-h5wy8vq5.js:21378-21459 fingerprint (2.1.88 match: isSharedSettingSource, 1)
 function isSharedSettingSource(source) {
   return source === "projectSettings" || source === "policySettings" || source === "command";
 }
-//@ chunk-p2qwpk2k.js:20340-20369 file-last-pair
+//@ chunk-h5wy8vq5.js:21459-21488 file-last-pair
 function formatSource(source) {
   return permissionRuleSourceDisplayString(source);
 }
-//@ chunk-p2qwpk2k.js:20369-20640 fingerprint (2.1.88 match: generateFixSuggestion, 1)
+//@ chunk-h5wy8vq5.js:21488-21759 fingerprint (2.1.88 match: generateFixSuggestion, 1)
 function generateFixSuggestion(shadowType, shadowingRule, shadowedRule) {
   let shadowingSource = formatSource(shadowingRule.source);
   let shadowedSource = formatSource(shadowedRule.source);
@@ -33,7 +33,7 @@ function generateFixSuggestion(shadowType, shadowingRule, shadowedRule) {
     return `Remove the "${toolName}" deny rule from ${shadowingSource}, or remove the specific allow rule from ${shadowedSource}`;
   return `Remove the "${toolName}" ask rule from ${shadowingSource}, or remove the specific allow rule from ${shadowedSource}`;
 }
-//@ chunk-p2qwpk2k.js:20640-20964 fingerprint (2.1.88 match: isAllowRuleShadowedByAskRule, 1)
+//@ chunk-h5wy8vq5.js:21759-22083 fingerprint (2.1.88 match: isAllowRuleShadowedByAskRule, 1)
 /**
  * 带内容 allow 规则是否被同工具整工具 ask 规则遮蔽；沙箱自动放行时只认 projectSettings/policySettings/command 来源的 ask。
  */
@@ -62,7 +62,7 @@ function isAllowRuleShadowedByAskRule(allowRule, askRules, options) {
     shadowType: "ask",
   };
 }
-//@ chunk-p2qwpk2k.js:20964-21212 fingerprint (2.1.88 match: isAllowRuleShadowedByDenyRule, 1)
+//@ chunk-h5wy8vq5.js:22083-22331 fingerprint (2.1.88 match: isAllowRuleShadowedByDenyRule, 1)
 function isAllowRuleShadowedByDenyRule(allowRule, denyRules) {
   let { toolName, ruleContent } = allowRule.ruleValue;
   if (ruleContent === undefined)
@@ -82,15 +82,15 @@ function isAllowRuleShadowedByDenyRule(allowRule, denyRules) {
     shadowType: "deny",
   };
 }
-//@ chunk-p2qwpk2k.js:21212-21751 fingerprint (2.1.88 match: detectUnreachableRules, 1)
+//@ chunk-h5wy8vq5.js:22331-22870 fingerprint (2.1.88 match: detectUnreachableRules, 1)
 /**
  * 检测不可达的 allow 规则：带内容的 allow 规则若同工具存在整工具 deny（被拦）或整工具 ask（被遮蔽；Bash 在沙箱自动放行开启时只有共享来源的 ask 才算）则列出，附原因和修复建议。
  */
 function detectUnreachableRules(context, options) {
   let unreachable = [];
   let allowRules = getAllowRules(context);
-  let askRules = getAskRules(context);
-  let denyRules = getDenyRules(context);
+  let askRules = askedBashRules(context);
+  let denyRules = deniedBashRules(context);
   for (let allowRule of allowRules) {
     let denyResult = isAllowRuleShadowedByDenyRule(allowRule, denyRules);
     if (denyResult.shadowed) {

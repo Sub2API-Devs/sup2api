@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：结构化 IO（stream-json）协议常量、控制请求子类型、stdin 行计数与超限处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-na0b3c5q.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1m58gz0q.js (23)
  * attribution: placement 23
  */
 import { UiClientAnswerableRequestSchema } from "../entrypoints/sdk/uiControlSchemas.js";
@@ -30,22 +30,22 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { ZodError } from "../../vendor/zod/v4/classic/errors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-na0b3c5q.js:2375-2425 placement
+//@ chunk-1m58gz0q.js:2504-2554 placement
 var isKnownControlSubtype = (request) =>
   UiClientAnswerableRequestSchema().options.some((option) => option === request.subtype);
-//@ chunk-na0b3c5q.js:2425-2512 placement
+//@ chunk-1m58gz0q.js:2554-2641 placement
 var UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-//@ chunk-na0b3c5q.js:2512-2576 placement
+//@ chunk-1m58gz0q.js:2641-2705 placement
 function matchRequestId(uuid) {
   return typeof uuid === "string" && UUID_PATTERN.test(uuid) ? uuid : undefined;
 }
-//@ chunk-na0b3c5q.js:2576-4383 placement
+//@ chunk-1m58gz0q.js:2705-4512 placement
 /**
  * 已知的 control_request 子类型名单（interrupt、can_use_tool、initialize、set_model、get_usage 等），用于校验与分类。
  */
 var CONTROL_REQUEST_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CONTROL_REQUEST_SUBTYPE_SET;
-deferInit("chunk-na0b3c5q.js:2576", () => {
+deferInit("chunk-1m58gz0q.js:2705", () => {
   CONTROL_REQUEST_SUBTYPES = [
     "interrupt",
     "can_use_tool",
@@ -148,17 +148,17 @@ deferInit("chunk-na0b3c5q.js:2576", () => {
   ];
   CONTROL_REQUEST_SUBTYPE_SET = new Set(CONTROL_REQUEST_SUBTYPES);
 });
-//@ chunk-na0b3c5q.js:4383-4446 placement
+//@ chunk-1m58gz0q.js:4512-4575 placement
 function knownSubtypeOrUndefined(subtype) {
   return typeof subtype === "string" && CONTROL_REQUEST_SUBTYPE_SET.has(subtype) ? subtype : undefined;
 }
-//@ chunk-na0b3c5q.js:4446-4488 placement
+//@ chunk-1m58gz0q.js:4575-4618 placement
 function flagKey(prefix, value) {
   return {
     [`${prefix}_${value}`]: true,
   };
 }
-//@ chunk-na0b3c5q.js:4488-5055 placement
+//@ chunk-1m58gz0q.js:4618-5186 placement
 function permissionResponseTelemetry(response) {
   let updatedPermissions = Array.isArray(response?.updatedPermissions) ? response.updatedPermissions : [];
   let kind =
@@ -192,17 +192,17 @@ function permissionResponseTelemetry(response) {
     }),
   };
 }
-//@ chunk-na0b3c5q.js:5055-5110 placement
+//@ chunk-1m58gz0q.js:5186-5241 placement
 function elapsedMs(startedAt) {
   return Math.round(performance.now() - startedAt);
 }
-//@ chunk-na0b3c5q.js:5110-5159 placement
+//@ chunk-1m58gz0q.js:5241-5290 placement
 function configProbeEnv() {
   return env.CLAUDE_CODE_CONFIG_PROBE;
 }
-//@ chunk-na0b3c5q.js:5159-5170 placement
+//@ chunk-1m58gz0q.js:5290-5301 placement
 var MAX_BUFFERED_STDIN_LINES = 100;
-//@ chunk-na0b3c5q.js:5170-5694 placement
+//@ chunk-1m58gz0q.js:5301-5825 placement
 function parseIntEnv(options, value) {
   let maxLineBytes = ENV_PARSERS.int({
     min: 1,
@@ -223,7 +223,7 @@ function parseIntEnv(options, value) {
     maxLineBytes,
   });
 }
-//@ chunk-na0b3c5q.js:5694-7948 placement
+//@ chunk-1m58gz0q.js:5825-8079 placement
 /**
  * 统计 stream-json 输入行数与大小、记录首个块，在超限时停止并上报。
  */
@@ -346,7 +346,7 @@ class StdinLineCounter {
     this.exitHook = registerCleanup(() => this.releaseOrLog());
   }
 }
-//@ chunk-na0b3c5q.js:7948-8022 placement
+//@ chunk-1m58gz0q.js:8079-8153 placement
 function dialogSourceAttr(dialogKind, payload) {
   let source = dialogSourceOf(dialogKind, payload);
   return source === undefined
@@ -355,7 +355,7 @@ function dialogSourceAttr(dialogKind, payload) {
         dialog_source: shortHash(source),
       };
 }
-//@ chunk-na0b3c5q.js:8022-8331 placement
+//@ chunk-1m58gz0q.js:8153-8498 placement
 /**
  * stream-json 协议常量：默认/长控制请求超时、需要刷新令牌的子类型、OAuth 令牌环境变量名、SDK 停滞超时、MCP 消息超时、SDK schema 抽样率与长度上限、设置 JSON schema 及最大行字符数。
  */
@@ -364,6 +364,7 @@ var HOST_AUTH_REFRESH_TIMEOUT_MS;
 var CONTROL_REQUEST_LONG_TIMEOUT_MS;
 var TOKEN_REFRESH_SUBTYPES;
 var OAUTH_TOKEN_ENV_NAMES;
+var CLAUDE_CODE_PROGRAM_USE_CASE_ID;
 var SDK_STALL_TIMEOUT_MS;
 var MCP_MESSAGE_TIMEOUT_MS;
 var SDK_SCHEMA_SAMPLE_RATE;
@@ -371,7 +372,7 @@ var MAX_SAMPLED_SDK_FRAME_CHARS;
 var SDK_SCHEMA_CHECK_INTERVAL_MS;
 var SETTINGS_JSON_SCHEMA;
 var DEFAULT_MAX_LINE_CHARS;
-deferInit("chunk-na0b3c5q.js:8022", () => {
+deferInit("chunk-1m58gz0q.js:8153", () => {
   CONTROL_TIMEOUTS = 30000;
   HOST_AUTH_REFRESH_TIMEOUT_MS = 30000;
   CONTROL_REQUEST_LONG_TIMEOUT_MS = 45000;
@@ -385,6 +386,7 @@ deferInit("chunk-na0b3c5q.js:8022", () => {
     "CLAUDE_CODE_OAUTH_TOKEN",
     "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN",
   ]);
+  CLAUDE_CODE_PROGRAM_USE_CASE_ID = "CLAUDE_CODE_PROGRAM_USE_CASE_ID";
   SDK_STALL_TIMEOUT_MS = 300000;
   MCP_MESSAGE_TIMEOUT_MS = 70000;
   SDK_SCHEMA_SAMPLE_RATE = 0.01;
@@ -393,16 +395,16 @@ deferInit("chunk-na0b3c5q.js:8022", () => {
   SETTINGS_JSON_SCHEMA = DoctorLazy(() => generateSettingsJSONSchema(StdoutMessageSchema()));
   DEFAULT_MAX_LINE_CHARS = 268435456;
 });
-//@ chunk-na0b3c5q.js:8331-8617 placement
+//@ chunk-1m58gz0q.js:8498-8784 placement
 function inputTooLargeError(maxLineChars) {
   return `Error: stream-json input carried over ${Math.round(maxLineChars / 1024 / 1024)}M characters with no newline. Each stream-json message must be a single newline-terminated JSON line: either the producer is not newline-terminating its messages, or one message exceeded this budget.`;
 }
-//@ chunk-na0b3c5q.js:8617-8667 placement
+//@ chunk-1m58gz0q.js:8784-8834 placement
 var STDIN_LIMITS = 64;
 var MAX_STDIN_CHARS_PER_LINE = 1048576;
 var CONTROL_RESPONSE_TYPE = '"control_response"';
 var MAX_LIVE_DEVICE_REQUESTS = 512;
-//@ chunk-na0b3c5q.js:8667-8840 placement
+//@ chunk-1m58gz0q.js:8834-9007 placement
 function parseControlResponse(value) {
   let parsed = hookJSONOutputSchema().safeParse(value);
   if (!parsed.success) return null;
@@ -411,14 +413,14 @@ function parseControlResponse(value) {
     ? null
     : parsed.data;
 }
-//@ chunk-na0b3c5q.js:8840-8955 placement
+//@ chunk-1m58gz0q.js:9007-9121 placement
 function truncatedErrorText(text) {
   let safe = sanitizeDisplayText(truncateToLength(text, 4096), {
     maxCodeUnits: 512,
   });
   return text.length > 512 ? `${safe}\u2026 [${text.length} chars total]` : safe;
 }
-//@ chunk-na0b3c5q.js:8955-9057 placement
+//@ chunk-1m58gz0q.js:9121-9222 placement
 function errorFieldText(error) {
   return typeof error === "string"
     ? sanitizeDisplayText(truncateToLength(error, 4096), {
@@ -426,19 +428,19 @@ function errorFieldText(error) {
       })
     : "a non-string error field";
 }
-//@ chunk-na0b3c5q.js:9057-9233 placement
+//@ chunk-1m58gz0q.js:9222-9398 placement
 function deliveryOutcome(delivery, uploadState) {
   if (delivery === "delivered" || uploadState === "accepted") return "delivered";
   if (delivery === "indeterminate" || uploadState === "indeterminate") return "indeterminate";
   return uploadState === "sending" ? "sending" : "queued";
 }
-//@ chunk-na0b3c5q.js:9233-9317 placement
+//@ chunk-1m58gz0q.js:9398-9482 placement
 function subtypeOf(request) {
   return typeof request === "object" && request !== null && "subtype" in request
     ? request.subtype
     : undefined;
 }
-//@ chunk-na0b3c5q.js:9317-9479 placement
+//@ chunk-1m58gz0q.js:9482-9644 placement
 function normalizeDeliveryState(delivery) {
   switch (delivery) {
     case "delivered":
@@ -451,7 +453,7 @@ function normalizeDeliveryState(delivery) {
       return "indeterminate";
   }
 }
-//@ chunk-na0b3c5q.js:9479-9613 placement
+//@ chunk-1m58gz0q.js:9644-9778 placement
 function classifyStreamError(error, signal) {
   if (error instanceof StreamClosedAbortError) return "stream_closed";
   if (error instanceof ZodError) return "parse_failed";
@@ -473,6 +475,7 @@ export {
   errorFieldText,
   isKnownControlSubtype,
   OAUTH_TOKEN_ENV_NAMES,
+  CLAUDE_CODE_PROGRAM_USE_CASE_ID,
   TOKEN_REFRESH_SUBTYPES,
   subtypeOf,
   truncatedErrorText,

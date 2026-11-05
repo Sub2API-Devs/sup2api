@@ -3,9 +3,9 @@
  *
  * 会话工具服务：图片重编码、结果大小、关闭原因（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-012rhzq5.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3hjq2hdt.js (29)
  * attribution: placement 29
  */
 import {
@@ -76,7 +76,7 @@ import { primeWindowsPlatform, isWindowsOrPowerShellHost } from "../../utils/pla
 import { getDeviceBindingRefusal } from "../../bridge/deviceBindingPolicy.js";
 import { onComplianceTaintsChanged } from "../../services/policyLimits/complianceTaints.js";
 
-//@ chunk-012rhzq5.js:15691-15767 placement
+//@ chunk-3hjq2hdt.js:16900-16976 placement
 function isViolinFinetunerEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_finetuner", false) === true;
@@ -84,21 +84,21 @@ function isViolinFinetunerEnabled() {
     return false;
   }
 }
-//@ chunk-012rhzq5.js:15767-15840 placement (2.1.88 match: _temp7, 1)
+//@ chunk-3hjq2hdt.js:16976-17049 placement (2.1.88 match: _temp7, 1)
 function backgroundSwitchedOffStub(
   readSettings = (path, options) => parseSettingsFileUncached(path, undefined, options),
   readPolicy = () => getSettingsForSource("policySettings"),
 ) {
   return false;
 }
-//@ chunk-012rhzq5.js:15840-15865 placement
+//@ chunk-3hjq2hdt.js:17049-17074 placement
 /**
  * 服务结果图片重编码的参数：最多 4 轮、每轮目标压缩到 9 成、小于 16 KB 的图片不再处理。
  */
 var MAX_IMAGE_REENCODE_ROUNDS = 4;
 var IMAGE_SHRINK_RATIO = 0.9;
 var MIN_IMAGE_BYTES_FOR_REENCODE = 16384;
-//@ chunk-012rhzq5.js:15865-16667 placement
+//@ chunk-3hjq2hdt.js:17074-17876 placement
 async function reencodeServedImage(result, limitBytes) {
   let size = byteLengthOf(result);
   if (size <= limitBytes) return result;
@@ -151,11 +151,11 @@ async function reencodeServedImage(result, limitBytes) {
     );
   return current;
 }
-//@ chunk-012rhzq5.js:16667-16714 placement
+//@ chunk-3hjq2hdt.js:17876-17923 placement
 function base64ByteLength(base64) {
   return Math.floor((base64.length * 3) / 4);
 }
-//@ chunk-012rhzq5.js:16714-17006 placement (2.1.88 match: buildImageToolResult, 0.905)
+//@ chunk-3hjq2hdt.js:17923-18215 placement (2.1.88 match: buildImageToolResult, 0.904)
 /**
  * （切分错误）从 image 块（MCP 的 data/mimeType 或 Anthropic 的 base64 source）取 {data, mediaType}。
  */
@@ -179,7 +179,7 @@ function extractImageData(block) {
     };
   return;
 }
-//@ chunk-012rhzq5.js:17006-17223 placement
+//@ chunk-3hjq2hdt.js:18215-18432 placement
 /**
  * （切分错误）递归统计对象中每张图片 data 出现的次数。
  */
@@ -199,7 +199,7 @@ function countImageCopies(value, images) {
   }
   Object.values(value).forEach((child) => countImageCopies(child, images));
 }
-//@ chunk-012rhzq5.js:17223-17535 placement
+//@ chunk-3hjq2hdt.js:18432-18744 placement
 /**
  * 把 MCP 工具结果中引用的图片数据按映射表替换为真实数据与 mimeType（含 structuredContent/_meta 深层）。
  */
@@ -225,11 +225,11 @@ function resolveMcpResultImages(result, imagesByRef) {
     }),
   };
 }
-//@ chunk-012rhzq5.js:17535-17578 placement
+//@ chunk-3hjq2hdt.js:18744-18787 placement
 function resolveImagesDeep(value, imagesByRef) {
   return import_mapValues(value, (item) => resolveImageBlockDeep(item, imagesByRef));
 }
-//@ chunk-012rhzq5.js:17578-17873 placement (2.1.88 match: normalizeImageBlocks, 0.869)
+//@ chunk-3hjq2hdt.js:18787-19082 placement (2.1.88 match: normalizeImageBlocks, 0.867)
 function resolveImageBlockDeep(value, imagesByRef) {
   if (Array.isArray(value)) return value.map((block) => resolveImageBlockDeep(block, imagesByRef));
   if (!isObjectLike(value)) return value;
@@ -252,11 +252,11 @@ function resolveImageBlockDeep(value, imagesByRef) {
         };
   return resolveImagesDeep(value, imagesByRef);
 }
-//@ chunk-012rhzq5.js:17873-17925 placement
+//@ chunk-3hjq2hdt.js:19082-19134 placement
 function isObjectLike(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-012rhzq5.js:17925-18000 placement
+//@ chunk-3hjq2hdt.js:19134-19209 placement
 var DEFAULT_CALL_AGE_WINDOW_MS = 30000;
 var BACKGROUND_WATCH_INTERVAL_MS = 5000;
 var BACKGROUND_BOUND_RECHECK_MS = 20000;
@@ -264,7 +264,7 @@ var OUTCOME_QUERY_AGE_WINDOW_MS = 5000;
 var NOT_SERVED_HERE_TEXT = "not served here";
 var REPOSITORY_TRUST_WAIT_MS = 3000;
 var PLUMBING_CALL_AGE_WINDOW_MS = 5000;
-//@ chunk-012rhzq5.js:18000-18392 placement
+//@ chunk-3hjq2hdt.js:19209-19601 placement
 /**
  * 上报远程 plumbing 调用遥测：结果、名称哈希、请求 id 哈希等。
  */
@@ -290,7 +290,7 @@ function logPlumbingCallTelemetry(outcome, tool, requestId, attestation) {
     logError(withTelemetryMessage(toError(error), "session serving: logging a plumbing call threw"));
   }
 }
-//@ chunk-012rhzq5.js:18392-18517 placement
+//@ chunk-3hjq2hdt.js:19601-19726 placement
 function safeJudgeSender(attestationStatus) {
   try {
     return attestationFor(attestationStatus);
@@ -301,7 +301,7 @@ function safeJudgeSender(attestationStatus) {
     return;
   }
 }
-//@ chunk-012rhzq5.js:18517-18812 placement
+//@ chunk-3hjq2hdt.js:19726-20021 placement
 function unattestedConsentText(reason) {
   switch (reason) {
     case "nothing_to_mark":
@@ -313,7 +313,7 @@ function unattestedConsentText(reason) {
       return REMOTE_TOOLS_CONSENT_TEXT["repository_trust.served_calls.unattested"];
   }
 }
-//@ chunk-012rhzq5.js:18812-26945 placement
+//@ chunk-3hjq2hdt.js:20021-28208 placement
 /**
  * 会话工具服务：在 tengu_remote_tool_serving 开启时为云会话提供本机工具
  */
@@ -730,6 +730,8 @@ var createSessionToolServing = (options) => {
             unattested,
             untrustedRepositories,
             modeStamp,
+            sharedRequest: request.sharedRequest,
+            toolUseId: request.tool_use_id,
           },
         )
           .then((result) => {
@@ -936,11 +938,11 @@ var buildAnnouncePayload = (servedTools, instanceId, workerEpoch) => ({
   passthrough: servedTools.passthrough ?? [],
   plumbing: servedTools.plumbing,
 });
-//@ chunk-012rhzq5.js:26945-27016 placement
+//@ chunk-3hjq2hdt.js:28208-28279 placement
 function stripServingDeps({ servedMcpTools, servedMcpWireArguments, ...rest }) {
   return rest;
 }
-//@ chunk-012rhzq5.js:27016-27186 placement
+//@ chunk-3hjq2hdt.js:28279-28449 placement
 function createAnswerDeduper() {
   let inFlight = new Map();
   return {
@@ -954,7 +956,7 @@ function createAnswerDeduper() {
     },
   };
 }
-//@ chunk-012rhzq5.js:27186-27250 placement
+//@ chunk-3hjq2hdt.js:28449-28513 placement
 async function checkReencodedResultSize(target, callId, result) {
   return checkServedResultSize(
     target,
@@ -962,7 +964,7 @@ async function checkReencodedResultSize(target, callId, result) {
     await reencodeServedImage(withCallIdInEnvelope(callId, result), servedAnswerLimitBytes()),
   );
 }
-//@ chunk-012rhzq5.js:27250-27434 placement
+//@ chunk-3hjq2hdt.js:28513-28697 placement
 function withCallIdInEnvelope(callId, result) {
   let callResult = readCallResult(result);
   if (callResult.envelope.status !== "present" || callResult.envelope.envelope.call_id !== undefined)
@@ -975,7 +977,7 @@ function withCallIdInEnvelope(callId, result) {
     content: callResult.content,
   });
 }
-//@ chunk-012rhzq5.js:27434-28148 placement
+//@ chunk-3hjq2hdt.js:28697-29411 placement
 function checkServedResultSize(target, callId, result) {
   let size = byteLengthOf(result);
   let limit = servedAnswerLimitBytes();
@@ -1008,7 +1010,7 @@ function checkServedResultSize(target, callId, result) {
     ],
   });
 }
-//@ chunk-012rhzq5.js:28148-28213 placement
+//@ chunk-3hjq2hdt.js:29411-29476 placement
 function errorTextResult(text) {
   return {
     content: [
@@ -1020,11 +1022,11 @@ function errorTextResult(text) {
     isError: true,
   };
 }
-//@ chunk-012rhzq5.js:28213-28265 placement
+//@ chunk-3hjq2hdt.js:29476-29528 placement
 function formatMegabytes(bytes) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
-//@ chunk-012rhzq5.js:28265-28611 placement
+//@ chunk-3hjq2hdt.js:29528-29874 placement
 /**
  * 服务调用抛异常时构造内部错误结果，并记录调试日志与错误。
  */
@@ -1054,7 +1056,7 @@ function internalErrorCallResult(description, toolUseId, error) {
     ],
   });
 }
-//@ chunk-012rhzq5.js:28611-30566 placement
+//@ chunk-3hjq2hdt.js:29874-31829 placement
 function remoteToolServingOffReason({
   owner,
   cloudClient,
@@ -1203,14 +1205,14 @@ function remoteToolServingOffReason({
     onRevoked: watchRevocation,
   };
 }
-//@ chunk-012rhzq5.js:30566-30622 placement
+//@ chunk-3hjq2hdt.js:31829-31885 placement
 /**
  * 导出函数 `deviceBindingOffReason`：返回 getDeviceBindingRefusal() ?? (isSessionChannelDisabled() ? "channel_off" : void 0)。
  */
 function deviceBindingOffReason() {
   return getDeviceBindingRefusal() ?? (isSessionChannelDisabled() ? "channel_off" : undefined);
 }
-//@ chunk-012rhzq5.js:30622-30701 placement
+//@ chunk-3hjq2hdt.js:31885-31964 placement
 function servingOffReasonNow(cloudClient) {
   return (
     getDeviceBindingRefusal() ??
@@ -1221,7 +1223,7 @@ function servingOffReasonNow(cloudClient) {
       : "flag_off")
   );
 }
-//@ chunk-012rhzq5.js:30701-31007 placement
+//@ chunk-3hjq2hdt.js:31964-32270 placement
 /**
  * 监听合规与开关变化，必要时撤销会话服务。
  */
@@ -1254,7 +1256,7 @@ function watchServingRevocation(
     return fire;
   };
 }
-//@ chunk-012rhzq5.js:31007-31071 placement
+//@ chunk-3hjq2hdt.js:32270-32334 placement
 function ownerUnlessServingOff(owner, cloudClient, stillBound) {
   return () =>
     servingOffReasonNow(cloudClient) === undefined && stillBound()

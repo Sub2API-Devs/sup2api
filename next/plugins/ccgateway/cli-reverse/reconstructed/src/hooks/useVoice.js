@@ -3,10 +3,10 @@
  *
  * 语音输入引擎：录音、电平、语音转写连接（STT）、静音超时、错误提示与语言规范化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVoice.ts
- * pieces: chunk-0777tkjc.js (2), chunk-a658aeqp.js (13)
- * attribution: fingerprint 4, sole-consumer 6, affinity 1, layout 1, placement 3
+ * pieces: chunk-1vwpwerm.js (14), chunk-ndkzc8d3.js (2)
+ * attribution: sole-consumer 7, affinity 1, fingerprint 4, layout 1, placement 3
  */
 import { basename } from "path";
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -15,14 +15,14 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytic
 import { createSignal } from "../utils/signal.js";
 import { logForDebugging } from "../utils/debug.js";
 import { toError } from "../utils/errors.js";
-import { logEvent } from "../services/analytics/index.js";
 import { logError } from "../utils/log.js";
-import { splitIdentifier, GLOBAL_KEYTERMS, fileNameWords } from "../services/voiceKeyterms.js";
-import { isStorageV5Enabled } from "../utils/hoverRest.js";
+import { logEvent } from "../services/analytics/index.js";
+import { splitIdentifier, GLOBAL_KEYTERMS } from "../services/voiceKeyterms.js";
 import { sleep } from "../utils/sleep.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { getSystemLocaleLanguage } from "../utils/intl.js";
 import { localeOrNonconforming } from "../services/analytics/metadata.js";
+import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { getProjectRoot } from "../bootstrap/state.js";
 import { getBranch } from "../utils/git.js";
 import { useHost } from "../context/session.js";
@@ -37,7 +37,7 @@ import {
 } from "../services/voiceStreamSTT.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 
-//@ chunk-0777tkjc.js:1031-2049 fingerprint (2.1.88 match: LANGUAGE_NAME_TO_CODE, 1)
+//@ chunk-ndkzc8d3.js:1033-2051 fingerprint (2.1.88 match: LANGUAGE_NAME_TO_CODE, 1)
 /**
  * 语言名（含本地写法）到 STT 语言代码的映射。
  */
@@ -111,7 +111,7 @@ var SUPPORTED_STT_LANGUAGES = new Set([
   "sv",
   "no",
 ]);
-//@ chunk-0777tkjc.js:2049-2285 fingerprint (2.1.88 match: normalizeLanguageForSTT, 1)
+//@ chunk-ndkzc8d3.js:2051-2287 fingerprint (2.1.88 match: normalizeLanguageForSTT, 1)
 function normalizeLanguageForSTT(language) {
   if (!language)
     return {
@@ -141,12 +141,12 @@ function normalizeLanguageForSTT(language) {
     fellBackFrom: language,
   };
 }
-//@ chunk-a658aeqp.js:5030-5034 sole-consumer
+//@ chunk-1vwpwerm.js:5366-5370 sole-consumer
 init_react_production();
-//@ chunk-a658aeqp.js:5034-5048 sole-consumer
+//@ chunk-1vwpwerm.js:5370-5384 sole-consumer
 var VOICE_MAX_RECORDING_MS = 1e4;
 var VOICE_MAX_ATTEMPTS = 3;
-//@ chunk-a658aeqp.js:5048-5347 sole-consumer
+//@ chunk-1vwpwerm.js:5384-5683 sole-consumer
 /**
  * 语音模块句柄与早期失败记录（用于熔断）。
  */
@@ -165,21 +165,21 @@ class VoiceSessionState {
     this.lastExpectedHint = null;
   }
 }
-//@ chunk-a658aeqp.js:5347-5370 sole-consumer
+//@ chunk-1vwpwerm.js:5683-5706 sole-consumer
 var voiceServiceSlot = new HostScoped(() => new VoiceSessionState());
-//@ chunk-a658aeqp.js:5370-5450 sole-consumer
+//@ chunk-1vwpwerm.js:5706-5786 sole-consumer
 function connectionFailureReason(code) {
   return `voice_transcription_connection_failed_${code ?? "no_response"}`;
 }
-//@ chunk-a658aeqp.js:5450-5466 sole-consumer
+//@ chunk-1vwpwerm.js:5786-5802 sole-consumer
 var VOICE_FLUSH_MS = 200;
 var VOICE_SILENCE_MS = 600;
-//@ chunk-a658aeqp.js:5466-5499 affinity
+//@ chunk-1vwpwerm.js:5802-5835 affinity
 var VOICE_CONNECT_TIMEOUT_MS = 5000;
 var VOICE_SESSION_TIMEOUT_MS = 15000;
 var VOICE_MAX_SESSION_MS = 120000;
 var VOICE_SAMPLE_CHUNK = 16;
-//@ chunk-a658aeqp.js:5499-5688 fingerprint (2.1.88 match: computeLevel, 1)
+//@ chunk-1vwpwerm.js:5835-6024 fingerprint (2.1.88 match: computeLevel, 1)
 function computeLevel(chunk) {
   let samples = chunk.length >> 1;
   if (samples === 0) return 0;
@@ -192,7 +192,7 @@ function computeLevel(chunk) {
   let normalized = Math.min(rms / 2000, 1);
   return Math.sqrt(normalized);
 }
-//@ chunk-a658aeqp.js:5688-6145 layout
+//@ chunk-1vwpwerm.js:6024-6481 layout
 /**
  * 没有转写结果时的提示：麦克风无信号、连接失败或没检测到语音。
  */
@@ -213,7 +213,7 @@ function describeEmptyTranscription({ hadAudioSignal, wsConnected }) {
     errorCode: "voice_transcription_no_speech",
   };
 }
-//@ chunk-a658aeqp.js:6145-18557 fingerprint (2.1.88 match: useVoice, 0.702)
+//@ chunk-1vwpwerm.js:6481-18884 fingerprint (2.1.88 match: useVoice, 0.702)
 /**
  * 语音引擎类：管理麦克风录音、电平计算、连接语音转写服务、静音超时自动结束与错误映射（no audio/no speech/连接失败）。
  */
@@ -543,7 +543,7 @@ class useVoice {
           let replayBuffer = this.#f;
           await sleep(250);
           if (isStale()) return;
-          let stt = normalizeLanguageForSTT(getInitialSettings_2().language);
+          let stt = normalizeLanguageForSTT(getInitialSettings().language);
           let keyterms = await this.#I();
           if (isStale()) return;
           await new Promise((resolve) => {
@@ -776,7 +776,7 @@ class useVoice {
       }));
       return;
     }
-    let rawLanguage = getInitialSettings_2().language;
+    let rawLanguage = getInitialSettings().language;
     let stt = normalizeLanguageForSTT(rawLanguage);
     let systemLocaleLanguage = getSystemLocaleLanguage();
     logFeatureOk("voice_start");
@@ -949,7 +949,6 @@ class useVoice {
           if (this.#e !== "recording") {
             audioBuffer.length = 0;
             conn.close();
-            return;
           }
         },
         (error) => {
@@ -969,9 +968,14 @@ class useVoice {
     this.#I().then(connectStream);
   }
 }
-//@ chunk-a658aeqp.js:18925-18934 placement
+//@ chunk-1vwpwerm.js:19191-19252 sole-consumer
+function splitFileName(filePath) {
+  let name = basename(filePath).replace(/\.[^.]+$/, "");
+  return splitIdentifier(name);
+}
+//@ chunk-1vwpwerm.js:19252-19261 placement
 var VOICE_TICK_MS = 50;
-//@ chunk-a658aeqp.js:18934-19201 placement
+//@ chunk-1vwpwerm.js:19261-19528 placement
 /**
  * 构造语音转写关键词：全局词表 + 项目目录名 + 当前分支名拆出的词 + 最近文件名中的词，最多 I 个。
  */
@@ -991,11 +995,11 @@ async function getVoiceKeyterms(filePaths) {
   if (filePaths)
     for (let filePath of filePaths) {
       if (keyterms.size >= VOICE_TICK_MS) break;
-      for (let word of fileNameWords(filePath)) keyterms.add(word);
+      for (let word of splitFileName(filePath)) keyterms.add(word);
     }
   return [...keyterms].slice(0, VOICE_TICK_MS);
 }
-//@ chunk-a658aeqp.js:19201-19798 placement
+//@ chunk-1vwpwerm.js:19528-20125 placement
 /**
  * 语音输入控制钩子：创建语音控制器，处理转写结果、错误、启用状态与按住/切换模式。
  */

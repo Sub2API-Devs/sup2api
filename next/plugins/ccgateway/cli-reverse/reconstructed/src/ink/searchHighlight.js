@@ -3,14 +3,14 @@
  *
  * 在 Screen 上叠加搜索命中高亮
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/searchHighlight.ts
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: fingerprint 1
  */
 import { cellAtIndex, setCellStyleId } from "./screen.js";
 
-//@ chunk-bzr73sfg.js:322260-322757 fingerprint (2.1.88 match: applySearchHighlight, 1)
+//@ chunk-2avr6cej.js:321841-322338 fingerprint (2.1.88 match: applySearchHighlight, 1)
 /**
  * 把屏幕上所有匹配查询串的格反显（搜索高亮），返回是否有匹配。
  */

@@ -3,9 +3,9 @@
  *
  * teleport 前自动 stash 本地改动。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportStash.tsx
- * pieces: chunk-qh0448cn.js (4)
+ * pieces: chunk-3tekt16c.js (4)
  * attribution: placement 2, fingerprint 1, affinity 1
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -27,17 +27,17 @@ import { HintText } from "./design-system/HintText.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qh0448cn.js:1233-1237 placement
+//@ chunk-3tekt16c.js:1234-1238 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qh0448cn.js:1233", () => {
+deferInit("chunk-3tekt16c.js:1234", () => {
   init_react_production();
 });
-//@ chunk-qh0448cn.js:1237-1241 placement
+//@ chunk-3tekt16c.js:1238-1242 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qh0448cn.js:1237", () => {
+deferInit("chunk-3tekt16c.js:1238", () => {
   init_react_production();
 });
-//@ chunk-qh0448cn.js:1241-3194 fingerprint (2.1.88 match: TeleportStash, 0.597)
+//@ chunk-3tekt16c.js:1242-3195 fingerprint (2.1.88 match: TeleportStash, 0.597)
 function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
   let [gitFileStatus, setGitFileStatus] = useState(null);
   let changedFiles = gitFileStatus !== null ? [...gitFileStatus.tracked, ...gitFileStatus.untracked] : [];
@@ -186,6 +186,6 @@ function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
     blockCancelWhileStashing ? "stashing" : "asking",
   );
 }
-//@ chunk-qh0448cn.js:3194-3209 affinity
+//@ chunk-3tekt16c.js:3195-3210 affinity
 function noop() {}
 export { TeleportStash };

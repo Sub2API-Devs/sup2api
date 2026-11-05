@@ -1,8 +1,8 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/policies/multipartPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { isNodeReadableStream, rawContent } from "../util/file.js";
@@ -11,14 +11,14 @@ import {
   multipartPolicy_2,
 } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/multipartPolicy.js";
 
-//@ chunk-mrx6y2r5.js:57028-57081 esm-layout
+//@ chunk-b5df2wx1.js:57028-57081 esm-layout
 function toRawBody(body) {
   if (isNodeReadableStream(body)) return body[rawContent]();
   else return body;
 }
-//@ chunk-mrx6y2r5.js:57081-57091 esm-layout
+//@ chunk-b5df2wx1.js:57081-57091 esm-layout
 var multipartPolicyName_2 = multipartPolicyName;
-//@ chunk-mrx6y2r5.js:57091-57271 esm-fingerprint
+//@ chunk-b5df2wx1.js:57091-57271 esm-fingerprint
 function multipartPolicy() {
   let tspPolicy = multipartPolicy_2();
   return {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件设置来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { getEnabledSettingSources } from "../settings/constants.js";
@@ -25,7 +25,7 @@ import {
 import { BUILTIN } from "../telemetry/pluginTelemetry.js";
 import { getAddDirEnabledPlugins } from "./addDirPluginSettings.js";
 
-//@ chunk-e6aww6q8.js:696163-696593 placement
+//@ chunk-5xgkngpb.js:706638-707068 placement
 /**
  * 遍历用户设置中值为 false 的 enabledPlugins，找出被其他（内置插件只看受信）设置源重新启用的插件，返回 {pluginId, overriddenBy}。
  */
@@ -57,14 +57,14 @@ function findUserDisabledOverrides() {
   }
   return overrides;
 }
-//@ chunk-e6aww6q8.js:696593-696633 placement
+//@ chunk-5xgkngpb.js:707068-707108 placement
 /**
  * settingsSourcesReversed：反向的已启用设置源。
  */
 function settingsSourcesReversed() {
   return [...getEnabledSettingSources()].reverse();
 }
-//@ chunk-e6aww6q8.js:696633-696712 placement
+//@ chunk-5xgkngpb.js:707108-707187 placement
 /**
  * enabledPluginRecordsBySource：各设置源的启用插件表。
  */
@@ -74,7 +74,7 @@ function enabledPluginRecordsBySource() {
     record: getSettingsForSource(source)?.enabledPlugins,
   }));
 }
-//@ chunk-e6aww6q8.js:696712-696824 placement
+//@ chunk-5xgkngpb.js:707187-707299 placement
 /**
  * 各设置源 enabledPlugins 的分组视图（policy 标为 managed）。
  */
@@ -87,12 +87,12 @@ function getEnabledPluginsBySource() {
         }),
   );
 }
-//@ chunk-e6aww6q8.js:696824-696877 placement
+//@ chunk-5xgkngpb.js:707299-707352 placement
 function isNonOfficialMarketplacePlugin(pluginId) {
   let suffix = marketplaceSuffix(normalizePluginId(pluginId));
   return !isOfficialMarketplace_2(suffix) && suffix !== BUILTIN;
 }
-//@ chunk-e6aww6q8.js:696877-697002 placement
+//@ chunk-5xgkngpb.js:707352-707477 placement
 /**
  * 内置插件只保留受信设置源的值。
  */
@@ -104,28 +104,28 @@ function filterTrustedForBuiltin(pluginId, records) {
     return source !== undefined && TRUSTED_SETTING_SOURCES_2.includes(source) ? record : undefined;
   });
 }
-//@ chunk-e6aww6q8.js:697002-697053 placement
+//@ chunk-5xgkngpb.js:707477-707532 placement
 /**
  * pluginSettingRecords：非官方插件追加 addDir 来源。
  */
-function pluginSettingRecords(pluginId) {
+function pluginSettingRecords(pluginId, enabledFiles) {
   let records = enabledPluginRecordsBySource();
-  return isNonOfficialMarketplacePlugin(pluginId) ? withAddDirPlugins(records) : records;
+  return isNonOfficialMarketplacePlugin(pluginId) ? withAddDirPlugins(records, enabledFiles) : records;
 }
-//@ chunk-e6aww6q8.js:697053-697113 placement
+//@ chunk-5xgkngpb.js:707532-707595 placement
 /**
  * withAddDirPlugins：追加 addDir 启用插件。
  */
-function withAddDirPlugins(records) {
+function withAddDirPlugins(records, enabledFiles) {
   return [
     ...records,
     {
       source: "addDir",
-      record: getAddDirEnabledPlugins(),
+      record: getAddDirEnabledPlugins(enabledFiles),
     },
   ];
 }
-//@ chunk-e6aww6q8.js:697113-697392 placement
+//@ chunk-5xgkngpb.js:707595-707874 placement
 /**
  * 两份按源分组的 enabledPlugins 是否等价。
  */
@@ -144,19 +144,19 @@ function enabledPluginsEqual(left, right) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:697392-697490 placement
+//@ chunk-5xgkngpb.js:707874-707972 placement (2.1.88 match: semanticBoolean, 0.73)
 function describePluginEnablement(value) {
   if (value === undefined) return "absent";
   if (value === false) return "false";
   return value === true ? "true" : "other";
 }
 export {
-  filterTrustedForBuiltin,
+  settingsSourcesReversed,
   getEnabledPluginsBySource,
+  findUserDisabledOverrides,
+  withAddDirPlugins,
   enabledPluginRecordsBySource,
   pluginSettingRecords,
-  withAddDirPlugins,
-  settingsSourcesReversed,
-  findUserDisabledOverrides,
+  filterTrustedForBuiltin,
   enabledPluginsEqual,
 };

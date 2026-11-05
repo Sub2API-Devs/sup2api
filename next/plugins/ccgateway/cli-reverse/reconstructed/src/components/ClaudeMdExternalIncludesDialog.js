@@ -3,9 +3,9 @@
  *
  * CLAUDE.md 或 .claude/rules 引用工作目录外文件时的允许确认对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ClaudeMdExternalIncludesDialog.tsx
- * pieces: chunk-e6aww6q8.js (1), chunk-jz0q3n7b.js (5)
+ * pieces: chunk-5xgkngpb.js (1), chunk-6gtnap6b.js (5)
  * attribution: fingerprint 2, placement 1, file-last-pair 1, facade-exports 2
  */
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../utils/config.js";
@@ -24,7 +24,7 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -35,7 +35,7 @@ import { plural } from "../utils/stringUtils.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1353129-1353286 fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-5xgkngpb.js:1352301-1352458 fingerprint (2.1.88 match: _temp3, 1)
 /**
  * 尚未批准或提示过、且 CLAUDE.md 引用了外部文件时返回 true。
  */
@@ -48,16 +48,16 @@ async function shouldShowExternalIncludesDialog(session, storageV5) {
     return false;
   return hasExternalClaudeMdIncludes(await getMemoryFilesCached(session, true, storageV5));
 }
-//@ chunk-jz0q3n7b.js:746-750 placement
+//@ chunk-6gtnap6b.js:746-750 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jz0q3n7b.js:746", () => {
+deferInit("chunk-6gtnap6b.js:746", () => {
   init_react_production();
 });
-//@ chunk-jz0q3n7b.js:750-810 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-6gtnap6b.js:750-810 fingerprint (2.1.88 match: _temp, 1)
 function logClaudeMdIncludesShown() {
   logEvent("tengu_claude_md_includes_dialog_shown", {});
 }
-//@ chunk-jz0q3n7b.js:810-909 file-last-pair
+//@ chunk-6gtnap6b.js:810-909 file-last-pair
 function renderIncludePath(include, i) {
   return jsxProd_default_2(
     Text,
@@ -69,7 +69,7 @@ function renderIncludePath(include, i) {
     i,
   );
 }
-//@ chunk-jz0q3n7b.js:909-1153 facade-exports (2.1.88 match: _temp2, 0.486)
+//@ chunk-6gtnap6b.js:909-1153 facade-exports (2.1.88 match: _temp2, 0.486)
 function recordExternalIncludesDecision(approved, source, storageV5) {
   saveCurrentProjectConfig(
     (config) => ({
@@ -88,7 +88,7 @@ function recordExternalIncludesDecision(approved, source, storageV5) {
     },
   );
 }
-//@ chunk-jz0q3n7b.js:1153-3617 facade-exports (2.1.88 match: ClaudeMdExternalIncludesDialog, 0.44)
+//@ chunk-6gtnap6b.js:1153-3611 facade-exports (2.1.88 match: ClaudeMdExternalIncludesDialog, 0.44)
 /**
  * 外部 CLAUDE.md 引用确认：列出工作目录外被 @ 引用的文件，允许或拒绝（记录 tengu_claude_md_external_includes_dialog_*）。
  */
@@ -102,18 +102,18 @@ function ClaudeMdExternalIncludesDialog(props) {
     $[0] = shownDeps;
   } else shownDeps = $[0];
   useEffect(logClaudeMdIncludesShown, shownDeps);
-  let inputRefusalWindow = useInputRefusalWindow();
+  let recentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let refuseInput;
-  if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
+  if ($[1] !== recentInput || $[2] !== noteRefused || $[3] !== refusedWithin) {
     refuseInput = function refuseInputFn() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (recentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[1] = inputRefusalWindow;
+    $[1] = recentInput;
     $[2] = noteRefused;
     $[3] = refusedWithin;
     $[4] = refuseInput;
@@ -139,14 +139,14 @@ function ClaudeMdExternalIncludesDialog(props) {
   let answeredRef = useRef(false);
   let handleAnswer;
   if (
-    $[9] !== inputRefusalWindow ||
+    $[9] !== recentInput ||
     $[10] !== noteRefused ||
     $[11] !== onDone ||
     $[12] !== refusedWithin ||
     $[13] !== storageV5
   ) {
     handleAnswer = (value) => {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (recentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -157,7 +157,7 @@ function ClaudeMdExternalIncludesDialog(props) {
       recordExternalIncludesDecision(value === "yes", "dialog", storageV5);
       onDone();
     };
-    $[9] = inputRefusalWindow;
+    $[9] = recentInput;
     $[10] = noteRefused;
     $[11] = onDone;
     $[12] = refusedWithin;

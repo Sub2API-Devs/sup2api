@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：同步回收站
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { createHash } from "crypto";
@@ -30,7 +30,7 @@ import { isUnavailableErrorCode } from "../settings/managedEnvKeys.js";
 import { sleep } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:627074-627213 placement
+//@ chunk-5xgkngpb.js:637184-637323 placement
 var SYNC_TRASH_MAX_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_TRASH_SCAN;
 var TRASH_TTL_MS;
@@ -39,7 +39,7 @@ var RETRY_DELAY_MS;
 var TENGU_LINKED_COCOA;
 var TRASH_ENTRY_NAME_RE;
 var trimQueues;
-deferInit("chunk-e6aww6q8.js:627074", () => {
+deferInit("chunk-5xgkngpb.js:637184", () => {
   SYNC_TRASH_MAX_ENTRIES = 3;
   MAX_TRASH_SCAN = 1024;
   TRASH_TTL_MS = 604800000;
@@ -49,21 +49,21 @@ deferInit("chunk-e6aww6q8.js:627074", () => {
   TRASH_ENTRY_NAME_RE = /^(\d+)-\d+-(?:([0-9a-f]{32})-)?[^-]+$/;
   trimQueues = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:627213-627314 placement
+//@ chunk-5xgkngpb.js:637323-637424 placement
 function hashSyncRootPath(path) {
   return createHash("sha256")
     .update(path.startsWith(SKILLS_SYNCED_STAGING + sep) ? stripGenerationSuffix(path) : path)
     .digest("hex")
     .slice(0, 32);
 }
-//@ chunk-e6aww6q8.js:627314-627378 placement
+//@ chunk-5xgkngpb.js:637424-637488 placement
 /**
  * syncTrashTempPrefix：同步回收站临时名前缀。
  */
 function syncTrashTempPrefix(path) {
   return `${Date.now()}-${process.pid}-${hashSyncRootPath(path)}-`;
 }
-//@ chunk-e6aww6q8.js:627378-627705 placement
+//@ chunk-5xgkngpb.js:637488-637815 placement
 /**
  * 排队修剪同步回收站（合并同一根的请求）。
  */
@@ -90,7 +90,7 @@ function queueSyncTrashTrim(trashDir, justMovedName) {
   else pending.justMoved.add(justMovedName);
   return pending.outcome;
 }
-//@ chunk-e6aww6q8.js:627705-629280 placement
+//@ chunk-5xgkngpb.js:637815-639409 placement
 /**
  * 修剪同步回收站。
  */
@@ -204,7 +204,7 @@ async function trimSyncTrash(trashDir, { justMoved, countsUntagged }) {
   }
   return stats;
 }
-//@ chunk-e6aww6q8.js:629280-629543 placement
+//@ chunk-5xgkngpb.js:639409-639672 placement
 async function isTrashEntryInUse(trashDir, entry) {
   if (!(await classifyDirEntry(trashDir, entry)).isDirectory) return false;
   let entryDir = join(trashDir, entry.name);
@@ -221,7 +221,7 @@ async function isTrashEntryInUse(trashDir, entry) {
       return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:629543-629706 placement
+//@ chunk-5xgkngpb.js:639672-639835 placement
 async function retryOnBusy(stats, attempt) {
   for (let idx = 1; ; idx++)
     try {
@@ -237,7 +237,7 @@ async function retryOnBusy(stats, attempt) {
       await sleep(idx * RETRY_DELAY_MS);
     }
 }
-//@ chunk-e6aww6q8.js:629706-629796 placement
+//@ chunk-5xgkngpb.js:639835-639925 placement
 function syncTrashEntryOrder(left, right) {
   return Number(right.justMoved) - Number(left.justMoved) || right.movedAtMs - left.movedAtMs;
 }

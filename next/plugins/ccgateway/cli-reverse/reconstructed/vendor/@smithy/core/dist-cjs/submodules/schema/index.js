@@ -1,15 +1,15 @@
 /**
  * @smithy/core/dist-cjs/submodules/schema/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-wjd9n4jx.js (1)
+ * pieces: chunk-1fkvp0h1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 
-//@ chunk-wjd9n4jx.js:12581-22053 cjs-fingerprint
+//@ chunk-1fkvp0h1.js:12581-22053 cjs-fingerprint
 var require_schema = __commonJS(function (cjsExports) {
   var HttpResponse = require_protocol_http();
   var getSmithyContext = require_util_middleware();

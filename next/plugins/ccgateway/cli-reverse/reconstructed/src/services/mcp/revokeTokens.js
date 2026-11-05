@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。吊销存储的 MCP 令牌。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xbm7kra6.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xvx0hpx.js (1)
  * attribution: placement 1
  */
 import { readSecureStorageForMcp } from "./credentialStoreRead.js";
 import { READ_FAILED } from "../../utils/secureStorage/storageWriteLock.js";
 import { getServerKey } from "./auth.js";
 
-//@ chunk-xbm7kra6.js:266-844 placement
+//@ chunk-5xvx0hpx.js:266-844 placement
 /**
  * 吊销存储的 MCP 令牌。
  */

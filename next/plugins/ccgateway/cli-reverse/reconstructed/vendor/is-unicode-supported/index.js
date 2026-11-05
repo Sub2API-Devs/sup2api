@@ -1,13 +1,13 @@
 /**
  * is-unicode-supported/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: is-unicode-supported@2.1.0
- * pieces: chunk-6rgkw5kr.js (1)
+ * pieces: chunk-g66qqkzw.js (1)
  * attribution: esm-fingerprint 1
  */
 import a from "process";
 
-//@ chunk-6rgkw5kr.js:687-1041 esm-fingerprint
+//@ chunk-g66qqkzw.js:687-1041 esm-fingerprint
 function isUnicodeSupported() {
   let { env } = a;
   let { TERM, TERM_PROGRAM } = env;

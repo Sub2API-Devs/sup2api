@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：按 id 记住最近项目的 LRU（512）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tm91gg77.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3xhr2e4v.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-tm91gg77.js:191-409 placement
+//@ chunk-3xhr2e4v.js:191-409 placement
 /**
  * 按 id 记住最近条目的 LRU 缓存，最多保留 512 条。
  */

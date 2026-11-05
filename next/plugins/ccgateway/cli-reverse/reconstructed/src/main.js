@@ -3,10 +3,10 @@
  *
  * 并入已有模块：非交互/SDK 会话启动主流程（选项、云会话、输入输出）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/main.tsx
- * pieces: chunk-151tygw9.js (1), chunk-2am86wgd.js (1), chunk-3wek6r2k.js (6), chunk-7dqf31r1.js (2), chunk-cjydagjy.js (14), chunk-e6aww6q8.js (1), chunk-qg4qg94n.js (8), chunk-shkzs7rp.js (37)
- * attribution: fingerprint 16, placement 31, layout 12, sole-consumer 3, callgraph-witnessed 1, affinity 1, facade-majority 5, callgraph-fingerprint 1
+ * pieces: chunk-10j59z4a.js (1), chunk-405cd95w.js (1), chunk-5xgkngpb.js (1), chunk-80cq400a.js (8), chunk-9ys74nhz.js (2), chunk-h61dq9nz.js (17), chunk-hjswk319.js (5), chunk-nhaxap13.js (38)
+ * attribution: placement 31, fingerprint 15, facade-majority 5, layout 15, sole-consumer 3, callgraph-witnessed 1, affinity 2, callgraph-fingerprint 1
  */
 import { isAbsolute, basename } from "path";
 import { realpath, opendir } from "fs/promises";
@@ -25,13 +25,14 @@ import {
   parseNumberWithSeparators,
   isEnvDefinedFalsy,
   hasNodeOption,
-  getClaudeConfigDir,
 } from "./utils/envUtils.js";
 import {
   HOST_FREE_FORM_SETTINGS_KEY,
   parseSettingSourcesFlag,
   REPO_DIR_SETTING_SOURCES,
+  EDITABLE_SETTING_SOURCES,
   isSettingSourceEnabled,
+  getSettingSourceDisplayNameLowercase,
 } from "./utils/settings/constants.js";
 import { jsonStringify, alwaysTrue } from "./utils/slowOperations.js";
 import { safeParseJSON } from "./utils/json.js";
@@ -56,6 +57,8 @@ import {
   getAllowedSettingSourcesAsConfigured,
   getExtendedQuestionsEnabled,
   getIsNonInteractiveSession,
+  setReplyGatePolicy,
+  setLaunchReplyGatePolicyRefused,
   setPrintOutputFormat,
   getRootSession,
   isParkedSpare,
@@ -99,7 +102,7 @@ import { readFileSync, isNotRegularFileError } from "./utils/fileRead.js";
 import {
   MAX_SETTINGS_JSON_BYTES,
   getManagedSettingsKeysForLogging,
-  getInitialSettings_2,
+  getInitialSettings,
   getSettingsForSourceForUpkeep,
   getSettingsForSource,
   getBasePolicySettings,
@@ -108,7 +111,7 @@ import {
   isForceRemoteSettingsRefreshConfigured,
   getSettingsFilePathForSource,
   getAutoModeConfig,
-  getEffectiveSettingSource_2,
+  getEffectiveSettingSource,
 } from "./utils/settings/settings.js";
 import {
   errorMessage,
@@ -163,17 +166,6 @@ import {
 } from "./cli/startup/awaitInitialize.js";
 import { isStdinUnusableError, peekForStdinData, writeOut } from "./utils/process.js";
 import { logError, getLogDisplayTitle } from "./utils/log.js";
-import { isModeDependentModelSetting, isOpusFableAdvisorSetting } from "./utils/model/planModeModel.js";
-import { strip1mSuffix } from "./utils/model/modelIds.js";
-import {
-  parseEffortLevel,
-  createSessionEffortState,
-  isUltracodeEnabled,
-  EFFORT_LEVELS,
-  parseEffortFlag,
-  resolveEffortLevel,
-} from "./utils/effort.js";
-import { cloudPermissionModeFrom, CLOUD_SESSION_OPTION_KEYS } from "./cli/cloudSession/launchFlags.js";
 import {
   fromSanitizer_SANITIZER_OUTPUT_ONLY,
   lit,
@@ -229,7 +221,7 @@ import {
   getTeammateUtils,
   maybeActivateBrief,
 } from "./cli/startup/prepareSession.js";
-import { emptyObjectFactory } from "./tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeTelemetryFields } from "./tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { logEvent, logEventAsync } from "./services/analytics/index.js";
 import {
   markAutoModeAvailability,
@@ -299,12 +291,22 @@ import {
 } from "./utils/gracefulShutdown.js";
 import { EXIT_CONFIG_ERROR } from "./utils/exitCodes.js";
 import { getAPIProvider } from "./utils/model/providers.js";
-import { createReplMessageQueue } from "./replSessionSeat.js";
-import { flushDeferredProblems } from "./plugins/functionHooks/hooksModuleLoader.js";
 import {
+  getPreSettingsEnvSnapshot,
   applyConfigEnvironmentVariables,
   applySafeConfigEnvironmentVariables,
 } from "./utils/managedEnvApply.js";
+import { parseReplyGatePolicy, replyGatePolicyIgnoredLine } from "./bridge/projectsReplyEvaluation.js";
+import {
+  logFeatureSad,
+  logFeatureOk,
+  logFeatureBadAsync,
+  logFeatureBad,
+} from "./services/analytics/featureTelemetry.js";
+import { logReplyGatePolicy } from "./query/toolDrain.js";
+import { createReplMessageQueue } from "./replSessionSeat.js";
+import { flushDeferredProblems } from "./plugins/functionHooks/hooksModuleLoader.js";
+import { warnIfSignInExpiring } from "./utils/auth/credentialExpiry.js";
 import { settingsChangeDetector } from "./utils/settings/changeDetector.js";
 import { initializeTelemetryAfterTrust, init } from "./entrypoints/init.js";
 import {
@@ -346,6 +348,7 @@ import { getRemoteSessionUrl } from "./constants/product.js";
 import { environmentFlagErrorPrefix } from "./cli/cloudSessionArgs.js";
 import { disallowedToolsTelemetry } from "./cli/cloudSession/hostedSessionRestrictions.js";
 import { unclosedParenError } from "./utils/permissions/disallowedToolsFlag.js";
+import { cloudPermissionModeFrom, CLOUD_SESSION_OPTION_KEYS } from "./cli/cloudSession/launchFlags.js";
 import {
   teleportToRemote,
   cloudCreateRefusal,
@@ -365,6 +368,13 @@ import { getModelDeprecationWarning, getDeprecationNotice } from "./utils/model/
 import { writeStartupFailureResult } from "./cli/startupFailureResult.js";
 import { getNonInteractiveCommands } from "./utils/commandPredicates.js";
 import { getDefaultAppState_2, EMPTY_PROJECTS_SELF_IDENTITY } from "./state/AppStateStore.js";
+import {
+  createSessionEffortState,
+  isUltracodeEnabled,
+  EFFORT_LEVELS,
+  parseEffortFlag,
+  resolveEffortLevel,
+} from "./utils/effort.js";
 import { isFastModeEnabled, isFastModeSettingActive } from "./utils/fastMode.js";
 import { isAdvisorToolEnabled } from "./utils/advisor.js";
 import {
@@ -459,7 +469,7 @@ import {
 } from "./utils/settings/policyHelper/policyHelper.js";
 import { configureProxyAuthHelperFromSettings } from "./utils/auth/proxyAuthHelperConfig.js";
 import { resetRemoteSettingsSyncCache } from "./services/cloudSessions/eligibility.js";
-import { injectBridgeFault } from "./bridge/bridgeDebug.js";
+import { exitRefusingBridgeFailure } from "./bridge/bridgeDebug.js";
 import { markLoadCycleBegun } from "./services/remoteManagedSettings/remoteSettingsState.js";
 import {
   isPluginMutationCommand,
@@ -490,18 +500,13 @@ import { tetherEnvAccessor } from "./utils/wireToolInputEcho.js";
 import { toolServerEnvAccessor } from "./utils/subprocessEnvLoader.js";
 import { envOverrideAccessor } from "./utils/env/envRegistry.js";
 import { useLocalProjectsEntrypoint, applyEntrypointOnRequestsEnv } from "./constants/system.js";
-import {
-  logFeatureOk,
-  logFeatureSad,
-  logFeatureBadAsync,
-  logFeatureBad,
-} from "./services/analytics/featureTelemetry.js";
 import { initializeWarningHandler } from "./utils/warningHandler.js";
 import { installTimerDelayClamp } from "./utils/timerDelayClamp.js";
 import { registerClientDataGetters } from "./services/api/bootstrap.js";
 import {
   stopCapturingEarlyInput,
   takeEarlyInputFieldText,
+  markEarlyInputLaunchWarning,
   hasEarlyInput,
   consumeEarlyInput,
 } from "./utils/earlyInput.js";
@@ -520,7 +525,7 @@ import { waitForGate } from "./utils/api.js";
 import { resolveCcrAutoConnectDefault } from "./bridge/bridgeGates.js";
 import { startMdmRawRead } from "./utils/settings/mdm/rawRead.js";
 import { DEFAULTS_PLACEHOLDER } from "./utils/permissions/autoModeRulesPrompt.js";
-import { count } from "./utils/collections.js";
+import { countWhere } from "./utils/collections.js";
 import { isFirstPartyTelemetryBlocked } from "./utils/hostEnvironment.js";
 import { getGhAuthStatus } from "./utils/github/ghAuthStatus.js";
 import {
@@ -585,7 +590,7 @@ import { createUserMessage, createSystemMessage } from "./utils/messages.js";
 import { addHistoryEntry } from "./history.js";
 import { loadConversationForResume } from "./utils/conversationRecovery.js";
 import { precomputeResumeHooks } from "./services/compact/precomputedCompact.js";
-import { noopModelPinSubscriber, modelPinStorageKind, noopModelPinReset } from "./utils/sessionModelPin.js";
+import { noopModelPinSubscriber, noopModelPinReset } from "./utils/sessionModelPin.js";
 import { backgroundSessionMovedNotice } from "./utils/backgroundSessionResume.js";
 import { applyAgentModelOverride } from "./utils/model/modelOverrideNotices.js";
 import { launchSessionRepl } from "./replLauncher.js";
@@ -606,13 +611,14 @@ import { sensitivePathGateEnabled, neverTrueAsync } from "./utils/permissions/se
 import { logInteractiveInputFailure, noTtyMessage } from "./cli/startup/interactiveInputCheck.js";
 import { isTerminalShutdown, heldUntilExit } from "./utils/terminalShutdown.js";
 import { earlyArgsArgv } from "./services/daemon/relaunchArgs.js";
+import { isCcpoolId, getEnvironmentSelectionInfo } from "./utils/teleport/environmentSelection.js";
 import {
   isCloudClientToolServingAnsweredOn,
   getViolinWillowOwnAnswer,
 } from "./services/analytics/violinWillowGate.js";
 import { environmentUnresolvedOutcome } from "./utils/teleport/cloudEnvironments.js";
 import { fetchEnvironments } from "./utils/teleport/environments.js";
-import { alwaysFalsePlaceholder } from "./utils/background/remote/remoteSession.js";
+import { isRemoteSessionDisabled } from "./utils/background/remote/remoteSession.js";
 import { isContainerSyncEnvironment } from "./utils/teleport/containerSync.js";
 import {
   resolveHostConsentMode,
@@ -622,6 +628,7 @@ import {
   noteHomeSettingsPrompt,
   shouldForwardHomeSettings,
 } from "./utils/teleport/homeSettingsMode.js";
+import { getClaudeConfigDir } from "./utils/markdownConfigLoader.js";
 import { isScrubEnabled } from "./utils/subprocessEnv.js";
 import {
   boolFromMaybe,
@@ -639,11 +646,12 @@ import { setCwd } from "./utils/Shell.js";
 import { getPlansDirectory, primePlanSlugCollisions } from "./utils/plans.js";
 import { isAgentsFleetEnabled, isPastSessionsExperimentEnabled } from "./utils/fleetGates.js";
 import { findBackgroundSessionHolder, formatSessionRunningInBackground } from "./utils/sessionAttach.js";
+import { resumeSourceForPath } from "./utils/codeMode/sessionResumeHooks.js";
 import { isTranscriptLoadError, win32EbadfHelp } from "./utils/transcript/transcriptFiles.js";
 import { getWorktreePaths } from "./utils/getWorktreePaths.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-7dqf31r1.js:8456-9704 sole-consumer
+//@ chunk-9ys74nhz.js:8700-10170 sole-consumer
 /**
  * initializeEntrypoint 之后把一批进程环境写入 launchOptions（交互性、entrypoint、子会话、远端会话/容器 ID、桌面技能/连接器、Chrome 标签组等），并从 process.env 删除只该被读一次的变量。
  */
@@ -659,6 +667,13 @@ function initializeLaunchOptionsFromEnv(isNonInteractive) {
     Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID || env.CLAUDE_CODE_CONTAINER_ID),
   );
   sessionShape_2.setClaudecode(Boolean(env.CLAUDECODE));
+  sessionShape_2.setHostManagedRunnerChild(
+    env.CLAUDE_CODE_REMOTE === true &&
+      env.CLAUDE_CODE_ENVIRONMENT_KIND === "byoc" &&
+      env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE === "self_hosted" &&
+      env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST &&
+      env.ANTHROPIC_BASE_URL !== undefined,
+  );
   sessionShape_2.setCoworkFrameArtifacts(env.CLAUDE_CODE_COWORK_FRAME_ARTIFACTS);
   sessionShape_2.setHostScheduledRun(env.CLAUDE_CODE_HOST_SCHEDULED_RUN);
   sessionShape_2.setDesktopSkillSwitches(env.CLAUDE_CODE_DESKTOP_SKILL_SWITCHES);
@@ -678,7 +693,7 @@ function initializeLaunchOptionsFromEnv(isNonInteractive) {
   sessionShape_2.setDesktopConnectorNames(isHostEntrypoint && env.CLAUDE_CODE_DESKTOP_CONNECTOR_NAMES);
   if (isHostEntrypoint) env.unset("CLAUDE_CODE_DESKTOP_CONNECTOR_NAMES");
 }
-//@ chunk-7dqf31r1.js:9704-10192 fingerprint (2.1.88 match: initializeEntrypoint, 0.814)
+//@ chunk-9ys74nhz.js:10170-10658 fingerprint (2.1.88 match: initializeEntrypoint, 0.813)
 /**
  * 推断 CLAUDE_CODE_ENTRYPOINT：已设置时规范化（local_agent→local-agent，非交互的 cli→sdk-cli）；mcp serve → mcp；CLAUDE_CODE_ACTION → claude-code-github-action；否则 cli 或 sdk-cli。
  */
@@ -701,7 +716,7 @@ function initializeEntrypoint(isNonInteractive) {
   }
   env.set("CLAUDE_CODE_ENTRYPOINT", isNonInteractive ? "sdk-cli" : "cli");
 }
-//@ chunk-2am86wgd.js:228-383 placement
+//@ chunk-10j59z4a.js:228-383 placement
 /**
  * 从层级记录中拆出组织字段
  */
@@ -719,14 +734,14 @@ function splitTierOrganization(sources) {
     memberLost: false,
   };
 }
-//@ chunk-qg4qg94n.js:918-1044 facade-majority
+//@ chunk-80cq400a.js:918-1044 facade-majority
 function compactJsonForTypedTransport(value) {
   return jsonStringify(value).replace(
     /[\u007f-\u009f]/g,
     (char) => "\\u" + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0"),
   );
 }
-//@ chunk-qg4qg94n.js:1044-1909 facade-majority (2.1.88 match: loadSettingsFromFlag, 0.517)
+//@ chunk-80cq400a.js:1044-1909 facade-majority (2.1.88 match: loadSettingsFromFlag, 0.517)
 /**
  * 处理 --settings：JSON 字符串写入按内容哈希命名的临时文件，否则解析路径；记录为 flagSettings 来源。
  */
@@ -782,7 +797,7 @@ function loadSettingsFromFlag(settingsFile) {
     return cliError(`Error processing settings: ${errorMessage(error)}`);
   }
 }
-//@ chunk-qg4qg94n.js:1909-2114 facade-majority
+//@ chunk-80cq400a.js:1909-2114 facade-majority
 /**
  * 处理 --managed-settings（SDK 父进程传入的策略层 JSON）：解析 tier/organization，非法时只告警。
  */
@@ -800,7 +815,7 @@ function loadManagedSettingsFromFlag(settingSourcesArg) {
   setParentManagedSettings(tier, organization);
   invalidateCommandNames();
 }
-//@ chunk-qg4qg94n.js:2114-2307 fingerprint (2.1.88 match: loadSettingSourcesFromFlag, 0.541)
+//@ chunk-80cq400a.js:2114-2307 fingerprint (2.1.88 match: loadSettingSourcesFromFlag, 0.541)
 /**
  * 处理 --setting-sources（user,project,local）并重置设置缓存；非法值退出。
  */
@@ -817,7 +832,7 @@ function loadSettingSourcesFromFlag(settingSourcesArg) {
     return cliError(`Error processing --setting-sources: ${errorMessage(error)}`);
   }
 }
-//@ chunk-qg4qg94n.js:2307-2537 facade-majority (2.1.88 match: eagerLoadSettings, 0.675)
+//@ chunk-80cq400a.js:2307-2537 facade-majority (2.1.88 match: eagerLoadSettings, 0.674)
 /**
  * 在 commander 解析前预读 --settings、--managed-settings 与 --setting-sources，记录 settings_load_ms。
  */
@@ -833,7 +848,7 @@ function eagerLoadSettings() {
   profileCheckpoint("eagerLoadSettings_end");
   recordPhase("settings_load_ms", performance.now() - startTime, startTime);
 }
-//@ chunk-qg4qg94n.js:2537-2645 layout
+//@ chunk-80cq400a.js:2537-2645 layout
 function applyFastModeFlag() {
   let value = eagerParseCliFlag("--fast-mode");
   if (value !== "on" && value !== "off") return;
@@ -843,7 +858,7 @@ function applyFastModeFlag() {
   });
   invalidateCommandNames();
 }
-//@ chunk-qg4qg94n.js:2645-2815 facade-majority
+//@ chunk-80cq400a.js:2645-2815 facade-majority
 function applySettingSourcesFlagFromArgv() {
   let settingSourcesArg = eagerParseCliFlag("--setting-sources");
   if (settingSourcesArg !== undefined) loadSettingSourcesFromFlag(settingSourcesArg);
@@ -859,7 +874,7 @@ function applySettingSourcesFlagFromArgv() {
     invalidateCommandNames();
   }
 }
-//@ chunk-qg4qg94n.js:2815-2930 sole-consumer
+//@ chunk-80cq400a.js:2815-2930 sole-consumer
 function canonicalizePathCase(path) {
   if (isUntouchableSpelling(path)) return path;
   try {
@@ -869,11 +884,11 @@ function canonicalizePathCase(path) {
     return path;
   }
 }
-//@ chunk-e6aww6q8.js:2039698-2039771 fingerprint (2.1.88 match: resetCursor, 0.689)
+//@ chunk-5xgkngpb.js:2095527-2095600 fingerprint (2.1.88 match: resetCursor, 0.689)
 function resetCursor() {
   return Boolean(process.stdout.isTTY && process.stdin.isTTY);
 }
-//@ chunk-151tygw9.js:5908-7043 fingerprint (2.1.88 match: getInputPrompt, 0.453)
+//@ chunk-405cd95w.js:6027-7162 fingerprint (2.1.88 match: getInputPrompt, 0.451)
 /**
  * 读取初始提示：stdin 非 TTY 时读完 stdin（stream-json 输入返回流；超过上限报错退出），与位置参数拼接。
  */
@@ -924,25 +939,7 @@ async function getInputPrompt(prompt, inputFormat) {
   }
   return prompt;
 }
-//@ chunk-3wek6r2k.js:49686-49945 fingerprint (2.1.88 match: _pendingSSH, 0.347)
-function _pendingSSH(config) {
-  let { model, effort, permissionMode } = config;
-  return {
-    ...config,
-    model:
-      typeof model === "string" &&
-      !isModeDependentModelSetting(strip1mSuffix(model.trim().toLowerCase())) &&
-      !isOpusFableAdvisorSetting(model)
-        ? undefined
-        : model,
-    effort: typeof effort === "string" && parseEffortLevel(effort) !== undefined ? undefined : effort,
-    permissionMode:
-      typeof permissionMode === "string" && cloudPermissionModeFrom(permissionMode) !== undefined
-        ? undefined
-        : permissionMode,
-  };
-}
-//@ chunk-3wek6r2k.js:95030-95105 fingerprint (2.1.88 match: logManagedSettings, 0.424)
+//@ chunk-hjswk319.js:94429-94504 fingerprint (2.1.88 match: logManagedSettings, 0.424)
 function logManagedSettings(policySettings) {
   let allKeys = getManagedSettingsKeysForLogging(policySettings);
   return {
@@ -950,7 +947,7 @@ function logManagedSettings(policySettings) {
     keys: fromSanitizer_SANITIZER_OUTPUT_ONLY(allKeys.join(",")),
   };
 }
-//@ chunk-3wek6r2k.js:96816-99424 fingerprint (2.1.88 match: logTenguInit, 0.611)
+//@ chunk-hjswk319.js:96215-98840 fingerprint (2.1.88 match: logTenguInit, 0.61)
 /**
  * 发送 tengu_init 事件：入口、启动方式、-p/格式、工具白黑名单数、MCP 数、权限模式、思考配置、模型来源，以及仓库特征（Dockerfile、lockfile、CI 配置等）。
  */
@@ -1061,8 +1058,8 @@ async function logTenguInit({
       is_safe_mode: isSafeMode() || undefined,
       extendedQuestions: getExtendedQuestionsEnabled() || undefined,
       is_coordinator: coordinatorModeModule.isCoordinatorMode() ? true : undefined,
-      ...emptyObjectFactory(runsLocalQueryLoop),
-      autoUpdatesChannel: fromEnum(getInitialSettings_2().autoUpdatesChannel ?? "latest"),
+      ...codeModeTelemetryFields(runsLocalQueryLoop),
+      autoUpdatesChannel: fromEnum(getInitialSettings().autoUpdatesChannel ?? "latest"),
       ...modelProvenance,
       ...autoModeAvailability,
       ...(gitPresenceForAnalytics && {
@@ -1098,7 +1095,7 @@ async function logTenguInit({
     logError(error);
   }
 }
-//@ chunk-3wek6r2k.js:99642-100256 fingerprint (2.1.88 match: extractTeammateOptions, 0.922)
+//@ chunk-hjswk319.js:99058-99672 fingerprint (2.1.88 match: extractTeammateOptions, 0.922)
 /**
  * 从 commander 选项中取出 teammate 相关隐藏参数（--agent-id/--agent-name/--team-name/--agent-color/--plan-mode-required/--parent-session-id/--teammate-mode/--agent-type）。
  */
@@ -1123,7 +1120,7 @@ function extractTeammateOptions(options) {
     agentType: typeof opts.agentType === "string" ? opts.agentType : undefined,
   };
 }
-//@ chunk-3wek6r2k.js:100256-100816 layout
+//@ chunk-hjswk319.js:99672-100232 layout
 /**
  * 首个位置参数像子命令名时（单词、无空格），按编辑距离提示“Did you mean claude X?”并退出 1。
  */
@@ -1162,7 +1159,7 @@ async function suggestUnknownSubcommand(typedName, program) {
   );
   await exitAfterAnalyticsFlush(1);
 }
-//@ chunk-3wek6r2k.js:100816-101033 fingerprint (2.1.88 match: prefetchSystemContextIfSafe, 1)
+//@ chunk-hjswk319.js:100232-100449 fingerprint (2.1.88 match: prefetchSystemContextIfSafe, 1)
 /**
  * 非交互或已信任时预取系统上下文（git 状态等）；未信任时跳过（git 可能执行仓库里的钩子）。
  */
@@ -1178,9 +1175,9 @@ function prefetchSystemContextIfSafe(session, options) {
     refreshExampleCommands(options);
   } else logForDiagnosticsNoPII("info", "prefetch_system_context_skipped_no_trust");
 }
-//@ chunk-cjydagjy.js:14073-14083 placement
+//@ chunk-h61dq9nz.js:14250-14260 placement
 var CURRENT_MIGRATION_VERSION = 14;
-//@ chunk-cjydagjy.js:14083-14381 placement (2.1.88 match: _temp, 0.315)
+//@ chunk-h61dq9nz.js:14260-14558 placement (2.1.88 match: _temp, 0.315)
 function isPristineUserConfig() {
   let globalConfig = getGlobalConfig();
   if (
@@ -1199,11 +1196,11 @@ function isPristineUserConfig() {
     settingsForSourceForUpkeep?.model === undefined && !settingsForSourceForUpkeep?.skipAutoPermissionPrompt
   );
 }
-//@ chunk-cjydagjy.js:14381-14454 layout
+//@ chunk-h61dq9nz.js:14558-14631 layout
 function shouldSkipFreshMigrations() {
   return env.CLAUDE_CODE_CCR_SKIP_FRESH_MIGRATIONS && isHostManagedProviderAuth() && isPristineUserConfig();
 }
-//@ chunk-cjydagjy.js:14454-15137 callgraph-witnessed (2.1.88 match: runMigrations, 0.216)
+//@ chunk-h61dq9nz.js:14631-15314 callgraph-witnessed (2.1.88 match: runMigrations, 0.216)
 /**
  * 运行同步配置迁移：migrationVersion 已等于 14 时跳过；CCR 新安装直接打标记；否则依次执行各迁移，任一写设置失败则不提升版本（下次启动重跑）。
  */
@@ -1256,7 +1253,7 @@ async function runMigrations(storageV5) {
     storageV5,
   );
 }
-//@ chunk-cjydagjy.js:15137-15359 placement
+//@ chunk-h61dq9nz.js:15314-15536 placement
 async function getPolicyMemoryFingerprint() {
   let settingsForSource = getSettingsForSource("policySettings");
   let includesWarning = shouldShowClaudeMdExternalIncludesWarning();
@@ -1272,12 +1269,12 @@ async function getPolicyMemoryFingerprint() {
     JSON.stringify((await includesWarning).filter((entry) => entry[2])),
   ];
 }
-//@ chunk-cjydagjy.js:16952-17014 placement
+//@ chunk-h61dq9nz.js:17095-17157 placement
 function isAuthSubcommand(flag) {
   if (flag.parent?.name() !== "auth") return false;
   return true;
 }
-//@ chunk-cjydagjy.js:17014-17117 placement
+//@ chunk-h61dq9nz.js:17157-17260 placement
 function isGatewayJsonLogin(command) {
   return (
     command.parent?.name() === "auth" &&
@@ -1285,14 +1282,14 @@ function isGatewayJsonLogin(command) {
     (command.opts().gatewayJson === true || isGatewayLoginForced())
   );
 }
-//@ chunk-cjydagjy.js:20897-21005 placement
+//@ chunk-h61dq9nz.js:21086-21194 placement
 async function getServeHelperStopReason(credentials) {
   let serveHelperIneligibility = getServeHelperIneligibility();
   if (serveHelperIneligibility !== undefined) return serveHelperIneligibility;
   if ((await getClaudeAIOAuthTokenOriginAsync(credentials)) !== "store") return "token_origin";
   return;
 }
-//@ chunk-cjydagjy.js:21005-21173 placement
+//@ chunk-h61dq9nz.js:21194-21362 placement
 async function stopIfServeHelperUnsupported(credentials, phase) {
   let stopReason;
   if (phase === "at_start") stopReason = await getServeHelperStopReason(credentials);
@@ -1310,13 +1307,71 @@ async function stopIfServeHelperUnsupported(credentials, phase) {
   }
   return true;
 }
-//@ chunk-cjydagjy.js:21173-21291 placement
+//@ chunk-h61dq9nz.js:21362-21480 placement
 function getServeHelperIneligibility() {
   if (getAPIProvider() !== "firstParty") return "provider";
   if (getAuthTokenSource().source !== "claude.ai" || !isClaudeAISubscriber()) return "token_source";
   return;
 }
-//@ chunk-cjydagjy.js:21291-33261 placement
+//@ chunk-h61dq9nz.js:21480-21493 layout
+var MAX_REPLY_GATE_POLICY_LENGTH = 32768;
+//@ chunk-h61dq9nz.js:21493-21532 layout
+var CLAUDE_CODE_REPLY_GATE_POLICY = "CLAUDE_CODE_REPLY_GATE_POLICY";
+//@ chunk-h61dq9nz.js:21532-23069 layout
+function applyLaunchReplyGatePolicy() {
+  let policyText = getPreSettingsEnvSnapshot()[CLAUDE_CODE_REPLY_GATE_POLICY];
+  env.unset(CLAUDE_CODE_REPLY_GATE_POLICY);
+  if (policyText === undefined || policyText.trim() === "") return;
+  let parsedPolicy =
+    policyText.length > MAX_REPLY_GATE_POLICY_LENGTH
+      ? {
+          longerThan: MAX_REPLY_GATE_POLICY_LENGTH,
+        }
+      : parseReplyGatePolicy(policyText);
+  let canWarn = process.stderr.isTTY || env.CLAUDE_CODE_REMOTE;
+  if ("policy" in parsedPolicy) {
+    let { policy, unreadBlocks } = parsedPolicy;
+    setReplyGatePolicy(policy, "launchEnv");
+    logForDebugging(
+      `${CLAUDE_CODE_REPLY_GATE_POLICY} accepted: tools=${policy.terminalTools.length} person=${policy.maxAsksAfterPerson} own_task=${policy.maxAsksAfterOwnTask ?? policy.maxAsksAfterServerEvent} other=${policy.maxAsksAfterServerEvent} after_error=${policy.maxAsksAfterError ?? "none"} error_texts=${policy.askTextsAfterError?.size ?? 0} skip_while_worker_out=${policy.skipWhileWorkerOut === true} skip_retry_while_server_down=${policy.skipRetryWhileServerDown === true} status_nudge_seconds=${policy.statusNudge?.seconds ?? "none"} prompt_reminder=${policy.promptReminder !== undefined}`,
+    );
+    if (unreadBlocks.length > 0)
+      logForDebugging(
+        `${CLAUDE_CODE_REPLY_GATE_POLICY}: ignoring its ${unreadBlocks.join(" and ")}, which could not be read; the rest of the policy is kept`,
+        {
+          level: "warn",
+        },
+      );
+    for (let unreadBlock of unreadBlocks)
+      logFeatureSad("projects_reply_gate_policy", `${unreadBlock}_unreadable`, {
+        from_launch_env: true,
+      });
+    let filtered = ["flagSettings", ...EDITABLE_SETTING_SOURCES].filter(
+      (source) => isSettingSourceEnabled(source) && getSettingsForSource(source)?.disableReplyCheck === true,
+    );
+    if (filtered.length > 0) {
+      let ignoredWarning = `disableReplyCheck is ignored in ${filtered.map(getSettingSourceDisplayNameLowercase).join(", ")}: only managed settings can turn the reply check off`;
+      logForDebugging(ignoredWarning, {
+        level: "warn",
+      });
+      if (canWarn) cliWarn(`Warning: ${ignoredWarning}.`);
+    }
+    return;
+  }
+  setLaunchReplyGatePolicyRefused();
+  logReplyGatePolicy("longerThan" in parsedPolicy ? "too_long" : "unreadable", {
+    from_launch_env: true,
+  });
+  let ignoredLine = replyGatePolicyIgnoredLine(CLAUDE_CODE_REPLY_GATE_POLICY, parsedPolicy);
+  logForDebugging(ignoredLine, {
+    level: "error",
+  });
+  if (!canWarn) return;
+  cliWarn(
+    `Warning: ${ignoredLine}. A self-hosted runner sets this variable from what Anthropic's service sends: update the runner and any Claude Code version that your start script pins, and contact Anthropic support if this continues.`,
+  );
+}
+//@ chunk-h61dq9nz.js:23069-35098 placement
 /**
  * 非交互/SDK 会话启动主流程（选项、云会话、输入输出）。
  */
@@ -1383,6 +1438,8 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
   } = session;
   setPrintOutputFormat(outputFormat ?? "text");
   flushDeferredProblems();
+  applyLaunchReplyGatePolicy();
+  if (outputFormat !== "json" && outputFormat !== "stream-json") warnIfSignInExpiring();
   if (headlessCloud) {
     if (!isAttachServeMode())
       return cliError(
@@ -1667,6 +1724,7 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
       m: "0",
     });
     let compatSessionId = toCompatSessionId_2(teleportResult.id);
+    let notice_2 = notice ?? undefined;
     if (outputFormat === "json")
       process.stdout.write(
         jsonStringify({
@@ -1675,7 +1733,7 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
           title: teleportResult.title,
           url: remoteSessionUrl,
           pool_id: poolId,
-          notice,
+          notice: notice_2,
           ...(cleanups.length > 0 && {
             not_applied: cleanups,
           }),
@@ -1687,8 +1745,8 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
 `,
       );
     else {
-      if (notice !== undefined)
-        process.stderr.write(`${notice}
+      if (notice_2 !== undefined)
+        process.stderr.write(`${notice_2}
 `);
       cleanups.forEach((cleanup) =>
         process.stderr.write(`${cleanup}
@@ -1961,7 +2019,7 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
           ? async (config) => {
               let filteredConfig = omitExcludedOrPluginDisabled(isParked, config, {
                 ...getAddDirEnabledPlugins(),
-                ...(getInitialSettings_2().enabledPlugins ?? {}),
+                ...(getInitialSettings().enabledPlugins ?? {}),
               });
               await connectMcpConfigServers({
                 configs: filteredConfig,
@@ -1978,18 +2036,18 @@ async function runPreparedHeadless(session, options, openLiveBackgroundSessionFo
   ).catch((error) => endHeadlessSessionOnEscapedError(session_2, error, outputFormat));
   return;
 }
-//@ chunk-cjydagjy.js:37242-37304 sole-consumer
+//@ chunk-h61dq9nz.js:39079-39141 sole-consumer
 function shouldPrefetchForCommand(command, program) {
   return (
     (command.parent === program && POLICY_HELPER_SUBCOMMANDS.has(command.name())) ||
     isGatewayJsonLogin(command)
   );
 }
-//@ chunk-cjydagjy.js:37304-37330 affinity
+//@ chunk-h61dq9nz.js:39141-39167 affinity
 function alwaysFalse(flag, program) {
   return false;
 }
-//@ chunk-cjydagjy.js:37330-69366 fingerprint (2.1.88 match: run, 0.359)
+//@ chunk-h61dq9nz.js:39167-71312 fingerprint (2.1.88 match: run, 0.358)
 /**
  * commander 构建器（旧版 run() 的前半）：new Command 并挂 preAction 钩子（MDM/钥匙串等待、--project-config-root、init()、客户端数据 URL、启动钩子、插件目录、迁移、远程托管设置/安全对话框、版本下限检查），定义根命令全部选项与 action（→ prepareSession → runHeadless 或 runInteractiveSession）。
  */
@@ -2135,7 +2193,16 @@ function buildCliProgram(hooks) {
     let setupStart = performance.now();
     let awaitResult = await awaitInitializeResult();
     if (awaitResult) recordPhase("await_initialize_ms", performance.now() - setupStart, setupStart);
-    if (awaitResult?.kind === "violation") return cliError(awaitResult.message);
+    if (awaitResult?.kind === "violation") {
+      printCliError(awaitResult.message);
+      if (awaitResult.cause === "first_line")
+        await writeStartupFailureResult({
+          sessionId: getSessionId(),
+          message: awaitResult.message,
+          reason: "initialize_not_first",
+        });
+      return cliError();
+    }
     let appliedAwaitResult = awaitResult?.kind === "applied" ? awaitResult : undefined;
     let pluginDirs = mergePluginDirs(
       asStringArray(raw.getOptionValue("pluginDir")),
@@ -2202,7 +2269,7 @@ function buildCliProgram(hooks) {
     let initialMainLoopModel = isForceRemoteSettingsRefreshConfigured();
     let gatewayRefusal = parsedAgents ? undefined : hostLaunchedGatewayRefusal(initialMainLoopModel);
     if (gatewayRefusal !== undefined)
-      return injectBridgeFault(
+      return exitRefusingBridgeFailure(
         initialMainLoopModel ? "force_refresh_failed" : "_OTHER",
         gatewayRefusal,
         "remote_settings_required_unavailable",
@@ -2219,7 +2286,7 @@ function buildCliProgram(hooks) {
         machineForcedRefresh,
       );
       if (!refreshResult.valid)
-        return injectBridgeFault(
+        return exitRefusingBridgeFailure(
           "force_refresh_failed",
           hostLaunchedGatewayLoadRefusal(false) ?? refreshResult.message,
           remoteSettingsFailureReason(),
@@ -2237,7 +2304,7 @@ function buildCliProgram(hooks) {
       let normalizedAdvisorModel = hostLaunchedGatewayLoadRefusal(remoteManagedSettings);
       if (normalizedAdvisorModel !== undefined) {
         let gatewayFailure = gatewaySettingsFailure();
-        return injectBridgeFault(
+        return exitRefusingBridgeFailure(
           gatewayFailure.forbidden ? "gateway_rejected" : "_OTHER",
           normalizedAdvisorModel,
           gatewayFailure.reason,
@@ -2251,7 +2318,7 @@ function buildCliProgram(hooks) {
           getIsNonInteractiveSession() ||
           isUnattendedInteractiveSession()
         )
-          return injectBridgeFault(
+          return exitRefusingBridgeFailure(
             gatewaySignInFailure.forbidden ? "gateway_rejected" : "_OTHER",
             gatewaySignInFailure.exitMessage,
             gatewaySignInFailure.reason,
@@ -2920,10 +2987,10 @@ function buildCliProgram(hooks) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -3111,9 +3178,9 @@ function buildCliProgram(hooks) {
     withStartupHandles,
   };
 }
-//@ chunk-shkzs7rp.js:24455-25561 placement
+//@ chunk-nhaxap13.js:25936-27042 placement
 var TELEMETRY_SAFE_ENV_VAR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-shkzs7rp.js:24455", () => {
+deferInit("chunk-nhaxap13.js:25936", () => {
   TELEMETRY_SAFE_ENV_VAR_NAMES = new Set([
     "ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES",
     "ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES",
@@ -3148,7 +3215,7 @@ deferInit("chunk-shkzs7rp.js:24455", () => {
     "CLAUDE_CODE_USE_CCR_V2",
   ]);
 });
-//@ chunk-shkzs7rp.js:25561-25723 placement
+//@ chunk-nhaxap13.js:27042-27204 placement
 function summarizeSetEnvVarNames(envVarNames) {
   let declaredNames = new Set([
     ...declaredEnvVarNames(env),
@@ -3166,7 +3233,7 @@ function summarizeSetEnvVarNames(envVarNames) {
       .join(","),
   );
 }
-//@ chunk-shkzs7rp.js:25723-25969 placement
+//@ chunk-nhaxap13.js:27204-27450 placement
 function consumeBridgeChildProjectsEntrypoint() {
   {
     let isBridgeEntrypoint = env.CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT === true;
@@ -3176,9 +3243,9 @@ function consumeBridgeChildProjectsEntrypoint() {
       else logFeatureSad("bridge_projects_entrypoint_name", "host_name_kept");
   }
 }
-//@ chunk-shkzs7rp.js:27853-27950 placement
+//@ chunk-nhaxap13.js:29337-29434 placement
 var SDK_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-shkzs7rp.js:27853", () => {
+deferInit("chunk-nhaxap13.js:29337", () => {
   SDK_ENTRYPOINTS = new Set([
     "sdk-ts",
     "sdk-py",
@@ -3188,7 +3255,7 @@ deferInit("chunk-shkzs7rp.js:27853", () => {
     "claude-desktop-3p",
   ]);
 });
-//@ chunk-shkzs7rp.js:27950-27980 placement
+//@ chunk-nhaxap13.js:29434-29464 placement
 /**
  * 进程级警告处理：initializeWarningHandler + 定时器夹紧 + 另一个进程钩子。
  */
@@ -3197,7 +3264,7 @@ function installProcessWarningHandlers() {
   installTimerDelayClamp();
   registerClientDataGetters();
 }
-//@ chunk-shkzs7rp.js:27980-30942 fingerprint (2.1.88 match: main, 0.47)
+//@ chunk-nhaxap13.js:29464-32429 fingerprint (2.1.88 match: main, 0.469)
 /**
  * main() 的前半（旧版 main 的同名部分）：判定是否非交互（-p/--print、非 TTY 等）并 setIsInteractive、从环境写入 launchOptions、读取 fd 传入的 OAuth/API key/WebSocket 令牌（code review 环境下强制要求 fd 4/5）、推断 clientType（github-action/sdk-*\/claude-vscode/remote/cli…）、预读 --settings。
  */
@@ -3285,13 +3352,13 @@ function applyClientTypeAndEarlySettings({ interactivity }) {
   profileCheckpoint("main_client_type_determined");
   eagerLoadSettings();
 }
-//@ chunk-shkzs7rp.js:30942-31006 placement
+//@ chunk-nhaxap13.js:32429-32493 placement
 var BYPASS_IGNORED_NOTICE = "Bypass permissions was requested at launch and ignored";
-//@ chunk-shkzs7rp.js:31006-31164 placement
+//@ chunk-nhaxap13.js:32493-32651 placement
 function bypassIgnoredHint(settingsPath) {
   return ` \xB7 if that was you, ${isSettingSourceEnabled("userSettings") ? "" : "relaunch with user settings on; "}${settingsPath} needs "skipDangerousModePermissionPrompt": true`;
 }
-//@ chunk-shkzs7rp.js:31164-31578 placement
+//@ chunk-nhaxap13.js:32651-33065 placement
 function buildPermissionModeNotifications(permissionModeNotification) {
   if (!permissionModeNotification)
     return {
@@ -3339,7 +3406,7 @@ function buildPermissionModeNotifications(permissionModeNotification) {
     ],
   };
 }
-//@ chunk-shkzs7rp.js:31578-31754 placement
+//@ chunk-nhaxap13.js:33065-33241 placement
 function startRemoteControlAutoConnect(gate, autoconnect) {
   let deferred = Promise.withResolvers();
   if (isCleanupStarted()) deferred.resolve();
@@ -3352,7 +3419,7 @@ function startRemoteControlAutoConnect(gate, autoconnect) {
   });
   runPromise.then(unregister);
 }
-//@ chunk-shkzs7rp.js:31754-32337 placement
+//@ chunk-nhaxap13.js:33241-33827 placement
 function resolveRemoteControlAtStartup({ remoteControlFlag, isRemoteThinClient }) {
   let CLAUDE_CODE_REMOTE = env.CLAUDE_CODE_REMOTE;
   let explicitRemoteControlAtStartup = resolveExplicitRemoteControlAtStartup();
@@ -3389,7 +3456,7 @@ function resolveRemoteControlAtStartup({ remoteControlFlag, isRemoteThinClient }
     result: !bridgeEnabled ? "off" : outboundOnly ? "mirror" : "full",
   };
 }
-//@ chunk-shkzs7rp.js:32337-32775 placement
+//@ chunk-nhaxap13.js:33827-34265 placement
 function logRemoteControlAutostartResolved(remoteControlAtStartup) {
   logEvent("tengu_rc_autostart_resolved", {
     explicit_setting: fromEnum(
@@ -3410,48 +3477,61 @@ function logRemoteControlAutostartResolved(remoteControlAtStartup) {
     result: fromEnum(remoteControlAtStartup.result),
   });
 }
-//@ chunk-shkzs7rp.js:32775-32801 placement
+//@ chunk-nhaxap13.js:34265-34291 placement
 function identity2(value, defaultedToCloud) {
   return value;
 }
-//@ chunk-shkzs7rp.js:32870-32921 placement
+//@ chunk-nhaxap13.js:34291-34515 affinity
+function hasWarningNotice(messages, { current, queue, pinned }) {
+  return (
+    messages.some(
+      (message) =>
+        message.type === "system" && message.subtype === "informational" && message.level === "warning",
+    ) ||
+    [current, ...queue, ...pinned].some(
+      (queued) =>
+        queued?.kind === "warning" || (queued !== null && "color" in queued && queued.color === "warning"),
+    )
+  );
+}
+//@ chunk-nhaxap13.js:34584-34635 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-shkzs7rp.js:32870", () => {
+deferInit("chunk-nhaxap13.js:34584", () => {
   process.env.NoDefaultCurrentDirectoryInExePath = "1";
 });
-//@ chunk-shkzs7rp.js:32921-32942 fingerprint
+//@ chunk-nhaxap13.js:34635-34656 fingerprint
 // deferred: uses profileCheckpoint (./utils/startupProfiler.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:32921", () => {
+deferInit("chunk-nhaxap13.js:34635", () => {
   profileCheckpoint("main_tsx_entry");
 });
-//@ chunk-shkzs7rp.js:32942-32985 layout
+//@ chunk-nhaxap13.js:34656-34699 layout
 // deferred: uses recordPhase (./utils/startupTiming.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:32942", () => {
+deferInit("chunk-nhaxap13.js:34656", () => {
   recordPhase("node_boot_ms", process.uptime() * 1000, 0);
 });
-//@ chunk-shkzs7rp.js:32985-32991 layout
+//@ chunk-nhaxap13.js:34699-34705 layout
 // deferred: uses recordSpawnToExec (./utils/startupTiming.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:32985", () => {
+deferInit("chunk-nhaxap13.js:34699", () => {
   recordSpawnToExec();
 });
-//@ chunk-shkzs7rp.js:32991-32997 layout
+//@ chunk-nhaxap13.js:34705-34711 layout
 // deferred: uses startMdmRawRead (./utils/settings/mdm/rawRead.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:32991", () => {
+deferInit("chunk-nhaxap13.js:34705", () => {
   startMdmRawRead();
 });
-//@ chunk-shkzs7rp.js:32997-33003 layout
+//@ chunk-nhaxap13.js:34711-34717 layout
 // deferred: uses startKeychainPrefetch (./utils/secureStorage/keychainPrefetch.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:32997", () => {
+deferInit("chunk-nhaxap13.js:34711", () => {
   startKeychainPrefetch();
 });
-//@ chunk-shkzs7rp.js:33003-33083 layout
+//@ chunk-nhaxap13.js:34717-34797 layout
 var dialogLaunchersModule = () => require("./launchCloudCreateChecklist.lazy.js");
 var interactiveHelpersModule = () => require("./interactiveHelpers.js");
-//@ chunk-shkzs7rp.js:33083-33122 layout
+//@ chunk-nhaxap13.js:34797-34836 layout
 function lazyCall(getFn) {
   return (...args) => getFn()(...args);
 }
-//@ chunk-shkzs7rp.js:33122-33918 layout
+//@ chunk-nhaxap13.js:34836-35632 layout
 /**
  * main.tsx 用到的懒加载函数表：每个都是 lazyCall(() => require(对话框/交互帮助模块).X)，避免启动时加载 Ink 组件。
  */
@@ -3474,7 +3554,7 @@ var getRenderContext;
 var renderAndRun;
 var showSetupScreens;
 var showSettingsLoadHold;
-deferInit("chunk-shkzs7rp.js:33122", () => {
+deferInit("chunk-nhaxap13.js:34836", () => {
   launchProviderSetupWizard = lazyCall(() => dialogLaunchersModule().launchProviderSetupWizard);
   launchCloudCreateChecklist = lazyCall(() => dialogLaunchersModule().launchCloudCreateChecklist);
   launchInvalidSettingsDialog = lazyCall(() => dialogLaunchersModule().launchInvalidSettingsDialog);
@@ -3499,12 +3579,12 @@ deferInit("chunk-shkzs7rp.js:33122", () => {
   showSetupScreens = lazyCall(() => interactiveHelpersModule().showSetupScreens);
   showSettingsLoadHold = lazyCall(() => interactiveHelpersModule().showSettingsLoadHold);
 });
-//@ chunk-shkzs7rp.js:33918-33948 fingerprint
+//@ chunk-nhaxap13.js:35632-35662 fingerprint
 // deferred: uses profileCheckpoint (./utils/startupProfiler.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:33918", () => {
+deferInit("chunk-nhaxap13.js:35632", () => {
   profileCheckpoint("main_tsx_imports_loaded");
 });
-//@ chunk-shkzs7rp.js:33948-34079 layout
+//@ chunk-nhaxap13.js:35662-35793 layout
 var loadStandaloneSecurityDialog = () =>
   getIsNonInteractiveSession()
     ? Promise.resolve(undefined)
@@ -3515,7 +3595,7 @@ var loadStandaloneSecurityDialog = () =>
           return;
         },
       );
-//@ chunk-shkzs7rp.js:34079-34371 fingerprint (2.1.88 match: isBeingDebugged, 1)
+//@ chunk-nhaxap13.js:35793-36085 fingerprint (2.1.88 match: isBeingDebugged, 1)
 /**
  * 检测是否处于调试器下（--inspect/--debug 参数、NODE_OPTIONS 或 inspector.url()）；模块顶层若为真则直接 process.exit(1)。
  */
@@ -3532,12 +3612,12 @@ function isBeingDebugged() {
     return hasInspectArg || hasInspectEnv;
   }
 }
-//@ chunk-shkzs7rp.js:34371-34395 callgraph-fingerprint
+//@ chunk-nhaxap13.js:36085-36109 callgraph-fingerprint
 // deferred: uses isBeingDebugged of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-shkzs7rp.js:34371", () => {
+deferInit("chunk-nhaxap13.js:36085", () => {
   if (isBeingDebugged()) process.exit(1);
 });
-//@ chunk-shkzs7rp.js:34395-34856 layout
+//@ chunk-nhaxap13.js:36109-36570 layout
 /**
  * 统计 autoMode 规则（allow/soft_deny/hard_deny/environment）条数与总词数，供启动遥测。
  */
@@ -3553,12 +3633,12 @@ function getAutoModeRuleCounts() {
   for (let category of ["allow", "soft_deny", "hard_deny", "environment"])
     for (let rule of autoModeConfig?.[category] ?? []) {
       if (rule === DEFAULTS_PLACEHOLDER) continue;
-      counts[category] += count(
+      counts[category] += countWhere(
         rule.split(`
 `),
         (line) => line.trim().length > 0,
       );
-      autoModeRuleWordCount += count(rule.split(/\s+/), Boolean);
+      autoModeRuleWordCount += countWhere(rule.split(/\s+/), Boolean);
     }
   return {
     auto_mode_allow_rule_count: counts.allow,
@@ -3568,7 +3648,7 @@ function getAutoModeRuleCounts() {
     auto_mode_rule_word_count: autoModeRuleWordCount,
   };
 }
-//@ chunk-shkzs7rp.js:34856-35158 fingerprint (2.1.88 match: getCertEnvVarTelemetry, 0.905)
+//@ chunk-nhaxap13.js:36570-36872 fingerprint (2.1.88 match: getCertEnvVarTelemetry, 0.905)
 /**
  * 证书相关环境的遥测字段：NODE_EXTRA_CA_CERTS、CLAUDE_CODE_CLIENT_CERT、--use-system-ca/--use-openssl-ca、CLAUDE_CODE_CERT_STORE。
  */
@@ -3581,7 +3661,7 @@ function getCertEnvVarTelemetry() {
   if (env.CLAUDE_CODE_CERT_STORE) result.cert_store = env.CLAUDE_CODE_CERT_STORE;
   return result;
 }
-//@ chunk-shkzs7rp.js:35158-36092 fingerprint (2.1.88 match: logStartupTelemetry, 0.616)
+//@ chunk-nhaxap13.js:36872-37808 fingerprint (2.1.88 match: logStartupTelemetry, 0.616)
 /**
  * 发送 tengu_startup_telemetry：git/worktree 数、gh 登录状态、沙箱开关、自动更新是否禁用、主题、设置过的环境变量名与非默认设置等。
  */
@@ -3597,7 +3677,7 @@ async function logStartupTelemetry(globals, extraFields) {
   ]);
   let setEnvVars = envVarsForTelemetry();
   let nonDefaultKeys = nonDefaultGlobalConfigKeys(globals);
-  let userSettingKeys = setUserSettingKeys(getInitialSettings_2());
+  let userSettingKeys = setUserSettingKeys(getInitialSettings());
   let themeValue = resolveSetting("theme", "dark").value;
   let setting = resolveSetting("precomputeCompactionEnabled", true);
   logEvent("tengu_startup_telemetry", {
@@ -3611,7 +3691,7 @@ async function logStartupTelemetry(globals, extraFields) {
     are_unsandboxed_commands_allowed: SandboxManager.areUnsandboxedCommandsAllowed(),
     is_auto_bash_allowed_if_sandbox_enabled: SandboxManager.isAutoAllowBashIfSandboxedEnabled(),
     auto_updater_disabled: isAutoUpdaterDisabled(),
-    prefers_reduced_motion: getInitialSettings_2().prefersReducedMotion ?? false,
+    prefers_reduced_motion: getInitialSettings().prefersReducedMotion ?? false,
     precompute_compaction_setting_enabled: setting.value,
     precompute_compaction_setting_source: fromEnum(setting.source),
     theme: fromEnumOpt(CONFIG_SOURCE_LABELS.find((label) => label === themeValue)) ?? lit("custom"),
@@ -3625,7 +3705,7 @@ async function logStartupTelemetry(globals, extraFields) {
     ...getAutoModeRuleCounts(),
   });
 }
-//@ chunk-shkzs7rp.js:36092-37015 placement
+//@ chunk-nhaxap13.js:37808-38733 placement
 /**
  * 主入口（cli.js 动态导入后调用）：初始化警告处理与定时器夹紧、注册退出时恢复光标；处理 --handle-uri 深链；必要时改写 argv（导入命令别名）；调用 applyClientTypeAndEarlySettings 后进入 run()。
  */
@@ -3684,7 +3764,7 @@ async function main(storageV5EnvPin) {
   await run(pendingConnect, pendingSSH, storageV5EnvPin, argsAsTyped);
   profileCheckpoint("main_after_run");
 }
-//@ chunk-shkzs7rp.js:37015-48983 placement
+//@ chunk-nhaxap13.js:38733-50952 placement
 /**
  * 调用 commander 构建器（runCommander/Lks）得到 program，注册全部子命令（gateway、mcp、plugin、auth、setup-token、agents、ultrareview、auto-mode、remote-control、doctor、sandbox、update、install、import…），然后 parseAsync(process.argv)。-p 或非 help 时跳过子命令注册以加快启动。
  */
@@ -3913,8 +3993,14 @@ async function run(pendingConnect, pendingSSH, storageV5EnvPin, argsAsTyped) {
       "--trust-workspace",
       "Trust the current folder for this run only, without asking (for scripts and CI). Takes no value: put a PR number or base branch before it. Use it only on folders you trust: the folder's git configuration and Claude Code project settings can run programs",
     )
+    .addOption(new Option("--list <file>").hideHelp())
+    .addOption(new Option("--output <file>").hideHelp())
+    .addOption(new Option("--max-cost <dollars>").hideHelp())
     .action(
-      withStartupHandles(async (target, options, arg, command) => {
+      withStartupHandles(async (target, options, arg, command, handles) => {
+        let { ultrareviewEvalHandler } =
+          await import("./commands/ultrareview/ultrareviewEvalHandler.lazy.js");
+        await ultrareviewEvalHandler(arg, handles.args.slice(1), command, options);
         let { ultrareviewHandler } = await import("./commands/ultrareview/ultrareviewHandler.lazy.js");
         await ultrareviewHandler(arg ?? "", command, target, options);
         process.exit(0);
@@ -4121,15 +4207,15 @@ Starts an interactive session and runs /import.`);
   profileReport();
   return program;
 }
-//@ chunk-shkzs7rp.js:48983-49005 placement
+//@ chunk-nhaxap13.js:50952-50974 placement
 async function noopAsync(unusedOptions) {}
-//@ chunk-shkzs7rp.js:49005-49111 placement
+//@ chunk-nhaxap13.js:50974-51080 placement
 function restoreCursorOnExit() {
   (process.stderr.isTTY ? process.stderr : process.stdout.isTTY ? process.stdout : undefined)?.write(
     SHOW_CURSOR,
   );
 }
-//@ chunk-shkzs7rp.js:49111-53866 placement
+//@ chunk-nhaxap13.js:51080-55839 placement
 /**
  * 交互模式的引导段：createRoot 建 Ink 根，执行 showSetupScreens（信任、onboarding、Chrome 提议等），信任后重新加载 MCP 配置、处理 --rc、刷新远程托管设置、启动受信遥测，最后校验 forceLoginOrg。
  */
@@ -4352,10 +4438,10 @@ async function runOnboardingAndSetupScreens(prepared) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -4397,7 +4483,7 @@ async function runOnboardingAndSetupScreens(prepared) {
     prompt,
   };
 }
-//@ chunk-shkzs7rp.js:53866-54318 placement
+//@ chunk-nhaxap13.js:55839-56291 placement
 function logDeepLinkLaunch(session, launchOptions) {
   if (launchOptions.deepLinkOrigin) {
     logEvent("tengu_deep_link_opened", {
@@ -4430,14 +4516,14 @@ function logDeepLinkLaunch(session, launchOptions) {
       prefillLength: launchOptions.prefill.length,
     });
 }
-//@ chunk-shkzs7rp.js:54318-54548 placement
+//@ chunk-nhaxap13.js:56291-56521 placement
 function printConsoleCloudSignInHint(hintText) {
   process.stdout
     .write(`Opening your browser to sign in for cloud sessions with your Console organization. If it doesn't open here, visit this address in a browser on any computer and paste the code it shows:
 ${hintText}
 `);
 }
-//@ chunk-shkzs7rp.js:54548-86699 placement
+//@ chunk-nhaxap13.js:56521-92152 placement
 /**
  * 交互会话主体：根据 --continue/--resume/--teleport/--cloud/--from-pr 等分支恢复或创建会话，最后调用 launchRepl（chunk-19arrzdw 的 aLt）渲染 App+REPL。
  */
@@ -4523,14 +4609,15 @@ async function runInteractiveSession(session, options, pendingConnect, pendingSS
     verbose,
     wasPersistedTrustedBeforeSetup,
     wasTrustedBeforeSetup,
+    localSessionMove,
   } = session;
   logStartupTiming("interactive_prepared");
   logEvent("tengu_startup_manual_model_config", {
     cli_flag: telemetrySafeModelName(options.model),
     env_var: telemetrySafeModelName(process.env.ANTHROPIC_MODEL),
     default_env_var: telemetrySafeModelName(env.ANTHROPIC_DEFAULT_MODEL),
-    settings_file: telemetrySafeModelName(getInitialSettings_2().model),
-    settings_source: fromEnumOpt(getEffectiveSettingSource_2("model")),
+    settings_file: telemetrySafeModelName(getInitialSettings().model),
+    settings_source: fromEnumOpt(getEffectiveSettingSource("model")),
     subscriptionType: fromEnumOpt(getSubscriptionType()),
     agent: agentSetting
       ? agentTypeForAnalytics_GATE_EVALUATED(
@@ -4599,7 +4686,7 @@ async function runInteractiveSession(session, options, pendingConnect, pendingSS
     sessionNoticesPoll: {
       pendingDeliveryUuids: [],
     },
-    settings: getInitialSettings_2(),
+    settings: getInitialSettings(),
     tasks: {},
     attentionBudget: UNLIMITED,
     proactivityLevel,
@@ -5031,10 +5118,11 @@ async function runInteractiveSession(session, options, pendingConnect, pendingSS
       let cachedSensitivePathGate;
       let isSensitivePathGateEnabled = () => (cachedSensitivePathGate ??= sensitivePathGateEnabled());
       let terminalInput_2 =
-        defaultedToCloud ||
-        getFeatureValue_CACHED_MAY_BE_STALE("tengu_remote_backend", false) ||
-        false ||
-        (await isSensitivePathGateEnabled());
+        localSessionMove === undefined &&
+        (defaultedToCloud ||
+          getFeatureValue_CACHED_MAY_BE_STALE("tengu_remote_backend", false) ||
+          false ||
+          (await isSensitivePathGateEnabled()));
       let inputUnavailableReason = terminalInput_2 ? unavailableReason(terminalInput) : undefined;
       if (inputUnavailableReason !== undefined) {
         await logInteractiveInputFailure(inputUnavailableReason);
@@ -5054,8 +5142,8 @@ ${noTtyMessage(inputUnavailableReason)}`,
       if (environmentQuery !== null && !terminalInput_2 && remote === "" && typeof inputPrompt === "string")
         remote = inputPrompt;
       let hasRemote = !compatRepoId && remote.length > 0;
-      let attachId = hasRemote ? randomUUID() : undefined;
-      if (!terminalInput_2 && !hasRemote && poolId === null)
+      let attachId = hasRemote || localSessionMove !== undefined ? randomUUID() : undefined;
+      if (!terminalInput_2 && !hasRemote && poolId === null && localSessionMove === undefined)
         return await exitWithError(
           root,
           `Error: --cloud requires a description.
@@ -5065,6 +5153,10 @@ Usage: claude --cloud "your task description"`,
       let attachId_2;
       let startupHandles = [];
       let pendingDialogs = [];
+      let moveNotices = [];
+      let sessionTitle;
+      let moveAsk;
+      let moveResult;
       let fleetNudgeStore;
       let fleetMountHandle;
       let fleetViewHost;
@@ -5098,7 +5190,7 @@ Usage: claude --cloud "your task description"`,
           import("./cli/handlers/attachRemote.lazy.js"),
           import("./components/fleet/useAttachFleetOwners.js"),
           import("./components/fleet/FleetNudgeStore.js"),
-          import("./components/pluginUi/chunk-3k3se2kw.lazy.js"),
+          import("./components/pluginUi/chunk-p51vwbvf.lazy.js"),
         ]);
         let fleetViewHost = createFleetViewHost();
         let fleetMounted;
@@ -5161,7 +5253,8 @@ Usage: claude --cloud "your task description"`,
       }
       if (compatRepoId) return await runStartupSteps(compatRepoId, undefined);
       else {
-        isAttachMode = await isSensitivePathGateEnabled();
+        if (!(localSessionMove !== undefined && !terminalInput_2))
+          isAttachMode = await isSensitivePathGateEnabled();
         let connectedSessionGate = lit(
           isAttachMode ? "on" : hasFreshGrowthBookFeatures() ? "off" : "unfetched",
         );
@@ -5197,6 +5290,61 @@ Usage: claude --cloud "your task description"`,
           });
           return waitForGate(fleetHandle.message);
         }
+        if (localSessionMove !== undefined) await waitForOwnFlagFetch();
+        let askMove = async (hasBeenChecked) =>
+          localSessionMove !== undefined
+            ? await require("./utils/teleport/HISTORY_HELD_BACK.lazy.js")
+                .checkLocalSessionMove(
+                  localSessionMove,
+                  {
+                    bare: false,
+                    selfHostedDefault: isCcpoolId(getEnvironmentSelectionInfo().id),
+                    monorepoAsked: monorepo === true,
+                    hasBeenChecked,
+                  },
+                  {
+                    account: {
+                      accountUuid: getStoredOauthAccountInfo()?.accountUuid ?? "",
+                      organizationUuid: getStoredOauthAccountInfo()?.organizationUuid ?? "",
+                    },
+                    storageV5,
+                    credentials,
+                    host: session_2.host,
+                    activeAgents: agentDefinitions.activeAgents,
+                  },
+                )
+                .catch(async (error) => {
+                  await logFeatureBadAsync("cloud_local_session_move", "check_threw");
+                  return {
+                    refusal: require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").moveCheckThrewWords(
+                      localSessionMove,
+                      error,
+                    ),
+                    destination: undefined,
+                    conversation: undefined,
+                  };
+                })
+            : undefined;
+        let handleRefusal = async (refusal) => {
+          logEvent("tengu_remote_create_session_error", {
+            defaulted: defaultedToCloud,
+            error: lit("local_session_move_refused"),
+            branch_mode: branchModeForTelemetry(poolOnBranch, poolRef),
+          });
+          return await waitForGate(
+            refusal +
+              (resumeState === undefined
+                ? ""
+                : `
+${resumeState}`),
+          );
+        };
+        let askedMove = await askMove(false);
+        if (askedMove?.refusal !== undefined) return await handleRefusal(askedMove.refusal);
+        let destination = askedMove?.destination;
+        let monorepo_2 =
+          monorepo === true ||
+          require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").goesToMonorepoPool(destination);
         try {
           if (!defaultedToCloud)
             await ensureConsoleProfileCloudSessionsCredential(credentials, printConsoleCloudSignInHint);
@@ -5263,7 +5411,8 @@ Usage: claude --cloud "your task description"`,
         let isViolinWoodServed = isAttachMode
           ? isViolinWoodServedOn()
           : await isViolinWoodEnabled().catch(() => false);
-        let cloudToolsAnswered = isAttachMode && isCloudClientToolServingAnsweredOn();
+        let ignoresSavedDefault = false;
+        let attachNeedsAnswer = isAttachMode && isCloudClientToolServingAnsweredOn();
         if (isAttachMode)
           logEvent("tengu_remote_create_tool_serving_gate", {
             own_answer: lit(isViolinWoodServed ? "on" : "off"),
@@ -5272,7 +5421,7 @@ Usage: claude --cloud "your task description"`,
             own_flags_loaded: hasFreshGrowthBookFeatures(),
             own_flag_fetch_wait_ms: ownFlagFetchWaitMs,
           });
-        let isAttachModeValue = isAttachMode;
+        let attachMode = isAttachMode;
         hostConsentMode = isAttachMode && (await neverTrueAsync());
         let { accessToken } = fleetNudgeStore;
         let noopDisposer = () => {};
@@ -5310,15 +5459,35 @@ Usage: claude --cloud "your task description"`,
               : undefined,
           poolId: poolId ?? undefined,
           chosenEnvironmentKind: startupBlock?.environment.kind,
-          monorepo,
+          ignoresSavedDefault,
+          monorepo: monorepo_2,
         };
         let fleetError = null;
         let resumeError = null;
         let hasAnyError = false;
-        let hostModeGate = hostConsentMode && alwaysFalsePlaceholder();
+        let hostModeGate = hostConsentMode && isRemoteSessionDisabled();
         let isBlocked = false;
         if (hasAnyError) hostConsentMode = false;
         let fileSyncGate = hasAnyError ? lit("device_too_old") : lit(hostConsentMode ? "on" : "off");
+        if (localSessionMove !== undefined && terminalInput_2) {
+          moveAsk = await require("./components/projects/askMoveFirstMessage.lazy.js").askMoveFirstMessage(
+            root,
+          );
+          let unused = undefined;
+          if (unused !== undefined)
+            return await handleRefusal(`${unused.notice}
+Session ${localSessionMove} wasn't moved. To continue it here, run \`claude --resume ${localSessionMove}\`.`);
+          if (moveAsk === undefined) {
+            logFeatureSad("cloud_local_session_move", "cancelled");
+            return await interactiveHelpersModule().exitWithMessage(
+              root,
+              `Not moved. To continue it here, run \`claude --resume ${localSessionMove}\`.`,
+              {
+                beforeExit: () => gracefulShutdown(1),
+              },
+            );
+          }
+        }
         let abortController = new AbortController();
         let attachStart = isAttachMode
           ? launchCloudCreateChecklist(root, {
@@ -5347,6 +5516,7 @@ Usage: claude --cloud "your task description"`,
           isAttachMode && isViolinWoodServed && (await isSettingsToCloudEnabled().catch(() => false));
         let needsContainerSync =
           terminalInput_2 && (await isContainerSyncEnvironment(hostConsentMode)) && !hasResumeTarget;
+        let isAttachModeValue = attachMode;
         noopDisposer(isAttachModeValue);
         let hostConsentMode_2 = resolveHostConsentMode({
           hostConsent: homeSettingsConsent,
@@ -5368,7 +5538,7 @@ Usage: claude --cloud "your task description"`,
             storageV5,
           });
         let didMountScreen = false;
-        if (cloudToolsAnswered && isAttachModeValue) {
+        if (attachNeedsAnswer && isAttachModeValue) {
           let [{ isRemoteToolServingSwitchOn }, { deviceMcpConsentOffer }, { primeWindowsProfileDirs }] =
             await Promise.all([
               import("./services/remoteTools/servingGates.js"),
@@ -5413,7 +5583,7 @@ Usage: claude --cloud "your task description"`,
           permissionModeTyped: permissionModeCli !== undefined,
           dangerouslySkipPermissions: dangerouslySkipPermissions === true,
           scrubbed: isScrubEnabled(),
-          settings: getInitialSettings_2(),
+          settings: getInitialSettings(),
           effort: resolveEffortLevel(initialSessionState),
         });
         let selfHostedModeNotice;
@@ -5430,7 +5600,7 @@ Usage: claude --cloud "your task description"`,
             settingsMode: startupModeTelemetry.settingsDefault,
             settingsModeForwardable: homeSettingsGate,
             ...getAutoSeedFactors({
-              settings: getInitialSettings_2(),
+              settings: getInitialSettings(),
               scrubbed: isScrubEnabled(),
               typedLevel: options.proactivity,
               carriedMode: options.inheritPermissionMode,
@@ -5455,7 +5625,7 @@ Usage: claude --cloud "your task description"`,
           ? shutdownCoordinator.permissionMode
           : cloudPermissionMode;
         if (
-          cloudToolsAnswered &&
+          attachNeedsAnswer &&
           isAttachModeValue &&
           (effectivePermissionMode === "auto" || effectivePermissionMode === "bypassPermissions")
         ) {
@@ -5481,7 +5651,7 @@ Usage: claude --cloud "your task description"`,
           )
             await launchUnattendedServingConsentDialog(root);
         }
-        let deviceBinding = isAttachModeValue
+        let deviceBinding = attachMode
           ? {
               orgUuid: fleetNudgeStore.orgUUID,
               accountUuid: getStoredOauthAccountInfo()?.accountUuid,
@@ -5516,6 +5686,8 @@ Usage: claude --cloud "your task description"`,
         let extraTeleportOptions = {};
         let unusedResumeOverrides = undefined;
         let unusedSessionOverrides = undefined;
+        let secondAsk = await askMove(true);
+        if (secondAsk?.refusal !== undefined) return await handleRefusal(secondAsk.refusal);
         let createSessionResult = await teleportToRemoteWithErrorHandling(root, {
           showTeleportErrors: showTeleportErrorsImpl,
           firstUpload: firstUploadPromise,
@@ -5536,9 +5708,19 @@ Usage: claude --cloud "your task description"`,
           source: "remote",
           branchName: chosenBranchName || undefined,
           branchFromHead: (poolOnBranch ?? poolRef) == null,
-          title: sessionNameArg || undefined,
+          title:
+            sessionNameArg ||
+            (localSessionMove !== undefined
+              ? require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").MOVED_SESSION_TITLE
+              : undefined),
+          isMove: localSessionMove !== undefined,
           appendSystemPrompt:
-            [null, null].filter((promptPart) => promptPart !== null).join(`
+            [
+              null,
+              null,
+              require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").monorepoMoveNoteForClaude(destination) ??
+                null,
+            ].filter((promptPart) => promptPart !== null).join(`
 
 `) || undefined,
           reuseOutcomeBranch: poolOnBranch ?? undefined,
@@ -5553,7 +5735,10 @@ Usage: claude --cloud "your task description"`,
           correlationId: correlationId ?? undefined,
           persistentVolume,
           persistentVolumeFromSessionId: persistentVolumeFromSessionId ?? undefined,
-          monorepo,
+          monorepo: monorepo_2,
+          monorepoNotice: require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").monorepoMoveNotice(
+            destination,
+          ),
           noMonorepo,
           noMonorepoAsksTheService,
           personal,
@@ -5577,9 +5762,9 @@ Usage: claude --cloud "your task description"`,
         if (!createSessionResult.ok) {
           if (attachStart !== null && abortController.signal.aborted) {
             if (defaultedToCloud) logFeatureSad("cloud_session_default", "cancelled");
+            if (localSessionMove !== undefined) logFeatureSad("cloud_local_session_move", "cancelled");
             return await attachStart.exitCancelled();
           }
-          attachStart?.failed();
           if (defaultedToCloud) logFeatureBad("cloud_session_default", createSessionResult.failReason);
           logEvent("tengu_remote_create_session_error", {
             defaulted: defaultedToCloud,
@@ -5605,17 +5790,91 @@ Usage: claude --cloud "your task description"`,
               session_archived: lit(createSessionResult.failDetail.sessionArchived ? "true" : "false"),
             }),
           });
+          let unstoredHint = "";
+          let attachFailure =
+            localSessionMove !== undefined
+              ? require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").moveCreateRefusal(
+                  localSessionMove,
+                  {
+                    failReason: createSessionResult.failReason,
+                    serverReason: createSessionResult.failDetail?.serverReason,
+                    failMessage: createSessionResult.failMessage,
+                  },
+                  destination,
+                )
+              : undefined;
+          attachStart?.failed(attachFailure !== undefined);
+          if (attachFailure !== undefined)
+            logFeatureSad(
+              "cloud_local_session_move",
+              attachFailure.code,
+              require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").moveEventFields(destination),
+            );
+          else if (localSessionMove !== undefined)
+            logFeatureBad("cloud_local_session_move", createSessionResult.failReason);
           return await waitForGate(
-            (createSessionResult.failMessage
-              ? `Error: ${createSessionResult.failMessage}`
-              : "Error: Unable to create cloud session") +
+            (attachFailure?.words ??
+              (createSessionResult.failMessage
+                ? `Error: ${createSessionResult.failMessage}${unstoredHint}`
+                : "Error: Unable to create cloud session")) +
               (resumeState === undefined
                 ? ""
                 : `
-${resumeState}`),
+${resumeState}`) +
+              (localSessionMove !== undefined && attachFailure === undefined
+                ? `
+To continue it here, run \`claude --resume ${localSessionMove}\`.`
+                : ""),
           );
         }
         let session_3 = createSessionResult.session;
+        if (localSessionMove !== undefined && secondAsk?.conversation !== undefined) {
+          stopCapturingEarlyInput();
+          if (!terminalInput_2 && process.stdin.isTTY) process.stdin.setRawMode(false);
+          let localMoveModule = require("./utils/teleport/HISTORY_HELD_BACK.lazy.js");
+          let settledMove = await localMoveModule.settleMovedSession(
+            {
+              id: localSessionMove,
+              destination,
+              conversation: secondAsk.conversation,
+              typed: moveAsk,
+            },
+            session_3,
+            {
+              storageV5,
+              credentials,
+              cancelled: abortController.signal,
+              named: Boolean(sessionNameArg),
+              asked: {
+                fileSync: needsContainerSync,
+                thisComputer: isAttachModeValue,
+              },
+              checkAgain: () => askMove(true),
+            },
+          );
+          if (!settledMove.ok) {
+            logEvent("tengu_remote_create_session_error", {
+              defaulted: defaultedToCloud,
+              error: lit("local_session_move_stopped"),
+              branch_mode: branchModeForTelemetry(poolOnBranch, poolRef),
+            });
+            return await waitForGate(
+              settledMove.error +
+                (resumeState === undefined
+                  ? ""
+                  : `
+${resumeState}`),
+            );
+          }
+          moveResult = settledMove;
+          moveNotices = [
+            settledMove.notice,
+            ...localMoveModule.moveModeNotices(shutdownCoordinator?.action),
+            ...localMoveModule.noMonorepoMoveNotices(destination, cloudCloseOnLeave !== undefined),
+            ...localMoveModule.poolChosenNotices(destination, isCcpoolId(getEnvironmentSelectionInfo().id)),
+          ];
+          sessionTitle = settledMove.title;
+        }
         let sentSettingsMode =
           session_3.settingsModeOnRunner === undefined ? effectivePermissionMode : undefined;
         fleetMountResult =
@@ -5634,7 +5893,7 @@ ${resumeState}`),
           });
           pendingResumeState = resolveSeedPermissionMode({
             seed: startupModeTelemetry,
-            settingsMode: getInitialSettings_2().permissions?.defaultMode,
+            settingsMode: getInitialSettings().permissions?.defaultMode,
             sentMode: sentSettingsMode,
             startsIn: deviceMcpOffer,
           });
@@ -5642,6 +5901,7 @@ ${resumeState}`),
         pendingDialogs =
           startupBlock?.notice && !session_3.chosenEnvironmentMoved ? [startupBlock.notice] : [];
         startupHandles = [...startupPromises, ...startupHandles_2, ...createSessionResult.notices];
+        startupHandles = [...moveNotices, ...startupHandles];
         if (defaultedToCloud) logFeatureOk("cloud_session_default");
         let unusedServedToolsHolder = null;
         let unusedRepositoryTrustHolder = null;
@@ -5709,7 +5969,19 @@ ${resumeState}`),
             }),
           });
         if (!terminalInput_2) {
-          process.stdout.write(`Created cloud session: ${session_3.title}
+          if (localSessionMove !== undefined && moveResult !== undefined) {
+            let resolve =
+              await require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").sendFirstMessageAndLeave(
+                {
+                  id: localSessionMove,
+                  sessionId: session_3.id,
+                  destination,
+                },
+                moveResult,
+              );
+            if (resolve !== undefined) return await waitForGate(resolve);
+          }
+          process.stdout.write(`Created cloud session: ${sessionTitle ?? session_3.title}
 `);
           let compatSessionId = toCompatSessionId_2(session_3.id);
           if (poolId !== null)
@@ -5720,7 +5992,10 @@ ${resumeState}`),
             m: "0",
           })}
 `);
-          process.stdout.write(`Resume with: claude --teleport ${compatSessionId}
+          for (let line of localSessionMove === undefined
+            ? [`Resume with: claude --teleport ${compatSessionId}`]
+            : moveNotices)
+            process.stdout.write(`${line}
 `);
           if (fleetMountResult)
             process.stdout.write(`${fleetMountResult.text}
@@ -5733,7 +6008,24 @@ ${resumeState}`),
         }
         attachId_2 = session_3.id;
         fleetMountHandle = session_3.homeSeed;
-        fleetViewHost = session_3.withheldInitialMessage;
+        fleetViewHost =
+          moveResult !== undefined && attachId !== undefined
+            ? {
+                content: moveResult.firstTurnText,
+                handoff: moveResult.handoff,
+                uuid: attachId,
+                fileAttachments: moveResult.fileAttachments,
+                followsPermissionMode: cloudCloseOnLeave !== undefined,
+                wordsIfLost: moveResult.wordsIfLost,
+              }
+            : session_3.withheldInitialMessage;
+        if (moveResult !== undefined) {
+          moveResult.letSessionStay();
+          logFeatureOk(
+            "cloud_local_session_move",
+            require("./utils/teleport/HISTORY_HELD_BACK.lazy.js").moveEventFields(destination),
+          );
+        }
       }
       setIsRemoteMode(true);
       switchSession(identityAgentId(attachId_2), "remote_attach");
@@ -5838,8 +6130,12 @@ ${resumeState}`),
         from: "cli",
         m: "0",
       });
-      let createPromptMessage = tryReadFileForSync("create", remoteSessionUrl, isAttachMode);
-      let extraInitialMessages = [];
+      let targetFileContent = tryReadFileForSync(
+        localSessionMove === undefined ? "create" : "moved",
+        remoteSessionUrl,
+        isAttachMode,
+      );
+      let droppedMcpMessages = [];
       let pendingResumeMessages = pendingResumeState
         ? [createSystemMessage(pendingResumeState.text, pendingResumeState.level)]
         : [];
@@ -5850,7 +6146,12 @@ ${resumeState}`),
             content: remote,
             uuid: attachId,
           })
-        : null;
+        : moveAsk !== undefined
+          ? createUserMessage({
+              content: moveAsk,
+              uuid: attachId,
+            })
+          : null;
       let permissionModeWarning = compatRepoId
         ? permissionModeCli
           ? "--permission-mode is ignored when attaching \u2014 the session keeps its current mode (shift+tab to change it)"
@@ -5862,12 +6163,15 @@ ${resumeState}`),
         applyPromises !== undefined && cloudCloseOnLeave === undefined
           ? isDeviceRevokedError(applyPromises)
           : undefined;
-      let initialState = {
+      let baseInitialSessionState = {
         ...initialSessionState,
-        initialMessage: nullIfTruthy(
-          hasRemote && poolId !== null && poolPromotedRemote,
-          initialSessionState.initialMessage,
-        ),
+        initialMessage:
+          localSessionMove === undefined
+            ? nullIfTruthy(
+                hasRemote && poolId !== null && poolPromotedRemote,
+                initialSessionState.initialMessage,
+              )
+            : null,
         remoteSessionUrl,
         ...(deviceMcpOffer !== undefined && {
           toolPermissionContext: {
@@ -5934,13 +6238,23 @@ ${resumeState}`),
           },
         }),
       };
+      let initialMessages = [
+        ...remoteDroppedMcpMessages,
+        targetFileContent,
+        ...droppedMcpMessages,
+        ...mapped_2,
+        ...pendingResumeMessages,
+        ...mapped,
+      ];
+      if (hasWarningNotice(initialMessages, baseInitialSessionState.notifications))
+        markEarlyInputLaunchWarning();
       logDeepLinkLaunch(session_2, options);
       await launchSessionRepl(
         root,
         {
           getFpsMetrics,
           stats,
-          initialState,
+          initialState: baseInitialSessionState,
           session: session_2,
           storageV5,
           credentials,
@@ -5949,24 +6263,7 @@ ${resumeState}`),
           debug,
           commands,
           initialTools: [],
-          initialMessages: remotePromptMessage
-            ? [
-                ...remoteDroppedMcpMessages,
-                createPromptMessage,
-                ...extraInitialMessages,
-                ...mapped_2,
-                ...pendingResumeMessages,
-                ...mapped,
-                remotePromptMessage,
-              ]
-            : [
-                ...remoteDroppedMcpMessages,
-                createPromptMessage,
-                ...extraInitialMessages,
-                ...mapped_2,
-                ...pendingResumeMessages,
-                ...mapped,
-              ],
+          initialMessages: remotePromptMessage ? [...initialMessages, remotePromptMessage] : initialMessages,
           mcpClients: [],
           autoConnectIdeFlag: ide,
           mainThreadAgentDefinition,
@@ -6131,7 +6428,7 @@ Couldn't parse your git remote: ${repositoryValidation.rawRemoteUrl}`;
                 forkSession: !!options.forkSession,
                 expectedSessionId: transcriptSessionId ?? undefined,
               }),
-              beforeUse: noopModelPinSubscriber(modelPinStorageKind(options.resume)),
+              beforeUse: noopModelPinSubscriber(resumeSourceForPath(options.resume)),
             });
             if (result) {
               transcriptFileFailureStage = "processing_error";
@@ -6142,7 +6439,7 @@ Couldn't parse your git remote: ${repositoryValidation.rawRemoteUrl}`;
                   forkSession: !!options.forkSession,
                   sessionIdOverride: transcriptSessionId ?? undefined,
                   transcriptPath: result.fullPath,
-                  resumeSource: modelPinStorageKind(options.resume),
+                  resumeSource: resumeSourceForPath(options.resume),
                 },
                 context,
               );
@@ -6280,7 +6577,7 @@ Couldn't parse your git remote: ${repositoryValidation.rawRemoteUrl}`;
     if (fileDownloadPromise)
       try {
         let downloadResults = await fileDownloadPromise;
-        let failedDownloadCount = count(downloadResults, (downloadResult) => !downloadResult.success);
+        let failedDownloadCount = countWhere(downloadResults, (downloadResult) => !downloadResult.success);
         if (failedDownloadCount > 0)
           warnStartupIssues(`${failedDownloadCount}/${downloadResults.length} file(s) failed to download.`);
       } catch (error) {
@@ -6422,18 +6719,17 @@ Couldn't parse your git remote: ${repositoryValidation.rawRemoteUrl}`;
   }
 }
 export {
+  compactJsonForTypedTransport,
+  resetCursor,
+  getPolicyMemoryFingerprint,
   logManagedSettings,
   prefetchSystemContextIfSafe,
   suggestUnknownSubcommand,
   extractTeammateOptions,
   getInputPrompt,
   logTenguInit,
-  applySettingSourcesFlagFromArgv,
-  _pendingSSH,
-  compactJsonForTypedTransport,
-  getPolicyMemoryFingerprint,
   runMigrations,
-  resetCursor,
+  applySettingSourcesFlagFromArgv,
   main,
   eagerLoadSettings,
   loadManagedSettingsFromFlag,

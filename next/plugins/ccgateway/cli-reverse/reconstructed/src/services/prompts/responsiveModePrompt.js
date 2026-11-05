@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：响应模式（responsive mode）提示词段与注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jr1te1aj.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rbrqatjy.js (14)
  * attribution: placement 14
  */
 import { __commonJS, __export } from "../../../runtime/bun-runtime.js";
@@ -19,8 +19,9 @@ import {
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../plugins/builtinPlugins.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { isRemoteEntrypoint } from "../../utils/entrypointKinds.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 
-//@ chunk-jr1te1aj.js:3810-3937 placement
+//@ chunk-rbrqatjy.js:4154-4281 placement
 var RESPONSIVE_MODE_HOOKS_MANIFEST = __commonJS(function (manifestModule, manifestExports) {
   manifestExports.exports = {
     scan: {
@@ -30,12 +31,12 @@ var RESPONSIVE_MODE_HOOKS_MANIFEST = __commonJS(function (manifestModule, manife
     files: {},
   };
 });
-//@ chunk-jr1te1aj.js:3937-3946 placement
+//@ chunk-rbrqatjy.js:4281-4290 placement
 /**
  * 响应模式插件的模块导出表（默认导出）。
  */
 var responsiveModeExports = {};
-//@ chunk-jr1te1aj.js:3946-4258 placement
+//@ chunk-rbrqatjy.js:4290-4602 placement
 __export(responsiveModeExports, {
   DRAFT_HINT: () => DRAFT_HINT_TEXT,
   FOCUS_MODE: () => FOCUS_MODE,
@@ -54,7 +55,7 @@ __export(responsiveModeExports, {
   spliceDraftHint: () => noSpliceHint,
   typedByTheUser: () => isTypedComposerText,
 });
-//@ chunk-jr1te1aj.js:4258-4343 placement
+//@ chunk-rbrqatjy.js:4602-4687 placement
 /**
  * 输入来自 composer、无附件且是用户键入的词。
  */
@@ -63,20 +64,20 @@ function isTypedComposerText(prompt) {
     prompt.origin.kind === "composer" && prompt.attachments === undefined && isRealUserPrompt(prompt.text)
   );
 }
-//@ chunk-jr1te1aj.js:4343-4387 placement
+//@ chunk-rbrqatjy.js:4687-4731 placement
 /**
  * 键入词、已有回合 id 且不在等待（提交会打断当前回合）。
  */
 var cutsTheTurnOnSubmit = (prompt) =>
   isTypedComposerText(prompt) && prompt.turnId !== undefined && !prompt.wait;
-//@ chunk-jr1te1aj.js:4387-4455 placement
+//@ chunk-rbrqatjy.js:4731-4799 placement
 /**
  * 草稿提示文案：enter 打断并发送、ctrl+x 再 enter 排队。
  */
 var DRAFT_HINT_TEXT = "enter to interrupt and send \xB7 ctrl+x then enter to queue";
-//@ chunk-jr1te1aj.js:4455-4474 placement
+//@ chunk-rbrqatjy.js:4799-4818 placement
 var FOCUS_MODE = "focus_mode";
-//@ chunk-jr1te1aj.js:4474-4874 placement
+//@ chunk-rbrqatjy.js:4818-5218 placement
 var RESPONSIVE_MODE_REMINDER = `<responsive-mode>
 Responsive mode is on. Reply to the user's message above right away, before
 any thinking or tool use, even if it is just "I'm on it..." or "Let me
@@ -84,7 +85,7 @@ think..." when you need to think first. Write in clear, conversational
 English, the way a sharp colleague writes in chat, without eager openers,
 flattery, stock apologies or wrap-ups. Then continue the work.
 </responsive-mode>`;
-//@ chunk-jr1te1aj.js:4874-7130 placement
+//@ chunk-rbrqatjy.js:5218-7474 placement
 var RESPONSIVE_MODE_SECTION = `# Responsive mode
 Responsive mode: the user is watching a live terminal and your #1 priority
 is to communicate with them quickly. Before you think or call any tool,
@@ -124,7 +125,7 @@ Avoid these patterns and their cousins:
   sentences.
 - Emoji, and exclamation-mark enthusiasm in general.
 Say what you found, what you did, what you need, and stop.`;
-//@ chunk-jr1te1aj.js:7130-7663 placement
+//@ chunk-rbrqatjy.js:7474-8007 placement
 function registerResponsiveModePrompt(registerHook, isRemote, getSpliceHint, isHintSuppressed) {
   registerHook(
     "prompt.section",
@@ -180,7 +181,7 @@ function registerResponsiveModePrompt(registerHook, isRemote, getSpliceHint, isH
     },
   );
 }
-//@ chunk-jr1te1aj.js:7663-7703 placement
+//@ chunk-rbrqatjy.js:8007-8047 placement
 /**
  * 注册简化版的响应式模式提示注入。
  */
@@ -192,7 +193,7 @@ function registerResponsiveModePromptSimple(registerHook) {
     () => false,
   );
 }
-//@ chunk-jr1te1aj.js:7703-7807 placement
+//@ chunk-rbrqatjy.js:8047-8151 placement
 var registerResponsiveModePlugin = () =>
   registerBuiltinPlugin({
     ...RESPONSIVE_MODE_PLUGIN,
@@ -210,16 +211,18 @@ var registerResponsiveModePlugin = () =>
       () => RESPONSIVE_MODE_HOOKS_MANIFEST(),
     ),
   });
-//@ chunk-jr1te1aj.js:7807-7847 placement
+//@ chunk-rbrqatjy.js:8151-8254 placement
 function isRemoteEntrypoint_2() {
   if (isRemoteEntrypoint()) return true;
-  return false;
+  return codeModeAccepted()
+    ? require("../../utils/codeMode/waitForNews.js").isReplSpliceWaitEnabled()
+    : false;
 }
-//@ chunk-jr1te1aj.js:7847-7860 placement
+//@ chunk-rbrqatjy.js:8254-8295 placement
 /**
  * 不拼接草稿提示（返回空串）。
  */
-var noSpliceHint = () => "";
+var noSpliceHint = () => "enter joins the running turn";
 export {
   DRAFT_HINT_TEXT,
   FOCUS_MODE,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对未担保的设置文档只保留限制性设置（deny 化、清除放宽项）；计算未担保设置文档中可采用的限制部分。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (5)
  * attribution: placement 5
  */
 import {
@@ -32,7 +32,7 @@ import { BUILTIN } from "../../utils/telemetry/pluginTelemetry.js";
 import { isSnapshotOnlySession, currentRemoteSettingsState_2 } from "./remoteSettingsState.js";
 import { isDiskless } from "../../bootstrap/state.js";
 
-//@ chunk-dcmhvw5a.js:400133-400199 placement
+//@ chunk-z20c443b.js:398551-398617 placement
 /**
  * 判断文档是否含需收窄的限制设置（有托管设置、非空且收窄后与原文不同）。
  */
@@ -43,7 +43,7 @@ function isRestrictedUnvouchedDocument(settings) {
     import_sortedIndex_2(extractRestrictionSettings(settings), settings)
   );
 }
-//@ chunk-dcmhvw5a.js:400199-400399 placement
+//@ chunk-z20c443b.js:398617-398817 placement
 var LOOSENING_SETTING_PATHS = [
   ["allowedHttpHookUrls"],
   ["httpHookAllowedEnvVars"],
@@ -59,7 +59,7 @@ var CREDENTIAL_LIST_PATHS = [
     names: "name",
   },
 ];
-//@ chunk-dcmhvw5a.js:400399-401104 placement
+//@ chunk-z20c443b.js:398817-399522 placement
 /**
  * 对未担保的设置文档只保留限制性设置（deny 化、清除放宽项）。
  */
@@ -102,7 +102,7 @@ function stripUnvouchedRestrictions(settings) {
     delete settings.strictPluginOnlyCustomization;
   if (settings.availableModelsMatch === "prefix") delete settings.availableModelsMatch;
 }
-//@ chunk-dcmhvw5a.js:401104-401583 placement
+//@ chunk-z20c443b.js:399522-400001 placement
 function restrictionsOfUnvouchedDocument(settings) {
   let restricted = {
     ...collectManagedRestrictions(settings),
@@ -136,7 +136,7 @@ function restrictionsOfUnvouchedDocument(settings) {
         enabledPlugins: Object.fromEntries(filtered),
       };
 }
-//@ chunk-dcmhvw5a.js:401583-402126 placement
+//@ chunk-z20c443b.js:400001-400544 placement
 /**
  * 计算未担保设置文档中可采用的限制部分。
  */

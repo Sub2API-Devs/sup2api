@@ -3,9 +3,9 @@
  *
  * 内置工具输入 schema 获取与缓存（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (7)
  * attribution: placement 7
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -13,21 +13,21 @@ import { settingsJsonSchema } from "../../../utils/settings/schemaOutput.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:10204-10215 placement
+//@ chunk-7jxyna5q.js:10180-10191 placement
 /**
  * 模块导出对象
  */
 var BUILTIN_TOOL_SCHEMAS_EXPORTS = {};
-//@ chunk-s61vbvea.js:10215-10297 placement
+//@ chunk-7jxyna5q.js:10191-10273 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:10215", () => {
+deferInit("chunk-7jxyna5q.js:10191", () => {
   __export(BUILTIN_TOOL_SCHEMAS_EXPORTS, {
     builtinToolSchemasOf: () => builtinToolSchemasOf,
     default: () => BUILTIN_TOOL_SCHEMAS_EXPORTS,
     outputJsonSchemaOf: () => outputJsonSchemaOf,
   });
 });
-//@ chunk-s61vbvea.js:454996-455140 placement
+//@ chunk-7jxyna5q.js:373665-373809 placement
 /**
  * 按 zod schema 对象缓存其 JSON Schema 转换结果（WeakMap，可重置）。
  */
@@ -43,15 +43,15 @@ class SchemaConversionCache {
     this.converted = new WeakMap();
   }
 }
-//@ chunk-s61vbvea.js:455140-455154 placement
+//@ chunk-7jxyna5q.js:373809-373823 placement
 /**
  * zod → JSON Schema 的缓存
  */
 var schemaConversionCache; // deferred: uses SchemaConversionCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:455140", () => {
+deferInit("chunk-7jxyna5q.js:373809", () => {
   schemaConversionCache = new SchemaConversionCache();
 });
-//@ chunk-s61vbvea.js:455154-455267 placement
+//@ chunk-7jxyna5q.js:373823-373936 placement
 /**
  * 把工具的 zod 输入 schema 转为 JSON Schema（不可表示时抛错），结果按 schema 缓存。被工具 API schema、延迟工具统计、serve 模式等使用。
  */
@@ -64,18 +64,27 @@ function toolInputJsonSchema(inputSchema) {
   schemaConversionCache.remember(inputSchema, jsonSchema);
   return jsonSchema;
 }
-//@ chunk-s61vbvea.js:626893-627024 placement
+//@ chunk-7jxyna5q.js:548401-548668 placement
 function outputJsonSchemaOf(outputSchema) {
   try {
-    return settingsJsonSchema(outputSchema, {
+    let jsonSchema = settingsJsonSchema(outputSchema, {
       unrepresentable: "any",
     });
+    let { properties } = jsonSchema;
+    if (typeof properties === "object" && properties !== null && "codeModeRouted" in properties) {
+      let { codeModeRouted, ...restProperties } = properties;
+      return {
+        ...jsonSchema,
+        properties: restProperties,
+      };
+    }
+    return jsonSchema;
   } catch (error) {
     logForDebugging(`tool types: an output schema did not convert: ${error}`);
     return;
   }
 }
-//@ chunk-s61vbvea.js:627024-627203 placement
+//@ chunk-7jxyna5q.js:548668-548847 placement
 var builtinToolSchemasOf = (allBaseToolsFromRegistry) =>
   allBaseToolsFromRegistry
     .filter((tool) => tool.isMcp !== true)

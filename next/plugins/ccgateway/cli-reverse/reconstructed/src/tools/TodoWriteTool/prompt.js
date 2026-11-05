@@ -3,21 +3,21 @@
  *
  * TodoWrite 描述与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TodoWriteTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (3)
+ * pieces: chunk-fmnbrxwy.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 
-//@ chunk-kxyd0g16.js:51559-51963 placement
+//@ chunk-fmnbrxwy.js:66273-66677 placement
 /**
  * TodoWrite 工具说明。
  */
 var TODO_WRITE_DESCRIPTION_2 =
   'Create and update a task list for the current session. The list is rendered to the user as your working plan.\n\n- Each todo has `content`, `status` ("pending" | "in_progress" | "completed"), and `activeForm` (present-tense label shown while in progress).\n- Send the full list each call; it replaces the previous one.\n- Keep one item `in_progress` at a time and mark it `completed` when done.';
-//@ chunk-kxyd0g16.js:51963-52020 placement
+//@ chunk-fmnbrxwy.js:66677-66734 placement
 function todoWritePromptFor(model, leanPrompt) {
   return leanPromptOf({
     model,
@@ -26,7 +26,7 @@ function todoWritePromptFor(model, leanPrompt) {
     ? TODO_WRITE_DESCRIPTION_2
     : TODO_WRITE_PROMPT;
 }
-//@ chunk-kxyd0g16.js:52020-61420 fingerprint (2.1.88 match: DESCRIPTION, 1)
+//@ chunk-fmnbrxwy.js:66734-76134 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TodoWrite 提示词与描述。
  */
@@ -148,7 +148,7 @@ The assistant did not use the todo list because this is an informational request
 <example>
 User: Can you add a comment to the calculateTotal function to explain what it does?
 Assistant: Sure, let me add a comment to the calculateTotal function to explain what it does.
-* Uses the ${FILE_EDIT_TOOL_NAME} tool to add a comment to the calculateTotal function *
+* Uses the ${EDIT} tool to add a comment to the calculateTotal function *
 
 <reasoning>
 The assistant did not use the todo list because this is a single, straightforward task confined to one location in the code. Adding a comment doesn't require tracking multiple steps or systematic organization.

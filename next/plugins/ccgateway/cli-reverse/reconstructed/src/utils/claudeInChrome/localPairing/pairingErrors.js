@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：配对错误码与时钟
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xf186d.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-290tacpj.js (6)
  * attribution: placement 6
  */
-//@ chunk-p7xf186d.js:4870-5251 placement
+//@ chunk-290tacpj.js:4870-5251 placement
 /**
  * 判断错误码是否已知，未知时归一为 malformed。
  */
@@ -35,7 +35,7 @@ var PAIRING_ERROR_CODES = [
   "unknown_pairing",
 ];
 var PAIRING_ERROR_CODE_SET = new Set(PAIRING_ERROR_CODES);
-//@ chunk-p7xf186d.js:5251-5566 placement
+//@ chunk-290tacpj.js:5251-5566 placement
 class PairingError extends Error {
   code;
   httpStatus;
@@ -55,17 +55,17 @@ class PairingError extends Error {
       : this.code;
   }
 }
-//@ chunk-p7xf186d.js:5566-5708 placement
+//@ chunk-290tacpj.js:5566-5708 placement
 function normalizePairingErrorCode(code) {
   if (typeof code !== "string") return "malformed";
   let code_2 = code.startsWith("attest_failed:") ? "attest_failed" : code;
   return PAIRING_ERROR_CODE_SET.has(code_2) ? code_2 : "malformed";
 }
-//@ chunk-p7xf186d.js:5708-5750 placement
+//@ chunk-290tacpj.js:5708-5750 placement
 function malformedError(message) {
   return new PairingError("malformed", message);
 }
-//@ chunk-p7xf186d.js:5750-6008 placement
+//@ chunk-290tacpj.js:5750-6008 placement
 class PairingClock {
   wall;
   mono;
@@ -83,6 +83,6 @@ class PairingClock {
     return Math.max(0, this.wall() - stamp.wall, this.mono() - stamp.mono);
   }
 }
-//@ chunk-p7xf186d.js:6008-6058 placement
+//@ chunk-290tacpj.js:6008-6058 placement (2.1.88 match: buildSdkUrl, 0.538)
 var LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export { LOOPBACK_HOSTS, malformedError, PairingError, PairingClock, normalizePairingErrorCode };

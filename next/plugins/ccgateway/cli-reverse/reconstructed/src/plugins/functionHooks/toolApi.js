@@ -3,20 +3,16 @@
  *
  * 2.1.316 新增：插件 $.tool.call/register 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { getCancelMessage, runToolUse } from "../../services/tools/toolExecution.js";
-import {
-  createCancelledToolResultBlock,
-  withMemoryCorrectionHint,
-  createUserMessage,
-  createAssistantMessage,
-} from "../../utils/messages.js";
+import { createCancelledToolResultBlock } from "../../services/PromptSuggestion/speculation.js";
+import { withMemoryCorrectionHint, createUserMessage, createAssistantMessage } from "../../utils/messages.js";
 import {
   markRecordGenuine as markRecordGenuine_2,
   noteToolText,
@@ -32,9 +28,6 @@ import { requireBoundSession } from "./sessionApi.js";
 import { isMultiEntryAliasTool } from "../../services/tools/permissionCheckGuard.js";
 import { findTool } from "../../services/api/deferredToolsState.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { isWebToolRestrictedInRelay } from "../../utils/permissions/permissionRulePayload.js";
-import { isComputerUseTool } from "../../utils/permissions/browserToolNames.js";
-import { isRemoteBrowserToolUnderModeFloor } from "../../utils/permissions/remoteBrowser.js";
 import { forwardAbort } from "./dispatch/chain.js";
 import {
   pluginToolContext,
@@ -52,8 +45,8 @@ import { jsonCloneValue } from "./api/settingsRead.js";
 import { resolvedModelOf } from "./api/agentToolOps.js";
 import { isBuiltinMcpServerName } from "../../services/mcp/builtinServerNames.js";
 import { moduleStore } from "../../services/mcp/mcpClientCapabilities.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { createToolCheckCore, toolCheckApprover } from "./toolCheckHooks.js";
 import { checkDeclarativePermission } from "../../utils/permissions/permissions.js";
 import { eventCallersFor2 } from "./eventCatalog.js";
@@ -68,9 +61,9 @@ import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analy
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { sleep } from "../../utils/sleep.js";
 import { isToolDroppedByDenyRules } from "../../utils/permissions/filterToolsByDenyRules.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-e6aww6q8.js:50158-50309 placement (2.1.88 match: _temp, 0.649)
+//@ chunk-5xgkngpb.js:52574-52725 placement (2.1.88 match: _temp, 0.649)
 /**
  * 校验工具输入并调用工具的 isReadOnly，是只读时返回 {isReadOnly: true}；出错记录日志并返回空对象。
  */
@@ -87,7 +80,7 @@ function checkToolReadOnly(tool, input, toolContext) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:3968539-3968704 placement
+//@ chunk-5xgkngpb.js:4070977-4071142 placement
 /**
  * 生成被取消的工具结果消息（带记忆纠正提示）。
  */
@@ -103,14 +96,14 @@ function createCancelledToolResult(toolUseId, assistantMessage, signal, now) {
     now,
   });
 }
-//@ chunk-e6aww6q8.js:3968704-3968733 placement
+//@ chunk-5xgkngpb.js:4071142-4071171 placement
 /**
  * 标记记录可信
  */
 function markRecordGenuine() {
   markRecordGenuine_2(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:3968733-3968947 placement
+//@ chunk-5xgkngpb.js:4071171-4071385 placement
 /**
  * 把工具输入与结果中的文本记入会话宿主的记录（失败时标记记录丢失）。
  */
@@ -129,7 +122,7 @@ function noteToolTexts(observableInput, content) {
     } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:3968947-3969019 placement
+//@ chunk-5xgkngpb.js:4071385-4071457 placement
 /**
  * 记录决定
  */
@@ -140,7 +133,7 @@ function setDecided(decisionOut, mode, decision) {
     mode,
   };
 }
-//@ chunk-e6aww6q8.js:3969019-3969116 placement
+//@ chunk-5xgkngpb.js:4071457-4071554 placement
 /**
  * 给结果消息附权限决定
  */
@@ -149,7 +142,7 @@ function attachPermissionDecision(messages, toolUseId, record) {
   for (let message of findToolResultMessages(messages, toolUseId)) message.permissionDecision = record;
   return messages;
 }
-//@ chunk-e6aww6q8.js:3969116-3969347 placement
+//@ chunk-5xgkngpb.js:4071554-4071785 placement
 /**
  * 找出只包含指定 tool_use_id 结果的用户消息。
  */
@@ -162,7 +155,7 @@ function findToolResultMessages(rows, toolUseId) {
   }
   return matches;
 }
-//@ chunk-e6aww6q8.js:3969347-3969456 placement
+//@ chunk-5xgkngpb.js:4071785-4071894 placement
 function awaitSpawnedAnswerForever(options) {
   return awaitSpawnedAgentAnswer({
     ...options,
@@ -170,7 +163,7 @@ function awaitSpawnedAnswerForever(options) {
     settleWaitMs: Number.POSITIVE_INFINITY,
   });
 }
-//@ chunk-e6aww6q8.js:3969456-3971994 placement
+//@ chunk-5xgkngpb.js:4071894-4074224 placement
 /**
  * 插件 $.tool.call：按名字调用会话中的工具，可附带用户同意字符串。
  */
@@ -191,15 +184,6 @@ async function toolCallForPlugin(request, caller) {
     );
     throw new HooksError(`${pluginName}: $.tool.call: no tool named "${tool}" in this session`);
   }
-  if (
-    consent !== undefined &&
-    (isWebToolRestrictedInRelay(tool_2.name) ||
-      isComputerUseTool(tool_2.mcpInfo) ||
-      isRemoteBrowserToolUnderModeFloor(tool_2))
-  )
-    throw new HooksError(
-      `${pluginName}: $.tool.call: ${tool_2.name} does not accept \`consent\` in this session. Call it without \`consent\`, and the normal permission check will decide.`,
-    );
   let abortController = new AbortController();
   let releaseAbort = forwardAbort(signal, abortController);
   let toolContext = pluginToolContext(session, abortController, {
@@ -330,35 +314,37 @@ async function toolCallForPlugin(request, caller) {
         text,
       };
 }
-//@ chunk-e6aww6q8.js:3973570-3973672 placement
+//@ chunk-5xgkngpb.js:4075803-4075905 placement
 function checkServerNameReserved(name) {
   if (isBuiltinMcpServerName(name))
     throw new HooksError(`${name}: $.tool.register: "${name}" is a reserved MCP server name`);
 }
-//@ chunk-e6aww6q8.js:3973672-3973946 placement
+//@ chunk-5xgkngpb.js:4075905-4076179 placement
 function checkServerNameTaken(session, pluginName, key) {
   if (moduleStore.serverKey(pluginName) !== undefined || moduleStore.minted(key)) return;
-  let found = session.mcpServers().find((name) => normalizeNameForMCP(name) === normalizeNameForMCP(key));
+  let found = session
+    .mcpServers()
+    .find((name) => CLAUDEAI_SERVER_PREFIX(name) === CLAUDEAI_SERVER_PREFIX(key));
   if (found === undefined) return;
   throw new HooksError(
     `${pluginName}: $.tool.register: the session already has an MCP server named "${found}" in its MCP config; registering would replace it`,
   );
 }
-//@ chunk-e6aww6q8.js:3973946-3973958 placement
+//@ chunk-5xgkngpb.js:4076179-4076191 placement
 /**
  * 100
  */
 var MAX_TOOL_DESCRIBE_CHARS = 100;
-//@ chunk-e6aww6q8.js:3973958-3973971 placement
+//@ chunk-5xgkngpb.js:4076191-4076204 placement
 /**
  * 8000
  */
 var TOOL_DESCRIBE_CACHE_MS = 8000;
-//@ chunk-e6aww6q8.js:3973971-3974541 placement
+//@ chunk-5xgkngpb.js:4076204-4076776 placement
 async function toolCheckForPlugin(args, caller) {
   let { plugin, signal } = caller;
   let { tool, input } = args;
-  if (!isPlainObject_5(input))
+  if (!isPlainObject_6(input))
     throw new HooksError(`${plugin}: $.tool.check: input is the tool's arguments, an object`);
   let origin = caller.origin ?? [plugin];
   let session = requireBoundSession(plugin, "$.tool.check");
@@ -396,7 +382,7 @@ async function toolCheckForPlugin(args, caller) {
     releaseAbort();
   }
 }
-//@ chunk-e6aww6q8.js:3974541-3974849 placement
+//@ chunk-5xgkngpb.js:4076776-4077083 placement
 /**
  * $.tool.list：列出会话工具（名字、截断后的描述、是否 MCP），描述按工具缓存。
  */
@@ -421,7 +407,7 @@ async function toolListOp(plugin) {
     })),
   );
 }
-//@ chunk-e6aww6q8.js:3974849-3976621 placement
+//@ chunk-5xgkngpb.js:4077083-4078858 placement
 /**
  * 插件 $.tool.register：注册插件工具；--tools 为空或 --bare 会话中拒绝。
  */
@@ -512,32 +498,32 @@ async function toolRegisterForPlugin(registration, plugin) {
     tool: rawMcpToolName,
   };
 }
-//@ chunk-e6aww6q8.js:3976621-3976724 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-5xgkngpb.js:4078858-4078961 placement (2.1.88 match: getMcpPrefix, 1)
 var listServersInToolNames = (serverName) =>
-  uniq(
+  normalizeCaseForComparison_2(
     serverName
       .filter((toolName) => toolName.startsWith("mcp__"))
       .map((toolName) => toolName.split("__")[1] ?? ""),
   ).join(", ") || "none";
-//@ chunk-e6aww6q8.js:3976724-3976788 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-5xgkngpb.js:4078961-4079025 placement (2.1.88 match: getMcpPrefix, 1)
 var mcpToolNameVariants = (server, tool) =>
   new Set([
     buildRawMcpToolName(server, tool),
     `mcp__${server}__${tool}`,
-    buildRawMcpToolName(server, normalizeNameForMCP(tool)),
+    buildRawMcpToolName(server, CLAUDEAI_SERVER_PREFIX(tool)),
   ]);
 export {
+  checkToolReadOnly,
+  toolCallForPlugin,
+  toolCheckForPlugin,
+  toolListOp,
+  toolRegisterForPlugin,
   createCancelledToolResult,
   attachPermissionDecision,
   findToolResultMessages,
   markRecordGenuine,
   setDecided,
   noteToolTexts,
-  checkToolReadOnly,
-  toolCallForPlugin,
   mcpToolNameVariants,
   listServersInToolNames,
-  toolCheckForPlugin,
-  toolListOp,
-  toolRegisterForPlugin,
 };

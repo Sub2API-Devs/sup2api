@@ -3,10 +3,10 @@
  *
  * AWS STS 运行时配置（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1), chunk-heg39xxp.js (3)
- * attribution: cjs-fingerprint 1, placement 2, esm-layout 1
+ * pieces: chunk-539esr4f.js (3), chunk-brqnbz3r.js (1)
+ * attribution: placement 2, esm-layout 1, cjs-fingerprint 1
  */
 import { __toESM, __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../../../core/dist-cjs/index.js";
@@ -29,9 +29,9 @@ import { require_tslib } from "../../../../../tslib/tslib.js";
 import { require_package } from "../../../package.json.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-heg39xxp.js:5178-5193 placement
+//@ chunk-539esr4f.js:5178-5193 placement
 var import_core_3 = __toESM(require_core_2());
-//@ chunk-heg39xxp.js:5193-5304 placement
+//@ chunk-539esr4f.js:5193-5304 placement
 var import_util_user_agent_node = __toESM(require_util_user_agent_node());
 var import_index_native_2 = __toESM(require_index_native());
 var import_core_4 = __toESM(require_core());
@@ -41,7 +41,7 @@ var import_node_config_provider = __toESM(require_node_config_provider());
 var import_node_http_handler = __toESM(require_node_http_handler());
 var import_util_body_length_node = __toESM(bodyLengthNodeModule());
 var import_index_browser = __toESM(require_index_browser_2());
-//@ chunk-heg39xxp.js:11221-13020 esm-layout
+//@ chunk-539esr4f.js:11221-13020 esm-layout
 var import_client_3 = __toESM(require_client());
 var import_node_config_provider_2 = __toESM(require_node_config_provider_2());
 var import_client_4 = __toESM(require_client());
@@ -129,9 +129,9 @@ var getRuntimeConfig_2 = (config) => {
       ),
   };
 };
-//@ chunk-a8ee6x44.js:7841-9866 cjs-fingerprint
+//@ chunk-brqnbz3r.js:7841-9866 cjs-fingerprint
 var require_runtimeConfig; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-a8ee6x44.js:7841", () => {
+deferInit("chunk-brqnbz3r.js:7841", () => {
   require_runtimeConfig = __commonJS(function (cjsExports) {
     Object.defineProperty(cjsExports, "__esModule", {
       value: true,
@@ -236,4 +236,4 @@ deferInit("chunk-a8ee6x44.js:7841", () => {
     cjsExports.getRuntimeConfig = getRuntimeConfig;
   });
 });
-export { require_runtimeConfig, getRuntimeConfig_2 };
+export { getRuntimeConfig_2, require_runtimeConfig };

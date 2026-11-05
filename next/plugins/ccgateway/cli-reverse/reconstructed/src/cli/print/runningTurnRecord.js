@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行中回合记录的构建、对账与压缩保留行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (20)
  * attribution: placement 20
  */
 import {
@@ -18,26 +18,30 @@ import {
 } from "./queuedMessageUtils.js";
 import { logError } from "../../utils/log.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
+import {
+  SYNTHETIC_MODEL,
+  isNoResponseRequestedMessage,
+  isInterruptionOnlyMessage,
+  isToolResultMessage,
+  isHarnessMetaMessage,
+} from "../../utils/messages.js";
 import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
-import { TENGU_CHEEKY_TOUCAN, TENGU_TWINKLY_CLOVER } from "../../services/api/withRetry.js";
+import {
+  TENGU_CHEEKY_TOUCAN,
+  TENGU_TWINKLY_CLOVER,
+  TENGU_SHINY_HAMMING,
+} from "../../services/api/withRetry.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 import { isNonPromptUserRow } from "../../utils/transcript/deserialize.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { env } from "../../utils/env.js";
 import { MAX_RESUME_TAIL_AGE_MS, isResumeTooOld } from "../../utils/conversationRecovery.js";
-import {
-  isSyntheticApiErrorMessage,
-  isInterruptionOnlyMessage,
-  isToolResultMessage,
-  isHarnessMetaMessage,
-} from "../../utils/messages.js";
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
 import { localCommandTagKindOf } from "../../utils/messages/localCommandTags.js";
 import { isTurnUnanswered } from "../../utils/sessionStorage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:39294-40494 placement
+//@ chunk-0yw3taqg.js:57852-59082 placement
 /**
  * 为正在运行的轮次构造压缩元数据中的 runningTurnSends（opener、已送达的消息 uuid 列表）。
  */
@@ -123,9 +127,9 @@ function buildRunningTurnRecord(
     },
   };
 }
-//@ chunk-tyg7f3ek.js:40494-40504 placement
+//@ chunk-0yw3taqg.js:59082-59092 placement
 var MAX_RUNNING_ROW_ID_CHARS = 64;
-//@ chunk-tyg7f3ek.js:40504-40910 placement
+//@ chunk-0yw3taqg.js:59092-59498 placement
 function createRunningTurnTracker(readTakenIn) {
   let takenIn = [];
   let lastReplyUuid;
@@ -175,7 +179,7 @@ function createRunningTurnTracker(readTakenIn) {
       }),
   };
 }
-//@ chunk-tyg7f3ek.js:40910-41059 placement (2.1.88 match: countUserPromptsFromEntries, 0.769)
+//@ chunk-0yw3taqg.js:59498-59647 placement (2.1.88 match: countUserPromptsFromEntries, 0.774)
 function countUserPromptsFromEntries_2(entries) {
   return (
     entries.type === "assistant" &&
@@ -185,7 +189,7 @@ function countUserPromptsFromEntries_2(entries) {
     entries.message.model !== SYNTHETIC_MODEL
   );
 }
-//@ chunk-tyg7f3ek.js:41059-42197 placement
+//@ chunk-0yw3taqg.js:59647-60800 placement
 function reconcileRunningTurnRecord(
   boundary,
   { boundaryOfThisTurn, continuedTurnsRows, conversation, ...options },
@@ -252,7 +256,7 @@ function reconcileRunningTurnRecord(
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:42197-42463 placement
+//@ chunk-0yw3taqg.js:60800-61094 placement
 function findRunningTurnBoundary(openerUuid, rows) {
   let lastIndex = rows.findLastIndex(isCompactBoundaryMessage);
   let boundary = rows[lastIndex];
@@ -261,12 +265,14 @@ function findRunningTurnBoundary(openerUuid, rows) {
   return (
     openerUuid !== undefined
       ? typeof openerUuid_2 === "string" && openerUuid_2.toLowerCase() === openerUuid.toLowerCase()
-      : !rows.slice(lastIndex + 1).some((row) => row.type === "user" && !isNonPromptUserRow(row))
+      : !rows
+          .slice(lastIndex + 1)
+          .some((row) => row.type === "user" && row.queueTranscriptOnly !== true && !isNonPromptUserRow(row))
   )
     ? boundary
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:42463-43363 placement
+//@ chunk-0yw3taqg.js:61094-61997 placement
 function mergeRunningTurnSends({
   takenIn,
   takenInAtLastReply,
@@ -317,17 +323,18 @@ function mergeRunningTurnSends({
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:43363-43374 placement
+//@ chunk-0yw3taqg.js:61997-62008 placement
 var COMPACTION_FRESHNESS_MS = 1e4;
-//@ chunk-tyg7f3ek.js:43374-43462 placement
+//@ chunk-0yw3taqg.js:62008-62096 placement
 function lowercaseUuidSet(uuids) {
   return new Set(uuids.flatMap((uuid) => (typeof uuid === "string" ? [uuid.toLowerCase()] : [])));
 }
-//@ chunk-tyg7f3ek.js:43462-44099 placement
-function compactionPreservedRows(messages, turnInterruption, loadedRows = messages) {
+//@ chunk-0yw3taqg.js:62096-62891 placement
+function compactionPreservedRows(messages, runningTurnBoundaryId, loadedRows = messages) {
   let boundary;
   let ranInsideTheCutOffTurn = false;
   let keptRowsNotLoaded = false;
+  let openedBehindIt = false;
   try {
     boundary = messages.findLast(isCompactBoundaryMessage);
     let uuids = Object(Object(boundary?.compactMetadata).preservedMessages).uuids;
@@ -339,9 +346,21 @@ function compactionPreservedRows(messages, turnInterruption, loadedRows = messag
         [...preservedUuids].some((uuid) => loadedUuids.has(uuid))
       );
     }
-    ranInsideTheCutOffTurn =
-      findRunningTurnBoundary(undefined, messages) !== undefined &&
-      findRunningTurnBoundary(turnInterruption, messages) !== undefined;
+    let turnMovedOn =
+      runningTurnBoundaryId !== undefined &&
+      findRunningTurnBoundary(runningTurnBoundaryId, messages) === undefined;
+    ranInsideTheCutOffTurn = findRunningTurnBoundary(undefined, messages) !== undefined && !turnMovedOn;
+    openedBehindIt =
+      turnMovedOn ||
+      messages
+        .slice(messages.findLastIndex(isCompactBoundaryMessage) + 1)
+        .some(
+          (message) =>
+            message.type === "user" &&
+            message.isMeta !== true &&
+            message.queueTranscriptOnly !== true &&
+            !isNonPromptUserRow(message),
+        );
   } catch (error) {
     logError(error);
     return;
@@ -357,9 +376,10 @@ function compactionPreservedRows(messages, turnInterruption, loadedRows = messag
     atMs: timestamp <= Date.now() ? timestamp : undefined,
     ranInsideTheCutOffTurn,
     keptRowsNotLoaded,
+    openedBehindIt,
   };
 }
-//@ chunk-tyg7f3ek.js:44099-44453 placement
+//@ chunk-0yw3taqg.js:62891-63245 placement
 function isRowFromLoadedCompaction({ uuid, conversation, loadedCompaction }) {
   return (
     env.CLAUDE_CODE_REMOTE &&
@@ -367,24 +387,24 @@ function isRowFromLoadedCompaction({ uuid, conversation, loadedCompaction }) {
       loadedCompaction?.takenInSince.has(uuid.toLowerCase()) === true) &&
     loadedCompaction.atMs !== undefined &&
     Date.now() - loadedCompaction.atMs < MAX_RESUME_TAIL_AGE_MS &&
-    !isResumeTooOld(conversation.filter((row) => !isSyntheticApiErrorMessage(row))) &&
+    !isResumeTooOld(conversation.filter((row) => !isNoResponseRequestedMessage(row))) &&
     isFoamySpringEnabled() &&
     conversation
       .slice(conversation.findLastIndex(isCompactBoundaryMessage) + 1)
       .every((row) =>
         row.type === "assistant"
-          ? isSyntheticApiErrorMessage(row)
+          ? isNoResponseRequestedMessage(row)
           : row.type !== "user" || row.isCompactSummary === true,
       )
   );
 }
-//@ chunk-tyg7f3ek.js:44453-44581 placement
+//@ chunk-0yw3taqg.js:63245-63373 placement
 function cutOffTurnFlagFor({ uuid, loadedCompaction, carriesTheCutOffTurnOn }) {
   return carriesTheCutOffTurnOn && loadedCompaction?.listed?.has(uuid.toLowerCase()) === true
     ? getRemoteFeatureGateState(TENGU_TWINKLY_CLOVER)
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:44581-44736 placement
+//@ chunk-0yw3taqg.js:63373-63528 placement
 function turnStartedBeforeCompaction({ startedAtMs, loadedCompaction, carriesTheCutOffTurnOn }) {
   return (
     carriesTheCutOffTurnOn &&
@@ -395,9 +415,9 @@ function turnStartedBeforeCompaction({ startedAtMs, loadedCompaction, carriesThe
     startedAtMs + COMPACTION_FRESHNESS_MS < loadedCompaction.atMs
   );
 }
-//@ chunk-tyg7f3ek.js:44736-44914 placement
+//@ chunk-0yw3taqg.js:63528-63706 placement
 var TERMINAL_TURN_OUTCOMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:44736", () => {
+deferInit("chunk-0yw3taqg.js:63528", () => {
   TERMINAL_TURN_OUTCOMES = new Set([
     "reply",
     "reply_then_reminder",
@@ -409,7 +429,7 @@ deferInit("chunk-tyg7f3ek.js:44736", () => {
     "max_turns",
   ]);
 });
-//@ chunk-tyg7f3ek.js:44914-45970 placement
+//@ chunk-0yw3taqg.js:63706-64762 placement
 function compactionCopyTelemetry({
   uuid,
   loadedCompaction,
@@ -469,7 +489,7 @@ function compactionCopyTelemetry({
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:45970-46684 placement
+//@ chunk-0yw3taqg.js:64762-65596 placement
 function classifyRedeliveredRow(uuid, copy) {
   let carriedOn = copy.carriesTheCutOffTurnOn();
   if (copy.loadedCompaction?.ranInsideTheCutOffTurn === false) {
@@ -482,10 +502,16 @@ function classifyRedeliveredRow(uuid, copy) {
       !copy.anInheritedPromptWaits()
     )
       return;
+    let mustWaitWhileOwed =
+      copy.loadedCompaction.keptRowsNotLoaded ||
+      copy.loadedCompaction.openedBehindIt ||
+      getRemoteFeatureGateState(TENGU_SHINY_HAMMING) !== "on";
     copy.noteCopyAwaitsTheCutOffTurn();
-    return {
-      whileStillOwed: copy.cutOffTurnIsStillOwed,
-    };
+    return mustWaitWhileOwed
+      ? {
+          whileStillOwed: copy.cutOffTurnIsStillOwed,
+        }
+      : copy.cutOffTurnIsStillOwed;
   }
   let { loadedCompaction } = copy;
   let flag = cutOffTurnFlagFor({
@@ -508,7 +534,7 @@ function classifyRedeliveredRow(uuid, copy) {
   copy.noteCopyAwaitsTheCutOffTurn();
   return copy.cutOffTurnIsStillOwed;
 }
-//@ chunk-tyg7f3ek.js:46684-46774 placement
+//@ chunk-0yw3taqg.js:65596-65686 placement
 function isNonUserRow(row) {
   return (
     ("isCompactSummary" in row && row.isCompactSummary === true) ||
@@ -517,7 +543,7 @@ function isNonUserRow(row) {
     isHarnessMetaMessage(row)
   );
 }
-//@ chunk-tyg7f3ek.js:46774-46879 placement
+//@ chunk-0yw3taqg.js:65686-65791 placement
 function isSyntheticUserMessage(row) {
   return (
     row.type === "user" &&
@@ -526,7 +552,7 @@ function isSyntheticUserMessage(row) {
     (row.isMeta === true || localCommandTagKindOf(row) !== undefined)
   );
 }
-//@ chunk-tyg7f3ek.js:46879-47303 placement
+//@ chunk-0yw3taqg.js:65791-66215 placement
 function isOpenerUnanswered(messages, openerUuid) {
   let messageIndex = findMessageIndex(messages, openerUuid);
   let opener = messages[messageIndex];
@@ -536,7 +562,7 @@ function isOpenerUnanswered(messages, openerUuid) {
       index > messageIndex &&
       (message.type === "user" || message.type === "assistant") &&
       !("isSidechain" in message && message.isSidechain === true) &&
-      !isSyntheticApiErrorMessage(message) &&
+      !isNoResponseRequestedMessage(message) &&
       !isSyntheticUserMessage(message),
   );
   let isInterruptionRow = (row) =>
@@ -552,7 +578,7 @@ function isOpenerUnanswered(messages, openerUuid) {
     return true;
   return isTurnUnanswered([opener, ...filtered], opener.uuid);
 }
-//@ chunk-tyg7f3ek.js:47303-47443 placement
+//@ chunk-0yw3taqg.js:66215-66355 placement
 function makeHeldMessageMatcher(getTranscript, heldFrames, getSessionId) {
   let seen = new Set();
   try {
@@ -572,10 +598,10 @@ export {
   classifyRedeliveredRow,
   isRowFromLoadedCompaction,
   compactionCopyTelemetry,
-  buildRunningTurnRecord,
-  createRunningTurnTracker,
   isSyntheticUserMessage,
   findRunningTurnBoundary,
   lowercaseUuidSet,
   isOpenerUnanswered,
+  buildRunningTurnRecord,
+  createRunningTurnTracker,
 };

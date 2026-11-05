@@ -3,11 +3,12 @@
  *
  * /btw 旁路提问：在共享缓存的 fork 中无工具单轮回答，补齐进行中工具的 tool_result 占位，整理回答文本；另混入拼写检查的词定位。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sideQuestion.ts
- * pieces: chunk-pphytj9x.js (6)
- * attribution: affinity 2, facade-exports 2, layout 1, fingerprint 1
+ * pieces: chunk-7jxyna5q.js (1), chunk-cb4h6sdt.js (6)
+ * attribution: fingerprint 2, affinity 2, facade-exports 2, layout 1
  */
+import { OPEN_TO_CLOSE } from "./ultraplan/keyword.js";
 import { createChildAbortController, createAbortController } from "./abortController.js";
 import { matchesFabricatedMarker } from "../query/malformedToolCallRecovery.js";
 import { createUserMessage, createAssistantMessage, extractTextContent_2 } from "./messages.js";
@@ -16,9 +17,65 @@ import { dropRetractedOnResume } from "./conversationRecovery.js";
 import { APIUserAbortError } from "../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import { isNonConversationMessage } from "../bootstrap/sessionSlices.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { isEvalToolName } from "../tools/REPLTool/constants.js";
+import { POLL } from "../tools/PollTool/prompt.js";
+import { isCodeModeExperimentEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { API_ERROR_MESSAGE_PREFIX } from "../services/api/errors.js";
 
-//@ chunk-pphytj9x.js:493-1043 affinity
+//@ chunk-7jxyna5q.js:33428-34206 fingerprint (2.1.88 match: findBtwTriggerPositions, 1)
+function findBtwTriggerPositions_2(text, keyword) {
+  if (!new RegExp(keyword, "i").test(text)) return [];
+  if (text.startsWith("/")) return [];
+  let codeSpans = [];
+  let openChar = null;
+  let spanStart = 0;
+  let isWordChar = (char) => !!char && /[\p{L}\p{N}_]/u.test(char);
+  for (let idx = 0; idx < text.length; idx++) {
+    let char = text[idx];
+    if (openChar) {
+      if (openChar === "[" && char === "[") {
+        spanStart = idx;
+        continue;
+      }
+      if (char !== OPEN_TO_CLOSE[openChar]) continue;
+      if (openChar === "'" && isWordChar(text[idx + 1])) continue;
+      codeSpans.push({
+        start: spanStart,
+        end: idx + 1,
+      });
+      openChar = null;
+    } else if (
+      (char === "<" && idx + 1 < text.length && /[a-zA-Z/]/.test(text[idx + 1])) ||
+      (char === "'" && !isWordChar(text[idx - 1])) ||
+      (char !== "<" && char !== "'" && char in OPEN_TO_CLOSE)
+    ) {
+      openChar = char;
+      spanStart = idx;
+    }
+  }
+  let hits = [];
+  let regExp = new RegExp(`\\b${keyword}\\b`, "gi");
+  let matches = text.matchAll(regExp);
+  for (let match of matches) {
+    if (match.index === undefined) continue;
+    let index = match.index;
+    let wordEnd = index + match[0].length;
+    if (codeSpans.some((span) => index >= span.start && index < span.end)) continue;
+    let before = text[index - 1];
+    let after = text[wordEnd];
+    if (before === "/" || before === "\\" || before === "-") continue;
+    if (after === "/" || after === "\\" || after === "-" || after === "?") continue;
+    if (after === "." && isWordChar(text[wordEnd + 1])) continue;
+    hits.push({
+      word: match[0],
+      start: index,
+      end: wordEnd,
+    });
+  }
+  return hits;
+}
+//@ chunk-cb4h6sdt.js:637-1187 affinity
 /**
  * /btw 相关常量：触发正则、无工具提示、截断提示、进行中工具的占位 tool_result 文本。
  */
@@ -31,23 +88,22 @@ var BTW_CUT_OFF_NOTICE = "_(This answer was cut off before it finished. Ask agai
 var BTW_CUT_OFF_OMITTED = "(That answer was cut off before it finished, so it is omitted here.)";
 var TOOL_RESULT_PENDING_PLACEHOLDER =
   "[No result yet \u2014 this call is still in progress in the main conversation (running, awaiting approval, or queued)]";
-//@ chunk-pphytj9x.js:1043-1186 facade-exports (2.1.88 match: findBtwTriggerPositions, 1)
+//@ chunk-cb4h6sdt.js:1187-1320 facade-exports
 /**
  * 文本中所有 /btw 触发位置。
  */
-function findBtwTriggerPositions(text) {
+function findBtwTriggerPositions(displayedValue) {
   let positions = [];
-  let matches = text.matchAll(BTW_COMMAND_RE);
+  let matches = displayedValue.matchAll(BTW_COMMAND_RE);
   for (let match of matches)
     if (match.index !== undefined)
       positions.push({
-        word: match[0],
         start: match.index,
         end: match.index + match[0].length,
       });
   return positions;
 }
-//@ chunk-pphytj9x.js:1186-3891 facade-exports (2.1.88 match: runSideQuestion, 0.558)
+//@ chunk-cb4h6sdt.js:1320-4025 facade-exports (2.1.88 match: runSideQuestion, 0.553)
 /**
  * /btw 旁路提问：带上历史 btw 问答与进行中工具的占位结果，加 system-reminder 约束（无工具、单轮），fork 一次（side_question）；整理回答并写入 btwHistory。
  */
@@ -185,21 +241,21 @@ Simply answer the question with the information you have.</system-reminder>
     throw error;
   }
 }
-//@ chunk-pphytj9x.js:3891-4422 layout (2.1.88 match: getLastToolUseName, 0.849)
+//@ chunk-cb4h6sdt.js:4025-4556 layout
 /**
  * 为最后一条 assistant 中未配对的 tool_use 合成 tool_result（isMeta 用户消息），用于中断后修复消息序列。
  */
-function createMissingToolResultsMessage(message) {
-  let filtered = message.filter((message) => !isNonConversationMessage(message));
-  let block = filtered.findLast((message) => message.type === "assistant");
-  if (!block) return;
+function createMissingToolResultsMessage(forkContextMessages) {
+  let filtered = forkContextMessages.filter((message) => !isNonConversationMessage(message));
+  let last = filtered.findLast((message) => message.type === "assistant");
+  if (!last) return;
   let answeredToolIds = new Set();
   let pendingToolIds = [];
   for (let candidate of filtered)
     if (candidate.type === "user" && Array.isArray(candidate.message.content)) {
       for (let contentBlock of candidate.message.content)
         if (contentBlock.type === "tool_result") answeredToolIds.add(contentBlock.tool_use_id);
-    } else if (candidate.type === "assistant" && candidate.message.id === block.message.id) {
+    } else if (candidate.type === "assistant" && candidate.message.id === last.message.id) {
       for (let contentBlock of candidate.message.content)
         if (contentBlock.type === "tool_use") pendingToolIds.push(contentBlock.id);
     }
@@ -214,7 +270,7 @@ function createMissingToolResultsMessage(message) {
     isMeta: true,
   });
 }
-//@ chunk-pphytj9x.js:4422-5175 fingerprint (2.1.88 match: extractSideQuestionResponse, 0.78)
+//@ chunk-cb4h6sdt.js:4556-5351 fingerprint (2.1.88 match: extractSideQuestionResponse, 0.762)
 /**
  * 从 fork 输出整理旁路回答：文本（必要时附无工具/截断说明）；模型改调工具或 API 错误时给出合成说明。
  */
@@ -244,7 +300,7 @@ function extractSideQuestionResponse(messages) {
   let toolUse = assistantBlocks.find((assistantBlock) => assistantBlock.type === "tool_use");
   if (toolUse)
     return {
-      response: `(The model tried to call ${"name" in toolUse ? toolUse.name : "a tool"} instead of answering directly. Try rephrasing or ask in the main conversation.)`,
+      response: `(The model tried to call ${"name" in toolUse && !(codeModeAccepted() && (isEvalToolName(toolUse.name) || (toolUse.name === POLL && isCodeModeExperimentEnabled()))) ? toolUse.name : "a tool"} instead of answering directly. Try rephrasing or ask in the main conversation.)`,
       synthetic: true,
     };
   let toolName = found
@@ -271,11 +327,11 @@ function extractSideQuestionResponse(messages) {
     synthetic: false,
   };
 }
-//@ chunk-pphytj9x.js:5175-5254 affinity
+//@ chunk-cb4h6sdt.js:5351-5430 affinity
 /**
  * 是否为 system/api_error 消息（重试状态与错误提示用）。
  */
 function isApiErrorSystemMessage(message) {
   return message.type === "system" && "subtype" in message && message.subtype === "api_error";
 }
-export { findBtwTriggerPositions, runSideQuestion };
+export { findBtwTriggerPositions_2, findBtwTriggerPositions, runSideQuestion };

@@ -3,16 +3,16 @@
  *
  * 沿用旧版路径：/extra-usage 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/extra-usage/extra-usage.tsx
- * pieces: chunk-g49d7j62.js (1)
+ * pieces: chunk-448az1sc.js (1)
  * attribution: placement 1
  */
 import { runExtraUsage } from "./extra-usage-core.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { USAGE_CREDITS_NONINTERACTIVE_HINT } from "../../services/api/adminRequests.js";
 
-//@ chunk-g49d7j62.js:11944-12294 placement
+//@ chunk-448az1sc.js:13092-13442 placement
 /**
  * /extra-usage 的非交互（文本）实现：调用 runExtraUsage，返回管理员请求确认文案或"已在浏览器打开/请访问 URL"的提示。
  */

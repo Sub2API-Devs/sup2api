@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Design/Slides 技能的提示：用已发布的 Artifact 类型新建 artifact。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p583jsvp.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6fr52gnc.js (7)
  * attribution: placement 7
  */
 import { isArtifactToolEnabled } from "../../services/artifacts/artifactToolGates.js";
@@ -18,24 +18,24 @@ import { isBuiltInArtifactHiddenForMcp } from "../../services/artifacts/artifact
 import { ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
 import { registerLoremIpsumSkill } from "./loremIpsum.js";
 
-//@ chunk-p583jsvp.js:412-427 placement
+//@ chunk-6fr52gnc.js:412-427 placement
 var SLIDES = "slides";
-//@ chunk-p583jsvp.js:427-461 placement
+//@ chunk-6fr52gnc.js:427-461 placement
 function isArtifactTypeAliasEnabled() {
   return isArtifactToolEnabled() && artifactTypeListAndCreatePromptGateOpen();
 }
-//@ chunk-p583jsvp.js:461-522 placement
+//@ chunk-6fr52gnc.js:461-522 placement
 function orgAllowsArtifactTypeAlias(options) {
   return options.policyKey === undefined || isPolicyAllowed(options.policyKey);
 }
-//@ chunk-p583jsvp.js:522-557 placement
+//@ chunk-6fr52gnc.js:522-557 placement
 /**
  * 判断某类型别名是否可用（功能开关 + 组织策略）。
  */
 function isArtifactTypeAliasReady(options) {
   return isArtifactTypeAliasEnabled() && orgAllowsArtifactTypeAlias(options);
 }
-//@ chunk-p583jsvp.js:557-1063 placement
+//@ chunk-6fr52gnc.js:557-1063 placement
 /**
  * slides 内置技能使用的类型别名定义。
  */
@@ -59,7 +59,7 @@ var SLIDES_TYPE_ALIAS = {
   description: "Make a new Slides deck artifact from a brief",
   argumentHint: "[what the deck is about]",
 };
-//@ chunk-p583jsvp.js:1063-4783 placement
+//@ chunk-6fr52gnc.js:1063-4783 placement
 /**
  * Design/Slides 技能的提示：用已发布的 Artifact 类型新建 artifact。
  */
@@ -88,15 +88,15 @@ ${trimmed}`
 
 `);
 }
-//@ chunk-p583jsvp.js:4783-4803 placement
+//@ chunk-6fr52gnc.js:4783-4803 placement
 function registerSlidesSkill() {
   registerLoremIpsumSkill(SLIDES_TYPE_ALIAS);
 }
 export {
+  isArtifactTypeAliasReady,
+  buildArtifactTypeAliasPrompt,
   registerSlidesSkill,
   isArtifactTypeAliasEnabled,
   orgAllowsArtifactTypeAlias,
   DESIGN_TYPE_ALIAS,
-  buildArtifactTypeAliasPrompt,
-  isArtifactTypeAliasReady,
 };

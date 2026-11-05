@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：plugin-authoring 内置技能（Make a mod）：按会话形态（云端、桌面、终端）给出分享 mod 的方式与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jy3v56kg.js (35)
- * attribution: placement 35
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cm73gsrm.js (32)
+ * attribution: placement 32
  */
 import { resolve, join } from "path";
 import { realpath } from "fs/promises";
@@ -38,7 +38,7 @@ import { currentSurfaceBinding } from "../../../plugins/functionHooks/surfaceBin
 import { canPromptForConfirmation } from "../../../utils/permissions/confirmWithUser.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { outsideBudget } from "../../../plugins/functionHooks/dispatch/valueSizing.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { logError } from "../../../utils/log.js";
 import { realpathAllowMissing } from "../../../utils/pathResolution.js";
 import { pluginIdHash } from "../../../utils/telemetry/pluginTelemetry.js";
@@ -75,14 +75,14 @@ import {
   ORG_LIBRARY_SHARING_NOTE,
   TERMINAL_SHARING_NOTE,
 } from "../pluginAuthoringPrompt.js";
-import { getAllBaseToolsFromRegistry, toolMatchesName } from "../../../Tool.js";
+import { getAllBaseToolsFromRegistry, matchesToolName } from "../../../Tool.js";
 import { identityPath_2 } from "../../loadSkillsDir.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../../tools/SendUserFileTool/prompt.js";
 import { buildPrompt } from "../claudeApi.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../../plugins/builtinPlugins.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-jy3v56kg.js:33238-33321 placement
+//@ chunk-cm73gsrm.js:34304-34387 placement
 function isHookInputPathAllowed(matcher) {
   try {
     return hookMatcherMatches(PreToolUseHookInputSchema_2, matcher);
@@ -91,7 +91,7 @@ function isHookInputPathAllowed(matcher) {
     throw error;
   }
 }
-//@ chunk-jy3v56kg.js:33321-34656 placement
+//@ chunk-cm73gsrm.js:34387-35722 placement
 /**
  * 插件编写技能里报告路径长度上限与相关说明文本。
  */
@@ -145,7 +145,7 @@ var createPluginAuthoringHooks = (host) => ({
               approved,
               readDenied: async (paths) => {
                 let denied = new Set();
-                let deniedPaths = await checkFiles(uniq(paths.flatMap(pathsFor)));
+                let deniedPaths = await checkFiles(normalizeCaseForComparison_2(paths.flatMap(pathsFor)));
                 for (let path of paths)
                   if (pathsFor(path).some((candidate) => deniedPaths.has(candidate))) denied.add(path);
                 return denied;
@@ -181,14 +181,14 @@ var createPluginAuthoringHooks = (host) => ({
   },
 });
 var MAX_REPORT_PATH_CHARS = 200;
-//@ chunk-jy3v56kg.js:34656-34686 placement
+//@ chunk-cm73gsrm.js:35722-35752 placement
 /**
  * 报告里展示路径前先清洗并截断。
  */
 function sanitizePathForReport(path) {
   return sanitizeForReport(path, MAX_REPORT_PATH_CHARS);
 }
-//@ chunk-jy3v56kg.js:34686-34983 placement
+//@ chunk-cm73gsrm.js:35752-36049 placement
 async function describeModFolder(folderPath) {
   if (realpathAllowMissing(folderPath))
     return {
@@ -211,7 +211,7 @@ async function describeModFolder(folderPath) {
 It leads to: ${sanitizePathForReport(filePath)}`,
   };
 }
-//@ chunk-jy3v56kg.js:34983-35428 placement
+//@ chunk-cm73gsrm.js:36049-36494 placement
 async function logScanOutcome(scanResult) {
   if (!scanResult.ok) {
     logFeatureBad("plugin_authoring_scan_secrets", "scan_not_run");
@@ -230,15 +230,15 @@ async function logScanOutcome(scanResult) {
     logFeatureSad("plugin_authoring_scan_secrets", "files_not_scanned", eventProps);
   else logFeatureOk("plugin_authoring_scan_secrets", eventProps);
 }
-//@ chunk-jy3v56kg.js:35516-35553 placement
+//@ chunk-cm73gsrm.js:36582-36619 placement
 var GH_HOSTNAME_REGEX = /^[a-z0-9][a-z0-9_-]{0,38}$/i;
-//@ chunk-jy3v56kg.js:35553-35695 placement
+//@ chunk-cm73gsrm.js:36619-36761 placement
 function getGhConfigDir() {
   if (env.GH_CONFIG_DIR) return env.GH_CONFIG_DIR;
   if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, "gh");
   return join(homedir(), ".config", "gh");
 }
-//@ chunk-jy3v56kg.js:35695-36095 placement
+//@ chunk-cm73gsrm.js:36761-37161 placement
 function readPluginJsonFields(content) {
   let hostsFile;
   try {
@@ -255,13 +255,13 @@ function readPluginJsonFields(content) {
     if (typeof users === "object" && users !== null && !Array.isArray(users))
       hostNames.push(...Object.keys(users));
   }
-  return uniq(
+  return normalizeCaseForComparison_2(
     hostNames.map((hostName) => hostName.trim()).filter((hostName) => GH_HOSTNAME_REGEX.test(hostName)),
   );
 }
-//@ chunk-jy3v56kg.js:36095-36108 placement
+//@ chunk-cm73gsrm.js:37161-37174 placement
 var MAX_GH_HOSTS_FILE_BYTES = 65536;
-//@ chunk-jy3v56kg.js:36108-36324 placement
+//@ chunk-cm73gsrm.js:37174-37390 placement
 async function isRepoOwnedByGhUser() {
   if (repoDetectionGuards().blocked()) return false;
   let currentRepositoryWithHost = await detectCurrentRepositoryWithHost(undefined, {
@@ -272,7 +272,7 @@ async function isRepoOwnedByGhUser() {
   let lower = currentRepositoryWithHost.owner.toLowerCase();
   return (await readGhHostUsers()).some((hostName) => hostName.toLowerCase() === lower);
 }
-//@ chunk-jy3v56kg.js:36324-36562 placement
+//@ chunk-cm73gsrm.js:37390-37628 placement
 async function describeGitRemote(cwd) {
   let gitRemoteResult = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "remote"], {
     cwd,
@@ -285,7 +285,7 @@ async function describeGitRemote(cwd) {
   if (gitRemoteResult.exitCode === 0) return gitRemoteResult.stdout.trim() === "";
   return gitRemoteResult.exitCode === 128 && gitRemoteResult.stderr.includes("not a git repository (or any");
 }
-//@ chunk-jy3v56kg.js:36562-36664 placement
+//@ chunk-cm73gsrm.js:37628-37730 placement
 async function readGhHostUsers() {
   try {
     let { content } = await readFileChecked(join(getGhConfigDir(), "hosts.yml"), MAX_GH_HOSTS_FILE_BYTES);
@@ -294,18 +294,18 @@ async function readGhHostUsers() {
     return [];
   }
 }
-//@ chunk-jy3v56kg.js:36664-36931 placement
+//@ chunk-cm73gsrm.js:37730-37997 placement
 var CLOUD_SURFACE_NOTE =
   "THIS SESSION runs in a cloud container and draws in no terminal of its own: whatever shows it (an app, a client) seats a pane where its surface seats panes. The mod's folder is in the container, not on the person's computer, and ends when the container does.";
-//@ chunk-jy3v56kg.js:36931-37087 placement
+//@ chunk-cm73gsrm.js:37997-38153 placement
 var GIT_PUSH_ONLY_SHARING_NOTE = `
 
 SHARING IT. In this session, git pushes a mod only to a remote the person already has; no new repository is created on GitHub or any other host.`;
-//@ chunk-jy3v56kg.js:37087-37389 placement
+//@ chunk-cm73gsrm.js:38153-38455 placement
 var HOSTED_SURFACE_NOTE = `THIS SESSION draws in no terminal of its own: a program started it, and a pane is seated by a surface it attaches, if any. Where hot reloading is off as ${NO_ONE_TO_ASK_TEXT}, the mod loads in a session started with \`--plugin-dir <mod folder>\`, or one with the folder named in \`CLAUDE_CODE_PLUGIN_DIRS\`.`;
-//@ chunk-jy3v56kg.js:37389-37811 placement
+//@ chunk-cm73gsrm.js:38455-38877 placement
 var ORGANIZATION_LIBRARY_NOTE = ` This session has the \`${PUBLISH_PLUGIN_TOOL_NAME}\` tool, so the normal way to share a mod here is the person's organization's library on claude.ai: when they ask to share or publish one, publish it with that tool, which shows them every file and sends nothing before their yes. A GitHub repository, by Sharing a mod in reference.md, is the other road: for people outside the organization, or when the person asks for a repository.`;
-//@ chunk-jy3v56kg.js:37811-38478 placement
+//@ chunk-cm73gsrm.js:38877-39544 placement
 /**
  * 插件编写技能里「分享或发送文件」的说明文本。
  */
@@ -315,37 +315,26 @@ var SEND_FILE_SHARE_NOTE =
   " After saving, the person sends someone the file, downloaded from its card or the saved plugin's page, for them to add under Customize or Plugins, with Add, then Upload plugin.";
 var SHARE_OR_SEND_NOTE =
   " After saving, the person presses Share where it then appears on the file's card, or sends someone the file, downloaded from its card or the saved plugin's page, for them to add under Customize or Plugins, with Add, then Upload plugin.";
-//@ chunk-jy3v56kg.js:38478-38506 placement
+//@ chunk-cm73gsrm.js:39544-39572 placement
 var TENGU_WOVEN_PARCEL = "tengu_woven_parcel";
-//@ chunk-jy3v56kg.js:38506-38516 placement
+//@ chunk-cm73gsrm.js:39572-39582 placement
 var WOVEN_PARCEL_DEFAULT = false;
-//@ chunk-jy3v56kg.js:38516-38551 placement
+//@ chunk-cm73gsrm.js:39582-39617 placement
 /**
  * 读开关 tengu_woven_parcel（默认关）。
  */
 function isWovenParcelOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WOVEN_PARCEL, WOVEN_PARCEL_DEFAULT) === true;
 }
-//@ chunk-jy3v56kg.js:38551-38578 placement
-var TENGU_SPICY_PEARL = "tengu_spicy_pearl";
-//@ chunk-jy3v56kg.js:38578-38588 placement
-var SPICY_PEARL_DEFAULT = false;
-//@ chunk-jy3v56kg.js:38588-38623 placement
-/**
- * 读开关 tengu_spicy_pearl（默认关）。
- */
-function isSpicyPearlOn() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SPICY_PEARL, SPICY_PEARL_DEFAULT) === true;
-}
-//@ chunk-jy3v56kg.js:38623-38684 placement
+//@ chunk-cm73gsrm.js:39617-39678 placement
 /**
  * 是否消费版订阅且未设置组织 UUID。
  */
 var isOrglessConsumerSession = () =>
   isDesktopSessionWithOwnToken() && normalizeUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID) === null;
-//@ chunk-jy3v56kg.js:38684-38989 placement
+//@ chunk-cm73gsrm.js:39678-39983 placement
 var TERMINAL_SURFACE_NOTE = `THIS SESSION is drawn in a terminal. A pane the person opened seats at any width; one opened unasked seats from 144 columns, or 110 as \`$.ui.open\`'s doc says, and waits below that. Where hot reloading is off as ${NO_ONE_TO_ASK_TEXT}, \`claude --plugin-dir <mod folder>\` starts a session with the mod loaded.`;
-//@ chunk-jy3v56kg.js:38989-39496 placement
+//@ chunk-cm73gsrm.js:39983-40484 placement
 function describeSharingSurface(canPublish, repoOwnedByUser, canSendFile) {
   let publishForbidden = !isPolicyAllowed(ALLOW_PLUGIN_PUBLISH_KEY);
   let librarySharing =
@@ -392,28 +381,27 @@ function describeSharingSurface(canPublish, repoOwnedByUser, canSendFile) {
     publishForbidden ||
     !envSessionKind() ||
     !canShareInTerminal ||
-    (!librarySharing && (!isConsumerSubscriber() || !repoOwnedByUser)) ||
-    !isSpicyPearlOn()
+    (!librarySharing && (!isConsumerSubscriber() || !repoOwnedByUser))
   )
     return baseSurface;
   return baseSurface + (librarySharing ? ORG_LIBRARY_SHARING_NOTE : TERMINAL_SHARING_NOTE);
 }
-//@ chunk-jy3v56kg.js:39496-39531 placement
+//@ chunk-cm73gsrm.js:40484-40519 placement
 /**
  * 插件编写技能提示词里的会话界面占位符。
  */
 var SESSION_SURFACE_PLACEHOLDER = "${CLAUDE_SESSION_SURFACE}";
-//@ chunk-jy3v56kg.js:39531-39787 placement
+//@ chunk-cm73gsrm.js:40519-40775 placement
 var PLUGIN_AUTHORING_DESCRIPTION =
   "Make a mod: a change to Claude's own interface or behaviour, such as a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module.";
-//@ chunk-jy3v56kg.js:39787-39816 placement
+//@ chunk-cm73gsrm.js:40775-40804 placement
 /**
  * 插件编写技能提示词里的技能目录占位符。
  */
 var SKILL_DIR_PLACEHOLDER = "${CLAUDE_SKILL_DIR}";
-//@ chunk-jy3v56kg.js:39816-39848 placement
+//@ chunk-cm73gsrm.js:40804-40836 placement
 var TYPES_CLAUDE_CODE_D_TS = "types/claude-code.d.ts";
-//@ chunk-jy3v56kg.js:39848-40846 placement
+//@ chunk-cm73gsrm.js:40836-41834 placement
 /**
  * 加载 plugin-authoring 技能附带的参考文件（类型定义、示例）。
  */
@@ -429,10 +417,10 @@ async function loadPluginAuthoringFiles(extractDir) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -447,20 +435,20 @@ async function loadPluginAuthoringFiles(extractDir) {
     "reference.md": skillModule.REFERENCE_MD,
   };
 }
-//@ chunk-jy3v56kg.js:40846-41106 placement
+//@ chunk-cm73gsrm.js:41834-42094 placement
 var FILES_NOT_WRITTEN_NOTE = (
   folder,
 ) => `The engine could not write this skill's folder, ${folder}, this time, so the files named below under it are absent; once the engine has loaded the mod from its folder the same declarations are in its \`.claude-plugin/types/claude-code/index.d.ts\`.
 
 `;
-//@ chunk-jy3v56kg.js:41106-41132 placement
+//@ chunk-cm73gsrm.js:42094-42120 placement
 var PLUGIN_AUTHORING_2 = "plugin-authoring";
-//@ chunk-jy3v56kg.js:41250-41836 placement
+//@ chunk-cm73gsrm.js:42238-42824 placement
 /**
  * plugin-authoring 内置技能定义（名称、描述、可由用户调用、附带文件）。
  */
 var PLUGIN_AUTHORING_SKILL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jy3v56kg.js:41250", () => {
+deferInit("chunk-cm73gsrm.js:42238", () => {
   PLUGIN_AUTHORING_SKILL = Object.freeze({
     name: PLUGIN_AUTHORING_2,
     description: PLUGIN_AUTHORING_DESCRIPTION,
@@ -481,9 +469,9 @@ deferInit("chunk-jy3v56kg.js:41250", () => {
           SESSION_SURFACE_PLACEHOLDER,
           () =>
             describeSharingSurface(
-              context.options.tools.some((tool) => toolMatchesName(tool, PUBLISH_PLUGIN_TOOL_NAME)),
+              context.options.tools.some((tool) => matchesToolName(tool, PUBLISH_PLUGIN_TOOL_NAME)),
               repoOwnedByGhUser,
-              context.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME)),
+              context.options.tools.some((tool) => matchesToolName(tool, SEND_USER_FILE_TOOL_NAME)),
             ),
         ),
         {
@@ -499,7 +487,7 @@ deferInit("chunk-jy3v56kg.js:41250", () => {
     },
   });
 });
-//@ chunk-jy3v56kg.js:41836-42087 placement
+//@ chunk-cm73gsrm.js:42824-43075 placement
 var PLUGIN_AUTHORING_PLUGIN = () =>
   registerBuiltinPlugin({
     name: "cc-plugin-plugin-authoring",

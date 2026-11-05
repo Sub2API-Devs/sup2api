@@ -119,7 +119,7 @@ bindingsOf('chunk-0089hrfm.js', source)
   被 `import("./x.js")` 动态加载；被 `import * as ns` 引用；参与 `export … from` 重导出；
   文件名在任何模块源码里出现（`require("./x.js")`、Worker 路径 `import.meta.dir+"/…/hooks-worker.js"` 等，按文件名匹配）；
   没有被任何模块静态导入（入口、Worker 脚本）。原因：这些模块的命名空间对象按属性名使用。
-  在 2.1.316 里共 1,041 个模块（报告 `exportPlan.frozenExports` 列出每个模块的原因）。
+  在 2.1.316 里共 1,041 个模块（2.1.318 见 `artifacts/tmp/rename-report.json` 的 `exportPlan.frozenExports`）（报告 `exportPlan.frozenExports` 列出每个模块的原因）。
 
 ## 8. 阅读树（tools/emit）注意
 

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型不可用时的回退选择与提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (28)
  * attribution: placement 28
  */
 import { isFirstPartyApiBackend } from "../../utils/model/providers.js";
@@ -42,9 +42,9 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { zodStrictObject, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2398030-2398072 placement
+//@ chunk-5xgkngpb.js:2453603-2453645 placement
 var HTTPS_WWW_ANTHROPIC_COM_NEWS = "https://www.anthropic.com/news/";
-//@ chunk-e6aww6q8.js:2398072-2398173 placement
+//@ chunk-5xgkngpb.js:2453645-2453746 placement
 /**
  * 模型不可用时的提示文字（优先使用服务端给出的说明）。
  */
@@ -54,15 +54,15 @@ function modelUnavailableMessage(model, reason) {
     `${reason} is currently unavailable. Learn more: ${HTTPS_WWW_ANTHROPIC_COM_NEWS}`
   );
 }
-//@ chunk-e6aww6q8.js:2398173-2398224 placement
+//@ chunk-5xgkngpb.js:2453746-2453797 placement
 function isFallbackReason(reason) {
   return reason === "refusal" || reason === "sticky";
 }
-//@ chunk-e6aww6q8.js:2398224-2398285 placement
+//@ chunk-5xgkngpb.js:2453797-2453858 placement
 function asFallbackReason(reason) {
   return reason === "refusal" || reason === "sticky" ? reason : "other";
 }
-//@ chunk-e6aww6q8.js:2398285-2398623 placement
+//@ chunk-5xgkngpb.js:2453858-2454196 placement
 /**
  * 若服务端回退车道适用于当前模型，锁定对应 beta（默认回退或显式回退），返回请求体里的 fallbacks 字段；否则返回空对象。
  */
@@ -101,11 +101,11 @@ function serverFallbackPlan(lane, model, betas, sticky, refused = false, useCate
         ],
       };
 }
-//@ chunk-e6aww6q8.js:2398623-2398691 placement
+//@ chunk-5xgkngpb.js:2454196-2454264 placement
 function hasNonTextContent(message) {
   return message.message.content.some((block) => block.type !== "text");
 }
-//@ chunk-e6aww6q8.js:2398691-2398923 placement
+//@ chunk-5xgkngpb.js:2454264-2454496 placement
 function applyRefusalFallbackBeta(armed, betas, conversation, silentArm = false, extraBodyParams) {
   if (armed && !isBetaRejected_2(conversation, BETA_FALLBACK_CREDIT))
     markBetaSent(conversation, BETA_FALLBACK_CREDIT);
@@ -121,7 +121,7 @@ function applyRefusalFallbackBeta(armed, betas, conversation, silentArm = false,
       extraBodyParams.anthropic_beta = [...anthropicBeta, BETA_FALLBACK_CREDIT.header];
   }
 }
-//@ chunk-e6aww6q8.js:2398923-2399073 placement
+//@ chunk-5xgkngpb.js:2454496-2454646 placement
 function readFallbackCreditToken(stopDetails) {
   if (typeof stopDetails !== "object" || stopDetails === null) return;
   let fallbackCreditToken = stopDetails.fallback_credit_token;
@@ -131,7 +131,7 @@ function readFallbackCreditToken(stopDetails) {
     ? fallbackCreditToken
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2399073-2399157 placement
+//@ chunk-5xgkngpb.js:2454646-2454730 placement
 function fallbackNotification(block) {
   return {
     type: "fallback",
@@ -143,13 +143,13 @@ function fallbackNotification(block) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2399157-2399275 placement
+//@ chunk-5xgkngpb.js:2454730-2454848 placement
 function readModelField(from) {
   if (typeof from !== "object" || from === null) return;
   let model = from.model;
   return typeof model === "string" && model.length > 0 ? model : undefined;
 }
-//@ chunk-e6aww6q8.js:2399275-2399455 placement
+//@ chunk-5xgkngpb.js:2454848-2455028 placement
 function readRefusalCategory(trigger) {
   if (typeof trigger !== "object" || trigger === null) return null;
   let fallbackTrigger = trigger;
@@ -157,7 +157,7 @@ function readRefusalCategory(trigger) {
   let category = fallbackTrigger.category;
   return typeof category === "string" && category.length > 0 && category.length <= 64 ? category : null;
 }
-//@ chunk-e6aww6q8.js:2399455-2399831 placement
+//@ chunk-5xgkngpb.js:2455028-2455404 placement
 /**
  * 解析流中的 fallback 内容块开始事件，得到索引、原模型、回退模型、原因与类别。
  */
@@ -181,7 +181,7 @@ function parseFallbackBlockStart(block) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2399831-2399999 placement
+//@ chunk-5xgkngpb.js:2455404-2455572 placement
 function parseFallbackMessage(block) {
   if (!isFallbackNotification(block)) return;
   let fallbackBlock = block;
@@ -196,11 +196,11 @@ function parseFallbackMessage(block) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2399999-2400073 placement
+//@ chunk-5xgkngpb.js:2455572-2455646 placement
 function isFallbackNotification(block) {
   return typeof block === "object" && block !== null && block.type === "fallback";
 }
-//@ chunk-e6aww6q8.js:2400073-2400317 placement
+//@ chunk-5xgkngpb.js:2455646-2455890 placement
 function isUnreadableFallbackBlock(event) {
   if (typeof event !== "object" || event === null) return false;
   let fallbackEvent = event;
@@ -209,10 +209,10 @@ function isUnreadableFallbackBlock(event) {
   if (typeof contentBlock !== "object" || contentBlock === null) return false;
   return contentBlock.type === "fallback" && parseFallbackBlockStart(event) === undefined;
 }
-//@ chunk-e6aww6q8.js:2400317-2400380 placement
+//@ chunk-5xgkngpb.js:2455890-2455953 placement
 var finiteNonNegative = (value) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
-//@ chunk-e6aww6q8.js:2400380-2400901 placement
+//@ chunk-5xgkngpb.js:2455953-2456478 placement
 /**
  * 计算回退过程中各条 fallback 消息的费用（拒绝回退时排除最后一条）以及回退模型的固定附加费用。
  */
@@ -256,7 +256,7 @@ function fallbackMessagesCost(messages, pricing, reason) {
   let limitIndex = reduced_2 + dropped;
   return Number.isFinite(limitIndex) ? limitIndex : 0;
 }
-//@ chunk-e6aww6q8.js:2401522-2401577 placement
+//@ chunk-5xgkngpb.js:2457099-2457154 placement
 /**
  * 导出函数 `preferSameModel`：参数 e, n，返回 e !== void 0 && Bn(e) === Bn(n) ? e : n。
  */
@@ -265,7 +265,7 @@ function preferSameModel(model, otherModel) {
     ? model
     : otherModel;
 }
-//@ chunk-e6aww6q8.js:2401577-2401806 placement
+//@ chunk-5xgkngpb.js:2457154-2457383 placement
 function canUseDefaultFallback(reason) {
   if (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
     let walked = walkDownOpusLineup(reason.primaryModel);
@@ -280,10 +280,10 @@ function canUseDefaultFallback(reason) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2401806-2401860 placement
+//@ chunk-5xgkngpb.js:2457383-2457437 placement
 var TENGU_DASH_FLAME = "tengu_dash_flame";
 var TENGU_ELEGANT_POSSUM = "tengu_elegant_possum";
-//@ chunk-e6aww6q8.js:2401860-2402173 placement
+//@ chunk-5xgkngpb.js:2457437-2457750 placement
 /**
  * 选择回退使用的 beta 头：已粘滞的优先，否则按是否允许服务端默认回退决定。
  */
@@ -304,16 +304,16 @@ function pickFallbackBeta(options) {
   }
   return BETA_SERVER_SIDE_FALLBACK;
 }
-//@ chunk-e6aww6q8.js:2402173-2402260 placement
+//@ chunk-5xgkngpb.js:2457750-2457837 placement
 var NO_SUPPRESSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2402173", () => {
+deferInit("chunk-5xgkngpb.js:2457750", () => {
   NO_SUPPRESSION = Object.freeze({
     visibleModel: undefined,
     serverLane: undefined,
     shouldLogSuppression: false,
   });
 });
-//@ chunk-e6aww6q8.js:2402260-2403191 placement
+//@ chunk-5xgkngpb.js:2457837-2458798 placement
 /**
  * 计算拒答后的回退：是否启用、是否静默拒绝、按 Opus 阵容向下找（或级联中的下一个）可见回退模型，以及能否交给服务端自动切换（default/explicit 车道）。
  */
@@ -329,6 +329,7 @@ function resolveRefusalFallback(options) {
   let shouldDecline = shouldSilentlyDeclineFallback({
     requestDialog: options.requestDialog,
     isMainThread: options.isMainThread,
+    isAgentThread: options.isAgentThread,
     consumerLacksDialogCapability: options.consumerLacksDialogCapability,
   });
   let walked = options.inCascadeEpisode ? undefined : walkDownOpusLineup(options.currentModel);
@@ -369,7 +370,7 @@ function resolveRefusalFallback(options) {
       !options.suppressionAlreadyLogged && enabled && shouldDecline && candidate !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:2403191-2403771 placement
+//@ chunk-5xgkngpb.js:2458798-2459378 placement
 /**
  * 描述一次服务端模型回退：遥测字段、是否对用户可见、被丢弃内容是否含工具调用、是否切换会话模型与横幅范围。
  */
@@ -399,11 +400,11 @@ function describeServerFallback(event, context) {
     bannerScope: isMainThread ? "session" : "local",
   };
 }
-//@ chunk-e6aww6q8.js:2403771-2404352 placement
+//@ chunk-5xgkngpb.js:2459378-2460008 placement
 /**
  * 生成模型拒答回退的系统消息（本地或会话范围），说明原模型、回退模型与拒答类别。
  */
-function buildRefusalFallbackSystemMessage(event, ids, scope) {
+function buildRefusalFallbackSystemMessage(event, ids, scope, cyberVerification) {
   return {
     type: "system",
     subtype: "model_refusal_fallback",
@@ -424,40 +425,43 @@ function buildRefusalFallbackSystemMessage(event, ids, scope) {
     requestId: event.requestId,
     apiRefusalCategory: event.apiRefusalCategory,
     apiRefusalExplanation: null,
+    ...(cyberVerification !== undefined && {
+      apiRefusalCyberVerification: cyberVerification,
+    }),
     isMeta: false,
     timestamp: ids.timestamp,
     uuid: ids.uuid,
   };
 }
-//@ chunk-e6aww6q8.js:2404352-2404526 placement
+//@ chunk-5xgkngpb.js:2460008-2460182 placement
 /**
  * accessFallbackModels 客户端数据结构：for（最多 256 字符）与 models（1–3 个安全模型名）的 schema。
  */
-var ACCESSFALLBACKMODELS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ACCESSFALLBACKMODELS; // deferred: uses MODEL_NAME_ALLOWED_CHARS (../../utils/model/validateModel.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_FALLBACK_MODELS;
 var MAX_FALLBACK_FOR_CHARS;
-var regExp_12;
+var regExp_13;
 var accessFallbackModelsSchema;
-deferInit("chunk-e6aww6q8.js:2404352", () => {
+deferInit("chunk-5xgkngpb.js:2460008", () => {
   ACCESSFALLBACKMODELS = "accessFallbackModels";
   MAX_FALLBACK_MODELS = 3;
   MAX_FALLBACK_FOR_CHARS = 256;
-  regExp_12 = new RegExp(`^[A-Za-z0-9][${MODEL_NAME_ALLOWED_CHARS}]{0,255}$`);
+  regExp_13 = new RegExp(`^[A-Za-z0-9][${MODEL_NAME_ALLOWED_CHARS}]{0,255}$`);
   accessFallbackModelsSchema = DoctorLazy(() =>
     zodStrictObject({
       for: stringSchema().min(1).max(MAX_FALLBACK_FOR_CHARS),
-      models: array(stringSchema().regex(regExp_12)).min(1).max(MAX_FALLBACK_MODELS),
+      models: array(stringSchema().regex(regExp_13)).min(1).max(MAX_FALLBACK_MODELS),
     }),
   );
 });
-//@ chunk-e6aww6q8.js:2404526-2404565 placement
+//@ chunk-5xgkngpb.js:2460182-2460221 placement
 /**
  * 是否合法 accessFallbackModels 客户端数据。
  */
 function isAccessFallbackModelsData(data) {
   return parseAccessFallbackModels(data) !== undefined;
 }
-//@ chunk-e6aww6q8.js:2404565-2404750 placement
+//@ chunk-5xgkngpb.js:2460221-2460406 placement
 /**
  * 解析客户端数据 accessFallbackModels：{for, models[≤3]} 经 schema 校验。
  */
@@ -468,7 +472,6 @@ function parseAccessFallbackModels(data) {
   return parsed.success ? parsed.data : undefined;
 }
 export {
-  finiteNonNegative,
   readFallbackCreditToken,
   pickFallbackBeta,
   TENGU_DASH_FLAME,
@@ -484,12 +487,13 @@ export {
   hasNonTextContent,
   fallbackMessagesCost,
   preferSameModel,
+  ACCESSFALLBACKMODELS,
+  isAccessFallbackModelsData,
   resolveRefusalFallback,
+  modelUnavailableMessage,
+  finiteNonNegative,
+  parseAccessFallbackModels,
   NO_SUPPRESSION,
   describeServerFallback,
   buildRefusalFallbackSystemMessage,
-  modelUnavailableMessage,
-  parseAccessFallbackModels,
-  ACCESSFALLBACKMODELS,
-  isAccessFallbackModelsData,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects OAuth scope
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nghef0fw.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-402wca7h.js (2)
  * attribution: placement 2
  */
 import { isPolicyAllowed } from "../policyLimits/policyEvidence.js";
@@ -24,7 +24,7 @@ import {
 import { isDiskless } from "../../bootstrap/state.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { refreshOAuthToken, isInvalidGrantError } from "./client.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   claudeAiLoginScopes,
   preservableScopesFrom,
@@ -33,7 +33,7 @@ import {
 } from "../../constants/oauth.js";
 import { isAbortError, errorMessage } from "../../utils/errors.js";
 
-//@ chunk-nghef0fw.js:1062-3097 placement
+//@ chunk-402wca7h.js:1100-3137 placement
 /**
  * 取得带 Projects 读写 scope 的访问令牌：策略/提供方/流量限制不允许时直接拒绝；会话入口令牌直接用；已有 scope 则返回；否则在 OAuth 刷新锁内用刷新令牌扩展 scope 并保存，返回 {ok, accessToken, expanded} 或失败原因。
  */
@@ -133,7 +133,7 @@ async function ensureProjectsAccessToken(credentials) {
         refreshAttempted = true;
         refreshed = await refreshOAuthToken(lockedTokens.refreshToken, {
           clientId: lockedTokens.clientId,
-          scopes: uniq([
+          scopes: normalizeCaseForComparison_2([
             ...claudeAiLoginScopes(),
             ...preservableScopesFrom(lockedTokens.scopes),
             CLAUDE_AI_PROJECTS_READ_SCOPE,
@@ -144,7 +144,7 @@ async function ensureProjectsAccessToken(credentials) {
         });
       } catch (error) {
         if (isInvalidGrantError(error) && !isCompromised())
-          await markRefreshTokenDeadAfterInvalidGrant(lockedTokens.refreshToken, credentials);
+          await markRefreshTokenDeadAfterInvalidGrant(lockedTokens.refreshToken, credentials, error);
         if (isCompromised() || isAbortError(error))
           return {
             ok: false,
@@ -205,7 +205,7 @@ async function ensureProjectsAccessToken(credentials) {
     };
   }
 }
-//@ chunk-nghef0fw.js:3097-3155 placement
+//@ chunk-402wca7h.js:3137-3195 placement
 /**
  * 判断 scope 列表是否同时含 projects 的读写权限。
  */

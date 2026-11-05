@@ -3,17 +3,18 @@
  *
  * 2.1.316 新增：打开 artifact 前预取类型文件与技能页面到 scratchpad
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5323y1gy.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0pt9fb1a.js (35)
  * attribution: placement 35
  */
-import { join } from "path";
+import { join, dirname, basename } from "path";
 import { writeFile, unlink } from "fs/promises";
 import {
   normalizeCaseForComparison,
   ensureScratchpadDir,
   checkWritePermissionForTool,
+  normalizeCaseForComparison_2,
 } from "../../utils/permissions/filesystem.js";
 import { validateArtifactFilePath } from "./publishedFiles.js";
 import { startKitSwitchOn } from "./startKitSwitch.js";
@@ -33,6 +34,19 @@ import {
   renameReplacing,
 } from "../../tools/ArtifactTool/readFilePaths.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
+import { getShareEntry, artifactForeign, entryOutsideOrgContent, markReadsLine } from "./shareEntries.js";
+import {
+  fileCopyFraming,
+  recordSavedArtifactCopyBeforeWrite,
+  recordSavedArtifactCopy,
+  abandonSavedArtifactCopy,
+  settleSavedArtifactCopy,
+} from "./framedCopies.js";
+import {
+  authoredByOthersPreamble,
+  artifactAuthorshipWarning,
+  ARTIFACT_CONTENT_AUTHORED_TAG,
+} from "../../constants/xml.js";
 import { errorMessage, getErrnoCode } from "../../utils/errors.js";
 import { pinWriteTarget } from "../../utils/fsSafety/pathRevalidation.js";
 import { makeTempSiblingPath } from "../../utils/atomicPublishWrite.js";
@@ -40,10 +54,8 @@ import { printedTypePaths, kitReadTypePaths } from "./artifactTypeReferences.js"
 import { getConfiguredBashOutputMaxChars, getMaxOutputLength } from "../../utils/shell/outputLimits.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { uniq } from "../../utils/collections.js";
-import { ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
 
-//@ chunk-5323y1gy.js:929-1166 placement
+//@ chunk-0pt9fb1a.js:1059-1296 placement
 /**
  * artifact 打开预取的限额：单文件 1 MB、合计 8 MB、最多 100 个文件、12 个字体、32 个参考页、1500 ms 截止、8 个并发读，及启动文件清单。
  */
@@ -63,43 +75,43 @@ var STARTER_FILES = [
   "tokens.css",
   "api/tokens.md",
 ];
-//@ chunk-5323y1gy.js:1166-1253 placement
+//@ chunk-0pt9fb1a.js:1296-1383 placement
 /**
  * 导出函数 `findPrefetchFile`：参数 e, s，返回 e.find((n) => n.path === `project/${s}`) ?? e.find((n) => n.path === s)。
  */
 function findPrefetchFile(files, name) {
   return files.find((file) => file.path === `project/${name}`) ?? files.find((file) => file.path === name);
 }
-//@ chunk-5323y1gy.js:1253-1380 placement
+//@ chunk-0pt9fb1a.js:1383-1510 placement
 var SAFE_FILE_NAME_RE = /^[A-Za-z0-9_@][A-Za-z0-9._@+-]{0,63}$/;
 var MAX_ASSET_PATH_LENGTH = 160;
 var FONT_FILE_RE = /\.(?:woff2?|ttf|otf|eot)$/i;
 var IMAGE_FILE_RE = /\.(?:png|jpe?g|gif|webp|avif|ico)$/i;
-//@ chunk-5323y1gy.js:1380-1453 placement
+//@ chunk-0pt9fb1a.js:1510-1583 placement
 function sumWithinBudget(entries) {
   return entries.reduce(
     (acc, entry) => (acc + entry.sizeBytes > MAX_TOTAL_BYTES ? acc : acc + entry.sizeBytes),
     0,
   );
 }
-//@ chunk-5323y1gy.js:1453-1525 placement (2.1.88 match: setCwdState, 0.867)
+//@ chunk-0pt9fb1a.js:1583-1655 placement (2.1.88 match: setCwdState, 0.867)
 function normalizeCaseFoldKey(cwd) {
   return normalizeCaseForComparison(cwd.normalize("NFC").toUpperCase().toLowerCase());
 }
-//@ chunk-5323y1gy.js:1525-1605 placement
+//@ chunk-0pt9fb1a.js:1655-1735 placement
 function isReservedProjectName(path) {
   let replaced = normalizeCaseFoldKey(path).replace(/^project\//, "");
   return STARTER_FILES.some((name) => normalizeCaseFoldKey(name) === replaced);
 }
-//@ chunk-5323y1gy.js:1605-1639 placement
+//@ chunk-0pt9fb1a.js:1735-1769 placement
 function isImageFilePath(path) {
   return FONT_FILE_RE.test(path);
 }
-//@ chunk-5323y1gy.js:1639-1723 placement
+//@ chunk-0pt9fb1a.js:1769-1853 placement
 function isBinaryTypeFile(file) {
   return isImageFilePath(file.path) || file.contentType.toLowerCase().startsWith("font/");
 }
-//@ chunk-5323y1gy.js:1723-2121 placement
+//@ chunk-0pt9fb1a.js:1853-2251 placement
 function typeFileSkipReason(file, kitSwitchOn) {
   let lower = file.contentType.toLowerCase();
   return file.path.length > MAX_ASSET_PATH_LENGTH ||
@@ -117,7 +129,7 @@ function typeFileSkipReason(file, kitSwitchOn) {
               ? "over 1 MB"
               : undefined;
 }
-//@ chunk-5323y1gy.js:2121-3862 placement
+//@ chunk-0pt9fb1a.js:2251-3992 placement
 /**
  * 打开 artifact 前把其 Artifact 类型（README、tokens、组件定义、字体、图片等）预取到 scratchpad，受文件数/字节/截止时间限制。
  */
@@ -253,7 +265,7 @@ async function prefetchTypeFilesToScratchpad(
     files: saved.files.toSorted((a, b) => sortRank(a.path) - sortRank(b.path)),
   };
 }
-//@ chunk-5323y1gy.js:3862-4151 placement
+//@ chunk-0pt9fb1a.js:3992-4281 placement
 async function readTypeFilesConcurrently(artifact, paths, signal, credentials, readFile) {
   let results = [];
   let next = 0;
@@ -278,7 +290,7 @@ async function readTypeFilesConcurrently(artifact, paths, signal, credentials, r
   );
   return results;
 }
-//@ chunk-5323y1gy.js:4151-5337 placement
+//@ chunk-0pt9fb1a.js:4281-5467 placement
 async function prefetchTypeSkillPages(
   artifact,
   instructions,
@@ -345,7 +357,7 @@ async function prefetchTypeSkillPages(
     ? saved
     : fail("a file did not land (see the line above)");
 }
-//@ chunk-5323y1gy.js:5337-5579 placement
+//@ chunk-0pt9fb1a.js:5467-5709 placement
 /**
  * 判断能否为打开 artifact 预取某文件：Artifact 与 Bash 工具都在、read_file 的目标路径一致、路径拼写安全，且该写入被权限规则直接允许。
  */
@@ -371,7 +383,7 @@ function canPrefetchArtifactFile(context, artifact, path, permissionContext) {
     return false;
   }
 }
-//@ chunk-5323y1gy.js:5579-5728 placement
+//@ chunk-0pt9fb1a.js:5709-5859 placement
 function getPrefetchDestination(artifact, url, saved) {
   let readFileOutput = resolveReadFileOutput({
     action: "read_file",
@@ -385,12 +397,19 @@ function getPrefetchDestination(artifact, url, saved) {
         dir: readFileOutput.base,
       };
 }
-//@ chunk-5323y1gy.js:5728-6309 placement
+//@ chunk-0pt9fb1a.js:5859-6533 placement
 async function saveFetchedFiles(artifact, scratchpad, files, skipped) {
   let deadline = performance.now() + PREFETCH_DEADLINE_MS;
   let saved = [];
   let sliced = skipped.slice();
   let notes = [];
+  let shareEntry = getShareEntry(artifact.slug);
+  let framing = fileCopyFraming(
+    authoredByOthersPreamble(
+      artifactForeign(shareEntry),
+      artifactAuthorshipWarning(entryOutsideOrgContent(shareEntry)),
+    ) || markReadsLine(artifact.slug),
+  );
   for (let entry of files) {
     if (performance.now() > deadline) {
       sliced.push({
@@ -399,8 +418,10 @@ async function saveFetchedFiles(artifact, scratchpad, files, skipped) {
       });
       continue;
     }
+    await recordSavedArtifactCopyBeforeWrite(entry.dest, framing);
     try {
-      await writeIntoScratchpad(scratchpad, entry.dest, entry.bytes);
+      await writeIntoScratchpad(scratchpad, entry.dest, entry.bytes, framing);
+      await recordSavedArtifactCopy(entry.dest, framing);
       saved.push({
         path: entry.path,
         bytes: entry.bytes.length,
@@ -426,16 +447,20 @@ async function saveFetchedFiles(artifact, scratchpad, files, skipped) {
         skipped: sliced,
       };
 }
-//@ chunk-5323y1gy.js:6309-6647 placement
-async function writeIntoScratchpad(context, dest, bytes) {
+//@ chunk-0pt9fb1a.js:6533-7009 placement
+async function writeIntoScratchpad(context, dest, bytes, framing) {
   let sliced = dest.slice(context.length + 1);
   let mapped = getPathsForPermissionCheck(context).map((path) => join(path, sliced));
   let pinned = await pinWriteTarget(dest, mapped, {
     createParents: true,
     leaf: "replace",
+  }).catch(async (error) => {
+    await abandonSavedArtifactCopy(dest, framing);
+    throw error;
   });
   let tempSiblingPath = makeTempSiblingPath(pinned.ioPath);
   let wrote = true;
+  let renamed = false;
   try {
     await writeFile(tempSiblingPath, bytes, {
       flag: "wx",
@@ -446,13 +471,21 @@ async function writeIntoScratchpad(context, dest, bytes) {
     });
     await pinned.recheckBeforeWrite();
     await renameReplacing(tempSiblingPath, pinned.ioPath);
+    renamed = true;
+    await settleSavedArtifactCopy(dest, framing);
     wrote = false;
+  } catch (error) {
+    if (!renamed) await abandonSavedArtifactCopy(dest, framing);
+    throw error;
   } finally {
-    if (wrote) await unlink(tempSiblingPath).catch(() => {});
+    if (wrote)
+      await unlink(tempSiblingPath)
+        .catch(() => recordSavedArtifactCopy(join(dirname(dest), basename(tempSiblingPath)), framing))
+        .catch(() => {});
     await pinned.close();
   }
 }
-//@ chunk-5323y1gy.js:6703-6827 placement
+//@ chunk-0pt9fb1a.js:7065-7189 placement
 var PREFETCH_FILE_SPECS = [
   {
     set: "type",
@@ -467,11 +500,11 @@ var PREFETCH_FILE_SPECS = [
     path,
   })),
 ];
-//@ chunk-5323y1gy.js:6827-6874 placement
+//@ chunk-0pt9fb1a.js:7189-7236 placement
 function printBudgetMs() {
   return Math.min(getConfiguredBashOutputMaxChars(), getMaxOutputLength()) - 2000;
 }
-//@ chunk-5323y1gy.js:6874-7082 placement
+//@ chunk-0pt9fb1a.js:7236-7444 placement
 /**
  * 按字节预算把文件列表分成三组：第一预算内、第二预算内、其余。
  */
@@ -497,7 +530,7 @@ function splitIntoBudgets(entries, budget) {
     rest: oversized,
   };
 }
-//@ chunk-5323y1gy.js:7082-7876 placement
+//@ chunk-0pt9fb1a.js:7444-8238 placement
 function typeFileListing(type, system, files, budget, options) {
   let entries = PREFETCH_FILE_SPECS.flatMap(({ set, path }) => {
     let source = set === "type" ? type : system;
@@ -531,14 +564,14 @@ function typeFileListing(type, system, files, budget, options) {
       : []),
   ];
 }
-//@ chunk-5323y1gy.js:7876-7897 placement
+//@ chunk-0pt9fb1a.js:8238-8259 placement
 var MAX_LISTED_FILES = 40;
 var DEFAULT_LISTED_FILES = 12;
 var MAX_SUMMARY_CHARS = 8000;
-//@ chunk-5323y1gy.js:7897-8586 placement
+//@ chunk-0pt9fb1a.js:8259-8948 placement
 function savedFilesSummary(result, artifactUrl, listedFiles = DEFAULT_LISTED_FILES) {
   let quote = (path) => jsonStringify(sweepResultLineField(path, 160));
-  let reasons = uniq(result.skipped.map((entry) => entry.reason));
+  let reasons = normalizeCaseForComparison_2(result.skipped.map((entry) => entry.reason));
   let lines = [
     ...result.files.slice(0, MAX_LISTED_FILES).map((file) => `- ${quote(file.path)} (${file.bytes} bytes)`),
     ...(result.files.length > MAX_LISTED_FILES
@@ -564,10 +597,10 @@ function savedFilesSummary(result, artifactUrl, listedFiles = DEFAULT_LISTED_FIL
     ? savedFilesSummary(result, artifactUrl, 0)
     : lines;
 }
-//@ chunk-5323y1gy.js:8586-8723 placement
+//@ chunk-0pt9fb1a.js:8948-9085 placement
 var EDIT_EFFICIENCY_HINT =
   "For edits, avoid re-printing entire files: be efficient and use the Bash tool to precisely batch edits via your favorite tools.";
-//@ chunk-5323y1gy.js:8723-10209 placement
+//@ chunk-0pt9fb1a.js:9085-10571 placement
 function typeSkillPrintInstructions(typeContext, saved, budget = printBudgetMs()) {
   let skillByRead = typeContext.skillByRead === true;
   let listing = typeFileListing(
@@ -599,7 +632,7 @@ function typeSkillPrintInstructions(typeContext, saved, budget = printBudgetMs()
 `) + saved
   );
 }
-//@ chunk-5323y1gy.js:10209-10998 placement
+//@ chunk-0pt9fb1a.js:10571-11360 placement
 function typeReadmePrintInstructions(url, saved, typeFiles, type, budget = printBudgetMs()) {
   let prefetchFile = findPrefetchFile(saved.files, "README.md");
   if (prefetchFile === undefined) return null;
@@ -634,7 +667,7 @@ function typeReadmePrintInstructions(url, saved, typeFiles, type, budget = print
   ].join(`
 `);
 }
-//@ chunk-5323y1gy.js:10998-11313 placement
+//@ chunk-0pt9fb1a.js:11360-11675 placement
 /**
  * 并行预取 artifact 的类型与设计系统文件，返回给模型的说明文本。
  */
@@ -672,38 +705,38 @@ async function prefetchArtifactTypeAndSystem(type, context, signal, readFrameFil
     system: systemResult,
   };
 }
-//@ chunk-5323y1gy.js:11313-11368 placement
+//@ chunk-0pt9fb1a.js:11675-11730 placement
 function shellPathForFile(filePath, path) {
   return shellQuoteArgs([join(filePath.dir, ...path.split("/"))]);
 }
-//@ chunk-5323y1gy.js:11368-11468 placement
+//@ chunk-0pt9fb1a.js:11730-11830 placement
 function findProjectFile(system, root) {
   return (
     system?.files.find((file) => file.path === `project/${root}`) ??
     system?.files.find((file) => file.path === root)
   );
 }
-//@ chunk-5323y1gy.js:11468-11558 placement
+//@ chunk-0pt9fb1a.js:11830-11920 placement
 function joinWithAnd(names) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
-//@ chunk-5323y1gy.js:11558-11593 placement
+//@ chunk-0pt9fb1a.js:11920-11955 placement
 function jsonSweepLine(path) {
   return jsonStringify(sweepResultLineField(path, 160));
 }
-//@ chunk-5323y1gy.js:11593-11740 placement
+//@ chunk-0pt9fb1a.js:11955-12102 placement
 function orderSkillFilesFirst(type, types) {
   let flattened = ["SKILL.md", ...printedTypePaths(types)].flatMap(
     (filePath) => type.files.find((file) => file.path === filePath) ?? [],
   );
   return flattened.concat(type.files.filter((file) => !flattened.includes(file)));
 }
-//@ chunk-5323y1gy.js:11740-11749 placement
+//@ chunk-0pt9fb1a.js:12102-12111 placement
 var MAX_SUMMARY_CHARS_ALIAS = MAX_SUMMARY_CHARS;
-//@ chunk-5323y1gy.js:11749-12247 placement
+//@ chunk-0pt9fb1a.js:12111-12609 placement
 function skippedFilesSummary(result, artifactUrl, listedFiles = DEFAULT_LISTED_FILES) {
   if (result.skipped.length === 0) return [];
-  let mapped = uniq(result.skipped.map((entry) => entry.reason)).map((reason) => {
+  let mapped = normalizeCaseForComparison_2(result.skipped.map((entry) => entry.reason)).map((reason) => {
     let filtered = result.skipped.filter((entry) => entry.reason === reason);
     let reasonText = sweepResultLineField(reason, 60);
     let pluralText = filtered.length > 1 && reasonText.endsWith(" file") ? `${reasonText}s` : reasonText;
@@ -722,7 +755,7 @@ function skippedFilesSummary(result, artifactUrl, listedFiles = DEFAULT_LISTED_F
     ? skippedFilesSummary(result, artifactUrl, 0)
     : [`${prefix}${result.skipped.length} files`];
 }
-//@ chunk-5323y1gy.js:12247-12464 placement
+//@ chunk-0pt9fb1a.js:12609-12826 placement
 function describeSavedFiles(context, saved, files, dir) {
   if (saved === null) return [];
   let omitted = files.length - MAX_LISTED_FILES;
@@ -736,7 +769,7 @@ function describeSavedFiles(context, saved, files, dir) {
     "",
   ];
 }
-//@ chunk-5323y1gy.js:12464-16751 placement
+//@ chunk-0pt9fb1a.js:12826-17113 placement
 /**
  * 生成 artifact 打开预取结果的提示文本（REPL 路由、类型文件、设计系统、未保存文件说明）。
  */
@@ -878,11 +911,11 @@ function artifactOpeningPrefetchPrompt(input) {
   return null;
 }
 export {
+  typeReadmePrintInstructions,
+  isImageFilePath,
   prefetchArtifactTypeAndSystem,
   typeSkillPrintInstructions,
   MAX_REFERENCE_PAGES,
-  typeReadmePrintInstructions,
-  isImageFilePath,
   typeFileSkipReason,
   isBinaryTypeFile,
   artifactOpeningPrefetchPrompt,

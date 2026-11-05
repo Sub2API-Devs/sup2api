@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。设计系统标题组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7ga9pgfv.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mmcsqv8e.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-7ga9pgfv.js:300-616 placement
+//@ chunk-mmcsqv8e.js:300-616 placement
 /**
  * 标题组件：粗体标题加可选副标题。
  */

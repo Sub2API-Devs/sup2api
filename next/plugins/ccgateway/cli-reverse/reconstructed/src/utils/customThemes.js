@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自定义主题
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6kfx541v.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m3nkvbec.js (18)
  * attribution: placement 18
  */
 import { isDeepStrictEqual } from "util";
@@ -15,10 +15,11 @@ import { createStore } from "../state/store.js";
 import { createSignal } from "./signal.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
-import { isBuiltinThemeName, getTheme, isValidThemeColor } from "./theme.js";
+import { isBuiltinThemeName, getTheme } from "./theme.js";
+import { isValidThemeColor } from "./ink.js";
 import { errorMessage, isENOENT, getErrnoCode, isFsInaccessible } from "./errors.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
@@ -32,7 +33,7 @@ import { createJsonStore } from "./jsonStore.js";
 import { chokidar_default } from "../../vendor/chokidar/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6kfx541v.js:1021-1771 placement
+//@ chunk-m3nkvbec.js:1021-1771 placement
 /**
  * 自定义主题的进程内状态：主题基底表、用户主题、插件主题、系统主题及其变化信号。
  */
@@ -69,36 +70,36 @@ class CustomThemeRegistry {
     this.systemThemeChanged.emit();
   }
 }
-//@ chunk-6kfx541v.js:1771-1794 placement
+//@ chunk-m3nkvbec.js:1771-1794 placement
 /**
  * 按宿主隔离的自定义主题注册表。
  */
 var customThemeRegistryByHost; // deferred: uses CustomThemeRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6kfx541v.js:1771", () => {
+deferInit("chunk-m3nkvbec.js:1771", () => {
   customThemeRegistryByHost = new HostScoped(() => new CustomThemeRegistry());
 });
-//@ chunk-6kfx541v.js:1794-1830 placement
+//@ chunk-m3nkvbec.js:1794-1830 placement
 /**
  * 取出当前宿主的自定义主题注册表。
  */
 function getCustomThemeRegistry() {
   return customThemeRegistryByHost.of(getRootSession().host);
 }
-//@ chunk-6kfx541v.js:1830-1855 placement
+//@ chunk-m3nkvbec.js:1830-1855 placement
 /**
  * 自定义主题文件的大小上限（256 KiB）。
  */
 var CUSTOM = "custom:";
 var MAX_CUSTOM_THEME_BYTES = 262144;
-//@ chunk-6kfx541v.js:1855-1902 placement
+//@ chunk-m3nkvbec.js:1855-1902 placement
 function getCustomThemeBase(customThemeRef) {
   return getCustomThemeRegistry().customThemeBase(customThemeRef);
 }
-//@ chunk-6kfx541v.js:1902-1948 placement
+//@ chunk-m3nkvbec.js:1902-1948 placement
 function getCachedCustomThemes() {
   return getCustomThemeRegistry().cachedUserThemes();
 }
-//@ chunk-6kfx541v.js:1948-2074 placement
+//@ chunk-m3nkvbec.js:1948-2074 placement
 function getCachedCustomTheme(customThemeRef) {
   let customThemeRegistry = getCustomThemeRegistry();
   return (
@@ -106,19 +107,19 @@ function getCachedCustomTheme(customThemeRef) {
     customThemeRegistry.pluginThemes.getState().find((theme) => theme.slug === customThemeRef)
   );
 }
-//@ chunk-6kfx541v.js:2074-2113 placement
+//@ chunk-m3nkvbec.js:2074-2113 placement
 function getThemesDir() {
   return join(getClaudeConfigDir(), "themes");
 }
-//@ chunk-6kfx541v.js:2113-2146 placement
+//@ chunk-m3nkvbec.js:2113-2146 placement
 function customThemeRef(slug) {
   return `${CUSTOM}${slug}`;
 }
-//@ chunk-6kfx541v.js:2146-2207 placement
+//@ chunk-m3nkvbec.js:2146-2207 placement
 function parseCustomThemeRef(themeRef) {
   return themeRef.startsWith(CUSTOM) ? themeRef.slice(CUSTOM.length) : null;
 }
-//@ chunk-6kfx541v.js:2207-2638 placement
+//@ chunk-m3nkvbec.js:2207-2638 placement
 /**
  * 解析自定义主题 JSON：基底（默认 dark）、名字与合法的颜色覆盖项。
  */
@@ -150,7 +151,7 @@ function parseCustomTheme(slug, text, source) {
     source,
   };
 }
-//@ chunk-6kfx541v.js:2638-3199 placement
+//@ chunk-m3nkvbec.js:2638-3199 placement
 /**
  * 读取单个主题文件（经存储后端或文件系统，超过 256KB 跳过）并解析。
  */
@@ -194,15 +195,15 @@ async function readCustomThemeFile(filePath, slug, source, storageV5, storageKey
   }
   return parseCustomTheme(slug, text, source);
 }
-//@ chunk-6kfx541v.js:3199-3254 placement
-async function readThemesFromPathAsync(dirPath, source, slugPrefix = "") {
-  return (await readThemesFromPath(dirPath, source, slugPrefix)) ?? [];
+//@ chunk-m3nkvbec.js:3199-3265 placement
+async function readThemesFromPathAsync(dirPath, source, slugPrefix = "", storageV5) {
+  return (await readThemesFromPath(dirPath, source, slugPrefix, undefined, storageV5)) ?? [];
 }
-//@ chunk-6kfx541v.js:3254-5056 placement
+//@ chunk-m3nkvbec.js:3265-5106 placement
 /**
  * 读取目录（或单个文件）中的所有 .json 主题；用户主题目录经存储后端分页列出并批量读取，失败时返回 null 保留旧主题。
  */
-async function readThemesFromPath(dirPath, source, slugPrefix, storageV5) {
+async function readThemesFromPath(dirPath, source, slugPrefix, storageV5, v5) {
   if (storageV5 && source === "user" && dirPath === getThemesDir()) {
     let configDirKey = {
       namespace: "userConfigDir",
@@ -337,6 +338,7 @@ async function readThemesFromPath(dirPath, source, slugPrefix, storageV5) {
   let themes = [];
   for (let fileName of fileNames) {
     if (extname(fileName) !== ".json") continue;
+    if (v5 !== undefined && (await v5(dirPath, fileName))) continue;
     let customThemeFile = await readCustomThemeFile(
       join(dirPath, fileName),
       slugPrefix + basename(fileName, ".json"),
@@ -346,13 +348,13 @@ async function readThemesFromPath(dirPath, source, slugPrefix, storageV5) {
   }
   return themes;
 }
-//@ chunk-6kfx541v.js:5056-5285 placement
+//@ chunk-m3nkvbec.js:5106-5335 placement
 /**
  * 自定义主题文件的 schema（名称、基础主题与覆盖项）。
  */
 var loadCustomThemes; // deferred: uses getCustomThemeRegistry of its import cycle while loading; runs once the cycle is complete
 var customThemeFileSchema;
-deferInit("chunk-6kfx541v.js:5056", () => {
+deferInit("chunk-m3nkvbec.js:5106", () => {
   loadCustomThemes = serializeCalls(async (storageV5) => {
     let customThemeRegistry = getCustomThemeRegistry();
     let themes = isCustomizationDisabled("themes")
@@ -370,7 +372,7 @@ deferInit("chunk-6kfx541v.js:5056", () => {
     }),
   );
 });
-//@ chunk-6kfx541v.js:5285-5803 placement
+//@ chunk-m3nkvbec.js:5335-5853 placement
 async function saveCustomTheme(theme, storageV5) {
   let fileData = {
     name: theme.name,
@@ -406,7 +408,7 @@ async function saveCustomTheme(theme, storageV5) {
     trailingNewline: true,
   }).write(fileData);
 }
-//@ chunk-6kfx541v.js:5803-5901 placement
+//@ chunk-m3nkvbec.js:5853-5951 placement
 function slugify(name) {
   return (
     name
@@ -415,7 +417,7 @@ function slugify(name) {
       .replace(/^-+|-+$/g, "") || "theme"
   );
 }
-//@ chunk-6kfx541v.js:5901-6238 placement (2.1.88 match: startWatching, 0.732)
+//@ chunk-m3nkvbec.js:5951-6288 placement (2.1.88 match: startWatching, 0.732)
 /**
  * 监听主题目录（depth 0）的增删改。旧版名 startWatching 来自 fileChangedWatcher，此处实为主题文件监听。
  */
@@ -442,16 +444,16 @@ function watchCustomThemes(paths) {
   return () => void watcher.close();
 }
 export {
-  readThemesFromPathAsync,
   getCustomThemeRegistry,
   parseCustomThemeRef,
   getCustomThemeBase,
   getCachedCustomTheme,
-  saveCustomTheme,
+  loadCustomThemes,
+  readThemesFromPathAsync,
   customThemeRef,
+  saveCustomTheme,
   getThemesDir,
   slugify,
-  loadCustomThemes,
   getCachedCustomThemes,
   watchCustomThemes,
 };

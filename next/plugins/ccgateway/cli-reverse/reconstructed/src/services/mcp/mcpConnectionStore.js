@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 连接状态存储。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kvr3v8w9.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pctxhybm.js (13)
  * attribution: placement 13
  */
 import { identityId2 } from "../../types/ids.js";
@@ -23,6 +23,7 @@ import {
 import { withConfigScope, decorateMcpTools, stampToolScope } from "./mcpToolDecoration.js";
 import { serverCacheKey } from "./client.js";
 import { isMcpServerDisabled, mcpDialBlockCause, suppressedConnectorsEqual } from "./config.js";
+import { CLOSED_WHILE_SIGNING_IN_REASON } from "./redactMcpErrors.js";
 import { logMCPDebug } from "../../utils/log.js";
 import { getMcpPrefix, isToolFromMcpServer } from "./mcpStringUtils.js";
 import { isRemoteMcpTransport } from "./discoveryIdentity.js";
@@ -32,14 +33,14 @@ import { isDiscoveryCacheOn } from "./mcpAccountKey.js";
 import { checkMcpServerHealth_2 } from "../../cli/handlers/mcp.js";
 import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
-//@ chunk-kvr3v8w9.js:646-715 placement
+//@ chunk-pctxhybm.js:684-753 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-kvr3v8w9.js:715-809 placement
+//@ chunk-pctxhybm.js:753-847 placement
 /**
  * 关闭连接并清理服务器缓存。
  */
@@ -49,7 +50,7 @@ function closeAndClearServer(row) {
     .clearServerCache(row.name, row.config)
     .catch(() => {});
 }
-//@ chunk-kvr3v8w9.js:809-989 placement
+//@ chunk-pctxhybm.js:847-1027 placement
 function withoutServerEntries(state, name, mcpPrefix) {
   return {
     tools: reject_default(state.tools, (tool) => tool.name?.startsWith(mcpPrefix)),
@@ -58,7 +59,7 @@ function withoutServerEntries(state, name, mcpPrefix) {
     resourceTemplates: omitKeys(state.resourceTemplates, name),
   };
 }
-//@ chunk-kvr3v8w9.js:989-6346 placement
+//@ chunk-pctxhybm.js:1027-6337 placement
 /**
  * AppState.mcp 的连接状态存储：标记/清除 needs-auth、收编连接结果（检查同名配置、禁用、策略阻止）、替换工具列表、维护被抑制的连接器与保留名拒绝、加入待连接服务器、按配置调和、身份边界时重置受影响服务器，以及批量应用排队的连接结果。
  */
@@ -133,7 +134,7 @@ class McpConnectionStore {
                 name: serverName,
                 type: "failed",
                 config: row.config,
-                error: "Its connection was closed while signing in again",
+                error: CLOSED_WHILE_SIGNING_IN_REASON,
               }
             : client,
         ),
@@ -445,7 +446,7 @@ class McpConnectionStore {
     });
   }
 }
-//@ chunk-kvr3v8w9.js:6346-6520 placement
+//@ chunk-pctxhybm.js:6337-6511 placement
 function pendingRowsFor(state, configs) {
   let existingNames = new Set(state.clients.map((client) => client.name));
   return Object.entries(configs)
@@ -456,13 +457,13 @@ function pendingRowsFor(state, configs) {
       config: value,
     }));
 }
-//@ chunk-kvr3v8w9.js:6520-6609 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-pctxhybm.js:6511-6600 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool, serverName) {
   return tool.mcpInfo?.serverName === undefined
     ? commandBelongsToServer(tool, serverName)
     : tool.mcpInfo.serverName === serverName;
 }
-//@ chunk-kvr3v8w9.js:6609-6788 placement
+//@ chunk-pctxhybm.js:6600-6779 placement
 function withoutServerItems(mcpState, serverName) {
   let mcpPrefix = getMcpPrefix(serverName);
   return {
@@ -472,7 +473,7 @@ function withoutServerItems(mcpState, serverName) {
     resourceTemplates: omitKeys(mcpState.resourceTemplates, serverName),
   };
 }
-//@ chunk-kvr3v8w9.js:6788-6934 placement
+//@ chunk-pctxhybm.js:6779-6925 placement
 function rowRelation(currentRow, update) {
   if (update.asked === true) return "asked";
   if (currentRow === undefined) return "nowhere";
@@ -480,7 +481,7 @@ function rowRelation(currentRow, update) {
     ? "stands"
     : "elsewhere";
 }
-//@ chunk-kvr3v8w9.js:6934-7109 placement
+//@ chunk-pctxhybm.js:6925-7101 placement
 function rebindToRowConfig(row, update) {
   let connection = {
     name: update.name,
@@ -496,7 +497,7 @@ function rebindToRowConfig(row, update) {
     }),
   };
 }
-//@ chunk-kvr3v8w9.js:7109-7504 placement
+//@ chunk-pctxhybm.js:7101-7497 placement
 /**
  * 配置的非身份字段变化时，更新连接行的配置并重新装饰其工具与命令。
  */
@@ -527,7 +528,7 @@ function refreshRowConfig(state, input) {
     commands: [...otherCommands, ...stampToolScope(connection, serverCommands)],
   };
 }
-//@ chunk-kvr3v8w9.js:7504-7716 placement
+//@ chunk-pctxhybm.js:7497-7709 placement
 function adoptRefusal(existingRow, result) {
   let { name: serverName } = result.client;
   if (existingRow === undefined) return "no-row";
@@ -537,7 +538,7 @@ function adoptRefusal(existingRow, result) {
   if (mcpDialBlockCause(serverName, existingRow.config) !== null) return "policy-blocked";
   return;
 }
-//@ chunk-kvr3v8w9.js:7716-8039 placement
+//@ chunk-pctxhybm.js:7709-8032 placement
 /**
  * 把禁用或策略拦截的结果应用到连接行：标记为 disabled，或为策略拦截生成带原因的 failed 状态，并移除其条目。
  */
@@ -565,7 +566,7 @@ function applyRefusalToRow(mcpState, row, reason) {
     ...withoutServerItems(mcpState, name),
   };
 }
-//@ chunk-kvr3v8w9.js:8039-8181 placement
+//@ chunk-pctxhybm.js:8032-8175 placement (2.1.88 match: _temp5, 0.676)
 function rebindAdoption(row, adopted) {
   let connection = {
     name: row.name,

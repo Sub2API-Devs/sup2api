@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：列出本地未推送的提交与当前分支。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjxz9pt3.js (6)
  * attribution: placement 6
  */
 import {
@@ -23,7 +23,7 @@ import { gitExe } from "../git.js";
 import { GIT_SAFE_GLOBAL_ARGS } from "./gitSafeEnv.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 
-//@ chunk-vrr64ez0.js:27301-27776 placement
+//@ chunk-bjxz9pt3.js:27337-27812 placement
 /**
  * 列出本地未推送的提交与当前分支。
  */
@@ -59,14 +59,14 @@ async function listUnpushedCommits(cwd) {
     subject: printableLabel(headCommit[1], HEAD_TAIL_LINES_SEED),
   };
 }
-//@ chunk-vrr64ez0.js:27776-27883 placement
+//@ chunk-bjxz9pt3.js:27812-27919 placement
 /**
  * N 个未推送提交在某分支。
  */
 function formatUnpushedCount(unpushed) {
   return `${unpushed.count}${unpushedOverflowSuffix(unpushed)} unpushed ${plural(unpushed.count, "commit")} on ${unpushed.branch ?? "detached HEAD"}`;
 }
-//@ chunk-vrr64ez0.js:27883-28026 placement
+//@ chunk-bjxz9pt3.js:27919-28062 placement
 /**
  * 未推送提交摘要（首个短 sha 与标题）。
  */
@@ -75,13 +75,13 @@ function formatUnpushedSummary(unpushed) {
     unpushed.count > 1 ? ` and ${unpushed.count - 1}${unpushedOverflowSuffix(unpushed)} more` : "";
   return `${formatUnpushedCount(unpushed)}: ${[unpushed.shortSha, unpushed.subject].filter(Boolean).join(" ")}${moreSuffix}`;
 }
-//@ chunk-vrr64ez0.js:28026-28146 placement
+//@ chunk-bjxz9pt3.js:28062-28182 placement
 async function isHeadAt(cwd, headSha) {
   if (!isValidGitSha(headSha)) return false;
   let result = await runGitForUnpushed(cwd, ["rev-parse", "HEAD"]);
   return result.code === 0 && result.stdout.trim() === headSha;
 }
-//@ chunk-vrr64ez0.js:28146-28228 placement
+//@ chunk-bjxz9pt3.js:28182-28264 placement
 async function runGitForUnpushed(cwd, args) {
   return execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
     cwd,
@@ -89,8 +89,8 @@ async function runGitForUnpushed(cwd, args) {
     maxBuffer: MAX_ADOPT_RECORD_BYTES,
   });
 }
-//@ chunk-vrr64ez0.js:28228-28269 placement
+//@ chunk-bjxz9pt3.js:28264-28305 placement
 function unpushedOverflowSuffix(unpushed) {
   return unpushed.count >= ADOPT_CLAIM_RETRY_MS ? "+" : "";
 }
-export { formatUnpushedCount, formatUnpushedSummary, isHeadAt, listUnpushedCommits };
+export { isHeadAt, listUnpushedCommits, formatUnpushedCount, formatUnpushedSummary };

@@ -39,7 +39,8 @@ if [ "${VERIFY:-0}" = 1 ]; then
 fi
 if [ "${VERIFY:-0}" = 1 ]; then
   # static checks on the reading tree (docs/process/lead.md, README "验证")
-  [ -f analysis/verify/readable-check-original.json ] || $N tools/verify/readable-check.mjs original > /dev/null
+  # the free-identifier baseline of the official build; redone when original/ was replaced (2.1.318: the 316 one was kept)
+  [ analysis/verify/readable-check-original.json -nt original/reconstruction.json ] || $N tools/verify/readable-check.mjs original > /dev/null
   step readable-check;  $N tools/verify/readable-check.mjs | tail -1
   # every declaration compared with the official bytes, up to renaming and the deminify rules
   step decl-equiv;      $N tools/verify/decl-equiv.mjs 2>&1 | tail -1

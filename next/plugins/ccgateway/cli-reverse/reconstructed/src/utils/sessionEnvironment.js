@@ -3,16 +3,16 @@
  *
  * Bash 会话环境脚本：CLAUDE_ENV_FILE 与 session-env 目录下各 hook 写入的 env 文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionEnvironment.ts
- * pieces: chunk-23fm9f0d.js (1), chunk-e6aww6q8.js (14)
+ * pieces: chunk-pc3x100t.js (1), chunk-rmva59md.js (14)
  * attribution: fingerprint 6, placement 4, layout 4, file-local 1
  */
 import { join } from "path";
 import { readdir, writeFile, readFile } from "fs/promises";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getSessionId } from "../bootstrap/state.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
@@ -24,7 +24,7 @@ import { getPlatform } from "./platform.js";
 import { cleanupOldFilesInDirectory } from "./cleanup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:824835-824956 placement
+//@ chunk-rmva59md.js:646-765 placement
 class SessionEnvScriptSlot {
   script = undefined;
   owner = undefined;
@@ -37,26 +37,26 @@ class SessionEnvScriptSlot {
     this.owner = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:824956-824983 placement
+//@ chunk-rmva59md.js:765-788 placement
 var sessionEnvScriptSlot; // deferred: uses SessionEnvScriptSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:824956", () => {
+deferInit("chunk-rmva59md.js:765", () => {
   sessionEnvScriptSlot = new HostScoped(() => new SessionEnvScriptSlot());
 });
-//@ chunk-e6aww6q8.js:824983-825022 placement
+//@ chunk-rmva59md.js:788-823 placement
 function sessionEnvScript() {
   return sessionEnvScriptSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:825022-825109 placement
+//@ chunk-rmva59md.js:823-906 placement
 async function sessionEnvDir(sessionId = getSessionId()) {
   let dir = join(getClaudeConfigDir(), "session-env", sessionId);
   await getFsImplementation().mkdir(dir);
   return dir;
 }
-//@ chunk-e6aww6q8.js:825109-825172 layout
+//@ chunk-rmva59md.js:906-967 layout
 function getSessionEnvKey(sessionId, name) {
   return STORAGE_SPACES.userConfigDir("session-env", [sessionId, name]);
 }
-//@ chunk-e6aww6q8.js:825172-825540 layout
+//@ chunk-rmva59md.js:967-1333 layout
 async function listSessionEnvFilesViaStorage(storage, sessionId) {
   let names = [];
   let cursor;
@@ -86,12 +86,12 @@ async function listSessionEnvFilesViaStorage(storage, sessionId) {
   } while (cursor !== undefined);
   return names;
 }
-//@ chunk-e6aww6q8.js:825540-825633 fingerprint (2.1.88 match: getHookEnvFilePath, 1)
+//@ chunk-rmva59md.js:1333-1422 fingerprint (2.1.88 match: getHookEnvFilePath, 1)
 async function getHookEnvFilePath(hookEvent, hookIndex, sessionId) {
   let prefix = hookEvent.toLowerCase();
   return join(await sessionEnvDir(sessionId), `${prefix}-hook-${hookIndex}.sh`);
 }
-//@ chunk-e6aww6q8.js:825633-826304 fingerprint (2.1.88 match: clearCwdEnvFiles, 0.852)
+//@ chunk-rmva59md.js:1422-2079 fingerprint (2.1.88 match: clearCwdEnvFiles, 0.852)
 async function clearCwdEnvFiles(storage) {
   if (isStorageV5Enabled() && storage !== undefined) {
     let sessionId = getSessionId();
@@ -128,16 +128,17 @@ async function clearCwdEnvFiles(storage) {
         )
         .map((file) => writeFile(join(dir, file), "")),
     );
-  } catch (e) {
-    if (getErrnoCode(e) !== "ENOENT") logForDebugging(`Failed to clear cwd env files: ${errorMessage(e)}`);
+  } catch (error) {
+    if (getErrnoCode(error) !== "ENOENT")
+      logForDebugging(`Failed to clear cwd env files: ${errorMessage(error)}`);
   }
 }
-//@ chunk-e6aww6q8.js:826304-826376 fingerprint (2.1.88 match: invalidateSessionEnvCache, 0.876)
+//@ chunk-rmva59md.js:2079-2149 fingerprint (2.1.88 match: invalidateSessionEnvCache, 0.876)
 function invalidateSessionEnvCache() {
   logForDebugging("Invalidating session environment cache");
   sessionEnvScript().reset();
 }
-//@ chunk-e6aww6q8.js:826376-828021 fingerprint (2.1.88 match: getSessionEnvironmentScript, 0.911)
+//@ chunk-rmva59md.js:2149-3766 fingerprint (2.1.88 match: getSessionEnvironmentScript, 0.911)
 /**
  * 组装 Bash 工具的会话环境脚本：CLAUDE_ENV_FILE 与 session-env 目录下各 hook 写入的 env 文件（按 setup/sessionstart/cwdchanged/filechanged 顺序）。
  */
@@ -169,10 +170,10 @@ async function getSessionEnvironmentScript(storage) {
         let results = await Promise.all(
           sorted.map((name) => storage.read([getSessionEnvKey(sessionId, name)])),
         );
-        for (let idx = 0; idx < sorted.length; idx++) {
-          let result = results[idx];
+        for (let j = 0; j < sorted.length; j++) {
+          let result = results[j];
           if (!result.ok) {
-            logForDebugging(`Failed to read hook file ${sorted[idx]}: ${formatStorageError(result.error)}`);
+            logForDebugging(`Failed to read hook file ${sorted[j]}: ${formatStorageError(result.error)}`);
             continue;
           }
           let item = result.value.items[0];
@@ -226,12 +227,12 @@ async function getSessionEnvironmentScript(storage) {
   logForDebugging(`Session environment script ready (${joined.length} chars total)`);
   return joined;
 }
-//@ chunk-e6aww6q8.js:828021-828196 layout
+//@ chunk-rmva59md.js:3766-3935 layout
 var PLAIN_ASSIGNMENT_RE =
   /^(?:\s*(?:#.*)?|(?:export +|declare -x +)?([A-Za-z_]\w*)=((?:[\w@%+=:,./-]|'[^'\0]*'|"(?:[^"\\$`\0]|\\[^\0])*")*))$/;
 var QUOTED_SEGMENT_RE = /'([^']*)'|"((?:[^"\\]|\\.)*)"/g;
 var PATH_SEPARATOR_RE = /[/\\]/;
-//@ chunk-e6aww6q8.js:828196-828573 layout
+//@ chunk-rmva59md.js:3935-4306 layout
 /**
  * 把会话环境脚本解析为变量表：每行必须是纯赋值（可带 export/declare -x 与引号），否则放弃返回空表；Windows 上含路径分隔符的值会被删除。
  */
@@ -256,7 +257,7 @@ async function parseSessionEnvironment(storage) {
   }
   return env;
 }
-//@ chunk-e6aww6q8.js:828573-828699 fingerprint (2.1.88 match: HOOK_ENV_PRIORITY, 1)
+//@ chunk-rmva59md.js:4306-4429 fingerprint (2.1.88 match: HOOK_ENV_PRIORITY, 1)
 var HOOK_ENV_PRIORITY = {
   setup: 0,
   sessionstart: 1,
@@ -264,10 +265,10 @@ var HOOK_ENV_PRIORITY = {
   filechanged: 3,
 };
 var HOOK_ENV_NAME_RE = /^(setup|sessionstart|cwdchanged|filechanged)-hook-(\d+)\.sh$/;
-//@ chunk-e6aww6q8.js:828699-828885 file-local
-function sortHookEnvFiles(a, b) {
-  let aMatch = a.match(HOOK_ENV_NAME_RE);
-  let bMatch = b.match(HOOK_ENV_NAME_RE);
+//@ chunk-rmva59md.js:4429-4607 file-local
+function sortHookEnvFiles(fileA, fileB) {
+  let aMatch = fileA.match(HOOK_ENV_NAME_RE);
+  let bMatch = fileB.match(HOOK_ENV_NAME_RE);
   let aType = aMatch?.[1] || "";
   let bType = bMatch?.[1] || "";
   if (aType !== bType) return (HOOK_ENV_PRIORITY[aType] ?? 99) - (HOOK_ENV_PRIORITY[bType] ?? 99);
@@ -275,15 +276,15 @@ function sortHookEnvFiles(a, b) {
   let bIndex = parseInt(bMatch?.[2] || "0", 10);
   return aIndex - bIndex;
 }
-//@ chunk-23fm9f0d.js:22931-22969 fingerprint (2.1.88 match: getSessionEnvDirPath, 0.858)
+//@ chunk-pc3x100t.js:22982-23020 fingerprint (2.1.88 match: getSessionEnvDirPath, 0.858)
 function getSessionEnvDirPath() {
   return cleanupOldFilesInDirectory("session-env");
 }
 export {
   invalidateSessionEnvCache,
   getSessionEnvDirPath,
+  parseSessionEnvironment,
   getHookEnvFilePath,
   getSessionEnvironmentScript,
   clearCwdEnvFiles,
-  parseSessionEnvironment,
 };

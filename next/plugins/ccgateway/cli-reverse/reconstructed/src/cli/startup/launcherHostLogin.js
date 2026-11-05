@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动器宿主登录校验与启动钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (7), chunk-jscvyyh4.js (1)
  * attribution: placement 8
  */
 import {
@@ -31,7 +31,9 @@ import {
 } from "../../utils/sessionStart.js";
 import { cacheHookSessionTitle } from "../../utils/sessionStorage.js";
 
-//@ chunk-3wek6r2k.js:16735-16911 placement
+//@ chunk-jscvyyh4.js:424-451 placement
+var HOSTED_RULES_FLAG = "tengu_harp_voatavo";
+//@ chunk-hjswk319.js:17497-17673 placement
 function settleLauncherHostLogin(identity) {
   if (usableLauncherHostLoginToken() === null) {
     if (!takeLauncherHostLoginEnd()) return identity;
@@ -47,7 +49,7 @@ function settleLauncherHostLogin(identity) {
   clearOAuthTokenCache();
   return refusal;
 }
-//@ chunk-3wek6r2k.js:16911-17243 placement
+//@ chunk-hjswk319.js:17673-18005 placement
 function forgetLauncherHostLoginForCloud(options) {
   if (
     (options.remote !== null ||
@@ -70,7 +72,7 @@ function forgetLauncherHostLoginForCloud(options) {
     refreshGrowthBookAfterAuthChange();
   }
 }
-//@ chunk-3wek6r2k.js:17243-17429 placement
+//@ chunk-hjswk319.js:18005-18191 placement
 async function validateLoginIdentity(token) {
   let info = await validateOauthToken(token);
   let organizationUuid = info?.organization_uuid;
@@ -85,7 +87,7 @@ async function validateLoginIdentity(token) {
       }
     : null;
 }
-//@ chunk-3wek6r2k.js:17429-18214 placement
+//@ chunk-hjswk319.js:18191-18976 placement
 /**
  * 校验桌面应用替换的登录令牌（launcher-host-login）：组织校验、身份是否与启动身份一致。
  */
@@ -145,7 +147,7 @@ async function verifyLauncherHostLogin(credentials, token) {
   );
   return verdict.verdict;
 }
-//@ chunk-3wek6r2k.js:18214-18425 placement
+//@ chunk-hjswk319.js:18976-19187 placement
 function launcherClaudeAiLoginRefusal() {
   let refusal = launcherSignInMethodRefusal();
   return refusal === null
@@ -158,7 +160,7 @@ function launcherClaudeAiLoginRefusal() {
 ${refusal}`,
       };
 }
-//@ chunk-3wek6r2k.js:18425-18905 placement
+//@ chunk-hjswk319.js:19187-19667 placement
 async function runStartupHooks(trigger, options) {
   switch (options.kind) {
     case "session-start": {
@@ -185,7 +187,7 @@ async function runStartupHooks(trigger, options) {
       });
   }
 }
-//@ chunk-3wek6r2k.js:18905-18992 placement
+//@ chunk-hjswk319.js:19667-19754 placement
 function joinPromptAppend(base, append) {
   if (!append) return base;
   if (!base) return append;
@@ -193,14 +195,12 @@ function joinPromptAppend(base, append) {
 
 ${append}`;
 }
-//@ chunk-3wek6r2k.js:18992-19020 placement
-var HOSTED_RULES_FLAG = "tengu_harp_voatavo";
 export {
-  settleLauncherHostLogin,
-  runStartupHooks,
   verifyLauncherHostLogin,
+  runStartupHooks,
+  settleLauncherHostLogin,
   forgetLauncherHostLoginForCloud,
   joinPromptAppend,
-  HOSTED_RULES_FLAG,
   validateLoginIdentity,
+  HOSTED_RULES_FLAG,
 };

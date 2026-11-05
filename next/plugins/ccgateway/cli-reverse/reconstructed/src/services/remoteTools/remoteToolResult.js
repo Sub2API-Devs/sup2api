@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：远程工具结果的呈现：完成标注、截断说明、未验证结果、输出落盘位置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dtv8x2hx.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3tymqgex.js (1), chunk-yvhjwwtt.js (22)
  * attribution: placement 23
  */
 import { isRanOutcome, REMOTE_TOOL_SERVING_LIMITS } from "../../remote/tools/protocolConstants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { formatFileSize } from "../../utils/format.js";
 import { outputFilterHint, isNonMcpShellTool } from "../../tools/shared/textSearchTools.js";
@@ -23,11 +23,14 @@ import {
 } from "./resultConversion.js";
 import { replayedOutcomeNote, deliveredAfterReconnectNote, ranOnHeader } from "./transportMessages.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 
-//@ chunk-dtv8x2hx.js:62603-62895 placement
+//@ chunk-3tymqgex.js:858-876 placement
+var RECONNECT_STATUS_SETTLE_MS = 3000;
+var RECONNECT_STATUS_LEAD_MS = 2000;
+//@ chunk-yvhjwwtt.js:63860-64152 placement
 function buildRemoteToolResultBlock(tool, outcome, toolUseId) {
   let ran = isRanOutcome(outcome.disposition);
   let hasEnvelope = ran && outcome.envelope === "present";
@@ -54,27 +57,27 @@ function buildRemoteToolResultBlock(tool, outcome, toolUseId) {
     formatTruncatedResult(tool, outcome),
   );
 }
-//@ chunk-dtv8x2hx.js:62895-62939 placement
+//@ chunk-yvhjwwtt.js:64152-64196 placement
 /**
  * 未验证答复 + 原始 shell 输出的组合文本。
  */
 function unverifiedAnswerWithOutput(tool, outcome) {
   return `${formatUnverifiedAnswer(outcome)}${shellOutputFollowing(tool, outcome)}`;
 }
-//@ chunk-dtv8x2hx.js:62939-62987 placement
+//@ chunk-yvhjwwtt.js:64196-64244 placement
 function shellOutputFollowing(tool, outcome) {
   return extractShellOutput(tool, outcome, "which follows");
 }
-//@ chunk-dtv8x2hx.js:62987-63040 placement
+//@ chunk-yvhjwwtt.js:64244-64297 placement
 /**
  * 取「如上所示」的 shell 输出（去首尾空白）。
  */
 function shellOutputShownAbove(tool, outcome) {
   return extractShellOutput(tool, outcome, "shown above").trim();
 }
-//@ chunk-dtv8x2hx.js:63040-63229 placement
+//@ chunk-yvhjwwtt.js:64297-64486 placement
 function formatCompletedOnHost(tool, remoteOrigin) {
-  return (tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) &&
+  return (tool.name === EDIT || tool.name === FILE_WRITE_TOOL_NAME) &&
     remoteOrigin.envelope === "present" &&
     isRanOutcome(remoteOrigin.disposition) &&
     !remoteOrigin.isError &&
@@ -83,7 +86,7 @@ function formatCompletedOnHost(tool, remoteOrigin) {
     ? `(completed on ${remoteOrigin.host.name}; diff not shown)`
     : "";
 }
-//@ chunk-dtv8x2hx.js:63229-63664 placement
+//@ chunk-yvhjwwtt.js:64486-64921 placement
 function extractShellOutput(tool, outcome, whichWord) {
   if (outcome.spilled === undefined || !isRanOutcome(outcome.disposition)) return "";
   let structured = remoteStructuredOutput(tool, outcome);
@@ -95,7 +98,7 @@ function extractShellOutput(tool, outcome, whichWord) {
   let hostName = outcome.host.name;
   return ` Output was ${formatFileSize(outcome.spilled.bytes)}; ${hostName} sent the first ${formatFileSize(inlineBytes)}, ${whichWord}; the rest exists only on ${hostName} \u2014 re-run there with ${outputFilterHint(tool.name)} if that is safe.`;
 }
-//@ chunk-dtv8x2hx.js:63664-64272 placement
+//@ chunk-yvhjwwtt.js:64921-65529 placement
 function formatTruncatedResult(tool, outcome) {
   let hasEnvelope = isRanOutcome(outcome.disposition) && outcome.envelope === "present";
   let answerTooLong = !hasEnvelope && exceedsAnswerCharLimit(outcome);
@@ -122,7 +125,7 @@ function formatTruncatedResult(tool, outcome) {
     ...(outcome.sessionNotes ?? []).map((note) => `(${note.text})`),
   ];
 }
-//@ chunk-dtv8x2hx.js:64272-64519 placement
+//@ chunk-yvhjwwtt.js:65529-65776 placement
 function describeDuplicateCall(outcome) {
   if (outcome.delivery === "fresh" || outcome.disposition === "duplicate_call") return [];
   let whatHappened = isRanOutcome(outcome.disposition)
@@ -136,7 +139,7 @@ function describeDuplicateCall(outcome) {
     ? [replayedOutcomeNote(outcome.servedAt, whatHappened)]
     : [deliveredAfterReconnectNote(whatHappened)];
 }
-//@ chunk-dtv8x2hx.js:64519-65593 placement
+//@ chunk-yvhjwwtt.js:65776-66850 placement
 /**
  * 标注"由某机器回答但无运行细节、未验证"。
  */
@@ -169,7 +172,7 @@ function formatUnverifiedAnswer(outcome) {
       return `[answered by ${hostName} with an outcome this version of Claude Code does not recognise \u2014 whether the command ran there is unknown, so check before re-running it]`;
   }
 }
-//@ chunk-dtv8x2hx.js:65593-65870 placement
+//@ chunk-yvhjwwtt.js:66850-67127 placement
 function remoteStructuredOutput(tool, outcome) {
   if (!isRanOutcome(outcome.disposition)) return;
   if (outcome.output !== undefined) return outcome.output;
@@ -182,18 +185,18 @@ function remoteStructuredOutput(tool, outcome) {
   });
   return parsed?.success ? parsed.data : undefined;
 }
-//@ chunk-dtv8x2hx.js:65870-65915 placement
+//@ chunk-yvhjwwtt.js:67127-67172 placement
 /**
  * 工具声明支持结构化输出时返回结构化结果，否则 undefined。
  */
 function structuredOutputIfStructured(tool, outcome) {
   return isNonMcpShellTool(tool) ? remoteStructuredOutput(tool, outcome) : undefined;
 }
-//@ chunk-dtv8x2hx.js:65915-65988 placement
+//@ chunk-yvhjwwtt.js:67172-67245 placement
 function isTextOrTextBlocks(content) {
   return typeof content === "string" || content.every((block) => block.type === "text");
 }
-//@ chunk-dtv8x2hx.js:65988-66106 placement
+//@ chunk-yvhjwwtt.js:67245-67363 placement
 function toolUseErrorResult(message, toolUseId) {
   return {
     type: "tool_result",
@@ -202,7 +205,7 @@ function toolUseErrorResult(message, toolUseId) {
     is_error: true,
   };
 }
-//@ chunk-dtv8x2hx.js:66106-66322 placement
+//@ chunk-yvhjwwtt.js:67363-67579 placement
 function appendResultLines(block, lines) {
   if (lines.length === 0) return block;
   let joined = lines.join(`
@@ -230,7 +233,7 @@ ${joined}`,
         ],
       };
 }
-//@ chunk-dtv8x2hx.js:66322-66498 placement
+//@ chunk-yvhjwwtt.js:67579-67755 placement
 function prependResultLine(block, line) {
   let { content } = block;
   if (content === undefined || content === "")
@@ -255,10 +258,10 @@ ${content}`,
         ],
       };
 }
-//@ chunk-dtv8x2hx.js:66498-66547 placement
+//@ chunk-yvhjwwtt.js:67755-67804 placement
 var TOOL_USE_ERROR_OPEN_TAG = "<tool_use_error>";
 var TOOL_USE_ERROR_CLOSE_TAG = "</tool_use_error>";
-//@ chunk-dtv8x2hx.js:66547-66703 placement
+//@ chunk-yvhjwwtt.js:67804-67960 placement
 function remoteResultText_2(outcome, maxChars = MAX_KEPT_ANSWER_CHARS) {
   let text = contentToText(outcome.content);
   let isWrappedError =
@@ -270,16 +273,16 @@ function remoteResultText_2(outcome, maxChars = MAX_KEPT_ANSWER_CHARS) {
     maxChars,
   );
 }
-//@ chunk-dtv8x2hx.js:66703-66765 placement
+//@ chunk-yvhjwwtt.js:67960-68022 placement
 /**
  * 判断远程结果文本是否超过要保留的字符上限（超出则应把全文写到文件）。
  */
 function exceedsAnswerCharLimit(outcome) {
   return remoteResultText_2(outcome, Number.MAX_SAFE_INTEGER).length > MAX_KEPT_ANSWER_CHARS;
 }
-//@ chunk-dtv8x2hx.js:66765-66777 placement
+//@ chunk-yvhjwwtt.js:68022-68034 placement
 var MAX_KEPT_ANSWER_CHARS = 2000;
-//@ chunk-dtv8x2hx.js:66777-67941 placement
+//@ chunk-yvhjwwtt.js:68034-69198 placement
 function formatSavedOutputNote(outcome, tool) {
   let hostName = outcome.host.name;
   let rerunHint = `e.g. ${tool.name} with ${HOST_TOOL_INPUT_FIELD}: "${hostName}"`;
@@ -290,16 +293,16 @@ function formatSavedOutputNote(outcome, tool) {
       case "background_task": {
         if (outcome.backgroundTaskId === undefined)
           return `(that command keeps running as a background task ON ${hostName}: its task id and output file exist there, not here, and this session is not notified when it finishes \u2014 check on it there, ${rerunHint})`;
-        return `(that command keeps running as a background task ON ${hostName}: its ID and output file exist there, not here, and this session is not notified when it finishes. Its output file there (${FILE_READ_TOOL_NAME} with ${HOST_TOOL_INPUT_FIELD}: "${hostName}") shows what it has printed, not whether it is still running. To stop it, call ${TASKSTOP} with that ID and ${HOST_TOOL_INPUT_FIELD}: "${hostName}". Never check on it or stop it with pgrep, pkill or kill: with the sandbox on there, a later command cannot see or reach this process, or a server it started. To test such a server, do it inside the same command, or ask the user to turn the sandbox off for that folder.)`;
+        return `(that command keeps running as a background task ON ${hostName}: its ID and output file exist there, not here, and this session is not notified when it finishes. Its output file there (${READ} with ${HOST_TOOL_INPUT_FIELD}: "${hostName}") shows what it has printed, not whether it is still running. To stop it, call ${TASKSTOP} with that ID and ${HOST_TOOL_INPUT_FIELD}: "${hostName}". Never check on it or stop it with pgrep, pkill or kill: with the sandbox on there, a later command cannot see or reach this process, or a server it started. To test such a server, do it inside the same command, or ask the user to turn the sandbox off for that folder.)`;
       }
     }
   });
 }
-//@ chunk-dtv8x2hx.js:67941-67971 placement
+//@ chunk-yvhjwwtt.js:69198-69228 placement
 var NUMBERED_LINE_REGEX = /^\s*(\d+)[\t:\u2192]/;
-//@ chunk-dtv8x2hx.js:67971-68583 placement
+//@ chunk-yvhjwwtt.js:69228-69840 placement
 function formatLineCutNote(tool, outcome) {
-  if (tool.name !== FILE_READ_TOOL_NAME) return;
+  if (tool.name !== READ) return;
   let text = contentToText(outcome.content);
   let match = REMOTE_TOOL_SERVING_LIMITS.exec(text);
   if (match === null) return;
@@ -324,11 +327,8 @@ function formatLineCutNote(tool, outcome) {
   }
   if (runStart === undefined || longestEnd <= runStart) return;
   let hostName = outcome.host.name;
-  return `(${hostName} cut this result at the most it sends in one answer: lines ${runStart}-${longestEnd - 1} arrived whole, line ${longestEnd} may be cut short, and the rest of the file is not in this result. The next page is ${FILE_READ_TOOL_NAME} with offset=${longestEnd} limit=${longestEnd - runStart} and ${HOST_TOOL_INPUT_FIELD}: "${hostName}"; ${GREP_TOOL_NAME} there finds a specific section.)`;
+  return `(${hostName} cut this result at the most it sends in one answer: lines ${runStart}-${longestEnd - 1} arrived whole, line ${longestEnd} may be cut short, and the rest of the file is not in this result. The next page is ${READ} with offset=${longestEnd} limit=${longestEnd - runStart} and ${HOST_TOOL_INPUT_FIELD}: "${hostName}"; ${GREP_TOOL_NAME} there finds a specific section.)`;
 }
-//@ chunk-dtv8x2hx.js:68583-68603 placement
-var RECONNECT_STATUS_SETTLE_MS = 3000;
-var RECONNECT_STATUS_LEAD_MS = 2000;
 export {
   RECONNECT_STATUS_LEAD_MS,
   RECONNECT_STATUS_SETTLE_MS,

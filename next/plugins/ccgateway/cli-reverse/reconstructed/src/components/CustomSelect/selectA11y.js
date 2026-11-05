@@ -3,9 +3,9 @@
  *
  * 选择框无障碍与键盘导航（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nz9pbsr3.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mcmr8p9f.js (22)
  * attribution: placement 22
  */
 import {
@@ -49,12 +49,12 @@ import { Ansi } from "../../ink/components/AnsiText.js";
 import { inverseText } from "../../ink/screen.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nz9pbsr3.js:904-908 placement
+//@ chunk-mcmr8p9f.js:905-909 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nz9pbsr3.js:904", () => {
+deferInit("chunk-mcmr8p9f.js:905", () => {
   init_react_production();
 });
-//@ chunk-nz9pbsr3.js:908-988 placement
+//@ chunk-mcmr8p9f.js:909-988 placement
 var A11Y_SPACE_WIDTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var A11Y_LABEL_GAP;
 var A11Y_ROW_PADDING;
@@ -64,7 +64,7 @@ var A11Y_AUTO_FOCUS_INPUT;
 var A11Y_INPUT_CONTEXT;
 var A11Y_CYCLE_CONTEXT;
 var A11Y_BOOLEAN_CONTEXT;
-deferInit("chunk-nz9pbsr3.js:908", () => {
+deferInit("chunk-mcmr8p9f.js:909", () => {
   A11Y_SPACE_WIDTH = 32;
   A11Y_LABEL_GAP = 2;
   A11Y_ROW_PADDING = 2;
@@ -75,7 +75,7 @@ deferInit("chunk-nz9pbsr3.js:908", () => {
   A11Y_CYCLE_CONTEXT = createContext(false);
   A11Y_BOOLEAN_CONTEXT = createContext(false);
 });
-//@ chunk-nz9pbsr3.js:988-3816 placement
+//@ chunk-mcmr8p9f.js:988-3811 placement
 function useSelectNavigation({ children, ...props }) {
   let scrollViewportSize = useScrollViewportSize(useTerminalSize());
   let containerRef = useRef(null);
@@ -330,7 +330,7 @@ function useSelectNavigation({ children, ...props }) {
     }),
   });
 }
-//@ chunk-nz9pbsr3.js:3816-6058 placement
+//@ chunk-mcmr8p9f.js:3811-6053 placement
 /**
  * 无障碍选择列表的一行：屏幕阅读器模式下输出"标签, 值 + 描述"纯文本；否则两栏或堆叠布局，支持悬停高亮、点击、锁定/被拒样式与描述换行。
  */
@@ -541,7 +541,7 @@ function A11ySelectRow(props) {
   } else rowElement = $[53];
   return rowElement;
 }
-//@ chunk-nz9pbsr3.js:6058-6769 placement
+//@ chunk-mcmr8p9f.js:6053-6764 placement
 /**
  * 选择行的值文本：屏幕阅读器下读 spoken（禁用加 ", unavailable"），否则显示 before/children/after，禁用或锁定时变暗。
  */
@@ -613,7 +613,7 @@ function A11yValueText(props) {
   } else textElement = $[14];
   return textElement;
 }
-//@ chunk-nz9pbsr3.js:6769-6879 placement
+//@ chunk-mcmr8p9f.js:6764-6875 placement
 function A11ySection(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -627,7 +627,7 @@ function A11ySection(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-nz9pbsr3.js:6879-7085 placement
+//@ chunk-mcmr8p9f.js:6875-7081 placement
 function A11yBooleanValue(props) {
   let $ = useMemoCache(4);
   let { value, disabled } = props;
@@ -647,7 +647,7 @@ function A11yBooleanValue(props) {
   } else valueText = $[3];
   return valueText;
 }
-//@ chunk-nz9pbsr3.js:7085-7490 placement
+//@ chunk-mcmr8p9f.js:7081-7486 placement
 /**
  * 循环选择型值：显示当前选项标签，可用时两侧加 ‹ ›。
  */
@@ -684,7 +684,7 @@ function A11yCycleValue(props) {
   } else valueText = $[7];
   return valueText;
 }
-//@ chunk-nz9pbsr3.js:7490-7749 placement
+//@ chunk-mcmr8p9f.js:7486-7745 placement
 function A11yOpenerValue(props) {
   let $ = useMemoCache(5);
   let { children, disabled } = props;
@@ -706,7 +706,7 @@ function A11yOpenerValue(props) {
   } else valueText = $[4];
   return valueText;
 }
-//@ chunk-nz9pbsr3.js:7749-7962 placement
+//@ chunk-mcmr8p9f.js:7745-7958 placement
 function A11yButtonValue(props) {
   let $ = useMemoCache(4);
   let { children, disabled } = props;
@@ -725,7 +725,7 @@ function A11yButtonValue(props) {
   } else valueText = $[3];
   return valueText;
 }
-//@ chunk-nz9pbsr3.js:7962-8245 placement
+//@ chunk-mcmr8p9f.js:7958-8241 placement
 function A11yTextValue(props) {
   let $ = useMemoCache(6);
   let { children, disabled } = props;
@@ -755,7 +755,7 @@ function A11yTextValue(props) {
   } else valueText = $[5];
   return valueText;
 }
-//@ chunk-nz9pbsr3.js:8245-10910 placement
+//@ chunk-mcmr8p9f.js:8241-10906 placement
 /**
  * 可编辑选择框的无障碍输入行为（编辑文本、取消）
  */
@@ -1043,7 +1043,7 @@ function useSelectA11yInput(props) {
   } else inputElement = $[74];
   return inputElement;
 }
-//@ chunk-nz9pbsr3.js:10910-11310 placement
+//@ chunk-mcmr8p9f.js:10906-11306 placement
 /**
  * 计算各种值组件的显示宽度（布尔、循环选项取最长标签加箭头、打开、按钮、文本、输入框），用于对齐值列。
  */
@@ -1064,7 +1064,7 @@ function measureA11yValueWidth(children) {
     return a11yLabelWidth(children.props.value || (children.props.placeholder ?? "")) + 1;
   return 0;
 }
-//@ chunk-nz9pbsr3.js:11310-11365 placement
+//@ chunk-mcmr8p9f.js:11306-11361 placement
 /**
  * 计算无障碍值区域宽度：文本宽度 + 空格数 + 1（无文本时为 2）。
  */
@@ -1072,7 +1072,7 @@ function a11yValueWidth(description) {
   let text = cellText(description);
   return 2 + (text ? countCharInString(text, " ") + 1 : 0);
 }
-//@ chunk-nz9pbsr3.js:11365-11431 placement
+//@ chunk-mcmr8p9f.js:11361-11427 placement
 function a11yLabelWidth(text) {
   return Math.max(
     0,
@@ -1084,7 +1084,7 @@ function a11yLabelWidth(text) {
       .map((line) => bunStringWidth(line)),
   );
 }
-//@ chunk-nz9pbsr3.js:11431-11986 placement
+//@ chunk-mcmr8p9f.js:11427-11982 placement
 /**
  * 为值组件给出键盘动作：布尔切换、循环选项前后切换并 onChange、打开器 onOpen、按钮 onPress。
  */
@@ -1127,33 +1127,33 @@ function getA11yValueActions(children, pendingValues) {
     };
   return {};
 }
-//@ chunk-nz9pbsr3.js:11986-12054 placement
+//@ chunk-mcmr8p9f.js:11982-12050 placement
 function toggleBooleanValue(props, pendingValues) {
   let nextValue = !(pendingValues.get(props) ?? props.value);
   setPendingValue(pendingValues, props, nextValue);
   props.onChange(nextValue);
 }
-//@ chunk-nz9pbsr3.js:12054-12116 placement
+//@ chunk-mcmr8p9f.js:12050-12112 placement
 function setPendingValue(pendingValues, props, value) {
   pendingValues.set(props, value);
   queueMicrotask(() => pendingValues.delete(props));
 }
-//@ chunk-nz9pbsr3.js:12116-12185 placement
+//@ chunk-mcmr8p9f.js:12112-12181 placement
 function pendingValueOrValue(props, pendingValues) {
   let pending = pendingValues.get(props);
   return typeof pending === "string" ? pending : props.value;
 }
-//@ chunk-nz9pbsr3.js:12185-12226 placement
+//@ chunk-mcmr8p9f.js:12181-12222 placement
 function isA11ySection(child) {
   return isValidElement_default(child) && child.type === A11ySection;
 }
-//@ chunk-nz9pbsr3.js:12226-12267 placement
+//@ chunk-mcmr8p9f.js:12222-12263 placement
 function isChildOfType(children, componentType) {
   return isValidElement_default(children) && children.type === componentType;
 }
-//@ chunk-nz9pbsr3.js:12267-12356 placement
+//@ chunk-mcmr8p9f.js:12263-12352 placement
 var merged; // deferred: uses useSelectNavigation of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nz9pbsr3.js:12267", () => {
+deferInit("chunk-mcmr8p9f.js:12263", () => {
   merged = Object.assign(useSelectNavigation, {
     Field: A11ySection,
     Toggle: A11yBooleanValue,

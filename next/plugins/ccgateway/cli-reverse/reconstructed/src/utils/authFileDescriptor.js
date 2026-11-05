@@ -3,9 +3,9 @@
  *
  * 从文件描述符或 CCR 已知文件（/home/claude/.claude/remote/.oauth_token 等）读取 OAuth 令牌、API key、网关令牌，并落盘给子进程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/authFileDescriptor.ts
- * pieces: chunk-847rdpmn.js (1), chunk-hvpfdswb.js (26), chunk-pspx8z4e.js (1)
+ * pieces: chunk-0fzr619q.js (1), chunk-m1f5npav.js (26), chunk-mdrpnc0g.js (1)
  * attribution: placement 18, fingerprint 6, layout 4
  */
 import { fstatSync, mkdirSync, writeFileSync } from "fs";
@@ -41,7 +41,7 @@ import { isMuslEnvironment_2 } from "./envDynamic.js";
 import { sleep } from "./sleep.js";
 import { getPlatform } from "./platform.js";
 
-//@ chunk-847rdpmn.js:5373-5638 placement
+//@ chunk-0fzr619q.js:5407-5672 placement
 /**
  * 同步读取继承的描述符（只允许管道或 socket，有大小上限）。
  */
@@ -55,12 +55,12 @@ function readInheritedFdSync(fd, { maxBytes }) {
     );
   return readBoundedFdClose(fd, maxBytes);
 }
-//@ chunk-pspx8z4e.js:191-205 placement
+//@ chunk-mdrpnc0g.js:191-205 placement
 /**
  * 凭据读取的字节上限（64 KiB）。
  */
 var MAX_CREDENTIAL_READ_BYTES = 65536;
-//@ chunk-hvpfdswb.js:695-833 fingerprint (2.1.88 match: CCR_TOKEN_DIR, 0.4)
+//@ chunk-m1f5npav.js:695-835 fingerprint (2.1.88 match: CCR_TOKEN_DIR, 0.4)
 /**
  * CCR（Claude Code Remote）令牌目录 /home/claude/.claude/remote 及 .oauth_token / .api_key / .session_ingress_token 文件路径。
  */
@@ -70,7 +70,7 @@ var CCR_API_KEY_PATH = `${CCR_TOKEN_DIR}/.api_key`;
 var CCR_SESSION_INGRESS_TOKEN_PATH = `${CCR_TOKEN_DIR}/.session_ingress_token`;
 var CCR_CREDENTIAL_PATHS = [CCR_OAUTH_TOKEN_PATH, CCR_API_KEY_PATH, CCR_SESSION_INGRESS_TOKEN_PATH];
 var MAX_CREDENTIAL_BYTES = MAX_CREDENTIAL_READ_BYTES;
-//@ chunk-hvpfdswb.js:833-1347 fingerprint (2.1.88 match: maybePersistTokenForSubprocesses, 0.694)
+//@ chunk-m1f5npav.js:835-1349 fingerprint (2.1.88 match: maybePersistTokenForSubprocesses, 0.694)
 /**
  * CCR 环境下把从 fd 读到的令牌写到 /home/claude/.claude/remote 下的已知文件，供子进程读取。
  */
@@ -104,7 +104,7 @@ function maybePersistTokenForSubprocesses(path, token, tokenName, { skipInReview
     });
   }
 }
-//@ chunk-hvpfdswb.js:1347-1601 placement
+//@ chunk-m1f5npav.js:1349-1603 placement
 async function removeCredentialFile() {
   if (!env.CLAUDE_CODE_REMOTE || isDiskless()) return;
   for (let path of CCR_CREDENTIAL_PATHS)
@@ -121,14 +121,14 @@ async function removeCredentialFile() {
         );
     }
 }
-//@ chunk-hvpfdswb.js:1666-1706 placement
+//@ chunk-m1f5npav.js:1668-1708 placement
 /**
  * 读取已知路径凭据文件里的令牌。
  */
 function readWellKnownCredentialToken(readPath, fileLabel) {
   return readWellKnownCredentialFile(readPath, fileLabel).token;
 }
-//@ chunk-hvpfdswb.js:1706-2175 placement
+//@ chunk-m1f5npav.js:1708-2177 placement
 function readWellKnownCredentialFile(path, label) {
   if (isHttpMcpServeInvocation())
     return {
@@ -174,7 +174,7 @@ function readWellKnownCredentialFile(path, label) {
     };
   }
 }
-//@ chunk-hvpfdswb.js:2175-2712 placement
+//@ chunk-m1f5npav.js:2177-2714 placement
 /**
  * 把凭据写到磁盘供子进程读取（无磁盘会话、工具服务器守护进程、审查来源会话跳过）。
  */
@@ -210,7 +210,7 @@ async function persistCredentialForSubprocess(
     },
   );
 }
-//@ chunk-hvpfdswb.js:2712-3095 fingerprint (2.1.88 match: readTokenFromWellKnownFile, 0.599)
+//@ chunk-m1f5npav.js:2714-3097 fingerprint (2.1.88 match: readTokenFromWellKnownFile, 0.6)
 async function readTokenFromWellKnownFile(path, tokenName, credentials) {
   if (isHttpMcpServeInvocation() || usesSessionAccessToken() || isDiskless() || isMuslEnvironment_2(path))
     return null;
@@ -236,7 +236,7 @@ async function readTokenFromWellKnownFile(path, tokenName, credentials) {
       return null;
   }
 }
-//@ chunk-hvpfdswb.js:3095-4265 fingerprint (2.1.88 match: getCredentialFromFd, 0.578)
+//@ chunk-m1f5npav.js:3097-4267 fingerprint (2.1.88 match: getCredentialFromFd, 0.579)
 /**
  * 从文件描述符读凭证（OAuth 令牌/API key/会话令牌）：env 指定 fd 号，CCR 模式下直接读 fd 并删 env，否则读已知文件路径；结果缓存，必要时落盘给子进程。
  */
@@ -331,14 +331,14 @@ function getCredentialFromFd({
     return null;
   }
 }
-//@ chunk-hvpfdswb.js:4265-4348 placement (2.1.88 match: isCCRMode, 0.656)
+//@ chunk-m1f5npav.js:4267-4350 placement (2.1.88 match: isCCRMode, 0.652)
 /**
  * 非远程（或远程允许）且不是 IPC 子进程。旧版名 isCCRMode 错配；疑似归 utils/authFileDescriptor.ts。
  */
 function canUseInheritedFd() {
   return (!env.CLAUDE_CODE_REMOTE || usesSessionAccessToken()) && typeof process.send !== "function";
 }
-//@ chunk-hvpfdswb.js:4348-4747 placement
+//@ chunk-m1f5npav.js:4350-4749 placement
 function readFromInheritedDescriptor(fd, label) {
   try {
     logForDebugging(`Reading ${label} from inherited descriptor ${fd} (until newline or end-of-stream)`);
@@ -360,7 +360,7 @@ function readFromInheritedDescriptor(fd, label) {
     return null;
   }
 }
-//@ chunk-hvpfdswb.js:4747-5997 placement
+//@ chunk-m1f5npav.js:4749-5999 placement
 /**
  * 从文件描述符（或其 /proc 路径）读取凭据，多种回退方式。
  */
@@ -456,7 +456,7 @@ async function readCredentialFromDescriptor({
     return cacheOrStoreCredential(getCached, setCached, null);
   }
 }
-//@ chunk-hvpfdswb.js:5997-6062 placement
+//@ chunk-m1f5npav.js:5999-6064 placement
 /**
  * 先取缓存，没有则调用设置函数缓存并返回该值。
  */
@@ -466,14 +466,14 @@ function cacheOrStoreCredential(getCached, setCached, tokenFromWellKnownFile) {
   setCached(tokenFromWellKnownFile);
   return tokenFromWellKnownFile;
 }
-//@ chunk-hvpfdswb.js:6062-6140 placement
+//@ chunk-m1f5npav.js:6064-6142 placement
 /**
  * 是否还有待消费的后台认证快照（设置了路径且非无盘）。
  */
 function hasBgAuthSnapshotPending() {
   return Boolean(process.env.CLAUDE_BG_AUTH_SNAPSHOT_PATH) && !isDiskless();
 }
-//@ chunk-hvpfdswb.js:6140-6250 placement
+//@ chunk-m1f5npav.js:6142-6252 placement
 /**
  * 等待后台认证快照被消费完：按次数与间隔重试，返回最终是否已无待处理快照。
  */
@@ -484,7 +484,7 @@ async function waitForBgAuthSnapshot({ attempts = 10, delayMs = 100 } = {}) {
   }
   return !hasBgAuthSnapshotPending();
 }
-//@ chunk-hvpfdswb.js:6250-6339 placement
+//@ chunk-m1f5npav.js:6252-6341 placement
 /**
  * 清除后台认证快照环境变量并标记已消费。
  */
@@ -492,7 +492,7 @@ function unsetBgAuthSnapshotEnv() {
   env.unset("CLAUDE_BG_AUTH_SNAPSHOT_PATH");
   markDescriptorAnnouncementConsumed("CLAUDE_BG_AUTH_SNAPSHOT_PATH");
 }
-//@ chunk-hvpfdswb.js:6339-7371 placement
+//@ chunk-m1f5npav.js:6341-7373 placement
 /**
  * 读取后台会话的认证快照（CLAUDE_BG_AUTH_SNAPSHOT_PATH），忙时下次重试。
  */
@@ -544,7 +544,7 @@ function consumeBgAuthSnapshot() {
       });
   }
 }
-//@ chunk-hvpfdswb.js:7371-8643 placement
+//@ chunk-m1f5npav.js:7373-8645 placement
 async function openCredentialPathPolicy(credentials) {
   let envClaudeBgAuthSnapshotPath = process.env.CLAUDE_BG_AUTH_SNAPSHOT_PATH;
   if (!envClaudeBgAuthSnapshotPath || isDiskless()) return;
@@ -598,14 +598,14 @@ async function openCredentialPathPolicy(credentials) {
     });
   }
 }
-//@ chunk-hvpfdswb.js:8643-8706 placement
+//@ chunk-m1f5npav.js:8645-8708 placement
 /**
  * 凭据是否可能来自环境变量声明的文件描述符。
  */
 function hasPossibleCredentialFromDescriptor(envVarName) {
   return (process.env[envVarName]?.trim() ?? "") !== "" || wasDescriptorAnnouncementConsumed(envVarName);
 }
-//@ chunk-hvpfdswb.js:8706-8874 fingerprint (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
+//@ chunk-m1f5npav.js:8708-8877 fingerprint (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
 /**
  * CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR（或 CCR 的 /home/claude/.claude/remote/.oauth_token）读 OAuth 令牌。
  */
@@ -620,12 +620,12 @@ function getOAuthTokenFromFileDescriptor() {
     skipInReviewOrigin: true,
   });
 }
-//@ chunk-hvpfdswb.js:8874-8923 layout
+//@ chunk-m1f5npav.js:8877-8926 layout
 async function getOAuthTokenFromFileDescriptorAsync(credentials) {
   await openCredentialPathPolicy(credentials);
   return getOAuthTokenFromFileDescriptor_2(credentials);
 }
-//@ chunk-hvpfdswb.js:8923-9107 layout (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
+//@ chunk-m1f5npav.js:8926-9111 layout (2.1.88 match: getOAuthTokenFromFileDescriptor, 0.937)
 async function getOAuthTokenFromFileDescriptor_2(credentials) {
   return readCredentialFromDescriptor({
     envVar: "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
@@ -637,7 +637,7 @@ async function getOAuthTokenFromFileDescriptor_2(credentials) {
     skipInReviewOrigin: true,
   });
 }
-//@ chunk-hvpfdswb.js:9107-9584 layout
+//@ chunk-m1f5npav.js:9111-9588 layout
 /**
  * CLAUDE_CODE_GATEWAY_TOKEN_FILE_DESCRIPTOR 读网关令牌（有后台认证快照时不读）。
  */
@@ -659,7 +659,7 @@ function getGatewayTokenFromFileDescriptor() {
   if (fdValue?.trim()) markDescriptorAnnouncementConsumed("CLAUDE_CODE_GATEWAY_TOKEN_FILE_DESCRIPTOR");
   return token;
 }
-//@ chunk-hvpfdswb.js:9584-9754 fingerprint (2.1.88 match: getApiKeyFromFileDescriptor, 1)
+//@ chunk-m1f5npav.js:9588-9758 fingerprint (2.1.88 match: getApiKeyFromFileDescriptor, 1)
 /**
  * CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR（或 CCR .api_key）读 API key。
  */
@@ -674,7 +674,7 @@ function getApiKeyFromFileDescriptor() {
     setCached: setApiKeyFromFd,
   });
 }
-//@ chunk-hvpfdswb.js:9754-9911 layout (2.1.88 match: getApiKeyFromFileDescriptor, 1)
+//@ chunk-m1f5npav.js:9758-9915 layout (2.1.88 match: getApiKeyFromFileDescriptor, 1)
 async function getApiKeyFromFileDescriptor_2(credentials) {
   return readCredentialFromDescriptor({
     envVar: "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
@@ -685,7 +685,7 @@ async function getApiKeyFromFileDescriptor_2(credentials) {
     credentials,
   });
 }
-//@ chunk-hvpfdswb.js:9911-9999 placement
+//@ chunk-m1f5npav.js:9915-10003 placement
 /**
  * 判断错误是否为文件被占用或无权限（Windows 上 EACCES 也算）。
  */
@@ -695,7 +695,7 @@ function isCredentialFileBusyError(error) {
     errnoCode === "EBUSY" || errnoCode === "EPERM" || (errnoCode === "EACCES" && getPlatform() === "windows")
   );
 }
-//@ chunk-hvpfdswb.js:9999-10187 placement
+//@ chunk-m1f5npav.js:10003-10191 placement
 function readCredentialFile(path) {
   let readOnce = () =>
     readBoundedSync(path, {
@@ -715,24 +715,24 @@ export {
   getGatewayTokenFromFileDescriptor,
   getApiKeyFromFileDescriptor,
   hasPossibleCredentialFromDescriptor,
+  MAX_CREDENTIAL_READ_BYTES,
+  CCR_SESSION_INGRESS_TOKEN_PATH,
+  CCR_OAUTH_TOKEN_PATH,
+  MAX_CREDENTIAL_BYTES,
   hasBgAuthSnapshotPending,
   getOAuthTokenFromFileDescriptorAsync,
-  openCredentialPathPolicy,
-  getOAuthTokenFromFileDescriptor_2,
-  getApiKeyFromFileDescriptor_2,
   removeCredentialFile,
-  MAX_CREDENTIAL_READ_BYTES,
-  CCR_TOKEN_DIR,
+  CCR_CREDENTIAL_PATHS,
   readFromInheritedDescriptor,
   waitForBgAuthSnapshot,
   consumeBgAuthSnapshot,
-  CCR_SESSION_INGRESS_TOKEN_PATH,
-  MAX_CREDENTIAL_BYTES,
-  readWellKnownCredentialFile,
-  CCR_OAUTH_TOKEN_PATH,
-  CCR_API_KEY_PATH,
+  CCR_TOKEN_DIR,
   readWellKnownCredentialToken,
+  CCR_API_KEY_PATH,
   getCredentialFromFd,
   readCredentialFromDescriptor,
-  CCR_CREDENTIAL_PATHS,
+  readWellKnownCredentialFile,
+  openCredentialPathPolicy,
+  getOAuthTokenFromFileDescriptor_2,
+  getApiKeyFromFileDescriptor_2,
 };

@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/esm/jws/compact/sign.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2)
+ * pieces: chunk-pd6th42n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../../runtime/bun-runtime.js";
@@ -17,7 +17,7 @@ import { init_encrypt } from "../../lib/check_key_type.js";
 import { init_options_2 } from "../../../../webapi/lib/options.js";
 import { FlattenedSign } from "../flattened/sign.js";
 
-//@ chunk-2tyrgda4.js:38428-38477 esm-layout
+//@ chunk-pd6th42n.js:38428-38477 esm-layout
 var init_sign_2 = __esm(() => {
   init_content_encryption();
   init_sign();
@@ -27,7 +27,7 @@ var init_sign_2 = __esm(() => {
   init_encrypt();
   init_options_2();
 });
-//@ chunk-2tyrgda4.js:38477-38804 esm-fingerprint
+//@ chunk-pd6th42n.js:38477-38804 esm-fingerprint
 class CompactSign {
   constructor(payload) {
     this._flattened = new FlattenedSign(payload);

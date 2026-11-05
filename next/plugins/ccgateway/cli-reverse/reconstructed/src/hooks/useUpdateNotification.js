@@ -3,9 +3,9 @@
  *
  * 新版本可用通知与 semver 片段比较。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useUpdateNotification.ts
- * pieces: chunk-hddjmtjj.js (1)
+ * pieces: chunk-ndr12bqk.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -17,7 +17,7 @@ import {
   numberSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-hddjmtjj.js:53438-53634 fingerprint (2.1.88 match: getSemverPart, 0.622)
+//@ chunk-ndr12bqk.js:53471-53667 fingerprint (2.1.88 match: getSemverPart, 0.622)
 var getSemverPart = DoctorLazy(() =>
   objectSchema({
     httpUrl: stringSchema().optional(),

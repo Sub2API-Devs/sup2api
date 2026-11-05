@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件读取合并后设置的接口与缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { bunHashOf } from "../../utils/pastedContent.js";
@@ -13,21 +13,21 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { computedSettings } from "./policyGate.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { SETTING_SOURCES } from "../../utils/settings/constants.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
-//@ chunk-e6aww6q8.js:4159986-4160098 placement
+//@ chunk-5xgkngpb.js:4266323-4266435 placement
 function settingsReadKey(answers) {
   let keys = [...answers.keys()].toSorted();
   return bunHashOf(
     jsonStringify([keys, keys.map((key) => [answers.get(key)].filter((value) => value !== undefined))]),
   );
 }
-//@ chunk-e6aww6q8.js:4160098-4162230 placement
+//@ chunk-5xgkngpb.js:4266435-4268571 placement
 /**
  * 插件读取引擎合并后的设置；插件与设置都未变化时复用上次结果。
  */
@@ -68,7 +68,7 @@ async function readMergedSettingsForPlugin(state, trigger) {
         .map((entry) => [entry.key, entry.value]),
     );
     let unsettledKeys = hookedMerge.visited.includes(settingsReadKey(engineValues))
-      ? uniq([...engineValues.keys(), ...hookedValues.keys()]).filter(
+      ? normalizeCaseForComparison_2([...engineValues.keys(), ...hookedValues.keys()]).filter(
           (key) =>
             engineValues.has(key) !== hookedValues.has(key) ||
             !import_sortedIndex_2(engineValues.get(key), hookedValues.get(key)),

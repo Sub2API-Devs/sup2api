@@ -3,10 +3,10 @@
  *
  * Slack 频道补全：已知频道缓存、#channel 提及识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/slackChannelSuggestions.ts
- * pieces: chunk-18hwfzwa.js (13), chunk-82kqcve8.js (4)
- * attribution: fingerprint 5, layout 5, file-local 4, callgraph-fingerprint 1, affinity 1, sole-consumer 1
+ * pieces: chunk-a2q0x549.js (4), chunk-czq1j3j2.js (13)
+ * attribution: fingerprint 5, file-local 4, affinity 1, sole-consumer 1, layout 5, callgraph-fingerprint 1
  */
 import { logForDebugging } from "../debug.js";
 import { truncateToLength } from "../stringUtils.js";
@@ -17,14 +17,14 @@ import { create, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { jsonParse } from "../slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:86360-86411 fingerprint (2.1.88 match: unwrapResults, 0.71)
+//@ chunk-a2q0x549.js:83803-83854 fingerprint (2.1.88 match: unwrapResults, 0.712)
 function unwrapResults(text) {
   return findSlackChannelPositions(text, {
     results: MAX_SLACK_CHANNELS,
     bytes: MAX_SLACK_RESPONSE_BYTES,
   });
 }
-//@ chunk-82kqcve8.js:86411-86767 file-local
+//@ chunk-a2q0x549.js:83854-84210 file-local
 function findSlackChannelPositions(content, pattern) {
   if (Array.isArray(content)) return content.flatMap((part) => findSlackChannelPositions(part, pattern));
   if (typeof content !== "string") return [];
@@ -51,10 +51,10 @@ function findSlackChannelPositions(content, pattern) {
     .filter((position) => position.length > 0)
     .flatMap((position) => expandBracePattern(position, pattern));
 }
-//@ chunk-82kqcve8.js:86767-86790 affinity
+//@ chunk-a2q0x549.js:84210-84233 affinity
 var MAX_SLACK_CHANNELS = 1000;
 var MAX_SLACK_RESPONSE_BYTES = 4194304;
-//@ chunk-82kqcve8.js:86790-87346 sole-consumer
+//@ chunk-a2q0x549.js:84233-84788 sole-consumer
 /**
  * 展开 {a,b} 花括号模式（受结果数与字节预算限制，超出时原样返回）。
  */
@@ -83,23 +83,24 @@ function expandBracePattern(position, budget) {
       );
       return [position];
     }
-    for (let j = mapped.length - 1; j >= 0; j--) pending.push(prefix + (mapped[j] ?? "") + suffix);
+    for (let optionIndex = mapped.length - 1; optionIndex >= 0; optionIndex--)
+      pending.push(prefix + (mapped[optionIndex] ?? "") + suffix);
   }
   budget.results -= results.length;
   budget.bytes -= results.length * position.length;
   return results;
 }
-//@ chunk-18hwfzwa.js:608844-608876 fingerprint (2.1.88 match: SLACK_SEARCH_TOOL, 1)
+//@ chunk-czq1j3j2.js:629525-629557 fingerprint (2.1.88 match: SLACK_SEARCH_TOOL, 1)
 var SLACK_SEARCH_TOOL = "slack_search_channels";
-//@ chunk-18hwfzwa.js:608876-608949 layout
+//@ chunk-czq1j3j2.js:629557-629630 layout
 function onKnownSlackChannelsChanged(session, listener) {
   return suggestionCacheBySessionRoot.of(session).knownSlackChannelsChanged.subscribe(listener);
 }
-//@ chunk-18hwfzwa.js:608949-609032 fingerprint (2.1.88 match: findSlackClient, 1)
+//@ chunk-czq1j3j2.js:629630-629713 fingerprint (2.1.88 match: findSlackClient, 1)
 function findSlackClient(clients) {
   return clients.find((client) => client.type === "connected" && client.name.includes("slack"));
 }
-//@ chunk-18hwfzwa.js:609032-609424 fingerprint (2.1.88 match: fetchChannels, 0.92)
+//@ chunk-czq1j3j2.js:629713-630105 fingerprint (2.1.88 match: fetchChannels, 0.92)
 async function fetchChannels(clients, query) {
   let slackClient = findSlackClient(clients);
   if (!slackClient || slackClient.type !== "connected") return [];
@@ -129,16 +130,16 @@ async function fetchChannels(clients, query) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:609424-609458 file-local
+//@ chunk-czq1j3j2.js:630105-630139 file-local
 var resultsEnvelopeSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:609424", () => {
+deferInit("chunk-czq1j3j2.js:630105", () => {
   resultsEnvelopeSchema = DoctorLazy(() =>
     create({
       results: create_2(),
     }),
   );
 });
-//@ chunk-18hwfzwa.js:609458-609604 layout
+//@ chunk-czq1j3j2.js:630139-630285 layout
 function unwrapResultsEnvelope(text) {
   let trimmed = text.trim();
   if (!trimmed.startsWith("{")) return text;
@@ -148,7 +149,7 @@ function unwrapResultsEnvelope(text) {
   } catch {}
   return text;
 }
-//@ chunk-18hwfzwa.js:609604-609783 file-local
+//@ chunk-czq1j3j2.js:630285-630464 file-local
 function parseChannels(text) {
   let channels = [];
   let seen = new Set();
@@ -162,15 +163,15 @@ function parseChannels(text) {
   }
   return channels;
 }
-//@ chunk-18hwfzwa.js:609783-609821 layout
+//@ chunk-czq1j3j2.js:630464-630502 layout
 function hasSlackClient(clients) {
   return findSlackClient(clients) !== undefined;
 }
-//@ chunk-18hwfzwa.js:609821-609879 layout
+//@ chunk-czq1j3j2.js:630502-630560 layout
 function getKnownSlackChannelsVersion(session) {
   return suggestionCacheBySessionRoot.of(session).knownSlackChannelsVersion;
 }
-//@ chunk-18hwfzwa.js:609879-610123 layout
+//@ chunk-czq1j3j2.js:630560-630804 layout
 /**
  * 在输入中找已知 Slack 频道的 #channel 提及位置。
  */
@@ -189,12 +190,12 @@ function findSlackChannelMentions(session, displayedValue) {
   }
   return positions;
 }
-//@ chunk-18hwfzwa.js:610123-610219 callgraph-fingerprint (2.1.88 match: mcpQueryFor, 1)
+//@ chunk-czq1j3j2.js:630804-630900 callgraph-fingerprint (2.1.88 match: mcpQueryFor, 1)
 function mcpQueryFor(searchToken) {
   let lastSep = Math.max(searchToken.lastIndexOf("-"), searchToken.lastIndexOf("_"));
   return lastSep > 0 ? searchToken.slice(0, lastSep) : searchToken;
 }
-//@ chunk-18hwfzwa.js:610219-610363 file-local
+//@ chunk-czq1j3j2.js:630900-631044 file-local
 function findReusableCacheEntry(slackChannelsByQuery, mcpQuery, lower) {
   let best;
   let bestLen = 0;
@@ -209,7 +210,7 @@ function findReusableCacheEntry(slackChannelsByQuery, mcpQuery, lower) {
     }
   return best;
 }
-//@ chunk-18hwfzwa.js:610363-611241 fingerprint (2.1.88 match: getSlackChannelSuggestions, 0.557)
+//@ chunk-czq1j3j2.js:631044-631922 fingerprint (2.1.88 match: getSlackChannelSuggestions, 0.556)
 async function getSlackChannelSuggestions(session, clients, searchToken) {
   if (!searchToken) return [];
   let mcpQuery = mcpQueryFor(searchToken);
@@ -249,10 +250,10 @@ async function getSlackChannelSuggestions(session, clients, searchToken) {
     }));
 }
 export {
+  unwrapResults,
   onKnownSlackChannelsChanged,
   getKnownSlackChannelsVersion,
   hasSlackClient,
   findSlackChannelMentions,
   getSlackChannelSuggestions,
-  unwrapResults,
 };

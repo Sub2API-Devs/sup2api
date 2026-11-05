@@ -3,9 +3,9 @@
  *
  * Artifact 持久唤醒订阅（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (10), chunk-jeazk6wn.js (54), chunk-r3568h5y.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8ydt468d.js (1), chunk-tsrpnscb.js (10), chunk-y0ps0qva.js (54)
  * attribution: placement 65
  */
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
@@ -55,7 +55,7 @@ import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { denyPolicyBody } from "./publishErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r3568h5y.js:264-472 placement (2.1.88 match: getServerUrl, 1)
+//@ chunk-8ydt468d.js:264-472 placement (2.1.88 match: getServerUrl, 1)
 /**
  * 在已连接的 claude.ai 连接器中找唯一一个 URL 满足条件的连接器。
  */
@@ -72,14 +72,14 @@ function getServerUrl(config) {
   }
   return ccrServers.length === 1 ? ccrServers[0] : null;
 }
-//@ chunk-aqdf5t3e.js:2072-5524 placement
+//@ chunk-tsrpnscb.js:2112-5564 placement
 /**
  * 持久唤醒订阅失败的提示文本表
  */
 var DURABLE_WATCH_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DURABLE_WATCH_ERROR_TEXTS;
 var DURABLE_WATCH_ERROR_ALIAS;
-deferInit("chunk-aqdf5t3e.js:2072", () => {
+deferInit("chunk-tsrpnscb.js:2112", () => {
   DURABLE_WATCH_ERRORS = "Could not register a durable wake subscription; publishing and reading still work.";
   DURABLE_WATCH_ERROR_TEXTS = {
     invalid_slug:
@@ -117,7 +117,7 @@ deferInit("chunk-aqdf5t3e.js:2072", () => {
   };
   DURABLE_WATCH_ERROR_ALIAS = new Map(Object.entries(DURABLE_WATCH_ERROR_TEXTS));
 });
-//@ chunk-aqdf5t3e.js:5524-5660 placement
+//@ chunk-tsrpnscb.js:5564-5700 placement
 /**
  * 生成持久监视错误的说明，附上服务端返回的消息（必要时补句号）。
  */
@@ -127,7 +127,7 @@ function describeWatchError(reason, serverMessage) {
   let period = /[.!?]['")\]]*$/.test(serverMessage) ? "" : ".";
   return `${baseMessage} Server said: "${serverMessage}"${period}`;
 }
-//@ chunk-aqdf5t3e.js:5660-6213 placement
+//@ chunk-tsrpnscb.js:5700-6253 placement
 /**
  * 描述监听请求失败的 HTTP 来源：经会话网关（是否归因到 artifact 服务）、直连，或在网关未应答/拒绝后直连。
  */
@@ -142,16 +142,16 @@ function describeWatchHttpStatus(outcome) {
     ? `HTTP ${outcome.status} direct from the artifact service, after the session gateway did not answer`
     : `HTTP ${outcome.status} direct from the artifact service, after the session gateway declined with HTTP ${outcome.gatewayDeclined}`;
 }
-//@ chunk-aqdf5t3e.js:6213-6298 placement
+//@ chunk-tsrpnscb.js:6253-6338 placement
 /**
  * 导出函数 `isMissingSessionSubscribe`：参数 e，返回 e.reason === "subscribe_failed" && e.status === 404 && !e.fromGateway。
  */
 function isMissingSessionSubscribe(result) {
   return result.reason === "subscribe_failed" && result.status === 404 && !result.fromGateway;
 }
-//@ chunk-aqdf5t3e.js:6298-6542 placement
+//@ chunk-tsrpnscb.js:6338-6582 placement
 var EXPECTED_WATCH_FAILURES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aqdf5t3e.js:6298", () => {
+deferInit("chunk-tsrpnscb.js:6338", () => {
   EXPECTED_WATCH_FAILURES = new Set([
     "no_originator",
     "client_policy",
@@ -167,14 +167,14 @@ deferInit("chunk-aqdf5t3e.js:6298", () => {
     "invalid_slug",
   ]);
 });
-//@ chunk-aqdf5t3e.js:6542-6584 placement
+//@ chunk-tsrpnscb.js:6582-6624 placement
 /**
  * 导出函数 `unexpectedWatchFailure`：参数 e，返回 EXPECTED_WATCH_FAILURES.has(e) ? null : NGr。
  */
 function unexpectedWatchFailure(reason) {
   return EXPECTED_WATCH_FAILURES.has(reason) ? null : MISSED_WATCH_RELAUNCH_ADVICE;
 }
-//@ chunk-aqdf5t3e.js:6584-6658 placement
+//@ chunk-tsrpnscb.js:6624-6698 placement
 /**
  * 导出函数 `noteArmInFlight`：参数 e。
  */
@@ -182,7 +182,7 @@ function noteArmInFlight(slug) {
   let { armsInFlight } = getLiveState().durable;
   armsInFlight.set(slug, (armsInFlight.get(slug) ?? 0) + 1);
 }
-//@ chunk-aqdf5t3e.js:6658-7442 placement
+//@ chunk-tsrpnscb.js:6698-7482 placement
 function registerDurableWatch(slug, outcome) {
   let durable = getLiveState().durable;
   let inFlight = (durable.armsInFlight.get(slug) ?? 1) - 1;
@@ -238,7 +238,7 @@ function registerDurableWatch(slug, outcome) {
           }),
       };
 }
-//@ chunk-aqdf5t3e.js:7442-7638 placement
+//@ chunk-tsrpnscb.js:7482-7678 placement
 function clearArmFailuresFor(reason) {
   let durable = getLiveState().durable;
   for (let [slug, outcome] of durable.armOutcomes)
@@ -246,7 +246,7 @@ function clearArmFailuresFor(reason) {
   for (let announcedArmFailure of durable.announcedArmFailures)
     if (announcedArmFailure.endsWith(`:${reason}`)) durable.announcedArmFailures.delete(announcedArmFailure);
 }
-//@ chunk-aqdf5t3e.js:7638-7727 placement
+//@ chunk-tsrpnscb.js:7678-7767 placement
 /**
  * 导出函数 `forgetArmOutcome`：参数 e。
  */
@@ -255,11 +255,11 @@ function forgetArmOutcome(slug) {
   durable.armOutcomes.delete(slug);
   removeCronOwnedKeys(durable.announcedArmFailures, slug);
 }
-//@ chunk-jeazk6wn.js:1024-1062 placement
+//@ chunk-y0ps0qva.js:1024-1062 placement
 function durableRows() {
   return getLiveState().durable.rows;
 }
-//@ chunk-jeazk6wn.js:1062-1256 placement
+//@ chunk-y0ps0qva.js:1062-1256 placement
 /**
  * 按 slug 串行执行异步操作：排在该 slug 上一个操作之后（无论成败），结束时若自己仍是队尾则清除。
  */
@@ -281,23 +281,23 @@ async function runSerializedForSlug(slug, operation) {
     if (slugOps.get(slug) === settled) slugOps.delete(slug);
   }
 }
-//@ chunk-jeazk6wn.js:1256-1295 placement
+//@ chunk-y0ps0qva.js:1256-1295 placement
 /**
  * 导出函数 `durableRowList`：返回 [...R().values()]。
  */
 function durableRowList() {
   return [...durableRows().values()];
 }
-//@ chunk-jeazk6wn.js:1295-1329 placement
+//@ chunk-y0ps0qva.js:1295-1329 placement
 /**
  * 导出函数 `durableRowFor`：参数 e，返回 R().get(e)。
  */
 function durableRowFor(slug) {
   return durableRows().get(slug);
 }
-//@ chunk-jeazk6wn.js:1329-1358 placement
+//@ chunk-y0ps0qva.js:1329-1358 placement
 var WORKER_STATE_REREAD_DELAYS_MS = [30000, 120000, 600000];
-//@ chunk-jeazk6wn.js:1358-1536 placement
+//@ chunk-y0ps0qva.js:1358-1536 placement
 /**
  * 远程环境下用 worker 状态恢复持久评论监听；状态读取失败时打点并按退避重读。
  */
@@ -310,7 +310,7 @@ function restoreDurableWatches(workerState, options) {
   }
   applyRestoredRegistry(workerState, options);
 }
-//@ chunk-jeazk6wn.js:1536-1952 placement
+//@ chunk-y0ps0qva.js:1536-1952 placement
 /**
  * 按退避间隔重读 worker 状态以恢复持久监听：登记表通道已建立则停止；读到有效状态后恢复并打点；全部失败时打点放弃。
  */
@@ -342,7 +342,7 @@ async function rereadWorkerState(reread, options, delays = WORKER_STATE_REREAD_D
   logFeatureSad("artifact_durable_subscribe", "registry_reread_failed");
   return false;
 }
-//@ chunk-jeazk6wn.js:1952-2773 placement
+//@ chunk-y0ps0qva.js:1952-2773 placement
 /**
  * 把上一 worker 纪元保存的持久监听登记表恢复到内存：孤立触发器、各 slug 行（已取消监听的转为孤立；有在途操作的延后恢复）、停止记录；已停止的行退役；随后重新发布登记表并打点。
  */
@@ -388,7 +388,7 @@ function applyRestoredRegistry(workerState, options) {
     );
   }
 }
-//@ chunk-jeazk6wn.js:2773-3118 placement
+//@ chunk-y0ps0qva.js:2773-3118 placement
 /**
  * 退役已停止的持久监视行：删除该行、标记为未监视并把相关触发器加入孤儿列表；若该 slug 有进行中的操作则排队执行。
  */
@@ -413,7 +413,7 @@ function retireStoppedRow(slug) {
   }
   stopFlat();
 }
-//@ chunk-jeazk6wn.js:3118-3483 placement
+//@ chunk-y0ps0qva.js:3118-3483 placement
 /**
  * 恢复一条持久监听行：已有行、已取消或已停止时把其触发器记为孤立（必要时补 claudeDoc 标记），否则以 restored 写入。
  */
@@ -440,7 +440,7 @@ function restoreRow(row) {
     restored: true,
   });
 }
-//@ chunk-jeazk6wn.js:3483-3581 placement
+//@ chunk-y0ps0qva.js:3483-3582 placement
 function connectorForUrl(config) {
   let serverUrl = getServerUrl(config);
   if (!serverUrl) return null;
@@ -451,14 +451,14 @@ function connectorForUrl(config) {
     dial: ensureConnectedClient,
   };
 }
-//@ chunk-jeazk6wn.js:3581-3617 placement
+//@ chunk-y0ps0qva.js:3582-3618 placement
 /**
  * 导出函数 `hasConnectorForUrl`：参数 e，返回 se(e) !== null。
  */
 function hasConnectorForUrl(clients) {
   return connectorForUrl(clients) !== null;
 }
-//@ chunk-jeazk6wn.js:3617-3773 placement
+//@ chunk-y0ps0qva.js:3618-3774 placement
 async function dialWatchServer(clients, signal, options) {
   let connector = connectorForUrl(clients);
   if (!connector) return null;
@@ -477,12 +477,12 @@ async function dialWatchServer(clients, signal, options) {
     return null;
   }
 }
-//@ chunk-jeazk6wn.js:3773-3863 placement
+//@ chunk-y0ps0qva.js:3774-3864 placement
 function headerFieldOf(text, field) {
   let match = new RegExp(`^${field}:\\s*(\\S+)`, "m").exec(text);
   return match && match[1] ? match[1] : null;
 }
-//@ chunk-jeazk6wn.js:3863-4005 placement
+//@ chunk-y0ps0qva.js:3864-4006 placement
 function parseTriggerResponse(text) {
   let url = headerFieldOf(text, "url");
   let triggerId = headerFieldOf(text, "trigger_id");
@@ -494,11 +494,11 @@ function parseTriggerResponse(text) {
     sealedSecret,
   };
 }
-//@ chunk-jeazk6wn.js:4005-4045 placement
+//@ chunk-y0ps0qva.js:4006-4046 placement
 function triggerIdOf(text) {
   return headerFieldOf(text, "trigger_id");
 }
-//@ chunk-jeazk6wn.js:4045-4148 placement
+//@ chunk-y0ps0qva.js:4046-4149 placement
 /**
  * 会话 webhook 触发器路径前后缀与持久监听的事件类型（全部 / 仅 published）。
  */
@@ -506,14 +506,14 @@ var WEBHOOK_TRIGGER_PATH_PREFIX = "/integrations/v1/code/webhook-triggers/";
 var WEBHOOK_FIRE_SUFFIX = "/fire";
 var ALL_WATCH_EVENTS = ["published", "comment"];
 var PUBLISH_ONLY_EVENTS = ["published"];
-//@ chunk-jeazk6wn.js:4148-4209 placement
+//@ chunk-y0ps0qva.js:4149-4210 placement
 /**
  * 导出函数 `localDurableWatchRefusal`：返回 env.CLAUDE_CODE_REMOTE ? null : "not_remote"。
  */
 function localDurableWatchRefusal() {
   return env.CLAUDE_CODE_REMOTE ? null : "not_remote";
 }
-//@ chunk-jeazk6wn.js:4209-4449 placement
+//@ chunk-y0ps0qva.js:4210-4450 placement
 /**
  * 返回持久监听被锁存阻止的原因：订阅被禁止（中继已可用时先解除）或中继不可用；否则 null。
  */
@@ -536,23 +536,23 @@ function getSubscribeBlock() {
       }
     : null;
 }
-//@ chunk-jeazk6wn.js:4449-4572 placement
+//@ chunk-y0ps0qva.js:4450-4573 placement
 function clearSubscribeForbidden() {
   let durable = getLiveState().durable;
   if (durable.subscribeForbidden === null) return;
   durable.subscribeForbidden = null;
   clearArmFailuresFor("subscribe_forbidden");
 }
-//@ chunk-jeazk6wn.js:4572-4694 placement
+//@ chunk-y0ps0qva.js:4573-4695 placement
 function clearSubscribeUnrelayed() {
   let durable = getLiveState().durable;
   if (durable.subscribeUnrelayed === null) return;
   durable.subscribeUnrelayed = null;
   clearArmFailuresFor("relay_unavailable");
 }
-//@ chunk-jeazk6wn.js:4694-4713 placement
+//@ chunk-y0ps0qva.js:4695-4714 placement
 var WATCH_URL = "watch_url";
-//@ chunk-jeazk6wn.js:4713-4851 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-y0ps0qva.js:4714-4852 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tools, name) {
   let found = false;
   for (let tool of tools) {
@@ -562,7 +562,7 @@ function getToolNameForPermissionCheck(tools, name) {
   }
   return found ? false : null;
 }
-//@ chunk-jeazk6wn.js:4851-4903 placement
+//@ chunk-y0ps0qva.js:4852-4904 placement
 /**
  * 导出函数 `isSubscriptionRelayBlocked`：返回 ( mn() && frameRelayActive() && !frameVerbRelayActive(SUBSCRIPTIONS_RELAY_FAMILY) && !isServiceAgentSession() …。
  */
@@ -574,7 +574,7 @@ function isSubscriptionRelayBlocked() {
     !isServiceAgentSession()
   );
 }
-//@ chunk-jeazk6wn.js:4903-5183 placement
+//@ chunk-y0ps0qva.js:4904-5184 placement
 /**
  * 远程环境下判断监听 URL 是否不可用：已记录的原因，或会话服务器已连接但没有提供监听工具（tool_not_offered）。
  */
@@ -590,7 +590,7 @@ function getWatchUrlWithheldReason(context) {
     ? "tool_not_offered"
     : null;
 }
-//@ chunk-jeazk6wn.js:5183-5376 placement
+//@ chunk-y0ps0qva.js:5184-5377 placement
 function isWebhookTriggerUrl(url, triggerId) {
   if (normalizeUuidOrNull(triggerId) === null) return false;
   let parsed;
@@ -608,15 +608,15 @@ function isWebhookTriggerUrl(url, triggerId) {
     parsed.pathname === WEBHOOK_TRIGGER_PATH_PREFIX + triggerId + WEBHOOK_FIRE_SUFFIX
   );
 }
-//@ chunk-jeazk6wn.js:5376-5484 placement
+//@ chunk-y0ps0qva.js:5377-5485 placement
 function isTriggerLimitMessage(text) {
   return text.includes("trigger limit reached") || text.includes("maximum number of webhook triggers");
 }
-//@ chunk-jeazk6wn.js:5484-5557 placement
+//@ chunk-y0ps0qva.js:5485-5558 placement
 function isNoOriginatorError(text) {
   return text.includes("a session with an originator account");
 }
-//@ chunk-jeazk6wn.js:5557-5889 placement
+//@ chunk-y0ps0qva.js:5558-5890 placement
 /**
  * 把创建触发器的错误文本归类为工具不可用、会话绑定桌面设备或组织未开启，未知返回 null。
  */
@@ -630,17 +630,17 @@ function classifyTriggerError(text) {
     return "org_not_enabled";
   return null;
 }
-//@ chunk-jeazk6wn.js:5889-6026 placement
+//@ chunk-y0ps0qva.js:5890-6027 placement
 var TRIGGER_ERROR_PHRASES = [
   ["cannot be found or is no longer active", "session_not_found"],
   ["not available in this deployment", "unavailable_in_deployment"],
 ];
-//@ chunk-jeazk6wn.js:6026-6097 placement
+//@ chunk-y0ps0qva.js:6027-6098 placement
 function classifyTriggerErrorDurable(text) {
   for (let [phrase, reason] of TRIGGER_ERROR_PHRASES) if (text.includes(phrase)) return reason;
   return null;
 }
-//@ chunk-jeazk6wn.js:6097-6413 placement
+//@ chunk-y0ps0qva.js:6098-6414 placement
 /**
  * 服务端消息清洗用的常量：长度上限、可保留的英文词/数字/标点正则、不可见字符正则、换行正则与 [redacted]/[url] 占位。
  */
@@ -655,15 +655,15 @@ var LINE_BREAK_RE = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/;
 var REDACTED = "[redacted]";
 var URL_PLACEHOLDER = "[url]";
 var MAX_RAW_MESSAGE = 2048;
-//@ chunk-jeazk6wn.js:6413-6460 placement
+//@ chunk-y0ps0qva.js:6414-6461 placement
 function isPlainWord(word) {
   return word.length <= MAX_PLAIN_WORD_LENGTH && WORD_TOKEN_RE.test(word);
 }
-//@ chunk-jeazk6wn.js:6460-6513 placement
+//@ chunk-y0ps0qva.js:6461-6515 placement
 function isDisplayableToken(token) {
   return token === undefined || (token !== URL_PLACEHOLDER && token !== REDACTED && isPlainWord(token));
 }
-//@ chunk-jeazk6wn.js:6513-6581 placement
+//@ chunk-y0ps0qva.js:6515-6585 placement
 function isAllowableServerToken(word, prev, next) {
   return (
     isPlainWord(word) ||
@@ -671,9 +671,9 @@ function isAllowableServerToken(word, prev, next) {
     (NUMBER_TOKEN_RE.test(word) && isDisplayableToken(prev) && isDisplayableToken(next))
   );
 }
-//@ chunk-jeazk6wn.js:6581-6645 placement
+//@ chunk-y0ps0qva.js:6585-6649 placement
 var SERVER_MESSAGE_SECRET_RE = /(?:^|[^A-Za-z_])(url|trigger_id)[ \t]*:|sealed_secret/i;
-//@ chunk-jeazk6wn.js:6645-7233 placement
+//@ chunk-y0ps0qva.js:6649-7235 placement
 /**
  * 把服务端错误消息清洗成可展示的一行：只取第一个非空行，URL 换成 [url]，不像普通词/数字/标点的词换成 [redacted]（合并连续），没有实质内容时返回 undefined，超长截断。
  */
@@ -710,7 +710,7 @@ function sanitizeServerMessage(message) {
     ? `${truncateToLength(joined, MAX_SERVER_MESSAGE - 3)}...`
     : joined;
 }
-//@ chunk-jeazk6wn.js:7233-7473 placement (2.1.88 match: isToolResultBlockWithContent, 1)
+//@ chunk-y0ps0qva.js:7235-7475 placement (2.1.88 match: isToolResultBlockWithContent, 1)
 function extractMcpTextContent(obj) {
   let content = "content" in obj ? obj.content : undefined;
   if (!Array.isArray(content)) return "";
@@ -728,7 +728,7 @@ function extractMcpTextContent(obj) {
   return texts.join(`
 `);
 }
-//@ chunk-jeazk6wn.js:7473-7633 placement
+//@ chunk-y0ps0qva.js:7475-7635 placement
 async function callMcpToolForText(client, name, args) {
   try {
     let result = await callMcpTool(
@@ -749,14 +749,14 @@ async function callMcpToolForText(client, name, args) {
     return null;
   }
 }
-//@ chunk-jeazk6wn.js:7633-7730 placement
+//@ chunk-y0ps0qva.js:7635-7732 placement
 async function unwatchUrlTrigger(client, triggerId) {
   let result = await callMcpToolForText(client, "unwatch_url", {
     trigger_id: triggerId,
   });
   return result !== null && !result.isError;
 }
-//@ chunk-jeazk6wn.js:7730-8007 placement
+//@ chunk-y0ps0qva.js:7732-8009 placement
 async function releaseOrphanTriggers(client) {
   let { durable } = getLiveState();
   let triggerIds = [...durable.orphanTriggers];
@@ -770,7 +770,7 @@ async function releaseOrphanTriggers(client) {
   if (released > 0) logFeatureSad("artifact_durable_subscribe", "orphan_trigger_release_failed");
   publishDurableWatchRegistry();
 }
-//@ chunk-jeazk6wn.js:8007-8232 placement
+//@ chunk-y0ps0qva.js:8009-8234 placement
 async function postFrameRelay(url, body, signal, credentials) {
   try {
     let res = await frameApi.postRelayBound(url, body, {
@@ -793,7 +793,7 @@ async function postFrameRelay(url, body, signal, credentials) {
     };
   }
 }
-//@ chunk-jeazk6wn.js:8232-8280 placement
+//@ chunk-y0ps0qva.js:8234-8282 placement
 function relayedFlag(response) {
   return response.relayed
     ? {
@@ -801,7 +801,7 @@ function relayedFlag(response) {
       }
     : {};
 }
-//@ chunk-jeazk6wn.js:8280-8327 placement
+//@ chunk-y0ps0qva.js:8282-8329 placement
 function relayedList(outcome) {
   return outcome.relayed
     ? [
@@ -811,7 +811,7 @@ function relayedList(outcome) {
       ]
     : [];
 }
-//@ chunk-jeazk6wn.js:8327-8558 placement
+//@ chunk-y0ps0qva.js:8329-8560 placement
 /**
  * 为 artifact 建立持久评论监听（串行、登记为在途操作），按结果打点，结束时登记监听并回调 onSettled。
  */
@@ -834,7 +834,7 @@ async function watchArtifactDurably(request) {
     }
   }
 }
-//@ chunk-jeazk6wn.js:8558-8658 placement
+//@ chunk-y0ps0qva.js:8560-8660 placement
 function trackPendingOp(opKey) {
   let { pendingOps } = getLiveState().durable;
   pendingOps.add(opKey);
@@ -842,11 +842,11 @@ function trackPendingOp(opKey) {
   opKey.then(finish, finish);
   registerPreExitFlush(awaitPendingDurableOps);
 }
-//@ chunk-jeazk6wn.js:8658-8741 placement
+//@ chunk-y0ps0qva.js:8660-8743 placement
 async function awaitPendingDurableOps() {
   await withDeadline(Promise.allSettled([...getLiveState().durable.pendingOps]), 1e4);
 }
-//@ chunk-jeazk6wn.js:8741-9146 placement
+//@ chunk-y0ps0qva.js:8743-9148 placement
 /**
  * 在 slug 串行队列里建立持久监听；已从旧纪元恢复的行先尝试刷新，失败时打点并保持已有监听。
  */
@@ -869,7 +869,7 @@ async function armOrRefreshWatch(slug, context, detachedFromUser) {
     return armDurableArtifactWatch(slug, context, detachedFromUser);
   });
 }
-//@ chunk-jeazk6wn.js:9146-10017 placement
+//@ chunk-y0ps0qva.js:9148-10019 placement
 /**
  * 按持久监听结果打点：subscribed（含评论事件不支持的降级）、already_watching、skipped、failed（区分可预期原因与真正错误，并写调试日志）。
  */
@@ -917,7 +917,7 @@ function logWatchOutcome(outcome, context) {
     }
   }
 }
-//@ chunk-jeazk6wn.js:10017-10422 placement
+//@ chunk-y0ps0qva.js:10019-10424 placement
 /**
  * 把预期内的持久监视失败（中断、无发起者、订阅被禁、中继不可用、文档未被接纳）映射为打点原因，非预期返回 undefined。
  */
@@ -937,7 +937,7 @@ function classifyExpectedWatchFailure(result, context) {
       return;
   }
 }
-//@ chunk-jeazk6wn.js:10422-10553 placement
+//@ chunk-y0ps0qva.js:10424-10555 placement
 function alreadyWatchingResult(existingRow) {
   return {
     outcome: "already_watching",
@@ -949,7 +949,7 @@ function alreadyWatchingResult(existingRow) {
     }),
   };
 }
-//@ chunk-jeazk6wn.js:10553-15052 placement
+//@ chunk-y0ps0qva.js:10555-15054 placement
 /**
  * 为 artifact 建立持久关注（durable wake）：校验 slug、去重已有关注、写入存储并启动订阅。
  */
@@ -1279,7 +1279,7 @@ async function armDurableArtifactWatch(slug, context, detachedFromUser, refreshR
     ...relayedFields,
   };
 }
-//@ chunk-jeazk6wn.js:15052-15277 placement
+//@ chunk-y0ps0qva.js:15054-15279 placement
 /**
  * 取消某 artifact 的持久监听：本地没有记录且非远程或 slug 非法时直接返回；否则在串行队列里执行取消。
  */
@@ -1300,7 +1300,7 @@ async function unwatchArtifactDurably(request) {
   trackPendingOp(unwatchOp);
   return unwatchOp;
 }
-//@ chunk-jeazk6wn.js:15277-16651 placement
+//@ chunk-y0ps0qva.js:15279-16653 placement
 /**
  * 执行取消持久监听：调用 unsubscribe 接口，释放该 slug 的 webhook 触发器（失败的记为孤立）并释放其他孤立触发器，更新登记表，按结果打点；返回之前是否在监听与请求是否发出。
  */
@@ -1397,16 +1397,16 @@ async function performUnwatch(slug, context) {
 export {
   restoreDurableWatches,
   getServerUrl,
-  unexpectedWatchFailure,
-  describeWatchError,
-  describeWatchHttpStatus,
-  durableRowFor,
   durableRowList,
-  unwatchArtifactDurably,
-  watchArtifactDurably,
+  durableRowFor,
   localDurableWatchRefusal,
   hasConnectorForUrl,
   isSubscriptionRelayBlocked,
   getWatchUrlWithheldReason,
   getSubscribeBlock,
+  watchArtifactDurably,
+  unexpectedWatchFailure,
+  describeWatchError,
+  describeWatchHttpStatus,
+  unwatchArtifactDurably,
 };

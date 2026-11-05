@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：teleport 时无法确认 git 远端主机的确认对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3q9d50y1.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4sn4vdvx.js (2)
  * attribution: placement 2
  */
 import { init_react_production, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -24,27 +24,27 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 
-//@ chunk-3q9d50y1.js:13642-13646 placement
+//@ chunk-4sn4vdvx.js:14790-14794 placement
 init_react_production();
-//@ chunk-3q9d50y1.js:13646-15613 placement
+//@ chunk-4sn4vdvx.js:14794-16761 placement
 /**
  * teleport 时无法确认 git 远端主机的确认对话框。
  */
 function TeleportRemoteHostDialog(props) {
   let $ = useMemoCache(56);
   let { sessionRepo, rawRemoteUrl, onConfirm, onCancel } = props;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let isInputRefused;
-  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+  if ($[0] !== isRecentInput || $[1] !== noteRefused || $[2] !== refusedWithin) {
     isInputRefused = function isInputRefused_() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[0] = inputRefusalWindow;
+    $[0] = isRecentInput;
     $[1] = noteRefused;
     $[2] = refusedWithin;
     $[3] = isInputRefused;
@@ -70,7 +70,7 @@ function TeleportRemoteHostDialog(props) {
   let focus;
   let onConfirm_2;
   if (
-    $[4] !== inputRefusalWindow ||
+    $[4] !== isRecentInput ||
     $[5] !== remount.remountKey ||
     $[6] !== noteRefused ||
     $[7] !== onCancel ||
@@ -83,7 +83,7 @@ function TeleportRemoteHostDialog(props) {
   ) {
     let answerOnce = function answerOnce_(callback) {
       return () => {
-        if (inputRefusalWindow() || refusedWithin()) {
+        if (isRecentInput() || refusedWithin()) {
           noteRefused();
           return;
         }
@@ -150,7 +150,7 @@ function TeleportRemoteHostDialog(props) {
     focus = "cancel";
     onConfirm_2 = answerOnce(onConfirm);
     onCancel_2 = answerOnce(onCancel);
-    $[4] = inputRefusalWindow;
+    $[4] = isRecentInput;
     $[5] = remount.remountKey;
     $[6] = noteRefused;
     $[7] = onCancel;

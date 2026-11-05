@@ -3,9 +3,9 @@
  *
  * 迁移：sonnet[1m] 固定到 Sonnet 4.5 1M
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateSonnet1mToSonnet45.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
@@ -14,7 +14,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { getMainLoopModelOverride, setMainLoopModelOverride } from "../bootstrap/state.js";
 
-//@ chunk-cjydagjy.js:11037-11557 fingerprint (2.1.88 match: migrateSonnet1mToSonnet45, 0.651)
+//@ chunk-h61dq9nz.js:11214-11734 fingerprint (2.1.88 match: migrateSonnet1mToSonnet45, 0.651)
 /**
  * 迁移：sonnet[1m] → sonnet-4-5-20250929[1m]（只做一次，sonnet1m45MigrationComplete）。
  */

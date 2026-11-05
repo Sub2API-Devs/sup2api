@@ -3,9 +3,9 @@
  *
  * Artifact 资源上传/列表/删除/复制/读取（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (17), chunk-vn5yv2ce.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f9dqjjrc.js (48), chunk-xzmy9dn4.js (17)
  * attribution: placement 65
  */
 import { extname, basename } from "path";
@@ -34,7 +34,11 @@ import {
 } from "../../../services/artifacts/frameRelay.js";
 import { knownArtifactCapabilities } from "../../../services/artifacts/rosterWait.js";
 import { MAX_FRAME_RESPONSE_BYTES, buildFrameHeaders } from "../../../services/artifacts/frameApi.js";
-import { uniq } from "../../../utils/collections.js";
+import {
+  normalizeCaseForComparison_2,
+  readPermissionDecisionForPath,
+  READ_PATH_PROBE,
+} from "../../../utils/permissions/filesystem.js";
 import { isENOENT, getErrnoCode, AbortError, isAbortError } from "../../../utils/errors.js";
 import { isProtectedPath, pathTouchesProtected } from "../../../services/artifacts/artifactUrl.js";
 import {
@@ -84,16 +88,16 @@ import {
   ownedVerdict,
 } from "../../../services/artifacts/shareEntries.js";
 import { ARTIFACT_MOUNT } from "../../../services/artifacts/artifactMount.js";
-import { fetchArtifactBootWithProbe } from "../../../services/artifacts/boot.js";
-import { getFrameHost, describeFrameAllowlistHint } from "../../../services/artifacts/frameHost.js";
+import { fetchBoot } from "../../../services/artifacts/boot.js";
+import { contentHostRequestBase, contentHostAllowlistRemedy } from "../../../services/artifacts/frameHost.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import {
-  canReadViaFrame,
-  getViaFrameContent,
-  getViaMountOnce,
-  singleReadRetryBudget,
-  describeGatewayTransient,
-  contentTypeOfHeaders,
+  frameContentRoute,
+  getFromFrameContent,
+  getFromArtifactMount,
+  mountRetryBudget,
+  mountUnavailableWords,
+  passthroughContentType,
 } from "../../../services/artifacts/gatewayRead.js";
 import { externalHttp } from "../../../services/http/externalHttp.js";
 import {
@@ -104,8 +108,8 @@ import {
   logProxyDenial,
   ARTIFACT_PROXY_DENIAL_TEXTS,
 } from "../../../utils/sandbox/proxyDenial.js";
-import { isRetryableStatus } from "../../../services/artifacts/liveSubscribe.js";
-import { redactFrameToken } from "../../../services/artifacts/webfetchRead.js";
+import { isUnavailableStatus } from "../../../services/artifacts/liveSubscribe.js";
+import { redactAssetToken } from "../../../services/artifacts/webfetchRead.js";
 import { readUntrustedArray, UNREADABLE_ARRAY, UNREADABLE_LIST_TEXT } from "../../../utils/untrustedArray.js";
 import { safeJsonQuote } from "../../../services/artifacts/contentTypes.js";
 import { expandPath } from "../../../utils/path.js";
@@ -149,8 +153,7 @@ import {
   ASSET_UPLOAD_COVERS_SESSION_NOTE,
 } from "../promptText.js";
 import { artifactCopyFromFrozen } from "../../../services/artifacts/artifactToolSchema.js";
-import { readPermissionDecisionForPath, READ_PATH_PROBE } from "../../../utils/permissions/filesystem.js";
-import { getDenyRuleForTool, getAskRuleForTool } from "../../../utils/permissions/permissions.js";
+import { getDenyRuleForTool, findAskRuleForTool } from "../../../utils/permissions/permissions.js";
 import { yieldToEventLoop } from "../../../native-ts/file-index/index.js";
 import {
   jsonQuotedSweep,
@@ -175,7 +178,7 @@ import { ARTIFACT_QUICKSTART_ACTION_HANDLER } from "./quickstart.js";
 import { ARTIFACT_SHARE_ACTION_HANDLER } from "./share.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-vn5yv2ce.js:1495-1602 placement
+//@ chunk-f9dqjjrc.js:1494-1601 placement
 /**
  * Artifact 资源功能是否开启：环境变量 CLAUDE_CODE_ARTIFACT_ASSETS 优先，否则 agent 会话可直发或服务端能力里含 assets。
  */
@@ -185,7 +188,7 @@ function isArtifactAssetsEnabled() {
     (agentSessionMaySendDirect() || (knownArtifactCapabilities().capabilities?.includes("assets") ?? false))
   );
 }
-//@ chunk-vn5yv2ce.js:1602-1705 placement
+//@ chunk-f9dqjjrc.js:1601-1704 placement
 /**
  * Artifact 资源功能开关的来源：环境变量、agent 会话，或已知能力的来源。
  */
@@ -193,24 +196,24 @@ function artifactAssetsEnabledSource() {
   if (env.CLAUDE_CODE_ARTIFACT_ASSETS !== undefined) return "env";
   return agentSessionMaySendDirect() ? "agent" : knownArtifactCapabilities().source;
 }
-//@ chunk-vn5yv2ce.js:1705-1738 placement
+//@ chunk-f9dqjjrc.js:1704-1737 placement
 /**
  * SVG MIME 类型与 SVG 资源大小上限。
  */
 var SVG_MIME_TYPE = "image/svg+xml";
 var MAX_SVG_BYTES = 2097152;
-//@ chunk-vn5yv2ce.js:1738-1773 placement
+//@ chunk-f9dqjjrc.js:1737-1772 placement
 /**
  * 按 MIME 类型给出上传大小上限（SVG 用较小上限）。
  */
 function maxAssetBytesFor(mimeType) {
   return mimeType === SVG_MIME_TYPE ? MAX_SVG_BYTES : MAX_FRAME_RESPONSE_BYTES;
 }
-//@ chunk-vn5yv2ce.js:1773-2407 placement
-var ASSET_MIME_TYPES; // deferred: uses extensionForMimeType of its import cycle while loading; runs once the cycle is complete
+//@ chunk-f9dqjjrc.js:1772-2406 placement
+var ASSET_MIME_TYPES; // deferred: uses normalizeCaseForComparison_2 (../../../utils/permissions/filesystem.js) of its import cycle while loading; runs once the cycle is complete
 var flattened;
 var joined;
-deferInit("chunk-vn5yv2ce.js:1773", () => {
+deferInit("chunk-f9dqjjrc.js:1772", () => {
   ASSET_MIME_TYPES = new Map([
     [".png", "image/png"],
     [".jpg", "image/jpeg"],
@@ -236,32 +239,34 @@ deferInit("chunk-vn5yv2ce.js:1773", () => {
     [".mjs", "text/javascript"],
     [".cjs", "text/javascript"],
   ]);
-  flattened = uniq(ASSET_MIME_TYPES.values()).flatMap((mimeType) => extensionForMimeType(mimeType) ?? []);
+  flattened = normalizeCaseForComparison_2(ASSET_MIME_TYPES.values()).flatMap(
+    (mimeType) => extensionForMimeType(mimeType) ?? [],
+  );
   joined = [...ASSET_MIME_TYPES.keys()].map((key) => key.slice(1)).join(", ");
 });
-//@ chunk-vn5yv2ce.js:2407-2457 placement
+//@ chunk-f9dqjjrc.js:2406-2456 placement
 /**
  * 由文件扩展名查资源的 MIME 类型。
  */
 function assetMimeTypeForPath(filePath) {
   return ASSET_MIME_TYPES.get(extname(filePath).toLowerCase());
 }
-//@ chunk-vn5yv2ce.js:2457-2534 placement
+//@ chunk-f9dqjjrc.js:2456-2533 placement
 /**
  * 可按文本处理的资源 MIME 类型集合。
  */
 var TEXT_ASSET_MIME_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vn5yv2ce.js:2457", () => {
+deferInit("chunk-f9dqjjrc.js:2456", () => {
   TEXT_ASSET_MIME_TYPES = new Set(["text/csv", "text/markdown", "application/json", "text/plain"]);
 });
-//@ chunk-vn5yv2ce.js:2534-2579 placement
+//@ chunk-f9dqjjrc.js:2533-2578 placement
 /**
  * 判断 MIME 类型是否可按文本处理。
  */
 function isTextAssetMimeType(mimeType) {
   return mimeType !== undefined && TEXT_ASSET_MIME_TYPES.has(mimeType);
 }
-//@ chunk-vn5yv2ce.js:2579-3152 placement
+//@ chunk-f9dqjjrc.js:2578-3151 placement
 /**
  * upload_asset 读取本地文件时的拒绝/错误文案常量：文件已变更、Read 规则阻止、符号链接需询问、不是普通文件、空文件。
  */
@@ -273,20 +278,20 @@ var UPLOAD_SYMLINK_ASK_MESSAGE =
   "file_path reaches its file through a symbolic link that resolves somewhere this session may not read without asking \u2014 upload the file by its resolved path, or copy it under the working directory first";
 var UPLOAD_NOT_REGULAR_FILE_MESSAGE = "file_path must name a regular file to upload";
 var UPLOAD_EMPTY_FILE_MESSAGE = "the file is empty \u2014 nothing to upload";
-//@ chunk-vn5yv2ce.js:3152-3254 placement
+//@ chunk-f9dqjjrc.js:3151-3253 placement
 /**
  * 上传文件过大的提示（实际 MB 与上限 MB）。
  */
 function uploadTooLargeMessage(bytes, maxBytes) {
   return `too large: ${Math.ceil((Number(bytes) * 10) / 1024 / 1024) / 10}MB (max ${maxBytes / 1024 / 1024}MB)`;
 }
-//@ chunk-vn5yv2ce.js:3254-3500 placement
+//@ chunk-f9dqjjrc.js:3253-3499 placement
 /**
  * 文件所在卷不提供文件身份（部分网络/FUSE/虚拟盘）时拒绝上传的说明，建议复制到普通本地目录。
  */
 var UPLOAD_NO_FILE_IDENTITY_MESSAGE =
   "file_path is on a volume that reports no usable file identity (some network, FUSE, and virtual-disk mounts), so the approved file cannot be told apart from a replacement \u2014 copy it to an ordinary local directory and upload the copy";
-//@ chunk-vn5yv2ce.js:3500-3668 placement
+//@ chunk-f9dqjjrc.js:3499-3667 placement
 function readErrorResult(error) {
   if (isENOENT(error))
     return {
@@ -300,14 +305,14 @@ function readErrorResult(error) {
     errnoCode,
   };
 }
-//@ chunk-vn5yv2ce.js:3668-3733 placement
+//@ chunk-f9dqjjrc.js:3667-3732 placement
 /**
  * 把文件状态拼成「设备:inode:大小:mtime」的身份串，用于确认批准后未被替换。
  */
 function fileIdentityOf(stats) {
   return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`;
 }
-//@ chunk-vn5yv2ce.js:3733-3843 placement
+//@ chunk-f9dqjjrc.js:3732-3842 placement
 /**
  * 从"a:b:c:d"形式的文件身份串中取出设备号。
  */
@@ -316,13 +321,13 @@ function fileIdentityDev(identity) {
   if (parts.length !== 4 || !parts.every((part) => /^\d+$/.test(part))) return;
   return Number(parts[2]);
 }
-//@ chunk-vn5yv2ce.js:3843-4153 placement
+//@ chunk-f9dqjjrc.js:3842-4152 placement
 /**
  * upload_asset 拒绝网络路径的说明：只读本地文件，UNC 共享、/net 自动挂载、设备路径或经链接到达网络位置的需先复制到本地磁盘。
  */
 var UPLOAD_NETWORK_PATH_MESSAGE =
   "upload_asset reads only local files \u2014 file_path names a network path (UNC share, /net automount, or device-style path), reaches one through a link on the way, or has a directory or link on the way that could not be examined; if the file is on a network location, copy it onto a local disk first";
-//@ chunk-vn5yv2ce.js:4153-4436 placement
+//@ chunk-f9dqjjrc.js:4152-4435 placement
 /**
  * 解析上传路径是否在本地：网络路径（UNC、自动挂载、中途 UNC junction）返回 network；无法解析返回 unresolved；否则返回 realpath。
  */
@@ -362,7 +367,7 @@ function resolveLocalUploadPath(path) {
         real: realPath,
       };
 }
-//@ chunk-vn5yv2ce.js:4436-4585 placement
+//@ chunk-f9dqjjrc.js:4435-4584 placement
 /**
  * lstat 文件得到文件身份（多硬链接时标记 linked），失败时身份为 null。
  */
@@ -386,7 +391,7 @@ function statFileIdentity(real) {
     };
   }
 }
-//@ chunk-vn5yv2ce.js:4585-4698 placement
+//@ chunk-f9dqjjrc.js:4584-4697 placement
 /**
  * 判断上传文件是否需要单独批准（路径或其真实路径命中特定规则，或非网络路径满足额外条件）。
  */
@@ -401,14 +406,14 @@ function isSoloApprovalFile(
     link
   );
 }
-//@ chunk-vn5yv2ce.js:4698-4732 placement
+//@ chunk-f9dqjjrc.js:4697-4731 placement
 /**
  * 取路径的符号链接目标。
  */
 function symlinkTargetOf(filePath) {
   return probeSymlink(filePath).link;
 }
-//@ chunk-vn5yv2ce.js:4732-4865 placement
+//@ chunk-f9dqjjrc.js:4731-4864 placement
 /**
  * 检查路径是否为符号链接；无法读取时视为链接并返回错误码。
  */
@@ -425,12 +430,12 @@ function probeSymlink(filePath) {
     };
   }
 }
-//@ chunk-vn5yv2ce.js:4865-4879 placement
+//@ chunk-f9dqjjrc.js:4864-4878 placement
 var readFileHandle; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vn5yv2ce.js:4865", () => {
+deferInit("chunk-f9dqjjrc.js:4864", () => {
   readFileHandle = promisify(read);
 });
-//@ chunk-vn5yv2ce.js:4879-7280 placement
+//@ chunk-f9dqjjrc.js:4878-7279 placement
 function checkUploadFile(filePath, pinned, checkSpelling, maxBytes) {
   let pin = pinned;
   let pinnedFile =
@@ -624,7 +629,7 @@ function checkUploadFile(filePath, pinned, checkSpelling, maxBytes) {
     if (!fdKept) closeSync(fd);
   }
 }
-//@ chunk-vn5yv2ce.js:7280-7775 placement
+//@ chunk-f9dqjjrc.js:7279-7774 placement
 /**
  * 从已打开的 fd 读出整个文件：读前核对 inode 身份、读后确认长度未变且不多出字节、可选校验内容哈希；任何不一致返回 changed 错误。
  */
@@ -673,7 +678,7 @@ async function readApprovedFileBytes(opened) {
     closeSync(fd);
   }
 }
-//@ chunk-vn5yv2ce.js:7775-7812 placement
+//@ chunk-f9dqjjrc.js:7774-7811 placement
 /**
  * 静默关闭文件描述符。
  */
@@ -682,7 +687,7 @@ function closeFdQuietly(opened) {
     closeSync(opened.fd);
   } catch {}
 }
-//@ chunk-vn5yv2ce.js:7812-7893 placement
+//@ chunk-f9dqjjrc.js:7811-7892 placement
 /**
  * 通过检查后读取已批准的本地文件。
  */
@@ -690,13 +695,13 @@ async function readApprovedUploadFile(filePath, pinned, checkSpelling, maxBytes)
   let opened = checkUploadFile(filePath, pinned, checkSpelling, maxBytes);
   return opened.kind === "opened" ? readApprovedFileBytes(opened) : opened;
 }
-//@ chunk-vn5yv2ce.js:7893-8149 placement
+//@ chunk-f9dqjjrc.js:7892-8148 placement
 /**
  * 资源 API 已知错误码集合，以及 _blob/<32 位十六进制> 形式的资源地址正则。
  */
 var ASSET_API_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ASSET_BLOB_URL_RE;
-deferInit("chunk-vn5yv2ce.js:7893", () => {
+deferInit("chunk-f9dqjjrc.js:7892", () => {
   ASSET_API_ERROR_CODES = new Set([
     "invalid_request",
     "too_large",
@@ -713,14 +718,14 @@ deferInit("chunk-vn5yv2ce.js:7893", () => {
   ]);
   ASSET_BLOB_URL_RE = /^\/?_blob\/[0-9a-f]{32}$/;
 });
-//@ chunk-vn5yv2ce.js:8149-8225 placement
+//@ chunk-f9dqjjrc.js:8148-8224 placement
 /**
  * 规范化资源 blob 地址（_blob/<id> 或 /_blob/<id>）。
  */
 function assetBlobUrl(opaqueId, url) {
   return url === `_blob/${opaqueId}` || url === `/_blob/${opaqueId}` ? url : `/_blob/${opaqueId}`;
 }
-//@ chunk-vn5yv2ce.js:8225-9311 placement
+//@ chunk-f9dqjjrc.js:8224-9310 placement
 /**
  * 资源 API 的常量与响应 schema：分页上限、id/类型/时间正则、复制上限 yue、批量上传上限 qL、路径长度上限，以及上传/列表/删除/错误响应的 zod schema 与超时。
  */
@@ -741,7 +746,7 @@ var relayErrorSchema;
 var MAX_RETRY_AFTER_MS;
 var ASSET_REQUEST_TIMEOUT_MS;
 var UPLOAD_TAIL_FLOOR_MS;
-deferInit("chunk-vn5yv2ce.js:8225", () => {
+deferInit("chunk-f9dqjjrc.js:8224", () => {
   SHA256_HEX_RE = /^[0-9a-f]{64}$/;
   ASSET_LIST_PAGE_LIMIT = 50;
   MAX_CONTENT_TYPE_LENGTH = 40;
@@ -810,35 +815,35 @@ deferInit("chunk-vn5yv2ce.js:8225", () => {
   ASSET_REQUEST_TIMEOUT_MS = 30000;
   UPLOAD_TAIL_FLOOR_MS = 90000;
 });
-//@ chunk-vn5yv2ce.js:9311-9368 placement
+//@ chunk-f9dqjjrc.js:9310-9367 placement
 /**
  * 资源上传接口路径。
  */
 function agentUploadRoute(slug) {
   return `/api/frame/blob/${slug}/agent-upload`;
 }
-//@ chunk-vn5yv2ce.js:9368-9423 placement
+//@ chunk-f9dqjjrc.js:9367-9422 placement
 /**
  * 资源列表接口路径。
  */
 function agentListRoute(slug) {
   return `/api/frame/blob/${slug}/agent-list`;
 }
-//@ chunk-vn5yv2ce.js:9423-9487 placement
+//@ chunk-f9dqjjrc.js:9422-9486 placement
 /**
  * 资源删除接口路径。
  */
 function agentDeleteRoute(slug, id) {
   return `/api/frame/blob/${slug}/${id}/agent-delete`;
 }
-//@ chunk-vn5yv2ce.js:9487-9542 placement
+//@ chunk-f9dqjjrc.js:9486-9541 placement
 /**
  * 资源复制接口路径。
  */
 function agentCopyRoute(slug) {
   return `/api/frame/blob/${slug}/agent-copy`;
 }
-//@ chunk-vn5yv2ce.js:9542-10896 placement
+//@ chunk-f9dqjjrc.js:9541-10897 placement
 function classifyAssetApiError(status, data) {
   let parsed = assetErrorSchema().safeParse(data);
   if (parsed.success) {
@@ -930,14 +935,14 @@ function classifyAssetApiError(status, data) {
     reason: `http_${status}`,
   };
 }
-//@ chunk-vn5yv2ce.js:10896-10965 placement
+//@ chunk-f9dqjjrc.js:10897-10966 placement
 /**
  * 去掉控制字符并截断的资产消息。
  */
 function sanitizeAssetMessage(message) {
   return truncateToLength(message.replace(/[\p{Cc}\p{Cf}\p{Co}]/gu, " "), 200);
 }
-//@ chunk-vn5yv2ce.js:10965-13719 placement
+//@ chunk-f9dqjjrc.js:10966-13720 placement
 function describeAssetFailure(code, detail, verb = "upload", cause) {
   let lead = `asset ${verb} failed (${code})`;
   switch (code) {
@@ -977,7 +982,7 @@ function describeAssetFailure(code, detail, verb = "upload", cause) {
       return `${lead}: artifact assets are not available to this account`;
   }
 }
-//@ chunk-vn5yv2ce.js:13719-13808 placement
+//@ chunk-f9dqjjrc.js:13720-13809 placement
 /**
  * 生成资产错误：按错误码给出描述并记录遥测。
  */
@@ -992,10 +997,10 @@ function assetErrorFactory(log, verb) {
     };
   };
 }
-//@ chunk-vn5yv2ce.js:13808-13995 placement
+//@ chunk-f9dqjjrc.js:13809-13996 placement
 var AGENT_ASSETS_DISABLED_MESSAGE =
   "asset uploads, copies, listing, and deletes from an agent session (one with no user account) aren't enabled on the server for this organization; retrying from here will not help";
-//@ chunk-vn5yv2ce.js:13995-17922 placement
+//@ chunk-f9dqjjrc.js:13996-17923 placement
 /**
  * Artifact 资源上传/复制/列表/删除只能在中继可用时运行，否则给出原因
  */
@@ -1226,7 +1231,7 @@ async function assetRelayUnavailableReason(request, signal) {
     retryAfter: response.response.headers?.["retry-after"],
   };
 }
-//@ chunk-vn5yv2ce.js:17922-18147 placement
+//@ chunk-f9dqjjrc.js:17923-18148 placement
 /**
  * 把资源 API 的 HTTP 失败按 classifyAssetApiError 分类，并用回调 r 生成错误（rate_limited 附重试秒数，upstream_error 附 HTTP 状态）。
  */
@@ -1245,7 +1250,7 @@ function assetApiFailure(response, makeError) {
         : detail,
   );
 }
-//@ chunk-vn5yv2ce.js:18147-19528 placement
+//@ chunk-f9dqjjrc.js:18148-19529 placement
 async function uploadArtifactAsset(request, signal) {
   let { slug, bytes, contentType } = request;
   let telemetry = {};
@@ -1322,7 +1327,7 @@ async function uploadArtifactAsset(request, signal) {
     }),
   };
 }
-//@ chunk-vn5yv2ce.js:19528-20821 placement
+//@ chunk-f9dqjjrc.js:19529-20823 placement
 async function listArtifactAssets(request, signal) {
   let { slug, after } = request;
   let telemetry = {};
@@ -1392,7 +1397,7 @@ async function listArtifactAssets(request, signal) {
     }),
   };
 }
-//@ chunk-vn5yv2ce.js:20821-21590 placement
+//@ chunk-f9dqjjrc.js:20823-21592 placement
 async function deleteArtifactAsset(request, signal) {
   let { slug, id } = request;
   let telemetry = {};
@@ -1431,13 +1436,13 @@ async function deleteArtifactAsset(request, signal) {
     deleted: parsed.data.deleted,
   };
 }
-//@ chunk-vn5yv2ce.js:21590-21678 placement
+//@ chunk-f9dqjjrc.js:21592-21680 placement
 /**
  * 复制资源的响应 schema 与请求超时。
  */
 var copyAssetsResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var COPY_ASSETS_TIMEOUT_MS;
-deferInit("chunk-vn5yv2ce.js:21590", () => {
+deferInit("chunk-f9dqjjrc.js:21592", () => {
   copyAssetsResponseSchema = DoctorLazy(() =>
     create({
       assets: create_15(
@@ -1449,7 +1454,7 @@ deferInit("chunk-vn5yv2ce.js:21590", () => {
   );
   COPY_ASSETS_TIMEOUT_MS = 120000;
 });
-//@ chunk-vn5yv2ce.js:21678-23321 placement
+//@ chunk-f9dqjjrc.js:21680-23323 placement
 async function copyArtifactAsset(request, signal) {
   let { slug, fromSlug, ids } = request;
   let crossOrg = request.crossOrgOk === true;
@@ -1534,9 +1539,9 @@ async function copyArtifactAsset(request, signal) {
     })),
   };
 }
-//@ chunk-vn5yv2ce.js:23321-23333 placement
+//@ chunk-f9dqjjrc.js:23323-23335 placement
 var ASSET_LIST_TIMEOUT_MS = 90000;
-//@ chunk-vn5yv2ce.js:23333-23391 placement
+//@ chunk-f9dqjjrc.js:23335-23393 placement
 /**
  * 由 MIME 类型反查扩展名。
  */
@@ -1544,10 +1549,10 @@ function extensionForMimeType(mimeType) {
   for (let [extension, typeForExt] of ASSET_MIME_TYPES) if (typeForExt === mimeType) return extension;
   return;
 }
-//@ chunk-vn5yv2ce.js:23391-23544 placement
+//@ chunk-f9dqjjrc.js:23393-23546 placement
 var ASSET_READ_UNAVAILABLE_MESSAGE =
   "asset reads run only from a local session or an Anthropic-hosted cloud session with its gateway relay enabled; retrying from here will not help";
-//@ chunk-vn5yv2ce.js:23544-29129 placement
+//@ chunk-f9dqjjrc.js:23546-29131 placement
 /**
  * 读取 Artifact 资源（artifact_asset_read）
  */
@@ -1574,18 +1579,18 @@ async function readArtifactAsset(
     !runnerDirect && (frameRelayBinds() || (frameRelayOffered() && !relayDeclined(ARTIFACT_MOUNT)));
   if (!needsRelay && !runnerDirect && env.CLAUDE_CODE_REMOTE)
     return failAssetRead("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
-  let artifactBootWithProbe = await fetchArtifactBootWithProbe(target, "artifact_asset_read", signal, {
+  let boot = await fetchBoot(target, "artifact_asset_read", signal, {
     gatePublicRead: false,
     credentials,
     probeToolUseId,
   });
-  if (artifactBootWithProbe.err !== null)
+  if (boot.err !== null)
     return {
       kind: "error",
-      message: artifactBootWithProbe.err.replace(/^artifact read/, "asset read"),
-      reason: artifactBootWithProbe.status === 404 ? "boot_404" : "boot",
+      message: boot.err.replace(/^artifact read/, "asset read"),
+      reason: boot.status === 404 ? "boot_404" : "boot",
     };
-  let { ver, assetToken } = artifactBootWithProbe;
+  let { ver, assetToken } = boot;
   let tokenless = assetToken === undefined;
   if (tokenless && !isFramePublicReadEnabled())
     return failAssetRead(
@@ -1603,12 +1608,12 @@ async function readArtifactAsset(
   let viaMountRelay = needsRelay && !tokenless;
   let path = `/_f/${ver}/_blob/${assetId}`;
   let contentHostName = `frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
-  let { host, base, headers } = getFrameHost(target);
+  let { host, base, headers } = contentHostRequestBase(target);
   let egressBlocked = () => {
     getLiveState().contentHostEgressDenied.add(target.env);
     return failAssetRead(
       "egress_blocked",
-      `this environment's network allowlist blocks ${host}, so the asset cannot be fetched (access to the artifact itself is fine). ${tokenless ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${describeFrameAllowlistHint(target.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.${contentHostName} to the network allowlist this session runs behind (the sandbox's allowed domains, or the Claude desktop app's network settings).`}`,
+      `this environment's network allowlist blocks ${host}, so the asset cannot be fetched (access to the artifact itself is fine). ${tokenless ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${contentHostAllowlistRemedy(target.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.${contentHostName} to the network allowlist this session runs behind (the sandbox's allowed domains, or the Claude desktop app's network settings).`}`,
     );
   };
   let egressProxyDenied = (status, denialReason) => {
@@ -1627,9 +1632,9 @@ async function readArtifactAsset(
   };
   let answeredViaFrame = false;
   let frameResponse;
-  if (!viaMountRelay && assetToken !== undefined && canReadViaFrame(artifactBootWithProbe.data)) {
+  if (!viaMountRelay && assetToken !== undefined && frameContentRoute(boot.data)) {
     try {
-      frameResponse = await getViaFrameContent(target.slug, path, {
+      frameResponse = await getFromFrameContent(target.slug, path, {
         token: assetToken,
         timeout: ASSET_LIST_TIMEOUT_MS,
         maxContentLength: MAX_FRAME_RESPONSE_BYTES + 1,
@@ -1654,24 +1659,24 @@ async function readArtifactAsset(
           "internal",
           "internal error: a public artifact read was routed where it cannot be served \u2014 this is a bug in this build; do not retry",
         );
-      let viaMount = await getViaMountOnce(target.slug, path, {
+      let uploadResult = await getFromArtifactMount(target.slug, path, {
         token: assetToken,
         timeout: ASSET_LIST_TIMEOUT_MS,
         maxContentLength: MAX_FRAME_RESPONSE_BYTES + 1,
         signal,
-        retryBudget: singleReadRetryBudget(),
+        retryBudget: mountRetryBudget(),
       });
-      if (!viaMount.ok)
+      if (!uploadResult.ok)
         return failAssetRead(
-          viaMount.reason.replace(/-/g, "_"),
-          viaMount.reason === "no-auth"
-            ? noGatewayCredentialMessage(viaMount.detail)
-            : `artifact content is unreachable from this session (${viaMount.reason})`,
+          uploadResult.reason.replace(/-/g, "_"),
+          uploadResult.reason === "no-auth"
+            ? noGatewayCredentialMessage(uploadResult.detail)
+            : `artifact content is unreachable from this session (${uploadResult.reason})`,
         );
       response = {
-        status: viaMount.status,
-        headers: viaMount.response.headers,
-        data: viaMount.data,
+        status: uploadResult.status,
+        headers: uploadResult.response.headers,
+        data: uploadResult.data,
       };
     } else {
       let tokenQuery = assetToken === undefined ? "" : `?__frame_t=${encodeURIComponent(assetToken)}`;
@@ -1716,8 +1721,8 @@ async function readArtifactAsset(
     return failAssetRead("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
   if (viaMountRelay && isMountNetworkOffRefusal(response.status, response.data))
     return failAssetRead("network_off", `${MOUNT_NETWORK_OFF_WORDS}; retrying from here will not help`);
-  if (viaMountRelay && isRetryableStatus(response.status))
-    return failAssetRead(`http_${response.status}`, describeGatewayTransient(response.status));
+  if (viaMountRelay && isUnavailableStatus(response.status))
+    return failAssetRead(`http_${response.status}`, mountUnavailableWords(response.status));
   if (viaMountRelay) mountHopFailedForRunner(response.status);
   if (response.status === 404)
     return failAssetRead(
@@ -1744,7 +1749,7 @@ async function readArtifactAsset(
         status: response.status,
         headers: response.headers,
         data: response.data,
-        redact: (text) => redactFrameToken(text, assetToken),
+        redact: (text) => redactAssetToken(text, assetToken),
         label: "[artifact] asset fetch",
       });
   if (denialCode !== undefined) return failAssetRead(denialCode, ARTIFACT_PROXY_DENIAL_TEXTS[denialCode]);
@@ -1763,7 +1768,7 @@ async function readArtifactAsset(
   if (viaMountRelay) markRelayServed(ARTIFACT_MOUNT);
   let headers_2 = response.headers;
   let contentTypeHeader =
-    viaMountRelay || answeredViaFrame ? contentTypeOfHeaders(headers_2) : headers_2?.["content-type"];
+    viaMountRelay || answeredViaFrame ? passthroughContentType(headers_2) : headers_2?.["content-type"];
   let contentType =
     typeof contentTypeHeader === "string" ? firstLineOf(contentTypeHeader, ";").trim().toLowerCase() : "";
   if (extensionForMimeType(contentType) === undefined)
@@ -1788,12 +1793,12 @@ async function readArtifactAsset(
     publicRead: tokenless,
   };
 }
-//@ chunk-8wvtd8sr.js:295557-295627 placement
+//@ chunk-xzmy9dn4.js:297796-297866 placement
 var FILE_PATHS_LIST_MESSAGE; // deferred: uses SHA256_HEX_RE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:295557", () => {
+deferInit("chunk-xzmy9dn4.js:297796", () => {
   FILE_PATHS_LIST_MESSAGE = `\`file_paths\` must be a list of 1 to ${MAX_UPLOAD_FILE_PATHS} local file paths`;
 });
-//@ chunk-8wvtd8sr.js:295627-296324 placement
+//@ chunk-xzmy9dn4.js:297866-298563 placement
 /**
  * 解析 upload_asset 的 file_path / file_paths：单个、列表或 invalid（缺参数、两者同传、列表为空或超过 qL、元素非字符串）。
  */
@@ -1840,7 +1845,7 @@ function parseUploadPaths(input) {
     paths,
   };
 }
-//@ chunk-8wvtd8sr.js:296324-296755 placement
+//@ chunk-xzmy9dn4.js:298563-298994 placement
 /**
  * 资源上传失败分类：单个文件即判定失败的代码、终止整次上传的代码、relay 不可用原因，以及上传结果行的长度与失败行数上限。
  */
@@ -1849,7 +1854,7 @@ var FINAL_UPLOAD_FAILURE_CODES;
 var RELAY_UNAVAILABLE_REASONS;
 var UPLOAD_LINE_MAX;
 var MAX_UPLOAD_FAILURE_LINES;
-deferInit("chunk-8wvtd8sr.js:296324", () => {
+deferInit("chunk-xzmy9dn4.js:298563", () => {
   SINGLE_UPLOAD_FAILURE_CODES = new Set(["invalid_request", "too_large", "unsupported_type"]);
   FINAL_UPLOAD_FAILURE_CODES = new Set([
     "invalid_request",
@@ -1877,19 +1882,19 @@ deferInit("chunk-8wvtd8sr.js:296324", () => {
   UPLOAD_LINE_MAX = 1300;
   MAX_UPLOAD_FAILURE_LINES = 6;
 });
-//@ chunk-8wvtd8sr.js:296755-296806 placement
+//@ chunk-xzmy9dn4.js:298994-299045 placement
 /**
  * 拼出「file_paths[i] "路径"」标签。
  */
 function filePathIndexLabel(index, path) {
   return `file_paths[${index}] ${safeJsonQuote(path)}`;
 }
-//@ chunk-8wvtd8sr.js:296806-296985 placement
+//@ chunk-xzmy9dn4.js:299045-299224 placement
 var UPLOAD_RATE_LIMITED_MESSAGE =
   "the store is rate limiting this artifact \u2014 wait a minute before sending the rest";
 var FILE_PATHS_FROM_SCRIPT_MESSAGE =
   "`file_paths` cannot be used from a script \u2014 pass one `file_path` per call";
-//@ chunk-8wvtd8sr.js:296985-297896 placement
+//@ chunk-xzmy9dn4.js:299224-300135 placement
 /**
  * 逐个校验批量上传路径：不能含 NUL、类型受支持、文本类文件须单独上传、路径长度上限、不重复、解析为本地路径；返回 {sources} 或首个出错的 {index, message, errorCode}。
  */
@@ -1934,13 +1939,13 @@ function vetUploadPathList(paths) {
     sources,
   };
 }
-//@ chunk-8wvtd8sr.js:297896-297938 placement
+//@ chunk-xzmy9dn4.js:300135-300177 placement
 /**
  * 拼出「路径标签: 错误」一行。
  */
 var filePathErrorLine = (paths, index, message) =>
   `${filePathIndexLabel(index, paths[index] ?? "")}: ${message}`;
-//@ chunk-8wvtd8sr.js:297938-298643 placement
+//@ chunk-xzmy9dn4.js:300177-300882 placement
 /**
  * upload_asset 的 validateInput：解析路径列表、拒绝脚本里使用 file_paths、逐个校验并用 readPublishFile 预读（大小上限、身份、空文件）。
  */
@@ -1997,7 +2002,7 @@ function validateUploadAssetInput(context, input, options) {
     result: true,
   };
 }
-//@ chunk-8wvtd8sr.js:298643-298726 placement
+//@ chunk-xzmy9dn4.js:300882-300965 placement
 /**
  * 生成 deny 权限决策（原因类型 other）。
  */
@@ -2009,7 +2014,7 @@ var denyDecision = (message, reason) => ({
     reason,
   },
 });
-//@ chunk-8wvtd8sr.js:298726-299009 placement
+//@ chunk-xzmy9dn4.js:300965-301248 placement
 function soloApprovalReason(source, check, isSolo) {
   if (!needsReadAsk(check, isSolo)) return;
   if (!check.spelledInside && check.readAsks) return "outside this session\u2019s allowed read paths";
@@ -2018,7 +2023,7 @@ function soloApprovalReason(source, check, isSolo) {
   let { linkNote } = describePublishPath(source.sourcePath, check);
   return linkNote !== "" ? linkNote.trim().replace(/^\(|\)$/g, "") : alwaysReason;
 }
-//@ chunk-8wvtd8sr.js:299009-303211 placement
+//@ chunk-xzmy9dn4.js:301248-305453 placement
 async function checkUploadAssetPermissions(tool, input, context, artifactUrl) {
   let uploadPaths = parseUploadPaths(input);
   if (uploadPaths.kind !== "list")
@@ -2238,7 +2243,7 @@ async function checkUploadAssetPermissions(tool, input, context, artifactUrl) {
     localDisplayOnly: true,
   };
 }
-//@ chunk-8wvtd8sr.js:303211-304298 placement
+//@ chunk-xzmy9dn4.js:305453-306540 placement
 /**
  * 生成批量上传权限询问的描述：列出每个 file_paths[i] 及其解析后的绝对路径与链接提示，超出数量时汇总。
  */
@@ -2276,7 +2281,7 @@ function describeUploadListAsk(input, card) {
       : "";
   return `${lead} (${untrustedArray.length} ${plural(untrustedArray.length, "file")}, one approval covers them all${filtered.length > 0 ? `; ${filtered.length} ${filtered.length === 1 ? "has a note in [brackets] and is" : "have a note in [brackets] and are"} listed first` : ""}): ${[...filtered, ...mapped.filter((entry) => !entry.noted)].map((entry) => entry.text).join("; ")}${hiddenCount > 0 ? `; and ${hiddenCount} more, past the ${MAX_UPLOAD_FILE_PATHS} one call may name, not shown` : ""}${bothFieldsNote}`;
 }
-//@ chunk-8wvtd8sr.js:304298-304443 placement
+//@ chunk-xzmy9dn4.js:306540-306685 placement
 /**
  * 本地文件列表无法显示时的描述（路径数量或占位）。
  */
@@ -2284,14 +2289,14 @@ function describeUploadListFallback(input) {
   let untrustedArray = readUntrustedArray(input.file_paths);
   return `a list of local files (${untrustedArray === undefined || untrustedArray === UNREADABLE_ARRAY ? UNREADABLE_LIST_TEXT : `${untrustedArray.length} paths`}, none of which could be shown)`;
 }
-//@ chunk-8wvtd8sr.js:304443-304500 placement
+//@ chunk-xzmy9dn4.js:306685-306742 placement
 /**
  * 判断上传失败是否可重试（非终态错误码、非中继不可用）。
  */
 function isRetryableUploadFailure(failure) {
   return !(FINAL_UPLOAD_FAILURE_CODES.has(failure.code) || RELAY_UNAVAILABLE_REASONS.has(failure.reason));
 }
-//@ chunk-8wvtd8sr.js:304500-309621 placement
+//@ chunk-xzmy9dn4.js:306742-311891 placement
 async function runUploadAsset(input, context, artifactUrl) {
   let uploadPaths = parseUploadPaths(input);
   if (uploadPaths.kind !== "list")
@@ -2352,7 +2357,7 @@ async function runUploadAsset(input, context, artifactUrl) {
         "reading this file is blocked by a Read permission rule \u2014 the upload was not attempted",
         "asset_upload_read_denied",
       );
-    let hasAskRule = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
+    let hasAskRule = findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
     return {
       contentType,
       path: absPath,
@@ -2559,7 +2564,7 @@ async function runUploadAsset(input, context, artifactUrl) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:309621-311311 placement
+//@ chunk-xzmy9dn4.js:311891-313582 placement
 /**
  * 渲染批量上传结果：已上传（大小、类型、url、id）与失败/未尝试（可能已存储）分组列出，附后续操作提示。
  */
@@ -2617,13 +2622,13 @@ ${unreadCount} more ${plural(unreadCount, "entry", "entries")} of this record co
 Everyone who can open the artifact can load the stored files; each is durable until deleted with action "delete_asset".`,
   };
 };
-//@ chunk-8wvtd8sr.js:311311-311415 placement
+//@ chunk-xzmy9dn4.js:313582-313686 placement
 /**
  * 全部 Artifact 动作处理器列表，以及动作名 → 处理器的映射表 $b。
  */
 var ARTIFACT_ACTION_HANDLERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ACTION_HANDLER_BY_NAME;
-deferInit("chunk-8wvtd8sr.js:311311", () => {
+deferInit("chunk-xzmy9dn4.js:313582", () => {
   ARTIFACT_ACTION_HANDLERS = [
     ARTIFACT_DB_ACTIONS,
     ARTIFACT_PREVIEW_ACTION_HANDLER,
@@ -2657,9 +2662,6 @@ export {
   fileIdentityOf,
   probeSymlink,
   readApprovedUploadFile,
-  copyArtifactAsset,
-  ACTION_HANDLER_BY_NAME,
-  renderAssetUploadsResult,
   checkUploadAssetPermissions,
   UPLOAD_NETWORK_PATH_MESSAGE,
   isSoloApprovalFile,
@@ -2683,7 +2685,10 @@ export {
   deleteArtifactAsset,
   readArtifactAsset,
   extensionForMimeType,
+  MAX_UPLOAD_PATH_LENGTH,
   isArtifactAssetsEnabled,
   artifactAssetsEnabledSource,
-  MAX_UPLOAD_PATH_LENGTH,
+  copyArtifactAsset,
+  ACTION_HANDLER_BY_NAME,
+  renderAssetUploadsResult,
 };

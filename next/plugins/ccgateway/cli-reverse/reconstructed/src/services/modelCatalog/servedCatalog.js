@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。服务端下发的模型目录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c0w5a81j.js (1), chunk-ynfp53zr.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b1v2msyk.js (36), chunk-df61xvp8.js (1)
  * attribution: placement 37
  */
 import { join } from "path";
@@ -70,26 +70,26 @@ import {
 import { apiClient } from "../routines/routinesApi.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ynfp53zr.js:874-902 placement
+//@ chunk-b1v2msyk.js:874-902 placement
 /**
  * 过期时间的抖动比例（0.1）。
  */
 var CACHE_VERSION = 2;
 var CACHE_TTL_MS = 3600000;
 var STALE_JITTER_RATIO = 0.1;
-//@ chunk-ynfp53zr.js:902-957 placement
+//@ chunk-b1v2msyk.js:902-957 placement
 /**
  * 给 TTL 加上抖动后的毫秒数。
  */
 function jitteredTtl(baseTtlMs, random) {
   return Math.round(baseTtlMs * (1 + STALE_JITTER_RATIO * (2 * random - 1)));
 }
-//@ chunk-ynfp53zr.js:957-1328 placement
+//@ chunk-b1v2msyk.js:957-1328 placement
 /**
  * 服务端模型目录缓存的 schema：版本、获取时间、过期时间、etag、组织等。
  */
 var servedCatalogCacheSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ynfp53zr.js:957", () => {
+deferInit("chunk-b1v2msyk.js:957", () => {
   servedCatalogCacheSchema = DoctorLazy(() =>
     objectSchema({
       version: literal(CACHE_VERSION),
@@ -113,7 +113,7 @@ deferInit("chunk-ynfp53zr.js:957", () => {
     }),
   );
 });
-//@ chunk-ynfp53zr.js:1328-1459 placement
+//@ chunk-b1v2msyk.js:1328-1459 placement
 function catalogEndpointForScope(scope) {
   switch (scope.kind) {
     case "account":
@@ -125,7 +125,7 @@ function catalogEndpointForScope(scope) {
       return "orgless";
   }
 }
-//@ chunk-ynfp53zr.js:1459-1627 placement
+//@ chunk-b1v2msyk.js:1459-1627 placement
 function catalogAuthKind(scope) {
   switch (scope.kind) {
     case "account":
@@ -139,7 +139,7 @@ function catalogAuthKind(scope) {
       return "federation";
   }
 }
-//@ chunk-ynfp53zr.js:1627-2076 placement
+//@ chunk-b1v2msyk.js:1627-2076 placement
 /**
  * 判断两个目录作用域是否相同（账号、令牌、API key 等类型分别比较）。
  */
@@ -162,7 +162,7 @@ function isSameCatalogScope(scope, otherScope) {
       return otherScope.kind === "federation" && scope.federationScope === otherScope.federationScope;
   }
 }
-//@ chunk-ynfp53zr.js:2076-2433 placement
+//@ chunk-b1v2msyk.js:2076-2433 placement
 /**
  * 按目录作用域（账号、令牌、API key）计算模型目录缓存文件路径。
  */
@@ -180,14 +180,14 @@ function catalogCacheFilePath(scope, surface) {
       return join(modelCatalogCacheDir(), `fed-${scope.federationScope}-${surface}.json`);
   }
 }
-//@ chunk-ynfp53zr.js:2433-2477 placement
+//@ chunk-b1v2msyk.js:2433-2477 placement
 /**
  * 按宿主的已服务目录缓存表。
  */
 function servedCatalogCache() {
   return getProviderState().servedCatalogByKey;
 }
-//@ chunk-ynfp53zr.js:2477-2764 placement
+//@ chunk-b1v2msyk.js:2477-2764 placement
 function catalogCacheKey(scope, surface) {
   switch (scope.kind) {
     case "account":
@@ -202,19 +202,22 @@ function catalogCacheKey(scope, surface) {
       return `fed:${scope.federationScope}:${surface}`;
   }
 }
-//@ chunk-ynfp53zr.js:2764-2815 placement
+//@ chunk-b1v2msyk.js:2764-2815 placement
 /**
  * 取某作用域的缓存条目。
  */
 function getCachedCatalogEntry(scope, surface) {
   return servedCatalogCache().get(catalogCacheKey(scope, surface)) ?? undefined;
 }
-//@ chunk-ynfp53zr.js:2815-2830 placement
+//@ chunk-b1v2msyk.js:2815-2830 placement
 /**
  * 缓存文件的最大字节数。
  */
-var MAX_CACHE_FILE_BYTES = MAX_CATALOG_RESPONSE_BYTES + 4096;
-//@ chunk-ynfp53zr.js:2830-3181 placement
+var MAX_CACHE_FILE_BYTES; // deferred: uses SURFACE_NAMES (../../utils/model/modelCatalog/servedCatalog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b1v2msyk.js:2815", () => {
+  MAX_CACHE_FILE_BYTES = MAX_CATALOG_RESPONSE_BYTES + 4096;
+});
+//@ chunk-b1v2msyk.js:2830-3181 placement
 /**
  * 读取模型目录缓存文件（限制大小），文件不存在时静默返回 undefined。
  */
@@ -238,7 +241,7 @@ async function readCatalogCacheFile(filePath) {
   }
   return parsed.data;
 }
-//@ chunk-ynfp53zr.js:3181-3524 placement
+//@ chunk-b1v2msyk.js:3181-3524 placement
 /**
  * 读取指定作用域与 surface 的目录缓存：先查内存，再读磁盘文件；文件无效或 surface 不符时删除缓存。
  */
@@ -261,7 +264,7 @@ async function loadCachedCatalog(scope, surface) {
   await saveCacheEntry(cacheKey, entry);
   return entry;
 }
-//@ chunk-ynfp53zr.js:3524-3683 placement
+//@ chunk-b1v2msyk.js:3524-3683 placement
 async function discardCachedCatalog(scope, surface) {
   servedCatalogCache().set(catalogCacheKey(scope, surface), null);
   try {
@@ -271,7 +274,7 @@ async function discardCachedCatalog(scope, surface) {
       logForDebugging(`[servedCatalog] cache delete failed: ${getErrnoCode(error) ?? "unknown"}`);
   }
 }
-//@ chunk-ynfp53zr.js:3683-3873 placement
+//@ chunk-b1v2msyk.js:3683-3873 placement
 async function saveCachedCatalog(scope, surface, entry) {
   await saveCacheEntry(catalogCacheKey(scope, surface), entry);
   try {
@@ -282,7 +285,7 @@ async function saveCachedCatalog(scope, surface, entry) {
     logForDebugging(`[servedCatalog] cache write failed: ${getErrnoCode(error) ?? "unknown"}`);
   }
 }
-//@ chunk-ynfp53zr.js:3873-3948 placement
+//@ chunk-b1v2msyk.js:3873-3948 placement
 /**
  * 保存缓存条目并登记掩码 id。
  */
@@ -290,7 +293,7 @@ async function saveCacheEntry(cacheKey, entry) {
   storeCacheEntry(cacheKey, entry);
   if (entry.catalog !== null) await addMaskedIds(getMaskedIdSet(entry.catalog));
 }
-//@ chunk-ynfp53zr.js:3948-4012 placement
+//@ chunk-b1v2msyk.js:3948-4012 placement
 /**
  * 写入内存缓存并记录掩码 id。
  */
@@ -298,7 +301,7 @@ function storeCacheEntry(cacheKey, entry) {
   servedCatalogCache().set(cacheKey, entry);
   if (entry.catalog !== null) recordMaskedFromCatalog(entry.catalog);
 }
-//@ chunk-ynfp53zr.js:4012-4283 placement
+//@ chunk-b1v2msyk.js:4012-4283 placement
 function buildCatalogCacheEntry({
   catalog,
   etag,
@@ -324,7 +327,7 @@ function buildCatalogCacheEntry({
     catalog,
   };
 }
-//@ chunk-ynfp53zr.js:4283-4368 placement
+//@ chunk-b1v2msyk.js:4283-4368 placement
 /**
  * 给条目补上获取时间与过期时间。
  */
@@ -335,19 +338,19 @@ function withFetchTimes(entry, fetchedAt = Date.now(), random = Math.random()) {
     staleAt: computeStaleAt(fetchedAt, random),
   };
 }
-//@ chunk-ynfp53zr.js:4368-4404 placement
+//@ chunk-b1v2msyk.js:4368-4404 placement
 /**
  * 计算过期时间（带抖动）。
  */
 function computeStaleAt(fetchedAt, random) {
   return fetchedAt + jitteredTtl(CACHE_TTL_MS, random);
 }
-//@ chunk-ynfp53zr.js:4404-4511 placement
+//@ chunk-b1v2msyk.js:4404-4511 placement
 function isCatalogCacheStale(cacheEntry, now = Date.now()) {
   let latestStaleAt = cacheEntry.fetchedAt + CACHE_TTL_MS * (1 + STALE_JITTER_RATIO);
   return now < cacheEntry.fetchedAt || now >= cacheEntry.staleAt || cacheEntry.staleAt > latestStaleAt;
 }
-//@ chunk-ynfp53zr.js:4511-4556 placement
+//@ chunk-b1v2msyk.js:4511-4556 placement
 /**
  * 默认的委托模式（off）。
  */
@@ -355,7 +358,7 @@ var TENGU_DELEGATED_QUAIL = "tengu_delegated_quail";
 var DEFAULT_DELEGATED_MODE = {
   mode: "off",
 };
-//@ chunk-ynfp53zr.js:4556-4896 placement
+//@ chunk-b1v2msyk.js:4556-4896 placement
 function servedModelCatalogEligibility({ skipEssentialTrafficGate = false } = {}) {
   if (isEnvDefinedFalsy(env.CLAUDE_CODE_MODEL_CATALOG)) return "env_off";
   if (isBareMode()) return "bare";
@@ -367,7 +370,7 @@ function servedModelCatalogEligibility({ skipEssentialTrafficGate = false } = {}
   if (!isPolicyAllowed("allow_model_catalog")) return "policy";
   return null;
 }
-//@ chunk-ynfp53zr.js:4896-4960 placement
+//@ chunk-b1v2msyk.js:4896-4960 placement
 /**
  * 服务端目录的模式（off 或按开关）。
  */
@@ -375,7 +378,7 @@ function servedCatalogMode() {
   if (servedModelCatalogEligibility() !== null) return "off";
   return delegatedQuailMode("served");
 }
-//@ chunk-ynfp53zr.js:4960-5022 placement
+//@ chunk-b1v2msyk.js:4960-5022 placement
 /**
  * 读 tengu_delegated_quail 并解析模式。
  */
@@ -386,14 +389,14 @@ function delegatedQuailMode(sourceKind) {
   );
   return resolveMode(flagValue, source, sourceKind);
 }
-//@ chunk-ynfp53zr.js:5022-5054 placement
+//@ chunk-b1v2msyk.js:5022-5054 placement
 /**
  * 解析目录模式。
  */
 function resolveMode(flagValue, source, sourceKind) {
   return resolveCatalogMode(flagValue, sourceKind);
 }
-//@ chunk-ynfp53zr.js:5054-5249 placement
+//@ chunk-b1v2msyk.js:5054-5249 placement
 function resolveCatalogMode(flagValue, sourceKind) {
   switch (readCatalogModeFlag(flagValue, sourceKind)) {
     case "shadow":
@@ -407,7 +410,7 @@ function resolveCatalogMode(flagValue, sourceKind) {
       return "off";
   }
 }
-//@ chunk-ynfp53zr.js:5249-5463 placement
+//@ chunk-b1v2msyk.js:5249-5463 placement
 function readCatalogModeFlag(flagValue, sourceKind) {
   if (flagValue === null || typeof flagValue !== "object") return;
   let modeValue;
@@ -416,17 +419,17 @@ function readCatalogModeFlag(flagValue, sourceKind) {
   if (typeof modeValue === "string") return modeValue;
   return "mode" in flagValue ? flagValue.mode : undefined;
 }
-//@ chunk-ynfp53zr.js:5463-5572 placement
+//@ chunk-b1v2msyk.js:5463-5572 placement
 function getCatalogOrgUuid() {
   let rawUuid = env.CLAUDE_CODE_ORGANIZATION_UUID ?? getOauthAccountInfo()?.organizationUuid;
   return normalizeUuidOrNull(rawUuid)?.toLowerCase() ?? null;
 }
-//@ chunk-ynfp53zr.js:5572-5581 placement
+//@ chunk-b1v2msyk.js:5572-5581 placement
 /**
  * 作用域哈希的字符数（12）。
  */
 var SCOPE_HASH_CHARS = 12;
-//@ chunk-ynfp53zr.js:5581-6032 placement
+//@ chunk-b1v2msyk.js:5581-6032 placement
 /**
  * 确定服务端模型目录的缓存/请求作用域：claude.ai 订阅者有账户与组织时用 account（账户 uuid 哈希前缀），环境变量/FD 令牌用 token 指纹，否则返回 null 与原因。
  */
@@ -470,7 +473,7 @@ function resolveCatalogScope() {
       };
   }
 }
-//@ chunk-ynfp53zr.js:6032-6169 placement
+//@ chunk-b1v2msyk.js:6032-6169 placement
 function nonClaudeAiCatalogScope() {
   if (false)
     switch (r) {
@@ -483,7 +486,7 @@ function nonClaudeAiCatalogScope() {
     reason: "not_claude_ai_auth",
   };
 }
-//@ chunk-ynfp53zr.js:6169-6534 placement
+//@ chunk-b1v2msyk.js:6169-6534 placement
 /**
  * 判断当前生效的凭据类型（third_party、host_token、claudeai_login、auth_token_env、api_key_env/login/helper、WIF profile 或 none），用于目录请求与遥测。
  */
@@ -510,19 +513,19 @@ function catalogCredentialKind() {
       return wifProfileCredentialKind() ?? "none";
   }
 }
-//@ chunk-ynfp53zr.js:6534-6638 placement
+//@ chunk-b1v2msyk.js:6534-6638 placement
 function wifProfileCredentialKind() {
   if (!shouldUseWIFAuth()) return null;
   return getWIFAuthType() === "user_oauth" ? "profile_user_oauth" : "profile_federation";
 }
-//@ chunk-ynfp53zr.js:6638-6670 placement
+//@ chunk-b1v2msyk.js:6638-6670 placement
 /**
  * 当前目录作用域。
  */
 function catalogScope() {
   return resolveCatalogScope().scope;
 }
-//@ chunk-ynfp53zr.js:6670-6751 placement
+//@ chunk-b1v2msyk.js:6670-6752 placement
 /**
  * 当前目录的入口类型（cc/ccd/ccr）。
  */
@@ -531,7 +534,7 @@ function catalogSurface() {
   if (isHostEntrypoint()) return "ccd";
   return "cc";
 }
-//@ chunk-c0w5a81j.js:1260-3112 placement (2.1.88 match: fetchTeamMemoryOnce, 0.268)
+//@ chunk-df61xvp8.js:1261-3113 placement (2.1.88 match: fetchTeamMemoryOnce, 0.268)
 async function fetchServedCatalogOnce(state, repoSlug, { etag } = {}) {
   let endpoint = catalogEndpointForScope(state);
   try {
@@ -664,15 +667,17 @@ async function fetchServedCatalogOnce(state, repoSlug, { etag } = {}) {
   }
 }
 export {
-  catalogEndpointForScope,
+  servedModelCatalogEligibility,
   catalogAuthKind,
+  catalogScope,
+  delegatedQuailMode,
+  catalogEndpointForScope,
   CACHE_TTL_MS,
   jitteredTtl,
   STALE_JITTER_RATIO,
   isCatalogCacheStale,
   servedCatalogMode,
   catalogSurface,
-  catalogScope,
   catalogCacheKey,
   loadCachedCatalog,
   fetchServedCatalogOnce,
@@ -683,7 +688,5 @@ export {
   discardCachedCatalog,
   catalogCacheFilePath,
   catalogCredentialKind,
-  servedModelCatalogEligibility,
   getCachedCatalogEntry,
-  delegatedQuailMode,
 };

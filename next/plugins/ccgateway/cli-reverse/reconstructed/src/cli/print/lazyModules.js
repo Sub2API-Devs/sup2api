@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：print 模式的懒加载模块表与 MCP 调用结果大小限制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (12)
+ * attribution: placement 11, layout 1
  */
 import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { env } from "../../utils/env.js";
@@ -14,7 +14,7 @@ import { MAX_MCP_RESOURCE_JSON_CHARS } from "./mcpControlRequests.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:622484-622802 placement
+//@ chunk-0yw3taqg.js:664593-664911 placement
 /**
  * 按需 require 的打印侧模块句柄：会话导出、分类器摘要、协调者模式、收件箱指针、cron 调度/抖动/工具、自治循环；另有 MCP 调用结果过大文案与打印阶段计时参数。
  */
@@ -27,7 +27,7 @@ var lazyCronScheduler;
 var lazyCronJitterConfig;
 var lazyCronTools;
 var lazyAutonomousLoop;
-deferInit("chunk-tyg7f3ek.js:622484", () => {
+deferInit("chunk-0yw3taqg.js:664593", () => {
   lazyPrintModules = () => require("../../utils/status.js");
   lazyConversationExporter = () => require("../../commands/export/exportConversation.lazy.js");
   lazyPostTurnSummary = require("../../services/classifierSummary.js");
@@ -38,34 +38,34 @@ deferInit("chunk-tyg7f3ek.js:622484", () => {
   lazyCronTools = require("../../tools/ScheduleCronTool/prompt.js");
   lazyAutonomousLoop = require("../../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 });
-//@ chunk-tyg7f3ek.js:622802-622942 placement
+//@ chunk-0yw3taqg.js:664911-665051 placement
 var lazyPrintModules2; // deferred: loads other modules while loading; runs once its import cycle is complete
 var lazyTeleportRelayMarker;
 var lazyTeleportRelayEnv;
 var lazyHandoffMarkerRelay;
-deferInit("chunk-tyg7f3ek.js:622802", () => {
+deferInit("chunk-0yw3taqg.js:664911", () => {
   lazyPrintModules2 = require("../../services/extractMemories/extractMemories.js");
   lazyTeleportRelayMarker = require("../../services/teleport/armRelay.js");
   lazyTeleportRelayEnv = require("../../utils/teleport/relayEnv.js");
   lazyHandoffMarkerRelay = require("../../utils/teleport/handoffRelay.js");
 });
-//@ chunk-tyg7f3ek.js:622942-622994 placement
+//@ chunk-0yw3taqg.js:665051-665103 placement
 function mcpModuleFacade() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-tyg7f3ek.js:622994-623038 placement
+//@ chunk-0yw3taqg.js:665103-665147 placement
 function getMcpClientModule() {
   return mcpModuleFacade().mcpClientModule();
 }
-//@ chunk-tyg7f3ek.js:623038-623080 placement
+//@ chunk-0yw3taqg.js:665147-665189 placement
 function getMcpAuthModule() {
   return mcpModuleFacade().mcpAuthModule();
 }
-//@ chunk-tyg7f3ek.js:623080-623140 placement
+//@ chunk-0yw3taqg.js:665189-665249 placement
 function getMcpErrorClassificationModule() {
   return mcpModuleFacade().mcpSdkErrorClassificationModule();
 }
-//@ chunk-tyg7f3ek.js:623140-623716 placement
+//@ chunk-0yw3taqg.js:665249-665825 placement
 var TEAM_SHUTDOWN_REMINDER = `<system-reminder>
 You are running in non-interactive mode and cannot return a response to the user until your team is shut down.
 
@@ -79,32 +79,32 @@ The user cannot receive your response until the team is completely shut down.
 </system-reminder>
 
 Shut down your team and prepare your final response for the user.`;
-//@ chunk-tyg7f3ek.js:623716-623758 placement
+//@ chunk-0yw3taqg.js:665825-665867 placement
 function isTeamShutdownReminder(command) {
   return isMainAgentCommand(command) && command.value === TEAM_SHUTDOWN_REMINDER;
 }
-//@ chunk-tyg7f3ek.js:623758-623828 placement
+//@ chunk-0yw3taqg.js:665867-665937 placement
 function teamTeardownParkTimeoutMs() {
   return env.CLAUDE_CODE_TEAM_TEARDOWN_PARK_TIMEOUT_MS ?? 1e4;
 }
-//@ chunk-tyg7f3ek.js:623828-624102 placement
-var MCP_CALL_RESULT_LIMITS = 30000;
+//@ chunk-0yw3taqg.js:665937-666211 layout
+var PRINT_TURN_TIMEOUT_MS = 30000;
 var MCP_CALL_RESULT_TOO_LARGE_TEXT = `The tool ran, but its result is over the ${MAX_MCP_RESOURCE_JSON_CHARS}-character limit of an mcp_call sent with result_not_for_model, so this mcp_call got no result. Check whether the call took effect before retrying mcp_call, and ask the tool for a smaller result if you retry.`;
-//@ chunk-tyg7f3ek.js:624102-624178 placement
+//@ chunk-0yw3taqg.js:666211-666287 placement
 function isMcpCallResultTooLarge(result) {
   return (
     jsonStringify([result.content, result.structuredContent, result._meta]).length >
     MAX_MCP_RESOURCE_JSON_CHARS
   );
 }
-//@ chunk-tyg7f3ek.js:624178-624262 placement
+//@ chunk-0yw3taqg.js:666287-666371 placement
 var PRINT_TIMING_CONSTANTS = 5;
 var PRINT_TURN_FLUSH_DELAY_MS = 2000;
 var TENGU_ANCHORED_LANTERN = "tengu_anchored_lantern";
 var PRINT_TURN_RETRY_MS = 2000;
 var PRINT_TURN_WAIT_MS = 20000;
-var PRINT_TURN_TIMEOUT_MS = 30000;
-var PRINT_TURN_POLL_MS = 5000;
+var CLAIM_SESSION_QUEUE_DELAY_MS = 30000;
+var ELICIT_WAIT_RETRY_MS = 5000;
 var PRINT_TURN_MAX_ATTEMPTS = 4;
 export {
   lazyTeleportRelayEnv,
@@ -116,8 +116,8 @@ export {
   lazySessionInboxPointers,
   getMcpClientModule,
   lazyHandoffMarkerRelay,
-  MCP_CALL_RESULT_LIMITS,
-  PRINT_TURN_POLL_MS,
+  PRINT_TURN_TIMEOUT_MS,
+  ELICIT_WAIT_RETRY_MS,
   TEAM_SHUTDOWN_REMINDER,
   teamTeardownParkTimeoutMs,
   isTeamShutdownReminder,
@@ -125,7 +125,7 @@ export {
   lazyCronScheduler,
   lazyCronJitterConfig,
   PRINT_TURN_MAX_ATTEMPTS,
-  PRINT_TURN_TIMEOUT_MS,
+  CLAIM_SESSION_QUEUE_DELAY_MS,
   lazyPrintModules,
   lazyConversationExporter,
   isMcpCallResultTooLarge,

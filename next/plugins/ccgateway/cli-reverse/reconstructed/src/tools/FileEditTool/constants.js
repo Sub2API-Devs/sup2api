@@ -3,22 +3,22 @@
  *
  * Edit 工具名、.claude 目录权限模式与文件编辑类错误文案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/constants.ts
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-p223w7hd.js (1)
  * attribution: callgraph-witnessed 1
  */
 import { ALLOW_LARGE_PARAM } from "../FileReadTool/constants.js";
 
-//@ chunk-bwbq4xvm.js:174061-175345 callgraph-witnessed (2.1.88 match: CLAUDE_FOLDER_PERMISSION_PATTERN, 0.122)
+//@ chunk-p223w7hd.js:228-1511 callgraph-witnessed (2.1.88 match: CLAUDE_FOLDER_PERMISSION_PATTERN, 0.122)
 /**
  * 文件编辑类常量：工具名 "Edit"、.claude 目录会话权限模式（项目 /.claude/**、全局 ~/.claude/**）、各类拒绝/失败文案（未读、只读了开头、目录被拒、Read deny、文件已变），以及不可写编码原因表。
  */
-var FILE_EDIT_TOOL_NAME = "Edit";
+var EDIT = "Edit";
 var CLAUDE_FOLDER_PERMISSION_PATTERN = "/.claude/**";
 var GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN = "~/.claude/**";
 var FILE_NOT_READ_ERROR = "File has not been read yet. Read it first before writing to it.";
-var PARTIAL_READ_WRITE_ERROR = `You were given only the start of this file, and nothing shows that you have since read all of it in one call, so a Write could lose the rest. To change part of it, use ${FILE_EDIT_TOOL_NAME}. To replace it whole, first Read it in one call with no offset or limit. If Read returns only a page or says the file is too large, Read it again with ${ALLOW_LARGE_PARAM}: true. If even that cannot return all of it, use ${FILE_EDIT_TOOL_NAME}.`;
+var PARTIAL_READ_WRITE_ERROR = `You were given only the start of this file, and nothing shows that you have since read all of it in one call, so a Write could lose the rest. To change part of it, use ${EDIT}. To replace it whole, first Read it in one call with no offset or limit. If Read returns only a page or says the file is too large, Read it again with ${ALLOW_LARGE_PARAM}: true. If even that cannot return all of it, use ${EDIT}.`;
 var DENIED_DIRECTORY_ERROR = "File is in a directory that is denied by your permission settings.";
 var READ_DENY_RULE_EDIT_ERROR =
   "File is covered by a Read deny rule in your permission settings and cannot be edited.";
@@ -33,14 +33,14 @@ var UNWRITABLE_ENCODING_REASONS = {
   utf16be: "is UTF-16 big-endian (it starts FE FF), which these tools cannot write",
 };
 export {
-  FILE_EDIT_TOOL_NAME,
-  GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN,
-  CLAUDE_FOLDER_PERMISSION_PATTERN,
-  FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+  EDIT,
   DENIED_DIRECTORY_ERROR,
-  UNWRITABLE_ENCODING_REASONS,
-  READ_DENY_RULE_EDIT_ERROR,
-  READ_DENY_RULE_WRITE_ERROR,
+  CLAUDE_FOLDER_PERMISSION_PATTERN,
+  GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN,
   FILE_NOT_READ_ERROR,
+  FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+  READ_DENY_RULE_WRITE_ERROR,
   PARTIAL_READ_WRITE_ERROR,
+  READ_DENY_RULE_EDIT_ERROR,
+  UNWRITABLE_ENCODING_REASONS,
 };

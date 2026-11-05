@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：判断一个占位记录是否该删除：进程仍活着则保留，已使用或服务端会话不存在则删除；延迟启动一次性的占位记录清理：逐条查询服务端会话状态，删除失效记录并上报 tengu_bridge_placeholder_sweep等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4cm44bmp.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-56msakfz.js (20)
  * attribution: placement 20
  */
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { looseObject, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
@@ -28,7 +28,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4cm44bmp.js:19536-19896 placement
+//@ chunk-56msakfz.js:19721-20081 placement
 /**
  * Remote Control 重连预算常量：每小时/每天的重连次数上限、窗口长度与耗尽时的说明文字。
  */
@@ -49,7 +49,7 @@ var OWNER_REMINT_CAP = {
   attempts: OWNER_REMINT_MAX_ATTEMPTS,
   exhaustedDetail: REINT_30MIN_UNREACHABLE_DETAIL,
 };
-//@ chunk-4cm44bmp.js:19896-20184 placement
+//@ chunk-56msakfz.js:20081-20369 placement
 /**
  * 桥接断线重连预算：charge(now, 计日上限) 按 24 小时与 1 小时滑动窗口计数，返回 daily_exhausted / hourly_exhausted / charged；noteHealthyBeat 在连接健康满 10 分钟后重置小时窗口的起点。
  */
@@ -61,7 +61,7 @@ function createReconnectBudget() {
       chargeTimestamps = chargeTimestamps.filter((chargedAt) => now - chargedAt < RECONNECT_DAILY_WINDOW_MS);
       if (countsTowardDaily && chargeTimestamps.length >= MAX_RECONNECTS_PER_DAY) return "daily_exhausted";
       if (
-        count(
+        countWhere(
           chargeTimestamps,
           (chargedAt) =>
             now - chargedAt < RECONNECT_HOURLY_WINDOW_MS &&
@@ -78,9 +78,9 @@ function createReconnectBudget() {
     },
   };
 }
-//@ chunk-4cm44bmp.js:20184-20317 placement
+//@ chunk-56msakfz.js:20369-20502 placement
 var bridgePlaceholderRecordSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4cm44bmp.js:20184", () => {
+deferInit("chunk-56msakfz.js:20369", () => {
   bridgePlaceholderRecordSchema = DoctorLazy(() =>
     looseObject({
       pid: numberSchema().int(),
@@ -91,7 +91,7 @@ deferInit("chunk-4cm44bmp.js:20184", () => {
     }),
   );
 });
-//@ chunk-4cm44bmp.js:20317-20557 placement
+//@ chunk-56msakfz.js:20502-20742 placement
 function readBridgePlaceholders(replBridgePlaceholders) {
   if (
     typeof replBridgePlaceholders !== "object" ||
@@ -116,26 +116,26 @@ function readBridgePlaceholders(replBridgePlaceholders) {
     ];
   });
 }
-//@ chunk-4cm44bmp.js:20557-20636 placement
+//@ chunk-56msakfz.js:20742-20821 placement
 var PLACEHOLDER_MIN_SESSION_AGE_MS = 300000;
 var PLACEHOLDER_KEEP_MAX_AGE_MS = 2592000000;
 var MAX_BRIDGE_PLACEHOLDERS = 20;
 var PLACEHOLDER_SWEEP_START_DELAY_MS = 15000;
 var BRIDGE_SESSION_ID_PATTERN = /^(session|cse)_[A-Za-z0-9_-]+$/;
-//@ chunk-4cm44bmp.js:20636-20798 placement
+//@ chunk-56msakfz.js:20821-20983 placement
 async function isPlaceholderSweepEnabled() {
   if (isEssentialTrafficOnly()) return false;
   let { getFeatureValue_CACHED_MAY_BE_STALE } =
     await import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_placeholder_sweep", true);
 }
-//@ chunk-4cm44bmp.js:20798-20913 placement
+//@ chunk-56msakfz.js:20983-21098 placement
 function enqueuePlaceholderWrite(writeOp) {
   let state = bridgeHostState();
   state.placeholderWriteChain = state.placeholderWriteChain.then(writeOp, writeOp);
   return state.placeholderWriteChain;
 }
-//@ chunk-4cm44bmp.js:20913-21561 placement
+//@ chunk-56msakfz.js:21098-21746 placement
 /**
  * 在全局配置 replBridgePlaceholders 里记录一个桥接占位会话（pid、进程启动时间、标题哈希），超过上限时淘汰最旧的。
  */
@@ -183,7 +183,7 @@ function recordBridgePlaceholder(sessionId, title, storageV5) {
     }, storageV5);
   });
 }
-//@ chunk-4cm44bmp.js:21561-21830 placement
+//@ chunk-56msakfz.js:21746-22015 placement
 /**
  * 统计仍在运行的 REPL bridge 进程数（含自身）：按全局配置里的占位记录逐个核对进程存活与启动时间，出错返回 0。
  */
@@ -208,7 +208,7 @@ async function countLiveBridgeProcesses() {
     return 0;
   }
 }
-//@ chunk-4cm44bmp.js:21830-22083 placement
+//@ chunk-56msakfz.js:22015-22268 placement
 function removeBridgePlaceholdersFor(sessionId, storageV5) {
   return enqueuePlaceholderWrite(async () => {
     await saveGlobalConfig((config) => {
@@ -227,7 +227,7 @@ function removeBridgePlaceholdersFor(sessionId, storageV5) {
     }, storageV5);
   });
 }
-//@ chunk-4cm44bmp.js:22083-22448 placement
+//@ chunk-56msakfz.js:22268-22633 placement
 /**
  * 把属于当前会话的桥接占位记录标记为已使用（usedAt）。
  */
@@ -257,18 +257,18 @@ function markBridgePlaceholderUsed(sessionId, storageV5) {
     });
   });
 }
-//@ chunk-4cm44bmp.js:22448-22486 placement
+//@ chunk-56msakfz.js:22633-22671 placement
 function sameSessionBody(leftId, rightId) {
   return sessionIdBody(leftId) === sessionIdBody(rightId);
 }
-//@ chunk-4cm44bmp.js:22486-22576 placement
+//@ chunk-56msakfz.js:22671-22761 placement
 async function isProcessGoneOrRestarted(placeholder) {
   if (isProcessProvablyGone(placeholder.pid)) return true;
   return (
     isProcessRunning(placeholder.pid) && !(await isSameProcessAsync(placeholder.pid, placeholder.procStart))
   );
 }
-//@ chunk-4cm44bmp.js:22576-22733 placement
+//@ chunk-56msakfz.js:22761-22918 placement
 function isFinalArchiveOutcome(outcome) {
   if (outcome === "invalid" || outcome === "skipped_superseded" || outcome === "skipped_owner_changed")
     return true;
@@ -276,7 +276,7 @@ function isFinalArchiveOutcome(outcome) {
     typeof outcome === "number" && outcome < 500 && outcome !== 401 && outcome !== 408 && outcome !== 429
   );
 }
-//@ chunk-4cm44bmp.js:22733-22889 placement
+//@ chunk-56msakfz.js:22918-23074 placement
 function toComparableTimestamp(timestamp) {
   if (!timestamp) return;
   let isoTimestamp = parseIsoTimestamp(timestamp.replace(/\.\d+/, ""));
@@ -284,7 +284,7 @@ function toComparableTimestamp(timestamp) {
   let fraction = /\.(\d+)/.exec(timestamp)?.[1] ?? "";
   return `${isoTimestamp}.${fraction.replace(/0+$/, "")}`;
 }
-//@ chunk-4cm44bmp.js:22889-24085 placement
+//@ chunk-56msakfz.js:23074-24270 placement
 /**
  * 判断一个占位记录是否该删除：进程仍活着则保留，已使用或服务端会话不存在则删除。
  */
@@ -341,7 +341,7 @@ async function judgeBridgePlaceholder(sessionId, placeholder, options) {
   );
   return "remove";
 }
-//@ chunk-4cm44bmp.js:24085-25199 placement
+//@ chunk-56msakfz.js:24270-25384 placement
 /**
  * 延迟启动一次性的占位记录清理：逐条查询服务端会话状态，删除失效记录并上报 tengu_bridge_placeholder_sweep。
  */
@@ -402,21 +402,20 @@ function startBridgePlaceholderSweep(options) {
     });
   });
 }
-//@ chunk-4cm44bmp.js:25199-25287 placement
+//@ chunk-56msakfz.js:25384-25472 placement
 function logPlaceholderUsedAndRemove(signal) {
   logEvent("tengu_bridge_placeholder_used_session", {
     signal: fromEnum(signal),
   });
   return "remove";
 }
-//@ chunk-4cm44bmp.js:25287-25301 placement
+//@ chunk-56msakfz.js:25472-25486 placement
 var RECENT_USE_THRESHOLD_MS = 120000;
-//@ chunk-4cm44bmp.js:25301-25351 placement
+//@ chunk-56msakfz.js:25486-25536 placement
 function bucketRecentUse(streakMs) {
   return streakMs <= RECENT_USE_THRESHOLD_MS ? lit("le_2m") : lit("gt_2m");
 }
 export {
-  countLiveBridgeProcesses,
   removeBridgePlaceholdersFor,
   recordBridgePlaceholder,
   startBridgePlaceholderSweep,
@@ -430,4 +429,5 @@ export {
   OWNER_REMINT_CAP,
   markBridgePlaceholderUsed,
   isFinalArchiveOutcome,
+  countLiveBridgeProcesses,
 };

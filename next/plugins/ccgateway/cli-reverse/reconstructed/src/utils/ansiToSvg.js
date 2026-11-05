@@ -3,12 +3,12 @@
  *
  * 把 ANSI 文本渲染为 SVG（解析 SGR、256 色，light/dark 主题）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ansiToSvg.ts
- * pieces: chunk-t6e3jxy0.js (3)
+ * pieces: chunk-h0kck2eh.js (3)
  * attribution: affinity 1, fingerprint 1, callgraph-fingerprint 1
  */
-//@ chunk-t6e3jxy0.js:366-764 affinity (2.1.88 match: SETTLED_GREY, 1)
+//@ chunk-h0kck2eh.js:394-792 affinity (2.1.88 match: SETTLED_GREY, 1)
 var ANSI_FG_RGB = {
   30: {
     r: 0,
@@ -101,7 +101,7 @@ var DEFAULT_BG_RGB = {
   g: 30,
   b: 30,
 };
-//@ chunk-t6e3jxy0.js:764-1679 fingerprint (2.1.88 match: parseAnsi, 1)
+//@ chunk-h0kck2eh.js:792-1707 fingerprint (2.1.88 match: parseAnsi, 1)
 function parseAnsi(text) {
   let lines = [];
   let rawLines = text.split(`
@@ -188,7 +188,7 @@ function parseAnsi(text) {
   }
   return lines;
 }
-//@ chunk-t6e3jxy0.js:1679-2159 callgraph-fingerprint (2.1.88 match: get256Color, 1)
+//@ chunk-h0kck2eh.js:1707-2187 callgraph-fingerprint (2.1.88 match: get256Color, 1)
 function get256Color(index) {
   if (index < 16)
     return (

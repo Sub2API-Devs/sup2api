@@ -3,9 +3,9 @@
  *
  * auto 模式不可用时（回退到 default）的通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useAutoModeUnavailableNotification.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { getIsRemoteMode } from "../../bootstrap/state.js";
@@ -14,7 +14,7 @@ import {
   getAutoModeUnavailableNotification,
 } from "../../utils/permissions/permissionSetup.js";
 
-//@ chunk-18hwfzwa.js:1756430-1756892 fingerprint (2.1.88 match: useAutoModeUnavailableNotification, 0.739)
+//@ chunk-czq1j3j2.js:1803691-1804153 fingerprint (2.1.88 match: useAutoModeUnavailableNotification, 0.74)
 var useAutoModeUnavailableNotification = {
   id: "auto-mode-unavailable",
   deps: (noticeState) => [

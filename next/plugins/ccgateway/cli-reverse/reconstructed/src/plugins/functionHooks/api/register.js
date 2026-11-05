@@ -3,9 +3,9 @@
  *
  * 函数钩子 register()/on()/.catch() 注册流程（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (18)
  * attribution: placement 18
  */
 import {
@@ -39,7 +39,7 @@ import { createInterfaceHost } from "./interfaces.js";
 import { MCP_OPS } from "./agentToolOps.js";
 import { getRegisterExport } from "./operations.js";
 
-//@ chunk-4121qate.js:296923-297166 placement
+//@ chunk-j8f885h1.js:278237-278480 placement
 /**
  * 登记一条 on(pattern, hook) 子句；有 matcher 时先按匹配到的每个事件校验 matcher，不合法抛 HooksError。
  */
@@ -57,7 +57,7 @@ function addHookClause(state, clause) {
   }
   state.clauses = [...state.clauses, clause];
 }
-//@ chunk-4121qate.js:297166-297329 placement
+//@ chunk-j8f885h1.js:278480-278643 placement
 function createClauseRunner({ engine, interfaces, invoke }, { pattern, hook }, event) {
   let isEngineCreate = event === "engine.create";
   let patternText = isEventPattern(pattern) ? pattern : undefined;
@@ -65,7 +65,7 @@ function createClauseRunner({ engine, interfaces, invoke }, { pattern, hook }, e
     ? interfaces.wrap(hook, patternText)
     : async (args, ctx) => await invoke(hook, [engine, args, ctx]);
 }
-//@ chunk-4121qate.js:297329-297504 placement
+//@ chunk-j8f885h1.js:278643-278818 placement
 function createClauseCatcher({ engine, invoke, stamped }, clause, event) {
   let { matcher } = clause;
   let catchHook = clause.catch;
@@ -75,7 +75,7 @@ function createClauseCatcher({ engine, invoke, stamped }, clause, event) {
       ? await invoke(catchHook, [engine, args, ctx])
       : undefined;
 }
-//@ chunk-4121qate.js:297504-297678 placement
+//@ chunk-j8f885h1.js:278818-278992 placement
 var hasMatchingCatch = (registrationState, { event, e, leftOut }) =>
   registrationState.clauses.some(
     (clause, index) =>
@@ -85,12 +85,12 @@ var hasMatchingCatch = (registrationState, { event, e, leftOut }) =>
       (clause.matcher === undefined ||
         registrationState.stamped(() => matchesRegExpMatcher(clause.matcher, e, lookupPathTable(event)))),
   );
-//@ chunk-4121qate.js:297678-297692 placement
+//@ chunk-j8f885h1.js:278992-279006 placement
 /**
  * 原样返回
  */
 var passThroughFn = (value) => value;
-//@ chunk-4121qate.js:297692-297882 placement
+//@ chunk-j8f885h1.js:279006-279196 placement
 var createPassedHookCall = (wrapMethod, ctx, rest) =>
   freezeHookCall({
     call: wrapMethod((value) => callNextWith(value, ctx, rest)),
@@ -103,7 +103,7 @@ var createPassedHookCall = (wrapMethod, ctx, rest) =>
     budget: () => ctx.budget,
     caught: pickErrorState(ctx),
   });
-//@ chunk-4121qate.js:297882-297947 placement
+//@ chunk-j8f885h1.js:279196-279261 placement
 /**
  * 取答案或抛错误
  */
@@ -111,7 +111,7 @@ function unwrapAnswer(answer) {
   if (answer.error !== undefined) throw answer.error;
   return answer.answer;
 }
-//@ chunk-4121qate.js:297947-298809 placement
+//@ chunk-j8f885h1.js:279261-280123 placement
 /**
  * 把外层与内层子句组合为一个处理器：外层的 next 进入内层；catch 先问外层（未处理且未调用 next 时再问内层）；matcher 两者都有才保留。
  */
@@ -191,7 +191,7 @@ function composeClauses({ pluginName, wrapMethod }, { outer, inner, pattern }) {
         }),
   };
 }
-//@ chunk-4121qate.js:298809-299103 placement
+//@ chunk-j8f885h1.js:280123-280417 placement
 /**
  * matcher 不匹配时直接走 next；前若干次不匹配时检查是否因路径不存在等原因，按路径去重打印一次警告。
  */
@@ -213,7 +213,7 @@ function createMatcherGate(state, { matcher, event, run }) {
     return next(args);
   };
 }
-//@ chunk-4121qate.js:299103-299407 placement
+//@ chunk-j8f885h1.js:280417-280721 placement
 /**
  * 为某事件把一条子句构造成 {run, matcher?, catch?}：engine.create 走接口包装，其他事件在 framed(registration) 下调用钩子。
  */
@@ -246,7 +246,7 @@ function buildClauseHandler(state, { clause, event, registration }) {
         catch: framedCatch,
       };
 }
-//@ chunk-4121qate.js:299407-299630 placement
+//@ chunk-j8f885h1.js:280721-280944 placement
 /**
  * 把某事件匹配到的全部子句（排除 leftOut）依次组合成一个处理器。
  */
@@ -270,7 +270,7 @@ function composeEventHandler(state, event, leftOut) {
   }
   return composed;
 }
-//@ chunk-4121qate.js:299630-299937 placement
+//@ chunk-j8f885h1.js:280944-281251 placement
 /**
  * 为流式事件的注册子句构造处理器：按 matcher 过滤，迭代钩子返回的异步生成器并逐块转发。
  */
@@ -293,7 +293,7 @@ function buildStreamClause(state, { clause, registration }) {
     }),
   };
 }
-//@ chunk-4121qate.js:299937-300164 placement
+//@ chunk-j8f885h1.js:281251-281478 placement
 var listStreamClauses = (state, event, leftOut) =>
   state.clauses.flatMap((clause, index) => {
     if (!(matchesEventForPlugin(clause.pattern, event, state) && !leftOut.includes(index))) return [];
@@ -316,7 +316,7 @@ var listStreamClauses = (state, event, leftOut) =>
           },
         ];
   });
-//@ chunk-4121qate.js:300164-300869 placement
+//@ chunk-j8f885h1.js:281478-282183 placement
 /**
  * 为一个 hooks 模块建立注册状态：子句列表、按 (事件, 排除项) 缓存组合处理器的 registrations（get/catches/streamClauses/registered），以及调用、迭代、包装等运行时函数。
  */
@@ -370,7 +370,7 @@ function createRegistrationState(
   });
   return state;
 }
-//@ chunk-4121qate.js:300869-301228 placement
+//@ chunk-j8f885h1.js:282183-282542 placement
 /**
  * 校验钩子形态与事件是否匹配：流式事件要求 async generator，非流式事件不接受 generator；不匹配返回说明文本。
  */
@@ -383,7 +383,7 @@ function checkHookShape(state, event, hook) {
     ? `takes ($, e, next) => result, not an async generator: only a streaming event named as itself (${STREAMING_EVENTS.join(", ")}) takes the generator form`
     : undefined;
 }
-//@ chunk-4121qate.js:301228-301800 placement
+//@ chunk-j8f885h1.js:282542-283114 placement
 function hookCatch(state, clause) {
   let { pattern } = clause;
   let label = `${state.pluginName}: on("${pattern}").catch()`;
@@ -404,7 +404,7 @@ function hookCatch(state, clause) {
     }),
   });
 }
-//@ chunk-4121qate.js:301800-302563 placement
+//@ chunk-j8f885h1.js:283114-283877 placement
 var registerHook = (state) =>
   nullPrototypeFunction(
     state.wrapMethod((pattern, ...rest) => {
@@ -439,7 +439,7 @@ var registerHook = (state) =>
       return hookCatch(state, secondMatcher);
     }),
   );
-//@ chunk-4121qate.js:302563-303344 placement
+//@ chunk-j8f885h1.js:283877-284658 placement
 /**
  * 加载一个 hooks 模块并执行其 register(on, options)：构建插件 $（plugin 信息 + 核心方法表 + 接口宿主），返回 registrations、finalize、callInterface 与 dispose（取消定时器）。
  */

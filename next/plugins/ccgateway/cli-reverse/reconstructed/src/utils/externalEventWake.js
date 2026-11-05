@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。解析外部事件唤醒文本（<wake reason="external-event">），只接受字段合法的记录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-71rdrfpa.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5np6xrmp.js (14)
  * attribution: placement 14
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -21,13 +21,13 @@ import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTeleme
 import { jsonParse } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-71rdrfpa.js:346-386 placement
+//@ chunk-5np6xrmp.js:346-386 placement
 var EXTERNAL_EVENT_WAKE_PREFIX = '<wake reason="external-event"';
-//@ chunk-71rdrfpa.js:386-427 placement
+//@ chunk-5np6xrmp.js:386-427 placement
 function isExternalEventWakeText(text) {
   return text.startsWith(EXTERNAL_EVENT_WAKE_PREFIX);
 }
-//@ chunk-71rdrfpa.js:427-642 placement
+//@ chunk-5np6xrmp.js:427-642 placement
 /**
  * 唤醒文本字段正则
  */
@@ -38,7 +38,7 @@ var WAKE_ATTR_RE;
 var WAKE_TOP_LEVEL_KEYS;
 var WAKE_EVENT_KEYS;
 var ExternalEventWakeSchema;
-deferInit("chunk-71rdrfpa.js:427", () => {
+deferInit("chunk-5np6xrmp.js:427", () => {
   WAKE_TEXT_PATTERNS = /^[a-z0-9-]{1,32}$/;
   EVENT_KIND_PATTERN = /^[a-z0-9_.-]{1,64}$/;
   MAX_WAKE_HEADER_LENGTH = 2048;
@@ -47,11 +47,11 @@ deferInit("chunk-71rdrfpa.js:427", () => {
   WAKE_EVENT_KEYS = new Set(["source", "kind", "from", "trust", "untrusted-keys"]);
   ExternalEventWakeSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-71rdrfpa.js:642-677 placement
+//@ chunk-5np6xrmp.js:642-677 placement
 function isBlank(text) {
   return text.trim() === "";
 }
-//@ chunk-71rdrfpa.js:677-1758 placement
+//@ chunk-5np6xrmp.js:677-1758 placement
 /**
  * 解析外部事件唤醒文本（<wake reason="external-event">），只接受字段合法的记录。
  */
@@ -112,14 +112,14 @@ function parseExternalEventWake(text) {
     untrustedKeys,
   };
 }
-//@ chunk-71rdrfpa.js:1758-2132 placement
+//@ chunk-5np6xrmp.js:1758-2132 placement
 /**
  * 外部事件唤醒 schema
  */
 var SAFE_WAKE_FIELD_RE; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var EVENT_FIELD_RE;
 var externalEventWakeZodSchema;
-deferInit("chunk-71rdrfpa.js:1758", () => {
+deferInit("chunk-5np6xrmp.js:1758", () => {
   SAFE_WAKE_FIELD_RE = /^[^"'<>&\s]{0,256}$/;
   EVENT_FIELD_RE = /^[^"'<>&\s,]{1,256}$/;
   externalEventWakeZodSchema = DoctorLazy(() =>
@@ -142,7 +142,7 @@ deferInit("chunk-71rdrfpa.js:1758", () => {
     }),
   );
 });
-//@ chunk-71rdrfpa.js:2132-2615 placement
+//@ chunk-5np6xrmp.js:2132-2615 placement
 function resolveExternalEventWake(text, record) {
   if (!isExternalEventWakeText(text)) return null;
   let parseResult = externalEventWakeZodSchema().safeParse(record);
@@ -170,16 +170,16 @@ function resolveExternalEventWake(text, record) {
     untrustedKeys: event.untrusted_keys ?? [],
   };
 }
-//@ chunk-71rdrfpa.js:2615-2660 placement
+//@ chunk-5np6xrmp.js:2615-2660 placement
 var externalEventReasonSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-71rdrfpa.js:2615", () => {
+deferInit("chunk-5np6xrmp.js:2615", () => {
   externalEventReasonSchema = DoctorLazy(() =>
     objectSchema({
       reason: literal("external-event"),
     }),
   );
 });
-//@ chunk-71rdrfpa.js:2660-3150 placement
+//@ chunk-5np6xrmp.js:2660-3150 placement
 /**
  * 渲染外部事件唤醒文本
  */
@@ -204,7 +204,7 @@ function renderExternalEventWake({ current_time: currentTime, event }) {
 </wake>`
   );
 }
-//@ chunk-71rdrfpa.js:3150-3364 placement
+//@ chunk-5np6xrmp.js:3150-3364 placement
 /**
  * 解析事件 JSON
  */
@@ -221,19 +221,19 @@ function parseEventJson(text) {
   let parseResult = ExternalEventWakeSchema().safeParse(parsed);
   return parseResult.success ? parseResult.data : null;
 }
-//@ chunk-71rdrfpa.js:3364-3443 placement
+//@ chunk-5np6xrmp.js:3364-3443 placement
 function isSessionInboxWake(wake) {
   return wake.source === "session-inbox" && wake.kind === "message.received";
 }
-//@ chunk-71rdrfpa.js:3443-3525 placement
+//@ chunk-5np6xrmp.js:3443-3525 placement
 function isServerInboxDelivery(delivery) {
   return delivery?.kind === "task-notification" && delivery.subkind === "session-inbox";
 }
-//@ chunk-71rdrfpa.js:3525-3609 placement
+//@ chunk-5np6xrmp.js:3525-3609 placement
 function isOwnerInboxNotice(wake) {
   return isSessionInboxWake(wake) && wake.from === "rc_owner" && wake.data.sender_kind === "rc_owner";
 }
-//@ chunk-71rdrfpa.js:3609-3735 placement
+//@ chunk-5np6xrmp.js:3609-3735 placement
 function ownerInboxNoticeFileId(delivery, text) {
   if (!isServerInboxDelivery(delivery)) return;
   let externalEventWake = parseExternalEventWake(text);
@@ -246,9 +246,9 @@ function ownerInboxNoticeFileId(delivery, text) {
 export {
   parseExternalEventWake,
   isSessionInboxWake,
+  ownerInboxNoticeFileId,
   isOwnerInboxNotice,
   isServerInboxDelivery,
-  ownerInboxNoticeFileId,
   EXTERNAL_EVENT_WAKE_PREFIX,
   isExternalEventWakeText,
   resolveExternalEventWake,

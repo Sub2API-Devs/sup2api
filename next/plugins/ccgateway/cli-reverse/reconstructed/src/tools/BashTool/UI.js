@@ -3,13 +3,13 @@
  *
  * Bash 工具的渲染函数：Ctrl+B 转后台提示、进度消息、结果与错误消息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/UI.tsx
- * pieces: chunk-8ndmcarc.js (2), chunk-hkh7sq9y.js (1), chunk-s06523pk.js (8)
- * attribution: fingerprint 2, shared-adjacent 1, affinity 1, facade-exports 7
+ * pieces: chunk-4hpb3crc.js (1), chunk-p5q1xrhb.js (2), chunk-sac13h7c.js (8)
+ * attribution: fingerprint 1, placement 2, affinity 1, facade-exports 7
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useSetVoiceState } from "../../context/voice.js";
+import { useTaskFramework } from "../../context/voice.js";
 import { backgroundAll } from "../../tasks/LocalShellTask/LocalShellTask.js";
 import { BackgroundTaskHint, ToolProgressHintNamespace } from "../../components/ToolProgressHint.js";
 import { useShortcutDisplay } from "../../keybindings/useShortcutDisplay.js";
@@ -36,10 +36,10 @@ import { CWD_RESET_WARNING_RE } from "./utils.js";
 import { renderToolUseProgressMessage_3 } from "../SkillTool/UI.js";
 import { RejectedToolUseMessage } from "../../components/messages/UserToolResultMessage/RejectedToolUseMessage.js";
 
-//@ chunk-s06523pk.js:2147-2161 affinity
+//@ chunk-sac13h7c.js:2147-2161 affinity
 var MAX_PREVIEW_LINES = 2;
 var MAX_PREVIEW_CHARS = 160;
-//@ chunk-s06523pk.js:2161-2876 facade-exports (2.1.88 match: BackgroundHint, 0.617)
+//@ chunk-sac13h7c.js:2161-2876 facade-exports (2.1.88 match: BackgroundHint, 0.626)
 /**
  * Bash 运行中的"按 Ctrl+B 转后台"提示（tmux 下显示 ctrl+b ctrl+b）；非交互或后台任务禁用时不显示；按键触发 onBackground。
  */
@@ -47,7 +47,7 @@ function BackgroundHint(props) {
   let $ = useMemoCache(10);
   let { toolUseId, keyOnly, onBackground } = props;
   let isKeyOnly = keyOnly === undefined ? false : keyOnly;
-  let store = useSetVoiceState();
+  let store = useTaskFramework();
   let onBackgroundClick;
   if ($[0] !== onBackground || $[1] !== store) {
     onBackgroundClick = () => {
@@ -110,7 +110,7 @@ function BackgroundHint(props) {
   } else element = $[9];
   return element;
 }
-//@ chunk-s06523pk.js:2876-3201 facade-exports (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-sac13h7c.js:2876-3201 facade-exports (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage(input, { verbose, theme: _theme }) {
   let { command } = input;
   if (!command) return null;
@@ -139,7 +139,7 @@ function renderToolUseMessage(input, { verbose, theme: _theme }) {
   }
   return command;
 }
-//@ chunk-s06523pk.js:3201-3526 facade-exports (2.1.88 match: renderToolUseProgressMessage, 0.963)
+//@ chunk-sac13h7c.js:3201-3510 facade-exports (2.1.88 match: renderToolUseProgressMessage, 0.922)
 function renderToolUseProgressMessage(
   progressMessagesForMessage,
   { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
@@ -154,15 +154,14 @@ function renderToolUseProgressMessage(
     totalLines: data.totalLines,
     totalBytes: data.totalBytes,
     timeoutMs: data.timeoutMs,
-    taskId: data.taskId,
     verbose,
   });
 }
-//@ chunk-s06523pk.js:3526-3554 facade-exports
+//@ chunk-sac13h7c.js:3510-3538 facade-exports
 function renderToolUseQueuedMessage() {
   return WaitingLabel();
 }
-//@ chunk-s06523pk.js:3554-3807 facade-exports (2.1.88 match: renderToolResultMessage, 0.829)
+//@ chunk-sac13h7c.js:3538-3791 facade-exports (2.1.88 match: renderToolResultMessage, 0.83)
 function renderToolResultMessage(
   content,
   progressMessagesForMessage,
@@ -181,7 +180,7 @@ function renderToolResultMessage(
     command,
   });
 }
-//@ chunk-s06523pk.js:3807-3906 facade-exports (2.1.88 match: renderToolUseErrorMessage, 1)
+//@ chunk-sac13h7c.js:3791-3890 facade-exports (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage(
   result,
   { verbose, progressMessagesForMessage: _progressMessagesForMessage, tools: _tools },
@@ -191,7 +190,7 @@ function renderToolUseErrorMessage(
     verbose,
   });
 }
-//@ chunk-s06523pk.js:3906-4058 facade-exports
+//@ chunk-sac13h7c.js:3890-4042 facade-exports
 function isResultTruncated(result, { columns }) {
   if (result.isImage) return false;
   return (
@@ -204,7 +203,7 @@ function isResultTruncated(result, { columns }) {
     )
   );
 }
-//@ chunk-hkh7sq9y.js:5285-5608 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.963)
+//@ chunk-4hpb3crc.js:5650-5957 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.922)
 function renderToolUseProgressMessage_2(
   progressMessagesForMessage,
   { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
@@ -219,11 +218,10 @@ function renderToolUseProgressMessage_2(
     totalLines: data.totalLines,
     totalBytes: data.totalBytes,
     timeoutMs: data.timeoutMs,
-    taskId: data.taskId,
     verbose,
   });
 }
-//@ chunk-8ndmcarc.js:17835-17957 fingerprint (2.1.88 match: renderToolUseErrorMessage, 1)
+//@ chunk-p5q1xrhb.js:19068-19191 placement (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage_2(result, { progressMessagesForMessage, tools, verbose }) {
   return jsxProd_default_2(Fragment, {
     children: [
@@ -235,7 +233,7 @@ function renderToolUseErrorMessage_2(result, { progressMessagesForMessage, tools
     ],
   });
 }
-//@ chunk-8ndmcarc.js:17957-18097 shared-adjacent (2.1.88 match: renderToolUseErrorMessage, 1)
+//@ chunk-p5q1xrhb.js:19191-19332 placement (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage_3(result, { progressMessagesForMessage, tools, verbose }) {
   return jsxProd_default_2(Fragment, {
     children: [

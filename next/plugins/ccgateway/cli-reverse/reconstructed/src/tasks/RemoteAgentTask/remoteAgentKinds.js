@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：启动时捕获的 CCR 环境（会话 ingress URL、桥接 MCP 载体、本会话 id、是否自托管 runner 子进程）；启动 CCR 环境单例。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2vae0cjf.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ex2q6ads.js (7)
+ * attribution: placement 6, affinity 1
  */
 import { isInCloudSession } from "./RemoteAgentTask.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { isSelfAddressableSessionId } from "../../bridge/sessionIdCompat.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2vae0cjf.js:263-775 placement
+//@ chunk-ex2q6ads.js:263-904 placement
 /**
  * 启动时捕获的 CCR 环境（会话 ingress URL、桥接 MCP 载体、本会话 id、是否自托管 runner 子进程）。
  */
@@ -23,6 +23,7 @@ class StartupCcrEnvironment {
   carrier = bridgeMcpCarrierRole();
   ownSessionIds = selfSessionIds();
   selfHostedRunnerChild = isSelfHostedRunnerChild();
+  toolsGrantedRunnerChild = kind();
   get atStartup() {
     return this.captured;
   }
@@ -34,6 +35,9 @@ class StartupCcrEnvironment {
   }
   get isSelfHostedRunnerChild() {
     return this.selfHostedRunnerChild;
+  }
+  get isToolsGrantedRunnerChild() {
+    return this.toolsGrantedRunnerChild;
   }
   get bridgeCarrier() {
     return this.carrier;
@@ -47,24 +51,25 @@ class StartupCcrEnvironment {
     this.carrier = bridgeMcpCarrierRole();
     this.ownSessionIds = selfSessionIds();
     this.selfHostedRunnerChild = isSelfHostedRunnerChild();
+    this.toolsGrantedRunnerChild = kind();
   }
 }
-//@ chunk-2vae0cjf.js:775-788 placement
+//@ chunk-ex2q6ads.js:904-917 placement
 /**
  * 启动 CCR 环境单例。
  */
 var startupCcrEnv; // deferred: uses StartupCcrEnvironment of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2vae0cjf.js:775", () => {
+deferInit("chunk-ex2q6ads.js:904", () => {
   startupCcrEnv = new StartupCcrEnvironment();
 });
-//@ chunk-2vae0cjf.js:788-872 placement
+//@ chunk-ex2q6ads.js:917-1001 placement
 /**
  * 取会话入口地址，未设置时回退到 ANTHROPIC_BASE_URL。
  */
 function sessionIngressUrl() {
   return process.env.SESSION_INGRESS_URL ?? process.env.ANTHROPIC_BASE_URL;
 }
-//@ chunk-2vae0cjf.js:933-1200 placement
+//@ chunk-ex2q6ads.js:1062-1329 placement
 function bridgeMcpCarrierRole() {
   let envClaudeCodeBridgeMcpCarrier = process.env.CLAUDE_CODE_BRIDGE_MCP_CARRIER;
   if (envClaudeCodeBridgeMcpCarrier === "1" || !envClaudeCodeBridgeMcpCarrier)
@@ -75,18 +80,22 @@ function bridgeMcpCarrierRole() {
   }
   return "descendant";
 }
-//@ chunk-2vae0cjf.js:1200-1329 placement
+//@ chunk-ex2q6ads.js:1329-1458 placement
 function selfSessionIds() {
   return [process.env.CLAUDE_CODE_REMOTE_SESSION_ID, process.env.CLAUDE_CODE_SESSION_ID].filter(
     (sessionId) => sessionId !== undefined && isSelfAddressableSessionId(sessionId),
   );
 }
-//@ chunk-2vae0cjf.js:1329-1500 placement
+//@ chunk-ex2q6ads.js:1458-1629 placement
 function isSelfHostedRunnerChild() {
   return (
     isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) &&
     process.env.CLAUDE_CODE_ENVIRONMENT_KIND === "byoc" &&
     process.env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE === "self_hosted"
   );
+}
+//@ chunk-ex2q6ads.js:1629-1651 affinity
+function kind() {
+  return false;
 }
 export { startupCcrEnv };

@@ -3,13 +3,14 @@
  *
  * 2.1.316 新增：钩子输入中的路径收集
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (10)
  * attribution: placement 10
  */
 import { basename, isAbsolute, resolve, dirname } from "path";
 import { sanitizeDisplayText } from "../../resultError.js";
+import { hookTypeLabel } from "../hooksSettings.js";
 import {
   unescapeJsonPointerPath,
   isPathLikeFieldName,
@@ -27,7 +28,7 @@ import {
 import { getErrnoCode } from "../../errors.js";
 import { isPathUnderForPlatform } from "../hookCommandAnalysis.js";
 
-//@ chunk-mthxbav8.js:19107-19330 placement
+//@ chunk-4z1ntdgk.js:19477-19700 placement
 function hookDisplayHost(hook, analysis) {
   if (hook.type === "http")
     try {
@@ -45,22 +46,35 @@ function hookDisplayHost(hook, analysis) {
     }) || "hook"
   );
 }
-//@ chunk-mthxbav8.js:19330-19516 placement
-function hookWireLabel(hook, fallbackLabel, options) {
-  if (options.wireLabel === "basename") return fallbackLabel;
-  if (hook.type === "http")
+//@ chunk-4z1ntdgk.js:19700-20003 placement
+function hookWireLabel(hook, target, options) {
+  let defaultLabel = hookTypeLabel(hook);
+  if (options.wireLabel === "command") {
+    if (hook.type === "command")
+      return sanitizeDisplayText(hook.command, {
+        maxCodeUnits: 200,
+      });
     try {
       return sanitizeDisplayText(new URL(hook.url).origin, {
         maxCodeUnits: 200,
       });
     } catch {
-      return fallbackLabel;
+      return defaultLabel;
     }
-  return sanitizeDisplayText(hook.command, {
-    maxCodeUnits: 200,
-  });
+  }
+  switch (target?.kind) {
+    case "script":
+      return (
+        sanitizeDisplayText(basename(target.rawPath), {
+          maxCodeUnits: 64,
+        }) || defaultLabel
+      );
+    case "opaque":
+    case undefined:
+      return defaultLabel;
+  }
 }
-//@ chunk-mthxbav8.js:19516-19631 placement
+//@ chunk-4z1ntdgk.js:20003-20118 placement
 function withTranscriptPath(input, transcriptPath) {
   let withPath = {
     ...input,
@@ -73,18 +87,18 @@ function withTranscriptPath(input, transcriptPath) {
       }
     : withPath;
 }
-//@ chunk-mthxbav8.js:19631-19683 placement
+//@ chunk-4z1ntdgk.js:20118-20170 placement
 function isObjectLike(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-mthxbav8.js:19683-19749 placement
+//@ chunk-4z1ntdgk.js:20170-20236 placement
 function getAtPath(root, pointer) {
   return unescapeJsonPointerPath(pointer).reduce(
     (acc, segment) => (isObjectLike(acc) ? acc[segment] : undefined),
     root,
   );
 }
-//@ chunk-mthxbav8.js:19749-20884 placement
+//@ chunk-4z1ntdgk.js:20236-21371 placement
 /**
  * 遍历钩子输入 JSON，收集其中看起来像路径的字符串（有数量与深度上限）。
  */
@@ -156,7 +170,7 @@ function collectInputPaths(input, toolPathFields) {
     });
   return pointers;
 }
-//@ chunk-mthxbav8.js:20884-21180 placement
+//@ chunk-4z1ntdgk.js:21371-21667 placement
 async function realpathWithLinks(path, deps) {
   let current = path;
   let missingParts = [];
@@ -178,7 +192,7 @@ async function realpathWithLinks(path, deps) {
     }
   }
 }
-//@ chunk-mthxbav8.js:21180-21438 placement
+//@ chunk-4z1ntdgk.js:21667-21925 placement
 async function filterPathsInRoots(pointers, input, root, deps) {
   let isInside = (realPath) =>
     realPath !== null &&
@@ -194,7 +208,7 @@ async function filterPathsInRoots(pointers, input, root, deps) {
     )
   ).filter((pointer) => pointer !== null);
 }
-//@ chunk-mthxbav8.js:21438-22021 placement
+//@ chunk-4z1ntdgk.js:21925-22508 placement
 function createSemaphore(deps) {
   let active = 0;
   let waiters = [];
@@ -245,7 +259,7 @@ function createSemaphore(deps) {
     },
   };
 }
-//@ chunk-mthxbav8.js:22021-22078 placement
+//@ chunk-4z1ntdgk.js:22508-22565 placement
 function once(callback) {
   let called = false;
   return () => {

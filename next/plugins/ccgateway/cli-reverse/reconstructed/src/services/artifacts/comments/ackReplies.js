@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论自动响应的确认回复模板与生成
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (6)
  * attribution: placement 6
  */
 import {
@@ -18,9 +18,9 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.
 import { evaluateAskingNoHost, checkRuleBasedPermissions } from "../../../utils/permissions/permissions.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:52643-52718 placement
+//@ chunk-c0pq6qyx.js:48552-48627 placement
 var FIXED_ACK_TEXT = "I\u2019m on it. I\u2019ll reply here once I\u2019ve taken a look.";
-//@ chunk-9tgt55am.js:52718-52829 placement
+//@ chunk-c0pq6qyx.js:48627-48738 placement
 /**
  * 评论自动回复是否使用固定的快速确认回复：自动回复开启时看 CLAUDE_CODE_ARTIFACT_COMMENT_FAST_ACK_FIXED，未设置时看 tengu_gorse_sill 开关。
  */
@@ -31,13 +31,13 @@ function isFixedFastAckEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_gorse_sill", false)
   );
 }
-//@ chunk-9tgt55am.js:52829-53486 placement
+//@ chunk-c0pq6qyx.js:48738-49395 placement
 /**
  * 自动回复确认语的模板表（7 条，标出是否随改稿）与冷却时间 2 s、固定确认文案、两条模型系统提示。
  */
 var ACK_REPLY_TEMPLATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ACK_COOLDOWN_MS;
-deferInit("chunk-9tgt55am.js:52829", () => {
+deferInit("chunk-c0pq6qyx.js:48738", () => {
   ACK_REPLY_TEMPLATES = Object.freeze(
     [
       {
@@ -72,12 +72,12 @@ deferInit("chunk-9tgt55am.js:52829", () => {
   );
   ACK_COOLDOWN_MS = 2000;
 });
-//@ chunk-9tgt55am.js:54406-54458 placement
+//@ chunk-c0pq6qyx.js:50314-50366 placement
 var ACK_EDIT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9tgt55am.js:54406", () => {
+deferInit("chunk-c0pq6qyx.js:50314", () => {
   ACK_EDIT_KEYS = new Set(["action", "url", "thread_id", "text"]);
 });
-//@ chunk-9tgt55am.js:54458-55194 placement
+//@ chunk-c0pq6qyx.js:50366-51102 placement
 function makeFixedAckPermissionProbe(verdictPremise, profile, context) {
   return async (tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId) => {
     let baseDecision = () => {
@@ -135,7 +135,7 @@ function makeFixedAckPermissionProbe(verdictPremise, profile, context) {
     };
   };
 }
-//@ chunk-9tgt55am.js:55194-56036 placement
+//@ chunk-c0pq6qyx.js:51102-51944 placement
 /**
  * 评论自动回复的两段系统提示（写一句确认 / 从列表选一句）与纯文本、不得描述内部机制的附加要求。
  */

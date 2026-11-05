@@ -3,14 +3,15 @@
  *
  * 首次使用时提示启用 Remote Control（连接到 claude.ai）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/RemoteCallout.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-drvxna8v.js (1)
+ * pieces: chunk-czq1j3j2.js (1), chunk-vax9bfta.js (1), chunk-yar0v238.js (1)
  * attribution: fingerprint 2, placement 1
  */
 import { withHideWhile } from "./dialogs/dialogRequests.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, _enum } from "../../vendor/zod/v4/classic/schemas.js";
+import { getGlobalConfig } from "../utils/config.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useConfirmArmed } from "./design-system/ConfirmSelect.js";
 import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../hooks/useRecentInputGuard.js";
@@ -22,15 +23,14 @@ import {
 import { Box, Text } from "../ink/components/Text.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
-import { getGlobalConfig } from "../utils/config.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-drvxna8v.js:299-453 placement
+//@ chunk-yar0v238.js:299-454 placement
 /**
  * Remote Control 首次提示对话框的定义（结果 enable/dismiss/cancelled，面板或草稿打开时隐藏）。
  */
 var REMOTE_CALLOUT_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-drvxna8v.js:299", () => {
+deferInit("chunk-yar0v238.js:299", () => {
   REMOTE_CALLOUT_DIALOG = withHideWhile({
     kind: "remote_callout",
     payload: DoctorLazy(() => objectSchema({})),
@@ -39,7 +39,11 @@ deferInit("chunk-drvxna8v.js:299", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-18hwfzwa.js:1195547-1196852 fingerprint (2.1.88 match: RemoteCallout, 0.769)
+//@ chunk-vax9bfta.js:790-832 fingerprint (2.1.88 match: shouldShowRemoteCallout, 0.778)
+function shouldShowRemoteCallout() {
+  return !getGlobalConfig().remoteDialogSeen;
+}
+//@ chunk-czq1j3j2.js:1225754-1227059 fingerprint (2.1.88 match: RemoteCallout, 0.769)
 function RemoteCallout(props) {
   let $ = useMemoCache(12);
   let { onDone, defaultFocusValue } = props;
@@ -131,9 +135,5 @@ function RemoteCallout(props) {
     $[11] = dialogElement;
   } else dialogElement = $[11];
   return dialogElement;
-}
-//@ chunk-18hwfzwa.js:1196852-1196896 fingerprint (2.1.88 match: shouldShowRemoteCallout, 0.779)
-function shouldShowRemoteCallout() {
-  return !getGlobalConfig().remoteDialogSeen;
 }
 export { REMOTE_CALLOUT_DIALOG, shouldShowRemoteCallout, RemoteCallout };

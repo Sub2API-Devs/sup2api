@@ -3,36 +3,30 @@
  *
  * 后台任务/队友视图间的键盘导航（Esc 退出查看等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useBackgroundTaskNavigation.ts
- * pieces: chunk-18hwfzwa.js (2)
- * attribution: fingerprint 2
+ * pieces: chunk-czq1j3j2.js (1)
+ * attribution: fingerprint 1
  */
 import { useAppStoreDirect, useAppState, useSetAppState } from "../state/AppState.js";
-import { useSetVoiceState } from "../context/voice.js";
+import { useTaskFramework } from "../context/voice.js";
 import { useSession } from "../context/session.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { interruptTeammateWork } from "../utils/inProcessTeammateHelpers.js";
 import { isLocalAgent, exitTeammateView } from "../state/teammateViewHelpers.js";
-import {
-  hasCompletedWithFindings,
-  interruptBackgroundSubagent,
-} from "../tasks/LocalAgentTask/LocalAgentTask.js";
+import { hasCompletedWithFindings } from "../components/tasks/RemoteSessionProgress.js";
+import { interruptBackgroundSubagent } from "../tasks/LocalAgentTask/LocalAgentTask.js";
 import { isZincHarborOn } from "../plugins/functionHooks/inputHold.js";
 import { stopTask } from "../components/tasks/stopTask.js";
 
-//@ chunk-18hwfzwa.js:440816-440861 fingerprint (2.1.88 match: stepTeammateSelection, 0.345)
-function stepTeammateSelection(state) {
-  return state.viewSelectionMode;
-}
-//@ chunk-18hwfzwa.js:1438068-1438659 fingerprint (2.1.88 match: useBackgroundTaskNavigation, 0.49)
+//@ chunk-czq1j3j2.js:1478295-1478886 fingerprint (2.1.88 match: useBackgroundTaskNavigation, 0.489)
 function useBackgroundTaskNavigation({ inputOwnsEscape, isTranscriptScreen, isPanelOpen }) {
   let appStoreDirect = useAppStoreDirect();
   let viewSelectionMode = useAppState((state) => state.viewSelectionMode);
   let viewingAgentTaskId = useAppState((state) => state.viewingAgentTaskId);
   let setAppState = useSetAppState();
-  let taskRegistry = useSetVoiceState();
+  let taskRegistry = useTaskFramework();
   let setAppState_2 = useSession();
   let { storageV5 } = useTheme_2();
   return {
@@ -67,4 +61,4 @@ function useBackgroundTaskNavigation({ inputOwnsEscape, isTranscriptScreen, isPa
     handleKeyDownCapture: () => {},
   };
 }
-export { stepTeammateSelection, useBackgroundTaskNavigation };
+export { useBackgroundTaskNavigation };

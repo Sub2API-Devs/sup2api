@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 检查仓库提交的 .claude 设置，拒绝越权的写入范围条目（SELF_HOSTED_RUNNER_CONFINE_REPO_SETTINGS）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (6)
  * attribution: placement 6
  */
 import { realpath, lstat, mkdir } from "fs/promises";
@@ -27,8 +27,8 @@ import { expandPath } from "../../utils/path.js";
 import { readFileChecked, isFileTooLargeError } from "../../utils/fileRead.js";
 import { MAX_SETTINGS_JSON_BYTES } from "../../utils/settings/settings.js";
 import { safeParseJSON } from "../../utils/json.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { patternWithRootFor } from "../../utils/permissions/filesystem.js";
@@ -38,7 +38,7 @@ import {
   resolveSandboxFilesystemPathAt,
 } from "../../utils/sandbox/sandbox-adapter.js";
 
-//@ chunk-hm0ce8vc.js:195214-195571 placement
+//@ chunk-asf5gh8x.js:206284-206641 placement
 class RepoSettingsRejectedError extends Error {
   entry;
   detail;
@@ -50,7 +50,7 @@ class RepoSettingsRejectedError extends Error {
     this.detail = detail;
   }
 }
-//@ chunk-hm0ce8vc.js:195571-203425 placement
+//@ chunk-asf5gh8x.js:206641-214495 placement
 /**
  * 扫描仓库 .claude/settings*.json 等，发现主机特定写入范围条目则拒绝启动（SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED）。
  */
@@ -318,11 +318,8 @@ async function checkRepoCommittedSettings(rootDir, extraDirs, findings) {
       let allow = Array.isArray(permissions?.allow) ? permissions.allow : [];
       for (let rule of allow) {
         if (typeof rule !== "string") continue;
-        let parsedRule = permissionRuleValueFromString(rule);
-        if (
-          ![FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME].includes(parsedRule.toolName)
-        )
-          continue;
+        let parsedRule = parseRuleString(rule);
+        if (![EDIT, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME].includes(parsedRule.toolName)) continue;
         if (parsedRule.ruleContent === undefined) {
           entries.push({
             path: sep,
@@ -461,7 +458,7 @@ async function checkRepoCommittedSettings(rootDir, extraDirs, findings) {
   }
   return entries;
 }
-//@ chunk-hm0ce8vc.js:203425-203810 placement
+//@ chunk-asf5gh8x.js:214495-214880 placement
 /**
  * 会话目录与子进程自动允许写入范围重叠时拒绝启动。
  */
@@ -477,7 +474,7 @@ function checkSessionDirOutsideWriteScope(dirPath, label, childCwd, addDirs) {
       );
   }
 }
-//@ chunk-hm0ce8vc.js:203810-203922 placement
+//@ chunk-asf5gh8x.js:214880-214992 placement
 function resolveInside(basePath, targetPath) {
   let baseResolved = resolve(basePath);
   let targetResolved = isAbsolute(targetPath) ? resolve(targetPath) : resolve(baseResolved, targetPath);
@@ -485,7 +482,7 @@ function resolveInside(basePath, targetPath) {
   if (targetResolved.startsWith(baseResolved + sep)) return targetResolved;
   return null;
 }
-//@ chunk-hm0ce8vc.js:203922-204220 placement
+//@ chunk-asf5gh8x.js:214992-215290 placement
 async function ensureDirsNoSymlinks(basePath, inside) {
   let baseResolved = resolve(basePath);
   let insideResolved = resolve(inside);
@@ -507,7 +504,7 @@ async function ensureDirsNoSymlinks(basePath, inside) {
   }
   return true;
 }
-//@ chunk-hm0ce8vc.js:204220-204328 placement
+//@ chunk-asf5gh8x.js:215290-215398 placement
 async function isRealpathInside(basePath, inside) {
   try {
     let baseReal = await realpath(basePath);

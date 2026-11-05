@@ -1,18 +1,18 @@
 /**
  * @smithy/eventstream-codec/dist-es/splitMessage.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/eventstream-codec@4.2.13..4.2.14
- * pieces: chunk-3cddmtk7.js (2)
+ * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Crc32 } from "../../../@aws-crypto/crc32/build/module/index.js";
 
-//@ chunk-3cddmtk7.js:8241-8270 esm-layout
+//@ chunk-ayc8mk37.js:8241-8270 esm-layout
 var PRELUDE_MEMBER_LENGTH = 4;
 var PRELUDE_LENGTH = PRELUDE_MEMBER_LENGTH * 2;
 var CHECKSUM_LENGTH = 4;
 var MINIMUM_MESSAGE_LENGTH = PRELUDE_LENGTH + CHECKSUM_LENGTH * 2;
-//@ chunk-3cddmtk7.js:8270-9036 esm-fingerprint
+//@ chunk-ayc8mk37.js:8270-9036 esm-fingerprint
 function splitMessage({ byteLength, byteOffset, buffer }) {
   if (byteLength < MINIMUM_MESSAGE_LENGTH)
     throw Error("Provided message too short to accommodate event stream message overhead");

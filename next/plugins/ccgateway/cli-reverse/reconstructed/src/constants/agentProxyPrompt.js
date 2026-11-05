@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话 GitHub 代理（内置 gh 客户端）相关的系统提示片段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (14)
  * attribution: placement 14
  */
 import { join } from "path";
@@ -15,14 +15,14 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:92200-92411 placement
+//@ chunk-5xgkngpb.js:95005-95216 placement
 /**
  * 云会话代理的 CLI、CA 路径与环境 schema。
  */
 var PROXIED_CLIS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CCR_CA_BUNDLE_PATH;
 var ProxyEnvironmentSchema;
-deferInit("chunk-e6aww6q8.js:92200", () => {
+deferInit("chunk-5xgkngpb.js:95005", () => {
   PROXIED_CLIS = ["aws", "bq", "gcloud", "gh", "gsutil"];
   CCR_CA_BUNDLE_PATH = "~/.ccr/ca-bundle.crt";
   ProxyEnvironmentSchema = DoctorLazy(() =>
@@ -37,14 +37,14 @@ deferInit("chunk-e6aww6q8.js:92200", () => {
     })),
   );
 });
-//@ chunk-e6aww6q8.js:92411-92458 placement
+//@ chunk-5xgkngpb.js:95216-95263 placement
 /**
  * 函数 agentProxyReadmePath（代理代理目录的 README 路径）。
  */
 function agentProxyReadmePath(caBundlePath) {
   return join(caBundlePath, "..", "README.md");
 }
-//@ chunk-e6aww6q8.js:92458-93064 placement
+//@ chunk-5xgkngpb.js:95263-95869 placement
 function buildAgentProxyCliSection({ caBundlePath, hasReadme, installedClis }) {
   let readmePrefix = hasReadme ? `see ${agentProxyReadmePath(caBundlePath)} and ` : "";
   let installedClisSuffix =
@@ -57,7 +57,7 @@ function buildAgentProxyCliSection({ caBundlePath, hasReadme, installedClis }) {
     installedClisSuffix
   );
 }
-//@ chunk-e6aww6q8.js:93064-93127 placement
+//@ chunk-5xgkngpb.js:95869-95932 placement
 class AgentProxyNote {
   note = undefined;
   ghStandin = undefined;
@@ -65,28 +65,28 @@ class AgentProxyNote {
     this.note = note;
   }
 }
-//@ chunk-e6aww6q8.js:93127-93154 placement
+//@ chunk-5xgkngpb.js:95932-95959 placement
 var agentProxyNoteSlot; // deferred: uses AgentProxyNote of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:93127", () => {
+deferInit("chunk-5xgkngpb.js:95932", () => {
   agentProxyNoteSlot = new HostScoped(() => new AgentProxyNote());
 });
-//@ chunk-e6aww6q8.js:93154-93192 placement
+//@ chunk-5xgkngpb.js:95959-95997 placement
 function agentProxyNote() {
   return agentProxyNoteSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:93192-93224 placement
+//@ chunk-5xgkngpb.js:95997-96029 placement
 /**
  * 函数 setAgentProxyNote（写入代理说明）。
  */
 function setAgentProxyNote(note) {
   agentProxyNote().setNote(note);
 }
-//@ chunk-e6aww6q8.js:93224-93292 placement
+//@ chunk-5xgkngpb.js:96029-96097 placement
 function getAgentProxyNoteText() {
   let { note } = agentProxyNote();
   return typeof note === "object" ? buildAgentProxyCliSection(note) : note;
 }
-//@ chunk-e6aww6q8.js:93292-93360 placement
+//@ chunk-5xgkngpb.js:96097-96165 placement
 /**
  * 函数 getAgentProxyNoteObject（对象形式的代理说明）。
  */
@@ -94,13 +94,13 @@ function getAgentProxyNoteObject() {
   let { note } = agentProxyNote();
   return typeof note === "object" ? note : undefined;
 }
-//@ chunk-e6aww6q8.js:93360-93439 placement
+//@ chunk-5xgkngpb.js:96165-96244 placement
 var BUILTIN_API = "builtin-api";
 var ENTERPRISE = "enterprise";
 var ANY_HOST = "any-host";
 var NO_JQ = "no-jq";
 var RUNNER = "runner";
-//@ chunk-e6aww6q8.js:93439-93560 placement
+//@ chunk-5xgkngpb.js:96244-96365 placement
 /**
  * 代理提示变体键。
  */
@@ -109,7 +109,7 @@ function proxyPromptVariant({ enterprise, anyHost, noJq, runner }) {
     .filter(Boolean)
     .join("+");
 }
-//@ chunk-e6aww6q8.js:93560-95249 placement
+//@ chunk-5xgkngpb.js:96365-98054 placement
 /**
  * 生成云会话 GitHub 代理说明：gh 是内置客户端、已经通过会话代理认证，可配合 --hostname 访问 GHE。
  */
@@ -138,14 +138,14 @@ function buildAgentProxyGhPrompt(githubCli) {
       : "")
   );
 }
-//@ chunk-e6aww6q8.js:95249-95282 placement
+//@ chunk-5xgkngpb.js:98054-98087 placement
 /**
  * 函数 setAgentProxyGhStandin（写入 gh stand-in）。
  */
 function setAgentProxyGhStandin(ghStandin) {
   agentProxyNote().ghStandin = ghStandin;
 }
-//@ chunk-e6aww6q8.js:95282-95319 placement
+//@ chunk-5xgkngpb.js:98087-98124 placement
 function getAgentProxyGhStandin() {
   return agentProxyNote().ghStandin;
 }
@@ -154,11 +154,11 @@ export {
   getAgentProxyNoteText,
   buildAgentProxyCliSection,
   buildAgentProxyGhPrompt,
+  getAgentProxyGhStandin,
   setAgentProxyNote,
   setAgentProxyGhStandin,
   agentProxyReadmePath,
   proxyPromptVariant,
   PROXIED_CLIS,
-  getAgentProxyGhStandin,
   getAgentProxyNoteObject,
 };

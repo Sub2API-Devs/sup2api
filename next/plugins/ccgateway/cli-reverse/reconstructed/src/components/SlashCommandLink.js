@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：斜杠命令链接与提示行组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-07xmkrj2.js (8)
- * attribution: placement 8
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9f7pg4vv.js (9)
+ * attribution: placement 8, layout 1
  */
 import {
   init_react_production,
@@ -32,12 +32,12 @@ import { useQueuedMessageContext } from "../context/QueuedMessageContext.js";
 import { currentToolPermissionContext } from "../utils/permissions/currentPermissionContext.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-07xmkrj2.js:708-712 placement
+//@ chunk-9f7pg4vv.js:708-712 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-07xmkrj2.js:708", () => {
+deferInit("chunk-9f7pg4vv.js:708", () => {
   init_react_production();
 });
-//@ chunk-07xmkrj2.js:712-1509 placement
+//@ chunk-9f7pg4vv.js:712-1509 placement
 function SlashCommandLink(props) {
   let $ = useMemoCache(17);
   let { command, args, color } = props;
@@ -120,27 +120,32 @@ function SlashCommandLink(props) {
   } else boxElement = $[16];
   return boxElement;
 }
-//@ chunk-07xmkrj2.js:1509-1513 placement
+//@ chunk-9f7pg4vv.js:1509-1513 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-07xmkrj2.js:1509", () => {
+deferInit("chunk-9f7pg4vv.js:1509", () => {
   init_react_production();
 });
-//@ chunk-07xmkrj2.js:1513-1517 placement
+//@ chunk-9f7pg4vv.js:1513-1517 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-07xmkrj2.js:1513", () => {
+deferInit("chunk-9f7pg4vv.js:1513", () => {
   init_react_production();
 });
-//@ chunk-07xmkrj2.js:1517-1543 placement
+//@ chunk-9f7pg4vv.js:1517-1543 placement
 /**
  * 导出值：slashCommandLinkSignal（命令链接标记）。
  */
 var SlashLinkContexts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var slashCommandLinkSignal;
-deferInit("chunk-07xmkrj2.js:1517", () => {
+deferInit("chunk-9f7pg4vv.js:1517", () => {
   SlashLinkContexts = createContext(false);
   slashCommandLinkSignal = createContext(false);
 });
-//@ chunk-07xmkrj2.js:1543-2829 placement
+//@ chunk-9f7pg4vv.js:1543-1558 layout
+var slashCommandLinkContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9f7pg4vv.js:1543", () => {
+  slashCommandLinkContext = createContext(false);
+});
+//@ chunk-9f7pg4vv.js:1558-2844 placement
 function NoticeLine(props) {
   let $ = useMemoCache(26);
   let { tone, text, detail, subLines, linkify } = props;
@@ -260,13 +265,13 @@ function NoticeLine(props) {
   } else rowElement = $[25];
   return rowElement;
 }
-//@ chunk-07xmkrj2.js:2829-2902 placement
+//@ chunk-9f7pg4vv.js:2844-2917 placement
 function shouldShowNotice(verbose) {
   let transcriptMode = useTranscriptMode();
   let isQueued = useQueuedMessageContext()?.isQueued === true;
   return !verbose && !transcriptMode && !isQueued && currentToolPermissionContext();
 }
-//@ chunk-07xmkrj2.js:2902-2984 placement
+//@ chunk-9f7pg4vv.js:2917-2999 placement
 function noticeSystemLines(verbose) {
   let showNotice = shouldShowNotice(verbose);
   let queuedMessageContext = useQueuedMessageContext();
@@ -274,9 +279,10 @@ function noticeSystemLines(verbose) {
 }
 export {
   shouldShowNotice,
+  slashCommandLinkContext,
   NoticeLine,
   slashCommandLinkSignal,
-  SlashCommandLink,
   SlashLinkContexts,
+  SlashCommandLink,
   noticeSystemLines,
 };

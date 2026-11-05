@@ -1,8 +1,8 @@
 /**
  * ajv/dist/vocabularies/dynamic/dynamicAnchor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-1r4fv9mg.js (1)
+ * pieces: chunk-1jdkttw7.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_names } from "../../compile/names.js";
 import { require_compile_2 as require_compile } from "../../compile/index.js";
 import { require_ref } from "../core/ref.js";
 
-//@ chunk-1r4fv9mg.js:576-1267 cjs-fingerprint
+//@ chunk-1jdkttw7.js:577-1268 cjs-fingerprint
 var require_dynamicAnchor = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

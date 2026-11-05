@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具文件夹目标
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { isRequestComputerFolderTool } from "../../remote/tools/protocolConstants.js";
@@ -17,7 +17,7 @@ import { lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { attachStateSchema } from "../../remote/tools/toolHostsNotice.js";
 import { safeParseJSON } from "../json.js";
 
-//@ chunk-e6aww6q8.js:3753706-3753982 placement
+//@ chunk-5xgkngpb.js:3849461-3849737 placement
 /**
  * 等待下一次宿主通告、中止或超时。
  */
@@ -38,9 +38,9 @@ function waitForAnnounce(announcer, signal, timeoutMs) {
     if (signal.aborted) settle("aborted");
   });
 }
-//@ chunk-e6aww6q8.js:3753982-3753995 placement
+//@ chunk-5xgkngpb.js:3849737-3849750 placement
 var MAX_REMOTE_COMMAND_LISTING_MS = 5000;
-//@ chunk-e6aww6q8.js:3753995-3754675 placement
+//@ chunk-5xgkngpb.js:3849750-3850430 placement
 async function waitForFolderAttached({ toolState, fullToolName, content, signal }) {
   try {
     if (
@@ -76,7 +76,7 @@ async function waitForFolderAttached({ toolState, fullToolName, content, signal 
     );
   }
 }
-//@ chunk-e6aww6q8.js:3754675-3754773 placement
+//@ chunk-5xgkngpb.js:3850430-3850528 placement
 function hasAttachedRemoteCommands(toolState) {
   try {
     let entries = toolState.get(RemoteBackgroundCommands).entries();
@@ -85,7 +85,7 @@ function hasAttachedRemoteCommands(toolState) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3754773-3755059 placement
+//@ chunk-5xgkngpb.js:3850528-3850814 placement
 /**
  * 工具结果中是否有 state 为 attached 的 JSON。
  */

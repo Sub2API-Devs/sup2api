@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：预加载备用进程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9e524z2b.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xk6g34pb.js (4)
  * attribution: placement 4
  */
 import { mkdirSync, unlinkSync, writeFileSync } from "fs";
@@ -16,12 +16,12 @@ import { readSpareClaim, applySpareClaim } from "../../daemon/bgSpare.js";
 import { markSpareLoaded, recordPhase } from "../../utils/startupTiming.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-9e524z2b.js:3948-3995 placement
+//@ chunk-xk6g34pb.js:4284-4331 placement
 /**
  * 备用（spare）进程 socket 的默认路径。
  */
 var DEFAULT_SPARE_SOCKET = "/home/claude/.claude/remote/spare.sock";
-//@ chunk-9e524z2b.js:3995-4983 placement
+//@ chunk-xk6g34pb.js:4331-5319 placement
 /**
  * 备用（spare）预加载进程主流程：清理环境与旧 socket，注册退出清理，等待认领帧（收到连接后写 pid 并预加载模块），记录认领耗时后应用认领、接管会话。
  */
@@ -85,7 +85,7 @@ async function runPreloadSpare_2(args, startPreload) {
   recordPhase("spare_claim_module_wait_ms", performance.now() - startTime, startTime);
   await applySpareClaim(claim, preloadReady, () => {});
 }
-//@ chunk-9e524z2b.js:4983-5283 placement
+//@ chunk-xk6g34pb.js:5319-5619 placement
 /**
  * 并行预加载会话启动所需的模块（远程环境多加一个），返回 allSettled 结果。
  */
@@ -101,7 +101,7 @@ function preloadSessionModules() {
   if (env.CLAUDE_CODE_REMOTE) loads.push(import("../../upstreamproxy/upstreamproxy.js"));
   return Promise.allSettled(loads);
 }
-//@ chunk-9e524z2b.js:5283-5347 placement
+//@ chunk-xk6g34pb.js:5619-5683 placement
 /**
  * 运行预加载备用进程（可注入加载函数）。
  */

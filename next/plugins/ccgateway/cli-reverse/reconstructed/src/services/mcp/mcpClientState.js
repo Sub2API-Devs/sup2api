@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按新的客户端列表调和动态 MCP 状态（移除、更新工具前缀）；在 AppState 中替换或追加一个 MCP 客户端及其工具/命令/资源等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-efym3dq7.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8ecx2442.js (8)
  * attribution: placement 8
  */
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
@@ -15,7 +15,7 @@ import { partitionAlias, import_sortedIndex_2 } from "../../../vendor/lodash-es/
 import { serverCacheKey } from "./client.js";
 import { decorateMcpTools } from "./mcpToolDecoration.js";
 
-//@ chunk-efym3dq7.js:347-614 placement
+//@ chunk-8ecx2442.js:348-615 placement
 /**
  * 在 AppState 中把指定 MCP 客户端标记为需要认证。
  */
@@ -40,7 +40,7 @@ function markClientNeedsAuth(state, serverName) {
     clients,
   };
 }
-//@ chunk-efym3dq7.js:614-1154 placement
+//@ chunk-8ecx2442.js:615-1155 placement
 /**
  * 在 AppState 中替换或追加一个 MCP 客户端及其工具/命令/资源。
  */
@@ -78,7 +78,7 @@ function setMcpClientInAppState(state, serverName, result, options) {
     },
   };
 }
-//@ chunk-efym3dq7.js:1154-1314 placement (2.1.88 match: findChromeClient, 0.769)
+//@ chunk-8ecx2442.js:1155-1315 placement (2.1.88 match: findChromeClient, 0.768)
 function findChromeClient(dynamicMcpState, serverName, tools) {
   if (!dynamicMcpState.clients.some((client) => client.name === serverName && client.type === "connected"))
     return dynamicMcpState;
@@ -91,7 +91,7 @@ function findChromeClient(dynamicMcpState, serverName, tools) {
     ],
   };
 }
-//@ chunk-efym3dq7.js:1314-1497 placement
+//@ chunk-8ecx2442.js:1315-1498 placement
 /**
  * 替换 AppState 中某个已连接服务器的工具列表。
  */
@@ -110,7 +110,7 @@ function replaceServerTools(state, serverName, tools) {
     },
   };
 }
-//@ chunk-efym3dq7.js:1497-1668 placement
+//@ chunk-8ecx2442.js:1498-1669 placement
 /**
  * 判断服务器的工具列表是否与新列表完全相同且无同名冲突。
  */
@@ -124,7 +124,7 @@ function sameServerTools(tools, serverName, nextTools) {
     !rest.some((tool) => nextNames.has(tool.name))
   );
 }
-//@ chunk-efym3dq7.js:1668-2478 placement
+//@ chunk-8ecx2442.js:1669-2479 placement
 /**
  * 按新的客户端列表调和动态 MCP 状态（移除、更新工具前缀）。
  */
@@ -179,7 +179,7 @@ function reconcileMcpClients(previous, dynamicMcpState, newDynamicState) {
   }
   return next;
 }
-//@ chunk-efym3dq7.js:2478-2536 placement
+//@ chunk-8ecx2442.js:2479-2537 placement
 /**
  * 配置不同时替换客户端的 config。
  */
@@ -191,7 +191,7 @@ function withMcpConfig(clientRow, config) {
         config,
       };
 }
-//@ chunk-efym3dq7.js:2536-2664 placement
+//@ chunk-8ecx2442.js:2537-2666 placement
 /**
  * 配置未变时为工具重新附加服务器装饰，配置已变返回 undefined。
  */
@@ -209,11 +209,11 @@ function redecorateTools(previous, tools, config) {
 }
 export {
   reconcileMcpClients,
-  withMcpConfig,
   setMcpClientInAppState,
-  redecorateTools,
-  sameServerTools,
-  replaceServerTools,
-  findChromeClient,
   markClientNeedsAuth,
+  redecorateTools,
+  replaceServerTools,
+  withMcpConfig,
+  sameServerTools,
+  findChromeClient,
 };

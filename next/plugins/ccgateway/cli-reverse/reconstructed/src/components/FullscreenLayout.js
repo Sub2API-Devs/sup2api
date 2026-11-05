@@ -3,9 +3,9 @@
  *
  * 全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FullscreenLayout.tsx
- * pieces: chunk-ag5x7vhf.js (65)
+ * pieces: chunk-hnxhr3bs.js (65)
  * attribution: placement 42, sole-consumer 5, affinity 1, fingerprint 8, layout 7, file-local 2
  */
 import { createStore } from "../state/store.js";
@@ -48,7 +48,6 @@ import { BaseBox } from "../ink/components/Box.js";
 import { isHiddenAttachmentMessage } from "./messages/nullRenderingAttachments.js";
 import { stripMemoryTags } from "../services/orgMemory/promptIndex.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { isBashOutputText } from "../constants/xml.js";
 import { subscribeScrollTraceLive, isScrollTraceDemoRuler } from "../ink/widest-line.js";
 import { openClickedLink } from "../utils/browser.js";
 import {
@@ -90,16 +89,16 @@ import { TagTabs } from "./TagTabs.js";
 import { FooterSuggestionsMemo } from "./PromptInput/PromptInputFooterSuggestions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:9697-9723 placement
+//@ chunk-hnxhr3bs.js:8544-8570 placement
 function renderNull() {
   return null;
 }
-//@ chunk-ag5x7vhf.js:9723-9754 placement
+//@ chunk-hnxhr3bs.js:8570-8601 placement
 var EMPTY_FULLSCREEN_SLOTS = {
   data: null,
   dialog: null,
 };
-//@ chunk-ag5x7vhf.js:9754-9861 placement
+//@ chunk-hnxhr3bs.js:8601-8708 placement
 function createFullscreenSlots() {
   let store = createStore(EMPTY_FULLSCREEN_SLOTS);
   return {
@@ -108,12 +107,12 @@ function createFullscreenSlots() {
     setDialog: setSliceField(store.setState, "dialog"),
   };
 }
-//@ chunk-ag5x7vhf.js:9861-9877 placement
+//@ chunk-hnxhr3bs.js:8708-8724 placement
 var FullscreenSlotsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:9861", () => {
+deferInit("chunk-hnxhr3bs.js:8708", () => {
   FullscreenSlotsContext = createContext(null);
 });
-//@ chunk-ag5x7vhf.js:9877-10140 placement
+//@ chunk-hnxhr3bs.js:8724-8987 placement
 function FullscreenSlotsProvider(props) {
   let $ = useMemoCache(6);
   let { container, children } = props;
@@ -143,23 +142,23 @@ function FullscreenSlotsProvider(props) {
   } else provider = $[5];
   return provider;
 }
-//@ chunk-ag5x7vhf.js:10140-10169 placement
+//@ chunk-hnxhr3bs.js:8987-9016 placement
 function selectSlotData(slots) {
   return slots.data;
 }
-//@ chunk-ag5x7vhf.js:10169-10200 placement
+//@ chunk-hnxhr3bs.js:9016-9047 placement
 function selectSlotDialog(slots) {
   return slots.dialog;
 }
-//@ chunk-ag5x7vhf.js:10306-10354 placement
+//@ chunk-hnxhr3bs.js:9153-9201 placement
 function useFullscreenSlotData() {
   return useStoreSelector(useContext(FullscreenSlotsContext)?.store, selectSlotData) ?? null;
 }
-//@ chunk-ag5x7vhf.js:10354-10402 placement
+//@ chunk-hnxhr3bs.js:9201-9249 placement
 function useFullscreenSlotDialog() {
   return useStoreSelector(useContext(FullscreenSlotsContext)?.store, selectSlotDialog) ?? null;
 }
-//@ chunk-ag5x7vhf.js:10402-10738 placement
+//@ chunk-hnxhr3bs.js:9249-9585 placement
 /**
  * 测量锚点在容器中的顶部位置，等于其上外边距时返回该值，否则为 0。
  */
@@ -187,14 +186,14 @@ function useAnchorTopMargin() {
   } else measureMargin = $[2];
   return useMeasured(measureMargin);
 }
-//@ chunk-ag5x7vhf.js:10738-10785 placement
+//@ chunk-hnxhr3bs.js:9585-9632 placement
 /**
  * 函数 useFeedIsWide（全屏 feed 是否够宽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
 function useFeedIsWide() {
   return useStoreSelector(useContext(FullscreenSlotsContext)?.store, calculateFeedWidth) ?? false;
 }
-//@ chunk-ag5x7vhf.js:10785-11045 placement
+//@ chunk-hnxhr3bs.js:9632-9892 placement
 function useSetSlot(setSlot, value) {
   let $ = useMemoCache(7);
   let setEffect;
@@ -237,28 +236,28 @@ function useSetSlot(setSlot, value) {
   }
   useEffect(clearEffect, clearDeps);
 }
-//@ chunk-ag5x7vhf.js:11045-11083 placement
+//@ chunk-hnxhr3bs.js:9892-9930 placement
 function useFullscreenFooterData(data) {
   useSetSlot(useContext(FullscreenSlotsContext)?.setData, data);
 }
-//@ chunk-ag5x7vhf.js:11083-11123 placement
+//@ chunk-hnxhr3bs.js:9930-9970 placement
 function useFullscreenDialogSlot(dialog) {
   useSetSlot(useContext(FullscreenSlotsContext)?.setDialog, dialog);
 }
-//@ chunk-ag5x7vhf.js:11123-11160 placement
+//@ chunk-hnxhr3bs.js:9970-10007 placement
 function useFullscreenAnchor() {
   return useContext(FullscreenSlotsContext)?.anchor;
 }
-//@ chunk-ag5x7vhf.js:11160-11164 placement
+//@ chunk-hnxhr3bs.js:10007-10011 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:11160", () => {
+deferInit("chunk-hnxhr3bs.js:10007", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:18504-18533 placement
+//@ chunk-hnxhr3bs.js:17351-17380 placement
 function newReplayHandleSlot() {
   return new ReplayHandleSlot();
 }
-//@ chunk-ag5x7vhf.js:18533-21173 placement
+//@ chunk-hnxhr3bs.js:17380-20020 placement
 /**
  * 全屏布局：可滚动区、底部区、上推区与浮层，维护滚动视口与缓存布局。
  */
@@ -474,7 +473,7 @@ function FullscreenLayoutView(props) {
   } else root = $[27];
   return root;
 }
-//@ chunk-ag5x7vhf.js:21173-21309 placement (2.1.88 match: siblingSharesY, 0.858)
+//@ chunk-hnxhr3bs.js:20020-20156 placement (2.1.88 match: siblingSharesY, 0.858)
 function offsetWithinParent(node, yogaNode) {
   if (!node) return;
   let offset = 0;
@@ -485,44 +484,44 @@ function offsetWithinParent(node, yogaNode) {
   }
   return node_2 ? offset : undefined;
 }
-//@ chunk-ag5x7vhf.js:22083-22097 placement
+//@ chunk-hnxhr3bs.js:20930-20944 placement
 /**
  * 导出值：TranscriptOverlaySlot（transcript 叠加层槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
 var TranscriptOverlaySlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:22083", () => {
+deferInit("chunk-hnxhr3bs.js:20930", () => {
   TranscriptOverlaySlot = createContext(0);
 });
-//@ chunk-ag5x7vhf.js:22097-22101 placement
+//@ chunk-hnxhr3bs.js:20944-20948 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:22097", () => {
+deferInit("chunk-hnxhr3bs.js:20944", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:22101-22115 placement
+//@ chunk-hnxhr3bs.js:20948-20962 placement
 /**
  * 导出值：FooterSlot（页脚槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
 var FooterSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:22101", () => {
+deferInit("chunk-hnxhr3bs.js:20948", () => {
   FooterSlot = createContext(0);
 });
-//@ chunk-ag5x7vhf.js:22115-22119 placement
+//@ chunk-hnxhr3bs.js:20962-20966 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:22115", () => {
+deferInit("chunk-hnxhr3bs.js:20962", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:22119-22181 placement
+//@ chunk-hnxhr3bs.js:20966-21028 placement
 function debugColor(color) {
   return `rgb(${color & 255},${(color >> 8) & 255},${(color >> 16) & 255})`;
 }
-//@ chunk-ag5x7vhf.js:22181-22436 placement
+//@ chunk-hnxhr3bs.js:21028-21283 placement
 var DEBUG_COLOR_COUNT; // deferred: uses debugColor of its import cycle while loading; runs once the cycle is complete
 var DEBUG_ALT_COLOR_COUNT;
 var DEBUG_COLORS;
 var DEBUG_ALT_COLORS;
 var GLYPH_RANGES;
 var GLYPH_RANGE_TOTAL;
-deferInit("chunk-ag5x7vhf.js:22181", () => {
+deferInit("chunk-hnxhr3bs.js:21028", () => {
   DEBUG_COLOR_COUNT = 64;
   DEBUG_ALT_COLOR_COUNT = 64;
   DEBUG_COLORS = Array.from(
@@ -551,7 +550,7 @@ deferInit("chunk-ag5x7vhf.js:22181", () => {
   ];
   GLYPH_RANGE_TOTAL = GLYPH_RANGES.reduce((acc, [, count]) => acc + count, 0);
 });
-//@ chunk-ag5x7vhf.js:24486-24758 placement
+//@ chunk-hnxhr3bs.js:23518-23790 placement
 function isInvisibleMessage(message) {
   switch (message.type) {
     case "attachment":
@@ -570,32 +569,32 @@ function isInvisibleMessage(message) {
       return false;
   }
 }
-//@ chunk-ag5x7vhf.js:24758-24762 placement
+//@ chunk-hnxhr3bs.js:23790-23794 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:24758", () => {
+deferInit("chunk-hnxhr3bs.js:23790", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:24762-24790 placement
+//@ chunk-hnxhr3bs.js:23794-23822 placement
 function incrementByOne(value) {
   return value + 1;
 }
-//@ chunk-ag5x7vhf.js:24790-24828 placement
+//@ chunk-hnxhr3bs.js:23822-23860 placement
 function isInKind(part) {
   return part.kind === "in";
 }
-//@ chunk-ag5x7vhf.js:24828-24927 placement (2.1.88 match: _temp2, 0.818)
+//@ chunk-hnxhr3bs.js:23860-23959 placement (2.1.88 match: _temp2, 0.818)
 function renderDebugLine(line, i_1) {
   return jsxProd_default(
     Text,
     {
       dimColor: true,
       wrap: "truncate-end",
-      children: isBashOutputText(line),
+      children: fmt(line),
     },
     `${line.ts}-${i_1}`,
   );
 }
-//@ chunk-ag5x7vhf.js:24927-24987 placement
+//@ chunk-hnxhr3bs.js:23959-24019 placement
 function renderDimChildren(children, key) {
   return jsxProd_default(
     Text,
@@ -606,17 +605,17 @@ function renderDimChildren(children, key) {
     key,
   );
 }
-//@ chunk-ag5x7vhf.js:24987-25012 placement
+//@ chunk-hnxhr3bs.js:24019-24044 placement
 var FULLSCREEN_COLUMNS = 25;
 var FULLSCREEN_ROWS = 80;
 var FULLSCREEN_CELL_BUDGET = FULLSCREEN_COLUMNS * FULLSCREEN_ROWS;
-//@ chunk-ag5x7vhf.js:25012-25016 placement
+//@ chunk-hnxhr3bs.js:24044-24048 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:25012", () => {
+deferInit("chunk-hnxhr3bs.js:24044", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:25016-25130 placement
-function renderScrollTestLine(line, _) {
+//@ chunk-hnxhr3bs.js:24048-24163 placement
+function renderScrollTestLine(line, key) {
   return jsxProd_default_2(
     Text,
     {
@@ -630,12 +629,12 @@ function renderScrollTestLine(line, _) {
           }),
       ],
     },
-    _,
+    key,
   );
 }
-//@ chunk-ag5x7vhf.js:25130-25141 placement
+//@ chunk-hnxhr3bs.js:24163-24174 placement
 var SCROLL_TEST_LINE_COUNT = 200;
-//@ chunk-ag5x7vhf.js:25141-25247 placement
+//@ chunk-hnxhr3bs.js:24174-24280 placement
 function ScrollTraceRuler() {
   let $ = useMemoCache(2);
   let isDemoRuler = useSyncExternalStore(subscribeScrollTraceLive, isScrollTraceDemoRuler);
@@ -647,7 +646,7 @@ function ScrollTraceRuler() {
   } else ruler = $[1];
   return ruler;
 }
-//@ chunk-ag5x7vhf.js:25247-25541 placement (2.1.88 match: _temp25, 0.357)
+//@ chunk-hnxhr3bs.js:24280-24574 placement (2.1.88 match: _temp25, 0.357)
 /**
  * 全屏布局里的"scroll test"占位区块：生成固定行数的拉丁文编号行，用于测试滚动，关闭对话框后消失。
  */
@@ -676,7 +675,7 @@ function ScrollTestFiller() {
   } else fillerBox = $[1];
   return fillerBox;
 }
-//@ chunk-ag5x7vhf.js:25541-27152 placement
+//@ chunk-hnxhr3bs.js:24574-26185 placement
 /**
  * 滚动测试用的拉丁文填充文本。
  */
@@ -725,7 +724,7 @@ var SCROLL_TEST_PARAGRAPH_SHAPES = [
     indent: 0,
   },
 ];
-//@ chunk-ag5x7vhf.js:27152-27597 placement
+//@ chunk-hnxhr3bs.js:26185-26630 placement
 /**
  * 用填充文本生成指定行数的滚动测试行，每行带行号。
  */
@@ -764,27 +763,27 @@ function buildScrollTestLines(lineCount) {
   }
   return lines;
 }
-//@ chunk-ag5x7vhf.js:27676-27704 sole-consumer
+//@ chunk-hnxhr3bs.js:26709-26737 sole-consumer
 function createEmptyStore() {
   return createStore([]);
 }
-//@ chunk-ag5x7vhf.js:27704-27751 sole-consumer
+//@ chunk-hnxhr3bs.js:26737-26784 sole-consumer
 function sumRowsMinusOwed(baseRows, layout) {
   return baseRows + layout.rows() - layout.owed;
 }
-//@ chunk-ag5x7vhf.js:27751-27785 sole-consumer
+//@ chunk-hnxhr3bs.js:26784-26818 sole-consumer
 function selectVerbose(state) {
   return state.verbose;
 }
-//@ chunk-ag5x7vhf.js:27785-27800 sole-consumer
+//@ chunk-hnxhr3bs.js:26818-26833 sole-consumer
 function noop() {}
-//@ chunk-ag5x7vhf.js:27800-27815 sole-consumer
+//@ chunk-hnxhr3bs.js:26833-26848 sole-consumer
 function noop_2() {}
-//@ chunk-ag5x7vhf.js:27815-27839 affinity
+//@ chunk-hnxhr3bs.js:26848-26872 affinity
 function openHyperlink(url) {
   openClickedLink(url);
 }
-//@ chunk-ag5x7vhf.js:27839-28016 fingerprint (2.1.88 match: _temp3, 0.652)
+//@ chunk-hnxhr3bs.js:26872-27049 fingerprint (2.1.88 match: _temp3, 0.653)
 function repaintFullscreenInk() {
   if (!isFullscreenEnvEnabled()) {
     return;
@@ -799,16 +798,16 @@ function repaintFullscreenInk() {
     ink.fileHyperlinkOpensInPanel = undefined;
   };
 }
-//@ chunk-ag5x7vhf.js:28016-28064 layout
+//@ chunk-hnxhr3bs.js:27049-27097 layout
 function selectUnseenDividerCount(state) {
   return state.unseenDivider?.count ?? 0;
 }
-//@ chunk-ag5x7vhf.js:28064-28080 layout
+//@ chunk-hnxhr3bs.js:27097-27113 layout
 var ScrollChromeContextValue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:28064", () => {
+deferInit("chunk-hnxhr3bs.js:27097", () => {
   ScrollChromeContextValue = createContext(null);
 });
-//@ chunk-ag5x7vhf.js:28080-28271 layout
+//@ chunk-hnxhr3bs.js:27113-27304 layout
 function useScrollChrome() {
   let chrome = useContext(ScrollChromeContextValue);
   if (!chrome) {
@@ -818,7 +817,7 @@ function useScrollChrome() {
   }
   return chrome;
 }
-//@ chunk-ag5x7vhf.js:28271-28367 fingerprint (2.1.88 match: ScrollChromeContext, 0.478)
+//@ chunk-hnxhr3bs.js:27304-27400 fingerprint (2.1.88 match: ScrollChromeContext, 0.479)
 function ScrollChromeContext() {
   let store = createStore(null);
   return {
@@ -830,7 +829,7 @@ function ScrollChromeContext() {
     },
   };
 }
-//@ chunk-ag5x7vhf.js:28367-28562 layout (2.1.88 match: countUnseenAssistantTurns, 1)
+//@ chunk-hnxhr3bs.js:27400-27595 layout (2.1.88 match: countUnseenAssistantTurns, 1)
 /**
  * 统计未读分隔线之后的助手回合数（跳过 progress 与无可见文本的助手消息）。
  */
@@ -847,14 +846,14 @@ function countUnseenAssistantTurns(messages, dividerIndex) {
   }
   return count;
 }
-//@ chunk-ag5x7vhf.js:28562-28694 file-local
+//@ chunk-hnxhr3bs.js:27595-27727 file-local
 function assistantHasVisibleText(message) {
   if (message.type !== "assistant") return false;
   for (let block of message.message.content) if (block.type === "text" && block.text?.trim()) return true;
   return false;
 }
-//@ chunk-ag5x7vhf.js:28694-28881 layout (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(message) {
+//@ chunk-hnxhr3bs.js:27727-27914 layout
+function isThinkingOnlyMessage(message) {
   if (message.type !== "assistant" || message.message.content.length === 0) return false;
   for (let block of message.message.content) {
     if (block.type === "text" || block.type === "tool_use") return false;
@@ -862,7 +861,7 @@ function countToolCallsSince(message) {
   }
   return true;
 }
-//@ chunk-ag5x7vhf.js:28881-29232 fingerprint (2.1.88 match: computeUnseenDivider, 0.78)
+//@ chunk-hnxhr3bs.js:27914-28265 fingerprint (2.1.88 match: computeUnseenDivider, 0.741)
 /**
  * 根据最后一次已读位置计算未读分隔线（位置与计数），跳过 progress/attachment。
  */
@@ -884,7 +883,7 @@ function computeUnseenDivider(messages, dividerIndex, skipReinjected) {
       anchorIdx++;
       continue;
     }
-    if (skipReinjected && countToolCallsSince(message)) {
+    if (skipReinjected && isThinkingOnlyMessage(message)) {
       if (fallbackAnchorIdx === -1) fallbackAnchorIdx = anchorIdx;
       anchorIdx++;
       continue;
@@ -900,7 +899,7 @@ function computeUnseenDivider(messages, dividerIndex, skipReinjected) {
     count: Math.max(1, count),
   };
 }
-//@ chunk-ag5x7vhf.js:29232-39089 fingerprint (2.1.88 match: FullscreenLayout, 0.489)
+//@ chunk-hnxhr3bs.js:28265-38123 fingerprint (2.1.88 match: FullscreenLayout, 0.482)
 /**
  * 全屏布局组件：scrollable 槽（消息列表）放在 ScrollBox 中并提供 ScrollChromeContext；底部 bottom/abovePrompt 槽、可选 sidebar/dock；未读分隔线、"新消息"药丸、置顶提示头、modal/对话框浮层与建议浮层。
  */
@@ -1714,7 +1713,7 @@ function FullscreenLayout(props) {
   } else plainLayout = $[163];
   return plainLayout;
 }
-//@ chunk-ag5x7vhf.js:39089-39452 layout
+//@ chunk-hnxhr3bs.js:38123-38486 layout
 function useHasVisibleNotification() {
   let $ = useMemoCache(3);
   let headerGauge = useHeaderGauge();
@@ -1750,7 +1749,7 @@ function useHasVisibleNotification() {
   } else toastRow = $[2];
   return toastRow;
 }
-//@ chunk-ag5x7vhf.js:39452-43160 file-local
+//@ chunk-hnxhr3bs.js:38486-42194 file-local
 /**
  * 管理未读分隔线：用户向上滚动后记录 dividerIndex，响应 down/pageup/pagedown/home 等按键，回到底部时清除。
  */
@@ -2045,14 +2044,14 @@ function useUnseenDivider(messageCount) {
   } else root = $[45];
   return root;
 }
-//@ chunk-ag5x7vhf.js:43160-43202 layout
-var JUMP_TO_BOTTOM_CHORD; // deferred: uses parseChord (../keybindings/parser.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-hnxhr3bs.js:42194-42236 layout
+var JUMP_TO_BOTTOM_CHORD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PAGE_DOWN_CHORD;
-deferInit("chunk-ag5x7vhf.js:43160", () => {
+deferInit("chunk-hnxhr3bs.js:42194", () => {
   JUMP_TO_BOTTOM_CHORD = parseChord("ctrl+end");
   PAGE_DOWN_CHORD = parseChord("pagedown");
 });
-//@ chunk-ag5x7vhf.js:43202-44640 fingerprint (2.1.88 match: NewMessagesPill, 0.615)
+//@ chunk-hnxhr3bs.js:42236-43674 fingerprint (2.1.88 match: NewMessagesPill, 0.608)
 /**
  * "新消息"药丸：不在底部且有未读时显示 "Jump to bottom"，点击或 scroll:bottom 快捷键跳到底部。
  */
@@ -2165,7 +2164,7 @@ function NewMessagesPill(props) {
   } else pill = $[19];
   return pill;
 }
-//@ chunk-ag5x7vhf.js:44640-45388 fingerprint (2.1.88 match: StickyPromptHeader, 0.796)
+//@ chunk-hnxhr3bs.js:43674-44422 fingerprint (2.1.88 match: StickyPromptHeader, 0.796)
 /**
  * 全屏滚动时置顶显示当前可见区域对应的用户提示（StickyPromptHeader）。
  */
@@ -2237,7 +2236,7 @@ function StickyPromptHeader(props) {
   } else header = $[12];
   return header;
 }
-//@ chunk-ag5x7vhf.js:45388-45658 fingerprint (2.1.88 match: DialogOverlay, 0.554)
+//@ chunk-hnxhr3bs.js:44422-44692 fingerprint (2.1.88 match: DialogOverlay, 0.554)
 function DialogOverlay(props) {
   let $ = useMemoCache(4);
   let { width, children } = props;
@@ -2265,7 +2264,7 @@ function DialogOverlay(props) {
   } else t0 = $[3];
   return t0;
 }
-//@ chunk-ag5x7vhf.js:45658-46504 fingerprint (2.1.88 match: SuggestionsOverlay, 0.783)
+//@ chunk-hnxhr3bs.js:44692-45539 fingerprint (2.1.88 match: SuggestionsOverlay, 0.783)
 function SuggestionsOverlay(props) {
   let $ = useMemoCache(10);
   let { rowsAbove } = props;
@@ -2334,19 +2333,19 @@ function SuggestionsOverlay(props) {
   } else overlay = $[9];
   return overlay;
 }
-//@ chunk-ag5x7vhf.js:46504-46508 placement
+//@ chunk-hnxhr3bs.js:45539-45543 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:46504", () => {
+deferInit("chunk-hnxhr3bs.js:45539", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:46508-46512 placement
+//@ chunk-hnxhr3bs.js:45543-45547 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:46508", () => {
+deferInit("chunk-hnxhr3bs.js:45543", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:46512-46516 placement
+//@ chunk-hnxhr3bs.js:45547-45551 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:46512", () => {
+deferInit("chunk-hnxhr3bs.js:45547", () => {
   init_react_production();
 });
 export {

@@ -3,9 +3,9 @@
  *
  * 子代理专属 MCP 服务器的菜单（http/anthropic-hosted/oauth）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPAgentServerMenu.tsx
- * pieces: chunk-cpqpnzp4.js (2)
+ * pieces: chunk-h6004nzv.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useCallback, useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -37,11 +37,11 @@ import { StatusIcon } from "../design-system/StatusIcon.js";
 import { ErrorText } from "../ErrorText.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-cpqpnzp4.js:17999-18067 affinity
+//@ chunk-h6004nzv.js:19182-19250 affinity
 function getMcpAuthModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpAuthModule();
 }
-//@ chunk-cpqpnzp4.js:18067-21061 fingerprint (2.1.88 match: MCPAgentServerMenu, 0.595)
+//@ chunk-h6004nzv.js:19250-22250 fingerprint (2.1.88 match: MCPAgentServerMenu, 0.595)
 function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
   let complete = useCallback(
     (message, ...rest) =>

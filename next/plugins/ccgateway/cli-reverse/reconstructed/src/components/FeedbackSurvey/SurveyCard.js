@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。调查卡片外框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -30,11 +30,11 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { USER_MESSAGE_BACKGROUND } from "../CustomSelect/selectTypeahead.js";
 import { Button } from "../../ink/components/ErrorBoundary.js";
 
-//@ chunk-18hwfzwa.js:1004373-1004412 placement
+//@ chunk-czq1j3j2.js:1038409-1038448 placement
 function isRatingKey(key) {
   return key === "0" || key === "1";
 }
-//@ chunk-18hwfzwa.js:1004412-1007788 placement
+//@ chunk-czq1j3j2.js:1038448-1041825 placement
 /**
  * SurveyCard：调查卡片外框与评分选项。
  */
@@ -70,10 +70,10 @@ function SurveyCard(props) {
   let isCardOpen = state === "open" && survey !== null && !hasUnrecognizedInput;
   let keybindingContext = useKeybindingContext();
   let enterChord;
-  Lt: {
+  Ht: {
     if (keybindingContext === null) {
       enterChord = "enter";
-      break Lt;
+      break Ht;
     }
     let submitChord;
     if ($[5] !== keybindingContext.bindings) {
@@ -348,7 +348,7 @@ function SurveyCard(props) {
   } else cardElement = $[47];
   return cardElement;
 }
-//@ chunk-18hwfzwa.js:1007788-1008312 placement
+//@ chunk-czq1j3j2.js:1041825-1042349 placement
 /**
  * 调查卡片里的一个数字按钮：显示"数字: 标签"，悬停高亮，点击回调 onAction(digit)。
  */

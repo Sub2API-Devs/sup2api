@@ -3,14 +3,13 @@
  *
  * 2.1.316 新增：为云会话进行 Console 浏览器登录（PKCE、超时、取消）；校验作用域并保存云会话凭据等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4r7nqnx2.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vp2eq1tc.js (7)
+ * attribution: affinity 1, placement 6
  */
 import { createInterface } from "readline";
 import { stopCapturingEarlyInput } from "../../utils/earlyInput.js";
-import { PASTE_HERE_MSG } from "../../commands/install-github-app/OAuthFlowStep.js";
 import {
   getOauthConfig,
   CLOUD_SESSIONS_OAUTH_SCOPES,
@@ -35,7 +34,9 @@ import { isSessionVerdictFromServerFetch, isSessionVerdictDisowned } from "../po
 import { hasComplianceTaint } from "../policyLimits/complianceTaints.js";
 import { setConsoleProfileBearerProvider } from "../../utils/telemetry/memorySummary.js";
 
-//@ chunk-4r7nqnx2.js:5096-5767 placement
+//@ chunk-vp2eq1tc.js:5057-5096 affinity (2.1.88 match: PASTE_HERE_MSG, 1)
+var PASTE_HERE_MSG = "Paste code here if prompted > ";
+//@ chunk-vp2eq1tc.js:5096-5767 placement
 /**
  * 在终端读取用户粘贴的授权码。
  */
@@ -91,7 +92,7 @@ function promptForPastedCode(terminal, { expectedState, onCode, onCancel }) {
     },
   };
 }
-//@ chunk-4r7nqnx2.js:5767-7748 placement
+//@ chunk-vp2eq1tc.js:5767-7748 placement
 /**
  * 为云会话进行 Console 浏览器登录（PKCE、超时、取消）。
  */
@@ -221,7 +222,7 @@ async function consoleSignInForCloudSessions({
     oauthService.cleanup();
   }
 }
-//@ chunk-4r7nqnx2.js:7748-7832 placement
+//@ chunk-vp2eq1tc.js:7748-7832 placement
 /**
  * 从回调 URL 里取 state 参数，取不到返回 undefined。
  */
@@ -232,7 +233,7 @@ function getOAuthStateFromUrl(url) {
     return;
   }
 }
-//@ chunk-4r7nqnx2.js:7832-9412 placement
+//@ chunk-vp2eq1tc.js:7832-9412 placement
 /**
  * 校验作用域并保存云会话凭据。
  */
@@ -309,7 +310,7 @@ async function finishConsoleSignIn(tokens, clientId, organizationUuid, accountEm
     },
   };
 }
-//@ chunk-4r7nqnx2.js:9412-9490 placement
+//@ chunk-vp2eq1tc.js:9412-9490 placement
 /**
  * 当前账号的组织标记：服务器已确认才返回 ldr 或 not_ldr，否则 unknown。
  */
@@ -317,7 +318,7 @@ function getOrganizationLabel() {
   if (!isSessionVerdictFromServerFetch() || isSessionVerdictDisowned()) return "unknown";
   return hasComplianceTaint("ldr") ? "ldr" : "not_ldr";
 }
-//@ chunk-4r7nqnx2.js:9490-9565 placement
+//@ chunk-vp2eq1tc.js:9490-9565 placement
 setConsoleProfileBearerProvider({
   organizationLabel: getOrganizationLabel,
   hasStored: hasCloudSessionsTokenForOrg,

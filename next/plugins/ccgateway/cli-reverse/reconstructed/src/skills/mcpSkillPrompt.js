@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：MCP 技能的提示文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../tools/ReadMcpResourceDirTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../tools/ReadMcpResourceTool/prompt.js";
 
-//@ chunk-e6aww6q8.js:3124230-3124614 placement
+//@ chunk-5xgkngpb.js:3210758-3211142 placement
 /**
  * MCP 提供的技能说明：如何用 ReadMcpResource 读取相对路径的支持文件。
  */

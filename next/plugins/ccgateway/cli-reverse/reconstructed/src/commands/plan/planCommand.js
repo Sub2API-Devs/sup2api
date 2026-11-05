@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/plan 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-139kcwcq.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dgr63j8a.js (1)
  * attribution: placement 1
  */
 import { RENAME_NOTICE } from "../usage-credits/renameNotice.js";
@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-139kcwcq.js:4446-4662 placement
+//@ chunk-dgr63j8a.js:4782-4998 placement
 /**
  * /extra-usage 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

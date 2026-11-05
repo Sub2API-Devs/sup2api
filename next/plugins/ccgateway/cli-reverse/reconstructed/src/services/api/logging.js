@@ -3,9 +3,9 @@
  *
  * API 请求的遥测：tengu_api_query（发请求前）、tengu_api_success / tengu_api_error（含 token、耗时、TTFT、缓存、网关识别）、拒答事件、请求内容与工具 schema 规模统计。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/logging.ts
- * pieces: chunk-e6aww6q8.js (37)
+ * pieces: chunk-5xgkngpb.js (37)
  * attribution: fingerprint 6, affinity 1, placement 17, layout 12, callgraph-witnessed 1
  */
 import {
@@ -31,7 +31,7 @@ import {
   noteObservedGateway,
   addToTotalDurationState,
 } from "../../bootstrap/state.js";
-import { getTokenCountFromUsage as getTokenCountFromUsage_5 } from "../../utils/messages/usageAndStopReason.js";
+import { getTokenCountFromUsage_2 } from "../../utils/messages/usageAndStopReason.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import {
   redactAccountMemoryText,
@@ -55,9 +55,11 @@ import {
   alwaysFalseErrors,
   classifyAPIError,
   DLP_REQUEST_DENIED,
+  isToolUseBlockCutOffError,
   CLAUDE_CODE_VERSION_TOO_OLD,
 } from "./errors.js";
 import { emitEpochFromHeader, TUNNEL_CREDENTIAL_EPOCH_HEADER } from "../../utils/auth/credentialEpoch.js";
+import { StoredLoginHeldBackError } from "../oauth/storedLoginRefusal.js";
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { extractConnectionErrorDetails, formatApiErrorType } from "./errorUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -77,7 +79,7 @@ import { endLLMRequestSpan, truncateContentForTelemetry } from "../../utils/tele
 import { bytesPerTokenForModel } from "../../utils/model/modelDisplay.js";
 import { isBase64ImageBlock as isBase64ImageBlock_3 } from "../../utils/imageValidation.js";
 import { parseWebpHeader } from "../../utils/imageFormats.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { getCachedJsonLength, roughTokenCountEstimationForContent } from "../tokenEstimation.js";
 import { jsonStringify, jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
@@ -94,13 +96,13 @@ import { writeOtelResponseBody } from "../../utils/telemetry/otelRawBodies.js";
 import { isBetaTracingEnabled } from "../../utils/telemetry/betaSessionTracing.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1559771-1560221 fingerprint (2.1.88 match: GATEWAY_FINGERPRINTS, 0.715)
+//@ chunk-5xgkngpb.js:1625352-1625802 fingerprint (2.1.88 match: GATEWAY_FINGERPRINTS, 0.715)
 /**
  * 已知 LLM 网关指纹：litellm、helicone、portkey、cloudflare-ai-gateway、kong、braintrust、bifrost（按响应头前缀）、databricks（按 host 后缀）。
  */
 var GATEWAY_FINGERPRINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GATEWAY_FINGERPRINT_ENTRIES;
-deferInit("chunk-e6aww6q8.js:1559771", () => {
+deferInit("chunk-5xgkngpb.js:1625352", () => {
   GATEWAY_FINGERPRINTS = {
     litellm: {
       headerPrefixes: ["x-litellm-"],
@@ -130,7 +132,7 @@ deferInit("chunk-e6aww6q8.js:1559771", () => {
   };
   GATEWAY_FINGERPRINT_ENTRIES = Object.entries(GATEWAY_FINGERPRINTS);
 });
-//@ chunk-e6aww6q8.js:1560221-1560527 affinity
+//@ chunk-5xgkngpb.js:1625802-1626109 affinity
 /**
  * 按响应头前缀或 base URL 主机后缀识别中间网关名，写进 API 成功/失败事件。
  */
@@ -150,7 +152,7 @@ function detectGateway({ headers, baseUrl }) {
     } catch {}
   return;
 }
-//@ chunk-e6aww6q8.js:2539755-2540118 placement
+//@ chunk-5xgkngpb.js:2591207-2591570 placement
 /**
  * 已知的请求入口（entrypoint）名单，未列出的按 unknown 处理。
  */
@@ -176,7 +178,7 @@ var KNOWN_ENTRYPOINTS = [
   "pr_steward",
   "claude-in-teams",
 ];
-//@ chunk-e6aww6q8.js:2540118-2540185 placement
+//@ chunk-5xgkngpb.js:2591570-2591637 placement
 /**
  * 导出函数 `entrypointForTelemetry`：参数 e，返回 fromEnumOpt(found) ?? lit_2("other")。
  */
@@ -184,7 +186,7 @@ function entrypointForTelemetry(messageClientPlatform) {
   let found = KNOWN_ENTRYPOINTS.find((entrypoint) => entrypoint === messageClientPlatform);
   return fromEnumOpt(found) ?? lit_2("other");
 }
-//@ chunk-e6aww6q8.js:2540185-2540288 placement (2.1.88 match: _temp9, 0.529)
+//@ chunk-5xgkngpb.js:2591637-2591740 placement (2.1.88 match: _temp9, 0.529)
 function emptyUsageCounters() {
   return {
     inputTokens: 0,
@@ -194,18 +196,18 @@ function emptyUsageCounters() {
     requests: 0,
   };
 }
-//@ chunk-e6aww6q8.js:2540288-2540322 placement
+//@ chunk-5xgkngpb.js:2591740-2591774 placement
 var MAX_TRACKED_MAPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var usageMapsByHost;
-deferInit("chunk-e6aww6q8.js:2540288", () => {
+deferInit("chunk-5xgkngpb.js:2591740", () => {
   MAX_TRACKED_MAPS = 32;
   usageMapsByHost = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:2540322-2540396 placement
+//@ chunk-5xgkngpb.js:2591774-2591848 placement
 function isMainThreadQueryLogging(querySource, sourceKind) {
   return sourceKind && (querySource.startsWith("repl_main_thread") || querySource === "sdk");
 }
-//@ chunk-e6aww6q8.js:2540396-2540588 placement
+//@ chunk-5xgkngpb.js:2591848-2592040 placement
 function sessionUsageTotals(host) {
   let usageMaps = usageMapsByHost.of(host ?? getRootSession().host);
   let sessionId = getSessionId();
@@ -223,7 +225,7 @@ function sessionUsageTotals(host) {
   usageMaps.set(sessionId, totals);
   return totals;
 }
-//@ chunk-e6aww6q8.js:2540588-2540665 placement
+//@ chunk-5xgkngpb.js:2592040-2592117 placement
 function addUsageToSession(delta, sessionId, host) {
   try {
     let totals = sessionUsageTotals(host);
@@ -231,7 +233,7 @@ function addUsageToSession(delta, sessionId, host) {
     if (sessionId) addUsage(totals.main, delta);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:2540665-2540877 placement
+//@ chunk-5xgkngpb.js:2592117-2592329 placement
 function addUsage(target, delta) {
   target.inputTokens += finiteOrZero(delta.input_tokens);
   target.cacheCreationTokens += finiteOrZero(delta.cache_creation_input_tokens);
@@ -239,14 +241,14 @@ function addUsage(target, delta) {
   target.outputTokens += finiteOrZero(delta.output_tokens);
   target.requests += 1;
 }
-//@ chunk-e6aww6q8.js:2540877-2540944 placement
+//@ chunk-5xgkngpb.js:2592329-2592396 placement
 function finiteOrZero(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
-//@ chunk-e6aww6q8.js:2540944-2541063 placement
+//@ chunk-5xgkngpb.js:2592396-2592515 placement
 var EXCUSED_TAIL_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MIN_EXCESS_TOKENS;
-deferInit("chunk-e6aww6q8.js:2540944", () => {
+deferInit("chunk-5xgkngpb.js:2592396", () => {
   EXCUSED_TAIL_REASONS = new Set([
     "none",
     "sent_once_text",
@@ -256,13 +258,13 @@ deferInit("chunk-e6aww6q8.js:2540944", () => {
   ]);
   MIN_EXCESS_TOKENS = 4096;
 });
-//@ chunk-e6aww6q8.js:2541063-2541674 placement
+//@ chunk-5xgkngpb.js:2592515-2593126 placement
 /**
  * 计算未被缓存覆盖的尾部字段：原因、标记后的消息数、重发/单次发送/无理由的尾部 token 估计，以及普通输入超出量。
  */
 function uncoveredTailFields(audit, usage) {
   let singleIteration = !Array.isArray(usage.iterations) || usage.iterations.length <= 1;
-  let tokenCountFromUsage = getTokenCountFromUsage_5(usage);
+  let tokenCountFromUsage = getTokenCountFromUsage_2(usage);
   let iterations =
     tokenCountFromUsage.input_tokens +
     tokenCountFromUsage.cache_read_input_tokens +
@@ -286,12 +288,12 @@ function uncoveredTailFields(audit, usage) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:2541674-2541686 placement
+//@ chunk-5xgkngpb.js:2593126-2593138 placement
 /**
  * 费用以微美元记录（cost_usd_micros）的换算系数 1e6。
  */
 var MICRO_USD_PER_USD = 1e6;
-//@ chunk-e6aww6q8.js:2541686-2541833 placement
+//@ chunk-5xgkngpb.js:2593138-2593285 placement
 function getErrorMessage(error) {
   if (error instanceof APIError) {
     let body = error.error?.error?.message;
@@ -299,7 +301,7 @@ function getErrorMessage(error) {
   }
   return error instanceof Error ? error.message : String(error);
 }
-//@ chunk-e6aww6q8.js:2541833-2541954 placement
+//@ chunk-5xgkngpb.js:2593285-2593406 placement
 function apiErrorText({ error, errorClass, querySource, accountMemoryKeys }) {
   return isDiskless()
     ? errorClass
@@ -309,9 +311,9 @@ function apiErrorText({ error, errorClass, querySource, accountMemoryKeys }) {
         getErrorMessage(error),
       );
 }
-//@ chunk-e6aww6q8.js:2541954-2541990 placement
+//@ chunk-5xgkngpb.js:2593406-2593442 placement
 var finiteCost = (costUSD) => (Number.isFinite(costUSD) ? costUSD : 0);
-//@ chunk-e6aww6q8.js:2541990-2542644 placement
+//@ chunk-5xgkngpb.js:2593442-2594099 placement
 /**
  * 构造 API 成功日志字段：模型、各类 token、费用（美元与微美元）、耗时、首 token 时间、请求 id、速度、查询来源与 effort。
  */
@@ -344,7 +346,7 @@ function apiSuccessFields(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2542644-2542969 placement
+//@ chunk-5xgkngpb.js:2594099-2594424 placement
 /**
  * 构造 API 错误日志字段：模型、错误、状态码、耗时、尝试次数、请求 id、速度、查询来源与 effort。
  */
@@ -380,14 +382,14 @@ function apiErrorFields({
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2542969-2543033 layout
+//@ chunk-5xgkngpb.js:2594424-2594488 layout
 /**
  * 非受限环境下返回 ANTHROPIC_BASE_URL（供网关识别与遥测）。
  */
 function getCustomApiBaseUrl() {
   return isDiskless() ? undefined : process.env.ANTHROPIC_BASE_URL;
 }
-//@ chunk-e6aww6q8.js:2543033-2543272 fingerprint (2.1.88 match: getAnthropicEnvMetadata, 0.926)
+//@ chunk-5xgkngpb.js:2594488-2594727 fingerprint (2.1.88 match: getAnthropicEnvMetadata, 0.927)
 /**
  * 遥测用环境元数据：baseUrl、ANTHROPIC_MODEL、ANTHROPIC_SMALL_FAST_MODEL。
  */
@@ -405,7 +407,7 @@ function getAnthropicEnvMetadata() {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2543272-2544363 callgraph-witnessed (2.1.88 match: getBuildAgeMinutes, 0.151)
+//@ chunk-5xgkngpb.js:2594727-2595818 callgraph-witnessed (2.1.88 match: getBuildAgeMinutes, 0.15)
 /**
  * 距构建时间（BUILD_TIME 2026-10-30T23:28:13Z）的分钟数。
  */
@@ -415,10 +417,10 @@ function getBuildAgeMinutes() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME
@@ -429,10 +431,10 @@ function getBuildAgeMinutes() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME,
@@ -440,7 +442,7 @@ function getBuildAgeMinutes() {
   if (isNaN(buildTime)) return;
   return Math.floor((Date.now() - buildTime) / 60000);
 }
-//@ chunk-e6aww6q8.js:2544363-2545020 fingerprint (2.1.88 match: logAPIQuery, 0.921)
+//@ chunk-5xgkngpb.js:2595818-2596477 fingerprint (2.1.88 match: logAPIQuery, 0.921)
 /**
  * 发请求前记 tengu_api_query：模型、消息数、temperature、betas、权限模式、querySource、thinking 类型、effort、fast mode、前一个 request id。
  */
@@ -489,7 +491,7 @@ function logAPIQuery({
     ...getAnthropicEnvMetadata(),
   });
 }
-//@ chunk-e6aww6q8.js:2545020-2549172 fingerprint (2.1.88 match: logAPIError, 0.492)
+//@ chunk-5xgkngpb.js:2596477-2600783 fingerprint (2.1.88 match: logAPIError, 0.477)
 /**
  * 记 API 失败：tengu_api_error（错误类型、状态、耗时、重试次数、request id、是否回退非流式、网关等），并做相关诊断。
  */
@@ -530,7 +532,11 @@ function logAPIError({
   let errStr = fromNumberOpt(status);
   let errorKind = classifyAPIError(error);
   let sourceCategory = normalizeAgentQuerySource(querySource);
-  if (errorKind === "stored_login_refused" && classifyQuerySource(querySource) === "main")
+  if (
+    errorKind === "stored_login_refused" &&
+    !(error instanceof StoredLoginHeldBackError && error.reason === "session_owner") &&
+    classifyQuerySource(querySource) === "main"
+  )
     logFeatureBad("managed_settings_stored_login_refused", "helper_not_in_force");
   let promptTooLong = promptTooLongIsHandled && errorKind === "prompt_too_long";
   let connectionErrorDetails = extractConnectionErrorDetails(error);
@@ -590,6 +596,10 @@ function logAPIError({
       logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
+    else if (isToolUseBlockCutOffError(error))
+      logForDebugging(`API tool-call block cut off: ${gateway}`, {
+        level: "error",
+      });
     else if (errorKind === CLAUDE_CODE_VERSION_TOO_OLD)
       logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
@@ -611,6 +621,7 @@ function logAPIError({
       errorKind === "token_revoked" ||
       errorKind === "oauth_org_not_allowed" ||
       errorKind === "oauth_refresh_lock_timeout" ||
+      errorKind === "network_edge_blocked" ||
       errorKind === "oauth_refresh_disk_full" ||
       errorKind === "stored_login_refused" ||
       errorKind === "verification_required"
@@ -750,15 +761,15 @@ function logAPIError({
     markFirstTeleportMessageLogged();
   }
 }
-//@ chunk-e6aww6q8.js:2549172-2549243 layout
+//@ chunk-5xgkngpb.js:2600783-2600854 layout
 /**
  * 可上报的拒答类别：cyber/bio/frontier_llm/reasoning_extraction。
  */
 var SHAREABLE_REFUSAL_CATEGORIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2549172", () => {
+deferInit("chunk-5xgkngpb.js:2600783", () => {
   SHAREABLE_REFUSAL_CATEGORIES = new Set(["cyber", "bio", "frontier_llm", "reasoning_extraction"]);
 });
-//@ chunk-e6aww6q8.js:2549243-2549704 layout
+//@ chunk-5xgkngpb.js:2600854-2601319 layout
 /**
  * 记 api_refusal 事件（模型、request id、速度、类别是否存在等）。
  */
@@ -805,7 +816,7 @@ function logApiRefusal({
     agentContext,
   );
 }
-//@ chunk-e6aww6q8.js:2549704-2549799 layout
+//@ chunk-5xgkngpb.js:2601319-2601414 layout
 /**
  * base64 字符串解码后的字节数。
  */
@@ -813,19 +824,19 @@ function base64DecodedLength(base64) {
   let padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
   return Math.floor((base64.length * 3) / 4) - padding;
 }
-//@ chunk-e6aww6q8.js:2549799-2549836 layout
+//@ chunk-5xgkngpb.js:2601414-2601451 layout
 /**
  * 87400 / 40：读图片尺寸时先取 40 字符再取 87400 字符解码头部；WeakMap 缓存每个 source 的统计。
  */
 var IMAGE_HEADER_SNIFF_LONG_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var IMAGE_HEADER_SNIFF_SHORT_CHARS;
 var imageStatsCache;
-deferInit("chunk-e6aww6q8.js:2549799", () => {
+deferInit("chunk-5xgkngpb.js:2601414", () => {
   IMAGE_HEADER_SNIFF_LONG_CHARS = 87400;
   IMAGE_HEADER_SNIFF_SHORT_CHARS = 40;
   imageStatsCache = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:2549836-2549938 layout
+//@ chunk-5xgkngpb.js:2601451-2601553 layout
 /**
  * requestContentStats 的异常保护版。
  */
@@ -837,7 +848,7 @@ function safeRequestContentStats(messages, model) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2549938-2551984 layout
+//@ chunk-5xgkngpb.js:2601553-2603603 layout
 /**
  * 统计请求消息内容：图片数/字节/像素、文档数/字节、文本/思考/工具输入/工具结果字符数。
  */
@@ -869,7 +880,7 @@ function requestContentStats(messages, model) {
       case "document": {
         stats.documentBlockCount += 1;
         let source = block.source;
-        if (!isPlainObject_5(source)) return stats;
+        if (!isPlainObject_6(source)) return stats;
         switch (block.source.type) {
           case "base64":
             if (isBase64ImageBlock_3(block))
@@ -954,7 +965,7 @@ function requestContentStats(messages, model) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:2551984-2552630 layout
+//@ chunk-5xgkngpb.js:2603603-2604249 layout
 /**
  * 统计本次新发与重发的图片块数与字节。
  */
@@ -998,7 +1009,7 @@ function sentImageStats(messagesForAPI, fallbackLimit) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2552630-2552765 layout
+//@ chunk-5xgkngpb.js:2604249-2604384 layout
 /**
  * 遥测用工具名：内置工具原名，MCP 工具归为 mcp_tool，其他为 other。
  */
@@ -1011,7 +1022,7 @@ function toolNameForTelemetry_2(name, names) {
   }
   return lit_2("other");
 }
-//@ chunk-e6aww6q8.js:2552765-2552875 layout
+//@ chunk-5xgkngpb.js:2604384-2604494 layout
 /**
  * 把 [工具类别, 字符数] 列表拼成脱敏 JSON 字符串（遥测元数据）。
  */
@@ -1028,7 +1039,7 @@ function buildToolSizeJson(schemas) {
     lit_2("}"),
   );
 }
-//@ chunk-e6aww6q8.js:2552875-2553413 layout
+//@ chunk-5xgkngpb.js:2604494-2605035 layout
 /**
  * system 字符数、工具 schema 字符数、工具数、延迟工具数与 schema 哈希（请求前缀遥测）。
  */
@@ -1069,17 +1080,17 @@ function requestPrefixStats(systemBlocks, tools, querySource) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2553413-2553448 layout
+//@ chunk-5xgkngpb.js:2605035-2605070 layout
 /**
  * 512：tengu_tool_schema_sizes 去重集合及其上限。
  */
 var loggedToolSchemaKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_LOGGED_TOOL_SCHEMA_KEYS;
-deferInit("chunk-e6aww6q8.js:2553413", () => {
+deferInit("chunk-5xgkngpb.js:2605035", () => {
   loggedToolSchemaKeys = new HostScoped(() => new Set());
   MAX_LOGGED_TOOL_SCHEMA_KEYS = 512;
 });
-//@ chunk-e6aww6q8.js:2553448-2557974 fingerprint (2.1.88 match: logAPISuccess, 0.505)
+//@ chunk-5xgkngpb.js:2605070-2609599 fingerprint (2.1.88 match: logAPISuccess, 0.504)
 /**
  * 记 tengu_api_success：模型、usage、耗时（含重试）、TTFT、首内容时间、stop_reason、成本、是否回退非流式、网关等；必要时记工具 schema 大小。
  */
@@ -1329,7 +1340,7 @@ function logAPISuccess({
   }
   setLastApiCompletionTimestamp(now);
 }
-//@ chunk-e6aww6q8.js:2557974-2562306 fingerprint (2.1.88 match: logAPISuccessAndDuration, 0.59)
+//@ chunk-5xgkngpb.js:2609599-2613934 fingerprint (2.1.88 match: logAPISuccessAndDuration, 0.587)
 /**
  * 响应完成后汇总：统计输出文本/思考/工具输入长度，识别网关，累加 API 时长，调用 logAPISuccess。
  */

@@ -3,9 +3,9 @@
  *
  * 下载会话附件（文件名校验、仅第一方 API）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8rjc1mgh.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zffzzkds.js (2)
  * attribution: placement 2
  */
 import { mkdir, lstat, rm } from "fs/promises";
@@ -17,13 +17,15 @@ import {
   booleanSchema,
   objectSchema,
   _enum,
+  numberSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
+import { SHA256_HEX_RE } from "../utils/commitAttribution.js";
 import { getAPIProvider } from "../utils/model/providers.js";
 import { getStageFileRoot } from "../utils/stageFileRoots.js";
 import { env } from "../utils/env.js";
 import { retryFsOp } from "../utils/atomicPublishWrite.js";
 
-//@ chunk-8rjc1mgh.js:1085-1289 placement
+//@ chunk-zffzzkds.js:1207-1483 placement
 /**
  * 附件下载请求的 zod 结构 {file_uuid, name, keep_existing}；同一声明里的 j 是结果结构 {outcome, reason}。
  */
@@ -34,15 +36,17 @@ var fetchAttachmentInputSchema = DoctorLazy(() =>
     keep_existing: booleanSchema().optional(),
   }),
 );
-var fetchAttachmentResultSchema = DoctorLazy(() =>
+var fetchAttachmentOutputSchema = DoctorLazy(() =>
   objectSchema({
     outcome: _enum(["placed", "kept", "too_large", "failed"]),
     reason: stringSchema()
       .regex(/^[a-z_]{1,32}$/)
       .optional(),
+    sha256: stringSchema().regex(SHA256_HEX_RE).optional(),
+    size: numberSchema().int().nonnegative().optional(),
   }),
 );
-//@ chunk-8rjc1mgh.js:1289-3668 placement
+//@ chunk-zffzzkds.js:1483-3900 placement
 /**
  * 下载会话附件：校验文件名、只在第一方 API 提供方下可用
  */
@@ -189,6 +193,8 @@ async function fetchSessionAttachment(
       summary: `placed ${download.file.size} bytes`,
       output: {
         outcome: "placed",
+        sha256: download.file.sha256,
+        size: download.file.size,
       },
     };
   } finally {

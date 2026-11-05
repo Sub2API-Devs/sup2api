@@ -1,6 +1,8 @@
-# Claude Code 2.1.316 逆向重建
+# Claude Code 2.1.318 逆向重建
 
-本目录（sup2api 的 `next/plugins/ccgateway/cli-reverse/`）把官方 Claude Code CLI **2.1.316** 还原成一个人能读、能编译运行的源码项目。输入是官方的 linux-x64 单文件可执行程序（sha256 `fd13c700…d824`），还原方法基于 **AST 语法分析**。
+本目录（sup2api 的 `next/plugins/ccgateway/cli-reverse/`）把官方 Claude Code CLI **2.1.318** 还原成一个人能读、能编译运行的源码项目。输入是官方的 linux-x64 单文件可执行程序（sha256 `708c77b2…bf0bd`），还原方法基于 **AST 语法分析**。
+
+2026-11-05 从 2.1.316 升级到 2.1.318：316 的名字、说明、放置由 `tools/versions/carry-names.mjs` 按代码配对迁移过来，318 新增的部分由补充批次命名和放置。过程见 [`docs/process/upgrade-318.md`](docs/process/upgrade-318.md)，官方的版本变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
 
 交付物是阅读树 [`reconstructed/`](reconstructed/)：
 
@@ -17,17 +19,17 @@
 
 | 项 | 结果 |
 |---|---|
-| 声明对应 | 阅读树 81,667 个顶层声明，与官方构建的声明一一对应。每个声明前有一行 `//@ chunk-xxx.js:起-止 <放置依据>` 出处注释，可以追溯到原字节区间；末尾的 `(2.1.88 match: 名字, 相似度)` 是与旧版最相近的函数，只是线索，不一定是这个声明的名字 |
-| 一方代码 | 5,295（其中 353 个是动态加载用的再导出入口 `*.lazy.js`） 个文件，82.5 MB；其中 3,280 个文件是 2.1.88 没有、316 新增的 |
-| 第三方代码 | 264 个 npm 包，2,027 个文件，15.4 MB；与 npm 源码对齐，文件头写明包名和版本 |
-| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 2 / 60 / 68 个）；第三方也都是 **100%**（剩余 4 / 1 / 1 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段。函数钩子 worker（`src/plugins/functionHooks/hooks-worker/hooks-worker.js`，worker 线程里的另一个程序，不在扫描的 chunk 里，不计入上面的比例）的 208 个绑定另按 [`naming/worker-hooks-worker.json`](naming/worker-hooks-worker.json) 命名，改名时逐个核对引用的绑定不变（[`tools/emit/worker-names.mjs`](tools/emit/worker-names.mjs)） |
-| 剩余压缩名 | 共 136 个，全部有原因：`dead` 35（从未读取）、`authored` 101（作者原名，对照过 npm 源码或是未压缩的随包脚本），**命名缺口 0**。原来还有 111 个 `frozen`：protobufjs 的直接 `eval` 让改名器冻结了整个 gRPC chunk，2026-11-04 改为只冻结 eval 实际读的名字（`require`），这 111 个都已命名；逐条原因见 [`analysis/readability/leftover.md`](analysis/readability/leftover.md) |
-| 构建 | `reconstructed/` 用 Bun 1.4.4 构建 0 错误，约 25 秒；运行时不读 `original/`、`runnable/`、`artifacts/` |
+| 声明对应 | 阅读树 84,503 个顶层声明，与官方构建的声明一一对应。每个声明前有一行 `//@ chunk-xxx.js:起-止 <放置依据>` 出处注释，可以追溯到原字节区间；末尾的 `(2.1.88 match: 名字, 相似度)` 是与旧版最相近的函数，只是线索，不一定是这个声明的名字 |
+| 一方代码 | 5,530 个文件（其中 397 个是动态加载用的再导出入口 `*.lazy.js`），85.9 MB；其中 3,474 个文件是 2.1.88 没有、之后新增的 |
+| 第三方代码 | 257 个 npm 包（按文件头统计），2,029 个文件，15.4 MB；与 npm 源码对齐，文件头写明包名和版本 |
+| 可读率（[`tools/verify/readability.mjs`](tools/verify/readability.mjs)） | 一方代码顶层 / 参数 / 局部均为 **100%**（剩余 1 / 0 / 0 个）；第三方也都是 **100%**（剩余 2 / 0 / 0 个）。成员有意取的短名（`ids`、`ttl`、比较器的 `a/b`）与上游原名（ajv 的 `it`）计为可读，分别统计在 `analysis/readability/summary.json` 的 chosenShort、authenticShort 字段。函数钩子 worker（`src/plugins/functionHooks/hooks-worker/hooks-worker.js`，worker 线程里的另一个程序，不在扫描的 chunk 里，不计入上面的比例）的 208 个绑定另按 [`naming/worker-hooks-worker.json`](naming/worker-hooks-worker.json) 命名，改名时逐个核对引用的绑定不变（[`tools/emit/worker-names.mjs`](tools/emit/worker-names.mjs)） |
+| 剩余压缩名 | 共 3 个，都是 `authored`（作者原名：zod 的 `_lt`、axios 的 `G`，以及随包脚本 build-report-lite 的 `esc`），**命名缺口 0**。2.1.316 时还有 35 个 `dead`（从未读取的变量），2.1.318 的补充批次也给它们起了名字。protobufjs 的直接 `eval` 只冻结 eval 实际读的名字（`require`），gRPC chunk 没有被冻结的绑定；逐条原因见 [`analysis/readability/leftover.md`](analysis/readability/leftover.md) |
+| 构建 | `reconstructed/` 用 Bun 1.4.4 构建 0 错误，约 40 秒；运行时不读 `original/`、`runnable/`、`artifacts/` |
 | 运行一致 | 原版 vs 阅读树构建产物 **98/98** 场景一致；原版 vs 改名树 `runnable/` **98/98** 一致 |
 | 改名等价 | α 校验 0 差异：模块内、跨模块、文件级都是 0 |
-| 去压缩等价 | 2,650 个模块的 printer 校验和规范形校验都是 0 差异 |
-| 声明级等价 | 逐个声明拿阅读树和官方原始字节比结构（[`tools/verify/decl-equiv.mjs`](tools/verify/decl-equiv.mjs)，不依赖场景，覆盖每一行）：81,667 个里 81,662 个一致；官方每条顶层语句都有着落，阅读树没有多出来的逻辑。剩下 5 个都在第三方包里，是有意按 npm 源码写法还原的（`var X = class e {…}` 写成 `class X {…}`，正则 flags `ig` 写成 `gi`），见 [`analysis/verify/decl-equiv.md`](analysis/verify/decl-equiv.md) |
-| 静态校验 | 0 解析错误、0 重复声明、0 缺失导入；自由标识符 32 个，与原版集合相同 |
+| 去压缩等价 | 2,859 个模块的 printer 校验和规范形校验都是 0 差异 |
+| 声明级等价 | 逐个声明拿阅读树和官方原始字节比结构（[`tools/verify/decl-equiv.mjs`](tools/verify/decl-equiv.mjs)，不依赖场景，覆盖每一行）：84,503 个里 84,498 个一致；官方每条顶层语句都有着落，阅读树没有多出来的逻辑。剩下 5 个都在第三方包里，是有意按 npm 源码写法还原的（`var X = class e {…}` 写成 `class X {…}`，正则 flags `ig` 写成 `gi`），见 [`analysis/verify/decl-equiv.md`](analysis/verify/decl-equiv.md) |
+| 静态校验 | 0 解析错误、0 重复声明、0 缺失导入；自由标识符 33 个，与原版集合相同 |
 | 文档引用 | 架构文档和 10 本手册的代码引用逐条校验，失效 0 处 |
 
 ## 从哪里开始读
@@ -38,7 +40,7 @@
 | 按子系统深入到函数级 | [`docs/handbook/`](docs/handbook/)：启动、查询循环、工具、权限、扩展、状态、UI、Ink、代理、命令 |
 | 读源码 | [`reconstructed/src/`](reconstructed/src/) 是一方代码，按 2.1.88 目录布局；`reconstructed/vendor/` 是第三方包 |
 | 找一个函数 | 查 `reconstructed/symbols.jsonl`（名字 → 文件:行、来源、说明），或运行 `node tools/q.mjs find <词>` |
-| 了解 316 相对旧版的变化 | 各手册的"与 2.1.88 的差异"一节，以及 [`docs/CHANGES-SINCE-2.1.88.md`](docs/CHANGES-SINCE-2.1.88.md) |
+| 了解 2.1.88 之后的变化（316 → 318 见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)） | 各手册的"与 2.1.88 的差异"一节，以及 [`docs/CHANGES-SINCE-2.1.88.md`](docs/CHANGES-SINCE-2.1.88.md) |
 | 了解这个项目是怎么做出来的 | [`docs/PLAN.md`](docs/PLAN.md)、[`docs/WORKLOG.md`](docs/WORKLOG.md)、[`docs/process/`](docs/process/)（各成员的过程记录；问题报告与裁决的对照见 [`docs/process/fixes-index.md`](docs/process/fixes-index.md)） |
 | 了解阅读树怎么做到能编译运行 | [`docs/process/buildable.md`](docs/process/buildable.md) |
 | 了解官方 CLI 实际发出什么请求、各版本改了什么 | [`research/README.md`](research/README.md)；版本对比工具见 [`tools/versions/README.md`](tools/versions/README.md) |
@@ -50,7 +52,7 @@
 reconstructed/        ★ 阅读树（生成物，入库）
   package.json          npm run build / npm start
   build.mjs             用 Bun 1.4.4 构建 → dist/
-  src/                  一方代码（按 2.1.88 布局；316 新增模块放在最合适的目录）
+  src/                  一方代码（按 2.1.88 布局；之后新增的模块放在最合适的目录）
   vendor/               第三方 npm 包（按包名/版本还原的路径）
   runtime/              Bun 打包器运行时辅助、延迟初始化（deferred-init.js）
   assets/               资源文件（提示词、wasm、图片等）
@@ -104,7 +106,7 @@ bash tools/fetch-references.sh
 ```
 
 ```bash
-node tools/extract/restore-bun.cjs artifacts/official/claude-linux-x64 original 2.1.316
+node tools/extract/restore-bun.cjs artifacts/official/claude-linux-x64 original 2.1.318
 ```
 
 ```bash
@@ -113,7 +115,7 @@ SCAN=1 VERIFY=1 bash tools/pipeline.sh
 
 说明：
 
-- 官方 ELF 放在 `artifacts/official/claude-linux-x64`，sha256 见 `artifacts/official/official-manifest.json`。没有这个文件时，运行 `node tools/extract/acquire.mjs 2.1.316 linux-x64 artifacts/official` 下载并校验。需要代理时加 `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=…`。`tools/extract/restore-bun.cjs` 的目标目录 `original/` 必须不存在。
+- 官方 ELF 放在 `artifacts/official/claude-linux-x64`，sha256 见 `artifacts/official/official-manifest.json`。没有这个文件时，运行 `node tools/extract/acquire.mjs 2.1.318 linux-x64 artifacts/official` 下载并校验。需要代理时加 `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=…`。`tools/extract/restore-bun.cjs` 的目标目录 `original/` 必须不存在。
 - 流水线依次做：AST 扫描 → 与 2.1.88 匹配 → 门面导出名 → 切分与放置 → 命名合并 → 生成 `runnable/` 并做 α 校验 → 生成 `reconstructed/` → 构建阅读树。
 - 加 `VERIFY=1` 时，最后还会跑运行对拍和全部静态校验，大约需要 1 小时。
 - 第三方识别要联网下载 npm 包，约 15 分钟，结果已经入库，一般不用重跑：
@@ -132,7 +134,7 @@ bash tools/vendor/run.sh
 | 运行对拍：阅读树 | `node tools/verify/compare.mjs original reconstructed/dist` | **从阅读树源码构建出的 CLI 与官方构建行为一致** |
 | α 等价 | `node tools/rename/apply.mjs original naming/final runnable --force --check` | 改名前后 AST 只差绑定名，绑定对应是双射，跨模块导入导出一致 |
 | 去压缩等价 | `node tools/emit/deminify-dir.mjs runnable <out> --check-printer --check-canonical` | `!0 → true`、拆逗号表达式等改写不改变语义；改写后的树同样跑 98 个场景 |
-| 静态完整性 | `node tools/verify/readable-check.mjs` | 81,667 个声明齐全且各出现一次，可解析、无重复、导入都能解析，自由标识符与原版相同 |
+| 静态完整性 | `node tools/verify/readable-check.mjs` | 84,503 个声明齐全且各出现一次，可解析、无重复、导入都能解析，自由标识符与原版相同 |
 | 声明级等价 | `node --max-old-space-size=12000 tools/verify/decl-equiv.mjs` | 每个声明出处注释后面的代码，与官方原始字节在去掉名字、去压缩改写和阅读树布局（`export`、`deferInit` 包装、模块路径）之后结构相同，绑定关系一一对应；场景没走到的代码也覆盖 |
 | 可读率 | `node tools/verify/readability.mjs` 和 `node tools/verify/leftover.mjs` | 各类绑定的可读比例，以及剩余压缩名的逐条原因 |
 | 名字形态 | `node tools/verify/name-shape.mjs naming/final analysis/name-shape` | 名字和初值形态不符的地方（例如 `isX` 是字符串）全部人工裁决过 |
@@ -181,13 +183,13 @@ bash tools/vendor/run.sh
   - `dead`：从未被读取的变量和参数。
   - `authored`：未压缩的随包脚本里，作者自己起的短名。
   - `unnamed`：命名缺口。
-- **`_2` 后缀**：同一作用域内两个声明起了同一个名字时，后出现的那个带 `_2`（`_3`…）后缀。一方代码顶层有 1,777 个这样的名字。2026-11-04 核对：其中 697 个和不带后缀的那个是同一份代码（Bun 把同一函数内联进了不同 chunk）；**另外 967 个代码不同**，例如 `src/utils/errors.js` 的 `getErrnoPath` 与 `getErrnoPath_2`、`ThemeProvider.js` 的 `useTheme`（返回 `[主题, 设置函数]`）与 `useTheme_2`（读 context）。这些名字还需要逐个区分。
-- **React Compiler 记忆化缓存**：316 的界面组件是 React Compiler 编译过的，565 个文件里有 `if ($[41] !== width) { … $[41] = width; … } else x = $[40];` 这样的按下标缓存，`t0`、`t1` 是编译器的临时变量名。这是官方产物本来的样子，去掉会改变重新渲染的行为，所以阅读树保留了它。读组件时，可以把每段缓存当成一次 `useMemo` 来看。
-- **大文件**：`src/cli/print.js` 有 19,127 行（2.1.88 的 `print.ts` 是 5,594 行），`src/services/mcp/client.js` 有 16,083 行。这两个文件声明不多（print.js 69 个），主要是单个函数在 316 里变大了。`src/utils/releaseNotes.js` 里有一个 9 万字符的字符串字面量。
+- **`_2` 后缀**：同一作用域内两个声明起了同一个名字时，后出现的那个带 `_2`（`_3`…）后缀。一方代码顶层有 1,731 个这样的名字（2.1.318）。2026-11-04 在 2.1.316 上核对：其中 697 个和不带后缀的那个是同一份代码（Bun 把同一函数内联进了不同 chunk）；**另外 967 个代码不同**，例如 `src/utils/errors.js` 的 `getErrnoPath` 与 `getErrnoPath_2`、`ThemeProvider.js` 的 `useTheme`（返回 `[主题, 设置函数]`）与 `useTheme_2`（读 context）。这些名字还需要逐个区分。
+- **React Compiler 记忆化缓存**：界面组件是 React Compiler 编译过的，564 个文件里有 `if ($[41] !== width) { … $[41] = width; … } else x = $[40];` 这样的按下标缓存，`t0`、`t1` 是编译器的临时变量名。这是官方产物本来的样子，去掉会改变重新渲染的行为，所以阅读树保留了它。读组件时，可以把每段缓存当成一次 `useMemo` 来看。
+- **大文件**：`src/cli/print.js` 有 19,737 行（2.1.88 的 `print.ts` 是 5,594 行），`src/services/mcp/client.js` 有 16,262 行。这两个文件声明不多（print.js 69 个，2.1.316 时），主要是单个函数在 316 里变大了。`src/utils/releaseNotes.js` 里有一个 9 万字符的字符串字面量。
 - **第三方包的写法**：少数第三方声明按 npm 源码的写法还原（`var X = class e {…}` 写成 `class X {…}`），和官方字节在提升和暂时性死区上有细微差别。声明级校验列出了全部 5 处。
-- **延迟初始化包装**：阅读树按源模块拆成了几千个 ES 模块，模块之间有一个 3,675 个模块组成的导入环（官方构建启动时只求值 8 个 chunk）。为了保持官方的求值顺序，有 5,801 条顶层语句被包在 `deferInit("<chunk>:<偏移>", () => {…})` 里，等导入环加载完成后再按官方顺序执行，每处都有注释说明原因。其中 2,852 条只是为了保持副作用的先后顺序，用更细的副作用分析可以减少。做法和等价性论证见 [`docs/process/buildable.md`](docs/process/buildable.md)。
+- **延迟初始化包装**：阅读树按源模块拆成了几千个 ES 模块，模块之间有一个大的导入环（2.1.316 时是 3,675 个模块）（官方构建启动时只求值 8 个 chunk）。为了保持官方的求值顺序，有 5,997 条顶层语句（2.1.318，decl-equiv 的 deferred 数）被包在 `deferInit("<chunk>:<偏移>", () => {…})` 里，等导入环加载完成后再按官方顺序执行，每处都有注释说明原因。2.1.316 时其中 2,852 条只是为了保持副作用的先后顺序，用更细的副作用分析可以减少。做法和等价性论证见 [`docs/process/buildable.md`](docs/process/buildable.md)。
 - **启动速度**：阅读树构建的 CLI 比官方慢约 0.6 秒。官方用的是 bytecode 编译，而 `--compile --bytecode` 在这棵树上生成 bytecode 失败，没有深究。
 - **和官方原生二进制的运行时差异**：官方 ELF 内嵌的是私有修订的 Bun 1.4.4。它在发送前把计费头里的 `cch=00000` 改写成按请求计算的值，报告的 Node 版本是 v26.12.1；公开的 Bun 1.4.4 不改写 `cch`，报 v26.3.0。阅读树构建的 CLI 跑在公开 Bun 上，所以这两处与官方原生运行时不同（对拍时两边都在公开 Bun 上跑，因此一致）。见 [`research/README.md`](research/README.md)。
 - **场景覆盖**：运行对拍覆盖 98 个场景，场景没走到的路径只有静态证据（声明一一对应、α 等价、规范形等价）。"加载时依赖"的判断是近似的，场景外的启动路径理论上仍可能有顺序问题。函数钩子 worker 只验证了能启动。
 - **文件归属**：一个源文件在官方构建里会被拆散到多个 chunk。归属先按门面导出、2.1.88 匹配和调用关系推断，再经过四轮人工复核（[`docs/process/fixes-index.md`](docs/process/fixes-index.md)），但仍是推断，不是源码真值。
-- **旧版对照**：`reference` 来源的名字依赖与 2.1.88 的匹配。316 改过的函数可能沿用旧名，名字形态检查和人工复核能兜住一部分。
+- **旧版对照**：`reference` 来源的名字依赖与 2.1.88 的匹配。2.1.88 之后改过的函数可能沿用旧名；316 → 318 迁移来的名字，在 318 改过的代码里也可能对错对象（抽样约 5%，见 `docs/process/batch-ck318-1.md`），名字形态检查和人工复核能兜住一部分。

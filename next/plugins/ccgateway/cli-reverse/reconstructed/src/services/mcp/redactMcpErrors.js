@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 错误文本与端点 URL 的脱敏（令牌、密钥、查询参数）及服务器不可用原因文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a76knw89.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-03tec5k5.js (4), chunk-c41z4928.js (18)
  * attribution: placement 22
  */
 import { getCliOwnedState, isCliOwnedConfig } from "./cliOwnedClients.js";
@@ -18,8 +18,9 @@ import {
 import { normalizeMcpServerName } from "../api/deferredToolsState.js";
 import { splitAroundEnvRefs, normalizeEnvRefs } from "./envExpansion.js";
 import { urlPatternToRegex, truncateToLength } from "../../utils/stringUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { normalizeNfkc } from "../../utils/sanitization.js";
+import { httpOrigin } from "./signedOutFallback.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import {
@@ -36,7 +37,7 @@ import { buildMcpToolName } from "./mcpStringUtils.js";
 import { CHROME_JAVASCRIPT_TOOL } from "../../utils/claudeInChrome/common.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a76knw89.js:29000-29777 placement
+//@ chunk-c41z4928.js:3546-4317 placement
 /**
  * 密钥值片段的正则源码。
  */
@@ -45,7 +46,7 @@ var SECRET_ASSIGNMENT_SRC;
 var SECRET_VALUE_SRC;
 var regExp_2;
 var regExp_3;
-deferInit("chunk-a76knw89.js:29000", () => {
+deferInit("chunk-c41z4928.js:3546", () => {
   SECRET_KEY_PATTERN = String.raw`(?:access[-_ ]?|refresh[-_ ]?|id[-_ ]?|client[-_ ]?|api[-_ ]?|x[-_]api[-_ ]?|session[-_ ]?|auth[-_ ]?)?(?:token|key|secret|password|authorization|credential)s?`;
   SECRET_ASSIGNMENT_SRC = String.raw`\b${SECRET_KEY_PATTERN}(?:\\*["']|\\+)?\s*[:=\uFF1A\uFF1D]\s*(?:\\*["']|\\+)?\s*(?!=*${SECRET_KEY_PATTERN}=*(?![A-Za-z0-9._~+/=%-]))(?=[A-Za-z0-9._~+/=%-]{8})[A-Za-z]*[0-9._~+/=%-]`;
   SECRET_VALUE_SRC = String.raw`(?:[A-Za-z0-9._~+/=%-]+?(?=${SECRET_ASSIGNMENT_SRC})|[A-Za-z0-9._~+/=%-]{8,})`;
@@ -58,12 +59,12 @@ deferInit("chunk-a76knw89.js:29000", () => {
     "gi",
   );
 });
-//@ chunk-a76knw89.js:29777-29909 placement
+//@ chunk-c41z4928.js:4317-4449 placement
 function redactedValue(match, prefix, secret, start, text) {
   if (!/[0-9._~+/=%-]/.test(secret)) return match;
   return /\w/.test(text[start + match.length] ?? "") ? `${prefix} [redacted] ` : `${prefix} [redacted]`;
 }
-//@ chunk-a76knw89.js:29909-29995 placement
+//@ chunk-c41z4928.js:4449-4535 placement
 /**
  * 脱敏文本里的密钥（模式为 none 时原样返回）。
  */
@@ -71,12 +72,12 @@ function redactSecrets(text, mode = "all") {
   if (mode === "none") return text;
   return text.replace(regExp_2, redactedValue).replace(regExp_3, redactedValue);
 }
-//@ chunk-a76knw89.js:29995-30240 placement
+//@ chunk-c41z4928.js:4535-4780 placement
 var SECRET_LABEL_REGEX =
   /^(?:bearer|basic|(?:access|refresh|id|client|api|x[-_]api|session|auth)?[-_ ]?(?:token|key|secret|password|authorization|credential)s?)$/i;
 var SECRET_LABEL_SUFFIX_REGEX =
   /(?:^|[^A-Za-z0-9_\s])(?:bearer|basic|token|key|secret|password|authorization|credential)s?$/i;
-//@ chunk-a76knw89.js:30240-30455 placement
+//@ chunk-c41z4928.js:4780-4995 placement
 function isSecretLabel(label) {
   let mapped = label.split(/[:=\uFF1A\uFF1D]+/).map((part) => part.trim());
   let labelCount = 0;
@@ -89,7 +90,7 @@ function isSecretLabel(label) {
   }
   return labelCount > 0;
 }
-//@ chunk-a76knw89.js:30455-30620 placement
+//@ chunk-c41z4928.js:4995-5158 placement
 var MAX_ERROR_TEXT_CHARS = 2000;
 var ERROR_TEXT_SLACK_CHARS = 512;
 var MAX_ERROR_INPUT_CHARS = MAX_ERROR_TEXT_CHARS + ERROR_TEXT_SLACK_CHARS;
@@ -100,7 +101,7 @@ var MAX_DECODED_TEXT_CHARS = 8192;
 var MAX_CONFIG_REPEATS = 65536;
 var INVISIBLE_CHAR_REGEX =
   /^(?:[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs})$/u;
-//@ chunk-a76knw89.js:30620-30733 placement (2.1.88 match: quoteProblematicValues, 0.844)
+//@ chunk-c41z4928.js:5158-5271 placement (2.1.88 match: quoteProblematicValues, 0.843)
 /**
  * 格式化 name (errorCode): "error" 形式的错误描述。旧版名 quoteProblematicValues 配错。
  */
@@ -109,7 +110,7 @@ function formatNamedError(frontmatterText) {
   let messageText = frontmatterText.error ? `: "${frontmatterText.error}"` : "";
   return `${frontmatterText.name}${codeText}${messageText}`;
 }
-//@ chunk-a76knw89.js:30733-31068 placement
+//@ chunk-c41z4928.js:5271-5838 placement
 /**
  * 由策略/设置导致禁用的原因集合。
  */
@@ -119,38 +120,47 @@ var NOT_APPROVED_REASON;
 var RESERVED_ADDRESS_REASON;
 var ACCOUNT_CHANGED_REASON;
 var DISABLED_IN_MCP_REASON;
+var TOKEN_REJECTED_REASON;
+var AUTH_CLEARED_REASON;
+var AUTH_CLEAR_FAILED_REASON;
+var CLOSED_WHILE_SIGNING_IN_REASON;
 var POLICY_DISABLE_REASONS;
-deferInit("chunk-a76knw89.js:30733", () => {
+deferInit("chunk-c41z4928.js:5271", () => {
   BLOCKED_BY_POLICY_REASON = "Blocked by enterprise managed policy";
   DISABLED_BY_SETTING_REASON = "Disabled by disableClaudeAiConnectors setting";
   NOT_APPROVED_REASON = "Not approved for this project - approve it via /mcp first";
   RESERVED_ADDRESS_REASON = "Refused - Claude Code reserves this address for its own use";
   ACCOUNT_CHANGED_REASON = "Account changed while connecting - reconnect to use it";
   DISABLED_IN_MCP_REASON = "Disabled in /mcp";
+  TOKEN_REJECTED_REASON =
+    "claude.ai rejected the session token \u2014 it may lack connector scopes or be invalid. Run /login.";
+  AUTH_CLEARED_REASON = "Authentication cleared";
+  AUTH_CLEAR_FAILED_REASON = "Authentication could not be cleared";
+  CLOSED_WHILE_SIGNING_IN_REASON = "Its connection was closed while signing in again";
   POLICY_DISABLE_REASONS = new Set([BLOCKED_BY_POLICY_REASON, DISABLED_BY_SETTING_REASON]);
 });
-//@ chunk-a76knw89.js:31068-31113 placement
+//@ chunk-c41z4928.js:5838-5883 placement
 /**
  * 判断原因是否属于策略禁用。
  */
 function isPolicyDisabledReason(error) {
   return error !== undefined && POLICY_DISABLE_REASONS.has(error);
 }
-//@ chunk-a76knw89.js:31113-31144 placement
+//@ chunk-c41z4928.js:5883-5914 placement
 /**
  * 判断原因是否为保留地址。
  */
 function isReservedAddressReason(error) {
   return error === RESERVED_ADDRESS_REASON;
 }
-//@ chunk-a76knw89.js:31144-31214 placement
+//@ chunk-c41z4928.js:5914-5984 placement
 /**
  * 判断失败是否属于未配置（UNCONFIGURED）。
  */
 function isUnconfiguredFailure(client) {
   return client.type === "failed" && client.errorCode === "UNCONFIGURED";
 }
-//@ chunk-a76knw89.js:31214-31336 placement
+//@ chunk-c41z4928.js:5984-6106 placement
 /**
  * 生成判断函数：服务器是否等待下一回合重拨，或（搜索时）允许按需重拨。
  */
@@ -160,7 +170,7 @@ function redialAllowsServer(searchAllowed) {
     awaitsNextTurnRedial?.(client) === true ||
     (searchAllowed && searchRedial?.allows(client) === true && "on_search");
 }
-//@ chunk-a76knw89.js:31336-31424 placement
+//@ chunk-c41z4928.js:6106-6194 placement
 /**
  * 判断是否为 artifacts 服务器的 404 且 CLI 自有。
  */
@@ -172,7 +182,7 @@ function isArtifacts404Failure(client) {
     isCliOwnedConfig(client.config)
   );
 }
-//@ chunk-a76knw89.js:31424-31798 placement
+//@ chunk-c41z4928.js:6194-6568 placement
 function collectFailedMcpServers(clients, willRetry = () => false) {
   return clients
     .filter((client) => client.type === "failed")
@@ -198,7 +208,7 @@ function collectFailedMcpServers(clients, willRetry = () => false) {
       };
     });
 }
-//@ chunk-a76knw89.js:31798-32755 placement
+//@ chunk-c41z4928.js:6568-7525 placement (2.1.88 match: OSC8_REGEX, 0.639)
 function extractAfterPattern(template, text) {
   if (!template || !text || !template.includes("${")) return [];
   let parts = splitAroundEnvRefs(template);
@@ -246,9 +256,9 @@ function extractAfterPattern(template, text) {
     let match = text.match(new RegExp(pattern + "$"));
     if (match) candidates.push(...match.slice(1).filter((captured) => captured !== ""));
   }
-  return uniq(candidates);
+  return normalizeCaseForComparison_2(candidates);
 }
-//@ chunk-a76knw89.js:32755-33275 placement
+//@ chunk-c41z4928.js:7525-8045 placement
 function redactServerConfig(original, expanded) {
   if (!original) return [];
   let secrets = [];
@@ -276,7 +286,7 @@ function redactServerConfig(original, expanded) {
   }
   return secrets;
 }
-//@ chunk-a76knw89.js:33275-33376 placement
+//@ chunk-c41z4928.js:8045-8146 placement
 function hasLongerPrefix(candidate, candidates) {
   for (let other of candidates) {
     if (other.length <= candidate.length) return false;
@@ -284,7 +294,7 @@ function hasLongerPrefix(candidate, candidates) {
   }
   return false;
 }
-//@ chunk-a76knw89.js:33376-38432 placement
+//@ chunk-c41z4928.js:8146-13098 placement
 /**
  * 对 MCP 错误文本与配置做脱敏（解码百分号、截断过长或过深编码），约 5 KB。
  */
@@ -463,12 +473,7 @@ function redactMcpErrorText(text, config, fallbackReplacement, original) {
   if ("url" in config && typeof config.url === "string") addUrlSecrets(config.url, endpointLabel);
   if ("oauth" in config && typeof config.oauth?.authServerMetadataUrl === "string") {
     let authServerMetadataUrl = config.oauth.authServerMetadataUrl;
-    let replacement = "[redacted]";
-    try {
-      let origin = new URL(authServerMetadataUrl).origin;
-      if (origin !== "null") replacement = origin;
-    } catch {}
-    addUrlSecrets(authServerMetadataUrl, replacement);
+    addUrlSecrets(authServerMetadataUrl, httpOrigin(authServerMetadataUrl) ?? "[redacted]");
   }
   if ("command" in config && typeof config.command === "string") {
     let commandReplacement =
@@ -553,9 +558,9 @@ function redactMcpErrorText(text, config, fallbackReplacement, original) {
     }
     let longest = secrets[0]?.[0].length ?? 0;
     let max = Math.max(0, cutoff - (longest - 1));
-    let candidates = uniq(secrets.map(([normalized]) => normalized.toUpperCase())).sort(
-      (a, b) => b.length - a.length,
-    );
+    let candidates = normalizeCaseForComparison_2(
+      secrets.map(([normalized]) => normalized.toUpperCase()),
+    ).sort((a, b) => b.length - a.length);
     let sliced = normalized.slice(max, cutoff);
     let offsets = [];
     let upperTail = "";
@@ -588,12 +593,12 @@ function redactMcpErrorText(text, config, fallbackReplacement, original) {
   if (code >= 55296 && code <= 56319) out = out.slice(0, -1);
   return truncated ? `${out}\u2026` : out;
 }
-//@ chunk-a76knw89.js:38432-38493 placement
+//@ chunk-03tec5k5.js:24411-24472 placement
 /**
  * 受限模式下不支持绕过权限的提示。
  */
 var RESTRICTED_BYPASS_NOTICE = "bypassPermissions not supported in restricted mode";
-//@ chunk-a76knw89.js:38493-38617 placement
+//@ chunk-03tec5k5.js:24472-24596 placement
 /**
  * 受限环境下以绕过权限模式启动时返回提示文本。
  */
@@ -603,14 +608,14 @@ function restrictedBypassNotice(options) {
     ? RESTRICTED_BYPASS_NOTICE
     : undefined;
 }
-//@ chunk-a76knw89.js:38617-38696 placement
+//@ chunk-03tec5k5.js:24596-24675 placement
 /**
  * 有 preset: 前缀时给空集合，否则原样转集合。
  */
 function presetExclusions(toolsToDisallow) {
   return toolsToDisallow.some((name) => name.startsWith("preset:")) ? new Set() : new Set(toolsToDisallow);
 }
-//@ chunk-a76knw89.js:38696-38928 placement
+//@ chunk-03tec5k5.js:24675-24907 placement
 function isCodeExecutionTool(tools, denied) {
   let filtered = [...tools, WEBFETCH].filter((name) => !denied.has(name));
   let workspaceTools = [
@@ -629,25 +634,29 @@ function isCodeExecutionTool(tools, denied) {
   return [...filtered, ...workspaceTools, DEVICE_BASH_TOOL, IDE_EXECUTE_CODE_TOOL, ...browserTools];
 }
 export {
-  isArtifacts404Failure,
-  isPolicyDisabledReason,
-  isReservedAddressReason,
-  formatNamedError,
-  ACCOUNT_CHANGED_REASON,
-  BLOCKED_BY_POLICY_REASON,
-  DISABLED_IN_MCP_REASON,
-  DISABLED_BY_SETTING_REASON,
-  restrictedBypassNotice,
-  isUnconfiguredFailure,
-  NOT_APPROVED_REASON,
-  RESERVED_ADDRESS_REASON,
-  RESTRICTED_BYPASS_NOTICE,
   isCodeExecutionTool,
-  presetExclusions,
   MAX_ERROR_TEXT_CHARS,
   ERROR_TEXT_SLACK_CHARS,
   redactSecrets,
+  isPolicyDisabledReason,
+  isReservedAddressReason,
+  isUnconfiguredFailure,
+  AUTH_CLEARED_REASON,
+  AUTH_CLEAR_FAILED_REASON,
+  BLOCKED_BY_POLICY_REASON,
+  DISABLED_IN_MCP_REASON,
+  redactMcpErrorText,
+  formatNamedError,
+  isArtifacts404Failure,
+  RESTRICTED_BYPASS_NOTICE,
+  presetExclusions,
   collectFailedMcpServers,
   redialAllowsServer,
-  redactMcpErrorText,
+  DISABLED_BY_SETTING_REASON,
+  restrictedBypassNotice,
+  ACCOUNT_CHANGED_REASON,
+  CLOSED_WHILE_SIGNING_IN_REASON,
+  RESERVED_ADDRESS_REASON,
+  NOT_APPROVED_REASON,
+  TOKEN_REJECTED_REASON,
 };

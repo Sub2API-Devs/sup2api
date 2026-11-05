@@ -3,14 +3,14 @@
  *
  * /diff 数据加载 hook（工作区 diff 或分支点 diff）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useDiffData.ts
- * pieces: chunk-qwh6zcf0.js (1)
+ * pieces: chunk-e2r2f340.js (1)
  * attribution: fingerprint 1
  */
 import { DIFF_DEBOUNCE_MS } from "./useWorkspaceDiff.js";
 
-//@ chunk-qwh6zcf0.js:3841-4330 fingerprint (2.1.88 match: useDiffData, 0.786)
+//@ chunk-e2r2f340.js:3841-4330 fingerprint (2.1.88 match: useDiffData, 0.786)
 function useDiffData(diff) {
   let skippedLargeSet = new Set(diff.skippedLarge);
   let restrictedSet = new Set(diff.restricted);

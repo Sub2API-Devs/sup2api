@@ -1,22 +1,21 @@
 /**
  * signal-exit/dist/mjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: signal-exit@4.1.0
- * pieces: chunk-m4p5zn6n.js (7)
+ * pieces: chunk-t889g22j.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
  */
 import { logForDebugging } from "../../../../src/utils/debug.js";
 import { env } from "../../../../src/utils/env.js";
 import { signals_2 } from "./signals.js";
-import { logEvent } from "../../../../src/services/analytics/index.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-m4p5zn6n.js:16481-16819 esm-fingerprint
+//@ chunk-t889g22j.js:16480-16818 esm-fingerprint
 var processOk; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var kExitEmitter;
 var globalObject;
 var ObjectDefineProperty;
-deferInit("chunk-m4p5zn6n.js:16481", () => {
+deferInit("chunk-t889g22j.js:16480", () => {
   processOk = (processRef) =>
     !!processRef &&
     typeof processRef === "object" &&
@@ -31,7 +30,7 @@ deferInit("chunk-m4p5zn6n.js:16481", () => {
   globalObject = globalThis;
   ObjectDefineProperty = Object.defineProperty.bind(Object);
 });
-//@ chunk-m4p5zn6n.js:16819-17355 esm-fingerprint
+//@ chunk-t889g22j.js:16818-17354 esm-fingerprint
 class Emitter {
   emitted = {
     afterExit: false,
@@ -71,9 +70,9 @@ class Emitter {
     return ret;
   }
 }
-//@ chunk-m4p5zn6n.js:17355-17365 esm-layout
+//@ chunk-t889g22j.js:17354-17364 esm-layout
 class SignalExitBase {}
-//@ chunk-m4p5zn6n.js:17365-17467 esm-fingerprint
+//@ chunk-t889g22j.js:17364-17466 esm-fingerprint
 var signalExitWrap = (handler) => ({
   onExit(cb, opts) {
     return handler.onExit(cb, opts);
@@ -85,9 +84,9 @@ var signalExitWrap = (handler) => ({
     return handler.unload();
   },
 });
-//@ chunk-m4p5zn6n.js:17467-17528 esm-fingerprint
+//@ chunk-t889g22j.js:17466-17527 esm-fingerprint
 let SignalExitFallback; // deferred: uses SignalExitBase of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m4p5zn6n.js:17467", () => {
+deferInit("chunk-t889g22j.js:17466", () => {
   SignalExitFallback = class SignalExitFallback extends SignalExitBase {
     onExit() {
       return () => {};
@@ -96,9 +95,9 @@ deferInit("chunk-m4p5zn6n.js:17467", () => {
     unload() {}
   };
 });
-//@ chunk-m4p5zn6n.js:17528-19078 esm-fingerprint
+//@ chunk-t889g22j.js:17527-19077 esm-fingerprint
 let SignalExit; // deferred: uses SignalExitBase of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m4p5zn6n.js:17528", () => {
+deferInit("chunk-t889g22j.js:17527", () => {
   SignalExit = class SignalExit extends SignalExitBase {
     #s = globalProcess.platform === "win32" ? "SIGINT" : "SIGHUP";
     #t = new Emitter();
@@ -184,12 +183,12 @@ deferInit("chunk-m4p5zn6n.js:17528", () => {
     }
   };
 });
-//@ chunk-m4p5zn6n.js:19078-19164 esm-fingerprint
+//@ chunk-t889g22j.js:19077-19163 esm-fingerprint
 var globalProcess; // deferred: uses signalExitWrap of its import cycle while loading; runs once the cycle is complete
 var onExit;
 var load;
 var unload;
-deferInit("chunk-m4p5zn6n.js:19078", () => {
+deferInit("chunk-t889g22j.js:19077", () => {
   globalProcess = globalThis.process;
   ({ onExit, load, unload } = signalExitWrap(
     processOk(globalProcess) ? new SignalExit(globalProcess) : new SignalExitFallback(),

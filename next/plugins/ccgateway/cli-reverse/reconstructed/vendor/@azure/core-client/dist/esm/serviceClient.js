@@ -1,8 +1,8 @@
 /**
  * @azure/core-client/dist/esm/serviceClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { logger_3 } from "./log.js";
@@ -12,7 +12,7 @@ import { getOperationRequestInfo } from "./operationHelpers.js";
 import { getStreamingResponseStatusCodes, flattenResponse } from "../index.js";
 import { createClientPipeline } from "./pipeline.js";
 
-//@ chunk-mrx6y2r5.js:79655-81677 esm-fingerprint
+//@ chunk-b5df2wx1.js:79655-81677 esm-fingerprint
 class ServiceClient {
   constructor(options = {}) {
     var _a;
@@ -91,7 +91,7 @@ class ServiceClient {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:81677-81842 esm-fingerprint
+//@ chunk-b5df2wx1.js:81677-81842 esm-fingerprint
 function createDefaultPipeline(options) {
   let credentialScopes = getCredentialScopes(options);
   let credentialOptions =
@@ -107,7 +107,7 @@ function createDefaultPipeline(options) {
     }),
   );
 }
-//@ chunk-mrx6y2r5.js:81842-82206 esm-fingerprint
+//@ chunk-b5df2wx1.js:81842-82206 esm-fingerprint
 function getCredentialScopes(options) {
   if (options.credentialScopes) return options.credentialScopes;
   if (options.endpoint) return `${options.endpoint}/.default`;

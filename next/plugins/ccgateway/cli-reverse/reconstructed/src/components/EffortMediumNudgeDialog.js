@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。建议改用 medium effort 的对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
+ * attribution: placement 11
  */
 import { MAX_NUDGE_BODY_LINES, normalizeNewlines } from "../utils/effortMediumNudge.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -19,8 +19,7 @@ import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useRefusableAnswer } from "../hooks/useRefusableAnswer.js";
 import { useInputClock } from "../ink/components/Input.js";
-import { useState } from "../../vendor/react/cjs/react.production.js";
-import { useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
+import { useMountTime, useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { isWithinRecentInput } from "../hooks/useRecentInputGuard.js";
 import { renderModelName } from "../utils/model/modelDisplay.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
@@ -44,7 +43,7 @@ import {
 } from "../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1101734-1101913 placement (2.1.88 match: formatPrice, 1)
+//@ chunk-czq1j3j2.js:1135707-1135886 placement (2.1.88 match: formatPrice, 1)
 /**
  * 把倍率格式化成 "~Nx"（<0.1 时两位小数）。旧版名 formatPrice 不准确。
  */
@@ -53,11 +52,7 @@ function formatCostMultiplier(price) {
   let roundedPrice = Math.round(price * 10) / 10;
   return Number.isInteger(roundedPrice) ? `~${roundedPrice.toFixed(0)}x` : `~${roundedPrice.toFixed(1)}x`;
 }
-//@ chunk-18hwfzwa.js:1101913-1101946 placement
-function getDialogOpenedAtMs() {
-  return Date.now();
-}
-//@ chunk-18hwfzwa.js:1101946-1102085 placement
+//@ chunk-czq1j3j2.js:1135886-1136025 placement
 var EFFORT_BODY_MAX_LINES; // deferred: uses MAX_NUDGE_BODY_CHARS (../utils/effortMediumNudge.js) of its import cycle while loading; runs once the cycle is complete
 var EFFORT_DIALOG_PADDING;
 var EFFORT_DIALOG_GAP;
@@ -66,7 +61,7 @@ var EFFORT_OPTION_MAX_LINES;
 var EFFORT_SWITCH_TITLE;
 var EFFORT_SWITCH_YES_LABEL;
 var EFFORT_SWITCH_NO_LABEL;
-deferInit("chunk-18hwfzwa.js:1101946", () => {
+deferInit("chunk-czq1j3j2.js:1135886", () => {
   EFFORT_BODY_MAX_LINES = MAX_NUDGE_BODY_LINES + 1;
   EFFORT_DIALOG_PADDING = 6;
   EFFORT_DIALOG_GAP = 2;
@@ -76,7 +71,7 @@ deferInit("chunk-18hwfzwa.js:1101946", () => {
   EFFORT_SWITCH_YES_LABEL = "Yes, use {to} effort by default";
   EFFORT_SWITCH_NO_LABEL = "No, keep {from}";
 });
-//@ chunk-18hwfzwa.js:1102085-1105698 placement
+//@ chunk-czq1j3j2.js:1136025-1139636 placement
 /**
  * EffortMediumNudgeDialog：建议把 effort 调到 medium 的对话框。
  */
@@ -127,20 +122,20 @@ function EffortMediumNudgeDialog(props) {
   } else answerCached = $[9];
   let refusableAnswer = useRefusableAnswer(answerCached);
   let inputClock = useInputClock();
-  let [openedAt] = useState(getDialogOpenedAtMs);
+  let mountTime = useMountTime();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let refuseInputCached;
-  if ($[10] !== inputClock || $[11] !== openedAt || $[12] !== noteRefused || $[13] !== refusedWithin) {
+  if ($[10] !== inputClock || $[11] !== noteRefused || $[12] !== mountTime || $[13] !== refusedWithin) {
     refuseInputCached = () => {
-      if (isWithinRecentInput(inputClock, openedAt) || refusedWithin()) {
+      if (isWithinRecentInput(inputClock, mountTime()) || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
     $[10] = inputClock;
-    $[11] = openedAt;
-    $[12] = noteRefused;
+    $[11] = noteRefused;
+    $[12] = mountTime;
     $[13] = refusedWithin;
     $[14] = refuseInputCached;
   } else refuseInputCached = $[14];
@@ -324,7 +319,7 @@ function EffortMediumNudgeDialog(props) {
     $[53] !== cancelLabel ||
     $[54] !== confirmLabel ||
     $[55] !== focus ||
-    $[56] !== openedAt ||
+    $[56] !== mountTime ||
     $[57] !== refuseInput ||
     $[58] !== refusableAnswer.attempts ||
     $[59] !== cancelFirst ||
@@ -334,7 +329,7 @@ function EffortMediumNudgeDialog(props) {
     confirmElement = jsxProd_default(
       ConfirmSelect,
       {
-        openedAt,
+        openedAt: mountTime,
         confirmLabel,
         cancelLabel,
         cancelFirst,
@@ -349,7 +344,7 @@ function EffortMediumNudgeDialog(props) {
     $[53] = cancelLabel;
     $[54] = confirmLabel;
     $[55] = focus;
-    $[56] = openedAt;
+    $[56] = mountTime;
     $[57] = refuseInput;
     $[58] = refusableAnswer.attempts;
     $[59] = cancelFirst;
@@ -395,7 +390,7 @@ function EffortMediumNudgeDialog(props) {
   } else dialogElement = $[74];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1105698-1105926 placement
+//@ chunk-czq1j3j2.js:1139636-1139864 placement
 function effortCostDescription(model, effort) {
   if (effort === "max" && modelSupportsMaxEffort(model)) return MAX_EFFORT_DESCRIPTION;
   let price = effortCostRatio(model, effort);
@@ -404,7 +399,7 @@ function effortCostDescription(model, effort) {
     return "{from} effort uses more tokens per task than {to}.";
   return `{from} effort is ${formatCostMultiplier(price)} the estimated cost of ${defaultEffortLevel} (the default).`;
 }
-//@ chunk-18hwfzwa.js:1105926-1106120 placement
+//@ chunk-czq1j3j2.js:1139864-1140058 placement
 function clampEffortBody(body, columns) {
   let width = subtractInsetWidth(columns, EFFORT_DIALOG_PADDING);
   let lines = wrapText(body, width, "wrap").split(`
@@ -416,15 +411,15 @@ function clampEffortBody(body, columns) {
 `)}
 ${overflowLine}`;
 }
-//@ chunk-18hwfzwa.js:1106120-1106154 placement
+//@ chunk-czq1j3j2.js:1140058-1140092 placement
 function sanitizeNudgeText(text) {
   return stripNonPrintable(normalizeNewlines(text));
 }
-//@ chunk-18hwfzwa.js:1106154-1106195 placement
+//@ chunk-czq1j3j2.js:1140092-1140133 placement
 function subtractInsetWidth(columns, inset) {
   return Math.max(1, columns - inset);
 }
-//@ chunk-18hwfzwa.js:1106195-1106379 placement
+//@ chunk-czq1j3j2.js:1140133-1140317 placement
 function clampToTwoLines(text, columns, inset) {
   let width = subtractInsetWidth(columns, inset);
   let lines = wrapText(text, width, "wrap").split(`
@@ -436,10 +431,10 @@ function clampToTwoLines(text, columns, inset) {
   return sliced.join(`
 `);
 }
-//@ chunk-18hwfzwa.js:1106379-1106400 placement
+//@ chunk-czq1j3j2.js:1142859-1142880 placement
 var LABEL_MAX_WIDTH = 160;
 var LABEL_MAX_LENGTH = 1024;
-//@ chunk-18hwfzwa.js:1106400-1106603 placement
+//@ chunk-czq1j3j2.js:1142880-1143082 placement
 function sanitizeOneLineLabel(text) {
   let truncatedText = truncateToLength(text, LABEL_MAX_LENGTH);
   let flat = renderableText(truncatedText.replace(/[\r\n\t ]+/g, " "));
@@ -448,7 +443,7 @@ function sanitizeOneLineLabel(text) {
   if (!isCleanText(cleaned)) return "";
   return truncateToWidth(truncatedText.length < text.length ? `${cleaned}\u2026` : cleaned, LABEL_MAX_WIDTH);
 }
-//@ chunk-18hwfzwa.js:1106603-1106798 placement
+//@ chunk-czq1j3j2.js:1143082-1143277 placement
 function LabelValueRow(props) {
   return jsxProd_default_2(
     Box,

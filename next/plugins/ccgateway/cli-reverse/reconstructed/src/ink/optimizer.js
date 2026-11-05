@@ -3,13 +3,13 @@
  *
  * Patch 列表优化：合并相邻写入、去掉冗余光标移动与样式切换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/optimizer.ts
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-bzr73sfg.js:275127-275860 fingerprint (2.1.88 match: optimize, 1)
+//@ chunk-2avr6cej.js:274708-275441 fingerprint (2.1.88 match: optimize, 1)
 /**
  * Patch 列表窥孔优化：去掉空输出/零移动/空样式，合并相邻 cursorMove、styleStr，相邻 cursorTo 与光标显隐只留最后一个，重复超链接去掉。
  */

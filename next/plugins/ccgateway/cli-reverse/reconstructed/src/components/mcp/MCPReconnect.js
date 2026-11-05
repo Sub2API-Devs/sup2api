@@ -3,9 +3,9 @@
  *
  * /mcp reconnect：重连指定服务器并显示结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPReconnect.tsx
- * pieces: chunk-cpqpnzp4.js (1)
+ * pieces: chunk-h6004nzv.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -38,7 +38,7 @@ import { WorkerBadge } from "../permissions/WorkerBadge.js";
 import { color } from "../design-system/color.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-cpqpnzp4.js:37997-40831 fingerprint (2.1.88 match: MCPReconnect, 0.613)
+//@ chunk-h6004nzv.js:38957-41791 fingerprint (2.1.88 match: MCPReconnect, 0.612)
 function MCPReconnect(props) {
   let $ = useMemoCache(30);
   let { serverName, onComplete } = props;

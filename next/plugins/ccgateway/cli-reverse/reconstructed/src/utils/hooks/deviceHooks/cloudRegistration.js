@@ -3,9 +3,9 @@
  *
  * 设备钩子向云会话注册（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (18)
  * attribution: placement 18
  */
 import { plural } from "../../stringUtils.js";
@@ -15,7 +15,7 @@ import { anyPairMatches, collectStickyRoots, stickyRootsFor } from "../../settin
 import { hasAnyHookEntries, DEVICE_HOOK_SCOPES, emptyEligibilityState } from "./eligibility.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { SETTING_SOURCES } from "../../settings/constants.js";
-import { count } from "../../collections.js";
+import { countWhere } from "../../collections.js";
 import { isAbsolutePlatformPath } from "../../git.js";
 import { stripInvisibleChars } from "../../invisibleChars.js";
 import { RegisterDeviceHooksResponseSchema } from "../../../entrypoints/sdk/controlSchemas.js";
@@ -24,7 +24,7 @@ import { createSignal } from "../../signal.js";
 import { HostScoped } from "../../hostScoped.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:341975-342218 placement
+//@ chunk-7jxyna5q.js:266615-266858 placement
 var REGISTRATION_LEASE_S = 180;
 var REGISTRATION_REFRESH_CHECK_MS = 3000;
 var REGISTRATION_TIMEOUT_MS = 120000;
@@ -49,17 +49,17 @@ var RESYNC_TRIGGER_PRIORITY = {
   init: 0,
 };
 var MAX_REFUSAL_TEXT_CHARS = 120;
-//@ chunk-s61vbvea.js:342218-342452 placement
+//@ chunk-7jxyna5q.js:266858-267092 placement
 function hooksStartOutsideProjectNotice(count) {
   return `${count} ${plural(count, "hook")} ${plural(count, "starts", "start")} in an empty folder for cloud sessions. A hook in your user settings marked "cloud": "device" starts in the project instead, where the cloud session can change files.`;
 }
-//@ chunk-s61vbvea.js:342452-342510 placement
+//@ chunk-7jxyna5q.js:267092-267150 placement
 class SupersededError extends Error {
   constructor() {
     super("superseded");
   }
 }
-//@ chunk-s61vbvea.js:342510-342731 placement
+//@ chunk-7jxyna5q.js:267150-267371 placement
 function classifyControlRequestError(error) {
   if (error instanceof ControlRequestTimeoutError) return "timeout";
   let message = error instanceof Error ? error.message : String(error);
@@ -67,14 +67,14 @@ function classifyControlRequestError(error) {
   let match = /^([a-z_]+):/.exec(message);
   return match ? match[1] : "failed";
 }
-//@ chunk-s61vbvea.js:342731-342849 placement
+//@ chunk-7jxyna5q.js:267371-267489 placement
 function refusalMessageText(error) {
   let message = error instanceof Error ? error.message : String(error);
   return sanitizeDisplayText(message.replace(/^[a-z_]+:\s*/, ""), {
     maxCodeUnits: MAX_REFUSAL_TEXT_CHARS,
   });
 }
-//@ chunk-s61vbvea.js:342849-347142 placement
+//@ chunk-7jxyna5q.js:267489-271782 placement
 /**
  * 设备钩子云端不可用的原因文案表（功能未开、策略限制、会话类型不支持等），含模板失败与来源说明。
  */
@@ -159,7 +159,7 @@ var LOCAL_ONLY_REASON_LABELS = {
   pattern_matcher: "a pattern matcher",
   author_skip: 'marked cloud: "skip"',
 };
-//@ chunk-s61vbvea.js:347142-347271 placement
+//@ chunk-7jxyna5q.js:271782-271911 placement
 function describeCloudRefusal(table, key) {
   return (
     (Object.hasOwn(table, key) ? table[key] : undefined) ??
@@ -168,7 +168,7 @@ function describeCloudRefusal(table, key) {
     })}"`
   );
 }
-//@ chunk-s61vbvea.js:347271-347540 placement
+//@ chunk-7jxyna5q.js:271911-272180 placement
 function deviceHooksRegistrationState(entry, now) {
   switch (entry.standing.kind) {
     case "dormant":
@@ -182,7 +182,7 @@ function deviceHooksRegistrationState(entry, now) {
       return null;
   }
 }
-//@ chunk-s61vbvea.js:347540-347931 placement
+//@ chunk-7jxyna5q.js:272180-272571 placement
 /**
  * 创建设备 hook 发送方的记忆状态：基线、被拒模板、选择加入的固定项等。
  */
@@ -211,13 +211,13 @@ function createDeviceHookSenderMemory() {
     pinnedRoots: new Map(),
   };
 }
-//@ chunk-s61vbvea.js:347931-348054 placement
+//@ chunk-7jxyna5q.js:272571-272694 placement
 function countByValue(values) {
   let counts = new Map();
   for (let value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts].map(([value, n]) => `${value} \xD7${n}`).join(", ");
 }
-//@ chunk-s61vbvea.js:348054-348342 placement
+//@ chunk-7jxyna5q.js:272694-272982 placement
 async function isHookScopeInReach(roots, scopes, deps) {
   for (let scope of scopes) {
     if (scope === "local" || deps.everInReach?.has(scope)) return true;
@@ -232,7 +232,7 @@ async function isHookScopeInReach(roots, scopes, deps) {
   }
   return false;
 }
-//@ chunk-s61vbvea.js:348342-349029 placement
+//@ chunk-7jxyna5q.js:272982-273669 placement
 function describeDeviceHookOutcome(inventory, counts) {
   let parts = [];
   let forwardedCount = inventory.forwarded.length;
@@ -255,20 +255,20 @@ function describeDeviceHookOutcome(inventory, counts) {
     );
   return `Hooks \u25B8 ${parts.join("; ")}.`;
 }
-//@ chunk-s61vbvea.js:349029-349106 placement
+//@ chunk-7jxyna5q.js:273669-273746 placement
 /**
  * 判断捕获结果是否为"已捕获且有钩子"。
  */
 function hasCapturedHooks(captured) {
   return captured.kind === "captured" && captured.sources.some((source) => hasAnyHookEntries(source.hooks));
 }
-//@ chunk-s61vbvea.js:349106-349224 placement
+//@ chunk-7jxyna5q.js:273746-273864 placement
 function captureFingerprint(captured) {
   return captured.kind === "captured"
     ? jsonStringify(captured.sources.map((source) => [source.source, source.settingsFile, source.hooks]))
     : `none:${captured.reason}`;
 }
-//@ chunk-s61vbvea.js:349224-373239 placement
+//@ chunk-7jxyna5q.js:273864-297906 placement
 /**
  * 把本机钩子注册到云会话并接收回调（静默、停止、捕获状态）
  */
@@ -448,7 +448,7 @@ function DeviceHooksRegistration(options) {
       forwarded: inventory?.forwarded.length ?? 0,
       templates: inventory?.templates.length ?? 0,
       heldAfterEdit: inventory?.heldCounts.after_edit ?? 0,
-      heldOther: inventory === null ? 0 : count(inventory.held, (held) => held.reason !== "after_edit"),
+      heldOther: inventory === null ? 0 : countWhere(inventory.held, (held) => held.reason !== "after_edit"),
       heldByReason,
       accepted: accepted.accepted,
       ignored: accepted.ignored,
@@ -849,7 +849,7 @@ function DeviceHooksRegistration(options) {
     for (let notice of inventory.notices) noteOnce(`notice:${notice}`, notice);
     let unmarkedCount =
       options.servicerDefaults.unmarkedStartFolder === "private"
-        ? count(
+        ? countWhere(
             inventory.forwarded,
             (forwarded) => forwarded.local.hook.type === "command" && forwarded.local.cloudOptIn !== true,
           )
@@ -1677,7 +1677,7 @@ function DeviceHooksRegistration(options) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:373239-373630 placement
+//@ chunk-7jxyna5q.js:297906-298297 placement
 /**
  * 创建设备 hook 注册表：按会话管理服务方、发送方与同意固定项。
  */
@@ -1707,12 +1707,12 @@ function createDeviceHookRegistry() {
     servedSettingsChanged: createSignal(),
   };
 }
-//@ chunk-s61vbvea.js:373630-373647 placement
+//@ chunk-7jxyna5q.js:298297-298314 placement
 var deviceHooksProcessMemories; // deferred: uses createDeviceHookRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:373630", () => {
+deferInit("chunk-7jxyna5q.js:298297", () => {
   deviceHooksProcessMemories = new HostScoped(createDeviceHookRegistry);
 });
-//@ chunk-s61vbvea.js:373647-373734 placement
+//@ chunk-7jxyna5q.js:298314-298401 placement
 function memoizeWith(cache, key, create) {
   let existing = cache.get(key);
   if (existing !== undefined) return existing;
@@ -1721,11 +1721,11 @@ function memoizeWith(cache, key, create) {
   return created;
 }
 export {
-  deviceHooksProcessMemories,
+  DeviceHooksRegistration,
+  UNREGISTER_TIMEOUT_MS,
   deviceHooksRegistrationState,
   hasCapturedHooks,
   isHookScopeInReach,
+  deviceHooksProcessMemories,
   SENDER_UNVERIFIED_TEXT,
-  DeviceHooksRegistration,
-  UNREGISTER_TIMEOUT_MS,
 };

@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
 import { RESERVED } from './lib/reserved.mjs';
+import { COMPILER_RUNTIME } from './lib/auto-common.mjs';
 import { bindingsOf } from '../rename/lib/rename.mjs';
 
 const A = process.argv[2] ?? 'analysis';
@@ -57,7 +58,7 @@ for (const src of sources) {
 // of the runtime chunk, see analysis/vendor) is named `$` everywhere, as in the
 // 2.1.88 source; members had also used cache / memo / memoCache.
 {
-  const RUNTIME_CHUNK = 'chunk-s89ma3n1.js';
+  const RUNTIME_CHUNK = COMPILER_RUNTIME; // found by content (tools/naming/lib/auto-common.mjs)
   let normalised = 0;
   const srcCache = new Map();
   for (const [file, m] of cands) {

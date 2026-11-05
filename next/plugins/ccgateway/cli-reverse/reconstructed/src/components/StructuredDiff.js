@@ -3,9 +3,9 @@
  *
  * 结构化 diff 组件：优先用原生 color-diff 模块渲染（词级高亮），不可用时退回 StructuredDiffFallback；gutter 宽度计算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StructuredDiff.tsx
- * pieces: chunk-0vxm8afm.js (1), chunk-887tgx6t.js (7)
+ * pieces: chunk-bh7ttv2b.js (1), chunk-e50jywsa.js (7)
  * attribution: fingerprint 3, placement 2, sole-consumer 1, affinity 1, layout 1
  */
 import { init_react_production, memo } from "../../vendor/react/cjs/react.production.js";
@@ -26,20 +26,20 @@ import { StructuredDiffFallback } from "./StructuredDiff/Fallback.js";
 import { NoSelect, RawAnsi } from "../ink/components/Input.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0vxm8afm.js:191-279 fingerprint (2.1.88 match: computeGutterWidth, 1)
+//@ chunk-bh7ttv2b.js:191-279 fingerprint (2.1.88 match: computeGutterWidth, 1)
 var computeGutterWidth = (patch) =>
   `+ ${Math.max(patch.oldStart + patch.oldLines - 1, patch.newStart + patch.newLines - 1, 1)} `.length;
-//@ chunk-887tgx6t.js:733-737 placement
+//@ chunk-e50jywsa.js:733-737 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-887tgx6t.js:733", () => {
+deferInit("chunk-e50jywsa.js:733", () => {
   init_react_production();
 });
-//@ chunk-887tgx6t.js:737-741 placement
+//@ chunk-e50jywsa.js:737-741 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-887tgx6t.js:737", () => {
+deferInit("chunk-e50jywsa.js:737", () => {
   init_react_production();
 });
-//@ chunk-887tgx6t.js:5314-5421 sole-consumer
+//@ chunk-e50jywsa.js:5239-5346 sole-consumer
 var DIFF_THEME_KEYS = [
   "diffAdded",
   "diffRemoved",
@@ -48,7 +48,7 @@ var DIFF_THEME_KEYS = [
   "diffAddedWord",
   "diffRemovedWord",
 ];
-//@ chunk-887tgx6t.js:5421-5519 affinity
+//@ chunk-e50jywsa.js:5346-5444 affinity
 function pickDiffThemeColors(activeThemeOverrides) {
   if (!activeThemeOverrides) return;
   let overrides;
@@ -61,7 +61,7 @@ function pickDiffThemeColors(activeThemeOverrides) {
   }
   return overrides;
 }
-//@ chunk-887tgx6t.js:5519-6020 fingerprint (2.1.88 match: renderColorDiff, 0.894)
+//@ chunk-e50jywsa.js:5444-5945 fingerprint (2.1.88 match: renderColorDiff, 0.894)
 function renderColorDiff(
   structuredDiff,
   patch,
@@ -111,7 +111,7 @@ function renderColorDiff(
   perHunk.set(key, entry);
   return entry;
 }
-//@ chunk-887tgx6t.js:6020-6158 layout
+//@ chunk-e50jywsa.js:5945-6083 layout
 function expandTabsInPatch(patch) {
   if (!patch.lines.some((line) => line.includes("\t"))) return patch;
   let lines = patch.lines.map((line) => line.slice(0, 1) + expandTabsInText(line.slice(1)));
@@ -120,12 +120,12 @@ function expandTabsInPatch(patch) {
     lines,
   };
 }
-//@ chunk-887tgx6t.js:6158-7247 fingerprint (2.1.88 match: StructuredDiff, 0.928)
+//@ chunk-e50jywsa.js:6083-7173 fingerprint (2.1.88 match: StructuredDiff, 0.928)
 /**
  * 结构化 diff：{patch, dim, filePath, width, …}；原生 color-diff 可用时调用 renderColorDiff 得到带词级高亮的行，否则用 StructuredDiffFallback。tab 先展开。
  */
 var StructuredDiff; // deferred: uses useTheme (./design-system/ThemeProvider.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-887tgx6t.js:6158", () => {
+deferInit("chunk-e50jywsa.js:6083", () => {
   StructuredDiff = memo(function (props) {
     let $ = useMemoCache(19);
     let { patch, dim, filePath, firstLine, fileContent, width, skipHighlighting } = props;

@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：自发消息计数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0z70g9af.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gm1e2jh3.js (2)
  * attribution: placement 2
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 
-//@ chunk-0z70g9af.js:227-818 placement
+//@ chunk-gm1e2jh3.js:227-818 placement
 class SelfPostCounter {
   #t = new Map();
   #n = 0;
@@ -49,5 +49,5 @@ class SelfPostCounter {
     return this.#n;
   }
 }
-//@ chunk-0z70g9af.js:818-842 placement
+//@ chunk-gm1e2jh3.js:818-842 placement
 var selfPostCounterBySessionRoot = new SessionRootSlot(() => new SelfPostCounter());

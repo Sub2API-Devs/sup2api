@@ -1,14 +1,14 @@
 /**
  * qrcode/lib/core/error-correction-code.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_error_correction_level } from "./error-correction-level.js";
 
-//@ chunk-spjgqa4y.js:5121-6599 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:5121-6599 cjs-fingerprint
 var require_error_correction_code = __commonJS(function (cjsExports) {
   var ECLevel = require_error_correction_level();
   var EC_BLOCKS_TABLE = [

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：Artifact 页面 presence 数据的限制常量、键名校验与清洗正则。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (7)
  * attribution: placement 7
  */
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-b0a246e7.js:1216-1742 placement
+//@ chunk-78ymyfsy.js:1249-1775 placement
 /**
  * Artifact 页面 presence 数据的限制常量与清洗正则（最大字节、深度、键数、键名格式、不可见字符等）。与 cron 无关，属于 Artifact 评论/presence 代码。
  */
@@ -28,7 +28,7 @@ var SURROGATE_PATTERN;
 var PRIVATE_USE_PATTERN;
 var JOINER_PATTERN;
 var FORMAT_CHAR_PATTERN;
-deferInit("chunk-b0a246e7.js:1216", () => {
+deferInit("chunk-78ymyfsy.js:1249", () => {
   MAX_PRESENCE_BYTES = 4096;
   MAX_PRESENCE_DEPTH = 8;
   MAX_PRESENCE_KEYS = 64;
@@ -44,11 +44,11 @@ deferInit("chunk-b0a246e7.js:1216", () => {
   JOINER_PATTERN = /[\u200C\u200D\p{Variation_Selector}]/u;
   FORMAT_CHAR_PATTERN = /\p{Cf}/u;
 });
-//@ chunk-b0a246e7.js:1742-1803 placement
+//@ chunk-78ymyfsy.js:1775-1836 placement
 function isPrototypeKey(key) {
   return key === "prototype" || key in Object.prototype;
 }
-//@ chunk-b0a246e7.js:1803-2200 placement
+//@ chunk-78ymyfsy.js:1836-2233 placement
 function hasUnsafeCodePoint(text) {
   for (let char of text) {
     let codePoint = char.codePointAt(0) ?? 0;
@@ -74,7 +74,7 @@ function hasUnsafeCodePoint(text) {
   }
   return false;
 }
-//@ chunk-b0a246e7.js:2200-2269 placement
+//@ chunk-78ymyfsy.js:2233-2302 placement
 function isSafePresenceString(text) {
   return (
     text.length <= MAX_PRESENCE_STRING &&
@@ -83,7 +83,7 @@ function isSafePresenceString(text) {
     !hasUnsafeCodePoint(text)
   );
 }
-//@ chunk-b0a246e7.js:2269-2707 placement (2.1.88 match: jitterFrac, 0.6)
+//@ chunk-78ymyfsy.js:2302-2740 placement
 /**
  * 递归清洗 presence 值（深度、数组长度、字符串安全检查），非法返回 undefined。
  */
@@ -106,7 +106,7 @@ function sanitizePresenceValue(value, depth) {
   if (prototypeOf !== Object.prototype && prototypeOf !== null) return;
   return sanitizePresenceObject(Object.entries(value), depth);
 }
-//@ chunk-b0a246e7.js:2707-2887 placement
+//@ chunk-78ymyfsy.js:2740-2920 placement
 function sanitizePresenceObject(entries, depth) {
   if (entries.length > MAX_PRESENCE_KEYS) return;
   let out = {};
@@ -118,7 +118,7 @@ function sanitizePresenceObject(entries, depth) {
   }
   return out;
 }
-//@ chunk-b0a246e7.js:2887-3385 placement
+//@ chunk-78ymyfsy.js:2920-3418 placement
 /**
  * 规范化 Artifact presence 对象（去掉保留键、校验大小与值），与上次 JSON 相同时返回 "unchanged"。
  */

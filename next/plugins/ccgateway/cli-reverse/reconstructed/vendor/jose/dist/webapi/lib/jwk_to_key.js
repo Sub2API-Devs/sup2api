@@ -1,15 +1,15 @@
 /**
  * jose/dist/webapi/lib/jwk_to_key.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (3)
+ * pieces: chunk-0f6azspv.js (3)
  * attribution: esm-fingerprint 3
  */
 import { JOSENotSupported_2 } from "../../node/esm/util/errors.js";
 
-//@ chunk-5h78gfwc.js:16138-16208 esm-fingerprint
+//@ chunk-0f6azspv.js:16138-16208 esm-fingerprint
 var unsupportedAlg = 'Invalid or unsupported JWK "alg" (Algorithm) Parameter value';
-//@ chunk-5h78gfwc.js:16208-17603 esm-fingerprint
+//@ chunk-0f6azspv.js:16208-17603 esm-fingerprint
 function subtleMapping(jwk) {
   let algorithm;
   let keyUsages;
@@ -125,7 +125,7 @@ function subtleMapping(jwk) {
     keyUsages,
   };
 }
-//@ chunk-5h78gfwc.js:17603-17878 esm-fingerprint
+//@ chunk-0f6azspv.js:17603-17878 esm-fingerprint
 async function jwkToKey(jwk) {
   if (!jwk.alg) throw TypeError('"alg" argument is required when "jwk.alg" is not present');
   let { algorithm, keyUsages } = subtleMapping(jwk);

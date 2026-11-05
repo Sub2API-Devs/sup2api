@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：插件发现工具名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b85cz7hw.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xbyvnehm.js (1)
  * attribution: placement 1
  */
-//@ chunk-b85cz7hw.js:191-380 placement
+//@ chunk-xbyvnehm.js:191-380 placement
 /**
  * 插件发现里属于“搜索”类的工具名列表（SearchPlugins/SearchSkills/ListPlugins/ListSkills）。
  */
@@ -20,10 +20,10 @@ var LISTPLUGINS = "ListPlugins";
 var LISTSKILLS = "ListSkills";
 var PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES = ["SearchPlugins", "SearchSkills", "ListPlugins", "ListSkills"];
 export {
-  PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES,
-  SUGGESTPLUGININSTALL,
-  SUGGESTSKILLS,
   SEARCHPLUGINS,
+  SUGGESTPLUGININSTALL,
+  PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES,
+  SUGGESTSKILLS,
   LISTPLUGINS,
   LISTSKILLS,
   SEARCHSKILLS,

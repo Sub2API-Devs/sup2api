@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{M5i,jE}from"./chunk-85eyj5gy.js";import{et,v}from"./chunk-exfmq47h.js";import{ed,Ae,kd,ws,ci}from"./chunk-5m8x0kb6.js";var x=1568,h={firstParty:2000,bedrock:2000,vertex:2000,foundry:2000,anthropicAws:2000,anthropicGoogleCloud:2000,mantle:2000,gateway:2000};function I(e){return ws()&&v("tengu_mossy_gray",!1)===!0?1/0:h[kd(e)]}function vd(e){let n=_(),t=e?et(e):void 0,i=t?ed(t)?.image_limits:void 0,m=void 0,a=I(e),c=a,g=Math.min(i?.maxWidth??jE.maxWidth,a),u=Math.min(i?.maxHeight??jE.maxHeight,a),o=Math.min(r((void 0)?.maxWidth,g),c),d=Math.min(r((void 0)?.maxHeight,u),c),f=i?.maxImageTokens,s=i?.maxBase64Size??n;if(f===void 0&&o===jE.maxWidth&&d===jE.maxHeight&&s===jE.maxBase64Size)return jE;return{maxWidth:o,maxHeight:d,maxImageTokens:f,rejectMaxWidth:Math.max(g,o),rejectMaxHeight:Math.max(u,d),maxBase64Size:s,targetRawSize:s*3/4}}function vRi(e){let n=e?et(e):void 0,t=n?ed(n)?.image_limits:void 0;if(t?.maxWidth===void 0||t.maxHeight===void 0)return;let i=void 0,m=Math.min(t.maxWidth,r(i?.maxWidth,t.maxWidth)),a=Math.min(t.maxHeight,r(i?.maxHeight,t.maxHeight));if(m<=jE.maxWidth||a<=jE.maxHeight)return;return{...jE,maxWidth:m,maxHeight:a,maxImageTokens:t.maxImageTokens}}function r(e,n){return e===void 0?n:Math.max(x,e)}function _(){if(Ae()==="firstParty"&&ci()&&v("tengu_crimson_vector",!1))return M5i;return jE.maxBase64Size}
+export{vd,vRi};

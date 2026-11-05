@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：机器状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 7, affinity 3
  */
 import { totalmem } from "os";
@@ -19,14 +19,14 @@ import { logForDebugging } from "./debug.js";
 import { getErrnoCode } from "./errors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3294343-3294437 placement
+//@ chunk-5xgkngpb.js:3379400-3379494 placement
 /**
  * 机器状态缓存时长、初始空状态与刷新中标记。
  */
 var MACHINE_STATUS_TTL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_MACHINE_STATUS;
 var machineStatusRefreshingState;
-deferInit("chunk-e6aww6q8.js:3294343", () => {
+deferInit("chunk-5xgkngpb.js:3379400", () => {
   MACHINE_STATUS_TTL_MS = 2000;
   EMPTY_MACHINE_STATUS = {
     memory: undefined,
@@ -42,7 +42,7 @@ deferInit("chunk-e6aww6q8.js:3294343", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:3294437-3294514 placement
+//@ chunk-5xgkngpb.js:3379494-3379571 placement
 function machineStatusDeps() {
   return {
     platform: getPlatform(),
@@ -50,7 +50,7 @@ function machineStatusDeps() {
     readText: (path) => readFile(path, "utf8"),
   };
 }
-//@ chunk-e6aww6q8.js:3294514-3294812 placement
+//@ chunk-5xgkngpb.js:3379571-3379869 placement
 async function getMachineMemoryStatus(deps = machineStatusDeps()) {
   if (deps.platform !== "linux" && deps.platform !== "wsl") return;
   let { available, container, hostOomKills } = await readMemoryStats(deps);
@@ -64,18 +64,18 @@ async function getMachineMemoryStatus(deps = machineStatusDeps()) {
         oomKills: container === undefined ? hostOomKills : container.oomKills,
       };
 }
-//@ chunk-e6aww6q8.js:3294812-3294835 placement
+//@ chunk-5xgkngpb.js:3379869-3379892 placement
 /**
  * 机器状态钩子空实现。
  */
 function noopMachineStatusHook(cwd) {
   return;
 }
-//@ chunk-e6aww6q8.js:3294835-3294904 placement
+//@ chunk-5xgkngpb.js:3379892-3379961 placement
 function availableQuota(container, available) {
   return Math.min(Math.max(0, container.limit - container.used), available ?? 1 / 0);
 }
-//@ chunk-e6aww6q8.js:3294904-3295140 affinity
+//@ chunk-5xgkngpb.js:3379961-3380197 affinity
 async function readMemoryStats(host) {
   let [procFile, procFile_2, cgroupMemory] = await Promise.all([
     readProcFile(host, "/proc/meminfo"),
@@ -89,7 +89,7 @@ async function readMemoryStats(host) {
     container: cgroupMemory,
   };
 }
-//@ chunk-e6aww6q8.js:3295140-3295980 affinity
+//@ chunk-5xgkngpb.js:3380197-3381040 affinity
 /**
  * 读取 cgroup（v1/v2）内存限制：沿层级找最紧的 limit，再读用量、inactive_file 与 OOM 次数。
  */
@@ -140,13 +140,13 @@ async function readCgroupMemory(host) {
     oomKills: matchNumber(/^oom_kill (\d+)$/m, eventsText),
   };
 }
-//@ chunk-e6aww6q8.js:3296114-3296216 affinity
+//@ chunk-5xgkngpb.js:3381174-3381276 affinity
 function matchNumber(pattern, text) {
   if (text === undefined) return;
   let value = Number(pattern.exec(text)?.[1]);
   return Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-e6aww6q8.js:3296216-3296372 placement
+//@ chunk-5xgkngpb.js:3381276-3381432 placement
 async function readProcFile(host, path) {
   try {
     return await host.readText(path);
@@ -157,7 +157,7 @@ async function readProcFile(host, path) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3296372-3296441 placement
+//@ chunk-5xgkngpb.js:3381432-3381501 placement
 async function readTextQuiet(host, path) {
   try {
     return await host.readText(path);
@@ -165,4 +165,4 @@ async function readTextQuiet(host, path) {
     return;
   }
 }
-export { noopMachineStatusHook, EMPTY_MACHINE_STATUS, MACHINE_STATUS_TTL_MS, getMachineMemoryStatus };
+export { noopMachineStatusHook, MACHINE_STATUS_TTL_MS, getMachineMemoryStatus, EMPTY_MACHINE_STATUS };

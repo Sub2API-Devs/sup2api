@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：策略限制拉取状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4xpk3fhh.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0avm71bs.js (7)
  * attribution: placement 7
  */
 import { getResponseFromCache, isClientOnlyEgressKeyWithheld } from "./policyEvidence.js";
@@ -13,9 +13,9 @@ import { EMPTY_POLICY_RESPONSE } from "./complianceTaints.js";
 import { getPolicyLimitsIneligibleReason, getLastFetchOutcome } from "./policyState.js";
 import { POLICY_LIMITS_PATH } from "./index.js";
 
-//@ chunk-4xpk3fhh.js:6642-6704 placement
-var _ = " \xB7 web fetch, design sync and Channels wait for it";
-//@ chunk-4xpk3fhh.js:6704-6800 placement
+//@ chunk-0avm71bs.js:7235-7297 placement
+var WEB_WAIT_SUFFIX = " \xB7 web fetch, design sync and Channels wait for it";
+//@ chunk-0avm71bs.js:7297-7393 placement
 /**
  * 策略缓存状态：无、未受限或旧缓存。
  */
@@ -24,7 +24,7 @@ function policyCacheStatus() {
   if (responseFromCache === null) return "nothing";
   return responseFromCache === EMPTY_POLICY_RESPONSE ? "unrestricted" : "stale_cache";
 }
-//@ chunk-4xpk3fhh.js:6800-7061 placement
+//@ chunk-0avm71bs.js:7393-7654 placement
 /**
  * 策略限制拉取状态：ineligible/pending/settled。
  */
@@ -51,7 +51,7 @@ function getPolicyFetchStatus() {
     egressKeysWithheld,
   };
 }
-//@ chunk-4xpk3fhh.js:7061-7598 placement
+//@ chunk-0avm71bs.js:7654-8200 placement
 /**
  * 策略不适用原因的说明文字。
  */
@@ -66,10 +66,10 @@ function describeIneligibleReason(reason) {
     case "oauth_no_inference_scope":
       return "not fetched: this sign-in lacks the inference scope";
     case "prosumer_oauth":
-      return "not applicable to Pro and Max accounts";
+      return "not applicable to individual subscription plans";
   }
 }
-//@ chunk-4xpk3fhh.js:7598-9776 placement
+//@ chunk-0avm71bs.js:8200-10378 placement
 /**
  * 拉取失败（鉴权、超时、网络等）的说明与修复建议。
  */
@@ -106,7 +106,7 @@ function describeFetchFailure(errorCode, httpStatus, host, retrying) {
         : `Couldn't complete the request to ${host}; if a proxy intercepts TLS, its certificate must be trusted (NODE_EXTRA_CA_CERTS) \xB7 Fix: check your network or proxy${retryNote}`;
   }
 }
-//@ chunk-4xpk3fhh.js:9776-10898 placement
+//@ chunk-0avm71bs.js:10378-11500 placement
 /**
  * 根据状态生成说明：不适用时给原因；未完成时说明是否使用磁盘副本；完成时成功显示来源主机， 失败时按实际使用（陈旧缓存/不受限/阻止）组合失败原因与是否仍在重试。
  */
@@ -116,8 +116,8 @@ function formatPolicyFetchStatus(policyFetchStatus) {
       return describeIneligibleReason(policyFetchStatus.reason);
     case "pending":
       return policyFetchStatus.hasCache
-        ? `Using the copy on disk \xB7 not refreshed yet this session${policyFetchStatus.egressKeysWithheld ? _ : ""}`
-        : `Not loaded yet${policyFetchStatus.egressKeysWithheld ? _ : ""} \xB7 if this persists, check your network or proxy`;
+        ? `Using the copy on disk \xB7 not refreshed yet this session${policyFetchStatus.egressKeysWithheld ? WEB_WAIT_SUFFIX : ""}`
+        : `Not loaded yet${policyFetchStatus.egressKeysWithheld ? WEB_WAIT_SUFFIX : ""} \xB7 if this persists, check your network or proxy`;
     case "settled": {
       let { outcome } = policyFetchStatus;
       if (outcome.success) return `Loaded from ${outcome.host}`;
@@ -131,7 +131,7 @@ function formatPolicyFetchStatus(policyFetchStatus) {
       let withheldNote = policyFetchStatus.egressKeysWithheld ? ", web fetch, design sync, Channels" : "";
       switch (policyFetchStatus.served) {
         case "stale_cache":
-          return `Couldn't refresh${retryingNote} \xB7 using the last copy on this machine${policyFetchStatus.egressKeysWithheld ? _ : ""} \xB7 ${failureText}`;
+          return `Couldn't refresh${retryingNote} \xB7 using the last copy on this machine${policyFetchStatus.egressKeysWithheld ? WEB_WAIT_SUFFIX : ""} \xB7 ${failureText}`;
         case "unrestricted":
           return policyFetchStatus.egressKeysWithheld
             ? `Couldn't load${retryingNote} \xB7 no restrictions applied this session, except that web fetch, design sync and Channels stay off until it loads \xB7 ${failureText}`
@@ -142,7 +142,7 @@ function formatPolicyFetchStatus(policyFetchStatus) {
     }
   }
 }
-//@ chunk-4xpk3fhh.js:10898-11081 placement
+//@ chunk-0avm71bs.js:11500-11683 placement
 /**
  * 拉取状态是否应显示为问题。
  */
@@ -158,4 +158,4 @@ function isPolicyFetchProblem(policyFetchStatus) {
       );
   }
 }
-export { policyCacheStatus, getPolicyFetchStatus, isPolicyFetchProblem, formatPolicyFetchStatus };
+export { policyCacheStatus, formatPolicyFetchStatus, getPolicyFetchStatus, isPolicyFetchProblem };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：非第一方提供商（gateway/bedrock/mantle/vertex 等）时给出"不支持 Remote Control"的说明文字；生成 Remote Control 诊断用的 GrowthBook 状态行（是否启用、被谁关闭、DISABLE_GROWTHBOOK、特性缓存新鲜度等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-71c4j971.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h3xdf7nq.js (35)
  * attribution: placement 35
  */
 import {
@@ -15,10 +15,11 @@ import {
   isBridgeSubscriptionEligible,
 } from "./bridgeEnabled.js";
 import { mergedCommandNames } from "../utils/settings/commandSyncNames.js";
+import { isAccepted } from "../utils/codeMode/accepted.js";
 import {
   isRunningInRemoteEnvironment,
-  ensurePolicyLimitsLoadedForDiagnostic,
   getRemoteControlPolicyVerdict,
+  ensurePolicyLimitsLoadedForDiagnostic,
 } from "./bridgeGates.js";
 import {
   checkGate_CACHED_OR_BLOCKING,
@@ -59,6 +60,8 @@ import {
   PRINCIPALS_NEVER_SERVED,
   getPolicyCacheRevision,
 } from "../services/policyLimits/policyState.js";
+import { CODE_MODE_EXPERIMENTAL_LABEL } from "../constants/codeMode.js";
+import { remoteControlRestartHint } from "../utils/foresightStatus.js";
 import { isBridgeEntitlementHintAvailable } from "./bridgeConfig.js";
 import { nullStub3 } from "../utils/externalBuildStubs.js";
 import {
@@ -86,9 +89,9 @@ import { isEnvTruthy, isBareMode } from "../utils/envUtils.js";
 import { getGlobalConfig } from "../utils/config.js";
 import { CLAUDE_AI_INFERENCE_SCOPE } from "../constants/oauth.js";
 
-//@ chunk-71c4j971.js:3910-3950 placement
+//@ chunk-h3xdf7nq.js:4018-4058 placement
 var SUBSCRIPTION_PLAN_NAMES = ["pro", "max", "team", "enterprise"];
-//@ chunk-71c4j971.js:3950-4101 placement
+//@ chunk-h3xdf7nq.js:4058-4209 placement
 function getBridgeEntitlementBlocker() {
   if (hasBridgeEntitlement()) return null;
   if (!hasClaudeAIInferenceScope()) return "not_signed_in";
@@ -96,40 +99,47 @@ function getBridgeEntitlementBlocker() {
   if (!hasProfileScopeSafe()) return "no_profile_scope";
   return "not_in_rollout";
 }
-//@ chunk-71c4j971.js:4101-4123 placement
+//@ chunk-h3xdf7nq.js:4209-4231 placement
 function isBridgeForceEnabledByBuild() {
   return false;
 }
-//@ chunk-71c4j971.js:4123-4185 placement
+//@ chunk-h3xdf7nq.js:4231-4293 placement
 function isRemoteControlHardDisabled() {
   return mergedCommandNames()?.settings.disableRemoteControl === true;
 }
-//@ chunk-71c4j971.js:4185-4226 placement
+//@ chunk-h3xdf7nq.js:4293-4351 placement
 function isBridgeEnabled() {
   if (isBridgeForceEnabledByBuild()) return true;
+  if (isAccepted()) return false;
   return isBridgeEnabledByDefault();
 }
-//@ chunk-71c4j971.js:4226-4275 placement
+//@ chunk-h3xdf7nq.js:4351-4400 placement
 function isBridgeEnabledByDefault() {
   if (isRemoteControlHardDisabled()) return false;
   return !isRunningInRemoteEnvironment() && hasBridgeEntitlement();
 }
-//@ chunk-71c4j971.js:4275-4299 placement
+//@ chunk-h3xdf7nq.js:4400-4457 placement
 function isBridgeOffByAnOptInAlone() {
-  return false;
+  return (
+    isAccepted() &&
+    !isBridgeForceEnabledByBuild() &&
+    isBridgeEnabledByDefault() &&
+    getRemoteControlPolicyVerdict() === "allowed"
+  );
 }
-//@ chunk-71c4j971.js:4299-4355 placement
+//@ chunk-h3xdf7nq.js:4457-4513 placement
 function isRemoteControlDeploymentAvailable() {
   if (isBridgeForceEnabledByBuild()) return true;
   return !isRemoteControlHardDisabled() && !isRunningInRemoteEnvironment() && isBridgeFirstParty();
 }
-//@ chunk-71c4j971.js:4355-4404 placement
+//@ chunk-h3xdf7nq.js:4513-4562 placement
 async function isBridgeEnabledBlocking(options) {
   return (await getBridgeBlockedCode(options)) === null;
 }
-//@ chunk-71c4j971.js:4404-4735 placement
+//@ chunk-h3xdf7nq.js:4562-4919 placement
 async function getBridgeBlockedCode(options) {
   if (isBridgeForceEnabledByBuild()) return null;
+  if (isAccepted()) return "repl_mode";
   if (isRemoteControlHardDisabled()) return "managed_disabled";
   if (!isBridgeFirstParty()) return "not_first_party";
   if (isRunningInRemoteEnvironment()) return "cloud_session";
@@ -139,7 +149,7 @@ async function getBridgeBlockedCode(options) {
   if (!isGrowthBookEnabled()) return "flags_disabled";
   return hasFreshGrowthBookFeatures() ? "gate_off" : "flags_unreachable";
 }
-//@ chunk-71c4j971.js:4735-4869 placement
+//@ chunk-h3xdf7nq.js:4919-5053 placement
 /**
  * 远程控制被组织策略禁用的提示文案，以及一天的毫秒数和定时器允许的最大延迟（2^31−1 毫秒）。
  */
@@ -147,11 +157,11 @@ var REMOTE_CONTROL_POLICY_DISABLED =
   "Remote Control is disabled by your organization's policy. Contact your organization admin for access.";
 var DAY_MS = 86400000;
 var MAX_TIMER_MS = 2147483647;
-//@ chunk-71c4j971.js:4869-4895 placement
+//@ chunk-h3xdf7nq.js:5053-5079 placement
 function hasLoadedPolicyLimitsCache() {
   return isPolicyLimitsCacheLoaded();
 }
-//@ chunk-71c4j971.js:4895-4988 placement
+//@ chunk-h3xdf7nq.js:5079-5172 placement
 function describeRemoteControlPolicyDenial() {
   let { featureLabel, verb } = policyKeyLabel("allow_remote_control");
   return formatPolicyDisabledMessage(
@@ -161,7 +171,7 @@ function describeRemoteControlPolicyDenial() {
     REMOTE_CONTROL_POLICY_DISABLED,
   );
 }
-//@ chunk-71c4j971.js:4988-5613 placement
+//@ chunk-h3xdf7nq.js:5172-5797 placement
 function connectedBridgePolicyRefusal(isConnected) {
   let policyKeys = isConnected ? ["allow_remote_control", "allow_remote_sessions"] : ["allow_remote_control"];
   try {
@@ -209,22 +219,27 @@ function connectedBridgePolicyRefusal(isConnected) {
     return null;
   }
 }
-//@ chunk-71c4j971.js:5613-5667 placement
+//@ chunk-h3xdf7nq.js:5797-5851 placement
 function isPrincipalNeverServedByPolicy() {
   let policyLimitsIneligibleReason = getPolicyLimitsIneligibleReason();
   return (
     policyLimitsIneligibleReason !== undefined && PRINCIPALS_NEVER_SERVED.has(policyLimitsIneligibleReason)
   );
 }
-//@ chunk-71c4j971.js:5667-5719 placement
+//@ chunk-h3xdf7nq.js:5851-5903 placement
 var bridgeBlockedResult = (code, reason) => ({
   reason,
   code,
   orgPolicyDenied: false,
 });
-//@ chunk-71c4j971.js:5719-7973 placement
+//@ chunk-h3xdf7nq.js:5903-8241 placement
 async function getBridgeDisabledDiagnosis() {
   if (isBridgeForceEnabledByBuild()) return null;
+  if (isAccepted())
+    return bridgeBlockedResult(
+      "repl_mode",
+      `Remote Control isn't available in ${CODE_MODE_EXPERIMENTAL_LABEL} yet. ${remoteControlRestartHint()}`,
+    );
   if (!isBridgeFirstParty())
     return bridgeBlockedResult("not_first_party", describeNonFirstPartyBridgeBlock());
   if (isRunningInRemoteEnvironment())
@@ -302,11 +317,11 @@ async function getBridgeDisabledDiagnosis() {
   }
   return null;
 }
-//@ chunk-71c4j971.js:7973-8026 placement
+//@ chunk-h3xdf7nq.js:8241-8294 placement
 async function getBridgeDisabledReasonAsync() {
   return (await getBridgeDisabledDiagnosis())?.reason ?? null;
 }
-//@ chunk-71c4j971.js:8026-8233 placement
+//@ chunk-h3xdf7nq.js:8294-8501 placement
 function remoteControlPolicyMessage() {
   try {
     if (isPolicyRouteMissing()) return policy404Message("Remote Control");
@@ -318,9 +333,9 @@ function remoteControlPolicyMessage() {
     return REMOTE_CONTROL_POLICY_UNVERIFIED_MESSAGE;
   }
 }
-//@ chunk-71c4j971.js:8233-8304 placement
+//@ chunk-h3xdf7nq.js:8501-8572 placement
 var ORG_CONFIG_NOT_ADMIN_SETTING_DETAIL = "set by your organization's configuration, not an admin setting";
-//@ chunk-71c4j971.js:8304-8490 placement
+//@ chunk-h3xdf7nq.js:8572-8758 placement
 function isAuthoritativeTaintDenial({ policyVerdict, policyDenialIsAuthoritative, currentTaints }) {
   if (policyVerdict !== "denied" || !policyDenialIsAuthoritative) return false;
   try {
@@ -333,7 +348,7 @@ function isAuthoritativeTaintDenial({ policyVerdict, policyDenialIsAuthoritative
     return false;
   }
 }
-//@ chunk-71c4j971.js:8490-8726 placement
+//@ chunk-h3xdf7nq.js:8758-8993 placement
 function getRemoteControlPolicyLockReason() {
   if (isBridgeForceEnabledByBuild()) return null;
   if (isRemoteControlHardDisabled()) return REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE;
@@ -352,14 +367,14 @@ function getRemoteControlPolicyLockReason() {
   };
   return reason;
 }
-//@ chunk-71c4j971.js:8726-8824 placement
+//@ chunk-h3xdf7nq.js:8993-9091 placement
 function describeRemoteControlPolicyVerdict() {
   let remoteControlPolicyVerdict = getRemoteControlPolicyVerdict();
   if (remoteControlPolicyVerdict === "allowed") return null;
   if (remoteControlPolicyVerdict === "unavailable") return REMOTE_CONTROL_POLICY_UNVERIFIED_MESSAGE;
   return remoteControlPolicyMessage();
 }
-//@ chunk-71c4j971.js:8824-8955 placement (2.1.88 match: checkBridgePrerequisites, 0.556)
+//@ chunk-h3xdf7nq.js:9091-9222 placement (2.1.88 match: checkBridgePrerequisites, 0.556)
 function remoteControlPolicyDeniedReason() {
   return policyDeniedReason(
     "allow_remote_control",
@@ -368,7 +383,7 @@ function remoteControlPolicyDeniedReason() {
     "Remote Control is disabled by your organization's policy.",
   );
 }
-//@ chunk-71c4j971.js:8955-9928 placement
+//@ chunk-h3xdf7nq.js:9222-10195 placement
 function getBridgeAuthDebugInfo() {
   if (!isDebugMode()) return "";
   let describeFlag = (value) => (value ? "set" : "unset");
@@ -402,7 +417,7 @@ function getBridgeAuthDebugInfo() {
 [debug] failed to collect auth state: ${error}`;
   }
 }
-//@ chunk-71c4j971.js:9928-10342 placement
+//@ chunk-h3xdf7nq.js:10195-10632 placement
 /**
  * 生成 Remote Control 诊断用的 GrowthBook 状态行（是否启用、被谁关闭、DISABLE_GROWTHBOOK、特性缓存新鲜度等）。
  */
@@ -416,11 +431,11 @@ function describeGrowthBookStateForDiagnostic() {
     `  DISABLE_GROWTHBOOK=${describeFlag(process.env.DISABLE_GROWTHBOOK)}`,
     `  hasFreshGrowthBookFeatures=${hasFreshGrowthBookFeatures()}`,
     `  growthBookFeaturesLoaded=${Object.keys(allGrowthBookFeatures).length}`,
-    `  growthBookLastFetched=${cachedGrowthBookFeaturesAt ? `${formatDurationShort(Date.now() - cachedGrowthBookFeaturesAt)} ago` : "never"}`,
+    `  growthBookLastFetched=${hasFreshGrowthBookFeatures() ? "by this process" : cachedGrowthBookFeaturesAt ? `${formatDurationShort(Date.now() - cachedGrowthBookFeaturesAt)} ago` : "never"}`,
     `  tengu_ccr_bridge=${String(allGrowthBookFeatures.tengu_ccr_bridge ?? "unset")}`,
   ];
 }
-//@ chunk-71c4j971.js:10342-12317 placement
+//@ chunk-h3xdf7nq.js:10632-12606 placement
 async function getBridgeDoctorInfo() {
   if (isRunningInRemoteEnvironment() && !isBridgeForceEnabledByBuild())
     return {
@@ -534,7 +549,7 @@ async function getBridgeDoctorInfo() {
     checks,
   };
 }
-//@ chunk-71c4j971.js:12317-12388 placement
+//@ chunk-h3xdf7nq.js:12606-12677 placement
 function getCachedGrowthBookFeaturesAt() {
   try {
     return getGlobalConfig().cachedGrowthBookFeaturesAt;
@@ -542,7 +557,7 @@ function getCachedGrowthBookFeaturesAt() {
     return;
   }
 }
-//@ chunk-71c4j971.js:12388-12571 placement
+//@ chunk-h3xdf7nq.js:12677-12860 placement
 function formatDurationShort(durationMs) {
   let rounded = Math.round(durationMs / 1000);
   if (rounded < 120) return `${rounded}s`;
@@ -552,7 +567,7 @@ function formatDurationShort(durationMs) {
   if (rounded_3 < 48) return `${rounded_3}h`;
   return `${Math.round(rounded_3 / 24)}d`;
 }
-//@ chunk-71c4j971.js:12571-13527 placement
+//@ chunk-h3xdf7nq.js:12860-13816 placement
 function describeAuthPrecedenceBlocker({ prefix, suffix }) {
   try {
     let { source } = getAnthropicApiKeyWithSource({
@@ -573,12 +588,12 @@ function describeAuthPrecedenceBlocker({ prefix, suffix }) {
   } catch {}
   return `${prefix} Unset ANTHROPIC_API_KEY / apiKeyHelper / ANTHROPIC_AUTH_TOKEN ${suffix}`;
 }
-//@ chunk-71c4j971.js:13527-13748 placement
+//@ chunk-h3xdf7nq.js:13816-14037 placement
 var REMOTE_CONTROL_FIRST_PARTY_ONLY =
   "Remote Control is only available when using Claude via api.anthropic.com.";
 var UNSET_IT_CLAUSE = "unset it (or run in a shell without it) to use Remote Control.";
 var UNSET_THEM_CLAUSE = "unset them (or run in a shell without them) to use Remote Control.";
-//@ chunk-71c4j971.js:13748-14591 placement
+//@ chunk-h3xdf7nq.js:14037-14880 placement
 /**
  * 非第一方提供商（gateway/bedrock/mantle/vertex 等）时给出"不支持 Remote Control"的说明文字。
  */
@@ -601,7 +616,7 @@ function describeNonFirstPartyBridgeBlock() {
     return `${REMOTE_CONTROL_FIRST_PARTY_ONLY} ANTHROPIC_UNIX_SOCKET is set, so this session sends requests through a local socket rather than to api.anthropic.com \u2014 ${UNSET_IT_CLAUSE}`;
   return REMOTE_CONTROL_FIRST_PARTY_ONLY;
 }
-//@ chunk-71c4j971.js:14591-14667 placement
+//@ chunk-h3xdf7nq.js:14880-14956 placement
 function hasClaudeAIInferenceScope() {
   try {
     return Boolean(getClaudeAIOAuthTokens()?.scopes?.includes(CLAUDE_AI_INFERENCE_SCOPE));
@@ -609,7 +624,7 @@ function hasClaudeAIInferenceScope() {
     return false;
   }
 }
-//@ chunk-71c4j971.js:14667-14712 placement
+//@ chunk-h3xdf7nq.js:14956-15001 placement
 function isSubscriberSafe() {
   try {
     return isClaudeAISubscriber();
@@ -617,7 +632,7 @@ function isSubscriberSafe() {
     return false;
   }
 }
-//@ chunk-71c4j971.js:14712-14757 placement
+//@ chunk-h3xdf7nq.js:15001-15046 placement
 function hasProfileScopeSafe() {
   try {
     return hasProfileScope();
@@ -626,24 +641,24 @@ function hasProfileScopeSafe() {
   }
 }
 export {
-  isSubscriberSafe,
-  SUBSCRIPTION_PLAN_NAMES,
-  hasProfileScopeSafe,
   connectedBridgePolicyRefusal,
-  isBridgeEnabled,
-  getBridgeDisabledDiagnosis,
   getRemoteControlPolicyLockReason,
   isRemoteControlHardDisabled,
   isRemoteControlDeploymentAvailable,
+  getBridgeDisabledDiagnosis,
   getBridgeDoctorInfo,
+  isBridgeEnabled,
   isBridgeOffByAnOptInAlone,
-  DAY_MS,
-  MAX_TIMER_MS,
+  getBridgeEntitlementBlocker,
   isBridgeEnabledBlocking,
   getBridgeBlockedCode,
   describeRemoteControlPolicyDenial,
   describeAuthPrecedenceBlocker,
-  getBridgeEntitlementBlocker,
+  isSubscriberSafe,
+  SUBSCRIPTION_PLAN_NAMES,
+  hasProfileScopeSafe,
+  DAY_MS,
+  MAX_TIMER_MS,
   getBridgeAuthDebugInfo,
   remoteControlPolicyDeniedReason,
 };

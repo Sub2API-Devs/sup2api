@@ -3,23 +3,23 @@
  *
  * 会话状态切片：压缩边界校验、withProject 派生、会话来源等（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ndmse9kj.js (46)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5ythzcas.js (45), chunk-r4yj9pae.js (1)
  * attribution: placement 46
  */
 import { resolve } from "path";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
-import { count } from "../utils/collections.js";
+import { SYNTHETIC_MODEL } from "../utils/messages.js";
+import { countWhere } from "../utils/collections.js";
 import {
   currentSession,
   getAgentContext,
+  getHookHolder,
   defaultRootSession,
   agentContextGetter,
-  getHookHolder,
   getRootSession,
-  getSessionId,
   isDiskless,
+  getSessionId,
 } from "./state.js";
 import { identityAgentId2 } from "../utils/agentId.js";
 import { createSignal } from "../utils/signal.js";
@@ -43,8 +43,8 @@ import {
   UserPresence,
   deepEqualWithCycles,
   nullProtoCopy,
-  ManagedDocumentLinks,
   unlatchStickyBetaLatches,
+  ManagedDocumentLinks,
   ManagedFileProtections,
   RepoTierFreeze,
   settingsEqualIgnoringOwner,
@@ -54,14 +54,39 @@ import { SESSION_URL_HASH_SALT } from "../utils/sessionUrl.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ndmse9kj.js:36671-36750 placement
+//@ chunk-r4yj9pae.js:300-520 placement
+/**
+ * 按会话根对象（WeakMap，键为 x.root）懒创建并缓存一份状态；of 取或建、peek 只取、drop 删除。被大量模块用作每会话单例。
+ */
+class SessionRootSlot {
+  #t;
+  #e = new WeakMap();
+  constructor(createSlot) {
+    this.#t = createSlot;
+  }
+  peek(session) {
+    return this.#e.get(session.root);
+  }
+  of(session) {
+    let root = session.root;
+    let cachedSlot = this.#e.get(root);
+    if (cachedSlot !== undefined) return cachedSlot;
+    let createdSlot = this.#t();
+    this.#e.set(root, createdSlot);
+    return createdSlot;
+  }
+  drop(session) {
+    this.#e.delete(session.root);
+  }
+}
+//@ chunk-5ythzcas.js:41789-41868 placement
 /**
  * 判断是否为压缩时插入的虚拟会话消息：type 为 user/assistant 且 isVirtual 为 true。
  */
 function isVirtualConversationMessage(message) {
   return (message.type === "user" || message.type === "assistant") && message.isVirtual === true;
 }
-//@ chunk-ndmse9kj.js:36750-36843 placement
+//@ chunk-5ythzcas.js:41868-41960 placement (2.1.88 match: isSyntheticApiErrorMessage, 1)
 /**
  * 判断是否为合成模型的 API 错误消息：assistant 且 isApiErrorMessage 为真、message.model 为 SYNTHETIC_MODEL。
  */
@@ -72,11 +97,11 @@ function isSyntheticModelApiErrorMessage(message) {
     message.message?.model === SYNTHETIC_MODEL
   );
 }
-//@ chunk-ndmse9kj.js:36843-36912 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
+//@ chunk-5ythzcas.js:41960-42029 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
 function isSystemLocalCommandMessage(message) {
   return message.type === "system" && message.subtype === "local_command";
 }
-//@ chunk-ndmse9kj.js:36912-37262 placement
+//@ chunk-5ythzcas.js:42029-42378 placement
 /**
  * 判断消息是否不属于发给 API 的对话内容：progress、非本地命令的 system、若干内部附件（thinking_drop、credential_org、prompt_snapshot、prompt_render_point、deferred_tools_record）等返回 true；api_system 返回 false。
  */
@@ -95,7 +120,7 @@ function isNonConversationMessage(message) {
         message.attachment?.type === "deferred_tools_record"))
   );
 }
-//@ chunk-ndmse9kj.js:37262-37361 placement
+//@ chunk-5ythzcas.js:42378-42477 placement
 var ARM_GATE_EVENT_KINDS = [
   "sdk_single_prompt_gate",
   "subagent_estimate",
@@ -103,7 +128,7 @@ var ARM_GATE_EVENT_KINDS = [
   "rows_unreadable",
 ];
 var SIDECAR_READAHEAD_LIMIT = 8;
-//@ chunk-ndmse9kj.js:37361-39133 placement
+//@ chunk-5ythzcas.js:42477-44249 placement
 /**
  * 会话状态切片：按 agentId 记录侧车状态、尝试次数、计数失败、否决记录、arm-gate 事件去重，并串行化侧车读写（enqueueSidecarIo）与预读缓存（有上限）。
  */
@@ -192,14 +217,14 @@ class AgentSidecarSlice {
     for (let eventKind of ARM_GATE_EVENT_KINDS) this.armGateEventEmitted.delete(`${agentId}:${eventKind}`);
   }
 }
-//@ chunk-ndmse9kj.js:39133-39166 placement
+//@ chunk-5ythzcas.js:44249-44282 placement
 /**
  * agentId 为空时归到 "main"，用于侧车状态与否决记录的分键。
  */
 function agentIdOrDefault(agentId) {
   return agentId ?? "main";
 }
-//@ chunk-ndmse9kj.js:39166-39274 placement
+//@ chunk-5ythzcas.js:44282-44390 placement
 /**
  * 由消息列表与行 uuid 生成预计算压缩的游标状态 {lastUuid, seenUuids, rowUuids}。
  */
@@ -210,7 +235,7 @@ function createCompactSeenState({ messages, rowUuids }, lastUuid) {
     rowUuids,
   };
 }
-//@ chunk-ndmse9kj.js:39274-40544 placement
+//@ chunk-5ythzcas.js:44390-45660 placement
 /**
  * 校验压缩边界：边界 uuid、被覆盖消息、保留消息是否仍一致，不一致时拒绝
  */
@@ -288,13 +313,13 @@ function checkCompactBoundaryCoverage({ coverage, kept, sent, received, instruct
   return {
     kind: "reuse",
     tail: mapped,
-    earlyTailCount: count(filtered, ({ isEarly }) => isEarly),
+    earlyTailCount: countWhere(filtered, ({ isEarly }) => isEarly),
     displayOnlyLeftOutCount: earlyVirtualSet.size,
     headReordered: !arraysEqual(received.rowUuids, coverage.rowUuids),
     sizes: swapResult?.sizes,
   };
 }
-//@ chunk-ndmse9kj.js:40544-40928 placement
+//@ chunk-5ythzcas.js:45660-46044 placement
 /**
  * 估算用压缩结果替换后的 token 数（postSwapTokens），并判断是否应让位（超过阈值且压缩来源小于窗口）。
  */
@@ -319,11 +344,11 @@ function evaluateCompactSwap(
     givesWay: postSwapTokens >= thresholdTokens && madeFromTokens < windowTokens,
   };
 }
-//@ chunk-ndmse9kj.js:40928-40977 placement
+//@ chunk-5ythzcas.js:46044-46093 placement
 function arraysEqual(rowUuids, otherRowUuids) {
   return otherRowUuids.every((rowUuid, index) => rowUuids[index] === rowUuid);
 }
-//@ chunk-ndmse9kj.js:40977-41173 placement (2.1.88 match: isHumanTurn, 0.802)
+//@ chunk-5ythzcas.js:46093-46289 placement (2.1.88 match: isHumanTurn, 0.801)
 /**
  * 找最后一条真实用户输入（非 meta、非工具结果）的 uuid。
  */
@@ -339,11 +364,11 @@ function findLastHumanPromptUuid(m) {
     )?.uuid ?? ""
   );
 }
-//@ chunk-ndmse9kj.js:41173-41221 placement
+//@ chunk-5ythzcas.js:46289-46337 placement
 function recordVetoForLastPrompt(precompute, agentId, messages) {
   precompute.recordVeto(agentIdOrDefault(agentId), findLastHumanPromptUuid(messages));
 }
-//@ chunk-ndmse9kj.js:41221-41289 placement
+//@ chunk-5ythzcas.js:46337-46405 placement
 class EngineStoreHolder {
   #e = undefined;
   get current() {
@@ -353,7 +378,7 @@ class EngineStoreHolder {
     this.#e = engineStore;
   }
 }
-//@ chunk-ndmse9kj.js:41289-41420 placement
+//@ chunk-5ythzcas.js:46405-46536 placement
 class SessionIdentitySlice {
   #e = null;
   #t = null;
@@ -368,7 +393,7 @@ class SessionIdentitySlice {
     this.#t = projectDir;
   }
 }
-//@ chunk-ndmse9kj.js:41420-41740 placement
+//@ chunk-5ythzcas.js:46536-46856 placement
 /**
  * 会话状态切片：记录当前打开的工具调用 id 与本会话是否已回答，用于防止同一问题在别处重复打开。
  */
@@ -391,7 +416,7 @@ class OpenToolUseQuestionSlice {
     if (toolUseId !== undefined && this.openToolUseId === toolUseId) this.openToolUseId = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:41740-41817 placement
+//@ chunk-5ythzcas.js:46856-46933 placement
 class WorkflowUsageConsentFlag {
   granted = false;
   isGranted() {
@@ -401,7 +426,7 @@ class WorkflowUsageConsentFlag {
     this.granted = true;
   }
 }
-//@ chunk-ndmse9kj.js:41817-41938 placement
+//@ chunk-5ythzcas.js:46933-47054 placement
 class TurnEndTaskSlice {
   inFlight = null;
   startedForTurnEnd = false;
@@ -411,7 +436,7 @@ class TurnEndTaskSlice {
     this.startedForTurnEnd = false;
   }
 }
-//@ chunk-ndmse9kj.js:41938-42648 placement
+//@ chunk-5ythzcas.js:47054-47764 placement
 /**
  * 会话状态切片：云同步（账号列表、同步错误、重载保持计数、同步目录、待删回收站条目、缺失条目重同步、设置安装）的运行时状态。
  */
@@ -458,7 +483,7 @@ class CloudSyncSlice {
     this.reloadsCompleted++;
   }
 }
-//@ chunk-ndmse9kj.js:42648-42875 placement
+//@ chunk-5ythzcas.js:47764-47991 placement
 class TurnOfferSlice {
   abortController = null;
   eligibleTurns = 0;
@@ -476,7 +501,7 @@ class TurnOfferSlice {
     return abortController;
   }
 }
-//@ chunk-ndmse9kj.js:42875-43034 placement
+//@ chunk-5ythzcas.js:47991-48150 placement
 class CcrSessionLatchSlice {
   #e = undefined;
   #t = undefined;
@@ -494,7 +519,7 @@ class CcrSessionLatchSlice {
     return enabled;
   }
 }
-//@ chunk-ndmse9kj.js:43034-43178 placement
+//@ chunk-5ythzcas.js:48150-48294 placement
 class AutonomousLoopSlice {
   autonomousPreambleDelivered = false;
   lastLoopFileDelivered = null;
@@ -503,7 +528,7 @@ class AutonomousLoopSlice {
     this.lastLoopFileDelivered = null;
   }
 }
-//@ chunk-ndmse9kj.js:43178-44268 placement
+//@ chunk-5ythzcas.js:48294-49384 placement
 /**
  * 会话状态切片：旁路提问的问答记录（最多 20 条）、待重新打开的请求（多个拥有者）、重新打开回调和进行中的问题栈。
  */
@@ -584,9 +609,9 @@ class SideQuestionSlice {
       );
   }
 }
-//@ chunk-ndmse9kj.js:44268-44278 placement
+//@ chunk-5ythzcas.js:49384-49394 placement
 var SUBMITTED_QUEUE_LIMIT = 16;
-//@ chunk-ndmse9kj.js:44278-44876 placement
+//@ chunk-5ythzcas.js:49394-49992 placement
 /**
  * 会话状态切片：一次性提议（pending/shown）与已提交项队列，带 subscribe/getSnapshot 供 useSyncExternalStore 订阅。
  */
@@ -625,15 +650,15 @@ class PendingOfferSlice {
     this.shownThisSession = true;
   }
 }
-//@ chunk-ndmse9kj.js:44876-44919 placement
+//@ chunk-5ythzcas.js:49992-50035 placement
 /**
  * 权限暂存通道 consume() 的哨兵值：该条目已被淘汰时返回此 Symbol，调用方据此当作未命中处理。
  */
 var PERMISSION_STASH_EVICTED_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ndmse9kj.js:44876", () => {
+deferInit("chunk-5ythzcas.js:49992", () => {
   PERMISSION_STASH_EVICTED_SYMBOL = Symbol("permission-stash-evicted");
 });
-//@ chunk-ndmse9kj.js:44919-46770 placement
+//@ chunk-5ythzcas.js:50035-51886 placement
 /**
  * 会话状态切片：按读/写两条通道暂存文件状态（容量上限、淘汰集合、溢出后标记 poisoned），并按会话记录文件 dev/ino 身份，consume 时清理前缀并返回被淘汰标记。
  */
@@ -748,24 +773,24 @@ class FileStateStashSlice {
     return stashedPaths;
   }
 }
-//@ chunk-ndmse9kj.js:46770-46808 placement
+//@ chunk-5ythzcas.js:51886-51924 placement
 function fileLaneKey(sessionId, toolUseId) {
   return `${sessionId}\x00${toolUseId}`;
 }
-//@ chunk-ndmse9kj.js:46808-46860 placement
+//@ chunk-5ythzcas.js:51924-51976 placement
 var NOPROJECTDIRECTORYERROR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var projectDirectoryErrorReporterSlot;
-deferInit("chunk-ndmse9kj.js:46808", () => {
+deferInit("chunk-5ythzcas.js:51924", () => {
   NOPROJECTDIRECTORYERROR = "NoProjectDirectoryError";
   projectDirectoryErrorReporterSlot = new HostScoped(() => ({}));
 });
-//@ chunk-ndmse9kj.js:46860-46874 placement
+//@ chunk-5ythzcas.js:51976-51990 placement
 var onProjectDirectoryError = () => {};
-//@ chunk-ndmse9kj.js:46874-46894 placement
+//@ chunk-5ythzcas.js:51990-52010 placement
 function setProjectDirectoryErrorHandler(handler) {
   onProjectDirectoryError = handler;
 }
-//@ chunk-ndmse9kj.js:46894-47009 placement
+//@ chunk-5ythzcas.js:52010-52125 placement
 /**
  * 会话没有工作目录时抛出的错误（name = NoProjectDirectoryError）。
  */
@@ -778,7 +803,7 @@ class NoProjectDirectoryError extends Error {
     } catch {}
   }
 }
-//@ chunk-ndmse9kj.js:47009-47084 placement
+//@ chunk-5ythzcas.js:52125-52200 placement
 /**
  * 判断一个错误是否为 NoProjectDirectoryError（按 name 比较，异常时返回 false）。
  */
@@ -789,7 +814,7 @@ function isNoProjectDirectoryError(error) {
     return false;
   }
 }
-//@ chunk-ndmse9kj.js:47084-47150 placement
+//@ chunk-5ythzcas.js:52200-52266 placement
 /**
  * 取会话的 project；project 为 null 时抛 NoProjectDirectoryError。同文件另有 forkRootSessionWithProject 等派生辅助。
  */
@@ -798,7 +823,7 @@ function getSessionProject(sessionRecord) {
   if (project === null) throw new NoProjectDirectoryError();
   return project;
 }
-//@ chunk-ndmse9kj.js:47150-47266 placement
+//@ chunk-5ythzcas.js:52266-52382 placement
 /**
  * 以 root 会话描述（host、id、parentId）和项目信息派生带项目的会话。
  */
@@ -814,7 +839,7 @@ function forkRootSessionWithProject(root) {
     root.project?.isolationRoot,
   );
 }
-//@ chunk-ndmse9kj.js:47266-47521 placement
+//@ chunk-5ythzcas.js:52382-52637 placement
 /**
  * 用新值覆盖旧的 originalCwd/projectRoot/cwd 三元组并规范化；三者都缺返回 null，只缺一部分抛 NoProjectDirectoryError。
  */
@@ -831,7 +856,7 @@ function mergeProjectDirs(project, patch) {
     cwd: identity(cwd),
   };
 }
-//@ chunk-ndmse9kj.js:47521-50630 placement
+//@ chunk-5ythzcas.js:52637-55746 placement
 /**
  * 以 withProject 方式派生会话，处理 fork/parentId 并拒绝无法重新标识的会话
  */
@@ -984,32 +1009,7 @@ function forkSessionWithProject(source, project, isolationRoot) {
   };
   return session;
 }
-//@ chunk-ndmse9kj.js:50630-50850 placement
-/**
- * 按会话根对象（WeakMap，键为 x.root）懒创建并缓存一份状态；of 取或建、peek 只取、drop 删除。被大量模块用作每会话单例。
- */
-class SessionRootSlot {
-  #e;
-  #t = new WeakMap();
-  constructor(createSlot) {
-    this.#e = createSlot;
-  }
-  peek(session) {
-    return this.#t.get(session.root);
-  }
-  of(session) {
-    let root = session.root;
-    let cachedSlot = this.#t.get(root);
-    if (cachedSlot !== undefined) return cachedSlot;
-    let createdSlot = this.#e();
-    this.#t.set(root, createdSlot);
-    return createdSlot;
-  }
-  drop(session) {
-    this.#t.delete(session.root);
-  }
-}
-//@ chunk-ndmse9kj.js:50850-56668 placement
+//@ chunk-5ythzcas.js:55746-61858 placement
 /**
  * 会话运行模式切片：交互/打印模式、输出格式、权限提示工具、受限工作区、客户端类型、会话启动类型等几十个私有字段的读写器。
  */
@@ -1017,61 +1017,64 @@ class RuntimeModeSlice {
   #e = false;
   #t = false;
   #n = false;
-  #o = null;
+  #s = null;
+  #o = false;
+  #i = undefined;
   #r = false;
-  #s = undefined;
-  #i = false;
   #d = false;
   #u = false;
   #c = false;
   #l = undefined;
-  #p = false;
   #h = false;
+  #p = false;
   #a = null;
-  #g = null;
-  #S = new Map();
-  #y = "cli";
-  #v = "fresh";
-  #f = undefined;
+  #f = null;
+  #v = new Map();
+  #S = "cli";
+  #y = "fresh";
+  #g = undefined;
   #m = false;
   #b = false;
-  #k = [];
-  #R = false;
+  #C = [];
   #x = false;
-  #C = false;
-  #P = new Set();
-  #T = false;
+  #R = false;
   #w = false;
+  #k = new Set();
+  #P = false;
+  #M = false;
+  #T = false;
   #A = false;
-  #L = false;
-  #M = "none";
+  #L = "none";
   #O = false;
   #F = false;
   #I = false;
   #E = false;
-  #H = false;
+  #D = false;
   #B = undefined;
   #U = undefined;
-  #j = undefined;
-  #q = undefined;
+  #j = false;
   #N = undefined;
+  #q = undefined;
   #_ = undefined;
   #W = false;
-  #G = false;
+  #G = undefined;
   #V = false;
-  #K = null;
-  #J = null;
-  #z = true;
+  #K = false;
+  #J = false;
+  #z = null;
   #Q = null;
-  #D = false;
-  #oe = createSignal();
-  #$ = null;
-  #Y = false;
-  #X = false;
-  #Z = {};
-  #ee = null;
-  #te = "none";
-  #ne = undefined;
+  #$ = true;
+  #Y = null;
+  #H = false;
+  #ie = createSignal();
+  #X = null;
+  #Z = false;
+  #ee = false;
+  #te = false;
+  #ne = {};
+  #oe = null;
+  #re = "none";
+  #se = undefined;
   isInteractive() {
     return this.#e;
   }
@@ -1089,28 +1092,28 @@ class RuntimeModeSlice {
     this.#t = true;
   }
   printOutputFormat() {
-    return this.#o;
-  }
-  replacePrintOutputFormat(outputFormat) {
-    this.#o = outputFormat;
-  }
-  thinkingDisplayExplicit() {
-    return this.#r;
-  }
-  replaceThinkingDisplayExplicit(isThinkingDisplayExplicit) {
-    this.#r = isThinkingDisplayExplicit;
-  }
-  permissionPromptToolName() {
     return this.#s;
   }
-  replacePermissionPromptToolName(toolName) {
-    this.#s = toolName;
+  replacePrintOutputFormat(outputFormat) {
+    this.#s = outputFormat;
   }
-  hasStreamingInput() {
+  thinkingDisplayExplicit() {
+    return this.#o;
+  }
+  replaceThinkingDisplayExplicit(isThinkingDisplayExplicit) {
+    this.#o = isThinkingDisplayExplicit;
+  }
+  permissionPromptToolName() {
     return this.#i;
   }
+  replacePermissionPromptToolName(toolName) {
+    this.#i = toolName;
+  }
+  hasStreamingInput() {
+    return this.#r;
+  }
   replaceHasStreamingInput(hasStreamingInput) {
-    this.#i = hasStreamingInput;
+    this.#r = hasStreamingInput;
   }
   singleShotPrintSession() {
     return this.#d;
@@ -1137,16 +1140,16 @@ class RuntimeModeSlice {
     this.#l = rendererMode;
   }
   strictToolResultPairing() {
-    return this.#p;
-  }
-  replaceStrictToolResultPairing(isStrictToolResultPairing) {
-    this.#p = isStrictToolResultPairing;
-  }
-  restrictedSession() {
     return this.#h;
   }
+  replaceStrictToolResultPairing(isStrictToolResultPairing) {
+    this.#h = isStrictToolResultPairing;
+  }
+  restrictedSession() {
+    return this.#p;
+  }
   replaceRestrictedSession(restrictedSession) {
-    this.#h = restrictedSession;
+    this.#p = restrictedSession;
   }
   workspaceRestrictionState() {
     return this.#a;
@@ -1155,35 +1158,35 @@ class RuntimeModeSlice {
     this.#a = restrictionState;
   }
   replaceWorkspaceRestrictionUnsubscribe(unsubscribe) {
-    this.#g?.();
-    this.#g = unsubscribe;
+    this.#f?.();
+    this.#f = unsubscribe;
   }
   restrictedWorkspaceRoots() {
-    return this.#S;
-  }
-  addRestrictedWorkspaceRoot(root, value) {
-    this.#S.set(root, value);
-  }
-  clearRestrictedWorkspaceRoots() {
-    this.#S = new Map();
-  }
-  clientType() {
-    return this.#y;
-  }
-  replaceClientType(clientType) {
-    this.#y = clientType;
-  }
-  sessionStartType() {
     return this.#v;
   }
+  addRestrictedWorkspaceRoot(root, value) {
+    this.#v.set(root, value);
+  }
+  clearRestrictedWorkspaceRoots() {
+    this.#v = new Map();
+  }
+  clientType() {
+    return this.#S;
+  }
+  replaceClientType(clientType) {
+    this.#S = clientType;
+  }
+  sessionStartType() {
+    return this.#y;
+  }
   replaceSessionStartType(sessionStartType) {
-    this.#v = sessionStartType;
+    this.#y = sessionStartType;
   }
   questionPreviewFormat() {
-    return this.#f;
+    return this.#g;
   }
   replaceQuestionPreviewFormat(previewFormat) {
-    this.#f = previewFormat;
+    this.#g = previewFormat;
   }
   extendedQuestionsEnabled() {
     return this.#m;
@@ -1198,64 +1201,64 @@ class RuntimeModeSlice {
     this.#b = optionDescriptionsOptional;
   }
   replConfigArgv() {
-    return this.#k;
-  }
-  replaceReplConfigArgv(argv) {
-    this.#k = argv;
-  }
-  userMsgOptIn() {
-    return this.#R;
-  }
-  replaceUserMsgOptIn(isUserMsgOptIn) {
-    this.#R = isUserMsgOptIn;
-  }
-  searchToolsOptIn() {
-    return this.#x;
-  }
-  replaceSearchToolsOptIn(isSearchToolsOptIn) {
-    this.#x = isSearchToolsOptIn;
-  }
-  todoToolsOptIn() {
     return this.#C;
   }
-  replaceTodoToolsOptIn(isTodoToolsOptIn) {
-    this.#C = isTodoToolsOptIn;
+  replaceReplConfigArgv(argv) {
+    this.#C = argv;
   }
-  toolsOmittedByLaunchList() {
-    return this.#P;
+  userMsgOptIn() {
+    return this.#x;
   }
-  replaceToolsOmittedByLaunchList(omittedTools) {
-    this.#P = omittedTools;
+  replaceUserMsgOptIn(isUserMsgOptIn) {
+    this.#x = isUserMsgOptIn;
   }
-  wizardOperatorToolsEnabled() {
-    return this.#T;
+  searchToolsOptIn() {
+    return this.#R;
   }
-  replaceWizardOperatorToolsEnabled(isWizardOperatorToolsEnabled) {
-    this.#T = isWizardOperatorToolsEnabled;
+  replaceSearchToolsOptIn(isSearchToolsOptIn) {
+    this.#R = isSearchToolsOptIn;
   }
-  runnerDeclaredNestedRepositoryDiff() {
+  todoToolsOptIn() {
     return this.#w;
   }
-  replaceRunnerDeclaredNestedRepositoryDiff(isNestedRepositoryDiff) {
-    this.#w = isNestedRepositoryDiff;
+  replaceTodoToolsOptIn(isTodoToolsOptIn) {
+    this.#w = isTodoToolsOptIn;
   }
-  runnerDeclaredNoRepositoryCheckedOut() {
-    return this.#A;
+  toolsOmittedByLaunchList() {
+    return this.#k;
   }
-  replaceRunnerDeclaredNoRepositoryCheckedOut(isNoRepositoryCheckedOut) {
-    this.#A = isNoRepositoryCheckedOut;
+  replaceToolsOmittedByLaunchList(omittedTools) {
+    this.#k = omittedTools;
   }
-  runnerDeclaredFreshMachinePerSession() {
-    return this.#L;
+  wizardOperatorToolsEnabled() {
+    return this.#P;
   }
-  replaceRunnerDeclaredFreshMachinePerSession(isFreshMachinePerSession) {
-    this.#L = isFreshMachinePerSession;
+  replaceWizardOperatorToolsEnabled(isWizardOperatorToolsEnabled) {
+    this.#P = isWizardOperatorToolsEnabled;
   }
-  pollEventIngress() {
+  runnerDeclaredNestedRepositoryDiff() {
     return this.#M;
   }
+  replaceRunnerDeclaredNestedRepositoryDiff(isNestedRepositoryDiff) {
+    this.#M = isNestedRepositoryDiff;
+  }
+  runnerDeclaredNoRepositoryCheckedOut() {
+    return this.#T;
+  }
+  replaceRunnerDeclaredNoRepositoryCheckedOut(isNoRepositoryCheckedOut) {
+    this.#T = isNoRepositoryCheckedOut;
+  }
+  runnerDeclaredFreshMachinePerSession() {
+    return this.#A;
+  }
+  replaceRunnerDeclaredFreshMachinePerSession(isFreshMachinePerSession) {
+    this.#A = isFreshMachinePerSession;
+  }
+  pollEventIngress() {
+    return this.#L;
+  }
   markPollEventIngress(ingressMode) {
-    this.#M = ingressMode;
+    this.#L = ingressMode;
   }
   ownEventDeliveryRequested() {
     return this.#O && !this.#F;
@@ -1279,10 +1282,10 @@ class RuntimeModeSlice {
     this.#E = isSessionPersistenceDisabled;
   }
   diskless() {
-    return this.#H;
+    return this.#D;
   }
   replaceDiskless(isDiskless) {
-    this.#H = isDiskless;
+    this.#D = isDiskless;
   }
   ccrSessionUrl() {
     return this.#B;
@@ -1302,180 +1305,201 @@ class RuntimeModeSlice {
   replaceAutoCompactWindowSurface(compactWindowSurface) {
     this.#q = compactWindowSurface;
   }
-  entrypointOnRequests() {
+  wrapUpOffered() {
     return this.#j;
   }
-  replaceEntrypointOnRequests(entrypoint) {
-    this.#j = entrypoint;
+  replaceWrapUpOffered(wrapUpOffered) {
+    this.#j = wrapUpOffered;
   }
-  coworkEnrollment() {
+  entrypointOnRequests() {
     return this.#N;
   }
-  replaceCoworkEnrollment(enrollment) {
-    this.#N = enrollment;
+  replaceEntrypointOnRequests(entrypoint) {
+    this.#N = entrypoint;
   }
-  toolsMachine() {
+  coworkEnrollment() {
     return this.#_;
   }
-  replaceToolsMachine(toolsMachine) {
-    this.#_ = toolsMachine;
+  replaceCoworkEnrollment(enrollment) {
+    this.#_ = enrollment;
   }
-  sessionBypassPermissionsMode() {
+  ccrSessionLimited() {
     return this.#W;
   }
-  replaceSessionBypassPermissionsMode(isBypassPermissionsMode) {
-    this.#W = isBypassPermissionsMode;
+  replaceCcrSessionLimited(isLimited) {
+    this.#W = isLimited;
   }
-  disableSlashCommands() {
+  toolsMachine() {
     return this.#G;
   }
-  replaceDisableSlashCommands(areSlashCommandsDisabled) {
-    this.#G = areSlashCommandsDisabled;
+  replaceToolsMachine(toolsMachine) {
+    this.#G = toolsMachine;
   }
-  disableFileMentions() {
+  sessionBypassPermissionsMode() {
     return this.#V;
   }
-  replaceDisableFileMentions(areFileMentionsDisabled) {
-    this.#V = areFileMentionsDisabled;
+  replaceSessionBypassPermissionsMode(isBypassPermissionsMode) {
+    this.#V = isBypassPermissionsMode;
   }
-  sessionUploadsDir() {
+  disableSlashCommands() {
     return this.#K;
   }
-  replaceSessionUploadsDir(uploadsDir) {
-    this.#K = uploadsDir;
+  replaceDisableSlashCommands(areSlashCommandsDisabled) {
+    this.#K = areSlashCommandsDisabled;
   }
-  localUploadsRoot() {
+  disableFileMentions() {
     return this.#J;
   }
-  replaceLocalUploadsRoot(uploadsRoot) {
-    this.#J = uploadsRoot;
+  replaceDisableFileMentions(areFileMentionsDisabled) {
+    this.#J = areFileMentionsDisabled;
   }
-  mayForwardHomeSettings() {
+  sessionUploadsDir() {
     return this.#z;
   }
-  replaceMayForwardHomeSettings(mayForwardHomeSettings) {
-    this.#z = mayForwardHomeSettings;
+  replaceSessionUploadsDir(uploadsDir) {
+    this.#z = uploadsDir;
   }
-  homeSettingsHostConsent() {
+  localUploadsRoot() {
     return this.#Q;
   }
-  replaceHomeSettingsHostConsent(hostConsent) {
-    this.#Q = hostConsent;
+  replaceLocalUploadsRoot(uploadsRoot) {
+    this.#Q = uploadsRoot;
   }
-  scheduledTasksEnabled() {
-    return this.#D;
-  }
-  replaceScheduledTasksEnabled(isScheduledTasksEnabled) {
-    let becameEnabled = isScheduledTasksEnabled && !this.#D;
-    this.#D = isScheduledTasksEnabled;
-    if (becameEnabled) this.#oe.emit();
-  }
-  onScheduledTasksEnabled(listener) {
-    return this.#oe.subscribe(listener);
-  }
-  initJsonSchema() {
+  mayForwardHomeSettings() {
     return this.#$;
   }
-  replaceInitJsonSchema(jsonSchema) {
-    this.#$ = jsonSchema;
+  replaceMayForwardHomeSettings(isMayForwardHomeSettings) {
+    this.#$ = isMayForwardHomeSettings;
   }
-  cliSessionConfigCarried() {
+  homeSettingsHostConsent() {
     return this.#Y;
   }
-  replaceCliSessionConfigCarried(isCliSessionConfigCarried) {
-    this.#Y = isCliSessionConfigCarried;
+  replaceHomeSettingsHostConsent(hostConsent) {
+    this.#Y = hostConsent;
   }
-  forkRestrictedLaunchConfig() {
+  scheduledTasksEnabled() {
+    return this.#H;
+  }
+  replaceScheduledTasksEnabled(isScheduledTasksEnabled) {
+    let becameEnabled = isScheduledTasksEnabled && !this.#H;
+    this.#H = isScheduledTasksEnabled;
+    if (becameEnabled) this.#ie.emit();
+  }
+  onScheduledTasksEnabled(listener) {
+    return this.#ie.subscribe(listener);
+  }
+  initJsonSchema() {
     return this.#X;
   }
-  replaceForkRestrictedLaunchConfig(restrictedLaunchConfig) {
-    this.#X = restrictedLaunchConfig;
+  replaceInitJsonSchema(jsonSchema) {
+    this.#X = jsonSchema;
   }
-  forkReplayLaunchConfig() {
+  cliSessionConfigCarried() {
     return this.#Z;
   }
-  spareClaimState() {
-    return this.#te;
+  replaceCliSessionConfigCarried(isCliSessionConfigCarried) {
+    this.#Z = isCliSessionConfigCarried;
   }
-  replaceSpareClaimState(claimState) {
-    this.#te = claimState;
-  }
-  spareParkedAtMs() {
-    return this.#ne;
-  }
-  replaceSpareParkedAtMs(parkedAtMs) {
-    this.#ne = parkedAtMs;
-  }
-  replaceForkReplayLaunchConfig(replayLaunchConfig) {
-    this.#Z = replayLaunchConfig;
-  }
-  projectConfigRoot() {
+  cliConfigBeyondSessionState() {
     return this.#ee;
   }
+  replaceCliConfigBeyondSessionState(isBeyondSessionState) {
+    this.#ee = isBeyondSessionState;
+  }
+  forkRestrictedLaunchConfig() {
+    return this.#te;
+  }
+  replaceForkRestrictedLaunchConfig(restrictedLaunchConfig) {
+    this.#te = restrictedLaunchConfig;
+  }
+  forkReplayLaunchConfig() {
+    return this.#ne;
+  }
+  spareClaimState() {
+    return this.#re;
+  }
+  replaceSpareClaimState(claimState) {
+    this.#re = claimState;
+  }
+  spareParkedAtMs() {
+    return this.#se;
+  }
+  replaceSpareParkedAtMs(parkedAtMs) {
+    this.#se = parkedAtMs;
+  }
+  replaceForkReplayLaunchConfig(replayLaunchConfig) {
+    this.#ne = replayLaunchConfig;
+  }
+  projectConfigRoot() {
+    return this.#oe;
+  }
   replaceProjectConfigRoot(projectConfigRoot) {
-    this.#ee = projectConfigRoot;
+    this.#oe = projectConfigRoot;
   }
   reset() {
     this.#e = false;
     this.#t = false;
     this.#n = false;
-    this.#o = null;
-    this.#te = "none";
-    this.#ne = undefined;
+    this.#s = null;
+    this.#re = "none";
+    this.#se = undefined;
+    this.#o = false;
+    this.#i = undefined;
     this.#r = false;
-    this.#s = undefined;
-    this.#i = false;
     this.#d = false;
     this.#u = false;
     this.#c = false;
     this.#l = undefined;
-    this.#p = false;
     this.#h = false;
+    this.#p = false;
     this.#a = null;
     this.replaceWorkspaceRestrictionUnsubscribe(null);
-    this.#S = new Map();
-    this.#y = "cli";
-    this.#v = "fresh";
-    this.#f = undefined;
+    this.#v = new Map();
+    this.#S = "cli";
+    this.#y = "fresh";
+    this.#g = undefined;
     this.#m = false;
     this.#b = false;
-    this.#k = [];
-    this.#R = false;
+    this.#C = [];
     this.#x = false;
-    this.#C = false;
-    this.#P = new Set();
-    this.#T = false;
+    this.#R = false;
     this.#w = false;
+    this.#k = new Set();
+    this.#P = false;
+    this.#M = false;
+    this.#T = false;
     this.#A = false;
-    this.#L = false;
-    this.#M = "none";
+    this.#L = "none";
     this.#O = false;
     this.#F = false;
     this.#I = false;
     this.#E = false;
-    this.#H = false;
+    this.#D = false;
     this.#B = undefined;
     this.#U = undefined;
     this.#q = undefined;
-    this.#j = undefined;
+    this.#j = false;
     this.#N = undefined;
     this.#_ = undefined;
     this.#W = false;
-    this.#G = false;
+    this.#G = undefined;
     this.#V = false;
-    this.#K = null;
-    this.#J = null;
-    this.#z = true;
+    this.#K = false;
+    this.#J = false;
+    this.#z = null;
     this.#Q = null;
-    this.#D = false;
-    this.#$ = null;
-    this.#Y = false;
-    this.#X = false;
-    this.#Z = {};
-    this.#ee = null;
+    this.#$ = true;
+    this.#Y = null;
+    this.#H = false;
+    this.#X = null;
+    this.#Z = false;
+    this.#ee = false;
+    this.#te = false;
+    this.#ne = {};
+    this.#oe = null;
   }
 }
-//@ chunk-ndmse9kj.js:56668-57999 placement
+//@ chunk-5ythzcas.js:61858-63189 placement
 /**
  * 设置来源切片：--settings 路径/内联内容、agents 与 MCP 配置文件、父进程托管设置、允许的设置来源（缓存去掉 project/local 的版本）、cowork 插件开关。
  */
@@ -1483,15 +1507,15 @@ class SettingsSourcesSlice {
   #e = undefined;
   #t = [];
   #n = [];
+  #s = undefined;
   #o = undefined;
-  #r = undefined;
-  #s = null;
   #i = null;
+  #r = null;
   #d = false;
   #u = null;
   #c = getDefaultSettingSources();
   #l = null;
-  #p = false;
+  #h = false;
   flagSettingsPath() {
     return this.#e;
   }
@@ -1511,28 +1535,28 @@ class SettingsSourcesSlice {
     this.#n = mcpConfigFilePaths;
   }
   flagSettingsExpectedContent() {
-    return this.#o;
-  }
-  replaceFlagSettingsExpectedContent(expectedContent) {
-    this.#o = expectedContent;
-  }
-  flagSettingsFilePinnedContent() {
-    return this.#r;
-  }
-  replaceFlagSettingsFilePinnedContent(pinnedContent) {
-    this.#r = pinnedContent;
-  }
-  flagSettingsInline() {
     return this.#s;
   }
-  replaceFlagSettingsInline(inlineSettings) {
-    this.#s = inlineSettings;
+  replaceFlagSettingsExpectedContent(expectedContent) {
+    this.#s = expectedContent;
   }
-  parentManagedSettings() {
+  flagSettingsFilePinnedContent() {
+    return this.#o;
+  }
+  replaceFlagSettingsFilePinnedContent(pinnedContent) {
+    this.#o = pinnedContent;
+  }
+  flagSettingsInline() {
     return this.#i;
   }
+  replaceFlagSettingsInline(inlineSettings) {
+    this.#i = inlineSettings;
+  }
+  parentManagedSettings() {
+    return this.#r;
+  }
   replaceParentManagedSettings(managedSettings, organizationSettings = null) {
-    this.#i = managedSettings;
+    this.#r = managedSettings;
     this.#u = organizationSettings;
   }
   parentManagedSettingsInvalid() {
@@ -1560,31 +1584,31 @@ class SettingsSourcesSlice {
     return this.#l.result;
   }
   useCoworkPlugins() {
-    return this.#p;
+    return this.#h;
   }
   replaceUseCoworkPlugins(useCoworkPlugins) {
-    this.#p = useCoworkPlugins;
+    this.#h = useCoworkPlugins;
   }
   reset() {
     this.#e = undefined;
     this.#t = [];
     this.#n = [];
+    this.#s = undefined;
     this.#o = undefined;
-    this.#r = undefined;
-    this.#s = null;
     this.#i = null;
+    this.#r = null;
     this.#d = false;
     this.#u = null;
     this.#c = getDefaultSettingSources();
     this.#l = null;
-    this.#p = false;
+    this.#h = false;
   }
 }
-//@ chunk-ndmse9kj.js:57999-58102 placement
+//@ chunk-5ythzcas.js:63189-63292 placement
 function getDefaultSettingSources() {
   return ["userSettings", "projectSettings", "localSettings", "flagSettings", "policySettings"];
 }
-//@ chunk-ndmse9kj.js:58102-59828 placement
+//@ chunk-5ythzcas.js:63292-65018 placement
 /**
  * 插件与通道切片：内联插件/URL、同步插件目录及其签名与行 id、官方市场认证（按签名过滤）、CLAUDE.md 附加目录、允许的通道、会话技能白名单、Chrome 开关、队友 agentId。
  */
@@ -1592,16 +1616,16 @@ class PluginsAndChannelsSlice {
   #e = [];
   #t = [];
   #n = [];
-  #o = undefined;
-  #r = new Map();
-  #s = new Map();
+  #s = undefined;
+  #o = new Map();
   #i = new Map();
+  #r = new Map();
   #d = [];
   #u = undefined;
   #c = [];
   #l = false;
-  #p = undefined;
   #h = undefined;
+  #p = undefined;
   #a = undefined;
   inlinePlugins() {
     return this.#e;
@@ -1622,38 +1646,38 @@ class PluginsAndChannelsSlice {
     this.#n = pluginUrls;
   }
   syncedPluginDirs() {
-    return this.#o ?? [];
+    return this.#s ?? [];
   }
   syncedPluginDirsRegistered() {
-    return this.#o !== undefined;
+    return this.#s !== undefined;
   }
   syncedPluginAttestation(pluginId) {
-    return this.#r.get(pluginId);
+    return this.#o.get(pluginId);
   }
   syncedPluginRowId(pluginId) {
-    return this.#s.get(pluginId);
-  }
-  replaceSyncedPluginDirs(dirs, attestations = new Map(), rowIds = new Map()) {
-    this.#o = dirs;
-    this.#r = attestations;
-    this.#s = rowIds;
-    this.#i = this.#g(this.#i);
-  }
-  clearSyncedPluginDirs() {
-    this.#o = undefined;
-    this.#r = new Map();
-    this.#s = new Map();
-    this.#i = new Map();
-  }
-  attestedOfficialPluginMarketplace(pluginId) {
     return this.#i.get(pluginId);
   }
-  replaceAttestedOfficialPluginIds(pluginIds) {
-    this.#i = this.#g(pluginIds);
+  replaceSyncedPluginDirs(dirs, attestations = new Map(), rowIds = new Map()) {
+    this.#s = dirs;
+    this.#o = attestations;
+    this.#i = rowIds;
+    this.#r = this.#f(this.#r);
   }
-  #g(pluginIds) {
+  clearSyncedPluginDirs() {
+    this.#s = undefined;
+    this.#o = new Map();
+    this.#i = new Map();
+    this.#r = new Map();
+  }
+  attestedOfficialPluginMarketplace(pluginId) {
+    return this.#r.get(pluginId);
+  }
+  replaceAttestedOfficialPluginIds(pluginIds) {
+    this.#r = this.#f(pluginIds);
+  }
+  #f(pluginIds) {
     let attestedKeys = new Set(
-      [...this.#r.values()].map((attestation) => `${attestation.pluginName}@${attestation.marketplace}`),
+      [...this.#o.values()].map((attestation) => `${attestation.pluginName}@${attestation.marketplace}`),
     );
     return new Map(
       [...pluginIds].filter(([pluginId, marketplace]) =>
@@ -1686,16 +1710,16 @@ class PluginsAndChannelsSlice {
     this.#l = hasDevChannels;
   }
   sessionSkillAllowlist() {
-    return this.#p;
-  }
-  replaceSessionSkillAllowlist(skillAllowlist) {
-    this.#p = skillAllowlist;
-  }
-  chromeFlagOverride() {
     return this.#h;
   }
+  replaceSessionSkillAllowlist(skillAllowlist) {
+    this.#h = skillAllowlist;
+  }
+  chromeFlagOverride() {
+    return this.#p;
+  }
   replaceChromeFlagOverride(flagOverride) {
-    this.#h = flagOverride;
+    this.#p = flagOverride;
   }
   teammateAgentId() {
     return this.#a;
@@ -1712,12 +1736,12 @@ class PluginsAndChannelsSlice {
     this.#u = undefined;
     this.#c = [];
     this.#l = false;
-    this.#p = undefined;
     this.#h = undefined;
+    this.#p = undefined;
     this.#a = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:59828-60202 placement
+//@ chunk-5ythzcas.js:65018-65392 placement
 /**
  * 模型字符串缓存与第三方管理员引导快照、探测否定的文档默认值。
  */
@@ -1753,9 +1777,9 @@ class ModelStringsSlice {
     this.#n = new Set();
   }
 }
-//@ chunk-ndmse9kj.js:60202-60212 placement
+//@ chunk-5ythzcas.js:65392-65402 placement
 var EMPTY_DIAGNOSTICS_LIST = [];
-//@ chunk-ndmse9kj.js:60212-60743 placement
+//@ chunk-5ythzcas.js:65402-65933 placement
 /**
  * 诊断切片：错误日志（最多 100 条）、慢操作（10 秒过期）、开发栏告警（60 秒过期）。
  */
@@ -1799,21 +1823,21 @@ class DiagnosticsSlice {
     this.#n = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:60743-60755 placement
+//@ chunk-5ythzcas.js:65933-65945 placement
 /**
  * 诊断切片里错误日志最多保留 100 条，超出丢最旧。
  */
 var MAX_DIAGNOSTIC_ERRORS = 100;
 export {
   SessionRootSlot,
+  isNoProjectDirectoryError,
+  getSessionProject,
+  PERMISSION_STASH_EVICTED_SYMBOL,
   isVirtualConversationMessage,
   isSystemLocalCommandMessage,
   isNonConversationMessage,
   isSyntheticModelApiErrorMessage,
-  isNoProjectDirectoryError,
   NoProjectDirectoryError,
-  getSessionProject,
-  PERMISSION_STASH_EVICTED_SYMBOL,
   agentIdOrDefault,
   checkCompactBoundaryCoverage,
   recordVetoForLastPrompt,

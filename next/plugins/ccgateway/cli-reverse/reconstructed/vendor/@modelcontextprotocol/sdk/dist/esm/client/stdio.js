@@ -1,25 +1,25 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/client/stdio.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-z1n5m6nf.js (4)
+ * pieces: chunk-h44h5gdv.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import Qt from "process";
+import oo from "process";
 import { PassThrough } from "stream";
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../../../../../cross-spawn/index.js";
 import { ReadBuffer, serializeMessage } from "../shared/stdio.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-z1n5m6nf.js:31818-31837 esm-layout
+//@ chunk-h44h5gdv.js:33240-33259 esm-layout
 var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z1n5m6nf.js:31818", () => {
+deferInit("chunk-h44h5gdv.js:33240", () => {
   import_cross_spawn = __toESM(require_cross_spawn(), 1);
 });
-//@ chunk-z1n5m6nf.js:31899-32132 esm-fingerprint
+//@ chunk-h44h5gdv.js:33321-33554 esm-fingerprint
 var DEFAULT_INHERITED_ENV_VARS =
-  Qt.platform === "win32"
+  oo.platform === "win32"
     ? [
         "APPDATA",
         "HOMEDRIVE",
@@ -35,18 +35,18 @@ var DEFAULT_INHERITED_ENV_VARS =
         "PROGRAMFILES",
       ]
     : ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"];
-//@ chunk-z1n5m6nf.js:32132-32258 esm-fingerprint
-function getDefaultEnvironment_2() {
+//@ chunk-h44h5gdv.js:33554-33680 esm-fingerprint
+function getDefaultEnvironment() {
   let env = {};
   for (let key of DEFAULT_INHERITED_ENV_VARS) {
-    let value = Qt.env[key];
+    let value = oo.env[key];
     if (value === undefined) continue;
     if (value.startsWith("()")) continue;
     env[key] = value;
   }
   return env;
 }
-//@ chunk-z1n5m6nf.js:32258-34193 esm-fingerprint
+//@ chunk-h44h5gdv.js:33680-35615 esm-fingerprint
 class StdioClientTransport {
   constructor(server) {
     this._readBuffer = new ReadBuffer();
@@ -62,12 +62,12 @@ class StdioClientTransport {
     return new Promise((resolve, reject) => {
       this._process = import_cross_spawn.default(this._serverParams.command, this._serverParams.args ?? [], {
         env: {
-          ...getDefaultEnvironment_2(),
+          ...getDefaultEnvironment(),
           ...this._serverParams.env,
         },
         stdio: ["pipe", "pipe", this._serverParams.stderr ?? "inherit"],
         shell: false,
-        windowsHide: Qt.platform === "win32",
+        windowsHide: oo.platform === "win32",
         cwd: this._serverParams.cwd,
       });
       this._process.on("error", (error) => {
@@ -146,4 +146,4 @@ class StdioClientTransport {
     });
   }
 }
-export { getDefaultEnvironment_2, StdioClientTransport };
+export { getDefaultEnvironment, StdioClientTransport };

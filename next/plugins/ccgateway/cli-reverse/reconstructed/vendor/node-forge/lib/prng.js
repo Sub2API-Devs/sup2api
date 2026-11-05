@@ -1,15 +1,15 @@
 /**
  * node-forge/lib/prng.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:84760-88346 cjs-fingerprint
+//@ chunk-qg41pqt6.js:84678-88283 cjs-fingerprint
 var require_prng = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
@@ -63,17 +63,17 @@ var require_prng = __commonJS(function (cjsExports, cjsModule) {
       var formatKey = ctx.plugin.formatKey;
       var formatSeed = ctx.plugin.formatSeed;
       ctx.key = null;
-      var b_2 = forge.util.createBuffer();
-      while (b_2.length() < count) {
+      var b = forge.util.createBuffer();
+      while (b.length() < count) {
         if (ctx.generated > 1048575) ctx.key = null;
         if (ctx.key === null) _reseedSync();
         var bytes = cipher(ctx.key, ctx.seed);
         ctx.generated += bytes.length;
-        b_2.putBytes(bytes);
+        b.putBytes(bytes);
         ctx.key = formatKey(cipher(ctx.key, increment(ctx.seed)));
         ctx.seed = formatSeed(cipher(ctx.key, ctx.seed));
       }
-      return b_2.getBytes(count);
+      return b.getBytes(count);
     };
     function _reseed(callback) {
       if (ctx.pools[0].messageLength >= 32) {

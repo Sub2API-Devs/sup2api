@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：汇总遥测用的环境事实（平台、终端、shell、包管理器、CI 等）；通过 uname 等读取机器平台、架构、内核信息等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4m46mxx9.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-08q4d92p.js (25)
  * attribution: placement 25
  */
 import { DANGEROUS_SHELL_PREFIXES } from "../../../utils/shell/prefix.js";
 import { JETBRAINS_IDES_2 } from "../../../utils/env.js";
-import { isEnvTruthy, cloudEnvironmentName, githubActionVersion, _ } from "./eventSchema.js";
+import { isEnvTruthy, cloudEnvironmentName, githubActionVersion, isPlainObjectValue } from "./eventSchema.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4m46mxx9.js:11914-12064 placement
+//@ chunk-08q4d92p.js:12166-12316 placement
 /**
  * 取路径末段（去 .exe 小写）判断是否已知 shell 名，返回该名、"other" 或 "none"（遥测分类用）。
  */
@@ -26,7 +26,7 @@ function classifyShellName(shellPath) {
   if (!shellPath) return "none";
   return replaced !== undefined && DANGEROUS_SHELL_PREFIXES.includes(replaced) ? replaced : "other";
 }
-//@ chunk-4m46mxx9.js:12238-13726 placement
+//@ chunk-08q4d92p.js:12490-13978 placement
 function detectTerminalFromEnv(facts, platform, isInteractive) {
   let lower = (facts.vscodeGitAskpassMain ?? "").toLowerCase();
   let lower_2 = (facts.bundleIdentifier ?? "").toLowerCase();
@@ -74,7 +74,7 @@ function detectTerminalFromEnv(facts, platform, isInteractive) {
     ].find(([flag]) => flag)?.[1] ?? "unknown"
   );
 }
-//@ chunk-4m46mxx9.js:13726-13951 placement
+//@ chunk-08q4d92p.js:13978-14203 placement
 /**
  * GitHub Actions 的 actor/仓库/所有者 id（都没有时 undefined）。
  */
@@ -89,7 +89,7 @@ function githubActionsIds(facts) {
       }
     : undefined;
 }
-//@ chunk-4m46mxx9.js:13951-14053 placement
+//@ chunk-08q4d92p.js:14203-14305 placement
 /**
  * 逗号分隔字符串转为非空列表。
  */
@@ -100,7 +100,7 @@ function splitCommaList(tags) {
     .filter(Boolean);
   return filtered.length > 0 ? filtered : undefined;
 }
-//@ chunk-4m46mxx9.js:14053-15170 placement
+//@ chunk-08q4d92p.js:14305-15422 placement
 /**
  * 汇总遥测用的环境事实（平台、终端、shell、包管理器、CI 等）。
  */
@@ -143,7 +143,7 @@ function describeEnvironment(senderContext) {
     buildTime: senderContext.engine?.builtAt,
   };
 }
-//@ chunk-4m46mxx9.js:15170-15288 placement
+//@ chunk-08q4d92p.js:15422-15540 placement
 /**
  * 从 os-release 内容中读 ID 或 VERSION_ID。
  */
@@ -156,7 +156,7 @@ var readOsReleaseField = (text, key) =>
     .map((line) => /^(ID|VERSION_ID)=(.*)$/.exec(line))
     .find((match) => match?.[1] === key)?.[2]
     ?.replace(/^"|"$/g, "");
-//@ chunk-4m46mxx9.js:15288-15389 placement
+//@ chunk-08q4d92p.js:15540-15641 placement
 /**
  * 读取发行版 id 与版本（读取失败为空）。
  */
@@ -172,7 +172,7 @@ async function readDistro(read) {
     version: readOsReleaseField(text, "VERSION_ID"),
   };
 }
-//@ chunk-4m46mxx9.js:15389-15537 placement
+//@ chunk-08q4d92p.js:15641-15789 placement
 /**
  * 从内核版本字符串判断 WSL 版本。
  */
@@ -186,7 +186,7 @@ async function detectWslVersion(read) {
   let included = text.includes("microsoft");
   return /wsl(\d+)/.exec(text)?.[1] ?? (included ? "1" : undefined);
 }
-//@ chunk-4m46mxx9.js:15537-15886 placement
+//@ chunk-08q4d92p.js:15789-16138 placement
 /**
  * 读取 /etc/os-release、/proc/version 等判断发行版、WSL、EC2。
  */
@@ -216,23 +216,23 @@ async function readLinuxDistroFacts(fs, isLinux) {
     ],
   };
 }
-//@ chunk-4m46mxx9.js:15886-16050 placement
+//@ chunk-08q4d92p.js:16138-16302 placement
 function getClaudeJsonPath(env) {
   let baseDir = env.configDir || env.home || env.userProfile;
   let separator = baseDir?.includes("\\") && !baseDir.includes("/") ? "\\" : "/";
   return baseDir ? `${baseDir.replace(/[\\/]+$/, "")}${separator}.claude.json` : undefined;
 }
-//@ chunk-4m46mxx9.js:16050-16059 placement
+//@ chunk-08q4d92p.js:16302-16311 placement
 var MIN_ID_LENGTH = 8;
-//@ chunk-4m46mxx9.js:16059-16070 placement
+//@ chunk-08q4d92p.js:16311-16322 placement
 var MAX_ID_LENGTH = 128;
-//@ chunk-4m46mxx9.js:16070-16148 placement
+//@ chunk-08q4d92p.js:16322-16400 placement
 function pickValidId(value) {
   return typeof value === "string" && value.length >= MIN_ID_LENGTH && value.length <= MAX_ID_LENGTH
     ? value
     : undefined;
 }
-//@ chunk-4m46mxx9.js:16148-16533 placement (2.1.88 match: companionUserId, 0.502)
+//@ chunk-08q4d92p.js:16400-16785 placement (2.1.88 match: companionUserId, 0.502)
 /**
  * 从 ~/.claude.json 读取 userID（作为 deviceId）、oauthAccount 的 accountUuid/organizationUuid，按需包含邮箱。
  */
@@ -244,8 +244,8 @@ async function readClaudeJsonIdentity(readFile, env, includeEmail) {
   } catch {
     parsed = undefined;
   }
-  let config = _(parsed) ? parsed : {};
-  let oauthAccount = _(config.oauthAccount) ? config.oauthAccount : {};
+  let config = isPlainObjectValue(parsed) ? parsed : {};
+  let oauthAccount = isPlainObjectValue(config.oauthAccount) ? config.oauthAccount : {};
   let userID = config.userID;
   let emailAddress = oauthAccount.emailAddress;
   let hasUserId = typeof userID === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(userID);
@@ -257,7 +257,7 @@ async function readClaudeJsonIdentity(readFile, env, includeEmail) {
     email: includeEmailOk ? emailAddress : undefined,
   };
 }
-//@ chunk-4m46mxx9.js:16533-16732 placement
+//@ chunk-08q4d92p.js:16785-16984 placement
 /**
  * 架构名规范化为 x64/arm64/ia32。
  */
@@ -272,9 +272,9 @@ function normalizeArch(arch) {
     (lower || "unknown")
   );
 }
-//@ chunk-4m46mxx9.js:16732-16972 placement
+//@ chunk-08q4d92p.js:16984-17224 placement
 var joined; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4m46mxx9.js:16732", () => {
+deferInit("chunk-08q4d92p.js:16984", () => {
   joined = [
     "uname -s",
     "uname -r",
@@ -284,7 +284,7 @@ deferInit("chunk-4m46mxx9.js:16732", () => {
   ].join(`
 `);
 });
-//@ chunk-4m46mxx9.js:16972-17405 placement
+//@ chunk-08q4d92p.js:17224-17657 placement
 /**
  * 通过 uname 等读取机器平台、架构、内核信息。
  */
@@ -317,30 +317,30 @@ async function readMachineFacts(run, env) {
     runtimes: runtimes.replace(/,$/, ""),
   };
 }
-//@ chunk-4m46mxx9.js:17405-17511 placement (2.1.88 match: detectTerminal, 0.92)
+//@ chunk-08q4d92p.js:17657-17763 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(hostPlatform, platformRaw) {
   return (
     ["win32", "darwin", "linux"].find((name) => name === hostPlatform) ??
     (platformRaw === "win32" || platformRaw === "darwin" ? platformRaw : "linux")
   );
 }
-//@ chunk-4m46mxx9.js:17511-17523 placement
+//@ chunk-08q4d92p.js:17763-17775 placement
 /**
  * 5000
  */
 var GIT_COMMAND_TIMEOUT_MS = 5000;
-//@ chunk-4m46mxx9.js:17523-17533 placement
+//@ chunk-08q4d92p.js:17775-17785 placement
 /**
  * 16
  */
 var HEX_RADIX = 16;
-//@ chunk-4m46mxx9.js:17533-17618 placement
+//@ chunk-08q4d92p.js:17785-17870 placement
 /**
  * 字节数组转十六进制
  */
 var hexOf = (bytes) =>
   [...new Uint8Array(bytes)].map((byte) => byte.toString(HEX_RADIX).padStart(2, "0")).join("");
-//@ chunk-4m46mxx9.js:17618-17838 placement
+//@ chunk-08q4d92p.js:17870-18090 placement
 /**
  * git 远程地址规范化为 host/path（小写）。
  */
@@ -352,12 +352,12 @@ function normalizeGitRemote(remote) {
     [];
   return host !== undefined && path !== undefined ? `${host}/${path}`.toLowerCase() : undefined;
 }
-//@ chunk-4m46mxx9.js:17838-17848 placement
+//@ chunk-08q4d92p.js:18090-18100 placement
 /**
  * 16
  */
 var HEX_RADIX_BYTES = 16;
-//@ chunk-4m46mxx9.js:17848-18000 placement
+//@ chunk-08q4d92p.js:18100-18252 placement
 /**
  * 规范化后的远程地址取 SHA-256 前缀。
  */
@@ -369,7 +369,7 @@ async function hashGitRemote(remote) {
     HEX_RADIX_BYTES,
   );
 }
-//@ chunk-4m46mxx9.js:18000-18087 placement
+//@ chunk-08q4d92p.js:18252-18339 placement
 function uniqueArray(values) {
   let seen = new Set();
   return values.filter((value) => {

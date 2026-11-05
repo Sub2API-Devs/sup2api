@@ -3,12 +3,12 @@
  *
  * 官方市场常量：claude-plugins-official 与其 GitHub 来源 anthropics/claude-plugins-official。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/officialMarketplace.ts
- * pieces: chunk-a42q40ze.js (1)
+ * pieces: chunk-k2w5atpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-a42q40ze.js:191-288 fingerprint (2.1.88 match: OFFICIAL_MARKETPLACE_SOURCE, 0.804)
+//@ chunk-k2w5atpb.js:191-288 fingerprint (2.1.88 match: OFFICIAL_MARKETPLACE_SOURCE, 0.804)
 /**
  * OFFICIAL_MARKETPLACE_SOURCE：官方市场的 GitHub 来源。
  */

@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：危险删除（变量展开路径的 rm）检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { getOpenQuoteAt, getBareVariableName, stripTrailingPathGlob } from "./expansionAnalysis.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getFeatureValueWithSource_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1064812-1065012 placement
+//@ chunk-5xgkngpb.js:1060063-1060263 placement
 /**
  * 构造危险删除的 ask 结果：safetyCheck 原因、不可被分类器批准、circuitBreaker = dangerousRemoval、无建议。
  */
@@ -33,7 +33,7 @@ function dangerousRemovalAsk(command, message, detail) {
     suggestions: [],
   };
 }
-//@ chunk-e6aww6q8.js:1065012-1068959 placement
+//@ chunk-5xgkngpb.js:1060263-1064214 placement
 /**
  * 检查 rm 的目标是否来自可能为空的变量展开，提示改用字面路径或 ${VAR:?}。
  */
@@ -60,7 +60,7 @@ function checkDangerousRemoval(dangerousVariableRemoval, inSubstitution) {
       return guard;
     },
   );
-  let names = varNames.length === 0 ? ["VAR"] : uniq(varNames);
+  let names = varNames.length === 0 ? ["VAR"] : normalizeCaseForComparison_2(varNames);
   let joined = names.map((name) => `$${name}`).join(" or ");
   let explainGuard = (hasBacktick) => {
     let quote = hasBacktick ? "`" : "";
@@ -135,13 +135,13 @@ Use a literal absolute path instead.`,
     `on possibly-empty variable path${inSubstitution ? " inside command substitution" : ""}: ${target} in \`${invocation}\` (${explainGuard(false)})`,
   );
 }
-//@ chunk-e6aww6q8.js:1068959-1069313 placement
+//@ chunk-5xgkngpb.js:1064214-1064568 placement
 /**
  * 指向系统或用户关键目录的环境变量集合（HOME、XDG_*、APPDATA、SYSTEMROOT、PROGRAMFILES、PWD 等），用于危险删除判断。
  */
 var SYSTEM_DIR_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TENGU_BRIGHT_LAKE;
-deferInit("chunk-e6aww6q8.js:1068959", () => {
+deferInit("chunk-5xgkngpb.js:1064214", () => {
   SYSTEM_DIR_ENV_VARS = new Set([
     "HOME",
     "USERPROFILE",
@@ -171,7 +171,7 @@ deferInit("chunk-e6aww6q8.js:1068959", () => {
   ]);
   TENGU_BRIGHT_LAKE = "tengu_bright_lake";
 });
-//@ chunk-e6aww6q8.js:1069313-1069389 placement
+//@ chunk-5xgkngpb.js:1064568-1064644 placement
 /**
  * 读取 tengu_bright_lake 配置：除非载荷里显式为 false，否则危险 rm 检查启用。
  */
@@ -179,7 +179,7 @@ function isDangerousRmEnabled() {
   let { value: config, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_BRIGHT_LAKE, true);
   return config !== false || source !== "payload";
 }
-//@ chunk-e6aww6q8.js:1069389-1069453 placement
+//@ chunk-5xgkngpb.js:1064644-1064708 placement
 /**
  * 上报 “tengu_bash_dangerous_rm_shape” 事件，记录危险 rm 的命令形状。
  */
@@ -188,29 +188,29 @@ function logDangerousRmShape(shape) {
     shape: fromEnum(shape),
   });
 }
-//@ chunk-e6aww6q8.js:1069453-1069469 placement
+//@ chunk-5xgkngpb.js:1064708-1064724 placement
 /**
  * 标记“静默遥测作用域”的 AsyncLocalStorage；在作用域内 logEventUnlessSuppressed 不写事件。
  */
 var suppressedTelemetryStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1069453", () => {
+deferInit("chunk-5xgkngpb.js:1064708", () => {
   suppressedTelemetryStorage = new AsyncLocalStorage();
 });
-//@ chunk-e6aww6q8.js:1069469-1069506 placement
+//@ chunk-5xgkngpb.js:1064724-1064761 placement
 /**
  * 在静默遥测作用域内运行回调（其中的事件不上报）。
  */
 function runWithoutTelemetry(fn) {
   return suppressedTelemetryStorage.run(true, fn);
 }
-//@ chunk-e6aww6q8.js:1069506-1069559 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-5xgkngpb.js:1064761-1064814 placement
 /**
  * 不在静默作用域内时才记遥测事件（Bash 危险命令形状等）。
  */
 function logEventUnlessSuppressed(...args) {
   if (suppressedTelemetryStorage.getStore() === undefined) logEvent(...args);
 }
-//@ chunk-e6aww6q8.js:1069559-1070063 placement
+//@ chunk-5xgkngpb.js:1064814-1065318 placement
 /**
  * 危险删除原因文案片段与分类用正则（变量为空时删除 /、驱动器根、挂载盘路径），以及挂载卷路径正则。
  */
@@ -221,7 +221,7 @@ var PLACEHOLDER_ROOT_CHILD_RE;
 var BACKSLASH_ONLY_RE;
 var MOUNTED_DRIVE_REASON_RE;
 var MOUNTED_VOLUME_PATH_RE;
-deferInit("chunk-e6aww6q8.js:1069559", () => {
+deferInit("chunk-5xgkngpb.js:1064814", () => {
   EMPTY_EXPANSION_HINT = "use a literal path: when the expansion is empty this removes /";
   DRIVE_ROOT_PREFIX = "on drive root: ";
   MOUNTED_DRIVE_PREFIX = "on mounted drive path: ";
@@ -233,7 +233,7 @@ deferInit("chunk-e6aww6q8.js:1069559", () => {
   MOUNTED_VOLUME_PATH_RE =
     /^\/(?:system\/)?volumes(?:\/[^/]+){0,2}$|^\/mnt\/(?:[^/]+|[a-z]\/[^/]+)$|^\/(?:run\/)?media(?:\/[^/]+){0,3}$/i;
 });
-//@ chunk-e6aww6q8.js:1070063-1070212 placement
+//@ chunk-5xgkngpb.js:1065318-1065467 placement
 /**
  * 分类危险删除目标的特殊形态：占位根子目录、仅反斜杠、挂载盘路径。
  */
@@ -245,14 +245,14 @@ function classifyRemovalReason(reason) {
 }
 export {
   isDangerousRmEnabled,
-  logDangerousRmShape,
-  logEventUnlessSuppressed,
-  checkDangerousRemoval,
-  classifyRemovalReason,
   dangerousRemovalAsk,
-  runWithoutTelemetry,
   EMPTY_EXPANSION_HINT,
   DRIVE_ROOT_PREFIX,
   MOUNTED_VOLUME_PATH_RE,
   MOUNTED_DRIVE_PREFIX,
+  runWithoutTelemetry,
+  classifyRemovalReason,
+  logDangerousRmShape,
+  checkDangerousRemoval,
+  logEventUnlessSuppressed,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：pty 宿主客户端
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89ebz077.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6a0t823.js (13)
  * attribution: placement 13
  */
 import { StringDecoder } from "string_decoder";
@@ -49,14 +49,14 @@ import { readStreamLines } from "../../utils/streamDestroy.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 
-//@ chunk-89ebz077.js:2682-2717 placement
+//@ chunk-v6a0t823.js:2750-2785 placement
 /**
  * 匹配光标左移控制序列的正则。
  */
 var ACTIVITY_POLL_MS = 2000;
 var MAX_STATUS_DETAIL_CHARS = MAX_HEADLINE_LENGTH;
 var CURSOR_BACK_RE = /\x1b\[\d*D/g;
-//@ chunk-89ebz077.js:2717-3496 placement
+//@ chunk-v6a0t823.js:2785-3564 placement
 /**
  * 跟踪 pty 输出以更新后台作业状态：记录最后一行（脱敏截断），定时根据近期输出与是否停在半行判断 working/active、blocked 或 idle 并写入状态行（去重）。
  */
@@ -133,7 +133,7 @@ function createPtyActivityTracker(jobDir, options) {
     },
   };
 }
-//@ chunk-89ebz077.js:3625-3692 placement
+//@ chunk-v6a0t823.js:3693-3760 placement
 /**
  * 可写缓冲检查间隔（50 毫秒）。
  */
@@ -143,7 +143,7 @@ var AUTH_RETRY_DELAY_MS = 4;
 var CONNECT_TIMEOUT_MS = 1e4;
 var MAX_SOCKET_WRITABLE_BYTES = 8 * MAX_FRAME_BYTES;
 var WRITABLE_CHECK_INTERVAL_MS = 50;
-//@ chunk-89ebz077.js:3692-9109 placement
+//@ chunk-v6a0t823.js:3760-9177 placement
 /**
  * 连接 pty 宿主进程，处理 utf8 流、认证要求、重连与退出。
  */
@@ -634,7 +634,7 @@ ${trimmed}`,
     }),
   };
 }
-//@ chunk-89ebz077.js:9109-9211 placement
+//@ chunk-v6a0t823.js:9177-9279 placement
 function firstVisibleLine(text) {
   return text
     .slice(0, 2000)
@@ -642,19 +642,19 @@ function firstVisibleLine(text) {
     .map((line) => line.trim())
     .find((line) => collapseWhitespace(stripAnsiPerLine(line)).length > 0);
 }
-//@ chunk-89ebz077.js:9211-9332 placement
+//@ chunk-v6a0t823.js:9279-9400 placement
 function partialDetachSuffixLength(text) {
   let min = Math.min(DAEMON_DETACH_APC.length - 1, text.length);
   for (let len = min; len > 0; len--) if (text.endsWith(DAEMON_DETACH_APC.slice(0, len))) return len;
   return 0;
 }
-//@ chunk-89ebz077.js:9362-9399 placement
+//@ chunk-v6a0t823.js:9430-9467 placement
 /**
  * rendezvous 最多重连次数（30），超过后放弃。
  */
 var RENDEZVOUS_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000];
 var MAX_RENDEZVOUS_ATTEMPTS = 30;
-//@ chunk-89ebz077.js:9399-10318 placement
+//@ chunk-v6a0t823.js:9467-10386 placement
 /**
  * 以 supervisor 角色连接后台会话 rendezvous socket：握手发送 pid 与认证，逐行解析消息；断开后按退避重连，超过次数放弃并记 tengu_bg_rv_connect_exhausted。返回 send/close。
  */
@@ -757,7 +757,7 @@ function connectRendezvousSocket(socketPath, onMessage, onDisconnect, onConnect,
     },
   };
 }
-//@ chunk-89ebz077.js:10318-10726 placement
+//@ chunk-v6a0t823.js:10386-10794 placement
 /**
  * 会话重启相关常量：重启延时、提示时间、次数与窗口限制，以及各种重启/未重启提示文字和需要重启的退出码。
  */
@@ -771,28 +771,28 @@ var NOT_RESTARTED_IDLE = "not restarted \u2014 this session was idle (the conver
 var NOT_RESTARTED_STOPPED = "not restarted \u2014 this session was stopped (the conversation is saved)";
 var NOT_RESTARTED_NO_TRANSCRIPT = "not restarted \u2014 this session has no saved conversation to resume";
 var SIGNAL_EXIT_CODES = new Set([129, 143]);
-//@ chunk-89ebz077.js:10726-10778 placement
+//@ chunk-v6a0t823.js:10794-10846 placement
 /**
  * 读 tengu_bg_revival_guard（默认开）。
  */
 function isRevivalGuardEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_revival_guard", true);
 }
-//@ chunk-89ebz077.js:10778-10831 placement
+//@ chunk-v6a0t823.js:10846-10899 placement
 /**
  * 读 tengu_greedy_crane（默认开）。
  */
 function isGreedyCraneEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_greedy_crane", true) !== false;
 }
-//@ chunk-89ebz077.js:10831-10885 placement
+//@ chunk-v6a0t823.js:10899-10953 placement
 /**
  * 读 tengu_cosmic_cookie（默认关）。
  */
 function isCosmicCookieEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cosmic_cookie", false) === true;
 }
-//@ chunk-89ebz077.js:10885-11038 placement
+//@ chunk-v6a0t823.js:10953-11106 placement
 function applySilentPeersFlag(env) {
   if (
     readFlagWithOverride("bot_protected_tengu_merry_bear", {

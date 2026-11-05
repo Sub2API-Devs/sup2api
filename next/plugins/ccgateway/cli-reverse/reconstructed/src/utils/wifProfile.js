@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作负载身份联邦（WIF）profile：ANTHROPIC_CONFIG_DIR 下的 profile 选择、凭据与账号信息、状态行、凭据存储的沙箱拒读路径
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-640x3zn9.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bxxnnnh4.js (44)
  * attribution: placement 44
  */
 import { join, resolve, sep, isAbsolute, parse, relative, dirname, basename } from "path";
@@ -19,13 +19,13 @@ import { env } from "./env.js";
 import { jsonParse } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { errorMessage, isFsInaccessible, isEISDIR, isFsInaccessibleCode } from "./errors.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { PathSpace } from "./resultError.js";
 import { storageErrorCode } from "./storage/storageErrors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-640x3zn9.js:6485-6608 placement
+//@ chunk-bxxnnnh4.js:6485-6608 placement
 function isWIFUserOAuthDeadError(error) {
   return (
     error instanceof WorkloadIdentityError &&
@@ -33,9 +33,9 @@ function isWIFUserOAuthDeadError(error) {
     error.message.includes("has expired and no refresh is available")
   );
 }
-//@ chunk-640x3zn9.js:6608-6676 placement
+//@ chunk-bxxnnnh4.js:6608-6676 placement
 var WIF_ENV_QUAD_VARS = ["ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_ORGANIZATION_ID"];
-//@ chunk-640x3zn9.js:6676-6895 placement
+//@ chunk-bxxnnnh4.js:6676-6895 placement
 class WifProfileCache {
   precedenceSource = {
     filled: false,
@@ -58,12 +58,12 @@ class WifProfileCache {
   settingsBearerRejected = false;
   primedFiles = undefined;
 }
-//@ chunk-640x3zn9.js:6895-6918 placement
+//@ chunk-bxxnnnh4.js:6895-6918 placement
 var wifProfileCacheByHost; // deferred: uses WifProfileCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-640x3zn9.js:6895", () => {
+deferInit("chunk-bxxnnnh4.js:6895", () => {
   wifProfileCacheByHost = new HostScoped(() => new WifProfileCache());
 });
-//@ chunk-640x3zn9.js:6918-7073 placement
+//@ chunk-bxxnnnh4.js:6918-7073 placement
 function getWIFPrecedenceSource() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.precedenceSource.filled) return cached.precedenceSource.value;
@@ -74,7 +74,7 @@ function getWIFPrecedenceSource() {
   };
   return wifPrecedenceSource;
 }
-//@ chunk-640x3zn9.js:7073-7353 placement
+//@ chunk-bxxnnnh4.js:7073-7353 placement
 function computeWIFPrecedenceSource() {
   let configDir = resolveConfigDir();
   let profileName = activeProfileNameFromEnv();
@@ -90,7 +90,7 @@ function computeWIFPrecedenceSource() {
   }
   return null;
 }
-//@ chunk-640x3zn9.js:7353-7575 placement
+//@ chunk-bxxnnnh4.js:7353-7575 placement
 function clearWIFPrecedenceCache() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   cached.precedenceSource = {
@@ -111,17 +111,17 @@ function clearWIFPrecedenceCache() {
   cached.settingsBearerRejected = false;
   clearWIFAccountInfoCache();
 }
-//@ chunk-640x3zn9.js:7575-7629 placement
+//@ chunk-bxxnnnh4.js:7575-7629 placement
 function clearWIFAccountInfoCache() {
   wifProfileCacheByHost.of(getRootSession().host).accountInfo = {
     filled: false,
   };
 }
-//@ chunk-640x3zn9.js:7629-7663 placement
+//@ chunk-bxxnnnh4.js:7629-7663 placement
 function isWIFActive() {
   return getWIFPrecedenceSource() !== null;
 }
-//@ chunk-640x3zn9.js:7663-7795 placement
+//@ chunk-bxxnnnh4.js:7663-7795 placement
 function getWIFAuthType() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.authType.filled) return cached.authType.value;
@@ -132,7 +132,7 @@ function getWIFAuthType() {
   };
   return wifAuthType;
 }
-//@ chunk-640x3zn9.js:7795-8069 placement
+//@ chunk-bxxnnnh4.js:7795-8069 placement
 function computeWIFAuthType() {
   let wifPrecedenceSource = getWIFPrecedenceSource();
   if (wifPrecedenceSource === null) return null;
@@ -146,11 +146,11 @@ function computeWIFAuthType() {
   let authType = profileAuthType(configDir, profileName);
   return authType === "oidc_federation" || authType === "user_oauth" ? authType : null;
 }
-//@ chunk-640x3zn9.js:8069-8139 placement
+//@ chunk-bxxnnnh4.js:8069-8139 placement
 function wouldWIFProfileYieldToClaudeAILogin() {
   return getWIFPrecedenceSource() === "profile-implicit" && getWIFAuthType() === "user_oauth";
 }
-//@ chunk-640x3zn9.js:8139-8279 placement
+//@ chunk-bxxnnnh4.js:8139-8279 placement
 function getWIFAccountInfo() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.accountInfo.filled) return cached.accountInfo.value;
@@ -161,7 +161,7 @@ function getWIFAccountInfo() {
   };
   return wifAccountInfo;
 }
-//@ chunk-640x3zn9.js:8279-8470 placement
+//@ chunk-bxxnnnh4.js:8279-8470 placement
 function computeWIFAccountInfo() {
   let wifPrecedenceSource = getWIFPrecedenceSource();
   if (wifPrecedenceSource === null || wifPrecedenceSource === "env-quad") return;
@@ -173,7 +173,7 @@ function computeWIFAccountInfo() {
       : resolveImplicitProfileName(configDir);
   return readWIFAccountInfo(configDir, profileName);
 }
-//@ chunk-640x3zn9.js:8470-8730 placement
+//@ chunk-bxxnnnh4.js:8470-8730 placement
 function readWIFAccountInfo(configDir, profileName) {
   let profileFile = readProfileFile(credentialsPathFor(configDir, profileName));
   if (profileFile === null) return;
@@ -190,7 +190,7 @@ function readWIFAccountInfo(configDir, profileName) {
     return;
   }
 }
-//@ chunk-640x3zn9.js:8730-9258 placement
+//@ chunk-bxxnnnh4.js:8730-9258 placement
 function getWIFStatusLine() {
   let wifPrecedenceSource = getWIFPrecedenceSource();
   if (wifPrecedenceSource === "env-quad") {
@@ -209,11 +209,11 @@ function getWIFStatusLine() {
   }
   return "inactive";
 }
-//@ chunk-640x3zn9.js:9258-9316 placement
+//@ chunk-bxxnnnh4.js:9258-9316 placement
 function tailOfId(id) {
   return id.length <= 6 ? id : `\u2026${id.slice(-6)}`;
 }
-//@ chunk-640x3zn9.js:9316-9466 placement
+//@ chunk-bxxnnnh4.js:9316-9466 placement
 function getWIFProfileBaseUrl() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.profileBaseUrl.filled) return cached.profileBaseUrl.value;
@@ -224,7 +224,7 @@ function getWIFProfileBaseUrl() {
   };
   return wifProfileBaseUrl;
 }
-//@ chunk-640x3zn9.js:9466-9810 placement
+//@ chunk-bxxnnnh4.js:9466-9810 placement
 /**
  * 读取当前 WIF profile 配置中的 base_url。
  */
@@ -246,9 +246,9 @@ function computeWIFProfileBaseUrl() {
     return;
   }
 }
-//@ chunk-640x3zn9.js:9810-9989 placement
+//@ chunk-bxxnnnh4.js:9810-9989 placement
 var wifProfileConfigSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-640x3zn9.js:9810", () => {
+deferInit("chunk-bxxnnnh4.js:9810", () => {
   wifProfileConfigSchema = DoctorLazy(() =>
     objectSchema({
       organization_id: stringSchema().optional(),
@@ -262,7 +262,7 @@ deferInit("chunk-640x3zn9.js:9810", () => {
     }).loose(),
   );
 });
-//@ chunk-640x3zn9.js:9989-10151 placement
+//@ chunk-bxxnnnh4.js:9989-10151 placement
 function getWIFFederationIdentity() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.federationIdentity.filled) return cached.federationIdentity.value;
@@ -273,7 +273,7 @@ function getWIFFederationIdentity() {
   };
   return wifFederationIdentity;
 }
-//@ chunk-640x3zn9.js:10151-10699 placement
+//@ chunk-bxxnnnh4.js:10151-10699 placement
 /**
  * 计算 WIF 联邦身份（组织 id、联邦规则 id、工作区 id）：来自环境变量四件套或当前 profile 的 oidc_federation 配置。
  */
@@ -304,7 +304,7 @@ function computeWIFFederationIdentity() {
     return;
   }
 }
-//@ chunk-640x3zn9.js:10699-10907 placement
+//@ chunk-bxxnnnh4.js:10699-10907 placement
 function federationIdentityOf({ organizationId, federationRuleId, workspaceId }) {
   let trimmed = organizationId?.trim();
   let trimmed_2 = federationRuleId?.trim();
@@ -318,18 +318,18 @@ function federationIdentityOf({ organizationId, federationRuleId, workspaceId })
     }),
   };
 }
-//@ chunk-640x3zn9.js:10907-10967 placement
+//@ chunk-bxxnnnh4.js:10907-10967 placement
 function isWIFSettingsBearerRejected() {
   return wifProfileCacheByHost.of(getRootSession().host).settingsBearerRejected;
 }
-//@ chunk-640x3zn9.js:10967-11023 placement
+//@ chunk-bxxnnnh4.js:10967-11023 placement
 function setWIFSettingsBearerRejected(settingsBearerRejected) {
   wifProfileCacheByHost.of(getRootSession().host).settingsBearerRejected = settingsBearerRejected;
 }
-//@ chunk-640x3zn9.js:11023-11077 placement
+//@ chunk-bxxnnnh4.js:11023-11077 placement
 var PROFILE_STORE_DENY_DIRS = ["configs", "credentials"];
 var PROFILE_STORE_DENY_FILES = ["active_config"];
-//@ chunk-640x3zn9.js:11077-11271 placement
+//@ chunk-bxxnnnh4.js:11077-11271 placement
 function getWIFProfileStoreDenyPaths() {
   let cached = wifProfileCacheByHost.of(getRootSession().host);
   if (cached.profileStoreDenyPaths.filled) return cached.profileStoreDenyPaths.value;
@@ -341,7 +341,7 @@ function getWIFProfileStoreDenyPaths() {
     };
   return denyPaths;
 }
-//@ chunk-640x3zn9.js:11271-11810 placement
+//@ chunk-bxxnnnh4.js:11271-11810 placement
 /**
  * 计算沙箱应拒读的 WIF profile 存储路径：配置目录（若包含当前目录则只拒其中的凭据子目录与文件）以及当前 profile 的凭据文件。
  */
@@ -394,31 +394,33 @@ function computeProfileStoreDenyPaths() {
     };
   }
 }
-//@ chunk-640x3zn9.js:11810-11918 placement
+//@ chunk-bxxnnnh4.js:11810-11918 placement
 function credentialsPathOrNull(configDir, profileName) {
   let path = credentialsPathFor(configDir, profileName);
   if (!path) return join(configDir, "credentials", `${profileName}.json`);
   return typeof path === "string" ? path : null;
 }
-//@ chunk-640x3zn9.js:11918-12017 placement
+//@ chunk-bxxnnnh4.js:11918-12017 placement
 function credentialsRealpaths(configDir, profileName) {
   let realpath = credentialsPathOrNull(configDir, profileName);
   if (realpath === null || !realpath.trim()) return [];
-  return uniq(isAbsolute(realpath) ? [resolve(realpath)] : [resolve(configDir, realpath), resolve(realpath)]);
+  return normalizeCaseForComparison_2(
+    isAbsolute(realpath) ? [resolve(realpath)] : [resolve(configDir, realpath), resolve(realpath)],
+  );
 }
-//@ chunk-640x3zn9.js:12017-12091 placement
+//@ chunk-bxxnnnh4.js:12017-12091 placement
 function isLoadableProfileName(name) {
   return !!name && /^[A-Za-z0-9_.-]+$/.test(name) && name !== "." && name !== "..";
 }
-//@ chunk-640x3zn9.js:12091-12157 placement
+//@ chunk-bxxnnnh4.js:12091-12157 placement
 function resolveImplicitProfileName(configDir) {
   return readProfileFile(join(configDir, "active_config"))?.trim() || "default";
 }
-//@ chunk-640x3zn9.js:12157-12226 placement
+//@ chunk-bxxnnnh4.js:12157-12226 placement
 function resolveLiveProfileName(configDir) {
   return process.env.ANTHROPIC_PROFILE?.trim() || resolveImplicitProfileName(configDir);
 }
-//@ chunk-640x3zn9.js:12226-12448 placement
+//@ chunk-bxxnnnh4.js:12226-12448 placement
 function profileAuthType(configDir, profileName) {
   let profileFile = readProfileFile(join(configDir, "configs", `${profileName}.json`));
   if (profileFile === null) return null;
@@ -434,7 +436,7 @@ function profileAuthType(configDir, profileName) {
   }
   return authType;
 }
-//@ chunk-640x3zn9.js:12448-12632 placement
+//@ chunk-bxxnnnh4.js:12448-12632 placement
 function credentialsPathFor(configDir, profileName, profileConfig) {
   if (profileConfig === undefined) {
     let profileFile = readProfileFile(join(configDir, "configs", `${profileName}.json`));
@@ -447,11 +449,11 @@ function credentialsPathFor(configDir, profileName, profileConfig) {
     profileConfig?.authentication?.credentials_path ?? join(configDir, "credentials", `${profileName}.json`)
   );
 }
-//@ chunk-640x3zn9.js:12632-12668 placement
+//@ chunk-bxxnnnh4.js:12632-12668 placement
 function resolveConfigDir() {
   return configDirLocation()?.dir ?? null;
 }
-//@ chunk-640x3zn9.js:12668-12948 placement
+//@ chunk-bxxnnnh4.js:12668-12948 placement
 function configDirLocation() {
   if (isDiskless()) return null;
   let env = process.env;
@@ -475,15 +477,15 @@ function configDirLocation() {
       }
     : null;
 }
-//@ chunk-640x3zn9.js:12948-13006 placement
+//@ chunk-bxxnnnh4.js:12948-13006 placement
 function activeProfileNameFromEnv() {
   return process.env.ANTHROPIC_PROFILE?.trim();
 }
-//@ chunk-640x3zn9.js:13006-13064 placement
+//@ chunk-bxxnnnh4.js:13006-13064 placement
 function hasEnvQuad() {
   return WIF_ENV_QUAD_VARS.every((name) => process.env[name]?.trim());
 }
-//@ chunk-640x3zn9.js:13064-13189 placement
+//@ chunk-bxxnnnh4.js:13064-13189 placement
 function isRootOrContainsCwd(path) {
   let canon = canonicalLowerPath(path);
   if (canon === parse(canon).root) return true;
@@ -491,7 +493,7 @@ function isRootOrContainsCwd(path) {
   let firstSegment = relativePath.split(sep)[0];
   return relativePath === "" || (firstSegment !== ".." && !isAbsolute(relativePath));
 }
-//@ chunk-640x3zn9.js:13189-13345 placement
+//@ chunk-bxxnnnh4.js:13189-13345 placement
 function canonicalLowerPath(path) {
   let resolved = resolve(path);
   let tailPath = "";
@@ -510,7 +512,7 @@ function canonicalLowerPath(path) {
     }
   return resolved.toLowerCase();
 }
-//@ chunk-640x3zn9.js:13345-13407 placement
+//@ chunk-bxxnnnh4.js:13345-13407 placement
 function isDirectorySync(path) {
   try {
     return lstatSync(path).isDirectory();
@@ -518,7 +520,7 @@ function isDirectorySync(path) {
     return false;
   }
 }
-//@ chunk-640x3zn9.js:13407-13571 placement
+//@ chunk-bxxnnnh4.js:13407-13571 placement
 function readProfileFile(path) {
   let primedFiles = wifProfileCacheByHost.of(getRootSession().host).primedFiles;
   if (primedFiles !== undefined && primedFiles.has(path)) return primedFiles.get(path) ?? null;
@@ -529,7 +531,7 @@ function readProfileFile(path) {
     throw error;
   }
 }
-//@ chunk-640x3zn9.js:13571-14239 placement
+//@ chunk-bxxnnnh4.js:13571-14239 placement
 async function primeWIFProfileFiles(hostFiles) {
   let cache = wifProfileCacheByHost.of(getRootSession().host);
   let configLocation = configDirLocation();
@@ -572,24 +574,24 @@ async function primeWIFProfileFiles(hostFiles) {
   }
 }
 export {
-  getWIFStatusLine,
-  getWIFAccountInfo,
-  getWIFAuthType,
-  getWIFPrecedenceSource,
-  wouldWIFProfileYieldToClaudeAILogin,
   isWIFActive,
-  getWIFProfileBaseUrl,
-  getWIFProfileStoreDenyPaths,
-  isWIFUserOAuthDeadError,
-  clearWIFPrecedenceCache,
+  getWIFAuthType,
+  getWIFAccountInfo,
+  getWIFPrecedenceSource,
   resolveConfigDir,
-  isWIFSettingsBearerRejected,
-  setWIFSettingsBearerRejected,
   resolveImplicitProfileName,
   clearWIFAccountInfoCache,
   readWIFAccountInfo,
   resolveLiveProfileName,
   getWIFFederationIdentity,
+  getWIFProfileStoreDenyPaths,
+  getWIFStatusLine,
+  getWIFProfileBaseUrl,
+  wouldWIFProfileYieldToClaudeAILogin,
+  isWIFUserOAuthDeadError,
+  isWIFSettingsBearerRejected,
+  setWIFSettingsBearerRejected,
   primeWIFProfileFiles,
+  clearWIFPrecedenceCache,
   isLoadableProfileName,
 };

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：/context 命令：显示上下文用量；远程会话通过控制通道获取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/context/context.tsx
- * pieces: chunk-10q8r8ck.js (1)
+ * pieces: chunk-qt8k81nz.js (1)
  * attribution: placement 1
  */
 import { getRemoteCaps, hasRemoteCap, REMOTE_STOPPED_WAITING_NOTICE } from "../../remote/remoteMode.js";
@@ -20,7 +20,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { analyzeContextUsage } from "../../utils/analyzeContext.js";
 
-//@ chunk-10q8r8ck.js:27146-28617 placement
+//@ chunk-qt8k81nz.js:28320-29791 placement
 /**
  * /context 命令：显示上下文用量；远程会话通过控制通道获取。
  */

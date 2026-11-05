@@ -3,9 +3,9 @@
  *
  * 剪贴板图片：各平台读取命令（osascript/PowerShell/xclip/wl-paste）、从剪贴板或路径读图片、图片路径识别与引号/转义处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imagePaste.ts
- * pieces: chunk-n770a3wm.js (15)
+ * pieces: chunk-6ajqjj6e.js (15)
  * attribution: placement 3, fingerprint 4, layout 4, callgraph-fingerprint 1, file-local 3
  */
 import { join, dirname, isAbsolute, basename } from "path";
@@ -30,7 +30,7 @@ import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { webpMaxBytesIfOn } from "./imageWebp.js";
 import { MODEL_COPY_IMAGE_BYTES } from "./mediaLimits.js";
 
-//@ chunk-n770a3wm.js:783-1027 placement
+//@ chunk-6ajqjj6e.js:783-1027 placement
 /**
  * 粘贴阈值与各平台读取剪贴板文件路径的命令。
  */
@@ -40,7 +40,7 @@ var CLIPBOARD_PATH_COMMANDS = {
   linux: "xclip -selection clipboard -t text/plain -o 2>/dev/null || wl-paste 2>/dev/null",
   win32: ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
 };
-//@ chunk-n770a3wm.js:1027-3646 fingerprint (2.1.88 match: getClipboardCommands, 0.376)
+//@ chunk-6ajqjj6e.js:1027-3646 fingerprint (2.1.88 match: getClipboardCommands, 0.376)
 /**
  * 官方行为，保留：getClipboardCommands 末行 return {commands: commands.linux || commands.linux, …}，三元退化成同一分支，darwin/win32 两张命令表构造后从不返回；另有一个声明后未使用的空串。
  */
@@ -104,7 +104,7 @@ function getClipboardCommands() {
     screenshotPath: linux,
   };
 }
-//@ chunk-n770a3wm.js:3646-3755 layout
+//@ chunk-6ajqjj6e.js:3646-3755 layout
 async function runClipboardCommand(command) {
   if (typeof command === "string")
     return safeExecShell(command, {
@@ -115,14 +115,14 @@ async function runClipboardCommand(command) {
     reject: false,
   });
 }
-//@ chunk-n770a3wm.js:3755-3785 layout
+//@ chunk-6ajqjj6e.js:3755-3785 layout
 /**
  * 此构建不支持从剪贴板读图（恒为 false）。
  */
 async function isClipboardImageUnsupported() {
   return false;
 }
-//@ chunk-n770a3wm.js:3785-4452 fingerprint (2.1.88 match: getImageFromClipboard, 0.549)
+//@ chunk-6ajqjj6e.js:3785-4452 fingerprint (2.1.88 match: getImageFromClipboard, 0.549)
 /**
  * 从剪贴板读取图片：执行平台命令保存到临时文件，读取并转 base64，返回 {base64, mediaType, dimensions}；失败记录 clipboard_read 错误类型。
  */
@@ -165,7 +165,7 @@ async function getImageFromClipboard(options) {
     return null;
   }
 }
-//@ chunk-n770a3wm.js:4452-4702 callgraph-fingerprint (2.1.88 match: getImagePathFromClipboard, 0.173)
+//@ chunk-6ajqjj6e.js:4452-4702 callgraph-fingerprint (2.1.88 match: getImagePathFromClipboard, 0.172)
 async function getImagePathFromClipboard() {
   try {
     let linux = CLIPBOARD_PATH_COMMANDS.linux || CLIPBOARD_PATH_COMMANDS.linux;
@@ -182,20 +182,20 @@ async function getImagePathFromClipboard() {
     return null;
   }
 }
-//@ chunk-n770a3wm.js:4702-4737 layout
+//@ chunk-6ajqjj6e.js:4702-4737 layout
 /**
  * 图片文件扩展名正则。
  */
 var IMAGE_FILE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i;
-//@ chunk-n770a3wm.js:4737-4855 file-local
+//@ chunk-6ajqjj6e.js:4737-4855 file-local
 function removeOuterQuotes(text) {
   if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'")))
     return text.slice(1, -1);
   return text;
 }
-//@ chunk-n770a3wm.js:4855-4885 layout
+//@ chunk-6ajqjj6e.js:4855-4885 layout
 var WINDOWS_PATH_RE = /^(?:[A-Za-z]:\\|\\\\)/;
-//@ chunk-n770a3wm.js:4885-5072 fingerprint (2.1.88 match: stripBackslashEscapes, 0.676)
+//@ chunk-6ajqjj6e.js:4885-5072 fingerprint (2.1.88 match: stripBackslashEscapes, 0.676)
 function stripBackslashEscapes(path) {
   if (getPlatform() === "wsl" && WINDOWS_PATH_RE.test(path)) return path;
   let placeholder = `__DOUBLE_BACKSLASH_${randomBytes(8).toString("hex")}__`;
@@ -204,20 +204,20 @@ function stripBackslashEscapes(path) {
     .replace(/\\(.)/g, "$1")
     .replace(new RegExp(placeholder, "g"), "\\");
 }
-//@ chunk-n770a3wm.js:5072-5132 file-local
+//@ chunk-6ajqjj6e.js:5072-5132 file-local
 function isImageFilePath(text) {
   let cleaned = removeOuterQuotes(text.trim());
   let unescaped = stripBackslashEscapes(cleaned);
   return IMAGE_FILE_EXT_RE.test(unescaped);
 }
-//@ chunk-n770a3wm.js:5132-5209 file-local
+//@ chunk-6ajqjj6e.js:5132-5209 file-local
 function asImageFilePath(text) {
   let cleaned = removeOuterQuotes(text.trim());
   let unescaped = stripBackslashEscapes(cleaned);
   if (IMAGE_FILE_EXT_RE.test(unescaped)) return unescaped;
   return null;
 }
-//@ chunk-n770a3wm.js:5209-6094 fingerprint (2.1.88 match: tryReadImageFromPath, 0.642)
+//@ chunk-6ajqjj6e.js:5209-6094 fingerprint (2.1.88 match: tryReadImageFromPath, 0.641)
 /**
  * 从粘贴的文件路径读取图片：去引号/转义、权限检查（可能 refused）、空文件警告，返回图片数据或 null。
  */
@@ -278,7 +278,7 @@ async function tryReadImageFromPath(text, clipboardPlatform, readFile) {
     dimensions: resized.dimensions,
   };
 }
-//@ chunk-n770a3wm.js:6094-6253 placement
+//@ chunk-6ajqjj6e.js:6094-6253 placement
 /**
  * 判断粘贴文本是否像二进制（含空字节或替换字符比例过高）。
  */
@@ -290,17 +290,17 @@ function looksLikeBinaryText(clipboard) {
   for (let char of sliced) if (char === "\uFFFD") replacementCount++;
   return replacementCount / sliced.length > 0.05;
 }
-//@ chunk-n770a3wm.js:6253-6293 placement
+//@ chunk-6ajqjj6e.js:6253-6293 placement
 function configuredDirectWebpMaxBytes() {
   return isRemoteSessionAvailable() ? undefined : webpMaxBytesIfOn(MODEL_COPY_IMAGE_BYTES);
 }
 export {
-  PASTE_THRESHOLD,
   getImageFromClipboard,
-  looksLikeBinaryText,
+  PASTE_THRESHOLD,
+  isClipboardImageUnsupported,
   isImageFilePath,
   tryReadImageFromPath,
   asImageFilePath,
-  isClipboardImageUnsupported,
   IMAGE_FILE_EXT_RE,
+  looksLikeBinaryText,
 };

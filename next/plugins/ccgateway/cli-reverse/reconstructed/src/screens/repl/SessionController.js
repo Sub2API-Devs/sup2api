@@ -3,25 +3,37 @@
  *
  * 2.1.316 新增。REPL 控制器：会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (21)
+ * attribution: placement 19, layout 2
  */
 import { randomUUID } from "crypto";
 import { dirname } from "path";
-import { isSubagentHistoryEnabled } from "../../components/messages/UserPromptMessage.js";
-import { unwrapMidTurnUserMessage } from "../../utils/messages/nonUserMessages.js";
-import { unwrapCoordinatorMessage } from "../../utils/crossSessionMessages.js";
-import { createDependencyWatcher } from "../../cli/print/rewindStandIn.js";
-import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { Text, Box } from "../../ink/components/Text.js";
+import {
+  isAccountCopyEnabled,
+  ownerDiffers,
+  getSessionOwner,
+  ownStoredLoginOwner,
+  rememberKnownAccount,
+  accountLabelOfOwner,
+  currentAccountLabel,
+  currentSessionFileIsFor,
+  saveSessionOwner,
   getAgentTranscript,
   isTranscriptPersistenceDisabled,
   getMaterializedSessionFile,
   getTranscriptPathForSession,
   pinSessionId,
   getCurrentSessionDisplayTitle,
+  appendToolsUsedEntryBeforeClear,
   resetSessionFilePointer,
   applyEndedByModelOnResume,
   clearSessionMetadata,
@@ -45,11 +57,46 @@ import {
   isRemoteEgressSuppressedFor,
   bridgeSessionForPulledWindow,
 } from "../../utils/sessionStorage.js";
+import { logError } from "../../utils/log.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { createElement } from "../../../vendor/react/cjs/react.production.js";
+import { SessionOwnerDialog } from "./copySessionDialog.js";
+import { SESSION_OWNER } from "../../components/dialogs/dialogKinds.js";
+import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
+import {
+  getSessionId,
+  getConversationToolsUsed,
+  getParentSessionId,
+  switchSession,
+  getStickyBetas,
+  removeSessionCronTasks,
+  getSessionCronTasks,
+  resetCostState,
+  onSessionSwitch,
+  getMainLoopModelOverride,
+  hasRefusalFallbackOccurred,
+  hasRefusalFallbackHeaderArmed,
+  getInitialMainLoopModel,
+  setLastMainThreadContextTokens,
+  clearPendingContextCompacted,
+  clearRefusalFallbackOccurred,
+  setMainLoopModelOverride,
+  getTotalOutputTokens,
+  getLastInteractionTime,
+  NOTIF_ACTIVE_THRESHOLD_MS,
+} from "../../bootstrap/state.js";
+import { branchAndResume } from "../../commands/branch/branch.js";
+import { createSystemMessage, getModeFromInput } from "../../utils/messages.js";
+import { isSubagentHistoryEnabled } from "../../components/messages/UserPromptMessage.js";
+import { unwrapMidTurnUserMessage } from "../../utils/messages/nonUserMessages.js";
+import { unwrapCoordinatorMessage } from "../../utils/crossSessionMessages.js";
+import { createDependencyWatcher } from "../../cli/print/rewindStandIn.js";
+import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { identityAgentId2, identityAgentId } from "../../utils/agentId.js";
 import { degradeRestoredMessages, clearClassifierContext } from "../../utils/conversationRecovery.js";
-import { logError } from "../../utils/log.js";
 import {
   getOauthAccountInfo,
+  loginSwitchMemo,
   subscribeOAuthCredentialsChangedOnDisk,
   checkOAuthCredentialsChangedOnDisk,
 } from "../../utils/auth.js";
@@ -71,34 +118,6 @@ import {
   restoreWorktreeForResume,
   worktreeResumeNotice,
 } from "../../utils/sessionRestore.js";
-import {
-  getSessionId,
-  getParentSessionId,
-  switchSession,
-  getStickyBetas,
-  removeSessionCronTasks,
-  getSessionCronTasks,
-  resetCostState,
-  onSessionSwitch,
-  getMainLoopModelOverride,
-  hasRefusalFallbackOccurred,
-  hasRefusalFallbackHeaderArmed,
-  getInitialMainLoopModel,
-  setLastMainThreadContextTokens,
-  clearPendingContextCompacted,
-  clearRefusalFallbackOccurred,
-  setMainLoopModelOverride,
-  getTotalOutputTokens,
-  getLastInteractionTime,
-  NOTIF_ACTIVE_THRESHOLD_MS,
-} from "../../bootstrap/state.js";
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
-import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
-import { Text, Box } from "../../ink/components/Text.js";
 import { createSignal } from "../../utils/signal.js";
 import { createQueueBusyCheck } from "../../utils/messageQueueIdle.js";
 import { resetContinueState } from "../../commands/continue/continueState.js";
@@ -122,17 +141,20 @@ import {
   buildPreviousConversationPointer,
   isPreviousConversationPointerAllowed,
 } from "./idleReturn.js";
-import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { env } from "../../utils/env.js";
 import { useDefaultToNewerModelKey } from "../../utils/newerModelOffer.js";
+import { collectToolsUsedBeforeSummary } from "../../utils/messages/untrustedArtifactContent.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
-import { createSystemMessage, getModeFromInput } from "../../utils/messages.js";
 import { truncateToWidth } from "../../utils/format.js";
 import {
   dropMalformedAttachments,
   deserializeToMessages,
+  assertResumeNotRefused,
   dedupeSessionStartRows,
 } from "../../utils/transcript/deserialize.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { stripToolUseIdBookkeeping } from "../../utils/transcript/entryTypes.js";
+import { noModelPin, recordModelPinSwitch, noopModelPinReset } from "../../utils/sessionModelPin.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { getSessionEndHookTimeoutMs, executeSessionEndHooks } from "../../utils/hooks.js";
 import {
@@ -168,11 +190,12 @@ import {
   clearMediaItemCap,
   clearRefusedToolSchemas,
   forgetBeta,
+  isGmailAttachmentTool,
 } from "../../bootstrap/stateSlices.js";
 import { getToolSearchBeta } from "../../utils/betas.js";
 import { resetPickerState } from "../../memdir/findRelevantMemories.js";
 import { AGENT_TASK_TYPES } from "../../tasks/taskKinds.js";
-import { hasCompletedWithFindings } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
+import { hasCompletedWithFindings } from "../../components/tasks/RemoteSessionProgress.js";
 import { invalidateToolDescriptions } from "../../services/api/toolDescriptionCache.js";
 import { clearDeclared } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { getEndedByModel } from "../../tasks/endedByModel.js";
@@ -211,7 +234,7 @@ import {
 import { getCurrentWorktreeSession } from "../../utils/worktree.js";
 import { primePasteIdsFromMessages, readPromptText, renumberPastedContents } from "../../history.js";
 import { emitReplBridgeEvent } from "../../hooks/useReplBridge.js";
-import { logEvent } from "../../services/analytics/index.js";
+import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import {
   sanitizedErrorNameForTelemetry,
   toError,
@@ -236,6 +259,7 @@ import { teammatePermissionContextBySessionRoot } from "../../utils/swarm/teamma
 import { setToolPermissionContextAndNotify } from "../../components/agents/AgentsMenu.js";
 import { noteFirstFullscreenFrame } from "../../utils/fullscreenBootGuard.js";
 import { commitGate } from "../../utils/api.js";
+import { loginEventCounter } from "../../services/oauth/loginEvents.js";
 import { setJitPolicyAfterStartup } from "../../utils/jitPolicy.js";
 import { useArtifactWatchStartup } from "../../services/artifacts/watchArtifact.js";
 import { WakeRouter, resumeStrandedAgent } from "./wakeRouter.js";
@@ -256,7 +280,6 @@ import {
 import { updateGroveSettings_2, getGroveNoticeConfig } from "../../services/api/grove.js";
 import { refreshRemoteManagedSettings } from "../../services/remoteManagedSettings/loader.js";
 import { showStandaloneSecurityDialog } from "../../components/ManagedSettingsSecurityDialog/showStandaloneSecurityDialog.js";
-import { loginEventCounter } from "../../services/oauth/loginEvents.js";
 import { isBgSession, isActingAsBgJob, getBgJobDir, getBgTakeover } from "../../utils/concurrentSessions.js";
 import {
   canAutoReply,
@@ -265,7 +288,7 @@ import {
   getAutoReactSlugs,
   formatAutoReplyNotice,
 } from "../../services/artifactComments/autoReplyNotices.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   isCarriedFrameLiveWatch,
   readAndConsumeAdoptJson,
@@ -324,7 +347,7 @@ import { classifyFallbackOrigin } from "../../services/api/refusalFallback.js";
 import { isFastModeEnabled, isFastModeActive, reportFastModeToggle } from "../../utils/fastMode.js";
 import { mergeTurnTags } from "../../utils/userTurnTags.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
-import { splitStampedImages } from "../../utils/messageQueueManager.js";
+import { restorePastedImageContents } from "../../utils/messageQueueManager.js";
 import { setSliceField } from "../../state/sliceHelpers.js";
 import { recordImagePath, storeImageAndRecord } from "../../utils/imageStore.js";
 import { createAbortController } from "../../utils/abortController.js";
@@ -334,15 +357,14 @@ import {
   buildPostCompactMessages_2,
   ERROR_MESSAGE_NOT_ENOUGH_MESSAGES,
   buildPostCompactMessages,
-  getTokenCountFromUsage_4,
+  getTokenCountFromUsage_6,
 } from "../../services/compact/compact.js";
 import { findMessageIndexByUuid } from "../../cli/queuedCommands.js";
 import { pruneDisplayedContent } from "../../cli/print/turnStreaming.js";
 import { cleanupAfterCompaction } from "../../services/compact/postCompactCleanup.js";
 import { leadingCompactHint } from "../../components/messages/GroupedToolUseContent.js";
-import { env } from "../../utils/env.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
-import { compactCommand } from "../../commands/compact/index.js";
+import { compactNonInteractiveCommand } from "../../commands/compact/index.js";
 import { isClaudeMdLoadingDisabled } from "../../utils/settings/customizationDisabled.js";
 import {
   getMemoryFilesCached,
@@ -353,23 +375,204 @@ import { getReadTimestamp } from "../../tools/FileReadTool/savedOutputPaths.js";
 import { stripBomAndCarriageReturn } from "../../utils/remoteFileState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:344654-344715 placement
+//@ chunk-czq1j3j2.js:355948-356195 placement
+var DIALOG_KINDS_PLACEHOLDER; // deferred: loads other modules while loading; runs once its import cycle is complete
+var workflowPermissionDialog;
+var workflowDialogKindsModule;
+var dialogKindsModuleA;
+var dialogKindsModuleB;
+var artifactsMcpEntryModule;
+var bridgeCoordinatorModule;
+deferInit("chunk-czq1j3j2.js:355948", () => {
+  DIALOG_KINDS_PLACEHOLDER = null;
+  workflowPermissionDialog =
+    require("../../components/dialogs/workflowPermissionDialog.lazy.js").workflowPermissionDialog;
+  workflowDialogKindsModule = require("../../tools/ContinueInProjectsTool/CONTINUE_NOTIFICATION.lazy.js");
+  dialogKindsModuleA = require("../../components/projects/continueInProjectsTargetRequest.js");
+  dialogKindsModuleB = require("../../components/projects/messageRevealConfirm.js");
+  artifactsMcpEntryModule = require("../../components/projects/continueInProjectsComposeRequest.js");
+  bridgeCoordinatorModule = require("../../commands/send-to-project/remoteControlOffRequest.js");
+});
+//@ chunk-czq1j3j2.js:361298-363368 placement
+/**
+ * 会话归属守卫：检查本地是否还留着别的账号的登录，若不匹配就停掉 REPL 桥接并提示 /login 或复制会话。
+ */
+class SessionOwnerCheck {
+  host;
+  #e = false;
+  #t = null;
+  #o;
+  #n = false;
+  #r = null;
+  constructor(host) {
+    this.host = host;
+  }
+  asking() {
+    return this.#t !== null;
+  }
+  holdsStoredLogin = () => {
+    this.#e ||= isAccountCopyEnabled();
+    return this.#e && (this.#t !== null || ownerDiffers(getSessionOwner(), ownStoredLoginOwner()));
+  };
+  check() {
+    this.#e ||= isAccountCopyEnabled();
+    if (!this.#e) return false;
+    rememberKnownAccount(this.host.storageV5).catch(logError);
+    let sessionOwner = getSessionOwner();
+    let currentIdentity = ownStoredLoginOwner();
+    if (!sessionOwner || (currentIdentity && !ownerDiffers(sessionOwner, currentIdentity))) {
+      this.#l();
+      return false;
+    }
+    if (!currentIdentity) return this.#t !== null;
+    let { store, localJsx } = this.host;
+    store.setState((state) =>
+      state.replBridgeEnabled || state.replBridgeOutboundOnly || state.replBridgeError !== undefined
+        ? {
+            ...state,
+            replBridgeEnabled: false,
+            replBridgeExplicit: false,
+            replBridgeOutboundOnly: false,
+            replBridgeError: undefined,
+            replBridgeErrorKind: undefined,
+          }
+        : state,
+    );
+    if (this.#t !== null) return true;
+    this.#r ??= store.getState().initialMessage;
+    store.setState((state) =>
+      state.initialMessage === null
+        ? state
+        : {
+            ...state,
+            initialMessage: null,
+          },
+    );
+    this.#o = currentIdentity;
+    let startedAccount = accountLabelOfOwner(sessionOwner);
+    let now = currentAccountLabel(startedAccount);
+    let handle = localJsx.show(
+      createElement(SessionOwnerDialog, {
+        started: startedAccount,
+        now,
+        onChoice: (choice) => void this.#s(choice, startedAccount).catch(logError),
+      }),
+      {
+        commandName: SESSION_OWNER,
+        immediate: false,
+        hidesPrompt: true,
+        retireAtTurnBoundary: false,
+      },
+    );
+    this.#t = handle;
+    handle.closed.then(() => {
+      if (this.#t === handle) this.#t = null;
+    });
+    return true;
+  }
+  async #s(choice, startedAccount) {
+    if (this.#n) return;
+    this.#n = true;
+    try {
+      switch (choice) {
+        case "exit":
+          logFeatureSad("auth_session_owner_ask", "exit");
+          await this.host.submitSlashCommand("/exit");
+          return;
+        case "login":
+          await this.host.submitSlashCommand("/login");
+          if (ownStoredLoginOwner()) {
+            this.#t?.close();
+            this.#t = null;
+            if (!this.check()) logFeatureOk("auth_session_owner_ask");
+          }
+          return;
+        case "copy": {
+          let { transcript, storageV5, credentials, resume } = this.host;
+          let currentIdentity = ownStoredLoginOwner();
+          if (!currentIdentity) return;
+          if (ownerDiffers(this.#o, currentIdentity)) {
+            this.#t?.close();
+            this.#t = null;
+            this.check();
+            return;
+          }
+          if (currentSessionFileIsFor(getSessionId())) {
+            let copyError;
+            if (
+              !(await branchAndResume(
+                {
+                  messages: transcript.getSnapshot(),
+                  storageV5,
+                  credentials,
+                  resume,
+                },
+                (error) => {
+                  copyError = error;
+                },
+              ))
+            ) {
+              logFeatureBad("auth_session_owner_ask", "copy_failed");
+              if (copyError)
+                transcript.apply({
+                  type: "append",
+                  messages: [createSystemMessage(copyError, "warning")],
+                });
+              return;
+            }
+          }
+          saveSessionOwner(currentIdentity);
+          transcript.apply({
+            type: "append",
+            messages: [
+              createSystemMessage(
+                `Copied to ${currentAccountLabel(startedAccount)}. The original stays with ${startedAccount ?? "the account that started it"}.`,
+                "notice",
+              ),
+            ],
+          });
+          logFeatureOk("auth_session_owner_ask");
+          this.#l();
+          return;
+        }
+      }
+    } finally {
+      this.#n = false;
+    }
+  }
+  #l() {
+    this.#t?.close();
+    this.#t = null;
+    let heldInitialMessage = this.#r;
+    this.#r = null;
+    if (heldInitialMessage !== null)
+      this.host.store.setState((state) =>
+        state.initialMessage === null
+          ? {
+              ...state,
+              initialMessage: heldInitialMessage,
+            }
+          : state,
+      );
+  }
+}
+//@ chunk-czq1j3j2.js:382375-382436 placement
 function appendLine(existing, line) {
   if (existing.trim() === "") return line;
   return `${existing}
 ${line}`;
 }
-//@ chunk-18hwfzwa.js:344715-344830 placement
+//@ chunk-czq1j3j2.js:382436-382551 placement
 function restorePromptAfterCancel(draft, text, { neverSubmitted = false } = {}) {
   draft.setMode("prompt");
   draft.replaceValue(appendLine(draft.value, text));
   if (!neverSubmitted) draft.markCameBack();
 }
-//@ chunk-18hwfzwa.js:369774-369833 placement
+//@ chunk-czq1j3j2.js:407187-407246 placement
 function noopController({ store, dialogStore, queue }) {
   return () => {};
 }
-//@ chunk-18hwfzwa.js:369833-371237 placement
+//@ chunk-czq1j3j2.js:407246-408650 placement
 function mergeQueuedHumanMessages(messages, messages_2) {
   let uuids = new Set(messages_2.map((message) => message.uuid));
   let filtered = messages.filter((message) => !uuids.has(message.uuid));
@@ -451,12 +654,12 @@ function mergeQueuedHumanMessages(messages, messages_2) {
   }
   return [...kept, ...messages_2.flatMap((message) => [message, ...(extrasByUuid.get(message.uuid) ?? [])])];
 }
-//@ chunk-18hwfzwa.js:371237-371273 placement
+//@ chunk-czq1j3j2.js:408650-408686 placement
 function joinLines(kind, text) {
   return `${kind}
 ${text}`;
 }
-//@ chunk-18hwfzwa.js:371273-371914 placement
+//@ chunk-czq1j3j2.js:408686-409327 placement
 function syncViewedAgentPermissionMode({ store, setAppState, storageV5 }) {
   return createDependencyWatcher(
     [store],
@@ -504,33 +707,33 @@ function syncViewedAgentPermissionMode({ store, setAppState, storageV5 }) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:371914-371989 placement
-var artifactsMcpEntryModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+//@ chunk-czq1j3j2.js:409327-409402 layout
+var artifactsEntryWatch; // deferred: loads other modules while loading; runs once its import cycle is complete
 var RESUME_RETRY_DELAYS_MS;
 var DRAIN_CHECK_INTERVAL_MS;
 var MAX_DRAIN_WAIT_CYCLES;
-deferInit("chunk-18hwfzwa.js:371914", () => {
-  artifactsMcpEntryModule = require("../../services/mcp/startArtifactsMcpEntryWatch.lazy.js");
+deferInit("chunk-czq1j3j2.js:409327", () => {
+  artifactsEntryWatch = require("../../services/mcp/startArtifactsMcpEntryWatch.lazy.js");
   RESUME_RETRY_DELAYS_MS = [1000, 3000, 1e4];
   DRAIN_CHECK_INTERVAL_MS = 50;
   MAX_DRAIN_WAIT_CYCLES = 1300;
 });
-//@ chunk-18hwfzwa.js:371989-372064 placement
+//@ chunk-czq1j3j2.js:409402-409477 placement
 function oauthAccountFingerprint() {
   let oauthAccountInfo = getOauthAccountInfo();
   return `${oauthAccountInfo?.accountUuid}|${oauthAccountInfo?.profileFetchedAt}`;
 }
-//@ chunk-18hwfzwa.js:372064-372127 placement
+//@ chunk-czq1j3j2.js:409477-409540 placement
 function isNotPlacedSystemMessage(message) {
   return message.type !== "system" || message.subtype !== "placed";
 }
-//@ chunk-18hwfzwa.js:372127-372224 placement
+//@ chunk-czq1j3j2.js:409540-409637 placement
 function transcriptStampSessionController(messages) {
   let lastIndex = messages.findLastIndex(isNotPlacedSystemMessage);
   let found = messages.find(isNotPlacedSystemMessage);
   return `${lastIndex + 1}|${found?.uuid}|${messages[lastIndex]?.uuid}`;
 }
-//@ chunk-18hwfzwa.js:372224-372356 placement
+//@ chunk-czq1j3j2.js:409637-409769 placement
 /**
  * 当前会话 id 与 transcript 路径（持久化关闭或无会话文件时 null）。
  */
@@ -544,16 +747,16 @@ function currentTranscriptRef() {
     transcriptPath: getTranscriptPathForSession(sessionId),
   };
 }
-//@ chunk-18hwfzwa.js:372356-372447 placement
+//@ chunk-czq1j3j2.js:409769-409860 placement
 var SLASH_COMMAND_PICKER_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:372356", () => {
+deferInit("chunk-czq1j3j2.js:409769", () => {
   SLASH_COMMAND_PICKER_KEYS = new Set([
     "slash_command_picker",
     "slash_command_session_id",
     "slash_command_title",
   ]);
 });
-//@ chunk-18hwfzwa.js:372447-411777 placement
+//@ chunk-czq1j3j2.js:409860-451081 placement
 /**
  * SessionController：REPL 会话控制器，管理会话 ID、续接、分叉与会话级状态。
  */
@@ -568,8 +771,8 @@ class SessionController {
   transcript;
   turn;
   draft;
-  #s;
   #r;
+  #s;
   scope;
   engine;
   dialogStore;
@@ -601,6 +804,8 @@ class SessionController {
   _host = null;
   _snapshot;
   _changed = createSignal();
+  #l;
+  askAboutSessionOwner = () => this.#l.check();
   constructor({
     session,
     presentation,
@@ -639,8 +844,8 @@ class SessionController {
     this.transcript = transcript;
     this.turn = turn;
     this.draft = draft;
-    this.#s = chrome;
-    this.#r = scrollPin;
+    this.#r = chrome;
+    this.#s = scrollPin;
     this.scope = scope;
     this.engine = engine;
     this.dialogStore = dialogStore;
@@ -666,6 +871,15 @@ class SessionController {
         }
       : null;
     this._restoredStamp = initialMessages && transcriptStampSessionController(initialMessages);
+    this.#l = new SessionOwnerCheck({
+      localJsx: scope.localJsx,
+      store,
+      transcript,
+      storageV5,
+      credentials,
+      resume: (session, log, mode) => this.resume(session, log, mode),
+      submitSlashCommand: (command) => this._submitSlashCommand(command),
+    });
     this._snapshot = {
       conversationId: randomUUID(),
       haikuTitle: undefined,
@@ -789,7 +1003,7 @@ class SessionController {
       );
       if (warning) {
         let generation = this.#t;
-        this.#c(
+        this.#i(
           generation,
           await showIdleReturnDialog(this.scope.requestDialog, warning, {
             trigger: "resume",
@@ -842,23 +1056,34 @@ class SessionController {
         startNewConversation: () =>
           this._startNewConversation(this.transcript.getSnapshot(), currentTranscriptRef(), "idle"),
       });
-      this.#c(generation, outcome);
+      this.#i(generation, outcome);
     } catch (error) {
       logFeatureBad(quotaWarningSurface("idle"), "prompt_failed");
       throw error;
     }
   }
-  #c(generation, outcome) {
+  #i(generation, outcome) {
     if (outcome === "resume" || outcome === "dismiss") this.#o = generation;
   }
   async _startNewConversation(messages, pin, trigger = "resume") {
-    let feature = quotaWarningSurface(trigger);
+    let quotaSurface = quotaWarningSurface(trigger);
     let sessionId = getSessionId();
     let pinnedSid = pinSessionId(sessionId);
     let pointer = null;
     let pointerFailed = false;
+    let toolsUsed = [];
+    let toolsCapture = null;
     if (pin !== null && canLookUpPrevious(messages, pinnedSid))
       try {
+        let conversationToolsUsed = getConversationToolsUsed();
+        toolsCapture = {
+          ledger: conversationToolsUsed,
+          names: conversationToolsUsed.captureRecords(),
+        };
+        toolsUsed = [
+          ...conversationToolsUsed.names(),
+          ...collectToolsUsedBeforeSummary(messages, undefined, false, true),
+        ];
         pointer = buildPreviousConversationPointer({
           resumed: messages,
           source: pin,
@@ -886,15 +1111,18 @@ class SessionController {
           : undefined,
       );
     } catch (error) {
-      logFeatureBad(feature, "clear_failed");
+      finishToolsCapture(toolsCapture);
+      logFeatureBad(quotaSurface, "clear_failed");
       logError(error);
       return;
     }
     let plan = {
       pointer,
       pointerFailed,
+      toolsUsed,
+      toolsCapture,
       previousTitle,
-      feature,
+      feature: quotaSurface,
     };
     if (getSessionId() !== sessionId) {
       this._finishNewConversation(plan, true);
@@ -973,6 +1201,7 @@ class SessionController {
         logError(error);
         if (!settled) {
           settled = true;
+          finishToolsCapture(plan.toolsCapture);
           logFeatureSad(plan.feature, "clear_not_applied");
         }
       }
@@ -984,10 +1213,15 @@ class SessionController {
     );
     queueMicrotask(check);
   }
-  _finishNewConversation({ pointer, pointerFailed, previousTitle, feature }, landed) {
+  _finishNewConversation(
+    { pointer, pointerFailed, toolsUsed, toolsCapture, previousTitle, feature },
+    landed,
+  ) {
+    let captured = finishToolsCapture(toolsCapture);
     let pointerFailedToAppend = false;
     if (pointer !== null && landed)
       try {
+        getConversationToolsUsed().record([...toolsUsed, ...captured]);
         let cleanTitle = previousTitle === undefined ? "" : stripIgnorables(previousTitle);
         let systemMessage = createSystemMessage(
           cleanTitle === ""
@@ -1043,14 +1277,30 @@ class SessionController {
     let { mainLoopModel } = this._requireHost();
     let replace = this.transcript.replace;
     let startTime = performance.now();
+    let askedOwner = false;
     try {
       markSessionRestored(session.host);
       let result = {
         ...log,
         messages: dropMalformedAttachments(log.messages),
       };
+      if (codeModeAccepted()) for (let message of result.messages) stripToolUseIdBookkeeping(message);
       let messages = deserializeToMessages(result.messages);
-      let modelNotice = undefined;
+      let modelNotice =
+        mode !== "fork"
+          ? noModelPin(
+              {
+                replMode: log.replMode,
+                replTypedEvents: log.replTypedEvents,
+                messages,
+                source: "store",
+                sessionId: taskId,
+                withinSession: true,
+              },
+              (warningText) => messages.push(createSystemMessage(warningText, "warning")),
+            )
+          : undefined;
+      if (modelNotice) assertResumeNotRefused(modelNotice);
       let sessionModeModule = require("../../coordinator/coordinatorMode.js");
       let modeWarning = sessionModeModule.matchSessionMode(log.mode);
       if (modeWarning) {
@@ -1108,16 +1358,24 @@ class SessionController {
         fork: mode === "fork",
         sessionId: taskId,
       });
-      let startRows = await processSessionStartHooks(session, mode === "fork" ? "fork" : "resume", {
-        sessionId: taskId,
-        envFileSessionId: identityAgentId(taskId),
-        sessionTitle: log.customTitle,
-        agentType: agentDefinition?.agentType,
-        model: restoredModel ?? mainLoopModel,
-        resumedMessages: log.messages,
-        storageV5,
-        credentials,
-      });
+      await appendToolsUsedEntryBeforeClear(storageV5);
+      let conversationToolsUsed = getConversationToolsUsed();
+      let capturedRecords = conversationToolsUsed.captureRecords();
+      let startRows;
+      try {
+        startRows = await processSessionStartHooks(session, mode === "fork" ? "fork" : "resume", {
+          sessionId: taskId,
+          envFileSessionId: identityAgentId(taskId),
+          sessionTitle: log.customTitle,
+          agentType: agentDefinition?.agentType,
+          model: restoredModel ?? mainLoopModel,
+          resumedMessages: log.messages,
+          storageV5,
+          credentials,
+        });
+      } finally {
+        conversationToolsUsed.endCapture(capturedRecords);
+      }
       messages.push(...dedupeSessionStartRows(messages, startRows));
       if (mode === "fork") copyPlanForFork(log, identityAgentId(taskId), storageV5);
       else copyPlanForResume(log, identityAgentId(taskId), storageV5);
@@ -1180,6 +1438,7 @@ class SessionController {
             };
           });
       }
+      if (codeModeAccepted() && modelNotice) recordModelPinSwitch(modelNotice);
       rearmRefusalFallbackHeaderFromTranscript(messages, mode === "fork");
       flushTelemetry?.();
       let { renameRecordingForSession } = await import("../../utils/asciicast.js");
@@ -1220,6 +1479,15 @@ class SessionController {
           invalidateToolDescriptions();
           clearDeclared(session.host);
         }
+        if (codeModeAccepted() && agentId !== sessionId) {
+          let { danglingReceipts } = require("../../utils/codeMode/lostEvals.js");
+          require("../../utils/codeMode/replSessionEnd.js").endMainThreadConversation(
+            scope.toolState,
+            this.messageQueue,
+            "another conversation was resumed",
+            danglingReceipts(messages).map((receipt) => receipt.toolUseId),
+          );
+        }
         if (SLASH_COMMAND_PICKER_KEYS.has(mode) && !known) {
           let planModeRestoreOnInteractiveResume = await preparePlanModeRestoreOnInteractiveResume({
             storedPermissionMode: log.permissionMode,
@@ -1243,7 +1511,14 @@ class SessionController {
         preserveLiveBudget: mode === "fork" || mode === "rewind_pre_clear",
       });
       applyEndedByModelOnResume(getEndedByModel(log), _setAppState);
+      let toolNames = getConversationToolsUsed().names();
+      let toolsToRecord = Object.values(store.getState().tasks).some((task) =>
+        AGENT_TASK_TYPES.has(task.type),
+      )
+        ? toolNames
+        : toolNames.filter(isGmailAttachmentTool);
       clearSessionMetadata();
+      getConversationToolsUsed().record(toolsToRecord);
       restoreSessionMetadata(
         mode === "fork"
           ? buildForkAdoptionMeta(log, {
@@ -1258,6 +1533,7 @@ class SessionController {
           storageV5,
         },
       );
+      askedOwner = mode !== "fork" && this.askAboutSessionOwner();
       installDevModsPlaceholderExpander();
       pushRestoredMemoryPauseNotice(messages);
       if (mode === "fork")
@@ -1267,10 +1543,11 @@ class SessionController {
         } else copyPrecautionarySuppressionTo(taintSid, pinSessionId(getSessionIdFromLog(log)));
       let hookTitle = takePendingHookSessionTitle();
       if (hookTitle) cacheHookSessionTitle(hookTitle);
+      if (capturedRecords.length > 0) getConversationToolsUsed().record(capturedRecords);
       reclaimSessionNameOnResume(log.agentName, storageV5, {
         autoOnly: !log.customTitle,
       });
-      if (mode !== "fork" && log.bridgeSessionId)
+      if (mode !== "fork" && log.bridgeSessionId && !askedOwner)
         _setAppState((state) =>
           state.replBridgeEnabled && !state.replBridgeOutboundOnly
             ? state
@@ -1436,6 +1713,7 @@ class SessionController {
       }
       let { isCoordinatorMode } = require("../../coordinator/coordinatorMode.js");
       saveMode(isCoordinatorMode() ? "coordinator" : "normal");
+      if (codeModeAccepted()) noopModelPinReset(modelNotice?.declined === true);
       resetCostState();
       setCostStateForRestore(log);
       if (mode !== "fork") scope.reconstructContentReplacementState(messages, log.contentReplacements ?? []);
@@ -1459,10 +1737,11 @@ class SessionController {
         } catch (error) {
           logError(error);
         }
-        this.maybePromptStaleResume(messages, {
-          sessionId: agentId,
-          transcriptPath: log.fullPath ?? getTranscriptPathForSession(agentId),
-        });
+        if (!askedOwner)
+          this.maybePromptStaleResume(messages, {
+            sessionId: agentId,
+            transcriptPath: log.fullPath ?? getTranscriptPathForSession(agentId),
+          });
       }
       logEvent("tengu_session_resumed", {
         entrypoint: fromEnum(mode),
@@ -1608,6 +1887,23 @@ class SessionController {
     messages.push(this.turn.watchLaunchPrompt());
     noteFirstFullscreenFrame();
     commitGate(session);
+    let loginCounter = loginEventCounter.of(session);
+    let loginSwitchHolder = loginSwitchMemo();
+    let holdsStoredLogin = this.#l.holdsStoredLogin;
+    loginSwitchHolder.sessionOwnerHold = holdsStoredLogin;
+    messages.push(
+      () => {
+        if (loginSwitchHolder.sessionOwnerHold === holdsStoredLogin)
+          loginSwitchHolder.sessionOwnerHold = null;
+      },
+      createDependencyWatcher(
+        [loginCounter],
+        () => [loginCounter.getSnapshot().loginCompleted],
+        () => {
+          if (this.askAboutSessionOwner()) this.turn.abort("remote-cancel");
+        },
+      ),
+    );
     setJitPolicyAfterStartup();
     useArtifactWatchStartup({
       initialMessages: this.initialMessages,
@@ -1617,10 +1913,10 @@ class SessionController {
       addNotification: (notification) => this._requireHost().addNotification(notification),
       artifactMountGate: this.artifactMountGate,
     });
-    if (artifactsMcpEntryModule !== null)
+    if (artifactsEntryWatch !== null)
       try {
         messages.push(
-          artifactsMcpEntryModule.startArtifactsMcpEntryWatch({
+          artifactsEntryWatch.startArtifactsMcpEntryWatch({
             session,
             store,
             scope: this.scope,
@@ -1636,6 +1932,9 @@ class SessionController {
         );
       }
     messages.push(this._startUnattendedMonitoringWatch());
+    if (codeModeAccepted())
+      getTaskRunState().onSubagentResume ??=
+        require("../../utils/codeMode/lostEvals.js").reportLostSubagentReplEvals;
     if (!this.runsNoModelTurn)
       messages.push(
         WakeRouter({
@@ -1683,9 +1982,9 @@ class SessionController {
         }),
       );
     let slot = idleCompactionSlot.of(session);
-    slot.host = this.#d;
+    slot.host = this.#u;
     messages.push(() => {
-      if (slot.host === this.#d) slot.host = null;
+      if (slot.host === this.#u) slot.host = null;
     });
   }
   _startSiblingLoginWatch(attempt) {
@@ -1778,10 +2077,10 @@ class SessionController {
         if (autoReplyOn) this.discloseUnattendedActivity();
       });
     }
-    let liveWatches = count(Object.values(store.getState().tasks), isCarriedFrameLiveWatch);
+    let liveWatches = countWhere(Object.values(store.getState().tasks), isCarriedFrameLiveWatch);
     let dependencyWatcher = createDependencyWatcher(
       [store],
-      () => [count(Object.values(store.getState().tasks), isCarriedFrameLiveWatch)],
+      () => [countWhere(Object.values(store.getState().tasks), isCarriedFrameLiveWatch)],
       (task) => {
         if (task === liveWatches) return;
         liveWatches = task;
@@ -1976,6 +2275,7 @@ class SessionController {
   }
   restoreOnMount() {
     let { initialMessages, session, taskRegistry, storageV5, credentials, store, scope, messageQueue } = this;
+    let askedOwnerAgain = false;
     if (initialMessages && initialMessages.length > 0) {
       scope.reseatIsolationLatch(
         getCurrentSessionIsolationLatch() ??
@@ -1987,6 +2287,7 @@ class SessionController {
             session,
           ),
       );
+      askedOwnerAgain = this.askAboutSessionOwner();
       this.restoreReadFileState(
         initialMessages,
         getSessionProject(session).originalCwd,
@@ -2179,7 +2480,7 @@ class SessionController {
             tools: this.scope.computeTools(),
           }),
         );
-      if (!this.disableQuery && store.getState().initialMessage === null)
+      if (!this.disableQuery && !askedOwnerAgain && store.getState().initialMessage === null)
         this.maybePromptStaleResume(initialMessages, currentRestoreSource());
     }
   }
@@ -2505,7 +2806,7 @@ class SessionController {
     setLastMainThreadContextTokens(contextTokensOf(messages_3));
     setLastCacheSafeForkMessages(messages_3);
     this.bumpConversationId();
-    if (uuid === "message_selector") this.#r.repin(true, "rewind");
+    if (uuid === "message_selector") this.#s.repin(true, "rewind");
     this._resetTurnEventTail();
     turn.resetForConversation({
       kind: "rewound",
@@ -2573,52 +2874,68 @@ class SessionController {
       }),
     }));
     if (b !== undefined) reportFastModeToggle(fastMode, b);
-    logFeatureOk("repl_rewind_conversation");
+    logFeatureOk("repl_rewind_conversation", {
+      source: fromEnum(uuid),
+    });
   }
-  restoreMessageSync = (rows, entry, prior = []) => {
+  restoreMessageSync = (entry, entry_2, prior = []) => {
     let lastPrior = prior[0];
     if (lastPrior === undefined) {
-      this.rewindConversationTo(rows, entry);
-      this.restoreDraftFrom(rows);
+      this.rewindConversationTo(entry, entry_2);
+      this.restoreDraftFrom(entry);
       return;
     }
-    let restored = [];
+    let restoredDrafts;
     try {
-      for (let row of [...prior, rows]) {
-        let blank = {
-          value: "",
-          pastedContents: {},
-        };
-        this.restoreDraftInto(row, {
-          replaceValue: (value) => {
-            blank.value = value;
-          },
-          setMode: () => {},
-          setPastedContents: (pastedContents) => {
-            blank.pastedContents = pastedContents;
-          },
-        });
-        restored.push(blank);
-      }
+      restoredDrafts = this.recordDraftsOf([...prior, entry]);
     } catch (error) {
       logError(error);
-      this.rewindConversationTo(rows, entry);
-      this.restoreDraftFrom(rows);
+      this.rewindConversationTo(entry, entry_2);
+      this.restoreDraftFrom(entry);
       return;
     }
-    this.rewindConversationTo(lastPrior, entry);
-    this.draft.replaceValue(restored.reduce((acc, acc2) => appendLine(acc, acc2.value), ""));
+    this.rewindConversationTo(lastPrior, entry_2);
+    this.fillDraftFrom(restoredDrafts);
+  };
+  restoreDraftsFrom = (entries) => {
+    let [first, ...rest] = entries;
+    if (first !== undefined && rest.length === 0) {
+      this.restoreDraftFrom(first);
+      return;
+    }
+    this.fillDraftFrom(this.recordDraftsOf(entries));
+  };
+  recordDraftsOf(messages) {
+    return messages.map((message) => {
+      let blank = {
+        value: "",
+        pastedContents: {},
+      };
+      this.restoreDraftInto(message, {
+        replaceValue: (value) => {
+          blank.value = value;
+        },
+        setMode: () => {},
+        setPastedContents: (pastedContents) => {
+          blank.pastedContents = pastedContents;
+        },
+      });
+      return blank;
+    });
+  }
+  fillDraftFrom(message) {
+    this.draft.replaceValue(message.reduce((acc, acc2) => appendLine(acc, acc2.value), ""));
     this.draft.setMode("prompt");
     let pastes = {};
-    for (let row of restored) pastes = mergeTurnTags(pastes, Object.values(row.pastedContents));
+    for (let row of message) pastes = mergeTurnTags(pastes, Object.values(row.pastedContents));
     if (Object.keys(pastes).length > 0) this.draft.setPastedContents(pastes);
-  };
+  }
   restoreDraftFrom = (entry) => {
     this.restoreDraftInto(entry, this.draft);
   };
   restoreDraftInto(entry, index) {
     let { _setAppState } = this;
-    this.#s.restoreIdeSelectionConsumedBy(entry.uuid);
+    this.#r.restoreIdeSelectionConsumedBy(entry.uuid);
     let modeFromInput = getModeFromInput(entry);
     let mode = modeFromInput
       ? modeFromInput.mode === "prompt"
@@ -2636,7 +2953,7 @@ class SessionController {
     if (Array.isArray(entry.message.content)) {
       let content = entry.message.content.filter((block) => isObjectBlock(block) && block.type === "image");
       if (content.length > 0) {
-        let { stamped, manufactured } = splitStampedImages(content, entry.imagePasteIds);
+        let { stamped, manufactured } = restorePastedImageContents(content, entry.imagePasteIds);
         let before = renumberPastedContents({
           display: mode?.text ?? "",
           pastedContents: manufactured,
@@ -2732,7 +3049,7 @@ class SessionController {
         draft.replaceValue(branch.text);
         draft.setMode(modeFromInput.mode);
         if (Object.keys(branch.pastedContents).length > 0) draft.setPastedContents(branch.pastedContents);
-        this.#s.restoreIdeSelectionConsumedBy(messages.uuid);
+        this.#r.restoreIdeSelectionConsumedBy(messages.uuid);
       }
     }
     let hint = leadingCompactHint(
@@ -2748,14 +3065,14 @@ class SessionController {
       timeoutMs: 8000,
     });
   };
-  #i() {
+  #a() {
     if (isRemoteSessionAvailable())
       return Error("a thin client's conversation lives on the remote session; compact it there");
     if (this.turn.getSnapshot().isExternalLoading)
       return Error("an external turn is driving the conversation; it compacts between turns");
     return null;
   }
-  async #a() {
+  async #c() {
     try {
       let { isHeldInAnotherPidDomain, listRegisteredSessionRecords } =
         await import("../../utils/udsMessaging/SessionRecordsUnreadableError.lazy.js");
@@ -2775,7 +3092,7 @@ class SessionController {
       return true;
     }
   }
-  async #l() {
+  async #d() {
     if (isTranscriptPersistenceDisabled()) return null;
     let transcriptTailForTip = await readTranscriptTailForTip(getSessionId(), this.storageV5);
     let uuid =
@@ -2783,12 +3100,12 @@ class SessionController {
     if (uuid === undefined) return "transcript_unreadable";
     return this.transcript.getSnapshot().some((row) => row.uuid === uuid) ? null : "transcript_advanced";
   }
-  #d = {
+  #u = {
     refusal: async () => {
-      if (await this.#a()) return "held_elsewhere";
-      let result = await this.#l();
+      if (await this.#c()) return "held_elsewhere";
+      let result = await this.#d();
       if (result !== null) return result;
-      if (this.#i() !== null || this.turn.guard.isActive) return "busy";
+      if (this.#a() !== null || this.turn.guard.isActive || this.#l.asking()) return "busy";
       if (Date.now() - getLastInteractionTime() < NOTIF_ACTIVE_THRESHOLD_MS) return "present";
       return null;
     },
@@ -2825,7 +3142,7 @@ class SessionController {
   compactConversation = async ({ instructions, origin, apiAttemptsLeft }) => {
     let { transcript, turn, scope, _setAppState } = this;
     let { mainLoopModel, addNotification } = this._requireHost();
-    let x = this.#i();
+    let x = this.#a();
     if (x !== null) throw x;
     let handle = turn.guard.isActive ? null : turn.guard.tryStart();
     if (handle === null) throw Error("a turn is in flight; the conversation compacts between turns");
@@ -2840,7 +3157,7 @@ class SessionController {
         mainLoopModel,
       );
       toolUseContext.compactionApiAttemptsLeft = apiAttemptsLeft;
-      let { compactManually } = await compactCommand.load();
+      let { compactManually } = await compactNonInteractiveCommand.load();
       let result = await compactManually(toolUseContext, {
         customInstructions: instructions,
         mainThreadAgentDefinition: scope.mainThreadAgentDefinition,
@@ -2860,7 +3177,7 @@ class SessionController {
         throw Error("a newer turn began before the compaction could be applied");
       let postCompactMessages = buildPostCompactMessages({
         ...result.compactionResult,
-        messagesToKeep: result.compactionResult.messagesToKeep.map(getTokenCountFromUsage_4),
+        messagesToKeep: result.compactionResult.messagesToKeep.map(getTokenCountFromUsage_6),
       });
       let beforeUuids = new Set(snapshot.map((row) => row.uuid));
       let afterUuids = new Set(postCompactMessages.map((postCompactMessage) => postCompactMessage.uuid));
@@ -2953,7 +3270,7 @@ ${joined}`);
     }
   }
 }
-//@ chunk-18hwfzwa.js:411777-411834 placement
+//@ chunk-czq1j3j2.js:451081-451138 placement
 function offersLookUp(resumed, pin) {
   return (
     pin !== null &&
@@ -2961,21 +3278,38 @@ function offersLookUp(resumed, pin) {
     isPreviousConversationPointerAllowed()
   );
 }
-//@ chunk-18hwfzwa.js:411834-411880 placement
+//@ chunk-czq1j3j2.js:451138-451184 placement
 function canLookUpPrevious(messages, pin) {
   return !isRemoteOrBridgeSession(pin) && !messages.some(isForeignToBridgeSession);
 }
-//@ chunk-18hwfzwa.js:411880-411926 placement
+//@ chunk-czq1j3j2.js:451184-451265 layout
+function finishToolsCapture(toolsCapture) {
+  if (toolsCapture === null) return [];
+  toolsCapture.ledger.endCapture(toolsCapture.names);
+  return toolsCapture.names;
+}
+//@ chunk-czq1j3j2.js:451265-451311 placement
 function isRemoteOrBridgeSession(pin) {
   return isRemoteEgressSuppressedFor(pin) || bridgeSessionForPulledWindow(pin) !== undefined;
 }
-//@ chunk-18hwfzwa.js:411926-411997 placement
+//@ chunk-czq1j3j2.js:451311-451382 placement
 function findMessageIndex(messages, message) {
   let index = messages.lastIndexOf(message);
   return index !== -1 ? index : findMessageIndexByUuid(messages, message.uuid);
 }
-//@ chunk-18hwfzwa.js:411997-412092 placement
+//@ chunk-czq1j3j2.js:451382-451477 placement
 function isForeignToBridgeSession(message) {
   return "foreignToBridgeSession" in message && typeof message.foreignToBridgeSession === "string";
 }
-export { SessionController, appendLine, restorePromptAfterCancel };
+export {
+  appendLine,
+  SessionController,
+  DIALOG_KINDS_PLACEHOLDER,
+  workflowDialogKindsModule,
+  dialogKindsModuleA,
+  dialogKindsModuleB,
+  artifactsMcpEntryModule,
+  bridgeCoordinatorModule,
+  workflowPermissionDialog,
+  restorePromptAfterCancel,
+};

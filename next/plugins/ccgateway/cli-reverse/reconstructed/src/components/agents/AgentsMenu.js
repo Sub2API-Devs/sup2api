@@ -3,9 +3,9 @@
  *
  * /agents 菜单主组件；本模块混入大量 auto 模式规则（allow/soft_deny/hard_deny）与设置来源判定代码。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentsMenu.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-82kqcve8.js (1), chunk-p2qwpk2k.js (5)
+ * pieces: chunk-a2q0x549.js (1), chunk-czq1j3j2.js (2), chunk-h5wy8vq5.js (5)
  * attribution: fingerprint 3, placement 4, callgraph-witnessed 1
  */
 import { permissionModeSignal } from "../../utils/permissions/permissionSetup.js";
@@ -44,23 +44,24 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getDefaultExternalAutoModeRules } from "../../utils/permissions/yoloClassifier.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
-import { useTabsWidth, useTabHeaderFocus } from "../design-system/Tabs.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
+import { useTabHeaderFocus } from "../design-system/Tabs.js";
 import { useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useFocusOnMount } from "../../hooks/useFocusOnMount.js";
 import { uniqueLabels } from "../../utils/permissions/approvalPayloadSerialization.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { countWhere } from "../../utils/collections.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { SearchBox } from "../SearchBox.js";
 import { ModelSelector } from "./ModelSelector.js";
 
-//@ chunk-82kqcve8.js:254881-255014 fingerprint (2.1.88 match: _temp6, 0.753)
+//@ chunk-a2q0x549.js:254157-254290 fingerprint (2.1.88 match: _temp6, 0.751)
 function getNonProjectAdditionalDirectories(a_1) {
   return Array.from(a_1.additionalWorkingDirectories.values())
     .filter((additionalWorkingDirectory) => additionalWorkingDirectory.source !== "projectSettings")
     .map((additionalWorkingDirectory) => additionalWorkingDirectory.path);
 }
-//@ chunk-18hwfzwa.js:342935-343157 fingerprint (2.1.88 match: _temp3, 0.687)
+//@ chunk-czq1j3j2.js:380656-380878 fingerprint (2.1.88 match: _temp3, 0.688)
 /**
  * 更新 AppState 的 toolPermissionContext（可传函数），仅在实际变化时于下一 tick 发出权限变更信号。
  */
@@ -80,11 +81,11 @@ function setToolPermissionContextAndNotify(setShowState, updater) {
     permissionModeSignal.emit();
   });
 }
-//@ chunk-18hwfzwa.js:687519-687576 fingerprint (2.1.88 match: _temp, 0.673)
+//@ chunk-czq1j3j2.js:708250-708307 fingerprint (2.1.88 match: _temp, 0.673)
 function selectAgentDefinitionsActiveAgents(s) {
   return s.agentDefinitions.activeAgents;
 }
-//@ chunk-p2qwpk2k.js:42457-42729 placement
+//@ chunk-h5wy8vq5.js:43577-43850 placement
 /**
  * 渲染自动模式规则的分类标签（按分区着色），并附加规则来源说明。
  */
@@ -110,7 +111,7 @@ function AutoModeRuleLabel(rule) {
     ],
   });
 }
-//@ chunk-p2qwpk2k.js:42828-42962 placement
+//@ chunk-h5wy8vq5.js:43949-44083 placement
 /**
  * 计算各自动模式规则分区内置规则的数量（只算一次）。
  */
@@ -126,7 +127,7 @@ function useBuiltinRuleCounts() {
   } else counts = $[0];
   return counts;
 }
-//@ chunk-p2qwpk2k.js:44000-44147 placement
+//@ chunk-h5wy8vq5.js:45121-45268 placement
 /**
  * 按显示宽度截断文本（按字素切分），超出时末尾加省略号。
  */
@@ -142,7 +143,7 @@ function truncateWithEllipsis(text, maxWidth) {
   }
   return `${result}\u2026`;
 }
-//@ chunk-p2qwpk2k.js:44147-44417 placement
+//@ chunk-h5wy8vq5.js:45268-45538 placement
 /**
  * 按显示宽度把文本按单词折行，过长的单词强制拆开。
  */
@@ -178,9 +179,9 @@ function wrapWithIndent(text, maxWidth) {
   return lines.join(`
 ${" ".repeat(RULE_LABEL_WIDTH)}`);
 }
-//@ chunk-p2qwpk2k.js:44417-49860 callgraph-witnessed (2.1.88 match: AgentsMenu, 0.027)
+//@ chunk-h5wy8vq5.js:45538-50908 callgraph-witnessed (2.1.88 match: AgentsMenu, 0.027)
 function AgentsMenu(props) {
-  let $ = useMemoCache(64);
+  let $ = useMemoCache(62);
   let {
     entries,
     searchQuery,
@@ -203,7 +204,6 @@ function AgentsMenu(props) {
     $[0] = defaultEnvRulesCached;
   } else defaultEnvRulesCached = $[0];
   let defaultEnvRules = defaultEnvRulesCached;
-  let tabsWidth = useTabsWidth();
   let { columns } = useTerminalSize();
   let { headerFocused, focusHeader, blurHeader } = useTabHeaderFocus();
   let agentDefinitions = useRef(null);
@@ -266,8 +266,7 @@ function AgentsMenu(props) {
     $[18] !== hasEnvironmentControl ||
     $[19] !== ruleEntries ||
     $[20] !== searchQuery ||
-    $[21] !== tabsWidth ||
-    $[22] !== columns
+    $[21] !== columns
   ) {
     let lower = searchQuery.toLowerCase();
     let allAgents_0 = sortRuleEntries(ruleEntries).filter(
@@ -282,7 +281,9 @@ function AgentsMenu(props) {
       ? environmentEntries.map(toDisplayRule)
       : defaultEnvRules.map(toDisplayRuleNoTag);
     let environment = builtinsState.environment;
-    let joined = uniq(environmentEntries.map(ruleSource)).map(describeRuleSource).join(" and ");
+    let joined = normalizeCaseForComparison_2(environmentEntries.map(ruleSource))
+      .map(describeRuleSource)
+      .join(" and ");
     let any = environmentEntries.some(isUserSettingsRule);
     let any_2 = environmentEntries.some(isNonUserSettingsRule);
     let editHint = !any_2 ? "enter to edit" : any ? "enter to edit your entries" : "enter to add your own";
@@ -290,7 +291,7 @@ function AgentsMenu(props) {
       ? `Built-in default document${environment.control === "otherSource" ? ` \xB7 kept by ${describeRuleSource(environment.source ?? "userSettings")}` : ""} \xB7 enter to edit`
       : `${environment.enabled ? "Extends" : "Replaces"} the built-in default \xB7 from ${joined} \xB7 ${editHint}`;
     let isSectionVisibleCached;
-    if ($[24] !== builtinsState) {
+    if ($[23] !== builtinsState) {
       isSectionVisibleCached = (agent_0) => {
         let sectionState = builtinsState[agent_0];
         if (agent_0 === "environment") {
@@ -298,9 +299,9 @@ function AgentsMenu(props) {
         }
         return !(sectionState.control === "otherSource" && !sectionState.enabled);
       };
-      $[24] = builtinsState;
-      $[25] = isSectionVisibleCached;
-    } else isSectionVisibleCached = $[25];
+      $[23] = builtinsState;
+      $[24] = isSectionVisibleCached;
+    } else isSectionVisibleCached = $[24];
     let isSectionVisible = isSectionVisibleCached;
     let hasEnvironmentMatch =
       searchQuery.length > 0 && environmentRows.some((row) => row.text.toLowerCase().includes(lower));
@@ -308,12 +309,12 @@ function AgentsMenu(props) {
     let totalOptionCount =
       allAgents_0.length +
       (showEnvironmentRow ? 1 : 0) +
-      (searchQuery ? 0 : 1 + count(AUTO_MODE_RULE_SECTIONS, isSectionVisible));
+      (searchQuery ? 0 : 1 + countWhere(AUTO_MODE_RULE_SECTIONS, isSectionVisible));
     let countPrefixWidth = String(totalOptionCount).length + 2;
-    let max = Math.max(1, (tabsWidth ?? columns - 4) - 4 - countPrefixWidth - RULE_LABEL_WIDTH);
+    let max = Math.max(1, columns - 4 - 4 - countPrefixWidth - RULE_LABEL_WIDTH);
     let LabelComponent = AutoModeRuleLabel;
     let wrapLabelCached;
-    if ($[26] !== max) {
+    if ($[25] !== max) {
       wrapLabelCached = (value_0) => {
         let wrapped = wrapWithIndent(value_0, max);
         let lines = wrapped.split(`
@@ -328,9 +329,9 @@ function AgentsMenu(props) {
 ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${lines.length - 3} lines)`
         );
       };
-      $[26] = max;
-      $[27] = wrapLabelCached;
-    } else wrapLabelCached = $[27];
+      $[25] = max;
+      $[26] = wrapLabelCached;
+    } else wrapLabelCached = $[26];
     let wrapLabel = wrapLabelCached;
     let ruleOption = (rule, key) => ({
       label: jsxProd_default_2(Text, {
@@ -385,7 +386,7 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
       };
     };
     let builtinOptionCached;
-    if ($[28] !== builtinsState || $[29] !== builtinRuleCounts) {
+    if ($[27] !== builtinsState || $[28] !== builtinRuleCounts) {
       builtinOptionCached = (a_8) => {
         let state = builtinsState[a_8];
         let checkbox = state.enabled ? "[x]" : "[ ]";
@@ -430,10 +431,10 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
           value: `builtins:${a_8}`,
         };
       };
-      $[28] = builtinsState;
-      $[29] = builtinRuleCounts;
-      $[30] = builtinOptionCached;
-    } else builtinOptionCached = $[30];
+      $[27] = builtinsState;
+      $[28] = builtinRuleCounts;
+      $[29] = builtinOptionCached;
+    } else builtinOptionCached = $[29];
     let builtinOption = builtinOptionCached;
     options = searchQuery
       ? [...allAgents_0.map(ruleOption), ...(showEnvironmentRow ? [environmentOption()] : [])]
@@ -465,37 +466,30 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
     $[18] = hasEnvironmentControl;
     $[19] = ruleEntries;
     $[20] = searchQuery;
-    $[21] = tabsWidth;
-    $[22] = columns;
-    $[23] = options;
-  } else options = $[23];
+    $[21] = columns;
+    $[22] = options;
+  } else options = $[22];
   let menuOptions = options;
   const tabIndex = isSearchMode ? 0 : undefined;
   let onFocus;
-  if ($[31] !== blurHeader || $[32] !== isSearchMode) {
+  if ($[30] !== blurHeader || $[31] !== isSearchMode) {
     onFocus = isSearchMode ? () => blurHeader(agentDefinitions.current) : undefined;
-    $[31] = blurHeader;
-    $[32] = isSearchMode;
-    $[33] = onFocus;
-  } else onFocus = $[33];
+    $[30] = blurHeader;
+    $[31] = isSearchMode;
+    $[32] = onFocus;
+  } else onFocus = $[32];
   let introText;
-  if ($[34] === MEMO_CACHE_SENTINEL) {
+  if ($[33] === MEMO_CACHE_SENTINEL) {
     introText = jsxProd_default(Text, {
       wrap: "wrap-trim",
       children:
         "Extra rules for auto mode. Rules are plain sentences; new rules are saved to your user settings.",
     });
-    $[34] = introText;
-  } else introText = $[34];
+    $[33] = introText;
+  } else introText = $[33];
   const isFocused_2 = isSearchMode && !headerFocused;
   let searchBoxElement;
-  if (
-    $[35] !== cursorOffset ||
-    $[36] !== isFocused ||
-    $[37] !== searchQuery ||
-    $[38] !== isFocused_2 ||
-    $[39] !== tabsWidth
-  ) {
+  if ($[34] !== cursorOffset || $[35] !== isFocused || $[36] !== searchQuery || $[37] !== isFocused_2) {
     searchBoxElement = jsxProd_default(Box, {
       marginBottom: 1,
       marginTop: 1,
@@ -504,27 +498,25 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
         query: searchQuery,
         isFocused: isFocused_2,
         isTerminalFocused: isFocused,
-        width: tabsWidth,
         cursorOffset,
       }),
     });
-    $[35] = cursorOffset;
-    $[36] = isFocused;
-    $[37] = searchQuery;
-    $[38] = isFocused_2;
-    $[39] = tabsWidth;
-    $[40] = searchBoxElement;
-  } else searchBoxElement = $[40];
+    $[34] = cursorOffset;
+    $[35] = isFocused;
+    $[36] = searchQuery;
+    $[37] = isFocused_2;
+    $[38] = searchBoxElement;
+  } else searchBoxElement = $[38];
   let onChange;
   if (
-    $[41] !== blurHeader ||
-    $[42] !== entryByKey ||
-    $[43] !== headerFocused ||
-    $[44] !== onAddNew ||
-    $[45] !== onHeaderFocusChange ||
-    $[46] !== onSelectBuiltins ||
-    $[47] !== onSelectEntry ||
-    $[48] !== onSelectEnvironment
+    $[39] !== blurHeader ||
+    $[40] !== entryByKey ||
+    $[41] !== headerFocused ||
+    $[42] !== onAddNew ||
+    $[43] !== onHeaderFocusChange ||
+    $[44] !== onSelectBuiltins ||
+    $[45] !== onSelectEntry ||
+    $[46] !== onSelectEnvironment
   ) {
     onChange = (a_7) => {
       if (headerFocused) {
@@ -546,29 +538,29 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
       let selectedRule = entryByKey.get(a_7);
       if (selectedRule) onSelectEntry(selectedRule);
     };
-    $[41] = blurHeader;
-    $[42] = entryByKey;
-    $[43] = headerFocused;
-    $[44] = onAddNew;
-    $[45] = onHeaderFocusChange;
-    $[46] = onSelectBuiltins;
-    $[47] = onSelectEntry;
-    $[48] = onSelectEnvironment;
-    $[49] = onChange;
-  } else onChange = $[49];
+    $[39] = blurHeader;
+    $[40] = entryByKey;
+    $[41] = headerFocused;
+    $[42] = onAddNew;
+    $[43] = onHeaderFocusChange;
+    $[44] = onSelectBuiltins;
+    $[45] = onSelectEntry;
+    $[46] = onSelectEnvironment;
+    $[47] = onChange;
+  } else onChange = $[47];
   const visibleOptionCount = Math.min(10, menuOptions.length);
   const isDisabled = isSearchMode || headerFocused;
   const pointerWhileDisabled = !isSearchMode;
   let selectorElement;
   if (
-    $[50] !== defaultFocusValue ||
-    $[51] !== focusHeader ||
-    $[52] !== onCancel ||
-    $[53] !== menuOptions ||
-    $[54] !== onChange ||
-    $[55] !== visibleOptionCount ||
-    $[56] !== isDisabled ||
-    $[57] !== pointerWhileDisabled
+    $[48] !== defaultFocusValue ||
+    $[49] !== focusHeader ||
+    $[50] !== onCancel ||
+    $[51] !== menuOptions ||
+    $[52] !== onChange ||
+    $[53] !== visibleOptionCount ||
+    $[54] !== isDisabled ||
+    $[55] !== pointerWhileDisabled
   ) {
     selectorElement = jsxProd_default(ModelSelector, {
       options: menuOptions,
@@ -581,18 +573,18 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
       pointerWhileDisabled,
       onUpFromFirstItem: focusHeader,
     });
-    $[50] = defaultFocusValue;
-    $[51] = focusHeader;
-    $[52] = onCancel;
-    $[53] = menuOptions;
-    $[54] = onChange;
-    $[55] = visibleOptionCount;
-    $[56] = isDisabled;
-    $[57] = pointerWhileDisabled;
-    $[58] = selectorElement;
-  } else selectorElement = $[58];
+    $[48] = defaultFocusValue;
+    $[49] = focusHeader;
+    $[50] = onCancel;
+    $[51] = menuOptions;
+    $[52] = onChange;
+    $[53] = visibleOptionCount;
+    $[54] = isDisabled;
+    $[55] = pointerWhileDisabled;
+    $[56] = selectorElement;
+  } else selectorElement = $[56];
   let menuElement;
-  if ($[59] !== onFocus || $[60] !== searchBoxElement || $[61] !== selectorElement || $[62] !== tabIndex) {
+  if ($[57] !== onFocus || $[58] !== searchBoxElement || $[59] !== selectorElement || $[60] !== tabIndex) {
     menuElement = jsxProd_default_2(Box, {
       ref: agentDefinitions,
       flexDirection: "column",
@@ -600,12 +592,12 @@ ${" ".repeat(RULE_LABEL_WIDTH)}\u2026 (+${hiddenCount} more ${hiddenCount === 1 
       onFocus,
       children: [introText, searchBoxElement, selectorElement],
     });
-    $[59] = onFocus;
-    $[60] = searchBoxElement;
-    $[61] = selectorElement;
-    $[62] = tabIndex;
-    $[63] = menuElement;
-  } else menuElement = $[63];
+    $[57] = onFocus;
+    $[58] = searchBoxElement;
+    $[59] = selectorElement;
+    $[60] = tabIndex;
+    $[61] = menuElement;
+  } else menuElement = $[61];
   return menuElement;
 }
 export {

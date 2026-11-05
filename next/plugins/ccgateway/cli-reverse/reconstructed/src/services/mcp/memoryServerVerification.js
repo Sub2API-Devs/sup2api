@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：创建账户记忆服务器的验证函数（缓存已验证名）；判断工具是否来自可信的记忆服务器等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hf6kt4yn.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r9ccm4pb.js (10)
  * attribution: placement 10
  */
 import { MEMORY_TOOL_PREFIX } from "./firstPartyServerIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hf6kt4yn.js:228-241 placement
+//@ chunk-r9ccm4pb.js:228-241 placement
 /**
  * 可选的记忆服务器别名。
  */
 var alternatesServerName = undefined;
-//@ chunk-hf6kt4yn.js:241-336 placement
+//@ chunk-r9ccm4pb.js:241-336 placement
 /**
  * 判断工具名是否来自记忆服务器。
  */
@@ -26,7 +26,7 @@ function isMemoryServerToolName(toolName) {
     (alternatesServerName !== undefined && toolName === alternatesServerName)
   );
 }
-//@ chunk-hf6kt4yn.js:336-551 placement
+//@ chunk-r9ccm4pb.js:336-551 placement
 function memoryPlacementOf(tool) {
   let mcpInfo = tool.mcpInfo;
   if (mcpInfo === undefined) return "unplaced";
@@ -34,17 +34,17 @@ function memoryPlacementOf(tool) {
   let source = mcpInfo.source ?? (mcpInfo.serverType === "sdk" ? "sdk" : undefined);
   return source === undefined || source === "sdk" ? "unplaced" : "other_server";
 }
-//@ chunk-hf6kt4yn.js:551-682 placement
+//@ chunk-r9ccm4pb.js:551-682 placement
 function mergeMemoryPlacement(a, b) {
   if (a === "verified" || b === "verified") return "verified";
   return a === "unplaced" || b === "unplaced" ? "unplaced" : "other_server";
 }
-//@ chunk-hf6kt4yn.js:682-700 placement
+//@ chunk-r9ccm4pb.js:682-700 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hf6kt4yn.js:682", () => {
+deferInit("chunk-r9ccm4pb.js:682", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-hf6kt4yn.js:700-870 placement
+//@ chunk-r9ccm4pb.js:700-870 placement
 function memoryPlacementByName(tools) {
   let cached = weakMap.get(tools);
   if (cached === undefined) {
@@ -59,7 +59,7 @@ function memoryPlacementByName(tools) {
   }
   return cached;
 }
-//@ chunk-hf6kt4yn.js:870-1035 placement
+//@ chunk-r9ccm4pb.js:870-1035 placement
 /**
  * 创建账户记忆服务器的验证函数（缓存已验证名）。
  */
@@ -74,14 +74,14 @@ function createMemoryServerVerifier(getTools) {
     return placement;
   };
 }
-//@ chunk-hf6kt4yn.js:1035-1093 placement
+//@ chunk-r9ccm4pb.js:1035-1093 placement
 /**
  * 返回判断函数：工具是否已登记（verified / unplaced）。
  */
 function classifyPlacedTool(verifiedNames) {
   return (toolName) => (verifiedNames.has(toolName) ? "verified" : "unplaced");
 }
-//@ chunk-hf6kt4yn.js:1093-1219 placement
+//@ chunk-r9ccm4pb.js:1093-1219 placement
 /**
  * 判断工具是否来自可信的记忆服务器。
  */
@@ -95,11 +95,11 @@ function isTrustedMemoryTool(toolName, placementOf, caller) {
       return isMemoryServerToolName(toolName);
   }
 }
-//@ chunk-hf6kt4yn.js:1219-1270 placement
+//@ chunk-r9ccm4pb.js:1219-1270 placement
 /**
  * 当前是否为可信的记忆工具（实时）。
  */
 function isLiveMemoryTool(tool) {
   return isTrustedMemoryTool(tool.name, () => memoryPlacementOf(tool), "live");
 }
-export { createMemoryServerVerifier, classifyPlacedTool, isLiveMemoryTool, isTrustedMemoryTool };
+export { isLiveMemoryTool, createMemoryServerVerifier, classifyPlacedTool, isTrustedMemoryTool };

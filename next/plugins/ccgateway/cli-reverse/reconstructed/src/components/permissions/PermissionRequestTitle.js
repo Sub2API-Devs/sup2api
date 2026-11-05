@@ -3,9 +3,9 @@
  *
  * 权限对话框标题行（工具名、子标题、队友 WorkerBadge）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionRequestTitle.tsx
- * pieces: chunk-3v13eg2e.js (11)
+ * pieces: chunk-dbmqtrf0.js (11)
  * attribution: placement 10, fingerprint 1
  */
 import {
@@ -29,25 +29,25 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3v13eg2e.js:759-763 placement
+//@ chunk-dbmqtrf0.js:764-768 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3v13eg2e.js:759", () => {
+deferInit("chunk-dbmqtrf0.js:764", () => {
   init_react_production();
 });
-//@ chunk-3v13eg2e.js:763-767 placement
+//@ chunk-dbmqtrf0.js:768-772 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3v13eg2e.js:763", () => {
+deferInit("chunk-dbmqtrf0.js:768", () => {
   init_react_production();
 });
-//@ chunk-3v13eg2e.js:767-784 placement
+//@ chunk-dbmqtrf0.js:772-789 placement
 /**
  * 导出值：permissionTitleRef（权限标题 ref）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。
  */
 var permissionTitleRef; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3v13eg2e.js:767", () => {
+deferInit("chunk-dbmqtrf0.js:772", () => {
   permissionTitleRef = createContext(null);
 });
-//@ chunk-3v13eg2e.js:784-929 placement
+//@ chunk-dbmqtrf0.js:789-934 placement
 /**
  * 返回一个回调：调用时通知对话框存储中当前对话框已被认领（onClaimed）。
  */
@@ -66,7 +66,7 @@ function useNotifyDialogClaimed() {
     }
   };
 }
-//@ chunk-3v13eg2e.js:929-1142 placement
+//@ chunk-dbmqtrf0.js:934-1147 placement
 /**
  * 订阅并返回当前询问在本轮询问计数中的位置标签（如 2/3）。
  */
@@ -82,7 +82,7 @@ function useAskPositionLabel() {
     countedAsk === undefined || !askTally ? null : askTally.positionLabel(countedAsk),
   );
 }
-//@ chunk-3v13eg2e.js:1142-1375 placement
+//@ chunk-dbmqtrf0.js:1147-1380 placement
 /**
  * 对话框首次显示时执行一次回调（按对话框 id 与键去重；perReveal 时每次重新显示各算一次）。
  */
@@ -102,16 +102,16 @@ function useOnFirstReveal(revealKey, onReveal, { perReveal = false } = {}) {
     onRevealRef();
   }, [titleRef, dialogStore, revealKey, perReveal, revealSeq]);
 }
-//@ chunk-3v13eg2e.js:1375-1402 placement
+//@ chunk-dbmqtrf0.js:1380-1407 placement
 function noopUnsubscribe() {
   return () => {};
 }
-//@ chunk-3v13eg2e.js:1402-1461 placement
+//@ chunk-dbmqtrf0.js:1407-1467 placement
 function commandNameOf(command) {
   let approvalLabel = toApprovalLabel(command);
   return approvalLabel === null ? undefined : String(approvalLabel);
 }
-//@ chunk-3v13eg2e.js:1461-1849 placement
+//@ chunk-dbmqtrf0.js:1467-1858 placement
 /**
  * 把权限请求来源（workflow-agent、subagent、remote-agent、plugin）转换为 "from the … agent" 之类的说明。
  */
@@ -134,7 +134,7 @@ function describeRequestSource(requestSource) {
   }
   return;
 }
-//@ chunk-3v13eg2e.js:1849-1929 placement
+//@ chunk-dbmqtrf0.js:1858-1938 placement
 /**
  * 函数 fitsWithMeta（标题加元信息能否放进宽度）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。
  */
@@ -144,7 +144,7 @@ function fitsWithMeta(title, requestSource, width) {
     bunStringWidth(title) + (sourceText === undefined ? 0 : 1 + bunStringWidth(`\xB7 ${sourceText}`)) <= width
   );
 }
-//@ chunk-3v13eg2e.js:1929-3158 fingerprint (2.1.88 match: PermissionRequestTitle, 0.588)
+//@ chunk-dbmqtrf0.js:1938-3167 fingerprint (2.1.88 match: PermissionRequestTitle, 0.589)
 /**
  * 权限对话框标题：工具名、副标题（截断）、队友徽章、读屏 aria-label。
  */

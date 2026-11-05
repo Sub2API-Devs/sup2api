@@ -3,10 +3,10 @@
  *
  * /insights 实现：扫描历史会话生成使用报告（语言统计、摘要、HTML 报告）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/insights.ts
- * pieces: chunk-01p2saxj.js (5), chunk-23fm9f0d.js (1), chunk-3a1caa6f.js (1), chunk-ah34pb7m.js (1), chunk-yt6zn9vg.js (65)
- * attribution: placement 2, layout 34, fingerprint 31, sole-consumer 1, callgraph-fingerprint 2, file-local 2, affinity 1
+ * pieces: chunk-f2v3cjkz.js (63), chunk-n5rwkt40.js (5), chunk-pc3x100t.js (1), chunk-vvzj896g.js (1), chunk-wjygkcr4.js (1)
+ * attribution: sole-consumer 5, fingerprint 31, layout 26, callgraph-fingerprint 2, affinity 3, file-local 2, placement 2
  */
 import { join, extname } from "path";
 import * as fsPromisesModule from "fs/promises";
@@ -36,7 +36,7 @@ import {
   array,
   booleanSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -44,9 +44,10 @@ import { formatStorageError } from "../utils/storage/storageErrors.js";
 import { createJsonStore } from "../utils/jsonStore.js";
 import { isCcsTenant, isDiskless, getSessionId } from "../bootstrap/state.js";
 import { AGENT, TASK } from "../tools/AgentTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../tools/NotebookEditTool/constants.js";
+import { countLineChanges } from "../native-ts/color-diff/index.js";
 import { diffLines } from "../../vendor/diff/libesm/diff/line.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { getDestructiveTargetCategory } from "../tools/BashTool/destructiveTargets.js";
@@ -64,6 +65,7 @@ import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { mainAgentContext } from "../utils/agentContext.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
+import { batchReadWithFallback } from "../utils/plugins/pluginStartupCheck.js";
 import { logError } from "../utils/log.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -71,12 +73,14 @@ import {
   toError,
   withTelemetryMessage,
 } from "../utils/errors.js";
+import { tagAndManifestArtifactContent } from "../utils/messages/untrustedArtifactContent.js";
 import { isAutoModeSetupNotOverridden } from "./auto-mode-setup/index.js";
 import { getAutoModeConfig } from "../utils/settings/settings.js";
 import { escapeXmlAttr } from "../utils/xml.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "../utils/pagedRead.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
-import { tagAndManifestArtifactContent } from "../utils/messages/untrustedArtifactContent.js";
+import { recordToolUsed } from "../services/compact/keptTools.js";
+import { UNREADABLE_TOOLS_USED_BEFORE_SUMMARY } from "../bootstrap/stateSlices.js";
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";
 import { canCycleToAuto } from "../utils/permissions/getNextPermissionMode.js";
 import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
@@ -88,7 +92,7 @@ import { roundToMinute } from "../utils/cronTasks.js";
 import { formatBriefTimestamp } from "../utils/formatBriefTimestamp.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3a1caa6f.js:3079-3216 fingerprint (2.1.88 match: getRemoteHostSessionCount, 0.407)
+//@ chunk-vvzj896g.js:1462-1599 fingerprint (2.1.88 match: getRemoteHostSessionCount, 0.406)
 function getRemoteHostSessionCount(env, options = {}) {
   let allowsSsh = env?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? false;
   return sanitizePathForGit(
@@ -103,7 +107,7 @@ function getRemoteHostSessionCount(env, options = {}) {
     ),
   );
 }
-//@ chunk-01p2saxj.js:305-474 placement
+//@ chunk-n5rwkt40.js:304-473 placement
 /**
  * 字符串或数组规整为内容块数组
  */
@@ -118,23 +122,23 @@ function toContentBlocks(content) {
   if (!Array.isArray(content)) return [];
   return content.filter((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry));
 }
-//@ chunk-01p2saxj.js:474-541 placement
-var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-01p2saxj.js:474", () => {
+//@ chunk-n5rwkt40.js:473-540 placement
+var regExp; // deferred: uses COMMAND_NAME (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n5rwkt40.js:473", () => {
   regExp = new RegExp(`<(${ARTIFACT_BLOCK_TAGS.join("|")})>[\\s\\S]*?(?:</\\1>|$)`, "g");
 });
-//@ chunk-01p2saxj.js:541-585 layout
+//@ chunk-n5rwkt40.js:540-584 layout
 function stripXmlTags(text) {
   return text.replace(regExp, "").trim();
 }
-//@ chunk-01p2saxj.js:585-708 layout
+//@ chunk-n5rwkt40.js:584-707 layout
 function textBlocksOf(content) {
   return toContentBlocks(content)
     .flatMap((block) => (block.type === "text" && typeof block.text === "string" ? [block.text] : []))
     .map(stripXmlTags)
     .filter((text) => text !== "");
 }
-//@ chunk-01p2saxj.js:708-1642 fingerprint (2.1.88 match: formatTranscriptForFacets, 0.397)
+//@ chunk-n5rwkt40.js:707-1637 fingerprint (2.1.88 match: formatTranscriptForFacets, 0.363)
 function formatTranscriptForFacets(messages, options) {
   let lines = [];
   let seen = new Set();
@@ -175,18 +179,18 @@ function formatTranscriptForFacets(messages, options) {
   }
   return lines;
 }
-//@ chunk-yt6zn9vg.js:12517-12554 sole-consumer
+//@ chunk-f2v3cjkz.js:13686-13723 sole-consumer
 function insightsModel() {
   return areBuiltinModelsKnownHosted() ? getDefaultOpusModel() : getMainLoopModel();
 }
-//@ chunk-yt6zn9vg.js:12554-15582 fingerprint (2.1.88 match: LABEL_MAP, 0.741)
+//@ chunk-f2v3cjkz.js:13723-16751 fingerprint (2.1.88 match: LABEL_MAP, 0.741)
 /**
  * /insights 会话元数据缓存的 zod 结构（消息数、工具计数、语言、git 提交、token、代码行变化、权限模式等）；Ve 是扩展名到语言名表，qe 是分面键到显示名的表。
  */
 var sessionMetaSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var EXTENSION_TO_LANGUAGE;
 var FACET_LABELS;
-deferInit("chunk-yt6zn9vg.js:12554", () => {
+deferInit("chunk-f2v3cjkz.js:13723", () => {
   sessionMetaSchema = DoctorLazy(() =>
     objectSchema({
       session_id: stringSchema(),
@@ -308,31 +312,31 @@ deferInit("chunk-yt6zn9vg.js:12554", () => {
     essential: "Essential",
   };
 });
-//@ chunk-yt6zn9vg.js:15582-15625 fingerprint (2.1.88 match: getDataDir, 1)
+//@ chunk-f2v3cjkz.js:16751-16794 fingerprint (2.1.88 match: getDataDir, 1)
 function getDataDir() {
   return join(getClaudeConfigDir(), "usage-data");
 }
-//@ chunk-yt6zn9vg.js:15625-15664 fingerprint (2.1.88 match: getFacetsDir, 1)
+//@ chunk-f2v3cjkz.js:16794-16833 fingerprint (2.1.88 match: getFacetsDir, 1)
 function getFacetsDir() {
   return join(getDataDir(), "facets");
 }
-//@ chunk-yt6zn9vg.js:15664-15709 fingerprint (2.1.88 match: getSessionMetaDir, 1)
+//@ chunk-f2v3cjkz.js:16833-16878 fingerprint (2.1.88 match: getSessionMetaDir, 1)
 function getSessionMetaDir() {
   return join(getDataDir(), "session-meta");
 }
-//@ chunk-yt6zn9vg.js:15709-15785 layout
+//@ chunk-f2v3cjkz.js:16878-16954 layout
 function facetsStorePath(sessionId) {
   return STORAGE_SPACES.userConfigDir("usage-data", ["facets", `${sessionId}.json`]);
 }
-//@ chunk-yt6zn9vg.js:15785-15867 layout
+//@ chunk-f2v3cjkz.js:16954-17036 layout
 function sessionMetaStorePath(sessionId) {
   return STORAGE_SPACES.userConfigDir("usage-data", ["session-meta", `${sessionId}.json`]);
 }
-//@ chunk-yt6zn9vg.js:15867-15924 layout (2.1.88 match: getDataDir, 0.8)
+//@ chunk-f2v3cjkz.js:17036-17093 layout (2.1.88 match: getDataDir, 0.8)
 function getDataDir_2(name) {
   return STORAGE_SPACES.userConfigDir("usage-data", [name]);
 }
-//@ chunk-yt6zn9vg.js:15924-16399 callgraph-fingerprint (2.1.88 match: saveSessionMeta, 0.26)
+//@ chunk-f2v3cjkz.js:17093-17568 callgraph-fingerprint (2.1.88 match: saveSessionMeta, 0.26)
 async function saveSessionMeta(htmlReport, sessionId, storageV5) {
   let metaPath = join(getDataDir(), `report-${sessionId}.html`);
   if (isStorageV5Enabled() && storageV5) {
@@ -363,7 +367,7 @@ async function saveSessionMeta(htmlReport, sessionId, storageV5) {
   });
   return metaPath;
 }
-//@ chunk-yt6zn9vg.js:16399-16579 layout
+//@ chunk-f2v3cjkz.js:17568-17748 layout
 function isExpectedCacheWriteFailure(error) {
   if (error.code !== "Failed") return false;
   return (
@@ -373,15 +377,15 @@ function isExpectedCacheWriteFailure(error) {
     error.telemetryCode === "ENOENT"
   );
 }
-//@ chunk-yt6zn9vg.js:16579-16589 layout
+//@ chunk-f2v3cjkz.js:17748-17758 layout
 var INSIGHTS_MCP_AUTH_BATCH = 50;
-//@ chunk-yt6zn9vg.js:16589-16675 layout
+//@ chunk-f2v3cjkz.js:17758-17844 layout
 function chunkArray(items, size) {
   let chunks = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
   return chunks;
 }
-//@ chunk-yt6zn9vg.js:16675-16794 callgraph-fingerprint (2.1.88 match: loadCachedSessionMeta, 0.327)
+//@ chunk-f2v3cjkz.js:17844-17963 callgraph-fingerprint (2.1.88 match: loadCachedSessionMeta, 0.327)
 function loadCachedSessionMeta(sessionId) {
   return createJsonStore(
     join(getSessionMetaDir(), `${sessionId}.json`),
@@ -394,7 +398,7 @@ function loadCachedSessionMeta(sessionId) {
     },
   );
 }
-//@ chunk-yt6zn9vg.js:16794-17942 layout
+//@ chunk-f2v3cjkz.js:17963-19111 layout
 /**
  * 让模型从单个会话里提取结构化分面（目标类别、满意度、摩擦类型等）的提示词前缀。
  */
@@ -425,11 +429,11 @@ CRITICAL GUIDELINES:
 
 SESSION:
 `;
-//@ chunk-yt6zn9vg.js:17942-17989 layout
+//@ chunk-f2v3cjkz.js:19111-19158 layout
 function stringOrEmpty(value) {
   return typeof value === "string" ? value : "";
 }
-//@ chunk-yt6zn9vg.js:17989-18285 layout
+//@ chunk-f2v3cjkz.js:19158-19454 layout
 var TOOL_ERROR_CATEGORY_RULES = [
   [["exit code"], "Command Failed"],
   [["rejected", "doesn't want"], "User Rejected"],
@@ -438,7 +442,7 @@ var TOOL_ERROR_CATEGORY_RULES = [
   [["exceeds maximum", "too large"], "File Too Large"],
   [["file not found", "does not exist"], "File Not Found"],
 ];
-//@ chunk-yt6zn9vg.js:18285-18423 layout
+//@ chunk-f2v3cjkz.js:19454-19592 layout
 function categorizeToolError(content) {
   if (typeof content !== "string") return "Other";
   let lower = content.toLowerCase();
@@ -448,7 +452,7 @@ function categorizeToolError(content) {
     )?.[1] ?? "Other"
   );
 }
-//@ chunk-yt6zn9vg.js:18423-20612 fingerprint (2.1.88 match: extractToolStats, 0.708)
+//@ chunk-f2v3cjkz.js:19592-21781 fingerprint (2.1.88 match: extractToolStats, 0.704)
 function extractToolStats(log) {
   let toolCounts = {};
   let languages = {};
@@ -502,7 +506,7 @@ function extractToolStats(log) {
                 if (toolName === "Edit" || toolName === "Write") filesModified.add(filePath);
               }
               if (
-                toolName === FILE_EDIT_TOOL_NAME ||
+                toolName === EDIT ||
                 toolName === FILE_WRITE_TOOL_NAME ||
                 toolName === NOTEBOOK_EDIT_TOOL_NAME
               )
@@ -619,36 +623,14 @@ function extractToolStats(log) {
     destructiveCommandCount: mcpCalls,
   };
 }
-//@ chunk-yt6zn9vg.js:20612-20857 layout (2.1.88 match: wordDiffStrings, 1)
-function countLineChanges(oldStr, newStr) {
-  let lineCounts = new Map();
-  for (let line of oldStr.split(`
-`))
-    lineCounts.set(line, (lineCounts.get(line) ?? 0) + 1);
-  let added = newStr
-    .split(
-      `
-`,
-    )
-    .reduce((acc, line) => {
-      let count = lineCounts.get(line) ?? 0;
-      lineCounts.set(line, count - 1);
-      return count > 0 ? acc : acc + 1;
-    }, 0);
-  let len = [...lineCounts.values()].reduce((acc, n) => acc + Math.max(n, 0), 0);
-  return {
-    added,
-    removed: len,
-  };
-}
-//@ chunk-yt6zn9vg.js:20857-20880 layout
+//@ chunk-f2v3cjkz.js:22026-22049 sole-consumer
 var INSIGHTS_CACHE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_INSIGHTS_CACHE_ENTRIES;
-deferInit("chunk-yt6zn9vg.js:20857", () => {
+deferInit("chunk-f2v3cjkz.js:22026", () => {
   INSIGHTS_CACHE = new Map();
   MAX_INSIGHTS_CACHE_ENTRIES = 5000;
 });
-//@ chunk-yt6zn9vg.js:20880-21085 layout
+//@ chunk-f2v3cjkz.js:22049-22254 sole-consumer
 function isReadOnlyBashCommandCached(command) {
   let cached = INSIGHTS_CACHE.get(command);
   if (cached !== undefined) return cached;
@@ -673,7 +655,7 @@ function isReadOnlyBashCommandCached(command) {
   }
   return fresh;
 }
-//@ chunk-yt6zn9vg.js:21085-22424 fingerprint (2.1.88 match: logToSessionMeta, 0.918)
+//@ chunk-f2v3cjkz.js:22254-23593 fingerprint (2.1.88 match: logToSessionMeta, 0.918)
 function logToSessionMeta(log) {
   let stats = extractToolStats(log);
   let sessionId = getSessionIdFromLog(log) || "unknown";
@@ -731,14 +713,14 @@ function logToSessionMeta(log) {
     destructive_command_count: stats.destructiveCommandCount,
   };
 }
-//@ chunk-yt6zn9vg.js:22424-22597 fingerprint (2.1.88 match: deduplicateSessionBranches, 0.759)
+//@ chunk-f2v3cjkz.js:23593-23766 fingerprint (2.1.88 match: deduplicateSessionBranches, 0.759)
 function deduplicateSessionBranches(meta, otherMeta) {
   if (!otherMeta) return true;
   if (meta.user_message_count !== otherMeta.user_message_count)
     return meta.user_message_count > otherMeta.user_message_count;
   return meta.duration_minutes > otherMeta.duration_minutes;
 }
-//@ chunk-yt6zn9vg.js:22597-22902 layout (2.1.88 match: formatTranscriptWithSummarization, 0.799)
+//@ chunk-f2v3cjkz.js:23766-24071 layout (2.1.88 match: formatTranscriptWithSummarization, 0.799)
 function formatTranscriptWithSummarization_2(log) {
   let chunks = [];
   let meta = logToSessionMeta(log);
@@ -755,7 +737,7 @@ function formatTranscriptWithSummarization_2(log) {
   return chunks.join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:22902-23229 fingerprint (2.1.88 match: SUMMARIZE_CHUNK_PROMPT, 1)
+//@ chunk-f2v3cjkz.js:24071-24398 fingerprint (2.1.88 match: SUMMARIZE_CHUNK_PROMPT, 1)
 var SUMMARIZE_CHUNK_PROMPT = `Summarize this portion of a Claude Code session transcript. Focus on:
 1. What the user asked for
 2. What Claude did (tools used, files modified)
@@ -766,7 +748,7 @@ Keep it concise - 3-5 sentences. Preserve specific details like file names, erro
 
 TRANSCRIPT CHUNK:
 `;
-//@ chunk-yt6zn9vg.js:23229-23659 fingerprint (2.1.88 match: summarizeTranscriptChunk, 0.924)
+//@ chunk-f2v3cjkz.js:24398-24849 fingerprint (2.1.88 match: summarizeTranscriptChunk, 0.873)
 async function summarizeTranscriptChunk(chunk, credentials, sectionTitle = "", options) {
   try {
     let result = await queryHaiku({
@@ -776,6 +758,7 @@ async function summarizeTranscriptChunk(chunk, credentials, sectionTitle = "", o
       options: {
         model: insightsModel(),
         querySource: "insights",
+        sendSideQueryBeta: true,
         agents: [],
         isNonInteractiveSession: true,
         hasAppendSystemPrompt: false,
@@ -791,16 +774,16 @@ async function summarizeTranscriptChunk(chunk, credentials, sectionTitle = "", o
     return chunk.slice(0, 2000);
   }
 }
-//@ chunk-yt6zn9vg.js:23659-23698 layout
+//@ chunk-f2v3cjkz.js:24849-24888 layout
 var CCS_INSIGHTS_SESSION_LIMIT; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var INSIGHTS_RUNNING_SLOT;
-deferInit("chunk-yt6zn9vg.js:23659", () => {
+deferInit("chunk-f2v3cjkz.js:24849", () => {
   CCS_INSIGHTS_SESSION_LIMIT = 5;
   INSIGHTS_RUNNING_SLOT = new SessionRootSlot(() => ({
     running: false,
   }));
 });
-//@ chunk-yt6zn9vg.js:23698-24184 fingerprint (2.1.88 match: formatTranscriptWithSummarization, 0.939)
+//@ chunk-f2v3cjkz.js:24888-25374 fingerprint (2.1.88 match: formatTranscriptWithSummarization, 0.939)
 async function formatTranscriptWithSummarization(log, credentials, sectionTitle, options) {
   let fullTranscript = formatTranscriptWithSummarization_2(log);
   if (fullTranscript.length <= 30000) return fullTranscript;
@@ -836,7 +819,7 @@ async function formatTranscriptWithSummarization(log, credentials, sectionTitle,
 `)
   );
 }
-//@ chunk-yt6zn9vg.js:24184-24401 fingerprint (2.1.88 match: loadCachedFacets, 1)
+//@ chunk-f2v3cjkz.js:25374-25591 fingerprint (2.1.88 match: loadCachedFacets, 1)
 async function loadCachedFacets(sessionId, storageV5) {
   if (storageV5) {
     let [facet] = await getMcpAuthCache([sessionId], storageV5);
@@ -859,7 +842,7 @@ async function loadCachedFacets(sessionId, storageV5) {
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:24401-24570 layout (2.1.88 match: getMcpAuthCache, 1)
+//@ chunk-f2v3cjkz.js:25591-25760 layout (2.1.88 match: getMcpAuthCache, 1)
 function getMcpAuthCache(sessionIds, storageV5) {
   return batchReadWithFallback(sessionIds, facetsStorePath, storageV5, async (key, file) => {
     let parsed;
@@ -875,7 +858,7 @@ function getMcpAuthCache(sessionIds, storageV5) {
     return parsed;
   });
 }
-//@ chunk-yt6zn9vg.js:24570-24974 fingerprint (2.1.88 match: saveFacets, 0.557)
+//@ chunk-f2v3cjkz.js:25760-26164 fingerprint (2.1.88 match: saveFacets, 0.557)
 async function saveFacets(facets, storageV5) {
   if (!isDiskless())
     try {
@@ -900,7 +883,7 @@ async function saveFacets(facets, storageV5) {
     mode: 384,
   });
 }
-//@ chunk-yt6zn9vg.js:24974-25116 layout
+//@ chunk-f2v3cjkz.js:26164-26306 affinity
 async function loadSessionMeta(sessionId, storageV5) {
   if (storageV5) {
     let [meta] = await getMcpAuthCache_2([sessionId], storageV5);
@@ -913,7 +896,7 @@ async function loadSessionMeta(sessionId, storageV5) {
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:25116-25299 layout (2.1.88 match: getMcpAuthCache, 0.763)
+//@ chunk-f2v3cjkz.js:26306-26489 affinity (2.1.88 match: getMcpAuthCache, 0.764)
 function getMcpAuthCache_2(sessionIds, storageV5) {
   return batchReadWithFallback(sessionIds, sessionMetaStorePath, storageV5, (data) => {
     try {
@@ -926,24 +909,7 @@ function getMcpAuthCache_2(sessionIds, storageV5) {
     }
   });
 }
-//@ chunk-yt6zn9vg.js:25299-25584 layout
-async function batchReadWithFallback(sessionIds, pathFor, storageV5, parse) {
-  if (sessionIds.length === 0) return [];
-  let batch = await storageV5.read(sessionIds.map(pathFor));
-  if (!batch.ok && sessionIds.length > 1)
-    return (
-      await Promise.all(
-        sessionIds.map((sessionId) => batchReadWithFallback([sessionId], pathFor, storageV5, parse)),
-      )
-    ).map(([result]) => result ?? null);
-  return Promise.all(
-    sessionIds.map(async (sessionId, index) => {
-      let item = batch.ok ? batch.value.items[index] : undefined;
-      return item?.found ? parse(item.value, sessionId) : null;
-    }),
-  );
-}
-//@ chunk-yt6zn9vg.js:25584-26157 layout
+//@ chunk-f2v3cjkz.js:26774-27347 sole-consumer
 /**
  * 给缓存读出的会话元数据补默认值（空对象、空数组、0、false），兼容旧版缓存缺字段。
  */
@@ -967,7 +933,7 @@ function withSessionMetaDefaults(meta) {
     uses_web_fetch: meta.uses_web_fetch ?? false,
   };
 }
-//@ chunk-yt6zn9vg.js:26157-26559 layout
+//@ chunk-f2v3cjkz.js:27347-27749 sole-consumer
 /**
  * 写会话元数据缓存：有 v5 存储时写存储（权限/环境类失败只记调试日志，其他上报错误），否则写本地缓存文件；文件系统不可访问时静默。
  */
@@ -1004,10 +970,12 @@ async function writeSessionMetaCache(meta, storageV5) {
     logError(error);
   }
 }
-//@ chunk-yt6zn9vg.js:26559-27969 fingerprint (2.1.88 match: extractFacetsFromAPI, 0.971)
+//@ chunk-f2v3cjkz.js:27749-29228 fingerprint (2.1.88 match: extractFacetsFromAPI, 0.901)
 async function extractFacetsFromAPI(log, sessionId, credentials, sectionTitle, options) {
   try {
-    let transcript = await formatTranscriptWithSummarization(log, credentials, sectionTitle, options);
+    let sectionTitle_2 =
+      sectionTitle ?? tagAndManifestArtifactContent(log.messages, [], [...(log.toolsUsed ?? []), ""]);
+    let transcript = await formatTranscriptWithSummarization(log, credentials, sectionTitle_2, options);
     let jsonPrompt = `${FACET_EXTRACTION_PROMPT}${transcript}
 
 RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
@@ -1025,11 +993,12 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
 }`;
     let result = await queryHaiku({
       systemPrompt: asSystemPrompt([]),
-      userPrompt: sectionTitle + jsonPrompt,
+      userPrompt: sectionTitle_2 + jsonPrompt,
       signal: options ?? new AbortController().signal,
       options: {
         model: insightsModel(),
         querySource: "insights",
+        sendSideQueryBeta: true,
         agents: [],
         isNonInteractiveSession: true,
         hasAppendSystemPrompt: false,
@@ -1054,7 +1023,7 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
     return null;
   }
 }
-//@ chunk-yt6zn9vg.js:27969-28795 fingerprint (2.1.88 match: detectMultiClauding, 0.958)
+//@ chunk-f2v3cjkz.js:29228-30054 fingerprint (2.1.88 match: detectMultiClauding, 1)
 function detectMultiClauding(sessions) {
   let allSessionMessages = [];
   for (let session of sessions)
@@ -1106,7 +1075,7 @@ function detectMultiClauding(sessions) {
     user_messages_during: messagesDuringMulticlaude.size,
   };
 }
-//@ chunk-yt6zn9vg.js:28795-32723 fingerprint (2.1.88 match: aggregateData, 0.891)
+//@ chunk-f2v3cjkz.js:30054-33982 fingerprint (2.1.88 match: aggregateData, 0.891)
 function aggregateData(sessions, facets) {
   let result = {
     total_sessions: sessions.length,
@@ -1260,13 +1229,13 @@ function aggregateData(sessions, facets) {
     sliced.length >= 3 && sliced.slice(0, 3).every((session) => session.auto);
   return result;
 }
-//@ chunk-yt6zn9vg.js:32723-32759 layout
+//@ chunk-f2v3cjkz.js:33982-34018 layout
 var MAX_GLANCE_SESSIONS = 20;
 var BASH_PROMPT_LOOKBACK_SESSIONS = 3 * MAX_GLANCE_SESSIONS;
 var MIN_SESSIONS_FOR_GLANCE = 5;
 var GLANCE_BASH_PROMPT_MARGIN = 0.25;
 var GLANCE_MIN_BASH_PROMPTS = 3;
-//@ chunk-yt6zn9vg.js:32759-33396 layout
+//@ chunk-f2v3cjkz.js:34018-34655 layout
 /**
  * 根据近期会话的自动模式统计给出建议：自动模式用得少且非自动会话中估计权限提示足够多时建议切到 auto；已在用 auto 但没配环境时建议运行 setup。
  */
@@ -1297,13 +1266,13 @@ function autoModeRecommendation(report, context) {
     };
   return null;
 }
-//@ chunk-yt6zn9vg.js:33396-33494 layout
+//@ chunk-f2v3cjkz.js:34655-34753 layout
 function roundToTwoSigFigs(estimatedPrompts) {
   if (estimatedPrompts < 100) return estimatedPrompts;
   let step = 10 ** (Math.floor(Math.log10(estimatedPrompts)) - 1);
   return Math.round(estimatedPrompts / step) * step;
 }
-//@ chunk-yt6zn9vg.js:33494-33887 layout
+//@ chunk-f2v3cjkz.js:34753-35146 layout
 /**
  * 读取生成自动模式建议所需的上下文开关（是否可用、当前会话是否 auto、沙箱自动放行、无对话框、仲裁器是分类器、setup 技能、已配置环境）。
  */
@@ -1319,7 +1288,7 @@ function readAutoModeContext(permissionGates) {
     hasAutoModeEnvironment: (getAutoModeConfig()?.environment?.length ?? 0) > 0,
   };
 }
-//@ chunk-yt6zn9vg.js:33887-34323 layout
+//@ chunk-f2v3cjkz.js:35146-35582 layout
 /**
  * 把自动模式建议转成一行提示文字（切换到 auto 可省多少次权限提示，或运行 /auto-mode-setup）。
  */
@@ -1331,7 +1300,7 @@ function autoModeTipText(autoModeReco) {
       return "Tip: you already use auto mode \u2014 run /auto-mode-setup once to teach it your environment and improve its decisions.";
   }
 }
-//@ chunk-yt6zn9vg.js:34323-39924 fingerprint (2.1.88 match: INSIGHT_SECTIONS, 0.937)
+//@ chunk-f2v3cjkz.js:35582-41183 fingerprint (2.1.88 match: INSIGHT_SECTIONS, 0.937)
 var INSIGHT_SECTIONS = [
   {
     name: "project_areas",
@@ -1461,7 +1430,7 @@ Find something genuinely interesting or amusing from the session summaries.`,
     maxTokens: 8192,
   },
 ];
-//@ chunk-yt6zn9vg.js:39924-40569 fingerprint (2.1.88 match: generateSectionInsight, 0.803)
+//@ chunk-f2v3cjkz.js:41183-41849 fingerprint (2.1.88 match: generateSectionInsight, 0.772)
 async function generateSectionInsight(section, dataContext, credentials, storageV5, options) {
   try {
     let result = await queryHaiku({
@@ -1478,6 +1447,7 @@ DATA:
       options: {
         model: insightsModel(),
         querySource: "insights",
+        sendSideQueryBeta: true,
         agents: [],
         isNonInteractiveSession: true,
         hasAppendSystemPrompt: false,
@@ -1521,7 +1491,7 @@ DATA:
     };
   }
 }
-//@ chunk-yt6zn9vg.js:40569-44394 fingerprint (2.1.88 match: generateParallelInsights, 0.942)
+//@ chunk-f2v3cjkz.js:41849-45674 fingerprint (2.1.88 match: generateParallelInsights, 0.942)
 async function generateParallelInsights(data, facets, credentials, storageV5, options) {
   let facetSummaries = Array.from(facets.values())
     .slice(0, 50)
@@ -1659,11 +1629,11 @@ ${horizonText}`,
   if (atAGlanceResult.result) insights.at_a_glance = atAGlanceResult.result;
   return insights;
 }
-//@ chunk-yt6zn9vg.js:44394-44470 fingerprint (2.1.88 match: escapeHtmlWithBold, 1)
+//@ chunk-f2v3cjkz.js:45674-45750 fingerprint (2.1.88 match: escapeHtmlWithBold, 1)
 function escapeHtmlWithBold(text) {
   return escapeXmlAttr(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
-//@ chunk-yt6zn9vg.js:44470-44657 fingerprint (2.1.88 match: SATISFACTION_ORDER, 0.699)
+//@ chunk-f2v3cjkz.js:45750-45937 fingerprint (2.1.88 match: SATISFACTION_ORDER, 0.699)
 var SATISFACTION_ORDER = ["frustrated", "dissatisfied", "likely_satisfied", "satisfied", "happy", "unsure"];
 var OUTCOME_ORDER = [
   "not_achieved",
@@ -1672,7 +1642,7 @@ var OUTCOME_ORDER = [
   "fully_achieved",
   "unclear_from_transcript",
 ];
-//@ chunk-yt6zn9vg.js:44657-45251 fingerprint (2.1.88 match: generateBarChart, 1)
+//@ chunk-f2v3cjkz.js:45937-46531 fingerprint (2.1.88 match: generateBarChart, 1)
 function generateBarChart(data, color, maxItems = 6, fixedOrder) {
   let entries;
   if (fixedOrder)
@@ -1697,7 +1667,7 @@ function generateBarChart(data, color, maxItems = 6, fixedOrder) {
   }).join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:45251-46100 fingerprint (2.1.88 match: generateResponseTimeHistogram, 1)
+//@ chunk-f2v3cjkz.js:46531-47380 fingerprint (2.1.88 match: generateResponseTimeHistogram, 1)
 function generateResponseTimeHistogram(times) {
   if (times.length === 0) return '<p class="empty">No response time data</p>';
   let buckets = {
@@ -1729,7 +1699,7 @@ function generateResponseTimeHistogram(times) {
   }).join(`
 `);
 }
-//@ chunk-yt6zn9vg.js:46100-46851 fingerprint (2.1.88 match: generateTimeOfDayChart, 1)
+//@ chunk-f2v3cjkz.js:47380-48131 fingerprint (2.1.88 match: generateTimeOfDayChart, 1)
 function generateTimeOfDayChart(messageHours) {
   if (messageHours.length === 0) return '<p class="empty">No time data</p>';
   let periods = [
@@ -1767,13 +1737,13 @@ function generateTimeOfDayChart(messageHours) {
   ).join(`
 `)}</div>`;
 }
-//@ chunk-yt6zn9vg.js:46851-46919 layout
+//@ chunk-f2v3cjkz.js:48131-48199 layout
 function countValues(messageHours) {
   let hourCounts = {};
   for (let messageHour of messageHours) hourCounts[messageHour] = (hourCounts[messageHour] || 0) + 1;
   return jsonStringify(hourCounts);
 }
-//@ chunk-yt6zn9vg.js:46919-90609 fingerprint (2.1.88 match: generateHtmlReport, 0.967)
+//@ chunk-f2v3cjkz.js:48199-90871 fingerprint (2.1.88 match: generateHtmlReport, 0.967)
 function generateHtmlReport(data, insights, htmlReport) {
   let markdownToHtml = (md) => {
     if (!md) return "";
@@ -2163,14 +2133,11 @@ function generateHtmlReport(data, insights, htmlReport) {
     .feature-examples { margin-top: 12px; }
     .feature-example { padding: 8px 0; border-top: 1px solid #d1fae5; }
     .feature-example:first-child { border-top: none; }
-    .example-desc { font-size: 13px; color: #334155; margin-bottom: 6px; }
     .example-code-row { display: flex; align-items: flex-start; gap: 8px; }
     .example-code { flex: 1; background: #f1f5f9; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #334155; overflow-x: auto; white-space: pre-wrap; }
     .copyable-prompt-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
     .copyable-prompt-row { display: flex; align-items: flex-start; gap: 8px; }
     .copyable-prompt { flex: 1; background: #f8fafc; padding: 10px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #334155; border: 1px solid #e2e8f0; white-space: pre-wrap; line-height: 1.5; }
-    .feature-code { background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 12px; border: 1px solid #e2e8f0; display: flex; align-items: flex-start; gap: 8px; }
-    .feature-code code { flex: 1; font-family: monospace; font-size: 12px; color: #334155; white-space: pre-wrap; }
     .pattern-prompt { background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 12px; border: 1px solid #e2e8f0; }
     .pattern-prompt code { font-family: monospace; font-size: 12px; color: #334155; display: block; white-space: pre-wrap; margin-bottom: 8px; }
     .prompt-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
@@ -2192,8 +2159,6 @@ function generateHtmlReport(data, insights, htmlReport) {
     .horizon-tip { font-size: 13px; color: #6b21a8; background: rgba(255,255,255,0.6); padding: 8px 12px; border-radius: 4px; }
     .feedback-header { margin-top: 48px; color: #64748b; font-size: 16px; }
     .feedback-intro { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
-    .feedback-section { margin-top: 16px; }
-    .feedback-section h3 { font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 12px; }
     .feedback-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
     .feedback-card.team-card { background: #eff6ff; border-color: #bfdbfe; }
     .feedback-card.model-card { background: #faf5ff; border-color: #e9d5ff; }
@@ -2384,14 +2349,11 @@ function generateHtmlReport(data, insights, htmlReport) {
     .feature-examples { margin-top: 12px; }
     .feature-example { padding: 8px 0; border-top: 1px solid #d1fae5; }
     .feature-example:first-child { border-top: none; }
-    .example-desc { font-size: 13px; color: #334155; margin-bottom: 6px; }
     .example-code-row { display: flex; align-items: flex-start; gap: 8px; }
     .example-code { flex: 1; background: #f1f5f9; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #334155; overflow-x: auto; white-space: pre-wrap; }
     .copyable-prompt-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
     .copyable-prompt-row { display: flex; align-items: flex-start; gap: 8px; }
     .copyable-prompt { flex: 1; background: #f8fafc; padding: 10px 12px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #334155; border: 1px solid #e2e8f0; white-space: pre-wrap; line-height: 1.5; }
-    .feature-code { background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 12px; border: 1px solid #e2e8f0; display: flex; align-items: flex-start; gap: 8px; }
-    .feature-code code { flex: 1; font-family: monospace; font-size: 12px; color: #334155; white-space: pre-wrap; }
     .pattern-prompt { background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 12px; border: 1px solid #e2e8f0; }
     .pattern-prompt code { font-family: monospace; font-size: 12px; color: #334155; display: block; white-space: pre-wrap; margin-bottom: 8px; }
     .prompt-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
@@ -2413,8 +2375,6 @@ function generateHtmlReport(data, insights, htmlReport) {
     .horizon-tip { font-size: 13px; color: #6b21a8; background: rgba(255,255,255,0.6); padding: 8px 12px; border-radius: 4px; }
     .feedback-header { margin-top: 48px; color: #64748b; font-size: 16px; }
     .feedback-intro { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
-    .feedback-section { margin-top: 16px; }
-    .feedback-section h3 { font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 12px; }
     .feedback-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
     .feedback-card.team-card { background: #eff6ff; border-color: #bfdbfe; }
     .feedback-card.model-card { background: #faf5ff; border-color: #e9d5ff; }
@@ -2591,7 +2551,7 @@ function generateHtmlReport(data, insights, htmlReport) {
 </body>
 </html>`;
 }
-//@ chunk-yt6zn9vg.js:90609-92317 layout
+//@ chunk-f2v3cjkz.js:90871-92579 layout
 /**
  * 列出要分析的会话：有 v5 存储时分页列出 transcript 命名空间下的项目和会话（受页数预算限制，截断时告警），否则扫描本地 projects 目录；结果按修改时间倒序。
  */
@@ -2738,7 +2698,7 @@ async function listSessionFilesForInsights(storage) {
   sessions.sort((a, b) => b.mtime - a.mtime);
   return sessions;
 }
-//@ chunk-yt6zn9vg.js:92317-95879 fingerprint (2.1.88 match: generateUsageReport, 0.578)
+//@ chunk-f2v3cjkz.js:92579-96212 fingerprint (2.1.88 match: generateUsageReport, 0.579)
 async function generateUsageReport(options) {
   let remoteStats;
   let sessionFiles =
@@ -2905,7 +2865,7 @@ async function generateUsageReport(options) {
           log,
           sessionId,
           options?.credentials,
-          privacyLabels,
+          options?.liveSession === undefined ? undefined : privacyLabels,
           options?.signal,
         );
         return {
@@ -2942,7 +2902,7 @@ async function generateUsageReport(options) {
     aggregated,
     facets,
     options?.credentials,
-    privacyLabels,
+    options?.liveSession === undefined ? tagAndManifestArtifactContent([], [], [""]) : privacyLabels,
     options?.signal,
   );
   let htmlReport = autoModeRecommendation(aggregated, readAutoModeContext(options?.permissionGates));
@@ -2969,15 +2929,15 @@ async function generateUsageReport(options) {
     autoModeReco: htmlReport,
   };
 }
-//@ chunk-yt6zn9vg.js:95879-95924 file-local
+//@ chunk-f2v3cjkz.js:96212-96257 file-local
 function safeEntries(obj) {
   return obj ? Object.entries(obj) : [];
 }
-//@ chunk-yt6zn9vg.js:95924-95966 file-local
+//@ chunk-f2v3cjkz.js:96257-96299 file-local
 function safeKeys(obj) {
   return obj ? Object.keys(obj) : [];
 }
-//@ chunk-yt6zn9vg.js:95966-98489 fingerprint (2.1.88 match: usageReport, 0.681)
+//@ chunk-f2v3cjkz.js:96299-98829 fingerprint (2.1.88 match: usageReport, 0.684)
 /**
  * /insights 命令对象（prompt）；描述：Generate a report analyzing your Claude Code sessions。
  */
@@ -3010,6 +2970,7 @@ var insightsCommandDefinition = {
     let liveSession = isCcsTenant() ? currentSessionAsLog(context.messages) : undefined;
     let privacyLabels = isCcsTenant() ? tagAndManifestArtifactContent(context.messages) : "";
     lock.running = isCcsTenant();
+    recordToolUsed(UNREADABLE_TOOLS_USED_BEFORE_SUMMARY);
     let { insights, htmlPath, data, remoteStats, autoModeReco } = await generateUsageReport({
       collectRemote,
       liveSession,
@@ -3096,7 +3057,7 @@ ${remoteInfo}
     ];
   },
 };
-//@ chunk-yt6zn9vg.js:98489-99110 layout
+//@ chunk-f2v3cjkz.js:98829-99450 layout
 /**
  * 生成 /insights 完成后给模型的提示：附上完整数据与报告地址，要求逐字回复报告链接与建议行。
  */
@@ -3134,7 +3095,7 @@ ${recommendationLine}
 }
 Want to dig into any section or try one of the suggestions?`;
 }
-//@ chunk-yt6zn9vg.js:99110-99520 layout
+//@ chunk-f2v3cjkz.js:99450-99860 layout
 /**
  * 只分析当前会话（无报告文件）时给模型的提示：附上数据与摘要，让模型用自己的话总结。
  */
@@ -3149,25 +3110,25 @@ ${header}${summaryText}
 
 Give the user this summary in your own words. There is no report file to open, so don't mention one. End by asking whether they want to dig into any section or try one of the suggestions.`;
 }
-//@ chunk-yt6zn9vg.js:99520-99729 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-f2v3cjkz.js:99860-100069 layout
 function normalizeToolUseNames(names) {
   if (names.type !== "assistant" || !Array.isArray(names.message.content)) return names;
   return {
     ...names,
     message: {
       ...names.message,
-      content: names.message.content.map((block) =>
-        block.type === "tool_use"
+      content: names.message.content.map((contentBlock) =>
+        contentBlock.type === "tool_use"
           ? {
-              ...block,
-              name: builtinToolNameForMcp(block.name) ?? block.name,
+              ...contentBlock,
+              name: builtinToolNameForMcp(contentBlock.name) ?? contentBlock.name,
             }
-          : block,
+          : contentBlock,
       ),
     },
   };
 }
-//@ chunk-yt6zn9vg.js:99729-100192 layout
+//@ chunk-f2v3cjkz.js:100069-100532 layout
 /**
  * 把当前会话的消息整理成一条日志记录（取首尾时间戳作创建/修改时间），用于只分析当前会话；没有有效时间戳时返回 null。
  */
@@ -3202,7 +3163,7 @@ function currentSessionAsLog(messages) {
     sessionId,
   };
 }
-//@ chunk-yt6zn9vg.js:100192-100565 fingerprint (2.1.88 match: isValidSessionFacets, 1)
+//@ chunk-f2v3cjkz.js:100532-100905 fingerprint (2.1.88 match: isValidSessionFacets, 1)
 function isValidSessionFacets(obj) {
   if (!obj || typeof obj !== "object") return false;
   let value = obj;
@@ -3218,9 +3179,9 @@ function isValidSessionFacets(obj) {
     typeof value.friction_counts === "object"
   );
 }
-//@ chunk-yt6zn9vg.js:100565-100575 affinity
-var insightsCommand = insightsCommandDefinition;
-//@ chunk-23fm9f0d.js:39583-39849 fingerprint (2.1.88 match: scanAllSessions, 0.665)
+//@ chunk-f2v3cjkz.js:100905-100915 affinity
+var insightsCommandAlias = insightsCommandDefinition;
+//@ chunk-pc3x100t.js:39858-40124 fingerprint (2.1.88 match: scanAllSessions, 0.666)
 async function scanAllSessions(dir, options, onEntry) {
   if (options === null) return true;
   let entries = await fsPromisesModule
@@ -3237,7 +3198,7 @@ async function scanAllSessions(dir, options, onEntry) {
   }
   return false;
 }
-//@ chunk-ah34pb7m.js:35940-36053 fingerprint (2.1.88 match: hasValidDates, 0.343)
+//@ chunk-wjygkcr4.js:36907-37020 fingerprint (2.1.88 match: hasValidDates, 0.342)
 function hasValidDates(log) {
   let minute = roundToMinute(log ?? Number.NaN);
   return Number.isNaN(minute.getTime()) ? "" : `, next run ${formatBriefTimestamp(minute.toISOString())}`;
@@ -3248,5 +3209,5 @@ export {
   hasValidDates,
   toContentBlocks,
   formatTranscriptForFacets,
-  insightsCommand,
+  insightsCommandAlias,
 };

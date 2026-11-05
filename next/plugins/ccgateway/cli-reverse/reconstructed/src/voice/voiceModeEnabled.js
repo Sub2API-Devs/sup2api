@@ -3,22 +3,22 @@
  *
  * 语音模式组织开关 allow_voice_mode（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/voice/voiceModeEnabled.ts
- * pieces: chunk-s61vbvea.js (4)
+ * pieces: chunk-7jxyna5q.js (4)
  * attribution: placement 4
  */
 import { isAnthropicAuthEnabled, hasStoredOAuthToken } from "../utils/auth.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
 
-//@ chunk-s61vbvea.js:460923-460997 placement
+//@ chunk-7jxyna5q.js:378349-378423 placement
 /**
  * 设置里是否出现 voice 相关字段。
  */
 function hasVoiceSettings(initialSettings) {
   return initialSettings.voice?.enabled !== undefined || initialSettings.voiceEnabled !== undefined;
 }
-//@ chunk-s61vbvea.js:460997-461062 placement
+//@ chunk-7jxyna5q.js:378423-378488 placement
 /**
  * 是否 Anthropic 登录且存有 OAuth 令牌。
  */
@@ -30,15 +30,15 @@ function hasAnthropicOAuthToken() {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:461062-461107 placement
+//@ chunk-7jxyna5q.js:378488-378533 placement
 function isVoiceModeAllowed() {
   return isPolicyAllowed("allow_voice_mode");
 }
-//@ chunk-s61vbvea.js:461107-461142 placement
+//@ chunk-7jxyna5q.js:378533-378568 placement
 /**
  * 语音模式是否可用（登录 + 组织允许）。
  */
 function isVoiceModeAvailable() {
   return hasAnthropicOAuthToken() && isVoiceModeAllowed();
 }
-export { isVoiceModeAvailable, hasVoiceSettings, hasAnthropicOAuthToken, isVoiceModeAllowed };
+export { hasAnthropicOAuthToken, isVoiceModeAllowed, isVoiceModeAvailable, hasVoiceSettings };

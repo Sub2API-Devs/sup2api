@@ -3,9 +3,9 @@
  *
  * 已有模块；g2 补充 GitHub 前置条件错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/background/remote/preconditions.ts
- * pieces: chunk-s61vbvea.js (12)
+ * pieces: chunk-7jxyna5q.js (12)
  * attribution: fingerprint 4, layout 4, placement 4
  */
 import { getIsClean, findGitRoot, gitExe } from "../../git.js";
@@ -33,13 +33,13 @@ import { jsonStringify } from "../../slowOperations.js";
 import { isEssentialTrafficOnly } from "../../privacyLevel.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:463956-464015 fingerprint (2.1.88 match: checkIsGitClean, 1)
+//@ chunk-7jxyna5q.js:381434-381493 fingerprint (2.1.88 match: checkIsGitClean, 1)
 async function checkIsGitClean() {
   return await getIsClean({
     ignoreUntracked: true,
   });
 }
-//@ chunk-s61vbvea.js:464015-464208 layout
+//@ chunk-7jxyna5q.js:381493-381686 layout
 /**
  * 拉取远程环境列表（401 抛出，其它错误返回 null）。
  */
@@ -52,7 +52,7 @@ async function fetchRemoteEnvironmentsForEligibility(storageV5, credentials) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:464208-464389 layout
+//@ chunk-7jxyna5q.js:381686-381867 layout
 /**
  * 目录是否在 git 工作树内（或是已知的仓库根）。
  */
@@ -68,13 +68,13 @@ async function isInGitRepo(cwd) {
   );
   return code === 0 && stdout.trim() === "true";
 }
-//@ chunk-s61vbvea.js:464389-464412 layout
+//@ chunk-7jxyna5q.js:381867-381890 layout
 /**
  * GitHub App 检查超时 15 秒；剩余时间少于 1 秒时不再请求重新同步。
  */
 var GITHUB_APP_CHECK_TIMEOUT_MS = 15000;
 var MIN_RESYNC_BUDGET_MS = 1000;
-//@ chunk-s61vbvea.js:464412-467594 fingerprint (2.1.88 match: checkGithubAppInstalled, 0.615)
+//@ chunk-7jxyna5q.js:381890-385072 fingerprint (2.1.88 match: checkGithubAppInstalled, 0.616)
 /**
  * 调 /api/oauth/organizations/{org}/code/repos/{owner}/{repo} 查 GitHub App 是否安装；状态未定时可请求服务端重新同步；非一方 API、无 token、无组织时返回未安装。
  */
@@ -251,7 +251,7 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
     };
   }
 }
-//@ chunk-s61vbvea.js:469320-469567 placement
+//@ chunk-7jxyna5q.js:386798-387045 placement
 function GITHUB_PRECONDITION_ERRORS({ linkedAccountAccess, serverMessage, transient }) {
   return linkedAccountAccess === "github_not_connected"
     ? {
@@ -270,9 +270,9 @@ function GITHUB_PRECONDITION_ERRORS({ linkedAccountAccess, serverMessage, transi
             kind: transient ? "transient" : "other_no",
           };
 }
-//@ chunk-s61vbvea.js:469567-469739 placement
+//@ chunk-7jxyna5q.js:387045-387217 placement
 var githubErrorResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:469567", () => {
+deferInit("chunk-7jxyna5q.js:387045", () => {
   githubErrorResponseSchema = DoctorLazy(() =>
     objectSchema({
       error: objectSchema({
@@ -286,7 +286,7 @@ deferInit("chunk-s61vbvea.js:469567", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:469739-470060 placement
+//@ chunk-7jxyna5q.js:387217-387538 placement
 /**
  * 根据 401/404 响应判断 GitHub 前置条件：需要授权、未安装应用或无法判断。
  */
@@ -299,7 +299,7 @@ function classifyGithubPrecondition(status, body) {
   if (status === 404 && details?.error_code === "github_resource_not_found") return "github_repo_not_found";
   return "inconclusive";
 }
-//@ chunk-s61vbvea.js:470060-470421 placement
+//@ chunk-7jxyna5q.js:387538-387899 placement
 /**
  * 从 403 响应中提取面向用户的 GitHub 错误信息。
  */
@@ -318,14 +318,14 @@ function githubUserFacingError(status, body) {
     return;
   return printableName(message, 300);
 }
-//@ chunk-s61vbvea.js:470421-470485 layout
+//@ chunk-7jxyna5q.js:387899-387963 layout
 /**
  * 只返回 GitHub App 是否已安装。
  */
 async function isGithubAppInstalled(owner, repo, signal) {
   return (await checkGithubAppInstalled(owner, repo, signal)).appInstalled;
 }
-//@ chunk-s61vbvea.js:470485-471223 fingerprint (2.1.88 match: checkGithubTokenSynced, 0.98)
+//@ chunk-7jxyna5q.js:387963-388701 fingerprint (2.1.88 match: checkGithubTokenSynced, 0.98)
 async function checkGithubTokenSynced() {
   try {
     let consoleProfile = isConsoleProfileSessionsCredential();
@@ -366,7 +366,7 @@ async function checkGithubTokenSynced() {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:471223-471582 fingerprint (2.1.88 match: checkRepoForRemoteAccess, 0.6)
+//@ chunk-7jxyna5q.js:388701-389060 fingerprint (2.1.88 match: checkRepoForRemoteAccess, 0.6)
 /**
  * 判断仓库的远程访问方式：github-app、token-sync 或 none（附原因）。
  */
@@ -395,14 +395,14 @@ async function checkRepoForRemoteAccess(owner, repo) {
   };
 }
 export {
-  isGithubAppInstalled,
+  fetchRemoteEnvironmentsForEligibility,
+  isInGitRepo,
   checkGithubAppInstalled,
+  checkIsGitClean,
+  checkRepoForRemoteAccess,
+  githubUserFacingError,
   GITHUB_APP_CHECK_TIMEOUT_MS,
   MIN_RESYNC_BUDGET_MS,
   GITHUB_PRECONDITION_ERRORS,
-  checkRepoForRemoteAccess,
-  fetchRemoteEnvironmentsForEligibility,
-  isInGitRepo,
-  githubUserFacingError,
-  checkIsGitClean,
+  isGithubAppInstalled,
 };

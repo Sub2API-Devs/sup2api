@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：plugin eval 子会话的工具授权规则（allowed_tools、只读路径、/proc 拒绝等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (16)
  * attribution: placement 16
  */
 import { splitRuleList } from "../../utils/permissions/disallowedToolsFlag.js";
 import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
 import { mcpToolNames, PUBLISH_TOOL_NAMES, READ_TOOL_NAMES } from "../artifacts/artifactsMcpServer.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { validateWildcardToolName } from "../../utils/settings/permissionValidation.js";
 import { mcpInfoFromString } from "../mcp/mcpStringUtils.js";
 import { mcpRuleMatchesTool } from "../mcp/serverIdentity.js";
@@ -30,19 +30,19 @@ import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
 import { toolMatchesAnyName } from "../tools/permissionCheckGuard.js";
 import { isConversationEndTool } from "../../utils/permissions/permissions.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { toSandboxRulePath } from "./evalFence.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { LSP_TOOL_NAME } from "../../tools/LSPTool/UI.js";
 
-//@ chunk-qchp9vrd.js:119534-119692 placement (2.1.88 match: SAFE_READ_ONLY_TOOLS, 0.494)
+//@ chunk-af1hzzme.js:120887-121045 placement
 /**
  * 推测执行中允许的安全只读工具名集合。
  */
-var SAFE_READ_ONLY_TOOLS = new Set([
+var ungatedToolNames = new Set([
   "Read",
   "Glob",
   "Grep",
@@ -57,7 +57,7 @@ var SAFE_READ_ONLY_TOOLS = new Set([
   "Agent",
   "TodoWrite",
 ]);
-//@ chunk-qchp9vrd.js:119692-120503 placement
+//@ chunk-af1hzzme.js:121045-121856 placement
 /**
  * 由用例的 allowed_tools 生成子会话的权限规则。
  */
@@ -70,31 +70,31 @@ function buildRunToolRules(allowedTools, allowTools, options = {}) {
     if (rules.length === 0) continue;
     if (rules.every(isValidAllowedToolRule)) {
       let [worktreeRules, toolRules] = partitionAlias(rules, (rule) =>
-        WORKTREE_TOOLS.includes(permissionRuleValueFromString(rule).toolName),
+        WORKTREE_TOOLS.includes(parseRuleString(rule).toolName),
       );
       denied.push(...worktreeRules);
       allowed.push(...toolRules);
-      operatorRules.push(...toolRules.map(permissionRuleValueFromString));
+      operatorRules.push(...toolRules.map(parseRuleString));
     } else denied.push(entry);
   }
   if (options.artifactPublishGranted) {
     allowed.push(ARTIFACT_TOOL_NAME);
-    operatorRules.push(permissionRuleValueFromString(ARTIFACT_TOOL_NAME));
+    operatorRules.push(parseRuleString(ARTIFACT_TOOL_NAME));
     for (let toolName of mcpToolNames([...PUBLISH_TOOL_NAMES, ...READ_TOOL_NAMES])) {
       allowed.push(toolName);
-      operatorRules.push(permissionRuleValueFromString(toolName));
+      operatorRules.push(parseRuleString(toolName));
     }
   }
   for (let toolName of options.mockedTools ?? []) {
     allowed.push(toolName);
-    operatorRules.push(permissionRuleValueFromString(toolName));
+    operatorRules.push(parseRuleString(toolName));
   }
   for (let rule of splitRuleList([allowedTools.join(",")])) {
     if (!isValidAllowedToolRule(rule)) {
       denied.push(rule);
       continue;
     }
-    let parsed = permissionRuleValueFromString(rule);
+    let parsed = parseRuleString(rule);
     if (
       (READ_TOOLS.has(parsed.toolName) || WRITE_TOOLS.has(parsed.toolName)) &&
       parsed.ruleContent !== undefined &&
@@ -105,27 +105,27 @@ function buildRunToolRules(allowedTools, allowTools, options = {}) {
       )
     )
       denied.push(rule);
-    else if (SAFE_READ_ONLY_TOOLS.has(parsed.toolName)) allowed.push(rule);
+    else if (ungatedToolNames.has(parsed.toolName)) allowed.push(rule);
     else if (!operatorRules.some((operatorRule) => rulesOverlap(operatorRule, parsed))) denied.push(rule);
   }
   let disallowedNames = new Set(options.disallowedTools);
   return {
-    allowed: uniq(allowed).filter(
-      (rule) => !disallowedNames.has(permissionRuleValueFromString(rule).toolName),
+    allowed: normalizeCaseForComparison_2(allowed).filter(
+      (rule) => !disallowedNames.has(parseRuleString(rule).toolName),
     ),
-    denied: uniq(denied),
+    denied: normalizeCaseForComparison_2(denied),
   };
 }
-//@ chunk-qchp9vrd.js:120503-120619 placement
+//@ chunk-af1hzzme.js:121856-121972 placement
 function isValidAllowedToolRule(ruleString) {
-  let { toolName, ruleContent } = permissionRuleValueFromString(ruleString);
+  let { toolName, ruleContent } = parseRuleString(ruleString);
   return (
     !/[()]/.test(toolName) &&
     validateWildcardToolName(toolName) === null &&
     (ruleContent === undefined || mcpInfoFromString(toolName) === null)
   );
 }
-//@ chunk-qchp9vrd.js:120619-120803 placement
+//@ chunk-af1hzzme.js:121972-122156 placement
 function rulesOverlap(left, right) {
   if (
     mcpRuleMatchesTool(left.toolName, {
@@ -140,21 +140,21 @@ function rulesOverlap(left, right) {
     left.ruleContent === right.ruleContent
   );
 }
-//@ chunk-qchp9vrd.js:148702-148746 placement
+//@ chunk-af1hzzme.js:150068-150112 placement
 /**
  * MCP 控制类工具。
  */
 var SHELL_TOOLS = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME];
 var WORKTREE_TOOLS = [MONITOR, ENTER_WORKTREE_TOOL_NAME, EXIT_WORKTREE_TOOL_NAME];
 var MCP_CONTROL_TOOLS = [WAITFORMCPSERVERS, REFRESH_MCP_TOOLS_TOOL_NAME, TOOL_SEARCH_TOOL_NAME];
-//@ chunk-qchp9vrd.js:148746-148802 placement
+//@ chunk-af1hzzme.js:150112-150168 placement
 /**
  * 判断允许规则里是否已包含某工具。
  */
 function hasToolRule(rules, toolName) {
-  return rules.some((rule) => permissionRuleValueFromString(rule).toolName === toolName);
+  return rules.some((rule) => parseRuleString(rule).toolName === toolName);
 }
-//@ chunk-qchp9vrd.js:148802-148962 placement
+//@ chunk-af1hzzme.js:150168-150328 placement
 /**
  * 构建评测运行禁用的工具列表（未授权的写入类工具、固定禁用项与额外项）。
  */
@@ -164,16 +164,16 @@ function buildDisallowedTools(allowedTools, extraNames = []) {
   disallowed.push(...WORKTREE_TOOLS);
   let known = new Set(disallowed);
   disallowed.push(...listUnlistedBaseTools(allowedTools).filter((toolName) => !known.has(toolName)));
-  return uniq([...disallowed, ...extraNames]);
+  return normalizeCaseForComparison_2([...disallowed, ...extraNames]);
 }
-//@ chunk-qchp9vrd.js:148962-149424 placement
+//@ chunk-af1hzzme.js:150328-150790 placement
 /**
  * 列出不在允许集合中的内置工具名（允许集合含只读工具、规则中的工具、其 V1/族父工具及成组工具），用于子会话禁用。
  */
 function listUnlistedBaseTools(allowedTools) {
   let allBaseTools = getAllBaseTools();
-  let listedNames = new Set([...SAFE_READ_ONLY_TOOLS, ...READ_TOOLS, ...MCP_CONTROL_TOOLS]);
-  for (let rule of allowedTools) listedNames.add(permissionRuleValueFromString(rule).toolName);
+  let listedNames = new Set([...ungatedToolNames, ...READ_TOOLS, ...MCP_CONTROL_TOOLS]);
+  for (let rule of allowedTools) listedNames.add(parseRuleString(rule).toolName);
   for (let baseTool of allBaseTools)
     if (listedNames.has(baseTool.name) && baseTool.underlyingV1ToolName !== undefined)
       listedNames.add(baseTool.underlyingV1ToolName);
@@ -193,7 +193,7 @@ function listUnlistedBaseTools(allowedTools) {
     )
     .map((baseTool) => baseTool.name);
 }
-//@ chunk-qchp9vrd.js:149424-149682 placement
+//@ chunk-af1hzzme.js:150790-151048 placement
 /**
  * 把评测允许的工具规则拆分为内置工具与其他工具。
  */
@@ -201,28 +201,28 @@ function splitAllowedTools(rules) {
   let allBaseTools = getAllBaseTools();
   let knownTools = new Set([
     ...allBaseTools.filter((baseTool) => !isConversationEndTool(baseTool)).map((baseTool) => baseTool.name),
-    ...SAFE_READ_ONLY_TOOLS,
+    ...ungatedToolNames,
     ...SHELL_TOOLS,
     ...WORKTREE_TOOLS,
   ]);
   let tools = [];
   let rejected = [];
   for (let rule of splitRuleList([...rules])) {
-    let parsed = permissionRuleValueFromString(rule);
+    let parsed = parseRuleString(rule);
     if (parsed.ruleContent === undefined && knownTools.has(parsed.toolName)) tools.push(parsed.toolName);
     else rejected.push(rule);
   }
   return {
-    tools: uniq(tools),
-    rejected: uniq(rejected),
+    tools: normalizeCaseForComparison_2(tools),
+    rejected: normalizeCaseForComparison_2(rejected),
   };
 }
-//@ chunk-qchp9vrd.js:149682-149709 placement
+//@ chunk-af1hzzme.js:151048-151075 placement
 /**
  * 写入类工具集合。
  */
-var WRITE_TOOLS = new Set([FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
-//@ chunk-qchp9vrd.js:149709-149967 placement
+var WRITE_TOOLS = new Set([FILE_WRITE_TOOL_NAME, EDIT, NOTEBOOK_EDIT_TOOL_NAME]);
+//@ chunk-af1hzzme.js:151075-151333 placement
 /**
  * 把写入类工具的无参数规则限定到评测工作目录内。
  */
@@ -230,7 +230,7 @@ function scopeWriteToolRules(rules, writeRoots) {
   let writeToolNames = new Set();
   let kept = [];
   for (let rule of rules) {
-    let parsed = permissionRuleValueFromString(rule);
+    let parsed = parseRuleString(rule);
     if (parsed.ruleContent === undefined && WRITE_TOOLS.has(parsed.toolName)) {
       writeToolNames.add(parsed.toolName);
       continue;
@@ -239,25 +239,25 @@ function scopeWriteToolRules(rules, writeRoots) {
   }
   if (writeToolNames.size === 0) return kept;
   let flattened = writeRoots.flatMap((dir) =>
-    uniq([FILE_EDIT_TOOL_NAME, ...writeToolNames]).map(
+    normalizeCaseForComparison_2([EDIT, ...writeToolNames]).map(
       (toolName) => `${toolName}(${toSandboxRulePath(dir)}/**)`,
     ),
   );
-  return uniq([...kept, ...flattened]);
+  return normalizeCaseForComparison_2([...kept, ...flattened]);
 }
-//@ chunk-qchp9vrd.js:149967-150019 placement
+//@ chunk-af1hzzme.js:151333-151385 placement
 /**
  * 禁止读取 /proc 的规则。
  */
-var READ_TOOLS = new Set([FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME, LSP_TOOL_NAME]);
-var PROC_READ_RULE = `${FILE_READ_TOOL_NAME}(//proc/**)`;
-//@ chunk-qchp9vrd.js:150019-150295 placement
+var READ_TOOLS = new Set([READ, GLOB_TOOL_NAME, GREP_TOOL_NAME, LSP_TOOL_NAME]);
+var PROC_READ_RULE = `${READ}(//proc/**)`;
+//@ chunk-af1hzzme.js:151385-151661 placement
 /**
  * 把读写工具规则中的相对路径锚定到评测根目录（单层名字前加 **\/）。
  */
 function anchorRelativeRules(rules, cwd) {
   return rules.map((rule) => {
-    let parsed = permissionRuleValueFromString(rule);
+    let parsed = parseRuleString(rule);
     if (
       (READ_TOOLS.has(parsed.toolName) || WRITE_TOOLS.has(parsed.toolName)) &&
       parsed.ruleContent !== undefined &&
@@ -270,7 +270,7 @@ function anchorRelativeRules(rules, cwd) {
     return rule;
   });
 }
-//@ chunk-qchp9vrd.js:150295-150433 placement
+//@ chunk-af1hzzme.js:151661-151799 placement
 function isRelativeRulePath(ruleContent) {
   return (
     !ruleContent.startsWith("/") &&
@@ -280,7 +280,7 @@ function isRelativeRulePath(ruleContent) {
     !ruleContent.split(/[\\/]/).includes("..")
   );
 }
-//@ chunk-qchp9vrd.js:150433-150705 placement
+//@ chunk-af1hzzme.js:151799-152071 placement
 /**
  * 把读取类工具的无参数规则限定到允许的目录。
  */
@@ -288,7 +288,7 @@ function scopeReadToolRules(rules, readRoots, readFiles = []) {
   let hasBareReadTool = false;
   let kept = [];
   for (let rule of rules) {
-    let parsed = permissionRuleValueFromString(rule);
+    let parsed = parseRuleString(rule);
     if (parsed.ruleContent === undefined && READ_TOOLS.has(parsed.toolName)) {
       hasBareReadTool = true;
       continue;
@@ -297,14 +297,12 @@ function scopeReadToolRules(rules, readRoots, readFiles = []) {
   }
   if (!hasBareReadTool) return kept;
   let flattened = readRoots.flatMap((dir) =>
-    [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME].map(
-      (toolName) => `${toolName}(${toSandboxRulePath(dir)}/**)`,
-    ),
+    [READ, GLOB_TOOL_NAME, GREP_TOOL_NAME].map((toolName) => `${toolName}(${toSandboxRulePath(dir)}/**)`),
   );
-  let mapped = readFiles.map((filePath) => `${FILE_READ_TOOL_NAME}(${toSandboxRulePath(filePath)})`);
-  return uniq([...kept, ...flattened, ...mapped]);
+  let mapped = readFiles.map((filePath) => `${READ}(${toSandboxRulePath(filePath)})`);
+  return normalizeCaseForComparison_2([...kept, ...flattened, ...mapped]);
 }
-//@ chunk-qchp9vrd.js:150705-150731 placement
+//@ chunk-af1hzzme.js:152071-152097 placement
 /**
  * 规则内容里需要特殊处理的正则元字符。
  */

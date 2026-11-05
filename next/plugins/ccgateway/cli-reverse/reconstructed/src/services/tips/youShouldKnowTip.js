@@ -3,9 +3,9 @@
  *
  * 推荐插件提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y448vcf1.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wj968rvb.js (2)
  * attribution: placement 2
  */
 import { color } from "../../components/design-system/color.js";
@@ -13,9 +13,9 @@ import { BUILTIN } from "../../utils/telemetry/pluginTelemetry.js";
 import { isBuiltinPluginAvailable, getBuiltinPlugin } from "../../plugins/builtinPlugins.js";
 import { findEnabledSettingForPlugin } from "../../utils/plugins/managedPlugins.js";
 
-//@ chunk-y448vcf1.js:307-343 placement
+//@ chunk-wj968rvb.js:307-343 placement
 var CC_PLUGIN_YOU_SHOULD_KNOW = "cc-plugin-you-should-know";
-//@ chunk-y448vcf1.js:343-717 placement
+//@ chunk-wj968rvb.js:343-717 placement
 var YOU_SHOULD_KNOW_PLUGIN_TIP = {
   id: "you-should-know-plugin",
   providerAgnostic: true,

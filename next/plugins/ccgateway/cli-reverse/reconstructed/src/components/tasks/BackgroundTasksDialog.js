@@ -3,15 +3,11 @@
  *
  * 后台任务对话框（↓ 打开）：列出 bash、子代理、队友、工作流、远程会话、monitor，查看详情、停止（ctrl+x ctrl+k）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/BackgroundTasksDialog.tsx
- * pieces: chunk-18hwfzwa.js (72)
- * attribution: placement 20, sole-consumer 19, affinity 7, file-local 2, layout 20, fingerprint 3, callgraph-fingerprint 1
+ * pieces: chunk-czq1j3j2.js (77)
+ * attribution: placement 21, sole-consumer 15, affinity 7, file-local 2, layout 28, fingerprint 3, callgraph-fingerprint 1
  */
-import { RemoteAgentTask } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { mainAgentId } from "../../bootstrap/state.js";
 import {
   init_react_production,
   useState,
@@ -20,6 +16,10 @@ import {
   useContext,
   useEffectEvent,
 } from "../../../vendor/react/cjs/react.production.js";
+import { RemoteAgentTask } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { mainAgentId } from "../../bootstrap/state.js";
 import { isSubagentHistoryEnabled } from "../messages/UserPromptMessage.js";
 import { processBatched } from "../../services/mcp/client.js";
 import { getSessionSubagentsDir } from "../../utils/sessionStorage.js";
@@ -28,7 +28,12 @@ import { repeatString, collapseWhitespace } from "../../utils/stringUtils.js";
 import { TREE_GLYPHS } from "../../../vendor/chart.js/dist/chart.js";
 import { formatRelativeTimeAgo, truncateToWidth } from "../../utils/format.js";
 import { cleanTaskDescription } from "../../utils/taskDescription.js";
-import { isAmbientTask, isPanelAgentTask, isCompletedBackgroundAgent } from "../../tasks/taskKinds.js";
+import {
+  isAmbientTask,
+  isLocalScriptTaskState,
+  isPanelAgentTask,
+  isCompletedBackgroundAgent,
+} from "../../tasks/taskKinds.js";
 import { isFsInaccessible } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
@@ -37,23 +42,19 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { isCoordinatorPanelActive, subscribeCoordinatorPanel } from "../../utils/transcriptDiagnostics.js";
 import { isBackgroundTask } from "../../tasks/types.js";
 import {
   isObserverAgentTask,
   restoreAgentTaskFromTranscript,
-  hasCompletedWithFindings,
   LocalAgentTask,
 } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { FLAG_IDLE_WINDOW, isWaitingOnChildren } from "../../tasks/LocalAgentTask/keepalive.js";
-import {
-  TaskOutputResultDisplay,
-  waitForTaskCompletion,
-  isTaskRunningOrPending,
-} from "../../tools/TaskOutputTool/TaskOutputTool.js";
+import { TaskOutputResultDisplay, waitForTaskCompletion } from "../../tools/TaskOutputTool/TaskOutputTool.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState, useSetAppState } from "../../state/AppState.js";
-import { useSetVoiceState } from "../../context/voice.js";
+import { useTaskFramework } from "../../context/voice.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -74,18 +75,16 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { isCpuAccountingEnabled } from "../../utils/shell/processCpuTime.js";
 import { LocalShellTask } from "../../tasks/LocalShellTask/LocalShellTask.js";
 import { stopTaskByUser, markStoppedByUser, stopTask as stopTask_2 } from "../../tasks/stopTask.js";
+import { hasCompletedWithFindings } from "./RemoteSessionProgress.js";
 import { stopAllTasks } from "./stopTask.js";
-import {
-  InProcessTeammateTask,
-  isTaskRunning,
-} from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
+import { InProcessTeammateTask } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
 import { DreamTask } from "../../tasks/DreamTask/DreamTask.js";
 import { LocalMemoryImportTask } from "../../tasks/LocalMemoryImportTask/LocalMemoryImportTask.js";
 import { AutoModeScanTask } from "../../tasks/AutoModeScanTask/AutoModeScanTask.js";
 import { stopMonitorWsTasks } from "../../tasks/MonitorWsTask/MonitorWsTask.js";
 import { PostTurnMemoryTask } from "../../tasks/PostTurnMemoryTask/PostTurnMemoryTask.js";
 import { stopUltraplan } from "../../commands/ultraplan.js";
-import { count, intersperse } from "../../utils/collections.js";
+import { countWhere, intersperse } from "../../utils/collections.js";
 import { StopUltrareviewConfirm, RemoteSessionDetailDialog } from "./RemoteSessionDetailDialog.js";
 import { ShellDetailDialog } from "./ShellDetailDialog.js";
 import { AsyncAgentDetailDialog } from "./AsyncAgentDetailDialog.js";
@@ -104,7 +103,12 @@ import { HintText } from "../design-system/HintText.js";
 import { isTerminalStatus } from "./taskStatusUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:686154-686687 placement
+//@ chunk-czq1j3j2.js:699101-699105 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:699101", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:706884-707417 placement
 /**
  * 停止 ultrareview 远程任务并通知
  */
@@ -127,19 +131,14 @@ async function stopUltrareviewTask(taskId, stopSource, setAppState, setUltraplan
     isMeta: true,
   });
 }
-//@ chunk-18hwfzwa.js:686687-686691 placement
+//@ chunk-czq1j3j2.js:724962-724966 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:686687", () => {
+deferInit("chunk-czq1j3j2.js:724962", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:726327-726331 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:726327", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:726331-726341 sole-consumer
+//@ chunk-czq1j3j2.js:746965-746975 sole-consumer
 var MAX_TREE_DEPTH = 6;
-//@ chunk-18hwfzwa.js:726341-726625 sole-consumer
+//@ chunk-czq1j3j2.js:746975-747259 sole-consumer
 function useSubagentHistory(timeWindow, cacheKey) {
   let [historyState, setHistoryState] = useState(() => ({
     status: isSubagentHistoryEnabled() ? "loading" : "off",
@@ -169,7 +168,7 @@ function useSubagentHistory(timeWindow, cacheKey) {
   }, [timeWindow, isHistoryDisabled, cacheKey]);
   return historyState;
 }
-//@ chunk-18hwfzwa.js:726625-726845 sole-consumer
+//@ chunk-czq1j3j2.js:747259-747479 sole-consumer
 function flattenSubagentTree(nodes, isHiddenAgent) {
   let rows = [];
   let frameStack = expandHiddenSubagents(
@@ -190,7 +189,7 @@ function flattenSubagentTree(nodes, isHiddenAgent) {
   }
   return rows;
 }
-//@ chunk-18hwfzwa.js:726845-727068 sole-consumer
+//@ chunk-czq1j3j2.js:747479-747702 sole-consumer
 function describeSubagentRow(row, { now, isScreenReader, isRefused }) {
   let { entry, parent } = row;
   return {
@@ -204,7 +203,7 @@ function describeSubagentRow(row, { now, isScreenReader, isRefused }) {
     ],
   };
 }
-//@ chunk-18hwfzwa.js:727068-727381 sole-consumer
+//@ chunk-czq1j3j2.js:747702-748015 sole-consumer
 /**
  * 展开被过滤代理的子节点到同一层，生成带深度、是否末位与父项的行。
  */
@@ -227,7 +226,7 @@ function expandHiddenSubagents(nodes, depth, parent, isHiddenAgent) {
     }))
     .reverse();
 }
-//@ chunk-18hwfzwa.js:727381-727508 sole-consumer
+//@ chunk-czq1j3j2.js:748015-748142 sole-consumer
 function treePrefix({ depth, isLastSibling }) {
   if (depth === 0) return "";
   return (
@@ -235,15 +234,15 @@ function treePrefix({ depth, isLastSibling }) {
     `${isLastSibling ? TREE_GLYPHS.last : TREE_GLYPHS.branch} `
   );
 }
-//@ chunk-18hwfzwa.js:727508-727560 sole-consumer
+//@ chunk-czq1j3j2.js:748142-748194 sole-consumer
 function entryLabel(entry) {
   return sanitizeLabel(entry.description) || entry.agentId;
 }
-//@ chunk-18hwfzwa.js:727560-727627 sole-consumer
+//@ chunk-czq1j3j2.js:748194-748261 sole-consumer
 function entryMetaLabel(entry) {
   return sanitizeLabel(entry.name && `@${entry.name}`) || sanitizeLabel(entry.agentType);
 }
-//@ chunk-18hwfzwa.js:727627-727819 sole-consumer
+//@ chunk-czq1j3j2.js:748261-748453 sole-consumer
 function describeAgentTimes({ startedAt, lastActivityAt }, now) {
   let startedAgo =
     startedAt === undefined
@@ -262,31 +261,31 @@ function describeAgentTimes({ startedAt, lastActivityAt }, now) {
     lastActiveAgo !== startedAgo && lastActiveAgo ? `last active ${lastActiveAgo}` : "",
   ];
 }
-//@ chunk-18hwfzwa.js:727819-727852 sole-consumer
+//@ chunk-czq1j3j2.js:748453-748486 sole-consumer
 function sanitizeLabel(entry) {
   return cleanTaskDescription(entry) ?? "";
 }
-//@ chunk-18hwfzwa.js:727852-727885 sole-consumer
+//@ chunk-czq1j3j2.js:748486-748519 sole-consumer
 function selectTasks_2(appState) {
   return appState.tasks;
 }
-//@ chunk-18hwfzwa.js:727885-727929 sole-consumer
+//@ chunk-czq1j3j2.js:748519-748563 sole-consumer
 function isListableTask(task) {
   return isTaskShownInDialog(task, false) && !isAmbientTask(task);
 }
-//@ chunk-18hwfzwa.js:727929-727959 sole-consumer
+//@ chunk-czq1j3j2.js:748563-748593 sole-consumer
 function emptyIdSet() {
   return new Set();
 }
-//@ chunk-18hwfzwa.js:727959-728006 sole-consumer
+//@ chunk-czq1j3j2.js:748593-748640 sole-consumer
 function taskKey(task) {
   return `${task.id},${task.status}`;
 }
-//@ chunk-18hwfzwa.js:728006-728036 sole-consumer
+//@ chunk-czq1j3j2.js:748640-748670 sole-consumer
 function taskId(task) {
   return task.id;
 }
-//@ chunk-18hwfzwa.js:728036-728260 affinity
+//@ chunk-czq1j3j2.js:748670-748894 affinity
 function compareTasksRunningFirst(taskA, taskB) {
   let status = taskA.status;
   let status_2 = taskB.status;
@@ -299,57 +298,61 @@ function compareTasksRunningFirst(taskA, taskB) {
   let startTime = "task" in taskA ? taskA.task.startTime : 0;
   return ("task" in taskB ? taskB.task.startTime : 0) - startTime;
 }
-//@ chunk-18hwfzwa.js:728260-728373 file-local
+//@ chunk-czq1j3j2.js:748894-749007 file-local
 function taskIdAliases(i_0) {
   return i_0.type === "in_process_teammate"
     ? [i_0.id, i_0.task.identity.resumableAgentId ?? i_0.id]
     : [i_0.id];
 }
-//@ chunk-18hwfzwa.js:728373-728420 layout
+//@ chunk-czq1j3j2.js:749007-749054 layout
 function isLocalBashTask(task) {
   return task.type === "local_bash";
 }
-//@ chunk-18hwfzwa.js:728420-728469 layout
+//@ chunk-czq1j3j2.js:749054-749103 layout
 function isRemoteAgentTask(task) {
   return task.type === "remote_agent";
 }
-//@ chunk-18hwfzwa.js:728469-728517 fingerprint (2.1.88 match: getSelectableBackgroundTasks, 1)
+//@ chunk-czq1j3j2.js:749103-749151 fingerprint (2.1.88 match: getSelectableBackgroundTasks, 1)
 function getSelectableBackgroundTasks(i_0) {
   return i_0.type === "local_agent";
 }
-//@ chunk-18hwfzwa.js:728517-728548 affinity
+//@ chunk-czq1j3j2.js:749151-749182 affinity
 function isNotSelectableTask(task) {
   return !getSelectableBackgroundTasks_2(task);
 }
-//@ chunk-18hwfzwa.js:728548-728599 affinity
-function isLocalWorkflowTask(task) {
+//@ chunk-czq1j3j2.js:749182-749233 affinity
+function isLocalWorkflowTask_2(task) {
   return task.type === "local_workflow";
 }
-//@ chunk-18hwfzwa.js:728599-728671 affinity
+//@ chunk-czq1j3j2.js:749233-749305 affinity
 function isMonitorTask(task) {
   return task.type === "monitor_mcp" || task.type === "monitor_ws";
 }
-//@ chunk-18hwfzwa.js:728671-728716 affinity
+//@ chunk-czq1j3j2.js:749305-749350 affinity
 function isMcpTask(task) {
   return task.type === "mcp_task";
 }
-//@ chunk-18hwfzwa.js:728758-728809 placement
+//@ chunk-czq1j3j2.js:749392-749443 placement
 function isAutoModeScanTask(task) {
   return task.type === "auto_mode_scan";
 }
-//@ chunk-18hwfzwa.js:728809-728865 placement
+//@ chunk-czq1j3j2.js:749443-749499 placement
 function isLocalMemoryImportTask(task) {
   return task.type === "local_memory_import";
 }
-//@ chunk-18hwfzwa.js:728865-728918 placement
+//@ chunk-czq1j3j2.js:749499-749552 placement
 function isPostTurnMemoryTask(task) {
   return task.type === "post_turn_memory";
 }
-//@ chunk-18hwfzwa.js:728918-728952 placement
+//@ chunk-czq1j3j2.js:749552-749589 layout
+function isLocalScriptTask(task) {
+  return isLocalScriptTaskState(task.type);
+}
+//@ chunk-czq1j3j2.js:749589-749623 placement
 function toIdPair(task) {
   return [task.id, task];
 }
-//@ chunk-18hwfzwa.js:728952-729052 placement
+//@ chunk-czq1j3j2.js:749623-749723 placement
 /**
  * 子代理历史无法读取时记调试日志（文件不可访问）或记错误，返回 false。
  */
@@ -358,59 +361,77 @@ function logSubagentHistoryLaunchError(error) {
   else logError(error);
   return false;
 }
-//@ chunk-18hwfzwa.js:729052-729082 placement
+//@ chunk-czq1j3j2.js:749723-749753 placement
 function logErrorAndReturn(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729082-729112 placement
+//@ chunk-czq1j3j2.js:749753-749783 placement
 function logErrorAndReturn_2(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729112-729142 placement
+//@ chunk-czq1j3j2.js:749783-749813 placement
 function logErrorAndReturn_3(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729142-729158 placement
+//@ chunk-czq1j3j2.js:749813-749829 placement
 function noopLaunch() {}
-//@ chunk-18hwfzwa.js:729158-729174 placement
+//@ chunk-czq1j3j2.js:749829-749845 placement
 function noopLaunchError() {}
-//@ chunk-18hwfzwa.js:729220-729250 placement
+//@ chunk-czq1j3j2.js:749845-749875 layout
+function logTaskError(error) {
+  return logError(error);
+}
+//@ chunk-czq1j3j2.js:749875-749921 layout (2.1.88 match: requestTeammateShutdown, 1)
+/**
+ * 任务是否在运行（status==="running"）。
+ */
+function isTaskRunning(task) {
+  return task.status === "running";
+}
+//@ chunk-czq1j3j2.js:749921-749951 placement
 function logErrorWrapper(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729250-729280 placement
+//@ chunk-czq1j3j2.js:749951-749981 placement
 function logErrorWrapper2(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729280-729310 placement
+//@ chunk-czq1j3j2.js:749981-750011 placement
 function logErrorWrapper3(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729310-729340 placement
+//@ chunk-czq1j3j2.js:750011-750041 placement
 function logErrorWrapper4(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729340-729370 placement
+//@ chunk-czq1j3j2.js:750041-750071 placement
 function logErrorWrapper5(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729370-729400 placement
+//@ chunk-czq1j3j2.js:750071-750101 placement
 function logErrorWrapper6(error) {
   return logError(error);
 }
-//@ chunk-18hwfzwa.js:729400-729446 placement (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-czq1j3j2.js:750101-750147 placement (2.1.88 match: requestTeammateShutdown, 1)
 function isTaskRunning_2(task) {
   return task.status === "running";
 }
-//@ chunk-18hwfzwa.js:729515-729561 sole-consumer (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-czq1j3j2.js:750147-750216 layout (2.1.88 match: waitForTaskCompletion, 0.869)
+/**
+ * 任务状态为 running 或 pending。
+ */
+function isTaskRunningOrPending(task) {
+  return task.status === "running" || task.status === "pending";
+}
+//@ chunk-czq1j3j2.js:750216-750262 layout (2.1.88 match: requestTeammateShutdown, 1)
 function isTaskRunning_3(task) {
   return task.status === "running";
 }
-//@ chunk-18hwfzwa.js:729561-729645 sole-consumer (2.1.88 match: getDisplayName, 0.757)
+//@ chunk-czq1j3j2.js:750262-750346 layout (2.1.88 match: getDisplayName, 0.758)
 function getDisplayName_2(teammateId) {
   return teammateId.status === "running" && !(teammateId.type === "leader" && teammateId.label === MAIN);
 }
-//@ chunk-18hwfzwa.js:729645-729712 sole-consumer
+//@ chunk-czq1j3j2.js:750346-750413 layout
 function renderSeparator(separatorIndex) {
   return jsxProd_default(
     Text,
@@ -420,15 +441,19 @@ function renderSeparator(separatorIndex) {
     `separator-${separatorIndex}`,
   );
 }
-//@ chunk-18hwfzwa.js:729712-729755 placement (2.1.88 match: getDisplayName, 1)
+//@ chunk-czq1j3j2.js:750413-750456 placement (2.1.88 match: getDisplayName, 1)
 function getDisplayName(teammateId) {
   return teammateId.type !== "leader";
 }
-//@ chunk-18hwfzwa.js:729755-729798 layout (2.1.88 match: getDisplayName, 1)
+//@ chunk-czq1j3j2.js:750456-750493 layout
+function isLocalScriptTaskRow(task) {
+  return isLocalScriptTaskState(task.type);
+}
+//@ chunk-czq1j3j2.js:750493-750536 layout (2.1.88 match: getDisplayName, 1)
 function getDisplayName_3(teammateId) {
   return teammateId.type === "leader";
 }
-//@ chunk-18hwfzwa.js:729798-729852 file-local
+//@ chunk-czq1j3j2.js:750536-750590 file-local
 function TeammateTaskGroups(t0) {
   return {
     kind: "row",
@@ -436,7 +461,7 @@ function TeammateTaskGroups(t0) {
     key: t0.id,
   };
 }
-//@ chunk-18hwfzwa.js:729852-729906 layout
+//@ chunk-czq1j3j2.js:750590-750644 layout
 function toListRow(task) {
   return {
     kind: "row",
@@ -444,18 +469,18 @@ function toListRow(task) {
     key: task.id,
   };
 }
-//@ chunk-18hwfzwa.js:729906-729948 layout
+//@ chunk-czq1j3j2.js:750644-750686 layout
 function hasRows(section) {
   return section.items.length > 0;
 }
-//@ chunk-18hwfzwa.js:729948-729996 layout
+//@ chunk-czq1j3j2.js:750686-750734 layout
 function toActionOption(action) {
   return {
     label: ACTION_LABELS[action],
     value: action,
   };
 }
-//@ chunk-18hwfzwa.js:729996-730171 layout
+//@ chunk-czq1j3j2.js:750734-750909 layout
 var MAX_SUBAGENT_HISTORY_ROWS = 16;
 var LEADER_GROUP_KEY = "__leader__";
 var SYSTEM_TASKS_LABEL = "System tasks";
@@ -469,11 +494,12 @@ var TERSE_SHORTCUT_FORMAT = {
   },
 };
 var EMPTY_SHORTCUT_FORMAT = {};
-//@ chunk-18hwfzwa.js:730171-730387 layout
+//@ chunk-czq1j3j2.js:750909-751141 layout
 function hasDetailDialog(type) {
   if (type === "mcp_task") return McpTaskDetailDialog !== null;
   if (type === "local_memory_import") return localMemoryImportDetailGates !== null;
   return (
+    !(codeModeAccepted() && isLocalScriptTaskState(type)) &&
     type !== "monitor_ws" &&
     type !== "post_turn_memory" &&
     type !== "self_managed_tasks" &&
@@ -481,7 +507,7 @@ function hasDetailDialog(type) {
     type !== "recorded_agent"
   );
 }
-//@ chunk-18hwfzwa.js:730387-730883 layout
+//@ chunk-czq1j3j2.js:751141-751637 layout
 var WorkflowDetailDialog; // deferred: loads other modules while loading; runs once its import cycle is complete
 var killWorkflowTask;
 var pauseWorkflowTask;
@@ -507,7 +533,7 @@ var localMemoryDetailModule;
 var backgroundListModules;
 var useBackgroundListV3Fallback;
 var useBackgroundListFallback;
-deferInit("chunk-18hwfzwa.js:730387", () => {
+deferInit("chunk-czq1j3j2.js:751141", () => {
   WorkflowDetailDialog = require("../workflows/WorkflowDetailDialog.js").WorkflowDetailDialog;
   ({
     killWorkflowTask,
@@ -536,7 +562,7 @@ deferInit("chunk-18hwfzwa.js:730387", () => {
   useBackgroundListV3Fallback = backgroundListModules?.useBackgroundListV3 ?? useBackgroundListV3Stub;
   useBackgroundListFallback = backgroundListModules?.useBackgroundList ?? useBackgroundListStub;
 });
-//@ chunk-18hwfzwa.js:730883-731180 layout
+//@ chunk-czq1j3j2.js:751637-751934 layout
 function hasBackgroundDetailScreen(task) {
   return (
     detailScreenGates?.isBackgroundDetailScreenEnabled() === true &&
@@ -550,7 +576,7 @@ function hasBackgroundDetailScreen(task) {
       (task.type === "mcp_task" && mcpTaskDetailFeatureGates !== null))
   );
 }
-//@ chunk-18hwfzwa.js:731180-731600 layout
+//@ chunk-czq1j3j2.js:751934-752354 layout
 /**
  * 判断任务是否列入后台任务对话框（协调面板、失败/被杀可见、已完成后台代理、仍在运行等规则）。
  */
@@ -576,12 +602,12 @@ function isTaskShownInDialog(task, backgroundListV3Fallback) {
   if (isFallbackFinished) return !TaskOutputResultDisplay(task);
   return waitForTaskCompletion(task);
 }
-//@ chunk-18hwfzwa.js:731600-762915 fingerprint (2.1.88 match: BackgroundTasksDialog, 0.512)
+//@ chunk-czq1j3j2.js:752354-783925 fingerprint (2.1.88 match: BackgroundTasksDialog, 0.51)
 /**
  * 后台任务对话框：把各类任务（local_bash、local_agent、in_process_teammate、local_workflow、remote_agent、monitor_mcp、dream）转成列表项，list/detail 两级视图，支持停止所有 agent（chat:killAgents）、进入队友视图、查看输出。
  */
 function BackgroundTasksDialog(props) {
-  let $ = useMemoCache(458);
+  let $ = useMemoCache(460);
   let {
     onDone,
     storageV5,
@@ -597,7 +623,7 @@ function BackgroundTasksDialog(props) {
   let promptVisibleBelow_2 = promptVisibleBelow === undefined ? false : promptVisibleBelow;
   let tasks = useAppState(selectTasks_2);
   let setAppState = useSetAppState();
-  let setAppState_2 = useSetVoiceState();
+  let setAppState_2 = useTaskFramework();
   let pendingNotifications = messageQueue;
   let killAgentsShortcut = useShortcutDisplay_2("chat:killAgents", "Chat", "ctrl+x ctrl+k");
   let tasks_2 = tasks;
@@ -780,14 +806,14 @@ function BackgroundTasksDialog(props) {
     let filtered_4 = filtered.filter(getSelectableBackgroundTasks);
     let filtered_5 = filtered_4.filter(isNotSelectableTask);
     let filtered_6 = filtered_4.filter(getSelectableBackgroundTasks_2);
-    let filtered_7 = filtered.filter(isLocalWorkflowTask);
+    let filtered_7 = filtered.filter(isLocalWorkflowTask_2);
     let filtered_8 = filtered.filter(isMonitorTask);
     let filtered_9 = filtered.filter(isMcpTask);
     let filtered_10 = filtered.filter(isDreamTask);
     let remote = filtered.filter(isAutoModeScanTask);
     let agent = filtered.filter(isLocalMemoryImportTask);
     let workflows = filtered.filter(isPostTurnMemoryTask);
-    let extraRows = [];
+    let extraRows = codeModeAccepted() ? filtered.filter(isLocalScriptTask) : [];
     let teammatesByTeam = new Map();
     for (const task of filtered) {
       if (task.type !== "in_process_teammate") {
@@ -916,10 +942,10 @@ function BackgroundTasksDialog(props) {
     viewState.mode === "list",
   );
   let rowsToRender;
-  Vl: {
+  fd: {
     if (!backgroundListFallback) {
       rowsToRender = listRows;
-      break Vl;
+      break fd;
     }
     let fallbackRows;
     if ($[28] !== allSelectableItems || $[29] !== backgroundListFallback.rows) {
@@ -1183,10 +1209,11 @@ function BackgroundTasksDialog(props) {
     $[85] !== killShellTask_ ||
     $[86] !== killDreamTask ||
     $[87] !== pendingNotifications ||
-    $[88] !== setAppState ||
-    $[89] !== killAgentTask ||
-    $[90] !== storageV5 ||
-    $[91] !== setAppState_2
+    $[88] !== session ||
+    $[89] !== setAppState ||
+    $[90] !== killAgentTask ||
+    $[91] !== storageV5 ||
+    $[92] !== setAppState_2
   ) {
     stopTask = function stopTaskById(item) {
       if (item.type === "local_bash" && item.status === "running") killShellTask_(item.id);
@@ -1211,6 +1238,14 @@ function BackgroundTasksDialog(props) {
         killAutoModeScanTask(item.id);
       else if (item.type === "post_turn_memory" && item.status === "running")
         PostTurnMemoryTask.kill(item.id, setAppState_2, setAppState, undefined, storageV5);
+      else if (codeModeAccepted() && isLocalScriptTaskState(item.type) && item.status === "running")
+        stopTaskByUser(item.id, {
+          taskRegistry: setAppState_2,
+          setAppState,
+          session,
+          source: "user",
+          storageV5,
+        }).catch(logTaskError);
       else if (item.type === "remote_agent" && item.status === "running") {
         if (item.task.isUltraplan)
           stopUltraplan(
@@ -1237,15 +1272,16 @@ function BackgroundTasksDialog(props) {
     $[85] = killShellTask_;
     $[86] = killDreamTask;
     $[87] = pendingNotifications;
-    $[88] = setAppState;
-    $[89] = killAgentTask;
-    $[90] = storageV5;
-    $[91] = setAppState_2;
-    $[92] = stopTask;
-  } else stopTask = $[92];
+    $[88] = session;
+    $[89] = setAppState;
+    $[90] = killAgentTask;
+    $[91] = storageV5;
+    $[92] = setAppState_2;
+    $[93] = stopTask;
+  } else stopTask = $[93];
   let stopItem = stopTask;
   let handleForeground;
-  if ($[93] !== onDone || $[94] !== setAppState) {
+  if ($[94] !== onDone || $[95] !== setAppState) {
     handleForeground = function tryForeground(item) {
       if (item.type === "in_process_teammate" && item.status === "running") {
         enterTeammateView(item.id, setAppState);
@@ -1270,13 +1306,13 @@ function BackgroundTasksDialog(props) {
       }
       return false;
     };
-    $[93] = onDone;
-    $[94] = setAppState;
-    $[95] = handleForeground;
-  } else handleForeground = $[95];
+    $[94] = onDone;
+    $[95] = setAppState;
+    $[96] = handleForeground;
+  } else handleForeground = $[96];
   let foregroundItem = handleForeground;
   let handleRowKeyDown;
-  if ($[96] !== foregroundItem || $[97] !== rows_2 || $[98] !== stopItem) {
+  if ($[97] !== foregroundItem || $[98] !== rows_2 || $[99] !== stopItem) {
     handleRowKeyDown = (event, rowIndex) => {
       let item = rows_2[rowIndex];
       if (!item) {
@@ -1293,14 +1329,14 @@ function BackgroundTasksDialog(props) {
       }
       if (event.key === "f" && !event.ctrl && !event.meta && foregroundItem(item)) event.preventDefault();
     };
-    $[96] = foregroundItem;
-    $[97] = rows_2;
-    $[98] = stopItem;
-    $[99] = handleRowKeyDown;
-  } else handleRowKeyDown = $[99];
+    $[97] = foregroundItem;
+    $[98] = rows_2;
+    $[99] = stopItem;
+    $[100] = handleRowKeyDown;
+  } else handleRowKeyDown = $[100];
   let onRowKeyDown = handleRowKeyDown;
   let activateRow;
-  if ($[100] !== isScreenReaderEnabled || $[101] !== rows_2 || $[102] !== handleSelect) {
+  if ($[101] !== isScreenReaderEnabled || $[102] !== rows_2 || $[103] !== handleSelect) {
     activateRow = (rowIndex) => {
       let item = rows_2[rowIndex];
       if (!item) {
@@ -1316,14 +1352,14 @@ function BackgroundTasksDialog(props) {
           itemId: item.id,
         });
     };
-    $[100] = isScreenReaderEnabled;
-    $[101] = rows_2;
-    $[102] = handleSelect;
-    $[103] = activateRow;
-  } else activateRow = $[103];
+    $[101] = isScreenReaderEnabled;
+    $[102] = rows_2;
+    $[103] = handleSelect;
+    $[104] = activateRow;
+  } else activateRow = $[104];
   let onSelect = activateRow;
   let handleAction;
-  if ($[104] !== foregroundItem || $[105] !== handleSelect || $[106] !== stopItem) {
+  if ($[105] !== foregroundItem || $[106] !== handleSelect || $[107] !== stopItem) {
     handleAction = function runAction(action, item) {
       switch (
         (setViewState({
@@ -1345,11 +1381,11 @@ function BackgroundTasksDialog(props) {
         }
       }
     };
-    $[104] = foregroundItem;
-    $[105] = handleSelect;
-    $[106] = stopItem;
-    $[107] = handleAction;
-  } else handleAction = $[107];
+    $[105] = foregroundItem;
+    $[106] = handleSelect;
+    $[107] = stopItem;
+    $[108] = handleAction;
+  } else handleAction = $[108];
   let runItemAction = handleAction;
   let dismissForSkip = useEffectEvent(onDone);
   let [detailSnapshot, setDetailSnapshot] = useState();
@@ -1374,13 +1410,13 @@ function BackgroundTasksDialog(props) {
     viewState.mode === "detail" && detailSnapshot?.id === viewState.itemId ? detailSnapshot : undefined;
   let closeIfGone;
   if (
-    $[108] !== allSelectableItems ||
-    $[109] !== snapshotTask ||
-    $[110] !== backgroundListV3Fallback ||
-    $[111] !== dismissForSkip ||
-    $[112] !== tasks_2 ||
-    $[113] !== viewState.itemId ||
-    $[114] !== viewState.mode
+    $[109] !== allSelectableItems ||
+    $[110] !== snapshotTask ||
+    $[111] !== backgroundListV3Fallback ||
+    $[112] !== dismissForSkip ||
+    $[113] !== tasks_2 ||
+    $[114] !== viewState.itemId ||
+    $[115] !== viewState.mode
   ) {
     closeIfGone = () => {
       if (viewState.mode === "actions") {
@@ -1417,34 +1453,34 @@ function BackgroundTasksDialog(props) {
         }
       }
     };
-    $[108] = allSelectableItems;
-    $[109] = snapshotTask;
-    $[110] = backgroundListV3Fallback;
-    $[111] = dismissForSkip;
-    $[112] = tasks_2;
-    $[113] = viewState.itemId;
-    $[114] = viewState.mode;
-    $[115] = closeIfGone;
-  } else closeIfGone = $[115];
+    $[109] = allSelectableItems;
+    $[110] = snapshotTask;
+    $[111] = backgroundListV3Fallback;
+    $[112] = dismissForSkip;
+    $[113] = tasks_2;
+    $[114] = viewState.itemId;
+    $[115] = viewState.mode;
+    $[116] = closeIfGone;
+  } else closeIfGone = $[116];
   let closeIfGoneDeps;
   if (
-    $[116] !== allSelectableItems ||
-    $[117] !== snapshotTask ||
-    $[118] !== backgroundListV3Fallback ||
-    $[119] !== tasks_2 ||
-    $[120] !== viewState
+    $[117] !== allSelectableItems ||
+    $[118] !== snapshotTask ||
+    $[119] !== backgroundListV3Fallback ||
+    $[120] !== tasks_2 ||
+    $[121] !== viewState
   ) {
     closeIfGoneDeps = [viewState, tasks_2, allSelectableItems, snapshotTask, backgroundListV3Fallback];
-    $[116] = allSelectableItems;
-    $[117] = snapshotTask;
-    $[118] = backgroundListV3Fallback;
-    $[119] = tasks_2;
-    $[120] = viewState;
-    $[121] = closeIfGoneDeps;
-  } else closeIfGoneDeps = $[121];
+    $[117] = allSelectableItems;
+    $[118] = snapshotTask;
+    $[119] = backgroundListV3Fallback;
+    $[120] = tasks_2;
+    $[121] = viewState;
+    $[122] = closeIfGoneDeps;
+  } else closeIfGoneDeps = $[122];
   useEffect(closeIfGone, closeIfGoneDeps);
   let handleBack;
-  if ($[122] !== allSelectableItems.length || $[123] !== onBack || $[124] !== onDone) {
+  if ($[123] !== allSelectableItems.length || $[124] !== onBack || $[125] !== onDone) {
     handleBack = () => {
       if (onBack) onBack();
       else if (openedFromListRef.current && allSelectableItems.length <= 1)
@@ -1458,13 +1494,13 @@ function BackgroundTasksDialog(props) {
         });
       }
     };
-    $[122] = allSelectableItems.length;
-    $[123] = onBack;
-    $[124] = onDone;
-    $[125] = handleBack;
-  } else handleBack = $[125];
+    $[123] = allSelectableItems.length;
+    $[124] = onBack;
+    $[125] = onDone;
+    $[126] = handleBack;
+  } else handleBack = $[126];
   let onBack_2 = handleBack;
-  let hasMultipleRunningAgents = count(agentTasks, isTaskRunning) > 1;
+  let hasMultipleRunningAgents = countWhere(agentTasks, isTaskRunning) > 1;
   if (viewState.mode !== "list" && viewState.mode !== "actions" && tasks_2) {
     let detailItem = tasks_2[viewState.itemId] ?? snapshotTask;
     if (!detailItem) {
@@ -1473,11 +1509,11 @@ function BackgroundTasksDialog(props) {
     if (viewState.mode === "confirmStopReview") {
       let onStop;
       if (
-        $[126] !== pendingNotifications ||
-        $[127] !== setAppState ||
-        $[128] !== storageV5 ||
-        $[129] !== setAppState_2 ||
-        $[130] !== viewState.itemId
+        $[127] !== pendingNotifications ||
+        $[128] !== setAppState ||
+        $[129] !== storageV5 ||
+        $[130] !== setAppState_2 ||
+        $[131] !== viewState.itemId
       ) {
         onStop = () => {
           stopUltrareviewTask(
@@ -1492,30 +1528,30 @@ function BackgroundTasksDialog(props) {
             mode: "list",
           });
         };
-        $[126] = pendingNotifications;
-        $[127] = setAppState;
-        $[128] = storageV5;
-        $[129] = setAppState_2;
-        $[130] = viewState.itemId;
-        $[131] = onStop;
-      } else onStop = $[131];
+        $[127] = pendingNotifications;
+        $[128] = setAppState;
+        $[129] = storageV5;
+        $[130] = setAppState_2;
+        $[131] = viewState.itemId;
+        $[132] = onStop;
+      } else onStop = $[132];
       let onBack;
-      if ($[132] === MEMO_CACHE_SENTINEL) {
+      if ($[133] === MEMO_CACHE_SENTINEL) {
         onBack = () =>
           setViewState({
             mode: "list",
           });
-        $[132] = onBack;
-      } else onBack = $[132];
+        $[133] = onBack;
+      } else onBack = $[133];
       let confirmElement;
-      if ($[133] !== onStop) {
+      if ($[134] !== onStop) {
         confirmElement = jsxProd_default(StopUltrareviewConfirm, {
           onStop,
           onBack,
         });
-        $[133] = onStop;
-        $[134] = confirmElement;
-      } else confirmElement = $[134];
+        $[134] = onStop;
+        $[135] = confirmElement;
+      } else confirmElement = $[135];
       return confirmElement;
     }
     switch (detailItem.type) {
@@ -1523,28 +1559,28 @@ function BackgroundTasksDialog(props) {
         if (autoModeScanDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `shell-${detailItem.id}`;
           let onClose;
-          if ($[135] !== onDone) {
+          if ($[136] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[135] = onDone;
-            $[136] = onClose;
-          } else onClose = $[136];
+            $[136] = onDone;
+            $[137] = onClose;
+          } else onClose = $[137];
           let onStop;
-          if ($[137] !== killShellTask_ || $[138] !== detailItem.id) {
+          if ($[138] !== killShellTask_ || $[139] !== detailItem.id) {
             onStop = () => void killShellTask_(detailItem.id).catch(logErrorWrapper);
-            $[137] = killShellTask_;
-            $[138] = detailItem.id;
-            $[139] = onStop;
-          } else onStop = $[139];
+            $[138] = killShellTask_;
+            $[139] = detailItem.id;
+            $[140] = onStop;
+          } else onStop = $[140];
           let detailElement;
           if (
-            $[140] !== onBack_2 ||
-            $[141] !== elementKey ||
-            $[142] !== onClose ||
-            $[143] !== onStop ||
-            $[144] !== detailItem
+            $[141] !== onBack_2 ||
+            $[142] !== elementKey ||
+            $[143] !== onClose ||
+            $[144] !== onStop ||
+            $[145] !== detailItem
           ) {
             detailElement = jsxProd_default(
               autoModeScanDetailGates,
@@ -1556,30 +1592,30 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[140] = onBack_2;
-            $[141] = elementKey;
-            $[142] = onClose;
-            $[143] = onStop;
-            $[144] = detailItem;
-            $[145] = detailElement;
-          } else detailElement = $[145];
+            $[141] = onBack_2;
+            $[142] = elementKey;
+            $[143] = onClose;
+            $[144] = onStop;
+            $[145] = detailItem;
+            $[146] = detailElement;
+          } else detailElement = $[146];
           return detailElement;
         }
         const elementKey = `shell-${detailItem.id}`;
         let onKillShell;
-        if ($[146] !== killShellTask_ || $[147] !== detailItem.id) {
+        if ($[147] !== killShellTask_ || $[148] !== detailItem.id) {
           onKillShell = () => void killShellTask_(detailItem.id);
-          $[146] = killShellTask_;
-          $[147] = detailItem.id;
-          $[148] = onKillShell;
-        } else onKillShell = $[148];
+          $[147] = killShellTask_;
+          $[148] = detailItem.id;
+          $[149] = onKillShell;
+        } else onKillShell = $[149];
         let element;
         if (
-          $[149] !== onBack_2 ||
-          $[150] !== onDone ||
-          $[151] !== elementKey ||
-          $[152] !== onKillShell ||
-          $[153] !== detailItem
+          $[150] !== onBack_2 ||
+          $[151] !== onDone ||
+          $[152] !== elementKey ||
+          $[153] !== onKillShell ||
+          $[154] !== detailItem
         ) {
           element = jsxProd_default(
             ShellDetailDialog,
@@ -1591,18 +1627,18 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[149] = onBack_2;
-          $[150] = onDone;
-          $[151] = elementKey;
-          $[152] = onKillShell;
-          $[153] = detailItem;
-          $[154] = element;
-        } else element = $[154];
+          $[150] = onBack_2;
+          $[151] = onDone;
+          $[152] = elementKey;
+          $[153] = onKillShell;
+          $[154] = detailItem;
+          $[155] = element;
+        } else element = $[155];
         return element;
       }
       case "local_agent": {
         let onOpenTranscript;
-        if ($[155] !== onDone || $[156] !== setAppState || $[157] !== detailItem) {
+        if ($[156] !== onDone || $[157] !== setAppState || $[158] !== detailItem) {
           onOpenTranscript = isPanelAgentTask(detailItem)
             ? () => {
                 enterTeammateView(detailItem.id, setAppState);
@@ -1611,38 +1647,38 @@ function BackgroundTasksDialog(props) {
                 });
               }
             : undefined;
-          $[155] = onDone;
-          $[156] = setAppState;
-          $[157] = detailItem;
-          $[158] = onOpenTranscript;
-        } else onOpenTranscript = $[158];
+          $[156] = onDone;
+          $[157] = setAppState;
+          $[158] = detailItem;
+          $[159] = onOpenTranscript;
+        } else onOpenTranscript = $[159];
         let onOpenTranscript_ = onOpenTranscript;
         if (memoryImportDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `agent-${detailItem.id}`;
           let onClose;
-          if ($[159] !== onDone) {
+          if ($[160] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[159] = onDone;
-            $[160] = onClose;
-          } else onClose = $[160];
+            $[160] = onDone;
+            $[161] = onClose;
+          } else onClose = $[161];
           let onStop;
-          if ($[161] !== killTeammateTask || $[162] !== detailItem.id) {
+          if ($[162] !== killTeammateTask || $[163] !== detailItem.id) {
             onStop = () => void killTeammateTask(detailItem.id).catch(logErrorWrapper2);
-            $[161] = killTeammateTask;
-            $[162] = detailItem.id;
-            $[163] = onStop;
-          } else onStop = $[163];
+            $[162] = killTeammateTask;
+            $[163] = detailItem.id;
+            $[164] = onStop;
+          } else onStop = $[164];
           let detailElement;
           if (
-            $[164] !== onBack_2 ||
-            $[165] !== elementKey ||
-            $[166] !== onClose ||
-            $[167] !== onStop ||
-            $[168] !== detailItem ||
-            $[169] !== onOpenTranscript_
+            $[165] !== onBack_2 ||
+            $[166] !== elementKey ||
+            $[167] !== onClose ||
+            $[168] !== onStop ||
+            $[169] !== detailItem ||
+            $[170] !== onOpenTranscript_
           ) {
             detailElement = jsxProd_default(
               memoryImportDetailGates,
@@ -1655,34 +1691,34 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[164] = onBack_2;
-            $[165] = elementKey;
-            $[166] = onClose;
-            $[167] = onStop;
-            $[168] = detailItem;
-            $[169] = onOpenTranscript_;
-            $[170] = detailElement;
-          } else detailElement = $[170];
+            $[165] = onBack_2;
+            $[166] = elementKey;
+            $[167] = onClose;
+            $[168] = onStop;
+            $[169] = detailItem;
+            $[170] = onOpenTranscript_;
+            $[171] = detailElement;
+          } else detailElement = $[171];
           return detailElement;
         }
         const elementKey = `agent-${detailItem.id}`;
         let onKillAgent;
-        if ($[171] !== killTeammateTask || $[172] !== detailItem.id) {
+        if ($[172] !== killTeammateTask || $[173] !== detailItem.id) {
           onKillAgent = () => void killTeammateTask(detailItem.id);
-          $[171] = killTeammateTask;
-          $[172] = detailItem.id;
-          $[173] = onKillAgent;
-        } else onKillAgent = $[173];
+          $[172] = killTeammateTask;
+          $[173] = detailItem.id;
+          $[174] = onKillAgent;
+        } else onKillAgent = $[174];
         const killAllAgentsShortcut = hasMultipleRunningAgents ? killAgentsShortcut : undefined;
         let element;
         if (
-          $[174] !== onBack_2 ||
-          $[175] !== onDone ||
-          $[176] !== elementKey ||
-          $[177] !== onKillAgent ||
-          $[178] !== killAllAgentsShortcut ||
-          $[179] !== detailItem ||
-          $[180] !== onOpenTranscript_
+          $[175] !== onBack_2 ||
+          $[176] !== onDone ||
+          $[177] !== elementKey ||
+          $[178] !== onKillAgent ||
+          $[179] !== killAllAgentsShortcut ||
+          $[180] !== detailItem ||
+          $[181] !== onOpenTranscript_
         ) {
           element = jsxProd_default(
             AsyncAgentDetailDialog,
@@ -1696,30 +1732,30 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[174] = onBack_2;
-          $[175] = onDone;
-          $[176] = elementKey;
-          $[177] = onKillAgent;
-          $[178] = killAllAgentsShortcut;
-          $[179] = detailItem;
-          $[180] = onOpenTranscript_;
-          $[181] = element;
-        } else element = $[181];
+          $[175] = onBack_2;
+          $[176] = onDone;
+          $[177] = elementKey;
+          $[178] = onKillAgent;
+          $[179] = killAllAgentsShortcut;
+          $[180] = detailItem;
+          $[181] = onOpenTranscript_;
+          $[182] = element;
+        } else element = $[182];
         return element;
       }
       case "remote_agent": {
         let onStop;
         if (
-          $[182] !== killRemoteAgentById ||
-          $[183] !== pendingNotifications ||
-          $[184] !== setAppState ||
-          $[185] !== storageV5 ||
-          $[186] !== setAppState_2 ||
-          $[187] !== detailItem.id ||
-          $[188] !== detailItem.isRemoteReview ||
-          $[189] !== detailItem.isUltraplan ||
-          $[190] !== detailItem.sessionId ||
-          $[191] !== detailItem.status
+          $[183] !== killRemoteAgentById ||
+          $[184] !== pendingNotifications ||
+          $[185] !== setAppState ||
+          $[186] !== storageV5 ||
+          $[187] !== setAppState_2 ||
+          $[188] !== detailItem.id ||
+          $[189] !== detailItem.isRemoteReview ||
+          $[190] !== detailItem.isUltraplan ||
+          $[191] !== detailItem.sessionId ||
+          $[192] !== detailItem.status
         ) {
           onStop =
             detailItem.status !== "running"
@@ -1745,37 +1781,37 @@ function BackgroundTasksDialog(props) {
                         storageV5,
                       )
                   : () => void killRemoteAgentById(detailItem.id);
-          $[182] = killRemoteAgentById;
-          $[183] = pendingNotifications;
-          $[184] = setAppState;
-          $[185] = storageV5;
-          $[186] = setAppState_2;
-          $[187] = detailItem.id;
-          $[188] = detailItem.isRemoteReview;
-          $[189] = detailItem.isUltraplan;
-          $[190] = detailItem.sessionId;
-          $[191] = detailItem.status;
-          $[192] = onStop;
-        } else onStop = $[192];
+          $[183] = killRemoteAgentById;
+          $[184] = pendingNotifications;
+          $[185] = setAppState;
+          $[186] = storageV5;
+          $[187] = setAppState_2;
+          $[188] = detailItem.id;
+          $[189] = detailItem.isRemoteReview;
+          $[190] = detailItem.isUltraplan;
+          $[191] = detailItem.sessionId;
+          $[192] = detailItem.status;
+          $[193] = onStop;
+        } else onStop = $[193];
         let onStop_ = onStop;
         if (shellDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `session-${detailItem.id}`;
           let onClose;
-          if ($[193] !== onDone) {
+          if ($[194] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[193] = onDone;
-            $[194] = onClose;
-          } else onClose = $[194];
+            $[194] = onDone;
+            $[195] = onClose;
+          } else onClose = $[195];
           let detailElement;
           if (
-            $[195] !== onBack_2 ||
-            $[196] !== onStop_ ||
-            $[197] !== elementKey ||
-            $[198] !== onClose ||
-            $[199] !== detailItem
+            $[196] !== onBack_2 ||
+            $[197] !== onStop_ ||
+            $[198] !== elementKey ||
+            $[199] !== onClose ||
+            $[200] !== detailItem
           ) {
             detailElement = jsxProd_default(
               shellDetailGates,
@@ -1787,26 +1823,26 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[195] = onBack_2;
-            $[196] = onStop_;
-            $[197] = elementKey;
-            $[198] = onClose;
-            $[199] = detailItem;
-            $[200] = detailElement;
-          } else detailElement = $[200];
+            $[196] = onBack_2;
+            $[197] = onStop_;
+            $[198] = elementKey;
+            $[199] = onClose;
+            $[200] = detailItem;
+            $[201] = detailElement;
+          } else detailElement = $[201];
           return detailElement;
         }
         const elementKey = `session-${detailItem.id}`;
         let element;
         if (
-          $[201] !== commands ||
-          $[202] !== onBack_2 ||
-          $[203] !== onDone ||
-          $[204] !== onStop_ ||
-          $[205] !== elementKey ||
-          $[206] !== detailItem ||
-          $[207] !== tools ||
-          $[208] !== verbose
+          $[202] !== commands ||
+          $[203] !== onBack_2 ||
+          $[204] !== onDone ||
+          $[205] !== onStop_ ||
+          $[206] !== elementKey ||
+          $[207] !== detailItem ||
+          $[208] !== tools ||
+          $[209] !== verbose
         ) {
           element = jsxProd_default(
             RemoteSessionDetailDialog,
@@ -1821,25 +1857,25 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[201] = commands;
-          $[202] = onBack_2;
-          $[203] = onDone;
-          $[204] = onStop_;
-          $[205] = elementKey;
-          $[206] = detailItem;
-          $[207] = tools;
-          $[208] = verbose;
-          $[209] = element;
-        } else element = $[209];
+          $[202] = commands;
+          $[203] = onBack_2;
+          $[204] = onDone;
+          $[205] = onStop_;
+          $[206] = elementKey;
+          $[207] = detailItem;
+          $[208] = tools;
+          $[209] = verbose;
+          $[210] = element;
+        } else element = $[210];
         return element;
       }
       case "in_process_teammate": {
         let onOpenTranscript;
         if (
-          $[210] !== onDone ||
-          $[211] !== setAppState ||
-          $[212] !== detailItem.id ||
-          $[213] !== detailItem.status
+          $[211] !== onDone ||
+          $[212] !== setAppState ||
+          $[213] !== detailItem.id ||
+          $[214] !== detailItem.status
         ) {
           onOpenTranscript =
             detailItem.status === "running"
@@ -1850,39 +1886,39 @@ function BackgroundTasksDialog(props) {
                   });
                 }
               : undefined;
-          $[210] = onDone;
-          $[211] = setAppState;
-          $[212] = detailItem.id;
-          $[213] = detailItem.status;
-          $[214] = onOpenTranscript;
-        } else onOpenTranscript = $[214];
+          $[211] = onDone;
+          $[212] = setAppState;
+          $[213] = detailItem.id;
+          $[214] = detailItem.status;
+          $[215] = onOpenTranscript;
+        } else onOpenTranscript = $[215];
         let onOpenTranscript_ = onOpenTranscript;
         if (subagentHistoryDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `teammate-${detailItem.id}`;
           let onClose;
-          if ($[215] !== onDone) {
+          if ($[216] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[215] = onDone;
-            $[216] = onClose;
-          } else onClose = $[216];
+            $[216] = onDone;
+            $[217] = onClose;
+          } else onClose = $[217];
           let onStop;
-          if ($[217] !== killDreamTask || $[218] !== detailItem.id) {
+          if ($[218] !== killDreamTask || $[219] !== detailItem.id) {
             onStop = () => void killDreamTask(detailItem.id).catch(logErrorWrapper3);
-            $[217] = killDreamTask;
-            $[218] = detailItem.id;
-            $[219] = onStop;
-          } else onStop = $[219];
+            $[218] = killDreamTask;
+            $[219] = detailItem.id;
+            $[220] = onStop;
+          } else onStop = $[220];
           let detailElement;
           if (
-            $[220] !== onBack_2 ||
-            $[221] !== elementKey ||
-            $[222] !== onClose ||
-            $[223] !== onStop ||
-            $[224] !== detailItem ||
-            $[225] !== onOpenTranscript_
+            $[221] !== onBack_2 ||
+            $[222] !== elementKey ||
+            $[223] !== onClose ||
+            $[224] !== onStop ||
+            $[225] !== detailItem ||
+            $[226] !== onOpenTranscript_
           ) {
             detailElement = jsxProd_default(
               subagentHistoryDetailGates,
@@ -1895,33 +1931,33 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[220] = onBack_2;
-            $[221] = elementKey;
-            $[222] = onClose;
-            $[223] = onStop;
-            $[224] = detailItem;
-            $[225] = onOpenTranscript_;
-            $[226] = detailElement;
-          } else detailElement = $[226];
+            $[221] = onBack_2;
+            $[222] = elementKey;
+            $[223] = onClose;
+            $[224] = onStop;
+            $[225] = detailItem;
+            $[226] = onOpenTranscript_;
+            $[227] = detailElement;
+          } else detailElement = $[227];
           return detailElement;
         }
         const elementKey = `teammate-${detailItem.id}`;
         let onKill;
-        if ($[227] !== killDreamTask || $[228] !== detailItem.id || $[229] !== detailItem.status) {
+        if ($[228] !== killDreamTask || $[229] !== detailItem.id || $[230] !== detailItem.status) {
           onKill = detailItem.status === "running" ? () => void killDreamTask(detailItem.id) : undefined;
-          $[227] = killDreamTask;
-          $[228] = detailItem.id;
-          $[229] = detailItem.status;
-          $[230] = onKill;
-        } else onKill = $[230];
+          $[228] = killDreamTask;
+          $[229] = detailItem.id;
+          $[230] = detailItem.status;
+          $[231] = onKill;
+        } else onKill = $[231];
         let element;
         if (
-          $[231] !== onBack_2 ||
-          $[232] !== onDone ||
-          $[233] !== elementKey ||
-          $[234] !== onKill ||
-          $[235] !== detailItem ||
-          $[236] !== onOpenTranscript_
+          $[232] !== onBack_2 ||
+          $[233] !== onDone ||
+          $[234] !== elementKey ||
+          $[235] !== onKill ||
+          $[236] !== detailItem ||
+          $[237] !== onOpenTranscript_
         ) {
           element = jsxProd_default(
             InProcessTeammateDetailDialog,
@@ -1934,19 +1970,19 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[231] = onBack_2;
-          $[232] = onDone;
-          $[233] = elementKey;
-          $[234] = onKill;
-          $[235] = detailItem;
-          $[236] = onOpenTranscript_;
-          $[237] = element;
-        } else element = $[237];
+          $[232] = onBack_2;
+          $[233] = onDone;
+          $[234] = elementKey;
+          $[235] = onKill;
+          $[236] = detailItem;
+          $[237] = onOpenTranscript_;
+          $[238] = element;
+        } else element = $[238];
         return element;
       }
       case "local_workflow": {
         let workflowActions;
-        if ($[238] !== setAppState_2 || $[239] !== detailItem.id || $[240] !== detailItem.status) {
+        if ($[239] !== setAppState_2 || $[240] !== detailItem.id || $[241] !== detailItem.status) {
           workflowActions =
             detailItem.status === "running"
               ? {
@@ -1956,39 +1992,39 @@ function BackgroundTasksDialog(props) {
                   onRetryAgent: (exitState) => retryWorkflowAgent(detailItem.id, exitState, setAppState_2),
                 }
               : undefined;
-          $[238] = setAppState_2;
-          $[239] = detailItem.id;
-          $[240] = detailItem.status;
-          $[241] = workflowActions;
-        } else workflowActions = $[241];
+          $[239] = setAppState_2;
+          $[240] = detailItem.id;
+          $[241] = detailItem.status;
+          $[242] = workflowActions;
+        } else workflowActions = $[242];
         let workflowActions_ = workflowActions;
         if (dreamDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `workflow-${detailItem.id}`;
           let onClose;
-          if ($[242] !== onDone) {
+          if ($[243] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[242] = onDone;
-            $[243] = onClose;
-          } else onClose = $[243];
+            $[243] = onDone;
+            $[244] = onClose;
+          } else onClose = $[244];
           const onStop = workflowActions_?.onKill;
           const onPause = workflowActions_?.onPause;
           const onSkipAgent = workflowActions_?.onSkipAgent;
           const onRetryAgent = workflowActions_?.onRetryAgent;
           let detailElement;
           if (
-            $[244] !== onBack_2 ||
-            $[245] !== onDone ||
-            $[246] !== promptVisibleBelow_2 ||
-            $[247] !== elementKey ||
-            $[248] !== onClose ||
-            $[249] !== onStop ||
-            $[250] !== onPause ||
-            $[251] !== onSkipAgent ||
-            $[252] !== onRetryAgent ||
-            $[253] !== detailItem
+            $[245] !== onBack_2 ||
+            $[246] !== onDone ||
+            $[247] !== promptVisibleBelow_2 ||
+            $[248] !== elementKey ||
+            $[249] !== onClose ||
+            $[250] !== onStop ||
+            $[251] !== onPause ||
+            $[252] !== onSkipAgent ||
+            $[253] !== onRetryAgent ||
+            $[254] !== detailItem
           ) {
             detailElement = jsxProd_default(
               dreamDetailGates,
@@ -2005,18 +2041,18 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[244] = onBack_2;
-            $[245] = onDone;
-            $[246] = promptVisibleBelow_2;
-            $[247] = elementKey;
-            $[248] = onClose;
-            $[249] = onStop;
-            $[250] = onPause;
-            $[251] = onSkipAgent;
-            $[252] = onRetryAgent;
-            $[253] = detailItem;
-            $[254] = detailElement;
-          } else detailElement = $[254];
+            $[245] = onBack_2;
+            $[246] = onDone;
+            $[247] = promptVisibleBelow_2;
+            $[248] = elementKey;
+            $[249] = onClose;
+            $[250] = onStop;
+            $[251] = onPause;
+            $[252] = onSkipAgent;
+            $[253] = onRetryAgent;
+            $[254] = detailItem;
+            $[255] = detailElement;
+          } else detailElement = $[255];
           return detailElement;
         }
         const elementKey = `workflow-${detailItem.id}`;
@@ -2026,15 +2062,15 @@ function BackgroundTasksDialog(props) {
         const onRetryAgent = workflowActions_?.onRetryAgent;
         let element;
         if (
-          $[255] !== onBack_2 ||
-          $[256] !== onDone ||
-          $[257] !== promptVisibleBelow_2 ||
-          $[258] !== elementKey ||
-          $[259] !== onKill ||
-          $[260] !== onPause ||
-          $[261] !== onSkipAgent ||
-          $[262] !== onRetryAgent ||
-          $[263] !== detailItem
+          $[256] !== onBack_2 ||
+          $[257] !== onDone ||
+          $[258] !== promptVisibleBelow_2 ||
+          $[259] !== elementKey ||
+          $[260] !== onKill ||
+          $[261] !== onPause ||
+          $[262] !== onSkipAgent ||
+          $[263] !== onRetryAgent ||
+          $[264] !== detailItem
         ) {
           element = jsxProd_default(
             WorkflowDetailDialog,
@@ -2050,17 +2086,17 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[255] = onBack_2;
-          $[256] = onDone;
-          $[257] = promptVisibleBelow_2;
-          $[258] = elementKey;
-          $[259] = onKill;
-          $[260] = onPause;
-          $[261] = onSkipAgent;
-          $[262] = onRetryAgent;
-          $[263] = detailItem;
-          $[264] = element;
-        } else element = $[264];
+          $[256] = onBack_2;
+          $[257] = onDone;
+          $[258] = promptVisibleBelow_2;
+          $[259] = elementKey;
+          $[260] = onKill;
+          $[261] = onPause;
+          $[262] = onSkipAgent;
+          $[263] = onRetryAgent;
+          $[264] = detailItem;
+          $[265] = element;
+        } else element = $[265];
         return element;
       }
       case "mcp_task": {
@@ -2070,30 +2106,30 @@ function BackgroundTasksDialog(props) {
         if (mcpTaskDetailFeatureGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `mcp-task-${detailItem.id}`;
           let onClose;
-          if ($[265] !== onDone) {
+          if ($[266] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[265] = onDone;
-            $[266] = onClose;
-          } else onClose = $[266];
+            $[266] = onDone;
+            $[267] = onClose;
+          } else onClose = $[267];
           let onStop;
-          if ($[267] !== killAgentTask || $[268] !== detailItem.id) {
+          if ($[268] !== killAgentTask || $[269] !== detailItem.id) {
             onStop = () => {
               if (kill) killAgentTask(detailItem.id, kill);
             };
-            $[267] = killAgentTask;
-            $[268] = detailItem.id;
-            $[269] = onStop;
-          } else onStop = $[269];
+            $[268] = killAgentTask;
+            $[269] = detailItem.id;
+            $[270] = onStop;
+          } else onStop = $[270];
           let detailElement;
           if (
-            $[270] !== onBack_2 ||
-            $[271] !== elementKey ||
-            $[272] !== onClose ||
-            $[273] !== onStop ||
-            $[274] !== detailItem
+            $[271] !== onBack_2 ||
+            $[272] !== elementKey ||
+            $[273] !== onClose ||
+            $[274] !== onStop ||
+            $[275] !== detailItem
           ) {
             detailElement = jsxProd_default(
               mcpTaskDetailFeatureGates,
@@ -2105,43 +2141,43 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[270] = onBack_2;
-            $[271] = elementKey;
-            $[272] = onClose;
-            $[273] = onStop;
-            $[274] = detailItem;
-            $[275] = detailElement;
-          } else detailElement = $[275];
+            $[271] = onBack_2;
+            $[272] = elementKey;
+            $[273] = onClose;
+            $[274] = onStop;
+            $[275] = detailItem;
+            $[276] = detailElement;
+          } else detailElement = $[276];
           return detailElement;
         }
         const elementKey = `mcp-task-${detailItem.id}`;
         let onDone_2;
-        if ($[276] !== onDone) {
+        if ($[277] !== onDone) {
           onDone_2 = () =>
             onDone("Background dialog dismissed", {
               display: "skip",
             });
-          $[276] = onDone;
-          $[277] = onDone_2;
-        } else onDone_2 = $[277];
+          $[277] = onDone;
+          $[278] = onDone_2;
+        } else onDone_2 = $[278];
         let onKill;
-        if ($[278] !== killAgentTask || $[279] !== detailItem.id || $[280] !== detailItem.status) {
+        if ($[279] !== killAgentTask || $[280] !== detailItem.id || $[281] !== detailItem.status) {
           onKill =
             detailItem.status === "running" && kill
               ? () => void killAgentTask(detailItem.id, kill)
               : undefined;
-          $[278] = killAgentTask;
-          $[279] = detailItem.id;
-          $[280] = detailItem.status;
-          $[281] = onKill;
-        } else onKill = $[281];
+          $[279] = killAgentTask;
+          $[280] = detailItem.id;
+          $[281] = detailItem.status;
+          $[282] = onKill;
+        } else onKill = $[282];
         let element;
         if (
-          $[282] !== onBack_2 ||
-          $[283] !== elementKey ||
-          $[284] !== onDone_2 ||
-          $[285] !== onKill ||
-          $[286] !== detailItem
+          $[283] !== onBack_2 ||
+          $[284] !== elementKey ||
+          $[285] !== onDone_2 ||
+          $[286] !== onKill ||
+          $[287] !== detailItem
         ) {
           element = jsxProd_default(
             McpTaskDetailDialog,
@@ -2153,13 +2189,13 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[282] = onBack_2;
-          $[283] = elementKey;
-          $[284] = onDone_2;
-          $[285] = onKill;
-          $[286] = detailItem;
-          $[287] = element;
-        } else element = $[287];
+          $[283] = onBack_2;
+          $[284] = elementKey;
+          $[285] = onDone_2;
+          $[286] = onKill;
+          $[287] = detailItem;
+          $[288] = element;
+        } else element = $[288];
         return element;
       }
       case "monitor_mcp": {
@@ -2169,28 +2205,28 @@ function BackgroundTasksDialog(props) {
         if (monitorMcpDetailFeatureGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `monitor-mcp-${detailItem.id}`;
           let onClose;
-          if ($[288] !== onDone) {
+          if ($[289] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[288] = onDone;
-            $[289] = onClose;
-          } else onClose = $[289];
+            $[289] = onDone;
+            $[290] = onClose;
+          } else onClose = $[290];
           let onStop;
-          if ($[290] !== setAppState_2 || $[291] !== detailItem.id) {
+          if ($[291] !== setAppState_2 || $[292] !== detailItem.id) {
             onStop = () => killMonitorMcp?.(detailItem.id, setAppState_2);
-            $[290] = setAppState_2;
-            $[291] = detailItem.id;
-            $[292] = onStop;
-          } else onStop = $[292];
+            $[291] = setAppState_2;
+            $[292] = detailItem.id;
+            $[293] = onStop;
+          } else onStop = $[293];
           let detailElement;
           if (
-            $[293] !== onBack_2 ||
-            $[294] !== elementKey ||
-            $[295] !== onClose ||
-            $[296] !== onStop ||
-            $[297] !== detailItem
+            $[294] !== onBack_2 ||
+            $[295] !== elementKey ||
+            $[296] !== onClose ||
+            $[297] !== onStop ||
+            $[298] !== detailItem
           ) {
             detailElement = jsxProd_default(
               monitorMcpDetailFeatureGates,
@@ -2202,29 +2238,29 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[293] = onBack_2;
-            $[294] = elementKey;
-            $[295] = onClose;
-            $[296] = onStop;
-            $[297] = detailItem;
-            $[298] = detailElement;
-          } else detailElement = $[298];
+            $[294] = onBack_2;
+            $[295] = elementKey;
+            $[296] = onClose;
+            $[297] = onStop;
+            $[298] = detailItem;
+            $[299] = detailElement;
+          } else detailElement = $[299];
           return detailElement;
         }
         const elementKey = `monitor-mcp-${detailItem.id}`;
         let onKill;
-        if ($[299] !== setAppState_2 || $[300] !== detailItem.id || $[301] !== detailItem.status) {
+        if ($[300] !== setAppState_2 || $[301] !== detailItem.id || $[302] !== detailItem.status) {
           onKill =
             detailItem.status === "running" && killMonitorMcp
               ? () => killMonitorMcp(detailItem.id, setAppState_2)
               : undefined;
-          $[299] = setAppState_2;
-          $[300] = detailItem.id;
-          $[301] = detailItem.status;
-          $[302] = onKill;
-        } else onKill = $[302];
+          $[300] = setAppState_2;
+          $[301] = detailItem.id;
+          $[302] = detailItem.status;
+          $[303] = onKill;
+        } else onKill = $[303];
         let element;
-        if ($[303] !== onBack_2 || $[304] !== elementKey || $[305] !== onKill || $[306] !== detailItem) {
+        if ($[304] !== onBack_2 || $[305] !== elementKey || $[306] !== onKill || $[307] !== detailItem) {
           element = jsxProd_default(
             mcpTaskDetailDialogModule,
             {
@@ -2234,40 +2270,40 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[303] = onBack_2;
-          $[304] = elementKey;
-          $[305] = onKill;
-          $[306] = detailItem;
-          $[307] = element;
-        } else element = $[307];
+          $[304] = onBack_2;
+          $[305] = elementKey;
+          $[306] = onKill;
+          $[307] = detailItem;
+          $[308] = element;
+        } else element = $[308];
         return element;
       }
       case "dream": {
         if (workflowDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `dream-${detailItem.id}`;
           let onClose;
-          if ($[308] !== onDone) {
+          if ($[309] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[308] = onDone;
-            $[309] = onClose;
-          } else onClose = $[309];
+            $[309] = onDone;
+            $[310] = onClose;
+          } else onClose = $[310];
           let onStop;
-          if ($[310] !== killMemoryImportTask || $[311] !== detailItem.id) {
+          if ($[311] !== killMemoryImportTask || $[312] !== detailItem.id) {
             onStop = () => void killMemoryImportTask(detailItem.id).catch(logErrorWrapper4);
-            $[310] = killMemoryImportTask;
-            $[311] = detailItem.id;
-            $[312] = onStop;
-          } else onStop = $[312];
+            $[311] = killMemoryImportTask;
+            $[312] = detailItem.id;
+            $[313] = onStop;
+          } else onStop = $[313];
           let detailElement;
           if (
-            $[313] !== onBack_2 ||
-            $[314] !== elementKey ||
-            $[315] !== onClose ||
-            $[316] !== onStop ||
-            $[317] !== detailItem
+            $[314] !== onBack_2 ||
+            $[315] !== elementKey ||
+            $[316] !== onClose ||
+            $[317] !== onStop ||
+            $[318] !== detailItem
           ) {
             detailElement = jsxProd_default(
               workflowDetailGates,
@@ -2279,41 +2315,41 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[313] = onBack_2;
-            $[314] = elementKey;
-            $[315] = onClose;
-            $[316] = onStop;
-            $[317] = detailItem;
-            $[318] = detailElement;
-          } else detailElement = $[318];
+            $[314] = onBack_2;
+            $[315] = elementKey;
+            $[316] = onClose;
+            $[317] = onStop;
+            $[318] = detailItem;
+            $[319] = detailElement;
+          } else detailElement = $[319];
           return detailElement;
         }
         const elementKey = `dream-${detailItem.id}`;
         let onDone_2;
-        if ($[319] !== onDone) {
+        if ($[320] !== onDone) {
           onDone_2 = () =>
             onDone("Background dialog dismissed", {
               display: "skip",
             });
-          $[319] = onDone;
-          $[320] = onDone_2;
-        } else onDone_2 = $[320];
+          $[320] = onDone;
+          $[321] = onDone_2;
+        } else onDone_2 = $[321];
         let onKill;
-        if ($[321] !== killMemoryImportTask || $[322] !== detailItem.id || $[323] !== detailItem.status) {
+        if ($[322] !== killMemoryImportTask || $[323] !== detailItem.id || $[324] !== detailItem.status) {
           onKill =
             detailItem.status === "running" ? () => void killMemoryImportTask(detailItem.id) : undefined;
-          $[321] = killMemoryImportTask;
-          $[322] = detailItem.id;
-          $[323] = detailItem.status;
-          $[324] = onKill;
-        } else onKill = $[324];
+          $[322] = killMemoryImportTask;
+          $[323] = detailItem.id;
+          $[324] = detailItem.status;
+          $[325] = onKill;
+        } else onKill = $[325];
         let element;
         if (
-          $[325] !== onBack_2 ||
-          $[326] !== elementKey ||
-          $[327] !== onDone_2 ||
-          $[328] !== onKill ||
-          $[329] !== detailItem
+          $[326] !== onBack_2 ||
+          $[327] !== elementKey ||
+          $[328] !== onDone_2 ||
+          $[329] !== onKill ||
+          $[330] !== detailItem
         ) {
           element = jsxProd_default(
             DreamDetailDialog,
@@ -2325,41 +2361,41 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[325] = onBack_2;
-          $[326] = elementKey;
-          $[327] = onDone_2;
-          $[328] = onKill;
-          $[329] = detailItem;
-          $[330] = element;
-        } else element = $[330];
+          $[326] = onBack_2;
+          $[327] = elementKey;
+          $[328] = onDone_2;
+          $[329] = onKill;
+          $[330] = detailItem;
+          $[331] = element;
+        } else element = $[331];
         return element;
       }
       case "auto_mode_scan": {
         if (remoteAgentDetailGates !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `auto-mode-scan-${detailItem.id}`;
           let onClose;
-          if ($[331] !== onDone) {
+          if ($[332] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[331] = onDone;
-            $[332] = onClose;
-          } else onClose = $[332];
+            $[332] = onDone;
+            $[333] = onClose;
+          } else onClose = $[333];
           let onStop;
-          if ($[333] !== killRemoteAgentTask || $[334] !== detailItem.id) {
+          if ($[334] !== killRemoteAgentTask || $[335] !== detailItem.id) {
             onStop = () => void killRemoteAgentTask(detailItem.id).catch(logErrorWrapper5);
-            $[333] = killRemoteAgentTask;
-            $[334] = detailItem.id;
-            $[335] = onStop;
-          } else onStop = $[335];
+            $[334] = killRemoteAgentTask;
+            $[335] = detailItem.id;
+            $[336] = onStop;
+          } else onStop = $[336];
           let detailElement;
           if (
-            $[336] !== onBack_2 ||
-            $[337] !== elementKey ||
-            $[338] !== onClose ||
-            $[339] !== onStop ||
-            $[340] !== detailItem
+            $[337] !== onBack_2 ||
+            $[338] !== elementKey ||
+            $[339] !== onClose ||
+            $[340] !== onStop ||
+            $[341] !== detailItem
           ) {
             detailElement = jsxProd_default(
               remoteAgentDetailGates,
@@ -2371,41 +2407,41 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[336] = onBack_2;
-            $[337] = elementKey;
-            $[338] = onClose;
-            $[339] = onStop;
-            $[340] = detailItem;
-            $[341] = detailElement;
-          } else detailElement = $[341];
+            $[337] = onBack_2;
+            $[338] = elementKey;
+            $[339] = onClose;
+            $[340] = onStop;
+            $[341] = detailItem;
+            $[342] = detailElement;
+          } else detailElement = $[342];
           return detailElement;
         }
         const elementKey = `auto-mode-scan-${detailItem.id}`;
         let onDone_2;
-        if ($[342] !== onDone) {
+        if ($[343] !== onDone) {
           onDone_2 = () =>
             onDone("Background dialog dismissed", {
               display: "skip",
             });
-          $[342] = onDone;
-          $[343] = onDone_2;
-        } else onDone_2 = $[343];
+          $[343] = onDone;
+          $[344] = onDone_2;
+        } else onDone_2 = $[344];
         let onKill;
-        if ($[344] !== killRemoteAgentTask || $[345] !== detailItem.id || $[346] !== detailItem.status) {
+        if ($[345] !== killRemoteAgentTask || $[346] !== detailItem.id || $[347] !== detailItem.status) {
           onKill =
             detailItem.status === "running" ? () => void killRemoteAgentTask(detailItem.id) : undefined;
-          $[344] = killRemoteAgentTask;
-          $[345] = detailItem.id;
-          $[346] = detailItem.status;
-          $[347] = onKill;
-        } else onKill = $[347];
+          $[345] = killRemoteAgentTask;
+          $[346] = detailItem.id;
+          $[347] = detailItem.status;
+          $[348] = onKill;
+        } else onKill = $[348];
         let element;
         if (
-          $[348] !== onBack_2 ||
-          $[349] !== elementKey ||
-          $[350] !== onDone_2 ||
-          $[351] !== onKill ||
-          $[352] !== detailItem
+          $[349] !== onBack_2 ||
+          $[350] !== elementKey ||
+          $[351] !== onDone_2 ||
+          $[352] !== onKill ||
+          $[353] !== detailItem
         ) {
           element = jsxProd_default(
             TaskDetailDialog,
@@ -2417,41 +2453,41 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[348] = onBack_2;
-          $[349] = elementKey;
-          $[350] = onDone_2;
-          $[351] = onKill;
-          $[352] = detailItem;
-          $[353] = element;
-        } else element = $[353];
+          $[349] = onBack_2;
+          $[350] = elementKey;
+          $[351] = onDone_2;
+          $[352] = onKill;
+          $[353] = detailItem;
+          $[354] = element;
+        } else element = $[354];
         return element;
       }
       case "local_memory_import": {
         if (localMemoryDetailModule !== null && detailScreenGates?.isBackgroundDetailScreenEnabled()) {
           const elementKey = `local-memory-import-${detailItem.id}`;
           let onClose;
-          if ($[354] !== onDone) {
+          if ($[355] !== onDone) {
             onClose = () =>
               onDone("Background dialog dismissed", {
                 display: "skip",
               });
-            $[354] = onDone;
-            $[355] = onClose;
-          } else onClose = $[355];
+            $[355] = onDone;
+            $[356] = onClose;
+          } else onClose = $[356];
           let onStop;
-          if ($[356] !== killAutoModeScanTask || $[357] !== detailItem.id) {
+          if ($[357] !== killAutoModeScanTask || $[358] !== detailItem.id) {
             onStop = () => void killAutoModeScanTask(detailItem.id).catch(logErrorWrapper6);
-            $[356] = killAutoModeScanTask;
-            $[357] = detailItem.id;
-            $[358] = onStop;
-          } else onStop = $[358];
+            $[357] = killAutoModeScanTask;
+            $[358] = detailItem.id;
+            $[359] = onStop;
+          } else onStop = $[359];
           let detailElement;
           if (
-            $[359] !== onBack_2 ||
-            $[360] !== elementKey ||
-            $[361] !== onClose ||
-            $[362] !== onStop ||
-            $[363] !== detailItem
+            $[360] !== onBack_2 ||
+            $[361] !== elementKey ||
+            $[362] !== onClose ||
+            $[363] !== onStop ||
+            $[364] !== detailItem
           ) {
             detailElement = jsxProd_default(
               localMemoryDetailModule,
@@ -2463,13 +2499,13 @@ function BackgroundTasksDialog(props) {
               },
               elementKey,
             );
-            $[359] = onBack_2;
-            $[360] = elementKey;
-            $[361] = onClose;
-            $[362] = onStop;
-            $[363] = detailItem;
-            $[364] = detailElement;
-          } else detailElement = $[364];
+            $[360] = onBack_2;
+            $[361] = elementKey;
+            $[362] = onClose;
+            $[363] = onStop;
+            $[364] = detailItem;
+            $[365] = detailElement;
+          } else detailElement = $[365];
           return detailElement;
         }
         if (!localMemoryImportDetailGates) {
@@ -2477,30 +2513,30 @@ function BackgroundTasksDialog(props) {
         }
         const elementKey = `local-memory-import-${detailItem.id}`;
         let onDone_2;
-        if ($[365] !== onDone) {
+        if ($[366] !== onDone) {
           onDone_2 = () =>
             onDone("Background dialog dismissed", {
               display: "skip",
             });
-          $[365] = onDone;
-          $[366] = onDone_2;
-        } else onDone_2 = $[366];
+          $[366] = onDone;
+          $[367] = onDone_2;
+        } else onDone_2 = $[367];
         let onKill;
-        if ($[367] !== killAutoModeScanTask || $[368] !== detailItem.id || $[369] !== detailItem.status) {
+        if ($[368] !== killAutoModeScanTask || $[369] !== detailItem.id || $[370] !== detailItem.status) {
           onKill =
             detailItem.status === "running" ? () => void killAutoModeScanTask(detailItem.id) : undefined;
-          $[367] = killAutoModeScanTask;
-          $[368] = detailItem.id;
-          $[369] = detailItem.status;
-          $[370] = onKill;
-        } else onKill = $[370];
+          $[368] = killAutoModeScanTask;
+          $[369] = detailItem.id;
+          $[370] = detailItem.status;
+          $[371] = onKill;
+        } else onKill = $[371];
         let element;
         if (
-          $[371] !== onBack_2 ||
-          $[372] !== elementKey ||
-          $[373] !== onDone_2 ||
-          $[374] !== onKill ||
-          $[375] !== detailItem
+          $[372] !== onBack_2 ||
+          $[373] !== elementKey ||
+          $[374] !== onDone_2 ||
+          $[375] !== onKill ||
+          $[376] !== detailItem
         ) {
           element = jsxProd_default(
             localMemoryImportDetailGates,
@@ -2512,22 +2548,23 @@ function BackgroundTasksDialog(props) {
             },
             elementKey,
           );
-          $[371] = onBack_2;
-          $[372] = elementKey;
-          $[373] = onDone_2;
-          $[374] = onKill;
-          $[375] = detailItem;
-          $[376] = element;
-        } else element = $[376];
+          $[372] = onBack_2;
+          $[373] = elementKey;
+          $[374] = onDone_2;
+          $[375] = onKill;
+          $[376] = detailItem;
+          $[377] = element;
+        } else element = $[377];
         return element;
       }
     }
   }
-  let runningShellCount = count(bashTasks, isTaskRunning_2);
-  let runningAgentCount = count(remoteSessions, isTaskRunningOrPending) + count(agentTasks, isTaskRunning_3);
-  let teammateCount = count(teammateTasks, getDisplayName_2);
+  let runningShellCount = countWhere(bashTasks, isTaskRunning_2);
+  let runningAgentCount =
+    countWhere(remoteSessions, isTaskRunningOrPending) + countWhere(agentTasks, isTaskRunning_3);
+  let teammateCount = countWhere(teammateTasks, getDisplayName_2);
   let summaryChildren;
-  if ($[377] !== runningAgentCount || $[378] !== runningShellCount || $[379] !== teammateCount) {
+  if ($[378] !== runningAgentCount || $[379] !== runningShellCount || $[380] !== teammateCount) {
     summaryChildren = intersperse(
       [
         ...(teammateCount > 0
@@ -2574,15 +2611,15 @@ function BackgroundTasksDialog(props) {
       ],
       renderSeparator,
     );
-    $[377] = runningAgentCount;
-    $[378] = runningShellCount;
-    $[379] = teammateCount;
-    $[380] = summaryChildren;
-  } else summaryChildren = $[380];
+    $[378] = runningAgentCount;
+    $[379] = runningShellCount;
+    $[380] = teammateCount;
+    $[381] = summaryChildren;
+  } else summaryChildren = $[381];
   let children = summaryChildren;
   let hintFormat = backgroundListV3Fallback ? TERSE_SHORTCUT_FORMAT : EMPTY_SHORTCUT_FORMAT;
   let navigationHints;
-  if ($[381] !== selectedItem || $[382] !== hintFormat || $[383] !== isScreenReaderEnabled) {
+  if ($[382] !== selectedItem || $[383] !== hintFormat || $[384] !== isScreenReaderEnabled) {
     navigationHints = isScreenReaderEnabled
       ? []
       : [
@@ -2651,17 +2688,17 @@ function BackgroundTasksDialog(props) {
               ]
             : []),
         ];
-    $[381] = selectedItem;
-    $[382] = hintFormat;
-    $[383] = isScreenReaderEnabled;
-    $[384] = navigationHints;
-  } else navigationHints = $[384];
+    $[382] = selectedItem;
+    $[383] = hintFormat;
+    $[384] = isScreenReaderEnabled;
+    $[385] = navigationHints;
+  } else navigationHints = $[385];
   let killAllHints;
   if (
-    $[385] !== selectedItem ||
-    $[386] !== hasMultipleRunningAgents ||
-    $[387] !== backgroundListV3Fallback ||
-    $[388] !== killAgentsShortcut
+    $[386] !== selectedItem ||
+    $[387] !== hasMultipleRunningAgents ||
+    $[388] !== backgroundListV3Fallback ||
+    $[389] !== killAgentsShortcut
   ) {
     killAllHints =
       selectedItem?.type === "local_agent" &&
@@ -2683,15 +2720,15 @@ function BackgroundTasksDialog(props) {
             ),
           ]
         : [];
-    $[385] = selectedItem;
-    $[386] = hasMultipleRunningAgents;
-    $[387] = backgroundListV3Fallback;
-    $[388] = killAgentsShortcut;
-    $[389] = killAllHints;
-  } else killAllHints = $[389];
+    $[386] = selectedItem;
+    $[387] = hasMultipleRunningAgents;
+    $[388] = backgroundListV3Fallback;
+    $[389] = killAgentsShortcut;
+    $[390] = killAllHints;
+  } else killAllHints = $[390];
   const action = viewState.mode === "actions" ? "go back" : "close";
   let escapeHint;
-  if ($[390] !== hintFormat || $[391] !== action) {
+  if ($[391] !== hintFormat || $[392] !== action) {
     escapeHint = jsxProd_default(
       KeyboardShortcutHint,
       {
@@ -2701,27 +2738,27 @@ function BackgroundTasksDialog(props) {
       },
       "esc",
     );
-    $[390] = hintFormat;
-    $[391] = action;
-    $[392] = escapeHint;
-  } else escapeHint = $[392];
+    $[391] = hintFormat;
+    $[392] = action;
+    $[393] = escapeHint;
+  } else escapeHint = $[393];
   let inputGuideChildren;
-  if ($[393] !== navigationHints || $[394] !== killAllHints || $[395] !== escapeHint) {
+  if ($[394] !== navigationHints || $[395] !== killAllHints || $[396] !== escapeHint) {
     inputGuideChildren = [...navigationHints, ...killAllHints, escapeHint];
-    $[393] = navigationHints;
-    $[394] = killAllHints;
-    $[395] = escapeHint;
-    $[396] = inputGuideChildren;
-  } else inputGuideChildren = $[396];
+    $[394] = navigationHints;
+    $[395] = killAllHints;
+    $[396] = escapeHint;
+    $[397] = inputGuideChildren;
+  } else inputGuideChildren = $[397];
   let children_2 = inputGuideChildren;
   let heading;
   if (
-    $[397] !== agentTasks.length ||
-    $[398] !== bashTasks ||
-    $[399] !== completedAgentTasks.length ||
-    $[400] !== remoteSessions.length ||
-    $[401] !== teammateTasks ||
-    $[402] !== teams.length
+    $[398] !== agentTasks.length ||
+    $[399] !== bashTasks ||
+    $[400] !== completedAgentTasks.length ||
+    $[401] !== remoteSessions.length ||
+    $[402] !== teammateTasks ||
+    $[403] !== teams.length
   ) {
     heading =
       teams.length > 0 &&
@@ -2731,36 +2768,37 @@ function BackgroundTasksDialog(props) {
         completedAgentTasks.length > 0) &&
       jsxProd_default(SectionHeading, {
         label: "Agents",
-        size: count(teammateTasks, getDisplayName),
+        size: countWhere(teammateTasks, getDisplayName),
       });
-    $[397] = agentTasks.length;
-    $[398] = bashTasks;
-    $[399] = completedAgentTasks.length;
-    $[400] = remoteSessions.length;
-    $[401] = teammateTasks;
-    $[402] = teams.length;
-    $[403] = heading;
-  } else heading = $[403];
+    $[398] = agentTasks.length;
+    $[399] = bashTasks;
+    $[400] = completedAgentTasks.length;
+    $[401] = remoteSessions.length;
+    $[402] = teammateTasks;
+    $[403] = teams.length;
+    $[404] = heading;
+  } else heading = $[404];
   let listRows_2;
   if (
-    $[404] !== agentTasks ||
-    $[405] !== autoModeScanTasks ||
-    $[406] !== bashTasks ||
-    $[407] !== completedAgentTasks ||
-    $[408] !== dreamTasks ||
-    $[409] !== historyRow ||
-    $[410] !== isScreenReaderEnabled ||
-    $[411] !== mcpMonitors ||
-    $[412] !== mcpTasks ||
-    $[413] !== memoryImportTasks ||
-    $[414] !== memorySaveTasks ||
-    $[415] !== remoteSessions ||
-    $[416] !== selfManaged ||
-    $[417] !== showSelfManaged ||
-    $[418] !== heading ||
-    $[419] !== teammateTasks ||
-    $[420] !== teams ||
-    $[421] !== workflowTasks
+    $[405] !== agentTasks ||
+    $[406] !== allSelectableItems ||
+    $[407] !== autoModeScanTasks ||
+    $[408] !== bashTasks ||
+    $[409] !== completedAgentTasks ||
+    $[410] !== dreamTasks ||
+    $[411] !== historyRow ||
+    $[412] !== isScreenReaderEnabled ||
+    $[413] !== mcpMonitors ||
+    $[414] !== mcpTasks ||
+    $[415] !== memoryImportTasks ||
+    $[416] !== memorySaveTasks ||
+    $[417] !== remoteSessions ||
+    $[418] !== selfManaged ||
+    $[419] !== showSelfManaged ||
+    $[420] !== heading ||
+    $[421] !== teammateTasks ||
+    $[422] !== teams ||
+    $[423] !== workflowTasks
   ) {
     let sections = [
       {
@@ -2845,7 +2883,14 @@ function BackgroundTasksDialog(props) {
         key: "post-turn-memory",
         items: memorySaveTasks,
       },
-      ...[],
+      ...(codeModeAccepted()
+        ? [
+            {
+              key: "scripts",
+              items: allSelectableItems.filter(isLocalScriptTaskRow),
+            },
+          ]
+        : []),
       {
         key: "self-managed",
         items: selfManaged,
@@ -2975,29 +3020,30 @@ function BackgroundTasksDialog(props) {
             );
       }),
     ]);
-    $[404] = agentTasks;
-    $[405] = autoModeScanTasks;
-    $[406] = bashTasks;
-    $[407] = completedAgentTasks;
-    $[408] = dreamTasks;
-    $[409] = historyRow;
-    $[410] = isScreenReaderEnabled;
-    $[411] = mcpMonitors;
-    $[412] = mcpTasks;
-    $[413] = memoryImportTasks;
-    $[414] = memorySaveTasks;
-    $[415] = remoteSessions;
-    $[416] = selfManaged;
-    $[417] = showSelfManaged;
-    $[418] = heading;
-    $[419] = teammateTasks;
-    $[420] = teams;
-    $[421] = workflowTasks;
-    $[422] = listRows_2;
-  } else listRows_2 = $[422];
+    $[405] = agentTasks;
+    $[406] = allSelectableItems;
+    $[407] = autoModeScanTasks;
+    $[408] = bashTasks;
+    $[409] = completedAgentTasks;
+    $[410] = dreamTasks;
+    $[411] = historyRow;
+    $[412] = isScreenReaderEnabled;
+    $[413] = mcpMonitors;
+    $[414] = mcpTasks;
+    $[415] = memoryImportTasks;
+    $[416] = memorySaveTasks;
+    $[417] = remoteSessions;
+    $[418] = selfManaged;
+    $[419] = showSelfManaged;
+    $[420] = heading;
+    $[421] = teammateTasks;
+    $[422] = teams;
+    $[423] = workflowTasks;
+    $[424] = listRows_2;
+  } else listRows_2 = $[424];
   let renderedRows = listRows_2;
   let listChildren;
-  if ($[423] !== backgroundListFallback || $[424] !== renderedRows) {
+  if ($[425] !== backgroundListFallback || $[426] !== renderedRows) {
     listChildren =
       backgroundListFallback && backgroundListModules
         ? backgroundListFallback.rows.map((item_8) =>
@@ -3013,10 +3059,10 @@ function BackgroundTasksDialog(props) {
             ),
           )
         : renderedRows;
-    $[423] = backgroundListFallback;
-    $[424] = renderedRows;
-    $[425] = listChildren;
-  } else listChildren = $[425];
+    $[425] = backgroundListFallback;
+    $[426] = renderedRows;
+    $[427] = listChildren;
+  } else listChildren = $[427];
   let renderedListRows = listChildren;
   let BACKGROUND_LIST_LINES =
     backgroundListModules && backgroundListFallback ? backgroundListModules.BACKGROUND_LIST_LINES : undefined;
@@ -3026,45 +3072,45 @@ function BackgroundTasksDialog(props) {
       : Math.min(renderedListRows.length, BACKGROUND_LIST_LINES ?? visibleRowCount);
   let dialogElement;
   if (
-    $[426] !== children_2 ||
-    $[427] !== allSelectableItems ||
-    $[428] !== focusedRow ||
-    $[429] !== onRowKeyDown ||
-    $[430] !== historyRow.length ||
-    $[431] !== renderedListRows ||
-    $[432] !== rows_2 ||
-    $[433] !== backgroundListFallback ||
-    $[434] !== BACKGROUND_LIST_LINES ||
-    $[435] !== onDone ||
-    $[436] !== onFocus ||
-    $[437] !== runItemAction ||
-    $[438] !== onSelect ||
-    $[439] !== children ||
-    $[440] !== columns ||
-    $[441] !== viewState.itemId ||
-    $[442] !== viewState.mode ||
-    $[443] !== visibleCount
+    $[428] !== children_2 ||
+    $[429] !== allSelectableItems ||
+    $[430] !== focusedRow ||
+    $[431] !== onRowKeyDown ||
+    $[432] !== historyRow.length ||
+    $[433] !== renderedListRows ||
+    $[434] !== rows_2 ||
+    $[435] !== backgroundListFallback ||
+    $[436] !== BACKGROUND_LIST_LINES ||
+    $[437] !== onDone ||
+    $[438] !== onFocus ||
+    $[439] !== runItemAction ||
+    $[440] !== onSelect ||
+    $[441] !== children ||
+    $[442] !== columns ||
+    $[443] !== viewState.itemId ||
+    $[444] !== viewState.mode ||
+    $[445] !== visibleCount
   ) {
     let actionItem =
       viewState.mode === "actions"
         ? allSelectableItems.find((item_9) => item_9.id === viewState.itemId)
         : undefined;
     let focusedIndex;
-    if ($[445] !== focusedRow || $[446] !== rows_2) {
+    if ($[447] !== focusedRow || $[448] !== rows_2) {
       let matchesFocus;
-      if ($[448] !== focusedRow) {
+      if ($[450] !== focusedRow) {
         matchesFocus = (item_10) => item_10.id === focusedRow.id;
-        $[448] = focusedRow;
-        $[449] = matchesFocus;
-      } else matchesFocus = $[449];
+        $[450] = focusedRow;
+        $[451] = matchesFocus;
+      } else matchesFocus = $[451];
       focusedIndex = rows_2.findIndex(matchesFocus);
-      $[445] = focusedRow;
-      $[446] = rows_2;
-      $[447] = focusedIndex;
-    } else focusedIndex = $[447];
+      $[447] = focusedRow;
+      $[448] = rows_2;
+      $[449] = focusedIndex;
+    } else focusedIndex = $[449];
     let focusedIndexOf = focusedIndex;
     let onCancel;
-    if ($[450] !== onDone || $[451] !== viewState.mode) {
+    if ($[452] !== onDone || $[453] !== viewState.mode) {
       onCancel = () => {
         if (viewState.mode === "actions") {
           setViewState({
@@ -3076,30 +3122,30 @@ function BackgroundTasksDialog(props) {
           display: "skip",
         });
       };
-      $[450] = onDone;
-      $[451] = viewState.mode;
-      $[452] = onCancel;
-    } else onCancel = $[452];
+      $[452] = onDone;
+      $[453] = viewState.mode;
+      $[454] = onCancel;
+    } else onCancel = $[454];
     let onCancel_2 = onCancel;
     let subtitle;
-    if ($[453] !== backgroundListFallback || $[454] !== children) {
+    if ($[455] !== backgroundListFallback || $[456] !== children) {
       subtitle = backgroundListFallback
         ? backgroundListFallback.count
         : jsxProd_default(Fragment, {
             children,
           });
-      $[453] = backgroundListFallback;
-      $[454] = children;
-      $[455] = subtitle;
-    } else subtitle = $[455];
+      $[455] = backgroundListFallback;
+      $[456] = children;
+      $[457] = subtitle;
+    } else subtitle = $[457];
     let inputGuide;
-    if ($[456] !== children_2) {
+    if ($[458] !== children_2) {
       inputGuide = jsxProd_default(Byline, {
         children: children_2,
       });
-      $[456] = children_2;
-      $[457] = inputGuide;
-    } else inputGuide = $[457];
+      $[458] = children_2;
+      $[459] = inputGuide;
+    } else inputGuide = $[459];
     dialogElement = jsxProd_default(Dialog, {
       title: "Background",
       subtitle,
@@ -3144,35 +3190,35 @@ function BackgroundTasksDialog(props) {
             ],
           }),
     });
-    $[426] = children_2;
-    $[427] = allSelectableItems;
-    $[428] = focusedRow;
-    $[429] = onRowKeyDown;
-    $[430] = historyRow.length;
-    $[431] = renderedListRows;
-    $[432] = rows_2;
-    $[433] = backgroundListFallback;
-    $[434] = BACKGROUND_LIST_LINES;
-    $[435] = onDone;
-    $[436] = onFocus;
-    $[437] = runItemAction;
-    $[438] = onSelect;
-    $[439] = children;
-    $[440] = columns;
-    $[441] = viewState.itemId;
-    $[442] = viewState.mode;
-    $[443] = visibleCount;
-    $[444] = dialogElement;
-  } else dialogElement = $[444];
+    $[428] = children_2;
+    $[429] = allSelectableItems;
+    $[430] = focusedRow;
+    $[431] = onRowKeyDown;
+    $[432] = historyRow.length;
+    $[433] = renderedListRows;
+    $[434] = rows_2;
+    $[435] = backgroundListFallback;
+    $[436] = BACKGROUND_LIST_LINES;
+    $[437] = onDone;
+    $[438] = onFocus;
+    $[439] = runItemAction;
+    $[440] = onSelect;
+    $[441] = children;
+    $[442] = columns;
+    $[443] = viewState.itemId;
+    $[444] = viewState.mode;
+    $[445] = visibleCount;
+    $[446] = dialogElement;
+  } else dialogElement = $[446];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:762915-762973 layout
+//@ chunk-czq1j3j2.js:783925-783983 layout
 var ACTION_LABELS = {
   view: "View",
   foreground: "Foreground",
   stop: "Stop",
 };
-//@ chunk-18hwfzwa.js:762973-763067 layout
+//@ chunk-czq1j3j2.js:783983-784077 layout
 function availableTaskActions(item) {
   return [
     ...(canOpenTaskDetail(item) ? ["view"] : []),
@@ -3180,14 +3226,14 @@ function availableTaskActions(item) {
     ...(canStopTask(item) ? ["stop"] : []),
   ];
 }
-//@ chunk-18hwfzwa.js:763067-763174 layout
+//@ chunk-czq1j3j2.js:784077-784184 layout
 function canOpenTaskDetail(item) {
   return (
     hasDetailDialog(item.type) ||
     (item.type === "recorded_agent" && item.row.entry.agentType !== undefined && !item.isRefused)
   );
 }
-//@ chunk-18hwfzwa.js:763174-763336 layout
+//@ chunk-czq1j3j2.js:784184-784346 layout
 function canForegroundTask(item) {
   return (
     (item.type === "in_process_teammate" && item.status === "running") ||
@@ -3198,7 +3244,7 @@ function canForegroundTask(item) {
       !getSelectableBackgroundTasks_2(item))
   );
 }
-//@ chunk-18hwfzwa.js:763336-763737 layout
+//@ chunk-czq1j3j2.js:784346-784762 layout
 /**
  * 任务是否可停止：处于运行中的各类后台任务（或活动中的本地代理）。
  */
@@ -3218,16 +3264,16 @@ function canStopTask(item) {
       item.type === "local_memory_import" ||
       item.type === "post_turn_memory" ||
       item.type === "remote_agent" ||
-      false)
+      (codeModeAccepted() && isLocalScriptTaskState(item.type)))
   );
 }
-//@ chunk-18hwfzwa.js:763737-763751 layout
+//@ chunk-czq1j3j2.js:784762-784776 layout
 var MAIN = "main";
-//@ chunk-18hwfzwa.js:763751-763818 layout
+//@ chunk-czq1j3j2.js:784776-784843 layout
 function viewingLabel(item) {
   return item.label === MAIN ? "Viewing main" : "Viewing leader";
 }
-//@ chunk-18hwfzwa.js:763818-763999 callgraph-fingerprint (2.1.88 match: Item, 0.252)
+//@ chunk-czq1j3j2.js:784843-785024 callgraph-fingerprint (2.1.88 match: Item, 0.252)
 function Item(t0) {
   if (
     t0.type === "leader" ||
@@ -3238,7 +3284,7 @@ function Item(t0) {
     return collapseWhitespace(t0.label);
   return collapseWhitespace(BackgroundTask(t0.task)?.label ?? t0.label);
 }
-//@ chunk-18hwfzwa.js:763999-764108 layout
+//@ chunk-czq1j3j2.js:785024-785133 layout
 function isParkedCompletedAgent(status) {
   return (
     status.type === "local_agent" &&
@@ -3247,11 +3293,11 @@ function isParkedCompletedAgent(status) {
     !(isCoordinatorPanelActive() && isTerminalStatus(status))
   );
 }
-//@ chunk-18hwfzwa.js:764108-764166 layout (2.1.88 match: getSelectableBackgroundTasks, 0.788)
+//@ chunk-czq1j3j2.js:785133-785191 layout (2.1.88 match: getSelectableBackgroundTasks, 0.787)
 function getSelectableBackgroundTasks_2(item) {
   return item.type === "local_agent" && isParkedCompletedAgent(item.task);
 }
-//@ chunk-18hwfzwa.js:764166-765510 fingerprint (2.1.88 match: toListItem, 0.784)
+//@ chunk-czq1j3j2.js:785191-786535 fingerprint (2.1.88 match: toListItem, 0.784)
 function toListItem(task) {
   switch (task.type) {
     case "local_bash":
@@ -3360,11 +3406,11 @@ function toListItem(task) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:765510-765534 affinity
+//@ chunk-czq1j3j2.js:786535-786559 affinity
 function useBackgroundListV3Stub() {
   return false;
 }
-//@ chunk-18hwfzwa.js:765534-765561 affinity
+//@ chunk-czq1j3j2.js:786559-786586 affinity
 function useBackgroundListStub() {
   return null;
 }

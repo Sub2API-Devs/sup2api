@@ -3,26 +3,26 @@
  *
  * BYOC git 代理与 sslVerify 设置（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t3sg9e26.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rzkdv0c6.js (13)
  * attribution: placement 13
  */
 
-//@ chunk-t3sg9e26.js:1313-1375 placement
+//@ chunk-rzkdv0c6.js:1312-1374 placement
 /**
  * 导出函数 `gitConfigPairs`：参数 e，返回 e.flatMap(([n, t]) => ["-c", `${n}=${t}`])。
  */
 function gitConfigPairs(pairs) {
   return pairs.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
 }
-//@ chunk-t3sg9e26.js:1375-1440 placement
+//@ chunk-rzkdv0c6.js:1374-1439 placement
 var EMPTY_TLS_TRUST_PLAN = {
   envOverrides: {},
   commandScopeEntries: [],
   fileSeedLines: "",
 };
-//@ chunk-t3sg9e26.js:1440-1908 placement
+//@ chunk-rzkdv0c6.js:1439-1907 placement
 /**
  * 按 git 角色（prep/resume/outcome/child/hook）决定证书文件与 sslVerify 设置如何处理：无路由时保持原样，否则分别交给对应的处理函数，返回环境覆盖、命令级配置和决策记录。
  */
@@ -53,7 +53,7 @@ function planGitTlsTrust(input) {
       return planHookGitTrust(input, input.routing, hasCertificateFile, skipVerification);
   }
 }
-//@ chunk-t3sg9e26.js:1908-2462 placement
+//@ chunk-rzkdv0c6.js:1907-2461 placement
 /**
  * 为 hook 角色规划 git 证书与 TLS 校验设置：不访问 git 挂载时保持原样，否则为挂载地址生成作用域配置并在需要时迁移关闭校验的设置。
  */
@@ -86,17 +86,17 @@ function planHookGitTrust(input, routing, hasCertificateFile, skipsVerification)
     },
   };
 }
-//@ chunk-t3sg9e26.js:2462-2557 placement
+//@ chunk-rzkdv0c6.js:2461-2556 placement
 function sslCaInfoEntries(url, path) {
   return ["", `${new URL(url).origin}.`, `${url}.`].map((scope) => [`http.${scope}sslCAInfo`, path]);
 }
-//@ chunk-t3sg9e26.js:2557-2622 placement
+//@ chunk-rzkdv0c6.js:2556-2621 placement
 function unsetEnvOverrides(overrides) {
   let env = {};
   for (let { name } of overrides) env[name] = undefined;
   return env;
 }
-//@ chunk-t3sg9e26.js:2622-3629 placement
+//@ chunk-rzkdv0c6.js:2621-3628 placement
 /**
  * prep/resume/outcome 角色的 TLS 信任方案：目标不走挂载路由时保持原设置；有运营方证书且信任包已构建时，把证书改为按目标 URL 作用的命令级配置。
  */
@@ -157,17 +157,17 @@ function planFetchGitTrust(input, hasCertificateFile, skipsVerification) {
     },
   };
 }
-//@ chunk-t3sg9e26.js:3629-3764 placement
+//@ chunk-rzkdv0c6.js:3628-3763 placement
 function certificateFileFor(config) {
   let trimmed = (config.serverCertificateFile ?? config.operator.certificateFile[0]?.value)?.trim();
   if (!trimmed || /[\n\r\0]/.test(trimmed)) return;
   return trimmed;
 }
-//@ chunk-t3sg9e26.js:3764-3837 placement
+//@ chunk-rzkdv0c6.js:3763-3836 placement
 function quoteGitConfigValue(value) {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
-//@ chunk-t3sg9e26.js:3837-4008 placement
+//@ chunk-rzkdv0c6.js:3836-4007 placement
 function mountUrlOrigins(config) {
   let origins = new Set();
   for (let url of [config.mountBaseUrl, config.pushBaseUrl])
@@ -176,14 +176,14 @@ function mountUrlOrigins(config) {
     }
   return [...origins];
 }
-//@ chunk-t3sg9e26.js:4008-4110 placement
+//@ chunk-rzkdv0c6.js:4007-4109 placement
 function sslVerifyEntries(urls, hosts) {
   return [...urls, ...hosts.map((host) => `https://${host}/`)].map((url) => [
     `http.${url}.sslVerify`,
     "true",
   ]);
 }
-//@ chunk-t3sg9e26.js:4110-4231 placement
+//@ chunk-rzkdv0c6.js:4109-4230 placement
 function sslVerifyConfigLines(entries) {
   return entries
     .map(([key, value]) => {
@@ -194,7 +194,7 @@ function sslVerifyConfigLines(entries) {
     })
     .join("");
 }
-//@ chunk-t3sg9e26.js:4231-5396 placement
+//@ chunk-rzkdv0c6.js:4230-5395 placement
 function armGitSslVerify(input, config, output) {
   let hasCert = input.serverCertificateFile !== undefined || input.operator.certificateFile.length > 0;
   let certFile = certificateFileFor(input);

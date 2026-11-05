@@ -1,8 +1,8 @@
 /**
  * jsonwebtoken/verify.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonwebtoken@9.0.1
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_validateAsymmetricKey } from "./lib/validateAsymmetricKey.js";
 import { require_psSupported } from "./lib/psSupported.js";
 import { require_jws } from "../jws/index.js";
 
-//@ chunk-mrx6y2r5.js:6093-10340 cjs-fingerprint
+//@ chunk-b5df2wx1.js:6093-10340 cjs-fingerprint
 var require_verify = __commonJS(function (cjsExports, cjsModule) {
   var JsonWebTokenError = require_JsonWebTokenError();
   var NotBeforeError = require_NotBeforeError();
@@ -101,7 +101,7 @@ var require_verify = __commonJS(function (cjsExports, cjsModule) {
             secretOrPublicKey = createSecretKey(
               typeof secretOrPublicKey === "string" ? Buffer.from(secretOrPublicKey) : secretOrPublicKey,
             );
-          } catch (_) {
+          } catch (error) {
             return done(new JsonWebTokenError("secretOrPublicKey is not valid key material"));
           }
         }

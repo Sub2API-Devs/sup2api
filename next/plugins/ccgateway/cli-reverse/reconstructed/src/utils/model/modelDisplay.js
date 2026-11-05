@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型显示名与模型选择器条目（订阅类型、Fable、[1m]）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (29)
  * attribution: placement 29
  */
 import {
@@ -63,7 +63,7 @@ import { is1mContextDisabled, get1mContextSupport } from "./contextWindow1m.js";
 import { env } from "../env.js";
 import { getMainLoopModelOverride } from "../../bootstrap/state.js";
 import {
-  getEffectiveSettingSource_2,
+  getEffectiveSettingSource,
   getRelativeSettingsFilePathForSource,
   getSecuritySensitiveSettingWithSources,
 } from "../settings/settings.js";
@@ -85,7 +85,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { identityModelId } from "./bedrock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:429417-429528 placement (2.1.88 match: resolveAgentModelDisplay, 1)
+//@ chunk-exfmq47h.js:440808-440919 placement (2.1.88 match: resolveAgentModelDisplay, 1)
 /**
  * 判断字符串是否为客户端可用的模型写法（别名、模型 ID、default、inherit 等）；供 utils/model 的 isClientSpelling 使用（共享指纹误归 agentDisplay）。
  */
@@ -101,14 +101,14 @@ function isClientModelSpelling(agent) {
     isKnownCustomModel(normalized)
   );
 }
-//@ chunk-aepeg2w5.js:459696-459792 placement
+//@ chunk-exfmq47h.js:471092-471188 placement
 function bytesPerTokenForModel(model) {
   if (!model) return 4;
   let userSpecifiedModel = parseUserSpecifiedModel(model);
   let replaced = strip1mSuffix(getCanonicalName(userSpecifiedModel)).replace(/[._]/g, "-");
   return LEGACY_SUBAGENT_MODEL_IDS.has(replaced) ? 4 : 3;
 }
-//@ chunk-aepeg2w5.js:459792-460412 placement
+//@ chunk-exfmq47h.js:471188-471808 placement
 function getClaudeAiUserDefaultModelDescription(fastMode = false) {
   let { setting, attribution } = resolveDefaultMainLoopModelSetting();
   if (attribution === "served") {
@@ -140,12 +140,12 @@ function getClaudeAiUserDefaultModelDescription(fastMode = false) {
   }
   return `${getMarketingNameForModel(stripAnyVersatileSuffix(getDefaultSonnetModel())) ?? "Sonnet"} \xB7 Efficient for routine tasks`;
 }
-//@ chunk-aepeg2w5.js:460412-460502 placement
+//@ chunk-exfmq47h.js:471808-471898 placement
 function renderDefaultModelSetting(setting) {
   if (setting === "opusplan") return "Opus in plan mode, else Sonnet";
   return renderModelName(parseUserSpecifiedModel(setting));
 }
-//@ chunk-aepeg2w5.js:460502-460634 placement
+//@ chunk-exfmq47h.js:471898-472030 placement
 function getModelPricingSuffix(fastMode, model) {
   if (!usesFirstPartyPricing()) return "";
   let canonical = firstPartyNameToCanonical(model);
@@ -153,7 +153,7 @@ function getModelPricingSuffix(fastMode, model) {
   if (price === undefined) return "";
   return ` \xB7${fastMode ? ` (${LIGHTNING})` : ""} ${price}`;
 }
-//@ chunk-aepeg2w5.js:460634-460789 placement (2.1.88 match: hasOpusAccess, 1)
+//@ chunk-exfmq47h.js:472030-472185 placement (2.1.88 match: hasOpusAccess, 1)
 /**
  * 是否可用 Opus：max 恒可；team 需 premium 或特性未限制；enterprise 需按量计费或未限制；pro 视特性。
  */
@@ -171,7 +171,7 @@ function isOpusDefaultSubscriber() {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:460789-461009 placement (2.1.88 match: isOpus1mMergeEnabled, 0.408)
+//@ chunk-exfmq47h.js:472185-472405 placement (2.1.88 match: isOpus1mMergeEnabled, 0.407)
 /**
  * Opus 1M 合并是否启用：未禁 1M、非 Pro、第一方；订阅用户需有订阅类型；默认 Opus 不能是 never 支持 1M 的模型。
  */
@@ -189,21 +189,21 @@ function isOpus1mMergeEnabled() {
   }
   return true;
 }
-//@ chunk-aepeg2w5.js:461009-461055 placement
+//@ chunk-exfmq47h.js:472405-472451 placement
 /**
  * 合并启用且该模型 1M 模式为 optIn。
  */
 function opus1mMergeAddsTagTo(model) {
   return isOpus1mMergeEnabled() && get1mContextSupport(model) === "optIn";
 }
-//@ chunk-aepeg2w5.js:461055-461103 placement
+//@ chunk-exfmq47h.js:472451-472499 placement
 /**
  * 默认 Opus 的 1M 模式为 optIn（此时 opus 默认带 [1m]）。
  */
 function opus1mMergeTagsDefaultOpus() {
   return isOpus1mMergeEnabled() && get1mContextSupport(getDefaultOpusModel()) === "optIn";
 }
-//@ chunk-aepeg2w5.js:461103-461140 placement
+//@ chunk-exfmq47h.js:472499-472536 placement
 /**
  * optIn 时给模型加 [1m]。
  */
@@ -212,7 +212,7 @@ function applyOpus1mOptIn(defaultOpusModel) {
     ? append1mSuffixIfMissing(defaultOpusModel)
     : defaultOpusModel;
 }
-//@ chunk-aepeg2w5.js:461140-461230 placement (2.1.88 match: renderModelSetting, 1)
+//@ chunk-exfmq47h.js:472536-472626 placement (2.1.88 match: renderModelSetting, 1)
 /**
  * 设置值的显示：opusplan 显示 "Opus Plan"，别名显示解析后模型名，否则直接显示名。
  */
@@ -221,14 +221,14 @@ function renderModelSetting(setting) {
   if (isModelKeyAlias(setting)) return renderModelName(parseUserSpecifiedModel(setting));
   return renderModelName(setting);
 }
-//@ chunk-aepeg2w5.js:461230-461456 placement
+//@ chunk-exfmq47h.js:472626-472852 placement
 /**
  * 模型来自项目设置或托管设置时返回 " (from …)"；有会话覆盖或 ANTHROPIC_MODEL 时为空。
  */
 function getModelSourceAnnotation() {
   if (getMainLoopModelOverride() !== undefined) return "";
   if (env.ANTHROPIC_MODEL) return "";
-  switch (getEffectiveSettingSource_2("model")) {
+  switch (getEffectiveSettingSource("model")) {
     case "projectSettings":
       return ` (from ${getRelativeSettingsFilePathForSource("projectSettings")})`;
     case "policySettings":
@@ -237,7 +237,7 @@ function getModelSourceAnnotation() {
       return "";
   }
 }
-//@ chunk-aepeg2w5.js:461456-461525 placement (2.1.88 match: resolveSkillModelOverride, 0.834)
+//@ chunk-exfmq47h.js:472852-472921 placement (2.1.88 match: resolveSkillModelOverride, 0.834)
 /**
  * 规范名在 catalog 的 display_name（[1m] 且支持时加 " (1M context)"）。旧版名 resolveSkillModelOverride_5 为错配。
  */
@@ -249,7 +249,7 @@ function getPublicModelDisplayName(model) {
     strip1mTagWhereBuiltIn(model).endsWith("[1m]"),
   );
 }
-//@ chunk-aepeg2w5.js:461525-461654 placement
+//@ chunk-exfmq47h.js:472921-473050 placement
 /**
  * catalog display_name，带 [1m] 且 supports_1m_suffix 时加 " (1M context)"。
  */
@@ -259,7 +259,7 @@ function getCatalogDisplayName(canonical, withSuffix) {
   let suffix = withSuffix && catalogEntry.context?.supports_1m_suffix ? " (1M context)" : "";
   return catalogEntry.display_name + suffix;
 }
-//@ chunk-aepeg2w5.js:461654-461769 placement
+//@ chunk-exfmq47h.js:473050-473165 placement
 /**
  * 机密模型代号只露前三个字母，其余换成星号。
  */
@@ -267,7 +267,7 @@ function maskModelCodename(baseName) {
   let [codename = "", ...rest] = baseName.split("-");
   return [codename.slice(0, 3) + "*".repeat(Math.max(0, codename.length - 3)), ...rest].join("-");
 }
-//@ chunk-aepeg2w5.js:461769-461896 placement
+//@ chunk-exfmq47h.js:473165-473293 placement
 /**
  * 已启用设置源里第一个 modelPicker 配置及其来源。
  */
@@ -283,7 +283,7 @@ function getCuratedModelPicker() {
       }
     : undefined;
 }
-//@ chunk-aepeg2w5.js:461896-462018 placement
+//@ chunk-exfmq47h.js:473293-473415 placement
 /**
  * modelPicker 选项里该模型的自定义 label。
  */
@@ -294,7 +294,7 @@ function getModelPickerLabel(model) {
     ?.label?.trim();
   return trimmed_2 === "" ? undefined : trimmed_2;
 }
-//@ chunk-aepeg2w5.js:462018-462171 placement
+//@ chunk-exfmq47h.js:473415-473568 placement
 /**
  * modelPicker 选项里该模型的 behavesAs（按哪个已知模型对待）。
  */
@@ -306,7 +306,7 @@ function getModelPickerBehavesAs(model) {
     ?.behavesAs?.trim();
   return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
-//@ chunk-aepeg2w5.js:462171-462260 placement
+//@ chunk-exfmq47h.js:473568-473657 placement
 /**
  * 是否有任一 modelPicker 选项设置了 behavesAs。
  */
@@ -315,12 +315,12 @@ function hasModelPickerBehavesAs() {
     getCuratedModelPicker()?.picker.options.some((option) => (option.behavesAs?.trim() ?? "") !== "") ?? false
   );
 }
-//@ chunk-aepeg2w5.js:462260-462820 placement
+//@ chunk-exfmq47h.js:473657-474218 placement
 /**
  * 注册模型知识回调（是否已知、是否模型 id、客户端拼写、身份拼写、behavesAs 等）供规范化使用（顶层副作用语句）。
  */
 // deferred: uses MAX_LOOKUP_BUCKETS (./modelCatalog/catalogCapabilities.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:462260", () => {
+deferInit("chunk-exfmq47h.js:473657", () => {
   MAX_LOOKUP_BUCKETS({
     isKnown: (value) =>
       isRecognizedCanonical(
@@ -348,18 +348,18 @@ deferInit("chunk-aepeg2w5.js:462260", () => {
     namingGeneration: gatewayGeneration,
   });
 });
-//@ chunk-aepeg2w5.js:462820-462885 placement
+//@ chunk-exfmq47h.js:474218-474283 placement
 /**
  * 注册服务端能力查询：catalog 运行时说明了能力列表时以其为准（顶层副作用语句）。
  */
 // deferred: uses setServedCapabilityLookup (./modelCatalog.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:462820", () => {
+deferInit("chunk-exfmq47h.js:474218", () => {
   setServedCapabilityLookup((capability, modelIds) => {
     let result = matchesCatalogList(capability, ...modelIds);
     return result === false && !anyModelDescribed(...modelIds) ? undefined : result;
   });
 });
-//@ chunk-aepeg2w5.js:462885-462979 placement
+//@ chunk-exfmq47h.js:474283-474377 placement
 /**
  * 服务端目录对该模型 eager_input_streaming 的设置（仅在模型被描述时）。
  */
@@ -368,7 +368,7 @@ function statedEagerInputStreaming(model) {
   let eagerInputStreaming = servedRuntime(model, canonical)?.eager_input_streaming;
   return eagerInputStreaming != null && anyModelDescribed(model, canonical) ? eagerInputStreaming : undefined;
 }
-//@ chunk-aepeg2w5.js:462979-463465 placement
+//@ chunk-exfmq47h.js:474377-474863 placement
 /**
  * 模型显示名：modelPicker 标签 → 服务端目录名（机密时打码）→ 网关/附加模型选项标签 → catalog display_name → 原始字符串。
  */
@@ -409,7 +409,7 @@ function renderModelName(model) {
   if (publicModelDisplayName) return publicModelDisplayName;
   return sanitizeTitle(model) || "unknown model";
 }
-//@ chunk-aepeg2w5.js:463465-463621 placement
+//@ chunk-exfmq47h.js:474863-475019 placement
 /**
  * 模型族显示名（Fable/Haiku/Mythos/Opus/Sonnet）。
  */
@@ -422,7 +422,7 @@ function getModelFamilyName(model) {
     return lower === family || canonicalName.startsWith(`claude-${lower}-`);
   });
 }
-//@ chunk-aepeg2w5.js:463621-463825 placement
+//@ chunk-exfmq47h.js:475019-475223 placement
 /**
  * 族名在 GrowthBook tengu_calm_seal 列表中（只走 usage credits 的族）时返回族名；Fable 直接返回。
  */
@@ -437,14 +437,14 @@ function usageCreditsOnlyFamily(model) {
     ? modelFamilyName
     : undefined;
 }
-//@ chunk-aepeg2w5.js:463825-463863 placement
+//@ chunk-exfmq47h.js:475223-475261 placement
 /**
  * 模型族是否只能走 usage credits。
  */
 function isUsageCreditsOnlyModel(model) {
   return usageCreditsOnlyFamily(model) !== undefined;
 }
-//@ chunk-aepeg2w5.js:463863-463941 placement
+//@ chunk-exfmq47h.js:475261-475339 placement
 /**
  * 模型短名：族名或带版本的显示名（同族时）。
  */
@@ -455,7 +455,7 @@ function renderUsageCreditsOnlyModelName(model) {
     ? publicModelDisplayName
     : family;
 }
-//@ chunk-aepeg2w5.js:463941-464016 placement (2.1.88 match: getPublicModelName, 1)
+//@ chunk-exfmq47h.js:475339-475414 placement (2.1.88 match: getPublicModelName, 1)
 /**
  * 公开模型名 "Claude <显示名>"，未知时 "Claude (<id>)"。
  */
@@ -464,7 +464,7 @@ function getPublicModelName(model) {
   if (publicName) return `Claude ${publicName}`;
   return `Claude (${model})`;
 }
-//@ chunk-aepeg2w5.js:464016-464052 placement
+//@ chunk-exfmq47h.js:475414-475450 placement
 /**
  * 用户模型设置解析为具体模型 id（parseUserSpecifiedModel 后再做自定义拼写回映）。
  */
@@ -473,25 +473,25 @@ function parseUserSpecifiedModel(setting) {
 }
 export {
   bytesPerTokenForModel,
+  renderModelName,
   parseUserSpecifiedModel,
+  isUsageCreditsOnlyModel,
+  getPublicModelDisplayName,
+  getPublicModelName,
+  isOpus1mMergeEnabled,
+  renderUsageCreditsOnlyModelName,
+  opus1mMergeAddsTagTo,
+  statedEagerInputStreaming,
   getCuratedModelPicker,
   getClaudeAiUserDefaultModelDescription,
   getCatalogDisplayName,
-  getPublicModelDisplayName,
-  renderModelName,
-  isUsageCreditsOnlyModel,
   usageCreditsOnlyFamily,
-  renderUsageCreditsOnlyModelName,
-  getModelSourceAnnotation,
-  isOpus1mMergeEnabled,
   renderDefaultModelSetting,
   renderModelSetting,
-  opus1mMergeAddsTagTo,
   opus1mMergeTagsDefaultOpus,
+  getModelSourceAnnotation,
   getModelPricingSuffix,
   isOpusDefaultSubscriber,
   maskModelCodename,
   applyOpus1mOptIn,
-  statedEagerInputStreaming,
-  getPublicModelName,
 };

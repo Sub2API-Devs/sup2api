@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：轮询事件声明校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (35)
- * attribution: placement 35
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (36)
+ * attribution: placement 35, layout 1
  */
 import { POLL } from "../../tools/PollTool/prompt.js";
 import {
@@ -39,13 +39,13 @@ import { logForDebugging } from "../debug.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:157378-157503 placement
+//@ chunk-5xgkngpb.js:157403-157528 placement
 /**
  * POLL_EVENTS_ANNOUNCE_LINE：轮询事件到达时的系统提示行。
  */
 var TENGU_MOONLIT_ISLAND = "tengu_moonlit_island";
 var POLL_EVENTS_ANNOUNCE_LINE = `<system>One or more events arrived; they follow as the result of a ${POLL} call.</system>`;
-//@ chunk-e6aww6q8.js:157503-157670 placement
+//@ chunk-5xgkngpb.js:157528-157695 placement
 function declaredRoundStamp(entries) {
   try {
     return entries.length > 0 &&
@@ -62,14 +62,14 @@ function declaredRoundStamp(entries) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:157670-157695 placement
+//@ chunk-5xgkngpb.js:157695-157720 placement
 /**
  * neverDeclaresEvents：恒 false 的声明判定（占位）。
  */
 function neverDeclaresEvents(entries) {
   return false;
 }
-//@ chunk-e6aww6q8.js:157695-157810 placement
+//@ chunk-5xgkngpb.js:157720-157835 placement
 function isDeclaredRound(round) {
   try {
     return (
@@ -82,12 +82,12 @@ function isDeclaredRound(round) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:157810-157845 placement
+//@ chunk-5xgkngpb.js:157835-157870 placement
 var declaredRoundsSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:157810", () => {
+deferInit("chunk-5xgkngpb.js:157835", () => {
   declaredRoundsSeen = identity_2(new Set(), (store) => store.clear());
 });
-//@ chunk-e6aww6q8.js:157845-158153 placement
+//@ chunk-5xgkngpb.js:157870-158178 placement
 /**
  * 每个回合记录一次"轮询事件声明轮次"的特性状态（已生效、开关关闭或未标记）。
  */
@@ -108,7 +108,7 @@ function logDeclaredRound(roundId, round) {
       logFeatureSad("poll_event_declared_round", round.declaredRound === true ? "flag_off" : "not_stamped");
   } catch {}
 }
-//@ chunk-e6aww6q8.js:158153-158565 placement
+//@ chunk-5xgkngpb.js:158178-158590 placement
 /**
  * 轮询事件声明的上限与 schema：kind 数量、字段路径数、枚举值数、at 令牌长度、描述长度、对象嵌套深度、提示词字节数、kind 名称格式、保留键，以及声明/事件 schema。
  */
@@ -126,7 +126,7 @@ var declarationsSchema;
 var eventFieldsSchema;
 var pollEventSchema;
 var EMPTY_DECLARATIONS;
-deferInit("chunk-e6aww6q8.js:158153", () => {
+deferInit("chunk-5xgkngpb.js:158178", () => {
   MAX_DECLARED_KINDS = 64;
   MAX_FIELD_PATHS = 48;
   MAX_ENUM_VALUES = 32;
@@ -156,21 +156,21 @@ deferInit("chunk-e6aww6q8.js:158153", () => {
   );
   EMPTY_DECLARATIONS = new Map();
 });
-//@ chunk-e6aww6q8.js:158565-158612 placement
+//@ chunk-5xgkngpb.js:158590-158637 placement
 /**
  * eventDeclarations：宿主声明的事件种类。
  */
 function eventDeclarations() {
   return noHostDeclarations()?.declarations ?? EMPTY_DECLARATIONS;
 }
-//@ chunk-e6aww6q8.js:158612-158647 placement
+//@ chunk-5xgkngpb.js:158637-158672 placement
 /**
  * eventDeclarationFault：事件声明解析失败的原因。
  */
 function eventDeclarationFault() {
   return noHostDeclarations()?.fault;
 }
-//@ chunk-e6aww6q8.js:158647-159176 placement
+//@ chunk-5xgkngpb.js:158672-159201 placement
 function validatePollEventDeclarations(input) {
   let result = declarationsSchema().safeParse(input);
   if (!result.success) {
@@ -201,7 +201,7 @@ function validatePollEventDeclarations(input) {
     declarations: byKind,
   };
 }
-//@ chunk-e6aww6q8.js:159176-159499 placement
+//@ chunk-5xgkngpb.js:159201-159524 placement
 /**
  * 生成宿主声明的轮询事件说明提示词：每种 kind 的字段与不受信字段列表。
  */
@@ -210,10 +210,14 @@ function declaredKindsPrompt(byKind) {
   return `Your host declares the event kinds below. Poll returns each one as an event element whose body is one JSON object, with only the fields listed for its kind. ${EVENT_NONCE_RULE_TEXT} The host sets every field except those listed as untrusted, which may hold text from untrusted sources.
 ${declaredKindsList(byKind)}`;
 }
-//@ chunk-e6aww6q8.js:159499-159590 placement
+//@ chunk-5xgkngpb.js:159524-159546 layout
+function declaredKindsNotePlaceholder() {
+  return;
+}
+//@ chunk-5xgkngpb.js:159546-159637 placement
 var EVENT_NONCE_RULE_TEXT =
   "Such an event ends at the closing tag that repeats the nonce of its opening tag.";
-//@ chunk-e6aww6q8.js:159590-159984 placement
+//@ chunk-5xgkngpb.js:159637-160031 placement
 /**
  * 校验一条轮询事件：kind 未保留、字段符合声明、字段总字节不超限、at 是合法令牌，通过时返回信封与字段。
  */
@@ -246,31 +250,31 @@ function buildPollEventEnvelope({ declaration, at, fields }) {
     fields: fieldResult.value,
   };
 }
-//@ chunk-e6aww6q8.js:159984-160037 placement
+//@ chunk-5xgkngpb.js:160031-160084 placement
 /**
  * collectFieldStrings：汇总事件字段的字符串。
  */
-function collectFieldStrings(fields) {
+function collectFieldStrings(event) {
   let strings = [];
-  collectFieldStrings_2(fields, strings);
+  collectFieldStrings_2(event, strings);
   return strings.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:160037-160263 placement
+//@ chunk-5xgkngpb.js:160084-160310 placement
 function collectFieldStrings_2(value, out) {
   if (typeof value === "string") out.push(normalizeNewlines(value));
   else if (typeof value === "number" || typeof value === "boolean") out.push(String(value));
   else if (Array.isArray(value)) for (let item of value) collectFieldStrings_2(item, out);
   else if (isPlainRecord(value)) for (let item of Object.values(value)) collectFieldStrings_2(item, out);
 }
-//@ chunk-e6aww6q8.js:160263-160313 placement
+//@ chunk-5xgkngpb.js:160310-160360 placement
 /**
  * escapedEventJsonBody：转义后的事件 JSON 正文。
  */
 function escapedEventJsonBody(value) {
   return escapeHtmlChars(jsonStringify(normalizeNewlines(value))).slice(1, -1);
 }
-//@ chunk-e6aww6q8.js:160313-160538 placement
+//@ chunk-5xgkngpb.js:160360-160585 placement
 /**
  * 取出事件中声明为 auto_mode_fields 的字段，序列化后给自动模式分类器。
  */
@@ -287,13 +291,13 @@ function autoModeFieldsText({ declaration, fields }) {
         ...Object.fromEntries(filtered.map((fieldName) => [fieldName, fields[fieldName]])),
       });
 }
-//@ chunk-e6aww6q8.js:160538-160560 placement
+//@ chunk-5xgkngpb.js:160585-160607 placement
 function noHostDeclarations() {
   return;
 }
-//@ chunk-e6aww6q8.js:160560-160808 placement
+//@ chunk-5xgkngpb.js:160607-160855 placement
 var parseDeclarationsCached; // deferred: uses memoizeWithLRU (../memoize.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:160560", () => {
+deferInit("chunk-5xgkngpb.js:160607", () => {
   parseDeclarationsCached = memoizeWithLRU(
     (rawJson) => {
       let result = validatePollEventDeclarations(safeParseJSON(rawJson, false));
@@ -315,7 +319,7 @@ deferInit("chunk-e6aww6q8.js:160560", () => {
     4,
   );
 });
-//@ chunk-e6aww6q8.js:160808-162060 placement
+//@ chunk-5xgkngpb.js:160855-162107 placement
 /**
  * 校验轮询事件声明（kind 合法、不重复、描述无换行、受信字段）。
  */
@@ -400,7 +404,7 @@ function validatePollEventDeclaration(declaration, seenKinds) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:162060-163490 placement
+//@ chunk-5xgkngpb.js:162107-163540 placement
 /**
  * 校验轮询事件字段的 schema（对象嵌套深度等）。
  */
@@ -479,7 +483,7 @@ function validatePollEventSchema(schema, pathPrefix, depth, budget) {
     value: fields,
   };
 }
-//@ chunk-e6aww6q8.js:163490-165066 placement
+//@ chunk-5xgkngpb.js:163540-165116 placement
 /**
  * 校验轮询事件单个字段的 schema（类型、枚举）。
  */
@@ -615,7 +619,7 @@ function validatePollEventField(schema, path, depth, budget) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:165066-165551 placement
+//@ chunk-5xgkngpb.js:165116-165601 placement
 /**
  * 检查字段路径（a.b[] 形式）是否指向已声明的文本字段，不是时返回问题描述。
  */
@@ -636,7 +640,7 @@ function fieldPathProblem(fields, untrustedField) {
   }
   return current?.type === "string" ? undefined : "which does not hold text";
 }
-//@ chunk-e6aww6q8.js:165551-166010 placement
+//@ chunk-5xgkngpb.js:165601-166060 placement
 /**
  * 递归描述声明字段（枚举值、嵌套对象与列表），跳过不受信字段。
  */
@@ -665,7 +669,7 @@ function describeFields(fields, untrusted, prefix) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:166010-166427 placement
+//@ chunk-5xgkngpb.js:166060-166477 placement
 /**
  * 按声明校验事件字段：不允许未声明字段，必填字段必须存在，逐个校验值类型。
  */
@@ -697,7 +701,7 @@ function validateEventFields(fields, values, prefix) {
     value: Object.fromEntries(entries),
   };
 }
-//@ chunk-e6aww6q8.js:166427-167330 placement
+//@ chunk-5xgkngpb.js:166477-167380 placement
 function validatePollEventValue(schema, value, path) {
   switch (schema.type) {
     case "string":
@@ -760,26 +764,26 @@ function validatePollEventValue(schema, value, path) {
           };
   }
 }
-//@ chunk-e6aww6q8.js:167330-167472 placement
+//@ chunk-5xgkngpb.js:167380-167522 placement
 function unknownKeysProblem(schema, allowedKeys, path) {
   let filtered = Object.keys(schema).filter((key) => !allowedKeys.includes(key));
   return filtered.length === 0
     ? undefined
     : `field ${path}: ${telemetryStringList(filtered)} is not a key it takes`;
 }
-//@ chunk-e6aww6q8.js:167472-167543 placement
+//@ chunk-5xgkngpb.js:167522-167593 placement
 function isPlainRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:167543-167606 placement
+//@ chunk-5xgkngpb.js:167593-167656 placement
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
-//@ chunk-e6aww6q8.js:167606-167673 placement
+//@ chunk-5xgkngpb.js:167656-167723 placement
 function telemetryStringList(items) {
   return items.map((item) => `"${sanitizeTelemetryString(String(item))}"`).join(", ");
 }
-//@ chunk-e6aww6q8.js:167673-167748 placement
+//@ chunk-5xgkngpb.js:167723-167798 placement
 function isValidAtToken(token) {
   return (
     token.length <= MAX_AT_TOKEN_LENGTH &&
@@ -787,7 +791,7 @@ function isValidAtToken(token) {
     sanitizeEventAttributes(token) === token
   );
 }
-//@ chunk-e6aww6q8.js:167748-167821 placement
+//@ chunk-5xgkngpb.js:167798-167871 placement
 function renderEventElement(kind, at, fields) {
   return renderPollEvent({
     kind,
@@ -797,11 +801,11 @@ ${escapeHtmlChars(sanitizedJson(fields))}
 `,
   });
 }
-//@ chunk-e6aww6q8.js:167821-167924 placement
+//@ chunk-5xgkngpb.js:167871-167974 placement
 function escapeHtmlChars(text) {
   return text.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026");
 }
-//@ chunk-e6aww6q8.js:167924-168346 placement
+//@ chunk-5xgkngpb.js:167974-168396 placement
 /**
  * 把声明的事件 kind 列成提示词条目：描述、字段与不受信字段。
  */
@@ -821,23 +825,24 @@ function declaredKindsList(byKind) {
   }).join(`
 `);
 }
-//@ chunk-e6aww6q8.js:168346-168410 placement
+//@ chunk-5xgkngpb.js:168396-168460 placement
 function sanitizedJson(value) {
   return jsonStringify(value, (key, value) => (typeof value === "string" ? normalizeNewlines(value) : value));
 }
 export {
+  logDeclaredRound,
   isDeclaredRound,
   POLL_EVENTS_ANNOUNCE_LINE,
-  buildPollEventEnvelope,
-  logDeclaredRound,
-  pollEventSchema,
-  declaredKindsPrompt,
-  eventDeclarations,
-  declaredRoundStamp,
   escapedEventJsonBody,
   neverDeclaresEvents,
   eventFieldsSchema,
+  eventDeclarations,
   eventDeclarationFault,
+  buildPollEventEnvelope,
   autoModeFieldsText,
   collectFieldStrings,
+  declaredRoundStamp,
+  pollEventSchema,
+  declaredKindsPrompt,
+  declaredKindsNotePlaceholder,
 };

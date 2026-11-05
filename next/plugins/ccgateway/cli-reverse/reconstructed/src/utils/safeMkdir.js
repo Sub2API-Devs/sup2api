@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：在用户数据目录内安全创建目录（防链接、属主检查、/proc/self/fd 校验）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s42bpptg.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jrka8r47.js (7)
  * attribution: placement 7
  */
 import { constants } from "fs";
@@ -21,22 +21,18 @@ import {
 import { getLocalUploadsRoot } from "../bootstrap/state.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s42bpptg.js:617-656 placement
-var dirOpenFlags; // deferred: uses READ_LIMITS (./fsBoundRead.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s42bpptg.js:617", () => {
-  dirOpenFlags = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
-});
-//@ chunk-s42bpptg.js:656-700 placement
+//@ chunk-jrka8r47.js:617-656 placement
+var dirOpenFlags = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+//@ chunk-jrka8r47.js:656-700 placement
 function fdPath(handle) {
   return `/proc/self/fd/${handle.fd}`;
 }
-//@ chunk-s42bpptg.js:700-768 placement
+//@ chunk-jrka8r47.js:700-768 placement
 async function isOwnedByCurrentUser(handle) {
   return (await handle.stat()).uid === process.getuid?.();
 }
-//@ chunk-s42bpptg.js:768-1450 placement
+//@ chunk-jrka8r47.js:768-1449 placement
 /**
  * 安全地打开（必要时逐级创建）目录：从已存在的上级打开句柄并确认不经过链接、属主正确，再逐级在句柄下 mkdir 并打开；返回 /proc/self/fd 形式路径与释放函数，或失败原因（链接、非属主、不存在等）。
  */
@@ -88,7 +84,7 @@ async function openOwnedDirChain(path, createDepth) {
     await handle?.close();
   }
 }
-//@ chunk-s42bpptg.js:1450-1730 placement
+//@ chunk-jrka8r47.js:1449-1729 placement
 /**
  * 在目录下新建子目录并打开句柄，确认属主与上级相同，返回句柄路径与释放函数。
  */
@@ -112,7 +108,7 @@ async function createOwnedSubdir(uploadsDir, subdirName) {
     release: () => handle.close(),
   };
 }
-//@ chunk-s42bpptg.js:1730-2093 placement
+//@ chunk-jrka8r47.js:1729-2092 placement
 /**
  * 探测已打开目录句柄在改名后是否仍指向同一目录（readlink 与 inode 一致），否则返回 holds_do_not_follow 或错误码。
  */
@@ -141,7 +137,7 @@ async function probeNoFollowSupport(dirRef) {
     await Promise.allSettled([rmdir(probePath), rmdir(movedPath)]);
   }
 }
-//@ chunk-s42bpptg.js:2093-2519 placement
+//@ chunk-jrka8r47.js:2092-2517 placement
 async function ensureAttachmentsDir(dirPath) {
   let localUploadsRoot = getLocalUploadsRoot();
   if (localUploadsRoot === null || dirname(dirPath) !== localUploadsRoot) {
@@ -168,4 +164,4 @@ async function ensureAttachmentsDir(dirPath) {
   }
   return ownedDirChain;
 }
-export { createOwnedSubdir, ensureAttachmentsDir, openOwnedDirChain, probeNoFollowSupport };
+export { openOwnedDirChain, probeNoFollowSupport, createOwnedSubdir, ensureAttachmentsDir };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：恢复会话时复活会话级 cron 与 /loop 唤醒（过期唤醒提示）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (13)
  * attribution: placement 13
  */
 import { isKairosCronEnabled } from "../tools/ScheduleCronTool/prompt.js";
@@ -31,9 +31,9 @@ import { NOTE } from "../constants/xml.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../tools/ScheduleWakeupTool/prompt.js";
 import { BACKGROUND_TASK_EVENT_NOTICE } from "../services/api/promptCacheBreakParts.js";
 import { fsPromises } from "./forkSourceNote.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
+import { SYNTHETIC_MODEL } from "./messages.js";
 
-//@ chunk-0sfjpx19.js:73095-73308 placement
+//@ chunk-nh1pvp1m.js:35912-36125 placement
 function logResurrectedCrons(resumedSession) {
   if (!isKairosCronEnabled()) return;
   let knownIds = new Set(getSessionCronTasks().map((task) => task.id));
@@ -49,7 +49,7 @@ function logResurrectedCrons(resumedSession) {
     logForDebugging(`resume: resurrected ${resurrectedCount} session cron task(s)`);
   }
 }
-//@ chunk-0sfjpx19.js:73308-74045 placement
+//@ chunk-nh1pvp1m.js:36125-36862 placement
 /**
  * 恢复会话 cron 任务（插件名不合法的跳过）。
  */
@@ -95,7 +95,7 @@ function resurrectSessionCrons({ calls, results, deletedCronIds }, nowMs) {
   }
   return resurrected;
 }
-//@ chunk-0sfjpx19.js:74045-75892 placement
+//@ chunk-nh1pvp1m.js:36862-38709 placement
 /**
  * /loop 唤醒在会话重启前已到期：发通知说明不再触发、如需继续请重新安排。
  */
@@ -166,21 +166,21 @@ async function handleMissedLoopWakeups({ wakeupCalls, wakeupCallsAtLastLoopFire,
     plugin: typeof lastWakeupResult.plugin === "string" ? lastWakeupResult.plugin : undefined,
   });
 }
-//@ chunk-0sfjpx19.js:75892-75944 placement
+//@ chunk-nh1pvp1m.js:38709-38761 placement
 /**
  * 判断值是非空对象。
  */
 function isPlainObjectRecord(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-0sfjpx19.js:75944-76005 placement
+//@ chunk-nh1pvp1m.js:38761-38822 placement
 /**
  * 返回非 web-fetch 启动时的输出文件。
  */
 function nonWebFetchOutputFile(call) {
   return call.isWebFetchLaunch ? undefined : call.outputFile;
 }
-//@ chunk-0sfjpx19.js:76005-76273 placement
+//@ chunk-nh1pvp1m.js:38822-39090 placement
 function RELAUNCH_ADVICE(entry) {
   return entry.isWebFetchLaunch
     ? "Launch it again if its report is still needed."
@@ -188,13 +188,13 @@ function RELAUNCH_ADVICE(entry) {
       ? "Check its worktree/output for partial work before assuming the task landed."
       : "Do not assume the task landed; launch it again if its result is still needed.";
 }
-//@ chunk-0sfjpx19.js:76273-76303 placement
+//@ chunk-nh1pvp1m.js:39090-39120 placement
 /**
  * 判定旧版本的版本号（2.1.285）。
  */
 var OLD_VERSION_THRESHOLD = "2.1.285";
 var NEW_VERSION_THRESHOLD = "2.1.300";
-//@ chunk-0sfjpx19.js:76303-76398 placement
+//@ chunk-nh1pvp1m.js:39120-39215 placement
 /**
  * 去掉前缀后按长度切分文本，切不出则整段返回。
  */
@@ -203,7 +203,7 @@ function splitPrefixedByLengths(text, lengths) {
   let text_2 = text.slice(BACKGROUND_TASK_EVENT_NOTICE.length);
   return splitByLengths(text_2, lengths) ?? [text_2];
 }
-//@ chunk-0sfjpx19.js:76398-76642 placement
+//@ chunk-nh1pvp1m.js:39215-39459 placement
 function splitByLengths(text, lengths) {
   if (!Array.isArray(lengths) || !lengths.every((length) => Number.isInteger(length) && length >= 0)) return;
   let pieces = [];
@@ -217,26 +217,26 @@ function splitByLengths(text, lengths) {
   }
   return offset === text.length ? pieces : undefined;
 }
-//@ chunk-0sfjpx19.js:76642-76654 placement
+//@ chunk-nh1pvp1m.js:39459-39471 placement
 /**
  * 两个换行的常量。
  */
 var DOUBLE_NEWLINE = `
 
 `;
-//@ chunk-0sfjpx19.js:76654-76758 placement
+//@ chunk-nh1pvp1m.js:39471-39575 placement
 function cronOwnership({ isOwn, isBare, isRewritten }) {
   if (isRewritten) return "none";
   if (isOwn) return "own";
   return isBare ? "bare" : "none";
 }
-//@ chunk-0sfjpx19.js:76758-76878 placement
+//@ chunk-nh1pvp1m.js:39575-39695 placement
 function isOlderVersion(entry, targetVersion) {
   let entryVersion =
     "version" in entry && typeof entry.version === "string" ? fsPromises.coerce(entry.version) : null;
   return entryVersion !== null && fsPromises.lt(entryVersion, targetVersion);
 }
-//@ chunk-0sfjpx19.js:76878-76977 placement
+//@ chunk-nh1pvp1m.js:69640-69739 placement
 /**
  * 判断是否为真实的 assistant 消息（非合成模型、非 meta、非虚拟）。
  */
@@ -249,6 +249,7 @@ function isRealAssistantMessage(message) {
   );
 }
 export {
+  isRealAssistantMessage,
   logResurrectedCrons,
   handleMissedLoopWakeups,
   isOlderVersion,
@@ -259,5 +260,4 @@ export {
   NEW_VERSION_THRESHOLD,
   nonWebFetchOutputFile,
   RELAUNCH_ADVICE,
-  isRealAssistantMessage,
 };

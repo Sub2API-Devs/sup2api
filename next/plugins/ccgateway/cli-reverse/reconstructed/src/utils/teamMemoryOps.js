@@ -3,13 +3,13 @@
  *
  * 团队记忆读/搜/写计数在折叠摘要中的展示文字。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teamMemoryOps.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:4677220-4677720 fingerprint (2.1.88 match: appendTeamMemorySummaryParts, 1)
+//@ chunk-5xgkngpb.js:4785826-4786326 fingerprint (2.1.88 match: appendTeamMemorySummaryParts, 1)
 /**
  * 在折叠摘要中追加"Recalling/Recalled N team memories"等团队记忆读/搜/写计数。
  */

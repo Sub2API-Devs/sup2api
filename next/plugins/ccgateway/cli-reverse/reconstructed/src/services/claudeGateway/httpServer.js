@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 HTTP 服务器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (10)
  * attribution: placement 10
  */
 import { isHostEntrypointName } from "../../utils/entrypointKinds.js";
@@ -13,7 +13,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { gatewayLog } from "../gateway/gatewayBanner.js";
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-1ny7cxrt.js:1520257-1520327 placement
+//@ chunk-1hnjmk23.js:1533372-1533442 placement
 /**
  * 连接 Postgres 重试的间隔毫秒数（5000）。
  */
@@ -23,7 +23,7 @@ var NO_STORE_HEADERS = {
 };
 var PG_RETRY_MAX_ATTEMPTS = 500;
 var PG_RETRY_INTERVAL_MS = 5000;
-//@ chunk-1ny7cxrt.js:1520327-1520432 placement
+//@ chunk-1hnjmk23.js:1533442-1533547 placement
 /**
  * OAuth 风格错误响应 {error, error_description}。
  */
@@ -41,7 +41,7 @@ function oauthErrorResponse(error, status = 400, description) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1520432-1520492 placement
+//@ chunk-1hnjmk23.js:1533547-1533607 placement
 /**
  * 返回 404 not found 的响应。
  */
@@ -50,7 +50,7 @@ function notFoundResponse() {
     status: 404,
   });
 }
-//@ chunk-1ny7cxrt.js:1520492-1520628 placement
+//@ chunk-1hnjmk23.js:1533607-1533743 placement
 /**
  * User-Agent 是否来自宿主入口的 Claude Code 客户端。
  */
@@ -61,7 +61,7 @@ function isHostEntrypointClient(userAgent) {
     hostEntrypoint.split(",").some((name) => isHostEntrypointName(name.trim()))
   );
 }
-//@ chunk-1ny7cxrt.js:1520628-1520720 placement
+//@ chunk-1hnjmk23.js:1533743-1533835 placement
 /**
  * 由 CRI 令牌声明构造的运维字段（cri、org、act、upstream_kind）。
  */
@@ -75,7 +75,7 @@ function criIdentityFields(criClaims, upstreamKind) {
       }
     : {};
 }
-//@ chunk-1ny7cxrt.js:1520720-1520868 placement
+//@ chunk-1hnjmk23.js:1533835-1533983 placement
 /**
  * 网关需要原生二进制（Bun），否则报错。
  */
@@ -85,14 +85,14 @@ function assertNativeBinary() {
       "claude gateway requires the native binary. Install via https://claude.ai/install.sh instead of npm.",
     );
 }
-//@ chunk-1ny7cxrt.js:1520868-1521013 placement
+//@ chunk-1hnjmk23.js:1533983-1534128 placement
 var SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "no-referrer",
   "Cross-Origin-Opener-Policy": "same-origin",
 };
-//@ chunk-1ny7cxrt.js:1521013-1521245 placement
+//@ chunk-1hnjmk23.js:1534128-1534360 placement
 /**
  * 补上安全响应头（HTTPS 时加 HSTS）。
  */
@@ -103,7 +103,7 @@ function withSecurityHeaders(response, secure) {
     response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   return response;
 }
-//@ chunk-1ny7cxrt.js:1521245-1521471 placement
+//@ chunk-1hnjmk23.js:1534360-1534586 placement
 /**
  * 识别 Postgres 连接被拒/超时类错误的文案正则。
  */
@@ -120,7 +120,7 @@ var PRIVATE_NETWORK_RANGES = [
   "fc00::/7",
 ];
 var PG_CONNECT_REFUSED_RE = /connect|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i;
-//@ chunk-1ny7cxrt.js:1521471-1521692 placement
+//@ chunk-1hnjmk23.js:1534586-1534807 placement
 /**
  * 启动时连接 Postgres 失败最多重试 3 次（间隔 2 秒）。
  */

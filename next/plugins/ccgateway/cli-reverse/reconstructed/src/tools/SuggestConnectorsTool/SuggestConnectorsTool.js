@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SuggestConnectors 工具：按 directoryUuid 解析连接器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-24nc744j.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qweg2pbs.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,7 +30,7 @@ import { AbortError } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-24nc744j.js:4607-5658 placement
+//@ chunk-qweg2pbs.js:4691-5742 placement
 /**
  * SuggestConnectors 工具：按 directoryUuid 解析连接器。
  */

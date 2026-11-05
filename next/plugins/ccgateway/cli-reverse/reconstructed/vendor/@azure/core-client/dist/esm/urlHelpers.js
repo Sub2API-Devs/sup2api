@@ -1,22 +1,22 @@
 /**
  * @azure/core-client/dist/esm/urlHelpers.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (11)
+ * pieces: chunk-b5df2wx1.js (11)
  * attribution: esm-layout 2, esm-fingerprint 9
  */
 import { createDefaultHttpClient_2 } from "../../../core-rest-pipeline/dist/esm/defaultHttpClient.js";
 import { getOperationArgumentValueFromParameter } from "./operationHelpers.js";
 import { getPathStringFromParameter } from "../index.js";
 
-//@ chunk-mrx6y2r5.js:76933-76940 esm-layout
+//@ chunk-b5df2wx1.js:76933-76940 esm-layout
 var serializer;
-//@ chunk-mrx6y2r5.js:76940-76979 esm-layout
+//@ chunk-b5df2wx1.js:76940-76979 esm-layout
 function getSerializer() {
   if (!serializer) serializer = createDefaultHttpClient_2();
   return serializer;
 }
-//@ chunk-mrx6y2r5.js:76979-77037 esm-fingerprint
+//@ chunk-b5df2wx1.js:76979-77037 esm-fingerprint
 var collectionFormat = {
   CSV: ",",
   SSV: " ",
@@ -24,7 +24,7 @@ var collectionFormat = {
   TSV: "\t",
   Pipes: "|",
 };
-//@ chunk-mrx6y2r5.js:77037-77283 esm-fingerprint
+//@ chunk-b5df2wx1.js:77037-77283 esm-fingerprint
 function getRequestUrl(baseUri, operationSpec, operationArguments, fallbackObject) {
   let urlReplacements = calculateUrlReplacements(operationSpec, operationArguments, fallbackObject);
   let isAbsolutePath = false;
@@ -45,13 +45,13 @@ function getRequestUrl(baseUri, operationSpec, operationArguments, fallbackObjec
   requestUrl = appendQueryParams(requestUrl, queryParams, sequenceParams, isAbsolutePath);
   return requestUrl;
 }
-//@ chunk-mrx6y2r5.js:77283-77355 esm-fingerprint
+//@ chunk-b5df2wx1.js:77283-77355 esm-fingerprint
 function replaceAll(input, replacements) {
   let result = input;
   for (let [searchValue, replaceValue] of replacements) result = result.split(searchValue).join(replaceValue);
   return result;
 }
-//@ chunk-mrx6y2r5.js:77355-77640 esm-fingerprint
+//@ chunk-b5df2wx1.js:77355-77640 esm-fingerprint
 function calculateUrlReplacements(operationSpec, operationArguments, fallbackObject) {
   var _a;
   let result = new Map();
@@ -73,11 +73,11 @@ function calculateUrlReplacements(operationSpec, operationArguments, fallbackObj
     }
   return result;
 }
-//@ chunk-mrx6y2r5.js:77640-77680 esm-fingerprint
+//@ chunk-b5df2wx1.js:77640-77680 esm-fingerprint
 function isAbsoluteUrl(url) {
   return url.includes("://");
 }
-//@ chunk-mrx6y2r5.js:77680-77978 esm-fingerprint
+//@ chunk-b5df2wx1.js:77680-77978 esm-fingerprint
 function appendPath(url, pathToAppend) {
   if (!pathToAppend) return url;
   let parsedUrl = new URL(url);
@@ -94,7 +94,7 @@ function appendPath(url, pathToAppend) {
   parsedUrl.pathname = newPath;
   return parsedUrl.toString();
 }
-//@ chunk-mrx6y2r5.js:77978-78868 esm-fingerprint
+//@ chunk-b5df2wx1.js:77978-78868 esm-fingerprint
 function calculateQueryParameters(operationSpec, operationArguments, fallbackObject) {
   var _a;
   let result = new Map();
@@ -151,7 +151,7 @@ function calculateQueryParameters(operationSpec, operationArguments, fallbackObj
     sequenceParams,
   };
 }
-//@ chunk-mrx6y2r5.js:78868-79087 esm-fingerprint
+//@ chunk-b5df2wx1.js:78868-79087 esm-fingerprint
 function simpleParseQueryParams(queryString) {
   let result = new Map();
   if (!queryString || queryString[0] !== "?") return result;
@@ -167,7 +167,7 @@ function simpleParseQueryParams(queryString) {
   }
   return result;
 }
-//@ chunk-mrx6y2r5.js:79087-79630 esm-fingerprint
+//@ chunk-b5df2wx1.js:79087-79630 esm-fingerprint
 function appendQueryParams(url, queryParams, sequenceParams, noOverwrite = false) {
   if (queryParams.size === 0) return url;
   let parsedUrl = new URL(url);

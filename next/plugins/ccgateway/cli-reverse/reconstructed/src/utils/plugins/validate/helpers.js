@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (24)
  * attribution: placement 24
  */
 import * as pathModule from "path";
@@ -22,13 +22,14 @@ import { jsonStringify } from "../../slowOperations.js";
 import { stripCombiningRepeated } from "../../sanitization.js";
 import { toWellFormedString } from "../../stringUtils.js";
 import { stripAnsiPerLine } from "../../stripAnsi.js";
+import { buildSecretScanResult } from "../../../skills/bundled/pluginAuthoring/secretScanTool.js";
 import { readRegularFileUpTo, isDirectoryOrFalse } from "../safeFileRead.js";
 import { getErrnoCode } from "../../errors.js";
 import { getFsImplementation } from "../../fsOperations.js";
 import { env } from "../../env.js";
 import { realpathOrManual, isPathInside, getTopLevelPaths } from "./directoryName.js";
 
-//@ chunk-5aas12zq.js:15267-15466 placement
+//@ chunk-6vxyfwtv.js:15386-15585 placement
 function makeFinding(code, file, field, message) {
   let issue = PLUGIN_VALIDATION_ISSUES[code];
   return {
@@ -44,14 +45,14 @@ function makeFinding(code, file, field, message) {
     rawFile: file,
   };
 }
-//@ chunk-5aas12zq.js:15466-15507 placement
+//@ chunk-6vxyfwtv.js:15585-15626 placement
 /**
  * appendAll：把数组内容追加到目标。
  */
 function appendAll(target, items) {
   for (let item of items) target.push(item);
 }
-//@ chunk-5aas12zq.js:15507-15657 placement
+//@ chunk-6vxyfwtv.js:15626-15776 placement
 function dedupeFindings(findings) {
   let seenKeys = new Set();
   let unique = [];
@@ -64,26 +65,26 @@ function dedupeFindings(findings) {
   }
   return unique;
 }
-//@ chunk-5aas12zq.js:15657-15693 placement
+//@ chunk-6vxyfwtv.js:15776-15812 placement
 /**
  * compareSeverity：按阻断与严重度排序。
  */
 function compareSeverity(left, right) {
   return severityRank(left) - severityRank(right);
 }
-//@ chunk-5aas12zq.js:15693-15762 placement
+//@ chunk-6vxyfwtv.js:15812-15881 placement
 function severityRank(finding) {
   if (finding.blocking) return 0;
   return finding.severity === "info" ? 2 : 1;
 }
-//@ chunk-5aas12zq.js:15762-15795 placement
+//@ chunk-6vxyfwtv.js:15881-15914 placement
 /**
  * quotedToolInput：引号包裹的遥测工具输入。
  */
 function quotedToolInput(text, maxChars) {
   return quoteForDisplay(extractToolInputForTelemetry(text, maxChars));
 }
-//@ chunk-5aas12zq.js:15795-15943 placement
+//@ chunk-6vxyfwtv.js:15914-16062 placement
 var ESCAPE_SEQUENCES = {
   '"': '\\"',
   "\\": "\\\\",
@@ -96,7 +97,7 @@ var ESCAPE_SEQUENCES = {
   "\v": "\\v",
 };
 var PRINTABLE_CHAR_RE = /^[\p{L}\p{M}\p{N}\p{P}\p{S} ]$/u;
-//@ chunk-5aas12zq.js:15943-16165 placement
+//@ chunk-6vxyfwtv.js:16062-16284 placement
 function quoteForDisplay(text) {
   let quoted = '"';
   for (let char of text) {
@@ -114,7 +115,7 @@ function quoteForDisplay(text) {
   }
   return `${quoted}"`;
 }
-//@ chunk-5aas12zq.js:16165-16454 placement (2.1.88 match: extractToolInputForTelemetry, 0.833)
+//@ chunk-6vxyfwtv.js:16284-16573 placement (2.1.88 match: extractToolInputForTelemetry, 0.833)
 function extractToolInputForTelemetry(text, maxChars) {
   let truncated = stripCombiningRepeated(toWellFormedString(stripAnsiPerLine(toWellFormedString(text))));
   let out = "";
@@ -144,22 +145,22 @@ function extractToolInputForTelemetry(text, maxChars) {
   }
   return out.slice(countLeadingChars(out), trimmedEndIndex(out));
 }
-//@ chunk-5aas12zq.js:16454-16532 placement
+//@ chunk-6vxyfwtv.js:16573-16651 placement
 function trimmedEndIndex(text) {
   let end = text.length;
   while (end > 0 && LISTING_WHITESPACE_CHARS.includes(text[end - 1] ?? "")) end--;
   return end;
 }
-//@ chunk-5aas12zq.js:16532-16575 placement
+//@ chunk-6vxyfwtv.js:16651-16694 placement
 var HANGUL_FILLER_RE = /[\u115F\u1160\u3164\uFFA0\u2800]/g;
-//@ chunk-5aas12zq.js:16575-16626 placement
+//@ chunk-6vxyfwtv.js:16694-16745 placement
 /**
  * cleanDisplayName：去掉组合标记与填充符并 trim。
  */
 function cleanDisplayName(name) {
   return stripCombiningRepeated(name).replace(HANGUL_FILLER_RE, " ").trim();
 }
-//@ chunk-5aas12zq.js:16626-16690 placement
+//@ chunk-6vxyfwtv.js:16745-16809 placement
 /**
  * stringField：取字符串字段并清洗。
  */
@@ -167,7 +168,7 @@ function stringField(obj, key) {
   let value = obj[key];
   return typeof value === "string" ? cleanDisplayName(value) : "";
 }
-//@ chunk-5aas12zq.js:16690-16769 placement
+//@ chunk-6vxyfwtv.js:16809-16888 placement
 /**
  * trimmedStringField：取字符串字段两端裁剪。
  */
@@ -175,7 +176,7 @@ function trimmedStringField(obj, key) {
   let value = obj[key];
   return typeof value === "string" ? value.slice(countLeadingChars(value), trimmedEndIndex(value)) : "";
 }
-//@ chunk-5aas12zq.js:16769-17481 placement
+//@ chunk-6vxyfwtv.js:16888-17676 placement
 /**
  * 规范化相对路径并逐段 readdir 确认每段存在且类型正确（中间为目录、最后为文件，链接被拒）； 返回 found、读到的字节（超过上限标 tooLarge）或 refused 的段号。
  */
@@ -223,6 +224,14 @@ async function readPluginFileSafe(rootDir, relPath, maxBytes) {
           isLink: found.isSymbolicLink(),
         },
       };
+    if (!isLastSegment && (await buildSecretScanResult(pathModule.join(currentDir, segment))))
+      return {
+        found: false,
+        refused: {
+          segment: index,
+          isLink: true,
+        },
+      };
     currentDir = pathModule.join(currentDir, segment);
   }
   let readResult = await readRegularFileUpTo(pathModule.join(rootDir, ...filtered), maxBytes).catch(() => {
@@ -236,55 +245,56 @@ async function readPluginFileSafe(rootDir, relPath, maxBytes) {
     }),
   };
 }
-//@ chunk-5aas12zq.js:17481-17542 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-6vxyfwtv.js:17676-17737 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_4(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-5aas12zq.js:17542-18245 placement
+//@ chunk-6vxyfwtv.js:17737-18509 placement
 /**
  * 目录只有 skills/*\/SKILL.md 而无 plugin.json/marketplace.json。
  */
-async function isSkillsOnlyFolder(dirPath) {
+async function isSkillsOnlyFolder(folder) {
   let safeReaddir = (safeReaddir) =>
     readdir(safeReaddir, {
       withFileTypes: true,
     }).catch(() => {
       return;
     });
-  if (!(await isDirectoryOrFalse(dirPath))) return false;
-  let rootEntries = await safeReaddir(dirPath);
+  if (!(await isDirectoryOrFalse(folder))) return false;
+  let rootEntries = await safeReaddir(folder);
   if (rootEntries === undefined || rootEntries.some((dirent) => dirent.name === "plugin.json")) return false;
   let found = rootEntries.find((pluginDirEntry) => pluginDirEntry.name === ".claude-plugin");
   if (found !== undefined) {
-    let pluginDirEntries = found.isDirectory()
-      ? await safeReaddir(pathModule.join(dirPath, ".claude-plugin"))
-      : undefined;
+    let joined = pathModule.join(folder, ".claude-plugin");
+    let pluginDirEntries =
+      found.isDirectory() && !(await buildSecretScanResult(joined)) ? await safeReaddir(joined) : undefined;
     if (
       pluginDirEntries === undefined ||
       pluginDirEntries.some((dirent) => dirent.name === "plugin.json" || dirent.name === "marketplace.json")
     )
       return false;
   }
-  if (!rootEntries.some((dirent) => dirent.name === "skills" && dirent.isDirectory())) return false;
-  let skillEntries = ((await safeReaddir(pathModule.join(dirPath, "skills"))) ?? []).toSorted(
-    (left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0),
+  if (
+    !rootEntries.some((dirent) => dirent.name === "skills" && dirent.isDirectory()) ||
+    (await buildSecretScanResult(pathModule.join(folder, "skills")))
+  )
+    return false;
+  let skillEntries = ((await safeReaddir(pathModule.join(folder, "skills"))) ?? []).toSorted((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
   );
   for (let skillEntry of skillEntries.slice(0, MAX_SCAN_ENTRIES)) {
-    if (!skillEntry.isDirectory()) continue;
-    if (
-      (await safeReaddir(pathModule.join(dirPath, "skills", skillEntry.name)))?.some(
-        (dirent) => dirent.name === "SKILL.md" && dirent.isFile(),
-      )
-    )
+    let joined = pathModule.join(folder, "skills", skillEntry.name);
+    if (!skillEntry.isDirectory() || (await buildSecretScanResult(joined))) continue;
+    if ((await safeReaddir(joined))?.some((dirent) => dirent.name === "SKILL.md" && dirent.isFile()))
       return true;
   }
   return false;
 }
-//@ chunk-5aas12zq.js:18245-18297 placement
+//@ chunk-6vxyfwtv.js:18509-18561 placement
 var KEBAB_CASE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 var NON_ASCII_PRINTABLE_RE = /[^\x20-\x7E]/;
-//@ chunk-5aas12zq.js:18297-18521 placement
+//@ chunk-6vxyfwtv.js:18561-18785 placement
 function checkNonAsciiName(name, sourceKind) {
   return typeof name === "string" && NON_ASCII_PRINTABLE_RE.test(name)
     ? [
@@ -297,7 +307,7 @@ function checkNonAsciiName(name, sourceKind) {
       ]
     : [];
 }
-//@ chunk-5aas12zq.js:18521-19090 placement
+//@ chunk-6vxyfwtv.js:18785-19354 placement
 /**
  * 无 plugin.json 时用目录名作插件名，检查格式与 kebab-case。
  */
@@ -325,7 +335,7 @@ function checkDerivedName(folderName) {
   appendAll(findings, checkNonAsciiName(folderName, "derived"));
   return findings;
 }
-//@ chunk-5aas12zq.js:19090-19347 placement
+//@ chunk-6vxyfwtv.js:19354-19611 placement
 async function preferPwdSpelling(path, cwd = getFsImplementation().cwd(), pwdPath = env.PWD) {
   if (pwdPath === undefined || !pathModule.isAbsolute(pwdPath) || pwdPath === cwd) return path;
   let relativePath = pathModule.relative(cwd, path);
@@ -338,7 +348,7 @@ async function preferPwdSpelling(path, cwd = getFsImplementation().cwd(), pwdPat
   let [realPwd, realCwd] = await Promise.all([realpathOrManual(pwdPath), realpathOrManual(cwd)]);
   return realPwd !== undefined && realPwd === realCwd ? pathModule.join(pwdPath, relativePath) : path;
 }
-//@ chunk-5aas12zq.js:19347-19965 placement
+//@ chunk-6vxyfwtv.js:19611-20229 placement
 /**
  * 找出插件所在 git 仓库：own/parent/link/unresolved/none。
  */
@@ -397,7 +407,7 @@ async function locateGitRepository(pluginDir) {
     directoryPath = dir;
   }
 }
-//@ chunk-5aas12zq.js:19965-20183 placement
+//@ chunk-6vxyfwtv.js:20229-20447 placement
 async function findGitDirUpward(startDir) {
   let currentDir = startDir;
   for (let idx = 0; idx <= MAX_REPO_ROOT_PARENTS; idx++) {
@@ -415,7 +425,7 @@ async function findGitDirUpward(startDir) {
   }
   return;
 }
-//@ chunk-5aas12zq.js:24938-25014 placement
+//@ chunk-6vxyfwtv.js:25226-25302 placement
 function countLeadingChars(text) {
   let index = 0;
   while (index < text.length && LISTING_WHITESPACE_CHARS.includes(text[index] ?? "")) index++;

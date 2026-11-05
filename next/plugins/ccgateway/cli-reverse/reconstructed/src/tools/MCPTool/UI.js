@@ -3,10 +3,10 @@
  *
  * MCP 工具进度/结果渲染（大响应警告、Slack 发送结果紧凑显示）、参数单行显示与控制字符清理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/MCPTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (1), chunk-e6aww6q8.js (3), chunk-hny2rpzz.js (11)
- * attribution: callgraph-fingerprint 2, placement 6, layout 3, fingerprint 4
+ * pieces: chunk-5xgkngpb.js (3), chunk-w7hwdb2a.js (11), chunk-wjygkcr4.js (1)
+ * attribution: placement 6, callgraph-fingerprint 2, layout 3, fingerprint 4
  */
 import { describeUnparsedInput, safeParseJSON } from "../../utils/json.js";
 import { jsonStringify, jsonStringifyRaw, jsonParse } from "../../utils/slowOperations.js";
@@ -32,23 +32,23 @@ import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4678114-4678247 placement
+//@ chunk-5xgkngpb.js:4786721-4786854 placement
 var C1_CONTROL_CHARS_REGEX = /[\x7f-\x9f]/g;
 var escapeC1ControlChars = (text) =>
   text.replace(C1_CONTROL_CHARS_REGEX, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 var CONTROL_CHARS_REGEX = /[\x00-\x1f\x7f-\x9f]/g;
-//@ chunk-e6aww6q8.js:4678247-4678288 placement
+//@ chunk-5xgkngpb.js:4786854-4786895 placement
 /**
  * 删除字符串里的 C0/C1 控制字符。
  */
 function stripControlChars(text) {
   return text.replace(CONTROL_CHARS_REGEX, "");
 }
-//@ chunk-e6aww6q8.js:4678288-4678495 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.651)
+//@ chunk-5xgkngpb.js:4786895-4787103 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.652)
 /**
  * MCP 工具调用参数的单行显示：优先用 jQ 专用格式，否则 "键: JSON值" 用逗号连接，并转义 C1 控制字符。
  */
-function renderToolUseMessage_3(input, { verbose }) {
+function renderToolUseMessage_4(input, { verbose }) {
   if (Object.keys(input).length === 0) return "";
   let rendered = describeUnparsedInput(input);
   if (rendered !== null) return rendered;
@@ -59,12 +59,12 @@ function renderToolUseMessage_3(input, { verbose }) {
     })
     .join(", ");
 }
-//@ chunk-hny2rpzz.js:736-740 placement
+//@ chunk-w7hwdb2a.js:736-740 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hny2rpzz.js:736", () => {
+deferInit("chunk-w7hwdb2a.js:736", () => {
   init_react_production();
 });
-//@ chunk-hny2rpzz.js:740-789 placement
+//@ chunk-w7hwdb2a.js:740-789 placement
 /**
  * 把 [键, 值] 渲染成 “键: 值”（MCP 工具参数展示）。
  */
@@ -72,7 +72,7 @@ function keyValueLine(entry) {
   let [key, value] = entry;
   return `${key}: ${value}`;
 }
-//@ chunk-hny2rpzz.js:789-827 placement
+//@ chunk-w7hwdb2a.js:789-827 placement
 /**
  * 取 [键] 的第一项并转成展示文本。
  */
@@ -80,9 +80,9 @@ function firstKeyLabel(entry) {
   let [key] = entry;
   return F(key);
 }
-//@ chunk-hny2rpzz.js:827-837 layout
+//@ chunk-w7hwdb2a.js:827-837 layout
 var LARGE_MCP_RESPONSE_TOKENS = 1e4;
-//@ chunk-hny2rpzz.js:837-1473 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.88)
+//@ chunk-w7hwdb2a.js:837-1473 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.88)
 /**
  * MCP 工具进度渲染：无进度显示 "Running…"；有 total 时画 20 宽进度条和百分比；否则显示进度消息或 "Processing… N"。
  */
@@ -144,7 +144,7 @@ function renderToolUseProgressMessage(progressMessagesForMessage) {
     }),
   });
 }
-//@ chunk-hny2rpzz.js:1473-1679 layout
+//@ chunk-w7hwdb2a.js:1473-1679 layout
 /**
  * MCP 工具结果渲染入口：非 verbose 时若是 Slack 发消息结果（含 message_link），压缩为 "Sent a message to #频道" 超链接；否则交给 renderToolResultMessage。
  */
@@ -168,7 +168,7 @@ function renderMcpToolResultMessage(doc, progressMessages, { verbose, input }) {
   }
   return renderToolResultMessage(output, verbose);
 }
-//@ chunk-hny2rpzz.js:1679-2423 fingerprint (2.1.88 match: renderToolResultMessage, 0.834)
+//@ chunk-w7hwdb2a.js:1679-2423 fingerprint (2.1.88 match: renderToolResultMessage, 0.834)
 /**
  * 渲染 MCP 结果内容：估算 token 超过 10000 时加大响应警告；数组逐块渲染（图片显示 [Image]）；空结果显示 (No content)。
  */
@@ -245,7 +245,7 @@ function renderToolResultMessage(output, verbose) {
     });
   return contentElement;
 }
-//@ chunk-hny2rpzz.js:2645-2921 fingerprint (2.1.88 match: parseJsonEntries, 1)
+//@ chunk-w7hwdb2a.js:2645-2921 fingerprint (2.1.88 match: parseJsonEntries, 1)
 function parseJsonEntries(content, { maxChars, maxKeys }) {
   let trimmed = content.trim();
   if (trimmed.length === 0 || trimmed.length > maxChars || trimmed[0] !== "{") return null;
@@ -260,9 +260,9 @@ function parseJsonEntries(content, { maxChars, maxKeys }) {
   if (entries.length === 0 || entries.length > maxKeys) return null;
   return entries;
 }
-//@ chunk-hny2rpzz.js:2921-2993 layout
+//@ chunk-w7hwdb2a.js:2921-2993 layout
 var SLACK_MESSAGE_LINK_REGEX = /^https:\/\/[a-z0-9-]+\.slack\.com\/archives\/([A-Z0-9]+)\/p\d+$/;
-//@ chunk-hny2rpzz.js:2993-3448 fingerprint (2.1.88 match: trySlackSendCompact, 1)
+//@ chunk-w7hwdb2a.js:2993-3448 fingerprint (2.1.88 match: trySlackSendCompact, 1)
 /**
  * 识别 Slack 发送消息的 JSON 结果，取 message_link 与频道名，用于紧凑显示。
  */
@@ -288,7 +288,7 @@ function trySlackSendCompact(output, input) {
     url,
   };
 }
-//@ chunk-hny2rpzz.js:3448-3600 placement
+//@ chunk-w7hwdb2a.js:3448-3600 placement
 /**
  * 判断 MCP 工具输出是否较大（字符串或任一文本块超过显示阈值）。
  */
@@ -299,7 +299,7 @@ function isLargeMcpOutput(output, options) {
     return output.some((block) => block.type === "text" && exceedsLineLimit(block.text, columns));
   return false;
 }
-//@ chunk-ah34pb7m.js:256016-256269 callgraph-fingerprint (2.1.88 match: MCPTextOutput, 0.169)
+//@ chunk-wjygkcr4.js:263701-263954 callgraph-fingerprint (2.1.88 match: MCPTextOutput, 0.169)
 /**
  * 结构化 MCP 文本输出渲染：能按 schema 解析时显示摘要，否则按普通文本行显示。
  */
@@ -325,11 +325,11 @@ function MCPTextOutput(output, progressMessages, { verbose }) {
       });
 }
 export {
+  renderToolUseMessage_4,
   renderMcpToolResultMessage,
-  stripControlChars,
-  renderToolUseMessage_3,
-  renderToolUseProgressMessage,
   isLargeMcpOutput,
-  MCPTextOutput,
   renderToolResultMessage,
+  renderToolUseProgressMessage,
+  MCPTextOutput,
+  stripControlChars,
 };

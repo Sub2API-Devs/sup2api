@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：后台 agent 状态分类器与 Projects 回顾的系统提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jt8fac03.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b7kq19tn.js (1)
  * attribution: placement 1
  */
-//@ chunk-jt8fac03.js:191-37462 placement
+//@ chunk-b7kq19tn.js:191-37462 placement
 /**
  * 后台 agent 状态分类器的系统提示（blocked/done/working 等四态，决定是否推送手机通知），以及 Projects 回顾提示的若干附加段。
  */

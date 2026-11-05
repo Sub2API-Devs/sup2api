@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：公告槽位状态（按宿主）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3w159cb0.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e2dcenkt.js (3)
  * attribution: placement 3
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3w159cb0.js:229-888 placement
+//@ chunk-e2dcenkt.js:262-921 placement
 class AnnouncementState {
   announcementSlotWinner = null;
   announcementSlotGovernance = null;
@@ -39,12 +39,12 @@ class AnnouncementState {
     this.savedModelSuccessorDrawnAt = null;
   }
 }
-//@ chunk-3w159cb0.js:888-914 placement
+//@ chunk-e2dcenkt.js:921-947 placement
 var announcementStateByHost; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3w159cb0.js:888", () => {
+deferInit("chunk-e2dcenkt.js:921", () => {
   announcementStateByHost = new SessionRootSlot(() => new AnnouncementState());
 });
-//@ chunk-3w159cb0.js:914-947 placement
+//@ chunk-e2dcenkt.js:947-980 placement
 function announcementState() {
   return announcementStateByHost.of(getRootSession());
 }

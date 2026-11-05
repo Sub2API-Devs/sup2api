@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：按 Bedrock 模型 id（含区域前缀）查找模型信息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (14)
- * attribution: placement 14
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (15)
+ * attribution: placement 14, sole-consumer 1
  */
 import {
   envDefaultModel_2,
@@ -23,6 +23,7 @@ import {
   normalizeDottedVersion,
   parseModelId,
   isStandardVersion,
+  isSameModelVersion,
 } from "./modelIds.js";
 import {
   markModelsConfigured,
@@ -36,26 +37,26 @@ import { ladderRungsToSend, getUserSpecifiedModelSetting } from "./smallFastMode
 import { getMainLoopModel, getDefaultOpusModel, getDefaultSonnetModel } from "./model.js";
 import { getProviderForModel } from "./providers.js";
 import { isModelAllowed } from "./modelAllowlist.js";
-import { getCatalogState, catalogIdForProviderModelId } from "./modelCatalog.js";
+import { getCatalogState, catalogIdForProviderModelId, getModelCatalog_2 } from "./modelCatalog.js";
 import { BEDROCK_REGION_PREFIXES } from "./bedrock.js";
-import { isPDFExtension } from "../pdfUtils.js";
+import { modelClassName } from "./canonicalModelName.js";
 
-//@ chunk-aepeg2w5.js:454751-454869 placement
+//@ chunk-exfmq47h.js:466145-466263 placement
 function isDefaultModelEnforced() {
   let envDefault = envDefaultModel_2();
   if (resolveAvailableModels(envDefault.setting, envDefault.envFamily, envDefault.concreteBaseline) !== null)
     return true;
   return familyDefaultFor(envDefault.setting) !== null;
 }
-//@ chunk-aepeg2w5.js:454869-454899 placement
+//@ chunk-exfmq47h.js:466263-466293 placement
 function getDefaultMainLoopModel() {
   return parseUserSpecifiedModel(getDefaultMainLoopModelSetting());
 }
-//@ chunk-aepeg2w5.js:454899-454957 placement
+//@ chunk-exfmq47h.js:466293-466351 placement
 function isNoModelFallbackEnabled() {
   return env.CLAUDE_CODE_NO_MODEL_FALLBACK === true;
 }
-//@ chunk-aepeg2w5.js:454957-455318 placement
+//@ chunk-exfmq47h.js:466351-466712 placement
 function noModelFallbackTripwire() {
   throw Error(
     "CLAUDE_CODE_NO_MODEL_FALLBACK tripwire: a model-fallback pivot was attempted " +
@@ -63,7 +64,7 @@ function noModelFallbackTripwire() {
       "the availability chain must be built via buildAvailabilityFallbackChain() so it collapses to [primary] under the env var. The stack trace identifies the call site.",
   );
 }
-//@ chunk-aepeg2w5.js:455318-455567 placement
+//@ chunk-exfmq47h.js:466712-466961 placement
 function isSubagentModelPinned(model) {
   let lower = env.CLAUDE_CODE_SUBAGENT_MODEL?.trim().toLowerCase();
   if (!lower || lower === "inherit" || lower === "default" || isModelKeyAliasOrResolved(lower)) return false;
@@ -74,7 +75,7 @@ function isSubagentModelPinned(model) {
     ? pinned === modelId
     : pinned === modelId.replace(regionPrefixPattern, "");
 }
-//@ chunk-aepeg2w5.js:455567-455706 placement
+//@ chunk-exfmq47h.js:466961-467100 placement
 function buildAvailabilityFallbackChain(model, configured) {
   if (isNoModelFallbackEnabled()) return [model];
   let fallbacks = configuredAvailabilityFallbacks(model, configured);
@@ -85,14 +86,14 @@ function buildAvailabilityFallbackChain(model, configured) {
   }
   return [model, ...fallbacks];
 }
-//@ chunk-aepeg2w5.js:455706-455772 placement
+//@ chunk-exfmq47h.js:467100-467166 placement
 function sessionHasOwnFallback() {
   let sessionModels = sessionFallbacks();
   return (
     sessionModels.length > 0 && configuredAvailabilityFallbacks(getMainLoopModel(), sessionModels).length > 0
   );
 }
-//@ chunk-aepeg2w5.js:455772-455833 placement
+//@ chunk-exfmq47h.js:467166-467227 placement
 function mayStepDownOnRefusal(model) {
   return (
     !isModelFallbackDisabled() &&
@@ -101,7 +102,7 @@ function mayStepDownOnRefusal(model) {
     !isExactModelPick(model)
   );
 }
-//@ chunk-aepeg2w5.js:455833-455988 placement
+//@ chunk-exfmq47h.js:467227-467382 placement
 function isExactModelPick(model) {
   if (isSubagentModelPinned(model)) return true;
   let userSpecifiedModelSetting = getUserSpecifiedModelSetting();
@@ -113,14 +114,14 @@ function isExactModelPick(model) {
     return false;
   return strip1mSuffix(parseUserSpecifiedModel(userSpecifiedModelSetting)) === strip1mSuffix(model);
 }
-//@ chunk-aepeg2w5.js:455988-456084 placement
+//@ chunk-exfmq47h.js:467382-467478 placement
 function configuredAvailabilityFallbacks(head, configured) {
   return [configured]
     .flat()
     .filter((candidate) => candidate !== undefined)
     .filter((candidate) => candidate !== "" && candidate !== head && !isFormerHeadRefused(candidate, head));
 }
-//@ chunk-aepeg2w5.js:456084-456236 placement
+//@ chunk-exfmq47h.js:467478-467630 placement
 function getUsageCreditsOnlyModelConsentDeclineFallback() {
   if (isNoModelFallbackEnabled()) return null;
   let defaultMainLoopModel = getDefaultMainLoopModel();
@@ -131,7 +132,7 @@ function getUsageCreditsOnlyModelConsentDeclineFallback() {
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:456236-456412 placement
+//@ chunk-exfmq47h.js:467630-467806 placement
 function firstPartyNameToCanonical(modelId) {
   modelId = normalizeDottedVersion(modelId.toLowerCase());
   let canonicalNameMemo = getCatalogState().canonicalNameMemo;
@@ -144,7 +145,7 @@ function firstPartyNameToCanonical(modelId) {
   }
   return canonical;
 }
-//@ chunk-aepeg2w5.js:456412-458110 placement
+//@ chunk-exfmq47h.js:467806-469506 placement
 /**
  * 按 Bedrock 模型 id（含区域前缀）查找模型信息。
  */
@@ -157,8 +158,9 @@ function bedrockModelInfo(modelId) {
       if (unprefixed !== undefined) return unprefixed;
       break;
     }
-  let ext = parseModelId(modelId);
-  if (isStandardVersion(ext)) return isPDFExtension(ext) ?? stripDateSuffix(ext.base);
+  let modelId_2 = parseModelId(modelId);
+  if (isStandardVersion(modelId_2))
+    return findModelIdWithSameVersion(modelId_2) ?? stripDateSuffix(modelId_2.base);
   if (modelId.includes("claude-fable-5-1")) return "claude-fable-5-1";
   if (modelId.includes("claude-fable-5")) return "claude-fable-5";
   if (modelId.includes("claude-mythos-5-1")) return "claude-mythos-5-1";
@@ -186,20 +188,32 @@ function bedrockModelInfo(modelId) {
   if (modelId.includes("claude-3-haiku")) return "claude-3-haiku";
   return stripDateSuffix(modelId);
 }
-//@ chunk-aepeg2w5.js:458110-458156 placement
+//@ chunk-exfmq47h.js:469506-469552 placement
 function stripDateSuffix(modelId) {
   return modelId.replace(/-\d{8}$/, "");
 }
+//@ chunk-exfmq47h.js:469552-469677 sole-consumer
+/**
+ * 在已知模型中查找满足某能力的模型 id（误配名 isPDFExtension）。
+ */
+function findModelIdWithSameVersion(modelId) {
+  let candidates = [...getModelCatalog_2().models.map((model) => model.id), ...modelClassName()];
+  for (let candidate of candidates) {
+    let modelId_2 = parseModelId(candidate);
+    if (isStandardVersion(modelId_2) && isSameModelVersion(modelId_2, modelId)) return candidate;
+  }
+  return;
+}
 export {
-  getDefaultMainLoopModel,
-  buildAvailabilityFallbackChain,
-  firstPartyNameToCanonical,
-  getUsageCreditsOnlyModelConsentDeclineFallback,
   sessionHasOwnFallback,
+  buildAvailabilityFallbackChain,
+  getDefaultMainLoopModel,
+  firstPartyNameToCanonical,
   isNoModelFallbackEnabled,
+  getUsageCreditsOnlyModelConsentDeclineFallback,
   noModelFallbackTripwire,
-  isDefaultModelEnforced,
   configuredAvailabilityFallbacks,
   isExactModelPick,
   mayStepDownOnRefusal,
+  isDefaultModelEnforced,
 };

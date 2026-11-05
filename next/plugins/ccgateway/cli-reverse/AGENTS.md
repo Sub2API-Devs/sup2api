@@ -1,6 +1,6 @@
 # AGENTS.md：在 cli-reverse 目录工作的 AI 与成员
 
-本目录（`next/plugins/ccgateway/cli-reverse/`）是官方 Claude Code CLI 的 AST 逆向工程，属于 sup2api 的 ccgateway 模块。主线是把 **2.1.316** 还原成能读、能编译运行的阅读树 `reconstructed/`。`research/` 收录官方 CLI 的行为研究，`tools/versions/` 提供版本对比工具。ccgateway 的定制 CLI（`../companions/cli-mods/`）就是建立在这些研究之上的。
+本目录（`next/plugins/ccgateway/cli-reverse/`）是官方 Claude Code CLI 的 AST 逆向工程，属于 sup2api 的 ccgateway 模块。主线是把 **2.1.318**（2026-11-05 从 2.1.316 升级，见 `docs/process/upgrade-318.md`）还原成能读、能编译运行的阅读树 `reconstructed/`。`research/` 收录官方 CLI 的行为研究，`tools/versions/` 提供版本对比工具。ccgateway 的定制 CLI（`../companions/cli-mods/`）就是建立在这些研究之上的。
 
 本目录原来是一个独立仓库（`D:\projects\js\cc`）。2026-11-04 用 `git subtree` 合并进 sup2api，原来的提交历史全部保留，文档里引用的提交号（如 `a968429f`）在 sup2api 里仍然能查到。sup2api 的总规则（仓库根目录的 `AGENTS.md`）在这里同样适用；本文件只补充本目录特有的规则。本文所说的"根目录"一律指本目录。
 
@@ -12,10 +12,10 @@
 ## 硬规则
 
 1. `original/` 是从官方 ELF 提取的真值，**只读**。阅读树里的所有内容都必须能追溯到 `original/` 的文件和字节区间。
-2. `references/claude-code-analysis/` 是旧版源码（约 2.1.88），**只读**，只用来取名字和目录线索。不得把旧版代码当成 316 的实现拷进输出。名字要标注来源：facade / semantic / vendor / reference / auto。
+2. `references/claude-code-analysis/` 是旧版源码（约 2.1.88），**只读**，只用来取名字和目录线索。不得把旧版代码当成新版的实现拷进输出。名字要标注来源：facade / semantic / vendor / reference / auto。
 3. 不要手工改生成物，包括 `reconstructed/`、`naming/final/`、`analysis/` 下工具写出的文件、`runnable/`。要改就改生成器（`tools/`）或命名表、放置表（`naming/semantic-*`、`docs-*`、`modules-*`、`placement-*`），再跑 `tools/pipeline.sh`。
 4. 改动之后要证明没改坏。运行对拍 98 个场景全部一致，α 校验和规范形校验 0 差异，`readable-check` 全部通过。这些都在 `VERIFY=1 bash tools/pipeline.sh` 里，跑法和结果的读法见 README 的"验证方法"一节。
-5. 编译用的 Bun 版本必须等于官方 ELF 内嵌的版本：2.1.316 是 **1.4.4**。`restore-bun.cjs` 会把内嵌版本写进 `original/reconstruction.json`，`reconstructed/build.mjs` 会拒绝其他版本。换版本时以 ELF 实际内嵌的版本为准，不要凭记忆。
+5. 编译用的 Bun 版本必须等于官方 ELF 内嵌的版本：2.1.318 是 **1.4.4**（修订 424a542a9；2.1.316 也是 1.4.4）。`restore-bun.cjs` 会把内嵌版本写进 `original/reconstruction.json`，`reconstructed/build.mjs` 会拒绝其他版本。换版本时以 ELF 实际内嵌的版本为准，不要凭记忆。
 6. 每一步都要写文档。里程碑写 `docs/WORKLOG.md`，一两行。细节写 `docs/process/<角色或主题>.md`：做了什么、怎么做、数据、发现、坑、没做完的。
 7. 工具必须可复现：输入、输出路径写在文件头注释里。
 8. 大文件不入库，包括 ELF、`node_modules`、`analysis/scan`、`runnable/`、`artifacts/tmp`、`artifacts/versions`，见本目录的 `.gitignore`。这个 `.gitignore` 开头有一组 `!vendor/`、`!dist/`、`!build/` 之类的反忽略规则，用来抵消 sup2api 根 `.gitignore` 对这些名字的忽略。在这里，这些名字是源码（`reconstructed/vendor/`，以及各包自己的 `dist/`、`build/`），不要删掉这组规则。

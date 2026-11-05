@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记录链上的回合答复判定与运行中回合行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (15)
  * attribution: affinity 1, placement 14
  */
 import { countUserPromptsFromEntries } from "../../utils/attribution.js";
@@ -20,7 +20,7 @@ import {
   heldUuidsIfEnabled,
 } from "./queuedMessageUtils.js";
 import {
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
   isInterruptionOnlyMessage,
   isToolResultMessage,
   APPROVAL_EXPIRED_MESSAGE,
@@ -39,7 +39,7 @@ import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js"
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-tyg7f3ek.js:47530-47630 affinity
+//@ chunk-0yw3taqg.js:66442-66542 affinity
 function isMetaPromptEntry(entries, index) {
   let entry = entries[index];
   return (
@@ -49,15 +49,15 @@ function isMetaPromptEntry(entries, index) {
     countUserPromptsFromEntries(entries, index)
   );
 }
-//@ chunk-tyg7f3ek.js:47630-47691 placement
+//@ chunk-0yw3taqg.js:66542-66603 placement
 function isPartialAssistantRow(row) {
   return row.type === "assistant" && (isApiErrorWithoutRefusal(row) || isMalformedToolUseExhausted(row));
 }
-//@ chunk-tyg7f3ek.js:47691-47733 placement
+//@ chunk-0yw3taqg.js:66603-66645 placement
 function isUserPromptRowAtIndex(entries, index) {
   return countUserPromptsFromEntries(entries, index) && !isMetaPromptEntry(entries, index);
 }
-//@ chunk-tyg7f3ek.js:47733-47810 placement
+//@ chunk-0yw3taqg.js:66645-66722 placement
 function nextTurnStartIndex(entries, messageIndex) {
   return entries.findIndex(
     (entry, index) =>
@@ -66,7 +66,7 @@ function nextTurnStartIndex(entries, messageIndex) {
       isUserPromptRowAtIndex(entries, index),
   );
 }
-//@ chunk-tyg7f3ek.js:47810-47946 placement
+//@ chunk-0yw3taqg.js:66722-66858 placement
 function trimTrailingAfterTurn(entries, uuid, enabled) {
   let messageIndex = findMessageIndex(entries, uuid, enabled);
   if (messageIndex === -1) return entries;
@@ -78,11 +78,11 @@ function trimTrailingAfterTurn(entries, uuid, enabled) {
         !(isMetaPromptEntry(entries, index) || isPartialAssistantRow(entries[index]))),
   );
 }
-//@ chunk-tyg7f3ek.js:47946-48019 placement
+//@ chunk-0yw3taqg.js:66858-66931 placement
 function isRealAssistantReply(row) {
-  return row.type === "assistant" && !row.isApiErrorMessage && !isSyntheticApiErrorMessage(row);
+  return row.type === "assistant" && !row.isApiErrorMessage && !isNoResponseRequestedMessage(row);
 }
-//@ chunk-tyg7f3ek.js:48019-48248 placement
+//@ chunk-0yw3taqg.js:66931-67160 placement
 function isStopInterruption(rows, index) {
   let row = rows[index];
   let previous = rows[index - 1];
@@ -100,7 +100,7 @@ function isStopInterruption(rows, index) {
       ))
   );
 }
-//@ chunk-tyg7f3ek.js:48248-48652 placement (2.1.88 match: countUserPromptsFromEntries, 0.786)
+//@ chunk-0yw3taqg.js:67160-67564 placement (2.1.88 match: countUserPromptsFromEntries, 0.787)
 function countUserPromptsFromEntries_3(entries, uuid, enabled) {
   let messageIndex = findMessageIndex(entries, uuid, enabled);
   let entry = entries[messageIndex];
@@ -115,7 +115,7 @@ function countUserPromptsFromEntries_3(entries, uuid, enabled) {
       (entry) =>
         (entry.type === "user" || entry.type === "assistant") &&
         !("isSidechain" in entry && entry.isSidechain === true) &&
-        !isSyntheticApiErrorMessage(entry) &&
+        !isNoResponseRequestedMessage(entry) &&
         !isSyntheticUserMessage(entry),
     );
   let last_2 = nonSidechain.at(-1);
@@ -128,18 +128,18 @@ function countUserPromptsFromEntries_3(entries, uuid, enabled) {
     findLastUserPromptUuid([last]) !== undefined
   );
 }
-//@ chunk-tyg7f3ek.js:48652-48901 placement
+//@ chunk-0yw3taqg.js:67564-67813 placement (2.1.88 match: countUserPromptsFromEntries, 0.75)
 function isTurnAnswered(entries, uuid, enabled) {
   let entry = entries[findMessageIndex(entries, uuid, enabled)];
   if (entry?.type !== "attachment") return entry !== undefined;
   let trimmed = trimTrailingAfterTurn(entries, uuid, enabled);
   let sliced = trimmed.slice(trimmed.indexOf(entry) + 1);
-  let index = sliced.findIndex((row) => isSyntheticApiErrorMessage(row) || isInterruptMarkerRow(row));
+  let index = sliced.findIndex((row) => isNoResponseRequestedMessage(row) || isInterruptMarkerRow(row));
   return (index === -1 ? sliced : sliced.slice(0, index)).some(
     (row) => isRealAssistantReply(row) && !("isSidechain" in row && row.isSidechain === true),
   );
 }
-//@ chunk-tyg7f3ek.js:48901-49334 placement
+//@ chunk-0yw3taqg.js:67813-68246 placement
 function isQueuedPromptAnswered(entries, uuid) {
   if (isTurnAnswered(entries, uuid)) return true;
   let entry = entries[findMessageIndex(entries, uuid)];
@@ -157,12 +157,12 @@ function isQueuedPromptAnswered(entries, uuid) {
     getRemoteFeatureGateState(TENGU_CHEEKY_TOUCAN) === "on"
   );
 }
-//@ chunk-tyg7f3ek.js:49334-49393 placement
+//@ chunk-0yw3taqg.js:68246-68305 placement
 function isTurnOpen(entries, uuid) {
   let answered = countUserPromptsFromEntries_3(entries, uuid);
   return answered === undefined ? undefined : !answered;
 }
-//@ chunk-tyg7f3ek.js:49393-49610 placement
+//@ chunk-0yw3taqg.js:68305-68522 placement
 function rowsSinceTurnStart(entries, uuid) {
   let lastIndex = entries.findLastIndex((row) => row.uuid === uuid);
   let prefix = lastIndex === -1 ? entries : entries.slice(0, lastIndex + 1);
@@ -172,7 +172,7 @@ function rowsSinceTurnStart(entries, uuid) {
   let index = boundary === undefined ? -1 : prefix.lastIndexOf(boundary);
   return index === -1 ? [] : prefix.slice(index);
 }
-//@ chunk-tyg7f3ek.js:49610-49963 placement
+//@ chunk-0yw3taqg.js:68522-68875 placement
 function runningTurnRowsFromBoundary(entries) {
   if (
     getRemoteFeatureGateState(TENGU_CHEEKY_TOUCAN) !== "on" ||
@@ -190,7 +190,7 @@ function runningTurnRowsFromBoundary(entries) {
     ? runningTurnBoundary
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:49963-50210 placement
+//@ chunk-0yw3taqg.js:68875-69122 placement
 function runningTurnSendsForTurn(entries, uuid, answered = new Set()) {
   try {
     let rows = rowsSinceTurnStart(entries, uuid);
@@ -210,7 +210,7 @@ function runningTurnSendsForTurn(entries, uuid, answered = new Set()) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:50210-50315 placement
+//@ chunk-0yw3taqg.js:69122-69227 placement
 function answeredHeldUuids(entries, uuid) {
   try {
     return new Set(
@@ -228,12 +228,12 @@ export {
   isQueuedPromptAnswered,
   answeredHeldUuids,
   runningTurnSendsForTurn,
-  trimTrailingAfterTurn,
-  isTurnAnswered,
   nextTurnStartIndex,
   isStopInterruption,
   isPartialAssistantRow,
   isRealAssistantReply,
   isTurnOpen,
   countUserPromptsFromEntries_3,
+  trimTrailingAfterTurn,
+  isTurnAnswered,
 };

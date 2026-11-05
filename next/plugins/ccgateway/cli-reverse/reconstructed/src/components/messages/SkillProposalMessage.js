@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具名到 UI 模块的映射（MCP 注册表搜索、连接器建议、Artifact、工作流等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (5)
  * attribution: placement 5
  */
 import {
@@ -45,10 +45,10 @@ import {
   renderToolResultMessage_10,
   renderToolUseRejectedMessage_2,
 } from "../../tools/ExitPlanModeTool/UI.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
@@ -57,7 +57,7 @@ import {
   renderTaskOutputResult,
   renderToolUseErrorMessage_4,
 } from "../../tools/GrepTool/UI.js";
-import { renderToolUseErrorMessage_3 } from "../../tools/GlobTool/UI.js";
+import { renderToolUseErrorMessage_2 } from "../../tools/GlobTool/UI.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
 import { renderToolResultMessage as renderToolResultMessage_11 } from "../../tools/WebFetchTool/UI.js";
@@ -76,7 +76,7 @@ import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import {
   LSP_TOOL_NAME,
   renderToolResultMessage_4,
-  renderToolUseErrorMessage_2,
+  renderToolUseErrorMessage_3,
 } from "../../tools/LSPTool/UI.js";
 import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
@@ -137,7 +137,7 @@ import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:256269-256563 placement
+//@ chunk-wjygkcr4.js:263954-264248 placement
 function renderFileOpResult(result) {
   if (typeof result === "string")
     return jsxProd_default(MessageResponse, {
@@ -166,7 +166,7 @@ function renderFileOpResult(result) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:256563-256810 placement
+//@ chunk-wjygkcr4.js:264248-264495 placement
 function renderAttachmentCaption(props) {
   return jsxProd_default_2(Box, {
     flexDirection: "row",
@@ -195,7 +195,7 @@ function renderAttachmentCaption(props) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:256810-256923 placement
+//@ chunk-wjygkcr4.js:264495-264608 placement
 function renderRolePickerResult(result) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default(Text, {
@@ -203,13 +203,13 @@ function renderRolePickerResult(result) {
     }),
   });
 }
-//@ chunk-ah34pb7m.js:256923-257050 placement
+//@ chunk-wjygkcr4.js:264608-264735 placement
 function renderSkillProposalResult(result) {
   return jsxProd_default(Text, {
     children: `Shown ${result.proposalCount} ${plural(result.proposalCount, "skill proposal")} to the user for review`,
   });
 }
-//@ chunk-ah34pb7m.js:257050-265304 placement
+//@ chunk-wjygkcr4.js:264735-272989 placement
 /**
  * 工具名到 UI 模块的映射（MCP 注册表搜索、连接器建议、Artifact、工作流等）。
  */
@@ -232,7 +232,7 @@ var ARTIFACT_TOOL_UI;
 var END_CONVERSATION_TOOL_UI;
 var GROUPED_TOOL_USE_RENDERERS;
 var MCP_TOOL_NAME_PREFIX;
-deferInit("chunk-ah34pb7m.js:257050", () => {
+deferInit("chunk-wjygkcr4.js:264735", () => {
   SEARCH_MCP_REGISTRY_TOOL_UI = {
     name: require("../../tools/SearchMcpRegistryTool/prompt.js").SEARCH_MCP_REGISTRY_TOOL_NAME,
     ui: require("../../tools/SearchMcpRegistryTool/renderToolResultMessage.lazy.js"),
@@ -245,7 +245,7 @@ deferInit("chunk-ah34pb7m.js:257050", () => {
   disabledToolUi_2 = null;
   LIST_CONNECTORS_TOOL_UI = {
     name: require("../../tools/ListConnectorsTool/prompt.js").LIST_CONNECTORS_TOOL_NAME,
-    ui: require("../../tools/ConnectorsTool/UI.js"),
+    ui: require("../../tools/ListConnectorsTool/renderToolResultMessage.lazy.js"),
   };
   disabledToolUi_3 = null;
   disabledToolUi_4 = null;
@@ -308,7 +308,7 @@ deferInit("chunk-ah34pb7m.js:257050", () => {
       renderToolResultMessage: renderToolResultMessage_10,
       renderToolUseRejectedMessage: renderToolUseRejectedMessage_2,
     },
-    get [FILE_EDIT_TOOL_NAME]() {
+    get [EDIT]() {
       let fileEditModule = require("../../tools/FileEditTool/UI.js");
       return {
         renderToolResultMessage: fileEditModule.renderToolResultMessage,
@@ -333,7 +333,7 @@ deferInit("chunk-ah34pb7m.js:257050", () => {
         isResultTruncated: memoryWriteModule.isResultTruncated,
       };
     },
-    get [FILE_READ_TOOL_NAME]() {
+    get [READ]() {
       let fileReadModule = require("../../tools/FileReadTool/renderToolResultMessage.lazy.js");
       return {
         renderToolResultMessage: fileReadModule.renderToolResultMessage,
@@ -361,11 +361,11 @@ deferInit("chunk-ah34pb7m.js:257050", () => {
     },
     [GREP_TOOL_NAME]: {
       renderToolResultMessage: renderToolResultMessage_3,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_3,
+      renderToolUseErrorMessage: renderToolUseErrorMessage_2,
     },
     [GLOB_TOOL_NAME]: {
       renderToolResultMessage: renderToolResultMessage_3,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_3,
+      renderToolUseErrorMessage: renderToolUseErrorMessage_2,
     },
     [WEBFETCH]: {
       renderToolResultMessage: renderToolResultMessage_11,
@@ -389,7 +389,7 @@ deferInit("chunk-ah34pb7m.js:257050", () => {
     },
     [LSP_TOOL_NAME]: {
       renderToolResultMessage: renderToolResultMessage_4,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_2,
+      renderToolUseErrorMessage: renderToolUseErrorMessage_3,
     },
     [REPL_TOOL_NAME]: {
       renderToolUseErrorMessage: noFindingError,

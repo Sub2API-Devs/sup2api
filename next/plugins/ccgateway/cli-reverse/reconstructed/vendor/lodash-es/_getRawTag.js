@@ -1,17 +1,17 @@
 /**
  * lodash-es/_getRawTag.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-a16kyqj3.js (3)
+ * pieces: chunk-j8tzrgex.js (3)
  * attribution: placement 3
  */
 import { symbolExport } from "./_root.js";
 
-//@ chunk-a16kyqj3.js:391-473 placement (2.1.88 match: substituteVariables, 0.576)
+//@ chunk-j8tzrgex.js:391-473 placement (2.1.88 match: substituteVariables, 0.576)
 var objectProto = Object.prototype;
 var { hasOwnProperty, toString: nativeObjectToString } = objectProto;
 var symToStringTag = symbolExport ? symbolExport.toStringTag : undefined;
-//@ chunk-a16kyqj3.js:473-606 placement
+//@ chunk-j8tzrgex.js:473-606 placement
 function getRawTag(value) {
   var isOwn = hasOwnProperty.call(value, symToStringTag);
   var tag = value[symToStringTag];
@@ -25,6 +25,6 @@ function getRawTag(value) {
     else delete value[symToStringTag];
   return result;
 }
-//@ chunk-a16kyqj3.js:606-614 placement
+//@ chunk-j8tzrgex.js:606-614 placement
 var getRawTag_default = getRawTag;
 export { getRawTag_default };

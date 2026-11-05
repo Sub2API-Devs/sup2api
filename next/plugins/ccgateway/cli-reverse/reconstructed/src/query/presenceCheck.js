@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Artifact 补丁回合：判断资格、组合补丁请求并记录结果；按编辑规则排除工具的结果（off/shadow 模式下不执行）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (57)
- * attribution: placement 57
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (58)
+ * attribution: placement 57, layout 1
  */
 import { isInlineNotificationMode } from "../utils/attachments.js";
 import { getContentText, createAssistantMessage } from "../utils/messages.js";
@@ -48,15 +48,15 @@ import {
   isNonConversationMessage,
 } from "../bootstrap/sessionSlices.js";
 import { getSessionId, getThinkingTypeOverride } from "../bootstrap/state.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import {
   getMainLoopModel as getMainLoopModel_2,
   getToolPermissionContext,
 } from "../utils/permissions/toolPermissionContext.js";
 import { classifyQuerySource } from "../services/api/requestHeaders.js";
 import { isBriefEnabled } from "../tools/BriefTool/BriefTool.js";
-import { toolMatchesName } from "../Tool.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { matchesToolName } from "../Tool.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { ARTIFACT_TOOL_NAME, VIEWER_PREFIX_RE, parseArtifactUrl } from "../tools/ArtifactTool/constants.js";
 import { getCanonicalName } from "../utils/model/canonicalModelName.js";
 import { strictHumanDeciderTurn, isHumanDrivenOrigin } from "../utils/turnOrigin.js";
@@ -81,11 +81,16 @@ import {
   MAX_DELIVERY_CHARS,
 } from "../services/agentObserver/agentObserver.js";
 import { classifyNonUserMessageSource } from "../utils/messages/nonUserMessages.js";
-import { REPL_EVAL, REPL_STATUS } from "../utils/pollEvents.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import { EVAL_SETTLE_EVENT_KIND, REPL_STATUS_EVENT_KIND } from "../utils/pollEvents.js";
 import { idleClearingMode, logIdleClearingFailure } from "../services/compact/idleToolResultClearing.js";
-import { planToolResultClearingAfterIdle, SMALL_RESULT_BYTES } from "../services/compact/microCompact.js";
+import {
+  planToolResultClearingAfterIdle,
+  IDLE_CLEARING_CONFIG,
+  TEXT_CLEAR_THRESHOLD,
+} from "../services/compact/microCompact.js";
 import { canonicalToolName } from "../utils/permissions/permissionRuleParser.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { expandPathOrNull } from "../utils/path.js";
 import { isFileUnchangedStub } from "../tools/FileReadTool/prompt.js";
@@ -93,7 +98,7 @@ import { SHELL_TOOL_NAMES } from "../utils/shell/shellToolUtils.js";
 import { extractReadOnlyFileReads } from "../tools/BashTool/BashTool.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:14651-15143 placement
+//@ chunk-w3ch4xq2.js:14743-15235 placement
 /**
  * 判断用户文本是否是"解释一下"类请求。
  */
@@ -107,7 +112,27 @@ function isExplainRequest(promptText) {
     trimmed,
   );
 }
-//@ chunk-ha3km179.js:15143-15218 placement
+//@ chunk-w3ch4xq2.js:15235-16162 layout
+function normalizeSecurityPrompt(prompt) {
+  let replaced = prompt
+    .slice(0, 500)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(
+      /\b(?:(?:social|spring)[ -]security|security[ -](?:groups?|deposits?|questions?|contexts?)|security audit[ -](?:logs?|logging|trails?)|(?:dependency|constructor|setter|field|method|property|fault)[ -]injection)\b ?/g,
+      "",
+    );
+  if (
+    /\b(?:find|are there any|(?:audit|check|hunt|look|review|scan|search)(?:n?ing)?(?: [\w'-]+){0,4} for) (?:[\w'-]+ ){0,3}(?:vulnerabilit(?:y|ies)|vulns?|security (?:issues?|bugs?|holes?|flaws?|problems?|risks?))\b|\bsecurity audit\b|\b(?:an?|run|do|perform|need|want) security (?:scan|review|assessment)\b|\b(?:is|are) (?:this|that|the|my|our|these|those) (?:\w+ )?(?:code(?:base)?|apps?|applications?|repos?|repositor(?:y|ies)|projects?|services?|systems?|(?:web)?sites?|changes) (?:secure|vulnerable)\b/.test(
+      replaced,
+    )
+  )
+    return 2;
+  return /\b(?:security|vuln\w*|exploit\w*|injections?)\b|\b(?:is|are) (?:\w+ ){1,4}secure\b/.test(replaced)
+    ? 1
+    : 0;
+}
+//@ chunk-w3ch4xq2.js:16162-16237 placement
 /**
  * “去睡觉/上床”类短语
  */
@@ -115,12 +140,12 @@ function isSleepCheckPhrase(text) {
   let lower = text.toLowerCase();
   return /\bgo to (sleep|bed)\b/.test(lower);
 }
-//@ chunk-ha3km179.js:15218-16200 placement
+//@ chunk-w3ch4xq2.js:16237-17219 placement
 /**
  * "你在吗"类在场确认短语集合。
  */
 var PRESENCE_PINGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ha3km179.js:15218", () => {
+deferInit("chunk-w3ch4xq2.js:16237", () => {
   PRESENCE_PINGS = new Set([
     "ping",
     "u there",
@@ -192,7 +217,7 @@ deferInit("chunk-ha3km179.js:15218", () => {
     "ci sei",
   ]);
 });
-//@ chunk-ha3km179.js:16200-16471 placement
+//@ chunk-w3ch4xq2.js:17219-17490 placement
 /**
  * 判断用户输入是否只是"在吗"类试探（问号、省略号、hi/hello 或常见问候短语，最长 40 字）。
  */
@@ -207,9 +232,9 @@ function isPresencePing(userPromptText) {
   if (/^(hi+|hello+|he+y+|yo+)$/.test(trimmed_2)) return true;
   return PRESENCE_PINGS.has(trimmed_2);
 }
-//@ chunk-ha3km179.js:16471-16506 placement (2.1.88 match: getValueFromInput, 1)
+//@ chunk-w3ch4xq2.js:17490-17525 placement (2.1.88 match: getValueFromInput, 1)
 var getValueFromInput = (command, waited) => waited && command.mode === "prompt";
-//@ chunk-ha3km179.js:16506-16601 placement
+//@ chunk-w3ch4xq2.js:17525-17620 placement
 /**
  * 内联通知模式下可查询
  */
@@ -218,7 +243,7 @@ var isInlineNotificationCandidate = (command) =>
   command.promptSubmitted === undefined &&
   command.shouldQuery !== false &&
   command.skipSubmissionHooks !== true;
-//@ chunk-ha3km179.js:16601-16684 placement
+//@ chunk-w3ch4xq2.js:17620-17703 placement
 /**
  * 队列里的可投递项
  */
@@ -226,7 +251,7 @@ function queuedDeliverable(commands, messageQueue) {
   let queued = new Set(messageQueue.getCommandQueue());
   return commands.filter((command) => queued.has(command));
 }
-//@ chunk-ha3km179.js:16684-16786 placement
+//@ chunk-w3ch4xq2.js:17703-17805 placement
 function filterPromptSubmissions(commands, messageQueue) {
   let waited = false;
   let deliverable = [];
@@ -235,14 +260,14 @@ function filterPromptSubmissions(commands, messageQueue) {
     else if (!getValueFromInput(command, waited)) deliverable.push(command);
   return queuedDeliverable(deliverable, messageQueue);
 }
-//@ chunk-ha3km179.js:16786-16861 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-w3ch4xq2.js:17805-17880 placement (2.1.88 match: processQueuedCommands, 1)
 var processQueuedCommands = (queuedCommands) =>
   queuedCommands.mode === "task-notification"
     ? {
         kind: "task-notification",
       }
     : undefined;
-//@ chunk-ha3km179.js:16861-16974 placement
+//@ chunk-w3ch4xq2.js:17880-17993 placement
 var submissionPayload = (command) => ({
   text: getContentText(command.value) ?? "",
   input: command.value,
@@ -251,7 +276,7 @@ var submissionPayload = (command) => ({
     isMeta: true,
   }),
 });
-//@ chunk-ha3km179.js:16974-17369 placement
+//@ chunk-w3ch4xq2.js:17993-18387 placement
 /**
  * 描述一次输入提交（来源、模式、是否等待、上下文）。
  */
@@ -276,14 +301,14 @@ function describeSubmission(command, toolUseContext, result) {
     isStartInput: isGoalIdleCheckinPaused(command.uuid),
   };
 }
-//@ chunk-ha3km179.js:17369-17403 placement
+//@ chunk-w3ch4xq2.js:18387-18421 placement
 /**
  * 投递去向
  */
 var settleFate = (settled, fate) => ({
   fate: settled ? fate : "left",
 });
-//@ chunk-ha3km179.js:17403-17632 placement
+//@ chunk-w3ch4xq2.js:18421-18650 placement
 function submissionOutcome({ outcome, scratch, under, text, isHidden }) {
   let { proceeds } = outcome;
   return {
@@ -295,17 +320,17 @@ function submissionOutcome({ outcome, scratch, under, text, isHidden }) {
     sessionTitle: proceeds?.sessionTitle,
   };
 }
-//@ chunk-ha3km179.js:17632-17668 placement
+//@ chunk-w3ch4xq2.js:18650-18687 placement
 /**
  * 当前激活的消息队列。
  */
 var getActiveMessageQueue = () => (submitMarksSlot.get() ? commandSetSignalA.get() : undefined);
-//@ chunk-ha3km179.js:17668-17711 placement
+//@ chunk-w3ch4xq2.js:18687-18730 placement
 /**
  * 有活动消息队列
  */
 var hasActiveQueue = (submission) => !submission.isStartInput && getActiveMessageQueue() !== undefined;
-//@ chunk-ha3km179.js:17711-18620 placement
+//@ chunk-w3ch4xq2.js:18730-19639 placement
 /**
  * 决定提交的去向（立即处理、等待、浮出）。
  */
@@ -388,7 +413,7 @@ async function routeSubmission(command, toolUseContext) {
   }
   return ended ? settleDropped(ended) : settleFromHookOutcome(submitOutcome);
 }
-//@ chunk-ha3km179.js:18620-19073 placement
+//@ chunk-w3ch4xq2.js:19639-20092 placement
 /**
  * 批量路由排队的提交。
  */
@@ -438,7 +463,7 @@ async function routeSubmissions(commands, updatedToolUseContext) {
     dropped,
   };
 }
-//@ chunk-ha3km179.js:19073-19485 placement
+//@ chunk-w3ch4xq2.js:20092-20508 placement
 /**
  * 包装 callModel，在调用前解析 prompt.attachment hook 的附件。
  */
@@ -448,7 +473,7 @@ function wrapCallModelWithAttachments(deps, toolUseContext) {
     ? deps
     : {
         ...deps,
-        callModel: async function* (params) {
+        callModel: async function* (params, meta) {
           try {
             if (
               hasModuleHookingSite("prompt.attachment", undefined, canShortcutAppend("prompt.attachment"))
@@ -467,16 +492,16 @@ function wrapCallModelWithAttachments(deps, toolUseContext) {
             if (params.signal.aborted) throw error;
             if (!isAbortError(error)) logError(error);
           }
-          return yield* deps.callModel(params);
+          return yield* deps.callModel(params, meta);
         },
       };
 }
-//@ chunk-ha3km179.js:19485-19512 placement
+//@ chunk-w3ch4xq2.js:20508-20535 placement
 /**
  * claude-opus-5-5
  */
 var ARTIFACT_PATCH_MODELS = ["claude-opus-5-5"];
-//@ chunk-ha3km179.js:19512-19844 placement
+//@ chunk-w3ch4xq2.js:20535-20867 placement
 /**
  * 解析 Artifact 补丁回合配置（开关、模型、side call 类）。
  */
@@ -504,7 +529,7 @@ function parseArtifactPatchConfig(featureValue_CACHED_MAY_BE_STALE) {
     sideCallClass: sideCallClass === "side_reply" ? "side_reply" : undefined,
   };
 }
-//@ chunk-ha3km179.js:19844-21092 placement
+//@ chunk-w3ch4xq2.js:20867-22137 placement
 /**
  * 补丁回合（artifact patch）可以忽略的附件种类集合：这些系统注入的附件不会单独触发一次补丁请求；同组还有一个默认关闭的开关。
  */
@@ -512,7 +537,7 @@ var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2; // deferred: has load-time effects a
 var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS;
 var ARTIFACT_PATCH_LIMITS;
 var ARTIFACT_PATCH_FLAGS;
-deferInit("chunk-ha3km179.js:19844", () => {
+deferInit("chunk-w3ch4xq2.js:20867", () => {
   ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2 = false;
   ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS = new Set([
     "advisor_tool",
@@ -567,6 +592,7 @@ deferInit("chunk-ha3km179.js:19844", () => {
     "tool_search_usage_reminder",
     "total_tokens_reminder",
     "ultra_effort_exit",
+    "widget_context_hint",
     "withheld_memory",
     "workflow_size_guideline_change",
   ]);
@@ -580,7 +606,7 @@ deferInit("chunk-ha3km179.js:19844", () => {
     "hook_system_message",
   ]);
 });
-//@ chunk-ha3km179.js:21092-21457 placement
+//@ chunk-w3ch4xq2.js:22137-22506 placement
 /**
  * 开关打开时把 callModel 包装为 Artifact 补丁回合。
  */
@@ -600,7 +626,7 @@ function wrapArtifactPatchTurn(deps, toolUseContext) {
     });
     return {
       ...deps,
-      callModel: (params) => artifactPatchTurn.step(params),
+      callModel: (params, meta) => artifactPatchTurn.step(params, meta),
     };
   } catch (error) {
     logError(artifactPatchError(error, "while setting up; the loop runs without the patch turn"));
@@ -608,13 +634,13 @@ function wrapArtifactPatchTurn(deps, toolUseContext) {
   }
   return deps;
 }
-//@ chunk-ha3km179.js:21457-21660 placement
+//@ chunk-w3ch4xq2.js:22506-22709 placement
 /**
  * 跳过补丁回合的原因
  */
 var ARTIFACT_PATCH_SKIP_REASONS_2; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var ARTIFACT_PATCH_SKIP_REASONS;
-deferInit("chunk-ha3km179.js:21457", () => {
+deferInit("chunk-w3ch4xq2.js:22506", () => {
   ARTIFACT_PATCH_SKIP_REASONS_2 = new Set([
     "plan_mode",
     "brief_mode",
@@ -630,7 +656,7 @@ deferInit("chunk-ha3km179.js:21457", () => {
     reasons: new Set(),
   }));
 });
-//@ chunk-ha3km179.js:21660-24530 placement
+//@ chunk-w3ch4xq2.js:22709-25590 placement
 /**
  * Artifact 补丁回合：判断资格、组合补丁请求并记录结果。
  */
@@ -676,7 +702,7 @@ function createArtifactPatchTurn(callModel, toolUseContext, options) {
       };
     }
   };
-  async function* step(params) {
+  async function* step(params, meta) {
     requestIndex++;
     let patchMessage;
     try {
@@ -694,7 +720,7 @@ function createArtifactPatchTurn(callModel, toolUseContext, options) {
       abortTarget.removeEventListener("abort", onAbort);
       abortTarget = undefined;
     }
-    if (patchMessage === undefined) return yield* callModel(params);
+    if (patchMessage === undefined) return yield* callModel(params, meta);
     yield patchMessage;
   }
   async function advance(params) {
@@ -709,7 +735,7 @@ function createArtifactPatchTurn(callModel, toolUseContext, options) {
         return params.signal.aborted ? undefined : await startFresh(params);
       case "edits_sent": {
         let { ids, editsSent, reply, sideCallMessageId, target, event } = previous;
-        let okCount = count(ids, (id) => toolResultStatus(params.messages, id) === "ok");
+        let okCount = countWhere(ids, (id) => toolResultStatus(params.messages, id) === "ok");
         let patchEvent = {
           ...event,
           editsWritten: okCount,
@@ -739,7 +765,7 @@ function createArtifactPatchTurn(callModel, toolUseContext, options) {
           target,
           event: patchEvent,
         };
-        return hasMemoryFileRead(target.path, id);
+        return markPatched(target.path, id);
       }
       case "publish_sent": {
         let { ids, editsSent, reply, sideCallMessageId, target, event } = previous;
@@ -841,7 +867,7 @@ function createArtifactPatchTurn(callModel, toolUseContext, options) {
     step,
   };
 }
-//@ chunk-ha3km179.js:24530-25885 placement
+//@ chunk-w3ch4xq2.js:25590-26945 placement
 /**
  * 判断能否走 Artifact 补丁回合（主线程、非子代理、非计划模式等）。
  */
@@ -855,8 +881,8 @@ function checkArtifactPatchEligibility(params, toolUseContext, models = ARTIFACT
   if (getToolPermissionContext(toolUseContext).mode === "plan") return reject("plan_mode");
   if (isBriefEnabled()) return reject("brief_mode");
   if (
-    !params.tools.some((tool) => toolMatchesName(tool, FILE_EDIT_TOOL_NAME)) ||
-    !params.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME))
+    !params.tools.some((tool) => matchesToolName(tool, EDIT)) ||
+    !params.tools.some((tool) => matchesToolName(tool, ARTIFACT_TOOL_NAME))
   )
     return reject("tools_missing");
   let mainLoopModel = getMainLoopModel_2(toolUseContext);
@@ -896,7 +922,7 @@ function checkArtifactPatchEligibility(params, toolUseContext, models = ARTIFACT
     },
   };
 }
-//@ chunk-ha3km179.js:25885-26021 placement
+//@ chunk-w3ch4xq2.js:26945-27081 placement
 function usesAdaptiveThinking(thinkingConfig, mainLoopModel) {
   if (thinkingConfig.type === "disabled") return true;
   return (
@@ -907,7 +933,7 @@ function usesAdaptiveThinking(thinkingConfig, mainLoopModel) {
     }) === "adaptive"
   );
 }
-//@ chunk-ha3km179.js:26021-26559 placement
+//@ chunk-w3ch4xq2.js:27081-27619 placement
 /**
  * 附件是否可在补丁回合中忽略。
  */
@@ -935,7 +961,7 @@ function isIgnorableAttachment(message, position) {
         attachment.hookEvent !== "UserPromptExpansion"))
   );
 }
-//@ chunk-ha3km179.js:26559-26781 placement
+//@ chunk-w3ch4xq2.js:27619-27841 placement
 function plainPromptText(message) {
   let { content } = message.message;
   let text;
@@ -948,14 +974,14 @@ function plainPromptText(message) {
   if (trimmed === "" || SYSTEM_TAG_PROMPT_RE.test(trimmed)) return;
   return text;
 }
-//@ chunk-ha3km179.js:26781-26888 placement
+//@ chunk-w3ch4xq2.js:27841-27948 placement
 var SYSTEM_TAG_PROMPT_RE; // deferred: uses UUID_PATTERN (../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var regExp;
-deferInit("chunk-ha3km179.js:26781", () => {
+deferInit("chunk-w3ch4xq2.js:27841", () => {
   SYSTEM_TAG_PROMPT_RE = /^<(command-|bash-|local-command|system-reminder|task-notification|user-prompt)/;
   regExp = new RegExp(VIEWER_PREFIX_RE);
 });
-//@ chunk-ha3km179.js:26888-27108 placement
+//@ chunk-w3ch4xq2.js:27948-28168 placement
 function artifactSlugsInText(text) {
   let slugs = new Set();
   let sawUnreadable = false;
@@ -967,7 +993,7 @@ function artifactSlugsInText(text) {
   }
   return sawUnreadable ? "unreadable" : [...slugs];
 }
-//@ chunk-ha3km179.js:27108-27361 placement
+//@ chunk-w3ch4xq2.js:28168-28421 placement
 function toolResultStatus(messages, toolUseId) {
   for (let j = messages.length - 1; j >= 0; j--) {
     let message = messages[j];
@@ -978,7 +1004,7 @@ function toolResultStatus(messages, toolUseId) {
   }
   return "missing";
 }
-//@ chunk-ha3km179.js:27361-27719 placement
+//@ chunk-w3ch4xq2.js:28421-28779 placement
 /**
  * 指定工具调用之后是否已有回复。
  */
@@ -998,14 +1024,14 @@ function toolResultsAnswered(messages, toolUseIds) {
     return !isIgnorableAttachment(message, "after_step");
   });
 }
-//@ chunk-ha3km179.js:27719-27780 placement
+//@ chunk-w3ch4xq2.js:28779-28840 placement
 /**
  * toolu_patch_<uuid>
  */
 function patchToolUseId(uuid) {
   return `toolu_patch_${uuid().replaceAll("-", "")}`;
 }
-//@ chunk-ha3km179.js:27780-27871 placement
+//@ chunk-w3ch4xq2.js:28840-28931 placement
 /**
  * 构造未计量的助手消息
  */
@@ -1017,13 +1043,13 @@ function synthesizedAssistantMessage(content) {
   assistantMessage.isUnmetered = true;
   return assistantMessage;
 }
-//@ chunk-ha3km179.js:27871-28032 placement
+//@ chunk-w3ch4xq2.js:28931-29092 placement
 function buildEditToolUses(filePath, edits, toolUseIds) {
   return synthesizedAssistantMessage(
     edits.map((edit, index) => ({
       type: "tool_use",
       id: toolUseIds[index],
-      name: FILE_EDIT_TOOL_NAME,
+      name: EDIT,
       input: {
         file_path: filePath,
         old_string: edit.oldString,
@@ -1033,8 +1059,8 @@ function buildEditToolUses(filePath, edits, toolUseIds) {
     })),
   );
 }
-//@ chunk-ha3km179.js:28032-28113 placement (2.1.88 match: hasMemoryFileRead, 1)
-function hasMemoryFileRead(filePath, id) {
+//@ chunk-w3ch4xq2.js:29092-29173 placement
+function markPatched(filePath, id) {
   return synthesizedAssistantMessage([
     {
       type: "tool_use",
@@ -1046,19 +1072,19 @@ function hasMemoryFileRead(filePath, id) {
     },
   ]);
 }
-//@ chunk-ha3km179.js:28113-28238 placement
+//@ chunk-w3ch4xq2.js:29173-29298 placement
 function artifactPatchError(error, stage) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `artifact patch turn: ${error instanceof Error ? error.name : typeof error} ${stage}`,
     "artifact patch turn error",
   );
 }
-//@ chunk-ha3km179.js:28238-28272 placement
+//@ chunk-w3ch4xq2.js:29298-29332 placement
 /**
  * msg_ 开头
  */
 var MESSAGE_ID_RE = /^msg_[A-Za-z0-9_]{1,60}$/;
-//@ chunk-ha3km179.js:28272-28387 placement
+//@ chunk-w3ch4xq2.js:29332-29447 placement
 function buildPatchTextMessage(text, sideCallMessageId) {
   let message = synthesizedAssistantMessage([
     {
@@ -1071,12 +1097,12 @@ function buildPatchTextMessage(text, sideCallMessageId) {
     message.message.id = sideCallMessageId;
   return message;
 }
-//@ chunk-ha3km179.js:28387-28522 placement
+//@ chunk-w3ch4xq2.js:29447-29582 placement
 function patchSummaryText(editsSent, url, reply) {
   if (ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2 && reply.trim() !== "") return reply.trim();
   return `Made ${editsSent === 1 ? "1 edit" : `${editsSent} edits`} and republished the artifact: ${url}`;
 }
-//@ chunk-ha3km179.js:28522-28846 placement
+//@ chunk-w3ch4xq2.js:29582-29906 placement
 /**
  * 上报 tengu_artifact_patch_turn。
  */
@@ -1096,24 +1122,24 @@ function reportArtifactPatchTurn(event) {
     model: event.model === undefined ? undefined : telemetrySafeModelName(event.model),
   });
 }
-//@ chunk-ha3km179.js:28846-28887 placement
+//@ chunk-w3ch4xq2.js:29906-29947 placement
 /**
  * 惰性加载补丁模块
  */
 var lazyPatchModule = () => import("../plugins/functionHooks/api/BLOCK_SCHEMA.lazy.js");
-//@ chunk-ha3km179.js:28887-28899 placement
+//@ chunk-w3ch4xq2.js:29947-29959 placement
 // deferred: uses TEXT_PASSTHROUGH_CORES (../plugins/functionHooks/coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ha3km179.js:28887", () => {
+deferInit("chunk-w3ch4xq2.js:29947", () => {
   TEXT_PASSTHROUGH_CORES.set(lazyPatchModule);
 });
-//@ chunk-ha3km179.js:28899-29158 placement
+//@ chunk-w3ch4xq2.js:29959-30218 placement
 /**
  * 可进时间线的类型
  */
 var TIMELINE_MESSAGE_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TIMELINE_MESSAGE_TYPES;
 var logAppendKeepFailure;
-deferInit("chunk-ha3km179.js:28899", () => {
+deferInit("chunk-w3ch4xq2.js:29959", () => {
   TIMELINE_MESSAGE_TYPES_2 = new Set(["user", "assistant", "attachment", "system"]);
   TIMELINE_MESSAGE_TYPES = (value) =>
     typeof value === "object" &&
@@ -1129,7 +1155,7 @@ deferInit("chunk-ha3km179.js:28899", () => {
       },
     );
 });
-//@ chunk-ha3km179.js:29158-29252 placement
+//@ chunk-w3ch4xq2.js:30218-30312 placement
 /**
  * 是否在运行中的回合
  */
@@ -1137,7 +1163,7 @@ function isTurnLive(agentId) {
   if (agentId === undefined) return currentTurn() !== undefined;
   return currentTurnBinding(agentId) !== undefined || runningTurnRegistry.of(agentId) !== undefined;
 }
-//@ chunk-ha3km179.js:29252-30449 placement
+//@ chunk-w3ch4xq2.js:30312-31509 placement
 /**
  * 观察运行中回合的消息（hooks 关闭时跳过）。
  */
@@ -1232,9 +1258,9 @@ function observeRunningTurn(toolUseContext, messages) {
     },
   };
 }
-//@ chunk-ha3km179.js:30449-30469 placement
+//@ chunk-w3ch4xq2.js:31509-31529 placement
 var POLL_EVENT = "poll-event";
-//@ chunk-ha3km179.js:30469-31890 placement
+//@ chunk-w3ch4xq2.js:31529-32957 placement
 /**
  * 为已布防的观察者生成附件。
  */
@@ -1340,14 +1366,14 @@ function buildArmedObserverAttachment({ querySource, toolUseContext, messages, t
     return null;
   }
 }
-//@ chunk-ha3km179.js:31890-31949 placement
+//@ chunk-w3ch4xq2.js:32957-33016 placement
 /**
  * 来源是否已上报
  */
 function isReportedOrigin(origin, pairing) {
   return origin !== undefined && pairing.reportOrigins.has(origin);
 }
-//@ chunk-ha3km179.js:31949-32044 placement
+//@ chunk-w3ch4xq2.js:33016-33111 placement
 /**
  * 未标明则 unattributed
  */
@@ -1355,7 +1381,7 @@ function originKindOf(origin, isMeta) {
   if (origin === undefined) return isMeta === true ? "unattributed" : undefined;
   return isHumanDrivenOrigin(origin) ? undefined : origin.kind;
 }
-//@ chunk-ha3km179.js:32044-32391 placement
+//@ chunk-w3ch4xq2.js:33111-33458 placement
 /**
  * 建立用户消息到来源的映射。
  */
@@ -1378,7 +1404,7 @@ function mapUserOrigins(messages) {
       else origins.set(lastUserMessage, POLL_EVENT);
   return origins;
 }
-//@ chunk-ha3km179.js:32391-32545 placement
+//@ chunk-w3ch4xq2.js:33458-33612 placement
 function joinUserTexts(messages) {
   let texts = [];
   for (let message of messages) {
@@ -1391,7 +1417,7 @@ function joinUserTexts(messages) {
 
 `);
 }
-//@ chunk-ha3km179.js:32545-33364 placement
+//@ chunk-w3ch4xq2.js:33612-34431 placement
 /**
  * 把消息转换为时间线事件。
  */
@@ -1450,7 +1476,7 @@ function toTimelineEvents(row, pairing) {
   }
   return null;
 }
-//@ chunk-ha3km179.js:33364-34422 placement
+//@ chunk-w3ch4xq2.js:34431-35532 placement
 /**
  * 把附件转换为时间线事件（记忆加载、技能发现等）。
  */
@@ -1483,7 +1509,8 @@ function attachmentToTimelineEvents(attachment, pairing) {
         isMeta: attachment.isMeta,
         hearthServerEnvelope: hasHearthRelay(attachment),
         hearthJoinedTextBlocks:
-          Array.isArray(attachment.prompt) && count(attachment.prompt, (block) => block.type === "text") > 1,
+          Array.isArray(attachment.prompt) &&
+          countWhere(attachment.prompt, (block) => block.type === "text") > 1,
         sendMessageToolAbsent: attachment.sendMessageToolAbsent,
       });
       let originKind = originKindOf(taskNotificationOrigin, attachment.isMeta);
@@ -1507,9 +1534,16 @@ function attachmentToTimelineEvents(attachment, pairing) {
     case "poll_events": {
       let flattened = attachment.envelopes.flatMap((envelope, index) => {
         switch (attachment.kinds[index]) {
-          case REPL_EVAL:
-            return [];
-          case REPL_STATUS:
+          case EVAL_SETTLE_EVENT_KIND:
+            return codeModeAccepted()
+              ? [
+                  {
+                    type: "tool_result",
+                    content: truncateObserverText(envelope),
+                  },
+                ]
+              : [];
+          case REPL_STATUS_EVENT_KIND:
             return [];
           default: {
             let text = truncateObserverText(envelope, MAX_TRIGGER_TEXT_CHARS);
@@ -1535,7 +1569,7 @@ function attachmentToTimelineEvents(attachment, pairing) {
       return null;
   }
 }
-//@ chunk-ha3km179.js:34422-34648 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-w3ch4xq2.js:35532-35758 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function joinNonEmptyText(data) {
   if (typeof data === "string") return data.trim() ? data : undefined;
   if (Array.isArray(data)) {
@@ -1551,7 +1585,7 @@ function joinNonEmptyText(data) {
   }
   return;
 }
-//@ chunk-ha3km179.js:34648-34735 placement
+//@ chunk-w3ch4xq2.js:35758-35845 placement
 /**
  * JSON 文本或占位
  */
@@ -1562,7 +1596,7 @@ function jsonTextOrFallback(value) {
     return "[unserializable]";
   }
 }
-//@ chunk-ha3km179.js:34735-36630 placement
+//@ chunk-w3ch4xq2.js:35845-37728 placement
 /**
  * 按编辑规则排除工具的结果（off/shadow 模式下不执行）。
  */
@@ -1630,15 +1664,16 @@ function applyToolExclusionEdit(
           }
         }
     }
-    let keep = plan.edit.keep.value;
-    let trigger = plan.edit.trigger.value;
-    let windowSpan = trigger + 1 - keep;
-    let effectiveCount = answeredToolUses.length + Math.max(keep, maxPerReply);
-    let fullWindows =
-      effectiveCount > trigger ? 1 + Math.floor((effectiveCount - trigger - 1) / windowSpan) : 0;
+    let triggerIndex = plan.edit.trigger.value;
+    let windowSpan = triggerIndex + 1 - plan.edit.keep.value;
+    let effectiveCount = answeredToolUses.length + maxPerReply;
+    let fullWindows = 1 + Math.floor((effectiveCount - triggerIndex - 1) / windowSpan);
     let max = Math.max(
       fullWindows * windowSpan,
-      Math.min(plan.returnAfterIdle.toolUsesClearedSinceIdle, answeredToolUses.length - keep),
+      Math.min(
+        plan.returnAfterIdle.toolUsesClearedSinceIdle,
+        answeredToolUses.length - IDLE_CLEARING_CONFIG.keepToolUses,
+      ),
     );
     let clearedPaths = new Set();
     for (let { sentName, input, result } of answeredToolUses) {
@@ -1654,10 +1689,10 @@ function applyToolExclusionEdit(
                 0,
               )
             : 0;
-      if (counted && resultBytes >= SMALL_RESULT_BYTES) max--;
+      if (counted && resultBytes >= TEXT_CLEAR_THRESHOLD) max--;
       if (result.is_error === true || typeof input !== "object" || !input) continue;
       if (
-        (sentName === FILE_READ_TOOL_NAME || sentName === FILE_WRITE_TOOL_NAME) &&
+        (sentName === READ || sentName === FILE_WRITE_TOOL_NAME) &&
         "file_path" in input &&
         typeof input.file_path === "string"
       ) {
@@ -1697,8 +1732,9 @@ function applyToolExclusionEdit(
   }
 }
 export {
-  isExplainRequest,
   getActiveMessageQueue,
+  isExplainRequest,
+  normalizeSecurityPrompt,
   observeRunningTurn,
   buildArmedObserverAttachment,
   wrapArtifactPatchTurn,

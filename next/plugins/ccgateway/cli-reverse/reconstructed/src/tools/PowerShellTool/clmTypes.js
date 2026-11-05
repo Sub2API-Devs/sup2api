@@ -3,13 +3,13 @@
  *
  * PowerShell 受限语言模式允许的 .NET 类型白名单与判断函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/clmTypes.ts
- * pieces: chunk-v0yfsee9.js (3)
+ * pieces: chunk-6zpsr8vx.js (3)
  * attribution: fingerprint 1, file-local 1, callgraph-witnessed 1
  */
 
-//@ chunk-v0yfsee9.js:58675-61506 fingerprint (2.1.88 match: CLM_ALLOWED_TYPES, 1)
+//@ chunk-6zpsr8vx.js:59906-62737 fingerprint (2.1.88 match: CLM_ALLOWED_TYPES, 1)
 /**
  * PowerShell 受限语言模式（CLM）允许的 .NET 类型白名单；normalizeTypeName 去掉数组/泛型后缀并小写，isClmAllowedType 判断类型是否允许（供 powershellSecurity 检查类型字面量）。
  */
@@ -156,7 +156,7 @@ var CLM_ALLOWED_TYPES = new Set(
     "microsoft.powershell.commands.modulespecification",
   ].map((t) => t.toLowerCase()),
 );
-//@ chunk-v0yfsee9.js:61506-61593 file-local
+//@ chunk-6zpsr8vx.js:62737-62824 file-local
 function normalizeTypeName(name) {
   return name
     .toLowerCase()
@@ -164,7 +164,7 @@ function normalizeTypeName(name) {
     .replace(/\[.*\]$/, "")
     .trim();
 }
-//@ chunk-v0yfsee9.js:61593-61629 callgraph-witnessed (2.1.88 match: isClmAllowedType, 0)
+//@ chunk-6zpsr8vx.js:62824-62860 callgraph-witnessed (2.1.88 match: isClmAllowedType, 0)
 /**
  * .NET 类型名是否在 PowerShell 受限语言模式（CLM）允许列表里。
  */

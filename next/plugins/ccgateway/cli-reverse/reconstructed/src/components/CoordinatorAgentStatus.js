@@ -3,10 +3,10 @@
  *
  * 协调者/队友任务面板：列出后台 agent/队友/工作流任务行（排队数、token、状态），处理面板选择与 chat:killAgents 等按键。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CoordinatorAgentStatus.tsx
- * pieces: chunk-18hwfzwa.js (75), chunk-e6aww6q8.js (2)
- * attribution: fingerprint 4, placement 63, layout 9, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (2), chunk-czq1j3j2.js (83)
+ * attribution: placement 63, callgraph-witnessed 1, fingerprint 4, affinity 1, layout 16
  */
 import {
   isMainSessionTask as isMainSessionTask_2,
@@ -20,19 +20,19 @@ import {
   isLocalAgent,
 } from "../state/teammateViewHelpers.js";
 import { findAgentTask } from "../plugins/functionHooks/sessionApi.js";
-import { waitForStoreState, useSetVoiceState } from "../context/voice.js";
+import { waitForStoreState, useTaskFramework } from "../context/voice.js";
 import { VIEW_WAIT_MS } from "../plugins/functionHooks/uiApi.js";
 import { listUncarriedLaunchSettings } from "../services/daemon/relaunchArgs.js";
 import { getForkRestrictedLaunchConfig } from "../bootstrap/state.js";
 import { hasRunningBackgroundTask } from "../tasks/backgroundTaskLabels.js";
-import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
+  init_react_production,
   useState,
   useEffect,
-  init_react_production,
   useMemo,
   useCallback,
 } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useStrayClickGuard } from "./CustomSelect/strayClickGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -49,24 +49,24 @@ import {
   LARGE_WORKFLOW_STOP_HINT,
   LARGE_WORKFLOW_LABEL,
   LARGE_WORKFLOW_ICON,
+  selectWorkflowFooterTask,
   runningWorkflowTasks,
+  runningRemoteWorkflows,
   workflowSizeSummary,
   LARGE_WORKFLOW_STOP_HINT_PLAIN,
   useShortcutDisplayText,
 } from "./Spinner/workflowStatus.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
-import {
-  SPINNER_PADDING,
-  SPINNER_MAX_LINES,
-  SPINNER_INDENT,
-  SPINNER_SEPARATOR,
-} from "./Spinner/SpinnerAnimationRow.js";
 import { clamp } from "../ink/screen.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { PAUSE_GLYPH, BLACK_CIRCLE, DOWN_ARROW, UP_ARROW } from "../constants/figures.js";
 import { ProgressBar } from "./design-system/ProgressBar.js";
+import { isRemoteControlChannelAvailable, getRemoteCaps } from "../remote/remoteMode.js";
+import { withOutcomeTelemetry } from "../remote/controlRequestErrors.js";
+import { sanitizeDisplayText, MAX_TITLE_LENGTH } from "../utils/resultError.js";
+import { errorMessage } from "../utils/errors.js";
 import { isTerminalTaskStatus } from "../Task.js";
-import { isTaskStillActive } from "./tasks/BackgroundTaskStatus.js";
+import { SnapshotCache } from "../remote/remoteSessionEvents.js";
 import { KeyboardShortcutHint, formatShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { isIdleCompletedSubagent } from "../tasks/LocalMainSessionTask.js";
@@ -74,13 +74,16 @@ import { collapseWhitespace, repeatString } from "../utils/stringUtils.js";
 import { hasRunningBackgroundWorkForAgent } from "../tasks/backgroundTaskKinds.js";
 import { isTeammateAwaitingInput } from "../utils/inProcessTeammateHelpers.js";
 import { isCoordinatorPanelActive, subscribeCoordinatorPanel } from "../utils/transcriptDiagnostics.js";
-import { count } from "../utils/collections.js";
-import { hasCompletedWithFindings } from "../tasks/LocalAgentTask/LocalAgentTask.js";
+import { countWhere } from "../utils/collections.js";
+import { hasCompletedWithFindings } from "./tasks/RemoteSessionProgress.js";
 import { useAppState, useAppStoreDirect, useSetAppState } from "../state/AppState.js";
+import { useHasRemoteWork } from "./tasks/remoteTaskStatus.js";
 import { useMainLoopModel as useMainLoopModel_3 } from "../hooks/useMainLoopModel.js";
 import { isUltracodeActive } from "../utils/effort.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
+import { selectIdleTeammatesExpanded_3 } from "./PromptInput/PromptComposer.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
+import { cloudWorkflowToTask } from "../commands/workflows/workflows.js";
 import { pausedUsageParts } from "../utils/usageLimitText.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -89,9 +92,7 @@ import { usePluginInstallationStatus } from "../hooks/notifs/usePluginInstallati
 import { hasOtherActiveAgents, MCP_TASK_KEEPALIVE_MS } from "../utils/task/framework.js";
 import { useInterval } from "../ink/components/Input.js";
 import { computeScrollWindow } from "./CustomSelect/select.js";
-import { extractTeammateTranscriptsFromTasks_2 } from "../utils/sessionStorage.js";
 import { TREE_GLYPHS } from "../../vendor/chart.js/dist/chart.js";
-import { stepTeammateSelection } from "../hooks/useBackgroundTaskNavigation.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../keybindings/useShortcutDisplay.js";
 import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { Byline } from "./design-system/Byline.js";
@@ -103,14 +104,14 @@ import { MessageActionsKeybindings } from "./messageActions.js";
 import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4006927-4007097 placement
+//@ chunk-5xgkngpb.js:4112393-4112563 placement
 function teammateRowState(agentTask) {
   if (agentTask.type !== "in_process_teammate") return isMainSessionTask_2(agentTask) ? undefined : "hidden";
   let failedOrStopped = isTaskFailedOrStopped(agentTask);
   let notResumable = agentTask.identity.resumableAgentId === undefined;
   return failedOrStopped ? "ended" : notResumable ? "elsewhere" : undefined;
 }
-//@ chunk-e6aww6q8.js:4007333-4007709 callgraph-witnessed (2.1.88 match: CoordinatorTaskPanel, 0.123)
+//@ chunk-5xgkngpb.js:4112799-4113175 callgraph-witnessed (2.1.88 match: CoordinatorTaskPanel, 0.123)
 async function showAgentTaskView(store, options) {
   if (options.agentId === undefined) {
     exitTeammateView((prevState) => store.setState(prevState));
@@ -133,14 +134,24 @@ async function showAgentTaskView(store, options) {
   );
   return store.getState().viewingAgentTaskId === agentTask.id ? "shown" : "moved";
 }
-//@ chunk-18hwfzwa.js:171209-171289 fingerprint (2.1.88 match: _temp, 0.667)
+//@ chunk-czq1j3j2.js:175302-175381 fingerprint (2.1.88 match: _temp, 0.668)
 function hasUncarriedLaunchSettings(s) {
   return (
     listUncarriedLaunchSettings(s.toolPermissionContext, getForkRestrictedLaunchConfig()).length > 0 ||
     hasRunningBackgroundTask(s.tasks)
   );
 }
-//@ chunk-18hwfzwa.js:435268-436126 placement
+//@ chunk-czq1j3j2.js:460211-460215 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:460211", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:460318-460355 affinity (2.1.88 match: SEP_WIDTH, 1)
+var SPINNER_PADDING = 2;
+var SPINNER_INDENT = "  ";
+var SPINNER_SEPARATOR = " \xB7 ";
+var SPINNER_MAX_LINES = 8;
+//@ chunk-czq1j3j2.js:460355-461213 placement
 /**
  * 协调者代理状态行（悬停高亮、防误点）。
  */
@@ -223,7 +234,7 @@ function AgentStatusRow(props) {
   } else rowElement = $[14];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:436126-436321 placement
+//@ chunk-czq1j3j2.js:461213-461408 placement
 function AgentStatusRowWithClock(props) {
   let $ = useMemoCache(5);
   let clockValue = ElapsedClock(props.row.clock);
@@ -245,7 +256,7 @@ function AgentStatusRowWithClock(props) {
   } else rowElement = $[4];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:436321-439174 placement
+//@ chunk-czq1j3j2.js:461408-464262 placement
 /**
  * 代理状态行视图：进度条、百分比、耗时与标签（屏幕阅读器有简化形式）。
  */
@@ -500,11 +511,11 @@ function AgentStatusRowView(props) {
   } else rowElement = $[61];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:439174-439257 placement
+//@ chunk-czq1j3j2.js:464262-464345 placement
 function progressBarCells(row, barWidth) {
   return row.totalAgents > 0 ? Math.floor((row.doneAgents * barWidth) / row.totalAgents) : 0;
 }
-//@ chunk-18hwfzwa.js:439257-439372 placement
+//@ chunk-czq1j3j2.js:464345-464460 placement
 function layoutWidth(layout) {
   let joined = layout.segments.map((segment) => segment.text).join(SPINNER_SEPARATOR);
   return (
@@ -513,7 +524,7 @@ function layoutWidth(layout) {
     bunStringWidth(joined)
   );
 }
-//@ chunk-18hwfzwa.js:439372-439778 placement
+//@ chunk-czq1j3j2.js:464460-464866 placement
 /**
  * 按宽度从宽到窄的进度布局候选（代理数、耗时、token、警告）。
  */
@@ -538,7 +549,7 @@ function progressLayoutCandidates(row, elapsed, isWarned, narrowest) {
     progressLayout(lastWidth, [], undefined),
   ];
 }
-//@ chunk-18hwfzwa.js:439778-439942 placement
+//@ chunk-czq1j3j2.js:464866-465030 placement
 function progressLayout(barWidth, texts, warningText) {
   let segments = [];
   for (let text of texts)
@@ -557,110 +568,155 @@ function progressLayout(barWidth, texts, warningText) {
     segments,
   };
 }
-//@ chunk-18hwfzwa.js:439942-439975 placement
+//@ chunk-czq1j3j2.js:465030-465061 layout
+function canStopRemoteWorkflow(remoteWorkerReportedGone) {
+  return isRemoteControlChannelAvailable() && !remoteWorkerReportedGone;
+}
+//@ chunk-czq1j3j2.js:465061-465389 layout
+async function stopRemoteWorkflow(taskId, notify) {
+  let remoteCaps = getRemoteCaps();
+  if (!remoteCaps) return false;
+  return withOutcomeTelemetry("cloud_workflow_stop", () =>
+    remoteCaps.sendControlRequest({
+      subtype: "stop_task",
+      task_id: taskId,
+    }),
+  ).then(
+    () => true,
+    (error) => {
+      let message = sanitizeDisplayText(errorMessage(error), {
+        maxCodeUnits: MAX_TITLE_LENGTH,
+      });
+      notify({
+        key: "cloud-workflow-stop",
+        kind: "feedback",
+        text: `Couldn't stop the workflow: ${message}`,
+        color: "error",
+        priority: "immediate",
+      });
+      return false;
+    },
+  );
+}
+//@ chunk-czq1j3j2.js:465389-465422 placement
 function selectTasks(state) {
   return state.tasks;
 }
-//@ chunk-18hwfzwa.js:439975-440012 placement
+//@ chunk-czq1j3j2.js:465422-465459 placement
 function selectUltracode(state) {
   return state.ultracode;
 }
-//@ chunk-18hwfzwa.js:440012-440055 placement
+//@ chunk-czq1j3j2.js:465459-465502 placement
 function selectTaskDecorations(state) {
   return state.taskDecorations;
 }
-//@ chunk-18hwfzwa.js:440055-440101 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:465502-465548 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:440101-440146 placement
+//@ chunk-czq1j3j2.js:465548-465593 placement
 function selectAgentNameRegistry(state) {
   return state.agentNameRegistry;
 }
-//@ chunk-18hwfzwa.js:440146-440191 placement
+//@ chunk-czq1j3j2.js:465593-465638 placement
 function selectSlackTagConnected(state) {
   return state.slackTagConnected;
 }
-//@ chunk-18hwfzwa.js:440191-440239 placement
+//@ chunk-czq1j3j2.js:465638-465686 placement
 function selectCoordinatorTaskIndex(state) {
   return state.coordinatorTaskIndex;
 }
-//@ chunk-18hwfzwa.js:440239-440292 placement (2.1.88 match: getTaskOutputDir, 0.766)
+//@ chunk-czq1j3j2.js:465686-465739 placement (2.1.88 match: getTaskOutputDir, 0.768)
 function getTaskOutputDir(state) {
   return state.footerSelection === "tasks";
 }
-//@ chunk-18hwfzwa.js:440292-440349 placement
+//@ chunk-czq1j3j2.js:465739-465796 placement
 function selectWorkflowsFooter(state) {
   return state.footerSelection === "workflows";
 }
-//@ chunk-18hwfzwa.js:440349-440396 placement
+//@ chunk-czq1j3j2.js:465796-465843 placement
 function selectWorkflowFooterIndex(state) {
   return state.workflowFooterIndex;
 }
-//@ chunk-18hwfzwa.js:440396-440449 placement
+//@ chunk-czq1j3j2.js:465843-465890 placement
 function selectIdleTeammatesExpanded(state) {
-  return state.idleTeammatesExpanded ?? false;
+  return state.workflowFooterRunId;
 }
-//@ chunk-18hwfzwa.js:440449-440522 placement
+//@ chunk-czq1j3j2.js:465943-466016 placement
 function isLiveTaskRow(task) {
   return isPanelOrTeammateTask(task) && (!isTerminalTaskStatus(task.status) || task.evictAfter !== undefined);
 }
-//@ chunk-18hwfzwa.js:440522-440552 placement
+//@ chunk-czq1j3j2.js:466016-466046 layout
+function createSnapshotCache() {
+  return new SnapshotCache();
+}
+//@ chunk-czq1j3j2.js:466046-466076 placement
 function newSet_2() {
   return new Set();
 }
-//@ chunk-18hwfzwa.js:440552-440585 placement
+//@ chunk-czq1j3j2.js:466076-466109 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-18hwfzwa.js:440585-440629 placement
+//@ chunk-czq1j3j2.js:466109-466153 placement
 function plusCountSuffix(count) {
   return count > 0 ? ` (+${count})` : "";
 }
-//@ chunk-18hwfzwa.js:440629-440678 placement
+//@ chunk-czq1j3j2.js:466153-466202 placement
 function rowNameWidth(props) {
   let { row } = props;
   return bunStringWidth(row.name);
 }
-//@ chunk-18hwfzwa.js:440678-440694 placement
+//@ chunk-czq1j3j2.js:466202-466218 placement
 function noopTaskClickHandler() {}
-//@ chunk-18hwfzwa.js:440694-440727 placement
+//@ chunk-czq1j3j2.js:466218-466251 placement
 function selectTasks_2_2(state) {
   return state.tasks;
 }
-//@ chunk-18hwfzwa.js:440727-440770 placement
+//@ chunk-czq1j3j2.js:466251-466440 placement
 function selectTaskDecorations_2(state) {
+  let selectedTask = state.footerSelection === "workflows" ? selectWorkflowFooterTask(state) : undefined;
+  if (!selectedTask) {
+    return;
+  }
+  if ("presence" in selectedTask && !canStopRemoteWorkflow(state.remoteWorkerReportedGone)) {
+    return "none";
+  }
+  return isTerminalTaskStatus(selectedTask.status) ? "clear" : "stop";
+}
+//@ chunk-czq1j3j2.js:466440-466483 placement
+function selectViewingAgentTaskId_2(state) {
   return state.taskDecorations;
 }
-//@ chunk-18hwfzwa.js:440770-440816 placement (2.1.88 match: _temp2, 1)
-function selectViewingAgentTaskId_2(s_0) {
+//@ chunk-czq1j3j2.js:466483-466529 layout (2.1.88 match: _temp2, 1)
+function selectViewingAgentTaskId_3(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:440861-440904 placement
-function selectFooterSelection(state) {
+//@ chunk-czq1j3j2.js:466529-466574 layout
+function selectViewSelectionMode(state) {
+  return state.viewSelectionMode;
+}
+//@ chunk-czq1j3j2.js:466574-466617 placement
+function selectCoordinatorTaskIndex_3(state) {
   return state.footerSelection;
 }
-//@ chunk-18hwfzwa.js:440904-440952 placement
-function selectCoordinatorTaskIndex_3(state) {
+//@ chunk-czq1j3j2.js:466617-466665 placement
+function selectWorkflowFooterIndex_2(state) {
   return state.coordinatorTaskIndex;
 }
-//@ chunk-18hwfzwa.js:440952-440999 placement
-function selectWorkflowFooterIndex_2(state) {
-  return state.workflowFooterIndex;
-}
-//@ chunk-18hwfzwa.js:440999-441052 placement
+//@ chunk-czq1j3j2.js:466665-466718 placement
 function selectIdleTeammatesExpanded_2(state) {
   return state.idleTeammatesExpanded ?? false;
 }
-//@ chunk-18hwfzwa.js:441052-441110 placement
+//@ chunk-czq1j3j2.js:466718-466776 placement
 function isEvictableIdleTeammate(task) {
   return isPanelOrTeammateTask(task) && task.evictAfter !== 0 && isTaskStillActive(task);
 }
-//@ chunk-18hwfzwa.js:441110-441150 placement
+//@ chunk-czq1j3j2.js:466776-466816 placement
 function isNotStopAllAction(action) {
   return action.action !== STOP_ALL_AGENTS_LABEL;
 }
-//@ chunk-18hwfzwa.js:441150-441197 placement
+//@ chunk-czq1j3j2.js:466816-466863 placement
 function renderShortcutHint(props) {
   return jsxProd_default(
     KeyboardShortcutHint,
@@ -670,24 +726,25 @@ function renderShortcutHint(props) {
     props.action,
   );
 }
-//@ chunk-18hwfzwa.js:441197-441268 placement
+//@ chunk-czq1j3j2.js:466863-466941 placement
 var WORKFLOW_SIZE_WARNING = "workflow-size-warning";
+var pendingShellLines = [];
 var MAX_VISIBLE_WORKFLOW_ROWS = 5;
 var MAX_INLINE_IDLE_TEAMMATES = 3;
 var IDLE_TEAMMATE_SUMMARY = "idle-teammate-summary";
-//@ chunk-18hwfzwa.js:441268-441314 placement
+//@ chunk-czq1j3j2.js:466941-466987 placement
 function isAgentRowVisible(agentRow) {
   return agentRow.type === "idle_summary";
 }
-//@ chunk-18hwfzwa.js:441314-441405 placement
+//@ chunk-czq1j3j2.js:466987-467078 placement
 function isViewingThisAgent(task, state) {
   return state.viewSelectionMode === "viewing-agent" && task.id === state.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:441405-441440 placement
+//@ chunk-czq1j3j2.js:467078-467113 placement
 function isPanelOrTeammateTask(task) {
   return isPanelAgentTask(task) || isInProcessTeammateTask(task);
 }
-//@ chunk-18hwfzwa.js:441612-441732 placement
+//@ chunk-czq1j3j2.js:467285-467405 placement
 /**
  * 是否存在可清理（evictAfter≠0、不是其他任务的祖先）的空闲已完成子代理任务，且它不是已完成的后台 agent。页脚据此决定是否显示清理提示。
  */
@@ -702,15 +759,19 @@ function hasEvictableIdleSubagent(tasks, viewingAgentTaskId) {
       !isCompletedBackgroundAgent(task),
   );
 }
-//@ chunk-18hwfzwa.js:441732-441822 placement
+//@ chunk-czq1j3j2.js:467405-467495 placement
 function agentRowLabel(task) {
   return collapseWhitespace(task.type === "in_process_teammate" ? task.identity.agentName : task.agentType);
 }
-//@ chunk-18hwfzwa.js:441905-441930 placement
+//@ chunk-czq1j3j2.js:467495-467578 layout (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
+function extractTeammateTranscriptsFromTasks(tasks) {
+  return tasks.type === "in_process_teammate" ? tasks.identity.agentId : tasks.agentId;
+}
+//@ chunk-czq1j3j2.js:467578-467603 placement
 function noopSlackTagHandler(event, slackTagConnected) {
   return;
 }
-//@ chunk-18hwfzwa.js:441930-442034 placement
+//@ chunk-czq1j3j2.js:467603-467707 placement
 function isEvictingIdleTeammate(task) {
   return (
     task?.type === "in_process_teammate" &&
@@ -719,22 +780,22 @@ function isEvictingIdleTeammate(task) {
     task.evictAfter > 0
   );
 }
-//@ chunk-18hwfzwa.js:442034-442194 placement
-function isTeammateDueForEviction(task, dueAt, setVoiceState) {
+//@ chunk-czq1j3j2.js:467707-467867 placement
+function isTeammateDueForEviction(task, dueAt, workspaceTasks) {
   return (
     isEvictingIdleTeammate(task) &&
     task.evictAfter !== undefined &&
     task.evictAfter <= dueAt &&
     !isAwaitingInputTeammate(task) &&
     (task.identity.resumableAgentId === undefined ||
-      !hasRunningBackgroundWorkForAgent(task.identity.resumableAgentId, setVoiceState))
+      !hasRunningBackgroundWorkForAgent(task.identity.resumableAgentId, workspaceTasks))
   );
 }
-//@ chunk-18hwfzwa.js:442194-442224 placement
+//@ chunk-czq1j3j2.js:467867-467897 placement
 function isAwaitingInputTeammate(task) {
   return isTeammateAwaitingInput(task);
 }
-//@ chunk-18hwfzwa.js:442224-442818 fingerprint (2.1.88 match: getVisibleAgentTasks, 1)
+//@ chunk-czq1j3j2.js:467897-468491 fingerprint (2.1.88 match: getVisibleAgentTasks, 1)
 function getVisibleAgentTasks(tasks, viewingAgentTaskId) {
   let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
   let agentId = isPanelAgentTask(viewedTask) ? viewedTask.agentId : undefined;
@@ -772,7 +833,7 @@ function getVisibleAgentTasks(tasks, viewingAgentTaskId) {
   walk(undefined);
   return ordered;
 }
-//@ chunk-18hwfzwa.js:442818-443034 layout (2.1.88 match: _temp6, 0.781)
+//@ chunk-czq1j3j2.js:468491-468707 layout (2.1.88 match: _temp6, 0.781)
 function nearestVisibleAncestorId(tasks, task, ancestorTaskIds) {
   if (task.type === "in_process_teammate") return;
   let seen = new Set();
@@ -786,7 +847,7 @@ function nearestVisibleAncestorId(tasks, task, ancestorTaskIds) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:443034-443271 layout
+//@ chunk-czq1j3j2.js:468707-468944 layout
 function collectAncestorTaskIds(tasks, viewingAgentTaskId) {
   let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
   let ids = new Set();
@@ -801,7 +862,7 @@ function collectAncestorTaskIds(tasks, viewingAgentTaskId) {
   }
   return ids;
 }
-//@ chunk-18hwfzwa.js:443271-443411 layout
+//@ chunk-czq1j3j2.js:468944-469084 layout
 function ancestorDepth(tasks, visibleBackgroundTask, ancestorTaskIds) {
   let depth = 0;
   let seen = new Set();
@@ -816,7 +877,7 @@ function ancestorDepth(tasks, visibleBackgroundTask, ancestorTaskIds) {
   }
   return depth;
 }
-//@ chunk-18hwfzwa.js:443411-443635 layout
+//@ chunk-czq1j3j2.js:469084-469308 layout
 function countVisibleDescendants(tasks, teammateTranscriptsFromTasks, ancestorTaskIds) {
   let total = 0;
   for (let task of Object.values(tasks)) {
@@ -837,7 +898,7 @@ function countVisibleDescendants(tasks, teammateTranscriptsFromTasks, ancestorTa
   }
   return total;
 }
-//@ chunk-18hwfzwa.js:443635-443995 layout
+//@ chunk-czq1j3j2.js:469308-469668 layout
 function getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId, expandAll = false) {
   if (isCoordinatorPanelActive()) return [];
   let filtered = getVisibleAgentTasks(tasks, viewingAgentTaskId).filter(
@@ -864,7 +925,7 @@ function getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId, e
     }
   return rows;
 }
-//@ chunk-18hwfzwa.js:443995-444095 placement (2.1.88 match: _temp6, 0.765)
+//@ chunk-czq1j3j2.js:469668-469768 placement (2.1.88 match: _temp6, 0.768)
 function isOtherIdleTeammate(task, viewingAgentTaskId) {
   return (
     task.type === "in_process_teammate" &&
@@ -874,13 +935,13 @@ function isOtherIdleTeammate(task, viewingAgentTaskId) {
     !isAwaitingInputTeammate(task)
   );
 }
-//@ chunk-18hwfzwa.js:444095-444142 placement
+//@ chunk-czq1j3j2.js:469768-469815 placement
 function hasFoldedIdleTeammates(visibleBackgroundTasks, tasks) {
   return (
-    count(visibleBackgroundTasks, (task) => isOtherIdleTeammate(task, tasks)) > MAX_INLINE_IDLE_TEAMMATES
+    countWhere(visibleBackgroundTasks, (task) => isOtherIdleTeammate(task, tasks)) > MAX_INLINE_IDLE_TEAMMATES
   );
 }
-//@ chunk-18hwfzwa.js:444142-444377 placement
+//@ chunk-czq1j3j2.js:469815-470050 placement
 /**
  * 任务列表变化后重新定位面板选中行：按原选中任务 id 在新列表中的位置返回新下标（1 起），找不到时在分组里找包含它的组，仍找不到返回 0。
  */
@@ -895,7 +956,7 @@ function remapTaskPanelIndex(appState, rows, nextRows, groupRows) {
   }
   return 0;
 }
-//@ chunk-18hwfzwa.js:444377-444619 placement
+//@ chunk-czq1j3j2.js:470050-470292 placement
 function selectTaskRowUpdater(taskIndex, updater) {
   return (state) => {
     let next = updater(state);
@@ -908,7 +969,7 @@ function selectTaskRowUpdater(taskIndex, updater) {
     };
   };
 }
-//@ chunk-18hwfzwa.js:444619-444699 placement
+//@ chunk-czq1j3j2.js:470292-470372 placement
 function expandIdleTeammates(state) {
   return state.idleTeammatesExpanded
     ? state
@@ -917,13 +978,13 @@ function expandIdleTeammates(state) {
         idleTeammatesExpanded: true,
       };
 }
-//@ chunk-18hwfzwa.js:444699-444755 placement
+//@ chunk-czq1j3j2.js:470372-470428 placement
 function agentRowPrefixWidth() {
   return 2 + Math.max(bunStringWidth(figures_default.circle), bunStringWidth(BLACK_CIRCLE)) + 1;
 }
-//@ chunk-18hwfzwa.js:444755-444764 placement
+//@ chunk-czq1j3j2.js:470428-470437 placement
 var AGENT_ROW_WIDTH_RESERVE = 2;
-//@ chunk-18hwfzwa.js:444764-444877 placement (2.1.88 match: getStatusColor, 1)
+//@ chunk-czq1j3j2.js:470437-470550 placement (2.1.88 match: getStatusColor, 1)
 function getStatusColor(status) {
   switch (status) {
     case "completed":
@@ -935,8 +996,13 @@ function getStatusColor(status) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:444973-446087 fingerprint (2.1.88 match: AgentLine, 0.401)
-function AgentLine(task, now, turnStartTime, idleAsDone) {
+//@ chunk-czq1j3j2.js:470550-470646 layout (2.1.88 match: _temp6, 1)
+function isTaskStillActive(t_1) {
+  if (t_1.type === "in_process_teammate") return !isTerminalTaskStatus(t_1.status);
+  return !isTerminalTaskStatus(t_1.status) || hasCompletedWithFindings(t_1);
+}
+//@ chunk-czq1j3j2.js:470646-471915 fingerprint (2.1.88 match: AgentLine, 0.402)
+function AgentLine(task, now, turnStartTime, idleAsDone, isScreenReaderEnabled) {
   let queuedCount =
     task.type === "in_process_teammate" ? task.pendingUserMessages.length : task.pendingMessages.length;
   let queuedText = queuedCount > 0 ? `${queuedCount} queued` : "";
@@ -969,6 +1035,13 @@ function AgentLine(task, now, turnStartTime, idleAsDone) {
         queuedCount,
       };
     }
+    if (isScreenReaderEnabled)
+      return {
+        elapsed: "running",
+        tokenText: "",
+        queuedText,
+        queuedCount,
+      };
     let startedAt = turnStartTime ?? task.startTime;
     return {
       elapsed: formatDuration(Math.max(0, now - startedAt)),
@@ -992,6 +1065,13 @@ function AgentLine(task, now, turnStartTime, idleAsDone) {
       queuedText,
       queuedCount,
     };
+  if (isActive && isScreenReaderEnabled)
+    return {
+      elapsed: "running",
+      tokenText: "",
+      queuedText,
+      queuedCount,
+    };
   let totalPausedMs = task.totalPausedMs ?? 0;
   let max = Math.max(
     0,
@@ -1006,13 +1086,13 @@ function AgentLine(task, now, turnStartTime, idleAsDone) {
     queuedCount,
   };
 }
-//@ chunk-18hwfzwa.js:446087-452984 layout
+//@ chunk-czq1j3j2.js:471915-479100 layout
 /**
  * 页脚上方的后台任务面板组件：列出后台 agent / 队友 / 工作流任务行（排队数、token、状态色、限额暂停），处理选中、窗口滚动与"more below"。
  * showWorkflows 为 true 时同时列出运行中的工作流。
  */
 function BackgroundTasksPanel(props) {
-  let $ = useMemoCache(60);
+  let $ = useMemoCache(62);
   let resolvedProps;
   if ($[0] !== props) {
     resolvedProps = props === undefined ? {} : props;
@@ -1020,18 +1100,29 @@ function BackgroundTasksPanel(props) {
     $[1] = resolvedProps;
   } else resolvedProps = $[1];
   let { showWorkflows } = resolvedProps;
-  let showWorkflowsFlag = showWorkflows === undefined ? false : showWorkflows;
+  let includeWorkflows = showWorkflows === undefined ? false : showWorkflows;
   let tasks = useAppState(selectTasks);
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let workflowsFooter = useHasRemoteWork();
+  let selector;
+  if ($[2] !== workflowsFooter || $[3] !== includeWorkflows) {
+    selector = (appState) =>
+      includeWorkflows && workflowsFooter ? appState.remoteWorkflowRuns : pendingShellLines;
+    $[2] = workflowsFooter;
+    $[3] = includeWorkflows;
+    $[4] = selector;
+  } else selector = $[4];
+  let appState = useAppState(selector);
   let mainLoopModel = useMainLoopModel_3();
-  let ultracode = useAppState(selectUltracode);
-  let ultracodeActiveFlag;
-  if ($[2] !== mainLoopModel || $[3] !== ultracode) {
-    ultracodeActiveFlag = isUltracodeActive(ultracode, mainLoopModel);
-    $[2] = mainLoopModel;
-    $[3] = ultracode;
-    $[4] = ultracodeActiveFlag;
-  } else ultracodeActiveFlag = $[4];
-  let ultracodeActive = ultracodeActiveFlag;
+  let appState_2 = useAppState(selectUltracode);
+  let ultracodeActive;
+  if ($[5] !== mainLoopModel || $[6] !== appState_2) {
+    ultracodeActive = isUltracodeActive(appState_2, mainLoopModel);
+    $[5] = mainLoopModel;
+    $[6] = appState_2;
+    $[7] = ultracodeActive;
+  } else ultracodeActive = $[7];
+  let ultracodeActive_2 = ultracodeActive;
   let { columns } = useTerminalSize();
   let isFooterHidden = subscribeCoordinatorPanel();
   let appStoreDirect = useAppStoreDirect();
@@ -1040,81 +1131,90 @@ function BackgroundTasksPanel(props) {
   let agentNameRegistry = useAppState(selectAgentNameRegistry);
   let slackTagConnected = useAppState(selectSlackTagConnected);
   let coordinatorTaskIndex = useAppState(selectCoordinatorTaskIndex);
-  let appState = useAppState(getTaskOutputDir);
-  let appState_2 = useAppState(selectWorkflowsFooter);
-  let workflowFooterIndex = useAppState(selectWorkflowFooterIndex);
-  let appState_3 = useAppState(selectIdleTeammatesExpanded);
-  let selectedIndex = appState ? coordinatorTaskIndex : undefined;
+  let appState_3 = useAppState(getTaskOutputDir);
+  let appState_4 = useAppState(selectWorkflowsFooter);
+  let appState_5 = useAppState(selectWorkflowFooterIndex);
+  let appState_6 = useAppState(selectIdleTeammatesExpanded);
+  let appState_7 = useAppState(selectIdleTeammatesExpanded_3);
+  let selectedIndex = appState_3 ? coordinatorTaskIndex : undefined;
   let setAppState = useSetAppState();
-  let setVoiceState = useSetVoiceState();
+  let taskSummary = useTaskFramework();
   useTheme_2();
   let visibleBackgroundTasks = getVisibleBackgroundTasks(
     tasks,
     taskDecorations,
     viewingAgentTaskId,
-    appState_3,
+    appState_7,
   );
   let any = Object.values(tasks).some(isLiveTaskRow);
-  let workflowTasksCached;
-  if ($[5] !== showWorkflowsFlag || $[6] !== tasks) {
-    workflowTasksCached = showWorkflowsFlag ? runningWorkflowTasks(tasks) : [];
-    $[5] = showWorkflowsFlag;
-    $[6] = tasks;
-    $[7] = workflowTasksCached;
-  } else workflowTasksCached = $[7];
-  let workflowTasks = workflowTasksCached;
-  let hasWorkflowRows = workflowTasks.length > 0;
+  let [progressCache] = useState(createSnapshotCache);
+  let workflowTasks;
+  if ($[8] !== progressCache || $[9] !== appState || $[10] !== includeWorkflows || $[11] !== tasks) {
+    workflowTasks = includeWorkflows
+      ? [
+          ...runningWorkflowTasks(tasks),
+          ...runningRemoteWorkflows(appState).map((run) =>
+            cloudWorkflowToTask(run, progressCache.of(run.wireProgress), undefined),
+          ),
+        ]
+      : [];
+    $[8] = progressCache;
+    $[9] = appState;
+    $[10] = includeWorkflows;
+    $[11] = tasks;
+    $[12] = workflowTasks;
+  } else workflowTasks = $[12];
+  let runnableWorkflows = workflowTasks;
+  let hasWorkflowRows = runnableWorkflows.length > 0;
   let workflowRows;
-  if ($[8] !== workflowTasks || $[9] !== ultracodeActive) {
-    let toWorkflowRowCached;
-    if ($[11] !== ultracodeActive) {
-      toWorkflowRowCached = (workflowTask) => {
-        let agentCounts = countWorkflowAgents(workflowTask.workflowProgress, workflowTask.agentCount);
-        let rateLimitWait = workflowTask.status === "running" ? workflowTask.rateLimitWait : undefined;
-        let bulletColor = isTerminalTaskStatus(workflowTask.status)
-          ? getStatusColor(workflowTask.status)
-          : rateLimitWait !== undefined
-            ? "warning"
-            : agentCounts.failedCount > 0
-              ? "error"
-              : undefined;
-        return {
-          workflow: workflowTask,
-          row: {
-            name: collapseWhitespace(
-              workflowTask.workflowName ??
-                workflowTask.summary ??
-                workflowTask.description ??
-                "Dynamic workflow",
-            ),
-            bulletColor,
-            doneAgents: agentCounts.done,
-            totalAgents: agentCounts.total,
-            totalTokens: workflowTask.totalTokens,
-            clock: workflowTask,
-            pausedStatuses: rateLimitWait && pausedUsageParts(rateLimitWait.resetsAt),
-          },
-          warning: workflowSizeSummary({
-            scheduledAgents: agentCounts.total,
-            startedAgents: agentCounts.started,
-            totalTokens: workflowTask.totalTokens,
-            ultracodeActive,
-          }),
-        };
+  if ($[13] !== runnableWorkflows || $[14] !== tasks || $[15] !== ultracodeActive_2) {
+    workflowRows = runnableWorkflows.map((workflowTask) => {
+      let agentCounts = countWorkflowAgents(workflowTask.workflowProgress, workflowTask.agentCount);
+      let rateLimitWait = workflowTask.status === "running" ? workflowTask.rateLimitWait : undefined;
+      let bulletColor = isTerminalTaskStatus(workflowTask.status)
+        ? getStatusColor(workflowTask.status)
+        : rateLimitWait !== undefined
+          ? "warning"
+          : agentCounts.failedCount > 0
+            ? "error"
+            : undefined;
+      return {
+        workflow: workflowTask,
+        row: {
+          name: collapseWhitespace(
+            workflowTask.workflowName ??
+              workflowTask.summary ??
+              workflowTask.description ??
+              "Dynamic workflow",
+          ),
+          bulletColor,
+          doneAgents: agentCounts.done,
+          totalAgents: agentCounts.total,
+          totalTokens: workflowTask.totalTokens,
+          clock: workflowTask,
+          pausedStatuses: rateLimitWait && pausedUsageParts(rateLimitWait.resetsAt),
+        },
+        warning:
+          tasks[workflowTask.id] === undefined
+            ? undefined
+            : workflowSizeSummary({
+                scheduledAgents: agentCounts.total,
+                startedAgents: agentCounts.started,
+                totalTokens: workflowTask.totalTokens,
+                ultracodeActive: ultracodeActive_2,
+              }),
       };
-      $[11] = ultracodeActive;
-      $[12] = toWorkflowRowCached;
-    } else toWorkflowRowCached = $[12];
-    workflowRows = workflowTasks.map(toWorkflowRowCached);
-    $[8] = workflowTasks;
-    $[9] = ultracodeActive;
-    $[10] = workflowRows;
-  } else workflowRows = $[10];
+    });
+    $[13] = runnableWorkflows;
+    $[14] = tasks;
+    $[15] = ultracodeActive_2;
+    $[16] = workflowRows;
+  } else workflowRows = $[16];
   let workflowRowItems = workflowRows;
   let [warnedWorkflowIds] = useState(newSet_2);
   let warnEffect;
   let warnEffectDeps;
-  if ($[13] !== tasks || $[14] !== warnedWorkflowIds || $[15] !== workflowRowItems) {
+  if ($[17] !== tasks || $[18] !== warnedWorkflowIds || $[19] !== workflowRowItems) {
     warnEffect = () => {
       for (const workflowId of warnedWorkflowIds) {
         if (tasks[workflowId]?.type !== "local_workflow") warnedWorkflowIds.delete(workflowId);
@@ -1136,14 +1236,14 @@ function BackgroundTasksPanel(props) {
       }
     };
     warnEffectDeps = [workflowRowItems, tasks, warnedWorkflowIds];
-    $[13] = tasks;
-    $[14] = warnedWorkflowIds;
-    $[15] = workflowRowItems;
-    $[16] = warnEffect;
-    $[17] = warnEffectDeps;
+    $[17] = tasks;
+    $[18] = warnedWorkflowIds;
+    $[19] = workflowRowItems;
+    $[20] = warnEffect;
+    $[21] = warnEffectDeps;
   } else {
-    warnEffect = $[16];
-    warnEffectDeps = $[17];
+    warnEffect = $[20];
+    warnEffectDeps = $[21];
   }
   useEffect(warnEffect, warnEffectDeps);
   let hasWorkflowWarning =
@@ -1161,7 +1261,7 @@ function BackgroundTasksPanel(props) {
           scheduledAgents: agentCounts.total,
           startedAgents: agentCounts.started,
           totalTokens: workflowTask.totalTokens,
-          ultracodeActive,
+          ultracodeActive: ultracodeActive_2,
         }) !== undefined
       );
     });
@@ -1174,11 +1274,11 @@ function BackgroundTasksPanel(props) {
   let [now, setNow] = useState(nowMs);
   let evictSweepCached;
   if (
-    $[18] !== isFooterHidden ||
-    $[19] !== setAppState ||
-    $[20] !== setVoiceState ||
-    $[21] !== tasks ||
-    $[22] !== viewingAgentTaskId
+    $[22] !== isFooterHidden ||
+    $[23] !== setAppState ||
+    $[24] !== taskSummary ||
+    $[25] !== tasks ||
+    $[26] !== viewingAgentTaskId
   ) {
     evictSweepCached = () => {
       let now = Date.now();
@@ -1191,7 +1291,7 @@ function BackgroundTasksPanel(props) {
       for (const task of Object.values(tasks)) {
         if (task.type === "local_workflow") {
           if (task.status !== "running" && (task.evictAfter ?? Infinity) <= now)
-            setVoiceState.evictTerminal(task.id);
+            taskSummary.evictTerminal(task.id);
           continue;
         }
         if (!isPanelOrTeammateTask(task)) {
@@ -1208,7 +1308,7 @@ function BackgroundTasksPanel(props) {
           )
             ancestorExtendIds.push(task.id);
           else if (task.evictAfter !== undefined && task.evictAfter <= now)
-            setVoiceState.evictTerminal(task.id);
+            taskSummary.evictTerminal(task.id);
         } else if (
           (hasOtherActive || isHeldBySibling) &&
           task.isIdle &&
@@ -1226,7 +1326,7 @@ function BackgroundTasksPanel(props) {
           let nextTasks;
           for (const taskId of expiredIds) {
             let task = state.tasks[taskId];
-            if (isTeammateDueForEviction(task, now, setVoiceState)) {
+            if (isTeammateDueForEviction(task, now, taskSummary)) {
               if (nextTasks === undefined)
                 nextTasks = {
                   ...state.tasks,
@@ -1278,30 +1378,30 @@ function BackgroundTasksPanel(props) {
         });
       if (hasActiveAgent && !isFooterHidden) setNow(now);
     };
-    $[18] = isFooterHidden;
-    $[19] = setAppState;
-    $[20] = setVoiceState;
-    $[21] = tasks;
-    $[22] = viewingAgentTaskId;
-    $[23] = evictSweepCached;
-  } else evictSweepCached = $[23];
+    $[22] = isFooterHidden;
+    $[23] = setAppState;
+    $[24] = taskSummary;
+    $[25] = tasks;
+    $[26] = viewingAgentTaskId;
+    $[27] = evictSweepCached;
+  } else evictSweepCached = $[27];
   useInterval(evictSweepCached, any || hasWorkflowRows ? 1000 : null);
   let nameByTaskId;
-  if ($[24] !== agentNameRegistry) {
+  if ($[28] !== agentNameRegistry) {
     nameByTaskId = new Map();
     for (const [rawName, taskId] of agentNameRegistry) nameByTaskId.set(taskId, collapseWhitespace(rawName));
-    $[24] = agentNameRegistry;
-    $[25] = nameByTaskId;
-  } else nameByTaskId = $[25];
-  let displayNames = nameByTaskId;
+    $[28] = agentNameRegistry;
+    $[29] = nameByTaskId;
+  } else nameByTaskId = $[29];
+  let rowHeightByRun = nameByTaskId;
   let isViewingAgentCached;
-  if ($[26] !== tasks || $[27] !== viewingAgentTaskId) {
+  if ($[30] !== tasks || $[31] !== viewingAgentTaskId) {
     isViewingAgentCached =
       viewingAgentTaskId !== undefined && isPanelOrTeammateTask(tasks[viewingAgentTaskId]);
-    $[26] = tasks;
-    $[27] = viewingAgentTaskId;
-    $[28] = isViewingAgentCached;
-  } else isViewingAgentCached = $[28];
+    $[30] = tasks;
+    $[31] = viewingAgentTaskId;
+    $[32] = isViewingAgentCached;
+  } else isViewingAgentCached = $[32];
   let isViewingAgent = isViewingAgentCached;
   if (isFooterHidden || (visibleBackgroundTasks.length === 0 && !hasWorkflowRows && !isViewingAgent)) {
     return null;
@@ -1327,7 +1427,7 @@ function BackgroundTasksPanel(props) {
       ? 0
       : countVisibleDescendants(
           tasks,
-          extractTeammateTranscriptsFromTasks_2(visibleBackgroundTask),
+          extractTeammateTranscriptsFromTasks(visibleBackgroundTask),
           ancestorTaskIds,
         ),
   );
@@ -1337,25 +1437,28 @@ function BackgroundTasksPanel(props) {
       : ancestorDepth(tasks, visibleBackgroundTask, ancestorTaskIds),
   );
   let descendantSuffixer = plusCountSuffix;
-  let min = Math.min(
-    28,
-    Math.max(
-      4,
-      ...visibleBackgroundTasks.map((visibleBackgroundTask, rowIndex) =>
-        !isAgentRowVisible(visibleBackgroundTask) &&
-        taskDecorations[visibleBackgroundTask.id]?.content === undefined
-          ? 2 * mapped_2[rowIndex] +
-            bunStringWidth(
-              displayNames.get(visibleBackgroundTask.id) ?? agentRowLabel(visibleBackgroundTask),
-            ) +
-            bunStringWidth(descendantSuffixer(mapped[rowIndex]))
-          : 0,
-      ),
-      ...workflowRowItems.map(rowNameWidth),
-    ),
+  const mapped_3 = visibleBackgroundTasks.map((visibleBackgroundTask, rowIndex) =>
+    !isAgentRowVisible(visibleBackgroundTask) &&
+    taskDecorations[visibleBackgroundTask.id]?.content === undefined
+      ? 2 * mapped_2[rowIndex] +
+        bunStringWidth(rowHeightByRun.get(visibleBackgroundTask.id) ?? agentRowLabel(visibleBackgroundTask)) +
+        bunStringWidth(descendantSuffixer(mapped[rowIndex]))
+      : 0,
   );
+  let labelRows;
+  if ($[33] !== workflowRowItems) {
+    labelRows = workflowRowItems.map(rowNameWidth);
+    $[33] = workflowRowItems;
+    $[34] = labelRows;
+  } else labelRows = $[34];
+  let min = Math.min(28, Math.max(4, ...mapped_3, ...labelRows));
   let agentLineCached;
-  if ($[29] !== displayNames || $[30] !== now || $[31] !== appStoreDirect) {
+  if (
+    $[35] !== isScreenReaderEnabled ||
+    $[36] !== rowHeightByRun ||
+    $[37] !== now ||
+    $[38] !== appStoreDirect
+  ) {
     agentLineCached = (task) =>
       isAgentRowVisible(task)
         ? undefined
@@ -1363,18 +1466,20 @@ function BackgroundTasksPanel(props) {
             task,
             now,
             appStoreDirect.getState().transcripts[task.id]?.turnStartTime,
-            displayNames.has(task.id),
+            rowHeightByRun.has(task.id),
+            isScreenReaderEnabled,
           );
-    $[29] = displayNames;
-    $[30] = now;
-    $[31] = appStoreDirect;
-    $[32] = agentLineCached;
-  } else agentLineCached = $[32];
-  let mapped_3 = visibleBackgroundTasks.map(agentLineCached);
+    $[35] = isScreenReaderEnabled;
+    $[36] = rowHeightByRun;
+    $[37] = now;
+    $[38] = appStoreDirect;
+    $[39] = agentLineCached;
+  } else agentLineCached = $[39];
+  let mapped_4 = visibleBackgroundTasks.map(agentLineCached);
   let statusWidthFor = (links) =>
     Math.max(
       0,
-      ...mapped_3.map((line, rowIndex) =>
+      ...mapped_4.map((line, rowIndex) =>
         line !== undefined && taskDecorations[visibleBackgroundTasks[rowIndex].id]?.content === undefined
           ? bunStringWidth(
               [line.elapsed, line.tokenText, line.queuedText, links[rowIndex]?.label]
@@ -1385,12 +1490,12 @@ function BackgroundTasksPanel(props) {
       ),
     );
   let linkCached;
-  if ($[33] !== slackTagConnected) {
+  if ($[40] !== slackTagConnected) {
     linkCached = (task) =>
       isAgentRowVisible(task) ? undefined : noopSlackTagHandler(task, slackTagConnected);
-    $[33] = slackTagConnected;
-    $[34] = linkCached;
-  } else linkCached = $[34];
+    $[40] = slackTagConnected;
+    $[41] = linkCached;
+  } else linkCached = $[41];
   let links = visibleBackgroundTasks.map(linkCached);
   let statusWidth = statusWidthFor(links);
   if (
@@ -1413,7 +1518,7 @@ function BackgroundTasksPanel(props) {
       moreAbove,
       onClick: () => exitTeammateView((state) => setAppState(selectTaskRowUpdater(0, state))),
     });
-  const mapped_4 = visibleBackgroundTasks
+  const mapped_5 = visibleBackgroundTasks
     .slice(windowStart, windowEnd)
     .map((visibleBackgroundTask, offset) => {
       let rowIndex = windowStart + offset;
@@ -1452,7 +1557,7 @@ function BackgroundTasksPanel(props) {
         CoordinatorTaskRow,
         {
           task,
-          name: displayNames.get(task.id),
+          name: rowHeightByRun.get(task.id),
           link,
           decoration: taskDecorations[task.id],
           isSelected: selectedIndex === rowIndex + 1,
@@ -1461,7 +1566,7 @@ function BackgroundTasksPanel(props) {
           descendantSuffix: descendantSuffixer(mapped[rowIndex]),
           labelWidth: min,
           statusWidth,
-          statusParts: mapped_3[rowIndex],
+          statusParts: mapped_4[rowIndex],
           onClick: (event) => {
             if (link !== undefined && event.hyperlinkUrl === link.url) {
               return event.allowDefault();
@@ -1473,7 +1578,7 @@ function BackgroundTasksPanel(props) {
       );
     });
   let moreBelowElement;
-  if ($[35] !== moreBelow || $[36] !== visibleBackgroundTasks.length) {
+  if ($[42] !== moreBelow || $[43] !== visibleBackgroundTasks.length) {
     moreBelowElement =
       visibleBackgroundTasks.length > MAX_VISIBLE_WORKFLOW_ROWS &&
       jsxProd_default(Box, {
@@ -1483,114 +1588,102 @@ function BackgroundTasksPanel(props) {
           children: moreBelow > 0 ? `  ${DOWN_ARROW} ${moreBelow} more` : " ",
         }),
       });
-    $[35] = moreBelow;
-    $[36] = visibleBackgroundTasks.length;
-    $[37] = moreBelowElement;
-  } else moreBelowElement = $[37];
+    $[42] = moreBelow;
+    $[43] = visibleBackgroundTasks.length;
+    $[44] = moreBelowElement;
+  } else moreBelowElement = $[44];
   let workflowRowElements;
   if (
-    $[38] !== columns ||
-    $[39] !== min ||
-    $[40] !== setAppState ||
-    $[41] !== warnedWorkflowIds ||
-    $[42] !== workflowFooterIndex ||
-    $[43] !== workflowRowItems ||
-    $[44] !== appState_2
+    $[45] !== columns ||
+    $[46] !== min ||
+    $[47] !== setAppState ||
+    $[48] !== tasks ||
+    $[49] !== warnedWorkflowIds ||
+    $[50] !== appState_5 ||
+    $[51] !== appState_6 ||
+    $[52] !== workflowRowItems ||
+    $[53] !== appState_4
   ) {
-    let renderWorkflowRow;
-    if (
-      $[46] !== columns ||
-      $[47] !== min ||
-      $[48] !== setAppState ||
-      $[49] !== warnedWorkflowIds ||
-      $[50] !== workflowFooterIndex ||
-      $[51] !== appState_2
-    ) {
-      renderWorkflowRow = (workflowRow, index) => {
-        let { workflow, row, warning } = workflowRow;
-        return jsxProd_default(
-          AgentStatusRow,
-          {
-            row,
-            isWarned:
-              !isTerminalTaskStatus(workflow.status) &&
-              (warning !== undefined || warnedWorkflowIds.has(workflow.id)),
-            prefixWidth: agentRowPrefixWidth(),
-            labelWidth: min,
-            rowWidth: columns - AGENT_ROW_WIDTH_RESERVE,
-            isSelected: appState_2 && workflowFooterIndex === index,
-            onClick: () =>
-              setAppState((state) =>
-                state.workflowDetail?.taskId === workflow.id
-                  ? state
-                  : {
-                      ...state,
-                      workflowDetail: {
-                        taskId: workflow.id,
-                      },
+    workflowRowElements = workflowRowItems.map((workflowRow, index) => {
+      let { workflow, row, warning } = workflowRow;
+      return jsxProd_default(
+        AgentStatusRow,
+        {
+          row,
+          isWarned:
+            !isTerminalTaskStatus(workflow.status) &&
+            (warning !== undefined || warnedWorkflowIds.has(workflow.id)),
+          prefixWidth: agentRowPrefixWidth(),
+          labelWidth: min,
+          rowWidth: columns - AGENT_ROW_WIDTH_RESERVE,
+          isSelected:
+            appState_4 && (appState_6 === undefined ? appState_5 === index : appState_6 === workflow.id),
+          onClick: () =>
+            setAppState((state) =>
+              state.workflowDetail?.taskId === workflow.id
+                ? state
+                : {
+                    ...state,
+                    workflowDetail: {
+                      taskId: workflow.id,
+                      isCloudRun: tasks[workflow.id] === undefined,
                     },
-              ),
-          },
-          workflow.id,
-        );
-      };
-      $[46] = columns;
-      $[47] = min;
-      $[48] = setAppState;
-      $[49] = warnedWorkflowIds;
-      $[50] = workflowFooterIndex;
-      $[51] = appState_2;
-      $[52] = renderWorkflowRow;
-    } else renderWorkflowRow = $[52];
-    workflowRowElements = workflowRowItems.map(renderWorkflowRow);
-    $[38] = columns;
-    $[39] = min;
-    $[40] = setAppState;
-    $[41] = warnedWorkflowIds;
-    $[42] = workflowFooterIndex;
-    $[43] = workflowRowItems;
-    $[44] = appState_2;
-    $[45] = workflowRowElements;
-  } else workflowRowElements = $[45];
+                  },
+            ),
+        },
+        workflow.id,
+      );
+    });
+    $[45] = columns;
+    $[46] = min;
+    $[47] = setAppState;
+    $[48] = tasks;
+    $[49] = warnedWorkflowIds;
+    $[50] = appState_5;
+    $[51] = appState_6;
+    $[52] = workflowRowItems;
+    $[53] = appState_4;
+    $[54] = workflowRowElements;
+  } else workflowRowElements = $[54];
   let panelElement;
   if (
-    $[53] !== BoxComponent ||
-    $[54] !== paddingRight ||
-    $[55] !== mainLineElement ||
-    $[56] !== mapped_4 ||
-    $[57] !== moreBelowElement ||
-    $[58] !== workflowRowElements
+    $[55] !== BoxComponent ||
+    $[56] !== paddingRight ||
+    $[57] !== mainLineElement ||
+    $[58] !== mapped_5 ||
+    $[59] !== moreBelowElement ||
+    $[60] !== workflowRowElements
   ) {
     panelElement = jsxProd_default_2(BoxComponent, {
       flexDirection,
       marginTop,
       paddingRight,
-      children: [mainLineElement, mapped_4, moreBelowElement, workflowRowElements],
+      children: [mainLineElement, mapped_5, moreBelowElement, workflowRowElements],
     });
-    $[53] = BoxComponent;
-    $[54] = paddingRight;
-    $[55] = mainLineElement;
-    $[56] = mapped_4;
-    $[57] = moreBelowElement;
-    $[58] = workflowRowElements;
-    $[59] = panelElement;
-  } else panelElement = $[59];
+    $[55] = BoxComponent;
+    $[56] = paddingRight;
+    $[57] = mainLineElement;
+    $[58] = mapped_5;
+    $[59] = moreBelowElement;
+    $[60] = workflowRowElements;
+    $[61] = panelElement;
+  } else panelElement = $[61];
   return panelElement;
 }
-//@ chunk-18hwfzwa.js:452984-455430 layout
+//@ chunk-czq1j3j2.js:479100-481493 layout
 /**
  * 任务面板获得焦点时页脚显示的快捷键提示行：按当前选中项（主会话 / agent / 分组 / 工作流）显示 select、view、stop all 等按键。
  */
 function TaskPanelFooterHints() {
-  let $ = useMemoCache(39);
+  let $ = useMemoCache(38);
   let tasks = useAppState(selectTasks_2_2);
-  let taskDecorations = useAppState(selectTaskDecorations_2);
-  let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_2);
-  let viewSelectionMode = useAppState(stepTeammateSelection);
-  let footerSelection = useAppState(selectFooterSelection);
-  let coordinatorTaskIndex = useAppState(selectCoordinatorTaskIndex_3);
-  let workflowFooterIndex = useAppState(selectWorkflowFooterIndex_2);
-  let appState = useAppState(selectIdleTeammatesExpanded_2);
+  let workflow = useAppState(selectTaskDecorations_2);
+  let taskDecorations = useAppState(selectViewingAgentTaskId_2);
+  let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_3);
+  let viewSelectionMode = useAppState(selectViewSelectionMode);
+  let appState = useAppState(selectCoordinatorTaskIndex_3);
+  let coordinatorTaskIndex = useAppState(selectWorkflowFooterIndex_2);
+  let appState_2 = useAppState(selectIdleTeammatesExpanded_2);
   let stopAll = useShortcutDisplay_2("chat:killAgents", "Chat", TASK_PANEL_KEYS.stopAll);
   let shortcutDisplay = useShortcutDisplay("footer:openSelected", "Footer", TASK_PANEL_KEYS.open);
   let shortcutDisplay_2 = useShortcutDisplay("footer:close", "Footer", TASK_PANEL_KEYS.close);
@@ -1619,13 +1712,13 @@ function TaskPanelFooterHints() {
   let selectHintNode = selectHint;
   let { columns } = useTerminalSize();
   let footerHints;
-  if (footerSelection === "tasks" && coordinatorTaskIndex >= 0) {
+  if (appState === "tasks" && coordinatorTaskIndex >= 0) {
     if (
       $[5] !== shortcutDisplay_2 ||
       $[6] !== collapse ||
       $[7] !== columns ||
       $[8] !== coordinatorTaskIndex ||
-      $[9] !== appState ||
+      $[9] !== appState_2 ||
       $[10] !== stopAll ||
       $[11] !== shortcutDisplay ||
       $[12] !== selectChord ||
@@ -1639,7 +1732,7 @@ function TaskPanelFooterHints() {
         tasks,
         taskDecorations,
         viewingAgentTaskId,
-        appState,
+        appState_2,
       );
       let selectedTask =
         coordinatorTaskIndex >= 1 ? visibleBackgroundTasks[coordinatorTaskIndex - 1] : undefined;
@@ -1697,10 +1790,10 @@ function TaskPanelFooterHints() {
         footerHints = expandByline;
       } else {
         const closeAction = isTaskStillActive(selectedTask) ? "stop" : "clear";
-        const showCollapse = appState && hasFoldedIdleTeammates(visibleBackgroundTasks, viewingAgentTaskId);
+        const showCollapse = appState_2 && hasFoldedIdleTeammates(visibleBackgroundTasks, viewingAgentTaskId);
         let evictableCount;
         if ($[29] !== tasks) {
-          evictableCount = count(Object.values(tasks), isEvictableIdleTeammate);
+          evictableCount = countWhere(Object.values(tasks), isEvictableIdleTeammate);
           $[29] = tasks;
           $[30] = evictableCount;
         } else evictableCount = $[30];
@@ -1738,7 +1831,7 @@ function TaskPanelFooterHints() {
       $[6] = collapse;
       $[7] = columns;
       $[8] = coordinatorTaskIndex;
-      $[9] = appState;
+      $[9] = appState_2;
       $[10] = stopAll;
       $[11] = shortcutDisplay;
       $[12] = selectChord;
@@ -1749,16 +1842,14 @@ function TaskPanelFooterHints() {
       $[17] = viewingAgentTaskId;
       $[18] = footerHints;
     } else footerHints = $[18];
-  } else if (footerSelection === "workflows") {
+  } else if (appState === "workflows") {
     let workflowByline;
     if (
       $[31] !== shortcutDisplay_2 ||
       $[32] !== shortcutDisplay ||
       $[33] !== selectHintNode ||
-      $[34] !== tasks ||
-      $[35] !== workflowFooterIndex
+      $[34] !== workflow
     ) {
-      let workflow = runningWorkflowTasks(tasks)[workflowFooterIndex];
       workflowByline = workflow
         ? jsxProd_default_2(Byline, {
             children: [
@@ -1768,9 +1859,10 @@ function TaskPanelFooterHints() {
                   action: "view",
                 }),
               shortcutDisplay_2 &&
+                workflow !== "none" &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: shortcutDisplay_2,
-                  action: isTerminalTaskStatus(workflow.status) ? "clear" : "stop",
+                  action: workflow,
                 }),
             ],
           })
@@ -1787,14 +1879,13 @@ function TaskPanelFooterHints() {
       $[31] = shortcutDisplay_2;
       $[32] = shortcutDisplay;
       $[33] = selectHintNode;
-      $[34] = tasks;
-      $[35] = workflowFooterIndex;
-      $[36] = workflowByline;
-    } else workflowByline = $[36];
+      $[34] = workflow;
+      $[35] = workflowByline;
+    } else workflowByline = $[35];
     footerHints = workflowByline;
   }
   let footerNode;
-  if ($[37] !== footerHints) {
+  if ($[36] !== footerHints) {
     footerNode =
       footerHints !== undefined
         ? jsxProd_default(Text, {
@@ -1803,18 +1894,18 @@ function TaskPanelFooterHints() {
             children: footerHints,
           })
         : null;
-    $[37] = footerHints;
-    $[38] = footerNode;
-  } else footerNode = $[38];
+    $[36] = footerHints;
+    $[37] = footerNode;
+  } else footerNode = $[37];
   return footerNode;
 }
-//@ chunk-18hwfzwa.js:455430-455482 layout
+//@ chunk-czq1j3j2.js:481493-481545 layout
 function useVisibleAgentTaskCount() {
   let [countSelector] = useState(makeVisibleTaskCountSelector);
   let appState = useAppState(countSelector);
   return subscribeCoordinatorPanel() ? 0 : appState;
 }
-//@ chunk-18hwfzwa.js:455482-456117 layout
+//@ chunk-czq1j3j2.js:481545-482180 layout
 /**
  * 生成带缓存的 AppState 选择器：返回可见后台任务行数（有任务或正在查看 agent 时 +1 主会话行），tasks 浅相等时复用上次结果。
  */
@@ -1853,7 +1944,7 @@ function makeVisibleTaskCountSelector() {
     return count;
   };
 }
-//@ chunk-18hwfzwa.js:456117-457026 fingerprint (2.1.88 match: MainLine, 0.512)
+//@ chunk-czq1j3j2.js:482180-483089 fingerprint (2.1.88 match: MainLine, 0.512)
 function MainLine(props) {
   let $ = useMemoCache(16);
   let { isSelected, isViewed, labelWidth, moreAbove, onClick } = props;
@@ -1926,7 +2017,7 @@ function MainLine(props) {
   } else rowElement = $[15];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:457026-461149 placement
+//@ chunk-czq1j3j2.js:483089-487214 placement
 /**
  * 协调者模式代理状态面板中的单行任务。
  */
@@ -2271,7 +2362,7 @@ function CoordinatorTaskRow(props) {
   } else rowElement = $[87];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:461149-462112 placement
+//@ chunk-czq1j3j2.js:487214-488177 placement
 function IdleAgentsSummaryRow(props) {
   let $ = useMemoCache(18);
   let { count, isSelected, onClick } = props;
@@ -2353,7 +2444,7 @@ function IdleAgentsSummaryRow(props) {
   } else rowElement = $[17];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:462112-462270 placement
+//@ chunk-czq1j3j2.js:488177-488335 placement
 function useStrayClickGuarded(onClick) {
   let $ = useMemoCache(3);
   let strayClickGuard = useStrayClickGuard();
@@ -2374,7 +2465,7 @@ function useStrayClickGuarded(onClick) {
   } else guardedClickCached = $[2];
   return guardedClickCached;
 }
-//@ chunk-18hwfzwa.js:462270-462409 placement
+//@ chunk-czq1j3j2.js:488335-488474 placement
 var TASK_PANEL_KEYS = {
   open: "enter",
   close: "x",
@@ -2386,7 +2477,7 @@ var STOP_ALL_AGENTS_LABEL = "stop all agents";
 var LOWER_KEY_CASE = {
   keyCase: "lower",
 };
-//@ chunk-18hwfzwa.js:462409-462731 placement
+//@ chunk-czq1j3j2.js:488474-488796 placement
 function CoordinatorPanelKeys({ keys, onViewedRow, closeAction, showCollapse, showStopAll }) {
   let hints = onViewedRow
     ? [
@@ -2418,20 +2509,15 @@ function CoordinatorPanelKeys({ keys, onViewedRow, closeAction, showCollapse, sh
     });
   return hints.filter((hint) => formatShortcutHint(hint) !== "");
 }
-//@ chunk-18hwfzwa.js:462731-462782 placement
+//@ chunk-czq1j3j2.js:488796-488847 placement
 function shortcutHintsWidth(hints) {
   return bunStringWidth(hints.map(formatShortcutHint).join(" \xB7 "));
 }
-//@ chunk-18hwfzwa.js:462782-462807 placement
+//@ chunk-czq1j3j2.js:488847-488872 placement
 function identity(value) {
   return value;
 }
-//@ chunk-18hwfzwa.js:462807-462811 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:462807", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:462811-462929 placement
+//@ chunk-czq1j3j2.js:488876-488994 placement
 /**
  * 返回一个按键处理器：只在动作被 Chat 上下文绑定遮蔽的 Footer 动作时调用回调。
  */
@@ -2443,7 +2529,7 @@ function useShadowedFooterActionHandler(handleAction) {
   );
   return useCallback((key) => shadowedActions.has(key) && handleAction(), [shadowedActions, handleAction]);
 }
-//@ chunk-18hwfzwa.js:462929-463038 placement
+//@ chunk-czq1j3j2.js:488994-489103 placement
 /**
  * 注册 Chat 上下文的消息操作快捷键，但按键归 Footer 所有时让给 Footer 处理。
  */
@@ -2456,11 +2542,22 @@ function useFooterAwareMessageActions(handlers, { isActive, footerOwnsKeyOf }) {
     },
   );
 }
+//@ chunk-czq1j3j2.js:963336-963381 placement
+function selectFooterSelection(state) {
+  return state.footerSelection;
+}
 export {
+  collectAncestorTaskIds,
   useVisibleAgentTaskCount,
+  TaskPanelFooterHints,
+  hasEvictableIdleSubagent,
   getVisibleBackgroundTasks,
+  isPanelOrTeammateTask,
+  canStopRemoteWorkflow,
+  stopRemoteWorkflow,
   isAgentRowVisible,
   remapTaskPanelIndex,
+  selectFooterSelection,
   useShadowedFooterActionHandler,
   useFooterAwareMessageActions,
   expandIdleTeammates,
@@ -2468,11 +2565,7 @@ export {
   isViewingThisAgent,
   hasUncarriedLaunchSettings,
   showAgentTaskView,
-  isPanelOrTeammateTask,
-  TaskPanelFooterHints,
-  hasEvictableIdleSubagent,
   agentRowPrefixWidth,
   AGENT_ROW_WIDTH_RESERVE,
-  collectAncestorTaskIds,
   BackgroundTasksPanel,
 };

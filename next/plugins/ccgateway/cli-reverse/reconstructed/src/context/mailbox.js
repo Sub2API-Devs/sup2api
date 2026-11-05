@@ -3,9 +3,9 @@
  *
  * Mailbox 上下文读取 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/mailbox.tsx
- * pieces: chunk-xe7zq1p4.js (3)
+ * pieces: chunk-swe0kb5q.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { createContext, useContext } from "../../vendor/react/cjs/react.production.js";
@@ -14,9 +14,9 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Mailbox } from "../utils/mailbox.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-xe7zq1p4.js:12161-12179 placement
+//@ chunk-swe0kb5q.js:12181-12199 placement
 var mailboxContext = createContext(undefined);
-//@ chunk-xe7zq1p4.js:12179-12357 placement
+//@ chunk-swe0kb5q.js:12199-12377 placement
 function MailboxProvider(props) {
   let $ = useMemoCache(3);
   let { children } = props;
@@ -37,7 +37,7 @@ function MailboxProvider(props) {
   } else t2 = $[2];
   return t2;
 }
-//@ chunk-xe7zq1p4.js:12357-12465 fingerprint (2.1.88 match: useMailbox, 1)
+//@ chunk-swe0kb5q.js:12377-12485 fingerprint (2.1.88 match: useMailbox, 1)
 /**
  * 读取 Mailbox 上下文，不在 MailboxProvider 内时抛错。
  */
@@ -48,4 +48,4 @@ function useMailbox() {
   }
   return mailbox;
 }
-export { useMailbox, MailboxProvider };
+export { MailboxProvider, useMailbox };

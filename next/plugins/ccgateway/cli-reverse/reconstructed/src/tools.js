@@ -3,10 +3,10 @@
  *
  * 内建工具注册表：getAllBaseTools 列出全部内建工具及其注册条件（Bash/Glob/Grep/Task*\/LSP/Worktree/PowerShell/ToolSearch 等）；getTools/assembleToolPool/TOOL_CATALOG 与懒加载工具表大部分在 _unattributed/chunk-kxyd0g16/part-016..018；另混入 /hooks 用的工具名列表和屏幕阅读器环境函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools.ts
- * pieces: chunk-azz22fvc.js (1), chunk-e6aww6q8.js (2), chunk-kxyd0g16.js (14)
- * attribution: fingerprint 1, placement 5, layout 4, file-local 2, facade-exports 5
+ * pieces: chunk-5xgkngpb.js (3), chunk-fmnbrxwy.js (15)
+ * attribution: fingerprint 1, placement 5, layout 4, file-local 2, facade-exports 6
  */
 import { FileReadTool } from "./tools/FileReadTool/FileReadTool.js";
 import { FileWriteTool } from "./tools/FileWriteTool/FileWriteTool.js";
@@ -22,6 +22,7 @@ import {
 } from "./bootstrap/state.js";
 import { isEssentialTrafficOnly } from "./utils/privacyLevel.js";
 import { isPowerShellToolEnabled, isBashAvailable } from "./utils/shell/shellToolUtils.js";
+import { codeModeAccepted } from "./utils/codeMode/accepted.js";
 import { lazyWritersSlot } from "./tools/ArtifactTool/actionNames.js";
 import { AgentTool } from "./tools/AgentTool/agentToolDefinition.js";
 import { getShadowedSearchToolNames, hasEmbeddedSearchTools } from "./utils/embeddedTools.js";
@@ -50,7 +51,9 @@ import { onboardingGuideTool } from "./tools/OnboardingGuideTool/OnboardingGuide
 import { ScheduleWakeupTool } from "./tools/ScheduleWakeupTool/ScheduleWakeupTool.js";
 import { RolePickerTool } from "./tools/RolePickerTool/RolePickerTool.js";
 import { ChromeSetupOfferTool } from "./tools/ChromeSetupOfferTool/ChromeSetupOfferTool.js";
+import { WrapUpTool } from "./tools/WrapUpTool/WrapUpTool.js";
 import { notificationsTool } from "./tools/NotificationsTool/NotificationsTool.js";
+import { readWidgetContextTool } from "./tools/ReadWidgetContextTool/ReadWidgetContextTool.js";
 import { BriefTool } from "./tools/BriefTool/BriefTool.js";
 import { ListMcpResourcesTool } from "./tools/ListMcpResourcesTool/ListMcpResourcesTool.js";
 import { ReadMcpResourceTool } from "./tools/ReadMcpResourceTool/ReadMcpResourceTool.js";
@@ -66,11 +69,12 @@ import {
   WAITFORMCPSERVERS,
 } from "./tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { GetTaskTool } from "./tools/TaskOutputTool/GetTaskTool.js";
-import { registerAllBaseToolsProvider, toolMatchesName, compareToolsByName } from "./Tool.js";
+import { registerAllBaseToolsProvider, matchesToolName, compareToolsByName } from "./Tool.js";
+import { uniqBy } from "./utils/collections.js";
 import {
-  alwaysFalseFlag,
-  READ_ONLY_TOOL_NAMES,
-  alwaysFalseFeed,
+  isCodeModeEnabled,
+  CODE_MODE_ONLY_TOOLS,
+  willHideCodeModeOnlyTools,
 } from "./tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getDenyRuleForTool } from "./utils/permissions/permissions.js";
 import { isPollEventIngressActive } from "./utils/pollEvents.js";
@@ -90,16 +94,26 @@ import {
   getToolNameForPermissionCheck,
   swapToArtifactsMcp,
 } from "./services/artifacts/artifactMcpSwap.js";
-import { uniqBy } from "./utils/collections.js";
 import { warnMcpToolNameTooLong } from "./services/mcp/toolNameLimits.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4672012-4672020 placement
+//@ chunk-5xgkngpb.js:3203102-3203201 fingerprint (2.1.88 match: getPowerShellTool, 0.524)
+var getPowerShellTool; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:3203102", () => {
+  getPowerShellTool = (() => {
+    let cachedTool;
+    return () => {
+      if (!cachedTool) cachedTool = require("./tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
+      return cachedTool;
+    };
+  })();
+});
+//@ chunk-5xgkngpb.js:4780615-4780623 placement
 /**
  * 文件与 shell 类工具表的缓存（只构建一次）。
  */
 var fileAndShellToolsCache;
-//@ chunk-e6aww6q8.js:4672020-4672143 placement
+//@ chunk-5xgkngpb.js:4780623-4780746 placement
 /**
  * 返回文件与 shell 类工具列表（读、写、编辑、Glob、Grep、Bash、PowerShell 等），只构建一次。
  */
@@ -117,7 +131,7 @@ function getFileAndShellTools() {
     NotebookEditTool,
   ]);
 }
-//@ chunk-kxyd0g16.js:152943-153625 placement
+//@ chunk-fmnbrxwy.js:167940-168622 placement
 /**
  * 创建懒加载代理：自有键直接读，其余键第一次访问时才调用工厂生成真实对象。ArtifactTool 用它在工具列表里先放一个轻量"头"，用到时再加载完整实现。
  */
@@ -164,18 +178,18 @@ function createLazyProxy(head, loadTarget) {
     },
   });
 }
-//@ chunk-kxyd0g16.js:153625-153648 placement
+//@ chunk-fmnbrxwy.js:168622-168645 placement
 /**
  * 打开向导操作员工具开关。
  */
 function enableWizardOperatorTools() {
   setWizardOperatorToolsEnabled(true);
 }
-//@ chunk-kxyd0g16.js:153648-153675 placement
+//@ chunk-fmnbrxwy.js:168645-168672 placement
 function areWizardOperatorToolsEnabled() {
   return getWizardOperatorToolsEnabled();
 }
-//@ chunk-kxyd0g16.js:153675-155165 layout
+//@ chunk-fmnbrxwy.js:168672-170162 layout
 /**
  * tools.ts 的懒加载工具表（一条 var 语句）：Cron 三件套、SELF_HOSTED_RUNNER_TOOLS、RemoteTrigger、SearchMcpRegistry、SuggestConnectors、ListConnectors、PLUGIN_SKILL_TOOLS、Monitor、SendUserFile、ProposeSkills、ProposeGoal、PublishPlugin、PushNotification、DesignSync、ClaudeDesign（aa：isEssentialTrafficOnly 时 null）、Projects、FetchInboxMessage、EndConversation、SendMessage（Ft）、SendFile（da）、ContinueInProjects、ENABLE_STUB_TOOLS、Poll、ArtifactTool（懒代理）。每个都在自己的 chunk 里，require 时才加载。
  */
@@ -204,7 +218,7 @@ var ContinueInProjectsContextTool;
 var ENABLE_STUB_TOOLS;
 var PollTool;
 var ArtifactTool;
-deferInit("chunk-kxyd0g16.js:153675", () => {
+deferInit("chunk-fmnbrxwy.js:168672", () => {
   CRON_TOOLS = [
     require("./tools/ScheduleCronTool/CronCreateTool.js").CronCreateTool,
     require("./tools/ScheduleCronTool/CronDeleteTool.js").CronDeleteTool,
@@ -247,11 +261,11 @@ deferInit("chunk-kxyd0g16.js:153675", () => {
     () => require("./tools/ArtifactTool/ArtifactTool.js").ArtifactTool,
   );
 });
-//@ chunk-kxyd0g16.js:155165-155210 layout
+//@ chunk-fmnbrxwy.js:170162-170207 layout
 function loadArtifactToolModule() {
   require("./tools/ArtifactTool/ArtifactTool.js");
 }
-//@ chunk-kxyd0g16.js:155210-155655 file-local
+//@ chunk-fmnbrxwy.js:170207-170660 file-local
 /**
  * tools.ts 懒加载表第二段：ARTIFACT_ADDON_TOOLS（fa）、AppifactRepl、外部构建为 null/[] 的槽位（fn、ha、hn、gn、yn、ga、kn，对应内部构建专有工具）、coordinatorMode 模块（st）、ListAgents、Workflow（先 initBundledWorkflows）、PowerShell（Bt：isPowerShellToolEnabled() 才 require）。
  */
@@ -263,12 +277,13 @@ var internalExtraToolSlotB;
 var WebBrowserTool;
 var coordinatorModeModule;
 var SnipTool;
-var getV2AliasTools;
 var internalToolFactorySlot;
+var getV2AliasTools;
+var getV2AliasToolsSlot;
 var ListAgentsTool;
 var WorkflowTool;
 var getPowerShellToolIfEnabled;
-deferInit("chunk-kxyd0g16.js:155210", () => {
+deferInit("chunk-fmnbrxwy.js:170207", () => {
   getArtifactAddonTools = () => require("./services/artifacts/artifactAddonTools.js").ARTIFACT_ADDON_TOOLS;
   AppifactReplTool = require("./tools/AppifactReplTool/AppifactReplTool.js").AppifactReplTool;
   internalExtraToolSlot = null;
@@ -277,8 +292,9 @@ deferInit("chunk-kxyd0g16.js:155210", () => {
   WebBrowserTool = null;
   coordinatorModeModule = require("./coordinator/coordinatorMode.js");
   SnipTool = null;
-  getV2AliasTools = null;
   internalToolFactorySlot = null;
+  getV2AliasTools = null;
+  getV2AliasToolsSlot = null;
   ListAgentsTool = require("./tools/ListAgentsTool/ListAgentsTool.js").ListAgentsTool;
   WorkflowTool = (() => {
     require("./services/workflows/bundledWorkflows.js").initBundledWorkflows();
@@ -289,14 +305,19 @@ deferInit("chunk-kxyd0g16.js:155210", () => {
     return require("./tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
   };
 });
-//@ chunk-kxyd0g16.js:155655-155681 layout
+//@ chunk-fmnbrxwy.js:170660-170776 layout
 /**
  * REPL 工具槽：外部构建恒返回 null，getTools 的简单模式与 REPL 分支因此不生效。
  */
 function getReplTool() {
+  if (codeModeAccepted()) {
+    let replModule = require("./tools/REPLTool/EvalTool.lazy.js");
+    replModule.registerEvalToolSeams();
+    return replModule.EvalTool;
+  }
   return null;
 }
-//@ chunk-kxyd0g16.js:155681-156481 facade-exports (2.1.88 match: getAllBaseTools, 0)
+//@ chunk-fmnbrxwy.js:170776-171596 facade-exports (2.1.88 match: getAllBaseTools, 0)
 /**
  * getAllBaseTools：当前环境下可能出现的全部内建工具（尚未经 isEnabled 与权限过滤）。固定项有 Agent、ExitPlanMode、Read、Edit、Write、NotebookEdit、WebFetch、TodoWrite、ReportFindings、WebSearch、TaskStop、AskUserQuestion、SendFeedback、Skill、EnterPlanMode、SendMessage、Cron 三件套、ScheduleWakeup、Workflow、MCP 资源工具、WaitForMcpServers 等；条件项：Bash（jd()）、Glob/Grep（未被嵌入式搜索遮蔽）、Task* 四件（isTodoV2Enabled）、LSP（Dqe）、Worktree 两件（YNt）、PowerShell（Bt）、ToolSearch（isToolSearchEnabledOptimistic）、RefreshMcpTools（CLAUDE_CODE_ENABLE_REFRESH_MCP_TOOLS）。
  */
@@ -357,7 +378,9 @@ function getAllBaseTools() {
     ...(SuggestConnectorsTool ? [SuggestConnectorsTool] : []),
     RolePickerTool,
     ChromeSetupOfferTool,
+    WrapUpTool,
     notificationsTool,
+    readWidgetContextTool,
     ...ENABLE_STUB_TOOLS,
     ...(ListConnectorsTool ? [ListConnectorsTool] : []),
     ...PLUGIN_SKILL_TOOLS,
@@ -372,7 +395,8 @@ function getAllBaseTools() {
     ...(EndConversationTool ? [EndConversationTool] : []),
     ...(getPowerShellToolIfEnabled() ? [getPowerShellToolIfEnabled()] : []),
     ...(SnipTool ? [SnipTool] : []),
-    ...(internalToolFactorySlot ? [internalToolFactorySlot()] : []),
+    ...(internalToolFactorySlot ? [internalToolFactorySlot] : []),
+    ...(getV2AliasToolsSlot ? [getV2AliasToolsSlot()] : []),
     ...[],
     ListMcpResourcesTool,
     ReadMcpResourceTool,
@@ -383,12 +407,20 @@ function getAllBaseTools() {
     GetTaskTool,
   ];
 }
-//@ chunk-kxyd0g16.js:156481-156489 layout
+//@ chunk-fmnbrxwy.js:171596-171604 layout
 // deferred: uses registerAllBaseToolsProvider (./Tool.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:156481", () => {
+deferInit("chunk-fmnbrxwy.js:171596", () => {
   registerAllBaseToolsProvider(getAllBaseTools);
 });
-//@ chunk-kxyd0g16.js:156489-156693 facade-exports
+//@ chunk-fmnbrxwy.js:171604-171727 facade-exports
+function rebuildStartupToolsForCodeMode(extraTools, toolPermissionContext) {
+  let baseNames = new Set(getAllBaseTools().map((tool) => tool.name));
+  return uniqBy(
+    [...getTools(toolPermissionContext), ...extraTools.filter((tool) => !baseNames.has(tool.name))],
+    (tool) => tool.name,
+  );
+}
+//@ chunk-fmnbrxwy.js:171727-171931 facade-exports
 /**
  * 在工具列表里补上 Poll 与 FetchInboxMessage：两者不在列表中、但 getTools(permissionContext) 结果里有（即已启用且未被拒绝）时追加。
  */
@@ -402,21 +434,21 @@ function withLateEnabledToolsIfAdvertised(tools, toolPermissionContext) {
   let filtered = missingLateTools.filter((tool) => tools_2.includes(tool));
   return filtered.length === 0 ? tools : [...tools, ...filtered];
 }
-//@ chunk-kxyd0g16.js:156693-156759 file-local
+//@ chunk-fmnbrxwy.js:171931-171997 file-local
 /**
  * 按名字集合过滤工具；集合为 undefined 时原样返回。
  */
 function filterToolsByNames(tools, permissionContext) {
   return permissionContext === undefined ? tools : tools.filter((tool) => permissionContext.has(tool.name));
 }
-//@ chunk-kxyd0g16.js:156759-157842 facade-exports
+//@ chunk-fmnbrxwy.js:171997-173075 facade-exports
 /**
  * getTools(permissionContext, opts)：给定权限上下文下实际可用的内建工具。CLAUDE_CODE_SIMPLE 时只给 Bash/PowerShell/Read/Edit（协调者模式再加 Agent/TaskStop/SendMessage/Workflow）；否则从 getAllBaseTools 去掉 MCP 资源三件与 StructuredOutput，按拒绝规则过滤（Aee），去掉 REPL 内部原语与 WebFetch 子代理冲突的 WebFetch，按 onlyNames 过滤，再按 isEnabled 过滤；嵌入式搜索开启但 Bash 不可用时把 Glob/Grep 补回；工具搜索开启且有 MCP 时追加 WaitForMcpServers。
  */
 var getTools = (toolPermissionContext, options) => {
   if (env.CLAUDE_CODE_SIMPLE && !options?.skipSimpleModeFilter) {
     let replTool = getReplTool();
-    if (replTool !== null && alwaysFalseFlag() && !options?.skipReplFilter) {
+    if (replTool !== null && isCodeModeEnabled() && !options?.skipReplFilter) {
       let simpleModeTools =
         isWorkspaceRestricted() ||
         (toolPermissionContext.restricted === true &&
@@ -461,11 +493,11 @@ var getTools = (toolPermissionContext, options) => {
   let filtered = getAllBaseTools().filter((tool) => !mcpResourceToolNames.has(tool.name));
   let allowedTools = filterToolsByDenyRules(filtered, toolPermissionContext);
   let hasBashTool =
-    allowedTools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) && BashTool.isEnabled();
+    allowedTools.some((tool) => matchesToolName(tool, BASH_TOOL_NAME)) && BashTool.isEnabled();
   let replReplacedReadOnly = false;
-  if (alwaysFalseFlag() && !options?.skipReplFilter) {
-    if (allowedTools.some((tool) => toolMatchesName(tool, REPL_TOOL_NAME))) {
-      allowedTools = allowedTools.filter((tool) => !toolMatchesAnyName(tool, READ_ONLY_TOOL_NAMES));
+  if (isCodeModeEnabled() && !options?.skipReplFilter) {
+    if (allowedTools.some((tool) => matchesToolName(tool, REPL_TOOL_NAME))) {
+      allowedTools = allowedTools.filter((tool) => !toolMatchesAnyName(tool, CODE_MODE_ONLY_TOOLS));
       replReplacedReadOnly = true;
     }
   }
@@ -475,7 +507,7 @@ var getTools = (toolPermissionContext, options) => {
       activeAgents: options?.activeAgents,
     })
   )
-    allowedTools = allowedTools.filter((tool) => !toolMatchesName(tool, WEBFETCH));
+    allowedTools = allowedTools.filter((tool) => !matchesToolName(tool, WEBFETCH));
   allowedTools = filterToolsByNames(allowedTools, options?.onlyNames);
   let mapped = allowedTools.map((tool) => tool.isEnabled());
   let filtered_2 = allowedTools.filter((tool, index) => mapped[index]);
@@ -490,15 +522,15 @@ var getTools = (toolPermissionContext, options) => {
   }
   if (
     (hasPendingMcpClients() || isDeclared()) &&
-    !alwaysFalseFeed(filtered_2) &&
-    !filtered_2.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) &&
-    !filtered_2.some((tool) => toolMatchesName(tool, WAITFORMCPSERVERS))
+    !willHideCodeModeOnlyTools(filtered_2) &&
+    !filtered_2.some((tool) => matchesToolName(tool, TOOL_SEARCH_TOOL_NAME)) &&
+    !filtered_2.some((tool) => matchesToolName(tool, WAITFORMCPSERVERS))
   )
     filtered_2 = [...filtered_2, ...filterToolsByDenyRules([WaitForMcpServersTool], toolPermissionContext)];
   return filterToolsByNames(filtered_2, options?.onlyNames);
 };
 var TOOL_POOL_MEMO_TTL_MS = 30000;
-//@ chunk-kxyd0g16.js:157842-158035 facade-exports (2.1.88 match: getRuleByContentsForTool, 0)
+//@ chunk-fmnbrxwy.js:173075-173267 facade-exports (2.1.88 match: getRuleByContentsForTool, 0)
 /**
  * assembleToolPool(permissionContext, mcpTools, opts)：内建工具（getTools）与 MCP 工具（含机器级 MCP 工具，按名去重、拒绝规则过滤、遮蔽内建的规则处理）各自按名排序后拼接，再按名去重（内建优先）。REPL 与子代理都用它组装工具池。
  */
@@ -519,7 +551,7 @@ function assembleToolPool(context, tool, behavior) {
     (tool) => tool.name,
   );
 }
-//@ chunk-kxyd0g16.js:158035-158096 facade-exports
+//@ chunk-fmnbrxwy.js:173267-173328 facade-exports
 /**
  * TOOL_CATALOG：{getAllBaseTools, getTools, assembleToolPool}，挂在 toolUseContext.options.toolCatalog，执行器遇到未知工具时用它给出"可能是哪个工具"的提示。
  */
@@ -528,21 +560,15 @@ var TOOL_CATALOG = {
   getTools,
   assembleToolPool,
 };
-//@ chunk-azz22fvc.js:4057-4123 fingerprint (2.1.88 match: getPowerShellTool, 0.524)
-/**
- * require 并返回 PowerShellTool（不检查启用条件）。
- */
-function getPowerShellTool() {
-  return require("./tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
-}
 export {
-  getAllBaseTools,
-  getTools,
-  assembleToolPool,
+  rebuildStartupToolsForCodeMode,
   withLateEnabledToolsIfAdvertised,
   TOOL_POOL_MEMO_TTL_MS,
+  assembleToolPool,
   TOOL_CATALOG,
-  enableWizardOperatorTools,
+  getAllBaseTools,
   getFileAndShellTools,
+  getTools,
   getPowerShellTool,
+  enableWizardOperatorTools,
 };

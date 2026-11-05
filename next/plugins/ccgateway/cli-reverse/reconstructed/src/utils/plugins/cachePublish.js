@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：插件缓存发布
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import { basename, join, dirname, sep } from "path";
-import { lstat, rm as rm_2, lutimes } from "fs/promises";
+import { lstat, rm, lutimes } from "fs/promises";
 import { randomBytes } from "crypto";
 import { versionCacheStorageSpace } from "./pluginDirectories.js";
 import {
@@ -42,7 +42,7 @@ import { swapVersionDir } from "./versionDirSwap.js";
 import { isPluginZipCacheEnabled } from "./zipCache.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4483311-4483405 placement
+//@ chunk-5xgkngpb.js:4590044-4590138 placement
 /**
  * orphanMarkerMove：孤儿标记的移动计划。
  */
@@ -56,7 +56,7 @@ function orphanMarkerMove(stagingScope, cachePath) {
         to: toSpace,
       };
 }
-//@ chunk-e6aww6q8.js:4483405-4483610 placement
+//@ chunk-5xgkngpb.js:4590138-4590343 placement
 /**
  * 通过 v5 存储后端删除暂存插件版本目录里残留的孤儿标记（R1），失败只记 warn。
  */
@@ -72,7 +72,7 @@ async function dropStagedOrphanMarkerV5(storageV5, from) {
       },
     );
 }
-//@ chunk-e6aww6q8.js:4483610-4484001 placement
+//@ chunk-5xgkngpb.js:4590343-4590734 placement
 /**
  * 识别“移到一边后搁浅”（ASIDESTRANDED）的发布失败：cause 带 path 且 entry 为 occupant 时返回 {aside, remove}， remove 表示没有 folderError、可以删除该 aside 目录；其他情况返回 undefined。
  */
@@ -97,7 +97,7 @@ function getAsideStrandedCleanup(error) {
     remove: !folderError,
   };
 }
-//@ chunk-e6aww6q8.js:4484001-4484736 placement
+//@ chunk-5xgkngpb.js:4590734-4591469 placement
 async function removeReplacedVersionAside(aside, publishedPath) {
   let asideName = basename(aside);
   if (aside !== join(dirname(publishedPath), asideName) || !isAsideFileName(asideName)) {
@@ -143,7 +143,7 @@ async function removeReplacedVersionAside(aside, publishedPath) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4484736-4484925 placement
+//@ chunk-5xgkngpb.js:4591469-4591658 placement
 function isUnsupportedSwapError(error) {
   return (
     error.code === "InvalidArgument" ||
@@ -154,7 +154,7 @@ function isUnsupportedSwapError(error) {
         error.telemetryCode === "EXDEV"))
   );
 }
-//@ chunk-e6aww6q8.js:4484925-4485103 placement
+//@ chunk-5xgkngpb.js:4591658-4591836 placement
 function isTargetOccupiedError(error) {
   return (
     error.code === "Failed" &&
@@ -165,7 +165,7 @@ function isTargetOccupiedError(error) {
       error.telemetryCode === "EISDIR")
   );
 }
-//@ chunk-e6aww6q8.js:4485103-4485702 placement
+//@ chunk-5xgkngpb.js:4591836-4592435 placement
 function refuseSymlinkedCacheTarget(error, cachePath) {
   if (error.code === "Failed" && error.cause instanceof Error) {
     let cause = error.cause;
@@ -194,10 +194,10 @@ function refuseSymlinkedCacheTarget(error, cachePath) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4485702-4485893 placement
+//@ chunk-5xgkngpb.js:4592435-4592626 placement
 async function dropStagedOrphanMarker(stagingPath) {
   try {
-    await rm_2(join(stagingPath, ORPHAN_MARKER_FILE), {
+    await rm(join(stagingPath, ORPHAN_MARKER_FILE), {
       force: true,
     });
   } catch (error) {
@@ -209,7 +209,7 @@ async function dropStagedOrphanMarker(stagingPath) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4485893-4486097 placement
+//@ chunk-5xgkngpb.js:4592626-4592830 placement
 function toProbeError(error, targetPath) {
   return error.code === "Failed" && error.cause instanceof Error
     ? error.cause
@@ -223,11 +223,11 @@ function toProbeError(error, targetPath) {
         },
       );
 }
-//@ chunk-e6aww6q8.js:4486097-4486139 placement
+//@ chunk-5xgkngpb.js:4592830-4592872 placement
 function isCrossDeviceRename(error) {
   return getErrnoCode(error) === "EXDEV" || false;
 }
-//@ chunk-e6aww6q8.js:4486139-4487907 placement
+//@ chunk-5xgkngpb.js:4592872-4594644 placement
 /**
  * 把暂存的插件发布到缓存版本目录，处理替换旧版本与存储接口失败。
  */
@@ -327,7 +327,7 @@ async function publishStagedPlugin(stagingPath, targetPath, options, storageV5, 
   if (asidePath !== undefined) await removeDirectoryTreeNoFollow_2(asidePath).catch(() => {});
   return "published";
 }
-//@ chunk-e6aww6q8.js:4487907-4488691 placement
+//@ chunk-5xgkngpb.js:4594644-4595428 placement
 async function adoptStagedPlugin(stagingPath, cachePath, strictCache, storageV5, orphanMarkerMoveInfo) {
   if (isStorageV5Enabled() && storageV5 !== undefined && orphanMarkerMoveInfo !== undefined)
     if (await hasLinkedAncestorBelow(cachePath, anchoredPluginCachePath()))
@@ -377,12 +377,12 @@ async function adoptStagedPlugin(stagingPath, cachePath, strictCache, storageV5,
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4488691-4488762 placement
+//@ chunk-5xgkngpb.js:4595428-4595499 placement
 /**
  * PluginCachePublishError：插件缓存发布错误类。
  */
 let PluginCachePublishError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4488691", () => {
+deferInit("chunk-5xgkngpb.js:4595428", () => {
   PluginCachePublishError = class PluginCachePublishError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -393,7 +393,7 @@ deferInit("chunk-e6aww6q8.js:4488691", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4488762-4488909 placement
+//@ chunk-5xgkngpb.js:4595499-4595646 placement
 /**
  * 安装依赖时，钉住的版本不满足要求的版本范围抛出；manifestVersion 记录实际 manifest 版本。
  */
@@ -404,7 +404,7 @@ class PinnedVersionMismatchError extends Error {
     this.manifestVersion = manifestVersion;
   }
 }
-//@ chunk-e6aww6q8.js:4488909-4488920 placement
+//@ chunk-5xgkngpb.js:4595646-4595657 placement
 /**
  * MAX_CACHE_PUBLISH_ATTEMPTS：发布重试次数。
  */

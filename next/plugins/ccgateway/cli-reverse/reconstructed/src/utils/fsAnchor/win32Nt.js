@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。基于 ntdll 的 Windows 文件锚定后端（NTSTATUS 映射、符号链接重解析数据）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9gakhe7s.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4m996d9p.js (14)
  * attribution: placement 14
  */
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-9gakhe7s.js:261-708 placement
+//@ chunk-4m996d9p.js:261-708 placement
 var ACCESS = {
   DELETE: 65536,
   READ_CONTROL: 131072,
@@ -38,7 +38,7 @@ var FILE_GENERIC_WRITE =
   ACCESS.FILE_WRITE_EA |
   ACCESS.FILE_APPEND_DATA |
   ACCESS.SYNCHRONIZE;
-//@ chunk-9gakhe7s.js:708-979 placement
+//@ chunk-4m996d9p.js:708-979 placement
 var DISPOSITION = {
   FILE_OPEN: 1,
   FILE_CREATE: 2,
@@ -61,11 +61,11 @@ var SYMLINK_REPARSE_TAG = 2684354572;
 var MAX_REPARSE_DATA_BYTES = 16384;
 var REPARSE_DATA_HEADER_BYTES = 8;
 var SYMLINK_NAME_HEADER_BYTES = 12;
-//@ chunk-9gakhe7s.js:979-1019 placement
+//@ chunk-4m996d9p.js:979-1019 placement
 function isReparseTagNameSurrogate(reparseTag) {
   return (reparseTag & 536870912) !== 0;
 }
-//@ chunk-9gakhe7s.js:1019-3620 placement
+//@ chunk-4m996d9p.js:1019-3620 placement
 /**
  * NTSTATUS 码表
  */
@@ -159,7 +159,7 @@ var NT_STATUS_TO_ERRNO = new Map([
   [NT_STATUS.DEVICE_NOT_READY, "EAGAIN"],
   [NT_STATUS.IO_TIMEOUT, "ETIMEDOUT"],
 ]);
-//@ chunk-9gakhe7s.js:3620-3758 placement
+//@ chunk-4m996d9p.js:3620-3758 placement
 function ntStatusError(syscall, status) {
   let unsignedStatus = status >>> 0;
   return Object.assign(Error("Windows file-system call failed"), {
@@ -168,13 +168,13 @@ function ntStatusError(syscall, status) {
     status: unsignedStatus,
   });
 }
-//@ chunk-9gakhe7s.js:3758-3869 placement
+//@ chunk-4m996d9p.js:3758-3869 placement
 function statusOf(error) {
   return typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
     ? error.status
     : undefined;
 }
-//@ chunk-9gakhe7s.js:3869-4048 placement
+//@ chunk-4m996d9p.js:3869-4048 placement
 /**
  * NTSTATUS 是否表示不支持
  */
@@ -189,7 +189,7 @@ function isUnsupportedNtStatus(error) {
     status === NT_STATUS.INVALID_LEVEL
   );
 }
-//@ chunk-9gakhe7s.js:4048-4421 placement
+//@ chunk-4m996d9p.js:4048-4421 placement
 function toNtPath(inputPath) {
   let pathWithoutPrefix = inputPath.startsWith("\\\\?\\UNC\\")
     ? "\\\\" + inputPath.slice(8)
@@ -204,7 +204,7 @@ function toNtPath(inputPath) {
     code: "EINVAL",
   });
 }
-//@ chunk-9gakhe7s.js:4421-4883 placement
+//@ chunk-4m996d9p.js:4421-4883 placement
 /**
  * 编码 Windows 符号链接重解析数据；本模块是基于 ntdll 的 Windows 文件锚定后端。
  */
@@ -228,20 +228,20 @@ function encodeSymlinkReparseData(targetPath) {
   buffer_2.copy(buffer_3, REPARSE_DATA_HEADER_BYTES + SYMLINK_NAME_HEADER_BYTES + buffer.length);
   return buffer_3;
 }
-//@ chunk-9gakhe7s.js:4883-4998 placement
+//@ chunk-4m996d9p.js:4883-4998 placement
 function fromNtPath(ntPath) {
   if (/^\\\?\?\\UNC\\/i.test(ntPath)) return "\\\\" + ntPath.slice(8);
   return /^\\\?\?\\[A-Za-z]:/.test(ntPath) ? ntPath.slice(4) : ntPath;
 }
-//@ chunk-9gakhe7s.js:4998-5004 placement
+//@ chunk-4m996d9p.js:4998-5004 placement
 var ntdllProbeMemo;
-//@ chunk-9gakhe7s.js:5004-5058 placement
+//@ chunk-4m996d9p.js:5004-5058 placement
 function loadNt() {
   if (ntdllProbeMemo !== undefined) return ntdllProbeMemo;
   ntdllProbeMemo = null;
   return ntdllProbeMemo;
 }
-//@ chunk-9gakhe7s.js:5058-5255 placement
+//@ chunk-4m996d9p.js:5058-5255 placement
 /**
  * 把 NTSTATUS 异常转为 errno 错误
  */
@@ -261,7 +261,7 @@ function wrapNtCall(ntCall) {
     }
   };
 }
-//@ chunk-9gakhe7s.js:5255-6827 placement
+//@ chunk-4m996d9p.js:5255-6827 placement
 /**
  * 基于 ntdll 的锚定后端
  */

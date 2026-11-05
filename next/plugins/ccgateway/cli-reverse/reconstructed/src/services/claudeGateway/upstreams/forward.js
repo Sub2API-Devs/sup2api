@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：网关上游转发（Bedrock/Vertex/Google）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
- * attribution: placement 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (2)
+ * attribution: sole-consumer 1, placement 1
  */
+import { createAwsCredentialProvider } from "./aws.js";
 import { OAUTH_BETA_HEADER } from "../../../constants/oauth.js";
 import { ssrfSafeFetch } from "../ssrfGuard.js";
 import { getProxyFetchOptions, getAWSProxyRequestHandler } from "../../../utils/proxy.js";
@@ -19,13 +20,12 @@ import {
   clearAuthorizationHeaders,
   CLOUD_AUTH_SLOT,
 } from "../../api/customHeaders.js";
-import { createAwsCredentialProvider } from "./aws.js";
 import {
   defaultAwsProviderChainResolver,
   getDefaultAwsProviderChain,
   invalidateDefaultAwsProviderChainDebounced,
 } from "../../../utils/auth.js";
-import { getNativeCaBlocks, createCaTransporterOptions } from "../network.js";
+import { getNativeCaBlocks, createCaTransporterOptions, warnShortLivedGoogleTokens } from "../network.js";
 import { escapeRegExpModule } from "../bedrockGuardrails.js";
 import { getMTLSAgent } from "../../../utils/mtls.js";
 import { env } from "../../../utils/env.js";
@@ -38,7 +38,31 @@ import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { vertexResidualCredentialPins, suppressVertexAuthRejection } from "../../api/vertexAuth.js";
 import { assertCannedUpstreams } from "../loadTestMode.js";
 
-//@ chunk-1ny7cxrt.js:1351851-1363283 placement
+//@ chunk-1hnjmk23.js:1352813-1353407 sole-consumer
+async function eitherSigv4OrBearerRequired(upstream, buildClient) {
+  if (!upstream.assume_role) return;
+  if (upstream.auth.aws_bearer_token)
+    throw Error(
+      "assume_role needs SigV4 source credentials (access keys or the ambient AWS chain); aws_bearer_token cannot call sts:AssumeRole",
+    );
+  return createAwsCredentialProvider({
+    upstreamName: upstream.name,
+    region: upstream.region,
+    roleArn: upstream.assume_role.role_arn,
+    externalId: upstream.assume_role.external_id,
+    sessionNameClaim: upstream.assume_role.session_name,
+    sourceCredentials:
+      upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key
+        ? {
+            accessKeyId: upstream.auth.aws_access_key_id,
+            secretAccessKey: upstream.auth.aws_secret_access_key,
+            sessionToken: upstream.auth.aws_session_token,
+          }
+        : undefined,
+    buildClient,
+  });
+}
+//@ chunk-1hnjmk23.js:1353407-1365008 placement
 /**
  * 按上游配置（anthropic/bedrock/vertex/google）构造转发器，剥离客户端认证头并注入上游凭据。
  */
@@ -176,10 +200,6 @@ async function createUpstreamForwarders(upstreams, testFetch) {
             throw Error(
               "bedrock upstream: aws_access_key_id and aws_secret_access_key must be set together (and are required with aws_session_token)",
             );
-          if (upstream.assume_role && upstream.auth.aws_bearer_token)
-            throw Error(
-              "bedrock upstream: assume_role needs SigV4 source credentials (access keys or the ambient AWS chain); aws_bearer_token cannot call sts:AssumeRole",
-            );
           let usesAmbientChain =
             !upstream.auth.aws_bearer_token &&
             !(upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key);
@@ -197,29 +217,15 @@ async function createUpstreamForwarders(upstreams, testFetch) {
             },
             ...CLOUD_AUTH_SLOT,
           };
-          let assumeRoleProvider =
-            upstream.assume_role &&
-            (await createAwsCredentialProvider({
-              upstreamName: upstream.name,
-              region: upstream.region,
-              roleArn: upstream.assume_role.role_arn,
-              externalId: upstream.assume_role.external_id,
-              sessionNameClaim: upstream.assume_role.session_name,
-              sourceCredentials:
-                upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key
-                  ? {
-                      accessKeyId: upstream.auth.aws_access_key_id,
-                      secretAccessKey: upstream.auth.aws_secret_access_key,
-                      sessionToken: upstream.auth.aws_session_token,
-                    }
-                  : undefined,
-              buildClient: (provider) =>
-                new AnthropicBedrock({
-                  ...baseClientOptions,
-                  ...sigv4ClientDefaults,
-                  providerChainResolver: async () => provider,
-                }),
-            }));
+          let assumeRoleProvider = await eitherSigv4OrBearerRequired(
+            upstream,
+            (provider) =>
+              new AnthropicBedrock({
+                ...baseClientOptions,
+                ...sigv4ClientDefaults,
+                providerChainResolver: async () => provider,
+              }),
+          );
           let client = assumeRoleProvider
             ? assumeRoleProvider.sharedClient
             : upstream.auth.aws_bearer_token
@@ -397,9 +403,20 @@ async function createUpstreamForwarders(upstreams, testFetch) {
                     );
                     return null;
                   }
+                  let credentialHint =
+                    errorName === "AccessDeniedException"
+                      ? " Check that the identity that signs this upstream's Bedrock calls has bedrock:CountTokens."
+                      : errorName === "ValidationException" &&
+                          /^The provided model doesn['\u2019]?t support counting tokens/i.test(detail)
+                        ? " AWS does not count this model on bedrock-runtime (it counts some newer Claude models only on bedrock-mantle). This is not a missing permission, and it holds until AWS counts this model on bedrock-runtime."
+                        : errorName === "ValidationException"
+                          ? " AWS refused the model or the request body, so this is not a missing permission."
+                          : upstream.base_url
+                            ? " Check that the proxy at base_url passes /model/{id}/count-tokens."
+                            : "";
                   gatewayLog(
                     countTokensRetryAt.has(modelId) ? "debug" : "warn",
-                    `upstream ${upstream.name}: AWS CountTokens failed for ${modelId} (${message}). Model requests are not affected. Until a retry works (one every ${UPSTREAM_TIMEOUT_MS / 60000} minutes), token counts for ${modelId} come from the next upstream or a billed one-token request. Check that the identity that signs this upstream's Bedrock calls has bedrock:CountTokens.${upstream.base_url ? " Check too that the proxy at base_url passes /model/{id}/count-tokens." : ""}`,
+                    `upstream ${upstream.name}: AWS CountTokens failed for ${modelId} (${message}). Model requests are not affected. For the next ${UPSTREAM_TIMEOUT_MS / 60000} minutes, count_tokens for this model goes to the next upstream. If there is none, the client gets a 501, and Claude Code counts with a billed model request or estimates locally. After ${UPSTREAM_TIMEOUT_MS / 60000} minutes, the gateway asks AWS again on the next count.${credentialHint}`,
                   );
                   countTokensRetryAt.set(modelId, Date.now() + UPSTREAM_TIMEOUT_MS);
                   countTokensWorking.delete(modelId);
@@ -455,9 +472,27 @@ async function createUpstreamForwarders(upstreams, testFetch) {
             },
             ...CLOUD_AUTH_SLOT,
           };
-          let usesAmbientChain = !upstream.auth.aws_bearer_token && !upstream.auth.aws_access_key_id;
+          let withoutSigv4Keys = !upstream.auth.aws_bearer_token && !upstream.auth.aws_access_key_id;
+          let withBearerEnv = (providerChainResolver) => {
+            let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
+            env.unset("AWS_BEARER_TOKEN_BEDROCK");
+            try {
+              return new AnthropicBedrockMantle({
+                ...baseClientOptions,
+                ...sigv4ClientDefaults,
+                providerChainResolver,
+              });
+            } finally {
+              if (AWS_BEARER_TOKEN_BEDROCK !== undefined)
+                env.set("AWS_BEARER_TOKEN_BEDROCK", AWS_BEARER_TOKEN_BEDROCK);
+            }
+          };
+          let shared = await eitherSigv4OrBearerRequired(upstream, (builder) =>
+            withBearerEnv(async () => builder),
+          );
           let client;
-          if (upstream.auth.aws_bearer_token)
+          if (shared) client = shared.sharedClient;
+          else if (upstream.auth.aws_bearer_token)
             client = new AnthropicBedrockMantle({
               ...baseClientOptions,
               apiKey: upstream.auth.aws_bearer_token,
@@ -478,26 +513,16 @@ async function createUpstreamForwarders(upstreams, testFetch) {
               awsSecretAccessKey: upstream.auth.aws_secret_access_key,
               awsSessionToken: upstream.auth.aws_session_token,
             });
-          else {
-            let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
-            env.unset("AWS_BEARER_TOKEN_BEDROCK");
-            try {
-              client = new AnthropicBedrockMantle({
-                ...baseClientOptions,
-                ...sigv4ClientDefaults,
-                providerChainResolver: defaultAwsProviderChainResolver(upstream.region, getNativeCaBlocks),
-              });
-            } finally {
-              if (AWS_BEARER_TOKEN_BEDROCK !== undefined)
-                env.set("AWS_BEARER_TOKEN_BEDROCK", AWS_BEARER_TOKEN_BEDROCK);
-            }
-          }
+          else client = withBearerEnv(defaultAwsProviderChainResolver(upstream.region, getNativeCaBlocks));
           return {
             kind: "sdk",
             name: upstream.name,
             provider: "mantle",
             client,
-            ...(usesAmbientChain && {
+            ...(shared && {
+              assumeRole: shared,
+            }),
+            ...(withoutSigv4Keys && {
               invalidateAuth: () => invalidateDefaultAwsProviderChainDebounced(upstream.region),
             }),
           };
@@ -611,6 +636,7 @@ async function createUpstreamForwarders(upstreams, testFetch) {
               }),
               clientOptions: createCaTransporterOptions(),
             });
+            warnShortLivedGoogleTokens(clientOptions.googleAuth, upstream.name);
           }
           return {
             kind: "sdk",
@@ -664,6 +690,7 @@ async function createUpstreamForwarders(upstreams, testFetch) {
               }),
               clientOptions: createCaTransporterOptions(),
             });
+            warnShortLivedGoogleTokens(clientOptions.googleAuth, upstream.name);
           }
           return {
             kind: "sdk",

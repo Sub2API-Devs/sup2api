@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台会话管理器主循环：派发、PTY 启动、会话结算、保活；daemon 子 worker 进程管理（启动、崩溃退避、停止、忙碌状态）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ss669z1x.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ergqq6hs.js (49)
  * attribution: placement 49
  */
 import { stat, rename, unlink, mkdir, lstat, rm, readFile, readdir, access, writeFile } from "fs/promises";
@@ -119,7 +119,7 @@ import {
 } from "../services/daemon/reapJobs.js";
 import { getProcessStartTimeAsync, reapDetachedRepl, sigtermThenKill } from "../utils/processIdentity.js";
 import { readDaemonLock } from "../utils/daemon/daemonLock.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
 import { moveSkipPermissionsLast, splitForwardableArgs } from "../cli/forwardedFlags.js";
 import { readSmallFileOrNull } from "../utils/readSmallFile.js";
@@ -132,10 +132,10 @@ import { initialize } from "./daemonConfigWatcher.js";
 import { defaultWorkerKindsConfig, readJsonConfigFile } from "../utils/jsonConfigFile.js";
 import { diffSkillServers } from "../utils/skills/skillChangeDetector.js";
 
-//@ chunk-ss669z1x.js:14515-14561 placement
+//@ chunk-ergqq6hs.js:15790-15836 placement
 var MAX_DISPATCH_INPUT_BYTES = 10485760;
 var regExp = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "gu");
-//@ chunk-ss669z1x.js:14561-14647 placement
+//@ chunk-ergqq6hs.js:15836-15922 placement
 function normalizeDispatchInput(input) {
   let redacted = redactSecrets(input).trimEnd();
   return redacted.includes(`
@@ -143,7 +143,7 @@ function normalizeDispatchInput(input) {
     ? escapeControlChars(jsonStringify(redacted))
     : redacted.replace(regExp, toUnicodeEscapes);
 }
-//@ chunk-ss669z1x.js:14647-15174 placement
+//@ chunk-ergqq6hs.js:15922-16449 placement
 /**
  * 打开后台派发日志（过大时清空），写入带时间戳的条目。
  */
@@ -198,7 +198,7 @@ async function openBgDispatchLog(logPath) {
     },
   };
 }
-//@ chunk-ss669z1x.js:15174-15243 placement
+//@ chunk-ergqq6hs.js:16449-16518 placement
 function openAppendFd(logPath) {
   let writeStream = createWriteStream(logPath, {
     flags: "a",
@@ -206,7 +206,7 @@ function openAppendFd(logPath) {
   writeStream.on("error", () => {});
   return writeStream;
 }
-//@ chunk-ss669z1x.js:15243-15341 placement
+//@ chunk-ergqq6hs.js:16518-16616 placement
 function endWritable(stream) {
   return new Promise((resolve) => {
     if (stream.closed) {
@@ -217,7 +217,7 @@ function endWritable(stream) {
     stream.end();
   });
 }
-//@ chunk-ss669z1x.js:15341-15491 placement
+//@ chunk-ergqq6hs.js:16616-16766 placement
 async function rotateLogFile(logPath) {
   let rotatedPath = `${logPath}.1`;
   try {
@@ -228,10 +228,10 @@ async function rotateLogFile(logPath) {
     await rename(logPath, rotatedPath).catch(() => unlink(logPath).catch(() => {}));
   }
 }
-//@ chunk-ss669z1x.js:15918-15944 placement
+//@ chunk-ergqq6hs.js:17193-17219 placement
 var DISPATCH_TTL_MS = 86400000;
 var MAX_DISPATCH_FILE_BYTES = 262144;
-//@ chunk-ss669z1x.js:15944-16092 placement
+//@ chunk-ergqq6hs.js:17219-17367 placement
 async function quarantineDispatchFile(filePath, reason) {
   await mkdir(daemonRejectedDir(), {
     recursive: true,
@@ -242,7 +242,7 @@ async function quarantineDispatchFile(filePath, reason) {
   );
   reportDispatchRejected(basename(filePath), reason);
 }
-//@ chunk-ss669z1x.js:16092-16206 placement
+//@ chunk-ergqq6hs.js:17367-17481 placement
 function reportDispatchRejected(filePath, reason) {
   logForDebugging(`[bg-dispatch] rejected ${filePath}: ${reason}`, {
     level: "warn",
@@ -251,11 +251,11 @@ function reportDispatchRejected(filePath, reason) {
     reason,
   });
 }
-//@ chunk-ss669z1x.js:16206-16268 placement
+//@ chunk-ergqq6hs.js:17481-17543 placement
 function oversizedMessage(size) {
   return concatSafe(lit("oversized ("), fromNumber(size), lit(" bytes)"));
 }
-//@ chunk-ss669z1x.js:16268-17013 placement
+//@ chunk-ergqq6hs.js:17543-18288 placement
 /**
  * 读取并校验一个派发请求文件（拒绝 symlink、非常规文件、过大文件）。
  */
@@ -301,12 +301,12 @@ async function ingestDispatchFile(filePath, onDispatch) {
   logFeatureOk("daemon_bg_dispatch_ingest");
   await unlink(filePath).catch(() => {});
 }
-//@ chunk-ss669z1x.js:17013-17062 placement
+//@ chunk-ergqq6hs.js:18288-18337 placement
 var DISPATCH_DIR = {
   namespace: "daemon",
   relPath: ["dispatch"],
 };
-//@ chunk-ss669z1x.js:17062-17208 placement
+//@ chunk-ergqq6hs.js:18337-18483 placement
 async function ensureDispatchDir(rootPath) {
   if (isStorageV5Enabled() && rootPath !== undefined) {
     await rootPath.ensureScope(DISPATCH_DIR).catch(() => {
@@ -319,7 +319,7 @@ async function ensureDispatchDir(rootPath) {
     mode: 448,
   }).catch(() => {});
 }
-//@ chunk-ss669z1x.js:17208-17710 placement
+//@ chunk-ergqq6hs.js:18483-18985 placement
 /**
  * 解析派发记录 JSON 并校验 schema。
  */
@@ -366,14 +366,14 @@ function parseDispatchRecord(text) {
     },
   };
 }
-//@ chunk-ss669z1x.js:17710-17791 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-ergqq6hs.js:18985-19066 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function convertDirectoryToZipInPlace(dirPath) {
   await rm(join(daemonDispatchDir(), dirPath), {
     recursive: true,
     force: true,
   }).catch(() => {});
 }
-//@ chunk-ss669z1x.js:17791-17927 placement
+//@ chunk-ergqq6hs.js:19066-19202 placement
 async function removeNonRegularDispatch(dirPath) {
   logFeatureBad("daemon_bg_dispatch_ingest", "not_a_file");
   logForDebugging(`[bg-dispatch] removed non-regular ${dirPath}`, {
@@ -381,7 +381,7 @@ async function removeNonRegularDispatch(dirPath) {
   });
   await convertDirectoryToZipInPlace(dirPath);
 }
-//@ chunk-ss669z1x.js:17927-18112 placement
+//@ chunk-ergqq6hs.js:19202-19387 placement
 async function rejectStoredDispatch(filePath, reason, extra, record) {
   if (record !== undefined)
     await filePath.write(STORAGE_SPACES.daemon(["dispatch", "rejected", reason]), record).catch(() => {
@@ -392,7 +392,7 @@ async function rejectStoredDispatch(filePath, reason, extra, record) {
   });
   reportDispatchRejected(reason, extra);
 }
-//@ chunk-ss669z1x.js:18112-18990 placement
+//@ chunk-ergqq6hs.js:19387-20265 placement
 /**
  * 处理一个派发请求条目（拒绝、移入存储、记录）。
  */
@@ -447,7 +447,7 @@ async function ingestDispatchEntry(storage, reason, entry) {
     return;
   });
 }
-//@ chunk-ss669z1x.js:18990-19123 placement
+//@ chunk-ergqq6hs.js:20265-20398 placement
 async function ingestDispatchName(storage, dirPath, entry) {
   if (!isValidKeySegment(dirPath)) {
     logFeatureBad("daemon_bg_dispatch_ingest", "bad_name");
@@ -457,7 +457,7 @@ async function ingestDispatchName(storage, dirPath, entry) {
   }
   await ingestDispatchEntry(storage, dirPath, entry);
 }
-//@ chunk-ss669z1x.js:19123-19834 placement
+//@ chunk-ergqq6hs.js:20398-21109 placement
 /**
  * 处理积压的派发请求（v5 存储或目录）。
  */
@@ -509,25 +509,25 @@ async function drainDispatchQueue(storage, dir) {
     await ingestDispatchFile(join(daemonDispatchDir(), entry), storage);
   }
 }
-//@ chunk-ss669z1x.js:19834-19896 placement
+//@ chunk-ergqq6hs.js:21109-21171 placement
 /**
  * 文件名是 .tmp 临时文件。疑似归错文件。
  */
 function isTempFileName(fileName) {
   return fileName.endsWith(".tmp") || fileName.includes(".tmp.");
 }
-//@ chunk-ss669z1x.js:19896-19959 placement (2.1.88 match: extractQuotaStatusFromError, 1)
+//@ chunk-ergqq6hs.js:21171-21234 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 以 . 开头、临时文件或名为 rejected。旧版名错配；疑似归错文件。
  */
 function isHiddenOrTempOrRejected(error) {
   return error.startsWith(".") || isTempFileName(error) || error === "rejected";
 }
-//@ chunk-ss669z1x.js:19959-20031 placement
+//@ chunk-ergqq6hs.js:21234-21306 placement
 async function startBgWatcher(onDispatch, storageV5) {
   return withFeatureTelemetry("daemon_bg_watcher_start", () => watchDispatchDir(onDispatch, storageV5));
 }
-//@ chunk-ss669z1x.js:20031-20817 placement
+//@ chunk-ergqq6hs.js:21306-22092 placement
 /**
  * 监视派发目录，新文件到达时处理。
  */
@@ -581,7 +581,7 @@ async function watchDispatchDir(onDispatch, storageV5) {
     close: () => watcher.close(),
   };
 }
-//@ chunk-ss669z1x.js:20817-20919 placement
+//@ chunk-ergqq6hs.js:22092-22194 placement
 var WATCHER_MAX_MS = 3600000;
 var WATCHER_TICK_MS = 60000;
 var WATCHER_IDLE_MS = 28800000;
@@ -592,14 +592,14 @@ var WATCHER_MAX_GAP_MS = 300000;
 var WATCHER_JITTER_MS = 2000;
 var WATCHER_POLL_MS = 1000;
 var WATCHER_STOP_FLAGS = new Set();
-//@ chunk-ss669z1x.js:20919-20975 placement
+//@ chunk-ergqq6hs.js:22194-22250 placement
 function readStopFlags(storageV5) {
   return readPinnedJobIds(storageV5).catch((error) => {
     logError(error);
     return new Set();
   });
 }
-//@ chunk-ss669z1x.js:20975-34603 placement
+//@ chunk-ergqq6hs.js:22250-35888 placement
 /**
  * 后台会话管理器主循环：派发、PTY 启动、会话结算、保活。
  */
@@ -821,10 +821,10 @@ async function runBgManagerLoop(log, options = {}) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION &&
@@ -1023,10 +1023,10 @@ async function runBgManagerLoop(log, options = {}) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -1189,7 +1189,7 @@ async function runBgManagerLoop(log, options = {}) {
               }),
           ),
         );
-        let retiredCount = count(results, (retired) => retired);
+        let retiredCount = countWhere(results, (retired) => retired);
         if (isLowMem && retiredCount === 0 && isLowMemory()) {
           let results = await Promise.all(
             [...handlesMap.values()].map((handle) =>
@@ -1206,7 +1206,7 @@ async function runBgManagerLoop(log, options = {}) {
                 }),
             ),
           );
-          retiredCount += count(results, (retired) => retired);
+          retiredCount += countWhere(results, (retired) => retired);
         }
         if (isLowMem && retiredCount === 0 && isLowMemory()) {
           let filtered = [...handlesMap.values()].filter((pinnedHandle) =>
@@ -1247,10 +1247,10 @@ async function runBgManagerLoop(log, options = {}) {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
                   README_URL: "https://code.claude.com/docs/en/overview",
-                  VERSION: "2.1.316",
+                  VERSION: "2.1.318",
                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                   HOOKS_WORKER_URL:
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
@@ -1266,10 +1266,10 @@ async function runBgManagerLoop(log, options = {}) {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
                   README_URL: "https://code.claude.com/docs/en/overview",
-                  VERSION: "2.1.316",
+                  VERSION: "2.1.318",
                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                   HOOKS_WORKER_URL:
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
@@ -1342,7 +1342,7 @@ async function runBgManagerLoop(log, options = {}) {
         }
         let concurrencyBudget =
           featureValue_CACHED_MAY_BE_STALE_2 -
-          count([...handles.values()], (handle) => handle.isBooting && !handle.isUnverified);
+          countWhere([...handles.values()], (handle) => handle.isBooting && !handle.isUnverified);
         for (let handle of staleHandles) {
           if (concurrencyBudget <= 0) break;
           staleHandles.delete(handle);
@@ -1461,7 +1461,7 @@ async function runBgManagerLoop(log, options = {}) {
     throw error;
   }
 }
-//@ chunk-ss669z1x.js:34603-38486 placement
+//@ chunk-ergqq6hs.js:35888-39771 placement
 /**
  * 后台会话结束时记录结果、通知并清理。
  */
@@ -1732,7 +1732,7 @@ function onBgSessionSettled(handles, handle, notifyKeepAlive, pendingWrites, log
     }
   });
 }
-//@ chunk-ss669z1x.js:38486-39851 placement
+//@ chunk-ergqq6hs.js:39771-41136 placement
 /**
  * 清理失效的会话 socket/pid 文件。
  */
@@ -1838,12 +1838,12 @@ async function reapStaleSockets(handles, log, options = {}) {
     });
   }
 }
-//@ chunk-ss669z1x.js:39851-39900 placement
+//@ chunk-ergqq6hs.js:41136-41185 placement
 var PTY_PIDS_DIR = {
   namespace: "daemon",
   relPath: ["pty-pids"],
 };
-//@ chunk-ss669z1x.js:39900-40001 placement
+//@ chunk-ergqq6hs.js:41185-41286 placement
 async function ensureJobsDir(storage) {
   if (isStorageV5Enabled() && storage !== undefined) {
     await ensureTombstoneScope(storage);
@@ -1854,7 +1854,7 @@ async function ensureJobsDir(storage) {
     mode: 448,
   });
 }
-//@ chunk-ss669z1x.js:40001-40138 placement
+//@ chunk-ergqq6hs.js:41286-41423 placement
 async function ensureDaemonStateDir(storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     await storageV5.ensureScope(PTY_PIDS_DIR).catch(() => {
@@ -1866,7 +1866,7 @@ async function ensureDaemonStateDir(storageV5) {
     recursive: true,
   }).catch(() => {});
 }
-//@ chunk-ss669z1x.js:40138-40290 placement
+//@ chunk-ergqq6hs.js:41423-41575 placement
 async function deletePtyPidRecords(storageV5, short, ptySock) {
   for (let fileName of [
     basename(daemonPtyPidFile(short)),
@@ -1876,7 +1876,7 @@ async function deletePtyPidRecords(storageV5, short, ptySock) {
   ])
     await storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", fileName])).catch(() => {});
 }
-//@ chunk-ss669z1x.js:40290-40429 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-ergqq6hs.js:41575-41714 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeIfNotDirectory(dirPath) {
   let zipData = await lstat(dirPath).catch(() => null);
   if (zipData === null || zipData.isDirectory()) return false;
@@ -1886,7 +1886,7 @@ async function removeIfNotDirectory(dirPath) {
   });
   return true;
 }
-//@ chunk-ss669z1x.js:40429-40556 placement
+//@ chunk-ergqq6hs.js:41714-41841 placement
 /**
  * 删除后台任务的存储作用域（名字配错）。
  */
@@ -1898,9 +1898,9 @@ async function deleteJobScope(storageV5, jobId, dirPath, onError) {
   });
   if (!deleteResult.ok) onError(deleteResult.error.code);
 }
-//@ chunk-ss669z1x.js:40556-40590 placement
+//@ chunk-ergqq6hs.js:41841-41875 placement
 var PTY_PID_KEY_RE = /^[0-9A-Za-z.+_-]{1,100}$/;
-//@ chunk-ss669z1x.js:40590-41418 placement
+//@ chunk-ergqq6hs.js:41875-42703 placement
 /**
  * 空闲超时或版本过旧时退役 worker。
  */
@@ -1918,10 +1918,10 @@ function retireIdleWorker(log, workerHandle, retirement, tag) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -1932,12 +1932,12 @@ function retireIdleWorker(log, workerHandle, retirement, tag) {
   );
   return true;
 }
-//@ chunk-ss669z1x.js:41418-41471 placement
+//@ chunk-ergqq6hs.js:42703-42756 placement
 function trackPending(pending, promise) {
   pending.add(promise);
   promise.finally(() => pending.delete(promise));
 }
-//@ chunk-ss669z1x.js:41592-41659 placement
+//@ chunk-ergqq6hs.js:42877-42944 placement
 var DISPATCH_POLL_MS = 60000;
 var DISPATCH_BACKOFF_MIN_MS = 5000;
 var DISPATCH_BACKOFF_MAX_MS = 300000;
@@ -1945,17 +1945,17 @@ var DISPATCH_BACKOFF_STEP_MS = 30000;
 var DISPATCH_LOCK_MS = 60000;
 var DISPATCH_LOCK_RETRY_MS = 2000;
 var DISPATCH_STALE_MS = 300000;
-//@ chunk-ss669z1x.js:41659-41715 placement
+//@ chunk-ergqq6hs.js:42944-43000 placement
 function jitterDelay(delayMs) {
   return Math.round(delayMs * (0.5 + Math.random()));
 }
-//@ chunk-ss669z1x.js:41715-41764 placement
+//@ chunk-ergqq6hs.js:43000-43049 placement
 function backoffDelay(consecutiveCrashes) {
   return jitterDelay(Math.min(1000 * 2 ** consecutiveCrashes, DISPATCH_BACKOFF_MAX_MS));
 }
-//@ chunk-ss669z1x.js:41764-41783 placement
+//@ chunk-ergqq6hs.js:43049-43068 placement
 var weakMap = new WeakMap();
-//@ chunk-ss669z1x.js:41783-47596 placement
+//@ chunk-ergqq6hs.js:43068-48881 placement
 /**
  * daemon 子 worker 进程管理（启动、崩溃退避、停止、忙碌状态）。
  */
@@ -2284,26 +2284,26 @@ class DaemonWorkerProcess {
     this.backoffTimer.unref();
   }
 }
-//@ chunk-ss669z1x.js:47596-47714 placement
+//@ chunk-ergqq6hs.js:48881-48999 placement
 function dirFieldOf(config) {
   if (typeof config !== "object" || config === null || !("dir" in config)) return;
   let { dir } = config;
   return typeof dir === "string" ? dir : undefined;
 }
-//@ chunk-ss669z1x.js:47714-47734 placement
+//@ chunk-ergqq6hs.js:48999-49019 placement
 var DRAIN_RETRY_MS = 1000;
 var DISPATCH_GRACE_MS = 5000;
-//@ chunk-ss669z1x.js:47734-47763 placement
+//@ chunk-ergqq6hs.js:49019-49048 placement
 function countByKind(kind) {
   return isWorkerKindAdmitted(kind);
 }
-//@ chunk-ss669z1x.js:47763-47846 placement
+//@ chunk-ergqq6hs.js:49048-49131 placement
 function countPendingItems(config) {
   let total = 0;
   for (let key of Object.keys(WORKER_KINDS)) total += (config[key] ?? []).length;
   return total;
 }
-//@ chunk-ss669z1x.js:47846-50788 placement
+//@ chunk-ergqq6hs.js:49131-52076 placement
 /**
  * daemon supervisor：读取配置、按 kind 管理 worker、处理配置变更。
  */
@@ -2508,7 +2508,7 @@ async function runDaemonSupervisor(options) {
     },
   };
 }
-//@ chunk-ss669z1x.js:50788-50836 placement
+//@ chunk-ergqq6hs.js:52076-52124 placement
 var SHUTDOWN_WAIT_MS = 60000;
 var SHUTDOWN_CLOSE_TIMEOUT_MS = 100;
 var SHUTDOWN_KILL_GRACE_MS = 5000;

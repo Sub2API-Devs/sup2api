@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SendMessage 输入修复与邮箱去重
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nw7jbebs.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3xs5443t.js (22)
  * attribution: placement 22
  */
 import { isPlainObject } from "../isPlainObject.js";
@@ -18,19 +18,19 @@ import { objectSchema, _enum, stringSchema } from "../../../vendor/zod/v4/classi
 import { safeParseJSON } from "../json.js";
 import { storageSpaceId } from "../storage/storageSpaces.js";
 import { swarmHostState } from "./hostState.js";
+import { notifyTasksUpdated } from "../tasks.js";
 import { slugifySessionName } from "../sessionAddresses.js";
 import { TEAM_LEAD, USER, SYSTEM } from "./constants.js";
-import { notifyTasksUpdated } from "../tasks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:1466-1723 placement
+//@ chunk-3xs5443t.js:1689-1946 placement
 var SEND_MESSAGE_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ANTML;
 var SUMMARY_CLOSE_TAG;
 var BARE_MESSAGE_PARAM;
 var NAMESPACED_MESSAGE_PARAM;
 var regExp;
-deferInit("chunk-nw7jbebs.js:1466", () => {
+deferInit("chunk-3xs5443t.js:1689", () => {
   SEND_MESSAGE_FIELDS = new Set(["to", "summary", "message", "notify_when_idle"]);
   ANTML = "antml:";
   SUMMARY_CLOSE_TAG = "</summary>";
@@ -40,12 +40,12 @@ deferInit("chunk-nw7jbebs.js:1466", () => {
     `<(?:${ANTML})?parameter\\b|</(?:${ANTML})?(?:parameter|invoke|function_calls|message)>`,
   );
 });
-//@ chunk-nw7jbebs.js:1723-1807 placement
+//@ chunk-3xs5443t.js:1946-2030 placement
 function splitRepairedMessage(input) {
   let repaired = repairSendMessageInput(input);
   return repaired !== undefined && repaired.unrepaired === undefined ? repaired.split : undefined;
 }
-//@ chunk-nw7jbebs.js:1807-2407 placement
+//@ chunk-3xs5443t.js:2030-2630 placement
 function repairSendMessageInput(input) {
   if (!isPlainObject(input)) return;
   let { message, summary } = input;
@@ -86,7 +86,7 @@ function repairSendMessageInput(input) {
   }
   return;
 }
-//@ chunk-nw7jbebs.js:2407-3132 placement
+//@ chunk-3xs5443t.js:2630-3354 placement
 /**
  * 修复模型把 summary 等字段混进 message 的 SendMessage 输入，必要时拆分。
  */
@@ -131,7 +131,7 @@ function normalizeSendMessageInput(input, { applySplit = true } = {}) {
     shapeClass,
   };
 }
-//@ chunk-nw7jbebs.js:3132-3282 placement
+//@ chunk-3xs5443t.js:3354-3504 placement
 function looksLikeJsonPayload(text) {
   let trimmed = text.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
@@ -142,11 +142,11 @@ function looksLikeJsonPayload(text) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:3282-3400 placement
+//@ chunk-3xs5443t.js:3504-3622 placement
 var repairedMessageCache; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_REPAIR_CACHE;
 var shutdownResponseSchema;
-deferInit("chunk-nw7jbebs.js:3282", () => {
+deferInit("chunk-3xs5443t.js:3504", () => {
   repairedMessageCache = identity(new Map(), (cache) => cache.clear());
   MAX_REPAIR_CACHE = 64;
   shutdownResponseSchema = DoctorLazy(() =>
@@ -156,21 +156,21 @@ deferInit("chunk-nw7jbebs.js:3282", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:3400-3477 placement
+//@ chunk-3xs5443t.js:3622-3699 placement
 function rememberRepair(requestId, fingerprint) {
   repairedMessageCache.set(requestId, fingerprint);
   if (repairedMessageCache.size > MAX_REPAIR_CACHE)
     repairedMessageCache.delete(repairedMessageCache.keys().next().value ?? requestId);
 }
-//@ chunk-nw7jbebs.js:3477-3527 placement
+//@ chunk-3xs5443t.js:3699-3749 placement
 function wasRepaired(requestId, fingerprint) {
   return fingerprint !== undefined && repairedMessageCache.get(requestId) === fingerprint;
 }
-//@ chunk-nw7jbebs.js:3527-3555 placement
+//@ chunk-3xs5443t.js:3749-3777 placement
 function forgetRepair(requestId) {
   repairedMessageCache.delete(requestId);
 }
-//@ chunk-nw7jbebs.js:3555-3749 placement
+//@ chunk-3xs5443t.js:3777-3971 placement
 function scanRepairs(unread) {
   if (repairedMessageCache.size === 0) return;
   for (let message of unread) {
@@ -180,7 +180,7 @@ function scanRepairs(unread) {
     if (parsed.success) repairedMessageCache.delete(parsed.data.requestId);
   }
 }
-//@ chunk-nw7jbebs.js:3749-3823 placement
+//@ chunk-3xs5443t.js:3971-4045 placement
 function internMailboxKey(key) {
   let frozenKey = freezeDefinedFields(key);
   return internFrozenTag(`\x00k${storageSpaceId(frozenKey)}`, {
@@ -188,22 +188,22 @@ function internMailboxKey(key) {
     key: frozenKey,
   });
 }
-//@ chunk-nw7jbebs.js:3823-3924 placement
+//@ chunk-3xs5443t.js:4045-4146 placement
 function mailboxKeyOf(input, fromString, fromKey) {
   if (typeof input === "string") return fromString(input);
   let keyObject = fromKey(input.key);
   return keyObject === undefined ? undefined : internMailboxKey(keyObject);
 }
-//@ chunk-nw7jbebs.js:3924-4019 placement (2.1.88 match: propagateAbort, 1)
+//@ chunk-3xs5443t.js:4146-4241 placement (2.1.88 match: propagateAbort, 1)
 var internedFrozenTagCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var finalizationRegistry;
-deferInit("chunk-nw7jbebs.js:3924", () => {
+deferInit("chunk-3xs5443t.js:4146", () => {
   internedFrozenTagCache = new Map();
   finalizationRegistry = new FinalizationRegistry((tagKey) => {
     if (internedFrozenTagCache.get(tagKey)?.deref() === undefined) internedFrozenTagCache.delete(tagKey);
   });
 });
-//@ chunk-nw7jbebs.js:4019-4178 placement
+//@ chunk-3xs5443t.js:4241-4400 placement
 function internFrozenTag(tagKey, fields) {
   let existing = internedFrozenTagCache.get(tagKey)?.deref();
   if (existing !== undefined) return existing;
@@ -215,7 +215,7 @@ function internFrozenTag(tagKey, fields) {
   finalizationRegistry.register(frozen, tagKey);
   return frozen;
 }
-//@ chunk-nw7jbebs.js:4178-4339 placement
+//@ chunk-3xs5443t.js:4400-4561 placement
 function freezeDefinedFields(record) {
   return Object.freeze(
     Object.fromEntries(
@@ -225,16 +225,32 @@ function freezeDefinedFields(record) {
     ),
   );
 }
-//@ chunk-nw7jbebs.js:4339-4379 placement
+//@ chunk-3xs5443t.js:6115-6209 placement
+function setLeaderTeamName(teamName) {
+  if (swarmHostState().taskList.leaderTeamName === teamName) return;
+  swarmHostState().taskList.leaderTeamName = teamName;
+  notifyTasksUpdated();
+}
+//@ chunk-3xs5443t.js:6209-6301 placement
+function setSessionListId(sessionListId) {
+  if (swarmHostState().taskList.sessionListId === sessionListId) return;
+  swarmHostState().taskList.sessionListId = sessionListId;
+  notifyTasksUpdated();
+}
+//@ chunk-3xs5443t.js:6301-6359 placement
+function onTaskListUpdated(listener) {
+  return swarmHostState().taskList.updated.subscribe(listener);
+}
+//@ chunk-3xs5443t.js:22018-22058 placement
 function mailboxLedger() {
   return swarmHostState().mailbox.ledger;
 }
-//@ chunk-nw7jbebs.js:4379-4463 placement
+//@ chunk-3xs5443t.js:22058-22142 placement
 function findTeammateByName(name, roster) {
   let slug = slugifySessionName(name);
   return Object.values(roster ?? {}).find((member) => slugifySessionName(member.name) === slug);
 }
-//@ chunk-nw7jbebs.js:4463-4718 placement
+//@ chunk-3xs5443t.js:22142-22397 placement
 function hasPaneTeammates(name, options) {
   if (options.isPaneTeammate) return false;
   if (!Object.values(options.roster ?? {}).some((member) => member.tmuxPaneId === "leader")) return false;
@@ -243,7 +259,7 @@ function hasPaneTeammates(name, options) {
   let teammateByName = findTeammateByName(name, options.roster);
   return teammateByName?.tmuxPaneId === "in-process" || teammateByName?.tmuxPaneId === "leader";
 }
-//@ chunk-nw7jbebs.js:4718-4951 placement
+//@ chunk-3xs5443t.js:22397-22630 placement
 function dedupeMailboxMessages(messages, inboxPath, options) {
   let ledger = mailboxLedger();
   let seenIds = new Set();
@@ -260,35 +276,19 @@ function dedupeMailboxMessages(messages, inboxPath, options) {
     } else provenance.set(message, hasPaneTeammates(message.from, options) ? "forged" : "unverifiable");
   return provenance;
 }
-//@ chunk-nw7jbebs.js:5062-5156 placement
-function setLeaderTeamName(teamName) {
-  if (swarmHostState().taskList.leaderTeamName === teamName) return;
-  swarmHostState().taskList.leaderTeamName = teamName;
-  notifyTasksUpdated();
-}
-//@ chunk-nw7jbebs.js:5156-5248 placement
-function setSessionListId(sessionListId) {
-  if (swarmHostState().taskList.sessionListId === sessionListId) return;
-  swarmHostState().taskList.sessionListId = sessionListId;
-  notifyTasksUpdated();
-}
-//@ chunk-nw7jbebs.js:5248-5306 placement
-function onTaskListUpdated(listener) {
-  return swarmHostState().taskList.updated.subscribe(listener);
-}
 export {
   onTaskListUpdated,
-  normalizeSendMessageInput,
-  rememberRepair,
-  splitRepairedMessage,
-  wasRepaired,
-  forgetRepair,
   dedupeMailboxMessages,
-  setSessionListId,
-  setLeaderTeamName,
   findTeammateByName,
-  mailboxKeyOf,
   internMailboxKey,
   mailboxLedger,
   scanRepairs,
+  splitRepairedMessage,
+  setSessionListId,
+  setLeaderTeamName,
+  normalizeSendMessageInput,
+  rememberRepair,
+  wasRepaired,
+  forgetRepair,
+  mailboxKeyOf,
 };

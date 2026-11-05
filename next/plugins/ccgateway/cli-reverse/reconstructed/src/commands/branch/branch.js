@@ -3,10 +3,10 @@
  *
  * /branch 实现：把当前对话在此处分叉成新会话（存储 v5 直接 createFork，旧存储复制 JSONL），记录 fork_inherit
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/branch/branch.ts
- * pieces: chunk-khj4kcw5.js (8)
- * attribution: affinity 2, fingerprint 4, layout 2
+ * pieces: chunk-2q3gtfzq.js (8)
+ * attribution: affinity 1, facade-majority 4, layout 2, fingerprint 1
  */
 import { randomUUID } from "crypto";
 import { mkdir, unlink } from "fs/promises";
@@ -25,6 +25,7 @@ import {
   isSessionHistorySuppressed,
   isSessionHistorySuppressedFor,
   pinSessionId,
+  snapshotSessionMetadata,
   getProjectDir,
   getTranscriptPathForSession,
   getMaterializedSessionFile,
@@ -38,6 +39,8 @@ import {
   saveCustomTitle,
   saveAgentName,
   isPrecautionarySuppressionHeldFor,
+  getSessionOwner,
+  ownStoredLoginOwner,
 } from "../../utils/sessionStorage.js";
 import { isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
@@ -51,13 +54,13 @@ import { urlPatternToRegex, firstLineOf } from "../../utils/stringUtils.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { syncJobName, getOwnJobShortId } from "../../services/daemon/jobState.js";
 
-//@ chunk-khj4kcw5.js:12227-12248 affinity
+//@ chunk-2q3gtfzq.js:1065-1086 affinity
 /**
  * MAX_FORK_TRANSCRIPT_BYTES：4194304。
  */
 var MAX_FORK_TRANSCRIPT_BYTES = 4194304;
 var MAX_BRANCH_MESSAGES = 1e5;
-//@ chunk-khj4kcw5.js:12248-12452 fingerprint (2.1.88 match: deriveFirstPrompt, 0.567)
+//@ chunk-2q3gtfzq.js:1086-1291 facade-majority (2.1.88 match: deriveFirstPrompt, 0.568)
 function deriveFirstPrompt(firstUserMessage) {
   let firstMessageSeed = {
     commandFallback: "",
@@ -70,7 +73,7 @@ function deriveFirstPrompt(firstUserMessage) {
   text ??= firstMessageSeed.commandFallback;
   return text.replace(/\s+/g, " ").trim().slice(0, 100).trimEnd() || "Branched conversation";
 }
-//@ chunk-khj4kcw5.js:12452-15231 fingerprint (2.1.88 match: createFork, 0.46)
+//@ chunk-2q3gtfzq.js:1291-4150 facade-majority (2.1.88 match: createFork, 0.443)
 async function createFork(messages, customTitle, extraMessages, storageV5) {
   let forkSessionId = randomUUID();
   let originalSessionId = getSessionId();
@@ -78,7 +81,7 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
     isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(originalSessionId));
   let conversationAtisLatch = getConversationAtisLatch();
   let toolsUsed = isSillyShoreGateOn() ? getConversationToolsUsed().names() : [];
-  let atisLatch = undefined;
+  let atisLatch = snapshotSessionMetadata().replMode;
   let relocatedCwd = undefined;
   let projectDir = getProjectDir(getOriginalCwd());
   let forkSessionPath = getTranscriptPathForSession(forkSessionId);
@@ -317,6 +320,16 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
         `
 `,
     );
+  if (atisLatch !== undefined)
+    await writeRow(
+      jsonStringify({
+        type: "repl-mode",
+        sessionId: forkSessionId,
+        replMode: atisLatch,
+      }) +
+        `
+`,
+    );
   writeStream.end();
   await finished(writeStream).catch(() => {});
   if (outStream) {
@@ -332,7 +345,7 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
     sessionHistorySuppressed: suppressedFlag,
   };
 }
-//@ chunk-khj4kcw5.js:15231-15267 layout
+//@ chunk-2q3gtfzq.js:4150-4186 layout
 function toJsonlLine(message) {
   return {
     data:
@@ -341,7 +354,7 @@ function toJsonlLine(message) {
 `,
   };
 }
-//@ chunk-khj4kcw5.js:15267-18005 layout
+//@ chunk-2q3gtfzq.js:4186-7008 layout
 /**
  * createForkFromStorage：storage v5 路径的 createFork。
  */
@@ -356,7 +369,7 @@ async function createForkFromStorage(entry) {
     extraMessages,
     forkSessionPath,
   } = entry;
-  let atisLatch = undefined;
+  let atisLatch = snapshotSessionMetadata().replMode;
   let relocatedCwd = undefined;
   let { backend, key } = sourceV5;
   let records = [];
@@ -522,12 +535,20 @@ async function createForkFromStorage(entry) {
     records.push(toJsonlLine(record));
   }
   if (entry.toolsUsedAtEntry.length > 0) {
-    let record = {
+    let toolsUsedRecord = {
       type: "tools-used",
       sessionId: forkSessionId,
       tools: [...entry.toolsUsedAtEntry],
     };
-    records.push(toJsonlLine(record));
+    records.push(toJsonlLine(toolsUsedRecord));
+  }
+  if (atisLatch !== undefined) {
+    let replModeRecord = {
+      type: "repl-mode",
+      sessionId: forkSessionId,
+      replMode: atisLatch,
+    };
+    records.push(toJsonlLine(replModeRecord));
   }
   let appended = await backend.append(forkKey, records);
   if (!appended.ok) {
@@ -547,7 +568,7 @@ async function createForkFromStorage(entry) {
     sessionHistorySuppressed: sourceTaintAtEntry,
   };
 }
-//@ chunk-khj4kcw5.js:18005-18361 fingerprint (2.1.88 match: getUniqueForkName, 1)
+//@ chunk-2q3gtfzq.js:7008-7364 fingerprint (2.1.88 match: getUniqueForkName, 1)
 async function getUniqueForkName(baseName, storageV5) {
   let candidateName = `${baseName} (Branch)`;
   if (
@@ -575,15 +596,15 @@ async function getUniqueForkName(baseName, storageV5) {
   while (usedNumbers.has(nextNumber)) nextNumber++;
   return `${baseName} (Branch ${nextNumber})`;
 }
-//@ chunk-khj4kcw5.js:18361-19802 fingerprint (2.1.88 match: call, 0.745)
-async function call(onDone, context, args = {}) {
+//@ chunk-2q3gtfzq.js:7364-8859 facade-majority (2.1.88 match: call, 0.727)
+async function branchAndResume(onDone, context, args = {}) {
   let sessionId = getSessionId();
   let currentSessionTitle = getCurrentSessionTitle(sessionId);
   let historySuppressed =
     isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(sessionId));
   let originalSessionId = getConversationAtisLatch();
   let toolsUsed = getConversationToolsUsed().names();
-  let atisLatch = undefined;
+  let atisLatch = snapshotSessionMetadata().replMode;
   let relocatedCwd = undefined;
   let memoryModeStamps = getCurrentSessionMemoryModeStamps().map(({ inFlight, ...stamp }) => stamp);
   try {
@@ -610,7 +631,7 @@ async function call(onDone, context, args = {}) {
       message_count: serializedMessages.length,
       has_custom_title: !!title,
     });
-    let forkLog = {
+    let forkFile = {
       date: firstLineOf(now.toISOString(), "T"),
       messages: serializedMessages,
       fullPath: forkPath,
@@ -633,11 +654,13 @@ async function call(onDone, context, args = {}) {
         : undefined,
       forkedFromSessionId: sessionId,
     };
+    forkFile.replMode = atisLatch;
+    forkFile.sessionOwner = getSessionOwner() ?? ownStoredLoginOwner();
     let titleInfo = title ? ` "${forkName}"` : "";
     let titleSuffix = currentSessionTitle ? ` ("${currentSessionTitle}")` : "";
     let successMessage = `Branched conversation${titleInfo}. You are now in the new branch (session ${sessionId_2}). Use /resume ${sessionId}${titleSuffix} to return to the original, or run \`claude -r ${sessionId}\` in a new terminal.`;
     if (onDone.resume) {
-      await onDone.resume(sessionId_2, forkLog, "fork");
+      await onDone.resume(sessionId_2, forkFile, "fork");
       syncJobName(getOwnJobShortId(), forkName, "user", onDone.storageV5);
       context(successMessage, {
         display: "system",
@@ -650,14 +673,14 @@ async function call(onDone, context, args = {}) {
     return false;
   }
 }
-//@ chunk-khj4kcw5.js:19802-19885 affinity
+//@ chunk-2q3gtfzq.js:8859-8944 facade-majority (2.1.88 match: _temp2, 0.643)
 /**
  * /branch 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-async function branchCommandCall(onDone, context, args) {
-  await call(context, onDone, {
+async function call(onDone, context, args) {
+  await branchAndResume(context, onDone, {
     customTitle: args?.trim() || undefined,
   });
   return null;
 }
-export { call, branchCommandCall, createFork, deriveFirstPrompt };
+export { branchAndResume, call, createFork, deriveFirstPrompt };

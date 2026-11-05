@@ -3,10 +3,10 @@
  *
  * 组织指标日志开关：查询 metrics_logging_enabled 并缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/metricsOptOut.ts
- * pieces: chunk-3n6ygrtf.js (17)
- * attribution: placement 14, fingerprint 2, file-local 1
+ * pieces: chunk-1gytdxcy.js (19)
+ * attribution: placement 14, fingerprint 2, file-local 1, layout 2
  */
 import { guardTelemetryCredentials } from "../analytics/telemetryCredentialGuard.js";
 import { getAuthHeadersAsync, withOAuth401Retry } from "../../utils/http.js";
@@ -32,20 +32,19 @@ import { env } from "../../utils/env.js";
 import { getOauthTokenFromFd, getRootSession } from "../../bootstrap/state.js";
 import { usableLauncherHostLoginToken } from "../../utils/auth/launcherHostLogin.js";
 import { readFreshOauthAccountFromDisk, saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
-import { Feed } from "../../components/LogoV2/Feed.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3n6ygrtf.js:665-741 placement
+//@ chunk-1gytdxcy.js:665-741 placement
 /**
  * 指标开关查询的缓存与刷新间隔（1 小时 / 1 天）与接口路径。
  */
 var METRICS_CACHE_TTL_MS = 3600000;
 var METRICS_STATUS_REFRESH_MS = 86400000;
 var METRICS_ENABLED_PATH = "/api/claude_code/organizations/metrics_enabled";
-//@ chunk-3n6ygrtf.js:741-764 placement
+//@ chunk-1gytdxcy.js:741-764 placement
 class MetricsCheckError extends Error {}
-//@ chunk-3n6ygrtf.js:764-1238 placement
+//@ chunk-1gytdxcy.js:764-1238 placement
 /**
  * 调 metrics_enabled 接口（绕过仅必要流量限制、5 秒超时、不跟随重定向）查询组织是否允许指标日志；无可用凭证或响应缺字段时抛错。
  */
@@ -69,7 +68,7 @@ async function fetchMetricsEnabled() {
     throw Error("metrics_enabled response missing metrics_logging_enabled");
   return metricsResponse.data;
 }
-//@ chunk-3n6ygrtf.js:1238-1718 fingerprint (2.1.88 match: _checkMetricsEnabledAPI, 0.713)
+//@ chunk-1gytdxcy.js:1238-1718 fingerprint (2.1.88 match: _checkMetricsEnabledAPI, 0.713)
 /**
  * 调用指标开关接口，返回 {enabled, hasError}。
  */
@@ -105,10 +104,10 @@ async function _checkMetricsEnabledAPI(credentials) {
     };
   }
 }
-//@ chunk-3n6ygrtf.js:1718-1840 placement
+//@ chunk-1gytdxcy.js:1718-1840 placement
 var metricsMemoByHost; // deferred: uses memoizeWithTTL (../../utils/memoize.js) of its import cycle while loading; runs once the cycle is complete
 var metricsIdentityByHost;
-deferInit("chunk-3n6ygrtf.js:1718", () => {
+deferInit("chunk-1gytdxcy.js:1718", () => {
   metricsMemoByHost = new HostScoped(() => {
     let state = {
       attempted: false,
@@ -122,7 +121,7 @@ deferInit("chunk-3n6ygrtf.js:1718", () => {
     identity: undefined,
   }));
 });
-//@ chunk-3n6ygrtf.js:1840-2017 placement
+//@ chunk-1gytdxcy.js:1840-2017 placement
 function apiKeyPrincipal() {
   let { key, source } = getAnthropicApiKeyWithSourceSafe();
   if (key === null) return null;
@@ -134,7 +133,7 @@ function apiKeyPrincipal() {
   }
   return `key:${computeContentHash(key).slice(0, 16)}`;
 }
-//@ chunk-3n6ygrtf.js:2017-2297 placement
+//@ chunk-1gytdxcy.js:2017-2297 placement
 function oauthPrincipal(account) {
   let authenticatedAccountInfo = getAuthenticatedAccountInfo();
   if (authenticatedAccountInfo !== undefined)
@@ -146,20 +145,20 @@ function oauthPrincipal(account) {
     ? null
     : `acct:${account.accountUuid}/${account.organizationUuid}`;
 }
-//@ chunk-3n6ygrtf.js:2297-2368 placement
+//@ chunk-1gytdxcy.js:2297-2368 placement
 function currentMetricsPrincipal() {
   let account = getOauthAccountInfo();
   if (account !== undefined) return oauthPrincipal(account);
   return isAnthropicAuthEnabled() ? null : apiKeyPrincipal();
 }
-//@ chunk-3n6ygrtf.js:2368-2485 placement
+//@ chunk-1gytdxcy.js:2368-2485 placement
 async function currentPrincipal(storage) {
   let account = getOauthAccountInfo();
   if (account === undefined) return isAnthropicAuthEnabled() ? null : apiKeyPrincipal();
   if (getAuthenticatedAccountInfo() !== undefined) return oauthPrincipal(account);
   return oauthPrincipal(await readFreshOauthAccountFromDisk(storage));
 }
-//@ chunk-3n6ygrtf.js:2485-2731 placement
+//@ chunk-1gytdxcy.js:2485-2731 placement
 function principalCacheKey() {
   let oauthAccountInfo = getOauthAccountInfo();
   if (oauthAccountInfo !== undefined || isAnthropicAuthEnabled()) {
@@ -172,7 +171,7 @@ function principalCacheKey() {
   }
   return apiKeyPrincipal() ?? "none";
 }
-//@ chunk-3n6ygrtf.js:2731-2907 placement
+//@ chunk-1gytdxcy.js:2731-2907 placement
 function _clearMetricsEnabledCacheForTesting() {
   let host = getRootSession().host;
   let memo = metricsMemoByHost.of(host);
@@ -185,7 +184,7 @@ function _clearMetricsEnabledCacheForTesting() {
   identity.identity = cacheKey;
   return memo.memo();
 }
-//@ chunk-3n6ygrtf.js:2907-3025 placement
+//@ chunk-1gytdxcy.js:2907-3025 placement
 /**
  * 清除指标开关的记忆缓存、OAuth 刷新闩和身份缓存（认证变化时调用）。
  */
@@ -196,7 +195,7 @@ function clearMetricsEnabledCache() {
   state.oauthRefreshLatch.attempted = false;
   metricsIdentityByHost.of(host).identity = undefined;
 }
-//@ chunk-3n6ygrtf.js:3025-3392 placement
+//@ chunk-1gytdxcy.js:3025-3392 placement
 /**
  * 刷新指标开关：查询期间若登录主体变了则判为失败；结果与缓存相同且未过期则不写，否则写入全局配置。
  */
@@ -223,7 +222,7 @@ async function refreshMetricsStatusFor(storage) {
   await saveGlobalConfig((config) => checkMetricsEnabled(config, principal, clearResult.enabled), storage);
   return clearResult;
 }
-//@ chunk-3n6ygrtf.js:3392-3624 file-local
+//@ chunk-1gytdxcy.js:3392-3624 file-local
 function checkMetricsEnabled(principal, enabled, enabled_2) {
   if (
     currentMetricsPrincipal() !== enabled ||
@@ -233,7 +232,7 @@ function checkMetricsEnabled(principal, enabled, enabled_2) {
   return {
     ...principal,
     metricsStatusCache: undefined,
-    metricsStatusCacheByPrincipal: Feed({
+    metricsStatusCacheByPrincipal: pruneMetricsStatusCache({
       ...principal.metricsStatusCacheByPrincipal,
       [enabled]: {
         enabled: enabled_2,
@@ -242,7 +241,17 @@ function checkMetricsEnabled(principal, enabled, enabled_2) {
     }),
   };
 }
-//@ chunk-3n6ygrtf.js:3774-3880 placement (2.1.88 match: _temp, 0.672)
+//@ chunk-1gytdxcy.js:3624-3632 layout
+var FEED_ROW_HEIGHT = 8;
+//@ chunk-1gytdxcy.js:3632-3774 layout
+function pruneMetricsStatusCache(byPrincipal) {
+  let sliced = Object.entries(byPrincipal)
+    .filter(([, value]) => isValidStatusCacheLine(value))
+    .sort(([, entryA], [, entryB]) => entryB.timestamp - entryA.timestamp)
+    .slice(0, FEED_ROW_HEIGHT);
+  return Object.fromEntries(sliced);
+}
+//@ chunk-1gytdxcy.js:3774-3880 placement
 /**
  * 判断缓存行是否有效：enabled 是布尔值且 timestamp 是不晚于现在的有限数。
  */
@@ -251,12 +260,12 @@ function isValidStatusCacheLine(line) {
     typeof line?.enabled === "boolean" && Number.isFinite(line.timestamp) && line.timestamp <= Date.now()
   );
 }
-//@ chunk-3n6ygrtf.js:3880-3973 placement
+//@ chunk-1gytdxcy.js:3880-3973 placement
 function cachedMetricsStatus(principal) {
-  let line = getGlobalConfig().metricsStatusCacheByPrincipal?.[principal];
-  return line !== undefined && isValidStatusCacheLine(line) ? line : undefined;
+  let cached = getGlobalConfig().metricsStatusCacheByPrincipal?.[principal];
+  return cached !== undefined && isValidStatusCacheLine(cached) ? cached : undefined;
 }
-//@ chunk-3n6ygrtf.js:3973-4181 fingerprint (2.1.88 match: refreshMetricsStatus, 0.736)
+//@ chunk-1gytdxcy.js:3973-4181 fingerprint (2.1.88 match: refreshMetricsStatus, 0.736)
 /**
  * 优先读缓存（过期则后台刷新），否则请求。
  */
@@ -278,4 +287,4 @@ async function refreshMetricsStatus(storage) {
   }
   return refreshMetricsStatusFor(storage);
 }
-export { isValidStatusCacheLine, clearMetricsEnabledCache, refreshMetricsStatus };
+export { refreshMetricsStatus, clearMetricsEnabledCache };

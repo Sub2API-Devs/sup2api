@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话中经 worker 代为抓取网页
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { env } from "../../utils/env.js";
@@ -33,12 +33,12 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 import { isAlreadyPrintable } from "../../utils/printableName.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2150802-2150817 placement
+//@ chunk-5xgkngpb.js:2204188-2204203 placement
 /**
  * WebFetch 抓取截止时间的默认值（5 分钟）。
  */
 var DEFAULT_WEBFETCH_DEADLINE_MS = 300000;
-//@ chunk-e6aww6q8.js:2150817-2151023 placement
+//@ chunk-5xgkngpb.js:2204203-2204409 placement
 /**
  * WebFetch 抓取截止时间：优先取环境变量 CLAUDE_CODE_WEBFETCH_DEADLINE_MS，否则取特性开关值，均不超过上限。
  */
@@ -56,13 +56,13 @@ function getWebFetchDeadlineMs() {
     ? Math.min(featureValue_CACHED_MAY_BE_STALE, MAX_TIMER_DELAY_MS)
     : DEFAULT_WEBFETCH_DEADLINE_MS;
 }
-//@ chunk-e6aww6q8.js:2151023-2151435 placement
+//@ chunk-5xgkngpb.js:2204409-2204821 placement
 /**
  * 云会话 worker 代抓网页的响应结构：url、最终地址、标题、正文、内容类型、抓取时间与错误。
  */
 var ISO_TIMESTAMP_PATTERN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var WORKER_FETCH_RESPONSE_SCHEMA;
-deferInit("chunk-e6aww6q8.js:2151023", () => {
+deferInit("chunk-5xgkngpb.js:2204409", () => {
   ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
   WORKER_FETCH_RESPONSE_SCHEMA = DoctorLazy(() =>
     create({
@@ -81,14 +81,14 @@ deferInit("chunk-e6aww6q8.js:2151023", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:2151435-2151515 placement
+//@ chunk-5xgkngpb.js:2204821-2204901 placement
 /**
  * 是否使用 CCR worker 代理抓取（首方 API 且设置了环境变量）。
  */
 function shouldUseCcrWebFetchProxy() {
   return getAPIProvider() === "firstParty" && env.CLAUDE_CODE_WEBFETCH_USE_CCR_PROXY;
 }
-//@ chunk-e6aww6q8.js:2151515-2151565 placement
+//@ chunk-5xgkngpb.js:2204901-2204951 placement
 /**
  * 当前请求能否通过 CCR worker 抓取（有此会话的 CCR 会话 id）。
  */
@@ -96,7 +96,7 @@ function canFetchViaCcrWorker(session) {
   if (!shouldUseCcrWebFetchProxy()) return false;
   return !!ccrSessionIdForRefs(session);
 }
-//@ chunk-e6aww6q8.js:2151565-2151604 placement
+//@ chunk-5xgkngpb.js:2204951-2204990 placement
 /**
  * CCR 抓取的最大尝试次数（4）。
  */
@@ -104,14 +104,14 @@ var CCR_FETCH_MAX_ATTEMPTS = 4;
 var CCR_FETCH_BASE_DELAY_MS = 1000;
 var CCR_FETCH_TOTAL_BUDGET_MS = 75000;
 var CCR_FETCH_TIMEOUT_MS = 40000;
-//@ chunk-e6aww6q8.js:2151604-2151643 placement
+//@ chunk-5xgkngpb.js:2204990-2205029 placement
 /**
  * 判断 HTTP 状态码是否可重试（429 或 5xx）。
  */
 function isRetryableFetchStatus(status) {
   return status === 429 || status >= 500;
 }
-//@ chunk-e6aww6q8.js:2151643-2151908 placement
+//@ chunk-5xgkngpb.js:2205029-2205294 placement
 function logWorkerPost(outcome, toolName, attempt, startedAt, response, error) {
   logEvent("tengu_ccr_worker_post", {
     toolName: fromEnum(toolName),
@@ -124,7 +124,7 @@ function logWorkerPost(outcome, toolName, attempt, startedAt, response, error) {
     ),
   });
 }
-//@ chunk-e6aww6q8.js:2151908-2155694 placement
+//@ chunk-5xgkngpb.js:2205294-2209082 placement
 /**
  * 云会话中经 worker 接口代为抓取网页。
  */

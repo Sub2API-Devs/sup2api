@@ -1,8 +1,8 @@
 /**
  * ajv/dist/refs/json-schema-2020-12/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-1r4fv9mg.js (1)
+ * pieces: chunk-1jdkttw7.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_format_annotation } from "./meta/format-annotation.json.js";
 import { require_meta_data } from "./meta/meta-data.json.js";
 import { require_validation } from "./meta/validation.json.js";
 
-//@ chunk-1r4fv9mg.js:12940-13281 cjs-require-graph
+//@ chunk-1jdkttw7.js:12941-13282 cjs-require-graph
 var require_json_schema_2020_12 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

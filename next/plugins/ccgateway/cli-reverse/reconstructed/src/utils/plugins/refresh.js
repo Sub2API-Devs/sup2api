@@ -3,9 +3,9 @@
  *
  * 并入已有模块：插件刷新补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/refresh.ts
- * pieces: chunk-4q6mp9e8.js (4), chunk-7nse75qx.js (1)
+ * pieces: chunk-0qaty0z2.js (4), chunk-a8hqqf13.js (1)
  * attribution: placement 3, fingerprint 2
  */
 import { isBareMode } from "../envUtils.js";
@@ -37,23 +37,23 @@ import { reinitializeLspServerManager } from "../../services/lsp/manager.js";
 import { errorMessage } from "../errors.js";
 import { getHostState } from "../hostEnvironment.js";
 import { skillsChangedSignal } from "./pluginsChangedSignal.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 
-//@ chunk-7nse75qx.js:453-519 fingerprint (2.1.88 match: mergePluginErrors, 1)
+//@ chunk-a8hqqf13.js:454-520 fingerprint (2.1.88 match: mergePluginErrors, 1)
 /**
  * 名字是否属于插件/LSP 管理器来源（lsp-manager 或 plugin: 前缀）。
  */
 function mergePluginErrors(source) {
   return source === "lsp-manager" || source.startsWith("plugin:");
 }
-//@ chunk-4q6mp9e8.js:1153-1189 placement
+//@ chunk-0qaty0z2.js:1153-1189 placement
 /**
  * bareModePluginAllow：裸模式下的通配插件放行函数。
  */
 function bareModePluginAllow() {
   return isBareMode() ? isChannelPluginAllowed : undefined;
 }
-//@ chunk-4q6mp9e8.js:1189-1276 placement
+//@ chunk-0qaty0z2.js:1189-1276 placement
 /**
  * pluginIdsWithSource：有 pluginSource 的插件 id。
  */
@@ -61,14 +61,14 @@ var pluginIdsWithSource = (dynamicMcpConfig) =>
   Object.entries(dynamicMcpConfig ?? {})
     .filter(([, value]) => value.pluginSource !== undefined)
     .map(([key]) => key);
-//@ chunk-4q6mp9e8.js:1276-1309 placement
+//@ chunk-0qaty0z2.js:1276-1309 placement
 /**
  * noReloadPlugins：已裁掉的插件重载（返回 0）。
  */
 async function noReloadPlugins(enabled, enabled_2) {
   return 0;
 }
-//@ chunk-4q6mp9e8.js:1309-3503 fingerprint (2.1.88 match: refreshActivePlugins, 0.701)
+//@ chunk-0qaty0z2.js:1309-3486 fingerprint (2.1.88 match: refreshActivePlugins, 0.693)
 /**
  * /reload-plugins 与安装后刷新：清空插件相关缓存、重新加载插件（完整或 cacheOnly）、刷新命令/代理/输出样式/MCP/LSP、重新注册 hooks，汇总各组件数量与错误供界面展示。
  */
@@ -192,8 +192,8 @@ async function refreshActivePlugins(appState, storageV5, credentials, options = 
     `refreshActivePlugins: ${enabled.length} enabled, ${pluginCommands.length} commands, ${pluginSkills.length} skills, ${agentDefinitionsWithOverrides.allAgents.length} agents, ${hook_count} hooks, ${mcp_count} MCP, ${lsp_count} LSP`,
   );
   return {
-    enabled_count: count(enabled, (plugin) => plugin.isBuiltin !== true),
-    disabled_count: count(disabled, (plugin) => plugin.isBuiltin !== true),
+    enabled_count: countWhere(enabled, (plugin) => plugin.isBuiltin !== true),
+    disabled_count: countWhere(disabled, (plugin) => plugin.isBuiltin !== true),
     command_count: pluginCommands.length,
     skill_count: pluginSkills.length,
     agent_count: agentDefinitionsWithOverrides.allAgents.length,
@@ -204,7 +204,6 @@ async function refreshActivePlugins(appState, storageV5, credentials, options = 
     errors: errors_2,
     warnings: warnings_2,
     agentDefinitions: agentDefinitionsWithOverrides,
-    pluginCommands,
   };
 }
-export { refreshActivePlugins, noReloadPlugins, bareModePluginAllow, pluginIdsWithSource, mergePluginErrors };
+export { bareModePluginAllow, refreshActivePlugins, pluginIdsWithSource, mergePluginErrors, noReloadPlugins };

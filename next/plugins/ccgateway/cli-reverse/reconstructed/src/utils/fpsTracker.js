@@ -3,13 +3,13 @@
  *
  * 帧率统计器（记录渲染帧时间）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fpsTracker.ts
- * pieces: chunk-7fw14qgv.js (1)
+ * pieces: chunk-yq5f910z.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-7fw14qgv.js:2195-2904 fingerprint (2.1.88 match: FpsTracker, 0.901)
+//@ chunk-yq5f910z.js:2232-2941 fingerprint (2.1.88 match: FpsTracker, 0.901)
 class FpsTracker {
   frameDurations = [];
   totalFrames = 0;

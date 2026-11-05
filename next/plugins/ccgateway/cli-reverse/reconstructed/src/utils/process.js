@@ -3,10 +3,10 @@
  *
  * 进程 I/O 健壮性：stdout/stderr 断管处理、写入结果、排空预算与外部时钟、丢弃计数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/process.ts
- * pieces: chunk-24t3dkzb.js (1), chunk-fy5kn7m3.js (2), chunk-j3nx1xyn.js (23), chunk-ksvdmrg0.js (1)
- * attribution: fingerprint 2, placement 25
+ * pieces: chunk-ndcj3jv5.js (23), chunk-ntm2y5qw.js (2), chunk-xd1cb3xs.js (1), chunk-y2nrbm62.js (1)
+ * attribution: placement 25, fingerprint 2
  */
 import { withTimeout, sleep } from "./sleep.js";
 import { bindAsyncResource } from "./asyncResourceBind.js";
@@ -19,14 +19,14 @@ import { getErrorCodeString } from "./errors.js";
 import { recordSlowestWrite } from "../ink/terminal.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-j3nx1xyn.js:1084-1179 placement
+//@ chunk-ndcj3jv5.js:1085-1180 placement
 var STREAM_GONE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var _;
-deferInit("chunk-j3nx1xyn.js:1084", () => {
+deferInit("chunk-ndcj3jv5.js:1085", () => {
   STREAM_GONE_CODES = new Set(["EPIPE", "EIO", "ENXIO", "EBADF"]);
   _ = new Set(["EISDIR", "ENOTCONN", "ECONNRESET"]);
 });
-//@ chunk-j3nx1xyn.js:1179-1325 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-ndcj3jv5.js:1180-1326 placement (2.1.88 match: isConnectionError, 1)
 /**
  * 错误码是否属于可重试的瞬时网络/文件错误。
  */
@@ -37,7 +37,7 @@ function isStdinUnusableError(err) {
       : undefined;
   return code !== undefined && (_.has(code) || STREAM_GONE_CODES.has(code));
 }
-//@ chunk-j3nx1xyn.js:1325-1439 placement (2.1.88 match: registerProcessOutputErrorHandlers, 0.639)
+//@ chunk-ndcj3jv5.js:1326-1440 placement (2.1.88 match: registerProcessOutputErrorHandlers, 0.64)
 /**
  * stdout/stderr 管道断开（EPIPE 等）时销毁流并回调，不让进程崩溃。
  */
@@ -51,7 +51,7 @@ function handleStreamGoneErrors(stream, onGone) {
     }
   });
 }
-//@ chunk-j3nx1xyn.js:1439-1655 placement
+//@ chunk-ndcj3jv5.js:1440-1656 placement
 /**
  * 为 stdin/stdout/stderr 注册断流处理。
  */
@@ -66,7 +66,7 @@ function registerProcessIOErrorHandlers(onStreamError) {
     stderrWriter.giveUpOnUnflushed();
   });
 }
-//@ chunk-j3nx1xyn.js:1655-1771 placement
+//@ chunk-ndcj3jv5.js:1656-1772 placement
 /**
  * 写流并返回 accepted/backed-up/dropped。
  */
@@ -74,7 +74,7 @@ function writeOut(stream, data, callback) {
   if (stream.destroyed || stream.writableEnded) return "dropped";
   return stream.write(data, callback) === false ? "backed-up" : "accepted";
 }
-//@ chunk-j3nx1xyn.js:1771-3294 placement
+//@ chunk-ndcj3jv5.js:1772-3295 placement
 class StdoutDrainState {
   everWritten = false;
   drainPromise = undefined;
@@ -148,12 +148,12 @@ class StdoutDrainState {
     Object.assign(this, new StdoutDrainState());
   }
 }
-//@ chunk-j3nx1xyn.js:3294-3306 placement
+//@ chunk-ndcj3jv5.js:3295-3307 placement
 var stdoutDrain; // deferred: uses StdoutDrainState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-j3nx1xyn.js:3294", () => {
+deferInit("chunk-ndcj3jv5.js:3295", () => {
   stdoutDrain = new StdoutDrainState();
 });
-//@ chunk-j3nx1xyn.js:3306-3448 placement
+//@ chunk-ndcj3jv5.js:3307-3449 placement
 /**
  * writeToStdout：写 stdout 并记录排队/已刷字节（退出前排空用）。
  */
@@ -167,7 +167,7 @@ function writeToStdout(text) {
   )
     stdoutDrain.recordQueued(byteLength);
 }
-//@ chunk-j3nx1xyn.js:3448-3681 placement
+//@ chunk-ndcj3jv5.js:3449-3682 placement
 /**
  * drainStdoutBeforeExit：结束 stdout 并等待刷完，超时按积压字节放宽（上限 30 s）。
  */
@@ -181,35 +181,35 @@ async function drainStdoutBeforeExit(budgetMs = 2000, { scaleBudgetToQueue = tru
     "stdout drain timeout (exit)",
   ).catch(() => {});
 }
-//@ chunk-j3nx1xyn.js:3681-3722 placement
+//@ chunk-ndcj3jv5.js:3682-3722 placement
 /**
  * 声明 stdout 排空由外部时钟驱动（信号退出时）。
  */
 function markStdoutDrainExternallyClocked() {
   stdoutDrain.markExternallyClocked();
 }
-//@ chunk-j3nx1xyn.js:3722-3768 placement
+//@ chunk-ndcj3jv5.js:3722-3768 placement
 /**
  * 退出是否由外部时钟驱动。
  */
 function isExitExternallyClocked() {
   return stdoutDrain.isExternallyClocked();
 }
-//@ chunk-j3nx1xyn.js:3768-3839 placement
+//@ chunk-ndcj3jv5.js:3768-3839 placement
 function waitExternallyClocked(delayMs) {
   return stdoutDrain.ensureExternallyClockedPromise().then(() => sleep(delayMs));
 }
-//@ chunk-j3nx1xyn.js:3839-3860 placement
+//@ chunk-ndcj3jv5.js:3839-3860 placement
 var STDOUT_DRAIN_BYTES_PER_SEC = 262144;
 var MAX_STDOUT_DRAIN_MS = 30000;
-//@ chunk-j3nx1xyn.js:3860-3903 placement
+//@ chunk-ndcj3jv5.js:3860-3903 placement
 /**
  * stdout 尚未刷出的字节数。
  */
 function outstandingStdoutBytes() {
   return stdoutDrain.outstandingBytes();
 }
-//@ chunk-j3nx1xyn.js:3903-3979 placement
+//@ chunk-ndcj3jv5.js:3903-3979 placement
 /**
  * 按积压字节估算 stdout 排空预算（2 s 起，最多 30 s）。
  */
@@ -219,16 +219,16 @@ function getStdoutDrainBudgetMs(budgetMs = 2000) {
     Math.max(budgetMs, Math.ceil((outstandingStdoutBytes() * 1000) / STDOUT_DRAIN_BYTES_PER_SEC)),
   );
 }
-//@ chunk-j3nx1xyn.js:3979-4014 placement
+//@ chunk-ndcj3jv5.js:3979-4015 placement
 var STDERR_BACKLOG_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STDERR_BACKLOG_MS;
 var stderrScheduler;
-deferInit("chunk-j3nx1xyn.js:3979", () => {
+deferInit("chunk-ndcj3jv5.js:3979", () => {
   STDERR_BACKLOG_BYTES = 1048576;
   STDERR_BACKLOG_MS = 1e4;
   stderrScheduler = bindAsyncResource((task) => task());
 });
-//@ chunk-j3nx1xyn.js:4014-4872 placement
+//@ chunk-ndcj3jv5.js:4015-4873 placement
 class StderrWriter {
   unflushed = {
     length: 0,
@@ -290,26 +290,26 @@ class StderrWriter {
     }
   }
 }
-//@ chunk-j3nx1xyn.js:4872-4903 placement
+//@ chunk-ndcj3jv5.js:4873-4904 placement
 var stderrWriter; // deferred: uses StderrWriter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-j3nx1xyn.js:4872", () => {
+deferInit("chunk-ndcj3jv5.js:4873", () => {
   stderrWriter = identity(new StderrWriter(), (writer) => writer.reset());
 });
-//@ chunk-j3nx1xyn.js:4903-4949 placement
+//@ chunk-ndcj3jv5.js:4904-4950 placement
 /**
  * writeToStderr：积压超过 10 s 且 1 MiB 时可丢弃消息并在下一行注明。
  */
 function writeToStderr(text, { mayDrop = false } = {}) {
   stderrWriter.write(text, mayDrop);
 }
-//@ chunk-j3nx1xyn.js:4949-4991 placement
+//@ chunk-ndcj3jv5.js:4950-4992 placement
 /**
  * 累计丢弃的 stderr 消息数。
  */
 function getStderrDroppedTotal() {
   return stderrWriter.getDroppedTotal();
 }
-//@ chunk-j3nx1xyn.js:4991-5072 placement
+//@ chunk-ndcj3jv5.js:4992-5073 placement
 /**
  * exitWithError：console.error 后以 1 退出。
  */
@@ -318,7 +318,7 @@ function exitWithError(message) {
   if (!isDisklessProcess()) setBgExitCause("exit_with_error");
   process.exit(1);
 }
-//@ chunk-j3nx1xyn.js:5072-5412 placement (2.1.88 match: peekForStdinData, 0.714)
+//@ chunk-ndcj3jv5.js:5073-5413 placement (2.1.88 match: peekForStdinData, 0.714)
 /**
  * peekForStdinData：在超时内探测 stdin 是否有数据或已结束。
  */
@@ -344,7 +344,7 @@ function peekForStdinData(stream, ms) {
     stream.once("data", onFirstData);
   });
 }
-//@ chunk-j3nx1xyn.js:5412-5801 placement
+//@ chunk-ndcj3jv5.js:5413-5802 placement
 async function* iterateStreamUntilClose(stdin) {
   if (stdin.readableEnded || stdin.destroyed) return;
   let closedSentinel = Symbol("stream-closed");
@@ -373,12 +373,12 @@ async function* iterateStreamUntilClose(stdin) {
     iterator.return?.().catch(() => {});
   }
 }
-//@ chunk-fy5kn7m3.js:27151-27228 placement (2.1.88 match: NEWLINE, 1)
+//@ chunk-ntm2y5qw.js:28167-28244 placement
 async function writeStdStreamOrThrow(streamName, data) {
   if (!(await writeStream(process[streamName], data)) && streamName === "stdout")
     throw new GhApiResponseError();
 }
-//@ chunk-fy5kn7m3.js:27228-27481 placement
+//@ chunk-ntm2y5qw.js:28244-28497 placement
 function writeStream(stream, data) {
   if (stream.destroyed || stream.writableEnded) return Promise.resolve(false);
   let { promise, resolve } = Promise.withResolvers();
@@ -391,7 +391,7 @@ function writeStream(stream, data) {
     stream.off("close", fail);
   });
 }
-//@ chunk-ksvdmrg0.js:32581-32635 fingerprint (2.1.88 match: writeOut, 1)
+//@ chunk-y2nrbm62.js:20302-20356 fingerprint (2.1.88 match: writeOut, 1)
 function writeOut_2(stream, data) {
   if (stream.destroyed) return;
   stream.end(
@@ -400,7 +400,7 @@ function writeOut_2(stream, data) {
 `,
   );
 }
-//@ chunk-24t3dkzb.js:4009-4238 fingerprint (2.1.88 match: handleEPIPE, 0.407)
+//@ chunk-xd1cb3xs.js:4009-4238 fingerprint (2.1.88 match: handleEPIPE, 0.408)
 /**
  * 写 stdout，容忍死管道（EIO/EPIPE）时标记 stdoutDead。
  */
@@ -424,23 +424,23 @@ function handleEPIPE(stats, text) {
   recordSlowestWrite(stats, startTime, bytes);
 }
 export {
+  writeToStderr,
   writeToStdout,
-  iterateStreamUntilClose,
+  markStdoutDrainExternallyClocked,
+  outstandingStdoutBytes,
+  drainStdoutBeforeExit,
   isStdinUnusableError,
   peekForStdinData,
   writeOut,
-  writeToStderr,
-  markStdoutDrainExternallyClocked,
-  outstandingStdoutBytes,
   handleEPIPE,
-  getStderrDroppedTotal,
-  STREAM_GONE_CODES,
-  drainStdoutBeforeExit,
-  exitWithError,
-  handleStreamGoneErrors,
+  iterateStreamUntilClose,
   registerProcessIOErrorHandlers,
   getStdoutDrainBudgetMs,
+  getStderrDroppedTotal,
+  isExitExternallyClocked,
+  STREAM_GONE_CODES,
+  exitWithError,
+  handleStreamGoneErrors,
   writeStdStreamOrThrow,
   writeOut_2,
-  isExitExternallyClocked,
 };

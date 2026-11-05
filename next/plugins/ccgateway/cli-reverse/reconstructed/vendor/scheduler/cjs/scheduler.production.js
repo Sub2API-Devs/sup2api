@@ -1,14 +1,14 @@
 /**
  * scheduler/cjs/scheduler.production.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: scheduler@0.26.0..0.28.0
- * pieces: chunk-bzr73sfg.js (12)
+ * pieces: chunk-2avr6cej.js (12)
  * attribution: esm-layout 4, esm-fingerprint 7
  */
 import { defineExports, __esm } from "../../../runtime/bun-runtime.js";
 import { schedulerExports } from "./scheduler-unstable_post_task.development.js";
 
-//@ chunk-bzr73sfg.js:2546-3596 esm-fingerprint (moved: shares a binding it assigns)
+//@ chunk-2avr6cej.js:2546-3596 esm-fingerprint (moved: shares a binding it assigns)
 defineExports(
   schedulerExports,
   {
@@ -50,7 +50,7 @@ defineExports(
     unstable_wrapCallback: (wrapCallback) => (unstableWrapCallback = wrapCallback),
   },
 );
-//@ chunk-bzr73sfg.js:3596-3717 esm-layout
+//@ chunk-2avr6cej.js:3596-3717 esm-layout
 function push(heap, node) {
   var index = heap.length;
   heap.push(node);
@@ -64,11 +64,11 @@ function push(heap, node) {
     } else break e;
   }
 }
-//@ chunk-bzr73sfg.js:3717-3762 esm-layout
+//@ chunk-2avr6cej.js:3717-3762 esm-layout
 function peek(heap) {
   return heap.length === 0 ? null : heap[0];
 }
-//@ chunk-bzr73sfg.js:3762-4050 esm-layout
+//@ chunk-2avr6cej.js:3762-4050 esm-layout
 function pop(heap) {
   if (heap.length === 0) return null;
   var first = heap[0];
@@ -99,12 +99,12 @@ function pop(heap) {
   }
   return first;
 }
-//@ chunk-bzr73sfg.js:4050-4122 esm-fingerprint
+//@ chunk-2avr6cej.js:4050-4122 esm-fingerprint
 function compare(a, b) {
   var diff = a.sortIndex - b.sortIndex;
   return diff !== 0 ? diff : a.id - b.id;
 }
-//@ chunk-bzr73sfg.js:4122-4282 esm-fingerprint
+//@ chunk-2avr6cej.js:4122-4282 esm-fingerprint
 function advanceTimers(currentTime) {
   for (var timer = peek(timerQueue); timer !== null;) {
     if (timer.callback === null) pop(timerQueue);
@@ -116,7 +116,7 @@ function advanceTimers(currentTime) {
     timer = peek(timerQueue);
   }
 }
-//@ chunk-bzr73sfg.js:4282-4406 esm-fingerprint
+//@ chunk-2avr6cej.js:4282-4406 esm-fingerprint
 function handleTimeout(currentTime) {
   isHostTimeoutScheduled = false;
   advanceTimers(currentTime);
@@ -132,11 +132,11 @@ function handleTimeout(currentTime) {
       if (firstTimer !== null) requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
     }
 }
-//@ chunk-bzr73sfg.js:4406-4463 esm-fingerprint
+//@ chunk-2avr6cej.js:4406-4463 esm-fingerprint
 function shouldYieldToHost() {
   return needsPaint ? true : schedulerExports.unstable_now() - startTime < frameInterval ? false : true;
 }
-//@ chunk-bzr73sfg.js:4463-5029 esm-fingerprint
+//@ chunk-2avr6cej.js:4463-5029 esm-fingerprint
 function performWorkUntilDeadline() {
   needsPaint = false;
   if (isMessageLoopRunning) {
@@ -198,13 +198,13 @@ function performWorkUntilDeadline() {
     }
   }
 }
-//@ chunk-bzr73sfg.js:5029-5088 esm-fingerprint
+//@ chunk-2avr6cej.js:5029-5088 esm-fingerprint
 function requestHostTimeout(handleTimeout, timeoutMs) {
   taskTimeoutID = localSetTimeout(function () {
     handleTimeout(schedulerExports.unstable_now());
   }, timeoutMs);
 }
-//@ chunk-bzr73sfg.js:5088-6328 esm-layout
+//@ chunk-2avr6cej.js:5088-6328 esm-layout
 var unstableNow = undefined;
 var localPerformance;
 var localDate;
@@ -356,7 +356,7 @@ var unstableWrapCallback = function (callback) {
     }
   };
 };
-//@ chunk-bzr73sfg.js:6328-6890 esm-fingerprint
+//@ chunk-2avr6cej.js:6328-6890 esm-fingerprint
 var init_scheduler_production = __esm(() => {
   if (typeof performance === "object" && typeof performance.now === "function") {
     localPerformance = performance;

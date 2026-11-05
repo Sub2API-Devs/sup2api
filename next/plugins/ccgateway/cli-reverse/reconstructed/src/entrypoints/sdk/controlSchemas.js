@@ -3,10 +3,10 @@
  *
  * 并入已有模块：SDK 控制协议 schema（initialize、interrupt、can_use_tool、钩子回调、mcp 消息、cancel_async 等）与控制请求注册表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/sdk/controlSchemas.ts
- * pieces: chunk-08945j39.js (1), chunk-18hwfzwa.js (5), chunk-1qpz7qcd.js (1), chunk-3wek6r2k.js (1), chunk-54xbtc53.js (2), chunk-bwbq4xvm.js (3), chunk-e6aww6q8.js (1), chunk-hm0ce8vc.js (2), chunk-kcvmr83c.js (1), chunk-tyg7f3ek.js (2), chunk-z4g2ta8k.js (1)
- * attribution: fingerprint 14, sole-consumer 1, affinity 2, placement 3
+ * pieces: chunk-0h9p4sxp.js (2), chunk-0tcpyvr1.js (1), chunk-0yw3taqg.js (2), chunk-1kk50rk6.js (1), chunk-5dqwe9kx.js (1), chunk-5xgkngpb.js (1), chunk-7kayq7nc.js (4), chunk-asf5gh8x.js (2), chunk-ck4jrdtf.js (1), chunk-czq1j3j2.js (4), chunk-h29vk4wn.js (1), chunk-hjswk319.js (1)
+ * attribution: affinity 2, fingerprint 14, placement 4, sole-consumer 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -24,6 +24,7 @@ import {
   looseObject,
   lazy,
 } from "../../../vendor/zod/v4/classic/schemas.js";
+import { hookFailureModeSchema } from "../../schemas/hooks.js";
 import {
   HookEventNameSchema,
   SDKSdkMessageSchema,
@@ -72,9 +73,14 @@ import {
   MCP_ASK_FOR_TOOLS_MAX,
 } from "../../types/permissions.js";
 import { parseToolOutputSchema } from "../../services/mcp/schemaParse.js";
-import { LAUNCHER_END_REASONS } from "../../utils/auth/launcherHostLogin.js";
 import { tryRenderShutdownMessage } from "../../components/messages/ShutdownMessage.js";
 import {
+  SDKMessageRatedMessageRatedMessageSchema,
+  MessageRatedResponseSchema,
+  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema,
+  OAuthTokenRefreshResponseSchema,
+  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema,
+  HostAuthTokenRefreshResponseSchema,
   SDKUiAttachUiAttachMessageSchema,
   UiAttachResponseSchema,
   SDKUiDetachUiDetachMessageSchema,
@@ -125,6 +131,7 @@ import {
   SDKControlRequestInnerSchema,
 } from "./uiControlSchemas.js";
 import { unwrapAbortReason } from "../../utils/abortController.js";
+import { redactsOrPersists } from "../../cli/transportState.js";
 import { getRemoteCaps, isRemoteControlChannelAvailable } from "../../remote/remoteMode.js";
 import { logError } from "../../utils/log.js";
 import { getControlRequestSubtype as getControlRequestSubtype_2 } from "../../bridge/controlRequests.js";
@@ -139,7 +146,7 @@ import { READ_ONLY_CONTROL_COMMAND_NAMES } from "../../bridge/replBridgeControl.
 import { createPermissionRequestMessage } from "../../utils/permissions/permissions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:501647-604200 placement
+//@ chunk-7kayq7nc.js:542616-646655 placement
 /**
  * SDK 控制协议 schema 大段（一个 var 语句里约 70 个 lazy schema）：initialize、interrupt、can_use_tool、set_model、mcp_status、get_usage、cloud session、记忆/技能/Chrome/沙箱对话框、context usage、mcp_call、rewind_files 等请求与响应。首个绑定是 MCP JSON-RPC 消息占位 schema。
  */
@@ -208,10 +215,7 @@ var SDKContextUsageCategorySchema;
 var SDKContextUsageGridSquareSchema;
 var SDKControlGetContextUsageStrictResponseSchema;
 var SDKMcpCallMcpCallMessageSchema;
-var SDKControlMcpCallResponseSchema;
-var SDKRewindFilesRewindFilesMessageSchema;
-var SDKControlRewindFilesResponseSchema;
-deferInit("chunk-bwbq4xvm.js:501647", () => {
+deferInit("chunk-7kayq7nc.js:542616", () => {
   JSONRPCMessagePlaceholder = DoctorLazy(() =>
     unknown().describe(
       "A JSON-RPC 2.0 message as defined by the Model Context Protocol (request, notification, or response object).",
@@ -224,6 +228,9 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
         "Opaque ids chosen by the client, one per hook function it registered for this matcher. When the hook fires the CLI sends a hook_callback control request carrying one of these ids as callback_id; the client maps it back to its function.",
       ),
       timeout: numberSchema().optional(),
+      onFailure: hookFailureModeSchema().describe(
+        "What a failure of these callbacks does: the client answered the hook_callback request with an error, or with an answer that fails validation. 'continue' (default): the failure is reported and the action goes ahead. 'block': the failure counts as a block, as it does for a command hook, so the action the event guards (a tool call, a permission request, a prompt) is blocked. Ignored on Stop, SubagentStop, TaskCompleted and TeammateIdle.",
+      ),
     }).describe("Configuration for matching and routing hook callbacks."),
   );
   SDKInitializeInitializeMessageSchema = DoctorLazy(() =>
@@ -452,6 +459,11 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
         .describe(
           "Whether the `hooks` this initialize carried were registered: true on a session's first initialize, and on a repeated initialize from the process that owns the CLI's stdin (its set replaces the one registered earlier); false when a repeated initialize's hooks were ignored (a client joining a remote session another client configured). Absent when the request carried no hooks, and on CLIs that predate the field \u2014 those ignored `hooks` on every repeated initialize.",
         ),
+      hook_on_failure_supported: booleanSchema()
+        .optional()
+        .describe(
+          'True on every initialize reply from a CLI that honors `onFailure` on hook matchers. Absent on CLIs that predate the option, which ignore it (a failed callback set to "block" lets the action run), and from responders that do not run the host\'s hooks. A host that sets "block" must not go on without it; the TypeScript SDK refuses the session. It says nothing of this request\'s hooks: `hooks_applied` does, and the TypeScript SDK also refuses a first initialize that reads `hooks_applied: false` when a matcher sets "block".',
+        ),
       code_running_mcp_tools_applied: record(stringSchema(), array(stringSchema()))
         .optional()
         .describe(
@@ -591,7 +603,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       for_user_message_uuids: array(stringSchema())
         .optional()
         .describe(
-          "@internal One to eight uuids (case ignored) of user messages whose turn this Stop is for; any other value is read as absent. The current turn is the latest one dequeued for a client's message (it may be over, or not yet started), with every turn started and message taken in since. A Stop that names one of its messages is handled as a plain interrupt (if latched, see still_queued, only for pending work that it names or that answers no client's message), and so is any Stop while the CLI knows of no current turn. Other Stops do nothing and get turn: 'spared', except a few that name queued work (sparesCurrentTurn). Always include the message that opened the turn (user_message_uuid on its first frames, before any re-run): after a restart the CLI knows no other. A turn handed over by turn_handoff has no name: any Stop may stop it, so send a plain one. The uuids are only compared: never stored, logged, sent back or shown to the model. Not read beside cancel_queued:true or send_now:true, nor by older CLIs, which answer without turn.",
+          "@internal One to eight uuids (case ignored) of user messages whose turn this Stop is for; any other value is read as absent. The current turn is the latest one dequeued for a client's message (it may be over, or not yet started), with every turn started and message taken in since. A Stop that names one of its messages is handled as a plain interrupt (if latched, see still_queued, only for pending work that it names or that answers no client's message), and so is any Stop while the CLI knows of no current turn. Other Stops do nothing and get turn: 'spared', except a few that name work that is queued or, on claude -p, read and not yet queued (sparesCurrentTurn). Always include the message that opened the turn (user_message_uuid on its first frames, before any re-run): after a restart the CLI knows no other. A turn handed over by turn_handoff has no name: any Stop may stop it, so send a plain one. The uuids are only compared: never stored, logged, sent back or shown to the model. Not read beside cancel_queued:true or send_now:true, nor by older CLIs, which answer without turn.",
         ),
       worker_epoch: numberSchema()
         .int()
@@ -605,7 +617,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
   SDKControlInterruptResponseSchema = DoctorLazy(() =>
     objectSchema({
       still_queued: array(stringSchema()).describe(
-        'Uuids of async user messages that survive this interrupt: commands still in the queue, plus any batch already dequeued for the imminent turn but not yet reachable by the abort. An interrupt \u2014 plain or cancel_queued:true \u2014 that lands during the FIRST-command prewait window (before the first turn of the session has armed a controller) is additionally LATCHED, scoped to the user-intent work pending at that instant \u2014 the batch already dequeued and parked for the imminent turn, plus the user-intent main-thread commands then in the queue (the work this list enumerates): the first turn to arm that carries any of that doomed work starts already aborted, exactly once, so the listed prewait batch is delivered into an immediately-aborted turn, its frames and result flowing through the normal abort path, instead of running to completion. A turn carrying none of it arms live and leaves the latch waiting: a system delivery turn (for example a replayed host event), or a prompt enqueued after the interrupt \u2014 post-interrupt work is never coalesced with the doomed work and never dies to the latch, so the Stop kills exactly what this receipt listed. The latch is released when the doomed work is retired without arming: if a parked prewait batch is entirely cancelled, the latch is released even when other queued commands remain (those arm and run normally); with nothing parked, it is released once none of the doomed commands remains queued \u2014 work enqueued after the interrupt neither holds it up nor is aborted by it. Survivors that ride any later turn run normally. These WILL run (subject to that latch) unless cancelled first (or unless the request set cancel_queued:true, in which case every uuid-stamped survivor this process holds is removed, emitted a terminal `cancelled` synchronously, and listed under `cancelled` instead \u2014 leaving here only what a client driving a hosted session can no longer recall: a send already in flight to that session, or the first prompt the session was created with; a send that client still holds on its own machine behind a send gate (it waits there until that session is ready to take it) has not gone out, so it is withdrawn and listed under `cancelled` like a queued one, and cancel_async_message can withdraw it too, while a plain interrupt leaves it held and lists it here). Cancellation granularity: uuids still in the queue are individually cancellable via cancel_async_message (the re-run of an interrupted turn that also answers for other client messages only if this interrupt was for it; see the response to that request); once a batch is dequeued and coalesced into one turn, cancelling a NON-representative member uuid is a no-op (its content still runs), while cancelling the batch-representative uuid drops the WHOLE coalesced batch \u2014 in both cases the cancel response reports cancelled:false because the message was no longer in the queue. Coverage caveats: only uuid-STAMPED messages appear (a message enqueued without a uuid still runs but is never listed, so [] does not mean "nothing will run"); only main-thread messages are listed (subagent-addressed messages are out of scope); and the list may include internally-enqueued uuids the client never sent (cron triggers, auto-resume continuations) \u2014 ignore unknown uuids rather than treating them as an error. Ordering: on a clean interrupt this receipt is written before the interrupted turn result; a turn that crashes during interrupt handling emits its error result on a direct-write path that may precede the receipt. Snapshot is taken synchronously with abort processing \u2014 probing the queue after the interrupted result instead always loses the race against the drain loop, which starts the next queued turn immediately.',
+        'Uuids of async user messages that survive this interrupt: commands still in the queue, plus any batch already dequeued for the imminent turn but not yet reachable by the abort, plus any user message this process has read but not yet queued, from its own input stream (held, for instance, while a model change is still being checked or behind start-up work; a message a Remote Control client sent that is still being ingested is not listed). An interrupt \u2014 plain or cancel_queued:true \u2014 that lands during the FIRST-command prewait window (before the first turn of the session has armed a controller) is additionally LATCHED, scoped to the user-intent work pending at that instant \u2014 the batch already dequeued and parked for the imminent turn, plus the user-intent main-thread commands then in the queue or held ahead of it (the work this list enumerates): the first turn to arm that carries any of that doomed work starts already aborted, exactly once, so the listed prewait batch is delivered into an immediately-aborted turn, its frames and result flowing through the normal abort path, instead of running to completion. A turn carrying none of it arms live and leaves the latch waiting: a system delivery turn (for example a replayed host event), or a prompt enqueued after the interrupt \u2014 post-interrupt work is never coalesced with the doomed work and never dies to the latch, so the Stop kills exactly what this receipt listed. The latch is released when the doomed work is retired without arming: if a parked prewait batch is entirely cancelled, the latch is released even when other queued commands remain (those arm and run normally); with nothing parked, it is released once none of the doomed commands remains queued or held \u2014 work enqueued after the interrupt neither holds it up nor is aborted by it. Survivors that ride any later turn run normally. These WILL run (subject to that latch) unless cancelled first (or unless the request set cancel_queued:true, in which case every uuid-stamped survivor this process holds is removed, emitted a terminal `cancelled` synchronously, and listed under `cancelled` instead \u2014 leaving here only what a client driving a hosted session can no longer recall: a send already in flight to that session, or the first prompt the session was created with; a send that client still holds on its own machine behind a send gate (it waits there until that session is ready to take it) has not gone out, so it is withdrawn and listed under `cancelled` like a queued one, and cancel_async_message can withdraw it too, while a plain interrupt leaves it held and lists it here). Cancellation granularity: uuids still in the queue are individually cancellable via cancel_async_message (the re-run of an interrupted turn that also answers for other client messages only if this interrupt was for it; see the response to that request); a listed uuid whose message the process running the session (never a client driving a hosted session) still keeps out of its queue, behind a model change or start-up work, is not yet cancellable that way: cancel_async_message answers cancelled:false for it and plants a cancel-pending mark, which the drain honours once the message is queued and the mid-turn fold of a running turn does not; once a batch is dequeued and coalesced into one turn, cancelling a NON-representative member uuid is a no-op (its content still runs), while cancelling the batch-representative uuid drops the WHOLE coalesced batch \u2014 in both cases the cancel response reports cancelled:false because the message was no longer in the queue. Coverage caveats: only uuid-STAMPED messages appear (a message enqueued without a uuid still runs but is never listed, so [] does not mean "nothing will run"); only main-thread messages are listed (subagent-addressed messages are out of scope); and the list may include internally-enqueued uuids the client never sent (cron triggers, auto-resume continuations) \u2014 ignore unknown uuids rather than treating them as an error. Ordering: on a clean interrupt this receipt is written before the interrupted turn result; a turn that crashes during interrupt handling emits its error result on a direct-write path that may precede the receipt. Snapshot is taken synchronously with abort processing \u2014 probing the queue after the interrupted result instead always loses the race against the drain loop, which starts the next queued turn immediately.',
       ),
       put_back: array(stringSchema())
         .optional()
@@ -625,7 +637,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       cancelled: array(stringSchema())
         .optional()
         .describe(
-          "Present only when the request set cancel_queued:true \u2014 uuids of main-thread commands cancelled by this interrupt: every survivor that would otherwise have appeared under `still_queued`, including any uuid that was mid-fold at the interrupt instant (this request also aborts, so the fold never delivers it). Each listed uuid has been removed (queue-resident) or marked cancel-pending (the first-command prewait window, closed by the drain loop's backstop) and emits a terminal 'cancelled' lifecycle synchronously at the first such interrupt (a repeat interrupt over the same parked batch re-lists the uuid idempotently without re-emitting); none will run. Where one of them is the re-run of an interrupted turn that also answered for other client messages whose re-sent copies had been set aside for it, those messages' uuids are listed behind the commands' too: they were in no queue and never under `still_queued`, each has its terminal 'cancelled' lifecycle, and a repeat interrupt does not list them again. Same coverage caveats as `still_queued` (uuid-stamped main-thread only; internally-enqueued uuids may appear). Advertised by the `interrupt_cancel_queued_v1` capability.",
+          "Present only when the request set cancel_queued:true \u2014 uuids of main-thread commands cancelled by this interrupt: every survivor that would otherwise have appeared under `still_queued`, including any uuid that was mid-fold at the interrupt instant (this request also aborts, so the fold never delivers it). Each listed uuid has been removed (queue-resident), dropped before it was queued (a message this process had read and was still holding), or marked cancel-pending (the first-command prewait window, closed by the drain loop's backstop) and emits a terminal 'cancelled' lifecycle synchronously at the first such interrupt (a repeat interrupt over the same parked batch re-lists the uuid idempotently without re-emitting); none will run. Where one of them is the re-run of an interrupted turn that also answered for other client messages whose re-sent copies had been set aside for it, those messages' uuids are listed behind the commands' too: they were in no queue and never under `still_queued`, each has its terminal 'cancelled' lifecycle, and a repeat interrupt does not list them again. Same coverage caveats as `still_queued` (uuid-stamped main-thread only; internally-enqueued uuids may appear). Advertised by the `interrupt_cancel_queued_v1` capability.",
         ),
     }).describe(
       "Result of an interrupt operation. Advertised by the interrupt_receipt_v1 capability on system/init; older CLIs send an empty success response with no still_queued field.",
@@ -687,7 +699,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       suppress_always_allow_rule: booleanSchema()
         .optional()
         .describe(
-          `True when the dialog must not offer the persistent "don't ask again" row for this ask: accepting it would write a whole-tool allow rule broader than the ask's own verb (PermissionAskDecision.suppressAlwaysAllowRule). Hosts rendering approve options should omit any persistent-rule affordance when set.`,
+          `True when the dialog must not offer the persistent "don't ask again" row for this ask: accepting it would write a whole-tool allow rule broader than the ask's own verb (PermissionAskDecision.suppressAlwaysAllowRule), or the ask comes from a run a plugin started, where Claude Code saves no rule from the answer, not even for the session. Hosts rendering approve options should omit any persistent-rule affordance when set.`,
         ),
       default_to_no: booleanSchema()
         .optional()
@@ -716,7 +728,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       requires_user_interaction: booleanSchema()
         .optional()
         .describe(
-          "True when one-tap Approve/Deny must not be offered: the tool's approval card IS the user-interaction surface (Tool.requiresUserInteraction(): the user responds on the card itself), OR the pending ask is localDisplayOnly (its consent disclosure cannot ride this wire and only the local dialog renders it), OR the auto-mode classifier blocked the call and it was handed to a person (decision_reason_type 'classifier' on a person-only ask), which no stored grant or automatic approval may answer, OR the MCP server's name spells a claude.ai connector's key and the server came from neither claude.ai nor whoever launched the session, so a grant keyed on the tool name must not answer it, OR the SDK host worded the ask (title and description are its consent copy, which a push cannot carry whole), OR the ask is the one made before the first upload by file reference to a connector, which no stored grant or automatic approval may answer. In each case the user has to open the session to answer.",
+          "True when one-tap Approve/Deny must not be offered: the tool's approval card IS the user-interaction surface (Tool.requiresUserInteraction(): the user responds on the card itself), OR the pending ask is localDisplayOnly (its consent disclosure cannot ride this wire and only the local dialog renders it), OR the auto-mode classifier blocked the call and it was handed to a person (decision_reason_type 'classifier' on a person-only ask), which no stored grant or automatic approval may answer, OR a grant keyed on the tool name must not answer it: the MCP server's name spells a claude.ai connector's key and the server came from neither claude.ai nor whoever launched the session, or, while Claude Code enforces grants, two tools of the server get that name, OR the SDK host worded the ask (title and description are its consent copy, which a push cannot carry whole), OR the ask is the one made before the first upload by file reference to a connector, which no stored grant or automatic approval may answer. In each case the user has to open the session to answer.",
         ),
       server_prompt: stringSchema()
         .optional()
@@ -832,7 +844,7 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       liveReply: booleanSchema()
         .optional()
         .describe(
-          "When true and the CLI writes to the session through CCR (a cloud session's worker, or a Remote Control worker), the success reply is published only to the clients attached at that moment, as a control_response marked live_only: true on the session's unsequenced event stream, and is not stored with the session's events; on a cloud session's worker its rows embed each server's configuration (URLs, headers, OAuth settings). Set it only if your client reads control_response frames from that stream; a reply sent while its stream is down is lost and the request must be sent again, and a reply over the live size limit comes back as a live error instead. Error replies other than that size-limit error, and every reply from hosts that do not send live replies (stdio hosts, and CLIs older than this field), are ordinary stored replies, so a client that sets it must accept either.",
+          "When true and the CLI writes to the session through CCR (a cloud session's worker, or a Remote Control worker), the success reply is published only to the clients attached at that moment, as a control_response marked live_only: true on the session's unsequenced event stream, and is not stored with the session's events; a cloud session's worker that does not advertise `mcp_status_no_config_v1` embeds each server's configuration (URLs, headers, OAuth settings) in its rows. Set it only if your client reads control_response frames from that stream; a reply sent while its stream is down is lost and the request must be sent again; a reply too large to send in full leaves out each server's `tools`, `serverInfo` and `capabilities` and sends only how many tools it has, and one still over the live size limit comes back as a live error instead. Error replies other than that size-limit error, and every reply from hosts that do not send live replies (stdio hosts, and CLIs older than this field), are ordinary stored replies, so a client that sets it must accept either.",
         ),
     }).describe("Requests the current status of all MCP server connections."),
   );
@@ -1435,6 +1447,11 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
       overrides_locked: booleanSchema().describe(
         "Whether the unsandboxed-fallback override cannot be changed from the project: set by policy (locked, or unsandboxed commands forbidden), or held closed (allowUnsandboxedCommands: false) by a --settings file or user settings.",
       ),
+      policy_origins: array(stringSchema())
+        .optional()
+        .describe(
+          "The managed (policy) settings sources at this read, as codes; empty when there are none. Absent from a Claude Code older than this field: treat that as another source. First the sources, highest precedence first. 'helper': a policy helper armed on this machine (one armed by server-managed settings counts as 'remote'); the codes after it are the sources beneath it, which may take no part. 'remote': server-managed settings. 'plist' or 'hklm': MDM. 'file': the managed settings file or its drop-ins. 'parent': --managed-settings or the SDK's managedSettings, where they take part; it stands for all the host passed: where that includes a hybrid organization's settings, the policy is not the host's alone. 'hkcu': the user's registry block, unless empty: listed where it serves and where 'parent', 'helper' or 'remote' displaces it; beneath 'hklm' or 'file' it is not read at all. Then two that say a source is missing. 'remote_unknown': this session counts as due server-managed settings and has none (the fetch failed, or is under way with no cached copy that holds settings); under any other verdict of the process on whether it is due them, or none, there is no code for what is missing, though its organization may have set some (desktop-host-contract.md D19a). 'unreadable': a document of the machine's administrator that exists and did not load (unreadable, or not valid JSON). Every administrator source that holds a setting is listed, even where a higher source leaves it unapplied; a source holding only the managedSourcesBehavior or wslInheritsWindowsSettings knob is not, nor one of whose policy this client reads nothing where another is listed, and one passed over for authoring nothing always has a listed one beneath it. New sources get new codes: treat an unknown code as another source.",
+        ),
       enabled: booleanSchema().describe(
         "Whether sandboxing is running in this session: on in the settings, and the sandbox started.",
       ),
@@ -1742,84 +1759,15 @@ deferInit("chunk-bwbq4xvm.js:501647", () => {
         'STAGED calls (input_files/output_files declared) additionally stage lane rows in/out around the call \u2014 see the input_files describe. Staged failures come back as a success-subtype response whose staging field carries a typed error_code; subtype:error is emitted only when the call could not be attempted at all (server not connected, kill switch, dispatch failure) and means nothing ran. A target server that is not yet connected is brought up on demand: dispatch runs the deferred plugin/MCP startup resolution (the work a first model turn would have done) and waits up to 30s \u2014 shortened by expires_at when that is sooner \u2014 for the server to connect before answering "MCP server not connected", so a dispatch that races plugin startup (e.g. after an idle-wake reattach) succeeds instead of failing until a turn runs. Standard RPC semantics: a redelivered request_id supersedes the in-flight run (it is aborted and its response suppressed \u2014 exactly one response per request_id); conversion is idempotent, so re-running is safe. Cancellable via control_cancel_request.',
     ),
   );
-  SDKControlMcpCallResponseSchema = DoctorLazy(() =>
-    objectSchema({
-      content: unknown(),
-      structuredContent: record(stringSchema(), unknown()).optional(),
-      _meta: record(stringSchema(), unknown())
-        .optional()
-        .describe(
-          "The result's own `_meta`, minus the server's keys under the CLI-reserved `com.anthropic/` prefix. Absent when nothing is left. The `_meta` of a block inside `content` is not filtered.",
-        ),
-      staging: union([
-        objectSchema({
-          ok: literal(true),
-          outputs: array(
-            objectSchema({
-              lane_path: stringSchema(),
-              etag: stringSchema().describe("Opaque lane etag returned by the durable-at-ack PUT."),
-              bytes: numberSchema().int(),
-            }),
-          ),
-          inputs_used: array(
-            objectSchema({
-              lane_path: stringSchema(),
-              etag: stringSchema(),
-            }),
-          ).describe("Lane etag each staged input actually carried."),
-        }),
-        objectSchema({
-          ok: literal(false),
-          error_code: _enum([
-            "expired",
-            "input_missing",
-            "output_too_large",
-            "output_conflict",
-            "timeout",
-            "tool_error",
-          ]),
-          detail: stringSchema().describe(
-            "Plain-text detail for the requesting client. May carry user-document content (tool output, lane paths) \u2014 surface it to the user where helpful, but do not log it verbatim or feed it to analytics.",
-          ),
-          retryable: booleanSchema()
-            .optional()
-            .describe(
-              "Present when the failure class is known (lane transport verdict, CAS rejection): true = safe to re-drive with the same request_id, false = deterministic. Absent = unknown; treat as non-retryable and switch on error_code.",
-            ),
-        }),
-      ])
-        .optional()
-        .describe(
-          "Present exactly when the request used any staged-call field (input_files, output_files, expires_at, timeout_ms) \u2014 such calls run through the staging engine even with no files, so expires_at is always honored. The error_code set is a stable cross-repo contract \u2014 extend it, never rename or repurpose members. A failure makes no guarantee about partial effects: earlier outputs may already have landed; retry with the same request_id is safe for outputs without if_match (unconditional PUTs re-land the same bytes), while if_match outputs surface output_conflict against their own prior write \u2014 reconcile by etag. On staged failures the tool may never have run, so content/structuredContent may be absent.",
-        ),
-    }).describe(
-      "MCP tool result \u2014 the content array, structuredContent, and _meta " +
-        "from CallToolResult. Unless the request set result_not_for_model, content passes through the same processing as model-turn MCP calls (large results may be truncated or redirected to a file). Caller interprets. Staged calls additionally carry a `staging` result.",
-    ),
-  );
-  SDKRewindFilesRewindFilesMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      subtype: literal("rewind_files"),
-      user_message_id: stringSchema(),
-      dry_run: booleanSchema().optional(),
-    }).describe("Rewinds file changes made since a specific user message."),
-  );
-  SDKControlRewindFilesResponseSchema = DoctorLazy(() =>
-    objectSchema({
-      canRewind: booleanSchema(),
-      error: stringSchema().optional(),
-      filesChanged: array(stringSchema()).optional(),
-      insertions: numberSchema().int().optional(),
-      deletions: numberSchema().int().optional(),
-      skippedLinks: numberSchema().optional().describe(SKIPPED_LINKS_DESCRIPTION),
-    }).describe("Result of a rewindFiles operation."),
-  );
 });
-//@ chunk-bwbq4xvm.js:604200-709920 placement
+//@ chunk-7kayq7nc.js:646655-745337 placement
 /**
  * SDK 控制协议 schema 第二部分：cancel_async_message、rewind、cloud session、插件/技能对话框等控制请求与响应。
  */
-var SDKCancelAsyncMessageCancelAsyncMessageMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKControlMcpCallResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKRewindFilesRewindFilesMessageSchema;
+var SDKControlRewindFilesResponseSchema;
+var SDKCancelAsyncMessageCancelAsyncMessageMessageSchema;
 var CancelAsyncMessageResponseSchema;
 var PathAnchorSchema;
 var SDKReadFileReadFileMessageSchema;
@@ -1917,18 +1865,79 @@ var SubmitFeedbackResponseSchema;
 var SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema;
 var SDKRemoteControlWorkSecretRemoteControlWorkSecretMessageSchema;
 var RemoteControlWorkSecretResponseSchema;
-var SDKOauthTokenRefreshOauthTokenRefreshMessageSchema;
-var OAuthTokenRefreshResponseSchema;
-var SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema;
-var HostAuthTokenRefreshResponseSchema;
-var SDKMessageRatedMessageRatedMessageSchema;
-var MessageRatedResponseSchema;
-var RenderElementKinds;
-var RenderChildSchema;
-var HoverStyleSchema;
-var ElementPressHandlerSchema;
-var SDKButtonMessageSchema;
-deferInit("chunk-bwbq4xvm.js:604200", () => {
+deferInit("chunk-7kayq7nc.js:646655", () => {
+  SDKControlMcpCallResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      content: unknown(),
+      structuredContent: record(stringSchema(), unknown()).optional(),
+      _meta: record(stringSchema(), unknown())
+        .optional()
+        .describe(
+          "The result's own `_meta`, minus the server's keys under the CLI-reserved `com.anthropic/` prefix. Absent when nothing is left. The `_meta` of a block inside `content` is not filtered.",
+        ),
+      staging: union([
+        objectSchema({
+          ok: literal(true),
+          outputs: array(
+            objectSchema({
+              lane_path: stringSchema(),
+              etag: stringSchema().describe("Opaque lane etag returned by the durable-at-ack PUT."),
+              bytes: numberSchema().int(),
+            }),
+          ),
+          inputs_used: array(
+            objectSchema({
+              lane_path: stringSchema(),
+              etag: stringSchema(),
+            }),
+          ).describe("Lane etag each staged input actually carried."),
+        }),
+        objectSchema({
+          ok: literal(false),
+          error_code: _enum([
+            "expired",
+            "input_missing",
+            "output_too_large",
+            "output_conflict",
+            "timeout",
+            "tool_error",
+          ]),
+          detail: stringSchema().describe(
+            "Plain-text detail for the requesting client. May carry user-document content (tool output, lane paths) \u2014 surface it to the user where helpful, but do not log it verbatim or feed it to analytics.",
+          ),
+          retryable: booleanSchema()
+            .optional()
+            .describe(
+              "Present when the failure class is known (lane transport verdict, CAS rejection): true = safe to re-drive with the same request_id, false = deterministic. Absent = unknown; treat as non-retryable and switch on error_code.",
+            ),
+        }),
+      ])
+        .optional()
+        .describe(
+          "Present exactly when the request used any staged-call field (input_files, output_files, expires_at, timeout_ms) \u2014 such calls run through the staging engine even with no files, so expires_at is always honored. The error_code set is a stable cross-repo contract \u2014 extend it, never rename or repurpose members. A failure makes no guarantee about partial effects: earlier outputs may already have landed; retry with the same request_id is safe for outputs without if_match (unconditional PUTs re-land the same bytes), while if_match outputs surface output_conflict against their own prior write \u2014 reconcile by etag. On staged failures the tool may never have run, so content/structuredContent may be absent.",
+        ),
+    }).describe(
+      "MCP tool result \u2014 the content array, structuredContent, and _meta " +
+        "from CallToolResult. Unless the request set result_not_for_model, content passes through the same processing as model-turn MCP calls (large results may be truncated or redirected to a file). Caller interprets. Staged calls additionally carry a `staging` result.",
+    ),
+  );
+  SDKRewindFilesRewindFilesMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      subtype: literal("rewind_files"),
+      user_message_id: stringSchema(),
+      dry_run: booleanSchema().optional(),
+    }).describe("Rewinds file changes made since a specific user message."),
+  );
+  SDKControlRewindFilesResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      canRewind: booleanSchema(),
+      error: stringSchema().optional(),
+      filesChanged: array(stringSchema()).optional(),
+      insertions: numberSchema().int().optional(),
+      deletions: numberSchema().int().optional(),
+      skippedLinks: numberSchema().optional().describe(SKIPPED_LINKS_DESCRIPTION),
+    }).describe("Result of a rewindFiles operation."),
+  );
   SDKCancelAsyncMessageCancelAsyncMessageMessageSchema = DoctorLazy(() =>
     objectSchema({
       subtype: literal("cancel_async_message"),
@@ -1958,7 +1967,7 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
       }),
       objectSchema({
         kind: literal("as_written").describe(
-          'For a path copied from one of Claude\'s replies, which may be relative to the cwd of an earlier moment or to the root of the repository, or may lack its leading directories. Send it only to a session whose newest system/init lists the capability read_file_as_written_v1, and send the text without a line suffix (`:12`, `#L12`) or URL scheme. The session tries the text against the live cwd, the git root above that and its working directories. If no file is there, it looks below them for a file whose path ends in the text, among the paths its file state has held: those the file tools of the main conversation have read or written since the process started, or in the transcript it started from, and what a host has seeded or staged. A file that only a sub-agent touched is not among them, nor one that only a shell command touched, unless the command did nothing but print single files plainly (`cat f`, `head f`, `sed -n 1,9p f` and the like, or a lone `grep` that matches), with no pipe or redirect. It reads a file only when exactly one fits or, of several that fit a directory, exactly one is among those paths. The response\'s `absPath` names the file read. Show that path: the file can be a namesake of the one meant. A text that is `~` or starts with `~/`, a text that fits no file or several, a file found in none of the folders of `within`, and a look-up that could not be finished are refused. From such a session a refusal is final for the `within` it was asked with: asking again with a directory of the client\'s own choosing would turn "two files fit" into "the first one wins". A CLI that has `anchor` but predates this kind refuses it.',
+          'For a path copied from one of Claude\'s replies, which may be relative to the cwd of an earlier moment or to the root of the repository, or may lack its leading directories. Send it only to a session whose newest system/init lists the capability read_file_as_written_v1, and send the text without a line suffix (`:12`, `#L12`) or URL scheme. The session tries the text against the live cwd, the git root above that and its working directories. If no file is there, it looks below them for a file whose path ends in the text, among the paths its file state has held: those the file tools of the main conversation have read or written since the process started, or in the transcript it started from, and what a host has seeded or staged. A file that only a sub-agent touched is not among them, nor one that only a shell command touched, unless the command did nothing but print single files plainly (`cat f`, `head f`, `sed -n 1,9p f` and the like, or a lone `grep` that matches), with no pipe or redirect. If none of those paths ends in the text, some sessions on Linux then search the files below their working directories for one whose path ends in it, skipping `.git` and `node_modules` and following no symbolic link. It reads a file only when exactly one fits or, of several that fit a directory, exactly one is among those paths. The response\'s `absPath` names the file read. Show that path: the file can be a namesake of the one meant. A text that is `~` or starts with `~/`, a text that fits no file or several, a file found in none of the folders of `within`, and a look-up that could not be finished are refused. From such a session a refusal is final for the `within` it was asked with: asking again with a directory of the client\'s own choosing would turn "two files fit" into "the first one wins". A CLI that has `anchor` but predates this kind refuses it.',
         ),
         within: array(stringSchema()).describe(
           "The folders the client will show a file from: 1 to 512 absolute, normalized paths of at most 4,096 characters, such as the `cwd` that system/init gave. Required: without it, or with one entry that is unfit, the request is refused. The look-up is the same whatever they are. The one file it settles on is read and named only if its path is one of them or lies below one, by its spelling alone (no symbolic link followed, no case folded; `/` holds nothing); else the request is refused as any other. So they can only narrow what is answered.",
@@ -1996,6 +2005,11 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
         .optional()
         .describe(
           "Set when the request asked for base64. Absent means utf-8 \u2014 including when an older CLI ignored the request's encoding field.",
+        ),
+      lossy: booleanSchema()
+        .optional()
+        .describe(
+          "Present on every utf-8 answer. True when the bytes read were not all valid UTF-8, so `contents` has U+FFFD where bytes were replaced and is not the file's own text: a binary file, text in another encoding, or a read cut inside a character when `truncated` is set. False when `contents` is exactly the bytes read, decoded, even if the file itself contains U+FFFD. Absent on a base64 answer, which is exact, and from an older CLI or tool container: a client that sees neither this nor `encoding: 'base64'` cannot tell whether `contents` is exact.",
         ),
       anchor: _enum(["workspace_root", "diff_root", "repo", "as_written"])
         .optional()
@@ -2055,7 +2069,7 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
     objectSchema({
       subtype: literal("get_workspace_diff"),
     }).describe(
-      "@internal Requests the workspace git diff for the thin-client /diff dialog. The worker resolves one base ref for both stats and hunks (the merge-base with the base branch the session names, else the default branch, when HEAD is on another branch with commits beyond it, so committed and uncommitted changes show together, uncommitted rows first; otherwise working tree vs HEAD) and applies the standard caps (5s git timeout, 50 files, 1MB/file).",
+      "@internal Requests the workspace diff for the thin-client /diff dialog. The worker resolves one base ref for both stats and hunks (the merge-base with the base branch the session names, else the default branch, when HEAD is on another branch with commits beyond it, so committed and uncommitted changes show together, uncommitted rows first; otherwise working tree vs HEAD) and applies the standard caps (5s git timeout, 50 files, 1MB/file).",
     ),
   );
   WorkspaceDiffResponseSchema = DoctorLazy(() =>
@@ -2115,8 +2129,19 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
           }),
         ]),
       }).nullable(),
+      noDiffReason: _enum([
+        "no-repository",
+        "repository-refused",
+        "repository-busy",
+        "diff-failed",
+        "root-moved",
+      ])
+        .optional()
+        .describe(
+          "Why diff is null. Sent with every null diff, never with a diff. no-repository: no repository that could be used was found for the session's folder (today only git repositories are looked for), or an earlier check this session ruled the folder out. repository-refused: the repository chosen in a subfolder failed Claude Code's safety checks (in git: on its .git folder and on the copy Claude Code makes of its config and refs), or that copy could not be made. repository-busy: the repository is part-way through bringing in other changes (in git: a merge, rebase, cherry-pick or revert). diff-failed: a version-control command failed or timed out, or, for a repository chosen in a subfolder on a self-hosted runner, the comparison Claude Code makes itself in place of git diff could not read the repository or ran out of time. root-moved: the repository root changed, or could not be read again, during the request. Every value can change on a later request, so ask again; after no-repository, asking when a turn ends and on a new connection is enough. A Claude Code version that predates the field omits it: treat an absent or unknown value as 'ask again'.",
+        ),
     }).describe(
-      "@internal Workspace git diff for the thin-client /diff dialog. diff is null when the workspace is not a git repo or is in a transient git state (merge/rebase/cherry-pick). Paths in skippedLarge carry no hunks entry at all \u2014 membership alone marks them as too large. An entirely empty hunks array with non-empty perFileStats is not by itself a failure signal: it is the normal shape when all changes are untracked (stats only \u2014 git diff emits no hunks for untracked files) or every file was withheld, and can also occur when the hunks fetch transiently failed and only stats are available.",
+      "@internal Workspace diff for the thin-client /diff dialog. diff is null when no diff could be made; noDiffReason says why. Paths in skippedLarge carry no hunks entry at all \u2014 membership alone marks them as too large. An entirely empty hunks array with non-empty perFileStats is not by itself a failure signal: it is the normal shape when all changes are untracked (stats only: untracked files never carry hunks) or every file was withheld, and can also occur when the hunks fetch transiently failed and only stats are available.",
     ),
   );
   SDKGetPlanGetPlanMessageSchema = DoctorLazy(() =>
@@ -2509,6 +2534,14 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
         .nullable()
         .describe(
           "@internal The wire version the worker will speak with this machine, or null when they have none in common: the machine stays listed and nothing is forwarded to it.",
+        ),
+      tool_host_interface: objectSchema({
+        version: numberSchema().int().min(1),
+        min_version: numberSchema().int().min(1),
+      })
+        .optional()
+        .describe(
+          "@internal The versions of the ToolHost interface that the session speaks, from min_version up to version, on an 'announced' answer to an offer of tools. Absent from an older worker.",
         ),
       passthrough_adopted: numberSchema()
         .int()
@@ -2987,7 +3020,7 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
         "The resource to read. Must use the ui:// scheme; any other URI is refused.",
       ),
     }).describe(
-      'Reads one MCP Apps (SEP-1865) UI resource \u2014 a `ui://` URI, typically the `_meta.ui.resourceUri` a tool declares \u2014 from a connected MCP server the CLI itself dialed, with `resources/read`, for a host that renders it. Read-only and no model turn. The reply is untrusted third-party content (HTML): render it sandboxed. SDK-type MCP servers (config.type === "sdk") are rejected \u2014 they are caller-provided, so the caller can read them directly. Errors name the cause: a non-ui:// URI, an unknown server, a server that managed policy blocks, that is disabled or that the project has not approved (the refusals mcp_reconnect gives), a server that is not connected (failed, pending or needs-auth: send mcp_reconnect; a connected server, or one still listed from the discovery cache, is read through the same connect path a tool call takes), a response over the size limit, or the server\'s own resources/read error. Refused on a lane that redacts what it persists (a Remote Control bridge worker, a tenant worker) and by the client of a cloud-hosted session. Advertised as `mcp_read_resource_v1` in system/init.capabilities.',
+      'Reads one MCP Apps (SEP-1865) UI resource \u2014 a `ui://` URI, typically the `_meta.ui.resourceUri` a tool declares \u2014 from a connected MCP server the CLI itself dialed, with `resources/read`, for a host that renders it. Read-only and no model turn. The reply is untrusted third-party content (HTML): render it sandboxed. SDK-type MCP servers (config.type === "sdk") are rejected \u2014 they are caller-provided, so the caller can read them directly. Errors name the cause: a non-ui:// URI, an unknown server, a server that managed policy blocks, that is disabled or that the project has not approved (the refusals mcp_reconnect gives), a server that is not connected (failed, pending or needs-auth: send mcp_reconnect; a connected server, or one still listed from the discovery cache, is read through the same connect path a tool call takes), a response over the size limit, or the server\'s own resources/read error (over a transport that stores frames, one fixed sentence in its place). Refused on a lane that redacts what it persists (a Remote Control bridge worker, a tenant worker) and by the client of a cloud-hosted session. Advertised as `mcp_read_resource_v1` in system/init.capabilities.',
     ),
   );
   McpReadResourceResponseSchema = DoctorLazy(() =>
@@ -3552,264 +3585,8 @@ deferInit("chunk-bwbq4xvm.js:604200", () => {
       "@internal The re-dispatched base64url work secret for the requested session, or null when the host has none available yet.",
     ),
   );
-  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      subtype: literal("oauth_token_refresh"),
-      kind: literal("sessions")
-        .optional()
-        .describe(
-          "Which host-handed bearer the CLI asks for. Absent: the claude.ai sign-in token (the only meaning hosts that predate the field know). 'sessions': the second token that authorizes the cloud-sessions API, which a host that set CLAUDE_CODE_SDK_HAS_SESSIONS_OAUTH_REFRESH answers; it must belong to the same account and organization as the sign-in token.",
-        ),
-    }).describe(
-      "@internal Request from the CLI subprocess to the SDK host for a fresh OAuth access token: after a 401 with no local refresh token, or, with kind, when the CLI first needs that bearer.",
-    ),
-  );
-  OAuthTokenRefreshResponseSchema = DoctorLazy(() =>
-    objectSchema({
-      accessToken: stringSchema().nullable(),
-      reason: _enum(LAUNCHER_END_REASONS)
-        .optional()
-        .catch(undefined)
-        .describe(
-          "Why the host returned no token (only meaningful when accessToken is null). Absent from hosts that do not say. Null, unknown or malformed values degrade to undefined at parse time (the enum carries `.catch`), so a reason can never cost a delivered token and values can be added without a version bump.",
-        ),
-    }).describe(
-      "@internal Fresh OAuth access token returned by the SDK host getOAuthToken callback, or null when the host has no token available.",
-    ),
-  );
-  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      subtype: literal("host_auth_token_refresh"),
-    }).describe(
-      "@internal Request from the CLI subprocess to the SDK host for a fresh provider credential after a 401 or an AWS / Google Cloud credential failure when the host owns the credential (Cowork 3P).",
-    ),
-  );
-  HostAuthTokenRefreshResponseSchema = DoctorLazy(() =>
-    objectSchema({
-      authToken: stringSchema().nullable(),
-      materialUnchanged: booleanSchema().optional(),
-    }).describe(
-      "@internal Fresh provider bearer token returned by the SDK host getHostAuthToken callback, or null if the credential was refreshed out-of-band. materialUnchanged is only consulted when authToken is null (out-of-band delivery) \u2014 true tells the CLI to fast-fail instead of backing off. A local AWS / Google Cloud credential-chain failure in the CLI is capped at two retries whatever the reply.",
-    ),
-  );
-  SDKMessageRatedMessageRatedMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      subtype: literal("message_rated"),
-      messageUuid: stringSchema().describe("UUID of the assistant message being rated."),
-      sentiment: _enum(["positive", "negative"]).describe(
-        "User rating: positive (thumbs up) or negative (thumbs down).",
-      ),
-      surface: _enum(["tool_use", "assistant_text"])
-        .optional()
-        .describe("Which in-conversation surface the rating came from. If omitted, logged as tool_use."),
-      cleared: booleanSchema()
-        .optional()
-        .describe("True when the caller is un-rating a message (clicking the same control a second time)."),
-    }).describe(
-      "@internal Records a per-message thumbs up/down rating. Logs tengu_message_rated with the same shape as the in-conversation rating controls so Desktop / IDE callers can surface their own native thumbs UI.",
-    ),
-  );
-  MessageRatedResponseSchema = DoctorLazy(() =>
-    objectSchema({}).describe("@internal Empty response for message_rated."),
-  );
-  RenderElementKinds = DoctorLazy(() =>
-    _enum([
-      "AskUserQuestion",
-      "UserMessage",
-      "AssistantMessage",
-      "ToolUse",
-      "ToolResult",
-      "ToolGroup",
-      "ToolProgress",
-      "CommandOutput",
-      "Spinner",
-      "TurnDuration",
-      "InfoNotice",
-      "SessionMode",
-      "PromptHint",
-      "AbovePrompt",
-      "Pane",
-      "Placed",
-    ]).describe(
-      "@internal A component a plugin may draw through `ui.render`: one name per render site of the hooks engine (src/plugins/functionHooks/types/render/render-component.ts).",
-    ),
-  );
-  RenderChildSchema = DoctorLazy(() =>
-    union([stringSchema(), lazy(() => SDKButtonMessageSchema())]).describe(
-      "@internal One child of a render element: a string inside Text (or Box, where the engine wraps it in a Text), or a nested element.",
-    ),
-  );
-  HoverStyleSchema = DoctorLazy(() =>
-    record(stringSchema(), union([stringSchema(), numberSchema(), booleanSchema()])).describe(
-      "@internal Style overrides the surface applies while the pointer is over the nearest keyed Box above the element, or over any member of the hover group `scope` names (a string of the drawing plugin's; two plugins never share a group): a Box's `borderStyle`, `borderColor`, `borderDimColor`, `backgroundColor`, `display` (\"flex\", revealing a Box drawn \"none\") and the offsets of a placed Box; a Text's or a Button label's colors and styles. Plain data the engine validated; nothing that moves a sibling.",
-    ),
-  );
-  ElementPressHandlerSchema = DoctorLazy(() =>
-    objectSchema({
-      plugin: stringSchema(),
-      handle: numberSchema().int(),
-    }).describe(
-      "@internal Where the element's handler lives: the plugin whose hook drew it and the handle its environment keeps the closure under, stamped by the engine as the tree left that hook. What a ui_press, ui_input or ui_select names the element by; a redraw that changed anything hands out new handles.",
-    ),
-  );
-  SDKButtonMessageSchema = DoctorLazy(() =>
-    union([
-      objectSchema({
-        type: _enum(["Box", "Text", "div", "span", "b"]),
-        props: record(stringSchema(), union([stringSchema(), numberSchema(), booleanSchema()]))
-          .optional()
-          .describe(
-            '@internal Layout props on Box (`key` makes it a hover scope; `position` "absolute" with integer `top`/`left`/`right`/`bottom` cell offsets places it over its surroundings, out of the flow), color and style props on Text (with `size`, `weight`, `mono` and `tabular`, which each surface draws its own way; `bold` is true for a `semibold` or `bold` weight, and a `bold: true` with no weight also carries `weight: "semibold"`), spacing on Box in cells (on `desktop` and `mobile` also a step name, `xs` to `xl`), a `style` declaration string on div/span/b; the allowlisted subset the engine validated before the tree crossed.',
-          ),
-        hover: HoverStyleSchema().optional(),
-        group: objectSchema({
-          plugin: stringSchema(),
-        })
-          .optional()
-          .describe(
-            "@internal Whose hover group `hover.scope` names: the plugin whose hook drew the element; present only with a `scope`.",
-          ),
-        part: objectSchema({
-          plugin: stringSchema(),
-        })
-          .optional()
-          .describe(
-            "@internal Whose part of the drawing starts at this Box or Text: set by the engine on each ui.render hook's returned root, so a surface can tell one mod's drawing from another's. A hook's own mark is kept, another plugin's at most as often as next(e) handed it, and an engine node (core's drawing) carries none. A hook above may change what a part holds, so the mark does not prove who wrote it.",
-          ),
-        children: array(lazy(() => RenderChildSchema())).optional(),
-      }),
-      objectSchema({
-        type: literal("Button"),
-        props: objectSchema({
-          key: stringSchema(),
-          label: stringSchema(),
-          hotkey: stringSchema().optional(),
-          action: stringSchema().optional(),
-          plain: literal(true).optional(),
-          dimColor: booleanSchema().optional(),
-          variant: _enum(["primary", "secondary"]).optional(),
-          role: _enum(["dismiss"]).optional(),
-          autoFocus: literal(true).optional(),
-        }).describe(
-          "@internal A button: `label` its text, `key` its address (what `ui.press` carries as `element`). `hotkey` (one digit or lowercase letter) presses it while the plugin's site holds the keyboard; `action` names an engine keybinding action whose chord presses it from the prompt; `plain` draws it without chrome (`hotkey: label`, or the label alone); `dimColor` dims the label at rest; `variant` `primary` marks the main action of several, drawn as the surface draws the one to press, while `secondary` and absent are the default look (carried as the plugin wrote it, never filled in; `plain` wins over it); `role` `dismiss` marks the Button that closes its site, a drawing hint only (the terminal draws it as without; a desktop its native close control, the label its accessible name; carried as written, never filled in); `autoFocus` starts the site's focus ring here. A press is a ui_press naming `press.plugin` and `press.handle`. `children`, when present and not empty, are drawn in the label's place, all of them one pressable: strings and Text elements only; `label` then names the control, and is what a surface that draws no children draws.",
-        ),
-        press: ElementPressHandlerSchema(),
-        hover: HoverStyleSchema().optional(),
-        children: array(lazy(() => RenderChildSchema())).optional(),
-      }),
-      objectSchema({
-        type: literal("Input"),
-        props: objectSchema({
-          key: stringSchema(),
-          label: stringSchema().optional(),
-          placeholder: stringSchema().optional(),
-          value: stringSchema().optional(),
-          submitLabel: stringSchema().optional(),
-          rows: numberSchema().int().min(1).optional(),
-          autoFocus: literal(true).optional(),
-        }).describe(
-          "@internal A text field: `label` before it, `placeholder` dim while empty, `value` the text it holds when drawn, `submitLabel` what Enter does, `autoFocus` as a Button's. Absent `rows`, or at 1, one line; from 2 a field of several lines drawn that many rows tall, its lines joined by `\\n` in `value` and in every ui_input, where Enter still submits and Shift+Enter types the newline. The surface keeps the text the person types; each change is a ui_input of kind `change`, Enter one of kind `submit`, naming `press.plugin` and `press.handle`; no children.",
-        ),
-        press: ElementPressHandlerSchema(),
-      }),
-      objectSchema({
-        type: literal("Select"),
-        props: objectSchema({
-          key: stringSchema(),
-          label: stringSchema().optional(),
-          options: array(
-            objectSchema({
-              value: stringSchema(),
-              label: stringSchema().optional(),
-            }),
-          ),
-          value: stringSchema().optional(),
-          autoFocus: literal(true).optional(),
-        }).describe(
-          "@internal A one-of-several picker: `options` in the order drawn (at least one, values unique, each drawn as its `label`, else its `value`), `value` the one selected when drawn, `label` before it, `autoFocus` as a Button's. A pick is a ui_select carrying the option's `value` and naming `press.plugin` and `press.handle`; no children.",
-        ),
-        press: ElementPressHandlerSchema(),
-      }),
-      objectSchema({
-        type: literal("Link"),
-        props: objectSchema({
-          href: stringSchema(),
-          label: stringSchema().optional(),
-        }).describe(
-          "@internal A hyperlink: `href` is https (or http://localhost), bounded and free of control characters as the engine validated it; the children are the text drawn (absent them the label, absent both the URL). A remote surface draws an anchor that opens outside the app.",
-        ),
-        children: array(lazy(() => RenderChildSchema())).optional(),
-      }),
-      objectSchema({
-        type: literal("Code"),
-        props: objectSchema({
-          source: stringSchema(),
-          language: stringSchema().optional(),
-          path: stringSchema().optional(),
-          startLine: numberSchema().int().optional(),
-          format: _enum(["source", "diff"]).optional(),
-          wrap: _enum(["wrap", "truncate-end"]).optional(),
-        }).describe(
-          '@internal Source code the surface draws with its own highlighter: `language` a highlight.js id or alias, else inferred from `path` (never read); `startLine` numbers a line gutter; under `format: "diff"` `source` is unified-diff hunks the engine checked parse; `wrap` is `wrap` (the default) or `truncate-end`, which cuts long lines with an ellipsis. `source` is bounded and free of control characters as the engine validated it; no children.',
-        ),
-      }),
-      objectSchema({
-        type: literal("Markdown"),
-        props: objectSchema({
-          key: stringSchema().optional(),
-          text: stringSchema(),
-          dimColor: booleanSchema().optional(),
-          pressableLinks: array(stringSchema()).optional(),
-        }).describe(
-          "@internal A block of markdown the surface draws as it draws an assistant reply (its own renderer, links, tables, code fences), dim when `dimColor`; `text` is bounded and free of control characters as the engine validated it; no children. A link whose URL scheme is not https, http or file is drawn as text, never clickable (the plugin must not choose the URL handler a click reaches). With `press` the plugin answers its links: a plain click on one (any, or one `pressableLinks` names) is a ui_press carrying `href`, and the surface does not open it; `key` is then present, the address `ui.press` carries as `element`.",
-        ),
-        press: objectSchema({
-          plugin: stringSchema(),
-          handle: numberSchema().int(),
-        }).optional(),
-      }),
-      objectSchema({
-        type: literal("Client"),
-        props: objectSchema({
-          key: stringSchema(),
-          module: stringSchema(),
-          props: unknown().optional(),
-          width: union([numberSchema(), stringSchema()]).optional(),
-          height: union([numberSchema(), stringSchema()]).optional(),
-          flexGrow: numberSchema().optional(),
-        }).describe(
-          "@internal A region one of the plugin's surface modules draws locally: `module` is that module's path under the plugin's folder (`hooks/board.tsx`, what ui_client_module lists it by), `key` addresses the instance (what `ui.message` carries as `element`), `props` is plain data the engine bounded, `width`/`height`/`flexGrow` size it as a Box. `client.plugin` says whose surface module. Carried as data: a surface without a surface-module runtime draws nothing for it; no children.",
-        ),
-        client: objectSchema({
-          plugin: stringSchema(),
-        }),
-      }),
-      objectSchema({
-        type: literal("Svg"),
-        props: objectSchema({
-          source: stringSchema(),
-          alt: stringSchema(),
-          width: numberSchema().optional(),
-          height: numberSchema().optional(),
-          isInteractive: booleanSchema().optional(),
-        }).describe(
-          "@internal A vector leaf of the desktop and mobile surfaces: `source` is SVG markup the surface draws in an isolated box (the desktop an image, or a sandboxed frame when `isInteractive`; the mobile app a sandboxed web view), `alt` what it says. Bounded by the engine (128 KiB of source, 4096 px) before it crossed; no children.",
-        ),
-      }),
-      objectSchema({
-        type: literal("engine"),
-        ref: numberSchema()
-          .int()
-          .describe(
-            "@internal Which drawing of the engine-owned component sits here: 0 draws the original props; any other ref names the props the ui_render response carries.",
-          ),
-      }),
-    ]).describe(
-      "@internal A plain-data tree a `ui.render` hook returned, as the hooks engine validated it: Box, Text, div, span or b with children, a Button, Input or Select leaf carrying the `press` that names its handler, a Link with its text, a Code leaf, a Markdown leaf, a Client leaf (a surface-module region, carried as data; never on mobile), an Svg leaf (desktop and mobile; never the terminal), or an engine node the surface draws itself (src/plugins/functionHooks/types/element/render-element.ts).",
-    ),
-  );
 });
-//@ chunk-bwbq4xvm.js:760384-775124 placement
+//@ chunk-7kayq7nc.js:808789-823253 placement
 /**
  * 控制请求登记表：每项 g(请求 schema, 发起方 client/agent, 响应 schema)，用于校验与方向判定。
  */
@@ -3828,8 +3605,7 @@ var SDKSessionNoticeMessageSchema;
 var SDKQueuedNotificationMessageSchema;
 var StdoutNotificationMessageSchema;
 var StdoutMessageSchema;
-var StdinMessageSchema;
-deferInit("chunk-bwbq4xvm.js:760384", () => {
+deferInit("chunk-7kayq7nc.js:808789", () => {
   CONTROL_REQUEST_REGISTRY = DoctorLazy(() => [
     tryRenderShutdownMessage(
       SDKInterruptInterruptMessageSchema(),
@@ -4237,7 +4013,7 @@ deferInit("chunk-bwbq4xvm.js:760384", () => {
         .optional()
         .catch(undefined)
         .describe(
-          "@internal Why the request got an error answer, stamped from the state the handler branched on (never parsed from `error`, though some of that state rests on the error message of another component, for example that of the MCP SDK for mcp_client_registration_unavailable). set_model: invalid_request, catalog_unknown (not shaped like a model id), not_found (the API serves no such model), restricted_by_org, unavailable_for_account, not_offered (this build does not offer it; `error` names the Claude Code version it requires only when its catalog row states one above this build), alias_1m_disabled (CLAUDE_CODE_DISABLE_1M_CONTEXT), alias_1m_unsupported, blocked_by_hook (also when the model kept changing while the hooks ran, which a retry may get past), check_failed (the API settled nothing about the model; a retry may pass), check_rejected (the API answered with an error no retry or sign-in clears), credits_required (a 429 whose body carries that error_code, and nothing clears it by itself), rate_limit (any other 429, even a usage-credits refusal that has no such code or that clears by itself), auth_failed (sign in again), model_not_current, verdict_pending (from older builds only; not a refusal: the outcome follows as a system/informational message), internal_error (the switch may or may not have applied). apply_flag_settings: rarely internal_error, and verdict_pending from older builds. set_permission_mode: invalid_mode, bypass_restricted, bypass_disabled, bypass_not_launched, and for auto auto_mode_settings, auto_mode_circuit_breaker, auto_mode_fast_mode, auto_mode_model or auto_mode_unavailable. remote_control (a failed enable whose cause the bridge reported): remote_control_auth (sign in again), remote_control_terminal, remote_control_ended_elsewhere, remote_control_policy_disabled. get_workspace_diff: workspace_diff_pending (the diff was not ready when the reply was due; ask again shortly, since a diff that finishes in the meantime is returned to the next request that comes within a minute). interrupt (a claude-code-server tenant, by worker_epoch): stale_worker_epoch (it is for another worker life; no turn was stopped), invalid_worker_epoch (it is no whole number of 1 or more; likewise). read_file with the anchor as_written: read_denied (the one refusal, the same for every cause; a plain read_file and the other anchors carry no code). mcp_authenticate (a reply from a `claude -p` session, over stdio or its --sdk-url connection, which includes the sessions that `claude remote-control` spawns; a reply relayed by the Remote Control bridge that a session itself runs carries none, and a claude-code-server tenant does not serve the request): mcp_client_registration_unavailable (the authorization server gives this client no way to register: it offers no registration endpoint, or the endpoint refused; retrying will not help until that changes). Absent on every other error; new values are additive, so treat an unknown one as absent.",
+          "@internal Why the request got an error answer, stamped from the state the handler branched on (never parsed from `error`, though some of that state rests on the error message of another component, for example that of the MCP SDK for mcp_client_registration_unavailable). set_model: invalid_request, catalog_unknown (not shaped like a model id), not_found (the API serves no such model), restricted_by_org, unavailable_for_account, not_offered (this build does not offer it; `error` names the Claude Code version it requires only when its catalog row states one above this build), alias_1m_disabled (CLAUDE_CODE_DISABLE_1M_CONTEXT), alias_1m_unsupported, blocked_by_hook (also when the model kept changing while the hooks ran, which a retry may get past), check_failed (the API settled nothing about the model; a retry may pass), check_rejected (the API answered with an error no retry or sign-in clears), credits_required (a 429 whose body carries that error_code, and nothing clears it by itself), rate_limit (any other 429, even a usage-credits refusal that has no such code or that clears by itself), auth_failed (sign in again), model_not_current, verdict_pending (from older builds only; not a refusal: the outcome follows as a system/informational message), internal_error (the switch may or may not have applied). apply_flag_settings: rarely internal_error, and verdict_pending from older builds. set_permission_mode: invalid_mode, bypass_restricted, bypass_disabled, bypass_not_launched, and for auto auto_mode_settings, auto_mode_circuit_breaker, auto_mode_fast_mode, auto_mode_model or auto_mode_unavailable. remote_control (a failed enable whose cause the bridge reported): remote_control_auth (sign in again), remote_control_terminal, remote_control_ended_elsewhere, remote_control_policy_disabled. get_workspace_diff: workspace_diff_pending (the diff was not ready when the reply was due; ask again shortly, since a diff that finishes in the meantime is returned to the next request that comes within a minute). interrupt (a claude-code-server tenant, by worker_epoch): stale_worker_epoch (it is for another worker life; no turn was stopped), invalid_worker_epoch (it is no whole number of 1 or more; likewise). read_file with the anchor as_written: read_denied (the one refusal, the same for every cause; a plain read_file and the other anchors carry no code). mcp_authenticate (a reply from a `claude -p` session, over stdio or its --sdk-url connection, which includes the sessions that `claude remote-control` spawns; a reply relayed by the Remote Control bridge that a session itself runs carries none, and a claude-code-server tenant does not serve the request): mcp_client_registration_unavailable (the authorization server gives this client no way to register: it offers no registration endpoint, or the endpoint refused; retrying will not help until that changes), mcp_redirect_uri_unusable (the request set redirectUriOnly and named no redirectUri, or the config of the server sets oauth.clientId or oauth.xaa, or the failure is one that gets mcp_client_registration_unavailable without redirectUriOnly). Absent on every other error; new values are additive, so treat an unknown one as absent.",
         ),
       model: stringSchema()
         .optional()
@@ -4316,6 +4092,16 @@ deferInit("chunk-bwbq4xvm.js:760384", () => {
         ),
         priority: _enum(["now", "next", "later"]),
         queued_at: stringSchema().describe("RFC3339 timestamp of when the backend queued it."),
+        fire_reason: stringSchema()
+          .optional()
+          .describe(
+            'Why the backend fired a "trigger_fire" notification: "scheduled" | "retry" | "catch_up" | "manual" | "api", or "webhook" for a GitHub event (open set). Absent where the backend gives no reason, as for a fire through a webhook URL.',
+          ),
+        own_session_author: booleanSchema()
+          .optional()
+          .describe(
+            "True only on a scheduled fire of a routine that this session's own Claude created for itself, as the backend attests. Left out otherwise.",
+          ),
       }),
       uuid: stringSchema().optional(),
       session_id: stringSchema().optional(),
@@ -4353,6 +4139,10 @@ deferInit("chunk-bwbq4xvm.js:760384", () => {
       "Everything the CLI writes to its output stream (stdout in stream-json mode): exactly one StdoutMessage per line, as a single JSON object. Besides the SDKMessage members this includes the control protocol - control requests the CLI originates, control responses to the client's requests, cancellations and keep-alives.",
     ),
   );
+});
+//@ chunk-7kayq7nc.js:823253-824228 placement
+var StdinMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7kayq7nc.js:823253", () => {
   StdinMessageSchema = DoctorLazy(() =>
     union([
       SDKUserMessageBaseSchema(),
@@ -4369,12 +4159,12 @@ deferInit("chunk-bwbq4xvm.js:760384", () => {
     ),
   );
 });
-//@ chunk-1qpz7qcd.js:34066-34151 fingerprint (2.1.88 match: SDKUpdateEnvironmentVariablesMessageSchema, 0.312)
+//@ chunk-ck4jrdtf.js:34569-34654 fingerprint (2.1.88 match: SDKUpdateEnvironmentVariablesMessageSchema, 0.312)
 /**
  * 允许经桥转发的 SDK 消息类型集合（bash_command、update_environment_variables、assistant、system）。
  */
 var BRIDGE_FORWARDED_MESSAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1qpz7qcd.js:34066", () => {
+deferInit("chunk-ck4jrdtf.js:34569", () => {
   BRIDGE_FORWARDED_MESSAGE_TYPES = new Set([
     "bash_command",
     "update_environment_variables",
@@ -4382,13 +4172,19 @@ deferInit("chunk-1qpz7qcd.js:34066", () => {
     "system",
   ]);
 });
-//@ chunk-e6aww6q8.js:84068-84127 fingerprint (2.1.88 match: SDKControlInterruptRequestSchema, 0.392)
+//@ chunk-5xgkngpb.js:86618-86677 fingerprint (2.1.88 match: SDKControlInterruptRequestSchema, 0.392)
 /**
  * 信号是否被中止且不是因 interrupt 中止（按参数）。
  */
 var isAbortedNotByInterrupt = (signal, isInterrupt) =>
   signal.aborted && !(isInterrupt && unwrapAbortReason(signal.reason) === "interrupt");
-//@ chunk-3wek6r2k.js:29040-29172 fingerprint (2.1.88 match: SDKControlInitializeResponseSchema, 0.544)
+//@ chunk-0tcpyvr1.js:1299-1399 fingerprint (2.1.88 match: SDKControlReloadPluginsRequestSchema, 0.328)
+function SDKControlReloadPluginsRequestSchema(redactsForControlRequest, name) {
+  return name.startsWith("mcp_") || name === "reload_plugins"
+    ? redactsOrPersists(redactsForControlRequest)
+    : redactsForControlRequest.redactsPersistedLane();
+}
+//@ chunk-hjswk319.js:28377-28509 fingerprint (2.1.88 match: SDKControlInitializeResponseSchema, 0.544)
 /**
  * 构造空的 initialize 响应（无命令/代理/模型，带 account 与 pid）。
  */
@@ -4403,18 +4199,18 @@ function createEmptyInitializeResponse(account) {
     pid: process.pid,
   };
 }
-//@ chunk-hm0ce8vc.js:23440-23565 affinity
+//@ chunk-asf5gh8x.js:24845-24970 affinity
 class HostConfigCancelledError extends Error {
   constructor() {
     super("host config copy cancelled after timeout");
     this.name = "HostConfigCancelledError";
   }
 }
-//@ chunk-hm0ce8vc.js:23565-23608 fingerprint (2.1.88 match: SDKControlCancelAsyncMessageResponseSchema, 0.419)
+//@ chunk-asf5gh8x.js:24970-25013 fingerprint (2.1.88 match: SDKControlCancelAsyncMessageResponseSchema, 0.416)
 function throwIfHostConfigCancelled(cancel) {
   if (cancel.cancelled) throw new HostConfigCancelledError();
 }
-//@ chunk-kcvmr83c.js:1538-1781 fingerprint (2.1.88 match: SDKControlApplyFlagSettingsRequestSchema, 0.305)
+//@ chunk-5dqwe9kx.js:1538-1781 fingerprint (2.1.88 match: SDKControlApplyFlagSettingsRequestSchema, 0.305)
 /**
  * 远程传输下把 apply_flag_settings 转发给远端会话；不能转发时返回"仅本地生效"的提示。
  */
@@ -4430,7 +4226,7 @@ function forwardApplyFlagSettings(settings) {
     .catch(logError);
   return null;
 }
-//@ chunk-z4g2ta8k.js:33069-33187 fingerprint (2.1.88 match: SDKControlResponseSchema, 0.635)
+//@ chunk-1kk50rk6.js:34243-34361 fingerprint (2.1.88 match: SDKControlResponseSchema, 0.635)
 /**
  * 从 control_response 消息里取出并解析 response 部分。
  */
@@ -4438,7 +4234,7 @@ function extractControlResponse(message) {
   let response = message.type === "control_response" ? message.response : undefined;
   return typeof response === "object" && response !== null ? getControlRequestSubtype_2(response) : undefined;
 }
-//@ chunk-tyg7f3ek.js:104419-104475 fingerprint (2.1.88 match: SDKKeepAliveMessageSchema, 0.554)
+//@ chunk-0yw3taqg.js:131888-131944 fingerprint (2.1.88 match: SDKKeepAliveMessageSchema, 0.554)
 /**
  * 生成一个往出站队列推 keep_alive 消息的函数。
  */
@@ -4448,7 +4244,7 @@ function createKeepAliveSender(outbound) {
       type: "keep_alive",
     });
 }
-//@ chunk-tyg7f3ek.js:266540-266801 fingerprint (2.1.88 match: JSONRPCMessagePlaceholder, 0.346)
+//@ chunk-0yw3taqg.js:295671-295932 fingerprint (2.1.88 match: JSONRPCMessagePlaceholder, 0.346)
 function parseHintFrames(restartStarts) {
   if (restartStarts === undefined || restartStarts === null)
     return {
@@ -4465,7 +4261,7 @@ function parseHintFrames(restartStarts) {
     unknown,
   };
 }
-//@ chunk-08945j39.js:35581-35735 fingerprint (2.1.88 match: SDKControlRequestSchema, 0.712)
+//@ chunk-h29vk4wn.js:37263-37417 fingerprint (2.1.88 match: SDKControlRequestSchema, 0.712)
 /**
  * 用指定的 schema 校验一条 control_request，返回 {type, request_id, request} 或 null。
  */
@@ -4478,7 +4274,7 @@ function parseControlRequest(message, schemaKey) {
     request: parsed.data.request,
   };
 }
-//@ chunk-18hwfzwa.js:178305-178485 fingerprint (2.1.88 match: SDKControlGetContextUsageRequestSchema, 0.404)
+//@ chunk-czq1j3j2.js:183102-183282 fingerprint (2.1.88 match: SDKControlGetContextUsageRequestSchema, 0.404)
 /**
  * 通过控制通道向对端发 get_context_usage 请求（可带 detail），并用响应 schema 解析结果。
  */
@@ -4499,12 +4295,12 @@ async function requestContextUsage(controlChannel, options = {}) {
     ),
   );
 }
-//@ chunk-18hwfzwa.js:178485-180359 fingerprint (2.1.88 match: SDKControlGetContextUsageResponseSchema, 0.805)
+//@ chunk-czq1j3j2.js:183282-185156 fingerprint (2.1.88 match: SDKControlGetContextUsageResponseSchema, 0.805)
 /**
  * get_context_usage 响应 schema：categories、totalTokens/maxTokens/rawMaxTokens、gridRows、memoryFiles、mcpTools、deferredBuiltinTools、systemTools、systemPromptSections、agents、slashCommands、skills、messageBreakdown、apiUsage 等，多数字段带 catch 容错。
  */
 var SDKControlGetContextUsageResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:178485", () => {
+deferInit("chunk-czq1j3j2.js:183282", () => {
   SDKControlGetContextUsageResponseSchema = DoctorLazy(() => {
     let tokenEntry = objectSchema({
       name: stringSchema(),
@@ -4633,14 +4429,7 @@ deferInit("chunk-18hwfzwa.js:178485", () => {
     }));
   });
 });
-//@ chunk-18hwfzwa.js:1204824-1204899 fingerprint (2.1.88 match: SDKControlElicitationResponseSchema, 0.415)
-/**
- * 交换 accept/decline（其余原样）。
- */
-function flipElicitationAction(action) {
-  return action === "accept" ? "decline" : action === "decline" ? "accept" : action;
-}
-//@ chunk-18hwfzwa.js:1573966-1574143 fingerprint (2.1.88 match: SDKControlSetMaxThinkingTokensRequestSchema, 0.301)
+//@ chunk-czq1j3j2.js:1617962-1618139 fingerprint (2.1.88 match: SDKControlSetMaxThinkingTokensRequestSchema, 0.302)
 /**
  * 分派控制请求：set_max_thinking_tokens 本地处理，属于懒加载处理集合的 subtype 交给 dispatchControlRequest。
  */
@@ -4652,14 +4441,14 @@ function dispatchLocalControlRequest(request, context) {
     dispatchControlRequest(request, context),
   );
 }
-//@ chunk-18hwfzwa.js:1574143-1574185 sole-consumer
+//@ chunk-czq1j3j2.js:1618139-1618181 sole-consumer
 function isLazyDispatchedSubtype(request) {
   return READ_ONLY_CONTROL_COMMAND_NAMES.has(request.subtype);
 }
-//@ chunk-54xbtc53.js:17978-18065 affinity
+//@ chunk-0h9p4sxp.js:19621-19708 affinity
 var UNATTENDED_CLOUD_SESSION_MESSAGE =
   "this cloud session runs unattended (claude -p --cloud): there is no one to ask";
-//@ chunk-54xbtc53.js:18065-18487 fingerprint (2.1.88 match: ControlResponseSchema, 0.345)
+//@ chunk-0h9p4sxp.js:19708-20130 fingerprint (2.1.88 match: ControlResponseSchema, 0.346)
 /**
  * 无人值守云会话（claude -p --cloud）里对控制请求的自动回复：can_use_tool 一律 deny（带原因），其他 subtype 回 error。
  */
@@ -4693,45 +4482,33 @@ function autoRespondUnattended(controlRequest) {
   };
 }
 export {
-  parseControlRequest,
-  isAbortedNotByInterrupt,
   SDKControlResponseMessageSchema,
   SDKControlCancelRequestMessageSchema,
-  requestContextUsage,
   createKeepAliveSender,
+  SDKControlReloadPluginsRequestSchema,
   SDKSetChromeBrowserHintsSetChromeBrowserHintsMessageSchema,
   SDKSetPromptSuggestionsPausedSetPromptSuggestionsPausedMessageSchema,
-  SDKMessageRatedMessageRatedMessageSchema,
-  flipElicitationAction,
-  dispatchLocalControlRequest,
-  BRIDGE_FORWARDED_MESSAGE_TYPES,
-  SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema,
-  forwardApplyFlagSettings,
-  autoRespondUnattended,
-  SDKRegisterDeviceHooksRegisterDeviceHooksMessageSchema,
-  RegisterDeviceHooksResponseSchema,
-  SDKUploadDeviceHookTemplateUploadDeviceHookTemplateMessageSchema,
   StdoutMessageSchema,
   ElicitationResponseSchema,
   UserDialogResponseSchema,
-  OAuthTokenRefreshResponseSchema,
   RemoteControlWorkSecretResponseSchema,
-  HostAuthTokenRefreshResponseSchema,
-  BASE64_BODY_RE,
-  SDKClaimSessionClaimSessionMessageSchema,
-  RenderElementKinds,
-  SDKButtonMessageSchema,
+  autoRespondUnattended,
+  parseHintFrames,
+  SDKTurnHandoffTurnHandoffMessageSchema,
+  extractControlResponse,
+  forwardApplyFlagSettings,
+  SDKRemoteToolsAnnounceRemoteToolsAnnounceMessageSchema,
+  SDKRemoteToolsReannounceRemoteToolsReannounceMessageSchema,
+  isAbortedNotByInterrupt,
+  RegisterDeviceHooksResponseSchema,
   SDKCanUseToolCanUseToolMessageSchema,
   SDKHookCallbackHookCallbackMessageSchema,
   SDKMcpMessageMcpMessageMessageSchema,
-  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema,
-  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema,
   SDKElicitationElicitationMessageSchema,
   SDKRequestUserDialogRequestUserDialogMessageSchema,
   SDKRemoteToolCallRemoteToolCallMessageSchema,
   SDKRemotePlumbingCallRemotePlumbingCallMessageSchema,
   SDKRemoteToolsProbeRemoteToolsProbeMessageSchema,
-  SDKRemoteToolsReannounceRemoteToolsReannounceMessageSchema,
   SDKRemoteControlWorkSecretRemoteControlWorkSecretMessageSchema,
   SDKInterruptInterruptMessageSchema,
   SDKInitializeInitializeMessageSchema,
@@ -4775,6 +4552,9 @@ export {
   SDKMcpToggleMcpToggleMessageSchema,
   SDKSetMcpPermissionModeOverrideSetMcpPermissionModeOverrideMessageSchema,
   SDKSetCwdSetCwdMessageSchema,
+  SDKClaimSessionClaimSessionMessageSchema,
+  SDKRegisterDeviceHooksRegisterDeviceHooksMessageSchema,
+  SDKUploadDeviceHookTemplateUploadDeviceHookTemplateMessageSchema,
   SDKStopTaskStopTaskMessageSchema,
   SDKStartShellTaskStartShellTaskMessageSchema,
   SDKBackgroundTasksBackgroundTasksMessageSchema,
@@ -4784,13 +4564,15 @@ export {
   SDKGetHooksListingGetHooksListingMessageSchema,
   SDKUpdateSettingsUpdateSettingsMessageSchema,
   SDKSubmitFeedbackSubmitFeedbackMessageSchema,
-  SDKRemoteToolsAnnounceRemoteToolsAnnounceMessageSchema,
-  SDKTurnHandoffTurnHandoffMessageSchema,
+  SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema,
   SDKListPermissionRulesListPermissionRulesMessageSchema,
   SDKMcpReadResourceMcpReadResourceMessageSchema,
-  createEmptyInitializeResponse,
+  dispatchLocalControlRequest,
   throwIfHostConfigCancelled,
+  parseControlRequest,
+  BRIDGE_FORWARDED_MESSAGE_TYPES,
+  requestContextUsage,
+  createEmptyInitializeResponse,
+  BASE64_BODY_RE,
   PathAnchorSchema,
-  parseHintFrames,
-  extractControlResponse,
 };

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/environments/poller.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (4)
+ * pieces: chunk-vn3g7zt8.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
@@ -15,7 +15,7 @@ import { isFatal4xx, applyJitter, jitter, isStatus, backoff } from "../../intern
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 import { uuid4 } from "../../internal/utils/uuid.mjs";
 
-//@ chunk-hwmsct5x.js:56388-59048 esm-layout
+//@ chunk-vn3g7zt8.js:56759-59419 esm-layout
 var _WorkPoller_runnerClient;
 var _WorkPoller_consumed;
 var _WorkPoller_controller;
@@ -218,11 +218,11 @@ var WorkPoller = (() => {
   }
   return WorkPoller;
 })();
-//@ chunk-hwmsct5x.js:59048-59082 esm-layout
+//@ chunk-vn3g7zt8.js:59419-59453 esm-layout
 function backoff_2(attempt) {
   return backoff(attempt, POLL_BACKOFF_BASE_MS, POLL_BACKOFF_CAP_MS);
 }
-//@ chunk-hwmsct5x.js:59082-59732 esm-fingerprint
+//@ chunk-vn3g7zt8.js:59453-60103 esm-fingerprint
 var IdleLog = (() => {
   class IdleLog {
     constructor(log, environmentId) {
@@ -265,7 +265,7 @@ var IdleLog = (() => {
   _IdleLog_lastReport = new WeakMap();
   return IdleLog;
 })();
-//@ chunk-hwmsct5x.js:59732-59815 esm-fingerprint
+//@ chunk-vn3g7zt8.js:60103-60186 esm-fingerprint
 function defaultWorkerId() {
   let host = globalThis.process?.env?.HOSTNAME;
   return host ? `${host}-${uuid4()}` : uuid4();

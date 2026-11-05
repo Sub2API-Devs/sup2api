@@ -3,9 +3,9 @@
  *
  * 会话预览（在恢复前查看会话内容）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SessionPreview.tsx
- * pieces: chunk-b79vwm1h.js (3)
+ * pieces: chunk-y1bp9wp9.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -34,17 +34,17 @@ import { formatRelativeTimeAgo } from "../utils/format.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-b79vwm1h.js:1859-1863 placement
+//@ chunk-y1bp9wp9.js:1861-1865 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-b79vwm1h.js:1859", () => {
+deferInit("chunk-y1bp9wp9.js:1861", () => {
   init_react_production();
 });
-//@ chunk-b79vwm1h.js:1863-1867 placement
+//@ chunk-y1bp9wp9.js:1865-1869 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-b79vwm1h.js:1863", () => {
+deferInit("chunk-y1bp9wp9.js:1865", () => {
   init_react_production();
 });
-//@ chunk-b79vwm1h.js:1867-4216 fingerprint (2.1.88 match: SessionPreview, 0.704)
+//@ chunk-y1bp9wp9.js:1869-4202 fingerprint (2.1.88 match: SessionPreview, 0.704)
 function SessionPreview(props) {
   let $ = useMemoCache(36);
   let { log, onExit, onSelect } = props;

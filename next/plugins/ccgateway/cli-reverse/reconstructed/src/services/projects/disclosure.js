@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 信息披露提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (8), chunk-qfmb95nn.js (1)
  * attribution: placement 9
  */
 import { factLabel } from "./contextFile.js";
@@ -13,14 +13,20 @@ import { plural } from "../../utils/stringUtils.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { HTTPS_CLAUDE_AI } from "../../constants/product.js";
 
-//@ chunk-dz3q485w.js:16805-16887 placement (2.1.88 match: formatPeakDay, 1)
+//@ chunk-qfmb95nn.js:414-606 placement
+var LEADING_PUNCT_RUN_REGEX = /^\s*[^\p{L}\p{N}\s]{5}/u;
+var TRAILING_PUNCT_RUN_REGEX = /[^\p{L}\p{N}\s]{5}\s*$/u;
+var LETTER_REGEX = /\p{L}/u;
+var FENCE_MARKER_WORDS_REGEX =
+  /\b(BEGIN|END)\s+(LOCAL\s+(HISTORY|SETUP\s*PROPOSAL|TOOLS\s*USED)|CLOUD\s+SETUP\s*PROPOSAL|PROJECT\s+INSTRUCTIONS)\b/i;
+//@ chunk-jndyh8cy.js:16902-16984 placement (2.1.88 match: formatPeakDay, 1)
 function formatPeakDay(dateStr) {
   return dateStr.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 }
-//@ chunk-dz3q485w.js:16887-17641 placement
+//@ chunk-jndyh8cy.js:16984-17742 placement
 /**
  * 用一行文字描述目录的仓库情况：非 git、git 但 origin 不是 github.com，或 GitHub 仓库及其默认分支与访问状态（是否可达、是否安装了 Claude GitHub App）。
  */
@@ -48,7 +54,7 @@ function describeRepoFact(repo) {
     }
   }
 }
-//@ chunk-dz3q485w.js:17641-18354 placement
+//@ chunk-jndyh8cy.js:17742-18456 placement
 /**
  * 生成 /send-to-project 披露的事实行：仓库/分支与 GitHub 访问状态、仓库内子目录、读取的本地会话数与日期范围、未提交文件数、未推送提交、找到的文档。
  */
@@ -81,12 +87,12 @@ function disclosureFactsLine(context, sessionsRead) {
   }
   return facts.join(" \xB7 ");
 }
-//@ chunk-dz3q485w.js:18354-18386 placement
+//@ chunk-jndyh8cy.js:18456-18488 placement
 /**
  * 「没有其他内容发出」的固定提示。
  */
 var NOTHING_ELSE_SENT_NOTICE = "Nothing else is sent.";
-//@ chunk-dz3q485w.js:18386-18943 placement
+//@ chunk-jndyh8cy.js:18488-19045 placement
 /**
  * 生成 /send-to-project 的"不会发送"说明：未提交/未跟踪文件、未推送提交、仓库外文件与凭据，以及线程将从 GitHub 内容还是无代码开始。
  */
@@ -111,13 +117,13 @@ function notSentLine(context, hasRepo) {
     : "No repository is added, so threads start without this code.";
   return `Not sent: ${items.join(", ")}. ${threadsNote}`;
 }
-//@ chunk-dz3q485w.js:18943-19026 placement
+//@ chunk-jndyh8cy.js:19045-19128 placement
 function projectUrl(id) {
   return getOauthConfig().CLAUDE_AI_ORIGIN + "/code/project/" + encodeURIComponent(id);
 }
-//@ chunk-dz3q485w.js:19026-19061 placement
+//@ chunk-jndyh8cy.js:19128-19163 placement
 var HTTPS_PREVIEW_CLAUDE_AI = "https://preview.claude.ai";
-//@ chunk-dz3q485w.js:19061-19530 placement
+//@ chunk-jndyh8cy.js:19163-19632 placement
 /**
  * 解析项目引用：chan_ 开头的 id（可带 /cmsg_ 线程 id），或 claude.ai 的 /code/project/<id> 链接（可带 thread 参数），其他输入返回 null。
  */
@@ -149,17 +155,11 @@ function parseProjectReference(firstToken) {
     threadId: threadParam,
   };
 }
-//@ chunk-dz3q485w.js:19691-19887 placement
-var LEADING_PUNCT_RUN_REGEX = /^\s*[^\p{L}\p{N}\s]{5}/u;
-var TRAILING_PUNCT_RUN_REGEX = /[^\p{L}\p{N}\s]{5}\s*$/u;
-var LETTER_REGEX = /\p{L}/u;
-var FENCE_MARKER_WORDS_REGEX =
-  /\b(BEGIN|END)\s+(LOCAL\s+(HISTORY|SETUP\s*PROPOSAL|TOOLS\s*USED)|CLOUD\s+SETUP\s*PROPOSAL|PROJECT\s+INSTRUCTIONS)\b/i;
 export {
+  disclosureFactsLine,
   parseProjectReference,
   NOTHING_ELSE_SENT_NOTICE,
   notSentLine,
-  disclosureFactsLine,
   LETTER_REGEX,
   LEADING_PUNCT_RUN_REGEX,
   TRAILING_PUNCT_RUN_REGEX,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：显示 Cowork 入门角色选择器的工具；校验角色选择回答等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (9)
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -25,7 +25,7 @@ import {
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:11581-11642 placement
+//@ chunk-fmnbrxwy.js:18800-18861 placement
 /**
  * 构造“工具不可用”的结果（带说明）。
  */
@@ -37,12 +37,12 @@ function unavailableResult(message) {
     },
   };
 }
-//@ chunk-kxyd0g16.js:11642-11653 placement
+//@ chunk-fmnbrxwy.js:18861-18872 placement
 /**
  * 角色选择结果的最大字符数（10000）。
  */
 var MAX_ROLE_PICKER_RESULT_CHARS = 1e4;
-//@ chunk-kxyd0g16.js:11653-12231 placement
+//@ chunk-fmnbrxwy.js:18872-19450 placement
 /**
  * 校验角色选择回答。
  */
@@ -82,7 +82,7 @@ function checkRolePickerAnswer(shownInput, reply) {
     return roleAnswerRefusal("threw");
   }
 }
-//@ chunk-kxyd0g16.js:12231-12276 placement
+//@ chunk-fmnbrxwy.js:19450-19495 placement
 /**
  * 构造角色选择的拒绝结果 {kind:"refused", rule}。
  */
@@ -92,13 +92,13 @@ function roleAnswerRefusal(rule) {
     rule,
   };
 }
-//@ chunk-kxyd0g16.js:12276-12357 placement
+//@ chunk-fmnbrxwy.js:19495-19576 placement
 /**
  * 角色选择器的输入 schema（空对象）。
  */
 var rolePickerInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var rolePickerOutputSchema;
-deferInit("chunk-kxyd0g16.js:12276", () => {
+deferInit("chunk-fmnbrxwy.js:19495", () => {
   rolePickerInputSchema = DoctorLazy(() => zodStrictObject({}));
   rolePickerOutputSchema = DoctorLazy(() =>
     objectSchema({
@@ -107,19 +107,19 @@ deferInit("chunk-kxyd0g16.js:12276", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:12357-12399 placement
+//@ chunk-fmnbrxwy.js:19576-19618 placement
 /**
  * 判断是否为远程会话（环境变量 CLAUDE_CODE_REMOTE）。
  */
 function isRemoteSession() {
   return env.CLAUDE_CODE_REMOTE;
 }
-//@ chunk-kxyd0g16.js:12399-13206 placement
+//@ chunk-fmnbrxwy.js:19618-20425 placement
 /**
  * 显示 Cowork 入门角色选择器的工具。
  */
 var RolePickerTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:12399", () => {
+deferInit("chunk-fmnbrxwy.js:19618", () => {
   RolePickerTool = buildTool({
     name: SHOWONBOARDINGROLEPICKER,
     searchHint: "show the Cowork onboarding role picker",
@@ -188,7 +188,7 @@ deferInit("chunk-kxyd0g16.js:12399", () => {
     },
   });
 });
-//@ chunk-kxyd0g16.js:13206-13642 placement
+//@ chunk-fmnbrxwy.js:20425-20861 placement
 /**
  * 校验 Chrome 设置回答。
  */
@@ -215,7 +215,7 @@ function checkChromeSetupAnswer(shownFields, answer) {
     return chromeAnswerRefusal("threw");
   }
 }
-//@ chunk-kxyd0g16.js:13642-13687 placement
+//@ chunk-fmnbrxwy.js:20861-20906 placement
 /**
  * 构造 Chrome 设置回答的拒绝结果 {kind:"refused", rule}。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把远程机器的工具结果转为本地 tool_result：拒绝/失败处理、内容限长、文档附件放置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qmsrnapp.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5vfqv7sk.js (28), chunk-9tzb09wm.js (3)
  * attribution: placement 31
  */
 import { isAwayRecheckOnCached } from "./awayRecheckFlag.js";
@@ -34,16 +34,16 @@ import {
   stillRunningMessage,
 } from "./transportMessages.js";
 import { isUnverifiedRefusal, SPILLEDOUTPUTBYTES } from "../../remote/tools/protocolConstants.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { isNonMcpShellTool } from "../../tools/shared/textSearchTools.js";
 import { supportsBackgroundShells, AGENT_ID_REGEX } from "./backgroundCommands.js";
 import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
 import { getAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { KEPT_RESULT_FIELDS_BY_TOOL } from "../../remote/tools/protocolSchemas.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { leaseOfMachine } from "./lease.js";
 import { normalizeMcpServerName } from "../api/deferredToolsState.js";
 import {
@@ -59,13 +59,13 @@ import {
 } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qmsrnapp.js:40968-40994 placement
+//@ chunk-9tzb09wm.js:22306-22331 placement
 var CAP_ANNOUNCES_RETURN = "announces_return";
-//@ chunk-qmsrnapp.js:40994-41085 placement
+//@ chunk-9tzb09wm.js:22331-22422 placement
 function hostAnnouncesReturnCap(host) {
   return host.source === "session" && host.description?.capabilities?.includes(CAP_ANNOUNCES_RETURN) === true;
 }
-//@ chunk-qmsrnapp.js:41085-41186 placement
+//@ chunk-9tzb09wm.js:22422-22524 placement
 function isHostAwayRecheckable(host) {
   return (
     isAwayRecheckOnCached() &&
@@ -73,7 +73,7 @@ function isHostAwayRecheckable(host) {
     (hostAnnouncesReturnCap(host) || host.transport.isRechecked?.() === true)
   );
 }
-//@ chunk-qmsrnapp.js:41186-41232 placement
+//@ chunk-5vfqv7sk.js:19306-19352 placement
 /**
  * 远程结果转本地结果时的内容上限：文本总字符、单张图片字节、内容块条数与该类的总字节。
  */
@@ -81,7 +81,7 @@ var REMOTE_RESULT_TEXT_CAP = 262144;
 var MAX_REMOTE_IMAGE_BYTES = 8388608;
 var MAX_PLACED_ATTACHMENT_BYTES = 8388608;
 var MAX_REMOTE_CONTENT_BLOCKS = 100;
-//@ chunk-qmsrnapp.js:41232-41321 placement
+//@ chunk-5vfqv7sk.js:19352-19441 placement
 function capTextContent(content) {
   let capped = capRemoteContent(content);
   return {
@@ -92,7 +92,7 @@ function capTextContent(content) {
     }),
   };
 }
-//@ chunk-qmsrnapp.js:41321-42048 placement
+//@ chunk-5vfqv7sk.js:19441-20166 placement
 function capRemoteContent(content) {
   if (typeof content === "string")
     return content.length > REMOTE_RESULT_TEXT_CAP
@@ -152,15 +152,15 @@ function capRemoteContent(content) {
     cut,
   };
 }
-//@ chunk-qmsrnapp.js:42048-42111 placement
+//@ chunk-5vfqv7sk.js:20166-20229 placement
 function isPlaceholderTextBlock(block) {
   return block?.type === "text" && block.text.startsWith(PDF_READ_MARKER_PREFIX);
 }
-//@ chunk-qmsrnapp.js:42111-42173 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-5vfqv7sk.js:20229-20291 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return hasBufferPrefix(Buffer.from(buffer.slice(0, 8), "base64"));
 }
-//@ chunk-qmsrnapp.js:42173-42619 placement
+//@ chunk-5vfqv7sk.js:20291-20737 placement
 function placeDocumentAttachments(content, documents) {
   if (documents === undefined || documents.length === 0 || typeof content === "string") return content;
   let { placed } = documents.reduce(
@@ -194,7 +194,7 @@ function placeDocumentAttachments(content, documents) {
         };
   });
 }
-//@ chunk-qmsrnapp.js:42619-43030 placement
+//@ chunk-5vfqv7sk.js:20737-21147 placement
 function capStructuredOutput(output) {
   if (typeof output !== "object" || output === null)
     return {
@@ -226,11 +226,11 @@ function capStructuredOutput(output) {
     truncated: cut,
   };
 }
-//@ chunk-qmsrnapp.js:43030-43101 placement
+//@ chunk-5vfqv7sk.js:21147-21218 placement
 function failureSide(failure) {
   return failure.machineNotAnswering === true ? "machine" : "this_side";
 }
-//@ chunk-qmsrnapp.js:43101-45249 placement
+//@ chunk-5vfqv7sk.js:21218-23375 placement
 /**
  * 把远程机器返回的工具结果转为本地 tool_result：处理 refused/failed/error/transport_error/completed，截断大输出，附加"在哪台机器运行"说明。
  */
@@ -414,13 +414,13 @@ function convertRemoteToolResult(tool, host, transported, { afterReconnect = fal
       };
   }
 }
-//@ chunk-qmsrnapp.js:45249-45266 placement
+//@ chunk-5vfqv7sk.js:23375-23392 placement
 /**
  * 备注类文本的常量：单条备注字符上限与附带备注条数上限。
  */
 var NOTE_CHAR_CAP = 2000;
 var MAX_REMOTE_NOTES = 8;
-//@ chunk-qmsrnapp.js:45266-45411 placement
+//@ chunk-5vfqv7sk.js:23392-23537 placement
 function formatHostNotes(notes, name) {
   let mapped = notes
     .slice(0, MAX_REMOTE_NOTES)
@@ -429,22 +429,22 @@ function formatHostNotes(notes, name) {
     ? [...mapped, `(${notes.length - MAX_REMOTE_NOTES} more notes omitted)`]
     : mapped;
 }
-//@ chunk-qmsrnapp.js:45411-45424 placement
+//@ chunk-5vfqv7sk.js:23537-23550 placement
 /**
  * 机器消息的字符上限。
  */
 var MAX_MACHINE_MESSAGE_CHARS = 2000;
-//@ chunk-qmsrnapp.js:45424-45614 placement
+//@ chunk-5vfqv7sk.js:23550-23740 placement
 function unreadableResultMessage(hostName) {
   return `${hostName} answered in a result format this session cannot read (Claude Code version mismatch?); the command probably ran there \u2014 check its effect before repeating it.`;
 }
-//@ chunk-qmsrnapp.js:45614-45840 placement
+//@ chunk-5vfqv7sk.js:23740-23966 placement
 function answeredWithErrorMessage({ name, detail }) {
   return `The connection to ${name} answered with an error: ${detail} \u2014 ${name}'s Claude Code did not report running the call; whether it ran there is not known, so check its effect before repeating it.`;
 }
-//@ chunk-qmsrnapp.js:45840-45978 placement
+//@ chunk-5vfqv7sk.js:23966-24104 placement
 var REMOTE_ONLY_RESULT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qmsrnapp.js:45840", () => {
+deferInit("chunk-5vfqv7sk.js:23966", () => {
   REMOTE_ONLY_RESULT_KEYS = new Set([
     "backgroundTaskId",
     "backgroundedByUser",
@@ -454,7 +454,7 @@ deferInit("chunk-qmsrnapp.js:45840", () => {
     "structuredContent",
   ]);
 });
-//@ chunk-qmsrnapp.js:45978-48097 placement
+//@ chunk-5vfqv7sk.js:24104-26226 placement
 function convertCompletedResult(tool, host, result, options = {}) {
   let { afterReconnect = false, call } = options;
   let unused = undefined;
@@ -480,9 +480,7 @@ function convertCompletedResult(tool, host, result, options = {}) {
   switch (result.outcome) {
     case "completed": {
       let capped = capRemoteContent(
-        tool.name === FILE_READ_TOOL_NAME
-          ? placeDocumentAttachments(result.content, result.documents)
-          : result.content,
+        tool.name === READ ? placeDocumentAttachments(result.content, result.documents) : result.content,
       );
       let converted = convertRemoteOutput(tool, result, call);
       let backgroundTaskId =
@@ -600,7 +598,7 @@ function convertCompletedResult(tool, host, result, options = {}) {
       };
   }
 }
-//@ chunk-qmsrnapp.js:48097-48978 placement
+//@ chunk-5vfqv7sk.js:26226-27107 placement
 /**
  * 把远程机器返回的结构化输出转换为本地工具输出：只保留白名单字段，Edit/Write 用本地输入重建 patch 输出并按 schema 校验；记录只在远端存在的输出（落盘文件、后台任务）与溢出字节。
  */
@@ -652,10 +650,10 @@ function convertRemoteOutput(tool, result, call) {
     patchRefused: output_2.structuredPatch !== undefined && !isRenderablePatchList(output_2.structuredPatch),
   };
 }
-//@ chunk-qmsrnapp.js:48978-48997 placement
+//@ chunk-5vfqv7sk.js:27107-27126 placement
 var MAX_PATCH_FILE_ENTRIES = 200;
 var MAX_PATCH_TOTAL_CHARS = 5000;
-//@ chunk-qmsrnapp.js:48997-49645 placement
+//@ chunk-5vfqv7sk.js:27126-27774 placement
 /**
  * 由远程 Edit/Write 结果与本地输入重建文件工具的输出对象（含 patch 与暂存标记）。
  */
@@ -667,7 +665,7 @@ function rebuildFileToolOutput(toolName, output, call) {
     staged: true,
     stagedWording: output.stagedWording,
   };
-  if (toolName === FILE_EDIT_TOOL_NAME)
+  if (toolName === EDIT)
     return {
       filePath,
       oldString: call.input.old_string,
@@ -694,7 +692,7 @@ function rebuildFileToolOutput(toolName, output, call) {
   }
   return;
 }
-//@ chunk-qmsrnapp.js:49645-49814 placement
+//@ chunk-5vfqv7sk.js:27774-27943 placement
 function isRenderablePatchList(structuredPatch) {
   if (!Array.isArray(structuredPatch) || structuredPatch.length > MAX_PATCH_FILE_ENTRIES) return false;
   if (!structuredPatch.every(isValidPatchHunk)) return false;
@@ -704,7 +702,7 @@ function isRenderablePatchList(structuredPatch) {
     flattened.reduce((acc, line) => acc + line.length, 0) <= REMOTE_RESULT_TEXT_CAP
   );
 }
-//@ chunk-qmsrnapp.js:49814-50221 placement (2.1.88 match: computeGutterWidth, 0.842)
+//@ chunk-5vfqv7sk.js:27943-28350 placement (2.1.88 match: computeGutterWidth, 0.843)
 function isValidPatchHunk(patch) {
   if (typeof patch !== "object" || patch === null) return false;
   let { oldStart, oldLines, newStart, newLines, lines } = patch;
@@ -720,10 +718,10 @@ function isValidPatchHunk(patch) {
     )
   )
     return false;
-  let countLines = (prefixes) => count(lines, (line) => prefixes.includes(line[0]));
+  let countLines = (prefixes) => countWhere(lines, (line) => prefixes.includes(line[0]));
   return countLines(" -") === oldLines && countLines(" +") === newLines;
 }
-//@ chunk-qmsrnapp.js:50221-50300 placement
+//@ chunk-5vfqv7sk.js:28350-28429 placement
 function machineIdentity(host) {
   let lease = leaseOfMachine(host);
   return {
@@ -731,17 +729,17 @@ function machineIdentity(host) {
     working_dir: cleanWorkingDir(lease.working_dir),
   };
 }
-//@ chunk-qmsrnapp.js:50300-50335 placement
+//@ chunk-5vfqv7sk.js:28429-28464 placement
 function cleanWorkingDir(workingDir) {
   return sanitizeForPrompt(workingDir).trim();
 }
-//@ chunk-qmsrnapp.js:50335-50401 placement
+//@ chunk-5vfqv7sk.js:28464-28530 placement
 function sanitizeForPrompt(text, maxChars) {
   return normalizeMcpServerName(text, maxChars)
     .replace(OPEN_BRACKETS_RE, "(")
     .replace(CLOSE_BRACKETS_RE, ")");
 }
-//@ chunk-qmsrnapp.js:50401-50567 placement
+//@ chunk-5vfqv7sk.js:28530-28696 placement
 function interruptedResult(host, { askLater = false, withdrawnAtAsk = false } = {}) {
   return {
     kind: "error",
@@ -756,7 +754,7 @@ function interruptedResult(host, { askLater = false, withdrawnAtAsk = false } = 
     }),
   };
 }
-//@ chunk-qmsrnapp.js:50567-50639 placement
+//@ chunk-5vfqv7sk.js:28696-28768 placement
 function cancelledResult(host) {
   return {
     kind: "error",
@@ -765,7 +763,7 @@ function cancelledResult(host) {
     host,
   };
 }
-//@ chunk-qmsrnapp.js:50639-50772 placement
+//@ chunk-5vfqv7sk.js:28768-28901 placement
 /**
  * 生成远程调用被用户拒绝时的消息（子代理与主线程措辞不同，可带拒绝原因）。
  */
@@ -780,7 +778,7 @@ function remoteRejectMessage(agentId, reason) {
       : REJECT_MESSAGE,
   );
 }
-//@ chunk-qmsrnapp.js:50772-50871 placement
+//@ chunk-5vfqv7sk.js:28901-29000 placement
 function contentToText(content) {
   return typeof content === "string"
     ? content
@@ -788,18 +786,18 @@ function contentToText(content) {
 `);
 }
 export {
-  sanitizeForPrompt,
-  convertRemoteToolResult,
-  machineIdentity,
-  isHostAwayRecheckable,
-  interruptedResult,
-  cancelledResult,
-  remoteRejectMessage,
-  MAX_MACHINE_MESSAGE_CHARS,
   formatHostNotes,
   REMOTE_RESULT_TEXT_CAP,
   MAX_REMOTE_IMAGE_BYTES,
   MAX_REMOTE_CONTENT_BLOCKS,
   contentToText,
+  sanitizeForPrompt,
+  isHostAwayRecheckable,
+  machineIdentity,
   hostAnnouncesReturnCap,
+  convertRemoteToolResult,
+  interruptedResult,
+  cancelledResult,
+  remoteRejectMessage,
+  MAX_MACHINE_MESSAGE_CHARS,
 };

@@ -3,9 +3,9 @@
  *
  * 设置校验错误与权限模式冲突（如 workflow auto 不可用）的通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useSettingsErrors.tsx
- * pieces: chunk-0e8j1zzj.js (4), chunk-18hwfzwa.js (3)
+ * pieces: chunk-8prszgkd.js (4), chunk-czq1j3j2.js (3)
  * attribution: placement 3, callgraph-fingerprint 1, sole-consumer 2, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -24,21 +24,21 @@ import { logSetupIssues } from "../../utils/notifications/setupIssues.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0e8j1zzj.js:24742-24746 placement
+//@ chunk-8prszgkd.js:23168-23172 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:24742", () => {
+deferInit("chunk-8prszgkd.js:23168", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:24746-24792 placement
+//@ chunk-8prszgkd.js:33880-33926 placement
 function selectToolPermissionContext(appState) {
   return appState.toolPermissionContext;
 }
-//@ chunk-0e8j1zzj.js:24792-24837 placement
+//@ chunk-8prszgkd.js:33926-33971 placement
 /**
  * 导出值：WORKFLOW_HINT_TEXT（"workflows run best with it on"）；位于「设置校验错误与权限模式冲突（如 workflow auto 不可用）的通知」模块。
  */
 var WORKFLOW_HINT_TEXT = "\xB7 workflows run best with it on";
-//@ chunk-0e8j1zzj.js:24837-25579 callgraph-fingerprint (2.1.88 match: useSettingsErrors, 0.187)
+//@ chunk-8prszgkd.js:33971-34713 callgraph-fingerprint (2.1.88 match: useSettingsErrors, 0.187)
 function useSettingsErrors(requestSource) {
   let $ = useMemoCache(10);
   let toolPermissionContext = useAppState(selectToolPermissionContext);
@@ -107,17 +107,17 @@ function useSettingsErrors(requestSource) {
   } else result = $[9];
   return result;
 }
-//@ chunk-18hwfzwa.js:1787159-1787214 sole-consumer
+//@ chunk-czq1j3j2.js:1835134-1835189 sole-consumer
 function invalidSettingsEntries() {
   return splitStatusNotices(formatInvalidSettingNotice().errors).invalidEntries;
 }
-//@ chunk-18hwfzwa.js:1787214-1787279 fingerprint (2.1.88 match: SETTINGS_ERRORS_NOTIFICATION_KEY, 0.672)
+//@ chunk-czq1j3j2.js:1835189-1835254 fingerprint (2.1.88 match: SETTINGS_ERRORS_NOTIFICATION_KEY, 0.672)
 var SETTINGS_ERRORS_NOTIFICATION_KEY = {
   id: "settings-errors",
   deps: (noticeState) => [noticeState.store],
   setup: () => watchSettingsErrorCount,
 };
-//@ chunk-18hwfzwa.js:1787279-1787546 sole-consumer
+//@ chunk-czq1j3j2.js:1835254-1835521 sole-consumer
 function watchSettingsErrorCount({ store }) {
   function applySettingsErrors(errors) {
     if (isRemoteSessionAvailable()) return;

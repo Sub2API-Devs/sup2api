@@ -1,8 +1,8 @@
 /**
  * openid-client/lib/passport_strategy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -14,9 +14,9 @@ import { require_pick } from "./helpers/pick.js";
 import { require_client } from "./helpers/client.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:72747-76030 cjs-fingerprint
+//@ chunk-1hnjmk23.js:73116-76399 cjs-fingerprint
 var require_passport_strategy; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:72747", () => {
+deferInit("chunk-1hnjmk23.js:73116", () => {
   require_passport_strategy = __commonJS(function (cjsExports, cjsModule) {
     var url = importMetaRequire("url");
     var { format } = importMetaRequire("util");

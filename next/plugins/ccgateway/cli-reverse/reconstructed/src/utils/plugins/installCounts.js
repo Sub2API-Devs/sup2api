@@ -3,10 +3,10 @@
  *
  * 插件目录（安装数、组件、token 开销估计）的获取与本地缓存，安装数格式化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/installCounts.ts
- * pieces: chunk-a477qqne.js (1), chunk-e6aww6q8.js (15)
- * attribution: fingerprint 4, placement 3, layout 8, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (15), chunk-b3a6nm9h.js (1)
+ * attribution: placement 3, fingerprint 4, layout 8, callgraph-fingerprint 1
  */
 import { join, dirname } from "path";
 import { randomBytes } from "crypto";
@@ -41,7 +41,7 @@ import { logPluginFetch, classifyFetchError } from "./fetchTelemetry.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a477qqne.js:22307-22609 fingerprint (2.1.88 match: saveInstallCountsCache, 0.666)
+//@ chunk-b3a6nm9h.js:22344-22646 fingerprint (2.1.88 match: saveInstallCountsCache, 0.666)
 /**
  * 原子写文件（临时文件 + rename）。名字配错，见 lead 建议。
  */
@@ -62,7 +62,7 @@ async function writeFileAtomic(filePath, content, mode) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4220852-4221633 placement
+//@ chunk-5xgkngpb.js:4327276-4328057 placement
 /**
  * 插件目录缓存的常量组：_ut 是缓存版本 1；k1n 是缓存文件名 plugin-catalog-cache.json；Ire 是插件统计目录下载地址；Ngs 是缓存时长 1 天；Fgs 是缓存体积上限（2 × 平台上限）；b1n/hut/$gs/w1n/Hgs 依次是 token 费用、目录条目、目录、目录文件与缓存文件的 schema。
  */
@@ -76,7 +76,7 @@ var pluginCatalogEntrySchema;
 var pluginCatalogSchema;
 var pluginCatalogFileSchema;
 var pluginCatalogCacheSchema;
-deferInit("chunk-e6aww6q8.js:4220852", () => {
+deferInit("chunk-5xgkngpb.js:4327276", () => {
   PLUGIN_CATALOG_CACHE_VERSION = 1;
   PLUGIN_CATALOG_CACHE_JSON = "plugin-catalog-cache.json";
   PLUGIN_CATALOG_STATS_URL =
@@ -129,11 +129,11 @@ deferInit("chunk-e6aww6q8.js:4220852", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4221633-4221669 placement
+//@ chunk-5xgkngpb.js:4328057-4328093 placement
 function pluginCatalogCachePath() {
   return join(getPluginsDirectory(), PLUGIN_CATALOG_CACHE_JSON);
 }
-//@ chunk-e6aww6q8.js:4221669-4222139 placement
+//@ chunk-5xgkngpb.js:4328093-4328563 placement
 /**
  * 读取插件目录缓存：v5 存储启用时从存储读；无盘模式返回 null；n 为真时从只读缓存 JSON 读；否则读本地缓存文件。
  */
@@ -167,7 +167,7 @@ async function readPluginCatalogCacheRaw(cachePath, allowStale) {
     encoding: "utf-8",
   });
 }
-//@ chunk-e6aww6q8.js:4222139-4222714 fingerprint (2.1.88 match: loadInstallCountsCache, 0.312)
+//@ chunk-5xgkngpb.js:4328563-4329138 fingerprint (2.1.88 match: loadInstallCountsCache, 0.312)
 /**
  * 读取插件目录缓存文件（校验结构与版本，可允许过期）。
  */
@@ -200,7 +200,7 @@ async function loadInstallCountsCache(cachePath, { allowStale = false } = {}) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4222714-4223137 fingerprint (2.1.88 match: INSTALL_COUNTS_CACHE_FILENAME, 0.491)
+//@ chunk-5xgkngpb.js:4329138-4329561 fingerprint (2.1.88 match: INSTALL_COUNTS_CACHE_FILENAME, 0.491)
 /**
  * 写插件目录缓存（存储后端或文件）。名字配错，见 lead 建议。
  */
@@ -229,7 +229,7 @@ async function saveInstallCountsCache(cache, cachePath) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4223137-4223533 layout
+//@ chunk-5xgkngpb.js:4329561-4329957 layout
 /**
  * 从插件目录服务下载插件目录（安装数、组件、token 估计），10 秒超时，校验格式。
  */
@@ -256,7 +256,7 @@ async function fetchPluginCatalog() {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4223533-4223614 layout
+//@ chunk-5xgkngpb.js:4329957-4330038 layout
 class OncePromise {
   promise;
   load(loader) {
@@ -266,12 +266,12 @@ class OncePromise {
     this.promise = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:4223614-4223641 layout
+//@ chunk-5xgkngpb.js:4330038-4330065 layout
 var catalogFetchOnce; // deferred: uses OncePromise of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4223614", () => {
+deferInit("chunk-5xgkngpb.js:4330038", () => {
   catalogFetchOnce = new HostScoped(() => new OncePromise());
 });
-//@ chunk-e6aww6q8.js:4223641-4223982 fingerprint (2.1.88 match: getInstallCounts, 0.402)
+//@ chunk-5xgkngpb.js:4330065-4330406 fingerprint (2.1.88 match: getInstallCounts, 0.402)
 /**
  * 取插件目录（安装数等）：优先 24 小时内的本地缓存，过期则联网获取并写缓存。
  */
@@ -303,7 +303,7 @@ function getInstallCounts(cachePath) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:4223982-4224171 layout
+//@ chunk-5xgkngpb.js:4330406-4330595 layout
 /**
  * 插件 ID → 去重安装数 的映射，用于 /plugin 浏览排序。
  */
@@ -315,14 +315,14 @@ async function getUniqueInstallCounts(storageV5) {
     if (typeof value.unique_installs === "number") counts.set(key, value.unique_installs);
   return counts;
 }
-//@ chunk-e6aww6q8.js:4224171-4224228 layout
+//@ chunk-5xgkngpb.js:4330595-4330652 layout
 /**
  * 取插件目录中某插件的条目。
  */
 async function getCatalogEntry(pluginId, storageV5) {
   return (await getInstallCounts(storageV5))?.plugins[pluginId];
 }
-//@ chunk-e6aww6q8.js:4224228-4224304 layout
+//@ chunk-5xgkngpb.js:4330652-4330728 layout
 /**
  * 读本地缓存的插件目录（允许过期）。
  */
@@ -333,13 +333,13 @@ async function getCachedCatalogPlugins(cachePath) {
     })
   )?.catalog.plugins;
 }
-//@ chunk-e6aww6q8.js:4224304-4224323 layout
+//@ chunk-5xgkngpb.js:4330728-4330747 layout
 /**
  * ESTIMATED_TOKENS_PER_COMPONENT：每组件估算 token 数；MAX_COMPONENT_ESTIMATE_COUNT：估算组件数上限（同一声明共 2 个绑定）。
  */
 var ESTIMATED_TOKENS_PER_COMPONENT = 2000;
 var MAX_COMPONENT_ESTIMATE_COUNT = 3;
-//@ chunk-e6aww6q8.js:4224323-4224703 layout
+//@ chunk-5xgkngpb.js:4330747-4331127 layout
 /**
  * 估计插件对上下文的 token 开销（常驻/调用时），目录没有精确值时按组件数估算。
  */
@@ -370,7 +370,7 @@ async function estimatePluginTokenCost(pluginId, canonicalName, storageV5) {
     isEstimate: true,
   };
 }
-//@ chunk-e6aww6q8.js:4224703-4224911 callgraph-fingerprint (2.1.88 match: formatInstallCount, 1)
+//@ chunk-5xgkngpb.js:4331127-4331335 callgraph-fingerprint (2.1.88 match: formatInstallCount, 1)
 /**
  * 安装数格式化：<1000 原样，千用 k，百万用 M。
  */
@@ -384,9 +384,9 @@ function formatInstallCount(count) {
   return formatted.endsWith(".0") ? `${formatted.slice(0, -2)}M` : `${formatted}M`;
 }
 export {
-  writeFileAtomic,
-  getUniqueInstallCounts,
   getCachedCatalogPlugins,
+  getUniqueInstallCounts,
+  writeFileAtomic,
   getCatalogEntry,
   formatInstallCount,
   estimatePluginTokenCost,

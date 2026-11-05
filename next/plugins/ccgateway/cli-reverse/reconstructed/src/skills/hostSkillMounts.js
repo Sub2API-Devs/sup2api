@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主技能挂载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f9asxqh1.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q1gbn2mn.js (28)
  * attribution: placement 28
  */
 import { join } from "path";
@@ -23,7 +23,7 @@ import { isZipMagic } from "../services/plugins/accountSync/sessionSkillManifest
 import { MAX_SCOPE_RESPONSE_BYTES } from "../services/plugins/accountSync/pluginsScopeGate.js";
 import { isServerPluginId } from "../utils/plugins/pluginAttribution.js";
 
-//@ chunk-f9asxqh1.js:23651-23814 placement
+//@ chunk-q1gbn2mn.js:25334-25497 placement
 /**
  * 宿主技能挂载的常量：挂载根 /mnt/skills、公共/示例来源映射、读取预算、文件大小上限、新鲜度容差、时间格式正则。
  */
@@ -37,7 +37,7 @@ var HOST_MOUNT_BUDGET_MS = 3000;
 var MAX_SKILL_ZIP_BYTES = 33554432;
 var MOUNT_FRESHNESS_SLACK_MS = 600000;
 var ISO_TIME_RE = /^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/;
-//@ chunk-f9asxqh1.js:23814-23927 placement
+//@ chunk-q1gbn2mn.js:25497-25610 placement
 /**
  * 记录一次宿主技能挂载未命中（按原因计数并写诊断日志）。
  */
@@ -48,20 +48,20 @@ function recordMountMiss(kind, miss, counts) {
     ...miss,
   });
 }
-//@ chunk-f9asxqh1.js:23927-24015 placement
+//@ chunk-q1gbn2mn.js:25610-25698 placement
 /**
  * 把挂载失败原因计数转成 mount_miss_* 字段。
  */
 function flattenMountMissCounts(counts) {
   return Object.fromEntries(Array.from(counts, ([reason, count]) => [`mount_miss_${reason}`, count]));
 }
-//@ chunk-f9asxqh1.js:24015-24215 placement
+//@ chunk-q1gbn2mn.js:25698-25898 placement
 function getHostMountKind(row) {
   if (row.creator_type !== "anthropic" || row.id !== row.name || !isSafeSkillName(row.name)) return;
   if (row.source === MOUNT_SOURCES.public) return "public";
   return row.source === MOUNT_SOURCES.examples && row.is_public_provisioned === true ? "examples" : undefined;
 }
-//@ chunk-f9asxqh1.js:24215-24325 placement
+//@ chunk-q1gbn2mn.js:25898-26008 placement
 /**
  * 为宿主挂载的技能建立 id→挂载类型的索引。
  */
@@ -73,7 +73,7 @@ function indexHostMountKinds(skills) {
     if (hostMountKind !== undefined) hostMountKinds.set(skill.id, hostMountKind);
   }
 }
-//@ chunk-f9asxqh1.js:24325-24401 placement
+//@ chunk-q1gbn2mn.js:26008-26084 placement
 function isHostSkillMountActive() {
   return (
     (isCoworkWithRemote() ||
@@ -82,7 +82,7 @@ function isHostSkillMountActive() {
     platformNoFollowFlags() !== 0
   );
 }
-//@ chunk-f9asxqh1.js:24401-24462 placement
+//@ chunk-q1gbn2mn.js:26084-26145 placement
 /**
  * 行匹配到挂载类型且挂载在当前会话生效时返回该类型。
  */
@@ -90,7 +90,7 @@ function hostMountKindForRow(row) {
   let kind = matchHostMountKind(row);
   return kind !== undefined && isHostSkillMountActive() ? kind : undefined;
 }
-//@ chunk-f9asxqh1.js:24462-24612 placement
+//@ chunk-q1gbn2mn.js:26145-26295 placement
 function matchHostMountKind(row) {
   let kind = remoteToolsState().hostMountKinds.get(row.skillId);
   return kind !== undefined &&
@@ -100,7 +100,7 @@ function matchHostMountKind(row) {
     ? kind
     : undefined;
 }
-//@ chunk-f9asxqh1.js:24612-25026 placement
+//@ chunk-q1gbn2mn.js:26295-26709 placement
 /**
  * 在时间预算内探测宿主技能挂载（各类目录是否为独立挂载设备），返回按 kind 读取技能 zip 的读取器（文件须比服务端记录新且为 zip），并记录花费/等待时间；不适用时返回 null。
  */
@@ -134,7 +134,7 @@ async function createHostSkillReader(skills, missCounts) {
     waitedMs: () => Math.round(budget.waitedMs),
   };
 }
-//@ chunk-f9asxqh1.js:25026-25599 placement
+//@ chunk-q1gbn2mn.js:26709-27282 placement
 /**
  * 在预算内执行一项宿主挂载工作：先等待正在进行的目录类工作（有上限），仍有未完成工作或预算耗尽时返回原因，否则执行并在截止前取结果。
  */
@@ -171,7 +171,7 @@ async function runHostMountWork(budget, work) {
     }
   );
 }
-//@ chunk-f9asxqh1.js:25599-25830 placement
+//@ chunk-q1gbn2mn.js:27282-27513 placement
 /**
  * 等待其他宿主挂载工作完成后独占执行本次工作。
  */
@@ -184,7 +184,7 @@ async function runHostMountWorkExclusive(work) {
   }
   return trackHostMountWork(state, work, performance.now(), true);
 }
-//@ chunk-f9asxqh1.js:25830-25945 placement
+//@ chunk-q1gbn2mn.js:27513-27628 placement
 /**
  * 判断进行中的宿主挂载工作是否已超时。
  */
@@ -195,7 +195,7 @@ function isHostMountWorkStale() {
     performance.now() - state.hostMountWorkStartedAt >= HOST_MOUNT_BUDGET_MS
   );
 }
-//@ chunk-f9asxqh1.js:25945-26159 placement
+//@ chunk-q1gbn2mn.js:27628-27842 placement
 function trackHostMountWork(state, startWork, hostMountWorkStartedAt, hostMountWorkIsCatalogs) {
   let work = startWork();
   state.hostMountWorkOutstanding = work;
@@ -207,11 +207,11 @@ function trackHostMountWork(state, startWork, hostMountWorkStartedAt, hostMountW
   work.then(clear, clear);
   return work;
 }
-//@ chunk-f9asxqh1.js:26159-26188 placement
+//@ chunk-q1gbn2mn.js:27842-27871 placement
 var NOT_A_MOUNT_PROBE = {
   reason: "not_a_mount",
 };
-//@ chunk-f9asxqh1.js:26188-26454 placement
+//@ chunk-q1gbn2mn.js:27871-28137 placement
 async function probeMountKinds(kinds) {
   let rootStat = await lstat(HOST_SKILLS_MOUNT).catch(toProbeFailure);
   let rootProbe = "reason" in rootStat || rootStat.isDirectory() ? rootStat : NOT_A_MOUNT_PROBE;
@@ -235,7 +235,7 @@ async function probeMountKinds(kinds) {
   }
   return probes;
 }
-//@ chunk-f9asxqh1.js:26454-26562 placement
+//@ chunk-q1gbn2mn.js:28137-28245 placement
 function toProbeFailure(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOENT"
@@ -247,7 +247,7 @@ function toProbeFailure(error) {
         code: errnoCode ?? "unknown",
       };
 }
-//@ chunk-f9asxqh1.js:26562-26842 placement
+//@ chunk-q1gbn2mn.js:28245-28525 placement
 function readMountedSkillZip(zipPath, updatedAt, device) {
   return withOpenedRegularFile(zipPath, device, MAX_SKILL_ZIP_BYTES, async (handle, stats) => {
     let rowUpdatedMs = updatedAt !== null && ISO_TIME_RE.test(updatedAt) ? Date.parse(updatedAt) : Number.NaN;
@@ -269,14 +269,14 @@ function readMountedSkillZip(zipPath, updatedAt, device) {
         };
   });
 }
-//@ chunk-f9asxqh1.js:26842-26905 placement
+//@ chunk-q1gbn2mn.js:28525-28588 placement
 /**
  * 探测单个技能 id 的宿主挂载情况（失败时返回原因）。
  */
 async function probeOneMountKind(kind) {
   return (await probeMountKinds(new Set([kind]))).get(kind) ?? NOT_A_MOUNT_PROBE;
 }
-//@ chunk-f9asxqh1.js:26905-27093 placement
+//@ chunk-q1gbn2mn.js:28588-28776 placement
 /**
  * 解析公共技能目录的根（设备与真实路径），失败时写诊断日志并返回原因。
  */
@@ -295,7 +295,7 @@ async function resolvePublicCatalogRoot() {
   if ("reason" in result) logForDiagnosticsNoPII("warn", "skill_host_catalog_not_read", result);
   return result;
 }
-//@ chunk-f9asxqh1.js:27093-27235 placement
+//@ chunk-q1gbn2mn.js:28776-28918 placement
 /**
  * 读取挂载技能目录中的 SKILL.md（优先缓存/特殊读取，否则作为普通文件读取），返回文本与路径或失败原因。
  */
@@ -311,7 +311,7 @@ async function readMountedSkillMd(root, skillName, device) {
         filePath: skillPath,
       });
 }
-//@ chunk-f9asxqh1.js:27235-27337 placement
+//@ chunk-q1gbn2mn.js:28918-29020 placement
 async function checkNotSymlink(filePath) {
   try {
     return (await realpath(filePath)) === filePath
@@ -323,7 +323,7 @@ async function checkNotSymlink(filePath) {
     return toReadFailure(error);
   }
 }
-//@ chunk-f9asxqh1.js:27337-27430 placement (2.1.88 match: readJsonFile, 0.83)
+//@ chunk-q1gbn2mn.js:29020-29113 placement (2.1.88 match: readJsonFile, 0.83)
 /**
  * 安全读取文本文件：同一设备、普通文件、大小不超过上限，否则返回原因。
  */
@@ -334,7 +334,7 @@ function readRegularFileText(filePath, device, maxBytes) {
     }),
   }));
 }
-//@ chunk-f9asxqh1.js:27430-27722 placement
+//@ chunk-q1gbn2mn.js:29113-29405 placement
 /**
  * 打开文件并做 dev/isFile/size 检查后交给回调，最后关闭。
  */
@@ -362,7 +362,7 @@ async function withOpenedRegularFile(filePath, expectedDevice, maxBytes, useFile
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-f9asxqh1.js:27722-27898 placement
+//@ chunk-q1gbn2mn.js:29405-29581 placement
 function toReadFailure(error) {
   let errnoCode = getErrnoCode(error);
   switch (errnoCode) {
@@ -381,7 +381,7 @@ function toReadFailure(error) {
       };
   }
 }
-//@ chunk-f9asxqh1.js:27898-28297 placement
+//@ chunk-q1gbn2mn.js:29581-29980 placement
 /**
  * 把服务端技能记录转成内部行：id、名称、描述、来源、更新时间，以及可选的背后插件 id、是否用户可调用、是否禁用模型调用。
  */
@@ -404,7 +404,7 @@ function toSkillRow(skill) {
     }),
   };
 }
-//@ chunk-f9asxqh1.js:28297-28630 placement
+//@ chunk-q1gbn2mn.js:29980-30313 placement
 /**
  * 根据技能元数据判断归属：anthropic、共享、组织、自己或他人。
  */
@@ -417,31 +417,31 @@ function getSkillOwnership(skill) {
   if (typeof skill.backing_plugin_id === "string") return isAccountPartitioned ? "own" : "other";
   return isAccountPartitioned || skill.partition_by == null ? "own" : "other";
 }
-//@ chunk-f9asxqh1.js:28630-28668 placement
+//@ chunk-q1gbn2mn.js:30313-30351 placement
 /**
  * 判断技能行是否启用（enabled 不为 false）。
  */
 function isSkillEnabled(skill) {
   return skill.enabled !== false;
 }
-//@ chunk-f9asxqh1.js:28668-28694 placement
+//@ chunk-q1gbn2mn.js:30351-30377 placement
 var COLLISION_LOSER = "collision-loser";
 export {
+  HOST_SKILLS_MOUNT,
+  PUBLIC,
+  COLLISION_LOSER,
+  readRegularFileText,
+  probeOneMountKind,
+  flattenMountMissCounts,
   isHostMountWorkStale,
   runHostMountWorkExclusive,
   resolvePublicCatalogRoot,
   readMountedSkillMd,
-  COLLISION_LOSER,
-  HOST_SKILLS_MOUNT,
-  PUBLIC,
-  readRegularFileText,
-  probeOneMountKind,
-  flattenMountMissCounts,
+  recordMountMiss,
+  hostMountKindForRow,
+  createHostSkillReader,
   getSkillOwnership,
   isSkillEnabled,
   toSkillRow,
   indexHostMountKinds,
-  recordMountMiss,
-  hostMountKindForRow,
-  createHostSkillReader,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：在自己的 worktree 里安全运行 git：校验 remote、关闭递归子模块、处理 partial clone 配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (34), chunk-7wx1ncrk.js (1)
  * attribution: placement 35
  */
 import { resolve } from "path";
@@ -49,11 +49,15 @@ import { urlPatternToRegex } from "../stringUtils.js";
 import { getEnvCaseInsensitive } from "../plugins/securityDefaultPlugin.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:5777-5843 placement
+//@ chunk-7wx1ncrk.js:191-231 placement
+var GIT_FILES_REF_BACKEND_ENV = {
+  GIT_REFERENCE_BACKEND: "files",
+};
+//@ chunk-01kgd7xg.js:6080-6146 placement
 function ownProperty(object, key) {
   return object !== undefined && Object.hasOwn(object, key) ? object[key] : undefined;
 }
-//@ chunk-6vnxsn99.js:5875-6326 placement
+//@ chunk-01kgd7xg.js:6178-6629 placement
 function gitConfigEnvOf(env) {
   let out = {};
   for (let varName of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
@@ -81,10 +85,10 @@ function gitConfigEnvOf(env) {
     count: envVarCaseInsensitiveOnWindows,
   };
 }
-//@ chunk-6vnxsn99.js:6326-6481 placement
+//@ chunk-01kgd7xg.js:6629-6784 placement
 var HTTP_SSL_CONFIG_KEY_RE =
   /^http\.(?:.*\.)?(?:ssl(?:cainfo|capath|verify|version|cipherlist|backend|try)|schannel(?:checkrevoke|usesslcainfo)|pinnedpubkey|proxysslcainfo)$/i;
-//@ chunk-6vnxsn99.js:6481-6738 placement
+//@ chunk-01kgd7xg.js:6784-7040 placement
 function safeGitConfigEnv() {
   let { env, count } = gitConfigEnvOf(effectiveEnvSnapshot());
   let pairs = [];
@@ -98,14 +102,14 @@ function safeGitConfigEnv() {
     ? {}
     : pickByHelper(buildGitConfigEnv(undefined, pairs), (value) => value !== undefined);
 }
-//@ chunk-6vnxsn99.js:6738-6785 placement
-function withSafeGitConfig(worktreePath, extraEnv) {
-  return buildGitEnvVarsForRepo(worktreePath, {
+//@ chunk-01kgd7xg.js:7040-7087 placement
+function withSafeGitConfig(cwd, extraEnv) {
+  return buildGitEnvVarsForRepo(cwd, {
     ...safeGitConfigEnv(),
     ...extraEnv,
   });
 }
-//@ chunk-6vnxsn99.js:6785-8208 placement
+//@ chunk-01kgd7xg.js:7087-8510 placement
 /**
  * 在自身 worktree 里运行 git（materializeWorkTree）：校验 remote 名、关闭递归子模块、处理 partial-clone 懒加载与 promisor remote，返回 stdout/stderr/code 与 lane 信息。
  */
@@ -182,7 +186,7 @@ async function runGitInOwnWorkTree(
     },
   );
 }
-//@ chunk-6vnxsn99.js:8208-8442 placement
+//@ chunk-01kgd7xg.js:8510-8744 placement
 function gitReadInOwnWorkTree(dir, args, envPins = {}, runOptions = {}) {
   let subcommand = args[gitSubcommandIndex(args)];
   if (subcommand === undefined || !ALLOWED_REMOTE_SUBCOMMANDS.has(subcommand))
@@ -192,22 +196,22 @@ function gitReadInOwnWorkTree(dir, args, envPins = {}, runOptions = {}) {
     );
   return runGitInLane(execFileNoThrow, dir, args, envPins, null, runOptions);
 }
-//@ chunk-6vnxsn99.js:8442-8527 placement
+//@ chunk-01kgd7xg.js:8744-8829 placement
 function gitSubcommandIndex(args) {
   return args.findIndex((arg, index) => !arg.startsWith("-") && (index === 0 || args[index - 1] !== "-c"));
 }
-//@ chunk-6vnxsn99.js:8527-8599 placement
+//@ chunk-01kgd7xg.js:8829-8901 placement
 var ALLOWED_REMOTE_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ALLOWED_GIT_URL_SCHEMES;
-deferInit("chunk-6vnxsn99.js:8527", () => {
+deferInit("chunk-01kgd7xg.js:8829", () => {
   ALLOWED_REMOTE_SUBCOMMANDS = new Set(["diff", "format-patch", "log", "show"]);
   ALLOWED_GIT_URL_SCHEMES = ["https", "ssh"];
 });
-//@ chunk-6vnxsn99.js:8599-8641 placement
+//@ chunk-01kgd7xg.js:8901-8943 placement
 function isNetworkGitUrl(url) {
   return ALLOWED_GIT_URL_SCHEMES.includes(gitUrlScheme(url));
 }
-//@ chunk-6vnxsn99.js:8641-8962 placement
+//@ chunk-01kgd7xg.js:8943-9264 placement
 function gitUrlScheme(gitUrl) {
   let scheme = /^[A-Za-z0-9][A-Za-z0-9+.-]*(?=::)/.exec(gitUrl)?.[0];
   if (scheme !== undefined) return scheme;
@@ -221,18 +225,18 @@ function gitUrlScheme(gitUrl) {
     ? "file"
     : "ssh";
 }
-//@ chunk-6vnxsn99.js:8962-9036 placement
+//@ chunk-01kgd7xg.js:9264-9338 placement
 var TRANSPORT_NOT_ALLOWED_RE = /^fatal: transport '([A-Za-z][A-Za-z0-9+.-]{0,31})' not allowed$/m;
-//@ chunk-6vnxsn99.js:9036-9103 placement
+//@ chunk-01kgd7xg.js:9338-9405 placement
 function normalizeRemoteName(name) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) ? name : null;
 }
-//@ chunk-6vnxsn99.js:9103-9179 placement
+//@ chunk-01kgd7xg.js:9405-9481 placement
 var SAFE_FETCH_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6vnxsn99.js:9103", () => {
+deferInit("chunk-01kgd7xg.js:9405", () => {
   SAFE_FETCH_FLAGS = new Set(["--stdin", "--negotiate-only", "--refs", "--heads", "--quiet"]);
 });
-//@ chunk-6vnxsn99.js:9179-9531 placement
+//@ chunk-01kgd7xg.js:9481-9833 placement
 /**
  * 参数是否为只读 fetch/ls-remote 且关闭递归子模块。
  */
@@ -250,7 +254,7 @@ function isSafeFetchArgs(args, remoteName) {
     args[index + 1] === remoteName
   );
 }
-//@ chunk-6vnxsn99.js:9531-9702 placement
+//@ chunk-01kgd7xg.js:9833-10004 placement
 var FAILED_RESULT = {
   stdout: "",
   stderr: "",
@@ -258,7 +262,7 @@ var FAILED_RESULT = {
 };
 var CANCELLED_BEFORE_START = "the operation was cancelled before it started";
 var GIT_DIRS_CHANGED = "the repository's git directories changed while Claude Code read its git config";
-//@ chunk-6vnxsn99.js:9702-9809 placement
+//@ chunk-01kgd7xg.js:10004-10111 placement
 function notStartedResult(why, reason) {
   return {
     stdout: "",
@@ -271,7 +275,7 @@ function notStartedResult(why, reason) {
     },
   };
 }
-//@ chunk-6vnxsn99.js:9809-10799 placement
+//@ chunk-01kgd7xg.js:10111-11101 placement
 /**
  * 校验 programs.buildInvocation 只返回指向 git 的绝对路径且不改参数/环境。
  */
@@ -320,7 +324,7 @@ function wrapCheckedPrograms(programs) {
     },
   };
 }
-//@ chunk-6vnxsn99.js:10799-10904 placement
+//@ chunk-01kgd7xg.js:11101-11206 placement
 function buildLaneInvocation(programs, gitExe, args, scope) {
   return programs === undefined
     ? {
@@ -331,7 +335,7 @@ function buildLaneInvocation(programs, gitExe, args, scope) {
       }
     : programs.buildInvocation(args, scope);
 }
-//@ chunk-6vnxsn99.js:10904-11092 placement
+//@ chunk-01kgd7xg.js:11206-11394 placement
 function guardRunner(programs, afterEachRead, movedFlag) {
   let runner = toRunner(programs);
   let run = runner.run ?? runGitQuietStdin;
@@ -352,7 +356,7 @@ function guardRunner(programs, afterEachRead, movedFlag) {
         },
       };
 }
-//@ chunk-6vnxsn99.js:11092-11244 placement
+//@ chunk-01kgd7xg.js:11394-11546 placement
 function toRunner(programs) {
   return programs === undefined
     ? {}
@@ -371,7 +375,7 @@ function toRunner(programs) {
           ),
       };
 }
-//@ chunk-6vnxsn99.js:11244-14477 placement
+//@ chunk-01kgd7xg.js:11546-14779 placement
 /**
  * 先按给定环境运行一次 git，成功即返回；失败且原因可能是 partial clone 缺对象时，检查 promisor 远端与配置， 必要时在受控配置下再试一次，返回结果与 lane（说明走了哪条路径）。
  */
@@ -527,7 +531,7 @@ async function runGitInLane(
     stderrOfGitAlone: retryResult.stderr,
   };
 }
-//@ chunk-6vnxsn99.js:14477-14925 placement (2.1.88 match: readHeadAndTail, 0.802)
+//@ chunk-01kgd7xg.js:14779-15227 placement (2.1.88 match: readHeadAndTail, 0.802)
 /**
  * 危险 git 配置键正则（http/url/remote 代理与凭证、ssh 命令、bundle、gpg 等），用于拒绝不安全配置。
  */
@@ -539,7 +543,7 @@ var LABEL_HEAD_TAIL = {
   head: 70,
   tail: 20,
 };
-//@ chunk-6vnxsn99.js:14925-15024 placement
+//@ chunk-01kgd7xg.js:15227-15326 placement
 function appendStderrLine(result, line) {
   let replaced = result.stderr.replace(/\n*$/, "");
   return {
@@ -553,7 +557,7 @@ function appendStderrLine(result, line) {
 `,
   };
 }
-//@ chunk-6vnxsn99.js:15024-15194 placement
+//@ chunk-01kgd7xg.js:15326-15496 placement
 function laneConfigPairs(extraPairs, filterEntries, tailPairs) {
   return [
     ["credential.helper", ""],
@@ -565,13 +569,13 @@ function laneConfigPairs(extraPairs, filterEntries, tailPairs) {
     ...isFilterConfigKey(filterDriverNames(filterEntries.map(([key]) => key))),
   ];
 }
-//@ chunk-6vnxsn99.js:15194-15262 placement
+//@ chunk-01kgd7xg.js:15496-15564 placement
 function definedEnvEntries(pairs, count) {
   return pairs.length === 0
     ? {}
     : pickByHelper(buildGitConfigEnv(count, pairs), (value) => value !== undefined);
 }
-//@ chunk-6vnxsn99.js:15262-19110 placement
+//@ chunk-01kgd7xg.js:15564-19411 placement
 /**
  * 判断能否以懒加载方式重试（promisor 远端、PATH、GIT_NO_LAZY_FETCH 等）。
  */
@@ -787,7 +791,7 @@ async function planLazyFetchRetry(
       undefined,
   };
 }
-//@ chunk-6vnxsn99.js:19110-19262 placement
+//@ chunk-01kgd7xg.js:19411-19563 placement
 function remoteIsGroupResult(fetchesFrom) {
   return {
     retry: false,
@@ -795,21 +799,21 @@ function remoteIsGroupResult(fetchesFrom) {
     forgone: `git's configuration sets remotes.${fetchesFrom}, which makes that name a group of remotes`,
   };
 }
-//@ chunk-6vnxsn99.js:19262-19393 placement
+//@ chunk-01kgd7xg.js:19563-19694 placement
 function singleRemoteUrl(entries, fetchesFrom) {
   let mapped = entries.filter(([key]) => key === `remote.${fetchesFrom}.url`).map(([, value]) => value);
   return mapped.every((url) => url !== null && url !== "") ? (mapped[0] ?? null) : null;
 }
-//@ chunk-6vnxsn99.js:19393-19449 placement
+//@ chunk-01kgd7xg.js:19694-19750 placement
 var PARTIAL_CLONE_CONFIG_KEY_RE = /^remote\.(.*)\.(promisor|partialclonefilter)$/s;
-//@ chunk-6vnxsn99.js:19449-19559 placement
+//@ chunk-01kgd7xg.js:19750-19860 placement
 async function findPromisorRemote(dir, repository, programs) {
   let partialCloneConfig = await readPartialCloneConfig(dir, repository, programs);
   return partialCloneConfig === null || partialCloneConfig === undefined
     ? partialCloneConfig
     : (partialCloneConfig.extension ?? partialCloneConfig.remotes[0] ?? null);
 }
-//@ chunk-6vnxsn99.js:19559-20127 placement
+//@ chunk-01kgd7xg.js:19860-20428 placement
 async function readPartialCloneConfig(dir, repository = resolveGitDirsOrPlaceholder(dir), programs) {
   let result = await gitConfigRead(
     dir,
@@ -844,7 +848,7 @@ async function readPartialCloneConfig(dir, repository = resolveGitDirsOrPlacehol
     remotes: promisorRemotes,
   };
 }
-//@ chunk-6vnxsn99.js:20127-20381 placement
+//@ chunk-01kgd7xg.js:20428-20682 placement
 function gitConfigRead(dir, args, repository, envPins, operatorEnv, programs) {
   let laneInvocation = buildLaneInvocation(
     programs,
@@ -869,7 +873,7 @@ function gitConfigRead(dir, args, repository, envPins, operatorEnv, programs) {
     stdin: "ignore",
   });
 }
-//@ chunk-6vnxsn99.js:20381-20548 placement
+//@ chunk-01kgd7xg.js:20682-20849 placement
 function sanitizedPathEnv(env) {
   let out = {
     ...env,
@@ -880,17 +884,13 @@ function sanitizedPathEnv(env) {
   out.PATH = sanitizePathEnv(getEnvCaseInsensitive(env, "PATH") ?? "");
   return out;
 }
-//@ chunk-6vnxsn99.js:20548-20588 placement
-var GIT_FILES_REF_BACKEND_ENV = {
-  GIT_REFERENCE_BACKEND: "files",
-};
 export {
-  runGitInOwnWorkTree,
-  isNetworkGitUrl,
   ownProperty,
+  gitConfigEnvOf,
   gitReadInOwnWorkTree,
   GIT_FILES_REF_BACKEND_ENV,
+  runGitInOwnWorkTree,
+  isNetworkGitUrl,
   withSafeGitConfig,
-  gitConfigEnvOf,
   readPartialCloneConfig,
 };

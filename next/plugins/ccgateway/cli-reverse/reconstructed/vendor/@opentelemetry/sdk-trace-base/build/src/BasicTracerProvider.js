@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/BasicTracerProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { import_core_3, import_resources_2 } from "../esm/enums.js";
@@ -12,7 +12,7 @@ import { MultiSpanProcessor } from "./MultiSpanProcessor.js";
 import { Tracer } from "./Tracer.js";
 import { ForceFlushState } from "../esm/BasicTracerProvider.js";
 
-//@ chunk-9vvvg0d3.js:22203-23328 esm-fingerprint
+//@ chunk-3wgj3rdg.js:22575-23700 esm-fingerprint
 class BasicTracerProvider {
   _config;
   _tracers = new Map();

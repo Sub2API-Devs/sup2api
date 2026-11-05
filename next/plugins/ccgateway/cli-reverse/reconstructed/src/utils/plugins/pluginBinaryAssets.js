@@ -3,27 +3,16 @@
  *
  * 2.1.316 新增：插件二进制资源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (39), chunk-f3qhjfah.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (1), chunk-5xgkngpb.js (39)
  * attribution: placement 40
  */
 import { join } from "path";
-import {
-  lstat,
-  mkdir,
-  realpath,
-  rm as rm_2,
-  open,
-  utimes,
-  copyFile,
-  link,
-  rename,
-  readdir,
-} from "fs/promises";
+import { lstat, mkdir, realpath, rm, open, utimes, copyFile, link, rename, readdir } from "fs/promises";
 import { createHash, randomBytes } from "crypto";
 import { constants } from "fs";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import {
   MAX_PLUGIN_BINARY_BYTES,
   binaryBaseNameForTarget,
@@ -60,7 +49,7 @@ import { OAUTH_BETA_HEADER } from "../../constants/oauth.js";
 import { LINKMISDIRECTED, LINKUNVERIFIED } from "../fsSafety/hardenedRead.js";
 import { ATOMIC_WRITE_ERRNOS } from "./safeCopy.js";
 
-//@ chunk-f3qhjfah.js:4072-4167 placement
+//@ chunk-5s0qaz1x.js:4173-4268 placement
 /**
  * 若路径正是插件资源缓存目录（`<配置目录>/plugins/asset-cache`），返回存储命名空间 pluginAssetCache，否则 null。
  */
@@ -71,7 +60,7 @@ function assetCacheNamespace(cacheDir) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:4369039-4369171 placement
+//@ chunk-5xgkngpb.js:4475632-4475764 placement
 var ASSET_LOG_PREFIX = "[pluginBinaryAssets]";
 var ASSET_CACHE = "asset-cache";
 var ASSET_FETCH_TIMEOUT_MS = 120000;
@@ -81,7 +70,7 @@ var MAX_ASSET_BYTES = MAX_PLUGIN_BINARY_BYTES;
 var ASSET_RETRY_DELAYS_MS = [1000, 2000];
 var ASSET_CACHE_TTL_MS = 2592000000;
 var TEMP_FILE_TTL_MS = 86400000;
-//@ chunk-e6aww6q8.js:4369171-4369295 placement
+//@ chunk-5xgkngpb.js:4475764-4475888 placement
 class PluginAssetFetchError extends Error {
   code;
   status;
@@ -92,14 +81,14 @@ class PluginAssetFetchError extends Error {
     this.status = status;
   }
 }
-//@ chunk-e6aww6q8.js:4369295-4369393 placement
+//@ chunk-5xgkngpb.js:4475888-4475986 placement
 function pluginBinaryAssetsEnabled() {
   return (
     env.CLAUDE_CODE_PLUGIN_BINARY_ASSETS ||
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_plugin_binary_assets", false) === true
   );
 }
-//@ chunk-e6aww6q8.js:4369393-4369572 placement
+//@ chunk-5xgkngpb.js:4475986-4476165 placement
 async function provisionBinaryAssets(pluginPath, pluginId, options) {
   let assetCacheDir = options?.assetCacheDir ?? join(projectPluginsDir(), ASSET_CACHE);
   let storageV5 = options?.storageV5;
@@ -112,7 +101,7 @@ async function provisionBinaryAssets(pluginPath, pluginId, options) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4369572-4369651 placement
+//@ chunk-5xgkngpb.js:4476165-4476244 placement
 /**
  * shouldInstallBinaryAssets：官方市场插件且功能开启。
  */
@@ -123,7 +112,7 @@ function shouldInstallBinaryAssets(pluginId) {
     pluginBinaryAssetsEnabled()
   );
 }
-//@ chunk-e6aww6q8.js:4369651-4373603 placement
+//@ chunk-5xgkngpb.js:4476244-4480199 placement
 /**
  * 为插件准备二进制资源：下载、校验并放到插件目录的 bin 下。
  */
@@ -422,7 +411,7 @@ async function provisionPluginBinaryAssets(pluginPath, pluginId, cacheDir, names
     }
   }
 }
-//@ chunk-e6aww6q8.js:4374535-4374872 placement
+//@ chunk-5xgkngpb.js:4481131-4481468 placement
 /**
  * 确保插件 bin 目录存在且是目录（ok/bin_not_dir/bin_uninspectable/bin_dir_race）。
  */
@@ -445,7 +434,7 @@ async function ensureBinDir(binDirPath, storageV5, versionSpace) {
     }
   return (await lstat(binDirPath).catch(() => null))?.isDirectory() ? "ok" : "bin_dir_race";
 }
-//@ chunk-e6aww6q8.js:4374872-4375279 placement
+//@ chunk-5xgkngpb.js:4481468-4481875 placement
 /**
  * v5 存储下确保 bin 作用域存在。
  */
@@ -466,13 +455,13 @@ async function ensureBinDirViaStorage(storageV5, versionSpace) {
   }
   return (await isDirectoryScope(storageV5, binScope)) ? "ok" : "bin_dir_race";
 }
-//@ chunk-e6aww6q8.js:4375279-4375320 placement
+//@ chunk-5xgkngpb.js:4481875-4481916 placement
 function makePrivateDir(dirPath) {
   return mkdir(dirPath, {
     mode: 493,
   });
 }
-//@ chunk-e6aww6q8.js:4375320-4375601 placement
+//@ chunk-5xgkngpb.js:4481916-4482197 placement
 async function resolveContainedBinDir(binDir, pluginRoot, storageV5, versionSpace) {
   if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null)
     return (await isDirectoryScope(storageV5, versionSpace)) &&
@@ -484,7 +473,7 @@ async function resolveContainedBinDir(binDir, pluginRoot, storageV5, versionSpac
   if (!(await lstat(binDir).catch(() => null))?.isDirectory()) return null;
   return (await isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace)) ? binDir : null;
 }
-//@ chunk-e6aww6q8.js:4375601-4375763 placement
+//@ chunk-5xgkngpb.js:4482197-4482359 placement
 async function isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace) {
   if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null) return true;
   try {
@@ -495,36 +484,36 @@ async function isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4375763-4375890 placement
+//@ chunk-5xgkngpb.js:4482359-4482486 placement
 async function isDirectoryPresent(pluginPath, storageV5, versionSpace) {
   if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null)
     return isDirectoryScope(storageV5, versionSpace);
   return (await lstat(pluginPath).catch(() => null))?.isDirectory() === true;
 }
-//@ chunk-e6aww6q8.js:4375890-4375981 placement
+//@ chunk-5xgkngpb.js:4482486-4482577 placement
 async function isDirectoryScope(storageV5, scope) {
   let kindResult = await storageV5.scopeKind(scope);
   return kindResult.ok && kindResult.value.kind === "directory";
 }
-//@ chunk-e6aww6q8.js:4375981-4376074 placement
+//@ chunk-5xgkngpb.js:4482577-4482670 placement
 async function pluginCacheBinPath(pluginPath) {
   let cacheDir = projectPluginCacheDir();
   let space = versionCacheStorageSpace(pluginPath, cacheDir);
   if (space === null || (await hasLinkedAncestorBelow(pluginPath, cacheDir))) return null;
   return space;
 }
-//@ chunk-e6aww6q8.js:4376074-4376119 placement
+//@ chunk-5xgkngpb.js:4482670-4482715 placement
 function withBinRelPath(versionSpace) {
   return {
     ...versionSpace,
     relPath: ["bin"],
   };
 }
-//@ chunk-e6aww6q8.js:4376119-4376202 placement
+//@ chunk-5xgkngpb.js:4482715-4482798 placement
 function pluginBinaryStorageSpace(coords, name) {
   return STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, ["bin", name]);
 }
-//@ chunk-e6aww6q8.js:4376202-4376479 placement
+//@ chunk-5xgkngpb.js:4482798-4483075 placement
 async function removeBinEntry(containedBinDir, name, storageV5, versionSpace) {
   if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null) {
     let deleteResult = await storageV5.delete(pluginBinaryStorageSpace(versionSpace, name));
@@ -537,12 +526,12 @@ async function removeBinEntry(containedBinDir, name, storageV5, versionSpace) {
     if (!scopeDelete.ok) throw storageRemovalError(scopeDelete.error);
     return;
   }
-  await rm_2(join(containedBinDir, name), {
+  await rm(join(containedBinDir, name), {
     recursive: true,
     force: true,
   });
 }
-//@ chunk-e6aww6q8.js:4376479-4376663 placement
+//@ chunk-5xgkngpb.js:4483075-4483259 placement
 function storageRemovalError(error) {
   let code = storageErrorCode(error);
   return Object.assign(
@@ -557,7 +546,7 @@ function storageRemovalError(error) {
       : {},
   );
 }
-//@ chunk-e6aww6q8.js:4376663-4377497 placement
+//@ chunk-5xgkngpb.js:4483259-4484093 placement
 async function verifyPlacedAsset(assetPath, expectedSha, options, storageV5, storageSpace) {
   if (options?.guestWritable && getPlatform() === "windows") return "unverifiable_windows";
   if (isStorageV5Enabled() && storageV5 !== undefined && storageSpace !== undefined)
@@ -602,7 +591,7 @@ async function verifyPlacedAsset(assetPath, expectedSha, options, storageV5, sto
     });
   }
 }
-//@ chunk-e6aww6q8.js:4377497-4378170 placement
+//@ chunk-5xgkngpb.js:4484093-4484766 placement
 /**
  * 经存储校验资源 sha256：match/mismatch/absent/not_regular/unreadable。
  */
@@ -639,7 +628,7 @@ async function verifyAssetDigest(storageV5, space, expectedSha, ensureMode) {
     ? "mismatch"
     : "unreadable";
 }
-//@ chunk-e6aww6q8.js:4378170-4378673 placement
+//@ chunk-5xgkngpb.js:4484766-4485271 placement
 /**
  * 资源缓存中已有且摘要匹配时刷新时间并返回命中；否则清掉非文件的占位，按重试策略下载到 .partial 临时文件后改名到缓存。
  */
@@ -668,7 +657,7 @@ async function fetchAssetToCache(
   }
   let stat = await lstat(cachePath).catch(() => null);
   if (stat && !stat.isFile())
-    await rm_2(cachePath, {
+    await rm(cachePath, {
       recursive: true,
       force: true,
     });
@@ -682,7 +671,7 @@ async function fetchAssetToCache(
         cacheHit: false,
       };
     } catch (error) {
-      await rm_2(partialPath, {
+      await rm(partialPath, {
         force: true,
       }).catch(() => {
         return;
@@ -691,7 +680,7 @@ async function fetchAssetToCache(
     }
   });
 }
-//@ chunk-e6aww6q8.js:4378673-4379523 placement
+//@ chunk-5xgkngpb.js:4485271-4486124 placement
 async function writePluginAsset(sha, cachePath, storageV5, retryDelays, deadline, timeoutMs, credentials) {
   let space = STORAGE_SPACES.pluginAssetCache(sha);
   let digestResult = await binaryAssetDigest(storageV5, space);
@@ -741,14 +730,14 @@ async function writePluginAsset(sha, cachePath, storageV5, retryDelays, deadline
     throw assetCacheStorageError(writeResult.error);
   });
 }
-//@ chunk-e6aww6q8.js:4379523-4379594 placement
+//@ chunk-5xgkngpb.js:4486124-4486195 placement
 function binaryAssetDigest(storageV5, space) {
   return storageV5.digest(space, {
     algorithm: "sha256",
     maxBytes: MAX_ASSET_BYTES,
   });
 }
-//@ chunk-e6aww6q8.js:4379594-4380019 placement
+//@ chunk-5xgkngpb.js:4486195-4486620 placement
 /**
  * 存储中摘要不符的缓存项按版本条件删除。
  */
@@ -771,7 +760,7 @@ async function dropMismatchedCacheEntry(storageV5, space, expectedSha, cachePath
   if (code === "EISDIR" || code === "ENXIO") {
     let stat = await lstat(cachePath).catch(() => null);
     if (stat && !stat.isFile() && !stat.isSymbolicLink())
-      await rm_2(cachePath, {
+      await rm(cachePath, {
         recursive: true,
         force: true,
       });
@@ -779,7 +768,7 @@ async function dropMismatchedCacheEntry(storageV5, space, expectedSha, cachePath
   }
   await storageV5.delete(space);
 }
-//@ chunk-e6aww6q8.js:4380019-4380240 placement
+//@ chunk-5xgkngpb.js:4486620-4486841 placement
 function assetCacheStorageError(error) {
   logForDebugging(`${ASSET_LOG_PREFIX} asset cache storage call failed: ${formatStorageError(error)}`, {
     level: "warn",
@@ -792,7 +781,7 @@ function assetCacheStorageError(error) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4380240-4380532 placement
+//@ chunk-5xgkngpb.js:4486841-4487133 placement
 async function retryTransientAssetFetch(retryDelays, deadline, attempt) {
   let attemptIndex = 0;
   for (;;)
@@ -813,7 +802,7 @@ async function retryTransientAssetFetch(retryDelays, deadline, attempt) {
       await sleep(delayMs);
     }
 }
-//@ chunk-e6aww6q8.js:4380532-4380631 placement
+//@ chunk-5xgkngpb.js:4487133-4487232 placement
 async function ensurePluginDirExists(dirPath, storageV5, namespace) {
   if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null) return;
   await mkdir(dirPath, {
@@ -821,7 +810,7 @@ async function ensurePluginDirExists(dirPath, storageV5, namespace) {
     mode: 448,
   });
 }
-//@ chunk-e6aww6q8.js:4380631-4381579 placement
+//@ chunk-5xgkngpb.js:4487232-4488180 placement
 /**
  * 从组织市场下载插件二进制资源。
  */
@@ -865,7 +854,7 @@ async function fetchPluginAsset(sha, timeout, credentials) {
   }
   return response.data;
 }
-//@ chunk-e6aww6q8.js:4381579-4382434 placement
+//@ chunk-5xgkngpb.js:4488180-4489038 placement
 /**
  * 下载资源并校验固定的 sha256。
  */
@@ -933,7 +922,7 @@ function downloadAssetWithDigest(pluginAsset, expectedSha, timeoutMs, verify) {
     abort,
   };
 }
-//@ chunk-e6aww6q8.js:4382434-4382943 placement
+//@ chunk-5xgkngpb.js:4489038-4489547 placement
 /**
  * 流式下载资源到新文件并校验摘要，失败删除。
  */
@@ -961,7 +950,7 @@ async function downloadAssetToFile(sha, filePath, timeoutMs, credentials) {
     });
   }
   if (failure !== undefined) {
-    await rm_2(filePath, {
+    await rm(filePath, {
       force: true,
     }).catch(() => {
       return;
@@ -975,7 +964,7 @@ async function downloadAssetToFile(sha, filePath, timeoutMs, credentials) {
   try {
     stream.verifyDigest();
   } catch (error) {
-    await rm_2(filePath, {
+    await rm(filePath, {
       force: true,
     }).catch(() => {
       return;
@@ -983,7 +972,7 @@ async function downloadAssetToFile(sha, filePath, timeoutMs, credentials) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4382943-4383113 placement
+//@ chunk-5xgkngpb.js:4489547-4489717 placement
 function createAssetStream(sha, timeoutMs, credentials) {
   let failure;
   let started = false;
@@ -1007,7 +996,7 @@ function createAssetStream(sha, timeoutMs, credentials) {
     started: () => started,
   };
 }
-//@ chunk-e6aww6q8.js:4383113-4384130 placement
+//@ chunk-5xgkngpb.js:4489717-4490743 placement
 /**
  * 把一个二进制资源放到目标位置，经存储接口失败时报错。
  */
@@ -1071,21 +1060,21 @@ async function placePluginBinaryAsset(cachePath, cacheDir, containedBinDir, name
       placedCopy = true;
     } finally {
       if (!placedCopy)
-        await rm_2(tempPath2, {
+        await rm(tempPath2, {
           force: true,
         }).catch(() => {
           return;
         });
     }
   } finally {
-    await rm_2(tempPath, {
+    await rm(tempPath, {
       force: true,
     }).catch(() => {
       return;
     });
   }
 }
-//@ chunk-e6aww6q8.js:4384130-4384584 placement
+//@ chunk-5xgkngpb.js:4490743-4491197 placement
 /**
  * 用硬链接（或存储共享复制）把缓存资源放进 bin 并校验。
  */
@@ -1122,7 +1111,7 @@ async function linkAssetIntoBin(containedBinDir, sourceName, linkName, expectedS
     ? "placed"
     : "failed_created";
 }
-//@ chunk-e6aww6q8.js:4384584-4385151 placement
+//@ chunk-5xgkngpb.js:4491197-4491764 placement
 /**
  * 存储层共享复制资源（ifAbsent），映射结果。
  */
@@ -1149,7 +1138,7 @@ async function shareCopyAsset(storageV5, namespace, sourceName, targetName) {
     return code === "ELOOP" || code === "ENXIO" ? "refused_source" : "failed_clean";
   return code === "ELOOP" || code === "EISDIR" || code === "ENXIO" ? "exists" : "failed_clean";
 }
-//@ chunk-e6aww6q8.js:4385151-4385310 placement
+//@ chunk-5xgkngpb.js:4491764-4491923 placement
 async function renameReplacing(tempPath, targetPath) {
   try {
     await rename(tempPath, targetPath);
@@ -1157,13 +1146,13 @@ async function renameReplacing(tempPath, targetPath) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "EXDEV" || errnoCode === undefined) throw error;
     if (!ATOMIC_WRITE_ERRNOS.has(errnoCode)) throw error;
-    await rm_2(targetPath, {
+    await rm(targetPath, {
       force: true,
     });
     await rename(tempPath, targetPath);
   }
 }
-//@ chunk-e6aww6q8.js:4385310-4385619 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
+//@ chunk-5xgkngpb.js:4491923-4492232 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 /**
  * 清理目录中过期的临时文件（点文件与普通文件不同期限；存储后端模式走存储层）。
  */
@@ -1183,7 +1172,7 @@ async function sweepStaleTempFiles(dirPath, storageV5, namespace) {
     if (!stat) continue;
     let ttlMs = name.startsWith(".") ? TEMP_FILE_TTL_MS : ASSET_CACHE_TTL_MS;
     if (now - stat.mtimeMs > ttlMs)
-      await rm_2(entryPath, {
+      await rm(entryPath, {
         recursive: true,
         force: true,
       }).catch(() => {
@@ -1191,7 +1180,7 @@ async function sweepStaleTempFiles(dirPath, storageV5, namespace) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:4385619-4385888 placement
+//@ chunk-5xgkngpb.js:4492232-4492501 placement
 async function sweepExpiredStorageEntries(dirPath, storageV5, namespace) {
   let now = Date.now();
   let cursor;
@@ -1207,7 +1196,7 @@ async function sweepExpiredStorageEntries(dirPath, storageV5, namespace) {
   } while (cursor);
   await convertDirectoryToZipInPlace_2(dirPath, (name) => name.startsWith("."));
 }
-//@ chunk-e6aww6q8.js:4385888-4386116 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
+//@ chunk-5xgkngpb.js:4492501-4492729 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
   let names;
   try {
@@ -1220,7 +1209,7 @@ async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
     let entryPath = join(dirPath, name);
     let stat = await lstat(entryPath).catch(() => null);
     if (stat && now - stat.mtimeMs > TEMP_FILE_TTL_MS)
-      await rm_2(entryPath, {
+      await rm(entryPath, {
         recursive: true,
         force: true,
       }).catch(() => {
@@ -1228,7 +1217,7 @@ async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:4386116-4386180 placement (2.1.88 match: generatePlaceholders, 0.792)
+//@ chunk-5xgkngpb.js:4492729-4492793 placement (2.1.88 match: generatePlaceholders, 0.793)
 function makePidRandomId() {
   return `${process.pid}-${randomBytes(6).toString("hex")}`;
 }

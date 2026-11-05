@@ -3,13 +3,13 @@
  *
  * 被查看的队友任务结束后自动退出队友视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTeammateViewAutoExit.ts
- * pieces: chunk-fym4r1th.js (1)
+ * pieces: chunk-wrq65rh8.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-fym4r1th.js:6681-6843 fingerprint (2.1.88 match: useTeammateViewAutoExit, 0.626)
+//@ chunk-wrq65rh8.js:7275-7437 fingerprint (2.1.88 match: useTeammateViewAutoExit, 0.626)
 function useTeammateViewAutoExit(status) {
   switch (status) {
     case "pending":

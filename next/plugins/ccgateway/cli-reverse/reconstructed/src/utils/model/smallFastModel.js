@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：小快模型选择（deniedModels helper、按提供商回退）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (26)
  * attribution: placement 26
  */
 import { currentFallbackLadderStates, getUnrefusedFallbacks } from "./modelUnavailability.js";
@@ -58,11 +58,11 @@ import { getCatalogEntry } from "./modelCatalog.js";
 import { getContextWindow } from "./configs.js";
 import { has1mSuffix_2 } from "./contextWindow1m.js";
 
-//@ chunk-aepeg2w5.js:426756-426824 placement
+//@ chunk-exfmq47h.js:438147-438215 placement
 function maxConversationSize() {
   return Math.max(0, ...currentFallbackLadderStates().conversationSizes.values());
 }
-//@ chunk-aepeg2w5.js:426824-427104 placement
+//@ chunk-exfmq47h.js:438215-438495 placement
 /**
  * 返回管理员第三方模型引导状态（是否设置了 Sonnet/Opus 默认值，排除探测写入的值）。
  */
@@ -78,11 +78,11 @@ function getAdminSteering() {
     }
   );
 }
-//@ chunk-aepeg2w5.js:427104-427136 placement
+//@ chunk-exfmq47h.js:438495-438527 placement
 function isDefaultOpusModelAdminSteered() {
   return getAdminSteering().opus;
 }
-//@ chunk-aepeg2w5.js:427136-427251 placement
+//@ chunk-exfmq47h.js:438527-438642 placement
 /**
  * 判断是否只设置了 Sonnet 默认值（无 Opus、未强制模型）。
  */
@@ -93,7 +93,7 @@ function isSonnetOnlySteering() {
     getSettings_DEPRECATED()?.enforceAvailableModels === true;
   return adminSteering.sonnet && !adminSteering.opus && !enforced;
 }
-//@ chunk-aepeg2w5.js:427251-427399 placement
+//@ chunk-exfmq47h.js:438642-438790 placement
 function hasDedicatedSmallFastModel() {
   if (env.ANTHROPIC_SMALL_FAST_MODEL !== undefined) return true;
   return (
@@ -102,7 +102,7 @@ function hasDedicatedSmallFastModel() {
     (getAPIProvider() === "gateway" && isModelAllowed(getDefaultHaikuModel()))
   );
 }
-//@ chunk-aepeg2w5.js:427399-427471 placement (2.1.88 match: logEventTo1P, 1)
+//@ chunk-exfmq47h.js:438790-438862 placement (2.1.88 match: logEventTo1P, 1)
 function areBuiltinModelsKnownHosted() {
   let apiProvider = getAPIProvider();
   return (
@@ -110,7 +110,7 @@ function areBuiltinModelsKnownHosted() {
     isClaudePlatformProvider(apiProvider)
   );
 }
-//@ chunk-aepeg2w5.js:427471-427790 placement
+//@ chunk-exfmq47h.js:438862-439181 placement
 function getSmallFastModel() {
   let ANTHROPIC_SMALL_FAST_MODEL = env.ANTHROPIC_SMALL_FAST_MODEL;
   if (ANTHROPIC_SMALL_FAST_MODEL !== undefined)
@@ -138,7 +138,7 @@ function getSmallFastModel() {
     ? resolveSmallFastModel(getDefaultHaikuModel())
     : mainLoopIfDenied(getDefaultHaikuModel());
 }
-//@ chunk-aepeg2w5.js:427790-427886 placement
+//@ chunk-exfmq47h.js:439181-439277 placement
 function getBareCheckModel() {
   if (getAPIProvider() === "firstParty" && areBuiltinModelsKnownHosted()) {
     let haiku45 = getModelStrings().haiku45;
@@ -146,7 +146,7 @@ function getBareCheckModel() {
   }
   return getSmallFastModel();
 }
-//@ chunk-aepeg2w5.js:427886-428079 placement
+//@ chunk-exfmq47h.js:439277-439470 placement
 function getHostedDefaultSmallFastModel() {
   if (
     env.ANTHROPIC_SMALL_FAST_MODEL !== undefined ||
@@ -162,51 +162,51 @@ function getHostedDefaultSmallFastModel() {
     ? model
     : undefined;
 }
-//@ chunk-aepeg2w5.js:428079-428114 placement
+//@ chunk-exfmq47h.js:439470-439505 placement
 function mainLoopIfDenied(model) {
   return isModelDeniedByManagedSafe(model) ? getMainLoopModel() : model;
 }
-//@ chunk-aepeg2w5.js:428114-428226 placement
+//@ chunk-exfmq47h.js:439505-439617 placement
 function unlessManagedDeniedModel(model) {
   if (!isModelDeniedByManagedSafe(model)) return model;
   let mainLoopModel = getMainLoopModel();
   logForDebugging(`[deniedModels] helper request for ${model} sent as ${mainLoopModel}`);
   return mainLoopModel;
 }
-//@ chunk-aepeg2w5.js:428226-428339 placement
+//@ chunk-exfmq47h.js:439617-439730 placement
 function resolveSmallFastModel(model) {
   let modelId = parseModelId(model);
   if (modelId?.family === "haiku" && modelId.trailer === undefined && hasProviderModelPrefix(model, modelId))
     return mainLoopIfDenied(model);
   return isBlockedByManagedModelPolicySafe(model) ? getMainLoopModel() : model;
 }
-//@ chunk-aepeg2w5.js:428339-428381 placement
+//@ chunk-exfmq47h.js:439730-439772 placement
 function catalogFamilyIs(model, family) {
   return getCatalogEntry(model)?.family === family;
 }
-//@ chunk-aepeg2w5.js:428381-428418 placement
+//@ chunk-exfmq47h.js:439772-439809 placement
 function isNonCustomFableModel(model) {
   return catalogFamilyIs(model, "fable");
 }
-//@ chunk-aepeg2w5.js:428418-428456 placement
+//@ chunk-exfmq47h.js:439809-439847 placement
 function isNonCustomMythosModel(model) {
   return catalogFamilyIs(model, "mythos");
 }
-//@ chunk-aepeg2w5.js:428456-428508 placement
+//@ chunk-exfmq47h.js:439847-439899 placement
 function swapShrinksContextWindow(fromModel, toModel) {
   let sdkBetas = getSdkBetas();
   return getContextWindow(toModel, sdkBetas) < getContextWindow(fromModel, sdkBetas);
 }
-//@ chunk-aepeg2w5.js:428508-428521 placement
+//@ chunk-exfmq47h.js:439899-439912 placement
 var CONTEXT_SWAP_SLACK = 20000;
-//@ chunk-aepeg2w5.js:428521-428576 placement
+//@ chunk-exfmq47h.js:439912-439967 placement
 function ladderStepLosesContext(fromModel, toModel, currentContextSize) {
   return (
     swapShrinksContextWindow(fromModel, toModel) &&
     currentContextSize() > getContextWindow(toModel, getSdkBetas()) - CONTEXT_SWAP_SLACK
   );
 }
-//@ chunk-aepeg2w5.js:428576-428759 placement
+//@ chunk-exfmq47h.js:439967-440150 placement
 function ladderRungsToSend(model) {
   let sdkBetas = getSdkBetas();
   let contextWindow = getContextWindow(model, sdkBetas);
@@ -220,11 +220,11 @@ function ladderRungsToSend(model) {
   }
   return kept.reverse();
 }
-//@ chunk-aepeg2w5.js:428759-428805 placement
+//@ chunk-exfmq47h.js:440150-440196 placement
 function largestSessionContextTokens() {
   return Math.max(getLastMainThreadContextTokens() ?? 0, maxConversationSize());
 }
-//@ chunk-aepeg2w5.js:428805-429009 placement
+//@ chunk-exfmq47h.js:440196-440400 placement
 function preserve1mContextForRefusalFallback(fromModel, toModel) {
   let sdkBetas = getSdkBetas();
   let contextWindow = getContextWindow(fromModel, sdkBetas);
@@ -244,21 +244,21 @@ function preserve1mContextForRefusalFallback(fromModel, toModel) {
     ? with1m
     : undefined;
 }
-//@ chunk-aepeg2w5.js:429009-429045 placement
+//@ chunk-exfmq47h.js:440400-440436 placement
 function isNonCustomOpusModel(canonicalName) {
   return catalogFamilyIs(canonicalName, "opus");
 }
-//@ chunk-aepeg2w5.js:429045-429083 placement
+//@ chunk-exfmq47h.js:440436-440474 placement
 function isNonCustomSonnetModel(canonicalName) {
   return catalogFamilyIs(canonicalName, "sonnet");
 }
-//@ chunk-aepeg2w5.js:429083-429160 placement
+//@ chunk-exfmq47h.js:440474-440551 placement
 function getUserSpecifiedModelSetting() {
   let model = getMainLoopModelOverride();
   if (model !== undefined) return vetUserSpecifiedModel(model, "explicit");
   return getBaselineModelSetting();
 }
-//@ chunk-aepeg2w5.js:429160-429302 placement (2.1.88 match: getUserSpecifiedModelSetting, 0.36)
+//@ chunk-exfmq47h.js:440551-440693 placement (2.1.88 match: getUserSpecifiedModelSetting, 0.36)
 /**
  * 用户指定的主模型设置：启动时的初始模型（--model）优先，否则 ANTHROPIC_MODEL，再否则 settings.model；经 normalizeModelSetting 过滤（不在白名单则尝试替代、未解析的拒绝）。
  */
@@ -271,7 +271,7 @@ function getBaselineModelSetting() {
       : envAnthropicModel || getSettings_DEPRECATED()?.model || undefined;
   return vetUserSpecifiedModel(setting, modelOverride !== undefined ? "explicit" : "persisted");
 }
-//@ chunk-aepeg2w5.js:429302-429417 placement
+//@ chunk-exfmq47h.js:440693-440808 placement
 /**
  * 模型不被允许且未复核时返回白名单替代（Hk）；未解析的别名（persisted 来源）丢弃；否则登记并原样返回。
  */
@@ -283,25 +283,25 @@ function vetUserSpecifiedModel(model, source = "explicit") {
   return model;
 }
 export {
-  areBuiltinModelsKnownHosted,
-  getUserSpecifiedModelSetting,
-  isNonCustomMythosModel,
-  getBareCheckModel,
-  getHostedDefaultSmallFastModel,
-  getBaselineModelSetting,
-  preserve1mContextForRefusalFallback,
   hasDedicatedSmallFastModel,
   getSmallFastModel,
+  getBareCheckModel,
   unlessManagedDeniedModel,
   ladderStepLosesContext,
   isNonCustomOpusModel,
   isNonCustomFableModel,
-  swapShrinksContextWindow,
-  isNonCustomSonnetModel,
+  isNonCustomMythosModel,
+  getUserSpecifiedModelSetting,
+  getBaselineModelSetting,
   isDefaultOpusModelAdminSteered,
-  vetUserSpecifiedModel,
-  isSonnetOnlySteering,
-  getAdminSteering,
+  swapShrinksContextWindow,
+  areBuiltinModelsKnownHosted,
   ladderRungsToSend,
   largestSessionContextTokens,
+  preserve1mContextForRefusalFallback,
+  isSonnetOnlySteering,
+  getAdminSteering,
+  getHostedDefaultSmallFastModel,
+  vetUserSpecifiedModel,
+  isNonCustomSonnetModel,
 };

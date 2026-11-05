@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifact 类型实例
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (5)
  * attribution: placement 5
  */
 import { issuedUnderDepartedAccount } from "./shareEntries.js";
@@ -15,7 +15,7 @@ import { objectSchema, booleanSchema } from "../../../vendor/zod/v4/classic/sche
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv307fw4.js:19360-19518 placement
+//@ chunk-m0ks5273.js:19377-19535 placement
 /**
  * 类型实例的归属类别（组织置顶、流水线、模板）与优先级表（第一方类型最高）。
  */
@@ -26,7 +26,7 @@ var ATTESTATION_KIND_RANK = {
   pipeline_instance: 2,
   template_instance: 3,
 };
-//@ chunk-jv307fw4.js:19518-19765 placement
+//@ chunk-m0ks5273.js:19535-19782 placement
 /**
  * 记录某 artifact 的类型归属标记（第一方类型/组织置顶/流水线/模板）：忽略离开账号签发的、早于撤销时间的；按签发时间与优先级保留最强的标记。
  */
@@ -50,7 +50,7 @@ function markAttestation(slug, typeKey, ver) {
       },
     });
 }
-//@ chunk-jv307fw4.js:19765-20020 placement
+//@ chunk-m0ks5273.js:19782-20037 placement
 /**
  * 撤销某 artifact 的若干归属类别：记录各类别的撤销时间，若当前标记属于被撤销类别且不晚于撤销时间则移除。
  */
@@ -72,9 +72,9 @@ function revokeAttestations(slug, kinds, issuedAt) {
     revokedAt,
   });
 }
-//@ chunk-jv307fw4.js:20020-20123 placement
+//@ chunk-m0ks5273.js:20037-20140 placement
 var TYPE_ATTESTATION_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jv307fw4.js:20020", () => {
+deferInit("chunk-m0ks5273.js:20037", () => {
   TYPE_ATTESTATION_SCHEMA = DoctorLazy(() =>
     objectSchema({
       firstPartyType: booleanSchema().optional(),
@@ -83,7 +83,7 @@ deferInit("chunk-jv307fw4.js:20020", () => {
     }),
   );
 });
-//@ chunk-jv307fw4.js:20123-20487 placement
+//@ chunk-m0ks5273.js:20140-20504 placement
 /**
  * 根据 boot 返回的归属信息更新标记：firstPartyType 标记 artifact 自身为第一方类型；typeFirstParty 时标记其类型为第一方，并按 template 标记或撤销模板实例（外部 artifact 不标记自身）。
  */
@@ -103,4 +103,4 @@ function applyTypeAttestation(slug, typeFacts, facts, ver, options) {
   if (data.template === true) markAttestation(slug, "template_instance", ver);
   else revokeAttestations(slug, ["template_instance"], ver);
 }
-export { applyTypeAttestation, markAttestation, revokeAttestations, REVOCABLE_INSTANCE_KINDS };
+export { markAttestation, revokeAttestations, REVOCABLE_INSTANCE_KINDS, applyTypeAttestation };

@@ -3,9 +3,9 @@
  *
  * 创建 Anthropic SDK 客户端（第一方/网关/Bedrock/Mantle/Foundry/AnthropicAws/Google Cloud/Vertex）：组装默认请求头、认证、超时与代理，并用 buildFetch 包装 fetch（x-client-request-id、请求体 gzip、首字节与字节流看门狗、Bedrock 内容类型守卫）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/client.ts
- * pieces: chunk-bwbq4xvm.js (1), chunk-hwmsct5x.js (42), chunk-vv0zxx69.js (1)
+ * pieces: chunk-7kayq7nc.js (1), chunk-ja0weedh.js (1), chunk-vn3g7zt8.js (42)
  * attribution: fingerprint 5, layout 36, callgraph-fingerprint 1, sole-consumer 2
  */
 import { randomUUID } from "crypto";
@@ -27,7 +27,10 @@ import {
   identityHeaders,
   validateAuthHeaders,
   X_COWORK_ENROLLMENT,
+  clipSlackMs,
+  slackStillFresh,
   attachSenderAddress,
+  streamTimerSlackMs,
 } from "./requestHeaders.js";
 import { envSessionKind } from "../../utils/concurrentSessions.js";
 import {
@@ -75,7 +78,9 @@ import {
   getAnthropicApiKey,
   shouldUseWIFAuth,
   isOAuthRefreshKnownDeadAsync,
+  storedLoginReachedTimeLimit,
   getOAuthAccountOnHold,
+  loginSwitchMemo,
   getAnthropicApiKeyWithSourceSafe,
   getAuthTokenSource,
   getApiKeyFromApiKeyHelper,
@@ -106,7 +111,6 @@ import { normalizeRequestId } from "../requestUserDialog.js";
 import {
   assertGcpPathSegment,
   getFoundryBaseUrl,
-  isSnugMittenAndSillyShoreOn,
   SANDY_PLOVER_HEADER,
   toolsUsedHeaderBuilder,
   noteModelRequestSent,
@@ -163,6 +167,7 @@ import {
 } from "./refusalFallbackHeaders.js";
 import { ANTHROPIC_USAGE_LIMIT, SLOW } from "../lowPriority/headers.js";
 import { isOfficialFirstPartyEndpoint } from "../../utils/model/firstPartyBaseUrl.js";
+import { isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { ANT_KEY_PFX } from "../teamMemorySync/secretScanner.js";
 import { appendWatermark, appendWatermarkBuffer } from "../analytics/eventSerialization.js";
@@ -171,12 +176,17 @@ import {
   isSameUnredirectedUrl,
   markFirstPartyFetch,
 } from "./fetchOptions.js";
-import { heldReplyHoldMs, wrapWithUnwatchedHold } from "./unwatchedReplyHold.js";
+import {
+  mainReplyHoldMs,
+  heldReplyHoldMs,
+  wrapWithUnwatchedHold_2,
+  wrapWithUnwatchedHold,
+} from "./unwatchedReplyHold.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vv0zxx69.js:1191-1249 fingerprint (2.1.88 match: configureApiKeyHeaders, 0.627)
+//@ chunk-ja0weedh.js:1191-1249 fingerprint (2.1.88 match: configureApiKeyHeaders, 0.626)
 /**
  * API key 转 Authorization: Bearer 头（空时返回空对象）。
  */
@@ -187,7 +197,7 @@ function configureApiKeyHeaders(apiKey) {
       }
     : {};
 }
-//@ chunk-bwbq4xvm.js:156422-156608 fingerprint (2.1.88 match: getCustomHeaders, 1)
+//@ chunk-7kayq7nc.js:155671-155857 fingerprint (2.1.88 match: getCustomHeaders, 1)
 /**
  * 解析 ANTHROPIC_CUSTOM_HEADERS（每行 "名: 值"）为 [名, 值] 数组；无冒号或名为空的行忽略。
  */
@@ -200,12 +210,12 @@ function getCustomHeaders(headerText = env.ANTHROPIC_CUSTOM_HEADERS ?? "") {
   }
   return pairs;
 }
-//@ chunk-hwmsct5x.js:241005-241035 fingerprint (2.1.88 match: CLIENT_REQUEST_ID_HEADER, 1)
+//@ chunk-vn3g7zt8.js:244576-244606 fingerprint (2.1.88 match: CLIENT_REQUEST_ID_HEADER, 1)
 /**
  * 请求头名 x-client-request-id（第一方请求时由 buildFetch 生成 UUID）。
  */
 var CLIENT_REQUEST_ID_HEADER = "x-client-request-id";
-//@ chunk-hwmsct5x.js:270380-270646 fingerprint (2.1.88 match: createStderrLogger, 1)
+//@ chunk-vn3g7zt8.js:277036-277302 fingerprint (2.1.88 match: createStderrLogger, 1)
 /**
  * SDK 日志器：error/warn/info/debug 都写 stderr 并加 [Anthropic SDK …] 前缀（调试模式 f7() 时传给 SDK）。
  */
@@ -217,14 +227,14 @@ function createStderrLogger() {
     debug: (msg, ...args) => console.error("[Anthropic SDK DEBUG]", msg, ...args),
   };
 }
-//@ chunk-hwmsct5x.js:270646-270723 layout (2.1.88 match: isSessionContainerCompatible, 0.828)
+//@ chunk-vn3g7zt8.js:277302-277379 layout (2.1.88 match: isSessionContainerCompatible, 1)
 /**
  * 工具列表转名字：有 name 用 name，否则 mcp__<type>。旧版名 isSessionContainerCompatible 为错配。
  */
 function getToolNameList(tools, messages = []) {
   return tools.map((tool) => ("name" in tool ? tool.name : `mcp__${tool.type}`));
 }
-//@ chunk-hwmsct5x.js:270723-280488 fingerprint (2.1.88 match: getAnthropicClient, 0.44)
+//@ chunk-vn3g7zt8.js:277379-287245 fingerprint (2.1.88 match: getAnthropicClient, 0.436)
 /**
  * 创建 API 客户端（旧版 getAnthropicClient）。默认头：x-app(cli/cli-bg)、User-Agent、X-Claude-Code-Session-Id、ANTHROPIC_CUSTOM_HEADERS、自定义 anthropic-beta、远程容器/会话 id、x-client-app、子代理 agent-id/parent-agent-id；网关提示头开启时加 x-claude-code-request-class、x-claude-code-agent-type、x-claude-code-prompt-id。随后按提供商分支：gateway（JWT）、bedrock、foundry、anthropicAws、anthropicGoogleCloud、mantle、vertex，最后是第一方（API key 或 OAuth；令牌变化时递归重建）。maxRetries 由调用方传 0，重试全部交给 withRetry；超时取 API_TIMEOUT_MS 或 600s。
  */
@@ -783,7 +793,7 @@ async function getAnthropicClient(options) {
     !splitAuthorizationHeader(defaultHeaders).value &&
     (await isOAuthRefreshKnownDeadAsync(credentials))
   )
-    throw new OAuthRefreshDeadError();
+    throw new OAuthRefreshDeadError(await storedLoginReachedTimeLimit(credentials));
   if (isClaudeAiSubscriber) {
     let oAuthAccountOnHold = getOAuthAccountOnHold();
     if (oAuthAccountOnHold) throw new OAuthAccountOnHoldError(oAuthAccountOnHold.url);
@@ -808,12 +818,12 @@ async function getAnthropicClient(options) {
     (splitAuthorizationHeader(defaultHeaders).value === undefined && hasCustomAuthorizationHeader())
   )
     return getAnthropicClient(options);
-  if (
-    isClaudeAiSubscriber &&
-    splitAuthorizationHeader(defaultHeaders).value === undefined &&
-    isStoredLoginRefused()
-  )
-    throw new StoredLoginHeldBackError(storedLoginRefusalReason());
+  if (splitAuthorizationHeader(defaultHeaders).value === undefined) {
+    if (isClaudeAiSubscriber && isStoredLoginRefused())
+      throw new StoredLoginHeldBackError(storedLoginRefusalReason());
+    if (!options.apiKey && loginSwitchMemo().sessionOwnerHold?.())
+      throw new StoredLoginHeldBackError("session_owner");
+  }
   let authPair = getAuthCredentialsForClient({
     isSubscriber: isClaudeAiSubscriber,
     apiKey: resolvedApiKey,
@@ -869,7 +879,7 @@ async function getAnthropicClient(options) {
   };
   return new Anthropic(firstPartyClientOptions);
 }
-//@ chunk-hwmsct5x.js:280488-280735 layout
+//@ chunk-vn3g7zt8.js:287245-287492 layout
 /**
  * 把 ANTHROPIC_AUTH_TOKEN 或 apiKeyHelper 的令牌写成 Authorization: Bearer，返回来源名；都没有返回 null。
  */
@@ -887,7 +897,7 @@ async function applyAuthTokenHeader(defaultHeaders, isNonInteractiveSession) {
   }
   return null;
 }
-//@ chunk-hwmsct5x.js:280735-281403 layout
+//@ chunk-vn3g7zt8.js:287492-288160 layout
 /**
  * 各提供商的 base URL：bedrock/mantle/anthropicAws/Google Cloud/vertex/foundry/gateway/firstParty（ANTHROPIC_BASE_URL 或配置的 BASE_API_URL），可用对应 *_BASE_URL 覆盖。
  */
@@ -922,7 +932,7 @@ function getProviderBaseUrl(provider, model, awsRegion) {
       return process.env.ANTHROPIC_BASE_URL || getOauthConfig().BASE_API_URL;
   }
 }
-//@ chunk-hwmsct5x.js:281403-281578 layout
+//@ chunk-vn3g7zt8.js:288160-288335 layout
 /**
  * 小快模型且设置了 ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION 时用该区域，否则用给定或默认 AWS 区域。
  */
@@ -943,7 +953,7 @@ function getAwsRegionForModel(model, awsRegion) {
   }
   return awsRegion ?? getDefaultAwsRegion();
 }
-//@ chunk-hwmsct5x.js:281578-281713 layout
+//@ chunk-vn3g7zt8.js:288335-288470 layout
 /**
  * 从头对象里分离出 Authorization（大小写不敏感），返回 {value, rest}。
  */
@@ -958,14 +968,14 @@ function splitAuthorizationHeader(defaultHeaders) {
     rest,
   };
 }
-//@ chunk-hwmsct5x.js:281713-281760 layout
+//@ chunk-vn3g7zt8.js:288470-288517 layout
 /**
  * ANTHROPIC_CUSTOM_HEADERS 里是否带 Authorization。
  */
 function hasCustomAuthorizationHeader() {
   return splitAuthorizationHeader(getCustomHeaderMap()).value !== undefined;
 }
-//@ chunk-hwmsct5x.js:281760-282214 layout
+//@ chunk-vn3g7zt8.js:288517-288971 layout
 /**
  * ANTHROPIC_CUSTOM_HEADERS 转对象（组织禁用实验 beta 时丢弃 anthropic-beta）；桌面版加 anthropic-client-platform/version；cowork 报名时加 x-cowork-enrollment。
  */
@@ -992,14 +1002,14 @@ function getCustomHeaderMap() {
   if (coworkEnrollment !== undefined) out[X_COWORK_ENROLLMENT] = coworkEnrollment;
   return out;
 }
-//@ chunk-hwmsct5x.js:282214-282261 layout
+//@ chunk-vn3g7zt8.js:288971-289018 layout
 /**
  * 流空闲超时：max(配置值, 300s)。
  */
 function getStreamIdleTimeoutMs() {
   return Math.max(getConfiguredStreamIdleTimeoutMs() ?? 0, 300000);
 }
-//@ chunk-hwmsct5x.js:282261-282418 layout
+//@ chunk-vn3g7zt8.js:289018-289175 layout
 /**
  * CLAUDE_STREAM_IDLE_TIMEOUT_MS 或托管配置 stream_idle_timeout_ms（上限 30 分钟）。
  */
@@ -1009,14 +1019,14 @@ function getConfiguredStreamIdleTimeoutMs() {
   let managedTimeoutSetting = getManagedTimeoutSetting("stream_idle_timeout_ms");
   return managedTimeoutSetting === undefined ? undefined : Math.min(managedTimeoutSetting, MAX_TIMEOUT_MS);
 }
-//@ chunk-hwmsct5x.js:282418-282479 layout
+//@ chunk-vn3g7zt8.js:289175-289236 layout
 /**
  * API_TIMEOUT_MS 或托管配置 api_timeout_ms。
  */
 function getApiTimeoutMs() {
   return env.API_TIMEOUT_MS ?? getManagedTimeoutSetting("api_timeout_ms");
 }
-//@ chunk-hwmsct5x.js:282479-282581 layout
+//@ chunk-vn3g7zt8.js:289236-289338 layout
 /**
  * 读托管网络配置里的整数超时项（1e4 到 int32 之间才有效）。
  */
@@ -1029,21 +1039,21 @@ function getManagedTimeoutSetting(settingName) {
     ? value
     : undefined;
 }
-//@ chunk-hwmsct5x.js:282581-282618 layout
+//@ chunk-vn3g7zt8.js:289338-289375 layout
 /**
  * 托管网络配置对象（未启用时 null）。
  */
 function getManagedNetworkConfig() {
   return providerReadsClientData() ? getCachedClientData() : null;
 }
-//@ chunk-hwmsct5x.js:282618-282650 layout
+//@ chunk-vn3g7zt8.js:289375-289407 layout
 /**
  * 1e4 / 1800000 / 180000：超时下限、上限、第一方字节流空闲默认。
  */
 var MIN_TIMEOUT_MS = 1e4;
 var MAX_TIMEOUT_MS = 1800000;
 var FIRST_PARTY_BYTE_IDLE_TIMEOUT_MS = 180000;
-//@ chunk-hwmsct5x.js:282650-282947 layout
+//@ chunk-vn3g7zt8.js:289407-289704 layout
 /**
  * 字节流空闲超时：CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS；第一方默认 180s（GrowthBook tengu_byte_stream_idle_timeout_ms），夹在 10s–30min。
  */
@@ -1068,14 +1078,14 @@ function getByteStreamIdleTimeoutMs(provider) {
   }
   return Math.min(Math.max(streamIdleTimeoutMs, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
 }
-//@ chunk-hwmsct5x.js:282947-282989 layout
+//@ chunk-vn3g7zt8.js:289704-289746 layout
 /**
  * 直连 Anthropic 端点时按提供商取字节流空闲超时，否则用通用值。
  */
 function getByteIdleTimeoutForProvider(provider) {
   return getByteStreamIdleTimeoutMs(isDirectAnthropicEndpoint(provider) ? provider : undefined);
 }
-//@ chunk-hwmsct5x.js:282989-283111 layout
+//@ chunk-vn3g7zt8.js:289746-289868 layout
 /**
  * 首字节超时：CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS（夹在 10s–30min）或字节流空闲超时。
  */
@@ -1085,14 +1095,14 @@ function getFirstByteTimeoutMs(provider) {
     return Math.min(Math.max(CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
   return getByteIdleTimeoutForProvider(provider);
 }
-//@ chunk-hwmsct5x.js:283111-283140 layout
+//@ chunk-vn3g7zt8.js:289868-289897 layout
 /**
  * 32768 / 1000 / 5000：请求体每 32KB 首字节窗口加 1s；心跳间隔 1s；超过 5s 的心跳间隔算作睡眠。
  */
 var FIRST_BYTE_BYTES_PER_EXTRA_SECOND = 32768;
 var SLEEP_PROBE_INTERVAL_MS = 1000;
 var SLEEP_GAP_THRESHOLD_MS = 5000;
-//@ chunk-hwmsct5x.js:283140-283227 layout
+//@ chunk-vn3g7zt8.js:289897-289984 layout
 /**
  * 记录某 client-request-id 需要首字节看门狗（是否已升级）。
  */
@@ -1101,7 +1111,7 @@ function armFirstByteWatchdog(clientRequestId, { escalated }) {
     escalated,
   });
 }
-//@ chunk-hwmsct5x.js:283227-283337 layout
+//@ chunk-vn3g7zt8.js:289984-290094 layout
 /**
  * 取出并删除该请求的首字节看门狗标记。
  */
@@ -1112,12 +1122,12 @@ function takeFirstByteWatchdogArm(clientRequestId) {
   streamFirstByteArmedRequestIds.delete(clientRequestId);
   return arm;
 }
-//@ chunk-hwmsct5x.js:283337-283375 layout
+//@ chunk-vn3g7zt8.js:290094-290132 layout
 /**
  * "/invoke-with-response-stream"。
  */
 var BEDROCK_STREAM_PATH = "/invoke-with-response-stream";
-//@ chunk-hwmsct5x.js:283375-284054 layout
+//@ chunk-vn3g7zt8.js:290132-290811 layout
 /**
  * 计算首字节窗口：基础首字节超时 + 请求体大小附加，受 API 超时约束；返回 {escalated, firstWindowMs, retryWindowMs}，不适用时 undefined。
  */
@@ -1173,7 +1183,7 @@ function getFirstByteWatchdogPlan({
     retryWindowMs,
   };
 }
-//@ chunk-hwmsct5x.js:284054-284792 layout
+//@ chunk-vn3g7zt8.js:290811-291549 layout
 /**
  * 包装 fetch：窗口内未收到响应头就中止（检测到系统睡眠则抛 StreamSuspendedError），记 tengu_api_no_response_timeout。
  */
@@ -1242,7 +1252,7 @@ async function fetchWithFirstByteTimeout(fetchImpl, url, init, deadline, clock =
     probeTimer();
   }
 }
-//@ chunk-hwmsct5x.js:284792-285084 layout
+//@ chunk-vn3g7zt8.js:291549-291841 layout
 /**
  * 字节流空闲超时错误：记录空闲时长、已收字节、TTFB、是否在等读取、cf-ray、睡眠时长。
  */
@@ -1264,7 +1274,7 @@ class StreamIdleTimeoutError extends Error {
     this.sleptMs = sleptMs;
   }
 }
-//@ chunk-hwmsct5x.js:285084-285293 layout
+//@ chunk-vn3g7zt8.js:291841-292050 layout
 /**
  * 看门狗检测到系统挂起时的错误（中止后换新连接重试）。
  */
@@ -1277,7 +1287,7 @@ class StreamSuspendedError extends Error {
     this.name = "StreamSuspendedError";
   }
 }
-//@ chunk-hwmsct5x.js:285293-285491 layout
+//@ chunk-vn3g7zt8.js:292050-292248 layout
 /**
  * 计时器触发的迟到量与墙钟睡眠量，判定是否跨越系统挂起。
  */
@@ -1294,7 +1304,7 @@ function measureTimerLateness(clock, { armedAt, wallArmedAt, idleMs }) {
     suspended: lateByTimer && wallAhead,
   };
 }
-//@ chunk-hwmsct5x.js:285491-285724 layout
+//@ chunk-vn3g7zt8.js:292248-292481 layout
 /**
  * 流空闲计时器跨越睡眠触发时返回 StreamSuspendedError。
  */
@@ -1314,12 +1324,12 @@ function checkSuspendedStreamIdle(clock, timing) {
     return;
   }
 }
-//@ chunk-hwmsct5x.js:285724-286365 layout
+//@ chunk-vn3g7zt8.js:292481-293122 layout
 /**
  * Bedrock 流式响应 content-type 不是 application/vnd.amazon.eventstream 时抛出（多半有网关改写了响应）。
  */
 let BedrockUnexpectedContentTypeError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:285724", () => {
+deferInit("chunk-vn3g7zt8.js:292481", () => {
   BedrockUnexpectedContentTypeError = class BedrockUnexpectedContentTypeError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -1337,11 +1347,12 @@ deferInit("chunk-hwmsct5x.js:285724", () => {
     }
   };
 });
-//@ chunk-hwmsct5x.js:286365-288145 layout
+//@ chunk-vn3g7zt8.js:293122-295002 layout
 /**
  * 包装响应体 ReadableStream：每块重置空闲计时，超时报 StreamIdleTimeoutError（或挂起时 StreamSuspendedError），并按 15/30/60/120s 记录部分停顿日志。
  */
-function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock) {
+function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock, slackFloorMs = 0) {
+  let slackMs = clipSlackMs(slackFloorMs, idleMs / 100);
   let idleTimer = null;
   let pollTimer = null;
   let checkpointStep = 0;
@@ -1367,7 +1378,7 @@ function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock
     clearPollTimer();
   };
   let lastChunkAt = 0;
-  let wallArmedAt = 0;
+  let lastChunkWallMs = 0;
   let armPollTimer = (pollController) => {
     clearPollTimer();
     if (checkpointStep >= stallCheckpointMs.length) return;
@@ -1399,16 +1410,18 @@ function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock
     );
   };
   let armIdleTimer = (streamController) => {
+    if (slackMs > 0 && idleTimer !== null && slackStillFresh(clock, lastChunkAt, lastChunkWallMs, slackMs))
+      return;
     clearTimers();
     lastChunkAt = clock.monotonicNow();
-    wallArmedAt = clock.now();
+    lastChunkWallMs = clock.now();
     checkpointStep = 0;
     armPollTimer(streamController);
     idleTimer = clock.setTimeout(() => {
       idleTimer = null;
       let { lateMs, sleptMs, suspended } = measureTimerLateness(clock, {
         armedAt: lastChunkAt,
-        wallArmedAt,
+        wallArmedAt: lastChunkWallMs,
         idleMs,
       });
       let readableErrored = streamController.desiredSize === null;
@@ -1437,6 +1450,7 @@ function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock
           slept_ms: sleptMs,
           bytes_received: bytesReceived,
           ttfb_ms: ttfbMs ?? null,
+          rearm_slack_ms: slackMs,
         });
         if (lateMs >= 1000 && !isDiskless())
           logEvent("tengu_byte_watchdog_fired_late", {
@@ -1505,7 +1519,7 @@ function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock
     },
   });
 }
-//@ chunk-hwmsct5x.js:288145-288266 layout
+//@ chunk-vn3g7zt8.js:295002-295123 layout
 /**
  * CLAUDE_ENABLE_BYTE_WATCHDOG 或 tengu_stream_watchdog_default_on（默认开）。
  */
@@ -1514,7 +1528,7 @@ function isByteWatchdogEnabled() {
   if (CLAUDE_ENABLE_BYTE_WATCHDOG !== undefined) return CLAUDE_ENABLE_BYTE_WATCHDOG;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_stream_watchdog_default_on", true);
 }
-//@ chunk-hwmsct5x.js:288266-288368 layout
+//@ chunk-vn3g7zt8.js:295123-295225 layout
 /**
  * 第一方且是 Anthropic 官方 API，或 anthropicAws 未设自定义 base URL。
  */
@@ -1524,35 +1538,35 @@ function isDirectAnthropicEndpoint(provider) {
     (provider === "anthropicAws" && !process.env.ANTHROPIC_AWS_BASE_URL)
   );
 }
-//@ chunk-hwmsct5x.js:288368-288442 layout
+//@ chunk-vn3g7zt8.js:295225-295299 layout
 /**
  * firstParty/gateway/anthropicAws（响应为 text/event-stream）。
  */
 function isSseProvider(provider) {
   return provider === "firstParty" || provider === "gateway" || provider === "anthropicAws";
 }
-//@ chunk-hwmsct5x.js:288442-288479 layout
+//@ chunk-vn3g7zt8.js:295299-295336 layout
 /**
  * 字节看门狗开启且当前提供商是 SSE 类（firstParty/gateway/anthropicAws）。
  */
 function isStreamWatchdogApplicable() {
   return isByteWatchdogEnabled() && isSseProvider(getAPIProvider());
 }
-//@ chunk-hwmsct5x.js:288479-288538 layout
+//@ chunk-vn3g7zt8.js:295336-295395 layout
 /**
  * CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK。
  */
 function isBedrockByteWatchdogEnabled() {
   return env.CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK;
 }
-//@ chunk-hwmsct5x.js:288538-288587 layout
+//@ chunk-vn3g7zt8.js:295395-295444 layout
 /**
  * 提供商支持字节看门狗：直连 Anthropic 端点，或 Bedrock 且开启了 Bedrock 看门狗。
  */
 function supportsByteWatchdog(provider) {
   return isDirectAnthropicEndpoint(provider) || (provider === "bedrock" && isBedrockByteWatchdogEnabled());
 }
-//@ chunk-hwmsct5x.js:288587-288644 layout
+//@ chunk-vn3g7zt8.js:295444-295501 layout
 /**
  * 看门狗开启且路由提供商与当前提供商都支持时为真（传给代理层，避免重复的 body 空闲超时）。
  */
@@ -1560,7 +1574,7 @@ function shouldUseBodyIdleWatchdog(provider) {
   if (!isByteWatchdogEnabled()) return false;
   return supportsByteWatchdog(provider) && supportsByteWatchdog(getAPIProvider());
 }
-//@ chunk-hwmsct5x.js:288644-288739 layout (2.1.88 match: getServerUrl, 1)
+//@ chunk-vn3g7zt8.js:295501-295596 layout (2.1.88 match: getServerUrl, 1)
 /**
  * 用新 body 重建 Response 并保留 url。旧版名 getServerUrl 为错配。
  */
@@ -1571,7 +1585,7 @@ function cloneResponseWithBody(response, body) {
   });
   return response_2;
 }
-//@ chunk-hwmsct5x.js:288739-291521 callgraph-fingerprint (2.1.88 match: buildFetch, 0.183)
+//@ chunk-vn3g7zt8.js:295596-298419 callgraph-fingerprint (2.1.88 match: buildFetch, 0.179)
 /**
  * 包装 fetch（旧版 buildFetch）：第一方直连时补 x-client-request-id、拒答回退相关头、anthropic-usage-limit、tools-used 头；打 [API REQUEST] 日志；大请求体 gzip 压缩；按需加首字节看门狗；Bedrock 流缺 content-type 时补默认值、类型不对抛 BedrockUnexpectedContentTypeError；SSE/eventstream 响应体加字节空闲看门狗。
  */
@@ -1587,8 +1601,8 @@ function buildFetch(
   classKey,
 ) {
   let fetchFn = fetchOverride ?? fetchWithRequestBodyCompression;
-  let apiProvider = getAPIProvider();
-  let isDirectEndpoint = isDirectAnthropicEndpoint(apiProvider);
+  let provider = getAPIProvider();
+  let isDirectEndpoint = isDirectAnthropicEndpoint(provider);
   return async (input, init) => {
     let headers = new Headers(init?.headers);
     let requestUrl = input instanceof Request ? input.url : String(input);
@@ -1611,16 +1625,13 @@ function buildFetch(
       let requestAtis = getRequestAtis();
       if (requestAtis !== undefined) headers.set(ATIS_REQUEST_HEADER, requestAtis);
     }
-    if (isMessagesEndpoint(requestUrl) && isSnugMittenAndSillyShoreOn()) {
-      let isOfficialEndpoint = false;
+    if (isMessagesEndpoint(requestUrl))
       try {
-        isOfficialEndpoint = isOfficialFirstPartyEndpoint(apiProvider);
+        if (isOfficialFirstPartyEndpoint(provider) && isSillyShoreGateOn()) {
+          headers.set(SANDY_PLOVER_HEADER, toolsUsedHeaderBuilder(getConversationToolsUsed()));
+          if (streamFallbackWarning().once("tools_used_header")) logFeatureOk("api_tools_used_header");
+        }
       } catch {}
-      if (isOfficialEndpoint) {
-        headers.set(SANDY_PLOVER_HEADER, toolsUsedHeaderBuilder(getConversationToolsUsed()));
-        if (streamFallbackWarning().once("tools_used_header")) logFeatureOk("api_tools_used_header");
-      }
-    }
     try {
       let id = headers.get(CLIENT_REQUEST_ID_HEADER);
       logForDebugging(
@@ -1681,7 +1692,7 @@ function buildFetch(
     }
     let firstByteWatchdogPlan = getFirstByteWatchdogPlan({
       clientRequestId: incomingRequestId,
-      provider: apiProvider,
+      provider,
       routedProvider,
       method,
       url: requestUrl,
@@ -1691,7 +1702,7 @@ function buildFetch(
     let checkFirstPartyOptions = (init) => {
       try {
         return shouldUseFirstPartyFetchOptions({
-          provider: apiProvider,
+          provider,
           routedProvider,
           url: requestUrl,
           init,
@@ -1731,10 +1742,9 @@ function buildFetch(
     if (isModelRequest)
       markArmedFromResponse(
         response.headers,
-        () => apiProvider !== "firstParty" || isOfficialFirstPartyEndpoint(apiProvider),
+        () => provider !== "firstParty" || isOfficialFirstPartyEndpoint(provider),
       );
-    let isBedrockStream =
-      apiProvider === "bedrock" && response.ok && requestUrl.includes(BEDROCK_STREAM_PATH);
+    let isBedrockStream = provider === "bedrock" && response.ok && requestUrl.includes(BEDROCK_STREAM_PATH);
     if (
       isBedrockStream &&
       response.body &&
@@ -1755,28 +1765,32 @@ function buildFetch(
       response.body?.cancel().catch(() => {});
       throw new BedrockUnexpectedContentTypeError(contentType);
     }
-    let isSse = (isSseProvider(apiProvider) || isDirectEndpoint) && lower?.includes("text/event-stream");
+    let isSse = (isSseProvider(provider) || isDirectEndpoint) && lower?.includes("text/event-stream");
     let isBedrockEventStream =
-      apiProvider === "bedrock" &&
-      lower?.includes("vnd.amazon.eventstream") &&
-      isBedrockByteWatchdogEnabled();
+      provider === "bedrock" && lower?.includes("vnd.amazon.eventstream") && isBedrockByteWatchdogEnabled();
     if ((isSse || isBedrockEventStream) && response.body && isByteWatchdogEnabled()) {
-      let byteIdleTimeoutForProvider = getByteIdleTimeoutForProvider(apiProvider);
+      let byteIdleTimeoutForProvider = getByteIdleTimeoutForProvider(provider);
       let cfRay =
         response.headers.get("cf-ray") ??
         (isBedrockEventStream ? (response.headers.get("x-amzn-requestid") ?? undefined) : undefined);
       let chunkTimes = {
         lastAt: 0,
       };
-      let holdMs = isSse ? heldReplyHoldMs(classKey) : 0;
+      let byteChunkTimes = classKey === "main";
+      let isMainClass = !isSse ? 0 : byteChunkTimes ? mainReplyHoldMs() : heldReplyHoldMs(classKey);
       let watchedResponse = cloneResponseWithBody(
         response,
         withByteIdleWatchdog(
-          holdMs > 0 ? wrapWithUnwatchedHold(response.body, holdMs, clock) : response.body,
+          isMainClass <= 0
+            ? response.body
+            : byteChunkTimes
+              ? wrapWithUnwatchedHold_2(response.body, isMainClass, clock)
+              : wrapWithUnwatchedHold(response.body, isMainClass, clock),
           byteIdleTimeoutForProvider,
           cfRay,
           chunkTimes,
           clock,
+          streamTimerSlackMs(),
         ),
       );
       Object.defineProperty(watchedResponse, "_chunkTimes", {
@@ -1789,7 +1803,7 @@ function buildFetch(
     return response;
   };
 }
-//@ chunk-hwmsct5x.js:291521-291734 sole-consumer
+//@ chunk-vn3g7zt8.js:298419-298632 sole-consumer
 /**
  * 调试日志用：Authorization 只保留方案名（"Bearer ***"），并列出 anthropic-beta 与 x-anthropic-* 头。
  */
@@ -1807,7 +1821,7 @@ function summarizeAuthHeadersForLog(headers) {
     headers: out,
   };
 }
-//@ chunk-hwmsct5x.js:291734-291807 sole-consumer
+//@ chunk-vn3g7zt8.js:298632-298705 sole-consumer
 /**
  * 等待 promise，完成后若 signal 已中止则抛 AbortError。
  */
@@ -1817,7 +1831,6 @@ async function awaitUnlessAborted(promise, signal) {
   return value;
 }
 export {
-  getStreamIdleTimeoutMs,
   getAnthropicClient,
   getApiTimeoutMs,
   CLIENT_REQUEST_ID_HEADER,
@@ -1825,12 +1838,13 @@ export {
   checkSuspendedStreamIdle,
   armFirstByteWatchdog,
   shouldUseBodyIdleWatchdog,
+  getStreamIdleTimeoutMs,
   getByteIdleTimeoutForProvider,
   StreamIdleTimeoutError,
   StreamSuspendedError,
-  configureApiKeyHeaders,
-  getCustomHeaderMap,
   getToolNameList,
+  configureApiKeyHeaders,
   hasCustomAuthorizationHeader,
   getCustomHeaders,
+  getCustomHeaderMap,
 };

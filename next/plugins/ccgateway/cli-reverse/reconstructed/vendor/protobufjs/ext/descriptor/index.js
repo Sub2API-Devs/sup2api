@@ -1,15 +1,15 @@
 /**
  * protobufjs/ext/descriptor/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protobufjs } from "../../src/index.js";
 import { require_descriptor } from "../../google/protobuf/descriptor.json.js";
 
-//@ chunk-pwh5dx3n.js:156548-168464 cjs-fingerprint
+//@ chunk-3k21nfa0.js:156548-168464 cjs-fingerprint
 var require_descriptor_2 = __commonJS(function (cjsExports, cjsModule) {
   var $protobuf = require_protobufjs();
   cjsModule.exports =

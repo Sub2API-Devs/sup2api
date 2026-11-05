@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置 diff 面板插件的界面：侧栏/对话框面板、分段绘制与停靠布局。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (65)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (65)
  * attribution: placement 65
  */
 import {
@@ -101,7 +101,7 @@ import { CC_PLUGIN_DIFF } from "../diff/index.js";
 import { BUILTIN } from "../../../utils/telemetry/pluginTelemetry.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:36855-37057 placement
+//@ chunk-c7hntn0y.js:37219-37421 placement
 function listRow(ctx, row, right) {
   let { Box, Button } = ctx.ui;
   return h(
@@ -130,9 +130,9 @@ function listRow(ctx, row, right) {
     right,
   );
 }
-//@ chunk-wyqg6m3h.js:37057-37073 placement
+//@ chunk-c7hntn0y.js:37421-37437 placement
 var POINTER = "\u276F";
-//@ chunk-wyqg6m3h.js:37073-37357 placement
+//@ chunk-c7hntn0y.js:37437-37721 placement
 function dialogFileRow(ctx, row, onPress) {
   let { Text } = ctx.ui;
   let max = Math.max(DIALOG_PATH_FLOOR, ctx.columns - DIALOG_PATH_RESERVE);
@@ -159,7 +159,7 @@ function dialogFileRow(ctx, row, onPress) {
     stat,
   );
 }
-//@ chunk-wyqg6m3h.js:37357-37438 placement
+//@ chunk-c7hntn0y.js:37721-37802 placement
 function dimNote(ctx, text) {
   let { Text } = ctx.ui;
   return h(
@@ -171,7 +171,7 @@ function dimNote(ctx, text) {
     text,
   );
 }
-//@ chunk-wyqg6m3h.js:37438-37555 placement
+//@ chunk-c7hntn0y.js:37802-37919 placement
 function divider(ctx) {
   let { Text } = ctx.ui;
   return h(
@@ -183,12 +183,12 @@ function divider(ctx) {
     "\u2500".repeat(Math.max(1, ctx.columns)),
   );
 }
-//@ chunk-wyqg6m3h.js:37555-37587 placement (2.1.88 match: _temp2, 1)
+//@ chunk-c7hntn0y.js:37919-37951 placement (2.1.88 match: _temp2, 1)
 var fileKeyOf = (url) => `file:${sanitizeName(url.path)}`;
-//@ chunk-wyqg6m3h.js:37587-37650 placement
+//@ chunk-c7hntn0y.js:37951-38014 placement
 var statTextOf = (added, removed) =>
   keptOf([added > 0 ? `+${added}` : null, removed > 0 ? `-${removed}` : null]).join(" ");
-//@ chunk-wyqg6m3h.js:37650-37856 placement
+//@ chunk-c7hntn0y.js:38014-38220 placement
 function fileRow(ctx, row, onPress) {
   let label = padEnd(
     truncateStart(sanitizeName(row.displayPath), Math.max(ctx.columns - STAT_CELLS, PATH_FLOOR)),
@@ -206,9 +206,9 @@ function fileRow(ctx, row, onPress) {
     diffStat(ctx, row.added, row.removed),
   );
 }
-//@ chunk-wyqg6m3h.js:37856-37873 placement
+//@ chunk-c7hntn0y.js:38220-38237 placement
 var present = (items) => keptOf(items);
-//@ chunk-wyqg6m3h.js:37873-38109 placement
+//@ chunk-c7hntn0y.js:38237-38473 placement
 function headerView(ctx, totals, right) {
   let { Box, Text } = ctx.ui;
   return h(
@@ -242,7 +242,7 @@ function headerView(ctx, totals, right) {
     ]),
   );
 }
-//@ chunk-wyqg6m3h.js:38109-38313 placement
+//@ chunk-c7hntn0y.js:38473-38677 placement
 function legendRow(ctx, entry) {
   let { Box, Text } = ctx.ui;
   return h(
@@ -266,7 +266,7 @@ function legendRow(ctx, entry) {
     ],
   );
 }
-//@ chunk-wyqg6m3h.js:38313-38504 placement
+//@ chunk-c7hntn0y.js:38677-38868 placement
 function listEdgeButton(ctx, key, label) {
   let { Button } = ctx.ui;
   let isUp = key === "list-up";
@@ -282,7 +282,7 @@ function listEdgeButton(ctx, key, label) {
     label,
   );
 }
-//@ chunk-wyqg6m3h.js:38504-38940 placement
+//@ chunk-c7hntn0y.js:38868-39304 placement
 function nameRow(ctx, file) {
   let { Box, Text, Button } = ctx.ui;
   let filtered = [file.isUntracked ? "untracked" : null, file.isTruncated ? "truncated" : null].filter(
@@ -325,7 +325,7 @@ function nameRow(ctx, file) {
     ],
   );
 }
-//@ chunk-wyqg6m3h.js:38940-39251 placement
+//@ chunk-c7hntn0y.js:39304-39615 placement
 function sourcePicker(ctx, view) {
   let { Select } = ctx.ui;
   let { source, turns } = view;
@@ -348,7 +348,7 @@ function sourcePicker(ctx, view) {
       })
     : null;
 }
-//@ chunk-wyqg6m3h.js:39251-39392 placement
+//@ chunk-c7hntn0y.js:39615-39756 placement
 function titleRow(ctx, title) {
   let { Text } = ctx.ui;
   let hasSubtitle = title.subtitle !== "";
@@ -367,7 +367,7 @@ function titleRow(ctx, title) {
     ),
   );
 }
-//@ chunk-wyqg6m3h.js:39392-39748 placement
+//@ chunk-c7hntn0y.js:39756-40112 placement
 function todoBar(ctx, view) {
   let { todos } = view;
   if (todos.total === 0) return null;
@@ -408,7 +408,7 @@ function todoBar(ctx, view) {
     ),
   );
 }
-//@ chunk-wyqg6m3h.js:39748-39886 placement
+//@ chunk-c7hntn0y.js:40112-40250 placement
 function toggleRow(ctx, key, row) {
   let { Box, Button } = ctx.ui;
   return h(
@@ -428,11 +428,11 @@ function toggleRow(ctx, key, row) {
     ),
   );
 }
-//@ chunk-wyqg6m3h.js:39886-39896 placement
+//@ chunk-c7hntn0y.js:40250-40260 placement
 var FILE_FRAME_NODES = 16;
-//@ chunk-wyqg6m3h.js:39896-39928 placement
+//@ chunk-c7hntn0y.js:40260-40292 placement
 var SAFE_PATHSPEC_PATTERN = /^[\p{L}\p{N}._/@+-]+$/u;
-//@ chunk-wyqg6m3h.js:39928-40296 placement
+//@ chunk-c7hntn0y.js:40292-40660 placement
 function placeholderOf(file) {
   if (file.isUntracked) return file.words.untrackedNoteOf(file.path, SAFE_PATHSPEC_PATTERN.test(file.path));
   if (file.isBinary) return ["Binary file - cannot display diff"];
@@ -443,7 +443,7 @@ function placeholderOf(file) {
   let message = isLarge ? "Large file - diff exceeds 1 MB limit" : isEmpty ? "No diff content" : null;
   return message ? [message] : null;
 }
-//@ chunk-wyqg6m3h.js:40296-40840 placement
+//@ chunk-c7hntn0y.js:40660-41204 placement
 function detailView(ctx, file, budget) {
   let { Box, Text, Code } = ctx.ui;
   let placeholder = placeholderOf(file);
@@ -503,7 +503,7 @@ function detailView(ctx, file, budget) {
     room: blocks.room,
   };
 }
-//@ chunk-wyqg6m3h.js:40840-40992 placement
+//@ chunk-c7hntn0y.js:41204-41356 placement
 var bodyEntryOf = (file, view) => ({
   path: file.path,
   displayPath: displayPathOf(file),
@@ -513,7 +513,7 @@ var bodyEntryOf = (file, view) => ({
   isBinary: file.isBinary,
   body: view.bodies.get(file.path),
 });
-//@ chunk-wyqg6m3h.js:40992-41149 placement
+//@ chunk-c7hntn0y.js:41356-41513 placement
 var detailModelOf = (file, view) => ({
   words: view.words,
   path: file.path,
@@ -523,7 +523,7 @@ var detailModelOf = (file, view) => ({
   body: file.body,
   isArmed: view.armedPath === file.path,
 });
-//@ chunk-wyqg6m3h.js:41149-41313 placement
+//@ chunk-c7hntn0y.js:41513-41677 placement
 var turnEntryOf = (file) => ({
   path: file.path,
   displayPath: file.path,
@@ -537,7 +537,7 @@ var turnEntryOf = (file) => ({
     isLarge: false,
   },
 });
-//@ chunk-wyqg6m3h.js:41313-42573 placement
+//@ chunk-c7hntn0y.js:41677-42937 placement
 function segmentsOf(ctx, view) {
   let { earlier } = view;
   let { columns } = ctx.place;
@@ -656,7 +656,7 @@ function segmentsOf(ctx, view) {
     ...(showEarlier ? legendSegments() : []),
   ];
 }
-//@ chunk-wyqg6m3h.js:42573-43102 placement
+//@ chunk-c7hntn0y.js:42937-43466 placement
 function bodyLayoutOf(ctx, view) {
   let segments = segmentsOf(ctx, view);
   let list = listWindowOf(ctx, view);
@@ -690,7 +690,7 @@ function bodyLayoutOf(ctx, view) {
     listEnd: showsList ? listTop + listRows - 2 : listTop,
   };
 }
-//@ chunk-wyqg6m3h.js:43102-43235 placement
+//@ chunk-c7hntn0y.js:43466-43599 placement
 function dialogEntriesOf(view) {
   let turn = pickedTurnOf(view);
   return turn
@@ -699,7 +699,7 @@ function dialogEntriesOf(view) {
         .sort((fileA, fileB) => displayPathOf(fileA).localeCompare(displayPathOf(fileB)))
         .map((file) => bodyEntryOf(file, view));
 }
-//@ chunk-wyqg6m3h.js:43235-43342 placement
+//@ chunk-c7hntn0y.js:43599-43706 placement
 var dialogWindowOf = (view, paths) =>
   Math.max(
     0,
@@ -708,7 +708,7 @@ var dialogWindowOf = (view, paths) =>
       Math.max(0, paths.indexOf(view.selectedPath ?? "")) - Math.floor(MAX_VISIBLE_FILES / 2),
     ),
   );
-//@ chunk-wyqg6m3h.js:43342-43679 placement
+//@ chunk-c7hntn0y.js:43706-44043 placement
 function dialogFocusOf(view, element) {
   let entries = dialogEntriesOf(view);
   let mapped = entries.map((entry) => entry.path);
@@ -740,7 +740,7 @@ function dialogFocusOf(view, element) {
         }
       : null;
 }
-//@ chunk-wyqg6m3h.js:43679-43909 placement
+//@ chunk-c7hntn0y.js:44043-44273 placement
 function preludeOf(ctx, view) {
   let { Box } = ctx.ui;
   let isLoading = view.data === null && !view.hasSettled;
@@ -757,7 +757,7 @@ function preludeOf(ctx, view) {
     : null;
   return view.isOutsideRepository ? outsideNote : loadingPane;
 }
-//@ chunk-wyqg6m3h.js:43909-45274 placement
+//@ chunk-c7hntn0y.js:44273-45638 placement
 function dialogPane(ctx, view) {
   let { Box, Text } = ctx.ui;
   let prelude = preludeOf(ctx, view);
@@ -854,7 +854,7 @@ function dialogPane(ctx, view) {
     ]),
   );
 }
-//@ chunk-wyqg6m3h.js:45274-45635 placement
+//@ chunk-c7hntn0y.js:45638-45999 placement
 function dialogRowsOf(view) {
   let entries = dialogEntriesOf(view);
   let hasTitleLine = pickedTurnOf(view) !== undefined || view.data !== null;
@@ -871,7 +871,7 @@ function dialogRowsOf(view) {
   let bodyRows = showsDetail ? 2 + Math.max(1, reduced) : listRows;
   return 2 + Number(hasTitleLine) + Number(view.turns.length > 0) + 2 + bodyRows + 1;
 }
-//@ chunk-wyqg6m3h.js:45635-46046 placement
+//@ chunk-c7hntn0y.js:45999-46410 placement
 function listBodyOf(view) {
   let { data, partition, totals, empty } = view;
   let hint = empty?.hint ?? null;
@@ -885,9 +885,9 @@ function listBodyOf(view) {
       ]
     : partition.shown;
 }
-//@ chunk-wyqg6m3h.js:46046-46055 placement
+//@ chunk-c7hntn0y.js:46410-46419 placement
 var FOOT_ROWS = 3;
-//@ chunk-wyqg6m3h.js:46055-46746 placement
+//@ chunk-c7hntn0y.js:46419-47110 placement
 function messagePaneOf(ctx, pane) {
   let { Box, Text } = ctx.ui;
   let { top, controls, earlier, rest } = pane;
@@ -974,7 +974,7 @@ function messagePaneOf(ctx, pane) {
     ],
   );
 }
-//@ chunk-wyqg6m3h.js:46746-47563 placement
+//@ chunk-c7hntn0y.js:47110-47927 placement
 function dockPlanOf(view) {
   let { data, requestedMode } = view;
   let turn = pickedTurnOf(view);
@@ -1020,7 +1020,7 @@ function dockPlanOf(view) {
     isUntrackedNoted: !turn && data?.isUntrackedWithheld === true && empty === null,
   };
 }
-//@ chunk-wyqg6m3h.js:47563-47734 placement
+//@ chunk-c7hntn0y.js:47927-48098 placement
 function hunkWindowOf(segment, windowSpec) {
   let consumedRows = 0;
   let offset = 0;
@@ -1040,7 +1040,7 @@ function hunkWindowOf(segment, windowSpec) {
     lines: hunk.lines.slice(0, takenLines),
   };
 }
-//@ chunk-wyqg6m3h.js:47734-47977 placement
+//@ chunk-c7hntn0y.js:48098-48341 placement
 function bodyScrolledBy(ctx, event) {
   let { visibleRows, maxTop } = bodyLayoutOf(ctx, dockPlanOf(ctx));
   let delta = Math.abs(event.by);
@@ -1052,7 +1052,7 @@ function bodyScrolledBy(ctx, event) {
     top: Math.max(0, Math.min(maxTop, ctx.place.top + Math.sign(event.by) * step)),
   };
 }
-//@ chunk-wyqg6m3h.js:47977-48829 placement
+//@ chunk-c7hntn0y.js:48341-49193 placement
 function drawWindow(ctx, layout, top) {
   let { Box, Text, Code } = ctx.ui;
   let out = [];
@@ -1139,14 +1139,14 @@ function drawWindow(ctx, layout, top) {
   }
   return out;
 }
-//@ chunk-wyqg6m3h.js:48829-48944 placement
+//@ chunk-c7hntn0y.js:49193-49308 placement
 function isWheelOverList(ctx, event) {
   let plan = dockPlanOf(ctx);
   let { listTop, listEnd } = bodyLayoutOf(ctx, plan);
   let pointerRow = event.pointer?.row ?? -1;
   return pointerRow >= listTop && pointerRow < listEnd && plan.rows.length > MAX_SUMMARY_ROWS;
 }
-//@ chunk-wyqg6m3h.js:48944-49605 placement
+//@ chunk-c7hntn0y.js:49308-49969 placement
 function listBlockOf(ctx, view, list) {
   let { shown, above, below } = listWindowOf(view, list);
   let { noiseCount } = list.partition;
@@ -1194,7 +1194,7 @@ function listBlockOf(ctx, view, list) {
     noiseToggle,
   ]);
 }
-//@ chunk-wyqg6m3h.js:49605-49746 placement
+//@ chunk-c7hntn0y.js:49969-50110 placement
 function listScrolledBy(ctx, delta) {
   let max = Math.max(0, dockPlanOf(ctx).rows.length - MAX_SUMMARY_ROWS);
   return {
@@ -1202,17 +1202,17 @@ function listScrolledBy(ctx, delta) {
     listStart: Math.max(0, Math.min(max, Math.min(ctx.place.listStart, max) + delta)),
   };
 }
-//@ chunk-wyqg6m3h.js:49746-49816 placement
+//@ chunk-c7hntn0y.js:50110-50180 placement
 var placeAtFile = (ctx, path) => ({
   ...ctx.place,
   top: bodyLayoutOf(ctx, dockPlanOf(ctx)).tops.get(path) ?? ctx.place.top,
 });
-//@ chunk-wyqg6m3h.js:49816-49870 placement
+//@ chunk-c7hntn0y.js:50180-50234 placement
 var insetOf = (place) => ({
   ...place,
   columns: Math.max(1, place.columns - PANE_RIGHT_PAD_COLUMNS),
 });
-//@ chunk-wyqg6m3h.js:49870-50611 placement
+//@ chunk-c7hntn0y.js:50234-50975 placement
 function sidebarPane(ctx, view) {
   let { Box, Button } = ctx.ui;
   let prelude = preludeOf(ctx, view);
@@ -1290,7 +1290,7 @@ function sidebarPane(ctx, view) {
     ],
   );
 }
-//@ chunk-wyqg6m3h.js:50611-50834 placement
+//@ chunk-c7hntn0y.js:50975-51198 placement
 function paneView(ctx, view, props) {
   let { Box } = ctx.ui;
   let isDocked = props.placement === "dock";
@@ -1309,7 +1309,7 @@ function paneView(ctx, view, props) {
       ? h(Box, null, dimNote(ctx, RESIZE_TERMINAL_TEXT))
       : dialogPane(ctx, view);
 }
-//@ chunk-wyqg6m3h.js:50834-51150 placement
+//@ chunk-c7hntn0y.js:51198-51514 placement
 function drawnFilesOf(view) {
   let files = view.data?.files ?? [];
   if (view.placement === "inline") {
@@ -1323,21 +1323,21 @@ function drawnFilesOf(view) {
   let includePreSession = view.isPreSessionShown && partition.preSession.length <= PRE_SESSION_BODY_CAP;
   return [...partition.shown, ...(includePreSession ? partition.preSession : [])];
 }
-//@ chunk-wyqg6m3h.js:51150-51237 placement
+//@ chunk-c7hntn0y.js:51514-51601 placement
 var entryKindsOf = (ctx) => (dir) =>
   ctx.listDir(dir).then(
     (entries) => new Map(entries.map((entry) => [entry.name, entry.kind])),
     () => null,
   );
-//@ chunk-wyqg6m3h.js:51237-51348 placement (2.1.88 match: isEnvTruthy, 0.824)
+//@ chunk-c7hntn0y.js:51601-51712 placement (2.1.88 match: isEnvTruthy, 0.824)
 var isEnvTruthy = (settings, envValue) =>
   settings.fileCheckpointingEnabled !== false &&
   !["1", "true", "yes", "on"].includes((envValue ?? "").trim().toLowerCase());
-//@ chunk-wyqg6m3h.js:51348-51381 placement
+//@ chunk-c7hntn0y.js:51712-51745 placement
 var isOnPaneSurface = (props) => props.surface !== "mobile";
-//@ chunk-wyqg6m3h.js:51381-51432 placement
+//@ chunk-c7hntn0y.js:51745-51796 placement
 var messageOf = (error) => (error instanceof Error ? error.message : String(error));
-//@ chunk-wyqg6m3h.js:51432-51489 placement (2.1.88 match: getFileModificationTimeAsync, 1)
+//@ chunk-c7hntn0y.js:51796-51853 placement (2.1.88 match: getFileModificationTimeAsync, 1)
 /**
  * 返回"取 mtime 或 null"的函数（柯里化）。
  */
@@ -1346,14 +1346,14 @@ var getFileModificationTimeAsync = (filePath) => (path) =>
     (stats) => stats.mtimeMs,
     () => null,
   );
-//@ chunk-wyqg6m3h.js:51489-51587 placement
+//@ chunk-c7hntn0y.js:51853-51951 placement
 function paneToggleOf(props) {
   let isTooNarrow = props.columns !== null && props.columns < OPEN_MIN_COLUMNS;
   return props.isOpen ? "close" : isTooNarrow ? "too-narrow" : "open";
 }
-//@ chunk-wyqg6m3h.js:51587-51631 placement
+//@ chunk-c7hntn0y.js:51951-51995 placement
 var BASE_OUTCOMES = ["merge-base", "head-is-base", "none"];
-//@ chunk-wyqg6m3h.js:51631-51797 placement
+//@ chunk-c7hntn0y.js:51995-52161 placement
 var FEATURES = {
   read: "repl_diff_read",
   tabSwitch: "repl_tab_switch",
@@ -1361,7 +1361,7 @@ var FEATURES = {
   baseResolve: "diff_base_resolve",
   selectionAttach: "diff_selection_attach",
 };
-//@ chunk-wyqg6m3h.js:51797-51848 placement
+//@ chunk-c7hntn0y.js:52161-52212 placement
 function safely(fn) {
   try {
     fn().catch(() => {
@@ -1369,11 +1369,11 @@ function safely(fn) {
     });
   } catch {}
 }
-//@ chunk-wyqg6m3h.js:51848-51878 placement
+//@ chunk-c7hntn0y.js:52212-52242 placement
 var SHOWN_TRIGGERS = ["auto_open", "manual"];
-//@ chunk-wyqg6m3h.js:51878-51936 placement
+//@ chunk-c7hntn0y.js:52242-52300 placement
 var WIDTH_BUCKETS = ["under_110", "110_to_143", "144_to_199", "200_plus"];
-//@ chunk-wyqg6m3h.js:51936-52198 placement
+//@ chunk-c7hntn0y.js:52300-52562 placement
 var recorderOf = (recorder) => ({
   mark: (feature, props) =>
     safely(() =>
@@ -1406,9 +1406,9 @@ var recorderOf = (recorder) => ({
       }),
     ),
 });
-//@ chunk-wyqg6m3h.js:52198-52222 placement
+//@ chunk-c7hntn0y.js:52562-52586 placement
 var TABS = ["diff", "convo"];
-//@ chunk-wyqg6m3h.js:52222-52302 placement
+//@ chunk-c7hntn0y.js:52586-52666 placement
 function widthBucketOf(columns) {
   let [narrow, medium, wide, widest] = WIDTH_BUCKETS;
   let width = columns ?? 0;
@@ -1417,7 +1417,7 @@ function widthBucketOf(columns) {
   let isWide = width < WIDEST_BUCKET_COLUMNS;
   return isNarrow ? narrow : isMedium ? medium : isWide ? wide : widest;
 }
-//@ chunk-wyqg6m3h.js:52302-52405 placement
+//@ chunk-c7hntn0y.js:52666-52769 placement
 function refreshRestOf(elapsedMs, timeoutCount) {
   let min = Math.min(elapsedMs, SLOW_REFRESH_REST_MAX_MS);
   let backoffMs =
@@ -1425,7 +1425,7 @@ function refreshRestOf(elapsedMs, timeoutCount) {
   let max = Math.max(min, backoffMs);
   return max > REFRESH_DEBOUNCE_MS ? max : 0;
 }
-//@ chunk-wyqg6m3h.js:52405-52554 placement
+//@ chunk-c7hntn0y.js:52769-52918 placement
 /**
  * 窗格打开结果：placed / awaited（暂无界面）/ withdrawn。
  */
@@ -1435,7 +1435,7 @@ function classifyPanePlacement(result) {
     ? "awaited"
     : "withdrawn";
 }
-//@ chunk-wyqg6m3h.js:52554-64097 placement
+//@ chunk-c7hntn0y.js:52918-64461 placement
 function register(on) {
   let host = null;
   let backend = null;
@@ -2431,9 +2431,9 @@ function register(on) {
     }
   });
 }
-//@ chunk-wyqg6m3h.js:64097-64119 placement
+//@ chunk-c7hntn0y.js:64461-64483 placement
 var STORE_ID; // deferred: uses INLINE_PLUGIN_MARKETPLACE (../../../utils/telemetry/pluginTelemetry.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-wyqg6m3h.js:64097", () => {
+deferInit("chunk-c7hntn0y.js:64461", () => {
   STORE_ID = `${CC_PLUGIN_DIFF}@${BUILTIN}`;
 });
 export {

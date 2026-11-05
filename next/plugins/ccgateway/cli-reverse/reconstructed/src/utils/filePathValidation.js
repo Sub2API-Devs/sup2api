@@ -3,15 +3,16 @@
  *
  * 2.1.316 新增：文件路径校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import { expandStablePath, UnstablePathError } from "./path.js";
 import { env } from "./env.js";
 import { isCoworkEntrypoint } from "./entrypointKinds.js";
-import { isRemoteToolsForwardEnabled } from "../bridge/deviceRegistration.js";
+import { isRemoteToolsForwardEnabled2 } from "../bridge/deviceRegistration.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import {
@@ -22,19 +23,19 @@ import {
 import { getOutputsRoot } from "./stageFileRoots.js";
 import { _enum } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-e6aww6q8.js:1365030-1365078 placement
+//@ chunk-5xgkngpb.js:1364350-1364398 placement
 /**
  * 去重追加：值不存在时才 push。
  */
 function pushUnique(list, absolutePath) {
   if (list && !list.includes(absolutePath)) list.push(absolutePath);
 }
-//@ chunk-e6aww6q8.js:1365078-1366023 placement
+//@ chunk-5xgkngpb.js:1364398-1365528 placement
 /**
  * 只暴露部分字段的工具上下文视图。
  */
 function createToolContextView(toolContext, toolUseContext) {
-  return {
+  let view = {
     get session() {
       return toolContext.session;
     },
@@ -77,6 +78,9 @@ function createToolContextView(toolContext, toolUseContext) {
     get remoteCall() {
       return toolUseContext.remoteCall;
     },
+    get readBaseline() {
+      return toolUseContext.remoteCall?.readBaseline ?? toolUseContext.carriedReadBaseline;
+    },
     get inputFromAnotherMachine() {
       return toolUseContext.inputFromAnotherMachine;
     },
@@ -96,8 +100,14 @@ function createToolContextView(toolContext, toolUseContext) {
       return toolUseContext.userModified;
     },
   };
+  if (codeModeAccepted())
+    Object.defineProperty(view, "primitiveToolGrant", {
+      get: () => toolContext.primitiveToolGrant,
+      enumerable: true,
+    });
+  return view;
 }
-//@ chunk-e6aww6q8.js:1366023-1366221 placement
+//@ chunk-5xgkngpb.js:1365528-1365726 placement
 function rejectNullBytes(label, entries) {
   let found = entries.find(([, value]) => value?.includes("\x00"));
   if (found)
@@ -108,7 +118,7 @@ function rejectNullBytes(label, entries) {
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:1366221-1366596 placement
+//@ chunk-5xgkngpb.js:1365726-1366101 placement
 /**
  * 解析后末尾为空白的路径拒绝。
  */
@@ -130,16 +140,16 @@ function rejectTrailingWhitespace(label, entries) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:1366596-1366685 placement
+//@ chunk-5xgkngpb.js:1366101-1366190 placement
 var EXPLICIT_HOME_PATH_RE = /^\s*(?:\/(?:Users|Volumes)\/|[A-Za-z]:[\\/]|\\\\)/;
 var POSIX_HOME_PATH_RE = /^\/(?:Users|Volumes)\//;
-//@ chunk-e6aww6q8.js:1366685-1367448 placement
+//@ chunk-5xgkngpb.js:1366190-1366954 placement
 function checkForeignFilePath(entries, toolName) {
   if (
     env.platform !== "linux" ||
     !isCoworkEntrypoint() ||
     env.CLAUDE_CODE_ENVIRONMENT_KIND !== undefined ||
-    isRemoteToolsForwardEnabled() ||
+    isRemoteToolsForwardEnabled2() ||
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_hazy_cosmos", true) === false
   )
     return null;
@@ -154,14 +164,14 @@ function checkForeignFilePath(entries, toolName) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:1367448-1367518 placement
+//@ chunk-5xgkngpb.js:1366954-1367024 placement
 /**
  * 用给定 schema 校验工具输入，成功返回原对象，否则 null。
  */
 function parsedToolInputOrNull(input, tool) {
   return tool !== null && input.safeParse(tool.input).success ? tool : null;
 }
-//@ chunk-e6aww6q8.js:1367518-1367657 placement
+//@ chunk-5xgkngpb.js:1367024-1367163 placement
 var SKILL_SAVE_SURFACES = {
   review: true,
   card: true,
@@ -176,7 +186,7 @@ var SKILL_SAVE_OUTCOMES = {
   no_save_tool: true,
   report_unsaved: true,
 };
-//@ chunk-e6aww6q8.js:1367657-1367698 placement
+//@ chunk-5xgkngpb.js:1367163-1367204 placement
 /**
  * 取对象的键列表。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 子会话的环境变量：剔除凭据/代理/宿主变量、只允许 EVAL_* 自定义、凭据存储排除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (19)
  * attribution: placement 19
  */
 import path from "path";
@@ -22,7 +22,7 @@ import {
   mkdtemp,
   rm as rm_2,
 } from "fs/promises";
-import os_2 from "os";
+import os from "os";
 import { GIT_ENV_VARS_TO_CLEAR } from "../../utils/git/gitSafeEnv.js";
 import { GIT_NO_PROMPT_ENV } from "../../utils/plugins/marketplaceManager.js";
 import {
@@ -74,7 +74,7 @@ import { missingGitSafetyEnv } from "../../utils/git/gitSafeInvocation.js";
 import { BG_CARRIED_ENV_KEYS_2, stripInternalEntrypoint } from "../../utils/background/envCarry.js";
 import { stubPublishDir } from "./artifactStub.js";
 
-//@ chunk-qchp9vrd.js:180856-183776 placement
+//@ chunk-af1hzzme.js:182251-185171 placement
 /**
  * 子会话保留的基础环境变量白名单。
  */
@@ -221,7 +221,7 @@ var PRESERVED_BASE_ENV_VARS = new Set([
   "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS",
   "CLAUDE_AGENT_SDK_MCP_NO_PREFIX",
 ]);
-//@ chunk-qchp9vrd.js:183776-184230 placement
+//@ chunk-af1hzzme.js:185171-185625 placement
 /**
  * 额外剔除的环境变量前缀。
  */
@@ -253,7 +253,7 @@ var STRIP_ENV_PREFIXES = [
   "CLAUDE_CODE_SDK_",
   "CLAUDE_CODE_RELAUNCH_",
 ];
-//@ chunk-qchp9vrd.js:184230-184364 placement
+//@ chunk-af1hzzme.js:185625-185759 placement
 function isStrippedClaudeCodeVar(envName) {
   if (isSecretEnvName(envName)) return !isNonSecretClaudeCodeEnvName(envName);
   if (PATH_LIKE_ENV_RE.test(envName)) return !PATH_ENV_EXCEPTIONS.has(envName);
@@ -264,12 +264,12 @@ function isStrippedClaudeCodeVar(envName) {
     isHelperEnvVar(envName)
   );
 }
-//@ chunk-qchp9vrd.js:184364-184432 placement
+//@ chunk-af1hzzme.js:185759-185827 placement
 /**
  * 代理相关的环境变量。
  */
 var PROXY_ENV_VARS = new Set(["http_proxy", "https_proxy", "no_proxy", "all_proxy"]);
-//@ chunk-qchp9vrd.js:184432-184670 placement
+//@ chunk-af1hzzme.js:185827-186065 placement
 /**
  * 判断评测子会话是否应剔除某环境变量：显式名单、密钥类 CLAUDE_CODE_*、连接串保留，EVAL_* 与凭据/代理前缀剔除。
  */
@@ -283,7 +283,7 @@ function shouldStripEnvVar(envName) {
   if (isConnectionStringName(envName)) return false;
   return STRIPPED_ENV_PREFIXES.some((prefix) => envName_2.startsWith(prefix));
 }
-//@ chunk-qchp9vrd.js:184670-184759 placement
+//@ chunk-af1hzzme.js:186065-186154 placement
 /**
  * 需要检查的 AWS 缓存目录。
  */
@@ -292,7 +292,7 @@ var AWS_CACHE_DIRS = [
   path.join(".aws", "cli", "cache"),
   path.join(".aws", "boto", "cache"),
 ];
-//@ chunk-qchp9vrd.js:184759-184856 placement
+//@ chunk-af1hzzme.js:186154-186251 placement
 /**
  * 求路径的真实路径（父目录 realpath 加文件名）。
  */
@@ -302,7 +302,7 @@ async function realPathOf(filePath) {
     path.basename(filePath),
   );
 }
-//@ chunk-qchp9vrd.js:184856-185059 placement
+//@ chunk-af1hzzme.js:186251-186454 placement
 /**
  * 求路径的真实路径，不存在时尝试按链接目标解析。
  */
@@ -318,7 +318,7 @@ async function resolveLinkTarget(linkPath) {
   let linkTarget = await readlink(linkPath).catch(() => null);
   return linkTarget === null ? null : path.resolve(path.dirname(await realPathOf(linkPath)), linkTarget);
 }
-//@ chunk-qchp9vrd.js:185059-185483 placement
+//@ chunk-af1hzzme.js:186454-186878 placement
 /**
  * 解析不存在的路径：向上找到第一个存在的祖先，经 realpath/readlink 拼回剩余部分；指向 /dev/null 返回原路径，无法解析返回 unresolvable。
  */
@@ -351,14 +351,14 @@ async function resolveMissingPath(filePath) {
   }
   return "absent";
 }
-//@ chunk-qchp9vrd.js:185483-185540 placement
+//@ chunk-af1hzzme.js:186878-186935 placement
 /**
  * 判断路径能否被解析出来。
  */
 async function isResolvablePath(path) {
   return (await resolveMissingPath(path)) !== "unresolvable";
 }
-//@ chunk-qchp9vrd.js:185540-186407 placement
+//@ chunk-af1hzzme.js:186935-187802 placement
 /**
  * 评测沙箱凭据排除用的常量：各工具（kube、ssh、gnupg、docker、云 CLI 等）配置目录中允许或排除的条目名集合。
  */
@@ -433,7 +433,7 @@ var CLOUD_CLI_SAFE_ENTRIES = new Set([
   "telemetry",
   "bin",
 ]);
-//@ chunk-qchp9vrd.js:186407-187803 placement
+//@ chunk-af1hzzme.js:187802-189198 placement
 async function checkCredentialStoreLinks(storePath, storeName, ignoredNames, ignoredRootNames) {
   let storeError = (problem) =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -494,7 +494,7 @@ async function checkCredentialStoreLinks(storePath, storeName, ignoredNames, ign
   }
   return storeReal === path.resolve(storePath) ? null : storeReal;
 }
-//@ chunk-qchp9vrd.js:187803-188365 placement
+//@ chunk-af1hzzme.js:189198-189760 placement
 async function checkAwsCredentialPointers(sandbox, envVars) {
   if (
     !Object.entries(envVars).some(
@@ -506,7 +506,7 @@ async function checkAwsCredentialPointers(sandbox, envVars) {
   )
     return;
   for (let cacheDir of AWS_CACHE_DIRS) {
-    let joined = path.join(os_2.homedir(), cacheDir);
+    let joined = path.join(os.homedir(), cacheDir);
     if (
       !(await stat(joined).then(
         (stats) => stats.isDirectory(),
@@ -530,14 +530,14 @@ async function checkAwsCredentialPointers(sandbox, envVars) {
     }
   }
 }
-//@ chunk-qchp9vrd.js:188365-188408 placement
+//@ chunk-af1hzzme.js:189760-189803 placement
 /**
  * 评测认证目录的有效期（2 小时）。
  */
 var CHILD_FD_NUMBER = 3;
 var CLAUDE_EVAL_AUTH = "claude-eval-auth-";
 var EVAL_AUTH_DIR_TTL_MS = 7200000;
-//@ chunk-qchp9vrd.js:188408-189126 placement
+//@ chunk-af1hzzme.js:189803-190521 placement
 /**
  * 把缓存的组织策略交给子会话（无缓存时警告）。
  */
@@ -577,12 +577,12 @@ async function writeChildManagedPolicy(sandbox) {
       );
   }
 }
-//@ chunk-qchp9vrd.js:189126-189137 placement
+//@ chunk-af1hzzme.js:190521-190532 placement
 /**
  * 设置文件名（别名）。
  */
 var SETTINGS_FILENAME_ALIAS = SETTINGS_FILENAME;
-//@ chunk-qchp9vrd.js:189137-190346 placement
+//@ chunk-af1hzzme.js:190532-191741 placement
 /**
  * 把本会话 API key 传给评测运行（部分平台/网关下不可行时说明）。
  */
@@ -627,7 +627,7 @@ async function passApiKeyToChild(credential) {
       cleanup: async () => {},
     };
   await cleanupStaleEvalAuthDirs();
-  let authDir = await mkdtemp(path.join(os_2.tmpdir(), CLAUDE_EVAL_AUTH));
+  let authDir = await mkdtemp(path.join(os.tmpdir(), CLAUDE_EVAL_AUTH));
   let joined = path.join(authDir, "snapshot.json");
   try {
     await writeFile(
@@ -669,7 +669,7 @@ async function passApiKeyToChild(credential) {
       }).catch(() => {}),
   };
 }
-//@ chunk-qchp9vrd.js:190346-190571 placement
+//@ chunk-af1hzzme.js:191741-191966 placement
 /**
  * 评测相关但允许的额外环境变量。
  */
@@ -680,7 +680,7 @@ var ALLOWED_EVAL_ENV_KEYS = new Set([
   "CLAUDE_CODE_EVAL_ALLOW_ARTIFACT_PUBLISH",
   "CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES",
 ]);
-//@ chunk-qchp9vrd.js:190571-193455 placement
+//@ chunk-af1hzzme.js:191966-194851 placement
 /**
  * 组装子会话环境：case.yaml 只能设 EVAL_* 键，移除宿主认证/代理/凭据指针。
  */
@@ -763,7 +763,7 @@ function buildChildEnv(
     finalEnv[`GIT_CONFIG_KEY_${gitConfigIndex}`] = gitConfigKey;
     finalEnv[`GIT_CONFIG_VALUE_${gitConfigIndex}`] = gitConfigValue;
   });
-  let homeDir = os_2.homedir();
+  let homeDir = os.homedir();
   let finalKeys = new Set(Object.keys(finalEnv).map((key) => key.toUpperCase()));
   let credentialPaths = {
     ...(!hasProviderConflict && {

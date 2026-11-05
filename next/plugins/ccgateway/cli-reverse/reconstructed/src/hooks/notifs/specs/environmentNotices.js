@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：环境类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 import { getIsRemoteMode, getChromeFlagOverride, getTotalCostUSD } from "../../../bootstrap/state.js";
@@ -36,7 +36,7 @@ import {
 } from "../../../services/deviceMcp/deviceToolNotices.js";
 import { createSystemMessage } from "../../../utils/messages.js";
 
-//@ chunk-18hwfzwa.js:1756892-1757422 placement
+//@ chunk-czq1j3j2.js:1804153-1804683 placement
 var chromeExtensionCheckNoticeSpec = {
   id: "chrome-extension-check",
   deps: (deps) => [deps.store],
@@ -81,7 +81,7 @@ var chromeExtensionCheckNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1757422-1757481 placement
+//@ chunk-czq1j3j2.js:1804683-1804742 placement
 var signinOfferNoticeSpec = {
   id: "signin-offer",
   setup() {
@@ -90,7 +90,7 @@ var signinOfferNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1757481-1758165 placement
+//@ chunk-czq1j3j2.js:1804742-1805426 placement
 var complianceTaintNoticeSpec = {
   id: "compliance-taint",
   deps: (ctx) => [ctx.addNotification],
@@ -144,7 +144,7 @@ var complianceTaintNoticeSpec_2 = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1758165-1758852 placement
+//@ chunk-czq1j3j2.js:1805426-1806113 placement
 /**
  * 启动通知"cost-threshold"：本地会话累计花费超过 5 美元且有 Console 计费权限时，弹一次花费提示对话框（记 tengu_cost_threshold_reached，确认后不再弹）。
  */
@@ -191,7 +191,7 @@ var costThresholdNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1759190-1759555 placement
+//@ chunk-czq1j3j2.js:1806451-1806816 placement
 var deviceToolNoticesNoticeSpec = {
   id: "device-tool-notices",
   deps: (ctx) => [ctx.transcript, ctx.session],

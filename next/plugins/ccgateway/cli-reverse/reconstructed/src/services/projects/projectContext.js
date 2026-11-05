@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Projects 上下文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nghef0fw.js (27)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-402wca7h.js (28)
+ * attribution: placement 27, layout 1
  */
 import { identity } from "../../utils/identity.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -38,8 +38,9 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
 import { onPolicyVerdictHeldStart } from "../policyLimits/policyState.js";
 import { isPolicyAllowed, policyDenyKind } from "../policyLimits/policyEvidence.js";
+import { isCcsTenant } from "../../bootstrap/state.js";
 import { isRemoteCoworkSession } from "../../utils/startupFlagWait.js";
-import { isClaudeAiChatRemote, isCcsCoworkSurface } from "../../utils/entrypointKinds.js";
+import { isClaudeAiChatRemote, isCcsCoworkSurface, isCcsRemoteCowork } from "../../utils/entrypointKinds.js";
 import { getSessionEntrypoint } from "../../utils/sessionShape.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -48,7 +49,7 @@ import {
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nghef0fw.js:3155-3362 placement
+//@ chunk-402wca7h.js:3195-3445 placement
 var MAX_LISTED_ITEMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SOURCE_TYPE_LABELS;
 var DETAIL_REUSE_MS;
@@ -56,8 +57,11 @@ var CONTEXT_FETCH_TIMEOUT_MESSAGE;
 var MEMORY_FETCH_TIMEOUT_MS;
 var DEADLINE_SLACK_MS;
 var ANSWERED_DETAIL_TTL_MS;
+var TENGU_MUTABLE_KNUTH;
+var MAX_ANSWERED_DETAIL_TTL_MS;
+var PENDING_DETAIL_REUSE_MS;
 var keptProjectDetail;
-deferInit("chunk-nghef0fw.js:3155", () => {
+deferInit("chunk-402wca7h.js:3195", () => {
   MAX_LISTED_ITEMS = 50;
   SOURCE_TYPE_LABELS = {
     gdrive: "Google Drive",
@@ -70,6 +74,9 @@ deferInit("chunk-nghef0fw.js:3155", () => {
   MEMORY_FETCH_TIMEOUT_MS = 3000;
   DEADLINE_SLACK_MS = 500;
   ANSWERED_DETAIL_TTL_MS = 600000;
+  TENGU_MUTABLE_KNUTH = "tengu_mutable_knuth";
+  MAX_ANSWERED_DETAIL_TTL_MS = 300000;
+  PENDING_DETAIL_REUSE_MS = 1000;
   keptProjectDetail = identity(
     {
       current: undefined,
@@ -79,15 +86,15 @@ deferInit("chunk-nghef0fw.js:3155", () => {
     },
   );
 });
-//@ chunk-nghef0fw.js:3362-3394 placement
+//@ chunk-402wca7h.js:3445-3477 placement
 function forgetKeptProjectDetail() {
   keptProjectDetail.current = undefined;
 }
-//@ chunk-nghef0fw.js:3394-3443 placement
+//@ chunk-402wca7h.js:3477-3526 placement
 function forgetKeptProjectDetail_2(projectDetail) {
   if (keptProjectDetail.current === projectDetail) keptProjectDetail.current = undefined;
 }
-//@ chunk-nghef0fw.js:3443-3596 placement
+//@ chunk-402wca7h.js:3526-3679 placement
 /**
  * 项目上下文的若干常量与开关名：保留的已构建块数、文档原文相关的特性开关、内联文档数上限、文档获取超时与下载字节上限。
  */
@@ -100,7 +107,7 @@ var TENGU_LOVELY_RAIN;
 var MAX_INLINE_DOCS;
 var DOC_TEXT_TIMEOUT_MS;
 var MAX_DOC_DOWNLOAD_BYTES;
-deferInit("chunk-nghef0fw.js:3443", () => {
+deferInit("chunk-402wca7h.js:3526", () => {
   MAX_BUILT_BLOCKS = 3;
   builtProjectBlocks = new SessionRootSlot(() => new Map());
   TENGU_PEPPY_SPINDLE = "tengu_peppy_spindle";
@@ -111,27 +118,27 @@ deferInit("chunk-nghef0fw.js:3443", () => {
   DOC_TEXT_TIMEOUT_MS = MEMORY_FETCH_TIMEOUT_MS;
   MAX_DOC_DOWNLOAD_BYTES = 8388608;
 });
-//@ chunk-nghef0fw.js:3596-3674 placement
+//@ chunk-402wca7h.js:3679-3757 placement
 function projectErrorMessage(error) {
   return error instanceof ProjectsApiError
     ? `Projects API status ${error.status}`
     : sanitizedErrorClassNameForTelemetry(error);
 }
-//@ chunk-nghef0fw.js:3674-3785 placement
+//@ chunk-402wca7h.js:3757-3868 placement
 function compareByCreatedAt(left, right) {
   return (
     (Date.parse(left.createdAt ?? "") || 0) - (Date.parse(right.createdAt ?? "") || 0) ||
     (left.uuid < right.uuid ? -1 : 1)
   );
 }
-//@ chunk-nghef0fw.js:3785-3819 placement
+//@ chunk-402wca7h.js:3868-3902 placement
 var projectAttachPlanSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nghef0fw.js:3785", () => {
+deferInit("chunk-402wca7h.js:3868", () => {
   projectAttachPlanSlot = new SessionRootSlot(() => ({
     plan: undefined,
   }));
 });
-//@ chunk-nghef0fw.js:3819-3937 placement
+//@ chunk-402wca7h.js:3902-4020 placement
 function setDocTextPlan(sessionRoot, plan) {
   if (sessionRoot === undefined) return;
   if (plan !== undefined) {
@@ -141,15 +148,15 @@ function setDocTextPlan(sessionRoot, plan) {
   let attachPlan = projectAttachPlanSlot.peek(sessionRoot);
   if (attachPlan !== undefined) attachPlan.plan = undefined;
 }
-//@ chunk-nghef0fw.js:3937-3995 placement
+//@ chunk-402wca7h.js:4020-4078 placement
 function logDocTextFailure(reason, ...details) {
   logFeatureSad("projects_context_doc_text", reason, ...details);
 }
-//@ chunk-nghef0fw.js:3995-4049 placement
+//@ chunk-402wca7h.js:4078-4132 placement
 function logUploadTextFailure(reason, details) {
   logFeatureSad("projects_context_upload_text", reason, details);
 }
-//@ chunk-nghef0fw.js:4049-4147 placement
+//@ chunk-402wca7h.js:4132-4230 placement
 function logAttachPlanFailures(plan, reason, ...details) {
   if (plan.docs.length > 0) logDocTextFailure(reason, ...details);
   if (plan.uploads.length > 0)
@@ -158,7 +165,7 @@ function logAttachPlanFailures(plan, reason, ...details) {
       uploads: 0,
     });
 }
-//@ chunk-nghef0fw.js:4147-4437 placement
+//@ chunk-402wca7h.js:4230-4520 placement
 function docTextFitProblem(docs, responses, fits) {
   let mapped = docs.map(projectReadRecord);
   if (
@@ -180,18 +187,18 @@ function docTextFitProblem(docs, responses, fits) {
     ? undefined
     : "does_not_fit";
 }
-//@ chunk-nghef0fw.js:4437-4522 placement
+//@ chunk-402wca7h.js:4520-4605 placement
 function estimatedTokenCountOrNull(record) {
   let estimatedTokenCount = record?.estimated_token_count;
   return typeof estimatedTokenCount === "number" && estimatedTokenCount > 0 ? estimatedTokenCount : null;
 }
-//@ chunk-nghef0fw.js:4522-7458 placement
+//@ chunk-402wca7h.js:4605-7802 placement
 /**
  * 附加项目文档的正文取值（含来源与截断标记）。
  */
 var attachedProjectDocText; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var attachedProjectDocTextValue;
-deferInit("chunk-nghef0fw.js:4522", () => {
+deferInit("chunk-402wca7h.js:4605", () => {
   attachedProjectDocText = {
     mayBeDue(sessionRoot) {
       return projectAttachPlanSlot.peek(sessionRoot)?.plan !== undefined;
@@ -252,7 +259,7 @@ deferInit("chunk-nghef0fw.js:4522", () => {
                     },
                   ),
                 );
-              return Promise.all(
+              let results = await Promise.all(
                 sortedDocs.map((doc) =>
                   readProjectDoc(
                     plan.projectUuid,
@@ -260,9 +267,20 @@ deferInit("chunk-nghef0fw.js:4522", () => {
                     abortController.signal,
                     authContext,
                     Math.floor(MAX_DOC_DOWNLOAD_BYTES / sortedDocs.length),
-                  ),
+                  ).catch((error) => {
+                    if (error instanceof ProjectsApiError && error.status === 404) return error;
+                    throw error;
+                  }),
                 ),
               );
+              let flattened = results.flatMap((docResponse) =>
+                docResponse instanceof ProjectsApiError ? [] : [docResponse],
+              );
+              if (flattened.length === 0 && results.length > 0) throw results[0];
+              sortedDocs = sortedDocs.filter(
+                (sortedDoc, index) => !(results[index] instanceof ProjectsApiError),
+              );
+              return flattened;
             })(),
             abortSignal,
             () => new AbortError(),
@@ -378,6 +396,9 @@ deferInit("chunk-nghef0fw.js:4522", () => {
               logFeatureOk("projects_context_doc_text", {
                 duration_ms: elapsedMs,
                 docs: sortedDocs.length,
+                ...(sortedDocs.length < plan.docs.length && {
+                  left_out: plan.docs.length - sortedDocs.length,
+                }),
               });
             return readsToAttach.length > 0 ? readsToAttach : undefined;
           }
@@ -418,7 +439,7 @@ deferInit("chunk-nghef0fw.js:4522", () => {
     unsubscribe: null,
   }));
 });
-//@ chunk-nghef0fw.js:7458-7836 placement
+//@ chunk-402wca7h.js:7802-8180 placement
 function retryProjectContextWhenPolicyLands(sessionRoot, onAllowed) {
   if (!env.CLAUDE_PROJECT_UUID) return;
   let slotValue = attachedProjectDocTextValue.of(sessionRoot);
@@ -443,12 +464,12 @@ function retryProjectContextWhenPolicyLands(sessionRoot, onAllowed) {
   });
   slotValue.unsubscribe = unsubscribe;
 }
-//@ chunk-nghef0fw.js:7836-7927 placement
+//@ chunk-402wca7h.js:8180-8271 placement
 function isProjectsPolicyUnresolved() {
   let denyKind = policyDenyKind("allow_projects_tool");
   return denyKind === "cache_miss" || denyKind === "route_missing";
 }
-//@ chunk-nghef0fw.js:7927-8521 placement
+//@ chunk-402wca7h.js:8271-8909 placement
 async function getProjectContextBlock(credentials, sessionRoot) {
   let CLAUDE_PROJECT_UUID = env.CLAUDE_PROJECT_UUID;
   if (!CLAUDE_PROJECT_UUID) {
@@ -459,10 +480,16 @@ async function getProjectContextBlock(credentials, sessionRoot) {
     };
   }
   let result;
+  let telemetryProps;
   try {
     let deadline = Date.now() + DETAIL_REUSE_MS;
     result = await withTimeout(
-      buildProjectContextBlock(CLAUDE_PROJECT_UUID, credentials, deadline, sessionRoot),
+      buildProjectContextBlock(CLAUDE_PROJECT_UUID, credentials, deadline, sessionRoot, (detail) => {
+        if (isCcsTenant())
+          telemetryProps = {
+            detail_from: fromEnum(detail),
+          };
+      }),
       DETAIL_REUSE_MS,
       CONTEXT_FETCH_TIMEOUT_MESSAGE,
     );
@@ -477,11 +504,12 @@ async function getProjectContextBlock(credentials, sessionRoot) {
       error.status !== 408 &&
       error.status !== 429 &&
       (error.status !== 401 || !isSessionJwtAuth());
-    if (isRejection) logFeatureBad("projects_context_block", "read_rejected");
+    if (isRejection) logFeatureBad("projects_context_block", "read_rejected", telemetryProps);
     else
       logFeatureSad(
         "projects_context_block",
         errorMessage(error) === CONTEXT_FETCH_TIMEOUT_MESSAGE ? "read_timed_out" : "read_failed",
+        telemetryProps,
       );
     return {
       block: null,
@@ -490,14 +518,14 @@ async function getProjectContextBlock(credentials, sessionRoot) {
   }
   let { read } = result;
   setDocTextPlan(sessionRoot, result.docTextPlan);
-  if (read.block !== null) logFeatureOk("projects_context_block");
+  if (read.block !== null) logFeatureOk("projects_context_block", telemetryProps);
   return read;
 }
-//@ chunk-nghef0fw.js:8521-10003 placement
+//@ chunk-402wca7h.js:8909-10413 placement
 /**
  * 构建项目上下文块：取得锁后并行获取项目详情（可复用保留的请求）与项目记忆，格式化成上下文块并记住最近几个；在 claude.ai 远程 cowork 场景下按开关决定是否内联项目文档原文（同名文档排除，数量有上限）。
  */
-async function buildProjectContextBlock(projectUuid, credentials, deadline, session) {
+async function buildProjectContextBlock(projectUuid, credentials, deadline, session, onDetailSource) {
   let lock = await ensureProjectsAccessToken(credentials);
   if (!lock.ok) {
     logForDebugging(`project context skipped: ${lock.reason}`, {
@@ -511,15 +539,16 @@ async function buildProjectContextBlock(projectUuid, credentials, deadline, sess
       },
     };
   }
-  let [detail, memory] = await Promise.all([
-    isRemoteCoworkSession()
-      ? keptProjectDetailFor(projectUuid, credentials)
-      : getProjectDetail(projectUuid, undefined, credentials),
+  let cachedDetail = keptProjectDetailFor(projectUuid, credentials);
+  onDetailSource(cachedDetail.source);
+  if (!isRemoteCoworkSession()) forgetKeptProjectDetail();
+  let [detail, projectMemoryWithin] = await Promise.all([
+    cachedDetail.detail,
     fetchProjectMemoryWithin(projectUuid, credentials, deadline),
   ]);
   let block;
   try {
-    let sources = [detail, memory, docVersionsOffered()];
+    let sources = [detail, projectMemoryWithin, docVersionsOffered()];
     block = formatProjectContext(...sources);
     if (session !== undefined) {
       let builtBlocks = builtProjectBlocks.of(session);
@@ -605,7 +634,15 @@ async function buildProjectContextBlock(projectUuid, credentials, deadline, sess
     docTextPlan,
   };
 }
-//@ chunk-nghef0fw.js:10003-10333 placement
+//@ chunk-402wca7h.js:10413-10516 layout
+function answeredDetailTtl() {
+  if (isRemoteCoworkSession()) return ANSWERED_DETAIL_TTL_MS;
+  let featureValue = isCcsRemoteCowork() ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MUTABLE_KNUTH, 0) : 0;
+  return typeof featureValue === "number" && featureValue > 0
+    ? Math.min(featureValue, MAX_ANSWERED_DETAIL_TTL_MS)
+    : 0;
+}
+//@ chunk-402wca7h.js:10516-10947 placement
 /**
  * 复用或发起项目详情请求：同一项目与账号在短时间内（已应答时更长）复用保留的请求，失败时清除。
  */
@@ -618,9 +655,17 @@ function keptProjectDetailFor(projectUuid, credentials) {
   let kept = keptProjectDetail.current;
   if (
     kept?.key === cacheKey &&
-    performance.now() - kept.startedAt < (kept.answered ? ANSWERED_DETAIL_TTL_MS : DETAIL_REUSE_MS)
+    performance.now() - kept.startedAt <
+      (kept.answered
+        ? answeredDetailTtl()
+        : isRemoteCoworkSession()
+          ? DETAIL_REUSE_MS
+          : PENDING_DETAIL_REUSE_MS)
   )
-    return kept.detail;
+    return {
+      detail: kept.detail,
+      source: kept.answered ? "earlier_answered" : "earlier_pending",
+    };
   let entry = {
     key: cacheKey,
     startedAt: performance.now(),
@@ -634,15 +679,18 @@ function keptProjectDetailFor(projectUuid, credentials) {
     },
     () => forgetKeptProjectDetail_2(entry),
   );
-  return entry.detail;
+  return {
+    detail: entry.detail,
+    source: "own_call",
+  };
 }
-//@ chunk-nghef0fw.js:10333-10603 placement
+//@ chunk-402wca7h.js:10947-11226 placement
 function startKeptProjectDetail(credentials) {
   let CLAUDE_PROJECT_UUID = env.CLAUDE_PROJECT_UUID;
-  if (!CLAUDE_PROJECT_UUID || !isRemoteCoworkSession()) return;
+  if (!CLAUDE_PROJECT_UUID || answeredDetailTtl() === 0) return;
   ensureProjectsAccessToken(credentials)
     .then((projectsAccessToken) => {
-      if (projectsAccessToken.ok) return keptProjectDetailFor(CLAUDE_PROJECT_UUID, credentials);
+      if (projectsAccessToken.ok) return keptProjectDetailFor(CLAUDE_PROJECT_UUID, credentials).detail;
       logForDebugging(`early project detail request skipped: ${projectsAccessToken.reason}`, {
         level: "verbose",
       });
@@ -654,7 +702,7 @@ function startKeptProjectDetail(credentials) {
       });
     });
 }
-//@ chunk-nghef0fw.js:10603-10815 placement
+//@ chunk-402wca7h.js:11226-11438 placement
 async function fetchProjectMemoryWithin(projectUuid, credentials, deadline) {
   if (isSessionJwtAuth()) return;
   let memoryPromise = getProjectMemory(projectUuid, credentials).catch((error) => {
@@ -667,11 +715,11 @@ async function fetchProjectMemoryWithin(projectUuid, credentials, deadline) {
   if (min <= 0) return;
   return (await withDeadline(memoryPromise, min)) ?? undefined;
 }
-//@ chunk-nghef0fw.js:10815-10903 placement
+//@ chunk-402wca7h.js:11438-11526 placement
 function safeInline(text) {
   return text.replace(/[\r\n\v\f\u0085\u2028\u2029]+/g, " ").replace(/`/g, "'");
 }
-//@ chunk-nghef0fw.js:10903-11067 placement
+//@ chunk-402wca7h.js:11526-11690 placement
 function listWithOverflowHint(items, toolName = "project_info") {
   let sliced = items.slice(0, MAX_LISTED_ITEMS);
   let moreCount = items.length - sliced.length;
@@ -684,9 +732,9 @@ function listWithOverflowHint(items, toolName = "project_info") {
       : "")
   );
 }
-//@ chunk-nghef0fw.js:11067-11078 placement
+//@ chunk-402wca7h.js:11690-11701 placement
 var MAX_PROJECT_FILES_LISTED = 200;
-//@ chunk-nghef0fw.js:11078-11236 placement
+//@ chunk-402wca7h.js:11701-11859 placement
 function describeProjectSource(source) {
   let typeLabel = SOURCE_TYPE_LABELS[source.type ?? ""] ?? safeInline(source.type ?? "source");
   let configJson = safeInline(jsonStringify(source.config));
@@ -697,11 +745,11 @@ function describeProjectSource(source) {
       : configJson;
   return `${typeLabel}: \`${configText}\``;
 }
-//@ chunk-nghef0fw.js:11236-11286 placement
+//@ chunk-402wca7h.js:11859-11909 placement
 function docVersionsOffered() {
   return getFeatureValue_SESSION_PINNED("tengu_quill_marten", false);
 }
-//@ chunk-nghef0fw.js:11286-13681 placement
+//@ chunk-402wca7h.js:11909-14304 placement
 function formatProjectContext(detail, memory, withVersion = false) {
   let filtered = detail.documents.map((doc) => doc.file_name).filter((fileName) => fileName !== null);
   let filtered_2 = (detail.files ?? []).filter((file) => file.file_name !== null);
@@ -761,13 +809,13 @@ function formatProjectContext(detail, memory, withVersion = false) {
 }
 export {
   startKeptProjectDetail,
+  forgetKeptProjectDetail,
+  attachedProjectDocText,
+  DOC_TEXT_WIDER_FLAG,
   builtProjectBlocks,
   formatProjectContext,
   docVersionsOffered,
   safeInline,
-  forgetKeptProjectDetail,
-  attachedProjectDocText,
-  DOC_TEXT_WIDER_FLAG,
   getProjectContextBlock,
   retryProjectContextWhenPolicyLands,
 };

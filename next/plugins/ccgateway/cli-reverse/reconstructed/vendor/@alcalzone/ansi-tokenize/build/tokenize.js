@@ -1,8 +1,8 @@
 /**
  * @alcalzone/ansi-tokenize/build/tokenize.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @alcalzone/ansi-tokenize@0.2.2
- * pieces: chunk-m4dvt8pp.js (7)
+ * pieces: chunk-ngeq6w7y.js (7)
  * attribution: esm-layout 3, esm-fingerprint 4
  */
 import { isFullwidthCodePoint, isWideCodePoint } from "../../../get-east-asian-width/lookup-data.js";
@@ -15,12 +15,12 @@ import {
   CSI,
 } from "./ansiCodes.js";
 
-//@ chunk-m4dvt8pp.js:6354-6419 esm-layout
+//@ chunk-ngeq6w7y.js:6354-6419 esm-layout
 function isValidCodePoint(codePoint) {
   if (!Number.isInteger(codePoint)) return false;
   return isFullwidthCodePoint(codePoint) || isWideCodePoint(codePoint);
 }
-//@ chunk-m4dvt8pp.js:6419-6580 esm-fingerprint
+//@ chunk-ngeq6w7y.js:6419-6580 esm-fingerprint
 function parseLinkCode(string, index) {
   string = string.slice(index);
   for (let index = 1; index < linkStartCodePrefixCharCodes.length; index++)
@@ -29,12 +29,12 @@ function parseLinkCode(string, index) {
   if (endIndex === -1) return;
   return string.slice(0, endIndex + 1);
 }
-//@ chunk-m4dvt8pp.js:6580-6605 esm-layout
+//@ chunk-ngeq6w7y.js:6580-6605 esm-layout
 var CC_0 = 48;
 var CC_9 = 57;
 var CC_SEMI = 59;
 var CC_M = 109;
-//@ chunk-m4dvt8pp.js:6605-6743 esm-fingerprint
+//@ chunk-ngeq6w7y.js:6605-6743 esm-fingerprint
 function findSGRSequenceEndIndex(str) {
   for (let index = 2; index < str.length; index++) {
     let charCode = str.charCodeAt(index);
@@ -45,14 +45,14 @@ function findSGRSequenceEndIndex(str) {
   }
   return -1;
 }
-//@ chunk-m4dvt8pp.js:6743-6822 esm-layout
+//@ chunk-ngeq6w7y.js:6743-6822 esm-layout
 function parseSGRSequence(string, offset) {
   string = string.slice(offset);
   let endIndex = findSGRSequenceEndIndex(string);
   if (endIndex === -1) return;
   return string.slice(0, endIndex + 1);
 }
-//@ chunk-m4dvt8pp.js:6822-7168 esm-fingerprint
+//@ chunk-ngeq6w7y.js:6822-7168 esm-fingerprint
 function splitCompoundSGRSequences(code) {
   if (!code.includes(";")) return [code];
   let codeParts = code.slice(2, -1).split(";");
@@ -74,7 +74,7 @@ function splitCompoundSGRSequences(code) {
   }
   return ret.map((part) => `\x1B[${part}m`);
 }
-//@ chunk-m4dvt8pp.js:7168-7632 esm-fingerprint
+//@ chunk-ngeq6w7y.js:7168-7632 esm-fingerprint
 function tokenize(str, endChar = Number.POSITIVE_INFINITY) {
   let ret = [];
   let index = 0;

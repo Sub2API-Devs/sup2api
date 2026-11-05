@@ -1,12 +1,12 @@
 /**
  * indent-string/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: indent-string@5.0.0
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-bzr73sfg.js:287550-288084 esm-fingerprint
+//@ chunk-2avr6cej.js:287131-287665 esm-fingerprint
 function indentString(input, count = 1, options = {}) {
   let { indent = " ", includeEmptyLines = false } = options;
   if (typeof input !== "string")

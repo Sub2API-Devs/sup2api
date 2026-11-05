@@ -1,13 +1,13 @@
 /**
  * @bufbuild/cel/dist/cjs/gen/dev/cel/expr/operator_const.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/cel@0.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-fq0cr76a.js:479776-480792 cjs-fingerprint
+//@ chunk-qg41pqt6.js:480350-481366 cjs-fingerprint
 var require_operator_const = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -1,9 +1,9 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-kejz1rpb.js (1), chunk-y366fgzk.js (1)
- * attribution: esm-fingerprint 1, cjs-require-graph 1
+ * pieces: chunk-csa0qt1j.js (1), chunk-tvcdn76c.js (1)
+ * attribution: cjs-require-graph 1, esm-fingerprint 1
  */
 import { import_index_browser } from "../../sso/index.js";
 import { ruleSet } from "../../sso/endpoint/ruleset.js";
@@ -20,10 +20,10 @@ import {
 // This module is the first evaluated of an import cycle of 3 modules closed by ../../../../../client-sso/dist-cjs/index.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("vendor/@aws-sdk/client-sso/dist-cjs/index.js");
-//@ chunk-kejz1rpb.js:7442-7616 esm-fingerprint
+//@ chunk-tvcdn76c.js:7442-7616 esm-fingerprint
 var endpointCache; // deferred: uses import_util_endpoints (../../sso/index.js) of its import cycle while loading; runs once the cycle is complete
 var defaultEndpointResolver;
-deferInit("chunk-kejz1rpb.js:7442", () => {
+deferInit("chunk-tvcdn76c.js:7442", () => {
   endpointCache = new import_index_browser.EndpointCache({
     size: 50,
     params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"],
@@ -36,9 +36,9 @@ deferInit("chunk-kejz1rpb.js:7442", () => {
       }),
     );
 });
-//@ chunk-y366fgzk.js:4373-4773 cjs-require-graph
+//@ chunk-csa0qt1j.js:4373-4773 cjs-require-graph
 var require_endpointResolver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y366fgzk.js:4373", () => {
+deferInit("chunk-csa0qt1j.js:4373", () => {
   require_endpointResolver = __commonJS(function (cjsExports) {
     Object.defineProperty(cjsExports, "__esModule", {
       value: true,
@@ -66,4 +66,4 @@ deferInit("chunk-y366fgzk.js:4373", () => {
 // The import cycle this module closes (3 modules) is complete: run the load-time work its statements
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("vendor/@aws-sdk/nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js");
-export { defaultEndpointResolver, require_endpointResolver };
+export { require_endpointResolver, defaultEndpointResolver };

@@ -3,26 +3,26 @@
  *
  * Unicode 清洗：去掉隐藏/双向控制/标签字符，递归清洗对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sanitization.ts
- * pieces: chunk-cgr0tezp.js (59)
+ * pieces: chunk-2jb250pa.js (32), chunk-3gbv0jkm.js (27)
  * attribution: placement 58, fingerprint 1
  */
 import { truncateToLength, toWellFormedString, collapseWhitespace } from "./stringUtils.js";
 import { stripAnsi } from "./stripAnsi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:797-870 placement
+//@ chunk-3gbv0jkm.js:226-298 placement
 var SURROGATE_PAIR_OR_LONE_RE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF]|[\uDC00-\uDFFF]/g;
-//@ chunk-cgr0tezp.js:870-929 placement
+//@ chunk-3gbv0jkm.js:298-355 placement
 function stripLoneSurrogates(text) {
   return text.replace(SURROGATE_PAIR_OR_LONE_RE, (match) => (match.length === 2 ? match : ""));
 }
-//@ chunk-cgr0tezp.js:929-1030 placement
+//@ chunk-3gbv0jkm.js:355-456 placement
 var INVISIBLE_CHARS_RE =
   /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs}/gu;
 var MAX_SHORT_TEXT = 1024;
-//@ chunk-cgr0tezp.js:1030-1128 placement
+//@ chunk-3gbv0jkm.js:456-554 placement
 /**
  * 清洗遥测字符串（截断、去控制字符）。
  */
@@ -33,18 +33,18 @@ function sanitizeTelemetryString(value) {
     MAX_SHORT_TEXT,
   );
 }
-//@ chunk-cgr0tezp.js:1128-1264 placement
+//@ chunk-3gbv0jkm.js:554-688 placement
 function recursivelySanitizeUnicode_2(value) {
   if (typeof value !== "string") return "";
   let current = value;
-  for (let j = 0; j < 64; j++) {
+  for (let i = 0; i < 64; i++) {
     let replaced = stripLoneSurrogates(current).replace(INVISIBLE_CHARS_RE, "");
     if (replaced === current) return replaced;
     current = replaced;
   }
   return "";
 }
-//@ chunk-cgr0tezp.js:1264-1404 placement
+//@ chunk-3gbv0jkm.js:688-826 placement
 /**
  * 清洗日志行。
  */
@@ -54,21 +54,21 @@ function sanitizeLogLine(value) {
     .replace(SURROGATE_PAIR_OR_LONE_RE, (match) => (match.length === 2 ? match : " "))
     .replace(INVISIBLE_CHARS_RE, " ");
 }
-//@ chunk-cgr0tezp.js:1404-1565 placement
+//@ chunk-3gbv0jkm.js:826-985 placement
 /**
  * 反复去除不可见字符直到稳定（过长返回 null）。
  */
 function sanitizeRelayUrl(url) {
   if (url.length > 16384) return null;
   let current = url;
-  for (let j = 0; j < 64; j++) {
+  for (let i = 0; i < 64; i++) {
     let replaced = stripLoneSurrogates(current).replace(INVISIBLE_CHARS_RE, "");
     if (replaced === current) return [...replaced].length <= 8192 ? replaced : null;
     current = replaced;
   }
   return null;
 }
-//@ chunk-cgr0tezp.js:1565-1773 placement
+//@ chunk-3gbv0jkm.js:985-1193 placement
 /**
  * 最多列出三个 URL，其余提示数量。
  */
@@ -78,32 +78,32 @@ function formatElicitationUrls(urls) {
     urls.length > 3 ? ` \u2026and ${urls.length - 3} more \u2014 re-run in the terminal to see all` : "";
   return `${mapped.join(", ")}${moreNote}`;
 }
-//@ chunk-cgr0tezp.js:1773-2047 placement
+//@ chunk-3gbv0jkm.js:1193-1460 placement
 var EXTRA_COMBINING_MARKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COMBINING_MARK_CLASS_2;
 var LONG_COMBINING_RUN_RE;
 var COMBINING_MARK_RE;
-deferInit("chunk-cgr0tezp.js:1773", () => {
+deferInit("chunk-3gbv0jkm.js:1193", () => {
   EXTRA_COMBINING_MARKS =
     "\\u05C8\\u05C9\\u1ADE\\u1ADF\\u1AEC-\\u1AF0\\u{10ECB}-\\u{10ECF}\\u{10EF0}-\\u{10EF9}\\u{1D127}\\u{1D128}\\u{1D250}-\\u{1D252}\\u{1D25B}\\u{1D25C}\\u{1D25F}\\u{1D280}\\u{1D281}";
   COMBINING_MARK_CLASS_2 = `[\\p{M}\\uFF9E\\uFF9F${EXTRA_COMBINING_MARKS}]`;
   LONG_COMBINING_RUN_RE = new RegExp(`${COMBINING_MARK_CLASS_2}{32,}`, "gu");
   COMBINING_MARK_RE = new RegExp(COMBINING_MARK_CLASS_2, "u");
 });
-//@ chunk-cgr0tezp.js:2047-2079 placement
+//@ chunk-3gbv0jkm.js:1460-1489 placement
 var combiningClassCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var combiningClassOrder;
 var decompositionCache;
-deferInit("chunk-cgr0tezp.js:2047", () => {
+deferInit("chunk-3gbv0jkm.js:1460", () => {
   combiningClassCache = new Map();
   combiningClassOrder = [];
   decompositionCache = new Map();
 });
-//@ chunk-cgr0tezp.js:2079-2139 placement
+//@ chunk-3gbv0jkm.js:1489-1548 placement
 function reordersUnderNfd(a, b) {
   return a !== b && (a + b).normalize("NFD") === b + a;
 }
-//@ chunk-cgr0tezp.js:2139-2518 placement
+//@ chunk-3gbv0jkm.js:1548-1915 placement
 /**
  * 字符的易混淆替代（缓存）。
  */
@@ -134,7 +134,7 @@ function combiningClassOf(codePoint) {
   combiningClassCache.set(codePoint, entry);
   return entry;
 }
-//@ chunk-cgr0tezp.js:2518-2662 placement
+//@ chunk-3gbv0jkm.js:1915-2056 placement
 function decomposeCodePoint(codePoint) {
   let parts = decompositionCache.get(codePoint);
   if (parts === undefined) {
@@ -143,9 +143,9 @@ function decomposeCodePoint(codePoint) {
   }
   return parts;
 }
-//@ chunk-cgr0tezp.js:2662-2674 placement
+//@ chunk-3gbv0jkm.js:2056-2067 placement
 var FROM_CODE_POINT_CHUNK = 4096;
-//@ chunk-cgr0tezp.js:2674-2790 placement
+//@ chunk-3gbv0jkm.js:2067-2180 placement
 function codePointsToString(codePoints, length) {
   let text = "";
   for (let offset = 0; offset < length; offset += FROM_CODE_POINT_CHUNK)
@@ -154,7 +154,7 @@ function codePointsToString(codePoints, length) {
     );
   return text;
 }
-//@ chunk-cgr0tezp.js:2790-3380 placement
+//@ chunk-3gbv0jkm.js:2180-2764 placement
 /**
  * 计算易混淆字符骨架。
  */
@@ -202,20 +202,20 @@ function canonicalReorderRun(run) {
   }
   return codePointsToString(codePoints, count);
 }
-//@ chunk-cgr0tezp.js:3380-3434 placement
+//@ chunk-3gbv0jkm.js:2764-2816 placement
 function reorderLongCombiningRuns(text) {
   return text.length < 32 ? text : text.replace(LONG_COMBINING_RUN_RE, canonicalReorderRun);
 }
-//@ chunk-cgr0tezp.js:3434-3445 placement
+//@ chunk-3gbv0jkm.js:2816-2826 placement
 var NORMALIZE_CHUNK = 128;
-//@ chunk-cgr0tezp.js:3445-3584 placement
+//@ chunk-3gbv0jkm.js:2826-2960 placement
 function isNormalizationStarter(codePoint) {
   if (codePoint < 768) return true;
   let decomposed = decompositionCache.get(codePoint);
   if (decomposed === undefined && !COMBINING_MARK_RE.test(String.fromCodePoint(codePoint))) return true;
   return combiningClassOf((decomposed ?? decomposeCodePoint(codePoint))[0]) === null;
 }
-//@ chunk-cgr0tezp.js:3584-3794 placement (2.1.88 match: needsWidthCompensation, 1)
+//@ chunk-3gbv0jkm.js:2960-3168 placement (2.1.88 match: needsWidthCompensation, 1)
 function nextStarterIndex(text, index) {
   let scanIndex = index;
   if (
@@ -231,7 +231,7 @@ function nextStarterIndex(text, index) {
   }
   return Math.min(scanIndex, text.length);
 }
-//@ chunk-cgr0tezp.js:3794-3960 placement (2.1.88 match: needsWidthCompensation, 1)
+//@ chunk-3gbv0jkm.js:3168-3332 placement (2.1.88 match: needsWidthCompensation, 1)
 function lastStarterIndex(char) {
   let index = char.length;
   while (index > 0) {
@@ -246,7 +246,7 @@ function lastStarterIndex(char) {
   }
   return 0;
 }
-//@ chunk-cgr0tezp.js:3960-4202 placement
+//@ chunk-3gbv0jkm.js:3332-3569 placement
 /**
  * 分块做 Unicode 规范化（每块 128 码元在规范化起始字符处切开），避免超长组合序列导致的性能问题。
  */
@@ -265,27 +265,27 @@ function normalizeChunked(text, form) {
   }
   return pieces.join("");
 }
-//@ chunk-cgr0tezp.js:4202-4237 placement
+//@ chunk-3gbv0jkm.js:3569-3603 placement
 /**
  * NFKC 归一化。
  */
 function normalizeNfkc(text) {
   return normalizeChunked(text, "NFKC");
 }
-//@ chunk-cgr0tezp.js:4237-4273 placement
+//@ chunk-3gbv0jkm.js:3603-3638 placement
 /**
  * nfkdNormalize：NFKD 规范化。
  */
 function nfkdNormalize(text) {
   return normalizeChunked(text, "NFKD");
 }
-//@ chunk-cgr0tezp.js:4273-5109 placement
+//@ chunk-3gbv0jkm.js:3638-4473 placement
 /**
  * 框线字符范围与替换表。
  */
 var BOX_DRAWING_RANGES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BOX_DRAWING_RANGES;
-deferInit("chunk-cgr0tezp.js:4273", () => {
+deferInit("chunk-3gbv0jkm.js:3638", () => {
   BOX_DRAWING_RANGES_2 =
     "\u02F9-\u02FC\u230C-\u230F\u231C-\u231F\u239B-\u23CC\u23DC-\u23E1\u2E00-\u2E0D\u2E1C\u2E1D\u2500-\u257F";
   BOX_DRAWING_RANGES = new Map([
@@ -337,14 +337,14 @@ deferInit("chunk-cgr0tezp.js:4273", () => {
     ["\uD834\uDE37", ">"],
   ]);
 });
-//@ chunk-cgr0tezp.js:5109-5399 placement
+//@ chunk-3gbv0jkm.js:4473-4762 placement
 /**
  * 尖括号类易混淆字符表。
  */
 var BRACKET_CONFUSABLES_2; // deferred: uses BOX_DRAWING_RANGES_2 of its import cycle while loading; runs once the cycle is complete
 var BRACKET_CONFUSABLES;
 var BRACKET_CONFUSABLES_WITH_ANGLES;
-deferInit("chunk-cgr0tezp.js:5109", () => {
+deferInit("chunk-3gbv0jkm.js:4473", () => {
   BRACKET_CONFUSABLES_2 = new Map([
     ...BOX_DRAWING_RANGES,
     ...Array.from("\u226A\u22D8\u2AA1\u2AF7\u27EA\uFE3D", (char) => [char, "<"]),
@@ -355,7 +355,7 @@ deferInit("chunk-cgr0tezp.js:5109", () => {
     `\u2992\u2994\u2A7A\u2AA7${"\u226B\u22D9\u2AA2\u2AF8\u27EB\uFE3E"}`,
   );
 });
-//@ chunk-cgr0tezp.js:5399-5465 placement
+//@ chunk-3gbv0jkm.js:4762-4828 placement
 /**
  * 字符及其易混淆变体。
  */
@@ -364,91 +364,91 @@ function withConfusables(char) {
   for (let [key, value] of BRACKET_CONFUSABLES) if (value === char) result += key;
   return result;
 }
-//@ chunk-cgr0tezp.js:5465-5556 placement
+//@ chunk-2jb250pa.js:324-415 placement
 /**
  * CONTROL_CHARS_RE：控制字符与行分隔符；MAX_CLEAN_IDENTIFIER_LENGTH：干净标识符长度上限；CONTROL_CHARS_OR_ANGLE_RE：控制字符或尖括号（同一声明共 3 个绑定）。
  */
 var CONTROL_CHARS_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
 var MAX_CLEAN_IDENTIFIER_LENGTH = 256;
 var CONTROL_CHARS_OR_ANGLE_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029<>]/;
-//@ chunk-cgr0tezp.js:5556-5605 placement
+//@ chunk-2jb250pa.js:415-464 placement
 function isCleanIdentifier(value) {
   return value.length <= MAX_CLEAN_IDENTIFIER_LENGTH && !CONTROL_CHARS_OR_ANGLE_RE.test(value);
 }
-//@ chunk-cgr0tezp.js:5605-5645 placement
+//@ chunk-2jb250pa.js:464-504 placement
 /**
  * 非空标识符。
  */
 function isNonEmptyIdentifier(name) {
   return name.length > 0 && isCleanIdentifier(name);
 }
-//@ chunk-cgr0tezp.js:5645-5711 placement
+//@ chunk-2jb250pa.js:504-570 placement
 /**
  * isAsciiIdentifier：短且仅 ASCII 标识符字符。
  */
 function isAsciiIdentifier(value) {
   return value.length <= MAX_CLEAN_IDENTIFIER_LENGTH && /^[A-Za-z0-9_:.-]+$/.test(value);
 }
-//@ chunk-cgr0tezp.js:5711-5784 placement
+//@ chunk-2jb250pa.js:570-643 placement
 /**
  * isUnicodeIdentifier：短且仅 Unicode 标识符字符。
  */
 function isUnicodeIdentifier(value) {
   return value.length <= MAX_CLEAN_IDENTIFIER_LENGTH && /^[\p{L}\p{M}\p{N}_:.-]+$/u.test(value);
 }
-//@ chunk-cgr0tezp.js:5784-5875 placement
+//@ chunk-2jb250pa.js:643-734 placement
 /**
  * isSafeRelativePath：短且为不含 .. 的相对路径。
  */
-function isSafeRelativePath(workingDirectory) {
+function isSafeRelativePath(pathText) {
   return (
-    workingDirectory.length <= MAX_CLEAN_IDENTIFIER_LENGTH &&
-    /^(?:\/(?!\.\.?(?:\/|$))[A-Za-z0-9._+@-]+)+$/.test(workingDirectory)
+    pathText.length <= MAX_CLEAN_IDENTIFIER_LENGTH &&
+    /^(?:\/(?!\.\.?(?:\/|$))[A-Za-z0-9._+@-]+)+$/.test(pathText)
   );
 }
-//@ chunk-cgr0tezp.js:5875-5973 placement (2.1.88 match: escapeXml, 1)
+//@ chunk-2jb250pa.js:734-832 placement (2.1.88 match: escapeXml, 1)
 /**
  * 转义 XML 文本并编码控制字符。
  */
 function escapeXmlText(s) {
   return encodeControlChars(s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
 }
-//@ chunk-cgr0tezp.js:5973-6038 placement
+//@ chunk-2jb250pa.js:832-897 placement
 /**
  * 控制字符编码为字符实体。
  */
 function encodeControlChars(text) {
   return text.replace(CONTROL_CHARS_RE, (char) => `&#${char.charCodeAt(0)};`);
 }
-//@ chunk-cgr0tezp.js:6038-6108 placement (2.1.88 match: escapeXml, 0.793)
+//@ chunk-2jb250pa.js:897-967 placement (2.1.88 match: escapeXml, 0.794)
 /**
  * 转义尖括号。
  */
 function escapeAngleBrackets(s) {
   return s.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
-//@ chunk-cgr0tezp.js:6108-6152 placement
+//@ chunk-2jb250pa.js:967-1011 placement
 /**
  * 标签内安全文本。
  */
 function escapeForTag(value) {
   return encodeControlChars(escapeAngleBrackets(String(value ?? "")));
 }
-//@ chunk-cgr0tezp.js:6152-6206 placement
+//@ chunk-2jb250pa.js:1011-1065 placement
 /**
  * escapeXmlAttribute：转义后的 XML 属性值。
  */
 function escapeXmlAttribute(value) {
   return escapeForTag(value).replaceAll('"', "&quot;");
 }
-//@ chunk-cgr0tezp.js:6206-6475 placement
+//@ chunk-2jb250pa.js:1065-1334 placement
 var MAX_ATTRIBUTE_LENGTH; // deferred: uses BRACKET_CONFUSABLES_2 of its import cycle while loading; runs once the cycle is complete
 var HIDDEN_CHARS_RE;
 var SYMBOL_CHARS_RE;
 var BRACKET_CONFUSABLES_RE;
 var OPEN_BRACKET_RE;
 var CLOSE_BRACKET_RE;
-deferInit("chunk-cgr0tezp.js:6206", () => {
+deferInit("chunk-2jb250pa.js:1065", () => {
   MAX_ATTRIBUTE_LENGTH = 2000;
   HIDDEN_CHARS_RE = /[\p{Cf}\p{Co}\p{Cn}\p{Cs}\p{Default_Ignorable_Code_Point}\u2800]/gu;
   SYMBOL_CHARS_RE = new RegExp(`[${BOX_DRAWING_RANGES_2}]|(?![\\x00-\\x7f])[\\p{Sm}\\p{Sk}\\p{So}]`, "gu");
@@ -456,7 +456,7 @@ deferInit("chunk-cgr0tezp.js:6206", () => {
   OPEN_BRACKET_RE = /(?![({\u201A\u201E\u2E42])\p{Ps}/gu;
   CLOSE_BRACKET_RE = /(?![)}])\p{Pe}/gu;
 });
-//@ chunk-cgr0tezp.js:6475-6725 placement
+//@ chunk-2jb250pa.js:1334-1584 placement
 /**
  * 清洗属性值（长度、不可见字符）。
  */
@@ -473,7 +473,7 @@ function sanitizeAttributeValue(value) {
   ).trim();
   return trimmed === "" || trimmed.length > MAX_ATTRIBUTE_LENGTH ? null : trimmed;
 }
-//@ chunk-cgr0tezp.js:6725-7145 placement
+//@ chunk-2jb250pa.js:1584-2006 placement
 /**
  * 不可见字符类正则片段。
  */
@@ -483,7 +483,7 @@ var INVISIBLE_CHAR_RANGES;
 var INVISIBLE_FORMAT_RANGES;
 var INVISIBLE_CHARS_RE_SOURCE;
 var regExp;
-deferInit("chunk-cgr0tezp.js:6725", () => {
+deferInit("chunk-2jb250pa.js:1584", () => {
   INVISIBLE_CHAR_CLASSES = "\\p{Default_Ignorable_Code_Point}\\u2800";
   INVISIBLE_CHAR_CLASS_SOURCE = `\\p{Cc}\\p{Cf}\\p{Cs}\\p{Co}\\p{Cn}\\u2028\\u2029${INVISIBLE_CHAR_CLASSES}`;
   INVISIBLE_CHAR_RANGES = String.raw`\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u2800\u3164\ufe00-\ufe0f\uffa0\ufff0-\ufffb\uDC00-\uDFFF\uDB40-\uDB43`;
@@ -491,7 +491,7 @@ deferInit("chunk-cgr0tezp.js:6725", () => {
   INVISIBLE_CHARS_RE_SOURCE = `[${INVISIBLE_CHAR_RANGES}${INVISIBLE_FORMAT_RANGES}\\ufeff]*`;
   regExp = new RegExp(`[${INVISIBLE_CHAR_RANGES}${INVISIBLE_FORMAT_RANGES}\\ufeff]`);
 });
-//@ chunk-cgr0tezp.js:7145-7254 placement
+//@ chunk-2jb250pa.js:2006-2115 placement
 /**
  * 在关键词正则字母间插入可选分隔符。
  */
@@ -500,14 +500,14 @@ function allowSeparatorsInPattern(pattern) {
     .replace(/([a-z)])(?=[a-z(\[])/gi, `$1${INVISIBLE_CHARS_RE_SOURCE}`)
     .replace(/\[_-\]\?/g, `(?:[_-]${INVISIBLE_CHARS_RE_SOURCE})?`);
 }
-//@ chunk-cgr0tezp.js:7254-7464 placement
+//@ chunk-2jb250pa.js:2115-2325 placement
 var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ZWJ_VS_KEEP_CHARS;
 var regExp_3;
 var regExp_4;
 var regExp_5;
 var INVISIBLE_CHARS_ALLOWING_ZWJ_RE;
-deferInit("chunk-cgr0tezp.js:7254", () => {
+deferInit("chunk-2jb250pa.js:2115", () => {
   regExp_2 = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}]+`, "gu");
   ZWJ_VS_KEEP_CHARS = "\\u200D\\uFE0E\\uFE0F";
   regExp_3 = new RegExp(`(?:(?![${ZWJ_VS_KEEP_CHARS}])[${INVISIBLE_CHAR_CLASS_SOURCE}])+`, "gu");
@@ -515,7 +515,7 @@ deferInit("chunk-cgr0tezp.js:7254", () => {
   regExp_5 = new RegExp(`(?<!\\S)[${ZWJ_VS_KEEP_CHARS}]+`, "gu");
   INVISIBLE_CHARS_ALLOWING_ZWJ_RE = /\p{Cs}/gu;
 });
-//@ chunk-cgr0tezp.js:7464-7977 placement
+//@ chunk-2jb250pa.js:2325-2836 placement
 /**
  * 去除不可见字符（可保留拼写的连接符）。
  */
@@ -532,9 +532,9 @@ function stripInvisibleChars(text, replacement, options) {
     }
     return stripped.replace(regExp_2, (run, offset) => {
       let rebuilt = "";
-      for (let j = 0; j < run.length; j++)
-        rebuilt += joinerPositions.has(offset + j)
-          ? run.charAt(j)
+      for (let idx = 0; idx < run.length; idx++)
+        rebuilt += joinerPositions.has(offset + idx)
+          ? run.charAt(idx)
           : rebuilt.endsWith(replacement)
             ? ""
             : replacement;
@@ -548,7 +548,7 @@ function stripInvisibleChars(text, replacement, options) {
   );
   return keepEmoji ? replaced.replace(regExp_5, "") : replaced;
 }
-//@ chunk-cgr0tezp.js:7977-9183 placement
+//@ chunk-2jb250pa.js:2836-4035 placement
 /**
  * 不可见字符与组合符正则。
  */
@@ -564,7 +564,7 @@ var regExp_7;
 var regExp_8;
 var KEEP_JOINER_TEST_RE;
 var RGI_EMOJI_RE;
-deferInit("chunk-cgr0tezp.js:7977", () => {
+deferInit("chunk-2jb250pa.js:2836", () => {
   INVISIBLE_PATTERNS = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
   INVISIBLE_SINGLE_RE = /(?! )\p{Zs}|[\uFFFC\u{1D159}\u{13441}\u{13442}\u{16FE4}]|^ | $/u;
   COMBINING_MARK_CLASS = "[\\p{M}\\u1160-\\u11FF\\uD7B0-\\uD7FF]";
@@ -587,32 +587,32 @@ deferInit("chunk-cgr0tezp.js:7977", () => {
   regExp_8 = new RegExp(`\\u20E3|\\u263A${COMBINING_MARK_CLASS}`, "u");
   KEEP_JOINER_TEST_RE = /[\u200C\u200D\uFE0F\u{E007F}]/u;
 });
-//@ chunk-cgr0tezp.js:9183-9319 placement
+//@ chunk-2jb250pa.js:4035-4167 placement
 function zeroWidthJoinerRule(base) {
   let leftContext = `[${unicodeEscape(base + 21)}-${unicodeEscape(base + 57)}]`;
   let optionalMark = base === 3328 ? "" : `${unicodeEscape(base + 60)}?`;
   return `[\\u200C\\u200D](?<=${leftContext}${optionalMark}${unicodeEscape(base + 77)}.)(?=${leftContext})`;
 }
-//@ chunk-cgr0tezp.js:9319-9365 placement
+//@ chunk-2jb250pa.js:4167-4212 placement
 function unicodeEscape(codePoint) {
   return `\\u{${codePoint.toString(16)}}`;
 }
-//@ chunk-cgr0tezp.js:9365-9488 placement
+//@ chunk-2jb250pa.js:4212-4333 placement
 function neutralizeEmoji(text) {
   if (!KEEP_JOINER_TEST_RE.test(text)) return text;
   RGI_EMOJI_RE ??= new RegExp("\\p{RGI_Emoji}", "gv");
   return text.replace(RGI_EMOJI_RE, "\u263A").replace(regExp_7, "");
 }
-//@ chunk-cgr0tezp.js:9488-9500 placement
+//@ chunk-2jb250pa.js:4333-4345 placement
 var MAX_JOINER_INSPECT_LENGTH = 4096;
-//@ chunk-cgr0tezp.js:9500-9565 placement
+//@ chunk-2jb250pa.js:4345-4410 placement
 /**
  * isNameWithNoJoinerFixes：名字干净且无需连接符处理。
  */
 function isNameWithNoJoinerFixes(name) {
   return isCleanIdentifier_2(name) && !name.includes("  ") && !regExp_6.test(neutralizeEmoji(name));
 }
-//@ chunk-cgr0tezp.js:9565-9681 placement
+//@ chunk-2jb250pa.js:4410-4526 placement
 function isCleanIdentifier_2(name) {
   return (
     isNonEmptyIdentifier(name) &&
@@ -622,15 +622,15 @@ function isCleanIdentifier_2(name) {
     !INVISIBLE_SINGLE_RE.test(name)
   );
 }
-//@ chunk-cgr0tezp.js:9681-9765 placement
+//@ chunk-2jb250pa.js:4526-4611 placement
 var regExp_9; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cgr0tezp.js:9681", () => {
+deferInit("chunk-2jb250pa.js:4526", () => {
   regExp_9 = new RegExp(
     `[\\p{Cf}\\p{Co}\\p{Cn}\\u2028\\u2029\\u007F-\\u009F${INVISIBLE_CHAR_CLASSES}]`,
     "gu",
   );
 });
-//@ chunk-cgr0tezp.js:9765-9986 placement
+//@ chunk-2jb250pa.js:4611-4832 placement
 function stripInvisibleChars_2(wellFormedString) {
   let replaced = wellFormedString.replace(/[\p{Cf}\p{Co}\p{Cn}]/gu, "");
   replaced = replaced
@@ -641,33 +641,33 @@ function stripInvisibleChars_2(wellFormedString) {
     .replace(/[\uE000-\uF8FF]/g, "");
   return replaced;
 }
-//@ chunk-cgr0tezp.js:9986-10078 placement
+//@ chunk-2jb250pa.js:4832-4924 placement
 /**
  * 反复去除组合字符直到稳定。
  */
 function stripCombiningRepeated(text) {
   let wellFormedString = toWellFormedString(text);
-  for (let j = 0; j < 10; j++) {
+  for (let i = 0; i < 10; i++) {
     let stripped = stripInvisibleChars_2(wellFormedString);
     if (stripped === wellFormedString) return wellFormedString;
     wellFormedString = stripped;
   }
   return wellFormedString;
 }
-//@ chunk-cgr0tezp.js:10078-10122 placement
+//@ chunk-2jb250pa.js:4924-4968 placement
 var IGNORABLE_CODE_POINT_RE = /\p{Default_Ignorable_Code_Point}/gu;
-//@ chunk-cgr0tezp.js:10122-10169 placement
+//@ chunk-2jb250pa.js:4968-5015 placement
 /**
  * 去掉默认可忽略字符。
  */
 function stripIgnorables(text) {
   return collapseWhitespace(stripCombiningRepeated(text).replace(IGNORABLE_CODE_POINT_RE, ""));
 }
-//@ chunk-cgr0tezp.js:10169-10213 placement
+//@ chunk-2jb250pa.js:5015-5059 placement
 function isAsciiOnly(text) {
   return !/[^\0-\x7f]/.test(text);
 }
-//@ chunk-cgr0tezp.js:10213-10427 fingerprint (2.1.88 match: partiallySanitizeUnicode, 0.81)
+//@ chunk-2jb250pa.js:5059-5273 fingerprint (2.1.88 match: partiallySanitizeUnicode, 0.81)
 /**
  * 清洗提示词中的危险 Unicode（零宽、双向覆盖、标签字符等），防止隐藏指令注入。
  */
@@ -689,7 +689,7 @@ function partiallySanitizeUnicode(prompt) {
     );
   return current;
 }
-//@ chunk-cgr0tezp.js:10427-10653 placement
+//@ chunk-2jb250pa.js:5273-5499 placement
 /**
  * 递归清洗 Unicode：字符串走 partiallySanitizeUnicode（去隐藏/双向控制字符等），数组和对象逐项递归，丢弃 __proto__ 键。
  */
@@ -710,42 +710,43 @@ export {
   escapeForTag,
   MAX_CLEAN_IDENTIFIER_LENGTH,
   escapeXmlText,
-  BRACKET_CONFUSABLES_2,
   INVISIBLE_CHAR_CLASS_SOURCE,
+  normalizeNfkc,
+  BRACKET_CONFUSABLES,
+  sanitizeLogLine,
+  sanitizeTelemetryString,
+  sanitizeRelayUrl,
+  formatElicitationUrls,
+  stripIgnorables,
+  stripCombiningRepeated,
+  encodeControlChars,
+  BRACKET_CONFUSABLES_2,
   BOX_DRAWING_RANGES_2,
   escapeXmlAttribute,
   isAsciiIdentifier,
   escapeAngleBrackets,
   CONTROL_CHARS_OR_ANGLE_RE,
   isNonEmptyIdentifier,
-  stripIgnorables,
-  stripCombiningRepeated,
-  sanitizeTelemetryString,
-  withConfusables,
-  allowSeparatorsInPattern,
-  INVISIBLE_CHAR_RANGES,
-  INVISIBLE_CHARS_RE_SOURCE,
-  encodeControlChars,
-  sanitizeRelayUrl,
-  formatElicitationUrls,
   stripInvisibleChars,
-  normalizeNfkc,
-  recursivelySanitizeUnicode,
-  sanitizeAttributeValue,
-  isAsciiOnly,
-  partiallySanitizeUnicode,
-  BRACKET_CONFUSABLES,
-  sanitizeLogLine,
-  recursivelySanitizeUnicode_2,
+  isUnicodeIdentifier,
+  withConfusables,
   regExp_9,
   regExp_2,
   MAX_SHORT_TEXT,
-  isSafeRelativePath,
-  isUnicodeIdentifier,
-  isNameWithNoJoinerFixes,
+  allowSeparatorsInPattern,
+  INVISIBLE_CHAR_RANGES,
+  INVISIBLE_CHARS_RE_SOURCE,
+  recursivelySanitizeUnicode,
+  isAsciiOnly,
+  partiallySanitizeUnicode,
   reorderLongCombiningRuns,
+  isSafeRelativePath,
+  isNameWithNoJoinerFixes,
+  recursivelySanitizeUnicode_2,
   BRACKET_CONFUSABLES_WITH_ANGLES,
   nfkdNormalize,
+  sanitizeAttributeValue,
   INVISIBLE_FORMAT_RANGES,
+  INVISIBLE_CHAR_CLASSES,
   regExp,
 };

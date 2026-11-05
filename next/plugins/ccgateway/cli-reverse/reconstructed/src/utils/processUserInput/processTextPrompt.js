@@ -3,9 +3,9 @@
  *
  * 普通文本提示转为用户消息（附件、图片、遥测）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processTextPrompt.ts
- * pieces: chunk-xx1vmpsq.js (1)
+ * pieces: chunk-pwdsqzsj.js (1)
  * attribution: fingerprint 1
  */
 import { randomUUID } from "crypto";
@@ -14,12 +14,16 @@ import { logSlashPromptEvent, cloneContent } from "../slashCommandParsing.js";
 import { hasFrustrationLanguage } from "../../query/goalCheckIn.js";
 import { matchesKeepGoingKeyword } from "../userPromptKeywords.js";
 import { isPresencePing } from "../../query/presenceCheck.js";
-import { getLastCancelledAPIMessageId, incrementPromptIndex } from "../../bootstrap/state.js";
+import {
+  getLastCancelledAPIMessageId,
+  incrementPromptIndex,
+  getConversationToolsUsed,
+} from "../../bootstrap/state.js";
 import { promptTelemetryFields } from "../promptSource.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getOriginKindLabel } from "../messages/promptOrigin.js";
-import { emptyObjectFactory } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeTelemetryFields } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { sanitizeMarkName } from "../startupMarks.js";
 import { isGlimmeringFinchGateOn } from "../messages/untrustedArtifactContent.js";
 import {
@@ -30,13 +34,13 @@ import {
 } from "../agentListing.js";
 import { wrapNonUserMessage } from "../messages/nonUserMessages.js";
 
-//@ chunk-xx1vmpsq.js:36221-37461 fingerprint (2.1.88 match: processTextPrompt, 0.523)
+//@ chunk-pwdsqzsj.js:37062-38352 fingerprint (2.1.88 match: processTextPrompt, 0.511)
 /**
  * processTextPrompt：普通文本提示转为用户消息并上报 tengu_input_prompt。
  */
 function processTextPrompt(
   inputContent,
-  imageContentBlocks,
+  extraContent,
   imagePasteIds,
   attachmentMessages,
   promptId,
@@ -103,7 +107,7 @@ function processTextPrompt(
     }),
     turn_origin: fromEnum(getOriginKindLabel(origin)),
     ...userMessage,
-    ...emptyObjectFactory(),
+    ...codeModeTelemetryFields(),
     ...(userMessage.artifact_comment_turn &&
       existingPromptId && {
         turn_prompt_id: sanitizeMarkName(existingPromptId),
@@ -113,6 +117,8 @@ function processTextPrompt(
     }),
   });
   let summaryEnabled = isGlimmeringFinchGateOn();
+  if (toolsUsed !== undefined && summaryEnabled)
+    getConversationToolsUsed().noteDelivered(messageUuid, toolsUsed);
   let unreadable =
     toolsUsed === undefined || !summaryEnabled ? undefined : unreadableToolsUsed(toolsUsed, knownTools ?? []);
   let summaryMessages =
@@ -124,7 +130,7 @@ function processTextPrompt(
       ? joinWithNewlineIfAny(inputContent, unreadableToolsLine(toolsUsed, knownTools ?? []))
       : inputContent;
   let finalContent = content;
-  if (imageContentBlocks.length > 0)
+  if (extraContent.length > 0)
     finalContent = [
       ...(typeof content === "string"
         ? content.trim()
@@ -136,7 +142,7 @@ function processTextPrompt(
             ]
           : []
         : content),
-      ...imageContentBlocks,
+      ...extraContent,
     ];
   let userMessage_2 = createUserMessage({
     content: finalContent,

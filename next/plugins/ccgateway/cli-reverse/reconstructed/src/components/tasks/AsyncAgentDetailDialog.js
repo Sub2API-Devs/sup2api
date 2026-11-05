@@ -3,9 +3,9 @@
  *
  * 后台异步 agent 详情：状态、进度、最近活动、结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/AsyncAgentDetailDialog.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -34,7 +34,7 @@ import { UserPlanMessage } from "../messages/UserPlanMessage.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 
-//@ chunk-18hwfzwa.js:687576-691937 fingerprint (2.1.88 match: AsyncAgentDetailDialog, 0.636)
+//@ chunk-czq1j3j2.js:708307-712671 fingerprint (2.1.88 match: AsyncAgentDetailDialog, 0.636)
 /**
  * 后台异步 agent 详情：描述、状态、进度、工具活动、结果或错误。
  */

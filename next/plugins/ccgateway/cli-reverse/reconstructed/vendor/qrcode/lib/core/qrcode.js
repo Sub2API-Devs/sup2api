@@ -1,8 +1,8 @@
 /**
  * qrcode/lib/core/qrcode.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -20,7 +20,7 @@ import { require_format_info } from "./format-info.js";
 import { require_mode } from "./mode.js";
 import { require_segments } from "./segments.js";
 
-//@ chunk-spjgqa4y.js:17575-20975 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:17575-20975 cjs-fingerprint
 var require_qrcode = __commonJS(function (cjsExports) {
   var Utils = require_utils();
   var ECLevel = require_error_correction_level();

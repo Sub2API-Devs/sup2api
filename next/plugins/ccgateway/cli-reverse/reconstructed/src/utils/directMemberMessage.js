@@ -3,9 +3,9 @@
  *
  * @队友 直接消息的解析与发送（写入对方邮箱并提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/directMemberMessage.ts
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: fingerprint 2, placement 2
  */
 import { USER } from "./swarm/constants.js";
@@ -13,7 +13,7 @@ import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTeleme
 import { replaceInlineCodeInModelResult } from "./messages.js";
 import { sequential } from "./sequential.js";
 
-//@ chunk-18hwfzwa.js:642027-642202 fingerprint (2.1.88 match: parseDirectMemberMessage, 1)
+//@ chunk-czq1j3j2.js:662708-662883 fingerprint (2.1.88 match: parseDirectMemberMessage, 1)
 function parseDirectMemberMessage(input) {
   let match = input.match(/^@([\w-]+)\s+(.+)$/s);
   if (!match) return null;
@@ -26,7 +26,7 @@ function parseDirectMemberMessage(input) {
     message: trimmedMessage,
   };
 }
-//@ chunk-18hwfzwa.js:642202-642587 fingerprint (2.1.88 match: sendDirectMemberMessage, 0.917)
+//@ chunk-czq1j3j2.js:662883-663268 fingerprint (2.1.88 match: sendDirectMemberMessage, 0.918)
 async function sendDirectMemberMessage(recipientName, message, teamContext, writeToMailbox, storageV5) {
   if (!teamContext || !writeToMailbox)
     return {
@@ -61,7 +61,7 @@ async function sendDirectMemberMessage(recipientName, message, teamContext, writ
     recipientName,
   };
 }
-//@ chunk-18hwfzwa.js:642587-643211 placement
+//@ chunk-czq1j3j2.js:663268-663892 placement
 async function sendDirectMemberMessageAndNotify(request) {
   let result = await sendDirectMemberMessage(
     request.recipientName,
@@ -95,8 +95,8 @@ async function sendDirectMemberMessageAndNotify(request) {
   }
   return "fall_through";
 }
-//@ chunk-18hwfzwa.js:643211-643256 placement
+//@ chunk-czq1j3j2.js:663892-663937 placement
 function boldDirectMemberMessage(text) {
   return replaceInlineCodeInModelResult(text, (code) => sequential.bold(code));
 }
-export { parseDirectMemberMessage, sendDirectMemberMessageAndNotify, boldDirectMemberMessage };
+export { boldDirectMemberMessage, parseDirectMemberMessage, sendDirectMemberMessageAndNotify };

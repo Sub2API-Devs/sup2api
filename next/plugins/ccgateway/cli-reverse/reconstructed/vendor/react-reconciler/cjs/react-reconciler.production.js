@@ -1,8 +1,8 @@
 /**
  * react-reconciler/cjs/react-reconciler.production.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: react-reconciler@0.33.0
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -20,7 +20,7 @@ import {
   unstableIdlePriority,
 } from "../../scheduler/cjs/scheduler.production.js";
 
-//@ chunk-bzr73sfg.js:6890-126116 cjs-fingerprint
+//@ chunk-2avr6cej.js:6890-126116 cjs-fingerprint
 var require_react_reconciler_production = __commonJS(function (cjsExports, cjsModule) {
   init_react_production();
   init_scheduler_production();

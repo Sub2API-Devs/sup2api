@@ -3,13 +3,13 @@
  *
  * 从 downloads.claude.ai 的 GCS 镜像获取官方市场（latest 指针 + zip），失败分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/officialMarketplaceGcs.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 4
  */
 import { resolve as resolve_2, sep, join, dirname } from "path";
-import { readFile, rm as rm_2, mkdir, writeFile, chmod, rename } from "fs/promises";
+import { readFile, rm, mkdir, writeFile, chmod, rename } from "fs/promises";
 import { logForDebugging } from "../debug.js";
 import { waitForScrollIdle, isDiskless } from "../../bootstrap/state.js";
 import { publicCdnGuardedClient } from "../nativeInstaller/downloadsClient.js";
@@ -24,11 +24,11 @@ import { sanitizeMarkName } from "../startupMarks.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4204213-4204348 fingerprint (2.1.88 match: GCS_BASE, 0.667)
+//@ chunk-5xgkngpb.js:4310615-4310750 fingerprint (2.1.88 match: GCS_BASE, 0.667)
 var OFFICIAL_MARKETPLACE_GCS_URL =
   "https://downloads.claude.ai/claude-code-releases/plugins/claude-plugins-official";
 var MARKETPLACES_CLAUDE_PLUGINS_OFFICIAL = "marketplaces/claude-plugins-official/";
-//@ chunk-e6aww6q8.js:4204348-4206218 fingerprint (2.1.88 match: fetchOfficialMarketplaceFromGcs, 0.882)
+//@ chunk-5xgkngpb.js:4310750-4312623 fingerprint (2.1.88 match: fetchOfficialMarketplaceFromGcs, 0.882)
 /**
  * 从 GCS 镜像（downloads.claude.ai/.../claude-plugins-official）下载官方市场：读 latest 指针，sha 未变则跳过，否则下载 zip 解压到市场缓存目录并写 .gcs-sha；失败返回 null 由调用方回退 git。
  */
@@ -91,7 +91,7 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     let files = await unzipFile(zipBuf);
     let modes = parseZipModes(zipBuf);
     let staging = `${installLocation}.staging`;
-    await rm_2(staging, {
+    await rm(staging, {
       recursive: true,
       force: true,
     });
@@ -112,7 +112,7 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     }
     await writeFile(join(staging, GCS_SHA_MARKER_FILE), sha);
     let backupPath = `${installLocation}.backup`;
-    await rm_2(backupPath, {
+    await rm(backupPath, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -129,7 +129,7 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
       if (movedAside) await rename(backupPath, installLocation).catch(() => {});
       throw error;
     }
-    await rm_2(backupPath, {
+    await rm(backupPath, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -161,9 +161,9 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     });
   }
 }
-//@ chunk-e6aww6q8.js:4206218-4206330 fingerprint (2.1.88 match: KNOWN_FS_CODES, 1)
+//@ chunk-5xgkngpb.js:4312623-4312735 fingerprint (2.1.88 match: KNOWN_FS_CODES, 1)
 var KNOWN_FS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4206218", () => {
+deferInit("chunk-5xgkngpb.js:4312623", () => {
   KNOWN_FS_CODES = new Set([
     "ENOSPC",
     "EACCES",
@@ -177,7 +177,7 @@ deferInit("chunk-e6aww6q8.js:4206218", () => {
     "ENAMETOOLONG",
   ]);
 });
-//@ chunk-e6aww6q8.js:4206330-4206760 fingerprint (2.1.88 match: classifyGcsError, 0.978)
+//@ chunk-5xgkngpb.js:4312735-4313165 fingerprint (2.1.88 match: classifyGcsError, 0.978)
 function classifyGcsError(error) {
   if (isAxiosError(error)) {
     if (error.code === "ECONNABORTED") return lit_2("timeout");

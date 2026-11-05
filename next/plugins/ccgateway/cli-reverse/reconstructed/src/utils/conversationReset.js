@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：对话重置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2663ce23.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dvbxt5ad.js (1)
  * attribution: placement 1
  */
 import { cancelQuotaAutoResume } from "../services/quotaAutoResume/quotaAutoResume.js";
 import { endLowPriority } from "../services/lowPriority/lowPriorityMode.js";
-import { removeQueuedByFilter, isPassiveMainAgentCommand } from "./messageQueueManager.js";
+import { removeByFilter, isPassiveMainThreadCommand } from "./messageQueueManager.js";
 import {
   retireConversationReplicas,
   disposeLiveState,
@@ -32,14 +32,14 @@ import { emitReplBridgeEvent } from "../hooks/useReplBridge.js";
 import { markRemoteSourced } from "../tools/ArtifactTool/artifactResumeCarry.js";
 import { noopModelPinReset } from "./sessionModelPin.js";
 
-//@ chunk-2663ce23.js:675-1227 placement
+//@ chunk-dvbxt5ad.js:674-1225 placement
 /**
  * 重置对话（/clear 等）：停止副本与监听、清理缓存与状态。
  */
 function resetConversation(context, messages, reason, options) {
   cancelQuotaAutoResume("conversation_reset");
   endLowPriority("conversation_reset");
-  removeQueuedByFilter(isPassiveMainAgentCommand);
+  removeByFilter(isPassiveMainThreadCommand);
   retireConversationReplicas();
   disposeLiveState();
   resetNoticeBudgets();

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Monitor 工具提示词与超时规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yt6b774j.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f5f3fs7w.js (12)
  * attribution: placement 12
  */
 import { isSingleShotPrintSession, isDiskless } from "../../bootstrap/state.js";
@@ -23,7 +23,7 @@ import { PUSHNOTIFICATION } from "../PushNotificationTool/constants.js";
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { MONITOR } from "./constants.js";
 
-//@ chunk-yt6b774j.js:978-1024 placement
+//@ chunk-f5f3fs7w.js:978-1024 placement
 /**
  * Monitor 超时的绝对上限（1 小时）。
  */
@@ -31,26 +31,26 @@ var MONITOR_DEFAULT_TIMEOUT_MS = 300000;
 var MONITOR_ABSOLUTE_MAX_TIMEOUT_MS = 3600000;
 var MONITOR_DEFAULT_MAX_TIMEOUT_MS = 1800000;
 var MONITOR_SHORT_SESSION_TIMEOUT_MS = 600000;
-//@ chunk-yt6b774j.js:1024-1060 placement
+//@ chunk-f5f3fs7w.js:1024-1060 placement
 function monitorMaxTimeoutMs() {
   return isSingleShotPrintSession() || isDiskless()
     ? MONITOR_SHORT_SESSION_TIMEOUT_MS
     : MONITOR_DEFAULT_MAX_TIMEOUT_MS;
 }
-//@ chunk-yt6b774j.js:1060-1113 placement
+//@ chunk-f5f3fs7w.js:1060-1113 placement
 /**
  * Monitor 超时时的默认提示文本。
  */
 var MONITOR_TIMEOUT_TEXT = "[Monitor timed out \u2014 re-arm if needed.]";
-//@ chunk-yt6b774j.js:1113-1171 placement
+//@ chunk-f5f3fs7w.js:1113-1171 placement
 function isMonitorPersistentAllowed() {
   return isDiskless() || getFeatureValue_SESSION_PINNED("tengu_breezy_crescent", true);
 }
-//@ chunk-yt6b774j.js:1171-1226 placement
+//@ chunk-f5f3fs7w.js:1171-1226 placement
 function formatMinutes(ms) {
   return `${Math.round(ms / 60000)} minutes`;
 }
-//@ chunk-yt6b774j.js:1226-1467 placement
+//@ chunk-f5f3fs7w.js:1226-1467 placement
 /**
  * 按会话类型钳制 Monitor 的 timeout_ms 并决定是否允许 persistent。
  */
@@ -73,7 +73,7 @@ function clampMonitorTimeout(input, bounded) {
     persistent: false,
   };
 }
-//@ chunk-yt6b774j.js:1467-2297 placement
+//@ chunk-f5f3fs7w.js:1467-2297 placement
 function monitorTimedOutMessage(timeoutMs, eventCount, bounded) {
   if (!bounded)
     return hasBackgroundBashStopAfterReply()
@@ -91,7 +91,7 @@ function monitorTimedOutMessage(timeoutMs, eventCount, bounded) {
     return `[Monitor expired after ${durationText} with no events delivered. ${rearmAdvice} \u2014 and widen the filter if silence was unexpected.]`;
   return `[Monitor expired after ${durationText} with ${eventCount} ${plural(eventCount, "event")} delivered. ${rearmAdvice}.]`;
 }
-//@ chunk-yt6b774j.js:2297-2557 placement
+//@ chunk-f5f3fs7w.js:2297-2557 placement
 function monitorEventGuidance() {
   return isAgentPushNotificationEnabled()
     ? `
@@ -99,7 +99,7 @@ function monitorEventGuidance() {
 When an event lands that the user would want to act on now \u2014 an error appeared, the status they were waiting on flipped \u2014 send a ${PUSHNOTIFICATION}. Not every event is worth a push; the ones that change what they'd do next are.`
     : "";
 }
-//@ chunk-yt6b774j.js:2557-8813 placement
+//@ chunk-f5f3fs7w.js:2557-8813 placement
 /**
  * Monitor 工具的完整提示词：单次/持续/轮询等使用模式、事件源说明、超时规则。
  */
@@ -181,13 +181,13 @@ Stdout lines within 200ms are batched into a single notification, so multiline o
 
 The script runs in the same shell environment as Bash. Exit ends the watch (exit code is reported). ${monitorExpiryParagraph()} Use TaskStop to cancel early.`;
 }
-//@ chunk-yt6b774j.js:8813-9539 placement
+//@ chunk-f5f3fs7w.js:8813-9539 placement
 /**
  * 会话内 Monitor 随时可能被停止的长版说明（含不订阅通知的情形）。
  */
 var MONITOR_SESSION_LIFETIME_NOTE = `In this session a monitor can be counted on only while you are working. After your reply it may stop at any time, often within a minute, and you are told so with the user's next message. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens; for anything longer, tell the user what to check and when.`;
 var MONITOR_SESSION_LIFETIME_NOTE_LONG = `In this session a monitor can be counted on only while you are working: a few minutes after your reply it is likely stopped along with every other process left running here, and you may hear nothing more from it, not even that it stopped, until the user writes again. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens.`;
-//@ chunk-yt6b774j.js:9539-10698 placement
+//@ chunk-f5f3fs7w.js:9539-10698 placement
 function monitorExpiryParagraph() {
   if (isDiskless())
     return `Every monitor expires after \`timeout_ms\` (default ${formatMinutes(MONITOR_DEFAULT_TIMEOUT_MS)}, at most ${formatMinutes(monitorMaxTimeoutMs())}): it is killed and you get one notice with the event count. If it stops after your reply and before it expires, you learn only that it stopped, with the user's next message.`;
@@ -197,7 +197,7 @@ function monitorExpiryParagraph() {
     ? `Every monitor expires after \`timeout_ms\` (default ${formatMinutes(MONITOR_DEFAULT_TIMEOUT_MS)}, at most ${formatMinutes(monitorMaxTimeoutMs())}): it is killed and you get one notice with the event count. Re-arm it if you still need the watch; for a long watch (PR monitoring, log tails) set \`timeout_ms\` to the maximum and re-arm on each expiry, and widen the filter if an expiry with no events was unexpected.`
     : "Timeout \u2192 killed. Set `persistent: true` for session-length watches (PR monitoring, log tails) \u2014 the monitor runs until you call TaskStop or the session ends.";
 }
-//@ chunk-yt6b774j.js:10698-11588 placement
+//@ chunk-f5f3fs7w.js:10698-11588 placement
 var WS_SOURCE_PARAGRAPH = `
 **ws source** \u2014 open a WebSocket and stream each incoming text frame as an event. No shell, no polling: the server pushes, you get notified.
 
@@ -210,11 +210,11 @@ Each text frame becomes one notification (multiline frames stay as one event). B
 
 Prefer this over \`command: 'websocat wss://\u2026'\` \u2014 it avoids the extra process and line-buffering pitfalls. Use bash when you need to transform or filter frames with shell tools before they become events.`;
 export {
+  isMonitorPersistentAllowed,
   monitorTimedOutMessage,
   MONITOR_DEFAULT_TIMEOUT_MS,
   MONITOR_ABSOLUTE_MAX_TIMEOUT_MS,
   monitorMaxTimeoutMs,
-  isMonitorPersistentAllowed,
   monitorToolPrompt,
   WS_SOURCE_PARAGRAPH,
   monitorEventGuidance,

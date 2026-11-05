@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增：shell 输出的裁剪显示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cqn8yadz.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6yg63dqr.js (3)
  * attribution: placement 3
  */
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { wrapAnsi } from "../../ink/wrapAnsi.js";
 import { stripPrefix } from "../../utils/stringUtils.js";
 
-//@ chunk-cqn8yadz.js:594-606 placement
+//@ chunk-6yg63dqr.js:627-639 placement
 var CLIP_HEAD_LINES = 5;
 var SHELL_OUTPUT_CLIP = 5;
-//@ chunk-cqn8yadz.js:1961-2067 placement
+//@ chunk-6yg63dqr.js:1994-2100 placement
 function isShellOutputClipped({ output, fullOutput, totalLines }, columns) {
   if (!fullOutput.trim()) return false;
   return (totalLines ?? 0) > CLIP_HEAD_LINES || clipShellOutput(output, columns).clipped;
 }
-//@ chunk-cqn8yadz.js:2067-2435 placement
+//@ chunk-6yg63dqr.js:2100-2468 placement
 function clipShellOutput(output, columns) {
   let max = Math.max(1, columns - SHELL_OUTPUT_CLIP);
   let filtered = stripAnsiPerLine(output.trim())
@@ -64,4 +64,4 @@ function clipShellOutput(output, columns) {
     dropped: index,
   };
 }
-export { isShellOutputClipped, clipShellOutput, CLIP_HEAD_LINES };
+export { clipShellOutput, CLIP_HEAD_LINES, isShellOutputClipped };

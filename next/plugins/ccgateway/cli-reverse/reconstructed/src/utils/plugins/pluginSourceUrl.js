@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：规范化插件仓库 URL；两个插件来源是否相同等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (13)
  * attribution: placement 13
  */
 import { GITHUB_HOST } from "../git/githubUrl.js";
@@ -13,7 +13,7 @@ import { foldName, INVISIBLE_FORMAT_CHAR_RE } from "../permissions/protectedDirN
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:20639-21039 placement
+//@ chunk-z20c443b.js:20648-21048 placement
 /**
  * 插件来源 URL 的主机/路径正则片段。
  */
@@ -30,7 +30,7 @@ var regExp_4;
 var regExp_5;
 var REPO_PATH_CHARS;
 var WIDE;
-deferInit("chunk-dcmhvw5a.js:20639", () => {
+deferInit("chunk-z20c443b.js:20648", () => {
   HOST_PATTERNS = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?`;
   PLUGIN_NAME_CHARS = "[A-Za-z0-9._-]+";
   PATH_SAFE_CHARS = "[A-Za-z0-9._~-]";
@@ -45,7 +45,7 @@ deferInit("chunk-dcmhvw5a.js:20639", () => {
   REPO_PATH_CHARS = `ssh.${GITHUB_HOST}`;
   WIDE = "wide:";
 });
-//@ chunk-dcmhvw5a.js:21039-21429 placement
+//@ chunk-z20c443b.js:21048-21438 placement
 /**
  * 解析 git 托管 URL。
  */
@@ -71,7 +71,7 @@ function parseGitHostUrl(url, blocklist) {
     scp: match !== null,
   };
 }
-//@ chunk-dcmhvw5a.js:21429-22470 placement
+//@ chunk-z20c443b.js:21438-22479 placement
 /**
  * 规范化插件仓库 URL。
  */
@@ -129,7 +129,7 @@ function normalizePluginRepoUrl(url, path, options) {
   }
   return `${WIDE}${hostPort}${replaced_2}#${keys.join("/")}`;
 }
-//@ chunk-dcmhvw5a.js:22470-22731 placement (2.1.88 match: setCwdState, 0.867)
+//@ chunk-z20c443b.js:22479-22740 placement (2.1.88 match: setCwdState, 0.867)
 function toWindowsShortNameKey(cwd) {
   let end = cwd.length;
   while (end > 0 && (cwd[end - 1] === "." || cwd[end - 1] === " ")) end--;
@@ -139,7 +139,7 @@ function toWindowsShortNameKey(cwd) {
   if (/~\d/.test(folded) || folded.includes(":") || INVISIBLE_FORMAT_CHAR_RE.test(folded)) return;
   return folded.toUpperCase().toLowerCase().normalize("NFC");
 }
-//@ chunk-dcmhvw5a.js:22731-22841 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
+//@ chunk-z20c443b.js:22740-22850 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.805)
 /**
  * 解析 repo#ref 写法。
  */
@@ -148,7 +148,7 @@ function parseRepoWithRef(key) {
   if (index === -1) return key;
   return normalizePluginRepoUrl(`https://${key.slice(0, index)}`, key.slice(index + 1)) ?? key;
 }
-//@ chunk-dcmhvw5a.js:22841-23385 placement
+//@ chunk-z20c443b.js:22850-23394 placement
 /**
  * 两个插件来源是否相同。
  */
@@ -184,7 +184,7 @@ function samePluginSource(source, ref, options) {
       return;
   }
 }
-//@ chunk-dcmhvw5a.js:23385-23515 placement
+//@ chunk-z20c443b.js:23394-23524 placement
 /**
  * 取来源的 URL 与 ref。
  */
@@ -204,7 +204,7 @@ function sourceUrlAndRef(source) {
       return;
   }
 }
-//@ chunk-dcmhvw5a.js:23515-23669 placement
+//@ chunk-z20c443b.js:23524-23678 placement
 /**
  * 官方插件固定的 sha。
  */
@@ -217,7 +217,7 @@ function pinnedSha(pluginId, source) {
   }
   return;
 }
-//@ chunk-dcmhvw5a.js:23669-23751 placement
+//@ chunk-z20c443b.js:23678-23760 placement
 /**
  * 名字附加 sha 前缀。
  */
@@ -225,7 +225,7 @@ function withShaSuffix(version, sha) {
   let suffix = `-${sha.substring(0, 12)}`;
   return version.endsWith(suffix) ? version : `${version}${suffix}`;
 }
-//@ chunk-dcmhvw5a.js:23751-23844 placement
+//@ chunk-z20c443b.js:23760-23853 placement
 /**
  * 插件目录不可用的错误。
  */
@@ -235,7 +235,7 @@ class PluginDirectoryUnavailableError extends Error {
     this.name = "PluginDirectoryUnavailableError";
   }
 }
-//@ chunk-dcmhvw5a.js:23886-23992 placement
+//@ chunk-z20c443b.js:23895-24001 placement
 /**
  * 脚本扩展名到加载器（ts/tsx/jsx/js）的映射。
  */
@@ -249,32 +249,32 @@ var SCRIPT_EXTENSION_LOADERS = {
   ".mts": "ts",
   ".cts": "ts",
 };
-//@ chunk-dcmhvw5a.js:23992-24017 placement
+//@ chunk-z20c443b.js:24001-24026 placement
 /**
  * 脚本扩展名列表。
  */
 var SCRIPT_EXTENSIONS; // deferred: uses SCRIPT_EXTENSION_LOADERS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:23992", () => {
+deferInit("chunk-z20c443b.js:24001", () => {
   SCRIPT_EXTENSIONS = Object.keys(SCRIPT_EXTENSION_LOADERS);
 });
-//@ chunk-dcmhvw5a.js:24017-24080 placement
+//@ chunk-z20c443b.js:24026-24089 placement
 /**
  * SCRIPT_EXTENSIONS_TEXT：脚本后缀的列举文字。
  */
 var SCRIPT_EXTENSIONS_TEXT; // deferred: uses SCRIPT_EXTENSIONS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:24017", () => {
+deferInit("chunk-z20c443b.js:24026", () => {
   SCRIPT_EXTENSIONS_TEXT =
     `${SCRIPT_EXTENSIONS.slice(0, -1).join(", ")} or ` + String(SCRIPT_EXTENSIONS.at(-1));
 });
 export {
-  PluginDirectoryUnavailableError,
+  normalizePluginRepoUrl,
+  parseRepoWithRef,
   samePluginSource,
   pinnedSha,
   withShaSuffix,
   sourceUrlAndRef,
-  parseRepoWithRef,
+  PluginDirectoryUnavailableError,
   SCRIPT_EXTENSIONS_TEXT,
   SCRIPT_EXTENSION_LOADERS,
   SCRIPT_EXTENSIONS,
-  normalizePluginRepoUrl,
 };

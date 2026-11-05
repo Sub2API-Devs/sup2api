@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端下发模型目录的获取、对比与应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (32), chunk-c0w5a81j.js (76)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-df61xvp8.js (76), chunk-hjswk319.js (32)
  * attribution: placement 108
  */
 import { getClientPlatform } from "../http.js";
@@ -167,25 +167,25 @@ import { getContextWindow } from "./configs.js";
 import { defaultMaxOutputTokens } from "../betas.js";
 import { getDefaultEffortForModel, hasAnyDefaultEffort, isEffortLevel } from "../effort.js";
 import { selectableRowIds, selectableNonOverflowRowIds } from "./modelErrorOverrides.js";
-import { count, uniq } from "../collections.js";
+import { countWhere } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { parseUserSpecifiedModel } from "./modelDisplay.js";
 import { isPlainNonInteractive } from "../sessionShape.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { telemetrySafeModelName, telemetrySafeModelList } from "./telemetryModelName.js";
 import { settingsSourceTag, managedKeyTelemetry } from "../settings/settingsTelemetryKeys.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-c0w5a81j.js:1151-1219 placement
+//@ chunk-df61xvp8.js:1152-1220 placement
 /**
  * 默认输出 token 数与"拒绝原因"枚举（未授权、IP 受限、通道不可用）。
  */
 var DEFAULT_OUTPUT_TOKENS = 5000;
 var REFUSAL_REASONS = ["not_permitted", "ip_restricted", "lane_unavailable"];
-//@ chunk-c0w5a81j.js:1219-1260 placement
+//@ chunk-df61xvp8.js:1220-1261 placement
 function isRefusalReason(reason) {
   return REFUSAL_REASONS.some((candidate) => candidate === reason);
 }
-//@ chunk-c0w5a81j.js:3112-3611 placement
+//@ chunk-df61xvp8.js:3113-3612 placement
 function fetchModelSelector(state, repoSlug) {
   switch (state.kind) {
     case "account":
@@ -221,7 +221,7 @@ function fetchModelSelector(state, repoSlug) {
       };
   }
 }
-//@ chunk-c0w5a81j.js:3611-3779 placement
+//@ chunk-df61xvp8.js:3612-3780 placement
 function parseCatalogResolution(input) {
   let lower = normalizeUuidOrNull(input.organization_uuid)?.toLowerCase();
   let found = ACCOUNT_KIND_VALUES.find((value) => value === input.resolution);
@@ -234,21 +234,21 @@ function parseCatalogResolution(input) {
     }),
   };
 }
-//@ chunk-c0w5a81j.js:3779-3857 placement
+//@ chunk-df61xvp8.js:3780-3858 placement
 function formatResolutionSuffix(info) {
   return info.resolution === undefined ? "" : ` (resolution ${info.resolution})`;
 }
-//@ chunk-c0w5a81j.js:3857-4033 placement
+//@ chunk-df61xvp8.js:3858-4034 placement
 var CREDENTIAL_SCOPE_CODES = ["oauth_scope_insufficient", "oauth_token_narrowed"];
 var IP_NOT_IN_ALLOWED_RANGE = "ip_not_in_allowed_range";
 var LANE_UNAVAILABLE_CODES = ["not_found", "account_session_invalid", "organization_not_visible"];
 var KNOWN_REFUSAL_CODES = [...CREDENTIAL_SCOPE_CODES, IP_NOT_IN_ALLOWED_RANGE, ...LANE_UNAVAILABLE_CODES];
-//@ chunk-c0w5a81j.js:4033-4088 placement
+//@ chunk-df61xvp8.js:4034-4089 placement
 function firstMatchingCode(codes, error) {
   let errorCode = getErrorCode(error);
   return codes.find((code) => code === errorCode);
 }
-//@ chunk-c0w5a81j.js:4088-4141 placement
+//@ chunk-df61xvp8.js:4089-4142 placement
 /**
  * 依次尝试各原因分类器，给出目录拒绝原因。
  */
@@ -259,7 +259,7 @@ function classifyRefusal(scope, httpStatus, error) {
     matchLaneRefusal(scope, httpStatus, error)
   );
 }
-//@ chunk-c0w5a81j.js:4141-4263 placement
+//@ chunk-df61xvp8.js:4142-4264 placement
 /**
  * 生成服务端目录拒绝的后缀说明（错误码与原因）。
  */
@@ -267,7 +267,7 @@ function formatRefusalSuffix(refusal) {
   if (refusal === undefined || !isRefusalReason(refusal.reason)) return "";
   return `${refusal.errorCode !== undefined ? ` ${refusal.errorCode}` : ""} (${describeRefusalReason(refusal.reason)})`;
 }
-//@ chunk-c0w5a81j.js:4263-4535 placement
+//@ chunk-df61xvp8.js:4264-4536 placement
 function describeRefusalReason(reason) {
   switch (reason) {
     case "not_permitted":
@@ -278,7 +278,7 @@ function describeRefusalReason(reason) {
       return "the server has not enabled the org-less route for this session";
   }
 }
-//@ chunk-c0w5a81j.js:4535-4668 placement
+//@ chunk-df61xvp8.js:4536-4669 placement
 function matchScopeRefusal(httpStatus, error) {
   let code = firstMatchingCode(CREDENTIAL_SCOPE_CODES, error);
   if (httpStatus === 403 && code !== undefined)
@@ -290,7 +290,7 @@ function matchScopeRefusal(httpStatus, error) {
     };
   return;
 }
-//@ chunk-c0w5a81j.js:4668-4785 placement
+//@ chunk-df61xvp8.js:4669-4786 placement
 function matchIpRefusal(httpStatus, error) {
   if (httpStatus === 403 && getErrorCode(error) === IP_NOT_IN_ALLOWED_RANGE)
     return {
@@ -301,7 +301,7 @@ function matchIpRefusal(httpStatus, error) {
     };
   return;
 }
-//@ chunk-c0w5a81j.js:4785-5058 placement
+//@ chunk-df61xvp8.js:4786-5059 placement
 function matchLaneRefusal(scope, httpStatus, error) {
   if (catalogEndpointForScope(scope) !== "orgless") return;
   let code = firstMatchingCode(LANE_UNAVAILABLE_CODES, error);
@@ -320,24 +320,24 @@ function matchLaneRefusal(scope, httpStatus, error) {
     };
   return;
 }
-//@ chunk-c0w5a81j.js:5058-5173 placement
+//@ chunk-df61xvp8.js:5059-5174 placement
 function getErrorCode(error) {
   let prop = getProp(error, "error");
   let prop_2 = getProp(getProp(prop, "details"), "error_code");
   return typeof prop_2 === "string" && prop_2.length > 0 ? prop_2 : undefined;
 }
-//@ chunk-c0w5a81j.js:5173-5246 placement
+//@ chunk-df61xvp8.js:5174-5247 placement
 function getProp(prop, key) {
   return typeof prop === "object" && prop !== null && key in prop ? prop[key] : undefined;
 }
-//@ chunk-c0w5a81j.js:5246-5294 placement
+//@ chunk-df61xvp8.js:5247-5295 placement
 /**
  * 取错误对象的 response.data。
  */
 function responseData(error) {
   return getProp(getProp(error, "response"), "data");
 }
-//@ chunk-c0w5a81j.js:5294-5345 placement
+//@ chunk-df61xvp8.js:5295-5346 placement
 /**
  * 取合法 ETag，不合法返回 undefined。
  */
@@ -345,46 +345,40 @@ function validEtagOrUndefined(headers) {
   let etag = headers?.etag;
   return isValidEtag(etag) ? etag : undefined;
 }
-//@ chunk-c0w5a81j.js:5345-5380 placement
-var RETRY_BASE_MS; // deferred: uses CACHE_VERSION (../../services/modelCatalog/servedCatalog.js) of its import cycle while loading; runs once the cycle is complete
-var RETRY_CAP_MS;
-var SLOW_FETCH_THRESHOLD_MS;
-var FAILED_MARKER_READ_BYTES;
-deferInit("chunk-c0w5a81j.js:5345", () => {
-  RETRY_BASE_MS = 30000;
-  RETRY_CAP_MS = CACHE_TTL_MS;
-  SLOW_FETCH_THRESHOLD_MS = 2000;
-  FAILED_MARKER_READ_BYTES = 256;
-});
-//@ chunk-c0w5a81j.js:5380-5451 placement
+//@ chunk-df61xvp8.js:5346-5381 placement
+var RETRY_BASE_MS = 30000;
+var RETRY_CAP_MS = CACHE_TTL_MS;
+var SLOW_FETCH_THRESHOLD_MS = 2000;
+var FAILED_MARKER_READ_BYTES = 256;
+//@ chunk-df61xvp8.js:5381-5452 placement
 function headlessFailedMarkerPath(cachePath) {
   return `${cachePath.replace(/\.json$/, "")}.headless-failed.json`;
 }
-//@ chunk-c0w5a81j.js:5451-5502 placement
+//@ chunk-df61xvp8.js:5452-5503 placement
 function jitteredBackoff(failures, random = Math.random()) {
   return jitteredTtl(backoffDelayMs(failures), random);
 }
-//@ chunk-c0w5a81j.js:5502-5561 placement
+//@ chunk-df61xvp8.js:5503-5562 placement
 function backoffDelayMs(failures) {
   return Math.min(RETRY_BASE_MS * 2 ** (Math.max(1, failures) - 1), RETRY_CAP_MS);
 }
-//@ chunk-c0w5a81j.js:5561-5597 placement
+//@ chunk-df61xvp8.js:5562-5598 placement
 function backoffWithSlack(failures) {
   return backoffDelayMs(failures) * (1 + STALE_JITTER_RATIO);
 }
-//@ chunk-c0w5a81j.js:5597-5740 placement
+//@ chunk-df61xvp8.js:5598-5741 placement
 async function isRetryDue(cachePath, now = Date.now(), random = Math.random()) {
   let retryMarker = await readRetryMarker(cachePath);
   if (retryMarker === undefined || retryMarker.failedAt > now) return true;
   return now - retryMarker.failedAt >= jitteredBackoff(retryMarker.failures, random);
 }
-//@ chunk-c0w5a81j.js:5740-5893 placement
+//@ chunk-df61xvp8.js:5741-5894 placement
 async function isInRetryBackoff(cachePath, now = Date.now(), random = Math.random()) {
   let retryMarker = await readRetryMarker(cachePath);
   if (retryMarker === undefined || retryMarker.failedAt > now) return false;
   return retryMarker.timedOut || now - retryMarker.failedAt < jitteredBackoff(retryMarker.failures, random);
 }
-//@ chunk-c0w5a81j.js:5893-6385 placement
+//@ chunk-df61xvp8.js:5894-6386 placement
 /**
  * 读取无头模式下服务端目录获取的重试标记文件（大小有上限），解析出失败时间、连续失败次数与是否超时；不存在或格式不对返回 undefined。
  */
@@ -412,11 +406,11 @@ async function readRetryMarker(cachePath) {
     timedOut: "timedOut" in parsed && parsed.timedOut === true,
   };
 }
-//@ chunk-c0w5a81j.js:6385-6455 placement
+//@ chunk-df61xvp8.js:6386-6456 placement
 function isWithinFailureBackoff(marker, now) {
   return marker.failedAt <= now && now - marker.failedAt < backoffWithSlack(marker.failures) + RETRY_CAP_MS;
 }
-//@ chunk-c0w5a81j.js:6455-6823 placement
+//@ chunk-df61xvp8.js:6456-6824 placement
 /**
  * 写入或清除重试标记：clear 删除文件；back_off 在上次失败基础上累加失败次数，retry_soon 重置为 1；以 0600 权限原子写入。
  */
@@ -445,7 +439,7 @@ async function writeRetryMarker(cachePath, mode, now = Date.now(), timedOut = fa
       );
   }
 }
-//@ chunk-c0w5a81j.js:6823-7136 placement
+//@ chunk-df61xvp8.js:6824-7137 placement
 /**
  * 服务端目录刷新结束后（每次只处理一次）按结果更新重试标记：错误/跳过时退避或尽快重试，成功时若缓存已过期则退避否则清除。
  */
@@ -469,11 +463,11 @@ async function settleServedRefresh(cachePath, result) {
       return;
   }
 }
-//@ chunk-c0w5a81j.js:7136-7219 placement
+//@ chunk-df61xvp8.js:7137-7220 placement
 function isInitialTimeoutFailure(result) {
   return result.prior === undefined && result.fetchStatus === "error" && !isRefusalReason(result.fetchReason);
 }
-//@ chunk-c0w5a81j.js:7219-7531 placement
+//@ chunk-df61xvp8.js:7220-7532 placement
 /**
  * 已发布目录刷新结束后按结果更新重试标记（超时或耗时过长时标记 timedOut）：错误/拒绝时退避，成功时视缓存是否过期退避或清除。
  */
@@ -498,14 +492,14 @@ async function settlePublishedRefresh(cachePath, result, firstSettle = markPubli
       return;
   }
 }
-//@ chunk-c0w5a81j.js:7531-7629 placement
+//@ chunk-df61xvp8.js:7532-7630 placement
 function markPublishedRefreshSettled(result) {
   let publishedCatalogSettledRefreshes = getProviderState().publishedCatalogSettledRefreshes;
   if (publishedCatalogSettledRefreshes.has(result)) return false;
   publishedCatalogSettledRefreshes.add(result);
   return true;
 }
-//@ chunk-c0w5a81j.js:7629-7970 placement
+//@ chunk-df61xvp8.js:7630-7972 placement
 /**
  * 按（作用域, 入口）合并并发的服务端目录刷新请求；目录关闭或无作用域时直接返回 off 结果。
  */
@@ -536,7 +530,7 @@ function refreshServedCatalogOnce({ allowNetwork }) {
   servedCatalogRefreshes.set(key, refresh);
   return refresh;
 }
-//@ chunk-c0w5a81j.js:7970-9657 placement
+//@ chunk-df61xvp8.js:7972-9659 placement
 async function refreshServedCatalog({ mode, surface, scope, allowNetwork }) {
   let cached;
   let fetchMs;
@@ -659,7 +653,7 @@ async function refreshServedCatalog({ mode, surface, scope, allowNetwork }) {
     };
   }
 }
-//@ chunk-c0w5a81j.js:9657-10216 placement
+//@ chunk-df61xvp8.js:9659-10218 placement
 async function checkCatalogKey(source) {
   if (source.trust.kind === "untrusted") return;
   let publishedCatalogCache = await readPublishedCatalogCache(source.cacheKey);
@@ -683,7 +677,7 @@ async function checkCatalogKey(source) {
   });
   return entry;
 }
-//@ chunk-c0w5a81j.js:10216-10739 placement
+//@ chunk-df61xvp8.js:10218-10741 placement
 async function verifySignedDocument(publishedCatalogCache, source) {
   let trust = source.trust;
   if (trust.kind === "untrusted")
@@ -730,32 +724,32 @@ async function verifySignedDocument(publishedCatalogCache, source) {
     },
   };
 }
-//@ chunk-c0w5a81j.js:10739-10877 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-df61xvp8.js:10741-10879 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   let buffer_2 = Buffer.from(buffer, "base64");
   if (buffer_2.toString("base64") !== buffer) return;
   return buffer_2.length > 0 && buffer_2.length <= CATALOG_SCHEMA ? new Uint8Array(buffer_2) : undefined;
 }
-//@ chunk-c0w5a81j.js:10877-11016 placement
+//@ chunk-df61xvp8.js:10879-11018 placement
 function parseCatalogDocument(documentBytes) {
   let parsed = safeParseJSON(Buffer.from(documentBytes).toString("utf8"), false);
   if (getSchemaVersion(parsed) !== CATALOG_SCHEMA_VERSION) return;
   let validated = CatalogDocumentSchema().safeParse(parsed);
   return validated.success ? validated.data : undefined;
 }
-//@ chunk-c0w5a81j.js:11016-11136 placement
+//@ chunk-df61xvp8.js:11018-11138 placement
 function getMinAcceptedVersion(source, cached, rootId) {
   let isTrustedRoot = source.kind === "hosted" || classifyKeySource(rootId) === "compiled_roots";
   return Math.max(cached?.document.version ?? 0, isTrustedRoot ? bundledCatalogVersion() : 0);
 }
-//@ chunk-c0w5a81j.js:11136-11285 placement
+//@ chunk-df61xvp8.js:11138-11287 placement
 async function checkVersionRollback(catalogDocument, source, cached, rootId) {
   if (catalogDocument.version < getMinAcceptedVersion(source, cached, rootId)) return "replayed_version";
   if (catalogDocument.version < (await publishedFloorVersion(source.cacheKey)))
     return "catalog_version_rollback";
   return;
 }
-//@ chunk-c0w5a81j.js:11285-11736 placement
+//@ chunk-df61xvp8.js:11287-11738 placement
 /**
  * 按缓存键合并并发的已发布目录刷新请求；功能未开启返回 off，来源 URL 无效返回 invalid_url。
  */
@@ -792,7 +786,7 @@ function refreshPublishedCatalogOnce({ allowNetwork }) {
   publishedCatalogRefreshes.set(source.cacheKey, refreshPromise);
   return refreshPromise;
 }
-//@ chunk-c0w5a81j.js:11736-13459 placement
+//@ chunk-df61xvp8.js:11738-13461 placement
 async function fetchPublishedCatalog({ mode, source, allowNetwork }) {
   let fetchMs;
   let withCommon = () => ({
@@ -910,7 +904,7 @@ async function fetchPublishedCatalog({ mode, source, allowNetwork }) {
     };
   }
 }
-//@ chunk-c0w5a81j.js:13459-14148 placement
+//@ chunk-df61xvp8.js:13461-14150 placement
 async function verifyCatalogSignature({ source, cached, result }) {
   let trust = source.trust;
   if (trust.kind === "untrusted")
@@ -967,18 +961,18 @@ async function verifyCatalogSignature({ source, cached, result }) {
     rootId: signature.rootId,
   };
 }
-//@ chunk-c0w5a81j.js:14148-14176 placement
+//@ chunk-df61xvp8.js:14150-14178 placement
 var FETCH_BUDGET_MS = 1750;
 var HEADLESS_FETCH_BUDGET_MS = 1500;
 var CCR_FETCH_BUDGET_MS = 4500;
-//@ chunk-c0w5a81j.js:14176-14232 placement
+//@ chunk-df61xvp8.js:14178-14235 placement
 function fetchBudgetMs(headless) {
   if (catalogSurface() === "ccr") return CCR_FETCH_BUDGET_MS;
   return headless ? HEADLESS_FETCH_BUDGET_MS : FETCH_BUDGET_MS;
 }
-//@ chunk-c0w5a81j.js:14232-14244 placement
+//@ chunk-df61xvp8.js:14235-14247 placement
 var SHORT_FETCH_BUDGET_MS = 2000;
-//@ chunk-c0w5a81j.js:14244-16511 placement
+//@ chunk-df61xvp8.js:14247-16515 placement
 async function loadCatalogCache({ headless }) {
   if (getProviderState().servedCatalogActive !== undefined) return;
   try {
@@ -1121,18 +1115,18 @@ async function loadCatalogCache({ headless }) {
       applyCompiledFallback("exception", "exception");
   }
 }
-//@ chunk-c0w5a81j.js:16511-16533 placement
+//@ chunk-df61xvp8.js:16515-16537 placement
 /**
  * 空实现（服务端目录钩子占位）。
  */
 async function noopServedCatalogHook() {}
-//@ chunk-c0w5a81j.js:16533-16556 placement
+//@ chunk-df61xvp8.js:16537-16560 placement
 function isServedCatalogDisabled() {
   return false;
 }
-//@ chunk-c0w5a81j.js:16556-16572 placement
+//@ chunk-df61xvp8.js:16560-16576 placement
 function noopOptInDecision(headless) {}
-//@ chunk-c0w5a81j.js:16572-16699 placement
+//@ chunk-df61xvp8.js:16576-16703 placement
 function getFetchFields(outcome) {
   let reason = fromEnumOpt(outcome?.fetchReason);
   let httpStatus = outcome?.httpStatus;
@@ -1145,7 +1139,7 @@ function getFetchFields(outcome) {
     }),
   };
 }
-//@ chunk-c0w5a81j.js:16699-16835 placement
+//@ chunk-df61xvp8.js:16703-16839 placement
 function getRouteFields(scope, resolution) {
   let route = catalogEndpointForScope(scope);
   return {
@@ -1157,7 +1151,7 @@ function getRouteFields(scope, resolution) {
     }),
   };
 }
-//@ chunk-c0w5a81j.js:16835-17027 placement
+//@ chunk-df61xvp8.js:16839-17031 placement
 function describeCredentialKind(kind) {
   switch (kind) {
     case "oauth":
@@ -1170,14 +1164,14 @@ function describeCredentialKind(kind) {
       return " with the federation credential";
   }
 }
-//@ chunk-c0w5a81j.js:17027-17081 placement
+//@ chunk-df61xvp8.js:17031-17085 placement
 function catalogRouteAndCredential(scope) {
   return {
     route: catalogEndpointForScope(scope),
     credential: catalogAuthKind(scope),
   };
 }
-//@ chunk-c0w5a81j.js:17081-17607 placement
+//@ chunk-df61xvp8.js:17085-17611 placement
 /**
  * 在预算时间内等待服务端目录刷新，超时则让刷新在后台继续并在结束时记录；记录等待诊断并返回结果与计时字段。
  */
@@ -1209,7 +1203,7 @@ async function awaitServedRefresh(refresh, options) {
     },
   };
 }
-//@ chunk-c0w5a81j.js:17607-18174 placement
+//@ chunk-df61xvp8.js:17611-18178 placement
 /**
  * 记录等待超时后才完成的目录获取：状态、耗时、路由字段与是否写入缓存，失败记为 sad、成功记为 ok。
  */
@@ -1237,17 +1231,17 @@ function logLateFetch(outcome, { wait, headless, budgetMs, scope }) {
     `[servedCatalog] ${wait} settled after its ${budgetMs}ms wait: fetch:${outcome.fetchStatus}, request took ${outcome.fetchMs ?? "?"}ms`,
   );
 }
-//@ chunk-c0w5a81j.js:18174-18213 placement
+//@ chunk-df61xvp8.js:18178-18217 placement
 function isRefusalFetchFailure(outcome) {
   return isRefusalReason(outcome.fetchReason);
 }
-//@ chunk-c0w5a81j.js:18213-18321 placement
+//@ chunk-df61xvp8.js:18217-18325 placement
 var REFUSAL_OFF_REASONS = {
   not_permitted: "credential_scope",
   ip_restricted: "ip_restricted",
   lane_unavailable: "lane_unavailable",
 };
-//@ chunk-c0w5a81j.js:18321-18791 placement
+//@ chunk-df61xvp8.js:18325-18795 placement
 /**
  * 服务端目录因凭据范围/IP 限制/通道不可用被拒时，切换到回退目录并记录 model_catalog_primary（off 原因、HTTP 状态、拒绝码与计时）。
  */
@@ -1273,7 +1267,7 @@ function applyRefusalFallback(outcome, { headless, timing, lane, scope }) {
     `[servedCatalog] primary: served rows unavailable (${describeRefusalReason(outcome.fetchReason)}: ${statusLabel}); using compiled behavior`,
   );
 }
-//@ chunk-c0w5a81j.js:18791-19010 placement
+//@ chunk-df61xvp8.js:18795-19014 placement
 function applyCompiledFallback(offReason, detail, decisionFields, scope, organizationUuid) {
   activateFallbackCatalog(offReason, {
     ...(scope !== undefined && catalogRouteAndCredential(scope)),
@@ -1287,14 +1281,14 @@ function applyCompiledFallback(offReason, detail, decisionFields, scope, organiz
   });
   logForDebugging(`[servedCatalog] primary: served rows unavailable (${detail}); using compiled behavior`);
 }
-//@ chunk-c0w5a81j.js:19010-19034 placement
+//@ chunk-df61xvp8.js:19014-19038 placement
 function emptyServedOverrides(reason) {
   return {};
 }
-//@ chunk-c0w5a81j.js:19034-19053 placement
+//@ chunk-df61xvp8.js:19038-19057 placement
 var PRIMARY_DECISION_BUDGET_MS = 2000;
 var HEADLESS_PRIMARY_DECISION_BUDGET_MS = 1500;
-//@ chunk-c0w5a81j.js:19053-22570 placement
+//@ chunk-df61xvp8.js:19057-22575 placement
 /**
  * 选择主模型目录来源：已发布目录或编译内置行为（非必要流量关闭时跳过）
  */
@@ -1497,7 +1491,7 @@ async function resolvePrimaryCatalog({ headless }) {
       applyPublishedFallback("exception", "exception", buildDecisionFields(headless, fields, false));
   }
 }
-//@ chunk-c0w5a81j.js:22570-22974 placement
+//@ chunk-df61xvp8.js:22575-22979 placement
 /**
  * 启动已发布目录刷新；有重试标记作用域时把标记更新串行化，并提供 countSpentWait 在等待耗尽而获取未完成时记一次超时退避。
  */
@@ -1535,7 +1529,7 @@ function startPublishedRefresh(markerPath, allowNetwork) {
     },
   };
 }
-//@ chunk-c0w5a81j.js:22974-23438 placement
+//@ chunk-df61xvp8.js:22979-23443 placement
 /**
  * 在限定时间内等待刷新结果，返回结果、获取状态（超时记为 timeout）、等待毫秒数与遥测字段。
  */
@@ -1567,7 +1561,7 @@ async function awaitRefreshOutcome(refresh, { waitMs, budgetMs, label }) {
     },
   };
 }
-//@ chunk-c0w5a81j.js:23438-23838 placement
+//@ chunk-df61xvp8.js:23443-23843 placement
 /**
  * 存在托管的模型拒绝规则时，读取（含忽略环境 URL 的）已发布目录缓存文档，供拒绝规则匹配行名使用；失败只记录日志。
  */
@@ -1596,7 +1590,7 @@ async function loadPublishedDenyDocuments() {
     logError(error);
   }
 }
-//@ chunk-c0w5a81j.js:23838-24217 placement
+//@ chunk-df61xvp8.js:23843-24222 placement
 /**
  * 比较目录给出的各族别名与 Default 目标和编译期默认值，返回第一个不一致项（族别名或 Default），全部一致返回 null。
  */
@@ -1630,11 +1624,11 @@ function findSeedMismatch(catalog) {
         compiled: undefined,
       };
 }
-//@ chunk-c0w5a81j.js:24217-24256 placement
+//@ chunk-df61xvp8.js:24222-24261 placement
 function hasBoldMarker(id) {
   return /\[1m\]/i.test(id);
 }
-//@ chunk-c0w5a81j.js:24256-24370 placement
+//@ chunk-df61xvp8.js:24261-24375 placement
 function selectCatalogSource(cached, surface) {
   if (cached !== undefined)
     return {
@@ -1646,7 +1640,7 @@ function selectCatalogSource(cached, surface) {
     kind: "seed",
   };
 }
-//@ chunk-c0w5a81j.js:24370-24712 placement
+//@ chunk-df61xvp8.js:24375-24717 placement
 /**
  * 若服务端托管设置尚未确认，最多等待到截止时间；仍未确认则记录并返回 true（本会话不使用这些设置决定目录）。
  */
@@ -1666,7 +1660,7 @@ async function waitForRemoteSettings(deadline) {
   );
   return true;
 }
-//@ chunk-c0w5a81j.js:24712-24801 placement
+//@ chunk-df61xvp8.js:24717-24806 placement
 function shouldWaitForPublishedCatalog() {
   let publishedCatalogBlock = getPublishedCatalogBlock();
   return (
@@ -1675,7 +1669,7 @@ function shouldWaitForPublishedCatalog() {
       (isUnverifiedFileCatalogSource() || getRemoteManagedSettingsSyncFromCache() === null))
   );
 }
-//@ chunk-c0w5a81j.js:24801-24880 placement
+//@ chunk-df61xvp8.js:24806-24885 placement
 function shouldWaitForRemoteSettings() {
   if (
     !computeRemoteSettingsEligibility() ||
@@ -1685,7 +1679,7 @@ function shouldWaitForRemoteSettings() {
     return false;
   return isManagedCatalogSourceUnverified() || getRemoteManagedSettingsSyncFromCache() === null;
 }
-//@ chunk-c0w5a81j.js:24880-25020 placement
+//@ chunk-df61xvp8.js:24885-25025 placement
 async function waitForLoadStatus(timeoutMs) {
   let unsubscribe = () => {};
   let promise = new Promise((resolve) => {
@@ -1700,7 +1694,7 @@ async function waitForLoadStatus(timeoutMs) {
     unsubscribe();
   }
 }
-//@ chunk-c0w5a81j.js:25020-25120 placement
+//@ chunk-df61xvp8.js:25025-25125 placement
 function buildDecisionFields(headless, extra, settingsUnconfirmed) {
   return {
     auth_kind: fromEnum(catalogCredentialKind()),
@@ -1711,7 +1705,7 @@ function buildDecisionFields(headless, extra, settingsUnconfirmed) {
     }),
   };
 }
-//@ chunk-c0w5a81j.js:25120-25273 placement
+//@ chunk-df61xvp8.js:25125-25278 placement
 function applyPublishedFallback(reason, detail, decisionFields) {
   setServedCatalog(null);
   logFeatureSad("model_catalog_published", reason, decisionFields);
@@ -1719,7 +1713,7 @@ function applyPublishedFallback(reason, detail, decisionFields) {
     `[publishedCatalog] primary: published rows unavailable (${detail}); using compiled behavior`,
   );
 }
-//@ chunk-c0w5a81j.js:25273-25407 placement
+//@ chunk-df61xvp8.js:25278-25412 placement
 /**
  * 确保本会话只做一次模型目录决策，返回该决策的 Promise。
  */
@@ -1729,7 +1723,7 @@ function ensureCatalogDecision({ headless }) {
     providerState.catalogDecision = ensureCatalogLoaded(headless).catch((error) => logError(error));
   return providerState.catalogDecision;
 }
-//@ chunk-c0w5a81j.js:25407-25485 placement
+//@ chunk-df61xvp8.js:25412-25490 placement
 async function ensureCatalogLoaded(headless) {
   await loadCatalogCache({
     headless,
@@ -1739,7 +1733,7 @@ async function ensureCatalogLoaded(headless) {
   });
   await loadPublishedDenyDocuments();
 }
-//@ chunk-3wek6r2k.js:80328-80820 placement
+//@ chunk-hjswk319.js:79727-80219 placement
 async function refreshServedModelCapabilities(storage, credentials) {
   if (!isModelCapabilitiesCacheEnabled()) return;
   if (isEssentialTrafficOnly()) return;
@@ -1772,7 +1766,7 @@ async function refreshServedModelCapabilities(storage, credentials) {
     );
   }
 }
-//@ chunk-3wek6r2k.js:80820-81293 placement
+//@ chunk-hjswk319.js:80219-80692 placement
 function pickerSnapshot() {
   let options = getEnabledModelOptions();
   let pickerIds = dedupeModelIds(userModelIds(options));
@@ -1802,7 +1796,7 @@ function pickerSnapshot() {
     ),
   };
 }
-//@ chunk-3wek6r2k.js:81293-82907 placement
+//@ chunk-hjswk319.js:80692-82303 placement
 /**
  * 对比服务端下发的模型目录与本地编译目录、选择器列表，得出差异。
  */
@@ -1825,8 +1819,8 @@ function compareServedCatalog(catalog, snapshot, provenance) {
   let mapped_2 = servedBaseIds.map(stripModelDateSuffix);
   let compiledSet = new Set(mapped);
   let servedSet = new Set(mapped_2);
-  let addedCount = count(mapped_2, (id) => !compiledSet.has(id));
-  let removedCount = count(mapped, (id) => !servedSet.has(id));
+  let addedCount = countWhere(mapped_2, (id) => !compiledSet.has(id));
+  let removedCount = countWhere(mapped, (id) => !servedSet.has(id));
   let familyDefaults = getFamilyDefaults(catalog);
   let offeredRows = offeredCatalogRows(catalog);
   let modelCatalogStatus = getModelCatalogStatus(catalog, snapshot.mainLoopModel);
@@ -1898,7 +1892,7 @@ function compareServedCatalog(catalog, snapshot, provenance) {
     },
     mainLoopKnowledge: modelCatalogStatus,
     offeredCount: offeredRows.length,
-    mappedCount: count(offeredRows, (row) => getModelCatalogStatus(catalog, row.id).status === "mapped"),
+    mappedCount: countWhere(offeredRows, (row) => getModelCatalogStatus(catalog, row.id).status === "mapped"),
     notOfferedCount: unselectableActiveRows(catalog).length,
     capabilities: compareEffortCapabilities(
       findServedCatalogRow(catalog, snapshot.mainLoopModel),
@@ -1907,7 +1901,7 @@ function compareServedCatalog(catalog, snapshot, provenance) {
     familyDefaultCount: zeroFamilyDefaultCount(catalog),
   };
 }
-//@ chunk-3wek6r2k.js:82907-83152 placement
+//@ chunk-hjswk319.js:82303-82548 placement
 function compareEffortCapabilities(servedCatalogRow, capabilities) {
   let capabilities_2 = servedCatalogRow?.runtime?.capabilities;
   if (capabilities_2 === undefined)
@@ -1916,7 +1910,7 @@ function compareEffortCapabilities(servedCatalogRow, capabilities) {
       servedCount: 0,
     };
   let keys = EFFORT_CAPABILITY_KEYS;
-  let served = uniq(
+  let served = normalizeCaseForComparison_2(
     capabilities_2
       .map((capability) => capability.trim().toLowerCase())
       .filter((capability) => keys.includes(capability)),
@@ -1927,11 +1921,11 @@ function compareEffortCapabilities(servedCatalogRow, capabilities) {
     servedCount: served.length,
   };
 }
-//@ chunk-3wek6r2k.js:83152-83176 placement
+//@ chunk-hjswk319.js:82548-82572 placement
 function zeroFamilyDefaultCount(catalog) {
   return 0;
 }
-//@ chunk-3wek6r2k.js:83176-83279 placement
+//@ chunk-hjswk319.js:82572-82675 placement
 function dedupeModelIds(ids) {
   let seen = new Set();
   let out = [];
@@ -1944,7 +1938,7 @@ function dedupeModelIds(ids) {
   }
   return out;
 }
-//@ chunk-3wek6r2k.js:83279-83384 placement
+//@ chunk-hjswk319.js:82675-82780 placement
 function compareModelIds(oldId, newId) {
   let oldNormalized = normalizeModelId(oldId);
   let newNormalized = newId === undefined ? undefined : normalizeModelId(newId);
@@ -1954,7 +1948,7 @@ function compareModelIds(oldId, newId) {
     new: newNormalized,
   };
 }
-//@ chunk-3wek6r2k.js:83384-83451 placement
+//@ chunk-hjswk319.js:82780-82847 placement
 function diffField(oldValue, newValue) {
   return {
     match: newValue === undefined ? undefined : oldValue === newValue,
@@ -1962,21 +1956,21 @@ function diffField(oldValue, newValue) {
     new: newValue,
   };
 }
-//@ chunk-3wek6r2k.js:83451-83533 placement
+//@ chunk-hjswk319.js:82847-82929 placement
 function userModelIds(options) {
   return options
     .flatMap((option) => (option.value === null ? [] : [option.value]))
     .map((value) => parseUserSpecifiedModel(value));
 }
-//@ chunk-3wek6r2k.js:83533-83603 placement
+//@ chunk-hjswk319.js:82929-82999 placement
 function sameOrder(a, b) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
-//@ chunk-3wek6r2k.js:83603-83653 placement
+//@ chunk-hjswk319.js:82999-83049 placement
 function stripModelDateSuffix(id) {
   return normalizeModelId(id).replace(/-\d{8}$/, "");
 }
-//@ chunk-3wek6r2k.js:83653-83857 placement
+//@ chunk-hjswk319.js:83049-83253 placement
 function startServedCatalog({ allowNetwork }) {
   if (servedCatalogMode() === "off") {
     logForDebugging(`[servedCatalog] off (${servedModelCatalogEligibility() ?? "flag"})`);
@@ -1987,7 +1981,7 @@ function startServedCatalog({ allowNetwork }) {
   providerState.servedCatalogShadowStarted = true;
   loadServedCatalog(allowNetwork).catch((error) => logError(error));
 }
-//@ chunk-3wek6r2k.js:83857-84544 placement
+//@ chunk-hjswk319.js:83253-83941 placement
 async function loadServedCatalog(allowNetwork) {
   let scope = catalogScope();
   let surface = catalogSurface();
@@ -2033,7 +2027,7 @@ async function loadServedCatalog(allowNetwork) {
     }),
   );
 }
-//@ chunk-3wek6r2k.js:84544-84940 placement
+//@ chunk-hjswk319.js:83941-84337 placement
 function reconcileServedModels(comparison, isHidden) {
   let catalog = activeServedCatalog();
   if (comparison === null || catalog === null) return;
@@ -2049,7 +2043,7 @@ function reconcileServedModels(comparison, isHidden) {
       : `[servedCatalog] primary: served list replaces the compiled picker; compiled rows not served (dropped): ${mapped.join(", ")}`,
   );
 }
-//@ chunk-3wek6r2k.js:84940-85053 placement
+//@ chunk-hjswk319.js:84337-84450 placement
 var DEFAULT_MODEL_SOURCES = [
   "global_default",
   "org_configuration",
@@ -2057,7 +2051,7 @@ var DEFAULT_MODEL_SOURCES = [
   "user_setting",
   "most_capable_fallback",
 ];
-//@ chunk-3wek6r2k.js:85053-85202 placement
+//@ chunk-hjswk319.js:84450-84599 placement
 function collectHiddenModelIds({ catalog, prior, sessionMaskedIds }) {
   let catalog_2 = prior?.catalog ?? null;
   return new Set([
@@ -2066,17 +2060,17 @@ function collectHiddenModelIds({ catalog, prior, sessionMaskedIds }) {
     ...sessionMaskedIds,
   ]);
 }
-//@ chunk-3wek6r2k.js:85202-85273 placement
+//@ chunk-hjswk319.js:84599-84670 placement
 function hiddenIdsForOutcome(ctx) {
   return hiddenIdPredicate([ctx.catalog, ctx.prior?.catalog ?? null], () => collectHiddenModelIds(ctx));
 }
-//@ chunk-3wek6r2k.js:85273-85365 placement
+//@ chunk-hjswk319.js:84670-84762 placement
 function hiddenIdPredicate(catalogs, collectIds) {
   if (catalogs.some((catalog) => catalog !== null && hasDroppedUnidentifiedRows(catalog))) return () => true;
   let hidden = collectIds();
   return (id) => isHiddenOrMasked(id, hidden);
 }
-//@ chunk-3wek6r2k.js:85365-86303 placement
+//@ chunk-hjswk319.js:84762-85700 placement
 function logServedCatalogOutcome({
   outcome,
   catalog,
@@ -2121,7 +2115,7 @@ function logServedCatalogOutcome({
     ...catalogTelemetryFields(comparison, isHidden),
   };
 }
-//@ chunk-3wek6r2k.js:86303-88115 placement
+//@ chunk-hjswk319.js:85700-87512 placement
 function catalogTelemetryFields(comparison, isHidden) {
   if (comparison === null) return {};
   let mainLoopKnowledge = comparison.mainLoopKnowledge;
@@ -2179,26 +2173,26 @@ function catalogTelemetryFields(comparison, isHidden) {
     }),
   };
 }
-//@ chunk-3wek6r2k.js:88115-88125 placement
+//@ chunk-hjswk319.js:87512-87522 placement
 var MAX_TELEMETRY_MODEL_IDS = 50;
-//@ chunk-3wek6r2k.js:88125-88186 placement
+//@ chunk-hjswk319.js:87522-87583 placement
 function telemetryModelLabel(model, isHidden) {
   return isHidden(model)
     ? lit(CONFIDENTIAL_MODEL_ID)
     : (telemetrySafeModelName(model) ?? lit("nonconforming"));
 }
-//@ chunk-3wek6r2k.js:88186-88240 placement
+//@ chunk-hjswk319.js:87583-87637 placement
 function telemetryModelList(old, isHidden) {
   return telemetrySafeModelList(
     old.map((id) => (isHidden(id) ? CONFIDENTIAL_MODEL_ID : id)),
     MAX_TELEMETRY_MODEL_IDS,
   );
 }
-//@ chunk-3wek6r2k.js:88240-88282 placement
+//@ chunk-hjswk319.js:87637-87679 placement
 function isHiddenOrMasked(id, masked) {
   return containsMaskedId(id, masked) || !maskModelIdCached(id);
 }
-//@ chunk-3wek6r2k.js:88282-88406 placement
+//@ chunk-hjswk319.js:87679-87803 placement
 function diffFields(field, diff, isHidden) {
   if (diff.match !== false) return {};
   return {
@@ -2206,7 +2200,7 @@ function diffFields(field, diff, isHidden) {
     [`${field}_new`]: diff.new === undefined ? undefined : telemetryModelLabel(diff.new, isHidden),
   };
 }
-//@ chunk-3wek6r2k.js:88406-88494 placement
+//@ chunk-hjswk319.js:87803-87891 placement
 function diffTelemetryFields(field, diff) {
   if (diff.match !== false) return {};
   return {
@@ -2214,13 +2208,13 @@ function diffTelemetryFields(field, diff) {
     [`${field}_new`]: diff.new,
   };
 }
-//@ chunk-3wek6r2k.js:88494-88589 placement
+//@ chunk-hjswk319.js:87891-87986 placement
 function effortTelemetryLabel(value) {
   if (isEffortLevel(value)) return fromEnum(value);
   let numeric = Number(value);
   return Number.isFinite(numeric) ? fromNumber(numeric) : lit("other");
 }
-//@ chunk-3wek6r2k.js:88589-88776 placement
+//@ chunk-hjswk319.js:87986-88173 placement
 function startServedCatalogShadow({ allowNetwork }) {
   if (!isPublishedCatalogBlocked()) return;
   let providerState = getProviderState();
@@ -2232,11 +2226,11 @@ function startServedCatalogShadow({ allowNetwork }) {
   providerState.servedCatalogShadowStarted = true;
   applyServedCatalog(allowNetwork).catch((error) => logError(error));
 }
-//@ chunk-3wek6r2k.js:88776-88815 placement
+//@ chunk-hjswk319.js:88173-88212 placement
 function shouldFetchServedCatalog() {
   return !getIsNonInteractiveSession() || (isPlainNonInteractive() && isPublishedCatalogUsable());
 }
-//@ chunk-3wek6r2k.js:88815-89087 placement
+//@ chunk-hjswk319.js:88212-88484 placement
 async function fetchServedCatalog(allowNetwork) {
   let plainNonInteractive = isPlainNonInteractive();
   let usePublished =
@@ -2258,7 +2252,7 @@ async function fetchServedCatalog(allowNetwork) {
   if (cachePath !== null && shouldFetch) await settlePublishedRefresh(cachePath, outcome);
   return outcome;
 }
-//@ chunk-3wek6r2k.js:89087-89725 placement
+//@ chunk-hjswk319.js:88484-89123 placement
 async function applyServedCatalog(allowNetwork) {
   let servedCatalog = await fetchServedCatalog(allowNetwork);
   if (servedCatalog.fetchStatus === "off") return;
@@ -2296,7 +2290,7 @@ async function applyServedCatalog(allowNetwork) {
     `[publishedCatalog] shadow compare logged (fetch=${servedCatalog.fetchStatus}, rows=${state === null ? 0 : catalogModels(state).length}, source=${servedCatalogSource() ?? "compiled"})`,
   );
 }
-//@ chunk-3wek6r2k.js:89725-90632 placement
+//@ chunk-hjswk319.js:89123-90031 placement
 function servedCatalogDiagnostics({
   outcome,
   catalog,
@@ -2345,12 +2339,7 @@ function servedCatalogDiagnostics({
   };
 }
 export {
-  refreshServedModelCapabilities,
-  startServedCatalog,
-  startServedCatalogShadow,
-  shouldFetchServedCatalog,
   ensureCatalogDecision,
-  catalogTelemetryFields,
   fetchModelSelector,
   DEFAULT_OUTPUT_TOKENS,
   classifyRefusal,
@@ -2359,5 +2348,10 @@ export {
   parseCatalogResolution,
   formatResolutionSuffix,
   responseData,
+  refreshServedModelCapabilities,
+  startServedCatalog,
+  startServedCatalogShadow,
+  shouldFetchServedCatalog,
+  catalogTelemetryFields,
   noopServedCatalogHook,
 };

@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/aws-sigv4.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (16)
+ * pieces: chunk-qg41pqt6.js (16)
  * attribution: esm-fingerprint 14, esm-layout 2
  */
 import { createHmac, createHash } from "crypto";
 
-//@ chunk-fq0cr76a.js:666915-666991 esm-fingerprint
+//@ chunk-qg41pqt6.js:667437-667513 esm-fingerprint
 var SIGV4_ALGORITHM = "AWS4-HMAC-SHA256";
 var SIGV4A_ALGORITHM = "AWS4-ECDSA-P256-SHA256";
 var UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
-//@ chunk-fq0cr76a.js:666991-667591 esm-fingerprint
+//@ chunk-qg41pqt6.js:667513-668113 esm-fingerprint
 function detectSigv4(headers, requestTarget) {
   let auth = singleHeader(headers.authorization);
   if (auth !== undefined && auth.startsWith(SIGV4A_ALGORITHM)) {
@@ -46,11 +46,11 @@ function detectSigv4(headers, requestTarget) {
       }
     : null;
 }
-//@ chunk-fq0cr76a.js:667591-667651 esm-fingerprint
+//@ chunk-qg41pqt6.js:668113-668173 esm-fingerprint
 function credentialAccessKeyId(auth) {
   return /Credential=([^/,\s]+)\//.exec(auth)?.[1];
 }
-//@ chunk-fq0cr76a.js:667651-668078 esm-fingerprint
+//@ chunk-qg41pqt6.js:668173-668600 esm-fingerprint
 function parseSigv4Authorization(auth) {
   if (!auth.startsWith(SIGV4_ALGORITHM)) return null;
   let cred = /Credential=([^,\s]+)/.exec(auth)?.[1];
@@ -70,11 +70,11 @@ function parseSigv4Authorization(auth) {
     signature,
   };
 }
-//@ chunk-fq0cr76a.js:668078-668194 esm-fingerprint
+//@ chunk-qg41pqt6.js:668600-668716 esm-fingerprint
 function uriEncode(s) {
   return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
-//@ chunk-fq0cr76a.js:668194-668450 esm-fingerprint
+//@ chunk-qg41pqt6.js:668716-668972 esm-fingerprint
 function canonicalUri(rawPath, service) {
   if (rawPath === "") return "/";
   if (service === "s3") return rawPath;
@@ -88,7 +88,7 @@ function canonicalUri(rawPath, service) {
   let normalized = `/${segments.join("/")}${trailing}`;
   return uriEncode(normalized).replace(/%2F/gi, "/");
 }
-//@ chunk-fq0cr76a.js:668450-668735 esm-fingerprint
+//@ chunk-qg41pqt6.js:668972-669257 esm-fingerprint
 function canonicalQueryString(rawQuery) {
   if (rawQuery === "") return "";
   let pairs = [];
@@ -102,7 +102,7 @@ function canonicalQueryString(rawQuery) {
   pairs.sort(([ak, av], [bk, bv]) => (ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0));
   return pairs.map(([k, v]) => `${k}=${v}`).join("&");
 }
-//@ chunk-fq0cr76a.js:668735-668799 esm-layout
+//@ chunk-qg41pqt6.js:669257-669321 esm-layout
 function safeDecode(s) {
   try {
     return decodeURIComponent(s);
@@ -110,11 +110,11 @@ function safeDecode(s) {
     return s;
   }
 }
-//@ chunk-fq0cr76a.js:668799-668853 esm-fingerprint
+//@ chunk-qg41pqt6.js:669321-669375 esm-fingerprint
 function trimall(value) {
   return value.trim().replace(/[ \t]+/g, " ");
 }
-//@ chunk-fq0cr76a.js:668853-669380 esm-fingerprint
+//@ chunk-qg41pqt6.js:669375-669902 esm-fingerprint
 function buildCanonicalRequest(input) {
   let q = input.requestTarget.indexOf("?");
   let rawPath = q === -1 ? input.requestTarget : input.requestTarget.slice(0, q);
@@ -140,7 +140,7 @@ function buildCanonicalRequest(input) {
   ].join(`
 `);
 }
-//@ chunk-fq0cr76a.js:669380-669478 esm-fingerprint
+//@ chunk-qg41pqt6.js:669902-670000 esm-fingerprint
 function buildStringToSign(canonicalRequest, amzDate, scope) {
   return [
     SIGV4_ALGORITHM,
@@ -150,14 +150,14 @@ function buildStringToSign(canonicalRequest, amzDate, scope) {
   ].join(`
 `);
 }
-//@ chunk-fq0cr76a.js:669478-669586 esm-fingerprint
+//@ chunk-qg41pqt6.js:670000-670108 esm-fingerprint
 function deriveSigningKey(secretAccessKey, scope) {
   let kDate = hmac(`AWS4${secretAccessKey}`, scope.date);
   let kRegion = hmac(kDate, scope.region);
   let kService = hmac(kRegion, scope.service);
   return hmac(kService, "aws4_request");
 }
-//@ chunk-fq0cr76a.js:669586-669996 esm-fingerprint
+//@ chunk-qg41pqt6.js:670108-670518 esm-fingerprint
 function signSigv4(input) {
   let canonicalRequest = buildCanonicalRequest(input);
   let stringToSign = buildStringToSign(canonicalRequest, input.amzDate, input.scope);
@@ -173,15 +173,15 @@ function signSigv4(input) {
     stringToSign,
   };
 }
-//@ chunk-fq0cr76a.js:669996-670055 esm-fingerprint
+//@ chunk-qg41pqt6.js:670518-670577 esm-fingerprint
 function sha256Hex(data) {
   return createHash("sha256").update(data).digest("hex");
 }
-//@ chunk-fq0cr76a.js:670055-670120 esm-fingerprint
+//@ chunk-qg41pqt6.js:670577-670642 esm-fingerprint
 function hmac(key, data) {
   return createHmac("sha256", key).update(data, "utf8").digest();
 }
-//@ chunk-fq0cr76a.js:670120-670166 esm-layout
+//@ chunk-qg41pqt6.js:670642-670688 esm-layout
 function singleHeader(v) {
   return Array.isArray(v) ? v[0] : v;
 }

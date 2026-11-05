@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管池
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mdk550gj.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yhb9bbxj.js (1)
  * attribution: placement 1
  */
 import { fetchEnvironments } from "./environments.js";
@@ -18,7 +18,7 @@ import {
   findFirst,
 } from "./environmentSelection.js";
 
-//@ chunk-mdk550gj.js:281-1059 placement
+//@ chunk-yhb9bbxj.js:279-1055 placement
 /**
  * 并行拉取云环境列表与自托管池，合并结果并校验当前选中的池是否仍存在、是否忽略了不可信池。
  */

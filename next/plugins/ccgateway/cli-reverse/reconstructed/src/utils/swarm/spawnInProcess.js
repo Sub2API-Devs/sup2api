@@ -3,10 +3,10 @@
  *
  * 进程内派生队友（in-process teammate）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/spawnInProcess.ts
- * pieces: chunk-5t8enyd9.js (4), chunk-v5mxhgy9.js (1)
- * attribution: placement 2, layout 1, facade-exports 1, fingerprint 1
+ * pieces: chunk-94s4dsgm.js (1), chunk-pgmbxgj8.js (4)
+ * attribution: fingerprint 1, placement 3, facade-exports 1
  */
 import { withTimeout } from "../sleep.js";
 import { TEAMMATE_TEARDOWN_TIMEOUT_MS } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
@@ -31,13 +31,13 @@ import { createAbortController } from "../abortController.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { createTeammateContext } from "../teammateContext.js";
 import { isTaskToolsEnabled } from "../tasks.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
 import { getToolPermissionContext } from "../permissions/toolPermissionContext.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 
-//@ chunk-v5mxhgy9.js:721-2171 fingerprint (2.1.88 match: killInProcessTeammate, 0.504)
+//@ chunk-94s4dsgm.js:721-2171 fingerprint (2.1.88 match: killInProcessTeammate, 0.481)
 /**
  * 终止同进程 teammate：标 killed 并中止、触发 onIdle 回调；带超时等 pane 拆除；从 teamContext 与团队文件移除成员；发 stopped 通知。返回 {killed, memberRemoval, osTeardown}。
  */
@@ -141,18 +141,7 @@ function killInProcessTeammate(taskId, taskRegistry, setAppState, storage) {
     osTeardown,
   };
 }
-//@ chunk-5t8enyd9.js:746-755 placement
-var MAX_DESCRIPTION_CHARS = 50;
-//@ chunk-5t8enyd9.js:755-833 placement
-/**
- * 把提示文本脱敏截断成队友描述（超出补省略号）。
- */
-function clipPromptDescription(prompt) {
-  let redacted = redactAndTruncate(prompt, MAX_DESCRIPTION_CHARS);
-  let clipped = truncateToLength(redacted, MAX_DESCRIPTION_CHARS);
-  return clipped.length < redacted.length ? `${clipped}...` : clipped;
-}
-//@ chunk-5t8enyd9.js:833-921 layout
+//@ chunk-pgmbxgj8.js:1559-1647 placement
 /**
  * teammate 的初始权限模式：要求计划模式时为 plan；父为 plan/dontAsk 时降为 default；否则继承。
  */
@@ -161,7 +150,18 @@ function getTeammatePermissionMode(parentMode, planModeRequired) {
   if (parentMode === "plan" || parentMode === "dontAsk") return "default";
   return parentMode;
 }
-//@ chunk-5t8enyd9.js:921-2645 facade-exports (2.1.88 match: spawnInProcessTeammate, 0.658)
+//@ chunk-pgmbxgj8.js:4908-4917 placement
+var MAX_DESCRIPTION_CHARS = 50;
+//@ chunk-pgmbxgj8.js:4917-4994 placement
+/**
+ * 把提示文本脱敏截断成队友描述（超出补省略号）。
+ */
+function clipPromptDescription(prompt) {
+  let redacted = redactAndTruncate(prompt, MAX_DESCRIPTION_CHARS);
+  let clipped = truncateToLength(redacted, MAX_DESCRIPTION_CHARS);
+  return clipped.length < redacted.length ? `${clipped}...` : clipped;
+}
+//@ chunk-pgmbxgj8.js:4994-6718 facade-exports (2.1.88 match: spawnInProcessTeammate, 0.648)
 /**
  * 派生同进程 teammate：生成 agentId（name@team）与 t 前缀任务 ID，建 teammate 上下文与 in_process_teammate 任务，在 agentNameRegistry 注册名字（被活着的代理占用时另分配名字）。返回 {ok, agentId, taskId, abortController, teammateContext}。
  */
@@ -193,7 +193,7 @@ async function spawnInProcessTeammate(config, context) {
       parentSessionId,
       hasTaskListTools:
         isTaskToolsEnabled() &&
-        context.rootToolSurface.tools.some((tool) => toolMatchesName(tool, TASK_UPDATE_TOOL_NAME)),
+        context.rootToolSurface.tools.some((tool) => matchesToolName(tool, TASK_UPDATE_TOOL_NAME)),
       abortController,
     });
     if (isPerfettoRecording()) registerPerfettoAgent(agentId, name, parentSessionId);
@@ -260,4 +260,4 @@ async function spawnInProcessTeammate(config, context) {
     };
   }
 }
-export { killInProcessTeammate, clipPromptDescription, spawnInProcessTeammate };
+export { killInProcessTeammate, getTeammatePermissionMode, clipPromptDescription, spawnInProcessTeammate };

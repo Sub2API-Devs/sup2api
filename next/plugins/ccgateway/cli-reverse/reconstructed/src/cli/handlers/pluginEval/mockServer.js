@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增（门面模块 runEvalMockServer）。插件评测时的 mock 模型/工具服务器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vzw8h259.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3nd3dera.js (14)
  * attribution: placement 14
  */
 import { createHash } from "crypto";
@@ -32,7 +32,7 @@ import { getPlatform } from "../../../utils/platform.js";
 import { isENOENT, getErrnoCode, errorMessage } from "../../../utils/errors.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
-//@ chunk-vzw8h259.js:10847-11407 placement
+//@ chunk-3nd3dera.js:10879-11439 placement
 async function runEvalMockServer(path, expectedHash) {
   if (!path) throw Error("missing spec path");
   let mockSpecFile = await readMockSpecFile(path);
@@ -59,7 +59,7 @@ async function runEvalMockServer(path, expectedHash) {
   process.stdin.on("end", () => void server.close());
   process.stdin.on("error", () => void server.close());
 }
-//@ chunk-vzw8h259.js:11407-12648 placement
+//@ chunk-3nd3dera.js:11439-12681 placement
 function respondToMockCall(mockSpec) {
   let sequence = 0;
   let abortController = new AbortController();
@@ -158,7 +158,7 @@ function respondToMockCall(mockSpec) {
   }
   return server;
 }
-//@ chunk-vzw8h259.js:12648-13183 placement
+//@ chunk-3nd3dera.js:12681-13216 placement
 /**
  * 回应一次 mock 工具调用：先按 expect 检查输入；agent 型交给宿主代理；fixed 型把输入代入固定正文，按 isError 返回 ok 或 tool_error。
  */
@@ -202,7 +202,7 @@ async function answerMockResponder(responder, input, relay, toolName = "") {
     }
   }
 }
-//@ chunk-vzw8h259.js:13183-13638 placement
+//@ chunk-3nd3dera.js:13216-13671 placement
 async function readFixture(fixturePath) {
   try {
     await checkRepoAuthoredPath(path.dirname(fixturePath), path.basename(fixturePath), "mock fixture");
@@ -232,21 +232,21 @@ async function readFixture(fixturePath) {
     };
   }
 }
-//@ chunk-vzw8h259.js:13638-13660 placement
+//@ chunk-3nd3dera.js:13671-13693 placement
 var MAX_AGENT_INPUT_SUBSTITUTION_CHARS = 16384;
 var MAX_AGENT_INPUT_CHARS = 16384;
-//@ chunk-vzw8h259.js:13660-13724 placement (2.1.88 match: extractToolInputForTelemetry, 1)
+//@ chunk-3nd3dera.js:13693-13756 placement (2.1.88 match: extractToolInputForTelemetry, 1)
 function extractToolInputForTelemetry(input) {
   return input.length > MAX_AGENT_INPUT_CHARS
     ? `${truncateToLength(input, MAX_AGENT_INPUT_CHARS)}\u2026[truncated]`
     : input;
 }
-//@ chunk-vzw8h259.js:13724-13779 placement
+//@ chunk-3nd3dera.js:13756-13811 placement
 function stringifyForTelemetry(input) {
   let json = jsonStringify(input) ?? "";
   return json.length > MAX_AGENT_INPUT_CHARS ? extractToolInputForTelemetry(json) : input;
 }
-//@ chunk-vzw8h259.js:13779-14105 placement
+//@ chunk-3nd3dera.js:13811-14137 placement
 /**
  * 以追加方式打开文件（非 Windows 带 O_NONBLOCK）写入一行；目标不是普通文件或写入失败返回 false。
  */
@@ -279,7 +279,7 @@ async function appendLineToFile(path, line) {
     return false;
   }
 }
-//@ chunk-vzw8h259.js:14105-14268 placement
+//@ chunk-3nd3dera.js:14137-14300 placement
 async function readExactly(handle, size) {
   let buffer = Buffer.alloc(size);
   let filled = 0;
@@ -294,22 +294,22 @@ async function readExactly(handle, size) {
   }
   return buffer.subarray(0, filled);
 }
-//@ chunk-vzw8h259.js:14268-14340 placement
+//@ chunk-3nd3dera.js:14300-14372 placement
 function unforgeable(text) {
   return UNFORGEABLE_LINE_PATTERN.test(text.trimStart()) ? `${UNFORGEABLE_PREFIX}${text.trimStart()}` : text;
 }
-//@ chunk-vzw8h259.js:14340-14468 placement
+//@ chunk-3nd3dera.js:14372-14500 placement
 var UNFORGEABLE_PREFIX = "| ";
 var UNFORGEABLE_LINE_PATTERN = new RegExp(
   `^(?:${EVAL_ABORTED_BY_MOCK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|MCP server "|MCP error -32000: Connection closed)`,
 );
-//@ chunk-vzw8h259.js:14468-14508 placement
+//@ chunk-3nd3dera.js:14500-14540 placement
 function parseMockSpec(mockSpecFile) {
   return MOCK_SPEC_SCHEMA().parse(jsonParse(mockSpecFile));
 }
-//@ chunk-vzw8h259.js:14508-14523 placement
+//@ chunk-3nd3dera.js:14540-14555 placement
 var MAX_FIXTURE_FILE_BYTES = 4194304;
-//@ chunk-vzw8h259.js:14523-14943 placement
+//@ chunk-3nd3dera.js:14555-14975 placement
 /**
  * 读取 mock 规格文件：先确认路径在仓库内且由仓库作者提供，必须是普通文件且不超过大小上限。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论读取同意的目标与摘要
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-grzs9chm.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s4zszvmd.js (11)
  * attribution: placement 11
  */
 import { stripControlChars } from "./commentMentions.js";
@@ -21,7 +21,7 @@ import {
   SCHEME_SEPARATOR_RE,
   DEFANGED_SCHEME_SEPARATOR,
 } from "../../../tools/ArtifactTool/artifactUrls.js";
-import { extractPageText } from "../audience.js";
+import { scrubThirdPartyText } from "../audience.js";
 import { truncateCodePoints } from "../../../utils/stringUtils.js";
 import { isOwnPrincipal, ownPrincipalTokens } from "./commentAuthorship.js";
 import { getCommentAuthorKind } from "./commentState.js";
@@ -34,7 +34,7 @@ import { getGatewayAccountInfoAsync } from "../../../utils/gatewayCredential.js"
 import { logFeatureSad } from "../../analytics/featureTelemetry.js";
 import { isAbortError } from "../../../utils/errors.js";
 
-//@ chunk-grzs9chm.js:634-686 placement
+//@ chunk-s4zszvmd.js:634-686 placement
 /**
  * 评论目标的键与文本截断上限（目标 120 字符、正文 4000、@提及 32）。
  */
@@ -42,11 +42,11 @@ var COMMENT_TARGET_KEY = "__artifactCommentTarget";
 var COMMENT_TARGET_MAX_CHARS = 120;
 var COMMENT_TEXT_MAX_CHARS = 4000;
 var MENTION_MAX_CHARS = 32;
-//@ chunk-grzs9chm.js:686-720 placement
+//@ chunk-s4zszvmd.js:686-720 placement
 function _(slug, slugArg) {
   return `${slug}/${slugArg}`;
 }
-//@ chunk-grzs9chm.js:720-866 placement
+//@ chunk-s4zszvmd.js:720-866 placement
 function flattenCommentText(text) {
   return stripControlChars(text)
     .replace(/[\n\t]/g, " ")
@@ -57,12 +57,14 @@ function flattenCommentText(text) {
     .replace(SINGLE_QUOTE_RUNS, "'")
     .trim();
 }
-//@ chunk-grzs9chm.js:866-950 placement
+//@ chunk-s4zszvmd.js:866-950 placement
 function truncateCommentText(text, limit) {
   let flat = flattenCommentText(text);
-  return Array.from(flat).length > limit ? `${extractPageText(truncateCodePoints(flat, limit))}\u2026` : flat;
+  return Array.from(flat).length > limit
+    ? `${scrubThirdPartyText(truncateCodePoints(flat, limit))}\u2026`
+    : flat;
 }
-//@ chunk-grzs9chm.js:950-1524 placement
+//@ chunk-s4zszvmd.js:950-1524 placement
 function openingCommentExcerpt(threads, threadList, threadId) {
   let found = threads.find((thread) => thread.id === threadList);
   let comment = found?.comments[0];
@@ -110,7 +112,7 @@ function openingCommentExcerpt(threads, threadList, threadId) {
       }),
   };
 }
-//@ chunk-grzs9chm.js:1524-1637 placement
+//@ chunk-s4zszvmd.js:1524-1637 placement
 function canAskCommentConsent(options) {
   let toolPermissionContext = getToolPermissionContext(options);
   return (
@@ -119,7 +121,7 @@ function canAskCommentConsent(options) {
     toolPermissionContext.shouldAvoidPermissionPrompts !== true
   );
 }
-//@ chunk-grzs9chm.js:1637-2550 placement
+//@ chunk-s4zszvmd.js:1637-2550 placement
 /**
  * 读取 artifact 评论线程开头评论，用于构造"Claude 想读取此评论线程"的同意提示。
  */
@@ -175,7 +177,7 @@ async function readCommentConsentTarget(target, threadId, account) {
     cleanup();
   }
 }
-//@ chunk-grzs9chm.js:2550-2709 placement
+//@ chunk-s4zszvmd.js:2550-2709 placement
 function describeRolePossessive(access) {
   switch (access) {
     case "owner":
@@ -188,7 +190,7 @@ function describeRolePossessive(access) {
       return "a viewer's";
   }
 }
-//@ chunk-grzs9chm.js:2709-2959 placement
+//@ chunk-s4zszvmd.js:2709-2959 placement
 function describeCommentForConsent({ display, access }) {
   switch (display.by) {
     case "user":
@@ -201,7 +203,7 @@ function describeCommentForConsent({ display, access }) {
       return `the comment "${display.excerpt}"`;
   }
 }
-//@ chunk-grzs9chm.js:2959-3175 placement
+//@ chunk-s4zszvmd.js:2959-3175 placement
 function describeThreadForConsent({ display, access }) {
   switch (display.by) {
     case "user":
@@ -214,7 +216,7 @@ function describeThreadForConsent({ display, access }) {
       return "a comment thread";
   }
 }
-//@ chunk-grzs9chm.js:3175-3282 placement
+//@ chunk-s4zszvmd.js:3175-3282 placement
 function withCommentTarget(input, target) {
   if (target === undefined && !(COMMENT_TARGET_KEY in input)) return;
   let { [COMMENT_TARGET_KEY]: targetKey, ...rest } = input;
@@ -226,11 +228,11 @@ function withCommentTarget(input, target) {
       };
 }
 export {
+  COMMENT_TARGET_KEY,
+  flattenCommentText,
   canAskCommentConsent,
   readCommentConsentTarget,
   describeCommentForConsent,
-  flattenCommentText,
   withCommentTarget,
   describeThreadForConsent,
-  COMMENT_TARGET_KEY,
 };

@@ -3,9 +3,9 @@
  *
  * 切换到 stable 更新通道可能降级时的确认对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ChannelDowngradeDialog.tsx
- * pieces: chunk-9h8dr0qb.js (3)
+ * pieces: chunk-j6tt9nsa.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
@@ -19,11 +19,11 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-9h8dr0qb.js:6534-6538 placement
+//@ chunk-j6tt9nsa.js:6529-6533 placement
 init_react_production();
-//@ chunk-9h8dr0qb.js:6538-6542 placement
+//@ chunk-j6tt9nsa.js:6533-6537 placement
 init_react_production();
-//@ chunk-9h8dr0qb.js:6542-7565 fingerprint (2.1.88 match: ChannelDowngradeDialog, 0.849)
+//@ chunk-j6tt9nsa.js:6537-7560 fingerprint (2.1.88 match: ChannelDowngradeDialog, 0.849)
 function ChannelDowngradeDialog(props) {
   let $ = useMemoCache(17);
   let { currentVersion, onChoice } = props;

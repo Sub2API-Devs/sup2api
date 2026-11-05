@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：batch_tools 批量工具调用的拆分与结果重组
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a76knw89.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-03tec5k5.js (2), chunk-xh983qqr.js (12)
  * attribution: placement 14
  */
 import { findToolByName } from "../../Tool.js";
@@ -21,7 +21,7 @@ import {
   SUFFIX_NUMBER_RE,
 } from "../api/toolDefinitionShape.js";
 import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { languageErrorNameOf } from "../../utils/errors.js";
@@ -29,7 +29,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a76knw89.js:11390-12492 placement
+//@ chunk-xh983qqr.js:1439-2538 placement
 /**
  * 把一次 batch_tools 调用拆成多个 tool_use（解析失败时记录）。
  */
@@ -75,7 +75,9 @@ function expandBatchToolsCall(block, tools, normalizeEntry) {
         } catch (error) {
           if (error instanceof Error && error.name === "ZodError") {
             let issueCodes =
-              error instanceof ZodError ? uniq(error.issues.map((issue) => issue.code)).join(",") : "unknown";
+              error instanceof ZodError
+                ? normalizeCaseForComparison_2(error.issues.map((issue) => issue.code)).join(",")
+                : "unknown";
             logForDebugging(
               `Normalizing a batch entry's input for tool=${toolCategoryForTelemetry(v1Tool)} was rejected: issues ${issueCodes}; the error text (${error.message.length} characters) is not logged`,
               {
@@ -107,7 +109,7 @@ function expandBatchToolsCall(block, tools, normalizeEntry) {
     };
   }
 }
-//@ chunk-a76knw89.js:12492-12640 placement
+//@ chunk-xh983qqr.js:2538-2686 placement
 /**
  * 有多入口别名工具时，从工具列表中去掉其底层 v1 工具。
  */
@@ -121,7 +123,7 @@ function hideAliasedV1Tools(tools) {
   if (hiddenNames === undefined) return tools;
   return tools.filter((tool) => !hiddenNames.has(tool.name));
 }
-//@ chunk-a76knw89.js:12640-12976 placement
+//@ chunk-xh983qqr.js:2686-3021 placement
 function isBatchToolsUse(content, tools, normalizeEntry) {
   let expanded;
   let batchToolUses = [];
@@ -154,7 +156,7 @@ function isBatchToolsUse(content, tools, normalizeEntry) {
     batchToolUses,
   };
 }
-//@ chunk-a76knw89.js:12976-13680 placement
+//@ chunk-xh983qqr.js:3021-3724 placement
 /**
  * 把拆开调用的结果按原 batch 重新组合成一个 tool_result。
  */
@@ -211,15 +213,15 @@ function reassembleBatchResults(content, batchToolUses, tools) {
   }
   return output;
 }
-//@ chunk-a76knw89.js:13680-14996 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
+//@ chunk-xh983qqr.js:3724-5038 placement
+function reassembleBatchToolResults(messages, tools) {
   let sawBatch = false;
   for (let message of messages) {
     if (message.type === "assistant") {
       for (let block of message.message.content)
         if (block.type === "tool_use") {
-          let toolByName = findToolByName(sinceUuid, block.name);
-          if (toolByName !== undefined && isMultiEntryAliasTool(toolByName)) sawBatch = true;
+          let tool = findToolByName(tools, block.name);
+          if (tool !== undefined && isMultiEntryAliasTool(tool)) sawBatch = true;
         }
     }
     if (message.type === "user" && !sawBatch) {
@@ -256,11 +258,11 @@ function countToolCallsSince(messages, sinceUuid) {
   }
   if (resultsById.size === 0) return messages;
   let emitted = new Set();
-  return messages.flatMap((block) => {
-    if (block.type !== "user" || !Array.isArray(block.message.content)) return [block];
+  return messages.flatMap((message) => {
+    if (message.type !== "user" || !Array.isArray(message.message.content)) return [message];
     let didReassemble = false;
     let blocks = [];
-    for (let resultBlock of block.message.content) {
+    for (let resultBlock of message.message.content) {
       if (resultBlock.type !== "tool_result") {
         blocks.push(resultBlock);
         continue;
@@ -275,8 +277,8 @@ function countToolCallsSince(messages, sinceUuid) {
       if (emitted.has(baseToolUseId)) continue;
       emitted.add(baseToolUseId);
       let toolUse = toolUseById.get(baseToolUseId);
-      let toolByName = findToolByName(sinceUuid, toolUse.name);
-      let aliasTool = toolByName !== undefined && isMultiEntryAliasTool(toolByName) ? toolByName : undefined;
+      let tool = findToolByName(tools, toolUse.name);
+      let aliasTool = tool !== undefined && isMultiEntryAliasTool(tool) ? tool : undefined;
       blocks.push(
         formatBatchResultEntries(
           aliasTool,
@@ -285,20 +287,20 @@ function countToolCallsSince(messages, sinceUuid) {
         ),
       );
     }
-    if (!didReassemble) return [block];
+    if (!didReassemble) return [message];
     if (blocks.length === 0) return [];
     return [
       {
-        ...block,
+        ...message,
         message: {
-          ...block.message,
+          ...message.message,
           content: blocks,
         },
       },
     ];
   });
 }
-//@ chunk-a76knw89.js:14996-15391 placement
+//@ chunk-xh983qqr.js:5038-5430 placement
 function NO_RESULT_TEXT(aliasTool, input, baseId, results) {
   let entries;
   if (aliasTool !== undefined)
@@ -330,7 +332,7 @@ function NO_RESULT_TEXT(aliasTool, input, baseId, results) {
     },
   );
 }
-//@ chunk-a76knw89.js:15391-16297 placement
+//@ chunk-xh983qqr.js:5430-6335 placement
 function formatBatchResultEntries(aliasTool, toolUseId, entries) {
   let content = [];
   let textBuffer = "";
@@ -382,22 +384,22 @@ ${text}`;
     }),
   };
 }
-//@ chunk-a76knw89.js:16297-16312 placement
+//@ chunk-xh983qqr.js:6335-6349 placement
 /**
  * 别名 → 工具定义的注册表。
  */
 var toolAliasRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-a76knw89.js:16297", () => {
+deferInit("chunk-xh983qqr.js:6335", () => {
   toolAliasRegistry = new Map();
 });
-//@ chunk-a76knw89.js:16312-16345 placement
+//@ chunk-xh983qqr.js:6349-6381 placement
 /**
  * 按别名查工具定义。
  */
 function toolByAlias(name) {
   return toolAliasRegistry.get(name);
 }
-//@ chunk-a76knw89.js:16345-16430 placement
+//@ chunk-xh983qqr.js:6381-6466 placement
 /**
  * 把别名列表映射成当前启用中的工具定义。
  */
@@ -407,14 +409,14 @@ function enabledToolsForAliases(names) {
     .filter((tool) => tool !== undefined)
     .filter((tool) => tool.isEnabled());
 }
-//@ chunk-a76knw89.js:16430-16504 placement
+//@ chunk-xh983qqr.js:6466-6540 placement
 /**
  * 把工具的内部 V1 名换成当前对外名。
  */
 function canonicalToolName(name, tools) {
   return tools.find((tool) => tool.underlyingV1ToolName === name)?.name ?? name;
 }
-//@ chunk-a76knw89.js:16504-16568 placement
+//@ chunk-xh983qqr.js:6540-6603 placement
 /**
  * 按工具名反查它的别名。
  */
@@ -422,18 +424,20 @@ function aliasOfToolName(toolName) {
   for (let [alias, tool] of toolAliasRegistry) if (tool.name === toolName) return alias;
   return;
 }
-//@ chunk-a76knw89.js:16568-16634 placement
+//@ chunk-03tec5k5.js:11904-12008 placement
 var TENGU_MARLIN_THICKET; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var BOT_PROTECTED_TENGU_DAPPER_BLUM;
 var MARLIN_THICKET_FLAG;
 var ideReadSlot;
-deferInit("chunk-a76knw89.js:16568", () => {
+deferInit("chunk-03tec5k5.js:11904", () => {
   TENGU_MARLIN_THICKET = "tengu_marlin_thicket";
+  BOT_PROTECTED_TENGU_DAPPER_BLUM = "bot_protected_tengu_dapper_blum";
   MARLIN_THICKET_FLAG = "ide";
   ideReadSlot = new SessionRootSlot(() => ({
     read: false,
   }));
 });
-//@ chunk-a76knw89.js:16634-16692 placement
+//@ chunk-03tec5k5.js:12008-12066 placement
 /**
  * 取对象自身的属性（不存在时 undefined）。
  */
@@ -441,16 +445,17 @@ function ownField(mcpLegacyKeyOwners, key) {
   return mcpLegacyKeyOwners && Object.hasOwn(mcpLegacyKeyOwners, key) ? mcpLegacyKeyOwners[key] : undefined;
 }
 export {
-  reassembleBatchResults,
-  countToolCallsSince,
-  isBatchToolsUse,
-  toolByAlias,
-  aliasOfToolName,
   hideAliasedV1Tools,
-  enabledToolsForAliases,
+  isBatchToolsUse,
   ownField,
   ideReadSlot,
   TENGU_MARLIN_THICKET,
+  BOT_PROTECTED_TENGU_DAPPER_BLUM,
   MARLIN_THICKET_FLAG,
+  toolByAlias,
+  aliasOfToolName,
+  reassembleBatchResults,
+  reassembleBatchToolResults,
   canonicalToolName,
+  enabledToolsForAliases,
 };

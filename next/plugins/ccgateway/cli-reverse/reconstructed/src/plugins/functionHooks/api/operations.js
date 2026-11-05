@@ -3,9 +3,9 @@
  *
  * 函数钩子 $ 接口：audio/clock/command/http/model.classify/process 操作（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (29)
  * attribution: placement 29
  */
 import { AsyncResource } from "async_hooks";
@@ -27,17 +27,17 @@ import { normalizePromptAndSystemBlocks } from "../modelApi.js";
 import { denseListCopy } from "../sites/promptContextSites.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:274614-274629 placement
+//@ chunk-j8f885h1.js:255806-255821 placement
 /**
  * 恒 false
  */
 var alwaysFalse = () => false;
-//@ chunk-4121qate.js:274629-274655 placement
+//@ chunk-j8f885h1.js:255821-255847 placement
 /**
  * 是否在可持久化范围之外
  */
 var isOutsideAllowedScope = (key) => key !== FLAG_SCOPE || alwaysFalse();
-//@ chunk-4121qate.js:274655-274821 placement
+//@ chunk-j8f885h1.js:255847-256013 placement
 /**
  * 取 hooks 模块导出的 register(on, options)，没有则抛 HooksError。
  */
@@ -47,7 +47,7 @@ function getRegisterExport(loaded, modulePath, pluginName) {
     throw new HooksError(`${pluginName}: ${modulePath} exports no register(on, options) function`);
   return register;
 }
-//@ chunk-4121qate.js:274821-274938 placement
+//@ chunk-j8f885h1.js:256013-256130 placement
 /**
  * 对命名空间对象的每个函数成员用 o 包装，返回冻结对象。
  */
@@ -60,12 +60,12 @@ function wrapNamespaceMethods(namespace, wrapMethod) {
   }
   return freezeApiObject(wrapped);
 }
-//@ chunk-4121qate.js:274938-274971 placement
+//@ chunk-j8f885h1.js:256130-256163 placement
 /**
  * 严格等于 true
  */
 var isExactlyTrue = (shouldLoop, signal) => shouldLoop === true && signal === undefined;
-//@ chunk-4121qate.js:274971-275393 placement
+//@ chunk-j8f885h1.js:256163-256585 placement
 var AUDIO_OPS = (pluginName, host) =>
   freezeApiObject({
     play: (clip, options) => {
@@ -94,7 +94,7 @@ var AUDIO_OPS = (pluginName, host) =>
         voice: options?.voice,
       }),
   });
-//@ chunk-4121qate.js:275393-275483 placement
+//@ chunk-j8f885h1.js:256585-256675 placement
 /**
  * 转成 HooksError
  */
@@ -102,17 +102,17 @@ function asHooksError(reason) {
   let { reason: reason_2 } = reason;
   return reason_2 instanceof Error ? reason_2 : new HooksError(abortReasonText(reason, "wait aborted"));
 }
-//@ chunk-4121qate.js:275528-275537 placement
+//@ chunk-j8f885h1.js:256720-256729 placement
 /**
  * 1
  */
 var MIN_DELAY_COUNT = 1;
-//@ chunk-4121qate.js:275537-275596 placement
+//@ chunk-j8f885h1.js:256729-256788 placement
 /**
  * 有限非负数
  */
 var isFiniteNonNegativeNumber = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
-//@ chunk-4121qate.js:275596-275673 placement
+//@ chunk-j8f885h1.js:256788-256865 placement
 /**
  * 取消息文本
  */
@@ -120,7 +120,7 @@ function messageOf(value) {
   let message = isPlainObject(value) ? value.message : undefined;
   return typeof message === "string" ? message : errorMessage(value);
 }
-//@ chunk-4121qate.js:275673-277081 placement
+//@ chunk-j8f885h1.js:256865-258273 placement
 /**
  * $.clock.now/sleep/after/every 实现
  */
@@ -227,18 +227,18 @@ function CLOCK_OPS({ pluginName, host, live, unloaded, invoke, signalFrom, makeS
       }),
   });
 }
-//@ chunk-4121qate.js:277081-277167 placement
+//@ chunk-j8f885h1.js:258273-258359 placement
 /**
  * clock.* 方法名
  */
 var isClockMethod = (name) =>
   name === "clock.now" || name === "clock.sleep" || name === "clock.after" || name === "clock.every";
-//@ chunk-4121qate.js:277167-277199 placement
+//@ chunk-j8f885h1.js:258359-258391 placement
 /**
  * 服务器名格式
  */
 var MCP_SERVER_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
-//@ chunk-4121qate.js:277199-278149 placement
+//@ chunk-j8f885h1.js:258391-259341 placement
 var COMMAND_OPS = (pluginName, host) =>
   freezeApiObject({
     list: () => host("command.list", {}),
@@ -296,7 +296,7 @@ var COMMAND_OPS = (pluginName, host) =>
           });
     },
   });
-//@ chunk-4121qate.js:278149-278533 placement
+//@ chunk-j8f885h1.js:259341-259725 placement
 /**
  * $.config 命名空间：list 与 set（校验 key 与值类型）。
  */
@@ -325,7 +325,7 @@ var CONFIG_OPS = (pluginName, host) =>
           });
     },
   });
-//@ chunk-4121qate.js:278533-278643 placement
+//@ chunk-j8f885h1.js:259725-259835 placement
 /**
  * $.env 命名空间：get 与 set。
  */
@@ -348,7 +348,7 @@ var ENV_OPS = (host) =>
             },
       ),
   });
-//@ chunk-4121qate.js:278643-278998 placement
+//@ chunk-j8f885h1.js:259835-260190 placement
 /**
  * $.fs 命名空间：read/write/list/exists/stat/ancestors，转为 fs.* 主机调用。
  */
@@ -388,7 +388,7 @@ var FS_OPS = (host) =>
         }),
       }),
   });
-//@ chunk-4121qate.js:278998-279406 placement
+//@ chunk-j8f885h1.js:260190-260598 placement
 var HTTP_FETCH_OP = (pluginName, host) =>
   freezeApiObject({
     fetch: (url, options) =>
@@ -421,7 +421,7 @@ var HTTP_FETCH_OP = (pluginName, host) =>
           })
         : Promise.reject(new HooksError(`${pluginName}: $.http.fetch takes a URL`)),
   });
-//@ chunk-4121qate.js:279406-279500 placement
+//@ chunk-j8f885h1.js:260598-260692 placement
 /**
  * $.mcp 的 call/connect
  */
@@ -438,17 +438,17 @@ var mcpApi = (pluginName, callHost, connectHost) =>
         server,
       }),
   });
-//@ chunk-4121qate.js:279500-279510 placement
+//@ chunk-j8f885h1.js:260692-260702 placement
 /**
  * $.model.classify 的 maxTokens 上限 20
  */
 var CLASSIFY_MAX_TOKENS = 20;
-//@ chunk-4121qate.js:279510-279622 placement
+//@ chunk-j8f885h1.js:260702-260814 placement
 var findMatchingLabel = (text, labels) =>
   [...labels]
     .sort((labelA, labelB) => labelB.length - labelA.length)
     .find((label) => new RegExp(`(^|\\W)${urlPatternToRegex(label)}(\\W|$)`, "i").test(text));
-//@ chunk-4121qate.js:279622-279884 placement
+//@ chunk-j8f885h1.js:260814-261076 placement
 function describeClassifyFailure(failure) {
   switch (failure.reason) {
     case "api-error":
@@ -461,7 +461,7 @@ function describeClassifyFailure(failure) {
       return "the request was aborted";
   }
 }
-//@ chunk-4121qate.js:279884-280739 placement
+//@ chunk-j8f885h1.js:261076-261931 placement
 /**
  * $.model.classify：让模型从给定标签里选一个
  */
@@ -498,7 +498,7 @@ Which label fits best?`,
     labels.find((label) => label.toLowerCase() === text_2.toLowerCase()) ?? findMatchingLabel(text_2, labels)
   );
 }
-//@ chunk-4121qate.js:280739-280961 placement (2.1.88 match: getCacheDir, 1)
+//@ chunk-j8f885h1.js:261931-262153 placement (2.1.88 match: getCacheDir, 1)
 /**
  * 是否 [{text, cache?}] 形式的块数组。旧版名 getCacheDir 为错配（与缓存目录无关）。
  */
@@ -515,9 +515,9 @@ var isTextBlockArrayWithCacheFlag = (value) =>
           key === "text" || (key === "cache" && (value === undefined || typeof value === "boolean")),
       ),
   );
-//@ chunk-4121qate.js:281189-281301 placement
+//@ chunk-j8f885h1.js:262381-262493 placement
 var ZERO_TOKEN_USAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:281189", () => {
+deferInit("chunk-j8f885h1.js:262381", () => {
   ZERO_TOKEN_USAGE = Object.freeze({
     input_tokens: 0,
     output_tokens: 0,
@@ -525,12 +525,12 @@ deferInit("chunk-4121qate.js:281189", () => {
     cache_creation_input_tokens: 0,
   });
 });
-//@ chunk-4121qate.js:281301-281364 placement
+//@ chunk-j8f885h1.js:262493-262556 placement
 /**
  * 中止时的模型结果
  */
 var ABORTED_MODEL_RESULT; // deferred: uses freezeApiObject (../dispatch/chain.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:281301", () => {
+deferInit("chunk-j8f885h1.js:262493", () => {
   ABORTED_MODEL_RESULT = freezeApiObject({
     isAnswered: false,
     reason: "aborted",
@@ -539,7 +539,7 @@ deferInit("chunk-4121qate.js:281301", () => {
     }),
   });
 });
-//@ chunk-4121qate.js:281364-281645 placement
+//@ chunk-j8f885h1.js:262556-262837 placement
 /**
  * $.model 命名空间：complete（已中止返回未回答结果）、fork、classify。
  */
@@ -569,14 +569,14 @@ var MODEL_OPS = (host) =>
         options,
       }),
   });
-//@ chunk-4121qate.js:281645-281834 placement (2.1.88 match: getTokenCountFromUsage, 1)
+//@ chunk-j8f885h1.js:262837-263026 placement (2.1.88 match: getTokenCountFromUsage, 1)
 var getTokenCountFromUsage_3 = (usage) => ({
   input_tokens: usage.input_tokens,
   output_tokens: usage.output_tokens,
   cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
   cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
 });
-//@ chunk-4121qate.js:281834-282328 placement
+//@ chunk-j8f885h1.js:263026-263520 placement
 var PROCESS_OPS = (host, hostStream) =>
   freezeApiObject({
     run: (argv, options) =>
@@ -631,10 +631,14 @@ var PROCESS_OPS = (host, hostStream) =>
       ),
   });
 export {
-  getTokenCountFromUsage_3,
+  classifyWithModel,
   isClockMethod,
-  isTextBlockArrayWithCacheFlag,
+  asHooksError,
+  isFiniteNonNegativeNumber,
+  alwaysFalse,
   ZERO_TOKEN_USAGE,
+  isTextBlockArrayWithCacheFlag,
+  getTokenCountFromUsage_3,
   MCP_SERVER_NAME_RE,
   wrapNamespaceMethods,
   MODEL_OPS,
@@ -649,8 +653,4 @@ export {
   ENV_OPS,
   isOutsideAllowedScope,
   getRegisterExport,
-  isFiniteNonNegativeNumber,
-  asHooksError,
-  alwaysFalse,
-  classifyWithModel,
 };

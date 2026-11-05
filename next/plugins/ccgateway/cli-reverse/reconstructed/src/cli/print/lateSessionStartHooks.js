@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：延迟完成的 SessionStart 钩子的等待、暂存与追加
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (16)
  * attribution: placement 16
  */
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
@@ -35,17 +35,17 @@ import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { invalidateSessionEnvCache } from "../../utils/sessionEnvironment.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:504394-504502 placement
+//@ chunk-0yw3taqg.js:543719-543827 placement
 function logLateSessionStartHookFailure(error) {
   logForDebugging(`SessionStart hooks of newly loaded plugins failed (continuing): ${errorMessage(error)}`, {
     level: "error",
   });
 }
-//@ chunk-tyg7f3ek.js:504502-504527 placement
+//@ chunk-0yw3taqg.js:543827-543852 placement
 function lateHookTimeoutMs() {
   return 1e4;
 }
-//@ chunk-tyg7f3ek.js:504527-504803 placement
+//@ chunk-0yw3taqg.js:543852-544128 placement
 function holdSessionStartHookContent(message) {
   if (message.type !== "attachment") return;
   let attachment = message.attachment;
@@ -63,9 +63,9 @@ function holdSessionStartHookContent(message) {
     });
   return;
 }
-//@ chunk-tyg7f3ek.js:504803-505069 placement
+//@ chunk-0yw3taqg.js:544128-544394 placement
 var heldSessionStartRowSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:504803", () => {
+deferInit("chunk-0yw3taqg.js:544128", () => {
   heldSessionStartRowSchema = DoctorLazy(() =>
     discriminatedUnion("type", [
       looseObject({
@@ -85,7 +85,7 @@ deferInit("chunk-tyg7f3ek.js:504803", () => {
     ]),
   );
 });
-//@ chunk-tyg7f3ek.js:505069-505478 placement
+//@ chunk-0yw3taqg.js:544394-544803 placement
 function releaseHeldSessionStartRow(message) {
   if (message.type !== "attachment") return;
   let parsed = heldSessionStartRowSchema().safeParse(message.attachment);
@@ -107,7 +107,7 @@ function releaseHeldSessionStartRow(message) {
   }
   return;
 }
-//@ chunk-tyg7f3ek.js:505478-505752 placement
+//@ chunk-0yw3taqg.js:544803-545077 placement
 function releaseHeldSessionStartRows(messages) {
   try {
     let released = dedupeSessionStartRows(
@@ -126,7 +126,7 @@ function releaseHeldSessionStartRows(messages) {
     return [];
   }
 }
-//@ chunk-tyg7f3ek.js:505752-505996 placement
+//@ chunk-0yw3taqg.js:545077-545321 placement
 function appendLateSessionStartRows({ conversation, append, waiting }, rows) {
   let rowsToAppend = dedupeSessionStartRows([...conversation(), ...waiting.flat()], rows);
   if (rowsToAppend.length === 0) return;
@@ -139,13 +139,13 @@ function appendLateSessionStartRows({ conversation, append, waiting }, rows) {
   if (filtered.length > 0) waiting.push(filtered);
   append(rowsToAppend.map((row, index) => mapped[index] ?? row));
 }
-//@ chunk-tyg7f3ek.js:505996-506054 placement
+//@ chunk-0yw3taqg.js:545321-545379 placement
 function clearLateSessionStartRows(state, overdueSessionStartHooks) {
   overdueSessionStartHooks?.abort();
   state.waiting.length = 0;
   state.clears++;
 }
-//@ chunk-tyg7f3ek.js:506054-506406 placement
+//@ chunk-0yw3taqg.js:545379-545731 placement
 function flushWaitingSessionStartRows({ conversation, append, waiting }) {
   if (waiting.length === 0) return;
   if (isToolResultForToolUse(conversation())) {
@@ -162,7 +162,7 @@ function flushWaitingSessionStartRows({ conversation, append, waiting }) {
       });
     }
 }
-//@ chunk-tyg7f3ek.js:506406-507003 placement
+//@ chunk-0yw3taqg.js:545731-546328 placement
 /**
  * 新加载插件的 SessionStart 钩子在会话开始后补跑，并把输出作为附件行追加到转录。
  */
@@ -205,9 +205,9 @@ function runLateSessionStartHooks(state) {
     overtook = !finished;
   });
 }
-//@ chunk-tyg7f3ek.js:507003-507014 placement
+//@ chunk-0yw3taqg.js:546328-546339 placement
 var RESUME_HOOK_WAIT_MS = 1e4;
-//@ chunk-tyg7f3ek.js:507014-507227 placement
+//@ chunk-0yw3taqg.js:546339-546552 placement
 async function waitForResumeSessionStartHooks(restored, timeoutMs) {
   let verdict = "empty_transcript";
   if (restored.messages.length > 0) {
@@ -225,7 +225,7 @@ async function waitForResumeSessionStartHooks(restored, timeoutMs) {
     if (isDatadogAllowed()) markResumeHooksWaitShadow(verdict);
   }
 }
-//@ chunk-tyg7f3ek.js:507227-507324 placement
+//@ chunk-0yw3taqg.js:546552-546649 placement
 function lateHookWaitVerdict() {
   try {
     return sessionStartWaitReason() === undefined ? "would_go_ahead" : "stand_down";
@@ -233,7 +233,7 @@ function lateHookWaitVerdict() {
     return "look_failed";
   }
 }
-//@ chunk-tyg7f3ek.js:507324-508277 placement
+//@ chunk-0yw3taqg.js:546649-547602 placement
 /**
  * resume 时按 CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS 或托管策略等待 SessionStart 钩子结束。
  */
@@ -274,7 +274,7 @@ async function maybeWaitForSessionStartHooks(restored, late, timeoutMs = RESUME_
   });
   return rows;
 }
-//@ chunk-tyg7f3ek.js:508277-508678 placement
+//@ chunk-0yw3taqg.js:547602-548003 placement
 function appendSessionStartHooksWhenDone(state, overdueSessionStartHooks, report) {
   let { clears } = state;
   overdueSessionStartHooks.promise
@@ -295,7 +295,7 @@ function appendSessionStartHooksWhenDone(state, overdueSessionStartHooks, report
       );
     });
 }
-//@ chunk-tyg7f3ek.js:508678-508695 placement
+//@ chunk-0yw3taqg.js:548003-548020 placement
 var SETTINGS_ERROR_NOTICE_LIMITS = 10;
 var SETTINGS_NOTICE_MAX_CHARS = 500;
 export {

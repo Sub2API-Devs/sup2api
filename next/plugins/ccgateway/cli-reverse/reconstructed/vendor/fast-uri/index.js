@@ -1,15 +1,15 @@
 /**
  * fast-uri/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fast-uri@3.1.2
- * pieces: chunk-s82q9s4x.js (1)
+ * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_utils } from "./lib/utils.js";
 import { require_schemes } from "./lib/schemes.js";
 
-//@ chunk-s82q9s4x.js:63889-68634 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:63889-68634 cjs-fingerprint
 var require_fast_uri = __commonJS(function (cjsExports, cjsModule) {
   var {
     normalizeIPv6,

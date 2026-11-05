@@ -3,13 +3,14 @@
  *
  * 2.1.316 新增：注册 claude plugin 命令组（init/install/list/validate/marketplace 等子命令与 --cowork 选项）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mgpyrzb5.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k66m6195.js (1)
  * attribution: placement 1
  */
 import { Option, Help } from "../../../vendor/commander/esm.mjs";
 import { createHelpConfig } from "../helpFormat.js";
+import { waitForOAuthRefreshUntilDeadlineAtExit } from "../../utils/auth/oauthRefreshExitWait.js";
 import { readResultNonce_2 } from "../../services/plugins/pluginCliCommands.js";
 import {
   isPluginMutationCommand,
@@ -33,7 +34,7 @@ import { joined } from "./modCommands.js";
 import { setUseCoworkPlugins } from "../../bootstrap/state.js";
 import { VALID_INSTALLABLE_SCOPES, VALID_UPDATE_SCOPES } from "../../services/plugins/pluginOperations.js";
 
-//@ chunk-mgpyrzb5.js:17938-36721 placement
+//@ chunk-k66m6195.js:19375-38164 placement
 /**
  * 注册 claude plugin 命令组（init/install/list/validate/marketplace 等子命令与 --cowork 选项）。
  */
@@ -45,6 +46,7 @@ function registerPluginCommands(program, withStorage, withStorageAndCredentials)
     .description("Manage Claude Code plugins")
     .configureHelp(createHelpConfig());
   pluginCommand.hook("preAction", async (thisCommand, actionCommand) => {
+    waitForOAuthRefreshUntilDeadlineAtExit();
     readResultNonce_2();
     if (isPluginMutationCommand(actionCommand) && !(await awaitPluginPolicyColdStart())) {
       if (!isTerminalShutdown())

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：share 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (10)
  * attribution: placement 10
  */
 import { readUntrustedArrayOrUndefined } from "../../../utils/untrustedArray.js";
@@ -19,7 +19,7 @@ import {
   ORG_VIEW_ONLY_UNSUPPORTED,
   shareArtifact,
 } from "../../../services/artifacts/artifactShare.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import {
   spacedFromClosingQuote,
   withSchemeMarked,
@@ -64,16 +64,16 @@ import { MAX_SHARE_PEOPLE_HINTS } from "../../../services/artifacts/artifactTool
 import { decideByClass, classFactsFor } from "../artifactAccessClasses.js";
 import { classifyArtifactConsent } from "../../../services/artifacts/consentClasses.js";
 import { urlSubPathError } from "../permissions/dbWriteInputs.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { sharedSourceSchema } from "../../../services/artifacts/publishSource.js";
 
-//@ chunk-8wvtd8sr.js:235149-235320 placement
+//@ chunk-xzmy9dn4.js:237371-237542 placement
 var SHARE_UNAVAILABLE_MESSAGE = "share is not available in this session.";
 var NOTHING_SHARED = "Nothing was shared.";
 var SHARE_MENU_HINT =
   "the person can share it themselves from the Share menu on the artifact's page on claude.ai.";
-//@ chunk-8wvtd8sr.js:235320-235582 placement
+//@ chunk-xzmy9dn4.js:237542-237804 placement
 /**
  * 读取 share 动作输入：共享模式、人员列表、访问级别，以及访问级别是否无法识别。
  */
@@ -90,7 +90,7 @@ function readShareInput(input) {
     accessUnrecognised: access !== undefined && !isOrgAccessMode(access),
   };
 }
-//@ chunk-8wvtd8sr.js:235582-237511 placement
+//@ chunk-xzmy9dn4.js:237804-239733 placement
 /**
  * 从分享卡片确认后的输入解析分享授权：必须来自卡片（有 user_uuids）、mode 为 org/people、org 不能附带人员、access 合法（people 必须指定 view/comment）、
  * 人员 id 合法且不超过上限；返回 {ok:true, grant:{mode, access, userUuids}} 或 {ok:false, code, message}。
@@ -143,7 +143,7 @@ function resolveShareGrant(input) {
       };
     accountIds.push(accountId);
   }
-  let uniqueIds = uniq(accountIds);
+  let uniqueIds = normalizeCaseForComparison_2(accountIds);
   if (uniqueIds.length > MAX_SHARE_TARGETS)
     return {
       ok: false,
@@ -159,14 +159,14 @@ function resolveShareGrant(input) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:237511-237570 placement
+//@ chunk-xzmy9dn4.js:239733-239792 placement
 /**
  * 把 view/comment 访问级别转成人类可读标签。
  */
 function shareAccessLabel(access) {
   return access === "view" ? "view only" : "can comment";
 }
-//@ chunk-8wvtd8sr.js:237570-237647 placement
+//@ chunk-xzmy9dn4.js:239792-239869 placement
 /**
  * 把名称处理成可展示标签（去方案标记、压空白，空则 ?）。
  */
@@ -177,7 +177,7 @@ function sanitizedDisplayLabel(value, max) {
     ) || "?"
   );
 }
-//@ chunk-8wvtd8sr.js:237647-237882 placement
+//@ chunk-xzmy9dn4.js:239869-240104 placement
 /**
  * 描述共享对象中指名的人员（最多列 5 个，其余计数）。
  */
@@ -190,7 +190,7 @@ function describeNamedPeople(people) {
   let moreNote = people.length > 5 ? ` and ${people.length - 5} more` : "";
   return `${people.length} ${plural(people.length, "person", "people")} it named (${joined}${moreNote})`;
 }
-//@ chunk-8wvtd8sr.js:237882-238055 placement
+//@ chunk-xzmy9dn4.js:240104-240277 placement
 function describeCurrentAudience(shareEntry) {
   if (shareEntry === undefined || shareEntry.probeFailed)
     return "its current audience could not be confirmed";
@@ -198,7 +198,7 @@ function describeCurrentAudience(shareEntry) {
     ? "currently private"
     : `currently shared with ${entryAudience(shareEntry)}`;
 }
-//@ chunk-8wvtd8sr.js:238055-238194 placement
+//@ chunk-xzmy9dn4.js:240277-240416 placement
 function describeShareTarget(mode, people, access, orgName) {
   if (mode === "org")
     return orgName
@@ -206,7 +206,7 @@ function describeShareTarget(mode, people, access, orgName) {
       : "everyone in the person's organization";
   return `${describeNamedPeople(people)} (${shareAccessLabel(access)})`;
 }
-//@ chunk-8wvtd8sr.js:238194-247705 placement
+//@ chunk-xzmy9dn4.js:240416-249930 placement
 var ARTIFACT_SHARE_ACTION_HANDLER = {
   actions: ["share"],
   async checkPermissions(tool, input, context) {
@@ -394,12 +394,12 @@ var ARTIFACT_SHARE_ACTION_HANDLER = {
       };
     let urlError = urlSubPathError(input.url, "; a share names the whole artifact");
     if (urlError !== undefined) return urlError;
-    let sessionArtifactUrl = parseSessionArtifactUrl(input.url);
-    if (!sessionArtifactUrl.ok)
+    let urlCheck = validateSessionArtifactUrl(input.url);
+    if (!urlCheck.ok)
       return {
         result: false,
-        message: sessionArtifactUrl.message,
-        errorCode: sessionArtifactUrl.errorCode,
+        message: urlCheck.message,
+        errorCode: urlCheck.errorCode,
       };
     let mode = Reflect.get(input, "mode");
     if (!isOrgReadMode(mode))
@@ -568,7 +568,7 @@ var ARTIFACT_SHARE_ACTION_HANDLER = {
     };
   },
 };
-//@ chunk-8wvtd8sr.js:247705-249767 placement
+//@ chunk-xzmy9dn4.js:249930-251992 placement
 /**
  * 把分享结果映射为 tool_result 文案：组织分享（是否已共享、组织名、访问级别）或指定人员分享（新增人数、编辑者保持不变、邀请邮件），记录不可读时给出说明。
  */
@@ -619,9 +619,9 @@ function renderShareResult(toolResult, toolUseId) {
   };
 }
 export {
-  ARTIFACT_SHARE_ACTION_HANDLER,
-  renderShareResult,
   sanitizedDisplayLabel,
   readShareInput,
   describeNamedPeople,
+  ARTIFACT_SHARE_ACTION_HANDLER,
+  renderShareResult,
 };

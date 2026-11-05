@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Continue in Projects 提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -20,7 +20,7 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { setupProposalSchema, PROJECT_ICONS_HINT } from "../../services/projects/setupProposalSchema.js";
 
-//@ chunk-dz3q485w.js:70470-73709 placement
+//@ chunk-jndyh8cy.js:59107-62347 placement
 /**
  * ContinueInProjects 工具的输入 schema。
  */

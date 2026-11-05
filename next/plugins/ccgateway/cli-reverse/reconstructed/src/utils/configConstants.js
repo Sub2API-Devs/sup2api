@@ -3,19 +3,19 @@
  *
  * 配置枚举常量（通知通道 auto/iterm2/kitty…、编辑器模式 normal/vim）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/configConstants.ts
- * pieces: chunk-q6rfp6n3.js (1), chunk-tzghj6zv.js (1)
+ * pieces: chunk-18rrbwq1.js (1), chunk-3xmyjkbh.js (1)
  * attribution: fingerprint 2
  */
 import { resolveSetting } from "./settings/userIntentSettings.js";
 import { resolveAutoNotificationChannel, sendToChannel } from "../services/notifier.js";
 
-//@ chunk-tzghj6zv.js:5760-5821 fingerprint (2.1.88 match: EDITOR_MODES, 0.782)
+//@ chunk-18rrbwq1.js:5869-5931 fingerprint (2.1.88 match: EDITOR_MODES, 0.782)
 function EDITOR_MODES() {
   return resolveSetting("editorMode", "normal").value === "vim";
 }
-//@ chunk-q6rfp6n3.js:2370-2659 fingerprint (2.1.88 match: NOTIFICATION_CHANNELS, 0.954)
+//@ chunk-3xmyjkbh.js:2370-2659 fingerprint (2.1.88 match: NOTIFICATION_CHANNELS, 0.954)
 async function NOTIFICATION_CHANNELS(preferredChannel, opts, terminal) {
   if (preferredChannel === "auto") {
     let channel = await resolveAutoNotificationChannel();

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/path-entries.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (19)
+ * pieces: chunk-qg41pqt6.js (19)
  * attribution: esm-fingerprint 19
  */
 import * as pathModule_2 from "path";
@@ -33,7 +33,7 @@ import {
 } from "./sandbox-utils.js";
 import { getPlatform as getPlatform_2 } from "../utils/platform.js";
 
-//@ chunk-fq0cr76a.js:639960-640088 esm-fingerprint
+//@ chunk-qg41pqt6.js:640445-640573 esm-fingerprint
 function splitPathEntries(entries) {
   let spelled = [];
   let marked = [];
@@ -45,18 +45,18 @@ function splitPathEntries(entries) {
     marked,
   };
 }
-//@ chunk-fq0cr76a.js:640088-640124 esm-fingerprint
+//@ chunk-qg41pqt6.js:640573-640609 esm-fingerprint
 function spelledOf(entries) {
   return splitPathEntries(entries).spelled;
 }
-//@ chunk-fq0cr76a.js:640124-640284 esm-fingerprint
+//@ chunk-qg41pqt6.js:640609-640769 esm-fingerprint
 function samePathEntries(a, b) {
   let key = (entry) => (typeof entry === "string" ? `s:${entry}` : `l:${markedLiteralPath(entry)}`);
   if (a.length !== b.length) return false;
   let keys = new Set(a.map(key));
   return b.every((entry) => keys.has(key(entry)));
 }
-//@ chunk-fq0cr76a.js:640284-640455 esm-fingerprint
+//@ chunk-qg41pqt6.js:640769-640940 esm-fingerprint
 function spelledAbsolute(spelling) {
   let onWindows = getPlatform_2() === "windows";
   let spelled = spelling;
@@ -71,7 +71,7 @@ function spelledAbsolute(spelling) {
       : expanded;
   return onWindows ? toForwardSlashes(absolute) : collapseInteriorSpellings(absolute);
 }
-//@ chunk-fq0cr76a.js:640455-640524 esm-fingerprint
+//@ chunk-qg41pqt6.js:640940-641009 esm-fingerprint
 function mayBeThere(p) {
   try {
     fsModule_2.lstatSync(p);
@@ -80,7 +80,7 @@ function mayBeThere(p) {
     return !isAbsenceErrno(err);
   }
 }
-//@ chunk-fq0cr76a.js:640524-640599 esm-fingerprint
+//@ chunk-qg41pqt6.js:641009-641084 esm-fingerprint
 function isThereUnlinked(p) {
   try {
     return !fsModule_2.lstatSync(p).isSymbolicLink();
@@ -88,7 +88,7 @@ function isThereUnlinked(p) {
     return false;
   }
 }
-//@ chunk-fq0cr76a.js:640599-640735 esm-fingerprint
+//@ chunk-qg41pqt6.js:641084-641220 esm-fingerprint
 function isDirectoryFor(kind, p) {
   try {
     return kind === "allow" ? fsModule_2.lstatSync(p).isDirectory() : fsModule_2.statSync(p).isDirectory();
@@ -96,7 +96,7 @@ function isDirectoryFor(kind, p) {
     return kind === "deny" && !isAbsenceErrno(err);
   }
 }
-//@ chunk-fq0cr76a.js:640735-641471 esm-fingerprint
+//@ chunk-qg41pqt6.js:641220-641965 esm-fingerprint
 function literalReadings(spelling, kind, opts = {}) {
   let isPattern = opts.isPattern ?? containsGlobCharsForPlatform;
   let stripped = removeTrailingGlobSuffix(spelling);
@@ -144,7 +144,7 @@ function literalReadings(spelling, kind, opts = {}) {
   }
   return readings;
 }
-//@ chunk-fq0cr76a.js:641471-641597 esm-fingerprint
+//@ chunk-qg41pqt6.js:641965-642091 esm-fingerprint
 function restIsUnlinked(from, to, prefix) {
   for (let i = from + 1; i <= to; i++)
     try {
@@ -154,11 +154,11 @@ function restIsUnlinked(from, to, prefix) {
     }
   return true;
 }
-//@ chunk-fq0cr76a.js:641597-641648 esm-fingerprint
+//@ chunk-qg41pqt6.js:642091-642142 esm-fingerprint
 function hasNameReading(spelling, kind) {
   return literalReadings(spelling, kind).some((reading) => !reading.glob);
 }
-//@ chunk-fq0cr76a.js:641648-641843 esm-fingerprint
+//@ chunk-qg41pqt6.js:642142-642337 esm-fingerprint
 function* withOtherReadings(spelling, name, kind, expandGlob) {
   let expansion = yield* expandGlob(spelling);
   let seen = new Set(expansion);
@@ -173,7 +173,7 @@ function* withOtherReadings(spelling, name, kind, expandGlob) {
   }
   return [...expansion, ...added];
 }
-//@ chunk-fq0cr76a.js:641843-642044 esm-fingerprint
+//@ chunk-qg41pqt6.js:642337-642538 esm-fingerprint
 function readRulesOf(denyRead, allowRead, credentialDenies) {
   let withNames = (entries, kind) => [
     ...entries,
@@ -195,33 +195,33 @@ function readRulesOf(denyRead, allowRead, credentialDenies) {
     allowRead: allowRead === undefined ? undefined : withNames(allowRead, "allow"),
   };
 }
-//@ chunk-fq0cr76a.js:642044-642131 esm-fingerprint
+//@ chunk-qg41pqt6.js:642538-642625 esm-fingerprint
 function nonEmptyLists(lists) {
   return Object.fromEntries(Object.entries(lists).filter(([, list]) => list.length > 0));
 }
-//@ chunk-fq0cr76a.js:642131-642226 esm-fingerprint
+//@ chunk-qg41pqt6.js:642625-642720 esm-fingerprint
 function literalReadLists(denyRead, allowRead) {
   return nonEmptyLists({
     literalDenyOnly: splitPathEntries(denyRead).marked,
     literalAllowWithinDeny: splitPathEntries(allowRead).marked,
   });
 }
-//@ chunk-fq0cr76a.js:642226-642322 esm-fingerprint
+//@ chunk-qg41pqt6.js:642720-642816 esm-fingerprint
 function literalWriteLists(allowWrite, denyWrite) {
   return nonEmptyLists({
     literalAllowOnly: splitPathEntries(allowWrite).marked,
     literalDenyWithinAllow: splitPathEntries(denyWrite).marked,
   });
 }
-//@ chunk-fq0cr76a.js:642322-642390 esm-fingerprint
+//@ chunk-qg41pqt6.js:642816-642884 esm-fingerprint
 function writeRootsOf(config) {
   return [...(config.allowOnly || []), ...(config.literalAllowOnly ?? [])];
 }
-//@ chunk-fq0cr76a.js:642390-642447 esm-fingerprint
+//@ chunk-qg41pqt6.js:642884-642941 esm-fingerprint
 function reExposedBy(expandedAllowRead, allowRead, writeConfig) {
   return [...expandedAllowRead, ...splitPathEntries(allowRead).marked, ...writeRootsOf(writeConfig)];
 }
-//@ chunk-fq0cr76a.js:642447-642664 esm-fingerprint
+//@ chunk-qg41pqt6.js:642941-643158 esm-fingerprint
 function readNamesOf(config) {
   if (!config) return config;
   let { literalDenyOnly, literalAllowWithinDeny, ...rest } = config;
@@ -235,7 +235,7 @@ function readNamesOf(config) {
       : {}),
   };
 }
-//@ chunk-fq0cr76a.js:642664-642913 esm-fingerprint
+//@ chunk-qg41pqt6.js:643158-643407 esm-fingerprint
 function writeNamesOf(config) {
   if (!config) return config;
   let { literalAllowOnly, literalDenyWithinAllow, ...rest } = config;
@@ -249,6 +249,8 @@ function writeNamesOf(config) {
   };
 }
 export {
+  readNamesOf,
+  writeNamesOf,
   writeRootsOf,
   readRulesOf,
   spelledOf,
@@ -258,7 +260,5 @@ export {
   literalReadLists,
   literalWriteLists,
   samePathEntries,
-  readNamesOf,
-  writeNamesOf,
   literalReadings,
 };

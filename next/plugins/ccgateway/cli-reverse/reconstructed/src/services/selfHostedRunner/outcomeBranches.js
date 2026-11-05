@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 会话结束后的分支收集：fetch 结果分支、push-on-release
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (13)
  * attribution: placement 13
  */
 import { spawn } from "child_process";
@@ -32,10 +32,10 @@ import { isSafeRefName } from "../../utils/git/safeRefName.js";
 import { redactToken } from "../../selfHostedRunner/git/tokenRedact.js";
 import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
-// This module is the first evaluated of an import cycle of 5 modules closed by ./launcherHooks.js;
+// This module is the first evaluated of an import cycle of 8 modules closed by ./launcherHooks.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/services/selfHostedRunner/launcherHooks.js");
-//@ chunk-hm0ce8vc.js:204328-205881 placement
+//@ chunk-asf5gh8x.js:215398-216951 placement
 async function fetchSourceBranch(
   repoDir,
   branchName,
@@ -150,7 +150,7 @@ async function fetchSourceBranch(
       `[runner:session] outcome branch '${branchName}' not created in ${repoDir} \u2014 continuing on current HEAD`,
     );
 }
-//@ chunk-hm0ce8vc.js:205881-207509 placement
+//@ chunk-asf5gh8x.js:216951-218579 placement
 /**
  * 从远端获取会话产出分支（hardenedGitUrl 与 governedAuth 互斥）。
  */
@@ -271,7 +271,7 @@ async function fetchOutcomeBranches(
   if (branches.length > 0)
     onDebug(`[runner:session] fetched ${fetchedCount}/${branches.length} outcome branch(es) in ${repoDir}`);
 }
-//@ chunk-hm0ce8vc.js:207509-208603 placement
+//@ chunk-asf5gh8x.js:218579-219673 placement
 function buildSslVerifyArgs(source, gitEnvironment) {
   let url = source.url ?? "";
   let token = source.getAuthToken ? source.getAuthToken() : source.token;
@@ -326,7 +326,7 @@ function buildSslVerifyArgs(source, gitEnvironment) {
     },
   };
 }
-//@ chunk-hm0ce8vc.js:208603-209793 placement
+//@ chunk-asf5gh8x.js:219673-220863 placement
 async function resumePushOnRelease(
   canonicalPath,
   branch,
@@ -412,7 +412,7 @@ async function resumePushOnRelease(
     child.on("error", () => finish(false));
   });
 }
-//@ chunk-hm0ce8vc.js:209793-210238 placement
+//@ chunk-asf5gh8x.js:220863-221308 placement
 async function revParseVerify(canonicalPath, ref, timeoutMs = SIGKILL_DELAY_MS) {
   return new Promise((resolve) => {
     let settled = false;
@@ -447,21 +447,21 @@ async function revParseVerify(canonicalPath, ref, timeoutMs = SIGKILL_DELAY_MS) 
     child.on("error", () => finish(undefined));
   });
 }
-//@ chunk-hm0ce8vc.js:210238-210291 placement
+//@ chunk-asf5gh8x.js:221308-221361 placement
 /**
  * 生成 claude-runner-upstream-<uuid> 形式的上游分支名。
  */
 function newRunnerUpstreamName() {
   return `claude-runner-upstream-${randomUUID()}`;
 }
-//@ chunk-hm0ce8vc.js:210291-210353 placement
+//@ chunk-asf5gh8x.js:221361-221423 placement
 /**
  * 判断是否同时有受管挂载与上游地址。
  */
 function hasGovernedMountAndUpstream(source) {
   return Boolean(source.governedMount && source.upstreamUrl);
 }
-//@ chunk-hm0ce8vc.js:210353-212031 placement
+//@ chunk-asf5gh8x.js:221423-223101 placement
 /**
  * 会话释放时把分支推送到上游（校验 ref 名安全）。
  */
@@ -558,7 +558,7 @@ async function pushOnRelease(canonicalPath, branch, source, timeoutMs, onDebug, 
     });
   });
 }
-//@ chunk-hm0ce8vc.js:212031-213081 placement
+//@ chunk-asf5gh8x.js:223101-224151 placement
 async function runGitQuiet(
   canonicalPath,
   branch,
@@ -631,7 +631,7 @@ async function runGitQuiet(
   if ((await runGit(["branch", "-D", "--end-of-options", branch], `branch -D '${branch}'`)) === 0)
     onDebug(`[runner:session] deleted outcome branch '${branch}' from ${canonicalPath}`);
 }
-//@ chunk-hm0ce8vc.js:213081-213272 placement (2.1.88 match: ghIsDangerousCallback, 0.82)
+//@ chunk-asf5gh8x.js:224151-224342 placement (2.1.88 match: ghIsDangerousCallback, 0.819)
 function getRemoteHostname(url) {
   if (!url.includes("://")) {
     let match = url.match(/^[^@]+@([^:/]+):.+$/);
@@ -644,7 +644,7 @@ function getRemoteHostname(url) {
     return;
   }
 }
-//@ chunk-hm0ce8vc.js:213272-213454 placement (2.1.88 match: ghIsDangerousCallback, 0.808)
+//@ chunk-asf5gh8x.js:224342-224524 placement (2.1.88 match: ghIsDangerousCallback, 0.807)
 function getRemoteRepoPath(url) {
   if (!url.includes("://")) {
     let match = url.match(/^[^@]+@[^:]+:(.+)$/);
@@ -659,14 +659,14 @@ function getRemoteRepoPath(url) {
   let path = parsedUrl.pathname.replace(/^\/+/, "");
   return stripGitSuffixAndTrailingSlash(path);
 }
-//@ chunk-hm0ce8vc.js:213454-213518 placement
+//@ chunk-asf5gh8x.js:224524-224588 placement
 /**
  * 去掉 .git 后缀与结尾斜杠。
  */
 function stripGitSuffixAndTrailingSlash(path) {
   return path.replace(/\.git$/, "").replace(/\/+$/, "");
 }
-//@ chunk-hm0ce8vc.js:213518-213722 placement
+//@ chunk-asf5gh8x.js:224588-224792 placement
 function isLocalhostUrl(apiBaseUrl, sessionId) {
   let isLocal = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
   let replaced = apiBaseUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -678,10 +678,10 @@ function isLocalhostUrl(apiBaseUrl, sessionId) {
 }
 export {
   getRemoteHostname,
+  revParseVerify,
   fetchOutcomeBranches,
   resumePushOnRelease,
   fetchSourceBranch,
-  revParseVerify,
   isLocalhostUrl,
   hasGovernedMountAndUpstream,
   pushOnRelease,

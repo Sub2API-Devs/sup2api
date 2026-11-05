@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude self-hosted-runner 子命令入口与主循环（注册、轮询工单、并发跑会话、排空退出）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (9)
  * attribution: placement 9
  */
 import { createWriteStream, fchmod } from "fs";
@@ -49,8 +49,9 @@ import {
   HEALTH_PROBE_INTERVAL_MS,
   DEFAULT_POLL_INTERVAL_MS,
   LEASE_5XX_RETRY_DELAY_MS,
+  MAX_SESSION_IDLE_MS,
   SHUTDOWN_LEASE_HEARTBEAT_MS,
-  MAX_LISTED_SESSION_IDS,
+  MAX_REPORTED_BUSY_SESSIONS,
   MIN_POLL_INTERVAL_MS,
   MAX_POLL_INTERVAL_MS,
   MIN_BACKOFF_MS,
@@ -76,6 +77,7 @@ import {
   getCheckoutHookTimeoutMs,
   handleSelfHostedSession,
 } from "./handleSession.js";
+import { makeHttpsAgentCloseAfterServerError } from "../../utils/mtls.js";
 import { configureGlobalAgents } from "../../utils/proxy.js";
 import { openStdioWriter } from "../../selfHostedRunner/stdioWriter.js";
 import { redactSecretsInText } from "../../utils/redactSecrets.js";
@@ -110,7 +112,9 @@ import {
   getStartupTimeoutMs,
 } from "./launcherHooks.js";
 import { formatDuration } from "../../utils/format.js";
+import { describeIdleRelease, getRunnerIdleMs } from "./idleRelease.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
+import { ADDED_FOLDER_PLUGINS_FOLLOW_SETTING_SOURCES } from "../../utils/plugins/addDirPluginSettings.js";
 import { createDefaultEnvironment } from "../../commands/remote-setup/api.js";
 import { NO_ALLOW } from "../../selfHostedRunner/serverAutoMode.js";
 import {
@@ -127,7 +131,7 @@ import {
   MAX_SERVER_MESSAGE_CHARS,
   POLL_WAKE_SOURCES,
 } from "./workOrder.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   getJwtExpiry,
   notAvailableInThisBuild,
@@ -148,10 +152,22 @@ import {
 import { systemClock, sleep } from "../../utils/sleep.js";
 import { startHealthServer } from "../../selfHostedRunner/healthServer.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
+import {
+  parseTurnSignal,
+  BUSY_IDLE_MS,
+  IDLE_BUSY_BEATS,
+  TURN_STATE_STATUS_TEXT,
+} from "./sessionTurnState.js";
+import {
+  checkoutStates,
+  checkOwnFolder as checkOwnFolder_2,
+  describeWorkLoss,
+  keptReasonCode,
+} from "./releaseReasons.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { rewriteContractionError } from "../../selfHostedRunner/git/fetchErrors.js";
 
-//@ chunk-hm0ce8vc.js:236182-288822 placement
+//@ chunk-asf5gh8x.js:247881-302375 placement
 /**
  * claude self-hosted-runner 入口：解析参数、检查 base-dir、捕获宿主配置、注册 runner 并进入运行循环（约 52 KB，含 --help 文本）。
  */
@@ -312,6 +328,9 @@ Runtime:
                               are dropped with an "Ignoring N permissions.allow" stderr
                               diagnostic; configure host-level grants via the host-config dir's
                               settings.json permissions.allow (userSettings source) instead.
+                              A session that the server starts without the repository's own
+                              settings gets no workspace trust, as with false, whatever
+                              this flag says.
                               [env: SELF_HOSTED_RUNNER_TRUST_WORKSPACE=0 to disable]
   --remove-session-state [bool]
                               Remove a session's per-session state under <base-dir>/_sessions/
@@ -427,11 +446,14 @@ Runner lifecycle:
                               advertises zero capacity and keeps polling only as its lease heartbeat) and
                               otherwise keep running as it does today, then finish shutting down M minutes
                               later. Until then attached sessions are served normally and leave only the way
-                              they would without any signal: --release-idle-session-min, if set, releases a
-                              session whose user has gone idle (it parks server-side and a fresh runner
-                              resumes it on the user's next message); a session that flag would not release
-                              \u2014 it is unset, or the finished turn still has background work running \u2014 simply
-                              stays attached. M minutes after the first signal every session still attached
+                              they would without any signal: an idle limit (--release-idle-session-min, or
+                              one that Anthropic's control plane sends for a session) releases a session
+                              whose user has gone idle (it parks server-side and a fresh runner resumes it on
+                              the user's next message); a session it would not release \u2014 it has no idle limit,
+                              Anthropic's limit found changes or new commits in its checkouts or something
+                              in its own folder, or could not check them, or the finished turn still has
+                              background work running \u2014 simply stays attached. M minutes after the first
+                              signal every session still attached
                               is released through that same park path at once regardless of idle time (one
                               mid-turn as soon as its turn ends; background work a finished turn left running
                               gets up to 60s), and anything STILL attached ${(DEFAULT_POST_SESSION_ALLOWANCE_MS + SIGKILL_GRACE_BASE_MS) / 1000}s later (that 60s + a 15s
@@ -455,17 +477,29 @@ Per-session watchdogs:
   --release-idle-session-min <n>  Release a session slot after N min of no user input (turn finished,
                                   or parked at a permission prompt, user idle). Runner exits if this
                                   drops it to zero active sessions.
-                                  Default: never. Max: ${MAX_KILL_AFTER_MINUTES}.
+                                  Default: never, unless Anthropic's control plane sends a session an
+                                  idle limit. That limit releases sessions only on Linux runners, only
+                                  after a finished turn, never at a permission prompt, and only a session
+                                  whose checkouts hold no uncommitted changes and are still at the
+                                  commit that the runner checked out, and whose own folder
+                                  (<base-dir>/_sessions/<id>) holds only what the runner put there.
+                                  Any value set here, 0 (never) included, overrides it.
+                                  Max: ${MAX_KILL_AFTER_MINUTES}.
                                   [env: SELF_HOSTED_RUNNER_SESSION_IDLE_MS, in ms]
-  --hold-idle-file <path>         Do not release an idle session (--release-idle-session-min) while
+  --hold-idle-file <path>         Do not release an idle session (--release-idle-session-min, or an
+                                  idle limit from Anthropic's control plane) while
                                   <path> is a regular file changed in the last ${HOLD_IDLE_MTIME_FRESH_MS / 1000}s: your host
                                   keeps it fresh while a process the session left running (nohup,
                                   tmux) lives. Looked at again every ${LEFTOVER_HOLD_LOOK_TIMEOUT_MS / 1000}s. Does not hold a
                                   session at startup, at --retire-at, at the --defer-shutdown-max-min
                                   ceiling or at --kill-session-after-min. Default: off.
                                   [env: SELF_HOSTED_RUNNER_HOLD_IDLE_FILE]
-  --max-hold-min <n>              With --hold-idle-file: release the session anyway N min after it
-                                  went idle. Default: ${DEFAULT_MAX_HOLD_MS / 60000}. 0 disables the hold.
+  --max-hold-min <n>              With --hold-idle-file: hold a session no longer than N min after it
+                                  went idle. If an idle limit from Anthropic's control plane reaches a
+                                  session that is already idle and has none in force (at first, or
+                                  after one was withdrawn), the N minutes count from then. Afterwards
+                                  the session is handled as it would be without the file.
+                                  Default: ${DEFAULT_MAX_HOLD_MS / 60000}. 0 disables the hold.
                                   Max: ${MAX_KILL_AFTER_MINUTES}. [env: SELF_HOSTED_RUNNER_MAX_HOLD_MS, in ms]
   --startup-timeout-min <n>       Release a session slot if the child has not finished starting up
                                   N min after spawn \u2014 covers a child hung during --resume hydration or
@@ -497,6 +531,7 @@ Debug:
   --help, -h                  Show this help message`);
     return;
   }
+  makeHttpsAgentCloseAfterServerError();
   configureGlobalAgents();
   let timestamp = () => new Date().toISOString();
   let logStream;
@@ -636,7 +671,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
                 hideTrailingZeros: true,
               },
             )} (--release-idle-session-min)`
-          : "none is released early (--release-idle-session-min is not set)") +
+          : describeIdleRelease()) +
         `, and the runner exits as soon as it holds no session; ${formatDuration(deferShutdownMaxMs, {
           hideTrailingZeros: true,
         })} after the signal every remaining session is released at once and anything still attached ${formatDuration(
@@ -696,7 +731,9 @@ Run 'claude self-hosted-runner --help' for usage.`,
     let idleReleaseMs = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
     let holdCaveat =
       idleReleaseMs === 0
-        ? ", but holds nothing while --release-idle-session-min is off"
+        ? getRunnerIdleMs()
+          ? ", but holds nothing while --release-idle-session-min is off"
+          : ", but holds nothing unless Anthropic's control plane sends a session an idle limit"
         : maxHoldMs <= idleReleaseMs
           ? ", but holds nothing: the cap is not longer than --release-idle-session-min"
           : "";
@@ -705,7 +742,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
     })} (${source})${holdCaveat}`;
   };
   logInfo(
-    `[runner] watchdog config: idle-release=${describeEnvSetting("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}; startup-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", DEFAULT_STARTUP_TIMEOUT_MS)}; kill-session-after=${describeEnvSetting("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${describeEnvSetting("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${describeEnvSetting("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", CHECKOUT_HOOK_TIMEOUT_MS, "unless-zero")}; bg-result-grace=${describeEnvSetting("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", BG_RESULT_GRACE_MS, true)}; post-turn-settle=${describeEnvSetting("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", POST_TURN_SETTLE_MS, true)}; leftover-hold=${describeLeftoverHold()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
+    `[runner] watchdog config: idle-release=${describeEnvSetting("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}${getRunnerIdleMs() ? "" : " unless Anthropic's control plane sends a session an idle limit"}; startup-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", DEFAULT_STARTUP_TIMEOUT_MS)}; kill-session-after=${describeEnvSetting("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${describeEnvSetting("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${describeEnvSetting("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", CHECKOUT_HOOK_TIMEOUT_MS, "unless-zero")}; bg-result-grace=${describeEnvSetting("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", BG_RESULT_GRACE_MS, true)}; post-turn-settle=${describeEnvSetting("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", POST_TURN_SETTLE_MS, true)}; leftover-hold=${describeLeftoverHold()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
   );
   let removeSessionStateSource =
     options.removeSessionState === REMOVE_SESSION_STATE_DEFAULT
@@ -713,8 +750,8 @@ Run 'claude self-hosted-runner --help' for usage.`,
       : "--remove-session-state / SELF_HOSTED_RUNNER_REMOVE_SESSION_STATE";
   logInfo(
     options.removeSessionState
-      ? `[runner] per-session state: REMOVED at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ are deleted when it ends, best-effort`
-      : `[runner] per-session state: KEPT at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ stay under ${options.baseDir} until the disk is recycled`,
+      ? `[runner] per-session state: REMOVED at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig, .disk-mark and <id>/ are deleted when it ends, best-effort`
+      : `[runner] per-session state: KEPT at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig, .disk-mark and <id>/ stay under ${options.baseDir} until the disk is recycled`,
   );
   let diffFindsNestedSource =
     options.diffFindsNestedRepository === DIFF_FINDS_NESTED_REPO_DEFAULT
@@ -775,16 +812,19 @@ Run 'claude self-hosted-runner --help' for usage.`,
       await flushLogFile();
       process.exit(1);
     }
-  let capabilities =
-    options.capacity === 1 && options.debugTokenDir === undefined && !execPath
-      ? [CODE_REVIEW_TOKEN_HANDOFF]
-      : [];
+  let capabilities = execPath
+    ? []
+    : [
+        ...(options.capacity === 1 && options.debugTokenDir === undefined ? [CODE_REVIEW_TOKEN_HANDOFF] : []),
+        ADDED_FOLDER_PLUGINS_FOLLOW_SETTING_SOURCES,
+      ];
   logDebug(`[runner] capabilities reported to the server: ${capabilities.join(", ") || "none"}`);
   let defaultEnvironment = createDefaultEnvironment({
     baseUrl: options.apiUrl,
     poolSecret,
     onDebug: logDebug,
     capabilities,
+    agentProxyUrl: agentProxyUrl?.origin,
   });
   let clientLabel = options.clientLabel ?? hostname();
   if (options.lockToAccountId) logInfo(`Registering locked to account: ${options.lockToAccountId}`);
@@ -865,7 +905,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
     let countsText =
       sessionCounts === undefined
         ? "session counts not yet initialized (startup in progress)"
-        : `${sessionCounts.sessionIdle.size} active session(s), ${count([...sessionCounts.sessionIdle.values()], (idleAt) => idleAt !== null)} of them idle`;
+        : `${sessionCounts.sessionIdle.size} active session(s), ${countWhere([...sessionCounts.sessionIdle.values()], (idleAt) => idleAt !== null)} of them idle`;
     return `(${context}; uptime ${formatDuration(process.uptime() * 1000)}; ${countsText})`;
   };
   let onShutdownSignal = (signalName) => {
@@ -1152,10 +1192,10 @@ Run 'claude self-hosted-runner --help' for usage.`,
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -1169,6 +1209,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
     sessionStartHookErrors: 0,
     pollErrors: emptyErrorCategoryCounts(),
     sessionIdle: new Map(),
+    sessionTurnState: new Map(),
   };
   healthStateRef.current = healthState;
   let clockSkewMonitor = startClockSkewMonitor({
@@ -1188,6 +1229,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
             }),
           renewSessionTokens: () => clockSkewMonitor?.renewSessionTokens() ?? Promise.resolve(),
           isThawing: () => false,
+          thaws: () => 0,
           getRetireAtMs: () => runnerRetireAtMs(),
           isStopping: () => shutdownState !== "running" || !isDeferWindowOpen,
           isHeldOff: () => clockSkewMonitor?.isHeldOff() ?? false,
@@ -1268,11 +1310,11 @@ Run 'claude self-hosted-runner --help' for usage.`,
     await flushLogFile();
   }
 }
-//@ chunk-hm0ce8vc.js:288822-288906 placement
+//@ chunk-asf5gh8x.js:302375-302459 placement
 function isAuthFailure(error) {
   return error instanceof Error && "isAuthFailure" in error && error.isAuthFailure === true;
 }
-//@ chunk-hm0ce8vc.js:288906-289263 placement
+//@ chunk-asf5gh8x.js:302459-302816 placement
 /**
  * 校验 --lock-to-account：必须是组织成员的 user_<id> 或邮箱。
  */
@@ -1283,7 +1325,7 @@ function validateLockToAccount(message) {
     return ` (${flagHint}; it must be the user_<id> or email address of a member of the organization that owns this environment)`;
   return ` (${flagHint})`;
 }
-//@ chunk-hm0ce8vc.js:289263-320208 placement
+//@ chunk-asf5gh8x.js:302816-339882 placement
 /**
  * runner 主循环：轮询/兑现工单、跑会话、处理 401/epoch 失配、排空与重启（约 31 KB）。
  */
@@ -1306,8 +1348,11 @@ async function runRunnerLoop(options, signal) {
     : "Draining and exiting for clean restart.";
   let restartHint = startedFromWorkOrder ? WORK_ORDER_SINGLE_USE_TEXT : "Orchestrator will restart.";
   let activeSessions = new Map();
-  let sessionStopGraceMs =
-    envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS;
+  let notifyMissingTurnSignals = (turnSignalIds) => {
+    for (let [sessionId, entry] of activeSessions)
+      if (turnSignalIds?.has(sessionId) !== true) entry.onNoTurnSignal();
+  };
+  let notifyMissing = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS;
   let postSessionHookTimeoutMs =
     envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS;
   let checkoutHookTimeoutMs = getCheckoutHookTimeoutMs();
@@ -1365,25 +1410,26 @@ async function runRunnerLoop(options, signal) {
   let leaseExpiresAt;
   let suggestedPollMs;
   let failureReportInFlight = new Set();
-  let canonicalLocks = new Map();
-  let spawnedSessionIds = new Set();
-  let unannouncedSkipCount = 0;
-  let now = Date.now();
+  let spawnedIds = new Map();
+  let unannouncedSkipCount = new Set();
+  let unannouncedSkipCount_2 = 0;
+  let pollOkLogged = Date.now();
   let pollOkNotLogged = false;
   let pollFailNotLogged = true;
   let pickedUpCount = 0;
-  let now_2 = Date.now();
-  let startCommandPhases = options.startCommandPhases;
-  let takeStartCommandPhases = () => {
-    let phases = startCommandPhases;
-    startCommandPhases = undefined;
+  let takeStartCommandPhases = Date.now();
+  let workloadDrained = options.startCommandPhases;
+  let idleSince = () => {
+    let phases = workloadDrained;
+    workloadDrained = undefined;
     return phases;
   };
-  let workloadDrained = false;
-  let idleSince = null;
+  let workloadDrained_2 = false;
+  let idleSince_2 = null;
   let idleShutdownMs = envPositiveMs("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
   let drainGraceMs = envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS");
   let sessionIdleMs = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+  let platform = getRunnerIdleMs();
   let holdIdlePath = holdIdleFile();
   let maxHoldMs = getMaxHoldMs();
   let leftoverHoldLookOverride = options.leftoverHoldLookOverride ?? checkPathNotOnNetworkLocation;
@@ -1410,12 +1456,12 @@ async function runRunnerLoop(options, signal) {
   let postCeilingPollTimer;
   let deferCeilingPassed = false;
   let liveSessionCount = () =>
-    count(
+    countWhere(
       [...activeSessions.entries()],
       ([sessionId, entry]) => !entry.controller.signal.aborted && !releaseInFlight.has(sessionId),
     );
   let releaseInFlightCount = () =>
-    count(
+    countWhere(
       [...activeSessions.entries()],
       ([sessionId, entry]) =>
         !entry.controller.signal.aborted && releaseInFlight.has(sessionId) && !releaseTasks.has(sessionId),
@@ -1508,7 +1554,7 @@ async function runRunnerLoop(options, signal) {
           ? `each is released once its user has been idle ${formatDuration(sessionIdleMs, {
               hideTrailingZeros: true,
             })} (--release-idle-session-min) or when it ends`
-          : "none is released early (--release-idle-session-min is not set)") +
+          : describeIdleRelease()) +
         `; ${formatDuration(deferShutdown.maxMs, {
           hideTrailingZeros: true,
         })} after the signal every session still attached is released at once; exiting as soon as the slots are empty`,
@@ -1589,7 +1635,7 @@ async function runRunnerLoop(options, signal) {
         onStatus(exitReasonText());
         return;
       }
-      if (drainGraceMs === 0 && workloadDrained && attachedCount() === 0) {
+      if (drainGraceMs === 0 && workloadDrained_2 && attachedCount() === 0) {
         onStatus(
           `[runner:exit] account workload drained \u2014 exiting (grace=0, no re-poll). ${restartHint}`,
         );
@@ -1601,7 +1647,7 @@ async function runRunnerLoop(options, signal) {
         await sleep(Math.floor(Math.random() * MAX_SERVER_MESSAGE_CHARS), signal);
         if (signal.aborted) break;
       }
-      let pollStartedAt = now;
+      let pollStartedAt = pollOkLogged;
       let assignmentIds;
       try {
         let pollResult = await apiClient.pollWork(
@@ -1613,8 +1659,11 @@ async function runRunnerLoop(options, signal) {
         );
         assignmentIds = pollResult.assignment_ids;
         clientPlatforms.clear();
+        let hintsStream = new Set();
         for (let assignment of pollResult.session_assignments ?? []) {
           if (!assignment || typeof assignment.session_id !== "string" || !assignment.session_id) continue;
+          activeSessions.get(assignment.session_id)?.onTurnSignal(parseTurnSignal(assignment.turn_signal));
+          hintsStream.add(assignment.session_id);
           if (
             typeof assignment.client_platform === "string" &&
             assignment.client_platform &&
@@ -1633,9 +1682,10 @@ async function runRunnerLoop(options, signal) {
             );
           }
         }
+        notifyMissingTurnSignals(hintsStream);
         leaseExpiresAt = pollResult.lease_expires_at;
         suggestedPollMs = pollResult.suggested_poll_interval;
-        now = Date.now();
+        pollOkLogged = Date.now();
         notFoundCount = 0;
         transportFailureCount = 0;
         if (pollFailNotLogged || pollOkNotLogged) {
@@ -1644,13 +1694,14 @@ async function runRunnerLoop(options, signal) {
           pollOkNotLogged = false;
         }
         if (healthState) {
-          healthState.lastPollAt = now;
+          healthState.lastPollAt = pollOkLogged;
           healthState.activeSessions = activeSessions.size;
         }
       } catch (error) {
         if (signal.aborted) break;
         let errorClass = classifyRunnerError(error);
         if (healthState) healthState.pollErrors[errorClass]++;
+        notifyMissingTurnSignals();
         let errorText = error instanceof Error ? error.message : String(error);
         if (isAuthFailure(error)) {
           logFeatureBad("self_hosted_poll", "self_hosted_poll_auth_failed");
@@ -1703,9 +1754,9 @@ async function runRunnerLoop(options, signal) {
       }
       let filtered = assignmentIds.filter((sessionId) => !stuckSessions.has(sessionId));
       if (filtered.length === 0 && attachedCount() === 0) {
-        idleSince ??= Date.now();
-        let idleForMs = Date.now() - idleSince;
-        if (workloadDrained) {
+        idleSince_2 ??= Date.now();
+        let idleForMs = Date.now() - idleSince_2;
+        if (workloadDrained_2) {
           if (idleForMs >= drainGraceMs) {
             onStatus(
               retiring
@@ -1722,9 +1773,9 @@ async function runRunnerLoop(options, signal) {
           );
           return;
         }
-      } else idleSince = null;
-      let drainNow = drainGraceMs === 0 && workloadDrained && attachedCount() === 0;
-      if (filtered.length > 0) workloadDrained = true;
+      } else idleSince_2 = null;
+      let drainNow = drainGraceMs === 0 && workloadDrained_2 && attachedCount() === 0;
+      if (filtered.length > 0) workloadDrained_2 = true;
       let assignedNow = new Set(assignmentIds);
       for (let [sessionId, entry] of activeSessions)
         if (!assignedNow.has(sessionId)) {
@@ -1795,14 +1846,14 @@ async function runRunnerLoop(options, signal) {
         onStatus(`Picked up session ${sessionId} (${activeSessions.size + 1}/${config.capacity} active)`);
         let abortController_2 = new AbortController();
         let sessionId_2 = sessionId.replace(/^cse_/, "session_");
-        let platform = clientPlatforms.get(sessionId) ?? UNKNOWN;
+        let platform_2 = clientPlatforms.get(sessionId) ?? UNKNOWN;
         healthState?.sessionIdle.set(sessionId_2, null);
-        healthState?.sessionClientPlatform.set(sessionId_2, platform);
+        healthState?.sessionClientPlatform.set(sessionId_2, platform_2);
         let now = Date.now();
         healthState?.claimVisibility?.set(sessionId_2, {
           pickedUpAt: now,
         });
-        let standbyIdleMs = activeSessions.size === 0 ? now - now_2 : undefined;
+        let standbyIdleMs = activeSessions.size === 0 ? now - takeStartCommandPhases : undefined;
         if (healthState) {
           for (let counter of [
             healthState.sessionsStarted,
@@ -1810,7 +1861,7 @@ async function runRunnerLoop(options, signal) {
             healthState.sessionsFailed,
             healthState.sessionsInterrupted,
           ])
-            if (!counter.has(platform)) counter.set(platform, 0);
+            if (!counter.has(platform_2)) counter.set(platform_2, 0);
         }
         let idleTimer;
         let loggedStartupRestart = false;
@@ -1828,6 +1879,17 @@ async function runRunnerLoop(options, signal) {
         };
         let turnDeferred = false;
         let lastActivityKind;
+        let sawTurnInFlight;
+        let pollIntervalMs = sessionIdleMs;
+        let wakeDelayMs = 0;
+        let platformsBySession;
+        let notFoundCount;
+        let transportFailureCount;
+        let leaseExpiresAt = 0;
+        let suggestedPollMs;
+        let failureReports = false;
+        let canonicalLocksByPath = false;
+        let spawnedSessionIdSet = false;
         let releaseRequested = false;
         let releaseReason = "retire";
         let reasonPhrase = () =>
@@ -1895,6 +1957,62 @@ async function runRunnerLoop(options, signal) {
           if (step < idleDeferSteps.length)
             idleDeferTimer = setTimeout(deferIdleClock, idleDeferSteps[step], ledger, step + 1);
         };
+        let stallTimer;
+        let onTurnSignal = (onTurnSignal) => {
+          if (sessionEnding) return;
+          if (onTurnSignal === undefined) {
+            stallTimer = undefined;
+            healthState?.sessionTurnState.delete(sessionId_2);
+          } else if (
+            onTurnSignal.state !== stallTimer?.state ||
+            onTurnSignal.workerEpoch !== stallTimer.workerEpoch ||
+            onTurnSignal.act !== stallTimer.act
+          ) {
+            stallTimer = onTurnSignal;
+            healthState?.sessionTurnState.set(sessionId_2, onTurnSignal.state);
+            onStatus(
+              `[runner:session] ${sessionId} turn state from the server: ${onTurnSignal.state} (worker epoch ${onTurnSignal.workerEpoch}, ${onTurnSignal.act ? "acting on it" : "report only"})`,
+            );
+          }
+          tick(onTurnSignal);
+        };
+        let turnActive = false;
+        let turnState;
+        let busySince;
+        let idleBeats = 0;
+        let noteIdle = () => {
+          turnState = undefined;
+          onStatus(
+            `[runner:session] ${sessionId} stopped following the server's turn state (it stopped asking, or polls gave no signal): retire and drain no longer wait for a turn`,
+          );
+          logFeatureSad("self_hosted_turn_signal", "stopped_acting");
+          onActivity("turn-end-deferred");
+        };
+        let onNoTurnSignal = () => {
+          busySince ??= Date.now();
+          if (!sessionEnded() && turnState?.state === "busy" && Date.now() - busySince >= BUSY_IDLE_MS)
+            noteIdle();
+        };
+        let tick = (signal) => {
+          if (!turnActive || sessionEnded()) return;
+          if (signal?.act !== true) {
+            if (signal === undefined && turnState?.state === "busy" && ++idleBeats < IDLE_BUSY_BEATS) return;
+            idleBeats = 0;
+            if (turnState !== undefined) noteIdle();
+            return;
+          }
+          idleBeats = 0;
+          busySince = undefined;
+          if (
+            !(turnState !== undefined && signal.workerEpoch !== turnState.workerEpoch) &&
+            signal.state === turnState?.state
+          )
+            return;
+          if (turnState === undefined) logFeatureOk("self_hosted_turn_signal");
+          turnState = signal;
+          onActivity("activity");
+          if (signal.state !== "busy") onActivity(TURN_STATE_STATUS_TEXT[signal.state]);
+        };
         let onActivity = (kind, details) => {
           if (kind === "startup" && details?.childAlive === true && lastActivityKind !== "startup") {
             onDebug(
@@ -1913,6 +2031,12 @@ async function runRunnerLoop(options, signal) {
             clearTimeout(idleTimer);
             idleTimer = undefined;
           }
+          leaseExpiresAt++;
+          let wasParked = canonicalLocksByPath;
+          let wasToolUse = spawnedSessionIdSet;
+          canonicalLocksByPath = false;
+          spawnedSessionIdSet = false;
+          if (kind !== "turn-end") suggestedPollMs = undefined;
           holdLookToken = undefined;
           if (!sessionEnding && healthState)
             if (kind === "turn-end" || (kind === "awaiting-action" && !turnDeferred)) {
@@ -1946,7 +2070,7 @@ async function runRunnerLoop(options, signal) {
             stopIdleDefer();
             onTurnSettled();
             if (sessionEnded()) return;
-            if (sessionIdleMs > 0) deferIdleClock(details, 0);
+            if (pollIntervalMs > 0) deferIdleClock(details, 0);
             if (releaseRequested) releaseDeferredTurn();
             return;
           }
@@ -1959,6 +2083,7 @@ async function runRunnerLoop(options, signal) {
           setTurnInFlight(false);
           turnDeferred = false;
           lastActivityKind = kind;
+          sawTurnInFlight = details;
           onTurnSettled();
           if (sessionEnded()) return;
           let idleTimeoutMs = childSilent
@@ -1969,7 +2094,17 @@ async function runRunnerLoop(options, signal) {
                 : retireReleaseRetryMsOverride
               : kind === "startup"
                 ? startupTimeoutMs
-                : sessionIdleMs;
+                : turnState !== undefined
+                  ? 0
+                  : kind === "turn-end" && details?.promptParked !== true && details?.goesOnUnasked !== true
+                    ? wasToolUse
+                      ? Math.max(pollIntervalMs, MAX_SESSION_IDLE_MS)
+                      : pollIntervalMs
+                    : sessionIdleMs;
+          let limitNote =
+            kind === "turn-end" && !releaseRequested && !platform
+              ? " (limit sent by Anthropic's control plane)"
+              : "";
           let effectiveMs = releaseRequested ? retireReleaseRetryMsOverride : idleTimeoutMs;
           let whenText = () =>
             releaseRequested
@@ -1984,7 +2119,21 @@ async function runRunnerLoop(options, signal) {
               : kind === "awaiting-action"
                 ? `awaiting user action ${formatDuration(idleTimeoutMs)}`
                 : `user idle ${formatDuration(idleTimeoutMs)}`;
-          if (!releaseRequested && !childSilent && idleTimeoutMs <= 0) return;
+          if (!releaseRequested && !childSilent && idleTimeoutMs <= 0) {
+            if (kind !== "startup") {
+              idleSinceAt = undefined;
+              idleSinceBySession.delete(sessionId);
+              holdAnnounced = false;
+              holdReleasedAnnounced = false;
+            }
+            if (details?.goesOnUnasked === true && pollIntervalMs > 0) {
+              (failureReports ? onDebug : onStatus)(
+                `[runner:session] ${sessionId} the idle limit from Anthropic's control plane is not counted: a scheduled prompt or a teammate agent may go on without the user`,
+              );
+              failureReports = true;
+            }
+            return;
+          }
           if (sessionEnded()) return;
           if (
             kind === "awaiting-action" &&
@@ -2016,8 +2165,9 @@ async function runRunnerLoop(options, signal) {
               {
                 hideTrailingZeros: true,
               },
-            )} at ${new Date(Date.now() + idleTimeoutMs).toISOString()} unless new activity arrives`;
-            if (!startupRestart) onStatus(clockMessage);
+            )} at ${new Date(Date.now() + idleTimeoutMs).toISOString()} unless new activity arrives${limitNote}`;
+            if (wasParked) onDebug(clockMessage);
+            else if (!startupRestart) onStatus(clockMessage);
             else if (loggedStartupRestart) onDebug(clockMessage);
             else {
               loggedStartupRestart = true;
@@ -2038,7 +2188,7 @@ async function runRunnerLoop(options, signal) {
             idleSinceAt ??= Date.now();
             idleSinceBySession.set(sessionId, idleSinceAt);
           }
-          let fireIdleRelease = (skipHold = false) => {
+          let fireIdleRelease = (skipHold = false, settle = false) => {
             idleTimer = undefined;
             if (sessionEnded()) return;
             if (releaseInFlight.has(sessionId)) return;
@@ -2092,6 +2242,8 @@ async function runRunnerLoop(options, signal) {
                       holdReleasedAnnounced = false;
                       if (!holdAnnounced) {
                         holdAnnounced = true;
+                        if (limitNote !== "")
+                          logFeatureSad("self_hosted_server_idle_limit", "kept_hold_file");
                         onStatus(
                           `[runner:session] ${sessionId} idle release held: ${holdPath} says a process the session left running still lives \u2014 looking again every ${formatDuration(
                             leftoverHoldRecheckMsOverride,
@@ -2123,7 +2275,7 @@ async function runRunnerLoop(options, signal) {
                     if (holdAnnounced && !holdReleasedAnnounced) {
                       holdReleasedAnnounced = true;
                       onStatus(
-                        `[runner:session] ${sessionId} idle release still held: ${lookFailureText} \u2014 looking once more before releasing`,
+                        `[runner:session] ${sessionId} idle release still held: ${lookFailureText} \u2014 looking once more${limitNote === "" ? " before releasing" : ""}`,
                       );
                       idleTimer = setTimeout(fireIdleRelease, max, false);
                       return;
@@ -2134,7 +2286,7 @@ async function runRunnerLoop(options, signal) {
                       );
                     else if (lookResult !== false)
                       onStatus(
-                        `[runner:session] ${sessionId} idle release not held: ${lookFailureText} \u2014 releasing`,
+                        `[runner:session] ${sessionId} idle release not held: ${lookFailureText} \u2014 ${limitNote === "" ? "releasing" : "its checkouts decide whether it is released"}`,
                       );
                     holdAnnounced = false;
                     holdReleasedAnnounced = false;
@@ -2152,12 +2304,77 @@ async function runRunnerLoop(options, signal) {
                 onStatus(
                   `[runner:session] ${sessionId} idle release no longer held: ${formatDuration(maxHoldMs, {
                     hideTrailingZeros: true,
-                  })} have passed since the session went idle (--max-hold-min)`,
+                  })} have passed since ${limitNote === "" ? "the session went idle" : "its idle clock started"} (--max-hold-min)`,
                 );
               }
             }
             if (releaseRequested) releaseAttempts++;
-            onStatus(`[runner:session] ${sessionId} ${clockReason} \u2014 releasing`);
+            if (limitNote !== "" && activeSessions.get(sessionId)?.postTurnSettling === true) {
+              canonicalLocksByPath = true;
+              onActivity(kind, details);
+              return;
+            }
+            if (limitNote !== "" && !settle) {
+              let idleBeatsAtStart = leaseExpiresAt;
+              let checkouts = platformsBySession;
+              Promise.all([
+                checkoutStates(checkouts ?? [], notFoundCount),
+                checkOwnFolder_2(transportFailureCount),
+              ])
+                .then(([checkoutResult, fetched]) => {
+                  if (
+                    leaseExpiresAt !== idleBeatsAtStart ||
+                    lastActivityKind !== "turn-end" ||
+                    turnDeferred ||
+                    sessionEnded()
+                  )
+                    return;
+                  if (checkouts !== undefined && checkoutResult.length === 0 && fetched === undefined) {
+                    fireIdleRelease(true, true);
+                    return;
+                  }
+                  let mismatchNote =
+                    checkouts === undefined
+                      ? "the runner does not know its checkouts"
+                      : describeWorkLoss(checkoutResult, checkouts.length, fetched);
+                  let sameAsBefore = mismatchNote === suggestedPollMs;
+                  (sameAsBefore ? onDebug : onStatus)(
+                    `[runner:session] ${sessionId} ${clockReason}${limitNote} \u2014 keeping the session: ${mismatchNote}. ` +
+                      (checkoutResult.includes("started_by_script") ||
+                      fetched === "own_folder_behind_script" ||
+                      fetched === "own_folder_not_linux" ||
+                      fetched === "own_folder_start_named"
+                        ? ""
+                        : `The runner checks again in ${formatDuration(
+                            Math.max(pollIntervalMs, MAX_SESSION_IDLE_MS),
+                            {
+                              hideTrailingZeros: true,
+                            },
+                          )}. `) +
+                      `To release idle sessions even when they hold such work, set --release-idle-session-min <minutes>: it checks nothing, so save their work with a post-session hook${fetched === undefined ? ", or with --push-outcome-on-release on every runner of the environment" : ""}.`,
+                  );
+                  if (!sameAsBefore)
+                    logFeatureSad(
+                      "self_hosted_server_idle_limit",
+                      checkouts === undefined
+                        ? "kept_checkouts_unknown"
+                        : keptReasonCode(checkoutResult, fetched),
+                    );
+                  suggestedPollMs = mismatchNote;
+                  canonicalLocksByPath = true;
+                  spawnedSessionIdSet = true;
+                  onActivity(kind, details);
+                })
+                .catch((error) => {
+                  onStatus(
+                    `[runner:session] ${sessionId} acting on the check of its checkouts and its own folder at the idle limit from Anthropic's control plane failed: ${error instanceof Error ? error.message : String(error)}. The session stays on this runner with its idle clock stopped until its next turn ends or a different limit arrives; --retire-at, --defer-shutdown-max-min and --kill-session-after-min, where set, still release it.`,
+                  );
+                  logFeatureBad("self_hosted_server_idle_limit", "acting_on_look_failed");
+                });
+              return;
+            }
+            onStatus(`[runner:session] ${sessionId} ${clockReason}${limitNote} \u2014 releasing`);
+            if (limitNote !== "") logFeatureOk("self_hosted_server_idle_limit");
             releaseInFlight.add(sessionId);
             if (kind !== "awaiting-action") {
               let liveBgTasks = activeSessions.get(sessionId)?.liveBgTasks ?? 0;
@@ -2192,7 +2409,7 @@ async function runRunnerLoop(options, signal) {
                     if (keepForShutdown) declinedSessions.add(sessionId);
                     onStatus(
                       keepForShutdown
-                        ? `[runner:session] ${sessionId} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its --release-idle-session-min window, if set, starts over; otherwise it stays until the ceiling)`
+                        ? `[runner:session] ${sessionId} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its idle limit, if it has one, starts over; otherwise it stays until the ceiling)`
                         : `[runner:session] ${sessionId} released=false after post-session hook (pending user event) after the defer ceiling \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`,
                     );
                     logFeatureSad("self_hosted_release_session", "released_false_shutting_down");
@@ -2457,7 +2674,50 @@ async function runRunnerLoop(options, signal) {
             onSessionActivity: onActivity,
             onMaxLifetime,
             onChildTerminating,
-            clientPlatform: platform,
+            onCheckouts: (products, platforms) => {
+              platformsBySession = products;
+              notFoundCount = platforms;
+            },
+            onOwnFolder: (folder) => {
+              transportFailureCount = folder;
+            },
+            onServerIdleLimit: (limit) => {
+              if (limit === wakeDelayMs || sessionEnded()) return;
+              wakeDelayMs = limit;
+              let limitValue = limit ?? 0;
+              let limitText = formatDuration(limitValue, {
+                hideTrailingZeros: true,
+              });
+              if (platform) {
+                if (limitValue > 0)
+                  onDebug(
+                    `[runner:session] ${sessionId} Anthropic's control plane sent an idle limit of ${limitText}; the operator's --release-idle-session-min setting wins`,
+                  );
+                return;
+              }
+              if (limit === undefined) {
+                logFeatureSad("self_hosted_server_idle_limit", "unusable_value");
+                onDebug(
+                  `[runner:session] ${sessionId} the idle limit that Anthropic's control plane sent is not a number of minutes from 0.1 to 10080: the session has no idle limit`,
+                );
+              }
+              if (limitValue === pollIntervalMs) return;
+              pollIntervalMs = limitValue;
+              suggestedPollMs = undefined;
+              failureReports = false;
+              holdReleasedAnnounced = false;
+              onStatus(
+                limitValue > 0
+                  ? `[runner:session] ${sessionId} idle limit ${limitText} from Anthropic's control plane: once its user has sent nothing for ${limitText} after a finished turn, the session is released only if its checkouts hold no uncommitted changes and are still at the commit that the runner checked out, and its own folder under --base-dir/_sessions holds only what the runner put there. The runner checks that folder only on Linux, and keeps the session on any other system.${drainGraceMs === 0 ? " This runner exits once its last session is released (--drain-grace-sec 0), so something has to start the next one." : ""} Set --release-idle-session-min to choose your own limit, or to 0 to keep idle sessions.${holdIdlePath !== undefined && maxHoldMs > 0 && maxHoldMs <= limitValue ? ` --hold-idle-file holds nothing at this limit, because --max-hold-min is not longer than ${limitText}: raise it for the file to hold.` : ""}`
+                  : `[runner:session] ${sessionId} the idle limit from Anthropic's control plane no longer applies: the session is not released for being idle`,
+              );
+              if (lastActivityKind === "turn-end" && !releaseRequested)
+                onActivity("turn-end", sawTurnInFlight);
+            },
+            onToolServerReady: () => {
+              turnActive = true;
+            },
+            clientPlatform: platform_2,
             onChildLifecycle: healthState
               ? (lifecycleKind) => {
                   let counter =
@@ -2468,7 +2728,7 @@ async function runRunnerLoop(options, signal) {
                         : lifecycleKind === "failed"
                           ? healthState.sessionsFailed
                           : healthState.sessionsInterrupted;
-                  counter.set(platform, (counter.get(platform) ?? 0) + 1);
+                  counter.set(platform_2, (counter.get(platform_2) ?? 0) + 1);
                 }
               : undefined,
             onInitPhase: healthState
@@ -2495,7 +2755,7 @@ async function runRunnerLoop(options, signal) {
                 }
               : undefined,
             standbyIdleMs,
-            takeStartCommandPhases,
+            takeStartCommandPhases: idleSince,
             getHealthzClaimVisibleMs: () => healthState?.claimVisibility?.get(sessionId_2)?.visibleMs,
             moveWatch: options.moveWatch,
             ...false,
@@ -2505,8 +2765,8 @@ async function runRunnerLoop(options, signal) {
                 if (sessionIdFromJwt !== null) healthState.lockedAccountEmail = sessionIdFromJwt;
               }
             },
-            canonicalLocks,
-            spawnedSessionIds,
+            canonicalLocks: spawnedIds,
+            spawnedSessionIds: unannouncedSkipCount,
             postSessionHookTimeoutMs,
             checkoutHookTimeoutMs,
             pushOutcomeOnRelease: config.pushOutcomeOnRelease,
@@ -2551,6 +2811,45 @@ async function runRunnerLoop(options, signal) {
             if (failureReason)
               onStatus(`Session ${sessionId} finished: ${result} \u2014 reason: ${failureReason}`);
             else onStatus(`Session ${sessionId} finished: ${result}`);
+            if (outcome.reviewDone && !releaseInFlight.has(sessionId) && !releaseTasks.has(sessionId)) {
+              releaseInFlight.add(sessionId);
+              let serverHint =
+                "If the server still has it assigned, it is started once more; that start is refused and reported as a failed session. Nothing on this runner needs changing.";
+              releaseTasks.set(
+                sessionId,
+                retryWithBackoff(() => apiClient.releaseSession(tokenState.runnerToken, sessionId), {
+                  initialDelayMs: 500,
+                  maxDelayMs: 2000,
+                  maxAttempts: 3,
+                  shouldRetry: isRetryableRunnerError,
+                })
+                  .then((granted) => {
+                    if (granted?.released) {
+                      onStatus(
+                        `[runner:session] ${sessionId} released after its code review ended; parked server-side`,
+                      );
+                      logFeatureOk("self_hosted_release_session");
+                      return;
+                    }
+                    releaseInFlight.delete(sessionId);
+                    onStatus(
+                      `[runner:session] ${sessionId}: the server declined to release this code review after it ended. ${serverHint}`,
+                    );
+                    logFeatureSad("self_hosted_release_session", "released_false_review_done");
+                  })
+                  .catch((error) => {
+                    releaseInFlight.delete(sessionId);
+                    onStatus(
+                      `[runner:session] ${sessionId}: could not release this code review after it ended: ${errorMessage(error)}. ${serverHint}`,
+                    );
+                    logFeatureBad("self_hosted_release_session", "rpc_failed");
+                  })
+                  .finally(() => {
+                    releaseTasks.delete(sessionId);
+                    pollWaker.wake("LOCAL");
+                  }),
+              );
+            }
             let isFailure =
               result === "failed" || (result === "interrupted" && !abortController_2.signal.aborted);
             if (isFailure && outcome.failedOnUpdateBuild === true) {
@@ -2613,6 +2912,7 @@ async function runRunnerLoop(options, signal) {
               idleSinceBySession.delete(sessionId);
             if (healthState) {
               healthState.sessionIdle.delete(sessionId_2);
+              healthState.sessionTurnState.delete(sessionId_2);
               healthState.sessionClientPlatform.delete(sessionId_2);
               healthState.claimVisibility?.delete(sessionId_2);
               dropSessionMetrics(healthState, sessionId_2);
@@ -2626,7 +2926,7 @@ async function runRunnerLoop(options, signal) {
             wakeEpochTimer?.();
             if (healthState) healthState.activeSessions = activeSessions.size;
             if (activeSessions.size === 0) {
-              now_2 = Date.now();
+              takeStartCommandPhases = Date.now();
               if (retiring) pollWaker.wake("LOCAL");
             }
             if (sseHintsEnabled && wasAtCapacity) pollWaker.wake("LOCAL");
@@ -2638,14 +2938,16 @@ async function runRunnerLoop(options, signal) {
           bgResultPendingFollowup: false,
           postTurnSettling: false,
           turnInFlight: false,
+          onTurnSignal,
+          onNoTurnSignal,
           releaseForRetire,
           releaseForShutdown,
         });
         if (healthState) healthState.activeSessions = activeSessions.size;
       }
       let pollDelayMs = options.pollIntervalOverrideMs ?? nextPollDelayMs(leaseExpiresAt, suggestedPollMs);
-      unannouncedSkipCount++;
-      if (unannouncedSkipCount % hintsRetries === 0) {
+      unannouncedSkipCount_2++;
+      if (unannouncedSkipCount_2 % hintsRetries === 0) {
         let size = activeSessions.size;
         let jwtExpirySeconds = decodeSessionJwt(tokenState.runnerToken);
         let now = Date.now();
@@ -2657,7 +2959,7 @@ async function runRunnerLoop(options, signal) {
                 mostSignificantOnly: true,
               })}`
             : "unknown";
-        let lockedAccountText = healthState?.lockedAccountEmail ?? (workloadDrained ? "yes" : "no");
+        let lockedAccountText = healthState?.lockedAccountEmail ?? (workloadDrained_2 ? "yes" : "no");
         onStatus(
           `[runner:health] polling ok \xB7 ${size}/${config.capacity} slots \xB7 last_poll=${pollAgeMs}ms ago \xB7 locked_account=${lockedAccountText} \xB7 runner_token expires in ${tokenExpiryText} \xB7 ${pickedUpCount} sessions handled`,
         );
@@ -2690,7 +2992,7 @@ async function runRunnerLoop(options, signal) {
     let drainTimeoutMs =
       options.drainTimeoutMs ??
       graceSeconds(
-        sessionStopGraceMs,
+        notifyMissing,
         postSessionHookTimeoutMs,
         0,
         config.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0,
@@ -2702,11 +3004,21 @@ async function runRunnerLoop(options, signal) {
       isHeartbeatInFlight = true;
       apiClient
         .pollWork(tokenState.runnerToken, runnerId, 0)
-        .then(() => {
+        .then((pollResult) => {
           if (healthState) healthState.lastPollAt = Date.now();
+          let assignments = new Set();
+          for (let assignment of pollResult.session_assignments ?? [])
+            if (assignment && typeof assignment.session_id === "string") {
+              activeSessions
+                .get(assignment.session_id)
+                ?.onTurnSignal(parseTurnSignal(assignment.turn_signal));
+              assignments.add(assignment.session_id);
+            }
+          notifyMissingTurnSignals(assignments);
         })
         .catch((error) => {
           if (healthState) healthState.pollErrors[classifyRunnerError(error)]++;
+          notifyMissingTurnSignals();
           onDebug(`[runner] shutdown: lease heartbeat failed (best-effort): ${error}`);
         })
         .finally(() => {
@@ -2776,7 +3088,7 @@ async function runRunnerLoop(options, signal) {
               ? "RUNNER_DRAIN_HOLD_OUTCOME_CAP_EXPIRED"
               : "RUNNER_DRAIN_HOLD_OUTCOME_FINISHED",
             held_ms: Date.now() - now,
-            busy_session_ids_at_release: busyIds.slice(0, MAX_LISTED_SESSION_IDS),
+            busy_session_ids_at_release: busyIds.slice(0, MAX_REPORTED_BUSY_SESSIONS),
           };
           onStatus(
             !didCapExpire
@@ -2871,7 +3183,7 @@ async function runRunnerLoop(options, signal) {
     });
   }
 }
-//@ chunk-hm0ce8vc.js:320208-320369 placement
+//@ chunk-asf5gh8x.js:339882-340043 placement
 function nextPollDelayMs(leaseExpiresAt, suggestedPollInterval) {
   let leaseExpiresMs = leaseExpiresAt ? Date.parse(leaseExpiresAt) : NaN;
   let leaseBasedMs = Number.isNaN(leaseExpiresMs)
@@ -2883,7 +3195,7 @@ function nextPollDelayMs(leaseExpiresAt, suggestedPollInterval) {
   let durationSeconds = parseDurationSeconds(suggestedPollInterval);
   return durationSeconds === undefined ? leaseBasedMs : Math.min(leaseBasedMs, durationSeconds);
 }
-//@ chunk-hm0ce8vc.js:320369-320570 placement
+//@ chunk-asf5gh8x.js:340043-340244 placement
 function parseDurationSeconds(text) {
   let match = text === undefined ? null : /^(\d{1,15})(?:\.(\d{1,9}))?s$/.exec(text);
   if (!match) return;
@@ -2891,13 +3203,13 @@ function parseDurationSeconds(text) {
   let durationMs = Number(match[1]) * 1000 + Math.floor(fractionNanos / 1e6);
   return durationMs > 0 ? Math.max(MIN_BACKOFF_MS, durationMs) : undefined;
 }
-//@ chunk-hm0ce8vc.js:320570-320688 placement
+//@ chunk-asf5gh8x.js:340244-340362 placement
 function backoffDelayMs(attempt, leaseExpiresAt, suggestedPollInterval) {
   let min = Math.min(MAX_POLL_DELAY_MS, HEALTH_PROBE_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
   let floored = Math.floor(min / 2 + Math.random() * (min / 2));
   return clampToLeaseExpiry(floored, leaseExpiresAt, HEALTH_PROBE_BACKOFF_BASE_MS, suggestedPollInterval);
 }
-//@ chunk-hm0ce8vc.js:320688-320839 placement
+//@ chunk-asf5gh8x.js:340362-340513 placement
 function clampToLeaseExpiry(delayMs, leaseExpiresAt, minDelayMs, suggestedPollInterval) {
   let leaseLeftMs = leaseExpiresAt === undefined ? NaN : Date.parse(leaseExpiresAt) - Date.now();
   if (!(leaseLeftMs > 0)) return delayMs;
@@ -2907,7 +3219,7 @@ function clampToLeaseExpiry(delayMs, leaseExpiresAt, minDelayMs, suggestedPollIn
   );
   return Math.min(delayMs, Math.max(minDelayMs, min));
 }
-//@ chunk-hm0ce8vc.js:320839-321020 placement
+//@ chunk-asf5gh8x.js:340513-340694 placement
 async function writeRunnerFileBestEffort(debugTokenDir, fileName, contents, onStatus) {
   try {
     await mkdir(debugTokenDir, {

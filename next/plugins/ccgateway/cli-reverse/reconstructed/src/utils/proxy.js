@@ -3,39 +3,47 @@
  *
  * 代理：读取 HTTP(S)_PROXY / NO_PROXY、创建代理 agent（undici/https-proxy-agent）、proxyAuthHelper 生成 Proxy-Authorization、安装全局 dispatcher 与 axios 拦截器、AWS SDK 代理配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/proxy.ts
- * pieces: chunk-1ny7cxrt.js (1), chunk-bwbq4xvm.js (1), chunk-hq88884p.js (48)
- * attribution: fingerprint 5, placement 6, layout 16, facade-exports 23
+ * pieces: chunk-1hnjmk23.js (1), chunk-355mdh7x.js (53), chunk-7kayq7nc.js (1)
+ * attribution: fingerprint 5, placement 6, layout 18, facade-exports 26
  */
 import { isIP } from "net";
 import { checkServerIdentity } from "tls";
 import { homedir } from "os";
 import { __toESM, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_https_proxy_agent } from "../../vendor/https-proxy-agent/dist/index.js";
+import { logForDebugging } from "./debug.js";
+import { KeptConnectionGate } from "./tlsAgentPool.js";
+import {
+  caEnvFingerprint,
+  anthropicHostOf,
+  withoutSensitiveHeaders,
+  nodeModuleInterop,
+} from "./anthropicHosts.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getIsNonInteractiveSession, getProjectConfigRoot } from "../bootstrap/state.js";
+import { PROXY_ENV_VARS, ALL_PROXY_ENV_NAMES } from "./swarm/spawnUtils.js";
 import { identity } from "./identity.js";
 import { ipInCidr } from "./cidr.js";
-import { getMTLSConfig, getTLSFetchOptions, getMTLSAgent } from "./mtls.js";
+import { getMTLSConfig, getTLSFetchOptions, getMTLSAgent, closeIdleDirectConnections } from "./mtls.js";
 import { getCACertificates, caListFor, applyDefaultCaCertificates } from "./caCerts.js";
 import { env } from "./env.js";
 import { isLoopbackHost } from "./localhost.js";
-import { logForDebugging } from "./debug.js";
 import { safeExecShell } from "./safeSpawn.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
-import { anthropicHostOf, withoutSensitiveHeaders, nodeModuleInterop } from "./anthropicHosts.js";
+import { missesHostOwnedEnvWrite } from "./plugins/securityDefaultPlugin.js";
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { hasAxiosProxyInterceptor, axiosTestEgressInterceptor } from "./testNetworkGuard.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hq88884p.js:60361-60380 placement
+//@ chunk-355mdh7x.js:101927-101946 placement
 var tlsModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hq88884p.js:60361", () => {
+deferInit("chunk-355mdh7x.js:101927", () => {
   tlsModule = __toESM(require_https_proxy_agent(), 1);
 });
-//@ chunk-hq88884p.js:60451-60549 placement
+//@ chunk-355mdh7x.js:102017-102115 placement
 /**
  * 代理 TLS 的 servername 与主机身份检查选项。
  */
@@ -49,12 +57,12 @@ function proxyTlsOptions(hostname) {
         servername: hostname,
       };
 }
-//@ chunk-hq88884p.js:60549-60786 placement
+//@ chunk-355mdh7x.js:102115-102352 placement
 /**
  * HTTPS 代理 agent：对 TLS 目标沿用调用方的证书身份检查（按 servername），否则套用代理 TLS 选项。
  */
 let TlsCheckingProxyAgent; // deferred: uses tlsModule of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:60549", () => {
+deferInit("chunk-355mdh7x.js:102115", () => {
   TlsCheckingProxyAgent = class TlsCheckingProxyAgent extends tlsModule.HttpsProxyAgent {
     connect(...[socket, options]) {
       if (!options.secureEndpoint) return super.connect(socket, options);
@@ -71,7 +79,84 @@ deferInit("chunk-hq88884p.js:60549", () => {
     }
   };
 });
-//@ chunk-hq88884p.js:60786-60984 placement
+//@ chunk-355mdh7x.js:102352-102895 layout
+let otelTunnelAgent; // deferred: uses TlsCheckingProxyAgent of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-355mdh7x.js:102352", () => {
+  otelTunnelAgent = class otelTunnelAgent extends TlsCheckingProxyAgent {
+    #e;
+    #t;
+    constructor({ isSecure, tunnelOpensWithinMs }, ...options) {
+      super(...options);
+      this.#e = isSecure;
+      this.#t = tunnelOpensWithinMs;
+    }
+    isSecureEndpoint() {
+      return this.#e;
+    }
+    async connect(...options) {
+      let abortController = new AbortController();
+      let timer = setTimeout(abortTunnel, this.#t, abortController);
+      this.connectOpts = {
+        ...this.connectOpts,
+        signal: abortController.signal,
+      };
+      try {
+        let socket = await super.connect(...options);
+        if (this.#e) {
+          socket.once("secureConnect", () => clearTimeout(timer));
+          socket.once("close", () => clearTimeout(timer));
+          abortController.signal.addEventListener("abort", () => socket.destroy(otelProxyTimeoutError()));
+        } else clearTimeout(timer);
+        return socket;
+      } catch (error) {
+        clearTimeout(timer);
+        throw abortController.signal.aborted ? otelProxyTimeoutError() : error;
+      }
+    }
+  };
+});
+//@ chunk-355mdh7x.js:102895-103454 layout
+let otelKeptConnectionAgent; // deferred: uses otelTunnelAgent of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-355mdh7x.js:102895", () => {
+  otelKeptConnectionAgent = class otelKeptConnectionAgent extends otelTunnelAgent {
+    #e = new KeptConnectionGate(this);
+    async connect(...options) {
+      let fingerprint = caEnvFingerprint();
+      let socket = await super.connect(...options);
+      if (caEnvFingerprint() !== fingerprint) {
+        socket.destroy();
+        throw Error(
+          "This OpenTelemetry export was not sent: NODE_TLS_REJECT_UNAUTHORIZED, BUN_TLS_REFUSE_DISTRUSTED_KEYS or CLAUDE_CODE_DISABLE_HTTPS_AGENT_KEEPING changed while its connection through the proxy was opening. The next export opens a new connection.",
+        );
+      }
+      this.#e.noteOpened(socket, fingerprint);
+      return socket;
+    }
+    reuseSocket(socket, options) {
+      this.#e.closeUnlessOpenedUnderPresentSwitches(socket);
+      super.reuseSocket(socket, options);
+    }
+    getName(options) {
+      return this.#e.poolName(options, () => super.getName(options));
+    }
+  };
+});
+//@ chunk-355mdh7x.js:103454-103769 layout
+function otelProxyTimeoutError() {
+  return Object.assign(
+    Error(
+      "Could not connect to the OpenTelemetry collector through the proxy in time, so this export was not sent. Check that both can be reached. OTEL_EXPORTER_OTLP_TIMEOUT, or a signal's own time-out, sets the time allowed: 10 seconds unless set, 30 at most.",
+    ),
+    {
+      code: "ETIMEDOUT",
+    },
+  );
+}
+//@ chunk-355mdh7x.js:103769-103794 layout
+function abortTunnel(abortController) {
+  abortController.abort();
+}
+//@ chunk-355mdh7x.js:103794-103992 placement
 class ProxyConnectRefusedError extends Error {
   connectStatus;
   headers;
@@ -83,14 +168,14 @@ class ProxyConnectRefusedError extends Error {
     this.name = "ProxyConnectRefusedError";
   }
 }
-//@ chunk-hq88884p.js:60984-61043 placement
+//@ chunk-355mdh7x.js:103992-104051 placement
 /**
  * 描述 HTTP 状态（0 为不可读回复）。
  */
 function describeHttpStatus(connectStatus) {
   return connectStatus === 0 ? "unreadable reply" : `HTTP ${connectStatus}`;
 }
-//@ chunk-hq88884p.js:61043-61184 placement
+//@ chunk-355mdh7x.js:104051-104192 placement
 /**
  * 沿 cause 链查找代理错误。
  */
@@ -102,12 +187,12 @@ function findProxyError(error) {
   }
   return;
 }
-//@ chunk-hq88884p.js:61184-61495 layout
+//@ chunk-355mdh7x.js:104192-104503 layout
 /**
  * CONNECT 代理 agent：代理对 CONNECT 返回非 200 时销毁连接并抛出 ProxyConnectRefusedError（带状态码与响应头）。
  */
 let ConnectProxyAgent; // deferred: uses TlsCheckingProxyAgent of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:61184", () => {
+deferInit("chunk-355mdh7x.js:104192", () => {
   ConnectProxyAgent = class ConnectProxyAgent extends TlsCheckingProxyAgent {
     async connect(...[socket, options]) {
       let refusal;
@@ -131,7 +216,7 @@ deferInit("chunk-hq88884p.js:61184", () => {
     }
   };
 });
-//@ chunk-hq88884p.js:61495-61731 layout
+//@ chunk-355mdh7x.js:104503-104767 layout
 class ProxyState {
   keepAliveDisabled = false;
   agents = new Map();
@@ -144,21 +229,22 @@ class ProxyState {
   };
   proxyAuthCache = null;
   proxyAuthPendingChallenge = undefined;
+  directRequestAdapter = undefined;
 }
-//@ chunk-hq88884p.js:61731-61756 layout
+//@ chunk-355mdh7x.js:104767-104792 layout
 var proxyStateSlot; // deferred: uses ProxyState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:61731", () => {
+deferInit("chunk-355mdh7x.js:104767", () => {
   proxyStateSlot = new HostScoped(() => new ProxyState());
 });
-//@ chunk-hq88884p.js:61756-61792 layout
+//@ chunk-355mdh7x.js:104792-104829 layout
 function proxyState() {
   return proxyStateSlot.of(getRootSession().host);
 }
-//@ chunk-hq88884p.js:61792-61832 facade-exports
+//@ chunk-355mdh7x.js:104829-104870 facade-exports
 function disableKeepAlive() {
   proxyState().keepAliveDisabled = true;
 }
-//@ chunk-hq88884p.js:61832-62017 fingerprint (2.1.88 match: getAddressFamily, 1)
+//@ chunk-355mdh7x.js:104870-105055 fingerprint (2.1.88 match: getAddressFamily, 1)
 function getAddressFamily(options) {
   switch (options.family) {
     case 0:
@@ -174,9 +260,7 @@ function getAddressFamily(options) {
       throw Error(`Unsupported address family: ${options.family}`);
   }
 }
-//@ chunk-hq88884p.js:62017-62080 layout
-var PROXY_ENV_VARS = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"];
-//@ chunk-hq88884p.js:62080-62186 facade-exports
+//@ chunk-355mdh7x.js:105175-105281 facade-exports
 function getProxyUrlWithSource(env = process.env) {
   let found = PROXY_ENV_VARS.find((name) => env[name]);
   let value = found ? env[found] : undefined;
@@ -187,11 +271,11 @@ function getProxyUrlWithSource(env = process.env) {
       }
     : undefined;
 }
-//@ chunk-hq88884p.js:62186-62233 facade-exports
+//@ chunk-355mdh7x.js:105281-105328 facade-exports
 function getProxyUrl(env = process.env) {
   return getProxyUrlWithSource(env)?.value;
 }
-//@ chunk-hq88884p.js:62233-62306 facade-exports
+//@ chunk-355mdh7x.js:105328-105401 facade-exports
 function parseProxyUrl(rawUrl) {
   try {
     let parsed = new URL(rawUrl);
@@ -200,19 +284,19 @@ function parseProxyUrl(rawUrl) {
     return;
   }
 }
-//@ chunk-hq88884p.js:62306-62565 facade-exports
+//@ chunk-355mdh7x.js:105401-105660 facade-exports
 function describeInvalidProxyUrl(source, value) {
   let replaced = value.replace(/\p{Cc}/gu, "");
   return `Invalid proxy URL in ${source}: "${replaced}" cannot be parsed as a URL.
 Proxy settings must be a complete URL including the scheme, e.g. "http://proxy.example.com:8080".
 Fix or unset ${source} and restart Claude Code.`;
 }
-//@ chunk-hq88884p.js:62565-62599 layout
+//@ chunk-355mdh7x.js:105660-105694 layout
 var reportedInvalidProxyUrls; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hq88884p.js:62565", () => {
+deferInit("chunk-355mdh7x.js:105660", () => {
   reportedInvalidProxyUrls = identity(new Set(), (set) => set.clear());
 });
-//@ chunk-hq88884p.js:62599-62782 facade-exports
+//@ chunk-355mdh7x.js:105694-105877 facade-exports
 /**
  * 读代理 URL（https_proxy、HTTPS_PROXY、http_proxy、HTTP_PROXY 依次），无法解析时打印一次错误并忽略。
  */
@@ -229,18 +313,18 @@ function getUsableProxyUrl(env = process.env) {
   }
   return proxyUrlWithSource.value;
 }
-//@ chunk-hq88884p.js:62782-62872 facade-exports (2.1.88 match: getNoProxy, 1)
+//@ chunk-355mdh7x.js:105877-105967 facade-exports (2.1.88 match: getNoProxy, 1)
 function noProxyUnion(env) {
   let { no_proxy: noProxy, NO_PROXY } = env;
   if (noProxy && NO_PROXY && noProxy !== NO_PROXY) return `${noProxy},${NO_PROXY}`;
   return noProxy || NO_PROXY;
 }
-//@ chunk-hq88884p.js:62872-62962 facade-exports (2.1.88 match: getNoProxy, 1)
+//@ chunk-355mdh7x.js:105967-106057 facade-exports (2.1.88 match: getNoProxy, 1)
 function getNoProxy(env = process.env) {
   if (env.no_proxy === "*" || env.NO_PROXY === "*") return "*";
   return noProxyUnion(env);
 }
-//@ chunk-hq88884p.js:62962-63363 facade-exports (2.1.88 match: shouldBypassProxy, 0.872)
+//@ chunk-355mdh7x.js:106057-106458 facade-exports (2.1.88 match: shouldBypassProxy, 0.872)
 /**
  * 按 NO_PROXY/no_proxy 判断 URL 是否绕过代理（支持 *、域名后缀、端口、IP）。
  */
@@ -269,7 +353,7 @@ function shouldBypassProxy(urlString, noProxy = getNoProxy()) {
     return false;
   }
 }
-//@ chunk-hq88884p.js:63363-63661 layout
+//@ chunk-355mdh7x.js:106458-106756 layout
 function shouldBypassProxyForHost(url, noProxy) {
   if (shouldBypassProxy(url, noProxy)) return true;
   if (!noProxy) return false;
@@ -290,7 +374,7 @@ function shouldBypassProxyForHost(url, noProxy) {
       return ipInCidr(hostname, `${entry}/${family === 4 ? 32 : 128}`);
     });
 }
-//@ chunk-hq88884p.js:63661-63830 fingerprint (2.1.88 match: createHttpsProxyAgent, 0.738)
+//@ chunk-355mdh7x.js:106756-106925 fingerprint (2.1.88 match: createHttpsProxyAgent, 0.737)
 /**
  * 创建 https-proxy-agent，带 mTLS 与 CA。
  */
@@ -316,15 +400,15 @@ function createHttpsProxyAgent(proxyUrl, extra) {
   };
   return agentOptions;
 }
-//@ chunk-hq88884p.js:63830-64056 facade-exports
+//@ chunk-355mdh7x.js:106925-107152 facade-exports
 function createConnectProxyAgent(proxyUrl, options) {
   let agentOptions = {
     ...options,
     headers: () => {
-      let cachedProxyAuthorization = getCachedProxyAuthorization();
-      return cachedProxyAuthorization
+      let proxyAuthFromHelper = getProxyAuthFromHelperCached();
+      return proxyAuthFromHelper
         ? {
-            "Proxy-Authorization": cachedProxyAuthorization,
+            "Proxy-Authorization": proxyAuthFromHelper,
           }
         : {};
     },
@@ -340,7 +424,7 @@ function createConnectProxyAgent(proxyUrl, options) {
   };
   return agent;
 }
-//@ chunk-hq88884p.js:64056-64134 layout
+//@ chunk-355mdh7x.js:107152-107231 layout
 function getCachedProxyAgent(uri) {
   let { agents } = proxyState();
   let agent = agents.get(uri);
@@ -350,7 +434,7 @@ function getCachedProxyAgent(uri) {
   }
   return agent;
 }
-//@ chunk-hq88884p.js:64134-64411 fingerprint (2.1.88 match: getProxyAgent, 1)
+//@ chunk-355mdh7x.js:107231-107508 fingerprint (2.1.88 match: getProxyAgent, 1)
 /**
  * 按代理 URL 创建 undici ProxyAgent / https-proxy-agent，带 Proxy-Authorization（proxyAuthHelper）与 mTLS。
  */
@@ -382,7 +466,7 @@ function getProxyAgent(uri) {
   }
   return new undiciMod.EnvHttpProxyAgent(proxyOptions);
 }
-//@ chunk-hq88884p.js:64411-64520 facade-exports
+//@ chunk-355mdh7x.js:107508-107617 facade-exports
 function getWebSocketProxyUrl(wsUrl) {
   let usableProxyUrl = getUsableProxyUrl();
   if (!usableProxyUrl) return;
@@ -392,13 +476,13 @@ function getWebSocketProxyUrl(wsUrl) {
   if (shouldBypassProxy(wsUrl)) return;
   return usableProxyUrl;
 }
-//@ chunk-hq88884p.js:64520-64534 layout
+//@ chunk-355mdh7x.js:107617-107631 layout
 var PROXY_AUTH_HELPER_DEFAULT_TTL_MS = 300000;
-//@ chunk-hq88884p.js:64534-64578 facade-exports
+//@ chunk-355mdh7x.js:107631-107676 facade-exports
 function _setProxyAuthHelperConfig(proxyAuthHelperConfig) {
   proxyState().proxyAuthHelperConfig = proxyAuthHelperConfig;
 }
-//@ chunk-hq88884p.js:64578-64683 facade-exports
+//@ chunk-355mdh7x.js:107676-107782 facade-exports
 /**
  * proxyAuthHelper 命令（需 CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER）。
  */
@@ -406,18 +490,18 @@ function getConfiguredProxyAuthHelper() {
   if (!env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER) return;
   return proxyState().proxyAuthHelperConfig.helper;
 }
-//@ chunk-hq88884p.js:64683-64764 layout
+//@ chunk-355mdh7x.js:107782-107863 layout
 function isProxyAuthHelperFromRepo(state) {
   return getConfiguredProxyAuthHelper() !== undefined && state.proxyAuthHelperConfig.fromProjectOrLocal;
 }
-//@ chunk-hq88884p.js:64764-64862 layout
+//@ chunk-355mdh7x.js:107863-107961 layout
 function getProxyAuthHelperTtl() {
   let CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS = env.CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS;
   if (CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS !== undefined && CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS >= 0)
     return CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS;
   return PROXY_AUTH_HELPER_DEFAULT_TTL_MS;
 }
-//@ chunk-hq88884p.js:64862-66260 facade-exports
+//@ chunk-355mdh7x.js:107961-109360 facade-exports
 /**
  * 运行 proxyAuthHelper 得到 Proxy-Authorization 值并缓存（TTL 默认 5 分钟，CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS）；来自项目/本地设置时需信任。
  */
@@ -511,8 +595,8 @@ async function getProxyAuthFromHelper() {
   };
   return trimmed;
 }
-//@ chunk-hq88884p.js:66260-66443 layout
-function getCachedProxyAuthorization() {
+//@ chunk-355mdh7x.js:109360-109545 facade-exports
+function getProxyAuthFromHelperCached() {
   let state = proxyState();
   let { helper, readAsHelperStarts } = state.proxyAuthHelperConfig;
   if (
@@ -522,20 +606,20 @@ function getCachedProxyAuthorization() {
     return null;
   return state.proxyAuthCache?.value ?? null;
 }
-//@ chunk-hq88884p.js:66443-66521 facade-exports
+//@ chunk-355mdh7x.js:109545-109624 facade-exports
 function clearProxyAuthHelperCache(proxyAuthPendingChallenge) {
   let state = proxyState();
   state.proxyAuthCache = null;
   state.proxyAuthPendingChallenge = proxyAuthPendingChallenge;
 }
-//@ chunk-hq88884p.js:66521-66627 facade-exports
+//@ chunk-355mdh7x.js:109624-109731 facade-exports
 function prefetchProxyAuthFromHelperIfSafe() {
   if (!getConfiguredProxyAuthHelper()) return;
   let state = proxyState();
   if (isProxyAuthHelperFromRepo(state) && !state.proxyAuthHelperConfig.trustAccepted()) return;
   getProxyAuthFromHelper();
 }
-//@ chunk-hq88884p.js:66627-67328 facade-exports (2.1.88 match: getProxyFetchOptions, 0.434)
+//@ chunk-355mdh7x.js:109731-110434 facade-exports (2.1.88 match: getProxyFetchOptions, 0.432)
 /**
  * 给 fetch 调用生成代理选项（dispatcher/proxy 与 Proxy-Authorization 头），无需代理时只带 TLS 选项。
  */
@@ -570,14 +654,14 @@ function getProxyFetchOptions(opts) {
         ...options,
         ...getTLSFetchOptions(opts.url),
       };
-    let cachedProxyAuthorization = getCachedProxyAuthorization();
+    let proxyAuthFromHelper = getProxyAuthFromHelperCached();
     return {
       ...options,
-      proxy: cachedProxyAuthorization
+      proxy: proxyAuthFromHelper
         ? {
             url: proxyUrl,
             headers: {
-              "Proxy-Authorization": cachedProxyAuthorization,
+              "Proxy-Authorization": proxyAuthFromHelper,
             },
           }
         : proxyUrl,
@@ -613,9 +697,9 @@ function getProxyFetchOptions(opts) {
     ...getTLSFetchOptions(opts.url),
   };
 }
-//@ chunk-hq88884p.js:67328-67376 layout
+//@ chunk-355mdh7x.js:110434-110482 layout
 var globalAgentsInstallState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hq88884p.js:67328", () => {
+deferInit("chunk-355mdh7x.js:110434", () => {
   globalAgentsInstallState = identity(
     {
       installed: false,
@@ -625,29 +709,38 @@ deferInit("chunk-hq88884p.js:67328", () => {
     },
   );
 });
-//@ chunk-hq88884p.js:67376-67456 layout
-function ejectAxiosProxyInterceptor(axiosProxyInterceptorRef) {
-  if (axiosProxyInterceptorRef.id !== undefined) {
-    axios_default.interceptors.request.eject(axiosProxyInterceptorRef.id);
-    axiosProxyInterceptorRef.id = undefined;
+//@ chunk-355mdh7x.js:110482-110562 layout
+function ejectAxiosProxyInterceptor(interceptorRef) {
+  if (interceptorRef.id !== undefined) {
+    axios_default.interceptors.request.eject(interceptorRef.id);
+    interceptorRef.id = undefined;
   }
 }
-//@ chunk-hq88884p.js:67456-67482 layout
+//@ chunk-355mdh7x.js:110562-110623 layout
 var axiosProxyInterceptorRef; // deferred: uses ejectAxiosProxyInterceptor of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:67456", () => {
+deferInit("chunk-355mdh7x.js:110562", () => {
   axiosProxyInterceptorRef = identity(
     {
       id: undefined,
     },
-    ejectAxiosProxyInterceptor,
+    (interceptorRef) => {
+      ejectAxiosProxyInterceptor(interceptorRef);
+      axios_default.defaults.proxy = undefined;
+    },
   );
 });
-//@ chunk-hq88884p.js:67482-67519 facade-exports
+//@ chunk-355mdh7x.js:110623-110660 facade-exports
 function hasConfiguredGlobalAgents() {
   return axiosProxyInterceptorRef.id !== undefined;
 }
-//@ chunk-hq88884p.js:67519-67743 layout
+//@ chunk-355mdh7x.js:110660-110723 facade-exports
+function proxyEnvFingerprint() {
+  return ALL_PROXY_ENV_NAMES.map((name) => process.env[name]).join("\x00");
+}
+//@ chunk-355mdh7x.js:110723-111211 layout
 function applyAxiosAgents(config, agentFor) {
+  let directRequestAdapter = proxyState().directRequestAdapter;
+  if (directRequestAdapter && config.adapter === directRequestAdapter.adapter) config.adapter = undefined;
   if (config.socketPath) return config;
   let uri = axios_default.getUri(config);
   let host = anthropicHostOf(withoutSensitiveHeaders(uri, config.headers));
@@ -658,32 +751,42 @@ function applyAxiosAgents(config, agentFor) {
       httpAgent: agent,
     });
   }
+  if (directRequestAdapter) {
+    let whyNot = directRequestAdapter.whyNot(config);
+    if (whyNot === undefined)
+      return Object.assign(config, {
+        adapter: directRequestAdapter.adapter,
+        httpsAgent: getMTLSAgent(host),
+      });
+    logForDebugging(
+      `An axios ${config.method?.toUpperCase()} request does not go through Bun's fetch: ${whyNot}`,
+    );
+  }
   return Object.assign(config, {
     httpsAgent: config.httpsAgent ?? getMTLSAgent(host),
   });
 }
-//@ chunk-hq88884p.js:67743-68094 facade-exports (2.1.88 match: configureGlobalAgents, 0.752)
-/**
- * 启动时安装全局代理：设置 undici 全局 dispatcher 与 axios 请求拦截器，使所有 HTTP 走代理/mTLS。
- */
+//@ chunk-355mdh7x.js:111211-111612 facade-exports (2.1.88 match: configureGlobalAgents, 0.68)
 function configureGlobalAgents() {
   let proxyUrl = getProxyUrlWithSource();
   let mtlsAgent = getUsableProxyUrl();
   getMTLSAgent();
   applyDefaultCaCertificates();
   ejectAxiosProxyInterceptor(axiosProxyInterceptorRef);
-  axios_default.defaults.proxy = undefined;
-  if (proxyUrl) axios_default.defaults.proxy = false;
-  let mtlsProxyAgent = mtlsAgent
+  let hasAllProxy =
+    !proxyUrl && (env.all_proxy || env.ALL_PROXY) && !missesHostOwnedEnvWrite(ALL_PROXY_ENV_NAMES);
+  axios_default.defaults.proxy = hasAllProxy ? undefined : false;
+  let agentFor = mtlsAgent
     ? memoizeAlias(
         (extra) => createHttpsProxyAgent(mtlsAgent, extra),
-        (agent) => agent !== undefined,
+        (extra) => extra !== undefined,
       )
     : undefined;
   axiosProxyInterceptorRef.id = axios_default.interceptors.request.use((config) =>
-    applyAxiosAgents(config, mtlsProxyAgent),
+    applyAxiosAgents(config, agentFor),
   );
   if (mtlsAgent) {
+    if (!globalAgentsInstallState.installed) closeIdleDirectConnections();
     importMetaRequire("undici").setGlobalDispatcher(getCachedProxyAgent(mtlsAgent));
     globalAgentsInstallState.installed = true;
   } else if (globalAgentsInstallState.installed) {
@@ -692,14 +795,25 @@ function configureGlobalAgents() {
     globalAgentsInstallState.installed = false;
   }
 }
-//@ chunk-hq88884p.js:68094-68194 facade-exports
+//@ chunk-355mdh7x.js:111612-111734 facade-exports
+function rebuildGlobalAgentsAfterPluginWrite(previousFingerprint) {
+  if (proxyEnvFingerprint() === previousFingerprint || !hasConfiguredGlobalAgents()) return;
+  let proxyWasOff = axios_default.defaults.proxy === false;
+  clearProxyCache();
+  try {
+    configureGlobalAgents();
+  } finally {
+    if (proxyWasOff) axios_default.defaults.proxy = false;
+  }
+}
+//@ chunk-355mdh7x.js:111734-111834 facade-exports
 /**
  * AWS STS 端点：AWS_ENDPOINT_URL_STS、AWS_ENDPOINT_URL 或 https://sts.<region>.amazonaws.com。
  */
 function resolveStsEndpointForProxyUrl(region) {
   return env.AWS_ENDPOINT_URL_STS || env.AWS_ENDPOINT_URL || `https://sts.${region}.amazonaws.com`;
 }
-//@ chunk-hq88884p.js:68194-68461 facade-exports
+//@ chunk-355mdh7x.js:111834-112101 facade-exports
 /**
  * 为 AWS SDK 客户端生成走代理的 requestHandler。
  */
@@ -722,7 +836,7 @@ async function getAWSClientProxyConfig(options) {
     }),
   };
 }
-//@ chunk-hq88884p.js:68461-68767 facade-exports (2.1.88 match: getAWSClientProxyConfig, 0.369)
+//@ chunk-355mdh7x.js:112101-112407 facade-exports (2.1.88 match: getAWSClientProxyConfig, 0.369)
 async function getAWSProxyRequestHandler(options) {
   let proxyUrl = getUsableProxyUrl();
   let timeoutOptions = options.requestTimeoutMs !== undefined && {
@@ -744,47 +858,51 @@ async function getAWSProxyRequestHandler(options) {
     ...timeoutOptions,
   });
 }
-//@ chunk-hq88884p.js:68767-68831 facade-exports (2.1.88 match: clearProxyCache, 0.766)
+//@ chunk-355mdh7x.js:112407-112472 facade-exports (2.1.88 match: clearProxyCache, 0.766)
 function clearProxyCache() {
   proxyState().agents.clear();
   logForDebugging("Cleared proxy agent cache");
 }
-//@ chunk-bwbq4xvm.js:161605-161660 fingerprint (2.1.88 match: createAxiosInstance, 0.565)
+//@ chunk-7kayq7nc.js:160854-160909 fingerprint (2.1.88 match: createAxiosInstance, 0.566)
 function createAxiosInstance() {
   if (!hasAxiosProxyInterceptor()) axios_default.interceptors.request.use(axiosTestEgressInterceptor);
 }
-//@ chunk-1ny7cxrt.js:1312506-1312578 fingerprint (2.1.88 match: getNoProxy, 1)
+//@ chunk-1hnjmk23.js:1312957-1313029 fingerprint (2.1.88 match: getNoProxy, 1)
 function getNoProxy_2() {
   return process.env.NO_PROXY || process.env.no_proxy || undefined;
 }
 export {
-  getProxyUrl,
-  parseProxyUrl,
   getProxyFetchOptions,
-  findProxyError,
-  getUsableProxyUrl,
-  shouldBypassProxy,
-  getAWSProxyRequestHandler,
-  resolveStsEndpointForProxyUrl,
+  getProxyUrlWithSource,
   getWebSocketProxyUrl,
+  getUsableProxyUrl,
   getNoProxy_2,
+  shouldBypassProxy,
   TlsCheckingProxyAgent,
+  getAWSProxyRequestHandler,
   configureGlobalAgents,
   noProxyUnion,
-  getProxyUrlWithSource,
-  describeHttpStatus,
-  clearProxyCache,
   getAWSClientProxyConfig,
-  getProxyAuthFromHelper,
+  resolveStsEndpointForProxyUrl,
+  otelKeptConnectionAgent,
+  getProxyUrl,
+  parseProxyUrl,
+  findProxyError,
+  describeHttpStatus,
+  getProxyAuthFromHelperCached,
+  clearProxyCache,
   getConfiguredProxyAuthHelper,
+  disableKeepAlive,
   clearProxyAuthHelperCache,
+  getNoProxy,
+  proxyEnvFingerprint,
+  rebuildGlobalAgentsAfterPluginWrite,
+  hasConfiguredGlobalAgents,
+  getProxyAuthFromHelper,
+  prefetchProxyAuthFromHelperIfSafe,
+  _setProxyAuthHelperConfig,
   createConnectProxyAgent,
   proxyTlsOptions,
   describeInvalidProxyUrl,
-  disableKeepAlive,
-  getNoProxy,
-  _setProxyAuthHelperConfig,
-  prefetchProxyAuthFromHelperIfSafe,
   ConnectProxyAgent,
-  hasConfiguredGlobalAgents,
 };

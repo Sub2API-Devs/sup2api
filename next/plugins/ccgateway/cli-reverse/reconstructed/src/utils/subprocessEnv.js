@@ -3,10 +3,10 @@
  *
  * 构造子进程环境变量（过滤 GitHub Actions INPUT_* 等敏感变量）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/subprocessEnv.ts
- * pieces: chunk-3zy56vtn.js (1), chunk-rtnapjwv.js (57)
- * attribution: fingerprint 1, placement 57
+ * pieces: chunk-3emqeq9c.js (1), chunk-ex0jqs9a.js (58)
+ * attribution: fingerprint 1, placement 58
  */
 import { resolve, dirname, posix } from "path";
 import { homedir } from "os";
@@ -61,9 +61,9 @@ import { isStoredLoginPinned } from "../cli/headlessCloud/attachServe.js";
 import { toolServerEnvAccessor } from "./subprocessEnvLoader.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-rtnapjwv.js:944-970 placement
+//@ chunk-ex0jqs9a.js:944-970 placement
 var SSH_PLACEHOLDER = "ssh-placeholder";
-//@ chunk-rtnapjwv.js:970-1152 placement
+//@ chunk-ex0jqs9a.js:970-1152 placement
 /**
  * 判断环境是否为 SSH 远程转发的占位认证：存在 ANTHROPIC_UNIX_SOCKET、没有 auth token，且 OAuth token 或 API key 之一为 ssh-placeholder 而另一个为空。
  */
@@ -76,7 +76,7 @@ function isSshPlaceholderAuth(env) {
       (ANTHROPIC_API_KEY === "ssh-placeholder" && !CLAUDE_CODE_OAUTH_TOKEN))
   );
 }
-//@ chunk-rtnapjwv.js:1152-1242 placement
+//@ chunk-ex0jqs9a.js:1152-1242 placement
 /**
  * 后台调度子进程的订阅类型与限速等级环境变量名。
  */
@@ -84,7 +84,7 @@ var BG_DISPATCHER_IDENTITY_ENV_VARS = [
   "CLAUDE_BG_DISPATCHER_SUBSCRIPTION_TYPE",
   "CLAUDE_BG_DISPATCHER_RATE_LIMIT_TIER",
 ];
-//@ chunk-rtnapjwv.js:1242-1424 placement
+//@ chunk-ex0jqs9a.js:1242-1424 placement
 /**
  * 生成传给后台调度子进程的订阅类型与限速等级环境变量。
  */
@@ -98,7 +98,7 @@ function buildBgDispatcherEnv(options) {
     }),
   };
 }
-//@ chunk-rtnapjwv.js:1424-1664 placement
+//@ chunk-ex0jqs9a.js:1424-1664 placement
 /**
  * 后台会话中从环境变量读取调度方传入的订阅类型与限速等级。
  */
@@ -113,7 +113,7 @@ function getBgDispatcherPlanInfo() {
     rateLimitTier: env.CLAUDE_BG_DISPATCHER_RATE_LIMIT_TIER || undefined,
   };
 }
-//@ chunk-rtnapjwv.js:1766-1922 placement
+//@ chunk-ex0jqs9a.js:1766-1922 placement
 /**
  * 联合缓存目录。
  */
@@ -124,12 +124,12 @@ function federationCacheDir() {
   let configDir = resolveConfigDir();
   return configDir === null ? null : resolve(configDir, "credentials", "federation");
 }
-//@ chunk-rtnapjwv.js:1922-1946 placement
+//@ chunk-ex0jqs9a.js:1922-1946 placement
 /**
  * 代理注入标记。
  */
 var PROXY_INJECTED_MARKER = "proxy-injected";
-//@ chunk-rtnapjwv.js:1946-2023 placement
+//@ chunk-ex0jqs9a.js:1946-2023 placement
 /**
  * 取策略设置里第一个 bwrap 路径。
  */
@@ -138,7 +138,7 @@ function getSandboxBwrapPath() {
     .map((tier) => tier.sandbox?.bwrapPath)
     .find((path) => path != null);
 }
-//@ chunk-rtnapjwv.js:2023-2100 placement
+//@ chunk-ex0jqs9a.js:2023-2100 placement
 /**
  * 取策略设置里第一个 socat 路径。
  */
@@ -147,9 +147,9 @@ function getSandboxSocatPath() {
     .map((tier) => tier.sandbox?.socatPath)
     .find((path) => path != null);
 }
-//@ chunk-rtnapjwv.js:2164-2189 placement
+//@ chunk-ex0jqs9a.js:2164-2189 placement
 var PROXY_VALUE_UNSAFE_RE = /[ \t\n\v\f\r'"]/;
-//@ chunk-rtnapjwv.js:2189-3109 placement
+//@ chunk-ex0jqs9a.js:2189-3109 placement
 /**
  * 为子进程生成代理环境变量（含 Java 参数）。
  */
@@ -193,7 +193,7 @@ function proxyEnvForSubprocess(env) {
   }
   return out;
 }
-//@ chunk-rtnapjwv.js:3109-3512 placement
+//@ chunk-ex0jqs9a.js:3109-3512 placement
 /**
  * 解析代理 URL 为主机、端口、用户、密码。
  */
@@ -232,7 +232,7 @@ function parseProxyUrl(url) {
     };
   }
 }
-//@ chunk-rtnapjwv.js:3512-3978 placement
+//@ chunk-ex0jqs9a.js:3512-3978 placement
 /**
  * 生成 Java 代理系统属性参数。
  */
@@ -254,7 +254,7 @@ function javaProxyArgs(proxyUrl, proxyUrl_2, noProxy) {
   args.push("-Djdk.http.auth.proxying.disabledSchemes=");
   return args.join(" ");
 }
-//@ chunk-rtnapjwv.js:3978-4134 placement
+//@ chunk-ex0jqs9a.js:3978-4134 placement
 function toNoProxyPattern(value) {
   return value
     .split(/[,\s]+/)
@@ -266,7 +266,7 @@ function toNoProxyPattern(value) {
     })
     .join("|");
 }
-//@ chunk-rtnapjwv.js:4134-4560 placement
+//@ chunk-ex0jqs9a.js:4134-4560 placement
 /**
  * 解析 IPv4 CIDR。
  */
@@ -287,9 +287,9 @@ function parseIpv4Cidr(cidr) {
     patterns.push(`${[...octets.slice(0, floored), lastOctet].join(".")}.*`);
   return patterns;
 }
-//@ chunk-rtnapjwv.js:4560-5201 placement
+//@ chunk-ex0jqs9a.js:4560-5242 placement
 var BG_WORKER_IDENTITY_ENV_VARS; // deferred: uses BG_DISPATCHER_IDENTITY_ENV_VARS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rtnapjwv.js:4560", () => {
+deferInit("chunk-ex0jqs9a.js:4560", () => {
   BG_WORKER_IDENTITY_ENV_VARS = [
     "CLAUDE_CODE_SESSION_KIND",
     "CLAUDE_BG_SOURCE",
@@ -311,10 +311,11 @@ deferInit("chunk-rtnapjwv.js:4560", () => {
     "CLAUDE_BG_CARRIED_PROMPTS_SHA256",
     "CLAUDE_BG_GATEWAY_WITHHELD",
     "CLAUDE_CODE_RELAUNCH_HOME_TRUST",
+    "CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS",
     ...BG_DISPATCHER_IDENTITY_ENV_VARS,
   ];
 });
-//@ chunk-rtnapjwv.js:5201-5741 placement
+//@ chunk-ex0jqs9a.js:5242-5782 placement
 /**
  * 子进程环境清洗状态（锁存值、脚本调用计数）。
  */
@@ -344,27 +345,27 @@ class SubprocessEnvState {
     this.scriptCapsLatched = undefined;
   }
 }
-//@ chunk-rtnapjwv.js:5741-5780 placement
+//@ chunk-ex0jqs9a.js:5782-5821 placement
 var subprocessEnvState; // deferred: uses SubprocessEnvState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rtnapjwv.js:5741", () => {
+deferInit("chunk-ex0jqs9a.js:5782", () => {
   subprocessEnvState = identity(new SubprocessEnvState(), (state) => {
     state.reset();
     clearSanitizedEnvCache();
   });
 });
-//@ chunk-rtnapjwv.js:5780-5885 placement
+//@ chunk-ex0jqs9a.js:5821-5926 placement
 class SubprocessEnvState_2 {
   getAgentProxyEnv = undefined;
   getGhStandinDir = undefined;
   settingsEnvForChildren = {};
   hipaaTierNoticeGiven = false;
 }
-//@ chunk-rtnapjwv.js:5885-5908 placement
+//@ chunk-ex0jqs9a.js:5926-5949 placement
 var subprocessEnvStateByHost; // deferred: uses SubprocessEnvState_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rtnapjwv.js:5885", () => {
+deferInit("chunk-ex0jqs9a.js:5926", () => {
   subprocessEnvStateByHost = new HostScoped(() => new SubprocessEnvState_2());
 });
-//@ chunk-rtnapjwv.js:5908-6065 placement
+//@ chunk-ex0jqs9a.js:5949-6106 placement
 function isScrubEnabled() {
   let scrubEnabledLatched = subprocessEnvState.scrubEnabledLatched;
   if (scrubEnabledLatched !== undefined) return scrubEnabledLatched;
@@ -372,7 +373,7 @@ function isScrubEnabled() {
   subprocessEnvState.setScrubEnabledLatched(enabled);
   return enabled;
 }
-//@ chunk-rtnapjwv.js:6065-6216 placement (2.1.88 match: isReplModeEnabled, 0.161)
+//@ chunk-ex0jqs9a.js:6106-6257 placement (2.1.88 match: isReplModeEnabled, 0.161)
 /**
  * REPL 模式：If() 为真，或未显式关闭 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 且入口为 local-agent。外部构建 getReplTool 恒 null，REPL 工具实际不存在。
  */
@@ -381,11 +382,11 @@ function shouldScrubSubprocessEnv() {
   if (isEnvDefinedFalsy(process.env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB)) return false;
   return process.env.CLAUDE_CODE_ENTRYPOINT === "local-agent";
 }
-//@ chunk-rtnapjwv.js:6216-6432 placement
+//@ chunk-ex0jqs9a.js:6257-6473 placement
 var DOTENV_FILE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SYSTEM_TOP_DIRS;
 var CURRENT_DIR;
-deferInit("chunk-rtnapjwv.js:6216", () => {
+deferInit("chunk-ex0jqs9a.js:6257", () => {
   DOTENV_FILE_NAMES = [
     ".env",
     ".env.local",
@@ -399,7 +400,7 @@ deferInit("chunk-rtnapjwv.js:6216", () => {
   SYSTEM_TOP_DIRS = ["home", "root", "tmp", "var", "opt", "run", "mnt"].map((dir) => `/${dir}`);
   CURRENT_DIR = ".";
 });
-//@ chunk-rtnapjwv.js:6432-6535 placement (2.1.88 match: isInClaudeFolder, 1)
+//@ chunk-ex0jqs9a.js:6473-6576 placement (2.1.88 match: isInClaudeFolder, 1)
 function isInClaudeFolder(filePath) {
   let dirs = new Set();
   for (let rootResolver of [storageRootFor, findCanonicalGitRoot, noUncachedRoot])
@@ -408,13 +409,13 @@ function isInClaudeFolder(filePath) {
     } catch {}
   return [...dirs];
 }
-//@ chunk-rtnapjwv.js:6535-6650 placement
+//@ chunk-ex0jqs9a.js:6576-6691 placement
 function isScrubSandboxAvailable() {
   if (subprocessEnvState.scrubSandboxAvailableLatched !== undefined)
     return subprocessEnvState.scrubSandboxAvailableLatched;
   return sandboxBinaryPath() !== null;
 }
-//@ chunk-rtnapjwv.js:6650-9707 placement
+//@ chunk-ex0jqs9a.js:6691-9748 placement
 async function assertScrubSandboxAvailable() {
   initEnvScrubFlag();
   if (!isScrubEnabled()) return;
@@ -559,7 +560,7 @@ ${stubFiles.map((fileName) => `/${fileName}`).join(`
     );
   } catch {}
 }
-//@ chunk-rtnapjwv.js:9707-10109 placement
+//@ chunk-ex0jqs9a.js:9748-10150 placement
 /**
  * 锁存 CLAUDE_CODE_SCRIPT_CAPS。
  */
@@ -583,7 +584,7 @@ function latchScriptCaps() {
     subprocessEnvState.setScriptCapsLatched(null);
   }
 }
-//@ chunk-rtnapjwv.js:10109-10518 placement
+//@ chunk-ex0jqs9a.js:10150-10559 placement
 function enforceScriptCaps(text) {
   if (!isScrubEnabled()) return;
   latchScriptCaps();
@@ -601,63 +602,63 @@ function enforceScriptCaps(text) {
     }
   }
 }
-//@ chunk-rtnapjwv.js:10518-10568 placement
+//@ chunk-ex0jqs9a.js:10559-10609 placement
 function registerAgentProxyEnvFn(getAgentProxyEnv) {
   subprocessEnvStateByHost.of(getRootSession().host).getAgentProxyEnv = getAgentProxyEnv;
 }
-//@ chunk-rtnapjwv.js:10568-10617 placement
+//@ chunk-ex0jqs9a.js:10609-10658 placement
 function registerGhStandinDirFn(getGhStandinDir) {
   subprocessEnvStateByHost.of(getRootSession().host).getGhStandinDir = getGhStandinDir;
 }
-//@ chunk-rtnapjwv.js:10617-10679 placement
+//@ chunk-ex0jqs9a.js:10658-10720 placement
 function agentProxyEnv() {
   return subprocessEnvStateByHost.of(getRootSession().host).getAgentProxyEnv?.() ?? {};
 }
-//@ chunk-rtnapjwv.js:10679-10736 placement
+//@ chunk-ex0jqs9a.js:10720-10777 placement
 function ghStandinDir() {
   return subprocessEnvStateByHost.of(getRootSession().host).getGhStandinDir?.();
 }
-//@ chunk-rtnapjwv.js:10736-10792 placement
+//@ chunk-ex0jqs9a.js:10777-10833 placement
 function setSettingsEnvForChildren(settingsEnvForChildren) {
   subprocessEnvStateByHost.of(getRootSession().host).settingsEnvForChildren = settingsEnvForChildren;
 }
-//@ chunk-rtnapjwv.js:10792-10871 placement
+//@ chunk-ex0jqs9a.js:10833-10912 placement
 function settingsEnvKeptForChildren(name) {
   let { settingsEnvForChildren } = subprocessEnvStateByHost.of(getRootSession().host);
   return settingsEnvForChildren[spellingIn(settingsEnvForChildren, name)];
 }
-//@ chunk-rtnapjwv.js:10871-10905 placement
+//@ chunk-ex0jqs9a.js:10912-10946 placement
 function settingsPathForChildren() {
   return settingsEnvKeptForChildren("PATH");
 }
-//@ chunk-rtnapjwv.js:10905-11000 placement
+//@ chunk-ex0jqs9a.js:10946-11041 placement
 function inheritedByChildren(name) {
   let { settingsEnvForChildren } = subprocessEnvStateByHost.of(getRootSession().host);
   return settingsEnvForChildren[spellingIn(settingsEnvForChildren, name)] ?? process.env[name];
 }
-//@ chunk-rtnapjwv.js:11000-11011 placement
+//@ chunk-ex0jqs9a.js:11041-11052 placement
 var DAEMON_FORCE_COLOR_VALUE = "3";
-//@ chunk-rtnapjwv.js:11011-11084 placement
+//@ chunk-ex0jqs9a.js:11052-11125 placement
 function holdsDaemonForceColor() {
   return env.CLAUDE_BG_BACKEND === "daemon" && env.FORCE_COLOR === DAEMON_FORCE_COLOR_VALUE;
 }
-//@ chunk-rtnapjwv.js:11084-11207 placement
+//@ chunk-ex0jqs9a.js:11125-11248 placement
 function withholdsDaemonForceColor() {
   if (!holdsDaemonForceColor()) return false;
   let { settingsEnvForChildren } = subprocessEnvStateByHost.of(getRootSession().host);
   return !Object.hasOwn(settingsEnvForChildren, spellingIn(settingsEnvForChildren, "FORCE_COLOR"));
 }
-//@ chunk-rtnapjwv.js:11207-11350 placement
+//@ chunk-ex0jqs9a.js:11248-11391 placement
 function spellingIn(env, name) {
   if (getPlatform() !== "windows" || Object.hasOwn(env, name)) return name;
   let upper = name.toUpperCase();
   return Object.keys(env).find((key) => key.toUpperCase() === upper) ?? name;
 }
-//@ chunk-rtnapjwv.js:11350-11435 placement
+//@ chunk-ex0jqs9a.js:11391-11476 placement
 function isArtifactDevBaseUrlVar(name) {
   return name.startsWith("CLAUDE_CODE_ARTIFACT") && name.endsWith("_BASE_URL");
 }
-//@ chunk-rtnapjwv.js:11435-11517 placement
+//@ chunk-ex0jqs9a.js:11476-11558 placement
 function armedRunnerShedsName(name) {
   let name_2 = name.toUpperCase();
   return (
@@ -667,12 +668,12 @@ function armedRunnerShedsName(name) {
     !isNonSecretClaudeCodeEnvName(name_2)
   );
 }
-//@ chunk-rtnapjwv.js:11517-11562 placement
+//@ chunk-ex0jqs9a.js:11558-11603 placement
 var HIPAA_CREDENTIAL_KEY_SET; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rtnapjwv.js:11517", () => {
+deferInit("chunk-ex0jqs9a.js:11558", () => {
   HIPAA_CREDENTIAL_KEY_SET = new Set(AUTH_TOKEN_ENV_VARS.map((name) => name.toUpperCase()));
 });
-//@ chunk-rtnapjwv.js:11562-11787 placement
+//@ chunk-ex0jqs9a.js:11603-11828 placement
 function hipaaCredentialScrubKeys() {
   if (!hipaaWithholdsChildCredentials()) return [];
   let state = subprocessEnvStateByHost.of(getRootSession().host);
@@ -684,16 +685,16 @@ function hipaaCredentialScrubKeys() {
   }
   return flattened_2;
 }
-//@ chunk-rtnapjwv.js:11787-11821 placement
+//@ chunk-ex0jqs9a.js:11828-11862 placement
 function hipaaWithholdsChildCredentials() {
   return hasComplianceTaint("hipaa");
 }
-//@ chunk-rtnapjwv.js:11821-11866 placement
+//@ chunk-ex0jqs9a.js:11862-11907 placement
 var CHILD_SCRUBBED_CREDENTIAL_KEY_SET; // deferred: uses flattened (./settings/policyHelper/helperExec.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rtnapjwv.js:11821", () => {
+deferInit("chunk-ex0jqs9a.js:11862", () => {
   CHILD_SCRUBBED_CREDENTIAL_KEY_SET = new Set(flattened_2.map((name) => name.toUpperCase()));
 });
-//@ chunk-rtnapjwv.js:11866-11993 placement
+//@ chunk-ex0jqs9a.js:11907-12034 placement
 function isChildScrubbedCredentialFamily(upperCase) {
   let name = upperCase.replace(/^INPUT_/, "");
   return (
@@ -703,7 +704,7 @@ function isChildScrubbedCredentialFamily(upperCase) {
     name === "CLAUDE_CODE_OTEL_DIAG_STDERR"
   );
 }
-//@ chunk-rtnapjwv.js:11993-12118 placement
+//@ chunk-ex0jqs9a.js:12034-12159 placement
 function isSshPlaceholderCredential(name, env) {
   return (
     (name === "CLAUDE_CODE_OAUTH_TOKEN" || name === "ANTHROPIC_API_KEY") &&
@@ -711,7 +712,7 @@ function isSshPlaceholderCredential(name, env) {
     env.ANTHROPIC_UNIX_SOCKET !== undefined
   );
 }
-//@ chunk-rtnapjwv.js:12118-12923 placement
+//@ chunk-ex0jqs9a.js:12159-12964 placement
 function childScrubbedCredentialKeys() {
   let env = process.env;
   let isKeptPlaceholder = (name) =>
@@ -742,10 +743,10 @@ function childScrubbedCredentialKeys() {
     ...BG_WORKER_IDENTITY_ENV_VARS,
   ];
 }
-//@ chunk-rtnapjwv.js:12923-13146 placement
+//@ chunk-ex0jqs9a.js:12964-13187 placement
 var BUN_GC_ENV_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MIMALLOC_ENV_KEYS;
-deferInit("chunk-rtnapjwv.js:12923", () => {
+deferInit("chunk-ex0jqs9a.js:12964", () => {
   BUN_GC_ENV_KEYS = new Set([
     "BUN_GC_TIMER_INTERVAL",
     "BUN_GC_TIMER_DISABLE",
@@ -758,19 +759,31 @@ deferInit("chunk-rtnapjwv.js:12923", () => {
     "MIMALLOC_PURGE_HOLES",
   ]);
 });
-//@ chunk-rtnapjwv.js:13146-13368 placement
+//@ chunk-ex0jqs9a.js:13187-13923 placement
 function isRuntimeTuningEnvKey(name) {
   let upper = name.toUpperCase();
   return (
     upper.startsWith("BUN_JSC_") ||
+    upper.startsWith("BUN_AOT_") ||
     BUN_GC_ENV_KEYS.has(upper) ||
     MIMALLOC_ENV_KEYS.has(upper) ||
     upper === "CLAUDE_CODE_COUNT_GARBAGE_COLLECTIONS" ||
     upper === "CLAUDE_CODE_STREAM_EVENT_HOLD_MS" ||
-    upper === "CLAUDE_CODE_STREAM_EVENT_MAX_LINE_BYTES"
+    upper === "CLAUDE_CODE_STREAM_EVENT_MAX_LINE_BYTES" ||
+    upper === "CLAUDE_CODE_INCREMENTAL_REQUEST_BODY" ||
+    upper === "CLAUDE_CODE_PLAIN_DELTA_FAST_PATH" ||
+    upper === "CLAUDE_CODE_PLAIN_DELTA_DIRECT_WRITE" ||
+    upper === "CLAUDE_CODE_PLAIN_DELTA_TAKE_AT_SOURCE" ||
+    upper === "CLAUDE_CODE_STREAM_TIMER_SLACK_MS" ||
+    upper === "CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS" ||
+    upper === "CLAUDE_CODE_MAIN_REPLY_HOLD_MS" ||
+    upper === "CLAUDE_CODE_REMOTE_STALL_CHECK_INTERVAL_MS" ||
+    upper === "CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD" ||
+    upper === "CLAUDE_CODE_CCR_SLOW_SKILLS_WATCH" ||
+    upper === "CLAUDE_CODE_MCP_SERVE_TUNNEL_BINARY_FRAMES"
   );
 }
-//@ chunk-rtnapjwv.js:13368-18946 placement
+//@ chunk-ex0jqs9a.js:13923-19667 placement
 function subprocessEnv(baseEnv) {
   let hostState = subprocessEnvStateByHost.of(getRootSession().host);
   let agentProxyEnv = hostState.getAgentProxyEnv?.() ?? {};
@@ -840,29 +853,32 @@ function subprocessEnv(baseEnv) {
   let CLAUDE_CODE_MCP_APPS_HOST = env.CLAUDE_CODE_MCP_APPS_HOST;
   let hasUpfrontTools = env.CLAUDE_CODE_UPFRONT_TOOLS !== undefined;
   let CLAUDE_CODE_ATTACHMENTS_BY_PATH = env.CLAUDE_CODE_ATTACHMENTS_BY_PATH;
-  let hasSleepCompact = env.CLAUDE_CODE_SLEEP_COMPACT || env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS !== undefined;
+  let hasSleepCompact = env.CLAUDE_CODE_PROGRAM_USE_CASE_ID !== undefined;
+  let hasSleepCompactFlag =
+    env.CLAUDE_CODE_SLEEP_COMPACT || env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS !== undefined;
   let hasResumeHookWait = env.CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS !== undefined;
   let hasArtifactShare = env.CLAUDE_CODE_ARTIFACT_SHARE !== undefined;
   let CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST = env.CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST;
   let any_4 = Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_ARTIFACT_VERSIONS");
   let any_5 = Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_HOST_GUARDS_ARTIFACTS_MCP");
-  let hasResourceWarnings =
+  let hasResourceWarn =
     env.CLAUDE_CODE_WARN_DISK_FREE_GIB !== undefined ||
     env.CLAUDE_CODE_WARN_MEMORY_FREE_GIB !== undefined ||
     env.CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY;
-  let hasChromeTabGroup = env.CLAUDE_CHROME_TAB_GROUP_KEY !== undefined;
+  let hasChromeTabGroupKey = env.CLAUDE_CHROME_TAB_GROUP_KEY !== undefined;
   let any_6 = Object.keys(env_2).some(
     (key) => key.toUpperCase() === "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS",
   );
-  let hostPromptSupersedes = env.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD;
-  let hasMcpServeSettings =
+  let hasPromptSupersedesRecord = env.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD;
+  let hasMcpServeFlags =
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_SETTINGS !== undefined ||
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS !== undefined ||
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT !== undefined;
-  let hasRelaunchProactivity = false;
-  hasRelaunchProactivity = Object.keys(env_2).some(isRelaunchProactivityVar);
-  let hasRuntimeTuning = isRemote && Object.keys(env_2).some(isRuntimeTuningEnvKey);
-  let hasExtra = false;
+  let hasReplyGatePolicy = env.CLAUDE_CODE_REPLY_GATE_POLICY !== undefined;
+  let hasProactivityVar = false;
+  hasProactivityVar = Object.keys(env_2).some(isRelaunchProactivityVar);
+  let hasRuntimeTuningKey = isRemote && Object.keys(env_2).some(isRuntimeTuningEnvKey);
+  let forceScrub = false;
   if (
     baseEnv === undefined &&
     !hasAgentProxy &&
@@ -894,19 +910,21 @@ function subprocessEnv(baseEnv) {
     !hasUpfrontTools &&
     !CLAUDE_CODE_ATTACHMENTS_BY_PATH &&
     !hasSleepCompact &&
+    !hasSleepCompactFlag &&
     !hasResumeHookWait &&
     !hasArtifactShare &&
     !CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST &&
-    !hasResourceWarnings &&
+    !hasResourceWarn &&
     !any_4 &&
     !any_5 &&
-    !hasChromeTabGroup &&
+    !hasChromeTabGroupKey &&
     !any_6 &&
-    !hostPromptSupersedes &&
-    !hasMcpServeSettings &&
-    !hasRelaunchProactivity &&
-    !hasRuntimeTuning &&
-    !hasExtra
+    !hasPromptSupersedesRecord &&
+    !hasMcpServeFlags &&
+    !hasReplyGatePolicy &&
+    !hasProactivityVar &&
+    !hasRuntimeTuningKey &&
+    !forceScrub
   )
     return process.env;
   let mergedProxyEnv = {
@@ -944,9 +962,11 @@ function subprocessEnv(baseEnv) {
       "CLAUDE_CODE_CONFIG_PROBE",
       "CLAUDE_CODE_MCP_STARTUP_WAIT_MS",
       "CLAUDE_CODE_REMOTE_MCP_CONFIG",
+      "CLAUDE_CODE_REPLY_GATE_POLICY",
       "CLAUDE_CODE_MCP_APPS_HOST",
       "CLAUDE_CODE_UPFRONT_TOOLS",
       "CLAUDE_CODE_ATTACHMENTS_BY_PATH",
+      "CLAUDE_CODE_PROGRAM_USE_CASE_ID",
       "CLAUDE_CODE_SLEEP_COMPACT",
       "CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS",
       "CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS",
@@ -977,10 +997,10 @@ function subprocessEnv(baseEnv) {
   delete envOut.CLAUDE_CODE_OTEL_DIAG_STDERR;
   delete envOut.CLAUDE_CODE_PLUGIN_ATTRIBUTION;
   delete envOut.CLAUDE_CODE_SKILL_ATTRIBUTION;
-  if (hasRelaunchProactivity) {
+  if (hasProactivityVar) {
     for (let key of Object.keys(envOut)) if (isRelaunchProactivityVar(key)) delete envOut[key];
   }
-  if (hasRuntimeTuning) {
+  if (hasRuntimeTuningKey) {
     for (let key of Object.keys(envOut)) if (isRuntimeTuningEnvKey(key)) delete envOut[key];
   }
   if (!scrubbing) return envOut;
@@ -1019,14 +1039,26 @@ function subprocessEnv(baseEnv) {
   }
   return envOut;
 }
-//@ chunk-rtnapjwv.js:18946-19103 placement
+//@ chunk-ex0jqs9a.js:19667-19824 placement
 function shouldUseMcpAllowlistEnv() {
   let envClaudeCodeMcpAllowlistEnv = process.env.CLAUDE_CODE_MCP_ALLOWLIST_ENV;
   if (isEnvTruthy(envClaudeCodeMcpAllowlistEnv)) return true;
   if (isEnvDefinedFalsy(envClaudeCodeMcpAllowlistEnv)) return false;
   return process.env.CLAUDE_CODE_ENTRYPOINT === "local-agent";
 }
-//@ chunk-rtnapjwv.js:19103-21194 placement
+//@ chunk-ex0jqs9a.js:19824-20025 placement
+/**
+ * 从子进程环境里删掉值为空的 AWS_BEARER_TOKEN_BEDROCK（Windows 忽略大小写）。
+ */
+function dropEmptyBedrockBearer(stdioEnv) {
+  let isWindows = getPlatform() === "windows";
+  let filtered = Object.keys(stdioEnv).filter(
+    (key) =>
+      key === "AWS_BEARER_TOKEN_BEDROCK" || (isWindows && key.toUpperCase() === "AWS_BEARER_TOKEN_BEDROCK"),
+  );
+  if (filtered.some((key) => stdioEnv[key] === "")) for (let key of filtered) delete stdioEnv[key];
+}
+//@ chunk-ex0jqs9a.js:20025-22116 placement
 function scrubSandboxConfig() {
   let scrubPathsLatched = subprocessEnvState.scrubPathsLatched;
   let homeDir = scrubPathsLatched?.home ?? homedir();
@@ -1134,13 +1166,13 @@ function scrubSandboxConfig() {
     },
   };
 }
-//@ chunk-rtnapjwv.js:21194-21265 placement
+//@ chunk-ex0jqs9a.js:22116-22187 placement
 function isRelaunchProactivityVar(name) {
   return name.startsWith("CLAUDE_CODE_RELAUNCH_PROACTIVITY_");
 }
-//@ chunk-rtnapjwv.js:21265-21271 placement
+//@ chunk-ex0jqs9a.js:22187-22193 placement
 var scrubbedEnvNamesCache;
-//@ chunk-rtnapjwv.js:21271-21408 placement
+//@ chunk-ex0jqs9a.js:22193-22330 placement
 function getScrubbedEnvNames() {
   let armedNames = scrubbedEnvNames();
   let armed = armedNames.length > 0;
@@ -1151,46 +1183,47 @@ function getScrubbedEnvNames() {
     };
   return scrubbedEnvNamesCache.names;
 }
-//@ chunk-3zy56vtn.js:8263-8318 fingerprint (2.1.88 match: subprocessEnv, 0.782)
+//@ chunk-3emqeq9c.js:8340-8395 fingerprint (2.1.88 match: subprocessEnv, 0.782)
 function subprocessEnv_2(names) {
   return names.flatMap((name) => [name, `INPUT_${name}`]);
 }
 export {
   subprocessEnv,
-  isScrubEnabled,
-  getBgDispatcherPlanInfo,
   shouldUseMcpAllowlistEnv,
   agentProxyEnv,
-  PROXY_INJECTED_MARKER,
-  inheritedByChildren,
-  isSshPlaceholderAuth,
-  federationCacheDir,
+  dropEmptyBedrockBearer,
+  isScrubEnabled,
   subprocessEnv_2,
-  hipaaWithholdsChildCredentials,
-  getSandboxBwrapPath,
-  SSH_PLACEHOLDER,
-  spellingIn,
-  settingsEnvKeptForChildren,
-  proxyEnvForSubprocess,
-  assertScrubSandboxAvailable,
-  buildBgDispatcherEnv,
   isScrubSandboxAvailable,
-  getSandboxSocatPath,
+  SSH_PLACEHOLDER,
+  inheritedByChildren,
+  enforceScriptCaps,
+  scrubSandboxConfig,
+  getBgDispatcherPlanInfo,
+  BG_WORKER_IDENTITY_ENV_VARS,
   isChildScrubbedCredentialFamily,
   shouldScrubSubprocessEnv,
   armedRunnerShedsName,
   childScrubbedCredentialKeys,
+  hipaaWithholdsChildCredentials,
   ghStandinDir,
   hipaaCredentialScrubKeys,
   withholdsDaemonForceColor,
-  enforceScriptCaps,
-  scrubSandboxConfig,
+  getSandboxBwrapPath,
+  getSandboxSocatPath,
+  spellingIn,
   settingsPathForChildren,
   BG_DISPATCHER_IDENTITY_ENV_VARS,
   setSettingsEnvForChildren,
   holdsDaemonForceColor,
-  BG_WORKER_IDENTITY_ENV_VARS,
+  isSshPlaceholderAuth,
+  proxyEnvForSubprocess,
+  settingsEnvKeptForChildren,
+  PROXY_INJECTED_MARKER,
   isArtifactDevBaseUrlVar,
+  federationCacheDir,
+  assertScrubSandboxAvailable,
+  buildBgDispatcherEnv,
   registerAgentProxyEnvFn,
   registerGhStandinDirFn,
 };

@@ -3,25 +3,12 @@
  *
  * "(ctrl+o to expand)" 提示组件与字符串版本；子代理上下文内不显示（SubAgentContext）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CtrlOToExpand.tsx
- * pieces: chunk-32akb2g2.js (3), chunk-4121qate.js (2), chunk-bn7jsn5n.js (1), chunk-mt2ya4ef.js (6)
- * attribution: placement 8, affinity 1, fingerprint 3
+ * pieces: chunk-81c4jqdt.js (1), chunk-hmaqgh0x.js (2), chunk-jnsr1ny1.js (3), chunk-my2nvh4x.js (6)
+ * attribution: fingerprint 3, affinity 1, placement 8
  */
-import "vm";
-import * as vmModule_2 from "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
+import * as vmModule from "vm";
 import { markUntrusted } from "../utils/untrustedValues.js";
 import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
 import { sequential } from "../utils/sequential.js";
@@ -43,12 +30,12 @@ import { firstLineOfPeerBody } from "../utils/peerMessageHeaders.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:49576-49612 affinity
-var runInContext = vmModule_2.runInContext;
+//@ chunk-hmaqgh0x.js:345-378 affinity
+var runInContext = vmModule.runInContext;
 var EvalErrorClass = EvalError;
-//@ chunk-4121qate.js:49612-49745 fingerprint (2.1.88 match: SubAgentContext, 0.609)
+//@ chunk-hmaqgh0x.js:378-507 fingerprint (2.1.88 match: SubAgentContext, 0.609)
 function SubAgentContext(sandbox, options) {
-  let context = vmModule_2.createContext(sandbox, options);
+  let context = vmModule.createContext(sandbox, options);
   let subject;
   try {
     subject = runInContext("this", context);
@@ -59,27 +46,27 @@ function SubAgentContext(sandbox, options) {
   markUntrusted(context, subject);
   return context;
 }
-//@ chunk-bn7jsn5n.js:537-635 fingerprint (2.1.88 match: ctrlOToExpand, 1)
+//@ chunk-81c4jqdt.js:537-635 fingerprint (2.1.88 match: ctrlOToExpand, 1)
 function ctrlOToExpand() {
   let shortcut = getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
   return sequential.dim(`(${shortcut} to expand)`);
 }
-//@ chunk-mt2ya4ef.js:523-527 placement
+//@ chunk-my2nvh4x.js:524-528 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mt2ya4ef.js:523", () => {
+deferInit("chunk-my2nvh4x.js:524", () => {
   init_react_production();
 });
-//@ chunk-mt2ya4ef.js:527-531 placement
+//@ chunk-my2nvh4x.js:528-532 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mt2ya4ef.js:527", () => {
+deferInit("chunk-my2nvh4x.js:528", () => {
   init_react_production();
 });
-//@ chunk-mt2ya4ef.js:531-544 placement
+//@ chunk-my2nvh4x.js:532-545 placement
 var SUBAGENT_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mt2ya4ef.js:531", () => {
+deferInit("chunk-my2nvh4x.js:532", () => {
   SUBAGENT_CONTEXT = createContext(false);
 });
-//@ chunk-mt2ya4ef.js:544-673 placement
+//@ chunk-my2nvh4x.js:545-674 placement
 /**
  * 标记子树处于子代理上下文的 Provider 组件。
  */
@@ -97,7 +84,7 @@ function SubAgentProvider(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-mt2ya4ef.js:673-973 fingerprint (2.1.88 match: CtrlOToExpand, 0.751)
+//@ chunk-my2nvh4x.js:674-974 fingerprint (2.1.88 match: CtrlOToExpand, 0.751)
 /**
  * "(ctrl+o to expand)" 提示：按当前 keybinding 显示，子代理上下文内不显示。
  */
@@ -132,7 +119,7 @@ function CtrlOToExpand() {
   } else hintNode = $[2];
   return hintNode;
 }
-//@ chunk-mt2ya4ef.js:973-1471 placement
+//@ chunk-my2nvh4x.js:974-1473 placement
 /**
  * 显示"+N 行/项"溢出提示（隐藏字符超过 1000 时附 KB 数），可选附加"ctrl+o 展开"提示；count 为 0 时不渲染。
  */
@@ -180,16 +167,16 @@ function OverflowHint(props) {
   } else hintText = $[10];
   return hintText;
 }
-//@ chunk-32akb2g2.js:661-665 placement
+//@ chunk-jnsr1ny1.js:661-665 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-32akb2g2.js:661", () => {
+deferInit("chunk-jnsr1ny1.js:661", () => {
   init_react_production();
 });
-//@ chunk-32akb2g2.js:665-689 placement
+//@ chunk-jnsr1ny1.js:665-689 placement
 var LOWER_KEY_FORMAT = {
   keyCase: "lower",
 };
-//@ chunk-32akb2g2.js:689-1648 placement
+//@ chunk-jnsr1ny1.js:689-1648 placement
 /**
  * 折叠内容的"ctrl+o 展开"提示行（显示名、数量、限定词）。
  */
@@ -278,4 +265,4 @@ function CtrlOToExpandHint(props) {
   } else container = $[18];
   return container;
 }
-export { SubAgentProvider, CtrlOToExpand, OverflowHint, SubAgentContext, ctrlOToExpand, CtrlOToExpandHint };
+export { SubAgentContext, CtrlOToExpand, OverflowHint, SubAgentProvider, ctrlOToExpand, CtrlOToExpandHint };

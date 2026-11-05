@@ -3,17 +3,17 @@
  *
  * clearConversation：/clear 的主体，结束后台任务、清空消息、生成新会话 ID 并保留旧会话可恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/clear/conversation.ts
- * pieces: chunk-231n2j4w.js (9)
+ * pieces: chunk-sj6t0nqg.js (9)
  * attribution: affinity 1, facade-exports 2, layout 6
  */
 import { randomUUID } from "crypto";
 import { resetObserverPairings } from "../../services/agentObserver/agentObserver.js";
 import {
-  removeQueuedByFilter,
-  isPassiveMainAgentCommand,
-  commandQueueManager,
+  removeByFilter,
+  isPassiveMainThreadCommand,
+  getProcessQueue,
 } from "../../utils/messageQueueManager.js";
 import {
   retireConversationReplicas,
@@ -24,23 +24,8 @@ import {
 } from "../../services/liveReplica/liveReplica.js";
 import { executeSessionEndHooks, getSessionEndHookTimeoutMs } from "../../utils/hooks.js";
 import { endMaintenanceAndForget } from "../../services/api/cacheKeepalive.js";
-import { isLocalAgent } from "../../state/teammateViewHelpers.js";
-import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
-import { notePendingConversationEdit } from "../../utils/shell/shellToolUtils.js";
-import { setCurrentForKey } from "../../utils/currentRefByKey.js";
-import { totalTokensReminderByRoot } from "../../utils/attachments/totalTokensReminder.js";
-import { tokenCountFromLastAPIResponse } from "../../utils/tokens.js";
-import { AGENT_TASK_TYPES, isCompletedBackgroundAgent } from "../../tasks/taskKinds.js";
 import {
-  hasCompletedWithFindings,
-  initAgentOutputSymlink,
-} from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { clearSessionCaches } from "./caches.js";
-import { androidEvidenceByHost } from "../../tools/BashTool/androidCommands.js";
-import { detachedCallSlots, parseTaskNotificationToolUseId } from "../../services/tools/detachedToolCalls.js";
-import { resetPickerState } from "../../memdir/findRelevantMemories.js";
-import { closeWebViews, resetArtifactReadState } from "../../state/artifactReadState.js";
-import {
+  appendToolsUsedEntryBeforeClear,
   getCurrentSessionTitle,
   getCurrentSessionAgentName,
   isConversationEgressTainted,
@@ -57,17 +42,34 @@ import {
   getAgentMetadataPath,
   cacheSessionTitle,
   resetSessionFilePointer,
+  saveAgentSetting,
   saveMemoryMode,
   dropSessionHistorySuppression,
   releasePrecautionarySuppressionFor,
   saveCustomTitle,
   saveAgentName,
   saveMode,
+  restoreSessionMetadata,
+  queueSessionMetadataEntry,
   saveWorktreeState,
   saveIsolationLatch,
   readAgentMetadataAtPath,
   writeAgentMetadata,
 } from "../../utils/sessionStorage.js";
+import { isLocalAgent } from "../../state/teammateViewHelpers.js";
+import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
+import { notePendingConversationEdit } from "../../utils/shell/shellToolUtils.js";
+import { setCurrentForKey } from "../../utils/currentRefByKey.js";
+import { totalTokensReminderByRoot } from "../../utils/attachments/totalTokensReminder.js";
+import { tokenCountFromLastAPIResponse } from "../../utils/tokens.js";
+import { AGENT_TASK_TYPES, isLocalScriptTask, isCompletedBackgroundAgent } from "../../tasks/taskKinds.js";
+import { hasCompletedWithFindings } from "../../components/tasks/RemoteSessionProgress.js";
+import { clearSessionCaches } from "./caches.js";
+import { androidEvidenceByHost } from "../../tools/BashTool/androidCommands.js";
+import { detachedCallSlots, parseTaskNotificationToolUseId } from "../../services/tools/detachedToolCalls.js";
+import { resetPickerState } from "../../memdir/findRelevantMemories.js";
+import { resetTurnHeard } from "../../services/mcp/ccrTurnId.js";
+import { closeWebViews, resetArtifactReadState } from "../../state/artifactReadState.js";
 import {
   getSessionId,
   getConversationAtisLatch,
@@ -83,6 +85,7 @@ import {
   resetCostState,
   isDiskless,
   regenerateSessionId,
+  getMainThreadAgentType,
   getOriginalCwd,
   getProjectRoot,
 } from "../../bootstrap/state.js";
@@ -91,7 +94,8 @@ import { retainPathLinks } from "../../services/artifacts/shareEntries.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { logError } from "../../utils/log.js";
 import { evictTaskOutput } from "../../utils/task/diskOutput.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { isIdleCompletedAgent } from "../../tasks/LocalAgentTask/keepalive.js";
 import { createEmptyAttributionState } from "../../utils/commitAttribution.js";
 import { liveAgentNames } from "../../utils/agentNameRegistry.js";
@@ -113,20 +117,25 @@ import { ccrSessionIdForRefs } from "../../utils/claudeAiSync/sessionRefsGate.js
 import { env } from "../../utils/env.js";
 import { syncJobResumeSessionId } from "../../services/daemon/jobState.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
+import { unpinCodeMode, setReplConversationResumed } from "../../utils/codeMode.js";
+import { resetConversationToolsUsed } from "../../utils/agentListing.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { alwaysFalsePlaceholder } from "../../utils/background/remote/remoteSession.js";
 import { getCurrentWorktreeSession } from "../../utils/worktree.js";
 import { processSessionStartHooks } from "../../utils/sessionStart.js";
 import { isAbortError, toError, withTelemetryMessage } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { hasCarriableCron } from "../../services/compact/compactCarry.js";
 import { withCronCarryAttachment } from "../../services/daemon/sessionCron.js";
+import { initAgentOutputSymlink } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { describeStorageError } from "../../utils/agentMetadata.js";
 import { setCwd } from "../../utils/Shell.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 
-//@ chunk-231n2j4w.js:1904-1924 affinity
+//@ chunk-sj6t0nqg.js:2015-2035 affinity
 var RESPONSE_PAIR_RETIREMENT_HOOK = null;
 var PAUSE_STAMPS_CARRY_HOOK = null;
-//@ chunk-231n2j4w.js:1924-6914 facade-exports (2.1.88 match: clearConversation, 0.403)
+//@ chunk-sj6t0nqg.js:2035-7392 facade-exports (2.1.88 match: clearConversation, 0.38)
 async function* clearConversation({
   session,
   setMessages,
@@ -150,7 +159,7 @@ async function* clearConversation({
   conversationOnly,
 }) {
   resetObserverPairings(session);
-  removeQueuedByFilter(isPassiveMainAgentCommand);
+  removeByFilter(isPassiveMainThreadCommand);
   retireConversationReplicas();
   disposeLiveState();
   resetNoticeBudgets();
@@ -166,6 +175,7 @@ async function* clearConversation({
       credentials,
     });
   endMaintenanceAndForget("conversation_clear");
+  await appendToolsUsedEntryBeforeClear(storageV5);
   let killedIds = new Set();
   let preservedAgentIds = new Map();
   if (getAppState && isolationLatch?.current != null) {
@@ -210,7 +220,7 @@ async function* clearConversation({
   readFileState.clear();
   androidEvidenceByHost.of(session.host).reset();
   detachedCallSlots.of(session).discardAll();
-  removeQueuedByFilter(
+  removeByFilter(
     (queued) =>
       queued.mode === "task-notification" &&
       typeof queued.value === "string" &&
@@ -219,6 +229,7 @@ async function* clearConversation({
   sessionEnvVars?.clear();
   resetPickerState(memorySelector);
   if (isolationLatch && keptAgentIds.size === 0 && killedIds.size === 0) isolationLatch.current = null;
+  if (keptAgentIds.size === 0 && killedIds.size === 0) resetTurnHeard();
   if (getAppState) closeWebViews(getAppState);
   let currentSessionTitle = getCurrentSessionTitle(getSessionId());
   let currentSessionAgentName = getCurrentSessionAgentName();
@@ -259,9 +270,12 @@ async function* clearConversation({
         }
         evictTaskOutput(key);
       }
-      runningAgents = count(
+      runningAgents = countWhere(
         Object.values(nextTasks),
-        (task) => !NON_AGENT_TASK_TYPES.has(task.type) && !isIdleCompletedAgent(task),
+        (task) =>
+          !(codeModeAccepted() && isLocalScriptTask(task)) &&
+          !NON_AGENT_TASK_TYPES.has(task.type) &&
+          !isIdleCompletedAgent(task),
       );
       goal = prev.activeGoal;
       let transcripts = prev.transcripts;
@@ -273,6 +287,12 @@ async function* clearConversation({
       }
       return {
         ...resetArtifactReadState(prev),
+        ...(prev.toolPermissionContext?.planDoc !== undefined && {
+          toolPermissionContext: {
+            ...prev.toolPermissionContext,
+            planDoc: undefined,
+          },
+        }),
         tasks: nextTasks,
         ...(transcripts !== prev.transcripts && {
           transcripts,
@@ -407,6 +427,8 @@ async function* clearConversation({
   ccrSessionIdForRefs(session);
   if (env.CLAUDE_CODE_SESSION_ID && !conversationOnly) process.env.CLAUDE_CODE_SESSION_ID = getSessionId();
   await resetSessionFilePointer();
+  let mainThreadAgentType = getMainThreadAgentType();
+  if (mainThreadAgentType !== undefined) saveAgentSetting(mainThreadAgentType);
   for (let stamp of PAUSE_STAMPS_CARRY_HOOK?.pauseStampsCarriedAcrossClear(
     getAppState?.().mcp.clients,
     stamps,
@@ -437,6 +459,26 @@ async function* clearConversation({
   await stopAgentsAndCarrySettings(tasks, metadataPaths, storageV5);
   let { isCoordinatorMode } = require("../../coordinator/coordinatorMode.js");
   saveMode(isCoordinatorMode() ? "coordinator" : "normal");
+  if (codeModeAccepted()) {
+    unpinCodeMode();
+    resetConversationToolsUsed();
+    setReplConversationResumed(false);
+    if (isCodeModeEnabled()) {
+      let _opts = alwaysFalsePlaceholder();
+      restoreSessionMetadata({
+        replMode: true,
+        replTypedEvents: _opts,
+      });
+      queueSessionMetadataEntry({
+        type: "repl-mode",
+        replMode: true,
+        ...(_opts && {
+          typedEvents: true,
+        }),
+        sessionId: getSessionId(),
+      });
+    }
+  }
   let worktreeSession = getCurrentWorktreeSession();
   if (worktreeSession) saveWorktreeState(worktreeSession, storageV5);
   if (isolationLatch?.current) saveIsolationLatch(isolationLatch.current, storageV5);
@@ -463,7 +505,7 @@ async function* clearConversation({
   if (hookRows.length > 0) setMessages(() => hookRows);
   if (hasCarriableCron()) setMessages(withCronCarryAttachment);
 }
-//@ chunk-231n2j4w.js:6914-7185 layout
+//@ chunk-sj6t0nqg.js:7392-7663 layout
 /**
  * /clear 时停止运行中的后台代理，并把各代理的设置元数据写到新位置（失败只记日志）。
  */
@@ -485,7 +527,7 @@ async function stopAgentsAndCarrySettings(tasks, metadataPaths, storage) {
     }),
   );
 }
-//@ chunk-231n2j4w.js:7185-7328 layout
+//@ chunk-sj6t0nqg.js:7663-7806 layout
 function restoreOriginalCwd() {
   let originalCwd = getOriginalCwd();
   try {
@@ -499,11 +541,11 @@ function restoreOriginalCwd() {
       } catch {}
   }
 }
-//@ chunk-231n2j4w.js:7328-7392 layout
+//@ chunk-sj6t0nqg.js:7806-7870 layout
 function isBackgroundTask(task) {
   return "isBackgrounded" in task && task.isBackgrounded === false;
 }
-//@ chunk-231n2j4w.js:7392-7554 layout
+//@ chunk-sj6t0nqg.js:7870-8032 layout
 function canDropCompletedAgentOnClear(task) {
   return (
     isLocalAgent(task) &&
@@ -515,11 +557,11 @@ function canDropCompletedAgentOnClear(task) {
     !hasPendingAgentWork(task.id, task.agentId)
   );
 }
-//@ chunk-231n2j4w.js:7554-7700 layout
+//@ chunk-sj6t0nqg.js:8032-8178 layout
 function hasPendingAgentWork(taskId, agentId) {
   return (
     getTaskRunState().resumesInFlight.has(agentId) ||
-    commandQueueManager()
+    getProcessQueue()
       .getCommandQueue()
       .some(
         (queued) =>
@@ -527,7 +569,7 @@ function hasPendingAgentWork(taskId, agentId) {
       )
   );
 }
-//@ chunk-231n2j4w.js:7700-7788 layout
+//@ chunk-sj6t0nqg.js:8178-8266 layout
 var NON_AGENT_TASK_TYPES = new Set([
   "local_bash",
   "monitor_mcp",
@@ -535,7 +577,7 @@ var NON_AGENT_TASK_TYPES = new Set([
   "mcp_task",
   "post_turn_memory",
 ]);
-//@ chunk-231n2j4w.js:7788-7877 facade-exports
+//@ chunk-sj6t0nqg.js:8266-8355 facade-exports
 function hasAgentTaskSurvivingClear(tasks) {
   return Object.values(tasks).some(
     (task) =>

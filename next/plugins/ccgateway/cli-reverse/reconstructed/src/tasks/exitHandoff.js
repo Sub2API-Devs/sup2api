@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话退出时把后台 shell、workflow、代理与评论监视同意交接给下一次唤醒（adopt.json）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qvytv6sj.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4kh72kn9.js (7)
  * attribution: placement 7
  */
 import {
@@ -18,7 +18,7 @@ import { getRootSession } from "../bootstrap/state.js";
 import { getBgTakeover, isActingAsBgJob, getBgJobDir } from "../utils/concurrentSessions.js";
 import { taskRootUnderTemp, normalizeFilePath, sessionTempDirRealpath } from "../utils/tempDirRealpaths.js";
 import { getLiveState } from "../services/liveReplica/liveReplica.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { env } from "../utils/env.js";
 import {
   drainUnresumedFrameLive,
@@ -51,12 +51,13 @@ import { trackPendingWrite } from "../utils/shutdown/pendingWrites.js";
 import { isLocalShellTask } from "./LocalShellTask/guards.js";
 import { isTerminalShutdown } from "../utils/terminalShutdown.js";
 import { evictTaskOutput } from "../utils/task/diskOutput.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import { isLocalScriptTask, skipsTranscript } from "./taskKinds.js";
 import { isObserverAgentTask } from "./LocalAgentTask/LocalAgentTask.js";
 import { emitTaskNotification } from "../utils/task/taskNotifications.js";
-import { skipsTranscript } from "./taskKinds.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-qvytv6sj.js:1177-1359 placement
+//@ chunk-4kh72kn9.js:1217-1399 placement
 function carryUnattendedReplies(frameLive) {
   let { bySlug } = drainUnattendedReplies();
   if (bySlug.size === 0) return frameLive;
@@ -73,13 +74,13 @@ function carryUnattendedReplies(frameLive) {
       : entry;
   });
 }
-//@ chunk-qvytv6sj.js:1359-1407 placement
+//@ chunk-4kh72kn9.js:1399-1447 placement
 /**
  * 退出交接时等待代理 flush 的超时与文案。
  */
 var EXIT_HANDOFF_FLUSH_TIMEOUT_MS = 2000;
 var EXIT_HANDOFF_FLUSH_TIMEOUT_MESSAGE = "exit-handoff agent flush timeout";
-//@ chunk-qvytv6sj.js:1407-1560 placement
+//@ chunk-4kh72kn9.js:1447-1600 placement
 function getAdoptReadRoots() {
   let last = lastResumeRecordRegistry.of(getRootSession().host).last;
   return [
@@ -87,7 +88,7 @@ function getAdoptReadRoots() {
     ...(last ? [taskRootUnderTemp(normalizeFilePath(last.worktreePath))] : []),
   ];
 }
-//@ chunk-qvytv6sj.js:1560-3438 placement
+//@ chunk-4kh72kn9.js:1600-3479 placement
 /**
  * 收集退出时需要交接的项目（监视 WebSocket、Artifact 实时订阅、后台任务）。
  */
@@ -95,7 +96,7 @@ function collectHandoffItems(tasks) {
   let jobDir = isActingAsBgJob() ? getBgJobDir() : undefined;
   let wakeOnlySlugs =
     jobDir && getLiveState().builtInArtifactHiddenForMcp
-      ? uniq([
+      ? normalizeCaseForComparison_2([
           ...Array.from(getLiveState().live.supervisors.values())
             .filter((supervisor) => supervisor.autoReactWiring !== undefined)
             .map((supervisor) => supervisor.slug),
@@ -188,7 +189,7 @@ function collectHandoffItems(tasks) {
     mergeShellOutputReadRoots: getAdoptReadRoots(),
   };
 }
-//@ chunk-qvytv6sj.js:3438-5443 placement
+//@ chunk-4kh72kn9.js:3479-5484 placement
 /**
  * 退出时刷写代理转录并写 adopt.json，记录交接的任务数。
  */
@@ -316,7 +317,7 @@ function writeExitHandoff(
   trackPendingWrite(writePromise);
   return writePromise;
 }
-//@ chunk-qvytv6sj.js:5443-5713 placement
+//@ chunk-4kh72kn9.js:5484-5754 placement
 function hasPendingHandoff(tasks, storageV5) {
   let handoffItems = collectHandoffItems(tasks);
   let writePromise =
@@ -334,21 +335,25 @@ function hasPendingHandoff(tasks, storageV5) {
   markRunningTasksForHandoff(tasks, carriedIds);
   return writePromise;
 }
-//@ chunk-qvytv6sj.js:5713-6103 placement
+//@ chunk-4kh72kn9.js:5754-6172 placement
 function markRunningTasksForHandoff(tasks, skipIds = new Set()) {
   for (let task of Object.values(tasks)) {
     if (task.status !== "running" || skipIds.has(task.id)) continue;
     try {
       if (isLocalShellTask(task)) {
-        task.shellCommand?.kill({
-          cause: "session_exit",
-        });
+        task.shellCommand?.kill(
+          isTerminalShutdown()
+            ? {
+                cause: "session_exit",
+              }
+            : undefined,
+        );
         task.shellCommand?.cleanup();
       } else if (isTerminalShutdown()) {
         evictTaskOutput(task.id);
         continue;
       } else if ("abortController" in task) task.abortController?.abort();
-      if (!isObserverAgentTask(task))
+      if (!(codeModeAccepted() && isLocalScriptTask(task)) && !isObserverAgentTask(task))
         emitTaskNotification(task.id, "stopped", {
           toolUseId: task.toolUseId,
           summary: task.description,

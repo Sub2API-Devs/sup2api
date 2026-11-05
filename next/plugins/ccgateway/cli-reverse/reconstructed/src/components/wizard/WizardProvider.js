@@ -3,9 +3,9 @@
  *
  * 向导状态 Provider：步骤栈、前进/后退、双击 Esc 退出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/wizard/WizardProvider.tsx
- * pieces: chunk-095ptjmr.js (7)
+ * pieces: chunk-pqe1nn4c.js (7)
  * attribution: placement 6, fingerprint 1
  */
 import {
@@ -20,50 +20,40 @@ import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-095ptjmr.js:821-825 placement
+//@ chunk-pqe1nn4c.js:822-826 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-095ptjmr.js:821", () => {
+deferInit("chunk-pqe1nn4c.js:822", () => {
   init_react_production();
 });
-//@ chunk-095ptjmr.js:825-829 placement
+//@ chunk-pqe1nn4c.js:826-830 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-095ptjmr.js:825", () => {
+deferInit("chunk-pqe1nn4c.js:826", () => {
   init_react_production();
 });
-//@ chunk-095ptjmr.js:829-857 placement
+//@ chunk-pqe1nn4c.js:830-858 placement
 function incrementStep(index) {
   return index + 1;
 }
-//@ chunk-095ptjmr.js:857-895 placement
+//@ chunk-pqe1nn4c.js:858-896 placement
 function popStep(prev) {
   return prev.slice(0, -1);
 }
-//@ chunk-095ptjmr.js:895-923 placement
+//@ chunk-pqe1nn4c.js:896-924 placement
 function decrementStep(index) {
   return index - 1;
 }
-//@ chunk-095ptjmr.js:923-939 placement
+//@ chunk-pqe1nn4c.js:924-940 placement
 var wizardSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-095ptjmr.js:923", () => {
+deferInit("chunk-pqe1nn4c.js:924", () => {
   wizardSlot = createContext(null);
 });
-//@ chunk-095ptjmr.js:939-2900 fingerprint (2.1.88 match: WizardProvider, 0.652)
+//@ chunk-pqe1nn4c.js:940-2761 fingerprint (2.1.88 match: WizardProvider, 0.583)
 /**
  * 向导上下文：步骤列表与当前步骤、共享数据、next/back/goTo/cancel，Esc 双击退出。
  */
 function WizardProvider(props) {
-  let $ = useMemoCache(40);
-  let {
-    steps,
-    stepProps,
-    initialData,
-    onComplete,
-    onCancel,
-    children,
-    title,
-    showStepCounter,
-    exitOnCtrlCD,
-  } = props;
+  let $ = useMemoCache(38);
+  let { steps, stepProps, initialData, onComplete, onCancel, children, title, exitOnCtrlCD } = props;
   let t3;
   if ($[0] !== initialData) {
     t3 = initialData === undefined ? {} : initialData;
@@ -71,7 +61,6 @@ function WizardProvider(props) {
     $[1] = t3;
   } else t3 = $[1];
   let initialData_2 = t3;
-  let showStepCounter_2 = showStepCounter === undefined ? true : showStepCounter;
   let exitOnCtrlCD_ = exitOnCtrlCD === undefined ? false : exitOnCtrlCD;
   let [currentStepIndex, setCurrentStepIndex] = useState(0);
   let [wizardData, setWizardData] = useState(initialData_2);
@@ -156,8 +145,7 @@ function WizardProvider(props) {
     $[19] = onCancel;
     $[20] = t10;
   } else t10 = $[20];
-  let cancel = t10;
-  let globalExitKeybindings = useGlobalExitKeybindings(exitOnCtrlCD_ ? undefined : cancel);
+  let globalExitKeybindings = useGlobalExitKeybindings(exitOnCtrlCD_ ? undefined : t10);
   let pendingExitHint = globalExitKeybindings.pending
     ? `Press ${globalExitKeybindings.keyName} again to ${exitOnCtrlCD_ ? "exit" : "cancel"}`
     : null;
@@ -174,70 +162,63 @@ function WizardProvider(props) {
   let updateWizardData = t11;
   let t12;
   if (
-    $[22] !== cancel ||
-    $[23] !== currentStepIndex ||
-    $[24] !== goBack ||
-    $[25] !== goNext ||
-    $[26] !== goToStep ||
-    $[27] !== pendingExitHint ||
-    $[28] !== showStepCounter_2 ||
-    $[29] !== steps.length ||
-    $[30] !== title ||
-    $[31] !== wizardData
+    $[22] !== currentStepIndex ||
+    $[23] !== goBack ||
+    $[24] !== goNext ||
+    $[25] !== goToStep ||
+    $[26] !== pendingExitHint ||
+    $[27] !== steps.length ||
+    $[28] !== title ||
+    $[29] !== wizardData
   ) {
     t12 = {
       currentStepIndex,
       totalSteps: steps.length,
       wizardData,
-      setWizardData,
       updateWizardData,
       goNext,
       goBack,
       goToStep,
-      cancel,
       title,
-      showStepCounter: showStepCounter_2,
       pendingExitHint,
     };
-    $[22] = cancel;
-    $[23] = currentStepIndex;
-    $[24] = goBack;
-    $[25] = goNext;
-    $[26] = goToStep;
-    $[27] = pendingExitHint;
-    $[28] = showStepCounter_2;
-    $[29] = steps.length;
-    $[30] = title;
-    $[31] = wizardData;
-    $[32] = t12;
-  } else t12 = $[32];
+    $[22] = currentStepIndex;
+    $[23] = goBack;
+    $[24] = goNext;
+    $[25] = goToStep;
+    $[26] = pendingExitHint;
+    $[27] = steps.length;
+    $[28] = title;
+    $[29] = wizardData;
+    $[30] = t12;
+  } else t12 = $[30];
   let contextValue = t12;
-  let CurrentStepComponent = steps[currentStepIndex];
-  if (!CurrentStepComponent || isCompleted) {
+  let step = steps[currentStepIndex];
+  if (!step || isCompleted) {
     return null;
   }
   let children_2;
-  if ($[33] !== CurrentStepComponent || $[34] !== children || $[35] !== stepProps) {
+  if ($[31] !== step || $[32] !== children || $[33] !== stepProps) {
     children_2 =
       children ||
-      jsxProd_default(CurrentStepComponent, {
+      jsxProd_default(step, {
         ...stepProps,
       });
-    $[33] = CurrentStepComponent;
-    $[34] = children;
-    $[35] = stepProps;
-    $[36] = children_2;
-  } else children_2 = $[36];
+    $[31] = step;
+    $[32] = children;
+    $[33] = stepProps;
+    $[34] = children_2;
+  } else children_2 = $[34];
   let t14;
-  if ($[37] !== contextValue || $[38] !== children_2) {
+  if ($[35] !== contextValue || $[36] !== children_2) {
     t14 = jsxProd_default(wizardSlot.Provider, {
       value: contextValue,
       children: children_2,
     });
-    $[37] = contextValue;
-    $[38] = children_2;
-    $[39] = t14;
-  } else t14 = $[39];
+    $[35] = contextValue;
+    $[36] = children_2;
+    $[37] = t14;
+  } else t14 = $[37];
   return t14;
 }
-export { wizardSlot, WizardProvider };
+export { WizardProvider, wizardSlot };

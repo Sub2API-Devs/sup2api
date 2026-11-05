@@ -1,15 +1,15 @@
 /**
  * semver/ranges/simplify.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_satisfies } from "../functions/satisfies.js";
 import { require_compare } from "../functions/compare.js";
 
-//@ chunk-bwbq4xvm.js:24064-24544 cjs-fingerprint
+//@ chunk-7kayq7nc.js:24147-24628 cjs-fingerprint
 var require_simplify = __commonJS(function (cjsExports, cjsModule) {
   var satisfies = require_satisfies();
   var compare = require_compare();

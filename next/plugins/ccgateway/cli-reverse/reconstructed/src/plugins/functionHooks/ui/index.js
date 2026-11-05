@@ -3,10 +3,10 @@
  *
  * validateTree 命名空间（x6）汇总（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (3)
- * attribution: placement 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (5)
+ * attribution: placement 5
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
 import {
@@ -216,16 +216,47 @@ import { isInterruptedCall } from "./interactions.js";
 import { maySelectInstance, renderModulesForInstance, renderPluginsForInstance } from "./renderInstances.js";
 import { renderInstanceKey } from "../api/state.js";
 import { tellOnce, toldRefusals } from "./renderNotices.js";
+import {
+  CLIENT_SURFACE,
+  MAX_DRAWN_INSTANCES,
+  MODULE_KEY_SCHEME,
+  RUNTIME_MODULE_KEY,
+  RUNTIME_MODULE_SOURCE,
+  TYPES_MODULE_KEY,
+  TYPES_MODULE_SOURCE,
+  UNLINKED_KEY_SCHEME,
+  clientPressArgumentOf,
+  createClientFaultRunner,
+  createDesktopModules,
+  createDrawnClients,
+  desktopModuleOf,
+  desktopModules,
+  desktopSiteOf,
+  drawnAddressKey,
+  drawnDesktopClients,
+  drawnInstanceKey,
+  isToldDrawn,
+  keyedFileOf,
+  messageQueueOf,
+  moduleHashesOf,
+  moduleKeyOf,
+  rewriteSpecifiers,
+  runClientMessage,
+  runClientPress,
+  specifierSpansOf,
+  unlinkedKeyOf,
+  versionReaderOf,
+} from "./desktopSurface.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:10297-10307 placement
+//@ chunk-7jxyna5q.js:10273-10283 placement
 /**
  * validateTree 命名空间
  */
 var VALIDATE_TREE_NAMESPACE = {};
-//@ chunk-s61vbvea.js:10307-14809 placement
+//@ chunk-7jxyna5q.js:10283-14785 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:10307", () => {
+deferInit("chunk-7jxyna5q.js:10283", () => {
   __export(VALIDATE_TREE_NAMESPACE, {
     BOOLEAN_PROPS: () => BOOLEAN_PROPS,
     BORDER_ROWS: () => BORDER_ROWS,
@@ -434,7 +465,51 @@ deferInit("chunk-s61vbvea.js:10307", () => {
     writtenHref: () => writtenHref,
   });
 });
-//@ chunk-s61vbvea.js:14809-15043 placement
+//@ chunk-7jxyna5q.js:14785-14796 placement
+/**
+ * 门面模块本体对象（ui 子模块导出集合的挂载点）。
+ */
+var drawnClientsModule = {};
+//@ chunk-7jxyna5q.js:14796-15552 placement
+/**
+ * 门面导出表：把 ui 子模块的全部导出（CLIENT_SURFACE、createDrawnClients、rewriteSpecifiers 等）挂到模块上。
+ */
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jxyna5q.js:14796", () => {
+  __export(drawnClientsModule, {
+    CLIENT_SURFACE: () => CLIENT_SURFACE,
+    MAX_DRAWN_INSTANCES: () => MAX_DRAWN_INSTANCES,
+    MODULE_KEY_SCHEME: () => MODULE_KEY_SCHEME,
+    RUNTIME_MODULE_KEY: () => RUNTIME_MODULE_KEY,
+    RUNTIME_MODULE_SOURCE: () => RUNTIME_MODULE_SOURCE,
+    TYPES_MODULE_KEY: () => TYPES_MODULE_KEY,
+    TYPES_MODULE_SOURCE: () => TYPES_MODULE_SOURCE,
+    UNLINKED_KEY_SCHEME: () => UNLINKED_KEY_SCHEME,
+    clientPressArgumentOf: () => clientPressArgumentOf,
+    createClientFaultRunner: () => createClientFaultRunner,
+    createDesktopModules: () => createDesktopModules,
+    createDrawnClients: () => createDrawnClients,
+    default: () => drawnClientsModule,
+    desktopModuleOf: () => desktopModuleOf,
+    desktopModules: () => desktopModules,
+    desktopSiteOf: () => desktopSiteOf,
+    drawnAddressKey: () => drawnAddressKey,
+    drawnDesktopClients: () => drawnDesktopClients,
+    drawnInstanceKey: () => drawnInstanceKey,
+    isToldDrawn: () => isToldDrawn,
+    keyedFileOf: () => keyedFileOf,
+    messageQueueOf: () => messageQueueOf,
+    moduleHashesOf: () => moduleHashesOf,
+    moduleKeyOf: () => moduleKeyOf,
+    rewriteSpecifiers: () => rewriteSpecifiers,
+    runClientMessage: () => runClientMessage,
+    runClientPress: () => runClientPress,
+    specifierSpansOf: () => specifierSpansOf,
+    unlinkedKeyOf: () => unlinkedKeyOf,
+    versionReaderOf: () => versionReaderOf,
+  });
+});
+//@ chunk-7jxyna5q.js:15552-15786 placement
 /**
  * 在 UI 树中找第一个非零 engine 引用（不进入 Button/Input/Select）。
  */
@@ -448,4 +523,4 @@ function findEngineRef(element) {
   }
   return;
 }
-export { findEngineRef, VALIDATE_TREE_NAMESPACE };
+export { findEngineRef, VALIDATE_TREE_NAMESPACE, drawnClientsModule };

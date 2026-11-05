@@ -3,9 +3,9 @@
  *
  * 在外部编辑器中编辑提示词（展开粘贴内容、附上一条回复作参考）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/promptEditor.ts
- * pieces: chunk-0dfh72mg.js (7)
+ * pieces: chunk-5hf2nd5s.js (7)
  * attribution: fingerprint 3, layout 3, file-local 1
  */
 import { spawnSync } from "child_process";
@@ -20,12 +20,12 @@ import { generateTempFilePath } from "./tempDir.js";
 import { countCharInString } from "./stringUtils.js";
 import { writeFileSync_DEPRECATED } from "./slowOperations.js";
 
-//@ chunk-0dfh72mg.js:2541-2583 fingerprint (2.1.88 match: EDITOR_OVERRIDES, 1)
+//@ chunk-5hf2nd5s.js:2541-2583 fingerprint (2.1.88 match: EDITOR_OVERRIDES, 1)
 var EDITOR_OVERRIDES = {
   code: "code -w",
   subl: "subl --wait",
 };
-//@ chunk-0dfh72mg.js:2583-3468 fingerprint (2.1.88 match: editFileInEditor, 0.539)
+//@ chunk-5hf2nd5s.js:2583-3468 fingerprint (2.1.88 match: editFileInEditor, 0.539)
 function editFileInEditor(filePath, cursorOffset) {
   let fs = getFsImplementation();
   let inkInstance = getSecondRootError().get(process.stdout);
@@ -92,7 +92,7 @@ function editFileInEditor(filePath, cursorOffset) {
     else inkInstance.restoreTerminalAfterHandoff();
   }
 }
-//@ chunk-0dfh72mg.js:3468-3732 layout
+//@ chunk-5hf2nd5s.js:3468-3732 layout
 function expandPastedContentForEditor(editedPrompt, originalPrompt, pastedContents) {
   let collapsed = editedPrompt;
   for (let [id, content] of Object.entries(pastedContents))
@@ -111,11 +111,11 @@ function expandPastedContentForEditor(editedPrompt, originalPrompt, pastedConten
     }
   return collapsed;
 }
-//@ chunk-0dfh72mg.js:3732-3956 layout
+//@ chunk-5hf2nd5s.js:3732-3956 layout
 var PROMPT_EDITOR_REPLY_MARKER =
   "# \u2500\u2500\u2500 Write your reply below this line \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500";
 var PROMPT_EDITOR_REPLY_MARKER_LINE = 50;
-//@ chunk-0dfh72mg.js:3956-4222 layout
+//@ chunk-5hf2nd5s.js:3956-4222 layout
 /**
  * 把 Claude 上一条回复格式化为编辑器中的注释块（最多 50 行，超出截断）。
  */
@@ -136,13 +136,13 @@ ${PROMPT_EDITOR_REPLY_MARKER}
 `
   );
 }
-//@ chunk-0dfh72mg.js:4222-4328 file-local
+//@ chunk-5hf2nd5s.js:4222-4328 file-local
 function recollapsePastedContent(finalContent) {
   let contentIndex = finalContent.indexOf(PROMPT_EDITOR_REPLY_MARKER);
   if (contentIndex === -1) return finalContent;
   return finalContent.slice(contentIndex + PROMPT_EDITOR_REPLY_MARKER.length).replace(/^\r?\n\r?\n?/, "");
 }
-//@ chunk-0dfh72mg.js:4328-4749 fingerprint (2.1.88 match: editPromptInEditor, 1)
+//@ chunk-5hf2nd5s.js:4328-4749 fingerprint (2.1.88 match: editPromptInEditor, 1)
 /**
  * 在外部编辑器（$EDITOR/$VISUAL）中编辑当前提示词，返回编辑后的内容；可附带 Claude 上一条回复作参考（保存时去掉）。
  */
@@ -195,4 +195,4 @@ function editPromptInEditor(currentPrompt, pastedContents, lastResponse, cursorO
     } catch {}
   }
 }
-export { editPromptInEditor, editFileInEditor };
+export { editFileInEditor, editPromptInEditor };

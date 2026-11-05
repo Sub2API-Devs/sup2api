@@ -3,9 +3,9 @@
  *
  * Brief 附件：上传通道判定、MIME 表、附件路径校验（URL/UNC/网络挂载/工作目录限制/存在性）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/attachments.ts
- * pieces: chunk-qq39x404.js (16)
+ * pieces: chunk-f4xfd9je.js (16)
  * attribution: placement 4, callgraph-fingerprint 1, layout 10, fingerprint 1
  */
 import { extname, isAbsolute, basename, join } from "path";
@@ -35,20 +35,20 @@ import { getCwd } from "../../utils/cwd.js";
 import { lastExistingIdentity } from "../../utils/fsSafety/pathRevalidation.js";
 import { IMAGE_FILE_EXT_RE } from "../../utils/imagePaste.js";
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
-import { isTopLevelBridgeSession } from "../../utils/remoteEnvironment.js";
+import { isTopLevelBridgeSession, isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { createMutex } from "../../utils/promiseQueue.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { createSemaphore, limitConcurrency } from "../../utils/concurrencyLimit.js";
 import { explainUploadError, MAX_IMAGE_DIMENSION } from "../../utils/imageErrors.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-qq39x404.js:1093-1106 placement
+//@ chunk-f4xfd9je.js:1130-1143 placement
 /**
  * 附件解析时同时写项目附件目录的并发数（createSemaphore 用）。
  */
 var MAX_CONCURRENT_FOLDER_WRITES = 3;
 var MAX_CONCURRENT_ATTACHMENTS = 32;
-//@ chunk-qq39x404.js:1106-1464 callgraph-fingerprint (2.1.88 match: resolveAttachments, 0.165)
+//@ chunk-f4xfd9je.js:1143-1501 callgraph-fingerprint (2.1.88 match: resolveAttachments, 0.164)
 /**
  * 决定附件上传通道：CLAUDE_CODE_ATTACHMENTS_BY_PATH 时不上传；REPL bridge；CLAUDE_CODE_BRIEF_UPLOAD；CCR 环境；BYOC 远程；SDK 托管（tengu_async_goblet 控制）；否则 none。
  */
@@ -64,14 +64,14 @@ function getAttachmentUploadLane(options) {
       : "sdk_hosted_disabled";
   return "none";
 }
-//@ chunk-qq39x404.js:1464-1510 layout
+//@ chunk-f4xfd9je.js:1501-1547 layout
 /**
  * 上传通道为 sdk_hosted 且附件只在本机渲染时为真。
  */
 function isRenderedLocallyLane(attachmentUploadLane) {
   return attachmentUploadLane === "sdk_hosted" && isTopHostSession();
 }
-//@ chunk-qq39x404.js:1510-2503 layout
+//@ chunk-f4xfd9je.js:1547-2540 layout
 var ATTACHMENT_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -112,14 +112,14 @@ var ATTACHMENT_MIME_BY_EXT = {
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".zip": "application/zip",
 };
-//@ chunk-qq39x404.js:2503-2548 layout
+//@ chunk-f4xfd9je.js:2540-2585 layout
 /**
  * 按扩展名取附件 MIME 类型。
  */
 function getAttachmentMimeType(path) {
   return ATTACHMENT_MIME_BY_EXT[extname(path).toLowerCase()];
 }
-//@ chunk-qq39x404.js:2548-2701 layout
+//@ chunk-f4xfd9je.js:2585-2738 layout
 /**
  * 判断已校验附件的上传副本（png/jpeg）是否与原扩展名类型不同（即使用了预览副本）。
  */
@@ -131,14 +131,14 @@ function hasMismatchedImageType(attachment) {
     attachment.media_type !== getAttachmentMimeType(attachment.path)
   );
 }
-//@ chunk-qq39x404.js:2701-2742 layout
+//@ chunk-f4xfd9je.js:2738-2779 layout
 /**
  * 附件项是否为已上传的对象（非字符串路径）。
  */
 function isPreUploadedAttachment(attachment) {
   return typeof attachment !== "string";
 }
-//@ chunk-qq39x404.js:2742-2957 layout
+//@ chunk-f4xfd9je.js:2779-2995 layout
 async function suggestAttachmentPath(rawPath, resolvedPath, cwd) {
   let normalizedPath = await normalizePathForComparison(resolvedPath);
   if (normalizedPath) return normalizedPath;
@@ -153,7 +153,7 @@ async function suggestAttachmentPath(rawPath, resolvedPath, cwd) {
   }
   return await findSimilarFile(resolvedPath);
 }
-//@ chunk-qq39x404.js:2957-3662 layout
+//@ chunk-f4xfd9je.js:2995-3700 layout
 /**
  * 拒绝看起来是 URL、UNC 路径或位于会触发网络挂载目录下的附件路径。
  */
@@ -180,20 +180,20 @@ function checkAttachmentPathShape(rawPath) {
     };
   return;
 }
-//@ chunk-qq39x404.js:3662-3752 layout
+//@ chunk-f4xfd9je.js:3700-3790 layout
 /**
  * diskless 会话里附件不能是文件路径时的错误文本。
  */
 var CANNOT_ATTACH_PATH_MESSAGE =
   "A file path cannot be attached here: this tool cannot read files in this session.";
-//@ chunk-qq39x404.js:3752-3791 layout
+//@ chunk-f4xfd9je.js:3790-3829 layout
 /**
  * validateInput 用的附件校验入口。
  */
 function validateAttachments(attachments, context) {
   return validateAttachmentPaths(attachments, context, undefined);
 }
-//@ chunk-qq39x404.js:3791-4046 layout
+//@ chunk-f4xfd9je.js:3829-4084 layout
 /**
  * call 时的附件校验：受限场景下同时收集被判定路径与文件身份，供上传时防止文件被替换。
  */
@@ -217,7 +217,7 @@ async function validateAttachmentsForCall(attachments, context) {
     },
   };
 }
-//@ chunk-qq39x404.js:4046-5176 fingerprint (2.1.88 match: validateAttachmentPaths, 0.493)
+//@ chunk-f4xfd9je.js:4084-5215 fingerprint (2.1.88 match: validateAttachmentPaths, 0.494)
 /**
  * 逐个校验附件路径（已上传对象跳过）：diskless 会话不允许路径；拒绝 URL/UNC/网络挂载路径；--restricted 只能发工作目录内文件；permissions.blockReadsOutsideWorkingDirectories 时拒绝外部路径；必须是存在的普通文件（不存在时给出猜测路径）。
  */
@@ -288,7 +288,7 @@ async function validateAttachmentPaths(attachments, context, judge) {
     result: true,
   };
 }
-//@ chunk-qq39x404.js:5176-8249 placement
+//@ chunk-f4xfd9je.js:5215-8436 placement
 /**
  * 处理 Brief/SendUserFile 的附件：预上传的直接记录；本地路径展开并检查（非网络路径、存在）；按通道把文件写入项目文件夹和/或上传到聊天（限并发、可缩放图片），汇总每个附件的 uuid、项目路径、缩放信息与错误。
  */
@@ -354,8 +354,7 @@ async function resolveBriefAttachments(attachments, options) {
         };
     return resolved;
   }
-  let { uploadBriefAttachment, writeAttachmentToProjectFolder } =
-    await import("./uploadBriefAttachment.lazy.js");
+  let { uploadBriefAttachment, writeAttachmentToProjectFolder } = await import("./upload.lazy.js");
   let copyLock = createMutex();
   let telemetry = {
     upload_lane: fromEnum(lane),
@@ -364,6 +363,10 @@ async function resolveBriefAttachments(attachments, options) {
   let noScaledCopies = !getFeatureValue_CACHED_MAY_BE_STALE("tengu_level_wren", true);
   let maxPosts = getFeatureValue_CACHED_MAY_BE_STALE("tengu_zany_flask", 2);
   let resendMaxMiB = getFeatureValue_CACHED_MAY_BE_STALE("tengu_shimmying_willow", 30);
+  let external =
+    isRemoteManagedEnvironment() &&
+    env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE !== "self_hosted" &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_deep_plum", true);
   let semaphore = createSemaphore(MAX_CONCURRENT_FOLDER_WRITES);
   let resolveAbort = () => {};
   let promise = new Promise((resolve) => {
@@ -382,7 +385,7 @@ async function resolveBriefAttachments(attachments, options) {
         },
         chat: undefined,
       };
-    let filename = basename(path);
+    let joinedPath = basename(path);
     let identities = options.judged?.identities;
     let identity = identities === undefined || identities.has(path) ? identities?.get(path) : null;
     let lockPromise;
@@ -393,7 +396,7 @@ async function resolveBriefAttachments(attachments, options) {
       let [folderResult, chatResult] = await Promise.allSettled([
         projectChannel
           ? writeAttachmentToProjectFolder(approvedPath, size, projectChannel, {
-              filename,
+              filename: joinedPath,
               identity,
               signal: options.signal,
               telemetry,
@@ -403,7 +406,9 @@ async function resolveBriefAttachments(attachments, options) {
         canUpload
           ? uploadBriefAttachment(approvedPath, size, {
               lane,
-              filename,
+              filename: joinedPath,
+              saysIfReceived:
+                external && /^(image|audio|video)\//.test(getAttachmentMimeType(joinedPath) ?? ""),
               identity,
               signal: options.signal,
               credentials: options.credentials,
@@ -461,7 +466,7 @@ async function resolveBriefAttachments(attachments, options) {
   });
   return resolved;
 }
-//@ chunk-qq39x404.js:8249-8403 placement
+//@ chunk-f4xfd9je.js:8436-8590 placement
 function approvedResolvedPath(path, paths) {
   let { resolvedPath } = safeResolvePath(getFsImplementation(), path);
   if (paths === undefined) return resolvedPath;
@@ -471,7 +476,7 @@ function approvedResolvedPath(path, paths) {
         error: "not sent: it now resolves to what was not approved",
       };
 }
-//@ chunk-qq39x404.js:8403-9266 placement
+//@ chunk-f4xfd9je.js:8590-9453 placement
 /**
  * 生成图片以缩小副本发送到聊天的说明：每张的发送尺寸与原尺寸，以及原图在项目文件夹还是本地。
  */
@@ -505,13 +510,13 @@ Tell the user they are seeing ${plural(count, "a scaled-down copy", "scaled-down
   );
 }
 export {
-  checkAttachmentPathShape,
-  getAttachmentMimeType,
-  hasMismatchedImageType,
   scaledImagesNote,
   validateAttachments,
   getAttachmentUploadLane,
+  validateAttachmentsForCall,
   resolveBriefAttachments,
   isRenderedLocallyLane,
-  validateAttachmentsForCall,
+  checkAttachmentPathShape,
+  getAttachmentMimeType,
+  hasMismatchedImageType,
 };

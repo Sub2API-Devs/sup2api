@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备钩子转发器：把钩子输入转发到附着的机器执行（大小/可克隆检查、超时、主人离开）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hyjyj8hj.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tdcrpxkn.js (10)
  * attribution: placement 10
  */
 import { realpath, readlink } from "fs/promises";
@@ -22,7 +22,7 @@ import { isAbortError, errorMessage } from "../errors.js";
 import { logError } from "../log.js";
 import { toolPathFieldInput } from "./hookInputPaths.js";
 
-//@ chunk-hyjyj8hj.js:8521-8746 placement
+//@ chunk-tdcrpxkn.js:8521-8746 placement
 var MAX_DEVICE_HOOK_INPUT_BYTES = 1044480;
 var DEVICE_HOOK_DEFAULT_S = {
   PreToolUse: 15,
@@ -39,15 +39,15 @@ var DEVICE_HOOK_DEFAULT_S = {
 };
 var DEVICE_HOOK_TIMEOUT_SLACK_MS = 5000;
 var DEVICE_HOOK_DEADLINE_SLACK_S = 30;
-//@ chunk-hyjyj8hj.js:8746-8802 placement
+//@ chunk-tdcrpxkn.js:8746-8802 placement
 function deviceHookTimeoutMs(spec) {
   return (spec.timeoutS ?? DEVICE_HOOK_DEFAULT_S[spec.event]) * 1000 + DEVICE_HOOK_TIMEOUT_SLACK_MS;
 }
-//@ chunk-hyjyj8hj.js:8802-8849 placement
+//@ chunk-tdcrpxkn.js:8802-8849 placement
 function deviceHookDeadlineSec(spec) {
   return Math.ceil(deviceHookTimeoutMs(spec) / 1000) + DEVICE_HOOK_DEADLINE_SLACK_S;
 }
-//@ chunk-hyjyj8hj.js:8849-12449 placement
+//@ chunk-tdcrpxkn.js:8849-12449 placement
 /**
  * 创建设备钩子转发器：把 PreToolUse 等钩子输入转发到附着机器执行，处理过大/不可克隆输入、路径无法解析、超时与主人离开。
  */
@@ -254,7 +254,7 @@ function createDeviceHookForwarder(options) {
     },
   };
 }
-//@ chunk-hyjyj8hj.js:12449-12570 placement
+//@ chunk-tdcrpxkn.js:12449-12570 placement
 function safeAwayNotice(answer, notify) {
   try {
     return notify();
@@ -267,7 +267,7 @@ function safeAwayNotice(answer, notify) {
     return answer;
   }
 }
-//@ chunk-hyjyj8hj.js:12570-12655 placement
+//@ chunk-tdcrpxkn.js:12570-12655 placement
 function productionForwarderTimer(callback, delayMs) {
   let timer = setTimeout(callback, delayMs);
   timer.unref();
@@ -275,11 +275,11 @@ function productionForwarderTimer(callback, delayMs) {
     clear: () => clearTimeout(timer),
   };
 }
-//@ chunk-hyjyj8hj.js:12655-12693 placement
+//@ chunk-tdcrpxkn.js:12655-12693 placement
 var realpathDefault = (path) => realpath(path);
 var readlinkDefault = (path) => readlink(path);
 var MAX_LINK_RESOLVE_STEPS = 40;
-//@ chunk-hyjyj8hj.js:12693-12864 placement
+//@ chunk-tdcrpxkn.js:12693-12864 placement
 async function realpathToolInputPaths(input, toolAliases, deps) {
   let calls = "tool_calls" in input && Array.isArray(input.tool_calls) ? input.tool_calls : [input];
   let allResolved = true;
@@ -290,7 +290,7 @@ async function realpathToolInputPaths(input, toolAliases, deps) {
   }
   return allResolved;
 }
-//@ chunk-hyjyj8hj.js:12864-13208 placement
+//@ chunk-tdcrpxkn.js:12864-13208 placement
 /**
  * 从 hook 输入中取出工具参数里的路径字段。
  */
@@ -316,7 +316,7 @@ function getToolInputPathField(call, toolAliases) {
       }
     : null;
 }
-//@ chunk-hyjyj8hj.js:13208-13639 placement
+//@ chunk-tdcrpxkn.js:13208-13639 placement
 /**
  * 把工具输入中的绝对路径字段替换为真实路径：逐级向上找到存在的祖先求 realpath，遇到符号链接时按链接目标重算，超过次数返回 false。
  */

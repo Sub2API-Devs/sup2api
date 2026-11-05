@@ -3,12 +3,11 @@
  *
  * 2.1.316 新增：渲染稍后送达的工具结果（成功/拒绝/错误三种行）；渲染来自其他代理/对等会话的消息（来源名、来源类型、转录模式下展开）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (18)
  * attribution: placement 18
  */
-import { init_react_production, useLayoutEffect } from "../../../vendor/react/cjs/react.production.js";
 import { clipTeammateText } from "../../utils/swarm/teammateIds.js";
 import {
   PEER_MESSAGE_PREFIXES,
@@ -40,6 +39,7 @@ import { useSessionOrUndefined } from "../../context/session.js";
 import { detachedCallSlots } from "../../services/tools/detachedToolCalls.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useFrozenValue } from "../FreezeWhenOffscreen.js";
+import { useLayoutEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { formatDuration } from "../../utils/format.js";
 import { readComputerFolderReplyTarget } from "../../remote/tools/toolHostsNotice.js";
@@ -47,23 +47,18 @@ import { isRepositoryTrustGateEnabled } from "../../utils/teleport/repositoryTru
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../../remote/tools/consentText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:209574-209578 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:209574", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:209578-209612 placement
+//@ chunk-wjygkcr4.js:216516-216550 placement
 function selectVerbose(state) {
   return state.verbose;
 }
-//@ chunk-ah34pb7m.js:209612-209643 placement
+//@ chunk-wjygkcr4.js:216550-216581 placement
 var AGENT_MESSAGE_CLOSE_TAG = "</agent-message>";
 var DEFAULT_CAP_LINES = 5;
-//@ chunk-ah34pb7m.js:209643-209680 placement
+//@ chunk-wjygkcr4.js:216581-216618 placement
 function senderLabelOrAgent(fromName) {
   return clipTeammateText(fromName) || "agent";
 }
-//@ chunk-ah34pb7m.js:209680-210044 placement
+//@ chunk-wjygkcr4.js:216618-216982 placement
 /**
  * 去掉代理消息的前缀与结尾标签，得到正文。
  */
@@ -81,7 +76,7 @@ function stripAgentMessageWrapper(text) {
   }
   return rest.replace(/^<agent-message[^>]*>\n/, "").replace(/\n<\/agent-message>$/, "");
 }
-//@ chunk-ah34pb7m.js:210044-210203 placement
+//@ chunk-wjygkcr4.js:216982-217141 placement
 function stripAgentMessageHeader(text) {
   let headerPrefix =
     HANDBACK_REPORT_HEADER +
@@ -97,7 +92,7 @@ ${headerPrefix}`);
 
 ${text_2}`;
 }
-//@ chunk-ah34pb7m.js:210203-211460 placement
+//@ chunk-wjygkcr4.js:217141-218401 placement
 /**
  * 渲染来自其他代理/对等会话的消息（来源名、来源类型、转录模式下展开）。
  */
@@ -218,7 +213,7 @@ function AgentMessage(props) {
   } else containerElement = $[30];
   return BriefTimestampNamespace.useUserMessageSite(containerElement);
 }
-//@ chunk-ah34pb7m.js:211460-212319 placement
+//@ chunk-wjygkcr4.js:218401-219260 placement
 /**
  * 代理消息正文：展开或限高显示，跟在发言人标签后时省略标题。
  */
@@ -302,7 +297,7 @@ function AgentMessageBody(props) {
   } else messageColumn = $[15];
   return messageColumn;
 }
-//@ chunk-ah34pb7m.js:212319-212929 placement
+//@ chunk-wjygkcr4.js:219260-219870 placement
 /**
  * 按终端宽度限制行数显示消息正文，超出时截断。
  */
@@ -361,7 +356,7 @@ function CappedMessageBody(props) {
   } else boxElement = $[12];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:212929-213394 placement
+//@ chunk-wjygkcr4.js:219870-220333 placement
 /**
  * 把文本按宽度折行并截到最大行数，返回截断后的行与是否截断。
  */
@@ -414,27 +409,27 @@ function capTextToLines(body, columns) {
     hiddenChars: body.length - joined.length,
   };
 }
-//@ chunk-ah34pb7m.js:213394-213413 placement
-var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:213394", () => {
-  weakMap = new WeakMap();
+//@ chunk-wjygkcr4.js:220333-220352 placement
+var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:220333", () => {
+  weakMap_2 = new WeakMap();
 });
-//@ chunk-ah34pb7m.js:213413-213594 placement
+//@ chunk-wjygkcr4.js:220352-220533 placement
 /**
  * 判断代理消息在给定宽度下是否超过显示行数上限（按消息对象和宽度缓存）。
  */
 function agentMessageOverflows(message, body, origin, columns) {
   if (isPeerHandbackOrFlagged(origin)) return false;
-  let cached = weakMap.get(message);
+  let cached = weakMap_2.get(message);
   if (cached !== undefined && cached.width === columns) return cached.overflows;
   let overflows = capTextToLines(stripAgentMessageWrapper(body), Math.max(1, columns)) !== null;
-  weakMap.set(message, {
+  weakMap_2.set(message, {
     width: columns,
     overflows,
   });
   return overflows;
 }
-//@ chunk-ah34pb7m.js:213594-213703 placement
+//@ chunk-wjygkcr4.js:220533-220642 placement
 function dedentTwoSpaces(text) {
   let lines = text.split(`
 `);
@@ -443,12 +438,7 @@ function dedentTwoSpaces(text) {
 `)
     : text;
 }
-//@ chunk-ah34pb7m.js:213703-213707 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:213703", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:213707-214296 placement
+//@ chunk-wjygkcr4.js:220646-221235 placement
 /**
  * 读取某工具调用在后台完成后的结果状态（用于"结果稍后送达"）。
  */
@@ -512,7 +502,7 @@ function useDeferredToolResult(props) {
   } else boxElement = $[14];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:214296-217098 placement
+//@ chunk-wjygkcr4.js:221235-224039 placement
 /**
  * 渲染稍后送达的工具结果（成功/拒绝/错误三种行）。
  */
@@ -709,14 +699,14 @@ function DeferredToolResultRow(props) {
   } else rowFragment = $[46];
   return rowFragment;
 }
-//@ chunk-ah34pb7m.js:217098-217164 placement
+//@ chunk-wjygkcr4.js:224039-224105 placement
 function folderWaitRefusal(toolName, content) {
   let computerFolderReplyTarget = readComputerFolderReplyTarget(toolName, content);
   return computerFolderReplyTarget !== undefined && isRepositoryTrustGateEnabled()
     ? computerFolderReplyTarget
     : undefined;
 }
-//@ chunk-ah34pb7m.js:217164-217416 placement
+//@ chunk-wjygkcr4.js:224105-224357 placement
 /**
  * 远程工具"等待文件夹信任"的拒绝提示行，文案取自 REMOTE_TOOLS_CONSENT_TEXT。
  */
@@ -738,10 +728,20 @@ function FolderWaitRefusalNotice(props) {
   } else noticeElement = $[1];
   return noticeElement;
 }
+//@ chunk-wjygkcr4.js:225232-225236 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:225232", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:227346-227350 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:227346", () => {
+  init_react_production();
+});
 export {
+  AgentMessage,
   agentMessageOverflows,
   folderWaitRefusal,
   useDeferredToolResult,
   FolderWaitRefusalNotice,
-  AgentMessage,
 };

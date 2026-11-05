@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve --transport http：本地 HTTP MCP 服务与 auth token 校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-k26nnqnx.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cacgqezg.js (5)
  * attribution: placement 5
  */
 import { randomBytes, randomUUID } from "crypto";
@@ -23,6 +23,7 @@ import { getRepoCheckouts } from "../utils/git/repoCheckouts.js";
 import { env } from "../utils/env.js";
 import { handedOverBy } from "./mcpServe/sessionTunnelLauncher.js";
 import { keepBackgroundCommandRecords } from "../services/mcpServe/readCalls.js";
+import { diskState } from "../services/mcpServe/toolHostIds.js";
 import { getErrnoCode, errorMessage } from "../utils/errors.js";
 import { registerCleanup } from "../utils/cleanupRegistry.js";
 import { bridgeHostState } from "../bridge/bridgeHostState.js";
@@ -39,9 +40,9 @@ import { ensureSettingsInstall } from "../services/remoteTools/commandRendering.
 import { setupPluginHookHotReload } from "../utils/plugins/loadPluginHooks.js";
 import { isLoopbackHost } from "../utils/localhost.js";
 
-//@ chunk-k26nnqnx.js:26139-26157 placement
+//@ chunk-cacgqezg.js:27464-27482 placement
 var LOOPBACK_HOST = "127.0.0.1";
-//@ chunk-k26nnqnx.js:26157-27736 placement
+//@ chunk-cacgqezg.js:27482-29061 placement
 /**
  * `mcp serve --transport http`：起本地 HTTP MCP 服务，校验 ≥32 字符的 auth token。
  */
@@ -151,7 +152,7 @@ async function startMcpHttpServer({
     },
   };
 }
-//@ chunk-k26nnqnx.js:27736-28834 placement
+//@ chunk-cacgqezg.js:29061-30220 placement
 async function runMcpServe(cwd, options) {
   let { launcher } = options;
   startServedCpuMeter(getRootSession().host, launcher.kind);
@@ -161,6 +162,7 @@ async function runMcpServe(cwd, options) {
   let { authToken, tunnel } = handedOverBy(launcher);
   let tunnelModule = tunnel === undefined ? undefined : await import("../cli/handlers/EX_CONFIG.lazy.js");
   keepBackgroundCommandRecords(getRootSession().host, launcher.kind);
+  if (launcher.kind === "runner") diskState.of(getRootSession().host).ids = launcher.tunnel.tool_host;
   let server = await startMcpHttpServer({
     ...options,
     session: getRootSession(),
@@ -210,13 +212,13 @@ async function runMcpServe(cwd, options) {
     .then(() => setupPluginHookHotReload(options.storageV5, credentials))
     .catch(logError);
 }
-//@ chunk-k26nnqnx.js:28834-28950 placement
+//@ chunk-cacgqezg.js:30220-30336 placement
 async function startTunnelWithCleanup(server, tunnel) {
   let { startSessionTunnel } = await import("../cli/handlers/EX_CONFIG.lazy.js");
   let sessionTunnel = startSessionTunnel(server, tunnel);
   registerCleanup(async () => sessionTunnel.stop());
 }
-//@ chunk-k26nnqnx.js:28950-29073 placement
+//@ chunk-cacgqezg.js:30336-30459 placement
 function isLoopbackHostHeader(host) {
   if (host === undefined || /[\s@/?#\\]/.test(host)) return false;
   try {

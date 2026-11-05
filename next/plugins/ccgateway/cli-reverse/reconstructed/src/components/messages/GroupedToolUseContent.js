@@ -3,9 +3,9 @@
  *
  * 同类工具调用分组显示（工具的 renderGroupedToolUse）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/GroupedToolUseContent.tsx
- * pieces: chunk-ah34pb7m.js (18)
+ * pieces: chunk-wjygkcr4.js (18)
  * attribution: placement 15, sole-consumer 1, affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -36,8 +36,8 @@ import { UserToolErrorMessage } from "./UserToolResultMessage/UserToolErrorMessa
 import { VALIDATE_TREE_NAMESPACE } from "../../plugins/functionHooks/ui/index.js";
 import {
   useState,
-  init_react_production,
   createContext,
+  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
 import { hasNoErrorOrInterrupt, hasContentAfterIndex } from "./toolResultRendering.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
@@ -57,7 +57,7 @@ import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js"
 import { hasStringUuid } from "../../bridge/inboundMessages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:162030-163885 placement
+//@ chunk-wjygkcr4.js:165574-167429 placement
 /**
  * 分组工具调用中的一行（输入、结果、进度）。
  */
@@ -82,7 +82,7 @@ function GroupedToolUseRow(props) {
     $[7] !== tools
   ) {
     earlyResult = EARLY_RETURN_SENTINEL;
-    N: {
+    O: {
       let resultElement;
       if ($[10] !== toolUseID) {
         resultElement = (state) => state.type === "tool_result" && state.tool_use_id === toolUseID;
@@ -92,7 +92,7 @@ function GroupedToolUseRow(props) {
       row = resultMsg.message.content.find(resultElement);
       if (row?.type !== "tool_result") {
         earlyResult = null;
-        break N;
+        break O;
       }
       let isInterrupted = isToolDenial(row.content, resultMsg, INTERRUPTED_TOOL_STATUSES);
       let isRejected = isToolDenial(row.content, resultMsg, USER_REJECTED_KIND);
@@ -103,7 +103,7 @@ function GroupedToolUseRow(props) {
           $[12] = toolName;
         } else toolName = $[12];
         earlyResult = toolName;
-        break N;
+        break O;
       }
       if (
         (isRejected &&
@@ -126,7 +126,7 @@ function GroupedToolUseRow(props) {
             $[13] = isError;
           } else isError = $[13];
           earlyResult = isError;
-          break N;
+          break O;
         }
         let rowElement = safeParseToolInput(tool, input);
         if (!rowElement.success) {
@@ -136,7 +136,7 @@ function GroupedToolUseRow(props) {
             $[14] = rejectedElement;
           } else rejectedElement = $[14];
           earlyResult = rejectedElement;
-          break N;
+          break O;
         }
         earlyResult =
           resultBlock(rowElement.data, {
@@ -154,7 +154,7 @@ function GroupedToolUseRow(props) {
             theme,
             isTranscriptMode: true,
           }) ?? jsxProd_default(RejectedToolUseMessage, {});
-        break N;
+        break O;
       }
     }
     $[0] = columns;
@@ -207,10 +207,10 @@ function GroupedToolUseRow(props) {
   } else userToolErrorMessageElement = $[23];
   return userToolErrorMessageElement;
 }
-//@ chunk-ah34pb7m.js:163885-163909 placement
+//@ chunk-wjygkcr4.js:167429-167453 placement
 var MEMO_KEY_FIELD_SEP = "\x00";
 var MEMO_KEY_ROW_SEP = "\x01";
-//@ chunk-ah34pb7m.js:163909-165874 placement
+//@ chunk-wjygkcr4.js:167453-169418 placement
 /**
  * 渲染一组同类工具调用（进行中、出错、活跃组）。
  */
@@ -219,7 +219,7 @@ function GroupedToolUseContent(props) {
   let { message, inProgressToolUseIDs, lookups, verbose, isActiveGroup } = props;
   let memoKey;
   if ($[0] !== inProgressToolUseIDs || $[1] !== lookups || $[2] !== message) {
-    const calls = toolCallOf(message);
+    const calls = toolCallOf_2(message);
     let callKey;
     if ($[4] !== inProgressToolUseIDs || $[5] !== lookups) {
       callKey = (call) =>
@@ -244,7 +244,7 @@ function GroupedToolUseContent(props) {
   if ($[7] !== inProgressToolUseIDs || $[8] !== lookups || $[9] !== message) {
     buildValue = (key) => ({
       key,
-      calls: toolCallOf(message).map((call) => {
+      calls: toolCallOf_2(message).map((call) => {
         let resultMsg = lookups.toolResultByToolUseID.get(call.id);
         return {
           tool_use_id: call.id,
@@ -353,8 +353,8 @@ function GroupedToolUseContent(props) {
   } else renderHook = $[33];
   return actionKeysNamespace.useRenderHook(renderKey, renderHook);
 }
-//@ chunk-ah34pb7m.js:165874-166083 placement (2.1.88 match: toolCallOf, 1)
-function toolCallOf(msg) {
+//@ chunk-wjygkcr4.js:169418-169627 placement (2.1.88 match: toolCallOf, 1)
+function toolCallOf_2(msg) {
   let content = [];
   for (let message of msg.messages) {
     let lookups =
@@ -366,7 +366,7 @@ function toolCallOf(msg) {
   }
   return content;
 }
-//@ chunk-ah34pb7m.js:185246-185626 placement
+//@ chunk-wjygkcr4.js:192477-192857 placement
 /**
  * 思考已用时间计时显示。
  */
@@ -408,7 +408,7 @@ function ThinkingElapsed(props) {
   } else labelElement = $[5];
   return labelElement;
 }
-//@ chunk-ah34pb7m.js:185626-185889 placement
+//@ chunk-wjygkcr4.js:192857-193120 placement
 /**
  * 从 anchorMs 起计时，超过 2 秒后显示" · 耗时"，动画时每秒刷新。
  */
@@ -437,7 +437,7 @@ function ElapsedSinceAnchor(props) {
   } else durationElement = $[3];
   return durationElement;
 }
-//@ chunk-ah34pb7m.js:185889-186222 placement
+//@ chunk-wjygkcr4.js:193120-193453 placement
 /**
  * 把文本按宽度折行截到指定行数并加省略号。
  */
@@ -463,11 +463,11 @@ function truncateToLines(text, columns, maxLines) {
   }
   return `${trimmed.trimEnd()}\u2026`;
 }
-//@ chunk-ah34pb7m.js:186222-186312 placement
+//@ chunk-wjygkcr4.js:193453-193543 placement
 function lowerFirstUnlessAcronym(text, keepCase) {
   return keepCase || /^\S\S*\p{Lu}/u.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
 }
-//@ chunk-ah34pb7m.js:186312-186984 placement
+//@ chunk-wjygkcr4.js:193543-194215 placement
 /**
  * 收集消息中以后台方式运行的 Bash/Agent 工具调用 id。
  */
@@ -503,25 +503,15 @@ function collectBackgroundToolUseIds(messages) {
   for (let backgroundId of backgroundIds) if (!completedIds.has(backgroundId)) return true;
   return false;
 }
-//@ chunk-ah34pb7m.js:186984-186988 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:186984", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:186988-186992 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:186988", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:186992-187166 placement
+//@ chunk-wjygkcr4.js:194223-194397 placement
 var COMPACTED_TRANSCRIPT_HINT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CompactSummaryContext;
-deferInit("chunk-ah34pb7m.js:186992", () => {
+deferInit("chunk-wjygkcr4.js:194223", () => {
   COMPACTED_TRANSCRIPT_HINT =
     "If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: ";
   CompactSummaryContext = createContext(null);
 });
-//@ chunk-ah34pb7m.js:187166-187682 placement
+//@ chunk-wjygkcr4.js:194397-194913 placement
 /**
  * 找到消息列表开头的压缩边界及其摘要消息。
  */
@@ -569,7 +559,7 @@ ${COMPACTED_TRANSCRIPT_HINT}`) ?? -1;
     },
   };
 }
-//@ chunk-ah34pb7m.js:187682-187792 placement
+//@ chunk-wjygkcr4.js:194913-195023 placement
 /**
  * 工具组标题后的提示后缀：没有摘要信息时提示查看历史，有摘要时提示查看摘要。
  */
@@ -577,7 +567,7 @@ function historyHintSuffix(summary, shortcut) {
   if (summary === null) return ` (${shortcut} for history)`;
   return summary.summary === null ? "" : ` (${shortcut} for the summary)`;
 }
-//@ chunk-ah34pb7m.js:187792-187857 placement
+//@ chunk-wjygkcr4.js:195023-195088 placement
 /**
  * 函数 leadingCompactHint（取以压缩边界开头的历史提示后缀）；位于「同类工具调用分组显示（工具的 renderGroupedToolUse）」模块。
  */
@@ -585,15 +575,15 @@ function leadingCompactHint(messages, uuid, shortcut) {
   let leadingCompactBoundary = findLeadingCompactBoundary(messages);
   return historyHintSuffix(leadingCompactBoundary?.uuid === uuid ? leadingCompactBoundary : null, shortcut);
 }
-//@ chunk-ah34pb7m.js:189153-189209 sole-consumer
+//@ chunk-wjygkcr4.js:196384-196438 sole-consumer
 function selectActiveAgents_4(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:189209-189248 affinity
+//@ chunk-wjygkcr4.js:196438-196477 affinity
 function isToolUseInProgress(toolUse) {
   return toolUse.isInProgress;
 }
-//@ chunk-ah34pb7m.js:189248-190237 fingerprint (2.1.88 match: GroupedToolUseContent, 0.834)
+//@ chunk-wjygkcr4.js:196477-197469 fingerprint (2.1.88 match: GroupedToolUseContent, 0.834)
 function GroupedToolUseContent_2(props) {
   let $ = useMemoCache(11);
   let { message, tools, lookups, inProgressToolUseIDs, shouldAnimate, addMargin } = props;
@@ -612,12 +602,12 @@ function GroupedToolUseContent_2(props) {
     $[8] !== tools
   ) {
     deps = EARLY_RETURN_SENTINEL;
-    L: {
+    H: {
       let tool = findToolByName(tools, message.toolName);
       let override = tool && mcpRenderOverrideFor(tool, "renderGroupedToolUse");
       if (!override) {
         deps = null;
-        break L;
+        break H;
       }
       let resultsByToolUseId = new Map();
       for (const resultMsg of message.results) {
@@ -669,18 +659,28 @@ function GroupedToolUseContent_2(props) {
   if (deps !== EARLY_RETURN_SENTINEL) return deps;
   return children;
 }
+//@ chunk-wjygkcr4.js:197469-197473 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:197469", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:197522-197526 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:197522", () => {
+  init_react_production();
+});
 export {
+  GroupedToolUseContent_2,
+  GroupedToolUseContent,
   findLeadingCompactBoundary,
   CompactSummaryContext,
   leadingCompactHint,
   historyHintSuffix,
   GroupedToolUseRow,
-  toolCallOf,
+  toolCallOf_2,
   ThinkingElapsed,
   collectBackgroundToolUseIds,
   lowerFirstUnlessAcronym,
   ElapsedSinceAnchor,
   truncateToLines,
-  GroupedToolUseContent_2,
-  GroupedToolUseContent,
 };

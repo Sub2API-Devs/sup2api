@@ -3,9 +3,9 @@
  *
  * 文本输入框的渲染层：把 useTextInput 的渲染结果（含光标、占位符、粘贴 pill、幽灵文本）画到终端，并声明终端光标位置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/BaseTextInput.tsx
- * pieces: chunk-81qqq1aq.js (1), chunk-e6aww6q8.js (1)
+ * pieces: chunk-3t80v0fz.js (1), chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1, placement 1
  */
 import { reduceCodes } from "../utils/textHighlighting.js";
@@ -30,7 +30,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { HighlightedInput } from "./PromptInput/ShimmeredInput.js";
 import { Ansi } from "../ink/components/AnsiText.js";
 
-//@ chunk-e6aww6q8.js:66424-66686 placement (2.1.88 match: writeCacheBreakDiff, 0.806)
+//@ chunk-5xgkngpb.js:68965-69227 placement (2.1.88 match: writeCacheBreakDiff, 0.805)
 /**
  * 文本编辑用的区间切分（BaseTextInput 使用），与缓存检测无关，归错文件。旧版名 writeCacheBreakDiff 为错配。
  */
@@ -58,7 +58,7 @@ var splitSpansAroundOverlays = (prevContent, newContent) =>
         : [];
     });
   });
-//@ chunk-81qqq1aq.js:4298-6714 fingerprint (2.1.88 match: BaseTextInput, 0.631)
+//@ chunk-3t80v0fz.js:4299-6717 fingerprint (2.1.88 match: BaseTextInput, 0.631)
 function BaseTextInput(props) {
   let $ = useMemoCache(7);
   let { inputState, children, terminalFocus, invert, hidePlaceholderText, cursorCellPainted, ...props_2 } =

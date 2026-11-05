@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主出站可达性探测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4xpk3fhh.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0avm71bs.js (6)
  * attribution: placement 6
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
@@ -21,12 +21,12 @@ import {
 import { isMaxContentLengthError } from "../../utils/errors.js";
 import { isForbiddenProxy, isNotFoundProxy } from "./shareEntries.js";
 
-//@ chunk-4xpk3fhh.js:1088-1130 placement
+//@ chunk-0avm71bs.js:1207-1249 placement
 var WARMUP_PATH = "/_warmup";
 var PROBE_TIMEOUT_MS = 3000;
 var PROBE_CACHE_MS = 600000;
 var MAX_PROBE_RESPONSE_BYTES = 262144;
-//@ chunk-4xpk3fhh.js:1130-1244 placement
+//@ chunk-0avm71bs.js:1249-1363 placement
 function artifactHostUnreachable(host) {
   let liveState = getLiveState();
   return (
@@ -34,12 +34,12 @@ function artifactHostUnreachable(host) {
     liveState.contentHostEgressUnanswered.has(artifactContentOriginUrlFor(host))
   );
 }
-//@ chunk-4xpk3fhh.js:1244-1334 placement
+//@ chunk-0avm71bs.js:1363-1453 placement
 function wasProbedRecently(host) {
   let probed = getLiveState().contentHostEgressProbed.get(host);
   return probed !== undefined && Date.now() - probed < PROBE_CACHE_MS;
 }
-//@ chunk-4xpk3fhh.js:1334-1413 placement
+//@ chunk-0avm71bs.js:1453-1532 placement
 function artifactHostAnswerAtHand(at) {
   return (
     isDiskless() ||
@@ -47,7 +47,7 @@ function artifactHostAnswerAtHand(at) {
     wasProbedRecently(artifactContentOriginUrlFor(at))
   );
 }
-//@ chunk-4xpk3fhh.js:1413-1910 placement
+//@ chunk-0avm71bs.js:1532-2029 placement
 async function probeArtifactHostEgress(target, signal) {
   let liveState = getLiveState();
   let contentOriginUrl = artifactContentOriginUrlFor(target);
@@ -74,7 +74,7 @@ async function probeArtifactHostEgress(target, signal) {
   liveState.contentHostEgressInFlight.set(contentOriginUrl, probe);
   return probe;
 }
-//@ chunk-4xpk3fhh.js:1910-2846 placement
+//@ chunk-0avm71bs.js:2029-2965 placement
 /**
  * 探测能否访问 artifact 内容主机：带超时 GET 探测路径；网络被拒时记为拒绝（并标记该环境），无应答或无法识别的状态记为不可达，2xx 或代理的 403/404 记为已探测可达。
  */
@@ -121,4 +121,4 @@ async function probeContentHostEgress(target, hostUrl, signal) {
     return compare(`unrecognised HTTP ${response.status}`);
   return done();
 }
-export { artifactHostUnreachable, probeArtifactHostEgress, artifactHostAnswerAtHand };
+export { artifactHostUnreachable, artifactHostAnswerAtHand, probeArtifactHostEgress };

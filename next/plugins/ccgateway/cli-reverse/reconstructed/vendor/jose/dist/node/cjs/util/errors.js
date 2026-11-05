@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/cjs/util/errors.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (2)
+ * pieces: chunk-0f6azspv.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __export } from "../../../../../../runtime/bun-runtime.js";
@@ -17,16 +17,16 @@ import {
   JWKSMultipleMatchingKeys,
   JWKSNoMatchingKey,
   JWKSTimeout,
-  JWSInvalid_2,
+  JWSInvalid,
   JWSSignatureVerificationFailed,
   JWTClaimValidationFailed,
   JWTExpired,
   JWTInvalid,
 } from "../../esm/util/errors.js";
 
-//@ chunk-5h78gfwc.js:227-238 esm-layout
+//@ chunk-0f6azspv.js:227-238 esm-layout
 var errors = {};
-//@ chunk-5h78gfwc.js:238-588 esm-fingerprint
+//@ chunk-0f6azspv.js:238-588 esm-fingerprint
 __export(errors, {
   JOSEAlgNotAllowed: () => JOSEAlgNotAllowed,
   JOSEError: () => JOSEError,
@@ -38,7 +38,7 @@ __export(errors, {
   JWKSMultipleMatchingKeys: () => JWKSMultipleMatchingKeys,
   JWKSNoMatchingKey: () => JWKSNoMatchingKey,
   JWKSTimeout: () => JWKSTimeout,
-  JWSInvalid: () => JWSInvalid_2,
+  JWSInvalid: () => JWSInvalid,
   JWSSignatureVerificationFailed: () => JWSSignatureVerificationFailed,
   JWTClaimValidationFailed: () => JWTClaimValidationFailed,
   JWTExpired: () => JWTExpired,

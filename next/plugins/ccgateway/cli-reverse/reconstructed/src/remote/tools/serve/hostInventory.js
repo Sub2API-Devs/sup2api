@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程工具服务启动时收集主机工具清单（gcloud、brew、sqlite3、ffmpeg 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5mav84cq.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rf2v5y5r.js (3)
  * attribution: placement 3
  */
 import { statfs } from "fs/promises";
@@ -19,11 +19,11 @@ import { withDeadline } from "../../../utils/sleep.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 
-//@ chunk-5mav84cq.js:587-679 placement
+//@ chunk-rf2v5y5r.js:587-679 placement
 var INVENTORY_PROBE_COMMANDS = ["gcloud", "aws", "az", "gh", "brew", "apt", "sqlite3", "ffmpeg", "rg", "jq"];
 var INVENTORY_PROBE_TIMEOUT_MS = 2000;
 var BYTES_PER_GIB = 2n ** 30n;
-//@ chunk-5mav84cq.js:679-761 placement
+//@ chunk-rf2v5y5r.js:679-761 placement
 function isHostInventoryShared() {
   try {
     return isViolinRibEnabled() && hostProfileSharing("basic") !== "off";
@@ -32,7 +32,7 @@ function isHostInventoryShared() {
     return false;
   }
 }
-//@ chunk-5mav84cq.js:761-1539 placement
+//@ chunk-rf2v5y5r.js:761-1539 placement
 /**
  * 远程工具服务启动时收集主机工具清单（gcloud、brew、sqlite3、ffmpeg 等）。
  */

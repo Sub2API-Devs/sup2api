@@ -3,9 +3,9 @@
  *
  * 把本地工作树打包为 git bundle 上传给云会话（CCR）：历史边界、浅克隆、引用选择、布局与设置检查、上传与回退说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/gitBundle.ts
- * pieces: chunk-gjx0rh1b.js (80)
+ * pieces: chunk-sfy2wa1e.js (80)
  * attribution: placement 80
  */
 import { lstat, open, stat, realpath, unlink } from "fs/promises";
@@ -114,7 +114,7 @@ import {
   indexFileEnv,
 } from "../git/builderGit/repoCopy.js";
 import { checkGitRootLocation, classifyPathIdentity, GIT_ROOT_REFUSALS } from "./gitBundleLayout.js";
-import { count, uniq } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { getEnvCaseInsensitive } from "../plugins/securityDefaultPlugin.js";
 import { env } from "../env.js";
@@ -126,12 +126,13 @@ import { lit, fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadat
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { emptyBindingFacts, classifyBindingFolder } from "../../bridge/deviceBinding.js";
 import { hasBackslash, cwdHasBackslash } from "../pathClassification.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { tmpdir, generateTempFilePath } from "../tempDir.js";
 import { isFileDeleted } from "../commitAttribution.js";
 import { uploadFileFromPath } from "../../services/api/filesApi.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gjx0rh1b.js:76493-77115 placement
+//@ chunk-sfy2wa1e.js:76594-77216 placement
 /**
  * bundle 上传的默认上限与各类超时、长度常量，以及部分克隆的拒绝文案。
  */
@@ -145,16 +146,16 @@ var PARTIAL_CLONE_REFUSAL =
   "This partial clone does not hold every file of its working tree locally (a sparse checkout, or blobs never downloaded), so it cannot be uploaded without fetching from its remote, which the upload does not do \u2014 a full clone, made without --filter, would upload. If no file is missing from the working tree, the index names an object that this repository has lost: `git fsck --name-objects` prints it as \u201Cmissing blob <id> (:<path>)\u201D, and `git rm --cached <path>` then `git add <path>` stores it again";
 var MAX_CHECKED_COMMITS = 32;
 var PROBE_GIT_STEPS = ["rev-parse", "cat-file", "diff-files"];
-//@ chunk-gjx0rh1b.js:77115-77177 placement
+//@ chunk-sfy2wa1e.js:77216-77278 placement
 function bundleMaxBytes() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_bundle_max_bytes", null) ?? DEFAULT_BUNDLE_MAX_BYTES;
 }
-//@ chunk-gjx0rh1b.js:77177-77228 placement
+//@ chunk-sfy2wa1e.js:77278-77329 placement
 var GIT_AUDIT_ENV; // deferred: uses GIT_ISOLATION_CONFIG_ARGS (../git/builderGit/gitEnv.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_REF_TIPS;
 var MAX_REF_LIST_BYTES;
 var MAX_REF_FILE_BYTES;
-deferInit("chunk-gjx0rh1b.js:77177", () => {
+deferInit("chunk-sfy2wa1e.js:77278", () => {
   GIT_AUDIT_ENV = {
     ...GIT_LIST_ENV,
     ...C_LOCALE_ENV,
@@ -163,7 +164,7 @@ deferInit("chunk-gjx0rh1b.js:77177", () => {
   MAX_REF_LIST_BYTES = 65536;
   MAX_REF_FILE_BYTES = (MAX_REF_TIPS + 1) * 65;
 });
-//@ chunk-gjx0rh1b.js:77228-77651 placement (2.1.88 match: readFileRange, 0.819)
+//@ chunk-sfy2wa1e.js:77329-77752 placement (2.1.88 match: readFileRange, 0.818)
 async function readFileRange(path) {
   try {
     if (!(await lstat(path)).isFile()) return null;
@@ -188,7 +189,7 @@ async function readFileRange(path) {
     return null;
   }
 }
-//@ chunk-gjx0rh1b.js:77651-78153 placement
+//@ chunk-sfy2wa1e.js:77752-78254 placement
 /**
  * 判断提交对象文本是否带 parent 行，以及浅克隆状态的说明文案。
  */
@@ -211,7 +212,7 @@ var SHALLOW_STATE_MESSAGES = {
     "HEAD is unborn and no local branch or tag is cut \u2014 trying the widest tier (branches and tags), the only one that can carry it",
   unborn_cut: "HEAD is unborn and a local branch or tag is cut \u2014 nothing can be bundled",
 };
-//@ chunk-gjx0rh1b.js:78153-79179 placement
+//@ chunk-sfy2wa1e.js:78254-79280 placement
 /**
  * 判断仓库是否浅克隆以及 HEAD 历史是否越过浅克隆边界：返回 not_shallow、complete、cut 或 unborn_cut，用于决定是否只打包工作树快照。
  */
@@ -271,11 +272,11 @@ async function detectShallowState(cwd, signal, hardening = null, probes = curren
   }
   return isUnborn ? "unborn" : "complete";
 }
-//@ chunk-gjx0rh1b.js:79179-79209 placement
+//@ chunk-sfy2wa1e.js:79280-79310 placement
 var PACK_MEASURE_TIMEOUT_MS = 5000;
 var PACK_SIZE_GROWTH_BASELINE = 100;
 var MAX_IN_PACK_OBJECTS = 5000000;
-//@ chunk-gjx0rh1b.js:79209-80157 placement
+//@ chunk-sfy2wa1e.js:79310-80258 placement
 /**
  * 测量仓库 pack 大小与对象数，决定是否需要压缩历史后再打包。
  */
@@ -344,7 +345,7 @@ async function measurePackSize(cwd, hardened, layout, signal, baselineBytes, pro
     inPackCount,
   };
 }
-//@ chunk-gjx0rh1b.js:80157-80382 placement
+//@ chunk-sfy2wa1e.js:80258-80483 placement
 function parseCountObjects({ code, stdout }) {
   if (code !== 0)
     return {
@@ -358,7 +359,7 @@ function parseCountObjects({ code, stdout }) {
     inPackCount: match_2 ? Number(match_2[1]) : null,
   };
 }
-//@ chunk-gjx0rh1b.js:80382-80834 placement
+//@ chunk-sfy2wa1e.js:80483-80935 placement
 async function probeRepoBundleSize(options) {
   let cwd = options?.gitRoot ?? findGitRoot(getCwd());
   if (!cwd)
@@ -393,7 +394,7 @@ async function probeRepoBundleSize(options) {
     inPackCount,
   };
 }
-//@ chunk-gjx0rh1b.js:80834-87035 placement
+//@ chunk-sfy2wa1e.js:80935-87136 placement
 /**
  * 生成 git bundle：选择 refs/heads、refs/tags、HEAD 与种子引用（stash、root），按需构造浅历史快照。
  */
@@ -795,7 +796,7 @@ async function _bundleWithFallback(cwd, outputBundlePath, bundleOptions) {
     sizeBytes: squashSize,
   };
 }
-//@ chunk-gjx0rh1b.js:87035-87262 placement
+//@ chunk-sfy2wa1e.js:87136-87363 placement
 async function verifyBundleHeads(sessionId, path, labels, copyOptions, runOptions) {
   let copyResult = await copyVerifiedBundle(path, labels, copyOptions, runOptions.signal);
   if (!copyResult.ok) return copyResult;
@@ -807,7 +808,7 @@ async function verifyBundleHeads(sessionId, path, labels, copyOptions, runOption
         error: `git bundle list-heads exited ${listHeads.code}: ${clipGitArgs(listHeads.stderr, runOptions.hardened)}`,
       };
 }
-//@ chunk-gjx0rh1b.js:87262-87535 placement
+//@ chunk-sfy2wa1e.js:87363-87636 placement
 function bundlePrepareFailure(error) {
   return {
     ok: false,
@@ -815,11 +816,11 @@ function bundlePrepareFailure(error) {
     failReason: "git_error",
   };
 }
-//@ chunk-gjx0rh1b.js:87535-87594 placement
+//@ chunk-sfy2wa1e.js:87636-87695 placement
 function isGitFileLayout(layout) {
   return layout.detail === "git_file" && layout.gitDir === "";
 }
-//@ chunk-gjx0rh1b.js:87594-87681 placement
+//@ chunk-sfy2wa1e.js:87695-87782 placement
 function isUnuploadableLayout(layout) {
   return (
     layout.misplaced === "linked_worktree" ||
@@ -827,7 +828,7 @@ function isUnuploadableLayout(layout) {
     isGitFileLayout(layout)
   );
 }
-//@ chunk-gjx0rh1b.js:87681-90833 placement
+//@ chunk-sfy2wa1e.js:87782-90934 placement
 /**
  * 决定在打包被拒时能否回退到旧上传方式：检查 .git 条目、家目录或上层检出能否被云会话写入，返回是否交还及拒绝原因文案。
  */
@@ -957,7 +958,7 @@ async function decideLegacyHandBack(cwd, layout, priorRefusal, reasonOverride) {
     screened: finding.kind,
   };
 }
-//@ chunk-gjx0rh1b.js:90833-93925 placement
+//@ chunk-sfy2wa1e.js:90934-94026 placement
 /**
  * 工作树布局问题的原因说明文本。
  */
@@ -995,7 +996,7 @@ var MISPLACED_REASONS = {
     "its git configuration pulls in more include files than are followed, so that capture would run every program those files name and enter any nested repository registered here; trim the include chain",
   work_tree: CORE_WORKTREE_REASON,
 };
-//@ chunk-gjx0rh1b.js:93925-98036 placement
+//@ chunk-sfy2wa1e.js:94026-98137 placement
 /**
  * 把 git 配置检查发现的问题（include 文件、core.worktree、worktreeConfig、硬链接、无法解析、家目录检出）翻译成拒绝原因。
  */
@@ -1039,14 +1040,14 @@ function describeConfigFinding(finding, advicePrefix, ordinaryCloneAdvice) {
       return `the user-level git configuration file ${configFile}, or a file it includes, lies inside \u2014 or links into \u2014 a git checkout (${displayName(finding.checkout)}), so a Claude Code session started there can write what that capture would run under, whether or not the file exists yet; ${advicePrefix}${ordinaryCloneAdvice ? "start from an ordinary clone, or " : ""}keep user-level git configuration outside any checkout`;
   }
 }
-//@ chunk-gjx0rh1b.js:98036-98400 placement
+//@ chunk-sfy2wa1e.js:98137-98501 placement
 /**
  * 生成工作树内设置文件无法读取时的拒绝原因。
  */
 function unreadableSettingsReason(file, advicePrefix) {
   return `a Claude Code settings file inside this working tree (${displayName(join(file, "settings.json"))} or settings.local.json) stands but cannot be read, so which directories it opens to sessions \u2014 and so whether a session could write the configuration that capture would run under \u2014 cannot be told; ${advicePrefix}fix or remove that settings file, then retry`;
 }
-//@ chunk-gjx0rh1b.js:98400-99210 placement
+//@ chunk-sfy2wa1e.js:98501-99311 placement
 /**
  * 生成家目录本身或其上层是 git 检出时的拒绝原因。
  */
@@ -1060,7 +1061,7 @@ function homeCheckoutReason({ file, checkout }, advicePrefix, ordinaryCloneAdvic
       return `your home directory lies inside a git checkout (${displayName(checkout)}), so a Claude Code session started there can write the user-level git configuration that capture would run under (${displayName(file)}, whether or not that file exists yet); ${advicePrefix}${cloneAdvice}move your home directory out of that checkout, or remove the stray git entry that makes it one`;
   }
 }
-//@ chunk-gjx0rh1b.js:99210-99373 placement
+//@ chunk-sfy2wa1e.js:99311-99474 placement
 function describeHomeCheckout(home) {
   let ancestor = nearestRepoAncestor(home);
   return ancestor === null
@@ -1069,30 +1070,30 @@ function describeHomeCheckout(home) {
       ? ` (yours is itself a git checkout: ${displayName(ancestor)})`
       : ` (yours lies inside the git checkout at ${displayName(ancestor)})`;
 }
-//@ chunk-gjx0rh1b.js:99373-99533 placement
+//@ chunk-sfy2wa1e.js:99474-99634 placement
 function homeInsideCheckoutPhrase(home, checkout) {
   return classifyHomePosition(home, checkout) === "home"
     ? `your home directory (${displayName(home)}) is itself a git checkout`
     : `your home directory lies inside a git checkout (${displayName(home)})`;
 }
-//@ chunk-gjx0rh1b.js:99533-99558 placement
+//@ chunk-sfy2wa1e.js:99634-99659 placement
 var displayName = (value) => truncateWithCount(replaceControlChars(value), MAX_DISPLAYED_NAME_CHARS);
-//@ chunk-gjx0rh1b.js:99558-99775 placement
+//@ chunk-sfy2wa1e.js:99659-99876 placement
 function nestedCheckoutReason(checkout) {
   return `this checkout sits inside another checkout (${displayName(checkout)}), whose Claude Code sessions can write this one\u2019s git files \u2014 start from a checkout of this repository that stands inside no other`;
 }
-//@ chunk-gjx0rh1b.js:99775-99983 placement
+//@ chunk-sfy2wa1e.js:99876-100084 placement
 function homeContainsRepoReason(home) {
   let enclosing = enclosingCheckoutAboveHome(home);
   return enclosing === null
     ? null
     : `${homeInsideCheckoutPhrase(enclosing, home)} and this working tree\u2019s repository (${displayName(home)}) is inside it, so a Claude Code session started there can write the repository\u2019s git files`;
 }
-//@ chunk-gjx0rh1b.js:99983-100220 placement
+//@ chunk-sfy2wa1e.js:100084-100321 placement
 function nestedRepoReason(checkout) {
   return `this working tree\u2019s repository sits inside another checkout (${displayName(checkout)}), whose Claude Code sessions can write its git files \u2014 start from a working tree of a repository that stands inside no other checkout`;
 }
-//@ chunk-gjx0rh1b.js:100220-100681 placement
+//@ chunk-sfy2wa1e.js:100321-100782 placement
 /**
  * 检查 .git 指向的目录里是否被放置了对象库（common_dir 等），返回问题类型。
  */
@@ -1129,7 +1130,7 @@ async function findPlantedObjectStore(dir) {
   }
   return null;
 }
-//@ chunk-gjx0rh1b.js:100681-100799 placement
+//@ chunk-sfy2wa1e.js:100782-100900 placement
 async function hasCommondirFile(dir) {
   return lstat(join(dir, "commondir")).then(
     () => true,
@@ -1139,11 +1140,11 @@ async function hasCommondirFile(dir) {
     },
   );
 }
-//@ chunk-gjx0rh1b.js:100799-100869 placement
+//@ chunk-sfy2wa1e.js:100900-100970 placement
 function isLinkedWorktreeGitDir(gitDir) {
   return gitDir !== "" && basename(gitDir) !== ".git" && basename(dirname(gitDir)) === "worktrees";
 }
-//@ chunk-gjx0rh1b.js:100869-103754 placement
+//@ chunk-sfy2wa1e.js:100970-103855 placement
 /**
  * 索引、shallow 等 git 目录文件异常时给用户的处理建议文本。
  */
@@ -1170,7 +1171,7 @@ var GIT_DIR_FILE_ADVICE = {
   config: ` First ${INSPECT_INDEX_ADVICE} check \`git status\` here, and retry.`,
   other: ` Retry; if it keeps happening, first ${INSPECT_INDEX_ADVICE} \`git status\` here shows whether git itself still reads this checkout.`,
 };
-//@ chunk-gjx0rh1b.js:103754-105796 placement
+//@ chunk-sfy2wa1e.js:103855-105897 placement
 /**
  * 生成因 core.attributesFile 等属性设置被拒绝上传时的说明与处理建议。
  */
@@ -1209,11 +1210,11 @@ function gitAttributesSettingRefusal({ kind, setting, where = "", relative }) {
   }[kind];
   return `Not uploading this working tree: ${problemText}, and the upload cannot follow that setting, so a file git would change before storing it (to encrypt it, for example) could be uploaded as it is on disk. ${fixText}`;
 }
-//@ chunk-gjx0rh1b.js:105796-105870 placement
+//@ chunk-sfy2wa1e.js:105897-105971 placement
 function notPreviousWayNote(note) {
   return ` It is not uploaded the previous way either: ${note}.`;
 }
-//@ chunk-gjx0rh1b.js:105870-106072 placement
+//@ chunk-sfy2wa1e.js:105971-106173 placement
 function misplacedKindForLog(misplaced) {
   switch (misplaced) {
     case "git_file":
@@ -1229,7 +1230,7 @@ function misplacedKindForLog(misplaced) {
       return null;
   }
 }
-//@ chunk-gjx0rh1b.js:106072-106463 placement
+//@ chunk-sfy2wa1e.js:106173-106564 placement
 /**
  * 查找会改写受保护环境变量的设置项，返回名称或无法读取。
  */
@@ -1266,7 +1267,7 @@ function findProtectedEnvSetting(location, names) {
     };
   }
 }
-//@ chunk-gjx0rh1b.js:106463-106733 placement
+//@ chunk-sfy2wa1e.js:106564-106834 placement
 function repositorySetBundleSwitches() {
   try {
     let flattened = ["projectSettings", "localSettings"].flatMap((source) =>
@@ -1283,9 +1284,9 @@ function repositorySetBundleSwitches() {
     return [];
   }
 }
-//@ chunk-gjx0rh1b.js:106733-106781 placement
+//@ chunk-sfy2wa1e.js:106834-106882 placement
 var BUNDLE_ENV_SWITCHES = ["CCR_ENABLE_BUNDLE", "CCR_FORCE_BUNDLE"];
-//@ chunk-gjx0rh1b.js:106781-108721 placement
+//@ chunk-sfy2wa1e.js:106882-108822 placement
 /**
  * 生成因受保护环境变量（HOME、CLAUDE_CONFIG_DIR 等）被设置文件改写而拒绝上传的说明。
  */
@@ -1301,11 +1302,11 @@ function protectedEnvRefusal(finding) {
     ? `Not uploading this working tree this way: ${finding.name} was changed by a settings file after Claude Code started; it decides where your own settings are found, so the upload only trusts the value the process was started with. Set it in the shell rather than in a settings file, then restart Claude Code.`
     : `Not uploading this working tree this way: ${finding.name} was set by ${"a settings file a cloud session could reach (this repository\u2019s .claude/settings.json or .claude/settings.local.json, or a --settings file)"} that no longer names it, and the upload's own git runs would still have to trust it. Keep it out of those files and restart Claude Code.`;
 }
-//@ chunk-gjx0rh1b.js:108721-108759 placement
+//@ chunk-sfy2wa1e.js:108822-108860 placement
 function previousCaptureServes() {
   return getPlatform() === "windows";
 }
-//@ chunk-gjx0rh1b.js:108759-109467 placement
+//@ chunk-sfy2wa1e.js:108860-109568 placement
 function explainPreviousCaptureRetired(state) {
   switch (state?.kind) {
     case undefined:
@@ -1316,7 +1317,7 @@ function explainPreviousCaptureRetired(state) {
       return `An older upload method, which took more layouts, is retired on macOS and Linux. Cloud sessions can't clone from ${state.forge} yet, so an upload is the only way to start one from this repository.`;
   }
 }
-//@ chunk-gjx0rh1b.js:109467-109556 placement
+//@ chunk-sfy2wa1e.js:109568-109657 placement
 function unsupportedLayoutResult(layoutKind, error) {
   return {
     success: false,
@@ -1325,7 +1326,7 @@ function unsupportedLayoutResult(layoutKind, error) {
     layoutKind,
   };
 }
-//@ chunk-gjx0rh1b.js:113464-114610 placement
+//@ chunk-sfy2wa1e.js:113565-114711 placement
 async function handBackDecision(cwd, signal, changesOptions) {
   let gitRoot = findGitRoot(cwd ?? getCwd());
   let indexCopy = gitRoot ? await rewriteCopyAsSingleFile(gitRoot, signal) : null;
@@ -1382,7 +1383,7 @@ async function handBackDecision(cwd, signal, changesOptions) {
           },
   };
 }
-//@ chunk-gjx0rh1b.js:114610-116743 placement
+//@ chunk-sfy2wa1e.js:114711-116844 placement
 /**
  * 列出未提交改动并检查是否含必须留在本机的文件、子模块 gitlink 等；无法列出或含受限文件时返回 refused 结果。
  */
@@ -1437,13 +1438,13 @@ async function examineUncommittedChanges(cwd, signal, changesOptions, opts) {
         kind: "refused",
         sentence: `It is not uploaded the previous way either (that way keeps nothing back): ${changedPathsRefusal(paths, changesOptions !== undefined).replace(/^Not uploading this working tree: /, "")}`,
         named: paths.length,
-        added: count(paths, ({ why }) => why === "added"),
-        unexamined: count(paths, ({ why }) => why === "unexamined"),
+        added: countWhere(paths, ({ why }) => why === "added"),
+        unexamined: countWhere(paths, ({ why }) => why === "unexamined"),
         gitlinks: 0,
         indexCopied: true,
       };
 }
-//@ chunk-gjx0rh1b.js:116743-116900 placement
+//@ chunk-sfy2wa1e.js:116844-117001 placement
 async function classifyDotGitEntry(dir) {
   let stats = await lstat(join(dir, ".git")).catch(() => null);
   return stats?.isSymbolicLink() === true
@@ -1452,7 +1453,7 @@ async function classifyDotGitEntry(dir) {
       ? "second_name"
       : "other";
 }
-//@ chunk-gjx0rh1b.js:116900-117247 placement
+//@ chunk-sfy2wa1e.js:117001-117348 placement
 /**
  * 判断 .git 指针文件指向的类型：链接工作树、子模块或独立 git 目录。
  */
@@ -1472,7 +1473,7 @@ async function classifyGitPointer(dir) {
       ? "submodule"
       : "separate_git_dir";
 }
-//@ chunk-gjx0rh1b.js:117247-118200 placement
+//@ chunk-sfy2wa1e.js:117348-118301 placement
 function unsupportedLayoutNotice(kind) {
   return `This checkout ${
     {
@@ -1489,7 +1490,7 @@ function unsupportedLayoutNotice(kind) {
     }[kind]
   }; the new upload path does not support that yet, so the working tree is being uploaded the previous way for this session.`;
 }
-//@ chunk-gjx0rh1b.js:118200-118847 placement
+//@ chunk-sfy2wa1e.js:118301-118948 placement
 /**
  * 判断是否请求使用旧版 bundle 上传方式（只认启动环境与自有设置）。
  */
@@ -1516,12 +1517,12 @@ function isLegacyBundleRequested() {
     ignored,
   };
 }
-//@ chunk-gjx0rh1b.js:118847-118878 placement
+//@ chunk-sfy2wa1e.js:118948-118979 placement
 var EMPTY_BUNDLE_VERDICT = {
   missing: [],
   foreign: [],
 };
-//@ chunk-gjx0rh1b.js:118878-119163 placement
+//@ chunk-sfy2wa1e.js:118979-119264 placement
 async function verifySeedRefInBundle(cwd, bundlePath, ref, targetSha, signal) {
   let result = await listGitRefs(cwd, [...GIT_READ_CONFIG_ARGS, "bundle", "list-heads", bundlePath], {
     hardened: false,
@@ -1546,7 +1547,7 @@ async function verifySeedRefInBundle(cwd, bundlePath, ref, targetSha, signal) {
         foreign: [],
       };
 }
-//@ chunk-gjx0rh1b.js:119163-120087 placement
+//@ chunk-sfy2wa1e.js:119264-120188 placement
 /**
  * 校验生成的 bundle 只包含预期的引用。
  */
@@ -1615,7 +1616,7 @@ async function verifyBundleRefs(cwd, bundlePath, refs, options) {
     notHeld,
   };
 }
-//@ chunk-gjx0rh1b.js:120087-120381 placement
+//@ chunk-sfy2wa1e.js:120188-120482 placement
 async function snapshotHeadTree(cwd, layout, opts, signal, probes) {
   if (layout === undefined || !(await isGitLayoutUntampered(layout, opts))) return null;
   let result = await listGitRefs(cwd, ["rev-parse", "-q", "--verify", "HEAD^{tree}"], {
@@ -1628,7 +1629,7 @@ async function snapshotHeadTree(cwd, layout, opts, signal, probes) {
   if (!(await isGitLayoutUntampered(layout, opts))) return null;
   return result.code === 0 && /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(trimmed) ? trimmed : undefined;
 }
-//@ chunk-gjx0rh1b.js:120381-120925 placement
+//@ chunk-sfy2wa1e.js:120482-121026 placement
 /**
  * 列出分支与标签的提交，用于判断能否用最宽的层级打包。
  */
@@ -1668,7 +1669,7 @@ async function listBranchAndTagTips(cwd, layout, opts, signal, probes) {
     ...headEntries,
   ]);
 }
-//@ chunk-gjx0rh1b.js:120925-121211 placement
+//@ chunk-sfy2wa1e.js:121026-121312 placement
 /**
  * git bundle 上传前的 ref 检查结果转错误（名字配错，与插件无关）。
  */
@@ -1683,7 +1684,7 @@ function bundleHeadsFailure(verdict, hardened) {
   if (verdict.foreign.length > 0) return unexpectedRefsFailure(verdict.foreign);
   return (verdict.notHeld?.length ?? 0) > 0 ? unexpectedRefsFailure(verdict.notHeld ?? [], "not_held") : null;
 }
-//@ chunk-gjx0rh1b.js:121211-121893 placement
+//@ chunk-sfy2wa1e.js:121312-121994 placement
 /**
  * 生成 bundle 打包了意外引用时的失败结果。
  */
@@ -1698,7 +1699,7 @@ function unexpectedRefsFailure(refs, reason = "changed") {
     refsChanged: true,
   };
 }
-//@ chunk-gjx0rh1b.js:121893-122340 placement
+//@ chunk-sfy2wa1e.js:121994-122441 placement
 /**
  * 生成 bundle 漏掉或改动引用时的失败结果。
  */
@@ -1709,7 +1710,7 @@ function droppedRefsFailure(missing) {
     failReason: "git_error",
   };
 }
-//@ chunk-gjx0rh1b.js:122340-122460 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-sfy2wa1e.js:122441-122561 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(failures, includeReasons = DEFAULT_LISTED_FAILURES) {
   let joined = failures
     .slice(0, includeReasons)
@@ -1718,7 +1719,7 @@ function formatFailureDetails(failures, includeReasons = DEFAULT_LISTED_FAILURES
   let remaining = failures.length - includeReasons;
   return remaining > 0 ? `${joined} and ${remaining} more` : joined;
 }
-//@ chunk-gjx0rh1b.js:122460-123893 placement
+//@ chunk-sfy2wa1e.js:122561-123994 placement
 /**
  * 生成 bundle 读回失败（对象缺失等）时的结果与原因。
  */
@@ -1754,7 +1755,7 @@ function bundleReadBackFailure(kind, detail) {
       };
   }
 }
-//@ chunk-gjx0rh1b.js:123893-124155 placement
+//@ chunk-sfy2wa1e.js:123994-124256 placement
 function gitCommandFailure(command, result, hardened) {
   let failureClass = hardened ? undefined : firstGitFailureClass(seenStderr(result));
   let stderrText = clipGitArgs(result.stderr, hardened);
@@ -1771,11 +1772,11 @@ function gitCommandFailure(command, result, hardened) {
     }),
   };
 }
-//@ chunk-gjx0rh1b.js:124155-124210 placement
+//@ chunk-sfy2wa1e.js:124256-124311 placement
 function clipGitArgs(stderr, hardened) {
   return hardened ? truncateWithCount(replaceControlChars(stderr), 200) : stderr.slice(0, 200);
 }
-//@ chunk-gjx0rh1b.js:124210-125623 placement
+//@ chunk-sfy2wa1e.js:124311-125724 placement
 /**
  * 链接工作树问题的原因说明文本。
  */
@@ -1795,7 +1796,7 @@ var LINKED_WORKTREE_REASONS = {
   worktree_config:
     "that uses per-worktree configuration (extensions.worktreeConfig, or a config.worktree file), which this upload does not support yet.",
 };
-//@ chunk-gjx0rh1b.js:125623-127303 placement
+//@ chunk-sfy2wa1e.js:125724-127404 placement
 /**
  * 生成可被云会话写入的 git 配置文件导致拒绝上传时的说明。
  */
@@ -1832,7 +1833,7 @@ function writableConfigRefusal(writable) {
         ];
   return `Not uploading this working tree: ${whereText} ${problem}.${hint} ${fix}`;
 }
-//@ chunk-gjx0rh1b.js:127303-132291 placement
+//@ chunk-sfy2wa1e.js:127404-132392 placement
 /**
  * 把工作树布局问题（.git 指针文件、链接工作树、include 配置、reftable、借用对象等）翻译成面向用户的拒绝上传说明。
  */
@@ -1870,7 +1871,7 @@ function misplacedRefusalMessage(summary) {
       return `Not uploading this working tree: the commondir file in this checkout\u2019s .git directory was written by something other than git, and it sends git to a directory where git itself would not keep this checkout\u2019s shared files. ${DO_NOT_RUN_GIT_USE_ADVICE}`;
   }
 }
-//@ chunk-gjx0rh1b.js:132291-132490 placement
+//@ chunk-sfy2wa1e.js:132392-132591 placement
 function misplacedSummary(layout) {
   return {
     misplaced: layout.misplaced,
@@ -1882,15 +1883,15 @@ function misplacedSummary(layout) {
     sharedDirectoryElsewhere: layout.commonDir !== layout.gitDir,
   };
 }
-//@ chunk-gjx0rh1b.js:132490-132776 placement
+//@ chunk-sfy2wa1e.js:132591-132877 placement
 function deletedHereNotice(files) {
   return `${files.length} tracked ${plural(files.length, "file")} ${plural(files.length, "was", "were")} missing when read and ${plural(files.length, "is", "are")} uploaded as deleted (${formatFailureDetails(files, 3)}) \u2014 if a build was rewriting ${plural(files.length, "it", "them")} just then, start the session again once it settles.`;
 }
-//@ chunk-gjx0rh1b.js:132776-133468 placement
+//@ chunk-sfy2wa1e.js:132877-133569 placement
 function leftOutNotice(items, { readRules = false, ofThisUploadOnly = false } = {}) {
   return `${ofThisUploadOnly ? "Left out of this upload" : "Left on this machine"}: ${items.length} uncommitted ${plural(items.length, "file")} named like credentials or keys, ${readRules ? "covered by a Read rule or a sandbox read-deny setting of yours, linked from your Claude Code configuration, " : ""}hard-linked to another file, kept by a git filter such as LFS, or still being written by another program while ${plural(items.length, "it was", "they were")} read (${formatFailureDetails(items)})${ofThisUploadOnly ? "" : `, ${plural(items.length, "was", "were")} not uploaded`} \u2014 the cloud session starts with the version git already holds for ${plural(items.length, "it", "them")} (committed or staged), or without ${plural(items.length, "it", "them")}.`;
 }
-//@ chunk-gjx0rh1b.js:133468-136928 placement
+//@ chunk-sfy2wa1e.js:133569-137029 placement
 /**
  * 按 git 报告的变更路径异常类型（伪造拼写、同字节条目等）生成拒绝上传的说明文案。
  */
@@ -1941,11 +1942,11 @@ function changedPathsRefusal(paths, paths_2 = false) {
     "Then retry.",
   ].join(" ");
 }
-//@ chunk-gjx0rh1b.js:136928-136969 placement
+//@ chunk-sfy2wa1e.js:137029-137070 placement
 function formatSizeOrUnknown(size) {
   return size === null ? "?" : formatFileSize(size);
 }
-//@ chunk-gjx0rh1b.js:136969-166897 placement
+//@ chunk-sfy2wa1e.js:137070-166998 placement
 /**
  * 把当前工作树上传给云会话：HIPAA 策略拒绝、检查检出布局与设置、捕获 WIP、生成并校验 bundle、上传，失败时按原因说明是否回退旧方式（约 30 KB）。
  */
@@ -2128,7 +2129,7 @@ async function createAndUploadGitBundle(options, capability) {
         ? checkoutDirOfGitDir(dirname(dirname(layout.gitDir)))
         : null;
   let linkedEnclosingRepos = linkedCheckoutDir === null ? [] : findEnclosingRepos(linkedCheckoutDir);
-  let enclosedRepos = uniq([...enclosingRepos, ...linkedEnclosingRepos]);
+  let enclosedRepos = normalizeCaseForComparison_2([...enclosingRepos, ...linkedEnclosingRepos]);
   let nestedReason =
     enclosingRepos[0] !== undefined
       ? nestedCheckoutReason(enclosingRepos[0])
@@ -2477,7 +2478,7 @@ async function createAndUploadGitBundle(options, capability) {
       logForDebugging(
         `[gitBundle] could not list refs/seed/ (${seedRefList.code}), so private refs a killed build left are not swept this run (the two fixed names still are): ${clipGitArgs(seedRefList.stderr, hardened)}`,
       );
-    let staleRefs = uniq([
+    let staleRefs = normalizeCaseForComparison_2([
       REFS_SEED_STASH,
       REFS_SEED_ROOT,
       ...staleSeedRefs(
@@ -2693,7 +2694,7 @@ async function createAndUploadGitBundle(options, capability) {
         ...uploadFacts,
         outcome: lit("uncommitted_credentials"),
         refused_paths: paths?.length ?? 0,
-        refused_unexamined: count(paths ?? [], ({ why }) => why === "unexamined"),
+        refused_unexamined: countWhere(paths ?? [], ({ why }) => why === "unexamined"),
         refused_on: lit("stash_trees"),
       });
       logFeatureBad("teleport_git_bundle_upload", "uncommitted_credentials");
@@ -2876,7 +2877,7 @@ async function createAndUploadGitBundle(options, capability) {
       : [];
   let leftOutUnstable =
     wipStash.kind === "created" || wipStash.kind === "none"
-      ? count(wipStash.leftOut, ({ why }) => why === "unstable")
+      ? countWhere(wipStash.leftOut, ({ why }) => why === "unstable")
       : 0;
   let deletedUnstaged = wipStash.kind === "created" ? [...wipStash.deletedUnstaged].sort() : [];
   if (leftOutPaths.length > 0)
@@ -3259,7 +3260,7 @@ async function createAndUploadGitBundle(options, capability) {
         });
   }
 }
-//@ chunk-gjx0rh1b.js:166897-167051 placement
+//@ chunk-sfy2wa1e.js:166998-167152 placement
 async function hasPartialCloneConfig(cwd, layout, signal, probes) {
   let result = await listGitRefs(cwd, ["config", "-z", "--list"], {
     hardened: true,
@@ -3270,7 +3271,7 @@ async function hasPartialCloneConfig(cwd, layout, signal, probes) {
   if (result.code !== 0) return true;
   return configListHasPartialClone(result.stdout);
 }
-//@ chunk-gjx0rh1b.js:167051-167349 placement
+//@ chunk-sfy2wa1e.js:167152-167450 placement
 function configListHasPartialClone(stdout) {
   return stdout.split("\x00").some((line) => {
     let index = line.indexOf(`
@@ -3284,25 +3285,25 @@ function configListHasPartialClone(stdout) {
     );
   });
 }
-//@ chunk-gjx0rh1b.js:167349-167416 placement
+//@ chunk-sfy2wa1e.js:167450-167517 placement
 function updateRefCommand(cwd, args, opts) {
   return listGitRefs(cwd, ["update-ref", "--no-deref", ...args], opts);
 }
-//@ chunk-gjx0rh1b.js:167416-167635 placement
+//@ chunk-sfy2wa1e.js:167517-167736 placement
 var COMMIT_FILES_ADVICE =
   'Commit the files that you want the cloud session to see (git add <file>, then git commit -m "initial"), then retry.';
 var COMMIT_CHANGED_FILES_ADVICE =
   "Commit the files that you changed by name (git add <file>, then git commit), then retry.";
-//@ chunk-gjx0rh1b.js:167635-167894 placement
+//@ chunk-sfy2wa1e.js:167736-167995 placement
 function windowsUnsafeNamesAdvice(fileCount) {
   return `${COMMIT_CHANGED_FILES_ADVICE} Do not run \`git add .\` or \`git commit -a\` here: this checkout tracks ${fileCount} file ${fileCount === 1 ? "name" : "names"} that Windows cannot hold, which git lists as deleted, and either command would record the ${fileCount === 1 ? "deletion" : "deletions"}.`;
 }
-//@ chunk-gjx0rh1b.js:167894-167988 placement
+//@ chunk-sfy2wa1e.js:167995-168089 placement
 async function holdIdOfPath(holder, path) {
   let hold = await holder.hold(path);
   return hold === "not_held" ? getFileIdentity_2(path) : hold === "gone" ? null : hold.id;
 }
-//@ chunk-gjx0rh1b.js:167988-168126 placement
+//@ chunk-sfy2wa1e.js:168089-168227 placement
 async function combinePathMatchers(exclude, path, workTree) {
   if (exclude === undefined) return;
   let results = await Promise.all(
@@ -3310,7 +3311,7 @@ async function combinePathMatchers(exclude, path, workTree) {
   );
   return (matcher) => results.some((matcher_2) => matcher_2(matcher));
 }
-//@ chunk-gjx0rh1b.js:168126-168563 placement
+//@ chunk-sfy2wa1e.js:168227-168664 placement
 function createAndUploadGitBundle_2(fault) {
   let wipStashSha =
     fault.on === "mid_build"
@@ -3338,7 +3339,7 @@ function createAndUploadGitBundle_2(fault) {
     failReason: "git_dir_tampered",
   };
 }
-//@ chunk-gjx0rh1b.js:168563-168739 placement
+//@ chunk-sfy2wa1e.js:168664-168840 placement
 function seedRefHeldFailure(stderr, privateGitDir, facts, eventFields) {
   let detail = seedRefWriteFailure(stderr, privateGitDir);
   logEvent("tengu_ccr_bundle_upload", {
@@ -3352,7 +3353,7 @@ function seedRefHeldFailure(stderr, privateGitDir, facts, eventFields) {
     ...detail,
   };
 }
-//@ chunk-gjx0rh1b.js:168739-169445 placement
+//@ chunk-sfy2wa1e.js:168840-169546 placement
 /**
  * 生成写临时 seed 引用失败时的错误说明。
  */
@@ -3367,27 +3368,27 @@ function seedRefWriteFailure(stderr, privateGitDir) {
     failReason: "git_error",
   };
 }
-//@ chunk-gjx0rh1b.js:169445-170060 placement
+//@ chunk-sfy2wa1e.js:169546-170161 placement
 /**
  * git 目录在准备上传期间被改动时的拒绝文案。
  */
 var GIT_DIR_TAMPERED_MESSAGE =
   "Not uploading this working tree: its git directory changed while the upload was being prepared, holds something git itself never puts there, or could not be inspected \u2014 another git process (a background fetch or gc) may have written packs meanwhile, in which case let it finish and retry; otherwise look for a commondir or objects/info/alternates file, or a link, special or unreadable entry where its branches, tags, HEAD, the temporary refs/seed entries, their logs, or objects go (commondir, refs/heads, refs/tags, refs/seed, logs/refs/seed, logs/HEAD, objects/info, objects/pack) before retrying.";
-//@ chunk-gjx0rh1b.js:170060-170121 placement
+//@ chunk-sfy2wa1e.js:170161-170222 placement
 function gitDirTamperedResult() {
   return {
     error: GIT_DIR_TAMPERED_MESSAGE,
     failReason: "git_dir_tampered",
   };
 }
-//@ chunk-gjx0rh1b.js:170121-175866 placement
+//@ chunk-sfy2wa1e.js:170222-175967 placement
 /**
  * git 目录内文件不是普通文件时的文案片段与各类篡改提示文本。
  */
 var NOT_PLAIN_FILE_PHRASE; // deferred: uses MAX_PLACEMENT_FILE_BYTES (../git/builderGit/gitDirShape.js) of its import cycle while loading; runs once the cycle is complete
 var TAMPER_MESSAGES;
 var GIT_REFUSAL_MESSAGES;
-deferInit("chunk-gjx0rh1b.js:170121", () => {
+deferInit("chunk-sfy2wa1e.js:170222", () => {
   NOT_PLAIN_FILE_PHRASE =
     "is not one plain file: it is a link, has a second name (a hard link, as tools that merge identical files make), is a folder or a special file, is missing where git needs it, or could not be examined. Git normally writes a plain file with one name there. Check with ls -l: a link shows an arrow (->), and the number after the permissions counts the names. If it is a plain file and that number is above 1, copy the file, move the copy over it (cp, then mv; git reads the copy the same), and retry. If it is anything else, start from a fresh clone of the repository instead (your uncommitted changes stay in this folder); where git itself writes links there (its core.preferSymlinkRefs setting), switch that setting off first.";
   TAMPER_MESSAGES = {

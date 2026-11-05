@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分支状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8), chunk-fepf8jp6.js (24)
  * attribution: placement 32
  */
 import {
@@ -29,7 +29,7 @@ import {
 import { GIT_SHA_RE } from "../../remote/tools/servedOwnerSettings.js";
 import { createCombinedAbortSignal } from "../combinedAbortSignal.js";
 import { GIT_SAFE_GLOBAL_ARGS } from "../git/gitSafeEnv.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { CONVENTIONAL_DEFAULT_BRANCH_NAMES, getBranchForDir } from "../git/gitFilesystem.js";
 import { GITHUB_SETUP_HINT } from "../../tasks/RemoteAgentTask/githubSetupHint.js";
 import { printableText } from "../stringUtils.js";
@@ -47,7 +47,7 @@ import { deleteFile } from "../../services/api/filesApi.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1923205-1926733 placement
+//@ chunk-fepf8jp6.js:94322-97821 placement
 /**
  * 检查当前分支是否已推送到远端，用于云会话启动。
  */
@@ -61,6 +61,8 @@ async function checkBranchPushed({
   sessionRoot,
   sessionReach,
   startsInProject = false,
+  gitEnvPins = {},
+  unsetInGitChildren = [],
   staleBranch,
   signal,
   deadlineMs,
@@ -84,13 +86,17 @@ async function checkBranchPushed({
         cause: "not_a_commit_id",
       };
     let headRef = headCommit ?? "HEAD";
-    let env = buildScreenedGitEnv_2(
-      {
-        GIT_GRAFT_FILE: "/dev/null",
-        GIT_NO_REPLACE_OBJECTS: "1",
-      },
-      reachRead,
-    );
+    let env = {
+      ...buildScreenedGitEnv_2(
+        {
+          ...gitEnvPins,
+          GIT_GRAFT_FILE: "/dev/null",
+          GIT_NO_REPLACE_OBJECTS: "1",
+        },
+        reachRead,
+      ),
+      ...Object.fromEntries(unsetInGitChildren.map((unsetInGitChild) => [unsetInGitChild, undefined])),
+    };
     let screen =
       reachRead === undefined
         ? describeGitBinaryFile(undefined)
@@ -208,7 +214,7 @@ async function checkBranchPushed({
       let creationRemoteRef = creation === null ? null : toRemoteTrackingRef(creation.from, remoteName);
       let localRefs = await listLocalRefs(
         git_2,
-        uniq([
+        normalizeCaseForComparison_2([
           ...(defaultBranchRefs?.refs ?? []),
           ...upstreamRefs,
           ...refsAtHead.atHead.filter((atHeadRef) => atHeadRef !== staleRef).slice(0, 1),
@@ -306,13 +312,13 @@ async function checkBranchPushed({
     };
   }
 }
-//@ chunk-e6aww6q8.js:1926733-1926770 placement
+//@ chunk-fepf8jp6.js:97821-97857 placement
 function reportCreation(onCreation, result) {
   try {
     onCreation?.(result);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:1926770-1927139 placement
+//@ chunk-fepf8jp6.js:97857-98225 placement
 /**
  * 从分支 reflog 中找出分支的创建点（创建时的提交与来源）。
  */
@@ -343,11 +349,11 @@ async function readBranchCreationPoint(runGit, branch) {
       }
     : "none";
 }
-//@ chunk-e6aww6q8.js:1927139-1927214 placement
+//@ chunk-fepf8jp6.js:98225-98299 placement
 function creationAbsenceReason(reason) {
   return reason === "read_failed" ? "read_failed" : "no_creation_entry";
 }
-//@ chunk-e6aww6q8.js:1927214-1927429 placement
+//@ chunk-fepf8jp6.js:98299-98513 placement
 function toRemoteTrackingRef(from, remoteName) {
   let refPrefix = `refs/remotes/${remoteName}/`;
   let shortPrefix = `${remoteName}/`;
@@ -363,7 +369,7 @@ function toRemoteTrackingRef(from, remoteName) {
     ? null
     : `${refPrefix}${branchName}`;
 }
-//@ chunk-e6aww6q8.js:1927429-1927747 placement
+//@ chunk-fepf8jp6.js:98513-98830 placement
 /**
  * 列出本地分支及其上游引用。
  */
@@ -385,7 +391,7 @@ async function listUpstreamRefs(runGit, remotePrefix) {
         line.startsWith(remotePrefix) && line.length > remotePrefix.length && line !== `${remotePrefix}HEAD`,
     );
 }
-//@ chunk-e6aww6q8.js:1927747-1928202 placement
+//@ chunk-fepf8jp6.js:98830-99284 placement
 /**
  * 列出指向给定提交的引用（可同时匹配两个提交）。
  */
@@ -427,7 +433,7 @@ async function findRefsPointingAt(runGit, refPattern, atHead, atCreation) {
       .map((atCreationEntry_2) => atCreationEntry_2.ref),
   };
 }
-//@ chunk-e6aww6q8.js:1928202-1928710 placement
+//@ chunk-fepf8jp6.js:99284-99789 placement
 async function listLocalRefs(runGit, refs) {
   let reduced = await chunkArray(refs, REF_BATCH_SIZE).reduce(async (acc, batch) => {
     let previous = await acc;
@@ -465,9 +471,9 @@ async function listLocalRefs(runGit, refs) {
         ];
   });
 }
-//@ chunk-e6aww6q8.js:1928710-1928721 placement
+//@ chunk-fepf8jp6.js:99789-99799 placement
 var REF_BATCH_SIZE = 64;
-//@ chunk-e6aww6q8.js:1928721-1928817 placement
+//@ chunk-fepf8jp6.js:99799-99894 placement
 function chunkArray(array, size) {
   return Array.from(
     {
@@ -476,7 +482,7 @@ function chunkArray(array, size) {
     (unused, index) => array.slice(index * size, (index + 1) * size),
   );
 }
-//@ chunk-e6aww6q8.js:1928817-1931288 placement
+//@ chunk-fepf8jp6.js:99894-102279 placement
 /**
  * 查找对应的远端分支（for-each-ref，取最近几个）。
  */
@@ -596,7 +602,7 @@ async function findRemoteBranches(
       aheadCount = 0;
     } else {
       let reachedSet = new Set(filtered.map(([firstParent]) => firstParent));
-      let candidates = uniq(
+      let candidates = normalizeCaseForComparison_2(
         filtered.flatMap(([, ...parent]) => parent.filter((parent_2) => !reachedSet.has(parent_2))),
       ).slice(0, MAX_REMOTE_BRANCH_CANDIDATES);
       let [nearest, ...others] = candidates;
@@ -674,13 +680,13 @@ async function findRemoteBranches(
     };
   }
 }
-//@ chunk-e6aww6q8.js:1931288-1931468 placement
+//@ chunk-fepf8jp6.js:102279-102458 placement
 async function countCommitsBetween(runGit, fromRef, toRef) {
   let result = await runGit(["rev-list", "--count", `${fromRef}..${toRef}`, "--"]);
   let count = Number.parseInt(result.stdout.trim(), 10);
   return result.exitCode === 0 && Number.isSafeInteger(count) && count >= 0 ? count : null;
 }
-//@ chunk-e6aww6q8.js:1931468-1931676 placement
+//@ chunk-fepf8jp6.js:102458-102664 placement
 async function hasStandardFetchRefspec(runGit, remoteName) {
   let result = await runGit(["config", "--get-all", `remote.${remoteName}.fetch`]);
   if (result.exitCode === 1) return false;
@@ -696,7 +702,7 @@ async function hasStandardFetchRefspec(runGit, remoteName) {
     remoteName,
   );
 }
-//@ chunk-e6aww6q8.js:1931676-1931852 placement
+//@ chunk-fepf8jp6.js:102664-102839 placement
 function isStandardFetchRefspec(refspecs, remoteName) {
   if (refspecs.some((line) => line.startsWith("^"))) return false;
   return refspecs.some((spec) => {
@@ -704,7 +710,7 @@ function isStandardFetchRefspec(refspecs, remoteName) {
     return src === "refs/heads/*" && dst === `refs/remotes/${remoteName}/*`;
   });
 }
-//@ chunk-e6aww6q8.js:1931852-1932084 placement
+//@ chunk-fepf8jp6.js:102839-103069 placement
 async function findClosestCandidate(runGit, candidates, toRef) {
   let results = await Promise.all(
     candidates.map(async (candidate) => ({
@@ -723,15 +729,15 @@ async function findClosestCandidate(runGit, candidates, toRef) {
   }
   return best;
 }
-//@ chunk-e6aww6q8.js:1932084-1932152 placement
+//@ chunk-fepf8jp6.js:103069-103135 placement
 async function findRemoteBranchPointingAt(runGit, remoteName, pattern, headCommit, staleRef) {
   return findRemoteBranchFor(runGit, remoteName, pattern, ["--points-at", headCommit], staleRef);
 }
-//@ chunk-e6aww6q8.js:1932152-1932219 placement
+//@ chunk-fepf8jp6.js:103135-103200 placement
 async function findRemoteBranchContaining(runGit, remoteName, pattern, headCommit, staleRef) {
   return findRemoteBranchFor(runGit, remoteName, pattern, ["--contains", headCommit], staleRef);
 }
-//@ chunk-e6aww6q8.js:1932219-1932599 placement
+//@ chunk-fepf8jp6.js:103200-103578 placement
 /**
  * 查找本地分支在远端对应的分支引用。
  */
@@ -763,7 +769,7 @@ async function findRemoteBranchFor(runGit, remoteName, patterns, refArgs, staleR
     null
   );
 }
-//@ chunk-e6aww6q8.js:1932599-1932846 placement
+//@ chunk-fepf8jp6.js:103578-103824 placement
 async function getRemoteDefaultBranch(runGit, remoteName) {
   let result = await runGit(["symbolic-ref", "-q", `${remoteName}HEAD`]);
   let trimmed = result.stdout.trim();
@@ -773,13 +779,13 @@ async function getRemoteDefaultBranch(runGit, remoteName) {
     ? trimmed.slice(remoteName.length)
     : null;
 }
-//@ chunk-e6aww6q8.js:1932846-1933181 placement
+//@ chunk-fepf8jp6.js:103824-104157 placement
 /**
  * 查找远端的默认分支引用（远端 HEAD 及常见默认分支名）。
  */
 async function findDefaultBranchRefs(runGit, remoteName) {
   let remoteDefaultBranch = await getRemoteDefaultBranch(runGit, remoteName);
-  let branchNames = uniq([
+  let branchNames = normalizeCaseForComparison_2([
     ...(remoteDefaultBranch === null ? [] : [remoteDefaultBranch]),
     ...CONVENTIONAL_DEFAULT_BRANCH_NAMES,
   ]);
@@ -804,7 +810,7 @@ async function findDefaultBranchRefs(runGit, remoteName) {
         refs: filtered.map((branchName_3) => `${remoteName}${branchName_3}`),
       };
 }
-//@ chunk-e6aww6q8.js:1933181-1933561 placement
+//@ chunk-fepf8jp6.js:104157-104537 placement
 /**
  * 生成找不到 GitHub 仓库时的原因说明（非 git 仓库、信任未确认等）。
  */
@@ -818,7 +824,7 @@ function describeNoRepositoryReason(reason) {
   } the cloud session starts empty: nothing from this folder is copied into it.`;
   return reason === "no_github_repository" ? `${message} ${GITHUB_SETUP_HINT}` : message;
 }
-//@ chunk-e6aww6q8.js:1933561-1933950 placement
+//@ chunk-fepf8jp6.js:104537-104926 placement
 /**
  * 生成分支不在远端时的提示，按需建议推送。
  */
@@ -826,7 +832,7 @@ function branchNotOnRemoteMessage({ branch, host, revision, advisesPush = true, 
   let revisionText = printableText(revision);
   return `Branch ${printableText(branch)} ${goneFromGithub ? "is not on GitHub" : `is not on ${isGithubDotCom(host) ? "GitHub" : host} as of the last fetch`}, so the cloud session starts from the default branch, ${revisionText}, instead, without the commits that ${revisionText} lacks or any uncommitted changes.${advisesPush ? " Push the branch, then start a new session to use it." : ""}`;
 }
-//@ chunk-e6aww6q8.js:1933950-1934335 placement
+//@ chunk-fepf8jp6.js:104926-105311 placement
 /**
  * 生成本地分支领先远端若干提交时的提示，按需建议推送。
  */
@@ -835,7 +841,7 @@ function branchAheadOfRemoteMessage({ branch, aheadCount, remoteName, advisesPus
   let isSingleCommit = aheadCount === 1;
   return `Branch ${branchText} is ${isSingleCommit ? "1 commit" : `${aheadCount.toLocaleString("en-US")} commits`} ahead of ${remoteName}/${branchText} (as last fetched), so the cloud session starts without ${isSingleCommit ? "it" : "them"} and without any uncommitted changes.${advisesPush ? ` Push the branch and start a new session to have ${isSingleCommit ? "that commit" : "those commits"}.` : ""}`;
 }
-//@ chunk-e6aww6q8.js:1934335-1935874 placement
+//@ chunk-fepf8jp6.js:105311-106823 placement
 /**
  * 说明当前检出能否作为云会话起点（分离 HEAD、领先过多等）。
  */
@@ -885,12 +891,12 @@ function describeBranchStartability({
       : `${remoteText !== null ? ` Commits that ${remoteText} lacks, and any uncommitted changes, stay on this machine` : pushedText ? " Later commits and any uncommitted changes stay on this machine" : ` ${start.aheadCount === 0 ? "Uncommitted changes" : start.aheadCount === 1 ? "That commit and any uncommitted changes" : `Those ${start.aheadCount} commits and any uncommitted changes`} stay on this machine`}${advisesPush || start.aheadCount === 0 ? "; push the branch to start from it" : ""}.`;
   return `${startText}, so ${message}.${hint}`;
 }
-//@ chunk-e6aww6q8.js:1935874-1935944 placement
+//@ chunk-5xgkngpb.js:1990958-1991028 placement
 async function branchForTeleport(dir, branchName) {
   if (getCurrentWorktreeSession() === null || !isWorktreeCloudClaimEnabled()) return branchName;
   return getBranchForDir(dir);
 }
-//@ chunk-e6aww6q8.js:1935944-1936032 placement
+//@ chunk-5xgkngpb.js:1991028-1991116 placement
 function recordedOriginalBranch(branchName) {
   let originalBranch = getCurrentWorktreeSession()?.originalBranch;
   return typeof originalBranch === "string" &&
@@ -899,10 +905,10 @@ function recordedOriginalBranch(branchName) {
     ? originalBranch
     : branchName;
 }
-//@ chunk-e6aww6q8.js:1936032-1936160 placement
+//@ chunk-5xgkngpb.js:1991116-1991244 placement
 var BATCH_BRANCH_STATUS_PATH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var batchBranchStatusSchema;
-deferInit("chunk-e6aww6q8.js:1936032", () => {
+deferInit("chunk-5xgkngpb.js:1991116", () => {
   BATCH_BRANCH_STATUS_PATH = "/v1/code/github/get-batch-branch-status";
   batchBranchStatusSchema = DoctorLazy(() =>
     objectSchema({
@@ -916,7 +922,7 @@ deferInit("chunk-e6aww6q8.js:1936032", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1936160-1936397 placement
+//@ chunk-5xgkngpb.js:1991244-1991481 placement
 function createBranchExistsLookup(body, repo) {
   let parsed = batchBranchStatusSchema().safeParse(body);
   let statuses = parsed.success
@@ -929,7 +935,7 @@ function createBranchExistsLookup(body, repo) {
     return found === undefined ? "cannot_tell" : found.branch_exists ? "yes" : "no";
   };
 }
-//@ chunk-e6aww6q8.js:1936397-1937059 placement
+//@ chunk-5xgkngpb.js:1991481-1992143 placement
 async function askGithubBranchExists({ owner, name: repoName, branches, timeoutMs, signal, credentials }) {
   let repoFullName = `${owner}/${repoName}`;
   let now = Date.now();
@@ -975,11 +981,12 @@ async function askGithubBranchExists({ owner, name: repoName, branches, timeoutM
   );
   return branchExistsLookup;
 }
-//@ chunk-e6aww6q8.js:1937059-1937662 placement
+//@ chunk-5xgkngpb.js:1992143-1992830 placement
 /**
  * 决定云会话的起点：先查分支状态，必要时再询问是否连接 GitHub。
  */
-async function resolveStartWithGithub({ lookUp, ask }) {
+async function resolveStartWithGithub({ lookUp, ask, alwaysAsk = false }) {
+  let preAsked = alwaysAsk ? ask?.() : undefined;
   let start = await lookUp({
     remoteLacksBranch: false,
   });
@@ -988,16 +995,27 @@ async function resolveStartWithGithub({ lookUp, ask }) {
       start,
       github: "not_asked",
     };
-  if (start.kind !== "on_remote" && start.kind !== "unknown" && start.kind !== "not_on_remote")
+  let canSkipAsk = start.kind === "pushed_ancestor" || start.kind === "none";
+  if (canSkipAsk && !alwaysAsk)
     return {
       start,
       github: "not_needed",
     };
-  let github = await ask();
+  let github = await (preAsked ?? ask());
   if (github === null)
     return {
       start,
       github: "not_asked",
+    };
+  if (canSkipAsk)
+    return {
+      start:
+        github === "yes"
+          ? {
+              kind: "on_remote",
+            }
+          : start,
+      github,
     };
   if (start.kind === "not_on_remote")
     return github === "yes"
@@ -1032,10 +1050,10 @@ async function resolveStartWithGithub({ lookUp, ask }) {
     github,
   };
 }
-//@ chunk-e6aww6q8.js:1937662-1937710 placement
+//@ chunk-5xgkngpb.js:1992830-1992878 placement
 var SEED_DELETE_TIMEOUT_MS = 5000;
 var SEED_DELETE_TIMEOUT_TEXT = "seed bundle delete timed out";
-//@ chunk-e6aww6q8.js:1937710-1938185 placement
+//@ chunk-5xgkngpb.js:1992878-1993353 placement
 /**
  * 删除已上传的种子 bundle 文件（限时），返回失败原因。
  */

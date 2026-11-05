@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。无人值守（served）模式同意对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d8vjfv68.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ybwrca1w.js (3)
  * attribution: placement 3
  */
 import {
@@ -38,16 +38,16 @@ import { REMOTE_TOOLS_CONSENT_TEXT } from "../remote/tools/consentText.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-d8vjfv68.js:13774-13778 placement
+//@ chunk-ybwrca1w.js:14922-14926 placement
 init_react_production();
-//@ chunk-d8vjfv68.js:13778-13865 placement
+//@ chunk-ybwrca1w.js:14926-15013 placement
 function logConsentShown() {
   logEvent("tengu_served_unattended_consent", {
     action: lit("shown"),
     surface: lit("cli"),
   });
 }
-//@ chunk-d8vjfv68.js:13865-15507 placement
+//@ chunk-ybwrca1w.js:15013-16655 placement
 function UnattendedConsentDialog(props) {
   let $ = useMemoCache(19);
   let { onDone, exitOnCtrlCD, onSaveFailed } = props;

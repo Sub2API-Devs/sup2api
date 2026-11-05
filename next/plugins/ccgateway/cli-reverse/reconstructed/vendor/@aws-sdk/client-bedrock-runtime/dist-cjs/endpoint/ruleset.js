@@ -1,11 +1,11 @@
 /**
  * @aws-sdk/client-bedrock-runtime/dist-cjs/endpoint/ruleset.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
- * pieces: chunk-3cddmtk7.js (1)
+ * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-3cddmtk7.js:20831-23181 esm-fingerprint
+//@ chunk-ayc8mk37.js:20831-23181 esm-fingerprint
 var h = {
   ["required"]: false,
   type: "string",

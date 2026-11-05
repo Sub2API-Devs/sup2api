@@ -3,9 +3,9 @@
  *
  * 迁移：全局配置 autoUpdates=false 改为设置 env.DISABLE_AUTOUPDATER
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateAutoUpdatesToSettings.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
@@ -15,7 +15,7 @@ import { env } from "../utils/env.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-cjydagjy.js:7542-8258 fingerprint (2.1.88 match: migrateAutoUpdatesToSettings, 0.82)
+//@ chunk-h61dq9nz.js:7719-8435 fingerprint (2.1.88 match: migrateAutoUpdatesToSettings, 0.82)
 /**
  * 迁移：全局配置 autoUpdates=false（且非原生安装保护）→ userSettings.env.DISABLE_AUTOUPDATER=1，并清除旧字段。
  */

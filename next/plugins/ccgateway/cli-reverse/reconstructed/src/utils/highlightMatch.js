@@ -3,12 +3,12 @@
  *
  * 高亮匹配子串的文本组件辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/highlightMatch.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-18hwfzwa.js:798958-799024 fingerprint (2.1.88 match: highlightMatch, 0.743)
+//@ chunk-czq1j3j2.js:831578-831644 fingerprint (2.1.88 match: highlightMatch, 0.742)
 /**
  * 匹配文本的默认样式，以及反色变体。
  */

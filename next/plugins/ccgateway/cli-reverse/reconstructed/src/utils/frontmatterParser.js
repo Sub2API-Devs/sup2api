@@ -3,10 +3,10 @@
  *
  * 已有模块；g2 补充 frontmatter 键表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/frontmatterParser.ts
- * pieces: chunk-82kqcve8.js (25)
- * attribution: placement 8, layout 11, fingerprint 4, callgraph-witnessed 2
+ * pieces: chunk-a2q0x549.js (25)
+ * attribution: placement 8, layout 12, fingerprint 3, callgraph-witnessed 2
  */
 import { normalizeKeyIndex, normalizeKey } from "./objectUtils.js";
 import { parseYaml } from "./yaml.js";
@@ -16,17 +16,17 @@ import { parseIntLoose, isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 import { TRANSPORT_LABELS, GLOBAL_CONFIG_FIELD_KINDS } from "./config.js";
 import { CACHE_TTL_VALUES } from "./env/envRegistry.js";
 import { MAX_CLEAN_IDENTIFIER_LENGTH } from "./sanitization.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { MAX_FRONTMATTER_NAME_CHARS, MAX_MEMORY_NAME_CHARS } from "../memdir/memoryTypes.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:81394-82228 placement
+//@ chunk-a2q0x549.js:78819-79653 placement
 /**
  * 旧版 skill/agent frontmatter 允许的键名列表（name、description、model、allowed-tools 等）。
  */
 var FRONTMATTER_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LEGACY_FRONTMATTER_KEYS;
-deferInit("chunk-82kqcve8.js:81394", () => {
+deferInit("chunk-a2q0x549.js:78819", () => {
   FRONTMATTER_KEYS = [
     "name",
     "description",
@@ -93,10 +93,10 @@ deferInit("chunk-82kqcve8.js:81394", () => {
   ];
   LEGACY_FRONTMATTER_KEYS = normalizeKeyIndex(FRONTMATTER_KEYS);
 });
-//@ chunk-82kqcve8.js:82228-82369 placement
+//@ chunk-a2q0x549.js:79653-79795 placement
 var SKILL_FRONTMATTER_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SKILL_FRONTMATTER_KEY_SET;
-deferInit("chunk-82kqcve8.js:82228", () => {
+deferInit("chunk-a2q0x549.js:79653", () => {
   SKILL_FRONTMATTER_KEYS = [
     "argument-hint",
     "arguments",
@@ -109,7 +109,7 @@ deferInit("chunk-82kqcve8.js:82228", () => {
   ];
   SKILL_FRONTMATTER_KEY_SET = new Set(SKILL_FRONTMATTER_KEYS.map(normalizeKey));
 });
-//@ chunk-82kqcve8.js:82409-82465 placement
+//@ chunk-a2q0x549.js:79835-79891 placement
 /**
  * 把对象序列化为 YAML frontmatter 文本（含结尾分隔）。
  */
@@ -120,9 +120,9 @@ function serializeFrontmatter(frontmatter) {
 `
   );
 }
-//@ chunk-82kqcve8.js:82465-82494 layout
+//@ chunk-a2q0x549.js:79891-79920 layout
 var YAML_SPECIAL_CHARS_RE = /[{}[\]*&#!|>%@`]|: /;
-//@ chunk-82kqcve8.js:82494-82960 fingerprint (2.1.88 match: quoteProblematicValues, 1)
+//@ chunk-a2q0x549.js:79920-80386 fingerprint (2.1.88 match: quoteProblematicValues, 1)
 /**
  * 给含 YAML 特殊字符的单行值加双引号，避免 frontmatter 解析失败。
  */
@@ -160,7 +160,7 @@ function quoteProblematicValues(frontmatterText) {
   return result.join(`
 `);
 }
-//@ chunk-82kqcve8.js:82960-83591 layout
+//@ chunk-a2q0x549.js:80386-81017 layout
 function quoteLossyYamlValues(yamlText) {
   let quotedKeys = [];
   let unprovableKeys = [];
@@ -214,7 +214,7 @@ function quoteLossyYamlValues(yamlText) {
     unprovableKeys,
   };
 }
-//@ chunk-82kqcve8.js:83591-83889 layout
+//@ chunk-a2q0x549.js:81017-81315 layout
 function collectInlineCommentKeys(line, commentKeys) {
   let keyMatch =
     line.match(/^("(?:[^"\\]|\\.)*"):[ \t]+(.*)$/) ??
@@ -226,7 +226,7 @@ function collectInlineCommentKeys(line, commentKeys) {
   let replaced = rawValue.trimEnd().replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, "");
   if (/^#|[ \t]#/.test(replaced)) commentKeys.push(keyName);
 }
-//@ chunk-82kqcve8.js:83889-83998 layout
+//@ chunk-a2q0x549.js:81315-81424 layout
 /**
  * 不受信任 frontmatter 行数上限。
  */
@@ -234,11 +234,11 @@ var MAX_UNTRUSTED_FRONTMATTER_LINES = 30;
 var MAX_UNTRUSTED_FRONTMATTER_BYTES = 65536;
 var FRONTMATTER_REGEX = /^---\s*\n([\s\S]*?)---\s*\n?/;
 var STRICT_FRONTMATTER_REGEX = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/;
-//@ chunk-82kqcve8.js:83998-84024 layout
+//@ chunk-a2q0x549.js:81424-81450 layout
 function normalizeFrontmatterKeys(frontmatter, sourceName) {
   return frontmatter;
 }
-//@ chunk-82kqcve8.js:84024-85922 callgraph-witnessed (2.1.88 match: parseFrontmatter, 0.146)
+//@ chunk-a2q0x549.js:81450-83365 callgraph-witnessed (2.1.88 match: parseFrontmatter, 0.142)
 /**
  * 解析 markdown 的 YAML frontmatter（--- 块）：返回 frontmatter、frontmatterAsWritten、content、parseError；untrusted 时拒绝超长/过深/含锚点的块；quoteLossyValues 模式会给会丢信息的值加引号并报告 rewriteHazard。
  */
@@ -266,6 +266,7 @@ function parseFrontmatter(rawText, fileName, options) {
       asWrittenProblem: "was not parsed: it is too long, too nested, or may hold a YAML anchor",
       content: content_2,
       parseError: "the frontmatter is too long, too nested, or may hold a YAML anchor",
+      notParsed: true,
     };
   let normalizeKeys = (frontmatter) =>
     options?.normalizeKeys ? normalizeFrontmatterKeys(frontmatter, fileName) : frontmatter;
@@ -354,7 +355,7 @@ function parseFrontmatter(rawText, fileName, options) {
     }),
   };
 }
-//@ chunk-82kqcve8.js:85922-86131 placement
+//@ chunk-a2q0x549.js:83365-83574 placement
 /**
  * 解析 YAML，失败时加引号与缩进修正再试。
  */
@@ -381,18 +382,18 @@ function parseYamlLenient(frontmatterText) {
     }
   }
 }
-//@ chunk-82kqcve8.js:86131-86282 placement
+//@ chunk-a2q0x549.js:83574-83725 placement
 function emptyFrontmatterProblem(frontmatterText, frontmatter) {
   if (frontmatterText.trim() !== "" && Object.keys(frontmatter).length === 0)
     return "the frontmatter has no keys (a sequence, scalar, or comment-only document)";
   return;
 }
-//@ chunk-82kqcve8.js:86282-86360 placement
+//@ chunk-a2q0x549.js:83725-83803 placement
 function splitPathInFrontmatter(input) {
   if (input && typeof input === "object" && !Array.isArray(input)) return input;
   return {};
 }
-//@ chunk-82kqcve8.js:87346-87479 callgraph-witnessed (2.1.88 match: parsePositiveIntFromFrontmatter, 1)
+//@ chunk-a2q0x549.js:84788-84921 callgraph-witnessed (2.1.88 match: parsePositiveIntFromFrontmatter, 1)
 /**
  * 把 frontmatter 值解析为正整数，否则 undefined。
  */
@@ -402,7 +403,7 @@ function parsePositiveIntFromFrontmatter(value) {
   if (Number.isInteger(parsed) && parsed > 0) return parsed;
   return;
 }
-//@ chunk-82kqcve8.js:87479-87549 layout
+//@ chunk-a2q0x549.js:84921-84991 layout
 /**
  * 正整数且在给定上下界内才返回。
  */
@@ -414,7 +415,7 @@ function parseBoundedIntFromFrontmatter(autoCompactWindow) {
     ? positiveIntFromFrontmatter
     : undefined;
 }
-//@ chunk-82kqcve8.js:87549-87715 layout
+//@ chunk-a2q0x549.js:84991-85158 layout
 /**
  * 读取 frontmatter.experimental 中的 cachettl（键名归一化比较），只接受白名单值。
  */
@@ -424,7 +425,7 @@ function parseExperimentalCacheTtl(frontmatter) {
   let cacheTtlValue = Object.entries(experimental).find(([key]) => normalizeKey(key) === "cachettl")?.[1];
   return CACHE_TTL_VALUES.find((allowedValue) => allowedValue === cacheTtlValue);
 }
-//@ chunk-82kqcve8.js:87715-87970 fingerprint (2.1.88 match: coerceDescriptionToString, 1)
+//@ chunk-a2q0x549.js:85158-85413 fingerprint (2.1.88 match: coerceDescriptionToString, 1)
 /**
  * description 转字符串：字符串去空白，数字/布尔转字符串，其他类型告警并返回 null。
  */
@@ -438,7 +439,7 @@ function coerceDescriptionToString(value, componentName, pluginName) {
   });
   return null;
 }
-//@ chunk-82kqcve8.js:87970-88140 layout
+//@ chunk-a2q0x549.js:85413-85583 layout
 /**
  * 读取 frontmatter.name，超过长度上限时告警并忽略。
  */
@@ -454,7 +455,7 @@ function parseFrontmatterName(name, fileName) {
   );
   return;
 }
-//@ chunk-82kqcve8.js:88140-88284 layout
+//@ chunk-a2q0x549.js:85583-85727 layout
 /**
  * 返回 frontmatter 声明过的所有键（含 experimental 下的键），用于遥测与校验。
  */
@@ -463,16 +464,19 @@ function getDeclaredFrontmatterFields(frontmatter) {
     experimental != null && typeof experimental === "object" && !Array.isArray(experimental)
       ? Object.keys(experimental)
       : [];
-  return uniq([...Object.keys(frontmatter), ...experimentalKeysOf(frontmatter.experimental)]);
+  return normalizeCaseForComparison_2([
+    ...Object.keys(frontmatter),
+    ...experimentalKeysOf(frontmatter.experimental),
+  ]);
 }
-//@ chunk-82kqcve8.js:88284-88318 layout
+//@ chunk-a2q0x549.js:85727-85761 layout
 /**
  * 布尔 frontmatter：真值字样为 true，其他为 false。
  */
 function parseBooleanFrontmatter(value) {
   return parseBooleanishFrontmatter(value) ?? false;
 }
-//@ chunk-82kqcve8.js:88318-88477 layout
+//@ chunk-a2q0x549.js:85761-85920 layout
 /**
  * 把 true/false/1/0 等字样解析为布尔，无法识别时返回 undefined。
  */
@@ -484,12 +488,12 @@ function parseBooleanishFrontmatter(value) {
   if (isEnvDefinedFalsy(text)) return false;
   return;
 }
-//@ chunk-82kqcve8.js:88477-88506 fingerprint (2.1.88 match: FRONTMATTER_SHELLS, 1)
+//@ chunk-a2q0x549.js:85920-85949 layout (2.1.88 match: FRONTMATTER_SHELLS, 1)
 /**
  * frontmatter 支持的 shell 列表：bash、powershell。
  */
 var FRONTMATTER_SHELLS = ["bash", "powershell"];
-//@ chunk-82kqcve8.js:88506-88757 fingerprint (2.1.88 match: parseShellFrontmatter, 1)
+//@ chunk-a2q0x549.js:85949-86200 fingerprint (2.1.88 match: parseShellFrontmatter, 1)
 /**
  * 解析 shell frontmatter，只接受 bash/powershell，其他值告警后回退 bash（返回 undefined）。
  */
@@ -506,7 +510,7 @@ function parseShellFrontmatter(value, source) {
   );
   return;
 }
-//@ chunk-82kqcve8.js:88768-88964 placement
+//@ chunk-a2q0x549.js:86211-86407 placement
 function hasExcessiveYamlNesting(text) {
   let nestingDepth = 0;
   for (let j = 0; j < text.length; j++) {
@@ -526,7 +530,7 @@ function hasExcessiveYamlNesting(text) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:88975-89664 placement
+//@ chunk-a2q0x549.js:86418-87107 placement
 /**
  * 是否含 YAML 锚点/别名（&）。
  */
@@ -567,20 +571,20 @@ function hasYamlAnchorOrAlias(text) {
   return false;
 }
 export {
-  parsePositiveIntFromFrontmatter,
-  parseBoundedIntFromFrontmatter,
-  parseExperimentalCacheTtl,
   FRONTMATTER_REGEX,
-  STRICT_FRONTMATTER_REGEX,
-  parseFrontmatter,
-  MAX_UNTRUSTED_FRONTMATTER_LINES,
-  MAX_UNTRUSTED_FRONTMATTER_BYTES,
   parseYamlLenient,
-  serializeFrontmatter,
-  parseFrontmatterName,
+  parseFrontmatter,
   coerceDescriptionToString,
   parseBooleanishFrontmatter,
   parseBooleanFrontmatter,
+  parseFrontmatterName,
   parseShellFrontmatter,
   getDeclaredFrontmatterFields,
+  STRICT_FRONTMATTER_REGEX,
+  MAX_UNTRUSTED_FRONTMATTER_BYTES,
+  parsePositiveIntFromFrontmatter,
+  parseBoundedIntFromFrontmatter,
+  parseExperimentalCacheTtl,
+  MAX_UNTRUSTED_FRONTMATTER_LINES,
+  serializeFrontmatter,
 };

@@ -3,9 +3,9 @@
  *
  * builderGit：检出内配置读取（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (15)
  * attribution: placement 15
  */
 import { join, isAbsolute } from "path";
@@ -22,12 +22,12 @@ import {
   findHeldCheckout,
   MAX_CONFIG_WALK_BYTES,
 } from "./sandboxReach.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import {
   resolveForeignSpellingAsync,
   classifyPathSpelling_3,
   spellingsToCheck,
-  isPathInside as isPathInside_2,
+  isPathInside,
   isWindowsNonDrivePath,
   getGitConfigPaths,
   isWritableSharedFile,
@@ -38,14 +38,14 @@ import { hasDotDotSegment } from "../../pathClassification.js";
 import { buildGitEnv } from "./gitEnv.js";
 import { resolveIncludePaths, MAX_INCLUDE_FILES } from "./gitConfigAudit.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
+import { getPlatform } from "../../platform.js";
 import { readOnlyNoFollowFlags } from "../../platformTargets.js";
 import { getErrnoCode } from "../../errors.js";
 import { hasNulByte, parseGitConfig } from "../gitConfigParser.js";
 import { firstLineOf } from "../../stringUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:267395-270729 placement
+//@ chunk-fepf8jp6.js:61271-64428 placement
 /**
  * 读取检出内的 git 配置与 config.worktree，判断能否安全使用
  */
@@ -83,7 +83,9 @@ async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
   let homePaths =
     ancestors.length === 0
       ? []
-      : uniq([homedir(), ...ancestors].flatMap((dir) => [dir, ...resolvePathSpellings(dir, cwd)]));
+      : normalizeCaseForComparison_2(
+          [homedir(), ...ancestors].flatMap((dir) => [dir, ...resolvePathSpellings(dir, cwd)]),
+        );
   let repoSettingsReachRoots = collectRepoSettingsReachRoots(cwd);
   if (repoSettingsReachRoots === "unreadable")
     return {
@@ -92,29 +94,35 @@ async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
     };
   let settingsRoots = (
     await Promise.all(
-      uniq([...settingsReachRoots(cwd), ...repoSettingsReachRoots]).map(async (root) => {
-        let foreignSpelling = await resolveForeignSpellingAsync(
-          await classifyPathSpelling_3(root, cwd),
-          cwd,
-          protectedHomeRoots(),
-        );
-        return foreignSpelling.verdict === "local"
-          ? await dropSpecialFiles(
-              uniq([root, foreignSpelling.spelling, ...resolvePathSpellings(foreignSpelling.spelling, cwd)]),
-            )
-          : spellingsToCheck(
-              foreignSpelling.verdict === "foreign"
-                ? {
-                    ...foreignSpelling,
-                    verdict: "opaque",
-                  }
-                : foreignSpelling,
-              cwd,
-            );
-      }),
+      normalizeCaseForComparison_2([...settingsReachRoots(cwd), ...repoSettingsReachRoots]).map(
+        async (root) => {
+          let foreignSpelling = await resolveForeignSpellingAsync(
+            await classifyPathSpelling_3(root, cwd),
+            cwd,
+            protectedHomeRoots(),
+          );
+          return foreignSpelling.verdict === "local"
+            ? await dropSpecialFiles(
+                normalizeCaseForComparison_2([
+                  root,
+                  foreignSpelling.spelling,
+                  ...resolvePathSpellings(foreignSpelling.spelling, cwd),
+                ]),
+              )
+            : spellingsToCheck(
+                foreignSpelling.verdict === "foreign"
+                  ? {
+                      ...foreignSpelling,
+                      verdict: "opaque",
+                    }
+                  : foreignSpelling,
+                cwd,
+              );
+        },
+      ),
     )
   ).flat();
-  let roots = uniq([
+  let roots = normalizeCaseForComparison_2([
     ...[cwd, repository, checkoutDirOfGitDir(repository)].flatMap((dir) => [
       dir,
       ...resolvePathSpellings(dir, cwd),
@@ -134,7 +142,7 @@ async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
     let realPathLoose = resolveRealPathLoose(foreignSpelling.spelling, cwd);
     return (
       realPathLoose === null ||
-      roots.some((root) => isPathInside_2(root, includePath) || isPathInside_2(root, realPathLoose))
+      roots.some((root) => isPathInside(root, includePath) || isPathInside(root, realPathLoose))
     );
   };
   let isCovered = (includePath) => isRootUnsafe(roots, includePath);
@@ -228,7 +236,7 @@ async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
       if (result !== "clear") return resultFor(result, LAUNCH_ENV_CONFIG_NOTE);
     }
   }
-  let configPaths = uniq(getGitConfigPaths([], cwd, null, env));
+  let configPaths = normalizeCaseForComparison_2(getGitConfigPaths([], cwd, null, env));
   for (let configPath of configPaths) {
     if (configPath.includes("\uFFFD") || isWindowsNonDrivePath(configPath))
       return {
@@ -287,20 +295,20 @@ async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
     kind: "clear",
   };
 }
-//@ chunk-s61vbvea.js:270729-270782 placement
+//@ chunk-fepf8jp6.js:64428-64481 placement
 /**
  * 说明这些配置来自启动环境的提示文本，以及 include 深度上限。
  */
 var LAUNCH_ENV_CONFIG_NOTE = "the launch environment (GIT_CONFIG_*)";
 var MAX_INCLUDE_DEPTH = 4;
-//@ chunk-s61vbvea.js:270782-270872 placement
+//@ chunk-fepf8jp6.js:64481-64571 placement
 /**
  * 判断配置键是否为 include.path / includeIf.*.path。
  */
 function inTreeConfigFileKeys(key) {
   return key === "include.path" || (key.startsWith("includeif.") && key.endsWith(".path"));
 }
-//@ chunk-s61vbvea.js:270872-271267 placement
+//@ chunk-fepf8jp6.js:64571-64966 placement
 /**
  * 解析 GIT_CONFIG_COUNT/KEY_n/VALUE_n 与 GIT_CONFIG_PARAMETERS。
  */
@@ -327,7 +335,7 @@ function readGitConfigFromEnv(env) {
   }
   return pairs;
 }
-//@ chunk-s61vbvea.js:271267-271516 placement
+//@ chunk-fepf8jp6.js:64966-65215 placement
 async function orderLocalRootsFirst(roots, launchDir) {
   let results = await Promise.all(
     roots.map(async (root) => ({
@@ -347,7 +355,7 @@ async function orderLocalRootsFirst(roots, launchDir) {
     ...results.filter(({ local }) => !local).map(({ root }) => root),
   ];
 }
-//@ chunk-s61vbvea.js:271516-271727 placement
+//@ chunk-fepf8jp6.js:65215-65424 placement
 async function dropSpecialFiles(paths) {
   return (
     await Promise.all(
@@ -363,9 +371,9 @@ async function dropSpecialFiles(paths) {
     )
   ).filter((path) => path !== null);
 }
-//@ chunk-s61vbvea.js:271727-271746 placement
+//@ chunk-fepf8jp6.js:65424-65443 placement
 var CONFIG_VALUE_WHITESPACE_RE = /[ \t\n\r]/;
-//@ chunk-s61vbvea.js:271746-272399 placement
+//@ chunk-fepf8jp6.js:65443-66096 placement
 /**
  * 解析 GIT_CONFIG_PARAMETERS 的单引号键值列表。
  */
@@ -436,7 +444,7 @@ function parseGitConfigParameters(envCaseInsensitive) {
   }
   return pairs;
 }
-//@ chunk-s61vbvea.js:272399-272480 placement
+//@ chunk-fepf8jp6.js:66096-66176 placement
 async function readInTreeConfig(filePath) {
   try {
     return (await lstat(filePath)).isCharacterDevice();
@@ -444,11 +452,11 @@ async function readInTreeConfig(filePath) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:272480-273100 placement
+//@ chunk-fepf8jp6.js:66176-66795 placement
 async function readGitConfigFile(filePath, followLink) {
   let handle;
   try {
-    if (!followLink && getPlatform_2() === "windows" && !(await lstat(filePath)).isFile())
+    if (!followLink && getPlatform() === "windows" && !(await lstat(filePath)).isFile())
       return {
         kind: "unread",
       };
@@ -500,11 +508,11 @@ async function readGitConfigFile(filePath, followLink) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-s61vbvea.js:273100-273153 placement
+//@ chunk-fepf8jp6.js:66795-66848 placement
 function OPEN_CONFIG_FLAGS() {
-  return getPlatform_2() === "windows" ? 0 : constants.O_NONBLOCK;
+  return getPlatform() === "windows" ? 0 : constants.O_NONBLOCK;
 }
-//@ chunk-s61vbvea.js:273153-273767 placement
+//@ chunk-fepf8jp6.js:66848-67462 placement
 function auditWorktreeConfigKeys(text) {
   let includes = [];
   let hasInclude = false;
@@ -554,25 +562,25 @@ function auditWorktreeConfigKeys(text) {
         inertWorktreeKeysOnly: inertKeysOnly,
       };
 }
-//@ chunk-s61vbvea.js:273767-273826 placement
+//@ chunk-fepf8jp6.js:67462-67521 placement
 var KNOWN_SAFE_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:273767", () => {
+deferInit("chunk-fepf8jp6.js:67462", () => {
   KNOWN_SAFE_EXTENSIONS = new Set(["hookspath", "untrackedcache", "longpaths"]);
 });
-//@ chunk-s61vbvea.js:273826-273947 placement (2.1.88 match: isEnvDefinedFalsy, 1)
+//@ chunk-fepf8jp6.js:67521-67642 placement (2.1.88 match: isEnvDefinedFalsy, 1)
 function isEnvDefinedFalsy(envVar) {
   let lower = envVar.trim().toLowerCase();
   return !(["false", "no", "off", ""].includes(lower) || /^[-+]?(0x)?0+[kmg]?$/.test(lower));
 }
-//@ chunk-s61vbvea.js:273947-274016 placement
+//@ chunk-fepf8jp6.js:67642-67711 placement
 function includesConfigKey(name) {
   let firstPart = firstLineOf(name, ".");
   return firstPart === "include" || firstPart === "includeif";
 }
 export {
-  readInTreeGitConfig,
-  LAUNCH_ENV_CONFIG_NOTE,
   readGitConfigFromEnv,
   inTreeConfigFileKeys,
   readGitConfigFile,
+  readInTreeGitConfig,
+  LAUNCH_ENV_CONFIG_NOTE,
 };

@@ -3,9 +3,9 @@
  *
  * 成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cost-tracker.ts
- * pieces: chunk-e6aww6q8.js (21), chunk-tw8fk0yz.js (1)
+ * pieces: chunk-5xgkngpb.js (21), chunk-8n1fbght.js (1)
  * attribution: placement 12, fingerprint 4, layout 5, file-local 1
  */
 import {
@@ -76,21 +76,21 @@ import { logEvent } from "./services/analytics/index.js";
 import { telemetrySafeModelName } from "./utils/model/telemetryModelName.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-tw8fk0yz.js:15693-15735 file-local
+//@ chunk-8n1fbght.js:15707-15749 file-local
 /**
  * 按精度四舍五入（round(x, 100) 保留两位）。
  */
 function round(number, precision) {
   return Math.round(number * precision) / precision;
 }
-//@ chunk-e6aww6q8.js:964789-964849 placement
+//@ chunk-5xgkngpb.js:978098-978158 placement
 /**
  * 函数 getSessionCostUSD（本次运行成本（扣除恢复部分））；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
 function getSessionCostUSD() {
   return getTotalCostUSD() - getRootSession().costLedger.restoredCostUSD();
 }
-//@ chunk-e6aww6q8.js:964849-965083 placement (2.1.88 match: combineUsage, 0.766)
+//@ chunk-5xgkngpb.js:978158-978392 placement (2.1.88 match: combineUsage, 0.766)
 /**
  * 返回本进程累计的 input/output/cache 读/cache 写 token，扣除恢复会话时 costLedger 记入的 restoredTokens（只统计本次运行实际消耗）。
  */
@@ -103,21 +103,21 @@ function getSessionUsageExcludingRestored() {
     cacheCreationInputTokens: getTotalCacheCreationInputTokens() - rootSession.cacheCreationInputTokens,
   };
 }
-//@ chunk-e6aww6q8.js:965083-965134 placement
+//@ chunk-5xgkngpb.js:978392-978443 placement
 /**
  * 函数 getSpentTokens（账本已用 token）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
 function getSpentTokens() {
   return getRootSession().costLedger.spentTokens();
 }
-//@ chunk-e6aww6q8.js:965134-965179 placement
+//@ chunk-5xgkngpb.js:978443-978488 placement
 /**
  * 函数 hasReachedBudget（是否达到 --max-budget-usd）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
 function hasReachedBudget(maxBudgetUsd) {
   return maxBudgetUsd !== undefined && !(getSessionCostUSD() < maxBudgetUsd);
 }
-//@ chunk-e6aww6q8.js:965179-965379 placement
+//@ chunk-5xgkngpb.js:978488-978688 placement
 /**
  * 达到 --max-budget-usd 上限时的提示；会话成本不是数字时说明拒绝继续。
  */
@@ -126,16 +126,16 @@ function maxBudgetReachedMessage(maxBudgetUsd) {
     return `Session cost is not a number (a usage or pricing fault upstream); refusing to continue under --max-budget-usd ${maxBudgetUsd}`;
   return `Reached maximum budget ($${maxBudgetUsd})`;
 }
-//@ chunk-e6aww6q8.js:965379-965388 placement
+//@ chunk-5xgkngpb.js:978688-978697 placement
 // deferred: uses registerSessionCostSaver (./bootstrap/state.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:965379", () => {
+deferInit("chunk-5xgkngpb.js:978688", () => {
   registerSessionCostSaver(saveSessionCostBeforeExit);
 });
-//@ chunk-e6aww6q8.js:965388-965418 placement
+//@ chunk-5xgkngpb.js:978697-978727 placement
 function saveSessionCostBeforeExit(session) {
   flushAndSaveCosts(undefined, session);
 }
-//@ chunk-e6aww6q8.js:965418-966114 placement (2.1.88 match: resetCostState, 0.598)
+//@ chunk-5xgkngpb.js:978727-979423 placement (2.1.88 match: resetCostState, 0.598)
 /**
  * 生成要保存的 cost-state 记录（当前会话的费用、时长、token、行数等）；账本不属于本会话时不生成。
  */
@@ -166,7 +166,7 @@ function resetCostState() {
     hasUnknownModelCost: hasUnknownModelCost(),
   };
 }
-//@ chunk-e6aww6q8.js:966114-966618 placement (2.1.88 match: setCostStateForRestore, 0.784)
+//@ chunk-5xgkngpb.js:979423-979927 placement (2.1.88 match: setCostStateForRestore, 0.784)
 /**
  * 从会话记录的 cost-state 恢复费用账本；没有记录时只限定账本范围。
  */
@@ -194,7 +194,7 @@ function setCostStateForRestore(restored) {
   });
   return true;
 }
-//@ chunk-e6aww6q8.js:966618-966675 placement
+//@ chunk-5xgkngpb.js:979927-979984 placement
 /**
  * 函数 flushAndSaveCosts（记录成本状态并写项目配置）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
@@ -203,21 +203,21 @@ function flushAndSaveCosts(fpsMetrics, options) {
   if (resetState) recordCostStateToTranscript(resetState, options);
   saveCurrentProjectConfig(saveCurrentSessionCosts(fpsMetrics), options);
 }
-//@ chunk-e6aww6q8.js:966675-966718 placement
+//@ chunk-5xgkngpb.js:979984-980027 placement
 /**
  * 函数 saveCostsAsync（异步保存会话成本）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
 async function saveCostsAsync(fpsMetrics, storageV5) {
   await saveCurrentProjectConfig(saveCurrentSessionCosts(fpsMetrics), storageV5);
 }
-//@ chunk-e6aww6q8.js:966718-966746 placement
+//@ chunk-5xgkngpb.js:980027-980055 placement
 /**
  * 函数 saveCostsOnExit（退出时同步保存）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
 function saveCostsOnExit(fpsMetrics) {
   saveCurrentProjectConfigSyncForExit(saveCurrentSessionCosts(fpsMetrics));
 }
-//@ chunk-e6aww6q8.js:966746-967530 fingerprint (2.1.88 match: saveCurrentSessionCosts, 0.912)
+//@ chunk-5xgkngpb.js:980055-980839 fingerprint (2.1.88 match: saveCurrentSessionCosts, 0.912)
 /**
  * 生成保存会话成本的更新函数：总成本、API/工具/墙钟时长、增删行数、各类 token、web search 次数、FPS、各模型用量、会话 id。
  */
@@ -256,7 +256,7 @@ function saveCurrentSessionCosts(fpsMetrics) {
     ...sessionCost,
   });
 }
-//@ chunk-e6aww6q8.js:967530-968243 layout
+//@ chunk-5xgkngpb.js:980839-981552 layout
 /**
  * "Usage by model:" 多行文本（按规范化模型名合并）。
  */
@@ -299,7 +299,7 @@ function formatModelUsageSummary() {
   }
   return header;
 }
-//@ chunk-e6aww6q8.js:968243-968416 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
+//@ chunk-5xgkngpb.js:981552-981725 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 模型名包含 fable/opus/sonnet/haiku 时返回族名，否则原样。
  */
@@ -310,7 +310,7 @@ function getModelFamilyOrSelf(canonicalName) {
   if (canonicalName.includes("haiku")) return "haiku";
   return canonicalName;
 }
-//@ chunk-e6aww6q8.js:968416-968900 layout
+//@ chunk-5xgkngpb.js:981725-982214 layout
 /**
  * /cost 的分解行：各模型族成本占比与缓存命中率。
  */
@@ -339,7 +339,7 @@ function formatCostBreakdown() {
   if (totalTokens > 0) lines.push(`cache hit: ${Math.round((cacheReadTokens / totalTokens) * 100)}%`);
   return lines.length > 0 ? `breakdown \xB7 ${lines.join(" \xB7 ")}` : null;
 }
-//@ chunk-e6aww6q8.js:968900-969274 fingerprint (2.1.88 match: formatTotalCost, 1)
+//@ chunk-5xgkngpb.js:982214-982588 fingerprint (2.1.88 match: formatTotalCost, 1)
 /**
  * /cost 与退出时的汇总：总成本（未知模型/组织计价提示）、API 与墙钟时长、代码增删行、按模型用量、提示词缓存状态。
  */
@@ -362,7 +362,7 @@ ${cacheStatus}`
       : ""
   }`);
 }
-//@ chunk-e6aww6q8.js:969274-970240 layout
+//@ chunk-5xgkngpb.js:982588-983554 layout
 /**
  * "Prompt cache (main):" 行：请求数、缓存命中率、miss 次数与原因、预期重建、warm/cold 与 TTL。
  */
@@ -396,7 +396,7 @@ function formatPromptCacheStatus(now = Date.now()) {
     );
   return `Prompt cache (main):   ${lines.join(" \xB7 ")}`;
 }
-//@ chunk-e6aww6q8.js:970240-970635 layout
+//@ chunk-5xgkngpb.js:983554-983949 layout
 /**
  * miss 原因描述（工具增减、system 字符变化等）。
  */
@@ -419,7 +419,7 @@ function formatCacheMissCauses(lastMissAttribution) {
     })
     .join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:970635-971479 fingerprint (2.1.88 match: addToTotalModelUsage, 0.697)
+//@ chunk-5xgkngpb.js:983949-984793 fingerprint (2.1.88 match: addToTotalModelUsage, 0.697)
 /**
  * 把一次响应的 usage 与成本累加到某模型的用量记录（含 thinking、5m/1h 缓存写入、web search、上下文窗口、最大输出、计价依据）。
  */
@@ -454,7 +454,7 @@ function addToTotalModelUsage(previousUsage, costUSD, usage, model) {
   modelUsage.costBasis = getCostBasis(model, usage);
   return modelUsage;
 }
-//@ chunk-e6aww6q8.js:971479-972881 fingerprint (2.1.88 match: addToTotalSessionCost, 0.752)
+//@ chunk-5xgkngpb.js:984793-986198 fingerprint (2.1.88 match: addToTotalSessionCost, 0.753)
 /**
  * 每次 API 响应后累加会话成本（旧版 addToTotalSessionCost）：更新按模型用量、总成本、token 统计、OTel 成本/token 计数器（带 model/speed/query_source/effort/归因属性），并对 advisor 子调用单独计价、记 tengu_advisor_tool_token_usage 后递归累加。返回含 advisor 的总成本。
  */
@@ -555,18 +555,18 @@ function addToTotalSessionCost(
   return totalCost;
 }
 export {
-  setCostStateForRestore,
-  getSpentTokens,
+  addToTotalSessionCost,
   hasReachedBudget,
-  getSessionCostUSD,
-  flushAndSaveCosts,
   resetCostState,
+  setCostStateForRestore,
+  getSessionCostUSD,
+  getSessionUsageExcludingRestored,
+  round,
+  flushAndSaveCosts,
   saveCostsAsync,
   formatTotalCost,
   saveCostsOnExit,
-  addToTotalSessionCost,
-  round,
-  formatCostBreakdown,
-  getSessionUsageExcludingRestored,
+  getSpentTokens,
   maxBudgetReachedMessage,
+  formatCostBreakdown,
 };

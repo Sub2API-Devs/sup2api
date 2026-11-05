@@ -3,9 +3,9 @@
  *
  * 并入已有模块：用户停止任务（找不到时标记 stoppedByUser）；停止全部运行中的后台任务（可按条件筛选）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/stopTask.ts
- * pieces: chunk-kxyd0g16.js (16)
+ * pieces: chunk-fmnbrxwy.js (16)
  * attribution: placement 7, layout 7, fingerprint 2
  */
 import { isWaitingOnChildren } from "./LocalAgentTask/keepalive.js";
@@ -55,7 +55,7 @@ import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js
 import { isLocalAgent } from "../state/teammateViewHelpers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:20267-20423 placement (2.1.88 match: getSelectableBackgroundTasks, 0.759)
+//@ chunk-fmnbrxwy.js:34188-34344 placement (2.1.88 match: getSelectableBackgroundTasks, 0.758)
 function getSelectableBackgroundTasks(matchesName, taskRegistry, getAppState) {
   let agentNameRegistry = getAppState?.().agentNameRegistry;
   if (!agentNameRegistry) return;
@@ -66,7 +66,7 @@ function getSelectableBackgroundTasks(matchesName, taskRegistry, getAppState) {
   }
   return;
 }
-//@ chunk-kxyd0g16.js:20423-20808 layout
+//@ chunk-fmnbrxwy.js:34344-34729 layout
 /**
  * 生成正在运行的后台子代理列表说明（排除当前、主会话、观察者与已注册命名的代理），附在停止任务结果后。
  */
@@ -86,7 +86,7 @@ function describeRunningBackgroundAgents(taskRegistry, getAppState, excludeTaskI
     .map((task) => (task.description ? `${task.id} (${printableName(task.description)})` : task.id));
   return mapped.length > 0 ? `. Running background agents: ${mapped.join(", ")}` : "";
 }
-//@ chunk-kxyd0g16.js:20808-20890 layout
+//@ chunk-fmnbrxwy.js:34729-34811 layout
 /**
  * 代理是否被某个已注册的级联停止豁免规则命中（全局 cascadeStopExemptions）。
  */
@@ -95,7 +95,7 @@ function isCascadeStopExempt(agentId) {
     if (cascadeStopExemption(agentId)) return true;
   return false;
 }
-//@ chunk-kxyd0g16.js:20890-21033 layout
+//@ chunk-fmnbrxwy.js:34811-34954 layout
 /**
  * 子代理是否因豁免而在级联停止中被放过：自身被豁免，且其祖先链（排除自己）中有被豁免的代理。
  */
@@ -112,7 +112,7 @@ function isSparedFromCascadeStop(task, stoppedOwnerId, allTasks) {
     )
   );
 }
-//@ chunk-kxyd0g16.js:21033-21165 layout
+//@ chunk-fmnbrxwy.js:34954-35086 layout
 /**
  * 有子代理被放过时发出 cascadeSpared 事件。
  */
@@ -125,12 +125,12 @@ function emitCascadeSpared(stoppedAgentId, sparedAgentIds, killedBy, taskRegistr
     taskRegistry,
   });
 }
-//@ chunk-kxyd0g16.js:21165-21323 fingerprint (2.1.88 match: StopTaskError, 0.446)
+//@ chunk-fmnbrxwy.js:35086-35244 fingerprint (2.1.88 match: StopTaskError, 0.446)
 /**
  * TaskStop 拒绝错误，code 为 not_found / ambiguous / not_running / not_owner / unsupported_type，带任务当前状态。
  */
 let StopTaskError; // deferred: uses WireSafeControlError (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:21165", () => {
+deferInit("chunk-fmnbrxwy.js:35086", () => {
   StopTaskError = class StopTaskError extends WireSafeControlError {
     code;
     taskStatus;
@@ -142,7 +142,7 @@ deferInit("chunk-kxyd0g16.js:21165", () => {
     }
   };
 });
-//@ chunk-kxyd0g16.js:21323-21515 layout (2.1.88 match: killAllRunningAgentTasks, 0.849)
+//@ chunk-fmnbrxwy.js:35244-35436 layout (2.1.88 match: killAllRunningAgentTasks, 0.849)
 /**
  * 列出代理名字注册表里仍在运行（或有存活工作）的本地代理名字。
  */
@@ -157,7 +157,7 @@ function getRunningAgentNames(taskRegistry, getAppState) {
   }
   return names;
 }
-//@ chunk-kxyd0g16.js:21515-21814 layout
+//@ chunk-fmnbrxwy.js:35436-35735 layout
 /**
  * 生成"找不到任务"的错误消息：可能的拼写建议、正在运行的队友与命名代理、后台代理列表。
  */
@@ -172,13 +172,13 @@ function formatTaskNotFoundMessage(taskId, taskRegistry, getAppState, suggestion
     message += `. Running named agents: ${runningAgentNames.map((runningAgentName) => singleLineText(runningAgentName)).join(", ")}`;
   return message + describeRunningBackgroundAgents(taskRegistry, getAppState, callerAgentId);
 }
-//@ chunk-kxyd0g16.js:21814-21925 layout
+//@ chunk-fmnbrxwy.js:35735-35846 layout
 /**
  * 停止 MCP 任务时附加给模型的说明：不会再有结果，服务器可能已经做了部分工作。
  */
 var MCP_TASK_STOPPED_NOTE =
   "No result will follow. The MCP server may already have done some of the work, or may still finish it.";
-//@ chunk-kxyd0g16.js:21925-25016 fingerprint (2.1.88 match: stopTask, 0.445)
+//@ chunk-fmnbrxwy.js:35846-38937 fingerprint (2.1.88 match: stopTask, 0.437)
 /**
  * 停止任务：先按 ID 查，查不到时按名字/前缀模糊解析（ambiguous/suggestion）；观察者代理不能停自己、非属主不能停；对"已结束但循环未退出"的 workflow/代理重新发中止并杀进程组；
  * 否则调用任务实现的 kill，并对 local_agent 级联停止其子代理（豁免的除外）；shell 任务补发 stopped 通知、通知属主代理或 SDK 来源。返回 {taskId, taskType, command, note?}。
@@ -367,7 +367,7 @@ async function stopTask(taskId, context) {
     command,
   };
 }
-//@ chunk-kxyd0g16.js:25016-25454 placement
+//@ chunk-fmnbrxwy.js:38937-39375 placement
 /**
  * 用户停止任务（找不到时标记 stoppedByUser）。
  */
@@ -411,7 +411,7 @@ async function stopTaskByUser(taskId, context) {
     throw error;
   }
 }
-//@ chunk-kxyd0g16.js:25454-25867 placement
+//@ chunk-fmnbrxwy.js:39375-39788 placement
 /**
  * 停止全部运行中的后台任务（可按条件筛选）。
  */
@@ -440,7 +440,7 @@ function stopAllRunningTasks(context) {
       });
   }
 }
-//@ chunk-kxyd0g16.js:25867-26025 placement
+//@ chunk-fmnbrxwy.js:39788-39946 placement
 /**
  * 停止所有正在运行的观察者代理任务。
  */
@@ -449,7 +449,7 @@ function stopObserverAgents(context) {
     if (isObserverAgentTask(task) && task.status === "running")
       lookupTaskForStop(task.type)?.kill(task.id, context.taskRegistry, context.setAppState, "system");
 }
-//@ chunk-kxyd0g16.js:26025-26308 placement
+//@ chunk-fmnbrxwy.js:39946-40229 placement
 /**
  * 标记任务被用户停止并累计次数。
  */
@@ -475,7 +475,7 @@ function markStoppedByUser(taskId, taskRegistry, storageV5) {
     markAgentStoppedByUser(taskId, agentType, storageV5);
   }
 }
-//@ chunk-kxyd0g16.js:26308-26406 placement
+//@ chunk-fmnbrxwy.js:40229-40327 placement
 function isSettledAgentAwaitingLoop(task, taskId) {
   return (
     isTerminalTaskStatus(task.status) &&
@@ -483,7 +483,7 @@ function isSettledAgentAwaitingLoop(task, taskId) {
     !isTaskLoopSettled(taskId)
   );
 }
-//@ chunk-kxyd0g16.js:26406-26589 placement
+//@ chunk-fmnbrxwy.js:40327-40510 placement
 async function markAgentStoppedByUser(agentId, agentType, storageV5) {
   await landAgentStop(
     identityAgentId2(agentId),
@@ -506,14 +506,14 @@ async function markAgentStoppedByUser(agentId, agentType, storageV5) {
   );
 }
 export {
+  stopObserverAgents,
+  stopAllRunningTasks,
+  stopTaskByUser,
   isSparedFromCascadeStop,
   isCascadeStopExempt,
   markStoppedByUser,
   emitCascadeSpared,
   stopTask,
-  stopTaskByUser,
-  stopObserverAgents,
-  stopAllRunningTasks,
   getSelectableBackgroundTasks,
   formatTaskNotFoundMessage,
   isSettledAgentAwaitingLoop,

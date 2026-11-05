@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。SearchMcpRegistry 工具名与提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fppkdgy4.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sk4fbtc8.js (1)
  * attribution: placement 1
  */
-//@ chunk-fppkdgy4.js:191-1675 placement
+//@ chunk-sk4fbtc8.js:191-1675 placement
 var SEARCH_MCP_REGISTRY_TOOL_NAME = "SearchMcpRegistry";
 var DESCRIPTION =
   "Search the MCP connector registry by keyword to discover connectors that might help complete the task.";

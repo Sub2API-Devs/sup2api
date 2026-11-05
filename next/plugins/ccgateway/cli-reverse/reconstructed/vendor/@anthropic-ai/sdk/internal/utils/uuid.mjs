@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/internal/utils/uuid.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-hwmsct5x.js:27525-27813 esm-fingerprint
+//@ chunk-vn3g7zt8.js:27896-28184 esm-fingerprint
 var uuid4 = function () {
   let { crypto: cryptoModule } = globalThis;
   if (cryptoModule?.randomUUID) {

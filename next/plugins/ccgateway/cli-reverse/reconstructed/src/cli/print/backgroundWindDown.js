@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行收尾时的后台任务终止、欠发任务通知、预算超限代理停止与附件上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (45)
  * attribution: placement 45
  */
 import { join } from "path";
@@ -19,11 +19,11 @@ import {
 } from "./followUpPreempt.js";
 import {
   isCompactBoundaryOrSummary,
+  SYNTHETIC_MODEL,
   isToolResultMessage,
   isContextAppendMessage,
   isInterruptionOnlyMessage,
 } from "../../utils/messages.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { isNonPromptUserRow } from "../../utils/transcript/deserialize.js";
 import { logError } from "../../utils/log.js";
 import { env } from "../../utils/env.js";
@@ -41,7 +41,7 @@ import {
   getTeardownUnwindRequested,
 } from "../../bootstrap/state.js";
 import { hashSessionAddress } from "../../utils/sessionUrl.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { createAutocompactStateReporter } from "../../services/compact/autoCompactStatus.js";
 import { rememberPdfPageLimits } from "../../tools/FileReadTool/FileReadTool.js";
 import { initializeGrowthBook } from "../../services/analytics/growthbook.js";
@@ -72,7 +72,7 @@ import { killTask } from "../../tasks/LocalShellTask/killShellTasks.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { lookupTaskForStop } from "../../utils/swarm/teammateAddressLookup.js";
 
-//@ chunk-tyg7f3ek.js:95577-96479 placement
+//@ chunk-0yw3taqg.js:123047-123949 placement
 /**
  * 回看转录，判断被折叠进上一轮的后续排队消息是否已被模型读到/回复，用于结果遥测。
  */
@@ -82,8 +82,8 @@ function classifyFoldedFollowUps(messages, skip, hasOpener) {
     let index = messages.findIndex((message) => queuedCommandSourceUuid(message) !== undefined);
     let latestRow = FOLD_END_NO_MORE_ROWS;
     let nextRow = FOLD_END_NO_MORE_ROWS;
-    for (let j = messages.length - 1; index !== -1 && j >= index; j--) {
-      let message = messages[j];
+    for (let idx = messages.length - 1; index !== -1 && idx >= index; idx--) {
+      let message = messages[idx];
       if (skip.has(message)) continue;
       if ("isSidechain" in message && message.isSidechain === true) continue;
       if (isCompactBoundaryOrSummary(message)) {
@@ -128,7 +128,7 @@ function classifyFoldedFollowUps(messages, skip, hasOpener) {
   }
   return states;
 }
-//@ chunk-tyg7f3ek.js:96479-96628 placement
+//@ chunk-0yw3taqg.js:123949-124098 placement
 function queuedCommandSourceUuid(message) {
   return message.type === "attachment" &&
     message.attachment.type === "queued_command" &&
@@ -136,7 +136,7 @@ function queuedCommandSourceUuid(message) {
     ? message.attachment.source_uuid
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:96628-96709 placement
+//@ chunk-0yw3taqg.js:124098-124179 placement
 function withModelEndedTurnDefault(state) {
   return state.modelEndedTheTurn === undefined
     ? {
@@ -145,7 +145,7 @@ function withModelEndedTurnDefault(state) {
       }
     : state;
 }
-//@ chunk-tyg7f3ek.js:96709-97015 placement
+//@ chunk-0yw3taqg.js:124179-124485 placement
 function foldedFollowUpState(state, hasOpener) {
   if (state.end === "stopped")
     return {
@@ -173,7 +173,7 @@ function foldedFollowUpState(state, hasOpener) {
         replySeen: true,
       };
 }
-//@ chunk-tyg7f3ek.js:97015-97259 placement
+//@ chunk-0yw3taqg.js:124485-124729 placement
 function foldedFollowUpTelemetry(folded, { cardCanBeHeld, openerKnown }) {
   if (folded === undefined) return {};
   if (folded.state !== "open")
@@ -187,9 +187,9 @@ function foldedFollowUpTelemetry(folded, { cardCanBeHeld, openerKnown }) {
     folded_turn_has_owner: cardCanBeHeld && openerKnown,
   };
 }
-//@ chunk-tyg7f3ek.js:97327-97339 placement
+//@ chunk-0yw3taqg.js:124797-124809 placement
 var MAX_USER_DATA_ATTACHMENT_FILES = 1000;
-//@ chunk-tyg7f3ek.js:97339-98319 placement
+//@ chunk-0yw3taqg.js:124809-125788 placement
 async function reportUserDataAttachments(sdkUrl) {
   let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
   if (
@@ -249,18 +249,18 @@ async function reportUserDataAttachments(sdkUrl) {
   logFeatureOk("bridge_attachment_user_data_root", result);
   if (result.files_found > 0) logFeatureOk("bridge_attachment_user_data_files_found");
 }
-//@ chunk-tyg7f3ek.js:98319-98422 placement
+//@ chunk-0yw3taqg.js:125788-125891 placement
 async function countUserDataFiles(dir) {
   try {
     return Math.min(
-      count(await readdir(dir), (name) => !name.startsWith(".")),
+      countWhere(await readdir(dir), (name) => !name.startsWith(".")),
       MAX_USER_DATA_ATTACHMENT_FILES,
     );
   } catch {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:98459-98992 placement
+//@ chunk-0yw3taqg.js:125928-126461 placement
 /**
  * 安装 autocompact 状态监听：变化时把 enabled/阈值等推送给 SDK 宿主并更新会话状态。
  */
@@ -308,19 +308,19 @@ function installAutocompactStateReporter({ session, sessionState, enqueue, readI
     if (ready) notify();
   };
 }
-//@ chunk-tyg7f3ek.js:98992-99014 placement
+//@ chunk-0yw3taqg.js:126461-126483 placement
 function requestTeardownUnwind() {
   setTeardownUnwindRequested(true);
 }
-//@ chunk-tyg7f3ek.js:99014-99041 placement
+//@ chunk-0yw3taqg.js:126483-126510 placement
 function isTeardownUnwindRequested() {
   return getTeardownUnwindRequested();
 }
-//@ chunk-tyg7f3ek.js:99041-99063 placement
+//@ chunk-0yw3taqg.js:126510-126532 placement
 function clearTeardownUnwind() {
   setTeardownUnwindRequested(false);
 }
-//@ chunk-tyg7f3ek.js:99063-99180 placement
+//@ chunk-0yw3taqg.js:126532-126649 placement
 function hasBudgetBoundBackgroundAgents(maxBudgetUsd, tasks) {
   if (!hasReachedBudget(maxBudgetUsd)) return false;
   return tasks.some(
@@ -332,7 +332,7 @@ function hasBudgetBoundBackgroundAgents(maxBudgetUsd, tasks) {
       !task.stoppedByUser,
   );
 }
-//@ chunk-tyg7f3ek.js:99180-99672 placement
+//@ chunk-0yw3taqg.js:126649-127141 placement
 /**
  * --max-budget-usd 达到时停止仍在运行的后台 agent，返回是否停止了任何任务。
  */
@@ -361,14 +361,14 @@ function stopAgentsOverBudget({
   });
   return true;
 }
-//@ chunk-tyg7f3ek.js:99672-99806 placement
+//@ chunk-0yw3taqg.js:127141-127275 placement
 function isUnnotifiedTerminalTask(task) {
   if (!isWaitableAgentOrWorkflow(task)) return false;
   if ("isBackgrounded" in task && task.isBackgrounded === false) return false;
   if (!isTerminalTaskStatus(task.status)) return false;
   return !task.notified;
 }
-//@ chunk-tyg7f3ek.js:99806-100304 placement
+//@ chunk-0yw3taqg.js:127275-127773 placement
 /**
  * 找出已结束但完成通知尚未入队的后台任务，带超时标记，避免无限等待。
  */
@@ -402,15 +402,15 @@ function collectOwedTaskNotifications({ tasks, waits, now }) {
   for (let key of waits.keys()) if (!liveIds.has(key)) waits.delete(key);
   return owed;
 }
-//@ chunk-tyg7f3ek.js:100304-100368 placement
+//@ chunk-0yw3taqg.js:127773-127837 placement
 function reportsRunningBackgroundTasks() {
   return env.CLAUDE_CODE_BG_TASKS_REPORT_RUNNING !== false;
 }
-//@ chunk-tyg7f3ek.js:100368-100432 placement
+//@ chunk-0yw3taqg.js:127837-127901 placement
 function reportsRunningBackgroundTasksExplicit() {
   return env.CLAUDE_CODE_BG_TASKS_REPORT_RUNNING === true;
 }
-//@ chunk-tyg7f3ek.js:100432-100588 placement
+//@ chunk-0yw3taqg.js:127901-128057 placement
 function isAwaitedBackgroundTask(task) {
   return (
     isWaitableBackgroundTask(task) &&
@@ -419,7 +419,7 @@ function isAwaitedBackgroundTask(task) {
     !((task.type === "monitor_ws" || task.type === "monitor_mcp") && task.timeoutId === undefined)
   );
 }
-//@ chunk-tyg7f3ek.js:100588-100711 placement (2.1.88 match: hasWorkingInProcessTeammates, 0.79)
+//@ chunk-0yw3taqg.js:128057-128180 placement (2.1.88 match: hasWorkingInProcessTeammates, 0.789)
 /**
  * 同进程 teammate 是否仍算"工作中"：运行中且非空闲，或还欠 leader 一条空闲通知。
  */
@@ -430,29 +430,29 @@ function isTeammateStillWorking(task) {
     (!task.isIdle || task.idleNotificationOwedToLead === true)
   );
 }
-//@ chunk-tyg7f3ek.js:100711-100747 placement
+//@ chunk-0yw3taqg.js:128180-128216 placement
 function isAmbientBackgroundTask(task) {
   return isWaitableBackgroundTask(task) && !isAwaitedBackgroundTask(task);
 }
-//@ chunk-tyg7f3ek.js:100747-100799 placement
+//@ chunk-0yw3taqg.js:128216-128268 placement
 function hasAwaitedRunningTaskIn(tasks) {
   return Object.values(tasks ?? {}).some(isAwaitedRunningTask);
 }
-//@ chunk-tyg7f3ek.js:100799-100856 placement (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-0yw3taqg.js:128268-128325 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 运行中且属于需要等待完成的任务。
  */
 function isAwaitedRunningTask(task) {
   return task.status === "running" && waitForTaskCompletion(task) && isWaitableAgentOrWorkflow(task);
 }
-//@ chunk-tyg7f3ek.js:100856-100938 placement (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-0yw3taqg.js:128325-128407 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 任务表里是否有运行中且需要等待完成的任务。
  */
 function hasAwaitedRunningTasks(tasks) {
   return Object.values(tasks ?? {}).some((task) => task.status === "running" && waitForTaskCompletion(task));
 }
-//@ chunk-tyg7f3ek.js:100938-101031 placement
+//@ chunk-0yw3taqg.js:128407-128500 placement
 function isUnownedRunningShell(task) {
   return (
     task.status === "running" &&
@@ -461,7 +461,7 @@ function isUnownedRunningShell(task) {
     task.agentId === undefined
   );
 }
-//@ chunk-tyg7f3ek.js:101031-101111 placement
+//@ chunk-0yw3taqg.js:128500-128580 placement
 function hasInputClosedWithRunningTasks({ inputClosed, runningTasks }) {
   return (
     inputClosed &&
@@ -470,7 +470,7 @@ function hasInputClosedWithRunningTasks({ inputClosed, runningTasks }) {
     )
   );
 }
-//@ chunk-tyg7f3ek.js:101111-101236 placement
+//@ chunk-0yw3taqg.js:128580-128705 placement
 function shouldReleaseHeldResults({
   aborted,
   shuttingDown,
@@ -480,7 +480,7 @@ function shouldReleaseHeldResults({
 }) {
   return aborted && !shuttingDown && !abortedForShutdown && !teardownRequested && heldResultCount > 0;
 }
-//@ chunk-tyg7f3ek.js:101236-101398 placement
+//@ chunk-0yw3taqg.js:128705-128867 placement
 function shouldStayRunningForInput({
   inputClosed,
   currentState,
@@ -492,7 +492,7 @@ function shouldStayRunningForInput({
     return false;
   return !inputClosed && currentState === "running";
 }
-//@ chunk-tyg7f3ek.js:101398-101695 placement
+//@ chunk-0yw3taqg.js:128867-129164 placement
 function summarizeTasksForTelemetry(tasks) {
   return tasks.map((task) => ({
     type: task.type,
@@ -504,14 +504,14 @@ function summarizeTasksForTelemetry(tasks) {
     holdCapped: "holdCapped" in task ? task.holdCapped : undefined,
   }));
 }
-//@ chunk-tyg7f3ek.js:101695-101801 placement
+//@ chunk-0yw3taqg.js:129164-129270 placement
 function mayEndWithBackgroundWork({ hasActiveTeammates, hasRunningBgTasks, hasPendingNotification }) {
   return !(
     (hasActiveTeammates || hasRunningBgTasks || hasPendingNotification) &&
     reportsRunningBackgroundTasks()
   );
 }
-//@ chunk-tyg7f3ek.js:101801-102007 placement
+//@ chunk-0yw3taqg.js:129270-129476 placement
 function isWaitableBackgroundTask(task) {
   return (
     waitForTaskCompletion(task) &&
@@ -523,7 +523,7 @@ function isWaitableBackgroundTask(task) {
     !(task.type === "monitor_ws" && task.ambient)
   );
 }
-//@ chunk-tyg7f3ek.js:102007-102242 placement
+//@ chunk-0yw3taqg.js:129476-129711 placement
 function isShellHeldByPlugin(command) {
   for (let [predicate, state] of getTaskRunState().heldShellReleases)
     try {
@@ -543,9 +543,9 @@ function isShellHeldByPlugin(command) {
     }
   return false;
 }
-//@ chunk-tyg7f3ek.js:102242-102254 placement
+//@ chunk-0yw3taqg.js:129711-129723 placement
 var WIND_DOWN_GRACE_MS = 5000;
-//@ chunk-tyg7f3ek.js:102254-102745 placement
+//@ chunk-0yw3taqg.js:129723-130214 placement
 /**
  * 综合输入是否关闭、主线程排队、teammate、通知、monitor/shell 持有、等待上限等，决定 print 模式是继续等后台任务还是收尾。
  */
@@ -599,9 +599,9 @@ function decideBackgroundWait({
     shouldSweep: !swept,
   };
 }
-//@ chunk-tyg7f3ek.js:102745-102755 placement
+//@ chunk-0yw3taqg.js:130214-130224 placement
 var SHELL_DEADLINE_GRACE_MS = WIND_DOWN_GRACE_MS;
-//@ chunk-tyg7f3ek.js:102755-102847 placement
+//@ chunk-0yw3taqg.js:130224-130316 placement
 function hasShellBeforeDeadline(tasks, deadline) {
   return tasks.some(
     (task) =>
@@ -611,9 +611,9 @@ function hasShellBeforeDeadline(tasks, deadline) {
       task.deadlineAt + SHELL_DEADLINE_GRACE_MS > deadline,
   );
 }
-//@ chunk-tyg7f3ek.js:102847-102861 placement
+//@ chunk-0yw3taqg.js:130316-130330 placement
 var LOOP_WAKEUP_HOLD_MS = 120000;
-//@ chunk-tyg7f3ek.js:102861-103006 placement
+//@ chunk-0yw3taqg.js:130330-130475 placement
 function hasPendingLoopWakeup(sessionCronTasks, { now, parkedSince }) {
   let baseline = parkedSince ?? now;
   return sessionCronTasks.some(
@@ -622,7 +622,7 @@ function hasPendingLoopWakeup(sessionCronTasks, { now, parkedSince }) {
       (task.scheduledFor === undefined || now <= Math.max(task.scheduledFor, baseline) + LOOP_WAKEUP_HOLD_MS),
   );
 }
-//@ chunk-tyg7f3ek.js:103006-103681 placement
+//@ chunk-0yw3taqg.js:130475-131150 placement
 /**
  * print 收尾：在宽限期后杀掉后台 shell、观察者 agent 等仍在运行的任务。
  */
@@ -660,7 +660,7 @@ function killBackgroundTasksForWindDown(tasks, taskFramework, setState, featureV
     }
   if (tasks.length > 0) logFeatureOk("print_wind_down");
 }
-//@ chunk-tyg7f3ek.js:103681-103815 placement (2.1.88 match: getSelectableBackgroundTasks, 0.799)
+//@ chunk-0yw3taqg.js:131150-131284 placement (2.1.88 match: getSelectableBackgroundTasks, 0.798)
 async function getSelectableBackgroundTasks(task, taskFramework, setState) {
   try {
     if (task.type === "local_agent") {
@@ -672,11 +672,11 @@ async function getSelectableBackgroundTasks(task, taskFramework, setState) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:103815-103876 placement
+//@ chunk-0yw3taqg.js:131284-131345 placement
 function shouldKillOnStreamClose({ shuttingDown, remoteTransport }) {
   return !shuttingDown && !remoteTransport;
 }
-//@ chunk-tyg7f3ek.js:103876-104220 placement
+//@ chunk-0yw3taqg.js:131345-131689 placement
 function killOrphanedShells(taskFramework) {
   for (let task of Object.values(taskFramework.all())) {
     if (!isLocalShellTask(task) || task.status !== "running") continue;
@@ -696,13 +696,13 @@ function killOrphanedShells(taskFramework) {
     }
   }
 }
-//@ chunk-tyg7f3ek.js:104220-104290 placement
+//@ chunk-0yw3taqg.js:131689-131759 placement
 function isKillableBackgroundTask(task) {
   return isBackgroundedShellTask(task) && !(task.type === "local_bash" && isShellHeldByPlugin(task.command));
 }
-//@ chunk-tyg7f3ek.js:104290-104303 placement
+//@ chunk-0yw3taqg.js:131759-131772 placement
 var WIND_DOWN_LOG_INTERVAL_MS = 30000;
-//@ chunk-tyg7f3ek.js:104303-104419 placement
+//@ chunk-0yw3taqg.js:131772-131888 placement
 function makeThrottledLogger(keepAliveSender, isEnabled, now = Date.now) {
   let lastSentAt = now();
   return () => {

@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/cbor/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_schema } from "../schema/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 import { base64Module } from "../../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:12632-26640 cjs-fingerprint
+//@ chunk-3p78mpxm.js:12632-26640 cjs-fingerprint
 var require_cbor = __commonJS(function (cjsExports) {
   var serde = require_serde();
   var utilUtf8 = require_util_utf8();

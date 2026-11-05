@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：plugin eval 的路径围栏：解析插件、用例、add_dirs、版本控制目录与系统敏感目录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (29)
  * attribution: placement 29
  */
 import { default as path_3 } from "path";
 import { realpath, lstat, readdir, readFile } from "fs/promises";
-import os_2 from "os";
+import os from "os";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
@@ -25,11 +25,11 @@ import {
 } from "./evalDir.js";
 import { nfcKeyIfEnabled } from "./runTrace.js";
 import { getFileKind } from "../../utils/fileKind.js";
-import { uniq } from "../../utils/collections.js";
-import { SUPPORTED_PLATFORMS, getPlatform } from "../../utils/platform.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { isCaseInsensitivePlatform, getPlatform } from "../../utils/platform.js";
 import { isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { isNetworkMountPath } from "../../utils/networkPaths.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { listSubdirectories, probePathDirectories } from "./credentialExclusion.js";
 import { openNoFollow_2 } from "../../utils/fsSafety/hardenedRead.js";
 import { RULE_META_CHARS_RE } from "./runToolRules.js";
@@ -38,14 +38,14 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 import { STRIPPED_GIT_ENV_SET } from "./childEnvironment.js";
 import { regExp } from "../../utils/git/gitSafeEnv.js";
 
-//@ chunk-qchp9vrd.js:150731-150924 placement
+//@ chunk-af1hzzme.js:152097-152290 placement
 function describeFenceProbeFailure(label, error) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `${label}: a plugin, case or version-control path could not be examined (${getErrnoCode(error) ?? "unexpected error"}) \u2014 make it readable or remove it`,
     "eval fence probe failed",
   );
 }
-//@ chunk-qchp9vrd.js:150924-164936 placement
+//@ chunk-af1hzzme.js:152290-166305 placement
 /**
  * 解析插件、用例与 add_dirs 的真实路径，生成本次运行允许/拒绝访问的路径集合（约 14 KB）。
  */
@@ -164,9 +164,9 @@ async function buildEvalFence(evalCase, addDirs) {
   let caseSuite = outermostSuite(caseRealPath, results);
   let pluginSuite = outermostSuite(evalCase.caseDir, pluginDirsUnderTest);
   let pluginSuiteReal = pluginSuite === undefined ? undefined : await resolveRealPath(pluginSuite);
-  let filtered = uniq([caseSuite, pluginSuiteReal].filter((path) => path !== undefined)).filter((path) =>
-    isSameOrWithin(path, caseRealPath),
-  );
+  let filtered = normalizeCaseForComparison_2(
+    [caseSuite, pluginSuiteReal].filter((path) => path !== undefined),
+  ).filter((path) => isSameOrWithin(path, caseRealPath));
   let dir = path_3.dirname(caseRealPath);
   let nearestEvalDir = () => {
     for (let dir = path_3.dirname(caseRealPath); dir !== path_3.dirname(dir); dir = path_3.dirname(dir))
@@ -219,9 +219,13 @@ async function buildEvalFence(evalCase, addDirs) {
     path === root || path.startsWith(root.endsWith(path_3.sep) ? root : root + path_3.sep);
   let findEvalDirAboveCase = () => {
     let resolved = path_3.resolve(evalCase.caseDir);
-    for (let idx = 0; idx < 64; idx++) {
+    for (let j = 0; j < 64; j++) {
       if (
-        pathEndsWith(resolved.split(path_3.sep), evalDirSegments, SUPPORTED_PLATFORMS() ? "folded" : "exact")
+        pathEndsWith(
+          resolved.split(path_3.sep),
+          evalDirSegments,
+          isCaseInsensitivePlatform() ? "folded" : "exact",
+        )
       )
         return resolved;
       let dir = path_3.dirname(resolved);
@@ -340,10 +344,7 @@ async function buildEvalFence(evalCase, addDirs) {
       let ruleKey = `tree:${path_3.normalize(variant)}`;
       if (seenRules.has(ruleKey)) continue;
       seenRules.add(ruleKey);
-      allowRules.push(
-        `${FILE_READ_TOOL_NAME}(${toRulePath(variant)})`,
-        `${FILE_READ_TOOL_NAME}(${toRulePath(variant)}/**)`,
-      );
+      allowRules.push(`${READ}(${toRulePath(variant)})`, `${READ}(${toRulePath(variant)}/**)`);
       allowPaths.push(variant);
     }
   };
@@ -357,7 +358,7 @@ async function buildEvalFence(evalCase, addDirs) {
       let ruleKey = `file:${path_3.normalize(variant)}`;
       if (seenRules.has(ruleKey)) continue;
       seenRules.add(ruleKey);
-      allowRules.push(`${FILE_READ_TOOL_NAME}(${toRulePath(variant)})`);
+      allowRules.push(`${READ}(${toRulePath(variant)})`);
       allowPaths.push(variant);
     }
   };
@@ -471,7 +472,8 @@ async function buildEvalFence(evalCase, addDirs) {
           let shouldScreen = (path) =>
             !isSameOrWithin(sandboxParent, path) ||
             filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, path));
-          for (let path of uniq([joined, realPath])) if (shouldScreen(path)) allowTree(path);
+          for (let path of normalizeCaseForComparison_2([joined, realPath]))
+            if (shouldScreen(path)) allowTree(path);
           if (realPath !== joined && !results.some((pluginReal) => isSameOrWithin(pluginReal, realPath)));
           else if (shouldScreen(realPath))
             await screenEvalTree(realPath).catch((error) => {
@@ -508,8 +510,8 @@ async function buildEvalFence(evalCase, addDirs) {
           }
           for (let fileName of mapped)
             allowRules.push(
-              `${FILE_READ_TOOL_NAME}(${toRulePath(joined)}/**/${fileName})`,
-              `${FILE_READ_TOOL_NAME}(${toRulePath(joined)}/**/${fileName}/**)`,
+              `${READ}(${toRulePath(joined)}/**/${fileName})`,
+              `${READ}(${toRulePath(joined)}/**/${fileName}/**)`,
             );
           for (let nestedPath of await listFenceFiles(joined)) allowTree(nestedPath);
           continue;
@@ -595,14 +597,14 @@ async function buildEvalFence(evalCase, addDirs) {
       }
     }
   };
-  for (let root of uniq([...results, sandboxParent, caseRealPath]))
+  for (let root of normalizeCaseForComparison_2([...results, sandboxParent, caseRealPath]))
     for (let vcsPath of await probeVcsMetadata(root, caseLabel, pluginRoots, (filePath) =>
       vcsFilesFound.add(filePath),
     ))
       allowNestedSuite(vcsPath);
   let scannedDirs = new Set();
   let screenedRoots = new Set();
-  for (let idx = 0; idx < 8; idx++) {
+  for (let j = 0; j < 8; j++) {
     let dirs = [...vcsFilesFound].filter((dir) => !scannedDirs.has(dir));
     let manifestCount = evalDirSuites.length;
     await scanManifestDirs(dirs);
@@ -687,7 +689,7 @@ async function buildEvalFence(evalCase, addDirs) {
     let joined = parts_2.slice(0, parts_2.length - parts.length).join(path_3.sep);
     if (joined !== sandboxParent && joined !== "") allowTree(joined);
   }
-  if (SUPPORTED_PLATFORMS()) {
+  if (isCaseInsensitivePlatform()) {
     let suffix = evalDirSegments;
     let joined = sandboxParent.split(path_3.sep).slice(0, -suffix.length).join(path_3.sep);
     let joined_2 = path_3.join(joined || path_3.sep, ...suffix);
@@ -742,20 +744,20 @@ async function buildEvalFence(evalCase, addDirs) {
     }
   }
   return {
-    readRoots: uniq(missingPaths.map((root) => path_3.normalize(root))),
-    readFiles: uniq(allowedPaths.map((file) => path_3.normalize(file))),
+    readRoots: normalizeCaseForComparison_2(missingPaths.map((root) => path_3.normalize(root))),
+    readFiles: normalizeCaseForComparison_2(allowedPaths.map((file) => path_3.normalize(file))),
     denies: allowRules,
-    denyPaths: uniq(allowPaths.map((denyPath) => path_3.normalize(denyPath))),
+    denyPaths: normalizeCaseForComparison_2(allowPaths.map((denyPath) => path_3.normalize(denyPath))),
   };
 }
-//@ chunk-qchp9vrd.js:164936-164962 placement
+//@ chunk-af1hzzme.js:166305-166331 placement
 /**
  * 记录的条目上限（4096）。
  */
 var MAX_FENCE_ENTRIES = 20000;
 var MAX_FENCE_MANIFEST_DEPTH = 3;
 var MAX_FENCE_RECORDS = 4096;
-//@ chunk-qchp9vrd.js:164962-168518 placement
+//@ chunk-af1hzzme.js:166331-169913 placement
 async function probeVcsMetadata(root, label = "plugin eval", knownRoots = [], onSpared) {
   let rethrowOrNull = (error) => {
     let errnoCode = getErrnoCode(error);
@@ -952,9 +954,9 @@ async function probeVcsMetadata(root, label = "plugin eval", knownRoots = [], on
     if (dir_2 === dir) break;
     dir = dir_2;
   }
-  return uniq(found);
+  return normalizeCaseForComparison_2(found);
 }
-//@ chunk-qchp9vrd.js:168518-169095 placement
+//@ chunk-af1hzzme.js:169913-170490 placement
 async function checkGitMetadataFile(filePath, maxBytes) {
   let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) {
@@ -982,20 +984,20 @@ async function checkGitMetadataFile(filePath, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-qchp9vrd.js:169095-169201 placement
+//@ chunk-af1hzzme.js:170490-170596 placement
 /**
  * 运行产物的文件名（aggregate-result.json、report.html）。
  */
 var VCS_DIR_NAMES = [".git", ".hg", ".svn", ".jj", ".sl", ".bzr", "_darcs", "CVS"];
 var RUN_ARTIFACT_FILENAMES = ["aggregate-result.json", "report.html"];
-//@ chunk-qchp9vrd.js:169201-169252 placement
+//@ chunk-af1hzzme.js:170596-170647 placement
 /**
  * 判断文件是否为运行产物。
  */
 function isRunArtifactFile(name) {
   return RUN_ARTIFACT_FILENAMES.includes(name.toLowerCase());
 }
-//@ chunk-qchp9vrd.js:169252-169534 placement
+//@ chunk-af1hzzme.js:170647-170929 placement
 async function looksLikeVcsTree(repoRoot) {
   let entries;
   try {
@@ -1018,7 +1020,7 @@ async function looksLikeVcsTree(repoRoot) {
   }
   return false;
 }
-//@ chunk-qchp9vrd.js:169534-169593 placement
+//@ chunk-af1hzzme.js:170929-170988 placement
 /**
  * 判断路径段是否可用（校验通过）。
  */
@@ -1030,7 +1032,7 @@ function isUsablePathSegment(segment) {
     return false;
   }
 }
-//@ chunk-qchp9vrd.js:169593-170327 placement
+//@ chunk-af1hzzme.js:170988-171722 placement
 function checkPathSegmentWhitespace(path, label) {
   for (let segment of path.split(/[\\/]/))
     if (segment !== segment.trim())
@@ -1053,10 +1055,10 @@ function checkPathSegmentWhitespace(path, label) {
     );
   }
 }
-//@ chunk-qchp9vrd.js:170327-170415 placement
+//@ chunk-af1hzzme.js:171722-171810 placement
 var UNIX_TEMP_DIRS = ["/tmp", "/var/tmp", "/dev/shm", "/run/shm"];
 var MACOS_PRIVATE_TEMP_DIRS = ["/private/tmp", "/private/var/tmp"];
-//@ chunk-qchp9vrd.js:170415-170515 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-af1hzzme.js:171810-171910 placement (2.1.88 match: getReservedShortcuts, 1)
 function getTempDirs() {
   switch (getPlatform()) {
     case "windows":
@@ -1067,7 +1069,7 @@ function getTempDirs() {
       return UNIX_TEMP_DIRS;
   }
 }
-//@ chunk-qchp9vrd.js:170515-172243 placement
+//@ chunk-af1hzzme.js:171910-173638 placement
 /**
  * 表示网络文件系统的类型名（drvfs、9p、cifs 等）。
  */
@@ -1134,7 +1136,7 @@ var CREDENTIAL_FILE_ENV_VARS = [
   "CLOUDSDK_AUTH_ACCESS_TOKEN_FILE",
   "CLOUDSDK_AUTH_AUTHORIZATION_TOKEN_FILE",
 ];
-var PROXY_ENV_VARS_EXTRA = uniq([
+var PROXY_ENV_VARS_EXTRA = normalizeCaseForComparison_2([
   "HTTPS_PROXY",
   "HTTP_PROXY",
   "ALL_PROXY",
@@ -1165,7 +1167,7 @@ var NETWORK_FS_NAMES = new Set([
   "vfat",
   "exfat",
 ]);
-//@ chunk-qchp9vrd.js:172243-172633 placement
+//@ chunk-af1hzzme.js:173638-174028 placement
 /**
  * 解析 /proc/mounts 文本，列出网络/远程文件系统、FUSE、WSL drvfs 与 UNC 来源的挂载点（解码八进制转义）。
  */
@@ -1191,9 +1193,9 @@ function parseNetworkMounts(mountTable) {
         ),
       );
   }
-  return uniq(mounts);
+  return normalizeCaseForComparison_2(mounts);
 }
-//@ chunk-qchp9vrd.js:172633-173070 placement
+//@ chunk-af1hzzme.js:174028-174465 placement
 async function detectWslWindowsMounts(mountsText) {
   let refuse = (reason) => {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1210,15 +1212,15 @@ async function detectWslWindowsMounts(mountsText) {
   if (networkMounts.length === 0) refuse("no Windows filesystem mount was recognized in the WSL mount table");
   return networkMounts;
 }
-//@ chunk-qchp9vrd.js:173070-173185 placement
+//@ chunk-af1hzzme.js:174465-174580 placement
 /**
  * 返回 XDG_CONFIG_HOME（须为绝对路径），否则 ~/.config。
  */
 function getXdgConfigHome() {
   let trimmed = process.env.XDG_CONFIG_HOME?.trim();
-  return trimmed && path_3.isAbsolute(trimmed) ? trimmed : path_3.join(os_2.homedir(), ".config");
+  return trimmed && path_3.isAbsolute(trimmed) ? trimmed : path_3.join(os.homedir(), ".config");
 }
-//@ chunk-qchp9vrd.js:173185-173597 placement
+//@ chunk-af1hzzme.js:174580-174992 placement
 /**
  * 配置目录类环境变量。
  */
@@ -1245,21 +1247,21 @@ var CONFIG_DIR_ENV_VARS = new Set([
   "CLAUDE_CODE_FEDERATION_CACHE_DIR",
   "CREDENTIALS_DIRECTORY",
 ]);
-//@ chunk-qchp9vrd.js:173597-173636 placement
+//@ chunk-af1hzzme.js:174992-175031 placement
 /**
  * 判断字符串是否含通配符。
  */
 function hasGlobChars(path) {
   return /[*?[\]]/.test(path);
 }
-//@ chunk-qchp9vrd.js:173636-173675 placement
+//@ chunk-af1hzzme.js:175031-175070 placement
 /**
  * 判断是否为文件系统根目录。
  */
 function isRootDir(path) {
   return path_3.dirname(path) === path;
 }
-//@ chunk-qchp9vrd.js:173675-173726 placement
+//@ chunk-af1hzzme.js:175070-175121 placement
 /**
  * 取父目录（已是根时原样）。
  */
@@ -1267,7 +1269,7 @@ function withDirname(path) {
   let path_2 = path_3.dirname(path);
   return isRootDir(path_2) ? path : path_2;
 }
-//@ chunk-qchp9vrd.js:173726-173843 placement
+//@ chunk-af1hzzme.js:175121-175238 placement
 /**
  * 在路径列表中补上其真实路径对应的目录（去重）。
  */
@@ -1276,16 +1278,16 @@ async function withPathDirectories(paths) {
     Promise.all(paths.map((path) => realpath(path).catch(() => path))),
     "a directory",
   );
-  return uniq([...paths, ...realPaths]);
+  return normalizeCaseForComparison_2([...paths, ...realPaths]);
 }
-//@ chunk-qchp9vrd.js:173843-173889 placement
+//@ chunk-af1hzzme.js:175238-175284 placement
 /**
  * 按平台转换沙箱规则路径。
  */
 function toSandboxPathForPlatform(path) {
   return getPlatform() === "windows" ? path : toSandboxRulePath(path);
 }
-//@ chunk-qchp9vrd.js:173889-174088 placement
+//@ chunk-af1hzzme.js:175284-175483 placement
 /**
  * 把文件路径转换为沙箱规则路径格式（Windows 盘符转 //c/...，其他前缀 /）。
  */
@@ -1298,7 +1300,7 @@ function toSandboxRulePath(path) {
   }
   return `/${slashed.startsWith("/") ? slashed : `/${slashed}`}`;
 }
-//@ chunk-qchp9vrd.js:179573-179930 placement
+//@ chunk-af1hzzme.js:180968-181325 placement
 /**
  * 解析用例引用的文件路径，要求经链接解析后仍位于用例目录或被测插件内，且是单链接普通文件，否则抛出。
  */
@@ -1318,7 +1320,7 @@ async function resolveCaseFileInsideSuite(evalCase, relativePath, fieldName) {
     );
   return resolved;
 }
-//@ chunk-qchp9vrd.js:179930-180037 placement
+//@ chunk-af1hzzme.js:181325-181432 placement
 /**
  * 获取评测用例目录与被测插件目录的真实路径。
  */
@@ -1327,14 +1329,14 @@ async function getSuiteRealRoots(evalCase) {
     [evalCase.caseDir, ...evalCase.pluginDirsUnderTest].map((dir) => realpath(dir).catch(() => dir)),
   );
 }
-//@ chunk-qchp9vrd.js:180037-180119 placement
+//@ chunk-af1hzzme.js:181432-181514 placement
 /**
  * 检查用例路径是否在根内。
  */
 async function checkCaseInsideRoot(evalCase, relativePath) {
   return checkCasePathInsideRoot(evalCase.caseDir, relativePath, `case "${evalCase.name}"`, "case directory");
 }
-//@ chunk-qchp9vrd.js:180119-180724 placement
+//@ chunk-af1hzzme.js:181514-182119 placement
 async function checkCasePathInsideRoot(root, relativePath, label, rootName) {
   await checkRepoAuthoredPath(root, relativePath, label);
   let resolved = path_3.resolve(root, relativePath);
@@ -1370,12 +1372,12 @@ async function checkCasePathInsideRoot(root, relativePath, label, rootName) {
     );
   }
 }
-//@ chunk-qchp9vrd.js:180724-180751 placement
+//@ chunk-af1hzzme.js:182119-182146 placement
 /**
  * 允许透传的评测环境变量名正则。
  */
 var EVAL_ENV_KEY_RE = /^EVAL_[A-Z0-9_]*$/;
-//@ chunk-qchp9vrd.js:180751-180856 placement
+//@ chunk-af1hzzme.js:182146-182251 placement
 /**
  * 从环境变量对象中删除被禁止的变量（名单或正则匹配）。
  */

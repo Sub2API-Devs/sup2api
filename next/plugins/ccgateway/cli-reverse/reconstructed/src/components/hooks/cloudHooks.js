@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/hooks 中"云会话钩子"：本机钩子是否转发给云会话、状态与可接受性说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bajxb7bf.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5tpnqyt5.js (38)
  * attribution: placement 38
  */
 import { basename } from "path";
@@ -54,10 +54,10 @@ import {
   projectConfigRootOr,
   shellPrefixOf,
 } from "../../utils/hooks/deviceHooks/commandReach.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { scriptFileReaderDeps } from "../../utils/hooks/servedHooks/hookSandbox.js";
 import { defaultShellKind } from "../../utils/shell/shellToolUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logError } from "../../utils/log.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
@@ -96,12 +96,12 @@ import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { hookSourceInlineDisplayString, getHookProgressDisplay } from "../../utils/hooks/hooksSettings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bajxb7bf.js:16364-16368 placement
+//@ chunk-5tpnqyt5.js:17575-17579 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bajxb7bf.js:16364", () => {
+deferInit("chunk-5tpnqyt5.js:17575", () => {
   init_react_production();
 });
-//@ chunk-bajxb7bf.js:16441-17018 placement
+//@ chunk-5tpnqyt5.js:17652-18229 placement
 var NOT_REGISTERED_YET_TEXT = "not registered yet; your next message tries again";
 var NOT_REGISTERED_NOW_TEXT = "not registered right now; reopen /hooks to check again";
 var CLOUD_HOOK_STATE_LABELS = {
@@ -116,7 +116,7 @@ var CLOUD_HOOK_STATE_LABELS = {
   muted: "turned off by Anthropic for now",
   flag_off: "not switched on for your account",
 };
-//@ chunk-bajxb7bf.js:17018-17535 placement
+//@ chunk-5tpnqyt5.js:18229-18746 placement
 function describeCloudHookState(standing, lapsesUnusedAt, state) {
   if (standing.kind === "dormant" && standing.senderUnverified)
     return {
@@ -151,7 +151,7 @@ function describeCloudHookState(standing, lapsesUnusedAt, state) {
       return {};
   }
 }
-//@ chunk-bajxb7bf.js:17535-19407 placement
+//@ chunk-5tpnqyt5.js:18746-20901 placement
 /**
  * 钩子不能在云会话运行的原因（云端改文件、只支持 command/http、事件只在本机发生等）。
  */
@@ -184,6 +184,9 @@ var CLOUD_HOOK_BLOCK_REASONS = {
     "its script is in a dot-folder this machine does not read hooks from. Check the script, then move it to ~/.claude/hooks",
   shell_prefix: "it would run through your CLAUDE_CODE_SHELL_PREFIX, which this machine cannot verify",
   script_missing: "its script is missing",
+  c_shell: "this machine cannot rule out that the script runs through csh or tcsh",
+  makefile: "its script is a makefile, and what make would run from it cannot be checked on this machine",
+  awk: "its script is an awk script, and what awk would run from it cannot be checked on this machine",
 };
 var HOOK_SOURCE_LABELS = {
   user: {
@@ -199,7 +202,7 @@ var HOOK_SOURCE_LABELS = {
     phrase: "the --settings file",
   },
 };
-//@ chunk-bajxb7bf.js:19407-19572 placement
+//@ chunk-5tpnqyt5.js:20901-21066 placement
 function hookDisplayName(command, path) {
   let label =
     path !== undefined
@@ -213,7 +216,7 @@ function hookDisplayName(command, path) {
     }) || "hook"
   );
 }
-//@ chunk-bajxb7bf.js:19572-20580 placement
+//@ chunk-5tpnqyt5.js:21066-22074 placement
 function classifyHookForCloud(deviceHookAttestations, writableSources = new Set()) {
   let writableFlag = (source) =>
     writableSources.has(source)
@@ -275,7 +278,7 @@ function classifyHookForCloud(deviceHookAttestations, writableSources = new Set(
   });
   return [...mapped, ...mapped_2, ...mapped_3];
 }
-//@ chunk-bajxb7bf.js:20580-20660 placement
+//@ chunk-5tpnqyt5.js:22074-22154 placement
 function httpHostLabel(url) {
   try {
     return new URL(url).host || "http hook";
@@ -283,12 +286,12 @@ function httpHostLabel(url) {
     return "http hook";
   }
 }
-//@ chunk-bajxb7bf.js:20660-20711 placement
+//@ chunk-5tpnqyt5.js:22154-22205 placement
 var NO_HOOK_REASON = {
   kind: "none",
   reason: "disabled_by_settings",
 };
-//@ chunk-bajxb7bf.js:20711-20978 placement
+//@ chunk-5tpnqyt5.js:22205-22472 placement
 function reconcileCapturedHooks(captured, baseline, launchInReach) {
   if (
     captured.kind === "none" &&
@@ -311,7 +314,7 @@ function reconcileCapturedHooks(captured, baseline, launchInReach) {
     captured,
   };
 }
-//@ chunk-bajxb7bf.js:20978-25112 placement
+//@ chunk-5tpnqyt5.js:22472-26606 placement
 /**
  * 计算每个钩子在云会话中的状态（dormant、idle、registered 等）。
  */
@@ -511,7 +514,7 @@ async function buildCloudHookRows({
         targetSet.add(source);
         continue;
       }
-      let spellings = uniq([
+      let spellings = normalizeCaseForComparison_2([
         filePath,
         await realpath(filePath).catch(() => filePath),
         ...(senderMemory.knownSpellings.get(source) ?? []),
@@ -564,7 +567,7 @@ async function buildCloudHookRows({
     };
   }
 }
-//@ chunk-bajxb7bf.js:25112-26126 placement
+//@ chunk-5tpnqyt5.js:26606-27620 placement
 var HOOKS_OFF_AT_START_TEXT =
   "all hooks were switched off in your settings when this cloud session started, and for it this machine keeps them off although that switch has since been removed \u2014 restart claude --cloud to offer them";
 var POLICY_BLOCK_REASONS = {
@@ -583,14 +586,14 @@ var UNTRUSTED_BLOCK_REASONS = {
   runtime_patch: "hooks set for this run only are not forwarded",
   served_folder: "the cloud session this computer serves can write that file",
 };
-//@ chunk-bajxb7bf.js:26126-26130 placement
+//@ chunk-5tpnqyt5.js:27620-27624 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bajxb7bf.js:26126", () => {
+deferInit("chunk-5tpnqyt5.js:27620", () => {
   init_react_production();
 });
-//@ chunk-bajxb7bf.js:26130-26141 placement
+//@ chunk-5tpnqyt5.js:27624-27635 placement
 var HOOK_LABEL_WIDTH = 250;
-//@ chunk-bajxb7bf.js:26141-28737 placement
+//@ chunk-5tpnqyt5.js:27635-30231 placement
 function describeWhereHookRuns(props) {
   let $ = useMemoCache(34);
   let { forwarded, templateNames, consentLocation, current: currentAnswer, onDone } = props;
@@ -772,15 +775,15 @@ function describeWhereHookRuns(props) {
   } else dialog = $[33];
   return dialog;
 }
-//@ chunk-bajxb7bf.js:28737-28741 placement
+//@ chunk-5tpnqyt5.js:30231-30235 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bajxb7bf.js:28737", () => {
+deferInit("chunk-5tpnqyt5.js:30231", () => {
   init_react_production();
 });
-//@ chunk-bajxb7bf.js:28741-28893 placement
+//@ chunk-5tpnqyt5.js:30235-30387 placement
 var PLUGIN_HOOKS_NOTE =
   "Plugin hooks are not listed above. A plugin's hooks run in this cloud session only if the session loaded that plugin (see the top of /plugin).";
-//@ chunk-bajxb7bf.js:28893-28993 placement
+//@ chunk-5tpnqyt5.js:30387-30487 placement
 function PluginHooksNote() {
   let $ = useMemoCache(1);
   let note;
@@ -793,18 +796,18 @@ function PluginHooksNote() {
   } else note = $[0];
   return note;
 }
-//@ chunk-bajxb7bf.js:28993-29037 placement
+//@ chunk-5tpnqyt5.js:30487-30531 placement
 function dimSegment(text) {
   return {
     text,
     dimColor: true,
   };
 }
-//@ chunk-bajxb7bf.js:29037-29068 placement
+//@ chunk-5tpnqyt5.js:30531-30562 placement
 function segmentText(segment) {
   return segment.text;
 }
-//@ chunk-bajxb7bf.js:29068-29190 placement
+//@ chunk-5tpnqyt5.js:30562-30684 placement
 function renderStatusLine(row, key) {
   let { status, pieces } = row;
   return jsxProd_default_2(
@@ -823,7 +826,7 @@ function renderStatusLine(row, key) {
     key,
   );
 }
-//@ chunk-bajxb7bf.js:29190-29279 placement
+//@ chunk-5tpnqyt5.js:30684-30773 placement
 function renderSegment(segment, index) {
   return jsxProd_default(
     Text,
@@ -835,7 +838,7 @@ function renderSegment(segment, index) {
     index,
   );
 }
-//@ chunk-bajxb7bf.js:29279-29444 placement
+//@ chunk-5tpnqyt5.js:30773-30938 placement
 var CLOUD_HOOKS_INTRO =
   "Each row says where one of this machine's hooks runs for this cloud session. Hooks committed to the repository run in the cloud.";
 var ROW_AGE_WIDTH = 40;
@@ -843,7 +846,7 @@ var ROW_COUNT_WIDTH = 7;
 var ROW_NAME_WIDTH = 10;
 var ROW_MATCHER_WIDTH = 8;
 var ROW_COMMAND_WIDTH = 3;
-//@ chunk-bajxb7bf.js:29444-30098 placement
+//@ chunk-5tpnqyt5.js:30938-31592 placement
 function renderCloudSessionBadge(props) {
   let $ = useMemoCache(11);
   let { summaryPromise, savedLine, hasPluginHooks } = props;
@@ -901,7 +904,7 @@ function renderCloudSessionBadge(props) {
   } else box = $[10];
   return box;
 }
-//@ chunk-bajxb7bf.js:30098-30796 placement
+//@ chunk-5tpnqyt5.js:31592-32290 placement
 function renderRemoteHostNotice(props) {
   let $ = useMemoCache(7);
   let { summaryPromise, savedLine, hasPluginHooks } = props;
@@ -947,7 +950,7 @@ function renderRemoteHostNotice(props) {
   } else offers = $[6];
   return offers;
 }
-//@ chunk-bajxb7bf.js:30796-33547 placement
+//@ chunk-5tpnqyt5.js:32290-35042 placement
 function renderCloudHookOffers(props) {
   let $ = useMemoCache(52);
   let { summary, consent, savedLine, hasPluginHooks } = props;
@@ -1181,7 +1184,7 @@ function renderCloudHookOffers(props) {
   } else root = $[51];
   return root;
 }
-//@ chunk-bajxb7bf.js:33547-33663 placement
+//@ chunk-5tpnqyt5.js:35042-35158 placement
 function TextPieces({ pieces }) {
   return pieces.map((piece, index) =>
     jsxProd_default(
@@ -1196,7 +1199,7 @@ function TextPieces({ pieces }) {
     ),
   );
 }
-//@ chunk-bajxb7bf.js:33663-33772 placement
+//@ chunk-5tpnqyt5.js:35158-35267 placement
 function fittingRowCount(heights, totalRows, availableRows) {
   let usedRows = 0;
   let shownCount = 0;
@@ -1208,11 +1211,11 @@ function fittingRowCount(heights, totalRows, availableRows) {
   }
   return shownCount;
 }
-//@ chunk-bajxb7bf.js:33772-33822 placement
+//@ chunk-5tpnqyt5.js:35267-35317 placement
 function segmentsText(segments) {
   return segments.map((segment) => segment.text).join("");
 }
-//@ chunk-bajxb7bf.js:33822-33888 placement
+//@ chunk-5tpnqyt5.js:35317-35383 placement
 function countWrappedLines(text, width) {
   return (
     1 +
@@ -1223,7 +1226,7 @@ function countWrappedLines(text, width) {
     )
   );
 }
-//@ chunk-bajxb7bf.js:33888-34513 placement
+//@ chunk-5tpnqyt5.js:35383-36008 placement
 function renderHookOriginSummary(summary, consent) {
   let prefix = {
     text: "Hooks from this machine: ",
@@ -1282,7 +1285,7 @@ function renderHookOriginSummary(summary, consent) {
           ];
   }
 }
-//@ chunk-bajxb7bf.js:34513-35101 placement
+//@ chunk-5tpnqyt5.js:36008-36596 placement
 function describeCloudAcceptance(row, consent) {
   switch (row.where) {
     case "cloud":
@@ -1303,7 +1306,7 @@ function describeCloudAcceptance(row, consent) {
         : `${consent === "accepted" ? "runs here when the session asks" : "will run here once you allow it"}${row.exceptAfterEdits ? ", except after cloud file edits" : ""}`;
   }
 }
-//@ chunk-bajxb7bf.js:35101-35863 placement
+//@ chunk-5tpnqyt5.js:36596-37358 placement
 function classifyHookLocation(row, consent, { notInForce, standingIsIdle }) {
   let isNotRunning = row.where === "here" && consent === "accepted" && notInForce === true;
   let eventLabel =
@@ -1353,7 +1356,7 @@ function classifyHookLocation(row, consent, { notInForce, standingIsIdle }) {
     ],
   };
 }
-//@ chunk-bajxb7bf.js:35863-35935 placement
+//@ chunk-5tpnqyt5.js:37358-37430 placement
 function segmentStyle(text, standingIsIdle) {
   return standingIsIdle
     ? {
@@ -1365,7 +1368,7 @@ function segmentStyle(text, standingIsIdle) {
         color: "warning",
       };
 }
-//@ chunk-bajxb7bf.js:35935-36254 placement
+//@ chunk-5tpnqyt5.js:37430-37749 placement
 function useEnterEscape(props) {
   let $ = useMemoCache(8);
   let { enter, escape: escapeAction } = props;
@@ -1402,15 +1405,15 @@ function useEnterEscape(props) {
   } else hints = $[7];
   return hints;
 }
-//@ chunk-bajxb7bf.js:36254-36286 placement
+//@ chunk-5tpnqyt5.js:37749-37781 placement
 function hooksOf(entry) {
   return entry.hooks;
 }
-//@ chunk-bajxb7bf.js:36286-36326 placement
+//@ chunk-5tpnqyt5.js:37781-37821 placement
 function lowercase(text) {
   return text.toLowerCase();
 }
-//@ chunk-bajxb7bf.js:36326-40626 placement
+//@ chunk-5tpnqyt5.js:37821-42121 placement
 /**
  * /hooks 首页：列出事件及其钩子数量、托管钩子提示与云会话钩子状态。
  */
@@ -1807,7 +1810,7 @@ function HooksOverview(props) {
   } else dialog = $[69];
   return dialog;
 }
-//@ chunk-bajxb7bf.js:40626-40776 placement
+//@ chunk-5tpnqyt5.js:42121-42271 placement
 function AllEventsLabel() {
   let $ = useMemoCache(2);
   const color = isMenuOpen() ? "suggestion" : undefined;

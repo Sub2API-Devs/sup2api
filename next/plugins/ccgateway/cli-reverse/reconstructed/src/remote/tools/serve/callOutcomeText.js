@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：服务端调用结果/未运行信封与 PostToolUse 钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (12)
+ * attribution: placement 11, layout 1
  */
 import { failedEnvelope } from "./callStatusQuery.js";
 import { stoppedBeforeStartMessage } from "../../../services/remoteTools/hostRefusals.js";
@@ -15,7 +15,7 @@ import { refusedEnvelope } from "./backgroundCommands.js";
 import { isShellToolName } from "../../../tools/shared/textSearchTools.js";
 import { getDefaultAppState_2 } from "../../../state/AppStateStore.js";
 import { getMainLoopModel } from "../../../utils/model/model.js";
-import { commandQueueManager } from "../../../utils/messageQueueManager.js";
+import { getProcessQueue } from "../../../utils/messageQueueManager.js";
 import { getRootSession } from "../../../bootstrap/state.js";
 import { makeSaltedName } from "../../../utils/agentId.js";
 import { TOOL_CATALOG } from "../../../tools.js";
@@ -28,6 +28,12 @@ import { createEmptyArtifactSessionStores } from "../../../services/artifacts/ar
 import { NOOP_AGENT_NAME_REGISTRY } from "../../../utils/agentNameRegistry.js";
 import { NO_OP_COLOR_ASSIGNER } from "../../../tools/AgentTool/agentColorManager.js";
 import { NO_BRIDGE_CONSENT } from "../../../screens/repl/bridgeChannelSlot.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
+import { GLOB_TOOL_NAME } from "../../../tools/GlobTool/prompt.js";
+import { GREP_TOOL_NAME } from "../../../tools/GrepTool/prompt.js";
+import { FILE_EDITING_TOOL_NAMES } from "../../../tools/AgentTool/agentLaunch.js";
+import { buildMcpToolName } from "../../../services/mcp/mcpStringUtils.js";
+import { REMOTE_DEVICES } from "../../../services/mcp/firstPartyServerIds.js";
 import { isUnattendedOwnRecord } from "./servedPermissionDecision.js";
 import { unattendedStanceKind } from "./servedSafetyChecks.js";
 import { unattendedServingConsented } from "../../../services/remoteTools/unattendedConsentStore.js";
@@ -44,11 +50,11 @@ import { beginDeferredInits } from "../../../../runtime/deferred-init.js";
 // This module is the first evaluated of an import cycle of 3 modules closed by ./serveCall.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/remote/tools/serve/serveCall.js");
-//@ chunk-ad2e1aj6.js:29729-29810 placement
+//@ chunk-nvm0wye1.js:30071-30152 placement
 function stoppedBeforeStartReason(clock) {
   return clock.timedOut ? "deadline" : clock.shuttingDown() ? "shutdown" : "cancel";
 }
-//@ chunk-ad2e1aj6.js:29810-30000 placement
+//@ chunk-nvm0wye1.js:30152-30343 placement
 function timedOutOrCancelled(context) {
   let { target, facts, targetName, clock, notes } = context;
   return {
@@ -67,7 +73,7 @@ function timedOutOrCancelled(context) {
     ranNothing: true,
   };
 }
-//@ chunk-ad2e1aj6.js:30000-30172 placement
+//@ chunk-nvm0wye1.js:30343-30516 placement
 function stoppedBeforeStart(request) {
   let { target, facts, targetName, clock } = request;
   let stopReason = stoppedBeforeStartReason(clock);
@@ -84,7 +90,7 @@ function stoppedBeforeStart(request) {
     ranNothing: true,
   };
 }
-//@ chunk-ad2e1aj6.js:30172-31203 placement
+//@ chunk-nvm0wye1.js:30516-31551 placement
 function callNotRunEnvelope(request) {
   let { target, facts, targetName, clock } = request;
   let envelopeOptions = {
@@ -133,13 +139,13 @@ function callNotRunEnvelope(request) {
         envelopeOptions,
       );
 }
-//@ chunk-ad2e1aj6.js:31203-31314 placement
+//@ chunk-nvm0wye1.js:31551-31662 placement
 function isPermissionGranted(outcome) {
   return (
     outcome.permissionOutcome?.kind === "allowed" || outcome.permissionOutcome?.kind === "approved_by_session"
   );
 }
-//@ chunk-ad2e1aj6.js:31314-32769 placement
+//@ chunk-nvm0wye1.js:31662-33119 placement
 function callResultEnvelope(request, outcome) {
   let { target, facts, targetName, callId, controller, clock, toolVerdict, notes } = request;
   if (outcome === undefined) return callNotRunEnvelope(request);
@@ -204,7 +210,7 @@ function callResultEnvelope(request, outcome) {
     content: shaped.content,
   };
 }
-//@ chunk-ad2e1aj6.js:32769-32971 placement
+//@ chunk-nvm0wye1.js:33119-33321 placement
 function toBashStyleOutput(output, text) {
   if (typeof output !== "object" || output === null) return text;
   let interp = Reflect.get(output, "returnCodeInterpretation");
@@ -217,7 +223,7 @@ function toBashStyleOutput(output, text) {
     }),
   };
 }
-//@ chunk-ad2e1aj6.js:32971-34520 placement
+//@ chunk-nvm0wye1.js:33321-34870 placement
 function servedToolUseContext(served) {
   let appState = {
     ...getDefaultAppState_2(),
@@ -227,7 +233,7 @@ function servedToolUseContext(served) {
   return {
     requestDialog: undefined,
     abortController: served.abortController,
-    messageQueue: commandQueueManager(),
+    messageQueue: getProcessQueue(),
     session: getRootSession().withProject({
       cwd: served.cwd,
     }),
@@ -301,12 +307,17 @@ function servedToolUseContext(served) {
     storageV5: served.storageV5,
   };
 }
-//@ chunk-ad2e1aj6.js:34520-34590 placement
+//@ chunk-nvm0wye1.js:34870-34922 layout
+var flattened = [READ, GLOB_TOOL_NAME, GREP_TOOL_NAME, ...FILE_EDITING_TOOL_NAMES].flatMap((tool) => [
+  tool,
+  buildMcpToolName(REMOTE_DEVICES, tool),
+]);
+//@ chunk-nvm0wye1.js:34922-34992 placement
 function servingConsentRequirement(stanceValue) {
   if (!isUnattendedOwnRecord(stanceValue)) return unattendedStanceKind(stanceValue);
   return unattendedServingConsented() ? undefined : "consent";
 }
-//@ chunk-ad2e1aj6.js:34590-34705 placement
+//@ chunk-nvm0wye1.js:34992-35107 placement
 function isServedPostToolHookEnabled() {
   try {
     let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -318,7 +329,7 @@ function isServedPostToolHookEnabled() {
     return false;
   }
 }
-//@ chunk-ad2e1aj6.js:34705-35252 placement
+//@ chunk-nvm0wye1.js:35107-35654 placement
 function runServedPostToolHook({ toolName, toolInput, toolAliases, targetName, keep }) {
   let hookInput = {
     session_id: "",

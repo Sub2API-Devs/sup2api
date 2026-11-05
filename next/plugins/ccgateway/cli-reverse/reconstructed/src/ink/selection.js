@@ -3,15 +3,15 @@
  *
  * 鼠标选区：锚点/焦点、按词/按行扩展、跨滚动保持、选区文字提取（含软换行拼接、URL 识别）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/selection.ts
- * pieces: chunk-bzr73sfg.js (33)
+ * pieces: chunk-2avr6cej.js (33)
  * attribution: fingerprint 21, layout 9, file-local 2, callgraph-fingerprint 1
  */
 import { clamp, cellAt, softWrapStartCol, SW_ELIDED_SEP, cellAtIndex, setCellStyleId } from "./screen.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:213752-213930 fingerprint (2.1.88 match: createSelectionState, 1)
+//@ chunk-2avr6cej.js:213347-213525 fingerprint (2.1.88 match: createSelectionState, 1)
 /**
  * 新建选区状态：锚点/焦点、是否拖动中、双击/三击时的锚定范围、滚出视口上方/下方的已选文本行（及各行是否软换行）、上次按下是否带 Alt。
  */
@@ -28,7 +28,7 @@ function createSelectionState() {
     lastPressHadAlt: false,
   };
 }
-//@ chunk-bzr73sfg.js:213930-214252 fingerprint (2.1.88 match: startSelection, 0.922)
+//@ chunk-2avr6cej.js:213525-213847 fingerprint (2.1.88 match: startSelection, 0.922)
 /**
  * 鼠标按下开始选区：记录锚点（限制在 scope 列范围内，例如只选某个面板）、清掉焦点与滚出缓存、进入拖动。
  */
@@ -51,7 +51,7 @@ function startSelection(selection, col, row, scope) {
   selection.virtualFocusCol = undefined;
   selection.lastPressHadAlt = false;
 }
-//@ chunk-bzr73sfg.js:214252-214396 fingerprint (2.1.88 match: updateSelection, 1)
+//@ chunk-2avr6cej.js:213847-213991 fingerprint (2.1.88 match: updateSelection, 1)
 /**
  * 拖动中更新焦点（第一次移动且没离开锚点格时不设焦点，避免单击产生空选区）。
  */
@@ -64,11 +64,11 @@ function updateSelection(s, col, row) {
     row,
   };
 }
-//@ chunk-bzr73sfg.js:214396-214460 layout
+//@ chunk-2avr6cej.js:213991-214055 layout
 function clampColToScope(selection, col) {
   return selection.scope ? clamp(col, selection.scope.x1, selection.scope.x2 - 1) : col;
 }
-//@ chunk-bzr73sfg.js:214460-214550 layout
+//@ chunk-2avr6cej.js:214055-214145 layout
 /**
  * 选区可用的列范围：有 scope 时为 [scope.x1, min(scope.x2,width)-1]，否则整行。
  */
@@ -83,14 +83,14 @@ function selectionColRange(selection, width) {
         hi: width - 1,
       };
 }
-//@ chunk-bzr73sfg.js:214550-214581 fingerprint (2.1.88 match: finishSelection, 1)
+//@ chunk-2avr6cej.js:214145-214176 fingerprint (2.1.88 match: finishSelection, 1)
 /**
  * 鼠标松开：结束拖动（选区保留）。
  */
 function finishSelection(s) {
   s.isDragging = false;
 }
-//@ chunk-bzr73sfg.js:214581-214887 fingerprint (2.1.88 match: clearSelection, 0.912)
+//@ chunk-2avr6cej.js:214176-214482 fingerprint (2.1.88 match: clearSelection, 0.912)
 /**
  * 清除选区及全部虚拟坐标/滚出缓存。
  */
@@ -110,9 +110,9 @@ function clearSelection(s) {
   s.virtualFocusCol = undefined;
   s.lastPressHadAlt = false;
 }
-//@ chunk-bzr73sfg.js:214887-214919 layout
+//@ chunk-2avr6cej.js:214482-214514 layout
 var WORD_CHAR = /[\p{L}\p{N}_/.\-+~\\]/u;
-//@ chunk-bzr73sfg.js:214919-214994 file-local
+//@ chunk-2avr6cej.js:214514-214589 file-local
 /**
  * 双击选词用的字符类别：空白 0、单词字符 1、其他标点 2。
  */
@@ -121,7 +121,7 @@ function charClass(c) {
   if (WORD_CHAR.test(c)) return 1;
   return 2;
 }
-//@ chunk-bzr73sfg.js:214994-215622 fingerprint (2.1.88 match: wordBoundsAt, 1)
+//@ chunk-2avr6cej.js:214589-215217 fingerprint (2.1.88 match: wordBoundsAt, 1)
 /**
  * 双击选词的范围：先看是否点在纯文本 URL 上（整条 URL 当一个词），否则按字符类（空白/单词字符/其它）向两侧扩展，跳过宽字符占位、遇 noSelect 停。
  */
@@ -178,7 +178,7 @@ function wordBoundsAt(screen, col, row) {
     hi,
   };
 }
-//@ chunk-bzr73sfg.js:215622-215730 fingerprint (2.1.88 match: comparePoints, 1)
+//@ chunk-2avr6cej.js:215217-215325 fingerprint (2.1.88 match: comparePoints, 1)
 /**
  * 比较两个 {row, col} 点的先后（先行后列）。
  */
@@ -187,7 +187,7 @@ function comparePoints(a, b) {
   if (a.col !== b.col) return a.col < b.col ? -1 : 1;
   return 0;
 }
-//@ chunk-bzr73sfg.js:215730-215908 fingerprint (2.1.88 match: selectWordAt, 1)
+//@ chunk-2avr6cej.js:215325-215503 fingerprint (2.1.88 match: selectWordAt, 1)
 /**
  * 双击：选中该词并设锚定范围 kind=word（后续拖动按词扩展）。
  */
@@ -211,12 +211,12 @@ function selectWordAt(s, screen, col, row) {
     kind: "word",
   };
 }
-//@ chunk-bzr73sfg.js:215908-215939 fingerprint (2.1.88 match: URL_BOUNDARY, 1)
+//@ chunk-2avr6cej.js:215503-215534 fingerprint (2.1.88 match: URL_BOUNDARY, 1)
 var URL_BOUNDARY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:215908", () => {
+deferInit("chunk-2avr6cej.js:215503", () => {
   URL_BOUNDARY = new Set([..."<>\"'` "]);
 });
-//@ chunk-bzr73sfg.js:215939-216034 callgraph-fingerprint (2.1.88 match: isUrlChar, 1)
+//@ chunk-2avr6cej.js:215534-215629 callgraph-fingerprint (2.1.88 match: isUrlChar, 1)
 /**
  * 可出现在纯文本 URL 中的字符（可打印 ASCII，不含 <>"'` 与空格）。
  */
@@ -225,13 +225,13 @@ function isUrlChar(c) {
   let code = c.charCodeAt(0);
   return code >= 33 && code <= 126 && !URL_BOUNDARY.has(c);
 }
-//@ chunk-bzr73sfg.js:216034-216158 layout
+//@ chunk-2avr6cej.js:215629-215753 layout
 function urlCharAt(screen, col, row) {
   if (screen.noSelect[row * screen.width + col] === 1) return null;
   let cell = cellAt(screen, col, row);
   return cell && cell.width === 0 && isUrlChar(cell.char) ? cell.char : null;
 }
-//@ chunk-bzr73sfg.js:216158-216413 layout
+//@ chunk-2avr6cej.js:215753-216008 layout
 /**
  * 从 col 起在一行内向两侧扩展连续的 URL 字符，返回 {lo, hi, text}。
  */
@@ -261,7 +261,7 @@ function scanUrlRun(screen, row, col, minCol, maxCol) {
     text: before + char + after,
   };
 }
-//@ chunk-bzr73sfg.js:216413-216536 layout
+//@ chunk-2avr6cej.js:216008-216131 layout
 /**
  * 一行里属于软换行续接段的列范围：起点取本行软换行标记的起始列，终点取下一行标记记录的上一行结束列。
  */
@@ -273,11 +273,11 @@ function softWrapSpanOfRow(screen, row) {
     end: nextWrap !== 0 ? nextWrap >>> 16 : screen.width,
   };
 }
-//@ chunk-bzr73sfg.js:216536-216577 layout
+//@ chunk-2avr6cej.js:216131-216172 layout
 function findPlainTextUrl(screen, col, row) {
   return findPlainTextUrlAt(screen, col, row)?.url;
 }
-//@ chunk-bzr73sfg.js:216577-217905 fingerprint (2.1.88 match: findPlainTextUrlAt, 0.805)
+//@ chunk-2avr6cej.js:216172-217500 fingerprint (2.1.88 match: findPlainTextUrlAt, 0.805)
 /**
  * 找 (col,row) 处的纯文本 URL（http/https/file）：沿软换行把折到多行的 URL 拼回来；以 … 截断的不算；去掉末尾标点和不配对的右括号；返回 {url, lo, hi}（本行内的列范围）。
  */
@@ -386,7 +386,7 @@ function findPlainTextUrlAt(screen, col, row) {
     hi: hi_2,
   };
 }
-//@ chunk-bzr73sfg.js:217905-218083 fingerprint (2.1.88 match: selectLineAt, 1)
+//@ chunk-2avr6cej.js:217500-217678 fingerprint (2.1.88 match: selectLineAt, 1)
 /**
  * 三击：选中整行（受 scope 限制），锚定范围 kind=line。
  */
@@ -410,7 +410,7 @@ function selectLineAt(s, screen, row) {
     kind: "line",
   };
 }
-//@ chunk-bzr73sfg.js:218083-218461 fingerprint (2.1.88 match: extendSelection, 1)
+//@ chunk-2avr6cej.js:217678-218056 fingerprint (2.1.88 match: extendSelection, 1)
 /**
  * 双击/三击后拖动：按词或按行扩展选区，锚点保持在原锚定范围的另一端。
  */
@@ -452,7 +452,7 @@ function extendSelection(s, screen, col, row) {
     s.focus = span.hi;
   }
 }
-//@ chunk-bzr73sfg.js:218461-218589 fingerprint (2.1.88 match: moveFocus, 0.89)
+//@ chunk-2avr6cej.js:218056-218184 fingerprint (2.1.88 match: moveFocus, 0.89)
 /**
  * 键盘移动选区焦点（Shift+方向键），取消锚定范围。
  */
@@ -466,7 +466,7 @@ function moveFocus(s, col, row) {
   s.virtualFocusRow = undefined;
   s.virtualFocusCol = undefined;
 }
-//@ chunk-bzr73sfg.js:218589-220371 fingerprint (2.1.88 match: shiftSelection, 0.924)
+//@ chunk-2avr6cej.js:218184-219966 fingerprint (2.1.88 match: shiftSelection, 0.924)
 /**
  * 内容滚动 dRow 行时平移选区：超出 [minRow,maxRow] 的端点钳到边界并记下虚拟行/列（滚回来能复原），同步裁剪/交换滚出上方/下方的文本缓存。
  */
@@ -562,7 +562,7 @@ function shiftSelection(s, dRow, minRow, maxRow, width) {
     };
   }
 }
-//@ chunk-bzr73sfg.js:220371-220752 fingerprint (2.1.88 match: shiftAnchor, 0.922)
+//@ chunk-2avr6cej.js:219966-220347 fingerprint (2.1.88 match: shiftAnchor, 0.922)
 /**
  * 拖动中内容滚动时只平移锚点（焦点跟着鼠标），超出范围记虚拟坐标。
  */
@@ -589,14 +589,14 @@ function shiftAnchor(s, dRow, minRow, maxRow) {
     };
   }
 }
-//@ chunk-bzr73sfg.js:220752-220806 fingerprint (2.1.88 match: hasSelection, 1)
+//@ chunk-2avr6cej.js:220347-220401 fingerprint (2.1.88 match: hasSelection, 1)
 /**
  * 是否有完整选区（锚点和焦点都在）。
  */
 function hasSelection(s) {
   return s.anchor !== null && s.focus !== null;
 }
-//@ chunk-bzr73sfg.js:220806-221045 fingerprint (2.1.88 match: shiftSelectionForFollow, 0.7)
+//@ chunk-2avr6cej.js:220401-220640 fingerprint (2.1.88 match: shiftSelectionForFollow, 0.7)
 /**
  * 选区两端都因滚动被钳到同一侧（虚拟行都在视口上方或都在下方），即整段选区已不在屏幕上。
  */
@@ -613,7 +613,7 @@ function isSelectionFullyOffscreen(selection) {
     (selection.virtualAnchorRow > selection.anchor.row && selection.virtualFocusRow > selection.focus.row)
   );
 }
-//@ chunk-bzr73sfg.js:221045-221185 layout (2.1.88 match: hasSelection, 1)
+//@ chunk-2avr6cej.js:220640-220780 layout (2.1.88 match: hasSelection, 1)
 /**
  * 返回按位置排序的 {start, end}，没有选区返回 null。
  */
@@ -629,13 +629,13 @@ function selectionBounds(s) {
         end: s.anchor,
       };
 }
-//@ chunk-bzr73sfg.js:221185-221257 layout
+//@ chunk-2avr6cej.js:220780-220852 layout
 function isSoftWrapInRange(packed, colRange) {
   if (!(packed > 0)) return false;
   let startCol = softWrapStartCol(packed);
   return startCol >= colRange.lo && startCol <= colRange.hi;
 }
-//@ chunk-bzr73sfg.js:221257-221675 fingerprint (2.1.88 match: extractRowText, 1)
+//@ chunk-2avr6cej.js:220852-221270 fingerprint (2.1.88 match: extractRowText, 1)
 /**
  * 取一行里 [startCol,endCol] 的选中文本：跳过 noSelect 与宽字符占位格；软换行续接行从续接起点取，折行吞掉的分隔空格补回；不是软换行时去掉行尾空白。
  */
@@ -667,7 +667,7 @@ function extractRowText(screen, row, startCol, endCol, isContinuation, colRange)
   }
   return contentEnd > 0 ? line : line.replace(/\s+$/, "");
 }
-//@ chunk-bzr73sfg.js:221675-221743 file-local
+//@ chunk-2avr6cej.js:221270-221338 file-local
 /**
  * 拼接选中文本行：软换行续接行接在上一行后面，否则另起一行。
  */
@@ -675,7 +675,7 @@ function joinRows(lines, text, sw) {
   if (sw && lines.length > 0) lines[lines.length - 1] += text;
   else lines.push(text);
 }
-//@ chunk-bzr73sfg.js:221743-222223 fingerprint (2.1.88 match: getSelectedText, 0.879)
+//@ chunk-2avr6cej.js:221338-221818 fingerprint (2.1.88 match: getSelectedText, 0.879)
 /**
  * 得到选中文本：滚出上方的缓存行 + 屏幕上的行 + 滚出下方的缓存行，按软换行合并。
  */
@@ -704,7 +704,7 @@ function getSelectedText(s, screen) {
   return lines.join(`
 `);
 }
-//@ chunk-bzr73sfg.js:222223-223237 fingerprint (2.1.88 match: captureScrolledRows, 0.961)
+//@ chunk-2avr6cej.js:221818-222832 fingerprint (2.1.88 match: captureScrolledRows, 0.961)
 /**
  * 内容滚动前把即将滚出视口的已选行文本存进 scrolledOffAbove/Below（复制时还能拿到），并把锚点移到边界。
  */
@@ -772,7 +772,7 @@ function captureScrolledRows(s, screen, firstRow, lastRow, side) {
     }
   }
 }
-//@ chunk-bzr73sfg.js:223237-223585 fingerprint (2.1.88 match: applySelectionOverlay, 0.85)
+//@ chunk-2avr6cej.js:222832-223180 fingerprint (2.1.88 match: applySelectionOverlay, 0.85)
 /**
  * 把选区画到屏幕上：选区内每格换成 withSelectionBg 派生样式（noSelect 格跳过）。
  */
@@ -796,7 +796,6 @@ function applySelectionOverlay(screen, selection, stylePool) {
 }
 export {
   isSelectionFullyOffscreen,
-  selectionBounds,
   finishSelection,
   hasSelection,
   clearSelection,
@@ -813,4 +812,5 @@ export {
   selectLineAt,
   extendSelection,
   updateSelection,
+  selectionBounds,
 };

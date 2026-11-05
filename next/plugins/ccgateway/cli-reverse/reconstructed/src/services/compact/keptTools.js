@@ -3,22 +3,25 @@
  *
  * 清理时保留的工具类型（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (8)
- * attribution: placement 8
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (10)
+ * attribution: placement 8, layout 2
  */
 import {
   isSillyShoreGateOn,
   getToolUseName,
-  tagUntrustedArtifactContent,
+  isToolUseLikeBlockType,
+  collectToolsUsedBeforeSummary,
 } from "../../utils/messages/untrustedArtifactContent.js";
 import { canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
 import { getConversationToolsUsed } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
-import { isGmailAttachmentTool } from "../../bootstrap/stateSlices.js";
+import { UNREADABLE_TOOLS_USED_BEFORE_SUMMARY, isGmailAttachmentTool } from "../../bootstrap/stateSlices.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { logFeatureOk } from "../analytics/featureTelemetry.js";
 
-//@ chunk-s61vbvea.js:377152-377237 placement
+//@ chunk-7jxyna5q.js:233887-233972 placement
 /**
  * 记录一次工具使用（工具名 + 输入），供清理/压缩时保留相关工具；开关关闭或出错时静默。
  */
@@ -32,7 +35,7 @@ function recordToolUsePair(name, name_2) {
     logError(error);
   }
 }
-//@ chunk-s61vbvea.js:377237-377427 placement
+//@ chunk-7jxyna5q.js:233972-234162 placement
 /**
  * 记录助手消息中用到的服务端/MCP 工具（用于清理时保留）。
  */
@@ -48,7 +51,7 @@ function recordServerToolsUsed(message) {
     logError(error);
   }
 }
-//@ chunk-s61vbvea.js:377427-377486 placement
+//@ chunk-7jxyna5q.js:234162-234221 placement
 /**
  * 记录一个用过的工具名。
  */
@@ -59,24 +62,53 @@ function recordToolUsed(name) {
     logError(error);
   }
 }
-//@ chunk-s61vbvea.js:377486-377558 placement
+//@ chunk-7jxyna5q.js:234221-234367 layout
+function recordServerListedTool(event) {
+  if (!isToolUseLikeBlockType(event.type)) return;
+  let entry =
+    typeof event.name === "string"
+      ? getToolUseName({
+          type: event.type,
+          name: event.name,
+          server_name: event.server_name,
+        })
+      : "";
+  recordToolUsed(entry === "" ? UNREADABLE_TOOLS_USED_BEFORE_SUMMARY : entry);
+}
+//@ chunk-7jxyna5q.js:234367-234635 layout
+function recordEarlierToolsUnknown(event) {
+  let request = isPlainObject(event) ? event.request : undefined;
+  let messages = isPlainObject(request) && Array.isArray(request.messages) ? request.messages : [];
+  if (
+    [event, ...messages].some(
+      (request) =>
+        isPlainObject(request) &&
+        request.earlier_tools_unknown !== undefined &&
+        request.earlier_tools_unknown !== null &&
+        request.earlier_tools_unknown !== false,
+    ) &&
+    getConversationToolsUsed().record([UNREADABLE_TOOLS_USED_BEFORE_SUMMARY])
+  )
+    logFeatureOk("api_tools_used_unknown_mark");
+}
+//@ chunk-7jxyna5q.js:234635-234707 placement
 /**
  * 记录经标签处理的工具输入（artifact 内容加不可信标记）。
  */
 function recordToolUseTagged(name) {
   try {
     if (isSillyShoreGateOn())
-      getConversationToolsUsed().record(tagUntrustedArtifactContent(name, undefined, false));
+      getConversationToolsUsed().record(collectToolsUsedBeforeSummary(name, undefined, false));
   } catch (error) {
     logError(error);
   }
 }
-//@ chunk-s61vbvea.js:377558-377568 placement
+//@ chunk-7jxyna5q.js:234707-234717 placement
 /**
  * 从内部元数据恢复 tools_kept_by_clear 时最多恢复的工具数（64）。
  */
 var MAX_RESTORED_TOOLS = 64;
-//@ chunk-s61vbvea.js:377568-377682 placement
+//@ chunk-7jxyna5q.js:234717-234831 placement
 /**
  * 从内部元数据恢复 tools_kept_by_clear 记录。
  */
@@ -87,7 +119,7 @@ function restoreToolsKeptByClear(restoredWorkerState) {
       toolsKeptByClear.slice(0, MAX_RESTORED_TOOLS).filter(isGmailAttachmentTool),
     );
 }
-//@ chunk-s61vbvea.js:377682-377773 placement
+//@ chunk-7jxyna5q.js:234831-234922 placement
 /**
  * 生成要写回内部元数据的 tools_kept_by_clear 字段。
  */
@@ -97,7 +129,7 @@ function toolsKeptMetadata() {
     tools_kept_by_clear: filtered.length > 0 ? filtered : null,
   };
 }
-//@ chunk-s61vbvea.js:377773-377847 placement
+//@ chunk-7jxyna5q.js:234922-234996 placement
 /**
  * 把当前保留工具列表写回会话内部元数据（出错静默）。
  */
@@ -109,10 +141,12 @@ function notifyToolsKept(sessionState) {
   }
 }
 export {
-  recordToolUseTagged,
-  recordToolUsed,
   restoreToolsKeptByClear,
+  recordEarlierToolsUnknown,
+  recordToolUsed,
   notifyToolsKept,
-  recordServerToolsUsed,
+  recordServerListedTool,
+  recordToolUseTagged,
   recordToolUsePair,
+  recordServerToolsUsed,
 };

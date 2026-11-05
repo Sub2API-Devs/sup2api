@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：插件使用中标记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
 import { dirname, basename, join, relative, sep } from "path";
-import { readdir, rm as rm_2, lstat, rmdir, realpath, mkdir, unlink, readFile } from "fs/promises";
+import { readdir, rm, lstat, rmdir, realpath, mkdir, unlink, readFile } from "fs/promises";
 import { readdirSync, unlinkSync, realpathSync, lstatSync } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_3, create_2 } from "../../../vendor/zod/lib/index.mjs";
@@ -51,12 +51,12 @@ import { safeParseJSON } from "../json.js";
 import { isProcessRunning as isProcessRunning_2 } from "../genericProcessUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:616264-616382 placement
+//@ chunk-5xgkngpb.js:626356-626474 placement
 var IN_USE_LINKS_DIR; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var IN_USE_LINK_DEPTH;
 var MAX_IN_USE_MARKER_BYTES;
 var InUseMarkerSchema;
-deferInit("chunk-e6aww6q8.js:616264", () => {
+deferInit("chunk-5xgkngpb.js:626356", () => {
   IN_USE_LINKS_DIR = ".in_use-links";
   IN_USE_LINK_DEPTH = 3;
   MAX_IN_USE_MARKER_BYTES = 4096;
@@ -68,7 +68,7 @@ deferInit("chunk-e6aww6q8.js:616264", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:616382-616791 placement
+//@ chunk-5xgkngpb.js:626474-626883 placement
 /**
  * 退出清理：删除本进程写的 in_use 标记（含 v5 存储项）。
  */
@@ -89,13 +89,13 @@ async function removeOwnInUseMarkersAsync(state) {
         dirEntries = await readdir(dirname(ownInUseMarkerPath));
       } catch {}
       for (let name of [...ownTempMarkersOf(dirEntries, ownInUseMarkerPath), basename(ownInUseMarkerPath)])
-        await rm_2(join(dirname(ownInUseMarkerPath), name), {
+        await rm(join(dirname(ownInUseMarkerPath), name), {
           force: true,
         }).catch(() => {});
     }),
   );
 }
-//@ chunk-e6aww6q8.js:616791-617024 placement
+//@ chunk-5xgkngpb.js:626883-627116 placement
 function removeOwnInUseMarkersSync(state) {
   for (let ownInUseMarkerPath of state.ownInUseMarkerPaths) {
     if (!scanDirectory(dirname(ownInUseMarkerPath))) continue;
@@ -111,11 +111,11 @@ function removeOwnInUseMarkersSync(state) {
   state.ownInUseMarkerPaths.clear();
   state.ownInUseMarkerHandles.clear();
 }
-//@ chunk-e6aww6q8.js:617024-617077 placement
+//@ chunk-5xgkngpb.js:627116-627169 placement
 function ownTempMarkersOf(names, ownInUseMarkerPath) {
   return names.filter((name) => isOwnTempName(name, basename(ownInUseMarkerPath)));
 }
-//@ chunk-e6aww6q8.js:617077-617191 placement
+//@ chunk-5xgkngpb.js:627169-627283 placement
 async function isMarkerDirOurs(dirPath) {
   if (isInUseMarkerPath(dirPath)) return (await classifyLinkDir(dirPath)) === "ours";
   try {
@@ -124,7 +124,7 @@ async function isMarkerDirOurs(dirPath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:617191-617379 placement (2.1.88 match: scanDirectory, 0.766)
+//@ chunk-5xgkngpb.js:627283-627471 placement (2.1.88 match: scanDirectory, 0.767)
 function scanDirectory(dirPath) {
   try {
     if (isInUseMarkerPath(dirPath)) {
@@ -138,7 +138,7 @@ function scanDirectory(dirPath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:617379-617698 placement
+//@ chunk-5xgkngpb.js:627471-627791 placement
 /**
  * lstat 判断路径 absent/directory/junk/refused（Windows 拒绝 junction）。
  */
@@ -166,11 +166,11 @@ async function classifyMarkerPath(markerPath) {
   }
   return "directory";
 }
-//@ chunk-e6aww6q8.js:617740-617784 placement
+//@ chunk-5xgkngpb.js:627833-627877 placement
 function isInUseMarkerPath(markerPath) {
   return isSubpathOf(join(projectPluginsDir(), IN_USE_LINKS_DIR), markerPath, false);
 }
-//@ chunk-e6aww6q8.js:617784-618049 placement
+//@ chunk-5xgkngpb.js:627877-628142 placement
 function registerOwnInUseMarker(state, markerPath, handle) {
   state.ownInUseMarkerPaths.add(markerPath);
   if (handle) state.ownInUseMarkerHandles.set(markerPath, handle);
@@ -184,12 +184,12 @@ function registerOwnInUseMarker(state, markerPath, handle) {
     process.off("exit", onExit);
   };
 }
-//@ chunk-e6aww6q8.js:618049-618133 placement
+//@ chunk-5xgkngpb.js:628142-628226 placement
 function forgetOwnInUseMarker(pluginRegistry, markerPath) {
   pluginRegistry.ownInUseMarkerPaths.delete(markerPath);
   pluginRegistry.ownInUseMarkerHandles.delete(markerPath);
 }
-//@ chunk-e6aww6q8.js:618133-618211 placement
+//@ chunk-5xgkngpb.js:628226-628304 placement
 /**
  * isSymlinkOrFalse：是否为符号链接。
  */
@@ -200,7 +200,7 @@ async function isSymlinkOrFalse(path) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:618211-618359 placement
+//@ chunk-5xgkngpb.js:628304-628452 placement
 async function pruneEmptyLinkDirs(inUseLinkPath) {
   let linksRoot = join(projectPluginsDir(), IN_USE_LINKS_DIR);
   let dir = inUseLinkPath;
@@ -214,14 +214,14 @@ async function pruneEmptyLinkDirs(inUseLinkPath) {
     dir = dirname(dir);
   }
 }
-//@ chunk-e6aww6q8.js:618359-618499 placement
+//@ chunk-5xgkngpb.js:628452-628592 placement
 function toInUseLinkPath(versionDir) {
   let pluginsDir = projectPluginsDir();
   let parts = relative(join(pluginsDir, PLUGIN_CACHE_DIRNAME), versionDir).split(sep);
   if (parts.length !== 3 || parts.some((part) => part === "" || part === "." || part === "..")) return;
   return join(pluginsDir, IN_USE_LINKS_DIR, ...parts);
 }
-//@ chunk-e6aww6q8.js:618499-618829 placement
+//@ chunk-5xgkngpb.js:628592-628922 placement
 /**
  * 逐级创建链接目录并检测是否被重定向。
  */
@@ -247,7 +247,7 @@ async function ensureLinkDirChain(linkPath) {
     return "undeterminable";
   }
 }
-//@ chunk-e6aww6q8.js:618829-619096 placement
+//@ chunk-5xgkngpb.js:628922-629189 placement
 async function findPlantedEntry(pluginsDir, linkPath) {
   let linksRoot = join(pluginsDir, IN_USE_LINKS_DIR);
   let currentPath = pluginsDir;
@@ -272,7 +272,7 @@ async function findPlantedEntry(pluginsDir, linkPath) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:619096-619360 placement
+//@ chunk-5xgkngpb.js:629189-629453 placement
 async function pruneOrReportPlantedEntry(pluginsDir, linkPath) {
   let plantedEntry = await findPlantedEntry(pluginsDir, linkPath);
   if (plantedEntry === undefined) return "pruned";
@@ -287,7 +287,7 @@ async function pruneOrReportPlantedEntry(pluginsDir, linkPath) {
   );
   return "pruned";
 }
-//@ chunk-e6aww6q8.js:619360-619644 placement
+//@ chunk-5xgkngpb.js:629453-629737 placement
 async function classifyLinkDir(linkDir) {
   try {
     let realLinkDir = await realpath(linkDir);
@@ -306,14 +306,14 @@ async function classifyLinkDir(linkDir) {
     return "undeterminable";
   }
 }
-//@ chunk-e6aww6q8.js:619644-619712 placement
+//@ chunk-5xgkngpb.js:629737-629805 placement
 async function inUseMarkerPayload() {
   return jsonStringify({
     pid: process.pid,
     ...procIdentityFields(await ownProcStartAsync()),
   });
 }
-//@ chunk-e6aww6q8.js:619712-621536 placement
+//@ chunk-5xgkngpb.js:629805-631637 placement
 /**
  * 写入插件使用中标记，并发清理导致反复失败时放弃。
  */
@@ -448,7 +448,7 @@ async function writeInUseMarker(versionDir, storageV5) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:621536-622103 placement
+//@ chunk-5xgkngpb.js:631637-632204 placement
 /**
  * 删除本进程（pid）在版本目录 e 的 in_use 标记：链接式缓存直接成功；v5 存储走存储 delete，否则 rm； 标记目录被拒或是杂项时返回 false。成功后从注册表移除。
  */
@@ -479,7 +479,7 @@ async function removeInUseMarker(versionDir, storage) {
         return false;
       }
     } else
-      await rm_2(markerPath, {
+      await rm(markerPath, {
         force: true,
       });
     await rmdir(markerDir).catch(() => {});
@@ -490,14 +490,14 @@ async function removeInUseMarker(versionDir, storage) {
   forgetOwnInUseMarker(getPluginRegistry(), markerPath);
   return true;
 }
-//@ chunk-e6aww6q8.js:622103-622144 placement
+//@ chunk-5xgkngpb.js:632204-632245 placement
 var LAST_INUSE_SWEEP_FILE = ".last_inuse_sweep";
 var INUSE_SWEEP_INTERVAL_MS = 86400000;
-//@ chunk-e6aww6q8.js:622144-622177 placement
+//@ chunk-5xgkngpb.js:632245-632278 placement
 function isSweepRecent(mtimeMs) {
   return isFreshTimestamp_2(mtimeMs, INUSE_SWEEP_INTERVAL_MS);
 }
-//@ chunk-e6aww6q8.js:622177-622999 placement
+//@ chunk-5xgkngpb.js:632278-633100 placement
 /**
  * 清扫插件使用中标记。
  */
@@ -544,7 +544,7 @@ async function sweepInUseMarkers(versionDirs, version) {
     logForDebugging(`Failed to stamp ${LAST_INUSE_SWEEP_FILE}: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:622999-623640 placement
+//@ chunk-5xgkngpb.js:633100-633741 placement
 /**
  * 链接式缓存查 .in_use-links 下的对应目录；否则读版本目录里的 in_use 标记（v5 存储时列存储项）。 读不到或被拒时按 refusedCountsAsLive（默认 true）保守视为使用中。孤儿清理、同步与安装前调用。
  */
@@ -590,7 +590,7 @@ async function isPluginVersionInUse(versionDir, options, storage) {
   }
   return listInUseMarkers(store, cacheCoords, options);
 }
-//@ chunk-e6aww6q8.js:623640-623959 placement
+//@ chunk-5xgkngpb.js:633741-634060 placement
 /**
  * 删除非目录形式的 in_use 标记，失败时视为仍在使用。
  */
@@ -614,14 +614,14 @@ async function removeNonDirectoryMarker(path) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:623959-623974 placement
+//@ chunk-5xgkngpb.js:634060-634075 placement
 var STALE_INUSE_MARKER_MS = 600000;
-//@ chunk-e6aww6q8.js:623974-624060 placement
+//@ chunk-5xgkngpb.js:634075-634161 placement
 function isStaleInUseMarker(mtimeMs) {
   if (typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs)) return false;
   return !isFreshTimestamp_2(mtimeMs, STALE_INUSE_MARKER_MS);
 }
-//@ chunk-e6aww6q8.js:624060-624205 placement
+//@ chunk-5xgkngpb.js:634161-634306 placement
 async function removeStaleEntry(path, mtimeMs) {
   try {
     let mtime = mtimeMs ?? (await lstat(path)).mtimeMs;
@@ -632,7 +632,7 @@ async function removeStaleEntry(path, mtimeMs) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:624205-625019 placement
+//@ chunk-5xgkngpb.js:634306-635120 placement
 async function readInUseMarker(markerDir, options) {
   let names;
   try {
@@ -692,7 +692,7 @@ async function readInUseMarker(markerDir, options) {
   }
   return anyLive;
 }
-//@ chunk-e6aww6q8.js:625019-626391 placement
+//@ chunk-5xgkngpb.js:635120-636501 placement
 /**
  * 列出插件缓存中的使用中标记。
  */
@@ -785,9 +785,9 @@ async function listInUseMarkers(storageV5, coords, options) {
   }
   return any;
 }
-//@ chunk-e6aww6q8.js:626391-626402 placement
+//@ chunk-5xgkngpb.js:636501-636512 placement
 var MAX_INUSE_READ_BATCH = 64;
-//@ chunk-e6aww6q8.js:626402-626761 placement
+//@ chunk-5xgkngpb.js:636512-636871 placement
 /**
  * 批量读存储项，失败退回逐项读。
  */
@@ -819,7 +819,7 @@ async function readMarkerItems(storageV5, keys) {
   }
   return items;
 }
-//@ chunk-e6aww6q8.js:626761-626936 placement
+//@ chunk-5xgkngpb.js:636871-637046 placement
 async function releaseMarkersOutside(cacheRoot, keep, storageV5) {
   let staleDirs = new Set();
   for (let ownInUseMarkerPath of getPluginRegistry().ownInUseMarkerPaths) {
@@ -828,7 +828,7 @@ async function releaseMarkersOutside(cacheRoot, keep, storageV5) {
   }
   await Promise.all(Array.from(staleDirs, (versionDir) => removeInUseMarker(versionDir, storageV5)));
 }
-//@ chunk-e6aww6q8.js:626936-627074 placement
+//@ chunk-5xgkngpb.js:637046-637184 placement
 async function isMarkerOwnerAlive(marker, requireIdentity) {
   if (!(marker.pid === 1 || isProcessRunning_2(marker.pid))) return false;
   let identity = procIdentityOf(marker);

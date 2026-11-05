@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能/命令 frontmatter 字段 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { DETAIL_KEY_RE } from "../plugins/functionHooks/contextDataApi.js";
@@ -32,11 +32,11 @@ import { claimOnce } from "../services/api/verificationRequired.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:789532-789584 placement
+//@ chunk-5xgkngpb.js:800857-800909 placement
 function frontmatterKeyTelemetry(key) {
   return DETAIL_KEY_RE.test(key) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(key) : lit_2("other");
 }
-//@ chunk-e6aww6q8.js:789584-797089 placement
+//@ chunk-5xgkngpb.js:800909-808414 placement
 /**
  * 技能/命令 frontmatter 字段定义（显示名、描述、模型、allowed-tools 等）。
  */
@@ -49,7 +49,7 @@ var SkillSchema;
 var AgentFrontmatterSchema;
 var OutputStyleFrontmatterSchema;
 var FRONTMATTER_SCHEMAS_BY_KIND;
-deferInit("chunk-e6aww6q8.js:789584", () => {
+deferInit("chunk-5xgkngpb.js:800909", () => {
   SKILL_FRONTMATTER_SCHEMA = () => union([stringSchema(), numberSchema(), booleanSchema(), nullSchema()]);
   SkillFrontmatterValueSchemaAlias = SKILL_FRONTMATTER_SCHEMA;
   SkillFrontmatterValueSchemaAlias2 = SKILL_FRONTMATTER_SCHEMA;
@@ -279,7 +279,7 @@ deferInit("chunk-e6aww6q8.js:789584", () => {
     "output-style": DoctorLazy(() => OutputStyleFrontmatterSchema().strict()),
   };
 });
-//@ chunk-e6aww6q8.js:797089-797199 placement
+//@ chunk-5xgkngpb.js:808414-808524 placement
 function logFrontmatterShadowOnce(eventName, surface, keyOrIssue, detail) {
   if (!claimOnce().claim(`frontmatter_shadow:${eventName}:${surface}:${keyOrIssue}`)) return;
   logEvent(eventName, {
@@ -287,7 +287,7 @@ function logFrontmatterShadowOnce(eventName, surface, keyOrIssue, detail) {
     detail,
   });
 }
-//@ chunk-e6aww6q8.js:797199-797549 placement
+//@ chunk-5xgkngpb.js:808524-808874 placement
 /**
  * 用新版 frontmatter schema 影子校验现有 frontmatter（不影响行为）：未知键与类型不匹配各按键只打点一次。
  */

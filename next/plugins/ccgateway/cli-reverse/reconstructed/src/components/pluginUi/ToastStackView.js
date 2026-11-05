@@ -3,18 +3,12 @@
  *
  * 2.1.316 新增。插件 toast 堆叠视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (36)
  * attribution: placement 36
  */
 import { __export, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { max } from "../PromptInput/promptInputState.js";
-import { DOCK_MIN_COLUMNS } from "./PaneDock.js";
-import { useAutoDialogKindAlt } from "../../screens/repl/storeHooks.js";
-import { useDialogSelector, topAutoDialog } from "../../state/dialogQueue.js";
-import { MCP_ELICITATION_DIALOG } from "../../services/mcp/elicitationDialogs.js";
-import { hasPluginUserConfig } from "../../plugins/bundled/claudeTest/userConfig.js";
 import {
   init_react_production,
   useEffect,
@@ -22,10 +16,16 @@ import {
   useContext,
   useRef,
 } from "../../../vendor/react/cjs/react.production.js";
+import { max } from "../PromptInput/promptInputState.js";
+import { DOCK_MIN_COLUMNS } from "./PaneDock.js";
+import { useAutoDialogKindAlt } from "../../screens/repl/storeHooks.js";
+import { useDialogSelector, topAutoDialog } from "../../state/dialogQueue.js";
+import { MCP_ELICITATION_DIALOG } from "../../services/mcp/elicitationDialogs.js";
+import { hasPluginUserConfig } from "../../plugins/bundled/claudeTest/userConfig.js";
 import { drawnToasts, TOAST_FADE_MS, toastStackNamespace, pauseToasts } from "./toastStack.js";
 import { toldRefusals } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { sayPlainCode, logLine, loadOf, leadOf } from "../../plugins/functionHooks/ui/renderDispatch.js";
 import { errorMessage } from "../../utils/errors.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -49,11 +49,11 @@ import { EMPTY_STATE_EXPORTS } from "../../plugins/functionHooks/api/state.js";
 import { SentryErrorBoundary } from "../SentryErrorBoundary.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:36759-36769 placement
+//@ chunk-czq1j3j2.js:38320-38330 placement
 var ToastStackViewNamespace = {};
-//@ chunk-18hwfzwa.js:36769-37274 placement
+//@ chunk-czq1j3j2.js:38330-38835 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36769", () => {
+deferInit("chunk-czq1j3j2.js:38330", () => {
   __export(ToastStackViewNamespace, {
     DrawnNote: () => DrawnNote,
     TOAST_BOX_COLUMNS: () => TOAST_BOX_COLUMNS,
@@ -79,26 +79,41 @@ deferInit("chunk-18hwfzwa.js:36769", () => {
     useToastPause: () => useToastPause,
   });
 });
-//@ chunk-18hwfzwa.js:1810342-1810364 placement
+//@ chunk-czq1j3j2.js:1857557-1857561 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1857557", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1857610-1857614 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1857610", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1858013-1858017 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1858013", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1858321-1858343 placement
 var TOAST_MIN_VISIBLE_COLUMNS; // deferred: uses MAX_DEFAULT_TRUNCATE_LINES (../PromptInput/promptInputState.js) of its import cycle while loading; runs once the cycle is complete
 var TOAST_RESERVED_COLUMNS;
-deferInit("chunk-18hwfzwa.js:1810342", () => {
+deferInit("chunk-czq1j3j2.js:1858321", () => {
   TOAST_MIN_VISIBLE_COLUMNS = 72;
   TOAST_RESERVED_COLUMNS = TOAST_MIN_VISIBLE_COLUMNS + max;
 });
-//@ chunk-18hwfzwa.js:1810364-1810428 placement
+//@ chunk-czq1j3j2.js:1858343-1858407 placement
 function fitToastWidth(requestedColumns, columns) {
   let availableColumns = columns - TOAST_RESERVED_COLUMNS;
   if (requestedColumns <= availableColumns) return requestedColumns;
   return availableColumns >= DOCK_MIN_COLUMNS ? availableColumns : 0;
 }
-//@ chunk-18hwfzwa.js:1810428-1810495 placement
+//@ chunk-czq1j3j2.js:1858407-1858474 placement
 function toastRegionWidth(isShown, columns, terminalColumns) {
   let hasPluginConfigDialog = useHasPluginConfigDialog();
   if (!isShown) return 0;
   return hasPluginConfigDialog ? fitToastWidth(columns, terminalColumns) : columns;
 }
-//@ chunk-18hwfzwa.js:1810495-1810806 placement
+//@ chunk-czq1j3j2.js:1858474-1858786 placement
 /**
  * 当前是否显示插件 MCP 用户配置对话框。
  */
@@ -120,19 +135,19 @@ function useHasPluginConfigDialog() {
   });
   return hasAutoDialog && isPluginConfigDialog;
 }
-//@ chunk-18hwfzwa.js:1810806-1810810 placement
+//@ chunk-czq1j3j2.js:1858786-1858790 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1810806", () => {
+deferInit("chunk-czq1j3j2.js:1858786", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1810810-1810866 placement
+//@ chunk-czq1j3j2.js:1858790-1858846 placement
 function DrawnNote({ id }) {
   useEffect(() => {
     drawnToasts.add(id);
   }, [id]);
   return null;
 }
-//@ chunk-18hwfzwa.js:1810866-1811075 placement
+//@ chunk-czq1j3j2.js:1858846-1859055 placement
 function firstToastsReport(error) {
   let reportKey = `reported ${error.load} ${error.lead} ui.toast`;
   if (toldRefusals.has(reportKey)) return null;
@@ -140,10 +155,10 @@ function firstToastsReport(error) {
   logFeatureBad("plugin_function_hooks_toast_stack", "threw_while_drawn");
   return "ui.toast: the toast stack threw while drawn";
 }
-//@ chunk-18hwfzwa.js:1811075-1811143 placement
+//@ chunk-czq1j3j2.js:1859055-1859123 placement
 var stackedTops = (sizes, start) =>
   sizes.map((size, index) => start + sizes.slice(0, index).reduce((acc, size) => acc + size, 0));
-//@ chunk-18hwfzwa.js:1811143-1811345 placement
+//@ chunk-czq1j3j2.js:1859123-1859325 placement
 function fittingToasts(layout) {
   let { heights, mostBoxes, roomRows } = layout;
   let sizes = heights.toReversed().slice(0, mostBoxes);
@@ -152,7 +167,7 @@ function fittingToasts(layout) {
     heights.length,
     Math.max(
       1,
-      count(
+      countWhere(
         sizes.map(
           (height, index) => (tops[index] ?? 0) + height + (heights.length > index + 1 ? 1 : 0) <= roomRows,
         ),
@@ -161,7 +176,7 @@ function fittingToasts(layout) {
     ),
   );
 }
-//@ chunk-18hwfzwa.js:1811345-1811645 placement
+//@ chunk-czq1j3j2.js:1859325-1859625 placement
 function seatedToasts(toasts) {
   let placeById = new Map(toasts.map((toast, index) => [toast.id, index]));
   return [...Map.groupBy(toasts, (toast) => toast.owner).values()]
@@ -177,33 +192,33 @@ function seatedToasts(toasts) {
     )
     .map((seated) => seated.toast);
 }
-//@ chunk-18hwfzwa.js:1811645-1811750 placement
+//@ chunk-czq1j3j2.js:1859625-1859730 placement
 function slideColumnsOf(animation) {
   let max = Math.max(0, animation.at - animation.shownAt);
   return animation.isStill || max >= TOAST_FADE_MS
     ? 0
     : Math.ceil(animation.columns * (1 - max / TOAST_FADE_MS));
 }
-//@ chunk-18hwfzwa.js:1811750-1811936 placement
+//@ chunk-czq1j3j2.js:1859730-1859916 placement
 var tellToastsThrown = (error, thrown) =>
   sayPlainCode({
     key: `${error.load} ${error.lead} ui.toast threw while drawn`,
     lead: error.lead,
     text: `ui.toast threw while drawn: ${logLine(String(errorMessage(thrown)))}; no toast is drawn until the stack changes`,
   });
-//@ chunk-18hwfzwa.js:1811936-1811940 placement
+//@ chunk-czq1j3j2.js:1859916-1859920 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1811936", () => {
+deferInit("chunk-czq1j3j2.js:1859916", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1811940-1811944 placement
+//@ chunk-czq1j3j2.js:1859920-1859924 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1811940", () => {
+deferInit("chunk-czq1j3j2.js:1859920", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1811944-1811955 placement
+//@ chunk-czq1j3j2.js:1859924-1859935 placement
 var TOAST_FRAME_MS = 48;
-//@ chunk-18hwfzwa.js:1811955-1812128 placement
+//@ chunk-czq1j3j2.js:1859935-1860108 placement
 function useSlideColumns(animation) {
   let [now, setNow] = useState(Date.now);
   let slideColumns = slideColumnsOf({
@@ -225,7 +240,7 @@ function useSlideColumns(animation) {
   }, [now, slideColumns]);
   return slideColumns;
 }
-//@ chunk-18hwfzwa.js:1812128-1813870 placement
+//@ chunk-czq1j3j2.js:1860108-1861850 placement
 function ToastBox(props) {
   let $ = useMemoCache(31);
   let { toast, shape, top, isFramed } = props;
@@ -380,22 +395,22 @@ function ToastBox(props) {
   } else toastBox = $[30];
   return toastBox;
 }
-//@ chunk-18hwfzwa.js:1813870-1813881 placement
+//@ chunk-czq1j3j2.js:1861850-1861861 placement
 var TOAST_BOX_COLUMNS = 44;
-//@ chunk-18hwfzwa.js:1813881-1813885 placement
+//@ chunk-czq1j3j2.js:1861861-1861865 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1813881", () => {
+deferInit("chunk-czq1j3j2.js:1861861", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1813885-1813895 placement
+//@ chunk-czq1j3j2.js:1861865-1861875 placement
 var TOAST_EDGE_COLUMNS = 2;
-//@ chunk-18hwfzwa.js:1813895-1813905 placement
+//@ chunk-czq1j3j2.js:1861875-1861885 placement
 var TOAST_RESERVED_ROWS = 8;
-//@ chunk-18hwfzwa.js:1813905-1813915 placement
+//@ chunk-czq1j3j2.js:1861885-1861895 placement
 var TOAST_FRAME_COLUMNS = 4;
-//@ chunk-18hwfzwa.js:1813915-1813925 placement
+//@ chunk-czq1j3j2.js:1861895-1861905 placement
 var TOAST_TEXT_ROWS = 3;
-//@ chunk-18hwfzwa.js:1813925-1814260 placement
+//@ chunk-czq1j3j2.js:1861905-1862240 placement
 function toastShapeOf(options) {
   let { toast, roomColumns, isFramed } = options;
   let frameWidth = isFramed ? TOAST_FRAME_COLUMNS : 0;
@@ -414,13 +429,13 @@ function toastShapeOf(options) {
     rows: filtered.length + 1 + (isFramed ? 2 : 0),
   };
 }
-//@ chunk-18hwfzwa.js:1814260-1814270 placement
+//@ chunk-czq1j3j2.js:1862240-1862250 placement
 var TOAST_STACK_VISIBLE = 3;
-//@ chunk-18hwfzwa.js:1814270-1814302 placement
+//@ chunk-czq1j3j2.js:1862250-1862282 placement
 function selectRows(shape) {
   return shape.rows;
 }
-//@ chunk-18hwfzwa.js:1814302-1814350 placement
+//@ chunk-czq1j3j2.js:1862282-1862330 placement
 function renderToastNote(toast) {
   return jsxProd_default(
     DrawnNote,
@@ -430,7 +445,7 @@ function renderToastNote(toast) {
     toast.id,
   );
 }
-//@ chunk-18hwfzwa.js:1814350-1815941 placement
+//@ chunk-czq1j3j2.js:1862330-1863922 placement
 function ToastBoxes(props) {
   let $ = useMemoCache(26);
   let { toasts, isPaused } = props;
@@ -581,7 +596,7 @@ function ToastBoxes(props) {
   } else content = $[16];
   return content;
 }
-//@ chunk-18hwfzwa.js:1815941-1816072 placement
+//@ chunk-czq1j3j2.js:1863922-1864053 placement
 function toastsTeller(storeSelector) {
   let owners = new Set(storeSelector.map((toast) => toast.owner));
   return {
@@ -589,12 +604,7 @@ function toastsTeller(storeSelector) {
     lead: leadOf([...owners]),
   };
 }
-//@ chunk-18hwfzwa.js:1816072-1816076 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1816072", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1816076-1816175 placement
+//@ chunk-czq1j3j2.js:1864057-1864156 placement
 function useToastPause() {
   let storeSelector = useStoreSelector(paneRegistry(), holdsToasts);
   useEffect(() => {
@@ -609,7 +619,7 @@ function useToastPause() {
   }, [storeSelector]);
   return storeSelector;
 }
-//@ chunk-18hwfzwa.js:1816175-1816681 placement
+//@ chunk-czq1j3j2.js:1864156-1864662 placement
 function ToastStackView() {
   let $ = useMemoCache(12);
   let sessionState;
@@ -657,14 +667,4 @@ function ToastStackView() {
   } else boundaryElement = $[11];
   return boundaryElement;
 }
-//@ chunk-18hwfzwa.js:1816681-1816685 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1816681", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1816718-1816722 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1816718", () => {
-  init_react_production();
-});
 export { toastRegionWidth, ToastStackViewNamespace };

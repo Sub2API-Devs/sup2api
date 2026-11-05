@@ -3,10 +3,10 @@
  *
  * IDE 诊断跟踪服务：编辑前后从 IDE（VS Code/JetBrains MCP）取诊断基线与新诊断并比对；本段还混入了 @opentelemetry/api-logs 的 ProxyLogger 等第三方代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/diagnosticTracking.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (8)
- * attribution: fingerprint 2, placement 5, layout 2
+ * pieces: chunk-5xgkngpb.js (8), chunk-exfmq47h.js (1)
+ * attribution: placement 5, layout 2, fingerprint 2
  */
 import { LogsAPI } from "../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js";
 import { ClaudeError, withTelemetryMessage, hasExactErrorMessage } from "../utils/errors.js";
@@ -21,24 +21,24 @@ import { hasAccessToIDEExtensionDiffFeature as hasAccessToIDEExtensionDiffFeatur
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:650328-650353 fingerprint (2.1.88 match: diagnosticTracker, 1)
+//@ chunk-exfmq47h.js:662934-662959 fingerprint (2.1.88 match: diagnosticTracker, 1)
 var diagnosticTracker; // deferred: uses LogsAPI (../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:650328", () => {
+deferInit("chunk-exfmq47h.js:662934", () => {
   diagnosticTracker = LogsAPI.getInstance();
 });
-//@ chunk-e6aww6q8.js:585149-585220 placement
+//@ chunk-5xgkngpb.js:593989-594060 placement
 function getMcpClientModule() {
   return require("./mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-e6aww6q8.js:585220-585243 placement
+//@ chunk-5xgkngpb.js:594060-594083 placement
 /**
  * IDE 诊断文件路径不匹配时抛出的错误类型。
  */
 let DiagnosticsPathMismatchError; // deferred: uses ClaudeError (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:585220", () => {
+deferInit("chunk-5xgkngpb.js:594060", () => {
   DiagnosticsPathMismatchError = class DiagnosticsPathMismatchError extends ClaudeError {};
 });
-//@ chunk-e6aww6q8.js:585243-585529 layout
+//@ chunk-5xgkngpb.js:594083-594369 layout
 /**
  * 从 URI 中提取盘符的正则。
  */
@@ -51,7 +51,7 @@ var JETBRAINS_PLUGIN_NAME = "Claude Code JetBrains Plugin";
 var URI_PREFIXES = ["file://", "_claude_fs_right:", "_claude_fs_left:"];
 var WINDOWS_DRIVE_PATH_RE = /^[\\/][A-Za-z]:[\\/]/;
 var DRIVE_LETTER_IN_URI_RE = /(?:^|[\\/])([A-Za-z])(?::|%3[Aa])(?=[\\/]|%5[Cc]|%2[Ff])/;
-//@ chunk-e6aww6q8.js:585529-585941 layout
+//@ chunk-5xgkngpb.js:594369-594781 layout
 function classifyDiagnosticUri(uri) {
   let lower = uri.toLowerCase();
   let scheme = lower.startsWith("file://")
@@ -70,7 +70,7 @@ function classifyDiagnosticUri(uri) {
     driveLetter === undefined ? "none" : driveLetter === driveLetter.toUpperCase() ? "upper" : "lower";
   return `scheme=${scheme} sep=${separators} enc=${encoding} drive=${driveCase}`;
 }
-//@ chunk-e6aww6q8.js:585941-589557 fingerprint (2.1.88 match: DiagnosticTrackingService, 0.559)
+//@ chunk-5xgkngpb.js:594781-598400 fingerprint (2.1.88 match: DiagnosticTrackingService, 0.56)
 class DiagnosticTrackingService {
   baseline = new Map();
   initialized = false;
@@ -254,15 +254,15 @@ class DiagnosticTrackingService {
     } else this.reset();
   }
 }
-//@ chunk-e6aww6q8.js:589557-589585 placement
+//@ chunk-5xgkngpb.js:598400-598428 placement
 /**
  * 按会话根保存的 IDE 诊断跟踪服务。
  */
 var diagnosticTrackingSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:589557", () => {
+deferInit("chunk-5xgkngpb.js:598400", () => {
   diagnosticTrackingSlot = new SessionRootSlot(() => new DiagnosticTrackingService());
 });
-//@ chunk-e6aww6q8.js:589585-589731 placement (2.1.88 match: formatLocation, 0.772)
+//@ chunk-5xgkngpb.js:598428-598574 placement (2.1.88 match: formatLocation, 0.771)
 /**
  * 把诊断（message/severity/source/code/range）拼成去重键（误配名 formatLocation，属 LSP 诊断）。
  */
@@ -279,7 +279,7 @@ function formatLocation(location) {
     range?.end?.character,
   ]);
 }
-//@ chunk-e6aww6q8.js:589731-589831 placement
+//@ chunk-5xgkngpb.js:598574-598674 placement
 function classifyDiagnosticsError(error, timeoutMessage) {
   if (hasExactErrorMessage(error, timeoutMessage)) return "timeout";
   return error instanceof SyntaxError ? "parse_failed" : "error";

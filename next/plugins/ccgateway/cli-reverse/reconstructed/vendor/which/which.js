@@ -1,14 +1,14 @@
 /**
  * which/which.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: which@2.0.2
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_isexe } from "../isexe/index.js";
 
-//@ chunk-m4p5zn6n.js:2251-3688 cjs-fingerprint
+//@ chunk-t889g22j.js:2251-3688 cjs-fingerprint
 var require_which = __commonJS(function (cjsExports, cjsModule) {
   var isWindows = process.env.OSTYPE === "cygwin" || process.env.OSTYPE === "msys";
   var path = importMetaRequire("path");

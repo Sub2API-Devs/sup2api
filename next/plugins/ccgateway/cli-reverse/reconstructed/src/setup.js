@@ -3,9 +3,9 @@
  *
  * setup()：Node 版本检查、--session-id、跨会话消息、终端恢复、chdir、钩子快照、worktree/tmux、锁定当前版本、tengu_started
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/setup.ts
- * pieces: chunk-fhdzwff4.js (15)
+ * pieces: chunk-ag1kt2k5.js (15)
  * attribution: placement 5, sole-consumer 9, fingerprint 1
  */
 import { realpath } from "fs/promises";
@@ -108,7 +108,7 @@ import { isStoredLoginPinned } from "./cli/headlessCloud/attachServe.js";
 import { prefetchApiKeyFromApiKeyHelperIfSafe } from "./utils/auth.js";
 import { HostScoped } from "./utils/hostScoped.js";
 
-//@ chunk-fhdzwff4.js:12919-13043 placement
+//@ chunk-ag1kt2k5.js:14123-14247 placement
 function bindInboxOnFlagRefresh(inboxOptions, session) {
   let didBind = false;
   let unsubscribe = onGrowthBookRefresh(() => {
@@ -127,7 +127,7 @@ function bindInboxOnFlagRefresh(inboxOptions, session) {
   registerCleanup(async () => unsubscribe());
   return unsubscribe;
 }
-//@ chunk-fhdzwff4.js:13043-13979 placement
+//@ chunk-ag1kt2k5.js:14247-15183 placement
 /**
  * 开关在启动后打开时补绑定跨会话收件箱
  */
@@ -177,7 +177,7 @@ async function lateBindCrossSessionInbox(inboxOptions, session) {
   if (udsMessagingSocketPath !== undefined)
     await updateSessionMessagingSocketPath(udsMessagingSocketPath, session);
 }
-//@ chunk-fhdzwff4.js:13979-14030 placement
+//@ chunk-ag1kt2k5.js:15183-15234 placement
 /**
  * 先记录错误再把同一个错误抛出。
  */
@@ -187,18 +187,18 @@ function logThenRethrow(promise, error) {
     throw error;
   });
 }
-//@ chunk-fhdzwff4.js:14030-14087 placement
+//@ chunk-ag1kt2k5.js:15234-15291 placement
 /**
  * 是否处于同步插件安装模式（非交互 + 环境变量开启 + 非 bare）。
  */
 var isSyncPluginInstallMode = () =>
   getIsNonInteractiveSession() && env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL && !isBareMode();
-//@ chunk-fhdzwff4.js:14087-14113 placement
+//@ chunk-ag1kt2k5.js:15291-15317 placement
 /**
  * 跳过常规插件安装：同步安装、bare 或 safe 模式。
  */
 var isPluginInstallBypassed = () => isSyncPluginInstallMode() || isBareMode() || isSafeMode();
-//@ chunk-fhdzwff4.js:15033-15976 sole-consumer
+//@ chunk-ag1kt2k5.js:16237-17180 sole-consumer
 /**
  * 后台会话启动时接管所在的代理 worktree：确认是规范 git 根下的关联 worktree 且 slug 合法，检查状态后加锁（必要时重试），恢复并保存 worktree 会话状态。
  */
@@ -259,7 +259,7 @@ async function adoptBackgroundWorktree(cwd, options) {
   saveWorktreeState(worktreeState);
   return worktreeState;
 }
-//@ chunk-fhdzwff4.js:15976-16059 sole-consumer
+//@ chunk-ag1kt2k5.js:17180-17263 sole-consumer
 /**
  * 当前进程是否持有该 worktree 的锁。
  */
@@ -270,7 +270,7 @@ async function isLockHolderProcess(cwd, storageV5) {
     return false;
   }
 }
-//@ chunk-fhdzwff4.js:16059-24868 fingerprint (2.1.88 match: setup, 0.523)
+//@ chunk-ag1kt2k5.js:17263-26072 fingerprint (2.1.88 match: setup, 0.522)
 /**
  * setup(cwd, permissionMode, …)：检查 Node≥22、后台 worker 抢控制终端、--session-id 切换会话、跨会话消息 UDS、恢复 iTerm2/Terminal.app 备份、chdir、捕获钩子快照、文件监视、--worktree（含 tmux）创建与切换、锁定当前版本、插件钩子预加载、上报 tengu_started 等。
  */
@@ -687,21 +687,21 @@ To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
       ...projectConfig.lastSessionMetrics,
     });
 }
-//@ chunk-fhdzwff4.js:24868-24892 sole-consumer
+//@ chunk-ag1kt2k5.js:26072-26096 sole-consumer
 /**
  * 恒返回 false 的占位判断。
  */
 function alwaysFalseHt(session) {
   return false;
 }
-//@ chunk-fhdzwff4.js:24892-24916 sole-consumer
+//@ chunk-ag1kt2k5.js:26096-26120 sole-consumer
 /**
  * 恒返回 false 的占位判断。
  */
 function alwaysFalseOt(session) {
   return false;
 }
-//@ chunk-fhdzwff4.js:24916-24955 sole-consumer
+//@ chunk-ag1kt2k5.js:26120-26159 sole-consumer
 /**
  * 登录未被固定时预取 API Key。
  */
@@ -709,7 +709,7 @@ function prefetchApiKeyIfUnpinned() {
   if (isStoredLoginPinned()) return;
   prefetchApiKeyFromApiKeyHelperIfSafe(getIsNonInteractiveSession());
 }
-//@ chunk-fhdzwff4.js:24955-25087 sole-consumer
+//@ chunk-ag1kt2k5.js:26159-26291 sole-consumer
 /**
  * 判断是否显示启动对话框（交互、非远程、非 bare、不在首帧后退出且已信任）。
  */
@@ -722,7 +722,7 @@ function shouldShowStartupDialogs({
 }) {
   return !isNonInteractiveSession && !isRemoteMode && !isBareMode && !exitAfterFirstRender && trustAccepted;
 }
-//@ chunk-fhdzwff4.js:25087-25161 sole-consumer
+//@ chunk-ag1kt2k5.js:26291-26365 sole-consumer
 /**
  * 一次性认领标记。
  */
@@ -734,12 +734,12 @@ class OneShotClaim {
     return true;
   }
 }
-//@ chunk-fhdzwff4.js:25161-25186 sole-consumer
+//@ chunk-ag1kt2k5.js:26365-26390 sole-consumer
 /**
  * 按 host 保存的记忆预热认领标记。
  */
 var memoryPrewarmClaimSlots = new HostScoped(() => new OneShotClaim());
-//@ chunk-fhdzwff4.js:25186-26353 sole-consumer
+//@ chunk-ag1kt2k5.js:26390-27557 sole-consumer
 /**
  * 交互会话（非恢复/继续）在信任已接受、记忆与索引召回开启时，后台预热记忆索引；有组织记忆决策时先等待决策落定。每宿主只做一次。
  */

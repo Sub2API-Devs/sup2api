@@ -3,15 +3,15 @@
  *
  * 依据 Fig 命令 spec 计算权限规则建议用的命令前缀（DEPTH_RULES、子命令/参数形状推断）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/specPrefix.ts
- * pieces: chunk-e6aww6q8.js (8)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 4, placement 2, sole-consumer 2
  */
 import { isKnownSubcommand } from "../bash/prefix.js";
 import { getOwn } from "../objectSafety.js";
 
-//@ chunk-e6aww6q8.js:1047407-1047569 fingerprint (2.1.88 match: DEPTH_RULES, 0.891)
+//@ chunk-5xgkngpb.js:1042613-1042775 fingerprint (2.1.88 match: DEPTH_RULES, 0.891)
 var URL_PROTOCOL_PREFIXES = ["http://", "https://", "ftp://"];
 var DEPTH_RULES = {
   rg: 2,
@@ -26,13 +26,13 @@ var DEPTH_RULES = {
   dotnet: 3,
   "git push": 2,
 };
-//@ chunk-e6aww6q8.js:1047569-1047593 placement
+//@ chunk-5xgkngpb.js:1042775-1042799 placement
 function noAdditionalDepthRule(command, subcommand) {
   return;
 }
-//@ chunk-e6aww6q8.js:1047593-1047628 placement
+//@ chunk-5xgkngpb.js:1042799-1042834 placement
 var toArray_3 = (val) => (Array.isArray(val) ? val : [val]);
-//@ chunk-e6aww6q8.js:1047821-1048029 sole-consumer (2.1.88 match: isKnownSubcommand, 1)
+//@ chunk-5xgkngpb.js:1043027-1043235 sole-consumer (2.1.88 match: isKnownSubcommand, 1)
 /**
  * 按命令规格判断某选项是否带参数：规格里有该选项时看其 args；规格有子命令且下一个词不是已知子命令时也视为带参数。
  */
@@ -47,7 +47,7 @@ function optionTakesArg(arg, nextArg, spec) {
     return !isKnownSubcommand(nextArg, spec);
   return false;
 }
-//@ chunk-e6aww6q8.js:1048029-1048219 sole-consumer (2.1.88 match: isKnownSubcommand, 1)
+//@ chunk-5xgkngpb.js:1043235-1043425 sole-consumer (2.1.88 match: isKnownSubcommand, 1)
 /**
  * 按命令规格跳过选项（及其参数），返回第一个子命令词；规格没有子命令时返回第一个非选项词。用于提取命令前缀。
  */
@@ -64,7 +64,7 @@ function findFirstSubcommand(arg, spec) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1048219-1048767 fingerprint (2.1.88 match: buildPrefix, 1)
+//@ chunk-5xgkngpb.js:1043425-1043973 fingerprint (2.1.88 match: buildPrefix, 1)
 /**
  * 按 Fig spec 生成命令前缀（如 `git push`、`gcloud compute …`）：跳过 flag（带 isCommand/isModule 参数的保留），遇路径/URL 停止，深度由 calculateDepth 决定；用于权限规则建议。
  */
@@ -102,7 +102,7 @@ async function buildPrefix(command, args, spec) {
   }
   return parts.join(" ");
 }
-//@ chunk-e6aww6q8.js:1048767-1049821 fingerprint (2.1.88 match: calculateDepth, 1)
+//@ chunk-5xgkngpb.js:1043973-1045027 fingerprint (2.1.88 match: calculateDepth, 1)
 /**
  * 计算前缀深度：DEPTH_RULES 表（rg 2、gcloud 4、kubectl 3…）优先，否则按 spec 的子命令/参数形状推断（默认 2）。
  */
@@ -155,7 +155,7 @@ async function calculateDepth(command, args, spec) {
   }
   return spec.args && toArray_3(spec.args).some((arg) => arg?.isDangerous) ? 3 : 2;
 }
-//@ chunk-e6aww6q8.js:1049821-1050226 fingerprint (2.1.88 match: shouldStopAtArg, 1)
+//@ chunk-5xgkngpb.js:1045027-1045432 fingerprint (2.1.88 match: shouldStopAtArg, 1)
 /**
  * 参数是否为前缀终点：flag、含 '/' 或像文件名（有扩展名）或 URL 时停止；`-m 模块` 例外。
  */
@@ -174,4 +174,4 @@ async function shouldStopAtArg(arg, args, spec) {
   }
   return true;
 }
-export { buildPrefix, DEPTH_RULES, noAdditionalDepthRule };
+export { buildPrefix, noAdditionalDepthRule, DEPTH_RULES };

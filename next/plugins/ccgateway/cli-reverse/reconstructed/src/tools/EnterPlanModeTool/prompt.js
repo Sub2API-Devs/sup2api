@@ -3,26 +3,26 @@
  *
  * 并入 EnterPlanMode 工具提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterPlanModeTool/prompt.ts
- * pieces: chunk-a5k9jscj.js (2)
+ * pieces: chunk-6kmb8me5.js (2)
  * attribution: placement 2
  */
 import { hasEmbeddedSearchTools } from "../../utils/embeddedTools.js";
 import { isBashAvailable } from "../../utils/shell/shellToolUtils.js";
 import { GLOB_TOOL_NAME } from "../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 import { EXITPLANMODE } from "../ExitPlanModeTool/constants.js";
 import { agentToolHintSuffix } from "../SkillTool/SkillTool.js";
 
-//@ chunk-a5k9jscj.js:27017-27450 placement
+//@ chunk-6kmb8me5.js:27433-27866 placement
 function planModeWhatHappensText() {
   return `## What Happens in Plan Mode
 
 In plan mode, you'll:
-1. Thoroughly explore the codebase using ${hasEmbeddedSearchTools() && isBashAvailable() ? `\`find\`/${GLOB_TOOL_NAME}, \`grep\`/${GREP_TOOL_NAME}, and ${FILE_READ_TOOL_NAME}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${FILE_READ_TOOL_NAME}`}
+1. Thoroughly explore the codebase using ${hasEmbeddedSearchTools() && isBashAvailable() ? `\`find\`/${GLOB_TOOL_NAME}, \`grep\`/${GREP_TOOL_NAME}, and ${READ}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${READ}`}
 2. Understand existing patterns and architecture
 3. Design an implementation approach
 4. Present your plan to the user for approval
@@ -31,7 +31,7 @@ In plan mode, you'll:
 
 `;
 }
-//@ chunk-a5k9jscj.js:27450-31089 placement
+//@ chunk-6kmb8me5.js:27866-31505 placement
 /**
  * EnterPlanMode 工具的完整提示词：何时主动进入计划模式、计划模式下做什么。
  */

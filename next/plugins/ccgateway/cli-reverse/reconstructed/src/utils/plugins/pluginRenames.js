@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件改名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { MAX_CACHE_PUBLISH_ATTEMPTS } from "./cachePublish.js";
@@ -14,7 +14,7 @@ import { getSettingsForSourceWriteSeed, updateSettingsForSource } from "../setti
 import { logForDebugging } from "../debug.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:4488920-4489328 placement
+//@ chunk-5xgkngpb.js:4595657-4596065 placement
 /**
  * 沿改名表追踪插件新名字（检测环、缺失、过深）。
  */
@@ -53,7 +53,7 @@ function resolvePluginRename(pluginName, renames, validNames) {
     reason: "chain-too-deep",
   };
 }
-//@ chunk-e6aww6q8.js:4489328-4490242 placement
+//@ chunk-5xgkngpb.js:4596065-4596982 placement
 /**
  * 把设置中已改名的插件迁移到新名字。
  */

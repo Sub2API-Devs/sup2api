@@ -3,12 +3,12 @@
  *
  * 沙箱网络访问请求：允许某域名一次或写入 userSettings 永久允许。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/SandboxPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (3)
- * attribution: placement 1, layout 1, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (3)
+ * attribution: placement 1, affinity 1, fingerprint 1
  */
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -16,6 +16,7 @@ import {
   isMisleadingConsentHost,
   consentHostEntry,
 } from "../../utils/sandbox/sandbox-adapter.js";
+import { currentToolPermissionContext } from "../../utils/permissions/currentPermissionContext.js";
 import {
   serializeApprovalPayload,
   hostnameLengthAllowance,
@@ -31,28 +32,28 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
-import { DiffFrame } from "../FileEditToolDiff.js";
 import { Blockquote } from "../Blockquote.js";
+import { DiffFrame } from "../FileEditToolDiff.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1248685-1248689 placement
+//@ chunk-czq1j3j2.js:1229459-1229463 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1248685", () => {
+deferInit("chunk-czq1j3j2.js:1229459", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1248689-1248719 layout
+//@ chunk-czq1j3j2.js:1273936-1273966 affinity
 var SANDBOX_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1248689", () => {
+deferInit("chunk-czq1j3j2.js:1273936", () => {
   SANDBOX_RULE_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-18hwfzwa.js:1248719-1252276 fingerprint (2.1.88 match: SandboxPermissionRequest, 0.396)
+//@ chunk-czq1j3j2.js:1273966-1278029 fingerprint (2.1.88 match: SandboxPermissionRequest, 0.357)
 /**
  * 沙箱网络请求：显示请求访问的主机，选项允许一次 / 永久允许该域名（写 userSettings 的 sandbox 规则）/ 拒绝。
  */
 function SandboxPermissionRequest(props) {
-  let $ = useMemoCache(44);
+  let $ = useMemoCache(57);
   let { hostPattern, requestSource, onUserResponse } = props;
   let { host } = hostPattern;
   let grantDestination;
@@ -61,6 +62,8 @@ function SandboxPermissionRequest(props) {
     $[0] = grantDestination;
   } else grantDestination = $[0];
   let destination = grantDestination;
+  let [inSandboxContext] = useState(currentToolPermissionContext);
+  let insetPadding = inSandboxContext ? 0 : 1;
   let hostPayload;
   if ($[1] !== host) {
     hostPayload = serializeApprovalPayload(host, {
@@ -71,18 +74,18 @@ function SandboxPermissionRequest(props) {
   } else hostPayload = $[2];
   let hostPayload_2 = hostPayload;
   let consentRow;
-  Xe: {
+  bt: {
     if (destination === null) {
       consentRow = null;
-      break Xe;
+      break bt;
     }
     if (isMisleadingConsentHost(host)) {
       consentRow = null;
-      break Xe;
+      break bt;
     }
     if (hostPayload_2.kind !== "full") {
       consentRow = null;
-      break Xe;
+      break bt;
     }
     let plainHost;
     if ($[3] !== host) {
@@ -93,7 +96,7 @@ function SandboxPermissionRequest(props) {
     let plainHost_2 = plainHost;
     if (plainHost_2 === null) {
       consentRow = null;
-      break Xe;
+      break bt;
     }
     let parsedSuggestions;
     if ($[5] !== host || $[6] !== plainHost_2) {
@@ -189,13 +192,13 @@ function SandboxPermissionRequest(props) {
   let onSelect;
   if ($[15] !== consentRow_2 || $[16] !== answerWithTimeoutFn) {
     onSelect = function onSelect(value) {
-      bo: switch (value) {
+      vo: switch (value) {
         case "yes": {
           answerWithTimeoutFn("yes", {
             allow: true,
             persistToSettings: false,
           });
-          break bo;
+          break vo;
         }
         case "yes-dont-ask-again": {
           if (consentRow_2 !== null)
@@ -209,7 +212,7 @@ function SandboxPermissionRequest(props) {
               allow: true,
               persistToSettings: false,
             });
-          break bo;
+          break vo;
         }
         case "no": {
           answerWithTimeoutFn("no", {
@@ -269,110 +272,150 @@ function SandboxPermissionRequest(props) {
     $[23] = options;
   } else options = $[23];
   let options_2 = options;
-  let hostLabel;
-  if ($[24] === MEMO_CACHE_SENTINEL) {
-    hostLabel = jsxProd_default(Text, {
-      dimColor: true,
-      children: "Host:",
-    });
-    $[24] = hostLabel;
-  } else hostLabel = $[24];
-  const multiline = hostPayload_2.kind === "full" && hostPayload_2.needsGutter;
-  const hostText = hostPayload_2.kind === "full" ? hostPayload_2.text : hostPayload_2.marker;
-  let children;
-  if ($[25] !== hostText) {
-    children = jsxProd_default_2(Text, {
-      children: [" ", hostText],
-    });
-    $[25] = hostText;
-    $[26] = children;
-  } else children = $[26];
-  let hostBlock;
-  if ($[27] !== multiline || $[28] !== children) {
-    hostBlock = jsxProd_default(DiffFrame, {
-      children: jsxProd_default_2(Box, {
-        children: [
-          hostLabel,
-          jsxProd_default(Blockquote, {
-            multiline,
-            children,
-          }),
-        ],
-      }),
-    });
-    $[27] = multiline;
-    $[28] = children;
-    $[29] = hostBlock;
-  } else hostBlock = $[29];
-  let question;
-  if ($[30] === MEMO_CACHE_SENTINEL) {
-    question = jsxProd_default(Text, {
-      children: "Do you want to allow this connection?",
-    });
-    $[30] = question;
-  } else question = $[30];
-  const isDisabled = !timeout;
   let onCancel;
-  if ($[31] !== answerWithTimeoutFn) {
+  if ($[24] !== answerWithTimeoutFn) {
     onCancel = () =>
       answerWithTimeoutFn("cancel", {
         allow: false,
         persistToSettings: false,
       });
-    $[31] = answerWithTimeoutFn;
-    $[32] = onCancel;
-  } else onCancel = $[32];
-  let promptBox;
-  if (
-    $[33] !== onChange ||
-    $[34] !== options_2 ||
-    $[35] !== refusableAnswer.attempts ||
-    $[36] !== defaultFocusValue ||
-    $[37] !== isDisabled ||
-    $[38] !== onCancel
-  ) {
-    promptBox = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      paddingX: 1,
-      paddingBottom: 1,
+    $[24] = answerWithTimeoutFn;
+    $[25] = onCancel;
+  } else onCancel = $[25];
+  let onCancel_2 = onCancel;
+  const title = inSandboxContext ? "Allow network request" : "Network request outside of sandbox";
+  let frame;
+  if ($[26] !== onCancel_2 || $[27] !== inSandboxContext) {
+    frame = inSandboxContext
+      ? {
+          onCancel: onCancel_2,
+          titleSuffix: "outside of sandbox",
+          showHintLine: false,
+        }
+      : undefined;
+    $[26] = onCancel_2;
+    $[27] = inSandboxContext;
+    $[28] = frame;
+  } else frame = $[28];
+  let hostLabel;
+  if ($[29] === MEMO_CACHE_SENTINEL) {
+    hostLabel = jsxProd_default(Text, {
+      dimColor: true,
+      children: "Host:",
+    });
+    $[29] = hostLabel;
+  } else hostLabel = $[29];
+  const multiline = hostPayload_2.kind === "full" && hostPayload_2.needsGutter;
+  const hostText = hostPayload_2.kind === "full" ? hostPayload_2.text : hostPayload_2.marker;
+  let children;
+  if ($[30] !== hostText) {
+    children = jsxProd_default_2(Text, {
+      children: [" ", hostText],
+    });
+    $[30] = hostText;
+    $[31] = children;
+  } else children = $[31];
+  let children_2;
+  if ($[32] !== multiline || $[33] !== children) {
+    children_2 = jsxProd_default_2(Box, {
       children: [
-        question,
-        jsxProd_default(Box, {
-          children: jsxProd_default(
-            ModelSelector,
-            {
-              defaultFocusValue,
-              options: options_2,
-              isDisabled,
-              onChange,
-              onCancel,
-            },
-            refusableAnswer.attempts,
-          ),
+        hostLabel,
+        jsxProd_default(Blockquote, {
+          multiline,
+          children,
         }),
       ],
     });
-    $[33] = onChange;
-    $[34] = options_2;
-    $[35] = refusableAnswer.attempts;
-    $[36] = defaultFocusValue;
-    $[37] = isDisabled;
-    $[38] = onCancel;
-    $[39] = promptBox;
-  } else promptBox = $[39];
+    $[32] = multiline;
+    $[33] = children;
+    $[34] = children_2;
+  } else children_2 = $[34];
+  let question;
+  if ($[35] !== insetPadding || $[36] !== children_2) {
+    question = jsxProd_default(DiffFrame, {
+      paddingX: insetPadding,
+      children: children_2,
+    });
+    $[35] = insetPadding;
+    $[36] = children_2;
+    $[37] = question;
+  } else question = $[37];
+  let questionText;
+  if ($[38] !== inSandboxContext) {
+    questionText =
+      !inSandboxContext &&
+      jsxProd_default(Text, {
+        children: "Do you want to allow this connection?",
+      });
+    $[38] = inSandboxContext;
+    $[39] = questionText;
+  } else questionText = $[39];
+  const isDisabled = !timeout;
+  let promptBody;
+  if (
+    $[40] !== onCancel_2 ||
+    $[41] !== onChange ||
+    $[42] !== options_2 ||
+    $[43] !== refusableAnswer.attempts ||
+    $[44] !== defaultFocusValue ||
+    $[45] !== isDisabled
+  ) {
+    promptBody = jsxProd_default(Box, {
+      children: jsxProd_default(
+        ModelSelector,
+        {
+          defaultFocusValue,
+          options: options_2,
+          isDisabled,
+          onChange,
+          onCancel: onCancel_2,
+        },
+        refusableAnswer.attempts,
+      ),
+    });
+    $[40] = onCancel_2;
+    $[41] = onChange;
+    $[42] = options_2;
+    $[43] = refusableAnswer.attempts;
+    $[44] = defaultFocusValue;
+    $[45] = isDisabled;
+    $[46] = promptBody;
+  } else promptBody = $[46];
+  let promptBox;
+  if ($[47] !== insetPadding || $[48] !== questionText || $[49] !== promptBody) {
+    promptBox = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      paddingX: insetPadding,
+      paddingBottom: insetPadding,
+      children: [questionText, promptBody],
+    });
+    $[47] = insetPadding;
+    $[48] = questionText;
+    $[49] = promptBody;
+    $[50] = promptBox;
+  } else promptBox = $[50];
   let dialog;
-  if ($[40] !== requestSource || $[41] !== hostBlock || $[42] !== promptBox) {
+  if (
+    $[51] !== requestSource ||
+    $[52] !== title ||
+    $[53] !== frame ||
+    $[54] !== question ||
+    $[55] !== promptBox
+  ) {
     dialog = jsxProd_default_2(PermissionDialog_2, {
-      title: "Network request outside of sandbox",
+      title,
       innerPaddingX: 0,
       requestSource,
-      children: [hostBlock, promptBox],
+      frame,
+      children: [question, promptBox],
     });
-    $[40] = requestSource;
-    $[41] = hostBlock;
-    $[42] = promptBox;
-    $[43] = dialog;
-  } else dialog = $[43];
+    $[51] = requestSource;
+    $[52] = title;
+    $[53] = frame;
+    $[54] = question;
+    $[55] = promptBox;
+    $[56] = dialog;
+  } else dialog = $[56];
   return dialog;
 }
 export { SandboxPermissionRequest };

@@ -3,10 +3,10 @@
  *
  * 是否启用/禁用 IDE 自动连接的对话框及显示条件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/IdeAutoConnectDialog.tsx
- * pieces: chunk-5bdzenzx.js (6), chunk-e6aww6q8.js (1)
- * attribution: placement 2, fingerprint 4, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-dh16zjm4.js (6)
+ * attribution: callgraph-fingerprint 1, placement 2, fingerprint 4
  */
 import { env } from "../utils/env.js";
 import { isBareMode } from "../utils/envUtils.js";
@@ -15,7 +15,7 @@ import { isSupportedTerminal } from "../utils/ide.js";
 import { init_react_production, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { useInputRefusalWindow, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -29,7 +29,7 @@ import { Dialog } from "./design-system/Dialog.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3236461-3236660 callgraph-fingerprint (2.1.88 match: shouldShowDisableAutoConnectDialog, 0.47)
+//@ chunk-5xgkngpb.js:3321077-3321276 callgraph-fingerprint (2.1.88 match: shouldShowDisableAutoConnectDialog, 0.47)
 function shouldShowDisableAutoConnectDialog(force = false) {
   if (env.CLAUDE_CODE_AUTO_CONNECT_IDE === false) return false;
   if (isBareMode()) return force;
@@ -41,42 +41,42 @@ function shouldShowDisableAutoConnectDialog(force = false) {
     env.CLAUDE_CODE_AUTO_CONNECT_IDE === true,
   );
 }
-//@ chunk-5bdzenzx.js:14079-14083 placement
+//@ chunk-dh16zjm4.js:15260-15264 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5bdzenzx.js:14079", () => {
+deferInit("chunk-dh16zjm4.js:15260", () => {
   init_react_production();
 });
-//@ chunk-5bdzenzx.js:14107-14111 placement
+//@ chunk-dh16zjm4.js:15288-15292 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5bdzenzx.js:14107", () => {
+deferInit("chunk-dh16zjm4.js:15288", () => {
   init_react_production();
 });
-//@ chunk-5bdzenzx.js:14111-14157 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-dh16zjm4.js:15292-15338 fingerprint (2.1.88 match: _temp, 1)
 function withAutoConnectOff(current) {
   return {
     ...current,
     autoConnectIde: false,
   };
 }
-//@ chunk-5bdzenzx.js:14157-15420 fingerprint (2.1.88 match: IdeAutoConnectDialog, 0.623)
+//@ chunk-dh16zjm4.js:15338-16601 fingerprint (2.1.88 match: IdeAutoConnectDialog, 0.624)
 function IdeAutoConnectDialog(props) {
   let $ = useMemoCache(20);
   let { onComplete } = props;
   let { storageV5 } = useTheme_2();
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let settle = settleKey(epoch, RECENT_INPUT_GUARD_MS);
   let submittedRef = useRef(false);
   let shouldRefuse;
-  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+  if ($[0] !== recentInput || $[1] !== noteRefused || $[2] !== refusedWithin) {
     shouldRefuse = () => {
-      if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+      if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[0] = inputRefusalWindow;
+    $[0] = recentInput;
     $[1] = noteRefused;
     $[2] = refusedWithin;
     $[3] = shouldRefuse;
@@ -182,7 +182,7 @@ function IdeAutoConnectDialog(props) {
   } else dialog = $[19];
   return dialog;
 }
-//@ chunk-5bdzenzx.js:15420-15521 fingerprint (2.1.88 match: shouldShowAutoConnectDialog, 1)
+//@ chunk-dh16zjm4.js:16601-16702 fingerprint (2.1.88 match: shouldShowAutoConnectDialog, 1)
 function shouldShowAutoConnectDialog() {
   let config = getGlobalConfig();
   return (
@@ -191,7 +191,7 @@ function shouldShowAutoConnectDialog() {
     config.hasIdeAutoConnectDialogBeenShown !== true
   );
 }
-//@ chunk-5bdzenzx.js:15521-16087 fingerprint (2.1.88 match: IdeDisableAutoConnectDialog, 0.582)
+//@ chunk-dh16zjm4.js:16702-17268 fingerprint (2.1.88 match: IdeDisableAutoConnectDialog, 0.582)
 function IdeDisableAutoConnectDialog(props) {
   let $ = useMemoCache(11);
   let { onComplete } = props;

@@ -3,9 +3,9 @@
  *
  * Advisor（顾问模型）server_tool_use 的显示："Advising using <模型>"、拒绝或结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AdvisorMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -28,7 +28,7 @@ import { claimOnceStore } from "../../services/api/verificationRequired.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:40534-43247 fingerprint (2.1.88 match: AdvisorMessage, 0.614)
+//@ chunk-wjygkcr4.js:41145-43856 fingerprint (2.1.88 match: AdvisorMessage, 0.614)
 function AdvisorMessage(props) {
   let $ = useMemoCache(42);
   let { block, addMargin, resolvedToolUseIDs, erroredToolUseIDs, shouldAnimate, verbose, advisorModel } =
@@ -176,7 +176,7 @@ function AdvisorMessage(props) {
     } else refusalBody = $[33];
     body = refusalBody;
   } else {
-    ge: switch (block.content?.type) {
+    ce: switch (block.content?.type) {
       case "advisor_tool_result_error": {
         let t1;
         if ($[34] !== block.content.error_code) {
@@ -188,7 +188,7 @@ function AdvisorMessage(props) {
           $[35] = t1;
         } else t1 = $[35];
         body = t1;
-        break ge;
+        break ce;
       }
       case "advisor_result": {
         let t1;
@@ -214,7 +214,7 @@ function AdvisorMessage(props) {
           $[38] = t1;
         } else t1 = $[38];
         body = t1;
-        break ge;
+        break ce;
       }
       case "advisor_redacted_result": {
         let redactedText;
@@ -232,7 +232,7 @@ function AdvisorMessage(props) {
           $[39] = redactedText;
         } else redactedText = $[39];
         body = redactedText;
-        break ge;
+        break ce;
       }
       default: {
         if (block.content != null && claimOnceStore.of(host).claim(`advisor-unknown:${block.tool_use_id}`))

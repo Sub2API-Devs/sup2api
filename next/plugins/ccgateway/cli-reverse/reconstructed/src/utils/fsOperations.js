@@ -3,10 +3,10 @@
  *
  * 文件系统抽象 getFsImplementation/NodeFsOperations、按范围/尾部读取、路径拼写展开（~ 与符号链接）及最深已存在祖先解析，供权限检查使用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fsOperations.ts
- * pieces: chunk-awy329vy.js (1), chunk-cgr0tezp.js (78), chunk-e6aww6q8.js (4), chunk-jhrww53q.js (1)
- * attribution: fingerprint 3, placement 79, layout 1, callgraph-fingerprint 1
+ * pieces: chunk-2jb250pa.js (1), chunk-5xgkngpb.js (4), chunk-6hadbefe.js (78), chunk-9knfmvrf.js (1), chunk-xjnnz630.js (1)
+ * attribution: placement 79, layout 2, callgraph-fingerprint 1, fingerprint 3
  */
 import * as fsModule from "fs";
 import * as pathModule from "path";
@@ -61,7 +61,6 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "./errors.js";
 import { launchCwd } from "./cwd.js";
-import { getResolvedPath } from "./swarm/permissionSync.js";
 import { isSentinelInode, realpathPromise, slowLogging, isBunVirtualPath } from "./slowOperations.js";
 import { toUncLongPath } from "./windowsUncPaths.js";
 import { realpathCacheEntry } from "./permissions/protectedDirs.js";
@@ -70,19 +69,28 @@ import { getOriginalCwd } from "../bootstrap/state.js";
 import { isSpecialOrUnsafePath, isNonCanonicalSymlink } from "./claudemd.js";
 import { readOnlyNoFollowFlags } from "./platformTargets.js";
 
-//@ chunk-cgr0tezp.js:19756-19772 placement
+//@ chunk-2jb250pa.js:8088-8192 placement
+function createOffsetMappedText(text) {
+  let int32Array = new Int32Array(text.length);
+  for (let i = 0; i < text.length; i++) int32Array[i] = i;
+  return {
+    text,
+    origin: int32Array,
+  };
+}
+//@ chunk-6hadbefe.js:7017-7033 placement
 var RENAME_ARROW = "\u2192";
-//@ chunk-cgr0tezp.js:19772-19839 placement
+//@ chunk-6hadbefe.js:7033-7100 placement
 function noFollowNonblockFlags() {
   return fsModule.constants.O_NOFOLLOW | fsModule.constants.O_NONBLOCK;
 }
-//@ chunk-cgr0tezp.js:19839-19926 placement
+//@ chunk-6hadbefe.js:7100-7187 placement
 function nonblockingReadFlags() {
   return fsModule.constants.O_RDONLY | fsModule.constants.O_NONBLOCK | fsModule.constants.O_NOCTTY;
 }
-//@ chunk-cgr0tezp.js:19926-19939 placement
+//@ chunk-6hadbefe.js:7187-7199 placement
 var PATH_SEPARATOR_RUN_RE = /\/+/;
-//@ chunk-cgr0tezp.js:19939-20126 placement
+//@ chunk-6hadbefe.js:7199-7385 placement
 function isSpelledStrictAncestor(ancestorPath, descendantPath) {
   let splitSegments = (path) => path.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
   let path = pathModule.resolve(ancestorPath);
@@ -95,7 +103,7 @@ function isSpelledStrictAncestor(ancestorPath, descendantPath) {
     ancestorParts.every((part, index) => part === descendantParts[index])
   );
 }
-//@ chunk-cgr0tezp.js:20126-20275 placement
+//@ chunk-6hadbefe.js:7385-7534 placement
 function truncateAtDotSegment(path) {
   let kept = "";
   for (let token of path.split(/([\\/]+)/)) {
@@ -105,7 +113,7 @@ function truncateAtDotSegment(path) {
   let replaced = kept.replace(/(?<=[^\\/])[\\/]+$/, "");
   return replaced === "" ? path : replaced;
 }
-//@ chunk-cgr0tezp.js:20275-20398 placement
+//@ chunk-6hadbefe.js:7534-7657 placement
 function normalizeNetworkMountPath(path) {
   if (path.startsWith("\\\\")) return truncateAtDotSegment(path);
   let replaced = path.replace(/^\/+/, "/");
@@ -113,9 +121,9 @@ function normalizeNetworkMountPath(path) {
   if (root !== null) return root;
   return truncateAtDotSegment(path);
 }
-//@ chunk-cgr0tezp.js:20398-20408 placement
+//@ chunk-6hadbefe.js:7657-7667 placement
 var networkMountPathOf = normalizeNetworkMountPath;
-//@ chunk-cgr0tezp.js:20408-20579 placement
+//@ chunk-6hadbefe.js:7667-7838 placement
 function joinRemainingSegments(basePath, segments, onCollapsedLanding) {
   let hasDot = hasDotSegment(basePath);
   if (segments.length === 0 || hasDot || segments.some((segment) => segment === "." || segment === "..")) {
@@ -125,16 +133,16 @@ function joinRemainingSegments(basePath, segments, onCollapsedLanding) {
   }
   return pathModule.join(basePath, ...segments);
 }
-//@ chunk-cgr0tezp.js:20579-20639 placement
+//@ chunk-6hadbefe.js:7838-7898 placement
 var UNVERIFIED_ANCESTRY = "\x00unverified-ancestry";
 var OPAQUE_LINK_TEXT = "\x00opaque-link-text";
-//@ chunk-cgr0tezp.js:20639-20722 placement
+//@ chunk-6hadbefe.js:7898-7981 placement
 function hasParentSegment(linkText) {
   return hasDotDotSegment(
     pathModule.isAbsolute(linkText) ? linkText : linkText.replace(/^(?:\.\.(?:[\\/]+|$))+/, ""),
   );
 }
-//@ chunk-cgr0tezp.js:20722-20982 placement
+//@ chunk-6hadbefe.js:7981-8241 placement
 function isOpaqueLinkText(linkText, strict = false) {
   return (
     linkText.includes("\uFFFD") ||
@@ -148,18 +156,18 @@ function isOpaqueLinkText(linkText, strict = false) {
           .some((segment) => segment !== "." && segment !== ".." && /[. ]$/.test(segment))))
   );
 }
-//@ chunk-cgr0tezp.js:20982-21024 placement
+//@ chunk-6hadbefe.js:8241-8283 placement
 function isNetworkJunction(intermediateUncJunction) {
   return intermediateUncJunction !== undefined && intermediateUncJunction !== UNVERIFIED_ANCESTRY;
 }
-//@ chunk-cgr0tezp.js:21024-21136 placement
+//@ chunk-6hadbefe.js:8283-8395 placement
 function hopCapExhausted(path) {
   return Object.assign(Error("ELOOP: symbolic link chain too long to vet"), {
     code: "ELOOP",
     path,
   });
 }
-//@ chunk-cgr0tezp.js:21136-21370 placement
+//@ chunk-6hadbefe.js:8395-8629 placement
 function unverifiedAncestryReason(
   errno,
   options,
@@ -174,11 +182,11 @@ function unverifiedAncestryReason(
   if (errno_2 === "ENAMETOOLONG" && !allowTooLong && !allowLaunchAncestry && !allowVouched) return;
   return UNVERIFIED_ANCESTRY;
 }
-//@ chunk-cgr0tezp.js:21370-21398 placement
+//@ chunk-6hadbefe.js:8629-8656 placement
 function isUnderNetworkDir(path) {
   return isUnderNetworkDirCached(path);
 }
-//@ chunk-cgr0tezp.js:21398-21481 placement
+//@ chunk-6hadbefe.js:8656-8739 placement
 function isNetworkPathUnderAnchors(path, anchors) {
   return (
     anchors !== undefined &&
@@ -190,14 +198,14 @@ function isNetworkPathUnderAnchors(path, anchors) {
     )
   );
 }
-//@ chunk-cgr0tezp.js:21481-21545 placement
+//@ chunk-6hadbefe.js:8739-8803 placement
 function isAnchorUnderPath(path, anchors) {
   return (
     anchors !== undefined &&
     anchors.some((anchor) => isUnderNetworkDirCached(anchor) && isPathUnderPosix(anchor, path))
   );
 }
-//@ chunk-cgr0tezp.js:21545-21669 placement
+//@ chunk-6hadbefe.js:8803-8927 placement
 function isPathUnderPosix(path, parentPath) {
   let trimTrailingSep = (path) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
   let [normalizedPath, normalizedParent] = [trimTrailingSep(path), trimTrailingSep(parentPath)];
@@ -206,15 +214,15 @@ function isPathUnderPosix(path, parentPath) {
     normalizedPath.startsWith(normalizedParent === "/" ? normalizedParent : normalizedParent + "/")
   );
 }
-//@ chunk-cgr0tezp.js:21669-21727 placement
+//@ chunk-6hadbefe.js:8927-8984 placement
 function isForeignToAllMounts(path, anchors) {
   return anchors === undefined || anchors.every((anchor) => isForeignMountPath(path, anchor));
 }
-//@ chunk-cgr0tezp.js:21727-21785 placement
+//@ chunk-6hadbefe.js:8984-9042 placement
 function isForeignToAllNetworks(path, anchors) {
   return anchors === undefined || anchors.every((anchor) => isForeignNetworkPath(path, anchor));
 }
-//@ chunk-cgr0tezp.js:21785-21924 placement
+//@ chunk-6hadbefe.js:9042-9180 placement
 function collapseNetworkLanding(path, anchors, onCollapsedLanding) {
   let root = isNetworkMountPath(path) ? networkMountRootCached(path) : null;
   if (root === null || !isForeignToAllMounts(root, anchors)) return;
@@ -222,12 +230,12 @@ function collapseNetworkLanding(path, anchors, onCollapsedLanding) {
   if (isNetworkMountPath(joined) && networkMountHost(joined) === networkMountHost(root)) return joined;
   return joinRemainingSegments(path, [], onCollapsedLanding);
 }
-//@ chunk-cgr0tezp.js:21924-22043 placement
+//@ chunk-6hadbefe.js:9180-9299 placement
 function getAnchors(options) {
   if (options?.anchors !== undefined && options.anchors.length > 0) return options.anchors;
   return options?.anchor !== undefined ? [options.anchor] : undefined;
 }
-//@ chunk-cgr0tezp.js:22043-22111 placement
+//@ chunk-6hadbefe.js:9299-9367 placement
 function hasUntouchableRecordSpelling(path) {
   return (
     hasDotDotSegment(path) ||
@@ -237,7 +245,7 @@ function hasUntouchableRecordSpelling(path) {
     findIntermediateUncJunction(NodeFsOperations, path) !== undefined
   );
 }
-//@ chunk-cgr0tezp.js:22111-22192 placement
+//@ chunk-6hadbefe.js:9367-9448 placement
 async function hasUntouchableRecordSpellingAsync(path) {
   return (
     hasDotDotSegment(path) ||
@@ -247,7 +255,7 @@ async function hasUntouchableRecordSpellingAsync(path) {
     (await findIntermediateUncJunctionAsync(NodeFsOperations, path)) !== undefined
   );
 }
-//@ chunk-cgr0tezp.js:22192-22320 placement
+//@ chunk-6hadbefe.js:9448-9576 placement
 function hasUntouchableRecordSpellingStrict(path, fsImpl = NodeFsOperations) {
   return (
     hasDotDotSegment(path) ||
@@ -260,7 +268,7 @@ function hasUntouchableRecordSpellingStrict(path, fsImpl = NodeFsOperations) {
     }) !== undefined
   );
 }
-//@ chunk-cgr0tezp.js:22320-22460 placement
+//@ chunk-6hadbefe.js:9576-9716 placement
 async function hasUntouchableRecordSpellingStrictAsync(path, fsImpl = NodeFsOperations) {
   return (
     hasDotDotSegment(path) ||
@@ -273,7 +281,7 @@ async function hasUntouchableRecordSpellingStrictAsync(path, fsImpl = NodeFsOper
     })) !== undefined
   );
 }
-//@ chunk-cgr0tezp.js:22460-22659 placement
+//@ chunk-6hadbefe.js:9716-9915 placement
 async function entryReachesForeignNetwork(path, permissionScreenAnchor, fsImpl = NodeFsOperations) {
   if (hasDotDotSegment(path)) return true;
   if (isNonWslUncPath(path)) return true;
@@ -295,7 +303,7 @@ async function entryReachesForeignNetwork(path, permissionScreenAnchor, fsImpl =
     ).verdict !== "clean"
   );
 }
-//@ chunk-cgr0tezp.js:22659-22925 placement
+//@ chunk-6hadbefe.js:9915-10181 placement
 async function examineEntryChain(path, anchor, { fsImpl = NodeFsOperations, signal } = {}) {
   let intermediateUncJunction = await findIntermediateUncJunctionAsync(
     fsImpl,
@@ -324,7 +332,7 @@ async function examineEntryChain(path, anchor, { fsImpl = NodeFsOperations, sign
     reaches: intermediateUncJunction,
   };
 }
-//@ chunk-cgr0tezp.js:22925-23119 placement
+//@ chunk-6hadbefe.js:10181-10375 placement
 function findIntermediateUncJunction(fsImpl, path, options) {
   return returnValue(resolvePathSafely(path, options), (step) => {
     if (step.kind === "lstat") return fsImpl.lstatSync(step.path);
@@ -335,7 +343,7 @@ function findIntermediateUncJunction(fsImpl, path, options) {
     return fsImpl.readlinkSync(step.path);
   });
 }
-//@ chunk-cgr0tezp.js:23119-23428 placement
+//@ chunk-6hadbefe.js:10375-10684 placement
 function findIntermediateUncJunctionAsync(fsImpl, path, options, signal, onStat) {
   return returnValue_2(resolvePathSafely(path, options), signal, async (step) => {
     if (step.kind === "lstat") {
@@ -357,7 +365,7 @@ function findIntermediateUncJunctionAsync(fsImpl, path, options, signal, onStat)
     return fsImpl.readlink(step.path);
   });
 }
-//@ chunk-cgr0tezp.js:23428-23543 placement (2.1.88 match: returnValue, 0.769)
+//@ chunk-6hadbefe.js:10684-10799 placement (2.1.88 match: returnValue, 0.769)
 function returnValue(steps, runStep) {
   let stepResult;
   for (;;) {
@@ -372,7 +380,7 @@ function returnValue(steps, runStep) {
     }
   }
 }
-//@ chunk-cgr0tezp.js:23543-23701 placement (2.1.88 match: returnValue, 0.769)
+//@ chunk-6hadbefe.js:10799-10957 placement (2.1.88 match: returnValue, 0.769)
 async function returnValue_2(path, signal, runStep) {
   let stepResult;
   for (;;) {
@@ -388,7 +396,7 @@ async function returnValue_2(path, signal, runStep) {
     }
   }
 }
-//@ chunk-cgr0tezp.js:23701-24117 placement
+//@ chunk-6hadbefe.js:10957-11373 placement
 /**
  * 驱动路径检查生成器执行文件系统步骤（可中止）。
  */
@@ -423,7 +431,7 @@ async function runFsSteps(steps, signal, shouldStop, runStep, cutShortResult) {
     if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-cgr0tezp.js:24117-27079 placement
+//@ chunk-6hadbefe.js:11373-14325 placement
 /**
  * 逐段解析路径的生成器（链接、网络、junction 检查）。
  */
@@ -652,7 +660,7 @@ function* resolvePathSafely(requestedPath, options) {
     });
   return;
 }
-//@ chunk-cgr0tezp.js:27079-27452 placement
+//@ chunk-6hadbefe.js:14325-14698 placement
 function safeResolvePath(fsImplementation, filePath) {
   if (
     (isUncOrDevicePath(filePath) && !isWslUncPath(filePath)) ||
@@ -692,7 +700,7 @@ function safeResolvePath(fsImplementation, filePath) {
     };
   }
 }
-//@ chunk-cgr0tezp.js:27452-27808 placement
+//@ chunk-6hadbefe.js:14698-15052 placement
 function vouchedLaunchAncestry(fsImplementation) {
   let launchDir = launchCwd();
   if (launchDir === null) return null;
@@ -715,7 +723,7 @@ function vouchedLaunchAncestry(fsImplementation) {
     return null;
   }
 }
-//@ chunk-cgr0tezp.js:27808-28206 placement
+//@ chunk-6hadbefe.js:15052-15450 placement
 function realpathExaminedSync(fsImplementation, filePath) {
   try {
     return fsImplementation.realpathSync(filePath);
@@ -745,9 +753,9 @@ function realpathExaminedSync(fsImplementation, filePath) {
     return identity(outcome.path);
   }
 }
-//@ chunk-cgr0tezp.js:28206-28244 placement
+//@ chunk-6hadbefe.js:15450-15488 placement
 var SYMLINK_TO_NETWORK_PATH_CODE = "ERR_SYMLINK_TO_NETWORK_PATH";
-//@ chunk-cgr0tezp.js:28244-28406 placement
+//@ chunk-6hadbefe.js:15488-15650 placement
 function vetRepoSettingsPath(fsImplementation, settingsPath, options) {
   let { asWritten, opts } = refuseUnvettablePath(fsImplementation, settingsPath, options);
   let linksResolvedPath;
@@ -769,7 +777,7 @@ function vetRepoSettingsPath(fsImplementation, settingsPath, options) {
     absentAt,
   };
 }
-//@ chunk-cgr0tezp.js:28406-29083 placement
+//@ chunk-6hadbefe.js:15650-16327 placement
 async function vetRepoSettingsPathAsync(fsImplementation, settingsPath, options) {
   let { asWritten, opts, ownHost } = refuseUnvettablePath(fsImplementation, settingsPath, options);
   let linksResolvedPath;
@@ -842,7 +850,11 @@ async function vetRepoSettingsPathAsync(fsImplementation, settingsPath, options)
       }),
   };
 }
-//@ chunk-cgr0tezp.js:29143-29287 placement
+//@ chunk-6hadbefe.js:16327-16387 layout (2.1.88 match: getResolvedDir, 1)
+function getResolvedPath(target) {
+  return target.kind === "resolved" ? identity(target.path) : undefined;
+}
+//@ chunk-6hadbefe.js:16387-16531 placement
 function absentSpellingInfo(outcome) {
   return outcome.kind === "absent"
     ? {
@@ -855,7 +867,7 @@ function absentSpellingInfo(outcome) {
       }
     : undefined;
 }
-//@ chunk-cgr0tezp.js:29287-29988 placement
+//@ chunk-6hadbefe.js:16531-17231 placement
 /**
  * 设备命名空间路径拒绝读取。
  */
@@ -906,7 +918,7 @@ function refuseUnvettablePath(fsImpl, filePath, options) {
     },
   };
 }
-//@ chunk-cgr0tezp.js:29988-30054 placement
+//@ chunk-6hadbefe.js:17231-17297 placement
 function plainResolvedPathInfo(resolvedPath) {
   return {
     resolvedPath,
@@ -914,7 +926,7 @@ function plainResolvedPathInfo(resolvedPath) {
     isCanonical: false,
   };
 }
-//@ chunk-cgr0tezp.js:30054-30618 placement
+//@ chunk-6hadbefe.js:17297-17859 placement
 /**
  * 无法检查的路径拒绝读取。
  */
@@ -951,33 +963,33 @@ function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
     },
   );
 }
-//@ chunk-cgr0tezp.js:30618-30652 placement
+//@ chunk-6hadbefe.js:17859-17893 placement
 function isSymlinkToNetworkPathError(error) {
   return getErrnoCode(error) === SYMLINK_TO_NETWORK_PATH_CODE;
 }
-//@ chunk-cgr0tezp.js:30652-30749 placement
+//@ chunk-6hadbefe.js:17893-17990 placement
 function repoSettingsRefusalReason(error) {
   if (!isSymlinkToNetworkPathError(error)) return;
   let reason = error.reason;
   return reason === "network" || reason === "unexamined" ? reason : undefined;
 }
-//@ chunk-cgr0tezp.js:30749-30837 placement
+//@ chunk-6hadbefe.js:17990-18078 placement
 function isDuplicatePath(fsImpl, filePath, loadedPaths) {
   let { resolvedPath } = safeResolvePath(fsImpl, filePath);
   if (loadedPaths.has(resolvedPath)) return true;
   loadedPaths.add(resolvedPath);
   return false;
 }
-//@ chunk-cgr0tezp.js:30837-30869 placement
+//@ chunk-6hadbefe.js:18078-18110 placement
 var DOTDOT_SEGMENT_PATTERN = /(^|[\\/])\.\.([\\/]|$)/;
-//@ chunk-cgr0tezp.js:30869-31047 placement
+//@ chunk-6hadbefe.js:18110-18288 placement
 function stripDotSegments(path, platform = "linux") {
   let replaced = path.replace(platform === "win32" ? /[\\/]\.(?=[\\/]|$)/g : /\/\.(?=\/|$)/g, "");
   if (replaced === "") return path[0];
   if (platform === "win32" && /^[A-Za-z]:$/.test(replaced)) return replaced + path[2];
   return replaced;
 }
-//@ chunk-cgr0tezp.js:31047-32818 placement (2.1.88 match: resolveDeepestExistingAncestorSync, 0.643)
+//@ chunk-6hadbefe.js:18288-20057 placement (2.1.88 match: resolveDeepestExistingAncestorSync, 0.643)
 /**
  * 对不存在的路径，找到最深的已存在祖先并 realpath，再拼回剩余部分（权限检查用于新建文件）。
  */
@@ -1139,7 +1151,7 @@ function resolveDeepestExistingAncestorSync(fsImplementation, path, options) {
   }
   return;
 }
-//@ chunk-cgr0tezp.js:32818-32868 placement
+//@ chunk-6hadbefe.js:20057-20107 placement
 function isSpecialPath(path) {
   return (
     (isUncOrDevicePath(path) && !isWslUncPath(path)) ||
@@ -1147,15 +1159,15 @@ function isSpecialPath(path) {
     isDeviceNamespacePath(path)
   );
 }
-//@ chunk-cgr0tezp.js:32868-32903 placement
+//@ chunk-6hadbefe.js:20107-20142 placement
 function expandWin32ExistingLongNames(path) {
   return resolveViaDeepestExistingAncestor(path, false) ?? path;
 }
-//@ chunk-cgr0tezp.js:32903-32935 placement
+//@ chunk-6hadbefe.js:20142-20174 placement
 function expandWin32ExistingLongNamesStrict(path) {
   return resolveViaDeepestExistingAncestor(path, true);
 }
-//@ chunk-cgr0tezp.js:32935-33259 placement
+//@ chunk-6hadbefe.js:20174-20498 placement
 /**
  * 找到最深的存在的祖先目录。
  */
@@ -1193,15 +1205,15 @@ function resolveViaDeepestExistingAncestor(path, strict) {
     currentPath = dir;
   }
 }
-//@ chunk-cgr0tezp.js:33259-33300 placement
+//@ chunk-6hadbefe.js:20498-20539 placement
 function walkPermissionCheckPaths(path) {
   return walkPathSpellingsSync(path, "permission");
 }
-//@ chunk-cgr0tezp.js:33300-33349 placement
+//@ chunk-6hadbefe.js:20539-20589 placement
 function walkPermissionCheckPathsAsync(path, signal, signal_2) {
   return vetPathAsync(path, "permission", signal, signal_2);
 }
-//@ chunk-cgr0tezp.js:33349-33764 placement
+//@ chunk-6hadbefe.js:20589-21004 placement
 /**
  * 异步执行路径检查步骤。
  */
@@ -1236,11 +1248,11 @@ function vetPathAsync(path, purpose, signal, shouldStop) {
     },
   );
 }
-//@ chunk-cgr0tezp.js:33764-33805 placement
+//@ chunk-6hadbefe.js:21004-21045 placement
 function getPathsForNetworkScreen(path) {
   return toPathCheckResult(walkPathSpellingsSync(path, "screen"));
 }
-//@ chunk-cgr0tezp.js:33805-33937 placement
+//@ chunk-6hadbefe.js:21045-21177 placement
 function toPathCheckResult(result) {
   return {
     paths: result.spellings,
@@ -1251,11 +1263,11 @@ function toPathCheckResult(result) {
       }),
   };
 }
-//@ chunk-cgr0tezp.js:33937-33998 placement
+//@ chunk-6hadbefe.js:21177-21238 placement
 async function getPathsForNetworkScreenAsync(path) {
   return toPathCheckResult(await vetPathAsync(path, "screen", undefined));
 }
-//@ chunk-cgr0tezp.js:33998-34261 placement
+//@ chunk-6hadbefe.js:21238-21501 placement
 /**
  * 同步驱动 pathSpellingWalker（lstat/readlink/opendir），得到路径的全部拼写。
  */
@@ -1275,7 +1287,7 @@ function walkPathSpellingsSync(path, purpose) {
     }
   });
 }
-//@ chunk-cgr0tezp.js:34261-36346 placement
+//@ chunk-6hadbefe.js:21501-23590 placement
 /**
  * 路径拼写生成器：展开 ~、逐段跟随符号链接，产出路径的全部等价拼写，供权限检查确保规则对真实位置生效；通过 yield 请求 lstat/readlink，可同步或异步驱动。
  */
@@ -1448,12 +1460,12 @@ function* vetPathSteps(requestedPath, purpose) {
   if (purpose === "screen" && !(yield* resolveExtraSpellings())) return unresolvedResult();
   return resolvedResult(combined, leafIsSymlink);
 }
-//@ chunk-cgr0tezp.js:36346-36430 placement
+//@ chunk-6hadbefe.js:23590-23674 placement
 function joinIfChanged(realPath, basePath, tail) {
   if (typeof realPath !== "string" || realPath === basePath) return;
   return tail === "" ? realPath : pathModule.join(realPath, tail);
 }
-//@ chunk-cgr0tezp.js:36430-36521 placement
+//@ chunk-6hadbefe.js:23674-23765 placement
 function resolvedSpellingWalk(resolvedPath) {
   return {
     unresolved: false,
@@ -1463,11 +1475,11 @@ function resolvedSpellingWalk(resolvedPath) {
     leafIsSymlink: false,
   };
 }
-//@ chunk-cgr0tezp.js:36521-36554 placement
+//@ chunk-6hadbefe.js:23765-23798 placement
 function getPathsForPermissionCheck(path) {
   return permissionCheckSpellings(walkPermissionCheckPaths(path));
 }
-//@ chunk-cgr0tezp.js:36554-36743 placement
+//@ chunk-6hadbefe.js:23798-23987 placement
 function permissionCheckSpellings(result) {
   if (!result.unresolved) return result.spellings;
   let { resolvedPath, isCanonical, isSymlink } = safeResolvePath(getFsImplementation(), result.requested);
@@ -1475,7 +1487,7 @@ function permissionCheckSpellings(result) {
     ? [...result.spellings, resolvedPath]
     : result.spellings;
 }
-//@ chunk-cgr0tezp.js:36743-40014 placement (2.1.88 match: NodeFsOperations, 0.851)
+//@ chunk-6hadbefe.js:23987-27258 placement (2.1.88 match: NodeFsOperations, 0.851)
 var NodeFsOperations = {
   cwd() {
     return process.cwd();
@@ -1705,14 +1717,14 @@ var NodeFsOperations = {
     }
   },
 };
-//@ chunk-cgr0tezp.js:40014-40038 placement (2.1.88 match: getFsImplementation, 0)
+//@ chunk-6hadbefe.js:27258-27282 placement (2.1.88 match: getFsImplementation, 0)
 /**
  * 返回全局文件系统抽象 NodeFsOperations（同步/异步 fs 包装，可在测试或宿主模式下替换）。全局约 400 处调用，项目内几乎所有文件读写都经过它。
  */
 function getFsImplementation() {
   return NodeFsOperations;
 }
-//@ chunk-cgr0tezp.js:40038-40367 placement
+//@ chunk-6hadbefe.js:27282-27612 placement
 function processChdir(dirPath) {
   let previousCwd;
   try {
@@ -1743,7 +1755,7 @@ function processChdir(dirPath) {
     },
   );
 }
-//@ chunk-cgr0tezp.js:40367-40709 placement (2.1.88 match: readFileRange, 1)
+//@ chunk-6hadbefe.js:27612-27954 placement (2.1.88 match: readFileRange, 1)
 async function readFileRange(path, offset, maxBytes) {
   await using openedHandle = typeof path === "string" ? await open(path, "r") : null;
   let handle = typeof path === "string" ? openedHandle : path;
@@ -1763,7 +1775,7 @@ async function readFileRange(path, offset, maxBytes) {
     bytesTotal: size,
   };
 }
-//@ chunk-cgr0tezp.js:40709-40974 placement
+//@ chunk-6hadbefe.js:27954-28219 placement
 /**
  * 读取文件末尾若干字节/行（日志、转录尾部读取用）。
  */
@@ -1780,7 +1792,7 @@ async function readHandleUpTo(handle, maxBytes, kind) {
   }
   return Buffer.concat(chunks, totalRead);
 }
-//@ chunk-cgr0tezp.js:40974-41352 placement (2.1.88 match: readFileRange, 1)
+//@ chunk-6hadbefe.js:28219-28597 placement (2.1.88 match: readFileRange, 1)
 /**
  * 按字节范围读取文件片段。
  */
@@ -1809,7 +1821,7 @@ async function tailFile(fileOrHandle, offset) {
     bytesTotal: size,
   };
 }
-//@ chunk-cgr0tezp.js:41352-41804 placement
+//@ chunk-6hadbefe.js:28597-29049 placement
 async function* readLines(filePath, chunkBytes = 65536) {
   let handle = await open(filePath, "r");
   let readBuffer = Buffer.alloc(chunkBytes);
@@ -1848,9 +1860,9 @@ async function* readLines(filePath, chunkBytes = 65536) {
   if (pendingBytes > 0)
     yield pendingParts.length === 1 ? pendingParts[0] : Buffer.concat(pendingParts, pendingBytes);
 }
-//@ chunk-cgr0tezp.js:41804-41815 placement
+//@ chunk-6hadbefe.js:29049-29059 placement
 var REVERSE_READ_OVERLAP_BYTES = 256;
-//@ chunk-cgr0tezp.js:41815-42032 placement
+//@ chunk-6hadbefe.js:29059-29276 placement
 class FileChangedDuringReadError extends Error {
   partialRead;
   constructor(partialRead = false) {
@@ -1859,7 +1871,7 @@ class FileChangedDuringReadError extends Error {
     this.name = "FileChangedDuringReadError";
   }
 }
-//@ chunk-cgr0tezp.js:42032-43018 placement
+//@ chunk-6hadbefe.js:29276-30257 placement
 async function* readLinesReverse(filePath, chunkBytes = 65536, { onOpen, strict = true } = {}) {
   let handle = await open(filePath, "r");
   try {
@@ -1931,16 +1943,7 @@ async function* readLinesReverse(filePath, chunkBytes = 65536, { onOpen, strict 
     await handle.close();
   }
 }
-//@ chunk-cgr0tezp.js:43018-43122 placement
-function createOffsetMappedText(text) {
-  let int32Array = new Int32Array(text.length);
-  for (let i = 0; i < text.length; i++) int32Array[i] = i;
-  return {
-    text,
-    origin: int32Array,
-  };
-}
-//@ chunk-jhrww53q.js:47434-47579 fingerprint (2.1.88 match: safeResolvePath, 0.602)
+//@ chunk-xjnnz630.js:48788-48933 fingerprint (2.1.88 match: safeResolvePath, 0.6)
 function safeResolvePath_2(entryStats) {
   return (
     !entryStats.isDirectory() &&
@@ -1952,13 +1955,13 @@ function safeResolvePath_2(entryStats) {
     !entryStats.isCharacterDevice()
   );
 }
-//@ chunk-e6aww6q8.js:1151949-1152000 placement
+//@ chunk-5xgkngpb.js:1147289-1147340 placement
 function resolveForPermissionCheck(fsImpl, filePath) {
   return isNonWslUncPath(filePath) || isMacSpecialPath(filePath)
     ? filePath
     : (resolveDeepestExistingAncestorSync(fsImpl, filePath) ?? filePath);
 }
-//@ chunk-e6aww6q8.js:1152000-1152140 layout
+//@ chunk-5xgkngpb.js:1147340-1147480 layout
 function isPathMatchedForPermission(rawPath, permissionCtx) {
   if (rawPath === "") return false;
   if (rawPath.startsWith("~")) {
@@ -1971,7 +1974,7 @@ function isPathMatchedForPermission(rawPath, permissionCtx) {
   }
   return getPathsForPermissionCheck_2(rawPath, permissionCtx);
 }
-//@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint (2.1.88 match: getPathsForPermissionCheck, 0.425)
+//@ chunk-5xgkngpb.js:1147480-1148488 callgraph-fingerprint (2.1.88 match: getPathsForPermissionCheck, 0.425)
 /**
  * 返回权限检查需要比对的路径集合（原始、规范化、符号链接解析后）。
  */
@@ -2033,7 +2036,7 @@ function getPathsForPermissionCheck_2(rawPath, baseCwd) {
   } while (walkDir !== normalized_2 && walkDir !== dirname(walkDir));
   return false;
 }
-//@ chunk-e6aww6q8.js:1337160-1337480 fingerprint (2.1.88 match: isDuplicatePath, 0.685)
+//@ chunk-5xgkngpb.js:1336317-1336637 fingerprint (2.1.88 match: isDuplicatePath, 0.685)
 function isDuplicatePath_2(fsImplementation, patterns) {
   let mapped = patterns.map((pattern) => pattern.replaceAll("\\", "/"));
   for (let pattern of mapped) {
@@ -2054,7 +2057,7 @@ function isDuplicatePath_2(fsImplementation, patterns) {
   }
   return mapped;
 }
-//@ chunk-awy329vy.js:49206-49477 fingerprint (2.1.88 match: readLinesReverse, 0.747)
+//@ chunk-9knfmvrf.js:59716-59987 fingerprint (2.1.88 match: readLinesReverse, 0.747)
 async function readLinesReverse_2(filePath, maxBytes) {
   let handle;
   try {
@@ -2071,54 +2074,54 @@ async function readLinesReverse_2(filePath, maxBytes) {
   }
 }
 export {
+  hasUntouchableRecordSpellingStrict,
   getFsImplementation,
-  hasUntouchableRecordSpellingStrictAsync,
-  hasUntouchableRecordSpelling,
-  processChdir,
-  findIntermediateUncJunction,
-  NodeFsOperations,
-  readLinesReverse,
-  FileChangedDuringReadError,
-  tailFile,
-  hasUntouchableRecordSpellingAsync,
-  getPathsForPermissionCheck,
-  walkPermissionCheckPaths,
   safeResolvePath,
+  tailFile,
+  FileChangedDuringReadError,
+  readLinesReverse,
+  hasUntouchableRecordSpellingAsync,
+  hasUntouchableRecordSpellingStrictAsync,
+  safeResolvePath_2,
+  walkPermissionCheckPaths,
+  getPathsForPermissionCheck,
+  nonblockingReadFlags,
+  readHandleUpTo,
+  permissionCheckSpellings,
   vetRepoSettingsPath,
   isSymlinkToNetworkPathError,
   realpathExaminedSync,
-  createOffsetMappedText,
-  permissionCheckSpellings,
-  resolveDeepestExistingAncestorSync,
-  UNVERIFIED_ANCESTRY,
-  readFileRange,
-  readHandleUpTo,
-  entryReachesForeignNetwork,
-  isDuplicatePath_2,
-  safeResolvePath_2,
-  vetRepoSettingsPathAsync,
-  nonblockingReadFlags,
-  isOpaqueLinkText,
-  findIntermediateUncJunctionAsync,
-  OPAQUE_LINK_TEXT,
-  getPathsForNetworkScreen,
+  processChdir,
   resolvedSpellingWalk,
-  hopCapExhausted,
-  vouchedLaunchAncestry,
-  readLinesReverse_2,
+  resolveDeepestExistingAncestorSync,
+  createOffsetMappedText,
+  hasUntouchableRecordSpelling,
+  findIntermediateUncJunction,
+  NodeFsOperations,
+  readFileRange,
+  findIntermediateUncJunctionAsync,
+  UNVERIFIED_ANCESTRY,
   isDuplicatePath,
-  walkPermissionCheckPathsAsync,
-  isSpelledStrictAncestor,
+  entryReachesForeignNetwork,
+  vetRepoSettingsPathAsync,
+  SYMLINK_TO_NETWORK_PATH_CODE,
   isPathMatchedForPermission,
   resolveForPermissionCheck,
   getPathsForPermissionCheck_2,
+  isDuplicatePath_2,
+  walkPermissionCheckPathsAsync,
+  getPathsForNetworkScreen,
   repoSettingsRefusalReason,
-  expandWin32ExistingLongNamesStrict,
-  examineEntryChain,
-  isNetworkJunction,
-  hasUntouchableRecordSpellingStrict,
-  SYMLINK_TO_NETWORK_PATH_CODE,
   expandWin32ExistingLongNames,
   getPathsForNetworkScreenAsync,
+  vouchedLaunchAncestry,
+  isSpelledStrictAncestor,
+  isOpaqueLinkText,
+  OPAQUE_LINK_TEXT,
+  readLinesReverse_2,
+  examineEntryChain,
+  hopCapExhausted,
+  isNetworkJunction,
+  expandWin32ExistingLongNamesStrict,
   readLines,
 };

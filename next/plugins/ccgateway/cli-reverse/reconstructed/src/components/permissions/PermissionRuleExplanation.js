@@ -3,21 +3,15 @@
  *
  * 解释为什么需要确认：命中的规则及来源文件、auto 模式分类器原因、沙箱覆盖等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionRuleExplanation.tsx
- * pieces: chunk-0e8j1zzj.js (7)
- * attribution: callgraph-fingerprint 1, layout 4, fingerprint 2
+ * pieces: chunk-8prszgkd.js (6)
+ * attribution: callgraph-fingerprint 1, layout 3, fingerprint 2
  */
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-  Fragment,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Blockquote } from "../Blockquote.js";
-import { needsGutter, displayField } from "../../utils/permissions/approvalPayloadSerialization.js";
+import { displayField, needsGutter } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { ensureNoReasonProvided } from "../../utils/messages.js";
 import { sequential } from "../../utils/sequential.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import {
   CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON,
   CLASSIFIER_TRANSCRIPT_TOO_LONG_PROMPT,
@@ -30,29 +24,29 @@ import { wrapAnsi } from "../../ink/wrapAnsi.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { countCharInString, getFirstLine } from "../../utils/stringUtils.js";
 import { useEffect } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { Blockquote } from "../Blockquote.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 
-//@ chunk-0e8j1zzj.js:19288-19341 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-8prszgkd.js:24687-24740 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode(s) {
   return s.toolPermissionContext.mode;
 }
-//@ chunk-0e8j1zzj.js:19341-19404 layout
-function renderRuleExplanation(text, children) {
-  return jsxProd_default(Blockquote, {
-    multiline: needsGutter(text),
-    children,
-  });
-}
-//@ chunk-0e8j1zzj.js:19404-19413 layout
+//@ chunk-8prszgkd.js:24740-24783 layout
+var PERMISSIONS_SLASH_COMMAND = "/permissions to update rules";
 var MAX_EXPLANATION_LINES = 7;
-//@ chunk-0e8j1zzj.js:19413-19546 layout
+//@ chunk-8prszgkd.js:24783-24916 layout
 function getRuleSourceFileLabel(hookSource) {
   if (hookSource?.startsWith("plugin")) return "plugin hooks.json";
   if (hookSource?.startsWith("skill")) return "SKILL.md";
   return "settings.json";
 }
-//@ chunk-0e8j1zzj.js:19546-19762 layout
+//@ chunk-8prszgkd.js:24916-25132 layout
 function findAskRule(decisionReason) {
   if (decisionReason?.type === "rule" && decisionReason.rule.ruleBehavior === "ask")
     return decisionReason.rule;
@@ -65,7 +59,7 @@ function findAskRule(decisionReason) {
   }
   return;
 }
-//@ chunk-0e8j1zzj.js:19762-21481 fingerprint (2.1.88 match: stringsForDecisionReason, 0.747)
+//@ chunk-8prszgkd.js:25132-26795 fingerprint (2.1.88 match: stringsForDecisionReason, 0.716)
 function stringsForDecisionReason(decisionReason, toolType, permissionMode) {
   if (!decisionReason) return null;
   let displayTextOf = (field) => displayField(field).text;
@@ -102,7 +96,9 @@ ${displayTextOf(decisionReason.reason)}`,
   }
   switch (decisionReason.type) {
     case "rule": {
-      let ruleLabel = sequential.bold(displayTextOf(formatPermissionRule(decisionReason.rule.ruleValue)));
+      let ruleLabel = sequential.bold(
+        displayTextOf(permissionRuleValueFromString(decisionReason.rule.ruleValue)),
+      );
       if (
         permissionMode === "auto" &&
         decisionReason.rule.ruleBehavior === "ask" &&
@@ -114,8 +110,7 @@ ${displayTextOf(decisionReason.reason)}`,
         };
       return {
         reasonString: `Permission rule ${ruleLabel} requires confirmation for this ${toolType}.`,
-        configString:
-          decisionReason.rule.source === "policySettings" ? undefined : "/permissions to update rules",
+        configString: decisionReason.rule.source === "policySettings" ? undefined : PERMISSIONS_SLASH_COMMAND,
       };
     }
     case "hook": {
@@ -143,7 +138,7 @@ ${displayTextOf(decisionReason.reason)}`
     case "workingDir":
       return {
         reasonString: displayTextOf(decisionReason.reason),
-        configString: "/permissions to update rules",
+        configString: PERMISSIONS_SLASH_COMMAND,
       };
     case "sandboxOverride": {
       let replaces = decisionReason.replaces;
@@ -165,13 +160,14 @@ ${displayTextOf(decisionReason.reason)}`
       return null;
   }
 }
-//@ chunk-0e8j1zzj.js:21481-24742 fingerprint (2.1.88 match: PermissionRuleExplanation, 0.415)
+//@ chunk-8prszgkd.js:26795-30292 fingerprint (2.1.88 match: PermissionRuleExplanation, 0.382)
 /**
  * 规则解释：显示命中的规则及其来源（settings.json/插件 hooks.json/SKILL.md），auto 模式分类器原因，沙箱覆盖、连续拒绝等。
  */
 function PermissionRuleExplanation(props) {
-  let $ = useMemoCache(29);
-  let { permissionResult, toolType, rowBudget, rowColumns, hideAskRuleHint, onConsentDrawn } = props;
+  let $ = useMemoCache(35);
+  let { permissionResult, toolType, rowBudget, rowColumns, framed, hideAskRuleHint, onConsentDrawn } = props;
+  let isFramed = framed === undefined ? false : framed;
   let permissionMode = useAppState(selectToolPermissionContextMode);
   let disclosure =
     permissionResult?.behavior === "ask" ? permissionResult.denialLimitFallback?.disclosure : undefined;
@@ -329,9 +325,24 @@ function PermissionRuleExplanation(props) {
   let themeColor =
     consentStrings?.themeColor ??
     (permissionResult?.decisionReason?.type === "hook" && permissionMode === "auto" ? "warning" : undefined);
-  let ruleRenderer = renderRuleExplanation;
+  let renderRuleBlock;
+  if ($[9] !== isFramed) {
+    renderRuleBlock = (needsGutterValue, children) =>
+      jsxProd_default(Blockquote, {
+        multiline: isFramed || needsGutter(needsGutterValue),
+        children,
+      });
+    $[9] = isFramed;
+    $[10] = renderRuleBlock;
+  } else renderRuleBlock = $[10];
+  let ruleRenderer = renderRuleBlock;
+  let slashCommandHint = isFramed ? PERMISSIONS_SLASH_COMMAND : undefined;
+  let configString =
+    consentStrings?.configString === slashCommandHint ? undefined : consentStrings?.configString;
+  let configString_2 =
+    askRuleStrings?.configString === slashCommandHint ? undefined : askRuleStrings?.configString;
   let consentBlock;
-  if ($[9] !== consentText || $[10] !== consentStrings || $[11] !== themeColor) {
+  if ($[11] !== consentText || $[12] !== ruleRenderer || $[13] !== consentStrings || $[14] !== themeColor) {
     consentBlock =
       consentStrings &&
       ruleRenderer(
@@ -347,28 +358,31 @@ function PermissionRuleExplanation(props) {
               }),
             }),
       );
-    $[9] = consentText;
-    $[10] = consentStrings;
-    $[11] = themeColor;
-    $[12] = consentBlock;
-  } else consentBlock = $[12];
+    $[11] = consentText;
+    $[12] = ruleRenderer;
+    $[13] = consentStrings;
+    $[14] = themeColor;
+    $[15] = consentBlock;
+  } else consentBlock = $[15];
   let consentConfigText;
-  if ($[13] !== consentStrings) {
+  if ($[16] !== configString) {
     consentConfigText =
-      consentStrings?.configString &&
+      configString &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: consentStrings.configString,
+        children: configString,
       });
-    $[13] = consentStrings;
-    $[14] = consentConfigText;
-  } else consentConfigText = $[14];
+    $[16] = configString;
+    $[17] = consentConfigText;
+  } else consentConfigText = $[17];
   let askRuleBlock;
   if (
-    $[15] !== askRuleStrings ||
-    $[16] !== askRuleText ||
-    $[17] !== hideAskRuleHint ||
-    $[18] !== consentStrings?.configString
+    $[18] !== configString_2 ||
+    $[19] !== askRuleStrings ||
+    $[20] !== askRuleText ||
+    $[21] !== configString ||
+    $[22] !== ruleRenderer ||
+    $[23] !== hideAskRuleHint
   ) {
     askRuleBlock =
       askRuleStrings &&
@@ -382,23 +396,25 @@ function PermissionRuleExplanation(props) {
               }),
             }),
           ),
-          askRuleStrings.configString &&
+          configString_2 &&
             hideAskRuleHint !== true &&
-            askRuleStrings.configString !== consentStrings?.configString &&
+            configString_2 !== configString &&
             jsxProd_default(Text, {
               dimColor: true,
-              children: askRuleStrings.configString,
+              children: configString_2,
             }),
         ],
       });
-    $[15] = askRuleStrings;
-    $[16] = askRuleText;
-    $[17] = hideAskRuleHint;
-    $[18] = consentStrings?.configString;
-    $[19] = askRuleBlock;
-  } else askRuleBlock = $[19];
+    $[18] = configString_2;
+    $[19] = askRuleStrings;
+    $[20] = askRuleText;
+    $[21] = configString;
+    $[22] = ruleRenderer;
+    $[23] = hideAskRuleHint;
+    $[24] = askRuleBlock;
+  } else askRuleBlock = $[24];
   let disclosureBlock;
-  if ($[20] !== streakText || $[21] !== disclosureStrings) {
+  if ($[25] !== streakText || $[26] !== ruleRenderer || $[27] !== disclosureStrings) {
     disclosureBlock =
       disclosureStrings &&
       ruleRenderer(
@@ -414,30 +430,31 @@ function PermissionRuleExplanation(props) {
               }),
             }),
       );
-    $[20] = streakText;
-    $[21] = disclosureStrings;
-    $[22] = disclosureBlock;
-  } else disclosureBlock = $[22];
+    $[25] = streakText;
+    $[26] = ruleRenderer;
+    $[27] = disclosureStrings;
+    $[28] = disclosureBlock;
+  } else disclosureBlock = $[28];
   let content;
   if (
-    $[23] !== fallbackNotice_2 ||
-    $[24] !== consentBlock ||
-    $[25] !== consentConfigText ||
-    $[26] !== askRuleBlock ||
-    $[27] !== disclosureBlock
+    $[29] !== fallbackNotice_2 ||
+    $[30] !== askRuleBlock ||
+    $[31] !== disclosureBlock ||
+    $[32] !== consentBlock ||
+    $[33] !== consentConfigText
   ) {
     content = jsxProd_default_2(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: [consentBlock, consentConfigText, askRuleBlock, disclosureBlock, fallbackNotice_2],
     });
-    $[23] = fallbackNotice_2;
-    $[24] = consentBlock;
-    $[25] = consentConfigText;
-    $[26] = askRuleBlock;
-    $[27] = disclosureBlock;
-    $[28] = content;
-  } else content = $[28];
+    $[29] = fallbackNotice_2;
+    $[30] = askRuleBlock;
+    $[31] = disclosureBlock;
+    $[32] = consentBlock;
+    $[33] = consentConfigText;
+    $[34] = content;
+  } else content = $[34];
   return content;
 }
 export { MAX_EXPLANATION_LINES, PermissionRuleExplanation };

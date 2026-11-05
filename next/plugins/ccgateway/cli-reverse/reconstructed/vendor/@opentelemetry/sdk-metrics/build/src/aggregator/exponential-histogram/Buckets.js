@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/aggregator/exponential-histogram/Buckets.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-wrv5s6k4.js:5286-7681 cjs-fingerprint
+//@ chunk-q87n5wsq.js:5286-7681 cjs-fingerprint
 var require_Buckets = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

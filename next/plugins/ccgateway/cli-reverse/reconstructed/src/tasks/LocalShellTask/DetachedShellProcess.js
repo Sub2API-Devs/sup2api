@@ -3,36 +3,55 @@
  *
  * 2.1.316 新增。脱离的 shell 进程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
- * attribution: placement 2
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
+ * attribution: placement 2, affinity 1
  */
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { objectSchema, booleanSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fireDeadProbe, readProcessStartTicks, killIfSameProcess } from "../../daemon/deadProbe.js";
 import { TaskOutput } from "../../utils/task/TaskOutput.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { logEvent } from "../../services/analytics/index.js";
 import { isSameProcessAsync } from "../../utils/processIdentity.js";
 import { env } from "../../utils/env.js";
 import { openTaskOutputForAppend } from "../../utils/task/diskOutput.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:343157-343170 placement
-var DETACHED_SHELL_POLL_MS = 1000;
-//@ chunk-18hwfzwa.js:343170-344654 placement
+//@ chunk-czq1j3j2.js:337520-337713 placement
+var DETACHED_SHELL_POLL_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var AUTO_RESTORE_CANCEL;
+var autoRestoreResultSchema;
+deferInit("chunk-czq1j3j2.js:337520", () => {
+  DETACHED_SHELL_POLL_MS = 1000;
+  AUTO_RESTORE_CANCEL = fromEnum("auto_restore_cancel");
+  autoRestoreResultSchema = DoctorLazy(() =>
+    objectSchema({
+      rewound: booleanSchema(),
+      error: stringSchema().optional().catch(undefined),
+      reason: stringSchema().optional().catch(undefined),
+      prefillText: stringSchema().nullable().optional().catch(undefined),
+    }),
+  );
+});
+//@ chunk-czq1j3j2.js:380878-380891 affinity
+var GESTURE_WINDOW_MS = 1000;
+//@ chunk-czq1j3j2.js:380891-382375 placement
 class DetachedShellProcess {
   taskOutput;
   #e;
   #t;
   #o;
   #n = "backgrounded";
-  #s = null;
-  #r;
+  #r = null;
+  #s;
   result;
   constructor(options) {
     this.#e = options.pid;
@@ -41,12 +60,12 @@ class DetachedShellProcess {
     if (this.#t === undefined && this.#o !== undefined) fireDeadProbe("liveness");
     this.taskOutput = new TaskOutput(options.taskId, null, true);
     this.result = new Promise((resolve) => {
-      this.#r = resolve;
+      this.#s = resolve;
     });
-    this.#s = setInterval(() => void this.#c(), DETACHED_SHELL_POLL_MS);
-    this.#s.unref();
+    this.#r = setInterval(() => void this.#l(), GESTURE_WINDOW_MS);
+    this.#r.unref();
   }
-  async #c() {
+  async #l() {
     if (this.#n !== "backgrounded") return;
     let isAlive = true;
     try {
@@ -64,9 +83,9 @@ class DetachedShellProcess {
   }
   async #i(wasKilled) {
     if (this.#n !== "backgrounded") return;
-    if (this.#s) {
-      clearInterval(this.#s);
-      this.#s = null;
+    if (this.#r) {
+      clearInterval(this.#r);
+      this.#r = null;
     }
     this.#n = wasKilled ? "killed" : "completed";
     let hasIdentity = this.#t !== undefined || this.#o !== undefined;
@@ -87,7 +106,7 @@ ${notice}
       })
       .catch(() => {});
     let stdout = await this.taskOutput.getStdout();
-    this.#r({
+    this.#s({
       code: -1,
       stdout,
       stderr: "",
@@ -106,9 +125,9 @@ ${notice}
     await this.#i(true);
   }
   cleanup() {
-    if (this.#s) {
-      clearInterval(this.#s);
-      this.#s = null;
+    if (this.#r) {
+      clearInterval(this.#r);
+      this.#r = null;
     }
     this.taskOutput.clear();
   }
@@ -116,4 +135,4 @@ ${notice}
     return Promise.resolve(this.#e);
   }
 }
-export { DetachedShellProcess };
+export { DETACHED_SHELL_POLL_MS, AUTO_RESTORE_CANCEL, DetachedShellProcess };

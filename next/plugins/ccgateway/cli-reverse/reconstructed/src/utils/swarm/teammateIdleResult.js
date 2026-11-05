@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：队友空闲结果文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s4bxxzsw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g4tsxwy3.js (6)
  * attribution: placement 6
  */
 import { dropRetractedOnResume, hasNonEmptyText } from "../conversationRecovery.js";
@@ -21,7 +21,7 @@ import { jsonParse } from "../slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s4bxxzsw.js:60333-61640 placement
+//@ chunk-g4tsxwy3.js:61771-63077 placement
 /**
  * 汇总队友（teammate）自上次唤醒以来的工作，生成空闲时交给 leader 的结果文本：取最后的点对点私信摘要、本轮 SendMessage 调用及其结果、最后的助手文本等。
  */
@@ -104,14 +104,14 @@ ${sanitized}`
     summary,
   };
 }
-//@ chunk-s4bxxzsw.js:61640-61676 placement
+//@ chunk-g4tsxwy3.js:63077-63113 placement
 /**
  * 取队友空闲结果的文本部分。
  */
 function teammateIdleResultText(messages) {
   return buildTeammateIdleResult(messages).result;
 }
-//@ chunk-s4bxxzsw.js:61676-61766 placement
+//@ chunk-g4tsxwy3.js:63113-63203 placement
 /**
  * 安全地构造队友空闲结果（失败返回空结果）。
  */
@@ -126,7 +126,7 @@ function safeTeammateIdleResult(messages, options) {
     };
   }
 }
-//@ chunk-s4bxxzsw.js:61766-62132 placement
+//@ chunk-g4tsxwy3.js:63203-63569 placement
 function collectTextParts(content) {
   let texts = [];
   if (typeof content === "string") texts.push(content);
@@ -152,7 +152,7 @@ function collectTextParts(content) {
   }
   return false;
 }
-//@ chunk-s4bxxzsw.js:62132-62273 placement
+//@ chunk-g4tsxwy3.js:63569-63710 placement
 class TeammatePermissionContextSlot {
   permissionContextSetter = null;
   registerSetter(permissionContextSetter) {
@@ -162,12 +162,12 @@ class TeammatePermissionContextSlot {
     this.permissionContextSetter = null;
   }
 }
-//@ chunk-s4bxxzsw.js:62273-62300 placement
+//@ chunk-g4tsxwy3.js:63710-63737 placement
 /**
  * 按会话根缓存的队友权限上下文槽。
  */
 var teammatePermissionContextBySessionRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:62273", () => {
+deferInit("chunk-g4tsxwy3.js:63710", () => {
   teammatePermissionContextBySessionRoot = new SessionRootSlot(() => new TeammatePermissionContextSlot());
 });
-export { safeTeammateIdleResult, teammatePermissionContextBySessionRoot, teammateIdleResultText };
+export { teammatePermissionContextBySessionRoot, safeTeammateIdleResult, teammateIdleResultText };

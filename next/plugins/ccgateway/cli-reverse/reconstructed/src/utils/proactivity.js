@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：主动性设置提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 13
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -16,14 +16,14 @@ import { SCHEDULE_WAKEUP_TOOL_NAME } from "../tools/ScheduleWakeupTool/prompt.js
 import { CRON_CREATE_TOOL_NAME } from "../tools/ScheduleCronTool/prompt.js";
 import { LOOP, SCHEDULE } from "../skills/bundled/bundledSkillNames.js";
 import { isProactivityMode } from "./proactivityMode.js";
-import { isProactivityActive, toolMatchesName } from "../Tool.js";
+import { isProactivityActive, matchesToolName } from "../Tool.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:86189-86281 placement
+//@ chunk-5xgkngpb.js:88994-89086 placement
 var proactivitySettingsSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:86189", () => {
+deferInit("chunk-5xgkngpb.js:88994", () => {
   proactivitySettingsSchema = DoctorLazy(() =>
     objectSchema({
       askUserQuestion: booleanSchema(),
@@ -33,31 +33,31 @@ deferInit("chunk-e6aww6q8.js:86189", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:86281-86330 placement
+//@ chunk-5xgkngpb.js:89086-89135 placement
 /**
  * isProactivitySettingsValid：主动性设置可解析。
  */
 function isProactivitySettingsValid(tools) {
   return proactivitySettingsSchema().safeParse(tools).success;
 }
-//@ chunk-e6aww6q8.js:86330-86401 placement
+//@ chunk-5xgkngpb.js:89135-89206 placement
 function isSameProactivitySettings(tools, otherTools) {
   return proactivitySettingsSchema()
     .keyof()
     .options.every((option) => tools[option] === otherTools[option]);
 }
-//@ chunk-e6aww6q8.js:86401-86609 placement
+//@ chunk-5xgkngpb.js:89206-89414 placement
 /**
  * 撤销之前公告的主动性设置的提示（恢复按基础指令处理提问、提交、推送与 PR）。
  */
 function proactivityWithdrawnNotice() {
   return "The proactivity setting announced earlier in this conversation no longer applies. Follow your base instructions about asking the user questions, committing, pushing, and pull requests.";
 }
-//@ chunk-e6aww6q8.js:86609-86649 placement
+//@ chunk-5xgkngpb.js:89414-89454 placement
 function PROACTIVITY_SECTION_HEADER() {
   return "## Proactivity: ";
 }
-//@ chunk-e6aww6q8.js:86649-86756 placement
+//@ chunk-5xgkngpb.js:89454-89561 placement
 function proactivityLevelLabel(level) {
   switch (level) {
     case "ask":
@@ -68,14 +68,14 @@ function proactivityLevelLabel(level) {
       return "high";
   }
 }
-//@ chunk-e6aww6q8.js:86756-86820 placement
+//@ chunk-5xgkngpb.js:89561-89625 placement
 /**
  * isProactivityBlockText：文本属于主动性段落。
  */
 function isProactivityBlockText(text) {
   return text.startsWith(PROACTIVITY_SECTION_HEADER()) || text.startsWith(proactivityWithdrawnNotice());
 }
-//@ chunk-e6aww6q8.js:86820-91286 placement
+//@ chunk-5xgkngpb.js:89625-94091 placement
 /**
  * 生成主动性设置段：按用户设定决定先给计划还是直接执行。
  */
@@ -112,7 +112,7 @@ The user has set how much initiative they want you to take in this session. This
     }
   }
 }
-//@ chunk-e6aww6q8.js:949642-949904 placement
+//@ chunk-5xgkngpb.js:961424-961686 placement
 function latestProactivityAttachment(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
@@ -127,7 +127,7 @@ function latestProactivityAttachment(messages) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:949904-950328 placement
+//@ chunk-5xgkngpb.js:961686-962110 placement
 /**
  * 生成主动性设置附件：功能关闭且之前通告过时发 withdrawn；否则当等级或可用工具（AskUserQuestion/EnterPlanMode/ScheduleWakeup/CronCreate）变化时发新的 active 附件。
  */
@@ -145,10 +145,10 @@ async function proactivityAttachments(messages, options) {
           ];
     let tools = options.options.tools;
     let toolAvailability = {
-      askUserQuestion: tools.some((tool) => toolMatchesName(tool, ASKUSERQUESTION)),
-      enterPlanMode: tools.some((tool) => toolMatchesName(tool, ENTER_PLAN_MODE_TOOL_NAME)),
-      scheduleWakeup: tools.some((tool) => toolMatchesName(tool, SCHEDULE_WAKEUP_TOOL_NAME)),
-      cronCreate: tools.some((tool) => toolMatchesName(tool, CRON_CREATE_TOOL_NAME)),
+      askUserQuestion: tools.some((tool) => matchesToolName(tool, ASKUSERQUESTION)),
+      enterPlanMode: tools.some((tool) => matchesToolName(tool, ENTER_PLAN_MODE_TOOL_NAME)),
+      scheduleWakeup: tools.some((tool) => matchesToolName(tool, SCHEDULE_WAKEUP_TOOL_NAME)),
+      cronCreate: tools.some((tool) => matchesToolName(tool, CRON_CREATE_TOOL_NAME)),
     };
     let proactivityLevel = options.getProactivityLevel();
     if (
@@ -168,23 +168,23 @@ async function proactivityAttachments(messages, options) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:950328-950389 placement
+//@ chunk-5xgkngpb.js:962110-962171 placement
 var skillOverridesState; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:950328", () => {
+deferInit("chunk-5xgkngpb.js:962110", () => {
   skillOverridesState = new SessionRootSlot(() => ({
     read: false,
     brought: {},
     skillOverrides: {},
   }));
 });
-//@ chunk-e6aww6q8.js:950389-950436 placement
+//@ chunk-5xgkngpb.js:962171-962218 placement
 /**
  * isSkillOverridesUnread：技能覆盖尚未读取。
  */
 function isSkillOverridesUnread() {
   return skillOverridesState.peek(getRootSession())?.read === false;
 }
-//@ chunk-e6aww6q8.js:950436-950488 placement
+//@ chunk-5xgkngpb.js:962218-962270 placement
 /**
  * skillOverrides：技能覆盖表。
  */

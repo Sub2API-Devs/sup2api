@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：稀疏检出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { resolve as resolve_2, posix, join } from "path";
-import { open, mkdtemp, rm as rm_2 } from "fs/promises";
+import { open, mkdtemp, rm } from "fs/promises";
 import { tmpdir as tmpdir_2 } from "os";
 import { randomUUID } from "crypto";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
@@ -27,7 +27,7 @@ import { stripProgressLines } from "./worktreeRegistrations.js";
 import { firstLineOf } from "../stringUtils.js";
 import { SandboxManager, getEffectiveFilesystemPolicy } from "../sandbox/sandbox-adapter.js";
 
-//@ chunk-e6aww6q8.js:3591246-3591456 placement
+//@ chunk-5xgkngpb.js:3686523-3686733 placement
 async function uploadPackArgForRemote(a, b) {
   let configResult = await execFileNoThrowWithCwd(
     gitExe(),
@@ -41,7 +41,7 @@ async function uploadPackArgForRemote(a, b) {
   let trimmed = configResult.stdout.trim();
   return configResult.code === 0 && trimmed !== "" ? `--upload-pack=${trimmed}` : undefined;
 }
-//@ chunk-e6aww6q8.js:3591456-3591870 placement
+//@ chunk-5xgkngpb.js:3686733-3687147 placement
 /**
  * 根据 sparse-checkout 模式生成需要检出的 .gitattributes 路径模式。
  */
@@ -68,9 +68,9 @@ function gitattributesSparsePatterns({ text, cone }) {
   return [...attributesPaths, ""].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3591870-3591886 placement
+//@ chunk-5xgkngpb.js:3687147-3687163 placement
 var MAX_SPARSE_CONFIG_BYTES = 1048576;
-//@ chunk-e6aww6q8.js:3591886-3592665 placement
+//@ chunk-5xgkngpb.js:3687163-3687944 placement
 async function readSparseCheckoutConfig(worktreePath) {
   let runGit = (args) =>
     execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
@@ -112,7 +112,7 @@ async function readSparseCheckoutConfig(worktreePath) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3592665-3593207 placement
+//@ chunk-5xgkngpb.js:3687944-3688486 placement
 /**
  * 把稀疏检出路径规范化并合并为最少的目录集合，含非法路径时返回 null。
  */
@@ -144,13 +144,13 @@ function minimalSparseDirs(paths) {
     cone: true,
   };
 }
-//@ chunk-e6aww6q8.js:3593207-3593326 placement
+//@ chunk-5xgkngpb.js:3688486-3688605 placement
 async function hasMissingSparseObjects(repoRoot, commit, sparseConfig) {
   await using patterns = await writeSparsePatterns(repoRoot, sparseConfig);
   let missing = await patterns.missing(commit);
   return typeof missing === "string" || missing.length > 0;
 }
-//@ chunk-e6aww6q8.js:3593326-3594255 placement
+//@ chunk-5xgkngpb.js:3688605-3689534 placement
 async function writeSparsePatterns(cwd, sparseConfig) {
   let sideDir =
     sparseConfig === null
@@ -204,7 +204,7 @@ ${gitattributesSparsePatterns(sparseConfig)}# ${randomUUID()}
     },
     async [Symbol.asyncDispose]() {
       if (sideDir !== null)
-        await rm_2(sideDir, {
+        await rm(sideDir, {
           recursive: true,
           force: true,
         }).catch((error) =>
@@ -218,7 +218,7 @@ ${gitattributesSparsePatterns(sparseConfig)}# ${randomUUID()}
     },
   };
 }
-//@ chunk-e6aww6q8.js:3594255-3594818 placement
+//@ chunk-5xgkngpb.js:3689534-3690097 placement
 /**
  * 用 rev-list --missing=print 列出提交缺失的对象，失败时返回错误说明。
  */
@@ -265,7 +265,7 @@ async function listMissingObjects(cwd, commit, sparseFilter) {
     .filter((line) => line.startsWith("?"))
     .map((line) => firstLineOf(line.slice(1), " "));
 }
-//@ chunk-e6aww6q8.js:3594848-3594932 placement
+//@ chunk-5xgkngpb.js:3690127-3690211 placement
 function isStrictSandboxFilesystem() {
   try {
     return SandboxManager.isSandboxingEnabled() && getEffectiveFilesystemPolicy() === "strict";

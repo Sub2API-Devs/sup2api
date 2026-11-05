@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增。提示把 auto 设为默认权限模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { saveGlobalConfig } from "../utils/config.js";
 import { logError } from "../utils/log.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -20,10 +21,14 @@ import {
 import { updateSettingsForSource } from "../utils/settings/settings.js";
 import { announce } from "../utils/accessibility/screenReader.js";
 import { permissionModeIndicator } from "../utils/permissions/PermissionMode.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:153747-154002 placement
+//@ chunk-czq1j3j2.js:153163-153167 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:153163", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:157843-158098 placement
 function resolveAutoDefaultNudge(choice, currentMode, context) {
   let outcome = choice === "accept" ? switchToAutoByDefault(context) : "declined";
   if (outcome !== "gate_off")
@@ -43,7 +48,7 @@ function resolveAutoDefaultNudge(choice, currentMode, context) {
     current_mode: fromEnum(currentMode),
   });
 }
-//@ chunk-18hwfzwa.js:154002-154424 placement
+//@ chunk-czq1j3j2.js:158098-158520 placement
 function switchToAutoByDefault({
   getToolPermissionContext,
   setToolPermissionContext,
@@ -85,9 +90,4 @@ function switchToAutoByDefault({
   announce(`[${autoModeUnavailableText}]`);
   return "gate_off";
 }
-//@ chunk-18hwfzwa.js:154424-154428 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:154424", () => {
-  init_react_production();
-});
 export { resolveAutoDefaultNudge };

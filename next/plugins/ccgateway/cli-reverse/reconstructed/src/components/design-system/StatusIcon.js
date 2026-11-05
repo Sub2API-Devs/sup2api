@@ -3,9 +3,9 @@
  *
  * 状态图标配置（success/error/warning/info/pending/loading 的符号与颜色）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/StatusIcon.tsx
- * pieces: chunk-axsvbsqv.js (1), chunk-mkatyybr.js (8)
+ * pieces: chunk-n6w10qzg.js (1), chunk-t9559jxw.js (8)
  * attribution: fingerprint 2, placement 7
  */
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -20,7 +20,7 @@ import {
 import { Text } from "../../ink/components/Text.js";
 import { stripSuffix, repeatString } from "../../utils/stringUtils.js";
 import { useResolvedTheme } from "./ThemeProvider.js";
-import { interpolateColor, toRGBColor, parseRGB, cosineEase } from "../Spinner/utils.js";
+import { parseRGB, toRGBColor, interpolateColor, cosineEase } from "../Spinner/utils.js";
 import { sequential } from "../../utils/sequential.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -29,7 +29,7 @@ import { SCROLL_JUMP_LINES } from "../../ink/scrollConstants.js";
 import { getTaskIcon } from "../TaskListV2.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-mkatyybr.js:651-1441 fingerprint (2.1.88 match: STATUS_CONFIG, 0.341)
+//@ chunk-t9559jxw.js:652-1442 fingerprint (2.1.88 match: STATUS_CONFIG, 0.342)
 /**
  * 状态图标闪光动画的调色板长度与每步时间。
  */
@@ -37,7 +37,7 @@ var STATUS_CONFIG; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) o
 var AGENT_STATUS_GLYPHS;
 var SHIMMER_PALETTE_LENGTH;
 var SHIMMER_STEP_MS;
-deferInit("chunk-mkatyybr.js:651", () => {
+deferInit("chunk-t9559jxw.js:652", () => {
   STATUS_CONFIG = {
     success: {
       icon: figures_default.tick,
@@ -114,21 +114,21 @@ deferInit("chunk-mkatyybr.js:651", () => {
   SHIMMER_PALETTE_LENGTH = 8;
   SHIMMER_STEP_MS = 200;
 });
-//@ chunk-mkatyybr.js:1441-1516 placement
+//@ chunk-t9559jxw.js:1442-1517 placement
 /**
  * 所有状态图标里最宽的显示宽度（按显示宽度计算）。
  */
 function maxStatusIconWidth() {
   return Math.max(...Object.values(STATUS_CONFIG).map((config) => bunStringWidth(config.icon)));
 }
-//@ chunk-mkatyybr.js:1516-1546 placement
+//@ chunk-t9559jxw.js:1517-1547 placement
 /**
  * 状态图标占位宽度：最宽图标 + 1 列。
  */
 function statusIconSlotWidth() {
   return maxStatusIconWidth() + 1;
 }
-//@ chunk-mkatyybr.js:1546-2361 placement
+//@ chunk-t9559jxw.js:1547-2362 placement
 /**
  * 状态图标（成功/失败/运行中等），带无障碍标签与占位空格。
  */
@@ -201,7 +201,7 @@ function StatusIcon(props) {
   } else iconText = $[19];
   return iconText;
 }
-//@ chunk-mkatyybr.js:2361-2519 placement
+//@ chunk-t9559jxw.js:2362-2521 placement
 function renderStatusGlyph(glyph, spoken, slot, withSpace) {
   let pad =
     slot === undefined ? withSpace && " " : repeatString(" ", statusIconSlotWidth() - bunStringWidth(glyph));
@@ -216,11 +216,11 @@ function renderStatusGlyph(glyph, spoken, slot, withSpace) {
     ],
   });
 }
-//@ chunk-mkatyybr.js:2519-2547 placement
+//@ chunk-t9559jxw.js:2521-2549 placement
 function isAgentStatusGlyph(status) {
   return status in AGENT_STATUS_GLYPHS;
 }
-//@ chunk-mkatyybr.js:2547-3261 placement
+//@ chunk-t9559jxw.js:2549-3263 placement
 /**
  * 按状态取颜色与字形绘制图标，支持朗读文本。
  */
@@ -230,14 +230,14 @@ function StatusGlyph(props) {
   let resolvedTheme = useResolvedTheme();
   let subtleColor;
   if ($[0] !== resolvedTheme.subtle) {
-    subtleColor = interpolateColor(resolvedTheme.subtle);
+    subtleColor = parseRGB(resolvedTheme.subtle);
     $[0] = resolvedTheme.subtle;
     $[1] = subtleColor;
   } else subtleColor = $[1];
   let subtle = subtleColor;
   let inactiveColor;
   if ($[2] !== resolvedTheme.inactive) {
-    inactiveColor = interpolateColor(resolvedTheme.inactive);
+    inactiveColor = parseRGB(resolvedTheme.inactive);
     $[2] = resolvedTheme.inactive;
     $[3] = inactiveColor;
   } else inactiveColor = $[3];
@@ -285,7 +285,7 @@ function StatusGlyph(props) {
   } else textNode = $[16];
   return textNode;
 }
-//@ chunk-mkatyybr.js:3261-3624 placement
+//@ chunk-t9559jxw.js:3263-3626 placement
 /**
  * 运行中状态的明暗闪烁包装（减弱动画模式下静态）。
  */
@@ -302,7 +302,7 @@ function ShimmerDim(props) {
     color = isStatic
       ? "subtle"
       : toRGBColor(
-          parseRGB(
+          interpolateColor(
             dimmer,
             dim,
             cosineEase(Math.floor(frame / frameInterval) % SHIMMER_PALETTE_LENGTH, SHIMMER_PALETTE_LENGTH),
@@ -327,7 +327,7 @@ function ShimmerDim(props) {
   } else textNode = $[7];
   return textNode;
 }
-//@ chunk-axsvbsqv.js:14472-14537 fingerprint (2.1.88 match: StatusIcon, 0.661)
+//@ chunk-n6w10qzg.js:15921-15986 fingerprint (2.1.88 match: StatusIcon, 0.661)
 function StatusIcon_2(t0) {
   let { icon, color } = getTaskIcon(t0);
   return {
@@ -335,4 +335,4 @@ function StatusIcon_2(t0) {
     color,
   };
 }
-export { StatusIcon, statusIconSlotWidth, maxStatusIconWidth, STATUS_CONFIG, StatusIcon_2 };
+export { statusIconSlotWidth, StatusIcon, STATUS_CONFIG, maxStatusIconWidth, StatusIcon_2 };

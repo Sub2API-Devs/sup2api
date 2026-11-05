@@ -3,9 +3,9 @@
  *
  * 移除工作目录确认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/RemoveWorkspaceDirectory.tsx
- * pieces: chunk-p2qwpk2k.js (1)
+ * pieces: chunk-h5wy8vq5.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
-//@ chunk-p2qwpk2k.js:32506-33366 fingerprint (2.1.88 match: RemoveWorkspaceDirectory, 0.681)
+//@ chunk-h5wy8vq5.js:33626-34486 fingerprint (2.1.88 match: RemoveWorkspaceDirectory, 0.681)
 function RemoveWorkspaceDirectory(props) {
   let $ = useMemoCache(15);
   let { directoryPath, onRemove, onCancel, permissionContext, setPermissionContext } = props;

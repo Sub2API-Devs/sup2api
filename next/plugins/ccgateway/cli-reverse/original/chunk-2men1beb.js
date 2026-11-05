@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{te,qM}from"./chunk-bjf8bvwf.js";import{Wr}from"./chunk-evj8g37g.js";import{ca}from"./chunk-89fdmwf8.js";import{i}from"./chunk-xjnnz630.js";import{Hp}from"./chunk-wtzc5s1n.js";import{r6}from"./chunk-bvz8t570.js";import{dc}from"./chunk-ja0weedh.js";var Qje="read_artifact",Qio="get_artifact",GZi="read_file",Zio="read_shared_artifact",jde="read_comments",lut="reply_comment",hyr="resolve_comment",LIn="reply_shared_comment";function Ure(){return!Hp()&&(!!i.CLAUDE_CODE_REMOTE||!!i.CLAUDE_CODE_REMOTE_SESSION_ID||dc()!==null)}function sye(e){return Wr(ca,e)}function gyr(e){return{name:sye(e),mcpInfo:{serverName:ca,toolName:e}}}function qd(){return qM()&&te().builtInArtifactHiddenForMcp}function Ccs(e){let o=r6;return qd()&&[e.name,e.underlyingV1ToolName,e.familyParentToolName].some((t)=>t!==void 0&&o.includes(t))}function Wda(e){return qd()&&e.some((o)=>o.mcpInfo?.serverName===ca)}function Gda(e){return qd()&&e.mcpInfo?.serverName===ca}function zda(e){if(!qd())return[];return[Qje,Qio,...e?[GZi]:[]].map(gyr)}class n{tool=null;register(e){this.tool=e}}var eao=new n;function HIn(){return qd()?eao.tool??void 0:void 0}
+export{Qje,Qio,GZi,Zio,jde,lut,hyr,LIn,Ure,sye,gyr,qd,Ccs,Wda,Gda,zda,eao,HIn};

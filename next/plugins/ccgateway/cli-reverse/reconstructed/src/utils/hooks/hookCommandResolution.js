@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子命令程序解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (27)
  * attribution: placement 28
  */
 import { realpath, lstat, access, readlink, stat, open } from "fs/promises";
@@ -13,7 +13,7 @@ import { isAbsolute, join, dirname, basename, delimiter, resolve as resolve_2 } 
 import { userInfo } from "os";
 import { constants } from "fs";
 import { getErrnoCode } from "../errors.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { subprocessEnv, hipaaCredentialScrubKeys } from "../subprocessEnv.js";
 import { anyPairMatches } from "../settings/stickyRoots.js";
 import { normalizeCommandForPlatform } from "../git.js";
@@ -24,18 +24,18 @@ import { getGlobalClaudeFile } from "../env.js";
 import { getSurfacedHookSpawnFailures } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../task/taskNotifications.js";
+import { enqueueTaskNotification } from "../task/taskNotifications.js";
 import { logError } from "../log.js";
 import { posixPathToWindowsPath } from "../path.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:829244-829372 placement
+//@ chunk-5xgkngpb.js:836707-836835 placement
 function omitKeys(object, keys) {
   let omit = new Set(typeof keys === "string" ? [keys] : keys);
   return Object.fromEntries(Object.entries(object).filter(([key]) => !omit.has(key)));
 }
-//@ chunk-e6aww6q8.js:829372-829685 placement
+//@ chunk-5xgkngpb.js:836835-837148 placement
 /**
  * 求路径的真实路径，允许末端不存在（拼回缺失部分）。
  */
@@ -62,24 +62,26 @@ async function realpathAllowMissing(path) {
       current = parent;
     }
 }
-//@ chunk-e6aww6q8.js:829685-829917 placement
+//@ chunk-5xgkngpb.js:837148-837380 placement
 function mergeHookEnv_2({ attached, beforeSettings, ownEnv, childrenSee }) {
   if (beforeSettings === undefined)
     return {
       ...attached,
     };
   return Object.fromEntries(
-    uniq([...Object.keys(attached), ...Object.keys(ownEnv).filter(childrenSee)]).map((name) => [
-      name,
-      Object.hasOwn(ownEnv, name)
-        ? ownEnv[name]
-        : attached[name] === beforeSettings[name]
-          ? attached[name]
-          : beforeSettings[name],
-    ]),
+    normalizeCaseForComparison_2([...Object.keys(attached), ...Object.keys(ownEnv).filter(childrenSee)]).map(
+      (name) => [
+        name,
+        Object.hasOwn(ownEnv, name)
+          ? ownEnv[name]
+          : attached[name] === beforeSettings[name]
+            ? attached[name]
+            : beforeSettings[name],
+      ],
+    ),
   );
 }
-//@ chunk-e6aww6q8.js:829917-829999 placement (2.1.88 match: resolveOptions, 0.831)
+//@ chunk-5xgkngpb.js:837380-837462 placement (2.1.88 match: resolveOptions, 0.831)
 function resolveOptions(options) {
   if (options.HOME) return options.HOME;
   try {
@@ -88,12 +90,12 @@ function resolveOptions(options) {
     return "/";
   }
 }
-//@ chunk-e6aww6q8.js:829999-830020 placement
+//@ chunk-5xgkngpb.js:837462-837483 placement
 /**
  * 空 PATH 目录（/var/empty），用于让钩子找不到任何程序。
  */
 var EMPTY_PATH_DIR = "/var/empty";
-//@ chunk-e6aww6q8.js:830020-830076 placement
+//@ chunk-5xgkngpb.js:837483-837539 placement
 /**
  * 合并钩子环境：基础环境去掉省略键再叠加额外项。
  */
@@ -103,7 +105,7 @@ function mergeHookEnv(env) {
     ...env.extra,
   };
 }
-//@ chunk-e6aww6q8.js:830076-831105 placement
+//@ chunk-5xgkngpb.js:837539-838575 placement
 /**
  * 在 PATH 中解析钩子命令对应的程序。
  */
@@ -167,7 +169,7 @@ async function resolveHookProgramOnPath(roots, searchPath = subprocessEnv(), ori
     omit,
   };
 }
-//@ chunk-e6aww6q8.js:831105-832040 placement
+//@ chunk-5xgkngpb.js:838575-839513 placement
 /**
  * 在 PATH 各目录中查找可执行程序并判断是否位于云会话可写范围：PATH 含相对目录即视为在范围内；跟随符号链接（有深度限制）检查目标与所在目录。
  */
@@ -240,7 +242,7 @@ async function resolveProgramOnPathInReach(
   }
   return;
 }
-//@ chunk-e6aww6q8.js:832040-832228 placement
+//@ chunk-5xgkngpb.js:839513-839701 placement
 async function isSuspiciousHardLinkedFile(path) {
   let stats = await stat(path).catch((error) =>
     error.code === "ENOENT" || error.code === "ENOTDIR" ? "absent" : "unreadable",
@@ -248,7 +250,7 @@ async function isSuspiciousHardLinkedFile(path) {
   if (stats === "absent") return false;
   return stats === "unreadable" || (stats.nlink > 1 && !(await isNativeBinaryFile(path)));
 }
-//@ chunk-e6aww6q8.js:832228-832545 placement
+//@ chunk-5xgkngpb.js:839701-840018 placement
 /**
  * 判断文件是否为原生可执行文件（读取文件头魔数）。
  */
@@ -274,7 +276,7 @@ async function isNativeBinaryFile(path) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:832545-832664 placement
+//@ chunk-5xgkngpb.js:840018-840137 placement
 /**
  * 判断参数词是否为普通选项（-、--、--xxx、短选项组合）。
  */
@@ -286,12 +288,12 @@ function isPlainOptionWord(word) {
     (/^-[A-Za-z]{1,3}$/.test(word) && !/^-[IMmr]./.test(word))
   );
 }
-//@ chunk-e6aww6q8.js:832664-832745 placement
+//@ chunk-5xgkngpb.js:840137-840218 placement
 async function hasShebang(path) {
   let fileHead = await readFileHead(path, 2);
   return fileHead === undefined || fileHead.startsWith("#!");
 }
-//@ chunk-e6aww6q8.js:832745-834284 placement
+//@ chunk-5xgkngpb.js:840218-841760 placement
 /**
  * 解析钩子命令：确定程序与 shebang 是否存在、可读，供沙箱与固定使用。
  */
@@ -380,7 +382,7 @@ async function resolveHookCommand(
     });
   return (await hasShebang(interpreterReal)) ? "program_unresolved" : undefined;
 }
-//@ chunk-e6aww6q8.js:834284-834499 placement
+//@ chunk-5xgkngpb.js:841760-841975 placement
 async function readFileHead(path, byteCount) {
   let handle = await open(path, "r").catch(() => {
     return;
@@ -394,14 +396,14 @@ async function readFileHead(path, byteCount) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:834499-834573 placement
+//@ chunk-5xgkngpb.js:841975-842049 placement
 /**
  * 取 legacy 环境 pin（未设置时返回默认值）。
  */
 function legacyPinOr(memory, appliedGlobalConfigEnv) {
   return memory.legacyEnvPin === undefined ? appliedGlobalConfigEnv : (memory.legacyEnvPin ?? undefined);
 }
-//@ chunk-e6aww6q8.js:834573-834671 placement
+//@ chunk-5xgkngpb.js:842049-842147 placement
 /**
  * 首次读到时锁定 legacy 环境 pin。
  */
@@ -409,7 +411,7 @@ function latchLegacyPin(memory, env) {
   if (memory.legacyEnvPin === undefined) memory.legacyEnvPin = env ?? null;
   return memory.legacyEnvPin ?? undefined;
 }
-//@ chunk-e6aww6q8.js:834671-834840 placement
+//@ chunk-5xgkngpb.js:842147-842316 placement
 /**
  * 若钩子脚本位于可疑硬链接/全局 CLI 文件内则返回 undefined，否则返回脚本路径。
  */
@@ -427,13 +429,13 @@ async function hookScriptInReach(legacyEnvAtAttach, roots) {
     return;
   return legacyEnvAtAttach;
 }
-//@ chunk-e6aww6q8.js:834840-835067 placement
+//@ chunk-5xgkngpb.js:842316-842543 placement
 var GIT_FOR_WINDOWS_LINK = "Git for Windows (https://git-scm.com/downloads/win)";
 var INSTALL_GIT_FOR_WINDOWS = `Install ${GIT_FOR_WINDOWS_LINK}`;
 var NO_BASH_FIX_HINT =
   'put the program in "command" and its arguments in "args", or set "shell" to "powershell" on a command written for PowerShell';
 var NO_BASH = "no-bash";
-//@ chunk-e6aww6q8.js:835067-835636 placement
+//@ chunk-5xgkngpb.js:842543-843112 placement
 function describeNoBashFallback(hookEvent) {
   try {
     let surfacedHookSpawnFailures = getSurfacedHookSpawnFailures();
@@ -442,7 +444,7 @@ function describeNoBashFallback(hookEvent) {
     logEvent("tengu_shell_no_bash_fallback", {
       source: fromEnum(hookEvent),
     });
-    enqueueTaskNotification_2({
+    enqueueTaskNotification({
       type: "system",
       subtype: "informational",
       content: `Git Bash wasn't found, so ${hookEvent === "skill" ? "a skill's shell command" : `a ${hookEvent} hook`} ran in PowerShell. Commands written for bash can fail there. ${INSTALL_GIT_FOR_WINDOWS} and start a new session, or ${hookEvent === "skill" || hookEvent === "StatusLine" || hookEvent === "FileSuggestion" ? 'set "shell" to "powershell" on commands written for PowerShell' : NO_BASH_FIX_HINT}.`,
@@ -457,13 +459,13 @@ function describeNoBashFallback(hookEvent) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:945437-945735 placement
+//@ chunk-5xgkngpb.js:957212-957510 placement
 var FILE_EXTENSION_RE = /\.[A-Za-z][A-Za-z0-9]*$/;
 var REDIRECT_TOKEN_RE = /^(?:\d*|&)[<>]/;
 var REDIRECT_OPERATOR_RE = /^(?:\d*|&)[<>]{1,2}$/;
 var INTERPRETER_SCRIPT_VAR_RE =
   /^\s*(?:\/(?:[\w.-]+\/)*)?(?:python[\d.]*|perl|sh|bash|dash)[ \t]+(\$(?:\{(?:CLAUDE_PLUGIN_ROOT|CLAUDE_PROJECT_DIR|HOME)\}|(?:CLAUDE_PLUGIN_ROOT|CLAUDE_PROJECT_DIR|HOME)\b)[\w./-]*)(?:[ \t]+[\w./=:@%+,-]+)*\s*$/;
-//@ chunk-e6aww6q8.js:945735-946439 placement
+//@ chunk-5xgkngpb.js:957510-958218 placement
 /**
  * 展开钩子命令中的 ${CLAUDE_PROJECT_DIR}、${CLAUDE_PLUGIN_ROOT}。
  */
@@ -505,7 +507,7 @@ function expandHookPathVariables({
   }
   return found;
 }
-//@ chunk-e6aww6q8.js:946439-946779 placement
+//@ chunk-5xgkngpb.js:958218-958558 placement
 /**
  * 把 hook 命令行按 shell 规则拆成单词（处理引号与转义）。
  */
@@ -544,10 +546,10 @@ function splitHookCommandWords(command) {
       !REDIRECT_TOKEN_RE.test(word) && !REDIRECT_OPERATOR_RE.test(words[wordIndex - 1] ?? ""),
   );
 }
-//@ chunk-e6aww6q8.js:946779-946918 placement
+//@ chunk-5xgkngpb.js:958558-958697 placement
 var CANNOT_OPEN_SCRIPT_RE =
   /^(?:(?:[A-Za-z]:\\[^:]*|[^\s:]+): )?(?:\d+: )?(?:[Cc]an't|cannot) open (?:file |perl script )?(?:(['"])(.+?)\1[:( ]|([^'"]+?): )/;
-//@ chunk-e6aww6q8.js:946918-947406 placement
+//@ chunk-5xgkngpb.js:958697-959188 placement
 /**
  * 钩子失败时判断输出是否只是"无法打开脚本"错误（如 can't open file 'x'），若每行都指向钩子命令中的脚本路径，返回缺失的脚本集合，用于给出更明确的提示。
  */
@@ -588,22 +590,22 @@ async function detectMissingHookScript({ stdout, stderr, scriptPaths }) {
         output,
       };
 }
-//@ chunk-e6aww6q8.js:947406-947500 placement
+//@ chunk-5xgkngpb.js:959188-959282 placement
 function normalizeScriptPathKey(path) {
   let replaced = path.replace(/[\\/]+/g, "/");
   return /^[A-Za-z]:\//.test(replaced) ? replaced.toLowerCase() : replaced;
 }
-//@ chunk-e6aww6q8.js:947500-947534 placement
+//@ chunk-5xgkngpb.js:959282-959316 placement
 /**
  * 记住的脚本路径数量上限与宿主隔离的 Map。
  */
 var MAX_REMEMBERED_SCRIPTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var rememberedScriptsRegistry;
-deferInit("chunk-e6aww6q8.js:947500", () => {
+deferInit("chunk-5xgkngpb.js:959282", () => {
   MAX_REMEMBERED_SCRIPTS = 64;
   rememberedScriptsRegistry = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:947534-947704 placement
+//@ chunk-5xgkngpb.js:959316-959486 placement
 function rememberBounded(cache, key, output) {
   if (output === undefined) {
     cache.delete(key);
@@ -620,25 +622,25 @@ function rememberBounded(cache, key, output) {
 }
 export {
   omitKeys,
+  isPlainOptionWord,
+  isSuspiciousHardLinkedFile,
+  legacyPinOr,
+  EMPTY_PATH_DIR,
+  mergeHookEnv,
+  latchLegacyPin,
+  mergeHookEnv_2,
+  resolveOptions,
+  resolveHookProgramOnPath,
+  realpathAllowMissing,
+  resolveProgramOnPathInReach,
   detectMissingHookScript,
   rememberBounded,
   rememberedScriptsRegistry,
   describeNoBashFallback,
-  mergeHookEnv,
   INSTALL_GIT_FOR_WINDOWS,
   NO_BASH_FIX_HINT,
   expandHookPathVariables,
   hookScriptInReach,
-  mergeHookEnv_2,
-  resolveHookProgramOnPath,
-  resolveOptions,
-  realpathAllowMissing,
-  resolveProgramOnPathInReach,
   resolveHookCommand,
-  EMPTY_PATH_DIR,
-  latchLegacyPin,
   GIT_FOR_WINDOWS_LINK,
-  isPlainOptionWord,
-  isSuspiciousHardLinkedFile,
-  legacyPinOr,
 };

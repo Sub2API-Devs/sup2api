@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：mod 命令处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bvc050re.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t306stqp.js (1)
  * attribution: placement 1
  */
 import { PLUGIN_SUBCOMMANDS } from "./plugins.js";
 
-//@ chunk-bvc050re.js:227-671 placement
+//@ chunk-t306stqp.js:227-671 placement
 var joined = [
   `Usage: claude ${PLUGIN_SUBCOMMANDS.test.usage}`,
   "",

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。查询循环中的 turn.step/turn.complete 插件钩子执行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0h4e7gnq.js (65)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-frs14hy1.js (65)
  * attribution: placement 65
  */
 import { randomUUID } from "crypto";
@@ -46,7 +46,7 @@ import {
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
 import { TURN_STEP_RULES, eventCallersWrapper2 } from "../plugins/functionHooks/eventCatalog.js";
 import { safeParseJSON } from "../utils/json.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { convertStreamEvent, deltaEventForKind } from "../remote/sdkMessageAdapter.js";
 import { isNonConversationMessage } from "../bootstrap/sessionSlices.js";
 import { stripAnyVersatileSuffix } from "../utils/model/modelIds.js";
@@ -58,7 +58,7 @@ import { logModsFirstTurn } from "../plugins/functionHooks/modLoadTelemetry.js";
 import { holdAgentConversation } from "../plugins/functionHooks/sessionApi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0h4e7gnq.js:6211-6439 placement
+//@ chunk-frs14hy1.js:7036-7264 placement
 /**
  * 队列命令附件带 source_uuid 时，把消息列表里对应的源消息复制一份并把 uuid 换成附件的 uuid（返回新数组）；找不到时返回 undefined。
  */
@@ -74,28 +74,28 @@ function retagQueuedCommandSource(messages, message) {
         uuid: message.uuid,
       });
 }
-//@ chunk-0h4e7gnq.js:6476-6512 placement
+//@ chunk-frs14hy1.js:10070-10106 placement
 /**
  * 回合步骤槽
  */
 var turnStepSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0h4e7gnq.js:6476", () => {
+deferInit("chunk-frs14hy1.js:10070", () => {
   turnStepSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-0h4e7gnq.js:6512-6652 placement
+//@ chunk-frs14hy1.js:10106-10246 placement
 function sliceTurnMessages(snapshot, span) {
   let indexOf = (before) => (before === undefined ? -1 : snapshot.findIndex((row) => row.uuid === before));
   let endIndex = span.next ? indexOf(span.next.before) : snapshot.length;
   return snapshot.slice(indexOf(span.before) + 1, endIndex + 1);
 }
-//@ chunk-0h4e7gnq.js:6652-6802 placement
+//@ chunk-frs14hy1.js:10246-10396 placement
 function turnEndedWithApiError(transcript, span) {
   let last = sliceTurnMessages(transcript.getSnapshot(), span).findLast(
     (row) => row.type === "assistant" && !row.isVirtual,
   );
   return last?.type === "assistant" && last.isApiErrorMessage === true;
 }
-//@ chunk-0h4e7gnq.js:6802-6912 placement
+//@ chunk-frs14hy1.js:10396-10506 placement
 function createSessionMeasurer() {
   let measurerSlot = subscribe();
   return {
@@ -103,25 +103,25 @@ function createSessionMeasurer() {
     measureSession: (context) => measurerSlot.get()?.(context) ?? Promise.resolve(),
   };
 }
-//@ chunk-0h4e7gnq.js:6912-6924 placement
+//@ chunk-frs14hy1.js:10506-10518 placement
 /**
  * 会话度量器
  */
 var sessionMeasurer; // deferred: uses createSessionMeasurer of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:6912", () => {
+deferInit("chunk-frs14hy1.js:10506", () => {
   sessionMeasurer = createSessionMeasurer();
 });
-//@ chunk-0h4e7gnq.js:6924-6950 placement
+//@ chunk-frs14hy1.js:10518-10544 placement
 var measureSession; // deferred: uses sessionMeasurer of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:6924", () => {
+deferInit("chunk-frs14hy1.js:10518", () => {
   measureSession = sessionMeasurer.measureSession;
 });
-//@ chunk-0h4e7gnq.js:6950-6980 placement
+//@ chunk-frs14hy1.js:10544-10574 placement
 var setSessionMeasurer; // deferred: uses sessionMeasurer of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:6950", () => {
+deferInit("chunk-frs14hy1.js:10544", () => {
   setSessionMeasurer = sessionMeasurer.setSessionMeasurer;
 });
-//@ chunk-0h4e7gnq.js:6980-7254 placement
+//@ chunk-frs14hy1.js:10574-10848 placement
 function lastAssistantMessageForTurnComplete(transcript, span) {
   try {
     let last = sliceTurnMessages(transcript.getSnapshot(), span).findLast(
@@ -139,7 +139,7 @@ function lastAssistantMessageForTurnComplete(transcript, span) {
     return "";
   }
 }
-//@ chunk-0h4e7gnq.js:7254-7390 placement
+//@ chunk-frs14hy1.js:10848-10984 placement
 function createCounterMap() {
   let counts = new Map();
   return {
@@ -156,17 +156,17 @@ function createCounterMap() {
     },
   };
 }
-//@ chunk-0h4e7gnq.js:7390-7423 placement
+//@ chunk-frs14hy1.js:10984-11017 placement
 /**
  * 回合步骤计数
  */
 var turnStepCounters; // deferred: uses createCounterMap of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:7390", () => {
+deferInit("chunk-frs14hy1.js:10984", () => {
   turnStepCounters = identity(createCounterMap(), (counters) => {
     counters.clear();
   });
 });
-//@ chunk-0h4e7gnq.js:7423-7515 placement
+//@ chunk-frs14hy1.js:11017-11109 placement
 /**
  * 回合结束通知
  */
@@ -177,7 +177,7 @@ var turnCompleteNotice = (text) =>
       .join("+")}: ${singleLineFieldText(text)}`,
     "notice",
   );
-//@ chunk-0h4e7gnq.js:7515-7611 placement
+//@ chunk-frs14hy1.js:11109-11205 placement
 /**
  * 回合结束原因
  */
@@ -194,7 +194,7 @@ var turnOutcomeReason = (isAborted, refusal, hasError) =>
       : {
           reason: hasError ? "error" : "answer",
         };
-//@ chunk-0h4e7gnq.js:7611-7981 placement
+//@ chunk-frs14hy1.js:11205-11575 placement
 function refusalSystemMessage(row) {
   if (row.type === "system")
     return row.subtype === "model_refusal_no_fallback"
@@ -210,7 +210,7 @@ function refusalSystemMessage(row) {
       }
     : undefined;
 }
-//@ chunk-0h4e7gnq.js:7981-8161 placement
+//@ chunk-frs14hy1.js:11575-11755 placement
 function getTurnRefusal(transcript, span) {
   try {
     return sliceTurnMessages(transcript.getSnapshot(), span)
@@ -224,7 +224,7 @@ function getTurnRefusal(transcript, span) {
     return;
   }
 }
-//@ chunk-0h4e7gnq.js:8501-8717 placement
+//@ chunk-frs14hy1.js:12095-12311 placement
 function getAssistantTokenUsage(message) {
   if (message.type !== "assistant") return;
   let isUnmetered = message.isUnmetered === true;
@@ -240,13 +240,13 @@ function getAssistantTokenUsage(message) {
         model: message.message.model,
       };
 }
-//@ chunk-0h4e7gnq.js:8717-8853 placement
+//@ chunk-frs14hy1.js:12311-12447 placement
 function isAssistantContentMessage(value) {
   if (!isPlainObject_2(value) || value.type !== "assistant") return false;
   let { message } = value;
   return isPlainObject_2(message) && Array.isArray(message.content) && value.isApiErrorMessage !== true;
 }
-//@ chunk-0h4e7gnq.js:8853-9138 placement
+//@ chunk-frs14hy1.js:12447-12732 placement
 function streamingFallbackRetraction(snapshots, event) {
   try {
     if (!isPlainObject_2(event)) return snapshots;
@@ -262,7 +262,7 @@ function streamingFallbackRetraction(snapshots, event) {
     return snapshots;
   }
 }
-//@ chunk-0h4e7gnq.js:9138-9342 placement
+//@ chunk-frs14hy1.js:12732-12936 placement
 function snapshotAssistantReply(message) {
   let { uuid, timestamp } = message;
   let { content } = message.message;
@@ -283,19 +283,19 @@ function snapshotAssistantReply(message) {
     };
   }
 }
-//@ chunk-0h4e7gnq.js:9342-9381 placement
+//@ chunk-frs14hy1.js:12936-12975 placement
 /**
  * 合法 stop_reason
  */
 var validStopReason = (stopReason) => STOP_REASONS.find((candidate) => candidate === stopReason) ?? null;
-//@ chunk-0h4e7gnq.js:9381-9434 placement
+//@ chunk-frs14hy1.js:12975-13028 placement
 /**
  * 取助手消息用量
  */
 function usageOfMessage(message) {
   return (message === undefined ? undefined : getAssistantTokenUsage(message)) ?? null;
 }
-//@ chunk-0h4e7gnq.js:9434-9810 placement
+//@ chunk-frs14hy1.js:13028-13404 placement
 /**
  * 维护服务端工具调用表：遇到 server_tool_use/mcp_tool_use 时记下开始时间，遇到对应结果块时补上结束时间；出错时返回原表。
  */
@@ -337,7 +337,7 @@ function trackServerToolUse(tools, block, timestamp) {
     return tools;
   }
 }
-//@ chunk-0h4e7gnq.js:9810-10289 placement
+//@ chunk-frs14hy1.js:13404-13883 placement
 /**
  * 收集一次 turn.step 请求的助手回复：note 记录每条回复（流式回退时撤回），result 汇总出回答文本、工具调用、服务端工具调用、停止原因与用量。
  */
@@ -386,7 +386,7 @@ function createStepResultCollector() {
     },
   };
 }
-//@ chunk-0h4e7gnq.js:10289-10597 placement
+//@ chunk-frs14hy1.js:13883-14191 placement
 function warnTurnStepModelNotAllowed(model, model_2) {
   if (model === model_2) return model_2;
   let modelAliasSpelling = resolveModelAliasSpelling(model);
@@ -405,7 +405,7 @@ function warnTurnStepModelNotAllowed(model, model_2) {
   });
   return model_2;
 }
-//@ chunk-0h4e7gnq.js:10597-10708 placement
+//@ chunk-frs14hy1.js:14191-14302 placement
 function toStepBlockKind(type) {
   switch (type) {
     case "text":
@@ -417,18 +417,19 @@ function toStepBlockKind(type) {
       return "other";
   }
 }
-//@ chunk-0h4e7gnq.js:10708-10820 placement
+//@ chunk-frs14hy1.js:14302-14427 placement
 function getOrCreateBlockState(state, index, kind) {
   let block = state.blocks.get(index) ?? {
     kind,
     tool: undefined,
     text: "",
     record: undefined,
+    isStopped: false,
   };
   state.blocks.set(index, block);
   return block;
 }
-//@ chunk-0h4e7gnq.js:10820-11900 placement
+//@ chunk-frs14hy1.js:14427-15577 placement
 function collectTurnStepBlocks() {
   let heldItems = new Map();
   let filedItems = new Map();
@@ -461,6 +462,8 @@ function collectTurnStepBlocks() {
     let { event } = item;
     if (event.type === "message_start") openResponse().isStreamed = true;
     if (event.type === "message_stop") currentOrOpen().isClosed = true;
+    if (event.type === "content_block_stop")
+      getOrCreateBlockState(currentOrOpen(), event.index, "other").isStopped = true;
     if (event.type === "content_block_start") {
       let contentBlock = event.content_block;
       let blockState = getOrCreateBlockState(
@@ -512,7 +515,7 @@ function collectTurnStepBlocks() {
     latest: () => currentResponse,
   };
 }
-//@ chunk-0h4e7gnq.js:11900-12192 placement
+//@ chunk-frs14hy1.js:15577-15869 placement
 /**
  * 恢复被截断的思考时请求必须保持原模型：写警告日志并向插件诊断上报"模型改写从下一次请求才生效"。
  */
@@ -529,11 +532,11 @@ function warnResumeKeepsModel(model) {
     hasOverrun: false,
   });
 }
-//@ chunk-0h4e7gnq.js:12192-12539 placement
+//@ chunk-frs14hy1.js:15869-16245 placement
 /**
  * 包装消息流：在第一次真正发出请求前缓存助手消息，确认有请求后再按序放出；结束时若一次请求都没发，标记助手消息 answeredWithoutRequest。
  */
-async function* bufferUntilFirstRequest(source, chain, state) {
+async function* bufferUntilFirstRequest(source, chain, state, signal) {
   let buffered = [];
   try {
     for await (let item of source)
@@ -548,19 +551,21 @@ async function* bufferUntilFirstRequest(source, chain, state) {
     throw error;
   }
   let neverRequested = state.requests === 0;
-  for (let out of [...buffered, ...chain.end()]) {
+  let tail = signal.aborted ? chain.cutShort() : chain.end();
+  for (let out of [...buffered, ...tail]) {
     if (neverRequested && out.type === "assistant") out.answeredWithoutRequest = true;
     yield out;
   }
 }
-//@ chunk-0h4e7gnq.js:12539-12879 placement
+//@ chunk-frs14hy1.js:16245-16621 placement
 /**
  * 构造 turn.step 事件：turnId、步序号、模型、按回合/循环设置解析出的 effort、消息条数、agentId。
  */
 function buildTurnStepEvent(turnId, index, args) {
-  let { model, effortValue, turnEffort, agentId } = args.options;
+  let { model, effortValue, turnEffort, hookEffortValue, agentId } = args.options;
   let effortValue_2 = resolveEffortValue(model, effortValue, {
     turnEffort,
+    hookEffortValue,
     carriedEffort: resolveLoopEffort(
       {
         loopEffort: args.options.refusalFallbackEffort,
@@ -582,7 +587,7 @@ function buildTurnStepEvent(turnId, index, args) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:12879-13065 placement
+//@ chunk-frs14hy1.js:16621-16807 placement
 function prepareTurnStep(args) {
   try {
     let { agentId } = args.options;
@@ -598,7 +603,7 @@ function prepareTurnStep(args) {
     return;
   }
 }
-//@ chunk-0h4e7gnq.js:13065-13157 placement
+//@ chunk-frs14hy1.js:16807-16899 placement
 /**
  * 空块状态
  */
@@ -611,12 +616,12 @@ var emptyBlockState = (kind, wire) => ({
   wire,
   isRecordSeen: false,
 });
-//@ chunk-0h4e7gnq.js:13157-13189 placement
+//@ chunk-frs14hy1.js:16899-16931 placement
 /**
  * 空串给 {} 否则解析
  */
 var parseJsonOrEmpty = (json) => (json === "" ? {} : (safeParseJSON(json) ?? {}));
-//@ chunk-0h4e7gnq.js:13189-13514 placement
+//@ chunk-frs14hy1.js:16931-17256 placement
 /**
  * 判断一个流式事件是否只是重复回显了已记录的内容增量（同一块下标，文本、思考或工具输入 JSON 完全相同）。
  */
@@ -634,18 +639,18 @@ function isEchoedDelta(chunk, event) {
       return false;
   }
 }
-//@ chunk-0h4e7gnq.js:13514-13691 placement
+//@ chunk-frs14hy1.js:17256-17433 placement
 function sameStopAndUsage(left, right) {
   let { usage } = left;
   let { usage: usage_2 } = right;
   let sameStopReason = left.stopReason === right.stopReason;
   return sameStopReason && usage !== null && usage_2 !== null
-    ? uniq([...Object.keys(usage), ...Object.keys(usage_2)]).every(
+    ? normalizeCaseForComparison_2([...Object.keys(usage), ...Object.keys(usage_2)]).every(
         (tokenKind) => usage[tokenKind] === usage_2[tokenKind],
       )
     : sameStopReason && usage === usage_2;
 }
-//@ chunk-0h4e7gnq.js:13691-13745 placement
+//@ chunk-frs14hy1.js:17433-17487 placement
 /**
  * 默认停止块
  */
@@ -654,7 +659,7 @@ var DEFAULT_STOP_BLOCK = {
   stopReason: "end_turn",
   usage: null,
 };
-//@ chunk-0h4e7gnq.js:13745-14260 placement
+//@ chunk-frs14hy1.js:17487-18002 placement
 /**
  * 把钩子流里的一个文本/工具块拼成助手消息：沿用信封的 id/model/usage、清空 stop_reason，记 apiBlockIndex 与批量工具调用；钩子虚构的内容标 isUnmetered。
  */
@@ -691,7 +696,7 @@ function buildHookAssistantMessage({ index, state, envelope, isMadeUp, model, to
   if (isMadeUp) message.isUnmetered = true;
   return message;
 }
-//@ chunk-0h4e7gnq.js:14260-14624 placement
+//@ chunk-frs14hy1.js:18002-18366 placement
 /**
  * 把真实响应的 usage、stop_reason/sequence/details、context_management（以及 research 字段）拷到钩子拼出的助手消息上，并去掉 isUnmetered。
  */
@@ -708,12 +713,12 @@ function copyFinalResponseMeta(target, source) {
       research: source.research,
     });
 }
-//@ chunk-0h4e7gnq.js:15132-15248 placement
+//@ chunk-frs14hy1.js:18874-18990 placement
 function copyContextManagement(message, record) {
   if (record.message.context_management !== undefined)
     message.message.context_management = record.message.context_management;
 }
-//@ chunk-0h4e7gnq.js:15248-15528 placement
+//@ chunk-frs14hy1.js:18990-19270 placement
 function makeBlockStartEvent(index, block) {
   let { tool } = block;
   let isTool = block.kind === "tool" && tool !== undefined;
@@ -742,7 +747,7 @@ function makeBlockStartEvent(index, block) {
     content_block: contentBlock,
   });
 }
-//@ chunk-0h4e7gnq.js:15565-15719 placement
+//@ chunk-frs14hy1.js:19307-19461 placement
 /**
  * 生成钩子用的 message_start 流事件（id 为 msg_hook_<uuid>）。
  */
@@ -760,7 +765,7 @@ var makeHookMessageStart = (model) =>
       stop_sequence: null,
     },
   });
-//@ chunk-0h4e7gnq.js:15719-15839 placement
+//@ chunk-frs14hy1.js:19461-19581 placement
 var makeToolBlockStartEvent = (tool) =>
   convertStreamEvent({
     type: "content_block_start",
@@ -772,7 +777,7 @@ var makeToolBlockStartEvent = (tool) =>
       input: {},
     },
   });
-//@ chunk-0h4e7gnq.js:15839-16149 placement
+//@ chunk-frs14hy1.js:19581-19891 placement
 /**
  * 把钩子给出的停止原因与 token 用量写进助手消息，并去掉 isUnmetered。
  */
@@ -789,7 +794,7 @@ function applyStepStopAndUsage(message, stop) {
   };
   delete message.isUnmetered;
 }
-//@ chunk-0h4e7gnq.js:16149-16201 placement
+//@ chunk-frs14hy1.js:19891-19943 placement
 /**
  * 块结束事件
  */
@@ -798,7 +803,7 @@ var contentBlockStopEvent = (index) =>
     type: "content_block_stop",
     index,
   });
-//@ chunk-0h4e7gnq.js:16201-16657 placement
+//@ chunk-frs14hy1.js:19943-20399 placement
 /**
  * 生成钩子用的 message_delta 流事件：停止原因与各项 token 用量（缺失补 0/null）。
  */
@@ -823,7 +828,7 @@ var makeHookMessageDelta = (stop) =>
     },
     context_management: null,
   });
-//@ chunk-0h4e7gnq.js:16657-16694 placement
+//@ chunk-frs14hy1.js:20399-20436 placement
 /**
  * 消息结束事件
  */
@@ -831,7 +836,7 @@ var messageStopEvent = () =>
   convertStreamEvent({
     type: "message_stop",
   });
-//@ chunk-0h4e7gnq.js:16694-17127 placement
+//@ chunk-frs14hy1.js:20436-20869 placement
 /**
  * 用钩子改写后的内容替换助手消息正文，丢弃服务端分类器与线上输入相关字段；原消息带服务端分类器请求时标记输入已被 turn_step 改写。
  */
@@ -863,7 +868,7 @@ function rewriteAssistantContent(original, replacement) {
   }
   return rewritten;
 }
-//@ chunk-0h4e7gnq.js:17127-21826 placement
+//@ chunk-frs14hy1.js:20869-26216 placement
 /**
  * 函数钩子 turn.step 的执行器：把一次模型请求的流事件（message_start/content_block/message_delta…）交给插件链，允许插件改写模型、注入工具调用或伪造回复（isMadeUp），并合并回查询循环。
  */
@@ -891,6 +896,7 @@ function runTurnStepHooks(
       messages: [],
       isStopped: false,
       stop: undefined,
+      isFailed: false,
     };
     return state;
   }
@@ -908,9 +914,13 @@ function runTurnStepHooks(
     let { wire } = state;
     let allBlocksSettled =
       wire !== undefined && wire.stop === undefined && wire.isClosed && !hasUnwiredBlock(state);
+    if (isFailedUnclosed(state)) {
+      yield* endPendingBlocks(state);
+      return;
+    }
     if (state.isStopped) return;
     if (allBlocksSettled) {
-      yield* endAllBlocks(state);
+      yield* endAllBlocks(state, "as the engine left them");
       copyFinalMeta(state);
       return;
     }
@@ -919,9 +929,17 @@ function runTurnStepHooks(
   function* closeResponse() {
     let current = state;
     if (current === undefined) return;
+    let isFailedWithoutWire = isFailedUnclosed(current);
     yield* finishState(current);
     state = undefined;
-    yield messageStopEvent();
+    if (!isFailedWithoutWire) yield messageStopEvent();
+  }
+  function* closeAllBlocks() {
+    let current = state;
+    if (current === undefined) return;
+    for (let key of current.blocks.keys()) yield* endBlock(current, key, "closing");
+    copyFinalMeta(current);
+    state = undefined;
   }
   function* alignByRef(ref) {
     let response = turnStepBlocks.responseOf(ref);
@@ -946,8 +964,11 @@ function runTurnStepHooks(
     current.blocks.set(index, blockState);
     return blockState;
   }
-  function hasUnwiredBlock(current) {
-    return [...current.blocks.values()].some((block) => block.wire === undefined);
+  function isFailedUnclosed(current) {
+    return current.isFailed && (current.isStopped || current.wire?.stop === undefined);
+  }
+  function hasUnwiredBlock(state) {
+    return [...state.blocks.values()].some((block) => block.wire === undefined);
   }
   function* startBlock(index, block) {
     yield* ensureStarted();
@@ -1007,7 +1028,8 @@ function runTurnStepHooks(
   }
   function shouldEmitEnd(current, blockState, mode) {
     let { wire } = blockState;
-    let textBlockClosing = mode === "closing" && wire?.kind === "text" && current.wire?.isClosed === false;
+    let textBlockClosing =
+      mode === "closing" && wire?.kind === "text" && current.wire?.isClosed === false && !current.isFailed;
     return wire?.record !== undefined ? !blockState.isRecordSeen : wire === undefined || textBlockClosing;
   }
   function* endBlock(current, index, mode) {
@@ -1032,10 +1054,18 @@ function runTurnStepHooks(
       yield hookAssistantMessage;
     }
   }
-  function* endAllBlocks(current) {
+  function* endAllBlocks(current, closingReason = "all") {
     for (let [index, blockState] of current.blocks) {
       if (blockState.isEnded) continue;
       yield* endBlock(current, index, "closing");
+      let skipStopEvent = closingReason === "as the engine left them" && blockState.wire?.isStopped !== true;
+      if (blockState.isStarted && !skipStopEvent) yield contentBlockStopEvent(index);
+    }
+  }
+  function* endPendingBlocks(state) {
+    for (let [index, blockState] of state.blocks) {
+      if (blockState.wire !== undefined || blockState.isEnded) continue;
+      yield* endBlock(state, index, "closing");
       if (blockState.isStarted) yield contentBlockStopEvent(index);
     }
   }
@@ -1066,6 +1096,7 @@ function runTurnStepHooks(
     yield* endAllBlocks(current);
     finalizeMeta(current, mode === "hook" && !alreadySent);
     current.isStopped = true;
+    current.isFailed = false;
     yield (alreadySent ? echoedEvent(stop.ref, (event) => event.type === "message_delta") : undefined) ??
       makeHookMessageDelta(stop);
   }
@@ -1113,6 +1144,15 @@ function runTurnStepHooks(
       logForDebugging(
         `turn.step: an engine chunk names no item of this step (ref ${String(chunk.ref)}); dropped`,
       );
+      return;
+    }
+    if (item.type === "assistant" && item.isApiErrorMessage === true) {
+      yield* alignByRef(chunk.ref);
+      let state = ensureState();
+      yield* endPendingBlocks(state);
+      state.isFailed = true;
+      copyFinalMeta(state);
+      yield item;
       return;
     }
     if (isAssistantContentMessage(item) && turnStepBlocks.responseOf(chunk.ref)?.isStreamed === false) {
@@ -1181,9 +1221,10 @@ function runTurnStepHooks(
       }
     },
     end: closeResponse,
+    cutShort: closeAllBlocks,
   };
 }
-//@ chunk-0h4e7gnq.js:21826-22092 placement
+//@ chunk-frs14hy1.js:26216-26482 placement
 function toDeltaChunk(index, delta, ref) {
   switch (delta.type) {
     case "text_delta":
@@ -1211,7 +1252,7 @@ function toDeltaChunk(index, delta, ref) {
       return;
   }
 }
-//@ chunk-0h4e7gnq.js:22092-22158 placement
+//@ chunk-frs14hy1.js:26482-26548 placement
 /**
  * 工具块引用
  */
@@ -1222,7 +1263,7 @@ var toolUseBlockRef = (index, contentBlock, ref) => ({
   name: contentBlock.name,
   ref,
 });
-//@ chunk-0h4e7gnq.js:22158-22824 placement
+//@ chunk-frs14hy1.js:26548-27214 placement
 /**
  * 把引擎流逐条转成 turn.step 的块描述：tool_use 开始块、text/thinking/input 增量（非工具块的 input 增量忽略）、带停止原因的 message_delta，其余为 engine 块；同时登记引用。
  */
@@ -1267,7 +1308,7 @@ function createStreamChunker(refs) {
     },
   };
 }
-//@ chunk-0h4e7gnq.js:22824-22962 placement
+//@ chunk-frs14hy1.js:27214-27352 placement
 /**
  * 判断最后一条有效消息是否是同一模型族的助手消息（可以在该模型上继续未完成的思考）；出错返回 false。
  */
@@ -1285,7 +1326,7 @@ function canResumeThinkingOnModel(messages, model) {
     return false;
   }
 }
-//@ chunk-0h4e7gnq.js:22962-23285 placement
+//@ chunk-frs14hy1.js:27352-27675 placement
 /**
  * 按 turn.step 钩子的结果算出本次请求的 options：恢复截断思考且模型不可换时保持原模型（并提示一次），否则采用钩子模型（受允许列表限制）；effort 被改时附 hookEffortValue。
  */
@@ -1308,7 +1349,7 @@ function resolveStepModelOptions(call, sent) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:23285-23647 placement
+//@ chunk-frs14hy1.js:27675-28037 placement
 /**
  * 创建 turn.step 链里的核心执行器：真正调用模型、统计请求次数、把流转成块并在结束时返回 step 结果；异常记在 state.thrown 后重抛。
  */
@@ -1349,7 +1390,7 @@ var makeCoreStepRunner = ({ callModel, args, sent, refs, state }) => ({
       return stepResultCollector.result(stepSent.turnId, stepSent.index);
     })(),
 });
-//@ chunk-0h4e7gnq.js:23647-23896 placement
+//@ chunk-frs14hy1.js:28037-28286 placement
 /**
  * 生成把工具名+输入规范化成助手内容（含批量工具拆分）的函数，供钩子构造工具调用块。
  */
@@ -1382,12 +1423,12 @@ var makeToolRecordBuilder = (args) => (tool, input) => {
         content,
       };
 };
-//@ chunk-0h4e7gnq.js:23896-23908 placement
+//@ chunk-frs14hy1.js:28286-28298 placement
 /**
  * 3000
  */
 var TURN_HOOKS_SETTLE_MS = 3000;
-//@ chunk-0h4e7gnq.js:23908-24052 placement
+//@ chunk-frs14hy1.js:28298-28442 placement
 async function waitForTurnStart(turn, signal, timeoutMs = TURN_HOOKS_SETTLE_MS) {
   let abortController = new AbortController();
   try {
@@ -1396,10 +1437,10 @@ async function waitForTurnStart(turn, signal, timeoutMs = TURN_HOOKS_SETTLE_MS) 
     abortController.abort();
   }
 }
-//@ chunk-0h4e7gnq.js:24052-24879 placement
-async function* raiseTurnStep(callModel, args, origin) {
+//@ chunk-frs14hy1.js:28442-29284 placement
+async function* raiseTurnStep(callModel, args, origin, meta) {
   let turnStep = prepareTurnStep(args);
-  if (!turnStep) return yield* callModel(args);
+  if (!turnStep) return yield* callModel(args, meta);
   await waitForTurnStart(turnStep.turn, args.signal);
   let state = {
     requests: 0,
@@ -1424,6 +1465,7 @@ async function* raiseTurnStep(callModel, args, origin) {
       }).turn.step(turnStep.e),
       runTurnStepHooks(turnStepBlocks, turnStep.e.model, makeToolRecordBuilder(args)),
       state,
+      args.signal,
     );
   } catch (error) {
     let error_2 = state.thrown?.error;
@@ -1443,12 +1485,12 @@ async function* raiseTurnStep(callModel, args, origin) {
         level: "error",
       },
     );
-    return yield* callModel(args);
+    return yield* callModel(args, meta);
   }
   if (state.requests === 0)
     logForDebugging("turn.step: a hook answered without the request; the loop read what it streamed");
 }
-//@ chunk-0h4e7gnq.js:24879-25012 placement
+//@ chunk-frs14hy1.js:29284-29421 placement
 /**
  * 给查询依赖包装 turn.step 钩子：委托观察上下文或关闭设置钩子时原样返回，否则把 callModel 换成经过 raiseTurnStep 的版本。
  */
@@ -1458,10 +1500,10 @@ function withTurnStepHooks(deps, toolUseContext) {
     ? deps
     : {
         ...deps,
-        callModel: (args) => raiseTurnStep(deps.callModel, args, toolUseContext.hookOrigin),
+        callModel: (args, meta) => raiseTurnStep(deps.callModel, args, toolUseContext.hookOrigin, meta),
       };
 }
-//@ chunk-0h4e7gnq.js:25012-25243 placement
+//@ chunk-frs14hy1.js:29421-29652 placement
 function sumTurnUsage(transcript, span) {
   try {
     let usageById = new Map();
@@ -1475,7 +1517,7 @@ function sumTurnUsage(transcript, span) {
     return;
   }
 }
-//@ chunk-0h4e7gnq.js:25243-25663 placement
+//@ chunk-frs14hy1.js:29652-30072 placement
 function raiseTurnComplete(turnEnd) {
   let { turnId, transcript, span, durationMs, isAborted } = turnEnd;
   releaseTurnIfCurrent(turnId, isAborted);
@@ -1510,7 +1552,7 @@ function raiseTurnComplete(turnEnd) {
       .then(() => []),
   );
 }
-//@ chunk-0h4e7gnq.js:25663-25759 placement
+//@ chunk-frs14hy1.js:30072-30168 placement
 /**
  * 是否有 turn.* 钩子
  */
@@ -1525,7 +1567,7 @@ function hasTurnHookSites() {
     return false;
   }
 }
-//@ chunk-0h4e7gnq.js:25759-26085 placement
+//@ chunk-frs14hy1.js:30168-30494 placement
 /**
  * 回合开始后异步触发插件的 turn.complete（回答、耗时、是否中止、拒绝/错误信息、用量），失败只记调试日志，最后释放该代理的回合登记。
  */
@@ -1554,16 +1596,16 @@ function fireTurnComplete(turnEnd) {
     )
     .finally(releaseHold);
 }
-//@ chunk-0h4e7gnq.js:26085-26157 placement
+//@ chunk-frs14hy1.js:30494-30566 placement
 var NO_TURN_HOOKS_HANDLE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0h4e7gnq.js:26085", () => {
+deferInit("chunk-frs14hy1.js:30494", () => {
   NO_TURN_HOOKS_HANDLE = Object.freeze({
     saw: () => {},
     ended: () => {},
     [Symbol.dispose]: () => {},
   });
 });
-//@ chunk-0h4e7gnq.js:26157-27320 placement
+//@ chunk-frs14hy1.js:30566-31729 placement
 function raiseTurnLifecycleForAgent(text, agentId, signal, tick, origin) {
   let onSaw = tick === undefined ? undefined : turnStepSlot.get();
   if (!hasTurnHookSites() && onSaw === undefined) return NO_TURN_HOOKS_HANDLE;
@@ -1662,12 +1704,12 @@ function raiseTurnLifecycleForAgent(text, agentId, signal, tick, origin) {
   };
 }
 export {
+  raiseTurnComplete,
+  turnStepSlot,
   retagQueuedCommandSource,
+  canResumeThinkingOnModel,
   raiseTurnLifecycleForAgent,
   setSessionMeasurer,
   measureSession,
-  raiseTurnComplete,
   withTurnStepHooks,
-  canResumeThinkingOnModel,
-  turnStepSlot,
 };

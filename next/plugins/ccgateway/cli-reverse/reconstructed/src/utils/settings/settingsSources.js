@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：设置来源与合并策略（merge/first-wins、托管来源、deniedModels）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (24)
  * attribution: placement 24
  */
 import { resolve, join } from "path";
-import { getPromptContent } from "../../commands/commit.js";
+import { hasCommitOrPrArg } from "../../commands/commit.js";
 import { resolveLocalSettingsStoreRoot } from "./settingsFileParsing.js";
 import { getRelativeSettingsFilePathForSource } from "./settings.js";
 import { getSettingsForSourceUncached, trimmedPolicyTier } from "./policyTiers.js";
@@ -21,23 +21,23 @@ import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../debug.js";
 import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
 import { AWS_CREDENTIAL_ENV_NAMES, PARENT_PAIR_SUPPRESSOR_SENTINEL } from "./settingsSourceTrust.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
 import { MODEL_SELECTION_ENV_VARS, CUSTOM_MODEL_OPTION_VARS } from "../managedEnvConstants.js";
 import { parseDeniedModelEntry, availableModelsEntryWarning } from "../model/deniedModels.js";
 import { parseParentManagedSettings } from "./managedFileSettings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:422494-422731 placement
+//@ chunk-z20c443b.js:420957-421194 placement
 function commitTrailersMode(attribution, includeCoAuthoredBy) {
   let commitTrailers = attribution?.commitTrailers;
   if (typeof commitTrailers === "boolean") return commitTrailers ? "explicit-enabled" : "disabled";
-  if (attribution !== undefined && getPromptContent(attribution))
+  if (attribution !== undefined && hasCommitOrPrArg(attribution))
     return attribution.commit === "" ? "disabled" : "implicit-enabled";
   if (includeCoAuthoredBy !== undefined) return includeCoAuthoredBy ? "implicit-enabled" : "disabled";
   return;
 }
-//@ chunk-dcmhvw5a.js:477482-477663 placement
+//@ chunk-z20c443b.js:476117-476298 placement
 function getLegacyLocalSettingsFilePath_3(context) {
   if (context.diskless) return;
   if (
@@ -48,13 +48,13 @@ function getLegacyLocalSettingsFilePath_3(context) {
   if (context.projectConfigDir !== undefined) return;
   return join(resolve(context.cwd), getRelativeSettingsFilePathForSource("localSettings"));
 }
-//@ chunk-dcmhvw5a.js:477663-477770 placement
+//@ chunk-z20c443b.js:476298-476405 placement
 function getSettingsForSourceIfRead(source, store) {
   let frozenTier = store.repoTierFreeze.tier(source);
   if (frozenTier !== undefined) return frozenTier.settings;
   return store.perSource.get(source);
 }
-//@ chunk-dcmhvw5a.js:477770-477898 placement
+//@ chunk-z20c443b.js:476405-476533 placement
 function getSettingsForSource_3(source, context) {
   let settingsForSourceIfRead = getSettingsForSourceIfRead(source, context.store);
   if (settingsForSourceIfRead !== undefined) return settingsForSourceIfRead;
@@ -63,22 +63,22 @@ function getSettingsForSource_3(source, context) {
   context.store.perSource.set(source, settings);
   return settings;
 }
-//@ chunk-dcmhvw5a.js:477898-477986 placement
+//@ chunk-z20c443b.js:476533-476621 placement
 function adminTierComposesParent(settings) {
   return (
     (settings.parentSettingsBehavior ?? (isProviderManagedByHost() ? "merge" : "first-wins")) === "merge"
   );
 }
-//@ chunk-dcmhvw5a.js:477986-478027 placement
+//@ chunk-z20c443b.js:476621-476662 placement
 function shouldIncludeParentTier(settings, forceInclude = false) {
   return !settings || adminTierComposesParent(settings) || forceInclude;
 }
-//@ chunk-dcmhvw5a.js:478027-478107 placement
+//@ chunk-z20c443b.js:476662-476742 placement
 var WINNER_ONLY_NESTED_UNDER_MERGE = [
   ["permissions", "defaultMode"],
   ["modelPicker", "replaceBuiltInOptions"],
 ];
-//@ chunk-dcmhvw5a.js:478107-478254 placement
+//@ chunk-z20c443b.js:476742-476889 placement
 function pickRestrictiveSandboxSettings(settings) {
   let restrictive = {};
   for (let { path, restrictive: restrictive_2 } of MANAGED_RESTRICTION_KEYS()) {
@@ -88,11 +88,11 @@ function pickRestrictiveSandboxSettings(settings) {
   }
   return restrictive.sandbox ?? {};
 }
-//@ chunk-dcmhvw5a.js:478254-478287 placement
+//@ chunk-z20c443b.js:476889-476922 placement
 function readSettingsPath(sandbox, path) {
   return getAtPath(sandbox, path);
 }
-//@ chunk-dcmhvw5a.js:478287-478376 placement
+//@ chunk-z20c443b.js:476922-477011 placement
 function isDisableAllHooksSet(settings) {
   let disableAllHooks = settings?.disableAllHooks;
   return (
@@ -102,7 +102,7 @@ function isDisableAllHooksSet(settings) {
     disableAllHooks !== "false"
   );
 }
-//@ chunk-dcmhvw5a.js:478376-482405 placement
+//@ chunk-z20c443b.js:477011-481040 placement
 function keepRestrictiveFromParent(parentSettings, currentSettings, settings, context) {
   let kept = {};
   if (
@@ -262,27 +262,27 @@ function keepRestrictiveFromParent(parentSettings, currentSettings, settings, co
   }
   return kept;
 }
-//@ chunk-dcmhvw5a.js:482405-482586 placement
+//@ chunk-z20c443b.js:481040-481221 placement
 function missingAwsPairs(pairs, outerPairs) {
   let allowedVarNames = AWS_CREDENTIAL_ENV_NAMES;
   let claimedVars = new Set(outerPairs.flatMap(awsPairVars));
-  return uniq(pairs.flatMap(awsPairVars))
+  return normalizeCaseForComparison_2(pairs.flatMap(awsPairVars))
     .filter((varName) => allowedVarNames.includes(varName) && !claimedVars.has(varName))
     .map((accessKeyIdVar, pairIndex) => ({
       accessKeyIdVar,
       secretAccessKeyVar: `${PARENT_PAIR_SUPPRESSOR_SENTINEL}${pairIndex + 1}_`,
     }));
 }
-//@ chunk-dcmhvw5a.js:482586-482716 placement
+//@ chunk-z20c443b.js:481221-481351 placement
 function awsPairVars(pair) {
   if (!isPlainObject_2(pair)) return [];
   return [pair.accessKeyIdVar, pair.secretAccessKeyVar, pair.sessionTokenVar].filter(
     (varName) => typeof varName === "string",
   );
 }
-//@ chunk-dcmhvw5a.js:482716-482910 placement
+//@ chunk-z20c443b.js:481351-481545 placement
 var HOST_MANAGED_MODEL_ENV_KEYS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:482716", () => {
+deferInit("chunk-z20c443b.js:481351", () => {
   HOST_MANAGED_MODEL_ENV_KEYS = new Set([
     ...[...MODEL_SELECTION_ENV_VARS].filter((envVar) => envVar !== "ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION"),
     ...CUSTOM_MODEL_OPTION_VARS,
@@ -291,7 +291,7 @@ deferInit("chunk-dcmhvw5a.js:482716", () => {
     "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
   ]);
 });
-//@ chunk-dcmhvw5a.js:482910-483525 placement
+//@ chunk-z20c443b.js:481545-482160 placement
 function hostManagedModelOverlay(settings, hostManagedProvider) {
   if (!hostManagedProvider || !settings) return null;
   let overlay = {};
@@ -310,7 +310,7 @@ function hostManagedModelOverlay(settings, hostManagedProvider) {
   if (settings.modelPicker !== undefined) overlay.modelPicker = settings.modelPicker;
   return Object.keys(overlay).length > 0 ? overlay : null;
 }
-//@ chunk-dcmhvw5a.js:483525-483726 placement
+//@ chunk-z20c443b.js:482160-482361 placement
 function deniedModelsEntryWarnings(settings) {
   let warnings = [];
   for (let entry of settings?.deniedModels ?? []) {
@@ -326,7 +326,7 @@ function deniedModelsEntryWarnings(settings) {
   }
   return warnings;
 }
-//@ chunk-dcmhvw5a.js:483726-483970 placement
+//@ chunk-z20c443b.js:482361-482605 placement
 function availableModelsExactEntryWarnings(settings) {
   if (settings?.availableModelsMatch !== "exact") return [];
   let availableModels = settings.availableModels ?? [];
@@ -345,14 +345,14 @@ function availableModelsExactEntryWarnings(settings) {
         ];
   });
 }
-//@ chunk-dcmhvw5a.js:483970-484109 placement
+//@ chunk-z20c443b.js:482605-482744 placement
 function assignWithDeniedModels(settings, hostModelOverlay) {
   let deniedModels = settings.deniedModels;
   Object.assign(settings, hostModelOverlay);
   if (deniedModels !== undefined && hostModelOverlay.deniedModels !== undefined)
-    settings.deniedModels = uniq([...deniedModels, ...hostModelOverlay.deniedModels]);
+    settings.deniedModels = normalizeCaseForComparison_2([...deniedModels, ...hostModelOverlay.deniedModels]);
 }
-//@ chunk-dcmhvw5a.js:484109-484309 placement
+//@ chunk-z20c443b.js:482744-482944 placement
 function stripHostManagedModelKeys(settings) {
   delete settings.model;
   delete settings.fallbackModel;
@@ -365,7 +365,7 @@ function stripHostManagedModelKeys(settings) {
     settings.env = filteredEnv;
   }
 }
-//@ chunk-dcmhvw5a.js:484309-484481 placement
+//@ chunk-z20c443b.js:482944-483116 placement
 function getPairedPolicyModelOverrides(settingsContext) {
   let pairedModelOverrides = settingsContext.store.policy.pairedModelOverrides;
   if (pairedModelOverrides !== undefined) return pairedModelOverrides.value;
@@ -374,7 +374,7 @@ function getPairedPolicyModelOverrides(settingsContext) {
   } catch {}
   return settingsContext.store.policy.pairedModelOverrides?.value;
 }
-//@ chunk-dcmhvw5a.js:484481-484632 placement
+//@ chunk-z20c443b.js:483116-483267 placement
 function getDeniedModelsPolicyOverrides(settingsContext) {
   if (settingsContext.store.policy.deniedModelsOverrides === undefined)
     try {
@@ -382,7 +382,7 @@ function getDeniedModelsPolicyOverrides(settingsContext) {
     } catch {}
   return settingsContext.store.policy.deniedModelsOverrides?.value;
 }
-//@ chunk-dcmhvw5a.js:484632-484761 placement
+//@ chunk-z20c443b.js:483267-483396 placement
 function getHostManagedModelPricing(settingsContext) {
   if (
     !settingsContext.hostManagedProvider ||
@@ -391,7 +391,7 @@ function getHostManagedModelPricing(settingsContext) {
     return;
   return parseParentManagedSettings(settingsContext).settings?.modelPricing;
 }
-//@ chunk-dcmhvw5a.js:484761-485092 placement
+//@ chunk-z20c443b.js:483396-483727 placement
 function getHostManagedToolSearchEnv(settingsContext) {
   let hostToolSearchEnv = settingsContext.store.policy.hostToolSearchEnv;
   if (hostToolSearchEnv !== undefined) return hostToolSearchEnv.value;
@@ -411,7 +411,7 @@ function getHostManagedToolSearchEnv(settingsContext) {
   };
   return value;
 }
-//@ chunk-dcmhvw5a.js:485092-485208 placement
+//@ chunk-z20c443b.js:483727-483843 placement
 function getAllPolicyTierSettings_3(context) {
   let allTiers = context.store.policy.allTiers;
   if (allTiers !== undefined) return allTiers;
@@ -430,6 +430,7 @@ export {
   getDeniedModelsPolicyOverrides,
   getHostManagedModelPricing,
   getHostManagedToolSearchEnv,
+  readSettingsPath,
   adminTierComposesParent,
   shouldIncludeParentTier,
   isDisableAllHooksSet,
@@ -439,6 +440,5 @@ export {
   missingAwsPairs,
   stripHostManagedModelKeys,
   assignWithDeniedModels,
-  readSettingsPath,
   HOST_MANAGED_MODEL_ENV_KEYS,
 };

@@ -1,16 +1,16 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/client/sse.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-z1n5m6nf.js (2)
+ * pieces: chunk-h44h5gdv.js (2)
  * attribution: esm-fingerprint 2
  */
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
 import { UnauthorizedError, auth, extractWWWAuthenticateParams } from "./auth.js";
 import { EventSource } from "../../../../../eventsource/dist/index.js";
-import { JSONRPCMessageSchema as JSONRPCMessageSchema_2 } from "../types.js";
+import { JSONRPCMessageSchema } from "../types.js";
 
-//@ chunk-z1n5m6nf.js:28313-28406 esm-fingerprint
+//@ chunk-h44h5gdv.js:29735-29828 esm-fingerprint
 class SseError extends Error {
   constructor(code, message, event) {
     super(`SSE error: ${message}`);
@@ -18,7 +18,7 @@ class SseError extends Error {
     this.event = event;
   }
 }
-//@ chunk-z1n5m6nf.js:28406-31818 esm-fingerprint
+//@ chunk-h44h5gdv.js:29828-33240 esm-fingerprint
 class SSEClientTransport {
   constructor(url, opts) {
     this._url = url;
@@ -109,7 +109,7 @@ class SSEClientTransport {
         let messageEvent = event;
         let message;
         try {
-          message = JSONRPCMessageSchema_2.parse(JSON.parse(messageEvent.data));
+          message = JSONRPCMessageSchema.parse(JSON.parse(messageEvent.data));
         } catch (error) {
           this.onerror?.(error);
           return;

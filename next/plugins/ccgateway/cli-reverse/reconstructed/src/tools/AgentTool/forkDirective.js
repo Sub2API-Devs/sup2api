@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。按 /fork、/subtask 指令派生分叉子代理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7jbxc8kr.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8gk80pm3.js (1)
  * attribution: placement 1
  */
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -34,7 +34,7 @@ import { runAsyncAgentLifecycle } from "./agentToolUtils.js";
 import { agentModelRestrictionNotifier } from "../../utils/model/agentModelRestriction.js";
 import { getQuerySourceForAgent } from "../../utils/promptCategory.js";
 
-//@ chunk-7jbxc8kr.js:717-3444 placement (2.1.88 match: resumeAgentBackground, 0.432)
+//@ chunk-8gk80pm3.js:716-3499 placement (2.1.88 match: resumeAgentBackground, 0.418)
 /**
  * 以 fork 代理身份在后台启动一个"继承上下文"的子代理（被技能/钩子等内部调用，非 Agent 工具）：分配名字、注册后台任务、用父线程渲染好的系统提示词和全部消息、useExactTools 运行 runAgent；coordinator 模式或 endedByModel 时返回 null。
  */
@@ -65,7 +65,9 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
     .replace(/\s+/g, " ")
     .trim();
   let shortDescription = trimmed.length > 50 ? truncateToLength(trimmed, 49) + "\u2026" : trimmed;
-  let launchedAgentId = makeSaltedName(agentName);
+  let launchedAgentId = makeSaltedName(
+    options.nameHint !== undefined && options.nameHintHoldsNoUserContent ? agentName : undefined,
+  );
   let { taskRegistry } = toolUseContext;
   let startTime = Date.now();
   let agentDepth = getAgentDepth(toolUseContext.agentContext) + 1;

@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/api-logs/build/esm/ProxyLoggerProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/api-logs@0.208.0..0.209.0
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: esm-fingerprint 1
  */
 import { ProxyLogger, NOOP_LOGGER_PROVIDER } from "./ProxyLogger.js";
 
-//@ chunk-aepeg2w5.js:649311-649630 esm-fingerprint
+//@ chunk-exfmq47h.js:661917-662236 esm-fingerprint
 class ProxyLoggerProvider {
   getLogger(name, version, options) {
     var _a;

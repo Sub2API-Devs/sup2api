@@ -1,23 +1,23 @@
 /**
  * @anthropic-ai/sdk/tools/agent-toolset/skills.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (13)
+ * pieces: chunk-m6wtswwx.js (13)
  * attribution: esm-fingerprint 13
  */
-import * as hat from "fs";
-import * as Fns from "util";
-import * as $ns from "child_process";
-import * as zp from "path";
-import * as lZr from "stream";
+import * as Jpt from "fs";
+import * as USs from "util";
+import * as FSs from "child_process";
+import * as Nm from "path";
+import * as Qpo from "stream";
 import { loggerFor } from "../../internal/utils/log.mjs";
 import { DIR_CREATE_MODE, errnoCode } from "./fs-util.mjs";
 import { AnthropicError } from "../../core/error.mjs";
 
-//@ chunk-2cw52qnf.js:2868-2918 esm-fingerprint
-var fs_2 = hat.promises;
-var execFileAsync = Fns.promisify($ns.execFile);
-//@ chunk-2cw52qnf.js:2918-4208 esm-fingerprint
+//@ chunk-m6wtswwx.js:2868-2918 esm-fingerprint
+var fs_2 = Jpt.promises;
+var execFileAsync = USs.promisify(FSs.execFile);
+//@ chunk-m6wtswwx.js:2918-4208 esm-fingerprint
 async function setupSkills(ctx) {
   let { client, sessionId } = ctx;
   if (!client) return async () => {};
@@ -33,17 +33,17 @@ async function setupSkills(ctx) {
     );
     session = await client.beta.sessions.retrieve(sessionId);
   }
-  let skillsRoot = zp.resolve(ctx.workdir, "skills");
+  let skillsRoot = Nm.resolve(ctx.workdir, "skills");
   let created = [];
   for (let skill of session.agent.skills)
     try {
       let version = await client.beta.skills.versions.retrieve(skill.version, {
         skill_id: skill.skill_id,
       });
-      let dirname = zp.basename(version.name.trim());
+      let dirname = Nm.basename(version.name.trim());
       if (dirname === "" || dirname === "." || dirname === "..") dirname = skill.skill_id;
-      let dest = zp.resolve(skillsRoot, dirname);
-      if (dest !== skillsRoot && !dest.startsWith(skillsRoot + zp.sep)) {
+      let dest = Nm.resolve(skillsRoot, dirname);
+      if (dest !== skillsRoot && !dest.startsWith(skillsRoot + Nm.sep)) {
         log.warn("skill name escapes the skills dir; skipping", {
           component: "agent-tool-context",
           name: version.name,
@@ -92,33 +92,33 @@ async function setupSkills(ctx) {
         });
   };
 }
-//@ chunk-2cw52qnf.js:4208-4387 esm-fingerprint
+//@ chunk-m6wtswwx.js:4208-4387 esm-fingerprint
 function assertSafeMemberNames(names) {
   for (let raw of names) {
     let entry = raw.trim();
     if (!entry) continue;
-    if (zp.isAbsolute(entry) || entry.split(/[\\/]/).includes(".."))
+    if (Nm.isAbsolute(entry) || entry.split(/[\\/]/).includes(".."))
       throw new AnthropicError(`refusing to extract unsafe archive member: ${entry}`);
   }
 }
-//@ chunk-2cw52qnf.js:4387-4516 esm-fingerprint
+//@ chunk-m6wtswwx.js:4387-4516 esm-fingerprint
 var INCONSISTENT_LISTING = "skill archive listing is inconsistent; refusing to extract";
 var PLAIN_TYPE_CHARS = {
   unzip: new Set(["-", "d", "?"]),
   tar: new Set(["-", "d", "C"]),
 };
-//@ chunk-2cw52qnf.js:4516-4589 esm-fingerprint
+//@ chunk-m6wtswwx.js:4516-4589 esm-fingerprint
 function listingLines(listing) {
   let lines = listing.split(`
 `);
   if (lines[lines.length - 1] === "") lines.pop();
   return lines;
 }
-//@ chunk-2cw52qnf.js:4589-4691 esm-fingerprint
+//@ chunk-m6wtswwx.js:4589-4691 esm-fingerprint
 function canExcludeVerbatim(cmd, name) {
   return /^[\x20-\x7E]+$/.test(name) && !/[\\^#]/.test(name) && !(cmd === "unzip" && name.startsWith("-"));
 }
-//@ chunk-2cw52qnf.js:4691-4995 esm-fingerprint
+//@ chunk-m6wtswwx.js:4691-4995 esm-fingerprint
 function classifyArchiveListing(cmd, names, typed) {
   let nameLines = listingLines(names);
   let typedLines = listingLines(typed);
@@ -141,15 +141,15 @@ function classifyArchiveListing(cmd, names, typed) {
     special,
   };
 }
-//@ chunk-2cw52qnf.js:4995-5151 esm-fingerprint
+//@ chunk-m6wtswwx.js:4995-5151 esm-fingerprint
 async function assertOnlyPlainEntries(dir) {
   for (let entry of await fs_2.readdir(dir, {
     withFileTypes: true,
   }))
-    if (entry.isDirectory()) await assertOnlyPlainEntries(zp.join(dir, entry.name));
+    if (entry.isDirectory()) await assertOnlyPlainEntries(Nm.join(dir, entry.name));
     else if (!entry.isFile()) throw new AnthropicError(INCONSISTENT_LISTING);
 }
-//@ chunk-2cw52qnf.js:5151-5345 esm-fingerprint
+//@ chunk-m6wtswwx.js:5151-5345 esm-fingerprint
 async function runArchiveTool(cmd, args) {
   try {
     let { stdout } = await execFileAsync(cmd, args);
@@ -162,7 +162,7 @@ async function runArchiveTool(cmd, args) {
     throw e;
   }
 }
-//@ chunk-2cw52qnf.js:5345-5564 esm-fingerprint
+//@ chunk-m6wtswwx.js:5345-5564 esm-fingerprint
 function archiveTopDir(names) {
   let top;
   let nested = false;
@@ -179,13 +179,13 @@ function archiveTopDir(names) {
   }
   return top !== undefined && nested ? top : "";
 }
-//@ chunk-2cw52qnf.js:5564-6524 esm-fingerprint
+//@ chunk-m6wtswwx.js:5564-6524 esm-fingerprint
 async function extractSkillArchive(resp, dest) {
-  let tmp = zp.join(dest, `.skill-archive-${process.pid}-${Date.now()}`);
+  let tmp = Nm.join(dest, `.skill-archive-${process.pid}-${Date.now()}`);
   if (!resp.body) throw new AnthropicError("skill download response had no body");
-  await lZr.promises.pipeline(lZr.Readable.fromWeb(resp.body), hat.createWriteStream(tmp));
-  let stage = zp.join(zp.dirname(dest), `.skill-stage-${process.pid}-${Date.now()}`);
-  let excludeFile = zp.join(zp.dirname(dest), `.skill-exclude-${process.pid}-${Date.now()}`);
+  await Qpo.promises.pipeline(Qpo.Readable.fromWeb(resp.body), Jpt.createWriteStream(tmp));
+  let stage = Nm.join(Nm.dirname(dest), `.skill-stage-${process.pid}-${Date.now()}`);
+  let excludeFile = Nm.join(Nm.dirname(dest), `.skill-exclude-${process.pid}-${Date.now()}`);
   try {
     let head = await readHead(tmp, 4);
     let isZip = head.length >= 4 && head[0] === 80 && head[1] === 75 && head[2] === 3 && head[3] === 4;
@@ -202,11 +202,11 @@ async function extractSkillArchive(resp, dest) {
     if (plain.length > 0)
       await runArchiveTool(archiveCmd, await extractArgs(archiveCmd, tmp, stage, special, excludeFile));
     await assertOnlyPlainEntries(stage);
-    let srcRoot = top ? zp.join(stage, top) : stage;
+    let srcRoot = top ? Nm.join(stage, top) : stage;
     let entries = await fs_2.readdir(srcRoot).catch((e) => {
       throw errnoCode(e) === "ENOENT" ? new AnthropicError(INCONSISTENT_LISTING) : e;
     });
-    for (let entry of entries) await fs_2.rename(zp.join(srcRoot, entry), zp.join(dest, entry));
+    for (let entry of entries) await fs_2.rename(Nm.join(srcRoot, entry), Nm.join(dest, entry));
   } finally {
     await fs_2.rm(tmp, {
       force: true,
@@ -220,7 +220,7 @@ async function extractSkillArchive(resp, dest) {
     });
   }
 }
-//@ chunk-2cw52qnf.js:6524-6795 esm-fingerprint
+//@ chunk-m6wtswwx.js:6524-6795 esm-fingerprint
 async function extractArgs(cmd, archive, stage, special, excludeFile) {
   let patterns = special.map((name) => name.replace(/[*?[\\]/g, "\\$&"));
   if (cmd === "unzip")
@@ -239,7 +239,7 @@ async function extractArgs(cmd, archive, stage, special, excludeFile) {
   );
   return ["-xf", archive, "-C", stage, "-X", excludeFile];
 }
-//@ chunk-2cw52qnf.js:6795-6954 esm-fingerprint
+//@ chunk-m6wtswwx.js:6795-6954 esm-fingerprint
 async function readHead(file, n_2) {
   let handle = await fs_2.open(file, "r");
   try {

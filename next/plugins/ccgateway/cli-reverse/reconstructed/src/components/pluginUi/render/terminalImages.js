@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件渲染中的终端图片（Kitty 协议）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bc20zedk.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkbsrtg1.js (22)
  * attribution: sole-consumer 1, placement 21
  */
 import { writeFile, unlink } from "fs/promises";
@@ -48,9 +48,9 @@ import { getImagePath } from "../../../utils/imageStore.js";
 import { sequential } from "../../../utils/sequential.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-bc20zedk.js:33069-33371 sole-consumer
+//@ chunk-rkbsrtg1.js:33071-33373 sole-consumer
 var placeholderImageInstance; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:33069", () => {
+deferInit("chunk-rkbsrtg1.js:33071", () => {
   placeholderImageInstance = Object.freeze({
     id: "",
     plugin: "",
@@ -87,9 +87,9 @@ deferInit("chunk-bc20zedk.js:33069", () => {
     },
   });
 });
-//@ chunk-bc20zedk.js:33371-33389 placement
+//@ chunk-rkbsrtg1.js:33373-33391 placement
 var DETACHED = "detached";
-//@ chunk-bc20zedk.js:33389-33708 placement
+//@ chunk-rkbsrtg1.js:33391-33710 placement
 /**
  * 获取并持有插件图片渲染实例（卸载时释放）。
  */
@@ -115,7 +115,7 @@ function usePluginImageInstance(props) {
   }, [plugin, props.module, elementKey, renderInstance, clock, initialProps]);
   return instance;
 }
-//@ chunk-bc20zedk.js:33708-34097 placement
+//@ chunk-rkbsrtg1.js:33710-34099 placement
 /**
  * 插件图片元素（错误边界与占位回退）。
  */
@@ -151,28 +151,28 @@ function PluginImageElement(props) {
     }),
   });
 }
-//@ chunk-bc20zedk.js:34097-34101 placement
+//@ chunk-rkbsrtg1.js:34099-34103 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:34097", () => {
+deferInit("chunk-rkbsrtg1.js:34099", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:34101-34105 placement
+//@ chunk-rkbsrtg1.js:34103-34107 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:34101", () => {
+deferInit("chunk-rkbsrtg1.js:34103", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:34159-34247 placement
+//@ chunk-rkbsrtg1.js:34161-34249 placement
 var IMAGE_CELL_WIDTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var IMAGE_CELL_HEIGHT;
 var IMAGE_MAX_SIDE;
 var RETRYABLE_IO_ERRORS;
-deferInit("chunk-bc20zedk.js:34159", () => {
+deferInit("chunk-rkbsrtg1.js:34161", () => {
   IMAGE_CELL_WIDTH = 24;
   IMAGE_CELL_HEIGHT = 4;
   IMAGE_MAX_SIDE = 384;
   RETRYABLE_IO_ERRORS = new Set(["EAGAIN", "EBUSY", "EINTR", "EMFILE", "ENFILE", "ENOSPC"]);
 });
-//@ chunk-bc20zedk.js:34247-34920 placement
+//@ chunk-rkbsrtg1.js:34249-34922 placement
 /**
  * 探测终端是否接受 Kitty 文件方式传图（写临时文件后查询）。
  */
@@ -217,21 +217,21 @@ async function probeKittyFileTransfer(querier, images) {
     if (tempPath !== undefined) await unlink(tempPath).catch(() => {});
   }
 }
-//@ chunk-bc20zedk.js:34920-34968 placement
+//@ chunk-rkbsrtg1.js:34922-34970 placement
 function imageAnswered(answer) {
   return {
     kind: "answered",
     answer,
   };
 }
-//@ chunk-bc20zedk.js:34968-35020 placement
+//@ chunk-rkbsrtg1.js:34970-35022 placement
 function imageInconclusive(source) {
   return {
     kind: "inconclusive",
     source,
   };
 }
-//@ chunk-bc20zedk.js:35020-35507 placement
+//@ chunk-rkbsrtg1.js:35022-35509 placement
 /**
  * 需要时发起一次文件传图探测并记录结论（不确定时下次再问）。
  */
@@ -262,7 +262,7 @@ function ensureImageFileProbe(querier, images) {
       }),
     );
 }
-//@ chunk-bc20zedk.js:35507-36001 placement
+//@ chunk-rkbsrtg1.js:35509-36003 placement
 /**
  * iTerm2 图片支持判定（滚动区域模式、经典渲染器、全量重绘时不画）。
  */
@@ -281,7 +281,7 @@ function itermImageSupport() {
     );
   return capability;
 }
-//@ chunk-bc20zedk.js:36001-36058 placement
+//@ chunk-rkbsrtg1.js:36003-36060 placement
 function imageSettledUnavailable(source) {
   return {
     state: "settled",
@@ -289,7 +289,7 @@ function imageSettledUnavailable(source) {
     source,
   };
 }
-//@ chunk-bc20zedk.js:36058-36294 placement
+//@ chunk-rkbsrtg1.js:36060-36296 placement
 function itermImageSequenceThunk(image) {
   let { source, columns, rows } = image;
   if (isNamedImageSource(source))
@@ -306,7 +306,7 @@ function itermImageSequenceThunk(image) {
     return sequence;
   };
 }
-//@ chunk-bc20zedk.js:36294-36374 placement
+//@ chunk-rkbsrtg1.js:36296-36376 placement
 var terminalImagePainter = (image) => (id) =>
   buildKittyTransmitSequence({
     id,
@@ -314,9 +314,9 @@ var terminalImagePainter = (image) => (id) =>
     columns: image.columns,
     rows: image.rows,
   });
-//@ chunk-bc20zedk.js:36374-36386 placement
+//@ chunk-rkbsrtg1.js:36376-36388 placement
 var IMAGE_PROBE_TIMEOUT_MS = 5000;
-//@ chunk-bc20zedk.js:36386-36638 placement
+//@ chunk-rkbsrtg1.js:36388-36640 placement
 function createRefusalLogger(info) {
   let { plugin, requestId, key } = info;
   let label = key === undefined ? "Image" : `Image "${key}"`;
@@ -336,25 +336,25 @@ function createRefusalLogger(info) {
     );
   };
 }
-//@ chunk-bc20zedk.js:36638-36688 placement
+//@ chunk-rkbsrtg1.js:36640-36690 placement
 var EMPTY_IMAGE_STATE = {
   reactKey: undefined,
   source: undefined,
   box: undefined,
 };
-//@ chunk-bc20zedk.js:36688-36692 placement
+//@ chunk-rkbsrtg1.js:36690-36694 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:36688", () => {
+deferInit("chunk-rkbsrtg1.js:36690", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:36692-36753 placement
+//@ chunk-rkbsrtg1.js:36694-36755 placement
 var IMAGE_ID_WIDTHS = {
   indexed: 2,
   truecolor: 3,
   smallIdWidth: 8,
   wideIdWidth: 24,
 };
-//@ chunk-bc20zedk.js:36753-37034 placement
+//@ chunk-rkbsrtg1.js:36755-37036 placement
 function useImageProtocol() {
   let [protocol, setProtocol] = useState(terminalImageProtocol);
   useEffect(() => onImageProtocolSettled(setProtocol), []);
@@ -374,9 +374,9 @@ function useImageProtocol() {
     width: isWide ? IMAGE_ID_WIDTHS.wideIdWidth : IMAGE_ID_WIDTHS.smallIdWidth,
   };
 }
-//@ chunk-bc20zedk.js:37034-37038 placement
+//@ chunk-rkbsrtg1.js:37036-37040 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:37034", () => {
+deferInit("chunk-rkbsrtg1.js:37036", () => {
   init_react_production();
 });
 export {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 模拟调用的录制与回放（.replay 目录、按参数哈希命名）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (7)
  * attribution: placement 7
  */
 import { createHash } from "crypto";
@@ -20,7 +20,7 @@ import { MOCK_OUTPUT_MAX_CHARS } from "./agentMockResponder.js";
 import { checkRepoAuthoredPath } from "../../../cli/handlers/pluginEval/mockGuards.js";
 import { openNoFollow_2 } from "../../../utils/fsSafety/hardenedRead.js";
 
-//@ chunk-qchp9vrd.js:19805-19931 placement
+//@ chunk-af1hzzme.js:21145-21271 placement
 /**
  * 模拟录制的 schema。
  */
@@ -34,7 +34,7 @@ var mockRecordingSchema = DoctorLazy(() =>
     model: stringSchema().nullable(),
   }),
 );
-//@ chunk-qchp9vrd.js:19931-20237 placement
+//@ chunk-af1hzzme.js:21271-21577 placement
 function hashMockCallArgs({ server, tool, input, mockHash, prompt, history }) {
   let historyHash = createHash("sha256")
     .update(
@@ -58,13 +58,13 @@ function hashMockCallArgs({ server, tool, input, mockHash, prompt, history }) {
     .update([server, tool, canonicalJsonStringify(input), mockHash, promptHash, historyHash].join(" "))
     .digest("hex");
 }
-//@ chunk-qchp9vrd.js:20237-20396 placement
+//@ chunk-af1hzzme.js:21577-21736 placement
 function mockRecordingFileName(toolName, inputHash) {
   if (!/^[A-Za-z0-9_-]+$/.test(toolName) || !/^[0-9a-f]+$/.test(inputHash))
     throw Error("recording name components must be plain segments");
   return `${toolName}-${inputHash}.json`;
 }
-//@ chunk-qchp9vrd.js:20396-20696 placement
+//@ chunk-af1hzzme.js:21736-22036 placement
 async function readMockRecording(replayDir, toolName, keyPart, pinned) {
   let fileName = mockRecordingFileName(toolName, keyPart);
   let expectedHash = pinned[fileName];
@@ -83,7 +83,7 @@ async function readMockRecording(replayDir, toolName, keyPart, pinned) {
       }
     : null;
 }
-//@ chunk-qchp9vrd.js:20696-21227 placement
+//@ chunk-af1hzzme.js:22036-22567 placement
 /**
  * 加载 mocks/ 下的回放录制，同一调用多份时只取第一份并提示。
  */
@@ -113,7 +113,7 @@ async function loadMockReplayRecordings(recordingsDir, notes = []) {
   }
   return pinned;
 }
-//@ chunk-qchp9vrd.js:21227-21672 placement
+//@ chunk-af1hzzme.js:22567-23012 placement
 async function loadMockReplayRecording(replayDir, fileName) {
   try {
     let dir = path.dirname(path.dirname(replayDir));
@@ -147,7 +147,7 @@ async function loadMockReplayRecording(replayDir, fileName) {
     return null;
   }
 }
-//@ chunk-qchp9vrd.js:21672-21738 placement
+//@ chunk-af1hzzme.js:23012-23078 placement
 /**
  * 单次回放最多固定多少条录制（2000）。
  */

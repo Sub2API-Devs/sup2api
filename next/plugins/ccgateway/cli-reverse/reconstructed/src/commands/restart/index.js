@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/restart 命令：重启会话并可切换版本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { resetCursor } from "../../main.js";
@@ -26,7 +26,7 @@ import {
   getAllGrowthBookFeatures,
 } from "../../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:2039771-2039933 placement
+//@ chunk-5xgkngpb.js:2095600-2095762 placement
 /**
  * canRestartInPlace：TTY、macOS/Linux、非后台、非远程。
  */
@@ -39,7 +39,7 @@ function canRestartInPlace() {
   if (isBgSession()) return false;
   return !isRemoteSessionAvailable() && !getDisableSlashCommands();
 }
-//@ chunk-e6aww6q8.js:2039933-2039999 placement
+//@ chunk-5xgkngpb.js:2095762-2095829 placement
 /**
  * /restart 命令的可用性：可原地重启、GrowthBook 新鲜或被覆盖、且满足其他前置条件。
  */
@@ -51,7 +51,7 @@ function canRestartCommandRun() {
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, false) === true
   );
 }
-//@ chunk-e6aww6q8.js:2039999-2040076 placement
+//@ chunk-5xgkngpb.js:2095829-2095909 placement
 /**
  * isRestartFlagOn：tengu_fancy_wand。
  */
@@ -61,14 +61,14 @@ function isRestartFlagOn() {
     ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, false) === true
     : getAllGrowthBookFeatures()[TENGU_FANCY_WAND] === true;
 }
-//@ chunk-e6aww6q8.js:2040076-2040111 placement
+//@ chunk-5xgkngpb.js:2095909-2095944 placement
 /**
  * isRestartCommandEnabled：/restart 的 isEnabled。
  */
 function isRestartCommandEnabled() {
   return canRestartInPlace() && isRestartFlagOn();
 }
-//@ chunk-e6aww6q8.js:2040111-2040494 placement
+//@ chunk-5xgkngpb.js:2095944-2096327 placement
 /**
  * /restart 命令对象（local）；描述：{let e=TGt();return(e.kind==="newer"||e.kind==="older")&&rJn()===void 0?`Restart on ${e.version} and keep this session`:"Restart Claude Code；别名 ["update"]；isEnabled: Mrn；isHidden: {return!Mrn()}；实现 chunk-egxcxk6h.js 的 hzi。
  */
@@ -93,4 +93,4 @@ var restartCommandDefinition = {
   load: () => import("./restart.js"),
 };
 var restartCommand = restartCommandDefinition;
-export { restartCommand, canRestartCommandRun };
+export { canRestartCommandRun, restartCommand };

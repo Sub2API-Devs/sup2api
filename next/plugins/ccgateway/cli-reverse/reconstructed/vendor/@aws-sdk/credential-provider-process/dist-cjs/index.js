@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-process/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-process@3.936.0..3.972.46
- * pieces: chunk-skhq176t.js (5)
+ * pieces: chunk-aa9fw239.js (5)
  * attribution: esm-layout 3, esm-fingerprint 2
  */
 import { promisify } from "util";
@@ -12,12 +12,12 @@ import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 
-//@ chunk-skhq176t.js:335-350 esm-layout
+//@ chunk-aa9fw239.js:335-350 esm-layout
 var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
-//@ chunk-skhq176t.js:350-376 esm-layout
+//@ chunk-aa9fw239.js:350-376 esm-layout
 var import_property_provider = __toESM(require_property_provider());
 var import_shared_ini_file_loader_2 = __toESM(require_shared_ini_file_loader());
-//@ chunk-skhq176t.js:446-1211 esm-layout
+//@ chunk-aa9fw239.js:446-1211 esm-layout
 var client = __toESM(require_client());
 var getValidatedProcessCredentials = (profileName, data, profiles) => {
   if (data.Version !== 1) throw Error(`Profile ${profileName} credential_process did not return Version 1.`);
@@ -49,7 +49,7 @@ var getValidatedProcessCredentials = (profileName, data, profiles) => {
   client.setCredentialFeature(credentials, "CREDENTIALS_PROCESS", "w");
   return credentials;
 };
-//@ chunk-skhq176t.js:1211-1798 esm-fingerprint
+//@ chunk-aa9fw239.js:1211-1798 esm-fingerprint
 var resolveProcessCredentials = async (profileName, profiles, logger) => {
   let profile = profiles[profileName];
   if (profiles[profileName]) {
@@ -87,7 +87,7 @@ var resolveProcessCredentials = async (profileName, profiles, logger) => {
       },
     );
 };
-//@ chunk-skhq176t.js:1798-2022 esm-fingerprint
+//@ chunk-aa9fw239.js:1798-2022 esm-fingerprint
 var fromProcess =
   (init = {}) =>
   async ({ callerClientConfig } = {}) => {

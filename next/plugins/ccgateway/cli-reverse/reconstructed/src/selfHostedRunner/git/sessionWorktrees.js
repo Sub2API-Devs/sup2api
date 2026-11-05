@@ -3,9 +3,9 @@
  *
  * BYOC 会话工作树添加与删除（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t3sg9e26.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rzkdv0c6.js (7)
  * attribution: placement 7
  */
 import { dirname, resolve, basename, sep, join } from "path";
@@ -23,14 +23,14 @@ import { errorText } from "./tokenRedact.js";
 import { isPathAbsent } from "../../utils/errors.js";
 import { clearReparsePoints } from "../../utils/pathIdentity.js";
 
-//@ chunk-t3sg9e26.js:34198-34300 placement
+//@ chunk-rzkdv0c6.js:34202-34304 placement
 function sessionWorktreesRoot(canonicalRepoPath, worktreePath) {
   let root = dirname(dirname(resolve(worktreePath)));
   return basename(root) === "_sessions" && resolve(canonicalRepoPath).startsWith(dirname(root) + sep)
     ? root
     : commonPathPrefix(canonicalRepoPath, worktreePath);
 }
-//@ chunk-t3sg9e26.js:34300-34448 placement
+//@ chunk-rzkdv0c6.js:34304-34452 placement
 function commonPathPrefix(left, right) {
   let parts = resolve(left).split(sep);
   let parts_2 = resolve(right).split(sep);
@@ -38,7 +38,7 @@ function commonPathPrefix(left, right) {
   while (index < parts.length && index < parts_2.length && parts[index] === parts_2[index]) index++;
   return index >= 2 ? parts.slice(0, index).join(sep) : undefined;
 }
-//@ chunk-t3sg9e26.js:34448-35900 placement
+//@ chunk-rzkdv0c6.js:34452-35904 placement
 async function addSessionWorktree(options) {
   let { canonicalRepoPath, worktreePath, ref, onDebug, signal, gitEnvironment } = options;
   if (worktreePath === canonicalRepoPath)
@@ -113,7 +113,7 @@ async function addSessionWorktree(options) {
   );
   onDebug(`[byoc:git] Added worktree ${worktreePath} at ${commit.slice(0, 12)} (detached)`);
 }
-//@ chunk-t3sg9e26.js:35900-36653 placement
+//@ chunk-rzkdv0c6.js:35904-36657 placement
 /**
  * git worktree add --detach；若报"missing but already registered worktree"且允许修复，就注销该失效登记（带超时）后重试一次，注销失败则抛出原错误。
  */
@@ -156,13 +156,13 @@ async function addDetachedWorktree(ctx, repoPath, worktreePath, commit, allowRep
   }
   await addWorktree();
 }
-//@ chunk-t3sg9e26.js:36653-36772 placement
+//@ chunk-rzkdv0c6.js:36657-36776 placement
 async function pathSpellings(worktreePath) {
   let realParent = await realpath(dirname(worktreePath)).catch(() => null);
   let resolved = realParent === null ? null : join(realParent, basename(worktreePath));
   return resolved === null || resolved === worktreePath ? [worktreePath] : [worktreePath, resolved];
 }
-//@ chunk-t3sg9e26.js:36772-37920 placement
+//@ chunk-rzkdv0c6.js:36776-37924 placement
 async function removeSessionWorktree(options) {
   let { worktrees, onDebug, signal } = options;
   for (let { canonicalRepoPath, worktreePath } of worktrees) {
@@ -225,7 +225,7 @@ async function removeSessionWorktree(options) {
       },
     );
 }
-//@ chunk-t3sg9e26.js:37920-38120 placement
+//@ chunk-rzkdv0c6.js:37924-38124 placement
 function outcomeBranchesByRepo(outcomes) {
   let byRepo = new Map();
   for (let outcome of outcomes) {

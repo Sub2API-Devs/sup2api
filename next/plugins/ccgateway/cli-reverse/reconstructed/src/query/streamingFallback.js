@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：创建流式查询状态（助手消息、工具结果、执行器）；在回退链中找下一个可用模型（支持替换）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (4)
  * attribution: placement 4
  */
 import { logError } from "../utils/log.js";
 import { withTelemetryMessage, toError } from "../utils/errors.js";
 import { discardInFlightTools } from "../services/tools/StreamingToolExecutor.js";
 
-//@ chunk-ha3km179.js:140987-141375 placement
+//@ chunk-w3ch4xq2.js:149898-150286 placement
 /**
  * 在回退链中找下一个可用模型（支持替换）。
  */
@@ -46,7 +46,7 @@ function nextFallbackModel({ chain, from, failedModel, reason, substituteFor }) 
     anySubstituted,
   };
 }
-//@ chunk-ha3km179.js:141375-141728 placement
+//@ chunk-w3ch4xq2.js:150286-150639 placement
 /**
  * 采用回退响应中的工具调用。
  */
@@ -69,7 +69,7 @@ function adoptFallbackResponse(attemptState, keptFirstResponse) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:141728-141926 placement
+//@ chunk-w3ch4xq2.js:150639-150837 placement
 /**
  * 生成移除进行中工具调用 id 的操作。
  */
@@ -86,7 +86,7 @@ function clearInProgressToolUses(keptFirstResponse) {
     },
   };
 }
-//@ chunk-ha3km179.js:141926-142768 placement
+//@ chunk-w3ch4xq2.js:150837-151679 placement
 /**
  * 创建流式查询状态（助手消息、工具结果、执行器）。
  */

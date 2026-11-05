@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管环境变量安全检查（PROJECT_SCOPE_BLOCKED_ENV_VARS）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q4qb1h08.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-71parphm.js (26)
  * attribution: placement 26
  */
 import {
@@ -55,13 +55,13 @@ import { isHttpMcpServeInvocation } from "../entrypoints/mcpServeArgs.js";
 import { isChildScrubbedCredentialFamily, spellingIn } from "./subprocessEnv.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q4qb1h08.js:2261-2626 placement
+//@ chunk-71parphm.js:2276-2641 placement
 /**
  * 模型组合（lead/worker）配置 schema。
  */
 var ModelIdSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ModelMixSchema;
-deferInit("chunk-q4qb1h08.js:2261", () => {
+deferInit("chunk-71parphm.js:2276", () => {
   ModelIdSchema = () =>
     stringSchema()
       .trim()
@@ -87,28 +87,28 @@ deferInit("chunk-q4qb1h08.js:2261", () => {
     }),
   );
 });
-//@ chunk-q4qb1h08.js:2626-2648 placement
+//@ chunk-71parphm.js:2641-2663 placement
 /**
  * 个人作用域阻断的占位实现（不返回任何内容）。
  */
 function noPersonalScopeBlock() {
   return;
 }
-//@ chunk-q4qb1h08.js:2648-2662 placement
+//@ chunk-71parphm.js:2663-2677 placement
 /**
  * 空的环境处理钩子。
  */
 function noopEnvHook() {}
-//@ chunk-q4qb1h08.js:2662-2716 placement
+//@ chunk-71parphm.js:2677-2731 placement
 var REMOTE_LIKE_ENV_VARS = ["CLAUDE_CODE_REMOTE", "CLAUDE_CODE_IS_COWORK"];
-//@ chunk-q4qb1h08.js:2716-2769 placement
+//@ chunk-71parphm.js:2731-2784 placement
 /**
  * 判断环境中是否带有远程/协作会话标记。
  */
 function isRemoteLikeEnv(env_2) {
   return REMOTE_LIKE_ENV_VARS.some((varName) => (env_2 ? isEnvTruthy(env_2[varName]) : env[varName]));
 }
-//@ chunk-q4qb1h08.js:2769-10497 placement
+//@ chunk-71parphm.js:2784-11213 placement
 /**
  * 只能由宿主设置的环境变量名单（宿主凭据、会话令牌、沙箱与后台进程相关等）。
  */
@@ -119,7 +119,7 @@ var CHROME_RELATED_ENV_VARS;
 var HOSTED_ENV_VARS;
 var BRIDGE_ENV_VARS;
 var CHROME_ENV_VARS;
-deferInit("chunk-q4qb1h08.js:2769", () => {
+deferInit("chunk-71parphm.js:2784", () => {
   MANAGED_ENV_SAFETY_LISTS = [];
   HOST_ONLY_ENV_VARS = new Set([
     ...HOST_MANAGED_MARKER_ENV_VARS,
@@ -144,6 +144,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_CODE_TRANSCRIPT_LOCAL_GC",
     "CLAUDE_CODE_MANAGED_SETTINGS_PATH",
     "CLAUDE_CODE_EVAL_CONFINED",
+    "CLAUDE_CODE_TELEPORT_MOVE",
     "CLAUDE_CODE_SANDBOX_LEAVE_DENIES_TO_SRT_WIN",
     "CLAUDE_CODE_TUI_TRIAL",
     "CLAUDE_RELAUNCH_SESSION_ADD_DIRS",
@@ -158,6 +159,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_BG_WORKSPACE_TRUSTED",
     "CLAUDE_BG_CARRIED_PROMPTS_SHA256",
     "CLAUDE_CODE_RELAUNCH_HOME_TRUST",
+    "CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS",
     "CLAUDE_BRIDGE_REATTACH_SESSION",
     "CLAUDE_CODE_IGNORE_PERSISTED_TRUST",
     "CLAUDE_CODE_PROJECT_DIR_NAME",
@@ -199,6 +201,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "VOICE_STREAM_BASE_URL",
     "CLAUDE_CODE_POLL_EVENTS",
     "CLAUDE_CODE_POLL_EVENT_DECLARATIONS",
+    "CLAUDE_CODE_REPLY_GATE_POLICY",
     "CLAUDE_CODE_ACCOUNT_UUID",
     "CLAUDE_CODE_ORGANIZATION_UUID",
     "CLAUDE_CODE_USER_EMAIL",
@@ -214,6 +217,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CCR_AGENT_PROXY_INCLUDE_HOSTS",
     "CCR_AGENT_PROXY_RECEIVE_GATE_DISABLED",
     "CCR_AGENT_PROXY_UPLOAD_GATE_DISABLED",
+    "CCR_AGENT_PROXY_MAX_BUSY_TUNNELS",
     "CCR_AGENT_PROXY_JAVA_STORE_DIRECT_DISABLED",
     "CCR_AGENT_PROXY_NO_PROXY_LOCAL_ONLY",
     "CCR_AGENT_PROXY_CA_WATCH_ENABLED",
@@ -230,6 +234,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT",
     "CLAUDE_CODE_MCP_SERVE_INTERFACE_MIN_VERSION",
     "CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS",
+    "CLAUDE_CODE_MCP_SERVE_TUNNEL_BINARY_FRAMES",
     ...[],
     "CLAUDE_CODE_AGENT_PROXY_GIT_CONFIG",
     "CLAUDE_CODE_AGENT_PROXY_GH_SHIM",
@@ -253,6 +258,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_CODE_SYNC_PLUGINS_DOWNLOAD_CONCURRENCY",
     "CLAUDE_CODE_CCR_FOLD_FIRST_TURN_RESCAN",
     "CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD",
+    "CLAUDE_CODE_CCR_SLOW_SKILLS_WATCH",
     "CLAUDE_CODE_MCP_REGISTRY_FETCH_AT_STARTUP",
     "CLAUDE_CODE_MCP_ALWAYS_LOAD_JOIN_BEFORE_INPUT",
     "CLAUDE_CODE_CHROME_LATE_MCP_SERVER",
@@ -267,25 +273,32 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_CODE_ATTACHMENTS_IN_USER_DATA",
     "CLAUDE_CODE_MANAGED_CONFIG_PREFETCH",
     "CLAUDE_CODE_CONFIG_WATCH_EVENTS",
+    "CLAUDE_CODE_SPARE_KEEPS_BOOT_SESSION_ID",
     "CLAUDE_CODE_FLAG_FETCH_WAIT_MS",
     "CLAUDE_CODE_GB_DISK_CACHE_WHEN_TELEMETRY_OFF",
     "CLAUDE_CODE_HOME_SEED_HOLD_TIMEOUT_MS",
     "CLAUDE_CODE_HOME_SEED_VERDICT_TIMEOUT_MS",
     "CLAUDE_CODE_TRANSCRIPT_SLIM_TOOL_RESULTS",
+    "CLAUDE_CODE_DISABLE_STOP_OF_HELD_MESSAGES",
     "CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS",
     "CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP",
     "CLAUDE_CODE_PLAIN_DELTA_FAST_PATH",
+    "CLAUDE_CODE_PLAIN_DELTA_DIRECT_WRITE",
+    "CLAUDE_CODE_PLAIN_DELTA_TAKE_AT_SOURCE",
+    "CLAUDE_CODE_STREAM_TIMER_SLACK_MS",
     "CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS",
+    "CLAUDE_CODE_MAIN_REPLY_HOLD_MS",
+    "CLAUDE_CODE_REMOTE_STALL_CHECK_INTERVAL_MS",
     "CLAUDE_CODE_STREAM_EVENT_HOLD_MS",
     "CLAUDE_CODE_STREAM_EVENT_MAX_LINE_BYTES",
     "CLAUDE_CODE_DISABLE_HOOK_FORWARDING",
     "CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING",
     "CLAUDE_CODE_DISABLE_TURN_HANDOFF",
     "CLAUDE_CODE_DISABLE_HELD_MESSAGE_RECOGNITION",
-    "CLAUDE_CODE_LAZY_ENV_GETTERS",
     "CLAUDE_CODE_RESTRICTED",
     "CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG",
     "CLAUDE_CODE_PERSONAL_CONFIG_FIX",
+    "CLAUDE_CODE_PERSONAL_HOOKS_OFF",
   ]);
   CHROME_RELATED_ENV_VARS = new Set([
     "CLAUDE_REMOTE_WORKFLOW_SCRIPT",
@@ -294,10 +307,13 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
   ]);
   HOSTED_ENV_VARS = new Set([
     "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_PROGRAM_USE_CASE_ID",
+    "CLAUDE_CODE_PROGRAM_USE_CASE_STAMPED",
     "CLAUDE_CODE_ENTRYPOINT_ON_REQUESTS",
     "CLAUDE_CODE_HOST_SESSION_ID",
     "CLAUDE_CODE_HOST_WORKTREE",
     "CLAUDE_CODE_HOST_WORKTREE_FENCE",
+    "CLAUDE_CODE_HOST_SHORT_TEMP_DIRS",
     "CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST",
     "CLAUDE_CODE_IS_COWORK",
     "CLAUDE_CODE_COWORK_FRAME_ARTIFACTS",
@@ -309,6 +325,8 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_CODE_SESSION_ORIGIN",
     "CLAUDE_CODE_SESSION_BEGAN_AS_COPY",
     "CLAUDE_CODE_WITTY_DEWDROP",
+    "CLAUDE_CODE_FIZZY_GROVE",
+    "CLAUDE_CODE_DEEP_TWILIGHT",
     "CLAUDE_CODE_CCR_EVENT_FLUSH_POLICY",
     "SYSTEM_REMINDER_MEMORY_CONTEXT",
     "CLAUDE_CODE_MEMORY_CONTEXT_NO_WAIT",
@@ -349,6 +367,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     "CLAUDE_STAGE_FILE_ROOT",
     "CLAUDE_CODE_DIFF_COPY_ROOT",
     "CLAUDE_CODE_FOUND_REPOSITORY_GIT",
+    "CLAUDE_CODE_ULTRAREVIEW_LAUNCH_RECORD",
   ]);
   CHROME_ENV_VARS = new Map([
     ["CLAUDE_CHROME_CLASSIFIER_FLOOR", "1"],
@@ -356,7 +375,7 @@ deferInit("chunk-q4qb1h08.js:2769", () => {
     ["CLAUDE_CODE_ENABLE_CFC", "0"],
   ]);
 });
-//@ chunk-q4qb1h08.js:10497-10686 placement
+//@ chunk-71parphm.js:11213-11402 placement
 function isSafeChromeEnvValue(key, value) {
   switch (key) {
     case "CLAUDE_CHROME_CLASSIFIER_FLOOR":
@@ -369,9 +388,9 @@ function isSafeChromeEnvValue(key, value) {
       return false;
   }
 }
-//@ chunk-q4qb1h08.js:10686-10720 placement
+//@ chunk-71parphm.js:11402-11436 placement
 var CLAUDE_CODE_DISABLE_DIR = "CLAUDE_CODE_DISABLE_DIR_";
-//@ chunk-q4qb1h08.js:10720-10927 placement
+//@ chunk-71parphm.js:11436-11647 placement
 function isRestrictedEnvKey(key, value) {
   let key_2 = key.toUpperCase();
   return (
@@ -383,19 +402,20 @@ function isRestrictedEnvKey(key, value) {
     BRIDGE_ENV_VARS.has(key_2) ||
     (CHROME_ENV_VARS.has(key_2) && isRemoteLikeEnv() && !isSafeChromeEnvValue(key_2, value)) ||
     false ||
-    key_2 === "CLAUDE_CODE_REMOTE_TOOLS_FORWARD"
+    key_2 === "CLAUDE_CODE_REMOTE_TOOLS_FORWARD" ||
+    false
   );
 }
-//@ chunk-q4qb1h08.js:10927-10983 placement
+//@ chunk-71parphm.js:11647-11703 placement
 /**
  * 判断某环境变量是否只能由宿主提供。
  */
 function isHostOnlyEnvKey(key, value) {
   return HOST_ONLY_ENV_VARS.has(key.toUpperCase()) || isRestrictedEnvKey(key, value);
 }
-//@ chunk-q4qb1h08.js:10983-11179 placement
+//@ chunk-71parphm.js:11703-11899 placement
 var PROVIDER_CREDENTIAL_ENV_VARS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:10983", () => {
+deferInit("chunk-71parphm.js:11703", () => {
   PROVIDER_CREDENTIAL_ENV_VARS = new Set([
     "ANTHROPIC_UNIX_SOCKET",
     "ANTHROPIC_BASE_URL",
@@ -407,7 +427,7 @@ deferInit("chunk-q4qb1h08.js:10983", () => {
     ),
   ]);
 });
-//@ chunk-q4qb1h08.js:17210-18297 placement
+//@ chunk-71parphm.js:18280-19368 placement
 /**
  * 从项目设置环境中去掉受限变量并按变量提示一次。
  */
@@ -448,15 +468,15 @@ function stripProjectBlockedEnv(env, source, warnedKeys, hostContext, onGitKeyDr
   }
   return filteredEnv ?? env;
 }
-//@ chunk-q4qb1h08.js:18297-18382 placement
+//@ chunk-71parphm.js:19368-19453 placement
 var ENV_ENTRY_PROBLEM_TEXT_ALL; // deferred: uses ENV_ENTRY_PROBLEM_TEXT (./envValidation.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:18297", () => {
+deferInit("chunk-71parphm.js:19368", () => {
   ENV_ENTRY_PROBLEM_TEXT_ALL = {
     ...ENV_ENTRY_PROBLEM_TEXT,
     "non-string-value": "its value isn't a string, a number or a boolean",
   };
 });
-//@ chunk-q4qb1h08.js:18382-18788 placement
+//@ chunk-71parphm.js:19453-19859 placement
 /**
  * 去掉被忽略的环境项、把数字/布尔转字符串并记 warn。
  */
@@ -497,12 +517,12 @@ function dropIgnoredEnvEntries(env, source, invalidEnvKeyWarned) {
   }
   return filteredEnv ?? env;
 }
-//@ chunk-q4qb1h08.js:18788-18840 placement
+//@ chunk-71parphm.js:19859-19911 placement
 var POLICY_FALSY_ALLOWED_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q4qb1h08.js:18788", () => {
+deferInit("chunk-71parphm.js:19859", () => {
   POLICY_FALSY_ALLOWED_ENV_VARS = new Set(["CLAUDE_CODE_TRANSCRIPT_LOCAL_GC"]);
 });
-//@ chunk-q4qb1h08.js:18840-18919 placement (2.1.88 match: _temp7, 0.791)
+//@ chunk-71parphm.js:19911-19990 placement (2.1.88 match: _temp7, 0.791)
 function isPolicyFalsyAllowedEnv(key, value, source) {
   return (
     source === "policySettings" &&
@@ -510,12 +530,12 @@ function isPolicyFalsyAllowedEnv(key, value, source) {
     isEnvDefinedFalsy(value)
   );
 }
-//@ chunk-q4qb1h08.js:18919-18970 placement
+//@ chunk-71parphm.js:19990-20041 placement
 var ATTRIBUTION_HEADER_ENV; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q4qb1h08.js:18919", () => {
+deferInit("chunk-71parphm.js:19990", () => {
   ATTRIBUTION_HEADER_ENV = new Set(["CLAUDE_CODE_ATTRIBUTION_HEADER"]);
 });
-//@ chunk-q4qb1h08.js:18970-19086 placement (2.1.88 match: _temp7, 0.791)
+//@ chunk-71parphm.js:20041-20157 placement (2.1.88 match: _temp7, 0.791)
 function isGatewayBackedPolicyDisable(envName, value, source) {
   return (
     source === "policySettings" &&
@@ -526,7 +546,7 @@ function isGatewayBackedPolicyDisable(envName, value, source) {
     isEnvDefinedFalsy(getRemoteManagedSettingsSyncFromCache()?.env?.[envName])
   );
 }
-//@ chunk-q4qb1h08.js:19086-19611 placement
+//@ chunk-71parphm.js:20157-20682 placement
 /**
  * 主机托管提供方时忽略设置中的变量（只提示一次）。
  */
@@ -543,7 +563,7 @@ function warnHostManagedEnvIgnored(warned, envName, source, desktopHost = false)
     },
   );
 }
-//@ chunk-q4qb1h08.js:19611-20486 placement
+//@ chunk-71parphm.js:20682-21557 placement
 /**
  * 按主机托管、Cowork 云、混合连接等条件过滤设置环境变量。
  */
@@ -602,7 +622,7 @@ function filterHostManagedEnv(env, source, facts, warned) {
   }
   return kept;
 }
-//@ chunk-q4qb1h08.js:20921-21271 placement
+//@ chunk-71parphm.js:21992-22342 placement
 /**
  * 宿主已提供的变量从设置中忽略的提示。
  */
@@ -622,17 +642,17 @@ function warnHostSuppliedEnv(envNames, source, warned) {
     },
   );
 }
-//@ chunk-q4qb1h08.js:21271-21368 placement
+//@ chunk-71parphm.js:22342-22439 placement
 /**
  * 需要清理的子进程环境变量，以及 OTEL 环境变量集合。
  */
 var SUBPROCESS_SCRUB_ENV_VARS; // deferred: uses OTEL_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
 var OTEL_ENV_VAR_SET;
-deferInit("chunk-q4qb1h08.js:21271", () => {
+deferInit("chunk-71parphm.js:22342", () => {
   SUBPROCESS_SCRUB_ENV_VARS = new Set(["CLAUDE_CODE_SUBPROCESS_ENV_SCRUB", "CLAUDE_CODE_PERFORCE_MODE"]);
   OTEL_ENV_VAR_SET = new Set(OTEL_ENV_VARS);
 });
-//@ chunk-q4qb1h08.js:21368-21483 placement
+//@ chunk-71parphm.js:22439-22554 placement
 function isServeBlockedEnv(envName, value) {
   let upper = envName.toUpperCase();
   return (
@@ -646,14 +666,14 @@ function isServeBlockedEnv(envName, value) {
     !(SUBPROCESS_SCRUB_ENV_VARS.has(upper) && isEnvTruthy(value))
   );
 }
-//@ chunk-q4qb1h08.js:21483-21538 placement
+//@ chunk-71parphm.js:22554-22609 placement
 /**
  * 判断是否为颜色控制环境变量（NO_COLOR/FORCE_COLOR）。
  */
 function isColorEnvVar(envName) {
   return envName === "NO_COLOR" || envName === "FORCE_COLOR";
 }
-//@ chunk-q4qb1h08.js:21538-21802 placement
+//@ chunk-71parphm.js:22609-22873 placement
 function applyDirectEnvKeys(env, targetEnv, settingsEnvForChildrenFromRepository, fromRepository) {
   if (!env) return {};
   let applied = {};
@@ -675,7 +695,7 @@ function applyDirectEnvKeys(env, targetEnv, settingsEnvForChildrenFromRepository
   }
   return applied;
 }
-//@ chunk-q4qb1h08.js:21802-21865 placement
+//@ chunk-71parphm.js:22873-22936 placement
 /**
  * 判断是否被策略显式关掉了模型目录环境开关。
  */
@@ -684,9 +704,6 @@ function isCatalogDisabledByPolicy(envName, value) {
 }
 export {
   PROVIDER_CREDENTIAL_ENV_VARS,
-  isRemoteLikeEnv,
-  isGatewayBackedPolicyDisable,
-  warnHostSuppliedEnv,
   noPersonalScopeBlock,
   isHostOnlyEnvKey,
   isSafeChromeEnvValue,
@@ -702,4 +719,7 @@ export {
   OTEL_ENV_VAR_SET,
   isServeBlockedEnv,
   noopEnvHook,
+  isGatewayBackedPolicyDisable,
+  warnHostSuppliedEnv,
+  isRemoteLikeEnv,
 };

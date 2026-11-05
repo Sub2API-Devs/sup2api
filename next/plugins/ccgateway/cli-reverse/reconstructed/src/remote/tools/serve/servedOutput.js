@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。把远端服务调用的输出编码为工具结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9fr8dc9p.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9qqbv5eq.js (3)
  * attribution: placement 3
  */
 import { randomBytes } from "crypto";
@@ -14,7 +14,7 @@ import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 import { currentMachineLabel } from "../../../bridge/deviceRegistration.js";
 import { getCwd } from "../../../utils/cwd.js";
 
-//@ chunk-9fr8dc9p.js:343-503 placement
+//@ chunk-9qqbv5eq.js:343-503 placement
 function encodeUnlistedToolResult(tool, update) {
   let result = tool.mapToolResultToToolResultBlockParam(
     update.data,
@@ -22,7 +22,7 @@ function encodeUnlistedToolResult(tool, update) {
   );
   return encodeServedOutput(result?.content ?? "", update.data, result?.is_error === true);
 }
-//@ chunk-9fr8dc9p.js:503-663 placement
+//@ chunk-9qqbv5eq.js:503-663 placement
 /**
  * 把远端服务调用的输出编码为工具结果。
  */
@@ -42,7 +42,7 @@ function encodeServedOutput(content, output, isError = false, notes = []) {
     content,
   });
 }
-//@ chunk-9fr8dc9p.js:663-713 placement
+//@ chunk-9qqbv5eq.js:663-713 placement
 function servedTarget() {
   return {
     name: currentMachineLabel(),

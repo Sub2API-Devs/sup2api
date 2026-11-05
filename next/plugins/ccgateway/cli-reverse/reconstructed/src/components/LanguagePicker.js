@@ -3,9 +3,9 @@
  *
  * 回复/语音语言设置输入框（留空为默认英语）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LanguagePicker.tsx
- * pieces: chunk-9h8dr0qb.js (1)
+ * pieces: chunk-j6tt9nsa.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -20,7 +20,7 @@ import { Text, Box } from "../ink/components/Text.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { TextInput } from "./TextInput.js";
 
-//@ chunk-9h8dr0qb.js:10277-11300 fingerprint (2.1.88 match: LanguagePicker, 0.822)
+//@ chunk-j6tt9nsa.js:10262-11278 fingerprint (2.1.88 match: LanguagePicker, 0.822)
 function LanguagePicker(props) {
   let $ = useMemoCache(13);
   let { initialLanguage, onComplete, onCancel } = props;

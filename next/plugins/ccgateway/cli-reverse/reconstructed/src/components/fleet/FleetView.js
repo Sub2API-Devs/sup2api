@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Agents（fleet）视图主组件：管理会话名单、选择、编辑器、附加与派发；Agents 视图的键盘处理：导航、打开、派发、重命名、分组、删除、搜索、vim 模式等等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (17)
  * attribution: placement 17
  */
 import { isDeepStrictEqual } from "util";
@@ -166,7 +166,7 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { getCwd } from "../../utils/cwd.js";
 import { canonicalizePath } from "../../utils/sessionStoragePortable.js";
 import { getRealPathOptions } from "../../utils/sessionStorage.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { useDoublePress } from "../../keybindings/useActionHandlers.js";
 import { useTerminalFocus } from "../../ink/hooks/use-terminal-focus.js";
 import { useAppState, useAppState_2 } from "../../state/AppState.js";
@@ -204,6 +204,7 @@ import { getSecondRootError, enterAltScreenSequence, exitAltScreenSequence } fro
 import { openClickedLink } from "../../utils/browser.js";
 import { getAuthTokenSource } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
+import { countWhere } from "../../utils/collections.js";
 import { usePasteHandler } from "../../hooks/usePasteHandler.js";
 import { PasteEvent } from "../../ink/frame.js";
 import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
@@ -242,14 +243,14 @@ import { attachJob } from "../../daemon/jobs/killJob.js";
 import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 
-//@ chunk-93kwxas0.js:5808-5932 placement
+//@ chunk-avy0g5d4.js:5876-6000 placement
 function fleetAttachFields(id, originJobId, visitCount) {
   return {
     attach_kind: !originJobId ? lit("no_origin") : id === originJobId ? lit("origin_return") : lit("other"),
     is_first_attach_of_visit: visitCount === 0,
   };
 }
-//@ chunk-93kwxas0.js:163196-164309 placement
+//@ chunk-avy0g5d4.js:163467-164580 placement
 /**
  * 在同组内上下移动当前会话（固定排序）。
  */
@@ -313,7 +314,7 @@ function reorderFocusedJob(context, direction) {
   );
   selection.queueOrderWrites(orders, sortByState ? "state" : "directory");
 }
-//@ chunk-93kwxas0.js:164309-177025 placement
+//@ chunk-avy0g5d4.js:164580-177308 placement
 /**
  * Agents 视图的键盘处理：导航、打开、派发、重命名、分组、删除、搜索、vim 模式等。
  */
@@ -1024,7 +1025,7 @@ function handleFleetKey(ctx, event) {
       selection.followOrigin = focusedRow.group;
       selection.followId = null;
       if (deleteConfirm.pending?.id !== headerArmId(focusedRow.group)) {
-        deleteConfirm.arm(headerArmId(focusedRow.group));
+        deleteConfirm.armHeader(headerArmId(focusedRow.group));
         return;
       }
       deleteConfirm.disarm();
@@ -1035,7 +1036,7 @@ function handleFleetKey(ctx, event) {
       selection.followOrigin = focusedRow.group;
       selection.followId = null;
       if (deleteConfirm.pending?.id !== headerArmId(focusedRow.group)) {
-        deleteConfirm.arm(headerArmId(focusedRow.group));
+        deleteConfirm.armHeader(headerArmId(focusedRow.group));
         return;
       }
       deleteConfirm.disarm();
@@ -1118,10 +1119,10 @@ function handleFleetKey(ctx, event) {
   }
   searchKeyDown(event);
 }
-//@ chunk-93kwxas0.js:177067-177083 placement
+//@ chunk-avy0g5d4.js:177350-177366 placement
 var EMPTY_REPO_UPDATES = {};
 var EMPTY_CATALOG_STATE = {};
-//@ chunk-93kwxas0.js:177083-178405 placement
+//@ chunk-avy0g5d4.js:177366-178688 placement
 /**
  * 派发建议数据存储（模板、技能、routine、子仓库、worktree）。
  */
@@ -1227,11 +1228,11 @@ class FleetCatalogStore {
     };
   }
 }
-//@ chunk-93kwxas0.js:178405-178444 placement
+//@ chunk-avy0g5d4.js:178688-178727 placement
 function ensureFleetCatalog(visit) {
   return (visit.scope ??= new FleetCatalogStore());
 }
-//@ chunk-93kwxas0.js:178444-178556 placement
+//@ chunk-avy0g5d4.js:178727-178839 placement
 /**
  * 目录项变化时返回新 Map，否则 null。
  */
@@ -1240,12 +1241,12 @@ function updateCatalogEntry(entries, key, updates, emptyState) {
   if (isDeepStrictEqual(entries.get(key), next)) return null;
   return new Map(entries).set(key, next);
 }
-//@ chunk-93kwxas0.js:178556-178560 placement
+//@ chunk-avy0g5d4.js:178839-178843 placement
 init_react_production();
-//@ chunk-93kwxas0.js:178560-178586 placement
+//@ chunk-avy0g5d4.js:178843-178869 placement
 var NEEDS_INPUT_PREVIEW_CHARS = 120;
 var IDLE_SEED = "idle-seed";
-//@ chunk-93kwxas0.js:178586-179308 placement
+//@ chunk-avy0g5d4.js:178869-179591 placement
 /**
  * 比较会话所在分区的变化，生成"需要输入/已完成"通知。
  */
@@ -1297,7 +1298,7 @@ function diffJobBands(previousBands, jobs) {
     notified,
   };
 }
-//@ chunk-93kwxas0.js:179308-179650 placement
+//@ chunk-avy0g5d4.js:179591-179933 placement
 /**
  * 会话分区变化时发通知的 hook。
  */
@@ -1322,9 +1323,9 @@ function useJobBandNotifications(bands, storageV5) {
         });
   });
 }
-//@ chunk-93kwxas0.js:179650-179660 placement
+//@ chunk-avy0g5d4.js:179933-179943 placement
 var EMPTY_REMOTE_JOBS = [];
-//@ chunk-93kwxas0.js:179660-199227 placement
+//@ chunk-avy0g5d4.js:179943-199324 placement
 /**
  * Agents（fleet）视图主组件：管理会话名单、选择、编辑器、附加与派发。
  */
@@ -1352,7 +1353,7 @@ function FleetView({
   let keybindings = useFleetBindings();
   let isSimpleView = isAgentsSimpleViewEnabled();
   let wantsRemote = !isSimpleView || !!initialJobId?.startsWith("remote-");
-  let le = false;
+  let skipInit = false;
   useTimeout(
     () => {
       if (!isRawModeSupported) return;
@@ -1384,7 +1385,7 @@ function FleetView({
   let { focusedIdx, hoverFocusIdx, collapsed, capExpanded, draftPick, followOrigin } =
     useStoreSelector(selection);
   let groupsEnabled = false;
-  let Yt = useRef(false);
+  let renamingRef = useRef(false);
   let [view] = useState(() => ensureFleetViewStore(hostState, groupsEnabled, "local"));
   let {
     groupMode,
@@ -1457,7 +1458,9 @@ function FleetView({
   }, [catalog, cwd]);
   let repoUpdates = childRepos.get(cwd) ?? EMPTY_REPO_UPDATES;
   let worktreeState = repoWorktrees.get(cwd) ?? EMPTY_CATALOG_STATE;
-  let joined = uniq([...(jobs ?? []), ...adoptedPeers].map((job) => spawnOrigin(job.state)))
+  let joined = normalizeCaseForComparison_2(
+    [...(jobs ?? []), ...adoptedPeers].map((job) => spawnOrigin(job.state)),
+  )
     .sort()
     .join("\x00");
   let { allRepos, worktreeBranches } = useMemo(() => {
@@ -1940,7 +1943,7 @@ function FleetView({
     let rootError = getSecondRootError().get(process.stdout);
     if (!rootError) return;
     rootError.onHyperlinkClick = (url) => {
-      let et = false;
+      let hyperlinkReady = false;
       let { activeTab, previewOpen } = view.getSnapshot();
       let { error } = editor.getSnapshot();
       openClickedLink(url);
@@ -2054,7 +2057,7 @@ function FleetView({
   useTerminalTitle(
     disableTitle
       ? null
-      : terminalTitle(count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked")),
+      : terminalTitle(countWhere(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked")),
   );
   useJobBandNotifications(
     scopedLocalJobs
@@ -2404,7 +2407,7 @@ function FleetView({
     handlePaste_4(paste);
   };
   let isReady = jobs !== null && !isAutoOpening;
-  let jE = useRef(null);
+  let frameRef = useRef(null);
   let inputClock = useInputClock();
   let { subscribeFrames } = useContext(APP_CONTEXT);
   useLayoutEffect(() => {
@@ -2584,20 +2587,20 @@ function FleetView({
     ],
   });
 }
-//@ chunk-93kwxas0.js:199227-199239 placement
+//@ chunk-avy0g5d4.js:199324-199336 placement
 var awayLoopApi = null;
-//@ chunk-93kwxas0.js:199239-199279 placement
+//@ chunk-avy0g5d4.js:199336-199376 placement
 function seedHostJobs(visit, jobs, storageV5) {
   ensureFleetRoster(visit, storageV5).seedJobs(jobs);
 }
-//@ chunk-93kwxas0.js:199279-199412 placement
+//@ chunk-avy0g5d4.js:199376-199509 placement
 function remountClearSeq(inAltScreen, lastFrameFillsCurrentViewport, frameClean) {
   if (inAltScreen) return enterAltScreenSequence();
   let rows = getTerminalSize(process.stdout, null).rows;
   if (rows !== process.stdout.rows) return "";
   return lastFrameFillsCurrentViewport && !frameClean ? eraseViewportInPlace(rows) : "";
 }
-//@ chunk-93kwxas0.js:199412-209165 placement
+//@ chunk-avy0g5d4.js:199509-209119 placement
 async function mountFleetView(renderer, options) {
   let resized = false;
   function onResize() {
@@ -2673,7 +2676,6 @@ async function mountFleetView(renderer, options) {
   let canGoBackNow = autoOpenJobId !== undefined && options?.canGoBack && cloudCommand === undefined;
   let visitedJobIds = [];
   let endedJobIds = new Set();
-  let skippedJobId;
   let resumedTab = false;
   let firstLoop = false;
   let takenJobIds = new Set();
@@ -2970,11 +2972,7 @@ async function mountFleetView(renderer, options) {
     let cleanupExitHook = fullscreen
       ? onExit(() => void process.stdout.write(exitAltScreenSequence() + exitNotice))
       : () => {};
-    if (
-      CLAUDE_AGENTS_SELECT !== undefined &&
-      CLAUDE_AGENTS_SELECT !== action.job.id &&
-      CLAUDE_AGENTS_SELECT !== skippedJobId
-    ) {
+    if (CLAUDE_AGENTS_SELECT !== undefined && CLAUDE_AGENTS_SELECT !== action.job.id) {
       let selectedJobId = CLAUDE_AGENTS_SELECT;
       visitedJobIds.splice(
         0,
@@ -2984,7 +2982,6 @@ async function mountFleetView(renderer, options) {
       );
     }
     CLAUDE_AGENTS_SELECT = action.job.id;
-    skippedJobId = undefined;
     if (!action.keepQuery) fleetEditor.dropDraft();
     fleetHost.agentLastUsedMigrationDone = true;
     let now = Date.now();
@@ -3182,15 +3179,6 @@ async function mountFleetView(renderer, options) {
             landing: nextTab.landing,
           }),
         };
-        if (attachEnding.kind === "asked" && attachEnding.intent.kind === "quit") {
-          let id = action.job.id;
-          skippedJobId = id;
-          visitedJobIds.splice(
-            0,
-            visitedJobIds.length,
-            ...visitedJobIds.filter((visitedId) => visitedId !== id),
-          );
-        }
         resumedTab = !nextTab.asked;
         booting = nextTab.booting;
         canGoBackNow = false;

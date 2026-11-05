@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：恢复会话时带过 Artifact 状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (40)
  * attribution: placement 40
  */
 import {
@@ -30,7 +30,7 @@ import {
   parseArtifactUrlInput,
 } from "./constants.js";
 import { WEBFETCH } from "../WebFetchTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { CLAUDE_ARTIFACTS } from "../../services/mcp/firstPartyServerIds.js";
 import {
@@ -39,7 +39,7 @@ import {
   deletedSlugFromResult,
   publishedArtifactFromResult,
 } from "./actionNames.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { artifactViewerUrlFor, canonicalArtifactTargetFor, sanitizeArtifactTitle } from "./artifactUrls.js";
 import { stripRejectBreakerNotice } from "../../services/artifacts/rejectBreaker.js";
 import { unlinkPath, linkPathToSlug, retainPathLinks } from "../../services/artifacts/shareEntries.js";
@@ -49,33 +49,33 @@ import { unescapeBasicHtmlEntities } from "../../utils/confusables.js";
 import { runBundledSkillSessionResets } from "../../skills/bundledSkills.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1860017-1860052 placement
+//@ chunk-5xgkngpb.js:1938778-1938813 placement
 var ATTACHED = "attached:";
 var CREATED = "created:";
-//@ chunk-e6aww6q8.js:1860052-1860100 placement
+//@ chunk-5xgkngpb.js:1938813-1938861 placement
 /**
  * 判断 frameUrl 键是否属于「created:」前缀。
  */
 function isCreatedFrameUrl(url) {
   return url.startsWith("created:");
 }
-//@ chunk-e6aww6q8.js:1860100-1860117 placement
+//@ chunk-5xgkngpb.js:1938861-1938878 placement
 var OPENED = "opened:";
-//@ chunk-e6aww6q8.js:1860117-1860210 placement
+//@ chunk-5xgkngpb.js:1938878-1938971 placement
 /**
  * 判断 frameUrl 键是否属于 attached/created/opened 之一。
  */
 function isPersistableFrameUrl(url) {
   return url.startsWith("attached:") || url.startsWith("created:") || url.startsWith(OPENED);
 }
-//@ chunk-e6aww6q8.js:1860210-1860283 placement
+//@ chunk-5xgkngpb.js:1938971-1939044 placement
 /**
  * 去掉 opened 前缀后的 frameUrl 条目。
  */
 function nonOpenedFrameUrls(frameUrls) {
   return Object.entries(frameUrls).filter(([key]) => !key.startsWith(OPENED));
 }
-//@ chunk-e6aww6q8.js:1860283-1860410 placement
+//@ chunk-5xgkngpb.js:1939044-1939171 placement
 /**
  * 选出需要持久化的 frameUrls 行：在恢复保留集合中的，或本会话经 MCP 发布的。
  */
@@ -85,7 +85,7 @@ function frameUrlRowsToPersist(frameUrls) {
     ([key, value]) => persistableKeys.has(key) || value.mcpPublishedHere === true,
   );
 }
-//@ chunk-e6aww6q8.js:1860410-1860536 placement
+//@ chunk-5xgkngpb.js:1939171-1939297 placement
 /**
  * 把 frameUrl 行转换成持久化记录（url、标题、图标、类型 frame、更新时间）。
  */
@@ -98,9 +98,9 @@ function frameUrlToRecord(entry) {
     updated_at: new Date(entry.updatedAt).toISOString(),
   };
 }
-//@ chunk-e6aww6q8.js:1860536-1860548 placement
+//@ chunk-5xgkngpb.js:1939297-1939309 placement
 var MAX_CARRIED_READ_VERSIONS = 256;
-//@ chunk-e6aww6q8.js:1860548-1860838 placement
+//@ chunk-5xgkngpb.js:1939309-1939599 placement
 /**
  * 收集压缩前需要保留的 Artifact 读版本：主线程观察过、且尚未作为同版本未注入的读取送达的 slug（最近的在前，最多 R3e 个）。
  */
@@ -120,7 +120,7 @@ function unconsumedReadVersions(appState) {
   }
   return result.reverse().slice(0, MAX_CARRIED_READ_VERSIONS);
 }
-//@ chunk-e6aww6q8.js:1860838-1860964 placement
+//@ chunk-5xgkngpb.js:1939599-1939726 placement
 /**
  * 压缩时（可恢复的情况下）把尚未送达的 Artifact 读版本写入压缩元数据。
  */
@@ -129,7 +129,7 @@ function stampPreCompactReadVersions(boundaryMarker, agentId, appState) {
   let versions = unconsumedReadVersions(appState);
   if (versions !== undefined) boundaryMarker.compactMetadata.preCompactArtifactReadVersions = versions;
 }
-//@ chunk-e6aww6q8.js:1860964-1861106 placement
+//@ chunk-5xgkngpb.js:1939726-1939868 placement
 function logResumeCarry(carry, held) {
   if (carry.boundaries === 0) return;
   logFeatureOk("artifact_resume_carry", {
@@ -139,7 +139,7 @@ function logResumeCarry(carry, held) {
     held,
   });
 }
-//@ chunk-e6aww6q8.js:1861106-1861280 placement
+//@ chunk-5xgkngpb.js:1939868-1940042 placement
 class ArtifactTargetOrder {
   order = [];
   touch(slug) {
@@ -154,20 +154,20 @@ class ArtifactTargetOrder {
     }));
   }
 }
-//@ chunk-e6aww6q8.js:1861280-1861358 placement
+//@ chunk-5xgkngpb.js:1940042-1940120 placement
 /**
  * 取出数组里的字符串项，非数组返回空数组。
  */
 function stringArrayOrEmpty(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
-//@ chunk-e6aww6q8.js:1861358-1861521 placement
+//@ chunk-5xgkngpb.js:1940120-1940283 placement
 function applyCompactCarry(segment, stats, versions) {
   if (segment.summarySeen && (segment.lastKept === undefined || segment.lastKeptSeen) && !segment.foreign)
     stats.versions = restoreCompactReadVersions(segment.versions, versions);
   else if (Array.isArray(segment.versions)) stats.dropped++;
 }
-//@ chunk-e6aww6q8.js:1861521-1864551 placement
+//@ chunk-5xgkngpb.js:1940283-1943318 placement
 /**
  * 恢复会话时收集需要带过的 Artifact 状态（最近的发布、读取等）。
  */
@@ -189,7 +189,7 @@ function collectArtifactResumeCarry(messages, options) {
           let url = block.input?.url;
           if (typeof url === "string") urlByToolUseId.set(block.id, url);
         } else if (block.name === WEBFETCH) webFetchIds.add(block.id);
-        else if (block.name === FILE_READ_TOOL_NAME) fileReadIds.add(block.id);
+        else if (block.name === READ) fileReadIds.add(block.id);
         else {
           let mcpInfo = mcpInfoFromString(block.name);
           if (mcpInfo?.serverName === CLAUDE_ARTIFACTS && mcpInfo.toolName !== undefined) {
@@ -197,7 +197,7 @@ function collectArtifactResumeCarry(messages, options) {
             else if (mcpInfo.toolName === DELETE_ARTIFACT)
               deleteSlugByToolUseId.set(
                 block.id,
-                isPlainObject_5(block.input) ? block.input.slug : undefined,
+                isPlainObject_6(block.input) ? block.input.slug : undefined,
               );
           }
         }
@@ -342,14 +342,14 @@ function collectArtifactResumeCarry(messages, options) {
     carry: stats,
   };
 }
-//@ chunk-e6aww6q8.js:1864551-1864639 placement
+//@ chunk-5xgkngpb.js:1943318-1943406 placement
 var TOOL_ERROR_PREFIX_REGEX; // deferred: uses ARTIFACT_DELETED_NOTE_TAG (./constants.js) of its import cycle while loading; runs once the cycle is complete
-var regExp_11;
-deferInit("chunk-e6aww6q8.js:1864551", () => {
+var regExp_12;
+deferInit("chunk-5xgkngpb.js:1943318", () => {
   TOOL_ERROR_PREFIX_REGEX = /^(?:<tool_use_error>)?(?:Error: )?/;
-  regExp_11 = new RegExp(`^<${ARTIFACT_DELETED_NOTE_TAG} url="([^"]+)"/>`);
+  regExp_12 = new RegExp(`^<${ARTIFACT_DELETED_NOTE_TAG} url="([^"]+)"/>`);
 });
-//@ chunk-e6aww6q8.js:1864639-1864878 placement
+//@ chunk-5xgkngpb.js:1943406-1943645 placement
 function slugFromToolResultText(content) {
   let text =
     typeof content === "string"
@@ -363,15 +363,15 @@ function slugFromToolResultText(content) {
 `)
         : "";
   let cleaned = stripRejectBreakerNotice(text.replace(TOOL_ERROR_PREFIX_REGEX, ""));
-  let urlMatch = regExp_11.exec(cleaned)?.[1];
+  let urlMatch = regExp_12.exec(cleaned)?.[1];
   return urlMatch !== undefined ? uuidSlugFromUrl(urlMatch) : null;
 }
-//@ chunk-e6aww6q8.js:1864878-1865367 placement (2.1.88 match: hasSuccessfulToolCall, 0.854)
-function hasSuccessfulToolCall_3(messages) {
+//@ chunk-5xgkngpb.js:1943645-1944134 placement (2.1.88 match: createToolResultStopMessage, 0.693)
+function createToolResultStopMessage(messages) {
   let serverByToolUseId = new Map();
-  for (let message of messages) {
-    if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
-    for (let block of message.message.content) {
+  for (let delegated of messages) {
+    if (delegated.type !== "assistant" || !Array.isArray(delegated.message.content)) continue;
+    for (let block of delegated.message.content) {
       if (block.type !== "tool_use") continue;
       let serverName = mcpInfoFromString(block.name)?.serverName;
       if (serverName !== undefined) serverByToolUseId.set(block.id, serverName);
@@ -388,7 +388,7 @@ function hasSuccessfulToolCall_3(messages) {
   }
   return servers;
 }
-//@ chunk-e6aww6q8.js:1865367-1865486 placement
+//@ chunk-5xgkngpb.js:1944134-1944253 placement
 function deletedArtifactSlug(toolUseResult) {
   let artifactDelete = toolUseResult?.artifact_delete;
   if (artifactDelete === undefined) return;
@@ -397,7 +397,7 @@ function deletedArtifactSlug(toolUseResult) {
     slug: typeof url === "string" ? uuidSlugFromUrl(url) : null,
   };
 }
-//@ chunk-e6aww6q8.js:1865486-1865799 placement
+//@ chunk-5xgkngpb.js:1944253-1944566 placement
 /**
  * 恢复时某个 Artifact 已被删除：从 frameUrls（可选解除路径链接）、createdFromType、读版本、路径 pin 与目标顺序中移除该 slug。
  */
@@ -413,7 +413,7 @@ function forgetArtifactSlug(slug, carry) {
   carry.pathPins.delete(slug);
   carry.target.forget(slug);
 }
-//@ chunk-e6aww6q8.js:1865799-1866223 placement
+//@ chunk-5xgkngpb.js:1944566-1944995 placement
 /**
  * 解析转录中的"已附加 Artifact"注记，把对应 slug 记为 ATTACHED 行写入 frameUrls（替换会话外的旧行，保留标题/图标），可选标记为当前目标。
  */
@@ -448,7 +448,7 @@ function applyAttachedNote(text, timestamp, frameUrls, targets) {
   }
   if (targetSlug !== undefined) targets.touch(slug);
 }
-//@ chunk-e6aww6q8.js:1866223-1866584 placement
+//@ chunk-5xgkngpb.js:1944995-1945361 placement
 /**
  * 记录打开过的 Artifact：已有同 slug 行时只在 MCP 发布时刷新时间；否则写入 OPENED 行（标题、mcpPublished 标记）。
  */
@@ -483,7 +483,7 @@ function recordOpenedArtifact(frameUrls, url, title, timestamp, { mcpPublished }
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1866584-1867884 placement
+//@ chunk-5xgkngpb.js:1945361-1946668 placement
 /**
  * 为 Artifact 工具输入生成简短摘要。
  */
@@ -573,16 +573,16 @@ function summarizeArtifactInput(
   if (typeof result.version === "string") setReadVersion(readVersions, slug, result.version);
   targets.touch(slug);
 }
-//@ chunk-e6aww6q8.js:1867884-1867909 placement
+//@ chunk-5xgkngpb.js:1946668-1946693 placement
 var SHA256_HEX_REGEX = /^[0-9a-f]{64}$/;
-//@ chunk-e6aww6q8.js:1867909-1867984 placement
+//@ chunk-5xgkngpb.js:1946693-1946768 placement
 /**
  * 判断是否为非空且不含 NUL 的字符串。
  */
 function isNonEmptyPathString(path) {
   return typeof path === "string" && path.length > 0 && !path.includes("\x00");
 }
-//@ chunk-e6aww6q8.js:1867984-1868385 placement
+//@ chunk-5xgkngpb.js:1946768-1947171 placement
 /**
  * 用发布结果里的 live 版本与 changed 列表更新路径 pin：sha 相同则清除 behind，不同则标记 behind（落后于线上）。
  */
@@ -613,7 +613,7 @@ function applyLiveChanges(mergedOver, version, pins) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:1868385-1870279 placement
+//@ chunk-5xgkngpb.js:1947171-1949076 placement
 /**
  * 从 Artifact 工具结果中收集每个 slug 的文件路径 pin（路径 → sha256 / 版本 / 来源）：发布写入、删除、复制、合并，以及 read_file 读取。
  */
@@ -725,7 +725,7 @@ function collectPathPins(result, timestamp, pinsBySlug) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:1870279-1870841 placement
+//@ chunk-5xgkngpb.js:1949076-1949642 placement
 /**
  * 回退/截断会话后重建 Artifact 状态：清空路径 pin，若可恢复则重新从剩余消息收集读版本与 pin，并保留原 pin 上的 behind 信息。
  */
@@ -763,7 +763,7 @@ function rebuildArtifactCarryAfterRewind(messages, seedEligible) {
     artifactReadObservers: defaultObserverMap(artifactReadVersions),
   };
 }
-//@ chunk-e6aww6q8.js:1870841-1870964 placement
+//@ chunk-5xgkngpb.js:1949642-1949765 placement
 function installPathPins(liveState, pathPins) {
   for (let [slug, pins] of pathPins) {
     let installed = new Map();
@@ -775,7 +775,7 @@ function installPathPins(liveState, pathPins) {
     liveState.pathPins.set(slug, installed);
   }
 }
-//@ chunk-e6aww6q8.js:1870964-1871046 placement
+//@ chunk-5xgkngpb.js:1949765-1949847 placement
 /**
  * 由路径键生成默认观察者映射。
  */
@@ -789,7 +789,7 @@ function defaultObserverMap(artifactReadVersions) {
     ]),
   );
 }
-//@ chunk-e6aww6q8.js:1871046-1871277 placement
+//@ chunk-5xgkngpb.js:1949847-1950078 placement
 function sameObservers(left, right) {
   let keys = Object.keys(left);
   return (
@@ -805,7 +805,7 @@ function sameObservers(left, right) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:1871277-1871349 placement
+//@ chunk-5xgkngpb.js:1950078-1950151 placement
 /**
  * 记录某 slug 的读取版本（先删除再追加，保持最近在后）。
  */
@@ -815,7 +815,7 @@ function setReadVersion(versions, slug, ver) {
   versions[slug] = ver;
   return true;
 }
-//@ chunk-e6aww6q8.js:1871349-1871624 placement
+//@ chunk-5xgkngpb.js:1950151-1950427 placement
 function restoreCompactReadVersions(versions, targetVersions) {
   if (!Array.isArray(versions)) return 0;
   for (let key of Object.keys(targetVersions)) delete targetVersions[key];
@@ -832,7 +832,7 @@ function restoreCompactReadVersions(versions, targetVersions) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:1871624-1871885 placement
+//@ chunk-5xgkngpb.js:1950427-1950689 placement
 function applyArtifactReadResult(toolUseResult, versions, targets, isRemote) {
   let artifactRead = toolUseResult?.artifactRead;
   if (
@@ -848,7 +848,7 @@ function applyArtifactReadResult(toolUseResult, versions, targets, isRemote) {
   if (isRemote) return;
   targets.touch(artifactRead.slug);
 }
-//@ chunk-e6aww6q8.js:1871885-1872058 placement
+//@ chunk-5xgkngpb.js:1950689-1950863 placement
 function applyArtifactReadVersion(toolUseResult, versions) {
   let artifactRead = toolUseResult?.artifactRead;
   if (
@@ -859,7 +859,7 @@ function applyArtifactReadVersion(toolUseResult, versions) {
   )
     setReadVersion(versions, artifactRead.slug, artifactRead.ver);
 }
-//@ chunk-e6aww6q8.js:1872058-1872208 placement
+//@ chunk-5xgkngpb.js:1950863-1951013 placement
 /**
  * 把用户、助手和压缩边界消息标记为远程来源。
  */
@@ -875,7 +875,7 @@ function markRemoteSourced(messages) {
       : message,
   );
 }
-//@ chunk-e6aww6q8.js:1872208-1872320 placement
+//@ chunk-5xgkngpb.js:1951013-1951125 placement
 /**
  * 空的 Artifact 恢复状态（frameUrls、读版本、引用、来源类型、路径 pin 都为空）。
  */
@@ -888,7 +888,7 @@ function emptyArtifactCarry() {
     pathPins: new Map(),
   };
 }
-//@ chunk-e6aww6q8.js:1872320-1872490 placement
+//@ chunk-5xgkngpb.js:1951125-1951295 placement
 /**
  * 恢复会话时收集要带过的 Artifact 状态：仅本地来源且允许时调用 collectArtifactResumeCarry 并记 artifact_resume_carry 埋点，否则返回空状态。
  */
@@ -899,7 +899,7 @@ function collectResumeArtifactCarry(messages, options) {
     logResumeCarry(artifactResumeCarry.carry, Object.keys(artifactResumeCarry.artifactReadVersions).length);
   return artifactResumeCarry;
 }
-//@ chunk-e6aww6q8.js:1872490-1873408 placement
+//@ chunk-5xgkngpb.js:1951295-1952227 placement
 /**
  * 把收集到的 Artifact 状态应用到新会话：重置会话状态、恢复 createdFromType 与路径 pin、保留路径链接，并合并 frameUrls / 读版本 / 观察者 / 目标引用到 AppState。
  */
@@ -950,7 +950,7 @@ function applyArtifactResumeCarry(setAppState, carry, options = {}) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1873408-1873574 placement
+//@ chunk-5xgkngpb.js:1952227-1952393 placement
 function keepCloudOpenedRows(frameUrls, frameUrls_2) {
   let filtered = Object.entries(frameUrls_2).filter(
     ([key, value]) => value.fromCloudSession === true && key.startsWith(OPENED) && !(key in frameUrls),
@@ -963,19 +963,19 @@ function keepCloudOpenedRows(frameUrls, frameUrls_2) {
       };
 }
 export {
-  nonOpenedFrameUrls,
-  ATTACHED,
   applyArtifactResumeCarry,
   collectResumeArtifactCarry,
-  rebuildArtifactCarryAfterRewind,
   OPENED,
   isPersistableFrameUrl,
   isCreatedFrameUrl,
-  markRemoteSourced,
+  nonOpenedFrameUrls,
+  CREATED,
+  createToolResultStopMessage,
   frameUrlRowsToPersist,
   frameUrlToRecord,
-  CREATED,
-  hasSuccessfulToolCall_3,
   stampPreCompactReadVersions,
+  markRemoteSourced,
+  rebuildArtifactCarryAfterRewind,
   emptyArtifactCarry,
+  ATTACHED,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：回合结束时运行 Stop hooks 与记忆提取，返回阻断错误与是否阻止继续；主线程回合结束后生成并发布回合摘要（按检测到的界面发往不同接收端）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (6)
  * attribution: placement 6
  */
 import { classifyQuerySource } from "../services/api/requestHeaders.js";
@@ -30,7 +30,7 @@ import { getOwnJobShortId } from "../services/daemon/jobState.js";
 import { hasActiveAgentTasks, isActiveAgentTask, isRunningShellTask } from "../tasks/taskStatus.js";
 import { errorMessage, isAbortError, StreamClosedAbortError } from "../utils/errors.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
-import { isRemoteCowork, isClaudeAiChatOrigin } from "../utils/entrypointKinds.js";
+import { isRemoteCowork, isCcsRemoteCowork, isClaudeAiChatOrigin } from "../utils/entrypointKinds.js";
 import { SESSION_STATE_IDLE_TTL_MS } from "../utils/sessionState.js";
 import { withTimeout } from "../utils/sleep.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -45,7 +45,7 @@ import { getHostedPostTurnMemoryConfig } from "../memdir/memoryTool.js";
 import { runAutoDreamForHost } from "../services/autoDream/autoDream.js";
 import { cleanupComputerUseAfterTurn } from "../utils/computerUse/cleanup.js";
 import { env } from "../utils/env.js";
-import { toolMatchesName } from "../Tool.js";
+import { matchesToolName } from "../Tool.js";
 import {
   findLastRealUserMessageIndex,
   createUserMessage,
@@ -55,7 +55,12 @@ import {
   createStopHookSummaryMessage,
   createSystemMessage,
 } from "../utils/messages.js";
-import { replyGatePolicy, getVisibleBackgroundTasks, createQueueDelivery } from "./turnEndReasons.js";
+import {
+  replyGatePolicy,
+  policyContext,
+  getVisibleBackgroundTasks,
+  createQueueDelivery,
+} from "./turnEndReasons.js";
 import { resolveHearthToolNames, serverHasAnyTool } from "../services/mcp/ccrMetaMcp.js";
 import {
   logReplyGatePolicy,
@@ -63,6 +68,7 @@ import {
   lastTurnReminderState,
   isJoyfulGlobeOn,
 } from "./toolDrain.js";
+import { currentMcpClients } from "../services/compact/idleToolResultClearing.js";
 import { STRUCTUREDOUTPUT } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import {
   getPendingHandbackReport,
@@ -77,7 +83,7 @@ import { glowingOrbitOn, pendingShellHandOffs, findLastPromptIndex } from "../ut
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";
 import { clearPendingGoalIdleCheckin, planGoalCheckin, scheduleGoalIdleCheckin } from "./goalCheckIn.js";
 import { getSessionStopPromptHooks } from "../commands/goal/goal.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { isHookEqual } from "../utils/hooks/hooksSettings.js";
 import {
   executeStopHooks,
@@ -96,16 +102,16 @@ import { logHookPushbackEvent } from "../services/tools/toolDecisionTelemetry.js
 import { getTaskListId, listTasks } from "../utils/tasks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:79310-79416 placement
+//@ chunk-w3ch4xq2.js:88563-88669 placement
 var extractMemoriesModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var agentJobStateModule;
 var postTurnSummaryModule;
-deferInit("chunk-ha3km179.js:79310", () => {
+deferInit("chunk-w3ch4xq2.js:88563", () => {
   extractMemoriesModule = require("../services/extractMemories/extractMemories.js");
   agentJobStateModule = require("../services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
   postTurnSummaryModule = require("../services/classifierSummary.js");
 });
-//@ chunk-ha3km179.js:82467-85391 placement
+//@ chunk-w3ch4xq2.js:91758-94753 placement
 /**
  * 主线程回合结束后生成并发布回合摘要（按检测到的界面发往不同接收端）。
  */
@@ -143,11 +149,11 @@ async function* generatePostTurnSummary(
   let hold;
   let outcomeLabel = lit("none");
   let erroredRowId = sinks.has("summary") ? shownErroredToolRowId(messages) : undefined;
-  classifierJobState.onClassified = (classified, isFresh) => {
+  let onClassified = (classified, isFresh) => {
     if (isFresh || !sinks.has("summary")) return;
-    if (hold?.superseded) {
+    if (hold?.superseded || classifierJobState.onClassified !== onClassified) {
       logForDebugging(
-        "[classifier] dropped a late end-of-turn summary: a newer session status was written or cleared while it was being generated",
+        "[classifier] dropped a late end-of-turn summary: a newer session status, later work or a person's message replaced it while it was being generated",
       );
       outcomeLabel = lit("dropped_superseded");
       return;
@@ -162,15 +168,7 @@ async function* generatePostTurnSummary(
                 postTurnSummary: postTurnSummary_2,
               },
         );
-        publishPostTurnSummary(
-          toolUseContext.sessionState,
-          postTurnSummary_2,
-          hold === undefined
-            ? undefined
-            : {
-                turnEndVerdict: true,
-              },
-        );
+        publishPostTurnSummary(toolUseContext.sessionState, postTurnSummary_2);
         outcomeLabel = lit("republished_prior");
       }
       return;
@@ -200,15 +198,7 @@ async function* generatePostTurnSummary(
             postTurnSummary: nextSummary,
           },
     );
-    publishPostTurnSummary(
-      toolUseContext.sessionState,
-      nextSummary,
-      hold === undefined
-        ? undefined
-        : {
-            turnEndVerdict: true,
-          },
-    );
+    publishPostTurnSummary(toolUseContext.sessionState, nextSummary);
     outcomeLabel = lit("published");
     enqueueTaskNotification({
       type: "system",
@@ -219,6 +209,7 @@ async function* generatePostTurnSummary(
       needs_action: nextSummary.needs_action,
     });
   };
+  classifierJobState.onClassified = onClassified;
   let mainThreadAgentType = getMainThreadAgentType();
   let mainThreadAgent = mainThreadAgentType
     ? toolUseContext.options.agentDefinitions.activeAgents.find(
@@ -260,7 +251,7 @@ async function* generatePostTurnSummary(
     });
   if (isBgSession() || querySource === "sdk") {
     let sessionState = toolUseContext.sessionState;
-    let coworkCcr = surfaces.has("ccr") && isRemoteCowork();
+    let coworkCcr = surfaces.has("ccr") && (isRemoteCowork() || isCcsRemoteCowork());
     let chatOrigin = isClaudeAiChatOrigin();
     let shouldHold = coworkCcr && sessionState !== undefined && !chatOrigin;
     let holdCapMs = shouldHold ? 0 : SESSION_STATE_IDLE_TTL_MS;
@@ -274,6 +265,7 @@ async function* generatePostTurnSummary(
     let now_2 = Date.now();
     if (querySource === "sdk")
       classifyPromise.then(() => {
+        let endedAt = hold?.endedAt;
         logEvent("tengu_turn_end_classifier_hold", {
           hold_cap_ms: holdCapMs,
           held_ms: now_2 - now,
@@ -282,11 +274,14 @@ async function* generatePostTurnSummary(
           engine: fromEnum(engine),
           summary_outcome: outcomeLabel,
           session_origin_chat: chatOrigin,
+          ...(endedAt !== undefined && {
+            call_ran_on_ms: Math.round(performance.now() - endedAt),
+          }),
         });
       });
   }
 }
-//@ chunk-ha3km179.js:85391-85527 placement
+//@ chunk-w3ch4xq2.js:94753-94889 placement
 /**
  * 若有未完成的回合结束摘要且条件满足，等待其完成（错误交给处理函数）。
  */
@@ -299,19 +294,19 @@ function waitForTurnEndSummary(sessionState, shouldWait) {
     return;
   }
 }
-//@ chunk-ha3km179.js:85527-85547 placement
+//@ chunk-w3ch4xq2.js:94889-94909 placement
 /**
  * 记录摘要失败
  */
 function logSummaryFailure(error) {
   logError(error);
 }
-//@ chunk-ha3km179.js:85547-98580 placement
+//@ chunk-w3ch4xq2.js:94909-108718 placement
 /**
  * 回合结束时运行 Stop hooks 与记忆提取，返回阻断错误与是否阻止继续。
  */
 async function* runStopHooks(
-  messagesForQuery,
+  priorMessages,
   assistantMessages,
   systemPrompt,
   userContext,
@@ -335,7 +330,7 @@ async function* runStopHooks(
     };
   let now = Date.now();
   let context_2 = {
-    messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
+    messages: [...priorMessages, ...assistantMessages, ...toolResults],
     systemPrompt,
     userContext,
     systemContext,
@@ -390,11 +385,11 @@ async function* runStopHooks(
     lazyChunkCv3.isBriefEnabled() &&
     !env.DISABLE_BRIEF_MODE_STOP_HOOK &&
     !context.agentId &&
-    context.options.tools.some((tool) => toolMatchesName(tool, lazyChunkVsw.BRIEF_TOOL_NAME))
+    context.options.tools.some((tool) => matchesToolName(tool, lazyChunkVsw.BRIEF_TOOL_NAME))
   )
     try {
-      let lastRealUserMessageIndex = findLastRealUserMessageIndex(messagesForQuery);
-      let sliced = messagesForQuery.slice(lastRealUserMessageIndex + 1);
+      let lastRealUserMessageIndex = findLastRealUserMessageIndex(priorMessages);
+      let sliced = priorMessages.slice(lastRealUserMessageIndex + 1);
       let any = [...sliced, ...assistantMessages].some(
         (message) =>
           message.type === "assistant" &&
@@ -428,7 +423,9 @@ async function* runStopHooks(
     }
   let replyGateNudge = null;
   let replyGateBounce = null;
-  let replyGatePolicyValue = replyGatePolicy();
+  let { policy: replyGatePolicyValue, launchPolicyLabel, isLaunchPolicyOff } = replyGatePolicy();
+  if (isLaunchPolicyOff && querySource === "sdk" && !context.agentId)
+    logForDebugging("Reply gate: verdict=skip why=disableReplyCheck");
   if (
     getQueuedPeerMessageCount &&
     querySource === "sdk" &&
@@ -439,23 +436,26 @@ async function* runStopHooks(
   )
     try {
       let hearthToolNames = resolveHearthToolNames(context.options.tools);
+      let verdict;
       let gateDecision = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
-        messagesForQuery,
+        priorMessages,
         [...assistantMessages, ...toolResults],
         replyGatePolicyValue !== undefined
-          ? {
-              kind: "policy",
-              policy: replyGatePolicyValue,
-            }
+          ? policyContext(replyGatePolicyValue, context)
           : {
               kind: "remote_control",
               toolNames: hearthToolNames,
             },
+        replyGatePolicyValue &&
+          ((result) => {
+            verdict = result;
+          }),
       );
       switch (gateDecision.kind) {
         case "answered":
           if (replyGatePolicyValue !== undefined)
             logFeatureOk("projects_reply_gate_policy", {
+              ...launchPolicyLabel,
               person_opened_turn: gateDecision.personOpened,
               no_reply_only: gateDecision.noReplyOnly,
             });
@@ -464,11 +464,17 @@ async function* runStopHooks(
         case "still_silent":
           if (replyGatePolicyValue !== undefined)
             logReplyGatePolicy("still_silent", {
+              ...launchPolicyLabel,
               person_opened_turn: gateDecision.personOpened,
             });
           else logFeatureBad("bridge_projects_reply_gate", "still_silent");
           break;
         case "skip":
+          if (verdict?.verdict === "skip" && verdict.why !== "not_held")
+            logFeatureOk("projects_reply_gate_policy_skip", {
+              ...launchPolicyLabel,
+              why: fromEnum(verdict.why),
+            });
           break;
         case "bounce":
           if (
@@ -477,15 +483,42 @@ async function* runStopHooks(
               replyGatePolicyValue?.terminalTools ?? [hearthToolNames.reply],
             )
           ) {
-            if (replyGatePolicyValue !== undefined)
+            if (replyGatePolicyValue !== undefined) {
               logReplyGatePolicy("reply_tool_not_in_pool", {
+                ...launchPolicyLabel,
                 person_opened_turn: gateDecision.personOpened,
               });
-            else logFeatureBad("bridge_projects_reply_gate", "reply_tool_not_in_pool");
+              verdict &&= {
+                ...verdict,
+                verdict: "no_bounce",
+                why: "reply_tool_not_in_pool",
+              };
+            } else logFeatureBad("bridge_projects_reply_gate", "reply_tool_not_in_pool");
+            break;
+          }
+          if (
+            replyGatePolicyValue?.skipRetryWhileServerDown === true &&
+            gateDecision.reason === "reply_errored" &&
+            getQueuedPeerMessageCount.areTerminalToolServersDown(
+              replyGatePolicyValue,
+              context.options.tools,
+              currentMcpClients(context),
+            )
+          ) {
+            logReplyGatePolicy("reply_server_down", {
+              ...launchPolicyLabel,
+              person_opened_turn: gateDecision.personOpened,
+            });
+            verdict &&= {
+              ...verdict,
+              verdict: "no_bounce",
+              why: "reply_server_down",
+            };
             break;
           }
           if (replyGatePolicyValue !== undefined)
             logFeatureSad("projects_reply_gate_policy", gateDecision.reason, {
+              ...launchPolicyLabel,
               person_opened_turn: gateDecision.personOpened,
             });
           else logFeatureSad("bridge_projects_reply_gate", gateDecision.reason);
@@ -493,9 +526,22 @@ async function* runStopHooks(
             content: gateDecision.text,
             isMeta: true,
           });
-          yield replyGateBounce;
           break;
       }
+      if (verdict !== undefined && launchPolicyLabel !== undefined) {
+        let { verdict: verdict_2, why, ...rest } = verdict;
+        logForDebugging(
+          `Reply gate: ${Object.entries({
+            verdict: verdict_2,
+            why,
+            ...rest,
+          })
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(" ")}`,
+        );
+      }
+      if (replyGateBounce !== null) yield replyGateBounce;
     } catch (error) {
       logForDebugging(`Projects reply gate enforcement failed: ${errorMessage(error)}`, {
         level: "error",
@@ -504,8 +550,8 @@ async function* runStopHooks(
   let structuredOutputNudge = null;
   if (context.options.requiresStructuredOutput && classifyQuerySource(querySource) !== "auxiliary")
     try {
-      let lastRealUserMessageIndex = findLastRealUserMessageIndex(messagesForQuery);
-      let sliced = messagesForQuery.slice(lastRealUserMessageIndex + 1);
+      let lastRealUserMessageIndex = findLastRealUserMessageIndex(priorMessages);
+      let sliced = priorMessages.slice(lastRealUserMessageIndex + 1);
       let hasStructuredOutput = hasSuccessfulToolCall([...sliced, ...assistantMessages], STRUCTUREDOUTPUT);
       let structuredOutputEnforced =
         !hasStructuredOutput &&
@@ -567,7 +613,7 @@ async function* runStopHooks(
     querySource === "sdk" &&
     !context.agentId &&
     isResilientGalaxyOn() &&
-    context.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME))
+    context.options.tools.some((tool) => matchesToolName(tool, SEND_USER_FILE_TOOL_NAME))
   )
     try {
       let reminderState = lastTurnReminderState(context_2.messages);
@@ -601,7 +647,7 @@ async function* runStopHooks(
   if (classifyQuerySource(querySource) !== "auxiliary" && glowingOrbitOn())
     try {
       let pendingHandoffs = pendingShellHandOffs(
-        messagesForQuery.slice(findLastPromptIndex(messagesForQuery)),
+        priorMessages.slice(findLastPromptIndex(priorMessages)),
         assistantMessages,
         context.agentId ?? null,
       );
@@ -647,8 +693,8 @@ async function* runStopHooks(
           logForDebugging("[goal] evaluation deferred \u2014 background work still running");
           goalOutcome = "deferred";
           goalTaskCounts = {
-            activeAgents: count(visibleBackgroundTasks, isActiveAgentTask),
-            activeShells: count(visibleBackgroundTasks, isRunningShellTask),
+            activeAgents: countWhere(visibleBackgroundTasks, isActiveAgentTask),
+            activeShells: countWhere(visibleBackgroundTasks, isRunningShellTask),
           };
           let checkinText;
           try {
@@ -1155,7 +1201,7 @@ async function* runStopHooks(
     }
   }
 }
-//@ chunk-ha3km179.js:98580-99181 placement
+//@ chunk-w3ch4xq2.js:108718-109319 placement
 /**
  * 运行 turn_end_reactions hooks。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件 ui.render 的基础元素组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bc20zedk.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkbsrtg1.js (52)
  * attribution: placement 52
  */
 import {
@@ -52,14 +52,14 @@ import { formatTokenWindowed } from "../../../utils/markdown.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-bc20zedk.js:6145-6149 placement
+//@ chunk-rkbsrtg1.js:6145-6149 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:6145", () => {
+deferInit("chunk-rkbsrtg1.js:6145", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:6149-6176 placement
+//@ chunk-rkbsrtg1.js:6149-6176 placement
 var rulerCut = (text, columns) => truncateToWidth(drawnText(text), columns);
-//@ chunk-bc20zedk.js:6176-6303 placement
+//@ chunk-rkbsrtg1.js:6176-6303 placement
 var clippedHunks = (hunks, columns) =>
   convertHunkLeadingTabs(hunks).map((hunk) => {
     let max = Math.max(1, columns - computeGutterWidth(hunk));
@@ -68,7 +68,7 @@ var clippedHunks = (hunks, columns) =>
       lines: hunk.lines.map((line) => line.slice(0, 1) + rulerCut(line.slice(1), max)),
     };
   });
-//@ chunk-bc20zedk.js:6303-6457 placement
+//@ chunk-rkbsrtg1.js:6303-6457 placement
 function clippedLines(source, columns, startLine) {
   let lines = source.replace(/\n$/, "").split(`
 `);
@@ -79,16 +79,16 @@ function clippedLines(source, columns, startLine) {
   return lines.map((line) => rulerCut(line, max)).join(`
 `);
 }
-//@ chunk-bc20zedk.js:6457-6461 placement
+//@ chunk-rkbsrtg1.js:6457-6461 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:6457", () => {
+deferInit("chunk-rkbsrtg1.js:6457", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:6461-6471 placement
+//@ chunk-rkbsrtg1.js:6461-6471 placement
 var DEFAULT_COLUMNS = 80;
-//@ chunk-bc20zedk.js:6471-6532 placement
+//@ chunk-rkbsrtg1.js:6471-6532 placement
 var highlightPath = ({ language, path }) => (language === undefined ? (path ?? "") : `source.${language}`);
-//@ chunk-bc20zedk.js:6532-7486 placement
+//@ chunk-rkbsrtg1.js:6532-7486 placement
 function CodeBlock(props) {
   let $ = useMemoCache(21);
   let { source, startLine, format, wrap } = props;
@@ -177,19 +177,19 @@ function CodeBlock(props) {
   } else boxElement = $[20];
   return boxElement;
 }
-//@ chunk-bc20zedk.js:7486-7569 placement
+//@ chunk-rkbsrtg1.js:7486-7569 placement
 function heldFor(tree, renderTree, fallback) {
   let held = heldRenderInput(tree, renderTree);
   return held !== undefined && held.component === fallback.component ? held : fallback;
 }
-//@ chunk-bc20zedk.js:7569-7573 placement
+//@ chunk-rkbsrtg1.js:7569-7573 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:7569", () => {
+deferInit("chunk-rkbsrtg1.js:7569", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:7573-7601 placement
+//@ chunk-rkbsrtg1.js:7573-7601 placement
 var hoverGroupsStore = () => getPluginRegistry().hoverGroups;
-//@ chunk-bc20zedk.js:7601-7708 placement
+//@ chunk-rkbsrtg1.js:7601-7708 placement
 var adjustHoverGroup = (scopeKey, delta) =>
   hoverGroupsStore().setState((groups) => {
     let nextCount = (groups.get(scopeKey) ?? 0) + delta;
@@ -198,7 +198,7 @@ var adjustHoverGroup = (scopeKey, delta) =>
     else next.delete(scopeKey);
     return next;
   });
-//@ chunk-bc20zedk.js:7708-7902 placement
+//@ chunk-rkbsrtg1.js:7708-7902 placement
 function groupMember() {
   let scopeKey;
   function enter(key) {
@@ -225,7 +225,7 @@ function groupMember() {
     },
   };
 }
-//@ chunk-bc20zedk.js:7902-7990 placement
+//@ chunk-rkbsrtg1.js:7902-7990 placement
 function groupOf(plugin, hover) {
   let scope = hover?.scope;
   return plugin !== undefined && scope !== undefined
@@ -235,17 +235,17 @@ function groupOf(plugin, hover) {
       }
     : undefined;
 }
-//@ chunk-bc20zedk.js:7990-8034 placement
+//@ chunk-rkbsrtg1.js:7990-8034 placement
 function hoverOverridesOf(overrides) {
   let { scope, ...rest } = overrides;
   return rest;
 }
-//@ chunk-bc20zedk.js:8034-8038 placement
+//@ chunk-rkbsrtg1.js:8034-8038 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:8034", () => {
+deferInit("chunk-rkbsrtg1.js:8034", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:8038-8293 placement
+//@ chunk-rkbsrtg1.js:8038-8293 placement
 function useHoverGroup(scope, options) {
   let scopeKey = scope && hoverScopeKey(scope);
   let isHot =
@@ -266,14 +266,14 @@ function useHoverGroup(scope, options) {
     onMouseLeave: member.leave,
   };
 }
-//@ chunk-bc20zedk.js:8293-8297 placement
+//@ chunk-rkbsrtg1.js:8293-8297 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:8293", () => {
+deferInit("chunk-rkbsrtg1.js:8293", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:8297-8346 placement
+//@ chunk-rkbsrtg1.js:8297-8346 placement
 var HEX_COLOR_PROPS = ["color", "backgroundColor", "borderColor"];
-//@ chunk-bc20zedk.js:8346-8486 placement
+//@ chunk-rkbsrtg1.js:8346-8486 placement
 function withHexColors(style) {
   if (!style) return null;
   let resolved = {
@@ -286,17 +286,17 @@ function withHexColors(style) {
   }
   return resolved;
 }
-//@ chunk-bc20zedk.js:8486-8490 placement
+//@ chunk-rkbsrtg1.js:8486-8490 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:8486", () => {
+deferInit("chunk-rkbsrtg1.js:8486", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:8490-8504 placement
+//@ chunk-rkbsrtg1.js:8490-8504 placement
 var ScopeHovered; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:8490", () => {
+deferInit("chunk-rkbsrtg1.js:8490", () => {
   ScopeHovered = createContext(false);
 });
-//@ chunk-bc20zedk.js:8504-8719 placement
+//@ chunk-rkbsrtg1.js:8504-8719 placement
 function useHoverLit(group, overrides, elementKind) {
   let scopeHovered = useContext(ScopeHovered);
   let hoverGroup = useHoverGroup(group, elementKind);
@@ -318,7 +318,7 @@ function useHoverLit(group, overrides, elementKind) {
         handlers: {},
       };
 }
-//@ chunk-bc20zedk.js:8719-9047 placement
+//@ chunk-rkbsrtg1.js:8719-9047 placement
 function HoverScope({ isLive, elementKey, layout, hover, group, children }) {
   let [isHovered, setIsHovered] = useState(false);
   let hoverGroup = useHoverGroup(group, "Box");
@@ -354,12 +354,12 @@ function HoverScope({ isLive, elementKey, layout, hover, group, children }) {
     ),
   );
 }
-//@ chunk-bc20zedk.js:9047-9051 placement
+//@ chunk-rkbsrtg1.js:9047-9051 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9047", () => {
+deferInit("chunk-rkbsrtg1.js:9047", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9051-9211 placement
+//@ chunk-rkbsrtg1.js:9051-9211 placement
 function HoverStyled({ isInline, props, hover, group, children }) {
   let elementKind = isInline ? "Text" : "Box";
   let { overrides, handlers } = useHoverLit(group, hover, elementKind);
@@ -373,75 +373,75 @@ function HoverStyled({ isInline, props, hover, group, children }) {
     ...children,
   );
 }
-//@ chunk-bc20zedk.js:9211-9221 placement
+//@ chunk-rkbsrtg1.js:9211-9221 placement
 var FIELD_MIN_COLUMNS = 12;
-//@ chunk-bc20zedk.js:9221-9225 placement
+//@ chunk-rkbsrtg1.js:9221-9225 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9221", () => {
+deferInit("chunk-rkbsrtg1.js:9221", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9225-9229 placement
+//@ chunk-rkbsrtg1.js:9225-9229 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9225", () => {
+deferInit("chunk-rkbsrtg1.js:9225", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9229-9246 placement
+//@ chunk-rkbsrtg1.js:9229-9246 placement
 var InputFields; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9229", () => {
+deferInit("chunk-rkbsrtg1.js:9229", () => {
   InputFields = createContext(null);
 });
-//@ chunk-bc20zedk.js:9246-9250 placement
+//@ chunk-rkbsrtg1.js:9246-9250 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9246", () => {
+deferInit("chunk-rkbsrtg1.js:9246", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9250-9267 placement
+//@ chunk-rkbsrtg1.js:9250-9267 placement
 var SiteColumns; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9250", () => {
+deferInit("chunk-rkbsrtg1.js:9250", () => {
   SiteColumns = createContext(null);
 });
-//@ chunk-bc20zedk.js:9267-9271 placement
+//@ chunk-rkbsrtg1.js:9267-9271 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9267", () => {
+deferInit("chunk-rkbsrtg1.js:9267", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9271-9288 placement
+//@ chunk-rkbsrtg1.js:9271-9288 placement
 var SiteRows; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9271", () => {
+deferInit("chunk-rkbsrtg1.js:9271", () => {
   SiteRows = createContext(null);
 });
-//@ chunk-bc20zedk.js:9288-9292 placement
+//@ chunk-rkbsrtg1.js:9288-9292 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9288", () => {
+deferInit("chunk-rkbsrtg1.js:9288", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9292-9411 placement
+//@ chunk-rkbsrtg1.js:9292-9411 placement
 var focusClick = (press) => (event) => {
   let isSuppressedClick = event.isWindowActivation || event.droppedAsStray;
   if (event.hyperlinkUrl !== undefined) event.allowDefault();
   if (!isSuppressedClick) press();
 };
-//@ chunk-bc20zedk.js:9411-9415 placement
+//@ chunk-rkbsrtg1.js:9411-9415 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9411", () => {
+deferInit("chunk-rkbsrtg1.js:9411", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9415-9432 placement
+//@ chunk-rkbsrtg1.js:9415-9432 placement
 var FocusedNode; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9415", () => {
+deferInit("chunk-rkbsrtg1.js:9415", () => {
   FocusedNode = createContext(null);
 });
-//@ chunk-bc20zedk.js:9432-9436 placement
+//@ chunk-rkbsrtg1.js:9432-9436 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9432", () => {
+deferInit("chunk-rkbsrtg1.js:9432", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:9436-9453 placement
+//@ chunk-rkbsrtg1.js:9436-9453 placement
 var FocusedPress; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:9436", () => {
+deferInit("chunk-rkbsrtg1.js:9436", () => {
   FocusedPress = createContext(null);
 });
-//@ chunk-bc20zedk.js:9453-9661 placement
+//@ chunk-rkbsrtg1.js:9453-9661 placement
 function useSiteFocus(props) {
   let { plugin, handle } = props;
   let focusedPress = useContext(FocusedPress);
@@ -462,7 +462,7 @@ function useSiteFocus(props) {
       : undefined,
   };
 }
-//@ chunk-bc20zedk.js:9661-11053 placement
+//@ chunk-rkbsrtg1.js:9661-11053 placement
 function InputField(props) {
   let { plugin, handle, element, placeholder } = props;
   let siteFocus = useSiteFocus({
@@ -578,20 +578,20 @@ ${fieldText.slice(min_2)}`,
     ],
   });
 }
-//@ chunk-bc20zedk.js:11053-11057 placement
+//@ chunk-rkbsrtg1.js:11053-11057 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:11053", () => {
+deferInit("chunk-rkbsrtg1.js:11053", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:11057-11116 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-rkbsrtg1.js:11057-11116 placement (2.1.88 match: isConnectionError, 1)
 var collectCodeSegments = (err) =>
   err.flatMap((block) =>
     block.type === "code" ? [block] : collectCodeSegments(checkAgentDescriptions(block)),
   );
-//@ chunk-bc20zedk.js:11116-11213 placement
+//@ chunk-rkbsrtg1.js:11116-11213 placement
 var SYNTAX_HIGHLIGHT_CUT_TEXT =
   "Syntax highlighting stops here. This message has more code than is highlighted at once.";
-//@ chunk-bc20zedk.js:11213-11583 placement
+//@ chunk-rkbsrtg1.js:11213-11583 placement
 /**
  * 带高亮预算的代码高亮器（超预算原样输出）。
  */
@@ -626,7 +626,7 @@ ${text}`
     },
   };
 }
-//@ chunk-bc20zedk.js:11583-11689 placement
+//@ chunk-rkbsrtg1.js:11583-11689 placement
 function prehighlightCodeSegments(highlight, err, theme) {
   let budgetedHighlighter = createBudgetedHighlighter(highlight);
   if (budgetedHighlighter !== null)
@@ -638,26 +638,26 @@ function prehighlightCodeSegments(highlight, err, theme) {
     );
   return budgetedHighlighter;
 }
-//@ chunk-bc20zedk.js:11689-11693 placement
+//@ chunk-rkbsrtg1.js:11689-11693 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:11689", () => {
+deferInit("chunk-rkbsrtg1.js:11689", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:11693-11697 placement
+//@ chunk-rkbsrtg1.js:11693-11697 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:11693", () => {
+deferInit("chunk-rkbsrtg1.js:11693", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:11697-11728 placement
+//@ chunk-rkbsrtg1.js:11697-11728 placement
 function trimEntryText(text) {
   return text.trim();
 }
-//@ chunk-bc20zedk.js:11728-11754 placement
+//@ chunk-rkbsrtg1.js:11728-11754 placement
 var CODE_LIST_TAB_WIDTH = 4;
 var LIST_LEVEL_INDENT = 3;
 var BLOCK_QUOTE_INDENT = 4;
 var MAX_RENDER_ROWS = 200;
-//@ chunk-bc20zedk.js:11754-11835 placement
+//@ chunk-rkbsrtg1.js:11754-11835 placement
 function moreRowsText(count) {
   return `\u2026 ${count.toLocaleString()} more ${plural(count, "row")} not shown`;
 }

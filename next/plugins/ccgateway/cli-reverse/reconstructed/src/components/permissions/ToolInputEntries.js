@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：通用权限请求里按条目显示工具输入（inline 的 key: value 与高亮折行的 block），按主题与文本缓存结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (9)
+ * attribution: placement 7, layout 1, affinity 1
  */
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useSettingsState } from "../../hooks/useSettings.js";
-import { useRef, useMemo } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useMemo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { getCliHighlightModule } from "../../utils/cliHighlight.js";
 import { canHighlightAsCode, VALUE_WRAP_WIDTH } from "./ToolParameterDisplay.js";
 import {
@@ -31,12 +31,12 @@ import { createHyperlink } from "../../utils/hyperlink.js";
 import { MessageActionsBar } from "../messageActions.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { isConsentRow, parseConsentSuggestions } from "./consentRows.js";
-import { RULE_ADDING_UPDATE_TYPES } from "../../utils/permissions/permissions.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { tildify } from "../../utils/path.js";
 import { splitGraphemes } from "../../utils/intl.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0e8j1zzj.js:41402-42744 placement
+//@ chunk-8prszgkd.js:50774-52117 placement
 /**
  * 通用权限请求中按条目显示工具输入：inline 条目 key: value（可带超链接、注解），block 条目按语言高亮/着色后折行放入左边框块；结果按主题与文本缓存。
  */
@@ -153,19 +153,24 @@ function ToolInputEntries({ entries: props, contentColumns }) {
     ),
   });
 }
-//@ chunk-0e8j1zzj.js:42744-42788 placement
+//@ chunk-8prszgkd.js:52117-52121 layout
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8prszgkd.js:52117", () => {
+  init_react_production();
+});
+//@ chunk-8prszgkd.js:52121-52165 placement
 function isUnrenderableEntry(entry) {
   return entry.unrenderable === true;
 }
-//@ chunk-0e8j1zzj.js:42788-42818 placement
+//@ chunk-8prszgkd.js:52165-52195 placement
 function describeToolInputEntry(text) {
   return hasVisibleText(text);
 }
-//@ chunk-0e8j1zzj.js:42818-42844 placement
+//@ chunk-8prszgkd.js:52195-52221 placement
 function isMissingEntry(entry) {
   return !entry;
 }
-//@ chunk-0e8j1zzj.js:42844-42930 placement
+//@ chunk-8prszgkd.js:52221-52308 placement
 function entryDisplayWidth(labelWidth, valueText) {
   return (
     labelWidth +
@@ -173,7 +178,7 @@ function entryDisplayWidth(labelWidth, valueText) {
     (valueText.split(/\r\n|[\r\n\u2028\u2029]/).length - 1) * VALUE_WRAP_WIDTH
   );
 }
-//@ chunk-0e8j1zzj.js:42930-43282 placement
+//@ chunk-8prszgkd.js:52308-52661 placement
 /**
  * 通用（Fallback）权限选项转换为结果：yes/启用 auto、不再询问（带权限更新）、no（带反馈）。
  */
@@ -209,7 +214,7 @@ function fallbackChoiceToResult(choice, payload, consentRow, feedback) {
       };
   }
 }
-//@ chunk-0e8j1zzj.js:43282-44090 placement
+//@ chunk-8prszgkd.js:52661-53470 placement
 /**
  * 生成 "不再询问该工具在 <目录> 下的命令" 的 localSettings 规则行；目录名过长时逐字素截断并加省略号。
  */
@@ -252,8 +257,8 @@ function buildToolDontAskAgainRule(tool, options) {
         if (bunStringWidth(formatLabel(tildeCwd)) <= max) return formatLabel(tildeCwd);
         let row = splitGraphemes(tildeCwd);
         let element = "";
-        for (let idx = 0; idx < row.length; idx++) {
-          let accumulated = element + row[idx];
+        for (let k = 0; k < row.length; k++) {
+          let accumulated = element + row[k];
           if (bunStringWidth(formatLabel(`${accumulated}\u2026`)) > max) break;
           element = accumulated;
         }
@@ -263,6 +268,11 @@ function buildToolDontAskAgainRule(tool, options) {
     },
   );
 }
+//@ chunk-8prszgkd.js:53470-53499 affinity
+var RULE_ADDING_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8prszgkd.js:53470", () => {
+  RULE_ADDING_UPDATE_TYPES = new Set(["addRules"]);
+});
 export {
   isUnrenderableEntry,
   buildToolDontAskAgainRule,

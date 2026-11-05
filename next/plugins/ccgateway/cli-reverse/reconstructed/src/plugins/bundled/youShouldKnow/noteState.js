@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。youShouldKnow 提示状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (23)
  * attribution: placement 23
  */
 import { drawsBand, tagOf, iterationOf, storedCount, isOpenView, stringLines } from "./noteRender.js";
@@ -13,7 +13,7 @@ import { answered, msSince, send, versionMarkOf } from "./telemetry.js";
 import { CC_PLUGIN_YOU_SHOULD_KNOW } from "../../../services/tips/youShouldKnowTip.js";
 import { OFF_COMMAND } from "./NoteCard.js";
 
-//@ chunk-bss4k1z9.js:31017-31210 placement
+//@ chunk-775n2x67.js:31325-31518 placement
 function viewOf(view) {
   if (typeof view !== "object" || !view) return null;
   let kind = view.kind;
@@ -28,31 +28,31 @@ function viewOf(view) {
     ? view
     : null;
 }
-//@ chunk-bss4k1z9.js:31210-31335 placement
+//@ chunk-775n2x67.js:31518-31643 placement
 function isRow(value) {
   if (typeof value !== "object" || !value) return false;
   let { id, view } = value;
   return typeof id === "string" && (view === undefined || viewOf(view) !== null);
 }
-//@ chunk-bss4k1z9.js:31335-31379 placement
+//@ chunk-775n2x67.js:31643-31687 placement
 var rowsOf = (value) => (Array.isArray(value) ? value.filter(isRow) : []);
-//@ chunk-bss4k1z9.js:31379-31437 placement
+//@ chunk-775n2x67.js:31687-31745 placement
 var droppedOf = (value, rows) =>
   rowsOf(value).filter((row) => !rows.some((secondRow) => secondRow.id === row.id));
-//@ chunk-bss4k1z9.js:31437-31499 placement
+//@ chunk-775n2x67.js:31745-31807 placement
 function forgetDetached(detached, liveIds) {
   for (let id of detached) if (!liveIds.includes(id)) detached.delete(id);
 }
-//@ chunk-bss4k1z9.js:31499-31565 placement
+//@ chunk-775n2x67.js:31807-31873 placement
 function isBandWatched(surfaces, active, excludeTerminal) {
   return drawsBand(excludeTerminal ? surfaces.filter((surface) => surface !== "terminal") : surfaces, active);
 }
-//@ chunk-bss4k1z9.js:31565-31591 placement
+//@ chunk-775n2x67.js:31873-31899 placement
 var isOfferDue = (askedTurn, turnId, asked) => askedTurn === turnId && !asked;
-//@ chunk-bss4k1z9.js:31591-31663 placement
+//@ chunk-775n2x67.js:31899-31971 placement
 var isUnattendedInFlight = (view, turnId, acknowledged) =>
   (view?.kind === "explaining" || view?.kind === "making") && !acknowledged.has(turnId);
-//@ chunk-bss4k1z9.js:31663-31863 placement
+//@ chunk-775n2x67.js:31971-32171 placement
 var leftOpen = ({ view, tag }, leftBy, offersShown) =>
   answered({
     answer: "left_open",
@@ -65,7 +65,7 @@ var leftOpen = ({ view, tag }, leftBy, offersShown) =>
     iteration: iterationOf(view),
     promptsSurvived: storedCount(view.promptsSurvived),
   });
-//@ chunk-bss4k1z9.js:31863-31929 placement
+//@ chunk-775n2x67.js:32171-32237 placement
 var openRowsOf = (rows) =>
   rows.flatMap(({ view, tag }) =>
     isOpenView(view)
@@ -77,17 +77,17 @@ var openRowsOf = (rows) =>
         ]
       : [],
   );
-//@ chunk-bss4k1z9.js:31929-31957 placement
+//@ chunk-775n2x67.js:32237-32265 placement
 var revive = (map, id) => {
   map.delete(id);
 };
-//@ chunk-bss4k1z9.js:31957-31995 placement
+//@ chunk-775n2x67.js:32265-32303 placement
 var rowOf = (state, id) => rowsOf(state).find((row) => row.id === id);
-//@ chunk-bss4k1z9.js:31995-32005 placement
+//@ chunk-775n2x67.js:32303-32313 placement
 var SESSIONS_MAX = 32;
-//@ chunk-bss4k1z9.js:32005-32022 placement
+//@ chunk-775n2x67.js:32313-32330 placement
 var SHOWN_KEEP_MS = 259200000;
-//@ chunk-bss4k1z9.js:32022-32303 placement
+//@ chunk-775n2x67.js:32330-32611 placement
 function withRow(state, row, now = Date.now()) {
   let filtered = rowsOf(state).filter((thirdRow) => thirdRow.id !== row.id);
   let evictCount = 1 + filtered.length - SESSIONS_MAX;
@@ -103,7 +103,7 @@ function withRow(state, row, now = Date.now()) {
   );
   return [row, ...filtered.filter((row) => !evicted.has(row))];
 }
-//@ chunk-bss4k1z9.js:32303-32362 placement
+//@ chunk-775n2x67.js:32611-32670 placement
 var withViewCleared = (state, sessionId) =>
   rowsOf(state).map((row) =>
     row.id === sessionId
@@ -113,7 +113,7 @@ var withViewCleared = (state, sessionId) =>
         }
       : row,
   );
-//@ chunk-bss4k1z9.js:32362-32513 placement
+//@ chunk-775n2x67.js:32670-32821 placement
 var cleared = (view, cleared) =>
   answered({
     answer: cleared.answer,
@@ -124,7 +124,7 @@ var cleared = (view, cleared) =>
     line: view.line,
     tag: cleared.tag,
   });
-//@ chunk-bss4k1z9.js:32513-32978 placement
+//@ chunk-775n2x67.js:32821-33286 placement
 async function takeDown(ctx, args) {
   let { sid, confirmed, isConfirmed } = args;
   let state = await ctx.store.get("sessions");
@@ -158,7 +158,7 @@ async function takeDown(ctx, args) {
     },
   );
 }
-//@ chunk-bss4k1z9.js:32978-33266 placement
+//@ chunk-775n2x67.js:33286-33574 placement
 async function clearOffLine(ctx, runtime, flags) {
   try {
     let sid = await ctx.session.id();
@@ -181,11 +181,11 @@ async function clearOffLine(ctx, runtime, flags) {
     }
   } catch {}
 }
-//@ chunk-bss4k1z9.js:33266-33312 placement
+//@ chunk-775n2x67.js:33574-33620 placement
 var EARLIER_NAMES = ["suggest-learning", "you-should-know"];
-//@ chunk-bss4k1z9.js:33312-33335 placement
+//@ chunk-775n2x67.js:33620-33643 placement
 var ownNames = () => [CC_PLUGIN_YOU_SHOULD_KNOW, ...EARLIER_NAMES];
-//@ chunk-bss4k1z9.js:33335-33487 placement
+//@ chunk-775n2x67.js:33643-33795 placement
 function isOffCommand(text) {
   let [command, subcommand, pluginName] = text.trim().split(/\s+/);
   return (
@@ -195,7 +195,7 @@ function isOffCommand(text) {
       ownNames().some((ownName) => pluginName === ownName || pluginName === `${ownName}@builtin`))
   );
 }
-//@ chunk-bss4k1z9.js:33487-33929 placement
+//@ chunk-775n2x67.js:33795-34237 placement
 async function ranOffCommand(ctx, runtime) {
   await clearOffLine(ctx, runtime, {
     isConfirmed: true,

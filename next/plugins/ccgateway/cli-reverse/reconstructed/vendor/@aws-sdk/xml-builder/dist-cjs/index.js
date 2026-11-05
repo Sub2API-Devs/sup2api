@@ -1,14 +1,14 @@
 /**
  * @aws-sdk/xml-builder/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/xml-builder@3.921.0..3.972.5
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_xml_parser } from "./xml-parser.js";
 
-//@ chunk-edce4vxq.js:74087-75638 cjs-fingerprint
+//@ chunk-3p78mpxm.js:74087-75638 cjs-fingerprint
 var require_xml_builder = __commonJS(function (cjsExports) {
   var xmlParser = require_xml_parser();
   function escapeAttribute(value) {

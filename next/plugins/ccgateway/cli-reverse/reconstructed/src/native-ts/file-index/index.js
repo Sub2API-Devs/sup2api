@@ -3,14 +3,14 @@
  *
  * 并入已有模块：让出事件循环一次（setImmediate 或 MessageChannel）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/native-ts/file-index/index.ts
- * pieces: chunk-dcmhvw5a.js (11)
+ * pieces: chunk-z20c443b.js (11)
  * attribution: placement 1, layout 7, fingerprint 2, file-local 1
  */
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-dcmhvw5a.js:44768-45031 placement
+//@ chunk-z20c443b.js:44780-45043 placement
 /**
  * 让出事件循环一次（setImmediate 或 MessageChannel）。
  */
@@ -27,7 +27,7 @@ function yieldToEventLoop() {
     });
   return sleep(0);
 }
-//@ chunk-dcmhvw5a.js:45031-45090 layout
+//@ chunk-z20c443b.js:45043-45102 layout
 /**
  * 模糊匹配打分常量（nucleo/fzf 风格）：每字匹配 16、边界后 8、驼峰 6、连续 4、首字符 8、间隙起始 -3 与每字 -1；空查询时最多返回 100 个顶层条目；查询最多取 64 字符；异步建索引每 4ms 让出一次事件循环。
  */
@@ -41,7 +41,7 @@ var PENALTY_GAP_EXTENSION = 1;
 var TOP_LEVEL_CACHE_LIMIT = 100;
 var MAX_QUERY_LEN = 64;
 var CHUNK_MS = 4;
-//@ chunk-dcmhvw5a.js:45090-48582 fingerprint (2.1.88 match: FileIndex, 0.826)
+//@ chunk-z20c443b.js:45102-48619 fingerprint (2.1.88 match: FileIndex, 0.826)
 /**
  * 文件路径模糊搜索索引（2.1.88 中替代原生 Rust 实现的 TS 版）：每个路径存小写形式、a-z 位图（快速排除不含查询字母的路径）、长度、文件名起点及文件名位图。search：位图过滤后贪心找子序列，计算连续/间隙得分，路径与文件名两种匹配取高者，加边界/驼峰加分与短路径加分，维护大小为 limit 的有序 top-k；最后按名次归一化成 0..1 分数（含 test 的路径略降权）并给出匹配位置。异步构建时分片让出事件循环，部分就绪即可查询。
  */
@@ -278,7 +278,7 @@ class FileIndex {
     return results;
   }
 }
-//@ chunk-dcmhvw5a.js:48582-48754 layout
+//@ chunk-z20c443b.js:48619-48791 layout
 function scoreNameMatch(haystack, needleChars, nameStart, nameMatchPositions) {
   let score = 0;
   let prev = nameStart - 1;
@@ -292,13 +292,13 @@ function scoreNameMatch(haystack, needleChars, nameStart, nameMatchPositions) {
   }
   return score;
 }
-//@ chunk-dcmhvw5a.js:48754-48839 layout
+//@ chunk-z20c443b.js:48791-48876 layout
 function sumBoundaryBonuses(path, positions, count) {
   let bonus = scoreBonusAt(path, positions[0], true);
   for (let j = 1; j < count; j++) bonus += scoreBonusAt(path, positions[j], false);
   return bonus;
 }
-//@ chunk-dcmhvw5a.js:48839-48973 file-local
+//@ chunk-z20c443b.js:48876-49010 file-local
 function scoreBonusAt(path, pos, first) {
   if (pos === 0) return first ? BONUS_FIRST_CHAR : 0;
   let prevCh = path.charCodeAt(pos - 1);
@@ -306,19 +306,19 @@ function scoreBonusAt(path, pos, first) {
   if (isLowerAscii(prevCh) && isUpperAscii(path.charCodeAt(pos))) return BONUS_CAMEL;
   return 0;
 }
-//@ chunk-dcmhvw5a.js:48973-49042 layout
+//@ chunk-z20c443b.js:49010-49079 layout
 function isBoundaryChar(code) {
   return code === 47 || code === 92 || code === 45 || code === 95 || code === 46 || code === 32;
 }
-//@ chunk-dcmhvw5a.js:49042-49078 layout
+//@ chunk-z20c443b.js:49079-49115 layout
 function isLowerAscii(code) {
   return code >= 97 && code <= 122;
 }
-//@ chunk-dcmhvw5a.js:49078-49113 layout
+//@ chunk-z20c443b.js:49115-49150 layout
 function isUpperAscii(code) {
   return code >= 65 && code <= 90;
 }
-//@ chunk-dcmhvw5a.js:49113-49309 layout
+//@ chunk-z20c443b.js:49150-49346 layout
 function mapLowerPositionsToOriginal(path, positions) {
   let origIndex = 0;
   let lowerIndex = 0;
@@ -335,7 +335,7 @@ function mapLowerPositionsToOriginal(path, positions) {
     lowerIndex += lowerLen;
   }
 }
-//@ chunk-dcmhvw5a.js:49309-49677 fingerprint (2.1.88 match: computeTopLevelEntries, 0.74)
+//@ chunk-z20c443b.js:49346-49714 fingerprint (2.1.88 match: computeTopLevelEntries, 0.74)
 /**
  * 空查询时展示的顶层条目：各路径第一段去重（最多 limit 个），按长度再字典序排序。
  */
@@ -368,4 +368,4 @@ function computeTopLevelEntries(paths, limit) {
     positions: [],
   }));
 }
-export { CHUNK_MS, yieldToEventLoop, FileIndex };
+export { yieldToEventLoop, CHUNK_MS, FileIndex };

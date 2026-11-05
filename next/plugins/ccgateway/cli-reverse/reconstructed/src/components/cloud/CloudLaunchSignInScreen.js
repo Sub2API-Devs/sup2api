@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话启动遇到未登录时，在 stdin 终端里引导 /login 并在登录后重启或继续启动云会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v4jnmstc.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4m2b8exh.js (4)
  * attribution: placement 4
  */
 import { CloudSessionAccessError } from "../../utils/teleport/api.js";
@@ -33,10 +33,10 @@ import { errorMessage } from "../../utils/errors.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { createSystemMessage } from "../../utils/messages.js";
 
-//@ chunk-v4jnmstc.js:12260-12358 placement
+//@ chunk-4m2b8exh.js:13408-13506 placement
 var SIGN_IN_SAVED_RESTART_TEXT =
   "Your sign-in is saved, but Claude Code couldn't restart: start claude again the same way.";
-//@ chunk-v4jnmstc.js:12358-12415 placement
+//@ chunk-4m2b8exh.js:13506-13563 placement
 function isCloudSessionAccessError(error) {
   return (
     error instanceof CloudSessionAccessError &&
@@ -45,13 +45,13 @@ function isCloudSessionAccessError(error) {
     !isWIFDispatchAuth()
   );
 }
-//@ chunk-v4jnmstc.js:12415-12537 placement
+//@ chunk-4m2b8exh.js:13563-13685 placement
 async function consoleLoginReplacedNotes() {
   return getApiKeyFromConfigOrMacOSKeychain() !== null || (await alwaysFalseProfileCheck())
     ? ["Signing in to claude.ai replaces this machine's Console login."]
     : [];
 }
-//@ chunk-v4jnmstc.js:12537-13878 placement
+//@ chunk-4m2b8exh.js:13685-15026 placement
 /**
  * 云会话启动遇到未登录时，在 stdin 终端里引导 /login 并在登录后重启或继续启动云会话。
  */

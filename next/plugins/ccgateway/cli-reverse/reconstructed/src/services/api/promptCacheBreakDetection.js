@@ -3,19 +3,24 @@
  *
  * 提示词缓存断裂检测：每次请求前按来源（主线程/SDK/代理/压缩分叉）记录 system、工具 schema、模型、beta、effort、thinking 等的哈希与消息哈希，响应后若 cache_read 明显下降则对比找出变化原因并上报（tengu_prompt_cache_break 一类），也处理服务器 cache-diagnosis 与压缩/缓存删除通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/promptCacheBreakDetection.ts
- * pieces: chunk-1t61stbc.js (26), chunk-a76knw89.js (19), chunk-g54kbxqw.js (82)
- * attribution: placement 88, layout 26, fingerprint 10, sole-consumer 1, file-local 2
+ * pieces: chunk-03tec5k5.js (20), chunk-5xgkngpb.js (83), chunk-7pwjpdkw.js (15), chunk-8tk33yy7.js (9), chunk-ac0ps64w.js (2)
+ * attribution: placement 88, layout 28, sole-consumer 1, fingerprint 10, file-local 2
  */
-import { join as join_2 } from "path";
+import { isDeepStrictEqual } from "util";
+import { join } from "path";
 import { rm, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
-import { isDeepStrictEqual } from "util";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession, onSessionSwitch, isDiskless, getSessionId } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
+import { toolKeyOf, withToolOwnership, stripSafeguardsField, exactKeyValue } from "./toolDefinitionShape.js";
+import { getCacheControl, stripCacheControl } from "./declaredToolSet.js";
+import { isPlainObject } from "../../utils/objectUtils.js";
+import { canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
+import { isToolResultBlockWithContent, isToolReferenceWithName } from "../../utils/toolSearch.js";
 import {
   messageRoleBucket,
   messageContentBlocks,
@@ -23,7 +28,7 @@ import {
   PREFIX_BREAK_EVENT,
   foldedAttachmentText,
   contentBlockTypeBucket,
-  stripCacheControl_2,
+  stripCacheControl_2_2,
   classifyUserText,
   MESSAGE_ROLE_BUCKETS,
   CONTENT_BLOCK_TYPE_BUCKETS,
@@ -46,7 +51,7 @@ import {
 import { sanitizePath_3 } from "../../utils/sessionStoragePortable.js";
 import { shortHash, normalizeShortHash } from "../../utils/shortHash.js";
 import {
-  lit,
+  lit as lit_2,
   concatSafe,
   fromNumber,
   joinSafe,
@@ -55,7 +60,7 @@ import {
   fromEnumOpt,
   fromNumberArr,
 } from "../analytics/safeMetadata.js";
-import { count, arraysEqual } from "../../utils/collections.js";
+import { countWhere, arraysEqual as arraysEqual_2 } from "../../utils/collections.js";
 import { logEvent } from "../analytics/index.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
@@ -90,32 +95,38 @@ import { custom } from "../../../vendor/zod/v3/types.js";
 import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { verifyTempDirOwnership } from "../../utils/tempDir.js";
 import { readSmallFileOrNullSync } from "../../utils/readSmallFile.js";
-import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
-import { isPlainObject } from "../../utils/objectUtils.js";
+import { writeFileAtomic as writeFileAtomic_2 } from "../../utils/atomicPublishWrite.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { sanitizeToolNameForTelemetry, hashToolNames } from "../../utils/model/modelCatalog/maskedIds.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
-import { toolKeyOf, stripSafeguardsField, exactKeyValue } from "./toolDefinitionShape.js";
-import { getCacheControl, stripCacheControl } from "./declaredToolSet.js";
-import { canonicalToolName as canonicalToolName_2 } from "../../utils/permissions/permissionRuleParser.js";
-import { isToolResultBlockWithContent, isToolReferenceWithName } from "../../utils/toolSearch.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1t61stbc.js:302-1230 placement
+//@ chunk-ac0ps64w.js:191-216 placement
+/**
+ * 导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。
+ */
+var CACHE_TTL_5M_MS = 300000;
+var CACHE_TTL_1H_MS = 3600000;
+//@ chunk-ac0ps64w.js:216-368 placement
+function getCacheCreationTtl(usage) {
+  if ((usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) > 0) return "5m";
+  return (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0) > 0 ? "1h" : undefined;
+}
+//@ chunk-8tk33yy7.js:226-1154 placement
 /**
  * 系统提示词"# Reporting outcomes"段：要求只报告在本会话中观察到的结果。
  */
 var REPORTING_OUTCOMES_SECTION = `# Reporting outcomes
 
 Report what actually happened, not what you intended. When you say something is done, sent, saved, fixed, or verified, that claim must rest on a result you observed in this session \u2014 tool output, the file as it now reads, the page as it now loads \u2014 not on what the step should have produced. If you did not check, say you did not check. If any step failed, was skipped, or came back different from what you expected, say so in the first sentence of your report, before anything else, even when the rest of the work succeeded. Never quietly work around a failure in a way that makes it look resolved; a problem the user can see is recoverable, one your summary hides is not. When you stop before the task is complete, your first line says so plainly and names what is left. Do not describe partial work as done, and do not let a summary read as more certain than the evidence behind it.`;
-//@ chunk-1t61stbc.js:1230-1268 placement
+//@ chunk-8tk33yy7.js:1154-1192 placement
 var X_ANTHROPIC_BILLING_HEADER = "x-anthropic-billing-header:";
-//@ chunk-1t61stbc.js:1268-1343 placement
+//@ chunk-8tk33yy7.js:1192-1267 placement
 function isBillingHeaderBlock(block) {
   let text = block.text;
   return typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER);
 }
-//@ chunk-1t61stbc.js:1343-1428 layout
+//@ chunk-8tk33yy7.js:1267-1352 layout
 /**
  * system 块是计费头（x-anthropic-billing-header:）或 "# Reporting outcomes" 段（不参与缓存比对）。
  */
@@ -126,7 +137,7 @@ function isUncachedSystemBlock(block) {
     (text.startsWith(X_ANTHROPIC_BILLING_HEADER) || text === REPORTING_OUTCOMES_SECTION)
   );
 }
-//@ chunk-1t61stbc.js:1428-1515 fingerprint (2.1.88 match: computeHash, 0.745)
+//@ chunk-8tk33yy7.js:1352-1439 fingerprint (2.1.88 match: computeHash, 0.745)
 /**
  * 对象 JSON 序列化后用 Bun.hash 取 32 位哈希。
  */
@@ -134,9 +145,9 @@ function computeHash(data) {
   let hash = Bun.hash(jsonStringify(data));
   return typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash;
 }
-//@ chunk-1t61stbc.js:1515-1626 placement
+//@ chunk-8tk33yy7.js:1439-1550 placement
 var FINGERPRINT_BLOCK_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1t61stbc.js:1515", () => {
+deferInit("chunk-8tk33yy7.js:1439", () => {
   FINGERPRINT_BLOCK_KEYS = new Set([
     "type",
     "text",
@@ -150,7 +161,7 @@ deferInit("chunk-1t61stbc.js:1515", () => {
     "cache_control",
   ]);
 });
-//@ chunk-1t61stbc.js:1626-3308 placement
+//@ chunk-8tk33yy7.js:1550-3232 placement
 function fingerprintContentBlock(block, parts) {
   if (typeof block === "string") {
     parts.push("s", String(block.length), block.slice(0, 32), block.slice(-32));
@@ -214,9 +225,9 @@ function fingerprintContentBlock(block, parts) {
     parts.push(key, text.length > 256 ? `len:${text.length}` : text);
   }
 }
-//@ chunk-1t61stbc.js:3308-3319 placement
+//@ chunk-8tk33yy7.js:3232-3243 placement
 var EPHEMERAL_MESSAGE_MARK = -1;
-//@ chunk-1t61stbc.js:3319-3770 placement
+//@ chunk-8tk33yy7.js:3243-3694 placement
 /**
  * 为每条消息计算缓存指纹（角色、内容块摘要），临时消息记为 -1，用于判断提示缓存是否被打破。
  */
@@ -238,20 +249,9 @@ function fingerprintMessagesForCache(messagesForAPI) {
     return typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash;
   });
 }
-//@ chunk-1t61stbc.js:3770-3795 placement
-/**
- * 导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。
- */
-var CACHE_TTL_5M_MS = 300000;
-var CACHE_TTL_1H_MS = 3600000;
-//@ chunk-1t61stbc.js:3795-3947 placement
-function getCacheCreationTtl(usage) {
-  if ((usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) > 0) return "5m";
-  return (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0) > 0 ? "1h" : undefined;
-}
-//@ chunk-1t61stbc.js:3947-3961 placement
+//@ chunk-7pwjpdkw.js:50016-50030 placement
 var MAIN = "main";
-//@ chunk-1t61stbc.js:3961-4050 placement (2.1.88 match: runPostCompactCleanup, 0.926)
+//@ chunk-7pwjpdkw.js:50030-50119 placement (2.1.88 match: runPostCompactCleanup, 0.925)
 /**
  * 第二个参数为假（非代理请求）且 querySource 为 repl_main_thread*、sdk、compact 时为真，供提示缓存断裂检测决定是否跟踪；不是压缩后清理。
  */
@@ -261,14 +261,14 @@ function isCacheBreakTrackedSource(querySource, sourceCategory) {
     (querySource.startsWith("repl_main_thread") || querySource === "sdk" || querySource === "compact")
   );
 }
-//@ chunk-1t61stbc.js:4050-4087 placement
+//@ chunk-7pwjpdkw.js:50119-50159 placement
 var MAX_CHANGED_MESSAGE_ENTRIES = 2000;
 var MAX_PREVIOUS_STATE_ENTRIES = 200;
 var CACHE_TTL_BY_KIND = {
   "5m": CACHE_TTL_5M_MS,
   "1h": CACHE_TTL_1H_MS,
 };
-//@ chunk-1t61stbc.js:4087-4860 placement
+//@ chunk-7pwjpdkw.js:50159-50932 placement
 var CACHE_BREAK_REASONS = {
   system_prompt_changed: "system prompt changed",
   tools_changed: "tool definitions changed",
@@ -289,7 +289,7 @@ var CACHE_BREAK_REASONS = {
   likely_server_side: "prompt unchanged \u2014 likely server-side",
   unknown: "unknown",
 };
-//@ chunk-1t61stbc.js:4860-7402 placement
+//@ chunk-7pwjpdkw.js:50932-53479 placement
 /**
  * 单个查询源的提示缓存命中统计：请求数、命中/未命中、冷启动、预期重建、未命中原因归因与重缓存 token 估计。
  */
@@ -428,7 +428,7 @@ class PromptCacheTracker {
     };
   }
 }
-//@ chunk-1t61stbc.js:7402-7936 placement
+//@ chunk-7pwjpdkw.js:53479-54016 placement
 class PromptCacheTrackerRegistry {
   #e = new Map();
   record(conversationKey, sample) {
@@ -463,16 +463,16 @@ class PromptCacheTrackerRegistry {
     else this.#e.delete(conversationKey);
   }
 }
-//@ chunk-1t61stbc.js:7936-7962 placement
+//@ chunk-7pwjpdkw.js:54016-54043 placement
 var promptCacheTrackers; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1t61stbc.js:7936", () => {
+deferInit("chunk-7pwjpdkw.js:54016", () => {
   promptCacheTrackers = new SessionRootSlot(() => new PromptCacheTrackerRegistry());
 });
-//@ chunk-1t61stbc.js:7962-7994 placement
+//@ chunk-7pwjpdkw.js:54043-54075 placement
 function promptCacheTrackersForSession() {
   return promptCacheTrackers.of(getRootSession());
 }
-//@ chunk-1t61stbc.js:7994-8066 placement
+//@ chunk-7pwjpdkw.js:54075-54147 placement
 function recordPromptCacheUsage(mainKey, usage) {
   try {
     return promptCacheTrackersForSession().record(mainKey, usage);
@@ -481,7 +481,7 @@ function recordPromptCacheUsage(mainKey, usage) {
     return null;
   }
 }
-//@ chunk-1t61stbc.js:8066-8122 placement
+//@ chunk-7pwjpdkw.js:54147-54203 placement
 function attributePromptCacheMiss(mainKey, detail) {
   try {
     promptCacheTrackersForSession().attribute(mainKey, detail);
@@ -489,7 +489,7 @@ function attributePromptCacheMiss(mainKey, detail) {
     logError(error);
   }
 }
-//@ chunk-1t61stbc.js:8122-8174 placement
+//@ chunk-7pwjpdkw.js:54203-54255 placement
 function touchPromptCache(mainKey, at) {
   try {
     promptCacheTrackersForSession().touch(mainKey, at);
@@ -497,7 +497,7 @@ function touchPromptCache(mainKey, at) {
     logError(error);
   }
 }
-//@ chunk-1t61stbc.js:8174-8245 placement
+//@ chunk-7pwjpdkw.js:54255-54326 placement
 function expectPromptCacheDrop(mainKey = MAIN, now = Date.now()) {
   try {
     promptCacheTrackersForSession().expectDrop(mainKey, now);
@@ -505,22 +505,535 @@ function expectPromptCacheDrop(mainKey = MAIN, now = Date.now()) {
     logError(error);
   }
 }
-//@ chunk-1t61stbc.js:8245-8301 placement
+//@ chunk-7pwjpdkw.js:54326-54382 placement
 function getPromptCacheSummary(mainKey = MAIN, now = Date.now()) {
   return promptCacheTrackersForSession().summary(mainKey, now);
 }
-//@ chunk-1t61stbc.js:8301-8356 placement
+//@ chunk-7pwjpdkw.js:54382-54437 placement
 function estimateRecacheTokens(mainKey = MAIN) {
   return promptCacheTrackersForSession().estimateRecacheTokens(mainKey);
 }
-//@ chunk-1t61stbc.js:8356-8437 placement
+//@ chunk-7pwjpdkw.js:54437-54518 placement
 function clearPromptCacheOnSessionSwitch() {
   return onSessionSwitch((sessionId, kind) => {
     if (kind === "cd" || kind === "hydrate") return;
     promptCacheTrackersForSession().clear();
   });
 }
-//@ chunk-g54kbxqw.js:54510-54678 sole-consumer
+//@ chunk-03tec5k5.js:2119-2233 placement
+var ENVELOPE_DIFF_FIELDS = [
+  "betas",
+  "tool_choice",
+  "thinking",
+  "context_management",
+  "output_config",
+  "speed",
+  "temperature",
+  "max_tokens",
+];
+//@ chunk-03tec5k5.js:2233-2472 placement
+/**
+ * 由已知的模型、工具和 system 生成提示前缀账本的初始快照（标记为播种）。
+ */
+function seedLedgerSnapshot(snapshot) {
+  return {
+    model: snapshot.model,
+    tools: snapshot.tools.map((tool, index) => ({
+      key: toolKeyOf(tool, index),
+      deferred: isDeferredTool(tool),
+      bound: isDeferredTool(tool),
+      cacheControl: undefined,
+      body: tool,
+    })),
+    system: snapshot.system.map((body) => ({
+      preamble: false,
+      cacheControl: undefined,
+      body,
+    })),
+    messages: [],
+    envelope: {},
+    seeded: true,
+  };
+}
+//@ chunk-03tec5k5.js:2472-3476 placement
+/**
+ * 把请求转换为可比较的快照（system 块、工具、betas、参数），可绑定引用到的延迟工具。
+ */
+function snapshotRequestForCacheDiff(request, options = {}) {
+  let boundDeferredToolNames =
+    options.boundDeferredToolNames ??
+    (options.bindReferencedDeferredTools === true
+      ? collectReferencedDeferredTools(request.messages)
+      : undefined);
+  let systemBlocks =
+    typeof request.system === "string"
+      ? [
+          {
+            type: "text",
+            text: request.system,
+          },
+        ]
+      : (request.system ?? []);
+  let envelope = {};
+  for (let fieldName of ENVELOPE_DIFF_FIELDS) {
+    let fieldValue =
+      fieldName === "betas"
+        ? sortedList(request.betas)
+        : fieldName === "context_management"
+          ? normalizeContextManagement(request.context_management)
+          : request[fieldName];
+    if (fieldValue !== undefined) envelope[fieldName] = fieldValue;
+  }
+  return {
+    model: request.model,
+    envelope,
+    tools: (request.tools ?? []).map((tool, toolIndex) => {
+      let toolBody = tool;
+      if ("ownership_metadata" in tool) {
+        let { ownership_metadata: ownershipMetadata, ...toolWithoutOwnership } = tool;
+        toolBody = toolWithoutOwnership;
+      }
+      return {
+        key: toolKeyOf(tool, toolIndex),
+        deferred: tool.defer_loading === true,
+        bound:
+          tool.defer_loading === true &&
+          typeof tool.name === "string" &&
+          boundDeferredToolNames?.has(tool.name) === true,
+        cacheControl: getCacheControl(tool),
+        body: stripCacheControl(toolBody),
+      };
+    }),
+    system: systemBlocks.map((block) => ({
+      preamble: isUncachedSystemBlock(block),
+      cacheControl: getCacheControl(block),
+      body: stripCacheControl(block),
+    })),
+    messages: request.messages.map((message, messageIndex, messages) => ({
+      role: message.role,
+      turnScopedSystem: message.role === "system" && messageIndex === messages.length - 1,
+      blocks:
+        typeof message.content === "string"
+          ? [
+              {
+                thinking: false,
+                cacheControl: undefined,
+                body: {
+                  type: "text",
+                  text: message.content,
+                },
+              },
+            ]
+          : message.content.map((block) => ({
+              thinking: block.type === "thinking" || block.type === "redacted_thinking",
+              cacheControl: getCacheControl(block),
+              body: withToolOwnership(stripSafeguardsField(stripCacheControl(block)), undefined),
+            })),
+    })),
+  };
+}
+//@ chunk-03tec5k5.js:3476-3752 placement
+/**
+ * 把提示前缀账本转成可比较的视图：去掉前导 system、回合内 system 消息和 thinking 块。
+ */
+function ledgerComparableView(ledger) {
+  return {
+    model: ledger.model,
+    tools: ledger.tools.filter(isBoundTool).map((tool) => tool.body),
+    system: ledger.system.filter((row) => !row.preamble).map((row) => row.body),
+    messages: ledger.messages
+      .filter((message) => !message.turnScopedSystem)
+      .map((message) => ({
+        role: message.role,
+        content: message.blocks.filter((block) => !block.thinking).map((block) => block.body),
+      })),
+  };
+}
+//@ chunk-03tec5k5.js:3752-3830 placement
+/**
+ * 导出函数 `isCacheFingerprintPart`：参数 e，返回 e.part === "tool" || e.part === "system" || e.part === "message"。
+ */
+function isCacheFingerprintPart(part) {
+  return part.part === "tool" || part.part === "system" || part.part === "message";
+}
+//@ chunk-03tec5k5.js:3830-3839 placement
+var MAX_LEDGER_ENTRIES = 16;
+//@ chunk-03tec5k5.js:3839-3927 placement
+/**
+ * 导出函数 `describeSnapshotDiff`：参数 e, n，返回 e.seeded ? diffToolLists(e, n) : [ ...diffToolLists(e, n), ...diffThinkingBlocks(e, n), ...diffCacheMarkers(e,…。
+ */
+function describeSnapshotDiff(previous, diff) {
+  return previous.seeded
+    ? diffToolLists(previous, diff)
+    : [
+        ...diffToolLists(previous, diff),
+        ...diffThinkingBlocks(previous, diff),
+        ...diffCacheMarkers(previous, diff),
+        ...describeRequestDifferences(previous, diff),
+      ];
+}
+//@ chunk-03tec5k5.js:3927-5480 placement
+/**
+ * 比较两次请求的工具列表（新增、移除、变化、重排），延迟工具单独处理。
+ */
+function diffToolLists(previous, next) {
+  let previousView = ledgerComparableView(previous);
+  let nextView = ledgerComparableView(next);
+  let entries = [];
+  let pushEntry = (entry) => {
+    entries.push(entry);
+    return entries.length < MAX_LEDGER_ENTRIES;
+  };
+  let indexTools = (tools) =>
+    new Map(
+      [...tools.filter((tool) => !tool.deferred), ...tools.filter((tool) => tool.bound)].map((tool) => [
+        tool.key,
+        tool,
+      ]),
+    );
+  let previousTools = indexTools(previous.tools);
+  let nextTools = indexTools(next.tools);
+  let seededRemovals = [];
+  let hasRealChange = false;
+  for (let [toolKey, previousTool] of previousTools) {
+    let body = previousTool.body;
+    let nextTool = nextTools.get(toolKey);
+    if (nextTool === undefined) {
+      if (previousTool.deferred) {
+        if (!previous.seeded)
+          seededRemovals.push({
+            part: "tool",
+            id: toolKey,
+            kind: "removed",
+            prev: body,
+          });
+        continue;
+      }
+      hasRealChange = true;
+      if (
+        !pushEntry({
+          part: "tool",
+          id: toolKey,
+          kind: "removed",
+          prev: body,
+        })
+      )
+        return entries;
+    } else if (previousTool.deferred !== nextTool.deferred) {
+      hasRealChange = true;
+      let deferralEntry = previousTool.deferred
+        ? {
+            part: "tool",
+            id: toolKey,
+            kind: "added",
+            next: nextTool.body,
+          }
+        : {
+            part: "tool",
+            id: toolKey,
+            kind: "removed",
+            prev: body,
+          };
+      if (!pushEntry(deferralEntry)) return entries;
+    } else if (!isDeepStrictEqual(body, nextTool.body)) {
+      hasRealChange ||= !previousTool.deferred;
+      let body_2 = nextTool.body;
+      let field =
+        [...Object.keys(body), ...Object.keys(body_2)].find(
+          (fieldName) => !isDeepStrictEqual(exactKeyValue(body, fieldName), exactKeyValue(body_2, fieldName)),
+        ) ?? "?";
+      if (
+        !pushEntry({
+          part: "tool",
+          id: toolKey,
+          kind: "changed",
+          field,
+          prev: body,
+          next: body_2,
+        })
+      )
+        return entries;
+    }
+  }
+  for (let [toolKey, nextTool] of nextTools)
+    if (!previousTools.has(toolKey) && !nextTool.deferred) {
+      hasRealChange = true;
+      if (
+        !pushEntry({
+          part: "tool",
+          id: toolKey,
+          kind: "added",
+          next: nextTool.body,
+        })
+      )
+        return entries;
+    }
+  if (!hasRealChange) {
+    let activeToolKeys = (toolMap) =>
+      [...toolMap.values()].flatMap((tool) => (tool.deferred ? [] : [tool.key]));
+    let previousKeys = activeToolKeys(previousTools);
+    let found = activeToolKeys(nextTools)
+      .filter((toolKey) => previousTools.has(toolKey))
+      .find((nextKey, keyIndex) => previousKeys[keyIndex] !== nextKey);
+    if (found !== undefined)
+      pushEntry({
+        part: "tool",
+        id: found,
+        kind: "reordered",
+      });
+  }
+  let max = Math.max(previousView.system.length, nextView.system.length);
+  for (let idx = 0; idx < max; idx++) {
+    let previousPart = previousView.system[idx];
+    let nextPart = nextView.system[idx];
+    let changeKind = previousPart === undefined ? "added" : nextPart === undefined ? "removed" : "changed";
+    if (changeKind !== "changed" || !isDeepStrictEqual(previousPart, nextPart)) {
+      if (
+        !pushEntry({
+          part: "system",
+          index: idx,
+          kind: changeKind,
+          prev: previousPart,
+          next: nextPart,
+        })
+      )
+        return entries;
+    }
+  }
+  for (let idx = 0; idx < previousView.messages.length; idx++) {
+    let previousMessage = previousView.messages[idx];
+    let nextMessage = nextView.messages[idx];
+    if (nextMessage !== undefined && isDeepStrictEqual(previousMessage, nextMessage)) continue;
+    let messageEntry = {
+      part: "message",
+      index: idx,
+      role: previousMessage.role,
+      kind: nextMessage === undefined ? "removed" : "changed",
+      prev: previousMessage,
+      next: nextMessage,
+    };
+    if (!pushEntry(messageEntry)) return entries;
+  }
+  for (let entry of seededRemovals) if (!pushEntry(entry)) break;
+  return entries;
+}
+//@ chunk-03tec5k5.js:5480-5956 placement
+function diffThinkingBlocks(previous, next) {
+  let entries = [];
+  let min = Math.min(previous.messages.length, next.messages.length);
+  for (let idx = 0; idx < min && entries.length < MAX_LEDGER_ENTRIES; idx++) {
+    let previousSignatures = describeSignatureField(previous.messages[idx]);
+    let nextSignatures = describeSignatureField(next.messages[idx]);
+    if (previousSignatures.length === 0 && nextSignatures.length === 0) continue;
+    if (
+      previousSignatures.length === nextSignatures.length &&
+      previousSignatures.every((signature, signatureIndex) => signature === nextSignatures[signatureIndex])
+    )
+      continue;
+    let sharesPrefix =
+      previousSignatures
+        .slice(0, nextSignatures.length)
+        .every((signature, signatureIndex) => signature === nextSignatures[signatureIndex]) ||
+      nextSignatures
+        .slice(0, previousSignatures.length)
+        .every((signature, signatureIndex) => signature === previousSignatures[signatureIndex]);
+    entries.push({
+      part: "thinking",
+      index: idx,
+      kind: !sharesPrefix
+        ? "changed"
+        : nextSignatures.length < previousSignatures.length
+          ? "dropped"
+          : "added",
+      prevCount: previousSignatures.length,
+      nextCount: nextSignatures.length,
+    });
+  }
+  return entries;
+}
+//@ chunk-03tec5k5.js:5956-6132 placement
+function describeSignatureField(block) {
+  return block.blocks.flatMap((block) => {
+    if (!block.thinking) return [];
+    let signature = exactKeyValue(block.body, "signature");
+    let data = exactKeyValue(block.body, "data");
+    return [typeof signature === "string" ? signature : typeof data === "string" ? data : "?"];
+  });
+}
+//@ chunk-03tec5k5.js:6132-6582 placement
+function diffCacheMarkers(previous, next) {
+  let cacheControlMarkers = collectCacheControlMarkers(previous, previous.messages.length);
+  let cacheControlMarkers_2 = collectCacheControlMarkers(next, previous.messages.length);
+  let entries = [];
+  for (let [markerKey, { at, marker }] of cacheControlMarkers) {
+    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
+    let nextMarkerInfo = cacheControlMarkers_2.get(markerKey);
+    if (nextMarkerInfo === undefined)
+      entries.push({
+        part: "cache",
+        at,
+        kind: "dropped",
+        prev: marker,
+        next: undefined,
+      });
+    else if (!isDeepStrictEqual(marker, nextMarkerInfo.marker))
+      entries.push({
+        part: "cache",
+        at,
+        kind: "changed",
+        prev: marker,
+        next: nextMarkerInfo.marker,
+      });
+  }
+  for (let [markerKey, { at, marker }] of cacheControlMarkers_2) {
+    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
+    if (!cacheControlMarkers.has(markerKey))
+      entries.push({
+        part: "cache",
+        at,
+        kind: "added",
+        prev: undefined,
+        next: marker,
+      });
+  }
+  return entries;
+}
+//@ chunk-03tec5k5.js:6582-7064 placement
+function collectCacheControlMarkers(request, limit) {
+  let markers = new Map();
+  for (let tool of request.tools)
+    if (tool.cacheControl !== undefined)
+      markers.set(`tools:${tool.key}`, {
+        at: {
+          segment: "tools",
+          key: tool.key,
+        },
+        marker: tool.cacheControl,
+      });
+  request.system.forEach((section, index) => {
+    if (section.cacheControl !== undefined)
+      markers.set(`system:${index}`, {
+        at: {
+          segment: "system",
+          index,
+        },
+        marker: section.cacheControl,
+      });
+  });
+  request.messages.slice(0, limit).forEach((message, index) => {
+    message.blocks.forEach((block, blockItem) => {
+      if (block.cacheControl !== undefined)
+        markers.set(`messages:${index}.${blockItem}`, {
+          at: {
+            segment: "messages",
+            index,
+            block: blockItem,
+          },
+          marker: block.cacheControl,
+        });
+    });
+  });
+  return markers;
+}
+//@ chunk-03tec5k5.js:7064-7325 placement
+function describeRequestDifferences(left, right) {
+  return [
+    ["model", left.model, right.model],
+    ["attribution_header", billingHeaderText(left), billingHeaderText(right)],
+    ["deferred_tools", deferredToolKeys(left), deferredToolKeys(right)],
+    ...ENVELOPE_DIFF_FIELDS.map((field) => [field, left.envelope[field], right.envelope[field]]),
+  ]
+    .filter(([, leftValue, rightValue]) => !isDeepStrictEqual(leftValue, rightValue))
+    .map(([field, leftValue, rightValue]) => ({
+      part: "envelope",
+      id: field,
+      kind: "changed",
+      prev: leftValue,
+      next: rightValue,
+    }));
+}
+//@ chunk-03tec5k5.js:7325-7364 placement
+function sortedList(betas) {
+  return betas && [...betas].sort();
+}
+//@ chunk-03tec5k5.js:7364-7726 layout
+function normalizeContextManagement(contextManagement) {
+  if (!isPlainObject(contextManagement) || !Array.isArray(contextManagement.edits)) return contextManagement;
+  return {
+    ...contextManagement,
+    edits: contextManagement.edits.map((edit) => {
+      if (
+        !isPlainObject(edit) ||
+        !isPlainObject(edit.trigger) ||
+        !isPlainObject(edit.keep) ||
+        edit.trigger.type !== "tool_uses" ||
+        edit.keep.type !== "tool_uses" ||
+        typeof edit.trigger.value !== "number" ||
+        typeof edit.keep.value !== "number"
+      )
+        return edit;
+      let triggerLessKeep = edit.trigger.value - edit.keep.value;
+      let { trigger, keep, ...editRest } = edit;
+      return {
+        ...editRest,
+        triggerLessKeep,
+      };
+    }),
+  };
+}
+//@ chunk-03tec5k5.js:7726-7848 placement
+function billingHeaderText(row) {
+  for (let systemRow of row.system) {
+    let text = exactKeyValue(systemRow.body, "text");
+    if (typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER)) return text;
+  }
+  return "";
+}
+//@ chunk-03tec5k5.js:7848-7935 placement
+function deferredToolKeys(reference) {
+  return reference.tools
+    .filter((tool) => tool.deferred)
+    .map((tool) => tool.key)
+    .sort()
+    .join(",");
+}
+//@ chunk-03tec5k5.js:7935-7977 placement
+function isBoundTool(tool) {
+  return !tool.deferred || tool.bound;
+}
+//@ chunk-03tec5k5.js:7977-8027 placement
+/**
+ * 导出函数 `isDeferredTool`：参数 e，返回 lO(e, "defer_loading") === !0。
+ */
+function isDeferredTool(tool) {
+  return exactKeyValue(tool, "defer_loading") === true;
+}
+//@ chunk-03tec5k5.js:8027-8444 placement
+function collectReferencedDeferredTools(messages) {
+  let seen = new Set();
+  for (let message of messages) {
+    if (typeof message.content === "string") continue;
+    if (message.role === "system") {
+      for (let block of message.content) {
+        let tool = exactKeyValue(block, "tool");
+        let out =
+          exactKeyValue(block, "type") === "tool_addition" && typeof tool === "object" && tool !== null
+            ? exactKeyValue(tool, "name")
+            : undefined;
+        if (typeof out === "string") seen.add(canonicalToolName(out));
+      }
+      continue;
+    }
+    if (message.role !== "user") continue;
+    for (let block of message.content) {
+      if (!isToolResultBlockWithContent(block)) continue;
+      for (let inner of block.content)
+        if (isToolReferenceWithName(inner)) seen.add(canonicalToolName(inner.tool_name));
+    }
+  }
+  return seen;
+}
+//@ chunk-5xgkngpb.js:1551633-1551804 sole-consumer
 function messageFingerprint(message) {
   return {
     role: messageRoleBucket(message.message.role),
@@ -531,22 +1044,22 @@ function messageFingerprint(message) {
         : [],
   };
 }
-//@ chunk-g54kbxqw.js:54678-54758 placement
+//@ chunk-5xgkngpb.js:1551804-1551886 placement
 /**
  * 提示缓存失效检测的输出上限：摘要块数 16、散列块 10000、系统附件字符 4 倍块上限，空摘要结构。
  */
-var MAX_SYSTEM_ATTACHMENT_CHARS; // deferred: uses PREFIX_BREAK_EVENT (./promptCacheBreakParts.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SYSTEM_ATTACHMENT_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_BLOCK_SUMMARY;
-deferInit("chunk-g54kbxqw.js:54678", () => {
+deferInit("chunk-5xgkngpb.js:1551804", () => {
   MAX_SYSTEM_ATTACHMENT_CHARS = 4 * PREFIX_HASH_CHUNK;
   EMPTY_BLOCK_SUMMARY = {
-    blocks: lit(""),
-    systemAttachments: lit(""),
+    blocks: lit_2(""),
+    systemAttachments: lit_2(""),
     blockCount: 0,
     truncated: false,
   };
 });
-//@ chunk-g54kbxqw.js:54758-55197 placement
+//@ chunk-5xgkngpb.js:1551886-1552330 placement
 function scanChangedMessages(describeMessage, firstChangedMessageIndex, messageCount, maxEntries) {
   let blockParts = [];
   let attachmentParts = [];
@@ -565,7 +1078,7 @@ function scanChangedMessages(describeMessage, firstChangedMessageIndex, messageC
       attachmentChars <= MAX_SYSTEM_ATTACHMENT_CHARS
     )
       attachmentParts.push(
-        concatSafe(fromNumber(max), lit("="), joinSafe(messageInfo.systemAttachments, "+")),
+        concatSafe(fromNumber(max), lit_2("="), joinSafe(messageInfo.systemAttachments, "+")),
       );
     let roleLabel = fromEnum(messageInfo.role);
     for (let block of messageInfo.blocks) {
@@ -583,11 +1096,11 @@ function scanChangedMessages(describeMessage, firstChangedMessageIndex, messageC
     truncated,
   };
 }
-//@ chunk-g54kbxqw.js:55197-55389 placement
+//@ chunk-5xgkngpb.js:1552330-1552523 placement
 function blockSummary(block, limit) {
   if (block === undefined)
     return {
-      blocks: lit(""),
+      blocks: lit_2(""),
       blockCount: 0,
     };
   let sliced = block.blocks.slice(0, limit);
@@ -600,7 +1113,7 @@ function blockSummary(block, limit) {
     blockCount: sliced.length,
   };
 }
-//@ chunk-g54kbxqw.js:55389-55540 placement
+//@ chunk-5xgkngpb.js:1552523-1552675 placement
 function isPrefixOf(prev, next) {
   return (
     prev.role === next.role &&
@@ -610,7 +1123,7 @@ function isPrefixOf(prev, next) {
     )
   );
 }
-//@ chunk-g54kbxqw.js:55540-56031 placement
+//@ chunk-5xgkngpb.js:1552675-1553172 placement
 function classifyFirstChange(firstChangedMessageIndex, hashAt, prevMessageCount, newMessages, knownHash) {
   if (firstChangedMessageIndex < 0) return "none";
   if (hashAt === undefined || newMessages === undefined) return "unknown";
@@ -620,10 +1133,10 @@ function classifyFirstChange(firstChangedMessageIndex, hashAt, prevMessageCount,
   if (message === undefined) return "rewrite";
   let fingerprint = knownHash ?? messageFingerprint(message);
   if (fingerprint.blocks.length === hash.blocks.length || !isPrefixOf(hash, fingerprint)) return "rewrite";
-  for (let j = firstChangedMessageIndex + 1; j < prevMessageCount; j++) {
-    let hash2 = hashAt(j);
+  for (let idx = firstChangedMessageIndex + 1; idx < prevMessageCount; idx++) {
+    let hash2 = hashAt(idx);
     if (hash2 === undefined) return "unknown";
-    let message2 = newMessages[j];
+    let message2 = newMessages[idx];
     if (hash2.role !== "system" || message2 === undefined || message2.message.role !== "system")
       return "rewrite";
     let fingerprint2 = messageFingerprint(message2);
@@ -632,18 +1145,18 @@ function classifyFirstChange(firstChangedMessageIndex, hashAt, prevMessageCount,
   }
   return "tail_append";
 }
-//@ chunk-g54kbxqw.js:56031-56168 placement
+//@ chunk-5xgkngpb.js:1553172-1553310 placement
 function countSystemRows(state) {
   if (state === undefined) return -1;
   return "messages" in state
-    ? count(state.messages, (message) => message.message.role === "system")
-    : count(state.rows, (row) => row.role === "system");
+    ? countWhere(state.messages, (message) => message.message.role === "system")
+    : countWhere(state.rows, (row) => row.role === "system");
 }
-//@ chunk-g54kbxqw.js:56168-56206 placement
+//@ chunk-5xgkngpb.js:1553310-1553349 placement
 function hashJoined(parts) {
   return shortHash(parts.join(","));
 }
-//@ chunk-g54kbxqw.js:56206-58038 placement
+//@ chunk-5xgkngpb.js:1553349-1555206 placement
 /**
  * 根据前后两次请求的差异（系统、工具、首个变化的消息等）推断提示缓存失效的原因。
  */
@@ -712,7 +1225,7 @@ function explainCacheBreak(context) {
   let previousFirstBlocks = blockSummary(previousFirstMessage, PREFIX_HASH_CHUNK);
   let newFirstBlocks = blockSummary(newFirstMessage, PREFIX_HASH_CHUNK);
   logEvent(PREFIX_BREAK_EVENT, {
-    requestId: sanitizeMarkName(context.requestId) ?? lit(""),
+    requestId: sanitizeMarkName(context.requestId) ?? lit_2(""),
     model: telemetrySafeModelName(context.model),
     cacheBroke: context.cacheBroke,
     changeKinds: context.changeKinds,
@@ -773,14 +1286,14 @@ function explainCacheBreak(context) {
     ),
   });
 }
-//@ chunk-g54kbxqw.js:58038-58339 placement
+//@ chunk-5xgkngpb.js:1555206-1555514 placement
 function messageOutline(message) {
   let text = foldedAttachmentText(message, 0);
   return {
     role: messageRoleBucket(message.message.role),
     blocks: messageContentBlocks(message).map((block) => {
       let bucket = contentBlockTypeBucket(block);
-      let stripped = stripCacheControl_2(block);
+      let stripped = stripCacheControl_2_2(block);
       let text = "text" in block ? block.text : undefined;
       let hash = Bun.hash(stripped);
       return {
@@ -795,10 +1308,10 @@ function messageOutline(message) {
     }),
   };
 }
-//@ chunk-g54kbxqw.js:58339-58356 placement
+//@ chunk-5xgkngpb.js:1555514-1555533 placement
 var MAX_CHANGED_MESSAGE_BLOCKS = 16;
 var MAX_HASHED_BLOCKS = 1e4;
-//@ chunk-g54kbxqw.js:58356-58577 placement
+//@ chunk-5xgkngpb.js:1555533-1555756 placement
 function compactBaseline(parts) {
   let rows = [];
   let total = 0;
@@ -815,9 +1328,9 @@ function compactBaseline(parts) {
   }
   return rows;
 }
-//@ chunk-g54kbxqw.js:58577-58774 placement
+//@ chunk-5xgkngpb.js:1555756-1555961 placement
 var BASELINE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:58577", () => {
+deferInit("chunk-5xgkngpb.js:1555756", () => {
   BASELINE_SCHEMA = DoctorLazy(() =>
     array(
       objectSchema({
@@ -839,7 +1352,7 @@ deferInit("chunk-g54kbxqw.js:58577", () => {
       .refine((parts) => parts.reduce((acc, part) => acc + part.b.length, 0) <= MAX_HASHED_BLOCKS),
   );
 });
-//@ chunk-g54kbxqw.js:58774-59001 placement
+//@ chunk-5xgkngpb.js:1555961-1556190 placement
 function restoreBaseline(outlines) {
   let parsed = BASELINE_SCHEMA().safeParse(outlines);
   if (!parsed.success) return;
@@ -860,27 +1373,27 @@ function restoreBaseline(outlines) {
     }),
   }));
 }
-//@ chunk-g54kbxqw.js:59001-59109 placement
+//@ chunk-5xgkngpb.js:1556190-1556299 placement
 function blockOutlineKey(parts) {
   return joinSafe(
     parts.flatMap((part) => {
       let type = normalizeShortHash(part.type);
-      return type === undefined ? [] : [concatSafe(type, lit(":"), fromNumber(part.len))];
+      return type === undefined ? [] : [concatSafe(type, lit_2(":"), fromNumber(part.len))];
     }),
   );
 }
-//@ chunk-g54kbxqw.js:59109-59241 placement
+//@ chunk-5xgkngpb.js:1556299-1556432 placement
 function positionedOutlineKey(parts) {
   return joinSafe(
     parts.flatMap((part) => {
       let type = normalizeShortHash(part.type);
       return type === undefined
         ? []
-        : [concatSafe(fromNumber(part.position), lit(":"), type, lit(":"), fromNumber(part.delta))];
+        : [concatSafe(fromNumber(part.position), lit_2(":"), type, lit_2(":"), fromNumber(part.delta))];
     }),
   );
 }
-//@ chunk-g54kbxqw.js:59241-59959 placement
+//@ chunk-5xgkngpb.js:1556432-1557161 placement
 function changedMessageFields(prev, next) {
   let changed = {
     ...(prev && {
@@ -919,29 +1432,29 @@ function changedMessageFields(prev, next) {
       }),
   };
 }
-//@ chunk-g54kbxqw.js:59959-60026 placement
+//@ chunk-5xgkngpb.js:1557161-1557229 placement
 function maxSafeIntSchema() {
   return numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER);
 }
-//@ chunk-g54kbxqw.js:60026-60085 placement
+//@ chunk-5xgkngpb.js:1557229-1557289 placement
 function blocksTotalLength(parts) {
   return parts.blocks.reduce((acc, block) => acc + block.length, 0);
 }
-//@ chunk-g54kbxqw.js:60085-60108 fingerprint (2.1.88 match: getCacheBreakDiffPath, 0.618)
+//@ chunk-5xgkngpb.js:1557289-1557312 fingerprint (2.1.88 match: getCacheBreakDiffPath, 0.618)
 /**
  * 缓存断裂状态文件名前缀 "cache-break-"（cache-break-state-<会话>.json）。
  */
 var cacheBreakStatePrefix = "cache-break-";
-//@ chunk-g54kbxqw.js:60183-61176 placement
+//@ chunk-5xgkngpb.js:1557388-1558382 placement
 var CACHE_BREAK_HINTS =
   typeof {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   } !== "undefined"
@@ -949,57 +1462,61 @@ var CACHE_BREAK_HINTS =
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
     : "unknown";
-//@ chunk-g54kbxqw.js:61176-61245 placement
+//@ chunk-5xgkngpb.js:1558382-1558452 placement
 function isCacheBreakOutlineEnabled() {
   if (env.CLAUDE_CODE_IS_COWORK) return true;
   return isManagedOAuthContext_2() || isRemoteEnv();
 }
-//@ chunk-g54kbxqw.js:61245-61292 placement
+//@ chunk-5xgkngpb.js:1558452-1558500 placement
 function isRemoteEnv() {
   return env.CLAUDE_CODE_REMOTE === true;
 }
-//@ chunk-g54kbxqw.js:61292-61303 placement
-var CACHE_TTL_MS = 1e4;
-//@ chunk-g54kbxqw.js:61303-61346 placement
+//@ chunk-5xgkngpb.js:1558500-1558512 placement
+var CACHE_TTL_MS_2 = 1e4;
+//@ chunk-5xgkngpb.js:1558512-1558555 placement
 function promptCacheBreakState() {
   return streamFallbackWarning().promptCacheBreak;
 }
-//@ chunk-g54kbxqw.js:61346-61368 placement
+//@ chunk-5xgkngpb.js:1558555-1558578 placement
 function noopShape(messages) {
   return;
 }
-//@ chunk-g54kbxqw.js:61368-61442 placement
+//@ chunk-5xgkngpb.js:1558578-1558655 placement
 function isCacheBreakPersisted() {
   if (env.CLAUDE_CODE_IS_COWORK || isManagedOAuthContext_2()) return true;
   return isRemoteEnv() && !isDiskless();
 }
-//@ chunk-g54kbxqw.js:61442-61480 placement
+//@ chunk-5xgkngpb.js:1558655-1558695 placement
 function isCacheBreakPersistenceEnabled() {
   return isCacheBreakPersisted() || (isPrefixBreakSampled() && !isDiskless());
 }
-//@ chunk-g54kbxqw.js:61480-61534 placement
+//@ chunk-5xgkngpb.js:1558695-1558767 layout
+function isNarrationClassifierExcludedModel(model) {
+  return isRemoteEnv() && !env.CLAUDE_CODE_IS_COWORK && !isManagedOAuthContext_2() && !isExcludedModel(model);
+}
+//@ chunk-5xgkngpb.js:1558767-1558823 placement
 function needsResumeBaseline(state) {
   return !isCacheBreakPersisted() && state.resumeBaseline === undefined;
 }
-//@ chunk-g54kbxqw.js:61534-61573 placement
+//@ chunk-5xgkngpb.js:1558823-1558865 placement
 function canPersistCacheBreakState() {
   return isCacheBreakPersistenceEnabled() && cacheBreakStatePath() !== null;
 }
-//@ chunk-g54kbxqw.js:61573-61665 placement
+//@ chunk-5xgkngpb.js:1558865-1558959 placement
 function cacheBreakStatePath() {
   let sessionId = normalizeUuidOrNull(getSessionId());
   if (sessionId === null) return null;
-  return join_2(getClaudeTempDirRealpath(), `${cacheBreakStatePrefix}state-${sessionId}.json`);
+  return join(getClaudeTempDirRealpath(), `${cacheBreakStatePrefix}state-${sessionId}.json`);
 }
-//@ chunk-g54kbxqw.js:61665-61804 placement
+//@ chunk-5xgkngpb.js:1558959-1559102 placement
 var TOOL_CHOICE_VALUES = {
   "": true,
   none: true,
@@ -1018,17 +1535,17 @@ var THINKING_DISPLAY_VALUES = {
   highlights: true,
 };
 var MAX_BASELINE_BYTES = 4000000;
-//@ chunk-g54kbxqw.js:61804-61847 placement
+//@ chunk-5xgkngpb.js:1559102-1559145 placement
 function isTrackedQuerySource(querySource) {
   return Object.hasOwn(FOREGROUND_529_RETRY_SOURCES, querySource);
 }
-//@ chunk-g54kbxqw.js:61847-63589 placement
+//@ chunk-5xgkngpb.js:1559145-1560902 placement
 /**
  * 提示缓存失效检测的持久化状态结构：系统/工具/cache_control 哈希、工具名、消息哈希等。
  */
 var cacheBreakStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var cacheBreakSnapshotSchema;
-deferInit("chunk-g54kbxqw.js:61847", () => {
+deferInit("chunk-5xgkngpb.js:1559145", () => {
   cacheBreakStateSchema = DoctorLazy(() =>
     create_20(
       create_2().max(200),
@@ -1120,18 +1637,18 @@ deferInit("chunk-g54kbxqw.js:61847", () => {
               create_3().int().min(0).max(Number.MAX_SAFE_INTEGER),
               create_26(TEXT_KIND_BUCKETS),
             ]),
-          ).max(CACHE_TTL_MS),
+          ).max(CACHE_TTL_MS_2),
           a: create_15(create_2().regex(/^[0-9a-f]{12}$/))
             .max(200)
             .optional(),
         }),
       )
         .max(20000)
-        .refine((blocks) => blocks.reduce((acc, block) => acc + block.b.length, 0) <= CACHE_TTL_MS),
+        .refine((blocks) => blocks.reduce((acc, block) => acc + block.b.length, 0) <= CACHE_TTL_MS_2),
     }),
   );
 });
-//@ chunk-g54kbxqw.js:63589-63884 placement
+//@ chunk-5xgkngpb.js:1560902-1561198 placement
 function outlinesFromState(prefixBreakHash) {
   let outlines = [];
   for (let message of prefixBreakHash.messages) {
@@ -1160,23 +1677,23 @@ function outlinesFromState(prefixBreakHash) {
   }
   return outlines;
 }
-//@ chunk-g54kbxqw.js:63884-64314 placement
+//@ chunk-5xgkngpb.js:1561198-1561636 placement
 function hashMessages(messages, messageHashes, previous) {
   let promptCacheHashSalt = getPromptCacheHashSalt();
   let reusable = previous !== undefined && previous.rows.salt === promptCacheHashSalt ? previous : undefined;
   let hashes = [];
   let total = 0;
-  for (let j = 0; j < messages.length; j++) {
-    let previousHash = messageHashes[j];
+  for (let idx = 0; idx < messages.length; idx++) {
+    let previousHash = messageHashes[idx];
     let hash =
       reusable !== undefined &&
       previousHash !== undefined &&
       previousHash !== EPHEMERAL_MESSAGE_MARK &&
-      reusable.messageHashes[j] === previousHash
-        ? reusable.rows.messages[j]
+      reusable.messageHashes[idx] === previousHash
+        ? reusable.rows.messages[idx]
         : undefined;
     if (hash === undefined) {
-      let fingerprint = messageFingerprint(messages[j]);
+      let fingerprint = messageFingerprint(messages[idx]);
       hash = {
         r: fingerprint.role,
         b: fingerprint.blocks.map((block) => [block.type, block.hash, block.length, block.prefixClass]),
@@ -1186,7 +1703,7 @@ function hashMessages(messages, messageHashes, previous) {
       };
     }
     total += hash.b.length;
-    if (total > CACHE_TTL_MS) break;
+    if (total > CACHE_TTL_MS_2) break;
     hashes.push(hash);
   }
   return {
@@ -1194,7 +1711,7 @@ function hashMessages(messages, messageHashes, previous) {
     messages: hashes,
   };
 }
-//@ chunk-g54kbxqw.js:64314-64530 placement
+//@ chunk-5xgkngpb.js:1561636-1561853 placement
 function messageHashesFor(messages, messageHashes, key) {
   if (messages === undefined || !isCacheBreakOutlineEnabled()) return;
   let messageHashes_2 = key?.messageHashes;
@@ -1213,7 +1730,7 @@ function messageHashesFor(messages, messageHashes, key) {
     });
   });
 }
-//@ chunk-g54kbxqw.js:64530-65323 placement
+//@ chunk-5xgkngpb.js:1561853-1562656 placement
 /**
  * 会话恢复时从磁盘读回上次的提示缓存状态，作为失效检测的基线。
  */
@@ -1230,7 +1747,7 @@ function hydrateCacheBreakState() {
     if (smallFileOrNull === null) return;
     let parsed = cacheBreakStateSchema().safeParse(jsonParse(smallFileOrNull));
     if (!parsed.success) return;
-    let trackedCount = count(
+    let trackedCount = countWhere(
       Object.keys(parsed.data),
       (key) => isTrackedQuerySource(key) && key.startsWith("repl_main_thread"),
     );
@@ -1259,7 +1776,7 @@ function hydrateCacheBreakState() {
     }
   } catch {}
 }
-//@ chunk-g54kbxqw.js:65323-65579 placement
+//@ chunk-5xgkngpb.js:1562656-1562917 placement
 /**
  * 去掉持久化快照里的大字段（哈希前缀、内容、基线等），只留元数据。与团队无关。
  */
@@ -1281,7 +1798,7 @@ function stripSnapshotPayload(payload) {
   } = payload;
   return rest;
 }
-//@ chunk-g54kbxqw.js:65579-66075 placement (2.1.88 match: destroyWorktree, 0.326)
+//@ chunk-5xgkngpb.js:1562917-1563418 placement (2.1.88 match: destroyWorktree, 0.326)
 /**
  * 把各来源的上一状态（去掉大字段）排队持久化到磁盘，空则删除文件。与团队/worktree 无关。
  */
@@ -1321,12 +1838,12 @@ function persistPreviousStates() {
           mode: 448,
         });
         verifyTempDirOwnership(getClaudeTempDirRealpath());
-        await writeFileAtomic(path, record.payload);
+        await writeFileAtomic_2(path, record.payload);
       })
       .catch(() => {});
   } catch {}
 }
-//@ chunk-g54kbxqw.js:66075-66231 fingerprint (2.1.88 match: TRACKED_SOURCE_PREFIXES, 0.811)
+//@ chunk-5xgkngpb.js:1563418-1563582 fingerprint (2.1.88 match: TRACKED_SOURCE_PREFIXES, 0.811)
 /**
  * 参与跟踪的 querySource 前缀：repl_main_thread、sdk、agent:custom/default/builtin。
  */
@@ -1339,7 +1856,7 @@ var COMPACT_FORK = "compact_fork";
 var MIN_CACHE_MISS_TOKENS = 2000;
 var MAX_COMPACTION_TIMESTAMPS = 8;
 var MAX_CLASSIFIER_COMPACTION_KEYS = 128;
-//@ chunk-g54kbxqw.js:66231-66275 layout
+//@ chunk-5xgkngpb.js:1563582-1563626 layout
 /**
  * 本次 cache_read 低于上次 95% 且少了至少 2000 token 即视为缓存断裂。
  */
@@ -1349,14 +1866,14 @@ function isCacheReadDrop(prevCacheReadTokens, cacheReadTokens) {
     prevCacheReadTokens - cacheReadTokens >= MIN_CACHE_MISS_TOKENS
   );
 }
-//@ chunk-g54kbxqw.js:66275-66318 fingerprint (2.1.88 match: isExcludedModel, 1)
+//@ chunk-5xgkngpb.js:1563626-1563669 fingerprint (2.1.88 match: isExcludedModel, 1)
 /**
  * 模型名含 haiku 的不做断裂检测。
  */
 function isExcludedModel(model) {
   return model.includes("haiku");
 }
-//@ chunk-g54kbxqw.js:66318-66487 fingerprint (2.1.88 match: getTrackingKey, 1)
+//@ chunk-5xgkngpb.js:1563669-1563839 fingerprint (2.1.88 match: getTrackingKey, 1)
 /**
  * querySource → 跟踪键：compact 归到 compact_fork；主线程归 repl_main_thread；代理按 agentId；其他来源不跟踪（null）。
  */
@@ -1367,7 +1884,7 @@ function getTrackingKey(querySource, agentId) {
     if (querySource.startsWith(prefix)) return agentId || querySource;
   return null;
 }
-//@ chunk-g54kbxqw.js:66487-66595 layout (2.1.88 match: stripCacheControl, 1)
+//@ chunk-5xgkngpb.js:1563839-1563948 layout (2.1.88 match: stripCacheControl, 1)
 /**
  * 数组每项去掉 cache_control。
  */
@@ -1378,7 +1895,7 @@ function stripCacheControlAll(items) {
     return rest;
   });
 }
-//@ chunk-g54kbxqw.js:66595-66659 layout
+//@ chunk-5xgkngpb.js:1563948-1564013 layout
 /**
  * 块的 text 字段（字符串时）。
  */
@@ -1386,7 +1903,7 @@ function getBlockText(block) {
   let text = block.text;
   return typeof text === "string" ? text : undefined;
 }
-//@ chunk-g54kbxqw.js:66659-66752 fingerprint (2.1.88 match: computePerToolHashes, 1)
+//@ chunk-5xgkngpb.js:1564013-1564107 fingerprint (2.1.88 match: computePerToolHashes, 1)
 /**
  * 每个工具 schema 的哈希表（按工具名）。
  */
@@ -1396,14 +1913,14 @@ function computePerToolHashes(strippedTools, names) {
     hashes[names[i] ?? `__idx_${i}`] = computeHash(strippedTools[i]);
   return hashes;
 }
-//@ chunk-g54kbxqw.js:66752-66985 layout
+//@ chunk-5xgkngpb.js:1564107-1564341 layout
 /**
  * 两个对象键集相同、值全等且除指定键外都是原始值。
  */
 function isShallowEqualExcept(a, b, keys) {
   if (!isPlainObject(a) || !isPlainObject(b)) return false;
   let keys_2 = Object.keys(a);
-  if (!arraysEqual(keys_2, Object.keys(b))) return false;
+  if (!arraysEqual_2(keys_2, Object.keys(b))) return false;
   for (let key of keys_2) {
     let value = a[key];
     if (value !== b[key]) return false;
@@ -1412,7 +1929,7 @@ function isShallowEqualExcept(a, b, keys) {
   }
   return true;
 }
-//@ chunk-g54kbxqw.js:66985-67151 layout
+//@ chunk-5xgkngpb.js:1564341-1564509 layout
 /**
  * 计算条目数组哈希；与上次条目浅相等时复用上次哈希。
  */
@@ -1432,7 +1949,7 @@ function hashEntriesReusing(entries, hashes, previous) {
     hash: reusable ? hashes.hash : computeHash(entries),
   };
 }
-//@ chunk-g54kbxqw.js:67151-67218 file-local
+//@ chunk-5xgkngpb.js:1564509-1564578 file-local
 /**
  * system 块文本总字符数。
  */
@@ -1441,7 +1958,7 @@ function getSystemCharCount(system) {
   for (let block of system) total += getBlockText(block)?.length ?? 0;
   return total;
 }
-//@ chunk-g54kbxqw.js:67218-68153 layout
+//@ chunk-5xgkngpb.js:1564578-1565514 layout
 /**
  * 比较前后两次请求的标量：system/工具/模型/fast/cache_control/全局缓存策略/beta/auto mode/超额/诊断/effort/thinking/额外 body/defer_loading 是否变化。
  */
@@ -1469,7 +1986,7 @@ function diffPromptScalars(prev, next) {
     deferLoadingPresenceChanged: next.anyDeferLoading !== prev.anyDeferLoading,
   };
 }
-//@ chunk-g54kbxqw.js:68153-68283 file-local
+//@ chunk-5xgkngpb.js:1565514-1565647 file-local
 /**
  * 跟踪来源数超过上限时淘汰旧条目（优先淘汰非主线程）。
  */
@@ -1482,7 +1999,7 @@ function cleanupAgentTracking(agentId) {
     agentId.delete(evictable);
   }
 }
-//@ chunk-g54kbxqw.js:68283-73678 fingerprint (2.1.88 match: recordPromptState, 0.62)
+//@ chunk-5xgkngpb.js:1565647-1571201 fingerprint (2.1.88 match: recordPromptState, 0.62)
 /**
  * 请求前记录本次提示词状态（各项哈希、消息哈希），与上次对比得到 pendingChanges。
  */
@@ -1636,7 +2153,7 @@ function recordPromptState(snapshot) {
           ? hashMessages(sampledMessages, messageHashes, undefined)
           : undefined,
       });
-      persistPreviousStates();
+      if (!isNarrationClassifierExcludedModel(model)) persistPreviousStates();
       return;
     }
     previousState.callCount++;
@@ -1807,12 +2324,12 @@ function recordPromptState(snapshot) {
     previousState.hashSampleMessages = sampledMessages;
     previousState.prefixBreakHash = prefixBreakHash;
     previousState.hydratedHashRows = undefined;
-    persistPreviousStates();
+    if (!isNarrationClassifierExcludedModel(model)) persistPreviousStates();
   } catch (e) {
     logError(e);
   }
 }
-//@ chunk-g54kbxqw.js:73678-74025 layout
+//@ chunk-5xgkngpb.js:1571201-1571549 layout
 /**
  * 所有变化类型键名（含 messagesHistoryChanged）。
  */
@@ -1834,7 +2351,7 @@ var CHANGE_KINDS = [
   "deferLoadingPresenceChanged",
   "messagesHistoryChanged",
 ];
-//@ chunk-g54kbxqw.js:74025-76178 layout
+//@ chunk-5xgkngpb.js:1571549-1573727 layout
 /**
  * 记录本次消息哈希与形状，算出首个变化的消息下标并并入 pendingChanges；摘要代理走分叉记录。
  */
@@ -1941,7 +2458,7 @@ function recordMessageHistory({ querySource, agentId, messages, getMessageHashes
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:76178-76297 layout
+//@ chunk-5xgkngpb.js:1573727-1573845 layout
 /**
  * 触发该来源记录的 messageOutlines 惰性计算。
  */
@@ -1954,14 +2471,14 @@ function flushMessageOutlines(querySource, agentId) {
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:76297-76359 layout
+//@ chunk-5xgkngpb.js:1573845-1573908 layout
 /**
  * 两个哈希数组首个不同的下标（-1 表示相同）。
  */
 function findFirstChangedHash(hashes, messageHashes) {
   return hashes.findIndex((hash, index) => hash !== EPHEMERAL_MESSAGE_MARK && messageHashes[index] !== hash);
 }
-//@ chunk-g54kbxqw.js:76359-76665 layout
+//@ chunk-5xgkngpb.js:1573908-1574216 layout
 /**
  * 本来源待定变化的类型列表、首个变化消息下标、基线来源、调用次数（遥测用）。
  */
@@ -1969,7 +2486,7 @@ function getPendingChangeSummary(source, trackingKey) {
   try {
     let { changes, baseline, callNumber } = getPendingChangesForSource(source, trackingKey);
     return {
-      kinds: changes ? fromEnumArr(CHANGE_KINDS.filter((kind) => changes[kind])) : lit("none"),
+      kinds: changes ? fromEnumArr(CHANGE_KINDS.filter((kind) => changes[kind])) : lit_2("none"),
       firstChangedMessageIndex: changes?.firstChangedMessageIndex ?? -1,
       baseline,
       callNumber,
@@ -1977,14 +2494,14 @@ function getPendingChangeSummary(source, trackingKey) {
   } catch (error) {
     logError(error);
     return {
-      kinds: lit("none"),
+      kinds: lit_2("none"),
       firstChangedMessageIndex: -1,
-      baseline: lit("none"),
+      baseline: lit_2("none"),
       callNumber: undefined,
     };
   }
 }
-//@ chunk-g54kbxqw.js:76665-76966 layout
+//@ chunk-5xgkngpb.js:1574216-1574518 layout
 /**
  * 取来源状态、待定变化与基线类型（磁盘基线未比对时不报变化）。
  */
@@ -1995,17 +2512,17 @@ function getPendingChangesForSource(source, trackingKey) {
     return {
       state: previous,
       changes: undefined,
-      baseline: lit("none"),
+      baseline: lit_2("none"),
       callNumber: previous.callCount,
     };
   return {
     state: previous,
     changes: previous?.pendingChanges ?? undefined,
-    baseline: fromEnumOpt(previous?.diffedAgainst) ?? lit("none"),
+    baseline: fromEnumOpt(previous?.diffedAgainst) ?? lit_2("none"),
     callNumber: previous?.callCount,
   };
 }
-//@ chunk-g54kbxqw.js:76966-78865 fingerprint (2.1.88 match: checkResponseForCacheBreak, 0.586)
+//@ chunk-5xgkngpb.js:1574518-1576418 fingerprint (2.1.88 match: checkResponseForCacheBreak, 0.586)
 /**
  * 把变化标志转成人可读的原因列表（model changed、system prompt changed (+N chars) 等）。
  */
@@ -2070,16 +2587,18 @@ function checkResponseForCacheBreak_2(pendingChanges, baselineFromDisk) {
     );
   return parts;
 }
-//@ chunk-g54kbxqw.js:78865-78943 layout
+//@ chunk-5xgkngpb.js:1576418-1576497 layout
 /**
  * 段列表格式化为 "名:长度" 脱敏串。
  */
 function formatSectionLengths(lengths) {
   return joinSafe(
-    lengths.sections.map((section) => concatSafe(fromEnum(section.name), lit(":"), fromNumber(section.len))),
+    lengths.sections.map((section) =>
+      concatSafe(fromEnum(section.name), lit_2(":"), fromNumber(section.len)),
+    ),
   );
 }
-//@ chunk-g54kbxqw.js:78943-79534 layout
+//@ chunk-5xgkngpb.js:1576497-1577092 layout
 /**
  * 首条消息变化时比较其分段形状（工作者工具数等）给出变化段。
  */
@@ -2100,7 +2619,7 @@ function describeFirstMessageChange(pendingChanges, msg0Shape) {
     msg0PrevSections: formatSectionLengths(prevMsg0Shape),
     msg0ChangedSections: joinSafe(
       diff.changedSections.map((changedSection) =>
-        concatSafe(fromEnum(changedSection.name), lit(":"), fromNumber(changedSection.delta)),
+        concatSafe(fromEnum(changedSection.name), lit_2(":"), fromNumber(changedSection.delta)),
       ),
     ),
     msg0AddedSections: fromEnumArr(diff.addedSections),
@@ -2109,23 +2628,23 @@ function describeFirstMessageChange(pendingChanges, msg0Shape) {
       diff.changedBlocks.map((changedBlock) =>
         concatSafe(
           fromNumber(changedBlock.index),
-          lit(":"),
+          lit_2(":"),
           fromEnum(changedBlock.kind),
-          lit(":"),
+          lit_2(":"),
           fromNumber(changedBlock.delta),
         ),
       ),
     ),
   };
 }
-//@ chunk-g54kbxqw.js:79534-79587 layout
+//@ chunk-5xgkngpb.js:1577092-1577146 layout
 /**
  * 形状各部分展开后格式化（遥测）。
  */
 function formatShapeParts(parts) {
   return joinSafe(parts.flatMap((part) => normalizeShortHash(part) ?? []));
 }
-//@ chunk-g54kbxqw.js:79587-80140 layout
+//@ chunk-5xgkngpb.js:1577146-1577706 layout
 /**
  * system 折叠段位置变化时给出前后段差异。
  */
@@ -2160,7 +2679,7 @@ function describeSystemFoldChange(pendingChanges, sysFoldShape) {
     sysFoldLenDelta: sysFoldShape.len - prevSysFoldShape.len,
   };
 }
-//@ chunk-g54kbxqw.js:80140-85530 layout
+//@ chunk-5xgkngpb.js:1577706-1583229 layout
 /**
  * 响应后检查：按 cache_read 降幅与 pendingChanges 判断是否断裂，结合距上次回答是否超过 5 分钟/1 小时（TTL 过期）上报原因。
  */
@@ -2372,8 +2891,8 @@ async function checkResponseForCacheBreak(
         resumedInNewProcess: resumeBaseline?.newProcess === true,
         prevMessageCount: state.baselineMessageHashes?.length ?? -1,
         newMessageCount: state.messageHashes.length,
-        requestId: sanitizeMarkName(requestId) ?? lit(""),
-        previousMessageId: sanitizeMarkName(previousMessageId) ?? lit(""),
+        requestId: sanitizeMarkName(requestId) ?? lit_2(""),
+        previousMessageId: sanitizeMarkName(previousMessageId) ?? lit_2(""),
       });
     let outlineDiff;
     if (isCacheBreakOutlineEnabled()) {
@@ -2390,7 +2909,7 @@ async function checkResponseForCacheBreak(
     persistPreviousStates();
   }
 }
-//@ chunk-g54kbxqw.js:85530-86621 layout
+//@ chunk-5xgkngpb.js:1583229-1584332 layout
 /**
  * 上报一次缓存断裂（模型、beta、变化类型、cache read/creation、TTL 是否过期）。
  */
@@ -2421,7 +2940,7 @@ function reportCacheBreak(
       cacheBroke,
       changeKinds: pendingChanges
         ? fromEnumArr(CHANGE_KINDS.filter((kind) => pendingChanges[kind]))
-        : lit("none"),
+        : lit_2("none"),
       firstChangedMessageIndex: pendingChanges?.firstChangedMessageIndex ?? -1,
       prev:
         pendingChanges?.prevHashSampleMessages !== undefined
@@ -2457,15 +2976,15 @@ function reportCacheBreak(
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:86621-86673 layout
+//@ chunk-5xgkngpb.js:1584332-1584386 layout
 /**
  * 去掉 messagesHistoryChanged 的变化类型。
  */
 var SCALAR_CHANGE_KINDS; // deferred: uses CHANGE_KINDS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:86621", () => {
+deferInit("chunk-5xgkngpb.js:1584332", () => {
   SCALAR_CHANGE_KINDS = CHANGE_KINDS.filter((kind) => kind !== "messagesHistoryChanged");
 });
-//@ chunk-g54kbxqw.js:86673-87322 layout
+//@ chunk-5xgkngpb.js:1584386-1585040 layout
 /**
  * 摘要代理分叉：记录相对父来源的标量变化与消息基线。
  */
@@ -2495,7 +3014,7 @@ function recordSummaryFork_2({ forkAgentId, parentKey, scalars, messageHashes, m
     newMessageCount: messageHashes.length,
   });
 }
-//@ chunk-g54kbxqw.js:87322-87522 layout
+//@ chunk-5xgkngpb.js:1585040-1585242 layout
 /**
  * 摘要分叉补记本次消息与首个变化下标。
  */
@@ -2509,7 +3028,7 @@ function updateSummaryForkMessages(agentId, messages, getMessageHashes) {
     ? findFirstChangedHash(fork.parentMessageHashes, hashes)
     : -1;
 }
-//@ chunk-g54kbxqw.js:87522-88683 layout
+//@ chunk-5xgkngpb.js:1585242-1586408 layout
 /**
  * 摘要分叉响应后的断裂检查与上报。
  */
@@ -2535,7 +3054,7 @@ function checkSummaryForkCacheBreak(agentId, { requestId, cacheReadTokens, cache
       prevBetas: fork.prevBetas,
       newBetas: fork.newBetas,
       cacheBroke: cacheReadDropped,
-      changeKinds: flags.length > 0 ? fromEnumArr(flags) : lit("none"),
+      changeKinds: flags.length > 0 ? fromEnumArr(flags) : lit_2("none"),
       firstChangedMessageIndex: fork.firstChangedMessageIndex,
       prev:
         fork.prevMessages !== undefined
@@ -2566,7 +3085,7 @@ function checkSummaryForkCacheBreak(agentId, { requestId, cacheReadTokens, cache
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:88683-88809 layout
+//@ chunk-5xgkngpb.js:1586408-1586535 layout
 /**
  * 服务器 cache diagnosis 类型：model/system/tools/messages_changed、previous_message_not_found、unavailable。
  */
@@ -2578,14 +3097,14 @@ var KNOWN_CACHE_DIAGNOSIS_TYPES = {
   previous_message_not_found: true,
   unavailable: true,
 };
-//@ chunk-g54kbxqw.js:88809-88851 layout
+//@ chunk-5xgkngpb.js:1586535-1586579 layout
 /**
  * 诊断类型是否已知。
  */
 function isKnownCacheDiagnosisType(type) {
   return Object.hasOwn(KNOWN_CACHE_DIAGNOSIS_TYPES, type);
 }
-//@ chunk-g54kbxqw.js:88851-89316 layout
+//@ chunk-5xgkngpb.js:1586579-1587045 layout
 /**
  * 记 tengu_prompt_cache_diagnosis_received（诊断类型、缺失 token 等）。
  */
@@ -2597,10 +3116,10 @@ function logCacheDiagnosisReceived(info, detail) {
           ? undefined
           : isKnownCacheDiagnosisType(info.type)
             ? fromEnum(info.type)
-            : lit("other"),
+            : lit_2("other"),
       tokensMissed: typeof info.cache_missed_input_tokens === "number" ? info.cache_missed_input_tokens : -1,
-      requestId: sanitizeMarkName(detail.requestId) ?? lit(""),
-      previousMessageId: sanitizeMarkName(detail.previousMessageId) ?? lit(""),
+      requestId: sanitizeMarkName(detail.requestId) ?? lit_2(""),
+      previousMessageId: sanitizeMarkName(detail.previousMessageId) ?? lit_2(""),
       model: telemetrySafeModelName(detail.model),
       isCowork: env.CLAUDE_CODE_IS_COWORK,
       is1hCacheTTL: detail.is1hCacheTTL,
@@ -2611,7 +3130,7 @@ function logCacheDiagnosisReceived(info, detail) {
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:89316-89585 fingerprint (2.1.88 match: notifyCacheDeletion, 0.413)
+//@ chunk-5xgkngpb.js:1587045-1587316 fingerprint (2.1.88 match: notifyCacheDeletion, 0.413)
 /**
  * 通知缓存被有意删除（如工具结果清除），下一次 cache_read 下降不算意外断裂。
  */
@@ -2630,7 +3149,7 @@ function notifyCacheDeletion(querySource, agentId) {
     if (previous) previous.cacheDeletionsPending = true;
   }
 }
-//@ chunk-g54kbxqw.js:89585-90016 fingerprint (2.1.88 match: notifyCompaction, 0.499)
+//@ chunk-5xgkngpb.js:1587316-1587749 fingerprint (2.1.88 match: notifyCompaction, 0.499)
 /**
  * 通知发生压缩：重置相关来源的上次 cache_read，避免误报。
  */
@@ -2665,21 +3184,21 @@ function notifyCompaction(agentId) {
     }
   if (changed) persistPreviousStates();
 }
-//@ chunk-g54kbxqw.js:90016-90187 placement
+//@ chunk-5xgkngpb.js:1587749-1587920 placement
 function forgetClassifierCompaction(agentId) {
   promptCacheBreakState().classifierCompactions.delete(agentId);
   let classifierLines = promptCacheBreakState().classifierLines;
   for (let [key, line] of classifierLines) if (line.agentId === agentId) classifierLines.delete(key);
   if (promptCacheBreakState().previousStateBySource.delete(agentId)) persistPreviousStates();
 }
-//@ chunk-g54kbxqw.js:90187-90286 placement
+//@ chunk-5xgkngpb.js:1587920-1588022 placement
 /**
  * 缓存断裂状态文件的限额：最多 32 个状态、文件 2 MB、版本号 1 与 outlines 结构。
  */
 var CACHE_STATE_LIMITS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_CACHE_STATE_BYTES;
 var cacheBreakStateFileSchema;
-deferInit("chunk-g54kbxqw.js:90187", () => {
+deferInit("chunk-5xgkngpb.js:1587920", () => {
   CACHE_STATE_LIMITS = 32;
   MAX_CACHE_STATE_BYTES = 2000000;
   cacheBreakStateFileSchema = DoctorLazy(() =>
@@ -2691,7 +3210,7 @@ deferInit("chunk-g54kbxqw.js:90187", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:90286-90898 placement
+//@ chunk-5xgkngpb.js:1588022-1588638 placement
 function parkAgentBaseline(agentId) {
   try {
     let state = promptCacheBreakState();
@@ -2731,7 +3250,7 @@ function parkAgentBaseline(agentId) {
     return;
   }
 }
-//@ chunk-g54kbxqw.js:90898-90954 placement
+//@ chunk-5xgkngpb.js:1588638-1588695 placement
 function modelWithEmptySystem(model) {
   return () => ({
     model,
@@ -2739,11 +3258,11 @@ function modelWithEmptySystem(model) {
     tools: [],
   });
 }
-//@ chunk-g54kbxqw.js:90954-91010 placement
+//@ chunk-5xgkngpb.js:1588695-1588751 placement
 function hasParkedAgentBaseline(agentId) {
   return promptCacheBreakState().parkedAgentBaselines.has(agentId);
 }
-//@ chunk-g54kbxqw.js:91010-91615 placement
+//@ chunk-5xgkngpb.js:1588751-1589364 placement
 function restoreAgentBaseline(agentId, outlines) {
   try {
     let state = promptCacheBreakState();
@@ -2792,7 +3311,7 @@ function restoreAgentBaseline(agentId, outlines) {
     logError(error);
   }
 }
-//@ chunk-g54kbxqw.js:91615-92203 placement
+//@ chunk-5xgkngpb.js:1589364-1589952 placement
 function recordSummaryFork(fork) {
   let state = promptCacheBreakState();
   let neededHydration = state.previousStateBySource.size === 0 && !state.hydrationAttempted;
@@ -2812,494 +3331,9 @@ function recordSummaryFork(fork) {
   }
   if (!neededHydration) persistPreviousStates();
 }
-//@ chunk-a76knw89.js:2168-2282 placement
-var ENVELOPE_DIFF_FIELDS = [
-  "betas",
-  "tool_choice",
-  "thinking",
-  "context_management",
-  "output_config",
-  "speed",
-  "temperature",
-  "max_tokens",
-];
-//@ chunk-a76knw89.js:2282-2521 placement
-/**
- * 由已知的模型、工具和 system 生成提示前缀账本的初始快照（标记为播种）。
- */
-function seedLedgerSnapshot(snapshot) {
-  return {
-    model: snapshot.model,
-    tools: snapshot.tools.map((tool, index) => ({
-      key: toolKeyOf(tool, index),
-      deferred: isDeferredTool(tool),
-      bound: isDeferredTool(tool),
-      cacheControl: undefined,
-      body: tool,
-    })),
-    system: snapshot.system.map((body) => ({
-      preamble: false,
-      cacheControl: undefined,
-      body,
-    })),
-    messages: [],
-    envelope: {},
-    seeded: true,
-  };
-}
-//@ chunk-a76knw89.js:2521-3389 placement
-/**
- * 把请求转换为可比较的快照（system 块、工具、betas、参数），可绑定引用到的延迟工具。
- */
-function snapshotRequestForCacheDiff(request, options = {}) {
-  let boundDeferredToolNames =
-    options.boundDeferredToolNames ??
-    (options.bindReferencedDeferredTools === true
-      ? collectReferencedDeferredTools(request.messages)
-      : undefined);
-  let systemBlocks =
-    typeof request.system === "string"
-      ? [
-          {
-            type: "text",
-            text: request.system,
-          },
-        ]
-      : (request.system ?? []);
-  let envelope = {};
-  for (let fieldName of ENVELOPE_DIFF_FIELDS) {
-    let fieldValue = fieldName === "betas" ? sortedList(request.betas) : request[fieldName];
-    if (fieldValue !== undefined) envelope[fieldName] = fieldValue;
-  }
-  return {
-    model: request.model,
-    envelope,
-    tools: (request.tools ?? []).map((tool, toolIndex) => ({
-      key: toolKeyOf(tool, toolIndex),
-      deferred: tool.defer_loading === true,
-      bound:
-        tool.defer_loading === true &&
-        typeof tool.name === "string" &&
-        boundDeferredToolNames?.has(tool.name) === true,
-      cacheControl: getCacheControl(tool),
-      body: stripCacheControl(tool),
-    })),
-    system: systemBlocks.map((block) => ({
-      preamble: isUncachedSystemBlock(block),
-      cacheControl: getCacheControl(block),
-      body: stripCacheControl(block),
-    })),
-    messages: request.messages.map((message, messageIndex, messages) => ({
-      role: message.role,
-      turnScopedSystem: message.role === "system" && messageIndex === messages.length - 1,
-      blocks:
-        typeof message.content === "string"
-          ? [
-              {
-                thinking: false,
-                cacheControl: undefined,
-                body: {
-                  type: "text",
-                  text: message.content,
-                },
-              },
-            ]
-          : message.content.map((block) => ({
-              thinking: block.type === "thinking" || block.type === "redacted_thinking",
-              cacheControl: getCacheControl(block),
-              body: stripSafeguardsField(stripCacheControl(block)),
-            })),
-    })),
-  };
-}
-//@ chunk-a76knw89.js:3389-3665 placement
-/**
- * 把提示前缀账本转成可比较的视图：去掉前导 system、回合内 system 消息和 thinking 块。
- */
-function ledgerComparableView(ledger) {
-  return {
-    model: ledger.model,
-    tools: ledger.tools.filter(isBoundTool).map((tool) => tool.body),
-    system: ledger.system.filter((row) => !row.preamble).map((row) => row.body),
-    messages: ledger.messages
-      .filter((message) => !message.turnScopedSystem)
-      .map((message) => ({
-        role: message.role,
-        content: message.blocks.filter((block) => !block.thinking).map((block) => block.body),
-      })),
-  };
-}
-//@ chunk-a76knw89.js:3665-3743 placement
-/**
- * 导出函数 `isCacheFingerprintPart`：参数 e，返回 e.part === "tool" || e.part === "system" || e.part === "message"。
- */
-function isCacheFingerprintPart(part) {
-  return part.part === "tool" || part.part === "system" || part.part === "message";
-}
-//@ chunk-a76knw89.js:3743-3753 placement
-var MAX_LEDGER_ENTRIES = 16;
-//@ chunk-a76knw89.js:3753-3841 placement
-/**
- * 导出函数 `describeSnapshotDiff`：参数 e, n，返回 e.seeded ? diffToolLists(e, n) : [ ...diffToolLists(e, n), ...diffThinkingBlocks(e, n), ...diffCacheMarkers(e,…。
- */
-function describeSnapshotDiff(previous, diff) {
-  return previous.seeded
-    ? diffToolLists(previous, diff)
-    : [
-        ...diffToolLists(previous, diff),
-        ...diffThinkingBlocks(previous, diff),
-        ...diffCacheMarkers(previous, diff),
-        ...describeRequestDifferences(previous, diff),
-      ];
-}
-//@ chunk-a76knw89.js:3841-5399 placement
-/**
- * 比较两次请求的工具列表（新增、移除、变化、重排），延迟工具单独处理。
- */
-function diffToolLists(previous, next) {
-  let previousView = ledgerComparableView(previous);
-  let nextView = ledgerComparableView(next);
-  let entries = [];
-  let pushEntry = (entry) => {
-    entries.push(entry);
-    return entries.length < MAX_LEDGER_ENTRIES;
-  };
-  let indexTools = (tools) =>
-    new Map(
-      [...tools.filter((tool) => !tool.deferred), ...tools.filter((tool) => tool.bound)].map((tool) => [
-        tool.key,
-        tool,
-      ]),
-    );
-  let previousTools = indexTools(previous.tools);
-  let nextTools = indexTools(next.tools);
-  let seededRemovals = [];
-  let hasRealChange = false;
-  for (let [toolKey, previousTool] of previousTools) {
-    let body = previousTool.body;
-    let nextTool = nextTools.get(toolKey);
-    if (nextTool === undefined) {
-      if (previousTool.deferred) {
-        if (!previous.seeded)
-          seededRemovals.push({
-            part: "tool",
-            id: toolKey,
-            kind: "removed",
-            prev: body,
-          });
-        continue;
-      }
-      hasRealChange = true;
-      if (
-        !pushEntry({
-          part: "tool",
-          id: toolKey,
-          kind: "removed",
-          prev: body,
-        })
-      )
-        return entries;
-    } else if (previousTool.deferred !== nextTool.deferred) {
-      hasRealChange = true;
-      let deferralEntry = previousTool.deferred
-        ? {
-            part: "tool",
-            id: toolKey,
-            kind: "added",
-            next: nextTool.body,
-          }
-        : {
-            part: "tool",
-            id: toolKey,
-            kind: "removed",
-            prev: body,
-          };
-      if (!pushEntry(deferralEntry)) return entries;
-    } else if (!isDeepStrictEqual(body, nextTool.body)) {
-      hasRealChange ||= !previousTool.deferred;
-      let body_2 = nextTool.body;
-      let field =
-        [...Object.keys(body), ...Object.keys(body_2)].find(
-          (fieldName) => !isDeepStrictEqual(exactKeyValue(body, fieldName), exactKeyValue(body_2, fieldName)),
-        ) ?? "?";
-      if (
-        !pushEntry({
-          part: "tool",
-          id: toolKey,
-          kind: "changed",
-          field,
-          prev: body,
-          next: body_2,
-        })
-      )
-        return entries;
-    }
-  }
-  for (let [toolKey, nextTool] of nextTools)
-    if (!previousTools.has(toolKey) && !nextTool.deferred) {
-      hasRealChange = true;
-      if (
-        !pushEntry({
-          part: "tool",
-          id: toolKey,
-          kind: "added",
-          next: nextTool.body,
-        })
-      )
-        return entries;
-    }
-  if (!hasRealChange) {
-    let activeToolKeys = (toolMap) =>
-      [...toolMap.values()].flatMap((tool) => (tool.deferred ? [] : [tool.key]));
-    let previousKeys = activeToolKeys(previousTools);
-    let found = activeToolKeys(nextTools)
-      .filter((toolKey) => previousTools.has(toolKey))
-      .find((nextKey, keyIndex) => previousKeys[keyIndex] !== nextKey);
-    if (found !== undefined)
-      pushEntry({
-        part: "tool",
-        id: found,
-        kind: "reordered",
-      });
-  }
-  let max = Math.max(previousView.system.length, nextView.system.length);
-  for (let j = 0; j < max; j++) {
-    let previousPart = previousView.system[j];
-    let nextPart = nextView.system[j];
-    let changeKind = previousPart === undefined ? "added" : nextPart === undefined ? "removed" : "changed";
-    if (changeKind !== "changed" || !isDeepStrictEqual(previousPart, nextPart)) {
-      if (
-        !pushEntry({
-          part: "system",
-          index: j,
-          kind: changeKind,
-          prev: previousPart,
-          next: nextPart,
-        })
-      )
-        return entries;
-    }
-  }
-  for (let j = 0; j < previousView.messages.length; j++) {
-    let previousMessage = previousView.messages[j];
-    let nextMessage = nextView.messages[j];
-    if (nextMessage !== undefined && isDeepStrictEqual(previousMessage, nextMessage)) continue;
-    let messageEntry = {
-      part: "message",
-      index: j,
-      role: previousMessage.role,
-      kind: nextMessage === undefined ? "removed" : "changed",
-      prev: previousMessage,
-      next: nextMessage,
-    };
-    if (!pushEntry(messageEntry)) return entries;
-  }
-  for (let entry of seededRemovals) if (!pushEntry(entry)) break;
-  return entries;
-}
-//@ chunk-a76knw89.js:5399-5876 placement
-function diffThinkingBlocks(previous, next) {
-  let entries = [];
-  let min = Math.min(previous.messages.length, next.messages.length);
-  for (let j = 0; j < min && entries.length < MAX_LEDGER_ENTRIES; j++) {
-    let previousSignatures = describeSignatureField(previous.messages[j]);
-    let nextSignatures = describeSignatureField(next.messages[j]);
-    if (previousSignatures.length === 0 && nextSignatures.length === 0) continue;
-    if (
-      previousSignatures.length === nextSignatures.length &&
-      previousSignatures.every((signature, signatureIndex) => signature === nextSignatures[signatureIndex])
-    )
-      continue;
-    let sharesPrefix =
-      previousSignatures
-        .slice(0, nextSignatures.length)
-        .every((signature, signatureIndex) => signature === nextSignatures[signatureIndex]) ||
-      nextSignatures
-        .slice(0, previousSignatures.length)
-        .every((signature, signatureIndex) => signature === previousSignatures[signatureIndex]);
-    entries.push({
-      part: "thinking",
-      index: j,
-      kind: !sharesPrefix
-        ? "changed"
-        : nextSignatures.length < previousSignatures.length
-          ? "dropped"
-          : "added",
-      prevCount: previousSignatures.length,
-      nextCount: nextSignatures.length,
-    });
-  }
-  return entries;
-}
-//@ chunk-a76knw89.js:5876-6052 placement
-function describeSignatureField(block) {
-  return block.blocks.flatMap((block) => {
-    if (!block.thinking) return [];
-    let signature = exactKeyValue(block.body, "signature");
-    let data = exactKeyValue(block.body, "data");
-    return [typeof signature === "string" ? signature : typeof data === "string" ? data : "?"];
-  });
-}
-//@ chunk-a76knw89.js:6052-6505 placement
-function diffCacheMarkers(previous, next) {
-  let cacheControlMarkers = collectCacheControlMarkers(previous, previous.messages.length);
-  let cacheControlMarkers_2 = collectCacheControlMarkers(next, previous.messages.length);
-  let entries = [];
-  for (let [markerKey, { at, marker }] of cacheControlMarkers) {
-    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
-    let nextMarkerInfo = cacheControlMarkers_2.get(markerKey);
-    if (nextMarkerInfo === undefined)
-      entries.push({
-        part: "cache",
-        at,
-        kind: "dropped",
-        prev: marker,
-        next: undefined,
-      });
-    else if (!isDeepStrictEqual(marker, nextMarkerInfo.marker))
-      entries.push({
-        part: "cache",
-        at,
-        kind: "changed",
-        prev: marker,
-        next: nextMarkerInfo.marker,
-      });
-  }
-  for (let [markerKey, { at, marker }] of cacheControlMarkers_2) {
-    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
-    if (!cacheControlMarkers.has(markerKey))
-      entries.push({
-        part: "cache",
-        at,
-        kind: "added",
-        prev: undefined,
-        next: marker,
-      });
-  }
-  return entries;
-}
-//@ chunk-a76knw89.js:6505-6987 placement
-function collectCacheControlMarkers(request, limit) {
-  let markers = new Map();
-  for (let tool of request.tools)
-    if (tool.cacheControl !== undefined)
-      markers.set(`tools:${tool.key}`, {
-        at: {
-          segment: "tools",
-          key: tool.key,
-        },
-        marker: tool.cacheControl,
-      });
-  request.system.forEach((section, index) => {
-    if (section.cacheControl !== undefined)
-      markers.set(`system:${index}`, {
-        at: {
-          segment: "system",
-          index,
-        },
-        marker: section.cacheControl,
-      });
-  });
-  request.messages.slice(0, limit).forEach((message, index) => {
-    message.blocks.forEach((block, blockItem) => {
-      if (block.cacheControl !== undefined)
-        markers.set(`messages:${index}.${blockItem}`, {
-          at: {
-            segment: "messages",
-            index,
-            block: blockItem,
-          },
-          marker: block.cacheControl,
-        });
-    });
-  });
-  return markers;
-}
-//@ chunk-a76knw89.js:6987-7249 placement
-function describeRequestDifferences(left, right) {
-  return [
-    ["model", left.model, right.model],
-    ["attribution_header", billingHeaderText(left), billingHeaderText(right)],
-    ["deferred_tools", deferredToolKeys(left), deferredToolKeys(right)],
-    ...ENVELOPE_DIFF_FIELDS.map((field) => [field, left.envelope[field], right.envelope[field]]),
-  ]
-    .filter(([, leftValue, rightValue]) => !isDeepStrictEqual(leftValue, rightValue))
-    .map(([field, leftValue, rightValue]) => ({
-      part: "envelope",
-      id: field,
-      kind: "changed",
-      prev: leftValue,
-      next: rightValue,
-    }));
-}
-//@ chunk-a76knw89.js:7249-7288 placement
-function sortedList(betas) {
-  return betas && [...betas].sort();
-}
-//@ chunk-a76knw89.js:7288-7410 placement
-function billingHeaderText(row) {
-  for (let systemRow of row.system) {
-    let text = exactKeyValue(systemRow.body, "text");
-    if (typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER)) return text;
-  }
-  return "";
-}
-//@ chunk-a76knw89.js:7410-7497 placement
-function deferredToolKeys(reference) {
-  return reference.tools
-    .filter((tool) => tool.deferred)
-    .map((tool) => tool.key)
-    .sort()
-    .join(",");
-}
-//@ chunk-a76knw89.js:7497-7539 placement
-function isBoundTool(tool) {
-  return !tool.deferred || tool.bound;
-}
-//@ chunk-a76knw89.js:7539-7589 placement
-/**
- * 导出函数 `isDeferredTool`：参数 e，返回 lO(e, "defer_loading") === !0。
- */
-function isDeferredTool(tool) {
-  return exactKeyValue(tool, "defer_loading") === true;
-}
-//@ chunk-a76knw89.js:7589-8006 placement
-function collectReferencedDeferredTools(messages) {
-  let seen = new Set();
-  for (let message of messages) {
-    if (typeof message.content === "string") continue;
-    if (message.role === "system") {
-      for (let block of message.content) {
-        let tool = exactKeyValue(block, "tool");
-        let out =
-          exactKeyValue(block, "type") === "tool_addition" && typeof tool === "object" && tool !== null
-            ? exactKeyValue(tool, "name")
-            : undefined;
-        if (typeof out === "string") seen.add(canonicalToolName_2(out));
-      }
-      continue;
-    }
-    if (message.role !== "user") continue;
-    for (let block of message.content) {
-      if (!isToolResultBlockWithContent(block)) continue;
-      for (let inner of block.content)
-        if (isToolReferenceWithName(inner)) seen.add(canonicalToolName_2(inner.tool_name));
-    }
-  }
-  return seen;
-}
 export {
-  parkAgentBaseline,
-  hasParkedAgentBaseline,
-  MAX_CACHE_STATE_BYTES,
-  restoreAgentBaseline,
-  forgetClassifierCompaction,
-  CACHE_TTL_1H_MS,
   CACHE_TTL_5M_MS,
-  getPromptCacheSummary,
-  estimateRecacheTokens,
-  notifyCacheDeletion,
-  isBillingHeaderBlock,
+  CACHE_TTL_1H_MS,
   recordPromptCacheUsage,
   MAIN,
   getCacheCreationTtl,
@@ -3311,15 +3345,17 @@ export {
   flushMessageOutlines,
   checkResponseForCacheBreak,
   logCacheDiagnosisReceived,
+  notifyCacheDeletion,
+  getPromptCacheSummary,
   cacheBreakStatePrefix,
-  isUncachedSystemBlock,
-  expectPromptCacheDrop,
-  recordSummaryFork,
-  promptCacheTrackers,
-  clearPromptCacheOnSessionSwitch,
-  notifyCompaction,
+  computeHash,
+  isBillingHeaderBlock,
   X_ANTHROPIC_BILLING_HEADER,
   REPORTING_OUTCOMES_SECTION,
+  getTrackingKey,
+  isUncachedSystemBlock,
+  EPHEMERAL_MESSAGE_MARK,
+  estimateRecacheTokens,
   CACHE_BREAK_REASONS,
   snapshotRequestForCacheDiff,
   describeSnapshotDiff,
@@ -3327,11 +3363,18 @@ export {
   ledgerComparableView,
   seedLedgerSnapshot,
   isDeferredTool,
-  getTrackingKey,
-  computeHash,
-  EPHEMERAL_MESSAGE_MARK,
+  expectPromptCacheDrop,
+  notifyCompaction,
   isCacheBreakOutlineEnabled,
   isExcludedModel,
   MIN_CACHE_MISS_TOKENS,
   isCacheReadDrop,
+  recordSummaryFork,
+  promptCacheTrackers,
+  clearPromptCacheOnSessionSwitch,
+  parkAgentBaseline,
+  hasParkedAgentBaseline,
+  MAX_CACHE_STATE_BYTES,
+  restoreAgentBaseline,
+  forgetClassifierCompaction,
 };

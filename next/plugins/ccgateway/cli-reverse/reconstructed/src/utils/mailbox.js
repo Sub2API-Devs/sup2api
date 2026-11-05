@@ -3,14 +3,14 @@
  *
  * 进程内消息邮箱（队友/后台代理通信）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mailbox.ts
- * pieces: chunk-xe7zq1p4.js (1)
+ * pieces: chunk-swe0kb5q.js (1)
  * attribution: fingerprint 1
  */
 import { createSignal } from "./signal.js";
 
-//@ chunk-xe7zq1p4.js:11488-12161 fingerprint (2.1.88 match: Mailbox, 1)
+//@ chunk-swe0kb5q.js:11508-12181 fingerprint (2.1.88 match: Mailbox, 1)
 /**
  * 进程内消息邮箱：按条件等待/取出消息，供队友与后台代理通信。
  */

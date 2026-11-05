@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：外部通知读取工具 schema。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -29,14 +29,14 @@ import {
 } from "../../services/queuedNotifications/queuedNotifications.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:5732-7894 placement
+//@ chunk-fmnbrxwy.js:6199-8361 placement
 /**
  * Notifications 工具的输出 schema：通知条目（id、来源、时间、正文、到达时间）列表。
  */
 var NotificationsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var notificationsOutputSchema;
 var notificationsTool;
-deferInit("chunk-kxyd0g16.js:5732", () => {
+deferInit("chunk-fmnbrxwy.js:6199", () => {
   NotificationsSchema = DoctorLazy(() => zodStrictObject({}));
   notificationsOutputSchema = DoctorLazy(() =>
     objectSchema({

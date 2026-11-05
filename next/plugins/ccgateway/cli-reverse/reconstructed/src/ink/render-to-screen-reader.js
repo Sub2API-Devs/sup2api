@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：把 Ink 节点树渲染为屏幕阅读器友好的纯文本（限制深度）；计算某节点在屏幕阅读器输出中的偏移等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (12)
  * attribution: placement 12
  */
 import { renderNodeToOutput } from "./render-node-to-output.js";
 import { stripAnsiPerLine } from "../utils/stripAnsi.js";
 import { MAX_TREE_DEPTH, reportTreeDepthExceeded } from "./hit-test.js";
 
-//@ chunk-bzr73sfg.js:316137-316148 placement
+//@ chunk-2avr6cej.js:315718-315729 placement
 var renderNodeToOutputAlias = renderNodeToOutput;
-//@ chunk-bzr73sfg.js:316148-316219 placement
+//@ chunk-2avr6cej.js:315729-315800 placement
 var SCREEN_READER_STRIP_RE = /[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u202a-\u202e\u2066-\u2069]/;
-//@ chunk-bzr73sfg.js:316219-316479 placement
+//@ chunk-2avr6cej.js:315800-316060 placement
 /**
  * 屏幕阅读器输出清洗：去掉转义序列与控制字符（保留 \t \n），双向控制字符换成 U+FFFD。
  */
@@ -35,7 +35,7 @@ function sanitizeForScreenReader(text) {
   }
   return out;
 }
-//@ chunk-bzr73sfg.js:316479-316553 placement
+//@ chunk-2avr6cej.js:316060-316134 placement
 var BLOCKQUOTE_PREFIX = "> ";
 var NO_PRESERVE_RANGES = [];
 var NO_ROW_PREFIXES = [];
@@ -44,7 +44,7 @@ var EMPTY_SR_OUTPUT = {
   preserveRanges: NO_PRESERVE_RANGES,
   rowPrefixRanges: NO_ROW_PREFIXES,
 };
-//@ chunk-bzr73sfg.js:316553-317716 placement
+//@ chunk-2avr6cej.js:316134-317297 placement
 /**
  * 把 Ink 节点树渲染为屏幕阅读器友好的纯文本（限制深度）。
  */
@@ -113,25 +113,25 @@ function renderNodeToScreenReaderOutput(node, parentRole, depth = 0) {
     rowPrefixRanges,
   };
 }
-//@ chunk-bzr73sfg.js:317716-317760 placement
+//@ chunk-2avr6cej.js:317297-317341 placement
 function screenReaderText(node, role, depth = 0) {
   return renderNodeToScreenReaderOutput(node, role, depth).text;
 }
-//@ chunk-bzr73sfg.js:317760-317871 placement
+//@ chunk-2avr6cej.js:317341-317452 placement
 function offsetRanges(base, preserveRanges, offset) {
   if (preserveRanges.length === 0) return base;
   let merged = base === NO_PRESERVE_RANGES ? [] : [...base];
   for (let [start, end] of preserveRanges) merged.push([start + offset, end + offset]);
   return merged;
 }
-//@ chunk-bzr73sfg.js:317871-317986 placement
+//@ chunk-2avr6cej.js:317452-317567 placement
 function offsetRowPrefixes(base, rowPrefixRanges, offset) {
   if (rowPrefixRanges.length === 0) return base;
   let merged = base === NO_ROW_PREFIXES ? [] : [...base];
   for (let [start, end, prefix] of rowPrefixRanges) merged.push([start + offset, end + offset, prefix]);
   return merged;
 }
-//@ chunk-bzr73sfg.js:317986-318461 placement
+//@ chunk-2avr6cej.js:317567-318042 placement
 /**
  * 按 flex 方向拼接子节点的屏幕阅读器文本。
  */
@@ -166,7 +166,7 @@ function renderBoxToScreenReaderOutput(node, role, depth) {
     rowPrefixRanges,
   };
 }
-//@ chunk-bzr73sfg.js:318461-319359 placement
+//@ chunk-2avr6cej.js:318042-318940 placement
 /**
  * 计算某节点在屏幕阅读器输出中的偏移。
  */
@@ -210,24 +210,24 @@ function screenReaderOffsetOf(node, target, role, depth = 0) {
   }
   return null;
 }
-//@ chunk-bzr73sfg.js:319359-319480 placement
+//@ chunk-2avr6cej.js:318940-319061 placement
 function setTranscriptFrontCut(node) {
   let root = node;
   while (root.parentNode !== undefined) root = root.parentNode;
   if (root.nodeName === "ink-root") root.transcriptFrontCutRows = node;
 }
-//@ chunk-bzr73sfg.js:319480-319573 placement
+//@ chunk-2avr6cej.js:319061-319154 placement
 function takeTranscriptFrontCut(rootNode) {
   let transcriptFrontCutRows = rootNode.transcriptFrontCutRows ?? null;
   rootNode.transcriptFrontCutRows = undefined;
   return transcriptFrontCutRows;
 }
 export {
-  setTranscriptFrontCut,
-  screenReaderText,
   renderNodeToOutputAlias,
   renderNodeToScreenReaderOutput,
   sanitizeForScreenReader,
   takeTranscriptFrontCut,
   screenReaderOffsetOf,
+  setTranscriptFrontCut,
+  screenReaderText,
 };

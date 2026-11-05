@@ -1,14 +1,14 @@
 /**
  * has-symbols/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: has-symbols@1.1.0
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_shams } from "./shams.js";
 
-//@ chunk-h6b7mazd.js:9455-9716 cjs-fingerprint
+//@ chunk-ww9agm6g.js:9455-9716 cjs-fingerprint
 var require_has_symbols = __commonJS(function (cjsExports, cjsModule) {
   var origSymbol = typeof Symbol !== "undefined" && Symbol;
   var hasSymbolSham = require_shams();

@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：claude.ai 插件安装
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { join, dirname } from "path";
-import { mkdir, rm as rm_2 } from "fs/promises";
+import { mkdir, rm } from "fs/promises";
 import { createHash } from "crypto";
 import { createReadStream } from "fs";
 import { ClaudeAiMarketplaceError } from "./claudeAiMarketplaces.js";
@@ -22,9 +22,9 @@ import { getFsImplementation } from "../fsOperations.js";
 import { retryFsOp } from "../atomicPublishWrite.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:693320-693442 placement
+//@ chunk-5xgkngpb.js:703792-703914 placement
 let ClaudeAiPluginInstallError; // deferred: uses ClaudeAiMarketplaceError (./claudeAiMarketplaces.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:693320", () => {
+deferInit("chunk-5xgkngpb.js:703792", () => {
   ClaudeAiPluginInstallError = class ClaudeAiPluginInstallError extends ClaudeAiMarketplaceError {
     constructor(message, code) {
       super(message, code, "claude.ai plugin install failed");
@@ -32,7 +32,7 @@ deferInit("chunk-e6aww6q8.js:693320", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:693442-693734 placement
+//@ chunk-5xgkngpb.js:703914-704206 placement
 function normalizeDownloadErrorCode(reason) {
   if (/^http_\d{3}$/.test(reason)) return `http_${reason.charAt(5)}xx`;
   switch (reason) {
@@ -50,7 +50,7 @@ function normalizeDownloadErrorCode(reason) {
       return "not_served";
   }
 }
-//@ chunk-e6aww6q8.js:693734-694768 placement
+//@ chunk-5xgkngpb.js:704206-705240 placement
 /**
  * 从 claude.ai 下载插件压缩包，处理网络、超时、未登录与被拒。
  */
@@ -75,7 +75,7 @@ function downloadClaudeAiPluginArchive(reason) {
       return "claude.ai did not serve an archive for this plugin. It may not be downloadable for your account.";
   }
 }
-//@ chunk-e6aww6q8.js:694768-696060 placement
+//@ chunk-5xgkngpb.js:705240-706535 placement
 /**
  * 安装 claude.ai 列出的插件，不可安装或没有作用域时跳过。
  */
@@ -132,7 +132,7 @@ async function installClaudeAiPlugin(source, cachePath, tempPath, credentials) {
         await retryFsOp(extracted.root, cachePath);
         return sha256;
       } finally {
-        await rm_2(tempDir, {
+        await rm(tempDir, {
           recursive: true,
           force: true,
         }).catch(() => {});
@@ -141,7 +141,7 @@ async function installClaudeAiPlugin(source, cachePath, tempPath, credentials) {
     (failure) => (failure instanceof ClaudeAiPluginInstallError ? failure.code : "unexpected"),
   );
 }
-//@ chunk-e6aww6q8.js:696060-696163 placement
+//@ chunk-5xgkngpb.js:706535-706638 placement
 async function sha256File(filePath) {
   let hash = createHash("sha256");
   for await (let chunk of createReadStream(filePath)) hash.update(chunk);

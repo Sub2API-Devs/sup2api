@@ -3,36 +3,36 @@
  *
  * 2.1.316 新增：环境变量解析器（str/bool/triBool/int/names）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fq90vph4.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t046xvwq.js (7)
  * attribution: placement 7
  */
 import { isEnvTruthy, isEnvDefinedFalsy, parseLooseInteger, parseIntLoose } from "./envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fq90vph4.js:270-311 placement
+//@ chunk-t046xvwq.js:270-311 placement
 function parserFrom(trimmedOrUndefined) {
   return {
     parse: (value) => trimmedOrUndefined(toEnvString(value)),
   };
 }
-//@ chunk-fq90vph4.js:311-359 placement
+//@ chunk-t046xvwq.js:311-359 placement
 function trimmedOrUndefined(value) {
   let trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
-//@ chunk-fq90vph4.js:359-408 placement
+//@ chunk-t046xvwq.js:359-408 placement
 function toEnvString(value) {
   return value === undefined ? undefined : String(value);
 }
-//@ chunk-fq90vph4.js:408-508 placement
+//@ chunk-t046xvwq.js:408-508 placement
 var strParser; // deferred: uses parserFrom of its import cycle while loading; runs once the cycle is complete
 var rawStrParser;
 var boolParser;
 var triBoolParser;
 var defaultIntParser;
-deferInit("chunk-fq90vph4.js:408", () => {
+deferInit("chunk-t046xvwq.js:408", () => {
   strParser = parserFrom(trimmedOrUndefined);
   rawStrParser = parserFrom((value) => value);
   boolParser = parserFrom((value) => isEnvTruthy(value));
@@ -43,7 +43,7 @@ deferInit("chunk-fq90vph4.js:408", () => {
   });
   defaultIntParser = intParser();
 });
-//@ chunk-fq90vph4.js:508-582 placement
+//@ chunk-t046xvwq.js:508-582 placement
 /**
  * 把环境变量值序列化：布尔转 "1"/"0"，其余转字符串。
  */
@@ -51,7 +51,7 @@ function boolToEnvString(value) {
   if (typeof value === "boolean") return value ? "1" : "0";
   return String(value);
 }
-//@ chunk-fq90vph4.js:582-893 placement
+//@ chunk-t046xvwq.js:582-893 placement
 /**
  * 环境变量解析器集合（str/bool/triBool/int/names/enum）。
  */
@@ -74,7 +74,7 @@ var ENV_PARSERS = {
   enum: (allowed) =>
     parserFrom((value) => (value !== undefined && allowed.includes(value.trim()) ? value.trim() : undefined)),
 };
-//@ chunk-fq90vph4.js:893-1198 placement
+//@ chunk-t046xvwq.js:893-1198 placement
 /**
  * 整数解析器（只数字、整值、上下限）。
  */

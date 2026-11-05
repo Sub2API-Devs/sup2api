@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：重启时传递主动性设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-erzjxbhh.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2b8xszbk.js (11)
  * attribution: placement 11
  */
 import { wasProactivityEverOn } from "../Tool.js";
@@ -15,7 +15,7 @@ import { parsePermissionMode } from "../types/permissions.js";
 import { isProactivityMode } from "./proactivityMode.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 
-//@ chunk-erzjxbhh.js:415-606 placement
+//@ chunk-2b8xszbk.js:416-607 placement
 /**
  * 重启时传递主动性设置所用的环境变量名。
  */
@@ -23,14 +23,14 @@ var RELAUNCH_PROACTIVITY_BASELINE_ENV = "CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELI
 var CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL = "CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL";
 var CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED = "CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED";
 var CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON = "CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON";
-//@ chunk-erzjxbhh.js:606-691 placement
+//@ chunk-2b8xszbk.js:607-692 placement
 /**
  * withProactivityBaseline：带主动性基线时原样返回。
  */
 function withProactivityBaseline(context) {
   return context.toolPermissionContext.proactivityBaseline === undefined ? undefined : context;
 }
-//@ chunk-erzjxbhh.js:691-795 placement
+//@ chunk-2b8xszbk.js:692-796 placement
 /**
  * 生成重启时传递主动性基线权限模式的环境变量。
  */
@@ -42,7 +42,7 @@ function proactivityBaselineEnv({ toolPermissionContext }) {
         [RELAUNCH_PROACTIVITY_BASELINE_ENV]: proactivityBaseline.mode,
       };
 }
-//@ chunk-erzjxbhh.js:795-960 placement
+//@ chunk-2b8xszbk.js:796-962 placement
 /**
  * 生成重启时传递主动性等级、是否已决定与是否开启过的环境变量。
  */
@@ -55,7 +55,7 @@ function proactivityLevelEnv({ proactivityLevel, toolPermissionContext }) {
   if (wasProactivityEverOn()) relaunchEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON] = "1";
   return relaunchEnv;
 }
-//@ chunk-erzjxbhh.js:960-1070 placement
+//@ chunk-2b8xszbk.js:962-1072 placement
 /**
  * 启动模式未由主动性等级决定时，传递"未决定"标记。
  */
@@ -66,7 +66,7 @@ function undecidedProactivityEnv({ toolPermissionContext }) {
       }
     : {};
 }
-//@ chunk-erzjxbhh.js:1070-1189 placement
+//@ chunk-2b8xszbk.js:1072-1191 placement
 /**
  * 判断重启参数是否为恢复会话或显式指定了 --permission-mode。
  */
@@ -78,7 +78,7 @@ function hasExplicitPermissionMode(argv) {
     )
   );
 }
-//@ chunk-erzjxbhh.js:1189-1367 placement
+//@ chunk-2b8xszbk.js:1191-1369 placement
 /**
  * 读取并清除重启传来的基线权限模式（未允许时忽略 bypassPermissions）。
  */
@@ -89,7 +89,7 @@ function takeRelaunchBaselineMode(allowBypass) {
   if (permissionMode === "bypassPermissions" && !allowBypass) return;
   return permissionMode;
 }
-//@ chunk-erzjxbhh.js:1367-1609 placement
+//@ chunk-2b8xszbk.js:1369-1611 placement
 /**
  * 读取并清除重启传来的主动性等级，无效时一并清除相关标记。
  */
@@ -102,7 +102,7 @@ function takeRelaunchProactivityLevel() {
   env.unset("CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON");
   return;
 }
-//@ chunk-erzjxbhh.js:1609-1738 placement
+//@ chunk-2b8xszbk.js:1611-1740 placement
 /**
  * 读取并清除"主动性曾开启"标记。
  */
@@ -111,7 +111,7 @@ function takeProactivityEverOn() {
   env.unset("CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON");
   return isEnvTruthy(CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON);
 }
-//@ chunk-erzjxbhh.js:1738-1854 placement
+//@ chunk-2b8xszbk.js:1740-1856 placement
 /**
  * 判断重启传来的主动性等级有效且曾开启过。
  */
@@ -121,7 +121,7 @@ function isRelaunchProactivityEverOn() {
     isEnvTruthy(env.CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON)
   );
 }
-//@ chunk-erzjxbhh.js:1854-2013 placement
+//@ chunk-2b8xszbk.js:1856-2015 placement
 /**
  * 读取并清除"启动模式已由主动性决定"标记，返回 true/false/undefined。
  */
@@ -133,18 +133,18 @@ function takeProactivityDecided() {
   return;
 }
 export {
+  takeRelaunchBaselineMode,
+  takeProactivityDecided,
   isRelaunchProactivityEverOn,
+  withProactivityBaseline,
   takeRelaunchProactivityLevel,
   takeProactivityEverOn,
-  takeProactivityDecided,
-  takeRelaunchBaselineMode,
   RELAUNCH_PROACTIVITY_BASELINE_ENV,
   CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED,
   CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON,
   CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL,
   proactivityBaselineEnv,
   proactivityLevelEnv,
-  withProactivityBaseline,
   hasExplicitPermissionMode,
   undecidedProactivityEnv,
 };

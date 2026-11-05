@@ -3,19 +3,19 @@
  *
  * 函数钩子 engineMergeRead 与 settings.read（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (24)
  * attribution: placement 24
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
 import { serverFilePresenceSlot } from "../../../services/remoteManagedSettings/seating.js";
 import { jsonParse, jsonStringify } from "../../../utils/slowOperations.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { subscribe } from "../../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { isWarnedSettingsKey, getSettingsFieldSchema } from "../../../utils/settings/types.js";
 import {
-  getInitialSettings_2,
+  getInitialSettings,
   getPolicySettingsOrigin,
   isPolicySlotAdminOrParentComposed,
   getSettingsForSource,
@@ -34,14 +34,14 @@ import { stableStringifySafe } from "../../../utils/hooks/hookSerialization.js";
 import { pluginsMatchingEvent } from "../hookDispatch.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:9634-9645 placement
+//@ chunk-7jxyna5q.js:9610-9621 placement
 /**
  * 空对象默认导出
  */
 var EMPTY_SETTINGS_EXPORTS = {};
-//@ chunk-s61vbvea.js:9645-10204 placement
+//@ chunk-7jxyna5q.js:9621-10180 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:9645", () => {
+deferInit("chunk-7jxyna5q.js:9621", () => {
   __export(EMPTY_SETTINGS_EXPORTS, {
     ENGINE_CALLER: () => ENGINE_CALLER,
     SETTINGS_SOURCE_NAMES: () => SETTINGS_SOURCE_NAMES,
@@ -68,12 +68,12 @@ deferInit("chunk-s61vbvea.js:9645", () => {
     settingsSourceProblem: () => settingsSourceProblem,
   });
 });
-//@ chunk-s61vbvea.js:297593-297633 placement
+//@ chunk-7jxyna5q.js:221016-221056 placement
 /**
  * JSON 深拷贝
  */
 var jsonCloneValue = (value) => (value === undefined ? undefined : jsonParse(jsonStringify(value)));
-//@ chunk-s61vbvea.js:620272-620623 placement
+//@ chunk-7jxyna5q.js:541795-542146 placement
 function deliveredNamesOf({ servers, errors }) {
   let isWarning = (error) => error.mcpErrorMetadata?.severity === "warning";
   if (!errors.every(isWarning))
@@ -83,24 +83,24 @@ function deliveredNamesOf({ servers, errors }) {
     let serverName = mcpErrorMetadata?.serverName;
     return mcpErrorMetadata?.skipReason !== undefined && serverName !== undefined ? [serverName] : [];
   });
-  return uniq([...Object.keys(servers), ...flattened]);
+  return normalizeCaseForComparison_2([...Object.keys(servers), ...flattened]);
 }
-//@ chunk-s61vbvea.js:620623-620636 placement
+//@ chunk-7jxyna5q.js:542146-542159 placement
 var deliveredReaderSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:620623", () => {
+deferInit("chunk-7jxyna5q.js:542146", () => {
   deliveredReaderSlot = subscribe();
 });
-//@ chunk-s61vbvea.js:620636-620702 placement
+//@ chunk-7jxyna5q.js:542159-542225 placement
 var ENGINE_CALLER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:620636", () => {
+deferInit("chunk-7jxyna5q.js:542159", () => {
   ENGINE_CALLER = Object.freeze({
     plugin: "engine",
     origin: Object.freeze([]),
   });
 });
-//@ chunk-s61vbvea.js:620702-620722 placement
+//@ chunk-7jxyna5q.js:542225-542245 placement
 var isSchemaKey = (key) => isWarnedSettingsKey(key);
-//@ chunk-s61vbvea.js:620722-620909 placement
+//@ chunk-7jxyna5q.js:542245-542432 placement
 function fittedValue(key, value) {
   let parsed =
     value !== undefined && isSchemaKey(key) ? getSettingsFieldSchema(key)?.safeParse(value) : undefined;
@@ -119,11 +119,11 @@ function fittedValue(key, value) {
         value: undefined,
       };
 }
-//@ chunk-s61vbvea.js:620909-620955 placement
+//@ chunk-7jxyna5q.js:542432-542478 placement
 var ownValue = (target, key) => (Object.hasOwn(target, key) ? target[key] : undefined);
-//@ chunk-s61vbvea.js:620955-621092 placement
+//@ chunk-7jxyna5q.js:542478-542615 placement
 var SETTING_SOURCE_OF; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:620955", () => {
+deferInit("chunk-7jxyna5q.js:542478", () => {
   SETTING_SOURCE_OF = Object.freeze({
     user: "userSettings",
     project: "projectSettings",
@@ -132,23 +132,23 @@ deferInit("chunk-s61vbvea.js:620955", () => {
     policy: "policySettings",
   });
 });
-//@ chunk-s61vbvea.js:621092-621188 placement
+//@ chunk-7jxyna5q.js:542615-542711 placement
 function settingsComputed() {
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   let { answers, computed } = commandSyncNameState().hookedMerge;
   return answers === null || computed === null ? initialSettings : computed;
 }
-//@ chunk-s61vbvea.js:621188-621234 placement
+//@ chunk-7jxyna5q.js:542711-542757 placement
 function settingsCopy(settings) {
   let copy = jsonCloneValue(settings);
   return isPlainObject(copy) ? copy : {};
 }
-//@ chunk-s61vbvea.js:621234-621254 placement
+//@ chunk-7jxyna5q.js:542757-542777 placement
 var servedBy; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:621234", () => {
+deferInit("chunk-7jxyna5q.js:542757", () => {
   servedBy = new WeakMap();
 });
-//@ chunk-s61vbvea.js:621254-621381 placement
+//@ chunk-7jxyna5q.js:542777-542904 placement
 function deliveredServers() {
   let policy = commandSyncNameState().policy;
   let served = servedBy.get(policy);
@@ -158,7 +158,7 @@ function deliveredServers() {
   servedBy.set(policy, compute);
   return compute;
 }
-//@ chunk-s61vbvea.js:621381-621488 placement
+//@ chunk-7jxyna5q.js:542904-543011 placement
 function originMarked(settings) {
   let policyUnverified = getPolicySettingsOrigin() === "remote" && !isRemoteManagedSettingsVerified();
   return settings !== null && (!isPolicySlotAdminOrParentComposed() || policyUnverified)
@@ -168,7 +168,7 @@ function originMarked(settings) {
       }
     : settings;
 }
-//@ chunk-s61vbvea.js:621488-621699 placement
+//@ chunk-7jxyna5q.js:543011-543222 placement
 function policyAsDelivered(settings) {
   let marked = originMarked(settings);
   try {
@@ -189,18 +189,18 @@ function policyAsDelivered(settings) {
     };
   }
 }
-//@ chunk-s61vbvea.js:621699-621772 placement
+//@ chunk-7jxyna5q.js:543222-543295 placement
 function settingsOfSource(source) {
   return source === "policy"
     ? policyAsDelivered(getSettingsForSource("policySettings"))
     : getSettingsForSource(SETTING_SOURCE_OF[source]);
 }
-//@ chunk-s61vbvea.js:621772-621838 placement
+//@ chunk-7jxyna5q.js:543295-543361 placement
 var SETTINGS_SOURCE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:621772", () => {
+deferInit("chunk-7jxyna5q.js:543295", () => {
   SETTINGS_SOURCE_NAMES = Object.freeze(["user", "project", "local", "flag", "policy"]);
 });
-//@ chunk-s61vbvea.js:621838-622071 placement (2.1.88 match: getSettingsWithAllErrors, 0.614)
+//@ chunk-7jxyna5q.js:543361-543594 placement (2.1.88 match: getSettingsWithAllErrors, 0.614)
 /**
  * 合并设置错误与插件、MCP 等来源的错误，供 /doctor 和 /status 展示。
  */
@@ -232,7 +232,7 @@ function settingsLayers() {
     }),
   ];
 }
-//@ chunk-s61vbvea.js:622071-622258 placement
+//@ chunk-7jxyna5q.js:543594-543781 placement
 function settingsReadInputOf(input) {
   if (hasCurrentDispatch())
     return {
@@ -256,7 +256,7 @@ function settingsReadInputOf(input) {
     })),
   };
 }
-//@ chunk-s61vbvea.js:622258-622948 placement
+//@ chunk-7jxyna5q.js:543781-544471 placement
 async function engineMergeRead() {
   if (!hasModuleHookingSite("settings.read")) return;
   let { layers = [] } = settingsReadInputOf({});
@@ -276,7 +276,7 @@ async function engineMergeRead() {
     );
     return computed;
   });
-  return uniq([...Object.keys(judged), ...Object.keys(computed)]).flatMap((input) => {
+  return normalizeCaseForComparison_2([...Object.keys(judged), ...Object.keys(computed)]).flatMap((input) => {
     let base = ownValue(judged, input);
     let result = fittedValue(input, base);
     let source = layers.findLast((layer) => Object.hasOwn(layer.settings, input))?.source;
@@ -301,7 +301,7 @@ async function engineMergeRead() {
         ];
   });
 }
-//@ chunk-s61vbvea.js:622948-623070 placement
+//@ chunk-7jxyna5q.js:544471-544593 placement
 function settingsRead(input) {
   let { source, layers } = input;
   let noSource = source === undefined;
@@ -311,20 +311,20 @@ function settingsRead(input) {
     );
   });
 }
-//@ chunk-s61vbvea.js:623070-623126 placement
+//@ chunk-7jxyna5q.js:544593-544649 placement
 function settingsReadPlugins() {
   return pluginsMatchingEvent("settings.read", {}, ENGINE_CALLER.origin);
 }
-//@ chunk-s61vbvea.js:623126-623314 placement
+//@ chunk-7jxyna5q.js:544649-544837 placement
 function settingsSourceProblem(source) {
   return source === undefined || (typeof source === "string" && Object.hasOwn(SETTING_SOURCE_OF, source))
     ? undefined
     : `takes { source } naming one of ${Object.keys(SETTING_SOURCE_OF).join(", ")} (got ${typeof source === "string" ? source : typeof source})`;
 }
 export {
+  jsonCloneValue,
   deliveredReaderSlot,
   deliveredNamesOf,
-  jsonCloneValue,
   settingsSourceProblem,
   settingsReadInputOf,
   settingsRead,

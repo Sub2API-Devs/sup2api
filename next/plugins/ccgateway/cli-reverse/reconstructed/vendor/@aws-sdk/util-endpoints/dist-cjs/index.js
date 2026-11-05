@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/util-endpoints/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/util-endpoints@3.936.0..3.953.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_index_browser as require_index_browser_3 } from "../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
 import { require_url_parser } from "../../../@smithy/url-parser/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:5421-12143 cjs-fingerprint
+//@ chunk-3p78mpxm.js:5421-12143 cjs-fingerprint
 var require_util_endpoints = __commonJS(function (cjsExports) {
   var utilEndpoints = require_index_browser_3();
   var urlParser = require_url_parser();

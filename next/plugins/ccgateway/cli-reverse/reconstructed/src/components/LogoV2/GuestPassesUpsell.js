@@ -3,19 +3,19 @@
  *
  * 欢迎区 guest passes 推广：判定是否显示、计数并在 /passes 刷新后重置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/GuestPassesUpsell.tsx
- * pieces: chunk-ag5x7vhf.js (10)
+ * pieces: chunk-hnxhr3bs.js (10)
  * attribution: placement 6, fingerprint 4
  */
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { init_react_production, useState, useContext } from "../../../vendor/react/cjs/react.production.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getOauthAccountInfo } from "../../utils/auth.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
-import { useState, useContext, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
 import { env } from "../../utils/env.js";
 import {
@@ -33,20 +33,25 @@ import { logEvent } from "../../services/analytics/index.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:78702-78730 placement
+//@ chunk-hnxhr3bs.js:78182-78186 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:78182", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:78186-78214 placement
 function pickGuestPassAnnouncement() {
   return pickCompanyAnnouncement(false);
 }
-//@ chunk-ag5x7vhf.js:78730-78802 placement
+//@ chunk-hnxhr3bs.js:78214-78286 placement
 function hasCompanyAnnouncements() {
-  let companyAnnouncements = getInitialSettings_2().companyAnnouncements;
+  let companyAnnouncements = getInitialSettings().companyAnnouncements;
   return !!companyAnnouncements && companyAnnouncements.some((companyAnnouncement) => companyAnnouncement);
 }
-//@ chunk-ag5x7vhf.js:78802-79096 placement
+//@ chunk-hnxhr3bs.js:78286-78580 placement
 function pickCompanyAnnouncement(cache) {
   let state = announcementState();
   if (state.companyAnnouncement !== null) return state.companyAnnouncement;
-  let filtered = (getInitialSettings_2().companyAnnouncements ?? []).filter((announcement) => announcement);
+  let filtered = (getInitialSettings().companyAnnouncements ?? []).filter((announcement) => announcement);
   if (filtered.length === 0) return null;
   let picked =
     getGlobalConfig().numStartups === 1 ? filtered[0] : filtered[Math.floor(Math.random() * filtered.length)];
@@ -54,7 +59,7 @@ function pickCompanyAnnouncement(cache) {
   if (cache) state.companyAnnouncement = picked;
   return picked;
 }
-//@ chunk-ag5x7vhf.js:79096-79655 placement
+//@ chunk-hnxhr3bs.js:78580-79139 placement
 function CompanyAnnouncementNotice() {
   let $ = useMemoCache(10);
   let account;
@@ -110,7 +115,7 @@ function CompanyAnnouncementNotice() {
   } else notice = $[9];
   return notice;
 }
-//@ chunk-ag5x7vhf.js:79655-79841 fingerprint (2.1.88 match: resetIfPassesRefreshed, 1)
+//@ chunk-hnxhr3bs.js:79139-79325 fingerprint (2.1.88 match: resetIfPassesRefreshed, 1)
 function resetIfPassesRefreshed(storageV5) {
   let remaining = getCachedRemainingPasses();
   if (remaining == null || remaining <= 0) return;
@@ -126,7 +131,7 @@ function resetIfPassesRefreshed(storageV5) {
       storageV5,
     );
 }
-//@ chunk-ag5x7vhf.js:79841-80009 fingerprint (2.1.88 match: shouldShowGuestPassesUpsell, 1)
+//@ chunk-hnxhr3bs.js:79325-79493 fingerprint (2.1.88 match: shouldShowGuestPassesUpsell, 1)
 function shouldShowGuestPassesUpsell(storageV5) {
   let { eligible, hasCache } = checkCachedPassesEligibility();
   if (!eligible || !hasCache) return false;
@@ -136,7 +141,7 @@ function shouldShowGuestPassesUpsell(storageV5) {
   if (config.hasVisitedPasses) return false;
   return true;
 }
-//@ chunk-ag5x7vhf.js:80009-80161 fingerprint (2.1.88 match: incrementGuestPassesSeenCount, 1)
+//@ chunk-hnxhr3bs.js:79493-79645 fingerprint (2.1.88 match: incrementGuestPassesSeenCount, 1)
 function incrementGuestPassesSeenCount(storageV5) {
   let newCount = 0;
   saveGlobalConfig((prev) => {
@@ -150,7 +155,7 @@ function incrementGuestPassesSeenCount(storageV5) {
     seen_count: newCount,
   });
 }
-//@ chunk-ag5x7vhf.js:80161-80518 fingerprint (2.1.88 match: GuestPassesUpsell, 0.607)
+//@ chunk-hnxhr3bs.js:79645-80002 fingerprint (2.1.88 match: GuestPassesUpsell, 0.607)
 function GuestPassesUpsell() {
   let $ = useMemoCache(1);
   let t0;
@@ -184,7 +189,7 @@ function GuestPassesUpsell() {
   } else t0 = $[0];
   return t0;
 }
-//@ chunk-ag5x7vhf.js:80518-80708 placement
+//@ chunk-hnxhr3bs.js:80002-80192 placement
 function GuestPassesNotice() {
   let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
@@ -204,9 +209,4 @@ function GuestPassesNotice() {
   } else upsell = $[2];
   return upsell;
 }
-//@ chunk-ag5x7vhf.js:80708-80712 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:80708", () => {
-  init_react_production();
-});
 export { hasCompanyAnnouncements, CompanyAnnouncementNotice, shouldShowGuestPassesUpsell, GuestPassesNotice };

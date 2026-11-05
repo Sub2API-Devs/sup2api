@@ -3,9 +3,9 @@
  *
  * 启动数据拉取：/api/claude_cli/bootstrap（或网关 /v1/models 发现）得到客户端数据、附加模型选项等并写入缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/bootstrap.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-mz6f608r.js (17)
+ * pieces: chunk-9dxf3ckd.js (17), chunk-exfmq47h.js (1)
  * attribution: placement 15, fingerprint 1, file-local 1, sole-consumer 1
  */
 import { createHash } from "crypto";
@@ -41,6 +41,7 @@ import {
   shouldUseWIFAuth,
   getClaudeAIOAuthTokens,
   hasProfileScope,
+  isAnthropicAuthEnabled,
 } from "../../utils/auth.js";
 import { isCcsCoworkSurface, getEntrypointKind } from "../../utils/entrypointKinds.js";
 import {
@@ -49,6 +50,9 @@ import {
   isDiskless,
   setBearerPlan,
   getAuthenticatedAccountEpoch,
+  getProgramUseCaseId,
+  setProgramUseCaseId,
+  unmarkBetaHeaderRefused,
   getLearnedEffortCaps,
   getGatewayAuth,
 } from "../../bootstrap/state.js";
@@ -67,6 +71,11 @@ import { promptModelOverride } from "../../utils/model/promptBundles.js";
 import { logError } from "../../utils/log.js";
 import { providerReadsClientData, getAPIProvider } from "../../utils/model/providers.js";
 import { applyClientDataModelOverrides } from "../clientDataUrl.js";
+import {
+  setProgramUseCaseRefetch,
+  refetchForVoidedBootstrapAnswer,
+  noteProgramUseCaseBootstrapAnswer,
+} from "../../utils/programUseCase.js";
 import { SUBSCRIPTION_TYPE_BY_ORG_TYPE } from "../oauth/client.js";
 import { recordBearerAccountOverride } from "../oauth/bearerAccountOverride.js";
 import { env } from "../../utils/env.js";
@@ -83,8 +92,13 @@ import { apiKeyForHost } from "../analytics/telemetryCredentialGuard.js";
 import { withOAuth401Retry, claudeCodeUserAgent } from "../../utils/http.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { envDriftDetected } from "../../entrypoints/warmSpare/claimCredentials.js";
-import { clearBetasCaches } from "../../utils/betas.js";
+import { clearBetasCaches, BETA_PROGRAM_USE_CASE_IDS } from "../../utils/betas.js";
 import { invalidateToolDescriptions } from "./toolDescriptionCache.js";
+import {
+  normalizeUseCaseList,
+  resolveUseCaseId,
+  normalizeChoiceMode,
+} from "../../utils/programUseCaseChoices.js";
 import { isTimestampedValue, withTimestampedEntry } from "../../utils/config/globalConfigValidation.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logEvent } from "../analytics/index.js";
@@ -96,7 +110,7 @@ import { firstPartyNameToCanonical } from "../../utils/model/modelFallback.js";
 import { sanitizeTitle, markdownSafeText } from "../../utils/resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:64555-64789 placement
+//@ chunk-exfmq47h.js:65033-65267 placement
 /**
  * 按入口/模型/版本/组织计算 bootstrap 缓存键（带内存缓存）。
  */
@@ -116,12 +130,12 @@ function bootstrapCacheKey(bootstrapRequestParams) {
   }
   return cacheKey;
 }
-//@ chunk-mz6f608r.js:1246-3050 placement
+//@ chunk-9dxf3ckd.js:1354-3322 placement
 /**
  * /api/claude_cli/bootstrap 响应 schema：client_data、附加模型选项（转换为选项并补营销名/价格/禁用原因）、附加模型价格、模型权限、组织默认模型、oauth 账号信息、自动压缩窗口等。
  */
 var BOOTSTRAP_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mz6f608r.js:1246", () => {
+deferInit("chunk-9dxf3ckd.js:1354", () => {
   BOOTSTRAP_RESPONSE_SCHEMA = DoctorLazy(() =>
     create({
       client_data: create_20(create_12()).nullish(),
@@ -215,10 +229,14 @@ deferInit("chunk-mz6f608r.js:1246", () => {
         .nullish(),
       auto_compact_windows: create_20(create_2(), create_12()).nullish(),
       narrowed: create_6().nullish(),
+      program_use_case_id: create_2().nullish(),
+      program_use_cases: create_12().optional(),
+      program_use_case_choice: create_12().optional(),
+      program_use_case_default_id: create_2().nullish().catch(null),
     }),
   );
 });
-//@ chunk-mz6f608r.js:3050-3706 placement
+//@ chunk-9dxf3ckd.js:3322-3978 placement
 /**
  * 生成 bootstrap 请求参数：入口类型、模型、CLI 版本等。
  */
@@ -232,17 +250,17 @@ function getBootstrapRequestParams(model = getMainLoopModel()) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
     organizationUuid: getGlobalConfig().oauthAccount?.organizationUuid ?? null,
   };
 }
-//@ chunk-mz6f608r.js:3706-3908 placement
+//@ chunk-9dxf3ckd.js:3978-4180 placement
 function isActiveBootstrapModel(modelId) {
   let strippedModel = stripAnyVersatileSuffix(modelId);
   let mainLoopModel = getMainLoopModel();
@@ -257,7 +275,7 @@ function isActiveBootstrapModel(modelId) {
     return overrideModel !== undefined && strippedModel === stripAnyVersatileSuffix(overrideModel);
   });
 }
-//@ chunk-mz6f608r.js:3908-4006 placement
+//@ chunk-9dxf3ckd.js:4180-4278 placement
 function installClientDataCacheKey() {
   setClientDataCacheKeyGetter((modelId) => {
     try {
@@ -272,16 +290,16 @@ function installClientDataCacheKey() {
     }
   });
 }
-//@ chunk-mz6f608r.js:4006-4011 placement
+//@ chunk-9dxf3ckd.js:4278-4283 placement
 // deferred: uses installClientDataCacheKey of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mz6f608r.js:4006", () => {
+deferInit("chunk-9dxf3ckd.js:4278", () => {
   installClientDataCacheKey();
 });
-//@ chunk-mz6f608r.js:4011-4037 placement
+//@ chunk-9dxf3ckd.js:4283-4309 placement
 function readsProviderClientData() {
   return providerReadsClientData();
 }
-//@ chunk-mz6f608r.js:4037-4378 placement
+//@ chunk-9dxf3ckd.js:4309-4739 placement
 function registerClientDataGetters() {
   try {
     setClientDataReadGate(() => {
@@ -322,11 +340,18 @@ function registerClientDataGetters() {
         return null;
       }
     });
+    setProgramUseCaseRefetch((options) =>
+      bootstrapFetchCanConvergeSlot()
+        ? refreshBootstrapData(options.storageV5, options.credentials, {
+            keepRenderCaches: true,
+          })
+        : Promise.resolve(false),
+    );
   } catch (error) {
     logError(error);
   }
 }
-//@ chunk-mz6f608r.js:4487-4985 placement
+//@ chunk-9dxf3ckd.js:4848-5347 placement
 /**
  * 把 bootstrap 返回的 oauth_account 信息合并到本地账号信息（账号 uuid 不一致时不合并）。
  */
@@ -347,23 +372,24 @@ function mergeBootstrapAccount(account, remote) {
     ...mergedFields,
   };
 }
-//@ chunk-mz6f608r.js:4985-5154 placement
+//@ chunk-9dxf3ckd.js:5347-5537 placement
 function applyBootstrapAccount(oauthAccount) {
   if (!oauthAccount?.account_uuid) return;
   setAuthenticatedAccount({
     accountUuid: oauthAccount.account_uuid,
     emailAddress: isDiskless() ? undefined : (oauthAccount.account_email ?? undefined),
     organizationUuid: oauthAccount.organization_uuid ?? undefined,
+    seatTier: oauthAccount.seat_tier,
   });
 }
-//@ chunk-mz6f608r.js:5154-5287 placement
+//@ chunk-9dxf3ckd.js:5537-5670 placement
 function subscriptionTypeFromBootstrap(response) {
   let oauthAccount = response.oauth_account;
   return response.narrowed !== true && oauthAccount?.account_uuid && oauthAccount.organization_type
     ? SUBSCRIPTION_TYPE_BY_ORG_TYPE.get(oauthAccount.organization_type)
     : undefined;
 }
-//@ chunk-mz6f608r.js:5287-5545 placement
+//@ chunk-9dxf3ckd.js:5670-5928 placement
 function recordBearerPlan(response, fingerprint, skipTier) {
   if (!skipTier) recordBearerAccountOverride(fingerprint, subscriptionTypeFromBootstrap(response));
   if (fingerprint !== null && fingerprint !== getClaudeAIOAuthTokenFingerprint()) return;
@@ -385,7 +411,7 @@ function recordBearerPlan(response, fingerprint, skipTier) {
         },
   );
 }
-//@ chunk-mz6f608r.js:5545-8151 fingerprint (2.1.88 match: fetchBootstrapAPI, 0.628)
+//@ chunk-9dxf3ckd.js:5928-8596 fingerprint (2.1.88 match: fetchBootstrapAPI, 0.621)
 /**
  * 请求 bootstrap 接口（网关模式需 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY 才查 /v1/models）。
  */
@@ -402,6 +428,7 @@ async function fetchBootstrapAPI(options, credentials) {
         viaScopelessOAuth: false,
         oauthBearerSha256: null,
         wasEndpointMovedAtSend: false,
+        viaOAuth: false,
       };
     }
     let gatewayModelOptions = await fetchGatewayModelOptions(credentials);
@@ -411,6 +438,7 @@ async function fetchBootstrapAPI(options, credentials) {
         viaScopelessOAuth: false,
         oauthBearerSha256: null,
         wasEndpointMovedAtSend: false,
+        viaOAuth: false,
       }
     );
   }
@@ -468,6 +496,7 @@ async function fetchBootstrapAPI(options, credentials) {
             viaScopelessOAuth: false,
             oauthBearerSha256: null,
             wasEndpointMovedAtSend: false,
+            viaOAuth: false,
           }
         );
       }
@@ -491,6 +520,7 @@ async function fetchBootstrapAPI(options, credentials) {
   let viaScopelessOAuth = false;
   let bearerSha256 = null;
   let wasEndpointMovedAtSend = false;
+  let viaOAuth = false;
   try {
     let data = await withOAuth401Retry(
       async () => {
@@ -500,6 +530,7 @@ async function fetchBootstrapAPI(options, credentials) {
         if (token && (profileScope || !hostApiKey)) {
           viaScopelessOAuth = !profileScope && !hostApiKey;
           bearerSha256 = computeContentHash(token);
+          viaOAuth = true;
           authHeaders = {
             Authorization: `Bearer ${token}`,
             "anthropic-beta": OAUTH_BETA_HEADER,
@@ -507,6 +538,7 @@ async function fetchBootstrapAPI(options, credentials) {
         } else if (hostApiKey) {
           viaScopelessOAuth = false;
           bearerSha256 = null;
+          viaOAuth = false;
           authHeaders = {
             "x-api-key": hostApiKey,
           };
@@ -528,6 +560,7 @@ async function fetchBootstrapAPI(options, credentials) {
         viaScopelessOAuth,
         oauthBearerSha256: bearerSha256,
         wasEndpointMovedAtSend,
+        viaOAuth,
       }
     );
   } catch (error) {
@@ -544,7 +577,7 @@ async function fetchBootstrapAPI(options, credentials) {
     throw error;
   }
 }
-//@ chunk-mz6f608r.js:8151-8261 placement
+//@ chunk-9dxf3ckd.js:8596-8706 placement
 /**
  * 非 unix socket，且有 API key 或可用 OAuth 令牌。
  */
@@ -555,14 +588,14 @@ function bootstrapFetchCanConvergeSlot() {
     (Boolean(getClaudeAIOAuthTokens()?.accessToken) && hasProfileScope())
   );
 }
-//@ chunk-mz6f608r.js:8261-8300 placement
+//@ chunk-9dxf3ckd.js:8706-8745 placement
 /**
  * 重新拉取 bootstrap 数据。
  */
 async function fetchBootstrapData(configWriteSource, credentials) {
   await refreshBootstrapData(configWriteSource, credentials);
 }
-//@ chunk-mz6f608r.js:8300-11179 placement (2.1.88 match: fetchBootstrapData, 0.296)
+//@ chunk-9dxf3ckd.js:8745-12039 placement (2.1.88 match: fetchBootstrapData, 0.251)
 /**
  * 拉取并保存 bootstrap 数据（客户端数据、附加模型选项、渲染缓存），失败不抛出。
  */
@@ -582,10 +615,14 @@ async function refreshBootstrapData(
     let authenticatedAccountEpoch = getAuthenticatedAccountEpoch();
     let bootstrapAPI = await fetchBootstrapAPI(bootstrapRequestParams, credentials);
     if (!bootstrapAPI) return false;
-    let { response, viaScopelessOAuth, oauthBearerSha256, wasEndpointMovedAtSend } = bootstrapAPI;
+    let { response, viaScopelessOAuth, viaOAuth, oauthBearerSha256, wasEndpointMovedAtSend } = bootstrapAPI;
     if (authenticatedAccountEpoch !== getAuthenticatedAccountEpoch()) {
       logForDebugging("[Bootstrap] Discarding response fetched under a superseded credential");
       logFeatureSad("api_bootstrap_fetch", "superseded_credential");
+      refetchForVoidedBootstrapAnswer({
+        storageV5: configWriteSource,
+        credentials,
+      });
       return false;
     }
     logFeatureOk(
@@ -615,7 +652,27 @@ async function refreshBootstrapData(
       ? (globalConfig.autoCompactWindowsCache ?? null)
       : (response.auto_compact_windows ?? null);
     applyBootstrapAccount(response.oauth_account);
-    let config = getAuthenticatedAccountEpoch();
+    if (!narrowed) {
+      let isAnthropicAuth = !viaOAuth || isAnthropicAuthEnabled();
+      let shouldOffer = !(viaOAuth && isAnthropicAuth)
+        ? []
+        : response.program_use_cases === undefined || response.program_use_cases === null
+          ? null
+          : normalizeUseCaseList(response.program_use_cases);
+      let config = getProgramUseCaseId();
+      let useCaseChoice = resolveUseCaseId({
+        serverNamed: isAnthropicAuth ? response.program_use_case_id || null : null,
+        serverDefault: response.program_use_case_default_id ?? null,
+        offered: shouldOffer,
+        mode: normalizeChoiceMode(response.program_use_case_choice, shouldOffer ?? []),
+      });
+      setProgramUseCaseId(useCaseChoice);
+      if (useCaseChoice !== null) logFeatureOk("api_program_use_case");
+      if (useCaseChoice !== null && useCaseChoice !== config)
+        unmarkBetaHeaderRefused(BETA_PROGRAM_USE_CASE_IDS);
+      noteProgramUseCaseBootstrapAnswer();
+    }
+    let authenticatedAccountEpoch_2 = getAuthenticatedAccountEpoch();
     recordBearerPlan(response, oauthBearerSha256, wasEndpointMovedAtSend);
     let mergedAccount = mergeBootstrapAccount(globalConfig.oauthAccount, response.oauth_account);
     let orgModelDefault = response.org_model_default
@@ -637,7 +694,7 @@ async function refreshBootstrapData(
     let slotHit = slotValue !== undefined;
     let accountUnchanged = import_sortedIndex_2(mergedAccount, globalConfig.oauthAccount);
     if (
-      config !== authenticatedAccountEpoch ||
+      authenticatedAccountEpoch_2 !== authenticatedAccountEpoch ||
       !import_sortedIndex_2(globalConfig.modelAccessCache ?? [], modelAccess)
     )
       getLearnedEffortCaps().clear();
@@ -686,7 +743,7 @@ async function refreshBootstrapData(
     logForDebugging("[Bootstrap] Cache updated, persisting to disk");
     let accountSuperseded = false;
     await saveGlobalConfig((current) => {
-      if (config !== getAuthenticatedAccountEpoch()) {
+      if (authenticatedAccountEpoch_2 !== getAuthenticatedAccountEpoch()) {
         accountSuperseded = true;
         return current;
       }
@@ -753,12 +810,12 @@ async function refreshBootstrapData(
     refreshGrowthBookAfterBootstrap();
   }
 }
-//@ chunk-mz6f608r.js:11179-11277 file-local
+//@ chunk-9dxf3ckd.js:12039-12137 file-local
 /**
  * 网关 GET /v1/models 响应的 zod schema（data[].id/display_name/description）。
  */
 var gatewayModelsResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mz6f608r.js:11179", () => {
+deferInit("chunk-9dxf3ckd.js:12039", () => {
   gatewayModelsResponseSchema = DoctorLazy(() =>
     create({
       data: create_15(
@@ -771,7 +828,7 @@ deferInit("chunk-mz6f608r.js:11179", () => {
     }),
   );
 });
-//@ chunk-mz6f608r.js:11277-12106 sole-consumer
+//@ chunk-9dxf3ckd.js:12137-12966 sole-consumer
 /**
  * 网关模式下带 JWT 请求 <gateway>/v1/models（limit 1000，5 秒超时），过滤出 claude/anthropic 且允许的模型，返回 {additional_model_options}；失败返回 null。
  */

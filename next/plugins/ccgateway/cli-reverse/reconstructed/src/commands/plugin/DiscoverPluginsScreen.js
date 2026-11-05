@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/plugin 的"发现"页：插件列表、上下文成本估计、按目录推荐、策略屏蔽与目录加载失败处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (10)
  * attribution: placement 10
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -92,7 +92,7 @@ import {
   pluginSuggestionDiscoverShownCount,
   recordPluginSuggestionShown,
 } from "../../services/tips/tipIds.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logDiscoverShown } from "../../utils/plugins/pluginDirectoryTelemetry.js";
 import { refreshMarketplaceOnCatalogMiss } from "../../services/plugins/pluginOperations.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
@@ -107,8 +107,8 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 import { SearchBox } from "../../components/SearchBox.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { HintText } from "../../components/design-system/HintText.js";
+import { MoreItemsIndicator, TwoColumnRow } from "../../components/CustomSelect/select.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { TwoColumnRow } from "../../components/CustomSelect/select.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { isNonInstallableClaudeAiPlugin } from "../../utils/plugins/claudeAiMarketplaces.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "../../utils/plugins/officialMarketplace.js";
@@ -116,7 +116,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:83483-84659 placement
+//@ chunk-wb51jffc.js:83416-84592 placement
 /**
  * 显示插件的上下文成本估计（每轮、调用时的 token）。
  */
@@ -223,14 +223,14 @@ function renderContextCost(props) {
   } else detailRows = $[21];
   return detailRows;
 }
-//@ chunk-vrb44rx7.js:84659-84663 placement
+//@ chunk-wb51jffc.js:84592-84596 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:84659", () => {
+deferInit("chunk-wb51jffc.js:84592", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:84663-84684 placement
+//@ chunk-wb51jffc.js:84596-84617 placement
 var selectResult = (entry) => entry.result;
-//@ chunk-vrb44rx7.js:84684-94560 placement
+//@ chunk-wb51jffc.js:84617-94377 placement
 /**
  * 发现页主组件：加载市场与安装量、计算推荐、搜索与安装（约 10 KB）。
  */
@@ -436,7 +436,7 @@ function DiscoverPluginsScreen({
               ]
             : filtered_2;
         setAllItems(sortedRows);
-        let configuredMarketplaceCount = count(
+        let configuredMarketplaceCount = countWhere(
           Object.values(knownMarketplacesWithDeclared),
           (row) => !(directoryBlocked && row.source !== undefined && isPluginDirectorySource(row.source)),
         );
@@ -463,7 +463,7 @@ function DiscoverPluginsScreen({
                 : emptyMarketplaceReason,
           );
         }
-        let successCount = count(marketplaces, (marketplace) => marketplace.data !== null);
+        let successCount = countWhere(marketplaces, (marketplace) => marketplace.data !== null);
         let loadError = formatMarketplaceLoadingErrors(failures, successCount);
         if (loadError)
           if (loadError.type === "warning")
@@ -476,14 +476,14 @@ function DiscoverPluginsScreen({
         if (targetPlugin === undefined) {
           let stamp = markDiscoverLoaded();
           logDiscoverShown({
-            directoryRows: count(filtered_2, (row) => row.fromPluginDirectory === true),
+            directoryRows: countWhere(filtered_2, (row) => row.fromPluginDirectory === true),
             totalRows: filtered_2.length,
-            foldedRows: count(filtered_2, (row) => row.installCountIds !== undefined),
+            foldedRows: countWhere(filtered_2, (row) => row.installCountIds !== undefined),
             loadMs: Date.now() - now,
             entry: stamp ? "tab_return" : initialMarketplace === undefined ? "menu" : "directory_command",
             directoryState:
               pluginDirectoryState === "on" && !found?.data ? "unavailable" : pluginDirectoryState,
-            knownMarketplaceCount: count(
+            knownMarketplaceCount: countWhere(
               Object.values(knownMarketplacesWithDeclared),
               (entry) => entry.source === undefined || !isPluginDirectorySource(entry.source),
             ),
@@ -849,13 +849,10 @@ function DiscoverPluginsScreen({
             children: ['No plugins match "', searchQuery, '"'],
           }),
         }),
-      pagination.scrollPosition.canScrollUp &&
-        jsxProd_default(Box, {
-          children: jsxProd_default_2(Text, {
-            dimColor: true,
-            children: [" ", figures_default.arrowUp, " more above"],
-          }),
-        }),
+      jsxProd_default(MoreItemsIndicator, {
+        direction: "above",
+        count: pagination.startIndex,
+      }),
       visibleItems.map((row, visibleIndex) => {
         let actualIndex = pagination.toActualIndex(visibleIndex);
         let isSelected = selectedIndex === actualIndex;
@@ -932,20 +929,17 @@ function DiscoverPluginsScreen({
           `${pagination.startIndex}-${row.pluginId}`,
         );
       }),
-      pagination.scrollPosition.canScrollDown &&
-        jsxProd_default(Box, {
-          children: jsxProd_default_2(Text, {
-            dimColor: true,
-            children: [" ", figures_default.arrowDown, " more below"],
-          }),
-        }),
+      jsxProd_default(MoreItemsIndicator, {
+        direction: "below",
+        count: filteredPlugins.length - pagination.endIndex,
+      }),
       jsxProd_default(DiscoverPluginsKeyHint, {
         ...keyHintProps,
       }),
     ],
   });
 }
-//@ chunk-vrb44rx7.js:94560-94764 placement
+//@ chunk-wb51jffc.js:94377-94581 placement
 function formatBlockedByOrg() {
   let $ = useMemoCache(2);
   let content;
@@ -968,7 +962,7 @@ function formatBlockedByOrg() {
   } else footer = $[1];
   return footer;
 }
-//@ chunk-vrb44rx7.js:94764-96832 placement
+//@ chunk-wb51jffc.js:94581-96655 placement
 /**
  * 发现页空状态（目录未加载、全部已安装、被策略隐藏、市场加载失败）。
  */
@@ -1126,9 +1120,9 @@ function renderEmptyDiscoverState(props) {
     }
   }
 }
-//@ chunk-vrb44rx7.js:96832-96842 placement
+//@ chunk-wb51jffc.js:96655-96665 placement
 var MAX_SUGGESTION_LABEL_WIDTH = 32;
-//@ chunk-vrb44rx7.js:96842-97141 placement
+//@ chunk-wb51jffc.js:96665-96964 placement
 function formatSuggestedFor(entry) {
   switch (entry.signal) {
     case "cwd":
@@ -1143,13 +1137,13 @@ function formatSuggestedFor(entry) {
       return `suggested from ${displayPathForSuggestion(entry.file)}`;
   }
 }
-//@ chunk-vrb44rx7.js:97141-97197 placement
+//@ chunk-wb51jffc.js:96964-97020 placement
 function displayPathForSuggestion(file) {
   return truncatePathMiddle(getDisplayPath(file).replaceAll("\\", "/"), MAX_SUGGESTION_LABEL_WIDTH);
 }
-//@ chunk-vrb44rx7.js:97197-97201 placement
+//@ chunk-wb51jffc.js:97020-97024 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:97197", () => {
+deferInit("chunk-wb51jffc.js:97020", () => {
   init_react_production();
 });
 export { DiscoverPluginsScreen, renderContextCost };

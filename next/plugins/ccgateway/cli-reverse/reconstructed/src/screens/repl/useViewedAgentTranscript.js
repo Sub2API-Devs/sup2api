@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：取正在查看的 agent 任务的转录（加协调者来源标记、带进行中的工具调用），合成为主界面要显示的视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { useAppState } from "../../state/AppState.js";
@@ -16,7 +16,7 @@ import { useState, useMemo, init_react_production } from "../../../vendor/react/
 import { tagCoordinatorOrigin } from "../../coordinator/coordinatorMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:223340-223741 placement
+//@ chunk-czq1j3j2.js:228379-228780 placement
 /**
  * 取正在查看的 agent 任务的转录（消息加协调者来源标记、进行中的工具调用），合成为主界面要显示的视图。
  */
@@ -45,14 +45,14 @@ function useViewedAgentTranscript({ mainIsBusy, mainConversationId }) {
     [viewedTask, messages, inProgress, mainIsBusy, mainConversationId, cache],
   );
 }
-//@ chunk-18hwfzwa.js:223741-223745 placement
+//@ chunk-czq1j3j2.js:228780-228784 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:223741", () => {
+deferInit("chunk-czq1j3j2.js:228780", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:223745-223749 placement
+//@ chunk-czq1j3j2.js:228784-228788 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:223745", () => {
+deferInit("chunk-czq1j3j2.js:228784", () => {
   init_react_production();
 });
 export { useViewedAgentTranscript };

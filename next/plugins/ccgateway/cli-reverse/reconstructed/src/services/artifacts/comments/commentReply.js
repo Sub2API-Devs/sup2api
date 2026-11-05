@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：回复 artifact 评论线程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (16)
  * attribution: placement 16
  */
 import { MAX_FRAME_HTML_BYTES } from "../frameComments.js";
@@ -19,7 +19,7 @@ import { relayIsOnlyRoute, frameApi, threwOnRelayLeg } from "../frameRelay.js";
 import { readFrameDecl } from "../readBack.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { getShareEntry, isOutsideOrgNotFound } from "../shareEntries.js";
-import { isReaderRole } from "../audience.js";
+import { isReaderClassRole } from "../audience.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 import { sleep } from "../../../utils/sleep.js";
 import { AbortError } from "../../../utils/errors.js";
@@ -30,7 +30,7 @@ import { COMMENT_ID_RE } from "./commentFormatting.js";
 import { rememberPostedReplyId } from "./commentState.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-b0a246e7.js:23031-23954 placement
+//@ chunk-78ymyfsy.js:23064-23987 placement
 /**
  * 评论回复相关的错误说明：未激活、需要用户级凭证、组织服务键无法读/写评论、网络关闭、已回复、他人召唤、id 占用等。
  */
@@ -51,7 +51,7 @@ var REPLY_RETRY_DELAY_RANGE_MS = {
   max: 1500,
 };
 var MAX_REPLY_RETRY_DELAY_MS = 5000;
-//@ chunk-b0a246e7.js:23954-24116 placement
+//@ chunk-78ymyfsy.js:23987-24149 placement
 function computeRetryDelay(retryAfter) {
   let { min, max } = REPLY_RETRY_DELAY_RANGE_MS;
   let floored = Math.floor(Math.random() * (max - min + 1));
@@ -60,14 +60,14 @@ function computeRetryDelay(retryAfter) {
     ? min + floored
     : Math.min(Math.max(retryAfterMs, min), MAX_REPLY_RETRY_DELAY_MS) + floored;
 }
-//@ chunk-b0a246e7.js:24116-24518 placement
+//@ chunk-78ymyfsy.js:24149-24551 placement
 /**
  * 评论回复不确定性的两段说明（可能已发出/连接未承载）与回复结果 schema。
  */
 var COMMENT_REPLY_TEXT; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RELAY_UNAVAILABLE_REPLY_TEXT;
 var replyResultSchema;
-deferInit("chunk-b0a246e7.js:24116", () => {
+deferInit("chunk-78ymyfsy.js:24149", () => {
   COMMENT_REPLY_TEXT =
     "an earlier attempt may already have posted this reply; re-read the comments before retrying";
   RELAY_UNAVAILABLE_REPLY_TEXT =
@@ -80,7 +80,7 @@ deferInit("chunk-b0a246e7.js:24116", () => {
     }),
   );
 });
-//@ chunk-b0a246e7.js:24518-24699 placement
+//@ chunk-78ymyfsy.js:24551-24732 placement
 function pickErrorFields(error) {
   if (!error || typeof error !== "object") return {};
   return {
@@ -94,13 +94,13 @@ function pickErrorFields(error) {
       }),
   };
 }
-//@ chunk-b0a246e7.js:24699-24739 placement
+//@ chunk-78ymyfsy.js:24732-24772 placement
 function errorReason(error) {
   return pickErrorFields(error).reason ?? null;
 }
-//@ chunk-b0a246e7.js:24739-24797 placement
+//@ chunk-78ymyfsy.js:24772-24830 placement
 var standingReplySchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-b0a246e7.js:24739", () => {
+deferInit("chunk-78ymyfsy.js:24772", () => {
   standingReplySchema = DoctorLazy(() =>
     create({
       standing_reply: create({
@@ -110,18 +110,18 @@ deferInit("chunk-b0a246e7.js:24739", () => {
     }),
   );
 });
-//@ chunk-b0a246e7.js:24797-24922 placement
+//@ chunk-78ymyfsy.js:24830-24955 placement
 function parseStandingReply(value) {
   let parsed = standingReplySchema().safeParse(value);
   if (!parsed.success || !ARTIFACT_SLUG_RE.test(parsed.data.standing_reply.id)) return;
   return parsed.data.standing_reply;
 }
-//@ chunk-b0a246e7.js:24922-24997 placement
+//@ chunk-78ymyfsy.js:24955-25030 placement
 function errorMessage(error) {
   let error_2 = pickErrorFields(error).error ?? error;
   return typeof error_2 === "string" ? scrubServerLine(error_2, 300) : "";
 }
-//@ chunk-b0a246e7.js:24997-25107 placement
+//@ chunk-78ymyfsy.js:25030-25140 placement
 function frameRequestOptions(signal, credentials) {
   return {
     refreshOAuth: true,
@@ -132,11 +132,11 @@ function frameRequestOptions(signal, credentials) {
     signal,
   };
 }
-//@ chunk-b0a246e7.js:25107-25165 placement
+//@ chunk-78ymyfsy.js:25140-25198 placement
 async function readRecordedDecl(slug, context) {
   return (await readFrameDeclForComments(slug, context)).orRecorded;
 }
-//@ chunk-b0a246e7.js:25165-25525 placement
+//@ chunk-78ymyfsy.js:25198-25558 placement
 async function readFrameDeclForComments(artifactId, frameOptions) {
   let route = relayIsOnlyRoute()
     ? {
@@ -165,14 +165,14 @@ async function readFrameDeclForComments(artifactId, frameOptions) {
     orRecorded: readNow,
   };
 }
-//@ chunk-b0a246e7.js:25525-25658 placement
+//@ chunk-78ymyfsy.js:25558-25691 placement
 function needsCapsReadForReply(slug) {
   if (!relayIsOnlyRoute()) return false;
   let shareEntry = getShareEntry(slug);
-  if (isReaderRole(shareEntry?.role)) return false;
+  if (isReaderClassRole(shareEntry?.role)) return false;
   return shareEntry?.lastCapsReadAt === undefined || shareEntry.capabilitiesUnknown === true;
 }
-//@ chunk-b0a246e7.js:25658-25792 placement
+//@ chunk-78ymyfsy.js:25691-25825 placement
 function networkOffRefusal(shareEntry, action) {
   return relayIsOnlyRoute() && shareEntry.gatewayPolicy === "network-off"
     ? {
@@ -182,7 +182,7 @@ function networkOffRefusal(shareEntry, action) {
       }
     : undefined;
 }
-//@ chunk-b0a246e7.js:25792-27233 placement
+//@ chunk-78ymyfsy.js:25825-27266 placement
 /**
  * 向 artifact 评论线程发表回复（直连或经会话中继），处理重发/幂等与授权错误。
  */
@@ -252,7 +252,7 @@ async function postCommentReply(
   }
   return retryResult;
 }
-//@ chunk-b0a246e7.js:27233-31546 placement
+//@ chunk-78ymyfsy.js:27266-31579 placement
 /**
  * 回复 artifact 评论线程：校验激活与凭证、构建请求、处理召唤与续写标记。
  */
@@ -519,7 +519,7 @@ async function sendCommentReply(
     };
   return failIdUnknown();
 }
-//@ chunk-b0a246e7.js:31546-32199 placement
+//@ chunk-78ymyfsy.js:31579-32232 placement
 async function readSummonStatus(slug, threadId, cursor) {
   let response;
   try {
@@ -571,10 +571,6 @@ async function readSummonStatus(slug, threadId, cursor) {
   };
 }
 export {
-  needsCapsReadForReply,
-  readFrameDeclForComments,
-  readRecordedDecl,
-  postCommentReply,
   errorMessage,
   NO_USER_CREDENTIAL_TEXT,
   ORG_SERVICE_KEY_READ_TEXT,
@@ -584,5 +580,9 @@ export {
   errorReason,
   SUMMON_FOREIGN_SENDER,
   ORG_SERVICE_KEY_WRITE_TEXT,
+  readRecordedDecl,
   readSummonStatus,
+  needsCapsReadForReply,
+  readFrameDeclForComments,
+  postCommentReply,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：停止同级代理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 13
  */
 import { mkdir, lstat, unlink } from "fs/promises";
@@ -30,13 +30,13 @@ import { describeStorageError } from "./agentMetadata.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:217569-217677 placement
+//@ chunk-5xgkngpb.js:216795-216903 placement
 var STOP_SIBLING_SUFFIXES = {
   stoppedByUser: ".stopped-by-user",
   observerStopped: ".observer-stopped",
 };
 var FOLD_BACK_DELAYS_MS = [50, 50, 50, 250, 1000, 4000];
-//@ chunk-e6aww6q8.js:217677-217772 placement
+//@ chunk-5xgkngpb.js:216903-216998 placement
 /**
  * 构造停止标记的遥测字段（是否 observer、errno 码）。
  */
@@ -49,7 +49,7 @@ function stopObserverTelemetryFields(observerStatus, error) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:217772-217979 placement
+//@ chunk-5xgkngpb.js:216998-217205 placement
 function isUnexpectedStopError(error) {
   let errnoCode = getErrnoCode(error) ?? storageCauseErrnoCode(error);
   if (errnoCode !== undefined) return errnoCode.startsWith("ERR_");
@@ -59,14 +59,14 @@ function isUnexpectedStopError(error) {
     (cause.code === "Unavailable" || ("telemetryCode" in cause && cause.telemetryCode !== undefined))
   );
 }
-//@ chunk-e6aww6q8.js:217979-218084 placement
+//@ chunk-5xgkngpb.js:217205-217310 placement
 /**
  * 停止标记相关的缓存表（重置时清空）。
  */
 var sleepUnref; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var stopSiblingCache;
 var foldBackGeneration;
-deferInit("chunk-e6aww6q8.js:217979", () => {
+deferInit("chunk-5xgkngpb.js:217205", () => {
   sleepUnref = (ms) =>
     sleep(ms, undefined, {
       unref: true,
@@ -81,28 +81,28 @@ deferInit("chunk-e6aww6q8.js:217979", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:218084-218120 placement
+//@ chunk-5xgkngpb.js:217310-217346 placement
 /**
  * 读取某停止标记已写入的次数。
  */
 function readStopSiblingCount(sessionId) {
   return stopSiblingCache.get(sessionId) ?? 0;
 }
-//@ chunk-e6aww6q8.js:218120-218178 placement
+//@ chunk-5xgkngpb.js:217346-217404 placement
 /**
  * 由元数据文件路径推出对应的停止标记路径。
  */
 function stopSiblingPath(path, index) {
   return path.replace(/\.meta\.json$/, STOP_SIBLING_SUFFIXES[index]);
 }
-//@ chunk-e6aww6q8.js:218178-218232 placement
+//@ chunk-5xgkngpb.js:217404-217458 placement
 /**
  * 计算停止标记的存储键（启用 v5 存储时才有）。
  */
 function stopSiblingStorageKey(path, storage) {
   return isStorageV5Enabled() && storage !== undefined ? pathToSessionSideKey(path) : undefined;
 }
-//@ chunk-e6aww6q8.js:218232-218638 placement
+//@ chunk-5xgkngpb.js:217458-217864 placement
 /**
  * 写入子代理停止标记：有存储键时用存储 ifAbsent 写空内容；无盘模式报错；否则创建目录并新建空文件（已存在视为成功）。
  */
@@ -128,7 +128,7 @@ async function writeStopSibling(path, storage) {
     if (getErrnoCode(error) !== "EEXIST") throw error;
   });
 }
-//@ chunk-e6aww6q8.js:218638-219009 placement
+//@ chunk-5xgkngpb.js:217864-218235 placement
 /**
  * 判断子代理停止标记是否存在：优先查存储元数据，无盘时返回 false（存储 v5 下缺键报错），否则查本地文件。
  */
@@ -155,7 +155,7 @@ async function stopSiblingExists(path, storage) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:219009-219255 placement
+//@ chunk-5xgkngpb.js:218235-218481 placement
 /**
  * 删除子代理停止标记（存储或本地文件，不存在视为成功）。
  */
@@ -174,7 +174,7 @@ async function removeStopSibling(path, storage) {
     if (!isPathAbsent(error)) throw error;
   });
 }
-//@ chunk-e6aww6q8.js:219255-219431 placement
+//@ chunk-5xgkngpb.js:218481-218657 placement
 async function tryFoldBack(agentMetadataPath, stopSiblingSuffix, storage, mergeFn, expectedCount) {
   let stopSiblingPath_2 = stopSiblingPath(agentMetadataPath, stopSiblingSuffix);
   return runWithFileWriteContext(agentMetadataPath, async () => {
@@ -192,7 +192,7 @@ async function tryFoldBack(agentMetadataPath, stopSiblingSuffix, storage, mergeF
     again,
   }));
 }
-//@ chunk-e6aww6q8.js:219431-219888 placement
+//@ chunk-5xgkngpb.js:218657-219116 placement
 /**
  * 按延迟表多次尝试把子代理的停止结果并回父记录；每次等待后若世代变化则放弃，用尽后记日志与遥测。
  */
@@ -237,7 +237,7 @@ async function scheduleFoldBack(
     );
   else if (outcome === "merged") logFeatureOk("subagent_stop_fold_back");
 }
-//@ chunk-e6aww6q8.js:219888-220628 placement
+//@ chunk-5xgkngpb.js:219116-219862 placement
 /**
  * 持久化子代理停止状态。
  */

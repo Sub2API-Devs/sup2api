@@ -3,10 +3,10 @@
  *
  * 从插件 commands/ 与 skills/ 目录生成斜杠命令和技能（<插件>:<名字>），处理 frontmatter 与变量替换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/loadPluginCommands.ts
- * pieces: chunk-e6aww6q8.js (27)
- * attribution: placement 15, layout 4, file-local 2, fingerprint 6
+ * pieces: chunk-5xgkngpb.js (28)
+ * attribution: placement 15, layout 5, file-local 2, fingerprint 6
  */
 import { join, basename, dirname } from "path";
 import { homedir } from "os";
@@ -22,7 +22,9 @@ import { getMcpAuthCache as getMcpAuthCache_2 } from "./safeFileRead.js";
 import { getErrnoCode, errorMessage, isENOENT } from "../errors.js";
 import { isUnavailableErrorCode } from "../settings/managedEnvKeys.js";
 import { jsonParse } from "../slowOperations.js";
+import { stripBom as stripBom_2 } from "../remoteFileState.js";
 import {
+  FRONTMATTER_REGEX,
   parseFrontmatter,
   MAX_UNTRUSTED_FRONTMATTER_BYTES,
   coerceDescriptionToString,
@@ -42,7 +44,7 @@ import {
 import { logForDebugging } from "../debug.js";
 import { buildFrontmatterResult } from "../../services/memorySync/pathScrub.js";
 import { getHostState } from "../hostEnvironment.js";
-import { isLocalMarketplaceSource } from "./reconciler.js";
+import { isLocalMarketplaceSource, redactMarketplaceSource, redactNpmTarball } from "./schemas.js";
 import { getFsImplementation, isDuplicatePath } from "../fsOperations.js";
 import { walkPluginMarkdown } from "./walkPluginMarkdown.js";
 import { readSmallFileChecked } from "../readSmallFile.js";
@@ -53,7 +55,6 @@ import {
   isSkillPathEligible,
   getUserSkillFileIds,
 } from "../../skills/loadSkillsDir.js";
-import { redactMarketplaceSource, redactNpmTarball } from "./schemas.js";
 import { reportRefusedSkillName } from "../../skills/skillNameRules.js";
 import {
   getToolsMachine,
@@ -86,7 +87,7 @@ import {
   frontmatterToolGrantWithheldReason,
   reportIgnoredFrontmatterToolGrants,
 } from "../permissions/permissionsLoader.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { skillWatchStateSlot } from "../../skills/skillChangeWatch.js";
 import { inlineSkillModelOverride } from "../model/model.js";
 import { getEffortValue, getEffortLayerOverride } from "../permissions/toolPermissionContext.js";
@@ -104,11 +105,12 @@ import { isCustomizationDisabled } from "../settings/customizationDisabled.js";
 import { pluginErrorText } from "../../types/plugin.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isSkillAttributionEnabled } from "../telemetry/skillAttribution.js";
+import { findSymlinkEscape } from "./pluginPathContainment.js";
 import { desktopSkillSwitches } from "../sessionShape.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1663434-1663518 placement
+//@ chunk-5xgkngpb.js:1737755-1737839 placement
 /**
  * memoizeLastValue：记录并复用同一键的上次结果。
  */
@@ -118,7 +120,7 @@ function memoizeLastValue(skillContentIntern, key, content) {
   skillContentIntern.set(key, content);
   return content;
 }
-//@ chunk-e6aww6q8.js:1663518-1663586 placement
+//@ chunk-5xgkngpb.js:1737839-1737907 placement
 /**
  * frontmatterDisallowedTools：从前置声明取 disallowed-tools。
  */
@@ -127,11 +129,11 @@ function frontmatterDisallowedTools(frontmatter) {
     frontmatter["disallowed-tools"] ?? frontmatter.disallowedTools,
   );
 }
-//@ chunk-e6aww6q8.js:1663586-1663707 placement
+//@ chunk-5xgkngpb.js:1737907-1738028 placement
 var SKILL_NAME_LETTER_RE = /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}\p{Mn}\p{Mc}\p{Nd}]/u;
 var CONNECTOR_PUNCTUATION_RE = /\p{Pc}/u;
 var SKILL_NAMESPACE_PREFIXES = ["anthropic-skills:", "claude-ai:"];
-//@ chunk-e6aww6q8.js:1663707-1663931 placement
+//@ chunk-5xgkngpb.js:1738028-1738252 placement
 function normalizeSkillName(input) {
   let normalized = "";
   for (let char of input.normalize("NFKC"))
@@ -143,7 +145,7 @@ function normalizeSkillName(input) {
     .replace(/-{2,}/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-//@ chunk-e6aww6q8.js:1663931-1664066 placement
+//@ chunk-5xgkngpb.js:1738252-1738387 placement
 /**
  * 去掉开头的 / 与 anthropic-skills:/claude-ai: 前缀。
  */
@@ -153,7 +155,7 @@ function stripSkillNamespacePrefix(raw) {
   let found = SKILL_NAMESPACE_PREFIXES.find((prefix) => withoutSlash.startsWith(prefix));
   return found === undefined ? withoutSlash : withoutSlash.slice(found.length);
 }
-//@ chunk-e6aww6q8.js:1664066-1664236 placement
+//@ chunk-5xgkngpb.js:1738387-1738557 placement
 /**
  * 技能名相等（含 name:name 形式）或规范化后相等。
  */
@@ -165,12 +167,12 @@ function skillNameMatches(name, candidate, allowDouble) {
   let normalizedCandidate = normalizeSkillName(candidate);
   return normalizedCandidate !== "" && normalizeSkillName(lower_2) === normalizedCandidate;
 }
-//@ chunk-e6aww6q8.js:1664266-1664362 placement
+//@ chunk-5xgkngpb.js:1738587-1738683 placement
 var MAX_PLUGIN_SKILLS_FILE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var pluginSkillsConfigSchema;
 var ALL_SKILLS_ON;
 var MAX_PLUGIN_COMMAND_VARIANTS;
-deferInit("chunk-e6aww6q8.js:1664266", () => {
+deferInit("chunk-5xgkngpb.js:1738587", () => {
   MAX_PLUGIN_SKILLS_FILE_BYTES = 8388608;
   pluginSkillsConfigSchema = DoctorLazy(() =>
     objectSchema({
@@ -187,7 +189,7 @@ deferInit("chunk-e6aww6q8.js:1664266", () => {
   };
   MAX_PLUGIN_COMMAND_VARIANTS = 100;
 });
-//@ chunk-e6aww6q8.js:1664362-1664502 placement
+//@ chunk-5xgkngpb.js:1738683-1738823 placement
 async function listPluginSkillFilesSettled(path) {
   let manifestPath = join(path, "manifest.json");
   let first = await listPluginSkillFiles(manifestPath);
@@ -195,14 +197,14 @@ async function listPluginSkillFilesSettled(path) {
   await sleep(MAX_PLUGIN_COMMAND_VARIANTS);
   return (await listPluginSkillFiles(manifestPath)).list;
 }
-//@ chunk-e6aww6q8.js:1664502-1664672 placement
+//@ chunk-5xgkngpb.js:1738823-1738993 placement
 function computeDisabledSkills(config, names) {
   if (config.kind === "all-on") return new Set();
   let listedNames = new Set(names);
   let any = [...config.off].some((offName) => !listedNames.has(offName));
   return new Set(names.filter((name) => config.off.has(name) || (any && !config.listed.has(name))));
 }
-//@ chunk-e6aww6q8.js:1664672-1665667 placement
+//@ chunk-5xgkngpb.js:1738993-1739988 placement
 async function listPluginSkillFiles(manifestPath) {
   let fileInfo;
   try {
@@ -282,7 +284,7 @@ async function listPluginSkillFiles(manifestPath) {
     maybeMidWrite: false,
   };
 }
-//@ chunk-e6aww6q8.js:1665667-1665792 placement
+//@ chunk-5xgkngpb.js:1739988-1740113 placement
 function skillListReadFailure(code) {
   return {
     kind: "unusable",
@@ -290,12 +292,26 @@ function skillListReadFailure(code) {
     why: `could not be read (${code ?? "no error code"})`,
   };
 }
-//@ chunk-e6aww6q8.js:1665792-1665808 placement
+//@ chunk-5xgkngpb.js:1740113-1740138 placement
 /**
  * MAX_PLUGIN_COMMAND_FILE_BYTES：插件命令文件体积上限。
  */
 var MAX_PLUGIN_COMMAND_FILE_BYTES = 1048576;
-//@ chunk-e6aww6q8.js:1665808-1666717 placement
+var MIDCONV_CACHE_PROXY_READ_THRESHOLD = 1024;
+//@ chunk-5xgkngpb.js:1740138-1740308 layout
+function pluginCommandHead(text) {
+  let stripped = stripBom_2(text);
+  let frontmatterLength = stripped.includes("---", 3)
+    ? FRONTMATTER_REGEX.exec(stripped)?.[0].length
+    : undefined;
+  let bomLength = text.length - stripped.length;
+  return {
+    head: text.slice(0, bomLength + (frontmatterLength ?? 0) + MIDCONV_CACHE_PROXY_READ_THRESHOLD),
+    fenced: frontmatterLength,
+    bodyAt: frontmatterLength === undefined ? 0 : bomLength + frontmatterLength,
+  };
+}
+//@ chunk-5xgkngpb.js:1740308-1741220 placement
 function validatePluginCommandAllowedTools(source, text, pluginDataDir) {
   let { frontmatter, frontmatterAsWritten, asWrittenProblem, content, parseError } = parseFrontmatter(
     text,
@@ -351,7 +367,7 @@ function validatePluginCommandAllowedTools(source, text, pluginDataDir) {
     pluginDataDir,
   );
 }
-//@ chunk-e6aww6q8.js:1666717-1666959 layout
+//@ chunk-5xgkngpb.js:1741220-1741462 layout
 /**
  * 把 manifest commands 对象形式里的元数据（description、argumentHint、model、allowedTools）覆盖到 markdown frontmatter 上。
  */
@@ -373,7 +389,7 @@ function applyCommandMetadataOverrides(frontmatter, metadata) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1666959-1667143 layout
+//@ chunk-5xgkngpb.js:1741462-1741646 layout
 function getPluginTrustContext(plugin) {
   let marketplaceSource = plugin.marketplaceSource;
   return {
@@ -386,14 +402,14 @@ function getPluginTrustContext(plugin) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:1667143-1667192 file-local
+//@ chunk-5xgkngpb.js:1741646-1741695 file-local
 /**
  * 文件名是否为 SKILL.md（忽略大小写）。
  */
 function isSkillFile_2(filePath) {
   return /^skill\.md$/i.test(basename(filePath));
 }
-//@ chunk-e6aww6q8.js:1667192-1667561 file-local
+//@ chunk-5xgkngpb.js:1741695-1742064 file-local
 function getCommandNameFromFile(filePath, baseDir, pluginName) {
   if (isSkillFile_2(filePath)) {
     let skillDirectory = dirname(filePath);
@@ -414,7 +430,7 @@ function getCommandNameFromFile(filePath, baseDir, pluginName) {
     return namespace ? `${pluginName}:${namespace}:${commandBaseName}` : `${pluginName}:${commandBaseName}`;
   }
 }
-//@ chunk-e6aww6q8.js:1667561-1668178 fingerprint (2.1.88 match: collectMarkdownFiles, 0.408)
+//@ chunk-5xgkngpb.js:1742064-1742686 fingerprint (2.1.88 match: collectMarkdownFiles, 0.408)
 async function collectMarkdownFiles(dirPath, baseDir, loadedPaths) {
   let files = [];
   let fs = getFsImplementation();
@@ -464,7 +480,7 @@ async function collectMarkdownFiles(dirPath, baseDir, loadedPaths) {
   );
   return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
 }
-//@ chunk-e6aww6q8.js:1668487-1668700 fingerprint (2.1.88 match: loadCommandsFromDirectory, 1)
+//@ chunk-5xgkngpb.js:1742995-1743213 fingerprint (2.1.88 match: loadCommandsFromDirectory, 1)
 async function loadCommandsFromDirectory(
   commandsPath,
   pluginName,
@@ -496,7 +512,7 @@ async function loadCommandsFromDirectory(
   }
   return commands;
 }
-//@ chunk-e6aww6q8.js:1668700-1674044 fingerprint (2.1.88 match: createPluginCommand, 0.643)
+//@ chunk-5xgkngpb.js:1743213-1748564 fingerprint (2.1.88 match: createPluginCommand, 0.643)
 /**
  * 由插件的 markdown 文件构造斜杠命令：命令名 <插件>:<相对路径>（技能目录用目录名），解析 frontmatter（description、allowed-tools、argument-hint、model、disable-model-invocation…），正文在调用时替换 $ARGUMENTS、${CLAUDE_PLUGIN_ROOT}、${user_config.X}。
  */
@@ -720,7 +736,7 @@ function createPluginCommand(
       disableModelInvocation,
       userInvocable,
       declaredFields: getDeclaredFrontmatterFields(frontmatter),
-      metadata: isPlainObject_5(frontmatter.metadata) ? frontmatter.metadata : undefined,
+      metadata: isPlainObject_6(frontmatter.metadata) ? frontmatter.metadata : undefined,
       contentLength: content.length,
       source: "plugin",
       loadedFrom: isSkill || config.isSkillMode ? "plugin" : undefined,
@@ -834,7 +850,7 @@ ${content}`
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1674044-1674355 layout
+//@ chunk-5xgkngpb.js:1748564-1748875 layout
 function copySyncedSkillFlags(pluginInfo, plugin) {
   if (plugin.serverPluginId !== undefined) pluginInfo.serverPluginId = plugin.serverPluginId;
   if (plugin.marketplaceKind !== undefined) pluginInfo.marketplaceKind = plugin.marketplaceKind;
@@ -842,7 +858,7 @@ function copySyncedSkillFlags(pluginInfo, plugin) {
   if (plugin.hostNamedSkillsFolder) pluginInfo.hostNamedSkillsFolder = true;
   if (plugin.followsSyncedSkillState) pluginInfo.followsSyncedSkillState = true;
 }
-//@ chunk-e6aww6q8.js:1674355-1677759 fingerprint (2.1.88 match: getPluginCommands, 0.756)
+//@ chunk-5xgkngpb.js:1748875-1752306 fingerprint (2.1.88 match: getPluginCommands, 0.756)
 /**
  * 加载所有启用插件的命令（commands/ 目录与 manifest.commands），结果缓存在全局 commands。
  */
@@ -1078,7 +1094,7 @@ function getPluginCommands(storageV5) {
   })();
   return pluginRegistry.commands;
 }
-//@ chunk-e6aww6q8.js:1677759-1677969 layout
+//@ chunk-5xgkngpb.js:1752306-1752516 layout
 async function realpathForDedupe(targetPath) {
   try {
     return await realpath(targetPath);
@@ -1092,45 +1108,53 @@ async function realpathForDedupe(targetPath) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1677969-1680227 fingerprint (2.1.88 match: loadSkillsFromDirectory, 0.479)
+//@ chunk-5xgkngpb.js:1752516-1755076 fingerprint (2.1.88 match: loadSkillsFromDirectory, 0.423)
 /**
  * 扫描插件的技能目录：根 SKILL.md 或子目录 <name>/SKILL.md，每个技能生成一个命令（技能模式）。
  */
 async function loadSkillsFromDirectory(
-  skillsPath,
-  pluginName,
+  skillsDir,
+  name,
   sourceName,
   pluginManifest,
   pluginPath,
   pluginTrustContext,
   loadedPaths,
   skillSwitches,
+  entriesAnchor,
 ) {
   let fs = getFsImplementation();
   let skills = [];
   let attributionFor = isSkillAttributionEnabled();
-  let directSkillPath = join(skillsPath, "SKILL.md");
+  let directSkillPath = join(skillsDir, "SKILL.md");
+  let directEscape =
+    entriesAnchor === undefined ? undefined : await findSymlinkEscape(entriesAnchor, skillsDir, "SKILL.md");
   let directSkillContent = null;
-  try {
-    directSkillContent = await readSmallFileChecked(fs, directSkillPath, MAX_PLUGIN_COMMAND_FILE_BYTES);
-    if (directSkillContent === null)
-      logForDebugging(
-        `Skipping plugin skill ${directSkillPath}: not a regular file or exceeds ${MAX_PLUGIN_COMMAND_FILE_BYTES} byte limit`,
-        {
-          level: "warn",
-        },
-      );
-  } catch (e) {
-    if (!isENOENT(e)) {
-      logForDebugging(`Failed to load skill from ${directSkillPath}: ${e}`, {
-        level: "error",
-      });
-      return skills;
+  if (directEscape !== undefined)
+    logForDebugging(`Plugin ${name}: did not read ${directSkillPath}: ${directEscape}`, {
+      level: "error",
+    });
+  else
+    try {
+      directSkillContent = await readSmallFileChecked(fs, directSkillPath, MAX_PLUGIN_COMMAND_FILE_BYTES);
+      if (directSkillContent === null)
+        logForDebugging(
+          `Skipping plugin skill ${directSkillPath}: not a regular file or exceeds ${MAX_PLUGIN_COMMAND_FILE_BYTES} byte limit`,
+          {
+            level: "warn",
+          },
+        );
+    } catch (e) {
+      if (!isENOENT(e)) {
+        logForDebugging(`Failed to load skill from ${directSkillPath}: ${e}`, {
+          level: "error",
+        });
+        return skills;
+      }
     }
-  }
   if (directSkillContent !== null) {
     if (
-      computeDisabledSkills(skillSwitches, [basename(skillsPath)]).size > 0 ||
+      computeDisabledSkills(skillSwitches, [basename(skillsDir)]).size > 0 ||
       isDuplicatePath(fs, directSkillPath, loadedPaths)
     )
       return skills;
@@ -1144,10 +1168,9 @@ async function loadSkillsFromDirectory(
       );
       let rawName = typeof frontmatter.name === "string" ? frontmatter.name.trim() : "";
       let replaced = (
-        (rawName.startsWith(`${pluginName}:`) ? rawName.slice(pluginName.length + 1) : rawName) ||
-        basename(skillsPath)
+        (rawName.startsWith(`${name}:`) ? rawName.slice(name.length + 1) : rawName) || basename(skillsDir)
       ).replace(/[^a-zA-Z0-9_-]/g, "-");
-      let skillName = `${pluginName}:${replaced}`;
+      let skillName = `${name}:${replaced}`;
       let file = {
         filePath: directSkillPath,
         baseDir: dirname(directSkillPath),
@@ -1155,7 +1178,7 @@ async function loadSkillsFromDirectory(
         skillFile: buildFrontmatterResult(frontmatterAsWritten, directSkillPath, asWrittenProblem),
         content: memoizeLastValue(getHostState().skillContentIntern, directSkillPath, content),
       };
-      let skill = createPluginCommand(
+      let pluginCommand = createPluginCommand(
         skillName,
         file,
         sourceName,
@@ -1168,9 +1191,9 @@ async function loadSkillsFromDirectory(
           serverAttribution: attributionFor(file.baseDir),
         },
       );
-      if (skill)
+      if (pluginCommand)
         skills.push({
-          skill,
+          skill: pluginCommand,
           realpath: await realpathForDedupe(directSkillPath),
         });
     } catch (error) {
@@ -1182,10 +1205,10 @@ async function loadSkillsFromDirectory(
   }
   let dirEntries;
   try {
-    dirEntries = await fs.readdir(skillsPath);
+    dirEntries = await fs.readdir(skillsDir);
   } catch (e) {
     if (!isENOENT(e))
-      logForDebugging(`Failed to load skills from directory ${skillsPath}: ${e}`, {
+      logForDebugging(`Failed to load skills from directory ${skillsDir}: ${e}`, {
         level: "error",
       });
     return skills;
@@ -1197,13 +1220,23 @@ async function loadSkillsFromDirectory(
   );
   if (skillDirPath.size > 0)
     logForDebugging(
-      `Leaving out ${skillDirPath.size} of ${filtered.length} skill folders of plugin ${pluginName}: switched off in its manifest.json, or not listed there while a switched-off entry names no folder`,
+      `Leaving out ${skillDirPath.size} of ${filtered.length} skill folders of plugin ${name}: switched off in its manifest.json, or not listed there while a switched-off entry names no folder`,
     );
   await Promise.all(
     filtered.map(async (entry) => {
       if (skillDirPath.has(entry.name)) return;
-      let skillDirPath_2 = join(skillsPath, entry.name);
-      let skillFilePath = join(skillDirPath_2, "SKILL.md");
+      let skillDir = join(skillsDir, entry.name);
+      let skillFilePath = join(skillDir, "SKILL.md");
+      let dirEscape =
+        entriesAnchor === undefined
+          ? undefined
+          : await findSymlinkEscape(entriesAnchor, skillsDir, join(entry.name, "SKILL.md"));
+      if (dirEscape !== undefined) {
+        logForDebugging(`Plugin ${name}: did not read the skill at ${skillDir}: ${dirEscape}`, {
+          level: "error",
+        });
+        return;
+      }
       let content;
       try {
         let smallFileChecked = await readSmallFileChecked(fs, skillFilePath, MAX_PLUGIN_COMMAND_FILE_BYTES);
@@ -1234,7 +1267,7 @@ async function loadSkillsFromDirectory(
         } = parseFrontmatter(content, skillFilePath, {
           normalizeKeys: true,
         });
-        let skillName = `${pluginName}:${entry.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+        let skillName = `${name}:${entry.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
         let file = {
           filePath: skillFilePath,
           baseDir: dirname(skillFilePath),
@@ -1242,7 +1275,7 @@ async function loadSkillsFromDirectory(
           skillFile: buildFrontmatterResult(frontmatterAsWritten, skillFilePath, asWrittenProblem),
           content: memoizeLastValue(getHostState().skillContentIntern, skillFilePath, content_2),
         };
-        let skill = createPluginCommand(
+        let pluginCommand = createPluginCommand(
           skillName,
           file,
           sourceName,
@@ -1255,9 +1288,9 @@ async function loadSkillsFromDirectory(
             serverAttribution: attributionFor(file.baseDir),
           },
         );
-        if (skill)
+        if (pluginCommand)
           skills.push({
-            skill,
+            skill: pluginCommand,
             realpath: await realpathForDedupe(skillFilePath),
           });
       } catch (error) {
@@ -1269,7 +1302,7 @@ async function loadSkillsFromDirectory(
   );
   return skills.sort((left, right) => left.skill.name.localeCompare(right.skill.name));
 }
-//@ chunk-e6aww6q8.js:1680227-1682147 fingerprint (2.1.88 match: getPluginSkills, 0.792)
+//@ chunk-5xgkngpb.js:1755076-1757039 fingerprint (2.1.88 match: getPluginSkills, 0.785)
 /**
  * 加载所有启用插件的技能（skills/ 与 manifest.skills），按真实路径跨插件去重。
  */
@@ -1315,6 +1348,7 @@ async function getPluginSkills(storageV5) {
             getPluginTrustContext(plugin),
             loadedPaths,
             switches,
+            plugin.entriesAnchor,
           );
           pluginSkills.push(...skills);
           logForDebugging(`Loaded ${skills.length} skills from plugin ${plugin.name} default directory`);
@@ -1342,6 +1376,7 @@ async function getPluginSkills(storageV5) {
                 getPluginTrustContext(plugin),
                 loadedPaths,
                 switches,
+                plugin.entriesAnchor,
               );
               logForDebugging(
                 `Loaded ${skills.length} skills from plugin ${plugin.name} custom path: ${skillPath}`,
@@ -1380,7 +1415,7 @@ async function getPluginSkills(storageV5) {
     hadErrorCode: found ?? failureKind,
   };
 }
-//@ chunk-e6aww6q8.js:1682147-1683072 placement
+//@ chunk-5xgkngpb.js:1757039-1757964 placement
 function loadPluginSkills(storageV5) {
   let pluginRegistry = getPluginRegistry();
   let cacheKey = isStorageV5Enabled() && storageV5 !== undefined ? "skillsV5" : "skills";
@@ -1433,7 +1468,7 @@ function loadPluginSkills(storageV5) {
   })();
   return pluginRegistry[cacheKey];
 }
-//@ chunk-e6aww6q8.js:1683072-1683472 placement
+//@ chunk-5xgkngpb.js:1757964-1758364 placement
 /**
  * 替换命令/技能内容里的变量：插件路径/来源/数据目录、${CLAUDE_SKILL_DIR}、${CLAUDE_SESSION_ID}、${CLAUDE_EFFORT}， 有用户配置时再替换 user_config 值。r 用于对替换值转义。
  */
@@ -1463,12 +1498,13 @@ function substituteSkillVariables(content, context, escapeValue = (value) => val
 }
 export {
   getPluginCommands,
-  skillNameMatches,
-  stripSkillNamespacePrefix,
   loadPluginSkills,
-  validatePluginCommandAllowedTools,
-  MAX_PLUGIN_COMMAND_FILE_BYTES,
   isSkillFile_2,
   frontmatterDisallowedTools,
   memoizeLastValue,
+  MAX_PLUGIN_COMMAND_FILE_BYTES,
+  validatePluginCommandAllowedTools,
+  pluginCommandHead,
+  skillNameMatches,
+  stripSkillNamespacePrefix,
 };

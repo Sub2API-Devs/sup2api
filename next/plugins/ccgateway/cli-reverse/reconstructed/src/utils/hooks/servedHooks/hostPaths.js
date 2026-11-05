@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主路径
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { isAbsolute, sep } from "path";
@@ -31,7 +31,7 @@ import { isStorageV5Enabled } from "../../hoverRest.js";
 import { PathSpace, isHostFileError, unwrapHostFileError } from "../../resultError.js";
 import { getFsImplementation } from "../../fsOperations.js";
 
-//@ chunk-e6aww6q8.js:918322-918365 placement
+//@ chunk-5xgkngpb.js:928821-928864 placement
 /**
  * 不可用时的空回调（把原因交给 onUnavailable）。
  */
@@ -39,7 +39,7 @@ function onUnavailableNoop(request, reason) {
   request.onUnavailable(reason);
   return;
 }
-//@ chunk-e6aww6q8.js:918453-918735 placement
+//@ chunk-5xgkngpb.js:928952-929234 placement
 function hostPathDeps(launchDir, hostFiles) {
   return {
     childEnv: subprocessEnv,
@@ -57,7 +57,7 @@ function hostPathDeps(launchDir, hostFiles) {
     deviceHooksMemory: deviceHooksProcessMemories.of(getRootSession().host),
   };
 }
-//@ chunk-e6aww6q8.js:918735-919824 placement
+//@ chunk-5xgkngpb.js:929234-930325 placement
 /**
  * 计算设备钩子的可达范围：收集启动目录、项目目录、git 根、各设置源的可写条目与公共根，解析真实路径，返回供判定"命令/路径是否在云会话可写范围内"的状态。
  */
@@ -133,7 +133,7 @@ function createHostPathReach({ launchDir, projectDir, originalCwd }, deps = host
     },
   };
 }
-//@ chunk-e6aww6q8.js:919824-920173 placement
+//@ chunk-5xgkngpb.js:930325-930674 placement
 /**
  * 经宿主文件接口求真实路径（存储 V5 时），否则走本地实现。
  */
@@ -160,14 +160,14 @@ async function realpathViaHostFiles(filePath, hostFiles) {
   }
   return realpath(filePath);
 }
-//@ chunk-e6aww6q8.js:920173-920226 placement
+//@ chunk-5xgkngpb.js:930674-930727 placement
 /**
  * 拼接路径时保留已存在的尾部分隔符。
  */
 function joinKeepingTrailingSep(dirPath, name) {
   return dirPath.endsWith(sep) ? dirPath + name : dirPath + sep + name;
 }
-//@ chunk-e6aww6q8.js:920226-920326 placement
+//@ chunk-5xgkngpb.js:930727-930827 placement
 function hostPathSpace(filePath) {
   return filePath === getSettingsFilePathForSource("userSettings")
     ? "store"
@@ -175,11 +175,11 @@ function hostPathSpace(filePath) {
       ? "system"
       : "workspace";
 }
-//@ chunk-e6aww6q8.js:920326-920454 placement
+//@ chunk-5xgkngpb.js:930827-930955 placement
 class HostPathRefused extends Error {
   constructor() {
     super("host path resolution refused by the storage backend");
     this.name = "HostPathRefused";
   }
 }
-export { joinKeepingTrailingSep, createHostPathReach, onUnavailableNoop };
+export { joinKeepingTrailingSep, onUnavailableNoop, createHostPathReach };

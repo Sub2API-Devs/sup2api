@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话通道工具（处理远程工具通告并转为本地工具）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qqkcdb5s.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4hamj64m.js (13)
  * attribution: placement 13
  */
 import {
@@ -21,7 +21,7 @@ import { recursivelySanitizeUnicode } from "../../utils/sanitization.js";
 import { isStandardKeyActive } from "../../services/mcp/mcpStandardKeys.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 import { TOOL_META_KEYS } from "../../bridge/deviceRegistration.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   normalizeWithdrawReason,
   STILL_HERE,
@@ -37,31 +37,34 @@ import { SDKRemoteToolsAnnounceRemoteToolsAnnounceMessageSchema } from "../../en
 import { sanitizeDisplayText } from "../../utils/resultError.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { MINIMAL_INTERFACE_VERSION } from "./protocolNegotiation.js";
 import { isSafeMode } from "../../utils/envUtils.js";
 import { ownSessionIdPrefixes, buildCcrMcpProxyUrls } from "../../services/analytics/metadata.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { logError } from "../../utils/log.js";
 import { isHostOnlyNativeTool } from "../../services/api/deferredToolsState.js";
 import { BridgeToolProvider } from "../../bridge/bridgePermissionResponse.js";
+import { isRemoteEnvPlaceholder } from "../../utils/remoteEnvironment.js";
 import { ToolHostsForwardingState } from "./toolHostsNotice.js";
 import { RemoteAskSeat } from "../../services/remoteTools/remoteAskSeat.js";
 
-//@ chunk-qqkcdb5s.js:6117-6186 placement
+//@ chunk-4hamj64m.js:6626-6695 placement
 function loadMcpClientModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-qqkcdb5s.js:6186-6333 placement
+//@ chunk-4hamj64m.js:6695-6871 placement
 var SESSION_CHANNEL_SERVER_CONFIG = {
   serverName: REMOTE_DEVICES_SERVER_NAME,
   scope: "dynamic",
   serverType: "http",
+  serverProvenance: "connector",
   source: "dynamic",
   skipPrefix: false,
   serverAlwaysLoad: false,
   isFirstPartyDesignServer: false,
   cliOwned: false,
 };
-//@ chunk-qqkcdb5s.js:6333-6545 placement
+//@ chunk-4hamj64m.js:6871-7083 placement
 function buildSessionChannelTools(registry, limits) {
   return [
     ...registry
@@ -76,7 +79,7 @@ function buildSessionChannelTools(registry, limits) {
     ),
   ];
 }
-//@ chunk-qqkcdb5s.js:6545-6659 placement
+//@ chunk-4hamj64m.js:7083-7197 placement
 function powerShellPromptToolsFor(machine) {
   return machine.servedTools.has(POWERSHELL_TOOL_NAME) && !isPowerShellToolEnabled()
     ? [
@@ -90,7 +93,7 @@ function powerShellPromptToolsFor(machine) {
       ]
     : [];
 }
-//@ chunk-qqkcdb5s.js:6659-6837 placement
+//@ chunk-4hamj64m.js:7197-7375 placement
 function createCachedSessionChannelTools(
   registry,
   onChanged = () => {
@@ -110,7 +113,7 @@ function createCachedSessionChannelTools(
     return cache.tools;
   };
 }
-//@ chunk-qqkcdb5s.js:6837-7364 placement
+//@ chunk-4hamj64m.js:7375-7902 placement
 function toSessionChannelTool(name, tool, effectiveMaxPermission) {
   let listed = recursivelySanitizeUnicode({
     name: tool.name,
@@ -144,7 +147,7 @@ function toSessionChannelTool(name, tool, effectiveMaxPermission) {
     },
   });
 }
-//@ chunk-qqkcdb5s.js:7364-7692 placement
+//@ chunk-4hamj64m.js:7902-8230 placement
 function sessionToolMeta(hints) {
   return {
     ...(hints.search_hint !== undefined && {
@@ -161,11 +164,11 @@ function sessionToolMeta(hints) {
     }),
   };
 }
-//@ chunk-qqkcdb5s.js:7692-7714 placement
+//@ chunk-4hamj64m.js:8230-8252 placement
 var MAX_ANNOUNCE_DEPTH = 32;
 var MAX_ANNOUNCE_ITEMS = 200;
 var EMPTY_ANNOUNCE_ITEMS = [];
-//@ chunk-qqkcdb5s.js:7714-7815 placement
+//@ chunk-4hamj64m.js:8252-8353 placement
 function memoizeLast(compute) {
   let last;
   return (input) => {
@@ -177,18 +180,18 @@ function memoizeLast(compute) {
     return last.result;
   };
 }
-//@ chunk-qqkcdb5s.js:7815-7882 placement
+//@ chunk-4hamj64m.js:8353-8420 placement
 var MACHINE_TOOLS_POLICY_STATES = {
   allowed: undefined,
   denied: "policy",
   pending: "pending",
 };
 var ANNOUNCE_PENDING_WINDOW_MS = 30000;
-//@ chunk-qqkcdb5s.js:7882-7964 placement
+//@ chunk-4hamj64m.js:8420-8502 placement
 function collectPassthroughToolNames(registry) {
   return new Set(registry.entries().flatMap((machine) => [...machine.passthrough.keys()]));
 }
-//@ chunk-qqkcdb5s.js:7964-13673 placement
+//@ chunk-4hamj64m.js:8502-14368 placement
 /**
  * 处理附着机器发来的 remote_tools_announce：校验嵌套深度/大小/epoch，登记其工具（served/passthrough/plumbing）。
  */
@@ -215,7 +218,7 @@ function handleRemoteToolsAnnounce(announcement) {
   };
   let reportPublished = (passthroughToolNames, reason) => {
     let passthroughToolNames_2 = collectPassthroughToolNames(announcement.registry);
-    let removedCount = count([...passthroughToolNames], (name) => !passthroughToolNames_2.has(name));
+    let removedCount = countWhere([...passthroughToolNames], (name) => !passthroughToolNames_2.has(name));
     if (removedCount > 0 || passthroughToolNames_2.size !== passthroughToolNames.size)
       announcement.telemetry.published({
         count: passthroughToolNames_2.size,
@@ -333,6 +336,14 @@ function handleRemoteToolsAnnounce(announcement) {
           return reportRefused(
             "disabled_switch_off",
             "remote_tools_disabled: switch_off",
+            announcement_2,
+            parsed.data.instance_id,
+            passthroughToolNames,
+          );
+        case "no_device_policy":
+          return reportRefused(
+            "disabled_device_policy",
+            "remote_tools_disabled: device_policy_not_enforced",
             announcement_2,
             parsed.data.instance_id,
             passthroughToolNames,
@@ -469,6 +480,7 @@ function handleRemoteToolsAnnounce(announcement) {
               status: "announced",
               worker_epoch: announcement.workerEpoch,
               protocol_version: acceptResult.protocolVersion,
+              tool_host_interface: MINIMAL_INTERFACE_VERSION,
               ...adoptedFields,
               ...ignoredFields,
               ...(announcement_2.host.capabilities?.includes(SAYS_STILL_HERE) === true &&
@@ -481,7 +493,7 @@ function handleRemoteToolsAnnounce(announcement) {
     },
   };
 }
-//@ chunk-qqkcdb5s.js:13673-17659 placement
+//@ chunk-4hamj64m.js:14368-18447 placement
 /**
  * 为云会话构建会话通道工具：附着机器公告的工具成为本会话可调用的 MCP 风格工具。
  */
@@ -615,8 +627,13 @@ async function createSessionChannelTools(options) {
       return "pending";
     },
     flagWaitCapMs: 5000,
-    switches: () =>
-      isSessionChannelDisabled() ? "channel_off" : isRemoteToolForwardingSwitchOn() ? "on" : "switch_off",
+    switches: () => {
+      if (isSessionChannelDisabled()) return "channel_off";
+      if (!isRemoteToolForwardingSwitchOn()) return "switch_off";
+      return isRemoteEnvPlaceholder() && options.sender.enforcesDevicePolicy?.() !== true
+        ? "no_device_policy"
+        : "on";
+    },
     now: Date.now,
     workerEpoch:
       options.workerEpoch !== undefined && Number.isInteger(options.workerEpoch) && options.workerEpoch >= 1

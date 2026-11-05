@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：API 额度链接提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (11)
  * attribution: placement 11
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
@@ -27,10 +28,14 @@ import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MarkdownText_2, MARKDOWN_LINK_SCHEMES } from "../pluginUi/render/MarkdownBlock.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:92617-92887 placement
+//@ chunk-hnxhr3bs.js:92357-92361 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:92357", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:96198-96468 placement
 var API_CREDIT_LINK_FLAG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var TENGU_RADIANT_FOX;
 var API_CREDIT_LINK;
@@ -41,7 +46,7 @@ var API_CREDIT_MAX_IMPRESSIONS;
 var ApiCreditLinkTextSchema;
 var ApiCreditLinkStatusSchema;
 var ApiCreditLinkCacheSchema;
-deferInit("chunk-ag5x7vhf.js:92617", () => {
+deferInit("chunk-hnxhr3bs.js:96198", () => {
   API_CREDIT_LINK_FLAG = "tengu_snug_storm";
   TENGU_RADIANT_FOX = "tengu_radiant_fox";
   API_CREDIT_LINK = "api-credit-link";
@@ -71,7 +76,7 @@ deferInit("chunk-ag5x7vhf.js:92617", () => {
     }),
   );
 });
-//@ chunk-ag5x7vhf.js:92887-93012 placement
+//@ chunk-hnxhr3bs.js:96468-96593 placement
 /**
  * 读 API 额度链接提示的 GrowthBook 配置并校验，返回提示文字；未配置或校验失败返回 null。
  */
@@ -82,7 +87,7 @@ function getApiCreditLinkText() {
   let parsed = ApiCreditLinkTextSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
   return parsed.success ? parsed.data.text : null;
 }
-//@ chunk-ag5x7vhf.js:93012-93136 placement
+//@ chunk-hnxhr3bs.js:96593-96717 placement
 /**
  * 判断当前账号的 passes 资格是否在本进程启动之前就已具备。
  */
@@ -92,7 +97,7 @@ function isPassesEligibleBeforeLaunch() {
     version === undefined ? undefined : readApiCreditLinkCache(getGlobalConfig(), version)?.eligibleSince;
   return typeof eligibleSince === "number" && eligibleSince < performance.timeOrigin;
 }
-//@ chunk-ag5x7vhf.js:93136-93247 placement
+//@ chunk-hnxhr3bs.js:96717-96828 placement
 /**
  * 首次展示前打点 tengu_api_credit_link_notice_arm；会话固定开关 TENGU_RADIANT_FOX 打开时返回 false（不压制），否则 true。
  */
@@ -104,7 +109,7 @@ function shouldSuppressApiCreditLinkNotice() {
     });
   return !enabled;
 }
-//@ chunk-ag5x7vhf.js:93247-93402 placement
+//@ chunk-hnxhr3bs.js:96828-96983 placement
 function recordApiCreditLinkShown(storageV5) {
   logEvent("tengu_api_credit_link_notice_shown", {
     impression: apiCreditLinkImpressionCount(getGlobalConfig()) + 1,
@@ -120,7 +125,7 @@ function recordApiCreditLinkShown(storageV5) {
     storageV5,
   );
 }
-//@ chunk-ag5x7vhf.js:93402-94448 placement
+//@ chunk-hnxhr3bs.js:96983-98029 placement
 /**
  * 后台查询组织的 API 额度链接状态（/api/oauth/organizations/:orgUUID/…），缓存到全局配置并控制重问间隔。
  */
@@ -180,22 +185,22 @@ async function refreshApiCreditLinkStatus(credentials, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:94448-94515 placement
+//@ chunk-hnxhr3bs.js:98029-98096 placement
 function shouldAskApiCreditLink({ nextAskAt, asks }, nowMs) {
   return (
     asks < API_CREDIT_MAX_IMPRESSIONS &&
     (nowMs >= nextAskAt || nextAskAt - nowMs > API_CREDIT_REASK_WINDOW_MS + ONE_DAY_MS_CREDIT)
   );
 }
-//@ chunk-ag5x7vhf.js:94708-94785 placement
+//@ chunk-hnxhr3bs.js:98289-98366 placement
 function readApiCreditLinkCache(globalConfig, version) {
   return ApiCreditLinkCacheSchema().safeParse(globalConfig.apiCreditLinkStatusCache?.[version]).data;
 }
-//@ chunk-ag5x7vhf.js:94785-94836 placement
+//@ chunk-hnxhr3bs.js:98366-98417 placement
 function apiCreditLinkImpressionCount(globalConfig) {
   return globalConfig.seenNotifications?.[API_CREDIT_LINK] ?? 0;
 }
-//@ chunk-ag5x7vhf.js:94836-95165 placement
+//@ chunk-hnxhr3bs.js:98417-98746 placement
 function ApiCreditLinkNotice() {
   let $ = useMemoCache(5);
   let { storageV5 } = useTheme_2();
@@ -233,18 +238,13 @@ function ApiCreditLinkNotice() {
   } else content = $[4];
   return content;
 }
-//@ chunk-ag5x7vhf.js:95165-95169 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:95165", () => {
-  init_react_production();
-});
 export {
+  getApiCreditLinkText,
+  apiCreditLinkImpressionCount,
+  API_CREDIT_MAX_ASKS,
   refreshApiCreditLinkStatus,
   API_CREDIT_LINK,
-  API_CREDIT_MAX_ASKS,
-  getApiCreditLinkText,
   shouldSuppressApiCreditLinkNotice,
   isPassesEligibleBeforeLaunch,
   ApiCreditLinkNotice,
-  apiCreditLinkImpressionCount,
 };

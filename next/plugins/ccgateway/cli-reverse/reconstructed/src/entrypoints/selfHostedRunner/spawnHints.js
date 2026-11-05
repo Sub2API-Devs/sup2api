@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：执行 spawn-runner 钩子并校验 spawn hint
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (1)
  * attribution: placement 1
  */
 import { spawn } from "child_process";
@@ -23,6 +23,7 @@ import {
 import { isGitRemoteUrl } from "../../selfHostedRunner/git/repoSources.js";
 import { isSafeRefName } from "../../utils/git/safeRefName.js";
 import { sanitizeMetricLabel, UNKNOWN, escapeMetricValue } from "./metrics.js";
+import { normalizeSpawnReason } from "./runId.js";
 import { connectorScopedAgentId } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { moveKeeperPid } from "../../utils/toolCgroup.js";
@@ -30,7 +31,7 @@ import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { redactSecretsInText } from "../../utils/redactSecrets.js";
 import { killProcessGroup } from "../../utils/auth/lockHolderLiveness.js";
 
-//@ chunk-2cbdmxy9.js:5544-12023 placement
+//@ chunk-h7hgs1mf.js:5980-12853 placement
 /**
  * 校验 spawn-hint 声明（jti、session_id、仓库源、关联 id 等），写入工作单文件并执行 spawn-runner 钩子，记录输出。
  */
@@ -70,6 +71,17 @@ async function runSpawnRunnerHook(hint) {
       client_platform: platformEscaped,
     };
   }
+  let spawnReason = normalizeSpawnReason(hint.claims.spawn_reason);
+  if (hint.claims.spawn_reason && spawnReason === undefined) {
+    let escapedSpawnReason = escapeMetricValue(hint.claims.spawn_reason);
+    hint.onDebug(
+      `[runner:orchestrator] spawn-hint spawn_reason rejected by the env-export gate (CLAUDE_RUNNER_SPAWN_REASON left unset): "${escapedSpawnReason}" (len=${hint.claims.spawn_reason.length})`,
+    );
+    hint.claims = {
+      ...hint.claims,
+      spawn_reason: escapedSpawnReason,
+    };
+  }
   if (!/^[A-Za-z0-9_.-]+$/.test(hint.jwt))
     throw Error("spawn-hint work_order_jwt: unsafe character (not base64url + dot)");
   let now = Date.now();
@@ -85,6 +97,7 @@ async function runSpawnRunnerHook(hint) {
       connectorScopedAgentId("session", hint.claims.session_id) ?? hint.claims.session_id,
     CLAUDE_RUNNER_SESSION_UUID: hint.claims.session_id,
     CLAUDE_RUNNER_ATTEMPT: String(hint.claims.attempt),
+    CLAUDE_RUNNER_SPAWN_REASON: spawnReason,
     CLAUDE_RUNNER_POOL_ID: hint.claims.pool_id,
     CLAUDE_RUNNER_ACCOUNT_EMAIL: hint.claims.account_email,
     CLAUDE_RUNNER_ACCOUNT_ID: hint.claims.account_id,
@@ -237,14 +250,20 @@ async function runSpawnRunnerHook(hint) {
         }
         resolve();
       };
+      let waitForExit = (timeoutMs) => {
+        let spawnedChild = !isKilled;
+        isKilled = true;
+        hint.onStatus(
+          spawnedChild
+            ? `${timeoutMs}, sending SIGTERM to process tree`
+            : `${timeoutMs}; its process tree was already sent SIGTERM, so it is not sent another`,
+        );
+        if (spawnedChild && child.pid !== undefined) killProcessGroup(child.pid, "SIGTERM");
+      };
       let timer = setTimeout(
-        (child_, jti, timeoutMs, status, settle_, graceMs) => {
+        (doSpawn, jti, timeoutMs, status, settle_, graceMs, logLine) => {
           timedOut = true;
-          isKilled = true;
-          status(
-            `[runner:orchestrator] spawn-runner jti=${jti} timed out after ${timeoutMs}ms, sending SIGTERM to process tree`,
-          );
-          if (child_.pid !== undefined) killProcessGroup(child_.pid, "SIGTERM");
+          logLine(`[runner:orchestrator] spawn-runner jti=${jti} timed out after ${timeoutMs}ms`);
           killTimer = setTimeout(
             (child__, jti_, timeoutMs_, status_, graceMs_) => {
               if (child__.pid !== undefined) killProcessGroup(child__.pid, "SIGKILL");
@@ -265,7 +284,7 @@ async function runSpawnRunnerHook(hint) {
               );
             },
             graceMs,
-            child_,
+            doSpawn,
             jti,
             status,
             settle_,
@@ -279,13 +298,10 @@ async function runSpawnRunnerHook(hint) {
         hint.onStatus,
         settle,
         sigkillGraceMs,
+        waitForExit,
       );
       onAbort = () => {
-        isKilled = true;
-        hint.onStatus(
-          `[runner:orchestrator] spawn-runner jti=${hint.claims.jti} aborted by shutdown, sending SIGTERM to process tree`,
-        );
-        if (child.pid !== undefined) killProcessGroup(child.pid, "SIGTERM");
+        waitForExit(`[runner:orchestrator] spawn-runner jti=${hint.claims.jti} aborted by shutdown`);
         abortKillTimer = setTimeout(
           (pid) => {
             if (pid !== undefined) killProcessGroup(pid, "SIGKILL");

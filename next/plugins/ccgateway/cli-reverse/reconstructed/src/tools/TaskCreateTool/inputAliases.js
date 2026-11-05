@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：TaskCreate 工具输入别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 5, affinity 1
  */
 import { getFirstLine } from "../../utils/stringUtils.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1776548-1776808 placement
+//@ chunk-5xgkngpb.js:1853518-1853778 placement
 /**
  * TaskCreate 输入的规范字段与可接受的别名（title/name → subject、content → description、active_form → activeForm），以及会被忽略的其他字段名。
  */
@@ -21,7 +21,7 @@ var SUBJECT_ALIASES;
 var DESCRIPTION_ALIASES;
 var ACTIVE_FORM_ALIASES_2;
 var IGNORED_TASK_FIELDS;
-deferInit("chunk-e6aww6q8.js:1776548", () => {
+deferInit("chunk-5xgkngpb.js:1853518", () => {
   TASK_INPUT_FIELDS = new Set(["subject", "description", "activeForm", "metadata"]);
   SUBJECT_ALIASES = ["title", "name"];
   DESCRIPTION_ALIASES = ["content"];
@@ -41,28 +41,28 @@ deferInit("chunk-e6aww6q8.js:1776548", () => {
     "addBlockedBy",
   ]);
 });
-//@ chunk-e6aww6q8.js:1776808-1776865 placement
+//@ chunk-5xgkngpb.js:1853778-1853835 placement
 /**
  * 判断值是非空字符串（去空白后）。
  */
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim() !== "";
 }
-//@ chunk-e6aww6q8.js:1776865-1776912 placement
+//@ chunk-5xgkngpb.js:1853835-1853882 placement
 /**
  * 判断输入含 tasks 或 todos 字段（是待办列表）。
  */
 function isTodoListInput(input) {
   return "tasks" in input || "todos" in input;
 }
-//@ chunk-e6aww6q8.js:1776912-1776968 placement
+//@ chunk-5xgkngpb.js:1853882-1853938 placement
 /**
  * 判断输入含 prompt 或 subagent_type 字段（是 Agent 调用）。
  */
 function isSubagentTaskInput(input) {
   return "prompt" in input || "subagent_type" in input;
 }
-//@ chunk-e6aww6q8.js:1776968-1777129 placement
+//@ chunk-5xgkngpb.js:1853938-1854099 placement
 function deriveTaskSubject(description) {
   let trimmed = getFirstLine(description).trim();
   let list = Array.from(trimmed);
@@ -71,12 +71,12 @@ function deriveTaskSubject(description) {
   let index = joined.lastIndexOf(" ");
   return (index > 40 ? joined.slice(0, index) : joined).trim();
 }
-//@ chunk-e6aww6q8.js:1777129-1778329 affinity
+//@ chunk-5xgkngpb.js:1854099-1855299 affinity
 /**
  * TaskCreate 的 coerceInput：修正 task 包裹、title/name 等别名、补齐 subject/description、去掉未知键。
  */
 function coerceTaskCreateInput(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
+  if (!isPlainObject_6(rawInput)) return null;
   if (isTodoListInput(rawInput)) return null;
   let appliedAliases = [];
   let input = {
@@ -90,7 +90,7 @@ function coerceTaskCreateInput(rawInput) {
       delete input.task;
       input.description = task;
       appliedAliases.push("task_wrapper_string");
-    } else if (isPlainObject_5(task)) {
+    } else if (isPlainObject_6(task)) {
       if (isTodoListInput(task)) return null;
       if (
         isSubagentTaskInput(task) &&
@@ -131,7 +131,7 @@ function coerceTaskCreateInput(rawInput) {
       delete input.activeForm;
       appliedAliases.push("drop_invalid_activeForm");
     }
-    if ("metadata" in input && !isPlainObject_5(input.metadata)) {
+    if ("metadata" in input && !isPlainObject_6(input.metadata)) {
       delete input.metadata;
       appliedAliases.push("drop_invalid_metadata");
     }

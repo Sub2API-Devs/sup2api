@@ -3,9 +3,9 @@
  *
  * 文件类权限对话框（Edit/Write/NotebookEdit/读外部文件）：diff 预览或 IDE diff、选项（允许一次/本会话允许编辑/拒绝）与 shift+tab 切模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FilePermissionDialog/FilePermissionDialog.tsx
- * pieces: chunk-18hwfzwa.js (6)
+ * pieces: chunk-czq1j3j2.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { resolve } from "path";
@@ -48,7 +48,7 @@ import {
 import { NotebookEditPermissionRequest } from "../NotebookEditPermissionRequest/NotebookEditPermissionRequest.js";
 import { sanitizeToolNameForAnalytics } from "../../../services/analytics/metadata.js";
 import { getRequestedMachineForPrompt } from "../../../bridge/deviceRegistration.js";
-import { useShellPermissionFeedback } from "../useShellPermissionFeedback.js";
+import { PermissionPrompt } from "../PermissionPrompt.js";
 import { ShowInIDEPrompt } from "../../ShowInIDEPrompt.js";
 import { YES_ASK_AGAIN, getFilePermissionOptions } from "./permissionOptions.js";
 import { KillAgentsConfirm } from "../../KillAgentsConfirm.js";
@@ -56,12 +56,11 @@ import { isRemoteOrPluginAgent, preferValueFirst } from "../../../utils/agentCon
 import { PERMISSION_HANDLERS } from "./usePermissionHandler.js";
 import { MessageActionsKeybindings } from "../../messageActions.js";
 import { isPathWithinCaseAware } from "../../../utils/pathPrefix.js";
-import { uppercaseDriveLetter } from "../../../utils/ide.js";
+import { uppercaseDriveLetter, isVSCodeTerminal } from "../../../utils/ide.js";
 import { getCwd } from "../../../utils/cwd.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { PermissionRuleExplanation, MAX_EXPLANATION_LINES } from "../PermissionRuleExplanation.js";
-import { getNativeCSIuTerminalDisplayName_2 } from "../../../commands/terminalSetup/terminalSetup.js";
 import { getOutsideReadsExplainer } from "../permissionCardKinds.js";
 import { sandboxReadBlockApplies } from "../../../utils/sandbox/sandbox-adapter.js";
 import { DenialLimitFallbackNotice } from "../UnattendedAutoBlockNotice.js";
@@ -71,12 +70,12 @@ import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { Byline } from "../../design-system/Byline.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1377043-1377047 placement
+//@ chunk-czq1j3j2.js:1394763-1394767 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1377043", () => {
+deferInit("chunk-czq1j3j2.js:1394763", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1377047-1378002 placement
+//@ chunk-czq1j3j2.js:1399848-1400803 placement
 /**
  * 文件权限对话框的 diff 区测量与裁剪：测量高度、生成占位行、计算可见行与展开快捷键，返回 fitted 状态。
  */
@@ -165,7 +164,7 @@ function useFittedDiffBody(content, isActive) {
   } else fitted = $[17];
   return fitted;
 }
-//@ chunk-18hwfzwa.js:1378002-1378346 placement
+//@ chunk-czq1j3j2.js:1400803-1401148 placement
 /**
  * 按 fitted 状态裁剪显示 diff（负 marginTop 实现滚动），下方加 "see more" 提示。
  */
@@ -196,11 +195,11 @@ function FittedDiffBody({ fitted, children }) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1378871-1378895 placement
+//@ chunk-czq1j3j2.js:1401673-1401697 placement
 function emptyQuestionTitle() {
   return "";
 }
-//@ chunk-18hwfzwa.js:1378895-1379060 placement
+//@ chunk-czq1j3j2.js:1401697-1401862 placement
 /**
  * 渲染文件权限对话框的问题文本："Do you want to <动作> <文件名>?"（文件名加粗）或纯文本。
  */
@@ -222,7 +221,7 @@ function FileDialogQuestion(question) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1380440-1386191 fingerprint (2.1.88 match: FilePermissionDialog, 0.316)
+//@ chunk-czq1j3j2.js:1403242-1409015 fingerprint (2.1.88 match: FilePermissionDialog, 0.316)
 /**
  * 文件权限对话框：根据工具类型选择 file-edit-diff/file-write-diff/notebook-edit-diff 预览（或 IDE 中显示 diff），选项由 getFilePermissionOptions 生成，处理器表 PERMISSION_HANDLERS。
  */
@@ -280,7 +279,7 @@ function FilePermissionDialog({ payload, answer }) {
     logSubmitted,
     logEscape,
     hintNode,
-  } = useShellPermissionFeedback({
+  } = PermissionPrompt({
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
@@ -294,7 +293,7 @@ function FilePermissionDialog({ payload, answer }) {
     handleFocus: handleFocus_2,
     logSubmitted: logSubmitted_2,
     hintNode: hintNode_2,
-  } = useShellPermissionFeedback({
+  } = PermissionPrompt({
     feedbackTypeOf: (option) => (option === YES_ASK_AGAIN ? "accept" : undefined),
     toolName,
     isMcp: payload.isMcp,
@@ -508,10 +507,11 @@ function FilePermissionDialog({ payload, answer }) {
               children: jsxProd_default(PermissionRuleExplanation, {
                 permissionResult: payload.permissionResult,
                 toolType: "edit",
+                framed: isFitted,
               }),
             }),
           payload.showingDiffInIDE
-            ? (isFitted || getNativeCSIuTerminalDisplayName_2()) &&
+            ? (isFitted || isVSCodeTerminal()) &&
               jsxProd_default_2(Box, {
                 flexDirection: "column",
                 paddingX,
@@ -522,7 +522,7 @@ function FilePermissionDialog({ payload, answer }) {
                       dimColor: true,
                       children: ideLabel,
                     }),
-                  getNativeCSIuTerminalDisplayName_2() &&
+                  isVSCodeTerminal() &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: "Save file to continue\u2026",
@@ -563,6 +563,7 @@ function FilePermissionDialog({ payload, answer }) {
                   permissionResult: payload.permissionResult,
                   toolType: "edit",
                   rowBudget: MAX_EXPLANATION_LINES,
+                  framed: isFitted,
                 }),
               payload.permissionResult.denialLimitFallback === undefined &&
                 payload.permissionResult.autoDenyWindow !== undefined &&

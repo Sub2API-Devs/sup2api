@@ -3,9 +3,9 @@
  *
  * 久离返回对话框：会话很旧且 token 很多时提示继续/清空/新会话，并格式化闲置时长。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/IdleReturnDialog.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: fingerprint 1, file-local 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:1196896-1198240 fingerprint (2.1.88 match: IdleReturnDialog, 0.463)
+//@ chunk-czq1j3j2.js:1227059-1228403 fingerprint (2.1.88 match: IdleReturnDialog, 0.463)
 function IdleReturnDialog(props) {
   let $ = useMemoCache(22);
   let {
@@ -124,7 +124,7 @@ function IdleReturnDialog(props) {
   } else t10 = $[21];
   return t10;
 }
-//@ chunk-18hwfzwa.js:1198240-1198448 file-local
+//@ chunk-czq1j3j2.js:1228403-1228611 file-local
 function formatIdleDuration(minutes) {
   if (minutes < 60) return `${Math.floor(minutes)}m`;
   let hours = Math.floor(minutes / 60);

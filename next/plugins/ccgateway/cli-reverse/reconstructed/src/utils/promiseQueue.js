@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：按键串行执行的队列；创建简单的异步互斥锁等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kk3qtrqx.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cf8h8052.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-kk3qtrqx.js:191-299 placement
+//@ chunk-cf8h8052.js:191-299 placement
 /**
  * 把异步函数调用串行化。
  */
@@ -21,7 +21,7 @@ function serializeCalls(preparePluginsBucket) {
     return result;
   };
 }
-//@ chunk-kk3qtrqx.js:299-424 placement
+//@ chunk-cf8h8052.js:299-425 placement
 /**
  * 创建简单的异步互斥锁。
  */
@@ -39,9 +39,9 @@ function createMutex() {
     },
   };
 }
-//@ chunk-kk3qtrqx.js:424-432 placement
+//@ chunk-cf8h8052.js:425-433 placement
 var MAX_QUEUE_BATCH = 5;
-//@ chunk-kk3qtrqx.js:432-844 placement
+//@ chunk-cf8h8052.js:433-845 placement
 /**
  * 按键串行执行的队列。
  */
@@ -81,4 +81,4 @@ function createKeyedQueue() {
     },
   };
 }
-export { serializeCalls, createKeyedQueue, createMutex };
+export { createKeyedQueue, serializeCalls, createMutex };

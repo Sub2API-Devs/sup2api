@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：commander 帮助文本的自定义格式（排序、换行、列宽）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b7dyevzy.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ardnz7sf.js (6)
  * attribution: placement 6
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { repeatString } from "../utils/stringUtils.js";
 
-//@ chunk-b7dyevzy.js:35767-35796 placement
+//@ chunk-ardnz7sf.js:35767-35796 placement
 var HELP_INDENT = 2;
 var HELP_COLUMN_GAP = 2;
 var HELP_TERM_WIDTH = 36;
 var HELP_MIN_DESC_WIDTH = 30;
 var HELP_SUBCOMMAND_INDENT = 4;
-//@ chunk-b7dyevzy.js:35796-36090 placement
+//@ chunk-ardnz7sf.js:35796-36090 placement
 function wrapHelpText(text, width) {
   let max = Math.max(width, 1);
   let lines = [];
@@ -52,7 +52,7 @@ function wrapHelpText(text, width) {
   return lines.join(`
 `);
 }
-//@ chunk-b7dyevzy.js:36090-36451 placement
+//@ chunk-ardnz7sf.js:36090-36451 placement
 /**
  * 格式化帮助中的一项：名称列对齐后接说明；说明多行或列宽不够时换行缩进。
  */
@@ -106,12 +106,12 @@ function formatHelpItem(term, description, padWidth, helpWidth) {
     )
   );
 }
-//@ chunk-b7dyevzy.js:36451-36510 placement
+//@ chunk-ardnz7sf.js:36451-36510 placement
 function pushHelpSection(lines, title, help) {
   if (help.length === 0) return;
   lines.push(title, ...help, "");
 }
-//@ chunk-b7dyevzy.js:36510-37116 placement
+//@ chunk-ardnz7sf.js:36510-37116 placement
 /**
  * 生成 commander 命令的帮助文本：Usage、描述，以及 Arguments/Options/Global Options/Commands 各段。
  */
@@ -161,7 +161,7 @@ function formatCommandHelp(command, helper) {
   return lines.join(`
 `);
 }
-//@ chunk-b7dyevzy.js:37116-37320 placement
+//@ chunk-ardnz7sf.js:37116-37320 placement
 function createHelpConfig() {
   let flagName = (option) => option.long?.replace(/^--/, "") ?? option.short?.replace(/^-/, "") ?? "";
   return Object.assign(

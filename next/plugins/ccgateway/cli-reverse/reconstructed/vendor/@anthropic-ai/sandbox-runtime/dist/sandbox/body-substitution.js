@@ -1,19 +1,19 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/body-substitution.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (4)
+ * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
  */
 import { Transform } from "stream";
 import { BODYLESS_METHODS } from "./request-filter.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:664164-664239 esm-fingerprint
+//@ chunk-qg41pqt6.js:664686-664761 esm-fingerprint
 function allLengthMatched(pairs) {
   return pairs.every((p) => p.sentinel.length === p.realValue.length);
 }
-//@ chunk-fq0cr76a.js:664239-664775 esm-fingerprint
+//@ chunk-qg41pqt6.js:664761-665297 esm-fingerprint
 function prepareBodySubstitution(getBodySubstitutions, req, fwdHeaders, destHost) {
   if (getBodySubstitutions === undefined) return;
   let declaresBody =
@@ -35,7 +35,7 @@ function prepareBodySubstitution(getBodySubstitutions, req, fwdHeaders, destHost
   if (!allLengthMatched(pairs)) delete fwdHeaders["content-length"];
   return createBodySubstitutionTransform(pairs);
 }
-//@ chunk-fq0cr76a.js:664775-665031 esm-fingerprint
+//@ chunk-qg41pqt6.js:665297-665553 esm-fingerprint
 function createBodySubstitutionTransform(pairs) {
   let maxLen = Math.max(...pairs.map((p) => p.sentinel.length));
   let carry;
@@ -52,7 +52,7 @@ function createBodySubstitutionTransform(pairs) {
     },
   });
 }
-//@ chunk-fq0cr76a.js:665031-665358 esm-fingerprint
+//@ chunk-qg41pqt6.js:665553-665880 esm-fingerprint
 function substitute(work, pairs, maxLen) {
   let parts = [];
   let pos = 0;

@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：去掉危险键并返回数量；对象图中是否含 __proto__ 等危险键等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-dcmhvw5a.js:203861-203960 placement
+//@ chunk-z20c443b.js:197987-198086 placement
 /**
  * 定义可枚举可写属性。
  */
@@ -21,7 +21,7 @@ function defineOwnProperty(object, trackingPath, value) {
     configurable: true,
   });
 }
-//@ chunk-dcmhvw5a.js:203960-204245 placement
+//@ chunk-z20c443b.js:198086-198371 placement
 /**
  * 对象图中是否含 __proto__ 等危险键。
  */
@@ -39,7 +39,7 @@ function hasProtoKeys(value) {
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:204245-204705 placement
+//@ chunk-z20c443b.js:198371-198831 placement
 /**
  * 去掉危险键并返回数量。
  */
@@ -78,11 +78,11 @@ function stripProtoKeys(value) {
     count,
   };
 }
-//@ chunk-dcmhvw5a.js:204705-204760 placement
+//@ chunk-z20c443b.js:198831-198886 placement
 /**
  * 仅取自有属性。
  */
 function getOwn(object, key) {
   return Object.hasOwn(object, key) ? object[key] : undefined;
 }
-export { getOwn, defineOwnProperty, hasProtoKeys, stripProtoKeys };
+export { defineOwnProperty, getOwn, hasProtoKeys, stripProtoKeys };

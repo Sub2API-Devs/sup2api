@@ -1,12 +1,12 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/policies/decompressResponsePolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-mrx6y2r5.js:42950-43109 esm-fingerprint
+//@ chunk-b5df2wx1.js:42950-43109 esm-fingerprint
 function decompressResponsePolicy() {
   return {
     name: "decompressResponsePolicy",

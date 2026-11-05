@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论自动响应的开关与权限门槛
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (52)
  * attribution: placement 52
  */
 import {
@@ -30,7 +30,7 @@ import {
   hasPermissionsToUseTool,
   isChainOnAllowActive,
   hasAutoModeClassifierDenyRules,
-  getAskRuleForTool,
+  findAskRuleForTool,
   matchToolRule,
 } from "../../../utils/permissions/permissions.js";
 import { withDeadline } from "../../../utils/sleep.js";
@@ -56,27 +56,27 @@ import {
 } from "../../../plugins/hooksModules/loadedModuleFilters.js";
 import { matcherTestTarget } from "../../../utils/hooks/matcherGrammar.js";
 
-//@ chunk-9tgt55am.js:43383-43395 placement
+//@ chunk-c0pq6qyx.js:39292-39304 placement
 var livePageProbeHook = null;
-//@ chunk-9tgt55am.js:43395-43450 placement
+//@ chunk-c0pq6qyx.js:39304-39359 placement
 function isProbedLivePage(slug) {
   return livePageProbeHook != null && livePageProbeHook.isProbedLivePage(slug);
 }
-//@ chunk-9tgt55am.js:43450-43518 placement
+//@ chunk-c0pq6qyx.js:39359-39427 placement
 /**
  * 自动回复的节流与开关常量：合并等待默认 60 s、读重试 [5s,15s,30s,60s]、时钟偏差 10 分钟、快确认刷新 3 s，及若干 GrowthBook 开关名。
  */
 var DEFAULT_NUMERIC_FLAG = 60;
 var TENGU_SORREL_TRELLIS_WEIR = "tengu_sorrel_trellis_weir";
 var TENGU_MADRONE_SPINDLE = "tengu_madrone_spindle";
-//@ chunk-9tgt55am.js:43518-43553 placement
+//@ chunk-c0pq6qyx.js:39427-39462 placement
 function isMadroneSpindleEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MADRONE_SPINDLE, true) !== false;
 }
-//@ chunk-9tgt55am.js:43553-43602 placement
+//@ chunk-c0pq6qyx.js:39462-39511 placement
 var TENGU_MADRONE_SPINDLE_PURLIN = "tengu_madrone_spindle_purlin";
 var MAX_RATE_LIMIT_MS = 3600000;
-//@ chunk-9tgt55am.js:43602-43703 placement
+//@ chunk-c0pq6qyx.js:39511-39612 placement
 /**
  * 读取自动响应评论的速率上限开关，非法值用默认值并限制在最大值内。
  */
@@ -91,24 +91,24 @@ function getAutoReactRateLimit() {
     ? Math.min(featureValue_CACHED_MAY_BE_STALE, MAX_RATE_LIMIT_MS)
     : BUSY_EDGE_THRESHOLD_MS;
 }
-//@ chunk-9tgt55am.js:43703-43749 placement
+//@ chunk-c0pq6qyx.js:39612-39658 placement
 var TENGU_MADRONE_SPINDLE_NEWEL = "tengu_madrone_spindle_newel";
 var MAX_NEWEL_MS = 60000;
-//@ chunk-9tgt55am.js:43749-43784 placement
+//@ chunk-c0pq6qyx.js:39658-39693 placement
 function isMadroneSpindleNewelEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MADRONE_SPINDLE_NEWEL, false) === true;
 }
-//@ chunk-9tgt55am.js:43784-43798 placement
+//@ chunk-c0pq6qyx.js:39693-39707 placement
 var CLOCK_SKEW_TOLERANCE_MS = 600000;
-//@ chunk-9tgt55am.js:43798-43873 placement
+//@ chunk-c0pq6qyx.js:39707-39782 placement
 function isRecentToClaudeAt(comment, now) {
   let timestamp = parseTimestamp(comment.toClaudeAt);
   return timestamp !== null && Math.abs(now - timestamp) <= CLOCK_SKEW_TOLERANCE_MS;
 }
-//@ chunk-9tgt55am.js:43873-43889 placement
+//@ chunk-c0pq6qyx.js:39782-39798 placement
 var MIN_FLAG_VALUE = 1;
 var MAX_FLAG_VALUE = 600;
-//@ chunk-9tgt55am.js:43889-44035 placement
+//@ chunk-c0pq6qyx.js:39798-39944 placement
 /**
  * 读取 GrowthBook 数值开关（允许字符串形式的数字），返回四舍五入后的整数，无效时返回 null。
  */
@@ -120,7 +120,7 @@ function getNumericFlag(name) {
       : featureValue_CACHED_MAY_BE_STALE;
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
 }
-//@ chunk-9tgt55am.js:44035-44178 placement
+//@ chunk-c0pq6qyx.js:39944-40087 placement
 /**
  * 评论自动回复的最大自动回合数：有覆盖值用覆盖值，否则读 tengu_sorrel_trellis_weir（限制在上下限内），未配置用默认值。
  */
@@ -132,15 +132,15 @@ function getMaxAutoTurns() {
     ? Math.min(Math.max(numericFlag, MIN_FLAG_VALUE), MAX_FLAG_VALUE)
     : DEFAULT_NUMERIC_FLAG;
 }
-//@ chunk-9tgt55am.js:44178-44213 placement
+//@ chunk-c0pq6qyx.js:40087-40122 placement
 async function ownAccount(credentials) {
   return ownAccountUuid(credentials);
 }
-//@ chunk-9tgt55am.js:44213-44276 placement
+//@ chunk-c0pq6qyx.js:40122-40185 placement
 function hasCommentsFromOthers(thread, account) {
   return thread.comments.some((comment) => !isOwnPrincipal(comment.account, account));
 }
-//@ chunk-9tgt55am.js:44276-44520 placement
+//@ chunk-c0pq6qyx.js:40185-40429 placement
 /**
  * 从评论线程里挑出需要重新判断的评论：未见过的，或者已发给 Claude 但"发给 Claude"时间更新（应重新触发）的，或者文字被改过的。
  */
@@ -158,7 +158,7 @@ function selectCommentsToJudge(slug, thread, threadState) {
       out.push(comment);
   return out;
 }
-//@ chunk-9tgt55am.js:44520-44669 placement
+//@ chunk-c0pq6qyx.js:40429-40578 placement
 /**
  * 记录已判定过的评论（讨论串、id、发给 Claude 的时间、文本与作者分类）。
  */
@@ -176,26 +176,26 @@ function recordJudged(slug, threadId, comments, account) {
     })),
   );
 }
-//@ chunk-9tgt55am.js:44669-44743 placement
+//@ chunk-c0pq6qyx.js:40578-40652 placement
 /**
  * 自动回复的合并等待 5 s、读重试退避表与 mullion 开关名。
  */
 var DEFAULT_COALESCE_MS = 5000;
 var DEFAULT_READ_RETRY_DELAYS_MS = [5000, 15000, 30000, 60000];
 var TENGU_SORREL_TRELLIS_MULLION = "tengu_sorrel_trellis_mullion";
-//@ chunk-9tgt55am.js:44743-44828 placement
+//@ chunk-c0pq6qyx.js:40652-40737 placement
 function effectiveReadRetryCount() {
   let retries = readRetryDelays().length;
   let numericFlag = getNumericFlag(TENGU_SORREL_TRELLIS_MULLION);
   return numericFlag === null ? retries : Math.min(Math.max(numericFlag, 0), retries);
 }
-//@ chunk-9tgt55am.js:44828-44839 placement
+//@ chunk-c0pq6qyx.js:40737-40748 placement
 var RETRY_JITTER_RATIO = 0.5;
-//@ chunk-9tgt55am.js:44839-44905 placement
+//@ chunk-c0pq6qyx.js:40748-40814 placement
 function readRetryDelays() {
   return getLiveState().autoReact.readRetryDelaysMsOverride ?? DEFAULT_READ_RETRY_DELAYS_MS;
 }
-//@ chunk-9tgt55am.js:44905-45043 placement
+//@ chunk-c0pq6qyx.js:40814-40952 placement
 /**
  * 计算第 N 次自动回复的退避等待：按退避表取基数乘以 0.7–1.3 随机系数，与服务端建议的等待（加随机放大）取较大者。
  */
@@ -206,19 +206,19 @@ function computeAutoReactBackoff(readRetryAttempts, retryDelayMs, random = Math.
   let jittered = retryDelayMs === undefined ? 0 : retryDelayMs * (1 + random() * RETRY_JITTER_RATIO);
   return Math.max(delay, jittered);
 }
-//@ chunk-9tgt55am.js:45043-45093 placement
+//@ chunk-c0pq6qyx.js:40952-41002 placement
 var DEFAULT_BURST_SCALE_MS = 2000;
 var TENGU_SORREL_TRELLIS_FINIAL = "tengu_sorrel_trellis_finial";
 var RETRY_CEILING_SLACK_S = 2;
-//@ chunk-9tgt55am.js:45093-45137 placement
+//@ chunk-c0pq6qyx.js:41002-41046 placement
 function ceilRetryDelay(delayMs) {
   return delayMs > 0 ? Math.ceil(delayMs) + RETRY_CEILING_SLACK_S : 0;
 }
-//@ chunk-9tgt55am.js:45137-45196 placement
+//@ chunk-c0pq6qyx.js:41046-41105 placement
 function coalesceMs() {
   return getLiveState().autoReact.coalesceMsOverride ?? DEFAULT_COALESCE_MS;
 }
-//@ chunk-9tgt55am.js:45196-45308 placement
+//@ chunk-c0pq6qyx.js:41105-41217 placement
 /**
  * 计算自动响应前的确认停留时间：优先测试覆盖值，否则读开关，非法时用默认值，并限制在上限内。
  */
@@ -227,18 +227,18 @@ function getConfirmDwellMs() {
   let scale = value !== null && value >= 0 ? value : DEFAULT_BURST_SCALE_MS;
   return Math.min(scale, coalesceMs());
 }
-//@ chunk-9tgt55am.js:45308-45322 placement
+//@ chunk-c0pq6qyx.js:41217-41231 placement
 var MAX_MAIN_AGENT_RETRIES = 3;
 var MAX_AUX_RETRIES = 3;
-//@ chunk-9tgt55am.js:45322-45360 placement
+//@ chunk-c0pq6qyx.js:41231-41269 placement
 function isHumanComment(comment) {
   return getCommentAuthorKind(comment) === "human";
 }
-//@ chunk-9tgt55am.js:45360-45404 placement
+//@ chunk-c0pq6qyx.js:41269-41313 placement
 function hasToClaudeAt(comment) {
   return comment.toClaudeAt !== undefined;
 }
-//@ chunk-9tgt55am.js:45404-45519 placement
+//@ chunk-c0pq6qyx.js:41313-41428 placement
 /**
  * 判断评论信息是否不完整：发给 Claude 时间缺失或无法解析，或作者类型未知。
  */
@@ -249,7 +249,7 @@ function isDegradedComment(comment) {
     getCommentAuthorKind(comment) === "unknown"
   );
 }
-//@ chunk-9tgt55am.js:45519-45660 placement
+//@ chunk-c0pq6qyx.js:41428-41569 placement
 /**
  * 自动响应推迟原因只打点一次；条件不再成立时清除记录以便下次再报。
  */
@@ -263,7 +263,7 @@ function noteDeferOnce(threadState, reason, shouldDefer) {
     logFeatureSad("artifact_comments_autoreact", reason);
   }
 }
-//@ chunk-9tgt55am.js:50833-51147 placement
+//@ chunk-c0pq6qyx.js:46742-47056 placement
 function shouldFireActivation(previous, next) {
   if (next === null)
     return {
@@ -307,7 +307,7 @@ function shouldFireActivation(previous, next) {
     record: previous,
   };
 }
-//@ chunk-9tgt55am.js:51147-51296 placement
+//@ chunk-c0pq6qyx.js:47056-47205 placement
 function collectActivationStamps(thread) {
   return [
     thread.activatedAtDegraded !== true ? (thread.activatedAt ?? null) : null,
@@ -316,22 +316,22 @@ function collectActivationStamps(thread) {
     ),
   ];
 }
-//@ chunk-9tgt55am.js:51296-51379 placement
+//@ chunk-c0pq6qyx.js:47205-47288 placement
 function raiseStampHighWater(artifactState, thread) {
   for (let threadArg of collectActivationStamps(thread))
     artifactState.stampHighWater = shouldFireActivation(artifactState.stampHighWater, threadArg).record;
 }
-//@ chunk-9tgt55am.js:51379-51433 placement
+//@ chunk-c0pq6qyx.js:47288-47342 placement
 function shouldFireOnStamps(thread, liveSightBoundary) {
   return collectActivationStamps(thread).some((stamp) => shouldFireActivation(liveSightBoundary, stamp).fire);
 }
-//@ chunk-9tgt55am.js:51433-51446 placement
+//@ chunk-c0pq6qyx.js:47342-47355 placement
 var MAX_STAMP_AGE_MS = 30000;
-//@ chunk-9tgt55am.js:51446-51522 placement
+//@ chunk-c0pq6qyx.js:47355-47431 placement
 function heldReplyChainFor(slug) {
   return getLiveState().autoReact.artifacts.get(slug)?.heldReplyChain ?? null;
 }
-//@ chunk-9tgt55am.js:51522-51723 placement
+//@ chunk-c0pq6qyx.js:47431-47632 placement
 function isArtifactScanBusy(slug) {
   let wake = getLiveState().wakes.wakes.get(slug);
   return (
@@ -345,7 +345,7 @@ function isArtifactScanBusy(slug) {
     hasThreadAgentForSlug(slug)
   );
 }
-//@ chunk-9tgt55am.js:51723-51856 placement
+//@ chunk-c0pq6qyx.js:47632-47765 placement
 function isCommentAutoreactOptedIn() {
   let autoReact = getLiveState().autoReact;
   autoReact.optIn ??=
@@ -353,23 +353,23 @@ function isCommentAutoreactOptedIn() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_sorrel_trellis", false);
   return autoReact.optIn;
 }
-//@ chunk-9tgt55am.js:51856-51944 placement
+//@ chunk-c0pq6qyx.js:47765-47853 placement
 function isFastAckEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_COMMENT_FAST_ACK ??
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_gorse_pylon", false)
   );
 }
-//@ chunk-9tgt55am.js:51944-51993 placement
+//@ chunk-c0pq6qyx.js:47853-47902 placement
 function isOchreBitternEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_bittern", false);
 }
-//@ chunk-9tgt55am.js:51993-52069 placement
+//@ chunk-c0pq6qyx.js:47902-47978 placement
 function autoReactCanUseTool(agentId, artifactState, state) {
   if (!isOchreBitternEnabled() || artifactState.heldReplyDeclined) return null;
   return makeAutoReactCanUseTool(agentId, state);
 }
-//@ chunk-9tgt55am.js:52069-52324 placement
+//@ chunk-c0pq6qyx.js:47978-48233 placement
 /**
  * 构造自动回复用的 canUseTool：先走常规权限检查，需要询问时若是子代理或无人值守会话则记为 unanswered 并返回 ask，否则记 answered 并交给交互式询问。
  */
@@ -389,9 +389,9 @@ function makeAutoReactCanUseTool(agentId, state) {
     return permissionPromptPerson(tool, input, toolUseContext, canUseTool, assistantMessage, decision);
   };
 }
-//@ chunk-9tgt55am.js:52324-52336 placement
+//@ chunk-c0pq6qyx.js:48233-48245 placement
 var FAST_ACK_FLAG_REFRESH_MS = 3000;
-//@ chunk-9tgt55am.js:52336-52643 placement
+//@ chunk-c0pq6qyx.js:48245-48552 placement
 function refreshFastAckFlag() {
   let CLAUDE_CODE_ARTIFACT_COMMENT_FAST_ACK = env.CLAUDE_CODE_ARTIFACT_COMMENT_FAST_ACK;
   if (
@@ -408,7 +408,7 @@ function refreshFastAckFlag() {
   );
   return autoReact.fastAckFlagRefresh;
 }
-//@ chunk-9tgt55am.js:53486-53641 placement
+//@ chunk-c0pq6qyx.js:49395-49550 placement
 /**
  * 判断读取评论是否受权限规则约束（有 deny/ask 规则，或在 MCP 替换模式下 MCP 读评论工具需要询问）。
  */
@@ -425,7 +425,7 @@ function isCommentReadGated(context, decision, url) {
   if (!isBuiltInArtifactHiddenForMcp()) return false;
   return hasArtifactDenyOrAskRule(context, ARTIFACTS_MCP_READ_COMMENTS_TOOL, true);
 }
-//@ chunk-9tgt55am.js:53641-53813 placement
+//@ chunk-c0pq6qyx.js:49550-49721 placement
 function canAutoreactWithoutPrompts(context) {
   let toolPermissionContext = getToolPermissionContext(context);
   let allowed = isAutoAllowedInMode(
@@ -440,21 +440,21 @@ function canAutoreactWithoutPrompts(context) {
         (getIsNonInteractiveSession() && !hasPermissionPromptTool(getPermissionPromptToolName()))))
   );
 }
-//@ chunk-9tgt55am.js:53813-53856 placement
+//@ chunk-c0pq6qyx.js:49721-49764 placement
 function hasReplyAllowRule(toolPermissionContext) {
   return (
     hasArtifactDenyOrAskRule(toolPermissionContext, ARTIFACTS_MCP_READ_COMMENTS_TOOL, true) ||
     isReplyDeniedByRules(toolPermissionContext)
   );
 }
-//@ chunk-9tgt55am.js:53856-53906 placement
+//@ chunk-c0pq6qyx.js:49764-49814 placement
 function canPostReply(context, url, tool) {
   return (
     isCommentReadGated(context, url, tool) ||
     (isBuiltInArtifactHiddenForMcp() && isReplyDeniedByRules(context))
   );
 }
-//@ chunk-9tgt55am.js:53906-54143 placement
+//@ chunk-c0pq6qyx.js:49814-50051 placement
 /**
  * 收集决定评论自动编辑能否免询问的权限上下文：当前模式是否自动允许、自动模式是否激活、chain-on-allow、是否避免提示、分类器 deny 规则、是否有可能询问的钩子。
  */
@@ -471,7 +471,7 @@ function getAutoEditPermissionContext(tool, toolUseContext) {
       hasModuleHookingSite("tool.check", matcherTestTarget(tool), getLoadedModulesForSite("tool.check")),
   };
 }
-//@ chunk-9tgt55am.js:54143-54268 placement
+//@ chunk-c0pq6qyx.js:50051-50176 placement
 /**
  * 只有 auto 模式且激活、没有 chain-on-allow/避免提示/分类器 deny 规则/可能询问的钩子时，自动编辑才可免询问执行。
  */
@@ -485,22 +485,21 @@ function canAutoEditWithoutPrompt(autoEditPermissionContext) {
     !autoEditPermissionContext.hookMayAsk
   );
 }
-//@ chunk-9tgt55am.js:54268-54406 placement
+//@ chunk-c0pq6qyx.js:50176-50314 placement
 function canAskForReply(context, url, tool) {
   let toolPermissionContext = getToolPermissionContext(tool);
   return (
     canAutoEditWithoutPrompt(getAutoEditPermissionContext(context, tool)) &&
     tool.hookAskFloor !== true &&
     tool.requireCanUseTool !== true &&
-    getAskRuleForTool(toolPermissionContext, context) === null &&
+    findAskRuleForTool(toolPermissionContext, context) === null &&
     matchToolRule(toolPermissionContext, context, url, "ask") === null
   );
 }
 export {
-  hasReplyAllowRule,
+  canAskForReply,
   canPostReply,
   canAutoreactWithoutPrompts,
-  canAskForReply,
   isCommentAutoreactOptedIn,
   isDegradedComment,
   isFastAckEnabled,
@@ -536,5 +535,6 @@ export {
   isOchreBitternEnabled,
   hasCommentsFromOthers,
   livePageProbeHook,
+  hasReplyAllowRule,
   isArtifactScanBusy,
 };

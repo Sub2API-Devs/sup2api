@@ -1,30 +1,30 @@
-{"file":"chunk-1ny7cxrt.js","key":"@1428347","name":"searchQuery","source":"semantic","confidence":0.9,"note":"查询参数 q（≤256 字符）"}
-{"file":"chunk-2xm1rxms.js","key":"@15345","name":"ancestorResolution","source":"semantic","confidence":0.9,"note":"worktree 路径上祖先目录的解析结果，.unresolved 为未能安全解析的目录"}
-{"file":"chunk-4121qate.js","key":"@76585","name":"tierLists","source":"semantic","confidence":0.9,"note":"outermost/prepend/append 名单及其来源（from）"}
-{"file":"chunk-7nse75qx.js","key":"@645","name":"pluginError","source":"semantic","confidence":0.9,"note":"插件/LSP 错误项（type、source、error），用来生成去重键"}
-{"file":"chunk-ag5x7vhf.js","key":"@28574","name":"message","source":"semantic","confidence":0.9,"note":"判断是否是有文本内容的 assistant 消息"}
-{"file":"chunk-aqdf5t3e.js","key":"@8630","name":"session","source":"semantic","confidence":0.9,"note":"与同文件 eyt/fzn/oRo 一致：按会话取 presence 状态"}
-{"file":"chunk-aqdf5t3e.js","key":"@43250","name":"onlySlug","source":"semantic","confidence":0.9,"note":"只处理该 frameLive slug；undefined 时处理全部"}
-{"file":"chunk-bzr73sfg.js","key":"@158110","name":"cachedMeasureCount","source":"semantic","confidence":0.9,"note":"节点 _cN：测量缓存条目数"}
-{"file":"chunk-bzr73sfg.js","key":"@167173","name":"flexBasisCache","source":"semantic","confidence":0.9,"note":"节点 _fb：flex basis 缓存数组"}
-{"file":"chunk-bzr73sfg.js","key":"@213942","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
-{"file":"chunk-bzr73sfg.js","key":"@214408","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
-{"file":"chunk-bzr73sfg.js","key":"@214472","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
-{"file":"chunk-bzr73sfg.js","key":"@220819","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
-{"file":"chunk-e6aww6q8.js","key":"@119666","name":"options","source":"semantic","confidence":0.9,"note":"与 met(messages, options) 同一个选项对象"}
-{"file":"chunk-e6aww6q8.js","key":"@200032","name":"contentBlocks","source":"semantic","confidence":0.9,"note":"消息 content 规范成块数组"}
-{"file":"chunk-e6aww6q8.js","key":"@200345","name":"block","source":"semantic","confidence":0.9,"note":"逐块写入哈希"}
-{"file":"chunk-e6aww6q8.js","key":"@1966729","name":"includeTrust","source":"semantic","confidence":0.9,"note":"$on 以 n(true) 调用时带 repositories_trusted"}
-{"file":"chunk-e6aww6q8.js","key":"@1967062","name":"includeTrust","source":"semantic","confidence":0.9,"note":"同上（去掉 ask 后重发）"}
-{"file":"chunk-e6aww6q8.js","key":"@1967348","name":"trustOutcome","source":"semantic","confidence":0.9,"note":"repositories_trusted 的发送结果 sent / refused_then_retried"}
-{"file":"chunk-e6aww6q8.js","key":"@3716513","name":"hookContext","source":"semantic","confidence":0.9,"note":"取 cwd 作为 path 字段"}
-{"file":"chunk-hm0ce8vc.js","key":"@27405","name":"targetDir","source":"semantic","confidence":0.9,"note":"主机配置种子写入的目标目录"}
-{"file":"chunk-hwmsct5x.js","key":"@249297","name":"capability","source":"semantic","confidence":0.9,"note":"Foundry 能力名"}
-{"file":"chunk-n332mrkv.js","key":"@3500","name":"schemaId","source":"semantic","confidence":0.9,"note":"schema 的 $id 值"}
-{"file":"chunk-s61vbvea.js","key":"@483024","name":"parseOptions","source":"semantic","confidence":0.9,"note":"传给 settings 解析器 ak 的选项"}
-{"file":"chunk-w6rm7nhv.js","key":"@9081","name":"configPath","source":"semantic","confidence":0.9,"note":"configLoopMdPath() 的结果"}
-{"file":"chunk-x6v6jz2y.js","key":"@27208","name":"red","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
-{"file":"chunk-x6v6jz2y.js","key":"@27210","name":"green","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
-{"file":"chunk-x6v6jz2y.js","key":"@27212","name":"blue","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
-{"file":"chunk-z1n5m6nf.js","key":"@124240","name":"serverName","source":"semantic","confidence":0.9,"note":"与 Zo(serverName, serverRef, …) 一致"}
-{"file":"chunk-z1n5m6nf.js","key":"@124242","name":"serverRef","source":"semantic","confidence":0.9,"note":"与 Zo 一致"}
+{"file":"chunk-1hnjmk23.js","key":"@1450475","name":"searchQuery","source":"semantic","confidence":0.9,"note":"查询参数 q（≤256 字符）"}
+{"file":"chunk-b2dh3swb.js","key":"@15345","name":"ancestorResolution","source":"semantic","confidence":0.9,"note":"worktree 路径上祖先目录的解析结果，.unresolved 为未能安全解析的目录"}
+{"file":"chunk-j8f885h1.js","key":"@57187","name":"tierLists","source":"semantic","confidence":0.9,"note":"outermost/prepend/append 名单及其来源（from）"}
+{"file":"chunk-a8hqqf13.js","key":"@646","name":"pluginError","source":"semantic","confidence":0.9,"note":"插件/LSP 错误项（type、source、error），用来生成去重键"}
+{"file":"chunk-hnxhr3bs.js","key":"@27607","name":"message","source":"semantic","confidence":0.9,"note":"判断是否是有文本内容的 assistant 消息"}
+{"file":"chunk-tsrpnscb.js","key":"@8670","name":"session","source":"semantic","confidence":0.9,"note":"与同文件 eyt/fzn/oRo 一致：按会话取 presence 状态"}
+{"file":"chunk-tsrpnscb.js","key":"@43345","name":"onlySlug","source":"semantic","confidence":0.9,"note":"只处理该 frameLive slug；undefined 时处理全部"}
+{"file":"chunk-2avr6cej.js","key":"@157859","name":"cachedMeasureCount","source":"semantic","confidence":0.9,"note":"节点 _cN：测量缓存条目数"}
+{"file":"chunk-2avr6cej.js","key":"@166922","name":"flexBasisCache","source":"semantic","confidence":0.9,"note":"节点 _fb：flex basis 缓存数组"}
+{"file":"chunk-2avr6cej.js","key":"@213537","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
+{"file":"chunk-2avr6cej.js","key":"@214003","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
+{"file":"chunk-2avr6cej.js","key":"@214067","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
+{"file":"chunk-2avr6cej.js","key":"@220414","name":"selection","source":"semantic","confidence":0.9,"note":"选区状态对象"}
+{"file":"chunk-5xgkngpb.js","key":"@122440","name":"options","source":"semantic","confidence":0.9,"note":"与 met(messages, options) 同一个选项对象"}
+{"file":"chunk-5xgkngpb.js","key":"@198896","name":"contentBlocks","source":"semantic","confidence":0.9,"note":"消息 content 规范成块数组"}
+{"file":"chunk-5xgkngpb.js","key":"@199209","name":"block","source":"semantic","confidence":0.9,"note":"逐块写入哈希"}
+{"file":"chunk-5xgkngpb.js","key":"@2022107","name":"includeTrust","source":"semantic","confidence":0.9,"note":"$on 以 n(true) 调用时带 repositories_trusted"}
+{"file":"chunk-5xgkngpb.js","key":"@2022446","name":"includeTrust","source":"semantic","confidence":0.9,"note":"同上（去掉 ask 后重发）"}
+{"file":"chunk-5xgkngpb.js","key":"@2022735","name":"trustOutcome","source":"semantic","confidence":0.9,"note":"repositories_trusted 的发送结果 sent / refused_then_retried"}
+{"file":"chunk-5xgkngpb.js","key":"@3812222","name":"hookContext","source":"semantic","confidence":0.9,"note":"取 cwd 作为 path 字段"}
+{"file":"chunk-asf5gh8x.js","key":"@28810","name":"targetDir","source":"semantic","confidence":0.9,"note":"主机配置种子写入的目标目录"}
+{"file":"chunk-vn3g7zt8.js","key":"@253577","name":"capability","source":"semantic","confidence":0.9,"note":"Foundry 能力名"}
+{"file":"chunk-fra0jg2y.js","key":"@3500","name":"schemaId","source":"semantic","confidence":0.9,"note":"schema 的 $id 值"}
+{"file":"chunk-7jxyna5q.js","key":"@400507","name":"parseOptions","source":"semantic","confidence":0.9,"note":"传给 settings 解析器 ak 的选项"}
+{"file":"chunk-fq3fa37m.js","key":"@9394","name":"configPath","source":"semantic","confidence":0.9,"note":"configLoopMdPath() 的结果"}
+{"file":"chunk-czq1j3j2.js","key":"@1465048","name":"red","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
+{"file":"chunk-czq1j3j2.js","key":"@1465050","name":"green","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
+{"file":"chunk-czq1j3j2.js","key":"@1465052","name":"blue","source":"semantic","confidence":0.9,"note":"rgb 构造器"}
+{"file":"chunk-h44h5gdv.js","key":"@126354","name":"serverName","source":"semantic","confidence":0.9,"note":"与 Zo(serverName, serverRef, …) 一致"}
+{"file":"chunk-h44h5gdv.js","key":"@126356","name":"serverRef","source":"semantic","confidence":0.9,"note":"与 Zo 一致"}

@@ -3,9 +3,9 @@
  *
  * /plugin 插件错误展示与修复建议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/PluginErrors.tsx
- * pieces: chunk-vrb44rx7.js (3)
+ * pieces: chunk-wb51jffc.js (3)
  * attribution: fingerprint 2, layout 1
  */
 import {
@@ -33,7 +33,7 @@ import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
 import { formatDisableOrUninstall } from "./pluginUsageStats.js";
 import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 
-//@ chunk-vrb44rx7.js:126794-131623 fingerprint (2.1.88 match: formatErrorMessage, 0.762)
+//@ chunk-wb51jffc.js:126623-131604 fingerprint (2.1.88 match: formatErrorMessage, 0.744)
 function formatErrorMessage(error) {
   switch (error.type) {
     case "path-not-found":
@@ -45,7 +45,9 @@ function formatErrorMessage(error) {
         ? `${quotedPrintable(error.component)} path could not be checked: ${printableOrEmpty(error.path)} (${quotedPrintable(error.errno)})`
         : `${quotedPrintable(error.component)} path not found: ${printableOrEmpty(error.path)}`;
     case "path-traversal":
-      return `${quotedPrintable(error.component)} path escapes plugin directory: ${printableOrEmpty(error.path)}${error.reason ? ` \u2014 ${printableOrEmpty(error.reason)}` : ""}`;
+      return !error.reason && (error.component === "mcp-servers" || error.component === "lsp-servers")
+        ? `${quotedPrintable(error.component)} path not read: ${printableOrEmpty(error.path)} is absolute or has a ".." part`
+        : `${quotedPrintable(error.component)} path escapes plugin directory: ${printableOrEmpty(error.path)}${error.reason ? ` \u2014 ${printableOrEmpty(error.reason)}` : ""}`;
     case "git-auth-failed":
       return `Git ${error.authType.toUpperCase()} authentication failed for ${printableOrEmpty(error.gitUrl)}`;
     case "git-timeout":
@@ -142,12 +144,12 @@ function formatErrorMessage(error) {
   }
   return pluginErrorText(error);
 }
-//@ chunk-vrb44rx7.js:131623-131677 layout
+//@ chunk-wb51jffc.js:131604-131658 layout
 function getErrorGuidanceText(error) {
   let errorGuidance = getErrorGuidance(error);
   return errorGuidance === null ? null : stripInvisibleKeepEmoji(errorGuidance);
 }
-//@ chunk-vrb44rx7.js:131677-138059 fingerprint (2.1.88 match: getErrorGuidance, 0.632)
+//@ chunk-wb51jffc.js:131658-138258 fingerprint (2.1.88 match: getErrorGuidance, 0.621)
 function getErrorGuidance(error) {
   switch (error.type) {
     case "path-not-found":
@@ -161,7 +163,9 @@ function getErrorGuidance(error) {
     case "path-traversal":
       return error.reason
         ? "This path was skipped because it could not be confirmed inside the plugin (or, for a local marketplace, the marketplace). If the message ends with an error code such as EACCES, check that every folder and link in the path exists and is readable. Otherwise, if you maintain the plugin, replace the link with a copy of what it points to, or load the plugin from the folder that holds the real files, and rename anything with a backslash in its name; if you installed it, tell its author"
-        : 'Paths in plugin.json must not use ".." to reference files outside the plugin directory';
+        : error.component === "mcp-servers" || error.component === "lsp-servers"
+          ? 'Server file paths in the manifest or marketplace config must be relative to the plugin folder, with no ".." part. If you installed the plugin, tell its author'
+          : 'Paths in plugin.json must not use ".." to reference files outside the plugin directory';
     case "git-auth-failed":
       return error.authType === "ssh"
         ? "Configure SSH keys or use HTTPS URL instead"

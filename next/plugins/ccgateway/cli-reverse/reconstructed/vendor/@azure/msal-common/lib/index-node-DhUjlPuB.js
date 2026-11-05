@@ -1,8 +1,8 @@
 /**
  * @azure/msal-common/lib/index-node-DhUjlPuB.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-common@15.13.1
- * pieces: chunk-mrx6y2r5.js (171)
+ * pieces: chunk-b5df2wx1.js (171)
  * attribution: esm-fingerprint 131, esm-layout 25, layout 15
  */
 import { LogLevel, Logger } from "../dist/logger/Logger.mjs";
@@ -11,7 +11,7 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 2 modules closed by ../dist/logger/Logger.mjs;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("vendor/@azure/msal-common/dist/logger/Logger.mjs");
-//@ chunk-mrx6y2r5.js:90426-92176 esm-fingerprint
+//@ chunk-b5df2wx1.js:90426-92176 esm-fingerprint
 var Constants = {
   LIBRARY_NAME: "MSAL.JS",
   SKU: "msal.js.common",
@@ -77,11 +77,11 @@ var HttpStatus = {
   SERVER_ERROR_RANGE_END: 599,
   MULTI_SIDED_ERROR: 600,
 };
-//@ chunk-mrx6y2r5.js:92176-92526 esm-fingerprint
+//@ chunk-b5df2wx1.js:92176-92526 esm-fingerprint
 var OIDC_DEFAULT_SCOPES; // deferred: uses Constants of its import cycle while loading; runs once the cycle is complete
 var OIDC_SCOPES;
 var HeaderNames_2;
-deferInit("chunk-mrx6y2r5.js:92176", () => {
+deferInit("chunk-b5df2wx1.js:92176", () => {
   OIDC_DEFAULT_SCOPES = [Constants.OPENID_SCOPE, Constants.PROFILE_SCOPE, Constants.OFFLINE_ACCESS_SCOPE];
   OIDC_SCOPES = [...OIDC_DEFAULT_SCOPES, Constants.EMAIL_SCOPE];
   HeaderNames_2 = {
@@ -95,7 +95,7 @@ deferInit("chunk-mrx6y2r5.js:92176", () => {
     X_MS_HTTP_VERSION: "x-ms-httpver",
   };
 });
-//@ chunk-mrx6y2r5.js:92526-92910 esm-fingerprint
+//@ chunk-b5df2wx1.js:92526-92910 esm-fingerprint
 var AADAuthorityConstants = {
   COMMON: "common",
   ORGANIZATIONS: "organizations",
@@ -122,7 +122,7 @@ var OAuthResponseType = {
   IDTOKEN_TOKEN: "id_token token",
   IDTOKEN_TOKEN_REFRESHTOKEN: "id_token token refresh_token",
 };
-//@ chunk-mrx6y2r5.js:92910-93571 esm-fingerprint
+//@ chunk-b5df2wx1.js:92910-93571 esm-fingerprint
 var ResponseModes = {
   QUERY: "query",
   FRAGMENT: "fragment",
@@ -153,7 +153,7 @@ var CredentialType = {
   ACCESS_TOKEN_WITH_AUTH_SCHEME: "AccessToken_With_AuthScheme",
   REFRESH_TOKEN: "RefreshToken",
 };
-//@ chunk-mrx6y2r5.js:93571-94635 esm-fingerprint
+//@ chunk-b5df2wx1.js:93571-94635 esm-fingerprint
 var APP_METADATA = "appmetadata";
 var CLIENT_INFO = "client_info";
 var THE_FAMILY_ID = "1";
@@ -215,17 +215,17 @@ var CacheOutcome = {
   CACHED_ACCESS_TOKEN_EXPIRED: "3",
   PROACTIVELY_REFRESHED: "4",
 };
-//@ chunk-mrx6y2r5.js:94635-94690 esm-layout
+//@ chunk-b5df2wx1.js:94635-94690 esm-layout
 var DEFAULT_TOKEN_RENEWAL_OFFSET_SEC = 300;
 var EncodingTypes = {
   BASE64: "base64",
   HEX: "hex",
   UTF8: "utf-8",
 };
-//@ chunk-mrx6y2r5.js:94735-94786 esm-fingerprint
+//@ chunk-b5df2wx1.js:94735-94786 esm-fingerprint
 var unexpectedError = "unexpected_error";
 var postRequestFailed = "post_request_failed";
-//@ chunk-mrx6y2r5.js:94831-95106 esm-fingerprint
+//@ chunk-b5df2wx1.js:94831-95106 esm-fingerprint
 var AuthErrorMessages = {
   [unexpectedError]: "Unexpected error in authentication.",
   [postRequestFailed]:
@@ -241,7 +241,7 @@ var AuthErrorMessage = {
     desc: AuthErrorMessages[postRequestFailed],
   },
 };
-//@ chunk-mrx6y2r5.js:95106-95384 esm-fingerprint
+//@ chunk-b5df2wx1.js:95106-95384 esm-fingerprint
 class AuthError extends Error {
   constructor(errorCode, errorMessage, suberror) {
     let errorString = errorMessage ? `${errorCode}: ${errorMessage}` : errorCode;
@@ -256,14 +256,14 @@ class AuthError extends Error {
     this.correlationId = correlationId;
   }
 }
-//@ chunk-mrx6y2r5.js:95384-95441 esm-layout
+//@ chunk-b5df2wx1.js:95384-95441 esm-layout
 function createAuthError(code, additionalMessage) {
   return new AuthError(
     code,
     additionalMessage ? `${AuthErrorMessages[code]} ${additionalMessage}` : AuthErrorMessages[code],
   );
 }
-//@ chunk-mrx6y2r5.js:95486-96737 esm-fingerprint
+//@ chunk-b5df2wx1.js:95486-96737 esm-fingerprint
 var clientInfoDecodingError = "client_info_decoding_error";
 var clientInfoEmptyError = "client_info_empty_error";
 var TOKEN_PARSING_ERROR = "token_parsing_error";
@@ -308,7 +308,7 @@ var userCanceled = "user_canceled";
 var missingTenantIdError = "missing_tenant_id_error";
 var methodNotImplemented = "method_not_implemented";
 var nestedAppAuthBridgeDisabled = "nested_app_auth_bridge_disabled";
-//@ chunk-mrx6y2r5.js:96782-101913 esm-fingerprint
+//@ chunk-b5df2wx1.js:96782-101913 esm-fingerprint
 var ClientAuthErrorMessages_2 = {
   [clientInfoDecodingError]: "The client info could not be parsed/decoded correctly",
   [clientInfoEmptyError]: "The client info was empty",
@@ -544,9 +544,9 @@ var ClientAuthErrorMessage = {
     desc: ClientAuthErrorMessages_2[nestedAppAuthBridgeDisabled],
   },
 };
-//@ chunk-mrx6y2r5.js:101913-102051 esm-fingerprint
+//@ chunk-b5df2wx1.js:101913-102051 esm-fingerprint
 let ClientAuthError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:101913", () => {
+deferInit("chunk-b5df2wx1.js:101913", () => {
   ClientAuthError = class ClientAuthError extends AuthError {
     constructor(errorCode, additionalMessage) {
       super(
@@ -560,11 +560,11 @@ deferInit("chunk-mrx6y2r5.js:101913", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:102051-102086 esm-layout
+//@ chunk-b5df2wx1.js:102051-102086 esm-layout
 function createClientAuthError(errorCode, additionalMessage) {
   return new ClientAuthError(errorCode, additionalMessage);
 }
-//@ chunk-mrx6y2r5.js:102131-102469 esm-fingerprint
+//@ chunk-b5df2wx1.js:102131-102469 esm-fingerprint
 var DEFAULT_CRYPTO_IMPLEMENTATION = {
   createNewGuid: () => {
     throw createClientAuthError(methodNotImplemented);
@@ -597,10 +597,10 @@ var DEFAULT_CRYPTO_IMPLEMENTATION = {
     throw createClientAuthError(methodNotImplemented);
   },
 };
-//@ chunk-mrx6y2r5.js:104757-104798 esm-fingerprint
+//@ chunk-b5df2wx1.js:104757-104798 esm-fingerprint
 var name_2 = "@azure/msal-common";
 var version_2 = "15.13.1";
-//@ chunk-mrx6y2r5.js:104843-105098 esm-fingerprint
+//@ chunk-b5df2wx1.js:104843-105098 esm-fingerprint
 var AzureCloudInstance = {
   None: "none",
   AzurePublic: "https://login.microsoftonline.com",
@@ -609,7 +609,7 @@ var AzureCloudInstance = {
   AzureGermany: "https://login.microsoftonline.de",
   AzureUsGovernment: "https://login.microsoftonline.us",
 };
-//@ chunk-mrx6y2r5.js:105143-105815 esm-fingerprint
+//@ chunk-b5df2wx1.js:105143-105815 esm-fingerprint
 var redirectUriEmpty = "redirect_uri_empty";
 var claimsRequestParsingError = "claims_request_parsing_error";
 var authorityUriInsecure = "authority_uri_insecure";
@@ -633,7 +633,7 @@ var cannotAllowPlatformBroker = "cannot_allow_platform_broker";
 var authorityMismatch = "authority_mismatch";
 var invalidRequestMethodForEAR = "invalid_request_method_for_EAR";
 var invalidAuthorizePostBodyParameters = "invalid_authorize_post_body_parameters";
-//@ chunk-mrx6y2r5.js:105860-109541 esm-fingerprint
+//@ chunk-b5df2wx1.js:105860-109541 esm-fingerprint
 var ClientConfigurationErrorMessages = {
   [redirectUriEmpty]: "A redirect URI is required for all calls, and none has been set.",
   [claimsRequestParsingError]: "Could not parse the given claims request object.",
@@ -768,9 +768,9 @@ var ClientConfigurationErrorMessage = {
     desc: ClientConfigurationErrorMessages[invalidRequestMethodForEAR],
   },
 };
-//@ chunk-mrx6y2r5.js:109541-109669 esm-fingerprint
+//@ chunk-b5df2wx1.js:109541-109669 esm-fingerprint
 let ClientConfigurationError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:109541", () => {
+deferInit("chunk-b5df2wx1.js:109541", () => {
   ClientConfigurationError = class ClientConfigurationError extends AuthError {
     constructor(errorCode) {
       super(errorCode, ClientConfigurationErrorMessages[errorCode]);
@@ -779,11 +779,11 @@ deferInit("chunk-mrx6y2r5.js:109541", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:109669-109700 esm-layout
+//@ chunk-b5df2wx1.js:109669-109700 esm-layout
 function createClientConfigurationError(errorCode) {
   return new ClientConfigurationError(errorCode);
 }
-//@ chunk-mrx6y2r5.js:109745-110494 esm-fingerprint
+//@ chunk-b5df2wx1.js:109745-110494 esm-fingerprint
 class StringUtils {
   static isEmptyObj(strObj) {
     if (strObj)
@@ -830,7 +830,7 @@ class StringUtils {
     );
   }
 }
-//@ chunk-mrx6y2r5.js:110539-112178 esm-fingerprint
+//@ chunk-b5df2wx1.js:110539-112178 esm-fingerprint
 class ScopeSet {
   constructor(inputScopes) {
     let scopes = inputScopes ? StringUtils.trimArrayEntries([...inputScopes]) : [];
@@ -920,7 +920,7 @@ class ScopeSet {
     return this.printScopes().toLowerCase();
   }
 }
-//@ chunk-mrx6y2r5.js:112223-112316 esm-layout
+//@ chunk-b5df2wx1.js:112223-112316 esm-layout
 function buildClientInfo(clientInfo, base64Decode) {
   if (!clientInfo) throw createClientAuthError(clientInfoEmptyError);
   try {
@@ -930,7 +930,7 @@ function buildClientInfo(clientInfo, base64Decode) {
     throw createClientAuthError(clientInfoDecodingError);
   }
 }
-//@ chunk-mrx6y2r5.js:112316-112444 esm-fingerprint
+//@ chunk-b5df2wx1.js:112316-112444 esm-fingerprint
 function buildClientInfoFromHomeAccountId(homeAccountId) {
   if (!homeAccountId) throw createClientAuthError(clientInfoDecodingError);
   let clientInfoParts = homeAccountId.split(Separators.CLIENT_INFO_SEPARATOR, 2);
@@ -939,11 +939,11 @@ function buildClientInfoFromHomeAccountId(homeAccountId) {
     utid: clientInfoParts.length < 2 ? Constants.EMPTY_STRING : clientInfoParts[1],
   };
 }
-//@ chunk-mrx6y2r5.js:112489-112542 esm-layout
+//@ chunk-b5df2wx1.js:112489-112542 esm-layout
 function tenantIdMatchesHomeTenant(tenantId, homeAccountId) {
   return !!tenantId && !!homeAccountId && tenantId === homeAccountId.split(".")[1];
 }
-//@ chunk-mrx6y2r5.js:112542-112842 esm-fingerprint
+//@ chunk-b5df2wx1.js:112542-112842 esm-fingerprint
 function buildTenantProfile(homeAccountId, localAccountId, tenantId, idTokenClaims) {
   if (idTokenClaims) {
     let { oid, sub, tid, name, tfp, acr, preferred_username, upn, login_hint } = idTokenClaims;
@@ -964,7 +964,7 @@ function buildTenantProfile(homeAccountId, localAccountId, tenantId, idTokenClai
       isHomeTenant: tenantIdMatchesHomeTenant(tenantId, homeAccountId),
     };
 }
-//@ chunk-mrx6y2r5.js:112842-113057 esm-fingerprint
+//@ chunk-b5df2wx1.js:112842-113057 esm-fingerprint
 function updateAccountTenantProfileData(baseAccountInfo, tenantProfile, idTokenClaims, idToken) {
   let updatedAccountInfo = baseAccountInfo;
   if (tenantProfile) {
@@ -991,25 +991,25 @@ function updateAccountTenantProfileData(baseAccountInfo, tenantProfile, idTokenC
   }
   return updatedAccountInfo;
 }
-//@ chunk-mrx6y2r5.js:113102-113142 esm-fingerprint
+//@ chunk-b5df2wx1.js:113102-113142 esm-fingerprint
 var AuthorityType = {
   Default: 0,
   Adfs: 1,
   Dsts: 2,
   Ciam: 3,
 };
-//@ chunk-mrx6y2r5.js:113187-113252 esm-fingerprint
+//@ chunk-b5df2wx1.js:113187-113252 esm-fingerprint
 function getTenantIdFromIdTokenClaims(idTokenClaims) {
   if (idTokenClaims) return idTokenClaims.tid || idTokenClaims.tfp || idTokenClaims.acr || null;
   return null;
 }
-//@ chunk-mrx6y2r5.js:113297-113338 esm-fingerprint
+//@ chunk-b5df2wx1.js:113297-113338 esm-fingerprint
 var ProtocolMode = {
   AAD: "AAD",
   OIDC: "OIDC",
   EAR: "EAR",
 };
-//@ chunk-mrx6y2r5.js:113383-116143 esm-fingerprint
+//@ chunk-b5df2wx1.js:113383-116143 esm-fingerprint
 class AccountEntity {
   static getAccountInfo(accountEntity) {
     return {
@@ -1132,7 +1132,7 @@ class AccountEntity {
     );
   }
 }
-//@ chunk-mrx6y2r5.js:116188-116275 esm-layout
+//@ chunk-b5df2wx1.js:116188-116275 esm-layout
 function extractTokenClaims(authToken, base64Decode) {
   let claims = getJWSPayload(authToken);
   try {
@@ -1142,31 +1142,31 @@ function extractTokenClaims(authToken, base64Decode) {
     throw createClientAuthError(TOKEN_PARSING_ERROR);
   }
 }
-//@ chunk-mrx6y2r5.js:116275-116412 esm-fingerprint
+//@ chunk-b5df2wx1.js:116275-116412 esm-fingerprint
 function isKmsi(idTokenClaims) {
   if (!idTokenClaims.signin_state) return false;
   let kmsiClaims = ["kmsi", "dvc_dmjd"];
   return idTokenClaims.signin_state.some((value) => kmsiClaims.includes(value.trim().toLowerCase()));
 }
-//@ chunk-mrx6y2r5.js:116412-116540 esm-fingerprint
+//@ chunk-b5df2wx1.js:116412-116540 esm-fingerprint
 function getJWSPayload(authToken) {
   if (!authToken) throw createClientAuthError(nullOrEmptyToken);
   let match = /^([^\.\s]*)\.([^\.\s]+)\.([^\.\s]*)$/.exec(authToken);
   if (!match || match.length < 4) throw createClientAuthError(TOKEN_PARSING_ERROR);
   return match[2];
 }
-//@ chunk-mrx6y2r5.js:116540-116601 esm-fingerprint
+//@ chunk-b5df2wx1.js:116540-116601 esm-fingerprint
 function checkMaxAge(authTime, maxAge) {
   if (maxAge === 0 || Date.now() - 300000 > authTime + maxAge) throw createClientAuthError(maxAgeTranspired);
 }
-//@ chunk-mrx6y2r5.js:116646-116781 esm-fingerprint
+//@ chunk-b5df2wx1.js:116646-116781 esm-fingerprint
 function stripLeadingHashOrQuery(responseString) {
   if (responseString.startsWith("#/")) return responseString.substring(2);
   else if (responseString.startsWith("#") || responseString.startsWith("?"))
     return responseString.substring(1);
   return responseString;
 }
-//@ chunk-mrx6y2r5.js:116781-116995 esm-fingerprint
+//@ chunk-b5df2wx1.js:116781-116995 esm-fingerprint
 function getDeserializedResponse(responseString) {
   if (!responseString || responseString.indexOf("=") < 0) return null;
   try {
@@ -1185,7 +1185,7 @@ function getDeserializedResponse(responseString) {
   }
   return null;
 }
-//@ chunk-mrx6y2r5.js:116995-117147 esm-fingerprint
+//@ chunk-b5df2wx1.js:116995-117147 esm-fingerprint
 function mapToQueryString(parameters, encodeExtraParams = true, extraQueryParameters) {
   let queryParameterArray = [];
   parameters.forEach((value, key) => {
@@ -1195,7 +1195,7 @@ function mapToQueryString(parameters, encodeExtraParams = true, extraQueryParame
   });
   return queryParameterArray.join("&");
 }
-//@ chunk-mrx6y2r5.js:117192-118913 esm-fingerprint
+//@ chunk-b5df2wx1.js:117192-118913 esm-fingerprint
 class UrlString {
   get urlString() {
     return this._urlString;
@@ -1287,12 +1287,12 @@ class UrlString {
     return !!getDeserializedResponse(response);
   }
 }
-//@ chunk-mrx6y2r5.js:118958-121125 esm-fingerprint
+//@ chunk-b5df2wx1.js:118958-121125 esm-fingerprint
 var rawMetdataJSON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EndpointMetadata;
 var InstanceDiscoveryMetadata;
 var InstanceDiscoveryMetadataAliases;
-deferInit("chunk-mrx6y2r5.js:118958", () => {
+deferInit("chunk-b5df2wx1.js:118958", () => {
   rawMetdataJSON = {
     endpointMetadata: {
       "login.microsoftonline.com": {
@@ -1356,16 +1356,16 @@ deferInit("chunk-mrx6y2r5.js:118958", () => {
     rawMetdataJSON);
   InstanceDiscoveryMetadataAliases = new Set();
 });
-//@ chunk-mrx6y2r5.js:121125-121189 esm-fingerprint
+//@ chunk-b5df2wx1.js:121125-121189 esm-fingerprint
 // deferred: uses rawMetdataJSON of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:121125", () => {
+deferInit("chunk-b5df2wx1.js:121125", () => {
   InstanceDiscoveryMetadata.metadata.forEach((metadataEntry) => {
     metadataEntry.aliases.forEach((alias) => {
       InstanceDiscoveryMetadataAliases.add(alias);
     });
   });
 });
-//@ chunk-mrx6y2r5.js:121189-121420 esm-fingerprint
+//@ chunk-b5df2wx1.js:121189-121420 esm-fingerprint
 function getAliasesFromStaticSources(staticAuthorityOptions, logger) {
   let staticAliases;
   let canonicalAuthority = staticAuthorityOptions.canonicalAuthority;
@@ -1388,7 +1388,7 @@ function getAliasesFromStaticSources(staticAuthorityOptions, logger) {
   }
   return staticAliases || [];
 }
-//@ chunk-mrx6y2r5.js:121420-121739 esm-fingerprint
+//@ chunk-b5df2wx1.js:121420-121739 esm-fingerprint
 function getAliasesFromMetadata(authorityHost, cloudDiscoveryMetadata, source, logger) {
   logger?.trace(`getAliasesFromMetadata called with source: ${source}`);
   if (authorityHost && cloudDiscoveryMetadata) {
@@ -1400,11 +1400,11 @@ function getAliasesFromMetadata(authorityHost, cloudDiscoveryMetadata, source, l
   }
   return null;
 }
-//@ chunk-mrx6y2r5.js:121739-121779 esm-fingerprint
+//@ chunk-b5df2wx1.js:121739-121779 esm-fingerprint
 function getCloudDiscoveryMetadataFromHardcodedValues(authorityHost) {
   return getCloudDiscoveryMetadataFromNetworkResponse(InstanceDiscoveryMetadata.metadata, authorityHost);
 }
-//@ chunk-mrx6y2r5.js:121779-121881 esm-fingerprint
+//@ chunk-b5df2wx1.js:121779-121881 esm-fingerprint
 function getCloudDiscoveryMetadataFromNetworkResponse(response, authorityHost) {
   for (let i = 0; i < response.length; i++) {
     let metadata = response[i];
@@ -1412,17 +1412,17 @@ function getCloudDiscoveryMetadataFromNetworkResponse(response, authorityHost) {
   }
   return null;
 }
-//@ chunk-mrx6y2r5.js:121926-121981 esm-fingerprint
+//@ chunk-b5df2wx1.js:121926-121981 esm-fingerprint
 var CACHE_QUOTA_EXCEEDED = "cache_quota_exceeded";
 var CACHE_ERROR_UNKNOWN = "cache_error_unknown";
-//@ chunk-mrx6y2r5.js:122026-122134 esm-fingerprint
+//@ chunk-b5df2wx1.js:122026-122134 esm-fingerprint
 var ClientAuthErrorMessages = {
   [CACHE_QUOTA_EXCEEDED]: "Exceeded cache storage capacity.",
   [CACHE_ERROR_UNKNOWN]: "Unexpected error occurred when using cache storage.",
 };
-//@ chunk-mrx6y2r5.js:122134-122322 esm-fingerprint
+//@ chunk-b5df2wx1.js:122134-122322 esm-fingerprint
 let CacheError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:122134", () => {
+deferInit("chunk-b5df2wx1.js:122134", () => {
   CacheError = class CacheError extends AuthError {
     constructor(errorCode, message) {
       let message_2 =
@@ -1438,7 +1438,7 @@ deferInit("chunk-mrx6y2r5.js:122134", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:122322-122549 esm-fingerprint
+//@ chunk-b5df2wx1.js:122322-122549 esm-fingerprint
 function createCacheError(error) {
   if (!(error instanceof Error)) return new CacheError(CACHE_ERROR_UNKNOWN);
   if (
@@ -1449,7 +1449,7 @@ function createCacheError(error) {
     return new CacheError(CACHE_QUOTA_EXCEEDED);
   else return new CacheError(error.name, error.message);
 }
-//@ chunk-mrx6y2r5.js:122594-135844 esm-fingerprint
+//@ chunk-b5df2wx1.js:122594-135844 esm-fingerprint
 class CacheManager {
   constructor(clientId, cryptoImpl, logger, performanceClient, staticAuthorityOptions) {
     this.clientId = clientId;
@@ -2053,9 +2053,9 @@ class CacheManager {
     return obj;
   }
 }
-//@ chunk-mrx6y2r5.js:135844-136615 esm-fingerprint
+//@ chunk-b5df2wx1.js:135844-136615 esm-fingerprint
 let DefaultStorageClass; // deferred: uses CacheManager of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:135844", () => {
+deferInit("chunk-b5df2wx1.js:135844", () => {
   DefaultStorageClass = class DefaultStorageClass extends CacheManager {
     async setAccount() {
       throw createClientAuthError(methodNotImplemented);
@@ -2128,11 +2128,11 @@ deferInit("chunk-mrx6y2r5.js:135844", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:136660-147470 esm-fingerprint
+//@ chunk-b5df2wx1.js:136660-147470 esm-fingerprint
 var PerformanceEvents; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PerformanceEventAbbreviations;
 var PerformanceEventStatus;
-deferInit("chunk-mrx6y2r5.js:136660", () => {
+deferInit("chunk-b5df2wx1.js:136660", () => {
   PerformanceEvents = {
     AcquireTokenByCode: "acquireTokenByCode",
     AcquireTokenByRefreshToken: "acquireTokenByRefreshToken",
@@ -2340,7 +2340,7 @@ deferInit("chunk-mrx6y2r5.js:136660", () => {
     Completed: 2,
   };
 });
-//@ chunk-mrx6y2r5.js:147515-147606 esm-fingerprint
+//@ chunk-b5df2wx1.js:147515-147606 esm-fingerprint
 class StubPerformanceMeasurement {
   startMeasurement() {
     return;
@@ -2352,7 +2352,7 @@ class StubPerformanceMeasurement {
     return null;
   }
 }
-//@ chunk-mrx6y2r5.js:147606-148274 esm-fingerprint
+//@ chunk-b5df2wx1.js:147606-148274 esm-fingerprint
 class StubPerformanceClient {
   generateId() {
     return "callback-id";
@@ -2414,7 +2414,7 @@ class StubPerformanceClient {
     return;
   }
 }
-//@ chunk-mrx6y2r5.js:148319-148825 esm-fingerprint
+//@ chunk-b5df2wx1.js:148319-148825 esm-fingerprint
 var DEFAULT_SYSTEM_OPTIONS_2; // deferred: uses LogLevel (../dist/logger/Logger.mjs) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_LOGGER_OPTIONS;
 var DEFAULT_CACHE_OPTIONS_2;
@@ -2423,7 +2423,7 @@ var DEFAULT_LIBRARY_INFO;
 var DEFAULT_CLIENT_CREDENTIALS;
 var DEFAULT_AZURE_CLOUD_OPTIONS;
 var DEFAULT_TELEMETRY_OPTIONS_2;
-deferInit("chunk-mrx6y2r5.js:148319", () => {
+deferInit("chunk-b5df2wx1.js:148319", () => {
   DEFAULT_SYSTEM_OPTIONS_2 = {
     tokenRenewalOffsetSeconds: DEFAULT_TOKEN_RENEWAL_OFFSET_SEC,
     preventCorsPreflight: false,
@@ -2466,7 +2466,7 @@ deferInit("chunk-mrx6y2r5.js:148319", () => {
     },
   };
 });
-//@ chunk-mrx6y2r5.js:148825-149441 esm-fingerprint
+//@ chunk-b5df2wx1.js:148825-149441 esm-fingerprint
 function buildClientConfiguration({
   authOptions: userAuthOptions,
   systemOptions: userSystemOptions,
@@ -2521,7 +2521,7 @@ function buildClientConfiguration({
     serializableCache: serializableCache || null,
   };
 }
-//@ chunk-mrx6y2r5.js:149441-149585 esm-fingerprint
+//@ chunk-b5df2wx1.js:149441-149585 esm-fingerprint
 function buildAuthOptions(userAuthOptions) {
   return {
     clientCapabilities: [],
@@ -2532,16 +2532,16 @@ function buildAuthOptions(userAuthOptions) {
     ...userAuthOptions,
   };
 }
-//@ chunk-mrx6y2r5.js:149585-149662 esm-fingerprint
+//@ chunk-b5df2wx1.js:149585-149662 esm-fingerprint
 function isOidcProtocolMode(config) {
   return config.authOptions.authority.options.protocolMode === ProtocolMode.OIDC;
 }
-//@ chunk-mrx6y2r5.js:149707-149760 esm-fingerprint
+//@ chunk-b5df2wx1.js:149707-149760 esm-fingerprint
 var CcsCredentialType = {
   HOME_ACCOUNT_ID: "home_account_id",
   UPN: "UPN",
 };
-//@ chunk-mrx6y2r5.js:149805-149919 esm-fingerprint
+//@ chunk-b5df2wx1.js:149805-149919 esm-fingerprint
 var CLIENT_ID = "client_id";
 var REDIRECT_URI = "redirect_uri";
 var RESPONSE_TYPE = "response_type";
@@ -2549,13 +2549,13 @@ var RESPONSE_MODE = "response_mode";
 var GRANT_TYPE = "grant_type";
 var CLAIMS = "claims";
 var SCOPE = "scope";
-//@ chunk-mrx6y2r5.js:149919-149942 esm-fingerprint
+//@ chunk-b5df2wx1.js:149919-149942 esm-fingerprint
 var REFRESH_TOKEN = "refresh_token";
-//@ chunk-mrx6y2r5.js:149942-149980 esm-fingerprint
+//@ chunk-b5df2wx1.js:149942-149980 esm-fingerprint
 var STATE = "state";
 var NONCE = "nonce";
 var PROMPT = "prompt";
-//@ chunk-mrx6y2r5.js:149980-150492 esm-fingerprint
+//@ chunk-b5df2wx1.js:149980-150492 esm-fingerprint
 var CODE = "code";
 var CODE_CHALLENGE = "code_challenge";
 var CODE_CHALLENGE_METHOD = "code_challenge_method";
@@ -2581,9 +2581,9 @@ var REQ_CNF = "req_cnf";
 var ASSERTION = "assertion";
 var REQUESTED_TOKEN_USE = "requested_token_use";
 var ON_BEHALF_OF = "on_behalf_of";
-//@ chunk-mrx6y2r5.js:150492-150517 esm-fingerprint
+//@ chunk-b5df2wx1.js:150492-150517 esm-fingerprint
 var RETURN_SPA_CODE = "return_spa_code";
-//@ chunk-mrx6y2r5.js:150517-150664 esm-fingerprint
+//@ chunk-b5df2wx1.js:150517-150664 esm-fingerprint
 var LOGOUT_HINT = "logout_hint";
 var SID = "sid";
 var LOGIN_HINT = "login_hint";
@@ -2592,7 +2592,7 @@ var X_CLIENT_XTRA_SKU = "x-client-xtra-sku";
 var BRK_CLIENT_ID = "brk_client_id";
 var BRK_REDIRECT_URI = "brk_redirect_uri";
 var INSTANCE_AWARE = "instance_aware";
-//@ chunk-mrx6y2r5.js:150709-150840 esm-fingerprint
+//@ chunk-b5df2wx1.js:150709-150840 esm-fingerprint
 function instrumentBrokerParams(parameters, correlationId, performanceClient) {
   if (!correlationId) return;
   let embeddedClientId = parameters.get(CLIENT_ID);
@@ -2605,15 +2605,15 @@ function instrumentBrokerParams(parameters, correlationId, performanceClient) {
       correlationId,
     );
 }
-//@ chunk-mrx6y2r5.js:150840-150869 esm-layout
+//@ chunk-b5df2wx1.js:150840-150869 esm-layout
 function addResponseType(parameters, responseType) {
   parameters.set(RESPONSE_TYPE, responseType);
 }
-//@ chunk-mrx6y2r5.js:150869-150909 esm-fingerprint
+//@ chunk-b5df2wx1.js:150869-150909 esm-fingerprint
 function addResponseMode(parameters, responseMode) {
   parameters.set(RESPONSE_MODE, responseMode ? responseMode : ResponseModes.QUERY);
 }
-//@ chunk-mrx6y2r5.js:150909-151072 esm-fingerprint
+//@ chunk-b5df2wx1.js:150909-151072 esm-fingerprint
 function addScopes(parameters, scopes, addOidcScopes = true, defaultScopes = OIDC_DEFAULT_SCOPES) {
   if (addOidcScopes && !defaultScopes.includes("openid") && !scopes.includes("openid"))
     defaultScopes.push("openid");
@@ -2621,43 +2621,43 @@ function addScopes(parameters, scopes, addOidcScopes = true, defaultScopes = OID
   let scopeSet = new ScopeSet(requestScopes);
   parameters.set(SCOPE, scopeSet.printScopes());
 }
-//@ chunk-mrx6y2r5.js:151072-151101 esm-layout
+//@ chunk-b5df2wx1.js:151072-151101 esm-layout
 function addClientId(parameters, clientId) {
   parameters.set(CLIENT_ID, clientId);
 }
-//@ chunk-mrx6y2r5.js:151101-151130 esm-layout
+//@ chunk-b5df2wx1.js:151101-151130 esm-layout
 function addRedirectUri(parameters, redirectUri) {
   parameters.set(REDIRECT_URI, redirectUri);
 }
-//@ chunk-mrx6y2r5.js:151130-151159 esm-layout
+//@ chunk-b5df2wx1.js:151130-151159 esm-layout
 function addResponseType_2(parameters, postLogoutRedirectUri) {
   parameters.set(POST_LOGOUT_REDIRECT_URI, postLogoutRedirectUri);
 }
-//@ chunk-mrx6y2r5.js:151159-151188 esm-layout
+//@ chunk-b5df2wx1.js:151159-151188 esm-layout
 function addResponseType_3(parameters, idTokenHint) {
   parameters.set(ID_TOKEN_HINT, idTokenHint);
 }
-//@ chunk-mrx6y2r5.js:151188-151217 esm-layout
+//@ chunk-b5df2wx1.js:151188-151217 esm-layout
 function addResponseType_4(parameters, domainHint) {
   parameters.set(DOMAIN_HINT, domainHint);
 }
-//@ chunk-mrx6y2r5.js:151217-151246 esm-layout
+//@ chunk-b5df2wx1.js:151217-151246 esm-layout
 function addLoginHint(parameters, responseType) {
   parameters.set(LOGIN_HINT, responseType);
 }
-//@ chunk-mrx6y2r5.js:151246-151294 esm-fingerprint
+//@ chunk-b5df2wx1.js:151246-151294 esm-fingerprint
 function addCcsUpn(parameters, loginHint) {
   parameters.set(HeaderNames_2.CCS_HEADER, `UPN:${loginHint}`);
 }
-//@ chunk-mrx6y2r5.js:151294-151356 esm-fingerprint
+//@ chunk-b5df2wx1.js:151294-151356 esm-fingerprint
 function addCcsOid(parameters, clientInfo) {
   parameters.set(HeaderNames_2.CCS_HEADER, `Oid:${clientInfo.uid}@${clientInfo.utid}`);
 }
-//@ chunk-mrx6y2r5.js:151356-151385 esm-layout
+//@ chunk-b5df2wx1.js:151356-151385 esm-layout
 function addSid(parameters, responseType) {
   parameters.set(SID, responseType);
 }
-//@ chunk-mrx6y2r5.js:151385-151469 esm-fingerprint
+//@ chunk-b5df2wx1.js:151385-151469 esm-fingerprint
 function addClaims(parameters, claims, clientCapabilities) {
   let claims_2 = addClientCapabilitiesToClaims(claims, clientCapabilities);
   try {
@@ -2667,96 +2667,96 @@ function addClaims(parameters, claims, clientCapabilities) {
   }
   parameters.set(CLAIMS, claims_2);
 }
-//@ chunk-mrx6y2r5.js:151469-151498 esm-layout
+//@ chunk-b5df2wx1.js:151469-151498 esm-layout
 function addCorrelationId(parameters, correlationId) {
   parameters.set(CLIENT_REQUEST_ID, correlationId);
 }
-//@ chunk-mrx6y2r5.js:151498-151599 esm-fingerprint
+//@ chunk-b5df2wx1.js:151498-151599 esm-fingerprint
 function addLibraryInfo(parameters, libraryInfo) {
   parameters.set(X_CLIENT_SKU, libraryInfo.sku);
   parameters.set(X_CLIENT_VER, libraryInfo.version);
   if (libraryInfo.os) parameters.set(X_CLIENT_OS, libraryInfo.os);
   if (libraryInfo.cpu) parameters.set(X_CLIENT_CPU, libraryInfo.cpu);
 }
-//@ chunk-mrx6y2r5.js:151599-151690 esm-fingerprint
+//@ chunk-b5df2wx1.js:151599-151690 esm-fingerprint
 function addApplicationTelemetry(parameters, appTelemetry) {
   if (appTelemetry?.appName) parameters.set(X_APP_NAME, appTelemetry.appName);
   if (appTelemetry?.appVersion) parameters.set(X_APP_VER, appTelemetry.appVersion);
 }
-//@ chunk-mrx6y2r5.js:151690-151719 layout
+//@ chunk-b5df2wx1.js:151690-151719 layout
 function addResponseType_5(parameters, prompt) {
   parameters.set(PROMPT, prompt);
 }
-//@ chunk-mrx6y2r5.js:151719-151753 layout
+//@ chunk-b5df2wx1.js:151719-151753 layout
 function addState(parameters, state) {
   if (state) parameters.set(STATE, state);
 }
-//@ chunk-mrx6y2r5.js:151753-151782 layout
+//@ chunk-b5df2wx1.js:151753-151782 layout
 function addResponseType_6(parameters, nonce) {
   parameters.set(NONCE, nonce);
 }
-//@ chunk-mrx6y2r5.js:151782-151850 layout
+//@ chunk-b5df2wx1.js:151782-151850 layout
 function addCodeChallengeParams(parameters, codeChallenge, codeChallengeMethod) {
   if (codeChallenge && codeChallengeMethod) {
     parameters.set(CODE_CHALLENGE, codeChallenge);
     parameters.set(CODE_CHALLENGE_METHOD, codeChallengeMethod);
   } else throw createClientConfigurationError(pkceParamsMissing);
 }
-//@ chunk-mrx6y2r5.js:151850-151879 layout
+//@ chunk-b5df2wx1.js:151850-151879 layout
 function addResponseType_7(parameters, code) {
   parameters.set(CODE, code);
 }
-//@ chunk-mrx6y2r5.js:151879-151908 layout
+//@ chunk-b5df2wx1.js:151879-151908 layout
 function addResponseType_8(parameters, deviceCode) {
   parameters.set(DEVICE_CODE, deviceCode);
 }
-//@ chunk-mrx6y2r5.js:151908-151937 layout
+//@ chunk-b5df2wx1.js:151908-151937 layout
 function addResponseType_9(parameters, refreshToken) {
   parameters.set(REFRESH_TOKEN, refreshToken);
 }
-//@ chunk-mrx6y2r5.js:151937-151966 layout
+//@ chunk-b5df2wx1.js:151937-151966 layout
 function addResponseType_10(parameters, codeVerifier) {
   parameters.set(CODE_VERIFIER, codeVerifier);
 }
-//@ chunk-mrx6y2r5.js:151966-151995 layout
+//@ chunk-b5df2wx1.js:151966-151995 layout
 function addClientSecret(parameters, clientSecret) {
   parameters.set(CLIENT_SECRET, clientSecret);
 }
-//@ chunk-mrx6y2r5.js:151995-152029 layout
+//@ chunk-b5df2wx1.js:151995-152029 layout
 function addClientAssertion(parameters, clientAssertion) {
   if (clientAssertion) parameters.set(CLIENT_ASSERTION, clientAssertion);
 }
-//@ chunk-mrx6y2r5.js:152029-152063 layout
+//@ chunk-b5df2wx1.js:152029-152063 layout
 function addClientAssertionType(parameters, assertionType) {
   if (assertionType) parameters.set(CLIENT_ASSERTION_TYPE, assertionType);
 }
-//@ chunk-mrx6y2r5.js:152063-152092 layout
+//@ chunk-b5df2wx1.js:152063-152092 layout
 function addResponseType_11(parameters, oboAssertion) {
   parameters.set(ASSERTION, oboAssertion);
 }
-//@ chunk-mrx6y2r5.js:152092-152121 layout
+//@ chunk-b5df2wx1.js:152092-152121 layout
 function addResponseType_12(parameters, responseType) {
   parameters.set(REQUESTED_TOKEN_USE, responseType);
 }
-//@ chunk-mrx6y2r5.js:152121-152150 layout
+//@ chunk-b5df2wx1.js:152121-152150 layout
 function addGrantType(parameters, responseType) {
   parameters.set(GRANT_TYPE, responseType);
 }
-//@ chunk-mrx6y2r5.js:152150-152179 layout
+//@ chunk-b5df2wx1.js:152150-152179 layout
 function addClientInfo(parameters) {
   parameters.set(CLIENT_INFO, "1");
 }
-//@ chunk-mrx6y2r5.js:152179-152225 esm-fingerprint
+//@ chunk-b5df2wx1.js:152179-152225 esm-fingerprint
 function addInstanceAware(parameters) {
   if (!parameters.has(INSTANCE_AWARE)) parameters.set(INSTANCE_AWARE, "true");
 }
-//@ chunk-mrx6y2r5.js:152225-152307 esm-fingerprint
+//@ chunk-b5df2wx1.js:152225-152307 esm-fingerprint
 function addExtraQueryParameters(parameters, eQParams) {
   Object.entries(eQParams).forEach(([key, value]) => {
     if (!parameters.has(key) && value) parameters.set(key, value);
   });
 }
-//@ chunk-mrx6y2r5.js:152307-152531 esm-fingerprint
+//@ chunk-b5df2wx1.js:152307-152531 esm-fingerprint
 function addClientCapabilitiesToClaims(claims, clientCapabilities) {
   let mergedClaims;
   if (!claims) mergedClaims = {};
@@ -2774,47 +2774,47 @@ function addClientCapabilitiesToClaims(claims, clientCapabilities) {
   }
   return JSON.stringify(mergedClaims);
 }
-//@ chunk-mrx6y2r5.js:152531-152569 esm-fingerprint
+//@ chunk-b5df2wx1.js:152531-152569 esm-fingerprint
 function addUsername(parameters, username) {
   parameters.set(PasswordGrantConstants.username, username);
 }
-//@ chunk-mrx6y2r5.js:152569-152607 esm-fingerprint
+//@ chunk-b5df2wx1.js:152569-152607 esm-fingerprint
 function addPassword(parameters, password) {
   parameters.set(PasswordGrantConstants.password, password);
 }
-//@ chunk-mrx6y2r5.js:152607-152657 esm-fingerprint
+//@ chunk-b5df2wx1.js:152607-152657 esm-fingerprint
 function addPopToken(parameters, reqCnfData) {
   if (reqCnfData) {
     parameters.set(TOKEN_TYPE, AuthenticationScheme.POP);
     parameters.set(REQ_CNF, reqCnfData);
   }
 }
-//@ chunk-mrx6y2r5.js:152657-152707 esm-fingerprint
+//@ chunk-b5df2wx1.js:152657-152707 esm-fingerprint
 function addSshJwk(parameters, sshJwk) {
   if (sshJwk) {
     parameters.set(TOKEN_TYPE, AuthenticationScheme.SSH);
     parameters.set(REQ_CNF, sshJwk);
   }
 }
-//@ chunk-mrx6y2r5.js:152707-152817 esm-fingerprint
+//@ chunk-b5df2wx1.js:152707-152817 esm-fingerprint
 function addServerTelemetry(parameters, serverTelemetryManager) {
   parameters.set(X_CLIENT_CURRENT_TELEMETRY, serverTelemetryManager.generateCurrentRequestHeaderValue());
   parameters.set(X_CLIENT_LAST_TELEMETRY, serverTelemetryManager.generateLastRequestHeaderValue());
 }
-//@ chunk-mrx6y2r5.js:152817-152871 esm-fingerprint
+//@ chunk-b5df2wx1.js:152817-152871 esm-fingerprint
 function addThrottling(parameters) {
   parameters.set(X_MS_LIB_CAPABILITY, ThrottlingConstants.X_MS_LIB_CAPABILITY_VALUE);
 }
-//@ chunk-mrx6y2r5.js:152871-152900 esm-layout
+//@ chunk-b5df2wx1.js:152871-152900 esm-layout
 function addResponseType_13(parameters, logoutHint) {
   parameters.set(LOGOUT_HINT, logoutHint);
 }
-//@ chunk-mrx6y2r5.js:152900-152971 esm-fingerprint
+//@ chunk-b5df2wx1.js:152900-152971 esm-fingerprint
 function addBrokerParameters(parameters, clientId, redirectUri) {
   if (!parameters.has(BRK_CLIENT_ID)) parameters.set(BRK_CLIENT_ID, clientId);
   if (!parameters.has(BRK_REDIRECT_URI)) parameters.set(BRK_REDIRECT_URI, redirectUri);
 }
-//@ chunk-mrx6y2r5.js:153016-153175 esm-fingerprint
+//@ chunk-b5df2wx1.js:153016-153175 esm-fingerprint
 function isOpenIdConfigResponse(body) {
   return (
     body.hasOwnProperty("authorization_endpoint") &&
@@ -2823,15 +2823,15 @@ function isOpenIdConfigResponse(body) {
     body.hasOwnProperty("jwks_uri")
   );
 }
-//@ chunk-mrx6y2r5.js:153220-153318 esm-fingerprint
+//@ chunk-b5df2wx1.js:153220-153318 esm-fingerprint
 function isCloudInstanceDiscoveryResponse(body) {
   return body.hasOwnProperty("tenant_discovery_endpoint") && body.hasOwnProperty("metadata");
 }
-//@ chunk-mrx6y2r5.js:153363-153450 esm-fingerprint
+//@ chunk-b5df2wx1.js:153363-153450 esm-fingerprint
 function isCloudInstanceDiscoveryErrorResponse(body) {
   return body.hasOwnProperty("error") && body.hasOwnProperty("error_description");
 }
-//@ chunk-mrx6y2r5.js:153495-154311 esm-fingerprint
+//@ chunk-b5df2wx1.js:153495-154311 esm-fingerprint
 var invoke =
   (callback, eventName, logger, telemetryClient, correlationId) =>
   (...args) => {
@@ -2908,7 +2908,7 @@ var invokeAsync =
         throw e;
       });
   };
-//@ chunk-mrx6y2r5.js:154356-156077 esm-fingerprint
+//@ chunk-b5df2wx1.js:154356-156077 esm-fingerprint
 class RegionDiscovery {
   constructor(networkInterface, logger, performanceClient, correlationId) {
     this.networkInterface = networkInterface;
@@ -3003,38 +3003,38 @@ class RegionDiscovery {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:156077-156121 esm-fingerprint
+//@ chunk-b5df2wx1.js:156077-156121 esm-fingerprint
 // deferred: uses RegionDiscovery of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:156077", () => {
+deferInit("chunk-b5df2wx1.js:156077", () => {
   RegionDiscovery.IMDS_OPTIONS = {
     headers: {
       Metadata: "true",
     },
   };
 });
-//@ chunk-mrx6y2r5.js:156166-156224 esm-fingerprint
+//@ chunk-b5df2wx1.js:156166-156224 esm-fingerprint
 function nowSeconds() {
   return Math.round(new Date().getTime() / 1000);
 }
-//@ chunk-mrx6y2r5.js:156224-156292 esm-layout
+//@ chunk-b5df2wx1.js:156224-156292 esm-layout
 function toDateFromSeconds(seconds) {
   if (seconds) return new Date(Number(seconds) * 1000);
   return new Date();
 }
-//@ chunk-mrx6y2r5.js:156292-156343 esm-layout
+//@ chunk-b5df2wx1.js:156292-156343 esm-layout
 function isTokenExpired(expiresOn, offset) {
   let expirationSec = Number(expiresOn) || 0;
   return nowSeconds() + offset > expirationSec;
 }
-//@ chunk-mrx6y2r5.js:156343-156379 esm-layout
+//@ chunk-b5df2wx1.js:156343-156379 esm-layout
 function wasClockTurnedBack(cachedAt) {
   return Number(cachedAt) > nowSeconds();
 }
-//@ chunk-mrx6y2r5.js:156379-156444 esm-layout
+//@ chunk-b5df2wx1.js:156379-156444 esm-layout
 function delay(pollingIntervalMilli, value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), pollingIntervalMilli));
 }
-//@ chunk-mrx6y2r5.js:156489-156640 esm-fingerprint
+//@ chunk-b5df2wx1.js:156489-156640 esm-fingerprint
 function createIdTokenEntity(homeAccountId, environment, idToken, clientId, tenantId) {
   return {
     credentialType: CredentialType.ID_TOKEN,
@@ -3046,7 +3046,7 @@ function createIdTokenEntity(homeAccountId, environment, idToken, clientId, tena
     lastUpdatedAt: Date.now().toString(),
   };
 }
-//@ chunk-mrx6y2r5.js:156640-157261 esm-fingerprint
+//@ chunk-b5df2wx1.js:156640-157261 esm-fingerprint
 function createAccessTokenEntity(
   homeAccountId,
   environment,
@@ -3096,7 +3096,7 @@ function createAccessTokenEntity(
     }
   return atEntity;
 }
-//@ chunk-mrx6y2r5.js:157261-157497 esm-fingerprint
+//@ chunk-b5df2wx1.js:157261-157497 esm-fingerprint
 function createRefreshTokenEntity(
   homeAccountId,
   environment,
@@ -3119,7 +3119,7 @@ function createRefreshTokenEntity(
   if (expiresOn) rtEntity.expiresOn = expiresOn.toString();
   return rtEntity;
 }
-//@ chunk-mrx6y2r5.js:157497-157680 esm-fingerprint
+//@ chunk-b5df2wx1.js:157497-157680 esm-fingerprint
 function isCredentialEntity(entity) {
   return (
     entity.hasOwnProperty("homeAccountId") &&
@@ -3129,7 +3129,7 @@ function isCredentialEntity(entity) {
     entity.hasOwnProperty("secret")
   );
 }
-//@ chunk-mrx6y2r5.js:157680-157867 esm-fingerprint
+//@ chunk-b5df2wx1.js:157680-157867 esm-fingerprint
 function isAccessTokenEntity(entity) {
   if (!entity) return false;
   return (
@@ -3140,7 +3140,7 @@ function isAccessTokenEntity(entity) {
       entity.credentialType === CredentialType.ACCESS_TOKEN_WITH_AUTH_SCHEME)
   );
 }
-//@ chunk-mrx6y2r5.js:157867-157968 esm-fingerprint
+//@ chunk-b5df2wx1.js:157867-157968 esm-fingerprint
 function isIdTokenEntity(entity) {
   if (!entity) return false;
   return (
@@ -3149,12 +3149,12 @@ function isIdTokenEntity(entity) {
     entity.credentialType === CredentialType.ID_TOKEN
   );
 }
-//@ chunk-mrx6y2r5.js:157968-158047 esm-fingerprint
+//@ chunk-b5df2wx1.js:157968-158047 esm-fingerprint
 function isRefreshTokenEntity(entity) {
   if (!entity) return false;
   return isCredentialEntity(entity) && entity.credentialType === CredentialType.REFRESH_TOKEN;
 }
-//@ chunk-mrx6y2r5.js:158047-158216 esm-fingerprint
+//@ chunk-b5df2wx1.js:158047-158216 esm-fingerprint
 function isServerTelemetryEntity(key, entity) {
   let validateKey = key.indexOf(SERVER_TELEM_CONSTANTS.CACHE_KEY) === 0;
   let validateEntity = true;
@@ -3165,7 +3165,7 @@ function isServerTelemetryEntity(key, entity) {
       entity.hasOwnProperty("cacheHits");
   return validateKey && validateEntity;
 }
-//@ chunk-mrx6y2r5.js:158216-158346 esm-fingerprint
+//@ chunk-b5df2wx1.js:158216-158346 esm-fingerprint
 function isThrottlingEntity(key, entity) {
   let validateKey = false;
   if (key) validateKey = key.indexOf(ThrottlingConstants.THROTTLING_PREFIX) === 0;
@@ -3173,11 +3173,11 @@ function isThrottlingEntity(key, entity) {
   if (entity) validateEntity = entity.hasOwnProperty("throttleTime");
   return validateKey && validateEntity;
 }
-//@ chunk-mrx6y2r5.js:158346-158444 esm-fingerprint
+//@ chunk-b5df2wx1.js:158346-158444 esm-fingerprint
 function generateAppMetadataKey({ environment, clientId }) {
   return [APP_METADATA, environment, clientId].join(Separators.CACHE_KEY_SEPARATOR).toLowerCase();
 }
-//@ chunk-mrx6y2r5.js:158444-158564 esm-fingerprint
+//@ chunk-b5df2wx1.js:158444-158564 esm-fingerprint
 function isAppMetadataEntity(key, entity) {
   if (!entity) return false;
   return (
@@ -3186,7 +3186,7 @@ function isAppMetadataEntity(key, entity) {
     entity.hasOwnProperty("environment")
   );
 }
-//@ chunk-mrx6y2r5.js:158564-159028 esm-fingerprint
+//@ chunk-b5df2wx1.js:158564-159028 esm-fingerprint
 function isAuthorityMetadataEntity(key, entity) {
   if (!entity) return false;
   return (
@@ -3204,11 +3204,11 @@ function isAuthorityMetadataEntity(key, entity) {
     entity.hasOwnProperty("jwks_uri")
   );
 }
-//@ chunk-mrx6y2r5.js:159028-159077 esm-fingerprint
+//@ chunk-b5df2wx1.js:159028-159077 esm-fingerprint
 function generateAuthorityMetadataExpiresAt() {
   return nowSeconds() + AUTHORITY_METADATA_CONSTANTS.REFRESH_TIME_SECONDS;
 }
-//@ chunk-mrx6y2r5.js:159077-159291 esm-fingerprint
+//@ chunk-b5df2wx1.js:159077-159291 esm-fingerprint
 function updateAuthorityEndpointMetadata(authorityMetadata, updatedValues, fromNetwork) {
   authorityMetadata.authorization_endpoint = updatedValues.authorization_endpoint;
   authorityMetadata.token_endpoint = updatedValues.token_endpoint;
@@ -3217,18 +3217,18 @@ function updateAuthorityEndpointMetadata(authorityMetadata, updatedValues, fromN
   authorityMetadata.endpointsFromNetwork = fromNetwork;
   authorityMetadata.jwks_uri = updatedValues.jwks_uri;
 }
-//@ chunk-mrx6y2r5.js:159291-159429 esm-fingerprint
+//@ chunk-b5df2wx1.js:159291-159429 esm-fingerprint
 function updateCloudDiscoveryMetadata(authorityMetadata, updatedValues, fromNetwork) {
   authorityMetadata.aliases = updatedValues.aliases;
   authorityMetadata.preferred_cache = updatedValues.preferred_cache;
   authorityMetadata.preferred_network = updatedValues.preferred_network;
   authorityMetadata.aliasesFromNetwork = fromNetwork;
 }
-//@ chunk-mrx6y2r5.js:159429-159468 esm-fingerprint
+//@ chunk-b5df2wx1.js:159429-159468 esm-fingerprint
 function isAuthorityMetadataExpired(metadata) {
   return metadata.expiresAt <= nowSeconds();
 }
-//@ chunk-mrx6y2r5.js:159513-175430 esm-fingerprint
+//@ chunk-b5df2wx1.js:159513-175430 esm-fingerprint
 class Authority {
   constructor(
     authority,
@@ -3856,9 +3856,9 @@ Error Description: ${typedError.message}`);
     return ciamAuthority;
   }
 }
-//@ chunk-mrx6y2r5.js:175430-175530 esm-fingerprint
+//@ chunk-b5df2wx1.js:175430-175530 esm-fingerprint
 // deferred: uses Authority of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:175430", () => {
+deferInit("chunk-b5df2wx1.js:175430", () => {
   Authority.reservedTenantDomains = new Set([
     "{tenant}",
     "{tenantid}",
@@ -3867,7 +3867,7 @@ deferInit("chunk-mrx6y2r5.js:175430", () => {
     AADAuthorityConstants.ORGANIZATIONS,
   ]);
 });
-//@ chunk-mrx6y2r5.js:175530-175710 esm-fingerprint
+//@ chunk-b5df2wx1.js:175530-175710 esm-fingerprint
 function getTenantFromAuthorityString(authority) {
   let tenantId = new UrlString(authority).getUrlComponents().PathSegments.slice(-1)[0]?.toLowerCase();
   switch (tenantId) {
@@ -3879,13 +3879,13 @@ function getTenantFromAuthorityString(authority) {
       return tenantId;
   }
 }
-//@ chunk-mrx6y2r5.js:175710-175787 esm-fingerprint
+//@ chunk-b5df2wx1.js:175710-175787 esm-fingerprint
 function formatAuthorityUri(authorityUri) {
   return authorityUri.endsWith(Constants.FORWARD_SLASH)
     ? authorityUri
     : `${authorityUri}${Constants.FORWARD_SLASH}`;
 }
-//@ chunk-mrx6y2r5.js:175787-176011 esm-fingerprint
+//@ chunk-b5df2wx1.js:175787-176011 esm-fingerprint
 function buildStaticAuthorityOptions(authOptions) {
   let rawCloudDiscoveryMetadata = authOptions.cloudDiscoveryMetadata;
   let cloudDiscoveryMetadata = undefined;
@@ -3901,7 +3901,7 @@ function buildStaticAuthorityOptions(authOptions) {
     cloudDiscoveryMetadata,
   };
 }
-//@ chunk-mrx6y2r5.js:176056-176338 esm-fingerprint
+//@ chunk-b5df2wx1.js:176056-176338 esm-fingerprint
 async function createDiscoveredInstance(
   authorityUri,
   networkClient,
@@ -3938,9 +3938,9 @@ async function createDiscoveredInstance(
     throw createClientAuthError(endpointResolutionError);
   }
 }
-//@ chunk-mrx6y2r5.js:176383-176533 esm-fingerprint
+//@ chunk-b5df2wx1.js:176383-176533 esm-fingerprint
 let ServerError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:176383", () => {
+deferInit("chunk-b5df2wx1.js:176383", () => {
   ServerError = class ServerError extends AuthError {
     constructor(errorCode, errorMessage, subError, errorNo, status) {
       super(errorCode, errorMessage, subError);
@@ -3951,7 +3951,7 @@ deferInit("chunk-mrx6y2r5.js:176383", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:176578-176931 esm-fingerprint
+//@ chunk-b5df2wx1.js:176578-176931 esm-fingerprint
 function getRequestThumbprint(clientId, request, homeAccountId) {
   return {
     clientId,
@@ -3967,7 +3967,7 @@ function getRequestThumbprint(clientId, request, homeAccountId) {
     embeddedClientId: request.embeddedClientId || request.tokenBodyParameters?.clientId,
   };
 }
-//@ chunk-mrx6y2r5.js:176976-178174 esm-fingerprint
+//@ chunk-b5df2wx1.js:176976-178174 esm-fingerprint
 class ThrottlingUtils {
   static generateThrottlingStorageKey(thumbprint) {
     return `${ThrottlingConstants.THROTTLING_PREFIX}.${JSON.stringify(thumbprint)}`;
@@ -4035,9 +4035,9 @@ class ThrottlingUtils {
     cacheManager.removeItem(key, request.correlationId);
   }
 }
-//@ chunk-mrx6y2r5.js:178219-178423 esm-fingerprint
+//@ chunk-b5df2wx1.js:178219-178423 esm-fingerprint
 let NetworkError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:178219", () => {
+deferInit("chunk-b5df2wx1.js:178219", () => {
   NetworkError = class NetworkError extends AuthError {
     constructor(error, httpStatus, responseHeaders) {
       super(error.errorCode, error.errorMessage, error.subError);
@@ -4049,7 +4049,7 @@ deferInit("chunk-mrx6y2r5.js:178219", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:178468-180896 esm-fingerprint
+//@ chunk-b5df2wx1.js:178468-180896 esm-fingerprint
 class BaseClient {
   constructor(configuration, performanceClient) {
     this.config = buildClientConfiguration(configuration);
@@ -4171,7 +4171,7 @@ class BaseClient {
     return mapToQueryString(parameters);
   }
 }
-//@ chunk-mrx6y2r5.js:180941-181128 esm-fingerprint
+//@ chunk-b5df2wx1.js:180941-181128 esm-fingerprint
 var noTokensFound = "no_tokens_found";
 var nativeAccountUnavailable = "native_account_unavailable";
 var refreshTokenExpired = "refresh_token_expired";
@@ -4180,7 +4180,7 @@ var interactionRequired = "interaction_required";
 var consentRequired = "consent_required";
 var loginRequired = "login_required";
 var badToken = "bad_token";
-//@ chunk-mrx6y2r5.js:181173-181955 esm-layout
+//@ chunk-b5df2wx1.js:181173-181955 esm-layout
 var InteractionRequiredServerErrorMessage = [
   interactionRequired,
   consentRequired,
@@ -4220,9 +4220,9 @@ var InteractionRequiredAuthErrorMessage = {
     desc: InteractionRequiredAuthErrorMessages[badToken],
   },
 };
-//@ chunk-mrx6y2r5.js:181955-182245 esm-fingerprint
+//@ chunk-b5df2wx1.js:181955-182245 esm-fingerprint
 let InteractionRequiredAuthError; // deferred: uses AuthError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:181955", () => {
+deferInit("chunk-b5df2wx1.js:181955", () => {
   InteractionRequiredAuthError = class InteractionRequiredAuthError extends AuthError {
     constructor(errorCode, errorMessage, subError, timestamp, traceId, correlationId, claims, errorNo) {
       super(errorCode, errorMessage, subError);
@@ -4236,7 +4236,7 @@ deferInit("chunk-mrx6y2r5.js:181955", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:182245-182368 esm-fingerprint
+//@ chunk-b5df2wx1.js:182245-182368 esm-fingerprint
 function isInteractionRequiredError(errorCode, errorString, subError) {
   let isInteractionRequiredErrorCode =
     !!errorCode && InteractionRequiredServerErrorMessage.indexOf(errorCode) > -1;
@@ -4247,11 +4247,11 @@ function isInteractionRequiredError(errorCode, errorString, subError) {
     InteractionRequiredServerErrorMessage.some((irErrorCode) => errorString.indexOf(irErrorCode) > -1);
   return isInteractionRequiredErrorCode || isInteractionRequiredErrorDesc || isInteractionRequiredSubError;
 }
-//@ chunk-mrx6y2r5.js:182368-182406 esm-layout
+//@ chunk-b5df2wx1.js:182368-182406 esm-layout
 function createInteractionRequiredAuthError(errorCode) {
   return new InteractionRequiredAuthError(errorCode, InteractionRequiredAuthErrorMessages[errorCode]);
 }
-//@ chunk-mrx6y2r5.js:182451-182997 esm-fingerprint
+//@ chunk-b5df2wx1.js:182451-182997 esm-fingerprint
 class ProtocolUtils {
   static setRequestState(cryptoObj, userState, meta) {
     let libraryState = ProtocolUtils.generateLibraryState(cryptoObj, meta);
@@ -4285,11 +4285,11 @@ class ProtocolUtils {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:183042-183059 esm-fingerprint
+//@ chunk-b5df2wx1.js:183042-183059 esm-fingerprint
 var KeyLocation = {
   SW: "sw",
 };
-//@ chunk-mrx6y2r5.js:183059-184065 esm-fingerprint
+//@ chunk-b5df2wx1.js:183059-184065 esm-fingerprint
 class PopTokenGenerator {
   constructor(cryptoUtils, performanceClient) {
     this.cryptoUtils = cryptoUtils;
@@ -4343,7 +4343,7 @@ class PopTokenGenerator {
     );
   }
 }
-//@ chunk-mrx6y2r5.js:184110-184248 esm-fingerprint
+//@ chunk-b5df2wx1.js:184110-184248 esm-fingerprint
 class TokenCacheContext {
   constructor(tokenCache, hasChanged) {
     this.cache = tokenCache;
@@ -4356,7 +4356,7 @@ class TokenCacheContext {
     return this.cache;
   }
 }
-//@ chunk-mrx6y2r5.js:184293-189654 esm-fingerprint
+//@ chunk-b5df2wx1.js:184293-189654 esm-fingerprint
 class ResponseHandler {
   constructor(
     clientId,
@@ -4705,7 +4705,7 @@ ${serverError}`);
     };
   }
 }
-//@ chunk-mrx6y2r5.js:189654-190138 esm-fingerprint
+//@ chunk-b5df2wx1.js:189654-190138 esm-fingerprint
 function buildAccountToCache(
   cacheStorage,
   authority,
@@ -4755,7 +4755,7 @@ function buildAccountToCache(
   baseAccount.tenantProfiles = tenantProfiles;
   return baseAccount;
 }
-//@ chunk-mrx6y2r5.js:190183-190284 esm-fingerprint
+//@ chunk-b5df2wx1.js:190183-190284 esm-fingerprint
 async function getClientAssertion(clientAssertion, clientId, tokenEndpoint) {
   if (typeof clientAssertion === "string") return clientAssertion;
   else
@@ -4764,9 +4764,9 @@ async function getClientAssertion(clientAssertion, clientId, tokenEndpoint) {
       tokenEndpoint,
     });
 }
-//@ chunk-mrx6y2r5.js:190329-194992 esm-fingerprint
+//@ chunk-b5df2wx1.js:190329-194992 esm-fingerprint
 let AuthorizationCodeClient; // deferred: uses BaseClient of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:190329", () => {
+deferInit("chunk-b5df2wx1.js:190329", () => {
   AuthorizationCodeClient = class AuthorizationCodeClient extends BaseClient {
     constructor(configuration, performanceClient) {
       super(configuration, performanceClient);
@@ -4985,11 +4985,11 @@ deferInit("chunk-mrx6y2r5.js:190329", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:195037-195048 esm-layout
+//@ chunk-b5df2wx1.js:195037-195048 esm-layout
 var DEFAULT_REFRESH_TOKEN_EXPIRATION_OFFSET_SECONDS = 300;
-//@ chunk-mrx6y2r5.js:195048-200556 esm-fingerprint
+//@ chunk-b5df2wx1.js:195048-200556 esm-fingerprint
 let RefreshTokenClient; // deferred: uses BaseClient of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:195048", () => {
+deferInit("chunk-b5df2wx1.js:195048", () => {
   RefreshTokenClient = class RefreshTokenClient extends BaseClient {
     constructor(configuration, performanceClient) {
       super(configuration, performanceClient);
@@ -5258,9 +5258,9 @@ deferInit("chunk-mrx6y2r5.js:195048", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:200601-202702 esm-fingerprint
+//@ chunk-b5df2wx1.js:200601-202702 esm-fingerprint
 let SilentFlowClient; // deferred: uses BaseClient of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:200601", () => {
+deferInit("chunk-b5df2wx1.js:200601", () => {
   SilentFlowClient = class SilentFlowClient extends BaseClient {
     constructor(configuration, performanceClient) {
       super(configuration, performanceClient);
@@ -5366,7 +5366,7 @@ deferInit("chunk-mrx6y2r5.js:200601", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:202747-205278 esm-fingerprint
+//@ chunk-b5df2wx1.js:202747-205278 esm-fingerprint
 function getStandardAuthorizeRequestParameters(authOptions, request, logger, performanceClient) {
   let correlationId = request.correlationId;
   let parameters = new Map();
@@ -5498,23 +5498,23 @@ function getStandardAuthorizeRequestParameters(authOptions, request, logger, per
     addInstanceAware(parameters);
   return parameters;
 }
-//@ chunk-mrx6y2r5.js:205278-205369 esm-fingerprint
+//@ chunk-b5df2wx1.js:205278-205369 esm-fingerprint
 function getAuthorizeUrl(authority, requestParameters, encodeParams, extraQueryParameters) {
   let queryString = mapToQueryString(requestParameters, encodeParams, extraQueryParameters);
   return UrlString.appendQueryString(authority.authorizationEndpoint, queryString);
 }
-//@ chunk-mrx6y2r5.js:205369-205418 esm-fingerprint
+//@ chunk-b5df2wx1.js:205369-205418 esm-fingerprint
 function extractAccountSid(account) {
   return account.idTokenClaims?.sid || null;
 }
-//@ chunk-mrx6y2r5.js:205418-205487 esm-fingerprint
+//@ chunk-b5df2wx1.js:205418-205487 esm-fingerprint
 function extractLoginHint(account) {
   return account.loginHint || account.idTokenClaims?.login_hint || null;
 }
-//@ chunk-mrx6y2r5.js:205532-205550 esm-layout
+//@ chunk-b5df2wx1.js:205532-205550 esm-layout
 var skuGroupSeparator = ",";
 var skuValueSeparator = "|";
-//@ chunk-mrx6y2r5.js:205550-205905 esm-fingerprint
+//@ chunk-b5df2wx1.js:205550-205905 esm-fingerprint
 function makeExtraSkuString(params) {
   let { skus, libraryName, libraryVersion, extensionName, extensionVersion } = params;
   let skuMap = new Map([
@@ -5543,13 +5543,13 @@ function makeExtraSkuString(params) {
   });
   return skuArr.join(skuGroupSeparator);
 }
-//@ chunk-mrx6y2r5.js:205905-206009 esm-fingerprint
+//@ chunk-b5df2wx1.js:205905-206009 esm-fingerprint
 function setSku(params) {
   let { skuArr, index, skuName, skuVersion } = params;
   if (index >= skuArr.length) return;
   skuArr[index] = [skuName, skuVersion].join(skuValueSeparator);
 }
-//@ chunk-mrx6y2r5.js:206009-209339 esm-fingerprint
+//@ chunk-b5df2wx1.js:206009-209339 esm-fingerprint
 class ServerTelemetryManager {
   constructor(telemetryRequest, cacheManager) {
     this.cacheOutcome = CacheOutcome.NOT_APPLICABLE;

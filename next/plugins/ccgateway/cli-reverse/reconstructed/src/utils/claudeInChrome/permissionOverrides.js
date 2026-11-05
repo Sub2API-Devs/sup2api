@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Claude in Chrome 工具的权限覆盖：确定动作作用的标签页与主机，校验 browser_batch，必要时弹出权限请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-38x90rmj.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bhrstd6k.js (28)
  * attribution: placement 28
  */
 import {
@@ -45,20 +45,27 @@ import {
   stripCyclesAndHiddenKeys,
 } from "../permissions/browserComputerUseTools.js";
 import { describeBrowserToolAction } from "../../components/TrustDialog/utils.js";
-import { AbortError } from "../errors.js";
+import { AbortError, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { handleChromeToolCall } from "./chromeMcpServer.js";
 import { stripAnthropicMeta } from "../../services/mcp/anthropicMeta.js";
 import { McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../services/mcp/client.js";
 import { logChromeToolAttempted, noBrowserConnected } from "./telemetry.js";
 import { getToolPermissionContext } from "../permissions/toolPermissionContext.js";
 import { isAutoAllowedInMode, isPlanBypass } from "../permissions/browserToolNames.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { isAutoClassifierActive } from "../permissions/autoModeState.js";
 import { forgetClassifierContext } from "../permissions/serverClassifier/context.js";
 import { createChromeDomainAllowRule } from "../permissions/permissions.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
+import {
+  codeModeHidesToolNamesFromApi,
+  offInCodeModeNoteForModel,
+  notListedYetNoteForModel,
+} from "../codeMode.js";
+import { getHookCaller } from "../agentContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-38x90rmj.js:1314-1423 placement
+//@ chunk-bhrstd6k.js:1465-1574 placement
 function normalizedOriginOf(url) {
   let parsed;
   try {
@@ -69,7 +76,7 @@ function normalizedOriginOf(url) {
   if (parsed.host === "") return;
   return `${parsed.protocol}//${normalizeChromeSite(parsed.host)}`;
 }
-//@ chunk-38x90rmj.js:1423-1494 placement
+//@ chunk-bhrstd6k.js:1574-1646 placement
 /**
  * 判断两个来源是否不同（任一未知也视为不同）。
  */
@@ -78,7 +85,7 @@ function originsDiffer(leftUrl, rightUrl) {
   let rightOrigin = normalizedOriginOf(rightUrl);
   return leftOrigin === undefined || rightOrigin === undefined || leftOrigin !== rightOrigin;
 }
-//@ chunk-38x90rmj.js:1494-1610 placement
+//@ chunk-bhrstd6k.js:1646-1763 placement
 function tabNavigationFor(scopeKey, rightUrl) {
   let lastUrl = claudeInChromeSession().lastExecutedTabUrlByScope.get(scopeKey);
   if (lastUrl === undefined) return;
@@ -89,19 +96,19 @@ function tabNavigationFor(scopeKey, rightUrl) {
       }
     : undefined;
 }
-//@ chunk-38x90rmj.js:1610-1666 placement
+//@ chunk-bhrstd6k.js:1763-1819 placement
 /**
  * 记录某作用域最近执行的标签页 URL。
  */
 function rememberExecutedTabUrl(scopeKey, url) {
   claudeInChromeSession().lastExecutedTabUrlByScope.set(scopeKey, url);
 }
-//@ chunk-38x90rmj.js:1666-1676 placement
+//@ chunk-bhrstd6k.js:1819-1829 placement
 /**
  * 按工具调用缓存解析结果的条数上限（200）。
  */
 var MAX_RESOLVED_BY_TOOL_USE = 200;
-//@ chunk-38x90rmj.js:1676-1761 placement
+//@ chunk-bhrstd6k.js:1829-1914 placement
 /**
  * 记录某工具调用解析出的站点。
  */
@@ -110,7 +117,7 @@ function rememberResolvedHost(toolUseId, host) {
   if (resolvedHostByToolUseId.size >= MAX_RESOLVED_BY_TOOL_USE) resolvedHostByToolUseId.clear();
   resolvedHostByToolUseId.set(toolUseId, host);
 }
-//@ chunk-38x90rmj.js:1761-1846 placement
+//@ chunk-bhrstd6k.js:1914-1999 placement
 /**
  * 记录某工具调用解析出的 URL。
  */
@@ -119,7 +126,7 @@ function rememberResolvedUrl(toolUseId, url) {
   if (resolvedUrlByToolUseId.size >= MAX_RESOLVED_BY_TOOL_USE) resolvedUrlByToolUseId.clear();
   resolvedUrlByToolUseId.set(toolUseId, url);
 }
-//@ chunk-38x90rmj.js:1846-1942 placement
+//@ chunk-bhrstd6k.js:1999-2095 placement
 /**
  * 返回权限作用域使用的会话 id（宿主提供时用宿主键）。
  */
@@ -134,14 +141,14 @@ function permissionScopeOfSession() {
     sessionId,
   };
 }
-//@ chunk-38x90rmj.js:1942-2006 placement
+//@ chunk-bhrstd6k.js:2095-2159 placement
 function setChromeBinding(context, socketClient) {
   claudeInChromeSession().bridgeBinding = {
     context,
     socketClient,
   };
 }
-//@ chunk-38x90rmj.js:2006-2193 placement
+//@ chunk-bhrstd6k.js:2159-2346 placement
 /**
  * 是否有总是允许 Chrome 工具的规则
  */
@@ -155,14 +162,14 @@ function hasChromeAlwaysAllow(toolPermissionContext, toolName) {
     }
   return false;
 }
-//@ chunk-38x90rmj.js:2193-3011 placement
+//@ chunk-bhrstd6k.js:2346-3164 placement
 /**
  * 切换/选择浏览器的工具名集合。
  */
 var CHROME_TOOL_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BROWSER_SELECT_TOOL_NAMES;
 var CHROME_TOOL_ERROR_MESSAGES;
-deferInit("chunk-38x90rmj.js:2193", () => {
+deferInit("chunk-bhrstd6k.js:2346", () => {
   CHROME_TOOL_CLASSES = new Set([
     "tabs_context_mcp",
     "tabs_create_mcp",
@@ -184,7 +191,7 @@ deferInit("chunk-38x90rmj.js:2193", () => {
       "Claude in Chrome: a browser_batch action must be {name, input} and cannot nest another browser_batch.",
   };
 });
-//@ chunk-38x90rmj.js:3011-3818 placement
+//@ chunk-bhrstd6k.js:3164-3971 placement
 /**
  * 检查 browser_batch 结构
  */
@@ -254,11 +261,11 @@ function vetBrowserBatch(toolName, input) {
     tabId: [...tabIds][0],
   };
 }
-//@ chunk-38x90rmj.js:3818-3948 placement
+//@ chunk-bhrstd6k.js:3971-4101 placement
 var CHROME_CALL_BUDGET_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CHROME_RETRY_DELAY_MS;
 var RETRYABLE_TIMEOUT_FAILURES;
-deferInit("chunk-38x90rmj.js:3818", () => {
+deferInit("chunk-bhrstd6k.js:3971", () => {
   CHROME_CALL_BUDGET_MS = 5000;
   CHROME_RETRY_DELAY_MS = 2500;
   RETRYABLE_TIMEOUT_FAILURES = new Set([
@@ -268,7 +275,7 @@ deferInit("chunk-38x90rmj.js:3818", () => {
     "answer_timeout",
   ]);
 });
-//@ chunk-38x90rmj.js:3948-5126 placement
+//@ chunk-bhrstd6k.js:4101-5279 placement
 /**
  * 确定动作作用的标签页
  */
@@ -354,7 +361,7 @@ async function resolveTargetTab(tabId) {
     .catch(logError);
   return winner;
 }
-//@ chunk-38x90rmj.js:5126-5252 placement
+//@ chunk-bhrstd6k.js:5279-5405 placement
 function chromeCallTimingFields(result) {
   return {
     connect_ms: result.connectMs,
@@ -365,14 +372,14 @@ function chromeCallTimingFields(result) {
       }),
   };
 }
-//@ chunk-38x90rmj.js:5252-5296 placement
+//@ chunk-bhrstd6k.js:5405-5449 placement
 /**
  * 取成功结果里的 URL 并解析成主机信息。
  */
 function parseOkTabUrl(result) {
   return result.ok ? parseChromeUrl(result.url) : undefined;
 }
-//@ chunk-38x90rmj.js:5296-5731 placement
+//@ chunk-bhrstd6k.js:5449-5884 placement
 /**
  * 在标签列表中找目标标签
  */
@@ -409,7 +416,7 @@ function findTargetTab(result, tabId) {
     callMs,
   };
 }
-//@ chunk-38x90rmj.js:5731-7399 placement
+//@ chunk-bhrstd6k.js:5884-7552 placement
 /**
  * 取标签上下文用于权限判断
  */
@@ -503,15 +510,15 @@ async function listTabsForPermission(options) {
         callMs,
       };
 }
-//@ chunk-38x90rmj.js:7399-7457 placement
+//@ chunk-bhrstd6k.js:7552-7610 placement
 // deferred: uses listTabsForPermission of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-38x90rmj.js:7399", () => {
+deferInit("chunk-bhrstd6k.js:7552", () => {
   setProvidedTabsProvider(async () => {
     let listResult = await listTabsForPermission();
     return listResult.ok ? listResult.tabs : undefined;
   });
 });
-//@ chunk-38x90rmj.js:7525-7621 placement
+//@ chunk-bhrstd6k.js:7678-7774 placement
 /**
  * 构造“图片未内联”的占位文本。
  */
@@ -521,13 +528,13 @@ function imageOmittedText(reason) {
     text: `[Image from Claude in Chrome \u2014 ${reason}; not inlined]`,
   };
 }
-//@ chunk-38x90rmj.js:7621-7734 placement
+//@ chunk-bhrstd6k.js:7774-7887 placement
 function isSupportedImageMimeType(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
   return SUPPORTED_IMAGE_TYPES.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
-//@ chunk-38x90rmj.js:7734-8095 placement
+//@ chunk-bhrstd6k.js:7887-8248 placement
 /**
  * 转换 Chrome 工具结果中的图片
  */
@@ -555,7 +562,7 @@ async function convertChromeResult(result, model) {
       else blocks.push(imageOmittedText(`unsupported type ${contentBlock.mimeType ?? "unknown"}`));
   return blocks;
 }
-//@ chunk-38x90rmj.js:8095-8307 placement
+//@ chunk-bhrstd6k.js:8248-8460 placement
 /**
  * batch 是否需要目标标签
  */
@@ -570,7 +577,7 @@ function batchNeedsTab(input) {
     );
   });
 }
-//@ chunk-38x90rmj.js:8307-8730 placement
+//@ chunk-bhrstd6k.js:8460-8883 placement
 /**
  * 取 browser_batch 中的导航地址
  */
@@ -595,14 +602,14 @@ function batchNavigateUrls(input) {
   }
   return hosts;
 }
-//@ chunk-38x90rmj.js:8822-8940 placement
+//@ chunk-bhrstd6k.js:8975-9093 placement
 function chromePermissionQuestion(toolName, input, site) {
   let actionText = describeBrowserToolAction(toolName, input);
   return site
     ? `Allow Claude in Chrome to ${actionText} on ${site}?`
     : `Allow Claude in Chrome to ${actionText}?`;
 }
-//@ chunk-38x90rmj.js:8940-9143 placement
+//@ chunk-bhrstd6k.js:9093-9296 placement
 /**
  * 主机是否仍在允许集合
  */
@@ -627,7 +634,7 @@ function isHostStillAllowed(allowed, sites) {
     return stillAllowed;
   };
 }
-//@ chunk-38x90rmj.js:9143-10233 placement
+//@ chunk-bhrstd6k.js:9296-10386 placement
 /**
  * 带权限检查调用 Chrome 工具
  */
@@ -705,7 +712,7 @@ async function callChromeWithPermission(toolName, input, signal, model, callOpti
     }),
   };
 }
-//@ chunk-38x90rmj.js:10233-16217 placement
+//@ chunk-bhrstd6k.js:10386-16847 placement
 /**
  * Claude in Chrome 工具的权限覆盖：确定动作作用的标签页与主机，校验 browser_batch，必要时弹出权限请求。
  */
@@ -816,7 +823,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
       }
       let toolPermissionContext = getToolPermissionContext(toolUseContext);
       let autoAllowed = isAutoAllowedInMode(
-        toolUseContext.options?.tools?.find((tool) => toolMatchesName(tool, commandName)),
+        toolUseContext.options?.tools?.find((tool) => matchesToolName(tool, commandName)),
         toolPermissionContext,
       );
       let isBypass =
@@ -1041,20 +1048,52 @@ function getClaudeInChromePermissionOverrides(toolName) {
         ? claudeInChromeSession().resolvedHostByToolUseId.get(toolUseId)
         : undefined;
       let host = resolvedHost?.host;
-      let resolvedUrl = toolUseId ? claudeInChromeSession().resolvedUrlByToolUseId.get(toolUseId) : undefined;
+      let url = toolUseId ? claudeInChromeSession().resolvedUrlByToolUseId.get(toolUseId) : undefined;
       if (toolUseId) {
         claudeInChromeSession().resolvedHostByToolUseId.delete(toolUseId);
         claudeInChromeSession().resolvedUrlByToolUseId.delete(toolUseId);
       }
+      if (
+        codeModeAccepted() &&
+        codeModeHidesToolNamesFromApi({
+          agentId: toolUseContext.agentId,
+          stickyBetas: toolUseContext.stickyBetas,
+          namesShownToApi: toolUseContext.namesShownToApi,
+          toolName: commandName,
+        })
+      )
+        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          codeModeHidesToolNamesFromApi() ? offInCodeModeNoteForModel() : notListedYetNoteForModel(),
+          "Claude in Chrome call refused in REPL mode",
+        );
       let toolPermissionContext = getToolPermissionContext(toolUseContext);
       let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
       let allowed = chromeSiteRules.allowed;
       let allowedDomainsRaw = [...chromeSiteRules.allowedRaw];
+      let matchedRule =
+        resolvedHost &&
+        [
+          resolvedHost.host,
+          resolvedHost.url === undefined
+            ? `${resolvedHost.host}:80`
+            : hostWithDefaultPort({
+                url: resolvedHost.url,
+              }),
+        ]
+          .map((candidate) => chromeSiteDenyDecision(chromeSiteRules, candidate))
+          .find((candidate) => candidate !== undefined);
+      if (matchedRule) {
+        logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
+        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          matchedRule.message,
+          "Claude in Chrome call refused under a deny rule",
+        );
+      }
       if (host && !allowed.has(normalizeChromeSite(host))) {
         allowed.add(normalizeChromeSite(host));
         allowedDomainsRaw.push(host);
       }
-      let found = toolUseContext.options?.tools?.find((tool) => toolMatchesName(tool, commandName));
+      let found = toolUseContext.options?.tools?.find((tool) => matchesToolName(tool, commandName));
       let autoAllowed = isAutoAllowedInMode(found, toolPermissionContext);
       let isAutoRun =
         autoAllowed === "bypassPermissions" ||
@@ -1095,7 +1134,14 @@ function getClaudeInChromePermissionOverrides(toolName) {
         options?.timing,
         toolUseContext,
       );
-      if (resolvedUrl !== undefined) rememberExecutedTabUrl(sessionKeyOrHostKey(), resolvedUrl);
+      if (url !== undefined) {
+        let scopeKey = sessionKeyOrHostKey();
+        if (
+          getHookCaller(toolUseContext) === undefined ||
+          !claudeInChromeSession().lastExecutedTabUrlByScope.has(scopeKey)
+        )
+          rememberExecutedTabUrl(scopeKey, url);
+      }
       if (host) logFeatureOk("chrome_permission_prompt");
       return callResult;
     },

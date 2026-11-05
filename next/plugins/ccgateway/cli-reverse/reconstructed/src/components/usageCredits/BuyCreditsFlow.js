@@ -3,11 +3,18 @@
  *
  * 2.1.316 新增。购买额度流程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (17)
  * attribution: placement 17
  */
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useRef,
+  useEffectEvent,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
@@ -16,13 +23,6 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import {
-  useState,
-  useEffect,
-  useRef,
-  useEffectEvent,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import {
   discountPercentOfPay,
   percentOfBase,
@@ -64,7 +64,12 @@ import { AnimatedClawd } from "../LogoV2/AnimatedClawd.js";
 import { WorkerBadge } from "../permissions/WorkerBadge.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1154884-1155348 placement
+//@ chunk-czq1j3j2.js:1158977-1158981 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1158977", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1185666-1186130 placement
 /**
  * 左右两端对齐的标签-数值行（购买额度汇总）。
  */
@@ -107,7 +112,7 @@ function SummaryRow(props) {
   } else rowElement = $[10];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:1155348-1160051 placement
+//@ chunk-czq1j3j2.js:1186130-1190836 placement
 /**
  * 购买额度流程中的确认购买步骤。
  */
@@ -505,11 +510,11 @@ function ConfirmPurchaseStep(props) {
   } else dialogElement = $[84];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1160051-1160100 placement
+//@ chunk-czq1j3j2.js:1190836-1190885 placement
 function formatPercent(taxRatePct) {
   return `${Number(taxRatePct.toFixed(2))}%`;
 }
-//@ chunk-18hwfzwa.js:1160100-1160529 placement
+//@ chunk-czq1j3j2.js:1190885-1191314 placement
 /**
  * 说明为何此金额没有额外额度/折扣（超出上限或本月折扣额度已用完）。
  */
@@ -523,7 +528,7 @@ function describeWithheldBonus(offer, capRemaining, currency) {
     ? `No ${bonusLabel}: this month's discount limit is used up.`
     : `No ${bonusLabel} on this amount: it would go over what's left of this month's discount limit.`;
 }
-//@ chunk-18hwfzwa.js:1160529-1162196 placement
+//@ chunk-czq1j3j2.js:1191314-1192981 placement
 function CustomAmountStep(props) {
   let $ = useMemoCache(24);
   let { pm, initialCents, currency, offer, discountTiers, usdRate, capRemaining, onConfirm, onCancel } =
@@ -624,9 +629,9 @@ function CustomAmountStep(props) {
   } else amountEntryElement = $[23];
   return amountEntryElement;
 }
-//@ chunk-18hwfzwa.js:1162196-1162209 placement
+//@ chunk-czq1j3j2.js:1192981-1192994 placement
 var YES = "yes";
-//@ chunk-18hwfzwa.js:1162209-1163920 placement
+//@ chunk-czq1j3j2.js:1192994-1194705 placement
 function ConfirmQuestion(props) {
   let $ = useMemoCache(30);
   let { question, amountCents, currency, onConfirm, onBack } = props;
@@ -766,7 +771,7 @@ function ConfirmQuestion(props) {
   } else dialogElement = $[29];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1163920-1167866 placement
+//@ chunk-czq1j3j2.js:1194705-1198651 placement
 /**
  * 购买额度流程中的花费上限设置步骤。
  */
@@ -818,7 +823,7 @@ function SpendLimitStep(props) {
     $[13] !== amountText
   ) {
     earlyReturnElement = EARLY_RETURN_SENTINEL;
-    Go: {
+    Fo: {
       let amountInput = parseAmountInput(amountText);
       amountError =
         !amountInput.ok && (amountText.trim() !== "" || focusIndex === 1) ? amountInput.error : "";
@@ -885,7 +890,7 @@ function SpendLimitStep(props) {
           onConfirm: () => onConfirm(amountInput.cents),
           onBack,
         });
-        break Go;
+        break Fo;
       }
       dialogComponent = Dialog;
       title = "Set monthly spend limit";
@@ -1118,7 +1123,7 @@ function SpendLimitStep(props) {
   } else dialogElement = $[69];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1167866-1175272 placement
+//@ chunk-czq1j3j2.js:1198651-1206050 placement
 /**
  * 购买额度流程中的自动充值设置步骤。
  */
@@ -1203,7 +1208,7 @@ function AutoReloadStep(props) {
     $[24] !== thresholdValue
   ) {
     earlyReturnElement = EARLY_RETURN_SENTINEL;
-    ur: {
+    Tr: {
       thresholdInput = parseAmountInput(thresholdValue);
       reloadToInput = parseAmountInput(reloadToValue);
       thresholdError = !thresholdInput.ok
@@ -1227,7 +1232,6 @@ function AutoReloadStep(props) {
             return;
           }
           setIsConfirming(true);
-          return;
         } else if (actionId === "off") onTurnOff();
         else onCancel();
       };
@@ -1303,7 +1307,7 @@ function AutoReloadStep(props) {
           onConfirm: () => onSave(thresholdInput.cents, reloadToInput.cents),
           onBack,
         });
-        break ur;
+        break Tr;
       }
       dialogComponent = Dialog;
       title = "Auto-reload";
@@ -1758,7 +1762,7 @@ function AutoReloadStep(props) {
   } else dialogElement = $[133];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1175272-1177637 placement
+//@ chunk-czq1j3j2.js:1206050-1208415 placement
 function AmountEntry(props) {
   let $ = useMemoCache(52);
   let { title, subtitle, initial, minCents, currency, preview, footer, onSubmit, onCancel } = props;
@@ -1965,7 +1969,7 @@ function AmountEntry(props) {
   } else dialogElement = $[51];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1177637-1178928 placement
+//@ chunk-czq1j3j2.js:1208415-1209706 placement
 function PurchasePoller(props) {
   let $ = useMemoCache(11);
   let { purchaseId, onSuccess, onError } = props;
@@ -2065,7 +2069,7 @@ function PurchasePoller(props) {
   } else loadingElement = $[10];
   return loadingElement;
 }
-//@ chunk-18hwfzwa.js:1178928-1179193 placement
+//@ chunk-czq1j3j2.js:1209706-1209971 placement
 /**
  * 渲染带动画 Clawd 的加载行与提示信息。
  */
@@ -2099,7 +2103,7 @@ function ClawdLoadingRow(props) {
   } else rowBox = $[2];
   return rowBox;
 }
-//@ chunk-18hwfzwa.js:1179193-1179628 placement
+//@ chunk-czq1j3j2.js:1209971-1210406 placement
 /**
  * 购买成功时显示 Clawd 庆祝动画与成功文案，动画结束后回调。
  */
@@ -2143,7 +2147,7 @@ function ClawdSuccessRow(props) {
   } else rowBox = $[6];
   return rowBox;
 }
-//@ chunk-18hwfzwa.js:1179628-1180592 placement
+//@ chunk-czq1j3j2.js:1210406-1211370 placement
 function CelebrationMessage(props) {
   let $ = useMemoCache(15);
   let { message, work, onDone, failure } = props;
@@ -2232,7 +2236,7 @@ function CelebrationMessage(props) {
   } else rowBox = $[14];
   return rowBox;
 }
-//@ chunk-18hwfzwa.js:1180592-1181129 placement
+//@ chunk-czq1j3j2.js:1211370-1211907 placement
 /**
  * 显示等待提示并等待一个 Promise；完成时以结果调用 onDone，失败记错误并以 failure 值调用；卸载后不再回调。
  */
@@ -2290,7 +2294,7 @@ function AwaitWork(props) {
   } else badgeBox = $[9];
   return badgeBox;
 }
-//@ chunk-18hwfzwa.js:1181129-1181441 placement
+//@ chunk-czq1j3j2.js:1211907-1212219 placement
 /**
  * 判断购买用量额度流程的当前步骤是否处于忙碌（加载、开通、调整、保存自动充值、购买中、轮询）状态。
  */
@@ -2315,11 +2319,6 @@ function isBusyCreditsStep(stepKind) {
       return false;
   }
 }
-//@ chunk-18hwfzwa.js:1181441-1181445 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1181441", () => {
-  init_react_production();
-});
 export {
   isBusyCreditsStep,
   CelebrationMessage,

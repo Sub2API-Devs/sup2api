@@ -3,9 +3,9 @@
  *
  * StructuredIO：stream-json 输入逐行解析（keep_alive、update_environment_variables、control_request/response、消息），以及向宿主发 can_use_tool/hook_callback/elicitation 等请求
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/structuredIO.ts
- * pieces: chunk-6j594vm1.js (1), chunk-e6aww6q8.js (1), chunk-fp6aqx1j.js (1), chunk-na0b3c5q.js (8)
+ * pieces: chunk-0fqk5atw.js (1), chunk-1m58gz0q.js (8), chunk-5xgkngpb.js (1), chunk-qyz2x025.js (1)
  * attribution: fingerprint 3, callgraph-witnessed 1, file-local 1, sole-consumer 6
  */
 import { randomUUID } from "crypto";
@@ -58,6 +58,7 @@ import {
   errorFieldText,
   isKnownControlSubtype,
   OAUTH_TOKEN_ENV_NAMES,
+  CLAUDE_CODE_PROGRAM_USE_CASE_ID,
   TOKEN_REFRESH_SUBTYPES,
   subtypeOf,
   truncatedErrorText,
@@ -109,11 +110,19 @@ import { ASKUSERQUESTION } from "../tools/AskUserQuestionTool/prompt.js";
 import { StreamClosedAbortError, errorMessage, AbortError, isAbortError } from "../utils/errors.js";
 import { TOOL_PERMISSION_STREAM_CLOSED_TEXT, STREAM_CLOSED_TEXT } from "./toolPermissionStream.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { createContentSummary } from "../tools/BashTool/utils.js";
+import {
+  HookCallbackFailedError,
+  SDK_HOST_REINITIALIZED_TEXT,
+  reportHookCallbackFailure,
+} from "../utils/hooks/hookFailures.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit, fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { MCP_ELICITATION_DIALOG_TOOL, dialogPermissionRequest } from "../utils/teleport/sessionCreate.js";
 import { shortHash } from "../utils/shortHash.js";
 import { entrypointForTelemetry } from "../services/api/logging.js";
+import { UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "../remote/wireFrameShape.js";
+import { NO_HOOK_CALLBACK_MESSAGE } from "../utils/hooks/AsyncHookRegistry.js";
 import { isValidBridgeToolName, humanizeToolName } from "../bridge/bridgePermissionResponse.js";
 import { getApprovalTicket } from "../bridge/bridgePermissionCallbacks.js";
 import { ENUM_PROMPT } from "../components/nudges/nudgeIds.js";
@@ -136,6 +145,7 @@ import {
 import { applySessionTokenEnv } from "../utils/sessionAccessToken.js";
 import { forgetHeldHostSessionsBearer, acceptPushedHostSessionsBearer } from "../utils/hostSessionsBearer.js";
 import { emitCredentialChange } from "../utils/auth/credentialEpoch.js";
+import { notifyHostChoice } from "../utils/programUseCaseChoices.js";
 import { isHostDialogApproval } from "../components/permissions/hooks.js";
 import { stripLiveOnlyMarker } from "../bridge/controlRequests.js";
 import { getRiskColor } from "../bridge/mcpApprovalTickets.js";
@@ -148,11 +158,10 @@ import {
   StdoutMessageSchema,
   ElicitationResponseSchema,
   UserDialogResponseSchema,
-  OAuthTokenRefreshResponseSchema,
   RemoteControlWorkSecretResponseSchema,
-  HostAuthTokenRefreshResponseSchema,
 } from "../entrypoints/sdk/controlSchemas.js";
 import { sanitizeJsonPath } from "../services/daemon/sessionCron.js";
+import { isProgramUseCaseChoiceEnabled } from "../utils/programUseCase.js";
 import { serializeDecisionReason } from "../utils/permissions/decisionReasons.js";
 import { getSessionId, noteSdkHostHookAnswered } from "../bootstrap/state.js";
 import { MARKETPLACE_ONLY_MANIFEST_FIELDS } from "../utils/plugins/validatePlugin.js";
@@ -176,16 +185,20 @@ import {
 import { WEBFETCH } from "../tools/WebFetchTool/prompt.js";
 import { isJsonRpcRequest } from "../services/mcp/SdkControlTransport.js";
 import { createCombinedAbortSignal } from "../utils/combinedAbortSignal.js";
+import {
+  OAuthTokenRefreshResponseSchema,
+  HostAuthTokenRefreshResponseSchema,
+} from "../entrypoints/sdk/uiControlSchemas.js";
 import { ZodError } from "../../vendor/zod/v4/classic/errors.js";
 import { drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2818055-2818085 fingerprint (2.1.88 match: SANDBOX_NETWORK_ACCESS_TOOL_NAME, 1)
+//@ chunk-5xgkngpb.js:2886920-2886951 fingerprint (2.1.88 match: SANDBOX_NETWORK_ACCESS_TOOL_NAME, 1)
 /**
  * 沙箱网络访问权限请求的工具名 SandboxNetworkAccess。
  */
 var SANDBOX_NETWORK_ACCESS_TOOL_NAME = "SandboxNetworkAccess";
-//@ chunk-fp6aqx1j.js:18843-19042 fingerprint (2.1.88 match: buildRequiresActionDetails, 0.512)
+//@ chunk-qyz2x025.js:19337-19536 fingerprint (2.1.88 match: buildRequiresActionDetails, 0.514)
 function buildRequiresActionDetails(input) {
   return {
     tool_name: input.tool_name,
@@ -196,7 +209,7 @@ function buildRequiresActionDetails(input) {
     tool_use_id: input.tool_use_id,
   };
 }
-//@ chunk-6j594vm1.js:19866-21542 fingerprint (2.1.88 match: executePermissionRequestHooksForSDK, 0.516)
+//@ chunk-0fqk5atw.js:21401-23077 fingerprint (2.1.88 match: executePermissionRequestHooksForSDK, 0.494)
 /**
  * SDK 模式下先执行 PermissionRequest 钩子，钩子给出 allow/deny 时直接返回。
  */
@@ -347,7 +360,7 @@ async function executePermissionRequestHooksForSDK(
     }
   return;
 }
-//@ chunk-na0b3c5q.js:9613-51278 callgraph-witnessed (2.1.88 match: StructuredIO, 0.256)
+//@ chunk-1m58gz0q.js:9778-52931 callgraph-witnessed (2.1.88 match: StructuredIO, 0.24)
 /**
  * StructuredIO：stream-json 协议的本地实现。read() 按行（\n）读 stdin，processLine 解析每行：keep_alive 丢弃、update_environment_variables 按白名单应用、control_response 匹配挂起请求、control_request 交给调用方、user/assistant/system 消息透传；sendRequest 发出 control_request（can_use_tool、hook_callback、elicitation、mcp_message…）并等待回复；write 输出 NDJSON。
  */
@@ -457,6 +470,7 @@ class StructuredIO {
   tracksRequestDelivery = false;
   unexpectedResponseCallback;
   unclaimedResponseObserver;
+  unknownResponseHold;
   resolvedToolUseIds = new Set();
   prependedLines = [];
   locallyPrependedMessages = new WeakSet();
@@ -863,7 +877,9 @@ class StructuredIO {
       let parsed = entry.schema ? entry.schema.parse(input) : input;
       this.pendingRequests.delete(requestId);
       this.enqueueCancelRequest(requestId);
-      entry.resolve(parsed);
+      if (createContentSummary(request.input.hook_event_name, input, entry.hookOnFailure))
+        entry.reject(new HookCallbackFailedError(request.callback_id, SDK_HOST_REINITIALIZED_TEXT));
+      else entry.resolve(parsed);
       retiredCount++;
     }
     return retiredCount;
@@ -954,6 +970,9 @@ class StructuredIO {
   setUnexpectedResponseCallback(unexpectedResponseCallback) {
     this.unexpectedResponseCallback = unexpectedResponseCallback;
   }
+  setUnknownResponseHold(unknownResponseHold) {
+    this.unknownResponseHold = unknownResponseHold;
+  }
   setUnclaimedResponseObserver(unclaimedResponseObserver) {
     this.unclaimedResponseObserver = unclaimedResponseObserver;
   }
@@ -983,6 +1002,23 @@ class StructuredIO {
     if (response.subtype !== "error" || !isKnownControlSubtype(request.request.request)) return false;
     logForDebugging(
       `Ignoring error-shaped control_response for ${subtype} request_id=${response.request_id} - not the named client's answer; still waiting (error: ${errorFieldText(response.error)})`,
+    );
+    return true;
+  }
+  ignoresPeerRefusalOfBlockingHook(blockingHook, response) {
+    if (
+      response.subtype !== "error" ||
+      blockingHook.hookOnFailure !== "block" ||
+      !this.isRemoteTransport() ||
+      typeof response.error !== "string" ||
+      !(
+        response.error.startsWith(UNSUPPORTED_CONTROL_SUBTYPE_TEXT) ||
+        response.error.startsWith(NO_HOOK_CALLBACK_MESSAGE)
+      )
+    )
+      return false;
+    logForDebugging(
+      `Ignoring another client's refusal of hook_callback request_id=${response.request_id}; still waiting for the registering host`,
     );
     return true;
   }
@@ -1048,33 +1084,34 @@ class StructuredIO {
   injectControlResponse(response) {
     let requestId = this.blankedPromptDenyTarget(response.response) ?? response.response?.request_id;
     if (!requestId) return false;
-    let request = this.pendingRequests.get(requestId);
-    if (!request) {
+    let pending = this.pendingRequests.get(requestId);
+    if (!pending) {
       logEvent("tengu_inject_control_response_unknown_id", {
         pending_control_requests: this.pendingRequests.size,
       });
       return false;
     }
-    if (this.ignoresErrorShapedDialogResponse(request, response.response)) return false;
-    if (this.ignoresErrorShapedUiHostResponse(request, response.response)) return false;
-    if (this.ignoresResponseAtShutdown(request, response.response)) return false;
-    if (this.ignoresUnsettlingDeviceResponse(request, response.response)) return false;
-    if (this.hasCanUseToolNameMismatch(request, response.response)) return false;
-    this.trackResolvedToolUseId(request.request);
+    if (this.ignoresErrorShapedDialogResponse(pending, response.response)) return false;
+    if (this.ignoresErrorShapedUiHostResponse(pending, response.response)) return false;
+    if (this.ignoresPeerRefusalOfBlockingHook(pending, response.response)) return false;
+    if (this.ignoresResponseAtShutdown(pending, response.response)) return false;
+    if (this.ignoresUnsettlingDeviceResponse(pending, response.response)) return false;
+    if (this.hasCanUseToolNameMismatch(pending, response.response)) return false;
+    this.trackResolvedToolUseId(pending.request);
     this.pendingRequests.delete(requestId);
-    this.rememberApprovalTicket(requestId, request, response.response);
+    this.rememberApprovalTicket(requestId, pending, response.response);
     if (requestId !== response.response?.request_id) this.onControlRequestResolved?.(requestId);
     this.sendCancelRequest(requestId);
-    if (response.response.subtype === "error") request.reject(Error(response.response.error));
+    if (response.response.subtype === "error") pending.reject(Error(response.response.error));
     else {
       let result = response.response.response;
-      if (request.schema)
+      if (pending.schema)
         try {
-          request.resolve(request.schema.parse(result));
+          pending.resolve(pending.schema.parse(result));
         } catch (error) {
-          request.reject(error);
+          pending.reject(error);
         }
-      else request.resolve({});
+      else pending.resolve({});
     }
     return true;
   }
@@ -1137,12 +1174,14 @@ class StructuredIO {
         let applied = [];
         let refused = [];
         let heldToken = false;
-        let sessionsAccepted = false;
         let sessionsToken;
         let signInTokenPushed = false;
         let previousSignIn;
         for (let [key, value] of Object.entries(controlMessage.variables)) {
-          if (!OAUTH_TOKEN_ENV_NAMES.has(key)) {
+          if (
+            !OAUTH_TOKEN_ENV_NAMES.has(key) &&
+            !(key === CLAUDE_CODE_PROGRAM_USE_CASE_ID && this.takesHostPick())
+          ) {
             refused.push(key);
             continue;
           }
@@ -1176,13 +1215,20 @@ class StructuredIO {
           if (heldToken || signInTokenPushed) forgetHeldHostSessionsBearer(previousSignIn);
         }
         if (sessionsToken !== undefined)
-          if (hostSessionsBearerOffered() && acceptPushedHostSessionsBearer(sessionsToken)) {
-            sessionsAccepted = true;
+          if (hostSessionsBearerOffered() && acceptPushedHostSessionsBearer(sessionsToken))
             applied.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
-          } else refused.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
+          else refused.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
         if (refused.length > 0)
           logForDebugging(`[structuredIO] refused update_environment_variables keys: ${refused.join(", ")}`);
-        if (!oauthApplied && (!sessionsAccepted || applied.length > 1)) emitCredentialChange();
+        if (
+          !oauthApplied &&
+          (applied.length === 0 ||
+            applied.some(
+              (key) => key !== "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN" && key !== CLAUDE_CODE_PROGRAM_USE_CASE_ID,
+            ))
+        )
+          emitCredentialChange();
+        if (applied.includes(CLAUDE_CODE_PROGRAM_USE_CASE_ID)) notifyHostChoice();
         if (heldToken)
           logForDebugging(
             "[structuredIO] update_environment_variables offered CLAUDE_CODE_OAUTH_TOKEN to the session's judge, not applied yet",
@@ -1222,8 +1268,13 @@ class StructuredIO {
           this.blankedPromptDenyTarget(controlMessage.response) ?? controlMessage.response.request_id;
         let entry = this.pendingRequests.get(requestId);
         if (!entry) {
-          let pending = this.settleUnknownResponse(controlMessage, uuid);
-          if (pending !== undefined) await pending;
+          let hold = this.unknownResponseHold?.();
+          if (hold !== undefined) {
+            await hold;
+            return this.processLine(line);
+          }
+          let settle = this.settleUnknownResponse(controlMessage, uuid);
+          if (settle !== undefined) await settle;
           return;
         }
         if (isTerminalShutdown() && this.asksOurHuman(entry)) {
@@ -1236,6 +1287,7 @@ class StructuredIO {
         if (uuid) this.onCommandLifecycle?.(uuid, "completed");
         if (this.ignoresErrorShapedDialogResponse(entry, controlMessage.response)) return;
         if (this.ignoresErrorShapedUiHostResponse(entry, controlMessage.response)) return;
+        if (this.ignoresPeerRefusalOfBlockingHook(entry, controlMessage.response)) return;
         if (this.ignoresUnsettlingDeviceResponse(entry, controlMessage.response)) return;
         if (this.hasCanUseToolNameMismatch(entry, controlMessage.response)) return;
         this.trackResolvedToolUseId(entry.request);
@@ -1599,12 +1651,18 @@ class StructuredIO {
   acceptsInboundEnvUpdates() {
     return true;
   }
+  takesHostPick() {
+    return isProgramUseCaseChoiceEnabled();
+  }
   exitOnFatalInput(message) {
     this.stopHoldingStreamEvents();
     return exitWithMessage(message);
   }
   stopHoldingStreamEvents() {
     this.streamEventHold?.stop();
+  }
+  writePlainDeltaNow(frame) {
+    return false;
   }
   async write(message) {
     if (this.streamEventHold !== undefined && this.streamEventHold.keeps(message)) return;
@@ -1653,7 +1711,7 @@ class StructuredIO {
     request,
     schema,
     signal,
-    { requestId = randomUUID(), forwarded = false, deviceHook = false } = {},
+    { requestId = randomUUID(), forwarded = false, deviceHook = false, hookOnFailure: onFailure } = {},
   ) {
     let message = {
       type: "control_request",
@@ -1708,6 +1766,9 @@ class StructuredIO {
           schema,
           ...(forwarded && {
             forwarded,
+          }),
+          ...(onFailure !== undefined && {
+            hookOnFailure: onFailure,
           }),
         };
         this.pendingRequests.set(requestId, entry);
@@ -1767,8 +1828,9 @@ class StructuredIO {
         this.emitPermissionDenied(toolName, toolUseId, agentId, result),
       promptShown:
         onShown &&
-        ((requestId, details, blockingId, custom) => {
+        ((requestId, details, blockingId, custom, pendingActionDetails) => {
           this.publishedPendingActionDetails.set(requestId, details);
+          if (pendingActionDetails) this.sessionState.noteStoredAnswerStands(details);
           if (custom !== undefined) this.backgroundPromptIds.add(requestId);
           if (blockingId !== undefined) this.sessionState.notifyNestedPromptBlocking(blockingId);
           onShown(details);
@@ -1802,31 +1864,55 @@ class StructuredIO {
     }
     this.sessionState.notifyStateChanged(this.mainLoopLiveness?.() === false ? "idle" : "running");
   }
-  createHookCallback(callbackId, timeout) {
+  createHookCallback(callbackId, timeout, timeoutMs) {
     let sdkHostHookGeneration = this.sdkHostHookGeneration;
     return {
       type: "callback",
       timeout,
-      callback: async (input, toolUseID, abort) => {
-        if (sdkHostHookGeneration !== this.sdkHostHookGeneration && this.retiredHostHookAnswer)
-          return this.retiredHostHookAnswer(input);
+      onFailure: timeoutMs,
+      callback: async (hookInput, toolUseId, onFailure) => {
+        if (sdkHostHookGeneration !== this.sdkHostHookGeneration && this.retiredHostHookAnswer) {
+          let retiredAnswer = this.retiredHostHookAnswer(hookInput);
+          if (!createContentSummary(hookInput.hook_event_name, retiredAnswer, timeoutMs))
+            return retiredAnswer;
+          let retiredRegistration = new HookCallbackFailedError(callbackId, SDK_HOST_REINITIALIZED_TEXT);
+          reportHookCallbackFailure(hookInput.hook_event_name, retiredRegistration, timeoutMs);
+          throw retiredRegistration;
+        }
         try {
-          let result = await this.sendRequest(
+          let answer = await this.sendRequest(
             {
               subtype: "hook_callback",
               callback_id: callbackId,
-              input,
-              tool_use_id: toolUseID || undefined,
+              input: hookInput,
+              tool_use_id: toolUseId || undefined,
             },
             hookJSONOutputSchema(),
-            abort,
+            onFailure,
+            {
+              hookOnFailure: timeoutMs,
+            },
           );
+          if (
+            timeoutMs === "block" &&
+            "hookSpecificOutput" in answer &&
+            answer.hookSpecificOutput !== undefined &&
+            answer.hookSpecificOutput.hookEventName !== hookInput.hook_event_name
+          )
+            throw Error("The answer names another hook event");
           noteSdkHostHookAnswered();
-          return result;
+          return answer;
         } catch (error) {
           if (isAbortError(error)) throw error;
+          if (error instanceof HookCallbackFailedError) {
+            reportHookCallbackFailure(hookInput.hook_event_name, error, timeoutMs);
+            throw error;
+          }
           noteSdkHostHookAnswered();
           console.error(`Error in hook callback ${callbackId}:`, error);
+          let hookError = new HookCallbackFailedError(callbackId);
+          reportHookCallbackFailure(hookInput.hook_event_name, hookError, timeoutMs);
+          if (timeoutMs === "block") throw hookError;
           return {};
         }
       },
@@ -2024,20 +2110,8 @@ class StructuredIO {
     return count;
   }
   sendServedCallRequest(request) {
+    if (this.inputClosed) return this.unsentServedCall();
     let requestId = randomUUID();
-    if (this.inputClosed) {
-      let rejected = Promise.reject(new StreamClosedAbortError(STREAM_CLOSED_TEXT));
-      rejected.catch(() => {});
-      return {
-        requestId,
-        sent: false,
-        delivery: () => "queued",
-        withdraw: () => false,
-        reply: rejected,
-        cancel: () => {},
-        errorRepliesIgnored: () => 0,
-      };
-    }
     let tracked = this.trackDeviceRequest(
       requestId,
       "served_call",
@@ -2070,6 +2144,22 @@ class StructuredIO {
       },
       errorRepliesIgnored: () => tracked.errorRepliesIgnored,
     };
+  }
+  unsentServedCall() {
+    let onError = Promise.reject(new StreamClosedAbortError(STREAM_CLOSED_TEXT));
+    onError.catch(() => {});
+    return {
+      requestId: randomUUID(),
+      sent: false,
+      delivery: () => "queued",
+      withdraw: () => false,
+      reply: onError,
+      cancel: () => {},
+      errorRepliesIgnored: () => 0,
+    };
+  }
+  enforcesDevicePolicy() {
+    return false;
   }
   askToAnnounce(request, signal) {
     this.sendRequest(request, unknown(), signal, {
@@ -2505,7 +2595,7 @@ class StructuredIO {
   }
   answerOwnWithdrawnAsk(requestId, toolUseId) {}
 }
-//@ chunk-na0b3c5q.js:51278-51576 file-local
+//@ chunk-1m58gz0q.js:52931-53229 file-local
 async function exitWithMessage(message) {
   console.error(message);
   let deadline = Date.now() + 2000;
@@ -2520,12 +2610,12 @@ async function exitWithMessage(message) {
   });
   process.exit(1);
 }
-//@ chunk-na0b3c5q.js:51576-51664 sole-consumer
+//@ chunk-1m58gz0q.js:53229-53317 sole-consumer
 var MESSAGE_FIELD_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-na0b3c5q.js:51576", () => {
+deferInit("chunk-1m58gz0q.js:53229", () => {
   MESSAGE_FIELD_NAMES = new Set(["type", "message", "uuid", "session_id", "parent_tool_use_id", "timestamp"]);
 });
-//@ chunk-na0b3c5q.js:51664-51754 sole-consumer
+//@ chunk-1m58gz0q.js:53317-53407 sole-consumer
 function isPlainMessageField([key, value]) {
   return (
     MESSAGE_FIELD_NAMES.has(key) ||
@@ -2533,7 +2623,7 @@ function isPlainMessageField([key, value]) {
     (key === "shouldQuery" && value === true)
   );
 }
-//@ chunk-na0b3c5q.js:51754-52136 sole-consumer
+//@ chunk-1m58gz0q.js:53407-53789 sole-consumer
 /**
  * 给 stream-json 输入里的 message 字段分类（无消息、非对象、无 role、role 为 null/数组/对象/字符串/其他），用于解析失败遥测。
  */
@@ -2554,7 +2644,7 @@ function classifyMessageRoleShape(message) {
       return "role_other";
   }
 }
-//@ chunk-na0b3c5q.js:52136-52455 sole-consumer
+//@ chunk-1m58gz0q.js:53789-54108 sole-consumer
 /**
  * 若输入行是 user 消息（content 为字符串或数组），返回 {inner, plain}；plain 表示外层只含已知字段。
  */
@@ -2576,11 +2666,11 @@ function extractPlainUserMessage(message) {
       (!("type" in message) || message.type === "user") && Object.entries(message).every(isPlainMessageField),
   };
 }
-//@ chunk-na0b3c5q.js:52455-52638 sole-consumer
+//@ chunk-1m58gz0q.js:54108-54291 sole-consumer
 function formatStreamInputParseError(line, error) {
   return `Error parsing streaming input line (type=${/"type"\s*:\s*"([\w-]{1,40})"/.exec(line)?.[1] ?? "unknown"}, ${line.length} chars): ${error instanceof Error ? error.name : typeof error}`;
 }
-//@ chunk-na0b3c5q.js:52638-52781 sole-consumer
+//@ chunk-1m58gz0q.js:54291-54434 sole-consumer
 function describeInputLineLazy(message) {
   return () => ({
     type: message.type,
@@ -2593,8 +2683,8 @@ function describeInputLineLazy(message) {
   });
 }
 export {
-  SANDBOX_NETWORK_ACCESS_TOOL_NAME,
   executePermissionRequestHooksForSDK,
   StructuredIO,
+  SANDBOX_NETWORK_ACCESS_TOOL_NAME,
   buildRequiresActionDetails,
 };

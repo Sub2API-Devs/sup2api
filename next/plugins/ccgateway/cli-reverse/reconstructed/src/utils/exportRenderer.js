@@ -3,11 +3,28 @@
  *
  * 把消息静态渲染为纯文本（/export、转录导出用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/exportRenderer.tsx
- * pieces: chunk-ag5x7vhf.js (13)
- * attribution: placement 4, sole-consumer 3, affinity 1, fingerprint 2, layout 2, callgraph-fingerprint 1
+ * pieces: chunk-4rj00p91.js (2), chunk-hnxhr3bs.js (11)
+ * attribution: placement 4, layout 6, fingerprint 2, callgraph-fingerprint 1
  */
+import { appendToolsNotInList } from "../commands/hooks/hooks.js";
+import { isCodeModeEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { getFileAndShellTools } from "../tools.js";
+import { isWebFetchAgentFlagOn } from "../tools/AgentTool/loadAgentsDir.js";
+import { WebFetchTool } from "../tools/WebFetchTool/WebFetchTool.js";
+import { isBuiltInArtifactHiddenForMcp } from "../services/artifacts/artifactsMcpTools.js";
+import { getAllBaseToolsFromRegistry } from "../Tool.js";
+import { isArtifactReplTool } from "../services/artifacts/artifactMcpSwap.js";
+import {
+  init_react_production,
+  useContext,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import {
@@ -34,15 +51,6 @@ import {
 } from "../components/Messages.js";
 import { TurnSpinnerRow } from "../screens/replDialogState.js";
 import { useAppState } from "../state/AppState.js";
-import {
-  useContext,
-  useDeferredValue,
-  useEffect,
-  useLayoutEffect,
-  init_react_production,
-  useRef,
-  useState,
-} from "../../vendor/react/cjs/react.production.js";
 import { SpinnerPaceContext } from "../components/Spinner/paceContext.js";
 import { shouldShowNotice } from "../components/SlashCommandLink.js";
 import { useIsViewedAgentCompacting, CompactingLine } from "../components/CompactingLine.js";
@@ -53,21 +61,12 @@ import {
 import { CodeLine } from "../components/HighlightedCode.js";
 import { QueuedMessageProvider } from "../context/QueuedMessageContext.js";
 import { UserTextMessage } from "../components/messages/UserTextMessage.js";
-import { getContentText } from "./messages.js";
+import { getContentText, SYNTHETIC_MODEL } from "./messages.js";
 import { promptAwaitingModelSlot, PLACEHOLDER } from "../components/messages/UserPromptMessage.js";
-import { appendToolsNotInList } from "../commands/hooks/hooks.js";
-import { alwaysFalseFlag } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
-import { getFileAndShellTools } from "../tools.js";
-import { isWebFetchAgentFlagOn } from "../tools/AgentTool/loadAgentsDir.js";
-import { WebFetchTool } from "../tools/WebFetchTool/WebFetchTool.js";
-import { isBuiltInArtifactHiddenForMcp } from "../services/artifacts/artifactsMcpTools.js";
-import { getAllBaseToolsFromRegistry } from "../Tool.js";
-import { isArtifactReplTool } from "../services/artifacts/artifactMcpSwap.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { loadKeybindingsSync, keybindingsState } from "../keybindings/loadUserBindings.js";
 import { createKeybindingRegistryState } from "../keybindings/keyNames.js";
 import { KeybindingProvider } from "../keybindings/KeybindingContext.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
 import { withholdForExport } from "./transcriptWithholding.js";
 import { getDefaultAppState } from "../state/AppStateStore.js";
 import { renderToAnsiString } from "./staticRender.js";
@@ -76,7 +75,30 @@ import { TranscriptModeProvider } from "../components/messages/transcriptModeCon
 import { stripAnsi } from "./stripAnsi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:200980-205567 placement
+//@ chunk-4rj00p91.js:451-566 placement
+/**
+ * 导出渲染时在工具列表后补上未包含的额外工具（特定功能工具、WebFetch、对 MCP 隐藏的内置 artifact 工具，可选再加更多）。
+ */
+function withExtraExportTools(tools, includeExtraTools = false) {
+  return appendToolsNotInList(tools, [
+    ...(isCodeModeEnabled() ? getFileAndShellTools() : []),
+    ...(isWebFetchAgentFlagOn() ? [WebFetchTool] : []),
+    ...(isBuiltInArtifactHiddenForMcp()
+      ? (getAllBaseToolsFromRegistry() ?? []).filter(isArtifactReplTool)
+      : []),
+    ...(includeExtraTools ? emptyArray() : []),
+  ]);
+}
+//@ chunk-4rj00p91.js:566-588 placement
+function emptyArray() {
+  return [];
+}
+//@ chunk-hnxhr3bs.js:156011-156015 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:156011", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:206106-210696 placement
 /**
  * 静态/实时消息渲染器（导出与会话预览共用）：把消息列表渲染成 live 或 static 视图，处理图片占位与 prompt 行。
  */
@@ -144,10 +166,10 @@ function ExportTranscriptView(props) {
   let visibleMessages = reviewedMessages;
   let settledReply = useStoreSelector(activeTurn?.stream, selectSettledReply) ?? EMPTY_ARRAY_A;
   let settledMessages;
-  Ue: {
+  xe: {
     if (!isLoading || settledReply.length === 0) {
       settledMessages = EMPTY_ARRAY_A;
-      break Ue;
+      break xe;
     }
     let visibleIds;
     if ($[14] !== visibleMessages) {
@@ -200,10 +222,10 @@ function ExportTranscriptView(props) {
   useEffect(clearSettledReply, effectDeps);
   let storeSelector_2 = useStoreSelector(isPromptScreen ? waitingLines : undefined);
   let unseenQueued;
-  Xt: {
+  Nt: {
     if (storeSelector_2 === undefined || storeSelector_2.length === 0) {
       unseenQueued = EMPTY_ARRAY_C;
-      break Xt;
+      break Nt;
     }
     let visibleIdSet;
     if ($[30] !== visibleMessages) {
@@ -474,40 +496,20 @@ function ExportTranscriptView(props) {
   } else viewElement = $[83];
   return viewElement;
 }
-//@ chunk-ag5x7vhf.js:205567-205571 placement
+//@ chunk-hnxhr3bs.js:210696-210700 layout
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:205567", () => {
+deferInit("chunk-hnxhr3bs.js:210696", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:205571-205688 placement
-/**
- * 导出渲染时在工具列表后补上未包含的额外工具（特定功能工具、WebFetch、对 MCP 隐藏的内置 artifact 工具，可选再加更多）。
- */
-function withExtraExportTools(tools, includeExtraTools = false) {
-  return appendToolsNotInList(tools, [
-    ...(alwaysFalseFlag() ? getFileAndShellTools() : []),
-    ...(isWebFetchAgentFlagOn() ? [WebFetchTool] : []),
-    ...(isBuiltInArtifactHiddenForMcp()
-      ? (getAllBaseToolsFromRegistry() ?? []).filter(isArtifactReplTool)
-      : []),
-    ...(includeExtraTools ? emptyArray() : []),
-  ]);
-}
-//@ chunk-ag5x7vhf.js:205688-205711 placement
-function emptyArray() {
-  return [];
-}
-//@ chunk-ag5x7vhf.js:205978-206007 sole-consumer
+//@ chunk-hnxhr3bs.js:210700-210729 layout
 function createEmptySet() {
   return new Set();
 }
-//@ chunk-ag5x7vhf.js:206007-206022 sole-consumer
-function noopChordHandler() {}
-//@ chunk-ag5x7vhf.js:206022-206037 sole-consumer
+//@ chunk-hnxhr3bs.js:210729-210744 layout
 function noopRegisterContext() {}
-//@ chunk-ag5x7vhf.js:206037-206052 affinity
+//@ chunk-hnxhr3bs.js:210744-210759 layout
 function noopUnregisterContext() {}
-//@ chunk-ag5x7vhf.js:206052-206622 fingerprint (2.1.88 match: StaticKeybindingProvider, 0.84)
+//@ chunk-hnxhr3bs.js:210759-211310 fingerprint (2.1.88 match: StaticKeybindingProvider, 0.769)
 function StaticKeybindingProvider(props) {
   let $ = useMemoCache(7);
   let { children } = props;
@@ -539,7 +541,6 @@ function StaticKeybindingProvider(props) {
       bindings,
       pendingChordRef,
       pendingChord: null,
-      setPendingChord: noopChordHandler,
       activeContexts,
       registerActiveContext: noopRegisterContext,
       unregisterActiveContext: noopUnregisterContext,
@@ -556,7 +557,7 @@ function StaticKeybindingProvider(props) {
   } else providerElement = $[6];
   return providerElement;
 }
-//@ chunk-ag5x7vhf.js:206622-206728 layout
+//@ chunk-hnxhr3bs.js:211310-211416 layout
 function findFirstRealModel(messages) {
   for (let message of messages)
     if (message.type === "assistant") {
@@ -565,13 +566,13 @@ function findFirstRealModel(messages) {
     }
   return;
 }
-//@ chunk-ag5x7vhf.js:206728-206831 layout (2.1.88 match: extractErrorDetail, 1)
+//@ chunk-hnxhr3bs.js:211416-211519 layout (2.1.88 match: extractErrorDetail, 1)
 function contentBlockCount(data) {
   if (!("message" in data)) return 1;
   let content = data.message.content;
   return Array.isArray(content) ? content.length : 1;
 }
-//@ chunk-ag5x7vhf.js:206831-207617 fingerprint (2.1.88 match: streamRenderedMessages, 0.538)
+//@ chunk-hnxhr3bs.js:211519-212306 fingerprint (2.1.88 match: streamRenderedMessages, 0.547)
 /**
  * 把消息用静态 Ink 渲染成文本流（/export 等导出用）。
  */
@@ -652,7 +653,7 @@ async function streamRenderedMessages(
     onProgress?.(offset + chunkSize);
   }
 }
-//@ chunk-ag5x7vhf.js:207617-207818 callgraph-fingerprint (2.1.88 match: renderMessagesToPlainText, 0.347)
+//@ chunk-hnxhr3bs.js:212306-212507 callgraph-fingerprint (2.1.88 match: renderMessagesToPlainText, 0.347)
 async function renderMessagesToPlainText(
   messages,
   tools,

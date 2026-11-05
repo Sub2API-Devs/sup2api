@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：开启 dev mods 的同意对话框文案与选项
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zhrgwca4.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c3nwd9gm.js (13)
  * attribution: placement 13
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -13,20 +13,20 @@ import { DEV_MODS_DIR_PLACEHOLDER } from "./devModsWatcher.js";
 import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-zhrgwca4.js:1093-1102 placement
+//@ chunk-c3nwd9gm.js:1291-1300 placement
 /**
  * 模块命名空间对象占位（导出集合）。
  */
 var devModsDialogNamespace = {};
-//@ chunk-zhrgwca4.js:1102-1152 placement
+//@ chunk-c3nwd9gm.js:1300-1350 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zhrgwca4.js:1102", () => {
+deferInit("chunk-c3nwd9gm.js:1300", () => {
   __export(devModsDialogNamespace, {
     DEV_MODS_PLACEHOLDER: () => DEV_MODS_DIR_PLACEHOLDER,
     default: () => devModsDialogNamespace,
   });
 });
-//@ chunk-zhrgwca4.js:1152-1212 placement
+//@ chunk-c3nwd9gm.js:1350-1410 placement
 /**
  * 对话框选项值到结果名的映射。
  */
@@ -35,7 +35,7 @@ var CHOICE_BY_VALUE = {
   allow: "enable",
   not_now: "decline",
 };
-//@ chunk-zhrgwca4.js:1212-1310 placement
+//@ chunk-c3nwd9gm.js:1410-1508 placement
 /**
  * 失败原因到结果名的映射。
  */
@@ -45,7 +45,7 @@ var OUTCOME_BY_REASON = {
   no_selection: "unpicked",
   error: "retry",
 };
-//@ chunk-zhrgwca4.js:1310-1472 placement
+//@ chunk-c3nwd9gm.js:1508-1670 placement
 function consentOutcomeToChoice(outcome) {
   switch (outcome.kind) {
     case "chose":
@@ -58,17 +58,15 @@ function consentOutcomeToChoice(outcome) {
       return OUTCOME_BY_REASON[outcome.reason];
   }
 }
-//@ chunk-zhrgwca4.js:1472-1484 placement
-var CONSENT_DIALOG_DELAY_MS = 2000;
-//@ chunk-zhrgwca4.js:1484-1534 placement
+//@ chunk-c3nwd9gm.js:1670-1720 placement
 /**
  * 描述 mod 加载时机（立即或本轮结束后）。
  */
 var loadTimingLabel = (loadTiming) => (loadTiming === "now" ? "now" : "when this turn ends");
-//@ chunk-zhrgwca4.js:1534-1675 placement
+//@ chunk-c3nwd9gm.js:1720-1861 placement
 var devModsConsentBody = (loadTiming) =>
   `They'll load ${loadTimingLabel(loadTiming)}, and they'll reload whenever they change. A mod is code, and it runs with the same access you have here.`;
-//@ chunk-zhrgwca4.js:1675-1801 placement
+//@ chunk-c3nwd9gm.js:1861-1987 placement
 var DEV_MODS_CONSENT_OPTIONS = [
   {
     value: "explain",
@@ -83,7 +81,7 @@ var DEV_MODS_CONSENT_OPTIONS = [
     label: "Not now",
   },
 ];
-//@ chunk-zhrgwca4.js:1801-2369 placement
+//@ chunk-c3nwd9gm.js:1987-2555 placement
 function devModsExplainerLines(loadTiming) {
   let loadsNow = loadTiming === "now";
   let isInteractive = !getIsNonInteractiveSession();
@@ -99,21 +97,23 @@ function devModsExplainerLines(loadTiming) {
   ].join(`
 `);
 }
-//@ chunk-zhrgwca4.js:2369-2383 placement
+//@ chunk-c3nwd9gm.js:2555-2569 placement
 var MODS_DIALOG_TITLE = "Mods";
-//@ chunk-zhrgwca4.js:2383-2439 placement
+//@ chunk-c3nwd9gm.js:2569-2625 placement
 var DEV_MODS_CONSENT_QUESTION = "Turn on the mods Claude writes in this session?";
-//@ chunk-zhrgwca4.js:2439-2468 placement
+//@ chunk-c3nwd9gm.js:2625-2654 placement
 var devModsConsentQuestionFor = (loadTiming) => `${DEV_MODS_CONSENT_QUESTION}
 
 ${devModsConsentBody(loadTiming)}`;
+//@ chunk-c3nwd9gm.js:3126-3138 placement
+var CONSENT_DIALOG_DELAY_MS = 2000;
 export {
   DEV_MODS_CONSENT_QUESTION,
   devModsExplainerLines,
-  devModsConsentQuestionFor,
-  consentOutcomeToChoice,
   MODS_DIALOG_TITLE,
   DEV_MODS_CONSENT_OPTIONS,
+  devModsConsentQuestionFor,
+  consentOutcomeToChoice,
   CONSENT_DIALOG_DELAY_MS,
   devModsDialogNamespace,
 };

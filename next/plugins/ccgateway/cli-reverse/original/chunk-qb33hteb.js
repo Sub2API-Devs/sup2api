@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{p}from"./chunk-k6qypy1d.js";import{ln}from"./chunk-2c3jp4kn.js";import{oCt}from"./chunk-5xgkngpb.js";import{Zwe,Xoi}from"./chunk-0rd17ynw.js";import{o,xH,A,u,Be}from"./chunk-m4y44r15.js";var r="",s="",R4r="mcp",uer="mcp-display-only";var c=p(()=>u({}).passthrough()),uqo=p(()=>Be([o(),A(u({type:o()}).passthrough()),xH()]).describe("MCP tool execution result"));function i(e){if(!Array.isArray(e)||!e.some(a))return e;return e.map((t)=>a(t)?{...t,source:{...t.source,data:""}}:t)}function m(e){return Array.isArray(e)&&e.some(n)?e.filter((t)=>!n(t)):e}function n(e){return e?.type==="document"&&e.source?.type==="base64"&&e.source.data===""}function a(e){return e?.type==="document"&&e.source?.type==="base64"&&e.source.data!==""}var uYe=ln({isMcp:!0,isOpenWorld(){return!1},name:"mcp",uiTableKey:R4r,backgrounding:"self",maxResultSizeChars:1e5,async description(){return s},async prompt(){return r},get inputSchema(){return c()},get outputSchema(){return uqo()},create(){return{async call(){return{data:""}},async checkPermissions(){return{behavior:"passthrough",message:"MCPTool requires permission."}}}},renderToolUseMessage(e,{verbose:t}){return oCt(e,{verbose:t})},userFacingName:()=>"mcp",stripForCreation:(e)=>Xoi(i(e)),mapToolResultToToolResultBlockParam(e,t){return{tool_use_id:t,type:"tool_result",content:Zwe(m(e))}}});
+export{R4r,uer,uqo,uYe};

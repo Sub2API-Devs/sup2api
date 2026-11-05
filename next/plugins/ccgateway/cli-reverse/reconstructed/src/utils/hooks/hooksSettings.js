@@ -3,10 +3,10 @@
  *
  * 钩子显示文本、来源文案、全部钩子列表、相等判断与 matcher 排序。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hooksSettings.ts
- * pieces: chunk-bajxb7bf.js (1), chunk-f9asxqh1.js (1), chunk-s61vbvea.js (14)
- * attribution: fingerprint 6, placement 5, layout 5
+ * pieces: chunk-5tpnqyt5.js (1), chunk-7jxyna5q.js (18), chunk-q1gbn2mn.js (1)
+ * attribution: fingerprint 6, placement 5, layout 9
  */
 import { resolve } from "path";
 import { defaultShellKind } from "../shell/shellToolUtils.js";
@@ -17,13 +17,13 @@ import { hookSourceOf } from "./sessionHooks.js";
 import { isVouchedMarketplaceRef } from "../permissions/permissionsLoader.js";
 import { escapeControlCharsForDisplay } from "../stringUtils.js";
 import { scriptHookDisplayLabel } from "./scriptHooks.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getSettingsForSource, getSettingsFilePathForSource } from "../settings/settings.js";
 import { EDITABLE_SETTING_SOURCES, isSettingSourceEnabled, SOURCES } from "../settings/constants.js";
 import { getSessionId } from "../../bootstrap/state.js";
-import { uniq } from "../collections.js";
 import { getDisplayPath } from "../file.js";
 
-//@ chunk-f9asxqh1.js:4192-4888 fingerprint (2.1.88 match: isHookEqual, 0.737)
+//@ chunk-q1gbn2mn.js:4296-4992 fingerprint (2.1.88 match: isHookEqual, 0.739)
 /**
  * 判断两个钩子配置是否相同（按类型比较 command/args/shell/prompt/url/server/tool/input/script/file 与 if）；function 钩子永不相等。
  */
@@ -66,12 +66,12 @@ function isHookEqual(a, b) {
       return false;
   }
 }
-//@ chunk-s61vbvea.js:200006-200126 placement
+//@ chunk-7jxyna5q.js:205500-205620 placement
 var isInternalCallbackHookMatcher = (matcher) =>
   matcher.pluginRoot === undefined &&
   matcher.deviceOwner === undefined &&
   matcher.hooks.every((hook) => hook.type === "callback" || hook.type === "function");
-//@ chunk-s61vbvea.js:200126-200256 placement
+//@ chunk-7jxyna5q.js:205620-205751 placement
 function isManagedHookMatcher(matcher, holdState) {
   let isManagedKey = () =>
     matcher.deviceOwner === undefined && holdState.managedKeys.has(stableStringifySafe(matcher));
@@ -79,7 +79,7 @@ function isManagedHookMatcher(matcher, holdState) {
     ? isManagedOrAllowlistedHook(matcher.pluginId)
     : isInternalCallbackHookMatcher(matcher) || isManagedKey();
 }
-//@ chunk-s61vbvea.js:200256-200312 placement
+//@ chunk-7jxyna5q.js:205751-205808 placement
 function isManagedHookMatcherSafe(matcher, holdState) {
   try {
     return isManagedHookMatcher(matcher, holdState);
@@ -87,7 +87,7 @@ function isManagedHookMatcherSafe(matcher, holdState) {
     return isInternalCallbackHookMatcher(matcher);
   }
 }
-//@ chunk-s61vbvea.js:200312-200387 placement
+//@ chunk-7jxyna5q.js:205808-205883 placement
 /**
  * 判断单个钩子条目能否解析出所属插件且该插件满足条件（解析出错视为否），用于按插件过滤钩子设置。
  */
@@ -99,7 +99,7 @@ function isHookPluginSatisfied(hook) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:200387-200618 placement (2.1.88 match: getAutoUpdatedPluginNames, 0.672)
+//@ chunk-7jxyna5q.js:205883-206114 placement (2.1.88 match: getAutoUpdatedPluginNames, 0.672)
 /**
  * 按“钩子是否来自托管/可更新插件”过滤一组钩子：整组都满足时返回该组或空数组，混合时返回只含满足条目的新组。被 filterHooksByManagedHold 使用。
  */
@@ -116,10 +116,7 @@ function filterHooksByPluginHold(matcher, holdState, wanted) {
     },
   ];
 }
-//@ chunk-s61vbvea.js:374768-375124 fingerprint (2.1.88 match: getHookDisplayText, 0.633)
-/**
- * 钩子的显示文本：command（含 args）、prompt、url、server/tool、script 文件、callback、function。
- */
+//@ chunk-7jxyna5q.js:299433-299789 fingerprint (2.1.88 match: getHookDisplayText, 0.636)
 function getHookDisplayText(hook) {
   switch (hook.type) {
     case "command":
@@ -142,7 +139,7 @@ function getHookDisplayText(hook) {
       return "function";
   }
 }
-//@ chunk-s61vbvea.js:375124-375244 layout
+//@ chunk-7jxyna5q.js:299789-299909 layout
 /**
  * 钩子进度显示：{command 显示文本, statusMessage}。
  */
@@ -155,16 +152,46 @@ function getHookProgressDisplay(hook) {
         : undefined,
   };
 }
-//@ chunk-s61vbvea.js:375244-375329 layout
+//@ chunk-7jxyna5q.js:299909-299947 layout
+function hookTypeLabel(hook) {
+  return `${hook.type} hook`;
+}
+//@ chunk-7jxyna5q.js:299947-300025 layout
+function hasRunnableHookType(hook) {
+  return hook.type === "command" || hook.type === "http" || hook.type === "script";
+}
+//@ chunk-7jxyna5q.js:300025-300111 layout
 /**
  * 钩子运行时的状态文本：有 statusMessage 用它，否则用显示文本。
  */
-function getHookStatusText(hook) {
+function getHookStatusText(config) {
   return escapeControlCharsForDisplay(
-    "statusMessage" in hook && hook.statusMessage ? hook.statusMessage : getHookDisplayText(hook),
+    "statusMessage" in config && config.statusMessage ? config.statusMessage : getHookDisplayText(config),
   );
 }
-//@ chunk-s61vbvea.js:375329-375832 fingerprint (2.1.88 match: getAllHooks, 0.755)
+//@ chunk-7jxyna5q.js:300111-300331 layout
+function hookLabelsByType(hooks, allHooks = hooks) {
+  let labels = new Map();
+  let byType = Map.groupBy([...allHooks, ...hooks].filter(hasRunnableHookType), (hook) => hook.type);
+  for (let hook of hooks.filter(hasRunnableHookType)) {
+    let sameTypeLabels = normalizeCaseForComparison_2((byType.get(hook.type) ?? []).map(getHookDisplayText));
+    let baseLabel = hookTypeLabel(hook);
+    labels.set(
+      hook,
+      sameTypeLabels.length === 1
+        ? baseLabel
+        : `${baseLabel} ${sameTypeLabels.indexOf(getHookDisplayText(hook)) + 1}`,
+    );
+  }
+  return labels;
+}
+//@ chunk-7jxyna5q.js:300331-300419 layout
+function hookStatusLabel(hook, hookEvent) {
+  return hookEvent !== undefined && !("statusMessage" in hook && hook.statusMessage)
+    ? hookEvent
+    : getHookStatusText(hook);
+}
+//@ chunk-7jxyna5q.js:300419-300922 fingerprint (2.1.88 match: getAllHooks, 0.756)
 /**
  * 列出全部已配置钩子（各 settings 来源按文件去重 + 当前会话钩子），allowManagedHooksOnly 时跳过 settings。
  */
@@ -205,7 +232,7 @@ function getAllHooks(appState) {
         });
   return hooks;
 }
-//@ chunk-s61vbvea.js:375832-376617 fingerprint (2.1.88 match: hookSourceDescriptionDisplayString, 0.389)
+//@ chunk-7jxyna5q.js:300922-301707 fingerprint (2.1.88 match: hookSourceDescriptionDisplayString, 0.389)
 /**
  * 钩子来源 → 描述/标题/行内文案表（userSettings、projectSettings、localSettings、policySettings、pluginHook、sessionHook、builtinHook）。
  */
@@ -246,28 +273,28 @@ var HOOK_SOURCE_LABELS = {
     inline: "Built-in",
   },
 };
-//@ chunk-s61vbvea.js:376617-376662 layout
+//@ chunk-7jxyna5q.js:301707-301752 layout
 /**
  * 钩子来源的长描述（如 User settings (~/.claude/settings.json)）。
  */
 function hookSourceDescriptionDisplayString(source) {
   return HOOK_SOURCE_LABELS[source]?.description ?? source;
 }
-//@ chunk-s61vbvea.js:376662-376702 layout
+//@ chunk-7jxyna5q.js:301752-301792 layout
 /**
  * 钩子来源的标题文案（如 User Settings）。
  */
 function hookSourceHeaderDisplayString(source) {
   return HOOK_SOURCE_LABELS[source]?.header ?? source;
 }
-//@ chunk-s61vbvea.js:376702-376742 layout
+//@ chunk-7jxyna5q.js:301792-301832 layout
 /**
  * 钩子来源的行内短文案（如 User、Plugin、Session）。
  */
 function hookSourceInlineDisplayString(source) {
   return HOOK_SOURCE_LABELS[source]?.inline ?? source;
 }
-//@ chunk-s61vbvea.js:376742-377065 fingerprint (2.1.88 match: sortMatchersByPriority, 1)
+//@ chunk-7jxyna5q.js:301832-302155 fingerprint (2.1.88 match: sortMatchersByPriority, 1)
 /**
  * /hooks 界面里按来源优先级（插件/内置最后）再按名字排序 matcher。
  */
@@ -279,8 +306,8 @@ function sortMatchersByPriority(matchers, hooksByEventAndMatcher, selectedEvent)
   return [...matchers].sort((a, b) => {
     let aHooks = hooksByEventAndMatcher[selectedEvent]?.[a] || [];
     let bHooks = hooksByEventAndMatcher[selectedEvent]?.[b] || [];
-    let aSources = uniq(aHooks.map((aHook) => aHook.source));
-    let bSources = uniq(bHooks.map((bHook) => bHook.source));
+    let aSources = normalizeCaseForComparison_2(aHooks.map((aHook) => aHook.source));
+    let bSources = normalizeCaseForComparison_2(bHooks.map((bHook) => bHook.source));
     let getSourcePriority = (source) =>
       source === "pluginHook" || source === "builtinHook" ? 999 : sourcePriority[source];
     let aHighestPriority = Math.min(...aSources.map(getSourcePriority));
@@ -289,7 +316,7 @@ function sortMatchersByPriority(matchers, hooksByEventAndMatcher, selectedEvent)
     return a.localeCompare(b);
   });
 }
-//@ chunk-bajxb7bf.js:47171-47988 fingerprint (2.1.88 match: hookSourceInlineDisplayString, 0.375)
+//@ chunk-5tpnqyt5.js:48670-49487 fingerprint (2.1.88 match: hookSourceInlineDisplayString, 0.375)
 /**
  * 告诉用户该钩子在哪里修改或删除（settings 文件路径、插件、内置、会话、组织策略）。
  */
@@ -314,16 +341,21 @@ function getHookSourceEditHint(source) {
   }
 }
 export {
-  getAllHooks,
-  sortMatchersByPriority,
-  getHookDisplayText,
-  getHookStatusText,
-  getHookProgressDisplay,
+  hookTypeLabel,
   hookSourceInlineDisplayString,
+  getHookProgressDisplay,
+  getHookStatusText,
   hookSourceHeaderDisplayString,
   hookSourceDescriptionDisplayString,
+  getHookDisplayText,
   getHookSourceEditHint,
-  isHookEqual,
+  hasRunnableHookType,
+  hookLabelsByType,
+  hookStatusLabel,
   filterHooksByPluginHold,
+  isHookEqual,
+  getAllHooks,
+  sortMatchersByPriority,
   isHookPluginSatisfied,
+  isManagedHookMatcher,
 };

@@ -1,8 +1,8 @@
 /**
  * chalk/source/vendor/supports-color/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chalk@5.6.0..5.6.2
- * pieces: chunk-4ymxyb4g.js (9)
+ * pieces: chunk-h88kgep4.js (9)
  * attribution: esm-layout 2, esm-fingerprint 7
  */
 import v from "process";
@@ -10,25 +10,25 @@ import os from "os";
 import tty from "tty";
 import { assembleStyles } from "../ansi-styles/index.js";
 
-//@ chunk-4ymxyb4g.js:2723-2737 esm-layout
+//@ chunk-h88kgep4.js:2723-2737 esm-layout
 var ansiStyles = assembleStyles();
 var ansiStylesAlias = ansiStyles;
-//@ chunk-4ymxyb4g.js:2797-2970 esm-fingerprint
+//@ chunk-h88kgep4.js:2797-2970 esm-fingerprint
 function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : v.argv) {
   let prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
   let position = argv.indexOf(prefix + flag);
   let terminatorPosition = argv.indexOf("--");
   return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
 }
-//@ chunk-4ymxyb4g.js:2970-2985 esm-layout
+//@ chunk-h88kgep4.js:2970-2985 esm-layout
 var { env } = v;
 var flagForceColor;
-//@ chunk-4ymxyb4g.js:2985-3130 esm-fingerprint
+//@ chunk-h88kgep4.js:2985-3130 esm-fingerprint
 if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never"))
   flagForceColor = 0;
 else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always"))
   flagForceColor = 1;
-//@ chunk-4ymxyb4g.js:3130-3317 esm-fingerprint
+//@ chunk-h88kgep4.js:3130-3317 esm-fingerprint
 function envForceColor() {
   if ("FORCE_COLOR" in env) {
     if (env.FORCE_COLOR === "true") return 1;
@@ -36,7 +36,7 @@ function envForceColor() {
     return env.FORCE_COLOR.length === 0 ? 1 : Math.min(Number.parseInt(env.FORCE_COLOR, 10), 3);
   }
 }
-//@ chunk-4ymxyb4g.js:3317-3401 esm-fingerprint
+//@ chunk-h88kgep4.js:3317-3401 esm-fingerprint
 function translateLevel(level) {
   if (level === 0) return false;
   return {
@@ -46,7 +46,7 @@ function translateLevel(level) {
     has16m: level >= 3,
   };
 }
-//@ chunk-4ymxyb4g.js:3401-4644 esm-fingerprint
+//@ chunk-h88kgep4.js:3401-4644 esm-fingerprint
 function _supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
   let noFlagForceColor = envForceColor();
   if (noFlagForceColor !== undefined) flagForceColor = noFlagForceColor;
@@ -94,7 +94,7 @@ function _supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
   if ("COLORTERM" in env) return 1;
   return min;
 }
-//@ chunk-4ymxyb4g.js:4644-4716 esm-fingerprint
+//@ chunk-h88kgep4.js:4644-4716 esm-fingerprint
 function createSupportsColor(stream, options = {}) {
   let level = _supportsColor(stream, {
     streamIsTTY: stream && stream.isTTY,
@@ -102,7 +102,7 @@ function createSupportsColor(stream, options = {}) {
   });
   return translateLevel(level);
 }
-//@ chunk-4ymxyb4g.js:4716-4788 esm-fingerprint
+//@ chunk-h88kgep4.js:4716-4788 esm-fingerprint
 var supportsColor = {
   stdout: createSupportsColor({
     isTTY: tty.isatty(1),

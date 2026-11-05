@@ -3,9 +3,9 @@
  *
  * 定时任务调度器：加载 scheduled_tasks.json 与会话内任务、抢调度锁、每秒检查到点任务并触发、错过的一次性任务提示、过期循环任务清理、文件监听
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronScheduler.ts
- * pieces: chunk-hnzqng4j.js (9)
+ * pieces: chunk-75adsf9v.js (9)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1, layout 3, facade-exports 2
  */
 import { join } from "path";
@@ -54,7 +54,7 @@ import { shortHash } from "./shortHash.js";
 import { cronToHuman } from "./cron.js";
 import { fenceCodeBlock } from "./stringUtils.js";
 
-//@ chunk-hnzqng4j.js:4668-4815 sole-consumer
+//@ chunk-75adsf9v.js:4669-4816 sole-consumer
 /**
  * 调度锁持有状态：退出清理注册与"被谁占用"的最后记录。
  */
@@ -67,7 +67,7 @@ class SchedulerLockState {
     this.lastBlockedBy = undefined;
   }
 }
-//@ chunk-hnzqng4j.js:4815-4876 affinity
+//@ chunk-75adsf9v.js:4816-4877 affinity
 /**
  * 依赖模块与常量：检查间隔 1000ms、文件监听去抖 300ms、锁探测间隔 5000ms。
  */
@@ -75,7 +75,7 @@ var loopSentinelModule = require("./loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var CHECK_INTERVAL_MS = 1000;
 var WATCH_DEBOUNCE_MS = 300;
 var LOCK_PROBE_INTERVAL_MS = 5000;
-//@ chunk-hnzqng4j.js:4876-4973 fingerprint (2.1.88 match: isRecurringTaskAged, 1)
+//@ chunk-75adsf9v.js:4877-4974 fingerprint (2.1.88 match: isRecurringTaskAged, 1)
 /**
  * 循环任务是否已超过最长存活时间（permanent 除外，maxAge 为 0 表示不限）。
  */
@@ -83,7 +83,7 @@ function isRecurringTaskAged(task, nowMs, maxAgeMs) {
   if (maxAgeMs === 0) return false;
   return Boolean(task.recurring && !task.permanent && nowMs - task.createdAt >= maxAgeMs);
 }
-//@ chunk-hnzqng4j.js:4973-5640 layout
+//@ chunk-75adsf9v.js:4974-5641 layout
 /**
  * 找出 scheduled_tasks.json 中由其他会话创建、且本项目目录下确实有其 transcript 的会话集合（用来判断是否由本项目接管这些任务）。
  */
@@ -120,16 +120,16 @@ async function findKnownCreatorSessions(tasks, selfSessionId, projectDir) {
     );
   return knownSessions;
 }
-//@ chunk-hnzqng4j.js:5640-5674 layout
+//@ chunk-75adsf9v.js:5641-5675 layout
 /**
  * 本进程已"交给处理器保留"的任务键集合（dir + id）。
  */
 var keptBackTaskKeys = identity(new Set(), (set) => set.clear());
-//@ chunk-hnzqng4j.js:5674-5716 layout
+//@ chunk-75adsf9v.js:5675-5717 layout
 function taskKey(dir, taskId) {
   return `${dir ?? ""}\x00${taskId}`;
 }
-//@ chunk-hnzqng4j.js:5716-12204 facade-exports (2.1.88 match: createCronScheduler, 0.654)
+//@ chunk-75adsf9v.js:5717-12206 facade-exports (2.1.88 match: createCronScheduler, 0.653)
 /**
  * 创建调度器：start 时（已启用或有任务时开启定时任务功能）抢调度锁、加载任务、每秒 check；check 对每个可归属本会话的任务计算带抖动的下次时间，到点调用 onFire/onFireTask，
  * 循环任务重排（超龄则最后一次后删除）、一次性任务删除、持久化 lastFiredAt；首次加载时把错过的一次性任务交给 onMissed 或生成提示。返回 {start, stop, getNextFireTime, checkNow}。
@@ -566,7 +566,7 @@ function createCronScheduler(options) {
     },
   };
 }
-//@ chunk-hnzqng4j.js:12204-12727 facade-exports (2.1.88 match: buildMissedTaskNotification, 0.806)
+//@ chunk-75adsf9v.js:12206-12729 facade-exports (2.1.88 match: buildMissedTaskNotification, 0.807)
 /**
  * 生成错过的一次性任务提示：说明已从文件删除，要求先用 AskUserQuestion 确认再执行，并列出每个任务的时间描述与提示词。
  */
@@ -585,7 +585,7 @@ ${blocks.join(`
 
 `)}`;
 }
-//@ chunk-hnzqng4j.js:12727-12919 sole-consumer
+//@ chunk-75adsf9v.js:12729-12921 sole-consumer
 function toReportableTaskError(error, taskId) {
   let buildError = () =>
     withTelemetryMessage(

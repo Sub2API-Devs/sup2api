@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：访客通行证对话框：读取资格与兑换记录后展示每张通行证的状态、推荐链接与奖励。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aa3cndeh.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b38vrjgc.js (9)
  * attribution: placement 9
  */
 import {
@@ -30,7 +30,7 @@ import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { setClipboard } from "../../ink/termio/osc.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { FocusColumn } from "../../components/design-system/FocusColumn.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   formatMinorUnits,
   getCachedOrFetchPassesEligibility,
@@ -40,19 +40,19 @@ import { Byline } from "../../components/design-system/Byline.js";
 import { Pane } from "../../components/design-system/Pane.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-aa3cndeh.js:5303-5307 placement
+//@ chunk-b38vrjgc.js:5640-5644 placement
 init_react_production();
-//@ chunk-aa3cndeh.js:5307-5322 placement
+//@ chunk-b38vrjgc.js:5644-5659 placement
 function noop() {}
-//@ chunk-aa3cndeh.js:5322-5360 placement
+//@ chunk-b38vrjgc.js:5659-5697 placement
 function isPassAvailable(pass) {
   return pass.isAvailable;
 }
-//@ chunk-aa3cndeh.js:5360-5417 placement
+//@ chunk-b38vrjgc.js:5697-5754 placement
 function availableFirst(first, second) {
   return +second.isAvailable - +first.isAvailable;
 }
-//@ chunk-aa3cndeh.js:5417-5470 placement
+//@ chunk-b38vrjgc.js:5754-5807 placement
 function renderPass(pass) {
   return jsxProd_default(
     Passes,
@@ -62,7 +62,7 @@ function renderPass(pass) {
     pass.passNumber,
   );
 }
-//@ chunk-aa3cndeh.js:5470-6628 placement
+//@ chunk-b38vrjgc.js:5807-6965 placement
 /**
  * 访客通行证（guest passes）对话框组件。
  */
@@ -170,7 +170,7 @@ function GuestPassesDialog(props) {
   } else hint = $[18];
   return hint;
 }
-//@ chunk-aa3cndeh.js:6628-9584 placement
+//@ chunk-b38vrjgc.js:6965-9922 placement
 /**
  * 访客通行证内容：不可用时提示；否则显示剩余张数、通行证状态、推荐链接、说明与条款链接，回车复制链接。
  */
@@ -253,7 +253,7 @@ function GuestPassesContent(props) {
   let { passStatuses, referrerReward } = passes;
   let footer;
   if ($[11] !== passStatuses) {
-    footer = count(passStatuses, isPassAvailable);
+    footer = countWhere(passStatuses, isPassAvailable);
     $[11] = passStatuses;
     $[12] = footer;
   } else footer = $[12];
@@ -426,7 +426,7 @@ function GuestPassesContent(props) {
   } else details = $[51];
   return details;
 }
-//@ chunk-aa3cndeh.js:9584-9694 placement
+//@ chunk-b38vrjgc.js:9922-10032 placement
 function PassesPane(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -440,7 +440,7 @@ function PassesPane(props) {
   } else content = $[1];
   return content;
 }
-//@ chunk-aa3cndeh.js:10490-11146 placement
+//@ chunk-b38vrjgc.js:10828-11484 placement
 /**
  * 读取访客通行证资格与已兑换记录，生成每张通行证的可用状态、推荐链接与推荐人奖励；任何失败返回 {available:false}。
  */

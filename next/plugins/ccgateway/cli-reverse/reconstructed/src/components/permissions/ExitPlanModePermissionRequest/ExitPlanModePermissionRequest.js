@@ -3,9 +3,9 @@
  *
  * 退出计划模式（批准计划）对话框：显示计划，选项"清空上下文并 auto/acceptEdits/bypass 执行、保留上下文、继续规划、ultraplan"，可按计划自动命名会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (9)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 3, fingerprint 4, layout 2
  */
 import { basename } from "path";
@@ -28,9 +28,9 @@ import {
   getSessionId,
   getSdkBetas,
   mainAgentId,
-  setNeedsAutoModeExitAttachment,
   setHasExitedPlanMode,
   setNeedsPlanModeExitAttachment,
+  setNeedsAutoModeExitAttachment,
 } from "../../../bootstrap/state.js";
 import {
   getCurrentSessionTitle,
@@ -63,11 +63,12 @@ import { isUltraplanEnabled, launchUltraplan } from "../../../commands/ultraplan
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../../services/policyLimits/policyEvidence.js";
 import {
   canPlanReturnToAutoMode,
+  stripDangerousPermissionsForAutoMode,
   restoreDangerousPermissions,
   getAutoModeConfigOrDefault,
-  stripDangerousPermissionsForAutoMode,
 } from "../../../utils/permissions/permissionSetup.js";
 import { hasSuspiciousText, displayText } from "../../../utils/permissions/approvalPayloadSerialization.js";
+import { isRestrictedModelAllowed } from "../../../utils/model/startupModelResolution.js";
 import { wasProactivityEverOn } from "../../../Tool.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { useTimeout, measureElement } from "../../../ink/hooks/useTerminalHooks.js";
@@ -82,10 +83,10 @@ import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { useUnattendedNotice } from "../UnattendedAutoBlockNotice.js";
 import { resolveEditorCommand } from "../../../utils/editor.js";
 import { toIDEDisplayName } from "../../../utils/ide.js";
-import { useInputRefusalWindow, useRefusalTracker } from "../../CustomSelect/selectTypeahead.js";
-import { lit as lit_2, fromEnum } from "../../../services/analytics/safeMetadata.js";
-import { isAutoModeActive, setAutoModeActive } from "../../../utils/permissions/autoModeState.js";
+import { useRecentInputWithin, useRefusalTracker } from "../../CustomSelect/selectTypeahead.js";
+import { setAutoModeActive, isAutoModeActive } from "../../../utils/permissions/autoModeState.js";
 import { logPermissionModeChanged } from "../../../utils/telemetry/thirdPartyEventRecords.js";
+import { lit as lit_2, fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { teammateSpawnPlanHint } from "../../../tools/ExitPlanModeTool/planPreconditions.js";
 import { isAgentSwarmsEnabled } from "../../../utils/agentSwarmsEnabled.js";
 import { MESSAGE_MARK_SYMBOLS } from "../../../utils/messageKinds.js";
@@ -107,17 +108,18 @@ import { ScrollBoxDefault } from "../../../ink/components/ScrollBox.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
 import { MarkdownText_2 } from "../../pluginUi/render/MarkdownBlock.js";
 import { PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
+import { pickFirst } from "../../design-system/Dialog.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { getDisplayPath } from "../../../utils/file.js";
 import { StatusIcon } from "../../design-system/StatusIcon.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1346542-1346546 placement
+//@ chunk-czq1j3j2.js:1366388-1366392 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1346542", () => {
+deferInit("chunk-czq1j3j2.js:1366388", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1346580-1347178 placement
+//@ chunk-czq1j3j2.js:1368885-1369483 placement
 /**
  * 选择 Ultraplan 时作为 deny 反馈发回模型的说明；同一声明还有计划显示上限与过大时的占位文字。
  */
@@ -126,7 +128,7 @@ var ULTRAPLAN_HANDOFF_FEEDBACK =
 var MAX_PLAN_DISPLAY_LENGTH = 200000;
 var PLAN_TOO_LARGE_TEXT =
   "(the plan is too large to be shown in full \u2014 approval is withheld; send feedback asking for a shorter plan, or press Esc)";
-//@ chunk-18hwfzwa.js:1347178-1347252 placement (2.1.88 match: createDisabledBypassPermissionsContext, 0.769)
+//@ chunk-czq1j3j2.js:1369483-1369557 placement (2.1.88 match: createDisabledBypassPermissionsContext, 0.769)
 function buildSetCurrentModeUpdates(currentContext) {
   return [
     {
@@ -136,7 +138,7 @@ function buildSetCurrentModeUpdates(currentContext) {
     },
   ];
 }
-//@ chunk-18hwfzwa.js:1347252-1347759 fingerprint (2.1.88 match: autoNameSessionFromPlan, 0.799)
+//@ chunk-czq1j3j2.js:1369557-1370064 fingerprint (2.1.88 match: autoNameSessionFromPlan, 0.798)
 function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, credentials) {
   if (isSessionPersistenceDisabled()) return;
   if (!isClearContext && getCurrentSessionTitle(getSessionId())) return;
@@ -178,7 +180,7 @@ function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, c
     })
     .catch(logError);
 }
-//@ chunk-18hwfzwa.js:1347759-1349532 fingerprint (2.1.88 match: buildPlanApprovalOptions, 0.751)
+//@ chunk-czq1j3j2.js:1370064-1371893 fingerprint (2.1.88 match: buildPlanApprovalOptions, 0.744)
 function buildPlanApprovalOptions({
   showClearContext,
   showUltraplan,
@@ -187,6 +189,7 @@ function buildPlanApprovalOptions({
   isBypassPermissionsModeAvailable,
   autoModeGateSnapshot,
   approvalsWithheld = false,
+  modelNeedsAutoOrPlan = false,
   onFeedbackChange,
 }) {
   let options = [];
@@ -194,8 +197,10 @@ function buildPlanApprovalOptions({
   let keepContextModes = {};
   let usedLabel = usedPercent !== null ? ` (${usedPercent}% used)` : "";
   let isAutoModeOffered = Boolean(isAutoModeAvailable) && autoModeGateSnapshot;
+  let autoGatedByModel = modelNeedsAutoOrPlan && isAutoModeOffered;
+  let bypassPreferred = isBypassPermissionsModeAvailable && !autoGatedByModel;
   if (!approvalsWithheld && showClearContext)
-    if (isBypassPermissionsModeAvailable)
+    if (bypassPreferred)
       options.push({
         label: `Yes, clear context${usedLabel} and bypass permissions`,
         value: "yes-bypass-permissions",
@@ -211,7 +216,7 @@ function buildPlanApprovalOptions({
         value: "yes-accept-edits",
       });
   if (!approvalsWithheld) {
-    if (isBypassPermissionsModeAvailable) {
+    if (bypassPreferred) {
       let bypassRow = modeSwitchRow("bypassPermissions", {
         isBypassPermissionsModeAvailable,
       });
@@ -244,9 +249,11 @@ function buildPlanApprovalOptions({
         });
       }
     }
-    let defaultRow = modeSwitchRow("default", {
-      labelVariant: "plan-keep-context",
-    });
+    let defaultRow = autoGatedByModel
+      ? null
+      : modeSwitchRow("default", {
+          labelVariant: "plan-keep-context",
+        });
     if (defaultRow !== null) {
       keepContextRows["yes-default-keep-context"] = defaultRow;
       keepContextModes["yes-default-keep-context"] = "default";
@@ -280,13 +287,13 @@ function buildPlanApprovalOptions({
     autoModeGateSnapshot,
   };
 }
-//@ chunk-18hwfzwa.js:1349532-1349577 layout
+//@ chunk-czq1j3j2.js:1371893-1371938 layout
 function announcePermissionMode(mode) {
   announce(`[${permissionModeIndicator(mode)} on]`, {
     hold: true,
   });
 }
-//@ chunk-18hwfzwa.js:1349577-1349866 fingerprint (2.1.88 match: getContextUsedPercent, 1)
+//@ chunk-czq1j3j2.js:1371938-1372227 fingerprint (2.1.88 match: getContextUsedPercent, 1)
 function getContextUsedPercent(usage, permissionMode) {
   if (!usage) return null;
   let runtimeModel = getRuntimeMainLoopModel({
@@ -305,7 +312,7 @@ function getContextUsedPercent(usage, permissionMode) {
   );
   return used;
 }
-//@ chunk-18hwfzwa.js:1349866-1350606 layout
+//@ chunk-czq1j3j2.js:1372227-1372967 layout
 /**
  * 把退出计划模式对话框的选项转换为权限结果：ultraplan 发反馈、清上下文类选项 deny、保留上下文类 allow 并带权限更新、no 带反馈与图片。
  */
@@ -365,7 +372,7 @@ function exitPlanChoiceToResult(choice, state) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:1350606-1359828 fingerprint (2.1.88 match: ExitPlanModePermissionRequest, 0.679)
+//@ chunk-czq1j3j2.js:1372967-1382630 fingerprint (2.1.88 match: ExitPlanModePermissionRequest, 0.672)
 /**
  * 计划批准对话框：读取计划文件（缺失时提示先写计划），显示计划 Markdown 与上下文用量；选项由 buildPlanApprovalOptions 生成（清空上下文 + auto/acceptEdits/bypass、保留上下文、继续规划/反馈、ultraplan）；批准时设置模式并可清空上下文。
  */
@@ -377,6 +384,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let session = useSession();
   let { addNotification } = useNotifications();
+  let [forcePlain] = useState(() => false);
   let [planFeedback, setPlanFeedback] = useState("");
   let [pastedContents, setPastedContents] = useState({});
   let nextPasteIdRef = useEffectEvent(() => [planFeedback]);
@@ -386,7 +394,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
     (useAppState((appState) => appState.settings.showClearContextOnPlanAccept) ?? false) && !isRemote;
   let ultraplanSessionUrl = useAppState((appState) => appState.ultraplanSessionUrl);
   let ultraplanLaunching = useAppState((appState) => appState.ultraplanLaunching);
-  let mainLoopModel = useMainLoopModel_3();
+  let model = useMainLoopModel_3();
   let backgroundWorkSignal = useBackgroundWorkSignal();
   let showUltraplan =
     isUltraplanEnabled() &&
@@ -394,7 +402,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
     !ultraplanSessionUrl &&
     !ultraplanLaunching &&
     backgroundWorkSignal !== null;
-  let { mode, isAutoModeAvailable, isBypassPermissionsModeAvailable } = toolPermissionContext;
+  let { mode, prePlanMode, isAutoModeAvailable, isBypassPermissionsModeAvailable } = toolPermissionContext;
   let { plan, planFilePath, usage } = payload;
   let [planText, setPlanText] = useState(() =>
     plan && plan.length > 0 ? plan : "No plan found. Please write your plan to the plan file first.",
@@ -404,7 +412,21 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
   let isPlanSmall = planText.length <= MAX_PLAN_DISPLAY_LENGTH;
   let canShowPlan = useMemo(() => isPlanSmall && !hasSuspiciousText(planText), [isPlanSmall, planText]);
   let planDisplay = useMemo(() => (canShowPlan ? displayText(planText) : null), [canShowPlan, planText]);
-  let defaultModeRow = useMemo(() => modeSwitchRow("default"), []);
+  let isDirectRequest = payload.requestSource === undefined;
+  let [allowRestrictedModel] = useState(
+    () => isDirectRequest && !isRemote && isRestrictedModelAllowed(model),
+  );
+  let [canResumeAutoMode] = useState(
+    () =>
+      mode === "plan" &&
+      isDirectRequest &&
+      (prePlanMode === "auto" || allowRestrictedModel) &&
+      (isRemote || (Boolean(isAutoModeAvailable) && options)),
+  );
+  let defaultModeRow = useMemo(
+    () => (canResumeAutoMode ? autoModeRow("exit-plan-resume") : modeSwitchRow("default")),
+    [canResumeAutoMode],
+  );
   let approvalOptions = useMemo(
     () =>
       buildPlanApprovalOptions({
@@ -415,6 +437,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
         isBypassPermissionsModeAvailable,
         autoModeGateSnapshot: options,
         approvalsWithheld: !canShowPlan,
+        modelNeedsAutoOrPlan: allowRestrictedModel,
         onFeedbackChange: setPlanFeedback,
       }),
     [
@@ -426,6 +449,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
       isBypassPermissionsModeAvailable,
       options,
       canShowPlan,
+      allowRestrictedModel,
     ],
   );
   let options_2 = approvalOptions.options;
@@ -502,7 +526,7 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
     : Math.max(1, terminalSize.rows - containerHeight - 4);
   let editorCommand = resolveEditorCommand();
   let editorDisplayName = editorCommand ? toIDEDisplayName(editorCommand) : null;
-  let plan_2 = useInputRefusalWindow();
+  let plan_2 = useRecentInputWithin();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   function refuseInput() {
     if (plan_2() || refusedWithin()) {
@@ -526,6 +550,31 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
         "The ultraplan note above reports what happened to the plan. Do not respond to it \u2014 wait for the user\u2019s next message.",
       mode: "task-notification",
       isMeta: true,
+    });
+  }
+  function switchToAutoMode() {
+    setHasExitedPlanMode(true);
+    setNeedsPlanModeExitAttachment(true);
+    setAutoModeActive(true);
+    logPermissionModeChanged({
+      from: "plan",
+      to: "auto",
+      trigger: "exit_plan_mode",
+    });
+    setAppState((appState) => {
+      let nextContext = {
+        ...appState.toolPermissionContext,
+        mode: "auto",
+        prePlanMode: undefined,
+      };
+      nextContext = {
+        ...nextContext,
+        startupModeDecidedByProactivityLevel: undefined,
+      };
+      return {
+        ...appState,
+        toolPermissionContext: stripDangerousPermissionsForAutoMode(nextContext),
+      };
     });
   }
   async function handleResponse(value) {
@@ -673,29 +722,7 @@ ${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
         clearContext: false,
         hasFeedback: !!acceptFeedback,
       });
-      setHasExitedPlanMode(true);
-      setNeedsPlanModeExitAttachment(true);
-      setAutoModeActive(true);
-      logPermissionModeChanged({
-        from: "plan",
-        to: "auto",
-        trigger: "exit_plan_mode",
-      });
-      setAppState((prev) => {
-        let nextContext = {
-          ...prev.toolPermissionContext,
-          mode: "auto",
-          prePlanMode: undefined,
-        };
-        nextContext = {
-          ...nextContext,
-          startupModeDecidedByProactivityLevel: undefined,
-        };
-        return {
-          ...prev,
-          toolPermissionContext: stripDangerousPermissionsForAutoMode(nextContext),
-        };
-      });
+      switchToAutoMode();
       answer(toResult());
       announcePermissionMode("auto");
       return;
@@ -732,7 +759,7 @@ ${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
             let { block } = await maybeResizeAndDownsampleImageBlock({
               data: img.content,
               mediaType: img.mediaType,
-              limits: imageLimitsForModel(mainLoopModel),
+              limits: imageLimitsForModel(model),
             });
             return block;
           }),
@@ -772,6 +799,28 @@ ${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
         });
         return;
       }
+      let nextContext = {
+        behavior: "allow",
+        updatedInput: {},
+        permissionUpdates: defaultModeRow.applies,
+      };
+      if (canResumeAutoMode) {
+        if (!isRemote && !(mode === "plan" && isAutoModeAvailable && canPlanReturnToAutoMode(prePlanMode))) {
+          answer({
+            behavior: "deny",
+          });
+          return;
+        }
+        logEvent("tengu_plan_exit", {
+          planLengthChars: 0,
+          outcome: lit_2("yes-resume-auto-mode"),
+        });
+        if (answer(nextContext) !== false && !isRemote) {
+          switchToAutoMode();
+          announcePermissionMode("auto");
+        }
+        return;
+      }
       logEvent("tengu_plan_exit", {
         planLengthChars: 0,
         outcome: lit_2("yes-default"),
@@ -789,14 +838,7 @@ ${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
       }
       setHasExitedPlanMode(true);
       setNeedsPlanModeExitAttachment(true);
-      if (
-        answer({
-          behavior: "allow",
-          updatedInput: {},
-          permissionUpdates: defaultModeRow.applies,
-        }) !== false
-      )
-        announcePermissionMode("default");
+      if (answer(nextContext) !== false) announcePermissionMode("default");
       return;
     }
     logEvent("tengu_plan_exit", {
@@ -958,7 +1000,7 @@ ${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
         ref: containerRef,
         flexDirection: "column",
         borderStyle: "round",
-        borderColor: "planMode",
+        borderColor: pickFirst("planMode", forcePlain),
         borderLeft: false,
         borderRight: false,
         borderBottom: false,

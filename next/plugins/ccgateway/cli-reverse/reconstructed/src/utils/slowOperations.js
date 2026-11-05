@@ -3,10 +3,10 @@
  *
  * JSON 序列化/解析包装与慢操作计时（生产构建为空 logger），慢插件 hook 报告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/slowOperations.ts
- * pieces: chunk-4121qate.js (1), chunk-cgr0tezp.js (23)
- * attribution: fingerprint 5, placement 11, file-local 1, layout 6, affinity 1
+ * pieces: chunk-6hadbefe.js (19), chunk-j8f885h1.js (1), chunk-trds6g68.js (4)
+ * attribution: placement 11, file-local 1, layout 6, fingerprint 5, affinity 1
  */
 import { realpath as realpath_2, writeFileSync } from "fs";
 import { extractDebugCategories } from "./debugFilter.js";
@@ -18,39 +18,21 @@ import {
 import { matcherLog } from "./hooks/functionHookMatchers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:17797-17960 placement
-function matchesFilter(debugCategories, filter) {
-  if (!filter) return true;
-  if (debugCategories.length === 0) return false;
-  if (filter.isExclusive) return !debugCategories.some((category) => filter.exclude.includes(category));
-  else return debugCategories.some((category) => filter.include.includes(category));
-}
-//@ chunk-cgr0tezp.js:17960-18019 placement
-function shouldLogDebugCategory(message, filter) {
-  if (!filter) return true;
-  let debugCategories = extractDebugCategories(message);
-  return matchesFilter(debugCategories, filter);
-}
-//@ chunk-cgr0tezp.js:18369-18435 placement
-var realpathPromise = (path) =>
-  new Promise((resolve, reject) => {
-    realpath_2(path, (error, resolved) => (error === null ? resolve(resolved) : reject(error)));
-  });
-//@ chunk-cgr0tezp.js:18435-18458 placement
+//@ chunk-trds6g68.js:191-214 placement
 /**
  * 恒为 true。
  */
 function alwaysTrue() {
   return true;
 }
-//@ chunk-cgr0tezp.js:18458-18527 placement
+//@ chunk-trds6g68.js:214-283 placement
 /**
  * 是否运行于 Bun 单文件可执行。
  */
 function isStandaloneExecutable() {
   return typeof Bun !== "undefined" && Bun.isStandaloneExecutable === true;
 }
-//@ chunk-cgr0tezp.js:18527-18628 placement
+//@ chunk-trds6g68.js:283-385 placement
 /**
  * 非独立可执行文件时，主模块是否为 .ts/.tsx 源文件。
  */
@@ -60,13 +42,31 @@ function isRunningFromTsSource() {
   if (isBunVirtualPath(main)) return false;
   return /\.[cm]?tsx?$/.test(main);
 }
-//@ chunk-cgr0tezp.js:18628-18702 placement
+//@ chunk-trds6g68.js:385-460 placement
 function isBunVirtualPath(path) {
   return /^(?:\/\$bunfs|[a-z]:[\\/]~BUN)(?:[\\/]|$)/i.test(path);
 }
-//@ chunk-cgr0tezp.js:18702-18729 placement
+//@ chunk-6hadbefe.js:5325-5488 placement (2.1.88 match: parseDebugFilter, 1)
+function matchesFilter(categories, filter) {
+  if (!filter) return true;
+  if (categories.length === 0) return false;
+  if (filter.isExclusive) return !categories.some((category) => filter.exclude.includes(category));
+  else return categories.some((category) => filter.include.includes(category));
+}
+//@ chunk-6hadbefe.js:5488-5547 placement
+function shouldLogDebugCategory(message, filter) {
+  if (!filter) return true;
+  let categories = extractDebugCategories(message);
+  return matchesFilter(categories, filter);
+}
+//@ chunk-6hadbefe.js:5897-5963 placement
+var realpathPromise = (path) =>
+  new Promise((resolve, reject) => {
+    realpath_2(path, (error, resolved) => (error === null ? resolve(resolved) : reject(error)));
+  });
+//@ chunk-6hadbefe.js:5963-5990 placement
 var SENTINEL_INODE_MAX = 0xffffffffffffffffn;
-//@ chunk-cgr0tezp.js:18729-18804 placement
+//@ chunk-6hadbefe.js:5990-6065 placement
 /**
  * inode 是否为无效哨兵值。
  */
@@ -74,16 +74,16 @@ function isSentinelInode(ino) {
   let inoBig = BigInt(ino);
   return inoBig === 0n || inoBig === -1n || inoBig === SENTINEL_INODE_MAX || inoBig === 1n << 64n;
 }
-//@ chunk-cgr0tezp.js:18804-18866 placement
+//@ chunk-6hadbefe.js:6065-6127 placement
 /**
  * 两个文件的 inode 是否都有效且不同（判断是否被替换）。
  */
 function didInodeChange(before, after) {
   return !isSentinelInode(before.ino) && !isSentinelInode(after.ino) && before.ino !== after.ino;
 }
-//@ chunk-cgr0tezp.js:18902-19054 placement
+//@ chunk-6hadbefe.js:6163-6315 placement
 var SLOW_OPERATION_THRESHOLD_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cgr0tezp.js:18902", () => {
+deferInit("chunk-6hadbefe.js:6163", () => {
   SLOW_OPERATION_THRESHOLD_MS = (() => {
     let envValue = process.env.CLAUDE_CODE_SLOW_OPERATION_THRESHOLD_MS;
     if (envValue !== undefined) {
@@ -93,20 +93,20 @@ deferInit("chunk-cgr0tezp.js:18902", () => {
     return 1 / 0;
   })();
 });
-//@ chunk-cgr0tezp.js:19054-19084 file-local
+//@ chunk-6hadbefe.js:6315-6345 file-local
 var NOOP_LOGGER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cgr0tezp.js:19054", () => {
+deferInit("chunk-6hadbefe.js:6315", () => {
   NOOP_LOGGER = {
     [Symbol.dispose]() {},
   };
 });
-//@ chunk-cgr0tezp.js:19084-19108 layout
+//@ chunk-6hadbefe.js:6345-6369 layout
 function createSlowOperationLogger() {
   return NOOP_LOGGER;
 }
-//@ chunk-cgr0tezp.js:19108-19118 layout
+//@ chunk-6hadbefe.js:6369-6379 layout
 var slowLogging = createSlowOperationLogger;
-//@ chunk-cgr0tezp.js:19118-19202 fingerprint (2.1.88 match: jsonStringify, 1)
+//@ chunk-6hadbefe.js:6379-6463 fingerprint (2.1.88 match: jsonStringify, 1)
 /**
  * JSON.stringify 包装（慢操作计时点）。
  */
@@ -114,7 +114,7 @@ function jsonStringify(value, replacer, space) {
   using span = slowLogging`JSON.stringify(${lengthOrValue(value)})`;
   return JSON.stringify(value, replacer, space);
 }
-//@ chunk-cgr0tezp.js:19202-19246 layout
+//@ chunk-6hadbefe.js:6463-6507 layout
 /**
  * 序列化为一行 JSONL（末尾换行）。
  */
@@ -125,14 +125,14 @@ function toJsonLine(value) {
 `
   );
 }
-//@ chunk-cgr0tezp.js:19246-19286 layout
+//@ chunk-6hadbefe.js:6507-6547 layout
 /**
  * 直接 JSON.stringify（不计时）。
  */
 function jsonStringifyRaw(value) {
   return JSON.stringify(value);
 }
-//@ chunk-cgr0tezp.js:19286-19410 layout
+//@ chunk-6hadbefe.js:6547-6671 layout
 function jsonlJoin(items) {
   using span = slowLogging`jsonlJoin(${items.length})`;
   let out = "";
@@ -143,7 +143,7 @@ function jsonlJoin(items) {
 `;
   return out;
 }
-//@ chunk-cgr0tezp.js:19410-19509 fingerprint (2.1.88 match: jsonParse, 0.745)
+//@ chunk-6hadbefe.js:6671-6770 fingerprint (2.1.88 match: jsonParse, 0.746)
 /**
  * JSON.parse 包装（慢操作计时点）。
  */
@@ -151,14 +151,14 @@ var jsonParse = (text, reviver) => {
   using span = slowLogging`JSON.parse(${lengthOrValue(text)})`;
   return typeof reviver === "undefined" ? JSON.parse(text) : JSON.parse(text, reviver);
 };
-//@ chunk-cgr0tezp.js:19509-19545 layout
+//@ chunk-6hadbefe.js:6770-6806 layout
 /**
  * 直接 JSON.parse（不计时、不捕获）。
  */
 function jsonParseRaw(text) {
   return JSON.parse(text);
 }
-//@ chunk-cgr0tezp.js:19545-19628 fingerprint (2.1.88 match: clone, 1)
+//@ chunk-6hadbefe.js:6806-6889 fingerprint (2.1.88 match: clone, 1)
 /**
  * structuredClone 包装，带慢操作计时（超阈值记调试日志）。
  */
@@ -166,16 +166,16 @@ function clone(value, options) {
   using span = slowLogging`structuredClone(${lengthOrValue(value)})`;
   return structuredClone(value, options);
 }
-//@ chunk-cgr0tezp.js:19628-19703 fingerprint (2.1.88 match: writeFileSync_DEPRECATED, 0.409)
+//@ chunk-6hadbefe.js:6889-6964 fingerprint (2.1.88 match: writeFileSync_DEPRECATED, 0.409)
 function writeFileSync_DEPRECATED(value, replacer, space) {
   using span = slowLogging`fs.writeFileSync(${value}, ${lengthOrValue(replacer)})`;
   writeFileSync(value, replacer, space);
 }
-//@ chunk-cgr0tezp.js:19703-19756 affinity
+//@ chunk-6hadbefe.js:6964-7017 affinity
 function lengthOrValue(value) {
   return typeof value === "string" ? value.length : value;
 }
-//@ chunk-4121qate.js:71907-72078 fingerprint (2.1.88 match: AntSlowLogger, 0.323)
+//@ chunk-j8f885h1.js:52509-52680 fingerprint (2.1.88 match: AntSlowLogger, 0.337)
 function AntSlowLogger(hookKey, message) {
   let report = slowHookReports_2.get(hookKey);
   slowHookReports_2.delete(hookKey);
@@ -187,20 +187,20 @@ function AntSlowLogger(hookKey, message) {
 export {
   jsonStringify,
   jsonParse,
-  writeFileSync_DEPRECATED,
-  jsonParseRaw,
-  alwaysTrue,
+  jsonStringifyRaw,
   clone,
   toJsonLine,
   jsonlJoin,
+  jsonParseRaw,
   slowLogging,
-  jsonStringifyRaw,
+  alwaysTrue,
   isSentinelInode,
   isStandaloneExecutable,
-  shouldLogDebugCategory,
-  AntSlowLogger,
-  didInodeChange,
   realpathPromise,
   isBunVirtualPath,
+  writeFileSync_DEPRECATED,
+  didInodeChange,
   isRunningFromTsSource,
+  shouldLogDebugCategory,
+  AntSlowLogger,
 };

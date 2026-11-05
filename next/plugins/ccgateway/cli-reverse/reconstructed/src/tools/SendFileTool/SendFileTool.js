@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SendFile 工具：跨会话发送文件；解析发送文件的接收方（uds、桥接、对等会话名）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dq968kwq.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9aspw092.js (12)
  * attribution: placement 12
  */
 import { realpath, unlink } from "fs/promises";
@@ -69,14 +69,14 @@ import {
   getRemoteSendBlock,
 } from "../SendMessageTool/crossSessionAddressing.js";
 import { agentAddressLabel, slugifySessionName, parseNameWithRef } from "../../utils/sessionAddresses.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { SENDFILE, SEND_FILE_SHORT_DESCRIPTION, sendFileToolPrompt } from "./prompt.js";
 import { hasIsolatePeerMachines } from "../../utils/settings/settings.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { encodeControlChars, escapeForTag } from "../../utils/sanitization.js";
 import { setPendingPermissionNote } from "../../utils/permissions/permissionRecord.js";
-import { getDenyRuleForTool, getAskRuleForTool } from "../../utils/permissions/permissions.js";
+import { getDenyRuleForTool, findAskRuleForTool } from "../../utils/permissions/permissions.js";
 import { READ_PATH_PROBE, readPermissionDecisionForPath } from "../../utils/permissions/filesystem.js";
 import { expandPath } from "../../utils/path.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -112,7 +112,7 @@ import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { IMAGE_FILE_EXT_RE } from "../../utils/imagePaste.js";
 
-//@ chunk-dq968kwq.js:12696-13617 placement
+//@ chunk-9aspw092.js:13848-14769 placement
 /**
  * SendFile 的输入 schema（收件人与文件列表）、输出 schema、跨会话/跨机器两种拒绝说明、并发上限（4）与两个并发限制器。
  */
@@ -152,12 +152,12 @@ var fileReadLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (task) => ta
 var fileSendLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (task) => task());
 var SEND_FILE_MACHINE_REFUSAL =
   "Cross-machine file transfer is unavailable: it uploads file contents through Anthropic servers, which this provider/privacy configuration does not allow. Same-machine (uds:) transfers still work.";
-//@ chunk-dq968kwq.js:13617-13749 placement
+//@ chunk-9aspw092.js:14769-14901 placement
 function describeNameShare(sameNamedSiblings) {
   if (sameNamedSiblings === undefined || sameNamedSiblings === 0) return;
   return ` (note: ${sameNamedSiblings} other live ${plural(sameNamedSiblings, "agent now shares", "agents now share")} this name)`;
 }
-//@ chunk-dq968kwq.js:13749-13972 placement
+//@ chunk-9aspw092.js:14901-15124 placement
 var SEND_TO_MAIN_HINT = `use ${SENDMESSAGE} to "${MAIN}" and reference the file as @<path>`;
 var SEND_FILE_REFUSAL_REASONS = {
   unreachable_elevated: ELEVATED_UNREACHABLE_REASON,
@@ -165,7 +165,7 @@ var SEND_FILE_REFUSAL_REASONS = {
   self: SELF_TARGET_REASON,
   impersonation: "target record advertises this session's own token \u2014 refused as impersonation",
 };
-//@ chunk-dq968kwq.js:13972-19274 placement
+//@ chunk-9aspw092.js:15124-20426 placement
 /**
  * 解析发送文件的接收方（uds、桥接、对等会话名）。
  */
@@ -375,7 +375,7 @@ ${joined}${availabilityNote}${selfKind !== "no" ? selfAliasNote(addressText, isT
             SEND_TO_MAIN_HINT,
           ),
         };
-      let any_2 = toolContext.tools.some((tool) => toolMatchesName(tool, LISTAGENTS));
+      let any_2 = toolContext.tools.some((tool) => matchesToolName(tool, LISTAGENTS));
       let filtered = target.closest.filter((candidate) => candidate.where !== "in-process");
       let suggestionText =
         filtered.length > 0
@@ -414,7 +414,7 @@ ${listHint}`,
       };
   }
 }
-//@ chunk-dq968kwq.js:19274-19411 placement
+//@ chunk-9aspw092.js:20426-20563 placement
 function sendFileDedupeKey(input) {
   let filesList = Array.isArray(input.files)
     ? input.files.toSorted()
@@ -423,17 +423,17 @@ function sendFileDedupeKey(input) {
       : input.files;
   return [input.to, input.message ?? null, filesList];
 }
-//@ chunk-dq968kwq.js:19411-19463 placement
+//@ chunk-9aspw092.js:20563-20615 placement
 /**
  * 判断值是非 null 的对象。
  */
 function isObjectLike(checkedNoteForInput) {
   return typeof checkedNoteForInput === "object" && checkedNoteForInput !== null;
 }
-//@ chunk-dq968kwq.js:19463-19596 placement
+//@ chunk-9aspw092.js:20615-20748 placement
 var REMOTE_TRANSFER_NOTE =
   "If the recipient is a Remote Control or cloud session, the file contents travel via Anthropic's servers to another machine.";
-//@ chunk-dq968kwq.js:19596-19818 placement
+//@ chunk-9aspw092.js:20748-20970 placement
 function discloseRemoteTransfer(decision, callOptions, input) {
   if (!hasIsolatePeerMachines() || decision.behavior !== "ask") return decision;
   callOptions.disclosed = true;
@@ -444,14 +444,14 @@ function discloseRemoteTransfer(decision, callOptions, input) {
     ),
   };
 }
-//@ chunk-dq968kwq.js:19818-19887 placement
+//@ chunk-9aspw092.js:20970-21039 placement
 /**
  * 判断决定原因是否为 ruleBehavior=ask 的规则。
  */
 function isAskRuleDecision(decisionReason) {
   return decisionReason?.type === "rule" && decisionReason.rule?.ruleBehavior === "ask";
 }
-//@ chunk-dq968kwq.js:19887-20508 placement
+//@ chunk-9aspw092.js:21039-21660 placement
 /**
  * 发送文件时使用的上下文代理。
  */
@@ -504,13 +504,13 @@ function sendFileContext(toolContext, callOptions) {
     },
   };
 }
-//@ chunk-dq968kwq.js:20508-20629 placement
+//@ chunk-9aspw092.js:21660-21781 placement
 function requireAsk(callContext) {
   if (callContext.ask === undefined)
     throw Error("SendFile: dispatch needs the permission pipeline (call.ask)");
   return callContext.ask;
 }
-//@ chunk-dq968kwq.js:20629-29348 placement
+//@ chunk-9aspw092.js:21781-30498 placement
 /**
  * SendFile 工具：跨会话发送文件。
  */
@@ -612,8 +612,8 @@ var SendFileTool = buildTool({
             if (otherDecision === undefined) otherDecision = decision;
           }
         if (askDecision !== undefined) return discloseRemoteTransfer(askDecision, disclosureState, input);
-        let askRuleForTool = getAskRuleForTool(permissions, READ_PATH_PROBE);
-        if (askRuleForTool)
+        let fileAllowRule = findAskRuleForTool(permissions, READ_PATH_PROBE);
+        if (fileAllowRule)
           return discloseRemoteTransfer(
             {
               behavior: "ask",
@@ -622,7 +622,7 @@ var SendFileTool = buildTool({
               ),
               decisionReason: {
                 type: "rule",
-                rule: askRuleForTool,
+                rule: fileAllowRule,
               },
             },
             disclosureState,
@@ -1003,7 +1003,7 @@ var SendFileTool = buildTool({
           mapped = fileList.map((filePath) => expandPath(filePath));
           mapped_2 = mapped.map((fileName) => basename(fileName));
         }
-        let { uploadBytesToBridgeStore } = await import("../BriefTool/uploadBriefAttachment.lazy.js");
+        let { uploadBytesToBridgeStore } = await import("../BriefTool/upload.lazy.js");
         let fileResults = Array(mapped.length);
         let results = await Promise.all(
           mapped.map((filePath, fileIndex) =>
@@ -1085,7 +1085,7 @@ var SendFileTool = buildTool({
           context.credentials,
         );
         if (!postResult.ok) {
-          let listHint = context.tools.some((tool) => toolMatchesName(tool, LISTAGENTS))
+          let listHint = context.tools.some((tool) => matchesToolName(tool, LISTAGENTS))
             ? ` Call ${LISTAGENTS} to see who is reachable now.`
             : "";
           let staleNote = isLikelyStaleBridgeError(postResult.error)

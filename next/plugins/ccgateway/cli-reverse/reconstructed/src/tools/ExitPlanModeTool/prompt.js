@@ -3,21 +3,22 @@
  *
  * ExitPlanMode 两版 prompt（读计划文件 / diskless 传参），并混入 AskUserQuestion 名称与 header 上限常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitPlanModeTool/prompt.ts
- * pieces: chunk-fnhsh6ng.js (1)
+ * pieces: chunk-sc94d59g.js (1)
  * attribution: fingerprint 1
  */
 import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fnhsh6ng.js:3021-5426 fingerprint (2.1.88 match: EXIT_PLAN_MODE_V2_TOOL_PROMPT, 1)
+//@ chunk-sc94d59g.js:3182-6559 fingerprint (2.1.88 match: EXIT_PLAN_MODE_V2_TOOL_PROMPT, 1)
 /**
  * ExitPlanMode 的两版 prompt：读计划文件版与 diskless 直接传 plan 版。
  */
 var EXIT_PLAN_MODE_PROMPT; // deferred: uses ASKUSERQUESTION (../AskUserQuestionTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var DISKLESS_PLAN_PROMPT;
 var EXIT_PLAN_MODE_DISKLESS_PROMPT;
-deferInit("chunk-fnhsh6ng.js:3021", () => {
+deferInit("chunk-sc94d59g.js:3182", () => {
   EXIT_PLAN_MODE_PROMPT = `Use this tool when you are in plan mode and have finished writing your plan to the plan file and are ready for user approval.
 
 ## How This Tool Works
@@ -42,12 +43,19 @@ Ensure your plan is complete and unambiguous:
 2. Initial task: "Help me implement yank mode for vim" - Use the exit plan mode tool after you have finished planning the implementation steps of the task.
 3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use ${ASKUSERQUESTION} first, then use exit plan mode tool after clarifying the approach.
 `;
-  EXIT_PLAN_MODE_DISKLESS_PROMPT = `Use this tool when you are in plan mode and your plan is ready for the user to approve.
+  DISKLESS_PLAN_PROMPT = `Use this tool when you are in plan mode and your plan is ready for the user to approve.
 
 - Pass the whole plan as \`plan\`, in Markdown. This session has no plan file, so do not write the plan to a file.
 - The user sees the plan on an approval card and approves or declines it. Do NOT ask "Is this plan okay?" or "Should I proceed?" in any other way: that is what this tool does.
 - If they approve, plan mode ends and you carry out the plan as approved.
 - If they decline, you stay in plan mode: find out what they want changed, revise the plan, and call this tool again.
 `;
+  EXIT_PLAN_MODE_DISKLESS_PROMPT = `Use this tool when you are in plan mode and your plan is ready for the user to approve.
+
+- Plan mode's reminder says where this session's plan goes. If that is a Claude Doc, call this tool with no argument: the user has the Doc beside the chat, and a copy on the card could not be edited and would disagree with the Doc after their first change. Otherwise pass the whole plan as \`plan\`, in Markdown; this session has no plan file, so do not write the plan to a file.
+- The user approves or declines on a card. Do NOT ask "Is this plan okay?" or "Should I proceed?" in any other way: that is what this tool does.
+- If they approve, plan mode ends and you carry out the plan as approved. For a Doc, that is the Doc as it reads when they approve, their edits included, so read it before you start.
+- If they decline, you stay in plan mode: find out what they want changed, revise the plan in the same place (the same Doc, or a new \`plan\`), and call this tool again.
+`;
 });
-export { EXIT_PLAN_MODE_DISKLESS_PROMPT, EXIT_PLAN_MODE_PROMPT };
+export { EXIT_PLAN_MODE_PROMPT, EXIT_PLAN_MODE_DISKLESS_PROMPT, DISKLESS_PLAN_PROMPT };

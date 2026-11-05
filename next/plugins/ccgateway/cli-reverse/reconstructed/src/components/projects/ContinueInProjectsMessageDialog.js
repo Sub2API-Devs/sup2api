@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：发送到 Claude 项目前的消息编辑/确认对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kv464nx7.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1gcg79yh.js (1), chunk-sa8rbrfs.js (4)
+ * attribution: placement 5
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useInputRefusalWindow, useMountTime, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useMountTime, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { DECAY_TICK_MS } from "../ResumeStaleConversationDialog.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -33,9 +33,9 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-kv464nx7.js:14087-14091 placement
+//@ chunk-sa8rbrfs.js:15263-15267 placement
 init_react_production();
-//@ chunk-kv464nx7.js:14091-14148 placement
+//@ chunk-sa8rbrfs.js:15267-15324 placement
 function renderDimText(text) {
   return jsxProd_default(
     Text,
@@ -46,7 +46,7 @@ function renderDimText(text) {
     text,
   );
 }
-//@ chunk-kv464nx7.js:14148-14255 placement
+//@ chunk-sa8rbrfs.js:15324-15431 placement
 var MIN_DIALOG_ROWS = 6;
 var BULLET_GAP = 11;
 var RESERVED_ROWS = 20;
@@ -57,15 +57,15 @@ var CLOSE_ONLY_OPTIONS = [
     value: "cancel",
   },
 ];
-//@ chunk-kv464nx7.js:14255-17317 placement
+//@ chunk-sa8rbrfs.js:15431-18493 placement
 /**
  * 发送到 Claude 项目前的消息编辑/确认对话框。
  */
 function ContinueInProjectsMessageDialog(props) {
   let $ = useMemoCache(69);
   let { payload, answer } = props;
-  let inputRefusalWindow = useInputRefusalWindow();
-  let inputRefusalWindow_2 = useInputRefusalWindow(DECAY_TICK_MS);
+  let isRecentInput = useRecentInputWithin();
+  let isRecentInputForSend = useRecentInputWithin(DECAY_TICK_MS);
   let openedAt = useMountTime();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let [isRefusedSend, setIsRefusedSend] = useState(false);
@@ -163,20 +163,20 @@ function ContinueInProjectsMessageDialog(props) {
   let showRevealNotice = isRefusedSend && !isTooSmall;
   let refuseInput;
   if (
-    $[25] !== inputRefusalWindow ||
-    $[26] !== inputRefusalWindow_2 ||
+    $[25] !== isRecentInput ||
+    $[26] !== isRecentInputForSend ||
     $[27] !== noteRefused ||
     $[28] !== refusedWithin
   ) {
     refuseInput = function refuseInput(action) {
-      if (!(action === "send" ? inputRefusalWindow_2() : inputRefusalWindow()) && !refusedWithin()) {
+      if (!(action === "send" ? isRecentInputForSend() : isRecentInput()) && !refusedWithin()) {
         return false;
       }
       noteRefused();
       return true;
     };
-    $[25] = inputRefusalWindow;
-    $[26] = inputRefusalWindow_2;
+    $[25] = isRecentInput;
+    $[26] = isRecentInputForSend;
     $[27] = noteRefused;
     $[28] = refusedWithin;
     $[29] = refuseInput;
@@ -351,4 +351,6 @@ function ContinueInProjectsMessageDialog(props) {
   } else dialog = $[68];
   return dialog;
 }
+//@ chunk-1gcg79yh.js:15021-15025 placement
+init_react_production();
 export { ContinueInProjectsMessageDialog };

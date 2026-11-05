@@ -3,9 +3,9 @@
  *
  * hook 运行进度："Running PreToolUse hooks…" / "N hooks ran"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/HookProgressMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:64280-65544 fingerprint (2.1.88 match: HookProgressMessage, 0.838)
+//@ chunk-wjygkcr4.js:64898-66162 fingerprint (2.1.88 match: HookProgressMessage, 0.838)
 /**
  * hook 进度："Running <事件> hooks…"，完成后 "N <事件> hooks ran"。
  */

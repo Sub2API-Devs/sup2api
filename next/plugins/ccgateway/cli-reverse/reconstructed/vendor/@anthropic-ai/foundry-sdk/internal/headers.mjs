@@ -1,19 +1,19 @@
 /**
  * @anthropic-ai/foundry-sdk/internal/headers.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/foundry-sdk@0.4.1..0.5.4
- * pieces: chunk-q01xm7xp.js (4)
+ * pieces: chunk-5g2k022m.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-//@ chunk-q01xm7xp.js:308-346 esm-layout
+//@ chunk-5g2k022m.js:308-346 esm-layout
 var iterateHeaders = (headers) => {
   iterateHeaders = Array.isArray;
   return iterateHeaders(headers);
 };
 var nulls = iterateHeaders;
-//@ chunk-q01xm7xp.js:346-395 esm-fingerprint
+//@ chunk-5g2k022m.js:346-395 esm-fingerprint
 var brand_privateNullableHeaders = Symbol.for("brand.privateNullableHeaders");
-//@ chunk-q01xm7xp.js:395-824 esm-fingerprint
+//@ chunk-5g2k022m.js:395-824 esm-fingerprint
 function* iterateHeaders_2(headers) {
   if (!headers) return;
   if (brand_privateNullableHeaders in headers) {
@@ -45,7 +45,7 @@ function* iterateHeaders_2(headers) {
     }
   }
 }
-//@ chunk-q01xm7xp.js:824-1426 esm-layout
+//@ chunk-5g2k022m.js:824-1426 esm-layout
 var clearSentinel = Symbol("clear");
 var APPEND_HEADERS = new Set(["x-stainless-helper"]);
 var appendHeaderValue = (existing, addition) => {

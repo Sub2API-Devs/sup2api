@@ -3,16 +3,16 @@
  *
  * 把连续的后台 Bash 完成通知合并显示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/collapseBackgroundBashNotifications.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { isFullscreenEnvEnabled } from "./fullscreen.js";
-import { collapseNotificationRunsIn, notificationKind, weakMap_14 } from "./queuedCommandDisplay.js";
+import { collapseNotificationRunsIn, notificationKind, weakMap_19 } from "./queuedCommandDisplay.js";
 import { TASK_NOTIFICATION, STATUS, SUMMARY } from "../constants/xml.js";
 
-//@ chunk-e6aww6q8.js:4675449-4675952 fingerprint (2.1.88 match: collapseBackgroundBashNotifications, 0.615)
+//@ chunk-5xgkngpb.js:4784054-4784557 fingerprint (2.1.88 match: collapseBackgroundBashNotifications, 0.615)
 /**
  * 把连续的后台 Bash 完成通知合并成一条显示。
  */
@@ -55,7 +55,7 @@ function collapseBackgroundBashNotifications(messages, host, options) {
         ],
       },
     };
-    if (kind === "bash") weakMap_14.set(entry, collapsedCount);
+    if (kind === "bash") weakMap_19.set(entry, collapsedCount);
     result.push(entry);
   }
   return result;

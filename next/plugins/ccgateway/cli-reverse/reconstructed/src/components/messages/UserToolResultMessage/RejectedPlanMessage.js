@@ -3,9 +3,9 @@
  *
  * 用户拒绝计划时显示 "User rejected Claude's plan:" 与计划内容。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/RejectedPlanMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -18,7 +18,7 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { MessageResponse } from "../../MessageResponse.js";
 import { MarkdownText_2 } from "../../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ah34pb7m.js:14788-15144 fingerprint (2.1.88 match: RejectedPlanMessage, 0.802)
+//@ chunk-wjygkcr4.js:15071-15427 fingerprint (2.1.88 match: RejectedPlanMessage, 0.802)
 function RejectedPlanMessage(props) {
   let $ = useMemoCache(3);
   let { plan } = props;

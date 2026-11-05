@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。清理 worktree 回收站与 git alternates。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4nhpaxz9.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2zeqrfs5.js (25)
  * attribution: placement 25
  */
 import { sep, join, basename, dirname, resolve, isAbsolute, parse } from "path";
@@ -17,7 +17,7 @@ import { isOnForeignMount } from "./networkPaths.js";
 import { isPathAbsent, isENOENT, getErrnoCode } from "./errors.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { getProjectDir, canonicalizePath } from "./sessionStoragePortable.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { sameTimestamp } from "./windowsPathNames.js";
 import { CLOUD_TRASH_DIR, CLOUD_TRASH_MARKER_FILE, GITIGNORE_FILE_NAME } from "./cloudTrash.js";
 import { READ_LIMITS, O_NOFOLLOW_ANY, O_NOFOLLOW_FLAG } from "./fsBoundRead.js";
@@ -25,27 +25,27 @@ import { isSentinelInode } from "./slowOperations.js";
 import { openTreeAnchor } from "./fsAnchor/treeAnchor.js";
 import { cleanupSingleDirectory } from "./cleanup.js";
 
-//@ chunk-4nhpaxz9.js:1349-1378 placement
+//@ chunk-2zeqrfs5.js:1433-1462 placement
 /**
  * 写锁文件算“新鲜”的时长（90 秒）。
  */
 var WRITER_LOCK_FRESH_MS = 90000;
 var WRITER_LOCKS = "writer-locks";
-//@ chunk-4nhpaxz9.js:1378-1414 placement
+//@ chunk-2zeqrfs5.js:1462-1498 placement
 /**
  * 判断写锁文件的 mtime 是否足够新。
  */
 function isWriterLockFresh(mtimeMs) {
   return Date.now() - mtimeMs < WRITER_LOCK_FRESH_MS;
 }
-//@ chunk-4nhpaxz9.js:1414-1460 placement
+//@ chunk-2zeqrfs5.js:1498-1544 placement
 /**
  * 读取 .git 指针文件的大小上限（8192）。
  */
 var MAX_GIT_POINTER_FILE_BYTES = 8192;
 var GIT_ENTRY_NAME = ".git";
 var PATH_SEPARATOR_SPLIT_RE = sep === "\\" ? /[\\/]+/ : /\/+/;
-//@ chunk-4nhpaxz9.js:1460-2116 placement
+//@ chunk-2zeqrfs5.js:1544-2200 placement
 async function pruneGitAlternates(alternatesPath, cutoffMs, host = createDeviceTreeHost()) {
   let result = {
     removed: 0,
@@ -103,14 +103,14 @@ async function pruneGitAlternates(alternatesPath, cutoffMs, host = createDeviceT
   }
   return result;
 }
-//@ chunk-4nhpaxz9.js:2116-2156 placement
+//@ chunk-2zeqrfs5.js:2200-2240 placement
 /**
  * 记录最近一次保留时间。
  */
 function markNewestKept(mtimeMs) {
   mtimeMs.newestKeptMs = Date.now();
 }
-//@ chunk-4nhpaxz9.js:2156-2295 placement
+//@ chunk-2zeqrfs5.js:2240-2379 placement
 /**
  * 规范化后比较两个路径是否相同（Windows 盘符大小写）。
  */
@@ -124,7 +124,7 @@ function samePath(leftPath, rightPath, separator = sep) {
   );
   return normalizedLeft === normalizedRight;
 }
-//@ chunk-4nhpaxz9.js:2295-2391 placement
+//@ chunk-2zeqrfs5.js:2379-2475 placement
 /**
  * 判断两个路径是否相同（或大小写折叠后相同）。
  */
@@ -132,7 +132,7 @@ function samePathCaseFolded(leftPath, path) {
   let lowercase = (path) => path.replace(/[A-Z]/g, (upperChar) => upperChar.toLowerCase());
   return samePath(leftPath, path) || samePath(lowercase(leftPath), lowercase(path));
 }
-//@ chunk-4nhpaxz9.js:2391-2421 placement
+//@ chunk-2zeqrfs5.js:2475-2505 placement
 /**
  * 记一次清理错误并更新最近保留时间。
  */
@@ -140,12 +140,12 @@ function markErrorAndNewest(mtimeMs) {
   mtimeMs.errors++;
   markNewestKept(mtimeMs);
 }
-//@ chunk-4nhpaxz9.js:2421-2468 placement
+//@ chunk-2zeqrfs5.js:2505-2552 placement
 /**
  * 去掉字符串末尾的换行。
  */
 var stripTrailingNewlines = (text) => text.replace(/(?<![\r\n])[\r\n]+$/, "");
-//@ chunk-4nhpaxz9.js:2468-2753 placement
+//@ chunk-2zeqrfs5.js:2552-2837 placement
 /**
  * 读取并解析 alternates/gitdir 指向的路径，确认无链接，返回路径或 absent/malformed/refused/leads_nowhere。
  */
@@ -162,7 +162,7 @@ async function resolveAlternatePath(worktreeDir, alternatePath, host, cutoffMs, 
       ? "leads_nowhere"
       : "refused";
 }
-//@ chunk-4nhpaxz9.js:2753-2986 placement
+//@ chunk-2zeqrfs5.js:2837-3070 placement
 /**
  * 路径各级是否都不是符号链接（plainly/missing/refused）。
  */
@@ -180,7 +180,7 @@ async function checkNoSymlinks(host, fullPath) {
   }
   return "plainly";
 }
-//@ chunk-4nhpaxz9.js:2986-3250 placement
+//@ chunk-2zeqrfs5.js:3070-3334 placement
 /**
  * 读取小文件内容并解析（不存在/过大/格式错误时返回原因）。
  */
@@ -197,7 +197,7 @@ async function readSmallFile(host, filePath, normalize) {
     return isENOENT(error) ? "absent" : "refused";
   }
 }
-//@ chunk-4nhpaxz9.js:3250-3398 placement
+//@ chunk-2zeqrfs5.js:3334-3482 placement
 /**
  * 构造判断回收项是否仍有写者锁的函数。
  */
@@ -208,11 +208,13 @@ async function liveWriterChecker(host, worktreeDir, repoPath) {
     CLOUD_SNAPSHOTS_DIR,
   );
   let results = await Promise.all(
-    uniq([worktreeDir, snapshotsDir]).map((lockDir) => readWriterLocks(host, lockDir)),
+    normalizeCaseForComparison_2([worktreeDir, snapshotsDir]).map((lockDir) =>
+      readWriterLocks(host, lockDir),
+    ),
   );
   return (candidate) => results.some((checker) => checker(candidate));
 }
-//@ chunk-4nhpaxz9.js:3398-3669 placement
+//@ chunk-2zeqrfs5.js:3482-3753 placement
 /**
  * 读取写者锁目录中仍新鲜的锁。
  */
@@ -233,7 +235,7 @@ async function readWriterLocks(host, rootDir) {
   }
   return (name) => liveNames.has(name);
 }
-//@ chunk-4nhpaxz9.js:3669-4809 placement
+//@ chunk-2zeqrfs5.js:3753-4893 placement
 async function cleanupWorktreeTrash(host, gitDir, tally) {
   let worktreesDir = join(gitDir, "worktrees");
   let worktreesStats = await host.fs
@@ -332,7 +334,7 @@ async function cleanupWorktreeTrash(host, gitDir, tally) {
   }
   return linkedWorktrees;
 }
-//@ chunk-4nhpaxz9.js:4809-4992 placement
+//@ chunk-2zeqrfs5.js:4893-5076 placement
 /**
  * 核对锚点仍指向同一 git 目录或 worktree。
  */
@@ -346,7 +348,7 @@ async function verifyGitIdentity(anchor, target) {
       return readGitFileMatches(anchor, target.gitFileLine);
   }
 }
-//@ chunk-4nhpaxz9.js:4992-5089 placement
+//@ chunk-2zeqrfs5.js:5076-5173 placement
 /**
  * 按 worktree 种类决定回收目录名与忽略文件。
  */
@@ -360,7 +362,7 @@ var TRASH_LAYOUT_BY_KIND = {
     ignoreFile: GITIGNORE_FILE_NAME,
   },
 };
-//@ chunk-4nhpaxz9.js:5089-5465 placement
+//@ chunk-2zeqrfs5.js:5173-5549 placement
 /**
  * 读取 .git 文件内容并核对与记录一致（防替换）。
  */
@@ -387,7 +389,7 @@ async function readGitFileMatches(anchor, gitFileLine) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-4nhpaxz9.js:5465-5643 placement
+//@ chunk-2zeqrfs5.js:5549-5727 placement
 /**
  * Windows 下按根与相对路径打开目录锚点。
  */
@@ -399,7 +401,7 @@ function openWin32Anchor(host, anchor, anchorPath) {
     true,
   );
 }
-//@ chunk-4nhpaxz9.js:5643-6209 placement
+//@ chunk-2zeqrfs5.js:5727-6293 placement
 /**
  * 按平台打开目录并核对 inode 与锚点一致。
  */
@@ -445,7 +447,7 @@ async function verifyAnchorInode(host, anchor, anchorPath = anchor.realRoot, exp
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-4nhpaxz9.js:6209-6889 placement
+//@ chunk-2zeqrfs5.js:6293-6973 placement
 /**
  * 清理某仓库的回收站：核对路径与身份后删除过期项并移除空回收站。
  */
@@ -498,7 +500,7 @@ async function cleanupTrashDir(host, target, { cutoffMs, isLive, tally }) {
     await anchor.close().catch(() => {});
   }
 }
-//@ chunk-4nhpaxz9.js:6889-7296 placement
+//@ chunk-2zeqrfs5.js:6973-7380 placement
 /**
  * 删除回收站中超过截止时间且无写者的条目。
  */
@@ -523,7 +525,7 @@ async function removeExpiredTrash(host, anchor, trashName, trashDir, { cutoffMs,
     }
   }
 }
-//@ chunk-4nhpaxz9.js:7296-7688 placement
+//@ chunk-2zeqrfs5.js:7380-7772 placement
 /**
  * 回收站只剩忽略文件或为空时删除它。
  */
@@ -548,12 +550,12 @@ async function removeEmptyTrashDir(host, anchor, trashName, trashDir, tally, ign
     if (!isENOENT(error) && getErrnoCode(error) !== "ENOTEMPTY") tally.errors++;
   }
 }
-//@ chunk-4nhpaxz9.js:7945-7968 placement
+//@ chunk-2zeqrfs5.js:8029-8052 placement
 /**
  * 删除过程中目录变新时抛出的错误类型。
  */
 class WorktreeChangedError extends Error {}
-//@ chunk-4nhpaxz9.js:7968-8365 placement
+//@ chunk-2zeqrfs5.js:8052-8449 placement
 /**
  * 递归删除比截止时间旧的目录树（期间变新则中止）。
  */

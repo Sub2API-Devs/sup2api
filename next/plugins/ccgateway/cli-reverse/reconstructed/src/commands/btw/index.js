@@ -3,12 +3,12 @@
  *
  * /btw 命令对象（[question]，瘦客户端通过 control-request 派发）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/btw/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1686098-1686326 fingerprint (2.1.88 match: btw, 0.686)
+//@ chunk-5xgkngpb.js:1760990-1761218 fingerprint (2.1.88 match: btw, 0.686)
 /**
  * /btw 命令对象（local-jsx）；描述：Ask a quick side question without interrupting the main conversation；实现 chunk-583vs41k.js 的 pr。
  */

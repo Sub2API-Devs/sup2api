@@ -1,14 +1,14 @@
 /**
  * @opentelemetry/api/build/src/platform/node/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/api@1.9.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 import { require_globalThis } from "./globalThis.js";
 
-//@ chunk-bwbq4xvm.js:27912-28325 cjs-require-graph
+//@ chunk-7kayq7nc.js:27998-28411 cjs-require-graph
 var require_platform = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

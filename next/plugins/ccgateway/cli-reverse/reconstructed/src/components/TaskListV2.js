@@ -3,9 +3,9 @@
  *
  * 任务列表 V2（Task 工具的任务）：按状态排序显示任务项与 "blocked by" 依赖。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TaskListV2.tsx
- * pieces: chunk-zef67v87.js (10)
+ * pieces: chunk-tv0spgv5.js (10)
  * attribution: placement 5, layout 1, callgraph-fingerprint 1, fingerprint 3
  */
 import {
@@ -30,30 +30,30 @@ import { isAgentSwarmsEnabled } from "../utils/agentSwarmsEnabled.js";
 import { AGENT_COLOR_TO_THEME_COLOR } from "../tools/AgentTool/agentColorManager.js";
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { summarizeRecentActivities } from "../utils/collapseReadSearch.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { truncateToWidth } from "../utils/format.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-zef67v87.js:778-782 placement
+//@ chunk-tv0spgv5.js:779-783 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zef67v87.js:778", () => {
+deferInit("chunk-tv0spgv5.js:779", () => {
   init_react_production();
 });
-//@ chunk-zef67v87.js:782-819 placement (2.1.88 match: _temp4, 1)
+//@ chunk-tv0spgv5.js:783-820 placement (2.1.88 match: _temp4, 1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
-//@ chunk-zef67v87.js:819-873 placement
+//@ chunk-tv0spgv5.js:820-874 placement
 function compareNumbers(left, right) {
   return parseInt(left, 10) - parseInt(right, 10);
 }
-//@ chunk-zef67v87.js:873-904 placement
+//@ chunk-tv0spgv5.js:874-903 placement
 function taskNumberLabel(taskNumber) {
   return `#${taskNumber}`;
 }
-//@ chunk-zef67v87.js:904-1150 placement
+//@ chunk-tv0spgv5.js:903-1149 placement
 /**
  * 展开视图为 tasks 时显示完整任务列表。
  */
@@ -80,16 +80,16 @@ function ExpandedTaskList(props) {
   } else element = $[1];
   return element;
 }
-//@ chunk-zef67v87.js:1150-1163 layout
+//@ chunk-tv0spgv5.js:1149-1162 layout
 var TASK_REFRESH_MS = 30000;
-//@ chunk-zef67v87.js:1163-1290 callgraph-fingerprint (2.1.88 match: byIdAsc, 1)
+//@ chunk-tv0spgv5.js:1162-1289 callgraph-fingerprint (2.1.88 match: byIdAsc, 1)
 function byIdAsc(a, b) {
   let aNum = parseInt(a.id, 10);
   let bNum = parseInt(b.id, 10);
   if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
   return a.id.localeCompare(b.id);
 }
-//@ chunk-zef67v87.js:1290-3878 fingerprint (2.1.88 match: TaskListV2, 0.943)
+//@ chunk-tv0spgv5.js:1289-3877 fingerprint (2.1.88 match: TaskListV2, 0.943)
 function TaskListV2({ tasks, isStandalone = false }) {
   let teamContext = useAppState((appState) => appState.teamContext);
   let appStateTasks = useAppState((s_0) => s_0.tasks);
@@ -144,8 +144,8 @@ function TaskListV2({ tasks, isStandalone = false }) {
         }
       }
   }
-  let completedCount = count(tasks, (t_3) => t_3.status === "completed");
-  let pendingCount = count(tasks, (t_4) => t_4.status === "pending");
+  let completedCount = countWhere(tasks, (t_3) => t_3.status === "completed");
+  let pendingCount = countWhere(tasks, (t_4) => t_4.status === "pending");
   let inProgressCount = tasks.length - completedCount - pendingCount;
   let unresolvedTaskIds = new Set(tasks.filter((t_5) => t_5.status !== "completed").map((t_6) => t_6.id));
   let needsTruncation = tasks.length > maxDisplay;
@@ -180,9 +180,9 @@ function TaskListV2({ tasks, isStandalone = false }) {
   let hiddenSummary = "";
   if (hiddenTasks.length > 0) {
     let parts = [];
-    let hiddenPending = count(hiddenTasks, (t_10) => t_10.status === "pending");
-    let hiddenInProgress = count(hiddenTasks, (t_11) => t_11.status === "in_progress");
-    let hiddenCompleted = count(hiddenTasks, (t_12) => t_12.status === "completed");
+    let hiddenPending = countWhere(hiddenTasks, (t_10) => t_10.status === "pending");
+    let hiddenInProgress = countWhere(hiddenTasks, (t_11) => t_11.status === "in_progress");
+    let hiddenCompleted = countWhere(hiddenTasks, (t_12) => t_12.status === "completed");
     if (hiddenInProgress > 0) parts.push(`${hiddenInProgress} in progress`);
     if (hiddenPending > 0) parts.push(`${hiddenPending} pending`);
     if (hiddenCompleted > 0) parts.push(`${hiddenCompleted} completed`);
@@ -258,7 +258,7 @@ function TaskListV2({ tasks, isStandalone = false }) {
     children: content,
   });
 }
-//@ chunk-zef67v87.js:3878-4080 fingerprint (2.1.88 match: getTaskIcon, 1)
+//@ chunk-tv0spgv5.js:3877-4079 fingerprint (2.1.88 match: getTaskIcon, 1)
 function getTaskIcon(status) {
   switch (status) {
     case "completed":
@@ -278,7 +278,7 @@ function getTaskIcon(status) {
       };
   }
 }
-//@ chunk-zef67v87.js:4080-5736 fingerprint (2.1.88 match: TaskItem, 0.926)
+//@ chunk-tv0spgv5.js:4079-5735 fingerprint (2.1.88 match: TaskItem, 0.926)
 function TaskItem(props) {
   let $ = useMemoCache(37);
   let { task, ownerColor, openBlockers, activity, ownerActive, columns } = props;

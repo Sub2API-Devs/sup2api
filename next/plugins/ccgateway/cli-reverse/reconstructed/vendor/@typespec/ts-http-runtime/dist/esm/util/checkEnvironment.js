@@ -1,11 +1,11 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/util/checkEnvironment.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-//@ chunk-mrx6y2r5.js:47192-47892 esm-layout
+//@ chunk-b5df2wx1.js:47192-47892 esm-layout
 var _a_2;
 var _b;
 var _c_2;
@@ -29,7 +29,7 @@ var isNodeLike =
   typeof globalThis.process !== "undefined" &&
   Boolean(globalThis.process.version) &&
   Boolean((_d = globalThis.process.versions) === null || _d === undefined ? undefined : _d.node);
-//@ chunk-mrx6y2r5.js:47892-48001 esm-fingerprint
+//@ chunk-b5df2wx1.js:47892-48001 esm-fingerprint
 var isReactNative =
   typeof navigator !== "undefined" &&
   (navigator === null || navigator === undefined ? undefined : navigator.product) === "ReactNative";

@@ -3,9 +3,9 @@
  *
  * PDF 整份读取（base64）、pdftoppm 页提取与可用性检测、错误分类
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/pdf.ts
- * pieces: chunk-cne5hsvz.js (1), chunk-t0gq9gyw.js (25)
+ * pieces: chunk-5j7d17eb.js (1), chunk-85eyj5gy.js (25)
  * attribution: fingerprint 4, affinity 1, layout 18, placement 3
  */
 import { constants } from "fs";
@@ -42,7 +42,7 @@ import { readAllPages } from "./pagedRead.js";
 import { getPreSettingsEnvHonoringLiveDeletions } from "./managedEnvApply.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:46537-46713 affinity
+//@ chunk-85eyj5gy.js:46601-46777 affinity
 /**
  * 把页区间描述为文本（page n / pages a-b / pages a-）。
  */
@@ -53,7 +53,7 @@ function describePageRange(range) {
   if (firstPage === lastPage) return `page ${firstPage}`;
   return `pages ${firstPage}-${lastPage}`;
 }
-//@ chunk-t0gq9gyw.js:46713-47385 fingerprint (2.1.88 match: readPDF, 0.929)
+//@ chunk-85eyj5gy.js:46777-47449 fingerprint (2.1.88 match: readPDF, 0.929)
 /**
  * 整份读取 PDF 为 base64（大小上限内），返回 pdf 类型结果或带原因的错误。
  */
@@ -110,7 +110,7 @@ async function readPDF(handle, ioPath) {
     };
   }
 }
-//@ chunk-t0gq9gyw.js:47385-48067 layout
+//@ chunk-85eyj5gy.js:47449-48131 layout
 /**
  * 用 pdfinfo 取 PDF 页数：普通路径直接传；已打开的句柄优先继承 fd，否则（≤上限）读入内存经 stdin 传入；pdfinfo 不存在或文件过大时返回失败原因。
  */
@@ -161,7 +161,7 @@ async function getPdfPageCount(inputPath, openFile, platform = "linux") {
     };
   }
 }
-//@ chunk-t0gq9gyw.js:48067-48592 layout
+//@ chunk-85eyj5gy.js:48131-48710 layout
 /**
  * 执行 pdfinfo（10 秒超时），解析 "Pages:" 行；失败返回 pdfinfoFailure.reason（timeout/not_found/nonzero_exit/no_page_count/no_exit_status）。
  */
@@ -172,10 +172,14 @@ async function runPdfinfo(target, options) {
     ...options,
   });
   if (code === 0) {
-    let match = /^Pages:\s+(\d+)/m.exec(stdout);
-    return match
+    let pageCount;
+    for (let [, pageCountText] of stdout.matchAll(PAGES_INFO_RE)) {
+      let count = Number(pageCountText);
+      if (Number.isSafeInteger(count) && count >= (pageCount ?? 0)) pageCount = count;
+    }
+    return pageCount !== undefined
       ? {
-          pageCount: parseInt(match[1], 10),
+          pageCount,
         }
       : {
           pageCount: null,
@@ -206,7 +210,7 @@ async function runPdfinfo(target, options) {
     },
   };
 }
-//@ chunk-t0gq9gyw.js:48592-48949 layout
+//@ chunk-85eyj5gy.js:48710-49067 layout
 /**
  * 把 pdfinfo 失败原因转成人读文字。
  */
@@ -226,17 +230,18 @@ function describePdfinfoFailure(pdfinfoFailure) {
       return "pdfinfo was not run";
   }
 }
-//@ chunk-t0gq9gyw.js:48949-49022 layout
+//@ chunk-85eyj5gy.js:49067-49140 layout
 function getPdfOpenFlags(platform) {
   let extraFlags = platform === "win32" ? 0 : (constants.O_NONBLOCK ?? 0);
   return constants.O_RDONLY | extraFlags;
 }
-//@ chunk-t0gq9gyw.js:49022-49058 layout
+//@ chunk-85eyj5gy.js:49140-49224 layout
 var WINDOWS_MAX_PATH = 259;
+var PAGES_INFO_RE = /(?:^|\n)Pages:[ \t]+(\d+)[ \t\r]*(?=\n|$)/g;
 var PDFINFO_TIMEOUT_MS = 1e4;
 var STDIN_PATH = "-";
 var READ_CHUNK_BYTES = 1048576;
-//@ chunk-t0gq9gyw.js:49058-49264 layout (2.1.88 match: readJSONLFile, 1)
+//@ chunk-85eyj5gy.js:49224-49430 layout (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(handle, size, signal) {
   let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;
@@ -251,18 +256,18 @@ async function readJSONLFile(handle, size, signal) {
   }
   return buf.subarray(0, totalRead);
 }
-//@ chunk-t0gq9gyw.js:49264-49297 layout
+//@ chunk-85eyj5gy.js:49430-49463 layout
 var MAX_PAGE_NUMBER_DIGITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-t0gq9gyw.js:49264", () => {
+deferInit("chunk-85eyj5gy.js:49430", () => {
   MAX_PAGE_NUMBER_DIGITS = String(2147483647).length;
 });
-//@ chunk-t0gq9gyw.js:49297-49401 layout
+//@ chunk-85eyj5gy.js:49463-49567 layout
 function toNamespacedPathIfLong(inputPath, platform) {
   if (platform !== "win32" || inputPath.length <= WINDOWS_MAX_PATH || !win32.isAbsolute(inputPath))
     return inputPath;
   return win32.toNamespacedPath(inputPath);
 }
-//@ chunk-t0gq9gyw.js:49401-50077 layout
+//@ chunk-85eyj5gy.js:49567-50243 layout
 /**
  * 准备 PDF 页图输出前缀：Windows 上路径可能超过 MAX_PATH 时改在短临时目录渲染，之后 collect 移回、dispose 清理。
  */
@@ -306,7 +311,7 @@ async function createPageImageOutput(outputDir, { platform, scratchRoot }) {
       ),
   };
 }
-//@ chunk-t0gq9gyw.js:50077-50296 layout
+//@ chunk-85eyj5gy.js:50243-50462 layout
 /**
  * 把渲染出的 p-N.jpg 移到目标目录并改名为 pageN.jpg。
  */
@@ -323,7 +328,7 @@ async function movePageImages(scratchDir, outputDir) {
   ).find((settled) => settled.status === "rejected");
   if (found !== undefined) throw found.reason;
 }
-//@ chunk-t0gq9gyw.js:50296-50419 layout
+//@ chunk-85eyj5gy.js:50462-50585 layout
 async function moveFileWithCopyFallback(fromPath, toPath) {
   try {
     await retryFsOp(fromPath, toPath);
@@ -337,7 +342,7 @@ async function moveFileWithCopyFallback(fromPath, toPath) {
     await copyFile(fromPath, toPath);
   }
 }
-//@ chunk-t0gq9gyw.js:50419-50510 layout
+//@ chunk-85eyj5gy.js:50585-50676 layout
 class PdfToolAvailability {
   available = undefined;
   markAvailable() {
@@ -347,16 +352,16 @@ class PdfToolAvailability {
     this.available = undefined;
   }
 }
-//@ chunk-t0gq9gyw.js:50510-50535 layout
+//@ chunk-85eyj5gy.js:50676-50701 layout
 var pdfToolAvailabilityByHost; // deferred: uses PdfToolAvailability of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:50510", () => {
+deferInit("chunk-85eyj5gy.js:50676", () => {
   pdfToolAvailabilityByHost = new HostScoped(() => new PdfToolAvailability());
 });
-//@ chunk-t0gq9gyw.js:50535-50572 layout
+//@ chunk-85eyj5gy.js:50701-50738 layout
 function getPdfToolAvailability() {
   return pdfToolAvailabilityByHost.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:50572-50782 fingerprint (2.1.88 match: isPdftoppmAvailable, 0.749)
+//@ chunk-85eyj5gy.js:50738-50948 fingerprint (2.1.88 match: isPdftoppmAvailable, 0.749)
 /**
  * 检测 pdftoppm 是否可用（pdftoppm -v，结果缓存）。
  */
@@ -371,7 +376,7 @@ async function isPdftoppmAvailable() {
   if (available) pdfToolAvailability.markAvailable();
   return available;
 }
-//@ chunk-t0gq9gyw.js:50782-55214 fingerprint (2.1.88 match: extractPDFPages, 0.581)
+//@ chunk-85eyj5gy.js:50948-55380 fingerprint (2.1.88 match: extractPDFPages, 0.578)
 /**
  * 用 pdftoppm 把指定页区间渲染为 JPEG 到临时目录，返回 parts 结果（页数、输出目录）。
  */
@@ -635,7 +640,7 @@ async function extractPDFPages(
     };
   }
 }
-//@ chunk-t0gq9gyw.js:55214-55637 layout
+//@ chunk-85eyj5gy.js:55380-55803 layout
 var PDFTOPPM_WRITE_FAILED_RE = /^Could not write image to [\s\S]*; exiting\s*$/;
 var PDFTOPPM_STDERR_CATEGORIES = [
   [/^Internal Error(?: \(\d+\))?: /, "internal_error"],
@@ -646,7 +651,7 @@ var PDFTOPPM_STDERR_CATEGORIES = [
   [/^I\/O Error(?: \(\d+\))?: /, "io_output"],
   [/^Syntax (?:Error|Warning)(?: \(\d+\))?: /, "syntax_diagnostics"],
 ];
-//@ chunk-t0gq9gyw.js:55637-55773 layout
+//@ chunk-85eyj5gy.js:55803-55939 layout
 /**
  * 把 pdftoppm 的 stderr 归类（internal_error、io_output、syntax_diagnostics 等）。
  */
@@ -659,19 +664,19 @@ function classifyPdftoppmStderr(stderr) {
     )?.[1] ?? "other"
   );
 }
-//@ chunk-t0gq9gyw.js:55773-55917 layout
+//@ chunk-85eyj5gy.js:55939-56083 layout
 function escapeNonPrintableBytes(text) {
   return Array.from(Buffer.from(text, "utf8"), (byte) =>
     byte < 32 || byte >= 127 ? `<${byte.toString(16).padStart(2, "0")}>` : String.fromCharCode(byte),
   ).join("");
 }
-//@ chunk-t0gq9gyw.js:55917-55968 layout
+//@ chunk-85eyj5gy.js:56083-56134 layout
 function fsErrorCategory(error) {
   return `fs_wrapped_${sanitizeErrnoForTelemetry(error) ?? "none"}`;
 }
-//@ chunk-t0gq9gyw.js:55968-55993 placement
+//@ chunk-85eyj5gy.js:56134-56159 placement
 var LISTCAPEXCEEDED = "ListCapExceeded";
-//@ chunk-t0gq9gyw.js:55993-56224 placement
+//@ chunk-85eyj5gy.js:56159-56390 placement
 function getPdfExtractionKey(extractionDir) {
   let resultsDir = toolResultsDir();
   if (dirname(extractionDir) !== resultsDir)
@@ -685,7 +690,7 @@ function getPdfExtractionKey(extractionDir) {
     relPath: [TOOL_RESULTS_SUBDIR, basename(extractionDir)],
   };
 }
-//@ chunk-t0gq9gyw.js:56224-57275 placement
+//@ chunk-85eyj5gy.js:56390-57441 placement
 /**
  * 列出 PDF 提取的 sidecar 页图。
  */
@@ -787,7 +792,7 @@ async function listPdfSidecarPages(storage, outputDir, scope) {
     scope: sidecarScope,
   };
 }
-//@ chunk-cne5hsvz.js:19054-19108 fingerprint (2.1.88 match: getPDFPageCount, 0.355)
+//@ chunk-5j7d17eb.js:16698-16752 fingerprint (2.1.88 match: getPDFPageCount, 0.355)
 /**
  * pdftoppm/pdfinfo 子进程选项（用 cwd、精简 env）。误配名。
  */

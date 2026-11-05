@@ -3,9 +3,9 @@
  *
  * 工具相关 hook：PreToolUse（改输入、给权限结论、阻止继续、追加上下文）、PostToolUse、PostToolUseFailure，以及把 hook 权限结论并入正常权限流程的 resolveHookPermissionDecision
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/toolHooks.ts
- * pieces: chunk-e6aww6q8.js (37), chunk-s61vbvea.js (1)
+ * pieces: chunk-5xgkngpb.js (37), chunk-7jxyna5q.js (1)
  * attribution: placement 30, affinity 1, fingerprint 4, layout 3
  */
 import {
@@ -70,6 +70,7 @@ import { fromEnum, lit as lit_2, fromEnumOpt } from "../analytics/safeMetadata.j
 import { formatToolErrorMessage } from "../../utils/toolErrors.js";
 import { isAbortError, StreamClosedAbortError, withTelemetryMessage, toError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
+import { getHookCaller } from "../../utils/agentContext.js";
 import { settingsProblemDenial } from "../../utils/settings/settingsProblems.js";
 import { dropStaleHostDisplay } from "../../utils/hooks/hookMessages.js";
 import { reservedKeyDenialIfPresent } from "../../tools/ArtifactTool/reservedKeys.js";
@@ -84,7 +85,7 @@ import { getRemoteHookRunner } from "../../Tool.js";
 import { setStrictestHookAnswer } from "../../utils/hooks/hookPermissionResult.js";
 import { getRuleBehaviorDescription } from "../../utils/permissions/PermissionResult.js";
 
-//@ chunk-s61vbvea.js:610375-610638 placement
+//@ chunk-7jxyna5q.js:527788-528051 placement
 /**
  * 限制钩子 additionalContext 的总长度：逐条加入，超出时截断剩余条目。
  */
@@ -111,7 +112,7 @@ async function capAdditionalContext(entries, event, storage) {
   }
   return kept;
 }
-//@ chunk-e6aww6q8.js:3775878-3775973 placement
+//@ chunk-5xgkngpb.js:3871757-3871852 placement
 /**
  * 构造 hook 错误的 tool_result。
  */
@@ -126,7 +127,7 @@ var hookErrorToolResult = (toolUseId, text) => ({
   is_error: true,
   tool_use_id: toolUseId,
 });
-//@ chunk-e6aww6q8.js:3775973-3776348 placement
+//@ chunk-5xgkngpb.js:3871852-3872227 placement
 /**
  * 构造 tool.call 钩子的附加上下文消息、PreToolUse 阻止继续的消息，以及判断消息是否为阻止继续。
  */
@@ -150,34 +151,34 @@ var buildHookStoppedMessage = (message, name, toolUseID) => ({
 });
 var isHookStoppedMessage = ({ message }) =>
   message.type === "attachment" && message.attachment.type === "hook_stopped_continuation";
-//@ chunk-e6aww6q8.js:3776348-3776530 placement
+//@ chunk-5xgkngpb.js:3872227-3872409 placement
 function findToolResultBlock({ message }, toolUseId) {
   if (message.type !== "user" || typeof message.message.content === "string") return;
   for (let block of message.message.content)
     if (block.type === "tool_result" && block.tool_use_id === toolUseId) return block;
   return;
 }
-//@ chunk-e6aww6q8.js:3776530-3776611 placement
+//@ chunk-5xgkngpb.js:3872409-3872490 placement
 /**
  * 取某工具调用在消息里的耗时。
  */
 var toolDurationMsOf = (made, toolUseId) =>
   made?.messages.find((message) => findToolResultBlock(message, toolUseId) !== undefined)?.toolDuration
     ?.durationMs;
-//@ chunk-e6aww6q8.js:3776611-3776723 placement
+//@ chunk-5xgkngpb.js:3872490-3872602 placement
 var buildToolUseErrorBlock = (toolUseId, message) => ({
   type: "tool_result",
   content: `<tool_use_error>${message}</tool_use_error>`,
   is_error: true,
   tool_use_id: toolUseId,
 });
-//@ chunk-e6aww6q8.js:3776723-3776825 placement
+//@ chunk-5xgkngpb.js:3872602-3872704 placement
 var isRunUnchanged = (hookResult, made) =>
   hookResult.deny === undefined &&
   (hookResult.result === undefined ||
     hookResult.result === made.result ||
     stableStringifySafe(hookResult.result) === stableStringifySafe(made.result));
-//@ chunk-e6aww6q8.js:3776825-3776892 placement
+//@ chunk-5xgkngpb.js:3872704-3872771 placement
 /**
  * 该工具调用有结果且不是错误。
  */
@@ -185,7 +186,7 @@ function ranWithoutError(message, toolUseId) {
   let toolResultBlock = findToolResultBlock(message, toolUseId);
   return toolResultBlock !== undefined && toolResultBlock.is_error !== true;
 }
-//@ chunk-e6aww6q8.js:3776892-3776954 placement
+//@ chunk-5xgkngpb.js:3872771-3872833 placement
 /**
  * 已存在结果块时先移除该结果再返回消息。
  */
@@ -193,7 +194,7 @@ function stripToolResultBlock(result, toolUseId) {
   if (findToolResultBlock(result, toolUseId) !== undefined) markWithheldResult(result.message);
   return result;
 }
-//@ chunk-e6aww6q8.js:3776954-3777201 placement
+//@ chunk-5xgkngpb.js:3872833-3873080 placement
 var rebuildResultMessage = (message, content, mapContent) => ({
   content: content.map(mapContent),
   imagePasteIds: message.imagePasteIds,
@@ -203,7 +204,7 @@ var rebuildResultMessage = (message, content, mapContent) => ({
   sandboxed: message.sandboxed,
   permissionDecision: message.toolDenialKind === undefined ? message.permissionDecision : undefined,
 });
-//@ chunk-e6aww6q8.js:3777201-3777431 placement
+//@ chunk-5xgkngpb.js:3873080-3873310 placement
 /**
  * 在消息列表中找到本次调用的结果消息，把其 tool_result 替换为新块（保留其他元数据）；找不到时只返回新块。
  */
@@ -222,13 +223,13 @@ function replaceToolResult(messages, toolUseId, newBlock) {
         block.type === "tool_result" && block.tool_use_id === toolUseId ? newBlock : block,
       );
 }
-//@ chunk-e6aww6q8.js:3777561-3777675 placement
+//@ chunk-5xgkngpb.js:3873440-3873554 placement
 function findToolUseResult(messages) {
   for (let { message } of messages)
     if (message.type === "user" && message.toolUseResult !== undefined) return message.toolUseResult;
   return;
 }
-//@ chunk-e6aww6q8.js:3777675-3777764 placement
+//@ chunk-5xgkngpb.js:3873554-3873643 placement
 /**
  * 从消息列表里去掉该工具的结果块。
  */
@@ -236,7 +237,7 @@ function withoutToolResultBlock(messages, toolUseId) {
   let index = messages.findIndex((message) => findToolResultBlock(message, toolUseId) !== undefined);
   return messages.filter((message, messageIndex) => messageIndex !== index);
 }
-//@ chunk-e6aww6q8.js:3777764-3778510 placement
+//@ chunk-5xgkngpb.js:3873643-3874391 placement
 /**
  * tool.call 链中的核心环节：检查拒绝，转发中止信号，运行工具并记录本次运行（结果、命令解读、只读标记）；抛错时记录到状态。
  */
@@ -306,7 +307,7 @@ var createCoreToolLink = ({ toolUseContext, runs, state, run, refuse, isMcpTool 
     }
   },
 });
-//@ chunk-e6aww6q8.js:3778510-3778618 placement
+//@ chunk-5xgkngpb.js:3874391-3874499 placement
 var makeErrorResultAppender =
   (toolUseId, prefixMessages, messageOrigin) =>
   (errorText, extraFields, makeBlock = buildToolUseErrorBlock) => [
@@ -320,7 +321,7 @@ var makeErrorResultAppender =
       }),
     },
   ];
-//@ chunk-e6aww6q8.js:3778618-3778740 placement
+//@ chunk-5xgkngpb.js:3874499-3874621 placement
 var createChainState = () => ({
   thrown: undefined,
   managedPass: undefined,
@@ -329,13 +330,13 @@ var createChainState = () => ({
   managedMade: undefined,
   toolEntered: false,
 });
-//@ chunk-e6aww6q8.js:3778740-3778766 placement
+//@ chunk-5xgkngpb.js:3874621-3874647 placement
 /**
  * 是否为 bare fork 且未关闭设置钩子（决定是否运行托管钩子）。
  */
 var shouldRunManagedLink = (keepForSubagents, managedRan, runKept) =>
   keepForSubagents || (managedRan && !runKept);
-//@ chunk-e6aww6q8.js:3778766-3778863 placement
+//@ chunk-5xgkngpb.js:3874647-3874744 placement
 /**
  * 子代理里是否保留工具结果。
  */
@@ -343,16 +344,16 @@ var shouldKeepToolResultInSubagents = (toolUseContext, tool) =>
   !toolUseContext.agentId ||
   toolUseContext.preserveToolUseResults === true ||
   tool.preserveToolUseResultInSubagents === true;
-//@ chunk-e6aww6q8.js:3778863-3778911 placement
+//@ chunk-5xgkngpb.js:3874744-3874792 placement
 var POST_TOOL_HOOK_STOPPED_MESSAGE = "Execution stopped by PostToolUse hook";
-//@ chunk-e6aww6q8.js:3778911-3778958 placement
+//@ chunk-5xgkngpb.js:3874792-3874839 placement
 /**
  * 是否运行托管工具钩子（非会话结束工具且未 bare fork/未关设置钩子）。
  */
 function shouldRunManagedToolHooks(tool, bareFork, settingsHooksOff = undefined) {
   return !isConversationEndTool(tool) && !bareFork && !settingsHooksOff;
 }
-//@ chunk-e6aww6q8.js:3778958-3779745 placement
+//@ chunk-5xgkngpb.js:3874839-3875629 placement
 /**
  * tool.call 链中的托管钩子环节：只运行托管的 PreToolUse 钩子，拒绝或账号记忆改写违规时返回 deny，否则记录托管放行信息并以（可能改写后的）输入继续调用下一环。
  */
@@ -420,7 +421,7 @@ var createManagedHookLink = (tool, context, state) => ({
     }
   },
 });
-//@ chunk-e6aww6q8.js:3779745-3779839 placement
+//@ chunk-5xgkngpb.js:3875629-3875723 placement
 /**
  * 按对象键排序后序列化，便于稳定比较。
  */
@@ -430,7 +431,7 @@ var sortedJson = (attachment) =>
       Object.entries(attachment).toSorted(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)),
     ),
   );
-//@ chunk-e6aww6q8.js:3779839-3780845 placement
+//@ chunk-5xgkngpb.js:3875723-3876732 placement
 /**
  * 运行 PostToolUse 钩子；钩子改写账户记忆服务器结果时拒绝并警告。
  */
@@ -509,7 +510,7 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
     messages,
   };
 }
-//@ chunk-e6aww6q8.js:3780845-3780918 placement
+//@ chunk-5xgkngpb.js:3876732-3876805 placement
 /**
  * 过滤空串后的文本列表，全空返回 undefined。
  */
@@ -517,7 +518,7 @@ function nonEmptyTexts(output) {
   let filtered = output.filter((text) => text !== "");
   return filtered.length === 0 ? undefined : filtered;
 }
-//@ chunk-e6aww6q8.js:3780918-3781155 placement
+//@ chunk-5xgkngpb.js:3876805-3877042 placement
 function applyManagedContextRewrite(output, hookResult) {
   if (!hookResult.rewritten) return output;
   if (typeof hookResult.output === "string") return nonEmptyTexts([hookResult.output]);
@@ -527,7 +528,7 @@ function applyManagedContextRewrite(output, hookResult) {
   );
   return;
 }
-//@ chunk-e6aww6q8.js:3781155-3781663 placement
+//@ chunk-5xgkngpb.js:3877042-3877550 placement
 /**
  * 运行记忆相关的 PostToolUse 钩子，在未被阻止时附上托管改写后的上下文，并去掉与已有附件重复的消息。
  */
@@ -560,7 +561,7 @@ async function runToolCallPostHooks(output, callInfo, priorMessages) {
     ),
   ];
 }
-//@ chunk-e6aww6q8.js:3781663-3781862 placement
+//@ chunk-5xgkngpb.js:3877550-3877749 placement
 function findRunInputForResult(hookResult, toolCallChain, input) {
   let currentInput = toolInputOf(input);
   let resultKey = stableStringifySafe(hookResult.result);
@@ -575,7 +576,7 @@ function findRunInputForResult(hookResult, toolCallChain, input) {
     currentInput
   );
 }
-//@ chunk-e6aww6q8.js:3781862-3782022 placement
+//@ chunk-5xgkngpb.js:3877749-3877909 placement
 function dropBlockingErrors(messages) {
   let kept = [];
   for (let { message } of messages)
@@ -588,7 +589,7 @@ function dropBlockingErrors(messages) {
       });
   return kept;
 }
-//@ chunk-e6aww6q8.js:3782022-3782687 placement
+//@ chunk-5xgkngpb.js:3877909-3878574 placement
 /**
  * 组装 tool.call 钩子链：核心与托管环节、运行记录，以及查询抛错、托管是否运行、工具是否已进入、托管改写、未送达产出等的访问器。
  */
@@ -642,18 +643,18 @@ function createToolCallChain(tool, context, run, refuse) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3782687-3782731 placement
+//@ chunk-5xgkngpb.js:3878574-3878618 placement
 /**
  * 未被拦下且托管改写可用时应用改写。
  */
 var shouldApplyManagedRewrite = (tool, hookResult, runKept) =>
   !runKept && hookResult.deny === undefined && isLiveMemoryToolName(tool);
-//@ chunk-e6aww6q8.js:3885866-3886174 affinity
+//@ chunk-5xgkngpb.js:3984438-3984746 affinity
 var PRE_TOOL_HOOK_TIMEOUT_MESSAGE =
   "PreToolUse hook did not respond before its timeout (host client may be unreachable). The tool call was not executed; other configured hooks may not have completed.";
 var PRE_TOOL_HOOK_ERROR_MESSAGE =
   "PreToolUse hook failed with an unexpected error. The tool call was not executed; other configured hooks may not have completed.";
-//@ chunk-e6aww6q8.js:3886174-3888827 fingerprint (2.1.88 match: runPostToolUseHooks, 0.685)
+//@ chunk-5xgkngpb.js:3984746-3987400 fingerprint (2.1.88 match: runPostToolUseHooks, 0.68)
 /**
  * runPostToolUseHooks：工具成功后执行 PostToolUse hooks，产出 hook 消息、附加上下文、阻止继续，支持 hook 改写 MCP 工具输出（updatedMCPToolOutput）。
  */
@@ -821,7 +822,7 @@ async function* runPostToolUseHooks(
     logError(withTelemetryMessage(toError(error), "PostToolUse hook dispatch failed"));
   }
 }
-//@ chunk-e6aww6q8.js:3888827-3890783 fingerprint (2.1.88 match: runPostToolUseFailureHooks, 0.806)
+//@ chunk-5xgkngpb.js:3987400-3989357 fingerprint (2.1.88 match: runPostToolUseFailureHooks, 0.802)
 /**
  * runPostToolUseFailureHooks：工具失败（含中断）后执行 PostToolUseFailure hooks，产出 hook 消息与附加上下文。
  */
@@ -945,7 +946,7 @@ async function* runPostToolUseFailureHooks(
     logError(withTelemetryMessage(toError(outerError), "PostToolUseFailure hook dispatch failed"));
   }
 }
-//@ chunk-e6aww6q8.js:3890783-3891073 layout
+//@ chunk-5xgkngpb.js:3989357-3989663 layout
 /**
  * 在 resolveHookPermissionDecision 之后再加一道：工具被限定运行位置（_M）而 allow 没有经过对应确认时改判为拒绝。
  */
@@ -970,7 +971,8 @@ async function resolvePermissionDecisionForCall(
   if (
     classifierOnlyConfig(tool) !== undefined &&
     hookPermissionDecision.decision.behavior === "allow" &&
-    !isClassifierAllow(hookPermissionDecision.decision)
+    !isClassifierAllow(hookPermissionDecision.decision) &&
+    getHookCaller(toolUseContext) === undefined
   ) {
     logForDebugging(
       `${tool.name} denied before call: ${describeNonClassifierAllow(hookPermissionDecision.decision)}`,
@@ -986,7 +988,7 @@ async function resolvePermissionDecisionForCall(
   }
   return hookPermissionDecision;
 }
-//@ chunk-e6aww6q8.js:3891073-3891167 layout
+//@ chunk-5xgkngpb.js:3989663-3989757 layout
 /**
  * 取 hook 权限结论里的 updatedInput（allow/ask 才有），否则用原输入。
  */
@@ -997,7 +999,7 @@ function getHookUpdatedInput(hookPermissionResult, input) {
       : undefined) ?? input
   );
 }
-//@ chunk-e6aww6q8.js:3891167-3894038 fingerprint (2.1.88 match: resolveHookPermissionDecision, 0.405)
+//@ chunk-5xgkngpb.js:3989757-3992634 fingerprint (2.1.88 match: resolveHookPermissionDecision, 0.411)
 /**
  * resolveHookPermissionDecision：把 PreToolUse hook 的权限结论与正常权限流程合并。hook allow 仍要过 deny/ask 规则；hook ask 或无结论走 canUseTool；返回最终决策与（可能被改写的）输入。
  */
@@ -1205,7 +1207,7 @@ async function resolveHookPermissionDecision(
     toolUseID,
   });
 }
-//@ chunk-e6aww6q8.js:3894038-3894954 layout
+//@ chunk-5xgkngpb.js:3992634-3993580 layout
 /**
  * 权限评估管线：先规则/模式评估（aWr），再分类器/后处理（nWr）；有输入级硬拒绝直接返回；allow 但上下文要求 requireCanUseTool、或结论为 ask 时调用 canUseTool（必要时禁止"总是允许"）。
  */
@@ -1226,6 +1228,7 @@ async function runPermissionPipeline(decision, request) {
       decision.behavior === "ask" && decision.hostDisplay !== undefined && checkedDecision.behavior !== "deny"
         ? decision
         : checkedDecision,
+      getHookCaller(request.toolUseContext) !== undefined,
     ),
     {
       tool: request.tool,
@@ -1280,7 +1283,7 @@ async function runPermissionPipeline(decision, request) {
     input: request.input,
   };
 }
-//@ chunk-e6aww6q8.js:3894954-3900124 fingerprint (2.1.88 match: runPreToolUseHooks, 0.724)
+//@ chunk-5xgkngpb.js:3993580-3998769 fingerprint (2.1.88 match: runPreToolUseHooks, 0.722)
 /**
  * runPreToolUseHooks：执行 PreToolUse hooks。产出 message、hookPermissionResult（allow/deny/ask/defer）、hookUpdatedInput（改写后再过 validateInput）、preventContinuation/stopReason、additionalContext、stop；hook 超时或异常时视为阻止执行并给出固定文案。
  */
@@ -1645,7 +1648,6 @@ async function* runPreToolUseHooks(
     };
 }
 export {
-  capAdditionalContext,
   isRunUnchanged,
   shouldApplyManagedRewrite,
   makeErrorResultAppender,
@@ -1666,10 +1668,12 @@ export {
   runToolCallPostHooks,
   findRunInputForResult,
   buildToolCallContextMessage,
+  capAdditionalContext,
   createToolCallChain,
   runPreToolUseHooks,
   getHookUpdatedInput,
   resolvePermissionDecisionForCall,
   runPostToolUseHooks,
   runPostToolUseFailureHooks,
+  buildToolUseErrorBlock,
 };

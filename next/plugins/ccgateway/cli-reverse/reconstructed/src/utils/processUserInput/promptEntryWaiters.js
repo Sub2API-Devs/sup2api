@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：提示词提交钩子与条目等待。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (8)
  * attribution: placement 8
  */
 import { identity } from "../identity.js";
 import { HooksError } from "../../plugins/functionHooks/hooksErrors.js";
-import { hasPromptHooks, isPromptHookObserved, getCurrentSpan } from "../telemetry/sessionTracing.js";
+import { hasPromptHooks, isPromptHookObserved, notePromptContent } from "../telemetry/sessionTracing.js";
 import { logError } from "../log.js";
 import { toError } from "../errors.js";
 import { logUserPromptEvent } from "../telemetry/userPromptEvent.js";
 import { hasHookRegistrationChanged } from "../plugins/functionHooks/hookRegistration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xx1vmpsq.js:30826-30996 placement
+//@ chunk-pwdsqzsj.js:31416-31586 placement
 function createMapStore() {
   let store = new Map();
   return {
@@ -37,14 +37,14 @@ function createMapStore() {
     },
   };
 }
-//@ chunk-xx1vmpsq.js:30996-31029 placement
+//@ chunk-pwdsqzsj.js:31586-31619 placement
 var promptEntryWaiters; // deferred: uses createMapStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xx1vmpsq.js:30996", () => {
+deferInit("chunk-pwdsqzsj.js:31586", () => {
   promptEntryWaiters = identity(createMapStore(), (waiterStore) => {
     waiterStore.clear();
   });
 });
-//@ chunk-xx1vmpsq.js:31029-31171 placement
+//@ chunk-pwdsqzsj.js:31619-31761 placement
 function resolvePromptEntryWaiters(newMessages) {
   for (let message of newMessages) {
     if (message.type !== "user") continue;
@@ -54,16 +54,16 @@ function resolvePromptEntryWaiters(newMessages) {
     for (let waiter of waiters) waiter.resolve();
   }
 }
-//@ chunk-xx1vmpsq.js:31171-31318 placement
+//@ chunk-pwdsqzsj.js:31761-31908 placement
 function awaitPromptEntry(entries, messages) {
   let filtered = messages.filter((message) => message.type === "user");
   let targetMessage = filtered.find((message) => message.promptSource !== undefined) ?? filtered[0];
   return targetMessage ? entries.awaitEntry(targetMessage.uuid) : Promise.resolve();
 }
-//@ chunk-xx1vmpsq.js:31318-31413 placement
+//@ chunk-pwdsqzsj.js:31908-32003 placement
 var PROMPT_NOT_ENTERED_MESSAGE =
   "prompt.submit: the prompt did not enter the session (its batch ended before its turn)";
-//@ chunk-xx1vmpsq.js:31413-31743 placement
+//@ chunk-pwdsqzsj.js:32003-32333 placement
 function createPromptEntryTracker() {
   let pendings = new Map();
   let handedOff = false;
@@ -91,7 +91,7 @@ function createPromptEntryTracker() {
     },
   };
 }
-//@ chunk-xx1vmpsq.js:31743-31926 placement
+//@ chunk-pwdsqzsj.js:32333-32516 placement
 function rewrittenEntryText(text, typedText, result) {
   let { screened } = result;
   let rewritten = screened?.dropped === true ? undefined : screened?.rewritten;
@@ -99,12 +99,12 @@ function rewrittenEntryText(text, typedText, result) {
   if (rewritten === undefined) return text;
   return text.trim() === typedText.trim() ? rewritten : undefined;
 }
-//@ chunk-xx1vmpsq.js:31926-32409 placement
+//@ chunk-pwdsqzsj.js:32516-32999 placement
 async function runPromptSubmitHooks(text, runBody, { prompt, reading }) {
   let initialReading = hasPromptHooks() ? undefined : reading;
   if (!isPromptHookObserved()) {
     try {
-      getCurrentSpan(prompt, text, text);
+      notePromptContent(prompt, text, text);
     } catch (error) {
       logError(toError(error));
     }
@@ -121,7 +121,7 @@ async function runPromptSubmitHooks(text, runBody, { prompt, reading }) {
         logUserPromptEvent(record, rewrittenEntryText(record.text, text, screenedValue)),
       );
       heldRecords.clear();
-      getCurrentSpan(prompt, text, rewrittenEntryText(text, text, screenedValue));
+      notePromptContent(prompt, text, rewrittenEntryText(text, text, screenedValue));
     } catch (error) {
       logError(toError(error));
     }
@@ -157,4 +157,4 @@ async function runPromptSubmitHooks(text, runBody, { prompt, reading }) {
     );
   }
 }
-export { resolvePromptEntryWaiters, createPromptEntryTracker, runPromptSubmitHooks, awaitPromptEntry };
+export { createPromptEntryTracker, resolvePromptEntryWaiters, runPromptSubmitHooks, awaitPromptEntry };

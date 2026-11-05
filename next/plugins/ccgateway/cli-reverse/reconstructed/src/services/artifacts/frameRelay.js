@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact frame 请求中继：经启动中继族发送请求与回包处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sh3bk7pt.js (71)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-he38vqx2.js (71)
  * attribution: placement 71
  */
 import {
@@ -19,7 +19,7 @@ import {
 import { logGzipSent, handleFrameGzipRejection } from "../api/gzipRequestBody.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { lit, fromEnum } from "../analytics/safeMetadata.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   isRemoteEnvironmentAny,
   isRemoteManagedEnvironment,
@@ -56,7 +56,7 @@ import { findProxyError } from "../../utils/proxy.js";
 import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sh3bk7pt.js:3791-4306 placement
+//@ chunk-he38vqx2.js:3791-4306 placement
 /**
  * 发送 frame 请求：请求体是普通对象且决定压缩时以 gzip 发送，服务端不支持压缩时回退为未压缩重发；否则直接发送。
  */
@@ -89,64 +89,64 @@ async function sendWithOptionalGzip({ url: options, body, storageV5, signal, sen
     rollout: "frame_publish",
   });
 }
-//@ chunk-sh3bk7pt.js:4306-4399 placement
+//@ chunk-he38vqx2.js:4306-4399 placement
 function isRelayUnsent(relayResult) {
   return (
     !relayResult.ok &&
     (relayResult.reason === "relay-unavailable" || relayResult.reason === "relay-not-served")
   );
 }
-//@ chunk-sh3bk7pt.js:4399-4508 placement
+//@ chunk-he38vqx2.js:4399-4508 placement
 /**
  * 中继请求的两个头 x-ccr-relay-upstream、x-ccr-sandbox-egress 与沙箱出网档位取值。
  */
 var X_CCR_RELAY_UPSTREAM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var X_CCR_SANDBOX_EGRESS;
 var SANDBOX_EGRESS_MODES;
-deferInit("chunk-sh3bk7pt.js:4399", () => {
+deferInit("chunk-he38vqx2.js:4399", () => {
   X_CCR_RELAY_UPSTREAM = "x-ccr-relay-upstream";
   X_CCR_SANDBOX_EGRESS = "x-ccr-sandbox-egress";
   SANDBOX_EGRESS_MODES = new Set(["disabled", "restricted", "unrestricted"]);
 });
-//@ chunk-sh3bk7pt.js:4508-4645 placement
+//@ chunk-he38vqx2.js:4508-4645 placement
 function sandboxEgressOf(result) {
   if (!result.ok || result.route !== "relay" || !fromUpstream(result)) return;
   let egress = result.response.headers?.[X_CCR_SANDBOX_EGRESS];
   return typeof egress === "string" && SANDBOX_EGRESS_MODES.has(egress) ? egress : undefined;
 }
-//@ chunk-sh3bk7pt.js:4645-4682 placement
+//@ chunk-he38vqx2.js:4645-4682 placement
 var CCR_CREDENTIAL_REFUSED_PREFIX = "forbidden: CCR agent tokens";
-//@ chunk-sh3bk7pt.js:4682-4810 placement
+//@ chunk-he38vqx2.js:4682-4810 placement
 function isFrameNotFoundBody(body) {
   if (typeof body === "string") return body.trim() === "not found";
   return typeof body === "object" && body !== null && body.error === "not_found";
 }
-//@ chunk-sh3bk7pt.js:4810-4878 placement
+//@ chunk-he38vqx2.js:4810-4878 placement
 function isFrameNoVersionBody(body) {
   return typeof body === "string" && body.trim() === "no version";
 }
-//@ chunk-sh3bk7pt.js:4878-5105 placement
+//@ chunk-he38vqx2.js:4878-5105 placement
 /**
  * 组织网络策略拒绝 artifact 存储读取/写入的服务端消息集合。
  */
 var RELAY_FALLBACK_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STORE_READ_POLICY_DENIALS;
-deferInit("chunk-sh3bk7pt.js:4878", () => {
+deferInit("chunk-he38vqx2.js:4878", () => {
   RELAY_FALLBACK_STATUSES = new Set([401, 403, 404, 413]);
   STORE_READ_POLICY_DENIALS = new Set([
     "organization network policy denies artifact storage reads for this session",
     "organization network policy could not be determined for this session; artifact storage reads denied",
   ]);
 });
-//@ chunk-sh3bk7pt.js:5105-5304 placement
+//@ chunk-he38vqx2.js:5105-5304 placement
 var STORE_WRITE_POLICY_DENIALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sh3bk7pt.js:5105", () => {
+deferInit("chunk-he38vqx2.js:5105", () => {
   STORE_WRITE_POLICY_DENIALS = new Set([
     "organization network policy denies artifact storage writes for this session",
     "organization network policy could not be determined for this session; artifact storage writes denied",
   ]);
 });
-//@ chunk-sh3bk7pt.js:5304-5440 placement
+//@ chunk-he38vqx2.js:5304-5440 placement
 function isStorePolicyDenial(body) {
   if (!body.ok || fromUpstream(body) || body.status !== 403 || typeof body.data !== "string") return false;
   let trimmed = body.data.trim();
@@ -154,10 +154,10 @@ function isStorePolicyDenial(body) {
     STORE_READ_POLICY_DENIALS.has(trimmed) || (relayIsOnlyRoute() && STORE_WRITE_POLICY_DENIALS.has(trimmed))
   );
 }
-//@ chunk-sh3bk7pt.js:5440-5534 placement
+//@ chunk-he38vqx2.js:5440-5534 placement
 var RELAY_APPROVAL_REQUIRED_TEXT =
   "relay approval required: this change was not approved by the person for this session";
-//@ chunk-sh3bk7pt.js:5534-5631 placement
+//@ chunk-he38vqx2.js:5534-5631 placement
 function isRelayApprovalRequired(body) {
   return (
     body.ok &&
@@ -167,13 +167,13 @@ function isRelayApprovalRequired(body) {
     body.data.trim() === RELAY_APPROVAL_REQUIRED_TEXT
   );
 }
-//@ chunk-sh3bk7pt.js:5631-5962 placement
+//@ chunk-he38vqx2.js:5631-5962 placement
 /**
  * 组织网络策略拒绝或无法确定 artifact 读取时的服务端消息集合，以及云会话网络关闭时挂载读取的说明。
  */
 var READ_POLICY_DENIALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MOUNT_NETWORK_OFF_WORDS;
-deferInit("chunk-sh3bk7pt.js:5631", () => {
+deferInit("chunk-he38vqx2.js:5631", () => {
   READ_POLICY_DENIALS = new Set([
     "organization network policy denies artifact reads for this session",
     "organization network policy could not be determined for this session",
@@ -181,7 +181,7 @@ deferInit("chunk-sh3bk7pt.js:5631", () => {
   MOUNT_NETWORK_OFF_WORDS =
     "this cloud session's network access is turned off for the organization, or could not be confirmed, so the session gateway does not serve artifact pages or files to it";
 });
-//@ chunk-sh3bk7pt.js:5962-6074 placement
+//@ chunk-he38vqx2.js:5962-6074 placement
 function isMountNetworkOffRefusal(status, body) {
   return (
     status === 403 &&
@@ -190,7 +190,7 @@ function isMountNetworkOffRefusal(status, body) {
     READ_POLICY_DENIALS.has(Buffer.from(body).toString("utf8").trim())
   );
 }
-//@ chunk-sh3bk7pt.js:6074-6205 placement
+//@ chunk-he38vqx2.js:6074-6205 placement
 /**
  * 中继相关常量：直连被拒/隧道拒绝的冷却时长、探测超时与大小、记录集合，以及允许透传的请求头正则（x-frame-*、x-ccr-relay-*、accept、if-match）。
  */
@@ -200,7 +200,7 @@ var RELAY_PROBE_MAX_BYTES;
 var weakSet;
 var weakMap;
 var RELAYABLE_HEADER_RE;
-deferInit("chunk-sh3bk7pt.js:6074", () => {
+deferInit("chunk-he38vqx2.js:6074", () => {
   DIRECT_REFUSAL_TTL_MS = 300000;
   RELAY_PROBE_TIMEOUT_MS = 15000;
   RELAY_PROBE_MAX_BYTES = 65536;
@@ -208,12 +208,12 @@ deferInit("chunk-sh3bk7pt.js:6074", () => {
   weakMap = new WeakMap();
   RELAYABLE_HEADER_RE = /^(?:x-frame-[a-z0-9-]+|x-ccr-relay-[a-z0-9-]+|accept|if-match)$/i;
 });
-//@ chunk-sh3bk7pt.js:6205-6266 placement
+//@ chunk-he38vqx2.js:6205-6266 placement
 function filterRelayableHeaders(headers) {
   if (!headers) return headers;
   return pickByHelper(headers, (value, name) => RELAYABLE_HEADER_RE.test(name));
 }
-//@ chunk-sh3bk7pt.js:6266-7634 placement
+//@ chunk-he38vqx2.js:6266-7688 placement
 /**
  * 通过会话中继转发 artifact 请求的路由族与具体路由表：boot/blobs/comments/subscriptions/types/type_create/db/sharing/publish/frames_external 各自的 method+path。
  */
@@ -228,10 +228,11 @@ var DB_RELAY_FAMILY;
 var SHARING_RELAY_FAMILY;
 var PUBLISH_RELAY_FAMILY;
 var FRAMES_EXTERNAL_RELAY_FAMILY;
+var ARTIFACTS_LISTING_RELAY_FAMILY;
 var RELAY_FAMILY_SET;
 var TENGU_COBALT_PLINTH_BURNET;
 var SORTED_RELAY_ROUTES;
-deferInit("chunk-sh3bk7pt.js:6266", () => {
+deferInit("chunk-he38vqx2.js:6266", () => {
   BOOT_RELAY_FAMILY = lit("boot");
   BLOBS_RELAY_FAMILY = lit("blobs");
   COMMENTS_RELAY_FAMILY = lit("comments");
@@ -243,6 +244,7 @@ deferInit("chunk-sh3bk7pt.js:6266", () => {
   SHARING_RELAY_FAMILY = lit("sharing");
   PUBLISH_RELAY_FAMILY = lit("publish");
   FRAMES_EXTERNAL_RELAY_FAMILY = lit("frames_external");
+  ARTIFACTS_LISTING_RELAY_FAMILY = lit("artifacts_listing");
   RELAY_FAMILY_SET = new Set([
     COMMENTS_RELAY_FAMILY,
     SUBSCRIPTIONS_RELAY_FAMILY,
@@ -265,6 +267,7 @@ deferInit("chunk-sh3bk7pt.js:6266", () => {
       "POST /track",
     ]),
     ...parseRelayRoutes(FRAMES_EXTERNAL_RELAY_FAMILY, ["GET /frames/external"]),
+    ...parseRelayRoutes(ARTIFACTS_LISTING_RELAY_FAMILY, ["GET /artifacts"]),
     ...parseRelayRoutes(PUBLISH_RELAY_FAMILY, [
       "POST /deploy/direct",
       "POST /deploy/prepare",
@@ -299,7 +302,7 @@ deferInit("chunk-sh3bk7pt.js:6266", () => {
     ...[],
   ].sort((a, b) => countPlaceholders(a) - countPlaceholders(b));
 });
-//@ chunk-sh3bk7pt.js:7634-7740 placement
+//@ chunk-he38vqx2.js:7688-7794 placement
 function parseRelayRoutes(family, familyName) {
   return familyName.map((route) => {
     let [method, path] = route.split(" ");
@@ -310,11 +313,11 @@ function parseRelayRoutes(family, familyName) {
     };
   });
 }
-//@ chunk-sh3bk7pt.js:7740-7798 placement
+//@ chunk-he38vqx2.js:7794-7852 placement
 function countPlaceholders(route) {
-  return count(route.pattern, (segment) => segment.startsWith("{"));
+  return countWhere(route.pattern, (segment) => segment.startsWith("{"));
 }
-//@ chunk-sh3bk7pt.js:7798-8007 placement
+//@ chunk-he38vqx2.js:7852-8061 placement
 function relayFamily(family, route) {
   let parts = route
     .slice(10)
@@ -331,9 +334,9 @@ function relayFamily(family, route) {
     )?.family ?? null
   );
 }
-//@ chunk-sh3bk7pt.js:8007-8044 placement
+//@ chunk-he38vqx2.js:8061-8098 placement
 var RUNNER_RELAY_FLAG = "tengu_cobalt_plinth_madder";
-//@ chunk-sh3bk7pt.js:8044-8195 placement
+//@ chunk-he38vqx2.js:8098-8249 placement
 function frameRelayActive() {
   if (!isRemoteEnvironmentAny()) return false;
   if (getFrameHostOverride() !== undefined) return false;
@@ -342,15 +345,15 @@ function frameRelayActive() {
     return false;
   return hasUsableRemoteSdkUrl();
 }
-//@ chunk-sh3bk7pt.js:8195-8220 placement
+//@ chunk-he38vqx2.js:8249-8274 placement
 function relayIsOnlyRoute() {
   return isDiskless();
 }
-//@ chunk-sh3bk7pt.js:8220-8261 placement
+//@ chunk-he38vqx2.js:8274-8315 placement
 function frameVerbRelayActive(family = null) {
   return frameRelayActive() && !isBotContextUnserved(family);
 }
-//@ chunk-sh3bk7pt.js:8261-8470 placement
+//@ chunk-he38vqx2.js:8315-8524 placement
 function isBotContextUnserved(family) {
   if (!isActingAsBot() && !isAgentSessionWorkerRelay()) return false;
   if (family !== null && accountBotMayRelay(family)) return false;
@@ -363,13 +366,13 @@ function isBotContextUnserved(family) {
   }
   return true;
 }
-//@ chunk-sh3bk7pt.js:8470-8504 placement
+//@ chunk-he38vqx2.js:8524-8558 placement
 function frameRelayBinds() {
   return isRemoteManagedEnvironment() && frameRelayActive();
 }
-//@ chunk-sh3bk7pt.js:8504-8540 placement
+//@ chunk-he38vqx2.js:8558-8594 placement
 var TENGU_COBALT_PLINTH_MEDLAR = "tengu_cobalt_plinth_medlar";
-//@ chunk-sh3bk7pt.js:8540-8583 placement
+//@ chunk-he38vqx2.js:8594-8637 placement
 function isAgentSessionWorkerRelay() {
   return (
     isByocEnvironment() &&
@@ -377,12 +380,12 @@ function isAgentSessionWorkerRelay() {
     isAgentSessionWorker()
   );
 }
-//@ chunk-sh3bk7pt.js:8583-8638 placement
+//@ chunk-he38vqx2.js:8637-8692 placement
 function accountlessAgentSession() {
   if (isRemoteManagedEnvironment()) return isActingAsBot() && isServiceAgentSession();
   return isAgentSessionWorkerRelay();
 }
-//@ chunk-sh3bk7pt.js:8638-8708 placement
+//@ chunk-he38vqx2.js:8692-8762 placement
 function agentSessionMaySendDirect() {
   return (
     isRemoteEnvironmentAny() &&
@@ -390,9 +393,9 @@ function agentSessionMaySendDirect() {
     accountlessAgentSession()
   );
 }
-//@ chunk-sh3bk7pt.js:8708-8745 placement
+//@ chunk-he38vqx2.js:8762-8799 placement
 var TENGU_COBALT_PLINTH_COMFREY = "tengu_cobalt_plinth_comfrey";
-//@ chunk-sh3bk7pt.js:8745-8789 placement
+//@ chunk-he38vqx2.js:8799-8843 placement
 function runnerAgentMayReadFilesDirect() {
   return (
     isByocEnvironment() &&
@@ -400,7 +403,7 @@ function runnerAgentMayReadFilesDirect() {
     agentSessionMaySendDirect()
   );
 }
-//@ chunk-sh3bk7pt.js:8789-8845 placement
+//@ chunk-he38vqx2.js:8843-8899 placement
 function accountBotMayRelay(family) {
   return (
     RELAY_FAMILY_SET.has(family) &&
@@ -409,11 +412,11 @@ function accountBotMayRelay(family) {
     isUserIngressToken()
   );
 }
-//@ chunk-sh3bk7pt.js:8845-8919 placement
+//@ chunk-he38vqx2.js:8899-8973 placement
 function relayDeclined(family) {
   return (getLiveState().frameRelay.declinedUntil.get(family) ?? 0) > Date.now();
 }
-//@ chunk-sh3bk7pt.js:8919-9065 placement
+//@ chunk-he38vqx2.js:8973-9119 placement
 function declineRelay(family, silent = false) {
   let frameRelay = getLiveState().frameRelay;
   let until = Date.now() + DIRECT_REFUSAL_TTL_MS;
@@ -421,49 +424,49 @@ function declineRelay(family, silent = false) {
   if (silent) frameRelay.hopFailedUntil.set(family, until);
   else frameRelay.hopFailedUntil.delete(family);
 }
-//@ chunk-sh3bk7pt.js:9065-9141 placement
+//@ chunk-he38vqx2.js:9119-9195 placement
 function relayHopFailed(family) {
   return (getLiveState().frameRelay.hopFailedUntil.get(family) ?? 0) > Date.now();
 }
-//@ chunk-sh3bk7pt.js:9141-9214 placement
+//@ chunk-he38vqx2.js:9195-9268 placement
 function relayServed(family) {
   return (getLiveState().frameRelay.servedUntil.get(family) ?? 0) > Date.now();
 }
-//@ chunk-sh3bk7pt.js:9214-9329 placement
+//@ chunk-he38vqx2.js:9268-9383 placement
 function markRelayServed(state) {
   let frameRelay = getLiveState().frameRelay;
   frameRelay.declinedUntil.delete(state);
   frameRelay.servedUntil.set(state, Date.now() + DIRECT_REFUSAL_TTL_MS);
   frameRelay.vouched.add(state);
 }
-//@ chunk-sh3bk7pt.js:9329-9383 placement
+//@ chunk-he38vqx2.js:9383-9437 placement
 function relayVouched(state) {
   return getLiveState().frameRelay.vouched.has(state);
 }
-//@ chunk-sh3bk7pt.js:9383-9433 placement
+//@ chunk-he38vqx2.js:9437-9487 placement
 function clearRelayVouch(state) {
   getLiveState().frameRelay.vouched.delete(state);
 }
-//@ chunk-sh3bk7pt.js:9433-9512 placement
+//@ chunk-he38vqx2.js:9487-9566 placement
 function isDirectRefused(state) {
   return (getLiveState().frameRelay.directRefusedUntil.get(state) ?? 0) > Date.now();
 }
-//@ chunk-sh3bk7pt.js:9512-9569 placement
+//@ chunk-he38vqx2.js:9566-9623 placement
 function isCredentialRefusal(error) {
   return error.ok && error.status === 403 && isCredentialRefusalBody(error.data);
 }
-//@ chunk-sh3bk7pt.js:9569-9642 placement
+//@ chunk-he38vqx2.js:9623-9696 placement
 function isCredentialRefusalBody(body) {
   return typeof body === "string" && body.trimStart().startsWith(CCR_CREDENTIAL_REFUSED_PREFIX);
 }
-//@ chunk-sh3bk7pt.js:9642-9766 placement
+//@ chunk-he38vqx2.js:9696-9820 placement
 function noteDirectRefusal(family, familyKey) {
   if (!familyKey.ok) return;
   let { directRefusedUntil } = getLiveState().frameRelay;
   if (isCredentialRefusal(familyKey)) directRefusedUntil.set(family, Date.now() + DIRECT_REFUSAL_TTL_MS);
   else directRefusedUntil.delete(family);
 }
-//@ chunk-sh3bk7pt.js:9766-9888 placement
+//@ chunk-he38vqx2.js:9820-9942 placement
 function mountDeclinedForRunner(status) {
   if (frameRelayBinds() || !(status === 401 || status === 403 || status === 404)) return false;
   if (relayVouched(ARTIFACT_MOUNT)) {
@@ -473,14 +476,14 @@ function mountDeclinedForRunner(status) {
   declineRelay(ARTIFACT_MOUNT);
   return true;
 }
-//@ chunk-sh3bk7pt.js:9888-9963 placement
+//@ chunk-he38vqx2.js:9942-10017 placement
 function mountHopFailedForRunner(status) {
   if (frameRelayBinds() || relayVouched(ARTIFACT_MOUNT)) return;
   if (status === undefined || status === 499) declineRelay(ARTIFACT_MOUNT, true);
 }
-//@ chunk-sh3bk7pt.js:9963-9977 placement
+//@ chunk-he38vqx2.js:10017-10031 placement
 var alwaysTrue = () => true;
-//@ chunk-sh3bk7pt.js:9977-10126 placement
+//@ chunk-he38vqx2.js:10031-10180 placement
 function noteTunnelDeclined(family, status, status_2) {
   getLiveState().frameRelay.tunnelDeclinedUntil.set(family, Date.now() + DIRECT_REFUSAL_TTL_MS);
   logFeatureSad("artifact_frame_relay", "tunnel_declined", {
@@ -489,16 +492,16 @@ function noteTunnelDeclined(family, status, status_2) {
     status: status_2,
   });
 }
-//@ chunk-sh3bk7pt.js:10126-10145 placement
+//@ chunk-he38vqx2.js:10180-10199 placement
 var weakSet_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sh3bk7pt.js:10126", () => {
+deferInit("chunk-he38vqx2.js:10180", () => {
   weakSet_2 = new WeakSet();
 });
-//@ chunk-sh3bk7pt.js:10145-10208 placement
+//@ chunk-he38vqx2.js:10199-10262 placement
 function isFirstPartyFetchRequest(error) {
   return typeof error === "object" && error !== null && weakSet_2.has(error);
 }
-//@ chunk-sh3bk7pt.js:10208-10798 placement
+//@ chunk-he38vqx2.js:10262-10852 placement
 async function sendRelayed(method, path, body, options, family) {
   let tunnelRoute =
     (getLiveState().frameRelay.tunnelDeclinedUntil.get(family) ?? 0) > Date.now()
@@ -547,7 +550,7 @@ async function sendRelayed(method, path, body, options, family) {
     tunnelled: false,
   };
 }
-//@ chunk-sh3bk7pt.js:10798-10963 placement
+//@ chunk-he38vqx2.js:10852-11017 placement
 function sendByMethod(method, path, pathArg, init) {
   switch (method) {
     case "GET":
@@ -560,7 +563,7 @@ function sendByMethod(method, path, pathArg, init) {
       return apiClient.delete(path, pathArg, init);
   }
 }
-//@ chunk-sh3bk7pt.js:10963-11169 placement
+//@ chunk-he38vqx2.js:11017-11223 placement
 async function withMcpFallback(direct, options) {
   let outcome = "answered";
   try {
@@ -580,7 +583,7 @@ async function withMcpFallback(direct, options) {
     throw error;
   }
 }
-//@ chunk-sh3bk7pt.js:11169-12039 placement
+//@ chunk-he38vqx2.js:11223-12093 placement
 /**
  * 直连 frame 接口：可选经 MCP 线路发送（失败则回退 HTTP），否则通过带套接字错误分类与超时的 HTTP 请求；POST 带 gzip 选项时按 sendWithOptionalGzip 压缩。
  */
@@ -647,17 +650,17 @@ function sendDirect(method, path, body, options, allowMcp = true) {
     },
   });
 }
-//@ chunk-sh3bk7pt.js:12039-12116 placement
+//@ chunk-he38vqx2.js:12093-12170 placement
 function artifactsApiTokenOverride() {
   return getFrameHostOverride() !== undefined ? env.CLAUDE_CODE_ARTIFACTS_API_TOKEN : undefined;
 }
-//@ chunk-sh3bk7pt.js:12116-12186 placement
+//@ chunk-he38vqx2.js:12170-12240 placement
 function directAuthFingerprint() {
   let tokenOverride = artifactsApiTokenOverride();
   if (tokenOverride) return hashCredential(`Bearer ${tokenOverride}`);
   return claudeAiBearerDigest();
 }
-//@ chunk-sh3bk7pt.js:12186-12263 placement
+//@ chunk-he38vqx2.js:12240-12317 placement
 async function settleDirectAuth(credentials) {
   if (!hasApiClient()) return;
   try {
@@ -666,26 +669,26 @@ async function settleDirectAuth(credentials) {
     });
   } catch {}
 }
-//@ chunk-sh3bk7pt.js:12263-12325 placement
+//@ chunk-he38vqx2.js:12317-12379 placement
 function fromUpstream(upstream) {
   return upstream.ok && upstream.response.headers?.[X_CCR_RELAY_UPSTREAM] !== undefined;
 }
-//@ chunk-sh3bk7pt.js:12325-12377 placement
+//@ chunk-he38vqx2.js:12379-12431 placement
 function isRelayFallbackStatus(status) {
   return status.ok && !fromUpstream(status) && RELAY_FALLBACK_STATUSES.has(status.status);
 }
-//@ chunk-sh3bk7pt.js:12377-12448 placement
+//@ chunk-he38vqx2.js:12431-12502 placement
 function classifyGatewayAnswer(answer) {
   return {
     refused: isRelayFallbackStatus(answer),
     vouched: fromUpstream(answer) || (answer.ok && answer.status < 300),
   };
 }
-//@ chunk-sh3bk7pt.js:12448-12483 placement
+//@ chunk-he38vqx2.js:12502-12537 placement
 function frameRelayOffered() {
   return frameRelayActive() && !isRemoteManagedEnvironment();
 }
-//@ chunk-sh3bk7pt.js:12483-12975 placement
+//@ chunk-he38vqx2.js:12537-13029 placement
 /**
  * 决定一次 frame 请求走哪条路：relay（经会话网关）、direct（直连）、unsent（不应发出）或 not-served（机器人上下文不服务）；考虑中继模式、路由家族、是否只能中继、中继是否已被拒。
  */
@@ -736,13 +739,13 @@ function chooseRelayLeg(method, path, mode, relayOnCredentialRefusal = false) {
     family,
   };
 }
-//@ chunk-sh3bk7pt.js:12975-13029 placement
+//@ chunk-he38vqx2.js:13029-13083 placement
 function relayIsOnlyRouteFor(route) {
   return (
     relayIsOnlyRoute() || (isRemoteManagedEnvironment() && (route === null || !accountBotMayRelay(route)))
   );
 }
-//@ chunk-sh3bk7pt.js:13029-13154 placement
+//@ chunk-he38vqx2.js:13083-13208 placement
 function isRelayRequired(mode, relayMode) {
   switch (mode) {
     case "strict":
@@ -755,11 +758,11 @@ function isRelayRequired(mode, relayMode) {
       return false;
   }
 }
-//@ chunk-sh3bk7pt.js:13154-13239 placement
+//@ chunk-he38vqx2.js:13208-13293 placement
 function plannedRoute(route, mode, fallbackMode = "fallback") {
   return relayIsOnlyRoute() || chooseRelayLeg(route, mode, fallbackMode).leg === "relay" ? "relay" : "direct";
 }
-//@ chunk-sh3bk7pt.js:13239-16556 placement
+//@ chunk-he38vqx2.js:13293-16610 placement
 /**
  * 发送 frame 接口请求的总入口：按路由选择直连或经中继；中继前可探测、中继不可用时按模式回退直连或返回 relay-unavailable；直连遭凭据拒绝且允许时改走中继；全程打点。
  */
@@ -996,11 +999,11 @@ async function sendFrameRequest(method, path, body, options, mode = "fallback") 
     fromFrame: relaySucceeded,
   };
 }
-//@ chunk-sh3bk7pt.js:16556-16619 placement
+//@ chunk-he38vqx2.js:16610-16673 placement
 function threwOnRelayLeg(error) {
   return typeof error === "object" && error !== null && weakSet.has(error);
 }
-//@ chunk-sh3bk7pt.js:16619-16749 placement
+//@ chunk-he38vqx2.js:16673-16803 placement
 function toWireTelemetry(mcpWire) {
   switch (mcpWire) {
     case "answered":
@@ -1011,16 +1014,16 @@ function toWireTelemetry(mcpWire) {
       return lit("http");
   }
 }
-//@ chunk-sh3bk7pt.js:16749-16815 placement
+//@ chunk-he38vqx2.js:16803-16869 placement
 function wireOf(value) {
   return value.route === "relay" ? lit("relay") : toWireTelemetry(value.mcpWire);
 }
-//@ chunk-sh3bk7pt.js:16815-16916 placement
+//@ chunk-he38vqx2.js:16869-16970 placement
 function wireOfThrow(error) {
   if (threwOnRelayLeg(error)) return lit("relay");
   return toWireTelemetry(typeof error === "object" && error !== null ? weakMap.get(error) : undefined);
 }
-//@ chunk-sh3bk7pt.js:16916-17381 placement
+//@ chunk-he38vqx2.js:16970-17435 placement
 var frameApi = {
   get(path, options) {
     return sendFrameRequest("GET", path, undefined, options);
@@ -1051,17 +1054,16 @@ var frameApi = {
   },
 };
 export {
+  accountlessAgentSession,
   frameApi,
+  wireOfThrow,
+  wireOf,
   isCredentialRefusal,
   plannedRoute,
   isRelayUnsent,
-  wireOf,
-  wireOfThrow,
   threwOnRelayLeg,
   isFrameNotFoundBody,
   isCredentialRefusalBody,
-  CCR_CREDENTIAL_REFUSED_PREFIX,
-  relayIsOnlyRoute,
   runnerAgentMayReadFilesDirect,
   frameRelayBinds,
   frameRelayOffered,
@@ -1074,26 +1076,27 @@ export {
   isMountNetworkOffRefusal,
   MOUNT_NETWORK_OFF_WORDS,
   markRelayServed,
+  relayIsOnlyRoute,
   accountBotMayRelay,
+  COMMENTS_RELAY_FAMILY,
+  SUBSCRIPTIONS_RELAY_FAMILY,
+  frameRelayActive,
+  relayFamily,
+  relayHopFailed,
+  RUNNER_RELAY_FLAG,
+  TYPE_CREATE_RELAY_FAMILY,
+  CCR_CREDENTIAL_REFUSED_PREFIX,
   BLOBS_RELAY_FAMILY,
   sendRelayed,
   relayVouched,
   declineRelay,
   classifyGatewayAnswer,
   clearRelayVouch,
-  accountlessAgentSession,
-  SUBSCRIPTIONS_RELAY_FAMILY,
-  frameRelayActive,
-  relayFamily,
-  relayHopFailed,
-  directAuthFingerprint,
-  settleDirectAuth,
-  COMMENTS_RELAY_FAMILY,
   fromUpstream,
   SHARING_RELAY_FAMILY,
   sandboxEgressOf,
   isFrameNoVersionBody,
   relayServed,
-  RUNNER_RELAY_FLAG,
-  TYPE_CREATE_RELAY_FAMILY,
+  directAuthFingerprint,
+  settleDirectAuth,
 };

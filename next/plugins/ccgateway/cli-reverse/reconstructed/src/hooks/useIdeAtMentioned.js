@@ -3,9 +3,9 @@
  *
  * 订阅 IDE 发来的 at_mentioned 通知（IDE 中选中文件插入 @ 引用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useIdeAtMentioned.ts
- * pieces: chunk-tzghj6zv.js (4), chunk-z1n5m6nf.js (1)
+ * pieces: chunk-18rrbwq1.js (4), chunk-h44h5gdv.js (1)
  * attribution: fingerprint 2, placement 3
  */
 import path from "path";
@@ -26,10 +26,10 @@ import { identityId2 } from "../types/ids.js";
 import { ElicitationCompleteNotificationSchema } from "../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:5035-5158 fingerprint (2.1.88 match: AtMentionedSchema, 0.599)
+//@ chunk-18rrbwq1.js:5144-5267 fingerprint (2.1.88 match: AtMentionedSchema, 0.6)
 var AT_MENTIONED; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var IdeAtMentionedParamsSchema;
-deferInit("chunk-tzghj6zv.js:5035", () => {
+deferInit("chunk-18rrbwq1.js:5144", () => {
   AT_MENTIONED = "at_mentioned";
   IdeAtMentionedParamsSchema = DoctorLazy(() =>
     objectSchema({
@@ -42,7 +42,7 @@ deferInit("chunk-tzghj6zv.js:5035", () => {
     }),
   );
 });
-//@ chunk-tzghj6zv.js:5158-5522 placement
+//@ chunk-18rrbwq1.js:5267-5631 placement
 /**
  * 订阅 IDE 扩展的 at_mentioned 通知：把选中文件路径与行号（转成 1 起始）回调给输入框，并记 ide_at_mention 成功埋点；IDE 客户端变化时旧订阅失效。
  */
@@ -71,7 +71,7 @@ function useIdeAtMentioned(mcpClients, onMentioned) {
     });
   }, [ideClient, onMentioned]);
 }
-//@ chunk-tzghj6zv.js:5522-5756 placement
+//@ chunk-18rrbwq1.js:5631-5865 placement
 /**
  * 把 IDE 选中的位置格式化为 @相对路径#L行号 引用（前一字符非空白时补空格）。
  */
@@ -87,12 +87,12 @@ function formatAtMention(mention, trailingText) {
   if (trailingText !== undefined && !/\s/.test(trailingText)) mentionText = ` ${mentionText}`;
   return mentionText;
 }
-//@ chunk-tzghj6zv.js:5756-5760 placement
+//@ chunk-18rrbwq1.js:5865-5869 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:5756", () => {
+deferInit("chunk-18rrbwq1.js:5865", () => {
   init_react_production();
 });
-//@ chunk-z1n5m6nf.js:88103-88192 fingerprint (2.1.88 match: useIdeAtMentioned, 0.56)
+//@ chunk-h44h5gdv.js:89750-89839 fingerprint (2.1.88 match: useIdeAtMentioned, 0.559)
 function useIdeAtMentioned_2(mcpClients, onAtMentioned) {
   identityId2(mcpClients.client).setNotificationHandler(
     ElicitationCompleteNotificationSchema,

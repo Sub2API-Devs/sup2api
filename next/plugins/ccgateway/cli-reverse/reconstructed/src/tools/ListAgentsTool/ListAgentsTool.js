@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ListAgents 工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kv9asrky.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ejhgq6ww.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -22,7 +22,7 @@ import { hasSendMessageTool } from "../SendMessageTool/constants.js";
 import { isCrossSessionMessagingEnabled } from "../../utils/crossSessionMessagingGate.js";
 import { isTeammateOrSubagentContext } from "../SendMessageTool/selfTarget.js";
 
-//@ chunk-kv9asrky.js:4770-6217 placement
+//@ chunk-ejhgq6ww.js:4854-6301 placement
 /**
  * ListAgents 工具：列出可用 SendMessage 联系的 agent/对等会话（跨会话消息启用时可用），输入的 channel/q 在本构建不可用，结果为格式化列表与分节行。
  */

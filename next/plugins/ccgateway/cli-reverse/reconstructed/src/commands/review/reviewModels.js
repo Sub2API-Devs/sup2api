@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：各审查等级使用的模型与代理数配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (7)
  * attribution: placement 7
  */
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
@@ -27,16 +27,16 @@ import {
 } from "./cleanupAngles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:77878-77920 placement
+//@ chunk-ne2890fx.js:78052-78094 placement
 function isKnownReviewModelKey(modelKey) {
   return Object.hasOwn(REVIEW_LEVEL_TABLE_BY_MODEL, modelKey);
 }
-//@ chunk-hantmvxa.js:77920-77988 placement
+//@ chunk-ne2890fx.js:78094-78162 placement
 function normalizeReviewModelKey(model) {
   let canonical = model ? getCanonicalName(strip1mSuffix(model)) : undefined;
   return canonical && isKnownReviewModelKey(canonical) ? canonical : "default";
 }
-//@ chunk-hantmvxa.js:77988-78963 placement
+//@ chunk-ne2890fx.js:78162-79137 placement
 /**
  * 按模型与 effort 档位查评审单元与 modelEffort 的映射表（default/sonnet5/opus4-8/opus5），含冻结。
  */
@@ -47,7 +47,7 @@ var REVIEW_CELL_OVERRIDES;
 var DEFAULT_REVIEW_LEVELS;
 var OPUS5_REVIEW_LEVELS;
 var REVIEW_LEVEL_TABLE_BY_MODEL;
-deferInit("chunk-hantmvxa.js:77988", () => {
+deferInit("chunk-ne2890fx.js:78162", () => {
   REVIEW_LEVEL_TABLE = {
     cell: "low",
     modelEffort: "typed",
@@ -134,25 +134,25 @@ deferInit("chunk-hantmvxa.js:77988", () => {
     "claude-opus-5": OPUS5_REVIEW_LEVELS,
   };
 });
-//@ chunk-hantmvxa.js:78963-79059 placement
+//@ chunk-ne2890fx.js:79137-79233 placement
 // deferred: uses REVIEW_LEVEL_TABLE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:78963", () => {
+deferInit("chunk-ne2890fx.js:79137", () => {
   for (let byEffort of Object.values(REVIEW_LEVEL_TABLE_BY_MODEL)) {
     for (let entry of Object.values(byEffort)) Object.freeze(entry);
     Object.freeze(byEffort);
   }
 });
-//@ chunk-hantmvxa.js:79059-79077 placement
+//@ chunk-ne2890fx.js:79233-79251 placement
 // deferred: uses REVIEW_LEVEL_TABLE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:79059", () => {
+deferInit("chunk-ne2890fx.js:79233", () => {
   Object.freeze(REVIEW_LEVEL_TABLE_BY_MODEL);
 });
-//@ chunk-hantmvxa.js:79077-79156 placement
+//@ chunk-ne2890fx.js:79251-79330 placement
 function resolveLevelEffort(modelKey, level) {
   let levelConfig = REVIEW_LEVEL_TABLE_BY_MODEL[modelKey][level];
   return levelConfig.modelEffort === "typed" ? level : levelConfig.modelEffort;
 }
-//@ chunk-hantmvxa.js:79156-79524 placement
+//@ chunk-ne2890fx.js:79330-79698 placement
 function buildReviewPromptForLevel(cell, outputBuilder, canSpawn = true, hasReportTool = false, findingCap) {
   switch (cell) {
     case "low":

@@ -1,15 +1,15 @@
 /**
  * @bufbuild/protobuf/dist/cjs/wkt/gen/google/protobuf/wrappers_pb.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_file } from "../../../../codegenv2/file.js";
 import { require_message } from "../../../../codegenv2/message.js";
 
-//@ chunk-fq0cr76a.js:436671-438286 cjs-fingerprint
+//@ chunk-qg41pqt6.js:437241-438856 cjs-fingerprint
 var require_wrappers_pb = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

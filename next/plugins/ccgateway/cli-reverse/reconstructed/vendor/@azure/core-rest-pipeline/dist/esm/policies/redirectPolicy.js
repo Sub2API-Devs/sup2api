@@ -1,14 +1,14 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/policies/redirectPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
 
-//@ chunk-mrx6y2r5.js:54403-54425 esm-fingerprint
+//@ chunk-b5df2wx1.js:54403-54425 esm-fingerprint
 var allowedRedirect = ["GET", "HEAD"];
-//@ chunk-mrx6y2r5.js:54425-54554 esm-layout
+//@ chunk-b5df2wx1.js:54425-54554 esm-layout
 function redirectPolicy(options = {}) {
   let { maxRetries = 20 } = options;
   return {
@@ -19,7 +19,7 @@ function redirectPolicy(options = {}) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:54554-54960 esm-fingerprint
+//@ chunk-b5df2wx1.js:54554-54960 esm-fingerprint
 async function handleRedirect(next, response, maxRetries, currentRetries = 0) {
   let { request, status, headers } = response;
   let locationHeader = headers.get("location");

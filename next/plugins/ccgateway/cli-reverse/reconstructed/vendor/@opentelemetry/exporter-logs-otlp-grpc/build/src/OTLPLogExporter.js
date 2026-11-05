@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/exporter-logs-otlp-grpc/build/src/OTLPLogExporter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/exporter-logs-otlp-grpc@0.208.0
- * pieces: chunk-vt7p2m92.js (1)
+ * pieces: chunk-4cwqx840.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_otlp_grpc_exporter_base } from "../../../otlp-grpc-exporter-bas
 import { require_otlp_transformer } from "../../../otlp-transformer/build/src/index.js";
 import { require_otlp_exporter_base } from "../../../otlp-exporter-base/build/src/index.js";
 
-//@ chunk-vt7p2m92.js:330-711 cjs-fingerprint
+//@ chunk-4cwqx840.js:330-711 cjs-fingerprint
 var require_OTLPLogExporter = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

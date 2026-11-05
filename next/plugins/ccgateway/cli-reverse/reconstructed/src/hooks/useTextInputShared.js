@@ -3,9 +3,9 @@
  *
  * 文本输入共享逻辑（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-81qqq1aq.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3t80v0fz.js (7)
  * attribution: placement 7
  */
 import {
@@ -19,12 +19,12 @@ import { useNotifications } from "../context/notifications.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-81qqq1aq.js:1467-1471 placement
+//@ chunk-3t80v0fz.js:1468-1472 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-81qqq1aq.js:1467", () => {
+deferInit("chunk-3t80v0fz.js:1468", () => {
   init_react_production();
 });
-//@ chunk-81qqq1aq.js:1471-2038 placement
+//@ chunk-3t80v0fz.js:1472-2039 placement
 /**
  * 依次运行一组 effect 槽（依赖变化时重跑）。
  */
@@ -76,16 +76,16 @@ function useEffectSlots(specs, props) {
     [slots],
   );
 }
-//@ chunk-81qqq1aq.js:2038-2157 placement
+//@ chunk-3t80v0fz.js:2039-2158 placement
 function shallowArrayEqual(deps, previousDeps) {
   if (deps.length !== previousDeps.length) return false;
   for (let index = 0; index < deps.length; index++)
     if (!Object.is(deps[index], previousDeps[index])) return false;
   return true;
 }
-//@ chunk-81qqq1aq.js:2157-2169 placement
+//@ chunk-3t80v0fz.js:2158-2170 placement
 var SHARED_NOTICE_SPECS = [clipboardImageHintNoticeSpec];
-//@ chunk-81qqq1aq.js:2169-2330 placement
+//@ chunk-3t80v0fz.js:2170-2331 placement
 /**
  * 文本输入共享 effect（焦点、粘贴图片、通知）。
  */
@@ -99,14 +99,14 @@ function useTextInputEffects({ isTerminalFocused, canPasteImages }) {
     clock,
   });
 }
-//@ chunk-81qqq1aq.js:2330-2334 placement
+//@ chunk-3t80v0fz.js:2331-2335 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-81qqq1aq.js:2330", () => {
+deferInit("chunk-3t80v0fz.js:2331", () => {
   init_react_production();
 });
-//@ chunk-81qqq1aq.js:2334-2338 placement
+//@ chunk-3t80v0fz.js:2335-2339 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-81qqq1aq.js:2334", () => {
+deferInit("chunk-3t80v0fz.js:2335", () => {
   init_react_production();
 });
-export { useEffectSlots, useTextInputEffects };
+export { useTextInputEffects, useEffectSlots };

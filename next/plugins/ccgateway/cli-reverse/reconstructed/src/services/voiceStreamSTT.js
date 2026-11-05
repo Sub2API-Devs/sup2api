@@ -3,9 +3,9 @@
  *
  * 语音流式转写：经 WebSocket 连接 /api/ws/speech_to_text/voice_stream，发送 PCM、KeepAlive、CloseStream，接收转写结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/voiceStreamSTT.ts
- * pieces: chunk-a5nx0r17.js (11)
+ * pieces: chunk-jhqxf120.js (11)
  * attribution: fingerprint 1, layout 7, facade-exports 3
  */
 import ws from "ws";
@@ -29,7 +29,7 @@ import { getWebSocketProxyUrl } from "../utils/proxy.js";
 import { guardTestWebSocket } from "../utils/testNetworkGuard.js";
 import { jsonParse } from "../utils/slowOperations.js";
 
-//@ chunk-a5nx0r17.js:698-829 fingerprint (2.1.88 match: FINALIZE_TIMEOUTS_MS, 0.408)
+//@ chunk-jhqxf120.js:698-829 fingerprint (2.1.88 match: FINALIZE_TIMEOUTS_MS, 0.408)
 /**
  * 协议常量：KeepAlive 与 CloseStream 帧、端点路径、keepalive 间隔 8s、收尾超时（safety 5s、noData 1.5s）。
  */
@@ -41,19 +41,19 @@ var FINALIZE_TIMEOUTS_MS = {
   safety: 5000,
   noData: 1500,
 };
-//@ chunk-a5nx0r17.js:829-927 layout
+//@ chunk-jhqxf120.js:829-927 layout
 function formatStatusBucket(status, minStatus, maxStatus) {
   return typeof status === "number" && Number.isInteger(status) && status >= minStatus && status <= maxStatus
     ? String(status)
     : "unknown";
 }
-//@ chunk-a5nx0r17.js:927-980 layout
+//@ chunk-jhqxf120.js:927-980 layout
 function errorCodeLabel(err) {
   return sanitizeErrnoForTelemetry(err)?.toLowerCase() ?? "unknown";
 }
-//@ chunk-a5nx0r17.js:980-991 layout
+//@ chunk-jhqxf120.js:980-991 layout
 var HELLO_TIMEOUT_MS = 1500;
-//@ chunk-a5nx0r17.js:991-1397 facade-exports
+//@ chunk-jhqxf120.js:991-1397 facade-exports
 /**
  * 连接失败诊断：请求 BASE_API_URL/api/hello，返回 http_xxx、cf_mitigated_xxx、timeout 等（隐私模式下跳过）。
  */
@@ -77,7 +77,7 @@ async function probeVoiceConnectivity() {
     return code === "ECONNABORTED" || code === "ETIMEDOUT" ? "timeout" : "fetch_failed";
   }
 }
-//@ chunk-a5nx0r17.js:1397-1499 layout
+//@ chunk-jhqxf120.js:1397-1499 layout
 /**
  * 是否请求 forward_interims=typed：CLAUDE_CODE_VOICE_FORWARD_INTERIMS_TYPED 或 tengu_brick_follow。
  */
@@ -85,7 +85,7 @@ function shouldForwardTypedInterims() {
   if (env.CLAUDE_CODE_VOICE_FORWARD_INTERIMS_TYPED) return true;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_brick_follow", false);
 }
-//@ chunk-a5nx0r17.js:1499-1581 facade-exports (2.1.88 match: isVoiceStreamAvailable, 1)
+//@ chunk-jhqxf120.js:1499-1581 facade-exports (2.1.88 match: isVoiceStreamAvailable, 1)
 /**
  * 是否可用语音流：Anthropic 登录且有 OAuth access token。
  */
@@ -94,9 +94,9 @@ function isVoiceStreamAvailable() {
   let tokens = getClaudeAIOAuthTokens();
   return tokens !== null && tokens.accessToken !== null;
 }
-//@ chunk-a5nx0r17.js:1581-1592 layout
+//@ chunk-jhqxf120.js:1581-1592 layout
 var MAX_KEYTERMS_HEADER_CHARS = 1024;
-//@ chunk-a5nx0r17.js:1592-1841 layout
+//@ chunk-jhqxf120.js:1592-1841 layout
 /**
  * 清洗并去重关键词，拼成不超过 1024 字符的 x-config-keyterms 头。
  */
@@ -119,11 +119,11 @@ function formatKeytermsHeader(keyterms) {
   }
   return kept.join(",");
 }
-//@ chunk-a5nx0r17.js:1841-1861 layout
+//@ chunk-jhqxf120.js:1841-1861 layout
 function getVoiceStreamBaseUrlOverride() {
   return;
 }
-//@ chunk-a5nx0r17.js:1861-6120 facade-exports (2.1.88 match: connectVoiceStream, 0.851)
+//@ chunk-jhqxf120.js:1861-6120 facade-exports (2.1.88 match: connectVoiceStream, 0.851)
 /**
  * 建立语音转写 WebSocket：OAuth Bearer 认证，参数 linear16/16000/单声道/endpointing 300ms/utterance_end 1000ms/language，可带关键词头；返回连接对象（send、finalize、close 等）。
  */

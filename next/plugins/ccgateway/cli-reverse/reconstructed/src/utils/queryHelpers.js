@@ -3,17 +3,19 @@
  *
  * 查询辅助：内部消息 → SDK 流消息（normalizeMessage）、结果成功判定、从历史提取已读文件与 Bash 命令；以及恢复会话时处理孤立权限、延迟工具、交接轮次的执行与补结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queryHelpers.ts
- * pieces: chunk-0eyv3mzk.js (6), chunk-0h4e7gnq.js (44), chunk-e6aww6q8.js (9)
- * attribution: fingerprint 6, placement 13, file-local 1, affinity 1, layout 38
+ * pieces: chunk-5xgkngpb.js (10), chunk-cwkrfaxh.js (6), chunk-frs14hy1.js (47)
+ * attribution: fingerprint 5, placement 15, affinity 2, file-local 1, layout 40
  */
 import { normalize } from "path";
+import { isSensitiveFileName, isSensitiveNameOrVariant } from "./permissions/sensitivePaths.js";
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
 import { canShortcutAppend } from "../plugins/functionHooks/modAdmission.js";
 import { TEXT_PASSTHROUGH_CORES } from "../plugins/functionHooks/coreHandlers.js";
 import { getPluginRegistry } from "./plugins/pluginLoadState.js";
 import { identity as identity_2 } from "./identity.js";
+import { readFlagWithOverride } from "../services/analytics/flagOverrides.js";
 import { lastAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isToolResultOnlyUserMessage } from "../services/api/claude.js";
 import { getToolEndsTurnKind } from "../services/tools/mcpResultMeta.js";
@@ -29,7 +31,6 @@ import {
   createUserMessage,
   stripThinkingFromIndex,
   isToolResultMessage,
-  createCancelledToolResultBlock,
   withMemoryCorrectionHint,
   CANCEL_MESSAGE,
   createUserInterruptionMessage,
@@ -45,6 +46,7 @@ import {
   getThinkingFields,
   toSDKToolHostResultMessage,
   informationalSystemMessage,
+  messagesToKeepForAssistant,
 } from "./messages/mappers.js";
 import { stripMemoryTagsFromBlocks } from "../services/orgMemory/promptIndex.js";
 import { getSessionId, isSessionPersistenceDisabled } from "../bootstrap/state.js";
@@ -56,6 +58,7 @@ import {
   isCacheMissReason,
   shouldWaitForMcpTool,
 } from "../services/tools/toolExecution.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 import { getToolPermissionContext } from "./permissions/toolPermissionContext.js";
 import { logForDebugging } from "./debug.js";
@@ -103,6 +106,12 @@ import {
 } from "../types/permissions.js";
 import { missingToolTelemetry } from "../services/tools/toolExecutionTelemetry.js";
 import { warnLateAllowNeverServed, createLateAnswerBound } from "../hooks/toolPermission/lateAnswerBounds.js";
+import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
+import { hasHostField, isRemoteToolsForwardEnabled2 } from "../bridge/deviceRegistration.js";
+import { askerDirIfNotWorktree, resolveAskedDir, directoryStillUnchanged } from "./sessionStateCwd.js";
+import { getCwd } from "./cwd.js";
+import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { jsonStringify } from "./slowOperations.js";
 import { isNonConversationMessage } from "../bootstrap/sessionSlices.js";
 import { isTerminalShutdown, heldUntilExit } from "./terminalShutdown.js";
 import { getToolCallOutcomeCode } from "./permissions/yoloClassifier.js";
@@ -114,24 +123,25 @@ import {
 import { recordToolUseTagged } from "../services/compact/keptTools.js";
 import { unwrapAbortReason } from "./abortController.js";
 import { setCommandDenyRules } from "./attachments/skillMentions.js";
+import { createCancelledToolResultBlock } from "../services/PromptSuggestion/speculation.js";
 import { DEVICE_CALL_NOT_SENT_TEXT, notSentNotice } from "./remoteTools/restartNotices.js";
 import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
+import { COWRITTEN_ARTIFACT_HTML, ARTIFACT_FILE_CONTENT } from "../constants/xml.js";
 import {
   createRemoteFileState,
   contentHashOf,
   stripBomAndCarriageReturn,
   stripBom,
 } from "./remoteFileState.js";
-import { hasHostField } from "../bridge/deviceRegistration.js";
-import { FILE_READ_TOOL_NAME, isImageOrPdfExtension } from "../tools/FileReadTool/constants.js";
+import { expandPathOrNull, expandPath, isNotebookPath } from "./path.js";
+import { READ, isImageOrPdfExtension } from "../tools/FileReadTool/constants.js";
 import { normalizeReadInputAliases } from "../tools/FileReadTool/inputAliases.js";
 import { coerceNumberString } from "../tools/ArtifactTool/publishEdits.js";
-import { expandPath, isNotebookPath, expandPathOrNull } from "./path.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { normalizeWriteInputAliases } from "../tools/FileWriteTool/inputAliases.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { isFileUnchangedStub, TRUNCATED_PARTIAL_VIEW_PREFIX } from "../tools/FileReadTool/prompt.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { stripReminderAndLineNumbers } from "./wireToolInputEcho.js";
 import { detectEncodingForResolvedPath } from "./fileRead.js";
 import { getFileModificationTime } from "./file.js";
@@ -141,14 +151,40 @@ import { SHELL_TOOL_NAMES } from "./shell/shellToolUtils.js";
 import { parseReferences } from "../history.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4735394-4735466 placement
+//@ chunk-5xgkngpb.js:3469721-3470051 fingerprint (2.1.88 match: extractReadFilesFromMessages, 0.342)
+function extractReadFilesFromMessages(readFileState, normalizedPath) {
+  let readFilePath = readFileState.get(normalizedPath);
+  if (
+    readFilePath?.contentHash === undefined ||
+    readFilePath.contentLength === undefined ||
+    readFilePath.offset !== 1 ||
+    readFilePath.limit !== undefined ||
+    isSensitiveFileName(normalizedPath) ||
+    isSensitiveNameOrVariant(normalizedPath)
+  )
+    return {};
+  return {
+    rereadEntry: {
+      timestamp: readFilePath.timestamp,
+      contentHash: readFilePath.contentHash,
+      contentLength: readFilePath.contentLength,
+      ...(readFilePath.isPartialView && {
+        isPartialView: true,
+      }),
+      ...(readFilePath.readBaseline && {
+        readBaseline: readFilePath.readBaseline,
+      }),
+    },
+  };
+}
+//@ chunk-5xgkngpb.js:4847493-4847565 placement
 /**
  * appendHookableFastPath：可走快路径的 session.append。
  */
 function appendHookableFastPath() {
   return hasModuleHookingSite("session.append", undefined, canShortcutAppend("session.append"));
 }
-//@ chunk-e6aww6q8.js:4735466-4735716 placement
+//@ chunk-5xgkngpb.js:4847565-4847815 placement
 /**
  * 把行追加到会话：无钩子时直接保留，有 session.append 钩子时按顺序经钩子处理（期间发生裁剪则不保留）。
  */
@@ -169,7 +205,7 @@ function appendRowsWithHooks(source, rows, options = {}) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:4735716-4735831 placement
+//@ chunk-5xgkngpb.js:4847815-4847930 placement
 function createRowSourceRegistry() {
   let weakMap = new WeakMap();
   return {
@@ -180,12 +216,12 @@ function createRowSourceRegistry() {
     of: (list) => weakMap.get(list),
   };
 }
-//@ chunk-e6aww6q8.js:4735831-4735845 placement
+//@ chunk-5xgkngpb.js:4847930-4847944 placement
 var rowSourceRegistry; // deferred: uses createRowSourceRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4735831", () => {
+deferInit("chunk-5xgkngpb.js:4847930", () => {
   rowSourceRegistry = createRowSourceRegistry();
 });
-//@ chunk-e6aww6q8.js:4735845-4736347 placement
+//@ chunk-5xgkngpb.js:4847944-4848446 placement
 /**
  * 为行来源加上顺序追加能力：inOrder 串行执行、裁剪计数、等待追加完成、附加循环收集新到的行。
  */
@@ -245,12 +281,12 @@ function createOrderedRowSource(base) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4736347-4736378 placement
+//@ chunk-5xgkngpb.js:4848446-4848477 placement
 /**
  * orderedRowSource：登记有序行来源。
  */
 var orderedRowSource = (base) => rowSourceRegistry.noted(createOrderedRowSource(base));
-//@ chunk-e6aww6q8.js:4736378-4736443 placement
+//@ chunk-5xgkngpb.js:4848477-4848542 placement
 var rowSourceFor = (list, keep) =>
   rowSourceRegistry.of(list) ??
   orderedRowSource({
@@ -258,7 +294,7 @@ var rowSourceFor = (list, keep) =>
     rows: () => list,
     isHookable: false,
   });
-//@ chunk-e6aww6q8.js:4736443-4736600 placement
+//@ chunk-5xgkngpb.js:4848542-4848699 placement
 function createRunningTurnRegistry() {
   let turns = new Map();
   return {
@@ -276,20 +312,28 @@ function createRunningTurnRegistry() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4736600-4736633 placement
+//@ chunk-5xgkngpb.js:4848699-4848732 placement
 /**
  * runningTurnRegistry：运行中回合登记表。
  */
 var runningTurnRegistry; // deferred: uses createRunningTurnRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4736600", () => {
+deferInit("chunk-5xgkngpb.js:4848699", () => {
   runningTurnRegistry = identity_2(createRunningTurnRegistry(), (registry) => registry.clear());
 });
-//@ chunk-0h4e7gnq.js:49711-49721 affinity
+//@ chunk-frs14hy1.js:31834-31862 placement
+var TENGU_HOMING_SWIFT = "tengu_homing_swift";
+//@ chunk-frs14hy1.js:31862-31900 placement
+function getHomingSwiftFlag() {
+  return readFlagWithOverride(TENGU_HOMING_SWIFT, {
+    safe: true,
+  });
+}
+//@ chunk-frs14hy1.js:55684-55694 affinity
 /**
  * 10：提取已读文件状态的默认缓存大小。
  */
 var READ_FILE_STATE_CACHE_SIZE = 10;
-//@ chunk-0h4e7gnq.js:49721-49930 fingerprint (2.1.88 match: isResultSuccessful, 0.89)
+//@ chunk-frs14hy1.js:55694-55903 fingerprint (2.1.88 match: isResultSuccessful, 0.89)
 /**
  * 结果是否成功：最后块是 text/thinking，或是 tool_result 用户消息，或 stop_reason=end_turn。
  */
@@ -306,7 +350,7 @@ function isResultSuccessful(message, stopReason = null) {
   if (isToolResultOnlyUserMessage(message)) return true;
   return stopReason === "end_turn";
 }
-//@ chunk-0h4e7gnq.js:49930-50143 layout
+//@ chunk-frs14hy1.js:55903-56116 layout
 /**
  * 末尾是 server_error 的 API 错误但前一条已成功、轮次 completed 时可忽略。
  */
@@ -322,7 +366,7 @@ function isRecoverableTrailingServerError({ trailing, preceding, terminalReason,
     getToolEndsTurnKind(preceding) !== false
   );
 }
-//@ chunk-0h4e7gnq.js:50143-50288 layout
+//@ chunk-frs14hy1.js:56116-56261 layout
 /**
  * 最后一条与前一条都是文本（且不是合成文本）时取前一条文本作为结果。
  */
@@ -335,7 +379,7 @@ function getSalvageableResultText(result, userMessage) {
     ? userBlock.text
     : undefined;
 }
-//@ chunk-0h4e7gnq.js:50288-50377 layout
+//@ chunk-frs14hy1.js:56261-56350 layout
 /**
  * 内存错误日志中某条之后的错误。
  */
@@ -344,14 +388,14 @@ function getRecentErrorLog(sinceError) {
   let startIndex = sinceError ? inMemoryErrors.lastIndexOf(sinceError) + 1 : 0;
   return inMemoryErrors.slice(startIndex).map((inMemoryError) => inMemoryError.error);
 }
-//@ chunk-0h4e7gnq.js:50377-50424 layout
+//@ chunk-frs14hy1.js:56350-56397 layout
 /**
  * 空结果诊断：结果类型描述 + 最近错误。
  */
 function buildEmptyResultDiagnostics(message, stopReason, sinceError) {
   return [formatResultDiagnostic(message, stopReason), ...getRecentErrorLog(sinceError)];
 }
-//@ chunk-0h4e7gnq.js:50424-50617 layout
+//@ chunk-frs14hy1.js:56397-56590 layout
 /**
  * "[ede_diagnostic] result_type=… last_content_type=… stop_reason=…"。
  */
@@ -361,7 +405,7 @@ function formatResultDiagnostic(message, stopReason) {
     message?.type === "assistant" ? (lastAlias(message.message.content)?.type ?? "none") : "n/a";
   return `[ede_diagnostic] result_type=${resultType} last_content_type=${contentType} stop_reason=${stopReason}`;
 }
-//@ chunk-0h4e7gnq.js:50617-50800 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-frs14hy1.js:56590-56773 layout
 /**
  * 首块是 tool_use 或 tool_result 的 user/assistant。覆盖后缀名 countToolCallsSince_3。
  */
@@ -372,7 +416,7 @@ function isToolUseOrResultMessage(message) {
   let firstBlock = content[0];
   return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
 }
-//@ chunk-0h4e7gnq.js:50800-50859 layout
+//@ chunk-frs14hy1.js:56773-56832 layout
 /**
  * 开启转发且（转发文本或该消息是工具调用/结果）。
  */
@@ -382,7 +426,7 @@ function shouldForwardSubagentMessage(bridgeSubagentFrameGate, message) {
     (bridgeSubagentFrameGate.forwardText || isToolUseOrResultMessage(message))
   );
 }
-//@ chunk-0h4e7gnq.js:50859-52368 layout
+//@ chunk-frs14hy1.js:56832-58340 layout
 /**
  * 子代理 progress 事件转 SDK 消息（带 parent_tool_use_id、agent_id、subagent_type）。
  */
@@ -494,7 +538,7 @@ function* subagentProgressToSDKMessages(progress, tools) {
       }
     }
 }
-//@ chunk-0h4e7gnq.js:52368-52533 layout
+//@ chunk-frs14hy1.js:58340-58505 layout
 /**
  * 取并消费 tool_result 对应的计时记录。
  */
@@ -507,7 +551,7 @@ function takeToolResultTiming(message) {
     ? takeCutResult(toolResultBlock.tool_use_id, message.uuid)
     : undefined;
 }
-//@ chunk-0h4e7gnq.js:52533-54292 fingerprint (2.1.88 match: normalizeMessage, 0.374)
+//@ chunk-frs14hy1.js:58505-60738 fingerprint (2.1.88 match: normalizeMessage, 0.304)
 /**
  * 内部消息转 SDK 流消息（-p/SDK 输出）：assistant 拆块并过滤空块、progress（子代理/心跳）、user、附件、系统消息。
  */
@@ -547,7 +591,19 @@ function* normalizeMessage(message, tools) {
     }
     case "progress":
       if (extractAgentIdsFromMessages_2(message)) yield* subagentProgressToSDKMessages(message, tools);
-      else if (message.data.type === "tool_heartbeat")
+      else if (codeModeAccepted() && message.data.type === "repl_tool_call") {
+        let frame = require("../tools/REPLTool/scriptCallFrame.js").scriptCallFrame({
+          toolUseID: message.toolUseID,
+          parentToolUseID: message.parentToolUseID,
+          data: message.data,
+        });
+        if (frame !== undefined)
+          yield {
+            ...frame,
+            session_id: getSessionId(),
+            uuid: message.uuid,
+          };
+      } else if (message.data.type === "tool_heartbeat")
         yield {
           type: "tool_progress",
           tool_use_id: message.toolUseID,
@@ -585,7 +641,7 @@ function* normalizeMessage(message, tools) {
       let timing = takeToolResultTiming(message);
       for (let normalized of normalizeMessages([message])) {
         let toolResults = filterToolUsesWithResults(remedies, normalized.message.content);
-        yield {
+        let userRow = {
           type: "user",
           message: normalized.message,
           parent_tool_use_id: null,
@@ -615,13 +671,31 @@ function* normalizeMessage(message, tools) {
             refused_message_id: message.refusedMessageId,
           }),
         };
+        let row = userRow;
+        if (
+          codeModeAccepted() &&
+          (message.visibleToRemoteClients === true ||
+            message.hiddenToolUseIds !== undefined ||
+            message.detachedToolUseIds !== undefined)
+        )
+          try {
+            if (require("./codeMode/vscodeExtensionStream.js").isVSCodeExtensionStream())
+              row = require("../services/remoteTools/storedRemoteToolResult.js").headlessScriptCallFrame(
+                userRow,
+                message,
+                tools,
+              );
+          } catch (error) {
+            logError(error);
+          }
+        yield row;
       }
       return;
     }
     default:
   }
 }
-//@ chunk-0h4e7gnq.js:54292-54497 layout
+//@ chunk-frs14hy1.js:60738-60943 layout
 /**
  * tool_host_result_lines、hook_system_message 附件转 SDK 系统消息。
  */
@@ -642,7 +716,7 @@ function* attachmentToSDKMessages(message) {
   }
   if (sdkMessage) yield sdkMessage;
 }
-//@ chunk-0h4e7gnq.js:54497-56016 layout
+//@ chunk-frs14hy1.js:60943-62563 layout
 /**
  * 恢复延迟的工具调用：在转录里找回 tool_use，重新走 PreToolUse 与执行，结果写回转录。
  */
@@ -697,6 +771,8 @@ async function* resumeDeferredToolUse(deferredToolUse, canUseTool, mutableMessag
             toolResult.message,
             toolUseContext.options.refreshTools?.() ?? toolUseContext.options.tools,
           );
+          if (codeModeAccepted() && toolResult.message.type === "user")
+            require("./codeMode/scriptCallStream.js").releaseScriptCallProgress(toolResult.message);
           continue;
         }
         if (
@@ -722,17 +798,17 @@ async function* resumeDeferredToolUse(deferredToolUse, canUseTool, mutableMessag
   }
   return deferredAttachment;
 }
-//@ chunk-0h4e7gnq.js:56016-56067 layout
+//@ chunk-frs14hy1.js:62563-62614 layout
 /**
  * 孤立权限被拒时对消息做的变换（refused / orphaned permission）。
  */
 var orphanedPermissionRefusedTransform; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:56016", () => {
+deferInit("chunk-frs14hy1.js:62563", () => {
   orphanedPermissionRefusedTransform = DoctorLazy(() =>
     capPermissionUpdates_2("refused", "orphaned permission"),
   );
 });
-//@ chunk-0h4e7gnq.js:56067-56590 layout
+//@ chunk-frs14hy1.js:62614-63137 layout
 /**
  * 重放工具的 askInputPreparer，判断记录的答案是否仍适用（served/answer_differs/step_failed 等）。
  */
@@ -773,7 +849,7 @@ async function replayAskInputPreparer(tool, toolInput, input, cardInput, context
     ended: signal.aborted ? "aborted" : stepDiffers ? "step_differs" : "step_failed",
   };
 }
-//@ chunk-0h4e7gnq.js:56590-56771 layout
+//@ chunk-frs14hy1.js:63137-63318 layout
 /**
  * 重放工具调用时计算应用的权限更新（规范化输入；某些工具或 MCP 服务器只保留非 allow 规则）。
  */
@@ -793,7 +869,7 @@ function computePermissionUpdatesForReplay(permissionUpdates, tool, toolInput, t
       )
     : stripped;
 }
-//@ chunk-0h4e7gnq.js:56771-56941 layout
+//@ chunk-frs14hy1.js:63318-63488 layout
 /**
  * MCP 交接调用恢复被中断轮次、当前不能询问时延后（开关 tengu_velvet_gannet）。
  */
@@ -806,7 +882,7 @@ function shouldDeferMcpOrphanedAsk(toolUseId, orphanedPermission, context) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_gannet", false)
   );
 }
-//@ chunk-0h4e7gnq.js:56941-64632 layout
+//@ chunk-frs14hy1.js:63488-72685 layout
 /**
  * 恢复时处理孤立的权限请求：按答案策略重新执行或拒绝对应 tool_use，并补写结果。
  */
@@ -818,6 +894,7 @@ async function* handleOrphanedPermission(
   context,
   waitForDeviceBridgeTool,
   permissionUpdates,
+  changeDirectory,
 ) {
   using guard = {
     [Symbol.dispose]() {
@@ -1036,10 +1113,8 @@ async function* handleOrphanedPermission(
     let callEnded =
       waitInfo !== undefined &&
       !waitInfo.aborted &&
-      (waitInfo.serverState === "connected" ||
-        waitInfo.serverState === "failed" ||
-        waitInfo.serverState === "needs-auth" ||
-        waitInfo.serverState === "disabled") &&
+      waitInfo.serverState !== "not_mcp" &&
+      waitInfo.serverState !== "unknown" &&
       (effectiveResult.behavior === "allow" || effectiveResult.behavior === "deny") &&
       orphanedPermission.resumesInterruptedTurn === true &&
       !orphanedPermission.siblings?.length &&
@@ -1119,6 +1194,26 @@ async function* handleOrphanedPermission(
             mcpClients: [...currentMcpClients(context)],
           },
         };
+  let askedInDirectory =
+    permissionUpdates.kind === "launcher" &&
+    effectiveResult.behavior === "allow" &&
+    toolName === BASH_TOOL_NAME &&
+    !hasHostField(toolUseBlock.input) &&
+    getHomingSwiftFlag()
+      ? orphanedPermission.askedInDirectory
+      : undefined;
+  let projectRoot =
+    askedInDirectory === undefined ? undefined : askerDirIfNotWorktree(context.session.project?.projectRoot);
+  let restoredDirectory =
+    askedInDirectory === undefined || projectRoot === undefined
+      ? undefined
+      : resolveAskedDir(projectRoot, askedInDirectory);
+  if (restoredDirectory !== undefined && restoredDirectory !== getCwd())
+    try {
+      await changeDirectory?.(restoredDirectory, executionContext);
+    } catch (error) {
+      if (!isAbortError(error)) logError(error);
+    }
   let updatedInput;
   if (effectiveResult.behavior === "allow") {
     let updatedInput_2 = effectiveResult.updatedInput;
@@ -1168,6 +1263,7 @@ async function* handleOrphanedPermission(
         )
       : undefined;
   let replayPromise;
+  let directoryConfirmed;
   let callStarted = tool !== undefined;
   let canUseTool_2 = async (tool, input, context, toolUse, callId, result) => {
     callStarted ||= callId === toolUseID;
@@ -1182,6 +1278,41 @@ async function* handleOrphanedPermission(
     )
       return canUseTool(tool, input, context, toolUse, callId, result);
     if (result?.behavior === "ask" && result.forcedByCaller === true) return result;
+    if (askedInDirectory !== undefined && directoryConfirmed === undefined) {
+      directoryConfirmed =
+        restoredDirectory !== undefined && directoryStillUnchanged(projectRoot, askedInDirectory);
+      if (directoryConfirmed)
+        logFeatureOk("permission_late_allow_directory", {
+          at_start: askedInDirectory === ".",
+        });
+      else
+        logFeatureBad(
+          "permission_late_allow_directory",
+          projectRoot === undefined
+            ? "no_start"
+            : restoredDirectory === undefined
+              ? "not_under_start"
+              : "not_reached",
+        );
+    }
+    if (directoryConfirmed === false) {
+      logForDebugging(
+        `Orphaned permission for ${toolName}: not run, because the call's directory ${getCwd()} could not be confirmed as the one that the card recorded, ${jsonStringify(askedInDirectory)}${projectRoot === undefined ? ": this worker has no directory to measure the record from" : ""}`,
+        {
+          level: "warn",
+        },
+      );
+      return {
+        behavior: "deny",
+        toolUseID,
+        decideLocation: "ask-path",
+        message: `This call was not run. The command was approved before Claude Code restarted, and Claude Code could not confirm that the shell is back in the directory where it was approved. ${projectRoot === undefined ? "It does not keep track of that directory across a restart in a session that has been in a worktree." : "That directory may be gone or replaced, lie outside the directory where the session started, or be one that Claude Code needs approval to enter or is not allowed to examine."} The shell's directory is ${getCwd()}. If the command still makes sense, cd to the directory it was meant for and make the call again; it may need approval again.`,
+        decisionReason: {
+          type: "other",
+          reason: "the shell could not be confirmed in the directory where the call was approved",
+        },
+      };
+    }
     let screenedRefusal =
       refusal ?? lateAnswerBound?.refusalOf(tool, input, context, context.setSessionToolPermissionContext);
     if (
@@ -1290,7 +1421,7 @@ async function* handleOrphanedPermission(
         callStarted: callStarted_2,
       };
 }
-//@ chunk-0h4e7gnq.js:64632-64828 layout
+//@ chunk-frs14hy1.js:72685-72881 layout
 /**
  * 把交接笔记写进转录并持久化，成功返回 {noteStored:true}。
  */
@@ -1310,7 +1441,7 @@ async function storeHandoffNote(orphanedPermission, messages, persist, context) 
       }
     : {};
 }
-//@ chunk-0h4e7gnq.js:64828-64990 layout
+//@ chunk-frs14hy1.js:72881-73043 layout
 /**
  * 从末尾看，真实 user 消息是否出现在 assistant 之前。
  */
@@ -1328,7 +1459,7 @@ function lastUserAfterAssistant(messages) {
   }
   return false;
 }
-//@ chunk-0h4e7gnq.js:64990-65843 layout
+//@ chunk-frs14hy1.js:73043-73895 layout
 /**
  * 把拒绝写成 tool_result（is_error）并补回 assistant 行。
  */
@@ -1357,7 +1488,7 @@ async function* recordToolDenialResult({
     )
   ) {
     conversationAppender(mutableMessages).keep(
-      messagesToKeepForAssistant(assistantMessage, messageRows, mutableMessages),
+      messagesToKeepForAssistant([assistantMessage], messageRows, mutableMessages),
     );
     await persistIfNeeded(mutableMessages, persistSession, context);
   }
@@ -1396,7 +1527,7 @@ async function* recordToolDenialResult({
   await persistIfNeeded(mutableMessages, persistSession, context);
   yield* normalizeMessage(userMessage, tools);
 }
-//@ chunk-0h4e7gnq.js:65843-66148 layout
+//@ chunk-frs14hy1.js:73895-74200 layout
 /**
  * 交接轮次结果是否已落定（已运行或无需重试）。
  */
@@ -1417,7 +1548,7 @@ function isHandoffTurnSettled(result) {
       return false;
   }
 }
-//@ chunk-0h4e7gnq.js:66148-66424 layout
+//@ chunk-frs14hy1.js:74200-74476 layout
 /**
  * 由交接信息计划 relay 标记行（stopped 时不处理）。
  */
@@ -1441,7 +1572,7 @@ function planRelayMarkerLine(relay, { kind, relayMarker, messages }, conversatio
   }
   return plan.arm ? plan.markerLine : undefined;
 }
-//@ chunk-0h4e7gnq.js:66424-66639 layout
+//@ chunk-frs14hy1.js:74476-74691 layout
 /**
  * 交接的记忆行若已在转录里则丢弃，否则返回。
  */
@@ -1461,14 +1592,14 @@ async function resolveHandoffMemoryLine({ memoryLine }, persist, { storageV5 }) 
   }
   return memoryLine;
 }
-//@ chunk-0h4e7gnq.js:66639-66699 layout
+//@ chunk-frs14hy1.js:74691-74751 layout
 /**
  * 在数组末尾倒数第 n 个位置前插入一行。
  */
 function insertBeforeTail(list, tailLength, item) {
   return item ? list.toSpliced(list.length - tailLength + 1, 0, item) : list;
 }
-//@ chunk-0h4e7gnq.js:66699-66791 layout
+//@ chunk-frs14hy1.js:74751-74843 layout
 /**
  * 从存储的交接信息重新武装 relay，异常只记日志。
  */
@@ -1480,7 +1611,7 @@ function armRelayFromStoredHandoff(relay, markerLine, conversation, turnKind) {
     logError(error);
   }
 }
-//@ chunk-0h4e7gnq.js:66791-70122 layout
+//@ chunk-frs14hy1.js:74843-78168 layout
 /**
  * 日志自证：处理从其他进程交接来的轮次，校验未回答的 tool_use 与工具池，执行这些工具调用或补写历史。
  */
@@ -1693,19 +1824,19 @@ async function* handleHandedOffTurn(
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:70122-70218 layout (2.1.88 match: isHumanTurn, 0.779)
+//@ chunk-frs14hy1.js:78168-78264 layout (2.1.88 match: isHumanTurn, 0.778)
 /**
  * 覆盖后缀名 isHumanTurn_2。
  */
 function isHumanTurnMessage(m) {
   return m.type === "user" && !m.isMeta && !m.toolUseResult && !m.isCompactSummary && !isToolResultMessage(m);
 }
-//@ chunk-0h4e7gnq.js:70218-70231 layout
+//@ chunk-frs14hy1.js:78264-78277 layout
 /**
  * 15000。
  */
 var HANDOFF_CONFIRM_TIMEOUT_MS = 15000;
-//@ chunk-0h4e7gnq.js:70231-72415 layout
+//@ chunk-frs14hy1.js:78277-80452 layout
 /**
  * 交接轮次为 history/stopped 时把携带的消息补进对话（检查重复、顺序与会话是否已前进），被打断时补取消结果。
  */
@@ -1813,7 +1944,7 @@ async function* appendHandedOffHistory(turn, tools, mutableMessages, context, pe
     reason: kind === "stopped" ? "stopped_closed" : "history_appended",
   };
 }
-//@ chunk-0h4e7gnq.js:72415-72947 layout
+//@ chunk-frs14hy1.js:80452-80984 layout
 /**
  * 给未回答的 tool_use 补已取消结果并追加中断消息。
  */
@@ -1853,14 +1984,14 @@ async function* cancelUnansweredToolUses(assistantMessage, echo, tools, messages
     if (echo) yield* normalizeMessage(message, tools);
   }
 }
-//@ chunk-0h4e7gnq.js:72947-73022 layout
+//@ chunk-frs14hy1.js:80984-81059 layout
 /**
  * 需要持久化时把对话写入会话存储。
  */
 async function persistIfNeeded(messages, persistEnabled, context) {
   if (persistEnabled) await recordTranscript(messages, undefined, undefined, undefined, context.storageV5);
 }
-//@ chunk-0h4e7gnq.js:73022-73332 layout
+//@ chunk-frs14hy1.js:81059-81369 layout
 /**
  * 内部 assistant 消息转 SDK assistant 消息（session_id、request_id、tool_use_meta）。
  */
@@ -1884,27 +2015,7 @@ function toSDKAssistantMessage(message, tools) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:73332-73629 layout
-/**
- * 补写 assistant 行时决定保留哪些同轮消息。
- */
-function messagesToKeepForAssistant(assistantMessage, messageRows, mutableMessages) {
-  if (
-    messageRows === undefined ||
-    !messageRows.some((row) => row.uuid === assistantMessage.uuid) ||
-    messageRows.some(
-      (row) =>
-        row.resumedFromIncompleteThinking === true ||
-        (row.uuid !== assistantMessage.uuid &&
-          Array.isArray(row.message.content) &&
-          row.message.content.some((block) => block.type === "tool_use")),
-    )
-  )
-    return [assistantMessage];
-  let knownUuids = new Set(mutableMessages.map((message) => message.uuid));
-  return messageRows.filter((row) => !knownUuids.has(row.uuid));
-}
-//@ chunk-0h4e7gnq.js:73629-74539 layout
+//@ chunk-frs14hy1.js:81369-82275 layout
 /**
  * 日志自证：对从未发出的工具调用补 is_error 结果。
  */
@@ -1960,7 +2071,7 @@ async function answerCallsNeverSent({ notSent, tools, mutableMessages, persistSe
     }
   return sdkMessages;
 }
-//@ chunk-0h4e7gnq.js:74539-75821 layout
+//@ chunk-frs14hy1.js:82275-83564 layout
 /**
  * 恢复时执行一批 tool_use：补写 assistant 行、执行工具并把结果写入转录与 SDK 输出。
  */
@@ -1994,7 +2105,7 @@ async function* runToolUsesOnResume({
     ) {
       conversationAppender(mutableMessages).keep(
         messagesToKeepForAssistant(
-          assistantMessage,
+          [assistantMessage],
           filtered.find((run) => run.messageRows !== undefined)?.messageRows,
           mutableMessages,
         ),
@@ -2059,28 +2170,82 @@ async function* runToolUsesOnResume({
   }
   return permissionLayers;
 }
-//@ chunk-0h4e7gnq.js:75821-78840 fingerprint (2.1.88 match: extractReadFilesFromMessages, 0.37)
+//@ chunk-frs14hy1.js:83564-83611 layout
+var regExp; // deferred: uses COWRITTEN_ARTIFACT_HTML (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-frs14hy1.js:83564", () => {
+  regExp = new RegExp(`^<(?:${COWRITTEN_ARTIFACT_HTML}|${ARTIFACT_FILE_CONTENT})>$`, "m");
+});
+//@ chunk-frs14hy1.js:83611-83684 layout
+function isNonNegativeSafeInteger(tool) {
+  return typeof tool === "number" && Number.isSafeInteger(tool) && tool >= 0;
+}
+//@ chunk-frs14hy1.js:83684-88213 layout
 /**
  * 官方行为，保留：extractReadFilesFromMessages 的 replaceEntry 先写新值又写回旧值，等于没有替换，只有 ee.delete 生效；疑为打包把“替换后清哈希”写坏。
  */
-function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_CACHE_SIZE) {
-  let cache = createRemoteFileState(maxSize);
-  let fileReadToolUseIds = new Map();
-  let fileWriteToolUseIds = new Map();
-  let fileEditToolUseIds = new Map();
+function restoreRemoteFileState(messages, cwd, cacheSize = READ_FILE_STATE_CACHE_SIZE) {
+  let remoteFileState = createRemoteFileState(cacheSize);
+  let readByToolUse = new Map();
+  let writeByToolUse = new Map();
+  let editByToolUse = new Map();
   let truncatedIds = new Set();
+  let rereadByMessage = new Map();
   for (let message of messages) {
     if (message.type === "attachment" && message.attachment.type === "read_truncation_notice") {
       truncatedIds.add(message.attachment.toolUseID);
       continue;
     }
+    if (message.type === "attachment" && message.attachment.type === "edited_text_file") {
+      let filename = message.attachment.filename;
+      let rereadEntry = message.attachment.rereadEntry;
+      if (typeof filename !== "string" || !isPlainObject(rereadEntry)) continue;
+      let { timestamp, contentHash, contentLength, isPartialView } = rereadEntry;
+      let readBaseline = rereadEntry.readBaseline;
+      let sha256 = isPlainObject(readBaseline) ? readBaseline.sha256 : undefined;
+      let bytes = isPlainObject(readBaseline) ? readBaseline.bytes : undefined;
+      if (
+        !isNonNegativeSafeInteger(timestamp) ||
+        typeof contentHash !== "string" ||
+        !/^[0-9a-z]{1,16}$/.test(contentHash) ||
+        !isNonNegativeSafeInteger(contentLength) ||
+        (isPartialView !== undefined && isPartialView !== true) ||
+        (readBaseline !== undefined &&
+          (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256) || !isNonNegativeSafeInteger(bytes)))
+      )
+        continue;
+      let rereadPath = expandPathOrNull(filename, cwd);
+      if (rereadPath !== null)
+        rereadByMessage.set(message, {
+          filePath: rereadPath,
+          state: {
+            content: "",
+            contentHash,
+            contentLength,
+            timestamp,
+            offset: undefined,
+            limit: undefined,
+            contentNotInModelContext: true,
+            ...(isPartialView === true && {
+              isPartialView: true,
+            }),
+            ...(typeof sha256 === "string" &&
+              isNonNegativeSafeInteger(bytes) && {
+                readBaseline: {
+                  sha256,
+                  bytes,
+                },
+              }),
+          },
+        });
+      continue;
+    }
     if (message.type === "assistant" && Array.isArray(message.message.content))
-      for (let content of message.message.content) {
-        if (content.type !== "tool_use") continue;
-        if (hasHostField(content.input)) continue;
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use") continue;
+        if (hasHostField(block.input)) continue;
         try {
-          if (content.name === FILE_READ_TOOL_NAME) {
-            let input = normalizeReadInputAliases(content.input)?.input ?? content.input;
+          if (block.name === READ) {
+            let input = normalizeReadInputAliases(block.input)?.input ?? block.input;
             let offset = coerceNumberString(input?.offset);
             let limit = coerceNumberString(input?.limit);
             if (
@@ -2089,67 +2254,104 @@ function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_C
                 (typeof offset === "number" && Number.isInteger(offset) && offset >= 0)) &&
               (limit === undefined || (typeof limit === "number" && Number.isInteger(limit) && limit >= 1))
             )
-              fileReadToolUseIds.set(content.id, {
+              readByToolUse.set(block.id, {
                 filePath: expandPath(input.file_path, cwd),
                 offset,
                 limit,
               });
-          } else if (content.name === FILE_WRITE_TOOL_NAME) {
-            let input = normalizeWriteInputAliases(content.input)?.input ?? content.input;
+          } else if (block.name === FILE_WRITE_TOOL_NAME) {
+            let input = normalizeWriteInputAliases(block.input)?.input ?? block.input;
             if (typeof input?.file_path === "string" && typeof input.content === "string")
-              fileWriteToolUseIds.set(content.id, {
+              writeByToolUse.set(block.id, {
                 filePath: expandPath(input.file_path, cwd),
                 content: input.content,
               });
-          } else if (content.name === FILE_EDIT_TOOL_NAME) {
-            let input = content.input;
+          } else if (block.name === EDIT) {
+            let input = block.input;
             if (typeof input?.file_path === "string")
-              fileEditToolUseIds.set(content.id, expandPath(input.file_path, cwd));
+              editByToolUse.set(block.id, expandPath(input.file_path, cwd));
           }
         } catch (error) {
           logForDebugging(
-            `extractReadFilesFromMessages: skipping malformed ${content.name} tool_use: ${error}`,
+            `extractReadFilesFromMessages: skipping malformed ${block.name} tool_use: ${error}`,
           );
         }
       }
   }
   let seenPaths = new Set();
-  let remoteFileState = createRemoteFileState(maxSize);
+  let remoteFileState_2 = createRemoteFileState(cacheSize);
   let insertedPaths = [];
   let insertEntry = (path, entry) => {
     seenPaths.add(normalize(path));
-    remoteFileState.set(path, entry);
+    remoteFileState_2.set(path, entry);
     insertedPaths.push(path);
   };
-  let writtenPaths = isRemoteToolForwardingSwitchOn()
+  let writtenPaths = isRemoteToolsForwardEnabled2()
     ? new Set(
-        [...fileWriteToolUseIds.values()]
+        [...writeByToolUse.values()]
           .map((entry) => entry.filePath)
-          .concat([...fileEditToolUseIds.values()])
+          .concat(
+            [...editByToolUse.values()],
+            [...rereadByMessage.values()]
+              .filter((reread) => reread.state.readBaseline !== undefined)
+              .map((reread) => reread.filePath),
+          )
           .map((path) => normalize(path)),
       )
     : undefined;
   let hashByPath = new Map();
+  let resultPaths = new Set();
+  if (rereadByMessage.size > 0)
+    for (let message of messages) {
+      if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
+      for (let block of message.message.content) {
+        if (block.type !== "tool_result" || block.is_error === true) continue;
+        let resultPath =
+          readByToolUse.get(block.tool_use_id)?.filePath ??
+          writeByToolUse.get(block.tool_use_id)?.filePath ??
+          editByToolUse.get(block.tool_use_id);
+        if (resultPath !== undefined) resultPaths.add(normalize(resultPath));
+      }
+    }
   let replaceEntry = (path, entry) => {
     let normalized = normalize(path);
-    let previous = remoteFileState.get(path);
-    remoteFileState.set(path, entry);
-    remoteFileState.set(path, previous);
+    let previous = remoteFileState_2.get(path);
+    remoteFileState_2.set(path, entry);
+    remoteFileState_2.set(path, previous);
     hashByPath.delete(normalized);
   };
   e: for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
+    let reread = rereadByMessage.get(message);
+    if (reread !== undefined) {
+      let normalizedPath = normalize(reread.filePath);
+      let noBaseline = reread.state.readBaseline === undefined;
+      if (hashByPath.has(normalizedPath)) {
+        if (!noBaseline) replaceEntry(reread.filePath, reread.state);
+        else if (reread.state.contentHash !== hashByPath.get(normalizedPath))
+          hashByPath.delete(normalizedPath);
+      } else if (
+        resultPaths.has(normalizedPath) &&
+        !seenPaths.has(normalizedPath) &&
+        seenPaths.size < cacheSize
+      ) {
+        insertEntry(reread.filePath, reread.state);
+        if (noBaseline && writtenPaths?.has(normalizedPath))
+          hashByPath.set(normalizedPath, remoteFileState_2.get(reread.filePath).contentHash);
+      }
+      continue;
+    }
     if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
     let content = message.message.content;
     for (let idx = content.length - 1; idx >= 0; idx--) {
       let block = content[idx];
       if (block.type !== "tool_result" || !block.tool_use_id) continue;
-      let readFilePath = fileReadToolUseIds.get(block.tool_use_id);
-      let normalizedPath = readFilePath && normalize(readFilePath.filePath);
+      let read = readByToolUse.get(block.tool_use_id);
+      let normalizedPath = read && normalize(read.filePath);
       let canInsert =
-        normalizedPath !== undefined && !seenPaths.has(normalizedPath) && seenPaths.size < maxSize;
+        normalizedPath !== undefined && !seenPaths.has(normalizedPath) && seenPaths.size < cacheSize;
       if (
-        readFilePath &&
+        read &&
         (canInsert || hashByPath.has(normalizedPath)) &&
         block.is_error !== true &&
         typeof block.content === "string" &&
@@ -2164,81 +2366,82 @@ function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_C
         let contentText;
         let content_2 = toolUseResult?.file?.content;
         if (
-          (content.length === 1 || count(content, (block) => block.type === "tool_result") === 1) &&
+          (content.length === 1 || countWhere(content, (block) => block.type === "tool_result") === 1) &&
           typeof content_2 === "string" &&
           content_2 !== ""
         )
           contentText = content_2.trim();
+        else if (regExp.test(block.content)) continue;
         else contentText = stripReminderAndLineNumbers(block.content);
         if (!canInsert) {
           if (contentHashOf(contentText) !== hashByPath.get(normalizedPath))
             hashByPath.delete(normalizedPath);
         } else {
           let timestamp = new Date(message.timestamp).getTime();
-          let isNotebook = isNotebookPath(readFilePath.filePath);
-          insertEntry(readFilePath.filePath, {
+          let isNotebook = isNotebookPath(read.filePath);
+          insertEntry(read.filePath, {
             content: contentText,
             timestamp,
-            offset: isNotebook ? 1 : (readFilePath.offset ?? 1),
-            limit: isNotebook ? undefined : readFilePath.limit,
+            offset: isNotebook ? 1 : (read.offset ?? 1),
+            limit: isNotebook ? undefined : read.limit,
             ...(isPartial && {
               isPartialView: true,
             }),
             contentFromTranscript: true,
           });
           if (writtenPaths?.has(normalizedPath))
-            hashByPath.set(normalizedPath, remoteFileState.get(readFilePath.filePath).contentHash);
+            hashByPath.set(normalizedPath, remoteFileState_2.get(read.filePath).contentHash);
         }
       }
-      let writeToolData = fileWriteToolUseIds.get(block.tool_use_id);
-      let writePath = writeToolData && normalize(writeToolData.filePath);
-      let canInsertWrite = writePath !== undefined && !seenPaths.has(writePath) && seenPaths.size < maxSize;
+      let write = writeByToolUse.get(block.tool_use_id);
+      let writePath = write && normalize(write.filePath);
+      let canInsertWrite = writePath !== undefined && !seenPaths.has(writePath) && seenPaths.size < cacheSize;
       if (
-        writeToolData &&
+        write &&
         (canInsertWrite || hashByPath.has(writePath)) &&
         block.is_error !== true &&
         message.timestamp
       ) {
         let timestamp = new Date(message.timestamp).getTime();
         let entry = {
-          content: stripBomAndCarriageReturn(writeToolData.content),
+          content: stripBomAndCarriageReturn(write.content),
           timestamp,
           offset: undefined,
           limit: undefined,
         };
-        if (canInsertWrite) insertEntry(writeToolData.filePath, entry);
-        else replaceEntry(writeToolData.filePath, entry);
+        if (canInsertWrite) insertEntry(write.filePath, entry);
+        else replaceEntry(write.filePath, entry);
       }
-      let editFilePath = fileEditToolUseIds.get(block.tool_use_id);
-      let editPath = editFilePath && normalize(editFilePath);
-      let canInsertEdit = editPath !== undefined && !seenPaths.has(editPath) && seenPaths.size < maxSize;
-      if (editFilePath && (canInsertEdit || hashByPath.has(editPath)) && block.is_error !== true)
+      let edit = editByToolUse.get(block.tool_use_id);
+      let editPath = edit && normalize(edit);
+      let canInsertEdit = editPath !== undefined && !seenPaths.has(editPath) && seenPaths.size < cacheSize;
+      if (edit && (canInsertEdit || hashByPath.has(editPath)) && block.is_error !== true)
         try {
-          let { content: diskContent } = detectEncodingForResolvedPath(editFilePath);
+          let { content } = detectEncodingForResolvedPath(edit);
           let entry = {
-            content: stripBom(diskContent),
-            timestamp: getFileModificationTime(editFilePath),
+            content: stripBom(content),
+            timestamp: getFileModificationTime(edit),
             offset: undefined,
             limit: undefined,
             contentNotInModelContext: true,
           };
-          if (canInsertEdit) insertEntry(editFilePath, entry);
-          else replaceEntry(editFilePath, entry);
+          if (canInsertEdit) insertEntry(edit, entry);
+          else replaceEntry(edit, entry);
         } catch (error) {
           logForDebugging(
-            `extractReadFilesFromMessages: skipping Edit disk read for ${editFilePath}: ${errorMessage(error)}`,
+            `extractReadFilesFromMessages: skipping Edit disk read for ${edit}: ${errorMessage(error)}`,
           );
         }
-      if (seenPaths.size >= maxSize && hashByPath.size === 0) break e;
+      if (seenPaths.size >= cacheSize && hashByPath.size === 0) break e;
     }
   }
   for (let j = insertedPaths.length - 1; j >= 0; j--) {
     let path = insertedPaths[j];
-    cache.set(path, remoteFileState.get(path));
+    remoteFileState.set(path, remoteFileState_2.get(path));
   }
-  return cache;
+  return remoteFileState;
 }
-//@ chunk-0h4e7gnq.js:78840-80094 layout
+//@ chunk-frs14hy1.js:88213-89467 layout
 /**
  * 日志自证：收集回退时需重新追踪的文件路径（编辑类工具、文件附件、记忆附件）。
  */
@@ -2262,11 +2465,11 @@ function collectRewoundFileTrackingPaths(messages, cwd, toolAliases) {
         let pathValue =
           last === NOTEBOOK_EDIT_TOOL_NAME
             ? input.notebook_path
-            : last === FILE_READ_TOOL_NAME || last === FILE_EDIT_TOOL_NAME || last === FILE_WRITE_TOOL_NAME
+            : last === READ || last === EDIT || last === FILE_WRITE_TOOL_NAME
               ? input.file_path
               : undefined;
         if (typeof pathValue !== "string") continue;
-        if (last === FILE_READ_TOOL_NAME && isImageOrPdfExtension(pathValue)) continue;
+        if (last === READ && isImageOrPdfExtension(pathValue)) continue;
         let absolutePath = expandPathOrNull(pathValue, cwd);
         if (absolutePath !== normalize(pathValue)) spelledFilePaths.push(pathValue);
         if (absolutePath === null) {
@@ -2312,7 +2515,7 @@ function collectRewoundFileTrackingPaths(messages, cwd, toolAliases) {
     spelledFilePaths,
   };
 }
-//@ chunk-0h4e7gnq.js:80094-80199 layout
+//@ chunk-frs14hy1.js:89467-89572 layout
 /**
  * 追加一条消息到对话（失败时直接 push 去重）。
  */
@@ -2324,7 +2527,7 @@ async function appendMessageToConversation(messages, message) {
     if (!messages.some((appendedMessage) => appendedMessage.uuid === message.uuid)) messages.push(message);
   }
 }
-//@ chunk-0h4e7gnq.js:80199-80248 layout
+//@ chunk-frs14hy1.js:89572-89621 layout
 /**
  * 对话追加器（把行 push 到数组）。
  */
@@ -2333,7 +2536,7 @@ function conversationAppender(list) {
     list.push(...rows);
   });
 }
-//@ chunk-0h4e7gnq.js:80248-80630 layout
+//@ chunk-frs14hy1.js:89621-90003 layout
 /**
  * 把兄弟调用分成可运行（工具在池中）与缺失工具两类。
  */
@@ -2361,7 +2564,7 @@ function partitionSiblingRuns(permission, tools, toolAliases) {
     missingBlocks,
   };
 }
-//@ chunk-0h4e7gnq.js:80630-80820 fingerprint (2.1.88 match: handleOrphanedPermission, 0.365)
+//@ chunk-frs14hy1.js:90003-90193 fingerprint (2.1.88 match: handleOrphanedPermission, 0.336)
 /**
  * 孤立权限的决定：被调用方强制询问时保留 ask（重启前挂起的除外），否则视为允许。
  */
@@ -2377,7 +2580,7 @@ function handleOrphanedPermission_2(result) {
     },
   };
 }
-//@ chunk-0h4e7gnq.js:80820-80991 placement
+//@ chunk-frs14hy1.js:90193-90364 placement
 /**
  * 判断从下标 n 起的消息中是否已有指定 tool_use_id 的 tool_result。
  */
@@ -2393,7 +2596,7 @@ function hasToolResultAfter(mutableMessages, fromIndex, toolUseID) {
         ),
     );
 }
-//@ chunk-0eyv3mzk.js:227-501 fingerprint (2.1.88 match: extractBashToolsFromMessages, 1)
+//@ chunk-cwkrfaxh.js:227-501 affinity (2.1.88 match: extractBashToolsFromMessages, 1)
 /**
  * 遍历 assistant 里 Bash 类 tool_use 的 command 字符串。
  */
@@ -2413,7 +2616,7 @@ function* extractBashToolsFromMessages(messages) {
         }
     }
 }
-//@ chunk-0eyv3mzk.js:501-584 placement
+//@ chunk-cwkrfaxh.js:501-584 placement
 /**
  * 历史中 Bash 命令用到的 CLI 名集合。
  */
@@ -2425,7 +2628,7 @@ function extractBashCliNames(messages) {
   }
   return names;
 }
-//@ chunk-0eyv3mzk.js:839-923 placement
+//@ chunk-cwkrfaxh.js:839-923 placement
 /**
  * referencedBashToolNames：从消息里的 Bash 工具调用提取引用的工具名。
  */
@@ -2435,7 +2638,7 @@ function referencedBashToolNames(messages) {
     for (let ref of parseReferences(toolRef)) names.add(ref);
   return names;
 }
-//@ chunk-0eyv3mzk.js:923-1104 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-cwkrfaxh.js:923-1104 placement
 function collectUsedToolNames(messages) {
   let names = new Set();
   for (let message of messages)
@@ -2444,15 +2647,15 @@ function collectUsedToolNames(messages) {
     }
   return names;
 }
-//@ chunk-0eyv3mzk.js:1104-1128 fingerprint (2.1.88 match: STRIPPED_COMMANDS, 1)
+//@ chunk-cwkrfaxh.js:1104-1128 fingerprint (2.1.88 match: STRIPPED_COMMANDS, 1)
 /**
  * 取 CLI 名时跳过的前缀命令（sudo）。
  */
 var STRIPPED_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0eyv3mzk.js:1104", () => {
+deferInit("chunk-cwkrfaxh.js:1104", () => {
   STRIPPED_COMMANDS = new Set(["sudo"]);
 });
-//@ chunk-0eyv3mzk.js:1128-1273 file-local
+//@ chunk-cwkrfaxh.js:1128-1273 file-local
 /**
  * 取命令第一个非 VAR=值 赋值、非 sudo 的词。
  */
@@ -2467,14 +2670,12 @@ function extractCliName(command) {
   return;
 }
 export {
-  normalizeMessage,
-  isToolUseOrResultMessage,
+  shouldForwardSubagentMessage,
   orderedRowSource,
   appendRowsWithHooks,
+  restoreRemoteFileState,
   runningTurnRegistry,
-  extractReadFilesFromMessages,
-  collectRewoundFileTrackingPaths,
-  shouldForwardSubagentMessage,
+  normalizeMessage,
   hasToolResultAfter,
   lastUserAfterAssistant,
   handleOrphanedPermission,
@@ -2484,10 +2685,13 @@ export {
   appendHookableFastPath,
   getSalvageableResultText,
   getRecentErrorLog,
+  collectRewoundFileTrackingPaths,
+  extractReadFilesFromMessages,
+  subagentProgressToSDKMessages,
   extractBashCliNames,
   referencedBashToolNames,
   collectUsedToolNames,
-  subagentProgressToSDKMessages,
+  isToolUseOrResultMessage,
   formatResultDiagnostic,
   isResultSuccessful,
   buildEmptyResultDiagnostics,

@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{g}from"./chunk-47b8txen.js";import{v}from"./chunk-exfmq47h.js";import{yA,wg}from"./chunk-9ys74nhz.js";import{on}from"./chunk-wtzc5s1n.js";import{nLn,Xi}from"./chunk-4k8902rt.js";var t="Browser extension is not connected. The user's last message came from the Claude mobile app, where Claude in Chrome cannot be set up, so give no setup or troubleshooting steps unless they ask. In one or two short sentences, tell them you could not reach Claude in Chrome, then carry on another way if you can (web search, for example), and offer to try again once they are at a computer with Chrome open and the Claude in Chrome extension signed in. Unless they say Chrome is now open, do not call a Claude in Chrome tool again in this reply.";function wtr(){if((on()||yA())&&wg()&&nLn(Xi().lastTurnClientPlatform)&&v("tengu_glowing_pancake",!1))return g("chrome_phone_answer"),t;return}function Toi(e){return()=>{let n=e(),o=Xi();return o.disconnectedAnswerCount++,o.disconnectedAnswerTexts.add(n),n}}function Uqo(){return Xi().disconnectedAnswerCount}function Etr(e){return Xi().disconnectedAnswerTexts.has(e)}function Tbn(){let e=Xi();return e.disconnectedAnswerCount>0||e.notConnectedSeenByPriorWorker}function Aoi(){Xi().notConnectedSeenByPriorWorker=!0}
+export{wtr,Toi,Uqo,Etr,Tbn,Aoi};

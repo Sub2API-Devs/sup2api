@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。hooks 来源分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-08s5p3av.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2snqx25v.js (2)
  * attribution: placement 2
  */
 import { hasFrontmatterHooks, isRepoFrontmatterHookRestricted } from "./registerFrontmatterHooks.js";
@@ -16,7 +16,7 @@ import { isRestrictedPersonalAgent } from "../permissions/permissionsLoader.js";
 import { tagHooksWithSource } from "./sessionHooks.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 
-//@ chunk-08s5p3av.js:2406-2697 placement
+//@ chunk-2snqx25v.js:2473-2764 placement
 function hookSourcesSummary(agent) {
   if (!agent || !hasFrontmatterHooks(agent.hooks)) {
     setMainThreadAgentHooks(undefined);
@@ -37,7 +37,7 @@ function hookSourcesSummary(agent) {
   if (allowedByPolicy && !trusted) checkAgentOriginTrust(agent, "mainThread");
   setMainThreadAgentHooks(undefined);
 }
-//@ chunk-08s5p3av.js:2697-2843 placement
+//@ chunk-2snqx25v.js:2764-2910 placement
 function markHookSource(hooks, kind) {
   let marked = {};
   for (let event of HOOK_EVENTS) {

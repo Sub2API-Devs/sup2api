@@ -3,23 +3,39 @@
  *
  * headless/SDK 引擎入口：ask() 由 runHeadlessStreaming 调用，从会话配置（工具、MCP、系统提示词选项、代理等，支持惰性函数）构建本次查询的 ToolUseContext；引擎主体（submitMessage 循环）在未归属的 chunk-tyg7f3ek.js#nI。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/QueryEngine.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-tyg7f3ek.js (61)
- * attribution: fingerprint 2, placement 55, sole-consumer 1, layout 2, affinity 2
+ * pieces: chunk-0yw3taqg.js (71)
+ * attribution: placement 55, layout 8, affinity 3, sole-consumer 4, fingerprint 1
  */
+import { extname } from "path";
+import { isDeepStrictEqual } from "util";
 import { randomUUID } from "crypto";
-import { NO_CONTENT_MESSAGE, DELETED_IMAGE_NOTICE, SYNTHETIC_MODEL } from "./constants/messages.js";
+import { sessionUploadsDir, uploadsRootCandidates } from "./utils/uploadsDir.js";
+import {
+  collectKeptToolUseIds,
+  renderBlock,
+  withdrawBridgeAttachments,
+} from "./utils/attachments/bridgeAttachments.js";
+import { countWhere, stringArray } from "./utils/collections.js";
 import { storedFormSymbol } from "./utils/messageKinds.js";
 import { resolveMessageAlias } from "./utils/pollEvents/fold.js";
+import { isHumanOrUnset } from "./utils/messageProvenance.js";
 import {
+  REMOVED_TOOL_RESULT_MARK,
   withRenderedAttachment,
+  ATTACHED_FILE_REMOVED_MARK,
+  HIDDEN_IMAGE_MARK,
+  collectImageFileUuids,
+  createInformationalSystemMessage,
   isInterruptionOnlyMessage,
+  SYNTHETIC_MODEL,
   isUserPromptOfKind,
   isUserStampPrompt,
   isReorderedRow,
   isToolResultMessage,
   isTurnCompanion,
+  createAssistantMessage,
   attachmentToMessages,
   createSystemMessage,
   isEmptyUserMessage,
@@ -30,8 +46,11 @@ import {
   stripToolResultsForStorage,
   createModelFallbackSystemMessage,
 } from "./utils/messages.js";
+import { NO_CONTENT_MESSAGE, DELETED_IMAGE_PLACEHOLDER } from "./constants/messages.js";
+import { isSubpathOf } from "./utils/pathPrefix.js";
 import {
   chromeSetupModule,
+  isHeadlessNoticeEligible,
   checkContextInstructionsSize,
   gatewayCodeTabRulesNotice,
 } from "./cli/print/agentResume.js";
@@ -43,6 +62,7 @@ import {
   getTotalCostUSD,
   getModelUsage,
   getSafetyStops,
+  getLaunchReplyGatePolicyOutcome,
   noteSystemPromptSectionInvalidation,
   setAutoModeUnavailableStopNotice,
   isSessionPersistenceDisabled,
@@ -53,8 +73,40 @@ import {
   isDiskless,
 } from "./bootstrap/state.js";
 import { notifyCacheDeletion } from "./services/api/promptCacheBreakDetection.js";
-import { logFeatureOk, logFeatureBad, logFeatureSad } from "./services/analytics/featureTelemetry.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "./services/analytics/featureTelemetry.js";
 import { logError, getInMemoryErrors } from "./utils/log.js";
+import {
+  normalizeCaseForComparison_2,
+  isScratchpadEnabled,
+  getScratchpadDir,
+  declaredAbsoluteAdditionalDirectories,
+} from "./utils/permissions/filesystem.js";
+import { IMAGE_EXTENSIONS } from "./tools/FileReadTool/constants.js";
+import {
+  getLastLoadStatus,
+  getSyncCacheResetEpoch,
+  servedSettingsLoadLeftNoAnswer,
+  hasLoadCycleBegun,
+  hasLoadCycleEnded,
+} from "./services/remoteManagedSettings/remoteSettingsState.js";
+import { describeFetchFailure } from "./services/cloudSessions/eligibility.js";
+import {
+  informationalSystemMessage,
+  preservedAttachmentRows,
+  replayMessagesToSdk,
+  systemMessagesToSdk,
+  toSdkMessages,
+} from "./cli/print/sdkMessageStream.js";
+import { fromEnum, fromEnumOpt } from "./services/analytics/safeMetadata.js";
+import {
+  isAbortError,
+  AbortError,
+  withTelemetryMessage,
+  toError,
+  ShellError,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  errorMessage,
+} from "./utils/errors.js";
 import { getTaskListId, snapshotTaskList } from "./utils/tasks.js";
 import {
   hasRemoteWorkerEventLog,
@@ -74,19 +126,9 @@ import {
 import { MAX_TASK_NUMBER } from "./cli/print/turnStartChecks.js";
 import { jsonStringify } from "./utils/slowOperations.js";
 import { logEvent } from "./services/analytics/index.js";
-import { fromEnum, fromEnumOpt } from "./services/analytics/safeMetadata.js";
 import { HostScoped } from "./utils/hostScoped.js";
-import {
-  isAbortError,
-  AbortError,
-  withTelemetryMessage,
-  toError,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  errorMessage,
-} from "./utils/errors.js";
 import { raceWithAbortSignal, withDeadline } from "./utils/sleep.js";
 import { logForDebugging } from "./utils/debug.js";
-import { isHumanOrUnset } from "./utils/messageProvenance.js";
 import { lastTextBlockText } from "./utils/historyFile.js";
 import { getMcpPrefix, buildMcpToolName, mcpInfoFromString } from "./services/mcp/mcpStringUtils.js";
 import {
@@ -105,6 +147,9 @@ import {
   LIFECYCLE_WAKEUP_SOURCE_V1,
   TASK_LIST_RESTORE_V1,
   TASK_LIST_RESTORED_V1,
+  REPLY_GATE_POLICY_DISABLED_V1,
+  REPLY_GATE_POLICY_V1,
+  REPLY_GATE_POLICY_REFUSED_V1,
   MCP_READ_RESOURCE_V1,
   MCP_TOOL_UI_META_V1,
   persistsWithoutRedaction,
@@ -113,9 +158,14 @@ import {
   emptyMarkerList,
   shouldOfferLinuxSandboxHint,
   START_SHELL_TASK_V1,
+  MCP_STATUS_NO_CONFIG_V1,
   recordInitTiming,
 } from "./utils/messages/systemInit.js";
-import { isRecordableDenial } from "./types/permissions.js";
+import {
+  isRecordableDenial,
+  READ_ONLY_AUTO_ALLOW_REASON,
+  SANDBOX_AUTO_ALLOW_REASON,
+} from "./types/permissions.js";
 import {
   isExternalOrigin,
   stampMissingOrigin,
@@ -124,20 +174,40 @@ import {
   markTranscriptOnly,
   attachTaskDelivery,
 } from "./utils/messages/nonUserMessages.js";
-import { selectableUserMessagesFilter } from "./utils/messages/mappers.js";
+import { selectableUserMessagesFilter, pluginPromptFieldOf } from "./utils/messages/mappers.js";
 import { bashCommandTagKindOf, localCommandTagKindOf } from "./utils/messages/localCommandTags.js";
 import { cleanShellOutputForViewers } from "./utils/shell/headlessBash.js";
 import { mergedMessageUuids } from "./cli/print/queuedMessageUtils.js";
 import { trimTrailingAfterTurn, isTurnAnswered } from "./cli/print/transcriptChain.js";
 import { lookMcpTaskEndings } from "./tasks/McpTask/mcpTaskEndings.js";
-import { count, uniq } from "./utils/collections.js";
-import { getTokenCountFromUsage_4 } from "./services/compact/compact.js";
+import { getTokenCountFromUsage_6 } from "./services/compact/compact.js";
 import { isCompactBoundaryMessage, messagesSinceCompactBoundary } from "./services/projects/threadRows.js";
 import {
   isStopInterruptionRow,
   isInterruptMarkerRow,
   isQueueTranscriptOnlyUserMessage,
 } from "./utils/transcript/deserialize.js";
+import { isRemoteCowork, isCcsRemoteCowork } from "./utils/entrypointKinds.js";
+import { highlightsRefusal } from "./cli/print/setMaxThinkingTokens.js";
+import {
+  shouldSendInterleavedThinkingBeta,
+  canonicalNameOrUndefined,
+  ultrathinkEffectiveSafely,
+  resolveModelAlias,
+  computeDeclaredToolSet,
+  promptIdForRequest,
+} from "./services/api/claude.js";
+import { getSettingsForSource } from "./utils/settings/settings.js";
+import { shouldNudgeFastModeChange } from "./commands/fast/fast.js";
+import { isAutoModeTransitionDue } from "./utils/permissions/autoModeTransition.js";
+import {
+  modelSupportsAutoMode,
+  isBetaHeaderAllowed,
+  shouldUseGlobalCacheScope,
+  isSkillModelOverrideAllowedInMode,
+} from "./utils/betas.js";
+import { getMainLoopModel } from "./utils/model/model.js";
+import { isAutoClassifierActive } from "./utils/permissions/autoModeState.js";
 import { isVsCodeTopSession } from "./utils/sessionShape.js";
 import {
   waitForMcpToolServer,
@@ -151,7 +221,12 @@ import { listMcpTools } from "./services/mcp/mcpWireUtils.js";
 import { describeConnectError } from "./services/mcp/auth.js";
 import { officeBridgeListingState, REMOTE_DEVICES } from "./services/mcp/firstPartyServerIds.js";
 import { refreshMcpServerTools } from "./services/mcp/client.js";
-import { findToolByName, toolMatchesName } from "./Tool.js";
+import { findToolByName, matchesToolName } from "./Tool.js";
+import { shellQuoteArgs } from "./utils/bash/bashPipeCommand.js";
+import { INNER_TASK_SUFFIX } from "./tasks/LocalShellTask/backgroundNotices.js";
+import { evaluateAskingNoHost } from "./utils/permissions/permissions.js";
+import { BashTool } from "./tools/BashTool/BashTool.js";
+import { createDenialTrackingState } from "./utils/permissions/denialTracking.js";
 import {
   NON_EXECUTION_KINDS,
   buildResultMessage,
@@ -159,7 +234,11 @@ import {
   isAbortedTerminalReason,
 } from "./entrypoints/sdk/coreSchemas.js";
 import { findTool, deferredToolsKeptCached } from "./services/api/deferredToolsState.js";
-import { isPermissionCardHoldEnabled } from "./cli/print/wakeRouter.js";
+import {
+  isPermissionCardHoldEnabled,
+  disallowedToolsFromMessages,
+  applyDisallowedTools,
+} from "./cli/print/wakeRouter.js";
 import {
   hasToolResultAfter,
   lastUserAfterAssistant,
@@ -179,10 +258,16 @@ import {
   getFastRejectedReason,
   rearmCreditsExhaustedNotice,
 } from "./utils/fastMode.js";
-import { checkTurnIdsConsistent, dropCcrTurnId } from "./services/mcp/ccrTurnId.js";
+import { checkTurnIdsConsistent, dropTurnId } from "./services/mcp/ccrTurnId.js";
 import { clearTurnTraceContexts, currentPromptHandle } from "./utils/telemetry/sessionTracing.js";
+import {
+  noteCarriedSenderAddress,
+  isSunnyGardenSenderAddress,
+  prefetchSenderAddress,
+} from "./services/api/requestHeaders.js";
 import { logForDiagnosticsNoPII } from "./utils/diagLogs.js";
 import { createTaskListCatchUp, TASK_LIST_HANDOFF_STATE } from "./cli/print/taskListRestore.js";
+import { markServedVersion, kickTurnEndCheckMemCtx } from "./services/accountMemory/memoryContext.js";
 import {
   measurePhase,
   endProfile,
@@ -200,20 +285,9 @@ import { recordPhase, consumeApiRequestSentFromSpawn } from "./utils/startupTimi
 import { isExemptDefaultResolvingPick } from "./utils/model/defaultModel.js";
 import { isModelAllowed } from "./utils/model/modelAllowlist.js";
 import { parseUserSpecifiedModel } from "./utils/model/modelDisplay.js";
-import { getMainLoopModel } from "./utils/model/model.js";
 import { getRuntimeMainLoopModel } from "./utils/model/planModeModel.js";
-import {
-  isBetaHeaderAllowed,
-  shouldUseGlobalCacheScope,
-  isSkillModelOverrideAllowedInMode,
-} from "./utils/betas.js";
 import { fetchSystemPromptParts } from "./utils/queryContext.js";
 import { TOOL_CATALOG } from "./tools.js";
-import {
-  isScratchpadEnabled,
-  getScratchpadDir,
-  declaredAbsoluteAdditionalDirectories,
-} from "./utils/permissions/filesystem.js";
 import { hasAutoMemPathOverride, getAutoMemPathState } from "./memdir/paths.js";
 import { loadMemoryPrompt } from "./memdir/memdir.js";
 import { getPromptModel } from "./utils/model/promptBundles.js";
@@ -221,9 +295,10 @@ import { withCliSections } from "./constants/promptSections.js";
 import { baseSystemPromptOf } from "./utils/systemPromptBoundary.js";
 import { renderAppendPromptHead } from "./cli/startup/appendPromptHead.js";
 import { asSystemPrompt } from "./utils/systemPromptType.js";
+import { sessionWriterSpelling } from "./utils/syncedSkillsAnchor.js";
+import { transportStateByHost, isTransportBacked, orderForTransport } from "./cli/transportState.js";
 import { getPlatform } from "./utils/platform.js";
 import { getCachedPowerShellPath } from "./utils/shell/powershellDetection.js";
-import { isTransportBacked, transportStateByHost, orderForTransport } from "./cli/transportState.js";
 import { isArtifacts404Failure } from "./services/mcp/redactMcpErrors.js";
 import { mcpServerSource } from "./services/mcp/fileReference/fileReferencePolicy.js";
 import { proactivityStateStub } from "./cli/print/proactivityControl.js";
@@ -234,19 +309,16 @@ import { pluginErrorText } from "./types/plugin.js";
 import { getSkippedDynamicServers } from "./services/mcp/mcpConfigProvenance.js";
 import { hasMarketplaceAlias } from "./utils/plugins/pluginIdentifier.js";
 import { pluginWarningText } from "./utils/plugins/pluginComponentConflicts.js";
-import {
-  canonicalNameOrUndefined,
-  ultrathinkEffectiveSafely,
-  computeDeclaredToolSet,
-  promptIdForRequest,
-} from "./services/api/claude.js";
-import { viewTeammateOutput } from "./components/teams/TeamsDialog.js";
+import { currentViewMode } from "./utils/focusMode.js";
 import {
   queuedNotificationCapabilities,
   createNotificationDrain,
 } from "./services/queuedNotifications/queuedNotifications.js";
+import { shouldSendWidgetStates, tools, READ_WIDGET_CONTEXT_V1 } from "./utils/widgetContext.js";
+import { programUseCaseStampsCapabilities } from "./utils/programUseCase.js";
 import { sessionNoticesCapability, SESSION_NOTICES } from "./cli/print/sessionNotices.js";
 import { sdkMcpCapabilities, uiSurfaceCapabilities, uiHookedCapabilities } from "./cli/sdkMcpManifests.js";
+import { getDisableReplyCheck } from "./query/turnEndReasons.js";
 import { isReadFileAsWrittenServed } from "./cli/print/authAndPolicyRefresh.js";
 import { reduceFileHistoryState, fileHistoryMakeSnapshot, fileHistoryEnabled } from "./utils/fileHistory.js";
 import { NO_BRIDGE_CONSENT } from "./screens/repl/bridgeChannelSlot.js";
@@ -268,13 +340,6 @@ import {
   missingWorkingDirectoryPins,
 } from "./utils/Shell.js";
 import {
-  informationalSystemMessage,
-  preservedAttachmentRows,
-  replayMessagesToSdk,
-  systemMessagesToSdk,
-  toSdkMessages,
-} from "./cli/print/sdkMessageStream.js";
-import {
   DeclaredToolSet,
   asDeclaredToolSet,
   resolveDeclaredToolSet,
@@ -288,7 +353,20 @@ import {
 } from "./utils/toolSearch.js";
 import { isFoamySpringEnabled as isFoamySpringEnabled_2 } from "./services/mcp/mcpToolAvailability.js";
 import { isDeferredTool, isDeferredToolInConversation } from "./tools/ToolSearchTool/prompt.js";
+import { getEffortLayerOverride } from "./utils/permissions/toolPermissionContext.js";
+import {
+  modelSupportsPerTurnEffortControl,
+  resolveEffortLevel,
+  resolveEffortValue,
+  getEffortEnvOverride,
+  isEffortHigherThan,
+} from "./utils/effort.js";
 import { clearClassifierContext } from "./utils/conversationRecovery.js";
+import {
+  UnsentMediaReporter,
+  toolResultUseIds,
+  letGoOfUnsentMediaInPlace,
+} from "./services/api/toolSchemaWire.js";
 import { env } from "./utils/env.js";
 import { androidEvidenceByHost } from "./tools/BashTool/androidCommands.js";
 import { createIsolationLatch } from "./services/tools/webToolIsolation.js";
@@ -326,9 +404,9 @@ import {
 import { useMessageActions } from "./components/messageActions.js";
 import { markOwnClientPrompt } from "./tools/BashTool/bashEditDiff/gitEnv.js";
 import { noteTurnClientPlatform } from "./tools/ChromeSetupOfferTool/ChromeSetupOfferTool.js";
+import { getWidgetStates } from "./tools/ReadWidgetContextTool/widgetState.js";
 import { isStorageV5Enabled } from "./utils/hoverRest.js";
 import { startFirstRequestGate } from "./utils/api.js";
-import { kickTurnEndCheckMemCtx } from "./services/accountMemory/memoryContext.js";
 import { buildRunningTurnRecord, createRunningTurnTracker } from "./cli/print/runningTurnRecord.js";
 import { awaitMcpSettle } from "./query/toolDrain.js";
 import { getUserContextMemoryFiles } from "./context.js";
@@ -345,10 +423,8 @@ import { ensureTurnId, markVerifiedHumanTurn } from "./utils/messages/apiNormali
 import { createPromptEntryTracker } from "./utils/processUserInput/promptEntryWaiters.js";
 import { processUserInput } from "./utils/processUserInput/processUserInput.js";
 import { confirmWithUser } from "./utils/permissions/confirmWithUser.js";
-import { withdrawBridgeAttachments } from "./utils/attachments/bridgeAttachments.js";
 import { setHearthRelayMetadata } from "./services/projectsRelay/relayConfig.js";
 import { isFoamySpringEnabled } from "./services/analytics/growthbookGates.js";
-import { isSunnyGardenSenderAddress, prefetchSenderAddressFor } from "./services/api/requestHeaders.js";
 import { isBareMode } from "./utils/envUtils.js";
 import { applyPollEventToolPermissions } from "./utils/pollEvents.js";
 import { toStreamEventMessage, createPartialStreamRetraction } from "./cli/print/userPromptFiles.js";
@@ -373,37 +449,84 @@ import { telemetrySafeModelName } from "./utils/model/telemetryModelName.js";
 import { isMarkerTextDelta, BRIEF_TOOL_NAME_SET } from "./cli/print/resumeMcpTasks.js";
 import { hasReachedBudget } from "./cost-tracker.js";
 import { raiseTurnComplete } from "./query/turnHooks.js";
+import { toolResultStore } from "./utils/toolResultStorage.js";
 import { sanitizeMarkName } from "./utils/startupMarks.js";
-import { resolveEffortLevel } from "./utils/effort.js";
 import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "./utils/remoteFileState.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:416207-418123 placement
-function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
+//@ chunk-0yw3taqg.js:110255-113943 placement
+function reconcileSavedFilesForTurn(
+  messages,
+  withdrawnUploadUuidList,
+  { hideBefore = 0, earlier = [] } = {},
+) {
+  let withdrawnPaths = new Set();
   try {
-    let withdrawnNames = new Set(withdrawnFileUuids.map((name) => name.toLowerCase()));
-    let withdrawnPaths = new Set(
-      initialMessages.flatMap((message) =>
-        message.type === "user" && Array.isArray(message.savedFiles)
-          ? message.savedFiles.flatMap((savedFile) =>
-              typeof savedFile?.file_uuid === "string" &&
-              typeof savedFile.path === "string" &&
-              withdrawnNames.has(savedFile.file_uuid.toLowerCase())
-                ? [savedFile.path]
-                : [],
-            )
-          : [],
-      ),
+    let withdrawnNames = new Set(withdrawnUploadUuidList.map((name) => name.toLowerCase()));
+    let flattened = [...earlier, ...messages].flatMap((message) =>
+      message.type === "user" && Array.isArray(message.savedFiles)
+        ? message.savedFiles.filter(
+            (savedFile) => typeof savedFile?.file_uuid === "string" && typeof savedFile.path === "string",
+          )
+        : [],
     );
-    let withdrawnCount = 0;
+    for (let savedFile of flattened)
+      if (withdrawnNames.has(savedFile.file_uuid.toLowerCase())) withdrawnPaths.add(savedFile.path);
+    let allPaths = new Set(flattened.map((savedFile) => savedFile.path));
+    let uploadRoots = hideBefore > 0 ? [sessionUploadsDir(), ...uploadsRootCandidates()] : [];
+    let keptToolUseIds = collectKeptToolUseIds([...earlier, ...messages], withdrawnPaths);
+    let cutPictureCount = 0;
+    let hiddenPictureCount = 0;
+    let cutReadCount = 0;
     let replacements = [];
-    for (let [index, message] of initialMessages.entries())
+    for (let [index, message] of messages.entries()) {
+      let isBeforeCut = hideBefore > 0 && !(Date.parse(message.timestamp) >= hideBefore);
       if (message.type === "user") {
-        let keepMask = maskDisallowedNames(message.imageFileUuids, withdrawnNames);
-        if (keepMask === undefined || !Array.isArray(message.message?.content)) continue;
-        let keptBlocks = filterImageBlocksByMask(message.message.content, keepMask);
-        let removedCount = message.message.content.length - keptBlocks.length;
-        withdrawnCount += removedCount;
+        let withdrawnBeforeCount = countWhere(stringArray(message.withdrawnFilesBefore), (fileUuid) =>
+          withdrawnNames.has(fileUuid),
+        );
+        let content = message.message?.content;
+        if (!Array.isArray(content)) {
+          if (withdrawnBeforeCount !== (message.withdrawnFiles ?? 0))
+            replacements.push([
+              index,
+              {
+                ...message,
+                withdrawnFiles: withdrawnBeforeCount,
+                [storedFormSymbol]: resolveMessageAlias(message),
+              },
+            ]);
+          continue;
+        }
+        let readCutCount = countWhere(content, (block) => renderBlock(block, keptToolUseIds));
+        let mask = maskDisallowedNames(message.imageFileUuids, withdrawnNames);
+        let isHumanVisible =
+          isBeforeCut &&
+          message.isMeta !== true &&
+          isHumanOrUnset(message.origin ?? undefined) &&
+          !content.some((block) => block?.type === "tool_result");
+        let keptBlocks = filterImageBlocksByMask(content, mask, !isHumanVisible).map((keptBlock) =>
+          renderBlock(keptBlock, keptToolUseIds)
+            ? {
+                ...keptBlock,
+                content: REMOVED_TOOL_RESULT_MARK,
+              }
+            : keptBlock,
+        );
+        let removedCount = content.length - keptBlocks.length;
+        if (
+          removedCount === 0 &&
+          readCutCount === 0 &&
+          withdrawnBeforeCount === (message.withdrawnFiles ?? 0)
+        )
+          continue;
+        cutReadCount += readCutCount;
+        let min = Math.min(
+          removedCount,
+          countWhere(mask, (keepIndex) => !keepIndex),
+        );
+        cutPictureCount += min;
+        hiddenPictureCount += removedCount - min;
         replacements.push([
           index,
           {
@@ -420,64 +543,133 @@ function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
                       },
                     ],
             },
-            withdrawnImages: (message.withdrawnImages ?? 0) + removedCount,
-            imageFileUuids: filterArrayByMask(message.imageFileUuids, keepMask),
-            imagePasteIds: filterArrayByMask(message.imagePasteIds, keepMask),
+            withdrawnFiles: withdrawnBeforeCount,
+            withdrawnImages: (message.withdrawnImages ?? 0) + min,
+            hiddenPictures: (message.hiddenPictures ?? 0) + removedCount - min,
+            imageFileUuids: filterArrayByMask(message.imageFileUuids, mask),
+            imagePasteIds: filterArrayByMask(message.imagePasteIds, mask, !isHumanVisible),
             [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
       } else if (message.type !== "attachment") continue;
       else if (message.attachment?.type === "inlined_image_paths") {
         let { attachment } = message;
-        let keepMask = maskDisallowedNames(attachment.fileUuids, withdrawnNames);
-        if (keepMask === undefined) continue;
+        if (!Array.isArray(attachment.paths)) continue;
+        let pathKeepMask = maskDisallowedNames(attachment.fileUuids, withdrawnNames);
+        let keptPaths = filterArrayByMask(attachment.paths, pathKeepMask, !isBeforeCut) ?? [];
+        if (keptPaths.length === attachment.paths.length) continue;
         replacements.push([
           index,
           {
             ...withRenderedAttachment(message, {
               ...attachment,
-              paths: filterArrayByMask(attachment.paths, keepMask) ?? [],
-              fileUuids: filterArrayByMask(attachment.fileUuids, keepMask),
+              paths: keptPaths,
+              fileUuids: filterArrayByMask(attachment.fileUuids, pathKeepMask),
             }),
             [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
       } else if (message.attachment?.type === "file") {
-        if (message.attachment.content?.type !== "image" || !withdrawnPaths.has(message.attachment.filename))
+        let { filename } = message.attachment;
+        let isWithdrawn = withdrawnPaths.has(filename);
+        let isImage = message.attachment.content?.type === "image";
+        if (!(
+          isWithdrawn ||
+          (isImage &&
+            isBeforeCut &&
+            typeof filename === "string" &&
+            !allPaths.has(filename) &&
+            uploadRoots.some((root) => isSubpathOf(root, filename, false)))
+        ))
           continue;
-        withdrawnCount++;
+        cutPictureCount += isWithdrawn && isImage ? 1 : 0;
+        cutReadCount += isImage ? 0 : 1;
+        hiddenPictureCount += isWithdrawn ? 0 : 1;
         replacements.push([
           index,
           {
             ...withRenderedAttachment(message, {
               type: "critical_system_reminder",
-              content: DELETED_IMAGE_NOTICE,
+              content: !isImage
+                ? ATTACHED_FILE_REMOVED_MARK
+                : isWithdrawn
+                  ? DELETED_IMAGE_PLACEHOLDER
+                  : HIDDEN_IMAGE_MARK,
+            }),
+            [storedFormSymbol]: resolveMessageAlias(message),
+          },
+        ]);
+      } else if (
+        ((message.attachment?.type === "pdf_reference" ||
+          message.attachment?.type === "compact_file_reference" ||
+          message.attachment?.type === "edited_text_file") &&
+          withdrawnPaths.has(message.attachment.filename)) ||
+        (message.attachment?.type === "at_mention_reference" &&
+          Array.isArray(message.attachment.mentions) &&
+          message.attachment.mentions.some((mention) => withdrawnPaths.has(mention)))
+      ) {
+        cutReadCount++;
+        replacements.push([
+          index,
+          {
+            ...withRenderedAttachment(message, {
+              type: "critical_system_reminder",
+              content: ATTACHED_FILE_REMOVED_MARK,
+            }),
+            [storedFormSymbol]: resolveMessageAlias(message),
+          },
+        ]);
+      } else if (message.attachment?.type === "read_truncation_notice") {
+        let { attachment } = message;
+        if (!keptToolUseIds.has(attachment.toolUseID) || attachment.banner === REMOVED_TOOL_RESULT_MARK)
+          continue;
+        cutReadCount++;
+        replacements.push([
+          index,
+          {
+            ...withRenderedAttachment(message, {
+              ...attachment,
+              banner: REMOVED_TOOL_RESULT_MARK,
             }),
             [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
       } else if (message.attachment?.type === "queued_command") {
         let { attachment } = message;
+        if (!Array.isArray(attachment.prompt)) continue;
         let keepMask = maskDisallowedNames(attachment.imageFileUuids, withdrawnNames);
-        if (keepMask === undefined || !Array.isArray(attachment.prompt)) continue;
-        let keptBlocks = filterImageBlocksByMask(attachment.prompt, keepMask);
-        let removedCount = attachment.prompt.length - keptBlocks.length;
-        withdrawnCount += removedCount;
+        let isVisibleBeforeCut =
+          isBeforeCut && attachment.isMeta !== true && isHumanOrUnset(attachment.origin ?? undefined);
+        let keptBlocks = filterImageBlocksByMask(attachment.prompt, keepMask, !isVisibleBeforeCut);
+        let removedPromptCount = attachment.prompt.length - keptBlocks.length;
+        if (removedPromptCount === 0) continue;
+        let min = Math.min(
+          removedPromptCount,
+          countWhere(keepMask, (keepIndex) => !keepIndex),
+        );
+        cutPictureCount += min;
+        hiddenPictureCount += removedPromptCount - min;
         replacements.push([
           index,
           {
             ...withRenderedAttachment(message, {
               ...attachment,
               prompt: keptBlocks.length > 0 ? keptBlocks : NO_CONTENT_MESSAGE,
-              withdrawnImages: (attachment.withdrawnImages ?? 0) + removedCount,
+              withdrawnImages: (attachment.withdrawnImages ?? 0) + min,
+              hiddenPictures: (attachment.hiddenPictures ?? 0) + removedPromptCount - min,
               imageFileUuids: filterArrayByMask(attachment.imageFileUuids, keepMask),
-              inlinedImagePaths: filterArrayByMask(attachment.inlinedImagePaths, keepMask),
+              inlinedImagePaths: filterArrayByMask(
+                attachment.inlinedImagePaths,
+                keepMask,
+                !isVisibleBeforeCut,
+              ),
             }),
             [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
       }
-    for (let [index, message] of replacements) initialMessages[index] = message;
+    }
+    for (let [index, message] of replacements) messages[index] = message;
     let teleportCacheState = chromeSetupModule?.getTeleportCacheState();
     if (
       teleportCacheState?.status === "active" &&
@@ -490,40 +682,191 @@ function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
     }
     logFeatureOk("bridge_attachment_withdraw", {
       listed_count: withdrawnNames.size,
-      cut_picture_count: withdrawnCount,
+      cut_picture_count: cutPictureCount,
+      hidden_picture_count: hiddenPictureCount,
+      cut_read_count: cutReadCount,
     });
+    if (hiddenPictureCount > 0) logFeatureSad("bridge_attachment_withdraw", "pictures_with_no_id_hidden");
   } catch (error) {
     logError(error);
     logFeatureBad("bridge_attachment_withdraw", "cut_failed");
   }
+  return [...withdrawnPaths];
 }
-//@ chunk-tyg7f3ek.js:418123-418262 placement
+//@ chunk-0yw3taqg.js:113943-115021 layout
+function computeWithdrawStamp(messages, withdrawnFileUuids) {
+  try {
+    let list = Array.from(new Map(messages.map((message) => [message.uuid, message])).values());
+    let withdrawnNames = new Set(withdrawnFileUuids.map((uuidText) => uuidText.toLowerCase()));
+    let alreadyListed = new Set(
+      list.flatMap((message) =>
+        message.type === "user"
+          ? [...stringArray(message.withdrawnBefore), ...stringArray(message.withdrawnFilesBefore)]
+          : [],
+      ),
+    );
+    let withdrawableUuids = collectImageFileUuids(list.map((message) => resolveMessageAlias(message)));
+    let pictureCount = 0;
+    let reminderCount = 0;
+    let alreadyHidden = 0;
+    for (let message of list)
+      if (message.type === "user") {
+        pictureCount += toCount(message.hiddenPictures);
+        alreadyHidden += toCount(message.hiddenBefore);
+      } else if (message.type !== "attachment") continue;
+      else if (message.attachment?.type === "queued_command")
+        pictureCount += toCount(message.attachment.hiddenPictures);
+      else if (
+        message.attachment?.type === "critical_system_reminder" &&
+        message.attachment.content === HIDDEN_IMAGE_MARK
+      )
+        reminderCount++;
+    return {
+      withdrawnBefore: Array.from(withdrawableUuids).filter(
+        (uuid) => withdrawnNames.has(uuid) && !alreadyListed.has(uuid),
+      ),
+      withdrawnFilesBefore: normalizeCaseForComparison_2(
+        list
+          .flatMap((message) =>
+            message.type === "user" && Array.isArray(message.savedFiles) ? message.savedFiles : [],
+          )
+          .filter(
+            (savedFile) =>
+              typeof savedFile?.file_uuid === "string" &&
+              typeof savedFile.path === "string" &&
+              !IMAGE_EXTENSIONS.has(extname(savedFile.path).slice(1).toLowerCase()),
+          )
+          .map((savedFile) => savedFile.file_uuid.toLowerCase()),
+      ).filter(
+        (uuid) => withdrawnNames.has(uuid) && !alreadyListed.has(uuid) && !withdrawableUuids.has(uuid),
+      ),
+      hiddenBefore: Math.max(0, (pictureCount || reminderCount) - alreadyHidden),
+    };
+  } catch (error) {
+    logError(error);
+    logFeatureBad("bridge_attachment_withdraw", "stamp_failed");
+    return {
+      withdrawnBefore: [],
+      withdrawnFilesBefore: [],
+      hiddenBefore: 0,
+    };
+  }
+}
+//@ chunk-0yw3taqg.js:115021-115464 layout
+function stampDeletionNote(messages, turnId, { withdrawnBefore, withdrawnFilesBefore, hiddenBefore }) {
+  try {
+    if (withdrawnBefore.length === 0 && withdrawnFilesBefore.length === 0 && hiddenBefore === 0) return;
+    let found = messages.find((message) => message.uuid === turnId);
+    if (found?.type === "user" && found.taskDelivery === undefined)
+      for (let target of [found, resolveMessageAlias(found)]) {
+        if (withdrawnBefore.length > 0) target.withdrawnBefore = withdrawnBefore;
+        if (withdrawnFilesBefore.length > 0) target.withdrawnFilesBefore = withdrawnFilesBefore;
+        if (hiddenBefore > 0) target.hiddenBefore = hiddenBefore;
+      }
+    else logFeatureSad("bridge_attachment_withdraw", "deletion_note_not_kept");
+  } catch (error) {
+    logError(error);
+    logFeatureBad("bridge_attachment_withdraw", "stamp_failed");
+  }
+}
+//@ chunk-0yw3taqg.js:115464-115565 placement
 function maskDisallowedNames(names, withdrawn) {
-  if (!Array.isArray(names)) return;
-  let mapped = names.map((name) => typeof name !== "string" || !withdrawn.has(name.toLowerCase()));
-  return mapped.includes(false) ? mapped : undefined;
+  return Array.isArray(names)
+    ? names.map((name) => typeof name !== "string" || !withdrawn.has(name.toLowerCase()))
+    : [];
 }
-//@ chunk-tyg7f3ek.js:418262-418336 placement
+//@ chunk-0yw3taqg.js:115565-115643 placement
 /**
  * 数组按布尔掩码过滤（掩码缺省为保留）
  */
-function filterArrayByMask(values, mask) {
-  return Array.isArray(values) ? values.filter((value, index) => mask[index] ?? true) : undefined;
+function filterArrayByMask(values, mask, defaultValue = true) {
+  return Array.isArray(values) ? values.filter((value, index) => mask[index] ?? defaultValue) : undefined;
 }
-//@ chunk-tyg7f3ek.js:418336-418415 placement (2.1.88 match: _temp, 1)
+//@ chunk-0yw3taqg.js:115643-115723 placement (2.1.88 match: _temp, 1)
 /**
  * 只按 image 块的顺序套用掩码过滤
  */
-function filterImageBlocksByMask(blocks, mask) {
+function filterImageBlocksByMask(blocks, mask, defaultValue) {
   let imageIndex = 0;
-  return blocks.filter((block) => block?.type !== "image" || (mask[imageIndex++] ?? true));
+  return blocks.filter((block) => block?.type !== "image" || (mask[imageIndex++] ?? defaultValue));
 }
-//@ chunk-tyg7f3ek.js:418415-418429 placement
+//@ chunk-0yw3taqg.js:115723-115786 affinity
+function toCount(value) {
+  return typeof value === "number" && value > 0 ? Math.floor(value) : 0;
+}
+//@ chunk-0yw3taqg.js:440777-440915 sole-consumer
+var STILL_LOADING = "Remote managed settings are still loading";
+var DID_NOT_LOAD = "Remote managed settings did not load";
+var HAS_LOADED = "Remote managed settings have now loaded";
+//@ chunk-0yw3taqg.js:440915-442102 sole-consumer
+function remoteSettingsNotice(said) {
+  try {
+    if (!isHeadlessNoticeEligible()) return null;
+    let lastLoadStatus = getLastLoadStatus();
+    let syncCacheResetEpoch = getSyncCacheResetEpoch();
+    let leftNoAnswer = servedSettingsLoadLeftNoAnswer();
+    if (!leftNoAnswer) {
+      if (said === undefined) return null;
+      if (lastLoadStatus?.state === "ineligible")
+        return {
+          said: undefined,
+          frame: null,
+        };
+      if (
+        said.word === "answered" ||
+        (lastLoadStatus?.state !== "ok" && lastLoadStatus?.state !== "stale_cache")
+      )
+        return null;
+    }
+    let word = !leftNoAnswer
+      ? "answered"
+      : lastLoadStatus === undefined && hasLoadCycleBegun() && !hasLoadCycleEnded()
+        ? "pending"
+        : "missing";
+    if (said?.epoch === syncCacheResetEpoch && said.word === word) return null;
+    let text;
+    if (lastLoadStatus === undefined) text = word === "pending" ? STILL_LOADING : DID_NOT_LOAD;
+    else
+      switch (lastLoadStatus.state) {
+        case "failed":
+          text = `Remote managed settings failed to load (${describeFetchFailure(lastLoadStatus.failure.errorKind, lastLoadStatus.failure.httpStatus)}) \xB7 ${lastLoadStatus.restrictionsOnly ? "the cached policy's restrictions still apply" : "no remote policy applied"}`;
+          break;
+        case "stale_cache":
+          text = `Remote managed settings failed to load (${describeFetchFailure(lastLoadStatus.failure.errorKind, lastLoadStatus.failure.httpStatus)}) \xB7 using cached policy${lastLoadStatus.transportEnvWithheld ? " (proxy/CA/provider env withheld)" : ""}`;
+          break;
+        case "ok":
+          text = `${HAS_LOADED} \xB7 ${lastLoadStatus.hasSettings ? "remote policy applied" : "no remote policy to apply"}`;
+          break;
+        case "ineligible":
+          return null;
+      }
+    let frame = informationalSystemMessage(
+      createInformationalSystemMessage(text, word === "answered" ? "notice" : "warning"),
+    );
+    logFeatureOk("remote_managed_settings_desktop_notice", {
+      word: fromEnum(word),
+    });
+    return {
+      said: {
+        word,
+        epoch: syncCacheResetEpoch,
+      },
+      frame,
+    };
+  } catch (error) {
+    if (!isAbortError(error)) {
+      logError(error);
+      logFeatureBad("remote_managed_settings_desktop_notice", "threw");
+    }
+    return null;
+  }
+}
+//@ chunk-0yw3taqg.js:442102-442116 placement
 /**
  * 262144：延迟结果的序列化上限
  */
 var MAX_DEFERRED_RESULT_BYTES = 262144;
-//@ chunk-tyg7f3ek.js:418429-419533 placement
+//@ chunk-0yw3taqg.js:442116-443221 placement
 async function mirrorTaskListSnapshot(compactResult, session, store) {
   try {
     let taskListId = getTaskListId();
@@ -597,7 +940,7 @@ async function mirrorTaskListSnapshot(compactResult, session, store) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:419533-419959 placement
+//@ chunk-0yw3taqg.js:443221-443647 placement
 function taskListSnapshotPayload({ shown, highestId, descriptions, metadata }) {
   return {
     tasks: shown.map((task) => ({
@@ -628,14 +971,14 @@ function taskListSnapshotPayload({ shown, highestId, descriptions, metadata }) {
     highestId,
   };
 }
-//@ chunk-tyg7f3ek.js:419959-420016 placement
+//@ chunk-0yw3taqg.js:443647-443704 placement
 /**
  * 判断一个值序列化后的字节数是否在上限内（用于延迟结果）。
  */
 function fitsResultBudget(payload) {
   return Buffer.byteLength(jsonStringify(payload), "utf8") <= MAX_DEFERRED_RESULT_BYTES;
 }
-//@ chunk-tyg7f3ek.js:420016-420648 placement
+//@ chunk-0yw3taqg.js:443704-444336 placement
 function createRetractionFilter() {
   let heldBanner;
   let retractedUuids = new Set();
@@ -690,7 +1033,7 @@ function createRetractionFilter() {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:420648-421367 placement
+//@ chunk-0yw3taqg.js:444336-445244 placement
 function collapseRefusalFallbackNotices(entries, sessionId) {
   return entries.map(({ banner, suppressedCount, emittedVia }) => {
     if (suppressedCount > 0)
@@ -698,6 +1041,7 @@ function collapseRefusalFallbackNotices(entries, sessionId) {
         suppressed_count: suppressedCount,
         emitted_via: fromEnum(emittedVia),
       });
+    if (banner.apiRefusalCyberVerification !== undefined) logFeatureOk("refusal_fallback_cyber_verification");
     return {
       type: "system",
       subtype: "model_refusal_fallback",
@@ -711,6 +1055,9 @@ function collapseRefusalFallbackNotices(entries, sessionId) {
       request_id: banner.requestId,
       api_refusal_category: banner.apiRefusalCategory ?? null,
       api_refusal_explanation: banner.apiRefusalExplanation ?? null,
+      ...(banner.apiRefusalCyberVerification !== undefined && {
+        api_refusal_cyber_verification: banner.apiRefusalCyberVerification,
+      }),
       ...(banner.sawCyberRefusal && {
         saw_cyber_refusal: true,
       }),
@@ -724,17 +1071,17 @@ function collapseRefusalFallbackNotices(entries, sessionId) {
     };
   });
 }
-//@ chunk-tyg7f3ek.js:421367-421402 placement
+//@ chunk-0yw3taqg.js:445244-445279 placement
 /**
  * 等待内置插件就绪的时限（15 秒）与已就绪宿主集合。
  */
 var BUILTIN_PLUGIN_READY_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var builtinPluginReadyHosts;
-deferInit("chunk-tyg7f3ek.js:421367", () => {
+deferInit("chunk-0yw3taqg.js:445244", () => {
   BUILTIN_PLUGIN_READY_TIMEOUT_MS = 15000;
   builtinPluginReadyHosts = new HostScoped(() => new Set());
 });
-//@ chunk-tyg7f3ek.js:421402-422100 placement
+//@ chunk-0yw3taqg.js:445279-445977 placement
 function runBuiltinTurnObservers(host, promptText, signal, timeoutMs) {
   if (signal.aborted) return;
   let pendingWaits = [];
@@ -787,7 +1134,7 @@ function runBuiltinTurnObservers(host, promptText, signal, timeoutMs) {
     },
   );
 }
-//@ chunk-tyg7f3ek.js:422100-422429 placement
+//@ chunk-0yw3taqg.js:445977-446306 placement
 function isTypedPersonPrompt(host, messages, options, signal) {
   try {
     let typedText =
@@ -809,7 +1156,7 @@ function isTypedPersonPrompt(host, messages, options, signal) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:422429-422737 placement
+//@ chunk-0yw3taqg.js:446306-446614 placement
 function markDroppedPrompts(messages, turnId, droppedUuids) {
   try {
     let allDropped = new Set(droppedUuids);
@@ -827,7 +1174,7 @@ function markDroppedPrompts(messages, turnId, droppedUuids) {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:422737-422882 placement
+//@ chunk-0yw3taqg.js:446614-446759 placement
 function filterMcpToolsBySelectedServers(tools, selectedServerNames, selectedServers) {
   if (selectedServerNames.length > 0) return tools;
   let mapped = selectedServers.map((server) => getMcpPrefix(server.name));
@@ -835,7 +1182,7 @@ function filterMcpToolsBySelectedServers(tools, selectedServerNames, selectedSer
     (toolName) => mapped.includes(`${toolName}__`) || !mapped.some((prefix) => toolName.startsWith(prefix)),
   );
 }
-//@ chunk-tyg7f3ek.js:422882-423099 placement
+//@ chunk-0yw3taqg.js:446759-446976 placement
 function assistantUsageDelta(message, lastId, previousId) {
   try {
     let { id, model, usage } = message.message;
@@ -848,7 +1195,7 @@ function assistantUsageDelta(message, lastId, previousId) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:423099-423374 placement
+//@ chunk-0yw3taqg.js:446976-447251 placement
 function createPermissionDenialTracker(canUseTool) {
   let denials = [];
   function recordDenial(tool, toolUseId, toolInput) {
@@ -876,7 +1223,7 @@ function createPermissionDenialTracker(canUseTool) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:423374-423535 placement
+//@ chunk-0yw3taqg.js:447251-447412 placement
 function userRowsToReplay(messages, options) {
   return messages.filter(
     (message) =>
@@ -886,13 +1233,13 @@ function userRowsToReplay(messages, options) {
       (message.type === "system" && message.subtype === "compact_boundary"),
   );
 }
-//@ chunk-tyg7f3ek.js:423535-423637 placement
+//@ chunk-0yw3taqg.js:447412-447514 placement
 function isOwnPromptRow(message, options) {
   return message.type === "user" && options?.localStdinOrigin === true && isSameUuidMessage(message, options)
     ? isUserPromptOfKind(message, "own-prompt")
     : isUserStampPrompt(message);
 }
-//@ chunk-tyg7f3ek.js:423637-423859 placement
+//@ chunk-0yw3taqg.js:447514-447736 placement
 function* replayUserRows(messages, options) {
   for (let message of messages) {
     if (message.type !== "user") continue;
@@ -909,7 +1256,7 @@ function* replayUserRows(messages, options) {
       : toSdkUserMessage(message, options);
   }
 }
-//@ chunk-tyg7f3ek.js:423859-423977 placement
+//@ chunk-0yw3taqg.js:447736-447854 placement
 function* userRowsForSdk(messages, options) {
   let replayAll = options?.shouldQuery === false;
   for (let message of messages)
@@ -918,14 +1265,14 @@ function* userRowsForSdk(messages, options) {
       yield toSdkUserMessage(message, options);
     }
 }
-//@ chunk-tyg7f3ek.js:423977-424032 placement
+//@ chunk-0yw3taqg.js:447854-447909 placement
 /**
  * 两条消息 uuid 相同
  */
 function isSameUuidMessage(message, options) {
   return options?.uuid != null && message.uuid === options.uuid;
 }
-//@ chunk-tyg7f3ek.js:424032-424301 placement
+//@ chunk-0yw3taqg.js:447909-448188 placement
 function toSdkUserMessage(message, options) {
   let fileAttachments = isSameUuidMessage(message, options) ? options?.fileAttachments : undefined;
   return {
@@ -944,9 +1291,10 @@ function toSdkUserMessage(message, options) {
     ...(message.origin && {
       origin: message.origin,
     }),
+    ...pluginPromptFieldOf(message),
   };
 }
-//@ chunk-tyg7f3ek.js:424301-424555 placement (2.1.88 match: _temp7, 0.809)
+//@ chunk-0yw3taqg.js:448188-448442 placement (2.1.88 match: _temp7, 0.809)
 function userRowsWithoutInput(opt) {
   let rows = [];
   for (let message of opt) {
@@ -972,7 +1320,7 @@ function userRowsWithoutInput(opt) {
   }
   return rows;
 }
-//@ chunk-tyg7f3ek.js:424555-424629 placement
+//@ chunk-0yw3taqg.js:448442-448516 placement
 /**
  * 清理 shell 输出用于显示（保留颜色）
  */
@@ -986,7 +1334,7 @@ function cleanShellOutput(text) {
     return "";
   }
 }
-//@ chunk-tyg7f3ek.js:424629-424760 placement
+//@ chunk-0yw3taqg.js:448516-448647 placement
 function answeredMergedUuids(entries, userMessageUuids, alsoLeftToThisReRun = []) {
   try {
     return userMessageUuids?.flatMap((uuid) =>
@@ -1000,20 +1348,27 @@ function answeredMergedUuids(entries, userMessageUuids, alsoLeftToThisReRun = []
     return userMessageUuids;
   }
 }
-//@ chunk-tyg7f3ek.js:424760-425012 placement
-function stampMergedSends(messages, turnId, mergedSendUuids, clientPlatform, contextKey) {
-  if (!mergedSendUuids?.length && clientPlatform === undefined && contextKey === undefined) return;
+//@ chunk-0yw3taqg.js:448647-448942 placement
+function stampMergedSends(messages, turnId, mergedSendUuids, clientPlatform, contextKey, typedByPerson) {
+  if (
+    !mergedSendUuids?.length &&
+    clientPlatform === undefined &&
+    contextKey === undefined &&
+    typedByPerson === undefined
+  )
+    return;
   try {
     let found = messages.find((message) => message.uuid === turnId);
     if (found?.type !== "user") return;
     if (mergedSendUuids?.length) found.mergedSendUuids = [...mergedSendUuids];
     if (clientPlatform !== undefined) found.clientPlatform = clientPlatform;
     if (contextKey !== undefined) found.turnAttributionKey = contextKey;
+    if (typedByPerson === true) found.typedByPerson = true;
   } catch (error) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:425012-430132 placement
+//@ chunk-0yw3taqg.js:448942-454105 placement
 /**
  * 把本轮新增消息写入转录（处理折叠副本、压缩边界、墓碑删除与 parentUuid 链）。
  */
@@ -1030,7 +1385,7 @@ function persistTurnRows({
   let parentUuid;
   let initialLength = messages.length;
   let preservedTail = null;
-  let sinceUuid = new Set();
+  let collectedReplIds = new Set();
   let scannedLength = 0;
   let weakSet = new WeakSet();
   let heldCopies = [];
@@ -1165,12 +1520,12 @@ function persistTurnRows({
         );
   }
   function cursorProvider() {
-    collectReplIds(messages.slice(scannedLength), sinceUuid);
+    collectReplIds(messages.slice(scannedLength), collectedReplIds);
     scannedLength = messages.length;
-    return sinceUuid;
+    return collectedReplIds;
   }
   function resetScan() {
-    sinceUuid = new Set();
+    collectedReplIds = new Set();
     scannedLength = 0;
   }
   function lastChainUuid(rows) {
@@ -1249,8 +1604,8 @@ function persistTurnRows({
         dropped: preservedMessages.uuids.length - filtered.length,
         tailDropped: !byUuid.has(preservedMessages.uuids.at(-1)),
         unpairedToolBlocksRemaining:
-          count([...toolUseIds], (id) => !toolResultIds.has(id)) +
-          count([...toolResultIds], (id) => !toolUseIds.has(id)),
+          countWhere([...toolUseIds], (id) => !toolResultIds.has(id)) +
+          countWhere([...toolResultIds], (id) => !toolUseIds.has(id)),
       });
     } catch (error) {
       logError(error);
@@ -1275,7 +1630,7 @@ function persistTurnRows({
     let mapped = (preservedMessages?.allUuids ?? preservedMessages?.uuids ?? [])
       .map((uuid) => conversation.find((row) => row.uuid === uuid))
       .filter((row) => row !== undefined)
-      .map(getTokenCountFromUsage_4);
+      .map(getTokenCountFromUsage_6);
     preservedTail =
       preservedMessages && mapped.length > 0
         ? {
@@ -1331,11 +1686,11 @@ function persistTurnRows({
     let limit = to;
     let sawInterruption = false;
     let sawMarker = false;
-    for (let j = to - 1; j >= from; j--) {
-      let row = messages[j];
+    for (let idx = to - 1; idx >= from; idx--) {
+      let row = messages[idx];
       let isStopRow = isStopInterruptionRow(row);
       if (
-        (row.type === "assistant" && (row.isApiErrorMessage !== true || j < initialLength)) ||
+        (row.type === "assistant" && (row.isApiErrorMessage !== true || idx < initialLength)) ||
         isCompactBoundaryMessage(row) ||
         (row.type === "user" &&
           (row.isMeta !== true || (row.promptSource !== undefined && !isInterruptMarkerRow(row))) &&
@@ -1348,7 +1703,7 @@ function persistTurnRows({
         break;
       sawInterruption ||= isStopRow;
       sawMarker ||= isInterruptMarkerRow(row);
-      limit = j;
+      limit = idx;
     }
     return sawInterruption || sawMarker ? limit : to;
   }
@@ -1358,6 +1713,7 @@ function persistTurnRows({
   }
   return {
     record,
+    unrecorded: () => (persistSession ? messages.slice(cursor) : []),
     appendHostRows,
     isHostRow: (row) => weakSet.has(row),
     evict,
@@ -1370,7 +1726,7 @@ function persistTurnRows({
     flushUnanchoredPreservedTail: flushUnanchoredTail,
   };
 }
-//@ chunk-tyg7f3ek.js:430132-430390 placement
+//@ chunk-0yw3taqg.js:454105-454363 placement
 function takeShownAsStoredMark(message, askMark) {
   try {
     delete message.shownAsStoredIn;
@@ -1387,7 +1743,7 @@ function takeShownAsStoredMark(message, askMark) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:430390-430560 placement
+//@ chunk-0yw3taqg.js:454363-454533 placement
 function markShownAsStored(message, shownAsStoredIn, hookOutputApplied) {
   try {
     if (!hookOutputApplied) message.shownAsStoredIn = shownAsStoredIn;
@@ -1399,12 +1755,47 @@ function markShownAsStored(message, shownAsStoredIn, hookOutputApplied) {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:430560-430575 placement
+//@ chunk-0yw3taqg.js:456707-457224 sole-consumer
+function turnSettings({ turnThinking, heldThinking, turnModel, fastMode, toolPermissionContext }) {
+  if (!isRemoteCowork() && !isCcsRemoteCowork()) return {};
+  try {
+    let display = turnThinking.type === "disabled" ? undefined : turnThinking.display;
+    let displayToSend =
+      !highlightsRefusal(display) &&
+      (display !== "highlights" || shouldSendInterleavedThinkingBeta(turnModel));
+    return {
+      ...(isDeepStrictEqual(turnThinking, heldThinking()) && {
+        client_thinking: {
+          max_thinking_tokens:
+            turnThinking.type === "disabled"
+              ? 0
+              : turnThinking.type === "enabled"
+                ? (turnThinking.budgetTokens ?? null)
+                : null,
+          thinking_display: (displayToSend ? display : undefined) ?? null,
+        },
+      }),
+      ...(isRemoteCowork() &&
+        getSettingsForSource("flagSettings")?.switchModelsOnFlag === true &&
+        !fastMode &&
+        !shouldNudgeFastModeChange(fastMode) &&
+        !isAutoModeTransitionDue(toolPermissionContext, fastMode) &&
+        (modelSupportsAutoMode(getMainLoopModel()) ||
+          !isAutoClassifierActive(toolPermissionContext.mode)) && {
+          flag_restate_noop: true,
+        }),
+    };
+  } catch (error) {
+    logError(error);
+    return {};
+  }
+}
+//@ chunk-0yw3taqg.js:457224-457239 placement
 /**
  * 0.03125：计时遥测采样率
  */
 var TIMING_SAMPLE_RATE = 0.03125;
-//@ chunk-tyg7f3ek.js:430575-430877 placement
+//@ chunk-0yw3taqg.js:457239-457541 placement
 function sampleQueueLatency(timing) {
   try {
     if (
@@ -1424,13 +1815,13 @@ function sampleQueueLatency(timing) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:430877-430897 placement
+//@ chunk-0yw3taqg.js:457541-457561 placement
 /**
  * 7000
  */
 var DEFAULT_POLL_INTERVAL_MS = 7000;
 var DEFAULT_LOOKAHEAD_MS = 3000;
-//@ chunk-tyg7f3ek.js:430897-431139 placement
+//@ chunk-0yw3taqg.js:457561-457803 placement
 async function runWithDeadline(run, lookMs, signal) {
   let abortMarker = Error("aborted");
   try {
@@ -1459,7 +1850,7 @@ async function runWithDeadline(run, lookMs, signal) {
         };
   }
 }
-//@ chunk-tyg7f3ek.js:431139-433255 placement
+//@ chunk-0yw3taqg.js:457803-459930 placement
 /**
  * 等待设备桥（device bridge）上的指定工具出现：轮询 tools/list，可在池中替换为新的工具定义。
  */
@@ -1586,7 +1977,79 @@ async function waitForDeviceBridgeTool(toolName, tools, toolUseContext, owner, s
     });
   }
 }
-//@ chunk-tyg7f3ek.js:433255-434504 placement
+//@ chunk-0yw3taqg.js:459967-460705 layout
+async function moveShellToDir(dir, callOptions) {
+  let cdCall = {
+    command: `cd ${shellQuoteArgs([dir])}`,
+  };
+  let toolUseId = `${randomUUID()}${INNER_TASK_SUFFIX}`;
+  let decision = await evaluateAskingNoHost(
+    BashTool,
+    cdCall,
+    {
+      ...callOptions,
+      permissionRound: undefined,
+      localDenialTracking: createDenialTrackingState(),
+      clientRequestedToolUseId: toolUseId,
+    },
+    createAssistantMessage({
+      content: [],
+    }),
+    toolUseId,
+  );
+  if (decision.behavior !== "allow" || !serializeDecisionReason(decision.decisionReason)) {
+    logForDebugging(
+      `Shell not moved to ${dir} for a stored approval: the permission check on the cd returned ${decision.behavior} (${decision.decisionReason?.type ?? "no reason"}), and only an allow from a rule, the mode, Bash's own checks or the classifier moves it`,
+      {
+        level: "warn",
+      },
+    );
+    return;
+  }
+  try {
+    await BashTool.call(cdCall, {
+      ...callOptions,
+      innerCall: true,
+      toolUseId,
+    });
+  } catch (error) {
+    if (!(error instanceof ShellError)) throw error;
+    logForDebugging(
+      `Shell not moved to ${dir} for a stored approval: the cd failed (exit code ${error.code}); the directory may be missing on this machine`,
+      {
+        level: "warn",
+      },
+    );
+  }
+}
+//@ chunk-0yw3taqg.js:460705-461128 layout (2.1.88 match: serializeDecisionReason, 0.941)
+function serializeDecisionReason(reason) {
+  switch (reason?.type) {
+    case "rule":
+    case "mode":
+      return true;
+    case "classifier":
+      return reason.classifierAllowed === true;
+    case "other":
+      return reason.reason === READ_ONLY_AUTO_ALLOW_REASON || reason.reason === SANDBOX_AUTO_ALLOW_REASON;
+    case "subcommandResults":
+      return (
+        reason.reasons.size > 0 &&
+        [...reason.reasons.values()].every(
+          (reason) => reason.behavior === "allow" && serializeDecisionReason(reason.decisionReason),
+        )
+      );
+    case "hook":
+    case "permissionPromptTool":
+    case "asyncAgent":
+    case "sandboxOverride":
+    case "workingDir":
+    case "safetyCheck":
+    case undefined:
+      return false;
+  }
+}
+//@ chunk-0yw3taqg.js:461128-462600 placement
 function resolveDeferredToolUse({
   behavior,
   outcome,
@@ -1638,15 +2101,19 @@ function resolveDeferredToolUse({
       typeof toolUseBlock?.name === "string" &&
       mcpInfoFromString(toolUseBlock.name)?.serverName === REMOTE_DEVICES,
     waited_for_tool_ms: outcome.toolWait?.waitedMs ?? 0,
+    tool_server_state_kind: outcome.toolWait?.serverState ?? "no_wait",
+    tool_server_state_at_start_kind: outcome.toolWait?.initialServerState ?? "no_wait",
+    tool_server_transport_kind:
+      (outcome.reExecuted ? undefined : outcome.missingTool?.serverTransport) ?? "none",
     device_bridge_wait_end_kind: outcome.toolWait?.bridgeEnd ?? "did_not_wait_for_computer",
     note_stored: outcome.noteStored === true,
     card_step_again_kind: (outcome.reExecuted ? outcome.cardStep : undefined) ?? "not_run",
   };
 }
-//@ chunk-tyg7f3ek.js:434504-434844 placement
+//@ chunk-0yw3taqg.js:462600-462940 placement
 function countAttachmentRowsAtTail(mutableMessages) {
   try {
-    return count(
+    return countWhere(
       mutableMessages.slice(
         mutableMessages.findLastIndex(
           (message) =>
@@ -1668,13 +2135,13 @@ function countAttachmentRowsAtTail(mutableMessages) {
     return 0;
   }
 }
-//@ chunk-tyg7f3ek.js:434844-435009 placement
+//@ chunk-0yw3taqg.js:462940-463105 placement
 function turnContinuationKind({ orphanedPermission, handedOffTurn, deferredToolUse }) {
   if (orphanedPermission) return "orphaned_permission";
   if (handedOffTurn) return "turn_handoff";
   return deferredToolUse ? "deferred_tool_use" : "none";
 }
-//@ chunk-tyg7f3ek.js:435009-440425 placement
+//@ chunk-0yw3taqg.js:463105-468743 placement
 /**
  * headless 轮次主体：处理 orphaned permission / turn handoff / 延迟工具调用，刷新转录、放置文件，然后运行查询并产出 SDK 消息。
  */
@@ -1767,6 +2234,7 @@ async function* runHeadlessTurn({
   if (orphanedPermission) {
     checkTurnIdsConsistent([orphanedPermission]);
     clearTurnTraceContexts();
+    noteCarriedSenderAddress(orphanedPermission.answerEventUuid);
     let lastUserMessage = lastUserAfterAssistant(mutableMessages);
     let permissionOutcome = yield* handleOrphanedPermission(
       orphanedPermission,
@@ -1776,8 +2244,9 @@ async function* runHeadlessTurn({
       processUserInputContext,
       waitForDeviceBridgeTool,
       answers,
+      moveShellToDir,
     );
-    if (!permissionOutcome.reExecuted) dropCcrTurnId();
+    if (!permissionOutcome.reExecuted) dropTurnId("turn_start_resume");
     try {
       let deferredToolUse = resolveDeferredToolUse({
         behavior: orphanedPermission.permissionResult?.behavior,
@@ -1852,7 +2321,7 @@ async function* runHeadlessTurn({
     }
   }
   if (handedOffTurn) {
-    dropCcrTurnId();
+    dropTurnId("turn_start_resume");
     clearTurnTraceContexts();
     let taskListCatchUp = createTaskListCatchUp(
       processUserInputContext.session,
@@ -1861,6 +2330,13 @@ async function* runHeadlessTurn({
       processUserInputContext.storageV5,
     );
     let attachmentRowsAhead = countAttachmentRowsAtTail(mutableMessages);
+    let attachment = handedOffTurn.memoryLine?.attachment;
+    if (attachment?.type === "cowork_memory_context" && attachment.version !== null)
+      try {
+        markServedVersion(processUserInputContext.session.host, attachment.version);
+      } catch (error) {
+        logError(error);
+      }
     let handoffOutcome;
     try {
       handoffOutcome = yield* handleHandedOffTurn(
@@ -1926,7 +2402,7 @@ async function* runHeadlessTurn({
     }
   }
   if (!deferredToolUse) return false;
-  dropCcrTurnId();
+  dropTurnId("turn_start_resume");
   clearContextKey();
   clearTurnTraceContexts();
   let deferredResult = (call, isError) =>
@@ -2000,7 +2476,7 @@ async function* runHeadlessTurn({
   yield deferredResult(resumedCall, false);
   return true;
 }
-//@ chunk-tyg7f3ek.js:440425-440628 placement
+//@ chunk-0yw3taqg.js:468743-468946 placement
 async function loadSkillsAndPlugins(storage) {
   headlessProfilerCheckpoint("before_skills_plugins");
   let startTime = performance.now();
@@ -2012,7 +2488,7 @@ async function loadSkillsAndPlugins(storage) {
   headlessProfilerCheckpoint("after_skills_plugins");
   return results;
 }
-//@ chunk-tyg7f3ek.js:440628-440808 placement
+//@ chunk-0yw3taqg.js:468946-469126 placement
 function logShouldQueryResolved({ shouldQuery, fromUserInput, fromOptions }) {
   headlessProfilerCheckpoint("system_message_yielded");
   logForDiagnosticsNoPII("info", "cli_ask_should_query_resolved", {
@@ -2021,12 +2497,12 @@ function logShouldQueryResolved({ shouldQuery, fromUserInput, fromOptions }) {
     from_options: fromOptions,
   });
 }
-//@ chunk-tyg7f3ek.js:440808-440872 placement
-var getCoordinatorUserContext_2; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-tyg7f3ek.js:440808", () => {
-  getCoordinatorUserContext_2 = require("./coordinator/coordinatorMode.js").getCoordinatorUserContext;
+//@ chunk-0yw3taqg.js:469126-469190 placement (2.1.88 match: getCoordinatorUserContext, 0.572)
+var getCoordinatorUserContext; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-0yw3taqg.js:469126", () => {
+  getCoordinatorUserContext = require("./coordinator/coordinatorMode.js").getCoordinatorUserContext;
 });
-//@ chunk-tyg7f3ek.js:440872-441122 placement
+//@ chunk-0yw3taqg.js:469190-469440 placement
 function resolveTurnModelAndThinking({ userSpecifiedModel, permissionMode, thinkingConfig }) {
   let mainLoopModel =
     userSpecifiedModel &&
@@ -2051,7 +2527,7 @@ function resolveTurnModelAndThinking({ userSpecifiedModel, permissionMode, think
           },
   };
 }
-//@ chunk-tyg7f3ek.js:441122-441978 placement
+//@ chunk-0yw3taqg.js:469440-470298 placement
 /**
  * headless 轮次的系统提示组装：自定义/追加提示、追加头、动态段与 cache breaker。
  */
@@ -2084,7 +2560,7 @@ async function buildHeadlessSystemPrompt({
   headlessProfilerCheckpoint("after_getSystemPrompt");
   let userContext_2 = {
     ...userContext,
-    ...getCoordinatorUserContext_2(
+    ...getCoordinatorUserContext(
       mcpClients,
       TOOL_CATALOG.getAllBaseTools,
       isScratchpadEnabled() ? (getScratchpadDir() ?? undefined) : undefined,
@@ -2118,7 +2594,7 @@ async function buildHeadlessSystemPrompt({
     systemContext,
   };
 }
-//@ chunk-tyg7f3ek.js:441978-442046 placement
+//@ chunk-0yw3taqg.js:470298-470366 placement
 /**
  * 声明为绝对路径的额外目录
  */
@@ -2130,13 +2606,23 @@ function additionalDirectoriesForInit(source) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:442046-443633 placement
+//@ chunk-0yw3taqg.js:470366-470467 layout
+function activeSessionSpelling(apiKey, settings) {
+  try {
+    return sessionWriterSpelling(apiKey, settings, transportStateByHost.of(apiKey).active?.sessionWriters())
+      ?.spelled;
+  } catch (error) {
+    logError(error);
+    return;
+  }
+}
+//@ chunk-0yw3taqg.js:470467-472282 placement
 /**
  * 组装 SDK system/init 消息：工具、MCP 服务器、模型、权限模式、命令、agents、skills、插件、快速模式等。
  */
 async function buildSdkInitMessage({
   session,
-  tools,
+  tools: tools_2,
   mcpClients,
   model,
   readSessionEffort,
@@ -2154,6 +2640,7 @@ async function buildSdkInitMessage({
   if (getPlatform() === "windows") await getCachedPowerShellPath();
   let startTime = performance.now();
   let transportBacked = isTransportBacked(session);
+  let launchReplyGatePolicyOutcome = getLaunchReplyGatePolicyOutcome();
   let uiSurfaceCapabilitySource = () => ({
     redactsWhatItPersists: transportBacked,
     isRemoteTransport: transportStateByHost.of(session).active?.isRemoteTransport() === true,
@@ -2161,7 +2648,7 @@ async function buildSdkInitMessage({
   });
   let message = buildSystemInitMessage({
     ...(transportBacked ? buildRemoteSystemInitFields() : buildSystemInitFields()),
-    tools,
+    tools: tools_2,
     mcpClients: mcpClients
       .filter((mcpClient) => !isArtifacts404Failure(mcpClient))
       .map((mcpClient) => ({
@@ -2180,6 +2667,7 @@ async function buildSdkInitMessage({
     additionalDirectories: transportBacked
       ? undefined
       : additionalDirectoriesForInit(proactivityState.toolPermissionContext),
+    syncedSkillsPath: activeSessionSpelling(session, proactivityState.toolPermissionContext),
     pluginErrors: transportBacked
       ? []
       : [...plugins.errors, ...pluginsSyncErrors(session)]
@@ -2210,7 +2698,8 @@ async function buildSdkInitMessage({
       getFastModeUnavailableReasonCode() ?? getFastRejectedReason(model, fastMode) ?? undefined,
     perTurnEffortActive: canonicalNameOrUndefined(model),
     ultrathinkAvailable: ultrathinkEffectiveSafely(model, readSessionEffort),
-    viewMode: viewTeammateOutput(),
+    ultrathinkTypedRaises: resolveModelAlias(model, readSessionEffort),
+    viewMode: currentViewMode(),
     capabilities: capabilities ?? [
       ...INTERRUPT_MARKER_KEYS,
       ...(transportStateByHost.of(session).active?.commandLifecycleForwarderInstalled === true
@@ -2220,9 +2709,16 @@ async function buildSdkInitMessage({
         ? [TASK_LIST_RESTORE_V1]
         : []),
       ...(TASK_LIST_HANDOFF_STATE.peek(session)?.honoured === true ? [TASK_LIST_RESTORED_V1] : []),
-      ...queuedNotificationCapabilities(tools, session, messagesInView),
+      ...queuedNotificationCapabilities(tools_2, session, messagesInView),
+      ...(shouldSendWidgetStates() && tools(tools_2) ? [READ_WIDGET_CONTEXT_V1] : []),
+      ...programUseCaseStampsCapabilities(),
       ...(sessionNoticesCapability(session, permissionMode) ? [SESSION_NOTICES] : []),
       ...sdkMcpCapabilities(transportStateByHost.of(session).active),
+      ...(launchReplyGatePolicyOutcome === "accepted"
+        ? [getDisableReplyCheck() ? REPLY_GATE_POLICY_DISABLED_V1 : REPLY_GATE_POLICY_V1]
+        : launchReplyGatePolicyOutcome === "refused"
+          ? [REPLY_GATE_POLICY_REFUSED_V1]
+          : []),
       ...(transportBacked ? [] : [MCP_READ_RESOURCE_V1]),
       ...(transportBacked ? [] : [MCP_TOOL_UI_META_V1]),
       ...uiSurfaceCapabilities(uiSurfaceCapabilitySource),
@@ -2230,14 +2726,15 @@ async function buildSdkInitMessage({
       ...(persistsWithoutRedaction(uiSurfaceCapabilitySource()) ? [MCP_CALL_RESULT_NOT_FOR_MODEL_V1] : []),
       ...(isReadFileAsWrittenServed(session) ? [READ_FILE_AS_WRITTEN_V1] : []),
       ...emptyMarkerList(),
-      ...(shouldOfferLinuxSandboxHint(tools) ? [START_SHELL_TASK_V1] : []),
+      ...(shouldOfferLinuxSandboxHint(tools_2) ? [START_SHELL_TASK_V1] : []),
+      ...(transportStateByHost.of(session).transportPersists === true ? [MCP_STATUS_NO_CONFIG_V1] : []),
       ...[],
     ],
   });
   recordInitTiming(message, startTime);
   return message;
 }
-//@ chunk-tyg7f3ek.js:443633-446804 placement
+//@ chunk-0yw3taqg.js:472282-475485 placement
 /**
  * 构造 headless 模式的 ToolUseContext（文件历史、AppState 读写、SDK 状态回调等）。
  */
@@ -2263,6 +2760,7 @@ function createHeadlessToolUseContext(sessionDeps, phaseConfig) {
     primitiveToolGrant: sessionDeps.primitiveToolGrant,
     ...(phaseConfig.phase === "query" && {
       permissionLayers: phaseConfig.permissionLayers,
+      stopsAtToolGap: sessionDeps.stopsAtToolGap,
     }),
     setMessages: phaseConfig.phase === "input" ? phaseConfig.setMessages : () => {},
     applyMessageOp: phaseConfig.phase === "input" ? phaseConfig.applyMessageOp : () => {},
@@ -2373,7 +2871,7 @@ function createHeadlessToolUseContext(sessionDeps, phaseConfig) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:446804-446865 placement
+//@ chunk-0yw3taqg.js:475485-475546 placement
 function setCwdOrPin(cwd, toolUseContext) {
   try {
     setCwd(cwd, toolUseContext);
@@ -2382,7 +2880,7 @@ function setCwdOrPin(cwd, toolUseContext) {
     return pinMissingWorkingDirectory(error, toolUseContext);
   }
 }
-//@ chunk-tyg7f3ek.js:446865-446943 placement
+//@ chunk-0yw3taqg.js:475546-475624 placement
 async function setCwdV5OrPin(cwd, session, context) {
   try {
     await setCwdV5(cwd, session, context);
@@ -2391,7 +2889,7 @@ async function setCwdV5OrPin(cwd, session, context) {
     return pinMissingWorkingDirectory(error, session);
   }
 }
-//@ chunk-tyg7f3ek.js:446943-447452 placement
+//@ chunk-0yw3taqg.js:475624-476133 placement
 function pinMissingWorkingDirectory(error, toolUseContext) {
   if (!(error instanceof MissingWorkingDirectoryError)) throw error;
   toolUseContext.setCwd(error.path);
@@ -2419,7 +2917,7 @@ function pinMissingWorkingDirectory(error, toolUseContext) {
     ),
   );
 }
-//@ chunk-tyg7f3ek.js:447452-447567 placement
+//@ chunk-0yw3taqg.js:476133-476248 placement
 function declaredToolSetFor(tools, predicate, turnState) {
   return new DeclaredToolSet(
     tools.filter((tool) => predicate(tool) && isToolDeclaredForTurn(tool, tools, turnState)),
@@ -2430,7 +2928,7 @@ function declaredToolSetFor(tools, predicate, turnState) {
     },
   );
 }
-//@ chunk-tyg7f3ek.js:447567-447963 placement
+//@ chunk-0yw3taqg.js:476248-476643 placement
 function resolveToolSearchForTurn(tool, tools, turnState) {
   turnState.requestsHaveToolSearch ??=
     isToolSearchEnabledOptimistic() &&
@@ -2448,7 +2946,7 @@ function resolveToolSearchForTurn(tool, tools, turnState) {
     return deferredToolsKeptCached() ? "costly" : "harmful";
   return turnState.held === undefined ? "costly" : "free";
 }
-//@ chunk-tyg7f3ek.js:447963-448257 placement
+//@ chunk-0yw3taqg.js:476643-476937 placement
 function isToolDeclaredForTurn(tool, tools, turnState) {
   let nonDeferrableBuiltins = (turnState.nonDeferrableBuiltins ??= getNonDeferrableBuiltins());
   if (turnState.held === undefined && turnState.aboutToHold === undefined)
@@ -2465,9 +2963,43 @@ function isToolDeclaredForTurn(tool, tools, turnState) {
     nonDeferrableBuiltins,
   });
 }
-//@ chunk-tyg7f3ek.js:448257-448270 placement
+//@ chunk-0yw3taqg.js:476937-477422 layout
+function resolveTurnEffortCap(turnEffortCap, permissionLayers, selectedModel, appState) {
+  if (turnEffortCap === undefined) return;
+  try {
+    if (getEffortLayerOverride(permissionLayers) !== undefined) {
+      logFeatureSad("headless_turn_effort_cap", "turn_sets_effort");
+      return;
+    }
+    if (!modelSupportsPerTurnEffortControl(selectedModel)) {
+      logFeatureSad("headless_turn_effort_cap", "would_rewrite_cache");
+      return;
+    }
+    let effortLevel = resolveEffortLevel(appState, selectedModel);
+    let effortValue = resolveEffortValue(selectedModel, effortLevel);
+    let effortValue_2 = resolveEffortValue(selectedModel, effortLevel, {
+      turnEffort: turnEffortCap,
+    });
+    if (
+      typeof effortValue !== "string" ||
+      typeof effortValue_2 !== "string" ||
+      getEffortEnvOverride() !== undefined
+    ) {
+      logFeatureSad("headless_turn_effort_cap", "level_set_elsewhere");
+      return;
+    }
+    if (!isEffortHigherThan(effortValue, effortValue_2)) return;
+    logFeatureOk("headless_turn_effort_cap");
+    return turnEffortCap;
+  } catch (error) {
+    logFeatureSad("headless_turn_effort_cap", "check_threw");
+    logError(error);
+    return;
+  }
+}
+//@ chunk-0yw3taqg.js:477422-477435 placement
 var DEVICE_BRIDGE_TOOL_WAIT_MS = 60000;
-//@ chunk-tyg7f3ek.js:448342-448521 sole-consumer
+//@ chunk-0yw3taqg.js:477507-477686 sole-consumer
 function readTurnSignals(turnStartClock, frameTiming, nowPerfMs, nowWallMs) {
   if (
     turnStartClock === undefined ||
@@ -2486,11 +3018,12 @@ function readTurnSignals(turnStartClock, frameTiming, nowPerfMs, nowWallMs) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:448521-483526 placement
+//@ chunk-0yw3taqg.js:477686-515129 placement
 function QueryEngine(sessionConfig) {
   clearClassifierContext();
   let { getAppState, setAppState } = sessionConfig;
   let initialMessages = sessionConfig.initialMessages ?? [];
+  let newsTracker = new UnsentMediaReporter(undefined);
   let conversation =
     sessionConfig.conversation ??
     orderedRowSource({
@@ -2514,6 +3047,7 @@ function QueryEngine(sessionConfig) {
       initialMessage.type === "assistant" || (initialMessage.type === "user" && !initialMessage.isMeta),
   );
   let gatewayNoticeShown = false;
+  let remoteSettingsSaid;
   let memorySelector = sessionConfig.memorySelector ?? emptyPickerState();
   let userSpecifiedModel = sessionConfig.userSpecifiedModel;
   let activeFastMode;
@@ -2767,7 +3301,10 @@ function QueryEngine(sessionConfig) {
       settledNoteRows = [];
       if (!eventsYieldedInput) turnEventRows.length = 0;
       if (turnOptions?.withdrawnFileUuids?.length)
-        reconcileSavedFilesForTurn(initialMessages, turnOptions.withdrawnFileUuids);
+        for (let path of reconcileSavedFilesForTurn(initialMessages, turnOptions.withdrawnFileUuids, {
+          hideBefore: turnOptions.hidePicturesWithNoFileIdBefore,
+        }))
+          readFileCache.delete(path);
       yield* runTurn(input, turnOptions, turnAbortController);
       for (let noteRow of settledNoteRows)
         if (noteRow.type === "system" && noteRow.subtype === "informational")
@@ -2783,8 +3320,21 @@ function QueryEngine(sessionConfig) {
       if (lastTurnEndWallMs === turnStartWallMs) lastTurnEndWallMs = Date.now();
     }
   }
-  let clientDisallowedTools = [];
-  function applyTurnDenials(names, extraDisallowed = []) {
+  let storedDenyLists =
+    sessionConfig.storedDenyLists ?? disallowedToolsFromMessages(sessionConfig.initialMessages ?? []);
+  let client = storedDenyLists?.client ?? [];
+  let canCarry = true;
+  let turn = storedDenyLists?.turn ?? [];
+  let declaredDisallowed = normalizeCaseForComparison_2([...turn, ...client]);
+  function storeDisallowedTools(turnDisallowedTools) {
+    if (storedDenyLists !== undefined || turnDisallowedTools.length > 0 || client.length > 0)
+      storedDenyLists = {
+        turn: [...turnDisallowedTools],
+        client: [...client],
+        version: Math.max((storedDenyLists?.version ?? 0) + 1, Date.now()),
+      };
+  }
+  function applyTurnDenials(names, toolList = []) {
     let { setToolPermissionContext } = createPermissionContextSetters(setAppState);
     let heldToolSet;
     let promptSnapshot;
@@ -2817,13 +3367,16 @@ function QueryEngine(sessionConfig) {
             thinkingConfig: resolveLazy(sessionConfig.thinkingConfig),
           }).mainLoopModel,
       };
-      let deniedTools = filterTurnDisallowedTools(
-        names,
-        turnDisallowed,
-        () => (toolsCache ??= sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools)),
-        (toolName) => heldToolSet?.has(toolName) ?? promptSnapshot?.toolDescriptions.has(toolName) ?? false,
-        (tool, toolList) => resolveToolSearchForTurn(tool, toolList, turnState),
-      );
+      let deniedTools = normalizeCaseForComparison_2([
+        ...toolList,
+        ...filterTurnDisallowedTools(
+          names,
+          turnDisallowed,
+          () => (toolsCache ??= sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools)),
+          (toolName) => heldToolSet?.has(toolName) ?? promptSnapshot?.toolDescriptions.has(toolName) ?? false,
+          (tool, toolList) => resolveToolSearchForTurn(tool, toolList, turnState),
+        ),
+      ]);
       if (heldToolSet === undefined && deniedTools.length > 0) {
         toolsCache ??= sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools);
         getStickyBetas().turnDeniedTools = declaredToolSetFor(
@@ -2838,15 +3391,15 @@ function QueryEngine(sessionConfig) {
           turnState,
         );
       }
-      applyTurnDisallowedTools(setToolPermissionContext, uniq([...extraDisallowed, ...deniedTools]));
+      applyTurnDisallowedTools(setToolPermissionContext, deniedTools);
     } catch (error) {
       logError(error);
       try {
         let deniedNames = turnDisallowed ?? getAppState().toolPermissionContext.alwaysDenyRules.command ?? [];
         applyTurnDisallowedTools(
           setToolPermissionContext,
-          uniq([
-            ...extraDisallowed,
+          normalizeCaseForComparison_2([
+            ...toolList,
             ...names.filter(
               (toolName) =>
                 deniedNames.includes(toolName) ||
@@ -2909,15 +3462,48 @@ function QueryEngine(sessionConfig) {
     } catch (error) {
       logError(error);
     }
-    clientDisallowedTools = turnOptions?.clientDisallowedTools ?? clientDisallowedTools;
-    if (turnOptions?.shouldQuery !== false && turnOptions?.skipSkillPermissionReset !== true)
+    client = turnOptions?.clientDisallowedTools ?? client;
+    canCarry &&= turnOptions?.clientDisallowedTools === undefined;
+    let carriedOnDisallowedTools = turnOptions?.carriedOnDisallowedTools ?? [];
+    if (turnOptions?.shouldQuery !== false && turnOptions?.skipSkillPermissionReset !== true) {
+      let carryAllowed =
+        canCarry &&
+        (turnOptions?.carriedOnDisallowedTools !== undefined || turnOptions?.opensOnRoutineFire === true);
+      let effectiveDisallowed = normalizeCaseForComparison_2([
+        ...(turnOptions?.keepsDisallowedTools !== true || carryAllowed ? [] : client),
+        ...(turnOptions?.disallowedTools ?? []),
+        ...carriedOnDisallowedTools,
+      ]);
+      let asDeclared = asDeclaredToolSet(getStickyBetas()) === undefined ? declaredDisallowed : [];
       applyTurnDenials(
-        turnOptions?.keepsDisallowedTools === true
-          ? clientDisallowedTools
-          : (turnOptions?.disallowedTools ?? []),
+        effectiveDisallowed,
+        effectiveDisallowed.filter(
+          (toolName) => carriedOnDisallowedTools.includes(toolName) || asDeclared.includes(toolName),
+        ),
       );
+      turn = [];
+      storeDisallowedTools(getAppState().toolPermissionContext.turnDisallowedTools ?? []);
+    } else {
+      let carried = normalizeCaseForComparison_2([...turn, ...carriedOnDisallowedTools]);
+      if (turnOptions?.shouldQuery !== false && carried.length > 0) {
+        let applied = normalizeCaseForComparison_2([
+          ...(getAppState().toolPermissionContext.turnDisallowedTools ?? []),
+          ...carried,
+        ]);
+        applyTurnDenials(applied, applied);
+        turn = [];
+        storeDisallowedTools(getAppState().toolPermissionContext.turnDisallowedTools ?? []);
+      } else if (turnOptions?.clientDisallowedTools !== undefined)
+        storeDisallowedTools(storedDenyLists?.turn ?? []);
+    }
+    let widgetViews;
+    try {
+      widgetViews = turnOptions?.namesWidgetViews ? getWidgetStates(sessionConfig.session) : undefined;
+    } catch (error) {
+      logError(error);
+    }
     let totalUsage = EMPTY_USAGE;
-    let toolList = sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools);
+    let tools = sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools);
     let commands = resolveLazy(sessionConfig.commands);
     let mcpClientsSource = sessionConfig.refreshMcpClients?.() ?? resolveLazy(sessionConfig.mcpClients);
     let agents = resolveLazy(sessionConfig.agents);
@@ -2951,7 +3537,7 @@ function QueryEngine(sessionConfig) {
     let turnSignals = readTurnSignals(turnStartClock, turnOptions?.frameTiming, startTime, now);
     useMessageActions(turnStartClock, "earlier_turn", startTime);
     if (turnOptions?.shouldQuery !== false) {
-      startFirstRequestGate(sessionConfig.session, toolList);
+      startFirstRequestGate(sessionConfig.session, tools);
       try {
         kickTurnEndCheckMemCtx(sessionConfig.session, {
           credentials: sessionConfig.credentials,
@@ -3009,7 +3595,7 @@ function QueryEngine(sessionConfig) {
       loadAllPluginsCacheOnly(sessionConfig.storageV5, sessionConfig.credentials).catch(() => {});
     let promptConfig = {
       session: sessionConfig.session,
-      tools: toolList,
+      tools,
       runtimeModel,
       customSystemPrompt,
       appendSystemPrompt,
@@ -3029,8 +3615,9 @@ function QueryEngine(sessionConfig) {
     let hostConfig = {
       session: sessionConfig.session,
       messageQueue: sessionConfig.messageQueue,
+      stopsAtToolGap: sessionConfig.stopsAtToolGap,
       commands,
-      tools: toolList,
+      tools,
       refreshTools: sessionConfig.refreshTools,
       toolCatalog: sessionConfig.toolCatalog,
       refreshMcpClients: sessionConfig.refreshMcpClients,
@@ -3053,7 +3640,7 @@ function QueryEngine(sessionConfig) {
       messageInboundOrigin: turnOptions?.inboundOrigin,
       forwardSubagentText,
       requiresStructuredOutput:
-        jsonSchema !== undefined && toolList.some((tool) => toolMatchesName(tool, STRUCTUREDOUTPUT)),
+        jsonSchema !== undefined && tools.some((tool) => matchesToolName(tool, STRUCTUREDOUTPUT)),
       renderedSystemPrompt: systemPrompt,
       onPermissionDenial: recordDenial,
       requestDialog: sessionConfig.requestDialog,
@@ -3145,7 +3732,7 @@ function QueryEngine(sessionConfig) {
       handoffRelay: sessionConfig.handoffRelay,
       deferredToolUse: turnOverrides?.deferredToolUse,
       hasPrompt,
-      tools: toolList,
+      tools,
       mutableMessages: initialMessages,
       processUserInputContext: headlessToolUseContext,
       canUseTool,
@@ -3225,6 +3812,7 @@ function QueryEngine(sessionConfig) {
       bridgeOrigin: turnOverrides?.bridgeOrigin,
       localStdinOrigin: turnOptions?.localStdinOrigin,
       sessionChannelPersonTyped: turnOptions?.sessionChannelPersonTyped,
+      ultrathinkTyped: turnOptions?.ultrathinkTyped,
       ownWordUuids: turnOptions?.ownWordUuids,
       hostInitiator: turnOptions?.hostInitiator,
       inboundOrigin: turnOptions?.inboundOrigin,
@@ -3242,6 +3830,7 @@ function QueryEngine(sessionConfig) {
       noPersonArrived: turnOptions?.noPersonArrived,
       inlinedImagePaths: turnOptions?.inlinedImagePaths,
       stampThreadState: turnOptions?.stampThreadState,
+      widgetViews,
       entries: promptEntryTracker,
     });
     endProfilePhase("process_user_input");
@@ -3282,13 +3871,16 @@ function QueryEngine(sessionConfig) {
       turnOptions?.mergedSendUuids,
       turnOptions?.clientPlatform,
       getContextKey(),
+      turnOptions?.typedByPerson,
     );
+    if (storedDenyLists !== undefined) applyDisallowedTools(messages_2, storedDenyLists);
     withdrawBridgeAttachments(
       messages_2,
       turnId,
       input,
       turnOptions?.imageFileUuids,
       turnOptions?.savedFiles,
+      turnOptions?.picturesToHide,
     );
     if (turnOptions?.verifiedSlackHumanTurn && turnId)
       markVerifiedHumanTurn(messages_2, turnId, {
@@ -3301,6 +3893,17 @@ function QueryEngine(sessionConfig) {
         rows: turnOptions?.hearthRelayRows,
         threadTs: turnOptions?.hearthRelayThreadTs,
       });
+    if (turnOptions?.withdrawnFileUuids?.length) {
+      stampDeletionNote(
+        messages_2,
+        turnId,
+        computeWithdrawStamp([...initialMessages, ...messages_2], turnOptions.withdrawnFileUuids),
+      );
+      for (let path of reconcileSavedFilesForTurn(messages_2, turnOptions.withdrawnFileUuids, {
+        earlier: initialMessages,
+      }))
+        readFileCache.delete(path);
+    }
     if (announceBeforePrompt)
       announceBeforePrompt =
         !checkSessionStartPlacement({
@@ -3361,7 +3964,7 @@ function QueryEngine(sessionConfig) {
       turnOptions?.origin?.kind === "human" &&
       isSunnyGardenSenderAddress()
     )
-      await prefetchSenderAddressFor(promptIdForRequest(turnMessages, mainAgentContext()));
+      await prefetchSenderAddress(promptIdForRequest(turnMessages, mainAgentContext()));
     let eagerFlush = Boolean(env.CLAUDE_CODE_EAGER_FLUSH) || Boolean(env.CLAUDE_CODE_IS_COWORK);
     if (persistSession && messages_2.length > 0) {
       let recordPromise = persistWriter.record();
@@ -3407,23 +4010,23 @@ function QueryEngine(sessionConfig) {
       model: selectedModel,
       enabled: appState.fastMode,
     };
-    let effectiveTools = toolList;
+    let effectiveTools = tools;
     let mcpClients = mcpClientsSource;
     let toolPoolReused;
     try {
-      let refreshedTools = sessionConfig.refreshTools?.() ?? toolList;
-      if (sessionConfig.refreshTools !== undefined) toolPoolReused = refreshedTools === toolList;
+      let refreshedTools = sessionConfig.refreshTools?.() ?? tools;
+      if (sessionConfig.refreshTools !== undefined) toolPoolReused = refreshedTools === tools;
       effectiveTools =
-        refreshedTools.length === toolList.length &&
-        refreshedTools.every((tool, index) => tool.name === toolList[index]?.name)
-          ? toolList
+        refreshedTools.length === tools.length &&
+        refreshedTools.every((tool, index) => tool.name === tools[index]?.name)
+          ? tools
           : refreshedTools;
       mcpClients = sessionConfig.refreshMcpClients?.() ?? mcpClientsSource;
     } catch (error) {
       logError(error);
     }
     endProfilePhase("tool_pool_refresh");
-    if (effectiveTools !== toolList)
+    if (effectiveTools !== tools)
       try {
         let systemPromptSectionEpoch = getSystemPromptSectionEpoch();
         startProfilePhase("system_prompt_rebuild");
@@ -3470,7 +4073,16 @@ function QueryEngine(sessionConfig) {
       startProfilePhase("init_frame_send");
       initSent = true;
       let startToInitMs = elapsedMs(startTime, performance.now());
-      yield initWithUserMessageUuids(initPayload, record);
+      yield initWithUserMessageUuids(
+        initPayload,
+        record,
+        shouldRunModel &&
+          !inPlaceOfFirstRequest &&
+          includePartialMessages &&
+          turnOptions?.resumeReason === undefined &&
+          turnOptions?.orphanedPermission === undefined &&
+          turnOptions?.deferredToolUse === undefined,
+      );
       if (shouldRunModel)
         sampleQueueLatency({
           enqueuedWallMs: turnOptions?.frameTiming?.enqueuedWallMs,
@@ -3494,6 +4106,11 @@ function QueryEngine(sessionConfig) {
       gatewayNoticeShown = true;
       let gatewayNotice = gatewayCodeTabRulesNotice(sessionConfig.session);
       if (gatewayNotice !== null) yield gatewayNotice;
+    }
+    let remoteNotice = remoteSettingsNotice(remoteSettingsSaid);
+    if (remoteNotice !== null) {
+      remoteSettingsSaid = remoteNotice.said;
+      if (remoteNotice.frame !== null) yield remoteNotice.frame;
     }
     if (!shouldRunModel) {
       endProfilePhase("init_frame_send");
@@ -3580,7 +4197,7 @@ function QueryEngine(sessionConfig) {
     let takePlainDelta =
       emitPlainDelta === undefined
         ? undefined
-        : (streamEventMessage) => {
+        : (streamEventMessage, meta) => {
             if (
               emitPlainDelta === undefined ||
               !plainDeltaActive ||
@@ -3595,6 +4212,7 @@ function QueryEngine(sessionConfig) {
                   uuid: randomUUID(),
                   session_id: getSessionId(),
                 }),
+                meta,
               );
               if (emitted) plainDeltaCount++;
               return emitted;
@@ -3619,6 +4237,13 @@ function QueryEngine(sessionConfig) {
       taskBudget: sessionConfig.taskBudget,
       takePlainDelta,
       stopHookActive: turnOptions?.stopHookActive,
+      turnEffortCap: resolveTurnEffortCap(
+        turnOverrides?.turnEffortCap,
+        headlessToolUseContext_2.permissionLayers,
+        selectedModel,
+        getAppState(),
+      ),
+      continuesInterruptedWork: turnOptions?.continuesInterruptedWork,
       joinedDisallowedTools: (toolNames) => {
         let cleanMcpClients =
           toolNames.length > 0
@@ -3632,10 +4257,12 @@ function QueryEngine(sessionConfig) {
             cleanMcpClients,
           ),
         );
-        clientDisallowedTools = uniq([
-          ...filterMcpToolsBySelectedServers(clientDisallowedTools, toolNames, cleanMcpClients),
+        client = normalizeCaseForComparison_2([
+          ...filterMcpToolsBySelectedServers(client, toolNames, cleanMcpClients),
           ...toolNames,
         ]);
+        canCarry &&= toolNames.length === 0;
+        storeDisallowedTools(getAppState().toolPermissionContext.turnDisallowedTools ?? []);
       },
       inPlaceOfFirstRequest:
         turnOptions?.inPlaceOfFirstRequest === "nothing" ? undefined : turnOptions?.inPlaceOfFirstRequest,
@@ -3788,11 +4415,13 @@ function QueryEngine(sessionConfig) {
           case "user": {
             let row = withoutSessionId(turnMessage);
             if (isInterruptionOnlyMessage(row)) pendingNotices.push(...collapseNotices("interrupted"));
+            if (storedDenyLists !== undefined) applyDisallowedTools([row], storedDenyLists);
             deferredRows = [];
             try {
               turnMessages.push(row);
               if (persistSession) await persistWriter.record();
               conversation.keep([row]);
+              if (newsTracker.hasNews()) writeTurnMessages(persistWriter, turnMessages);
               androidEvidence.absorb([row]);
               persistWriter.settlePreservedTail(row.uuid);
             } finally {
@@ -3805,9 +4434,11 @@ function QueryEngine(sessionConfig) {
           case "attachment": {
             let row = markMaxTurnsExit(withoutSessionId(turnMessage));
             let storedRow = stripAgentToolResultForStorage(row);
+            let sourceUuid = getSourceUuid(row);
+            if (sourceUuid !== undefined && storedDenyLists !== undefined)
+              applyDisallowedTools([storedRow], storedDenyLists);
             conversation.keep([storedRow]);
             androidEvidence.absorb([row]);
-            let sourceUuid = getSourceUuid(row);
             if (sourceUuid !== undefined) persistWriter.holdFoldCopy(storedRow, sourceUuid);
             if (persistSession) {
               turnMessages.push(storedRow);
@@ -3943,6 +4574,7 @@ function QueryEngine(sessionConfig) {
                 conversation: initialMessages,
                 continuedTurnsRows: continuesTurns ? initialMessages : undefined,
               });
+              if (storedDenyLists !== undefined) applyDisallowedTools([boundary], storedDenyLists);
               deferredRows = [];
               try {
                 await mirrorTaskListSnapshot(boundary, sessionConfig.session, sessionConfig.storageV5);
@@ -3991,7 +4623,7 @@ function QueryEngine(sessionConfig) {
             turnFinished = true;
             cleanupDone = true;
             turnTiming.end(turnMessage.terminal_reason);
-            finalizeTurn(persistWriter, toolList);
+            finalizeTurn(persistWriter, tools);
             let turnError = takeTurnError();
             if (turnError !== undefined) {
               yield* partialStreamRetraction.closeAtTurnEnd(streamUsage);
@@ -4163,11 +4795,23 @@ function QueryEngine(sessionConfig) {
                     main_stream_chunk_count: profile.streaming.chunks,
                   }),
                 }),
+                ...(profile?.states && {
+                  process_turn_states: profile.states,
+                }),
                 ...(profile?.inputAttachments && {
                   input_attachments_detail: profile.inputAttachments,
                 }),
                 ...(profile?.storeConfirm && {
                   resume_store_confirm_detail: profile.storeConfirm,
+                }),
+                ...(profile?.toolSchemaBuild && {
+                  tool_schema_build_detail: profile.toolSchemaBuild,
+                }),
+                ...(profile?.messageNormalization && {
+                  message_normalization_detail: profile.messageNormalization,
+                }),
+                ...(profile?.requestBuild && {
+                  request_build_detail: profile.requestBuild,
                 }),
                 first_content_frame_ms:
                   isSuccessResult && firstContentAt ? elapsedMs(startTime, firstContentAt) : undefined,
@@ -4341,7 +4985,7 @@ function QueryEngine(sessionConfig) {
             cleanupDone = true;
             await drainAbandonedTurn(turnAbortController, permissionDenials);
             turnFinished = true;
-            finalizeTurn(persistWriter, toolList);
+            finalizeTurn(persistWriter, tools);
             if (persistSession) {
               await persistWriter.record(true);
               if (eagerFlush) await flushSessionStorage();
@@ -4393,7 +5037,7 @@ function QueryEngine(sessionConfig) {
       emitPlainDelta = undefined;
       if (plainDeltaCount > 0)
         logForDebugging(
-          `[headless] ${plainDeltaCount} streamed deltas went straight to output this turn (CLAUDE_CODE_PLAIN_DELTA_FAST_PATH)`,
+          `[headless] ${plainDeltaCount} streamed deltas went straight to output this turn (the fast path for plain deltas, plainDeltasNeedOnlyEmit)`,
           {
             level: "info",
           },
@@ -4401,7 +5045,7 @@ function QueryEngine(sessionConfig) {
       turnTiming.end(undefined, turnAbortController.signal.aborted);
       turnTiming.dispose();
       if (!turnFinished) await drainAbandonedTurn(turnAbortController);
-      if (!cleanupDone) finalizeTurn(persistWriter, toolList);
+      if (!cleanupDone) finalizeTurn(persistWriter, tools);
       await persistWriter.settleFoldCopies("all");
       openTurnSpans.delete(turnSpan);
       if (turnStartEventId !== undefined)
@@ -4443,17 +5087,32 @@ function QueryEngine(sessionConfig) {
       );
     }
   }
-  function finalizeTurn(writer, toolList) {
-    writer.flushUnanchoredPreservedTail();
+  function writeTurnMessages(writer, turnMessages) {
+    try {
+      let storedRow = toolResultStore(sessionConfig.session);
+      let sourceUuid = toolResultUseIds(writer.unrecorded());
+      for (let conversation of [initialMessages, turnMessages])
+        letGoOfUnsentMediaInPlace(
+          conversation,
+          undefined,
+          (row) => sourceUuid.has(row) || storedRow?.mayYetReadResult?.(row) === true,
+        );
+    } catch (error) {
+      logError(error);
+    }
+  }
+  function finalizeTurn(persistWriter, tools) {
+    persistWriter.flushUnanchoredPreservedTail();
+    if (newsTracker.hasReports()) writeTurnMessages(persistWriter, []);
     try {
       clearCutResults();
     } catch (error) {
       logError(error);
     }
     try {
-      let stripped = stripToolResultsForStorage(initialMessages, toolList, 0, true);
+      let stripped = stripToolResultsForStorage(initialMessages, tools, 0, true);
       if (stripped !== initialMessages)
-        for (let j = 0; j < stripped.length; j++) initialMessages[j] = stripped[j];
+        for (let idx = 0; idx < stripped.length; idx++) initialMessages[idx] = stripped[idx];
     } catch (error) {
       logError(error);
     }
@@ -4495,7 +5154,7 @@ function QueryEngine(sessionConfig) {
       });
     }
   }
-  async function buildInitMessage(hostConfig, model, fastMode) {
+  async function buildInitMessage(hostConfig, initExtras, fastMode) {
     let [skills, plugins] = await loadSkillsAndPlugins(hostConfig.storageV5);
     let appState = getAppState();
     let resolvedSkills;
@@ -4512,22 +5171,31 @@ function QueryEngine(sessionConfig) {
       logError(error);
       capabilities = [];
     }
-    return await buildSdkInitMessage({
-      session: hostConfig.session,
-      tools: hostConfig.tools,
-      mcpClients: hostConfig.mcpClients,
-      model,
-      readSessionEffort: () => resolveEffortLevel(appState),
-      permissionMode: appState.toolPermissionContext.mode,
-      commands: hostConfig.commands,
-      agents: hostConfig.agents,
-      skills: resolvedSkills,
-      plugins,
-      fastMode,
-      proactivityState: appState,
-      capabilities,
-      messagesInView: () => messagesSinceCompactBoundary(initialMessages),
-    });
+    return {
+      ...(await buildSdkInitMessage({
+        session: hostConfig.session,
+        tools: hostConfig.tools,
+        mcpClients: hostConfig.mcpClients,
+        model: initExtras,
+        readSessionEffort: () => resolveEffortLevel(appState),
+        permissionMode: appState.toolPermissionContext.mode,
+        commands: hostConfig.commands,
+        agents: hostConfig.agents,
+        skills: resolvedSkills,
+        plugins,
+        fastMode,
+        proactivityState: appState,
+        capabilities,
+        messagesInView: () => messagesSinceCompactBoundary(initialMessages),
+      })),
+      ...turnSettings({
+        turnThinking: hostConfig.thinkingConfig,
+        heldThinking: () => resolveLazy(sessionConfig.thinkingConfig),
+        turnModel: initExtras,
+        fastMode: getAppState().fastMode,
+        toolPermissionContext: getAppState().toolPermissionContext,
+      }),
+    };
   }
   return {
     submitMessage,
@@ -4563,14 +5231,14 @@ function QueryEngine(sessionConfig) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:483526-483578 layout
+//@ chunk-0yw3taqg.js:515129-515181 layout
 /**
  * 非负取整的时间差
  */
 function elapsedMs(startMs, endMs) {
   return Math.max(0, Math.round(endMs - startMs));
 }
-//@ chunk-tyg7f3ek.js:483578-483926 layout
+//@ chunk-0yw3taqg.js:515181-515529 layout
 /**
  * 发送时间相关遥测字段。
  */
@@ -4600,7 +5268,7 @@ function postTimingFields(enabled, startMs, timing) {
     return {};
   }
 }
-//@ chunk-tyg7f3ek.js:483926-485753 fingerprint (2.1.88 match: ask, 0.405)
+//@ chunk-0yw3taqg.js:515529-517356 fingerprint (2.1.88 match: ask, 0.396)
 /**
  * ask()：解析惰性配置（工具/MCP/命令/JSON schema 等可为函数），按 userSpecifiedModel 与权限模式决定主循环模型与 thinking，构建 headless 的 ToolUseContext（isNonInteractiveSession、runQuery=query 等）。
  */
@@ -4643,7 +5311,7 @@ function ask(sessionConfig, { abortController, userSpecifiedModel }) {
       messageInboundOrigin: undefined,
       forwardSubagentText: resolveLazy(sessionConfig.forwardSubagentText) ?? false,
       requiresStructuredOutput:
-        jsonSchema !== undefined && tools.some((tool) => toolMatchesName(tool, STRUCTUREDOUTPUT)),
+        jsonSchema !== undefined && tools.some((tool) => matchesToolName(tool, STRUCTUREDOUTPUT)),
       onPermissionDenial: () => {},
       requestDialog: sessionConfig.requestDialog,
       sessionState: sessionConfig.sessionState,
@@ -4671,28 +5339,18 @@ function ask(sessionConfig, { abortController, userSpecifiedModel }) {
     },
   );
 }
-//@ chunk-tyg7f3ek.js:485753-485787 affinity
+//@ chunk-0yw3taqg.js:517356-517390 affinity
 /**
  * 值是函数则调用取值，否则原样（配置项可惰性提供）。
  */
 function resolveLazy(value) {
   return isFunction(value) ? value() : value;
 }
-//@ chunk-tyg7f3ek.js:485787-485831 affinity
+//@ chunk-0yw3taqg.js:517390-517434 affinity
 /**
  * typeof 为 function。
  */
 function isFunction(value) {
   return typeof value === "function";
 }
-//@ chunk-18hwfzwa.js:1510660-1510734 fingerprint (2.1.88 match: getCoordinatorUserContext, 0.572)
-/**
- * coordinator 用户上下文缓存（初始 null）。
- */
-var getCoordinatorUserContext; // deferred: loads other modules while loading; runs once its import cycle is complete
-var coordinatorContextCache;
-deferInit("chunk-18hwfzwa.js:1510660", () => {
-  getCoordinatorUserContext = require("./coordinator/coordinatorMode.js").getCoordinatorUserContext;
-  coordinatorContextCache = null;
-});
-export { ask, QueryEngine, coordinatorContextCache, getCoordinatorUserContext };
+export { ask, QueryEngine, reconcileSavedFilesForTurn };

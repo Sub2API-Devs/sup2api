@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。接管后台任务。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { lstat } from "fs/promises";
@@ -25,12 +25,12 @@ import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { openNoFollow_2 } from "../fsSafety/hardenedRead.js";
 import { REFUSED_CAPACITY_WINDOW } from "../../services/liveReplica/liveReplica.js";
 
-//@ chunk-18hwfzwa.js:331869-331885 placement
+//@ chunk-czq1j3j2.js:369589-369605 placement
 /**
  * probeAdoptedJob 读取 adopt.json 时的大小上限（1 MiB）。
  */
 var MAX_ADOPT_JSON_BYTES = 1048576;
-//@ chunk-18hwfzwa.js:331885-333584 placement
+//@ chunk-czq1j3j2.js:369605-371305 placement
 async function probeAdoptedJob(intents, storage, nowMs) {
   let states = new Map();
   let memo = new Map();
@@ -126,7 +126,7 @@ async function probeAdoptedJob(intents, storage, nowMs) {
   }
   return states;
 }
-//@ chunk-18hwfzwa.js:333584-334726 placement
+//@ chunk-czq1j3j2.js:371305-372447 placement
 async function readAdoptJson(jobId, slug, storage, nowMs, getJobDir, staleMs, skewMs = 60000) {
   let content;
   if (storage !== undefined) {

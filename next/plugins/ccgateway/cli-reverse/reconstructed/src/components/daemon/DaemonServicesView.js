@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台守护进程服务列表视图
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b7gstm5r.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k82fyra0.js (10)
  * attribution: placement 10
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -37,7 +37,7 @@ import { formatRelativeTime, truncateStartToWidth } from "../../utils/format.js"
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-b7gstm5r.js:25608-29460 placement
+//@ chunk-k82fyra0.js:26785-30637 placement
 /**
  * 后台守护进程服务列表视图：定时任务与常驻服务两类，可选择、新建、操作。
  */
@@ -413,7 +413,7 @@ function DaemonServicesView(props) {
   } else viewElement = $[71];
   return viewElement;
 }
-//@ chunk-b7gstm5r.js:29460-29763 placement
+//@ chunk-k82fyra0.js:30637-30940 placement
 function TabLabel(props) {
   let $ = useMemoCache(7);
   let { isFocused, label, color } = props;
@@ -443,7 +443,7 @@ function TabLabel(props) {
   } else listItemElement = $[6];
   return listItemElement;
 }
-//@ chunk-b7gstm5r.js:29763-30873 placement
+//@ chunk-k82fyra0.js:30940-32051 placement
 function serviceTableColumns(kind, items, data, now) {
   let date = new Date(now);
   let isRunning = data.lock !== null;
@@ -524,7 +524,7 @@ function serviceTableColumns(kind, items, data, now) {
     keys,
   };
 }
-//@ chunk-b7gstm5r.js:30873-31015 placement
+//@ chunk-k82fyra0.js:32051-32193 placement
 /**
  * 补齐宽度的状态文本，running 显示为成功色。
  */
@@ -540,21 +540,21 @@ function renderPaddedStatus(status, width) {
         children,
       });
 }
-//@ chunk-b7gstm5r.js:31015-31067 placement
+//@ chunk-k82fyra0.js:32193-32245 placement
 function nextCronRunAt(cron, from) {
   let fields = parseCronExpression(cron);
   return fields ? computeNextCronRun(fields, from) : null;
 }
-//@ chunk-b7gstm5r.js:31067-31098 placement
+//@ chunk-k82fyra0.js:32245-32276 placement
 function truncateDirName(dir) {
   return truncateStartToWidth(dir, 40);
 }
-//@ chunk-b7gstm5r.js:31098-31149 placement
+//@ chunk-k82fyra0.js:32276-32327 placement
 var SERVICE_ACTION_LABELS = {
   uninstall: "Uninstall service",
   stop: "Stop",
 };
-//@ chunk-b7gstm5r.js:31149-31281 placement
+//@ chunk-k82fyra0.js:32327-32459 placement
 /**
  * 服务可执行的操作：未安装/不支持为空，无锁只能卸载，否则停止和卸载。
  */
@@ -563,7 +563,7 @@ function getServiceActions(service) {
   if (service.lock === null) return ["uninstall"];
   return ["stop", "uninstall"];
 }
-//@ chunk-b7gstm5r.js:31281-33299 placement
+//@ chunk-k82fyra0.js:32459-34481 placement
 function DaemonServiceDetail(props) {
   let $ = useMemoCache(25);
   let { data, message } = props;
@@ -612,10 +612,10 @@ function DaemonServiceDetail(props) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION;
@@ -709,7 +709,7 @@ function DaemonServiceDetail(props) {
   } else detailElement = $[24];
   return detailElement;
 }
-//@ chunk-b7gstm5r.js:33299-33785 placement
+//@ chunk-k82fyra0.js:34481-34967 placement
 async function renderDaemonServicesView(storageV5) {
   let [{ createRoot }, { getBaseRenderOptions }] = await Promise.all([
     import("../../ink/components/Ansi.lazy.js"),

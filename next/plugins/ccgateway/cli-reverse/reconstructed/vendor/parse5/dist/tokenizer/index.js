@@ -1,8 +1,8 @@
 /**
  * parse5/dist/tokenizer/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (13)
+ * pieces: chunk-p9ac6cnb.js (13)
  * attribution: esm-layout 4, esm-fingerprint 9
  */
 import {
@@ -20,9 +20,9 @@ import { uint16Array } from "../../../entities/lib/esm/generated/decode-data-xml
 import { TokenType, getTokenAttr } from "../common/token.js";
 import { TAG_ID, getTagID } from "../common/html.js";
 
-//@ chunk-6ja29j2n.js:71013-71019 esm-layout
+//@ chunk-p9ac6cnb.js:71013-71019 esm-layout
 var State;
-//@ chunk-6ja29j2n.js:71019-75235 esm-fingerprint
+//@ chunk-p9ac6cnb.js:71019-75235 esm-fingerprint
 (function (State) {
   State[(State.DATA = 0)] = "DATA";
   State[(State.RCDATA = 1)] = "RCDATA";
@@ -99,7 +99,7 @@ var State;
   State[(State.CHARACTER_REFERENCE = 71)] = "CHARACTER_REFERENCE";
   State[(State.AMBIGUOUS_AMPERSAND = 72)] = "AMBIGUOUS_AMPERSAND";
 })(State || (State = {}));
-//@ chunk-6ja29j2n.js:75235-75368 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75235-75368 esm-fingerprint
 var TokenizerMode = {
   DATA: State.DATA,
   RCDATA: State.RCDATA,
@@ -108,31 +108,31 @@ var TokenizerMode = {
   PLAINTEXT: State.PLAINTEXT,
   CDATA_SECTION: State.CDATA_SECTION,
 };
-//@ chunk-6ja29j2n.js:75368-75417 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75368-75417 esm-fingerprint
 function isAsciiDigit(cp) {
   return cp >= CODE_POINTS.DIGIT_0 && cp <= CODE_POINTS.DIGIT_9;
 }
-//@ chunk-6ja29j2n.js:75417-75481 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75417-75481 esm-fingerprint
 function isAsciiUpper(cp) {
   return cp >= CODE_POINTS.LATIN_CAPITAL_A && cp <= CODE_POINTS.LATIN_CAPITAL_Z;
 }
-//@ chunk-6ja29j2n.js:75481-75542 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75481-75542 esm-fingerprint
 function isAsciiLower(cp) {
   return cp >= CODE_POINTS.LATIN_SMALL_A && cp <= CODE_POINTS.LATIN_SMALL_Z;
 }
-//@ chunk-6ja29j2n.js:75542-75575 esm-layout
+//@ chunk-p9ac6cnb.js:75542-75575 esm-layout
 function isAsciiLetter(cp) {
   return isAsciiLower(cp) || isAsciiUpper(cp);
 }
-//@ chunk-6ja29j2n.js:75575-75609 esm-layout
+//@ chunk-p9ac6cnb.js:75575-75609 esm-layout
 function isAsciiAlphaNumeric_2(cp) {
   return isAsciiLetter(cp) || isAsciiDigit(cp);
 }
-//@ chunk-6ja29j2n.js:75609-75635 esm-layout
+//@ chunk-p9ac6cnb.js:75609-75635 esm-layout
 function toAsciiLower(cp) {
   return cp + 32;
 }
-//@ chunk-6ja29j2n.js:75635-75721 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75635-75721 esm-fingerprint
 function isWhitespace(cp) {
   return (
     cp === CODE_POINTS.SPACE ||
@@ -141,11 +141,11 @@ function isWhitespace(cp) {
     cp === CODE_POINTS.FORM_FEED
   );
 }
-//@ chunk-6ja29j2n.js:75721-75789 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75721-75789 esm-fingerprint
 function isScriptDataDoubleEscapeSequenceEnd(cp) {
   return isWhitespace(cp) || cp === CODE_POINTS.SOLIDUS || cp === CODE_POINTS.GREATER_THAN_SIGN;
 }
-//@ chunk-6ja29j2n.js:75789-76101 esm-fingerprint
+//@ chunk-p9ac6cnb.js:75789-76101 esm-fingerprint
 function getErrorForNumericCharacterReference(code) {
   if (code === CODE_POINTS.NULL) return errors.nullCharacterReference;
   else if (code > 1114111) return errors.characterReferenceOutsideUnicodeRange;
@@ -155,7 +155,7 @@ function getErrorForNumericCharacterReference(code) {
     return errors.controlCharacterReference;
   return null;
 }
-//@ chunk-6ja29j2n.js:76101-117020 esm-fingerprint
+//@ chunk-p9ac6cnb.js:76101-117020 esm-fingerprint
 class Tokenizer {
   constructor(options, handler) {
     this.options = options;
@@ -2411,4 +2411,4 @@ class Tokenizer {
     }
   }
 }
-export { Tokenizer, TokenizerMode };
+export { TokenizerMode, Tokenizer };

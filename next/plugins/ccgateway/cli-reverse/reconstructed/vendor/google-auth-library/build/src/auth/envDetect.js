@@ -1,14 +1,14 @@
 /**
  * google-auth-library/build/src/auth/envDetect.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: google-auth-library@10.6.2
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_gcp_metadata } from "../../../../gcp-metadata/build/src/index.js";
 
-//@ chunk-na3pph4p.js:84616-85733 cjs-fingerprint
+//@ chunk-e8d3a8an.js:84616-85733 cjs-fingerprint
 var require_envDetect = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,9 +3,9 @@
  *
  * 安装 GitHub Actions 工作流时的多选对话框（Claude Code / 代码审查等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/WorkflowMultiselectDialog.tsx
- * pieces: chunk-4v9zy7gn.js (5)
+ * pieces: chunk-2xbvbqx2.js (5)
  * attribution: placement 2, file-local 1, fingerprint 2
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
@@ -22,18 +22,18 @@ import { Text, Box, Link } from "../ink/components/Text.js";
 import { SelectMultiAccessible } from "./CustomSelect/SelectMulti.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-4v9zy7gn.js:15719-15723 placement
+//@ chunk-2xbvbqx2.js:16868-16872 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:15723-15727 placement
+//@ chunk-2xbvbqx2.js:16872-16876 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:15727-15778 file-local
+//@ chunk-2xbvbqx2.js:16876-16927 file-local
 function toMultiselectOption(workflow) {
   return {
     label: workflow.label,
     value: workflow.value,
   };
 }
-//@ chunk-4v9zy7gn.js:15778-16180 fingerprint (2.1.88 match: renderInputGuide, 0.527)
+//@ chunk-2xbvbqx2.js:16927-17329 fingerprint (2.1.88 match: renderInputGuide, 0.527)
 /**
  * GitHub Actions 工作流多选的选项（@claude 标记与自动代码审查）与底部按键提示行。
  */
@@ -69,7 +69,7 @@ var WORKFLOW_SELECT_HINTS = jsxProd_default_2(Byline, {
     }),
   ],
 });
-//@ chunk-4v9zy7gn.js:16180-17501 fingerprint (2.1.88 match: WorkflowMultiselectDialog, 0.715)
+//@ chunk-2xbvbqx2.js:17329-18650 fingerprint (2.1.88 match: WorkflowMultiselectDialog, 0.715)
 /**
  * GitHub Actions 工作流多选：为每个选中的工作流在仓库中创建文件。
  */

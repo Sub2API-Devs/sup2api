@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台管理器（bg manager）入口：监听、过期检查、空闲退出、升级。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ss669z1x.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ergqq6hs.js (3)
  * attribution: placement 3
  */
 import { isRunningFromVersionsDir_2, getLaunchCommand } from "../utils/deepLink/registerProtocol.js";
@@ -69,12 +69,12 @@ import { WORKER_KINDS } from "./runDaemonWorker.js";
 import { isDaemonServiceRecalled } from "../utils/fleetGates.js";
 import { readRoster } from "../services/daemon/roster.js";
 
-//@ chunk-ss669z1x.js:50966-51051 placement
+//@ chunk-ergqq6hs.js:52254-52339 placement
 function targetChanged(previous, current) {
   if (previous.target !== current.target) return true;
   return !isRunningFromVersionsDir_2() && previous.mtimeMs !== current.mtimeMs;
 }
-//@ chunk-ss669z1x.js:51051-51231 placement
+//@ chunk-ergqq6hs.js:52339-52519 placement
 function logBgManagerStartError(error) {
   if (
     isSyscallError(error) &&
@@ -88,7 +88,7 @@ function logBgManagerStartError(error) {
   }
   logError(error);
 }
-//@ chunk-ss669z1x.js:51231-64258 placement
+//@ chunk-ergqq6hs.js:52519-65556 placement
 /**
  * 后台管理器（bg manager）入口：监听、过期检查、空闲退出、升级。
  */
@@ -116,10 +116,10 @@ async function runBgManager(options) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -213,10 +213,10 @@ async function runBgManager(options) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -275,10 +275,10 @@ async function runBgManager(options) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,

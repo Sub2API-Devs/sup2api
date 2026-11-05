@@ -3,9 +3,9 @@
  *
  * Ctrl+R 历史搜索状态机：流式读取历史、增量匹配、接受/执行/取消，记录 history_search_* 事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useHistorySearch.ts
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 2, layout 1, fingerprint 1
  */
 import {
@@ -38,14 +38,14 @@ import { isFullscreenActive } from "../utils/fullscreen.js";
 import { MessageActionsKeybindings } from "../components/messageActions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:535581-535620 placement
+//@ chunk-czq1j3j2.js:556288-556327 placement
 var historyPromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:535581", () => {
+deferInit("chunk-czq1j3j2.js:556288", () => {
   historyPromptOrigin = Object.freeze({
     kind: "history",
   });
 });
-//@ chunk-18hwfzwa.js:535620-535718 placement
+//@ chunk-czq1j3j2.js:556327-556425 placement
 function logHistoryReaderError(error) {
   if (isTransientHistoryReadError(error)) {
     logForDebugging(`History search reader failed: ${errorMessage(error)}`, {
@@ -55,7 +55,7 @@ function logHistoryReaderError(error) {
   }
   logError(error);
 }
-//@ chunk-18hwfzwa.js:535718-535949 layout
+//@ chunk-czq1j3j2.js:556425-556656 layout
 function findMatchCursorOffset(text, pastedContents, needle) {
   let index = text.toLowerCase().lastIndexOf(needle);
   if (index !== -1) return index;
@@ -65,7 +65,7 @@ function findMatchCursorOffset(text, pastedContents, needle) {
   });
   return last ? last.index : text.length;
 }
-//@ chunk-18hwfzwa.js:535949-538827 fingerprint (2.1.88 match: useHistorySearch, 0.689)
+//@ chunk-czq1j3j2.js:556656-559534 fingerprint (2.1.88 match: useHistorySearch, 0.689)
 /**
  * Ctrl+R 历史搜索：打开时流式读取全部历史（history_search_scan），输入时增量匹配（含粘贴文本内容），accept 把匹配填回输入框，execute 直接提交，cancel 恢复原输入；记录 history_search_open/accept/execute 事件。
  */

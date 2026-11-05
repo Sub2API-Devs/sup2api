@@ -3,11 +3,17 @@
  *
  * 2.1.316 新增：无人值守时自动模式拦截与拒绝上限回退提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (10)
  * attribution: placement 10
  */
+import {
+  init_react_production,
+  createContext,
+  useContext,
+  useState,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
@@ -24,12 +30,6 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Divider } from "../design-system/Divider.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import {
-  createContext,
-  useContext,
-  init_react_production,
-  useState,
-} from "../../../vendor/react/cjs/react.production.js";
 import { showSwarmFooterGate } from "../PromptInput/footerGates.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useSessionBanner } from "../PromptInput/useSwarmBanner.js";
@@ -42,7 +42,12 @@ import { useInterval } from "../../ink/components/Input.js";
 import { WARNING_GLYPH } from "../../constants/figures.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0e8j1zzj.js:16079-17038 placement
+//@ chunk-8prszgkd.js:21466-21470 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8prszgkd.js:21466", () => {
+  init_react_production();
+});
+//@ chunk-8prszgkd.js:21479-22438 placement
 /**
  * 无人值守时自动模式拦截的提示条，显示被阻止的会话与 tmux 提示。
  */
@@ -151,20 +156,20 @@ function UnattendedAutoBlockNotice(props) {
   } else promptBorderBannerElement = $[24];
   return promptBorderBannerElement;
 }
-//@ chunk-0e8j1zzj.js:17038-17078 placement
+//@ chunk-8prszgkd.js:22438-22478 placement
 function unattendedNoticeRows(hideSessionTitle) {
   return useUnattendedNoticeLines(hideSessionTitle) === null ? 0 : 1;
 }
-//@ chunk-0e8j1zzj.js:17078-17092 placement
+//@ chunk-8prszgkd.js:22478-22492 placement
 var UnattendedNoticeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:17078", () => {
+deferInit("chunk-8prszgkd.js:22478", () => {
   UnattendedNoticeContext = createContext(0);
 });
-//@ chunk-0e8j1zzj.js:17092-17122 placement
+//@ chunk-8prszgkd.js:22492-22521 placement
 function useUnattendedNotice() {
   return useContext(UnattendedNoticeContext);
 }
-//@ chunk-0e8j1zzj.js:17122-17761 placement
+//@ chunk-8prszgkd.js:22521-23160 placement
 function useUnattendedNoticeLines(hideSessionTitle) {
   let $ = useMemoCache(16);
   let swarmFooterVisible = showSwarmFooterGate();
@@ -190,11 +195,11 @@ function useUnattendedNoticeLines(hideSessionTitle) {
   let resultElement;
   if ($[2] !== banner || $[3] !== columns || $[4] !== swarmFooterVisible || $[5] !== isScreenReaderEnabled) {
     resultElement = EARLY_RETURN_SENTINEL;
-    T: {
+    N: {
       let badgeText = cleanForDisplay(stripAnsi(banner.text));
       if (!badgeText) {
         resultElement = null;
-        break T;
+        break N;
       }
       drawsPromptCharacter = swarmFooterVisible;
       containerComponent = banner;
@@ -237,26 +242,21 @@ function useUnattendedNoticeLines(hideSessionTitle) {
   } else bannerState = $[15];
   return bannerState;
 }
-//@ chunk-0e8j1zzj.js:17761-17765 placement
+//@ chunk-8prszgkd.js:23160-23164 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:17761", () => {
+deferInit("chunk-8prszgkd.js:23160", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:17765-17769 placement
+//@ chunk-8prszgkd.js:23164-23168 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:17765", () => {
+deferInit("chunk-8prszgkd.js:23164", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:17769-17773 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:17769", () => {
-  init_react_production();
-});
-//@ chunk-0e8j1zzj.js:17773-17799 placement
+//@ chunk-8prszgkd.js:23172-23198 placement
 function incrementByOne(count) {
   return count + 1;
 }
-//@ chunk-0e8j1zzj.js:17799-19288 placement
+//@ chunk-8prszgkd.js:23198-24687 placement
 function DenialLimitFallbackNotice(props) {
   let $ = useMemoCache(18);
   let { permissionResult } = props;
@@ -363,8 +363,8 @@ function DenialLimitFallbackNotice(props) {
   return noticeBox;
 }
 export {
-  useUnattendedNotice,
   DenialLimitFallbackNotice,
+  useUnattendedNotice,
   UnattendedAutoBlockNotice,
   unattendedNoticeRows,
   UnattendedNoticeContext,

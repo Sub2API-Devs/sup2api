@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：session.receive 事件钩子（处理收到的消息）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 import { dropHopChain } from "../../utils/peerMessageHeaders.js";
@@ -18,7 +18,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { pluginsMatchingEvent } from "./hookDispatch.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:71511-71595 placement
+//@ chunk-5xgkngpb.js:74058-74142 placement
 /**
  * 拼接文本块
  */
@@ -26,7 +26,7 @@ var joinTextBlocks = (blocks, separator) =>
   blocks
     .flatMap((block) => (block.type === "text" && block.text !== undefined ? [block.text] : []))
     .join(separator);
-//@ chunk-e6aww6q8.js:71595-71739 placement
+//@ chunk-5xgkngpb.js:74142-74286 placement
 function receivedText(origin, content) {
   let clean = origin.kind === "peer" ? dropHopChain : (text) => text;
   return typeof content === "string"
@@ -44,15 +44,15 @@ function receivedText(origin, content) {
 `,
       );
 }
-//@ chunk-e6aww6q8.js:71739-71797 placement
+//@ chunk-5xgkngpb.js:74286-74344 placement
 /**
  * 钩子未放行投递
  */
 var DELIVERY_NOT_PASSED = "a hook answered without passing the delivery on";
-//@ chunk-e6aww6q8.js:71797-71912 placement
+//@ chunk-5xgkngpb.js:74344-74459 placement
 var RECEIVE_NOT_QUEUED_MESSAGE =
   "session.receive: the delivery was not queued (the drain refused or held it after the hooks passed it on)";
-//@ chunk-e6aww6q8.js:71912-71999 placement
+//@ chunk-5xgkngpb.js:74459-74546 placement
 /**
  * 排队投递结果
  */
@@ -63,7 +63,7 @@ var queuedDelivery = (coreHandoff, arrived) => ({
     }),
   [Symbol.dispose]: coreHandoff[Symbol.dispose],
 });
-//@ chunk-e6aww6q8.js:71999-72174 placement
+//@ chunk-5xgkngpb.js:74546-74721 placement
 /**
  * 把投递来源（对等或协调者，交还除外）转换为附件中的来源描述。
  */
@@ -78,7 +78,7 @@ function agentMessageOrigin(origin) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:72174-72503 placement
+//@ chunk-5xgkngpb.js:74721-75050 placement
 /**
  * 代理消息接收槽：有接收器时经 session.receive 钩子处理，可被消费或改写后入队。
  */
@@ -112,15 +112,15 @@ function createDeliveryReceiverSlot() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:72503-72517 placement
+//@ chunk-5xgkngpb.js:75050-75064 placement
 /**
  * 投递接收槽
  */
 var deliveryReceiverSlot; // deferred: uses createDeliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:72503", () => {
+deferInit("chunk-5xgkngpb.js:75050", () => {
   deliveryReceiverSlot = createDeliveryReceiverSlot();
 });
-//@ chunk-e6aww6q8.js:72517-72663 placement
+//@ chunk-5xgkngpb.js:75064-75210 placement
 /**
  * 队友邮箱消息的来源：已验证且来自 team-lead 为 coordinator，否则 peer，附带插件与队友名。
  */
@@ -134,17 +134,17 @@ function teammateMessageOrigin(message, isVerified) {
     isVerified,
   };
 }
-//@ chunk-e6aww6q8.js:72663-72695 placement
+//@ chunk-5xgkngpb.js:75210-75242 placement
 var receiveAgentMessage; // deferred: uses deliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:72663", () => {
+deferInit("chunk-5xgkngpb.js:75210", () => {
   receiveAgentMessage = deliveryReceiverSlot.receiveAgentMessage;
 });
-//@ chunk-e6aww6q8.js:72695-72727 placement
+//@ chunk-5xgkngpb.js:75242-75274 placement
 var setDeliveryReceiver; // deferred: uses deliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:72695", () => {
+deferInit("chunk-5xgkngpb.js:75242", () => {
   setDeliveryReceiver = deliveryReceiverSlot.setDeliveryReceiver;
 });
-//@ chunk-e6aww6q8.js:72727-72799 placement
+//@ chunk-5xgkngpb.js:75274-75346 placement
 /**
  * 执行核心步骤
  */
@@ -154,7 +154,7 @@ var performCoreStep = (coreHandoff) => ({
   budgetMs: 0,
   run: (request) => coreHandoff.perform(request),
 });
-//@ chunk-e6aww6q8.js:72799-72985 placement
+//@ chunk-5xgkngpb.js:75346-75532 placement
 /**
  * 等待钩子链要么把事件传到核心（arrived），要么直接作答（answered），后者释放核心。
  */
@@ -179,7 +179,7 @@ async function awaitArrivalOrAnswer(coreHandoff, hookAnswer) {
     answered: await hookAnswer,
   };
 }
-//@ chunk-e6aww6q8.js:72985-73305 placement
+//@ chunk-5xgkngpb.js:75532-75852 placement
 /**
  * 核心交接器：perform 记录到达的参数并返回结果 Promise，done/failed 结算，dispose 以给定消息失败。
  */
@@ -219,9 +219,9 @@ function createCoreHandoff(disposeMessage) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:73305-73380 placement
+//@ chunk-5xgkngpb.js:75852-75927 placement
 var KEEP_QUEUED_READY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:73305", () => {
+deferInit("chunk-5xgkngpb.js:75852", () => {
   KEEP_QUEUED_READY = Object.freeze({
     queued: () => {
       return;
@@ -231,7 +231,7 @@ deferInit("chunk-e6aww6q8.js:73305", () => {
     },
   });
 });
-//@ chunk-e6aww6q8.js:73380-73484 placement
+//@ chunk-5xgkngpb.js:75927-76031 placement
 function replaceTextContent(content, text) {
   return typeof content === "string"
     ? text
@@ -243,7 +243,7 @@ function replaceTextContent(content, text) {
         ...content.filter((block) => block.type !== "text"),
       ];
 }
-//@ chunk-e6aww6q8.js:73484-74082 placement
+//@ chunk-5xgkngpb.js:76031-76632 placement
 /**
  * 运行 session.receive 钩子链，钩子消费的消息不再入队。
  */
@@ -296,18 +296,18 @@ async function dispatchSessionReceiveHooks(request) {
     queueing: queuedDelivery(coreHandoff, arrived),
   };
 }
-//@ chunk-e6aww6q8.js:74082-74091 placement
+//@ chunk-5xgkngpb.js:76632-76641 placement
 // deferred: uses setDeliveryReceiver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:74082", () => {
+deferInit("chunk-5xgkngpb.js:76632", () => {
   setDeliveryReceiver(dispatchSessionReceiveHooks);
 });
 export {
   dispatchSessionReceiveHooks,
+  agentMessageOrigin,
+  receiveAgentMessage,
+  joinTextBlocks,
+  teammateMessageOrigin,
   createCoreHandoff,
   awaitArrivalOrAnswer,
   performCoreStep,
-  joinTextBlocks,
-  agentMessageOrigin,
-  receiveAgentMessage,
-  teammateMessageOrigin,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 配置来源合并与策略剔除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (12)
  * attribution: placement 12
  */
 import { classifyServerLocation } from "../../cli/cloudSession/validateCloudFlags.js";
@@ -17,7 +17,7 @@ import { replaceControlChars } from "../../utils/resultError.js";
 import { isChildSession } from "../../utils/sessionShape.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
+import { getPrefixServerKey } from "./mcpStringUtils.js";
 import { isPluginServerConfig } from "./types.js";
 import { firstPartyServerIdFor, getCliOwnedState } from "./cliOwnedClients.js";
 import { isSafeMode } from "../../utils/envUtils.js";
@@ -25,7 +25,7 @@ import { isHermeticRemoteSession } from "../cloudSessions/eligibility.js";
 import { isCcrInjectedConfig, isOwnToolContainerConfig } from "../analytics/metadata.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-3wek6r2k.js:60150-60423 placement
+//@ chunk-hjswk319.js:59579-59852 placement
 function mcpServerKindFlags(mcpConfigs) {
   let kinds = new Set();
   for (let config of mcpConfigs) kinds.add(classifyServerLocation(config));
@@ -38,7 +38,7 @@ function mcpServerKindFlags(mcpConfigs) {
     has_mcp_other: kinds.has("other"),
   };
 }
-//@ chunk-3wek6r2k.js:60469-61058 placement
+//@ chunk-hjswk319.js:59898-60487 placement
 function loadRemoteMcpConfig(bridgeSessionId, getServerUrl) {
   let CLAUDE_CODE_REMOTE_MCP_CONFIG = isByocEnvironment() ? env.CLAUDE_CODE_REMOTE_MCP_CONFIG : undefined;
   if (!CLAUDE_CODE_REMOTE_MCP_CONFIG) return;
@@ -68,7 +68,7 @@ function loadRemoteMcpConfig(bridgeSessionId, getServerUrl) {
     ),
   };
 }
-//@ chunk-3wek6r2k.js:61058-61672 placement
+//@ chunk-hjswk319.js:60487-61101 placement
 function mcpConfigProvenanceNote(hostOwnedNames, declaredCount) {
   if (hostOwnedNames !== undefined)
     return {
@@ -88,7 +88,7 @@ function mcpConfigProvenanceNote(hostOwnedNames, declaredCount) {
         level: "debug",
       };
 }
-//@ chunk-3wek6r2k.js:61672-61857 placement
+//@ chunk-hjswk319.js:61101-61286 placement
 function sameCommandServers(configs, servers) {
   if (servers === undefined) return;
   let same = new Set();
@@ -103,7 +103,7 @@ function sameCommandServers(configs, servers) {
       same.add(key);
   return same;
 }
-//@ chunk-3wek6r2k.js:61857-62915 placement
+//@ chunk-hjswk319.js:61286-62339 placement
 /**
  * 合并多个来源的 MCP 配置，并按 --mcp-config 来源声明标记或剔除。
  */
@@ -161,7 +161,7 @@ function mergeMcpConfigs(localConfigs, skippedNames, remoteMcpConfig) {
     refused,
   };
 }
-//@ chunk-3wek6r2k.js:62915-63316 placement
+//@ chunk-hjswk319.js:62339-62740 placement
 function partitionOperatorServers(clients, ownership) {
   let hostOwnedConfigs = Object.create(null);
   let operatorOwnedNames = new Set(ownership?.operatorNames);
@@ -188,9 +188,9 @@ function partitionOperatorServers(clients, ownership) {
     operatorOwnedConfigs,
   };
 }
-//@ chunk-3wek6r2k.js:63316-63396 placement
+//@ chunk-hjswk319.js:62740-62820 placement
 var OPERATOR_SUPPLIED_IGNORED_TEXT = "Configured via --mcp-config on this host (operator-supplied); ignored";
-//@ chunk-3wek6r2k.js:63396-64114 placement
+//@ chunk-hjswk319.js:62820-63538 placement
 /**
  * 按企业 MCP 配置与侧载策略剔除服务器，记录被保留但不在允许列表中的项。
  */
@@ -242,7 +242,7 @@ function applyMcpPolicyDrops(
     reason: dropReason,
   };
 }
-//@ chunk-3wek6r2k.js:64114-64178 placement
+//@ chunk-hjswk319.js:63538-63602 placement
 function isAlwaysKeptServer(config, keepCcrInjected, keepOwnToolContainer) {
   return (
     config.type === "sdk" ||
@@ -250,7 +250,7 @@ function isAlwaysKeptServer(config, keepCcrInjected, keepOwnToolContainer) {
     (keepCcrInjected && isCcrInjectedConfig(config))
   );
 }
-//@ chunk-3wek6r2k.js:64178-64479 placement
+//@ chunk-hjswk319.js:63602-63903 placement
 function removalNoteLines(settingName, names) {
   if (names.length === 0) return [];
   let isSingle = names.length === 1;
@@ -258,20 +258,20 @@ function removalNoteLines(settingName, names) {
     `Note: ${settingName} does not remove the MCP ${plural(names.length, "server")} Claude Code adds to its own remote sessions: ${names.join(", ")}. To remove ${isSingle ? "it" : "one"}, add {"serverName": "${isSingle ? names[0] : "<name>"}"} to deniedMcpServers in managed settings.`,
   ];
 }
-//@ chunk-3wek6r2k.js:64479-64532 placement
+//@ chunk-hjswk319.js:63903-63956 placement
 function recordSkippedDynamicServers(names) {
   getCliOwnedState().skippedDynamicServers.push(...names);
 }
-//@ chunk-3wek6r2k.js:64532-64581 placement
+//@ chunk-hjswk319.js:63956-64005 placement
 function getSkippedDynamicServers() {
   return getCliOwnedState().skippedDynamicServers;
 }
 export {
-  mcpServerKindFlags,
   OPERATOR_SUPPLIED_IGNORED_TEXT,
   isAlwaysKeptServer,
   partitionOperatorServers,
   getSkippedDynamicServers,
+  mcpServerKindFlags,
   loadRemoteMcpConfig,
   mergeMcpConfigs,
   recordSkippedDynamicServers,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。渲染任务完成与监控事件的 task-notification 消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (8)
  * attribution: placement 8
  */
 import { parseTaskResultOrNull } from "../../tasks/LocalShellTask/backgroundNotices.js";
@@ -46,9 +46,9 @@ import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { capIdFrameField, IDLE_ID_FIELD_RECEIVE_BOUND } from "../../utils/teammateMailbox.js";
 
-//@ chunk-ah34pb7m.js:99135-99144 placement
+//@ chunk-wjygkcr4.js:100942-100951 placement
 var NOTIFICATION_INDENT = 2;
-//@ chunk-ah34pb7m.js:99144-99279 placement (2.1.88 match: getStatusColor, 1)
+//@ chunk-wjygkcr4.js:100951-101086 placement (2.1.88 match: getStatusColor, 1)
 function getStatusColor(status) {
   switch (status) {
     case "completed":
@@ -61,7 +61,7 @@ function getStatusColor(status) {
       return "text";
   }
 }
-//@ chunk-ah34pb7m.js:99279-99385 placement (2.1.88 match: _temp, 1)
+//@ chunk-wjygkcr4.js:101086-101192 placement (2.1.88 match: _temp, 1)
 function completedTaskResultText(taskDelivery) {
   let taskResultOrNull = parseTaskResultOrNull(taskDelivery);
   return taskResultOrNull?.status === "completed"
@@ -69,7 +69,7 @@ function completedTaskResultText(taskDelivery) {
 `)
     : "";
 }
-//@ chunk-ah34pb7m.js:99385-99918 placement (2.1.88 match: renderToolUseErrorMessage, 0.161)
+//@ chunk-wjygkcr4.js:101192-101725 placement (2.1.88 match: renderToolUseErrorMessage, 0.161)
 /**
  * 某消息组件（taskDelivery/origin 参数），误配为 NotebookEdit 的错误渲染；归属疑似错误。
  */
@@ -123,7 +123,7 @@ function renderToolUseErrorMessage_5(props) {
   } else taskNotificationMessageElement = $[10];
   return taskNotificationMessageElement;
 }
-//@ chunk-ah34pb7m.js:99918-101686 placement
+//@ chunk-wjygkcr4.js:101725-103495 placement
 /**
  * 任务完成通知消息
  */
@@ -309,7 +309,7 @@ function TaskNotificationMessage(props) {
   } else siteProps = $[48];
   return BriefTimestampNamespace.useUserMessageSite(siteProps);
 }
-//@ chunk-ah34pb7m.js:101686-103536 placement
+//@ chunk-wjygkcr4.js:103495-105344 placement
 /**
  * 监控任务通知消息
  */
@@ -480,7 +480,7 @@ function MonitorNotificationMessage(props) {
   } else content = $[31];
   return content;
 }
-//@ chunk-ah34pb7m.js:103536-104446 placement
+//@ chunk-wjygkcr4.js:105344-106254 placement
 /**
  * 监控事件行
  */
@@ -499,7 +499,7 @@ function MonitorEventRow(props) {
     $[4] !== transcriptV2Rows
   ) {
     noticeRowMessageElement = EARLY_RETURN_SENTINEL;
-    E: {
+    N: {
       ({ headline, description } = fitMonitorEventText(monitorEvent, columns - NOTIFICATION_INDENT));
       if (transcriptV2Rows) {
         noticeRowMessageElement = jsxProd_default(NoticeRowMessage, {
@@ -513,7 +513,7 @@ function MonitorEventRow(props) {
           }),
           addMargin,
         });
-        break E;
+        break N;
       }
     }
     $[0] = addMargin;
@@ -575,7 +575,7 @@ function MonitorEventRow(props) {
   } else boxElement = $[18];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:104446-104523 placement
+//@ chunk-wjygkcr4.js:106254-106331 placement
 function readTagText(text, tagName) {
   let tag = extractTag(text, tagName);
   let field = tag === null ? "" : capIdFrameField(tag, IDLE_ID_FIELD_RECEIVE_BOUND);

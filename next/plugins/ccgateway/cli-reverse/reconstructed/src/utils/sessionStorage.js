@@ -3,10 +3,10 @@
  *
  * 会话转录存储核心：projects/<清洗cwd>/<sessionId>.jsonl 的写入队列（Project 类）、记录类型策略、元数据记录、加载/建链、日志列表与 resume 查找、子代理转录与侧车、远程水合与迁移。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionStorage.ts
- * pieces: chunk-0j11jfmy.js (1), chunk-18hwfzwa.js (2), chunk-63641kq7.js (3), chunk-7dqf31r1.js (2), chunk-89ebz077.js (1), chunk-ad2e1aj6.js (1), chunk-bss4k1z9.js (1), chunk-cg2r2hy6.js (2), chunk-cgs3vg0v.js (1), chunk-dz3q485w.js (1), chunk-e6aww6q8.js (503), chunk-qzv7ezvq.js (19), chunk-rds552kq.js (1), chunk-wd9kxbpn.js (1), chunk-x753sk9t.js (8)
- * attribution: fingerprint 32, callgraph-fingerprint 6, placement 29, affinity 1, sole-consumer 1, layout 163, facade-majority 292, callgraph-witnessed 3, file-local 4, facade-exports 16
+ * pieces: chunk-05hzzra9.js (1), chunk-0yn8vxcn.js (8), chunk-5s0qaz1x.js (1), chunk-5xgkngpb.js (518), chunk-66b9fbd5.js (2), chunk-775n2x67.js (1), chunk-807vb177.js (19), chunk-9ys74nhz.js (2), chunk-czq1j3j2.js (1), chunk-jd53r7dh.js (3), chunk-jndyh8cy.js (1), chunk-n44f9pt7.js (1), chunk-nvm0wye1.js (1), chunk-rytc8e8q.js (1), chunk-v6a0t823.js (1), chunk-xgvz6tdn.js (1)
+ * attribution: fingerprint 31, placement 33, layout 164, callgraph-witnessed 3, facade-majority 294, file-local 4, affinity 3, sole-consumer 8, callgraph-fingerprint 6, facade-exports 16
  */
 import { join, dirname, basename, sep, isAbsolute, relative, resolve as resolve_2, normalize } from "path";
 import {
@@ -24,7 +24,7 @@ import {
   lutimes,
   lstat,
   copyFile,
-  rm as rm_2,
+  rm,
   link,
 } from "fs/promises";
 import { constants, createReadStream, openSync, fstatSync, writeSync, closeSync, readSync } from "fs";
@@ -33,15 +33,15 @@ import { constants as constants_8 } from "os";
 import { StringDecoder } from "string_decoder";
 import { isAscii } from "buffer";
 import { env } from "./env.js";
-import { getClaudeConfigDir, isEnvTruthy, getProjectDirNameOverride } from "./envUtils.js";
-import { HostScoped } from "./hostScoped.js";
+import { pluginDataDirPath } from "./plugins/pluginDirectories.js";
 import {
+  isDiskless,
   getRootSession,
   getOriginalCwdOrNull,
   getOriginalCwd,
   getSessionProjectDir,
   getSessionId,
-  isDiskless,
+  getIsNonInteractiveSession,
   isSessionPersistenceDisabled,
   getConversationAtisLatch,
   getConversationToolsUsed,
@@ -57,6 +57,15 @@ import {
   setRestoredAutoMemoryOff,
   setAutoMemoryOffThisSession,
 } from "../bootstrap/state.js";
+import {
+  getFsImplementation,
+  tailFile,
+  FileChangedDuringReadError,
+  readLinesReverse,
+  hasUntouchableRecordSpellingAsync,
+} from "./fsOperations.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
+import { HostScoped } from "./hostScoped.js";
 import {
   getProjectKey,
   getPinnedProjectDir,
@@ -145,9 +154,19 @@ import {
   persistSubagentStop,
 } from "./agentStopSiblings.js";
 import { runWithFileWriteContext } from "./file.js";
+import { getOauthAccountInfo, credentialIsOwnStoredLogin, sameOwnerAccount } from "./auth.js";
+import {
+  isBgSession,
+  envSessionKind,
+  getRegisteredSessionName,
+  isUnattendedInteractiveSession,
+} from "./concurrentSessions.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { getGlobalConfig, saveGlobalConfig } from "./config.js";
+import { truncateToWidth, formatDurationCoarse, formatFileSize } from "./format.js";
+import { stripNonPrintable } from "./truncateGraphemes.js";
 import { devModsDir } from "../plugins/functionHooks/devModsName.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
-import { formatDurationCoarse, formatFileSize } from "./format.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 import { MAX_LOGS, sortLogs } from "../types/logs.js";
 import { defineOwnProperty } from "./objectSafety.js";
 import { createStore } from "../state/store.js";
@@ -166,10 +185,12 @@ import {
   isInterruptionOnlyMessage,
   isToolResultMessage,
   isHarnessMetaMessage,
+  replaceUnsentMediaInToolResult,
   isShutdownInterrupted,
 } from "./messages.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit as lit_2, fromEnumOpt } from "../services/analytics/safeMetadata.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import {
   jsonParse,
   jsonStringify,
@@ -201,23 +222,12 @@ import {
   create_12,
   create_25,
 } from "../../vendor/zod/lib/index.mjs";
-import {
-  getFsImplementation,
-  tailFile,
-  FileChangedDuringReadError,
-  readLinesReverse,
-  hasUntouchableRecordSpellingAsync,
-} from "./fsOperations.js";
 import { isNestedInteractiveClaudeSession, isTeammate } from "./teammate.js";
-import {
-  envSessionKind,
-  getRegisteredSessionName,
-  isUnattendedInteractiveSession,
-} from "./concurrentSessions.js";
 import { getCwdOrNull } from "./cwd.js";
+import { transcriptVersionOrDefault } from "./computerUse/computerUseLock.js";
 import { getBranch } from "./git.js";
 import { identity } from "./pathClassification.js";
-import { uniq, count } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { createSignal } from "./signal.js";
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import {
@@ -234,7 +244,7 @@ import {
   RequestBlobStore,
   clearAllReplayChains,
   isRequestBlobStoreEnabled,
-  stripCacheControl as stripCacheControl_4,
+  stripCacheControl as stripCacheControl_5,
   getToolResultDigests,
   setMarkerTextWriter,
 } from "./transcriptRequestBlobs.js";
@@ -277,12 +287,13 @@ import {
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../services/projects/threadRows.js";
 import { isShuttingDown, gracefulShutdownSync } from "./gracefulShutdown.js";
 import { createKeyedQueue } from "./promiseQueue.js";
-import { isSillyShoreGateOn, tagUntrustedArtifactContent } from "./messages/untrustedArtifactContent.js";
+import { isSillyShoreGateOn, collectToolsUsedBeforeSummary } from "./messages/untrustedArtifactContent.js";
 import {
   readTranscriptEntries,
   skipNuls,
   readEnvelopeSessionId,
   ArtifactLedgerCollector,
+  stripToolUseIdBookkeeping,
   CostStateEntrySchema,
   resetArtifactLedgerState,
   isLaptopMemoryAttachment,
@@ -290,6 +301,7 @@ import {
 import { writeFully, WRITE_BUFFER_LIMIT_BYTES } from "../services/memorySync/syncFiles.js";
 import { ATOMIC_WRITE_ERRNOS } from "./plugins/safeCopy.js";
 import { refreshCheckoutMetadata } from "./git/repoCheckouts.js";
+import { isEnvTruthy, getProjectDirNameOverride } from "./envUtils.js";
 import { appendSessionLog, getSessionLogs } from "../services/api/sessionIngress.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
 import { parseJSONL, bunJSONLParse } from "./json.js";
@@ -310,24 +322,34 @@ import { renderPluginPromptColon } from "./messages/pluginPrompts.js";
 import { flattenPastedBlocks } from "./pastedContent.js";
 import { COMMAND_NAME, TICK } from "../constants/xml.js";
 import { restoredTaskMarkSymbol } from "./messageKinds.js";
+import { countWhere } from "./collections.js";
 import { readSessionStartDate } from "./stats.js";
 import {
   isFoamySpringEnabled,
   isSideMessagesEnabled,
   readGateTrueByDefault,
+  readGateFalseByDefault,
 } from "../services/analytics/growthbookGates.js";
 import { announceFirstTurnOnce } from "./transcript/resumeAnnouncements.js";
 import { hasEmbeddedSearchTools_2 } from "./embeddedTools.js";
-import { collectBlockFieldsByType, getToolResultIds } from "../services/api/claude.js";
+import { collectBlockFieldsByType } from "../services/api/claude.js";
 import { withEndedByModel, getEndedByModel, isModelEndCheckSupported } from "../tasks/endedByModel.js";
+import { latestLogPerSession } from "../components/LogSelector.js";
 import { slugifySessionName } from "./sessionAddresses.js";
 import { settledYieldFor } from "./sessionNameUniqueness.js";
 import { getWorktreePaths } from "./getWorktreePaths.js";
+import {
+  INDEX_HEAD_SCAN_BYTES,
+  INDEX_BOUNDARY_SCAN_BYTES,
+  INDEX_LAST_PROMPT_SCAN_BYTES,
+  LAST_PROMPT_PREFIX_SCAN_BYTES,
+} from "../services/api/tether.js";
 import { createRowRepairer } from "./transcript/transcriptRepair.js";
-import { countToolCallsSince_2, restoreWireInputStamps } from "./wireToolInputEcho.js";
+import { wireToolInputsForContent, restoreWireInputStamps } from "./wireToolInputEcho.js";
 import { sanitizeStringList } from "../bridge/controlRequests.js";
+import { lastLineOf } from "../upstreamproxy/relay.js";
 import { limitConcurrency } from "./concurrencyLimit.js";
-import { isExactReplToolName } from "../tools/REPLTool/constants.js";
+import { isEvalToolCallName } from "../tools/REPLTool/constants.js";
 import { resolveMessageAlias } from "./pollEvents/fold.js";
 import { readCustomTitle } from "../cli/toolPermissionStream.js";
 import { getPlatform } from "./platform.js";
@@ -342,9 +364,9 @@ import { endsWithNumberedList } from "../components/FeedbackSurvey/SurveyHost.js
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7dqf31r1.js:4170-4264 affinity
+//@ chunk-9ys74nhz.js:4180-4274 affinity
 var REMOTE_ENTRYPOINTS_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7dqf31r1.js:4170", () => {
+deferInit("chunk-9ys74nhz.js:4180", () => {
   REMOTE_ENTRYPOINTS_3 = new Set([
     "remote",
     "remote_desktop",
@@ -353,7 +375,7 @@ deferInit("chunk-7dqf31r1.js:4170", () => {
     "remote_trigger",
   ]);
 });
-//@ chunk-7dqf31r1.js:4264-4369 fingerprint (2.1.88 match: getEntrypoint, 0.699)
+//@ chunk-9ys74nhz.js:4274-4379 fingerprint (2.1.88 match: getEntrypoint, 0.702)
 function getEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
@@ -362,24 +384,41 @@ function getEntrypoint() {
     REMOTE_ENTRYPOINTS_3.has(CLAUDE_CODE_ENTRYPOINT)
   );
 }
-//@ chunk-qzv7ezvq.js:590-630 facade-exports (2.1.88 match: getProjectsDir, 1)
+//@ chunk-n44f9pt7.js:7128-7260 fingerprint (2.1.88 match: resolveMetadataBuf, 0.833)
+function resolveMetadataBuf(carry, chunkBuf) {
+  let chunkBuffer = typeof chunkBuf === "string" ? Buffer.from(chunkBuf) : chunkBuf;
+  return (
+    carry.length <= chunkBuffer.length && Buffer.compare(carry, chunkBuffer.subarray(0, carry.length)) === 0
+  );
+}
+//@ chunk-5s0qaz1x.js:6181-6252 fingerprint (2.1.88 match: appendEntryToFile, 0.638)
+/**
+ * 返回并（非只读模式下）创建插件数据目录。
+ */
+function ensurePluginDataDir(pluginId) {
+  let dirPath = pluginDataDirPath(pluginId);
+  if (isDiskless()) return dirPath;
+  getFsImplementation().mkdirSync(dirPath);
+  return dirPath;
+}
+//@ chunk-807vb177.js:590-630 facade-exports (2.1.88 match: getProjectsDir, 1)
 /**
  * <配置目录>/projects：所有项目转录目录的父目录。
  */
 function getProjectsDir() {
   return join(getClaudeConfigDir(), "projects");
 }
-//@ chunk-qzv7ezvq.js:630-676 facade-exports
+//@ chunk-807vb177.js:630-676 facade-exports
 function getProjectKeyIfRepresentable(path) {
   return dirname(path) === getProjectsDir() ? basename(path) : undefined;
 }
-//@ chunk-qzv7ezvq.js:676-819 facade-exports
+//@ chunk-807vb177.js:676-819 facade-exports
 function projectKeyOf(key) {
   if (typeof key === "string") return getProjectKeyIfRepresentable(key);
   let { scope } = key;
   return scope.namespace === "transcript" && scope.sessionId === undefined ? scope.projectKey : undefined;
 }
-//@ chunk-qzv7ezvq.js:819-1121 layout
+//@ chunk-807vb177.js:819-1121 layout
 class ProjectDirCacheState {
   projectDirCache = new Map();
   agentTranscriptSubdirs = new Map();
@@ -396,12 +435,12 @@ class ProjectDirCacheState {
     this.agentTranscriptSubdirs.delete(agentId);
   }
 }
-//@ chunk-qzv7ezvq.js:1121-1144 layout
+//@ chunk-807vb177.js:1121-1144 layout
 var projectDirCacheByHost; // deferred: uses ProjectDirCacheState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qzv7ezvq.js:1121", () => {
+deferInit("chunk-807vb177.js:1121", () => {
   projectDirCacheByHost = new HostScoped(() => new ProjectDirCacheState());
 });
-//@ chunk-qzv7ezvq.js:1144-1282 facade-exports
+//@ chunk-807vb177.js:1144-1282 facade-exports
 /**
  * 项目目录：<配置目录>/projects/<cwd 清洗名>，cwd 中非字母数字字符换成 '-'，超过 200 字符截断并加 hash 后缀；按 cwd 缓存。
  */
@@ -413,44 +452,44 @@ function getProjectDir(projectKey) {
   cache.cacheProjectDir(projectKey, projectDirPath);
   return projectDirPath;
 }
-//@ chunk-qzv7ezvq.js:1282-1356 facade-exports
+//@ chunk-807vb177.js:1282-1356 facade-exports
 function resolveProjectDir() {
   let originalCwdOrNull = getOriginalCwdOrNull();
   if (originalCwdOrNull !== null) return getProjectDir(originalCwdOrNull);
   return getPinnedProjectDir() ?? getProjectDir(getOriginalCwd());
 }
-//@ chunk-qzv7ezvq.js:1356-1390 facade-exports
+//@ chunk-807vb177.js:1356-1390 facade-exports
 function resolveSessionProjectDir() {
   return getSessionProjectDir() ?? resolveProjectDir();
 }
-//@ chunk-qzv7ezvq.js:1390-1434 facade-exports (2.1.88 match: getErrorsPath, 1)
+//@ chunk-807vb177.js:1390-1434 facade-exports (2.1.88 match: getErrorsPath, 1)
 /**
  * 当前会话主转录路径：<项目目录>/<sessionId>.jsonl。
  */
 function getTranscriptPath() {
   return join(resolveSessionProjectDir(), `${getSessionId()}.jsonl`);
 }
-//@ chunk-qzv7ezvq.js:1434-1461 facade-exports
+//@ chunk-807vb177.js:1434-1461 facade-exports
 function locateSessionProjectDir() {
   return resolveSessionProjectDir();
 }
-//@ chunk-qzv7ezvq.js:1461-1524 facade-exports
+//@ chunk-807vb177.js:1461-1524 facade-exports
 function setAgentTranscriptSubdir(agentId, transcriptSubdir) {
   projectDirCacheByHost.of(getRootSession().host).setAgentTranscriptSubdir(agentId, transcriptSubdir);
 }
-//@ chunk-qzv7ezvq.js:1524-1585 facade-exports
+//@ chunk-807vb177.js:1524-1585 facade-exports
 function clearAgentTranscriptSubdir(agentId) {
   projectDirCacheByHost.of(getRootSession().host).clearAgentTranscriptSubdir(agentId);
 }
-//@ chunk-qzv7ezvq.js:1585-1631 facade-exports
+//@ chunk-807vb177.js:1585-1631 facade-exports
 function getSessionSubagentsDir() {
   return join(resolveSessionProjectDir(), getSessionId(), "subagents");
 }
-//@ chunk-qzv7ezvq.js:1631-1660 facade-exports
+//@ chunk-807vb177.js:1631-1660 facade-exports
 function locateAgentTranscript(agentId) {
   return getAgentTranscriptPath(agentId);
 }
-//@ chunk-qzv7ezvq.js:1660-1778 facade-exports
+//@ chunk-807vb177.js:1660-1778 facade-exports
 /**
  * 子代理转录路径：<项目目录>/<sessionId>/subagents/[子目录/]agent-<agentId>.jsonl。
  */
@@ -459,11 +498,11 @@ function getAgentTranscriptPath(agentId) {
   let baseDir = subdir ? join(getSessionSubagentsDir(), subdir) : getSessionSubagentsDir();
   return join(baseDir, `agent-${agentId}.jsonl`);
 }
-//@ chunk-qzv7ezvq.js:1778-1824 facade-exports
+//@ chunk-807vb177.js:1778-1824 facade-exports
 function agentTranscriptPathOfEntry(agentId) {
   return isSafeIdSegment(agentId) ? getAgentTranscriptPath(identityAgentId2(agentId)) : undefined;
 }
-//@ chunk-qzv7ezvq.js:1824-2105 facade-exports (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.818)
+//@ chunk-807vb177.js:1824-2105 facade-exports (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.818)
 async function listSubagentIdsFromDisk(storageV5) {
   let projectKey = getProjectKeyIfRepresentable(resolveSessionProjectDir());
   if (isStorageV5Enabled() && storageV5 !== undefined && projectKey !== undefined)
@@ -481,7 +520,7 @@ async function listSubagentIdsFromDisk(storageV5) {
     .filter((entry) => entry.isFile() && entry.name.startsWith("agent-") && entry.name.endsWith(".jsonl"))
     .map((entry) => entry.name.slice(6, -6));
 }
-//@ chunk-qzv7ezvq.js:2105-2495 layout
+//@ chunk-807vb177.js:2105-2495 layout
 /**
  * listTranscriptEntries：分页列出转录条目（qzv7 备份实现）。
  */
@@ -524,7 +563,7 @@ async function listTranscriptEntries(storage, projectKey, sessionId) {
     return [];
   }
 }
-//@ chunk-qzv7ezvq.js:2495-2680 facade-exports (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
+//@ chunk-807vb177.js:2495-2680 facade-exports (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
 function extractTeammateTranscriptsFromTasks(tasks, transcripts) {
   let transcripts_2 = {};
   for (let task of Object.values(tasks)) {
@@ -534,12 +573,12 @@ function extractTeammateTranscriptsFromTasks(tasks, transcripts) {
   }
   return transcripts_2;
 }
-//@ chunk-x753sk9t.js:513-578 placement
+//@ chunk-0yn8vxcn.js:513-578 placement
 function resolveAgainstProcessCwd(path) {
   let cwd = process.cwd();
   return cwd.endsWith(sep) ? cwd + path : cwd + sep + path;
 }
-//@ chunk-x753sk9t.js:578-673 placement
+//@ chunk-0yn8vxcn.js:578-673 placement
 function makeWorkspaceRealPath(hostFiles) {
   return (path) =>
     hostFiles.hostFiles.realPath(
@@ -549,7 +588,7 @@ function makeWorkspaceRealPath(hostFiles) {
       },
     );
 }
-//@ chunk-x753sk9t.js:673-747 placement
+//@ chunk-0yn8vxcn.js:673-747 placement
 function getRealPathOptions(hostFiles) {
   return hostFiles === undefined
     ? undefined
@@ -558,13 +597,13 @@ function getRealPathOptions(hostFiles) {
         realPath: makeWorkspaceRealPath(hostFiles),
       };
 }
-//@ chunk-x753sk9t.js:747-865 layout
+//@ chunk-0yn8vxcn.js:747-865 layout
 function getAgentIdFromTranscriptKey(key) {
   return key.namespace !== "transcript" || key.journal !== undefined || key.sessionJournal !== undefined
     ? undefined
     : (key.agentId ?? null);
 }
-//@ chunk-x753sk9t.js:865-1185 callgraph-witnessed (2.1.88 match: getTranscriptPath, 0.658)
+//@ chunk-0yn8vxcn.js:865-1185 callgraph-witnessed (2.1.88 match: getTranscriptPath, 0.658)
 /**
  * storage v5 后端下把 <配置目录>/projects/<项目>/<session>.jsonl 形式的路径映射为转录存储 key；不在 projects 目录下或无后端时返回 undefined。
  */
@@ -591,7 +630,7 @@ function getTranscriptStorageKey(pathOrKey, backend) {
       }
     : undefined;
 }
-//@ chunk-x753sk9t.js:1185-1734 layout (2.1.88 match: getAgentTranscriptPath, 0.867)
+//@ chunk-0yn8vxcn.js:1185-1734 layout (2.1.88 match: getAgentTranscriptPath, 0.868)
 function getAgentTranscriptStorageKey(agentTranscriptPath, backend) {
   if (!isStorageV5Enabled() || backend === undefined) return;
   if (typeof agentTranscriptPath !== "string")
@@ -635,7 +674,7 @@ function getAgentTranscriptStorageKey(agentTranscriptPath, backend) {
       }
     : undefined;
 }
-//@ chunk-x753sk9t.js:1734-1863 placement
+//@ chunk-0yn8vxcn.js:1734-1863 placement
 function getTranscriptStorageContext(backend) {
   if (!isStorageV5Enabled() || backend === undefined) return;
   return {
@@ -645,7 +684,7 @@ function getTranscriptStorageContext(backend) {
     realWorkspacePath: makeWorkspaceRealPath(backend),
   };
 }
-//@ chunk-x753sk9t.js:1863-1930 placement
+//@ chunk-0yn8vxcn.js:1863-1930 placement
 function wrapStorageSource(source) {
   return source === undefined
     ? undefined
@@ -654,7 +693,7 @@ function wrapStorageSource(source) {
         hoverRestOn: isStorageV5Enabled(),
       };
 }
-//@ chunk-63641kq7.js:4535-4668 callgraph-fingerprint (2.1.88 match: getTranscriptPathForSession, 0.661)
+//@ chunk-jd53r7dh.js:3722-3855 callgraph-fingerprint (2.1.88 match: getTranscriptPathForSession, 0.663)
 async function getTranscriptPathForSession_2(fullPath, continuedInSessionId, storageV5) {
   let continuedPath = join(dirname(fullPath), `${continuedInSessionId}.jsonl`);
   let sessionLite = await readSessionLite(
@@ -672,11 +711,11 @@ async function getTranscriptPathForSession_2(fullPath, continuedInSessionId, sto
     ))
   );
 }
-//@ chunk-63641kq7.js:4668-4711 placement
+//@ chunk-jd53r7dh.js:3855-3898 placement
 var PARENT_UUID_KEY = '"parentUuid":';
 var MAX_TRANSCRIPT_SCAN_BYTES = 16777216;
 var TRANSCRIPT_TAIL_SCAN_BYTES = 1048576;
-//@ chunk-63641kq7.js:4711-5193 placement
+//@ chunk-jd53r7dh.js:3898-4380 placement
 /**
  * 判断转录头尾或全文是否含有某标记：头尾已命中返回 true，文件较小返回 false，存储模式保守返回 true，否则分块扫描文件直到上限。
  */
@@ -708,21 +747,23 @@ async function transcriptMayContainMarker(path, head, tail, size, storageV5) {
     return false;
   }
 }
-//@ chunk-rds552kq.js:226-282 placement
+//@ chunk-xgvz6tdn.js:226-282 placement
 /**
  * worktreeFromProgress：进度消息里的 worktree（磁盘模式下保留）。
  */
 function worktreeFromProgress(value) {
   return typeof value !== "string" || isDiskless() ? undefined : value;
 }
-//@ chunk-e6aww6q8.js:215483-215536 placement
+//@ chunk-5xgkngpb.js:127315-127326 placement
+var MAX_VIEW_REFS = 64;
+//@ chunk-5xgkngpb.js:214544-214597 placement
 /**
  * clearLastIngressUuid：清空按会话记录的最后入站 uuid。
  */
 function clearLastIngressUuid() {
   streamFallbackWarning().lastIngressUuidBySession.clear();
 }
-//@ chunk-e6aww6q8.js:220628-220716 placement
+//@ chunk-5xgkngpb.js:219862-219950 placement
 /**
  * isUnavailableStoreError：存储不可用错误（含 cause 链）。
  */
@@ -730,17 +771,103 @@ function isUnavailableStoreError(error) {
   let cause = error instanceof Error ? error.cause : undefined;
   return isUnavailableErrorCode(getErrnoCode(error)) || (isStoreError(cause) && isUnavailableError(cause));
 }
-//@ chunk-e6aww6q8.js:220716-220758 placement
+//@ chunk-5xgkngpb.js:219950-219992 placement
 function stopSiblingExistsAt(agentMetadataPath, count, storageV5) {
   return stopSiblingExists(stopSiblingPath(agentMetadataPath, count), storageV5);
 }
-//@ chunk-e6aww6q8.js:220758-220842 placement
+//@ chunk-5xgkngpb.js:219992-220076 placement
 async function setAgentTranscriptSubdir_2(agentMetadataPath, count, storageV5) {
   let path = stopSiblingPath(agentMetadataPath, count);
   stopSiblingCache.set(path, readStopSiblingCount(path) + 1);
   await runWithFileWriteContext(agentMetadataPath, () => removeStopSibling(path, storageV5));
 }
-//@ chunk-e6aww6q8.js:220887-220972 placement
+//@ chunk-5xgkngpb.js:220076-220087 layout
+var MAX_ACCOUNT_LABEL_WIDTH = 80;
+//@ chunk-5xgkngpb.js:220087-220216 layout
+function ownStoredLoginOwner() {
+  let oauthAccountInfo = getOauthAccountInfo();
+  if (!oauthAccountInfo?.accountUuid || !credentialIsOwnStoredLogin()) return;
+  return {
+    accountUuid: oauthAccountInfo.accountUuid,
+    organizationUuid: oauthAccountInfo.organizationUuid,
+  };
+}
+//@ chunk-5xgkngpb.js:220216-220281 layout
+function ownerDiffers(sessionOwner, owner) {
+  if (!sessionOwner?.accountUuid || !owner) return false;
+  return !sameOwnerAccount(sessionOwner, owner);
+}
+//@ chunk-5xgkngpb.js:220281-220356 layout
+function isAccountCopyEnabled() {
+  if (getIsNonInteractiveSession() || isBgSession()) return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bubbly_fountain", false);
+}
+//@ chunk-5xgkngpb.js:220356-220873 layout
+async function rememberKnownAccount(storageV5) {
+  let oauthAccountInfo = getOauthAccountInfo();
+  if (!oauthAccountInfo?.accountUuid || !credentialIsOwnStoredLogin()) return;
+  let organizationUuid = oauthAccountInfo.organizationUuid ?? "";
+  let knownAccount = getGlobalConfig().knownAccounts?.[oauthAccountInfo.accountUuid];
+  let organizationName =
+    oauthAccountInfo.organizationName ?? knownAccount?.organizations?.[organizationUuid] ?? null;
+  if (
+    knownAccount?.emailAddress === oauthAccountInfo.emailAddress &&
+    knownAccount.organizations?.[organizationUuid] === organizationName
+  )
+    return;
+  await saveGlobalConfig((config) => {
+    let knownAccount = config.knownAccounts?.[oauthAccountInfo.accountUuid];
+    if (
+      knownAccount?.emailAddress === oauthAccountInfo.emailAddress &&
+      knownAccount.organizations?.[organizationUuid] === organizationName
+    )
+      return config;
+    return {
+      ...config,
+      knownAccounts: {
+        ...config.knownAccounts,
+        [oauthAccountInfo.accountUuid]: {
+          emailAddress: oauthAccountInfo.emailAddress,
+          organizations: {
+            ...knownAccount?.organizations,
+            [organizationUuid]: organizationName,
+          },
+        },
+      },
+    };
+  }, storageV5);
+}
+//@ chunk-5xgkngpb.js:220873-221077 layout
+function accountLabelOfOwner(sessionOwner) {
+  let knownAccount = getGlobalConfig().knownAccounts?.[sessionOwner.accountUuid];
+  if (typeof knownAccount?.emailAddress !== "string") return;
+  let knownOrganization = knownAccount.organizations?.[sessionOwner.organizationUuid ?? ""];
+  return accountLabel(
+    knownAccount.emailAddress,
+    typeof knownOrganization === "string" ? knownOrganization : null,
+  );
+}
+//@ chunk-5xgkngpb.js:221077-221283 layout
+function currentAccountLabel(label) {
+  let oauthAccountInfo = getOauthAccountInfo();
+  if (typeof oauthAccountInfo?.emailAddress !== "string") return "your current account";
+  let ownLabel = accountLabel(oauthAccountInfo.emailAddress, oauthAccountInfo.organizationName);
+  return ownLabel === label
+    ? `${accountLabel(oauthAccountInfo.emailAddress, null)} (another organization)`
+    : ownLabel;
+}
+//@ chunk-5xgkngpb.js:221283-221389 layout
+function accountLabel(emailAddress, organizationName) {
+  return truncateToWidth(
+    stripNonPrintable(
+      organizationName && organizationName !== `${emailAddress}'s Organization`
+        ? `${emailAddress} (${organizationName})`
+        : emailAddress,
+    ).replace(/[\r\n]+/g, " "),
+    MAX_ACCOUNT_LABEL_WIDTH,
+  );
+}
+//@ chunk-5xgkngpb.js:221434-221519 placement
 /**
  * isSessionFileAt：该路径是否为指定会话的转录文件。
  */
@@ -751,11 +878,11 @@ function isSessionFileAt(path, sessionId) {
     resolve_2(path) === resolve_2(join(devModsDir(), sessionId))
   );
 }
-//@ chunk-e6aww6q8.js:220972-221079 placement
+//@ chunk-5xgkngpb.js:221519-221626 placement
 var DISK_TRANSCRIPT_LAG_PREFIX =
   "When this session resumed, the copy of this conversation on the container's disk lacked at least";
-//@ chunk-e6aww6q8.js:221079-221757 placement
-function findUnresolvedToolUse_2(events, resolvedEventIds, includeAll) {
+//@ chunk-5xgkngpb.js:221626-222309 placement
+function unresolvedTailAfterTip(events, resolvedEventIds, includeAll) {
   let lastIndex = events.findLastIndex((event) =>
     [event.event_id, event.payload.uuid].some(
       (candidate) => typeof candidate === "string" && resolvedEventIds.has(candidate),
@@ -767,15 +894,11 @@ function findUnresolvedToolUse_2(events, resolvedEventIds, includeAll) {
   let sliced = events.slice(lastIndex + 1);
   for (let { payload } of sliced) {
     let message = payload.message;
-    let content = isPlainObject_5(message) ? message.content : undefined;
+    let content = isPlainObject_6(message) ? message.content : undefined;
     let blocks = Array.isArray(content) ? content : [];
-    for (let message of blocks.filter(isPlainObject_5)) {
+    for (let block of blocks.filter(isPlainObject_6)) {
       let toolId =
-        message.type === "tool_use"
-          ? message.id
-          : message.type === "tool_result"
-            ? message.tool_use_id
-            : undefined;
+        block.type === "tool_use" ? block.id : block.type === "tool_result" ? block.tool_use_id : undefined;
       if (typeof toolId === "string") {
         if (toolIds.size === 0 && typeof payload.timestamp === "string") oldestToolRowAt = payload.timestamp;
         toolIds.add(toolId);
@@ -789,14 +912,14 @@ function findUnresolvedToolUse_2(events, resolvedEventIds, includeAll) {
     remindedBefore: sliced.some(({ payload }) => {
       let attachment = payload.attachment;
       let content =
-        isPlainObject_5(attachment) && attachment.type === "critical_system_reminder"
+        isPlainObject_6(attachment) && attachment.type === "critical_system_reminder"
           ? attachment.content
           : undefined;
       return typeof content === "string" && content.startsWith(DISK_TRANSCRIPT_LAG_PREFIX);
     }),
   };
 }
-//@ chunk-e6aww6q8.js:221757-222475 placement
+//@ chunk-5xgkngpb.js:222309-223027 placement
 function describeDiskTranscriptLag(lag, now) {
   let timestamp = Date.parse(lag.oldestToolRowAt ?? "");
   let ageNote =
@@ -808,7 +931,7 @@ function describeDiskTranscriptLag(lag, now) {
     : "";
   return `${DISK_TRANSCRIPT_LAG_PREFIX} ${lag.toolCalls} of your recent tool calls, so the disk may be older than the conversation.${ageNote} Files that those calls created or changed may be missing or out of date, and installed packages may be gone. Check the files that you need before you rely on them, and tell the user if work was lost.${repeatNote}`;
 }
-//@ chunk-e6aww6q8.js:222475-223602 placement
+//@ chunk-5xgkngpb.js:223027-224167 placement
 /**
  * 按转录消息顺序把文件历史快照与增量合成快照列表：同一消息的更新替换、增量合并或合成新快照，只保留最近若干个，被裁掉的部分折叠为基准状态。
  */
@@ -902,7 +1025,7 @@ function buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, tran
   }
   return snapshots;
 }
-//@ chunk-e6aww6q8.js:223602-224004 placement
+//@ chunk-5xgkngpb.js:224167-224569 placement
 /**
  * 把被裁掉的文件历史快照操作折叠进基准状态（追加/替换取快照，合成/合并累加增量）。
  */
@@ -932,10 +1055,16 @@ function foldSnapshotBase(baseState, op) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:338564-338771 placement
+//@ chunk-5xgkngpb.js:303488-303557 placement
+function isFileSnapshotMessage(message) {
+  return message.type === "system" && message.subtype === "file_snapshot";
+}
+//@ chunk-5xgkngpb.js:340087-340336 placement
 class TranscriptWriterHealth {
   failuresByFile = new Map();
   failureSeq = 0;
+  fullDiskCode = undefined;
+  fullDiskPaths = new Set();
   abandonedPaths = new Set();
   abandonedPrefixes = new Set();
   abandonedPendingPaths = new Set();
@@ -944,23 +1073,23 @@ class TranscriptWriterHealth {
   liveServing = null;
   degradedStore = createStore(null);
 }
-//@ chunk-e6aww6q8.js:338771-338796 placement
+//@ chunk-5xgkngpb.js:340336-340361 placement
 var sessionStorageInitState; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:338771", () => {
+deferInit("chunk-5xgkngpb.js:340336", () => {
   sessionStorageInitState = new SessionRootSlot(() => ({}));
 });
-//@ chunk-e6aww6q8.js:338796-338831 placement
+//@ chunk-5xgkngpb.js:340361-340396 placement
 function setStoragePort(port) {
   sessionStorageInitState.of(getRootSession()).port = port;
 }
-//@ chunk-e6aww6q8.js:338831-338873 placement
+//@ chunk-5xgkngpb.js:340396-340438 placement
 /**
  * storagePort：取存储端口。
  */
 function storagePort() {
   return sessionStorageInitState.peek(getRootSession())?.port;
 }
-//@ chunk-e6aww6q8.js:338873-340008 layout
+//@ chunk-5xgkngpb.js:340438-341573 layout
 /**
  * 会话存储常量：CLI 版本、各种大小上限、合成用户文本（中断提示、标签开头）的正则。
  */
@@ -969,10 +1098,10 @@ var CLI_VERSION =
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   } !== "undefined"
@@ -980,10 +1109,10 @@ var CLI_VERSION =
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -992,33 +1121,33 @@ var MAX_TRANSCRIPT_READ_BYTES_2 = 52428800;
 var MAX_SYNTHETIC_MESSAGE_BYTES = 2000000;
 var MAX_TRANSCRIPT_TAIL_BYTES = 52428800;
 var TRANSCRIPT_HEAD_BUFFER_BYTES = 4096;
-var TRANSCRIPT_PAGE_BYTES = 1048576;
+var TOMBSTONE_PAGE_BYTES = 1048576;
 var MAX_PAGED_TRANSCRIPT_BYTES = 4194304;
 var SYNTHETIC_USER_TEXT_PATTERN = /^(?:\s*<[a-z][\w-]*[\s>]|\[Request interrupted by user[^\]]*\])/;
-//@ chunk-e6aww6q8.js:340008-340037 facade-majority
+//@ chunk-5xgkngpb.js:341573-341602 facade-majority
 /**
  * 是否为转录消息类型（user/assistant/attachment/system，排除 fork_briefing 附件）。
  */
 function isTranscriptMessage(message) {
   return isTranscriptMessage_3(message);
 }
-//@ chunk-e6aww6q8.js:340037-340075 layout
+//@ chunk-5xgkngpb.js:341602-341640 layout
 function isCompactOrCarriedMessage(message) {
   return isCompactBoundaryOrSummary(message) || isCarriedAttachment(message);
 }
-//@ chunk-e6aww6q8.js:340075-340113 layout
+//@ chunk-5xgkngpb.js:341640-341678 layout
 function isCarriedAttachment(message) {
   return isProjectsThreadAskAttachment(message) || isSessionCronCarryAttachment(message);
 }
-//@ chunk-e6aww6q8.js:340113-340202 layout
+//@ chunk-5xgkngpb.js:341678-341767 layout
 function isProjectsThreadAskAttachment(message) {
   return message.type === "attachment" && message.attachment?.type === "projects_thread_ask";
 }
-//@ chunk-e6aww6q8.js:340202-340290 layout
+//@ chunk-5xgkngpb.js:341767-341855 layout
 function isSessionCronCarryAttachment(message) {
   return message.type === "attachment" && message.attachment?.type === "session_cron_carry";
 }
-//@ chunk-e6aww6q8.js:340290-340400 facade-majority (2.1.88 match: isLegacyProgressEntry, 0.8)
+//@ chunk-5xgkngpb.js:341855-341965 facade-majority (2.1.88 match: isLegacyProgressEntry, 0.802)
 function isSyncedTranscriptEntry(entry) {
   return (
     typeof entry === "object" &&
@@ -1029,11 +1158,11 @@ function isSyncedTranscriptEntry(entry) {
     isTranscriptMessage(entry)
   );
 }
-//@ chunk-e6aww6q8.js:340400-340428 layout
-function isPlainObject_3(value) {
-  return isPlainObject_5(value);
+//@ chunk-5xgkngpb.js:341965-341993 layout
+function isPlainObject_4(value) {
+  return isPlainObject_6(value);
 }
-//@ chunk-e6aww6q8.js:340428-341559 facade-majority
+//@ chunk-5xgkngpb.js:341993-343149 facade-majority
 /**
  * 记录类型写入策略表：user/assistant/attachment/system/progress 为 dedup-transcript（按 uuid 去重，子代理写入自己的转录）；summary、custom-title、tag、last-prompt、file-history-snapshot 等元数据为 always；content-replacement、api-request*、fork-context-ref、observer-ref 为 route-by-agent（有 agentId 时写入子代理文件）。
  */
@@ -1066,6 +1195,7 @@ var ENTRY_APPEND_POLICY = {
   mode: "always",
   "permission-mode": "always",
   "isolation-latch": "always",
+  "session-owner": "always",
   "dev-mods": "always",
   "memory-mode": "always",
   "atis-latch": "always",
@@ -1084,39 +1214,39 @@ var COMPACT_MIN_FILE_BYTES = 5242880;
 var ENTRY_APPEND_POLICY_2 = 20971520;
 var SESSION_ENTRY_APPEND_POLICY = 8 * ENTRY_APPEND_POLICY_2;
 var SESSION_ENTRY_APPEND_POLICY_2 = 0.1;
-//@ chunk-e6aww6q8.js:341559-341607 layout
+//@ chunk-5xgkngpb.js:343149-343197 layout
 function forceGcIfBun(enabled) {
   if (enabled && typeof Bun !== "undefined") Bun.gc(true);
 }
-//@ chunk-e6aww6q8.js:341607-341640 layout
+//@ chunk-5xgkngpb.js:343197-343230 layout
 function isLowYieldCompaction(threshold, count) {
   return count < threshold * SESSION_ENTRY_APPEND_POLICY_2;
 }
-//@ chunk-e6aww6q8.js:341640-341690 facade-majority
+//@ chunk-5xgkngpb.js:343230-343280 facade-majority
 function setLowYieldCompactSkipForTesting(lowYieldCompactSkipEnabled) {
   currentTranscriptStore().lowYieldCompactSkipEnabled = lowYieldCompactSkipEnabled;
 }
-//@ chunk-e6aww6q8.js:341690-341732 facade-majority
+//@ chunk-5xgkngpb.js:343280-343322 facade-majority
 function setTranscriptLocalGcEnabled(enabled) {
   currentTranscriptStore().setLocalGcEnabled(enabled);
 }
-//@ chunk-e6aww6q8.js:341732-341782 facade-majority
+//@ chunk-5xgkngpb.js:343322-343372 facade-majority
 function setToolResultCopiesOnDisk(mode) {
   currentTranscriptStore().setToolResultCopiesOnDisk(mode);
 }
-//@ chunk-e6aww6q8.js:341782-341830 facade-majority
+//@ chunk-5xgkngpb.js:343372-343420 facade-majority
 function getSessionRowsOffDisk() {
   return getProject().sessionRowsOffDisk();
 }
-//@ chunk-e6aww6q8.js:341830-341882 facade-majority
+//@ chunk-5xgkngpb.js:343420-343472 facade-majority
 function setKeepSessionMessagesCache(keep) {
   currentTranscriptStore().setKeepSessionMessagesCache(keep);
 }
-//@ chunk-e6aww6q8.js:341882-341924 facade-majority (2.1.88 match: countUnseenAssistantTurns, 1)
+//@ chunk-5xgkngpb.js:343472-343515 facade-majority (2.1.88 match: countUnseenAssistantTurns, 1)
 function isChainParticipant(message) {
   return message.type !== "progress";
 }
-//@ chunk-e6aww6q8.js:341924-342084 facade-majority
+//@ chunk-5xgkngpb.js:343515-343675 facade-majority
 function transcriptCursorEnd(messages, start, findOpenAssistant) {
   if (!findOpenAssistant) return messages.length;
   for (let index = start; index < messages.length; index++) {
@@ -1125,14 +1255,14 @@ function transcriptCursorEnd(messages, start, findOpenAssistant) {
   }
   return messages.length;
 }
-//@ chunk-e6aww6q8.js:342084-342203 layout
+//@ chunk-5xgkngpb.js:343675-343794 layout
 function logLegacyProgressProbe(signal) {
   if (!currentTranscriptStore().claimLegacyProgressProbe(signal)) return;
   logEvent("tengu_dead_probe_legacy_progress_bridge", {
     signal: fromEnum(signal),
   });
 }
-//@ chunk-e6aww6q8.js:342203-342327 fingerprint (2.1.88 match: isLegacyProgressEntry, 1)
+//@ chunk-5xgkngpb.js:343794-343918 fingerprint (2.1.88 match: isLegacyProgressEntry, 1)
 function isLegacyProgressEntry(entry) {
   return (
     typeof entry === "object" &&
@@ -1143,9 +1273,9 @@ function isLegacyProgressEntry(entry) {
     typeof entry.uuid === "string"
   );
 }
-//@ chunk-e6aww6q8.js:342327-342471 fingerprint (2.1.88 match: EPHEMERAL_PROGRESS_TYPES, 0.656)
+//@ chunk-5xgkngpb.js:343918-344062 fingerprint (2.1.88 match: EPHEMERAL_PROGRESS_TYPES, 0.654)
 var EPHEMERAL_PROGRESS_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:342327", () => {
+deferInit("chunk-5xgkngpb.js:343918", () => {
   EPHEMERAL_PROGRESS_TYPES = new Set([
     "bash_progress",
     "powershell_progress",
@@ -1157,27 +1287,30 @@ deferInit("chunk-e6aww6q8.js:342327", () => {
     ...[],
   ]);
 });
-//@ chunk-e6aww6q8.js:342471-342532 facade-majority
-function isEphemeralToolProgress(dataType) {
-  return typeof dataType === "string" && (EPHEMERAL_PROGRESS_TYPES.has(dataType) || false);
+//@ chunk-5xgkngpb.js:344062-344147 facade-majority
+function isEphemeralToolProgress(type) {
+  return (
+    typeof type === "string" &&
+    (EPHEMERAL_PROGRESS_TYPES.has(type) || (codeModeAccepted() && type === "repl_tool_call"))
+  );
 }
-//@ chunk-e6aww6q8.js:342532-342589 facade-majority
+//@ chunk-5xgkngpb.js:344147-344204 facade-majority
 function getMaterializedSessionFile() {
   return currentTranscriptStore().project?.sessionFilePath ?? null;
 }
-//@ chunk-e6aww6q8.js:342589-342616 facade-majority
+//@ chunk-5xgkngpb.js:344204-344231 facade-majority
 function locateMaterializedSessionFile() {
   return getMaterializedSessionFile();
 }
-//@ chunk-e6aww6q8.js:342616-342650 facade-majority
+//@ chunk-5xgkngpb.js:344231-344265 facade-majority
 function hasMaterializedSessionFile() {
   return getMaterializedSessionFile() !== null;
 }
-//@ chunk-e6aww6q8.js:342650-342720 facade-majority
+//@ chunk-5xgkngpb.js:344265-344335 facade-majority
 function hasRecordedUserPrompt() {
   return currentTranscriptStore().project?.currentSessionLastPrompt !== undefined;
 }
-//@ chunk-e6aww6q8.js:342720-342802 facade-majority (2.1.88 match: getErrorsPath, 1)
+//@ chunk-5xgkngpb.js:344335-344417 facade-majority (2.1.88 match: getErrorsPath, 1)
 /**
  * 某会话的转录路径：当前会话返回已绑定的会话文件，否则 <当前项目目录>/<sessionId>.jsonl。
  */
@@ -1186,21 +1319,15 @@ function getTranscriptPathForSession(sessionId) {
   let projectDir = resolveProjectDir();
   return join(projectDir, `${sessionId}.jsonl`);
 }
-//@ chunk-e6aww6q8.js:342802-342831 facade-majority
+//@ chunk-5xgkngpb.js:344417-344446 facade-majority
 function locateTranscriptForSession(sessionId) {
   return getTranscriptPathForSession(sessionId);
 }
-//@ chunk-e6aww6q8.js:342831-342881 facade-majority
-var MAX_TRANSCRIPT_READ_BYTES = 52428800;
-var INDEX_HEAD_SCAN_BYTES = 256;
-var INDEX_BOUNDARY_SCAN_BYTES = 4096;
-var INDEX_LAST_PROMPT_SCAN_BYTES = 1024;
-var LAST_PROMPT_PREFIX_SCAN_BYTES = 64;
-//@ chunk-e6aww6q8.js:342881-342943 facade-majority (2.1.88 match: getAgentMetadataPath, 1)
+//@ chunk-5xgkngpb.js:344496-344558 facade-majority (2.1.88 match: getAgentMetadataPath, 1)
 function getAgentMetadataPath(agentId) {
   return getAgentTranscriptPath(agentId).replace(/\.jsonl$/, ".meta.json");
 }
-//@ chunk-e6aww6q8.js:342943-343074 facade-majority
+//@ chunk-5xgkngpb.js:344558-344715 facade-majority
 var RESERVED_AGENT_METADATA_FIELDS = [
   "isObserver",
   "observerStopped",
@@ -1208,8 +1335,13 @@ var RESERVED_AGENT_METADATA_FIELDS = [
   "armingPermissionMode",
   "revivedAt",
 ];
-var AGENT_METADATA_FIELDS = [...RESERVED_AGENT_METADATA_FIELDS, "restartResumes", "model"];
-//@ chunk-e6aww6q8.js:343074-343475 facade-majority (2.1.88 match: readAgentMetadata, 0.393)
+var AGENT_METADATA_FIELDS = [
+  ...RESERVED_AGENT_METADATA_FIELDS,
+  "restartResumes",
+  "restartResumesSetBackBy",
+  "model",
+];
+//@ chunk-5xgkngpb.js:344715-345116 facade-majority (2.1.88 match: readAgentMetadata, 0.394)
 async function readAgentMetadataAtPath(path, storage, isAbsent = isFsInaccessible) {
   if (isStorageV5Enabled() && storage !== undefined) {
     let path_2 = keyFromMetaPath(path);
@@ -1234,7 +1366,7 @@ async function readAgentMetadataAtPath(path, storage, isAbsent = isFsInaccessibl
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:343475-345781 layout
+//@ chunk-5xgkngpb.js:345116-347556 layout
 /**
  * 写子代理元数据侧车 agent-<id>.meta.json（agentType、observer 状态等），已有内容时合并。
  */
@@ -1312,7 +1444,10 @@ async function persistAgentMetadata(path, metadata, sessionId, storage, requireC
       ...(merged.toolUseId && {
         toolUseId: merged.toolUseId,
       }),
-      ...false,
+      ...(codeModeAccepted() &&
+        merged.enclosingToolUseId && {
+          enclosingToolUseId: merged.enclosingToolUseId,
+        }),
       ...(merged.parentAgentId && {
         parentAgentId: merged.parentAgentId,
       }),
@@ -1351,6 +1486,9 @@ async function persistAgentMetadata(path, metadata, sessionId, storage, requireC
       }),
       ...(merged.effort && {
         effort: merged.effort,
+      }),
+      ...(merged.pickedEffortModel && {
+        pickedEffortModel: merged.pickedEffortModel,
       }),
       ...(merged.permissionMode && {
         permissionMode: merged.permissionMode,
@@ -1395,7 +1533,7 @@ async function persistAgentMetadata(path, metadata, sessionId, storage, requireC
         },
       );
 }
-//@ chunk-e6aww6q8.js:345781-345866 facade-majority
+//@ chunk-5xgkngpb.js:347556-347641 facade-majority
 async function writeAgentMetadata(agentId, metadata, storage, requireComplete = false) {
   let sessionId = pinSessionId(getSessionId());
   let path = getAgentMetadataPath(agentId);
@@ -1403,7 +1541,7 @@ async function writeAgentMetadata(agentId, metadata, storage, requireComplete = 
     persistAgentMetadata(path, metadata, sessionId, storage, requireComplete),
   );
 }
-//@ chunk-e6aww6q8.js:345866-345947 facade-majority
+//@ chunk-5xgkngpb.js:347641-347722 facade-majority
 async function updateAgentMetadata(agentId, patch, storageV5, isAbsent) {
   let sessionId = pinSessionId(getSessionId());
   let agentMetadataPath = getAgentMetadataPath(agentId);
@@ -1411,7 +1549,7 @@ async function updateAgentMetadata(agentId, patch, storageV5, isAbsent) {
     mergeAgentMetadataUnderLock(agentMetadataPath, patch, sessionId, storageV5, isAbsent),
   );
 }
-//@ chunk-e6aww6q8.js:345947-346187 facade-majority
+//@ chunk-5xgkngpb.js:347722-347962 facade-majority
 async function mergeAgentMetadataUnderLock(path, patch, sessionId, storage, isAbsent, fallback) {
   let existing = (await readAgentMetadataAtPath(path, storage, isAbsent)) ?? fallback;
   if (!existing && patch.agentType === undefined) {
@@ -1427,14 +1565,14 @@ async function mergeAgentMetadataUnderLock(path, patch, sessionId, storage, isAb
   await persistAgentMetadata(path, merged, sessionId, storage);
   return true;
 }
-//@ chunk-e6aww6q8.js:346187-346250 layout
+//@ chunk-5xgkngpb.js:347962-348025 layout
 function canPersistAgentMetadata(agentMetadataPath, storage) {
   return (
     !isDiskless() ||
     (isStorageV5Enabled() && storage !== undefined && keyFromMetaPath(agentMetadataPath) !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:346250-346497 facade-majority
+//@ chunk-5xgkngpb.js:348025-348272 facade-majority
 function landAgentStop(agentId, field, apply, storage, options) {
   return (async () => {
     let sessionId = pinSessionId(getSessionId());
@@ -1464,7 +1602,7 @@ function landAgentStop(agentId, field, apply, storage, options) {
     );
   })().catch(logError);
 }
-//@ chunk-e6aww6q8.js:346497-346646 facade-majority
+//@ chunk-5xgkngpb.js:348272-348421 facade-majority
 function landStoppedByUser(agentId, agentType, storage) {
   return landAgentStop(
     agentId,
@@ -1490,26 +1628,26 @@ function landStoppedByUser(agentId, agentType, storage) {
     storage,
   );
 }
-//@ chunk-e6aww6q8.js:346646-346695 facade-majority
+//@ chunk-5xgkngpb.js:348421-348470 facade-majority
 async function hasAgentStopSibling(agentId, storage, storageV5) {
   return stopSiblingExistsAt(getAgentMetadataPath(agentId), storage, storageV5);
 }
-//@ chunk-e6aww6q8.js:346695-346743 facade-majority
+//@ chunk-5xgkngpb.js:348470-348518 facade-majority
 async function clearAgentStopSibling(agentId, storage, storageV5) {
   await setAgentTranscriptSubdir_2(getAgentMetadataPath(agentId), storage, storageV5);
 }
-//@ chunk-e6aww6q8.js:346743-346791 facade-majority
+//@ chunk-5xgkngpb.js:348518-348566 facade-majority
 async function readAgentMetadata(agentId, storageV5, isAbsent) {
   return readAgentMetadataAtPath(getAgentMetadataPath(agentId), storageV5, isAbsent);
 }
-//@ chunk-e6aww6q8.js:346791-347245 layout
+//@ chunk-5xgkngpb.js:348566-349020 layout
 /**
  * REMOTE_TASK_ID_PATTERN：远程任务 id 格式；REMOTE_TASK_ENTRY_SCHEMA：远程任务条目 schema（同一声明共 2 个绑定）。
  */
 var REMOTE_TASK_ID_PATTERN_2; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var REMOTE_TASK_ID_PATTERN;
 var REMOTE_TASK_ENTRY_SCHEMA;
-deferInit("chunk-e6aww6q8.js:346791", () => {
+deferInit("chunk-5xgkngpb.js:348566", () => {
   REMOTE_TASK_ID_PATTERN_2 = /^r[0-9a-z]{8}$/;
   REMOTE_TASK_ID_PATTERN = /^(?!\.\.?$)[^\\/?#%\x00-\x20\x7f]+$/;
   REMOTE_TASK_ENTRY_SCHEMA = DoctorLazy(() =>
@@ -1531,16 +1669,16 @@ deferInit("chunk-e6aww6q8.js:346791", () => {
     }).passthrough(),
   );
 });
-//@ chunk-e6aww6q8.js:347245-347304 fingerprint (2.1.88 match: getRemoteAgentsDir, 1)
+//@ chunk-5xgkngpb.js:349020-349079 fingerprint (2.1.88 match: getRemoteAgentsDir, 1)
 function getRemoteAgentsDir() {
   let projectDir = resolveSessionProjectDir();
   return join(projectDir, getSessionId(), "remote-agents");
 }
-//@ chunk-e6aww6q8.js:347304-347367 fingerprint (2.1.88 match: getRemoteAgentMetadataPath, 1)
+//@ chunk-5xgkngpb.js:349079-349142 fingerprint (2.1.88 match: getRemoteAgentMetadataPath, 1)
 function getRemoteAgentMetadataPath(taskId) {
   return join(getRemoteAgentsDir(), `remote-agent-${taskId}.meta.json`);
 }
-//@ chunk-e6aww6q8.js:347367-347694 facade-majority (2.1.88 match: writeRemoteAgentMetadata, 0.137)
+//@ chunk-5xgkngpb.js:349142-349469 facade-majority (2.1.88 match: writeRemoteAgentMetadata, 0.137)
 async function writeRemoteAgentMetadata(taskId, metadata, storageV5) {
   let path = getRemoteAgentMetadataPath(taskId);
   if (!isDiskless())
@@ -1563,7 +1701,7 @@ async function writeRemoteAgentMetadata(taskId, metadata, storageV5) {
   assertDiskWritable("remote_agent_metadata", path);
   await writeFile(path, jsonStringify(metadata));
 }
-//@ chunk-e6aww6q8.js:347694-347984 facade-majority
+//@ chunk-5xgkngpb.js:349469-349759 facade-majority
 async function deleteRemoteAgentMetadata(taskId, storageV5) {
   let remoteAgentMetadataPath = getRemoteAgentMetadataPath(taskId);
   if (isStorageV5Enabled() && storageV5 !== undefined) {
@@ -1586,7 +1724,7 @@ async function deleteRemoteAgentMetadata(taskId, storageV5) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:347984-348089 facade-majority (2.1.88 match: removeRemoteAgentMetadata, 1)
+//@ chunk-5xgkngpb.js:349759-349864 facade-majority (2.1.88 match: removeRemoteAgentMetadata, 1)
 /**
  * 删除远程代理任务的本地元数据（失败只记日志）。
  */
@@ -1597,7 +1735,7 @@ async function removeRemoteAgentMetadata(taskId, storageV5) {
     logForDebugging(`removeRemoteAgentMetadata failed: ${String(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:348089-348779 facade-majority (2.1.88 match: listRemoteAgentMetadata, 0.645)
+//@ chunk-5xgkngpb.js:349864-350554 facade-majority (2.1.88 match: listRemoteAgentMetadata, 0.645)
 async function listRemoteAgentMetadata(storage) {
   let dir = getRemoteAgentsDir();
   if (isStorageV5Enabled() && storage !== undefined) {
@@ -1638,7 +1776,7 @@ async function listRemoteAgentMetadata(storage) {
   }
   return results;
 }
-//@ chunk-e6aww6q8.js:348779-349705 layout
+//@ chunk-5xgkngpb.js:350554-351480 layout
 async function listRemoteAgentMetadataViaStorage(storage, scope) {
   let keys = [];
   let allPages = await readAllPages(
@@ -1693,7 +1831,7 @@ async function listRemoteAgentMetadataViaStorage(storage, scope) {
   });
   return results;
 }
-//@ chunk-e6aww6q8.js:349705-349820 facade-majority (2.1.88 match: sessionIdExists, 1)
+//@ chunk-5xgkngpb.js:351480-351595 facade-majority (2.1.88 match: sessionIdExists, 1)
 /**
  * 当前项目目录下是否存在 <sessionId>.jsonl。
  */
@@ -1709,15 +1847,15 @@ function sessionIdExists(sessionId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:349820-349854 facade-majority (2.1.88 match: getEnvironmentForGrowthBook, 1)
+//@ chunk-5xgkngpb.js:351595-351629 facade-majority (2.1.88 match: getEnvironmentForGrowthBook, 1)
 function getNodeEnv() {
   return "production";
 }
-//@ chunk-e6aww6q8.js:349854-349888 facade-majority
+//@ chunk-5xgkngpb.js:351629-351663 facade-majority
 function isTranscriptPersistenceDisabled() {
   return getPersistenceSuppressionCause() !== null;
 }
-//@ chunk-e6aww6q8.js:349888-350115 facade-majority
+//@ chunk-5xgkngpb.js:351663-351890 facade-majority
 function getPersistenceSuppressionCause() {
   if (getNodeEnv() === "test" && !env.TEST_ENABLE_SESSION_PERSISTENCE) return "test_env";
   if (isSessionPersistenceDisabled()) return "explicit_disable";
@@ -1725,7 +1863,7 @@ function getPersistenceSuppressionCause() {
   if (isNestedInteractiveClaudeSession()) return "nested_marker";
   return null;
 }
-//@ chunk-e6aww6q8.js:350115-350229 facade-majority
+//@ chunk-5xgkngpb.js:351890-352004 facade-majority
 function transcriptStamp(sessionId) {
   return {
     sessionKind: envSessionKind(),
@@ -1736,30 +1874,26 @@ function transcriptStamp(sessionId) {
     version: CLI_VERSION,
   };
 }
-//@ chunk-e6aww6q8.js:350229-350311 layout
+//@ chunk-5xgkngpb.js:352004-352086 placement
 function transcriptVersion(entry) {
   return "version" in entry && typeof entry.version === "string" ? entry.version : undefined;
 }
-//@ chunk-e6aww6q8.js:350311-350371 layout
-function transcriptVersionOrDefault(entry) {
-  return transcriptVersion(entry) ?? ("sessionId" in entry ? undefined : CLI_VERSION);
-}
-//@ chunk-e6aww6q8.js:350371-350415 facade-majority
+//@ chunk-5xgkngpb.js:352146-352190 facade-majority
 function withVersionToRecord(entry) {
   return {
     ...entry,
     version: transcriptVersionOrDefault(entry),
   };
 }
-//@ chunk-e6aww6q8.js:350415-350447 facade-majority
+//@ chunk-5xgkngpb.js:352190-352222 facade-majority (2.1.88 match: getUserType, 0.74)
 function getUserType() {
   return "external";
 }
-//@ chunk-e6aww6q8.js:350447-350504 layout
+//@ chunk-5xgkngpb.js:352222-352279 layout
 function entrypointEnv() {
   return process.env.CLAUDE_CODE_ENTRYPOINT;
 }
-//@ chunk-e6aww6q8.js:350504-350646 layout
+//@ chunk-5xgkngpb.js:352279-352421 layout
 async function transcriptContextFields() {
   let entrypoint = entrypointEnv();
   return {
@@ -1770,13 +1904,9 @@ async function transcriptContextFields() {
     entrypoint: entrypoint !== undefined && PROGRAMMATIC_ENTRYPOINTS.has(entrypoint) ? undefined : entrypoint,
   };
 }
-//@ chunk-e6aww6q8.js:350646-350670 facade-majority
-function isCustomTitleEnabled() {
-  return true;
-}
-//@ chunk-e6aww6q8.js:350670-350697 layout
+//@ chunk-5xgkngpb.js:352421-352448 layout
 var SESSION_ALIASES_DIR = ".session-aliases";
-//@ chunk-e6aww6q8.js:350697-350904 layout
+//@ chunk-5xgkngpb.js:352448-352655 layout
 function sessionAliasStorageTarget(projectDir, storage) {
   if (!isStorageV5Enabled() || storage === undefined || dirname(projectDir) !== getProjectsDir()) return;
   let projectKey = basename(projectDir);
@@ -1793,7 +1923,7 @@ function sessionAliasStorageTarget(projectDir, storage) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:350904-351398 layout
+//@ chunk-5xgkngpb.js:352655-353149 layout
 /**
  * 经存储后端把会话别名追加到别名记录（已存在则跳过）；目录不存在时先建作用域再重试，失败只记日志。
  */
@@ -1845,7 +1975,7 @@ async function appendSessionAliasViaStorage(target, sessionProjectDir, projectDi
       level: "error",
     });
 }
-//@ chunk-e6aww6q8.js:351398-352397 facade-majority
+//@ chunk-5xgkngpb.js:353149-354148 facade-majority
 async function recordSessionAlias(projectPath, storage) {
   if (isTranscriptPersistenceDisabled()) return;
   let realPath = projectPath;
@@ -1935,7 +2065,7 @@ async function recordSessionAlias(projectPath, storage) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:352397-352965 layout
+//@ chunk-5xgkngpb.js:354148-354716 layout
 /**
  * 读取项目目录下的会话别名列表：优先经存储后端，否则读本地文件，去重并忽略空行；读失败返回空列表。
  */
@@ -1950,7 +2080,7 @@ async function readSessionAliases(projectPath, storage) {
       }
       let item = text.value.items[0];
       return item.found
-        ? uniq(
+        ? normalizeCaseForComparison_2(
             item.value
               .split(
                 `
@@ -1967,7 +2097,7 @@ async function readSessionAliases(projectPath, storage) {
   if (aliasesPath === undefined) return [];
   try {
     let file = await readFile(aliasesPath, "utf8");
-    return uniq(
+    return normalizeCaseForComparison_2(
       file
         .split(
           `
@@ -1983,7 +2113,7 @@ async function readSessionAliases(projectPath, storage) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:352965-355234 layout
+//@ chunk-5xgkngpb.js:354716-356985 layout
 /**
  * 会话转录存储的进程级状态：当前 Project、写入健康、退出重盖章、本地清理开关、工具结果副本方式、会话消息 uuid 缓存（含无文件恢复的预置）、迁移期间暂存的追加，以及各种信号。
  */
@@ -2102,21 +2232,21 @@ class TranscriptStore {
     this.primeSessionMessagesCache(sessionId, set);
   }
 }
-//@ chunk-e6aww6q8.js:355234-355283 facade-majority
+//@ chunk-5xgkngpb.js:356985-357034 facade-majority
 var transcriptStores; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:355234", () => {
+deferInit("chunk-5xgkngpb.js:356985", () => {
   transcriptStores = new SessionRootSlot(() => ({
     current: new TranscriptStore(() => getSessionId()),
   }));
 });
-//@ chunk-e6aww6q8.js:355283-355324 layout
+//@ chunk-5xgkngpb.js:357034-357075 layout
 /**
  * currentTranscriptStore：当前转录存储。
  */
 function currentTranscriptStore() {
   return transcriptStores.of(getRootSession()).current;
 }
-//@ chunk-e6aww6q8.js:355324-355411 layout
+//@ chunk-5xgkngpb.js:357075-357162 layout
 class RestoreClaim {
   installed = false;
   claim() {
@@ -2125,24 +2255,24 @@ class RestoreClaim {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:355411-355438 facade-majority
+//@ chunk-5xgkngpb.js:357162-357189 facade-majority
 var transcriptExitHooksLatches; // deferred: uses RestoreClaim of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:355411", () => {
+deferInit("chunk-5xgkngpb.js:357162", () => {
   transcriptExitHooksLatches = new HostScoped(() => new RestoreClaim());
 });
-//@ chunk-e6aww6q8.js:355438-355478 facade-majority
+//@ chunk-5xgkngpb.js:357189-357229 facade-majority
 function getTranscriptWriterHealth() {
   return currentTranscriptStore().writerHealth;
 }
-//@ chunk-e6aww6q8.js:355478-355528 facade-majority
+//@ chunk-5xgkngpb.js:357229-357279 facade-majority
 function getTranscriptWriteFailureSeq() {
   return currentTranscriptStore().writerHealth.failureSeq;
 }
-//@ chunk-e6aww6q8.js:355528-355593 facade-majority
+//@ chunk-5xgkngpb.js:357279-357344 facade-majority
 function getTranscriptWriterDegraded() {
   return currentTranscriptStore().writerHealth.degradedStore.getState();
 }
-//@ chunk-e6aww6q8.js:355593-356221 facade-majority
+//@ chunk-5xgkngpb.js:357344-357969 facade-majority
 function reAppendSessionMetadataAtExit() {
   if (isDiagLogging() && !isInDiagScope()) return;
   if (isDiskless()) return;
@@ -2177,31 +2307,31 @@ function reAppendSessionMetadataAtExit() {
       if (entries !== undefined) store.project?.appendOwedEntryAtExit(entries);
     } catch {}
 }
-//@ chunk-e6aww6q8.js:356221-356319 facade-majority
+//@ chunk-5xgkngpb.js:357969-358067 facade-majority
 function registerTranscriptExitReStamp(provider) {
   currentTranscriptStore().exitReStampProviders.add(provider);
   return () => {
     currentTranscriptStore().exitReStampProviders.delete(provider);
   };
 }
-//@ chunk-e6aww6q8.js:356319-356397 facade-majority
+//@ chunk-5xgkngpb.js:358067-358145 facade-majority
 function registerTranscriptExitDrain(drain) {
   currentTranscriptStore().exitDrains.add(drain);
   return () => {
     currentTranscriptStore().exitDrains.delete(drain);
   };
 }
-//@ chunk-e6aww6q8.js:356397-356509 facade-majority
+//@ chunk-5xgkngpb.js:358145-358257 facade-majority
 function registerForeignTranscriptExitReStamp(collectExitIntentEntries) {
   currentTranscriptStore().foreignExitReStampProviders.add(collectExitIntentEntries);
   return () => {
     currentTranscriptStore().foreignExitReStampProviders.delete(collectExitIntentEntries);
   };
 }
-//@ chunk-e6aww6q8.js:356509-356527 layout
+//@ chunk-5xgkngpb.js:358257-358275 layout
 var MAX_RELOCATION_RETRIES = 500;
 var RELOCATION_BACKOFF = 3;
-//@ chunk-e6aww6q8.js:356527-357248 facade-majority
+//@ chunk-5xgkngpb.js:358275-358995 facade-majority
 async function flushSessionStorageAtExit() {
   if (isDiagLogging() && !isInDiagScope()) return;
   let store = currentTranscriptStore();
@@ -2245,7 +2375,7 @@ async function flushSessionStorageAtExit() {
       );
   }
 }
-//@ chunk-e6aww6q8.js:357248-357431 callgraph-witnessed (2.1.88 match: getProject, 0)
+//@ chunk-5xgkngpb.js:358995-359178 callgraph-witnessed (2.1.88 match: getProject, 0)
 /**
  * 取当前宿主的会话存储单例 Project；首次创建时注册退出钩子，进程退出前把写队列刷到磁盘。
  */
@@ -2261,68 +2391,68 @@ function getProject() {
   }
   return store.project;
 }
-//@ chunk-e6aww6q8.js:357431-357479 facade-majority (2.1.88 match: resetProjectFlushStateForTesting, 0.771)
+//@ chunk-5xgkngpb.js:359178-359226 facade-majority (2.1.88 match: resetProjectFlushStateForTesting, 0.772)
 function resetProjectFlushStateForTesting() {
   currentTranscriptStore().project?._resetFlushState();
 }
-//@ chunk-e6aww6q8.js:357479-357531 facade-majority
+//@ chunk-5xgkngpb.js:359226-359278 facade-majority
 function resetProjectForTesting() {
   transcriptStores.of(getRootSession()).current = new TranscriptStore(() => getSessionId());
 }
-//@ chunk-e6aww6q8.js:357531-357603 facade-majority
+//@ chunk-5xgkngpb.js:359278-359350 facade-majority
 function compactTranscriptForTesting(messages, options, args, thirdArg, fourthArg) {
   return getProject().performCompactTranscript(messages, options, args, thirdArg, fourthArg);
 }
-//@ chunk-e6aww6q8.js:357603-357652 facade-majority
+//@ chunk-5xgkngpb.js:359350-359399 facade-majority
 function requestCompactForTesting(reason) {
   getProject().requestCompact(reason, undefined, true);
 }
-//@ chunk-e6aww6q8.js:357652-357691 facade-majority
+//@ chunk-5xgkngpb.js:359399-359438 facade-majority
 function setSessionFileForTesting(path) {
   getProject().setSessionFile(path);
 }
-//@ chunk-e6aww6q8.js:357691-357729 facade-majority
+//@ chunk-5xgkngpb.js:359438-359476 facade-majority
 function transcriptTailForHydrateForTesting(a, b, c) {
   return readHydrateTail(a, b, c);
 }
-//@ chunk-e6aww6q8.js:357729-357763 facade-majority
+//@ chunk-5xgkngpb.js:359476-359510 facade-majority
 function readSessionAliasesForTesting(projectPath, storage) {
   return readSessionAliases(projectPath, storage);
 }
-//@ chunk-e6aww6q8.js:357763-357838 facade-majority
+//@ chunk-5xgkngpb.js:359510-359585 facade-majority
 async function reAppendSessionMetadataAsyncForTesting(maybe = true, options) {
   await getProject().reAppendSessionMetadataAsync(false, maybe, options);
 }
-//@ chunk-e6aww6q8.js:357838-357901 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
+//@ chunk-5xgkngpb.js:359585-359648 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function appendEntryToSessionForTesting(entry, cwd, options) {
   await getProject().appendEntry(entry, cwd, undefined, options);
 }
-//@ chunk-e6aww6q8.js:357901-357944 facade-majority
+//@ chunk-5xgkngpb.js:359648-359691 facade-majority
 function getCurrentSessionFile() {
   return getProject().sessionFilePath;
 }
-//@ chunk-e6aww6q8.js:357944-357972 facade-majority
+//@ chunk-5xgkngpb.js:359691-359719 facade-majority
 function locateCurrentSessionFile() {
   return getCurrentSessionFile();
 }
-//@ chunk-e6aww6q8.js:357972-358023 facade-majority
+//@ chunk-5xgkngpb.js:359719-359770 facade-majority
 function currentSessionFileIsFor(path) {
   return isOwnTranscriptFile(path, getProject().sessionFilePath);
 }
-//@ chunk-e6aww6q8.js:358023-358088 facade-majority
+//@ chunk-5xgkngpb.js:359770-359835 facade-majority
 function onSessionFileMaterialized(listener) {
   return currentTranscriptStore().sessionFileMaterialized.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:358088-358139 facade-majority
+//@ chunk-5xgkngpb.js:359835-359886 facade-majority
 function emitSessionFileMaterializedForTesting() {
   currentTranscriptStore().sessionFileMaterialized.emit();
 }
-//@ chunk-e6aww6q8.js:358139-358196 facade-majority (2.1.88 match: setInternalEventWriter, 1)
+//@ chunk-5xgkngpb.js:359886-359943 facade-majority (2.1.88 match: setInternalEventWriter, 1)
 function setInternalEventWriter(writer, mirrorWriter) {
   getProject().setInternalEventWriter(writer, mirrorWriter);
   registerWorkerEventMirror();
 }
-//@ chunk-e6aww6q8.js:358196-358307 layout
+//@ chunk-5xgkngpb.js:359943-360054 layout
 function registerWorkerEventMirror() {
   setStoragePort({
     mirror: (event, payload, { sessionId, agentId }) =>
@@ -2333,27 +2463,29 @@ function registerWorkerEventMirror() {
     readAgent: readAgentWorkerEvents,
   });
 }
-//@ chunk-e6aww6q8.js:358307-358354 facade-majority
+//@ chunk-5xgkngpb.js:360054-360101 facade-majority
 function clearInternalEventWriter() {
   getProject().clearInternalEventWriter();
 }
-//@ chunk-e6aww6q8.js:358354-358399 facade-majority
+//@ chunk-5xgkngpb.js:360101-360146 facade-majority
 function sealTranscriptAppendsForShutdown() {
   getProject().sealAppendsForShutdown();
 }
-//@ chunk-e6aww6q8.js:358399-358433 facade-majority
+//@ chunk-5xgkngpb.js:360146-360180 facade-majority
 function addSessionMirror(mirror) {
   getProject().addMirror(mirror);
 }
-//@ chunk-e6aww6q8.js:358433-358472 facade-majority
+//@ chunk-5xgkngpb.js:360180-360219 facade-majority
 function hasSessionMirror() {
   return getProject().hasMirror();
 }
-//@ chunk-e6aww6q8.js:358472-358511 facade-majority
+//@ chunk-5xgkngpb.js:360219-360258 facade-majority
 function fireSessionMirror(path, records) {
   getProject().fireMirror(path, records);
 }
-//@ chunk-e6aww6q8.js:358511-358689 facade-majority (2.1.88 match: setInternalEventReader, 0.674)
+//@ chunk-5xgkngpb.js:360258-360276 layout
+var MAX_AGENT_EVENTS_READ_BYTES = 536870912;
+//@ chunk-5xgkngpb.js:360276-360454 facade-majority (2.1.88 match: setInternalEventReader, 0.674)
 function setInternalEventReader(reader, subagentReader, agentEventReader) {
   getProject().setInternalEventReader(reader);
   getProject().setInternalSubagentEventReader(subagentReader);
@@ -2361,7 +2493,7 @@ function setInternalEventReader(reader, subagentReader, agentEventReader) {
   getProject().setAgentWorkerEventReader(agentEventReader ?? null);
   registerWorkerEventMirror();
 }
-//@ chunk-e6aww6q8.js:358689-359050 facade-majority
+//@ chunk-5xgkngpb.js:360454-360815 facade-majority
 async function readAgentWorkerEvents(agentId, signal) {
   let project = getProject();
   let agentWorkerEventReader = project.getAgentWorkerEventReader();
@@ -2374,29 +2506,29 @@ async function readAgentWorkerEvents(agentId, signal) {
   if (filtered.length === 0 && result.events.length > 0) return null;
   return filtered.map((event) => event.payload);
 }
-//@ chunk-e6aww6q8.js:359050-359100 facade-majority
+//@ chunk-5xgkngpb.js:360815-360865 facade-majority
 function setAgentMetadataInStreamGate(keepsAgentMetadataInStream) {
   getProject().keepsAgentMetadataInStream = keepsAgentMetadataInStream;
 }
-//@ chunk-e6aww6q8.js:359100-359156 facade-majority
+//@ chunk-5xgkngpb.js:360865-360921 facade-majority
 function keepsAgentMetadataInStream() {
   return getProject().keepsAgentMetadataInStream();
 }
-//@ chunk-e6aww6q8.js:359156-359210 facade-majority
+//@ chunk-5xgkngpb.js:360921-360975 facade-majority
 function hasWrittenAgentTranscript(agentId) {
   return getProject().hasWrittenAgentLocally(agentId);
 }
-//@ chunk-e6aww6q8.js:359210-359258 facade-majority
+//@ chunk-5xgkngpb.js:360975-361023 facade-majority
 function isAgentTranscriptOverBound(agentId) {
   return getProject().isAgentOverBound(agentId);
 }
-//@ chunk-e6aww6q8.js:359258-359302 facade-majority (2.1.88 match: setRemoteIngressUrlForTesting, 1)
+//@ chunk-5xgkngpb.js:361023-361067 facade-majority (2.1.88 match: setRemoteIngressUrlForTesting, 1)
 function setRemoteIngressUrlForTesting(url) {
   getProject().setRemoteIngressUrl(url);
 }
-//@ chunk-e6aww6q8.js:359302-359313 layout
+//@ chunk-5xgkngpb.js:361067-361078 layout
 var REPLAY_INDEX_SCAN_LIMIT = 10;
-//@ chunk-e6aww6q8.js:359313-360206 facade-majority
+//@ chunk-5xgkngpb.js:361078-361978 facade-majority
 async function seedReplayIndex(path, resume) {
   let index = new RequestBlobStore();
   if (isDiskless())
@@ -2459,11 +2591,11 @@ async function seedReplayIndex(path, resume) {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:360206-360284 layout
+//@ chunk-5xgkngpb.js:361978-362056 layout
 function hasToolResultMessage(content) {
   return Array.isArray(content) && content.some((block) => block?.type === "tool_result");
 }
-//@ chunk-e6aww6q8.js:360284-407532 fingerprint (2.1.88 match: Project, 0.319)
+//@ chunk-5xgkngpb.js:362056-410326 fingerprint (2.1.88 match: Project, 0.315)
 /**
  * 会话转录写入器：按目标文件维护写队列，每 100ms（FLUSH_INTERVAL_MS）批量 flush，单块不超过 100MB；会话文件在第一条 user/assistant/system 消息时才创建；同时管理标题、tag、agent 名等会话元数据并在尾部重写（reAppendSessionMetadata），支持远程镜像、storage v5 后端与转录迁移。
  */
@@ -2481,6 +2613,7 @@ class Project {
   currentSessionAgentSetting;
   currentSessionMode;
   currentSessionPermissionMode;
+  currentSessionOwner;
   currentSessionIsolationLatch;
   currentSessionDevModsFolder;
   currentSessionMemoryModeStamps = [];
@@ -3010,7 +3143,8 @@ ${key2 ?? ""}`,
     if (!plan) return;
     try {
       if (plan.entries.length > 0) this.sealTornTailSync(plan.sessionFile);
-      for (let entry of plan.entries) writeTranscriptMetadataSync(plan.sessionFile, entry);
+      for (let entry of plan.entries)
+        (storageV5 ? appendEntrySync : writeTranscriptMetadataSync)(plan.sessionFile, entry);
     } catch (error) {
       for (let stamp of plan.stamps) stamp.inFlight = false;
       throw error;
@@ -3023,7 +3157,7 @@ ${key2 ?? ""}`,
   appendOwedEntryAtExit(entry) {
     if (!this.sessionFile) return;
     this.sealTornTailSync(this.sessionFile);
-    writeTranscriptMetadataSync(this.sessionFile, entry);
+    appendEntrySync(this.sessionFile, entry);
   }
   exitReStampSource() {
     return this.sessionFileAppendSource;
@@ -3041,7 +3175,7 @@ ${key2 ?? ""}`,
       return;
     }
     try {
-      await this.reAppendSessionMetadataAsync(false, false, storageV5, false);
+      await this.reAppendSessionMetadataAsync(false, false, storageV5, false, true);
     } catch (error) {
       logReStampFailure("Exit re-stamp through the storage backend failed", error);
       return;
@@ -3083,14 +3217,17 @@ ${key2 ?? ""}`,
         try {
           let entry = exitReStampProvider();
           if (entry !== undefined) {
-            await appendToTranscriptFile(
-              sessionFile,
-              jsonStringify(entry) +
-                `
+            if (
+              (await appendToTranscriptFile(
+                sessionFile,
+                jsonStringify(entry) +
+                  `
 `,
-              storageV5,
-            );
-            this.fireMirror(sessionFile, [entry]);
+                storageV5,
+                true,
+              )) !== "skipped"
+            )
+              this.fireMirror(sessionFile, [entry]);
           }
         } catch (error) {
           logReStampFailure(
@@ -3137,6 +3274,7 @@ ${key2 ?? ""}`,
     onlyIfMissing = false,
     storageV5,
     checkSession = false,
+    verbatim = false,
   ) {
     let sessionFile = this.sessionFile;
     if (!sessionFile || this.storeFence !== undefined) return;
@@ -3153,8 +3291,9 @@ ${key2 ?? ""}`,
     let plan = this.planReAppendSessionMetadata(fileRange, skipTitles, onlyIfMissing, storageV5);
     if (!plan || plan.entries.length === 0) return;
     this.directAppendsInFlight++;
+    let written;
     try {
-      await appendToTranscriptFile(plan.sessionFile, jsonlJoin(plan.entries), storageV5);
+      written = await appendToTranscriptFile(plan.sessionFile, jsonlJoin(plan.entries), storageV5, verbatim);
     } catch (error) {
       if (error instanceof Error && getStorageErrorCause(error) !== undefined) this.storeFence = error;
       for (let stamp of plan.stamps) stamp.inFlight = false;
@@ -3162,11 +3301,12 @@ ${key2 ?? ""}`,
     } finally {
       this.directAppendsInFlight--;
     }
+    let didWrite = written !== "skipped";
     for (let stamp of plan.stamps) {
-      stamp.written = true;
+      stamp.written = didWrite;
       stamp.inFlight = false;
     }
-    this.fireMirror(plan.sessionFile, plan.entries);
+    if (didWrite) this.fireMirror(plan.sessionFile, plan.entries);
   }
   normalizeLastPrompt(text) {
     let trimmed = text
@@ -3299,6 +3439,22 @@ ${key2 ?? ""}`,
       entries.push({
         type: "permission-mode",
         permissionMode: this.currentSessionPermissionMode,
+        sessionId,
+      });
+    if (this.currentSessionCodeMode !== undefined)
+      entries.push({
+        type: "repl-mode",
+        replMode: this.currentSessionCodeMode,
+        ...(this.currentSessionReplTypedEvents === true && {
+          typedEvents: true,
+        }),
+        sessionId,
+      });
+    this.currentSessionOwner ??= ownStoredLoginOwner();
+    if (this.currentSessionOwner)
+      entries.push({
+        type: "session-owner",
+        ...this.currentSessionOwner,
         sessionId,
       });
     if (this.currentSessionIsolationLatch)
@@ -3604,7 +3760,7 @@ ${conversationToolsUsed.generation()}`;
           if (isByteViewUnsupportedError(readResult.error))
             return await removeTombstones(handle, key, uuid, {
               windowBytes: LITE_READ_BUF_SIZE,
-              pageBytes: TRANSCRIPT_PAGE_BYTES,
+              pageBytes: TOMBSTONE_PAGE_BYTES,
               maxReadBytes: MAX_TRANSCRIPT_READ_BYTES_2,
             });
           logForDebugging(`Tombstone removal abandoned: tail read failed (${readResult.error.code})`, {
@@ -3688,7 +3844,7 @@ ${conversationToolsUsed.generation()}`;
         ...(fromSeq !== undefined && {
           fromSeq,
         }),
-        maxBytes: TRANSCRIPT_PAGE_BYTES,
+        maxBytes: TOMBSTONE_PAGE_BYTES,
       });
       if (!records.ok) {
         logForDebugging(`Tombstone removal abandoned: paging failed (${records.error.code})`, {
@@ -4219,24 +4375,8 @@ ${conversationAtisLatch}`;
           );
         }
       }
-      if (!isForeign && this.sessionFile !== null && targetSessionId === getSessionId()) {
-        let conversationToolsUsed = getConversationToolsUsed();
-        let stamp = `${this.sessionFile}
-${conversationToolsUsed.generation()}`;
-        if (isSillyShoreGateOn() && conversationToolsUsed.size() > 0 && this.toolsUsedStamp !== stamp) {
-          await this.appendEntry(
-            {
-              type: "tools-used",
-              tools: conversationToolsUsed.names(),
-              sessionId: sessionId_2,
-            },
-            sessionId_2,
-            undefined,
-            bridge,
-          );
-          this.toolsUsedStamp = stamp;
-        }
-      }
+      if (!isForeign && targetSessionId === getSessionId())
+        await this.appendToolsUsedEntryIfGrown(sessionId_2, bridge);
       let wrote = false;
       for (let message of transcript) {
         let isBoundary = isCompactBoundaryMessage_3(message);
@@ -4410,7 +4550,7 @@ ${toolUseId}`)
   }
   async appendRequestReplayRecords(replayRecord) {
     if (!replayRecord.target.agentId && (this.sessionFile === null || this.awaitingFirstUserRow)) {
-      let shape = stripCacheControl_4(replayRecord.shape);
+      let shape = stripCacheControl_5(replayRecord.shape);
       let cacheControl = clone(replayRecord.request.cacheControl);
       let request = {
         ...replayRecord.request,
@@ -4450,7 +4590,7 @@ ${toolUseId}`)
           shapeHash: replayRecord.shapeHash,
           timestamp: request.timestamp,
           version: request.version,
-          shape: stripCacheControl_4(replayRecord.shape),
+          shape: stripCacheControl_5(replayRecord.shape),
         };
         if (Buffer.byteLength(jsonStringify(shapeRecord)) > MAX_SYNTHETIC_MESSAGE_BYTES) {
           this.oversizeReplayShapes.add(replayRecord.shapeHash);
@@ -4485,6 +4625,24 @@ ${toolUseId}`)
       );
       return "written";
     });
+  }
+  async appendToolsUsedEntryIfGrown(sessionId, storageV5) {
+    if (this.sessionFile === null) return;
+    let conversationToolsUsed = getConversationToolsUsed();
+    let stamp = `${this.sessionFile}
+${conversationToolsUsed.generation()}`;
+    if (!isSillyShoreGateOn() || conversationToolsUsed.size() === 0 || this.toolsUsedStamp === stamp) return;
+    await this.appendEntry(
+      {
+        type: "tools-used",
+        tools: conversationToolsUsed.names(),
+        sessionId,
+      },
+      sessionId,
+      undefined,
+      storageV5,
+    );
+    this.toolsUsedStamp = stamp;
   }
   async appendEntry(
     entry,
@@ -4554,7 +4712,7 @@ ${toolUseId}`)
       }
       transcriptPath = existingSessionFile;
     }
-    switch (ENTRY_APPEND_POLICY[entry.type]) {
+    switch (entry.type === "repl-mode" ? "always" : ENTRY_APPEND_POLICY[entry.type]) {
       case "always": {
         this.enqueueWrite(transcriptPath, entry, storageV5);
         return;
@@ -4902,7 +5060,9 @@ ${toolUseId}`,
     let now = Date.now();
     let outcome = "read_fail";
     let pageCount;
-    let eventCount;
+    let entryCount;
+    let bytesDecoded;
+    let overBoundBy;
     let errnoCode;
     let localProbe;
     try {
@@ -4921,7 +5081,12 @@ ${toolUseId}`,
       }
       let fetchResult = null;
       if (lastSyncedUuid !== undefined) {
-        fetchResult = await readEvents(agentId, abortSignal, lastSyncedUuid).catch((error) => {
+        fetchResult = await readEvents(
+          agentId,
+          abortSignal,
+          lastSyncedUuid,
+          MAX_AGENT_EVENTS_READ_BYTES,
+        ).catch((error) => {
           logError(error);
           return null;
         });
@@ -4937,11 +5102,25 @@ ${toolUseId}`,
               ? "not-current"
               : "current";
       }
-      if (localProbe !== "current" && !fetchResult?.anchorFallback)
-        fetchResult = await readEvents(agentId, abortSignal).catch((error) => {
+      if (localProbe !== "current" && !fetchResult?.anchorFallback) {
+        let firstResult = fetchResult;
+        fetchResult = await readEvents(
+          agentId,
+          abortSignal,
+          undefined,
+          verifyLocal ? MAX_AGENT_EVENTS_READ_BYTES : undefined,
+        ).catch((error) => {
           logError(error);
           return null;
         });
+        if (
+          fetchResult?.overBound &&
+          firstResult?.events.some(
+            (event) => event.session_agent_id === agentId && isConversationEntry(event.payload),
+          )
+        )
+          fetchResult = firstResult;
+      }
       if (fetchResult === null) {
         if (abortSignal?.aborted) {
           outcome = "aborted";
@@ -4950,8 +5129,10 @@ ${toolUseId}`,
         throw new AgentTranscriptFetchError("read_fail");
       }
       pageCount = fetchResult.stats?.pageCount;
-      if (fetchResult.overBound) {
+      bytesDecoded = fetchResult.stats?.bytesDecoded;
+      if (fetchResult.overBound && !verifyLocal) {
         outcome = "over_bound";
+        overBoundBy = fetchResult.overBoundBy;
         this.agentIdsOverBound.add(agentId);
         throw new AgentTranscriptFetchError("over_bound");
       }
@@ -4963,7 +5144,7 @@ ${toolUseId}`,
       let entries = fetchResult.events
         .filter((event) => event.session_agent_id === agentId)
         .map((event) => fillMissingTranscriptFields(event.payload, contextFields));
-      eventCount = entries.length;
+      entryCount = entries.length;
       if (entries.length === 0 && fetchResult.events.length > 0) {
         outcome = "unfiltered";
         throw new AgentTranscriptFetchError("unfiltered");
@@ -5011,9 +5192,11 @@ ${toolUseId}`,
         outcome =
           missingEvents.length > 0
             ? "hit"
-            : last === undefined && localProbe !== "current"
-              ? "empty"
-              : "local_current";
+            : fetchResult.overBound
+              ? "local_unchecked"
+              : last === undefined && localProbe !== "current"
+                ? "empty"
+                : "local_current";
       } else if (entries.some(isConversationEntry)) {
         outcome = "write_fail";
         outcome =
@@ -5030,8 +5213,21 @@ ${toolUseId}`,
       this.agentIdsFetched.add(agentId);
       return outcome;
     } finally {
-      if (outcome === "hit" || outcome === "empty" || outcome === "local_current" || outcome === "superseded")
+      if (outcome === "hit" && bytesDecoded !== undefined && !verifyLocal)
+        logFeatureOk("ccr_subagent_lazy_fetch", {
+          size_bytes: bytesDecoded,
+          count: entryCount ?? 0,
+        });
+      else if (
+        outcome === "hit" ||
+        outcome === "empty" ||
+        outcome === "local_current" ||
+        outcome === "superseded"
+      )
         logFeatureOk("ccr_subagent_lazy_fetch");
+      else if (outcome === "local_unchecked") logFeatureSad("ccr_subagent_lazy_fetch", outcome);
+      else if (outcome === "over_bound" && overBoundBy !== undefined)
+        logFeatureBad("ccr_subagent_lazy_fetch", `over_bound_${overBoundBy}`);
       else if (outcome !== "aborted") logFeatureBad("ccr_subagent_lazy_fetch", outcome);
       logForDiagnosticsNoPII("info", "subagent_lazy_fetch", {
         outcome,
@@ -5040,13 +5236,13 @@ ${toolUseId}`,
         probe: localProbe,
         errno: errnoCode,
         page_count: pageCount,
-        event_count: eventCount,
+        event_count: entryCount,
         duration_ms: Date.now() - now,
       });
     }
   }
 }
-//@ chunk-e6aww6q8.js:407532-407706 facade-majority
+//@ chunk-5xgkngpb.js:410326-410500 facade-majority
 function readAtTranscriptEntry(messages, allMessages) {
   let sessionId = getSessionId();
   return {
@@ -5058,7 +5254,7 @@ function readAtTranscriptEntry(messages, allMessages) {
     promptIdAtEntry: getPromptId_2(),
   };
 }
-//@ chunk-e6aww6q8.js:407706-408232 facade-majority (2.1.88 match: recordTranscript, 0.261)
+//@ chunk-5xgkngpb.js:410500-411031 facade-majority (2.1.88 match: recordTranscript, 0.261)
 /**
  * 记录一组消息到当前会话转录：清理消息后交给 Project.insertMessageChain，建立 parentUuid 链（压缩边界的 parentUuid 置空并记 logicalParentUuid），检测幻影父节点（tengu_phantom_parent_hint）。
  */
@@ -5109,7 +5305,7 @@ async function recordTranscript(
     return newMessages.findLast(isChainParticipant)?.uuid ?? startingParentUuid ?? null;
   });
 }
-//@ chunk-e6aww6q8.js:408232-408523 facade-majority
+//@ chunk-5xgkngpb.js:411031-411322 facade-majority
 /**
  * 追加 last-prompt 记录：叶子 uuid 与最后一条提示，用于 resume 选取叶子与列表显示。
  */
@@ -5133,7 +5329,7 @@ async function persistLeafCheckpoint(leafUuid, extraFields, storageV5) {
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:408523-408635 facade-majority
+//@ chunk-5xgkngpb.js:411322-411434 facade-majority
 function queueLeafCheckpointWithdrawal() {
   getProject().queueLeafCheckpointWithdrawal({
     type: "last-prompt",
@@ -5142,7 +5338,7 @@ function queueLeafCheckpointWithdrawal() {
     sessionId: getSessionId(),
   });
 }
-//@ chunk-e6aww6q8.js:408635-408833 facade-majority
+//@ chunk-5xgkngpb.js:411434-411632 facade-majority
 async function mirrorLeafCheckpointToRemote(leafUuid, extraFields) {
   let project = getProject();
   await project.mirrorInternalEntry({
@@ -5156,7 +5352,7 @@ async function mirrorLeafCheckpointToRemote(leafUuid, extraFields) {
     sessionId: getSessionId(),
   });
 }
-//@ chunk-e6aww6q8.js:408833-408932 facade-majority
+//@ chunk-5xgkngpb.js:411632-411731 facade-majority
 function mirrorCustomTitleToRemote(sessionId, customTitle) {
   return getProject().mirrorInternalEntry({
     type: "custom-title",
@@ -5164,15 +5360,15 @@ function mirrorCustomTitleToRemote(sessionId, customTitle) {
     sessionId,
   });
 }
-//@ chunk-e6aww6q8.js:408932-408984 facade-majority
+//@ chunk-5xgkngpb.js:411731-411783 facade-majority
 function hasRemoteWorkerEventLog() {
   return getProject().hasInternalEventWriter();
 }
-//@ chunk-e6aww6q8.js:408984-409041 facade-majority
+//@ chunk-5xgkngpb.js:411783-411840 facade-majority
 function mirrorWorkerEventToRemote(eventType, payload, meta) {
   return getProject().mirrorWorkerEvent(eventType, payload, meta);
 }
-//@ chunk-e6aww6q8.js:409041-409221 facade-majority (2.1.88 match: recordSidechainTranscript, 0.678)
+//@ chunk-5xgkngpb.js:411840-412020 facade-majority (2.1.88 match: recordSidechainTranscript, 0.678)
 /**
  * 记录子代理（sidechain）消息：isSidechain=true、带 agentId，写入 subagents/agent-<id>.jsonl。
  */
@@ -5200,7 +5396,7 @@ async function recordSidechainTranscript(messages, agentId, sessionIdOverride, s
     ),
   );
 }
-//@ chunk-e6aww6q8.js:409221-409316 facade-majority (2.1.88 match: recordContextCollapseSnapshot, 0.517)
+//@ chunk-5xgkngpb.js:412020-412115 facade-majority (2.1.88 match: recordContextCollapseSnapshot, 0.517)
 async function recordForkContextRef(snapshot, storageV5) {
   await getProject().appendEntry(
     {
@@ -5212,20 +5408,20 @@ async function recordForkContextRef(snapshot, storageV5) {
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:409316-409387 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
+//@ chunk-5xgkngpb.js:412115-412186 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function recordArtifactAutoReactLedger(ledgerEntry, storageV5) {
   await getProject().appendEntry(ledgerEntry, ledgerEntry.sessionId, undefined, storageV5);
 }
-//@ chunk-e6aww6q8.js:409387-409455 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
+//@ chunk-5xgkngpb.js:412186-412254 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 function recordCostState(costEntry, storageV5) {
   getProject().appendEntry(costEntry, costEntry.sessionId, undefined, storageV5).catch(logError);
 }
-//@ chunk-e6aww6q8.js:409455-409464 layout
+//@ chunk-5xgkngpb.js:412254-412263 layout
 // deferred: uses registerCostStateRecorder (../bootstrap/state.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:409455", () => {
+deferInit("chunk-5xgkngpb.js:412254", () => {
   registerCostStateRecorder(recordCostState);
 });
-//@ chunk-e6aww6q8.js:409464-409590 facade-majority
+//@ chunk-5xgkngpb.js:412263-412389 facade-majority
 /**
  * 记录任务摘要（observer-ref 相关），供后台会话列表显示。
  */
@@ -5241,7 +5437,7 @@ async function recordObserverRef(sessionId, summary) {
     summary,
   );
 }
-//@ chunk-e6aww6q8.js:409590-409790 facade-majority
+//@ chunk-5xgkngpb.js:412389-412590 facade-majority
 async function agentTranscriptExists(agentId, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined)
     try {
@@ -5257,7 +5453,7 @@ async function agentTranscriptExists(agentId, storageV5) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:409790-409923 layout
+//@ chunk-5xgkngpb.js:412590-412723 layout
 function splitJsonlLines(text) {
   let lines = [];
   let cursor = 0;
@@ -5275,7 +5471,7 @@ function splitJsonlLines(text) {
   }
   return lines;
 }
-//@ chunk-e6aww6q8.js:409923-410098 layout
+//@ chunk-5xgkngpb.js:412723-412898 layout
 function getSessionScopeOfKey(storageKey) {
   if (storageKey.namespace !== "transcript") throw Error("sessionScopeOf: not a transcript key");
   return {
@@ -5284,12 +5480,12 @@ function getSessionScopeOfKey(storageKey) {
     sessionId: storageKey.sessionId,
   };
 }
-//@ chunk-e6aww6q8.js:410098-410185 layout
+//@ chunk-5xgkngpb.js:412898-412985 layout
 function getStorageErrorCause(error) {
   let cause = error instanceof Error ? error.cause : undefined;
   return isStoreError(cause) && isStoreFencedError(cause) ? cause : undefined;
 }
-//@ chunk-e6aww6q8.js:410185-410360 layout
+//@ chunk-5xgkngpb.js:412985-413160 layout
 function transcriptAppendFailedError(error) {
   let makeError = () =>
     Object.assign(
@@ -5303,7 +5499,7 @@ function transcriptAppendFailedError(error) {
     );
   return isStoreFencedError(error) ? makeError() : withErrnoFromStorageError(error, makeError, "write");
 }
-//@ chunk-e6aww6q8.js:410360-410481 layout
+//@ chunk-5xgkngpb.js:413160-413281 layout
 function logReStampFailure(operationName, error) {
   if (isSyscallError(error))
     logForDebugging(
@@ -5314,14 +5510,14 @@ function logReStampFailure(operationName, error) {
     );
   else logError(error);
 }
-//@ chunk-e6aww6q8.js:410481-410576 layout
+//@ chunk-5xgkngpb.js:413281-413376 layout
 function entryDedupKey(path, entry) {
   let sessionId = "sessionId" in entry ? entry.sessionId : undefined;
   return `${path}
 ${entry.type}
 ${String(sessionId)}`;
 }
-//@ chunk-e6aww6q8.js:410576-410822 layout
+//@ chunk-5xgkngpb.js:413376-413622 layout
 function getAsideStrandedLeftover(error) {
   if (error.code !== "Failed" || error.telemetryCode !== "AsideStranded") return;
   let cause = "cause" in error ? error.cause : undefined;
@@ -5331,7 +5527,7 @@ function getAsideStrandedLeftover(error) {
     leftover: typeof path === "string" ? path : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:410822-410975 layout
+//@ chunk-5xgkngpb.js:413622-413775 layout
 function transcriptMoveFailedError(error) {
   return withErrnoFromStorageError(
     error,
@@ -5348,7 +5544,7 @@ function transcriptMoveFailedError(error) {
     "rename",
   );
 }
-//@ chunk-e6aww6q8.js:410975-411149 layout
+//@ chunk-5xgkngpb.js:413775-413949 layout
 function transcriptMkdirFailedError(error) {
   return withErrnoFromStorageError(
     error,
@@ -5365,13 +5561,13 @@ function transcriptMkdirFailedError(error) {
     "mkdir",
   );
 }
-//@ chunk-e6aww6q8.js:411149-411246 layout
+//@ chunk-5xgkngpb.js:413949-414046 layout
 function formatStorageErrorCode(storageError) {
   return "telemetryCode" in storageError && storageError.telemetryCode
     ? `${storageError.code} ${storageError.telemetryCode}`
     : storageError.code;
 }
-//@ chunk-e6aww6q8.js:411246-411437 layout
+//@ chunk-5xgkngpb.js:414046-414237 layout
 function withErrnoFromStorageError(storageError, makeError, syscall) {
   let cause = "cause" in storageError ? storageError.cause : undefined;
   if (isSyscallError(cause)) return cause;
@@ -5385,7 +5581,7 @@ function withErrnoFromStorageError(storageError, makeError, syscall) {
     syscall,
   });
 }
-//@ chunk-e6aww6q8.js:411437-411610 layout
+//@ chunk-5xgkngpb.js:414237-414410 layout
 function storageErrorToErrno(storageError, cause) {
   let code = storageErrorCode(storageError);
   if (isErrnoCode(code)) return code;
@@ -5400,11 +5596,11 @@ function storageErrorToErrno(storageError, cause) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:411610-411668 layout
+//@ chunk-5xgkngpb.js:414410-414468 layout
 function isErrnoCode(code) {
   return code !== undefined && /^E[A-Z0-9]+$/.test(code);
 }
-//@ chunk-e6aww6q8.js:411668-411873 facade-majority
+//@ chunk-5xgkngpb.js:414468-414673 facade-majority
 class RefusedDirectWriteError extends Error {
   writer;
   name = "RefusedDirectWriteError";
@@ -5415,25 +5611,25 @@ class RefusedDirectWriteError extends Error {
     this.writer = writer;
   }
 }
-//@ chunk-e6aww6q8.js:411873-411922 layout
+//@ chunk-5xgkngpb.js:414673-414722 layout
 function assertDiskWritable(writer, reason) {
   if (isDiskless()) {
     warnDisklessSettingsWrite(writer, reason);
     throw new RefusedDirectWriteError(writer);
   }
 }
-//@ chunk-e6aww6q8.js:411922-411974 layout
+//@ chunk-5xgkngpb.js:414722-414774 layout
 function swallowRefusedDirectWrite(error) {
   if (!(error instanceof RefusedDirectWriteError)) throw error;
   logError(error);
 }
-//@ chunk-e6aww6q8.js:411974-412062 layout
+//@ chunk-5xgkngpb.js:414774-414862 layout
 function getHydratedTranscriptTarget(transcriptPath, storageV5) {
   let target = wrapStorageSource(getStorageTargetForPath(transcriptPath, storageV5));
   if (target === undefined) assertDiskWritable("hydrated_transcript", transcriptPath);
   return target;
 }
-//@ chunk-e6aww6q8.js:412062-413115 layout
+//@ chunk-5xgkngpb.js:414862-415919 layout
 /**
  * 把一段 jsonl 文本追加到转录：文件以 O_APPEND 打开（必要时先补换行封闭撕裂的尾行），storage v5 后端时写记录。
  */
@@ -5514,7 +5710,7 @@ async function appendToTranscriptFile(transcriptPath, content, storageV5, ifExis
   if (sealPending) store.project?.tornTailSealLanded(transcriptPath);
   return "direct";
 }
-//@ chunk-e6aww6q8.js:413115-413637 layout
+//@ chunk-5xgkngpb.js:415919-416445 layout
 async function appendToExistingTranscript(transcriptPath, content, newlineFallback) {
   let fileHandle;
   try {
@@ -5550,9 +5746,9 @@ async function appendToExistingTranscript(transcriptPath, content, newlineFallba
     await fileHandle.close();
   }
 }
-//@ chunk-e6aww6q8.js:413637-413653 facade-majority
+//@ chunk-5xgkngpb.js:416445-416461 facade-majority
 var OBSERVER_REF_TAIL_SCAN_BYTES = 1048576;
-//@ chunk-e6aww6q8.js:413653-413811 layout
+//@ chunk-5xgkngpb.js:416461-416620 layout
 async function readTranscriptTailViaStorage(transcriptPath, maxBytes, storageV5) {
   let storageKey = transcriptKeyFor(transcriptPath);
   if (storageKey === undefined) return;
@@ -5564,7 +5760,7 @@ async function readTranscriptTailViaStorage(transcriptPath, maxBytes, storageV5)
     cut: transcriptTailV5.cut,
   };
 }
-//@ chunk-e6aww6q8.js:413811-414178 facade-majority
+//@ chunk-5xgkngpb.js:416620-416987 facade-majority
 function readTranscriptTailV5(storageKey, maxBytes, storageV5) {
   return storageV5
     .read([
@@ -5594,20 +5790,20 @@ function readTranscriptTailV5(storageKey, maxBytes, storageV5) {
       };
     });
 }
-//@ chunk-e6aww6q8.js:414178-414267 layout
+//@ chunk-5xgkngpb.js:416987-417076 layout
 function isStorageTooLargeError(error) {
   return error.code === "Failed" && "telemetryCode" in error && error.telemetryCode === "EFBIG";
 }
-//@ chunk-e6aww6q8.js:414267-414290 layout
+//@ chunk-5xgkngpb.js:417076-417099 layout
 var PAGED_TRANSCRIPT_PAGE_BYTES = 4194304;
 var pagedTranscriptPageBytes = WRITE_BUFFER_LIMIT_BYTES;
-//@ chunk-e6aww6q8.js:414290-414405 layout
+//@ chunk-5xgkngpb.js:417099-417214 layout
 function pagedTranscriptTooLargeError() {
   return Object.assign(Error("loadTranscriptFile: the paged transcript is too large"), {
     code: "EFBIG",
   });
 }
-//@ chunk-e6aww6q8.js:414405-415433 layout
+//@ chunk-5xgkngpb.js:417214-418247 layout
 async function readPagedTranscript(backend, key, pagedTranscriptPageBytes_2) {
   let statResult;
   try {
@@ -5671,7 +5867,7 @@ async function readPagedTranscript(backend, key, pagedTranscriptPageBytes_2) {
     tornTailBytes: statResult.value.tornTailBytes ?? 0,
   };
 }
-//@ chunk-e6aww6q8.js:415433-415739 layout
+//@ chunk-5xgkngpb.js:418247-418553 layout
 async function readStorageTailByRecords(storageKey, maxBytes, storageV5) {
   let records = await storageV5.readRecords(storageKey, {
     order: "backward",
@@ -5693,7 +5889,7 @@ async function readStorageTailByRecords(storageKey, maxBytes, storageV5) {
     cut: false,
   };
 }
-//@ chunk-e6aww6q8.js:415739-416177 facade-majority
+//@ chunk-5xgkngpb.js:418553-418991 facade-majority
 async function readLastObserverRef(agentId, storageV5) {
   let transcriptPath = agentId ? getAgentTranscriptPath(agentId) : getTranscriptPath();
   let storageTail =
@@ -5725,10 +5921,10 @@ async function readLastObserverRef(agentId, storageV5) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:416177-416200 layout
+//@ chunk-5xgkngpb.js:418991-419014 layout
 var FORK_CONTEXT_MAX_DEPTH_2 = 4;
 var FORK_CONTEXT_MAX_DEPTH = 16777216;
-//@ chunk-e6aww6q8.js:416200-416535 facade-majority
+//@ chunk-5xgkngpb.js:419014-419349 facade-majority
 /**
  * 解析 fork-context-ref：加载父会话到 parentLastUuid 为止的前缀消息，带缓存与并发去重。
  */
@@ -5748,7 +5944,7 @@ async function hydrateForkContext(forkRef, maxDepth = FORK_CONTEXT_MAX_DEPTH, st
   forkContextHydrationsInFlight.set(forkRef.parentLastUuid, loadPromise);
   return loadPromise;
 }
-//@ chunk-e6aww6q8.js:416535-417329 layout
+//@ chunk-5xgkngpb.js:419349-420152 layout
 async function loadForkContextPrefix(forkRef, maxBytes, storageV5) {
   let { forkContextHydrationCache } = currentTranscriptStore();
   if (!isSafeIdSegment_2(forkRef.parentSessionId)) {
@@ -5800,14 +5996,14 @@ async function loadForkContextPrefix(forkRef, maxBytes, storageV5) {
   }
   return mapped;
 }
-//@ chunk-e6aww6q8.js:417329-417390 facade-majority (2.1.88 match: recordQueueOperation, 1)
+//@ chunk-5xgkngpb.js:420152-420213 facade-majority (2.1.88 match: recordQueueOperation, 1)
 /**
  * 追加 queue-operation 记录（排队命令的入队/出队），可写入其他会话的文件。
  */
 async function recordQueueOperation(operation, storageV5) {
   await getProject().insertQueueOperation(operation, storageV5);
 }
-//@ chunk-e6aww6q8.js:417390-417547 facade-majority (2.1.88 match: removeTranscriptMessage, 0.515)
+//@ chunk-5xgkngpb.js:420213-420370 facade-majority (2.1.88 match: removeTranscriptMessage, 0.515)
 /**
  * 从转录中删除指定 uuid 的消息（排入写队列，执行时重写文件）。
  */
@@ -5820,7 +6016,7 @@ async function removeTranscriptMessage(uuid, storageV5, sessionId) {
   );
   await drained;
 }
-//@ chunk-e6aww6q8.js:417547-417773 facade-majority
+//@ chunk-5xgkngpb.js:420370-420596 facade-majority
 async function removeTranscriptMessageIfPersisted(continuationReplacesUuid, storageV5) {
   let storageBackend = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
   let sessionId = getSessionId();
@@ -5834,14 +6030,14 @@ async function removeTranscriptMessageIfPersisted(continuationReplacesUuid, stor
   );
   await drained;
 }
-//@ chunk-e6aww6q8.js:417773-417847 facade-majority (2.1.88 match: recordFileHistorySnapshot, 1)
+//@ chunk-5xgkngpb.js:420596-420670 facade-majority (2.1.88 match: recordFileHistorySnapshot, 1)
 /**
  * 追加 file-history-snapshot 记录（文件检查点，供 /rewind 回滚文件）。
  */
 async function recordFileHistorySnapshot(messageId, snapshot, isSnapshotUpdate, storageV5) {
   await getProject().insertFileHistorySnapshot(messageId, snapshot, isSnapshotUpdate, storageV5);
 }
-//@ chunk-e6aww6q8.js:417847-418033 facade-majority
+//@ chunk-5xgkngpb.js:420670-420856 facade-majority
 async function recordFileHistoryDelta(messageId, snapshotMessageId, trackingPath, backup, storageV5) {
   await getProject().insertFileHistoryDelta(
     {
@@ -5855,37 +6051,37 @@ async function recordFileHistoryDelta(messageId, snapshotMessageId, trackingPath
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:418033-418099 facade-majority (2.1.88 match: recordAttributionSnapshot, 1)
+//@ chunk-5xgkngpb.js:420856-420922 facade-majority (2.1.88 match: recordAttributionSnapshot, 1)
 /**
  * 追加 attribution-snapshot 记录（提交署名统计快照）。
  */
 async function recordAttributionSnapshot(snapshot, storageV5) {
   await getProject().insertAttributionSnapshot(snapshot, storageV5);
 }
-//@ chunk-e6aww6q8.js:418099-418168 facade-majority (2.1.88 match: recordContentReplacement, 1)
+//@ chunk-5xgkngpb.js:420922-420991 facade-majority (2.1.88 match: recordContentReplacement, 1)
 /**
  * 追加 content-replacement 记录（大工具结果替换为引用），有 agentId 时写入子代理转录。
  */
 async function recordContentReplacement(contentReplacements, agentId, storageV5) {
   await getProject().insertContentReplacement(contentReplacements, agentId, storageV5);
 }
-//@ chunk-e6aww6q8.js:418168-418333 layout
+//@ chunk-5xgkngpb.js:420991-421156 layout
 // deferred: uses setMarkerTextWriter (./transcriptRequestBlobs.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:418168", () => {
+deferInit("chunk-5xgkngpb.js:420991", () => {
   setMarkerTextWriter({
     canRecord: () => !isTranscriptPersistenceDisabled() && !getProject().isRemotelyMirrored(),
     append: (replayRecord) => getProject().appendRequestReplayRecords(replayRecord),
     storedToolResultDigest: (entry, toolUseId) => getProject().queuedToolResultDigest(entry, toolUseId),
   });
 });
-//@ chunk-e6aww6q8.js:418333-418378 facade-majority (2.1.88 match: resetSessionFilePointer, 1)
+//@ chunk-5xgkngpb.js:421156-421201 facade-majority (2.1.88 match: resetSessionFilePointer, 1)
 /**
  * 重置会话文件指针（新 sessionId 时下次写入重新创建文件）。
  */
 async function resetSessionFilePointer() {
   getProject().resetSessionFile();
 }
-//@ chunk-e6aww6q8.js:418378-418687 facade-majority (2.1.88 match: adoptResumedSessionFile, 0.214)
+//@ chunk-5xgkngpb.js:421201-421510 facade-majority (2.1.88 match: adoptResumedSessionFile, 0.214)
 /**
  * resume 同一会话时把会话文件指针指向被恢复的转录文件，并重写元数据。
  */
@@ -5913,7 +6109,7 @@ function adoptResumedSessionFile() {
     );
   }
 }
-//@ chunk-e6aww6q8.js:418687-418982 facade-majority
+//@ chunk-5xgkngpb.js:421510-421805 facade-majority
 async function adoptResumedSessionFileAsync(storageV5) {
   let project = getProject();
   let transcriptPath = getTranscriptPath();
@@ -5933,13 +6129,13 @@ async function adoptResumedSessionFileAsync(storageV5) {
     reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "adopt", error, transcriptPath);
   }
 }
-//@ chunk-e6aww6q8.js:418982-419053 facade-majority
+//@ chunk-5xgkngpb.js:421805-421876 facade-majority
 function touchSessionTranscript(storageV5) {
   let sessionFilePath = getProject().sessionFilePath;
   if (sessionFilePath === null) return;
   touchTranscript(sessionFilePath, storageV5);
 }
-//@ chunk-e6aww6q8.js:419053-419235 layout
+//@ chunk-5xgkngpb.js:421876-422059 layout
 function touchTranscript(transcriptPath, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let storageKey = transcriptKeyFor(transcriptPath);
@@ -5955,7 +6151,7 @@ function touchTranscript(transcriptPath, storageV5) {
   let date = new Date();
   utimes(progressFile, date, date).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:419235-421372 facade-majority
+//@ chunk-5xgkngpb.js:422059-424200 facade-majority
 /**
  * cwd 改变（如进入 worktree）后把当前会话转录从旧项目目录迁到新项目目录，迁移期间新写入先缓存在 relocationBuffer。
  */
@@ -6128,7 +6324,7 @@ async function relocateSessionTranscript(storageV5) {
     await project.endTranscriptRelocation();
   }
 }
-//@ chunk-e6aww6q8.js:421372-421526 facade-majority
+//@ chunk-5xgkngpb.js:424200-424354 facade-majority
 function reportRelocateSessionTranscriptFailure(error, operationName) {
   if (isSadFsErrno(error) || isEnvFsErrno(error))
     logForDebugging(
@@ -6140,15 +6336,15 @@ function reportRelocateSessionTranscriptFailure(error, operationName) {
   else logError(error);
   reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "relocate", error);
 }
-//@ chunk-e6aww6q8.js:421526-421574 facade-majority
+//@ chunk-5xgkngpb.js:424354-424402 facade-majority
 function beginTranscriptRelocationForTesting() {
   getProject().beginTranscriptRelocation();
 }
-//@ chunk-e6aww6q8.js:421574-421632 facade-majority
+//@ chunk-5xgkngpb.js:424402-424460 facade-majority
 async function endTranscriptRelocationForTesting() {
   await getProject().endTranscriptRelocation();
 }
-//@ chunk-e6aww6q8.js:421632-422089 layout
+//@ chunk-5xgkngpb.js:424460-424917 layout
 async function supersedeTranscriptFile(transcriptPath) {
   let setAsidePath = `${transcriptPath}.superseded-${Date.now()}`;
   try {
@@ -6174,7 +6370,7 @@ async function supersedeTranscriptFile(transcriptPath) {
   });
   return setAsidePath;
 }
-//@ chunk-e6aww6q8.js:422089-422775 layout
+//@ chunk-5xgkngpb.js:424917-425603 layout
 async function moveStorageScope(backend, fromScope, toScope) {
   let moveResult = await backend.moveScope(fromScope, toScope);
   if (!moveResult.ok || moveResult.value.published) return moveResult;
@@ -6205,7 +6401,7 @@ async function moveStorageScope(backend, fromScope, toScope) {
   if (!retryResult.ok) return retryResult;
   throw blockedError();
 }
-//@ chunk-e6aww6q8.js:422775-424251 layout
+//@ chunk-5xgkngpb.js:425603-427072 layout
 async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
   if (isStorageV5Enabled() && storageV5 !== undefined && storageMove !== undefined) {
     let moveResult =
@@ -6255,7 +6451,6 @@ async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
   }
   try {
     await rename(sourcePath, targetPath);
-    return;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (
@@ -6286,7 +6481,7 @@ async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
             await copyDirectory(sourcePath, targetPath);
           } catch (error) {
             if (setAsidePath !== undefined) {
-              await rm_2(targetPath, {
+              await rm(targetPath, {
                 recursive: true,
                 force: true,
               }).catch(() => {});
@@ -6296,7 +6491,7 @@ async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
           }
         } else throw error;
       }
-      await rm_2(sourcePath, {
+      await rm(sourcePath, {
         recursive: true,
         force: true,
       });
@@ -6305,18 +6500,18 @@ async function moveTranscript(sourcePath, targetPath, storageV5, storageMove) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:424251-424290 facade-majority (2.1.88 match: flushSessionStorage, 1)
+//@ chunk-5xgkngpb.js:427072-427111 facade-majority (2.1.88 match: flushSessionStorage, 1)
 /**
  * 等待会话存储所有排队写入落盘。
  */
 async function flushSessionStorage() {
   await getProject().flush();
 }
-//@ chunk-e6aww6q8.js:424290-424345 facade-majority
+//@ chunk-5xgkngpb.js:427111-427166 facade-majority
 async function inTranscriptCallOrder(callback) {
   return await getProject().inCallOrder(callback);
 }
-//@ chunk-e6aww6q8.js:424345-424474 facade-majority
+//@ chunk-5xgkngpb.js:427166-427294 facade-majority
 function appendEntryToCurrentTranscriptNow(entry, transcriptPath, tornTailEntry) {
   let project = getProject();
   let resolvedPath = transcriptPath ?? project.sessionFilePath;
@@ -6328,7 +6523,7 @@ function appendEntryToCurrentTranscriptNow(entry, transcriptPath, tornTailEntry)
     reportStopNowAppendFailure(error, resolvedPath);
   }
 }
-//@ chunk-e6aww6q8.js:424474-424626 layout
+//@ chunk-5xgkngpb.js:427294-427446 layout
 function reportStopNowAppendFailure(error, transcriptPath) {
   if (isSyscallError(error))
     logForDebugging(
@@ -6340,17 +6535,17 @@ function reportStopNowAppendFailure(error, transcriptPath) {
   else logError(error);
   reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "stop_now", error, transcriptPath);
 }
-//@ chunk-e6aww6q8.js:424626-424684 facade-majority
+//@ chunk-5xgkngpb.js:427446-427504 facade-majority
 function sealTornTranscriptTail(transcriptPath) {
   getProject().sealTornTailOnNextAppend(transcriptPath ?? getTranscriptPathForSession(getSessionId()));
 }
-//@ chunk-e6aww6q8.js:424684-424789 layout
+//@ chunk-5xgkngpb.js:427504-427609 layout
 function isConversationEntry(entry) {
   if (typeof entry !== "object" || entry === null) return false;
   let messageType = entry.type;
   return messageType === "user" || messageType === "assistant";
 }
-//@ chunk-e6aww6q8.js:424789-424995 layout
+//@ chunk-5xgkngpb.js:427609-427815 layout
 async function openRegularFile(path) {
   if (isDiskless()) return null;
   let fileHandle = await open(path, constants.O_RDONLY | O_NONBLOCK_2);
@@ -6363,13 +6558,13 @@ async function openRegularFile(path) {
   await fileHandle.close().catch(() => {});
   return null;
 }
-//@ chunk-e6aww6q8.js:424995-425085 facade-majority
+//@ chunk-5xgkngpb.js:427815-427905 facade-majority
 async function transcriptFileHasContentEntry(transcriptPath, backend) {
   if (isStorageV5Enabled() && backend !== undefined)
     return storedTranscriptHasContent(transcriptPath, backend);
   return someLineMatches(transcriptPath, isConversationLine).catch(() => false);
 }
-//@ chunk-e6aww6q8.js:425085-425476 layout
+//@ chunk-5xgkngpb.js:427905-428296 layout
 /**
  * 逐块读取文件并按行调用判断函数，任一行命中即返回 true。
  */
@@ -6398,9 +6593,9 @@ async function someLineMatches(path, matcher) {
       } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:425476-425490 layout
+//@ chunk-5xgkngpb.js:428296-428310 layout
 var MAX_TRANSCRIPT_HEAD_SCAN_BYTES = 65536;
-//@ chunk-e6aww6q8.js:425490-426134 layout
+//@ chunk-5xgkngpb.js:428310-428954 layout
 /**
  * 判断转录是否含对话消息：无存储键时查本地文件；无盘模式读存储直到判定；否则先读存储记录前段，未截断时续读本地文件。
  */
@@ -6450,7 +6645,7 @@ async function storedTranscriptHasContent(transcriptPath, backend) {
   } catch {}
   return transcriptFileHasContentEntry(transcriptPath);
 }
-//@ chunk-e6aww6q8.js:426134-426509 layout (2.1.88 match: readJSONLFile, 0.869)
+//@ chunk-5xgkngpb.js:428954-429331 layout (2.1.88 match: readJSONLFile, 0.869)
 async function readJSONLFile(path, bytesRead) {
   let fileHandle = null;
   try {
@@ -6479,7 +6674,7 @@ async function readJSONLFile(path, bytesRead) {
       } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:426509-426704 layout
+//@ chunk-5xgkngpb.js:429331-429526 layout
 function isConversationLine(line) {
   if (
     !line.includes('"type":"user"') &&
@@ -6494,11 +6689,15 @@ function isConversationLine(line) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:426704-426729 facade-majority
-function withoutFetchedCodeModeRecords(messages) {
-  return messages;
+//@ chunk-5xgkngpb.js:429526-429628 facade-majority
+function withoutFetchedCodeModeRecords(records) {
+  let kept = records;
+  kept = kept.filter(
+    (record) => typeof record !== "object" || record === null || record.type !== "repl-mode",
+  );
+  return kept;
 }
-//@ chunk-e6aww6q8.js:426729-427354 facade-majority (2.1.88 match: hydrateRemoteSession, 0.588)
+//@ chunk-5xgkngpb.js:429628-430253 facade-majority (2.1.88 match: hydrateRemoteSession, 0.588)
 /**
  * 远程会话（CCR）恢复：从服务器拉取会话条目写回本地转录。
  */
@@ -6538,7 +6737,7 @@ async function hydrateRemoteSession(sessionId, ingressUrl, storage) {
     project.setRemoteIngressUrl(ingressUrl);
   }
 }
-//@ chunk-e6aww6q8.js:427354-427728 layout
+//@ chunk-5xgkngpb.js:430253-430627 layout
 async function readHydrateTail(transcriptPath, maxBytes, storageV5) {
   let storageTail =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -6565,7 +6764,7 @@ async function readHydrateTail(transcriptPath, maxBytes, storageV5) {
     }
   );
 }
-//@ chunk-e6aww6q8.js:427728-428352 layout
+//@ chunk-5xgkngpb.js:430627-431252 layout
 async function readHydrateTailViaStorage(path, tailBytes, storage) {
   let key = transcriptKeyFor(path);
   if (key === undefined) return;
@@ -6606,7 +6805,7 @@ async function readHydrateTailViaStorage(path, tailBytes, storage) {
 `),
   };
 }
-//@ chunk-e6aww6q8.js:428352-428553 layout
+//@ chunk-5xgkngpb.js:431252-431453 layout
 async function ensureTranscriptDir(dir, storage) {
   if (isStorageV5Enabled() && storage !== undefined) {
     let scope = transcriptScopeForDir(dir);
@@ -6622,7 +6821,7 @@ async function ensureTranscriptDir(dir, storage) {
     mode: 448,
   });
 }
-//@ chunk-e6aww6q8.js:428553-428653 layout
+//@ chunk-5xgkngpb.js:431453-431553 layout
 function getStorageTargetForPath(path, storage) {
   if (!isStorageV5Enabled() || storage === undefined) return;
   let key = transcriptStorageKeyForPath(path);
@@ -6633,15 +6832,15 @@ function getStorageTargetForPath(path, storage) {
         key,
       };
 }
-//@ chunk-e6aww6q8.js:428653-428692 facade-majority
+//@ chunk-5xgkngpb.js:431553-431592 facade-majority
 function getSessionSidecarDir(sessionId) {
   return join(dirname(getTranscriptPathForSession(sessionId)), sessionId);
 }
-//@ chunk-e6aww6q8.js:428692-428733 facade-majority
+//@ chunk-5xgkngpb.js:431592-431633 facade-majority
 function locateSidecarFile(sessionId, parts) {
   return join(getSessionSidecarDir(sessionId), ...parts);
 }
-//@ chunk-e6aww6q8.js:428733-428864 facade-majority
+//@ chunk-5xgkngpb.js:431633-431764 facade-majority
 async function ensureSidecarDirFor(filePath) {
   if (isDiskless()) throw Error("A diskless session writes no side file to disk");
   await mkdir(dirname(filePath), {
@@ -6649,15 +6848,15 @@ async function ensureSidecarDirFor(filePath) {
     mode: 448,
   });
 }
-//@ chunk-e6aww6q8.js:428864-428913 layout
+//@ chunk-5xgkngpb.js:431764-431813 layout
 function getCcrTipPath(sessionId) {
   return join(getSessionSidecarDir(sessionId), "ccr-tip.json");
 }
-//@ chunk-e6aww6q8.js:428913-428959 layout
+//@ chunk-5xgkngpb.js:431813-431859 layout
 function getLegacyCcrTipPath(sessionId) {
   return getSessionSidecarDir(sessionId) + ".ccr-tip.json";
 }
-//@ chunk-e6aww6q8.js:428959-429070 facade-majority
+//@ chunk-5xgkngpb.js:431859-431970 facade-majority
 async function readCCRTip(sessionId, storage) {
   for (let path of [getCcrTipPath(sessionId), getLegacyCcrTipPath(sessionId)]) {
     let remoteAgentMetadata = await readRemoteAgentMetadata(path, storage);
@@ -6665,7 +6864,7 @@ async function readCCRTip(sessionId, storage) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:429070-429529 file-local
+//@ chunk-5xgkngpb.js:431970-432429 file-local
 async function readRemoteAgentMetadata(path, storage) {
   let key = storage !== undefined ? pathToSessionSideKey(path) : undefined;
   let text;
@@ -6702,7 +6901,7 @@ async function readRemoteAgentMetadata(path, storage) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:429529-430152 layout
+//@ chunk-5xgkngpb.js:432429-433055 layout
 /**
  * 远程水合时查找未解决的 tool_use：收集本会话及来源会话在各项目目录下的 ccr-tip 记录，结合已解决事件找到未完成的工具调用，并定位其所在目录与会话。
  */
@@ -6735,7 +6934,7 @@ async function findUnresolvedToolUseTip(sessionId, folder, events, resolvedIds, 
         });
       }
     }
-  let unresolved = findUnresolvedToolUse_2(events, resolvedEventIds, includeAll);
+  let unresolved = unresolvedTailAfterTip(events, resolvedEventIds, includeAll);
   if (unresolved === undefined) return;
   let anchor = events.at(-unresolved.rows - 1);
   let mapped = tips
@@ -6747,7 +6946,7 @@ async function findUnresolvedToolUseTip(sessionId, folder, events, resolvedIds, 
     tipAt: found ?? mapped[0],
   };
 }
-//@ chunk-e6aww6q8.js:430152-430517 layout
+//@ chunk-5xgkngpb.js:433055-433420 layout
 async function writeCcrTip(sessionId, eventId, storage) {
   let tip = {
     eventId,
@@ -6771,7 +6970,7 @@ async function writeCcrTip(sessionId, eventId, storage) {
     logForDebugging(`Failed to write CCR tip sidecar: ${error}`);
   }
 }
-//@ chunk-e6aww6q8.js:430517-430678 facade-majority
+//@ chunk-5xgkngpb.js:433420-433581 facade-majority
 async function updateCCRTipFromAckedBatch(batch, storage) {
   for (let idx = batch.length - 1; idx >= 0; idx--) {
     let item = batch[idx];
@@ -6782,7 +6981,7 @@ async function updateCCRTipFromAckedBatch(batch, storage) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:430678-430825 facade-majority
+//@ chunk-5xgkngpb.js:433581-433728 facade-majority
 function collectTailUuids(content) {
   let uuids = new Set();
   for (let entry of parseJSONL(content)) {
@@ -6792,7 +6991,7 @@ function collectTailUuids(content) {
   }
   return uuids;
 }
-//@ chunk-e6aww6q8.js:430825-431087 facade-majority
+//@ chunk-5xgkngpb.js:433728-433990 facade-majority
 async function getValidatedCCRTip(sessionId, tail, storage) {
   let [ccrTip, tailSnapshot] = await Promise.all([
     readCCRTip(sessionId, storage),
@@ -6812,7 +7011,7 @@ async function getValidatedCCRTip(sessionId, tail, storage) {
   rememberValidatedTip(tip, ccrTip.updatedAt);
   return tip;
 }
-//@ chunk-e6aww6q8.js:431087-431276 facade-majority
+//@ chunk-5xgkngpb.js:433990-434179 facade-majority
 async function readTranscriptTailForTip(sessionId, storage) {
   let transcriptPathForSession = getTranscriptPathForSession(sessionId);
   if (isStorageV5Enabled() && storage !== undefined) {
@@ -6824,12 +7023,12 @@ async function readTranscriptTailForTip(sessionId, storage) {
   let path = worktreeFromProgress(transcriptPathForSession);
   return path === undefined ? null : tailFile(path, 65536).catch(() => null);
 }
-//@ chunk-e6aww6q8.js:431276-431328 facade-majority
+//@ chunk-5xgkngpb.js:434179-434231 facade-majority
 function extractLastSyncedEventUuid(content) {
   for (let uuid of iterateUuidsBackward(content)) return uuid;
   return;
 }
-//@ chunk-e6aww6q8.js:431328-431477 layout
+//@ chunk-5xgkngpb.js:434231-434380 layout
 function* iterateUuidsBackward(content) {
   let lines = content.split(`
 `);
@@ -6845,7 +7044,7 @@ function* iterateUuidsBackward(content) {
     if (isSyncedTranscriptEntry(parsed)) yield parsed.uuid;
   }
 }
-//@ chunk-e6aww6q8.js:431477-431573 facade-majority
+//@ chunk-5xgkngpb.js:434380-434476 facade-majority
 function extractLatestIntersectingSyncedUuid(sessionId, known) {
   let walkback = 0;
   for (let uuid of iterateUuidsBackward(sessionId)) {
@@ -6858,7 +7057,7 @@ function extractLatestIntersectingSyncedUuid(sessionId, known) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:431573-431922 facade-majority
+//@ chunk-5xgkngpb.js:434476-434825 facade-majority
 async function restoreAgentSidecarFromStream(agentId, entry, storage) {
   try {
     let metadata = validateAgentMetadata(entry);
@@ -6877,7 +7076,7 @@ async function restoreAgentSidecarFromStream(agentId, entry, storage) {
     return "failed";
   }
 }
-//@ chunk-e6aww6q8.js:431922-433001 facade-majority
+//@ chunk-5xgkngpb.js:434825-435904 facade-majority
 async function writeHydratedAgentTranscript(agentId, entries, storage, options) {
   let filtered = entries.filter((entry) => entry.type !== "agent_metadata");
   let entry = entries.findLast((entry) => entry.type === "agent_metadata");
@@ -6935,11 +7134,11 @@ async function writeHydratedAgentTranscript(agentId, entries, storage, options) 
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:433001-433058 facade-majority
+//@ chunk-5xgkngpb.js:435904-435961 facade-majority
 function canFetchAgentTranscriptsOnDemand() {
   return getProject().hasInternalAgentEventReader();
 }
-//@ chunk-e6aww6q8.js:433058-433242 facade-majority
+//@ chunk-5xgkngpb.js:435961-436145 facade-majority
 class AgentTranscriptFetchError extends Error {
   outcome;
   constructor(outcome = "read_fail", options) {
@@ -6948,13 +7147,13 @@ class AgentTranscriptFetchError extends Error {
     this.name = "AgentTranscriptFetchError";
   }
 }
-//@ chunk-e6aww6q8.js:433242-433331 layout
+//@ chunk-5xgkngpb.js:436145-436234 layout
 function slimToolResultsIfConfigured(entries, storage) {
   return currentTranscriptStore().toolResultCopiesOnDisk === "slim" && storage === undefined
     ? entries.map(createToolResultSlimmer_2())
     : entries;
 }
-//@ chunk-e6aww6q8.js:433331-438546 facade-majority (2.1.88 match: hydrateFromCCRv2InternalEvents, 0.34)
+//@ chunk-5xgkngpb.js:436234-441455 facade-majority (2.1.88 match: hydrateFromCCRv2InternalEvents, 0.341)
 /**
  * 从 CCR v2 内部事件流重建本地转录（主会话与子代理）。
  */
@@ -7259,7 +7458,7 @@ async function hydrateFromCCRv2InternalEvents(
     return outcome ?? (reading ? "read_failed" : "apply_failed");
   }
 }
-//@ chunk-e6aww6q8.js:438546-438675 layout
+//@ chunk-5xgkngpb.js:441455-441584 layout
 function getFirstPromptInfo(transcript) {
   let firstPromptPreview = getFirstPromptPreview(transcript, "stored");
   let shownPreview =
@@ -7275,9 +7474,9 @@ function getFirstPromptInfo(transcript) {
         firstPromptShown: shownPreview,
       };
 }
-//@ chunk-e6aww6q8.js:438675-438695 fingerprint (2.1.88 match: extractFirstPrompt, 1)
+//@ chunk-5xgkngpb.js:441584-441604 fingerprint (2.1.88 match: extractFirstPrompt, 1)
 var extractFirstPrompt = "No prompt";
-//@ chunk-e6aww6q8.js:438695-438833 layout
+//@ chunk-5xgkngpb.js:441604-441741 layout
 function getFirstPromptPreview(transcript, mode) {
   let textContent = getFirstMeaningfulUserMessageTextContent(transcript, mode);
   if (textContent) {
@@ -7293,7 +7492,7 @@ function getFirstPromptPreview(transcript, mode) {
   }
   return extractFirstPrompt;
 }
-//@ chunk-e6aww6q8.js:438833-439536 facade-majority (2.1.88 match: getFirstMeaningfulUserMessageTextContent, 0.673)
+//@ chunk-5xgkngpb.js:441741-442447 facade-majority (2.1.88 match: getFirstMeaningfulUserMessageTextContent, 0.674)
 /**
  * 取第一条有意义的用户文本（跳过 meta、压缩摘要、命令输出），用于会话列表首条提示。
  */
@@ -7334,14 +7533,14 @@ function getFirstMeaningfulUserMessageTextContent(transcript, mode = "stored") {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:439536-439637 facade-majority (2.1.88 match: removeExtraFields, 0.786)
+//@ chunk-5xgkngpb.js:442447-442548 facade-majority (2.1.88 match: removeExtraFields, 0.785)
 function removeExtraFields(transcript) {
   return transcript.map((m) => {
     let { isSidechain, parentUuid, promptId, ...serializedMessage } = m;
     return withoutTaskProducerMark(serializedMessage);
   });
 }
-//@ chunk-e6aww6q8.js:439637-440004 facade-majority
+//@ chunk-5xgkngpb.js:442548-442915 facade-majority (2.1.88 match: buildTranscriptEntries, 0.77)
 function withoutTaskProducerMark(message) {
   if (message.type === "attachment" && message.attachment?.type === "queued_command") {
     let origin = stripTaskProducer(message.attachment.origin);
@@ -7370,7 +7569,7 @@ function withoutTaskProducerMark(message) {
         }),
       };
 }
-//@ chunk-e6aww6q8.js:440004-440256 facade-majority (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-5xgkngpb.js:442915-443167 facade-majority (2.1.88 match: buildTranscriptEntries, 0.902)
 /**
  * 对带内部标记（B6e）的 user 消息或 queued_command 附件，复制一份并把 task-notification 类 origin 的 producer 改成 "session-task"；其他消息原样返回。
  */
@@ -7394,7 +7593,7 @@ function withTaskProducerMarkRecorded(message) {
     };
   return message;
 }
-//@ chunk-e6aww6q8.js:440256-440342 layout
+//@ chunk-5xgkngpb.js:443167-443253 layout
 function markSessionTaskProducer(origin) {
   return origin?.kind === "task-notification"
     ? {
@@ -7403,13 +7602,13 @@ function markSessionTaskProducer(origin) {
       }
     : origin;
 }
-//@ chunk-e6aww6q8.js:440342-440453 layout
+//@ chunk-5xgkngpb.js:443253-443364 layout
 function stripTaskProducer(origin) {
   if (origin?.kind !== "task-notification" || origin.producer === undefined) return origin;
   let { producer, ...rest } = origin;
   return rest;
 }
-//@ chunk-e6aww6q8.js:440453-441757 layout
+//@ chunk-5xgkngpb.js:443364-444673 layout
 /**
  * 加载转录时应用压缩保留段：最后一个压缩边界带保留信息时，重新链接保留消息到锚点后、清零其用量，删除边界前其他消息并把孤立子节点接到保留段末尾，返回末条保留消息 uuid。
  */
@@ -7440,7 +7639,7 @@ function applyPreservedSegmentOnLoad(messages) {
     logEvent("tengu_relink_walk_broken", {
       source: fromEnumOpt(relink?.source),
       listed: preserved.uuids.length,
-      present: count(preserved.uuids, (uuid) => messages.has(uuid)),
+      present: countWhere(preserved.uuids, (uuid) => messages.has(uuid)),
       anchorInTranscript: messages.has(preserved.anchorUuid),
       transcriptSize: messages.size,
     });
@@ -7505,7 +7704,7 @@ function applyPreservedSegmentOnLoad(messages) {
   }
   return preservedUuids.at(-1);
 }
-//@ chunk-e6aww6q8.js:441757-442329 fingerprint (2.1.88 match: applyPreservedSegmentRelinks, 0.702)
+//@ chunk-5xgkngpb.js:444673-445245 fingerprint (2.1.88 match: applyPreservedSegmentRelinks, 0.702)
 function applyPreservedSegmentRelinks(preservedMeta, messages) {
   if (preservedMeta.preservedMessages)
     return {
@@ -7542,7 +7741,7 @@ function applyPreservedSegmentRelinks(preservedMeta, messages) {
   });
   return;
 }
-//@ chunk-e6aww6q8.js:442329-442447 callgraph-witnessed (2.1.88 match: findLatestMessage, 1)
+//@ chunk-5xgkngpb.js:445245-445363 callgraph-witnessed (2.1.88 match: findLatestMessage, 1)
 function findLatestMessage(messages, predicate) {
   let latest;
   let maxTime = -1 / 0;
@@ -7556,7 +7755,7 @@ function findLatestMessage(messages, predicate) {
   }
   return latest;
 }
-//@ chunk-e6aww6q8.js:442447-442965 facade-majority (2.1.88 match: buildConversationChain, 0.785)
+//@ chunk-5xgkngpb.js:445363-445881 facade-majority (2.1.88 match: buildConversationChain, 0.785)
 /**
  * 从叶子消息沿 parentUuid 回溯到根，反转得到对话链；检测环（tengu_chain_parent_cycle），断链时按时间戳回退，最后补回孤立的并行工具结果。
  */
@@ -7596,7 +7795,7 @@ function buildConversationChain(messages, leafMessage, children) {
   announceFirstTurnOnce(messages, result, seen);
   return result;
 }
-//@ chunk-e6aww6q8.js:442965-443830 facade-majority
+//@ chunk-5xgkngpb.js:445881-446746 facade-majority
 function warnIfTranscriptUnchained(messages, transcript, sessionId) {
   let unchained = 0;
   for (let message of messages.values()) {
@@ -7611,7 +7810,7 @@ function warnIfTranscriptUnchained(messages, transcript, sessionId) {
     if (warnedUnchainedSessions.has(sessionKey)) return;
     warnedUnchainedSessions.add(sessionKey);
   }
-  let survived = count(transcript, (message) => message.type === "user" || message.type === "assistant");
+  let survived = countWhere(transcript, (message) => message.type === "user" || message.type === "assistant");
   let warning = `Resume transcript${sessionKey ? ` (session ${sessionKey})` : ""} has ${unchained} user/assistant records but none carry parentUuid links; only ${survived} reached the resumed conversation. Conversation reconstruction walks parentUuid from the last record, so unlinked records are dropped \u2014 the file's producer must chain records (parentUuid null on the first, the previous record's uuid on each subsequent one).`;
   logEvent("tengu_resume_unchained_transcript", {
     conversational_records: unchained,
@@ -7624,14 +7823,13 @@ function warnIfTranscriptUnchained(messages, transcript, sessionId) {
     process.stderr.write(`Warning: ${warning}
 `);
 }
-//@ chunk-e6aww6q8.js:443830-443948 layout
+//@ chunk-5xgkngpb.js:446746-446823 layout
 function getFileSnapshotMessages(messages) {
   let snapshots = [];
-  for (let message of messages.values())
-    if (message.type === "system" && message.subtype === "file_snapshot") snapshots.push(message);
+  for (let message of messages.values()) if (isFileSnapshotMessage(message)) snapshots.push(message);
   return snapshots;
 }
-//@ chunk-e6aww6q8.js:443948-444137 layout
+//@ chunk-5xgkngpb.js:446823-447012 layout
 function groupNonChainChildrenByParent(messages) {
   let byParent = new Map();
   for (let message of messages.values())
@@ -7642,7 +7840,7 @@ function groupNonChainChildrenByParent(messages) {
     }
   return byParent;
 }
-//@ chunk-e6aww6q8.js:444137-444704 layout
+//@ chunk-5xgkngpb.js:447012-447584 layout
 function attachSideMessages(leafMessage, transcript, seen, children) {
   if (isSideMessagesEnabled()) {
     let compare = (a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0);
@@ -7676,36 +7874,36 @@ function attachSideMessages(leafMessage, transcript, seen, children) {
     side.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
   transcript.push(...side);
 }
-//@ chunk-e6aww6q8.js:444704-444757 layout
+//@ chunk-5xgkngpb.js:447584-447637 layout
 var TENGU_CCR_STORED_GAP_BRIDGE_ENABLED = "tengu_ccr_stored_gap_bridge_enabled";
 var CCR_STORED_GAP_BRIDGE_FLAG = 16;
-//@ chunk-e6aww6q8.js:444757-445149 callgraph-fingerprint (2.1.88 match: applySnipRemovals, 0.189)
-function applySnipRemovals(messages, leafUuid) {
+//@ chunk-5xgkngpb.js:447637-448029 layout
+function bridgeStoredGaps(messages, leafUuid) {
   if (
     !isRemoteEnvironmentAny() ||
     !isFoamySpringEnabled() ||
     !readGateTrueByDefault(TENGU_CCR_STORED_GAP_BRIDGE_ENABLED)
   )
     return;
-  let toDelete = new Set();
+  let visited = new Set();
   let bridges = 0;
   let newestGapMs = 0;
   let current = leafUuid ? messages.get(leafUuid) : undefined;
-  while (current?.parentUuid && !toDelete.has(current.uuid)) {
-    toDelete.add(current.uuid);
-    let entry = messages.get(current.parentUuid);
-    if (!entry && bridges < CCR_STORED_GAP_BRIDGE_FLAG) {
-      entry = removeExtraFields_2(messages, current, toDelete);
-      if (entry) {
+  while (current?.parentUuid && !visited.has(current.uuid)) {
+    visited.add(current.uuid);
+    let parent = messages.get(current.parentUuid);
+    if (!parent && bridges < CCR_STORED_GAP_BRIDGE_FLAG) {
+      parent = removeExtraFields_2(messages, current, visited);
+      if (parent) {
         messages.set(current.uuid, {
           ...current,
-          parentUuid: entry.uuid,
+          parentUuid: parent.uuid,
         });
-        newestGapMs ||= Date.parse(current.timestamp) - Date.parse(entry.timestamp);
+        newestGapMs ||= Date.parse(current.timestamp) - Date.parse(parent.timestamp);
         bridges++;
       }
     }
-    current = entry;
+    current = parent;
   }
   if (bridges > 0)
     logEvent("tengu_ccr_stored_gap_bridged", {
@@ -7714,8 +7912,8 @@ function applySnipRemovals(messages, leafUuid) {
       message_count: messages.size,
     });
 }
-//@ chunk-e6aww6q8.js:445149-445455 fingerprint (2.1.88 match: removeExtraFields, 0.847)
-function removeExtraFields_2(messages, current, toDelete) {
+//@ chunk-5xgkngpb.js:448029-448335 fingerprint (2.1.88 match: removeExtraFields, 0.847)
+function removeExtraFields_2(messages, current, visited) {
   let candidates = [];
   for (let message of messages.values()) {
     if (message.uuid === current.uuid) break;
@@ -7725,7 +7923,7 @@ function removeExtraFields_2(messages, current, toDelete) {
   let best;
   for (let message of candidates)
     if (
-      !toDelete.has(message.uuid) &&
+      !visited.has(message.uuid) &&
       !parents.has(message.uuid) &&
       !(message.type === "system" && !message.parentUuid) &&
       (!best || message.timestamp >= best.timestamp)
@@ -7733,17 +7931,26 @@ function removeExtraFields_2(messages, current, toDelete) {
       best = message;
   return best;
 }
-//@ chunk-e6aww6q8.js:445455-445534 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_5(message) {
+//@ chunk-5xgkngpb.js:448335-448414 placement
+function hasToolUseBlockFlag(message) {
   return message.type === "assistant" && contentHasBlockType(message.message?.content, "tool_use");
 }
-//@ chunk-e6aww6q8.js:445534-445621 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-5xgkngpb.js:448414-448501 placement
 function hasToolUseBlock(message) {
   return message.type === "assistant"
     ? collectBlockFieldsByType(message.message?.content, "tool_use", "id")
     : [];
 }
-//@ chunk-e6aww6q8.js:445862-446111 placement
+//@ chunk-5xgkngpb.js:448501-448594 affinity
+/**
+ * user 消息里所有 tool_result 的 tool_use_id。旧版名 isToolResultBlock 不准确。
+ */
+function getToolResultIds(message) {
+  return message.type === "user"
+    ? collectBlockFieldsByType(message.message?.content, "tool_result", "tool_use_id")
+    : [];
+}
+//@ chunk-5xgkngpb.js:448742-448991 placement
 function countVisibleMessages_2(message, messageId) {
   switch (message.type) {
     case "assistant":
@@ -7758,33 +7965,33 @@ function countVisibleMessages_2(message, messageId) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:446111-446162 layout
+//@ chunk-5xgkngpb.js:448991-449042 layout
 function isAssistantTranscriptEntry(entry) {
   return isTranscriptMessage(entry) && entry.type === "assistant";
 }
-//@ chunk-e6aww6q8.js:446162-446211 layout
+//@ chunk-5xgkngpb.js:449042-449091 layout
 function isChainLinkCandidate(entry, messageId) {
   return (
     isLegacyProgressEntry(entry) || (isTranscriptMessage(entry) && countVisibleMessages_2(entry, messageId))
   );
 }
-//@ chunk-e6aww6q8.js:446211-446265 layout
+//@ chunk-5xgkngpb.js:449091-449145 layout
 function getAssistantMessageId(entry, fallbackId) {
   return isAssistantTranscriptEntry(entry) ? (entry.message?.id ?? null) : fallbackId;
 }
-//@ chunk-e6aww6q8.js:446265-446309 layout
+//@ chunk-5xgkngpb.js:449145-449189 layout
 function isProgressOrHiddenEntry(entry) {
   return isLegacyProgressEntry(entry) || (isTranscriptMessage(entry) && isAuxiliaryEntry(entry));
 }
-//@ chunk-e6aww6q8.js:446309-446394 layout
+//@ chunk-5xgkngpb.js:449189-449274 layout
 function hasMalformedMessage(entry) {
   return (
     isTranscriptMessage(entry) &&
     (entry.type === "user" || entry.type === "assistant") &&
-    !isPlainObject_5(entry.message)
+    !isPlainObject_6(entry.message)
   );
 }
-//@ chunk-e6aww6q8.js:446394-450439 fingerprint (2.1.88 match: recoverOrphanedParallelToolResults, 0.451)
+//@ chunk-5xgkngpb.js:449274-453323 fingerprint (2.1.88 match: recoverOrphanedParallelToolResults, 0.45)
 /**
  * 并行工具调用时多个 tool_result 只有一个在主链上，把同一 assistant 消息的其余 tool_result 找回插入链中。
  */
@@ -7931,7 +8138,7 @@ function recoverOrphanedParallelToolResults(messages, chain, seen) {
     }
     while (groupEnd < chain.length && countVisibleMessages_2(chain[groupEnd], msgId)) groupEnd++;
     let anchoredTails = new Map();
-    if (group.some(countToolCallsSince_5)) {
+    if (group.some(hasToolUseBlockFlag)) {
       childrenIndex ??= buildChildrenIndex(messages);
       let index = childrenIndex;
       let entries = [...group];
@@ -8016,7 +8223,7 @@ function recoverOrphanedParallelToolResults(messages, chain, seen) {
   result.push(...chain.slice(previousEnd));
   return result;
 }
-//@ chunk-e6aww6q8.js:450439-450740 facade-majority (2.1.88 match: checkResumeConsistency, 1)
+//@ chunk-5xgkngpb.js:453323-453624 facade-majority (2.1.88 match: checkResumeConsistency, 1)
 /**
  * 检查恢复的消息链与记录的轮次统计是否一致，偏差时打 tengu_resume_consistency_delta。
  */
@@ -8037,11 +8244,11 @@ function checkResumeConsistency(chain) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:450740-450788 file-local
-function buildAttributionSnapshotChain(attributionSnapshots, _conversation) {
+//@ chunk-5xgkngpb.js:453624-453670 file-local
+function buildAttributionSnapshotChain(attributionSnapshots) {
   return Array.from(attributionSnapshots.values());
 }
-//@ chunk-e6aww6q8.js:450788-450856 facade-majority
+//@ chunk-5xgkngpb.js:453670-453738 facade-majority
 class TranscriptFileFormatError extends Error {
   code;
   constructor(message, code) {
@@ -8049,11 +8256,11 @@ class TranscriptFileFormatError extends Error {
     this.code = code;
   }
 }
-//@ chunk-e6aww6q8.js:450856-452382 layout
+//@ chunk-5xgkngpb.js:453738-455344 layout
 function buildLiteLogFromMessages(transcriptFile, lite, fallbackSessionId) {
   let sessionId =
     findLatestMessage(transcriptFile.messages.values(), () => true)?.sessionId ?? fallbackSessionId;
-  return {
+  let log = {
     ...lite,
     messages: [],
     value: lite.value ?? 0,
@@ -8071,6 +8278,7 @@ function buildLiteLogFromMessages(transcriptFile, lite, fallbackSessionId) {
     permissionMode: transcriptFile.permissionModes.get(sessionId),
     isolationLatch: transcriptFile.isolationLatches.get(sessionId),
     devModsFolder: transcriptFile.devModsFolders?.get(sessionId),
+    sessionOwner: transcriptFile.sessionOwners?.get(sessionId),
     memoryModeStamps: transcriptFile.memoryModeStamps.get(sessionId) ?? [],
     atisLatch: transcriptFile.atisLatches.get(sessionId),
     toolsUsed: transcriptFile.toolsUsedLists?.get(sessionId),
@@ -8094,8 +8302,10 @@ function buildLiteLogFromMessages(transcriptFile, lite, fallbackSessionId) {
     contentReplacements: transcriptFile.contentReplacements.get(sessionId) ?? [],
     rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
   };
+  log.replMode = weakMap_7.get(transcriptFile.messages)?.get(sessionId);
+  return log;
 }
-//@ chunk-e6aww6q8.js:452382-455102 facade-majority (2.1.88 match: loadTranscriptFromFile, 0.439)
+//@ chunk-5xgkngpb.js:455344-458134 facade-majority (2.1.88 match: loadTranscriptFromFile, 0.428)
 /**
  * 读取指定 jsonl 文件并构造日志对象（No messages found in JSONL file 时报错），用于 --resume <path>.jsonl。
  */
@@ -8133,6 +8343,7 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
       costStates,
       isolationLatches,
       devModsFolders,
+      sessionOwners,
       memoryModeStamps,
       atisLatches,
       toolsUsedLists,
@@ -8150,9 +8361,7 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
       throw new TranscriptFileFormatError("No messages found in JSONL file", "no_messages");
     let leafMessage =
       findLatestMessage(messages.values(), (msg) => leafUuids.has(msg.uuid)) ??
-      (leafUuids.size === 0 && !clearedToEmpty
-        ? findLatestMessage(messages.values(), (msg) => !msg.isSidechain)
-        : undefined);
+      (leafUuids.size === 0 && !clearedToEmpty ? filterResumableSessions_2(messages) : undefined);
     if (!leafMessage) {
       if (clearedToEmpty) {
         let timestamp = fileStat?.mtime ?? new Date(transcriptFile.v5Read?.mtimeMs ?? 0);
@@ -8171,7 +8380,7 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
     let customTitle = customTitles.get(leafMessage.sessionId);
     let tag = tags.get(leafMessage.sessionId);
     let sessionId = leafMessage.sessionId;
-    return {
+    let log = {
       ...convertToLogOption(
         transcript,
         0,
@@ -8180,11 +8389,12 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
         buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
         tag,
         transcriptPath,
-        buildAttributionSnapshotChain(attributionSnapshots, transcript),
+        buildAttributionSnapshotChain(attributionSnapshots),
         undefined,
         contentReplacements.get(sessionId) ?? [],
       ),
       rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
+      fileSnapshots: getFileSnapshotMessages(messages),
       aiTitle: aiTitles.get(sessionId),
       relocatedCwd: relocatedCwds.get(sessionId),
       ...withEndedByModel({}, endedSessions.has(sessionId)),
@@ -8194,6 +8404,7 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
       costState: costStates.get(sessionId),
       isolationLatch: isolationLatches.get(sessionId),
       devModsFolder: devModsFolders?.get(sessionId),
+      sessionOwner: sessionOwners?.get(sessionId),
       memoryModeStamps: memoryModeStamps.get(sessionId) ?? [],
       atisLatch: getOrEmptyString(atisLatches, sessionId),
       toolsUsed: toolsUsedLists?.get(sessionId),
@@ -8206,6 +8417,8 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
       bridgeOwnerOrganizationUuid: bridgeOwnerOrganizationUuids.get(sessionId),
       sessionHistorySuppressed: historySuppressed.has(sessionId) ? true : undefined,
     };
+    log.replMode = weakMap_7.get(messages)?.get(sessionId);
+    return log;
   }
   let stats = await stat(transcriptPath);
   if (stats.size > 268435456)
@@ -8237,7 +8450,7 @@ async function loadTranscriptFromFile(transcriptPath, storageV5) {
     throw new TranscriptFileFormatError("No messages found in JSON file", "no_messages");
   return convertToLogOption(messages, 0, undefined, undefined, undefined, undefined, transcriptPath);
 }
-//@ chunk-e6aww6q8.js:455102-455270 layout
+//@ chunk-5xgkngpb.js:458134-458302 layout
 function makeEnoentError(path) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -8251,7 +8464,7 @@ function makeEnoentError(path) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:455270-455527 fingerprint (2.1.88 match: hasVisibleUserContent, 1)
+//@ chunk-5xgkngpb.js:458302-458559 fingerprint (2.1.88 match: hasVisibleUserContent, 1)
 function hasVisibleUserContent(message) {
   if (message.type !== "user") return false;
   if (message.isMeta) return false;
@@ -8264,7 +8477,7 @@ function hasVisibleUserContent(message) {
     );
   return false;
 }
-//@ chunk-e6aww6q8.js:455527-455721 file-local
+//@ chunk-5xgkngpb.js:458559-458753 file-local
 /**
  * assistant 消息含非空 text 块。旧版名 getAssistantMessageText 不准确。
  */
@@ -8276,7 +8489,7 @@ function hasNonEmptyAssistantText(message) {
     (block) => block.type === "text" && typeof block.text === "string" && block.text.trim().length > 0,
   );
 }
-//@ chunk-e6aww6q8.js:455721-455902 placement (2.1.88 match: isSyntheticMessage, 1)
+//@ chunk-5xgkngpb.js:458753-458934 placement (2.1.88 match: isSyntheticMessage, 1)
 /**
  * 统计含可见内容的 user/assistant 消息数（会话列表用）。旧版名 isSyntheticMessage 为错配。
  */
@@ -8297,7 +8510,7 @@ function countVisibleMessages(message) {
     }
   return visible;
 }
-//@ chunk-e6aww6q8.js:455902-456426 fingerprint (2.1.88 match: convertToLogOption, 0.925)
+//@ chunk-5xgkngpb.js:458934-459465 fingerprint (2.1.88 match: convertToLogOption, 0.925)
 function convertToLogOption(
   transcript,
   value = 0,
@@ -8340,7 +8553,7 @@ function convertToLogOption(
     projectPath: firstMessage.cwd,
   };
 }
-//@ chunk-e6aww6q8.js:456426-456852 fingerprint (2.1.88 match: trackSessionBranchingAnalytics, 1)
+//@ chunk-5xgkngpb.js:459465-459891 fingerprint (2.1.88 match: trackSessionBranchingAnalytics, 1)
 /**
  * 统计会话分叉（同一会话多叶子），打 tengu_session_forked_branches_fetched。
  */
@@ -8367,7 +8580,7 @@ async function trackSessionBranchingAnalytics(logs) {
     total_transcript_count: logs.length,
   });
 }
-//@ chunk-e6aww6q8.js:456852-457422 facade-majority (2.1.88 match: fetchLogs, 0)
+//@ chunk-5xgkngpb.js:459891-460461 facade-majority (2.1.88 match: fetchLogs, 0)
 /**
  * 列出当前项目（及 worktree）的会话日志（lite），供 /resume 与 --continue 使用。
  */
@@ -8416,30 +8629,30 @@ async function fetchLogs(limit, storage) {
   await trackSessionBranchingAnalytics(logs);
   return logs;
 }
-//@ chunk-e6aww6q8.js:457422-457634 layout
-function writeTranscriptMetadataSync(sessionFile, entry) {
+//@ chunk-5xgkngpb.js:460461-460673 layout
+function writeTranscriptMetadataSync(transcriptPath, entry) {
   if (isTranscriptPersistenceDisabled()) return;
-  assertDiskWritable("transcript_metadata", sessionFile);
+  assertDiskWritable("transcript_metadata", transcriptPath);
   let fsImplementation = getFsImplementation();
   let line =
     jsonStringify(entry) +
     `
 `;
   try {
-    fsImplementation.appendFileSync(sessionFile, line, {
+    fsImplementation.appendFileSync(transcriptPath, line, {
       mode: 384,
     });
   } catch {
-    fsImplementation.mkdirSync(dirname(sessionFile), {
+    fsImplementation.mkdirSync(dirname(transcriptPath), {
       mode: 448,
     });
-    fsImplementation.appendFileSync(sessionFile, line, {
+    fsImplementation.appendFileSync(transcriptPath, line, {
       mode: 384,
     });
   }
-  getProject().fireMirror(sessionFile, [entry]);
+  getProject().fireMirror(transcriptPath, [entry]);
 }
-//@ chunk-e6aww6q8.js:457634-458137 layout
+//@ chunk-5xgkngpb.js:460673-461175 layout
 /**
  * 同步向已存在的转录文件追加一条记录（文件末尾无换行时先补换行、可换用替代记录），完整写入后触发镜像；文件不存在或为空时跳过。
  */
@@ -8489,7 +8702,7 @@ function appendEntrySync(transcriptPath, entry, tornTailEntry) {
   }
   getProject().fireMirror(transcriptPath, [entry]);
 }
-//@ chunk-e6aww6q8.js:458137-458381 layout
+//@ chunk-5xgkngpb.js:461175-461419 layout
 function readTranscriptTail(sessionFile) {
   if (isDiskless()) return "";
   let fd;
@@ -8509,23 +8722,23 @@ function readTranscriptTail(sessionFile) {
       } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:458381-458394 layout
+//@ chunk-5xgkngpb.js:461419-461432 layout
 var transcriptRelocationQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:458381", () => {
+deferInit("chunk-5xgkngpb.js:461419", () => {
   transcriptRelocationQueue = createKeyedQueue();
 });
-//@ chunk-e6aww6q8.js:458394-458446 layout
+//@ chunk-5xgkngpb.js:461432-461484 layout
 function openRelocationBracket(sessionFilePath) {
   currentTranscriptStore().openAppendRelocationBracket(sessionFilePath);
 }
-//@ chunk-e6aww6q8.js:458446-458598 layout
+//@ chunk-5xgkngpb.js:461484-461636 layout
 function flushParkedAppends(sessionFilePath) {
   let parked = currentTranscriptStore().closeAppendRelocationBracket();
   if (!parked) return;
   for (let { entry, storageV5, opts, resolve, reject } of parked)
     appendEntryToFileAsync(sessionFilePath, entry, storageV5, opts).then(resolve, reject);
 }
-//@ chunk-e6aww6q8.js:458598-459186 facade-majority
+//@ chunk-5xgkngpb.js:461636-462224 facade-majority
 function appendEntryToFileAsync(path, entry, storageV5, opts) {
   if (isTranscriptPersistenceDisabled()) return Promise.resolve();
   let { relocationParkedAppends, relocationParkedPath } = currentTranscriptStore();
@@ -8566,11 +8779,11 @@ function appendEntryToFileAsync(path, entry, storageV5, opts) {
   });
   return queued;
 }
-//@ chunk-e6aww6q8.js:459186-459226 facade-majority
+//@ chunk-5xgkngpb.js:462224-462264 facade-majority
 async function flushAppendEntryQueues() {
   await transcriptRelocationQueue.settle();
 }
-//@ chunk-e6aww6q8.js:459226-459401 layout
+//@ chunk-5xgkngpb.js:462264-462439 layout
 function isLastPromptLine(line) {
   if (!line.includes('"type":"last-prompt"') || !line.includes('"leafUuid":')) return false;
   try {
@@ -8580,7 +8793,7 @@ function isLastPromptLine(line) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:459401-459819 layout (2.1.88 match: readFileRange, 0.819)
+//@ chunk-5xgkngpb.js:462439-462858 layout (2.1.88 match: readFileRange, 0.818)
 async function readFileRange(path, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined && transcriptKeyFor(path) !== undefined)
     return (
@@ -8611,7 +8824,7 @@ async function readFileRange(path, storageV5) {
       } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:459819-460025 facade-majority
+//@ chunk-5xgkngpb.js:462858-463064 facade-majority
 async function markSessionEndedByModel(sessionId, storageV5) {
   if (isTranscriptPersistenceDisabled()) return;
   await appendEntryToFileAsync(
@@ -8626,7 +8839,7 @@ async function markSessionEndedByModel(sessionId, storageV5) {
     logForDebugging(`markSessionEndedByModel: transcript append failed: ${errorMessage(error)}`);
   });
 }
-//@ chunk-e6aww6q8.js:460025-460111 facade-majority
+//@ chunk-5xgkngpb.js:463064-463150 facade-majority
 function applyEndedByModelOnResume(endedByModel, setAppState) {
   let ended = Boolean(endedByModel);
   setAppState((state) =>
@@ -8638,7 +8851,7 @@ function applyEndedByModelOnResume(endedByModel, setAppState) {
         },
   );
 }
-//@ chunk-e6aww6q8.js:460111-460503 facade-majority (2.1.88 match: saveCustomTitle, 0.756)
+//@ chunk-5xgkngpb.js:463150-463542 facade-majority (2.1.88 match: saveCustomTitle, 0.756)
 /**
  * 追加 custom-title 记录（/rename 等），更新内存中的会话标题并发出标题变更事件。
  */
@@ -8676,7 +8889,7 @@ async function saveCustomTitle(sessionId, customTitle, fullPath, source = "user"
     source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:460503-460722 facade-majority (2.1.88 match: saveAiGeneratedTitle, 0.539)
+//@ chunk-5xgkngpb.js:463542-463761 facade-majority (2.1.88 match: saveAiGeneratedTitle, 0.539)
 /**
  * 追加 ai-title 记录（自动生成的会话标题）。
  */
@@ -8697,7 +8910,7 @@ function saveAiGeneratedTitle(sessionId, aiTitle, storageV5) {
     currentTranscriptStore().sessionTitleChanged.emit();
   }
 }
-//@ chunk-e6aww6q8.js:460722-461204 facade-majority (2.1.88 match: linkSessionToPR, 0.804)
+//@ chunk-5xgkngpb.js:463761-464243 facade-majority (2.1.88 match: linkSessionToPR, 0.804)
 /**
  * 追加 pr-link 记录（PR 编号、URL、仓库），打 tengu_session_linked_to_pr。
  */
@@ -8738,11 +8951,11 @@ async function linkSessionToPR(sessionId, prNumber, prUrl, prRepository, fullPat
     project.currentSessionPrRepository = prRepository;
   }
 }
-//@ chunk-e6aww6q8.js:461204-461292 layout
+//@ chunk-5xgkngpb.js:464243-464331 layout
 function needsTranscriptTarget(project, path, options) {
   return Boolean(project.sessionFilePath) || (options?.targetExists === true && path !== undefined);
 }
-//@ chunk-e6aww6q8.js:461292-462041 facade-majority
+//@ chunk-5xgkngpb.js:464331-465171 facade-majority
 function saveBridgeSession(
   sessionId,
   bridgeSessionId,
@@ -8756,7 +8969,11 @@ function saveBridgeSession(
   storageV5,
 ) {
   let project = getProject();
-  if (needsTranscriptTarget(project, path, options))
+  let isCurrentSessionFile =
+    options?.atExit === true &&
+    sessionId === getSessionId() &&
+    (path ?? getTranscriptPathForSession(sessionId)) === project.sessionFilePath;
+  if (needsTranscriptTarget(project, path, options) && !isCurrentSessionFile)
     appendEntryToFileAsync(
       path ?? getTranscriptPathForSession(sessionId),
       {
@@ -8781,6 +8998,9 @@ function saveBridgeSession(
         }),
       },
       storageV5,
+      {
+        onlyIfExists: options?.atExit,
+      },
     ).catch((error) => {
       logForDebugging(`saveBridgeSession: transcript append failed: ${errorMessage(error)}`);
     });
@@ -8794,7 +9014,7 @@ function saveBridgeSession(
     project.currentSessionBridgeOwnerOrganizationUuid = owner?.organizationUuid;
   }
 }
-//@ chunk-e6aww6q8.js:462041-462279 facade-majority
+//@ chunk-5xgkngpb.js:465171-465409 facade-majority
 function writeHistorySuppression(sessionId, path, reason, detail, storageV5) {
   let sid = sessionId ?? getSessionId();
   if (!sid) return;
@@ -8811,11 +9031,11 @@ function writeHistorySuppression(sessionId, path, reason, detail, storageV5) {
   if (sid === getSessionId()) getProject().currentSessionHistorySuppressed = true;
   return promise;
 }
-//@ chunk-e6aww6q8.js:462279-462343 facade-majority
+//@ chunk-5xgkngpb.js:465409-465472 facade-majority
 function isSessionHistorySuppressed() {
   return getProject().currentSessionHistorySuppressed === true;
 }
-//@ chunk-e6aww6q8.js:462343-462597 facade-majority
+//@ chunk-5xgkngpb.js:465472-465726 facade-majority
 async function readHistorySuppressionFromDisk(storageV5) {
   let sessionId = getSessionId();
   let materializedSessionFile = getMaterializedSessionFile();
@@ -8843,19 +9063,19 @@ async function readHistorySuppressionFromDisk(storageV5) {
     return "read-error";
   }
 }
-//@ chunk-e6aww6q8.js:462597-462659 facade-majority
+//@ chunk-5xgkngpb.js:465726-465788 facade-majority
 function isTranscriptRelocationInProgress() {
   return getProject().isTranscriptRelocationInProgress();
 }
-//@ chunk-e6aww6q8.js:462659-462710 facade-majority
+//@ chunk-5xgkngpb.js:465788-465839 facade-majority
 function mirrorInternalEntryForTesting(entry) {
   return getProject().mirrorInternalEntry(entry);
 }
-//@ chunk-e6aww6q8.js:462710-462745 facade-majority
+//@ chunk-5xgkngpb.js:465839-465874 facade-majority
 var SUPPRESSION_SCAN_MAX_LINES = 1e5;
 var SUPPRESSION_SCAN_MAX_LINES_ANT = 1e6;
 var SUPPRESSION_SCAN_MAX_BYTES_ANT = 4294967296;
-//@ chunk-e6aww6q8.js:462745-462989 facade-majority
+//@ chunk-5xgkngpb.js:465874-466118 facade-majority
 class SuppressionScanBudget {
   maxLines;
   maxBytes;
@@ -8873,17 +9093,17 @@ class SuppressionScanBudget {
     return ++this.lines >= this.maxLines || this.chars >= this.maxBytes;
   }
 }
-//@ chunk-e6aww6q8.js:462989-463004 facade-majority
+//@ chunk-5xgkngpb.js:466118-466133 facade-majority
 var SUPPRESSION_SCAN_CHUNK_BYTES = 262144;
-//@ chunk-e6aww6q8.js:463004-463134 facade-majority
+//@ chunk-5xgkngpb.js:466133-466263 facade-majority
 function suppressionScanFailure(error) {
   if (isENOENT(error)) return "no-file";
   if (error instanceof FileChangedDuringReadError) return error.partialRead ? "partial-read" : "file-changed";
   return "read-error";
 }
-//@ chunk-e6aww6q8.js:463134-463151 facade-majority
+//@ chunk-5xgkngpb.js:466263-466280 facade-majority
 function logSuppressionScan(info) {}
-//@ chunk-e6aww6q8.js:463151-463643 facade-majority
+//@ chunk-5xgkngpb.js:466280-466774 facade-majority
 async function scanTranscriptForSuppression(path, options, storageV5) {
   let storageKey =
     isStorageV5Enabled() && storageV5 !== undefined ? getTranscriptStorageKey(path, storageV5) : undefined;
@@ -8931,7 +9151,7 @@ async function scanTranscriptForSuppression(path, options, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:463643-464057 facade-majority
+//@ chunk-5xgkngpb.js:466774-467188 facade-majority
 async function scanAppendedForSuppression(path, snapshot, options, budget) {
   for (;;) {
     let size = 0;
@@ -8966,16 +9186,16 @@ async function scanAppendedForSuppression(path, snapshot, options, budget) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:464057-464124 facade-majority (2.1.88 match: getErrorsPath, 1)
+//@ chunk-5xgkngpb.js:467188-467255 facade-majority (2.1.88 match: getErrorsPath, 1)
 function isOwnTranscriptFile(sessionId, path) {
   return sessionId !== undefined && path != null && basename(path) === `${sessionId}.jsonl`;
 }
-//@ chunk-e6aww6q8.js:464124-464178 facade-majority (2.1.88 match: getErrorsPath, 1)
+//@ chunk-5xgkngpb.js:467255-467309 facade-majority (2.1.88 match: getErrorsPath, 1)
 function getDerivedTranscriptPathForSession(sessionId) {
   let projectDir = resolveProjectDir();
   return join(projectDir, `${sessionId}.jsonl`);
 }
-//@ chunk-e6aww6q8.js:464178-464357 facade-majority
+//@ chunk-5xgkngpb.js:467309-467488 facade-majority
 function matchesHistorySuppressionLine(line, options = {}) {
   if (!line.includes('"history-suppression"')) return false;
   try {
@@ -8987,7 +9207,7 @@ function matchesHistorySuppressionLine(line, options = {}) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:464357-464879 facade-majority
+//@ chunk-5xgkngpb.js:467488-468010 facade-majority
 function buildForkAdoptionMeta(meta, options = {}) {
   return {
     ...meta,
@@ -9013,7 +9233,7 @@ function buildForkAdoptionMeta(meta, options = {}) {
     bridgeOwnerOrganizationUuid: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:464879-465180 facade-majority
+//@ chunk-5xgkngpb.js:468010-468311 facade-majority
 async function adoptForkSessionMetadata(meta, options) {
   let destSid = options.destSid ?? pinSessionId(getSessionId());
   let suppressed =
@@ -9037,77 +9257,77 @@ async function adoptForkSessionMetadata(meta, options) {
   );
   copyPrecautionarySuppressionTo(destSid, pinSessionId(meta.sessionId));
 }
-//@ chunk-e6aww6q8.js:465180-465235 facade-majority
+//@ chunk-5xgkngpb.js:468311-468366 facade-majority
 function holdSessionHistorySuppression() {
   getProject().currentSessionHistorySuppressed = true;
 }
-//@ chunk-e6aww6q8.js:465235-465321 facade-majority
+//@ chunk-5xgkngpb.js:468366-468452 facade-majority
 function holdSessionHistorySuppressionFor(sid) {
   markSessionHistorySuppressedFor(sid);
   if (sid !== undefined && sid === getSessionId()) getProject().currentSessionHistorySuppressed = true;
 }
-//@ chunk-e6aww6q8.js:465321-465436 facade-majority
+//@ chunk-5xgkngpb.js:468452-468567 facade-majority
 function markSessionHistorySuppressedFor(sid) {
   if (sid === undefined) return;
   let project = getProject();
   project.knownTaintedSessionIds ??= new Set();
   project.knownTaintedSessionIds.add(sid);
 }
-//@ chunk-e6aww6q8.js:465436-465512 facade-majority
+//@ chunk-5xgkngpb.js:468567-468643 facade-majority
 function isSessionHistorySuppressedFor(sid) {
   return sid !== undefined && getProject().knownTaintedSessionIds?.has(sid) === true;
 }
-//@ chunk-e6aww6q8.js:465512-465571 facade-majority
+//@ chunk-5xgkngpb.js:468643-468702 facade-majority
 function dropSessionHistorySuppression() {
   getProject().currentSessionHistorySuppressed = undefined;
 }
-//@ chunk-e6aww6q8.js:465571-465595 facade-majority
+//@ chunk-5xgkngpb.js:468702-468726 facade-majority
 function pinSessionId(sessionId) {
   return sessionId;
 }
-//@ chunk-e6aww6q8.js:465595-465734 facade-majority
+//@ chunk-5xgkngpb.js:468726-468865 facade-majority
 function holdPrecautionarySuppressionFor(transcriptPath) {
   if (!transcriptPath) return;
   let project = getProject();
   project.currentSessionPrecautionarySuppression ??= new Set();
   project.currentSessionPrecautionarySuppression.add(transcriptPath);
 }
-//@ chunk-e6aww6q8.js:465734-465877 facade-majority
+//@ chunk-5xgkngpb.js:468865-469008 facade-majority
 function dropPrecautionarySuppressionForTesting() {
   getProject().currentSessionPrecautionarySuppression = undefined;
   getProject().clearResilientPrecautionSids = undefined;
   getProject().scanUncertaintyHoldSids = undefined;
 }
-//@ chunk-e6aww6q8.js:465877-466002 facade-majority
+//@ chunk-5xgkngpb.js:469008-469133 facade-majority
 function releasePrecautionarySuppressionFor(sid) {
   let project = getProject();
   if (sid && !project.clearResilientPrecautionSids?.has(sid))
     project.currentSessionPrecautionarySuppression?.delete(sid);
 }
-//@ chunk-e6aww6q8.js:466002-466129 facade-majority
+//@ chunk-5xgkngpb.js:469133-469260 facade-majority
 function markPrecautionClearResilientFor(sid) {
   if (sid === undefined) return;
   let project = getProject();
   project.clearResilientPrecautionSids ??= new Set();
   project.clearResilientPrecautionSids.add(sid);
 }
-//@ chunk-e6aww6q8.js:466129-466246 facade-majority
+//@ chunk-5xgkngpb.js:469260-469377 facade-majority
 function markScanUncertaintyHoldFor(sid) {
   if (sid === undefined) return;
   let project = getProject();
   project.scanUncertaintyHoldSids ??= new Set();
   project.scanUncertaintyHoldSids.add(sid);
 }
-//@ chunk-e6aww6q8.js:466246-466323 facade-majority
+//@ chunk-5xgkngpb.js:469377-469454 facade-majority
 function isScanUncertaintyHoldFor(sid) {
   return sid !== undefined && getProject().scanUncertaintyHoldSids?.has(sid) === true;
 }
-//@ chunk-e6aww6q8.js:466323-466400 facade-majority
+//@ chunk-5xgkngpb.js:469454-469531 facade-majority
 function claimPrecautionHoldForObservedCause(boundSessionKey) {
   if (boundSessionKey === undefined) return;
   getProject().scanUncertaintyHoldSids?.delete(boundSessionKey);
 }
-//@ chunk-e6aww6q8.js:466400-466623 facade-majority
+//@ chunk-5xgkngpb.js:469531-469754 facade-majority
 function releaseScanUncertaintyHoldFor(sid) {
   if (sid === undefined) return;
   let project = getProject();
@@ -9116,15 +9336,15 @@ function releaseScanUncertaintyHoldFor(sid) {
   project.clearResilientPrecautionSids?.delete(sid);
   project.currentSessionPrecautionarySuppression?.delete(sid);
 }
-//@ chunk-e6aww6q8.js:466623-466658 facade-majority
+//@ chunk-5xgkngpb.js:469754-469788 facade-majority
 function isPrecautionarySuppressionHeld() {
   return isPrecautionarySuppressionHeldFor(pinSessionId(getSessionId()));
 }
-//@ chunk-e6aww6q8.js:466658-466750 facade-majority
+//@ chunk-5xgkngpb.js:469788-469879 facade-majority
 function isPrecautionarySuppressionHeldFor(sid) {
   return sid !== undefined && getProject().currentSessionPrecautionarySuppression?.has(sid) === true;
 }
-//@ chunk-e6aww6q8.js:466750-466943 facade-majority
+//@ chunk-5xgkngpb.js:469879-470072 facade-majority
 function copyPrecautionarySuppressionTo(from, to) {
   if (!from || !to) return;
   let project = getProject();
@@ -9134,36 +9354,36 @@ function copyPrecautionarySuppressionTo(from, to) {
     if (project.clearResilientPrecautionSids?.has(to)) project.clearResilientPrecautionSids.add(from);
   }
 }
-//@ chunk-e6aww6q8.js:466943-466991 facade-majority
+//@ chunk-5xgkngpb.js:470072-470120 facade-majority
 function registerLiveSuppressionProbe(probe) {
   currentTranscriptStore().setLiveSuppressionProbe(probe);
 }
-//@ chunk-e6aww6q8.js:466991-467048 facade-majority
+//@ chunk-5xgkngpb.js:470120-470177 facade-majority
 function isLiveBridgeSuppressed() {
   return currentTranscriptStore().liveSuppressionProbe?.() === true;
 }
-//@ chunk-e6aww6q8.js:467048-467069 facade-majority (2.1.88 match: orgStatus, 1)
+//@ chunk-5xgkngpb.js:470177-470198 facade-majority (2.1.88 match: orgStatus, 1)
 var PENDING_BRIDGE_SESSION = "pending";
 var PENDING_BRIDGE_SESSION_2;
-//@ chunk-e6aww6q8.js:467069-467090 facade-majority
+//@ chunk-5xgkngpb.js:470198-470219 facade-majority
 function registerForeignConversationProbe(probe) {
   PENDING_BRIDGE_SESSION_2 = probe;
 }
-//@ chunk-e6aww6q8.js:467090-467126 facade-majority
+//@ chunk-5xgkngpb.js:470219-470255 facade-majority
 function bridgeSessionsForPulledRow(uuid) {
   return pulledRows_2()?.get(uuid);
 }
-//@ chunk-e6aww6q8.js:467126-467209 layout
+//@ chunk-5xgkngpb.js:470255-470338 layout
 function firstConcreteBridgeSession(sids) {
   if (sids === undefined) return;
   for (let sid of sids) if (sid !== PENDING_BRIDGE_SESSION) return sid;
   return PENDING_BRIDGE_SESSION;
 }
-//@ chunk-e6aww6q8.js:467209-467248 layout
+//@ chunk-5xgkngpb.js:470338-470377 layout
 function pulledRows_2() {
   return PENDING_BRIDGE_SESSION_2?.().pulledRows;
 }
-//@ chunk-e6aww6q8.js:467248-467422 facade-majority
+//@ chunk-5xgkngpb.js:470377-470551 facade-majority
 function isRowForeignToBridgeSession(row, bridgeSessionId) {
   if (bridgeSessionId === undefined) return false;
   if (row.foreignToBridgeSession === bridgeSessionId || row.foreignToBridgeSession === PENDING_BRIDGE_SESSION)
@@ -9171,29 +9391,29 @@ function isRowForeignToBridgeSession(row, bridgeSessionId) {
   let sids = bridgeSessionsForPulledRow(row.uuid);
   return sids !== undefined && (sids.has(bridgeSessionId) || sids.has(PENDING_BRIDGE_SESSION));
 }
-//@ chunk-e6aww6q8.js:467422-467463 facade-majority
+//@ chunk-5xgkngpb.js:470551-470592 facade-majority
 function isBridgeBindingForeign() {
   return PENDING_BRIDGE_SESSION_2?.().foreign === true;
 }
-//@ chunk-e6aww6q8.js:467463-467570 facade-majority
+//@ chunk-5xgkngpb.js:470592-470699 facade-majority
 function isForeignToBinding(sid) {
   let binding = PENDING_BRIDGE_SESSION_2?.();
   if (binding?.foreign !== true) return false;
   if (!sid || !binding.boundSid) return true;
   return sid !== binding.boundSid;
 }
-//@ chunk-e6aww6q8.js:467570-467682 facade-majority
+//@ chunk-5xgkngpb.js:470699-470811 facade-majority
 function bridgeSessionForPulledWindow(sid) {
   let pulledWindow = PENDING_BRIDGE_SESSION_2?.().pulledWindow;
   return pulledWindow !== undefined && sid !== undefined && pulledWindow.sids.has(sid)
     ? pulledWindow.bridgeSessionId
     : undefined;
 }
-//@ chunk-e6aww6q8.js:467682-467720 facade-majority
+//@ chunk-5xgkngpb.js:470811-470849 facade-majority
 function getBridgeBoundConversationSid() {
   return PENDING_BRIDGE_SESSION_2?.().boundSid;
 }
-//@ chunk-e6aww6q8.js:467720-467792 facade-majority
+//@ chunk-5xgkngpb.js:470849-470920 facade-majority
 function isCompactPairWithheldFromRemote() {
   return (
     isSessionHistorySuppressed() ||
@@ -9202,7 +9422,7 @@ function isCompactPairWithheldFromRemote() {
     isPrecautionarySuppressionHeld()
   );
 }
-//@ chunk-e6aww6q8.js:467792-467844 facade-majority
+//@ chunk-5xgkngpb.js:470920-470971 facade-majority
 function isRemoteEgressSuppressedFor(sid) {
   return (
     isForeignToBinding(sid) ||
@@ -9211,7 +9431,7 @@ function isRemoteEgressSuppressedFor(sid) {
     isSessionHistorySuppressedFor(sid)
   );
 }
-//@ chunk-e6aww6q8.js:467844-467889 facade-majority
+//@ chunk-5xgkngpb.js:470971-471015 facade-majority
 function isConversationEgressTainted(sid) {
   return (
     isCompactPairWithheldFromRemote() ||
@@ -9219,11 +9439,11 @@ function isConversationEgressTainted(sid) {
     isSessionHistorySuppressedFor(sid)
   );
 }
-//@ chunk-e6aww6q8.js:467889-467914 facade-majority
+//@ chunk-5xgkngpb.js:471015-471040 facade-majority
 function clearBridgeSessionCache() {
   clearBridgeSessionFields(getProject());
 }
-//@ chunk-e6aww6q8.js:467914-468213 layout
+//@ chunk-5xgkngpb.js:471040-471339 layout
 function clearBridgeSessionFields(project) {
   project.currentSessionBridgeId = undefined;
   project.currentSessionBridgeSeq = undefined;
@@ -9233,7 +9453,7 @@ function clearBridgeSessionFields(project) {
   project.currentSessionBridgeOwnerAccountUuid = undefined;
   project.currentSessionBridgeOwnerOrganizationUuid = undefined;
 }
-//@ chunk-e6aww6q8.js:468213-468448 facade-majority
+//@ chunk-5xgkngpb.js:471339-471574 facade-majority
 function clearBridgeSession(sessionId, path, options, storageV5) {
   let sid = sessionId ?? getSessionId();
   let project = getProject();
@@ -9252,7 +9472,7 @@ function clearBridgeSession(sessionId, path, options, storageV5) {
     });
   if (sid === getSessionId()) clearBridgeSessionFields(project);
 }
-//@ chunk-e6aww6q8.js:468448-468846 facade-majority
+//@ chunk-5xgkngpb.js:471574-471972 facade-majority
 function getCurrentSessionBridge() {
   let project = getProject();
   return project.currentSessionBridgeId
@@ -9267,7 +9487,7 @@ function getCurrentSessionBridge() {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:468846-468911 facade-majority (2.1.88 match: getCurrentSessionTitle, 1)
+//@ chunk-5xgkngpb.js:471972-472037 facade-majority (2.1.88 match: getCurrentSessionTitle, 1)
 /**
  * 当前（或指定）会话的自定义标题。
  */
@@ -9275,23 +9495,20 @@ function getCurrentSessionTitle(sessionId) {
   if (sessionId === getSessionId()) return getProject().currentSessionTitle;
   return;
 }
-//@ chunk-e6aww6q8.js:468911-468979 facade-majority
+//@ chunk-5xgkngpb.js:472037-472105 facade-majority
 function getCurrentSessionAiTitle(sessionId) {
   if (sessionId === getSessionId()) return getProject().currentSessionAiTitle;
   return;
 }
-//@ chunk-e6aww6q8.js:468979-469015 facade-majority
-/**
- * 会话标题：自定义标题优先，否则 AI 生成标题。
- */
+//@ chunk-5xgkngpb.js:472105-472141 facade-majority
 function getCurrentSessionDisplayTitle(sessionId) {
   return getCurrentSessionTitle(sessionId) ?? getCurrentSessionAiTitle(sessionId);
 }
-//@ chunk-e6aww6q8.js:469015-469057 facade-majority
+//@ chunk-5xgkngpb.js:472141-472183 facade-majority
 function getCurrentSessionPeerName() {
   return getRegisteredSessionName()?.name ?? getCurrentSessionDisplayTitle(getSessionId());
 }
-//@ chunk-e6aww6q8.js:469057-469147 facade-majority
+//@ chunk-5xgkngpb.js:472183-472273 facade-majority
 function getCurrentSessionOffBoxPeerName() {
   let registeredSessionName = getRegisteredSessionName();
   return (
@@ -9300,31 +9517,31 @@ function getCurrentSessionOffBoxPeerName() {
       : undefined) ?? getCurrentSessionDisplayTitle(getSessionId())
   );
 }
-//@ chunk-e6aww6q8.js:469147-469195 facade-majority
+//@ chunk-5xgkngpb.js:472273-472321 facade-majority
 function getCurrentSessionPeerNameFor(kind) {
   return kind === "bridge" ? getCurrentSessionOffBoxPeerName() : getCurrentSessionPeerName();
 }
-//@ chunk-e6aww6q8.js:469195-469247 facade-majority (2.1.88 match: getCurrentSessionAgentColor, 1)
+//@ chunk-5xgkngpb.js:472321-472373 facade-majority (2.1.88 match: getCurrentSessionAgentColor, 1)
 function getCurrentSessionAgentColor() {
   return getProject().currentSessionAgentColor;
 }
-//@ chunk-e6aww6q8.js:469247-469298 facade-majority
+//@ chunk-5xgkngpb.js:472373-472424 facade-majority
 function getCurrentSessionAgentName() {
   return getProject().currentSessionAgentName;
 }
-//@ chunk-e6aww6q8.js:469298-469373 facade-majority
+//@ chunk-5xgkngpb.js:472424-472499 facade-majority
 function restoreConversationToolsUsed(toolsUsed, messages) {
   let conversationToolsUsed = getConversationToolsUsed();
   conversationToolsUsed.record(toolsUsed ?? []);
-  conversationToolsUsed.record(tagUntrustedArtifactContent(messages ?? [], undefined, false));
+  conversationToolsUsed.record(collectToolsUsedBeforeSummary(messages ?? [], undefined, false));
 }
-//@ chunk-e6aww6q8.js:469373-469456 facade-majority (2.1.88 match: setSessionFileForTesting, 0.526)
+//@ chunk-5xgkngpb.js:472499-472582 facade-majority (2.1.88 match: setSessionFileForTesting, 0.526)
 function markToolsUsedWritten() {
   let project = getProject();
   project.toolsUsedStamp = `${project.sessionFile}
 ${getConversationToolsUsed().generation()}`;
 }
-//@ chunk-e6aww6q8.js:469456-472098 facade-majority
+//@ chunk-5xgkngpb.js:472582-475351 facade-majority
 /**
  * resume 时把日志中的会话元数据（标题、AI 标题、tag、cwd 迁移、代理名/颜色/设置、模式、PR、worktree 等）装回 Project 当前会话字段。
  */
@@ -9340,6 +9557,8 @@ function restoreSessionMetadata(meta, options) {
   if (meta.agentSetting) project.currentSessionAgentSetting = meta.agentSetting;
   if (meta.mode) project.currentSessionMode = meta.mode;
   if (meta.permissionMode) project.currentSessionPermissionMode = meta.permissionMode;
+  if (meta.replMode !== undefined) project.currentSessionCodeMode = meta.replMode;
+  if (meta.sessionOwner?.accountUuid) project.currentSessionOwner = meta.sessionOwner;
   if (meta.isolationLatch) project.currentSessionIsolationLatch = meta.isolationLatch;
   if (meta.devModsFolder)
     if (isSessionFileAt(meta.devModsFolder, getSessionId()))
@@ -9408,10 +9627,10 @@ function restoreSessionMetadata(meta, options) {
   if (meta.leafUuid !== undefined) project.currentSessionLeafUuid = meta.leafUuid;
   if (meta.leafTs !== undefined) project.currentSessionLeafTs = meta.leafTs;
 }
-//@ chunk-e6aww6q8.js:472098-473538 facade-majority (2.1.88 match: restoreSessionMetadata, 0.453)
+//@ chunk-5xgkngpb.js:475351-476867 facade-majority (2.1.88 match: restoreSessionMetadata, 0.432)
 function snapshotSessionMetadata() {
   let project = getProject();
-  return {
+  let metadata = {
     customTitle: project.currentSessionTitle,
     aiTitle: project.currentSessionAiTitle,
     tag: project.currentSessionTag,
@@ -9421,6 +9640,7 @@ function snapshotSessionMetadata() {
     agentSetting: project.currentSessionAgentSetting,
     mode: project.currentSessionMode,
     permissionMode: project.currentSessionPermissionMode,
+    sessionOwner: project.currentSessionOwner,
     isolationLatch: project.currentSessionIsolationLatch,
     devModsFolder: project.currentSessionDevModsFolder,
     memoryModeStamps: project.currentSessionMemoryModeStamps.map(({ inFlight, ...rest }) => rest),
@@ -9446,8 +9666,10 @@ function snapshotSessionMetadata() {
     leafUuid: project.currentSessionLeafUuid,
     leafTs: project.currentSessionLeafTs,
   };
+  metadata.replMode = project.currentSessionCodeMode;
+  return metadata;
 }
-//@ chunk-e6aww6q8.js:473538-474497 facade-majority (2.1.88 match: clearSessionMetadata, 0.62)
+//@ chunk-5xgkngpb.js:476867-477887 facade-majority (2.1.88 match: clearSessionMetadata, 0.587)
 /**
  * 清空 Project 中当前会话的全部元数据字段（/clear、新会话时）。
  */
@@ -9466,6 +9688,8 @@ function clearSessionMetadata() {
   project.currentSessionAgentSetting = undefined;
   project.currentSessionMode = undefined;
   project.currentSessionPermissionMode = undefined;
+  project.currentSessionCodeMode = undefined;
+  project.currentSessionOwner = undefined;
   project.currentSessionIsolationLatch = undefined;
   project.currentSessionDevModsFolder = undefined;
   project.currentSessionMemoryModeStamps = [];
@@ -9484,14 +9708,14 @@ function clearSessionMetadata() {
   project.currentSessionHistorySuppressed = undefined;
   if (titleChanged) currentTranscriptStore().sessionTitleChanged.emit();
 }
-//@ chunk-e6aww6q8.js:474497-474548 facade-majority (2.1.88 match: reAppendSessionMetadata, 1)
+//@ chunk-5xgkngpb.js:477887-477938 facade-majority (2.1.88 match: reAppendSessionMetadata, 1)
 /**
  * 把当前会话元数据（标题、tag、last-prompt 等）重新追加到转录尾部，使 lite 读取（只读头尾）也能拿到最新元数据。
  */
 function reAppendSessionMetadata() {
   getProject().reAppendSessionMetadata(false, true);
 }
-//@ chunk-e6aww6q8.js:474548-474703 facade-majority
+//@ chunk-5xgkngpb.js:477938-478093 facade-majority
 async function reAppendSessionMetadataAfterCompaction(storageV5) {
   try {
     if (isStorageV5Enabled() && storageV5 !== undefined) {
@@ -9505,11 +9729,19 @@ async function reAppendSessionMetadataAfterCompaction(storageV5) {
     swallowRefusedDirectWrite(error);
   }
 }
-//@ chunk-e6aww6q8.js:474703-474768 facade-majority
+//@ chunk-5xgkngpb.js:478093-478180 facade-majority
+async function appendToolsUsedEntryBeforeClear(storageV5) {
+  try {
+    await getProject().appendToolsUsedEntryIfGrown(getSessionId(), storageV5);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-5xgkngpb.js:478180-478245 facade-majority
 function subscribeSessionAgentNameChanged(listener) {
   return currentTranscriptStore().sessionAgentNameChanged.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:474768-475111 facade-majority (2.1.88 match: saveAgentName, 0.752)
+//@ chunk-5xgkngpb.js:478245-478588 facade-majority (2.1.88 match: saveAgentName, 0.751)
 /**
  * 追加 agent-name 记录并更新当前会话代理名。
  */
@@ -9543,7 +9775,7 @@ async function saveAgentName(sessionId, agentName, fullPath, source = "user", st
     source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:475111-475403 facade-majority (2.1.88 match: saveAgentColor, 0.845)
+//@ chunk-5xgkngpb.js:478588-478880 facade-majority (2.1.88 match: saveAgentColor, 0.845)
 /**
  * 追加 agent-color 记录，打 tengu_agent_color_set。
  */
@@ -9572,30 +9804,30 @@ async function saveAgentColor(sessionId, agentColor, fullPath, storageV5) {
   if (sessionId === getSessionId()) getProject().currentSessionAgentColor = agentColor;
   logEvent("tengu_agent_color_set", {});
 }
-//@ chunk-e6aww6q8.js:475403-475453 facade-majority (2.1.88 match: saveAgentSetting, 1)
+//@ chunk-5xgkngpb.js:478880-478930 facade-majority (2.1.88 match: saveAgentSetting, 1)
 function saveAgentSetting(agentSetting) {
   getProject().currentSessionAgentSetting = agentSetting;
 }
-//@ chunk-e6aww6q8.js:475453-475514 facade-majority
+//@ chunk-5xgkngpb.js:478930-478991 facade-majority
 function subscribeSessionTitleChanged(listener) {
   return currentTranscriptStore().sessionTitleChanged.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:475514-475588 facade-majority (2.1.88 match: cacheSessionTitle, 0.562)
+//@ chunk-5xgkngpb.js:478991-479065 facade-majority (2.1.88 match: cacheSessionTitle, 0.563)
 function cacheSessionTitle(customTitle) {
   getProject().currentSessionTitle = customTitle;
   currentTranscriptStore().sessionTitleChanged.emit();
 }
-//@ chunk-e6aww6q8.js:475588-475665 facade-majority
+//@ chunk-5xgkngpb.js:479065-479142 facade-majority
 function cacheAiTitle(currentSessionAiTitle) {
   getProject().currentSessionAiTitle = currentSessionAiTitle;
   currentTranscriptStore().sessionTitleChanged.emit();
 }
-//@ chunk-e6aww6q8.js:475665-475748 facade-majority
+//@ chunk-5xgkngpb.js:479142-479225 facade-majority
 function cacheAgentName(currentSessionAgentName) {
   getProject().currentSessionAgentName = currentSessionAgentName;
   currentTranscriptStore().sessionAgentNameChanged.emit();
 }
-//@ chunk-e6aww6q8.js:475748-475858 facade-majority
+//@ chunk-5xgkngpb.js:479225-479335 facade-majority
 function titleCacheStillOn(id, name, suffixBase) {
   let currentSessionTitle = getCurrentSessionTitle(id);
   let cachedTitle = currentSessionTitle && sanitizeSessionTitle(currentSessionTitle);
@@ -9606,7 +9838,7 @@ function titleCacheStillOn(id, name, suffixBase) {
     (suffixBase !== undefined && cachedSlug === slugifySessionName(suffixBase))
   );
 }
-//@ chunk-e6aww6q8.js:475858-476066 facade-majority
+//@ chunk-5xgkngpb.js:479335-479543 facade-majority
 function cacheHookSessionTitle(title) {
   if (isTeammate()) return false;
   let sanitized = sanitizeSessionTitle(title);
@@ -9623,7 +9855,7 @@ function cacheHookSessionTitle(title) {
   cacheAgentName(sanitized);
   return true;
 }
-//@ chunk-e6aww6q8.js:476066-476358 facade-majority
+//@ chunk-5xgkngpb.js:479543-479835 facade-majority
 async function applyResumeHookSessionTitle(title, sessionFile, storageV5) {
   if (!cacheHookSessionTitle(title) || !currentSessionFileIsFor(sessionFile)) return;
   if (isTranscriptPersistenceDisabled()) return;
@@ -9649,26 +9881,39 @@ async function applyResumeHookSessionTitle(title, sessionFile, storageV5) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:476358-476399 facade-majority (2.1.88 match: saveMode, 1)
+//@ chunk-5xgkngpb.js:479835-479876 facade-majority (2.1.88 match: saveMode, 1)
 /**
  * 记录会话模式（mode 记录）。
  */
 function saveMode(mode) {
   getProject().currentSessionMode = mode;
 }
-//@ chunk-e6aww6q8.js:476399-476451 facade-majority
+//@ chunk-5xgkngpb.js:479876-479928 facade-majority
 function savePermissionMode(currentSessionPermissionMode) {
   getProject().currentSessionPermissionMode = currentSessionPermissionMode;
 }
-//@ chunk-e6aww6q8.js:476451-476468 facade-majority
+//@ chunk-5xgkngpb.js:479928-479945 facade-majority
 function saveAutoMemorySessionSwitch(options) {}
-//@ chunk-e6aww6q8.js:476468-476578 facade-majority
+//@ chunk-5xgkngpb.js:479945-479992 facade-majority
+function getSessionOwner() {
+  return getProject().currentSessionOwner;
+}
+//@ chunk-5xgkngpb.js:479992-480082 facade-majority
+function saveSessionOwner(owner) {
+  getProject().currentSessionOwner = owner;
+  queueSessionMetadataEntry({
+    type: "session-owner",
+    ...owner,
+    sessionId: getSessionId(),
+  });
+}
+//@ chunk-5xgkngpb.js:480082-480192 facade-majority
 function queueSessionMetadataEntry(entry) {
   let project = getProject();
   if (project.sessionFilePath)
     project.appendEntry(entry, undefined, undefined, project.exitReStampSource()).catch(logError);
 }
-//@ chunk-e6aww6q8.js:476578-476978 facade-majority
+//@ chunk-5xgkngpb.js:480192-480592 facade-majority
 function saveIsolationLatch(side, storageV5) {
   let project = getProject();
   if (project.currentSessionIsolationLatch === side) return;
@@ -9702,11 +9947,11 @@ function saveIsolationLatch(side, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:476978-477034 facade-majority
+//@ chunk-5xgkngpb.js:480592-480648 facade-majority
 function getCurrentSessionIsolationLatch() {
   return getProject().currentSessionIsolationLatch;
 }
-//@ chunk-e6aww6q8.js:477034-477404 facade-majority
+//@ chunk-5xgkngpb.js:480648-481018 facade-majority
 function saveDevModsFolder(folder, storageV5) {
   let project = getProject();
   if (project.currentSessionDevModsFolder === folder) return;
@@ -9734,11 +9979,11 @@ function saveDevModsFolder(folder, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:477404-477459 facade-majority
+//@ chunk-5xgkngpb.js:481018-481073 facade-majority
 function getCurrentSessionDevModsFolder() {
   return getProject().currentSessionDevModsFolder;
 }
-//@ chunk-e6aww6q8.js:477459-478175 facade-majority
+//@ chunk-5xgkngpb.js:481073-481791 facade-majority
 function saveMemoryMode({ mode, afterUuid, reason, account, accountChoice, timestamp }, storageV5) {
   let project = getProject();
   let stamp = {
@@ -9801,62 +10046,62 @@ function saveMemoryMode({ mode, afterUuid, reason, account, accountChoice, times
       });
   }
 }
-//@ chunk-e6aww6q8.js:478175-478233 facade-majority
+//@ chunk-5xgkngpb.js:481791-481849 facade-majority
 function getCurrentSessionMemoryModeStamps() {
   return getProject().currentSessionMemoryModeStamps;
 }
-//@ chunk-e6aww6q8.js:478233-478273 layout
+//@ chunk-5xgkngpb.js:481849-481889 layout
 function resetAgentLatches() {
   if (getRestoredMemoryPause()) {
     setRestoredMemoryPause(false);
     setMemoryToggledOff(false);
   }
 }
-//@ chunk-e6aww6q8.js:478273-478313 layout
+//@ chunk-5xgkngpb.js:481889-481929 layout
 function resetAtisLatches() {
   if (getRestoredAutoMemoryOff()) {
     setRestoredAutoMemoryOff(false);
     setAutoMemoryOffThisSession(false);
   }
 }
-//@ chunk-e6aww6q8.js:478313-478336 facade-majority
+//@ chunk-5xgkngpb.js:481929-481952 facade-majority
 function memoryPauseToggledByPerson() {
   setRestoredMemoryPause(false);
 }
-//@ chunk-e6aww6q8.js:478336-478402 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
+//@ chunk-5xgkngpb.js:481952-482018 facade-majority (2.1.88 match: recordContextCollapseCommit, 1)
 async function recordArtifactCommentMonitor(entry, storageV5) {
   await getProject().appendEntry(entry, undefined, undefined, storageV5);
 }
-//@ chunk-e6aww6q8.js:478402-478510 facade-majority
+//@ chunk-5xgkngpb.js:482018-482126 facade-majority
 function takeResumedArtifactCommentMonitor() {
   let project = getProject();
   let resumedArtifactCommentMonitor = project.resumedArtifactCommentMonitor;
   project.resumedArtifactCommentMonitor = undefined;
   return resumedArtifactCommentMonitor;
 }
-//@ chunk-e6aww6q8.js:478510-478620 facade-majority
+//@ chunk-5xgkngpb.js:482126-482236 facade-majority
 function takeResumedArtifactAutoReactLedger() {
   let project = getProject();
   let resumedArtifactAutoReactLedger = project.resumedArtifactAutoReactLedger;
   project.resumedArtifactAutoReactLedger = undefined;
   return resumedArtifactAutoReactLedger;
 }
-//@ chunk-e6aww6q8.js:478620-478678 facade-majority
+//@ chunk-5xgkngpb.js:482236-482294 facade-majority
 function peekResumedArtifactAutoReactLedger() {
   return getProject().resumedArtifactAutoReactLedger;
 }
-//@ chunk-e6aww6q8.js:478678-478689 facade-majority
+//@ chunk-5xgkngpb.js:482294-482305 facade-majority
 var UNLATCHED_RESUMED_ATIS = "";
-//@ chunk-e6aww6q8.js:478689-478728 layout
+//@ chunk-5xgkngpb.js:482305-482344 layout
 function getOrEmptyString(atisLatches, sessionId) {
   return atisLatches.get(sessionId) ?? UNLATCHED_RESUMED_ATIS;
 }
-//@ chunk-e6aww6q8.js:478728-478752 facade-majority
+//@ chunk-5xgkngpb.js:482344-482368 facade-majority
 var worktreeStateSignals; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:478728", () => {
+deferInit("chunk-5xgkngpb.js:482344", () => {
   worktreeStateSignals = new HostScoped(() => createSignal());
 });
-//@ chunk-e6aww6q8.js:478752-479396 facade-majority (2.1.88 match: saveWorktreeState, 0.741)
+//@ chunk-5xgkngpb.js:482368-483012 facade-majority (2.1.88 match: saveWorktreeState, 0.741)
 /**
  * 追加 worktree-state 记录（会话所在 worktree），resume 时据此恢复或退出 worktree。
  */
@@ -9895,7 +10140,7 @@ function saveWorktreeState(worktreeSession, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:479396-479477 facade-majority (2.1.88 match: getSessionIdFromLog, 0)
+//@ chunk-5xgkngpb.js:483012-483093 facade-majority (2.1.88 match: getSessionIdFromLog, 0)
 /**
  * 从日志对象取 sessionId（最后一条消息的 sessionId 或日志自身）。
  */
@@ -9903,11 +10148,11 @@ function getSessionIdFromLog(log) {
   if (log.sessionId) return log.sessionId;
   return log.messages[0]?.sessionId;
 }
-//@ chunk-e6aww6q8.js:479477-479544 facade-majority
+//@ chunk-5xgkngpb.js:483093-483160 facade-majority
 function isLiteLog(log) {
   return log.messages.length === 0 && log.sessionId !== undefined;
 }
-//@ chunk-e6aww6q8.js:479544-482685 facade-majority (2.1.88 match: loadFullLog, 0.543)
+//@ chunk-5xgkngpb.js:483160-486412 facade-majority (2.1.88 match: loadFullLog, 0.528)
 /**
  * 把 lite 日志（只读了头尾元数据）补全为完整日志：读取整份转录并建对话链。
  */
@@ -9949,6 +10194,7 @@ async function loadFullLog(log, options) {
       permissionModes,
       isolationLatches,
       devModsFolders,
+      sessionOwners,
       memoryModeStamps,
       atisLatches,
       toolsUsedLists,
@@ -9976,7 +10222,7 @@ async function loadFullLog(log, options) {
     let transcript = buildConversationChain(messages, mostRecentLeaf);
     warnIfTranscriptUnchained(messages, transcript, mostRecentLeaf.sessionId);
     let sessionId = mostRecentLeaf.sessionId;
-    return {
+    let marker = {
       ...log,
       rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
       messages: removeExtraFields(transcript),
@@ -9996,6 +10242,7 @@ async function loadFullLog(log, options) {
       permissionMode: sessionId ? permissionModes.get(sessionId) : log.permissionMode,
       isolationLatch: sessionId ? isolationLatches.get(sessionId) : log.isolationLatch,
       devModsFolder: sessionId ? devModsFolders?.get(sessionId) : log.devModsFolder,
+      sessionOwner: sessionId ? sessionOwners?.get(sessionId) : log.sessionOwner,
       memoryModeStamps: sessionId ? (memoryModeStamps.get(sessionId) ?? []) : log.memoryModeStamps,
       atisLatch: sessionId ? getOrEmptyString(atisLatches, sessionId) : log.atisLatch,
       toolsUsed: sessionId ? toolsUsedLists?.get(sessionId) : log.toolsUsed,
@@ -10031,10 +10278,12 @@ async function loadFullLog(log, options) {
       sessionKind: transcript[0]?.sessionKind ?? log.sessionKind,
       leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
       fileHistorySnapshots: buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
-      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots, transcript),
+      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots),
       contentReplacements: sessionId ? (contentReplacements.get(sessionId) ?? []) : log.contentReplacements,
       fileSnapshots: getFileSnapshotMessages(messages),
     };
+    marker.replMode = sessionId ? weakMap_7.get(messages)?.get(sessionId) : log.replMode;
+    return marker;
   } catch (error) {
     if (isTranscriptLoadError(error)) {
       logForDebugging(`loadFullLog: transcript unreadable (${getErrnoCode(error)}): ${errorMessage(error)}`, {
@@ -10045,7 +10294,7 @@ async function loadFullLog(log, options) {
     return log;
   }
 }
-//@ chunk-e6aww6q8.js:482685-483199 facade-majority (2.1.88 match: searchSessionsByCustomTitle, 0.913)
+//@ chunk-5xgkngpb.js:486412-486931 facade-majority (2.1.88 match: searchSessionsByCustomTitle, 0.913)
 /**
  * 按自定义标题搜索会话（--resume <标题>）。
  */
@@ -10073,7 +10322,7 @@ async function searchSessionsByCustomTitle(query, options, storageV5) {
   if (limit) return deduplicated.slice(0, limit);
   return deduplicated;
 }
-//@ chunk-e6aww6q8.js:483199-483503 layout (2.1.88 match: hasPrefix, 1)
+//@ chunk-5xgkngpb.js:486931-487239 layout (2.1.88 match: hasPrefix, 1)
 function hasPrefix_2(src, prefix, at, end) {
   let firstByte = end[0];
   let endLength = end.length;
@@ -10104,7 +10353,7 @@ function hasPrefix_2(src, prefix, at, end) {
   }
   return -1;
 }
-//@ chunk-e6aww6q8.js:483503-483764 file-local
+//@ chunk-5xgkngpb.js:487239-487504 file-local
 function pickDepthOneUuidCandidate(buf, lineStart, candidates) {
   let depth = 0;
   let inString = false;
@@ -10126,7 +10375,7 @@ function pickDepthOneUuidCandidate(buf, lineStart, candidates) {
   }
   return candidates.at(-1);
 }
-//@ chunk-e6aww6q8.js:483764-485959 fingerprint (2.1.88 match: walkChainBeforeParse, 0.912)
+//@ chunk-5xgkngpb.js:487504-489784 fingerprint (2.1.88 match: walkChainBeforeParse, 0.912)
 /**
  * 不解析 JSON，直接在字节缓冲中按 "parentUuid"/"uuid" 前缀走链，快速定位主链所需行。
  */
@@ -10181,12 +10430,18 @@ function walkChainBeforeParse(buf) {
     pos = lineEnd;
   }
   let leafSlot = -1;
+  let leafStarts = [];
   for (let i = msgIdx.length - 3; i >= 0; i -= 3) {
-    let sc = buf.indexOf(SIDECHAIN_TRUE, msgIdx[i]);
-    if (sc === -1 || sc >= msgIdx[i + 1]) {
-      leafSlot = i;
-      break;
+    if (buf.subarray(msgIdx[i], msgIdx[i + 1]).includes(SIDECHAIN_TRUE)) continue;
+    if (msgIdx[i + 2] < 0) {
+      let slot = parseSlot(i);
+      if (slot === null || isFileSnapshotMessage(slot)) {
+        leafStarts.push(i);
+        continue;
+      }
     }
+    leafSlot = i;
+    break;
   }
   if (leafSlot < 0) return buf;
   function parentSlot(slot) {
@@ -10195,22 +10450,22 @@ function walkChainBeforeParse(buf) {
       ? undefined
       : uuidToSlot.get(buf.toString("latin1", parentStart, parentStart + 36));
   }
-  let seen = new Set();
+  let keptSlots = new Set(leafStarts);
   let keptBytes = 0;
   let slot = leafSlot;
   while (slot !== undefined) {
-    if (seen.has(slot)) break;
-    seen.add(slot);
+    if (keptSlots.has(slot)) break;
+    keptSlots.add(slot);
     keptBytes += msgIdx[slot + 1] - msgIdx[slot];
     slot = parentSlot(slot);
   }
   if (len - keptBytes < len >> 1) return buf;
-  let chain = new Map();
+  let kindBySlot = new Map();
   let cache = new Map();
   function parseSlot(slot) {
     try {
       let parsed = jsonParseRaw(buf.toString("utf8", msgIdx[slot], msgIdx[slot + 1]));
-      return isPlainObject_3(parsed) ? parsed : null;
+      return isPlainObject_4(parsed) ? parsed : null;
     } catch {
       return null;
     }
@@ -10232,10 +10487,10 @@ function walkChainBeforeParse(buf) {
     };
   }
   function classifySlot(slot) {
-    let kind = chain.get(slot);
+    let kind = kindBySlot.get(slot);
     if (kind === undefined) {
       kind = classify(parseSlot(slot));
-      chain.set(slot, kind);
+      kindBySlot.set(slot, kind);
     }
     return kind;
   }
@@ -10268,15 +10523,15 @@ function walkChainBeforeParse(buf) {
       parts.push(buf.subarray(metaRanges[m], metaRanges[m + 1]));
       m += 2;
     }
-    if (!seen.has(i)) {
+    if (!keptSlots.has(i)) {
       let parentIndex = parentSlot(i);
-      if (parentIndex === undefined || !seen.has(parentIndex)) continue;
+      if (parentIndex === undefined || !keptSlots.has(parentIndex)) continue;
       let parsed = parseSlot(i);
       if (parsed === null || hasMalformedMessage(parsed)) continue;
       let kind = classify(parsed);
-      chain.set(i, kind);
+      kindBySlot.set(i, kind);
       if (isChainLinkCandidate(parsed, kind.kind === "assistant" ? assistantIdFor(parentIndex) : null))
-        seen.add(i);
+        keptSlots.add(i);
       else if (classifySlot(parentIndex).kind !== "runLink") continue;
     }
     parts.push(buf.subarray(start, msgIdx[i + 1]));
@@ -10287,7 +10542,7 @@ function walkChainBeforeParse(buf) {
   }
   return Buffer.concat(parts);
 }
-//@ chunk-e6aww6q8.js:485959-486712 layout
+//@ chunk-5xgkngpb.js:489784-490556 layout
 function createFileChunkReader(path, size) {
   let buffer = Buffer.allocUnsafe(1048576);
   let fd = openSync(path, "r");
@@ -10340,7 +10595,7 @@ function createFileChunkReader(path, size) {
     close: () => closeSync(fd),
   };
 }
-//@ chunk-e6aww6q8.js:486712-486884 layout
+//@ chunk-5xgkngpb.js:490556-490728 layout
 function createBufferLineScanner(buffer) {
   return {
     scan(emit) {
@@ -10358,7 +10613,7 @@ function createBufferLineScanner(buffer) {
     close() {},
   };
 }
-//@ chunk-e6aww6q8.js:486884-487075 layout
+//@ chunk-5xgkngpb.js:490728-490919 layout
 function reportUnparsableLines(skipped) {
   if (skipped <= 0) return;
   logForDebugging(
@@ -10368,12 +10623,12 @@ function reportUnparsableLines(skipped) {
     lines: skipped,
   });
 }
-//@ chunk-e6aww6q8.js:487075-487102 layout
+//@ chunk-5xgkngpb.js:490919-490946 layout
 var WHITESPACE_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:487075", () => {
+deferInit("chunk-5xgkngpb.js:490919", () => {
   WHITESPACE_BYTES = new Set([32, 9, 13]);
 });
-//@ chunk-e6aww6q8.js:487102-487279 layout
+//@ chunk-5xgkngpb.js:490946-491123 layout
 function countJsonlLines(buffer) {
   let jsonl = parseJSONL(buffer);
   let nonBlank = 0;
@@ -10386,27 +10641,28 @@ function countJsonlLines(buffer) {
   reportUnparsableLines(nonBlank - jsonl.length);
   return jsonl;
 }
-//@ chunk-e6aww6q8.js:487279-497626 layout
+//@ chunk-5xgkngpb.js:491123-502503 layout
 function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
   let buffer = Buffer.from('{"type":"attribution-snapshot"');
   let buffer_2 = Buffer.from('{"parentUuid":');
   let buffer_3 = Buffer.from('"parentUuid":');
   let buffer_4 = Buffer.from('"uuid":"');
   let buffer_5 = Buffer.from('","timestamp":"');
-  let buffer_6 = Buffer.from('"isSidechain":true');
-  let buffer_7 = Buffer.from('"compact_boundary"');
-  let buffer_8 = Buffer.from('"compactMetadata":');
-  let buffer_9 = Buffer.from('"type":"last-prompt"');
-  let buffer_10 = Buffer.from('{"type":"last-prompt"');
-  let buffer_11 = Buffer.from('"leafUuid":');
-  let buffer_12 = Buffer.from("\\ud");
-  let buffer_13 = Buffer.from("\\uD");
-  let buffer_14 = Buffer.from("null");
+  let buffer_6 = Buffer.from('"isSidechain":');
+  let buffer_7 = Buffer.from('"isSidechain":true');
+  let buffer_8 = Buffer.from('"compact_boundary"');
+  let buffer_9 = Buffer.from('"compactMetadata":');
+  let buffer_10 = Buffer.from('"type":"last-prompt"');
+  let buffer_11 = Buffer.from('{"type":"last-prompt"');
+  let buffer_12 = Buffer.from('"leafUuid":');
+  let buffer_13 = Buffer.from("\\ud");
+  let buffer_14 = Buffer.from("\\uD");
+  let buffer_15 = Buffer.from("null");
   let UUID_LEN = 36;
   let PARENT_PREFIX_LEN = buffer_2.length;
   let UUID_KEY_LEN = buffer_4.length;
   let TS_SUFFIX_LEN = buffer_5.length;
-  let NULL_LEN = buffer_14.length;
+  let NULL_LEN = buffer_15.length;
   let BAD_PARENT_SENTINEL = "parentUuid is neither a string nor null";
   let msgOffsets = [];
   let msgLengths = [];
@@ -10424,7 +10680,17 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
   let lazyThreshold = 1 / 0;
   let lazyIndexed = [];
   let lazyBackscannedLines = 0;
-  let lazyBackfilledAll = false;
+  let backfilledAll = false;
+  let otherKeyOrderSlots = [];
+  let boundaryOtherKeyOrder;
+  let preservedCount = 0;
+  let missingBytes;
+  let listedRowsOtherKeyOrder;
+  let listedSpanBytes;
+  let listUnused;
+  let stragglers;
+  let missingParentCount;
+  let earliestSlot = 1 / 0;
   let lastPromptLeafOffset = -1;
   let boundaryOffsetsSeen = new Set();
   let hasPreserved = false;
@@ -10485,17 +10751,17 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
     }
     if (
       length < lastPromptScanBytes &&
-      length > buffer_10.length &&
-      chunk.compare(buffer_10, 0, buffer_10.length, 0, buffer_10.length) === 0
+      length > buffer_11.length &&
+      chunk.compare(buffer_11, 0, buffer_11.length, 0, buffer_11.length) === 0
     ) {
       lastPromptOffsets.push(lineOffset);
       lastPromptLengths.push(length);
-      lastPromptHasLeaf.push(chunk.includes(buffer_11));
+      lastPromptHasLeaf.push(chunk.includes(buffer_12));
       return;
     }
     if (
       length < lastPromptScanBytes &&
-      chunk.subarray(0, Math.min(length, LAST_PROMPT_PREFIX_SCAN_BYTES)).includes(buffer_9)
+      chunk.subarray(0, Math.min(length, LAST_PROMPT_PREFIX_SCAN_BYTES)).includes(buffer_10)
     ) {
       let parsed;
       try {
@@ -10516,8 +10782,8 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
     let contentStart = skipNuls(chunk, 0, length);
     let chunk_2 = chunk.subarray(contentStart, Math.min(length, contentStart + boundaryScanBytes));
     if (
-      chunk_2.includes(buffer_7) ||
-      (chunk_2.includes(buffer_8) && chunk.includes(buffer_7, contentStart))
+      chunk_2.includes(buffer_8) ||
+      (chunk_2.includes(buffer_9) && chunk.includes(buffer_8, contentStart))
     ) {
       let parsed;
       try {
@@ -10527,9 +10793,11 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
       }
       if (parsed?.type === "system" && parsed.subtype === "compact_boundary") {
         lastBoundaryOffset = lineOffset;
+        boundaryOtherKeyOrder = chunk.compare(buffer_2, 0, PARENT_PREFIX_LEN, 0, PARENT_PREFIX_LEN) !== 0;
         let preservedMessages = parsed.compactMetadata?.preservedMessages;
         if (preservedMessages || parsed.compactMetadata?.preservedSegment) {
           hasPreserved = true;
+          preservedCount++;
           if (
             preservedMessages &&
             typeof preservedMessages.anchorUuid === "string" &&
@@ -10567,6 +10835,8 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
           leafUuidFromPrompt = undefined;
           lastPromptLeafOffset = -1;
           plainBoundaryOffset = lineOffset;
+          otherKeyOrderSlots.length = 0;
+          preservedCount = 0;
           if (!lazyMode) lazyMode = true;
           lazyThreshold = 1;
         }
@@ -10595,14 +10865,16 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
       }
       parentStart += buffer_3.length;
     }
-    recordMessage(chunk, length, lineOffset, parentStart, msgOffsets.length);
+    let slot = msgOffsets.length;
+    recordMessage(chunk, length, lineOffset, parentStart, slot);
+    if (parentStart !== PARENT_PREFIX_LEN && msgOffsets.length > slot) otherKeyOrderSlots.push(slot);
   }
   function recordMessage(buf, length, offset, parentValueStart, slot) {
     let parentValue =
       buf[parentValueStart] === 34
         ? buf.toString("latin1", parentValueStart + 1, parentValueStart + 1 + 36)
         : parentValueStart + NULL_LEN <= length &&
-            buf.compare(buffer_14, 0, NULL_LEN, parentValueStart, parentValueStart + NULL_LEN) === 0
+            buf.compare(buffer_15, 0, NULL_LEN, parentValueStart, parentValueStart + NULL_LEN) === 0
           ? null
           : "parentUuid is neither a string nor null";
     let uuidOffset = findUuidOffset(buf, length);
@@ -10616,21 +10888,28 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
       return;
     }
     let str = buf.toString("latin1", uuidOffset + UUID_KEY_LEN, uuidOffset + UUID_KEY_LEN + 36);
-    let included = (length <= headScanBytes ? buf : buf.subarray(0, headScanBytes)).includes(buffer_6);
+    let sidechainScan =
+      parentValueStart === PARENT_PREFIX_LEN
+        ? (length <= headScanBytes ? buf : buf.subarray(0, headScanBytes)).indexOf(buffer_6)
+        : -1;
+    let sidechainOffset = sidechainScan >= 0 ? sidechainScan : hasPrefix_2(buf, 0, length, buffer_6);
+    let isSidechain =
+      sidechainOffset >= 0 &&
+      buf.subarray(sidechainOffset, sidechainOffset + buffer_7.length).equals(buffer_7);
     if (uuidToSlot.has(str)) duplicateUuid = true;
     if (slot === msgOffsets.length) {
       uuidToSlot.set(str, slot);
       msgOffsets.push(offset);
       msgLengths.push(length);
       parentRefs.push(parentValue);
-      sidechainFlags.push(included);
+      sidechainFlags.push(isSidechain);
       lazyIndexed.push(false);
     } else {
       lazyIndexed[slot] = false;
       let uuidSlot = uuidToSlot.get(str);
       if (uuidSlot === undefined || uuidSlot < slot) uuidToSlot.set(str, slot);
       parentRefs[slot] = parentValue;
-      sidechainFlags[slot] = included;
+      sidechainFlags[slot] = isSidechain;
     }
   }
   function backfill(from, to) {
@@ -10750,9 +11029,11 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
             }
           }
           if (unresolved && slot >= lazyThreshold) {
-            lazyBackfilledAll = true;
+            backfilledAll = true;
             backfill(lazyThreshold, slot + 1);
+            slot = lazyThreshold - 1;
           }
+          earliestSlot = slot + 1;
         }
       } else if (!hasPreserved) backfill(lazyThreshold, msgOffsets.length);
     }
@@ -10813,7 +11094,18 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
         }
       }
     }
-    let missingSlot = boundarySlot !== undefined && !preservedSlots;
+    if (preservedSlots && boundarySlot !== undefined) {
+      let missingSlot = new Set(preservedSlots);
+      missingBytes = 0;
+      let lowestSlot = boundarySlot;
+      for (let slot of missingSlot) {
+        missingBytes += msgLengths[slot];
+        lowestSlot = Math.min(lowestSlot, slot);
+      }
+      listedSpanBytes = msgOffsets[boundarySlot] - msgOffsets[lowestSlot];
+      listedRowsOtherKeyOrder = countWhere(otherKeyOrderSlots, (slot) => missingSlot.has(slot));
+    }
+    let uuidMissing = boundarySlot !== undefined && !preservedSlots;
     let anchorBefore = false;
     if (preservedSlots && boundarySlot !== undefined && preservedAnchor) {
       let anchorSlot = uuidToSlot.get(preservedAnchor);
@@ -10825,18 +11117,20 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
     if (duplicateUuid) preservedSlots = undefined;
     if (!keepAllLeaves && hasPreserved && !preservedSlots) {
       fallbackAll = true;
+      let listUnusedReason = !preservedUuids
+        ? "no_list"
+        : boundarySlot === undefined
+          ? "boundary_unindexed"
+          : uuidMissing
+            ? "uuid_missing"
+            : anchorBefore
+              ? "anchor_before_boundary"
+              : "duplicate_uuid";
+      listUnused = listUnusedReason;
       logEvent("tengu_transcript_preserved_dispatch", {
         mode: lit_2("fallback_all"),
         indexed_slots: msgOffsets.length,
-        reason: !preservedUuids
-          ? lit_2("no_list")
-          : boundarySlot === undefined
-            ? lit_2("boundary_unindexed")
-            : missingSlot
-              ? lit_2("uuid_missing")
-              : anchorBefore
-                ? lit_2("anchor_before_boundary")
-                : lit_2("duplicate_uuid"),
+        reason: fromEnum(listUnusedReason),
       });
     }
     if (!keepAllLeaves && hasPreserved && preservedSlots && boundarySlot !== undefined) {
@@ -10850,13 +11144,16 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
         dispatchedRanges.push([msgOffsets[slot], msgLengths[slot]]);
       };
       let preservedSet = new Set(preservedSlots);
+      for (let preservedSlot of preservedSlots) earliestSlot = Math.min(earliestSlot, preservedSlot);
       if (msgOffsets.length > 0 && boundaryOffsetsSeen.has(msgOffsets[0])) dispatchSlot(0);
       for (let slot of preservedSlots) if (!visited.has(slot)) dispatchSlot(slot);
-      let stragglers = 0;
+      stragglers = 0;
+      missingParentCount = 0;
       for (let slot = boundarySlot; slot < msgOffsets.length; slot++) {
         if (!visited.has(slot)) dispatchSlot(slot);
         let parentValue = parentRefs[slot];
         let parentSlot = parentValue == null ? undefined : uuidToSlot.get(parentValue);
+        if (parentValue != null && parentSlot === undefined) missingParentCount++;
         while (
           parentSlot !== undefined &&
           parentSlot < boundarySlot &&
@@ -10865,6 +11162,7 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
         ) {
           dispatchSlot(parentSlot);
           stragglers++;
+          earliestSlot = Math.min(earliestSlot, parentSlot);
           let nextValue = parentRefs[parentSlot];
           parentSlot = nextValue == null ? undefined : uuidToSlot.get(nextValue);
         }
@@ -10875,19 +11173,32 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
         dispatched_slots: visited.size,
         preserved: preservedSlots.length,
         straggler_ancestors: stragglers,
-        lazy_unindexed_slots: lazyMode ? count(lazyIndexed, (flag) => flag) : 0,
+        lazy_unindexed_slots: lazyMode ? countWhere(lazyIndexed, (flag) => flag) : 0,
         lazy_backscanned_lines: lazyBackscannedLines,
-        lazy_backfilled_all: lazyBackfilledAll,
+        lazy_backfilled_all: backfilledAll,
       });
     }
     let leafSlot = -1;
-    if (!keepAllLeaves && !hasPreserved) {
-      for (let idx = msgOffsets.length - 1; idx >= 0; idx--)
-        if (!sidechainFlags[idx] && msgLengths[idx] >= 0) {
-          leafSlot = idx;
-          break;
+    let unparsableSlots = [];
+    if (!keepAllLeaves && !hasPreserved)
+      for (let idx = msgOffsets.length - 1; idx >= 0; idx--) {
+        if (sidechainFlags[idx] || msgLengths[idx] < 0) continue;
+        if (parentRefs[idx] === null) {
+          let line = reader.read(msgOffsets[idx], msgLengths[idx]);
+          let parsed;
+          try {
+            parsed = parseLine(line.subarray(skipNuls(line, 0, line.length)));
+          } catch {
+            parsed = undefined;
+          }
+          if (!isPlainObject_4(parsed) || isFileSnapshotMessage(parsed)) {
+            unparsableSlots.push(idx);
+            continue;
+          }
         }
-    }
+        leafSlot = idx;
+        break;
+      }
     if (leafSlot >= 0) {
       dispatchedOffsets = new Set();
       dispatchedRanges = [];
@@ -10902,10 +11213,7 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
           dispatchedOffsets.add(msgOffsets[current]);
           dispatchedRanges.push([msgOffsets[current], msgLengths[current]]);
           let parentValue = parentRefs[current];
-          if (parentValue == null) {
-            current = undefined;
-            break;
-          }
+          if (parentValue == null) break;
           if (parentValue === "parentUuid is neither a string nor null") {
             phantomReason ??= "non_string_parent";
             break;
@@ -10919,6 +11227,7 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
         }
       };
       walkSlot(leafSlot);
+      unparsableSlots.forEach(walkSlot);
       let promptLeafSlot = leafUuidFromPrompt ? uuidToSlot.get(leafUuidFromPrompt) : undefined;
       walkSlot(promptLeafSlot);
       if (phantomReason !== undefined) {
@@ -10988,7 +11297,7 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
     let readyHead = 0;
     let offsetCursor = 0;
     using pass2Timer = slowLogging`transcript load pass2 (${ranges.length} lines to parse)`;
-    let hasEscape = (text) => text.includes(buffer_12) || text.includes(buffer_13);
+    let hasEscape = (text) => text.includes(buffer_13) || text.includes(buffer_14);
     let emitEntry = (entry, raw, offset) => {
       if (dispatchMode) {
         let slot = slotAtOffset(offset);
@@ -11137,22 +11446,37 @@ function scanTranscriptBuffer(reader, onEntry, onBoundary, keepAllLeaves) {
           : "preserved",
       keptFrom,
       seedFrom: Math.max(lastBoundaryOffset, 0),
+      plainFrom: plainBoundaryOffset,
+      reachFrom: stragglers === undefined ? undefined : msgOffsets[earliestSlot],
+      boundaryOtherKeyOrder,
+      keepingBoundaries: preservedCount,
+      rows: countWhere(msgLengths, (length) => length >= 0),
+      rowsOtherKeyOrder: otherKeyOrderSlots.length,
+      rowsUnindexed: countWhere(lazyIndexed, (indexed) => indexed),
+      listedRows: preservedUuids?.length,
+      listedRowsBytes: missingBytes,
+      listedRowsOtherKeyOrder,
+      listedSpanBytes,
+      stragglerAncestors: stragglers,
+      parentsNotFound: missingParentCount,
+      backfilledAll: stragglers === undefined ? undefined : backfilledAll,
+      listUnused,
       earlierMetadataBytes,
       scanMs,
       scanStartMs: startTime,
     },
   };
 }
-//@ chunk-e6aww6q8.js:497626-497677 layout
+//@ chunk-5xgkngpb.js:502503-502554 layout
 function scanTranscriptFile(path, size, onEntry, onBoundary, keepAllLeaves) {
   return scanTranscriptBuffer(createFileChunkReader(path, size), onEntry, onBoundary, keepAllLeaves);
 }
-//@ chunk-e6aww6q8.js:497677-497755 layout
+//@ chunk-5xgkngpb.js:502554-502632 layout
 function endsWithNewlineSync(fd, size) {
   let byte = Buffer.alloc(1);
   return readSync(fd, byte, 0, 1, size - 1) === 1 && byte[0] === 10;
 }
-//@ chunk-e6aww6q8.js:497755-497974 layout
+//@ chunk-5xgkngpb.js:502632-502851 layout
 async function endsWithNewline(path, size) {
   if (size === 0) return true;
   let handle = await open(path, "r");
@@ -11170,11 +11494,11 @@ async function endsWithNewline(path, size) {
     await closeAfterReadAsync(() => handle.close(), error);
   }
 }
-//@ chunk-e6aww6q8.js:497974-498012 layout
+//@ chunk-5xgkngpb.js:502851-502889 layout
 function readJsonAtOffset(path, offset, lastAttributionLength) {
   return readJsonAtOffsetSync(path, offset, lastAttributionLength);
 }
-//@ chunk-e6aww6q8.js:498012-498107 layout
+//@ chunk-5xgkngpb.js:502889-502984 layout
 function readJsonAtOffsetSync(path, offset, length) {
   if (offset < 0 || length <= 0) return null;
   let [line] = readFileTailSync(path, [
@@ -11185,7 +11509,7 @@ function readJsonAtOffsetSync(path, offset, length) {
   ]);
   return parseJsonBuffer(line);
 }
-//@ chunk-e6aww6q8.js:498107-498194 layout
+//@ chunk-5xgkngpb.js:502984-503071 layout
 function parseJsonBuffer(line) {
   if (!line) return null;
   try {
@@ -11194,14 +11518,14 @@ function parseJsonBuffer(line) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:498194-498269 layout
+//@ chunk-5xgkngpb.js:503071-503146 layout
 function readJsonAtOffset_2(buffer, lastAttributionOffset, lastAttributionLength) {
   if (lastAttributionOffset < 0 || lastAttributionLength <= 0) return null;
   return parseJsonBuffer(
     buffer.subarray(lastAttributionOffset, lastAttributionOffset + lastAttributionLength),
   );
 }
-//@ chunk-e6aww6q8.js:498269-498511 fingerprint (2.1.88 match: readFileTailSync, 0.701)
+//@ chunk-5xgkngpb.js:503146-503388 fingerprint (2.1.88 match: readFileTailSync, 0.699)
 function readFileTailSync(path, ranges) {
   if (ranges.length === 0) return [];
   let fd = openSync(path, "r");
@@ -11221,10 +11545,10 @@ function readFileTailSync(path, ranges) {
     closeAfterRead(() => closeSync(fd), fd_2);
   }
 }
-//@ chunk-e6aww6q8.js:498511-498604 facade-majority
+//@ chunk-5xgkngpb.js:503388-503481 facade-majority
 var TRANSCRIPT_CLOSE_FAILED_REPORT =
   "loadTranscriptFile: transcript close failed while an earlier error was propagating";
-//@ chunk-e6aww6q8.js:498604-498677 facade-majority
+//@ chunk-5xgkngpb.js:503481-503554 facade-majority
 function closeAfterRead(close, readError) {
   try {
     close();
@@ -11233,7 +11557,7 @@ function closeAfterRead(close, readError) {
     reportTranscriptCloseFailure(error, readError.error);
   }
 }
-//@ chunk-e6aww6q8.js:498677-498762 facade-majority
+//@ chunk-5xgkngpb.js:503554-503639 facade-majority
 async function closeAfterReadAsync(close, readError) {
   try {
     await close();
@@ -11242,7 +11566,7 @@ async function closeAfterReadAsync(close, readError) {
     reportTranscriptCloseFailure(error, readError.error);
   }
 }
-//@ chunk-e6aww6q8.js:498762-498904 layout
+//@ chunk-5xgkngpb.js:503639-503781 sole-consumer
 function reportTranscriptCloseFailure(error, error_2) {
   if (isWin32ReadEbadf(error_2)) {
     logForDebugging(
@@ -11255,7 +11579,7 @@ function reportTranscriptCloseFailure(error, error_2) {
   }
   logError(withTelemetryMessage(error, TRANSCRIPT_CLOSE_FAILED_REPORT));
 }
-//@ chunk-e6aww6q8.js:498904-499117 layout
+//@ chunk-5xgkngpb.js:503781-503994 sole-consumer
 function addTranscriptLine(collector, line, index) {
   let trimmed = line === null ? null : line.subarray(skipNuls(line, 0, line.length));
   let parsed = null;
@@ -11271,7 +11595,7 @@ function addTranscriptLine(collector, line, index) {
   }
   collector.torn(trimmed === null ? null : readEnvelopeSessionId(trimmed), index);
 }
-//@ chunk-e6aww6q8.js:499117-499231 layout
+//@ chunk-5xgkngpb.js:503994-504108 sole-consumer
 function rebuildFromLines(lines, artifactAutoReactLedgers, tailTorn) {
   let collector = new ArtifactLedgerCollector();
   let index = 0;
@@ -11279,7 +11603,7 @@ function rebuildFromLines(lines, artifactAutoReactLedgers, tailTorn) {
   artifactAutoReactLedgers.clear();
   for (let [sessionId, ledger] of collector.finish(tailTorn)) artifactAutoReactLedgers.set(sessionId, ledger);
 }
-//@ chunk-e6aww6q8.js:499231-499389 layout
+//@ chunk-5xgkngpb.js:504108-504266 sole-consumer
 function isTornLine(line) {
   if (line === null) return true;
   if (hasPrefix(line)) return false;
@@ -11290,14 +11614,7 @@ function isTornLine(line) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:499389-499508 layout
-function lastLineOf(buf) {
-  let end = buf.length;
-  while (end > 0 && buf[end - 1] === 10) end--;
-  let start = end === 0 ? 0 : buf.lastIndexOf(10, end - 1) + 1;
-  return buf.subarray(start, end);
-}
-//@ chunk-e6aww6q8.js:499508-499640 layout
+//@ chunk-5xgkngpb.js:504385-504517 sole-consumer
 function* iterateEntryLines(buf) {
   let start = 0;
   while (start < buf.length) {
@@ -11307,23 +11624,23 @@ function* iterateEntryLines(buf) {
     start = index + 1;
   }
 }
-//@ chunk-e6aww6q8.js:499640-499693 layout
+//@ chunk-5xgkngpb.js:504517-504570 sole-consumer
 function isObjectLike(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-e6aww6q8.js:499693-499819 layout
+//@ chunk-5xgkngpb.js:504570-504696 sole-consumer
 function writtenAtOrLatest(entry) {
   return typeof entry.writtenAtMs === "number" && Number.isFinite(entry.writtenAtMs)
     ? entry.writtenAtMs
     : Number.POSITIVE_INFINITY;
 }
-//@ chunk-e6aww6q8.js:499819-499944 layout
+//@ chunk-5xgkngpb.js:504696-504821 affinity
 function writtenAtOrEarliest(entry) {
   return typeof entry.writtenAtMs === "number" && Number.isFinite(entry.writtenAtMs)
     ? entry.writtenAtMs
     : Number.NEGATIVE_INFINITY;
 }
-//@ chunk-e6aww6q8.js:499944-501228 facade-majority
+//@ chunk-5xgkngpb.js:504821-506108 facade-majority
 function mergeArtifactCommentMonitorEntries(existing, incoming) {
   let artifacts = incoming.artifacts;
   let artifacts_2 = existing.artifacts;
@@ -11402,7 +11719,25 @@ function mergeArtifactCommentMonitorEntries(existing, incoming) {
     artifacts: Object.fromEntries(merged),
   };
 }
-//@ chunk-e6aww6q8.js:501228-502443 placement (2.1.88 match: shouldExtractMemory, 0)
+//@ chunk-5xgkngpb.js:506108-506143 layout
+var weakMap_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap_8;
+deferInit("chunk-5xgkngpb.js:506108", () => {
+  weakMap_7 = new WeakMap();
+  weakMap_8 = new WeakMap();
+});
+//@ chunk-5xgkngpb.js:506143-506175 facade-majority
+var TURNS_AFTER_LEAF_CHECKPOINT_GB_FLAG = "tengu_modular_sparkle";
+//@ chunk-5xgkngpb.js:506175-506305 callgraph-fingerprint (2.1.88 match: applySnipRemovals, 0.625)
+function applySnipRemovals(messages, removedRows, lastRowUuid, checkpointUuid) {
+  let cursor = lastRowUuid;
+  for (let idx = 0; cursor && cursor !== checkpointUuid && idx < removedRows.size; idx++) {
+    let entry = removedRows.get(cursor);
+    cursor = messages.get(cursor)?.parentUuid === entry ? entry : undefined;
+  }
+  return cursor === checkpointUuid;
+}
+//@ chunk-5xgkngpb.js:506305-507523 placement
 function findToolUseSiblings(messages, leafUuid, targetUuid, { direct, throughBatch }) {
   let holder;
   let toolIds = [];
@@ -11422,7 +11757,7 @@ function findToolUseSiblings(messages, leafUuid, targetUuid, { direct, throughBa
     } else if (lastAux) {
       let toolUseID =
         lastAux.type === "attachment" &&
-        isPlainObject_5(lastAux.attachment) &&
+        isPlainObject_6(lastAux.attachment) &&
         "toolUseID" in lastAux.attachment
           ? lastAux.attachment.toolUseID
           : undefined;
@@ -11459,7 +11794,7 @@ function findToolUseSiblings(messages, leafUuid, targetUuid, { direct, throughBa
         entry.type === "assistant" &&
         entry.uuid !== holder.uuid &&
         entry.message?.id === id &&
-        countToolCallsSince_5(entry)
+        hasToolUseBlockFlag(entry)
       ) {
         if (siblingUuids.has(entry.uuid)) return true;
         sawSameMessage = true;
@@ -11481,7 +11816,7 @@ function findToolUseSiblings(messages, leafUuid, targetUuid, { direct, throughBa
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:502443-502643 placement
+//@ chunk-5xgkngpb.js:507523-507723 placement
 function collectSameMessageSiblings(messages, start, id) {
   let siblings = [];
   let seen = new Set([start.uuid]);
@@ -11493,7 +11828,7 @@ function collectSameMessageSiblings(messages, start, id) {
   }
   return siblings;
 }
-//@ chunk-e6aww6q8.js:502643-511663 fingerprint (2.1.88 match: loadTranscriptFile, 0.424)
+//@ chunk-5xgkngpb.js:507723-517838 fingerprint (2.1.88 match: loadTranscriptFile, 0.39)
 /**
  * 构造转录加载器：逐条处理 jsonl 记录，按 uuid 收集消息，按类型收集 summary、custom-title、tag、ai-title、file-history、attribution、content-replacement、worktree-state 等元数据，并找出叶子节点。
  */
@@ -11523,10 +11858,11 @@ function loadTranscriptFile_2(keepAllLeaves) {
   let permissionModes = new Map();
   let isolationLatches = new Map();
   let devModsFolders = new Map();
+  let sessionOwners = new Map();
   let memoryModeStamps = new Map();
   let atisLatches = new Map();
   let toolsUsedLists = new Map();
-  let worktreeStateMap = new Map();
+  let worktreeStateRows = new Map();
   let artifactCommentMonitors = new Map();
   let artifactAutoReactLedgers = new Map();
   let costStates = new Map();
@@ -11547,14 +11883,16 @@ function loadTranscriptFile_2(keepAllLeaves) {
   let rewound = false;
   let sawLastPrompt = false;
   let rowsSinceCheckpoint = 0;
+  let rewindParents;
   let leafChoice = "leaf_scan";
   let prunedBeforeFold = false;
   let pendingParentUuid;
+  let trailingSnapshotRows = 0;
   let legacyParentMap = new Map();
   let rowRepairer = createRowRepairer();
   let rewindTracker = createRewindTracker(messages);
   let processEntry = (entry, repairStrings = true) => {
-    if (!isPlainObject_3(entry)) return;
+    if (!isPlainObject_4(entry)) return;
     let row = entry;
     if (isLegacyProgressEntry(row)) {
       logLegacyProgressProbe("seen");
@@ -11572,14 +11910,15 @@ function loadTranscriptFile_2(keepAllLeaves) {
         logLegacyProgressProbe("rewrote");
         row.parentUuid = legacyParentMap.get(row.parentUuid) ?? null;
       }
-      if (pendingParentUuid !== undefined && !row.isSidechain) {
+      if (pendingParentUuid !== undefined && !row.isSidechain && !isFileSnapshotMessage(row)) {
         if (row.parentUuid === null && !isCompactBoundaryMessage_3(row)) row.parentUuid = pendingParentUuid;
         pendingParentUuid = undefined;
       }
       if (!rowRepairer.admit(row, messages)) return;
       if (repairStrings) repairMalformedStringsDeep(row);
+      if (codeModeAccepted()) stripToolUseIdBookkeeping(row);
       if (row.type === "assistant" && row.wireToolInputs !== undefined) {
-        let toolInputCount = countToolCallsSince_2(
+        let toolInputCount = wireToolInputsForContent(
           row.wireToolInputs,
           row.message?.content,
           row.batchToolUses,
@@ -11595,10 +11934,14 @@ function loadTranscriptFile_2(keepAllLeaves) {
         if (stamps === undefined) delete row.wireIngestContext;
         else row.wireIngestContext = stamps;
       }
+      let isNewRow = !messages.has(row.uuid);
       messages.set(row.uuid, row);
-      if (!row.isSidechain && !isTranscriptMessage_2(row)) {
+      if (isFileSnapshotMessage(row)) trailingSnapshotRows++;
+      else if (!row.isSidechain && !isTranscriptMessage_2(row)) {
+        if (isNewRow) rewindParents?.set(row.uuid, row.parentUuid);
         rewindTracker.noteRow(row);
         lastRowUuid = row.uuid;
+        trailingSnapshotRows = 0;
         rowsSinceCheckpoint++;
         if (typeof row.timestamp === "string" && row.timestamp > newestTs) {
           newestRowUuid = row.uuid;
@@ -11623,6 +11966,7 @@ function loadTranscriptFile_2(keepAllLeaves) {
         checkpointEverExplicit =
           row.explicit === true || (checkpointEverExplicit && row.leafUuid === checkpointUuid);
         rewound = row.rewound === true || (rewound && row.leafUuid === checkpointUuid);
+        rewindParents = row.rewound === true ? new Map() : undefined;
         checkpointUuid = row.leafUuid;
         rowsSinceCheckpoint = 0;
         clearedExplicitly = false;
@@ -11647,8 +11991,30 @@ function loadTranscriptFile_2(keepAllLeaves) {
     else if (row.type === "mode" && row.sessionId) modeMap.set(row.sessionId, row.mode);
     else if (row.type === "permission-mode" && row.sessionId)
       permissionModes.set(row.sessionId, row.permissionMode);
-    else if (row.type === "isolation-latch" && row.sessionId) isolationLatches.set(row.sessionId, row.side);
-    else if (row.type === "dev-mods" && row.sessionId) {
+    else if (row.type === "repl-mode" && row.sessionId) {
+      if (typeof row.replMode === "boolean") {
+        let replModes = weakMap_7.get(messages);
+        if (replModes === undefined) {
+          replModes = new Map();
+          weakMap_7.set(messages, replModes);
+        }
+        replModes.set(row.sessionId, row.replMode);
+        let typedEventSessions = weakMap_8.get(messages);
+        if (typedEventSessions === undefined) {
+          typedEventSessions = new Set();
+          weakMap_8.set(messages, typedEventSessions);
+        }
+        if (row.typedEvents === true) typedEventSessions.add(row.sessionId);
+        else typedEventSessions.delete(row.sessionId);
+      }
+    } else if (row.type === "isolation-latch" && row.sessionId) isolationLatches.set(row.sessionId, row.side);
+    else if (row.type === "session-owner" && row.sessionId) {
+      if (typeof row.accountUuid === "string" && row.accountUuid !== "")
+        sessionOwners.set(row.sessionId, {
+          accountUuid: row.accountUuid,
+          organizationUuid: typeof row.organizationUuid === "string" ? row.organizationUuid : undefined,
+        });
+    } else if (row.type === "dev-mods" && row.sessionId) {
       if (typeof row.folder === "string" && isSessionFileAt(row.folder, row.sessionId))
         devModsFolders.set(row.sessionId, row.folder);
       else logForDebugging("dev mods: dropped a dev-mods entry naming a folder not its own");
@@ -11691,7 +12057,7 @@ function loadTranscriptFile_2(keepAllLeaves) {
           row.tools.filter((tool) => typeof tool === "string" && tool !== ""),
         );
     } else if (row.type === "worktree-state" && row.sessionId)
-      worktreeStateMap.set(row.sessionId, row.worktreeSession);
+      worktreeStateRows.set(row.sessionId, row.worktreeSession);
     else if (row.type === "artifact-comment-monitor" && row.sessionId) {
       let existing = artifactCommentMonitors.get(row.sessionId);
       artifactCommentMonitors.set(
@@ -11780,7 +12146,7 @@ function loadTranscriptFile_2(keepAllLeaves) {
       rowRepairer.finish(messages);
       rewindTracker.publish();
       let entries = applyPreservedSegmentOnLoad(messages);
-      if (!keepAllLeaves) applySnipRemovals(messages, newestRowUuid);
+      if (!keepAllLeaves) bridgeStoredGaps(messages, newestRowUuid);
       return chooseLeaves(entries);
     },
   };
@@ -11791,6 +12157,22 @@ function loadTranscriptFile_2(keepAllLeaves) {
           ...monitor,
           tailTorn: true,
         });
+    if (!keepAllLeaves && trailingSnapshotRows > 0) {
+      let checkpointRow = checkpointUuid && messages.get(checkpointUuid);
+      logEvent("tengu_transcript_ends_on_file_snapshot", {
+        trailing_snapshot_rows: trailingSnapshotRows,
+        pruned_before_fold: prunedBeforeFold,
+        newest_checkpoint: clearedExplicitly
+          ? lit_2("rewind_to_empty")
+          : checkpointUuid === undefined
+            ? sawLastPrompt
+              ? lit_2("dropped")
+              : lit_2("none")
+            : checkpointRow && isFileSnapshotMessage(checkpointRow)
+              ? lit_2("on_snapshot")
+              : lit_2("elsewhere"),
+      });
+    }
     if (!keepAllLeaves && clearedExplicitly) return finish(new Set());
     let progressBridge = new Set();
     let leafIsCheckpoint =
@@ -11849,7 +12231,7 @@ function loadTranscriptFile_2(keepAllLeaves) {
         })
       )
         checkpoint = lastRowUuid;
-      if (!entries) checkpoint ??= chosen;
+      if (!entries && trailingSnapshotRows === 0) checkpoint ??= chosen;
       if (checkpoint && messages.has(checkpoint)) {
         let leafUuids = new Set();
         let message = messages.get(checkpoint);
@@ -11897,16 +12279,27 @@ function loadTranscriptFile_2(keepAllLeaves) {
       logEvent("tengu_transcript_parent_cycle", {});
     if (!keepAllLeaves && progressBridge.size > 1) {
       let chosenLeaf =
-        checkpointUuid &&
-        progressBridge.has(checkpointUuid) &&
-        (checkpointExplicit ||
-          !lastRowUuid ||
-          !findToolUseSiblings(messages, lastRowUuid, checkpointUuid, {
-            direct: false,
-            throughBatch: !checkpointEverExplicit,
-          }))
-          ? checkpointUuid
-          : lastRowUuid;
+        rewindParents !== undefined &&
+        !checkpointExplicit &&
+        checkpointUuid !== undefined &&
+        lastRowUuid !== undefined &&
+        isRemoteEnvironmentAny() &&
+        isFoamySpringEnabled() &&
+        readGateFalseByDefault(TURNS_AFTER_LEAF_CHECKPOINT_GB_FLAG) &&
+        applySnipRemovals(messages, rewindParents, lastRowUuid, checkpointUuid)
+          ? lastRowUuid
+          : checkpointUuid &&
+              progressBridge.has(checkpointUuid) &&
+              (checkpointExplicit ||
+                !lastRowUuid ||
+                !findToolUseSiblings(messages, lastRowUuid, checkpointUuid, {
+                  direct: false,
+                  throughBatch: !checkpointEverExplicit,
+                }))
+            ? checkpointUuid
+            : trailingSnapshotRows > 0
+              ? undefined
+              : lastRowUuid;
       if (!chosenLeaf || !messages.has(chosenLeaf)) return finish(progressBridge);
       let seen = new Set();
       let message = messages.get(chosenLeaf);
@@ -11962,12 +12355,15 @@ function loadTranscriptFile_2(keepAllLeaves) {
       ...(devModsFolders.size > 0 && {
         devModsFolders,
       }),
+      ...(sessionOwners.size > 0 && {
+        sessionOwners,
+      }),
       memoryModeStamps,
       atisLatches,
       ...(toolsUsedLists.size > 0 && {
         toolsUsedLists,
       }),
-      worktreeStates: worktreeStateMap,
+      worktreeStates: worktreeStateRows,
       artifactCommentMonitors,
       artifactAutoReactLedgers,
       costStates,
@@ -11983,13 +12379,13 @@ function loadTranscriptFile_2(keepAllLeaves) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:511663-511764 facade-majority
+//@ chunk-5xgkngpb.js:517838-517939 facade-majority
 function loadTranscriptFromEntries(entries, options) {
   let transcriptFile = loadTranscriptFile_2(options?.keepAllLeaves ?? false);
   for (let entry of entries) transcriptFile.processEntry(entry);
   return transcriptFile.finish();
 }
-//@ chunk-e6aww6q8.js:511764-515250 facade-majority
+//@ chunk-5xgkngpb.js:517939-521530 facade-majority
 /**
  * 加载一份转录文件（或 storage 记录）：逐条解析，交给 loadTranscriptFile 处理器，跳过无法解析的行并统计。
  */
@@ -12126,11 +12522,13 @@ async function loadTranscriptFile(path, options) {
           options?.keepAllLeaves ?? false,
         );
         if (!options?.keepAllLeaves) {
-          let { keptFrom, seedFrom, ...rest } = scan.scan;
+          let { keptFrom, seedFrom, plainFrom, reachFrom, ...rest } = scan.scan;
           markResumeTranscriptScan({
             ...rest,
             bytes: size,
             keptBytes: size - keptFrom,
+            plainKeptBytes: plainFrom < 0 ? undefined : size - plainFrom,
+            reachBytes: reachFrom === undefined ? undefined : size - reachFrom,
             toolCopyChars:
               currentTranscriptStore().toolResultCopiesOnDisk === "whole"
                 ? undefined
@@ -12184,7 +12582,7 @@ async function loadTranscriptFile(path, options) {
   }
   return transcriptFile.finish();
 }
-//@ chunk-e6aww6q8.js:515250-515696 layout
+//@ chunk-5xgkngpb.js:521530-521976 layout
 /**
  * 按 sessionId 或显式路径加载会话转录，返回加载结果与会话文件路径。
  */
@@ -12224,7 +12622,7 @@ async function loadSessionTranscript(sessionId, path, storage, precedingEntries)
     sessionFile: transcriptPath,
   });
 }
-//@ chunk-e6aww6q8.js:515696-516929 callgraph-fingerprint (2.1.88 match: loadSessionFile, 0.183)
+//@ chunk-5xgkngpb.js:521976-523211 callgraph-fingerprint (2.1.88 match: loadSessionFile, 0.183)
 /**
  * 按 sessionId 定位会话文件：先看会话记录的 projectDir，再看当前项目目录与清洗名截断冲突的兄弟目录。
  */
@@ -12318,7 +12716,7 @@ async function loadSessionFile(sessionId, storage) {
         path: join(getProjectsDir(), projectKey, `${sessionId}.jsonl`),
       };
 }
-//@ chunk-e6aww6q8.js:516929-517106 layout (2.1.88 match: getErrorsPath, 1)
+//@ chunk-5xgkngpb.js:523211-523388 layout (2.1.88 match: getErrorsPath, 1)
 async function getErrorsPath(sessionId) {
   let sessionProjectDir = getSessionProjectDir();
   let originalCwd = getOriginalCwd();
@@ -12334,26 +12732,26 @@ async function getErrorsPath(sessionId) {
   }
   return fallbackPath;
 }
-//@ chunk-e6aww6q8.js:517106-517154 facade-majority
+//@ chunk-5xgkngpb.js:523388-523436 facade-majority
 function clearSessionMessagesCache() {
   currentTranscriptStore().clearSessionMessagesCache();
 }
-//@ chunk-e6aww6q8.js:517154-517228 facade-majority
+//@ chunk-5xgkngpb.js:523436-523510 facade-majority
 function consumeFailedTranscriptWrite() {
   let store = currentTranscriptStore();
   let hasFailedWrite = store.hasFailedWrite;
   store.hasFailedWrite = false;
   return hasFailedWrite;
 }
-//@ chunk-e6aww6q8.js:517228-517282 facade-majority
+//@ chunk-5xgkngpb.js:523510-523564 facade-majority
 function primeSessionMessagesCache(sessionId, uuids) {
   currentTranscriptStore().primeSessionMessagesCache(sessionId, uuids);
 }
-//@ chunk-e6aww6q8.js:517282-517355 facade-majority
+//@ chunk-5xgkngpb.js:523564-523637 facade-majority
 async function doesMessageExistInSession(sessionId, uuid, storageV5) {
   return (await currentTranscriptStore().sessionMessages(sessionId, storageV5)).has(uuid);
 }
-//@ chunk-e6aww6q8.js:517355-517585 facade-majority
+//@ chunk-5xgkngpb.js:523637-523867 facade-majority
 async function isMessageTurnUnanswered(sessionId, messageUuid, storage) {
   try {
     let { messages } = await loadSessionTranscript(sessionId, undefined, storage);
@@ -12368,7 +12766,7 @@ async function isMessageTurnUnanswered(sessionId, messageUuid, storage) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:517585-518079 facade-majority
+//@ chunk-5xgkngpb.js:523867-524361 facade-majority
 function isTurnUnanswered(messages, startUuid) {
   let index = messages.findIndex((message) => message.uuid === startUuid);
   if (index === -1) return false;
@@ -12398,7 +12796,7 @@ function isTurnUnanswered(messages, startUuid) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:518335-520628 facade-majority (2.1.88 match: getLastSessionLog, 0.235)
+//@ chunk-5xgkngpb.js:524616-526951 facade-majority (2.1.88 match: getLastSessionLog, 0.227)
 async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessionFile) {
   let {
     messages,
@@ -12426,6 +12824,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
     permissionModes,
     isolationLatches,
     devModsFolders,
+    sessionOwners,
     memoryModeStamps,
     atisLatches,
     toolsUsedLists,
@@ -12450,10 +12849,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
         leafUuids.has(message.uuid) &&
         !message.isSidechain &&
         (message.type === "user" || message.type === "assistant"),
-    ) ??
-    (leafUuids.size === 0 && !clearedToEmpty
-      ? findLatestMessage(messages.values(), (message) => !message.isSidechain)
-      : undefined);
+    ) ?? (leafUuids.size === 0 && !clearedToEmpty ? filterResumableSessions_2(messages) : undefined);
   if (!leafMessage) {
     if (clearedToEmpty && sessionFile !== undefined) {
       let modifiedAt = await sessionFile.modifiedAt();
@@ -12485,7 +12881,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
     buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
     tag,
     sessionFile?.path,
-    buildAttributionSnapshotChain(attributionSnapshots, transcript),
+    buildAttributionSnapshotChain(attributionSnapshots),
     agentSetting,
     contentReplacements.get(sessionId_2) ?? [],
   );
@@ -12507,6 +12903,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
     permissionMode: permissionModes.get(sessionId_2),
     isolationLatch: isolationLatches.get(sessionId_2),
     devModsFolder: devModsFolders?.get(sessionId_2),
+    sessionOwner: sessionOwners?.get(sessionId_2),
     memoryModeStamps: memoryModeStamps.get(sessionId_2) ?? [],
     atisLatch: getOrEmptyString(atisLatches, sessionId_2),
     toolsUsed: toolsUsedLists?.get(sessionId_2),
@@ -12526,6 +12923,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
     artifactAutoReactLedger: artifactAutoReactLedgers.get(sessionId_2),
     costState: costStates.get(sessionId_2),
   };
+  log.replMode = weakMap_7.get(messages)?.get(sessionId_2);
   if (sessionFile !== undefined) {
     let project = currentTranscriptStore().project;
     recordLoadReportSafely(
@@ -12542,7 +12940,7 @@ async function sessionLogFromTranscriptLoad(sessionId, sessionTranscript, sessio
   }
   return log;
 }
-//@ chunk-e6aww6q8.js:520628-520756 facade-majority (2.1.88 match: loadMessageLogs, 1)
+//@ chunk-5xgkngpb.js:526951-527079 facade-majority (2.1.88 match: loadMessageLogs, 1)
 /**
  * 加载当前项目的会话日志列表并富化。
  */
@@ -12555,7 +12953,7 @@ async function loadMessageLogs(limit, storage) {
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:520756-520922 facade-majority
+//@ chunk-5xgkngpb.js:527079-527245 facade-majority
 async function findFirstMessageLog(logs, onLog, storage) {
   let buf = Buffer.alloc(LITE_READ_BUF_SIZE);
   for (let log of logs) {
@@ -12567,7 +12965,7 @@ async function findFirstMessageLog(logs, onLog, storage) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:520922-521054 facade-majority (2.1.88 match: loadAllProjectsMessageLogs, 1)
+//@ chunk-5xgkngpb.js:527245-527377 facade-majority (2.1.88 match: loadAllProjectsMessageLogs, 1)
 /**
  * 加载所有项目的会话日志（/resume 全部项目视图）。
  */
@@ -12581,9 +12979,9 @@ async function loadAllProjectsMessageLogs(limit, options) {
     )
   ).logs;
 }
-//@ chunk-e6aww6q8.js:521054-521065 layout
+//@ chunk-5xgkngpb.js:527377-527388 layout
 var LOG_LIST_CONCURRENCY = 64;
-//@ chunk-e6aww6q8.js:521065-521368 layout
+//@ chunk-5xgkngpb.js:527388-527691 layout
 async function listTranscriptProjectKeys(storage) {
   let keys = new Set();
   let cursor;
@@ -12614,7 +13012,7 @@ async function listTranscriptProjectKeys(storage) {
   }
   return [...keys];
 }
-//@ chunk-e6aww6q8.js:521368-522159 fingerprint (2.1.88 match: loadAllProjectsMessageLogsFull, 0.838)
+//@ chunk-5xgkngpb.js:527691-528491 fingerprint (2.1.88 match: loadAllProjectsMessageLogsFull, 0.838)
 async function loadAllProjectsMessageLogsFull(limit, storage) {
   let projectsDir = getProjectsDir();
   let keys = isStorageV5Enabled() && storage ? await listTranscriptProjectKeys(storage) : undefined;
@@ -12666,7 +13064,7 @@ async function loadAllProjectsMessageLogsFull(limit, storage) {
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:522159-522662 facade-majority (2.1.88 match: loadAllProjectsMessageLogsProgressive, 0.915)
+//@ chunk-5xgkngpb.js:528491-529000 facade-majority (2.1.88 match: loadAllProjectsMessageLogsProgressive, 0.915)
 /**
  * 分批渐进加载所有项目的会话日志，默认每批 50。
  */
@@ -12714,7 +13112,7 @@ async function loadAllProjectsMessageLogsProgressive(
     nextIndex,
   };
 }
-//@ chunk-e6aww6q8.js:522662-522726 facade-majority (2.1.88 match: loadMessageLogs, 1)
+//@ chunk-5xgkngpb.js:529000-529064 facade-majority (2.1.88 match: loadMessageLogs, 1)
 async function loadSameRepoMessageLogs(
   worktreePaths,
   limit,
@@ -12723,7 +13121,7 @@ async function loadSameRepoMessageLogs(
 ) {
   return (await loadSameRepoMessageLogsProgressive(worktreePaths, limit, initialEnrichCount, storage)).logs;
 }
-//@ chunk-e6aww6q8.js:522726-523031 facade-majority (2.1.88 match: loadSameRepoMessageLogsProgressive, 1)
+//@ chunk-5xgkngpb.js:529064-529369 facade-majority (2.1.88 match: loadSameRepoMessageLogsProgressive, 1)
 /**
  * 渐进加载同一仓库（含其 worktree）的会话日志。
  */
@@ -12748,7 +13146,7 @@ async function loadSameRepoMessageLogsProgressive(
     nextIndex,
   };
 }
-//@ chunk-e6aww6q8.js:523031-525836 fingerprint (2.1.88 match: getStatOnlyLogsForWorktrees, 0.327)
+//@ chunk-5xgkngpb.js:529369-532177 fingerprint (2.1.88 match: getStatOnlyLogsForWorktrees, 0.326)
 /**
  * 为各 worktree 对应的项目目录列出会话文件（只 stat 不读内容）。
  */
@@ -12765,7 +13163,7 @@ async function getStatOnlyLogsForWorktrees(worktreePaths, limit, storage) {
       return projectDir === normalized || projectDir.startsWith(normalized + "/");
     })
     .sort((a, b) => b.length - a.length)[0];
-  let aliases = uniq(
+  let aliases = normalizeCaseForComparison_2(
     (
       await Promise.all(
         (worktreeRoot && worktreeRoot !== cwd ? [cwd, worktreeRoot] : [cwd]).map((dir) =>
@@ -12932,20 +13330,20 @@ async function getStatOnlyLogsForWorktrees(worktreePaths, limit, storage) {
   );
   return latestLogPerSession(results.flat().concat(results_2.flat(), aliasLogs));
 }
-//@ chunk-e6aww6q8.js:525836-525869 layout
+//@ chunk-5xgkngpb.js:532177-532210 layout
 function normalizeSlashesForCompare(path) {
   return normalizePathForCwdCompare(path, false);
 }
-//@ chunk-e6aww6q8.js:525869-525897 layout
+//@ chunk-5xgkngpb.js:532210-532238 layout
 var UNSAFE_PATH_CHAR_PATTERN = /[^a-zA-Z0-9/\\:-]/;
-//@ chunk-e6aww6q8.js:525897-526006 layout
+//@ chunk-5xgkngpb.js:532238-532347 layout
 async function allLogsShareCwd(sessionFilesLite, cwd, storage, scanPaths) {
   let buf = Buffer.alloc(LITE_READ_BUF_SIZE);
   for (let log of sessionFilesLite)
     if (!(await logCwdMatches(log, cwd, buf, storage, scanPaths))) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:526006-526222 layout
+//@ chunk-5xgkngpb.js:532347-532563 layout
 async function logCwdMatches(log, cwd, buf, storage, scanPaths) {
   if (!log.fullPath) return false;
   let liteMetadata = await readLiteMetadata(log.fullPath, log.fileSize ?? 0, buf, storage);
@@ -12960,9 +13358,9 @@ async function logCwdMatches(log, cwd, buf, storage, scanPaths) {
     getRealPathOptions(storage),
   );
 }
-//@ chunk-e6aww6q8.js:526222-526233 layout
+//@ chunk-5xgkngpb.js:532563-532574 layout
 var PROJECT_SCAN_CONCURRENCY = 32;
-//@ chunk-e6aww6q8.js:526233-526820 layout
+//@ chunk-5xgkngpb.js:532574-533163 layout
 async function listProjectDirs(storage, listKeys) {
   let projectsDir = getProjectsDir();
   let names;
@@ -13001,7 +13399,7 @@ async function listProjectDirs(storage, listKeys) {
   });
   return (await Promise.all(names.map((name) => scanOne(name)))).filter((result) => result !== null);
 }
-//@ chunk-e6aww6q8.js:526820-527428 layout (2.1.88 match: getSessionFilesLite, 0.917)
+//@ chunk-5xgkngpb.js:533163-533776 layout (2.1.88 match: getSessionFilesLite, 0.917)
 /**
  * 读取会话文件头尾得到 lite 日志（首条提示、标题、分支、cwd 等），不解析整份文件。
  */
@@ -13048,9 +13446,9 @@ async function getSessionFilesLite_2(
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:527428-527441 facade-majority
+//@ chunk-5xgkngpb.js:533776-533789 facade-majority
 var QUEUED_ROWS_WAIT_MS = 2000;
-//@ chunk-e6aww6q8.js:527441-527861 layout
+//@ chunk-5xgkngpb.js:533789-534209 layout
 function drainQueuedAgentRows(agentIds, signal) {
   let { project, writerHealth } = currentTranscriptStore();
   let startTime = performance.now();
@@ -13077,7 +13475,7 @@ function drainQueuedAgentRows(agentIds, signal) {
         });
     });
 }
-//@ chunk-e6aww6q8.js:527861-528776 facade-majority
+//@ chunk-5xgkngpb.js:534209-535124 facade-majority
 /**
  * 读取子代理转录，校验路径在项目目录内，返回消息与状态。
  */
@@ -13127,7 +13525,7 @@ async function getAgentTranscript(agentId, storage, options) {
   });
   return null;
 }
-//@ chunk-e6aww6q8.js:528776-530489 callgraph-fingerprint (2.1.88 match: getAgentTranscript, 0.182)
+//@ chunk-5xgkngpb.js:535124-536841 callgraph-fingerprint (2.1.88 match: getAgentTranscript, 0.182)
 async function getAgentTranscript_2(agentId, storage) {
   let hasContent = false;
   let miss = (miss) => ({
@@ -13209,7 +13607,7 @@ async function getAgentTranscript_2(agentId, storage) {
     return miss("load_threw");
   }
 }
-//@ chunk-e6aww6q8.js:530489-530758 facade-majority (2.1.88 match: extractAgentIdsFromMessages, 1)
+//@ chunk-5xgkngpb.js:536841-537110 facade-majority (2.1.88 match: extractAgentIdsFromMessages, 1)
 function extractAgentIdsFromMessages(messages) {
   let agentIds = [];
   for (let message of messages)
@@ -13223,9 +13621,9 @@ function extractAgentIdsFromMessages(messages) {
       typeof message.data.agentId === "string"
     )
       agentIds.push(message.data.agentId);
-  return uniq(agentIds);
+  return normalizeCaseForComparison_2(agentIds);
 }
-//@ chunk-e6aww6q8.js:530758-531129 facade-majority
+//@ chunk-5xgkngpb.js:537110-537481 facade-majority
 async function loadSubagentTranscripts(agentIds, storage) {
   let filtered = agentIds.filter(isSafeIdSegment);
   let drained = drainQueuedAgentRows(filtered.map(identityAgentId2));
@@ -13252,23 +13650,30 @@ async function loadSubagentTranscripts(agentIds, storage) {
     results.filter((result) => result !== null).map((result) => [result.agentId, result.transcript]),
   );
 }
-//@ chunk-e6aww6q8.js:531129-531201 facade-majority
+//@ chunk-5xgkngpb.js:537481-537553 facade-majority
 async function loadAllSubagentTranscriptsFromDisk(storage) {
   return loadSubagentTranscripts(
     await listSubagentIdsFromDisk(isStorageV5Enabled() && storage !== undefined ? storage : undefined),
     storage,
   );
 }
-//@ chunk-e6aww6q8.js:531201-531221 layout
+//@ chunk-5xgkngpb.js:537553-537573 layout
 var EMPTY_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:531201", () => {
+deferInit("chunk-5xgkngpb.js:537553", () => {
   EMPTY_SET = new Set([]);
 });
-//@ chunk-e6aww6q8.js:531221-531304 callgraph-fingerprint (2.1.88 match: isTranscriptMessage, 0.461)
+//@ chunk-5xgkngpb.js:537573-537656 callgraph-fingerprint (2.1.88 match: isTranscriptMessage, 0.46)
 function isTranscriptMessage_2(entry) {
   return entry.type === "attachment" && entry.attachment?.type === "fork_briefing";
 }
-//@ chunk-e6aww6q8.js:531304-531699 facade-majority (2.1.88 match: isLoggableMessage, 0.611)
+//@ chunk-5xgkngpb.js:537656-537758 layout (2.1.88 match: filterResumableSessions, 1)
+function filterResumableSessions_2(logs) {
+  return (
+    findLatestMessage(logs.values(), (message) => !message.isSidechain && !isFileSnapshotMessage(message)) ??
+    findLatestMessage(logs.values(), (message) => !message.isSidechain)
+  );
+}
+//@ chunk-5xgkngpb.js:537758-538153 facade-majority (2.1.88 match: isLoggableMessage, 0.611)
 /**
  * 该消息是否应写入转录（过滤 progress、部分 attachment 与 hook 系统消息）。
  */
@@ -13287,16 +13692,20 @@ function isLoggableMessage(m) {
   if (m.type === "system" && "persist" in m && m.persist === false) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:531699-531886 facade-majority (2.1.88 match: countToolCallsSince, 1)
-function collectReplIds(messages, sinceUuid = new Set()) {
-  for (let message of messages)
-    if (message.type === "assistant" && Array.isArray(message.message.content)) {
-      for (let block of message.message.content)
-        if (block.type === "tool_use" && isExactReplToolName(block.name)) sinceUuid.add(block.id);
+//@ chunk-5xgkngpb.js:538153-538340 facade-majority
+function collectReplIds(messages, ids = new Set()) {
+  for (let m of messages)
+    if (m.type === "assistant" && Array.isArray(m.message.content)) {
+      for (let block of m.message.content)
+        if (block.type === "tool_use" && isEvalToolCallName(block.name)) ids.add(block.id);
     }
-  return sinceUuid;
+  return ids;
 }
-//@ chunk-e6aww6q8.js:531886-533052 fingerprint (2.1.88 match: transformMessagesForExternalTranscript, 0.544)
+//@ chunk-5xgkngpb.js:538340-538412 layout
+function isMetaVirtualUserRow(message) {
+  return message.type === "user" && message.isMeta === true && message.isVirtual === true;
+}
+//@ chunk-5xgkngpb.js:538412-539596 fingerprint (2.1.88 match: transformMessagesForExternalTranscript, 0.451)
 function transformMessagesForExternalTranscript(messages, replIds) {
   let resumedIdx = new Set();
   if (
@@ -13307,8 +13716,8 @@ function transformMessagesForExternalTranscript(messages, replIds) {
   return messages.flatMap((m, index) => {
     if (m.type === "assistant" && Array.isArray(m.message.content)) {
       let content = m.message.content;
-      let keptContent = content.some((block) => block.type === "tool_use" && isExactReplToolName(block.name))
-        ? content.filter((block) => !(block.type === "tool_use" && isExactReplToolName(block.name)))
+      let keptContent = content.some((block) => block.type === "tool_use" && isEvalToolCallName(block.name))
+        ? content.filter((block) => !(block.type === "tool_use" && isEvalToolCallName(block.name)))
         : content;
       if (keptContent.length === 0) return [];
       if (m.isVirtual && !resumedIdx.has(index) && m.virtualInResumeRun !== true) {
@@ -13343,7 +13752,12 @@ function transformMessagesForExternalTranscript(messages, replIds) {
         ? content.filter((block) => !(block.type === "tool_result" && replIds.has(block.tool_use_id)))
         : content;
       if (keptContent.length === 0) return [];
-      if (m.isVirtual && !resumedIdx.has(index) && m.virtualInResumeRun !== true) {
+      if (
+        m.isVirtual &&
+        !isMetaVirtualUserRow(m) &&
+        !resumedIdx.has(index) &&
+        m.virtualInResumeRun !== true
+      ) {
         let { isVirtual: _omit, ...rest } = m;
         return [
           {
@@ -13370,6 +13784,7 @@ function transformMessagesForExternalTranscript(messages, replIds) {
     if (
       "isVirtual" in m &&
       m.isVirtual &&
+      !isMetaVirtualUserRow(m) &&
       !resumedIdx.has(index) &&
       ("virtualInResumeRun" in m ? m.virtualInResumeRun !== true : true)
     ) {
@@ -13379,7 +13794,7 @@ function transformMessagesForExternalTranscript(messages, replIds) {
     return [m];
   });
 }
-//@ chunk-e6aww6q8.js:533052-533264 facade-majority (2.1.88 match: loadMessagesFromJsonlPath, 0.447)
+//@ chunk-5xgkngpb.js:539596-539809 facade-majority (2.1.88 match: loadMessagesFromJsonlPath, 0.447)
 function toTranscriptEntries(rows, sessionId) {
   let tip = null;
   return cleanMessagesForLogging(rows.slice()).map((message) => {
@@ -13397,36 +13812,40 @@ function toTranscriptEntries(rows, sessionId) {
     return entry;
   });
 }
-//@ chunk-e6aww6q8.js:533264-533420 facade-majority (2.1.88 match: cleanMessagesForLogging, 1)
-function cleanMessagesForLogging(messages, allMessages = messages) {
-  let messages_2 = messages.filter(isLoggableMessage).map((message) => resolveMessageAlias(message));
+//@ chunk-5xgkngpb.js:539809-540030 facade-majority
+function cleanMessagesForLogging(allMessages, messages = allMessages) {
+  let messages_2 = allMessages
+    .filter(isLoggableMessage)
+    .map((message) => replaceUnsentMediaInToolResult(resolveMessageAlias(message)));
   if (getUserType() === "ant") return messages_2;
+  if (codeModeAccepted() && currentTranscriptStore().project?.currentSessionCodeMode === true)
+    return messages_2;
   let replIds =
-    allMessages instanceof Set
-      ? allMessages
-      : typeof allMessages === "function"
-        ? allMessages()
-        : collectReplIds(allMessages);
+    messages instanceof Set
+      ? messages
+      : typeof messages === "function"
+        ? messages()
+        : collectReplIds(messages);
   return transformMessagesForExternalTranscript(messages_2, replIds);
 }
-//@ chunk-e6aww6q8.js:533420-533481 facade-majority
+//@ chunk-5xgkngpb.js:540030-540091 facade-majority
 async function getLogByIndex(index, storage) {
   return (await loadMessageLogs(undefined, storage))[index] || null;
 }
-//@ chunk-e6aww6q8.js:533481-533530 facade-majority
+//@ chunk-5xgkngpb.js:540091-540140 facade-majority
 function findUnresolvedToolUseInTranscript(toolUseId, message) {
   return findUnresolvedToolUsesInTranscript(toolUseId, [message]).get(message) ?? null;
 }
-//@ chunk-e6aww6q8.js:533530-533936 facade-majority (2.1.88 match: countToolCallsSince, 1)
-function findUnresolvedToolUsesInTranscript(messages, sinceUuid) {
-  let pending = new Set(sinceUuid);
+//@ chunk-5xgkngpb.js:540140-540546 facade-majority
+function findUnresolvedToolUsesInTranscript(messages, pendingIds) {
+  let pending = new Set(pendingIds);
   let holders = new Map();
   for (let message of messages)
     if (message.type === "assistant") {
       let content = message.message.content;
       if (Array.isArray(content)) {
-        for (let message_2 of content)
-          if (message_2.type === "tool_use" && pending.has(message_2.id)) holders.set(message_2.id, message);
+        for (let block of content)
+          if (block.type === "tool_use" && pending.has(block.id)) holders.set(block.id, message);
       }
     } else if (message.type === "user") {
       if (isShutdownInterrupted(message)) continue;
@@ -13441,16 +13860,16 @@ function findUnresolvedToolUsesInTranscript(messages, sinceUuid) {
     }
   return holders;
 }
-//@ chunk-e6aww6q8.js:533936-533998 facade-majority
+//@ chunk-5xgkngpb.js:540546-540608 facade-majority
 async function findUnresolvedToolUse(toolUseId, storage) {
   return (await findUnresolvedToolUses([toolUseId], storage)).get(toolUseId) ?? null;
 }
-//@ chunk-e6aww6q8.js:533998-534092 facade-majority
+//@ chunk-5xgkngpb.js:540608-540702 facade-majority
 async function findUnresolvedToolUses(ids, storage) {
   if (ids.length === 0) return new Map();
   return (await findUnresolvedToolUsesInTranscript_2(ids, storage))?.found ?? new Map();
 }
-//@ chunk-e6aww6q8.js:534092-534426 facade-majority
+//@ chunk-5xgkngpb.js:540702-541036 facade-majority
 async function findUnresolvedToolUseMessageRows(toolUseId, storage) {
   let unresolvedToolUsesInTranscript = await findUnresolvedToolUsesInTranscript_2([toolUseId], storage);
   let holder = unresolvedToolUsesInTranscript?.found.get(toolUseId);
@@ -13473,7 +13892,7 @@ async function findUnresolvedToolUseMessageRows(toolUseId, storage) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:534426-535060 facade-majority
+//@ chunk-5xgkngpb.js:541036-541670 facade-majority
 function assistantMessageRowsInTranscript(messages, holder) {
   let id = holder.message.id;
   let holderRow = messages.get(holder.uuid);
@@ -13515,22 +13934,22 @@ function assistantMessageRowsInTranscript(messages, holder) {
       rows.push(message);
   return rows;
 }
-//@ chunk-e6aww6q8.js:535060-535166 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-5xgkngpb.js:541670-541776 layout
 function getAssistantToolUseIds(message) {
   return (
     Array.isArray(message.message.content) &&
-    message.message.content.some((block) => block.type === "tool_use")
+    message.message.content.some((contentBlock) => contentBlock.type === "tool_use")
   );
 }
-//@ chunk-e6aww6q8.js:535166-535230 layout
+//@ chunk-5xgkngpb.js:541776-541840 layout
 function isAssistantWithMessageId(message, id) {
   return message.type === "assistant" && message.message.id === id;
 }
-//@ chunk-e6aww6q8.js:535230-535291 layout
+//@ chunk-5xgkngpb.js:541840-541901 layout
 function isUserOrAssistant(message) {
   return message.type === "user" || message.type === "assistant";
 }
-//@ chunk-e6aww6q8.js:535291-535795 layout
+//@ chunk-5xgkngpb.js:541901-542405 layout
 /**
  * 读取当前转录并找出给定 tool_use id 中尚未有结果的那些，未找到的记调试日志；读取失败返回 null。
  */
@@ -13568,7 +13987,7 @@ async function findUnresolvedToolUsesInTranscript_2(ids, storage) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:535795-536485 facade-majority
+//@ chunk-5xgkngpb.js:542405-543095 facade-majority
 async function findDeferredToolMarkerInTranscript(fullPath, storageV5) {
   try {
     let tail =
@@ -13611,7 +14030,7 @@ async function findDeferredToolMarkerInTranscript(fullPath, storageV5) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:536485-537059 layout
+//@ chunk-5xgkngpb.js:543095-543669 layout
 async function listSessionFilesViaStorage(storage, projectKey) {
   let files = new Map();
   try {
@@ -13664,7 +14083,7 @@ async function listSessionFilesViaStorage(storage, projectKey) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:537059-537303 layout
+//@ chunk-5xgkngpb.js:543669-543913 layout
 async function getSessionFilesViaStorage(projectDir, storage) {
   let projectKey = basename(projectDir);
   if (dirname(projectDir) !== getProjectsDir() || !isValidKeySegment(projectKey)) return;
@@ -13680,7 +14099,7 @@ async function getSessionFilesViaStorage(projectDir, storage) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:537303-537861 facade-majority (2.1.88 match: getSessionFilesWithMtime, 1)
+//@ chunk-5xgkngpb.js:543913-544471 facade-majority (2.1.88 match: getSessionFilesWithMtime, 1)
 /**
  * 列出项目目录中的 .jsonl 会话文件及 mtime。
  */
@@ -13725,9 +14144,9 @@ async function getSessionFilesWithMtime(projectDir, storage) {
   );
   return sessionFilesMap;
 }
-//@ chunk-e6aww6q8.js:537861-537872 layout
+//@ chunk-5xgkngpb.js:544471-544482 layout
 var DEFAULT_LOG_PAGE_SIZE = 50;
-//@ chunk-e6aww6q8.js:537872-539365 facade-majority (2.1.88 match: loadAllLogsFromSessionFile, 0.77)
+//@ chunk-5xgkngpb.js:544482-546054 facade-majority (2.1.88 match: loadAllLogsFromSessionFile, 0.743)
 async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, storage) {
   let {
     messages,
@@ -13747,6 +14166,7 @@ async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, stor
     permissionModes,
     isolationLatches,
     devModsFolders,
+    sessionOwners,
     memoryModeStamps,
     atisLatches,
     toolsUsedLists,
@@ -13801,6 +14221,7 @@ async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, stor
       permissionMode: permissionModes.get(sessionId),
       isolationLatch: isolationLatches.get(sessionId),
       devModsFolder: devModsFolders?.get(sessionId),
+      sessionOwner: sessionOwners?.get(sessionId),
       memoryModeStamps: memoryModeStamps.get(sessionId) ?? [],
       atisLatch: getOrEmptyString(atisLatches, sessionId),
       toolsUsed: toolsUsedLists?.get(sessionId),
@@ -13810,13 +14231,14 @@ async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, stor
       gitBranch: leafMessage.gitBranch,
       projectPath: projectPathOverride ?? firstMessage.cwd,
       fileHistorySnapshots: buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, chain),
-      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots, chain),
+      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots),
       contentReplacements: contentReplacements.get(sessionId) ?? [],
     });
+    logs.at(-1).replMode = weakMap_7.get(messages)?.get(sessionId);
   }
   return logs;
 }
-//@ chunk-e6aww6q8.js:539365-539514 layout
+//@ chunk-5xgkngpb.js:546054-546203 layout
 async function getSessionFileEntriesViaStorage(projectDir, storage, projectKey) {
   let files = await listSessionFilesViaStorage(storage, projectKey);
   return files === undefined
@@ -13827,7 +14249,7 @@ async function getSessionFileEntriesViaStorage(projectDir, storage, projectKey) 
         key: info.key,
       }));
 }
-//@ chunk-e6aww6q8.js:539514-540131 fingerprint (2.1.88 match: getLogsWithoutIndex, 0.804)
+//@ chunk-5xgkngpb.js:546203-546826 fingerprint (2.1.88 match: getLogsWithoutIndex, 0.804)
 async function getLogsWithoutIndex(projectDir, limit, storageOptions) {
   if (isStorageV5Enabled() && storageOptions) {
     let { backend, projectKey } = storageOptions;
@@ -13868,7 +14290,7 @@ async function getLogsWithoutIndex(projectDir, limit, storageOptions) {
     }
   return logs;
 }
-//@ chunk-e6aww6q8.js:540131-541827 fingerprint (2.1.88 match: readLiteMetadata, 0.723)
+//@ chunk-5xgkngpb.js:546826-548535 fingerprint (2.1.88 match: readLiteMetadata, 0.724)
 /**
  * 从文件头尾字节中抽取 lite 元数据：isSidechain、teamName、cwd、首条提示、custom-title、tag 等。
  */
@@ -13979,9 +14401,9 @@ async function readLiteMetadata(path, fileSize, buf, storage) {
     bookkeepingOnly,
   };
 }
-//@ chunk-e6aww6q8.js:541827-541970 layout
+//@ chunk-5xgkngpb.js:548535-548678 layout
 var FrameLinkEntrySchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:541827", () => {
+deferInit("chunk-5xgkngpb.js:548535", () => {
   FrameLinkEntrySchema = DoctorLazy(() =>
     create({
       type: create_25("frame-link"),
@@ -13990,7 +14412,7 @@ deferInit("chunk-e6aww6q8.js:541827", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:541970-542380 layout
+//@ chunk-5xgkngpb.js:548678-549088 layout
 function countFrameLinks(tail) {
   if (!tail.includes('"type":"frame-link"')) return;
   let maxCount = 0;
@@ -14013,7 +14435,7 @@ function countFrameLinks(tail) {
   let max = Math.max(maxCount, urls.size);
   return max > 0 ? max : undefined;
 }
-//@ chunk-e6aww6q8.js:542380-543149 layout
+//@ chunk-5xgkngpb.js:549088-549864 layout
 function isLoopCommandSession(chunk) {
   let start = 0;
   while (start < chunk.length) {
@@ -14057,7 +14479,7 @@ function isLoopCommandSession(chunk) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:543149-544523 fingerprint (2.1.88 match: extractFirstPromptFromChunk, 0.719)
+//@ chunk-5xgkngpb.js:549864-551243 fingerprint (2.1.88 match: extractFirstPromptFromChunk, 0.72)
 function extractFirstPromptFromChunk(chunk, mode) {
   let start = 0;
   let hasTickMessages = false;
@@ -14137,7 +14559,7 @@ function extractFirstPromptFromChunk(chunk, mode) {
   if (hasTickMessages) return "Proactive session";
   return firstCommandFallback_2;
 }
-//@ chunk-e6aww6q8.js:544523-544740 layout
+//@ chunk-5xgkngpb.js:551243-551460 layout
 function findLastFieldInType(tail, type, key) {
   let typeNeedle = `"type":"${type}"`;
   let keyNeedle = `"${key}":`;
@@ -14158,7 +14580,7 @@ function findLastFieldInType(tail, type, key) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:544740-545032 fingerprint (2.1.88 match: extractJsonStringFieldPrefix, 1)
+//@ chunk-5xgkngpb.js:551460-551752 fingerprint (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractJsonStringFieldPrefix(text, key, maxLen) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   for (let pattern of patterns) {
@@ -14181,20 +14603,7 @@ function extractJsonStringFieldPrefix(text, key, maxLen) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:545032-545254 layout (2.1.88 match: groupLogsBySessionId, 1)
-function latestLogPerSession(filteredLogs) {
-  let groups = new Map();
-  for (let log of filteredLogs) {
-    if (!log.sessionId) continue;
-    let existing = groups.get(log.sessionId);
-    if (!existing || log.modified.getTime() > existing.modified.getTime()) groups.set(log.sessionId, log);
-  }
-  return sortLogs([...groups.values()]).map((log, value) => ({
-    ...log,
-    value,
-  }));
-}
-//@ chunk-e6aww6q8.js:545254-545715 facade-majority (2.1.88 match: getSessionFilesLite, 0.952)
+//@ chunk-5xgkngpb.js:551974-552435 facade-majority (2.1.88 match: getSessionFilesLite, 0.952)
 async function getSessionFilesLite(projectDir, limit, projectPath, storage, ownWorktrees) {
   let entries = [...(await getSessionFilesWithMtime(projectDir, storage)).entries()].sort(
     (a, b) => b[1].mtime - a[1].mtime,
@@ -14224,7 +14633,7 @@ async function getSessionFilesLite(projectDir, limit, projectPath, storage, ownW
   });
   return sorted;
 }
-//@ chunk-e6aww6q8.js:545715-547898 fingerprint (2.1.88 match: enrichLog, 0.575)
+//@ chunk-5xgkngpb.js:552435-554621 fingerprint (2.1.88 match: enrichLog, 0.575)
 /**
  * 富化单个 lite 日志并过滤：cwd 不同、sidechain、无内容等不显示在 /resume。
  */
@@ -14328,15 +14737,16 @@ async function enrichLog(log, buf, storage) {
   }
   return enriched;
 }
-//@ chunk-e6aww6q8.js:547898-548224 facade-majority (2.1.88 match: enrichLogs, 0.969)
+//@ chunk-5xgkngpb.js:554621-554977 facade-majority (2.1.88 match: enrichLogs, 0.969)
 /**
  * 批量富化 lite 日志，记录过滤计数（/resume: enriched … filtered out … visible）。
  */
-async function enrichLogs(allLogs, startIndex, count, storage) {
+async function enrichLogs(allLogs, startIndex, count, storage, scanLimit = 1 / 0) {
   let result = [];
   let readBuf = Buffer.alloc(LITE_READ_BUF_SIZE);
+  let min = Math.min(allLogs.length, startIndex + scanLimit);
   let i = startIndex;
-  while (i < allLogs.length && result.length < count) {
+  while (i < min && result.length < count) {
     let log = allLogs[i];
     i++;
     let enriched = await enrichLog(log, readBuf, storage);
@@ -14353,7 +14763,7 @@ async function enrichLogs(allLogs, startIndex, count, storage) {
     nextIndex: i,
   };
 }
-//@ chunk-89ebz077.js:16227-16458 fingerprint (2.1.88 match: writeAgentMetadata, 0.515)
+//@ chunk-v6a0t823.js:16374-16605 fingerprint (2.1.88 match: writeAgentMetadata, 0.514)
 async function writeAgentMetadata_2(agentId, metadata) {
   if (getPlatform() === "windows") return;
   let path = daemonTokensFile(agentId);
@@ -14373,7 +14783,7 @@ async function writeAgentMetadata_2(agentId, metadata) {
     return;
   }
 }
-//@ chunk-cgs3vg0v.js:1502-1585 fingerprint (2.1.88 match: buildFileHistorySnapshotChain, 0.456)
+//@ chunk-05hzzra9.js:1502-1585 fingerprint (2.1.88 match: buildFileHistorySnapshotChain, 0.455)
 function buildFileHistorySnapshotChain(session) {
   if (!session) return;
   try {
@@ -14383,7 +14793,7 @@ function buildFileHistorySnapshotChain(session) {
     return;
   }
 }
-//@ chunk-dz3q485w.js:15191-15469 callgraph-fingerprint (2.1.88 match: loadSameRepoMessageLogs, 0.229)
+//@ chunk-jndyh8cy.js:15289-15567 callgraph-fingerprint (2.1.88 match: loadSameRepoMessageLogs, 0.229)
 async function loadSameRepoMessageLogs_2(cwd, credentials) {
   let worktrees = await sameRepoWorktrees(cwd);
   let sameRepoMessageLogsProgressive = await loadSameRepoMessageLogsProgressive(
@@ -14399,16 +14809,16 @@ async function loadSameRepoMessageLogs_2(cwd, credentials) {
     log.sessionId !== sessionId &&
     (log.projectPath === undefined || isSameRepoPath(log.projectPath, cwd, worktrees));
   let filtered = sameRepoMessageLogsProgressive.logs.filter(keep);
-  let unreadCount = count(
+  let unreadCount = countWhere(
     sameRepoMessageLogsProgressive.allStatLogs.slice(sameRepoMessageLogsProgressive.nextIndex),
     resolveSessionFilePath_2,
   );
   return {
     logs: filtered,
-    totalCount: count(filtered, resolveSessionFilePath_2) + unreadCount,
+    totalCount: countWhere(filtered, resolveSessionFilePath_2) + unreadCount,
   };
 }
-//@ chunk-wd9kxbpn.js:18162-18427 placement (2.1.88 match: renderToolResultMessage, 0.52)
+//@ chunk-rytc8e8q.js:19163-19428 placement (2.1.88 match: renderToolResultMessage, 0.521)
 /**
  * 根据进度消息里的 worktree 信息更新已保存的会话元数据（路径/分支/hook 标记变化时写回）。
  */
@@ -14434,22 +14844,16 @@ async function renderToolResultMessage(output, _progressMessagesForMessage, _opt
     _options,
   );
 }
-//@ chunk-0j11jfmy.js:6045-6057 fingerprint (2.1.88 match: cleanMessagesForLogging, 1)
-var cleanMessagesForLogging_2 = "ant";
-//@ chunk-bss4k1z9.js:33929-33956 fingerprint (2.1.88 match: getUserType, 0.74)
-var getUserType_2 = (userType) => userType === "external";
-//@ chunk-18hwfzwa.js:441822-441905 fingerprint (2.1.88 match: extractTeammateTranscriptsFromTasks, 1)
-function extractTeammateTranscriptsFromTasks_2(tasks) {
-  return tasks.type === "in_process_teammate" ? tasks.identity.agentId : tasks.agentId;
-}
-//@ chunk-18hwfzwa.js:1084489-1084597 fingerprint (2.1.88 match: loadSubagentTranscripts, 0.658)
+//@ chunk-775n2x67.js:34237-34264 placement
+var offerOffAvailable = (userType) => userType === "external";
+//@ chunk-czq1j3j2.js:1118520-1118628 fingerprint (2.1.88 match: loadSubagentTranscripts, 0.658)
 function loadSubagentTranscripts_2({ isLoading, transcript }) {
   let ready = useCallback((agentId) => !isLoading && endsWithNumberedList(agentId), [isLoading]);
   let storeSelector = useStoreSelector(transcript, ready);
   let unattended = !isUnattendedInteractiveSession();
   return !isLoading && !storeSelector && unattended;
 }
-//@ chunk-ad2e1aj6.js:22307-22511 fingerprint (2.1.88 match: scanPreBoundaryMetadata, 0.481)
+//@ chunk-nvm0wye1.js:22652-22856 fingerprint (2.1.88 match: scanPreBoundaryMetadata, 0.481)
 function scanPreBoundaryMetadata(text, maxBytes, suffix) {
   if (Buffer.byteLength(text) <= maxBytes)
     return {
@@ -14465,7 +14869,7 @@ function scanPreBoundaryMetadata(text, maxBytes, suffix) {
     truncated: true,
   };
 }
-//@ chunk-cg2r2hy6.js:24194-24674 fingerprint (2.1.88 match: getAgentTranscriptPath, 0.928)
+//@ chunk-66b9fbd5.js:25405-25885 fingerprint (2.1.88 match: getAgentTranscriptPath, 0.928)
 function getAgentTranscriptPath_2(agentId) {
   let projectsPrefix = getProjectsDir_3() + sep;
   if (!agentId.startsWith(projectsPrefix)) return null;
@@ -14498,44 +14902,77 @@ function getAgentTranscriptPath_2(agentId) {
   }
   return null;
 }
-//@ chunk-cg2r2hy6.js:24674-24718 sole-consumer
+//@ chunk-66b9fbd5.js:25885-25929 sole-consumer
 function pathIfNotStorageBacked(key) {
   return validateStorageKey(key) === undefined ? key : null;
 }
 export {
   getEntrypoint,
-  getSessionIdFromLog,
-  getProjectsDir,
-  getSessionFilesWithMtime,
-  loadAllLogsFromSessionFile,
-  getProjectKeyIfRepresentable,
+  pinSessionId,
+  getAgentTranscriptPath,
+  getMaterializedSessionFile,
+  getTranscriptPath,
+  getAgentMetadataPath,
   isTranscriptPersistenceDisabled,
-  getTranscriptPathForSession,
-  saveWorktreeState,
+  saveAgentSetting,
+  describeDiskTranscriptLag,
+  findUnresolvedToolUses,
+  recordTranscript,
+  flushSessionStorage,
+  isCompactPairWithheldFromRemote,
+  addSessionMirror,
+  getCurrentSessionIsolationLatch,
+  saveIsolationLatch,
+  registerLiveSuppressionProbe,
+  buildFileHistorySnapshotChain,
+  cacheSessionTitle,
+  getSessionRowsOffDisk,
+  mirrorLeafCheckpointToRemote,
+  persistLeafCheckpoint,
+  adoptResumedSessionFileAsync,
+  adoptResumedSessionFile,
+  registerTranscriptExitReStamp,
   resetSessionFilePointer,
   adoptForkSessionMetadata,
   recordContentReplacement,
   restoreSessionMetadata,
-  adoptResumedSessionFileAsync,
-  adoptResumedSessionFile,
   saveMode,
-  pinSessionId,
-  recordTranscript,
-  doesMessageExistInSession,
-  isChainParticipant,
-  updateAgentMetadata,
-  worktreeFromProgress,
-  getAgentTranscriptPath,
-  locateAgentTranscript,
+  searchSessionsByCustomTitle,
+  getSessionIdFromLog,
+  setTranscriptLocalGcEnabled,
+  hydrateFromCCRv2InternalEvents,
+  hydrateRemoteSession,
+  getTranscriptPathForSession,
+  listSubagentIdsFromDisk,
   readAgentMetadata,
-  writeAgentMetadata,
-  setAgentTranscriptSubdir,
-  isLoggableMessage,
-  clearAgentTranscriptSubdir,
-  recordForkContextRef,
-  recordSidechainTranscript,
+  restoreAgentSidecarFromStream,
+  findUnresolvedToolUseMessageRows,
+  findUnresolvedToolUse,
+  getTranscriptStorageKey,
+  loadTranscriptFile,
+  findUnresolvedToolUsesInTranscript,
+  assistantMessageRowsInTranscript,
+  updateAgentMetadata,
+  landStoppedByUser,
+  getCurrentSessionBridge,
+  clearBridgeSession,
+  saveBridgeSession,
+  isTurnUnanswered,
+  wrapStorageSource,
+  doesMessageExistInSession,
+  isMessageTurnUnanswered,
+  getTranscriptWriterHealth,
+  hasRemoteWorkerEventLog,
   registerTranscriptExitDrain,
+  readAtTranscriptEntry,
+  inTranscriptCallOrder,
   transcriptCursorEnd,
+  collectReplIds,
+  isLoggableMessage,
+  isChainParticipant,
+  hasSessionMirror,
+  removeTranscriptMessage,
+  cleanMessagesForLogging,
   loadSessionTranscript,
   sessionLogFromTranscriptLoad,
   currentTranscriptStore,
@@ -14548,155 +14985,80 @@ export {
   findDeferredToolMarkerInTranscript,
   getCurrentSessionTitle,
   applyResumeHookSessionTitle,
-  wrapStorageSource,
   getTranscriptStorageContext,
-  cleanMessagesForLogging_2,
-  AgentTranscriptFetchError,
-  isAgentTranscriptOverBound,
-  isUnavailableStoreError,
-  hasAgentStopSibling,
-  flushSessionStorage,
-  getAgentTranscript,
-  canFetchAgentTranscriptsOnDemand,
-  readAgentWorkerEvents,
-  hasWrittenAgentTranscript,
-  keepsAgentMetadataInStream,
-  clearAgentStopSibling,
-  landStoppedByUser,
-  touchSessionTranscript,
-  isCompactPairWithheldFromRemote,
-  isBridgeBindingForeign,
-  recordQueueOperation,
-  isTranscriptRelocationInProgress,
-  getTranscriptWriteFailureSeq,
-  getMaterializedSessionFile,
-  getAgentTranscriptStorageKey,
-  removeRemoteAgentMetadata,
-  writeRemoteAgentMetadata,
-  listRemoteAgentMetadata,
   isRemoteEgressSuppressedFor,
-  mergeArtifactCommentMonitorEntries,
-  loadTranscriptFromFile,
-  listSubagentIdsFromDisk,
-  searchSessionsByCustomTitle,
-  TranscriptFileFormatError,
-  getProjectDir,
-  getCurrentSessionFile,
-  transcriptStamp,
-  appendEntryToFileAsync,
-  getTranscriptStorageKey,
-  getCurrentSessionAiTitle,
-  getCurrentSessionAgentColor,
-  getCurrentSessionBridge,
-  extractTeammateTranscriptsFromTasks_2,
-  subscribeSessionTitleChanged,
-  saveIsolationLatch,
-  savePermissionMode,
-  readAgentMetadataAtPath,
   getCurrentSessionDisplayTitle,
-  applyEndedByModelOnResume,
-  clearSessionMetadata,
-  buildForkAdoptionMeta,
-  holdPrecautionarySuppressionFor,
-  markPrecautionClearResilientFor,
-  copyPrecautionarySuppressionTo,
-  cacheHookSessionTitle,
-  subscribeSessionAgentNameChanged,
-  getCurrentSessionAgentName,
-  getCurrentSessionIsolationLatch,
+  withVersionToRecord,
+  readHistorySuppressionFromDisk,
+  loadTranscriptFromFile,
+  TranscriptFileFormatError,
+  isTranscriptMessage,
+  setInternalEventWriter,
+  setAgentMetadataInStreamGate,
+  setInternalEventReader,
+  updateCCRTipFromAckedBatch,
+  sealTranscriptAppendsForShutdown,
   readTranscriptTailForTip,
-  extractLastSyncedEventUuid,
-  bridgeSessionForPulledWindow,
-  titleCacheStillOn,
-  cacheSessionTitle,
-  cacheAgentName,
-  getFirstMeaningfulUserMessageTextContent,
+  getValidatedCCRTip,
+  getProjectDir,
+  recordQueueOperation,
+  appendEntryToFileAsync,
+  isBridgeBindingForeign,
+  snapshotSessionMetadata,
+  queueSessionMetadataEntry,
+  getProjectsDir,
+  isSessionHistorySuppressed,
+  isSessionHistorySuppressedFor,
+  getCurrentSessionMemoryModeStamps,
+  primeSessionMessagesCache,
   saveCustomTitle,
-  isCustomTitleEnabled,
+  saveAgentName,
+  isPrecautionarySuppressionHeldFor,
+  getSessionOwner,
+  ownStoredLoginOwner,
+  getProjectKeyIfRepresentable,
+  saveWorktreeState,
+  readTranscriptTailV5,
+  loadAllProjectsMessageLogsProgressive,
   loadSameRepoMessageLogsProgressive,
   enrichLogs,
-  loadAllProjectsMessageLogsProgressive,
-  getTranscriptPath,
-  getAgentMetadataPath,
-  getSessionSubagentsDir,
-  saveAutoMemorySessionSwitch,
-  getPersistenceSuppressionCause,
-  getTranscriptWriterHealth,
-  saveAgentSetting,
-  describeDiskTranscriptLag,
-  findUnresolvedToolUses,
-  addSessionMirror,
-  registerLiveSuppressionProbe,
-  buildFileHistorySnapshotChain,
-  getSessionRowsOffDisk,
-  mirrorLeafCheckpointToRemote,
-  persistLeafCheckpoint,
-  registerTranscriptExitReStamp,
-  setTranscriptLocalGcEnabled,
-  hydrateFromCCRv2InternalEvents,
-  hydrateRemoteSession,
-  loadSubagentTranscripts_2,
-  extractAgentIdsFromMessages,
-  loadSubagentTranscripts,
-  saveAiGeneratedTitle,
-  saveAgentName,
-  isTranscriptMessage,
-  queueSessionMetadataEntry,
-  hasRemoteWorkerEventLog,
-  readAtTranscriptEntry,
-  inTranscriptCallOrder,
-  collectReplIds,
-  hasSessionMirror,
-  removeTranscriptMessage,
-  isEphemeralToolProgress,
-  removeTranscriptMessageIfPersisted,
-  readHistorySuppressionFromDisk,
-  PENDING_BRIDGE_SESSION,
-  registerForeignConversationProbe,
-  clearBridgeSession,
-  clearBridgeSessionCache,
-  saveBridgeSession,
-  isOwnTranscriptFile,
-  claimPrecautionHoldForObservedCause,
-  writeHistorySuppression,
+  loadSameRepoMessageLogs,
   saveAgentColor,
-  cleanMessagesForLogging,
+  getFirstMeaningfulUserMessageTextContent,
+  getTranscriptWriteFailureSeq,
+  MAX_VIEW_REFS,
+  sessionIdExists,
+  isFileSnapshotMessage,
+  transcriptVersion,
+  CLI_VERSION,
+  ensurePluginDataDir,
+  savePermissionMode,
+  getSessionSidecarDir,
+  ensureSidecarDirFor,
+  saveAutoMemorySessionSwitch,
+  recordFileHistoryDelta,
+  recordFileHistorySnapshot,
+  getAgentTranscript,
   getCurrentSessionPeerNameFor,
   getCurrentSessionPeerName,
   getCurrentSessionOffBoxPeerName,
-  transcriptMayContainMarker,
-  sessionIdExists,
-  relocateSessionTranscript,
-  isConversationEgressTainted,
-  isSessionHistorySuppressed,
-  getCurrentSessionMemoryModeStamps,
-  holdSessionHistorySuppression,
-  markToolsUsedWritten,
-  queueLeafCheckpointWithdrawal,
-  saveMemoryMode,
-  dropSessionHistorySuppression,
-  releasePrecautionarySuppressionFor,
-  recordFileHistoryDelta,
-  recordFileHistorySnapshot,
-  getSessionSidecarDir,
-  ensureSidecarDirFor,
-  resolveSessionProjectDir,
-  setToolResultCopiesOnDisk,
-  resolveProjectDir,
-  storagePort,
-  getRealPathOptions,
-  loadSameRepoMessageLogs,
-  clearLastIngressUuid,
-  writeAgentMetadata_2,
-  peekResumedArtifactAutoReactLedger,
-  takeResumedArtifactAutoReactLedger,
-  recordArtifactAutoReactLedger,
-  scanPreBoundaryMetadata,
-  deleteRemoteAgentMetadata,
   reAppendSessionMetadataAfterCompaction,
-  getUserType_2,
+  getCurrentSessionAgentColor,
+  deleteRemoteAgentMetadata,
+  removeRemoteAgentMetadata,
+  writeRemoteAgentMetadata,
+  listRemoteAgentMetadata,
+  recordSidechainTranscript,
+  consumeFailedTranscriptWrite,
+  clearSessionMessagesCache,
+  saveAiGeneratedTitle,
+  cacheAgentName,
+  getCurrentSessionAgentName,
+  isSessionFileAt,
+  isOwnTranscriptFile,
   getDerivedTranscriptPathForSession,
-  isPrecautionarySuppressionHeldFor,
+  holdPrecautionarySuppressionFor,
+  markPrecautionClearResilientFor,
   markScanUncertaintyHoldFor,
   holdSessionHistorySuppressionFor,
   isScanUncertaintyHoldFor,
@@ -14709,35 +15071,26 @@ export {
   SUPPRESSION_SCAN_MAX_LINES,
   suppressionScanFailure,
   logSuppressionScan,
-  isSessionHistorySuppressedFor,
-  setInternalEventWriter,
-  setInternalEventReader,
+  claimPrecautionHoldForObservedCause,
+  writeHistorySuppression,
   clearInternalEventWriter,
   releaseScanUncertaintyHoldFor,
+  getCurrentSessionAiTitle,
   getBridgeBoundConversationSid,
-  loadSameRepoMessageLogs_2,
-  scanTranscriptForSuppression,
-  consumeFailedTranscriptWrite,
-  clearSessionMessagesCache,
-  isSessionFileAt,
+  getSessionSubagentsDir,
   projectKeyOf,
-  hasRecordedUserPrompt,
-  locateSessionProjectDir,
-  primeSessionMessagesCache,
+  worktreeFromProgress,
+  getRealPathOptions,
+  offerOffAvailable,
   landAgentStop,
-  reportRelocateSessionTranscriptFailure,
-  cacheAiTitle,
-  readTranscriptTailV5,
-  markSessionEndedByModel,
-  isTurnUnanswered,
-  loadTranscriptFile,
-  MAX_TRANSCRIPT_READ_BYTES,
-  isMessageTurnUnanswered,
-  findUnresolvedToolUsesInTranscript,
-  findUnresolvedToolUseMessageRows,
-  findUnresolvedToolUse,
-  assistantMessageRowsInTranscript,
-  withVersionToRecord,
+  readLastObserverRef,
+  hasAgentStopSibling,
+  canFetchAgentTranscriptsOnDemand,
+  agentTranscriptExists,
+  recordObserverRef,
+  PENDING_BRIDGE_SESSION,
+  registerForeignConversationProbe,
+  clearBridgeSessionCache,
   currentSessionFileIsFor,
   registerForeignTranscriptExitReStamp,
   appendEntryToCurrentTranscriptNow,
@@ -14745,27 +15098,89 @@ export {
   takeResumedArtifactCommentMonitor,
   sealTornTranscriptTail,
   recordArtifactCommentMonitor,
-  worktreeStateSignals,
-  renderToolResultMessage,
-  readLastObserverRef,
-  agentTranscriptExists,
-  recordObserverRef,
-  recordSessionAlias,
-  extractTeammateTranscriptsFromTasks,
-  loadAllSubagentTranscriptsFromDisk,
-  restoreAgentSidecarFromStream,
-  setAgentMetadataInStreamGate,
-  updateCCRTipFromAckedBatch,
-  sealTranscriptAppendsForShutdown,
-  getValidatedCCRTip,
+  resolveSessionProjectDir,
+  resolveProjectDir,
+  clearLastIngressUuid,
+  touchSessionTranscript,
+  buildForkAdoptionMeta,
+  applyEndedByModelOnResume,
+  peekResumedArtifactAutoReactLedger,
+  takeResumedArtifactAutoReactLedger,
+  recordArtifactAutoReactLedger,
   saveDevModsFolder,
   getCurrentSessionDevModsFolder,
+  titleCacheStillOn,
+  writeAgentMetadata,
+  transcriptMayContainMarker,
+  getCurrentSessionFile,
+  transcriptStamp,
+  subscribeSessionTitleChanged,
+  readAgentMetadataAtPath,
+  isAccountCopyEnabled,
+  ownerDiffers,
+  rememberKnownAccount,
+  accountLabelOfOwner,
+  currentAccountLabel,
+  saveSessionOwner,
+  appendToolsUsedEntryBeforeClear,
+  clearSessionMetadata,
+  copyPrecautionarySuppressionTo,
+  cacheHookSessionTitle,
+  subscribeSessionAgentNameChanged,
+  extractLastSyncedEventUuid,
+  bridgeSessionForPulledWindow,
+  getPersistenceSuppressionCause,
+  loadSubagentTranscripts_2,
+  extractAgentIdsFromMessages,
+  loadSubagentTranscripts,
+  isEphemeralToolProgress,
+  removeTranscriptMessageIfPersisted,
+  getSessionFilesWithMtime,
+  loadAllLogsFromSessionFile,
+  relocateSessionTranscript,
+  reportRelocateSessionTranscriptFailure,
+  locateAgentTranscript,
+  setAgentTranscriptSubdir,
+  clearAgentTranscriptSubdir,
+  recordForkContextRef,
+  recordSessionAlias,
+  locateSessionProjectDir,
+  setToolResultCopiesOnDisk,
+  loadSameRepoMessageLogs_2,
+  scanTranscriptForSuppression,
+  hasRecordedUserPrompt,
+  storagePort,
+  scanAppendedForSuppression,
+  resolveMetadataBuf,
+  getAgentTranscriptStorageKey,
+  isTranscriptRelocationInProgress,
+  mergeArtifactCommentMonitorEntries,
+  scanPreBoundaryMetadata,
+  extractTeammateTranscriptsFromTasks,
+  loadAllSubagentTranscriptsFromDisk,
+  isForeignToBinding,
+  worktreeStateSignals,
+  renderToolResultMessage,
+  isConversationEgressTainted,
+  holdSessionHistorySuppression,
+  markToolsUsedWritten,
+  queueLeafCheckpointWithdrawal,
+  saveMemoryMode,
+  dropSessionHistorySuppression,
+  releasePrecautionarySuppressionFor,
+  writeAgentMetadata_2,
+  markSessionEndedByModel,
+  cacheAiTitle,
+  AgentTranscriptFetchError,
+  isAgentTranscriptOverBound,
+  isUnavailableStoreError,
+  readAgentWorkerEvents,
+  hasWrittenAgentTranscript,
+  keepsAgentMetadataInStream,
+  clearAgentStopSibling,
+  agentTranscriptPathOfEntry,
   COMPACT_MIN_FILE_BYTES,
   ENTRY_APPEND_POLICY,
-  INDEX_BOUNDARY_SCAN_BYTES,
-  INDEX_HEAD_SCAN_BYTES,
-  INDEX_LAST_PROMPT_SCAN_BYTES,
-  LAST_PROMPT_PREFIX_SCAN_BYTES,
   OBSERVER_REF_TAIL_SCAN_BYTES,
   QUEUED_ROWS_WAIT_MS,
   RESERVED_AGENT_METADATA_FIELDS,
@@ -14773,6 +15188,7 @@ export {
   SUPPRESSION_SCAN_MAX_BYTES_ANT,
   SUPPRESSION_SCAN_MAX_LINES_ANT,
   TRANSCRIPT_CLOSE_FAILED_REPORT,
+  TURNS_AFTER_LEAF_CHECKPOINT_GB_FLAG,
   UNLATCHED_RESUMED_ATIS,
   appendEntryToSessionForTesting,
   beginTranscriptRelocationForTesting,
@@ -14797,7 +15213,6 @@ export {
   getUserType,
   hasMaterializedSessionFile,
   hydrateForkContext,
-  isForeignToBinding,
   isLiveBridgeSuppressed,
   isPrecautionarySuppressionHeld,
   linkSessionToPR,
@@ -14826,13 +15241,11 @@ export {
   resetProjectFlushStateForTesting,
   resetProjectForTesting,
   restoreConversationToolsUsed,
-  scanAppendedForSuppression,
   seedReplayIndex,
   setKeepSessionMessagesCache,
   setLowYieldCompactSkipForTesting,
   setRemoteIngressUrlForTesting,
   setSessionFileForTesting,
-  snapshotSessionMetadata,
   transcriptExitHooksLatches,
   transcriptFileHasContentEntry,
   transcriptStores,
@@ -14842,5 +15255,4 @@ export {
   withoutFetchedCodeModeRecords,
   withoutTaskProducerMark,
   writeHydratedAgentTranscript,
-  agentTranscriptPathOfEntry,
 };

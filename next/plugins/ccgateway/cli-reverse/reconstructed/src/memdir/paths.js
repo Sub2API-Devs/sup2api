@@ -3,14 +3,13 @@
  *
  * 自动记忆目录的解析与开关：环境变量覆盖、autoMemoryDirectory 设置、默认 <记忆根>/projects/<项目>/memory/。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/paths.ts
- * pieces: chunk-4vzb3taj.js (1), chunk-aepeg2w5.js (41)
- * attribution: fingerprint 3, placement 34, file-local 1, callgraph-fingerprint 2, layout 1, callgraph-witnessed 1
+ * pieces: chunk-exfmq47h.js (41)
+ * attribution: placement 34, fingerprint 2, file-local 1, callgraph-fingerprint 2, layout 1, callgraph-witnessed 1
  */
 import { join, sep, normalize, isAbsolute } from "path";
 import { homedir } from "os";
-import { isSelfHostedRemoteEnvironment } from "../utils/remoteEnvironment.js";
 import {
   getMemoryToggledOff,
   getAutoMemoryOffThisSession,
@@ -25,15 +24,16 @@ import {
   getSessionId,
 } from "../bootstrap/state.js";
 import {
-  getInitialSettings_2,
+  getInitialSettings,
   policySettingUnreadable,
   getSettingsForSource,
 } from "../utils/settings/settings.js";
-import { isSafeMode, isEnvTruthy, isEnvDefinedFalsy, getClaudeConfigDir } from "../utils/envUtils.js";
+import { isSafeMode, isEnvTruthy, isEnvDefinedFalsy } from "../utils/envUtils.js";
 import { env } from "../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { includesAnyIgnoreCase } from "../utils/toolErrors.js";
 import { getHostedPostTurnMemoryConfig } from "./memoryTool.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { isUntouchableSpelling } from "../utils/networkPaths.js";
 import { isProjectScopeTrustAccepted } from "../utils/config.js";
 import { isSettingSourceEnabled, getEnabledSettingSources } from "../utils/settings/constants.js";
@@ -45,20 +45,16 @@ import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
 import { isProtectedDirPath } from "../utils/permissions/protectedDirNames.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4vzb3taj.js:993-1052 fingerprint (2.1.88 match: AUTO_MEM_DIRNAME, 1)
-function AUTO_MEM_DIRNAME_2(appendSystemPromptHead) {
-  return isSelfHostedRemoteEnvironment() && appendSystemPromptHead === undefined ? ["memory"] : undefined;
-}
-//@ chunk-aepeg2w5.js:59531-59574 placement
+//@ chunk-exfmq47h.js:60005-60049 placement
 function isAutoMemoryEnabled() {
   if (isAutoMemoryHeldForSession()) return false;
   return isAutoMemoryEnabledIgnoringPause();
 }
-//@ chunk-aepeg2w5.js:59574-59607 placement
+//@ chunk-exfmq47h.js:60049-60082 placement
 function isAutoMemoryHeldForSession() {
   return getMemoryToggledOff() || getAutoMemoryOffThisSession();
 }
-//@ chunk-aepeg2w5.js:59607-59726 placement
+//@ chunk-exfmq47h.js:60082-60202 placement
 function isAutoMemoryEnabledIgnoringPause() {
   switch (getAutoMemoryState()) {
     case "off":
@@ -71,11 +67,11 @@ function isAutoMemoryEnabledIgnoringPause() {
   if (isAutoMemoryDisabledForCurrentMainLoopModel()) return false;
   return isAutoMemoryEnabledBySettings();
 }
-//@ chunk-aepeg2w5.js:59726-59762 placement
+//@ chunk-exfmq47h.js:60202-60238 placement
 function isAutoMemoryEnabledByExplicitSwitches() {
   return getAutoMemoryDisabledReason() === undefined;
 }
-//@ chunk-aepeg2w5.js:59762-59944 placement
+//@ chunk-exfmq47h.js:60238-60420 placement
 function getAutoMemoryDisabledReason() {
   switch (getAutoMemoryState()) {
     case "off":
@@ -87,23 +83,23 @@ function getAutoMemoryDisabledReason() {
       return isAutoMemoryPolicyUnreadable() ? "policy_unreadable" : undefined;
   }
 }
-//@ chunk-aepeg2w5.js:59944-60037 placement
+//@ chunk-exfmq47h.js:60420-60513 placement
 /**
  * 设置里的自动记忆开关
  */
 function isAutoMemoryEnabledBySettings() {
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   if (initialSettings.autoMemoryEnabled !== undefined) return initialSettings.autoMemoryEnabled;
   return true;
 }
-//@ chunk-aepeg2w5.js:60037-60083 placement
+//@ chunk-exfmq47h.js:60513-60559 placement
 /**
  * 判断 autoMemoryEnabled 策略设置是否不可读（不可读时记忆功能按未决处理）。
  */
 function isAutoMemoryPolicyUnreadable() {
   return policySettingUnreadable("autoMemoryEnabled");
 }
-//@ chunk-aepeg2w5.js:60083-60280 placement
+//@ chunk-exfmq47h.js:60559-60756 placement
 /**
  * 自动记忆总开关：--safe-mode、lk()、diskless、CLAUDE_CODE_DISABLE_AUTO_MEMORY=真 → off；该变量为假 → forced_on；SIMPLE/REMOTE 环境 → off；否则 unset（再看 autoMemoryEnabled 设置）。
  */
@@ -116,7 +112,7 @@ function getAutoMemoryState() {
   if (isEnvDefinedFalsy(envClaudeCodeDisableAutoMemory)) return "forced_on";
   return isAutoMemoryOffByEnvironment() ? "off" : "unset";
 }
-//@ chunk-aepeg2w5.js:60280-60447 fingerprint (2.1.88 match: isAutoMemoryEnabled, 0.611)
+//@ chunk-exfmq47h.js:60756-60923 fingerprint (2.1.88 match: isAutoMemoryEnabled, 0.611)
 /**
  * CLAUDE_CODE_SIMPLE，或 CLAUDE_CODE_REMOTE 且未给 REMOTE_MEMORY_DIR/cowork 覆盖时返回 true（这些环境默认关自动记忆）。
  */
@@ -128,11 +124,11 @@ function isAutoMemoryOffByEnvironment() {
     !env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE
   );
 }
-//@ chunk-aepeg2w5.js:60447-60495 placement
+//@ chunk-exfmq47h.js:60923-60971 placement
 function isIndexRecallEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mill_orange", false);
 }
-//@ chunk-aepeg2w5.js:60495-60560 placement (2.1.88 match: filterInjectedMemoryFiles, 0.724)
+//@ chunk-exfmq47h.js:60971-61036 placement (2.1.88 match: filterInjectedMemoryFiles, 0.724)
 /**
  * tengu_moth_copse 开启或设置了 CLAUDE_MEMORY_STORES 时，记忆文件由外部注入（不自己读 MEMORY.md）。
  */
@@ -140,23 +136,25 @@ function isMemoryRecallEnabled() {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_moth_copse", false)) return true;
   return isStoreMountedRecall();
 }
-//@ chunk-aepeg2w5.js:60560-60624 placement
+//@ chunk-exfmq47h.js:61036-61100 placement
 /**
  * 是否设置了 CLAUDE_MEMORY_STORES（多 store 记忆同步）。
  */
 function isStoreMountedRecall() {
   return !!process.env.CLAUDE_MEMORY_STORES?.trim();
 }
-//@ chunk-aepeg2w5.js:60624-60829 placement
+//@ chunk-exfmq47h.js:61100-61305 placement
 function isAutoMemoryDisabledForCurrentMainLoopModel() {
-  let needles = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
-  if (!Array.isArray(needles) || needles.length === 0) return false;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
+  if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
+    return false;
   let mainLoopModelOverride = getMainLoopModelOverride();
   let model = mainLoopModelOverride !== undefined ? mainLoopModelOverride : getInitialMainLoopModel();
-  if (typeof model !== "string" || !includesAnyIgnoreCase(model, needles)) return false;
+  if (typeof model !== "string" || !includesAnyIgnoreCase(model, featureValue_CACHED_MAY_BE_STALE))
+    return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_petrel", false);
 }
-//@ chunk-aepeg2w5.js:60829-60952 placement (2.1.88 match: isExtractModeActive, 1)
+//@ chunk-exfmq47h.js:61305-61428 placement (2.1.88 match: isExtractModeActive, 1)
 /**
  * 是否走"提取"模式写记忆：有 hosted post-turn 配置，或 tengu_passport_quail 开且（交互式或 tengu_slate_thimble）。
  */
@@ -165,7 +163,7 @@ function isExtractModeActive() {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_passport_quail", false)) return false;
   return !getIsNonInteractiveSession() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_thimble", false);
 }
-//@ chunk-aepeg2w5.js:60952-61073 placement (2.1.88 match: getMemoryBaseDir, 1)
+//@ chunk-exfmq47h.js:61428-61549 placement (2.1.88 match: getMemoryBaseDir, 1)
 /**
  * 记忆根目录：CLAUDE_CODE_REMOTE_MEMORY_DIR 或配置目录。
  */
@@ -173,21 +171,21 @@ function getMemoryBaseDir() {
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR) return process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   return getClaudeConfigDir();
 }
-//@ chunk-aepeg2w5.js:61073-61110 placement
+//@ chunk-exfmq47h.js:61549-61586 placement
 function getMemoryBaseDirOrNull() {
   return isDiskless() ? null : getMemoryBaseDir();
 }
-//@ chunk-aepeg2w5.js:61110-61141 file-local
+//@ chunk-exfmq47h.js:61586-61617 file-local
 var AUTO_MEM_DIRNAME = "memory";
 var MEMORY_MD = "MEMORY.md";
-//@ chunk-aepeg2w5.js:61141-61213 placement
+//@ chunk-exfmq47h.js:61617-61689 placement
 /**
  * account 作用域个人记忆目录 <配置目录>/memory/personal/。
  */
 function getAccountMemoryMirrorPath() {
   return (join(getClaudeConfigDir(), "memory", "personal") + sep).normalize("NFC");
 }
-//@ chunk-aepeg2w5.js:61213-61520 callgraph-fingerprint (2.1.88 match: validateMemoryPath, 0.503)
+//@ chunk-exfmq47h.js:61689-61996 callgraph-fingerprint (2.1.88 match: validateMemoryPath, 0.503)
 /**
  * 校验记忆目录路径（可展开 ~），拒绝相对路径、裸盘符、NUL 等，返回带结尾分隔符的 NFC 路径。
  */
@@ -211,7 +209,7 @@ function validateMemoryPath(raw, expandTilde) {
   if (isDangerousMemoryRoot(normalized)) return;
   return (normalized + sep).normalize("NFC");
 }
-//@ chunk-aepeg2w5.js:61520-61611 placement
+//@ chunk-exfmq47h.js:61996-62087 placement
 function isDangerousMemoryRoot(dir) {
   return (
     !isAbsolute(dir) ||
@@ -221,21 +219,21 @@ function isDangerousMemoryRoot(dir) {
     dir.includes("\x00")
   );
 }
-//@ chunk-aepeg2w5.js:61611-61676 fingerprint (2.1.88 match: getAutoMemPathOverride, 1)
+//@ chunk-exfmq47h.js:62087-62152 fingerprint (2.1.88 match: getAutoMemPathOverride, 1)
 /**
  * CLAUDE_COWORK_MEMORY_PATH_OVERRIDE 指定的自动记忆目录（经 validateMemoryPath 校验）。
  */
 function getAutoMemPathOverride() {
   return validateMemoryPath(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE, false);
 }
-//@ chunk-aepeg2w5.js:61676-61713 layout
+//@ chunk-exfmq47h.js:62152-62189 layout
 /**
  * 校验后的 autoMemoryDirectory 设置值。
  */
 function getValidatedAutoMemDirSetting() {
   return validateMemoryPath(getAutoMemPathSetting().dir, true);
 }
-//@ chunk-aepeg2w5.js:61713-61964 callgraph-fingerprint (2.1.88 match: getAutoMemPathSetting, 0.905)
+//@ chunk-exfmq47h.js:62189-62440 callgraph-fingerprint (2.1.88 match: getAutoMemPathSetting, 0.905)
 /**
  * 按 policy→flag→(信任后)local/project→user 顺序取第一个设置了 autoMemoryDirectory 的来源。
  */
@@ -260,15 +258,15 @@ function getAutoMemPathSetting() {
     source: undefined,
   };
 }
-//@ chunk-aepeg2w5.js:61964-62013 placement
+//@ chunk-exfmq47h.js:62440-62489 placement
 function getAutoMemPathSettingSource() {
   return getAutoMemPathState().resolveEntry().source;
 }
-//@ chunk-aepeg2w5.js:62013-62049 placement
+//@ chunk-exfmq47h.js:62489-62525 placement
 function hasAutoMemPathOverride() {
   return getAutoMemPathOverride() !== undefined;
 }
-//@ chunk-aepeg2w5.js:62049-63373 callgraph-witnessed (2.1.88 match: getAutoMemPath, 0.243)
+//@ chunk-exfmq47h.js:62525-63849 callgraph-witnessed (2.1.88 match: getAutoMemPath, 0.242)
 /**
  * 自动记忆目录解析器：CLAUDE_COWORK_MEMORY_PATH_OVERRIDE → autoMemoryDirectory 设置 → <记忆根>/projects/<清洗后的工作副本/git 根/项目根>/memory/；结果按项目根、信任状态、设置来源 memo。
  */
@@ -365,14 +363,14 @@ class AutoMemPathResolver {
     this.clearWcWarmLatch();
   }
 }
-//@ chunk-aepeg2w5.js:63373-63398 placement
+//@ chunk-exfmq47h.js:63849-63874 placement
 var autoMemPathResolverByHost; // deferred: uses AutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:63373", () => {
+deferInit("chunk-exfmq47h.js:63849", () => {
   autoMemPathResolverByHost = new HostScoped(() => new AutoMemPathResolver());
 });
-//@ chunk-aepeg2w5.js:63398-63600 placement
+//@ chunk-exfmq47h.js:63874-64076 placement
 let NullAutoMemPathResolver; // deferred: uses AutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:63398", () => {
+deferInit("chunk-exfmq47h.js:63874", () => {
   NullAutoMemPathResolver = class NullAutoMemPathResolver extends AutoMemPathResolver {
     resolveEntry = memoizeAlias(() => ({
       path: null,
@@ -390,36 +388,36 @@ deferInit("chunk-aepeg2w5.js:63398", () => {
     }
   };
 });
-//@ chunk-aepeg2w5.js:63600-63614 placement
+//@ chunk-exfmq47h.js:64076-64090 placement
 var nullAutoMemPathResolver; // deferred: uses NullAutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:63600", () => {
+deferInit("chunk-exfmq47h.js:64076", () => {
   nullAutoMemPathResolver = new NullAutoMemPathResolver();
 });
-//@ chunk-aepeg2w5.js:63614-63658 placement
+//@ chunk-exfmq47h.js:64090-64134 placement
 function getAutoMemPathState() {
   return isDiskless() ? nullAutoMemPathResolver : autoMemPathResolverByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:63658-63730 placement
+//@ chunk-exfmq47h.js:64134-64206 placement
 function hasNoAutoMemPath() {
   let autoMemPathState = getAutoMemPathState();
   return autoMemPathState.canLackAFolder() && autoMemPathState.resolve() === null;
 }
-//@ chunk-aepeg2w5.js:63730-63767 placement
+//@ chunk-exfmq47h.js:64206-64243 placement
 function getAutoMemPathOrNull() {
   return hasNoAutoMemPath() ? null : getAutoMemPath();
 }
-//@ chunk-aepeg2w5.js:63767-63836 placement
+//@ chunk-exfmq47h.js:64243-64312 placement
 function getAutoMemPath() {
   let resolved = getAutoMemPathState().resolve();
   if (resolved === null) throw new NoProjectDirectoryError();
   return resolved;
 }
-//@ chunk-aepeg2w5.js:63836-63845 placement
+//@ chunk-exfmq47h.js:64312-64321 placement
 /**
  * 8
  */
 var SHORT_SESSION_ID_CHARS = 8;
-//@ chunk-aepeg2w5.js:63845-64035 placement
+//@ chunk-exfmq47h.js:64321-64511 placement
 function activeSessionLogExcluder(date) {
   let sessionIdShort;
   try {
@@ -433,22 +431,22 @@ function activeSessionLogExcluder(date) {
     return sliced === `${sessionIdShort}.md` || sliced.startsWith(`${sessionIdShort}-`);
   };
 }
-//@ chunk-aepeg2w5.js:64035-64068 placement
+//@ chunk-exfmq47h.js:64511-64544 placement
 function getAutoMemEntrypoint() {
   return join(getAutoMemPath(), MEMORY_MD);
 }
-//@ chunk-aepeg2w5.js:64068-64131 placement
+//@ chunk-exfmq47h.js:64544-64607 placement
 function isAutoMemPath(absolutePath) {
   let normalizedPath = getAutoMemPathOrNull();
   return normalizedPath !== null && normalize(absolutePath).startsWith(normalizedPath);
 }
-//@ chunk-aepeg2w5.js:64131-64167 placement
+//@ chunk-exfmq47h.js:64607-64643 placement
 function mayBeAutoMemPath(filePath) {
   return hasNoAutoMemPath() || isAutoMemPath(filePath);
 }
-//@ chunk-aepeg2w5.js:64167-64219 placement
+//@ chunk-exfmq47h.js:64643-64695 placement
 var AUTO_MEM_WRITE_ALLOW_REASON = "auto memory files are allowed for writing";
-//@ chunk-aepeg2w5.js:64219-64366 placement
+//@ chunk-exfmq47h.js:64695-64843 placement
 function isAutoMemPathSafeForCarveout(filePath, autoMemPath = getAutoMemPathOrNull()) {
   if (
     autoMemPath === null ||
@@ -460,38 +458,37 @@ function isAutoMemPathSafeForCarveout(filePath, autoMemPath = getAutoMemPathOrNu
   if (!normalizedPath.startsWith(autoMemPath)) return false;
   return !isProtectedDirPath(normalizedPath, autoMemPath);
 }
-//@ chunk-aepeg2w5.js:64366-64460 placement
+//@ chunk-exfmq47h.js:64843-64938 placement
 function isOwnProjectAutoMemPathSafeForCarveout(filePath) {
   let ownProjectDir = getAutoMemPathState().resolveOwnProjectDir();
   if (ownProjectDir === undefined) return false;
   return isAutoMemPathSafeForCarveout(filePath, ownProjectDir) && isAutoMemoryEnabled();
 }
 export {
+  isExtractModeActive,
   isAutoMemoryEnabled,
   isIndexRecallEnabled,
-  getAutoMemEntrypoint,
+  hasAutoMemPathOverride,
+  getAutoMemPathState,
   isAutoMemoryHeldForSession,
   getMemoryBaseDirOrNull,
   hasNoAutoMemPath,
   isAutoMemPath,
   mayBeAutoMemPath,
-  hasAutoMemPathOverride,
   isAutoMemPathSafeForCarveout,
   isOwnProjectAutoMemPathSafeForCarveout,
   AUTO_MEM_WRITE_ALLOW_REASON,
-  isMemoryRecallEnabled,
-  isAutoMemoryEnabledIgnoringPause,
-  isAutoMemoryDisabledForCurrentMainLoopModel,
-  isExtractModeActive,
-  AUTO_MEM_DIRNAME_2,
   getAutoMemPath,
-  getAutoMemPathState,
+  activeSessionLogExcluder,
+  isMemoryRecallEnabled,
+  getAutoMemEntrypoint,
   getMemoryBaseDir,
   getAutoMemPathOrNull,
+  isAutoMemoryEnabledIgnoringPause,
+  isAutoMemoryDisabledForCurrentMainLoopModel,
   isDangerousMemoryRoot,
   isStoreMountedRecall,
   getAutoMemPathSettingSource,
   getAccountMemoryMirrorPath,
-  activeSessionLogExcluder,
   isAutoMemoryEnabledByExplicitSwitches,
 };

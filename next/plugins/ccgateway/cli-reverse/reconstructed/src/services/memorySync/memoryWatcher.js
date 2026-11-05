@@ -3,13 +3,13 @@
  *
  * 记忆目录监听与同步触发（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (13)
  * attribution: placement 13
  */
 import { relative, sep, join, isAbsolute } from "path";
-import { mkdir, stat, rm } from "fs/promises";
+import { mkdir, stat, rm as rm_2 } from "fs/promises";
 import { getAutoMemPath, getAutoMemPathState } from "../../memdir/paths.js";
 import {
   normalizeKeySegment,
@@ -26,8 +26,11 @@ import {
 } from "./availability.js";
 import {
   isUsableSuppressedReason,
-  getMemoryPushDeleteMode,
+  memoryPushDeleteMode,
   detectMassDelete,
+  collectDeleteCandidates,
+  recordNamedRemovals,
+  namedDeleteHintMessage,
   canPushStore,
   isStoreSuppressed,
   PUSH_TIMEOUT_MS,
@@ -35,7 +38,12 @@ import {
 } from "./syncConfig.js";
 import { MEMORY_SYNC_DIR } from "../orgMemory/storeErrors.js";
 import { isHashTempFile } from "./syncFiles.js";
-import { OrgMemoryMirrorNotices, quoteStoreName, MEMORY_SYNC_REJECT_TEXTS } from "./syncNotices.js";
+import {
+  OrgMemoryMirrorNotices,
+  quoteMemoryFilePath,
+  quoteStoreName,
+  MEMORY_SYNC_REJECT_TEXTS,
+} from "./syncNotices.js";
 import { loadMemoryStoreSkills, enqueueMemorySkillLoad } from "./memorySkills.js";
 import {
   syncTeamMemoryOnce,
@@ -47,12 +55,12 @@ import { sanitizedMachineReasonForTelemetry, errorMessage, getErrnoCode } from "
 import { getStoreKindTelemetry, parseMemoryStoresEnv } from "../orgMemory/memoryStores.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { noteStorePulls, settleFirstStorePull } from "../orgMemory/storePulls.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { escapeForTag } from "../../utils/sanitization.js";
 import { chokidar_default } from "../../../vendor/chokidar/index.js";
 import { isDiskless, getRootSession } from "../../bootstrap/state.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { env } from "../../utils/env.js";
-import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { discoverOrgMemoryStoresForDecision, isSelectionMounted } from "../orgMemory/discovery.js";
 import { errorTelemetryFields } from "../../utils/accessibility/screenReader.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
@@ -77,7 +85,7 @@ import { getOrgMemoryAuthorization } from "../orgMemory/credential.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:173260-173312 placement
+//@ chunk-7jxyna5q.js:176478-176530 placement
 /**
  * 轮询间隔（2000 毫秒）。
  */
@@ -86,7 +94,7 @@ var MAX_RECORDS_IN_LIST = 10;
 var FS_EVENT_DEBOUNCE_MS = 1500;
 var IS_BUN_RUNTIME = typeof Bun !== "undefined";
 var POLL_INTERVAL_MS = 2000;
-//@ chunk-s61vbvea.js:173312-173525 placement
+//@ chunk-7jxyna5q.js:176530-176743 placement
 function createWatcherState() {
   return {
     debounceTimer: null,
@@ -101,7 +109,7 @@ function createWatcherState() {
     backoffWakes: 0,
   };
 }
-//@ chunk-s61vbvea.js:173525-173625 placement
+//@ chunk-7jxyna5q.js:176743-176843 placement
 var DEBOUNCE_MS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_OFF_RETRIES;
 var BACKOFF_FACTOR;
@@ -109,7 +117,7 @@ var MIN_BACKOFF_MINUTES;
 var MAX_BACKOFF_MINUTES;
 var OFF_RETRY_JITTER_MS;
 var PERMANENT_FAILURE_CODES;
-deferInit("chunk-s61vbvea.js:173525", () => {
+deferInit("chunk-7jxyna5q.js:176743", () => {
   DEBOUNCE_MS_2 = 1000;
   MAX_OFF_RETRIES = 10;
   BACKOFF_FACTOR = 2;
@@ -121,14 +129,14 @@ deferInit("chunk-s61vbvea.js:173525", () => {
     user: new Set(),
   };
 });
-//@ chunk-s61vbvea.js:173625-173662 placement
+//@ chunk-7jxyna5q.js:176843-176880 placement
 /**
  * 判断某类失败码是否为永久失败。
  */
 function isPermanentFailureCode(scope, suppressedReason) {
   return PERMANENT_FAILURE_CODES[scope].has(suppressedReason);
 }
-//@ chunk-s61vbvea.js:173662-173847 placement (2.1.88 match: isTeamSubscriber, 1)
+//@ chunk-7jxyna5q.js:176880-177065 placement (2.1.88 match: isTeamSubscriber, 1)
 function isTeamSubscriber(path) {
   let autoMemPath = getAutoMemPath();
   let replaced = relative(autoMemPath, path).replaceAll(sep, "/");
@@ -138,34 +146,34 @@ function isTeamSubscriber(path) {
   if (isExcludedMemoryKey(replaced)) return null;
   return "user";
 }
-//@ chunk-s61vbvea.js:173847-173874 placement
+//@ chunk-7jxyna5q.js:177065-177092 placement
 /**
  * 多存储同步是否可用。
  */
 function isMultiStoreSyncOn() {
   return isMultiStoreSyncAvailable();
 }
-//@ chunk-s61vbvea.js:173874-173936 placement
+//@ chunk-7jxyna5q.js:177092-177154 placement
 /**
  * 是否有存储因依据不可用而失效。
  */
 function hasUnusableStore(storeState) {
   return storeState.stores.some((store) => isUsableSuppressedReason(store.basisUnusable));
 }
-//@ chunk-s61vbvea.js:173936-173980 placement
+//@ chunk-7jxyna5q.js:177154-177198 placement
 /**
  * 计算退避抖动毫秒数。
  */
 function backoffJitterMs() {
   return Math.random() * BACKOFF_FACTOR * 60000;
 }
-//@ chunk-s61vbvea.js:173980-174404 placement
+//@ chunk-7jxyna5q.js:177198-177515 placement
 /**
  * 记忆同步失败代码的合法取值正则（无 OAuth、HTTP 状态、团队记忆限制、挂载目录问题、内容被拒等）。
  */
 var SYNC_FAILURE_CODE_RE =
-  /^(no_oauth|server_unavailable|http_\d{3}|team_memory_(too_many_entries|entry_too_large|group_acl_denied|group_acl_unconfigured|feature_unavailable)|mount_dir_(foreign_partition|unmanifested_nonempty|unreadable)|malformed_response|list_page_limit|store_full|content_too_large|content_secret|content_screened|index_too_large|invalid_path|store_archived|auth|forbidden|timeout|network|conflict|parse|aborted|unknown)$/;
-//@ chunk-s61vbvea.js:174404-174663 placement
+  /^(no_oauth|server_unavailable|http_\d{3}|mount_dir_(foreign_partition|unmanifested_nonempty|unreadable)|malformed_response|list_page_limit|store_full|content_too_large|content_secret|content_screened|index_too_large|invalid_path|store_archived|auth|forbidden|timeout|network|conflict|parse|aborted|unknown)$/;
+//@ chunk-7jxyna5q.js:177515-177774 placement
 /**
  * 判断记忆目录中的路径是否应被同步忽略：临时/暂存文件、team 下的特定前缀，及其他被排除的键。
  */
@@ -181,13 +189,14 @@ function isIgnoredMemoryPath(filePath, options = {}) {
     );
   return isExcludedMemoryKey(replaced);
 }
-//@ chunk-s61vbvea.js:174663-198608 placement
+//@ chunk-7jxyna5q.js:177774-204102 placement
 /**
  * 记忆目录监听器：触发团队/多库同步、推送抑制、失败后暂停
  */
 class MemoryWatcher {
   watcher = null;
   started = false;
+  stopping = false;
   notices = new OrgMemoryMirrorNotices();
   resyncTimer = null;
   deleteConfirmTimers = {
@@ -223,6 +232,7 @@ class MemoryWatcher {
     this.firstStartAtMs = null;
     this.startHeldByPolicy = false;
     this.started = options?.skipWatcher ?? false;
+    this.stopping = false;
     this.multiStoreState = options?.multiStoreState ?? null;
     this.userMultiStoreState = options?.userMultiStoreState ?? null;
     this.scopeStates.team = createWatcherState();
@@ -253,6 +263,7 @@ class MemoryWatcher {
       let syncResult = await syncTeamMemoryOnce(storeState, trigger, this.storageV5, scopeState.offRetries);
       this.refreshStoreSkills();
       this.enqueueUnsavedReadOnlyNotices(storeState, syncResult);
+      this.enqueuePutBackNotices(storeState, syncResult);
       let values = Object.values(syncResult.pushes);
       let any = values.some((push) => !push.success);
       let any_2 = stores.some((store) => store.suppressedReason !== null);
@@ -272,8 +283,9 @@ class MemoryWatcher {
             });
       }
       if (
-        getMemoryPushDeleteMode() === "corroborate" &&
-        values.some((push) => (push.deletesDeferred ?? 0) > 0)
+        (memoryPushDeleteMode() === "corroborate" &&
+          values.some((push) => (push.deletesDeferred ?? 0) > 0)) ||
+        values.some((plan) => plan.retryWrites)
       )
         this.armDeleteConfirmTimer(scope);
     } catch (error) {
@@ -295,6 +307,51 @@ class MemoryWatcher {
       this.storageV5,
     );
   }
+  namedRemovalCandidates(paths) {
+    return collectDeleteCandidates(
+      [...(this.multiStoreState?.stores ?? []), ...(this.userMultiStoreState?.stores ?? [])],
+      paths,
+      this.storageV5,
+    );
+  }
+  async recordNamedRemovals(paths) {
+    let recorded = await recordNamedRemovals(paths, this.storageV5);
+    await Promise.all([
+      this.multiStoreState?.stores.some((store) => recorded.has(store)) ? this.syncNow("team") : undefined,
+      this.userMultiStoreState?.stores.some((store) => recorded.has(store))
+        ? this.syncNow("user")
+        : undefined,
+    ]);
+  }
+  async syncNow(scope) {
+    if (this.stopping) return;
+    let state = this.scopeStates[scope];
+    this.schedulePush(scope);
+    await state.currentPushPromise;
+    if (state.pushInProgress) await state.currentPushPromise;
+    else if (!this.stopping && isMultiStoreSyncOn()) {
+      state.currentPushPromise = this.executePush(scope);
+      await state.currentPushPromise;
+    }
+  }
+  tellUnsentNamedRemovals(entries) {
+    if (!isMultiStoreSyncOn()) return;
+    let filtered = entries.filter((recorded) => recorded.recorded === true);
+    let filtered_2 = filtered.filter(
+      (unconfirmed) => unconfirmed.store.remoteHashes.has(unconfirmed.path) || !unconfirmed.store.pulled,
+    );
+    if (filtered_2.length === 0) {
+      if (filtered.length > 0) logFeatureOk("memory_named_delete");
+      return;
+    }
+    logFeatureSad("memory_named_delete", "not_confirmed");
+    let any = filtered_2.some((someConfirmed) => someConfirmed.store.namedRemovals?.has(someConfirmed.path));
+    let sliced = filtered_2.slice(0, MAX_RECORDS_IN_LIST);
+    let shown = filtered_2.length - sliced.length;
+    enqueueMemorySkillLoad(
+      `Shared memory has not confirmed deleting ${sliced.map((hiddenCount) => quoteMemoryFilePath(hiddenCount.path)).join(", ")}${shown > 0 ? ` (+${shown} more)` : ""}. ${any ? "The delete may have been refused, the file may have changed elsewhere, or memory sync may still send the delete." : "Memory sync dropped the delete or the server refused it, so sync will not send it."} If you told the user a file was removed, say that is not confirmed yet. If a file comes back and should still go, run a command that is only an rm of its full path.`,
+    );
+  }
   enqueueUnsavedReadOnlyNotices(storeState, syncResult) {
     for (let store of storeState.stores) {
       let unsavedReadOnlyPaths = syncResult.pushes[store.mountName]?.unsavedReadOnlyPaths ?? [];
@@ -307,6 +364,31 @@ class MemoryWatcher {
           (remedy !== null
             ? `To keep content you wrote, ${remedy}. If you told the user this was saved or remembered, tell them plainly that it was not shared and where you re-saved it (describe the memory location in plain terms, not as a filesystem path).`
             : "There is no writable memory store in this session. If you told the user this was saved or remembered, tell them plainly that it was not."),
+      );
+    }
+  }
+  enqueuePutBackNotices(result, store) {
+    for (let store_2 of result.stores) {
+      let pull = store.pulls[store_2.mountName];
+      let putBackWhileDeletesOff = pull?.putBackWhileDeletesOff ?? [];
+      let pending = store_2.notices.putBackTold.get(store_2.mountDir) ?? new Set();
+      let filtered = putBackWhileDeletesOff.filter((told) => !pending.has(told));
+      store_2.notices.putBackTold.set(
+        store_2.mountDir,
+        new Set(
+          pull?.success === true && pull.skipped !== true
+            ? putBackWhileDeletesOff
+            : [...pending, ...putBackWhileDeletesOff],
+        ),
+      );
+      if (filtered.length === 0) continue;
+      let sliced = filtered.slice(0, MAX_RECORDS_IN_LIST);
+      let fresh = filtered.length - sliced.length;
+      logFeatureOk("memory_put_back_notice", {
+        count: filtered.length,
+      });
+      enqueueMemorySkillLoad(
+        `${filtered.length} memory file(s) under ${escapeForTag(store_2.mountDir)} were missing and have been put back: ${sliced.map(quoteMemoryFilePath).join(", ")}${fresh > 0 ? ` (+${fresh} more)` : ""}. A missing file is not a delete here, so they are still in shared memory for everyone who shares it (a renamed file is back under its old name as well). ${namedDeleteHintMessage(store_2)} If the user asked you to forget one of them, tell them it has not been removed.`,
       );
     }
   }
@@ -816,7 +898,7 @@ class MemoryWatcher {
           },
         );
     }
-    await rm(store.mountDir, {
+    await rm_2(store.mountDir, {
       recursive: true,
       force: true,
     });
@@ -942,6 +1024,7 @@ class MemoryWatcher {
     this.schedulePush(scope);
   }
   async stop() {
+    this.stopping = true;
     this.clearPolicyVerdictWait();
     if (this.resyncTimer) {
       clearTimeout(this.resyncTimer);
@@ -1157,6 +1240,7 @@ class MemoryWatcher {
             this.scopeStates.team.offRetries,
           );
           this.enqueueUnsavedReadOnlyNotices(nextState, syncResult);
+          this.enqueuePutBackNotices(nextState, syncResult);
           this.noteBackoffWake(team, nextState.stores, syncResult);
         } catch (error) {
           logForDebugging(`memory-watcher: rebuild initial sync failed: ${errorMessage(error)}`, {
@@ -1177,12 +1261,12 @@ class MemoryWatcher {
     }
   }
 }
-//@ chunk-s61vbvea.js:198608-198634 placement
+//@ chunk-7jxyna5q.js:204102-204128 placement
 var memoryWatchers; // deferred: uses MemoryWatcher of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:198608", () => {
+deferInit("chunk-7jxyna5q.js:204102", () => {
   memoryWatchers = new HostScoped(() => new MemoryWatcher());
 });
-//@ chunk-s61vbvea.js:198634-198898 placement
+//@ chunk-7jxyna5q.js:204128-204392 placement
 async function startMemoryWatcher(storageV5, credentials) {
   if (storageV5 !== undefined)
     logForDebugging(

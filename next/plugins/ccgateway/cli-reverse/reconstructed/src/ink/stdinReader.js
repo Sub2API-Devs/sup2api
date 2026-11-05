@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：终端 stdin 读取状态机（按键解析推进、粘贴/鼠标前缀丢弃、超时刷出未完成转义序列），从 line-width-cache.ts 拆出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (7)
  * attribution: placement 7
  */
 import {
@@ -16,11 +16,11 @@ import {
 } from "./parse-keypress.js";
 import { ESC } from "./termio/ansi.js";
 
-//@ chunk-bzr73sfg.js:172812-172838 placement
+//@ chunk-2avr6cej.js:172561-172587 placement
 var ESC_FLUSH_TIMEOUT_MS = 50;
 var PASTE_FLUSH_TIMEOUT_MS = 2000;
 var PARTIAL_PREFIX_DROP_MS = 2000;
-//@ chunk-bzr73sfg.js:172838-172976 placement
+//@ chunk-2avr6cej.js:172587-172725 placement
 /**
  * 新建 stdin 读取器状态：按键解析状态（INITIAL_STATE 的副本）、上次输入时间、UTF-8 字节串截止时间、鼠标前缀丢弃时间、被丢弃前缀的清理时间、是否有迟到读标记。
  */
@@ -36,11 +36,11 @@ function createInputReaderState(now) {
     heldReadLate: false,
   };
 }
-//@ chunk-bzr73sfg.js:172976-173027 placement
+//@ chunk-2avr6cej.js:172725-172776 placement
 function isEscPrefixedChunk(text) {
   return text.length > 1 && text.startsWith(ESC);
 }
-//@ chunk-bzr73sfg.js:173027-173153 placement
+//@ chunk-2avr6cej.js:172776-172902 placement
 /**
  * 把以 ESC 开头的一段输入拆成单独的 ESC 和其余文本分别解析（用于 ESC 后紧跟文字被合并读入的情况）。
  */
@@ -56,12 +56,12 @@ function splitEscPrefixedChunk(text) {
     return keys.concat(parseMultipleKeypresses(prevState, null)[0]);
   });
 }
-//@ chunk-bzr73sfg.js:173153-173259 placement
+//@ chunk-2avr6cej.js:172902-173008 placement
 function hasPendingInput(reader) {
   let { parse } = reader;
   return parse.incomplete !== "" || parse.mode === "IN_PASTE" || parse.pendingByteEvents.length > 0;
 }
-//@ chunk-bzr73sfg.js:173259-174416 placement
+//@ chunk-2avr6cej.js:173008-174165 placement
 /**
  * 推进输入解析状态机（粘贴、鼠标前缀丢弃），产出按键。
  */
@@ -145,7 +145,7 @@ function feedInputReader(reader, chunk, now, isReadLate = false) {
     wakeAt: wait === null ? null : now + wait,
   };
 }
-//@ chunk-bzr73sfg.js:174416-174812 placement
+//@ chunk-2avr6cej.js:174165-174561 placement
 /**
  * 超时后刷出未完成的转义序列。
  */

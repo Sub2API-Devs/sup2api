@@ -3,35 +3,35 @@
  *
  * 2.1.316 新增：内嵌资源。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sgzeept5.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7aq85ejn.js (6)
  * attribution: placement 6
  */
 import { isAbsolute, join } from "path";
 import { readFile } from "fs/promises";
 import { readFileSync } from "fs";
 
-//@ chunk-sgzeept5.js:308-330 placement
+//@ chunk-7aq85ejn.js:308-330 placement
 /**
  * zstd 压缩流的魔数字节。
  */
 var ZSTD_MAGIC_BYTES = [40, 181, 47, 253];
-//@ chunk-sgzeept5.js:330-389 placement
+//@ chunk-7aq85ejn.js:330-389 placement
 /**
  * 判断数据是否以 zstd 魔数开头。
  */
 function isZstdCompressed(file) {
   return file.length >= 4 && ZSTD_MAGIC_BYTES.every((expected, index) => file[index] === expected);
 }
-//@ chunk-sgzeept5.js:389-426 placement
+//@ chunk-7aq85ejn.js:389-426 placement
 /**
  * 内嵌资源路径解析（相对路径拼上基准目录）。
  */
 function resolveResourcePath(name, dir) {
   return isAbsolute(name) ? name : join(dir, name);
 }
-//@ chunk-sgzeept5.js:426-532 placement
+//@ chunk-7aq85ejn.js:426-532 placement
 /**
  * 读取内嵌资源（zstd 压缩时解压）为文本。
  */
@@ -39,14 +39,14 @@ async function readEmbeddedText(name, dirname) {
   let file = await readFile(resolveResourcePath(name, dirname));
   return (isZstdCompressed(file) ? await Bun.zstdDecompress(file) : file).toString("utf8");
 }
-//@ chunk-sgzeept5.js:532-582 placement
+//@ chunk-7aq85ejn.js:532-582 placement
 /**
  * 同步读取内嵌资源并转成文本。
  */
 function readEmbeddedTextSync(name, dirname) {
   return readEmbeddedSync(name, dirname).toString("utf8");
 }
-//@ chunk-sgzeept5.js:582-764 placement
+//@ chunk-7aq85ejn.js:582-764 placement
 /**
  * 同步读取内嵌资源（必要时解压），缺失时抛错。
  */
@@ -66,4 +66,4 @@ function readEmbeddedSync(name, dir) {
     );
   }
 }
-export { readEmbeddedTextSync, readEmbeddedText, readEmbeddedSync };
+export { readEmbeddedTextSync, readEmbeddedSync, readEmbeddedText };

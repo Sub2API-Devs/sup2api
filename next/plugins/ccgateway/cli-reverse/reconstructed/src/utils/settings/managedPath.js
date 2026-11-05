@@ -3,9 +3,9 @@
  *
  * 托管设置目录：macOS /Library/Application Support/ClaudeCode、Windows C:\Program Files\ClaudeCode、其他 /etc/claude-code；managed-settings.d 目录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/managedPath.ts
- * pieces: chunk-dcmhvw5a.js (10)
+ * pieces: chunk-z20c443b.js (10)
  * attribution: placement 9, fingerprint 1
  */
 import { accessSync, constants, lstatSync, readlinkSync } from "fs";
@@ -15,7 +15,7 @@ import { isWritableByCurrentUser } from "../../bootstrap/stateSlices.js";
 import { getPlatform } from "../platform.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:427275-427376 placement
+//@ chunk-z20c443b.js:425738-425839 placement
 function writabilityFromError(error) {
   switch (getErrnoCode(error)) {
     case "EACCES":
@@ -26,7 +26,7 @@ function writabilityFromError(error) {
       return "unknown";
   }
 }
-//@ chunk-dcmhvw5a.js:427376-427445 placement
+//@ chunk-z20c443b.js:425839-425908 placement
 /**
  * probeWritabilitySync：同步探测路径可写。
  */
@@ -38,7 +38,7 @@ function probeWritabilitySync(path) {
     return writabilityFromError(error);
   }
 }
-//@ chunk-dcmhvw5a.js:427445-427574 placement
+//@ chunk-z20c443b.js:425908-426037 placement
 function anyAccountCouldWrite(accountInfo, file, folder) {
   for (let euid of accountInfo.uids) {
     let writable = isWritableByCurrentUser({
@@ -52,9 +52,9 @@ function anyAccountCouldWrite(accountInfo, file, folder) {
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:427574-427584 placement
+//@ chunk-z20c443b.js:426037-426047 placement
 var MAX_MANAGED_PATH_SEGMENTS = 40;
-//@ chunk-dcmhvw5a.js:427584-428151 placement
+//@ chunk-z20c443b.js:426047-426614 placement
 /**
  * 安全解析托管设置路径（逐段检查链接）。
  */
@@ -103,7 +103,7 @@ function resolveManagedPathSafely(path, accountInfo, certain) {
   } catch {}
   return true;
 }
-//@ chunk-dcmhvw5a.js:428180-428488 placement
+//@ chunk-z20c443b.js:426643-426951 placement
 /**
  * 托管设置文件路径与 drop-in 目录缓存。
  */
@@ -126,22 +126,22 @@ class ManagedPathCache {
     this.dropInDir = undefined;
   }
 }
-//@ chunk-dcmhvw5a.js:428488-428502 placement
+//@ chunk-z20c443b.js:426951-426965 placement
 /**
  * managedPathCache：托管路径缓存。
  */
 var managedPathCache; // deferred: uses ManagedPathCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:428488", () => {
+deferInit("chunk-z20c443b.js:426951", () => {
   managedPathCache = new ManagedPathCache();
 });
-//@ chunk-dcmhvw5a.js:428502-428547 placement
+//@ chunk-z20c443b.js:426965-427010 placement
 /**
  * 托管设置文件路径。
  */
 function getManagedFilePath() {
   return managedPathCache.getManagedFilePath();
 }
-//@ chunk-dcmhvw5a.js:428547-428754 fingerprint (2.1.88 match: getManagedFilePath, 0.801)
+//@ chunk-z20c443b.js:427010-427217 fingerprint (2.1.88 match: getManagedFilePath, 0.801)
 /**
  * 托管设置根目录（按平台固定路径，见 getManagedSettingsFilePath）。
  */
@@ -157,16 +157,16 @@ function getManagedFilePath_2() {
       return "/etc/claude-code";
   }
 }
-//@ chunk-dcmhvw5a.js:428754-428776 placement
+//@ chunk-z20c443b.js:427217-427239 placement
 function getManagedFilePathOverride() {
   return;
 }
 export {
   getManagedFilePath,
+  getManagedFilePathOverride,
   managedPathCache,
   writabilityFromError,
   anyAccountCouldWrite,
   probeWritabilitySync,
   resolveManagedPathSafely,
-  getManagedFilePathOverride,
 };

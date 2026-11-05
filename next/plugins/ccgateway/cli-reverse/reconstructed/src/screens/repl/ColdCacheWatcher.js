@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。提示缓存变冷的监视。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
@@ -18,10 +18,10 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { errorMessage } from "../../utils/errors.js";
 import { NOTIF_ACTIVE_THRESHOLD_MS } from "../../bootstrap/state.js";
 import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -32,7 +32,7 @@ import { topAutoDialog } from "../../state/dialogQueue.js";
 import { COLD_RESUME_QUOTA } from "../../components/nudges/nudgeIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:48551-48653 placement
+//@ chunk-czq1j3j2.js:50155-50257 placement
 function isColdCacheWatchEnabled(config) {
   return (
     !config.disabled &&
@@ -44,7 +44,7 @@ function isColdCacheWatchEnabled(config) {
     isDriftingNovaEnabled()
   );
 }
-//@ chunk-18hwfzwa.js:48653-49890 placement
+//@ chunk-czq1j3j2.js:50257-51494 placement
 /**
  * 缓存失效计时器：每轮结束后按 expectedMissAt() 设定定时器，到点时（仍闲置）通知上层预先提醒或预热，dispose 时清理。
  */
@@ -53,20 +53,20 @@ class ColdCacheWatcher {
   #t;
   #o = null;
   #n = null;
-  #s;
-  #r = false;
+  #r;
+  #s = false;
   constructor(host) {
     this.#e = host;
     this.#t = host.turn.getSnapshot();
-    this.#s = host.turn.subscribe(this.#c);
+    this.#r = host.turn.subscribe(this.#l);
   }
   dispose() {
-    if (this.#r) return;
-    this.#r = true;
-    this.#s();
+    if (this.#s) return;
+    this.#s = true;
+    this.#r();
     this.#i();
   }
-  #c = () => {
+  #l = () => {
     let snapshot = this.#e.turn.getSnapshot();
     let previousSnapshot = this.#t;
     this.#t = snapshot;
@@ -82,11 +82,11 @@ class ColdCacheWatcher {
   }
   #a() {
     this.#i();
-    if (this.#r || this.#t.isLoading || !this.#e.isEnabled()) return;
+    if (this.#s || this.#t.isLoading || !this.#e.isEnabled()) return;
     let expectedMissAt = this.#e.expectedMissAt();
-    if (expectedMissAt !== null && expectedMissAt !== this.#n) this.#l(expectedMissAt);
+    if (expectedMissAt !== null && expectedMissAt !== this.#n) this.#c(expectedMissAt);
   }
-  #l(targetAt) {
+  #c(targetAt) {
     this.#i();
     this.#o = this.#e.clock.setTimeout(
       () => {
@@ -98,17 +98,17 @@ class ColdCacheWatcher {
   }
   #d() {
     let host = this.#e;
-    if (this.#r || this.#t.isLoading || !host.isEnabled()) return;
+    if (this.#s || this.#t.isLoading || !host.isEnabled()) return;
     let expectedMissAt = host.expectedMissAt();
     let nowMs = host.now();
     if (expectedMissAt === null || expectedMissAt === this.#n) return;
     if (nowMs < expectedMissAt) {
-      this.#l(expectedMissAt);
+      this.#c(expectedMissAt);
       return;
     }
     let activeUntil = host.getLastInteractionTime() + NOTIF_ACTIVE_THRESHOLD_MS;
     if (nowMs < activeUntil) {
-      this.#l(activeUntil);
+      this.#c(activeUntil);
       return;
     }
     if (
@@ -118,12 +118,12 @@ class ColdCacheWatcher {
       host.hasArmedQuotaAutoResume() ||
       host.hasBackgroundAgents()
     ) {
-      this.#l(nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
+      this.#c(nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
     let partBusyUntil = host.pastUsageLimitUntil();
     if (partBusyUntil !== null) {
-      this.#l(Number.isFinite(partBusyUntil) ? partBusyUntil : nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
+      this.#c(Number.isFinite(partBusyUntil) ? partBusyUntil : nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
     this.#n = expectedMissAt;
@@ -136,12 +136,12 @@ class ColdCacheWatcher {
       .finally(() => host.setIdleHintSuppressed(false));
   }
 }
-//@ chunk-18hwfzwa.js:49890-49894 placement
+//@ chunk-czq1j3j2.js:51494-51498 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:49890", () => {
+deferInit("chunk-czq1j3j2.js:51494", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:49894-50624 placement
+//@ chunk-czq1j3j2.js:51498-52228 placement
 function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
   let bufferRef = useRef(null);
   usePreDispatchKeyHandler(
@@ -187,7 +187,7 @@ function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
   );
   return null;
 }
-//@ chunk-18hwfzwa.js:50624-50719 placement
+//@ chunk-czq1j3j2.js:52228-52323 placement
 function askBuffer(bufferRef, askId) {
   if (bufferRef.current?.ask !== askId)
     bufferRef.current = {
@@ -197,13 +197,13 @@ function askBuffer(bufferRef, askId) {
     };
   return bufferRef.current;
 }
-//@ chunk-18hwfzwa.js:50719-50809 placement
+//@ chunk-czq1j3j2.js:52323-52413 placement
 function selectIdleQuotaResumePayload(dialogStore) {
   let dialog = topAutoDialog(dialogStore.getState());
   let payload = dialog?.payload;
   return dialog?.kind === COLD_RESUME_QUOTA && isIdleTriggeredPayload(payload) ? payload : undefined;
 }
-//@ chunk-18hwfzwa.js:50809-50897 placement
+//@ chunk-czq1j3j2.js:52413-52501 placement
 function isIdleTriggeredPayload(payload) {
   return (
     typeof payload === "object" && payload !== null && "trigger" in payload && payload.trigger === "idle"

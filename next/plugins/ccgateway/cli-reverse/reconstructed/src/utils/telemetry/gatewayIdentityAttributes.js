@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关身份遥测属性
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p52gp8zk.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a0xc6evk.js (7)
  * attribution: placement 7
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -20,16 +20,16 @@ import { OTEL_METRICS_INCLUDE_DEFAULTS } from "./repositoryAttributes.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:1228-1259 placement
+//@ chunk-a0xc6evk.js:1168-1198 placement
 var otelApi; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var promClient_2;
-deferInit("chunk-p52gp8zk.js:1228", () => {
+deferInit("chunk-a0xc6evk.js:1168", () => {
   otelApi = __toESM(require_api(), 1);
   promClient_2 = __toESM(require_core(), 1);
 });
-//@ chunk-p52gp8zk.js:1259-1404 placement
+//@ chunk-a0xc6evk.js:1198-1343 placement
 var GatewayJwtClaimsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p52gp8zk.js:1259", () => {
+deferInit("chunk-a0xc6evk.js:1198", () => {
   GatewayJwtClaimsSchema = DoctorLazy(() =>
     create({
       sub: create_2().optional().catch(undefined),
@@ -38,7 +38,7 @@ deferInit("chunk-p52gp8zk.js:1259", () => {
     }).passthrough(),
   );
 });
-//@ chunk-p52gp8zk.js:1404-1619 placement
+//@ chunk-a0xc6evk.js:1343-1558 placement
 function decodeGatewayJwtClaims(jwt) {
   let index = jwt.indexOf(".");
   let index_2 = jwt.indexOf(".", index + 1);
@@ -52,21 +52,21 @@ function decodeGatewayJwtClaims(jwt) {
     return null;
   }
 }
-//@ chunk-p52gp8zk.js:1619-1677 placement
+//@ chunk-a0xc6evk.js:1558-1616 placement
 function gatewayJwtSubject(auth) {
   return isGatewayAuthPinned(auth) ? decodeGatewayJwtClaims(auth.jwt)?.sub || undefined : undefined;
 }
-//@ chunk-p52gp8zk.js:1677-1738 placement
+//@ chunk-a0xc6evk.js:1616-1677 placement
 var EMPTY_GATEWAY_ATTRS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var gatewayIdentityStateByHost;
-deferInit("chunk-p52gp8zk.js:1677", () => {
+deferInit("chunk-a0xc6evk.js:1616", () => {
   EMPTY_GATEWAY_ATTRS = Object.freeze({});
   gatewayIdentityStateByHost = new HostScoped(() => ({
     jwt: undefined,
     attrs: EMPTY_GATEWAY_ATTRS,
   }));
 });
-//@ chunk-p52gp8zk.js:1738-2099 placement
+//@ chunk-a0xc6evk.js:1677-2038 placement
 function gatewayIdentityAttributes() {
   let gatewayAuth = getGatewayAuth();
   let jwt = isGatewayAuthPinned(gatewayAuth) ? gatewayAuth.jwt : undefined;
@@ -84,11 +84,11 @@ function gatewayIdentityAttributes() {
   if (attributes.groups && attributes.groups.length > 0) claims["user.groups"] = attributes.groups.join(",");
   return (state.attrs = Object.freeze(claims));
 }
-//@ chunk-p52gp8zk.js:2559-2638 placement
+//@ chunk-a0xc6evk.js:3484-3563 placement
 function isOtelMetricsAttributeEnabled(name) {
   let defaultValue = OTEL_METRICS_INCLUDE_DEFAULTS[name];
   let rawValue = process.env[name];
   if (rawValue === undefined) return defaultValue;
   return isEnvTruthy(rawValue);
 }
-export { gatewayJwtSubject, gatewayIdentityAttributes, promClient_2, otelApi, isOtelMetricsAttributeEnabled };
+export { gatewayIdentityAttributes, promClient_2, otelApi, gatewayJwtSubject, isOtelMetricsAttributeEnabled };

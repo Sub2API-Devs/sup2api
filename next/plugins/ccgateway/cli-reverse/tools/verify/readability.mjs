@@ -28,8 +28,9 @@ const CONVENTIONAL = new Set(('i j k n m x y z e t v ' +
   ' add all any ask bad big cmp cpu cut due fix get has hit job kv lo hi mb kb gb').split(/\s+/).filter(Boolean));
 const looksMinified = (final, min, minifiedModule) => {
   if (final === '$' || final === '_') return false;
-  // strip a module-clash chunk tag (`K1e_ab12`); a name that is only `_meta`, `_host` … keeps itself
-  const base = final.replace(/(?<=[\w$])_[a-z0-9]{4}\d*$/, '');
+  // strip a module-clash chunk tag (`K1e_ab12`); a name that is only `_meta`, `_host` … keeps itself,
+  // and so do tslib's `__rest` / `__read` (the tag must follow a letter, digit or `$`, not `_`)
+  const base = final.replace(/(?<=[A-Za-z0-9$])_[a-z0-9]{4}\d*$/, '');
   if (minifiedModule && base === min && min.length <= 3) return true;
   return base.length <= 3 && !CONVENTIONAL.has(base) && !CONVENTIONAL.has(base.toLowerCase());
 };

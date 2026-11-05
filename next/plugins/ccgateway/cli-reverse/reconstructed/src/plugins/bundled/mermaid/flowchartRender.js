@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mermaid 流程图解析与字符画绘制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (14)
  * attribution: placement 14
  */
 import { MAX_NODE_HEIGHT, layoutFlowchart, gridToLines } from "./flowchartLayout.js";
@@ -21,7 +21,7 @@ import {
 } from "../../../ink/graphemeCells.js";
 import { createBoxCanvas, drawCanvasBox, drawCanvasText } from "./boxCanvas.js";
 
-//@ chunk-yb0ajcmt.js:14774-15376 placement
+//@ chunk-q80fh8vc.js:15082-15684 placement
 function labelEdgeBundles(segments, nodes) {
   let filtered = segments.filter((segment) => nodes[segment.from]?.center !== nodes[segment.to]?.center);
   let countByFrom = new Map();
@@ -57,7 +57,7 @@ function labelEdgeBundles(segments, nodes) {
   }
   return track;
 }
-//@ chunk-yb0ajcmt.js:15376-15788 placement
+//@ chunk-q80fh8vc.js:15684-16096 placement
 /**
  * 宽度不够画框图时，把流程图退化为"subgraph: 成员"的文字列表。
  */
@@ -80,7 +80,7 @@ function renderFlowchartAsList(graph, width) {
   }
   return;
 }
-//@ chunk-yb0ajcmt.js:15788-17387 placement
+//@ chunk-q80fh8vc.js:16096-17695 placement
 /**
  * 在字符画布上绘制流程图的节点框、交叉、连线与回环。
  */
@@ -88,8 +88,8 @@ function drawFlowchart(layout, chars, stylePool) {
   let boxCanvas = createBoxCanvas(chars, stylePool);
   for (let node of layout.nodes) {
     let leftColumn = node.center - Math.floor(node.breadth / 2);
-    let left = _(layout, node.start, leftColumn);
-    let right = _(layout, node.start + node.depth - 1, leftColumn + node.breadth - 1);
+    let left = rankAnchor(layout, node.start, leftColumn);
+    let right = rankAnchor(layout, node.start + node.depth - 1, leftColumn + node.breadth - 1);
     if (node.kind === "crossing")
       linkPath(
         boxCanvas,
@@ -97,7 +97,7 @@ function drawFlowchart(layout, chars, stylePool) {
           {
             length: node.depth,
           },
-          (index, offset) => _(layout, node.start + offset, node.center),
+          (index, offset) => rankAnchor(layout, node.start + offset, node.center),
         ),
         node.line,
       );
@@ -126,34 +126,34 @@ function drawFlowchart(layout, chars, stylePool) {
     let turnRow = segment.track < 0 ? toStart : gap.start + 1 + segment.track * gap.stride;
     let points = [];
     for (let row = fromEnd; row <= turnRow && segment.kind !== "loopIn"; row++)
-      points.push(_(layout, row, fromNode.center));
+      points.push(rankAnchor(layout, row, fromNode.center));
     let direction = Math.sign(toNode.center - fromNode.center);
     for (
       let column = fromNode.center + (segment.kind === "loopIn" ? 0 : direction);
       column !== toNode.center + direction;
       column += direction
     )
-      points.push(_(layout, turnRow, column));
-    for (let k = turnRow + 1; k <= toStart && segment.kind !== "loopOut"; k++)
-      points.push(_(layout, k, toNode.center));
+      points.push(rankAnchor(layout, turnRow, column));
+    for (let idx = turnRow + 1; idx <= toStart && segment.kind !== "loopOut"; idx++)
+      points.push(rankAnchor(layout, idx, toNode.center));
     linkPath(boxCanvas, points, segment.line);
     let nodeIndex = segment.kind === "loopOut" ? segment.to : segment.from;
     if (segment.kind !== "plain")
       tracksByNode.set(nodeIndex, [...(tracksByNode.get(nodeIndex) ?? []), turnRow]);
     if (segment.hasHead)
       arrowheads.push({
-        at: _(layout, toStart, toNode.center),
-        toward: _(layout, toNode.start, toNode.center),
+        at: rankAnchor(layout, toStart, toNode.center),
+        toward: rankAnchor(layout, toNode.start, toNode.center),
       });
     if (segment.label !== "" && layout.isVertical)
       drawCanvasText(
         boxCanvas,
-        _(layout, gap.labelStart, toNode.center - Math.floor(textDisplayWidth(segment.label) / 2)),
+        rankAnchor(layout, gap.labelStart, toNode.center - Math.floor(textDisplayWidth(segment.label) / 2)),
         segment.label,
       );
     else if (segment.label !== "") {
-      let labelAt = _(layout, gap.labelStart, toNode.center);
-      let labelEnd = _(layout, gap.labelStart + gap.labelSize - 1, toNode.center);
+      let labelAt = rankAnchor(layout, gap.labelStart, toNode.center);
+      let labelEnd = rankAnchor(layout, gap.labelStart + gap.labelSize - 1, toNode.center);
       drawCanvasText(
         boxCanvas,
         {
@@ -170,7 +170,7 @@ function drawFlowchart(layout, chars, stylePool) {
     let node = layout.nodes[nodeIndex];
     let points = [];
     for (let min = Math.min(firstTrack, lastTrack); min <= Math.max(firstTrack, lastTrack); min++)
-      points.push(_(layout, min, node?.center ?? 0));
+      points.push(rankAnchor(layout, min, node?.center ?? 0));
     linkPath(boxCanvas, points, node?.line);
   }
   for (let arrowhead of arrowheads) {
@@ -189,8 +189,8 @@ function drawFlowchart(layout, chars, stylePool) {
   }
   return gridToLines(boxCanvas);
 }
-//@ chunk-yb0ajcmt.js:17387-17482 placement
-function _(layout, rank, center) {
+//@ chunk-q80fh8vc.js:17695-17790 placement
+function rankAnchor(layout, rank, center) {
   let row = layout.isFlipped ? layout.rankExtent - 1 - rank : rank;
   return layout.isVertical
     ? {
@@ -202,7 +202,7 @@ function _(layout, rank, center) {
         y: center,
       };
 }
-//@ chunk-yb0ajcmt.js:17482-17679 placement
+//@ chunk-q80fh8vc.js:17790-17987 placement
 /**
  * 流程图解析常量：头部、箭头端点字符、节点括号形状、节点/边上限。
  */
@@ -220,7 +220,7 @@ var NODE_SHAPES = [
 ];
 var MAX_NODES = 200;
 var MAX_EDGES = 400;
-//@ chunk-yb0ajcmt.js:17679-18251 placement
+//@ chunk-q80fh8vc.js:17987-18559 placement
 /**
  * 解析 mermaid flowchart/graph 源码（方向、节点、边、subgraph），超出限制返回 undefined。
  */
@@ -267,7 +267,7 @@ function parseFlowchart(lines) {
     ? undefined
     : graph;
 }
-//@ chunk-yb0ajcmt.js:18251-18591 placement
+//@ chunk-q80fh8vc.js:18559-18899 placement
 function parseNodeDeclaration(state, text) {
   let trimmed = text.trim();
   let index = trimmed.indexOf("[");
@@ -286,7 +286,7 @@ function parseNodeDeclaration(state, text) {
   state.open.push(group);
   return true;
 }
-//@ chunk-yb0ajcmt.js:18591-18934 placement
+//@ chunk-q80fh8vc.js:18899-19242 placement
 function parseEdgeChain(state, cursor) {
   let nodeGroup = parseNodeGroup(state, cursor);
   while (nodeGroup !== undefined) {
@@ -312,7 +312,7 @@ function parseEdgeChain(state, cursor) {
   }
   return false;
 }
-//@ chunk-yb0ajcmt.js:18934-19095 placement
+//@ chunk-q80fh8vc.js:19242-19403 placement
 /**
  * 解析 “A & B & C” 节点组。
  */
@@ -327,7 +327,7 @@ function parseNodeGroup(state, cursor) {
     cursor.position++;
   }
 }
-//@ chunk-yb0ajcmt.js:19095-20015 placement
+//@ chunk-q80fh8vc.js:19403-20323 placement
 function parseNodeRef(state, cursor) {
   skipSpaces(cursor);
   let position = cursor.position;
@@ -385,7 +385,7 @@ function parseNodeRef(state, cursor) {
   }
   return sliced;
 }
-//@ chunk-yb0ajcmt.js:20015-20870 placement
+//@ chunk-q80fh8vc.js:20323-21178 placement
 function parseEdgeArrow(cursor) {
   skipSpaces(cursor);
   let { text } = cursor;
@@ -434,7 +434,7 @@ function parseEdgeArrow(cursor) {
     hasArrow,
   };
 }
-//@ chunk-yb0ajcmt.js:20870-20966 placement
+//@ chunk-q80fh8vc.js:21178-21274 placement
 /**
  * 连续重复字符数
  */
@@ -443,14 +443,14 @@ function countRepeats(cursor, char) {
   while (cursor.text[cursor.position] === char) cursor.position++;
   return cursor.position - position;
 }
-//@ chunk-yb0ajcmt.js:20966-21051 placement
+//@ chunk-q80fh8vc.js:21274-21359 placement
 /**
  * 跳过空格与制表符
  */
 function skipSpaces(cursor) {
   while (cursor.text[cursor.position] === " " || cursor.text[cursor.position] === "\t") cursor.position++;
 }
-//@ chunk-yb0ajcmt.js:21051-21060 placement
+//@ chunk-q80fh8vc.js:21359-21368 placement
 /**
  * 4
  */

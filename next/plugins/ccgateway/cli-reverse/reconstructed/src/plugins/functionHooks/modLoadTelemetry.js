@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mod 加载结果遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -15,34 +15,34 @@ import { fromEnumOpt, fromEnum } from "../../services/analytics/safeMetadata.js"
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3699865-3699901 placement
+//@ chunk-5xgkngpb.js:3795553-3795589 placement
 /**
  * 是否已记录 mod 加载汇总
  */
 var modLoadSummaryLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3699865", () => {
+deferInit("chunk-5xgkngpb.js:3795553", () => {
   modLoadSummaryLogged = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:3699901-3699937 placement
+//@ chunk-5xgkngpb.js:3795589-3795625 placement
 /**
  * 分发计数
  */
 var modLoadDispatchCount; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3699901", () => {
+deferInit("chunk-5xgkngpb.js:3795589", () => {
   modLoadDispatchCount = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:3699937-3699971 placement
+//@ chunk-5xgkngpb.js:3795625-3795659 placement
 /**
  * 按来源计数
  */
 var modLoadBySource; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3699937", () => {
+deferInit("chunk-5xgkngpb.js:3795625", () => {
   modLoadBySource = identity_2(new Map(), (bySource) => bySource.clear());
 });
-//@ chunk-e6aww6q8.js:3699971-3700046 placement
+//@ chunk-5xgkngpb.js:3795659-3795734 placement
 /**
  * 计入一次事件
  */
@@ -50,12 +50,12 @@ function countModLoadEvent(pluginStorageId) {
   if (modLoadSummaryLogged.get() === undefined && modLoadBySource.has(pluginStorageId))
     modLoadDispatchCount.set((modLoadDispatchCount.get() ?? 0) + 1);
 }
-//@ chunk-e6aww6q8.js:3700046-3700117 placement
+//@ chunk-5xgkngpb.js:3795734-3795805 placement
 var PROVENANCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3700046", () => {
+deferInit("chunk-5xgkngpb.js:3795734", () => {
   PROVENANCES = Object.freeze(["installed", "plugin_dir", "dev_mods", "managed"]);
 });
-//@ chunk-e6aww6q8.js:3700117-3700514 placement
+//@ chunk-5xgkngpb.js:3795805-3796202 placement
 /**
  * 每个插件只记一次加载结果（官方市场插件且首次即成功时不记），返回来源、哈希 id、层级等遥测字段。
  */
@@ -84,7 +84,7 @@ function modLoadTelemetryFields(pluginInfo, outcome) {
     is_hosted: isRemoteManagedEnvironment(),
   };
 }
-//@ chunk-e6aww6q8.js:3700514-3700687 placement
+//@ chunk-5xgkngpb.js:3796202-3796375 placement
 function logModLoad(pluginInfo, outcome, extraFields) {
   try {
     let fields = modLoadTelemetryFields(pluginInfo, outcome);
@@ -102,7 +102,7 @@ function logModLoad(pluginInfo, outcome, extraFields) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:3700687-3700732 placement
+//@ chunk-5xgkngpb.js:3796375-3796420 placement
 /**
  * 记录加载失败
  */
@@ -110,7 +110,7 @@ var logModLoadFailed = (pluginInfo, reason) =>
   logModLoad(pluginInfo, "failed", {
     reason: fromEnum(reason),
   });
-//@ chunk-e6aww6q8.js:3700732-3700800 placement
+//@ chunk-5xgkngpb.js:3796420-3796488 placement
 /**
  * 记录已加载
  */
@@ -118,7 +118,7 @@ var logModLoaded = (loadedMod) =>
   logModLoad(loadedMod.args, "loaded", {
     hook_patterns: loadedMod.patterns.length,
   });
-//@ chunk-e6aww6q8.js:3700800-3701193 placement
+//@ chunk-5xgkngpb.js:3796488-3796881 placement
 /**
  * 首个回合结束时记录一次 mod 加载情况：已加载/失败数量、分发次数与各来源计数。
  */
@@ -134,7 +134,7 @@ function logModsFirstTurn() {
       ...Object.fromEntries(
         PROVENANCES.map((provenance) => [
           `provenance_${provenance}`,
-          count(filtered, (entry) => entry.provenance === provenance),
+          countWhere(filtered, (entry) => entry.provenance === provenance),
         ]),
       ),
     });

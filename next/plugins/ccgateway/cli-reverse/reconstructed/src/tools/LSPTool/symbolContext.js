@@ -3,9 +3,9 @@
  *
  * 读文件前 64KB 取光标处符号，用于渲染 LSP 调用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/symbolContext.ts
- * pieces: chunk-kxyd0g16.js (2)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { hasUncOrNetworkPath } from "./LSPTool.js";
@@ -14,9 +14,9 @@ import { expandPath } from "../../utils/path.js";
 import { truncate } from "../../utils/format.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-kxyd0g16.js:103289-103302 affinity
+//@ chunk-fmnbrxwy.js:118003-118016 affinity
 var MAX_SYMBOL_READ_BYTES = 65536;
-//@ chunk-kxyd0g16.js:103302-103920 fingerprint (2.1.88 match: getSymbolAtPosition, 1)
+//@ chunk-fmnbrxwy.js:118016-118634 fingerprint (2.1.88 match: getSymbolAtPosition, 1)
 /**
  * 读取文件前 64KB，取指定 0 基行列处的符号（标识符）文本，用于渲染工具调用；失败返回 null。
  */

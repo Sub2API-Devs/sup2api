@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动模式转换判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pc1rmcr2.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01b7fqej.js (5)
  * attribution: placement 5
  */
 import { isAntInternalFastModelId, getMainLoopModel } from "../model/model.js";
@@ -20,7 +20,7 @@ import { logError } from "../log.js";
 import { toError } from "../errors.js";
 import { withDeadline } from "../sleep.js";
 
-//@ chunk-pc1rmcr2.js:4806-4888 placement
+//@ chunk-01b7fqej.js:4849-4931 placement
 function isAutoModeTransitionDue(context, fastMode) {
   return (
     (context.isAutoModeAvailable === false ||
@@ -29,15 +29,15 @@ function isAutoModeTransitionDue(context, fastMode) {
     isAutoModeGateEnabled()
   );
 }
-//@ chunk-pc1rmcr2.js:4888-4931 placement
+//@ chunk-01b7fqej.js:4931-4974 placement
 function checkAutoModeTransition(context, setAppState, fastMode, timeoutMs) {
   return evaluateAutoModeGate(context, setAppState, fastMode, timeoutMs, false);
 }
-//@ chunk-pc1rmcr2.js:4931-4977 placement
-function checkAutoModeInUse(toolPermissionContext, setAppState, fastMode) {
-  return evaluateAutoModeGate(toolPermissionContext, setAppState, fastMode, undefined, true);
+//@ chunk-01b7fqej.js:4974-5017 placement
+function checkAutoModeInUse(toolPermissionContext, setAppState, fastMode, timeoutMs) {
+  return evaluateAutoModeGate(toolPermissionContext, setAppState, fastMode, timeoutMs, true);
 }
-//@ chunk-pc1rmcr2.js:4977-5258 placement
+//@ chunk-01b7fqej.js:5017-5298 placement
 async function applyAutoModeTransition(context, setAppState, fastMode, timeoutMs) {
   switch (await checkAutoModeTransition(context, setAppState, fastMode, timeoutMs)) {
     case "not-due":
@@ -53,7 +53,7 @@ async function applyAutoModeTransition(context, setAppState, fastMode, timeoutMs
       };
   }
 }
-//@ chunk-pc1rmcr2.js:5258-5883 placement
+//@ chunk-01b7fqej.js:5298-5923 placement
 /**
  * 检查是否需要验证自动模式门控，并据此允许、拒绝或降级权限模式。
  */

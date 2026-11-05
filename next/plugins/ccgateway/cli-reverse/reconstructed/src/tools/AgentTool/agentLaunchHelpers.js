@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：AgentTool 启动辅助：后台会话锁、隔离方式降级（remote → worktree/本地）、web-fetch 代理强制本地
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0tkmvwy0.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tmsx2mh0.js (12)
  * attribution: placement 12
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -25,7 +25,7 @@ import { isDiskless } from "../../bootstrap/state.js";
 import { canRunAgentInWorktree, isRemoteAgentIsolationAvailable } from "./agentLaunch.js";
 import { isWebFetchAgent } from "../WebFetchTool/harnessNotes.js";
 
-//@ chunk-0tkmvwy0.js:3257-3497 placement
+//@ chunk-tmsx2mh0.js:3461-3701 placement
 /**
  * assistant 消息中该 tool_use 请求后台运行（或默认后台且未显式 false）时返回其 id。
  */
@@ -34,17 +34,18 @@ function getBackgroundedToolUseId(assistantMessage, toolUseId, backgroundByDefau
   let content = assistantMessage?.message?.content;
   if (!Array.isArray(content)) return;
   return content.some(
-    (_) =>
-      isPlainObject(_) &&
-      _.type === "tool_use" &&
-      _.id === toolUseId &&
-      isPlainObject(_.input) &&
-      (_.input.run_in_background === true || (backgroundByDefault && _.input.run_in_background !== false)),
+    (block) =>
+      isPlainObject(block) &&
+      block.type === "tool_use" &&
+      block.id === toolUseId &&
+      isPlainObject(block.input) &&
+      (block.input.run_in_background === true ||
+        (backgroundByDefault && block.input.run_in_background !== false)),
   )
     ? toolUseId
     : undefined;
 }
-//@ chunk-0tkmvwy0.js:3497-3648 placement
+//@ chunk-tmsx2mh0.js:3701-3852 placement
 /**
  * 在任务表中找 cwd 位于给定路径之下、仍占用的任务（用于判断 worktree 能否删除）。
  */
@@ -56,7 +57,7 @@ function findTaskOccupyingPath(tasks, paths, isOccupying = (task) => !isTerminal
   }
   return;
 }
-//@ chunk-0tkmvwy0.js:3648-3706 placement
+//@ chunk-tmsx2mh0.js:3852-3910 placement
 /**
  * 任务是否仍占用 worktree：未结束、等待恢复或有 keepalive 子代理。
  */
@@ -65,7 +66,7 @@ function isTaskStillOccupying(task, taskRegistry) {
     !isTerminalTaskStatus(task.status) || isParkedOnChildWork(task) || hasChildAgents(task.id, taskRegistry)
   );
 }
-//@ chunk-0tkmvwy0.js:3706-3922 placement
+//@ chunk-tmsx2mh0.js:3910-4126 placement
 /**
  * worktree 被其他任务占用而保留时，订阅 agentSettled/taskEvicted 事件，等无占用者后释放 worktree 锁。
  */
@@ -83,7 +84,7 @@ function watchWorktreeForRelease(watch) {
   );
   maybeReleaseWorktreeLock(state, undefined, false, false);
 }
-//@ chunk-0tkmvwy0.js:3922-4446 placement
+//@ chunk-tmsx2mh0.js:4126-4650 placement
 /**
  * 代理结束时更新后台锁：仍有活任务则保持，否则释放。
  */
@@ -115,7 +116,7 @@ function maybeReleaseWorktreeLock(state, agentOrTaskId, isStranded, evicted) {
     if (!isAbortError(error)) logError(error);
   }
 }
-//@ chunk-0tkmvwy0.js:4446-4880 placement
+//@ chunk-tmsx2mh0.js:4650-5084 placement
 /**
  * isolation:"remote" 不可用时记录原因，有 git 根则回退 "worktree"，否则本地运行。
  */
@@ -134,7 +135,7 @@ function getRemoteIsolationFallback(restricted) {
   logForDebugging(`[remote agent] isolation:'remote' is unavailable ${fallbackDetail}`);
   return canUseWorktree ? "worktree" : undefined;
 }
-//@ chunk-0tkmvwy0.js:4880-5029 placement
+//@ chunk-tmsx2mh0.js:5084-5233 placement
 /**
  * 把 spawn 描述（prompt/description/subagentType/model/background/cwd）合并回 Agent 输入，用于比较钩子改写前后的权限判定。
  */
@@ -147,7 +148,7 @@ var toSpawnHookInput = (agentInput, spawn) => ({
   run_in_background: spawn.background,
   cwd: spawn.cwd,
 });
-//@ chunk-0tkmvwy0.js:5029-5278 placement
+//@ chunk-tmsx2mh0.js:5233-5482 placement
 /**
  * 解析有效隔离方式：内建 web-fetch 代理忽略 isolation；remote 不可用或受限时回退为 worktree 或本地。
  */
@@ -164,7 +165,7 @@ function resolveEffectiveIsolation(options) {
     ? getRemoteIsolationFallback(restricted)
     : isolationMode;
 }
-//@ chunk-0tkmvwy0.js:5278-5566 placement
+//@ chunk-tmsx2mh0.js:5482-5770 placement
 /**
  * 两个权限决策是否来自同一条规则（来源、行为、工具名、内容都相同）。
  */
@@ -180,17 +181,17 @@ function isSameRuleDecision(previous, next) {
     previousRule.ruleValue.ruleContent === nextRule.ruleValue.ruleContent
   );
 }
-//@ chunk-0tkmvwy0.js:5566-5576 placement
+//@ chunk-tmsx2mh0.js:5770-5780 placement
 /**
  * 启动前检查时表示「中断不算中止」的标志常量。
  */
 var ALLOW_INTERRUPT_ABORT = true;
-//@ chunk-0tkmvwy0.js:5576-5586 placement
+//@ chunk-tmsx2mh0.js:5780-5790 placement
 /**
  * 启动前检查时表示「中断按中止处理」的标志常量。
  */
 var NO_INTERRUPT_ABORT = false;
-//@ chunk-0tkmvwy0.js:5586-5898 placement
+//@ chunk-tmsx2mh0.js:5790-6102 placement
 /**
  * 决定启动形态：effectiveIsolation（输入或定义的 isolation，remote 不可用时回退）、isRemoteLaunch、shouldRunAsync（显式 run_in_background、定义 background、coordinator/强制异步，且后台任务未禁用）。
  */
@@ -212,7 +213,6 @@ function decideAgentLaunchMode(options) {
   };
 }
 export {
-  isSameRuleDecision,
   NO_INTERRUPT_ABORT,
   toSpawnHookInput,
   ALLOW_INTERRUPT_ABORT,
@@ -221,4 +221,5 @@ export {
   findTaskOccupyingPath,
   isTaskStillOccupying,
   watchWorktreeForRelease,
+  isSameRuleDecision,
 };

@@ -1,13 +1,13 @@
 /**
  * isexe/windows.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: isexe@2.0.0
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
-//@ chunk-m4p5zn6n.js:713-1221 cjs-fingerprint
+//@ chunk-t889g22j.js:713-1221 cjs-fingerprint
 var require_windows = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = isexe;
   isexe.sync = sync;

@@ -3,9 +3,9 @@
  *
  * 沿用旧版路径：claude mcp serve 入口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/mcp.ts
- * pieces: chunk-87nrc1a5.js (6), chunk-hjesqqfw.js (7)
+ * pieces: chunk-aw801t9e.js (7), chunk-be03srwe.js (6)
  * attribution: placement 13
  */
 import { array, stringSchema, zodStrictObject } from "../../vendor/zod/v4/classic/schemas.js";
@@ -15,15 +15,16 @@ import { safeParseJSON } from "../utils/json.js";
 import { hasProtoKeys } from "../utils/objectSafety.js";
 import {
   applyPermissionRulesToPermissionContext,
-  collectRulesFromSettings,
+  hasBashPermission,
   hasPermissionsToUseTool,
 } from "../utils/permissions/permissions.js";
 import { getEmptyToolPermissionContext, findToolByName, safeParseToolInput } from "../Tool.js";
-import { uniq, count } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { antBuiltinDenyRules } from "../utils/permissions/permissionSetup.js";
 import { classifyRuleParens } from "../utils/permissions/permissionRuleParser.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../utils/settings/permissionRuleCarveOut.js";
 import { splitRuleList } from "../utils/permissions/disallowedToolsFlag.js";
+import { countWhere } from "../utils/collections.js";
 import {
   CLAUDECODE_REPOHOOKSSTAMP,
   getSettingsFilesStamp,
@@ -82,7 +83,7 @@ import {
   CallToolRequestSchema,
 } from "../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { addSessionWorkingDirectories } from "../utils/permissions/PermissionUpdate.js";
-import { commandQueueManager } from "../utils/messageQueueManager.js";
+import { getProcessQueue } from "../utils/messageQueueManager.js";
 import { makeSaltedName } from "../utils/agentId.js";
 import { TOOL_CATALOG, getAllBaseTools } from "../tools.js";
 import { getMainLoopModel } from "../utils/model/model.js";
@@ -95,6 +96,7 @@ import { createEmptyArtifactSessionStores } from "../services/artifacts/artifact
 import { NOOP_AGENT_NAME_REGISTRY } from "../utils/agentNameRegistry.js";
 import { NO_OP_COLOR_ASSIGNER } from "../tools/AgentTool/agentColorManager.js";
 import { NO_BRIDGE_CONSENT } from "../screens/repl/bridgeChannelSlot.js";
+import { ANTHROPIC_SHELLDIRECTORYHELD } from "./mcpServe/toolHostPermissionContext.js";
 import { combineWithCallerGoneSignal } from "../services/mcp/xaa.js";
 import { findTool } from "../services/api/deferredToolsState.js";
 import { createAssistantMessage } from "../utils/messages.js";
@@ -109,13 +111,13 @@ import {
 import { getErrorParts } from "../utils/toolErrors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-87nrc1a5.js:11934-12043 placement
+//@ chunk-be03srwe.js:13082-13191 placement
 /**
  * mcp serve 设置的 schema：permissions.allow/deny 字符串列表。
  */
 var stringListSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MCP_SERVE_SETTINGS_SCHEMA;
-deferInit("chunk-87nrc1a5.js:11934", () => {
+deferInit("chunk-be03srwe.js:13082", () => {
   stringListSchema = () => array(stringSchema()).default([]);
   MCP_SERVE_SETTINGS_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
@@ -129,7 +131,7 @@ deferInit("chunk-87nrc1a5.js:11934", () => {
     }),
   );
 });
-//@ chunk-87nrc1a5.js:12043-12296 placement
+//@ chunk-be03srwe.js:13191-13444 placement
 /**
  * 读取并删除 CLAUDE_CODE_MCP_SERVE_SETTINGS，解析为 absent / unreadable / parsed（deny 规则合成权限上下文）。
  */
@@ -151,7 +153,7 @@ function readMcpServeSettings() {
         ...buildServeDenyContext(settings.permissions),
       };
 }
-//@ chunk-87nrc1a5.js:12296-12411 placement
+//@ chunk-be03srwe.js:13444-13559 placement
 /**
  * 规则全部合法时把 deny 规则应用到权限上下文（无上下文时附加内置 deny 规则）。
  */
@@ -159,9 +161,11 @@ function buildDenyRulesContext(baseContext, denyRules) {
   return denyRules.every(isWellFormedDenyRule)
     ? applyPermissionRulesToPermissionContext(
         baseContext ?? getEmptyToolPermissionContext(),
-        collectRulesFromSettings(
+        hasBashPermission(
           {
-            cliArg: baseContext ? [...denyRules] : uniq([...antBuiltinDenyRules(), ...denyRules]),
+            cliArg: baseContext
+              ? [...denyRules]
+              : normalizeCaseForComparison_2([...antBuiltinDenyRules(), ...denyRules]),
           },
           "deny",
         ),
@@ -171,7 +175,7 @@ function buildDenyRulesContext(baseContext, denyRules) {
       )
     : undefined;
 }
-//@ chunk-87nrc1a5.js:12411-12636 placement
+//@ chunk-be03srwe.js:13559-13784 placement
 /**
  * 检查 deny 规则格式：不以 -/( 开头、无控制字符、工具名合法、括号配平等。
  */
@@ -188,7 +192,7 @@ function isWellFormedDenyRule(rule) {
     splitRuleList([rule])[0] !== rule
   );
 }
-//@ chunk-87nrc1a5.js:12636-12769 placement
+//@ chunk-be03srwe.js:13784-13917 placement
 /**
  * 括号是否配平（跳过反斜杠转义）。
  */
@@ -200,29 +204,32 @@ function hasBalancedParens(rawContent) {
     else if (rawContent[j] === ")") depth--;
   return depth === 0;
 }
-//@ chunk-87nrc1a5.js:12769-12953 placement
+//@ chunk-be03srwe.js:13917-14101 placement
 /**
  * 由 deny 规则（加内置规则）生成权限上下文，并统计格式错误的规则数。
  */
 function buildServeDenyContext(permissions) {
-  let denyRules = uniq([...splitRuleList(permissions.deny), ...antBuiltinDenyRules()]);
+  let denyRules = normalizeCaseForComparison_2([
+    ...splitRuleList(permissions.deny),
+    ...antBuiltinDenyRules(),
+  ]);
   return {
     context: applyPermissionRulesToPermissionContext(
       getEmptyToolPermissionContext(),
-      collectRulesFromSettings(
+      hasBashPermission(
         {
           cliArg: denyRules,
         },
         "deny",
       ),
     ),
-    malformedRules: count(
+    malformedRules: countWhere(
       [...denyRules, ...splitRuleList(permissions.allow)],
       (rule) => rule.startsWith("-") || classifyRuleParens(rule).kind === "malformed",
     ),
   };
 }
-//@ chunk-hjesqqfw.js:3042-3211 placement (2.1.88 match: createComputerUseMcpServerForCli, 0.323)
+//@ chunk-aw801t9e.js:3201-3370 placement (2.1.88 match: createComputerUseMcpServerForCli, 0.323)
 /**
  * （误归 computerUse/mcpServer）包装 MCP 请求处理器：请求 _meta 带 repo hooks stamp 标记时，在结果 _meta 中附加 stamp。
  */
@@ -239,13 +246,13 @@ function stampRepoHooksMeta(server, method, session, handler) {
     };
   });
 }
-//@ chunk-hjesqqfw.js:3211-3253 placement
+//@ chunk-aw801t9e.js:3370-3412 placement
 function hasCloseSseStream(transport) {
   return "closeSSEStream" in transport;
 }
-//@ chunk-hjesqqfw.js:3253-3274 placement
+//@ chunk-aw801t9e.js:3412-3433 placement
 var CALLER_GONE_SIGNAL = "callerGone";
-//@ chunk-hjesqqfw.js:3274-3392 placement (2.1.88 match: getServerCommandArray, 0.769)
+//@ chunk-aw801t9e.js:3433-3551 placement (2.1.88 match: getServerCommandArray, 0.77)
 async function startMCPServer(serverName, debug, verbose, host, context, options) {
   setCwd(serverName);
   let mcpServer = createMCPServer(debug, verbose, getRootSession(), "stdio", host, context, options);
@@ -253,9 +260,9 @@ async function startMCPServer(serverName, debug, verbose, host, context, options
   await mcpServer.connect(transport);
   registerCleanup(() => mcpServer.close());
 }
-//@ chunk-hjesqqfw.js:3392-3478 placement
+//@ chunk-aw801t9e.js:3551-3637 placement
 let ReadonlyMapView; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hjesqqfw.js:3392", () => {
+deferInit("chunk-aw801t9e.js:3551", () => {
   ReadonlyMapView = class ReadonlyMapView extends InstanceRegistry {
     #e;
     constructor(options) {
@@ -267,7 +274,7 @@ deferInit("chunk-hjesqqfw.js:3392", () => {
     }
   };
 });
-//@ chunk-hjesqqfw.js:3478-13829 placement (2.1.88 match: startMCPServer, 0.2)
+//@ chunk-aw801t9e.js:3637-14159 placement (2.1.88 match: startMCPServer, 0.194)
 /**
  * claude mcp serve：把 Claude Code 自身的工具作为 MCP 服务器暴露（stdio 或 http），禁用后台代理等不适用功能。
  */
@@ -328,10 +335,10 @@ function createMCPServer(
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -449,7 +456,7 @@ function createMCPServer(
     return {
       toolUseContext: {
         abortController: childAbortController,
-        messageQueue: commandQueueManager(),
+        messageQueue: getProcessQueue(),
         session,
         agentContext: {
           agentType: "main",
@@ -505,7 +512,6 @@ function createMCPServer(
         messages: [],
         turnStartIndex: 0,
         readFileState,
-        dedupUnchangedReads: false,
         toolState,
         toolDecisions: new Map(),
         permissionRelays: NO_BRIDGE_CONSENT,
@@ -530,10 +536,18 @@ function createMCPServer(
     ) => {
       let { transport } = server;
       using servingCallScope = isHttp ? require("./mcpServe/cpuReport.js").servingCall(host.host) : undefined;
-      let needsPermission = (withPermissionReport) =>
-        isHttp
-          ? require("./mcpServe/cpuReport.js").withCpuReport(withPermissionReport, host.host, _meta)
-          : withPermissionReport;
+      let needsPermission = async (withPermissionReport) => {
+        if (isHttp) {
+          let cpuReportModule = require("./mcpServe/cpuReport.js");
+          return cpuReportModule.withCpuReport(
+            withPermissionReport,
+            host.host,
+            _meta,
+            await cpuReportModule.lookAtOtherPrograms(host.host, _meta),
+          );
+        }
+        return withPermissionReport;
+      };
       let sessionHandle =
         isHttp && transport !== undefined && setMcpServeSession(host.host, _meta?.[ANTHROPIC_SESSION]);
       let getCurrentSession = () => {
@@ -576,6 +590,10 @@ function createMCPServer(
           credentials: readFileStateCache,
         });
       }
+      if (isHttp && context_2 !== undefined) {
+        let { takeShellDirectoryHeld } = require("./mcpServe/shellDirectoryHeld.js");
+        takeShellDirectoryHeld(_meta?.[ANTHROPIC_SHELLDIRECTORYHELD], host);
+      }
       if (
         isHttp &&
         name !== (await import("../services/mcpServe/runMonitorCommand.js")).RUN_MONITOR_COMMAND_CALL
@@ -603,7 +621,7 @@ function createMCPServer(
             startHeartbeat: () => startProgressHeartbeat(_meta?.progressToken, sendNotification),
             callerLogsSharedEvents: sessionHandle,
           });
-          return needsPermission(
+          return await needsPermission(
             permissionReply ??
               refusedResult({
                 code: "unsupported_protocol",
@@ -688,10 +706,10 @@ function createMCPServer(
               ),
             );
             let { encodeServedOutput } = await import("../remote/tools/serve/servedOutput.js");
-            return needsPermission(callsScope.run(() => encodeServedOutput(summary, output)));
+            return await needsPermission(callsScope.run(() => encodeServedOutput(summary, output)));
           } catch (error) {
             let { ServedCallError } = await import("../services/mcpServe/servedCallError.js");
-            return needsPermission({
+            return await needsPermission({
               isError: true,
               content: [
                 {
@@ -900,7 +918,7 @@ ${strippedFieldsNote}`;
         if (!callerLogsSharedEvents)
           if (resultTooLarge) logFeatureSad(toolFeatureName(tool.name), "result_too_large");
           else logFeatureOk(toolFeatureName(tool.name));
-        return needsPermission(toolResult);
+        return await needsPermission(toolResult);
       } catch (error) {
         let errorText =
           (error instanceof Error ? getErrorParts(error) : [String(error)])
@@ -928,7 +946,7 @@ ${strippedFieldsNote}`;
             logFeatureBad(toolFeatureName(tool.name), code);
           }
         }
-        return needsPermission({
+        return await needsPermission({
           isError: true,
           content: [
             {
@@ -944,6 +962,6 @@ ${strippedFieldsNote}`;
   );
   return server;
 }
-//@ chunk-hjesqqfw.js:13829-13845 placement
+//@ chunk-aw801t9e.js:14159-14175 placement
 function noop(toolState) {}
 export { CALLER_GONE_SIGNAL, createMCPServer, readMcpServeSettings, buildDenyRulesContext, startMCPServer };

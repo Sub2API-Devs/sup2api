@@ -3,12 +3,12 @@
  *
  * /install-github-app 用的常量：PR 标题、文档地址、GitHub Actions 工作流 YAML（@claude 触发与代码审查）、PR 正文。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/github-app.ts
- * pieces: chunk-4v9zy7gn.js (1)
+ * pieces: chunk-2xbvbqx2.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-4v9zy7gn.js:17501-22847 fingerprint (2.1.88 match: PR_TITLE, 0.5)
+//@ chunk-2xbvbqx2.js:18650-23995 fingerprint (2.1.88 match: PR_TITLE, 0.5)
 /**
  * "Add Claude Code GitHub Workflow" 等 GitHub App 安装常量。
  */

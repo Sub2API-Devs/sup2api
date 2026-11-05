@@ -3,9 +3,9 @@
  *
  * CronCreate 工具：创建循环/一次性定时 prompt，可选 durable 持久化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/CronCreateTool.ts
- * pieces: chunk-kyk75gag.js (1)
+ * pieces: chunk-z8eehvwz.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -39,13 +39,13 @@ import {
 import { isUnknownPluginSpawnedAgent, UNKNOWN_PLUGIN_AGENT_NOTE } from "../AgentTool/pluginSpawnNote.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { parseCronExpression, cronToHuman } from "../../utils/cron.js";
-import { getTeammateContext } from "../../utils/teammate.js";
+import { getTeammateContext } from "../../utils/teammateContext.js";
 import { getCronJitterConfig } from "../../utils/cronJitterConfig.js";
 import { setScheduledTasksEnabled } from "../../bootstrap/state.js";
 import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
 import { truncate } from "../../utils/format.js";
 
-//@ chunk-kyk75gag.js:5317-8204 fingerprint (2.1.88 match: CronCreateTool, 0.774)
+//@ chunk-z8eehvwz.js:5461-8347 fingerprint (2.1.88 match: CronCreateTool, 0.775)
 /**
  * CronCreate 工具（shouldDefer，enablesCodeExecution；isEnabled = isKairosCronEnabled）。输入 cron（5 字段本地时间）、prompt、recurring（默认 true）、durable（仅 tengu_kairos_cron_durable 开启时生效）。权限：auto 模式下 passthrough 交给分类器，否则直接允许。validateInput：特定上下文拒绝、表达式非法、一年内无匹配日期、已有任务 ≥50、队友不能建 durable 任务。call 写入任务（durable 写 .claude/scheduled_tasks.json，否则只在会话内存），按抖动配置算下次触发时间。
  */

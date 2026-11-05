@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能来源判定与展示字段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2c3jp4kn.js (6)
  * attribution: placement 6
  */
 import { remoteToolsState } from "../remote/tools/callResults.js";
@@ -13,7 +13,7 @@ import { env } from "../utils/env.js";
 import { isRemoteCowork } from "../utils/entrypointKinds.js";
 import { escapeXmlKeepJoiners, normalizeKeepJoiners } from "../utils/permissions/checkRegistry.js";
 
-//@ chunk-g54kbxqw.js:34049-34302 placement
+//@ chunk-2c3jp4kn.js:2957-3210 placement
 function isSkillFromUserSource(command) {
   if (command.loadedFrom === undefined) return Boolean(command.isMcp);
   switch (command.loadedFrom) {
@@ -30,16 +30,16 @@ function isSkillFromUserSource(command) {
       return true;
   }
 }
-//@ chunk-g54kbxqw.js:34302-34394 placement
+//@ chunk-2c3jp4kn.js:3210-3302 placement
 function isSkillShownToModel(command) {
   if (command.loadedFrom === "syncedSkills") return !isRemoteOrCowork() || remoteToolsState().textAlone;
   return isSkillFromUserSource(command);
 }
-//@ chunk-g54kbxqw.js:34394-34486 placement
+//@ chunk-2c3jp4kn.js:3302-3394 placement
 function isRemoteOrCowork() {
   return Boolean(env.CLAUDE_CODE_REMOTE) || Boolean(env.CLAUDE_CODE_IS_COWORK) || isRemoteCowork();
 }
-//@ chunk-g54kbxqw.js:34486-34733 placement
+//@ chunk-2c3jp4kn.js:3394-3641 placement
 function emptySkillFrontmatter() {
   return {
     hooks: undefined,
@@ -58,7 +58,7 @@ function emptySkillFrontmatter() {
     metadata: undefined,
   };
 }
-//@ chunk-g54kbxqw.js:34733-34942 placement
+//@ chunk-2c3jp4kn.js:3641-3846 placement
 function escapedSkillFields(command) {
   return {
     description: escapeXmlKeepJoiners(command.description),
@@ -67,7 +67,7 @@ function escapedSkillFields(command) {
     argumentNames: command.argumentNames.map(escapeXmlKeepJoiners),
   };
 }
-//@ chunk-g54kbxqw.js:34942-35039 placement
+//@ chunk-2c3jp4kn.js:3846-3942 placement
 function displaySkillFields(command) {
   return {
     ...escapedSkillFields(command),
@@ -75,10 +75,10 @@ function displaySkillFields(command) {
   };
 }
 export {
-  displaySkillFields,
-  isSkillShownToModel,
-  isRemoteOrCowork,
   isSkillFromUserSource,
+  displaySkillFields,
+  isRemoteOrCowork,
+  isSkillShownToModel,
   emptySkillFrontmatter,
   escapedSkillFields,
 };

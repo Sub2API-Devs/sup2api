@@ -3,10 +3,10 @@
  *
  * Glob 实现：绝对模式拆分、ripgrep --files 调用、deny 规则过滤与分页
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/glob.ts
- * pieces: chunk-e6aww6q8.js (9)
- * attribution: placement 2, fingerprint 2, layout 2, affinity 1, sole-consumer 2
+ * pieces: chunk-5xgkngpb.js (9)
+ * attribution: placement 4, fingerprint 2, layout 3
  */
 import { normalize, join, relative, sep, isAbsolute, dirname, basename } from "path";
 import { realpath } from "fs/promises";
@@ -20,6 +20,7 @@ import {
   getRipgrepDisplayRoot,
   ripGrep_2,
   assertDenyGlobsUnchanged,
+  RipgrepTimeoutError,
   splitNulDelimitedOutput,
   hasUnsafeDenyGlob,
   mapRipgrepOutputPath,
@@ -36,7 +37,7 @@ import { isEnvTruthy } from "./envUtils.js";
 import { getPathsForPermissionCheck, getFsImplementation } from "./fsOperations.js";
 import { countCharInString } from "./stringUtils.js";
 
-//@ chunk-e6aww6q8.js:1435498-1435631 placement
+//@ chunk-5xgkngpb.js:1435078-1435211 placement
 async function getPluginCacheExclusionDirs(searchPath) {
   let cacheDir = normalize(projectPluginCacheDir());
   let realCacheDir = await realpath(cacheDir).catch(() => cacheDir);
@@ -44,7 +45,7 @@ async function getPluginCacheExclusionDirs(searchPath) {
     join(realCacheDir, ...glob.slice(4, -3).split("/")),
   );
 }
-//@ chunk-e6aww6q8.js:1436520-1436772 placement
+//@ chunk-5xgkngpb.js:1436100-1436352 placement
 /**
  * 把一个排除目录转为相对搜索根的 rg --glob 否定模式；排除根本身返回 "!**"，无关返回 null。
  */
@@ -58,7 +59,7 @@ function toRipgrepExcludeGlob(excludedPath, ripgrepDisplayRoot, insideWorktree =
   let upPath = relative(excludedPath, ripgrepDisplayRoot);
   return !(upPath === ".." || upPath.startsWith(`..${sep}`)) && !isAbsolute(upPath) ? "!**" : null;
 }
-//@ chunk-e6aww6q8.js:1436772-1437164 fingerprint (2.1.88 match: extractGlobBaseDirectory, 1)
+//@ chunk-5xgkngpb.js:1436352-1436744 fingerprint (2.1.88 match: extractGlobBaseDirectory, 1)
 function extractGlobBaseDirectory(pattern) {
   let globChars = /[*?[{]/;
   let match = pattern.match(globChars);
@@ -86,7 +87,7 @@ function extractGlobBaseDirectory(pattern) {
     relativePattern,
   };
 }
-//@ chunk-e6aww6q8.js:1437164-1437303 layout
+//@ chunk-5xgkngpb.js:1436744-1436883 layout
 /**
  * 绝对路径 glob 拆出静态前缀目录作为 searchDir，余下作为相对模式。
  */
@@ -99,7 +100,7 @@ function resolveAbsoluteGlobPattern(pattern) {
     relativePattern,
   };
 }
-//@ chunk-e6aww6q8.js:1437303-1437868 layout
+//@ chunk-5xgkngpb.js:1436883-1437464 layout
 /**
  * Glob 主入口：处理绝对模式与和搜索目录重复的前缀，打开搜索根，调用 glob。
  */
@@ -128,6 +129,7 @@ async function globFiles(pattern, cwd, { limit, offset }, abortSignal, permissio
       truncated: false,
       totalMatches: 0,
       countIsComplete: true,
+      timedOut: false,
     };
   if (
     rewrotePattern &&
@@ -156,7 +158,7 @@ async function globFiles(pattern, cwd, { limit, offset }, abortSignal, permissio
     await ripgrepTarget.close();
   }
 }
-//@ chunk-e6aww6q8.js:1437868-1439124 fingerprint (2.1.88 match: glob, 0.551)
+//@ chunk-5xgkngpb.js:1437464-1438937 fingerprint (2.1.88 match: glob, 0.517)
 /**
  * 用 ripgrep --files --glob 列文件（--sort=modified，默认 --no-ignore 与 --hidden，可由 CLAUDE_CODE_GLOB_NO_IGNORE/CLAUDE_CODE_GLOB_HIDDEN 关闭），附读取忽略模式与排除目录，按 deny 规则过滤，分页返回。
  */
@@ -182,28 +184,46 @@ async function glob(target, pattern, { limit, offset }, abortSignal, toolPermiss
     args.push("--glob", ripgrepExcludeGlob);
   }
   let span = null;
-  let output;
+  let paths;
   let perhapsIncomplete = false;
+  let timedOut = false;
   {
     let endSpan = timing?.mark("external");
-    output = await ripGrep_2(args, target.target, abortSignal, {
+    let result = await ripGrep_2(args, target.target, abortSignal, {
       rawLines: true,
       rejectOnInputError: true,
       searchOtherAppsData: true,
       cwd: target.spawnCwd,
+      spawnDirFd: target.spawnDirFd,
       inheritFd: target.inheritFd,
       beforeSpawn: () => {
         target.recheckBeforeSpawn();
         assertDenyGlobsUnchanged(patternsByRoot, target, ignorePatterns);
       },
-    }).finally(endSpan);
-    output = splitNulDelimitedOutput(output, "files_with_matches");
+    })
+      .then(
+        (lines) => ({
+          lines,
+          timedOut: false,
+        }),
+        (error) => {
+          if (error instanceof RipgrepTimeoutError && error.partialResults.length > 0)
+            return {
+              lines: error.partialResults,
+              timedOut: true,
+            };
+          throw error;
+        },
+      )
+      .finally(endSpan);
+    timedOut = result.timedOut;
+    paths = splitNulDelimitedOutput(result.lines, "files_with_matches");
   }
   let needsDenyCheck =
     target.judgeEveryResult === true ||
     hasUnsafeDenyGlob(patternsByRoot, target) ||
     (patternsByRoot.size > 0 && mayBeGuardedFileSyncCopy(target.canonical));
-  let absolutePaths = output.map((line) => mapRipgrepOutputPath(line, target));
+  let absolutePaths = paths.map((line) => mapRipgrepOutputPath(line, target));
   if (
     !target.isDirectory &&
     [target.canonical, target.lexical, ...getPathsForPermissionCheck(target.lexical)].some(
@@ -246,10 +266,11 @@ async function glob(target, pattern, { limit, offset }, abortSignal, toolPermiss
     files,
     truncated,
     totalMatches,
-    countIsComplete: !perhapsIncomplete && countIsComplete,
+    countIsComplete: !perhapsIncomplete && countIsComplete && !timedOut,
+    timedOut,
   };
 }
-//@ chunk-e6aww6q8.js:1439124-1439401 affinity
+//@ chunk-5xgkngpb.js:1438937-1439214 layout
 /**
  * 模式开头几段与搜索目录末尾几段重复时去掉重复部分。
  */
@@ -271,13 +292,13 @@ function stripPatternPrefixDuplicatingCwd(pattern, cwd) {
   }
   return pattern;
 }
-//@ chunk-e6aww6q8.js:1439401-1439511 sole-consumer
+//@ chunk-5xgkngpb.js:1439214-1439324 placement
 function getPatternBaseSegments(pattern, strippedPattern) {
   let parts = pattern.split("/");
   let droppedCount = countCharInString(strippedPattern.replace(/^\//, ""), "/") + 1;
   return parts.slice(0, Math.max(1, parts.length - droppedCount));
 }
-//@ chunk-e6aww6q8.js:1439511-1439687 sole-consumer
+//@ chunk-5xgkngpb.js:1439324-1439500 placement
 async function isRealDirectoryChain(baseDir, patternBaseSegments) {
   let fsImplementation = getFsImplementation();
   let currentDir = baseDir;
@@ -292,4 +313,4 @@ async function isRealDirectoryChain(baseDir, patternBaseSegments) {
   }
   return patternBaseSegments.length > 0;
 }
-export { resolveAbsoluteGlobPattern, globFiles, getPluginCacheExclusionDirs, toRipgrepExcludeGlob };
+export { getPluginCacheExclusionDirs, toRipgrepExcludeGlob, resolveAbsoluteGlobPattern, globFiles };

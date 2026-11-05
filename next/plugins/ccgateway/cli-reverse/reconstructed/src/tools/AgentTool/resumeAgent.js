@@ -3,10 +3,10 @@
  *
  * resumeAgentBackground：以 fork 身份在后台启动继承上下文的子代理（技能/内部调用，非 Agent 工具）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/resumeAgent.ts
- * pieces: chunk-0m7em5b4.js (27)
- * attribution: placement 27
+ * pieces: chunk-yz2nt7xx.js (28)
+ * attribution: placement 27, layout 1
  */
 import { promises } from "fs";
 import {
@@ -53,24 +53,36 @@ import {
   raceAgentLaunch,
 } from "./agentLaunch.js";
 import {
+  STREAM_PREFIXES,
+  isGlimmeringFinchGateOn,
+  isSillyShoreGateOn,
+  collectToolsUsedBeforeSummary,
+  messageHasUntrustedBlock,
+  streamPrefixesPresent,
+} from "../../utils/messages/untrustedArtifactContent.js";
+import { isPollEventForAgent, isEvalSettleWakePollEvent } from "../../utils/pollEvents.js";
+import {
   NodeFsOperations,
   findIntermediateUncJunction,
   hasUntouchableRecordSpelling,
 } from "../../utils/fsOperations.js";
 import { hasDotDotSegment } from "../../utils/pathClassification.js";
 import { isNonWslUncPath, isNetworkMountRoot, isNetDir } from "../../utils/networkPaths.js";
+import { allPeerOrigins } from "../../services/mcp/ccrTurnId.js";
 import { getTaskRunState } from "../../utils/task/taskNotifications.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { identityAgentId2 } from "../../utils/agentId.js";
 import {
   getToolPermissionContext,
   withCommandRuleOverrides,
   getMainLoopModel,
+  getPickedEffortModel,
 } from "../../utils/permissions/toolPermissionContext.js";
 import { isAgentStopPending } from "../../utils/agentProcessRegistry.js";
 import { isTaskLoopSettled } from "../../tasks/taskLoopRegistry.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { TASKSTOP } from "../TaskStopTool/prompt.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
-import { identityAgentId2 } from "../../utils/agentId.js";
 import { logError } from "../../utils/log.js";
 import {
   pruneSettledChildWork,
@@ -83,6 +95,7 @@ import { withTimeout } from "../../utils/sleep.js";
 import {
   getBackgroundLaunchRule,
   admitsWakeSafe,
+  agentId,
   runBackgroundLaunchRules,
 } from "../../tasks/backgroundLaunchRules.js";
 import {
@@ -178,11 +191,11 @@ import {
 } from "../../utils/worktreeIsolation.js";
 import { STARTUP_CWD_REALPATH } from "../../utils/sessionRestoreCwd.js";
 import { wasAgentCleanlyRemoved, wasAgentSpawnedIsolated } from "../../utils/concurrentSessions.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isEffortLevel } from "../../utils/effort.js";
 import { getSystemPrompt } from "../../constants/prompts.js";
 import { effectiveSystemPromptText } from "../../utils/systemPrompt.js";
-import { getAgentModel, getExploreAgentModel } from "../../utils/model/agent.js";
+import { getExploreAgentModel, getAgentModel, resolveAgentModelDisplay } from "../../utils/model/agent.js";
 import { promptSnapshotUnlessRenderPoint } from "../../utils/contextAttachments/promptSnapshot.js";
 import { resolveSubagentEffort, findForkTokenReminders } from "./subagentSpawn.js";
 import {
@@ -198,13 +211,6 @@ import {
 import { resolveAgentTools, runAsyncAgentLifecycle } from "./agentToolUtils.js";
 import { memoryModeForSession } from "../../services/accountMemory/memoryContext.js";
 import { hasSendMessageTool } from "../SendMessageTool/constants.js";
-import {
-  isGlimmeringFinchGateOn,
-  isSillyShoreGateOn,
-  tagUntrustedArtifactContent,
-  messageHasUntrustedBlock,
-  messagesContainUntrustedContent,
-} from "../../utils/messages/untrustedArtifactContent.js";
 import {
   unreadableToolsUsed,
   summaryCompanionMessage,
@@ -245,7 +251,7 @@ import { isCoordinatorMode } from "../../coordinator/coordinatorMode.js";
 import { getPendingHandbackReport, forgetHandback } from "./handbackReport.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0m7em5b4.js:13597-13731 placement
+//@ chunk-yz2nt7xx.js:13815-13949 placement
 function resumeReadError(error) {
   if (error instanceof ResumeAgentStateError) return error;
   let isTransient =
@@ -254,7 +260,7 @@ function resumeReadError(error) {
   let message = isFsInaccessible(error) ? unreadableStateMessage(error, isTransient) : errorMessage(error);
   return isTransient ? new AgentResumeTransientError(message) : new ResumeAgentStateError(message);
 }
-//@ chunk-0m7em5b4.js:13731-13841 placement
+//@ chunk-yz2nt7xx.js:13949-14059 placement
 function isResumeDenied(result) {
   return (
     typeof result === "object" &&
@@ -263,16 +269,16 @@ function isResumeDenied(result) {
     typeof result.deniedByPlugin === "string"
   );
 }
-//@ chunk-0m7em5b4.js:13841-13936 placement
+//@ chunk-yz2nt7xx.js:14059-14146 placement
 var RESUMEDINLINE = "resumedInline";
-var RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT = "resumedInlinePriorForeignArtifactContent";
+var RESUMEDINLINEPRIORCARRIEDMARKERS = "resumedInlinePriorCarriedMarkers";
 var RESUMEDINLINESALVAGE = "resumedInlineSalvage";
-//@ chunk-0m7em5b4.js:13936-13958 placement
+//@ chunk-yz2nt7xx.js:14146-14168 placement
 /**
  * 用于承载代理覆盖的表（带类型标记，便于区分）。
  */
 class agentOverridesMap extends Map {}
-//@ chunk-0m7em5b4.js:13958-14299 placement
+//@ chunk-yz2nt7xx.js:14168-14509 placement
 /**
  * 代理恢复相关文案与不安全字符正则。
  */
@@ -281,37 +287,37 @@ var BACKGROUND_AGENTS_UNAVAILABLE =
 var AGENT_RESUME_BACKGROUND_REFUSED_TEXT =
   "This agent cannot be resumed in the background in this session. Start a new agent instead.";
 var UNSAFE_AGENT_TEXT_REGEX = /[<>\p{Cc}]|(?![\u200c\u200d])\p{Cf}/u;
-//@ chunk-0m7em5b4.js:14299-14359 placement
+//@ chunk-yz2nt7xx.js:14509-14569 placement
 function isMainConversationsOwnCall(toolUseContext) {
   return toolUseContext.agentId === undefined && toolUseContext.innerCall !== true;
 }
-//@ chunk-0m7em5b4.js:14359-14422 placement
+//@ chunk-yz2nt7xx.js:14569-14632 placement
 function isResumedInlineRunError(error) {
   return error instanceof Error && RESUMEDINLINE in error && error[RESUMEDINLINE] === true;
 }
-//@ chunk-0m7em5b4.js:14422-14525 placement
+//@ chunk-yz2nt7xx.js:14632-14735 placement
 function getResumeSalvage(error, agentId) {
   let salvageMap =
     error instanceof Error && RESUMEDINLINESALVAGE in error ? error[RESUMEDINLINESALVAGE] : undefined;
   return salvageMap instanceof agentOverridesMap ? salvageMap.get(agentId) : undefined;
 }
-//@ chunk-0m7em5b4.js:14525-14568 placement
+//@ chunk-yz2nt7xx.js:14735-14778 placement
 function resumedInlineRunHandback(error, agentId) {
   return getResumeSalvage(error, agentId)?.handback;
 }
-//@ chunk-0m7em5b4.js:14568-14614 placement
+//@ chunk-yz2nt7xx.js:14778-14824 placement
 function resumedInlineRunReviewTools(error, agentId) {
   return getResumeSalvage(error, agentId)?.reviewTools;
 }
-//@ chunk-0m7em5b4.js:14614-14681 placement
-function resumedInlineRunHadPriorForeignContent(error) {
-  return !(
-    error instanceof Error &&
-    RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT in error &&
-    error[RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT] === false
-  );
+//@ chunk-yz2nt7xx.js:14824-14944 placement
+function resumedInlineRunPriorCarriedMarkers(error) {
+  let resumed =
+    error instanceof Error && RESUMEDINLINEPRIORCARRIEDMARKERS in error
+      ? error[RESUMEDINLINEPRIORCARRIEDMARKERS]
+      : undefined;
+  return Array.isArray(resumed) ? STREAM_PREFIXES.filter((id) => resumed.includes(id)) : STREAM_PREFIXES;
 }
-//@ chunk-0m7em5b4.js:14681-14832 placement
+//@ chunk-yz2nt7xx.js:14944-15095 placement
 class ResumeAgentStateError extends Error {
   transcriptMissing;
   constructor(message, options) {
@@ -320,11 +326,11 @@ class ResumeAgentStateError extends Error {
     this.transcriptMissing = options?.transcriptMissing === true;
   }
 }
-//@ chunk-0m7em5b4.js:14832-14861 placement
+//@ chunk-yz2nt7xx.js:15095-15124 placement
 var GIT_WORKTREE_CREATE = "git_worktree_create";
-//@ chunk-0m7em5b4.js:14861-14944 placement
+//@ chunk-yz2nt7xx.js:15124-15207 placement
 let AgentResumeTransientError; // deferred: uses ResumeAgentStateError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:14861", () => {
+deferInit("chunk-yz2nt7xx.js:15124", () => {
   AgentResumeTransientError = class AgentResumeTransientError extends ResumeAgentStateError {
     constructor(message) {
       super(message);
@@ -332,9 +338,9 @@ deferInit("chunk-0m7em5b4.js:14861", () => {
     }
   };
 });
-//@ chunk-0m7em5b4.js:14944-15036 placement
+//@ chunk-yz2nt7xx.js:15207-15299 placement
 let AgentResumePermanentlyRefusedError; // deferred: uses ResumeAgentStateError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:14944", () => {
+deferInit("chunk-yz2nt7xx.js:15207", () => {
   AgentResumePermanentlyRefusedError = class AgentResumePermanentlyRefusedError extends (
     ResumeAgentStateError
   ) {
@@ -344,9 +350,9 @@ deferInit("chunk-0m7em5b4.js:14944", () => {
     }
   };
 });
-//@ chunk-0m7em5b4.js:15036-15117 placement
+//@ chunk-yz2nt7xx.js:15299-15380 placement
 let AgentStoppedByUserError; // deferred: uses ResumeAgentStateError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:15036", () => {
+deferInit("chunk-yz2nt7xx.js:15299", () => {
   AgentStoppedByUserError = class AgentStoppedByUserError extends ResumeAgentStateError {
     constructor(message) {
       super(message);
@@ -354,9 +360,9 @@ deferInit("chunk-0m7em5b4.js:15036", () => {
     }
   };
 });
-//@ chunk-0m7em5b4.js:15117-15201 placement
+//@ chunk-yz2nt7xx.js:15380-15464 placement
 let AgentResumeInProgressError; // deferred: uses ResumeAgentStateError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:15117", () => {
+deferInit("chunk-yz2nt7xx.js:15380", () => {
   AgentResumeInProgressError = class AgentResumeInProgressError extends ResumeAgentStateError {
     constructor(message) {
       super(message);
@@ -364,9 +370,9 @@ deferInit("chunk-0m7em5b4.js:15117", () => {
     }
   };
 });
-//@ chunk-0m7em5b4.js:15201-15283 placement
+//@ chunk-yz2nt7xx.js:15464-15546 placement
 let AgentStillStoppingError; // deferred: uses ResumeAgentStateError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:15201", () => {
+deferInit("chunk-yz2nt7xx.js:15464", () => {
   AgentStillStoppingError = class AgentStillStoppingError extends ResumeAgentStateError {
     constructor(message) {
       super(message);
@@ -374,18 +380,24 @@ deferInit("chunk-0m7em5b4.js:15201", () => {
     }
   };
 });
-//@ chunk-0m7em5b4.js:15283-15326 placement
+//@ chunk-yz2nt7xx.js:15546-15626 layout
+function hasObserverReport(messageQueue, id) {
+  return messageQueue
+    .getCommandQueueSnapshot()
+    .some((args) => isPollEventForAgent(args, id) && isEvalSettleWakePollEvent(args));
+}
+//@ chunk-yz2nt7xx.js:15626-15669 placement
 function resumeAgentBackground(options) {
   return resumeAgentExclusive(options, "notification");
 }
-//@ chunk-0m7em5b4.js:15326-15364 placement (2.1.88 match: INLINE_MARKETPLACE, 1)
+//@ chunk-yz2nt7xx.js:15669-15707 placement (2.1.88 match: INLINE_MARKETPLACE, 1)
 /**
  * 是否为 inline 市场插件 ID（--plugin-dir 加载）。
  */
 function resumeAgentInline(options) {
   return resumeAgentExclusive(options, "inline");
 }
-//@ chunk-0m7em5b4.js:15364-15546 placement
+//@ chunk-yz2nt7xx.js:15707-15889 placement
 function safeWorktreePath(worktreePath, fs = NodeFsOperations) {
   return typeof worktreePath === "string" &&
     worktreePath !== "" &&
@@ -401,15 +413,20 @@ function safeWorktreePath(worktreePath, fs = NodeFsOperations) {
     ? worktreePath
     : undefined;
 }
-//@ chunk-0m7em5b4.js:15546-15583 placement
+//@ chunk-yz2nt7xx.js:15889-15957 placement
 function resumeAgentForReply(options) {
+  allPeerOrigins([
+    {
+      origin: options.promptOrigin,
+    },
+  ]);
   return resumeAgentExclusive(options, "reply");
 }
-//@ chunk-0m7em5b4.js:15583-15619 placement
+//@ chunk-yz2nt7xx.js:15957-15993 placement
 function resumeAgentAtItsCall(options) {
   return resumeAgentExclusive(options, "call");
 }
-//@ chunk-0m7em5b4.js:15619-15847 placement
+//@ chunk-yz2nt7xx.js:15993-16221 placement
 /**
  * 恢复后台代理的入口：同一 agentId 同时只能有一次恢复（resumesInFlight），再调用实际恢复流程。
  */
@@ -432,13 +449,13 @@ async function resumeAgentExclusive(options, deliverKind) {
     releaseInFlight();
   }
 }
-//@ chunk-0m7em5b4.js:15847-43509 placement
+//@ chunk-yz2nt7xx.js:16221-44802 placement
 /**
  * 恢复一个已停止/后台代理：校验停止状态与保存的会话记录、修补被关停打断的回合、处理插件钩子拒绝，再继续运行或只取结果。
  */
 async function resumeAgent(
   {
-    agentId,
+    agentId: agentId_2,
     prompt,
     promptOrigin,
     promptToolsUsed,
@@ -464,30 +481,33 @@ async function resumeAgent(
   secondArg,
 ) {
   let now = Date.now();
-  let alreadySettled = false;
+  let alreadySettled = codeModeAccepted() && resultsOnly === true && continueInterruptedTurn !== true;
+  if (alreadySettled && !hasObserverReport(toolUseContext.messageQueue, identityAgentId2(agentId_2)))
+    throw new ResumeAgentStateError(`Agent ${agentId_2} has no queued results to wake for.`);
   let appState = toolUseContext.getAppState();
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   let { taskRegistry } = toolUseContext;
   let mode = toolPermissionContext.mode;
-  let agentId_2 = toolUseContext.agentId;
-  if (agentId_2 !== undefined && isAgentStopPending(agentId_2))
+  let agentId_3 = toolUseContext.agentId;
+  if (agentId_3 !== undefined && isAgentStopPending(agentId_3))
     throw new AgentStillStoppingError(
       "This agent has been stopped and its stop is still completing; it cannot resume other agents.",
     );
   if (
-    isAgentStopPending(agentId) ||
-    (!isTaskLoopSettled(agentId) && isTerminalTaskStatus(taskRegistry.get(agentId)?.status ?? "running"))
+    isAgentStopPending(agentId_2) ||
+    (!isTaskLoopSettled(agentId_2) && isTerminalTaskStatus(taskRegistry.get(agentId_2)?.status ?? "running"))
   )
     throw new AgentStillStoppingError(
-      `Agent ${agentId} is still stopping \u2014 its previous run was stopped but has not exited. Re-run ${TASKSTOP} on it or wait for it to exit before resuming.`,
+      `Agent ${agentId_2} is still stopping \u2014 its previous run was stopped but has not exited. Re-run ${TASKSTOP} on it or wait for it to exit before resuming.`,
     );
-  let taskEntry = taskRegistry.get(agentId);
+  let taskEntry = taskRegistry.get(agentId_2);
   let stopCountBefore = 0;
   let revivedAt = Date.now();
   if (isLocalAgent(taskEntry)) {
     let didMarkResuming = false;
-    taskRegistry.update(agentId, (task) => {
+    taskRegistry.update(agentId_2, (task) => {
       if (task.status === "running" || task.resuming) return task;
+      if (codeModeAccepted() && task.finalizing === true && task.finalizingPass !== undefined) return task;
       didMarkResuming = true;
       stopCountBefore = task.userStopCount ?? 0;
       return {
@@ -496,10 +516,10 @@ async function resumeAgent(
       };
     });
     if (!didMarkResuming)
-      throw new AgentResumeInProgressError(`Agent ${agentId} is already running or being resumed`);
+      throw new AgentResumeInProgressError(`Agent ${agentId_2} is already running or being resumed`);
   }
   let clearResuming = () => {
-    taskRegistry.update(agentId, (task) =>
+    taskRegistry.update(agentId_2, (task) =>
       task.resuming
         ? {
             ...task,
@@ -513,23 +533,23 @@ async function resumeAgent(
     clearResuming();
     if (finishedEarly)
       updateAgentMetadata(
-        identityAgentId2(agentId),
+        identityAgentId2(agentId_2),
         {
           finished: true,
         },
         toolUseContext.storageV5,
       ).catch(logError);
-    pruneSettledChildWork(agentId, taskRegistry);
-    releaseIfFinished(agentId, taskRegistry);
+    pruneSettledChildWork(agentId_2, taskRegistry);
+    releaseIfFinished(agentId_2, taskRegistry);
   };
   let overBoundError = () => {
     logFeatureBad("subagent_launch", "subagent_resume_transcript_over_bound");
     settle();
     return new AgentResumePermanentlyRefusedError(
-      `Agent ${agentId}'s earlier transcript is too large to load, or has a row with a malformed timestamp. Sending the message again will not help. Start a new agent if the work is still needed.`,
+      `Agent ${agentId_2}'s earlier transcript is too large to load, or has a row with a malformed timestamp. Sending the message again will not help. Start a new agent if the work is still needed.`,
     );
   };
-  if (isAgentTranscriptOverBound(agentId)) throw overBoundError();
+  if (isAgentTranscriptOverBound(agentId_2)) throw overBoundError();
   let errnoFields = (err) => {
     let errno = sanitizeErrnoTokenForTelemetry(getErrnoCode(err) ?? storageCauseErrnoCode(err));
     return (
@@ -550,7 +570,11 @@ async function resumeAgent(
       ? {
           found: false,
         }
-      : await hasAgentStopSibling(identityAgentId2(agentId), "stoppedByUser", toolUseContext.storageV5).then(
+      : await hasAgentStopSibling(
+          identityAgentId2(agentId_2),
+          "stoppedByUser",
+          toolUseContext.storageV5,
+        ).then(
           (found) => ({
             found,
           }),
@@ -561,14 +585,18 @@ async function resumeAgent(
         );
   let absentTolerance =
     userInitiated || promptOrigin?.kind === "observer-activity" ? undefined : isPathAbsent;
-  let agentMetadata = readAgentMetadata(identityAgentId2(agentId), toolUseContext.storageV5, absentTolerance);
+  let agentMetadata = readAgentMetadata(
+    identityAgentId2(agentId_2),
+    toolUseContext.storageV5,
+    absentTolerance,
+  );
   let readTranscript = async () => {
     await withTimeout(
       flushSessionStorage(),
       SETTLE_AGENT_BACKGROUND_MS,
       "agent resume: transcript flush wait",
     ).catch(() => {});
-    return getAgentTranscript(identityAgentId2(agentId), toolUseContext.storageV5, {
+    return getAgentTranscript(identityAgentId2(agentId_2), toolUseContext.storageV5, {
       signal: toolUseContext.abortController.signal,
     });
   };
@@ -582,7 +610,7 @@ async function resumeAgent(
     agentMetadata.then((meta) =>
       meta === null && !isDiskless() && canFetchAgentTranscriptsOnDemand()
         ? transcriptPromise.then(() =>
-            readAgentMetadata(identityAgentId2(agentId), toolUseContext.storageV5, absentTolerance),
+            readAgentMetadata(identityAgentId2(agentId_2), toolUseContext.storageV5, absentTolerance),
           )
         : meta,
     ),
@@ -591,12 +619,12 @@ async function resumeAgent(
       settle();
       throw error;
     }
-    if (isAgentTranscriptOverBound(agentId)) throw overBoundError();
+    if (isAgentTranscriptOverBound(agentId_2)) throw overBoundError();
     if (error instanceof AgentTranscriptFetchError && error.outcome === "body_encoded") {
       logFeatureBad("subagent_launch", "subagent_resume_transcript_body_encoded");
       settle();
       throw new AgentResumeTransientError(
-        `Agent ${agentId}'s earlier transcript arrived in an encoding that was not asked for, so it was not read. Send the message again, or start a new agent if that fails too.`,
+        `Agent ${agentId_2}'s earlier transcript arrived in an encoding that was not asked for, so it was not read. Send the message again, or start a new agent if that fails too.`,
       );
     }
     logFeatureBad("subagent_launch", "subagent_resume_setup_read_failed", errnoFields(error));
@@ -612,19 +640,19 @@ async function resumeAgent(
     prompt_origin_kind: fromEnumOpt(promptOrigin?.kind),
     has_task_record: isLocalAgent(taskEntry),
     continue_interrupted_turn: continueInterruptedTurn === true,
-    resumer_is_subagent: agentId_2 !== undefined,
+    resumer_is_subagent: agentId_3 !== undefined,
     storage_v5: toolUseContext.storageV5 !== undefined,
   });
   let wakeSafe =
     deliverKind === "notification" &&
     backgroundLaunchRule !== undefined &&
-    admitsWakeSafe(backgroundLaunchRule, agentId);
+    admitsWakeSafe(backgroundLaunchRule, agentId_2);
   let notWakeSafe = deliverKind === "notification" && backgroundLaunchRule !== undefined && !wakeSafe;
   if (metadata === null && isDiskless()) {
     logFeatureBad("subagent_launch", "subagent_resume_sidecar_missing_diskless");
     settle();
     throw new AgentResumePermanentlyRefusedError(
-      `This session has no saved settings for agent ${agentId}: it never ran here, or they did not survive a restart of the server that runs the session. Start a new agent if the work is still needed.`,
+      `This session has no saved settings for agent ${agentId_2}: it never ran here, or they did not survive a restart of the server that runs the session. Start a new agent if the work is still needed.`,
     );
   }
   let agentIdArg = parseAgentIdArg(metadata?.cwd);
@@ -666,7 +694,7 @@ async function resumeAgent(
     if (!userInitiated) {
       settle();
       throw new AgentStoppedByUserError(
-        `Agent ${agentId} was stopped by the user and won't be resumed. Treat its work as cancelled; only launch a new agent if the user explicitly asks.`,
+        `Agent ${agentId_2} was stopped by the user and won't be resumed. Treat its work as cancelled; only launch a new agent if the user explicitly asks.`,
       );
     }
   }
@@ -674,10 +702,13 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "subagent_resume_no_rule_diskless");
     settle();
     throw new AgentResumePermanentlyRefusedError(
-      `Background agents are switched off in this session, and it no longer tracks agent ${agentId}, so the agent cannot be resumed. Start a new agent if the work is still needed.`,
+      `Background agents are switched off in this session, and it no longer tracks agent ${agentId_2}, so the agent cannot be resumed. Start a new agent if the work is still needed.`,
     );
   }
-  let forkedSkillScoping = await readForkedSkillScoping(identityAgentId2(agentId), toolUseContext.storageV5);
+  let forkedSkillScoping = await readForkedSkillScoping(
+    identityAgentId2(agentId_2),
+    toolUseContext.storageV5,
+  );
   let scopingErrorClass =
     "transientRead" in forkedSkillScoping && forkedSkillScoping.transientRead
       ? AgentResumeTransientError
@@ -686,14 +717,14 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "forked_skill_resume_scoping_invalid");
     settle();
     throw new scopingErrorClass(
-      `Agent ${agentId} has a malformed forked-skill scoping record; refusing to resume it without the skill's permission scoping.`,
+      `Agent ${agentId_2} has a malformed forked-skill scoping record; refusing to resume it without the skill's permission scoping.`,
     );
   }
   if (forkedSkillScoping.status === "diskless") {
     logFeatureBad("subagent_launch", "forked_skill_resume_scoping_diskless");
     settle();
     throw new ResumeAgentStateError(
-      `Agent ${agentId} cannot be checked for a forked-skill scoping record: this diskless session has no storage backend or key for it. Refusing to resume it.`,
+      `Agent ${agentId_2} cannot be checked for a forked-skill scoping record: this diskless session has no storage backend or key for it. Refusing to resume it.`,
     );
   }
   if (
@@ -704,14 +735,14 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "forked_skill_resume_scoping_missing");
     settle();
     throw new scopingErrorClass(
-      `Agent ${agentId} ran as a forked skill but its scoping record is missing; refusing to resume it without the skill's permission scoping.`,
+      `Agent ${agentId_2} ran as a forked skill but its scoping record is missing; refusing to resume it without the skill's permission scoping.`,
     );
   }
   if (forkedSkillScoping.status === "absent-but-marked") {
     logFeatureBad("subagent_launch", "forked_skill_resume_scoping_missing_cold");
     settle();
     throw new scopingErrorClass(
-      `Agent ${agentId} carries a forked-skill provenance marker but its scoping record is missing; refusing to resume it without the skill's permission scoping.`,
+      `Agent ${agentId_2} carries a forked-skill provenance marker but its scoping record is missing; refusing to resume it without the skill's permission scoping.`,
     );
   }
   if (forkedSkillScoping.status === "valid" && isLocalAgent(taskEntry)) {
@@ -719,18 +750,18 @@ async function resumeAgent(
       logFeatureBad("subagent_launch", "forked_skill_resume_scoping_mismatch");
       settle();
       throw new ResumeAgentStateError(
-        `Agent ${agentId} has a forked-skill scoping record that does not match its task record; refusing to resume it.`,
+        `Agent ${agentId_2} has a forked-skill scoping record that does not match its task record; refusing to resume it.`,
       );
     }
   } else if (forkedSkillScoping.status === "valid") {
     if (
-      (await readForkedSkillName(identityAgentId2(agentId), toolUseContext.storageV5)) !==
+      (await readForkedSkillName(identityAgentId2(agentId_2), toolUseContext.storageV5)) !==
       forkedSkillScoping.scoping.skillName
     ) {
       logFeatureBad("subagent_launch", "forked_skill_resume_cold_witness_mismatch");
       settle();
       throw new ResumeAgentStateError(
-        `Agent ${agentId} has a forked-skill scoping record with no matching provenance-marker witness; refusing to resume it on a cold path without a corroborated fork identity.`,
+        `Agent ${agentId_2} has a forked-skill scoping record with no matching provenance-marker witness; refusing to resume it on a cold path without a corroborated fork identity.`,
       );
     }
   }
@@ -754,14 +785,14 @@ async function resumeAgent(
       logFeatureBad("subagent_launch", "forked_skill_resume_skill_unread");
       settle();
       throw new AgentResumeTransientError(
-        `Agent ${agentId} ran as forked skill ${scoping.skillName}, whose file has not been read since a reload kept it; refusing to resume it before it is. Try again shortly.`,
+        `Agent ${agentId_2} ran as forked skill ${scoping.skillName}, whose file has not been read since a reload kept it; refusing to resume it before it is. Try again shortly.`,
       );
     }
     if (found?.type !== "prompt" || (found.context !== "fork" && found.getContext === undefined)) {
       logFeatureBad("subagent_launch", "forked_skill_resume_skill_unresolved");
       settle();
       throw new ResumeAgentStateError(
-        `Agent ${agentId} ran as forked skill ${scoping.skillName}, which no longer resolves to a fork-capable skill; refusing to resume it without its permission scoping.`,
+        `Agent ${agentId_2} ran as forked skill ${scoping.skillName}, which no longer resolves to a fork-capable skill; refusing to resume it without its permission scoping.`,
       );
     }
     let hiddenReason = describeSkillHiddenBehindPlugin(found);
@@ -769,7 +800,7 @@ async function resumeAgent(
       logFeatureBad("subagent_launch", "forked_skill_resume_hidden_behind_plugin");
       settle();
       throw new ResumeAgentStateError(
-        `Agent ${agentId} ran as forked skill ${scoping.skillName}; refusing to resume it: ${hiddenReason}`,
+        `Agent ${agentId_2} ran as forked skill ${scoping.skillName}; refusing to resume it: ${hiddenReason}`,
       );
     }
     let syncRefusal = await checkCommandSyncedAccess(found).catch((error) => {
@@ -785,8 +816,8 @@ async function resumeAgent(
       settle();
       throw new ResumeAgentStateError(
         isHostCatalog
-          ? `Agent ${agentId} ran as forked skill ${scoping.skillName}, which your organization's Skills setting currently turns off; refusing to resume it.`
-          : `Agent ${agentId} ran as forked skill ${scoping.skillName}, an account-synced skill that is currently disabled (skills sync turned off or denied by policy); refusing to resume it.`,
+          ? `Agent ${agentId_2} ran as forked skill ${scoping.skillName}, which your organization's Skills setting currently turns off; refusing to resume it.`
+          : `Agent ${agentId_2} ran as forked skill ${scoping.skillName}, an account-synced skill that is currently disabled (skills sync turned off or denied by policy); refusing to resume it.`,
       );
     }
     if (isDefined(syncRefusal)) {
@@ -796,7 +827,7 @@ async function resumeAgent(
       });
       settle();
       throw new ResumeAgentStateError(
-        `Agent ${agentId} ran as forked skill ${scoping.skillName}; refusing to resume it: ${refusalTextFor(syncRefusal)}.`,
+        `Agent ${agentId_2} ran as forked skill ${scoping.skillName}; refusing to resume it: ${refusalTextFor(syncRefusal)}.`,
       );
     }
     allowRules = splitRuleList(
@@ -837,7 +868,7 @@ async function resumeAgent(
             ]),
       ]
     : [];
-  let spawnProvenanceMarks = resolveSpawnProvenanceMarks(agentId, metadata, toolUseContext);
+  let spawnProvenanceMarks = resolveSpawnProvenanceMarks(agentId_2, metadata, toolUseContext);
   let baseContext = {
     ...toolUseContext,
     ...spawnProvenanceMarks.marks,
@@ -855,7 +886,7 @@ async function resumeAgent(
             : toolUseContext.permissionLayers,
       }
     : baseContext;
-  let currentTask = taskRegistry.get(agentId);
+  let currentTask = taskRegistry.get(agentId_2);
   let prevResult = isLocalAgent(currentTask) ? currentTask.result : undefined;
   let modelsUsed =
     prevResult?.modelsUsed ?? (prevResult?.resolvedModel ? [prevResult.resolvedModel] : undefined);
@@ -865,10 +896,10 @@ async function resumeAgent(
   let startTime = isLocalAgent(currentTask) ? currentTask.startTime : now;
   let transcriptData = transcript;
   if (!transcriptData) {
-    let messages = taskRegistry.getTranscript(agentId)?.messages;
+    let messages = taskRegistry.getTranscript(agentId_2)?.messages;
     if (messages && messages.length > 0) {
       logForDebugging(
-        `[resumeAgentBackground ${agentId}] disk transcript missing; using ${messages.length} in-memory messages mirrored during the run`,
+        `[resumeAgentBackground ${agentId_2}] disk transcript missing; using ${messages.length} in-memory messages mirrored during the run`,
       );
       transcriptData = {
         messages: messages.map((message) =>
@@ -893,14 +924,14 @@ async function resumeAgent(
   if (!transcriptData) {
     logFeatureBad("subagent_launch", "subagent_resume_transcript_missing");
     settle();
-    throw new ResumeAgentStateError(`No transcript found for agent ID: ${agentId}`, {
+    throw new ResumeAgentStateError(`No transcript found for agent ID: ${agentId_2}`, {
       transcriptMissing: true,
     });
   }
   if (isDiskless() && !isLocalAgent(taskEntry) && !notWakeSafe) {
     let { signal } = toolUseContext.abortController;
     let workerEvents =
-      (await readAgentWorkerEvents(agentId, signal).catch((error) => {
+      (await readAgentWorkerEvents(agentId_2, signal).catch((error) => {
         if (!signal.aborted) logError(error);
         return null;
       })) ?? null;
@@ -908,8 +939,8 @@ async function resumeAgent(
       settle();
       throw new AbortError();
     }
-    if (isAgentTranscriptOverBound(agentId)) throw overBoundError();
-    if (workerEvents === null || (workerEvents.length === 0 && !hasWrittenAgentTranscript(agentId))) {
+    if (isAgentTranscriptOverBound(agentId_2)) throw overBoundError();
+    if (workerEvents === null || (workerEvents.length === 0 && !hasWrittenAgentTranscript(agentId_2))) {
       logFeatureBad(
         "subagent_launch",
         workerEvents === null
@@ -918,7 +949,7 @@ async function resumeAgent(
       );
       settle();
       throw new AgentResumeTransientError(
-        `Agent ${agentId}'s stored transcript could not be read, or is empty. Send the message again, or start a new agent if that fails too.`,
+        `Agent ${agentId_2}'s stored transcript could not be read, or is empty. Send the message again, or start a new agent if that fails too.`,
       );
     }
     if (
@@ -930,7 +961,7 @@ async function resumeAgent(
       logFeatureBad("subagent_launch", "subagent_resume_transcript_gap");
       settle();
       throw new AgentResumePermanentlyRefusedError(
-        `Part of agent ${agentId}'s transcript is missing, so it cannot go on from where it stopped. Start a new agent if the work is still needed.`,
+        `Part of agent ${agentId_2}'s transcript is missing, so it cannot go on from where it stopped. Start a new agent if the work is still needed.`,
       );
     }
   }
@@ -944,7 +975,7 @@ async function resumeAgent(
     ? resumeInPlace
       ? transcriptData.messages
       : [...trimIncompleteTail(transcriptData.messages)]
-    : transcriptData.messages.map((message) => repairShutdownInterruptedTurn(message, agentId));
+    : transcriptData.messages.map((message) => repairShutdownInterruptedTurn(message, agentId_2));
   let stableMessages = filterThinkingOnlyUntilStable(
     normalizeMessagesForResume(
       regroupSplitResponsesOnResume(
@@ -961,7 +992,7 @@ async function resumeAgent(
     stableMessages.length > 0 &&
     !endsWithUserPrompt(stableMessages)
   ) {
-    taskRegistry.update(agentId, (task) => ({
+    taskRegistry.update(agentId_2, (task) => ({
       ...task,
       resuming: false,
       notified: true,
@@ -969,9 +1000,9 @@ async function resumeAgent(
     }));
     logFeatureOk("subagent_launch");
     return {
-      agentId,
+      agentId: agentId_2,
       description: descriptionText ?? "(resumed)",
-      outputFile: isDiskless() ? undefined : getTaskOutputPath(agentId),
+      outputFile: isDiskless() ? undefined : getTaskOutputPath(agentId_2),
       alreadyCompleted: true,
     };
   }
@@ -986,7 +1017,7 @@ async function resumeAgent(
       (currentTask.agentType === WEB_FETCH_BUILTIN_AGENT.agentType ||
         currentTask.webFetchSavedFiles !== undefined)) ||
       isWebFetchLaunch === true ||
-      findAgentLaunchResults(toolUseContext.messages, agentId))
+      findAgentLaunchResults(toolUseContext.messages, agentId_2))
       ? WEB_FETCH_BUILTIN_AGENT.agentType
       : metadata?.agentType;
   let listedAgent =
@@ -1003,8 +1034,8 @@ async function resumeAgent(
   let isWebFetch = agentType === WEB_FETCH_BUILTIN_AGENT.agentType && metadata?.isBuiltIn !== false;
   if (
     (isDiskless() ||
-      isStoppedAgent(agentId) ||
-      (metadata === null && keepsAgentMetadataInStream() && !isResumableAgent(agentId))) &&
+      isStoppedAgent(agentId_2) ||
+      (metadata === null && keepsAgentMetadataInStream() && !isResumableAgent(agentId_2))) &&
     (!listedAgent ||
       (metadata?.isBuiltIn !== undefined && metadata.isBuiltIn !== isBuiltInAgent(listedAgent))) &&
     metadata?.isFork !== true &&
@@ -1015,12 +1046,12 @@ async function resumeAgent(
     if (metadata === null) {
       logFeatureBad(
         "subagent_launch",
-        isStoppedAgent(agentId)
+        isStoppedAgent(agentId_2)
           ? "subagent_resume_sidecar_missing_held"
           : "subagent_resume_sidecar_missing_gate_on",
       );
       throw new AgentResumePermanentlyRefusedError(
-        `This session no longer has the saved settings of agent ${agentId}, so it cannot be resumed as the type it ran as. Start a new agent if the work is still needed.`,
+        `This session no longer has the saved settings of agent ${agentId_2}, so it cannot be resumed as the type it ran as. Start a new agent if the work is still needed.`,
       );
     }
     logFeatureBad(
@@ -1028,7 +1059,7 @@ async function resumeAgent(
       isDiskless() ? "subagent_resume_type_unmatched_diskless" : "subagent_resume_type_unmatched_held",
     );
     throw new AgentResumeTransientError(
-      `The agent type that agent ${agentId} ran as is not on this session's list right now, or its name now belongs to a different type. Try once more; if that fails too, start a new agent.`,
+      `The agent type that agent ${agentId_2} ran as is not on this session's list right now, or its name now belongs to a different type. Try once more; if that fails too, start a new agent.`,
     );
   }
   let chosenAgent = isWebFetch
@@ -1073,14 +1104,14 @@ async function resumeAgent(
     (wakeSafe ||
       (deliverKind === "reply" &&
         toolUseContext.toolUseId !== undefined &&
-        metadata?.requestShape !== "foreground")) &&
+        (metadata?.requestShape !== "foreground" || agentId(backgroundLaunchRule, agentId_2)))) &&
     !isBackgroundAgentLaunchDisabled() &&
     !isWebFetchAgent(agentDefinition)
       ? runBackgroundLaunchRules(backgroundLaunchRule, {
           toolUseId: toolUseContext.toolUseId,
           callerAgentId: toolUseContext.agentId,
           signal: toolUseContext.abortController.signal,
-          resumedAgentId: agentId,
+          resumedAgentId: agentId_2,
         })
       : undefined;
   let runsForeground =
@@ -1101,14 +1132,14 @@ async function resumeAgent(
   let startResult =
     promptOrigin?.kind === "observer-activity"
       ? undefined
-      : await runResumeStartHooks(agentId, {
+      : await runResumeStartHooks(agentId_2, {
           tool_use_id: toolUseContext.toolUseId ?? "",
           parentModel: getMainLoopModel(toolUseContext),
-          parentAgentId: agentId_2,
+          parentAgentId: agentId_3,
           signal: toolUseContext.abortController.signal,
           origin: toolUseContext.hookOrigin,
           agent: agentDefinition,
-          prompt: continueInterruptedTurn ? "" : prompt,
+          prompt: continueInterruptedTurn || alreadySettled ? "" : prompt,
           description,
           model:
             !isFork && !metadata?.isObserver && typeof metadata?.model === "string"
@@ -1129,7 +1160,7 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "subagent_resume_denied_by_hook");
     clearResuming();
     return {
-      agentId,
+      agentId: agentId_2,
       description,
       deniedByPlugin: pluginDeclinedResumeMessage(startResult.deny),
     };
@@ -1159,7 +1190,7 @@ async function resumeAgent(
         );
       })();
     let telemetryCode = details?.telemetryCode ?? "git_worktree_resume_worktree_gone";
-    let worktreeLabel = metadata?.worktreePath ?? `agent ${agentId}`;
+    let worktreeLabel = metadata?.worktreePath ?? `agent ${agentId_2}`;
     if (rootStillValid) {
       logFeatureSad(GIT_WORKTREE_CREATE, telemetryCode);
       logForDebugging(
@@ -1200,7 +1231,7 @@ async function resumeAgent(
     : undefined;
   if (
     worktreeDir === undefined &&
-    !wasAgentCleanlyRemoved(agentId) &&
+    !wasAgentCleanlyRemoved(agentId_2) &&
     ((metadata !== null &&
       metadata.spawnedWithWorktree === true &&
       metadata.worktreeCleanlyRemoved !== true &&
@@ -1213,11 +1244,11 @@ async function resumeAgent(
           )
         )?.worktreeCleanlyRemoved === true
       )) ||
-      wasAgentSpawnedIsolated(agentId))
+      wasAgentSpawnedIsolated(agentId_2))
   )
     worktreeGoneNote("is not recorded for this isolated agent", {
       telemetryCode: "git_worktree_resume_binding_missing",
-      terminalOnUncovered: wasAgentSpawnedIsolated(agentId),
+      terminalOnUncovered: wasAgentSpawnedIsolated(agentId_2),
     });
   let usableWorktree = worktreeCheck;
   if (worktreeCheck) {
@@ -1226,7 +1257,11 @@ async function resumeAgent(
     let isolationCheck = await checkWorktreeIsolation(
       worktreeCheck,
       gitRootsForPath(originalCwd),
-      uniq([originalReal, STARTUP_CWD_REALPATH, ...gitRootsForPath(STARTUP_CWD_REALPATH)]),
+      normalizeCaseForComparison_2([
+        originalReal,
+        STARTUP_CWD_REALPATH,
+        ...gitRootsForPath(STARTUP_CWD_REALPATH),
+      ]),
       {
         requireWitnessForSelfOwningPins: true,
         declineSelfOwningPinUnderLiveRoot: true,
@@ -1324,12 +1359,17 @@ async function resumeAgent(
     }
   }
   let mainLoopModel = getMainLoopModel(toolUseContext);
-  let agentModel = getAgentModel(
-    getExploreAgentModel(agentWithEffort, mainLoopModel),
-    mainLoopModel,
-    metadata?.isObserver ? undefined : isFork ? "inherit" : metadata?.model,
-    mode,
-  );
+  let agent = getExploreAgentModel(agentWithEffort, mainLoopModel);
+  let requestedModel = metadata?.isObserver ? undefined : isFork ? "inherit" : metadata?.model;
+  let agentModel = getAgentModel(agent, mainLoopModel, requestedModel, mode);
+  let pickedEffortModel =
+    typeof metadata?.pickedEffortModel === "string" ? metadata.pickedEffortModel : undefined;
+  let effortModel =
+    isFork && pickedEffortModel === undefined
+      ? null
+      : resolveAgentModelDisplay(agent, requestedModel)
+        ? undefined
+        : pickedEffortModel;
   let systemPrompt = promptSnapshotUnlessRenderPoint(stableMessages, scopedContext.options)?.systemPrompt;
   let taskRunState =
     metadata?.isObserver || scoping !== undefined
@@ -1339,6 +1379,7 @@ async function resumeAgent(
           isFork,
           model: agentModel,
           effortState: scopedContext.getAppState(),
+          pickedEffortModel: effortModel ?? getPickedEffortModel(toolUseContext),
           inheritedLayers: scopedContext.permissionLayers,
           recordedBudgetText: isFork ? findForkTokenReminders(stableMessages) : systemPrompt,
         });
@@ -1351,7 +1392,7 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "observer_resume_sidecar_unconfirmed");
     settle();
     throw new ResumeAgentStateError(
-      `Observer sidecar for ${agentId} missing or did not confirm isObserver; refusing delivery`,
+      `Observer sidecar for ${agentId_2} missing or did not confirm isObserver; refusing delivery`,
     );
   }
   let observerMode = metadata?.isObserver ? (narrowerMode(workerPermissionMode, mode) ?? mode) : undefined;
@@ -1386,7 +1427,7 @@ async function resumeAgent(
   let unreadableTools = unreadableGateOn
     ? unreadableToolsUsed(promptToolsUsed ?? [], stableMessages)
     : undefined;
-  let unreadableMessages =
+  let extraTools =
     unreadableTools === undefined
       ? []
       : [markToolSummaryMessage(createUserMessage(summaryCompanionMessage(unreadableTools)))];
@@ -1396,7 +1437,7 @@ async function resumeAgent(
   let resumedPrompt = joinWithNewlineIfAny(prompt, unreadableLine);
   let noticeLengths = adjustLastOffset(promptNoticeLengths, unreadableLine);
   if (isSillyShoreGateOn())
-    getConversationToolsUsed().record(tagUntrustedArtifactContent(stableMessages, undefined, false));
+    getConversationToolsUsed().record(collectToolsUsedBeforeSummary(stableMessages, undefined, false));
   let origin = promptOrigin
     ? withJoinedNotices(
         noticeLengths,
@@ -1430,7 +1471,7 @@ async function resumeAgent(
       : defaultToolResultsStorage()
     : undefined;
   let deliveryContext = {
-    agentId,
+    agentId: agentId_2,
     deliveringLoop: toolUseContext.agentId,
   };
   let launchOptions =
@@ -1452,10 +1493,10 @@ async function resumeAgent(
   let fullOptions =
     metadata?.finished === true ||
     (isLocalAgent(taskEntry) && (taskEntry.status === "completed" || taskEntry.status === "failed"));
-  if (runOptions && userStopCount(taskRegistry.get(agentId)) === stopCountBefore)
+  if (runOptions && userStopCount(taskRegistry.get(agentId_2)) === stopCountBefore)
     try {
       await updateAgentMetadata(
-        identityAgentId2(agentId),
+        identityAgentId2(agentId_2),
         {
           revivedAt,
           ...(fullOptions && {
@@ -1467,12 +1508,12 @@ async function resumeAgent(
       finishedEarly = fullOptions;
     } catch (error) {
       if (isFsInaccessible(error) || isFsInaccessibleCode(storageCauseErrnoCode(error)))
-        logForDebugging(`failed to record the revival of ${agentId}: ${describeStorageError(error)}`, {
+        logForDebugging(`failed to record the revival of ${agentId_2}: ${describeStorageError(error)}`, {
           level: "warn",
         });
       else logError(error);
     }
-  if (!continueInterruptedTurn) markDirectDelivery_2(agentId, origin, "user");
+  if (!continueInterruptedTurn && !alreadySettled) markDirectDelivery_2(agentId_2, origin, "user");
   let runFinal;
   if (!continueInterruptedTurn && !launchOptions)
     try {
@@ -1490,41 +1531,50 @@ async function resumeAgent(
           runFinal === undefined ? "snapshot" : "live",
         );
   let copies = finalCapabilities?.copies ?? [];
-  let canUseToolNarrowing = getTaskRunState().canUseToolNarrowings.get(agentId);
-  let forkAgentPath = isFork
-    ? {
-        systemPrompt: effortNote,
-        parentSystemPrompt: true,
-      }
-    : metadata?.isObserver
+  let canUseToolNarrowing = getTaskRunState().canUseToolNarrowings.get(agentId_2);
+  let forkAgentPath = {
+    ...(isFork
       ? {
-          agentToolScope: agentWithEffort,
+          systemPrompt: effortNote,
+          parentSystemPrompt: true,
         }
-      : undefined;
+      : metadata?.isObserver
+        ? {
+            agentToolScope: agentWithEffort,
+          }
+        : undefined),
+    pickedEffortModel: effortModel,
+  };
   let launchedWithDefaultsOnly =
     metadata?.launchedWithDefaults === true && !isHookOrPluginSteered(baseContext);
   let launchModel =
     launchedWithDefaultsOnly || isFork || metadata?.isObserver || isHookOrPluginSteered(baseContext)
       ? undefined
       : metadata?.model;
+  let requestShape =
+    !metadata?.isObserver &&
+    (metadata?.requestShape === "foreground" || metadata?.requestShape === "background")
+      ? metadata.requestShape
+      : undefined;
   let { onToolPool, reviewTools } = createDeferredReviewTools(toolUseContext.options.tools);
   let runAgentArgs = {
     agentDefinition: agentWithEffort,
     promptMessages: continueInterruptedTurn
       ? stableMessages
-      : [...stableMessages, ...copies, ...unreadableMessages, origin],
-    turnPrompt: continueInterruptedTurn ? undefined : (getContentText(origin.message.content) ?? undefined),
+      : alreadySettled
+        ? [...stableMessages, ...copies]
+        : [...stableMessages, ...copies, ...extraTools, origin],
+    turnPrompt:
+      continueInterruptedTurn || alreadySettled
+        ? undefined
+        : (getContentText(origin.message.content) ?? undefined),
     waitingToolUse: resumeInPlace ? waitingToolUse : undefined,
     toolUseContext: scopedContext,
     canUseTool: canUseToolNarrowing ? canUseToolNarrowing(canUseTool) : canUseTool,
     handbackOptIn: !(isFork || metadata?.isObserver),
     handbackTool: ObserverReportTool,
     isAsync: true,
-    requestShape:
-      !metadata?.isObserver &&
-      (metadata?.requestShape === "foreground" || metadata?.requestShape === "background")
-        ? metadata.requestShape
-        : undefined,
+    requestShape,
     requestNonInteractive:
       !metadata?.isObserver && typeof metadata?.requestNonInteractive === "boolean"
         ? metadata.requestNonInteractive || getIsNonInteractiveSession()
@@ -1574,7 +1624,7 @@ async function resumeAgent(
     toolUseId,
     contentReplacementState,
   };
-  let liveTaskEntry = taskRegistry.get(agentId);
+  let liveTaskEntry = taskRegistry.get(agentId_2);
   if (
     isLocalAgent(liveTaskEntry) &&
     liveTaskEntry.stoppedByUser &&
@@ -1582,8 +1632,12 @@ async function resumeAgent(
   ) {
     settle();
     throw new AgentStoppedByUserError(
-      `Agent ${agentId} was stopped by the user and won't be resumed. Treat its work as cancelled; only launch a new agent if the user explicitly asks.`,
+      `Agent ${agentId_2} was stopped by the user and won't be resumed. Treat its work as cancelled; only launch a new agent if the user explicitly asks.`,
     );
+  }
+  if (alreadySettled && !hasObserverReport(toolUseContext.messageQueue, identityAgentId2(agentId_2))) {
+    settle();
+    throw new ResumeAgentStateError(`Agent ${agentId_2} has no queued results to wake for.`);
   }
   let backgroundConfirmResult = backgroundConfirm?.confirm(toolUseContext.abortController.signal);
   if (backgroundConfirmResult !== undefined) {
@@ -1596,11 +1650,11 @@ async function resumeAgent(
     logFeatureBad("subagent_launch", "subagent_resume_background_closed");
     throw new ResumeAgentStateError(BACKGROUND_AGENTS_UNAVAILABLE);
   }
-  for (let copy of copies) appendAgentTranscriptMessage(agentId, copy, taskRegistry);
-  if (!promptIsMeta && !continueInterruptedTurn) {
-    for (let message of unreadableMessages) appendAgentTranscriptMessage(agentId, message, taskRegistry);
+  for (let copy of copies) appendAgentTranscriptMessage(agentId_2, copy, taskRegistry);
+  if (!promptIsMeta && !continueInterruptedTurn && !alreadySettled) {
+    for (let message of extraTools) appendAgentTranscriptMessage(agentId_2, message, taskRegistry);
     appendAgentTranscriptMessage(
-      agentId,
+      agentId_2,
       isNonHumanInboundOrigin(promptOrigin)
         ? origin
         : createUserMessage({
@@ -1611,14 +1665,23 @@ async function resumeAgent(
     );
   }
   onDeliveryCommitted?.();
+  if (codeModeAccepted())
+    getTaskRunState().onSubagentResume?.(
+      stableMessages,
+      identityAgentId2(agentId_2),
+      toolUseContext.toolState,
+    );
   let resultOptions = {
     outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
-    agentId,
+    agentId: agentId_2,
     ownerAgentId: mainAgentId(),
     parentAgentId: metadata?.parentAgentId,
     spawnDepth,
     launchedWithDefaults: launchedWithDefaultsOnly,
     launchModel,
+    ...(requestShape === "foreground" && {
+      requestShape,
+    }),
     description,
     prompt,
     model: agentModel,
@@ -1644,7 +1707,7 @@ async function resumeAgent(
   let moveToBackground =
     finalResult !== undefined
       ? {
-          agentId,
+          agentId: agentId_2,
           abortController: finalResult.abortController,
           outputFile: finalResult.outputFile,
         }
@@ -1676,7 +1739,7 @@ async function resumeAgent(
   spawnProvenanceMarks.admit();
   secondArg();
   starting?.started({
-    agentId,
+    agentId: agentId_2,
     model: agentModel,
   });
   let taskId =
@@ -1693,16 +1756,16 @@ async function resumeAgent(
       seenIds.add(currentId);
       let taskEntry = taskRegistry.get(currentId);
       currentId = isLocalAgent(taskEntry) ? taskEntry.ownerAgentId : undefined;
-      if (currentId === agentId) {
+      if (currentId === agentId_2) {
         settledAlready = true;
         break;
       }
     }
   }
-  if (taskId !== undefined && taskId !== agentId && quietParked && !settledAlready) {
+  if (taskId !== undefined && taskId !== agentId_2 && quietParked && !settledAlready) {
     let previousOwnerId;
     let interactive = !getIsNonInteractiveSession();
-    taskRegistry.update(agentId, (task) => {
+    taskRegistry.update(agentId_2, (task) => {
       if (task.ownerAgentId !== taskId) previousOwnerId = task.ownerAgentId;
       else if (!interactive || task.handbackRecipient === taskId) return task;
       return {
@@ -1713,10 +1776,10 @@ async function resumeAgent(
         }),
       };
     });
-    if (interactive) addAgentKeepaliveReason(taskId, `agent:${agentId}`, taskRegistry);
-    if (previousOwnerId !== undefined) notifyAgentReparented(agentId, previousOwnerId, taskRegistry);
+    if (interactive) addAgentKeepaliveReason(taskId, `agent:${agentId_2}`, taskRegistry);
+    if (previousOwnerId !== undefined) notifyAgentReparented(agentId_2, previousOwnerId, taskRegistry);
   }
-  let endedTaskEntry = taskRegistry.get(agentId);
+  let endedTaskEntry = taskRegistry.get(agentId_2);
   let resumeResult =
     isLocalAgent(endedTaskEntry) &&
     isCurrentAgentId(toolUseContext.agentId, endedTaskEntry.ownerAgentId, taskRegistry);
@@ -1726,7 +1789,7 @@ async function resumeAgent(
       ? endedTaskEntry.ownerCanContinueAgents
       : undefined;
   if (resumeResult)
-    taskRegistry.update(agentId, (task) =>
+    taskRegistry.update(agentId_2, (task) =>
       task.ownerCanContinueAgents === output
         ? task
         : {
@@ -1735,14 +1798,14 @@ async function resumeAgent(
           },
     );
   if (runOptions) {
-    let entries = taskRegistry.get(agentId);
+    let entries = taskRegistry.get(agentId_2);
     toolUseContext.messageQueue.enqueuePendingNotification(
       buildUserResumedNotice({
-        agentId,
+        agentId: agentId_2,
         description,
         to: resolveNotificationRecipient({
           ownerAgentId: isLocalAgent(entries) ? entries.ownerAgentId : undefined,
-          keepaliveReason: `agent:${agentId}`,
+          keepaliveReason: `agent:${agentId_2}`,
           delivering: true,
           taskRegistry,
         }),
@@ -1752,18 +1815,20 @@ async function resumeAgent(
   if (launchOptionsWithTools) {
     let onMessage = (message) => {
       if (isFsInaccessible(message) || isFsInaccessibleCode(storageCauseErrnoCode(message)))
-        logForDebugging(`failed to clear stop marker for ${agentId}: ${describeStorageError(message)}`, {
+        logForDebugging(`failed to clear stop marker for ${agentId_2}: ${describeStorageError(message)}`, {
           level: "warn",
         });
       else logError(message);
     };
-    let userStopChanged = () => userStopCount(taskRegistry.get(agentId)) !== stopCountBefore;
+    let userStopChanged = () => userStopCount(taskRegistry.get(agentId_2)) !== stopCountBefore;
     if (!userStopChanged()) {
-      await clearAgentStopSibling(identityAgentId2(agentId), "stoppedByUser", toolUseContext.storageV5).catch(
-        onMessage,
-      );
+      await clearAgentStopSibling(
+        identityAgentId2(agentId_2),
+        "stoppedByUser",
+        toolUseContext.storageV5,
+      ).catch(onMessage);
       await updateAgentMetadata(
-        identityAgentId2(agentId),
+        identityAgentId2(agentId_2),
         {
           stoppedByUser: false,
         },
@@ -1771,7 +1836,7 @@ async function resumeAgent(
       ).catch(onMessage);
       if (userStopChanged())
         await landStoppedByUser(
-          identityAgentId2(agentId),
+          identityAgentId2(agentId_2),
           agentWithEffort.agentType,
           toolUseContext.storageV5,
         );
@@ -1779,7 +1844,7 @@ async function resumeAgent(
   }
   if (suppressOwnerNotification) markAgentNotified(moveToBackground.agentId, taskRegistry);
   await rearmObserverOnResume({
-    observedTaskId: agentId,
+    observedTaskId: agentId_2,
     observedDefinition: agentWithEffort,
     observedName: agentName ?? agentWithEffort.agentType,
     observedMeta: metadata
@@ -1791,9 +1856,9 @@ async function resumeAgent(
     toolUseContext,
     canUseTool,
   });
-  pruneSettledChildWork(agentId, taskRegistry);
+  pruneSettledChildWork(agentId_2, taskRegistry);
   if (agentName !== undefined && toolUseContext.getAppState().agentNameRegistry.get(agentName) === undefined)
-    toolUseContext.agentLifecycle.registerName(agentName, identityAgentId2(agentId));
+    toolUseContext.agentLifecycle.registerName(agentName, identityAgentId2(agentId_2));
   let resultPayload = {
     prompt,
     resolvedAgentModel: agentModel,
@@ -1808,15 +1873,23 @@ async function resumeAgent(
     pluginId: isPluginAgent(agentWithEffort) ? parsePluginIdentifier_2(agentWithEffort.plugin) : undefined,
     persistedToolResultFiles,
     spawnedSubagent: isLocalAgent(currentTask) ? currentTask.spawnedSubagent : undefined,
-    priorForeignArtifactContent:
-      (prevResult !== undefined && messageHasUntrustedBlock(prevResult)) ||
-      messagesContainUntrustedContent(transcriptData.messages),
+    priorCarriedMarkers: normalizeCaseForComparison_2([
+      ...(prevResult !== undefined ? messageHasUntrustedBlock(prevResult) : []),
+      ...streamPrefixesPresent(transcriptData.messages),
+      ...STREAM_PREFIXES.filter((marker) => prompt.includes(marker)),
+      ...((isLocalAgent(currentTask) && currentTask.priorCarriedMarkers) || []),
+    ]),
   };
+  if (resultPayload.priorCarriedMarkers.length > 0)
+    taskRegistry.update(agentId_2, (state) => ({
+      ...state,
+      priorCarriedMarkers: resultPayload.priorCarriedMarkers,
+    }));
   let cancellationFlags = {
-    agentId,
+    agentId: agentId_2,
     parentAgentId: toolUseContext.agentId,
     depth: spawnDepth,
-    ...(getTaskRunState().spawnedByMainThread.has(agentId) && {
+    ...(getTaskRunState().spawnedByMainThread.has(agentId_2) && {
       spawnedByMainThread: true,
     }),
     parentSessionId: getParentSessionId(),
@@ -1864,11 +1937,12 @@ async function resumeAgent(
         metadata: {
           ...resultPayload,
           agentContext: cancellationFlags,
+          pickedEffortModel: effortModel,
         },
         description,
         toolUseContext,
         taskRegistry,
-        agentIdForCleanup: agentId,
+        agentIdForCleanup: agentId_2,
         reviewTools,
         enableSummarization:
           getSdkAgentProgressSummariesEnabled() ||
@@ -1925,15 +1999,15 @@ async function resumeAgent(
         })
       )
         return {
-          agentId,
+          agentId: agentId_2,
           description,
           outputFile: finalResult.outputFile,
           movedRunEnded: runPromise.catch(logError),
         };
-      let task = taskRegistry.get(agentId);
+      let task = taskRegistry.get(agentId_2);
       let agentResult = isLocalAgent(task) ? task.result : undefined;
       return {
-        agentId,
+        agentId: agentId_2,
         description,
         outputFile: moveToBackground.outputFile,
         inlineHandback: {
@@ -1950,17 +2024,20 @@ async function resumeAgent(
         Object.defineProperty(error, RESUMEDINLINE, {
           value: true,
         });
-        Object.defineProperty(error, RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT, {
-          value:
-            resultPayload.priorForeignArtifactContent === true ||
-            (RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT in error &&
-              error[RESUMEDINLINEPRIORFOREIGNARTIFACTCONTENT] === true),
+        let carried =
+          RESUMEDINLINEPRIORCARRIEDMARKERS in error ? error[RESUMEDINLINEPRIORCARRIEDMARKERS] : undefined;
+        let value = Array.isArray(carried) ? carried : [];
+        Object.defineProperty(error, RESUMEDINLINEPRIORCARRIEDMARKERS, {
+          value: STREAM_PREFIXES.filter(
+            (marker) =>
+              resultPayload.priorCarriedMarkers?.includes(marker) === true || value.includes(marker),
+          ),
           configurable: true,
         });
         let salvage = RESUMEDINLINESALVAGE in error ? error[RESUMEDINLINESALVAGE] : undefined;
         let salvageMap = salvage instanceof agentOverridesMap ? salvage : new agentOverridesMap();
-        salvageMap.set(agentId, {
-          handback: getPendingHandbackReport(taskRegistry.get(agentId), agentId),
+        salvageMap.set(agentId_2, {
+          handback: getPendingHandbackReport(taskRegistry.get(agentId_2), agentId_2),
           reviewTools: reviewTools(),
         });
         Object.defineProperty(error, RESUMEDINLINESALVAGE, {
@@ -1972,23 +2049,24 @@ async function resumeAgent(
       finalResult?.cancelAutoBackground?.();
       finalResult?.detachParentAbortRelay();
       if (!moveState.moved) {
-        getTaskRunState().agentBackgroundSignalResolvers.delete(agentId);
-        if (!hasChildAgents(agentId, taskRegistry) && !hasPendingChildWork(agentId, taskRegistry))
-          forgetHandback(agentId);
-        taskRegistry.update(agentId, (task) => ({
+        getTaskRunState().agentBackgroundSignalResolvers.delete(agentId_2);
+        if (!hasChildAgents(agentId_2, taskRegistry) && !hasPendingChildWork(agentId_2, taskRegistry))
+          forgetHandback(agentId_2);
+        taskRegistry.update(agentId_2, (task) => ({
           ...task,
           notified: true,
           evictAfter: agentEvictAt(task),
         }));
       }
     }
+  runPromise.finally(() => waitingToolUse?.settled()).catch(logError);
   return {
-    agentId,
+    agentId: agentId_2,
     description,
     outputFile: moveToBackground.outputFile,
   };
 }
-//@ chunk-0m7em5b4.js:43509-43904 placement
+//@ chunk-yz2nt7xx.js:44802-45197 placement
 function repairShutdownInterruptedTurn(message, agentId) {
   if (
     message.type !== "user" ||
@@ -2029,7 +2107,7 @@ function repairShutdownInterruptedTurn(message, agentId) {
     },
   };
 }
-//@ chunk-0m7em5b4.js:43904-44013 placement
+//@ chunk-yz2nt7xx.js:45197-45306 placement
 function withJoinedNotices(noticeLengths, joinedNoticeOwn, joinedNoticeRunIds, userMessage) {
   return noticeLengths === undefined
     ? userMessage
@@ -2041,21 +2119,21 @@ function withJoinedNotices(noticeLengths, joinedNoticeOwn, joinedNoticeRunIds, u
       };
 }
 export {
+  ResumeAgentStateError,
+  resumeAgentBackground,
+  isResumeDenied,
+  resumeAgentAtItsCall,
+  isResumedInlineRunError,
   AgentResumeInProgressError,
   AgentResumeTransientError,
-  AgentStillStoppingError,
   AgentStoppedByUserError,
-  ResumeAgentStateError,
-  isResumeDenied,
+  AgentResumePermanentlyRefusedError,
+  AgentStillStoppingError,
+  resumeAgentForReply,
   isMainConversationsOwnCall,
-  isResumedInlineRunError,
-  resumedInlineRunHadPriorForeignContent,
+  resumeAgentInline,
+  resumedInlineRunPriorCarriedMarkers,
   resumedInlineRunHandback,
   resumedInlineRunReviewTools,
-  resumeAgentBackground,
-  AgentResumePermanentlyRefusedError,
-  resumeAgentForReply,
-  resumeAgentInline,
-  resumeAgentAtItsCall,
   resumeReadError,
 };

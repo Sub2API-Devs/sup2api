@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话设备绑定相关的小型开关判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-96k5yyba.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t1gv8tz1.js (2)
  * attribution: placement 2
  */
 import { isCrossSessionMessagingEnabled } from "../utils/crossSessionMessagingGate.js";
@@ -16,7 +16,7 @@ import { isClaudeAISubscriber, getOauthAccountInfo, hasProfileScope } from "../u
 import { env } from "../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
-//@ chunk-96k5yyba.js:3522-3726 placement
+//@ chunk-t1gv8tz1.js:3830-4034 placement
 function isHarborKiteCloudEnabled() {
   if (!isCrossSessionMessagingEnabled()) return false;
   if (
@@ -31,7 +31,7 @@ function isHarborKiteCloudEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_cloud", false)
   );
 }
-//@ chunk-96k5yyba.js:3726-3826 placement
+//@ chunk-t1gv8tz1.js:4034-4134 placement
 function hasOrganizationContext() {
   return (
     Boolean(env.CLAUDE_CODE_ORGANIZATION_UUID) ||

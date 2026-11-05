@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP elicitation 对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7dan15rc.js (2), chunk-sahc08q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xpf9k10b.js (2), chunk-xqahk224.js (2)
  * attribution: placement 4
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
@@ -15,12 +15,12 @@ import { hasCacheKillSwitch, setCacheKillSwitch } from "./mcpAccountKey.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7dan15rc.js:374-584 placement
+//@ chunk-xpf9k10b.js:374-584 placement
 /**
  * MCP URL elicitation 对话框类型定义（默认取消）。
  */
 var MCP_URL_ELICITATION_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7dan15rc.js:374", () => {
+deferInit("chunk-xpf9k10b.js:374", () => {
   MCP_URL_ELICITATION_DIALOG = withHideWhile({
     kind: "mcp_url_elicitation",
     payload: DoctorLazy(() =>
@@ -35,7 +35,7 @@ deferInit("chunk-7dan15rc.js:374", () => {
     },
   });
 });
-//@ chunk-7dan15rc.js:584-710 placement
+//@ chunk-xpf9k10b.js:584-710 placement
 /**
  * 预置发现缓存开关的读取函数（首次调用时读取并缓存特性值）。
  */
@@ -52,13 +52,13 @@ function primeDiscoveryCacheFlag() {
     return killSwitchValue;
   });
 }
-//@ chunk-sahc08q8.js:300-726 placement
+//@ chunk-xqahk224.js:300-727 placement
 /**
  * MCP elicitation 对话框与"等待 elicitation"对话框的类型定义。
  */
 var MCP_ELICITATION_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MCP_ELICITATION_WAITING_DIALOG;
-deferInit("chunk-sahc08q8.js:300", () => {
+deferInit("chunk-xqahk224.js:300", () => {
   MCP_ELICITATION_DIALOG = withHideWhile({
     kind: "mcp_elicitation",
     payload: DoctorLazy(() =>
@@ -85,7 +85,7 @@ deferInit("chunk-sahc08q8.js:300", () => {
     default: "cancelled",
   });
 });
-//@ chunk-sahc08q8.js:726-775 placement
+//@ chunk-xqahk224.js:727-777 placement
 /**
  * 判断对话框类型是否属于 MCP elicitation。
  */
@@ -96,9 +96,9 @@ function isElicitationDialogKind(blockingDialogKind) {
   );
 }
 export {
-  MCP_ELICITATION_DIALOG,
-  isElicitationDialogKind,
-  MCP_ELICITATION_WAITING_DIALOG,
-  MCP_URL_ELICITATION_DIALOG,
   primeDiscoveryCacheFlag,
+  MCP_URL_ELICITATION_DIALOG,
+  MCP_ELICITATION_DIALOG,
+  MCP_ELICITATION_WAITING_DIALOG,
+  isElicitationDialogKind,
 };

@@ -3,9 +3,9 @@
  *
  * Artifact 评论监视器（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w4p2kd11.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8kbxsj3k.js (45)
  * attribution: placement 45
  */
 import { basename } from "path";
@@ -21,7 +21,7 @@ import {
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getLiveState, hasLiveState } from "../liveReplica/liveReplica.js";
 import { env } from "../../utils/env.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -51,7 +51,7 @@ import {
 import { import_reject, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w4p2kd11.js:876-1711 placement
+//@ chunk-8kbxsj3k.js:910-1745 placement
 /**
  * 持久评论监听登记表的常量与 schema：事件类型（published/comment）、行数与孤立触发器上限、时间格式、行/停止/孤立触发器信封。
  */
@@ -61,7 +61,7 @@ var MAX_ORPHAN_TRIGGERS;
 var ISO_MS_RE;
 var REGISTRY_UNPUBLISHED;
 var DURABLE_REGISTRY_SCHEMAS;
-deferInit("chunk-w4p2kd11.js:876", () => {
+deferInit("chunk-8kbxsj3k.js:910", () => {
   MONITOR_EVENT_KINDS = {
     published: "published",
     comment: "comment",
@@ -97,7 +97,7 @@ deferInit("chunk-w4p2kd11.js:876", () => {
       events: array(stringSchema())
         .max(16)
         .transform((values) =>
-          uniq(values).flatMap((value) => {
+          normalizeCaseForComparison_2(values).flatMap((value) => {
             let parsed = eventKindSchema.safeParse(value);
             return parsed.success ? [parsed.data] : [];
           }),
@@ -126,21 +126,21 @@ deferInit("chunk-w4p2kd11.js:876", () => {
     };
   });
 });
-//@ chunk-w4p2kd11.js:1711-1755 placement
+//@ chunk-8kbxsj3k.js:1745-1789 placement
 /**
  * 导出函数 `setRegistrySink`：参数 e。
  */
 function setRegistrySink(registrySink) {
   getLiveState().durable.registrySink = registrySink;
 }
-//@ chunk-w4p2kd11.js:1755-1804 placement
+//@ chunk-8kbxsj3k.js:1789-1838 placement
 /**
  * 导出函数 `resetRegistryPublished`。
  */
 function resetRegistryPublished() {
   getLiveState().durable.registryPublished = REGISTRY_UNPUBLISHED;
 }
-//@ chunk-w4p2kd11.js:1804-2880 placement
+//@ chunk-8kbxsj3k.js:1838-2914 placement
 /**
  * 远程环境下把持久评论监听登记表（各 slug 的触发器、起始时间、事件、未释放触发器；已停止的 slug；孤立触发器）序列化后经 registrySink 上报；与上次相同则跳过。
  */
@@ -183,7 +183,10 @@ function publishDurableWatchRegistry() {
     stopped[slug] = {
       at_ms: stop.writtenAtMs,
     };
-  let sliced_2 = uniq([...durable.orphanTriggers, ...orphanCandidates]).slice(0, MAX_ORPHAN_TRIGGERS);
+  let sliced_2 = normalizeCaseForComparison_2([...durable.orphanTriggers, ...orphanCandidates]).slice(
+    0,
+    MAX_ORPHAN_TRIGGERS,
+  );
   let stoppedRows =
     durable.rows.size + restoredOnly.length === 0 && sliced.length === 0 && sliced_2.length === 0
       ? null
@@ -202,7 +205,7 @@ function publishDurableWatchRegistry() {
     artifact_durable_watches: stoppedRows,
   });
 }
-//@ chunk-w4p2kd11.js:2880-3805 placement
+//@ chunk-8kbxsj3k.js:2914-3839 placement
 function readCommentMonitorRegistry(artifactDurableWatches) {
   if (artifactDurableWatches === undefined || artifactDurableWatches === null) return null;
   let schemas = DURABLE_REGISTRY_SCHEMAS();
@@ -257,13 +260,13 @@ function readCommentMonitorRegistry(artifactDurableWatches) {
     orphans,
   };
 }
-//@ chunk-w4p2kd11.js:3805-3871 placement
+//@ chunk-8kbxsj3k.js:3839-3905 placement
 function boundedRegistryRows(rows) {
   return Object.keys(rows)
     .slice(0, MAX_REGISTRY_ROWS)
     .map((key) => [key, rows[key]]);
 }
-//@ chunk-w4p2kd11.js:3871-4015 placement
+//@ chunk-8kbxsj3k.js:3905-4049 placement
 /**
  * 判断某个 slug 是否有接上自动回复的活跃监听（或正在建立）。
  */
@@ -275,7 +278,7 @@ function isAutoReactWired(slug) {
     live.inFlightWiredIntent.has(slug)
   );
 }
-//@ chunk-w4p2kd11.js:4015-4746 placement
+//@ chunk-8kbxsj3k.js:4049-4780 placement
 /**
  * 会话记录里评论监听意图（artifact-comment-monitor）的标记与 schema：标题/持有者字段上限、单条记录（armed/stopped、写入时间、标题、后台持有者进程身份）与整行信封。
  */
@@ -284,7 +287,7 @@ var MAX_TITLE_LENGTH;
 var MAX_PARKED_INTENTS;
 var MAX_INTENT_ENTRIES;
 var MONITOR_INTENT_SCHEMAS;
-deferInit("chunk-w4p2kd11.js:4015", () => {
+deferInit("chunk-8kbxsj3k.js:4049", () => {
   UNWRITTEN_MARKER = "\x00unwritten";
   MAX_TITLE_LENGTH = 256;
   MAX_PARKED_INTENTS = 32;
@@ -321,7 +324,7 @@ deferInit("chunk-w4p2kd11.js:4015", () => {
     };
   });
 });
-//@ chunk-w4p2kd11.js:4746-5124 placement
+//@ chunk-8kbxsj3k.js:4780-5158 placement
 /**
  * 从评论监控记录中取出持有者身份字段（pid、任务、启动时间、pid 命名空间）；字段不完整时返回空对象。
  */
@@ -345,7 +348,7 @@ function pickHolderIdentity(holder) {
     holderPidSpace: holder.holderPidSpace,
   };
 }
-//@ chunk-w4p2kd11.js:5124-5403 placement
+//@ chunk-8kbxsj3k.js:5158-5438 placement
 /**
  * 当前进程是后台任务时，返回写进监听意图的持有者身份（pid、任务短 id、进程启动标识、pid 命名空间）；身份还没就绪时先异步计算并返回空。
  */
@@ -366,14 +369,14 @@ function getOwnHolderIdentity() {
     holderPidSpace: ownPidSpace().slice(0, 160),
   });
 }
-//@ chunk-w4p2kd11.js:5403-5430 placement
+//@ chunk-8kbxsj3k.js:5438-5465 placement
 /**
  * 导出函数 `ownProcStart`：返回 ownProcStartAsync()。
  */
 function ownProcStart() {
   return ownProcStartAsync();
 }
-//@ chunk-w4p2kd11.js:5430-6570 placement
+//@ chunk-8kbxsj3k.js:5465-6605 placement
 function readCommentMonitorIntent(intent, options) {
   let schemas = MONITOR_INTENT_SCHEMAS();
   let envelope = schemas.envelope.safeParse(intent);
@@ -444,7 +447,7 @@ function readCommentMonitorIntent(intent, options) {
   if (armed > 0) logFeatureSad("artifact_live_subscribe", "comment_monitor_intent_record_invalid");
   return bySlug;
 }
-//@ chunk-w4p2kd11.js:6570-6738 placement
+//@ chunk-8kbxsj3k.js:6605-6773 placement
 /**
  * 取出所有监听意图（待恢复的 + 当前的），清空待恢复表，可排除某个 slug；同时刷新记录。
  */
@@ -457,28 +460,28 @@ function takeRestoredMonitorIntents(options) {
   persistCommentMonitorIntent();
   return restored;
 }
-//@ chunk-w4p2kd11.js:6738-6796 placement
+//@ chunk-8kbxsj3k.js:6773-6831 placement
 /**
  * 导出函数 `tornStopIntents`：返回 getLiveState().commentMonitorIntent.tornStops。
  */
 function tornStopIntents() {
   return getLiveState().commentMonitorIntent.tornStops;
 }
-//@ chunk-w4p2kd11.js:6796-6854 placement
+//@ chunk-8kbxsj3k.js:6831-6889 placement
 /**
  * 导出函数 `monitorStorage`：返回 getLiveState().commentMonitorIntent.storageV5。
  */
 function monitorStorage() {
   return getLiveState().commentMonitorIntent.storageV5;
 }
-//@ chunk-w4p2kd11.js:6854-6885 placement
+//@ chunk-8kbxsj3k.js:6889-6920 placement
 /**
  * 导出函数 `runCommentMonitorWithIntent`：参数 e。
  */
 function runCommentMonitorWithIntent(options) {
   runCommentMonitor(options?.storageV5);
 }
-//@ chunk-w4p2kd11.js:6885-7015 placement
+//@ chunk-8kbxsj3k.js:6920-7050 placement
 /**
  * 预置评论监控意图（早期种子与待领取会话），然后启动评论监控。
  */
@@ -489,7 +492,7 @@ function seedCommentMonitorIntent(artifactCommentMonitor, intent) {
   commentMonitorIntent.adoptPendingFor = getSessionId();
   runCommentMonitor(intent?.storageV5);
 }
-//@ chunk-w4p2kd11.js:7015-7402 placement
+//@ chunk-8kbxsj3k.js:7050-7437 placement
 /**
  * 记录某 slug 的评论监听为 armed（保留/更新标题，后台任务记持有者身份），标记需要随会话迁移，并写入会话记录；持有者身份尚未就绪时稍后补写。
  */
@@ -523,7 +526,7 @@ function armCommentMonitorIntent(slug, options) {
   persistCommentMonitorIntent();
   if (holder !== undefined && holder.holderPid === undefined) backfillHolderIdentity(slug, now);
 }
-//@ chunk-w4p2kd11.js:7402-7702 placement
+//@ chunk-8kbxsj3k.js:7437-7737 placement
 /**
  * 异步取得本进程启动时间后，为后台任务持有的已布防评论监控记录补写持有者身份（记录未变时才写）。
  */
@@ -553,7 +556,7 @@ function backfillHolderIdentity(intent, options) {
       return;
     });
 }
-//@ chunk-w4p2kd11.js:7702-8061 placement
+//@ chunk-8kbxsj3k.js:7737-8096 placement
 /**
  * 把某 slug 的监听意图标为 stopped 并立即持久写入；其他会话（parked）里仍 armed 的同一 slug 也改为 stopped 并写回。
  */
@@ -586,14 +589,14 @@ function stopCommentMonitorIntent(slug, options) {
     }
   }
 }
-//@ chunk-w4p2kd11.js:8061-8123 placement
+//@ chunk-8kbxsj3k.js:8096-8158 placement
 /**
  * 导出函数 `forgetSlugIntent`：参数 e, t，返回 runCommentMonitor(t?.storageV5).bySlug.get(e)?.state。
  */
 function forgetSlugIntent(slug, intentSlug) {
   return runCommentMonitor(intentSlug?.storageV5).bySlug.get(slug)?.state;
 }
-//@ chunk-w4p2kd11.js:8123-8695 placement
+//@ chunk-8kbxsj3k.js:8158-8730 placement
 /**
  * 忘掉一个或多个 slug 的监听意图（记录遗忘时间，表有上限），并从其他会话的迁移行里移除这些 armed 项；有变化时持久写入。
  */
@@ -631,7 +634,7 @@ function forgetCommentMonitorIntents(slugs, slugList) {
     }
   }
 }
-//@ chunk-w4p2kd11.js:8695-9000 placement
+//@ chunk-8kbxsj3k.js:8730-9035 placement
 /**
  * 按远端给出的停止时间把对应 slug 的意图标为 stopped（被重新监听清除过的跳过），并确认停止锁存。
  */
@@ -653,7 +656,7 @@ function applyRemoteStops(stops, options) {
   }
   persistCommentMonitorIntent();
 }
-//@ chunk-w4p2kd11.js:9000-9472 placement
+//@ chunk-8kbxsj3k.js:9035-9507 placement
 /**
  * 把所有 armed 且未让出的监听意图标为 stopped，并同样处理其他会话迁移行里的 armed 项，持久写入。
  */
@@ -696,7 +699,7 @@ function stopAllCommentMonitorIntents(options) {
       });
   }
 }
-//@ chunk-w4p2kd11.js:9472-9637 placement
+//@ chunk-8kbxsj3k.js:9507-9672 placement
 function isSessionChangeCarrying(change) {
   switch (change) {
     case "clear":
@@ -711,7 +714,7 @@ function isSessionChangeCarrying(change) {
       return false;
   }
 }
-//@ chunk-w4p2kd11.js:9637-9926 placement
+//@ chunk-8kbxsj3k.js:9672-9961 placement
 /**
  * 切换会话时记下离开的会话：会随会话迁移的 armed slug、该会话的记录是否尚未写出、是否在接管窗口内。
  */
@@ -735,7 +738,7 @@ function rememberLeavingSession() {
     inWindow: commentMonitorIntent.adoptPendingFor === sid,
   };
 }
-//@ chunk-w4p2kd11.js:9926-10262 placement
+//@ chunk-8kbxsj3k.js:9961-10297 placement
 /**
  * 清理随会话迁移而已"带走"的停放监控条目：删除其中已布防的行并写回，整组都没有布防条目时移出停放表。
  */
@@ -756,7 +759,7 @@ function dropTravelledFromParked() {
       commentMonitorIntent.parked.delete(path);
   }
 }
-//@ chunk-w4p2kd11.js:10262-10388 placement
+//@ chunk-8kbxsj3k.js:10297-10423 placement
 function isDeferredSessionFile(file, sessionId) {
   if (currentSessionFileIsFor(sessionId)) {
     if (file.adoptPendingFor === sessionId) file.adoptPendingFor = null;
@@ -764,7 +767,7 @@ function isDeferredSessionFile(file, sessionId) {
   }
   return file.adoptPendingFor === sessionId || getMaterializedSessionFile() !== null;
 }
-//@ chunk-w4p2kd11.js:10388-10781 placement
+//@ chunk-8kbxsj3k.js:10423-10816 placement
 /**
  * 排队写一条其他会话的监听意图行：先等会话存储刷盘，确认仍是最新、未在退出时盖章，且之前写失败过或是强制写，才写入对应会话记录。
  */
@@ -792,12 +795,12 @@ function queueParkedIntentWrite(sessionId, transcriptPath, line, seq, failureSeq
   });
   commentMonitorIntent.writeChain = commentMonitorIntent.writeChain.catch(() => {});
 }
-//@ chunk-w4p2kd11.js:10781-10793 placement
+//@ chunk-8kbxsj3k.js:10816-10828 placement
 /**
  * 评论监控意图里“已遗忘 slug”表的上限 1024。
  */
 var MAX_FORGOTTEN_SLUGS = 1024;
-//@ chunk-w4p2kd11.js:10793-11078 placement
+//@ chunk-8kbxsj3k.js:10828-11113 placement
 function filterParkedLine(sessionId, line) {
   let commentMonitorIntent = getLiveState().commentMonitorIntent;
   let entry = commentMonitorIntent.parked.get(sessionId);
@@ -816,7 +819,7 @@ function filterParkedLine(sessionId, line) {
     }).artifacts;
   return line;
 }
-//@ chunk-w4p2kd11.js:11078-11992 placement
+//@ chunk-8kbxsj3k.js:11113-12027 placement
 function writeCommentMonitorIntent(sessionId, path, line, seq) {
   if (path === null) return;
   let commentMonitorIntent = getLiveState().commentMonitorIntent;
@@ -873,14 +876,14 @@ function writeCommentMonitorIntent(sessionId, path, line, seq) {
       logFeatureSad("artifact_live_subscribe", "comment_monitor_intent_write_failed");
     });
 }
-//@ chunk-w4p2kd11.js:11992-12032 placement
+//@ chunk-8kbxsj3k.js:12027-12067 placement
 /**
  * 导出函数 `markSlugTravelling`：参数 e, t。
  */
 function markSlugTravelling(slug, opts) {
   markTravelling(runCommentMonitor(opts?.storageV5), slug);
 }
-//@ chunk-w4p2kd11.js:12032-12176 placement
+//@ chunk-8kbxsj3k.js:12067-12211 placement
 function markTravelling(entry, slug) {
   let changed = false;
   for (let [entrySlug, record] of entry.parked) {
@@ -890,7 +893,7 @@ function markTravelling(entry, slug) {
   }
   if (changed) dropTravelledFromParked();
 }
-//@ chunk-w4p2kd11.js:12176-12451 placement
+//@ chunk-8kbxsj3k.js:12211-12486 placement
 function flushOwedIntentLines(commentMonitorIntent) {
   if (commentMonitorIntent.owedLines.size === 0) return;
   let owed = [...commentMonitorIntent.owedLines.entries()];
@@ -908,7 +911,7 @@ function flushOwedIntentLines(commentMonitorIntent) {
   }
   if (changed) persistCommentMonitorIntent();
 }
-//@ chunk-w4p2kd11.js:12451-15513 placement
+//@ chunk-8kbxsj3k.js:12486-15548 placement
 /**
  * Artifact 评论监视器主循环（armed/stopped/clear 状态）
  */
@@ -1125,7 +1128,7 @@ function runCommentMonitor(storageV5) {
   if (anyArmed || carriedUnwired) persistCommentMonitorIntent();
   return commentMonitorIntent;
 }
-//@ chunk-w4p2kd11.js:15513-15722 placement
+//@ chunk-8kbxsj3k.js:15548-15757 placement
 function newerIntent(entry, candidate) {
   if (entry === undefined) return candidate;
   if (
@@ -1138,7 +1141,7 @@ function newerIntent(entry, candidate) {
     return candidate;
   return entry;
 }
-//@ chunk-w4p2kd11.js:15722-15902 placement
+//@ chunk-8kbxsj3k.js:15757-15937 placement
 function selectIntentsToWrite(state) {
   return Object.fromEntries(
     [...state.bySlug.entries()]
@@ -1149,7 +1152,7 @@ function selectIntentsToWrite(state) {
       .slice(0, MAX_INTENT_ENTRIES),
   );
 }
-//@ chunk-w4p2kd11.js:15902-16128 placement
+//@ chunk-8kbxsj3k.js:15937-16163 placement
 function buildExitIntentEntry() {
   let { commentMonitorIntent, wakes } = getLiveState();
   if (
@@ -1165,7 +1168,7 @@ function buildExitIntentEntry() {
     artifacts: selectIntentsToWrite(commentMonitorIntent),
   };
 }
-//@ chunk-w4p2kd11.js:16128-16829 placement
+//@ chunk-8kbxsj3k.js:16163-16864 placement
 /**
  * 进程退出时收集要补写进会话记录的监听意图行：当前会话（必要时）、欠写与待写的其他会话行；每行附带一个把无持有者的 armed 改为 stopped 的"尾部撕裂"备份行。
  */
@@ -1222,7 +1225,7 @@ function collectExitIntentEntries() {
   });
   return currentEntry === undefined ? mapped : [...mapped, currentEntry];
 }
-//@ chunk-w4p2kd11.js:16829-17012 placement
+//@ chunk-8kbxsj3k.js:16864-17047 placement
 function toTornTailEntry(entry) {
   let writtenAtMs = Date.now();
   return {
@@ -1240,7 +1243,7 @@ function toTornTailEntry(entry) {
     ),
   };
 }
-//@ chunk-w4p2kd11.js:17012-17286 placement
+//@ chunk-8kbxsj3k.js:17047-17321 placement
 function dropTravellingFromEntry(intent, entry) {
   let sessionId = getSessionId();
   let travelling = new Set();
@@ -1257,14 +1260,14 @@ function dropTravellingFromEntry(intent, entry) {
     ),
   };
 }
-//@ chunk-w4p2kd11.js:17286-17383 placement
+//@ chunk-8kbxsj3k.js:17321-17418 placement
 function isIntentChanged(intent, intent_2) {
   return (
     intent.lastWritten !== intentFingerprint(intent_2) &&
     !(intent.lastWritten === null && Object.keys(intent_2).length === 0)
   );
 }
-//@ chunk-w4p2kd11.js:17383-17605 placement
+//@ chunk-8kbxsj3k.js:17418-17640 placement
 function intentFingerprint(intent) {
   return jsonStringify(
     Object.entries(intent)
@@ -1282,7 +1285,7 @@ function intentFingerprint(intent) {
       .sort(),
   );
 }
-//@ chunk-w4p2kd11.js:17605-18212 placement
+//@ chunk-8kbxsj3k.js:17640-18247 placement
 /**
  * 把当前会话的评论监听意图写入会话记录：与上次指纹相同且没有新写失败则跳过；会话文件尚未落盘时延后（durableNow 时直接追加）；写失败时打点并允许重写。
  */
@@ -1323,23 +1326,23 @@ function persistCommentMonitorIntent(options) {
   });
 }
 export {
-  readCommentMonitorIntent,
-  takeRestoredMonitorIntents,
-  tornStopIntents,
-  applyRemoteStops,
-  seedCommentMonitorIntent,
-  isAutoReactWired,
+  runCommentMonitorWithIntent,
   stopCommentMonitorIntent,
   forgetCommentMonitorIntents,
-  runCommentMonitorWithIntent,
-  forgetSlugIntent,
-  stopAllCommentMonitorIntents,
   readCommentMonitorRegistry,
   publishDurableWatchRegistry,
+  applyRemoteStops,
   setRegistrySink,
   resetRegistryPublished,
+  stopAllCommentMonitorIntents,
+  seedCommentMonitorIntent,
+  takeRestoredMonitorIntents,
+  tornStopIntents,
+  isAutoReactWired,
+  readCommentMonitorIntent,
   monitorStorage,
   ownProcStart,
   markSlugTravelling,
   armCommentMonitorIntent,
+  forgetSlugIntent,
 };

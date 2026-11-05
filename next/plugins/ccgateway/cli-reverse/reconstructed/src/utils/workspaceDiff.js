@@ -3,13 +3,13 @@
  *
  * 工作区差异（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1r5nz6dk.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hma1b5gv.js (11)
+ * attribution: placement 11
  */
 import { realpath, opendir, lstat } from "fs/promises";
-import { join, sep } from "path";
+import { join, sep, relative } from "path";
 import { getRepoTopLevel, getDiffCwd, isDiffCwdInRepoCached, standardRepoLayout } from "./gitDiff.js";
 import { HostScoped } from "./hostScoped.js";
 import {
@@ -32,8 +32,11 @@ import { isSadFsErrno, errorMessage, getErrnoCode } from "./errors.js";
 import { logError } from "./log.js";
 import { linkChainIsUnsafeToFollow } from "./git/gitFilesystem.js";
 import { readGitConfigTexts } from "./git/gitDirResolution.js";
+import { withPathAliases, getClaudeConfigDirs } from "./permissions/claudeStatePaths.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
+import { isSubpathOf } from "./pathPrefix.js";
 
-//@ chunk-1r5nz6dk.js:806-961 placement
+//@ chunk-hma1b5gv.js:2008-2164 placement
 /**
  * 确定工作区差异的根：单仓库时为仓库顶层，否则计算多仓库工作区差异。
  */
@@ -53,9 +56,9 @@ async function getWorkspaceDiffRoot() {
         nested: true,
       };
 }
-//@ chunk-1r5nz6dk.js:961-986 placement
+//@ chunk-hma1b5gv.js:2164-2190 placement
 var multiRepoDiffRoots = new HostScoped(() => new Set());
-//@ chunk-1r5nz6dk.js:986-1102 placement
+//@ chunk-hma1b5gv.js:2190-2307 placement
 function shouldUseMultiRepoDiff() {
   if (runnerDeclaredNoRepo()) return true;
   if (!hasRunnerDeclaredNestedRepoDiff()) return false;
@@ -64,9 +67,9 @@ function shouldUseMultiRepoDiff() {
   if (!diffRoots.has(diffCwd) && !isDiffCwdInRepoCached()) diffRoots.add(diffCwd);
   return diffRoots.has(diffCwd);
 }
-//@ chunk-1r5nz6dk.js:1102-1112 placement
+//@ chunk-hma1b5gv.js:2307-2318 placement
 var MAX_DIFF_ATTEMPTS = 256;
-//@ chunk-1r5nz6dk.js:1112-2281 placement
+//@ chunk-hma1b5gv.js:2318-3493 placement
 async function computeWorkspaceDiff() {
   try {
     if (
@@ -154,7 +157,7 @@ async function computeWorkspaceDiff() {
     return null;
   }
 }
-//@ chunk-1r5nz6dk.js:2281-2582 placement
+//@ chunk-hma1b5gv.js:3493-3797 placement
 /**
  * 取声明的仓库检出目录，若有启动目录则只保留能解析且位于其下的检出，忽略的数量记录警告。
  */
@@ -175,12 +178,12 @@ async function resolveDeclaredCheckouts(checkouts, baseDir) {
     );
   return resolvedCheckouts;
 }
-//@ chunk-1r5nz6dk.js:2582-2642 placement
+//@ chunk-hma1b5gv.js:3797-3859 placement
 function isPathUnder(path, prefix) {
   let normalized = normalizePathForCompare(path);
   return normalized === prefix || normalized.startsWith(prefix + sep);
 }
-//@ chunk-1r5nz6dk.js:2642-2740 placement
+//@ chunk-hma1b5gv.js:3859-3959 placement
 async function safeRealpath(path, baseDir) {
   if (!isLocalAbsolutePath(path, baseDir) || linkChainIsUnsafeToFollow(path, baseDir)) return null;
   try {
@@ -189,7 +192,7 @@ async function safeRealpath(path, baseDir) {
     return null;
   }
 }
-//@ chunk-1r5nz6dk.js:2740-2902 placement
+//@ chunk-hma1b5gv.js:3959-4121 placement
 async function getGitDirKind(dir) {
   try {
     return (await lstat(join(dir, ".git"))).isDirectory() ? "directory" : "other";
@@ -199,7 +202,7 @@ async function getGitDirKind(dir) {
     throw error;
   }
 }
-//@ chunk-1r5nz6dk.js:3074-3350 placement
+//@ chunk-hma1b5gv.js:4294-4573 placement
 async function resolveDiffWorkTree(dir, launchDir) {
   let layout = standardRepoLayout(dir);
   if (layout === null) return null;
@@ -212,4 +215,19 @@ async function resolveDiffWorkTree(dir, launchDir) {
   let realWorkTree = await safeRealpath(workTree, resolveNetworkShareCached(initialCwdKey()));
   return realWorkTree !== null && isPathUnder(realWorkTree, launchDir) ? realWorkTree : null;
 }
-export { getWorkspaceDiffRoot };
+//@ chunk-hma1b5gv.js:4606-4748 placement
+/**
+ * 把路径集合转成相对前缀列表（目录补斜杠），用于在 diff 清单里还原嵌套目录。
+ */
+function claudeConfigPrefixesFor(path) {
+  let aliases = withPathAliases([path]);
+  return normalizeCaseForComparison_2(
+    withPathAliases(getClaudeConfigDirs()).flatMap((configDir) =>
+      aliases.flatMap((alias) => {
+        if (isSubpathOf(configDir, alias, true)) return [""];
+        return isSubpathOf(alias, configDir, false) ? [`${relative(alias, configDir)}/`] : [];
+      }),
+    ),
+  );
+}
+export { shouldUseMultiRepoDiff, claudeConfigPrefixesFor, getWorkspaceDiffRoot };

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：设备同步文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2s19t0f2.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kmandvsd.js (9)
  * attribution: placement 9
  */
 import { randomUUID } from "crypto";
 import { branchOfferPayload } from "../../utils/teleport/branchOffer.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { sleep } from "../../utils/sleep.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isRemoteToolServingSwitchOn } from "./servingGates.js";
@@ -19,7 +19,7 @@ import { dirSyncSession } from "../../utils/teleport/dirSync.js";
 import { logEvent } from "../analytics/index.js";
 import { lit, fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
 
-//@ chunk-2s19t0f2.js:15337-15387 placement
+//@ chunk-kmandvsd.js:16541-16591 placement
 /**
  * sync_files 调用的常量：工具名、默认与最大等待时间、作业保留与并发上限、上传明细截断长度。
  */
@@ -29,7 +29,7 @@ var MAX_SYNC_WAIT_MS = 20000;
 var MAX_TRACKED_SYNC_JOBS = 16;
 var MAX_CONCURRENT_SYNC_JOBS = 4;
 var MAX_UPLOAD_DETAIL_CHARS = 300;
-//@ chunk-2s19t0f2.js:15387-15740 placement
+//@ chunk-kmandvsd.js:16591-16944 placement
 /**
  * 解析 sync_files 调用参数：进度上限、是否上传、等待时长（有上限）、作业 id 与同步点提议。
  */
@@ -52,7 +52,7 @@ function parseSyncFilesArgs(args) {
     }),
   };
 }
-//@ chunk-2s19t0f2.js:15740-15930 placement
+//@ chunk-kmandvsd.js:16944-17134 placement
 function truncateUploadDetail(result) {
   let { upload } = result;
   switch (upload.kind) {
@@ -76,7 +76,7 @@ function truncateUploadDetail(result) {
       return result;
   }
 }
-//@ chunk-2s19t0f2.js:15930-17269 placement
+//@ chunk-kmandvsd.js:17134-18473 placement
 /**
  * 设备同步文件的作业管理：按 job id 或"未完成且覆盖相同进度"复用作业；否则检查同步引擎状态后启动追赶（catchUp）或同步点上传（syncPoint），在等待时长内返回 done，否则返回 running 与 job id。
  */
@@ -129,7 +129,7 @@ function createSyncFilesRunner(getEngine, maxWaitMs = MAX_SYNC_WAIT_MS, acceptOf
           state: "refused",
           reason: "unsupported",
         };
-      if (count([...jobs.values()], (job) => !job.settled) >= MAX_CONCURRENT_SYNC_JOBS)
+      if (countWhere([...jobs.values()], (job) => !job.settled) >= MAX_CONCURRENT_SYNC_JOBS)
         return {
           state: "refused",
           reason: "too_many_concurrent",
@@ -184,7 +184,7 @@ function createSyncFilesRunner(getEngine, maxWaitMs = MAX_SYNC_WAIT_MS, acceptOf
     };
   };
 }
-//@ chunk-2s19t0f2.js:17269-17373 placement
+//@ chunk-kmandvsd.js:18473-18577 placement
 function toToolResult(result) {
   return {
     content: [
@@ -197,14 +197,14 @@ function toToolResult(result) {
     isError: result.state === "refused",
   };
 }
-//@ chunk-2s19t0f2.js:17373-17406 placement
+//@ chunk-kmandvsd.js:18577-18610 placement
 /**
  * 远程工具服务开关打开时返回 sync_files 工具名。
  */
 function syncFilesToolNames() {
   return isRemoteToolServingSwitchOn() ? [SYNC_FILES] : [];
 }
-//@ chunk-2s19t0f2.js:17406-17484 placement
+//@ chunk-kmandvsd.js:18610-18688 placement
 /**
  * 设备端 sync_files 服务对象：提供工具名与 serve，另有空的 heldBack 实现。
  */
@@ -218,7 +218,7 @@ function createDeviceSyncFilesServer(host) {
     },
   };
 }
-//@ chunk-2s19t0f2.js:17484-18069 placement
+//@ chunk-kmandvsd.js:18688-19273 placement
 /**
  * 创建设备端 sync_files 服务：解析参数、运行或续接同步作业，并记录遥测。
  */
@@ -257,7 +257,7 @@ function createSyncFilesServer(
     },
   };
 }
-//@ chunk-2s19t0f2.js:18069-18168 placement
+//@ chunk-kmandvsd.js:19273-19372 placement
 /**
  * 未识别的管道工具返回的错误结果。
  */

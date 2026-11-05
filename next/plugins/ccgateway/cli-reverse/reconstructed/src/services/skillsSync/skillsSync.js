@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。claude.ai skills 同步（bucket、清单、下载）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hme9amad.js (66)
- * attribution: placement 66
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-daqvrkkv.js (71)
+ * attribution: placement 65, layout 6
  */
 import { lstat, readdir, rm, rmdir, stat, readFile } from "fs/promises";
 import { join, relative, sep } from "path";
@@ -71,10 +71,12 @@ import {
   hasSyncMarker,
   verifySyncRoot,
   readSyncMarker,
-  checkSyncRoots,
+  moveRootToTrashOk,
   rootRefusedError,
 } from "../../utils/claudeAiSync/syncOwnedRoot.js";
 import { isPlainNonInteractive, envSessionKind } from "../../utils/sessionShape.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
+import { isFreshTimestamp } from "../../utils/plugins/pluginCachePaths.js";
 import { ORG_SKILL_ZIP_TIMEOUT_MS } from "./orgSkillsApi.js";
 import { env } from "../../utils/env.js";
 import { runSyncRoundOnce, reconcileSkillsManifest, checkSyncOwnedRootFor } from "./syncRound.js";
@@ -86,7 +88,7 @@ import {
   syncedSkillEntrySchema as syncedSkillEntrySchema_2,
 } from "../../skills/loadSkillsDir.js";
 import { skillsChangedSignal } from "../../utils/plugins/pluginsChangedSignal.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -97,12 +99,11 @@ import {
   stringSchema,
   undefinedSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { MAX_SCOPE_RESPONSE_BYTES } from "../plugins/accountSync/pluginsScopeGate.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hme9amad.js:2036-2772 placement
+//@ chunk-daqvrkkv.js:2169-2905 placement
 async function resolveSkillsBucket(candidates, skills, syncBucket) {
   let syncedSkillIds = new Set(skills.map((skill) => skill.skillId));
   let filtered = candidates.filter(
@@ -152,7 +153,7 @@ async function resolveSkillsBucket(candidates, skills, syncBucket) {
     });
   return kept;
 }
-//@ chunk-hme9amad.js:2772-3399 placement
+//@ chunk-daqvrkkv.js:2905-3532 placement
 /**
  * 检查被同步技能遮蔽的插件目录是否已消失，若消失的目录对应列表中的技能则记录并返回 true（需要重新同步）。
  */
@@ -189,7 +190,7 @@ async function noteHidingFoldersGone(refetchSkills) {
   });
   return true;
 }
-//@ chunk-hme9amad.js:3399-3593 placement
+//@ chunk-daqvrkkv.js:3532-3726 placement
 /**
  * 技能同步的调度常量：默认/最小/最大间隔、空闲倍数、退避、睡眠检测阈值与对应的特性开关名。
  */
@@ -207,7 +208,7 @@ var SYNC_JITTER_BASE_MS = 30000;
 var SYNC_JITTER_RANGE_MS = 60000;
 var WAKE_SETTLE_MS = 180000;
 var FIRST_FAILED_ROUND_THRESHOLD_MS = 45000;
-//@ chunk-hme9amad.js:3593-3719 placement
+//@ chunk-daqvrkkv.js:3726-3852 placement
 function syncIntervalMs() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     SYNC_INTERVAL_FLAG,
@@ -226,7 +227,7 @@ function syncIntervalMs() {
     ) * 60000
   );
 }
-//@ chunk-hme9amad.js:3719-3774 placement
+//@ chunk-daqvrkkv.js:3852-3907 placement
 /**
  * 当前是否应走空闲同步节奏（空闲间隔更长、无活跃工作）。
  */
@@ -234,7 +235,7 @@ function shouldWeatherIdle() {
   let baseIntervalMs = syncIntervalMs();
   return idleSyncIntervalMs() > baseIntervalMs && isIdleLongerThan(baseIntervalMs) && !hasActiveWork();
 }
-//@ chunk-hme9amad.js:3774-3916 placement
+//@ chunk-daqvrkkv.js:3907-4049 placement
 function idleSyncIntervalMs() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     IDLE_SYNC_INTERVALS_FLAG,
@@ -247,14 +248,14 @@ function idleSyncIntervalMs() {
   let baseIntervalMs = syncIntervalMs();
   return Math.max(baseIntervalMs, Math.min(baseIntervalMs * factor, MAX_IDLE_SYNC_INTERVAL_MS));
 }
-//@ chunk-hme9amad.js:3916-3969 placement
+//@ chunk-daqvrkkv.js:4049-4102 placement
 /**
  * 同步间隔的随机抖动值。
  */
 function syncJitterMs() {
   return SYNC_JITTER_BASE_MS + Math.floor(Math.random() * SYNC_JITTER_RANGE_MS);
 }
-//@ chunk-hme9amad.js:3969-4038 placement
+//@ chunk-daqvrkkv.js:4102-4171 placement
 /**
  * 按连续失败轮数计算指数退避后的同步间隔（封顶为基准的若干倍）。
  */
@@ -265,21 +266,21 @@ function backoffIntervalMs(consecutiveFailedRounds) {
     baseIntervalMs * MAX_SYNC_BACKOFF_FACTOR,
   );
 }
-//@ chunk-hme9amad.js:4038-4157 placement
+//@ chunk-daqvrkkv.js:4171-4290 placement
 function armResync(runRound) {
   let state = remoteToolsState();
   if (state.resyncTimer) return;
   state.resyncRunRound = runRound;
   scheduleResync(state, runRound, backoffIntervalMs(state.consecutiveFailedRounds), "resync", false);
 }
-//@ chunk-hme9amad.js:4157-4292 placement
+//@ chunk-daqvrkkv.js:4290-4425 placement
 function rescheduleResync(delayMs) {
   let state = remoteToolsState();
   if (!state.resyncTimer || !state.resyncRunRound) return;
   clearTimeout(state.resyncTimer);
   scheduleResync(state, state.resyncRunRound, delayMs, "resync", false);
 }
-//@ chunk-hme9amad.js:4292-4559 placement
+//@ chunk-daqvrkkv.js:4425-4692 placement
 function awaitActivityForResync() {
   let state = remoteToolsState();
   if (state.stopAwaitingActivity) return;
@@ -295,15 +296,15 @@ function awaitActivityForResync() {
     for (let unsubscribe of mapped) unsubscribe();
   };
 }
-//@ chunk-hme9amad.js:4559-4613 placement
+//@ chunk-daqvrkkv.js:4692-4746 placement
 function isAwaitingActivityStop() {
   return remoteToolsState().stopAwaitingActivity !== null;
 }
-//@ chunk-hme9amad.js:4613-4657 placement
+//@ chunk-daqvrkkv.js:4746-4790 placement
 function stopAwaitingActivity() {
   remoteToolsState().stopAwaitingActivity?.();
 }
-//@ chunk-hme9amad.js:4657-5137 placement
+//@ chunk-daqvrkkv.js:4790-5270 placement
 /**
  * 有用户活动时调整重新同步计时（睡眠后跳过或提前）。
  */
@@ -327,11 +328,11 @@ function resyncOnActivity(state) {
     logError(error);
   }
 }
-//@ chunk-hme9amad.js:5137-5188 placement
+//@ chunk-daqvrkkv.js:5270-5321 placement
 function rescheduleResyncByBackoff() {
   rescheduleResync(backoffIntervalMs(remoteToolsState().consecutiveFailedRounds));
 }
-//@ chunk-hme9amad.js:5188-5379 placement
+//@ chunk-daqvrkkv.js:5321-5512 placement
 function scheduleResync(state, runRound, delayMs, trigger, woken) {
   let dueAtMs = Date.now() + delayMs;
   state.resyncArmed = {
@@ -343,7 +344,7 @@ function scheduleResync(state, runRound, delayMs, trigger, woken) {
   state.resyncTimer = setTimeout(runResyncTick, delayMs, state, runRound, dueAtMs, trigger, woken);
   state.resyncTimer.unref?.();
 }
-//@ chunk-hme9amad.js:5379-5628 placement
+//@ chunk-daqvrkkv.js:5512-5761 placement
 function runResyncTick(state, runRound, dueAtMs, trigger, woken) {
   let resyncTimer = state.resyncTimer;
   let max = Math.max(0, Date.now() - dueAtMs);
@@ -364,7 +365,7 @@ function runResyncTick(state, runRound, dueAtMs, trigger, woken) {
       scheduleResync(state, runRound, backoffIntervalMs(state.consecutiveFailedRounds), "resync", false);
     });
 }
-//@ chunk-hme9amad.js:5628-5865 placement
+//@ chunk-daqvrkkv.js:5761-5998 placement
 function skipResyncAfterSleep(state, runRound, trigger, lateMs, woken) {
   logForDiagnosticsNoPII("info", "skills_sync_resync_skipped_after_sleep", {
     late_ms: lateMs,
@@ -383,9 +384,9 @@ function skipResyncAfterSleep(state, runRound, trigger, lateMs, woken) {
     logError(error);
   }
 }
-//@ chunk-hme9amad.js:5865-5878 placement
+//@ chunk-daqvrkkv.js:5998-6011 placement
 var MAX_STARTUP_SYNC_WAIT_MS = 60000;
-//@ chunk-hme9amad.js:5878-5935 placement
+//@ chunk-daqvrkkv.js:6011-6068 placement
 /**
  * 构造 listedFor 键：入口类型，加上是否把技能转换成了插件。
  */
@@ -393,16 +394,16 @@ function listedForKey(convertedSkillsAsPlugins) {
   let entrypointKind = getEntrypointKind() ?? "none";
   return convertedSkillsAsPlugins ? `${entrypointKind}${CONVERTED_SKILLS_SUFFIX}` : entrypointKind;
 }
-//@ chunk-hme9amad.js:5935-5962 placement
+//@ chunk-daqvrkkv.js:6068-6095 placement
 var CONVERTED_SKILLS_SUFFIX = ".converted-skills";
-//@ chunk-hme9amad.js:5962-6040 placement
+//@ chunk-daqvrkkv.js:6095-6173 placement
 function onlyConvertedSkills(result) {
   return {
     ...result,
     listedFor: result.listedFor.filter((listedFor) => listedFor.endsWith(CONVERTED_SKILLS_SUFFIX)),
   };
 }
-//@ chunk-hme9amad.js:6040-6858 placement
+//@ chunk-daqvrkkv.js:6173-6991 placement
 async function reuseSkillsSyncRound({
   syncedRoot,
   bucket,
@@ -477,7 +478,7 @@ async function reuseSkillsSyncRound({
     reload,
   };
 }
-//@ chunk-hme9amad.js:6858-7045 placement
+//@ chunk-daqvrkkv.js:6991-7178 placement
 function firstResyncDelay(trigger, isSharedBucket, idle) {
   let reuseWithinMs = trigger === "startup" ? syncReuseWithinMs() : undefined;
   if (!isSharedBucket || trigger === "reload") return reuseWithinMs;
@@ -488,36 +489,79 @@ function firstResyncDelay(trigger, isSharedBucket, idle) {
       : syncIntervalMs();
   return Math.max(intervalMs, reuseWithinMs ?? 0);
 }
-//@ chunk-hme9amad.js:7045-7074 placement
+//@ chunk-daqvrkkv.js:7178-7231 layout
+var TENGU_PLACID_NOETHER = "tengu_placid_noether";
+var BACKOFF_CAP_MS = 21600000;
+var BACKOFF_BASE_CAP_MS = 3600000;
+//@ chunk-daqvrkkv.js:7231-7296 layout
+function itemVersionKey(item) {
+  return jsonStringify([item.updatedAt, item.requestedVersion, item.name]);
+}
+//@ chunk-daqvrkkv.js:7296-7434 layout
+function recordLandingFailure(failedLandings, item) {
+  let version = itemVersionKey(item);
+  let previous = failedLandings.get(item.skillId);
+  failedLandings.set(item.skillId, {
+    version,
+    failures: previous?.version === version ? previous.failures + 1 : 1,
+    failedAtMs: Date.now(),
+  });
+}
+//@ chunk-daqvrkkv.js:7434-7818 layout
+async function partitionBackoff(failedLandings, toDownload, probe) {
+  let currentVersions = new Map(toDownload.map(({ item }) => [item.skillId, itemVersionKey(item)]));
+  for (let [skillId, { version }] of failedLandings)
+    if (currentVersions.get(skillId) !== version) failedLandings.delete(skillId);
+  let backoffEnabled = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PLACID_NOETHER, true) !== false;
+  let due = [];
+  let heldBack = [];
+  for (let download of toDownload) {
+    let state = failedLandings.get(download.item.skillId);
+    if (!backoffEnabled || state === undefined) {
+      due.push(download);
+      continue;
+    }
+    let waitMs = syncIntervalMs() * 2 ** (state.failures - 1);
+    if (waitMs > BACKOFF_BASE_CAP_MS)
+      waitMs = (await probe(download)) ? Math.min(waitMs, BACKOFF_CAP_MS) : BACKOFF_BASE_CAP_MS;
+    if (isFreshTimestamp(state.failedAtMs, waitMs)) heldBack.push(download);
+    else due.push(download);
+  }
+  return {
+    due,
+    heldBack,
+  };
+}
+//@ chunk-daqvrkkv.js:7818-7847 placement
 var TENGU_JAUNTY_ALPACA = "tengu_jaunty_alpaca";
-//@ chunk-hme9amad.js:7074-7110 placement
+//@ chunk-daqvrkkv.js:7847-7883 placement
 function isJauntyAlpacaOn() {
   return getFeatureValue_SESSION_PINNED(TENGU_JAUNTY_ALPACA, true) !== false;
 }
-//@ chunk-hme9amad.js:7110-7141 placement
+//@ chunk-daqvrkkv.js:7883-7914 placement
 var TENGU_QUIZZICAL_WIRTH = "tengu_quizzical_wirth";
-//@ chunk-hme9amad.js:7141-7176 placement
+//@ chunk-daqvrkkv.js:7914-7949 placement
 /**
  * 读开关 tengu_quizzical_wirth（默认开）。
  */
 function isQuizzicalWirthOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_QUIZZICAL_WIRTH, true) !== false;
 }
-//@ chunk-hme9amad.js:7176-7199 placement
+//@ chunk-daqvrkkv.js:7949-7972 placement
 var MAX_INSTALL_WAIT_CHAIN; // deferred: uses SKILLS_LIST_TIMEOUT_MS (./orgSkillsApi.js) of its import cycle while loading; runs once the cycle is complete
 var INSTALL_WAIT_CEILING_MS;
-deferInit("chunk-hme9amad.js:7176", () => {
+deferInit("chunk-daqvrkkv.js:7949", () => {
   MAX_INSTALL_WAIT_CHAIN = 15;
   INSTALL_WAIT_CEILING_MS = ORG_SKILL_ZIP_TIMEOUT_MS + 60000;
 });
-//@ chunk-hme9amad.js:7199-7282 placement
+//@ chunk-daqvrkkv.js:7972-8055 placement
 function firstListWaitTimeoutMs() {
   let CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS = env.CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS;
   return CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS && CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS > 0
     ? CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS
     : 5000;
 }
-//@ chunk-hme9amad.js:7282-7370 placement
+//@ chunk-daqvrkkv.js:8055-8143 placement
 /**
  * 计算安装等待的超时。
  */
@@ -525,7 +569,7 @@ function installWaitTimeoutMs() {
   let timeoutMs = env.CLAUDE_CODE_SYNC_SKILLS_INSTALL_TIMEOUT_MS;
   return timeoutMs && timeoutMs > 0 ? timeoutMs : 30000;
 }
-//@ chunk-hme9amad.js:7370-7521 placement
+//@ chunk-daqvrkkv.js:8143-8294 placement
 /**
  * 返回首次技能列表的 deferred（Promise 与 resolve），没有时创建。
  */
@@ -543,7 +587,7 @@ function firstListDeferred() {
   }
   return state.firstListDeferred;
 }
-//@ chunk-hme9amad.js:7521-7596 placement
+//@ chunk-daqvrkkv.js:8294-8369 placement
 /**
  * 启动技能同步并重新同步。
  */
@@ -551,7 +595,7 @@ function startSkillSyncAndResync(session, storageV5, credentials) {
   remoteToolsState().firstSyncPromise ??= runStartupSync(session, storageV5, credentials);
   armResync((runRound) => runSyncRoundOnce(session, storageV5, credentials, runRound));
 }
-//@ chunk-hme9amad.js:7596-7780 placement
+//@ chunk-daqvrkkv.js:8369-8553 placement
 /**
  * CCR 中按 CLAUDE_CODE_CCR_EARLY_SKILLS_SYNC 在非交互会话启动时提前开始技能同步，返回是否启动。
  */
@@ -569,7 +613,7 @@ function startEarlySkillsSync(session, storageV5, credentials, isAlreadySynced) 
   startSkillSyncAndResync(session, storageV5, credentials);
   return true;
 }
-//@ chunk-hme9amad.js:7780-7862 placement
+//@ chunk-daqvrkkv.js:8553-8635 placement
 /**
  * 等待首次技能列表返回。
  */
@@ -578,7 +622,7 @@ function awaitFirstSkillList(session, storageV5, credentials) {
   remoteToolsState().firstSyncPromise ??= runStartupSync(session, storageV5, credentials);
   return deferred.promise;
 }
-//@ chunk-hme9amad.js:7862-8070 placement
+//@ chunk-daqvrkkv.js:8635-8843 placement
 /**
  * 回合开始前等待首次技能列表，超过剩余等待时间则记 timed_out 遥测。
  */
@@ -591,18 +635,24 @@ async function awaitFirstSkillsList(skillsSync, skillsSyncStartedAt) {
   if (winner === "timed_out") logEvent("tengu_skills_sync_wait_timeout", {});
   return winner;
 }
-//@ chunk-hme9amad.js:8070-8198 placement
+//@ chunk-daqvrkkv.js:8843-9032 placement
 /**
  * 丢弃进行中的请求，等当前同步结束后以 reload 触发重新同步。
  */
-async function reloadSyncedSkills(session, credentials, storageV5) {
+async function reloadSyncedSkills(
+  session,
+  credentials,
+  storageV5,
+  { keepLandingWaits: options = false } = {},
+) {
   sessionSkillManifestSlot.of(session).discardInflight();
   await remoteToolsState().syncPromise?.catch(() => {});
+  if (!options) remoteToolsState().failedLandings.clear();
   return runSyncRoundOnce(session, credentials, storageV5, {
     trigger: "reload",
   });
 }
-//@ chunk-hme9amad.js:8198-8303 placement
+//@ chunk-daqvrkkv.js:9032-9137 placement
 function runStartupSync(session, storageV5, credentials) {
   let state = remoteToolsState();
   return runSyncRoundOnce(session, storageV5, credentials, {
@@ -611,12 +661,12 @@ function runStartupSync(session, storageV5, credentials) {
     state.firstRoundSettled = true;
   });
 }
-//@ chunk-hme9amad.js:8303-8375 placement
+//@ chunk-daqvrkkv.js:9137-9209 placement
 function markFirstRoundEmitted() {
   let state = remoteToolsState();
   if (!state.firstRoundSettled) state.firstRoundEmitted = true;
 }
-//@ chunk-hme9amad.js:8375-8410 placement
+//@ chunk-daqvrkkv.js:9209-9244 placement
 /**
  * 清空技能缓存并广播变更（技能 bucket 代号变化时调用）。
  */
@@ -625,7 +675,7 @@ function resetSkillSyncState() {
   clearSkillCaches();
   skillsChangedSignal.emit();
 }
-//@ chunk-hme9amad.js:8410-8521 placement
+//@ chunk-daqvrkkv.js:9244-9355 placement
 /**
  * 记录技能 bucket 代号；代号变化时清空同步缓存。
  */
@@ -637,21 +687,21 @@ function noteBucketGeneration(generation, storedGeneration) {
   }
   remoteToolsState().bucketGeneration = generation.token;
 }
-//@ chunk-hme9amad.js:8521-8553 placement
+//@ chunk-daqvrkkv.js:9355-9387 placement
 /**
  * 技能同步根目录的绝对路径。
  */
 function skillsSyncDir() {
   return join(getClaudeConfigDir(), SKILLS_SYNC_DIR_2);
 }
-//@ chunk-hme9amad.js:8553-8585 placement
+//@ chunk-daqvrkkv.js:9387-9419 placement
 /**
  * 同步根目录下的相对路径。
  */
 function skillsSyncPath(relativePath) {
   return join(skillsSyncDir(), relativePath);
 }
-//@ chunk-hme9amad.js:8585-8667 placement
+//@ chunk-daqvrkkv.js:9419-9501 placement
 /**
  * 把同步目录路径映射成用户配置存储空间里的键。
  */
@@ -661,7 +711,7 @@ function storageKeyForSyncedPath(path) {
     relative(join(getClaudeConfigDir(), "skills"), path).split(sep),
   );
 }
-//@ chunk-hme9amad.js:8667-9212 placement
+//@ chunk-daqvrkkv.js:9501-10046 placement
 /**
  * 扫描技能同步根目录：区分 bucket、杂项与不可读条目。
  */
@@ -712,17 +762,17 @@ async function scanSkillsSyncRoot(storageV5) {
     unreadable,
   };
 }
-//@ chunk-hme9amad.js:9212-9357 placement
+//@ chunk-daqvrkkv.js:10046-10191 placement
 async function trashStrayEntries(names, storageV5) {
   let trashedCount = 0;
-  for (let name of names) if (await moveToSyncTrash(join(skillsSyncDir(), name), storageV5)) trashedCount++;
+  for (let name of names) if (await moveSkillToTrash(join(skillsSyncDir(), name), storageV5)) trashedCount++;
   if (trashedCount > 0)
     logForDiagnosticsNoPII("info", "skills_sync_stray_entry_trashed", {
       count: trashedCount,
     });
   return trashedCount;
 }
-//@ chunk-hme9amad.js:9357-9468 placement
+//@ chunk-daqvrkkv.js:10191-10302 placement
 /**
  * 把技能同步根目录下的杂项条目移到回收目录，返回是否移动了。
  */
@@ -731,20 +781,21 @@ async function trashStraySyncEntries(storageV5) {
   if (scan === null || scan.strays.length === 0) return false;
   return (await trashStrayEntries(scan.strays, storageV5)) > 0;
 }
-//@ chunk-hme9amad.js:9468-9593 placement
-/**
- * 把技能同步目录移到回收目录（带根目录检查）。
- */
-function moveToSyncTrash(dir, storageV5) {
-  return checkSyncRoots({
+//@ chunk-daqvrkkv.js:10302-10339 layout
+function moveSkillToTrash(dir, storageV5) {
+  return moveRootToTrashOk(trashContext(dir, storageV5));
+}
+//@ chunk-daqvrkkv.js:10339-10458 layout
+function trashContext(dir, storageV5) {
+  return {
     dir,
     trashRoot: trashRootDir(),
     configHome: getClaudeConfigDir(),
     failureEvent: "skills_sync_trash_move_failed",
     storageV5,
-  });
+  };
 }
-//@ chunk-hme9amad.js:9593-10191 placement
+//@ chunk-daqvrkkv.js:10458-11056 placement
 /**
  * 技能同步关闭时清理同步根目录：逐个 bucket 对账清单并删除，移走杂项，清空命令与技能缓存。
  */
@@ -795,21 +846,21 @@ async function pruneSkillsSyncRoot(storageV5) {
   }
   return anyMoved;
 }
-//@ chunk-hme9amad.js:10191-10224 placement
+//@ chunk-daqvrkkv.js:11056-11089 placement
 /**
  * 技能垃圾箱目录路径。
  */
 function trashRootDir() {
   return join(getClaudeConfigDir(), SKILLS_SYNC_DIR);
 }
-//@ chunk-hme9amad.js:10224-10254 placement
+//@ chunk-daqvrkkv.js:11089-11119 placement
 /**
  * 某目录下同步清单（SYNCED_MANIFEST_FILE）的路径。
  */
 function manifestPathIn(root) {
   return join(root, SYNCED_MANIFEST_FILE);
 }
-//@ chunk-hme9amad.js:10254-10593 placement
+//@ chunk-daqvrkkv.js:11119-11458 placement
 /**
  * 技能同步清单 schema（lastUpdated、skills、staleDirs、pendingClaims）与清单中单个技能的 schema。
  */
@@ -817,7 +868,7 @@ var SKILLS_MANIFEST_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/uti
 var SKILLS_MANIFEST_SCHEMA_PLACEHOLDER;
 var syncedSkillsManifestSchema;
 var syncedSkillEntrySchema;
-deferInit("chunk-hme9amad.js:10254", () => {
+deferInit("chunk-daqvrkkv.js:11119", () => {
   SKILLS_MANIFEST_SCHEMA = new Set();
   SKILLS_MANIFEST_SCHEMA_PLACEHOLDER = [];
   syncedSkillsManifestSchema = DoctorLazy(() =>
@@ -840,14 +891,14 @@ deferInit("chunk-hme9amad.js:10254", () => {
     }),
   );
 });
-//@ chunk-hme9amad.js:10593-10625 placement
+//@ chunk-daqvrkkv.js:11458-11490 placement
 /**
  * 某目录下同步清单在存储空间里的键。
  */
 function manifestStorageKey(root) {
   return storageKeyForSyncedPath(manifestPathIn(root));
 }
-//@ chunk-hme9amad.js:10625-11482 placement
+//@ chunk-daqvrkkv.js:11490-12347 placement
 async function readSkillsSyncManifest(storageV5, ctx) {
   let shouldLog = !ctx.manifestRead;
   ctx.manifestRead = true;
@@ -906,7 +957,7 @@ async function readSkillsSyncManifest(storageV5, ctx) {
     pendingClaims: stringArray(pendingClaims),
   };
 }
-//@ chunk-hme9amad.js:11482-12201 placement
+//@ chunk-daqvrkkv.js:12347-13066 placement
 async function writeSkillsSyncManifest(next, mergeOptions, storageV5, ctx) {
   let refusedReason = ctx.guard.refusedReason();
   if (refusedReason !== null) throw rootRefusedError(refusedReason);
@@ -950,21 +1001,21 @@ async function writeSkillsSyncManifest(next, mergeOptions, storageV5, ctx) {
   }
   await writeFileAtomic(manifestPathIn(ctx.root), manifestJson);
 }
-//@ chunk-hme9amad.js:12201-12252 placement
+//@ chunk-daqvrkkv.js:13066-13117 placement
 /**
  * 按进程 pid 区分的临时目录。
  */
 function perProcessTempDir(root) {
   return join(root, TRASH_SUBDIR, String(process.pid));
 }
-//@ chunk-hme9amad.js:12252-12283 placement
+//@ chunk-daqvrkkv.js:13117-13148 placement
 /**
  * 同步目录下某技能的路径。
  */
 function syncedSkillDirPath(root, name) {
   return syncedItemPath(name, root);
 }
-//@ chunk-hme9amad.js:12283-12646 placement
+//@ chunk-daqvrkkv.js:13148-13511 placement
 /**
  * 读取同步技能的 SKILL.md 文本（经存储后端或文件系统，超出大小或不是文件时为 null）。
  */
@@ -996,14 +1047,14 @@ async function readSyncedSkillMd(root, name, storageV5) {
     return null;
   }
 }
-//@ chunk-hme9amad.js:12646-12688 placement
+//@ chunk-daqvrkkv.js:13511-13553 placement
 /**
  * 某技能 SKILL.md 在存储空间里的键。
  */
 function skillMdStorageKey(skillDir) {
   return storageKeyForSyncedPath(join(skillDir, "SKILL.md"));
 }
-//@ chunk-hme9amad.js:12688-12829 placement
+//@ chunk-daqvrkkv.js:13553-13694 placement
 /**
  * 判断同步技能目录中是否有 SKILL.md。
  */
@@ -1016,7 +1067,7 @@ async function hasSyncedSkillMd(root, name, storageV5) {
     return false;
   }
 }
-//@ chunk-hme9amad.js:12829-13007 placement
+//@ chunk-daqvrkkv.js:13694-13872 placement
 /**
  * 判断技能目录中的 SKILL.md 是否缺失。
  */
@@ -1032,7 +1083,7 @@ async function isSkillMdMissing(skillDir, storageV5) {
     return isENOENT(error) || getErrnoCode(error) === "ENOTDIR";
   }
 }
-//@ chunk-hme9amad.js:13007-13172 placement
+//@ chunk-daqvrkkv.js:13872-14037 placement
 /**
  * 把会话引用的技能转为同步条目（来源 session-refs，可带请求的版本）。
  */
@@ -1046,7 +1097,7 @@ function sessionRefSkillEntry(ref) {
     requestedVersion: ref.version || undefined,
   };
 }
-//@ chunk-hme9amad.js:13172-13236 placement
+//@ chunk-daqvrkkv.js:14037-14101 placement
 /**
  * 复制条目并替换 backingPluginId。
  */
@@ -1056,13 +1107,13 @@ function carryBackingPluginId(row, incoming) {
     backingPluginId: incoming.backingPluginId,
   };
 }
-//@ chunk-hme9amad.js:13236-13349 placement
+//@ chunk-daqvrkkv.js:14101-14214 placement
 var SKILL_DIR_NAMING = {
   idOf: (row) => row.skillId,
   invalidNameTag: "skills_sync_invalid_name",
   collisionTag: "skills_sync_name_collision",
 };
-//@ chunk-hme9amad.js:13349-13453 placement
+//@ chunk-daqvrkkv.js:14214-14318 placement
 /**
  * 为同步技能分配目录名（处理非法名与冲突，可标记冲突落败者）。
  */
@@ -1076,7 +1127,7 @@ function assignSkillDirs(root, listed, previous) {
     }),
   });
 }
-//@ chunk-hme9amad.js:13453-13495 placement
+//@ chunk-daqvrkkv.js:14318-14360 placement
 /**
  * 把冲突落败条目的 updatedAt 标成哨兵值。
  */
@@ -1091,16 +1142,18 @@ export {
   awaitFirstSkillList,
   installWaitTimeoutMs,
   reloadSyncedSkills,
-  startEarlySkillsSync,
+  awaitFirstSkillsList,
   pruneSkillsSyncRoot,
   resetSkillSyncState,
+  startEarlySkillsSync,
   syncedSkillDirPath,
   perProcessTempDir,
-  moveToSyncTrash,
+  trashContext,
   syncedSkillsManifestSchema,
   syncedSkillEntrySchema,
   skillsSyncDir,
   trashRootDir,
+  moveSkillToTrash,
   skillsSyncPath,
   shouldWeatherIdle,
   reuseSkillsSyncRound,
@@ -1115,6 +1168,7 @@ export {
   assignSkillDirs,
   markFirstRoundEmitted,
   hasSyncedSkillMd,
+  partitionBackoff,
   writeSkillsSyncManifest,
   SKILLS_MANIFEST_SCHEMA,
   SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
@@ -1125,8 +1179,8 @@ export {
   MAX_INSTALL_WAIT_CHAIN,
   readSyncedSkillMd,
   isQuizzicalWirthOn,
+  recordLandingFailure,
   rescheduleResyncByBackoff,
   isSkillMdMissing,
   INSTALL_WAIT_CEILING_MS,
-  awaitFirstSkillsList,
 };

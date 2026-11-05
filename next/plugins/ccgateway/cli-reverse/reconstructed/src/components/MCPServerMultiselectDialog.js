@@ -3,20 +3,20 @@
  *
  * 发现多个新 MCP 服务器时的多选启用对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MCPServerMultiselectDialog.tsx
- * pieces: chunk-20skp6hd.js (1)
+ * pieces: chunk-ezx72dpn.js (1)
  * attribution: fingerprint 1
  */
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useRef, useCallback } from "../../vendor/react/cjs/react.production.js";
-import { useInputRefusalWindow, useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { partitionAlias } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { logEvent } from "../services/analytics/index.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { addSessionApprovedMcpServers } from "../bootstrap/state.js";
 import { getWorkspacePersistedTrustKey } from "../utils/config.js";
 import {
@@ -33,23 +33,23 @@ import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 
-//@ chunk-20skp6hd.js:2795-4353 fingerprint (2.1.88 match: MCPServerMultiselectDialog, 0.684)
+//@ chunk-ezx72dpn.js:2796-4355 fingerprint (2.1.88 match: MCPServerMultiselectDialog, 0.684)
 /**
  * 多个新 MCP 服务器的多选启用，结果写入 localSettings。
  */
 function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) {
   let { storageV5 } = useTheme_2();
   let submitGuardRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let shouldRefuseInput = useCallback(() => {
-    if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+    if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
       noteRefused();
       return true;
     }
     return false;
-  }, [inputRefusalWindow, refusedWithin, noteRefused]);
+  }, [recentInput, refusedWithin, noteRefused]);
   async function handleSubmit(selectedServers) {
     if (shouldRefuseInput()) return;
     if (submitGuardRef.current) return;
@@ -66,7 +66,7 @@ function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) 
       let { error } = await updateSettingsForSourceWithTransform(
         "localSettings",
         (currentSettings) => ({
-          enabledMcpjsonServers: uniq([
+          enabledMcpjsonServers: normalizeCaseForComparison_2([
             ...(currentSettings?.enabledMcpjsonServers || []),
             ...approvedServers,
           ]),
@@ -81,7 +81,7 @@ function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) 
       let { error } = await updateSettingsForSourceWithTransform(
         "localSettings",
         (currentSettings) => ({
-          disabledMcpjsonServers: uniq([
+          disabledMcpjsonServers: normalizeCaseForComparison_2([
             ...(currentSettings?.disabledMcpjsonServers || []),
             ...rejectedServers,
           ]),
@@ -102,7 +102,10 @@ function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) 
     let { error } = await updateSettingsForSourceWithTransform(
       "localSettings",
       (selectedServers) => ({
-        disabledMcpjsonServers: uniq([...(selectedServers?.disabledMcpjsonServers || []), ...serverNames]),
+        disabledMcpjsonServers: normalizeCaseForComparison_2([
+          ...(selectedServers?.disabledMcpjsonServers || []),
+          ...serverNames,
+        ]),
       }),
       undefined,
       storageV5,

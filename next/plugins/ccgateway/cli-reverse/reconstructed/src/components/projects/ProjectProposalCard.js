@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：项目（Project）设置提议卡片：名称/图标/颜色、线程与例程、项目指令的对比与确认
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a6f4nz0a.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z9xdrcsy.js (19)
  * attribution: placement 19
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -32,19 +32,19 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { OverflowHint } from "../CtrlOToExpand.js";
 
-//@ chunk-a6f4nz0a.js:721-725 placement
+//@ chunk-z9xdrcsy.js:722-726 placement
 init_react_production();
-//@ chunk-a6f4nz0a.js:725-793 placement
+//@ chunk-z9xdrcsy.js:726-794 placement
 var BRIEF_LABEL_KEYS = {
   claude: "briefLabelClaude",
   you: "briefLabelYou",
 };
 var VERTICAL_BAR_PREFIX = "\u2502 ";
-//@ chunk-a6f4nz0a.js:793-820 placement
+//@ chunk-z9xdrcsy.js:794-821 placement
 function normalizeText(text) {
   return stripNonPrintable(text);
 }
-//@ chunk-a6f4nz0a.js:820-1017 placement
+//@ chunk-z9xdrcsy.js:821-1018 placement
 /**
  * 把文本按宽度硬换行（保留空行，可选不裁剪空白），超宽的行再强制切分；被项目对话框多处复用。
  */
@@ -66,16 +66,16 @@ function wrapTextToWidth(text, columns, preserveIndent = false) {
   }
   return outLines;
 }
-//@ chunk-a6f4nz0a.js:1017-1074 placement
+//@ chunk-z9xdrcsy.js:1018-1075 placement
 function padToWidth(text, width) {
   let textWidth = bunStringWidth(text);
   return textWidth >= width ? text : text + repeatString(" ", width - textWidth);
 }
-//@ chunk-a6f4nz0a.js:1074-1137 placement
+//@ chunk-z9xdrcsy.js:1075-1138 placement
 function renderProposalFlow(session) {
   return `${THREAD_WHO_LABELS[session.who]} \u2192 ${THREAD_PRODUCES_LABELS[session.produces]}`;
 }
-//@ chunk-a6f4nz0a.js:1137-1300 placement
+//@ chunk-z9xdrcsy.js:1138-1301 placement
 function renderQuotedLines(text, width, kind, dimColor) {
   return wrapTextToWidth(normalizeText(text), width - VERTICAL_BAR_PREFIX.length, true).map((line, index) =>
     jsxProd_default_2(
@@ -96,14 +96,14 @@ function renderQuotedLines(text, width, kind, dimColor) {
     ),
   );
 }
-//@ chunk-a6f4nz0a.js:1300-1348 placement
+//@ chunk-z9xdrcsy.js:1301-1349 placement
 /**
  * 函数 wrapCardText（按宽度换行）。
  */
 function wrapCardText(text, width) {
   return renderQuotedLines(text.trim(), width, "msg", false);
 }
-//@ chunk-a6f4nz0a.js:1348-1575 placement (2.1.88 match: _temp2, 0.87)
+//@ chunk-z9xdrcsy.js:1349-1576 placement (2.1.88 match: _temp2, 0.869)
 function renderProposalHeaderRow(index, title, suffix, meta, color) {
   return jsxProd_default_2(
     Text,
@@ -131,7 +131,7 @@ function renderProposalHeaderRow(index, title, suffix, meta, color) {
     index,
   );
 }
-//@ chunk-a6f4nz0a.js:1575-1619 placement
+//@ chunk-z9xdrcsy.js:1576-1620 placement
 function renderSpace(key) {
   return jsxProd_default(
     Text,
@@ -141,7 +141,7 @@ function renderSpace(key) {
     key,
   );
 }
-//@ chunk-a6f4nz0a.js:1619-2191 placement
+//@ chunk-z9xdrcsy.js:1620-2193 placement
 function renderFromLine(session, index, senderName, body) {
   let numberPrefix = `${index + 1}. `;
   let indent = " ".repeat(numberPrefix.length);
@@ -214,7 +214,7 @@ function renderFromLine(session, index, senderName, body) {
   );
   return headerRow;
 }
-//@ chunk-a6f4nz0a.js:2191-5033 placement
+//@ chunk-z9xdrcsy.js:2193-5036 placement
 /**
  * 生成提议的各行（名称、图标、颜色、线程、例程、权限、指令）。
  */
@@ -467,12 +467,12 @@ function buildProposalRows(proposal, senderName, options) {
     );
   return rows;
 }
-//@ chunk-a6f4nz0a.js:5033-5079 placement
+//@ chunk-z9xdrcsy.js:5036-5082 placement
 /**
  * 导出值：DRAFTED_BY_CLAUDE_TEXT（"Drafted by Claude from this session"）。
  */
 var DRAFTED_BY_CLAUDE_TEXT = "Drafted by Claude from this session";
-//@ chunk-a6f4nz0a.js:5079-5475 placement
+//@ chunk-z9xdrcsy.js:5082-5478 placement
 function describeInstructionsScope(proposal, indexBase, chord) {
   let threadCount = proposal.sessions?.length ?? 0;
   let routineCount = proposal.routines?.length ?? 0;
@@ -484,11 +484,11 @@ function describeInstructionsScope(proposal, indexBase, chord) {
     .filter((part) => part !== "")
     .join("  ");
 }
-//@ chunk-a6f4nz0a.js:5475-5550 placement
+//@ chunk-z9xdrcsy.js:5478-5553 placement
 function shortcutHintText(count, chord) {
   return [formatOverflowHint(count), formatShortcut(chord, "expand")].filter((part) => part !== "").join(" ");
 }
-//@ chunk-a6f4nz0a.js:5550-5632 placement
+//@ chunk-z9xdrcsy.js:5553-5635 placement
 function formatShortcut(chord, action) {
   return formatShortcutHint({
     chord,
@@ -499,7 +499,7 @@ function formatShortcut(chord, action) {
     },
   });
 }
-//@ chunk-a6f4nz0a.js:5632-5759 placement
+//@ chunk-z9xdrcsy.js:5635-5762 placement
 /**
  * 计算项目指令说明区需要的最大行数（两种展示形式取大者）。
  */
@@ -510,7 +510,7 @@ function measureInstructionsRows(proposal, indexBase, shortcutDisplay, columns) 
       wrapTextToWidth(shortcutHintText(Math.max(1, indexBase), shortcutDisplay), columns, true).length,
   );
 }
-//@ chunk-a6f4nz0a.js:5759-5898 placement
+//@ chunk-z9xdrcsy.js:5762-5901 placement
 /**
  * 在 o 行内能放下多少个列表项（c 为宽度；null 时按项数计）。
  */
@@ -525,7 +525,7 @@ function countItemsFittingRows(items, maxRows, columns) {
   }
   return fitting;
 }
-//@ chunk-a6f4nz0a.js:5898-8834 placement
+//@ chunk-z9xdrcsy.js:5901-8834 placement
 /**
  * 显示项目设置提议并等待确认（终端太矮时提示）。
  */
@@ -795,9 +795,9 @@ function ProjectProposalCard(props) {
 }
 export {
   wrapTextToWidth,
-  DRAFTED_BY_CLAUDE_TEXT,
-  measureInstructionsRows,
   wrapCardText,
   countItemsFittingRows,
   ProjectProposalCard,
+  DRAFTED_BY_CLAUDE_TEXT,
+  measureInstructionsRows,
 };

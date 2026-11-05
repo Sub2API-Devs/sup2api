@@ -3,28 +3,28 @@
  *
  * 底部"后台任务"胶囊标签文字：按任务类型汇总数量（shell/monitor、团队、本地代理、云会话、ultraplan、workflow、MCP 任务、dream 等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/pillLabel.ts
- * pieces: chunk-1fg1sa83.js (4)
- * attribution: fingerprint 2, layout 2
+ * pieces: chunk-n62g4ekh.js (5)
+ * attribution: fingerprint 2, layout 3
  */
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../constants/figures.js";
 import { isAutoReactArmedMonitorTask } from "./MonitorWsTask/MonitorWsTask.js";
 
-//@ chunk-1fg1sa83.js:302-1852 fingerprint (2.1.88 match: getPillLabel, 0.699)
+//@ chunk-n62g4ekh.js:302-1783 fingerprint (2.1.88 match: getPillLabel, 0.723)
 /**
  * 生成后台任务胶囊文字：全部同类型时按类型给专门文案（如 "2 shells, 1 monitor"、"ultraplan ready"、"3 cloud sessions"、"dreaming"），否则回退为 "N background tasks"。
  */
 function getPillLabel(tasks) {
   let first = tasks[0];
   if (!first) return null;
-  let count_2 = tasks.length;
+  let taskCount = tasks.length;
   if (tasks.every((t) => t.type === first.type))
     switch (first.type) {
       case "local_bash": {
-        let monitors = count(tasks, (t) => t.type === "local_bash" && t.kind === "monitor");
-        let shells = count_2 - monitors;
+        let monitors = countWhere(tasks, (t) => t.type === "local_bash" && t.kind === "monitor");
+        let shells = taskCount - monitors;
         let parts = [];
         if (shells > 0) parts.push(shells === 1 ? "1 shell" : `${shells} shells`);
         if (monitors > 0) parts.push(monitors === 1 ? "1 monitor" : `${monitors} monitors`);
@@ -37,9 +37,9 @@ function getPillLabel(tasks) {
         return teamCount === 1 ? "1 team" : `${teamCount} teams`;
       }
       case "local_agent":
-        return count_2 === 1 ? "1 local agent" : `${count_2} local agents`;
+        return taskCount === 1 ? "1 local agent" : `${taskCount} local agents`;
       case "remote_agent": {
-        if (count_2 === 1 && first.isUltraplan)
+        if (taskCount === 1 && first.isUltraplan)
           switch (first.ultraplanPhase) {
             case "plan_ready":
               return `${FILLED_DIAMOND_GLYPH} ultraplan ready`;
@@ -49,23 +49,23 @@ function getPillLabel(tasks) {
               return `${DIAMOND_GLYPH} ultraplan`;
           }
         if (tasks.every((task) => task.type === "remote_agent" && task.remoteTaskType === "remote-workflow"))
-          return count_2 === 1
+          return taskCount === 1
             ? `${DIAMOND_GLYPH} 1 remote dynamic workflow`
-            : `${DIAMOND_GLYPH} ${count_2} remote dynamic workflows`;
-        return count_2 === 1
+            : `${DIAMOND_GLYPH} ${taskCount} remote dynamic workflows`;
+        return taskCount === 1
           ? `${DIAMOND_GLYPH} 1 cloud session`
-          : `${DIAMOND_GLYPH} ${count_2} cloud sessions`;
+          : `${DIAMOND_GLYPH} ${taskCount} cloud sessions`;
       }
       case "local_workflow":
-        return count_2 === 1 ? "1 background dynamic workflow" : `${count_2} background dynamic workflows`;
+        return workflowPillLabel(taskCount);
       case "monitor_mcp":
       case "monitor_ws": {
         if (tasks.every(isAutoReactArmedMonitorTask))
-          return count_2 === 1 ? "1 Artifact comment monitor" : `${count_2} Artifact comment monitors`;
-        return count_2 === 1 ? "1 monitor" : `${count_2} monitors`;
+          return taskCount === 1 ? "1 Artifact comment monitor" : `${taskCount} Artifact comment monitors`;
+        return taskCount === 1 ? "1 monitor" : `${taskCount} monitors`;
       }
       case "mcp_task":
-        return count_2 === 1 ? "1 MCP task" : `${count_2} MCP tasks`;
+        return taskCount === 1 ? "1 MCP task" : `${taskCount} MCP tasks`;
       case "dream":
         return "dreaming";
       case "auto_mode_scan":
@@ -78,23 +78,32 @@ function getPillLabel(tasks) {
         return "saving memories";
       default:
     }
-  return formatBackgroundTaskCount(count_2);
+  return formatBackgroundTaskCount(taskCount);
 }
-//@ chunk-1fg1sa83.js:1852-1904 layout
+//@ chunk-n62g4ekh.js:1783-1957 layout
 /**
  * 带额外计数的胶囊文字：extraCount 为 0 时同 getPillLabel，否则统一显示总数。
  */
-function getPillLabelWithExtra(tasks, extraCount) {
-  return extraCount === 0 ? getPillLabel(tasks) : formatBackgroundTaskCount(tasks.length + extraCount);
+function getPillLabelWithExtra(tasks, task) {
+  if (task.length === 0) return getPillLabel(tasks);
+  let taskCount = tasks.length + task.length;
+  return task.every((task) => task.taskType === "local_workflow") &&
+    tasks.every((task) => task.type === "local_workflow")
+    ? workflowPillLabel(taskCount)
+    : formatBackgroundTaskCount(taskCount);
 }
-//@ chunk-1fg1sa83.js:1904-1966 layout
+//@ chunk-n62g4ekh.js:1957-2052 layout
+function workflowPillLabel(task) {
+  return task === 1 ? "1 background dynamic workflow" : `${task} background dynamic workflows`;
+}
+//@ chunk-n62g4ekh.js:2052-2114 layout
 /**
  * 格式化 "N background task(s)"。
  */
 function formatBackgroundTaskCount(count) {
   return `${count} background ${count === 1 ? "task" : "tasks"}`;
 }
-//@ chunk-1fg1sa83.js:1966-2096 fingerprint (2.1.88 match: pillNeedsCta, 1)
+//@ chunk-n62g4ekh.js:2114-2244 fingerprint (2.1.88 match: pillNeedsCta, 1)
 /**
  * 只有一个 ultraplan 远程任务且有阶段时，胶囊需要显示行动提示。
  */

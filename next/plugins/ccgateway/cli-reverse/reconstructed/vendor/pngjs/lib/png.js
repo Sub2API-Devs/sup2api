@@ -1,8 +1,8 @@
 /**
  * pngjs/lib/png.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_parser_async } from "./parser-async.js";
 import { require_packer_async } from "./packer-async.js";
 import { require_png_sync } from "./png-sync.js";
 
-//@ chunk-spjgqa4y.js:48112-50618 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:48112-50618 cjs-fingerprint
 var require_png = __commonJS(function (cjsExports) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream");

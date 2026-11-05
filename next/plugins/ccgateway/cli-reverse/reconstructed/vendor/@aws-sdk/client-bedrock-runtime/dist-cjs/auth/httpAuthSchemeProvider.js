@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-bedrock-runtime/dist-cjs/auth/httpAuthSchemeProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
- * pieces: chunk-3cddmtk7.js (5)
+ * pieces: chunk-ayc8mk37.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -14,12 +14,12 @@ import { require_core_2 } from "../../../core/dist-cjs/index.js";
 import { require_core } from "../../../../@smithy/core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../@smithy/util-middleware/dist-cjs/index.js";
 
-//@ chunk-3cddmtk7.js:13451-13503 esm-layout
+//@ chunk-ayc8mk37.js:13451-13503 esm-layout
 var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2());
 var import_middleware_endpoint = __toESM(require_middleware_endpoint());
 var import_retry_2 = __toESM(require_retry());
 var import_client_2 = __toESM(require_client());
-//@ chunk-3cddmtk7.js:13503-13731 esm-layout
+//@ chunk-ayc8mk37.js:13503-13731 esm-layout
 var import_core_4 = __toESM(require_core_2());
 var import_core_5 = __toESM(require_core());
 var import_util_middleware = __toESM(require_util_middleware());
@@ -31,7 +31,7 @@ var defaultBedrockRuntimeHttpAuthSchemeParametersProvider = async (config, conte
       throw Error("expected `region` to be configured for `aws.auth#sigv4`");
     })(),
 });
-//@ chunk-3cddmtk7.js:13731-13901 esm-fingerprint
+//@ chunk-ayc8mk37.js:13731-13901 esm-fingerprint
 function createAwsAuthSigv4HttpAuthOption(authParameters) {
   return {
     schemeId: "aws.auth#sigv4",
@@ -47,7 +47,7 @@ function createAwsAuthSigv4HttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-3cddmtk7.js:13901-14117 esm-fingerprint
+//@ chunk-ayc8mk37.js:13901-14117 esm-fingerprint
 function createSmithyApiHttpBearerAuthHttpAuthOption(authParameters) {
   return {
     schemeId: "smithy.api#httpBearerAuth",
@@ -61,7 +61,7 @@ function createSmithyApiHttpBearerAuthHttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-3cddmtk7.js:14117-14441 esm-fingerprint
+//@ chunk-ayc8mk37.js:14117-14441 esm-fingerprint
 var defaultBedrockRuntimeHttpAuthSchemeProvider = (authParameters) => {
   let options = [];
   switch (authParameters.operation) {

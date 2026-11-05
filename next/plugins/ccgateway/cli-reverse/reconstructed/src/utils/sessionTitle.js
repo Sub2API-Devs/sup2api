@@ -3,9 +3,9 @@
  *
  * 用小模型生成会话标题（提示词与 JSON {title} 解析）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionTitle.ts
- * pieces: chunk-e6aww6q8.js (12), chunk-q6msdgx4.js (11)
+ * pieces: chunk-5xgkngpb.js (12), chunk-zhnr3erp.js (11)
  * attribution: placement 20, fingerprint 2, layout 1
  */
 import { whenSessionRegistered, getRegisteredSessionName, updateSessionName } from "./concurrentSessions.js";
@@ -44,8 +44,8 @@ import { getBridgeTokenOverride, getBridgeBaseUrlOverride } from "../bridge/brid
 import { isTeleportedSession } from "../bridge/createSession.js";
 import { isTeammate } from "./teammate.js";
 import { logForDebugging } from "./debug.js";
-import { _, MAX_TITLE_TEXT_CHARS } from "./terminalTitle.js";
-import { env } from "./env.js";
+import { isLongEnoughForTitle, MAX_TITLE_TEXT_CHARS } from "./terminalTitle.js";
+import { _ } from "./codeMode/remoteSessionId.js";
 import { isHumanTurn_3 } from "./messagePredicates.js";
 import { isHumanOrUnset } from "./messageProvenance.js";
 import { stripMemoryTags } from "../services/orgMemory/promptIndex.js";
@@ -59,20 +59,20 @@ import { extractTextContent_2 } from "./messages.js";
 import { safeParseJSON, stripJsonCodeFence } from "./json.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { MAX_TITLE_MESSAGE_CHARS, truncateFirstSessionMessage } from "./teleport/sessionTitle.js";
-import { getInitialSettings_2 } from "./settings/settings.js";
+import { getInitialSettings } from "./settings/settings.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3441166-3441193 placement
+//@ chunk-5xgkngpb.js:3530115-3530142 placement
 /**
  * 空实现的重命名通知钩子位。
  */
 async function noopRenameNotify(name, outcome, source) {}
-//@ chunk-e6aww6q8.js:3441193-3441253 placement
+//@ chunk-5xgkngpb.js:3530142-3530202 placement
 function toTitleRecordSource(source) {
   return source === "collision" || source === "peer" ? "hook" : source;
 }
-//@ chunk-e6aww6q8.js:3441253-3442351 placement
+//@ chunk-5xgkngpb.js:3530202-3531300 placement
 /**
  * 会话命名冲突协商（被放在 hooks.ts 里，实为会话标题/名称模块）：决定保留、让出、被取代或沿用已决定的名字。
  */
@@ -158,7 +158,7 @@ async function resolveSessionNameClaim(name, source, alreadyClaimed) {
           },
   };
 }
-//@ chunk-e6aww6q8.js:3442351-3442519 placement
+//@ chunk-5xgkngpb.js:3531300-3531468 placement
 function toRenameOutcome(sessionNameClaim) {
   switch (sessionNameClaim.settle) {
     case "superseded":
@@ -172,7 +172,7 @@ function toRenameOutcome(sessionNameClaim) {
       return "kept";
   }
 }
-//@ chunk-e6aww6q8.js:3442519-3442614 placement
+//@ chunk-5xgkngpb.js:3531468-3531563 placement
 /**
  * 重命名会话并返回最终名字。
  */
@@ -187,7 +187,7 @@ async function renameSessionName(
   let result = await renameSession(name, source, storageV5, alreadyClaimed, userInitiated, credentials);
   return result === null ? null : result.name;
 }
-//@ chunk-e6aww6q8.js:3442614-3443504 placement
+//@ chunk-5xgkngpb.js:3531563-3532455 placement
 /**
  * 重命名会话：保存自定义/AI 标题、同步 bridge 与 CCR 远程会话标题、更新 --name 记录。
  */
@@ -286,11 +286,11 @@ async function renameSession(
     registryUpdated: shared.registryUpdated,
   };
 }
-//@ chunk-e6aww6q8.js:3443504-3443537 placement
+//@ chunk-5xgkngpb.js:3532455-3532488 placement
 function getBridgeHandleForTitle() {
   return getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
 }
-//@ chunk-e6aww6q8.js:3443537-3443850 placement
+//@ chunk-5xgkngpb.js:3532488-3532801 placement
 /**
  * 把会话标题推送到 bridge（远程控制）会话。
  */
@@ -314,7 +314,7 @@ function pushBridgeSessionTitle(name, sessionId, getBridge, userInitiated, crede
   };
   handle.titleWriter.update(bridgeSessionId, name, writerOptions).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:3443850-3444899 placement
+//@ chunk-5xgkngpb.js:3532801-3533862 placement
 /**
  * 保存会话代理名称并登记名字注册表，处理冲突让名。
  */
@@ -402,11 +402,11 @@ async function saveSessionAgentName(
   if (source !== "auto") noopRenameNotify("renamed", credentials, finalName);
   return finalName;
 }
-//@ chunk-e6aww6q8.js:3444899-3444939 placement
+//@ chunk-5xgkngpb.js:3533862-3533902 placement
 function getCurrentSessionName() {
   return getRegisteredSessionName()?.name ?? getCurrentSessionAgentName();
 }
-//@ chunk-e6aww6q8.js:3444939-3445044 placement
+//@ chunk-5xgkngpb.js:3533902-3534007 placement (2.1.88 match: parseDimension, 1)
 function isSessionNameUnchanged(name, userInitiated) {
   if (userInitiated) return false;
   let registeredSessionName = getRegisteredSessionName();
@@ -417,7 +417,7 @@ function isSessionNameUnchanged(name, userInitiated) {
     getCurrentSessionAgentName() === name
   );
 }
-//@ chunk-e6aww6q8.js:3445044-3445264 placement
+//@ chunk-5xgkngpb.js:3534007-3534227 placement
 /**
  * 应用钩子返回的 hookSpecificOutput.sessionTitle（队友会话不处理，相同或冲突时跳过）。
  */
@@ -431,14 +431,14 @@ async function applyHookSessionTitle(id, sessionTitle, storageV5, credentials) {
   logForDebugging(`Hook sessionTitle applied (${[...sanitized].length} chars)`);
   await renameSessionName(sanitized, "hook", storageV5, false, false, credentials);
 }
-//@ chunk-q6msdgx4.js:2029-2037 placement
+//@ chunk-zhnr3erp.js:2113-2121 placement
 var MAX_TITLE_FALLBACKS = 2;
-//@ chunk-q6msdgx4.js:2037-2184 placement
+//@ chunk-zhnr3erp.js:2121-2268 placement
 /**
  * 选择会话标题回退：可用的散文文本优先，否则沿用已有回退。
  */
 function pickTitleFallback({ prose, isContinuationTurn, fallback }) {
-  if (prose !== null && _(prose))
+  if (prose !== null && isLongEnoughForTitle(prose))
     return {
       text: prose,
       unusableRepliesLeft: MAX_TITLE_FALLBACKS,
@@ -446,7 +446,7 @@ function pickTitleFallback({ prose, isContinuationTurn, fallback }) {
   if (fallback && (prose !== null || isContinuationTurn)) return fallback;
   return;
 }
-//@ chunk-q6msdgx4.js:2184-2371 placement
+//@ chunk-zhnr3erp.js:2268-2455 placement
 /**
  * 按标题请求结果更新回退：成功清除，失败保留，不可用时减少剩余次数。
  */
@@ -465,32 +465,32 @@ function nextTitleFallback(fallback, result) {
         : undefined;
   }
 }
-//@ chunk-q6msdgx4.js:2371-2592 placement
+//@ chunk-zhnr3erp.js:2455-2648 placement
 /**
  * 把会话标题同步到远程会话（仅远程会话中）。
  */
 function syncTitleToRemoteSession(title, update) {
-  let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
-  if (!CLAUDE_CODE_REMOTE_SESSION_ID) return;
+  let appState = _();
+  if (!appState) return;
   return (
     update ??
     ((sessionId, title) =>
       import("./teleport/api.js").then((mod) => mod.updateSessionTitle(sessionId, title)))
-  )(CLAUDE_CODE_REMOTE_SESSION_ID, title).then(
+  )(appState, title).then(
     () => {
       return;
     },
     (error) => logForDebugging(`syncTitleToRemoteSession: ${error}`),
   );
 }
-//@ chunk-q6msdgx4.js:2592-2627 placement
+//@ chunk-zhnr3erp.js:2648-2683 placement
 /**
  * firstHumanTurn：首个用户回合。
  */
 function firstHumanTurn(messages) {
   return messages.find(isHumanTurn_3);
 }
-//@ chunk-q6msdgx4.js:2627-3004 fingerprint (2.1.88 match: extractConversationText, 0.878)
+//@ chunk-zhnr3erp.js:2683-3060 fingerprint (2.1.88 match: extractConversationText, 0.878)
 /**
  * 抽取会话中用户与助手的可见文本（跳过 meta），用于生成标题。
  */
@@ -512,13 +512,13 @@ function extractConversationText(messages) {
 `);
   return text.length > MAX_TITLE_TEXT_CHARS ? text.slice(-MAX_TITLE_TEXT_CHARS) : text;
 }
-//@ chunk-q6msdgx4.js:3004-6131 layout
+//@ chunk-zhnr3erp.js:3060-6187 layout
 /**
  * 会话命名的系统提示词：以用户提到的最具体对象开头，用用户语言，返回 JSON title。
  */
 var SESSION_TITLE_PROMPT_2; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SESSION_TITLE_PROMPT;
-deferInit("chunk-q6msdgx4.js:3004", () => {
+deferInit("chunk-zhnr3erp.js:3060", () => {
   SESSION_TITLE_PROMPT_2 = `You are naming a coding session so the user can pick it out of a long list of sessions. The title is a name for what the session is about, not a sentence describing the task: a short noun phrase of two to five words, in sentence case (capitalize only the first word, plus proper nouns, acronyms, and code identifiers exactly as written). When a draft runs past five words, drop the least identifying ones \u2014 articles, prepositions, generic nouns, a secondary detail \u2014 never a proper noun, product name, or identifier.
 
 Lead with the most specific thing the user named \u2014 the component, feature, file, function, service, error, or concept \u2014 in the short form a person would say aloud: a file or module's name rather than its full path, an issue or pull request number rather than a URL or an opaque ID. Keep that identifier verbatim; it is what makes the title recognizable, so never swap it for a broader category. Leave out the request verbs that say what the user wants done (fix, add, check, investigate, implement, evaluate, debug, refactor, update, help with, look into, and the like): every session in the list is something being built or fixed, so the verb carries no information and pushes the real subject out of view. Turning the request into a trailing abstract noun does not rescue it: a title ending in evaluation, investigation, implementation, analysis, review, or check is still the task in other words, so name the thing being evaluated or investigated and stop there. Even a message that is itself a terse command gets recast this way \u2014 the thing acted on leads, and a verb that genuinely carries the meaning (a version bump, a rename, a migration) follows it as a noun, so the title never opens with a verb. The same holds in every language: the title is a noun phrase, not a clause, so in Japanese or Korean it does not end in a verb either. Do not append an explanation after a dash or colon. A generic label that could sit on dozens of sessions is not a name; when the message is mostly pasted code, logs, or an error, name the session by the specific function, file, or error inside it. But do not over-trim either \u2014 a few words that already read as one specific name are finished.
@@ -536,7 +536,7 @@ Return JSON with a single "title" field. Capitalize the first letter of the titl
     }),
   );
 });
-//@ chunk-q6msdgx4.js:6131-7119 fingerprint (2.1.88 match: generateSessionTitle, 0.592)
+//@ chunk-zhnr3erp.js:6187-7175 fingerprint (2.1.88 match: generateSessionTitle, 0.591)
 /**
  * 用小模型根据对话文本生成会话标题（JSON {title}），使用用户的语言。
  */
@@ -583,7 +583,7 @@ ${languageLine}`,
   let parsed = SESSION_TITLE_PROMPT().safeParse(safeParseJSON(stripJsonCodeFence(text), false));
   return parsed.success ? parsed.data.title.trim() || null : null;
 }
-//@ chunk-q6msdgx4.js:7119-7319 placement
+//@ chunk-zhnr3erp.js:7175-7375 placement
 function isTitleInputCapEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lucky_brooks", false) === true;
@@ -597,13 +597,13 @@ function isTitleInputCapEnabled() {
     return false;
   }
 }
-//@ chunk-q6msdgx4.js:7319-7864 placement
+//@ chunk-zhnr3erp.js:7375-7920 placement
 /**
  * 用小模型为输入文本生成会话标题（超长时可截断输入），上报 tengu_session_title_generated；返回 titled、unusable 或 failed。
  */
 async function requestSessionTitle(text, signal, credentials) {
   let trimmed = text.trim();
-  if (!_(trimmed))
+  if (!isLongEnoughForTitle(trimmed))
     return {
       kind: "unusable",
     };
@@ -614,7 +614,7 @@ async function requestSessionTitle(text, signal, credentials) {
     let title = await generateSessionTitle({
       systemPrompt: SESSION_TITLE_PROMPT_2,
       content: input,
-      language: getInitialSettings_2().language,
+      language: getInitialSettings().language,
       signal,
       credentials,
     });
@@ -645,7 +645,7 @@ async function requestSessionTitle(text, signal, credentials) {
     };
   }
 }
-//@ chunk-q6msdgx4.js:7864-7951 placement
+//@ chunk-zhnr3erp.js:7920-8007 placement
 /**
  * requestAndPickSessionTitle：请求并挑选会话标题。
  */
@@ -654,17 +654,17 @@ async function requestAndPickSessionTitle(text, signal, credentials) {
   return titleResult.kind === "titled" ? titleResult.title : null;
 }
 export {
-  renameSessionName,
   saveSessionAgentName,
-  renameSession,
   pushBridgeSessionTitle,
+  requestAndPickSessionTitle,
+  extractConversationText,
+  noopRenameNotify,
+  renameSessionName,
+  renameSession,
   firstHumanTurn,
   pickTitleFallback,
   nextTitleFallback,
-  noopRenameNotify,
   applyHookSessionTitle,
-  requestAndPickSessionTitle,
-  extractConversationText,
   requestSessionTitle,
   syncTitleToRemoteSession,
 };

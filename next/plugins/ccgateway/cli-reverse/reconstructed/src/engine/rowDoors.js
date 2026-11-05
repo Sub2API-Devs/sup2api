@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：查询引擎的行入口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1nk4j4sn.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8fb5jme0.js (14)
  * attribution: placement 14
  */
 import { originFromUnknown } from "../utils/messageOrigin.js";
 import { classifyHookAttachmentSource } from "../utils/hooks/hookAttachmentTypes.js";
-import { getToolUseIdOfMessage } from "../tools/utils.js";
+import { answeredToolUseId } from "../tools/utils.js";
 import { COMMAND_NAME, COMMAND_MESSAGE, ARTIFACT_BLOCK_TAGS } from "../constants/xml.js";
 import {
   summarizeMessageForExport,
@@ -24,11 +24,11 @@ import { errorMessage } from "../utils/errors.js";
 import { currentSurfaceBinding } from "../plugins/functionHooks/surfaceBinding.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1nk4j4sn.js:15636-16179 placement
+//@ chunk-8fb5jme0.js:16784-17327 placement
 /**
  * 判定消息作者类别：assistant→model，attachment 按来源，system→engine，user 里工具结果→tool，开场提示→coordinator，插件 note→plugin，否则按用户来源。
  */
-function classifyMessageAuthor(message, door, hooks) {
+function appendOriginOf(message, door, hooks) {
   switch (message.type) {
     case "assistant":
       return {
@@ -48,8 +48,7 @@ function classifyMessageAuthor(message, door, hooks) {
     case "user":
       break;
   }
-  let toolUseId =
-    door === "tool-result" || door === "tool-message" ? getToolUseIdOfMessage(message) : undefined;
+  let toolUseId = door === "tool-result" || door === "tool-message" ? answeredToolUseId(message) : undefined;
   if (toolUseId !== undefined)
     return {
       kind: "tool",
@@ -71,26 +70,26 @@ function classifyMessageAuthor(message, door, hooks) {
         kind: "engine",
       };
 }
-//@ chunk-1nk4j4sn.js:16179-16197 placement
+//@ chunk-8fb5jme0.js:17327-17345 placement
 var BOUNDARY_SUFFIX = "_boundary";
-//@ chunk-1nk4j4sn.js:16197-16237 placement
-var COMMAND_ROW_TAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1nk4j4sn.js:16197", () => {
+//@ chunk-8fb5jme0.js:17345-17385 placement
+var COMMAND_ROW_TAGS; // deferred: uses COMMAND_NAME (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8fb5jme0.js:17345", () => {
   COMMAND_ROW_TAGS = [COMMAND_NAME, COMMAND_MESSAGE, ...ARTIFACT_BLOCK_TAGS].map((tag) => `<${tag}>`);
 });
-//@ chunk-1nk4j4sn.js:16237-16304 placement
+//@ chunk-8fb5jme0.js:17385-17452 placement
 var DELIVERY_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1nk4j4sn.js:16237", () => {
+deferInit("chunk-8fb5jme0.js:17385", () => {
   DELIVERY_ATTACHMENT_TYPES = new Set(["queued_command", "poll_events", "teammate_mailbox"]);
 });
-//@ chunk-1nk4j4sn.js:16304-16452 placement
+//@ chunk-8fb5jme0.js:17452-17600 placement
 function lastTextOf(message) {
   let { content } = message.message;
   if (typeof content === "string") return content;
   let last = content.findLast((block) => block.type === "text");
   return last?.type === "text" ? last.text : undefined;
 }
-//@ chunk-1nk4j4sn.js:16452-16869 placement
+//@ chunk-8fb5jme0.js:17600-18017 placement
 function userDoorOf(message) {
   let { content } = message.message;
   if (Array.isArray(content) && content.some((block) => block.type === "tool_result")) return "tool-result";
@@ -107,7 +106,7 @@ function userDoorOf(message) {
     ? "prompt"
     : "note";
 }
-//@ chunk-1nk4j4sn.js:16869-17221 placement
+//@ chunk-8fb5jme0.js:18017-18369 placement
 function doorOf(message) {
   switch (message.type) {
     case "user":
@@ -126,20 +125,20 @@ function doorOf(message) {
       return message.subtype === "local_command" ? "command" : "notice";
   }
 }
-//@ chunk-1nk4j4sn.js:17221-17447 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
-  for (let message of sinceUuid)
-    for (let idx = message.length - 1; idx >= 0; idx--) {
-      let message_2 = message[idx];
-      if (message_2?.type !== "assistant") continue;
-      let found = message_2.message.content.find(
-        (block) => block.type === "tool_use" && block.id === messages,
+//@ chunk-8fb5jme0.js:18369-18595 placement
+function toolNameOf(toolUseId, lists) {
+  for (let list of lists)
+    for (let idx = list.length - 1; idx >= 0; idx--) {
+      let message = list[idx];
+      if (message?.type !== "assistant") continue;
+      let found = message.message.content.find(
+        (block) => block.type === "tool_use" && block.id === toolUseId,
       );
       if (found?.type === "tool_use") return found.name;
     }
   return "unknown";
 }
-//@ chunk-1nk4j4sn.js:17447-17665 placement
+//@ chunk-8fb5jme0.js:18595-18813 placement
 function appendInputOf(message, context) {
   let { agentId, raising, lists } = context;
   let door = raising.door ?? doorOf(message);
@@ -148,8 +147,8 @@ function appendInputOf(message, context) {
     door,
     origin:
       raising.origin ??
-      classifyMessageAuthor(message, door, {
-        toolNameOf: (messages) => countToolCallsSince(messages, lists),
+      appendOriginOf(message, door, {
+        toolNameOf: (toolUseId) => toolNameOf(toolUseId, lists),
         isOpeningPrompt: raising.door === "prompt",
       }),
     uuid: message.uuid,
@@ -158,7 +157,7 @@ function appendInputOf(message, context) {
     }),
   };
 }
-//@ chunk-1nk4j4sn.js:17665-18093 placement
+//@ chunk-8fb5jme0.js:18813-19241 placement
 async function appendedRow(session, input, raising) {
   let { row, listed } = input;
   let options = {
@@ -193,13 +192,13 @@ async function appendedRow(session, input, raising) {
   if (applied === undefined && !options.fills) options.keep([row]);
   return applied ?? row;
 }
-//@ chunk-1nk4j4sn.js:18093-18144 placement
+//@ chunk-8fb5jme0.js:19241-19292 placement
 var callAppended = (agentContext) =>
   refuseSessionAppend(agentContext, currentSurfaceBinding()?.conversation?.(agentContext.agentId));
-//@ chunk-1nk4j4sn.js:18144-18212 placement
+//@ chunk-8fb5jme0.js:19292-19360 placement
 var isAppendable = (message) =>
   message.type !== "progress" && (message.type !== "user" || message.ephemeral !== true);
-//@ chunk-1nk4j4sn.js:18212-18322 placement
+//@ chunk-8fb5jme0.js:19360-19470 placement
 var pluginAppended = (message, options) =>
   NO_CORE_AT_CHAIN_BOTTOM("session.append", {
     origin: options.origin,
@@ -207,7 +206,7 @@ var pluginAppended = (message, options) =>
       signal: options.signal,
     }),
   })(buildPluginAppendRow(message, options.plugin));
-//@ chunk-1nk4j4sn.js:18322-18493 placement
+//@ chunk-8fb5jme0.js:19470-19641 placement
 async function rowsAppendedTo(session, rows, raising) {
   let listed = rows.filter(isAppendable);
   let applied = [];
@@ -234,7 +233,7 @@ export {
   COMMAND_ROW_TAGS,
   DELIVERY_ATTACHMENT_TYPES,
   appendInputOf,
-  classifyMessageAuthor,
+  appendOriginOf,
   appendedRow,
   callAppended,
   doorOf,
@@ -242,6 +241,6 @@ export {
   lastTextOf,
   pluginAppended,
   rowsAppendedTo,
-  countToolCallsSince,
+  toolNameOf,
   userDoorOf,
 };

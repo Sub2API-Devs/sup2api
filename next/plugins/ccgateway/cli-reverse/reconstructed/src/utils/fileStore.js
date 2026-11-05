@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地文件存储实现与文件读取器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7kr2r08r.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yw5t5y3v.js (5)
  * attribution: placement 5
  */
 import {
@@ -27,7 +27,7 @@ import { writeFileAtomic } from "./atomicPublishWrite.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7kr2r08r.js:528-1859 placement
+//@ chunk-yw5t5y3v.js:528-1859 placement
 /**
  * 本地文件存储实现：读写文本与字节、删除、列目录。
  */
@@ -145,7 +145,7 @@ class LocalFileStore {
     }
   }
 }
-//@ chunk-7kr2r08r.js:1859-1978 placement
+//@ chunk-yw5t5y3v.js:1859-1978 placement
 /**
  * 参数不是非负整数时抛 RangeError。
  */
@@ -153,7 +153,7 @@ function assertNonNegativeInteger(methodName, parameterName, value) {
   if (!Number.isInteger(value) || value < 0)
     throw RangeError(`${methodName}: ${parameterName} must be a non-negative integer, got ${value}`);
 }
-//@ chunk-7kr2r08r.js:1978-2178 placement
+//@ chunk-yw5t5y3v.js:1978-2178 placement
 /**
  * 从句柄指定位置读取 n 字节（遇到文件结尾时返回已读部分）。
  */
@@ -168,12 +168,12 @@ async function readExactly(handle, offset, length) {
   }
   return totalRead === length ? buffer : Buffer.from(buffer.subarray(0, totalRead));
 }
-//@ chunk-7kr2r08r.js:2178-2190 placement
+//@ chunk-yw5t5y3v.js:2178-2190 placement
 var fileReaderStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7kr2r08r.js:2178", () => {
+deferInit("chunk-yw5t5y3v.js:2178", () => {
   fileReaderStorage = new AsyncLocalStorage();
 });
-//@ chunk-7kr2r08r.js:2190-2233 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-yw5t5y3v.js:2190-2233 placement
 /**
  * 取当前文件读取器（ALS 覆盖或默认 read/readBytes 实现）。
  */

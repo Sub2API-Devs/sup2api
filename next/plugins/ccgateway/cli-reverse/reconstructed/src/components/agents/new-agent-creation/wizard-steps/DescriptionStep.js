@@ -3,9 +3,9 @@
  *
  * 向导描述步骤；实际内容为 Bedrock 区域输入（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/DescriptionStep.tsx
- * pieces: chunk-sx9xc5ee.js (1)
+ * pieces: chunk-3msz77wt.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
@@ -25,7 +25,7 @@ import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
-//@ chunk-sx9xc5ee.js:19296-20653 callgraph-fingerprint (2.1.88 match: DescriptionStep, 0.579)
+//@ chunk-3msz77wt.js:19296-20653 callgraph-fingerprint (2.1.88 match: DescriptionStep, 0.579)
 function DescriptionStep() {
   let $ = useMemoCache(17);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();

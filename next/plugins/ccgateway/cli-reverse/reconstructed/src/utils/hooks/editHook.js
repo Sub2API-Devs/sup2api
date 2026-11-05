@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。编辑 settings 中的 hooks（edit_hook）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-azbt01vf.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x30dhg5a.js (22)
  * attribution: placement 22
  */
 import { HookCommandSchema } from "../../schemas/hooks.js";
@@ -27,23 +27,23 @@ import { identityMap } from "../../remote/tools/protocolConstants.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
 
-//@ chunk-azbt01vf.js:4004-4052 placement
+//@ chunk-x30dhg5a.js:4317-4365 placement
 var EDIT_HOOK_OPERATIONS = ["add", "replace", "remove"];
 var MAX_EDIT_FIELD_CHARS = 1e4;
 var MAX_EDIT_PAYLOAD_CHARS = 262144;
-//@ chunk-azbt01vf.js:4052-4122 placement
+//@ chunk-x30dhg5a.js:4365-4435 placement
 function isPlainObjectLike(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-azbt01vf.js:4122-4177 placement
+//@ chunk-x30dhg5a.js:4435-4490 placement
 var FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-//@ chunk-azbt01vf.js:4177-4297 placement
+//@ chunk-x30dhg5a.js:4490-4610 placement
 function hasForbiddenKey(value) {
   if (Array.isArray(value)) return value.some(hasForbiddenKey);
   if (!isPlainObjectLike(value)) return false;
   return Object.keys(value).some((key) => FORBIDDEN_OBJECT_KEYS.has(key) || hasForbiddenKey(value[key]));
 }
-//@ chunk-azbt01vf.js:4297-4762 placement
+//@ chunk-x30dhg5a.js:4610-5075 placement
 /**
  * 校验 edit_hook 的命令对象：必须是对象、不含禁用键、大小受限。
  */
@@ -77,7 +77,7 @@ function validateEditHookCommand(hook, label) {
     hook: parsed.data,
   };
 }
-//@ chunk-azbt01vf.js:4762-5056 placement
+//@ chunk-x30dhg5a.js:5075-5369 placement
 function validateEditHookMatcher(matcher, label) {
   if (matcher === undefined || matcher === null)
     return {
@@ -104,7 +104,7 @@ function validateEditHookMatcher(matcher, label) {
     matcher,
   };
 }
-//@ chunk-azbt01vf.js:5056-6081 placement
+//@ chunk-x30dhg5a.js:5369-6394 placement
 function validateEditHookRequest(request) {
   let op = request.op;
   if (typeof op !== "string" || !EDIT_HOOK_OPERATIONS.includes(op))
@@ -168,7 +168,7 @@ function validateEditHookRequest(request) {
     },
   };
 }
-//@ chunk-azbt01vf.js:6081-6485 placement
+//@ chunk-x30dhg5a.js:6394-6798 placement
 /**
  * 托管设置禁止编辑 hook 时返回原因（禁用全部 hook 或只允许托管 hook）。
  */
@@ -183,13 +183,13 @@ function managedHooksEditBlockReason() {
     return "edit_hook: managed settings could not be read, so hooks cannot be edited";
   return null;
 }
-//@ chunk-azbt01vf.js:6485-6605 placement
+//@ chunk-x30dhg5a.js:6798-6918 placement
 function disabledSourceEditReason(source) {
   if (!isSettingSourceEnabled(source))
     return `edit_hook: the ${source} source is disabled for this session (--setting-sources)`;
   return null;
 }
-//@ chunk-azbt01vf.js:6605-6766 placement
+//@ chunk-x30dhg5a.js:6918-7079 placement
 async function applyHookEditToSettings(request, writeOptions) {
   let outcome = null;
   return {
@@ -210,7 +210,7 @@ async function applyHookEditToSettings(request, writeOptions) {
     outcome,
   };
 }
-//@ chunk-azbt01vf.js:6766-6962 placement
+//@ chunk-x30dhg5a.js:7079-7275 placement
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   if (isPlainObjectLike(value))
@@ -220,7 +220,7 @@ function stableStringify(value) {
       .join(",")}}`;
   return JSON.stringify(value) ?? "null";
 }
-//@ chunk-azbt01vf.js:6962-7060 placement
+//@ chunk-x30dhg5a.js:7275-7373 placement
 function isSameHookCommand(hookCommand, config) {
   let parsed = HookCommandSchema().safeParse(hookCommand);
   if (!parsed.success) return false;
@@ -228,7 +228,7 @@ function isSameHookCommand(hookCommand, config) {
     stableStringify(redactHttpHeaderValues(parsed.data)) === stableStringify(redactHttpHeaderValues(config))
   );
 }
-//@ chunk-azbt01vf.js:7060-7174 placement (2.1.88 match: isHTTPConfig, 1)
+//@ chunk-x30dhg5a.js:7373-7487 placement (2.1.88 match: isHTTPConfig, 1)
 function canonicalHookKey(config) {
   return stableStringify(
     config.type === "http" && config.headers !== undefined
@@ -239,12 +239,12 @@ function canonicalHookKey(config) {
       : config,
   );
 }
-//@ chunk-azbt01vf.js:7174-7245 placement
+//@ chunk-x30dhg5a.js:7487-7558 placement
 function canonicalHookKeyOf(hook) {
   let parsed = HookCommandSchema().safeParse(hook);
   return parsed.success ? canonicalHookKey(parsed.data) : null;
 }
-//@ chunk-azbt01vf.js:7245-7532 placement
+//@ chunk-x30dhg5a.js:7558-7845 placement
 /**
  * findDuplicateHook：在同 matcher 的 hook 组里查找重复 hook，返回 exact/by-headers/null（编辑 hooks 设置用，非 MCP；见 lead 建议）。
  */
@@ -263,18 +263,18 @@ function findDuplicateHook(groups, matcher, hook, skip) {
   }
   return headersOnly ? "by-headers" : null;
 }
-//@ chunk-azbt01vf.js:7532-7595 placement
+//@ chunk-x30dhg5a.js:7845-7908 placement
 function duplicateHookKind(duplicateHook) {
   return duplicateHook === "exact" ? "duplicate" : "twin-by-headers";
 }
-//@ chunk-azbt01vf.js:7595-7746 placement
+//@ chunk-x30dhg5a.js:7908-8059 placement
 function getHookMatcherKey(group) {
   if (!isPlainObjectLike(group) || !Array.isArray(group.hooks)) return null;
   let matcher = group.matcher;
   if (matcher === undefined || matcher === null || matcher === "") return "";
   return typeof matcher === "string" ? matcher : null;
 }
-//@ chunk-azbt01vf.js:7746-8291 placement (2.1.88 match: isHTTPConfig, 1)
+//@ chunk-x30dhg5a.js:8059-8604 placement (2.1.88 match: isHTTPConfig, 1)
 /**
  * mergeHookPreservingHeaders：编辑 http hook 时保留原有未知字段与被遮蔽的 header 值（非 MCP；见 lead 建议）。
  */
@@ -315,7 +315,7 @@ function mergeHookPreservingHeaders(previous, hook) {
     delete merged.headers;
   return merged;
 }
-//@ chunk-azbt01vf.js:8291-8479 placement (2.1.88 match: convertToHookMatchers, 0.839)
+//@ chunk-x30dhg5a.js:8604-8792 placement (2.1.88 match: convertToHookMatchers, 0.839)
 /**
  * 统计设置对象里某事件、某 matcher 下与给定钩子相同的条目数。
  */
@@ -329,7 +329,7 @@ function countMatchingHookEntries(settings, target) {
   }
   return count;
 }
-//@ chunk-azbt01vf.js:8479-9859 placement
+//@ chunk-x30dhg5a.js:8792-10172 placement
 function applyHookEdit(request, edit) {
   let hooks = request?.hooks;
   if (hooks !== undefined && !isPlainObjectLike(hooks))
@@ -440,7 +440,7 @@ function applyHookEdit(request, edit) {
     outcome: "applied",
   };
 }
-//@ chunk-azbt01vf.js:9859-10060 placement
+//@ chunk-x30dhg5a.js:10172-10373 placement
 function buildHooksPartial(original, edited) {
   let partial = {};
   for (let [event, list] of edited) partial[event] = list.length > 0 ? list : undefined;
@@ -453,7 +453,7 @@ function buildHooksPartial(original, edited) {
         hooks: undefined,
       };
 }
-//@ chunk-azbt01vf.js:10060-12184 placement
+//@ chunk-x30dhg5a.js:10373-12497 placement
 async function editHook(request, writeOptions) {
   let failure = (code, error, refusal) => ({
     ok: false,

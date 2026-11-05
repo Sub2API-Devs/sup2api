@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/client.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-layout 1
  */
 import { readEnv } from "./internal/utils/env.mjs";
@@ -52,7 +52,7 @@ import { Skills_2 } from "./resources/skills/skills.mjs";
 import { Beta } from "./resources/beta/beta.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:162129-177706 esm-layout
+//@ chunk-vn3g7zt8.js:162509-178094 esm-layout
 var _BaseAnthropic_instances; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var _a;
 var _BaseAnthropic_encoder;
@@ -61,7 +61,7 @@ var HUMAN_PROMPT;
 var AI_PROMPT;
 var BaseAnthropic;
 var Anthropic;
-deferInit("chunk-hwmsct5x.js:162129", () => {
+deferInit("chunk-vn3g7zt8.js:162509", () => {
   HUMAN_PROMPT = "\\n\\nHuman:";
   AI_PROMPT = "\\n\\nAssistant:";
   BaseAnthropic = (() => {
@@ -842,4 +842,4 @@ new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     return Anthropic;
   })();
 });
-export { Anthropic, BaseAnthropic };
+export { BaseAnthropic, Anthropic };

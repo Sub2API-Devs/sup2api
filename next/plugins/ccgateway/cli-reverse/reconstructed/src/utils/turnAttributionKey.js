@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：回合归因键的读取与校验（消息自带、任务通知继承、跨会话禁用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (4)
  * attribution: placement 4
  */
 import { normalizeUuidOrNull } from "./agentId.js";
 
-//@ chunk-aepeg2w5.js:853069-853143 placement
+//@ chunk-exfmq47h.js:875452-875526 placement
 /**
  * 取跨会话继承的回合归属键（跨会话时不给）。
  */
 function inheritedAttributionKey(uuid, { isCrossSession }) {
   return !isCrossSession && typeof uuid === "string" ? uuid : undefined;
 }
-//@ chunk-aepeg2w5.js:853143-853323 placement
+//@ chunk-exfmq47h.js:875526-875706 placement
 /**
  * 取消息的回合归因键（任务通知继承）。
  */
@@ -27,14 +27,14 @@ function messageTurnAttributionKey(command) {
     ? attributionKeyOrUndefined(command.inheritedTurnAttributionKey)
     : undefined;
 }
-//@ chunk-aepeg2w5.js:853418-853455 placement
+//@ chunk-exfmq47h.js:875801-875838 placement
 /**
  * 规范化归属键（空值转 undefined）。
  */
 function attributionKeyOrUndefined(value) {
   return normalizeUuidOrNull(value) ?? undefined;
 }
-//@ chunk-aepeg2w5.js:853455-853590 placement
+//@ chunk-exfmq47h.js:875838-875973 placement
 /**
  * 若消息中恰好有一条带回合归属键的非 meta 消息，返回其归属键。
  */
@@ -43,8 +43,8 @@ function turnAttributionKeyOf(messages) {
   return filtered.length === 1 ? attributionKeyOrUndefined(filtered[0]?.turnAttributionKey) : undefined;
 }
 export {
+  attributionKeyOrUndefined,
   messageTurnAttributionKey,
   turnAttributionKeyOf,
   inheritedAttributionKey,
-  attributionKeyOrUndefined,
 };

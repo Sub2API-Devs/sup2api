@@ -3,12 +3,11 @@
  *
  * 2.1.316 新增。启动通知：会话类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (14)
- * attribution: placement 14
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (15)
+ * attribution: placement 15
  */
-import { useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { getIsRemoteMode } from "../../../bootstrap/state.js";
 import {
   isAdvisorToolEnabled,
@@ -68,13 +67,7 @@ import {
 import { isPromoOffersBlocked } from "../../../utils/planTiers.js";
 import { getCurrentWorktreeSession } from "../../../utils/worktree.js";
 
-//@ chunk-18hwfzwa.js:1751839-1751883 placement
-function noopEffect_2(session, addNotification, removeNotification) {
-  useEffect(() => {
-    return;
-  }, [session, addNotification, removeNotification]);
-}
-//@ chunk-18hwfzwa.js:1751883-1752682 placement
+//@ chunk-czq1j3j2.js:1799144-1799943 placement
 var advisorToolNoticeSpec = {
   id: "advisor-tool",
   deps: (ctx) => [ctx.advisorModel, ctx.mainLoopModel, ctx.addNotification, ctx.growthBookVersion],
@@ -121,14 +114,14 @@ var advisorToolNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1752682-1752730 placement
+//@ chunk-czq1j3j2.js:1799943-1799991 placement
 var antOrgAuthCheckNoticeSpec = {
   id: "ant-org-auth-check",
   setup: () => noopSessionNotice,
 };
-//@ chunk-18hwfzwa.js:1752730-1752746 placement
+//@ chunk-czq1j3j2.js:1799991-1800007 placement
 function noopSessionNotice() {}
-//@ chunk-18hwfzwa.js:1752746-1755611 placement
+//@ chunk-czq1j3j2.js:1800007-1802872 placement
 /**
  * 会话通知规格：提议开启自动压缩。
  */
@@ -328,14 +321,14 @@ var autocompactOfferNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1755611-1755693 placement
+//@ chunk-czq1j3j2.js:1802872-1802954 placement
 function getLiveContextTokens({ transcript, mainLoopModel }) {
   return estimateTokensWithAnchor(
     messagesSinceCompactBoundary(transcript.getSnapshot()),
     bytesPerTokenForModel(mainLoopModel),
   );
 }
-//@ chunk-18hwfzwa.js:1755693-1756430 placement
+//@ chunk-czq1j3j2.js:1802954-1803691 placement
 /**
  * 启动通知"auto-mode-entry-warning"：进入 auto 模式（非回退、非后台会话）且需要时，延迟追加一条自动模式说明系统消息并记录已看过。
  */
@@ -383,7 +376,7 @@ var autoModeEntryWarningSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1785137-1785355 placement
+//@ chunk-czq1j3j2.js:1833016-1833234 placement
 var repoMemoryImportNoticeSpec = {
   id: "repo-memory-import",
   deps: (ctx) => [ctx.addNotification, ctx.transcript, ctx.session, ctx.isRemoteSession],
@@ -394,7 +387,7 @@ var repoMemoryImportNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1785355-1785931 placement
+//@ chunk-czq1j3j2.js:1833234-1833810 placement
 var replMountLogNoticeSpec = {
   id: "repl-mount-log",
   deps: (ctx) => [ctx.disabled],
@@ -432,16 +425,29 @@ var dialogWaitingTranscriptNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1787546-1787594 placement
+//@ chunk-czq1j3j2.js:1833810-1833861 placement
+/**
+ * “工作副本未被使用”启动通知的规格：id 与 setup。
+ */
+var workingCopyNotUsedCheck = {
+  id: "working-copy-not-used",
+  setup: () => workingCopyNotUsedSetup,
+};
+//@ chunk-czq1j3j2.js:1833861-1833906 placement
+/**
+ * 上述通知的 setup：向通知器登记一条 working-copy-not-used 提示。
+ */
+function workingCopyNotUsedSetup({ addNotification, session }) {}
+//@ chunk-czq1j3j2.js:1835521-1835569 placement
 var slackFooterOfferNoticeSpec = {
   id: "slack-footer-offer",
   setup: () => noopSlackFooterOffer,
 };
-//@ chunk-18hwfzwa.js:1787594-1787616 placement
+//@ chunk-czq1j3j2.js:1835569-1835591 placement
 function noopSlackFooterOffer() {
   return;
 }
-//@ chunk-18hwfzwa.js:1787616-1787959 placement
+//@ chunk-czq1j3j2.js:1835591-1835934 placement
 var subscriptionSwitchCheckNoticeSpec = {
   id: "subscription-switch-check",
   deps: (ctx) => [ctx.store],
@@ -469,7 +475,7 @@ var subscriptionSwitchCheckNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1788831-1789070 placement
+//@ chunk-czq1j3j2.js:1836806-1837045 placement
 var wellbeingNoticeSpec = {
   id: "wellbeing",
   deps: (ctx) => [ctx.settings, ctx.addNotification, ctx.clock],
@@ -494,7 +500,7 @@ var wellbeingNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1789070-1789557 placement
+//@ chunk-czq1j3j2.js:1837045-1837532 placement
 /**
  * 启动通知规格：创建工作树耗时超过阈值且未使用稀疏检出时，提示设置 worktree.sparsePaths。
  */
@@ -520,13 +526,13 @@ var worktreeSparseTipSpec = {
   },
 };
 export {
-  noopEffect_2,
   replMountLogNoticeSpec,
   dialogWaitingTranscriptNoticeSpec,
   repoMemoryImportNoticeSpec,
   antOrgAuthCheckNoticeSpec,
   subscriptionSwitchCheckNoticeSpec,
   advisorToolNoticeSpec,
+  workingCopyNotUsedCheck,
   wellbeingNoticeSpec,
   dialogWaitingInTranscriptNoticeSpec,
   autoModeEntryWarningSpec,

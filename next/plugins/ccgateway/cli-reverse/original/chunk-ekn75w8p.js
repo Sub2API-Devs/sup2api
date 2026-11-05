@@ -1,6 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import"./chunk-kcjh5jnz.js";import"./chunk-0777tkjc.js";import"./chunk-ndmse9kj.js";import"./chunk-vk5xfx8n.js";import"./chunk-0wqny7vr.js";import"./chunk-2g090z7k.js";import"./chunk-eabawhjj.js";import"./chunk-aat7wt0p.js";import"./chunk-x7vma94a.js";import"./chunk-cgr0tezp.js";import"./chunk-cmr2yp8m.js";import"./chunk-cgcrer2m.js";import"./chunk-j3nx1xyn.js";import"./chunk-m41h77x8.js";import"./chunk-fq90vph4.js";import"./chunk-jhrww53q.js";import"./chunk-6ysndsgz.js";import"./chunk-bbtre4r8.js";import"./chunk-znrryf4y.js";import"./chunk-m4p5zn6n.js";import"./chunk-fnk5kvbf.js";import"./chunk-qnshrmd1.js";import"./chunk-3a1caa6f.js";import"./chunk-sycgf9xs.js";import"./chunk-hvmek2df.js";import"./chunk-8kte1b36.js";import"./chunk-8nhse09v.js";import"./chunk-yr49hy5m.js";import{fi}from"./chunk-xh6k20xb.js";import"./chunk-58wc6nbw.js";async function s(){if(await fi("https://www.stickermule.com/claudecode"))return{type:"text",value:"Opening sticker page in browser\u2026"};else return{type:"text",value:"Failed to open browser. Visit: https://www.stickermule.com/claudecode"}}export{s as call};

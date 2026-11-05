@@ -3,10 +3,10 @@
  *
  * Agent 工具执行体（callAgentTool）与输出 schema：子代理/fork/队友/远程代理的启动决策、隔离、前后台与结果组装（工具对象本身被切到 _unattributed/chunk-0tkmvwy0/part-005）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/AgentTool.tsx
- * pieces: chunk-0tkmvwy0.js (4), chunk-apw2zhyn.js (1), chunk-e6aww6q8.js (1)
- * attribution: placement 2, fingerprint 4
+ * pieces: chunk-5xgkngpb.js (1), chunk-bmmd67jf.js (1), chunk-czq1j3j2.js (1), chunk-tmsx2mh0.js (4)
+ * attribution: fingerprint 5, placement 2
  */
 import { realpath } from "fs/promises";
 import { env } from "../../utils/env.js";
@@ -50,6 +50,9 @@ import {
   getForkPreconditionError,
   isGeneralPurposeAgentAvailable,
 } from "./agentToolDefinition.js";
+import { TASK_CALLS_PAYLOAD_SCHEMA, collectTaskSubagentCalls } from "../../cli/print/turnStartChecks.js";
+import { TASK_CREATE_TOOL_NAME } from "../TaskCreateTool/constants.js";
+import { TASK_UPDATE_TOOL_NAME } from "../TaskUpdateTool/constants.js";
 import { isRelativeEffortDisabled } from "./agentEffort.js";
 import {
   assertAgentCwdAllowed,
@@ -79,7 +82,11 @@ import {
 } from "./agentContainerResume.js";
 import { willToolsLoseSessionState } from "../../services/compact/compactCarry.js";
 import { hasSendMessageTool } from "../SendMessageTool/constants.js";
-import { getToolPermissionContext, getMainLoopModel } from "../../utils/permissions/toolPermissionContext.js";
+import {
+  getToolPermissionContext,
+  getMainLoopModel,
+  getPickedEffortModel,
+} from "../../utils/permissions/toolPermissionContext.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 import { getDynamicTeamContext, getParentSessionId } from "../../utils/teammate.js";
 import { isZincHarborOn } from "../../plugins/functionHooks/inputHold.js";
@@ -179,7 +186,7 @@ import {
 import { isAbortedNotByInterrupt } from "../../entrypoints/sdk/controlSchemas.js";
 import { getAgentModel, getExploreAgentModel } from "../../utils/model/agent.js";
 import { resolveSubagentEffort } from "./subagentSpawn.js";
-import { findAdjacentEffortLevel } from "../../utils/effort.js";
+import { findAdjacentEffortLevel, categorizeRetryableAPIError } from "../../services/api/errors.js";
 import { readAgentMemoryScope } from "./agentMemory.js";
 import { parsePluginIdentifier_2 } from "../../utils/plugins/pluginIdentifier.js";
 import { recordPluginUsage, buildPluginEventFields } from "../../utils/telemetry/pluginTelemetry.js";
@@ -231,7 +238,7 @@ import {
   clearWorktreeFromAgentMetadata,
   spawnRequestShape,
   runAgent,
-  filterIncompleteToolCalls_2,
+  shouldForwardNestedToolCall,
 } from "./runAgent.js";
 import {
   MAIN_OBSERVED_KEY,
@@ -248,6 +255,7 @@ import { getCwd, hasOutermostCallFrame, runWithCwdOverride, withCallFrameCwd } f
 import { formatTotalTokensTag } from "../../utils/attachments/totalTokensReminder.js";
 import { getQuerySourceForAgent } from "../../utils/promptCategory.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { plural } from "../../utils/stringUtils.js";
 import { displayModelName, formatModelRestrictedNotice } from "../../utils/model/validateModel.js";
 import { isParkedOnChildWork, hasChildAgents } from "../../tasks/LocalAgentTask/childWork.js";
@@ -257,20 +265,21 @@ import { MAIN } from "../../utils/sessionPeers.js";
 import { getTaskRunState, emitTaskNotification } from "../../utils/task/taskNotifications.js";
 import { addAgentKeepaliveReason } from "../../tasks/taskKinds.js";
 import { isIterativeHavenGateOn } from "../../cli/print/agentResume.js";
-import { categorizeRetryableAPIError } from "../../services/api/errors.js";
-import { getAssistantMessageContentLength } from "../../utils/tokens.js";
+import { UnsentMediaReporter, letGoOfUnsentMediaInPlace } from "../../services/api/toolSchemaWire.js";
+import { hasThinkingContent } from "../../utils/tokens.js";
 import { getPendingHandbackReport, forgetHandback } from "./handbackReport.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
+import { isShutdownFrameStale } from "../../utils/swarm/teamHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-apw2zhyn.js:1372-1439 fingerprint (2.1.88 match: isBackgroundTasksDisabled, 1)
+//@ chunk-bmmd67jf.js:1372-1439 fingerprint (2.1.88 match: isBackgroundTasksDisabled, 1)
 /**
  * 后台任务是否被禁用：CLAUDE_CODE_DISABLE_BACKGROUND_TASKS 或 --bare 模式。
  */
 function isBackgroundTasksDisabled() {
   return env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode();
 }
-//@ chunk-e6aww6q8.js:4709491-4709738 fingerprint (2.1.88 match: getAutoBackgroundMs, 0.638)
+//@ chunk-5xgkngpb.js:4820335-4820582 fingerprint (2.1.88 match: getAutoBackgroundMs, 0.638)
 /**
  * coordinator 模式或 CLAUDE_AUTO_BACKGROUND_TASKS 下解析 CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE（逗号分隔秒数，1–86400）为毫秒数组。
  */
@@ -280,7 +289,7 @@ function getWorkerCheckinScheduleMs() {
   if (!mapped?.every((value) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 86400)) return;
   return mapped.map((seconds) => Number(seconds) * 1000);
 }
-//@ chunk-0tkmvwy0.js:7783-7872 placement
+//@ chunk-tmsx2mh0.js:15722-15811 placement
 /**
  * AgentTool.checkPermissions 的免审分支：dontAsk 下 web-fetch 代理派发满足条件时登记并返回 true。
  */
@@ -289,7 +298,7 @@ async function tryAutoApproveWebFetchDispatch({ input, toolUseContext }) {
   markWebFetchDispatchApproved(toolUseContext);
   return true;
 }
-//@ chunk-0tkmvwy0.js:7872-7955 placement (2.1.88 match: collectCandidatesFromMessage, 0.621)
+//@ chunk-tmsx2mh0.js:15811-15894 placement
 /**
  * 在 toolState 的 WebFetchDispatchApprovals 中登记当前 toolUseId。
  */
@@ -297,13 +306,13 @@ function markWebFetchDispatchApproved({ toolUseId, toolState }) {
   if (toolUseId === undefined) return;
   toolState.get(WebFetchDispatchApprovals).set(toolUseId, [], true);
 }
-//@ chunk-0tkmvwy0.js:16698-18155 fingerprint (2.1.88 match: outputSchema, 0.581)
+//@ chunk-tmsx2mh0.js:24623-26362 fingerprint (2.1.88 match: outputSchema, 0.521)
 /**
  * Agent 工具输出 schema：completed（agentToolResultSchema + prompt/worktree）、async_launched（agentId/outputFile/resolvedModel/modelsUsed/sharesCwd…）、remote_launched（taskId/sessionUrl/outputFile）三者联合。
  */
 var completedResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var agentOutputSchema;
-deferInit("chunk-0tkmvwy0.js:16698", () => {
+deferInit("chunk-tmsx2mh0.js:24623", () => {
   completedResultSchema = DoctorLazy(() =>
     agentToolResultSchema().extend({
       status: literal("completed"),
@@ -311,6 +320,11 @@ deferInit("chunk-0tkmvwy0.js:16698", () => {
       worktreePath: stringSchema().optional(),
       worktreeBranch: stringSchema().optional(),
       canContinueAgent: canContinueAgentSchema(),
+      taskCalls: TASK_CALLS_PAYLOAD_SCHEMA()
+        .optional()
+        .describe(
+          `@internal The subagent's ${TASK_CREATE_TOOL_NAME} and ${TASK_UPDATE_TOOL_NAME} calls that landed, in order: each call's tool, input and result text. The subagent writes the session's task list, and no other row of the main transcript shows these calls (not a stable consumer field)`,
+        ),
     }),
   );
   agentOutputSchema = DoctorLazy(() => {
@@ -349,7 +363,7 @@ deferInit("chunk-0tkmvwy0.js:16698", () => {
     return union([completedSchema, asyncSchema, remoteSchema]);
   });
 });
-//@ chunk-0tkmvwy0.js:18155-48361 fingerprint (2.1.88 match: AgentTool, 0.354)
+//@ chunk-tmsx2mh0.js:26362-56858 fingerprint (2.1.88 match: AgentTool, 0.348)
 /**
  * Agent 工具的执行体：校验嵌套深度、预算、并发上限与 deny 规则，解析 subagent_type（fork / 规范化匹配 / general-purpose 缺省），处理 name 队友派生、agent.spawn 插件钩子改写、requiredMcpServers 等待，然后按 decideAgentLaunchMode 走远程（teleportToRemote）、后台（runAsyncAgentLifecycle）或同步（runAgent 流 + 进度回调）三条路径；isolation=worktree 时创建并在结束后清理 worktree。
  */
@@ -999,6 +1013,7 @@ async function callAgentTool({
         isFork: isForkLaunch,
         model: resolvedModel,
         effortState: toolUseContext.getAppState(),
+        pickedEffortModel: getPickedEffortModel(toolUseContext),
         inheritedLayers: toolUseContext.permissionLayers,
         recordedBudgetText: undefined,
       });
@@ -1024,7 +1039,6 @@ async function callAgentTool({
   let effectiveEffort = isForkLaunch ? undefined : (spawnInput ?? absoluteEffort);
   selectedAgent = effortBudgetPlan?.agentDefinition ?? selectedAgent;
   let agentTypeForTelemetry = agentTypeForAnalyticsFromDefinition(selectedAgent);
-  toolUseContext.agentLifecycle.markTypeInvoked(selectedAgent.agentType);
   let primedAgentMemory = await readAgentMemoryScope(selectedAgent, toolUseContext.storageV5);
   let systemPrompt = selectedAgent.getSystemPrompt({
     toolUseContext,
@@ -1385,7 +1399,10 @@ ${joined}`);
     description: agentDescription,
     preserveToolUseResults: !getIsNonInteractiveSession(),
     toolUseId: toolUseContext.toolUseId,
-    ...false,
+    ...(codeModeAccepted() &&
+      enclosingToolUseId !== undefined && {
+        enclosingToolUseId,
+      }),
     onMcpServersBlocked: (blockedServers, blockedBy) =>
       onProgress?.({
         type: "notification",
@@ -1621,6 +1638,7 @@ ${joined}`);
       toolUseId: toolUseContext.toolUseId,
       cwd: cwd_2,
       spawnedSubagent: spawnTelemetry,
+      pluginRewrote: spawnHookResult.isRewritten,
       sessionScratch: toolUseContext.session.sessionScratch,
     });
     if (
@@ -1825,9 +1843,11 @@ ${joined}`);
           isDirectCall: !toolUseContext.innerCall && toolUseContext.hookCaller === undefined,
           cwd: cwd_2,
           spawnedSubagent: spawnTelemetry,
+          pluginRewrote: spawnHookResult.isRewritten,
           ...(recordsLaunchDefaults && {
             launchedWithDefaults,
             launchModel,
+            requestShape: "foreground",
           }),
         });
         let { taskId, cancelAutoBackground, abortController, detachParentAbortRelay } =
@@ -1848,10 +1868,12 @@ ${joined}`);
         };
         logFeatureOk("subagent_launch");
         let agentMessages = [];
+        let pendingMessages = new UnsentMediaReporter(foregroundAgentId);
         let forwardSubagentText = toolUseContext.options.forwardSubagentText;
         let lastRetryKey;
         let sawAssistantMessage = false;
         let onMessage = (message) => {
+          if (pendingMessages.hasNews()) letGoOfUnsentMediaInPlace(agentMessages, foregroundAgentId);
           if (backgroundWait.moved) return;
           if (message.type === "query_model_change") {
             resolvedModel_2 = message.toModel;
@@ -1912,7 +1934,7 @@ ${joined}`);
             return;
           }
           if (extractAgentIdsFromMessages_2(message)) {
-            if (filterIncompleteToolCalls_2(toolUseContext, message))
+            if (shouldForwardNestedToolCall(toolUseContext, message))
               onProgress(createProgressMessage_2(message));
             return;
           }
@@ -1920,12 +1942,12 @@ ${joined}`);
           if (message.type === "user" && message.isMeta && !sawAssistantMessage) return;
           if (message.type === "assistant") sawAssistantMessage = true;
           if (message.type === "assistant") {
-            let assistantMessageContentLength = getAssistantMessageContentLength(message);
-            if (assistantMessageContentLength > 0)
+            let length = hasThinkingContent(message);
+            if (length > 0)
               onProgress({
                 type: "response_length",
                 op: "add",
-                delta: assistantMessageContentLength,
+                delta: length,
               });
           }
           for (let normalizedMessage of normalizeMessages([message])) {
@@ -2135,11 +2157,15 @@ ${joined}`);
               toolUseContext,
             },
           );
+          let agentRunMessages = collectTaskSubagentCalls(agentMessages);
           return {
             data: {
               status: "completed",
               prompt: agentPrompt,
               ...agentHandback,
+              ...(agentRunMessages !== undefined && {
+                taskCalls: agentRunMessages,
+              }),
               ...worktreeResult,
               canContinueAgent: hasSendMessageTool(toolUseContext.options.tools),
             },
@@ -2182,10 +2208,19 @@ ${joined}`);
     return runReleasingSlotOnError(foregroundRun);
   }
 }
+//@ chunk-czq1j3j2.js:1732342-1732518 fingerprint (2.1.88 match: resolveTeamName, 0.568)
+async function resolveTeamName(from, message, context, storage) {
+  let { teamName, teammates } = context.teamContext ?? {};
+  let teammateId = Object.entries(teammates ?? {}).find(([, value]) => value.name === from)?.[0];
+  return teamName && teammateId
+    ? isShutdownFrameStale(teamName, teammateId, message.timestamp, storage)
+    : false;
+}
 export {
+  isBackgroundTasksDisabled,
+  getWorkerCheckinScheduleMs,
+  resolveTeamName,
   agentOutputSchema,
   callAgentTool,
   tryAutoApproveWebFetchDispatch,
-  isBackgroundTasksDisabled,
-  getWorkerCheckinScheduleMs,
 };

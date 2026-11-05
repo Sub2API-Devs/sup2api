@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/client/auth.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-9z4e25ww.js (31)
+ * pieces: chunk-6dff51n3.js (31)
  * attribution: esm-fingerprint 29, esm-layout 2
  */
 import {
@@ -26,20 +26,20 @@ import { resourceUrlFromServerUrl, checkResourceAllowed } from "../shared/auth-u
 import { LATEST_PROTOCOL_VERSION } from "../types.js";
 import { pkceChallenge } from "../../../../../pkce-challenge/dist/index.node.js";
 
-//@ chunk-9z4e25ww.js:6666-6730 esm-fingerprint
+//@ chunk-6dff51n3.js:6666-6730 esm-fingerprint
 class UnauthorizedError extends Error {
   constructor(message) {
     super(message ?? "Unauthorized");
   }
 }
-//@ chunk-9z4e25ww.js:6730-6815 esm-fingerprint
+//@ chunk-6dff51n3.js:6730-6815 esm-fingerprint
 function isClientAuthMethod(method) {
   return ["client_secret_basic", "client_secret_post", "none"].includes(method);
 }
-//@ chunk-9z4e25ww.js:6815-6837 esm-fingerprint
+//@ chunk-6dff51n3.js:6815-6837 esm-fingerprint
 var AUTHORIZATION_CODE_RESPONSE_TYPE = "code";
 var AUTHORIZATION_CODE_CHALLENGE_METHOD = "S256";
-//@ chunk-9z4e25ww.js:6837-7339 esm-fingerprint
+//@ chunk-6dff51n3.js:6837-7339 esm-fingerprint
 function selectClientAuthMethod(clientInformation, supportedMethods) {
   let hasClientSecret = clientInformation.client_secret !== undefined;
   if (
@@ -55,7 +55,7 @@ function selectClientAuthMethod(clientInformation, supportedMethods) {
   if (supportedMethods.includes("none")) return "none";
   return hasClientSecret ? "client_secret_post" : "none";
 }
-//@ chunk-9z4e25ww.js:7339-7587 esm-fingerprint
+//@ chunk-6dff51n3.js:7339-7587 esm-fingerprint
 function applyClientAuthentication(method, clientInformation, headers, params) {
   let { client_id, client_secret } = clientInformation;
   switch (method) {
@@ -72,22 +72,22 @@ function applyClientAuthentication(method, clientInformation, headers, params) {
       throw Error(`Unsupported client authentication method: ${method}`);
   }
 }
-//@ chunk-9z4e25ww.js:7587-7747 esm-fingerprint
+//@ chunk-6dff51n3.js:7587-7747 esm-fingerprint
 function applyBasicAuth(clientId, clientSecret, headers) {
   if (!clientSecret) throw Error("client_secret_basic authentication requires a client_secret");
   let credentials = btoa(`${clientId}:${clientSecret}`);
   headers.set("Authorization", `Basic ${credentials}`);
 }
-//@ chunk-9z4e25ww.js:7747-7817 esm-fingerprint
+//@ chunk-6dff51n3.js:7747-7817 esm-fingerprint
 function applyPostAuth(clientId, clientSecret, params) {
   params.set("client_id", clientId);
   if (clientSecret) params.set("client_secret", clientSecret);
 }
-//@ chunk-9z4e25ww.js:7817-7855 esm-fingerprint
+//@ chunk-6dff51n3.js:7817-7855 esm-fingerprint
 function applyPublicAuth(clientId, params) {
   params.set("client_id", clientId);
 }
-//@ chunk-9z4e25ww.js:7855-8178 esm-fingerprint
+//@ chunk-6dff51n3.js:7855-8178 esm-fingerprint
 async function parseErrorResponse(input) {
   let statusCode = input instanceof Response ? input.status : undefined;
   let body = input instanceof Response ? await input.text() : input;
@@ -100,7 +100,7 @@ async function parseErrorResponse(input) {
     return new ServerError(errorMessage);
   }
 }
-//@ chunk-9z4e25ww.js:8178-8424 esm-fingerprint
+//@ chunk-6dff51n3.js:8178-8424 esm-fingerprint
 async function auth(provider, options) {
   try {
     return await authInternal(provider, options);
@@ -115,7 +115,7 @@ async function auth(provider, options) {
     throw error;
   }
 }
-//@ chunk-9z4e25ww.js:8424-10757 esm-fingerprint
+//@ chunk-6dff51n3.js:8424-10757 esm-fingerprint
 async function authInternal(provider, { serverUrl, authorizationCode, scope, resourceMetadataUrl, fetchFn }) {
   let cachedState = await provider.discoveryState?.();
   let resourceMetadata;
@@ -238,7 +238,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
   await provider.redirectToAuthorization(authorizationUrl);
   return "REDIRECT";
 }
-//@ chunk-9z4e25ww.js:10757-10871 esm-fingerprint
+//@ chunk-6dff51n3.js:10757-10871 esm-fingerprint
 function isHttpsUrl(value) {
   if (!value) return false;
   try {
@@ -248,7 +248,7 @@ function isHttpsUrl(value) {
     return false;
   }
 }
-//@ chunk-9z4e25ww.js:10871-11170 esm-fingerprint
+//@ chunk-6dff51n3.js:10871-11170 esm-fingerprint
 async function selectResourceURL(serverUrl, provider, resourceMetadata) {
   let defaultResource = resourceUrlFromServerUrl(serverUrl);
   if (provider.validateResourceURL)
@@ -265,7 +265,7 @@ async function selectResourceURL(serverUrl, provider, resourceMetadata) {
     );
   return new URL(resourceMetadata.resource);
 }
-//@ chunk-9z4e25ww.js:11170-11472 esm-fingerprint
+//@ chunk-6dff51n3.js:11170-11472 esm-fingerprint
 function extractWWWAuthenticateParams(res) {
   let authenticateHeader = res.headers.get("WWW-Authenticate");
   if (!authenticateHeader) return {};
@@ -285,7 +285,7 @@ function extractWWWAuthenticateParams(res) {
     error,
   };
 }
-//@ chunk-9z4e25ww.js:11472-11644 esm-fingerprint
+//@ chunk-6dff51n3.js:11472-11644 esm-fingerprint
 function extractFieldFromWwwAuth(response, fieldName) {
   let wwwAuthHeader = response.headers.get("WWW-Authenticate");
   if (!wwwAuthHeader) return null;
@@ -294,7 +294,7 @@ function extractFieldFromWwwAuth(response, fieldName) {
   if (match) return match[1] || match[2];
   return null;
 }
-//@ chunk-9z4e25ww.js:11644-12086 esm-fingerprint
+//@ chunk-6dff51n3.js:11644-12086 esm-fingerprint
 async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn = fetch) {
   let response = await discoverMetadataWithFallback(serverUrl, "oauth-protected-resource", fetchFn, {
     protocolVersion: opts?.protocolVersion,
@@ -310,7 +310,7 @@ async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn =
   }
   return OAuthProtectedResourceMetadataSchema.parse(await response.json());
 }
-//@ chunk-9z4e25ww.js:12086-12232 esm-layout
+//@ chunk-6dff51n3.js:12086-12232 esm-layout
 async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
   try {
     return await fetchFn(url, {
@@ -323,14 +323,14 @@ async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
     throw error;
   }
 }
-//@ chunk-9z4e25ww.js:12232-12365 esm-fingerprint
+//@ chunk-6dff51n3.js:12232-12365 esm-fingerprint
 function buildWellKnownPath(wellKnownPrefix, pathname = "", options = {}) {
   if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
   return options.prependPathname
     ? `${pathname}/.well-known/${wellKnownPrefix}`
     : `/.well-known/${wellKnownPrefix}${pathname}`;
 }
-//@ chunk-9z4e25ww.js:12365-12442 esm-fingerprint
+//@ chunk-6dff51n3.js:12365-12442 esm-fingerprint
 async function tryMetadataDiscovery(url, protocolVersion, fetchFn = fetch) {
   return await fetchWithCorsRetry(
     url,
@@ -340,11 +340,11 @@ async function tryMetadataDiscovery(url, protocolVersion, fetchFn = fetch) {
     fetchFn,
   );
 }
-//@ chunk-9z4e25ww.js:12442-12506 esm-layout
+//@ chunk-6dff51n3.js:12442-12506 esm-layout
 function shouldAttemptFallback(response, pathname) {
   return !response || (response.status >= 400 && response.status < 500 && pathname !== "/");
 }
-//@ chunk-9z4e25ww.js:12506-12826 esm-fingerprint
+//@ chunk-6dff51n3.js:12506-12826 esm-fingerprint
 async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
   let issuer = new URL(serverUrl);
   let protocolVersion = opts?.protocolVersion ?? LATEST_PROTOCOL_VERSION;
@@ -362,7 +362,7 @@ async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, o
   }
   return response;
 }
-//@ chunk-9z4e25ww.js:12826-13406 esm-fingerprint
+//@ chunk-6dff51n3.js:12826-13406 esm-fingerprint
 function buildDiscoveryUrls(authorizationServerUrl) {
   let url =
     typeof authorizationServerUrl === "string" ? new URL(authorizationServerUrl) : authorizationServerUrl;
@@ -395,7 +395,7 @@ function buildDiscoveryUrls(authorizationServerUrl) {
   });
   return urlsToTry;
 }
-//@ chunk-9z4e25ww.js:13406-13874 esm-fingerprint
+//@ chunk-6dff51n3.js:13406-13874 esm-fingerprint
 async function discoverAuthorizationServerMetadata(
   authorizationServerUrl,
   { fetchFn = fetch, protocolVersion = LATEST_PROTOCOL_VERSION } = {},
@@ -420,7 +420,7 @@ async function discoverAuthorizationServerMetadata(
   }
   return;
 }
-//@ chunk-9z4e25ww.js:13874-14231 esm-fingerprint
+//@ chunk-6dff51n3.js:13874-14231 esm-fingerprint
 async function discoverOAuthServerInfo(serverUrl, opts) {
   let resourceMetadata;
   let authorizationServerUrl;
@@ -445,7 +445,7 @@ async function discoverOAuthServerInfo(serverUrl, opts) {
     resourceMetadata,
   };
 }
-//@ chunk-9z4e25ww.js:14231-15195 esm-fingerprint
+//@ chunk-6dff51n3.js:14231-15195 esm-fingerprint
 async function startAuthorization(
   authorizationServerUrl,
   { metadata, clientInformation, redirectUrl, scope, state, resource },
@@ -481,7 +481,7 @@ async function startAuthorization(
     codeVerifier,
   };
 }
-//@ chunk-9z4e25ww.js:15195-15321 esm-fingerprint
+//@ chunk-6dff51n3.js:15195-15321 esm-fingerprint
 function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redirectUri) {
   return new URLSearchParams({
     grant_type: "authorization_code",
@@ -490,7 +490,7 @@ function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redire
     redirect_uri: String(redirectUri),
   });
 }
-//@ chunk-9z4e25ww.js:15321-15859 esm-fingerprint
+//@ chunk-6dff51n3.js:15321-15859 esm-fingerprint
 async function executeTokenRequest(
   authorizationServerUrl,
   { metadata, tokenRequestParams, clientInformation, addClientAuthentication, resource, fetchFn },
@@ -517,7 +517,7 @@ async function executeTokenRequest(
   if (!response.ok) throw await parseErrorResponse(response);
   return OAuthTokensSchema.parse(await response.json());
 }
-//@ chunk-9z4e25ww.js:15859-16138 esm-fingerprint
+//@ chunk-6dff51n3.js:15859-16138 esm-fingerprint
 async function exchangeAuthorization(
   authorizationServerUrl,
   {
@@ -541,7 +541,7 @@ async function exchangeAuthorization(
     fetchFn,
   });
 }
-//@ chunk-9z4e25ww.js:16138-16470 esm-fingerprint
+//@ chunk-6dff51n3.js:16138-16470 esm-fingerprint
 async function refreshAuthorization(
   authorizationServerUrl,
   { metadata, clientInformation, refreshToken, resource, addClientAuthentication, fetchFn },
@@ -563,7 +563,7 @@ async function refreshAuthorization(
     ...tokens,
   };
 }
-//@ chunk-9z4e25ww.js:16470-17054 esm-fingerprint
+//@ chunk-6dff51n3.js:16470-17054 esm-fingerprint
 async function fetchToken(
   provider,
   authorizationServerUrl,
@@ -593,7 +593,7 @@ async function fetchToken(
     fetchFn,
   });
 }
-//@ chunk-9z4e25ww.js:17054-17511 esm-fingerprint
+//@ chunk-6dff51n3.js:17054-17511 esm-fingerprint
 async function registerClient(authorizationServerUrl, { metadata, clientMetadata, scope, fetchFn }) {
   let registrationUrl;
   if (metadata) {
@@ -619,13 +619,13 @@ async function registerClient(authorizationServerUrl, { metadata, clientMetadata
   return OAuthClientInformationFullSchema.parse(await response.json());
 }
 export {
-  UnauthorizedError,
   discoverOAuthProtectedResourceMetadata,
   discoverAuthorizationServerMetadata,
-  discoverOAuthServerInfo,
-  auth,
-  extractWWWAuthenticateParams,
-  refreshAuthorization,
+  UnauthorizedError,
   startAuthorization,
   exchangeAuthorization,
+  auth,
+  extractWWWAuthenticateParams,
+  discoverOAuthServerInfo,
+  refreshAuthorization,
 };

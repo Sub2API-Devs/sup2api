@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：按键分组的计数信号量（立即占位或排队，可被 signal 中止），以及带等待上限与回调的 acquire 包装。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { logForDebugging } from "./debug.js";
 import { createCombinedAbortSignal } from "./combinedAbortSignal.js";
 
-//@ chunk-e6aww6q8.js:2156416-2157289 placement
+//@ chunk-5xgkngpb.js:2209845-2210718 placement
 /**
  * 按键分组的计数信号量：acquire 在未满且无排队时立即占位，否则排队等待（可被 signal 中止，中止返回 undefined）；wouldWait 判断是否需要等待；occupy 强制占位；释放时按排队顺序放行。
  */
@@ -85,7 +85,7 @@ class KeyedSemaphore {
     return slot;
   }
 }
-//@ chunk-e6aww6q8.js:2157385-2157689 placement
+//@ chunk-5xgkngpb.js:2210814-2211118 placement
 /**
  * 带等待上限地向信号量申请位置：需要等待时先回调 onWait；超时仍返回句柄但 seated 为 false，外部中止则返回 undefined；句柄可 release、retake，并支持 using 释放。
  */

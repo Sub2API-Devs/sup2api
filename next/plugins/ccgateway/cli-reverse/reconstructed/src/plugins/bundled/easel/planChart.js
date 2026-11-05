@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：easel 绘图前的检查与规划：日期拼写、时区混用、单位混用、占比合计、行数上限
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3s7ydtfd.js (92)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7stfs6p0.js (92)
  * attribution: placement 92
  */
 import {
@@ -35,12 +35,12 @@ import { unreadNumber } from "./easelMessages.js";
 import { spansWeeksWithoutWeekend, formatTimeTick, defaultTimeStep, pickTickStep } from "./timeFormat.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-3s7ydtfd.js:41306-41316 placement
+//@ chunk-7stfs6p0.js:41306-41316 placement
 /**
  * true
  */
 var ARE_TICK_FIELDS_ALL = true;
-//@ chunk-3s7ydtfd.js:41316-41455 placement
+//@ chunk-7stfs6p0.js:41316-41455 placement
 /**
  * 同一组标签同一时刻是否有多个读数。
  */
@@ -50,68 +50,68 @@ function hasDuplicateReadings(chartData) {
     .map((reading) => JSON.stringify([reading.groupLabels, reading.ms]));
   return new Set(mapped).size < mapped.length;
 }
-//@ chunk-3s7ydtfd.js:41455-41464 placement
+//@ chunk-7stfs6p0.js:41455-41464 placement
 /**
  * 5
  */
 var MAX_LISTED_TABLES = 5;
-//@ chunk-3s7ydtfd.js:41464-41475 placement
+//@ chunk-7stfs6p0.js:41464-41475 placement
 /**
  * 120
  */
 var MAX_LABEL_TEXT = 120;
-//@ chunk-3s7ydtfd.js:41475-41484 placement
+//@ chunk-7stfs6p0.js:41475-41484 placement
 /**
  * 3
  */
 var MAX_LISTED_NAMES = 3;
-//@ chunk-3s7ydtfd.js:41484-41493 placement
+//@ chunk-7stfs6p0.js:41484-41493 placement
 /**
  * 3
  */
 var MAX_JOINED_NAMES = 3;
-//@ chunk-3s7ydtfd.js:41493-41506 placement
+//@ chunk-7stfs6p0.js:41493-41506 placement
 /**
  * 65536
  */
 var MAX_DATA_TEXT_BYTES = 65536;
-//@ chunk-3s7ydtfd.js:41506-41517 placement
+//@ chunk-7stfs6p0.js:41506-41517 placement
 /**
  * 240
  */
 var MAX_TABLE_ROWS = 240;
-//@ chunk-3s7ydtfd.js:41517-41526 placement
+//@ chunk-7stfs6p0.js:41517-41526 placement
 /**
  * 8
  */
 var MAX_LISTED_COLUMNS = 8;
-//@ chunk-3s7ydtfd.js:41526-41535 placement
+//@ chunk-7stfs6p0.js:41526-41535 placement
 /**
  * 2
  */
 var MIN_ROWS_FOR_CHART = 2;
-//@ chunk-3s7ydtfd.js:41535-41554 placement
+//@ chunk-7stfs6p0.js:41535-41554 placement
 /**
  * 以 ] 或 } 结尾
  */
 var JSON_END_RE = /[\]}]\s*$/;
-//@ chunk-3s7ydtfd.js:41554-41572 placement
+//@ chunk-7stfs6p0.js:41554-41572 placement
 /**
  * 以 [ 或 { 开头
  */
 var JSON_START_RE = /^\s*[[{]/;
-//@ chunk-3s7ydtfd.js:41572-41603 placement
+//@ chunk-7stfs6p0.js:41572-41603 placement
 /**
  * 以数字开头
  */
 var LEADING_NUMBER_RE = /^[^\p{L}\p{N}]*\p{N}/u;
-//@ chunk-3s7ydtfd.js:41603-41662 placement
+//@ chunk-7stfs6p0.js:41603-41662 placement
 /**
  * 列名都能匹配
  */
 var allColumnsMatch = (columns) => (table) =>
   columns.every((column) => table.columns.includes(matchColumnName(table, column)));
-//@ chunk-3s7ydtfd.js:41662-41730 placement
+//@ chunk-7stfs6p0.js:41662-41730 placement
 /**
  * 能读出数据且非 bars
  */
@@ -119,12 +119,12 @@ function isSingleTableReadable(table, request) {
   let chartData = readChartData(table, request);
   return !("code" in chartData) && chartData.form !== "bars";
 }
-//@ chunk-3s7ydtfd.js:41730-41776 placement
+//@ chunk-7stfs6p0.js:41730-41776 placement
 /**
  * 请求里点名的列
  */
 var requestColumns = (request) => [request.x ?? [], request.y ?? [], request.by ?? []].flat();
-//@ chunk-3s7ydtfd.js:41776-41879 placement
+//@ chunk-7stfs6p0.js:41776-41879 placement
 /**
  * 多个表时按列名与请求筛选出唯一匹配的表。
  */
@@ -137,12 +137,12 @@ function pickMatchingTables(tablesFromText, request) {
     ? candidates
     : candidates.filter((table) => isSingleTableReadable(table, request));
 }
-//@ chunk-3s7ydtfd.js:41879-41919 placement
+//@ chunk-7stfs6p0.js:41879-41919 placement
 /**
  * 去重后取前 N 个拼接
  */
 var joinFirstNames = (names) => uniqueValues(names).slice(0, MAX_JOINED_NAMES).join(", ");
-//@ chunk-3s7ydtfd.js:41919-42545 placement
+//@ chunk-7stfs6p0.js:41919-42545 placement
 /**
  * 检查时间列（未识别的日期拼写、非时间数字、名称而非时间）。
  */
@@ -169,7 +169,7 @@ function checkTimeColumn(roles, reading) {
       }
     : undefined;
 }
-//@ chunk-3s7ydtfd.js:42545-43356 placement
+//@ chunk-7stfs6p0.js:42545-43356 placement
 /**
  * 检查时区混用、整列未读、多行共享同一 x 等。
  */
@@ -205,7 +205,7 @@ function checkTimeline({ reading, roles, request, series }) {
       }
     : undefined;
 }
-//@ chunk-3s7ydtfd.js:43356-43443 placement
+//@ chunk-7stfs6p0.js:43356-43443 placement
 /**
  * sum/mean/max/min
  */
@@ -215,17 +215,17 @@ var AGGREGATORS = {
   max: (values) => Math.max(...values),
   min: (values) => Math.min(...values),
 };
-//@ chunk-3s7ydtfd.js:43443-43526 placement
+//@ chunk-7stfs6p0.js:43443-43526 placement
 /**
  * 最后一点可能仍在累积
  */
 var LAST_PERIOD_FILLING_NOTE = "the last point may still be filling: its period had not ended at the call";
-//@ chunk-3s7ydtfd.js:43526-43589 placement
+//@ chunk-7stfs6p0.js:43526-43589 placement
 /**
  * 建议减少行数
  */
 var FEWER_ROWS_HINT = "Ask for fewer rows or a shorter span, then chart that";
-//@ chunk-3s7ydtfd.js:43589-44654 placement
+//@ chunk-7stfs6p0.js:43589-44654 placement
 /**
  * 占比图检查：各部分需相加为整体，否则拒绝或提示 combine。
  */
@@ -259,12 +259,12 @@ function checkShareChart({ roles, request, series, timeline }) {
       }
     : undefined;
 }
-//@ chunk-3s7ydtfd.js:44654-44709 placement
+//@ chunk-7stfs6p0.js:44654-44709 placement
 /**
  * bars 且名字是编的则不用 y
  */
 var columnsForForm = (roles, request) => (roles.hasMadeUpNames && request.form === "bars" ? [] : request.y);
-//@ chunk-3s7ydtfd.js:44709-45228 placement
+//@ chunk-7stfs6p0.js:44709-45228 placement
 function describeNotDrawn(mark) {
   let label = mark.mark.label === undefined ? "" : mark.mark.label;
   let timeCell = parseTimeCell(mark.mark.at);
@@ -281,7 +281,7 @@ function describeNotDrawn(mark) {
         label,
       };
 }
-//@ chunk-3s7ydtfd.js:45228-45298 placement
+//@ chunk-7stfs6p0.js:45228-45298 placement
 /**
  * 取单元值
  */
@@ -289,7 +289,7 @@ var cellReader = (columnIndex) => (column, row) => {
   let index = columnIndex.get(column);
   return index === undefined ? null : (row[index] ?? null);
 };
-//@ chunk-3s7ydtfd.js:45298-45468 placement
+//@ chunk-7stfs6p0.js:45298-45468 placement
 /**
  * 单元格转为读数（时间、分组标签、数值、单位）。
  */
@@ -301,7 +301,7 @@ var toReading = (time, baseLabels, chartData) => (column, value) => ({
   value: value.kind === "number" ? value.value : null,
   unit: value.kind === "number" ? value.unit : null,
 });
-//@ chunk-3s7ydtfd.js:45468-45553 placement
+//@ chunk-7stfs6p0.js:45468-45553 placement
 /**
  * 按列单位换算
  */
@@ -311,15 +311,15 @@ function applyUnitToCell(numberWithUnit, override) {
     ? scaledNumber(numberWithUnit.value, unit)
     : numberWithUnit;
 }
-//@ chunk-3s7ydtfd.js:45553-45592 placement
+//@ chunk-7stfs6p0.js:45553-45592 placement
 /**
  * 对数刻度无法表示的读数
  */
 var LOG_SCALE_REJECT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3s7ydtfd.js:45553", () => {
+deferInit("chunk-7stfs6p0.js:45553", () => {
   LOG_SCALE_REJECT = unreadNumber("a log scale cannot show it");
 });
-//@ chunk-3s7ydtfd.js:45592-45629 placement
+//@ chunk-7stfs6p0.js:45592-45629 placement
 /**
  * 零点时间值
  */
@@ -328,7 +328,7 @@ var ZERO_TIME = {
   ms: 0,
   isZoned: false,
 };
-//@ chunk-3s7ydtfd.js:45629-46632 placement
+//@ chunk-7stfs6p0.js:45629-46632 placement
 function describeBarsUnread(table, chartData, request) {
   let readCell = cellReader(new Map(table.columns.map((column, index) => [column, index])));
   let firstRow = table.rows[0] ?? [];
@@ -392,17 +392,17 @@ function describeBarsUnread(table, chartData, request) {
     unreadXCells,
   };
 }
-//@ chunk-3s7ydtfd.js:46632-46672 placement
+//@ chunk-7stfs6p0.js:46632-46672 placement
 /**
  * 至少一个非空值
  */
 var hasAnyValue = (series) => series.some((series) => series.value !== null);
-//@ chunk-3s7ydtfd.js:46672-46699 placement
+//@ chunk-7stfs6p0.js:46672-46699 placement
 /**
  * 条件或拆分判断
  */
 var orHasSplit = (hasSplit, reads, zone) => hasSplit || spansWeeksWithoutWeekend(reads, zone);
-//@ chunk-3s7ydtfd.js:46699-46821 placement
+//@ chunk-7stfs6p0.js:46699-46821 placement
 /**
  * 合并同一时刻的多个读数。
  */
@@ -413,18 +413,18 @@ var combineSamplesAt = (groups, combine) => (ms) => {
     value: filtered.length > 0 ? combine(filtered) : null,
   };
 };
-//@ chunk-3s7ydtfd.js:46821-46885 placement
+//@ chunk-7stfs6p0.js:46821-46885 placement
 /**
  * 系列标题
  */
 var seriesTitle = (reads, options) =>
   truncateMiddle(reads[0]?.groupLabels.join(" ") || options.fallbackName, MAX_LABEL_TEXT);
-//@ chunk-3s7ydtfd.js:46885-46938 placement
+//@ chunk-7stfs6p0.js:46885-46938 placement
 /**
  * 去重排序的时间戳
  */
 var sortedUniqueTimes = (reads) => uniqueValues(reads.map((read) => read.ms)).toSorted((a, b) => a - b);
-//@ chunk-3s7ydtfd.js:46938-47140 placement
+//@ chunk-7stfs6p0.js:46938-47140 placement
 /**
  * 由读数生成一个系列（单位、名称、按周期的样本）。
  */
@@ -445,7 +445,7 @@ function buildSeries(reads, context, hasSplit) {
     ),
   };
 }
-//@ chunk-3s7ydtfd.js:47140-47400 placement
+//@ chunk-7stfs6p0.js:47140-47400 placement
 /**
  * 按分组生成全部时间序列与空系列名，并计算时间网格。
  */
@@ -465,7 +465,7 @@ function buildTimeSeries(options) {
     grid: formatTimeTick(times, options, hasSplit),
   };
 }
-//@ chunk-3s7ydtfd.js:47400-47455 placement
+//@ chunk-7stfs6p0.js:47400-47455 placement
 /**
  * 生成拒绝结果
  */
@@ -474,7 +474,7 @@ var refusedResult = (problem, tables = []) => ({
   problem,
   tables,
 });
-//@ chunk-3s7ydtfd.js:47455-47509 placement
+//@ chunk-7stfs6p0.js:47455-47509 placement
 /**
  * 带表名的拒绝结果
  */
@@ -486,7 +486,7 @@ var refuseWithTable = (table, refusal) =>
     },
     [table],
   );
-//@ chunk-3s7ydtfd.js:47509-47682 placement
+//@ chunk-7stfs6p0.js:47509-47682 placement
 /**
  * 系列标题（列名或共享标签）。
  */
@@ -501,7 +501,7 @@ function seriesTitle_2(columns, request, reading) {
     MAX_TABLE_ROWS,
   );
 }
-//@ chunk-3s7ydtfd.js:47682-47772 placement
+//@ chunk-7stfs6p0.js:47682-47772 placement
 /**
  * 求时间范围
  */
@@ -513,7 +513,7 @@ function timeRangeOf(source) {
     zone: source.zone,
   };
 }
-//@ chunk-3s7ydtfd.js:47772-47829 placement
+//@ chunk-7stfs6p0.js:47772-47829 placement
 /**
  * 刻度起点（不走字段）
  */
@@ -522,7 +522,7 @@ var tickTimeStart = (source) => ({
   areTicks: !ARE_TICK_FIELDS_ALL,
   fieldsBefore: [],
 });
-//@ chunk-3s7ydtfd.js:47829-48155 placement
+//@ chunk-7stfs6p0.js:47829-48155 placement
 function defaultFormFor(source) {
   let dataSpan = timeRangeOf(source);
   let precision = defaultTimeStep(source.times, source.zone);
@@ -547,7 +547,7 @@ function defaultFormFor(source) {
     periodStarts: grid?.periodStarts ?? [],
   };
 }
-//@ chunk-3s7ydtfd.js:48155-48870 placement
+//@ chunk-7stfs6p0.js:48155-48870 placement
 function checkUnitsMixed(reading, chartRequest, request) {
   let unitsPerColumn = [...reading.units.values()];
   if (unitsPerColumn.some((units) => units.length > 1)) {
@@ -576,7 +576,7 @@ function checkUnitsMixed(reading, chartRequest, request) {
       }
     : undefined;
 }
-//@ chunk-3s7ydtfd.js:48870-49934 placement
+//@ chunk-7stfs6p0.js:48870-49934 placement
 function describeMissingValues(source, request, context) {
   let chartData = readChartData(source, request);
   if ("code" in chartData) return refuseWithTable(source, chartData);
@@ -659,7 +659,7 @@ function describeMissingValues(source, request, context) {
     notes,
   };
 }
-//@ chunk-3s7ydtfd.js:49934-50082 placement
+//@ chunk-7stfs6p0.js:49934-50082 placement
 /**
  * 表中没有任何时间值。
  */
@@ -675,7 +675,7 @@ function hasNoTimeValues({ rows, listColumns = [] }) {
     )
   );
 }
-//@ chunk-3s7ydtfd.js:50082-51328 placement
+//@ chunk-7stfs6p0.js:50082-51328 placement
 /**
  * 读取请求数据（64 KiB 上限、截断检测）并解析为表。
  */
@@ -733,127 +733,127 @@ function readChartRequestData(text, request, context) {
         ],
       };
 }
-//@ chunk-3s7ydtfd.js:51328-51355 placement
+//@ chunk-7stfs6p0.js:51328-51355 placement
 /**
  * 取第一个值
  */
 var firstValue = (series) => series.values[0] ?? 0;
-//@ chunk-3s7ydtfd.js:51355-51366 placement
+//@ chunk-7stfs6p0.js:51355-51366 placement
 /**
  * 1e9
  */
 var SI_GIGA_ALT = 1e9;
-//@ chunk-3s7ydtfd.js:51366-51375 placement
+//@ chunk-7stfs6p0.js:51366-51375 placement
 /**
  * 小数位只求到 1 位时至少补到 2 位
  */
 var MIN_TRAILING_DECIMALS = 2;
-//@ chunk-3s7ydtfd.js:51375-51385 placement
+//@ chunk-7stfs6p0.js:51375-51385 placement
 /**
  * 10
  */
 var MAX_SIGNIFICANT_DIGITS = 10;
-//@ chunk-3s7ydtfd.js:51385-51396 placement
+//@ chunk-7stfs6p0.js:51385-51396 placement
 /**
  * 100
  */
 var MAX_DECIMALS = 100;
-//@ chunk-3s7ydtfd.js:51396-51415 placement
+//@ chunk-7stfs6p0.js:51396-51415 placement
 /**
  * 1e-9
  */
 var NEGLIGIBLE = 0.000000001;
-//@ chunk-3s7ydtfd.js:51415-51424 placement
+//@ chunk-7stfs6p0.js:51415-51424 placement
 /**
  * 5
  */
 var LABEL_DECIMALS = 5;
-//@ chunk-3s7ydtfd.js:51424-51434 placement
+//@ chunk-7stfs6p0.js:51424-51434 placement
 /**
  * 10
  */
 var PRECISION_BASE = 10;
-//@ chunk-3s7ydtfd.js:51434-51444 placement
+//@ chunk-7stfs6p0.js:51434-51444 placement
 /**
  * 10
  */
 var PRECISION_BASE_ALT = 10;
-//@ chunk-3s7ydtfd.js:51444-51455 placement
+//@ chunk-7stfs6p0.js:51444-51455 placement
 /**
  * 1e6
  */
 var SI_MEGA_ALT = 1e6;
-//@ chunk-3s7ydtfd.js:51455-51466 placement
+//@ chunk-7stfs6p0.js:51455-51466 placement
 /**
  * 1e4
  */
 var LARGE_VALUE_THRESHOLD = 1e4;
-//@ chunk-3s7ydtfd.js:51466-51475 placement
+//@ chunk-7stfs6p0.js:51466-51475 placement
 /**
  * 单位换算倍率的展开上限
  */
 var UNIT_DECIMALS_MAX = 3;
-//@ chunk-3s7ydtfd.js:51475-51484 placement
+//@ chunk-7stfs6p0.js:51475-51484 placement
 /**
  * 数值跨度的展开上限
  */
 var VALUE_DECIMALS_MAX = 2;
-//@ chunk-3s7ydtfd.js:51484-51493 placement
+//@ chunk-7stfs6p0.js:51484-51493 placement
 /**
  * 挑单位后缀时小数位的上限
  */
 var SUFFIX_DECIMALS_MAX = 2;
-//@ chunk-3s7ydtfd.js:51493-51503 placement
+//@ chunk-7stfs6p0.js:51493-51503 placement
 /**
  * 12
  */
 var MAX_TICK_COUNT = 12;
-//@ chunk-3s7ydtfd.js:51503-51524 placement
+//@ chunk-7stfs6p0.js:51503-51524 placement
 /**
  * 1e12
  */
 var SI_TERA_ALT = 1000000000000;
-//@ chunk-3s7ydtfd.js:51524-51537 placement
+//@ chunk-7stfs6p0.js:51524-51537 placement
 /**
  * 86400
  */
 var SECONDS_PER_DAY_ALT = 86400;
-//@ chunk-3s7ydtfd.js:51537-51549 placement
+//@ chunk-7stfs6p0.js:51537-51549 placement
 /**
  * 3600
  */
 var SECONDS_PER_HOUR_ALT = 3600;
-//@ chunk-3s7ydtfd.js:51549-51565 placement
+//@ chunk-7stfs6p0.js:51549-51565 placement
 /**
  * 1e-6
  */
 var SI_MICRO_ALT = 0.000001;
-//@ chunk-3s7ydtfd.js:51565-51578 placement
+//@ chunk-7stfs6p0.js:51565-51578 placement
 /**
  * 1e-3
  */
 var SI_MILLI_ALT = 0.001;
-//@ chunk-3s7ydtfd.js:51578-51588 placement
+//@ chunk-7stfs6p0.js:51578-51588 placement
 /**
  * 60
  */
 var SECONDS_PER_MINUTE_ALT = 60;
-//@ chunk-3s7ydtfd.js:51588-51607 placement
+//@ chunk-7stfs6p0.js:51588-51607 placement
 /**
  * 1e-9
  */
 var SI_NANO_ALT = 0.000000001;
-//@ chunk-3s7ydtfd.js:51607-51631 placement
+//@ chunk-7stfs6p0.js:51607-51631 placement
 /**
  * 1e15
  */
 var SI_PETA_ALT = 1000000000000000;
-//@ chunk-3s7ydtfd.js:51631-51643 placement
+//@ chunk-7stfs6p0.js:51631-51643 placement
 /**
  * 1000
  */
 var SI_KILO_ALT = 1000;
-//@ chunk-3s7ydtfd.js:51643-51731 placement
+//@ chunk-7stfs6p0.js:51643-51731 placement
 /**
  * 按数量级算小数位
  */
@@ -862,7 +862,7 @@ function decimalsForValue(value, precision) {
     ? Math.min(Math.max(0, precision - 1 - Math.floor(Math.log10(value) + NEGLIGIBLE)), MAX_DECIMALS)
     : 0;
 }
-//@ chunk-3s7ydtfd.js:51731-51815 placement
+//@ chunk-7stfs6p0.js:51731-51815 placement
 /**
  * 千分位格式化绝对值
  */
@@ -870,12 +870,12 @@ var formatAbsoluteWithDecimals = (value, decimals) =>
   Math.abs(value).toLocaleString("en-US", {
     minimumFractionDigits: value === 0 ? 0 : decimals,
   });
-//@ chunk-3s7ydtfd.js:51815-51838 placement
+//@ chunk-7stfs6p0.js:51815-51838 placement
 /**
  * 负数前缀
  */
 var signPrefix = (value) => (value < 0 ? "-" : "");
-//@ chunk-3s7ydtfd.js:51838-52220 placement
+//@ chunk-7stfs6p0.js:51838-52220 placement
 function clampSeriesCount(format, values) {
   let mapped = values.map((value) => value * format.multiplesPerUnit);
   let decimalsFit = (decimals) =>
@@ -900,7 +900,7 @@ function clampSeriesCount(format, values) {
     );
   });
 }
-//@ chunk-3s7ydtfd.js:52220-52249 placement
+//@ chunk-7stfs6p0.js:52220-52249 placement
 /**
  * ""/M/G/T
  */
@@ -910,7 +910,7 @@ var SI_MULTIPLIERS_NO_B = {
   G: SI_GIGA_ALT,
   T: SI_TERA_ALT,
 };
-//@ chunk-3s7ydtfd.js:52249-52315 placement
+//@ chunk-7stfs6p0.js:52249-52315 placement
 /**
  * 按单位与大值修正小数位
  */
@@ -920,7 +920,7 @@ var decimalsForUnit = (max, spread, isCurrency) => (multiple) =>
     decimalsForValue(max / multiple, UNIT_DECIMALS_MAX),
     decimalsForValue(spread / multiple, VALUE_DECIMALS_MAX),
   );
-//@ chunk-3s7ydtfd.js:52315-52344 placement
+//@ chunk-7stfs6p0.js:52315-52344 placement
 /**
  * ""/M/B/T
  */
@@ -930,17 +930,17 @@ var SI_MULTIPLIERS_BYTES = {
   B: SI_GIGA_ALT,
   T: SI_TERA_ALT,
 };
-//@ chunk-3s7ydtfd.js:52344-52359 placement
+//@ chunk-7stfs6p0.js:52344-52359 placement
 /**
  * 1/2/5
  */
 var NICE_STEPS = [1, 2, 5];
-//@ chunk-3s7ydtfd.js:52359-52395 placement
+//@ chunk-7stfs6p0.js:52359-52395 placement
 /**
  * 四种货币符号
  */
 var CURRENCY_SIGNS = ["$", "\u20AC", "\xA3", "\xA5"];
-//@ chunk-3s7ydtfd.js:52395-52494 placement
+//@ chunk-7stfs6p0.js:52395-52494 placement
 /**
  * 时间/字节/百分比单位组
  */
@@ -966,7 +966,7 @@ var UNIT_GROUPS = [
     "%": 1,
   },
 ];
-//@ chunk-3s7ydtfd.js:52494-52895 placement
+//@ chunk-7stfs6p0.js:52494-52895 placement
 function summarizeSeries(unit, values) {
   let found = UNIT_GROUPS.find((group) => Object.hasOwn(group, unit));
   let isCurrency = CURRENCY_SIGNS.includes(unit);
@@ -990,12 +990,12 @@ function summarizeSeries(unit, values) {
     decimals: decimalsFor(multiple),
   };
 }
-//@ chunk-3s7ydtfd.js:52895-52934 placement
+//@ chunk-7stfs6p0.js:52895-52934 placement
 /**
  * 按单位生成系列标签
  */
 var unitLabel = (value, unit) => clampSeriesCount(summarizeSeries(unit, [value]), [value])[0] ?? "";
-//@ chunk-3s7ydtfd.js:52934-53140 placement
+//@ chunk-7stfs6p0.js:52934-53140 placement
 /**
  * 按系列单位格式化数值（必要时提高精度）。
  */
@@ -1008,17 +1008,17 @@ function formatSeriesValues(unit, values, options = {}) {
     ? values.map((value) => unitLabel(value, unit))
     : clampSeriesCount(summary, values);
 }
-//@ chunk-3s7ydtfd.js:53140-53175 placement
+//@ chunk-7stfs6p0.js:53140-53175 placement
 /**
  * 精度基数
  */
 var precisionBase = (max) => (max === 0 ? 1 : Math.abs(max) / PRECISION_BASE);
-//@ chunk-3s7ydtfd.js:53175-53211 placement
+//@ chunk-7stfs6p0.js:53175-53211 placement
 /**
  * 差值可忽略即相等
  */
 var nearlyEqual = (from, to) => !(to - from > NEGLIGIBLE * Math.abs(to));
-//@ chunk-3s7ydtfd.js:53211-53291 placement
+//@ chunk-7stfs6p0.js:53211-53291 placement
 /**
  * 提高精度
  */
@@ -1027,7 +1027,7 @@ var withMoreDecimals = (format, step) => ({
   multiplesPerUnit: 1,
   decimals: Math.max(format.decimals, decimalsForValue(step, 1)),
 });
-//@ chunk-3s7ydtfd.js:53291-53650 placement
+//@ chunk-7stfs6p0.js:53291-53650 placement
 /**
  * 线性坐标轴刻度：选整齐的步长，返回刻度与位置函数。
  */
@@ -1053,7 +1053,7 @@ function linearAxisTicks(format, [min, max], maxAxisSteps) {
     positionOf: (value) => (value * format.multiplesPerUnit - base) / (max_2 * step),
   };
 }
-//@ chunk-3s7ydtfd.js:53650-53899 placement
+//@ chunk-7stfs6p0.js:53650-53899 placement
 /**
  * 对数坐标轴刻度。
  */
@@ -1070,7 +1070,7 @@ function logAxisTicks(format, [min, max], maxAxisSteps) {
     positionOf: (value) => (Math.log10(value) - floored) / (steps * decadeStep),
   };
 }
-//@ chunk-3s7ydtfd.js:53899-54522 placement
+//@ chunk-7stfs6p0.js:53899-54522 placement
 var CHART_THEME_COLORS = {
   title: {
     host: undefined,

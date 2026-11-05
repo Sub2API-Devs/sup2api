@@ -3,18 +3,18 @@
  *
  * 打开特定类型文件时推荐安装 LSP 插件的菜单。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LspRecommendation/LspRecommendationMenu.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
+import { EffortCallout } from "../EffortCallout.js";
 
-//@ chunk-18hwfzwa.js:1194526-1195547 fingerprint (2.1.88 match: LspRecommendationMenu, 0.429)
+//@ chunk-czq1j3j2.js:1224733-1225754 fingerprint (2.1.88 match: LspRecommendationMenu, 0.428)
 function LspRecommendationMenu(props) {
   let $ = useMemoCache(10);
   let { pluginName, pluginDescription, marketplaceName, fileExtension, onResponse } = props;
@@ -71,7 +71,7 @@ function LspRecommendationMenu(props) {
     $[7] !== pluginName ||
     $[8] !== extraIdentityRow
   ) {
-    menu = jsxProd_default(DesktopUpsellStartup, {
+    menu = jsxProd_default(EffortCallout, {
       title: "LSP plugin recommendation",
       intro,
       pluginName,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。从文件描述符预读凭据（CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR 等），失败不致命。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2dh0g62b.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xvc1m2vt.js (1)
  * attribution: placement 1
  */
 import { isBareMode } from "./envUtils.js";
@@ -19,7 +19,7 @@ import { loadSessionIngressToken } from "./sessionIngressAuth.js";
 import { logForDebugging } from "./debug.js";
 import { errorMessage } from "./errors.js";
 
-//@ chunk-2dh0g62b.js:414-652 placement
+//@ chunk-xvc1m2vt.js:414-652 placement
 /**
  * 从文件描述符预读凭据（CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR 等），失败不致命。
  */

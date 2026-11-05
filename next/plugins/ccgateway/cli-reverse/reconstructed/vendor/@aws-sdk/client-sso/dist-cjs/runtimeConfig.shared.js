@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-sso/dist-cjs/runtimeConfig.shared.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
- * pieces: chunk-ddzww9ex.js (1)
+ * pieces: chunk-67qh5zdp.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -16,7 +16,7 @@ import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js"
 import { require_httpAuthSchemeProvider } from "../../nested-clients/dist-cjs/submodules/sso-oidc/auth/httpAuthSchemeProvider.js";
 import { require_endpointResolver } from "../../nested-clients/dist-cjs/submodules/sso-oidc/endpoint/endpointResolver.js";
 
-//@ chunk-ddzww9ex.js:4361-5486 cjs-require-graph
+//@ chunk-67qh5zdp.js:4361-5486 cjs-require-graph
 var require_runtimeConfig_shared = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

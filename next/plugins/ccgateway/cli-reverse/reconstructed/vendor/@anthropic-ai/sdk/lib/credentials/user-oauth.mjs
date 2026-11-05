@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/credentials/user-oauth.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (1)
+ * pieces: chunk-gjbr82c9.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -21,7 +21,7 @@ import { nowSeconds } from "./token-cache.mjs";
 import { VERSION } from "../../version.mjs";
 import { CREDENTIALS_FILE_VERSION } from "../../core/credentials.mjs";
 
-//@ chunk-3wydcdvj.js:10007-11752 esm-fingerprint
+//@ chunk-gjbr82c9.js:10007-11752 esm-fingerprint
 function userOAuthProvider(config) {
   return async (opts) => {
     let { fs } = await import("../../../../../src/child_process.lazy.js");

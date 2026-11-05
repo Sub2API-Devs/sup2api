@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：sec-default 插件的 hooks：把各类提示词、上下文、技能、工具描述事件统一追加处理并做审核；注册安全默认插件（有托管设置或 Team/Enterprise 时放在最外层）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ykab7xp3.js (61)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1q7gzm2x.js (61)
  * attribution: placement 60, affinity 1
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
@@ -49,7 +49,7 @@ import { SKILL_TOOL_NAME } from "../../../tools/SkillTool/constants.js";
 import { resolveManagedPluginOrder } from "../../../utils/plugins/managedPlugins.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef, getModsFolderPath } from "../../builtinPlugins.js";
 
-//@ chunk-ykab7xp3.js:4526-4960 placement
+//@ chunk-1q7gzm2x.js:4862-5296 placement
 /**
  * sec-default 插件的 hooks 扫描清单。
  */
@@ -85,12 +85,12 @@ var SEC_DEFAULT_HOOKS_SCAN = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-ykab7xp3.js:4960-4970 placement
+//@ chunk-1q7gzm2x.js:5296-5306 placement
 /**
  * 空对象
  */
 var emptyHooksFirst = {};
-//@ chunk-ykab7xp3.js:4970-5728 placement
+//@ chunk-1q7gzm2x.js:5306-6064 placement
 __export(emptyHooksFirst, {
   ADMISSION_OPTIONS: () => MANAGED_MOD_OPTIONS,
   MOD_FOLDER: () => SEC_DEFAULT,
@@ -124,12 +124,12 @@ __export(emptyHooksFirst, {
   seat: () => resolveSecurityPluginSeat,
   seatHeld: () => outermostSeatCache,
 });
-//@ chunk-ykab7xp3.js:5728-5737 placement
+//@ chunk-1q7gzm2x.js:6064-6073 placement
 /**
  * 空对象
  */
 var emptyHooksSecond = {};
-//@ chunk-ykab7xp3.js:5737-6859 placement
+//@ chunk-1q7gzm2x.js:6073-7195 placement
 __export(emptyHooksSecond, {
   CODE_LOADING_VARIABLES: () => DANGEROUS_ENV_VARS,
   LENIENCY: () => LENIENCY,
@@ -184,28 +184,28 @@ __export(emptyHooksSecond, {
   rewrittenByUsers: () => pluginsThatChangedDecision,
   serverNameRefusal: () => orgToolNameClashMessage,
   spellingsOf: () => serverNameVariants,
-  toolPrefixOf: () => _,
+  toolPrefixOf: () => toolPrefixOf,
 });
-//@ chunk-ykab7xp3.js:6859-6898 placement
+//@ chunk-1q7gzm2x.js:7195-7234 placement
 /**
  * sec-default 是否在最外层
  */
 var isSecDefaultOutermost = () =>
   resolveManagedPluginOrder().outermost.includes(DEFAULT_SECURITY_SEAT_PLUGIN);
-//@ chunk-ykab7xp3.js:6898-6918 placement
+//@ chunk-1q7gzm2x.js:7234-7254 placement
 var SEC_DEFAULT = "sec-default";
-//@ chunk-ykab7xp3.js:6918-7014 placement
+//@ chunk-1q7gzm2x.js:7254-7350 placement
 /**
  * 钩子判定失败的错误文本
  */
 var registerHookJudgeError = (name, error) =>
   `plugin.register hook failed judging ${name} (${error.kind}): ` + (error.message ?? "no message");
-//@ chunk-ykab7xp3.js:7014-7034 placement
+//@ chunk-1q7gzm2x.js:7350-7370 placement
 /**
  * 取条目的 plugin
  */
 var pluginOf = (ask) => ask.plugin;
-//@ chunk-ykab7xp3.js:7034-7235 placement
+//@ chunk-1q7gzm2x.js:7370-7571 placement
 /**
  * 描述 ask 决定来自哪里（某钩子、某设置、某插件、ask 上限或宿主）。
  */
@@ -225,7 +225,7 @@ function describeAskSource(ask) {
           ? "ask cap"
           : "host's ask";
 }
-//@ chunk-ykab7xp3.js:7235-7392 placement
+//@ chunk-1q7gzm2x.js:7571-7728 placement
 /**
  * 两个决定对象（忽略 undefined 字段）是否相同。
  */
@@ -240,27 +240,27 @@ var sameDecision = (a, b) =>
       ),
     )
     .every((value, index, list) => value === list[0]);
-//@ chunk-ykab7xp3.js:7392-7460 placement
+//@ chunk-1q7gzm2x.js:7728-7796 placement
 /**
  * 找第一个有 returned 的钩子结果
  */
 var firstReturnedBy = (asks, index) =>
   asks.slice(index + 1).find((ask) => ask.returned !== undefined)?.returned;
-//@ chunk-ykab7xp3.js:7460-7504 placement
+//@ chunk-1q7gzm2x.js:7796-7840 placement
 var LENIENCY = Object.freeze({
   deny: 0,
   ask: 1,
   allow: 2,
 });
-//@ chunk-ykab7xp3.js:7504-7566 placement
+//@ chunk-1q7gzm2x.js:7840-7902 placement
 /**
  * 决定强度比较
  */
 var isStrongerDecision = (candidate, previous) =>
   candidate !== undefined && LENIENCY[candidate.decision] > LENIENCY[previous?.decision ?? "deny"];
-//@ chunk-ykab7xp3.js:7566-7607 placement
+//@ chunk-1q7gzm2x.js:7902-7943 placement
 var TIERS_HOLDING_USERS = Object.freeze(["user", "prepend"]);
-//@ chunk-ykab7xp3.js:7607-7801 placement
+//@ chunk-1q7gzm2x.js:7943-8137 placement
 /**
  * 插件改动的决定是否覆盖了不允许覆盖的来源（deny、规则、钩子、设置、上限、宿主 ask）。
  */
@@ -278,7 +278,7 @@ function isOverriddenDecision(ask, previous, approver) {
       (isAsk && approver === "host"))
   );
 }
-//@ chunk-ykab7xp3.js:7801-7948 placement
+//@ chunk-1q7gzm2x.js:8137-8284 placement
 /**
  * 列出在受限层级中改变了决定的插件。
  */
@@ -294,19 +294,19 @@ var pluginsThatChangedDecision = (trace) =>
       );
     })
     .map((entry) => entry.plugin);
-//@ chunk-ykab7xp3.js:7948-8087 placement
+//@ chunk-1q7gzm2x.js:8284-8423 placement
 var UNCHECKED_DENY = Object.freeze({
   decision: "deny",
   reason: "the rules and hooks in your settings could not be checked for this call, so it is refused",
 });
-//@ chunk-ykab7xp3.js:8087-8144 placement
+//@ chunk-1q7gzm2x.js:8423-8480 placement
 /**
  * 有决定且未被插件改变则用，否则冻结
  */
 function decideOrFreeze(decision, trace) {
   return decision !== undefined && pluginsThatChangedDecision(trace).length === 0 ? decision : UNCHECKED_DENY;
 }
-//@ chunk-ykab7xp3.js:8144-8249 placement
+//@ chunk-1q7gzm2x.js:8480-8585 placement
 /**
  * 决定的名称（deny/ask rule、refusal 或 ask 来源）。
  */
@@ -315,7 +315,7 @@ function decisionNoun(ask) {
   let isDeny = ask.decision === "deny";
   return hasRule ? `${ask.decision} rule` : isDeny ? "refusal" : describeAskSource(ask);
 }
-//@ chunk-ykab7xp3.js:8249-8523 placement
+//@ chunk-1q7gzm2x.js:8585-8859 placement
 /**
  * 插件试图推翻设置中的规则时的说明文本（allowModsToOverrideDenyRules）。
  */
@@ -328,27 +328,27 @@ function formatOverrideRefusal(plugin, tool, ask, action) {
       : `${article} ${noun} in your settings from a ${tool} call (${ask.rule})`;
   return `${plugin} tried to ${action} ${sourceText}; the ${noun} holds over the plugins you install (allowModsToOverrideDenyRules)`;
 }
-//@ chunk-ykab7xp3.js:8523-8630 placement
+//@ chunk-1q7gzm2x.js:8859-8966 placement
 /**
  * allowManagedModsOnly 策略下插件未加载的说明。
  */
 var managedModsOnlyMessage = (name) =>
   `mods are limited to your organization's by policy (allowManagedModsOnly); ${name} was not loaded`;
-//@ chunk-ykab7xp3.js:8630-8677 placement
+//@ chunk-1q7gzm2x.js:8966-9013 placement
 var USER_REACHABLE_TIERS = Object.freeze(["user", "builtin", "core"]);
-//@ chunk-ykab7xp3.js:8677-8751 placement
+//@ chunk-1q7gzm2x.js:9013-9087 placement
 /**
  * 非受信层级只能 append
  */
 function appendForUntrustedTier(ctx, next) {
   return USER_REACHABLE_TIERS.includes(ctx.provider?.tier) ? next(ctx) : next.to(ctx, "append");
 }
-//@ chunk-ykab7xp3.js:8751-8828 placement
+//@ chunk-1q7gzm2x.js:9087-9164 placement
 /**
  * 托管环境变量不可改的提示
  */
 var managedEnvRejection = (name) => `env (managed): ${name} is not for plugins outside policy to change`;
-//@ chunk-ykab7xp3.js:8828-8986 placement
+//@ chunk-1q7gzm2x.js:9164-9322 placement
 /**
  * 可劫持进程的环境变量（LD_PRELOAD、DYLD_*、BASH_ENV、NODE_OPTIONS 等）。
  */
@@ -364,7 +364,7 @@ var DANGEROUS_ENV_VARS = [
   "ZDOTDIR",
   "NODE_OPTIONS",
 ];
-//@ chunk-ykab7xp3.js:8986-9107 placement
+//@ chunk-1q7gzm2x.js:9322-9443 placement
 /**
  * 在 e 毫秒内复用上次计算结果的节流器。
  */
@@ -379,46 +379,46 @@ function throttleValue(windowMs, now = Date.now) {
     return lastValue ?? compute();
   };
 }
-//@ chunk-ykab7xp3.js:9107-9144 placement
+//@ chunk-1q7gzm2x.js:9443-9480 placement
 /**
  * 出错也当成功
  */
 var settleTrueOnError = (promise, isDenyRuleProtected) => promise.then(isDenyRuleProtected).catch(() => true);
-//@ chunk-ykab7xp3.js:9144-9183 placement
+//@ chunk-1q7gzm2x.js:9480-9519 placement
 /**
  * 策略允许本人修改
  */
 var isPersonWritablePolicy = (ctx) => ctx.personWritablePolicy === true;
-//@ chunk-ykab7xp3.js:9183-9277 placement
+//@ chunk-1q7gzm2x.js:9519-9613 placement
 /**
  * 对象取值（Map 化）
  */
 function getFromMap(value, key) {
   return typeof value === "object" && value !== null ? new Map(Object.entries(value)).get(key) : undefined;
 }
-//@ chunk-ykab7xp3.js:9277-9343 placement
+//@ chunk-1q7gzm2x.js:9613-9679 placement
 /**
  * 插件配置的 options 路径
  */
 var SEC_DEFAULT_OPTIONS_PATH = ["pluginConfigs", "cc-plugin-sec-default@builtin", "options"];
-//@ chunk-ykab7xp3.js:9343-9377 placement
+//@ chunk-1q7gzm2x.js:9679-9713 placement
 /**
  * 取 sec-default 配置项
  */
 var getSecDefaultOption = (settings, option) =>
   [...SEC_DEFAULT_OPTIONS_PATH, option].reduce(getFromMap, settings);
-//@ chunk-ykab7xp3.js:9377-9435 placement
+//@ chunk-1q7gzm2x.js:9713-9771 placement
 /**
  * deny 规则是否受保护
  */
 var isDenyRuleProtected = (ctx) =>
   isPersonWritablePolicy(ctx) || getSecDefaultOption(ctx, "allowModsToOverrideDenyRules") !== true;
-//@ chunk-ykab7xp3.js:9435-9482 placement
+//@ chunk-1q7gzm2x.js:9771-9818 placement (2.1.88 match: isMcpServerAllowedByPolicy, 0.429)
 /**
  * 是否声明了 allowedMcpServers
  */
 var hasAllowedMcpServerList = (settings) => Array.isArray(settings.allowedMcpServers);
-//@ chunk-ykab7xp3.js:9482-9557 placement
+//@ chunk-1q7gzm2x.js:9818-9893 placement
 /**
  * 只允许托管插件
  */
@@ -426,7 +426,7 @@ function isManagedModsOnly(ctx) {
   let secDefaultOption = getSecDefaultOption(ctx, "allowManagedModsOnly");
   return secDefaultOption !== undefined && secDefaultOption !== false;
 }
-//@ chunk-ykab7xp3.js:9557-9831 placement
+//@ chunk-1q7gzm2x.js:9893-10167 placement
 /**
  * 托管设置与 OAuth 配置相关的保护环境变量。
  */
@@ -441,9 +441,9 @@ var PROTECTED_CONFIG_ENV_VARS = [
   "USE_STAGING_OAUTH",
   "CLAUDE_LOCAL_OAUTH_API_BASE",
 ];
-//@ chunk-ykab7xp3.js:9831-9867 placement
+//@ chunk-1q7gzm2x.js:10167-10203 placement
 var CLAUDE_CODE_PROCESS_WRAPPER = "CLAUDE_CODE_PROCESS_WRAPPER";
-//@ chunk-ykab7xp3.js:9867-9969 placement
+//@ chunk-1q7gzm2x.js:10203-10305 placement
 /**
  * 插件不得改写的环境变量键（设置 env 中的键、进程包装器、保护变量与危险变量）。
  */
@@ -456,20 +456,20 @@ function protectedEnvKeys(ctx) {
     ...DANGEROUS_ENV_VARS,
   ];
 }
-//@ chunk-ykab7xp3.js:9969-10033 placement
+//@ chunk-1q7gzm2x.js:10305-10369 placement
 /**
  * 是否为受保护环境变量
  */
 var isProtectedEnvKey = (ctx, name) =>
   protectedEnvKeys(ctx).some((key) => key.toUpperCase() === name.toUpperCase());
-//@ chunk-ykab7xp3.js:10033-10079 placement
+//@ chunk-1q7gzm2x.js:10369-10415 placement
 /**
  * 托管 MCP 列表不可读
  */
 var isManagedMcpUnreadable = (ctx) => ctx.managedMcpServersUnreadable === true;
-//@ chunk-ykab7xp3.js:10079-10123 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-1q7gzm2x.js:10415-10459 placement (2.1.88 match: setCwdState, 1)
 var nfcLower = (cwd) => cwd.normalize("NFC").toLowerCase();
-//@ chunk-ykab7xp3.js:10123-10205 placement
+//@ chunk-1q7gzm2x.js:10459-10541 placement
 /**
  * NFC/NFD 两种归一化
  */
@@ -478,12 +478,12 @@ var normalizationVariants = (name) => {
   let normalized_2 = name.normalize("NFD");
   return normalized === normalized_2 ? [normalized] : [normalized, normalized_2];
 };
-//@ chunk-ykab7xp3.js:10205-10241 placement
+//@ chunk-1q7gzm2x.js:10541-10577 placement
 /**
  * true 或数组
  */
 var isTrueOrArray = (value) => value === true || Array.isArray(value);
-//@ chunk-ykab7xp3.js:10241-10306 placement
+//@ chunk-1q7gzm2x.js:10577-10642 placement
 /**
  * 去掉 @版本
  */
@@ -491,7 +491,7 @@ function stripVersionSuffix(id) {
   let index = id.lastIndexOf("@");
   return index > 0 ? id.slice(0, index) : id;
 }
-//@ chunk-ykab7xp3.js:10306-10660 placement
+//@ chunk-1q7gzm2x.js:10642-10996 placement
 /**
  * 列出组织在 sec-default 之前启用的插件。
  */
@@ -509,7 +509,7 @@ function listOrgPluginsBeforeSecDefault(ctx, cwd) {
     }),
   );
 }
-//@ chunk-ykab7xp3.js:10660-10956 placement
+//@ chunk-1q7gzm2x.js:10996-11292 placement
 /**
  * 组织允许/托管的 MCP 服务器名列表。
  */
@@ -525,7 +525,7 @@ function orgMcpServerNames(settings) {
     ...Object.keys(hasManagedMap ? (managedMcpServers ?? {}) : {}),
   ];
 }
-//@ chunk-ykab7xp3.js:10956-11099 placement
+//@ chunk-1q7gzm2x.js:11292-11435 placement
 /**
  * 服务器名规范化后的变体（替换非法字符、合并下划线）。
  */
@@ -534,7 +534,7 @@ function serverNameVariants(name) {
   let replaced_2 = replaced.replace(/_+/g, "_").replace(/^_|_$/g, "");
   return [...new Set([replaced, replaced_2])].filter((variant) => variant !== "");
 }
-//@ chunk-ykab7xp3.js:11099-11200 placement
+//@ chunk-1q7gzm2x.js:11435-11536 placement
 /**
  * 名称规范化为小写下划线形式。
  */
@@ -544,9 +544,9 @@ var normalizeToolPrefix = (name) =>
     .toLowerCase()
     .replace(/[-_]+/g, "_")
     .replace(/^_|_$/g, "");
-//@ chunk-ykab7xp3.js:11200-11226 placement
-var _ = (serverName) => `mcp_${normalizeToolPrefix(serverName)}_`;
-//@ chunk-ykab7xp3.js:11226-11423 placement
+//@ chunk-1q7gzm2x.js:11536-11562 placement
+var toolPrefixOf = (serverName) => `mcp_${normalizeToolPrefix(serverName)}_`;
+//@ chunk-1q7gzm2x.js:11562-11759 placement
 /**
  * 工具名是否属于组织的 MCP 服务器或组织插件。
  */
@@ -558,8 +558,8 @@ var isOrgToolName = (ctx, name) =>
   listOrgPluginsBeforeSecDefault(ctx)
     .filter((pluginId) => normalizeToolPrefix(pluginId) !== "")
     .flatMap((pluginId) => [pluginId, `plugin_${pluginId}`])
-    .some((candidate) => `${normalizeToolPrefix(name)}_`.startsWith(_(candidate)));
-//@ chunk-ykab7xp3.js:11423-11488 placement
+    .some((candidate) => `${normalizeToolPrefix(name)}_`.startsWith(toolPrefixOf(candidate)));
+//@ chunk-1q7gzm2x.js:11759-11824 placement
 /**
  * 组织保留的工具名前缀
  */
@@ -567,7 +567,7 @@ var toolNamesReservedForOrg = (ctx, cwd) => [
   ...orgMcpServerNames(ctx),
   ...listOrgPluginsBeforeSecDefault(ctx, cwd).flatMap((pluginId) => [pluginId, `plugin_${pluginId}`]),
 ];
-//@ chunk-ykab7xp3.js:11488-11646 placement
+//@ chunk-1q7gzm2x.js:11824-11982 placement
 /**
  * 组织工具排在前面，其他工具在后。
  */
@@ -581,45 +581,45 @@ function orderOrgToolsFirst(ctx, orgTools, otherTools) {
         ],
       };
 }
-//@ chunk-ykab7xp3.js:11646-11761 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-1q7gzm2x.js:11982-12097 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(ctx, serverName, toolName, cwd) {
   let prefix = `${normalizeToolPrefix(`mcp__${serverName}__${toolName}`)}_`;
   return (
     isManagedMcpUnreadable(ctx) ||
     toolNamesReservedForOrg(ctx, cwd).some(
-      (reserved) => normalizeToolPrefix(reserved) === "" || prefix.startsWith(_(reserved)),
+      (reserved) => normalizeToolPrefix(reserved) === "" || prefix.startsWith(toolPrefixOf(reserved)),
     )
   );
 }
-//@ chunk-ykab7xp3.js:11761-11772 placement
+//@ chunk-1q7gzm2x.js:12097-12108 placement
 /**
  * 500
  */
 var MAX_TOOL_NAMES = 500;
-//@ chunk-ykab7xp3.js:11772-11796 placement
+//@ chunk-1q7gzm2x.js:12108-12132 placement
 /**
  * 只有 policy 来源
  */
 var POLICY_SOURCE_ONLY = {
   source: "policy",
 };
-//@ chunk-ykab7xp3.js:11811-11866 affinity
+//@ chunk-1q7gzm2x.js:12147-12202 affinity
 /**
  * 判断消息 origin 是否为 Skill 工具产生。
  */
 var isSkillToolOrigin = (ctx) => ctx.origin.kind === "tool" && ctx.origin.tool === SKILL_TOOL_NAME;
-//@ chunk-ykab7xp3.js:11866-11986 placement
+//@ chunk-1q7gzm2x.js:12202-12322 placement
 /**
  * 插件工具名冒充组织服务器工具时的说明。
  */
 var orgToolNameClashMessage = (serverName) =>
   `managedMcpServers (managed): a tool of ${serverName} would be named as a tool of one of the organization's servers`;
-//@ chunk-ykab7xp3.js:11986-12064 placement
+//@ chunk-1q7gzm2x.js:12322-12400 placement
 /**
  * 托管 allowedMcpServers 的提示
  */
 var ALLOWED_MCP_WARNING = "allowedMcpServers (managed): plugins outside policy may not add tools";
-//@ chunk-ykab7xp3.js:12064-12115 placement
+//@ chunk-1q7gzm2x.js:12400-12451 placement
 /**
  * 工具名冲突原因
  */
@@ -629,7 +629,7 @@ var reservedToolNameReason = (ctx, serverName, toolName, cwd) =>
     : getMcpPrefix(ctx, serverName, toolName, cwd)
       ? orgToolNameClashMessage(serverName)
       : undefined;
-//@ chunk-ykab7xp3.js:12115-14738 placement
+//@ chunk-1q7gzm2x.js:12451-15074 placement
 /**
  * sec-default 插件的 hooks：把各类提示词、上下文、技能、工具描述事件统一追加处理并做审核。
  */
@@ -812,7 +812,7 @@ function secDefaultHooks(on) {
         };
   });
 }
-//@ chunk-ykab7xp3.js:14738-15274 placement
+//@ chunk-1q7gzm2x.js:15074-15610 placement
 /**
  * 注册安全默认插件（有托管设置或 Team/Enterprise 时放在最外层）。
  */

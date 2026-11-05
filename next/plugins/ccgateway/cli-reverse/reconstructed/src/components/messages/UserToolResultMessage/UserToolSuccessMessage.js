@@ -3,10 +3,10 @@
  *
  * 工具成功结果：调用工具的 renderToolResultMessage，"Allowed by auto mode" 标记与 PostToolUse hook 进度。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/UserToolSuccessMessage.tsx
- * pieces: chunk-ah34pb7m.js (4)
- * attribution: sole-consumer 2, affinity 1, fingerprint 1
+ * pieces: chunk-6gyvmn2t.js (1), chunk-wjygkcr4.js (3)
+ * attribution: placement 1, sole-consumer 1, affinity 1, fingerprint 1
  */
 import { init_react_production, useState, useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -34,20 +34,20 @@ import { SentryErrorBoundary } from "../../SentryErrorBoundary.js";
 import { HookProgressMessage } from "../HookProgressMessage.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:218291-218295 sole-consumer
+//@ chunk-6gyvmn2t.js:527-531 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:218291", () => {
+deferInit("chunk-6gyvmn2t.js:527", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:218295-218333 sole-consumer
+//@ chunk-wjygkcr4.js:225236-225274 sole-consumer
 function selectIsBriefOnly(state) {
   return state.isBriefOnly;
 }
-//@ chunk-ah34pb7m.js:218333-218389 affinity
+//@ chunk-wjygkcr4.js:225274-225330 affinity
 function selectActiveAgents_5(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:218389-220401 fingerprint (2.1.88 match: UserToolSuccessMessage, 0.657)
+//@ chunk-wjygkcr4.js:225330-227346 fingerprint (2.1.88 match: UserToolSuccessMessage, 0.657)
 /**
  * 工具成功结果：调用 tool.renderToolResultMessage(output, progress, {verbose, theme, …})，auto 模式放行时附 "Allowed by auto mode"，并显示 PostToolUse hook 进度。
  */
@@ -122,11 +122,11 @@ function UserToolSuccessMessage(props) {
     $[22] !== verbose
   ) {
     hintElement = EARLY_RETURN_SENTINEL;
-    pe: {
+    ge: {
       let renderModeValue = parseRenderModeValue(frameRegistry, tool.outputSchema, message.toolUseResult);
       if (renderModeValue && !renderModeValue.success) {
         hintElement = null;
-        break pe;
+        break ge;
       }
       let containerElement = renderModeValue ? renderModeValue.data : message.toolUseResult;
       let rowElement = containerElement;
@@ -147,7 +147,7 @@ function UserToolSuccessMessage(props) {
         ) ?? null;
       if (columnElement === null) {
         hintElement = null;
-        break pe;
+        break ge;
       }
       headerElement = tool.userFacingName(undefined) === "";
       bodyElement = guardPrimitiveToolResult(host, columnElement, tool);

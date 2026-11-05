@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/mcpb/dist/schemas.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/mcpb@1.1.2..2.0.1
- * pieces: chunk-64s30qnv.js (1)
+ * pieces: chunk-vhxew9vz.js (1)
  * attribution: esm-layout 1
  */
 import {
@@ -16,7 +16,7 @@ import {
   create_3,
 } from "../../../zod/lib/index.mjs";
 
-//@ chunk-64s30qnv.js:248-2213 esm-layout
+//@ chunk-vhxew9vz.js:248-2213 esm-layout
 var McpServerConfigSchema = strictCreate({
   command: create_2(),
   args: create_15(create_2()).optional(),

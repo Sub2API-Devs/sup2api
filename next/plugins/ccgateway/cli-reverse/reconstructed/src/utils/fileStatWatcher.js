@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：文件变化监视器（fs.watch 加轮询回退、去抖）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (1)
- * attribution: placement 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (2)
+ * attribution: sole-consumer 1, placement 1
  */
-import { basename, dirname } from "path";
+import { dirname, basename } from "path";
 import { watch, unwatchFile } from "fs";
 import { getFsImplementation } from "./fsOperations.js";
 import { errorMessage } from "./errors.js";
@@ -17,7 +17,16 @@ import { watchFileSafe } from "./fsSafety/guardedFileRead.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { logError } from "./log.js";
 
-//@ chunk-t0gq9gyw.js:59431-61600 placement
+//@ chunk-85eyj5gy.js:59597-59704 sole-consumer
+async function fileIdentity(path) {
+  try {
+    let { dev, ino } = await getFsImplementation().statBigint(path);
+    return `${dev}:${ino}`;
+  } catch {
+    return "absent";
+  }
+}
+//@ chunk-85eyj5gy.js:59704-62407 placement
 /**
  * 文件变化监视器（fs.watch 加轮询回退、去抖）。
  */
@@ -26,6 +35,7 @@ class FileStatWatcher {
   options;
   onStat;
   watcher = undefined;
+  watchedDirectory = undefined;
   pollListener = undefined;
   pollMs = undefined;
   lastStatMtimeMs = undefined;
@@ -50,33 +60,41 @@ class FileStatWatcher {
     this.stopPolling();
     this.dropWatcher();
   }
+  async target() {
+    try {
+      return await getFsImplementation().realpath(this.file);
+    } catch {
+      return this.file;
+    }
+  }
   async arm() {
     this.arming = true;
-    let file = this.file;
-    try {
-      file = await getFsImplementation().realpath(this.file);
-    } catch {}
+    let realTarget = await this.target();
+    this.watchedDirectory = await fileIdentity(dirname(realTarget));
     this.arming = false;
     if (this.closed) return;
-    let fileName = basename(file);
+    let fileName = basename(realTarget);
+    let parentName = basename(dirname(realTarget));
     try {
       let watcher = (this.options.watch ?? watch)(
-        dirname(file),
+        dirname(realTarget),
         {
           persistent: false,
         },
         (eventType, changedFileName) => {
-          if (this.watcher === watcher && (changedFileName === null || changedFileName === fileName))
-            this.statSoon();
+          if (this.watcher !== watcher) return;
+          if (changedFileName === null || changedFileName === fileName) this.statSoon();
+          else if (eventType === "rename" && changedFileName === parentName)
+            this.pollInstead(watcher, "directory_event", "its directory was probably removed or renamed");
         },
       );
-      watcher.on("error", (error) => this.pollInstead(watcher, errorMessage(error)));
+      watcher.on("error", (error) => this.pollInstead(watcher, "watcher_error", errorMessage(error)));
       this.watcher = watcher;
     } catch (error) {
-      this.pollInstead(undefined, errorMessage(error));
+      this.pollInstead(undefined, "cannot_watch", errorMessage(error));
       return;
     }
-    logForDebugging(`Watching ${dirname(file)} for changes to ${fileName}`);
+    logForDebugging(`Watching ${dirname(realTarget)} for changes to ${fileName}`);
     this.poll(this.options.safetyPollMs);
     this.statSoon();
   }
@@ -90,6 +108,7 @@ class FileStatWatcher {
         persistent: false,
       },
       ({ mtimeMs, size }) => {
+        if (this.settleTimer !== undefined) return;
         this.onStat({
           mtimeMs,
           size,
@@ -97,12 +116,24 @@ class FileStatWatcher {
         if (this.arming) return;
         if (this.watcher === undefined) {
           if (!this.gaveUpOnEvents) this.arm();
-        } else if (mtimeMs !== this.lastStatMtimeMs && this.settleTimer === undefined && !this.statting) {
-          logForDiagnosticsNoPII("warn", "file_watch_missed_change");
-          this.pollInstead(this.watcher, "a change went unnoticed");
+        } else if (mtimeMs !== this.lastStatMtimeMs && !this.statting) {
+          this.logMissedChange();
+          this.pollInstead(this.watcher, "missed_change", "a change went unnoticed");
         }
       },
     );
+  }
+  async logMissedChange() {
+    let dirIdentity = await fileIdentity(dirname(await this.target()));
+    logForDiagnosticsNoPII("warn", "file_watch_missed_change", {
+      watched: this.options.label,
+      directory:
+        dirIdentity === "absent"
+          ? "absent"
+          : dirIdentity === this.watchedDirectory
+            ? "unchanged"
+            : "replaced",
+    });
   }
   stopPolling() {
     if (this.pollListener !== undefined) {
@@ -110,18 +141,21 @@ class FileStatWatcher {
       this.pollListener = undefined;
     }
   }
-  pollInstead(watcherToDrop, reason) {
+  pollInstead(watcherToDrop, previous, next) {
     if (watcherToDrop !== this.watcher) return;
     this.gaveUpOnEvents ||= watcherToDrop !== undefined;
     this.dropWatcher();
     if (this.pollMs !== this.options.fallbackPollMs) {
       logForDebugging(
-        `Cannot watch for changes to ${this.file} (${reason}); checking it every ${this.options.fallbackPollMs}ms instead`,
+        `Cannot watch for changes to ${this.file} (${next}); checking it every ${this.options.fallbackPollMs}ms instead`,
         {
           level: "warn",
         },
       );
-      logForDiagnosticsNoPII("warn", "file_watch_fell_back_to_polling");
+      logForDiagnosticsNoPII("warn", "file_watch_fell_back_to_polling", {
+        watched: this.options.label,
+        cause: previous,
+      });
       this.poll(this.options.fallbackPollMs);
       this.statSoon();
     }

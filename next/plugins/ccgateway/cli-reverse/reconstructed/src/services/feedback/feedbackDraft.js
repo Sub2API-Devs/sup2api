@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：反馈草稿
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d16hc1ab.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-20ssm8df.js (10)
  * attribution: placement 10
  */
 import { jsonStringifyRaw, slowLogging, jsonParseRaw } from "../../utils/slowOperations.js";
@@ -57,19 +57,19 @@ import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { getAuthHeaders } from "../../utils/http.js";
 import { checkProductFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
 
-//@ chunk-d16hc1ab.js:830-842 placement
+//@ chunk-20ssm8df.js:830-842 placement
 /**
  * 计算反馈载荷大小时给转录留的余量（64 KiB）。
  */
 var TRANSCRIPT_SIZE_SLACK_BYTES = 65536;
-//@ chunk-d16hc1ab.js:842-904 placement
+//@ chunk-20ssm8df.js:842-904 placement
 /**
  * 计算单条转录消息序列化后的字节数。
  */
 function serializedEntryBytes(entry) {
   return Buffer.byteLength(jsonStringifyRaw(jsonStringifyRaw(entry)).slice(1, -1));
 }
-//@ chunk-d16hc1ab.js:904-986 placement
+//@ chunk-20ssm8df.js:904-986 placement
 /**
  * 计算整个原始转录文本序列化后的字节数。
  */
@@ -77,7 +77,7 @@ function serializedRawBytes(rawTranscriptJsonl) {
   let sliced = jsonStringifyRaw(rawTranscriptJsonl).slice(1, -1);
   return Buffer.byteLength(jsonStringifyRaw(sliced).slice(1, -1));
 }
-//@ chunk-d16hc1ab.js:986-2202 placement
+//@ chunk-20ssm8df.js:986-2173 placement
 /**
  * 反馈载荷超过大小预算时从最旧处裁剪转录消息与原始会话日志（保留最新，丢弃单条超大的），在描述后附加截断说明，返回 {payload, trim}。
  */
@@ -136,7 +136,6 @@ function fitFeedbackPayloadToBudget(payload) {
   let trimInfo = {
     keptMessageCount: keptEntries.length,
     totalMessageCount: payload.transcript.length,
-    oversizedMessageCount: oversized.size,
     rawTail,
     rawTailKeptBytes: rawTranscriptJsonl === undefined ? 0 : Buffer.byteLength(rawTranscriptJsonl),
   };
@@ -170,7 +169,7 @@ ${trimNote}`,
     trim: trimInfo,
   };
 }
-//@ chunk-d16hc1ab.js:2202-2701 placement
+//@ chunk-20ssm8df.js:2173-2672 placement
 /**
  * 生成反馈草稿的转录裁剪说明：保留了多少条消息、原始日志保留多少 KiB 或已省略；未裁剪返回 null。
  */
@@ -188,7 +187,7 @@ function describeTranscriptTrim(trim) {
   if (lines.length === 0) return null;
   return `transcript_truncated: ${lines.join("; ")} (trimmed client-side to fit the upload size limit)`;
 }
-//@ chunk-d16hc1ab.js:2701-3866 placement
+//@ chunk-20ssm8df.js:2672-3837 placement
 /**
  * 把反馈草稿格式化为提交描述：标题、详情、来源说明（是否经完整审阅）以及 trigger、area、模型、版本、轮次、request_ids 等元数据行。
  */
@@ -235,7 +234,7 @@ function formatDraftDescription(draft, via = "panel") {
   ].join(`
 `);
 }
-//@ chunk-d16hc1ab.js:3866-4603 placement
+//@ chunk-20ssm8df.js:3837-4574 placement
 /**
  * 解析草稿的 JSONL 转录，只保留主线（非 sidechain）的 user/assistant 消息并精简字段。
  */
@@ -291,13 +290,13 @@ function parseDraftTranscriptMessages(jsonl) {
   }
   return messages;
 }
-//@ chunk-d16hc1ab.js:4603-4697 placement
+//@ chunk-20ssm8df.js:4574-4668 placement
 /**
  * 载荷过大时的错误文案。
  */
 var PAYLOAD_TOO_LARGE_MESSAGE =
   "Feedback payload too large. Try again without the transcript, or shorten the details.";
-//@ chunk-d16hc1ab.js:4697-7857 placement
+//@ chunk-20ssm8df.js:4668-7828 placement
 /**
  * 提交反馈草稿（可附会话记录），区分来源会话与界面。
  */
@@ -477,7 +476,7 @@ async function submitFeedbackDraft({
     error: `Couldn't send feedback${statusSuffix}. The draft is still queued.${retryHint}`,
   };
 }
-//@ chunk-d16hc1ab.js:7857-8070 placement
+//@ chunk-20ssm8df.js:7828-8041 placement
 /**
  * 丢弃反馈草稿：删除草稿、关闭提示、调整会话草稿计数并上报 tengu_feedback_draft_discarded。
  */

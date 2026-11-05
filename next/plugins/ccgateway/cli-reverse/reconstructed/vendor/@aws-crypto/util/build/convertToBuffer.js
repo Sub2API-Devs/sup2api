@@ -1,14 +1,14 @@
 /**
  * @aws-crypto/util/build/convertToBuffer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/util@3.0.0..4.0.0
- * pieces: chunk-me1s9h91.js (2)
+ * pieces: chunk-jcm8ph2a.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js";
 
-//@ chunk-me1s9h91.js:263-364 esm-layout
+//@ chunk-jcm8ph2a.js:263-364 esm-layout
 var util_utf8_browser_1 = __toESM(require_util_utf8());
 var fromUtf8 =
   typeof Buffer !== "undefined" && Buffer.from
@@ -16,7 +16,7 @@ var fromUtf8 =
         return Buffer.from(input, "utf8");
       }
     : util_utf8_browser_1.fromUtf8;
-//@ chunk-me1s9h91.js:364-588 esm-fingerprint
+//@ chunk-jcm8ph2a.js:364-588 esm-fingerprint
 function convertToBuffer(data) {
   if (data instanceof Uint8Array) return data;
   if (typeof data === "string") return fromUtf8(data);

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：存储键对应的路径片段；按命名空间校验范围等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (61)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (61)
  * attribution: placement 61
  */
 import { basename, dirname } from "path";
@@ -20,14 +20,14 @@ import { BACKUP_FILE_NAME_PATTERN_WITH_LEGACY, getProjectsDir } from "../session
 import { hasJsonlFiles } from "../errorLogSink.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:25952-26099 placement
+//@ chunk-85eyj5gy.js:26016-26163 placement
 function invalidSegmentError(argument) {
   return invalidStorageArgument(
     argument,
     "expected a segment that is not empty or made only of dots and spaces, with no path separator, NUL or set-aside shape",
   );
 }
-//@ chunk-t0gq9gyw.js:26099-26329 placement
+//@ chunk-85eyj5gy.js:26163-26393 placement
 /**
  * 校验存储键对象。
  */
@@ -40,7 +40,7 @@ function validateStorageKey(key) {
     return invalidStorageArgument("key", `${key.namespace} is not a storage namespace`);
   return checkKeyFields("key", fields);
 }
-//@ chunk-t0gq9gyw.js:26329-26757 placement
+//@ chunk-85eyj5gy.js:26393-26821 placement
 /**
  * 按字段定义检查键字段（必填、格式）。
  */
@@ -67,11 +67,11 @@ function checkKeyFields(keyPath, fields) {
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:26757-26813 placement
+//@ chunk-85eyj5gy.js:26821-26877 placement
 function isRelPathField(field) {
   return field === "relPath" || field === "agentRelPath";
 }
-//@ chunk-t0gq9gyw.js:26813-26987 placement
+//@ chunk-85eyj5gy.js:26877-27051 placement
 var USER_CONFIG_DIR_NAMES = [
   "commands",
   "agents",
@@ -87,49 +87,49 @@ var USER_CONFIG_DIR_NAMES = [
   "usage-data",
   "mcp-discovery-cache",
 ];
-//@ chunk-t0gq9gyw.js:26987-27144 placement
+//@ chunk-85eyj5gy.js:27051-27208 placement
 var USER_CONFIG_DIR_NAME_SET; // deferred: uses USER_CONFIG_DIR_NAMES of its import cycle while loading; runs once the cycle is complete
 var USER_CONFIG_DIR_ERROR;
 var PLUGIN_REGISTRY_FILES;
-deferInit("chunk-t0gq9gyw.js:26987", () => {
+deferInit("chunk-85eyj5gy.js:27051", () => {
   USER_CONFIG_DIR_NAME_SET = new Set(USER_CONFIG_DIR_NAMES);
   USER_CONFIG_DIR_ERROR = `must be one of the userConfigDir directory names (${USER_CONFIG_DIR_NAMES.join(", ")})`;
   PLUGIN_REGISTRY_FILES = ["installed", "marketplaces", "flagged", "catalog", "inUseSweep"];
 });
-//@ chunk-t0gq9gyw.js:27144-27253 placement
+//@ chunk-85eyj5gy.js:27208-27317 placement
 var PLUGIN_REGISTRY_FILE_SET; // deferred: uses USER_CONFIG_DIR_NAME_SET of its import cycle while loading; runs once the cycle is complete
 var PLUGIN_REGISTRY_FILE_ERROR;
 var MARKETPLACE_CACHE_FORMS_2;
-deferInit("chunk-t0gq9gyw.js:27144", () => {
+deferInit("chunk-85eyj5gy.js:27208", () => {
   PLUGIN_REGISTRY_FILE_SET = new Set(PLUGIN_REGISTRY_FILES);
   PLUGIN_REGISTRY_FILE_ERROR = `must be one of the pluginRegistry files (${PLUGIN_REGISTRY_FILES.join(", ")})`;
   MARKETPLACE_CACHE_FORMS_2 = ["manifest", "catalog"];
 });
-//@ chunk-t0gq9gyw.js:27253-27338 placement
+//@ chunk-85eyj5gy.js:27317-27402 placement
 var MARKETPLACE_CACHE_FORMS; // deferred: uses PLUGIN_REGISTRY_FILE_SET of its import cycle while loading; runs once the cycle is complete
 var MARKETPLACE_CACHE_FORM_ERROR;
-deferInit("chunk-t0gq9gyw.js:27253", () => {
+deferInit("chunk-85eyj5gy.js:27317", () => {
   MARKETPLACE_CACHE_FORMS = new Set(MARKETPLACE_CACHE_FORMS_2);
   MARKETPLACE_CACHE_FORM_ERROR = `must be one of the marketplaceCache forms (${MARKETPLACE_CACHE_FORMS_2.join(", ")})`;
 });
-//@ chunk-t0gq9gyw.js:27338-27355 placement
+//@ chunk-85eyj5gy.js:27402-27419 placement
 var SESSION_JOURNAL_NAMES = ["world"];
-//@ chunk-t0gq9gyw.js:27355-27439 placement
+//@ chunk-85eyj5gy.js:27419-27503 placement
 var SESSION_JOURNAL_NAME_SET; // deferred: uses SESSION_JOURNAL_NAMES of its import cycle while loading; runs once the cycle is complete
 var SESSION_JOURNAL_NAME_ERROR;
-deferInit("chunk-t0gq9gyw.js:27355", () => {
+deferInit("chunk-85eyj5gy.js:27419", () => {
   SESSION_JOURNAL_NAME_SET = new Set(SESSION_JOURNAL_NAMES);
   SESSION_JOURNAL_NAME_ERROR = `must be one of the session journal names (${SESSION_JOURNAL_NAMES.join(", ")})`;
 });
-//@ chunk-t0gq9gyw.js:27439-27471 placement
+//@ chunk-85eyj5gy.js:27503-27535 placement
 function isSessionJournalName(sessionJournal) {
   return SESSION_JOURNAL_NAME_SET.has(sessionJournal);
 }
-//@ chunk-t0gq9gyw.js:27471-27539 placement
+//@ chunk-85eyj5gy.js:27535-27603 placement
 function isSha256Hex(digest) {
   return typeof digest === "string" && /^[0-9a-f]{64}$/.test(digest);
 }
-//@ chunk-t0gq9gyw.js:27539-29572 placement
+//@ chunk-85eyj5gy.js:27603-29636 placement
 /**
  * 按命名空间校验存储键。
  */
@@ -201,7 +201,7 @@ function validateKeyByNamespace(key) {
     ? undefined
     : invalidStorageArgument("key.agentType", "an agent memory key names its agent");
 }
-//@ chunk-t0gq9gyw.js:29572-29769 placement
+//@ chunk-85eyj5gy.js:29636-29833 placement
 function validateBackupFileName(key) {
   return typeof key.backupFileName !== "string" ||
     !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(key.backupFileName)
@@ -211,24 +211,24 @@ function validateBackupFileName(key) {
       )
     : undefined;
 }
-//@ chunk-t0gq9gyw.js:29769-29830 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
+//@ chunk-85eyj5gy.js:29833-29894 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings(config) {
   return config === "user" || config === "project" || config === "local";
 }
-//@ chunk-t0gq9gyw.js:29830-29860 placement
+//@ chunk-85eyj5gy.js:29894-29924 placement
 var GLOBAL_CONFIG_COPY_KINDS = ["backup", "corrupted"];
-//@ chunk-t0gq9gyw.js:29860-29947 placement
+//@ chunk-85eyj5gy.js:29924-30011 placement
 var GLOBAL_CONFIG_COPY_KIND_SET; // deferred: uses GLOBAL_CONFIG_COPY_KINDS of its import cycle while loading; runs once the cycle is complete
 var GLOBAL_CONFIG_COPY_KIND_ERROR;
-deferInit("chunk-t0gq9gyw.js:29860", () => {
+deferInit("chunk-85eyj5gy.js:29924", () => {
   GLOBAL_CONFIG_COPY_KIND_SET = new Set(GLOBAL_CONFIG_COPY_KINDS);
   GLOBAL_CONFIG_COPY_KIND_ERROR = `must be one of the global-config copy kinds (${GLOBAL_CONFIG_COPY_KINDS.join(", ")})`;
 });
-//@ chunk-t0gq9gyw.js:29947-29979 placement
+//@ chunk-85eyj5gy.js:30011-30043 placement
 function isGlobalConfigCopyKind(kind) {
   return GLOBAL_CONFIG_COPY_KIND_SET.has(kind);
 }
-//@ chunk-t0gq9gyw.js:29979-30853 placement
+//@ chunk-85eyj5gy.js:30043-30917 placement
 /**
  * 校验转录存储键（会话、代理相对路径）。
  */
@@ -262,7 +262,7 @@ function validateTranscriptKey(key) {
     ? invalidStorageArgument("key.agentRelPath", "requires agentId or journal")
     : undefined;
 }
-//@ chunk-t0gq9gyw.js:30853-30931 placement
+//@ chunk-85eyj5gy.js:30917-30995 placement
 /**
  * 云快照、side.git、同步目录名。
  */
@@ -270,7 +270,7 @@ var CLOUD_SNAPSHOTS_DIR = "cloud-snapshots";
 var SIDE_GIT = "side.git";
 var ARCHIVE_SYNC = "archive-sync";
 var FOLDER_SYNC = "folder-sync";
-//@ chunk-t0gq9gyw.js:30931-31303 placement
+//@ chunk-85eyj5gy.js:30995-31367 placement
 /**
  * 「steps-under-way」目录名：会话转录下保留项目级条目的保留名单之一。
  */
@@ -280,7 +280,7 @@ var RECORDING_STAMP_RE;
 var RECORDING_STAMP_ERROR;
 var RECORDING_STREAM_SUFFIX;
 var RECORDING_STREAM_ADDRESSED_ERROR;
-deferInit("chunk-t0gq9gyw.js:30931", () => {
+deferInit("chunk-85eyj5gy.js:30995", () => {
   STEPS_UNDER_WAY_DIR = "steps-under-way";
   RESERVED_PROJECT_ENTRY_NAMES = new Set([
     "memory",
@@ -295,11 +295,11 @@ deferInit("chunk-t0gq9gyw.js:30931", () => {
   RECORDING_STREAM_SUFFIX = ".cast";
   RECORDING_STREAM_ADDRESSED_ERROR = `<stamp>${RECORDING_STREAM_SUFFIX} inside a session's folder is that session's terminal recording stream: address it as keys.recording(projectKey, sessionId, stamp)`;
 });
-//@ chunk-t0gq9gyw.js:31303-31357 placement
+//@ chunk-85eyj5gy.js:31367-31421 placement
 function isRecordingStamp(stamp) {
   return typeof stamp === "string" && RECORDING_STAMP_RE.test(stamp);
 }
-//@ chunk-t0gq9gyw.js:31357-31458 placement
+//@ chunk-85eyj5gy.js:31421-31522 placement
 function isRecordingStreamPath(relPath) {
   return (
     Array.isArray(relPath) &&
@@ -307,7 +307,7 @@ function isRecordingStreamPath(relPath) {
     storageNameSpellings(relPath[0]).some((spelling) => recordingStampOfStreamName(spelling) !== undefined)
   );
 }
-//@ chunk-t0gq9gyw.js:31458-31550 placement
+//@ chunk-85eyj5gy.js:31522-31614 placement
 /**
  * 从录音流文件名取时间戳前缀，非法返回 undefined。
  */
@@ -316,43 +316,43 @@ function recordingStampOfStreamName(name) {
   let stamp = name.slice(0, -RECORDING_STREAM_SUFFIX.length);
   return isRecordingStamp(stamp) ? stamp : undefined;
 }
-//@ chunk-t0gq9gyw.js:31550-31689 placement
+//@ chunk-85eyj5gy.js:31614-31753 placement
 var SESSION_SIBLING_SUFFIXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SESSION_SIBLING_SUFFIX_ERROR;
-deferInit("chunk-t0gq9gyw.js:31550", () => {
+deferInit("chunk-85eyj5gy.js:31614", () => {
   SESSION_SIBLING_SUFFIXES = [".ccr-tip.json", ".precompact.json", RECORDING_STREAM_SUFFIX];
   SESSION_SIBLING_SUFFIX_ERROR = `must not end with ${SESSION_SIBLING_SUFFIXES.join(", ")}: those name a session's project-level sibling files`;
 });
-//@ chunk-t0gq9gyw.js:31689-31757 placement
+//@ chunk-85eyj5gy.js:31753-31821 placement
 function hasSessionSiblingSuffix(name) {
   return storageNameSpellings(name).some((spelling) =>
     SESSION_SIBLING_SUFFIXES.some((suffix) => spelling.endsWith(suffix)),
   );
 }
-//@ chunk-t0gq9gyw.js:31757-31885 placement
+//@ chunk-85eyj5gy.js:31821-31949 placement
 var DIR_SYNC_RECORD_SUFFIX = ".dir-sync.json";
 var DIR_SYNC_SUFFIX_ERROR = `must not end with ${DIR_SYNC_RECORD_SUFFIX}: that name is reserved for a cloud session's record at the project level`;
-//@ chunk-t0gq9gyw.js:31885-31941 placement
+//@ chunk-85eyj5gy.js:31949-32005 placement
 function hasDirSyncSuffix(name) {
   return storageNameSpellings(name).some((spelling) => spelling.endsWith(DIR_SYNC_RECORD_SUFFIX));
 }
-//@ chunk-t0gq9gyw.js:31941-32032 placement
+//@ chunk-85eyj5gy.js:32005-32096 placement
 var RESERVED_SESSION_NAME_ERROR; // deferred: uses STEPS_UNDER_WAY_DIR of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:31941", () => {
+deferInit("chunk-85eyj5gy.js:32005", () => {
   RESERVED_SESSION_NAME_ERROR = `${[...RESERVED_PROJECT_ENTRY_NAMES].join(", ")} are reserved: they name project-level entries, not sessions`;
 });
-//@ chunk-t0gq9gyw.js:32032-32082 placement
+//@ chunk-85eyj5gy.js:32096-32146 placement
 function isReservedProjectEntryName(name) {
   return storageNameSpellings(name).some((spelling) => RESERVED_PROJECT_ENTRY_NAMES.has(spelling));
 }
-//@ chunk-t0gq9gyw.js:32082-32128 placement
+//@ chunk-85eyj5gy.js:32146-32192 placement
 /**
  * 该名字能否用作会话 id（不是保留项、不含 .jsonl、不带兄弟后缀）。
  */
 function isNameableSessionId(name) {
   return !isReservedProjectEntryName(name) && !hasJsonlFiles(name) && !hasSessionSiblingSuffix(name);
 }
-//@ chunk-t0gq9gyw.js:32128-32280 placement
+//@ chunk-85eyj5gy.js:32192-32344 placement
 function validateSessionIdSegment(fieldPath, name) {
   if (typeof name !== "string") return;
   if (isReservedProjectEntryName(name)) return invalidStorageArgument(fieldPath, RESERVED_SESSION_NAME_ERROR);
@@ -360,38 +360,38 @@ function validateSessionIdSegment(fieldPath, name) {
   if (hasDirSyncSuffix(name)) return invalidStorageArgument(fieldPath, DIR_SYNC_SUFFIX_ERROR);
   return hasJsonlFiles(name) ? invalidStorageArgument(fieldPath, JSONL_STREAM_KEY_ERROR) : undefined;
 }
-//@ chunk-t0gq9gyw.js:32280-32391 placement
+//@ chunk-85eyj5gy.js:32344-32455 placement
 var META_JSON_SUFFIX = ".meta.json";
 var META_RESERVED_ERROR =
   ".meta is reserved for the list metadata key, under every spelling that opens its file";
-//@ chunk-t0gq9gyw.js:32391-32429 placement
+//@ chunk-85eyj5gy.js:32455-32493 placement
 function isMetaJsonTaskId(taskId) {
   return isMetaJsonName(`${taskId}.json`);
 }
-//@ chunk-t0gq9gyw.js:32429-32471 placement
+//@ chunk-85eyj5gy.js:32493-32535 placement
 function isMetaJsonName(name) {
   return storageNameSpellings(name).includes(META_JSON_SUFFIX);
 }
-//@ chunk-t0gq9gyw.js:32471-32541 placement
+//@ chunk-85eyj5gy.js:32535-32605 placement
 var JSONL_STREAM_KEY_ERROR = "names a .jsonl stream, which only a transcript key addresses";
-//@ chunk-t0gq9gyw.js:32541-32622 placement
+//@ chunk-85eyj5gy.js:32605-32686 placement
 function namesJsonlStream(segments) {
   return (
     Array.isArray(segments) &&
     segments.some((segment) => typeof segment === "string" && hasJsonlFiles(segment))
   );
 }
-//@ chunk-t0gq9gyw.js:32622-32683 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
+//@ chunk-85eyj5gy.js:32686-32747 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings_2(config) {
   return config === "user" || config === "project" || config === "local";
 }
-//@ chunk-t0gq9gyw.js:32683-32728 placement
+//@ chunk-85eyj5gy.js:32747-32792 placement
 var LOG_CHANNEL_ERROR = "must be debug, telemetry or apiDump";
-//@ chunk-t0gq9gyw.js:32728-32794 placement
+//@ chunk-85eyj5gy.js:32792-32858 placement
 function isLogChannel(channel) {
   return channel === "debug" || channel === "telemetry" || channel === "apiDump";
 }
-//@ chunk-t0gq9gyw.js:32794-33162 placement
+//@ chunk-85eyj5gy.js:32858-33226 placement
 /**
  * 校验日志通道键。
  */
@@ -406,7 +406,7 @@ function validateLogChannelKey(key) {
       );
   return;
 }
-//@ chunk-t0gq9gyw.js:33162-33936 placement
+//@ chunk-85eyj5gy.js:33226-34000 placement
 /**
  * 校验任务存储键。
  */
@@ -432,7 +432,7 @@ function validateTaskKey(key) {
   if (isMetaJsonTaskId(key.taskId)) return invalidStorageArgument("key.taskId", META_RESERVED_ERROR);
   return;
 }
-//@ chunk-t0gq9gyw.js:33936-34337 placement
+//@ chunk-85eyj5gy.js:34000-34401 placement
 /**
  * 校验 jobs 根下的键。
  */
@@ -450,10 +450,10 @@ function validateJobsKey(key) {
     ? undefined
     : invalidStorageArgument("key.draftKey", "must be 8 lowercase hex characters");
 }
-//@ chunk-t0gq9gyw.js:34337-34440 placement
+//@ chunk-85eyj5gy.js:34401-34504 placement
 var TIMELINE_JSONL = "timeline.jsonl";
 var JOB_TIMELINE_KEY_ERROR = `${TIMELINE_JSONL} is the job's timeline stream: address it as keys.jobTimeline(jobId)`;
-//@ chunk-t0gq9gyw.js:34440-34527 placement
+//@ chunk-85eyj5gy.js:34504-34591 placement
 function isJobTimelinePath(relPath) {
   return (
     Array.isArray(relPath) &&
@@ -461,13 +461,13 @@ function isJobTimelinePath(relPath) {
     storageNameSpellings(relPath[0]).includes(TIMELINE_JSONL)
   );
 }
-//@ chunk-t0gq9gyw.js:34527-34645 placement
+//@ chunk-85eyj5gy.js:34591-34709 placement
 var YEAR_RE = /^\d{4}$/;
 var TWO_DIGIT_RE = /^\d{2}$/;
 var SAFE_SHORT_ID_RE = /^[A-Za-z0-9_-]{1,8}(?:-[a-z0-9]+)*$/;
 var MAX_SHORT_ID_CHARS = 128;
 var WINDOWS_RESERVED_NAME_RE = /^(?:con|prn|aux|nul|com\d|lpt\d)$/i;
-//@ chunk-t0gq9gyw.js:34645-34726 placement
+//@ chunk-85eyj5gy.js:34709-34790 placement
 function isShortLogName(logName) {
   return (
     typeof logName === "string" &&
@@ -476,7 +476,7 @@ function isShortLogName(logName) {
     !WINDOWS_RESERVED_NAME_RE.test(logName)
   );
 }
-//@ chunk-t0gq9gyw.js:34726-35005 placement
+//@ chunk-85eyj5gy.js:34790-35069 placement
 function validateDateParts(prefix, scope) {
   if (scope.year !== undefined && !matchesDigits(YEAR_RE, scope.year))
     return invalidStorageArgument(`${prefix}.year`, "must be four digits (YYYY)");
@@ -486,11 +486,11 @@ function validateDateParts(prefix, scope) {
     return invalidStorageArgument(`${prefix}.day`, "must be two digits (DD)");
   return;
 }
-//@ chunk-t0gq9gyw.js:35005-35060 placement
+//@ chunk-85eyj5gy.js:35069-35124 placement
 function matchesDigits(pattern, value) {
   return typeof value === "string" && pattern.test(value);
 }
-//@ chunk-t0gq9gyw.js:35060-35380 placement
+//@ chunk-85eyj5gy.js:35124-35444 placement
 /**
  * 校验按年月的范围。
  */
@@ -503,9 +503,9 @@ function validateDateScope(scope) {
     return invalidStorageArgument("scope.month", "required when day is given");
   return validateDateParts("scope", scope);
 }
-//@ chunk-t0gq9gyw.js:35380-35403 placement
+//@ chunk-85eyj5gy.js:35444-35467 placement
 var DRAFT_KEY_RE = /^[0-9a-f]{8}$/;
-//@ chunk-t0gq9gyw.js:35403-37779 placement
+//@ chunk-85eyj5gy.js:35467-37843 placement
 /**
  * 存储键对应的路径片段。
  */
@@ -647,7 +647,7 @@ function keyPathSegments(key) {
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:37779-37999 placement
+//@ chunk-85eyj5gy.js:37843-38063 placement
 /**
  * 校验存储范围对象。
  */
@@ -659,7 +659,7 @@ function validateStorageScope(scope) {
     return invalidStorageArgument("scope", `${String(scope.namespace)} is not a listable namespace`);
   return validateScopeByNamespace(scope) ?? checkKeyFields("scope", fields);
 }
-//@ chunk-t0gq9gyw.js:37999-39955 placement
+//@ chunk-85eyj5gy.js:38063-40019 placement
 /**
  * 范围中不允许字段的说明。
  */
@@ -717,7 +717,7 @@ var SCOPE_FIELD_ERRORS = {
   job: [],
   bridgeSpawn: [],
 };
-//@ chunk-t0gq9gyw.js:39955-42173 placement
+//@ chunk-85eyj5gy.js:40019-42237 placement
 /**
  * 按命名空间校验范围。
  */
@@ -790,7 +790,7 @@ function validateScopeByNamespace(scope) {
     return invalidStorageArgument("scope.kind", GLOBAL_CONFIG_COPY_KIND_ERROR);
   return;
 }
-//@ chunk-t0gq9gyw.js:42173-42652 placement
+//@ chunk-85eyj5gy.js:42237-42716 placement
 /**
  * 校验代理记忆范围（user/project/local）。
  */
@@ -808,7 +808,7 @@ function validateAgentMemoryScope(scope) {
       )
     : undefined;
 }
-//@ chunk-t0gq9gyw.js:42652-44363 placement
+//@ chunk-85eyj5gy.js:42716-44427 placement
 /**
  * 范围对应的路径片段。
  */
@@ -896,16 +896,16 @@ function scopePathSegments(scope) {
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:44363-44373 placement
+//@ chunk-85eyj5gy.js:44427-44437 placement
 var MAX_SIDE_PATH_DEPTH = 6;
-//@ chunk-t0gq9gyw.js:44373-44434 placement (2.1.88 match: getAgentMetadataPath, 1)
+//@ chunk-85eyj5gy.js:44437-44498 placement (2.1.88 match: getAgentMetadataPath, 1)
 /**
  * 从 .meta.json 路径反推存储键。
  */
 function keyFromMetaPath(agentId) {
   return agentId.endsWith(".meta.json") ? pathToSessionSideKey(agentId) : undefined;
 }
-//@ chunk-t0gq9gyw.js:44434-44734 placement
+//@ chunk-85eyj5gy.js:44498-44798 placement
 /**
  * 从文件路径反推存储键。
  */
@@ -933,23 +933,23 @@ function pathToSessionSideKey(path) {
   let sideKey = STORAGE_SPACES.sidecar(sessionId, relDir, relSegments);
   return validateStorageKey(sideKey) === undefined ? sideKey : undefined;
 }
-//@ chunk-t0gq9gyw.js:44734-44789 placement
+//@ chunk-85eyj5gy.js:44798-44853 placement
 function toStorageKey(pathOrKey) {
   return typeof pathOrKey === "string" ? pathToSessionSideKey(pathOrKey) : pathOrKey.key;
 }
 export {
   pathToSessionSideKey,
-  toStorageKey,
   validateStorageKey,
   keyFromMetaPath,
   validateStorageScope,
+  SIDE_GIT,
+  CLOUD_SNAPSHOTS_DIR,
   isNameableSessionId,
   ARCHIVE_SYNC,
   FOLDER_SYNC,
   STEPS_UNDER_WAY_DIR,
-  SIDE_GIT,
-  CLOUD_SNAPSHOTS_DIR,
   recordingStampOfStreamName,
-  MAX_SIDE_PATH_DEPTH,
   DIR_SYNC_RECORD_SUFFIX,
+  MAX_SIDE_PATH_DEPTH,
+  toStorageKey,
 };

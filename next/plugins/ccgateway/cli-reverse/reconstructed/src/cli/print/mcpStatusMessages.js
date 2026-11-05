@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 服务器未启动/连接失败的说明与状态等待
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (11)
  * attribution: placement 11
  */
 import { getMcpServerSignature, supportsEnvExpansion } from "../../services/mcp/config.js";
@@ -18,7 +18,10 @@ import { isNonReservedStdioConfig } from "../../services/mcp/utils.js";
 import { IGNORED_BY_ENTERPRISE_POLICY_TEXT } from "./mcpControlRequests.js";
 import { MCP_STATUS_POLL_MS } from "./pollEvents.js";
 
-//@ chunk-tyg7f3ek.js:566123-566294 placement
+//@ chunk-0yw3taqg.js:454617-454633 placement
+var SETTINGS_NESTING_LIMITS = 32;
+var SETTINGS_STRING_MAX_CHARS = 40;
+//@ chunk-0yw3taqg.js:609783-609954 placement
 async function waitForMcpServerStatus(registry, serverName, config) {
   let found = registry.rows().find((row) => row.name === serverName);
   let shouldRetry = found?.type === "failed" && registry.isAdded(serverName);
@@ -27,7 +30,7 @@ async function waitForMcpServerStatus(registry, serverName, config) {
     ? subscribeRows(registry.rows, serverName)
     : mcpServerNotStarted(registry, serverName, config);
 }
-//@ chunk-tyg7f3ek.js:566294-566510 placement
+//@ chunk-0yw3taqg.js:609954-610170 placement
 function resolveConnectorTwin(row, rows, listedNames) {
   if (!row.isListed || row.isTwin || !listedNames.includes(row.name)) return row;
   let mcpServerSignature = getMcpServerSignature(row.config);
@@ -42,7 +45,7 @@ function resolveConnectorTwin(row, rows, listedNames) {
     name: found.name,
   };
 }
-//@ chunk-tyg7f3ek.js:566510-566563 placement
+//@ chunk-0yw3taqg.js:610170-610223 placement
 function subscribeRows(rows, serverName) {
   return awaitMcpServerConnected(
     {
@@ -52,15 +55,15 @@ function subscribeRows(rows, serverName) {
     serverName,
   );
 }
-//@ chunk-tyg7f3ek.js:566563-566687 placement
+//@ chunk-0yw3taqg.js:610223-610347 placement
 function withKeyReplaced(key, map, value) {
   let result = Object.create(null);
   for (let [key_2, value] of Object.entries(map)) if (key_2 !== key) result[key_2] = value;
   if (value !== undefined) result[key] = value;
   return result;
 }
-//@ chunk-tyg7f3ek.js:566687-566862 placement (2.1.88 match: toScopedConfig, 0.78)
-function toScopedConfig(rows, known) {
+//@ chunk-0yw3taqg.js:610347-610522 placement (2.1.88 match: toScopedConfig, 0.779)
+function toScopedConfig_2(rows, known) {
   let configs = Object.create(null);
   for (let row of rows)
     if (
@@ -70,7 +73,7 @@ function toScopedConfig(rows, known) {
       configs[row.name] = row.config;
   return configs;
 }
-//@ chunk-tyg7f3ek.js:566862-567205 placement
+//@ chunk-0yw3taqg.js:610522-610865 placement
 async function mcpServerNotStarted(registry, serverName, config) {
   if (registry.isParked() && isNonReservedStdioConfig(serverName, config))
     return mcpConnectRefusal(
@@ -85,7 +88,7 @@ async function mcpServerNotStarted(registry, serverName, config) {
         `The MCP server "${serverName}" has a transport this session cannot connect.`,
       );
 }
-//@ chunk-tyg7f3ek.js:567205-567438 placement
+//@ chunk-0yw3taqg.js:610865-611098 placement
 async function applyMcpServerAndDescribe(registry, serverName, config) {
   let result = await registry.apply(serverName, config);
   let outcome =
@@ -95,7 +98,7 @@ async function applyMcpServerAndDescribe(registry, serverName, config) {
   if (!outcome.isConnected && outcome.refused !== "auth") await registry.apply(serverName, undefined);
   return outcome;
 }
-//@ chunk-tyg7f3ek.js:567438-567593 placement
+//@ chunk-0yw3taqg.js:611098-611253 placement
 function describeMcpConnectFailure(registry, serverName, error) {
   let found = registry.rows().find((row) => row.name === serverName);
   return (
@@ -106,12 +109,12 @@ function describeMcpConnectFailure(registry, serverName, error) {
     )
   );
 }
-//@ chunk-tyg7f3ek.js:567593-567659 placement
+//@ chunk-0yw3taqg.js:611253-611319 placement
 function pollRowsInterval(onPoll) {
   let interval = setInterval(onPoll, MCP_STATUS_POLL_MS);
   return () => clearInterval(interval);
 }
-//@ chunk-tyg7f3ek.js:567659-567805 placement
+//@ chunk-0yw3taqg.js:611319-611465 placement
 function duplicateConnectorRefusal(name) {
   return {
     isListed: false,
@@ -119,13 +122,10 @@ function duplicateConnectorRefusal(name) {
     message: `The MCP server "${name}" duplicates a claude.ai connector that is not in this session.`,
   };
 }
-//@ chunk-tyg7f3ek.js:567847-567863 placement
-var SETTINGS_NESTING_LIMITS = 32;
-var SETTINGS_STRING_MAX_CHARS = 40;
 export {
   withKeyReplaced,
   resolveConnectorTwin,
-  toScopedConfig,
+  toScopedConfig_2,
   subscribeRows,
   waitForMcpServerStatus,
   SETTINGS_NESTING_LIMITS,

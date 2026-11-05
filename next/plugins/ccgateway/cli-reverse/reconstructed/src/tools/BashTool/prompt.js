@@ -3,10 +3,10 @@
  *
  * Bash 工具提示词：完整版与精简版说明、git 提交/PR 指南、后台运行与 sleep 规则、Windows Git Bash 提示、# Machines 节、系统提示里的沙箱节
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/prompt.ts
- * pieces: chunk-e6aww6q8.js (28), chunk-fym4r1th.js (12)
- * attribution: placement 26, layout 10, fingerprint 3, affinity 1
+ * pieces: chunk-5xgkngpb.js (29), chunk-wrq65rh8.js (12)
+ * attribution: placement 24, layout 13, callgraph-fingerprint 1, fingerprint 2, affinity 1
  */
 import { isPlainNonInteractive, isHeadlessHostSession } from "../../utils/sessionShape.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";
@@ -65,7 +65,7 @@ import {
 } from "../../utils/model/promptBundles.js";
 import { isCatalogSuppressed } from "../../utils/model/modelCatalog/servedCatalog.js";
 import { env } from "../../utils/env.js";
-import { isPowerShellToolEnabled } from "../../utils/shell/shellToolUtils.js";
+import { isPowerShellToolEnabled, bashTeachesHeredocOnStdin } from "../../utils/shell/shellToolUtils.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
 import { AGENT } from "../AgentTool/constants.js";
 import { isTaskToolsEnabled } from "../../utils/tasks.js";
@@ -74,16 +74,16 @@ import { TODO_WRITE_TOOL_NAME } from "../TodoWriteTool/constants.js";
 import { BASH_TOOL_NAME } from "./toolName.js";
 import { hasEmbeddedSearchTools } from "../../utils/embeddedTools.js";
 import { CWD_PERSISTS_NOTE } from "../../constants/promptSections.js";
-import { isRemoteToolForwardingEnabledCached } from "../../services/remoteTools/servingGates.js";
-import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
+import { isRemoteToolsForwardEnabled2, HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
+import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.js";
 import { GLOB_TOOL_NAME } from "../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { prependBullets } from "../../constants/prompts.js";
 import { shouldMaintainProjectWorkingDir } from "../../utils/envUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
 import { getPlatform } from "../../utils/platform.js";
 import {
@@ -99,30 +99,30 @@ import { isArtifactMountMode } from "../../services/artifacts/artifactMount.js";
 import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
 import { WINDOWS_LOOPBACK_PROBE_PORT } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js";
 
-//@ chunk-fym4r1th.js:10036-10097 placement
+//@ chunk-wrq65rh8.js:45032-45093 placement
 /**
  * 单次非交互会话且宿主策略未禁用后台截止时间时为真。
  */
 function isBackgroundDeadlineEnforced() {
   return isPlainNonInteractive() && !getHostAgentPolicy().backgroundDeadlineDisabled;
 }
-//@ chunk-fym4r1th.js:10097-10153 placement
+//@ chunk-wrq65rh8.js:45093-45149 placement
 /**
  * 后台超时提示是否启用：上面条件加上 tengu_cosmic_shore 开关。
  */
 function isBackgroundTimeoutPromptEnabled() {
   return isBackgroundDeadlineEnforced() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_cosmic_shore", true);
 }
-//@ chunk-fym4r1th.js:10153-10202 placement
+//@ chunk-wrq65rh8.js:45149-45198 placement
 function isWoollyToastGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_woolly_toast", false);
 }
-//@ chunk-fym4r1th.js:10202-10216 placement
+//@ chunk-wrq65rh8.js:45198-45212 placement
 /**
  * 单次打印会话的后台超时下限（600000 毫秒）。
  */
 var MIN_BACKGROUND_TIMEOUT_MS = 600000;
-//@ chunk-fym4r1th.js:10216-10347 placement
+//@ chunk-wrq65rh8.js:45212-45342 placement
 function getDefaultBackgroundTimeoutMs() {
   return Math.min(
     isSingleShotPrintSession()
@@ -135,7 +135,7 @@ function getDefaultBackgroundTimeoutMs() {
     getBackgroundTimeoutCapMs(),
   );
 }
-//@ chunk-fym4r1th.js:10347-10434 placement
+//@ chunk-wrq65rh8.js:45342-45429 placement
 /**
  * 后台命令的总超时上限，取 tengu_crispy_glade / 环境变量配置并做上下限约束。
  */
@@ -146,21 +146,21 @@ function getBackgroundTimeoutCapMs() {
     ),
   );
 }
-//@ chunk-fym4r1th.js:10434-10477 placement
+//@ chunk-wrq65rh8.js:45429-45472 placement
 /**
  * 开启后台超时提示时返回默认后台超时的说明文本。
  */
 function getBackgroundTimeoutNote(timeoutMs) {
   return isBackgroundTimeoutPromptEnabled() ? getBackgroundTimeoutForDisplay(timeoutMs) : undefined;
 }
-//@ chunk-fym4r1th.js:10477-10525 placement
+//@ chunk-wrq65rh8.js:45472-45520 placement
 /**
  * 显示用后台超时：请求值或默认值，且不超过总上限。
  */
 function getBackgroundTimeoutForDisplay(timeoutMs) {
   return Math.min(timeoutMs ?? getDefaultBackgroundTimeoutMs(), getBackgroundTimeoutCapMs());
 }
-//@ chunk-fym4r1th.js:10525-10795 placement
+//@ chunk-wrq65rh8.js:45520-45790 placement
 /**
  * 返回 run_in_background 参数说明，开启后台超时时附带超时含义与默认值。
  */
@@ -169,7 +169,7 @@ function getRunInBackgroundDescription() {
     ? `Set to true to run this command in the background. With it, \`timeout\` limits how long the command may run in the background before it is stopped (default ${getDefaultBackgroundTimeoutMs()} ms, max ${getBackgroundTimeoutCapMs()} ms).`
     : "Set to true to run this command in the background.";
 }
-//@ chunk-fym4r1th.js:10795-11163 placement
+//@ chunk-wrq65rh8.js:45790-46158 placement
 /**
  * 生成 Bash 提示词中后台运行超时的说明：run_in_background 时 timeout 表示后台最长运行时间（默认值与上限），到时停止并（可选）通知。
  */
@@ -183,7 +183,7 @@ function getBackgroundTimeoutPromptNote() {
       : `${Math.round(backgroundTimeoutCapMs / 3600000)} hours`;
   return ` With \`run_in_background\` the timeout is instead how long the command may run in the background (default ${defaultBackgroundTimeoutMs}ms / ${Math.round(defaultBackgroundTimeoutMs / 60000)} minutes, max ${backgroundTimeoutCapMs}ms / ${capText}); at that limit it is stopped${backgroundShellsKeptElsewhere() ? "" : " and you are notified"}.`;
 }
-//@ chunk-fym4r1th.js:11163-11327 placement
+//@ chunk-wrq65rh8.js:46158-46322 placement
 /**
  * 返回后台运行截止说明，会话上限低于默认时附带本会话允许的最长超时。
  */
@@ -193,7 +193,7 @@ function getBackgroundDeadlineNote() {
     ? `${BACKGROUND_STOP_EXPLANATIONS.deadline} The longest \`timeout\` allowed in this session is ${backgroundTimeoutCapMs} ms (${Math.round(backgroundTimeoutCapMs / 60000)} minutes).`
     : BACKGROUND_STOP_EXPLANATIONS.deadline;
 }
-//@ chunk-fym4r1th.js:11327-11663 placement
+//@ chunk-wrq65rh8.js:46322-46658 placement
 /**
  * 在无头宿主会话中采用会话固定的背景时长开关值（须为整分钟、≥5 分钟且不超过代码上限），否则回退代码默认并记录诊断。
  */
@@ -223,7 +223,7 @@ function resolveBackgroundLimitFlag(limitMs, featureFlag, readFlagValue) {
     });
   return limitMs;
 }
-//@ chunk-e6aww6q8.js:1480025-1480099 placement
+//@ chunk-5xgkngpb.js:1480664-1480738 placement
 /**
  * 当包含 Git 提示且 tengu_polished_tulip 开启时，返回使用 PR 技能的提示；否则空串。
  */
@@ -232,32 +232,32 @@ function buildPrSkillPrepSuggestion(model, tools) {
     ? buildPrPrepSuggestion(model, tools)
     : "";
 }
-//@ chunk-e6aww6q8.js:1480099-1480127 placement
+//@ chunk-5xgkngpb.js:1480738-1480766 layout
 /**
- * 当前构建不提供这段提示内容，恒返回 null，调用方据此走默认文案。
+ * getCoAuthorTrailer：构建期返回 null。
  */
-function noPromptSection(context) {
+function noPrUrlTemplate(ctx) {
   return null;
 }
-//@ chunk-e6aww6q8.js:1480127-1480154 placement
+//@ chunk-5xgkngpb.js:1480766-1480793 placement
 /**
  * 返回 Bash 默认超时（毫秒），用于提示词中的 timeout 说明。
  */
 function getDefaultBashTimeout() {
   return getDefaultBashTimeoutMs();
 }
-//@ chunk-e6aww6q8.js:1480154-1480311 placement
+//@ chunk-5xgkngpb.js:1480793-1480950 placement
 var COMMUNICATION_RULE = "Communication: Output text directly (NOT echo/printf)";
 var ATTRIBUTION_REMINDER_PHRASE =
   "the attribution lines given in the conversation's system-reminder, when one is present";
-//@ chunk-e6aww6q8.js:1480311-1480356 placement
+//@ chunk-5xgkngpb.js:1480950-1480995 placement
 /**
  * 归属声明未禁用时返回提交/PR 的结尾署名文本，否则 null。
  */
 async function getAttributionTrailer() {
   return isAttributionAnnouncementEnabled() ? null : buildDefaultAttributionTexts();
 }
-//@ chunk-e6aww6q8.js:1480356-1480413 placement
+//@ chunk-5xgkngpb.js:1480995-1481052 placement
 /**
  * 计算 availablePrSkills 后判断是否继续渲染 Git 提示节。
  */
@@ -266,7 +266,7 @@ function shouldRenderGitInstructions(tools) {
   let prSkills = availablePrSkills(tools);
   return true;
 }
-//@ chunk-e6aww6q8.js:1480413-1480644 placement
+//@ chunk-5xgkngpb.js:1481052-1481283 placement
 /**
  * 判断是否精简 Bash 工具描述（自动模式或绕过权限且开关开启），按会话缓存。
  */
@@ -281,28 +281,33 @@ function shouldTrimBashDescription() {
   sessionFeatureValues.bashFirstDescriptionTrimmed ??= computeTrim();
   return sessionFeatureValues.bashFirstDescriptionTrimmed;
 }
-//@ chunk-e6aww6q8.js:1480644-1480671 placement
+//@ chunk-5xgkngpb.js:1481283-1481309 placement
 /**
  * 返回前台命令的最大超时（毫秒）。
  */
 function getMaxBashTimeout() {
   return getMaxBashTimeoutMs();
 }
-//@ chunk-e6aww6q8.js:1480671-1481048 placement
-/**
- * Windows 上提示"本工具运行 Git Bash（POSIX sh）"；PowerShell 工具启用时再提醒不要用 here-string 和反引号续行。
- */
-function getWindowsGitBashNote() {
+//@ chunk-5xgkngpb.js:1481309-1481686 layout
+function gitBashNote() {
   if (env.platform !== "win32") return null;
-  let baseNote =
+  let GIT_BASH_NOTE =
     "This tool runs Git Bash (POSIX sh), not cmd.exe or PowerShell. Use Unix shell syntax: `/dev/null` not `NUL`, forward slashes, `$VAR` not `%VAR%` or `$env:VAR`.";
-  if (!isPowerShellToolEnabled()) return baseNote;
-  return `${baseNote} Do not use PowerShell here-strings (\`@'\u2026'@\`) or backtick continuation here \u2014 for multi-line strings use a heredoc.`;
+  if (!isPowerShellToolEnabled()) return GIT_BASH_NOTE;
+  return `${GIT_BASH_NOTE} Do not use PowerShell here-strings (\`@'\u2026'@\`) or backtick continuation here \u2014 for multi-line strings use a heredoc.`;
 }
-//@ chunk-e6aww6q8.js:1481048-1481275 layout
+//@ chunk-5xgkngpb.js:1481686-1482271 layout
+function bash3Note() {
+  if (!bashTeachesHeredocOnStdin()) return null;
+  let [stdinForm, optionWord] = shouldIncludeGitInstructions()
+    ? [" (`git commit -F - <<'EOF'`, `gh pr create --body-file - <<'EOF'`)", "those options"]
+    : [" with `<<'EOF'`", "that"];
+  return `This tool runs macOS's /bin/bash (version 3.2), too old to run a heredoc inside \`$(...)\` reliably. Never write \`"$(cat <<'EOF' \u2026 EOF)"\`, even where other instructions show it. Pass multi-line text on stdin${stdinForm} and end the command at \`EOF\`: run what follows as a separate call. Where a command cannot read stdin, or a skill refuses ${optionWord}, use one single-quoted string, writing each \`'\` as \`'\\''\`.`;
+}
+//@ chunk-5xgkngpb.js:1482271-1482498 layout
 var BACKGROUND_SURVIVES_REPLY_NOTE =
   "A command started with run_in_background keeps running after your reply ends, until it finishes or reaches its timeout; a process the shell itself detaches (nohup, &) is usually stopped a few minutes after the reply.";
-//@ chunk-e6aww6q8.js:1481275-1481338 layout
+//@ chunk-5xgkngpb.js:1482498-1482561 layout
 function getBackgroundLifetimeNote() {
   return backgroundShellsKeptElsewhere()
     ? ` ${BACKGROUND_COMMAND_STOP_NOTICE}`
@@ -310,17 +315,17 @@ function getBackgroundLifetimeNote() {
       ? ` ${BACKGROUND_SURVIVES_REPLY_NOTE}`
       : "";
 }
-//@ chunk-e6aww6q8.js:1481338-1481594 layout
+//@ chunk-5xgkngpb.js:1482561-1482817 layout
 function getBackgroundAgentAlternativeNote() {
   return canLaunchBackgroundAgent()
     ? ` Work that must go on after your reply can instead run in a background agent that runs its commands in the foreground (if you are a background agent, run them here in the foreground); the ${AGENT} tool's description says how.`
     : "";
 }
-//@ chunk-e6aww6q8.js:1481594-1481628 layout
+//@ chunk-5xgkngpb.js:1482817-1482851 layout
 function isLongSleepBlocked() {
   return !isBackgroundTasksOff() && backgroundCompletionNoticeEnabled();
 }
-//@ chunk-e6aww6q8.js:1481628-1482442 layout
+//@ chunk-5xgkngpb.js:1482851-1483665 layout
 /**
  * run_in_background 用法说明；后台任务被禁用时返回 null，按是否允许 Monitor/通知方式给出不同文字。
  */
@@ -330,7 +335,7 @@ function getBackgroundUsageNote() {
     return `You can use the \`run_in_background\` parameter to run the command in the background. Only use this if you don't need the result immediately. ${NO_FINISH_NOTIFICATION_NOTICE} You do not need to use '&' at the end of the command when using this parameter.`;
   return `You can use the \`run_in_background\` parameter to run the command in the background. ${backgroundShellsKeptElsewhere() ? "Only use this if you don't need the result immediately; you'll be notified if it finishes while you are still working." : "Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away - you'll be notified when it finishes."} You do not need to use '&' at the end of the command when using this parameter.${getBackgroundTimeoutPromptNote()}${getBackgroundLifetimeNote()}${getBackgroundAgentAlternativeNote()}`;
 }
-//@ chunk-e6aww6q8.js:1482442-1482491 layout
+//@ chunk-5xgkngpb.js:1483665-1483714 layout
 /**
  * 渲染 “Committing changes with git / Creating pull requests” 提示节，并记录已渲染。
  */
@@ -339,7 +344,7 @@ function renderCommitAndPrSection(surface) {
   if (section) logPrGuidanceRendered(surface);
   return section;
 }
-//@ chunk-e6aww6q8.js:1482491-1489405 fingerprint (2.1.88 match: getCommitAndPRInstructions, 0.348)
+//@ chunk-5xgkngpb.js:1483714-1490769 callgraph-fingerprint (2.1.88 match: getCommitAndPRInstructions, 0.22)
 /**
  * 完整版"# Committing changes with git / # Creating pull requests"提示：Git 安全协议、提交与 PR 步骤、HEREDOC 示例；提交/PR 结尾署名来自归属设置（S8t），TodoV2 启用时提到 TaskCreate。
  */
@@ -347,7 +352,7 @@ async function getCommitAndPRInstructions(tools) {
   let prSkills = availablePrSkills(tools);
   let prSkillPrepSuggestion = buildPrSkillPrepSuggestion(prSkills, "bash");
   if (!shouldRenderGitInstructions(tools)) return prSkillPrepSuggestion;
-  let taskToolName = isTaskToolsEnabled() ? TASK_CREATE_TOOL_NAME : TODO_WRITE_TOOL_NAME;
+  let hashes = isTaskToolsEnabled() ? TASK_CREATE_TOOL_NAME : TODO_WRITE_TOOL_NAME;
   let attributionTrailer = await getAttributionTrailer();
   let commitSection = renderCommitAndPrSection("bash_full");
   let extraNote = null;
@@ -383,7 +388,16 @@ ${attributionTrailer.commit}`
 ${attributionTrailer.pr}`
             : "",
         };
-  let stagingNote =
+  let stagingNote = bashTeachesHeredocOnStdin();
+  let prFooter = stagingNote
+    ? `git commit -F - <<'EOF'
+Commit message here.${commitExampleTrailer.replace("   ", "")}
+EOF`
+    : `git commit -m "$(cat <<'EOF'
+   Commit message here.${commitExampleTrailer}
+   EOF
+   )"`;
+  let commitExample =
     "- Only commit when the user explicitly asks. When staging, prefer " +
     'naming specific files over "git add -A"/"git add ." \u2014 never commit ' +
     "files that likely contain secrets (.env, credentials).";
@@ -421,17 +435,14 @@ Git Safety Protocol:
 
 Important notes:
 - NEVER run additional commands to read or explore code, besides git bash commands
-- NEVER use the ${taskToolName} or ${AGENT} tools
+- NEVER use the ${hashes} or ${AGENT} tools
 - DO NOT push to the remote repository unless the user explicitly asks you to do so
 - IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported.
 - IMPORTANT: Do not use --no-edit with git rebase commands, as the --no-edit flag is not a valid option for git rebase.
 - If there are no changes to commit (i.e., no untracked files and no modifications), do not create an empty commit
 - In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
 <example>
-git commit -m "$(cat <<'EOF'
-   Commit message here.${commitExampleTrailer}
-   EOF
-   )"
+${prFooter}
 </example>
 
 ` +
@@ -466,18 +477,22 @@ IMPORTANT: When the user asks you to create a pull request, follow these steps c
    - Push to remote with -u flag if needed
    - Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.${prBodyEnding}
 <example>
-gh pr create --title "the pr title" --body "$(cat <<'EOF'
+gh pr create --title "the pr title" ${stagingNote ? "--body-file - <<'EOF'" : `--body "$(cat <<'EOF'`}
 ## Summary
 ${prSummaryPlaceholder()}
 
 ## Test plan
 ${prTestPlanPlaceholder()}${prExampleFooter}
-EOF
-)"
+EOF${
+      stagingNote
+        ? ""
+        : `
+)"`
+    }
 </example>
 
 Important:
-- DO NOT use the ${taskToolName} or ${AGENT} tools
+- DO NOT use the ${hashes} or ${AGENT} tools
 - Return the PR URL when you're done, so the user can see it
 
 # Other common operations
@@ -490,7 +505,7 @@ ${extraNote}`
     }`
   );
 }
-//@ chunk-e6aww6q8.js:1489405-1490057 layout
+//@ chunk-5xgkngpb.js:1490769-1491421 layout
 /**
  * 精简版 # Git 提示节：不支持交互参数、用 gh、只在用户要求时提交、署名要求。
  */
@@ -542,7 +557,7 @@ ${extraNote}`
       : ""
   }`;
 }
-//@ chunk-e6aww6q8.js:1490057-1492212 layout
+//@ chunk-5xgkngpb.js:1491421-1493824 layout
 /**
  * 精简（lean）提示词：一句话工具说明、cwd 持久化规则、避免用 Bash 做 find/grep/cat、timeout 默认/最大值、run_in_background 说明、# Git 与 # Machines 节。
  */
@@ -551,7 +566,7 @@ async function getLeanPrompt(tools, context, bashFirstTrimmed, leanRewrite) {
   let leanGitInstructions = await getLeanGitInstructions(tools);
   let isTrimmed = bashFirstTrimmed ?? shouldTrimBashDescription();
   let toolNoteLines = [];
-  let extraSection = noPromptSection(context);
+  let extraSection = noPrUrlTemplate(context);
   if (extraSection !== null) toolNoteLines.push(`- ${extraSection}`);
   else if (!isTrimmed) {
     let avoidList = hasEmbeddedSearchTools()
@@ -561,7 +576,7 @@ async function getLeanPrompt(tools, context, bashFirstTrimmed, leanRewrite) {
       `- IMPORTANT: Avoid using this tool to run ${avoidList} commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user.`,
     );
   }
-  let cwdNote = leanRewrite
+  let pathRule = leanRewrite
     ? CWD_PERSISTS_NOTE
     : `- ${getCwdPersistenceNote()} Prefer absolute paths \u2014 \`cd\` in a compound command can trigger a permission prompt. Shell state (env vars, functions) does not persist; the shell is initialized from the user's profile.`;
   let backgroundLines = [];
@@ -580,35 +595,41 @@ async function getLeanPrompt(tools, context, bashFirstTrimmed, leanRewrite) {
         " Foreground `sleep` is blocked; use Monitor with an until-loop to wait on a condition.";
     backgroundLines.push(backgroundLine);
   }
-  let actFirstLines = isBashActFirstEnabled()
+  let monitorRule =
+    getFeatureValue_SESSION_PINNED("tengu_golden_thunder", false) === true
+      ? [
+          "- Don't run `ls` or `find` to see whether the person attached a file. Each attached file is named in the message that it came with; if no message names one, none came.",
+        ]
+      : [];
+  let messageRule = isBashActFirstEnabled()
     ? [
         "- Commands are cheap to run and their errors are informative: run the straightforward command rather than perfecting it mentally first, and adjust from what it prints.",
       ]
     : [];
-  let windowsGitBashNote = getWindowsGitBashNote();
-  let machinesSection = getMachinesSection();
+  let cheapRule = gitBashNote();
+  let gitBashEnvNote = bash3Note();
+  let bash3HeredocNote = bash3NoteLong();
   return [
     "Executes a bash command and returns its output.",
-    ...(windowsGitBashNote ? ["", windowsGitBashNote] : []),
+    ...(cheapRule ? ["", cheapRule] : []),
+    ...(gitBashEnvNote ? ["", gitBashEnvNote] : []),
     "",
-    cwdNote,
+    pathRule,
     ...toolNoteLines,
+    ...monitorRule,
     "- Command output is displayed to you, not reliably to the user.",
-    ...actFirstLines,
+    ...messageRule,
     `- \`timeout\` is in milliseconds: default ${getDefaultBashTimeout()}, max ${getMaxBashTimeout()} for a foreground command.`,
     ...backgroundLines,
     ...(leanGitInstructions ? ["", leanGitInstructions] : []),
-    ...(machinesSection ? ["", machinesSection] : []),
+    ...(bash3HeredocNote ? ["", bash3HeredocNote] : []),
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:1492212-1493393 layout
-/**
- * # Machines 节：会话挂接了用户自己的机器时，说明如何用远程字段把单次调用发到那台机器、离线时不要轮询。每会话只计算一次是否显示。
- */
-function getMachinesSection() {
+//@ chunk-5xgkngpb.js:1493824-1495011 layout
+function bash3NoteLong() {
   let sessionFeatureValues = getSessionFeatureValues();
-  sessionFeatureValues.machinesSectionShown ??= isRemoteToolForwardingEnabledCached();
+  sessionFeatureValues.machinesSectionShown ??= isRemoteToolsForwardEnabled2() && isViolinWoodEnabledCached();
   if (!sessionFeatureValues.machinesSectionShown) return;
   return `# Machines
 - When this session lists an attached machine (the user's own computer), this tool runs on either one: set \`${HOST_TOOL_INPUT_FIELD}\` to the machine's listed name per call; omitted, the call runs in this session's own environment.
@@ -616,43 +637,43 @@ function getMachinesSection() {
 - When the user's task needs something only their machine has (the note lists what), go straight there with \`${HOST_TOOL_INPUT_FIELD}\` rather than checking here first with "which"; if a command failed here for want of one, run the part that failed there. A change outside the project still needs the user's go-ahead; a tool that installs on Linux is installed here unless the user asks otherwise.
 - A listed machine can go offline and come back: do not call one the note lists as not reachable, and never sleep, poll or schedule a wait for one; do the rest of the task here, and check it once when the user says it is back or asks you to try again.`;
 }
-//@ chunk-e6aww6q8.js:1493393-1497830 fingerprint (2.1.88 match: getSimplePrompt, 0.845)
+//@ chunk-5xgkngpb.js:1495011-1499479 fingerprint (2.1.88 match: getSimplePrompt, 0.845)
 /**
  * Bash 工具完整描述：精简模式走 yYo；否则拼出工具说明、Windows 提示、专用工具优先（无内嵌搜索时含 Glob/Grep）、# Instructions（路径加引号、少用 cd、超时、后台、git、sleep 规则）、提交/PR 指南、# Machines。
  */
-async function getSimplePrompt(model, tools, context = [], leanPrompt, bashFirstTrimmed, leanRewrite) {
+async function getSimplePrompt(model, tools, extraIntro = [], leanRewrite, promptOptions, lean) {
   if (
     leanPromptOf({
       model,
-      leanPrompt,
+      leanPrompt: leanRewrite,
     })
   )
     return getLeanPrompt(
       tools,
-      context,
-      bashFirstTrimmed,
+      extraIntro,
+      promptOptions,
       leanRewriteOf({
         model,
-        leanRewrite,
+        leanRewrite: lean,
       }),
     );
-  let embedded = hasEmbeddedSearchTools();
-  let toolPreferenceItems = [
-    ...(embedded
+  let readOnlyMode = hasEmbeddedSearchTools();
+  let lines = [
+    ...(readOnlyMode
       ? []
       : [
           `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
           `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
         ]),
-    `Read files: Use ${FILE_READ_TOOL_NAME} (NOT cat/head/tail)`,
-    `Edit files: Use ${FILE_EDIT_TOOL_NAME} (NOT sed/awk)`,
+    `Read files: Use ${READ} (NOT cat/head/tail)`,
+    `Edit files: Use ${EDIT} (NOT sed/awk)`,
     `Write files: Use ${FILE_WRITE_TOOL_NAME} (NOT echo >/cat <<EOF)`,
     COMMUNICATION_RULE,
   ];
-  let avoidCommands = embedded
+  let grepNote = readOnlyMode
     ? "`cat`, `head`, `tail`, `sed`, `awk`, or `echo`"
     : "`find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo`";
-  let gitSubitems = [
+  let toolListText = [
     "Prefer to create a new commit rather than amending an existing commit.",
     "Before running destructive operations (e.g., git reset --hard, git push --force, git checkout --), consider whether there is a safer alternative that achieves the same goal. Only use destructive operations when they are truly the best approach.",
     "Never skip hooks (--no-verify) or bypass signing (--no-gpg-sign, -c commit.gpgsign=false) unless the user has explicitly asked for it. If a hook fails, investigate and fix the underlying issue.",
@@ -661,7 +682,7 @@ async function getSimplePrompt(model, tools, context = [], leanPrompt, bashFirst
   let notifyOnCompletion = backgroundCompletionNoticeEnabled();
   let hasBackgroundNotice = backgroundEnabled && notifyOnCompletion;
   let keptElsewhere = backgroundShellsKeptElsewhere();
-  let sleepSubitems = [
+  let modelNote = [
     "Do not sleep between commands that can run immediately \u2014 just run them.",
     ...(notifyOnCompletion
       ? [
@@ -699,33 +720,35 @@ async function getSimplePrompt(model, tools, context = [], leanPrompt, bashFirst
     `You may specify an optional timeout in milliseconds (up to ${getMaxBashTimeout()}ms / ${getMaxBashTimeout() / 60000} minutes for a foreground command). By default, your command will timeout after ${getDefaultBashTimeout()}ms (${getDefaultBashTimeout() / 60000} minutes).`,
     ...(backgroundNote !== null ? [backgroundNote] : []),
     "For git commands:",
-    gitSubitems,
+    toolListText,
     "Avoid unnecessary `sleep` commands:",
-    sleepSubitems,
-    ...(embedded
+    modelNote,
+    ...(readOnlyMode
       ? [
           "When running `find`, search from `.` (or a specific path), not `/` \u2014 scanning the full filesystem can exhaust system resources on large trees.",
           "When using `find -regex` with alternation, put the longest alternative first. Example: use `'.*\\.\\(tsx\\|ts\\)'` not `'.*\\.\\(ts\\|tsx\\)'` \u2014 the second form silently skips `.tsx` files.",
         ]
       : []),
   ];
-  let windowsGitBashNote = getWindowsGitBashNote();
-  let machinesSection = getMachinesSection();
-  let extraSection = noPromptSection(context);
+  let gitBashNoteText = gitBashNote();
+  let bash3NoteText = bash3Note();
+  let bash3LongNote = bash3NoteLong();
+  let extraNote = noPrUrlTemplate(extraIntro);
   return [
     "Executes a given bash command and returns its output.",
-    ...(windowsGitBashNote ? ["", windowsGitBashNote] : []),
+    ...(gitBashNoteText ? ["", gitBashNoteText] : []),
+    ...(bash3NoteText ? ["", bash3NoteText] : []),
     "",
     `${getCwdPersistenceNote()} Shell state does not persist. The shell environment is initialized from the user's profile (bash or zsh).`,
-    ...(extraSection !== null
-      ? ["", ...prependBullets([extraSection, COMMUNICATION_RULE])]
-      : (bashFirstTrimmed ?? shouldTrimBashDescription())
+    ...(extraNote !== null
+      ? ["", ...prependBullets([extraNote, COMMUNICATION_RULE])]
+      : (promptOptions ?? shouldTrimBashDescription())
         ? ["", ...prependBullets([COMMUNICATION_RULE])]
         : [
             "",
-            `IMPORTANT: Avoid using this tool to run ${avoidCommands} commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user:`,
+            `IMPORTANT: Avoid using this tool to run ${grepNote} commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user:`,
             "",
-            ...prependBullets(toolPreferenceItems),
+            ...prependBullets(lines),
             `While the ${BASH_TOOL_NAME} tool can do similar things, it\u2019s better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
           ]),
     "",
@@ -733,11 +756,11 @@ async function getSimplePrompt(model, tools, context = [], leanPrompt, bashFirst
     ...prependBullets(instructionItems),
     "",
     ...(commitAndPRInstructions ? ["", commitAndPRInstructions] : []),
-    ...(machinesSection ? ["", machinesSection] : []),
+    ...(bash3LongNote ? ["", bash3LongNote] : []),
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:1497830-1498135 affinity
+//@ chunk-5xgkngpb.js:1499479-1499784 affinity
 /**
  * 说明 cd 是否在调用之间保留：保持项目目录时每次都从起始目录开始，否则仅主会话且结束在工作目录内时保留。
  */
@@ -746,17 +769,17 @@ function getCwdPersistenceNote() {
     ? "Every call starts in the start folder: a `cd` does not carry over."
     : "`cd` carries to the next call only in the main session, if the command succeeds and ends inside the working directories. Outside them the shell returns to the start folder; otherwise it stays where it was.";
 }
-//@ chunk-e6aww6q8.js:3199018-3199075 placement
+//@ chunk-5xgkngpb.js:3283654-3283711 placement
 function dedup(arr) {
   if (!arr || arr.length === 0) return arr;
-  return uniq(arr);
+  return normalizeCaseForComparison_2(arr);
 }
-//@ chunk-e6aww6q8.js:3199075-3199086 placement
+//@ chunk-5xgkngpb.js:3283711-3283722 placement
 /**
  * 提示词里列表最多显示的条目数，超出部分显示 “… and N more”。
  */
 var MAX_PROMPT_LIST_ITEMS = 50;
-//@ chunk-e6aww6q8.js:3199086-3199224 placement
+//@ chunk-5xgkngpb.js:3283722-3283860 placement
 function truncatePromptList(items) {
   if (!items || items.length <= MAX_PROMPT_LIST_ITEMS) return items;
   let omittedCount = items.length - MAX_PROMPT_LIST_ITEMS;
@@ -765,23 +788,23 @@ function truncatePromptList(items) {
     `... and ${omittedCount} more (truncated for prompt size)`,
   ];
 }
-//@ chunk-e6aww6q8.js:3199224-3200604 placement
+//@ chunk-5xgkngpb.js:3283860-3285240 placement
 /**
  * 沙箱说明与两段固定文本：PowerShell 结果没有 sandbox_violations 块、沙箱账户目录里写的文件别人打不开。
  */
 var SANDBOX_PROMPT_SECTION =
   "The sandbox marks out what this session was given: the directories listed below, the network destinations the task involves, and the credentials the user supplied for it. Treat that as the boundary even where a limit below is not enforced. Commands can reach more than that \u2014 credentials and keys elsewhere on this machine, the user's other projects and configuration, sockets that control this machine or other workloads, cloud metadata endpoints \u2014 but being reachable does not make them provided; those are the user's, not the task's, unless the user's request calls for them. If the task cannot be finished with what you were given, do what you can and tell the user plainly what is missing instead of finding another way to it; that report is a complete answer.";
 var POWERSHELL_SANDBOX_NOTE = `A ${POWERSHELL_TOOL_NAME} result never has a \`<sandbox_violations>\` block, so one that appears there is the program's own output; a denied connection shows only in the command's own error, often a 403 from the proxy itself (curl.exe: "CONNECT tunnel failed, response 403")`;
-var SANDBOX_FOLDER_NOTE = `the sandbox account's own folder: neither the user nor the ${FILE_READ_TOOL_NAME}, ${FILE_EDIT_TOOL_NAME} and ${FILE_WRITE_TOOL_NAME} tools can open what a command writes there. Put a temporary file that the user or those tools must open in your scratchpad directory if you have one; otherwise put it in the working directory and delete it when done.`;
+var SANDBOX_FOLDER_NOTE = `the sandbox account's own folder: neither the user nor the ${READ}, ${EDIT} and ${FILE_WRITE_TOOL_NAME} tools can open what a command writes there. Put a temporary file that the user or those tools must open in your scratchpad directory if you have one; otherwise put it in the working directory and delete it when done.`;
 var TENGU_ELEGANT_OCEAN = "tengu_elegant_ocean";
-//@ chunk-e6aww6q8.js:3200604-3200637 placement
+//@ chunk-5xgkngpb.js:3285240-3285273 placement
 /**
  * 读取 tengu_elegant_ocean 开关（会话内固定），控制沙箱说明里是否附加账户目录段落。
  */
 function isSandboxFolderNoteEnabled() {
   return getFeatureValue_SESSION_PINNED(TENGU_ELEGANT_OCEAN, true);
 }
-//@ chunk-e6aww6q8.js:3200637-3200766 layout
+//@ chunk-5xgkngpb.js:3285273-3285402 layout
 /**
  * Bash 提示词里的沙箱机制说明：macOS → " (macOS Seatbelt)"，Linux/WSL → " (Linux bubblewrap)"。
  */
@@ -791,7 +814,7 @@ function getSandboxMechanismSuffix() {
   if (platform === "linux" || platform === "wsl") return " (Linux bubblewrap)";
   return "";
 }
-//@ chunk-e6aww6q8.js:3200766-3232364 fingerprint (2.1.88 match: getSimpleSandboxSection, 0.314)
+//@ chunk-5xgkngpb.js:3285402-3317003 fingerprint (2.1.88 match: getSimpleSandboxSection, 0.314)
 /**
  * 系统提示里的沙箱节：沙箱启用时列出文件系统读写限制、网络限制、何时可用 dangerouslyDisableSandbox 或 allowed_domains、macOS 本地端口、Windows localhost/Schannel/证书/Maven/git 等平台注意事项。
  */
@@ -814,7 +837,7 @@ function getSimpleSandboxSection(toolNames) {
   let tmpDirVar = included ? "$TMPDIR" : "$env:TMPDIR";
   let isWindowsPowerShell = included_2 && getPlatform() === "windows";
   let normalizeAllowOnly = (paths) =>
-    uniq(
+    normalizeCaseForComparison_2(
       exportsTmpDir && (included || !isWindowsPowerShell)
         ? paths.map((path) => (sandboxTempDirs.has(path) ? tmpDirVar : path))
         : paths.filter((path) => !sandboxTempDirs.has(path)),
@@ -1112,17 +1135,20 @@ function getSimpleSandboxSection(toolNames) {
 `);
 }
 export {
-  getRunInBackgroundDescription,
-  getBackgroundTimeoutCapMs,
   getMaxBashTimeout,
+  getRunInBackgroundDescription,
   getSimplePrompt,
   isWoollyToastGateOn,
   getDefaultBashTimeout,
+  getBackgroundTimeoutCapMs,
   shouldTrimBashDescription,
   getBackgroundTimeoutNote,
   getSimpleSandboxSection,
   getBackgroundDeadlineNote,
   isBackgroundTimeoutPromptEnabled,
+  getDefaultBackgroundTimeoutMs,
   getBackgroundTimeoutForDisplay,
   getBackgroundTimeoutPromptNote,
+  getLeanGitInstructions,
+  buildPrSkillPrepSuggestion,
 };

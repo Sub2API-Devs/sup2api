@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：无人值守会话的启动记录：重启次数上限、首批提示分类与拒绝、用户数据目录就绪闸门、暂存文件落位提示、系统状态消息与模型覆盖追踪。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (33)
- * attribution: placement 33
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (36)
+ * attribution: placement 33, layout 3
  */
 import { posix } from "path";
 import { randomUUID } from "crypto";
@@ -25,7 +25,7 @@ import {
   MAX_BATCHED_PROMPT_ID_CHARS,
 } from "./turnDispatch.js";
 import { parseHintFrames } from "../../entrypoints/sdk/controlSchemas.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { createSignal } from "../../utils/signal.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -36,10 +36,10 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analy
 import { logError } from "../../utils/log.js";
 import {
   createApiErrorMessage,
-  createModelSwitchBreadcrumbs as createModelSwitchBreadcrumbs_2,
+  createSystemMessage,
+  createModelSwitchBreadcrumbs,
   createUserMessage,
   localCommandOutputOf,
-  createSystemMessage,
 } from "../../utils/messages.js";
 import { ensureUserDataRoot } from "../../utils/userDataRoots.js";
 import { TURN_GATE_READY } from "./turnGate.js";
@@ -56,11 +56,11 @@ import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
 import { mainAgentId, getSessionId } from "../../bootstrap/state.js";
+import { formatModelRestrictedNotice, displayModelName } from "../../utils/model/validateModel.js";
+import { getMainLoopModel, modelDisplayString } from "../../utils/model/model.js";
 import { buildModelSwitchNotice } from "./setModelControl.js";
 import { abortPrecomputeOnModelSwitch } from "../../services/compact/precomputedCompact.js";
-import { modelDisplayString, getMainLoopModel } from "../../utils/model/model.js";
 import { env } from "../../utils/env.js";
-import { formatModelRestrictedNotice } from "../../utils/model/validateModel.js";
 import { getDefaultMainLoopModel } from "../../utils/model/modelFallback.js";
 import { managedDenyStartupRefusal, isModelAllowed } from "../../utils/model/modelAllowlist.js";
 import { classifyFallbackOrigin } from "../../services/api/refusalFallback.js";
@@ -68,7 +68,7 @@ import { isExemptDefaultResolvingPick } from "../../utils/model/defaultModel.js"
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:266801-267003 placement
+//@ chunk-0yw3taqg.js:295932-296134 placement
 /**
  * 读 tengu_whimsical_otter：服务端下发的正整数为无人值守重启次数上限（不超过 TURN_DISPATCH_CONSTANTS），否则 "off"。
  */
@@ -79,7 +79,7 @@ function getUnattendedRestartLimit() {
     ? Math.min(limit, TURN_DISPATCH_CONSTANTS)
     : "off";
 }
-//@ chunk-tyg7f3ek.js:267003-267215 placement
+//@ chunk-0yw3taqg.js:296134-296346 placement
 function isRestartedMember(member) {
   return (
     member.startedBy === "restart" ||
@@ -89,7 +89,7 @@ function isRestartedMember(member) {
       member.orphanedPermission?.resumesInterruptedTurn !== true)
   );
 }
-//@ chunk-tyg7f3ek.js:267215-267404 placement
+//@ chunk-0yw3taqg.js:296346-296535 placement
 /**
  * 判断无人值守重启是否已达上限：读工作进程状态里的 restart_starts，记录损坏或最近窗口内的启动次数达到上限时返回 true。
  */
@@ -102,14 +102,14 @@ function hasHitUnattendedRestartLimit(workerState, now = Date.now()) {
       : parseHintFrames(workerState.internal?.restart_starts);
   return (
     frames === "malformed" ||
-    count(frames.starts, (at) => at > now - TURN_DISPATCH_MAX_AGE_MS) >= unattendedRestartLimit
+    countWhere(frames.starts, (at) => at > now - TURN_DISPATCH_MAX_AGE_MS) >= unattendedRestartLimit
   );
 }
-//@ chunk-tyg7f3ek.js:267404-267441 placement
+//@ chunk-0yw3taqg.js:296535-296572 placement
 function isNonRestPromptBatch(batch) {
   return classifyPromptBatch(batch) !== "rest";
 }
-//@ chunk-tyg7f3ek.js:267441-267567 placement
+//@ chunk-0yw3taqg.js:296572-296698 placement
 /**
  * 给一批待执行提示分类：有人或外部发起的为 "new"；有重启续跑成员的为 "listed"；其余为 "rest"。
  */
@@ -120,7 +120,7 @@ function classifyPromptBatch({ members }) {
       ? "listed"
       : "rest";
 }
-//@ chunk-tyg7f3ek.js:267567-273567 placement
+//@ chunk-0yw3taqg.js:296698-302698 placement
 /**
  * 无人值守启动记录：从工作进程状态读写 restart_starts（starts 时间戳、new_frames 已见帧），判断一次重启后是否允许自动续跑、拒绝并给出提示，写入通过 sessionState 刷盘并跟踪是否落盘。
  */
@@ -454,7 +454,7 @@ class UnattendedStartRecord {
   }
   inWindow() {
     let cutoff = this.now() - TURN_DISPATCH_MAX_AGE_MS;
-    return count(this.starts(), (at) => at > cutoff);
+    return countWhere(this.starts(), (at) => at > cutoff);
   }
   async wait(signal, done, waitMs = this.timings.waitMs) {
     let deadline = performance.now() + waitMs;
@@ -518,10 +518,10 @@ class UnattendedStartRecord {
     };
   }
 }
-//@ chunk-tyg7f3ek.js:273567-273720 placement
+//@ chunk-0yw3taqg.js:302698-302851 placement
 var INITIAL_RECORD_WRITE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REFUSED_RECORD_WRITE;
-deferInit("chunk-tyg7f3ek.js:273567", () => {
+deferInit("chunk-0yw3taqg.js:302698", () => {
   INITIAL_RECORD_WRITE = {
     number: 0,
     flushed: Promise.resolve(true),
@@ -533,7 +533,7 @@ deferInit("chunk-tyg7f3ek.js:273567", () => {
     flushAnswered: () => true,
   };
 });
-//@ chunk-tyg7f3ek.js:273720-273985 placement
+//@ chunk-0yw3taqg.js:302851-303116 placement
 function logUnattendedStartOutcome(outcome) {
   switch (outcome) {
     case "started":
@@ -551,13 +551,13 @@ function logUnattendedStartOutcome(outcome) {
       return;
   }
 }
-//@ chunk-tyg7f3ek.js:273985-274002 placement
+//@ chunk-0yw3taqg.js:303116-303133 placement
 var ANSWER = "answer:";
-//@ chunk-tyg7f3ek.js:274002-274049 placement
+//@ chunk-0yw3taqg.js:303133-303180 placement
 function answerFrameKey(uuid) {
   return `${ANSWER}${uuid}`.toLowerCase();
 }
-//@ chunk-tyg7f3ek.js:274049-274390 placement
+//@ chunk-0yw3taqg.js:303180-303521 placement
 /**
  * 记录 tengu_unattended_start 事件：批次类别、首成员的模式与提示来源。
  */
@@ -583,11 +583,11 @@ function logUnattendedFirstTurn(batch, batchClass) {
     logTurnError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:274390-274410 placement
+//@ chunk-0yw3taqg.js:303521-303541 placement
 function logTurnError(error) {
   logError(error);
 }
-//@ chunk-tyg7f3ek.js:274410-274606 placement
+//@ chunk-0yw3taqg.js:303541-303737 placement
 function buildUnattendedRefusalMessage(reason, content) {
   return reason === "limit"
     ? createApiErrorMessage({
@@ -601,7 +601,7 @@ function buildUnattendedRefusalMessage(reason, content) {
         apiErrorIsTransient: false,
       });
 }
-//@ chunk-tyg7f3ek.js:274606-275057 placement
+//@ chunk-0yw3taqg.js:303737-304188 placement
 /**
  * 会话重启后不再自动继续时的各种提示文字。
  */
@@ -613,9 +613,9 @@ var TIMERS_NOT_RESTORED_MESSAGE =
   "Timers that were pending when this session restarted weren't set again. Send a message to continue.";
 var UNANSWERED_AFTER_RESTART_MESSAGE =
   "Your last message wasn't answered, because this session restarted. Please send it again.";
-//@ chunk-tyg7f3ek.js:275057-275069 placement
+//@ chunk-0yw3taqg.js:304188-304200 placement
 var USER_DATA_ROOTS_WAIT_MS = 5000;
-//@ chunk-tyg7f3ek.js:275069-275458 placement
+//@ chunk-0yw3taqg.js:304200-304589 placement
 /**
  * 回合前置门：确保用户数据根目录已创建，最多等待 waitMs；超时只告警一次（user_data_roots_wait_expired），不阻塞回合。
  */
@@ -649,9 +649,9 @@ function createUserDataRootsTurnGate(waitMs = USER_DATA_ROOTS_WAIT_MS) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:275488-275501 placement
+//@ chunk-0yw3taqg.js:304619-304632 placement
 var HOME_FILES_FLAG_WAIT_MS = 20000;
-//@ chunk-tyg7f3ek.js:275501-275588 placement
+//@ chunk-0yw3taqg.js:304632-304719 placement
 function isStagedHomeMountPath(path) {
   return (
     typeof path === "string" &&
@@ -659,7 +659,7 @@ function isStagedHomeMountPath(path) {
     posix.normalize(path).startsWith(`${STAGE_FILE_HOME_MOUNT_PREFIX}/`)
   );
 }
-//@ chunk-tyg7f3ek.js:275588-275973 placement
+//@ chunk-0yw3taqg.js:304719-305104 placement
 /**
  * 等 GrowthBook 初始化（有上限），读取 tengu_hazy_nova 得到 home 文件暂存开关 "on"/"off"/"not_loaded"，并记录等待耗时。
  */
@@ -681,7 +681,7 @@ async function waitForHomeFilesFlag(options, timeoutMs = HOME_FILES_FLAG_WAIT_MS
   });
   return state;
 }
-//@ chunk-tyg7f3ek.js:275973-276476 placement
+//@ chunk-0yw3taqg.js:305104-305607 placement
 /**
  * 回合开始时放置上一回合交接带来的写入文件：没有则记 no_files；功能关闭则拒绝；否则动态加载 placeCarriedWrites 执行。
  */
@@ -712,9 +712,9 @@ async function placeCarriedWritesAtTurnStart(turn, context, options) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:276476-276486 placement
+//@ chunk-0yw3taqg.js:305607-305617 placement
 var MAX_DIRECTORIES_LISTED = 50;
-//@ chunk-tyg7f3ek.js:276486-277043 placement
+//@ chunk-0yw3taqg.js:305617-306248 placement
 /**
  * 说明暂存文件可能未送达（路径可能缺失或旧），并按原因提示空间不足或文件名过长。
  */
@@ -723,7 +723,7 @@ function formatStagedFilesNotPlacedNote(paths, failureKinds) {
   return `${paths.length} ${one ? "file" : "files"} may not have arrived here, so ${one ? "this path" : "these paths"} may be missing or hold an older copy: ${formatDirectoryList(paths)}${
     failureKinds.has("no_space")
       ? `
-At least one of these copies failed with "no space left on device". Make space before the file is sent again. Ask the user before you delete one of their files.`
+At least one of these copies failed with "no space left on device". That file is not sent again by itself. Make space. Then ask the user to attach it, or make it again if you made it. Ask the user before you delete one of their files.`
       : ""
   }${
     failureKinds.has("name_too_long")
@@ -732,7 +732,7 @@ At least one of these names is too long for the file system here (the usual limi
       : ""
   }`;
 }
-//@ chunk-tyg7f3ek.js:277043-277375 placement
+//@ chunk-0yw3taqg.js:306248-306580 placement
 /**
  * 有暂存文件未能落盘时，给模型发一条隐藏通知（STAGED_FILES_MISSING），说明路径和失败原因（磁盘满、文件名过长）。
  */
@@ -758,7 +758,7 @@ function noteStagedFilesNotPlaced(paths, failureKinds) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:277375-278647 placement
+//@ chunk-0yw3taqg.js:306580-307852 placement
 /**
  * 生成"文件仍在复制中"的模型提示：告诉模型不要说文件没到、需要时分段等待。
  */
@@ -769,7 +769,7 @@ The copy has not failed. It can take a few more minutes. While it runs, do not t
     : `${paths.length} files are still being copied here, so these paths may be missing or hold an older copy for now: ${formatDirectoryList(paths)}
 The copies have not failed. They can take a few more minutes. While they run, do not tell the user that these files did not arrive, and do not ask for them again, whatever an earlier message says about a missing file. If you need one of these files, wait for up to a minute at a time: run a foreground command that ends when the file is there or the minute is over, then look again. If it is still missing after a few minutes, tell the user that it is still being copied. Another note will tell you if a copy fails.`;
 }
-//@ chunk-tyg7f3ek.js:278647-278923 placement
+//@ chunk-0yw3taqg.js:307852-308128 placement
 function noteStagedFilesStillCopying(paths) {
   try {
     let counters = stagedFilesNoticeCounters();
@@ -789,7 +789,7 @@ function noteStagedFilesStillCopying(paths) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:278923-279027 placement (2.1.88 match: formatDirectoryList, 1)
+//@ chunk-0yw3taqg.js:308128-308232 placement (2.1.88 match: formatDirectoryList, 1)
 /**
  * （切分错误）XML 转义后列出前若干个目录，超出部分写 "and N more"。
  */
@@ -797,14 +797,14 @@ function formatDirectoryList(directories) {
   let dirCount = directories.length - MAX_DIRECTORIES_LISTED;
   return `${directories.slice(0, MAX_DIRECTORIES_LISTED).map(escapeXml).join(", ")}${dirCount > 0 ? `, and ${dirCount} more` : ""}`;
 }
-//@ chunk-tyg7f3ek.js:279027-279112 placement
+//@ chunk-0yw3taqg.js:308232-308317 placement
 function stagedFilesNoticeCounters() {
   return {
     told: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_dunlin", false) === true ? 1 : 0,
     flags_loaded: hasFreshGrowthBookFeatures() ? 1 : 0,
   };
 }
-//@ chunk-tyg7f3ek.js:279112-279274 placement
+//@ chunk-0yw3taqg.js:308317-308479 placement
 function enqueueHiddenNotice(tag, body) {
   enqueuePendingNotification({
     value: formatTaskNotification({
@@ -821,7 +821,7 @@ ${body}
     passive: true,
   });
 }
-//@ chunk-tyg7f3ek.js:279311-279524 placement
+//@ chunk-0yw3taqg.js:308516-308729 placement
 function buildSystemStatusMessage(status, extra) {
   return {
     type: "system",
@@ -837,7 +837,43 @@ function buildSystemStatusMessage(status, extra) {
     uuid: randomUUID(),
   };
 }
-//@ chunk-tyg7f3ek.js:279524-280615 placement
+//@ chunk-0yw3taqg.js:308729-308847 layout
+function modelRestrictedNotice(requestedModel, effectiveModel, at) {
+  return {
+    ...createSystemMessage(formatModelRestrictedNotice(requestedModel, effectiveModel), "warning"),
+    modelRestriction: {
+      requestedModel: displayModelName(requestedModel),
+      effectiveModel: displayModelName(effectiveModel),
+      at,
+    },
+  };
+}
+//@ chunk-0yw3taqg.js:308847-308967 layout
+function resumeModelRestrictedNotice(notice, model) {
+  return {
+    ...createSystemMessage(notice, "warning"),
+    modelRestriction: {
+      requestedModel: displayModelName(model),
+      effectiveModel: displayModelName(getMainLoopModel()),
+      at: "resume",
+    },
+  };
+}
+//@ chunk-0yw3taqg.js:308967-309136 layout
+function withWireModelRestriction({ modelRestriction, ...message }) {
+  return {
+    ...message,
+    ...(modelRestriction && {
+      model_restriction: {
+        requested_model: modelRestriction.requestedModel,
+        effective_model: modelRestriction.effectiveModel,
+        at: modelRestriction.at,
+      },
+    }),
+    session_id: getSessionId(),
+  };
+}
+//@ chunk-0yw3taqg.js:309136-310217 placement
 /**
  * 输出模式下的模型切换提示集合：conversationModel 计算模型切换说明；injectModelSwitchBreadcrumbs 写入切换面包屑（远程模式附 system-reminder）；noticeRestrictedModel 提示受限模型；noticeFlagSettingsModel 按 flag 设置结果给提示。
  */
@@ -857,7 +893,7 @@ function createModelChangeNotices({ session, messages, appendToConversation, enq
   function injectModelSwitchBreadcrumbs(modelArg, model) {
     abortPrecomputeOnModelSwitch(session.precompute);
     if (isLaunchModelPick?.()) return;
-    let breadcrumbs = createModelSwitchBreadcrumbs_2(modelArg, modelDisplayString(model));
+    let breadcrumbs = createModelSwitchBreadcrumbs(modelArg, modelDisplayString(model));
     appendToConversation(breadcrumbs);
     if (env.CLAUDE_CODE_REMOTE) {
       let modelName = modelDisplayString(model);
@@ -884,15 +920,9 @@ function createModelChangeNotices({ session, messages, appendToConversation, enq
   function noticeRestrictedModel(model, effective) {
     if (model === lastRestrictedModel) return;
     lastRestrictedModel = model;
-    let systemMessage = createSystemMessage(
-      formatModelRestrictedNotice(model, effective ?? getMainLoopModel()),
-      "warning",
-    );
-    appendToConversation([systemMessage]);
-    enqueue({
-      ...systemMessage,
-      session_id: getSessionId(),
-    });
+    let notice = modelRestrictedNotice(model, effective ?? getMainLoopModel(), "switch");
+    appendToConversation([notice]);
+    enqueue(withWireModelRestriction(notice));
   }
   function recordAllowedModelApplied() {
     lastRestrictedModel = undefined;
@@ -912,14 +942,14 @@ function createModelChangeNotices({ session, messages, appendToConversation, enq
     noticeFlagSettingsModel,
   };
 }
-//@ chunk-tyg7f3ek.js:280615-280716 placement
+//@ chunk-0yw3taqg.js:310217-310318 placement
 function isDefaultModelRefusedByPolicy(model) {
   return (
     (model == null || String(model).trim().toLowerCase() === "default") &&
     managedDenyStartupRefusal(getDefaultMainLoopModel(), "switch") !== null
   );
 }
-//@ chunk-tyg7f3ek.js:280716-281931 placement
+//@ chunk-0yw3taqg.js:310318-311533 placement
 /**
  * 记录回合开始时的模型覆盖与当前模型，回合结束时用 resolveTurnEndModelOverride 决定是否采纳回合中的覆盖、清回默认，或提示被白名单拦下。
  */
@@ -985,7 +1015,7 @@ class TurnModelOverrideTracker {
       this.noticeRestrictedModel(decision.blockedByAllowlist, activeModel);
   }
 }
-//@ chunk-tyg7f3ek.js:281931-282558 placement
+//@ chunk-0yw3taqg.js:311533-312160 placement
 /**
  * 回合结束时决定模型覆盖：keep（附带 blockedByAllowlist / allowedOverrideApplied）、clearToSessionDefault 或 adopt。"default" 解析为默认主模型，不在允许列表里的模型不采纳。
  */
@@ -1047,7 +1077,10 @@ function resolveTurnEndModelOverride({
 }
 export {
   createUserDataRootsTurnGate,
+  resumeModelRestrictedNotice,
+  modelRestrictedNotice,
   hasHitUnattendedRestartLimit,
+  withWireModelRestriction,
   UnattendedStartRecord,
   createModelChangeNotices,
   buildSystemStatusMessage,

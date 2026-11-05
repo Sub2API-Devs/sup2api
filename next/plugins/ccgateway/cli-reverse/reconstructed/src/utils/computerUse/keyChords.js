@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：computer use 按键组合解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hrs3dad1.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p57a7983.js (5)
  * attribution: placement 5
  */
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
@@ -13,7 +13,7 @@ import { jsonStringify } from "../slowOperations.js";
 import { truncateWithCount } from "../stringUtils.js";
 import { scaledImageSize, IMAGE_SCALING_DEFAULTS } from "./imageScaling.js";
 
-//@ chunk-hrs3dad1.js:5858-6161 placement
+//@ chunk-p57a7983.js:6082-6385 placement
 /**
  * 修饰键别名到标准名的映射。
  */
@@ -51,7 +51,7 @@ var KEY_NAME_ALIASES = new Set([
 ]);
 var MAX_CHORD_COMPONENTS = 8;
 var MAX_KEY_NAME_CHARS = 32;
-//@ chunk-hrs3dad1.js:6161-6897 placement
+//@ chunk-p57a7983.js:6385-7121 placement
 /**
  * 解析按键组合字符串（修饰键 + 普通键），校验并规范化。
  */
@@ -81,7 +81,7 @@ function parseKeyChord(components, label) {
     );
   return keys;
 }
-//@ chunk-hrs3dad1.js:6897-7010 placement
+//@ chunk-p57a7983.js:7121-7234 placement
 function describeChordKeys(keys) {
   let joined = keys
     .slice(0, MAX_CHORD_COMPONENTS)
@@ -90,13 +90,13 @@ function describeChordKeys(keys) {
   let hiddenCount = keys.length - MAX_CHORD_COMPONENTS;
   return hiddenCount > 0 ? `${jsonStringify(joined)} (+${hiddenCount} more)` : jsonStringify(joined);
 }
-//@ chunk-hrs3dad1.js:7010-7028 placement
+//@ chunk-p57a7983.js:7234-7252 placement
 /**
  * 未使用的缩放比例常量（0.75）。
  */
 var UNUSED_SCALE_RATIO = 0.75;
 var UNUSED_SCALE_TIMEOUT_MS = 5000;
-//@ chunk-hrs3dad1.js:7028-7102 placement
+//@ chunk-p57a7983.js:7252-7326 placement
 /**
  * 按比例缩放坐标点。
  */

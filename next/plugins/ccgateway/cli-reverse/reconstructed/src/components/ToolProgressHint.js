@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。工具进度提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s06523pk.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sac13h7c.js (9)
  * attribution: placement 9
  */
 import { __export } from "../../runtime/bun-runtime.js";
@@ -26,32 +26,34 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s06523pk.js:983-992 placement
+//@ chunk-sac13h7c.js:983-992 placement
 var ToolProgressHintNamespace = {};
-//@ chunk-s06523pk.js:992-1063 placement
+//@ chunk-sac13h7c.js:992-1063 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s06523pk.js:992", () => {
+deferInit("chunk-sac13h7c.js:992", () => {
   __export(ToolProgressHintNamespace, {
     PILL_INDENT_COLUMNS: () => PILL_INDENT_COLUMNS,
     ToolProgressHint: () => ToolProgressHint,
     default: () => ToolProgressHintNamespace,
   });
 });
-//@ chunk-s06523pk.js:1063-1067 placement
+//@ chunk-sac13h7c.js:1063-1067 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s06523pk.js:1063", () => {
+deferInit("chunk-sac13h7c.js:1063", () => {
   init_react_production();
 });
-//@ chunk-s06523pk.js:1067-1138 placement
-var PROGRESS_HINT_KEY; // deferred: uses chordToString (../keybindings/parser.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-sac13h7c.js:1067-1138 placement
+var PROGRESS_HINT_KEY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROGRESS_HINT_CHORD;
-var _;
-deferInit("chunk-s06523pk.js:1067", () => {
+var PROGRESS_HINT_CHORDS;
+deferInit("chunk-sac13h7c.js:1067", () => {
   PROGRESS_HINT_KEY = "ctrl+b";
   PROGRESS_HINT_CHORD = "ctrl+x ctrl+b";
-  _ = new Set([PROGRESS_HINT_KEY, PROGRESS_HINT_CHORD].map((chord) => chordToString(parseChord(chord))));
+  PROGRESS_HINT_CHORDS = new Set(
+    [PROGRESS_HINT_KEY, PROGRESS_HINT_CHORD].map((chord) => chordToString(parseChord(chord))),
+  );
 });
-//@ chunk-s06523pk.js:1138-1324 placement (2.1.88 match: LEGACY_AGENT_TOOL_NAME, 0.566)
+//@ chunk-sac13h7c.js:1138-1324 placement (2.1.88 match: LEGACY_AGENT_TOOL_NAME, 0.566)
 /**
  * 检测键位绑定中 Task 上下文的 task:background 是否被改动/冲突（与 Agent 工具名无关，切分误归）。
  */
@@ -60,12 +62,12 @@ function hasTaskBackgroundKeybindingConflict(bindings) {
     if (binding.context !== "Task") continue;
     let normalizedChord = chordToString(binding.chord);
     if (binding.action === "task:background") {
-      if (!_.has(normalizedChord)) return true;
-    } else if (binding.action === null && _.has(normalizedChord)) return true;
+      if (!PROGRESS_HINT_CHORDS.has(normalizedChord)) return true;
+    } else if (binding.action === null && PROGRESS_HINT_CHORDS.has(normalizedChord)) return true;
   }
   return false;
 }
-//@ chunk-s06523pk.js:1324-1757 placement
+//@ chunk-sac13h7c.js:1324-1757 placement
 /**
  * 注册 task:background 快捷键处理器，并显示把当前任务转入后台的按键提示；与其他绑定冲突或不在活动状态时不显示。
  */
@@ -105,9 +107,9 @@ function BackgroundTaskHint({ handler, isActive }) {
     resolvedShortcut: shortcutDisplay,
   };
 }
-//@ chunk-s06523pk.js:1757-1765 placement
+//@ chunk-sac13h7c.js:1757-1765 placement
 var PILL_INDENT_COLUMNS = 5;
-//@ chunk-s06523pk.js:1765-1880 placement
+//@ chunk-sac13h7c.js:1765-1880 placement
 function ToolProgressHintRow(input) {
   return input.props.hint === ""
     ? null
@@ -119,7 +121,7 @@ function ToolProgressHintRow(input) {
         }),
       });
 }
-//@ chunk-s06523pk.js:1880-2147 placement
+//@ chunk-sac13h7c.js:1880-2147 placement
 var ToolProgressHint = (props) => {
   let $ = useMemoCache(4);
   let { toolUseId, hint } = props;

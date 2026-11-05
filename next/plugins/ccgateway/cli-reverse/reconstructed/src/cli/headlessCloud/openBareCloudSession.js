@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头 --cloud 新建或附加云会话：门禁校验、带特性打开会话、报告未生效的特性。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (50)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (50)
  * attribution: placement 50
  */
 import { randomUUID } from "crypto";
@@ -68,7 +68,7 @@ import {
 import { printCliError } from "../exit.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { runHeadlessCloudClient } from "./HeadlessCloudClient.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { env } from "../../utils/env.js";
 import { printableName } from "../../utils/printableName.js";
 import {
@@ -87,7 +87,7 @@ import { recordManagedSettingsRefusal } from "../managedConfigRefusal.js";
 import { waitForPolicyLimitsToLoad } from "../../services/policyLimits/PolicyLimitsClient.js";
 import { cloudSessionsUnavailableReason } from "../../services/cloudSessions/cloudSessionsPolicy.js";
 import { logOrgPolicyDeniedAsync } from "../../services/policyLimits/orgPolicyDeniedEvent.js";
-import { getSettingsForSource, getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getSettingsForSource, getInitialSettings } from "../../utils/settings/settings.js";
 import { createServedToolsFeature } from "./servedTools.js";
 import { createRemoteSessionConnection } from "../../remote/tools/servedChannel.js";
 import { createHomeSettingsFeature } from "./cloudPlugins.js";
@@ -158,7 +158,7 @@ import { markableRepositoryTrust, reportableRepositoryTrust } from "../../remote
 import { isTrustedDeviceActiveForOrg } from "../../bridge/trustedDevice.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fe6rs39h.js:128747-128919 placement
+//@ chunk-keyy05re.js:128604-128776 placement
 function takeDirSyncHandle(id, laptop = {}) {
   let takeDirSync = (laptop.takeDirSync ?? takeDirSyncHandle_2)(id);
   return takeDirSync === undefined
@@ -168,7 +168,7 @@ function takeDirSyncHandle(id, laptop = {}) {
         return;
       });
 }
-//@ chunk-fe6rs39h.js:128919-129093 placement
+//@ chunk-keyy05re.js:128776-128950 placement
 async function releaseDirSyncHandle(handlePromise, laptop = {}) {
   try {
     let handle = await handlePromise;
@@ -178,15 +178,15 @@ async function releaseDirSyncHandle(handlePromise, laptop = {}) {
     logForDebugging(`[headlessCloud] session handle not released: ${errorMessage(error)}`);
   }
 }
-//@ chunk-fe6rs39h.js:129093-129129 placement
+//@ chunk-keyy05re.js:128950-128986 placement
 async function retireDirSync(sessionId) {
   dirSyncSession().retire(sessionId);
 }
-//@ chunk-fe6rs39h.js:129129-129172 placement
+//@ chunk-keyy05re.js:128986-129029 placement
 async function remoteFileModeUnspecified(sessionId, target) {
   return "unspecified";
 }
-//@ chunk-fe6rs39h.js:129172-129512 placement
+//@ chunk-keyy05re.js:129029-129369 placement
 /**
  * 为云会话启动设备注册：带会话、组织、设备 id、令牌、存储与目录同步等参数，通知走调试日志。
  */
@@ -211,7 +211,7 @@ function startCloudDeviceRegistration(
       }),
   });
 }
-//@ chunk-fe6rs39h.js:129617-129743 placement
+//@ chunk-keyy05re.js:129474-129600 placement
 function dirSyncState({ dirSync, fileMode, sessionId }) {
   if (dirSync !== undefined) return dirSync.sync.state();
   return {
@@ -219,7 +219,7 @@ function dirSyncState({ dirSync, fileMode, sessionId }) {
     reason: "not_opted_in",
   };
 }
-//@ chunk-fe6rs39h.js:129743-130085 placement
+//@ chunk-keyy05re.js:129600-129942 placement
 function dirSyncReport({ dirSync, fileMode, sessionId }) {
   let options = dirSyncState({
     dirSync,
@@ -244,7 +244,7 @@ function dirSyncReport({ dirSync, fileMode, sessionId }) {
     file_mode_source: "stored",
   };
 }
-//@ chunk-fe6rs39h.js:130085-130503 placement
+//@ chunk-keyy05re.js:129942-130360 placement
 function armedDirSyncFields(state) {
   if (state.state !== "armed") return {};
   return {
@@ -270,7 +270,7 @@ function armedDirSyncFields(state) {
     }),
   };
 }
-//@ chunk-fe6rs39h.js:130503-130745 placement
+//@ chunk-keyy05re.js:130360-130602 placement
 function logLaptopLinked({ dirSync, fileMode, sessionId }) {
   let options = dirSyncState({
     dirSync,
@@ -284,11 +284,11 @@ function logLaptopLinked({ dirSync, fileMode, sessionId }) {
     has_dir_sync: dirSync !== undefined,
   });
 }
-//@ chunk-fe6rs39h.js:130745-130867 placement
+//@ chunk-keyy05re.js:130602-130724 placement
 var CLOUD_START_TIMEOUT_MS = 5000;
 var STDIN_IS_TTY_ERROR =
   "Error: headless --cloud reads the SDK host messages from stdin as stream-json; stdin is a terminal here.";
-//@ chunk-fe6rs39h.js:130867-131100 placement
+//@ chunk-keyy05re.js:130724-130957 placement
 function cloudSessionContext(apiCreds, sessionId) {
   return {
     sessionId,
@@ -301,7 +301,7 @@ function cloudSessionContext(apiCreds, sessionId) {
     },
   };
 }
-//@ chunk-fe6rs39h.js:131100-131207 placement
+//@ chunk-keyy05re.js:130957-131064 placement
 async function checkLocalBindIdentity() {
   if (isConsoleProfileSessionsCredential()) return "profile";
   let result = await localBindIdentity({
@@ -309,11 +309,11 @@ async function checkLocalBindIdentity() {
   });
   return result.ok ? undefined : result.error;
 }
-//@ chunk-fe6rs39h.js:131207-131246 placement
+//@ chunk-keyy05re.js:131064-131103 placement
 function currentAccountUuid() {
   return getStoredOauthAccountInfo()?.accountUuid;
 }
-//@ chunk-fe6rs39h.js:131246-131467 placement (2.1.88 match: PermissionModeSchema, 0.42)
+//@ chunk-keyy05re.js:131103-131324 placement (2.1.88 match: PermissionModeSchema, 0.42)
 /**
  * 由 --permission-mode 生成启动时需发送的 set_permission_mode 控制请求。
  */
@@ -333,16 +333,16 @@ function attachOpeningRequests(permissionModeCli, { serveOnly }) {
         },
       ];
 }
-//@ chunk-fe6rs39h.js:131467-131514 placement
+//@ chunk-keyy05re.js:131324-131371 placement
 var signal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SESSION_HISTORY_PAGE_SIZE;
 var SESSION_HISTORY_MAX_PAGES;
-deferInit("chunk-fe6rs39h.js:131467", () => {
+deferInit("chunk-keyy05re.js:131324", () => {
   signal = new AbortController().signal;
   SESSION_HISTORY_PAGE_SIZE = 50;
   SESSION_HISTORY_MAX_PAGES = 5;
 });
-//@ chunk-fe6rs39h.js:131514-131755 placement
+//@ chunk-keyy05re.js:131371-131612 placement
 function normalizeOpenOptions({
   signal: signal_2,
   credentials,
@@ -369,13 +369,13 @@ function normalizeOpenOptions({
     }),
   };
 }
-//@ chunk-fe6rs39h.js:131755-131818 placement
+//@ chunk-keyy05re.js:131612-131675 placement
 function logRemoteToolsWarning(what, detail) {
   logForDebugging(`[remote-tools] ${what}: ${detail}`, {
     level: "warn",
   });
 }
-//@ chunk-fe6rs39h.js:131818-132413 placement
+//@ chunk-keyy05re.js:131675-132270 placement
 async function startServedTools(
   options,
   sessionId,
@@ -425,13 +425,13 @@ async function startServedTools(
         servedTools,
       };
 }
-//@ chunk-fe6rs39h.js:132413-132471 placement
+//@ chunk-keyy05re.js:132270-132328 placement
 function disposeHandles(features) {
   let adopted = new HeadlessFeatureHandles();
   adopted.adopt(features);
   return adopted.dispose();
 }
-//@ chunk-fe6rs39h.js:132471-133445 placement
+//@ chunk-keyy05re.js:132328-133302 placement
 async function openWithFeatures(options, host, { entry, opener, features = [], attachHonours = [] }) {
   let honours = entry === "create" ? PROMPT_OPTION_KEYS : attachHonours;
   let gated = await checkCloudGates(options, host, entry);
@@ -454,7 +454,7 @@ async function openWithFeatures(options, host, { entry, opener, features = [], a
     ignoredOptions:
       entry === "create"
         ? policy.ignored
-        : uniq([
+        : normalizeCaseForComparison_2([
             ...policy.ignored,
             ...sdkHostOptionEntries(policy.forwarded, options, options.effectiveModel ?? env.ANTHROPIC_MODEL),
           ]),
@@ -484,7 +484,7 @@ async function openWithFeatures(options, host, { entry, opener, features = [], a
   else if (client.message) printCliError(client.message);
   await gracefulShutdown(client.exitCode);
 }
-//@ chunk-fe6rs39h.js:133445-133798 placement
+//@ chunk-keyy05re.js:133302-133655 placement
 async function authenticateThenOpen(credentials, credArgs) {
   let apiCreds;
   try {
@@ -506,11 +506,11 @@ async function authenticateThenOpen(credentials, credArgs) {
     };
   }
 }
-//@ chunk-fe6rs39h.js:133798-133822 placement
+//@ chunk-keyy05re.js:133655-133679 placement
 var MAX_LISTED_REFUSAL_GROUPS = 12;
 var MAX_ERROR_MESSAGE_CHARS = 2000;
 var MAX_LISTED_ENTRIES = 40;
-//@ chunk-fe6rs39h.js:133822-134757 placement
+//@ chunk-keyy05re.js:133679-134614 placement
 function notAppliedReport(notAppliedEntries, options, entry, supplied) {
   let openEntry = new Set(entry === "attach" ? PROMPT_OPTION_KEYS : []);
   let keptKinds =
@@ -570,7 +570,7 @@ function notAppliedReport(notAppliedEntries, options, entry, supplied) {
     entries: sorted.slice(0, MAX_LISTED_ENTRIES),
   };
 }
-//@ chunk-fe6rs39h.js:134757-134901 placement
+//@ chunk-keyy05re.js:134614-134758 placement
 function getUnconfirmedOptions(forwarded, result) {
   let maxTurnsSettled =
     result.kind === "opened" &&
@@ -578,13 +578,13 @@ function getUnconfirmedOptions(forwarded, result) {
     result.session.maxTurnsConfirmed === true;
   return forwarded.maxTurns !== undefined && !maxTurnsSettled ? [MAX_TURNS_UNCONFIRMED_ENTRY] : [];
 }
-//@ chunk-fe6rs39h.js:134901-135004 placement
+//@ chunk-keyy05re.js:134758-134861 placement
 function listWithOverflow(names) {
   return names.length > MAX_LISTED_REFUSAL_GROUPS
     ? `${names.slice(0, MAX_LISTED_REFUSAL_GROUPS).join(", ")} (and ${names.length - MAX_LISTED_REFUSAL_GROUPS} more)`
     : names.join(", ");
 }
-//@ chunk-fe6rs39h.js:135004-135264 placement
+//@ chunk-keyy05re.js:134861-135121 placement
 function withNotApplied(result, report) {
   if (result.kind !== "opened" || report.entries.length === 0) return result;
   let { session } = result;
@@ -603,18 +603,18 @@ function withNotApplied(result, report) {
     },
   };
 }
-//@ chunk-fe6rs39h.js:135264-135359 placement
+//@ chunk-keyy05re.js:135121-135216 placement
 function noteHeadless(text) {
   logForDebugging(`[headlessCloud] ${text}`);
   if (process.stderr.isTTY)
     process.stderr.write(`${text}
 `);
 }
-//@ chunk-fe6rs39h.js:135359-135403 placement
+//@ chunk-keyy05re.js:135216-135260 placement
 function registeredBuiltInToolNames() {
   return getAllBaseTools().map((line) => line.name);
 }
-//@ chunk-fe6rs39h.js:135403-136151 placement
+//@ chunk-keyy05re.js:135260-136008 placement
 async function cloudCreateGates(
   options,
   host,
@@ -669,7 +669,7 @@ async function cloudCreateGates(
           },
   };
 }
-//@ chunk-fe6rs39h.js:136151-136371 placement
+//@ chunk-keyy05re.js:136008-136228 placement
 async function checkCloudGates(options, host, entry) {
   let inputPrompt = options.inputPrompt;
   let openEntry = await cloudCreateGates(options, host, entry);
@@ -686,7 +686,7 @@ async function checkCloudGates(options, host, entry) {
     policy: openEntry.policy,
   };
 }
-//@ chunk-fe6rs39h.js:136371-136515 placement
+//@ chunk-keyy05re.js:136228-136372 placement
 function runHeadlessCloudCreate(options, host, openerOptions) {
   return openWithFeatures(options, host, {
     entry: "create",
@@ -699,7 +699,7 @@ function runHeadlessCloudCreate(options, host, openerOptions) {
     features: createCloudSessionFeatures(options, openerOptions),
   });
 }
-//@ chunk-fe6rs39h.js:136515-136672 placement
+//@ chunk-keyy05re.js:136372-136529 placement
 function createAttachFeatures() {
   let idleMinutes = env.CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES;
   return [
@@ -712,7 +712,7 @@ function createAttachFeatures() {
     }),
   ];
 }
-//@ chunk-fe6rs39h.js:136672-136889 placement
+//@ chunk-keyy05re.js:136529-136746 placement
 function createCloudSessionFeatures(options, sessionHost) {
   return [
     createHomeSettingsFeature({
@@ -732,7 +732,7 @@ function createCloudSessionFeatures(options, sessionHost) {
     }),
   ];
 }
-//@ chunk-fe6rs39h.js:136889-143545 placement
+//@ chunk-keyy05re.js:136746-143430 placement
 /**
  * 官方行为，保留：createBareCloudSession 中 if (V_K137841 !== null) 整段不可达（恒 null），G_K137777/x_K137771 只赋值不使用；本版构建里是死代码。
  */
@@ -826,7 +826,7 @@ async function createBareCloudSession(
       surface: "sdk_host",
       trigger: "create",
     });
-  let settings = getInitialSettings_2();
+  let settings = getInitialSettings();
   let { model, explicitMode, decision, isModeFromSettings, noticeOnRunner } = buildCloudCreateOptions(
     options,
     {
@@ -1162,7 +1162,7 @@ async function createBareCloudSession(
     },
   };
 }
-//@ chunk-fe6rs39h.js:143545-144254 placement
+//@ chunk-keyy05re.js:143430-144139 placement
 async function reportCreateSessionError(failure, aborted, branchMode, isAborted) {
   await logEventAsync("tengu_remote_create_session_error", {
     error: aborted ? lit("aborted") : failure ? fromEnum(failure.reason) : lit("unknown"),
@@ -1192,7 +1192,7 @@ async function reportCreateSessionError(failure, aborted, branchMode, isAborted)
       : "Error: Unable to create cloud session",
   };
 }
-//@ chunk-fe6rs39h.js:144254-148366 placement
+//@ chunk-keyy05re.js:144139-148251 placement
 /**
  * runHeadlessCloudCreate：`claude -p --cloud` 新建云会话入口（需要 prompt），处理模型门禁提示、bare 模式与退出码。
  */
@@ -1233,7 +1233,7 @@ async function openBareCloudSession(
     {
       settingsToCloudEnabled,
       settingsNeverForwarded: options.noMonorepo,
-      settings: getInitialSettings_2(),
+      settings: getInitialSettings(),
       hostFillsDefault,
       typedLevel: forwarded.proactivityLevel,
       carriedMode,
@@ -1436,7 +1436,7 @@ async function openBareCloudSession(
     },
   };
 }
-//@ chunk-fe6rs39h.js:148366-150538 placement
+//@ chunk-keyy05re.js:148251-150423 placement
 /**
  * runHeadlessCloudAttach：附加到已有云会话（archived/requires_action/running 等状态分支），可选本机提供工具。
  */
@@ -1554,7 +1554,7 @@ async function openBareAttachedSession(
     },
   };
 }
-//@ chunk-fe6rs39h.js:151068-151199 placement
+//@ chunk-keyy05re.js:150953-151084 placement
 function hasPromptContent(prompt) {
   return typeof prompt === "string"
     ? prompt.trim() !== ""
@@ -1562,7 +1562,7 @@ function hasPromptContent(prompt) {
         (prompt) => prompt.type !== "text" || (typeof prompt.text === "string" && prompt.text.trim() !== ""),
       );
 }
-//@ chunk-fe6rs39h.js:151199-151768 placement
+//@ chunk-keyy05re.js:151084-151653 placement
 async function startDeviceBridgeForAttach(
   { sessionId, orgUuid, deviceId, getAccessToken, storageV5, servedSettingsChanged, seams },
   options,
@@ -1598,7 +1598,7 @@ async function startDeviceBridgeForAttach(
     bridge: cloudDeviceRegistration,
   };
 }
-//@ chunk-fe6rs39h.js:151768-152017 placement
+//@ chunk-keyy05re.js:151653-151902 placement
 function runHeadlessCloudAttach(options, host, storage, sessionHost, { serveOnly = false } = {}) {
   return openWithFeatures(options, host, {
     entry: "attach",
@@ -1620,15 +1620,15 @@ function runHeadlessCloudAttach(options, host, storage, sessionHost, { serveOnly
     }),
   });
 }
-//@ chunk-fe6rs39h.js:152017-152088 placement
+//@ chunk-keyy05re.js:151902-151973 placement
 function servedSettingsChangedOf(sessionHost) {
   return sessionHost === undefined
     ? undefined
     : deviceHooksProcessMemories.of(sessionHost).servedSettingsChanged;
 }
-//@ chunk-fe6rs39h.js:152088-152106 placement
+//@ chunk-keyy05re.js:151973-151991 placement
 function noopDialogWiring(unused, dialogs) {}
-//@ chunk-fe6rs39h.js:152106-152539 placement
+//@ chunk-keyy05re.js:151991-152424 placement
 function sdkHostOptionEntries(forwarded, options, host) {
   return [
     ["appendSystemPrompt", forwarded.appendSystemPrompt],
@@ -1646,7 +1646,7 @@ function sdkHostOptionEntries(forwarded, options, host) {
     .filter(([, name]) => Boolean(name))
     .map(([name]) => name);
 }
-//@ chunk-fe6rs39h.js:152539-158893 placement
+//@ chunk-keyy05re.js:152424-158781 placement
 /**
  * 附加到已有云会话的主体：预检、读取会话状态、本机记录查找、启动客户端与特性。
  */
@@ -2122,13 +2122,13 @@ async function attachBareCloudSession(
     },
   };
 }
-//@ chunk-fe6rs39h.js:158893-158961 placement
+//@ chunk-keyy05re.js:158781-158849 placement
 function repositoryTrustOf(reader) {
   return reader === undefined
     ? undefined
     : markableRepositoryTrust(reportableRepositoryTrust(reader.current(), isTrustedDeviceActiveForOrg()));
 }
-//@ chunk-fe6rs39h.js:158961-159220 placement
+//@ chunk-keyy05re.js:158849-159108 placement
 function sessionRecordState(refusal) {
   if (refusal.handle !== undefined) return "held";
   switch (refusal.why) {
@@ -2143,7 +2143,7 @@ function sessionRecordState(refusal) {
       return refusal.noRecordOnThisMachine ? "nowhere" : "here_only";
   }
 }
-//@ chunk-fe6rs39h.js:159220-159812 placement
+//@ chunk-keyy05re.js:159108-159700 placement
 function sessionRecordReport(state, detail, label) {
   if (state.handle === undefined)
     switch (state.why) {
@@ -2179,7 +2179,7 @@ function sessionRecordReport(state, detail, label) {
     ...armedDirSyncFields(inner),
   };
 }
-//@ chunk-fe6rs39h.js:159812-160033 placement
+//@ chunk-keyy05re.js:159700-159921 placement
 function bindingState_2(binding) {
   switch (binding.status) {
     case "bound":
@@ -2193,7 +2193,7 @@ function bindingState_2(binding) {
       return "unknown";
   }
 }
-//@ chunk-fe6rs39h.js:160033-160345 placement
+//@ chunk-keyy05re.js:159921-160233 placement
 function toDeviceBindingStatus(binding) {
   switch (binding.status) {
     case "bound":
@@ -2215,7 +2215,7 @@ function toDeviceBindingStatus(binding) {
       return unboundStatus("device_tools_off");
   }
 }
-//@ chunk-fe6rs39h.js:160345-160409 placement (2.1.88 match: resolveKey, 0.584)
+//@ chunk-keyy05re.js:160233-160297 placement (2.1.88 match: resolveKey, 0.585)
 function unboundStatus(reason) {
   return {
     status: "unbound",
@@ -2224,8 +2224,6 @@ function unboundStatus(reason) {
   };
 }
 export {
-  SESSION_HISTORY_PAGE_SIZE,
-  SESSION_HISTORY_MAX_PAGES,
   cloudCreateGates,
   authenticateThenOpen,
   openBareAttachedSession,
@@ -2235,6 +2233,8 @@ export {
   withNotApplied,
   notAppliedReport,
   getUnconfirmedOptions,
+  SESSION_HISTORY_PAGE_SIZE,
+  SESSION_HISTORY_MAX_PAGES,
   runHeadlessCloudAttach,
   runHeadlessCloudCreate,
 };

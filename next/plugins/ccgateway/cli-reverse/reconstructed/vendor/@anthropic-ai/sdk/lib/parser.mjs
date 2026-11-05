@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/sdk/lib/parser.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (4)
+ * pieces: chunk-vn3g7zt8.js (4)
  * attribution: esm-fingerprint 4
  */
 import { AnthropicError } from "../core/error.mjs";
 
-//@ chunk-hwmsct5x.js:146814-146861 esm-fingerprint
+//@ chunk-vn3g7zt8.js:147194-147241 esm-fingerprint
 function getOutputFormat_3(params) {
   return params?.output_config?.format;
 }
-//@ chunk-hwmsct5x.js:146861-147106 esm-fingerprint
+//@ chunk-vn3g7zt8.js:147241-147486 esm-fingerprint
 function maybeParseMessage(message, params, opts) {
   let outputFormat = getOutputFormat_3(params);
   if (!params || !("parse" in (outputFormat ?? {})))
@@ -35,7 +35,7 @@ function maybeParseMessage(message, params, opts) {
     };
   return parseMessage(message, params, opts);
 }
-//@ chunk-hwmsct5x.js:147106-147340 esm-fingerprint
+//@ chunk-vn3g7zt8.js:147486-147720 esm-fingerprint
 function parseMessage(message, params, opts) {
   let firstParsedOutput = null;
   let content = message.content.map((block) => {
@@ -61,7 +61,7 @@ function parseMessage(message, params, opts) {
     parsed_output: firstParsedOutput,
   };
 }
-//@ chunk-hwmsct5x.js:147340-147532 esm-fingerprint
+//@ chunk-vn3g7zt8.js:147720-147912 esm-fingerprint
 function parseOutputFormat(params, content) {
   let outputFormat = getOutputFormat_3(params);
   if (outputFormat?.type !== "json_schema") return null;

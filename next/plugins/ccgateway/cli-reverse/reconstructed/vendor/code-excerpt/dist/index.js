@@ -1,13 +1,13 @@
 /**
  * code-excerpt/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: code-excerpt@4.0.0
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: esm-layout 1
  */
 import { convertToSpaces_default } from "../../convert-to-spaces/dist/index.js";
 
-//@ chunk-bzr73sfg.js:224159-224554 esm-layout
+//@ chunk-2avr6cej.js:223754-224149 esm-layout
 var generateLineNumbers = (line, around) => {
   let lineNumbers = [];
   let min = line - around;

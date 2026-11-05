@@ -65,6 +65,28 @@ node tools/versions/lookup.cjs artifacts/versions/equiv-312-316.json <名字>
 
 还原树、配对结果都是生成物，放在 `artifacts/versions/`，不入库。sup2api 已经算好的 `equiv-304-310.json`、`equiv-310-312.json`、`equiv-312-316.json` 也复制到了那里。各版本之间已经整理出的变化清单在 [`research/versions/`](../../research/versions/)。
 
-## 和阅读树的关系
+## 和阅读树的关系：升级阅读树到新版本
 
-阅读树 `reconstructed/` 里的名字是给 2.1.316 起的。对比新版本时，可以先用 `equiv.cjs` 把 316 的单元和新版本配对，再沿用 `naming/final/top.json` 里同一个单元的名字。这一步还没有做成工具，做下一个版本时再实现。
+阅读树的名字、说明、放置都按 `original/` 的偏移和声明 id 记录。换新版本时，要把这些表迁到新版本的键上。2026-11-05 升级到 2.1.318 时把这一步做成了工具（过程与数据见 [`docs/process/upgrade-318.md`](../../docs/process/upgrade-318.md)）：
+
+| 工具 | 用途 |
+|---|---|
+| `carry-names.mjs` | 按 equiv 配对，把 `naming/` 下所有带旧键的表迁到新版本，写出报告、丢弃清单和全部配对（`*-pairs.jsonl`）。same 单元的局部按编号一一对应；changed 单元做 token 对齐（Myers，差异大时用 patience 锚点）；还会做回退配对，覆盖语句单元和 `*.mjs` 脚本 |
+| `carry-check.mjs` | 抽查迁移结果：给一个旧声明，并排打印每个名字在新旧两边的上下文 |
+| `carry-paths.mjs` | 旧版阅读树里推断出来的文件归属，在新版落进临时目录的，写成一张放置表沿用 |
+| `carry-doc-refs.mjs` | 把文档里的旧声明 id、chunk 名、字节区间、`#简写` 换成新版本的 |
+| `upgrade-batches.mjs`、`check-placement.mjs` | 把剩下的手工放置、命名切成批次，并校验放置批次的产物 |
+| `changes.mjs` | 版本变化清单的原始数据：每个 changed / removed / added 单元的名字、路径、新增和消失的字符串与属性名 |
+
+各工具的用法写在文件头。升级的顺序：
+
+1. 先备份旧的 `original/`、`naming/`、`analysis/` 到 `artifacts/versions/<旧版本>-*`。
+2. 换真值：`restore-bun.cjs`。
+3. 扫描：`tools/ast/scan.mjs`。
+4. 迁移命名表：`carry-names.mjs`。
+5. 第三方识别：`tools/vendor/run.sh`，用 `SKIP_FETCH=1`。
+6. 跑一次流水线。
+7. 依次运行 `carry-paths.mjs`、`carry-doc-refs.mjs`。
+8. 再跑一次流水线。
+9. 用 `upgrade-batches.mjs` 切出手工批次，交给子代理。
+10. 合并批次的产物，最后跑 `SCAN=1 VERIFY=1 bash tools/pipeline.sh`。

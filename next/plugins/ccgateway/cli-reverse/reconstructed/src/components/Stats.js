@@ -3,12 +3,11 @@
  *
  * /stats 统计：每日活跃热力图、token 用量图、峰值日、最长会话等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Stats.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-9h8dr0qb.js (31)
- * attribution: fingerprint 16, placement 3, affinity 1, file-local 3, layout 7, callgraph-witnessed 1, callgraph-fingerprint 1
+ * pieces: chunk-j6tt9nsa.js (31)
+ * attribution: placement 3, affinity 1, file-local 3, layout 7, fingerprint 15, callgraph-witnessed 1, callgraph-fingerprint 1
  */
-import { DEFAULT_PROGRESS_DISPLAY } from "../screens/repl/InlineProgressList.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -50,19 +49,13 @@ import { stripAnsi } from "../utils/stripAnsi.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "../utils/sequential.js";
 
-//@ chunk-18hwfzwa.js:1668742-1668823 fingerprint (2.1.88 match: DATE_RANGE_ORDER, 0.539)
-function DATE_RANGE_ORDER(toolProgress) {
-  for (let toolProgressEntry of toolProgress.values())
-    if (DEFAULT_PROGRESS_DISPLAY[toolProgressEntry.kind] === "all") return true;
-  return false;
-}
-//@ chunk-9h8dr0qb.js:77494-77547 placement
+//@ chunk-j6tt9nsa.js:77453-77506 placement
 /**
  * ISO 日期（YYYY-MM-DD）前缀与整串正则。错归（统计界面）。
  */
 var ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}/;
 var ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-//@ chunk-9h8dr0qb.js:77547-77702 placement (2.1.88 match: evaluateTimeBasedTrigger, 0.576)
+//@ chunk-j6tt9nsa.js:77506-77661 placement (2.1.88 match: nextCronRunMs, 0.693)
 /**
  * 严格的 YYYY-MM-DD 字符串，日期有效则原样返回，否则 null。错归（统计界面 mergeCacheWithNewStats 使用），旧版名 evaluateTimeBasedTrigger 为错配。
  */
@@ -71,7 +64,7 @@ function parseIsoDate(value) {
   let date = new Date(value);
   return Number.isFinite(date.getTime()) && date.toISOString().startsWith(value) ? value : null;
 }
-//@ chunk-9h8dr0qb.js:77702-77795 placement
+//@ chunk-j6tt9nsa.js:77661-77754 placement
 /**
  * 以 YYYY-MM-DD 开头且可解析的时间字符串。
  */
@@ -80,20 +73,20 @@ function parseIsoDateTimePrefix(value) {
     ? value
     : null;
 }
-//@ chunk-9h8dr0qb.js:90886-90915 affinity
+//@ chunk-j6tt9nsa.js:90585-90614 affinity
 function emptyStatsMap() {
   return new Map();
 }
-//@ chunk-9h8dr0qb.js:90915-90955 file-local
+//@ chunk-j6tt9nsa.js:90614-90654 file-local
 function rowsAboveTwo(prev) {
   return Math.max(prev - 2, 0);
 }
-//@ chunk-9h8dr0qb.js:90955-90990 layout
+//@ chunk-j6tt9nsa.js:90654-90689 layout
 function firstItem(items) {
   let [first] = items;
   return first;
 }
-//@ chunk-9h8dr0qb.js:90990-91107 fingerprint (2.1.88 match: _temp1, 1)
+//@ chunk-j6tt9nsa.js:90689-90806 fingerprint (2.1.88 match: _temp1, 1)
 function renderModelLegendItem(item, i) {
   return jsxProd_default_2(
     Text,
@@ -110,26 +103,26 @@ function renderModelLegendItem(item, i) {
     item.model,
   );
 }
-//@ chunk-9h8dr0qb.js:91107-91213 layout (2.1.88 match: formatPeakDay, 0.864)
+//@ chunk-j6tt9nsa.js:90806-90912 layout (2.1.88 match: formatPeakDay, 0.864)
 function formatPeakDay_2(dateStr) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 }
-//@ chunk-9h8dr0qb.js:91213-91299 fingerprint (2.1.88 match: DATE_RANGE_LABELS, 0.948)
+//@ chunk-j6tt9nsa.js:90912-90998 fingerprint (2.1.88 match: DATE_RANGE_LABELS, 0.949)
 var STATS_RANGE_LABELS = {
   "7d": "Last 7 days",
   "30d": "Last 30 days",
   all: "All time",
 };
 var STATS_RANGES = ["all", "7d", "30d"];
-//@ chunk-9h8dr0qb.js:91299-91361 file-local
+//@ chunk-j6tt9nsa.js:90998-91060 file-local
 function getNextDateRange(current) {
   let currentIndex = STATS_RANGES.indexOf(current);
   return STATS_RANGES[(currentIndex + 1) % STATS_RANGES.length];
 }
-//@ chunk-9h8dr0qb.js:91361-91575 fingerprint (2.1.88 match: createAllTimeStatsPromise, 1)
+//@ chunk-j6tt9nsa.js:91060-91274 fingerprint (2.1.88 match: createAllTimeStatsPromise, 1)
 function createAllTimeStatsPromise(storage) {
   return aggregateClaudeCodeStatsForRange("all", storage)
     .then((data) => {
@@ -147,7 +140,7 @@ function createAllTimeStatsPromise(storage) {
       message: err instanceof Error ? err.message : "Failed to load stats",
     }));
 }
-//@ chunk-9h8dr0qb.js:91575-91694 layout
+//@ chunk-j6tt9nsa.js:91274-91393 layout
 var EMPTY_ACTIVITY_STATS = {
   todaySeconds: 0,
   weekSeconds: 0,
@@ -159,11 +152,11 @@ var EMPTY_ACTIVITY_STATS = {
     longestMs: 0,
   },
 };
-//@ chunk-9h8dr0qb.js:91694-91736 layout
+//@ chunk-j6tt9nsa.js:91393-91435 layout
 function emptyStatsProvider(storageV5) {
   return Promise.resolve(EMPTY_ACTIVITY_STATS);
 }
-//@ chunk-9h8dr0qb.js:91736-92964 callgraph-witnessed (2.1.88 match: Stats, 0.296)
+//@ chunk-j6tt9nsa.js:91435-92663 callgraph-witnessed (2.1.88 match: Stats, 0.296)
 /**
  * /stats：活跃热力图、token 用量图表、常用模型、峰值日与连续天数等统计。
  */
@@ -274,7 +267,7 @@ function Stats(props) {
   } else columnBoxElement = $[20];
   return columnBoxElement;
 }
-//@ chunk-9h8dr0qb.js:92964-96305 fingerprint (2.1.88 match: StatsContent, 0.519)
+//@ chunk-j6tt9nsa.js:92663-96000 fingerprint (2.1.88 match: StatsContent, 0.519)
 function StatsContent(props) {
   let $ = useMemoCache(50);
   let { allTimePromise, activeTimePromise } = props;
@@ -552,7 +545,7 @@ function StatsContent(props) {
   } else t12 = $[49];
   return t12;
 }
-//@ chunk-9h8dr0qb.js:96305-96800 fingerprint (2.1.88 match: DateRangeSelector, 0.89)
+//@ chunk-j6tt9nsa.js:96000-96495 fingerprint (2.1.88 match: DateRangeSelector, 0.89)
 function DateRangeSelector(props) {
   let $ = useMemoCache(9);
   let { dateRange, isLoading } = props;
@@ -613,7 +606,7 @@ function DateRangeSelector(props) {
   } else t4 = $[8];
   return t4;
 }
-//@ chunk-9h8dr0qb.js:96800-96935 layout
+//@ chunk-j6tt9nsa.js:96495-96630 layout
 function sortModelUsage(modelUsage) {
   let sorted = Object.entries(modelUsage).sort(([, a], [, b]) => totalUsageTokens(b) - totalUsageTokens(a));
   return {
@@ -621,7 +614,7 @@ function sortModelUsage(modelUsage) {
     totalTokens: sorted.reduce((acc, [, usage]) => acc + totalUsageTokens(usage), 0),
   };
 }
-//@ chunk-9h8dr0qb.js:96935-97201 file-local
+//@ chunk-j6tt9nsa.js:96630-96896 file-local
 function formatTokenBreakdown(modelUsage) {
   let inputTokens = 0;
   let outputTokens = 0;
@@ -638,19 +631,19 @@ function formatTokenBreakdown(modelUsage) {
     `Cache read ${formatNumber(cacheReadTokens)} \xB7 Cache write ${formatNumber(cacheWriteTokens)}`
   );
 }
-//@ chunk-9h8dr0qb.js:97201-97269 layout
+//@ chunk-j6tt9nsa.js:96896-96964 layout
 function percentOf(usage, totalTokens) {
   if (totalTokens <= 0) return "0.0";
   return ((totalUsageTokens(usage) / totalTokens) * 100).toFixed(1);
 }
-//@ chunk-9h8dr0qb.js:97269-97388 layout
+//@ chunk-j6tt9nsa.js:96964-97083 layout
 function formatCacheTokens(usage) {
   return (
     `Cache: ${formatNumber(usage.cacheReadInputTokens || 0)} read \xB7 ` +
     `${formatNumber(usage.cacheCreationInputTokens || 0)} write`
   );
 }
-//@ chunk-9h8dr0qb.js:97388-103714 fingerprint (2.1.88 match: OverviewTab, 0.688)
+//@ chunk-j6tt9nsa.js:97083-103403 fingerprint (2.1.88 match: OverviewTab, 0.684)
 function OverviewTab(props) {
   let $ = useMemoCache(102);
   let { stats, allTimeStats, dateRange, selectorRange, isLoading } = props;
@@ -1237,7 +1230,7 @@ function OverviewTab(props) {
   } else content = $[101];
   return content;
 }
-//@ chunk-9h8dr0qb.js:103714-105109 fingerprint (2.1.88 match: BOOK_COMPARISONS, 0.823)
+//@ chunk-j6tt9nsa.js:103403-104798 fingerprint (2.1.88 match: BOOK_COMPARISONS, 0.823)
 /**
  * 书籍 token 数对照表。
  */
@@ -1381,7 +1374,7 @@ var TOKEN_COMPARISONS = [
     minutes: 480,
   },
 ];
-//@ chunk-9h8dr0qb.js:105109-105714 fingerprint (2.1.88 match: generateFunFactoid, 0.651)
+//@ chunk-j6tt9nsa.js:104798-105403 fingerprint (2.1.88 match: generateFunFactoid, 0.651)
 function generateFunFactoid(stats) {
   let factoids = [];
   let totalTokens = 0;
@@ -1408,7 +1401,7 @@ function generateFunFactoid(stats) {
   let randomIndex = Math.floor(Math.random() * factoids.length);
   return factoids[randomIndex];
 }
-//@ chunk-9h8dr0qb.js:105714-108735 fingerprint (2.1.88 match: ModelsTab, 0.61)
+//@ chunk-j6tt9nsa.js:105403-108417 fingerprint (2.1.88 match: ModelsTab, 0.61)
 function ModelsTab(props) {
   let $ = useMemoCache(61);
   let { stats, selectorRange, isLoading } = props;
@@ -1447,7 +1440,7 @@ function ModelsTab(props) {
     $[7] !== terminalWidth
   ) {
     earlyReturn = EARLY_RETURN_SENTINEL;
-    We: {
+    $e: {
       let { modelEntries: modelEntries_2, totalTokens } = sortModelUsage(stats.modelUsage);
       modelEntries = modelEntries_2;
       let onKeyDownImpl = function memoCache(event) {
@@ -1479,7 +1472,7 @@ function ModelsTab(props) {
           $[29] = emptyBox;
         } else emptyBox = $[29];
         earlyReturn = emptyBox;
-        break We;
+        break $e;
       }
       let chartOutput = generateTokenChart(
         stats.dailyModelTokens,
@@ -1728,7 +1721,7 @@ function ModelsTab(props) {
   } else content = $[60];
   return content;
 }
-//@ chunk-9h8dr0qb.js:108735-109824 fingerprint (2.1.88 match: ModelEntry, 0.556)
+//@ chunk-j6tt9nsa.js:108417-109501 fingerprint (2.1.88 match: ModelEntry, 0.556)
 function ModelEntry(props) {
   let $ = useMemoCache(27);
   let { model, usage, totalTokens } = props;
@@ -1825,7 +1818,7 @@ function ModelEntry(props) {
   } else t10 = $[26];
   return t10;
 }
-//@ chunk-9h8dr0qb.js:109824-110697 fingerprint (2.1.88 match: generateTokenChart, 0.82)
+//@ chunk-j6tt9nsa.js:109501-110354 fingerprint (2.1.88 match: generateTokenChart, 0.82)
 function generateTokenChart(dailyTokens, models, terminalWidth) {
   if (dailyTokens.length < 2 || models.length === 0) return null;
   let yAxisWidth = 7;
@@ -1874,15 +1867,15 @@ function generateTokenChart(dailyTokens, models, terminalWidth) {
       return label.padStart(6);
     },
   });
-  let xAxisLabels = generateXAxisLabels(recentData, recentData.length, yAxisWidth);
+  let xAxisLabels = generateXAxisLabels(recentData, yAxisWidth);
   return {
     chart,
     legend,
     xAxisLabels,
   };
 }
-//@ chunk-9h8dr0qb.js:110697-111044 callgraph-fingerprint (2.1.88 match: generateXAxisLabels, 0.39)
-function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
+//@ chunk-j6tt9nsa.js:110354-110699 callgraph-fingerprint (2.1.88 match: generateXAxisLabels, 0.391)
+function generateXAxisLabels(data, yAxisWidth) {
   if (data.length === 0) return "";
   let numLabels = Math.min(4, Math.max(2, Math.floor(data.length / 8)));
   let usableLength = data.length - 6;
@@ -1896,7 +1889,7 @@ function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
       label,
     });
   }
-  let result = " ".repeat(yAxisOffset);
+  let result = " ".repeat(yAxisWidth);
   let currentPos = 0;
   for (let { pos, label } of labelPositions) {
     let spaces = Math.max(1, pos - currentPos);
@@ -1905,7 +1898,7 @@ function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
   }
   return result;
 }
-//@ chunk-9h8dr0qb.js:111044-111190 fingerprint (2.1.88 match: handleScreenshot, 0.953)
+//@ chunk-j6tt9nsa.js:110699-110845 fingerprint (2.1.88 match: handleScreenshot, 0.953)
 async function handleScreenshot(stats, activeTab, tab, setStatus, clock) {
   setStatus("copying\u2026");
   let ansiText = renderStatsToAnsi(stats, activeTab, tab);
@@ -1913,7 +1906,7 @@ async function handleScreenshot(stats, activeTab, tab, setStatus, clock) {
   setStatus(result.success ? "copied!" : "copy failed");
   clock.setTimeout(() => setStatus(null), 2000);
 }
-//@ chunk-9h8dr0qb.js:111190-111487 fingerprint (2.1.88 match: renderStatsToAnsi, 1)
+//@ chunk-j6tt9nsa.js:110845-111142 fingerprint (2.1.88 match: renderStatsToAnsi, 1)
 function renderStatsToAnsi(stats, theme, tab) {
   let lines = [];
   if (tab === "Overview") lines.push(...renderOverviewToAnsi(stats, theme));
@@ -1930,7 +1923,7 @@ function renderStatsToAnsi(stats, theme, tab) {
   return lines.join(`
 `);
 }
-//@ chunk-9h8dr0qb.js:111487-112580 fingerprint (2.1.88 match: renderOverviewToAnsi, 0.843)
+//@ chunk-j6tt9nsa.js:111142-112233 fingerprint (2.1.88 match: renderOverviewToAnsi, 0.843)
 function renderOverviewToAnsi(stats, theme) {
   let lines = [];
   let theme_2 = getThemeWithOverrides(resolveSetting("theme", "dark").value);
@@ -1982,7 +1975,7 @@ function renderOverviewToAnsi(stats, theme) {
   lines.push(sequential.gray(`Stats from the last ${stats.totalDays} days`));
   return lines;
 }
-//@ chunk-9h8dr0qb.js:112580-113320 fingerprint (2.1.88 match: renderModelsToAnsi, 0.958)
+//@ chunk-j6tt9nsa.js:112233-112973 fingerprint (2.1.88 match: renderModelsToAnsi, 0.958)
 function renderModelsToAnsi(stats) {
   let lines = [];
   let { modelEntries, totalTokens } = sortModelUsage(stats.modelUsage);
@@ -2023,4 +2016,4 @@ function renderModelsToAnsi(stats) {
   }
   return lines;
 }
-export { DATE_RANGE_ORDER, parseIsoDate, parseIsoDateTimePrefix, Stats };
+export { parseIsoDate, parseIsoDateTimePrefix, Stats };

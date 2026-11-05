@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：控制请求错误分类与超时错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (5)
  * attribution: placement 5
  */
 import { AbortError } from "../utils/errors.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-6vnxsn99.js:21583-21749 placement
+//@ chunk-01kgd7xg.js:21375-21541 placement
 class ControlRequestTimeoutError extends Error {
   subtype;
   constructor(subtype, timeoutMs) {
@@ -21,7 +21,7 @@ class ControlRequestTimeoutError extends Error {
     this.subtype = subtype;
   }
 }
-//@ chunk-6vnxsn99.js:21749-21868 placement
+//@ chunk-01kgd7xg.js:21541-21660 placement
 class ControlRequestNotDeliveredError extends Error {
   subtype;
   constructor(subtype) {
@@ -29,7 +29,7 @@ class ControlRequestNotDeliveredError extends Error {
     this.subtype = subtype;
   }
 }
-//@ chunk-6vnxsn99.js:21868-22265 placement
+//@ chunk-01kgd7xg.js:21660-22057 placement
 function classifyControlRequestError(error) {
   if (error instanceof AbortError) return "aborted";
   if (error instanceof ControlRequestTimeoutError) return "timeout";
@@ -46,7 +46,7 @@ function classifyControlRequestError(error) {
     return "not_connected";
   return "server_error";
 }
-//@ chunk-6vnxsn99.js:22265-22391 placement (2.1.88 match: abortSpeculation, 0.378)
+//@ chunk-01kgd7xg.js:22057-22183 placement (2.1.88 match: abortSpeculation, 0.378)
 /**
  * 执行异步函数并记成功/中止/失败遥测。旧版名 abortSpeculation 为错配。
  */
@@ -61,7 +61,7 @@ async function withOutcomeTelemetry(event, run) {
     throw error;
   }
 }
-//@ chunk-6vnxsn99.js:22391-22659 placement
+//@ chunk-01kgd7xg.js:22183-22451 placement
 function controlResponseError(response) {
   if (response.subtype === "error" && typeof response.error === "string") return Error(response.error);
   let reason =
@@ -71,9 +71,9 @@ function controlResponseError(response) {
   return Error(`Malformed control_response from worker (${reason})`);
 }
 export {
-  controlResponseError,
-  withOutcomeTelemetry,
-  ControlRequestNotDeliveredError,
   ControlRequestTimeoutError,
   classifyControlRequestError,
+  ControlRequestNotDeliveredError,
+  withOutcomeTelemetry,
+  controlResponseError,
 };

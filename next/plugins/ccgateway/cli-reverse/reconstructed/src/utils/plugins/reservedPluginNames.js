@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：插件名保留词检查（不能冒充 Anthropic 官方插件）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x8f8es1n.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-65bt0307.js (2)
  * attribution: placement 2
  */
 import { splitAlnumWords, NON_ASCII_PATTERN, iterJoinedWordPrefixes, OFFICIAL_NAME_RE } from "./schemas.js";
 import { foldConfusableCharacters } from "../confusables.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x8f8es1n.js:276-896 placement
+//@ chunk-65bt0307.js:276-753 placement
 /**
  * 第三方插件名保留词（claude/anthropic、产品名）及提示文字。
  */
@@ -24,11 +24,9 @@ var RESERVED_PREFIX_SET;
 var RESERVED_EXACT_SET;
 var max;
 var formatOrList;
-var RESERVED_PREFIX_LIST;
-var RESERVED_NAME_MESSAGE;
 var RENAME_HINT;
 var OFFICIAL_PLUGIN_HINT;
-deferInit("chunk-x8f8es1n.js:276", () => {
+deferInit("chunk-65bt0307.js:276", () => {
   RESERVED_NAME_PARTS = {
     marks: ["claude", "anthropic", "anthropics"],
     builtinLead: "cc-plugin",
@@ -44,12 +42,10 @@ deferInit("chunk-x8f8es1n.js:276", () => {
     new Intl.ListFormat("en", {
       type: "disjunction",
     }).format(list.map((word) => `"${word}"`));
-  RESERVED_PREFIX_LIST = formatOrList(RESERVED_PREFIX_WORDS.map((word) => `${word}-`));
-  RESERVED_NAME_MESSAGE = `A third party's plugin name cannot start with ${RESERVED_PREFIX_LIST}, be ${formatOrList(RESERVED_EXACT_NAMES)}, or put "official" beside "claude" or "anthropic".`;
   RENAME_HINT = "Name it for what it does.";
   OFFICIAL_PLUGIN_HINT = "If this is one of Anthropic's own plugins, validate the marketplace that lists it.";
 });
-//@ chunk-x8f8es1n.js:896-1344 placement
+//@ chunk-65bt0307.js:753-1331 placement
 function checkReservedPluginName(name) {
   let matches = NON_ASCII_PATTERN.test(name);
   let name_2 = (matches ? foldConfusableCharacters(name) : name).toLowerCase();
@@ -65,7 +61,7 @@ function checkReservedPluginName(name) {
     return {
       severity: "error",
       message:
-        `Plugin name ${name_3} is reserved: it passes as one of Anthropic's own. ${RESERVED_NAME_MESSAGE} ` +
+        `Plugin name ${name_3} is reserved: it passes as one of Anthropic's own. A third party's plugin name cannot start with ${formatOrList(RESERVED_PREFIX_WORDS.map((word) => `${word}-`))}, be ${formatOrList(RESERVED_EXACT_NAMES)}, or put "official" beside "claude" or "anthropic". ` +
         RENAME_HINT,
     };
   return RESERVED_NAME_PARTS.marks.some((mark) => words.includes(mark))

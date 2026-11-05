@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Anthropic 账户资料读取与缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tv8z1ygb.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hf1ad2x6.js (19)
  * attribution: placement 19
  */
 import { join } from "path";
@@ -33,7 +33,7 @@ import { logForDebugging } from "./debug.js";
 import { jsonParse } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tv8z1ygb.js:703-1257 placement
+//@ chunk-hf1ad2x6.js:703-1257 placement
 /**
  * Anthropic Console 配置档登录的常量：OAuth client_id、所需 scope、created_by 标记、配置/凭据文件的 zod schema，以及各拒绝原因是否可以回退到普通登录（I）。
  */
@@ -43,7 +43,7 @@ var CREATED_BY_CLAUDE_CODE;
 var profileConfigSchema;
 var profileCredentialsSchema;
 var PROFILE_REFUSAL_FALLS_BACK;
-deferInit("chunk-tv8z1ygb.js:703", () => {
+deferInit("chunk-hf1ad2x6.js:703", () => {
   CONSOLE_PROFILE_CLIENT_ID = "41077d10-94b8-4194-be48-d251e9eb21b4";
   PROFILE_LOGIN_SCOPES = [CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_INFERENCE_SCOPE];
   CREATED_BY_CLAUDE_CODE = {
@@ -80,14 +80,14 @@ deferInit("chunk-tv8z1ygb.js:703", () => {
     unreadable_profile: false,
   };
 });
-//@ chunk-tv8z1ygb.js:1257-1297 placement
+//@ chunk-hf1ad2x6.js:1257-1297 placement
 /**
  * 判断该配置档拒绝原因是否允许退回普通登录。
  */
 function isProfileRefusalFallsBack(errorClass) {
   return Object.hasOwn(PROFILE_REFUSAL_FALLS_BACK, errorClass);
 }
-//@ chunk-tv8z1ygb.js:1297-1410 placement
+//@ chunk-hf1ad2x6.js:1297-1410 placement
 /**
  * 若错误是带 errorClass 的配置档登录拒绝，返回该原因是否允许退回普通登录（查 I 表），否则 null。
  */
@@ -100,7 +100,7 @@ function profileRefusalFallsBack(error) {
     return null;
   return PROFILE_REFUSAL_FALLS_BACK[error.errorClass];
 }
-//@ chunk-tv8z1ygb.js:1410-1763 placement
+//@ chunk-hf1ad2x6.js:1410-1763 placement
 /**
  * 不使用 Anthropic 配置 profile 的原因说明：无配置目录、profile 名无效、profile 属于其他工具、凭证路径自定义、设置了 ANTHROPIC_API_KEY。
  */
@@ -111,7 +111,7 @@ var PROFILE_REFUSAL_NOTES = {
   custom_credentials_path: "the existing profile keeps its sign-in somewhere custom",
   api_key_env_nondispatching: "ANTHROPIC_API_KEY is set in this environment",
 };
-//@ chunk-tv8z1ygb.js:1763-1876 placement
+//@ chunk-hf1ad2x6.js:1763-1876 placement
 /**
  * 从 profile 错误中取对应的拒绝说明（未知错误类别返回 null）。
  */
@@ -124,14 +124,14 @@ function profileRefusalNote(error) {
     return null;
   return PROFILE_REFUSAL_NOTES[error.errorClass];
 }
-//@ chunk-tv8z1ygb.js:1876-1916 placement
+//@ chunk-hf1ad2x6.js:1876-1916 placement
 /**
  * 判断该配置档拒绝原因是否有对应说明。
  */
 function hasProfileRefusalNote(errorClass) {
   return Object.hasOwn(PROFILE_REFUSAL_NOTES, errorClass);
 }
-//@ chunk-tv8z1ygb.js:1916-5279 placement
+//@ chunk-hf1ad2x6.js:1916-5279 placement
 /**
  * 确定 Console 配置档登录要写入的目标：拒绝 WIF 环境变量、第三方提供方、ANTHROPIC_API_KEY 或其他凭据遮蔽、找不到配置目录的情况；
  * 读取现有配置档，若属于其他工具、自定义凭据路径或其他部署则拒绝。返回 {profile, configDir, isNewProfile}。均抛带 errorClass 的 TelemetrySafeError。
@@ -228,7 +228,7 @@ async function resolveConsoleProfileTarget() {
     isNewProfile: profileConfig === null,
   };
 }
-//@ chunk-tv8z1ygb.js:5279-5427 placement
+//@ chunk-hf1ad2x6.js:5279-5427 placement
 /**
  * 在配置档凭据文件锁内写入 Console 登录结果（先建 credentials 目录）。
  */
@@ -243,7 +243,7 @@ async function saveConsoleProfileLogin(login) {
     () => writeConsoleProfileFiles(login),
   );
 }
-//@ chunk-tv8z1ygb.js:5427-6275 placement
+//@ chunk-hf1ad2x6.js:5427-6275 placement
 /**
  * 写入配置档：configs/<profile>.json（组织、工作区、user_oauth 认证）与凭据文件（access/refresh token、过期时间、scope、组织/账户信息），若无 active_config 则设为当前。
  */
@@ -298,7 +298,7 @@ async function writeConsoleProfileFiles(login) {
     configDir,
   };
 }
-//@ chunk-tv8z1ygb.js:6275-6696 placement
+//@ chunk-hf1ad2x6.js:6275-6696 placement
 /**
  * 退出登录时移除本工具创建的配置档凭据（在文件锁内），可选先吊销 refresh token；不存在或不是本工具创建的返回 {removed:false}。
  */
@@ -342,7 +342,7 @@ async function removeConsoleProfileCredentials({ revoke } = {}) {
     };
   }
 }
-//@ chunk-tv8z1ygb.js:6696-7271 placement
+//@ chunk-hf1ad2x6.js:6696-7271 placement
 /**
  * x1s 的锁内实现：核对配置档由 Claude Code 创建，读取 refresh token 交给吊销回调，再删除凭据文件并重置 WIF 状态。
  */
@@ -398,7 +398,7 @@ async function removeProfileCredentialsLocked(revoke) {
     ...revokeResult,
   };
 }
-//@ chunk-tv8z1ygb.js:7271-7511 placement
+//@ chunk-hf1ad2x6.js:7271-7511 placement
 function resolveProfileName(configDir) {
   let profileName = env.ANTHROPIC_PROFILE || resolveImplicitProfileName(configDir);
   if (!isLoadableProfileName(profileName))
@@ -409,14 +409,14 @@ function resolveProfileName(configDir) {
     );
   return profileName;
 }
-//@ chunk-tv8z1ygb.js:7511-7565 placement
+//@ chunk-hf1ad2x6.js:7511-7565 placement
 /**
  * 配置档凭据文件的路径。
  */
 function profileCredentialsPath(configDir, profileName) {
   return join(configDir, "credentials", `${profileName}.json`);
 }
-//@ chunk-tv8z1ygb.js:7565-7933 placement
+//@ chunk-hf1ad2x6.js:7565-7933 placement
 /**
  * 读取配置档 JSON：不存在返回 null，不可读或格式不符视为 unreadable。
  */
@@ -454,7 +454,7 @@ async function readProfileConfig(configPath) {
         },
       };
 }
-//@ chunk-tv8z1ygb.js:7933-8054 placement
+//@ chunk-hf1ad2x6.js:7933-8054 placement
 function isClaudeCodeProfile(profileConfig) {
   return (
     profileConfig.created_by === CREATED_BY_CLAUDE_CODE.created_by &&
@@ -462,7 +462,7 @@ function isClaudeCodeProfile(profileConfig) {
     profileConfig.authentication.client_id === CONSOLE_PROFILE_CLIENT_ID
   );
 }
-//@ chunk-tv8z1ygb.js:8054-8339 placement
+//@ chunk-hf1ad2x6.js:8054-8339 placement
 async function readProfileCredentials(credentialsPath) {
   let credentialsText;
   try {
@@ -484,7 +484,7 @@ async function readProfileCredentials(credentialsPath) {
     refreshToken: typeof refreshToken === "string" ? refreshToken : undefined,
   };
 }
-//@ chunk-tv8z1ygb.js:8339-8474 placement
+//@ chunk-hf1ad2x6.js:8339-8474 placement
 /**
  * 判断给定刷新令牌是否就是 profile 中存储的那个（读取失败时视为是）。
  */
@@ -500,14 +500,14 @@ async function isStoredRefreshToken(refreshToken) {
     return true;
   }
 }
-//@ chunk-tv8z1ygb.js:8474-8504 placement
+//@ chunk-hf1ad2x6.js:8474-8504 placement
 /**
  * 恒返回 false 的能力判断。
  */
 async function alwaysFalseProfileCheck() {
   return false;
 }
-//@ chunk-tv8z1ygb.js:8504-8620 placement (2.1.88 match: tryCreateExclusive, 1)
+//@ chunk-hf1ad2x6.js:8504-8620 placement (2.1.88 match: tryCreateExclusive, 1)
 async function tryCreateExclusive(filePath, data) {
   try {
     await writeFile(filePath, data, {
@@ -521,6 +521,7 @@ async function tryCreateExclusive(filePath, data) {
   }
 }
 export {
+  alwaysFalseProfileCheck,
   removeConsoleProfileCredentials,
   resolveConsoleProfileTarget,
   profileRefusalFallsBack,
@@ -529,5 +530,4 @@ export {
   PROFILE_LOGIN_SCOPES,
   saveConsoleProfileLogin,
   isStoredRefreshToken,
-  alwaysFalseProfileCheck,
 };

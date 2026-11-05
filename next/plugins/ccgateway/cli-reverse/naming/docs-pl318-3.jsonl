@@ -1,0 +1,135 @@
+{"id":"chunk-gv3r3pqa.js#k","doc":"按状态把脚本留下的工具调用汇总成一行人话：正在运行、等待、被拒绝、完成、失败、被 hook 重跑，按名字去重并截断。"}
+{"id":"chunk-gv3r3pqa.js#A","doc":"生成脚本停止报告的主体：被拒/被打断的开场句、逐步列出每个工具调用的结局（含结果或错误文本，超预算则写字符数），最后补一句未列出数量与总预算裁剪。"}
+{"id":"chunk-gv3r3pqa.js#j7n","doc":"把超长文本从中间挖掉，保留首尾并插入“中间 N 个字符未显示”的标记。"}
+{"id":"chunk-gv3r3pqa.js#eqr","doc":"判断一个 REPL 脚本结果是否带 stoppedBy（即脚本被停止而不是正常结束）。"}
+{"id":"chunk-gv3r3pqa.js#yaa","doc":"判断结果是否为停止结果，或标记了 neverRan=person（人没让它跑）。"}
+{"id":"chunk-gv3r3pqa.js#p2o","doc":"停止报告的入口：在 REPL 模式下生成完整报告，否则退回简短提示。"}
+{"id":"chunk-2s9zwbhq.js#Whn","doc":"在字符数与值个数双重预算内遍历结果值，返回已计入的字符数/值个数；超预算时停止。"}
+{"id":"chunk-2s9zwbhq.js#U","doc":"把发给 Remote Control 的输入裁到上限：字符串截断加“N 个字符未发送”的标记，数组/对象整体超限就整块换成一条说明，对象逐一裁剪超长字段并在超预算处写“还有 N 个字段”。"}
+{"id":"chunk-2s9zwbhq.js#Pia","doc":"把会话消息改写成 Remote Control 客户端能看的帧：去掉 tool_use_result 原始值、补充结构化结果别名、隐藏扣留的工具调用 id、标出虚拟消息。"}
+{"id":"chunk-2s9zwbhq.js#D","doc":"从脚本调用的 stored 结果里按工具名找到工具定义，生成并可裁剪结构化结果；失败只记一条 error 日志。"}
+{"id":"chunk-2s9zwbhq.js#v","doc":"从脚本调用结果里取 Remote Control 文本：stored 直接返回文本，built 按 from（toolOutput/mcpContent/servedText）重新渲染。"}
+{"id":"chunk-2s9zwbhq.js#V9n","doc":"结果文本因省空间被丢时补一条 kind=stored 的 Remote Control 文本，避免远程端看到空结果。"}
+{"id":"chunk-2s9zwbhq.js#Iia","doc":"给单条消息补 Remote Control 字段：结果文本、隐藏/分离的工具调用 id、被扣留的脚本调用 id。"}
+{"id":"chunk-2s9zwbhq.js#Oia","doc":"为 Remote Control 缩短 assistant 消息里 tool_use 的 input，超限或出错时换成一条“未发送”的标记。"}
+{"id":"chunk-2s9zwbhq.js#w","doc":"把脚本调用的 toolOutput 结果渲染成发给 Remote Control 的文本，失败时记日志并返回空。"}
+{"id":"chunk-5ythzcas.js#L8i","doc":"被隐藏的图片在移除前的说明句：按隐藏张数是 1 张还是多张给出不同措辞。"}
+{"id":"chunk-5ythzcas.js#H8i","doc":"被隐藏图片的另一种说明：告诉模型旧位置有标记、需要时可再读文件。"}
+{"id":"chunk-5ythzcas.js#ian","doc":"图片附件被事后隐藏时留在原位置的占位文本。"}
+{"id":"chunk-5ythzcas.js#oBt","doc":"工具结果被事后移除时留在原位置的占位文本。"}
+{"id":"chunk-czq1j3j2.js#lQ","doc":"草稿保活观察器：轮次运行中盯住问答、审批与开场提示，在需要时撤回草稿并给出 launch_warning / question_behind_draft 等提示。"}
+{"id":"chunk-czq1j3j2.js#gHe","doc":"草稿被扣留时用的通知 id 与三条提示文案：审批未通过、先看警告、有提问在等。"}
+{"id":"chunk-czq1j3j2.js#sle","doc":"“把会话复制到新账号”对话框：确认、说明会共享历史与读过的文件、给出继续/返回按钮。"}
+{"id":"chunk-czq1j3j2.js#gle","doc":"会话归属守卫：检查本地是否还留着别的账号的登录，若不匹配就停掉 REPL 桥接并提示 /login 或复制会话。"}
+{"id":"chunk-czq1j3j2.js#MRo","doc":"Life Sciences 用例选择对话框：列出可选用例，带“（当前）”标记，说明选了之后从下一次请求开始生效。"}
+{"id":"chunk-czq1j3j2.js#U_o","doc":"把用例项映射成选择控件需要的 label/value。"}
+{"id":"chunk-czq1j3j2.js#a9","doc":"用例选择器的空占位字符串。"}
+{"id":"chunk-czq1j3j2.js#abt","doc":"从权限拒绝原因文本里解析被写文件与“看起来像但实际不是”的路径：跳过前两行、要求末尾有警示行，并拼接被折行的加号续行。"}
+{"id":"chunk-czq1j3j2.js#rWo","doc":"需要检查的书写系统（阿拉伯、西里尔、希腊、汉字等）正则表，用于识别混用的非拉丁字母。"}
+{"id":"chunk-czq1j3j2.js#rbt","doc":"取拒绝原因里“被写的文件”列表。"}
+{"id":"chunk-czq1j3j2.js#ibt","doc":"取拒绝原因里“名字像但实际不是”的路径列表。"}
+{"id":"chunk-czq1j3j2.js#tbt","doc":"拒绝原因的续行缩进、警示行与列表前缀标记（tbt/obt/Bx/uMe），解析路径清单时靠它们切分。"}
+{"id":"chunk-czq1j3j2.js#bWo","doc":"算出权限载荷里被拒绝原因的说明段落在第几行结束，供表格渲染切分。"}
+{"id":"chunk-czq1j3j2.js#SMe","doc":"通用权限提示对话框：按终端宽度排版载荷与选项、渲染工具调用行（含表格兜底），处理 auto 模式与熔断拒绝的文案。"}
+{"id":"chunk-czq1j3j2.js#vMe","doc":"包装权限提示对话框，提取载荷、回答回调与决策原因后交给视图。"}
+{"id":"chunk-czq1j3j2.js#yEe","doc":"首页 logo 的退场阶段机：home → logo → leaving → gone，按 reducedMotion 决定是否淡出。"}
+{"id":"chunk-czq1j3j2.js#x1o","doc":"由当前阶段与是否主会话推出 logo 的下一阶段（home/logo/gone/leaving）。"}
+{"id":"chunk-czq1j3j2.js#WPt","doc":"“工作副本未被使用”启动通知的规格：id 与 setup。"}
+{"id":"chunk-czq1j3j2.js#N2o","doc":"上述通知的 setup：向通知器登记一条 working-copy-not-used 提示。"}
+{"id":"chunk-fmnbrxwy.js#lo","doc":"把 ReadWidgetContext 的视图状态内容拼成文本，按上限截断并标 cut_for_size。"}
+{"id":"chunk-fmnbrxwy.js#yo","doc":"视图状态里的图片收集器：记录字节、张数与尝试次数，超限的图片计入 leftOut。"}
+{"id":"chunk-fmnbrxwy.js#Rs","doc":"渲染视图状态的文本结果：按视图排序、给被截断的视图加标签、图像超限时写明被略过的数量。"}
+{"id":"chunk-fmnbrxwy.js#bo","doc":"ReadWidgetContext 的实际读取：没有持有状态、视图 id 不存在或只剩截断内容时给出各自的人话说明，否则渲染文本。"}
+{"id":"chunk-fmnbrxwy.js#ko","doc":"按最大长度截断一段文本并在末尾补省略标记。"}
+{"id":"chunk-fmnbrxwy.js#Es","doc":"ReadWidgetContext 的输入 schema：可选的 view 参数，说明省略即读全部持有视图。"}
+{"id":"chunk-fmnbrxwy.js#Qs","doc":"Wrap up 工具的开关名（tengu_merry_thunder）与工具定义：把 recap、待拍板的提问和最多两个按钮回给用户。"}
+{"id":"chunk-fmnbrxwy.js#Wo","doc":"按钮标签校验的实际规则：空、像编号列表、首尾空格、内部双空格、双冒号、括号错位、像链接、像 emoji 等逐条给出原因。"}
+{"id":"chunk-fmnbrxwy.js#Vs","doc":"按钮标签里不允许出现的组合附加符码位区间。"}
+{"id":"chunk-fmnbrxwy.js#Ee","doc":"把一个码位渲染成 U+XXXX 说明，可见 ASCII 直接加引号。"}
+{"id":"chunk-gsmkwtjh.js#oe","doc":"ultrareview 的启动摘要：列出将要审查的 PR、说明上限与费用估算，以及没被排上的部分。"}
+{"id":"chunk-gsmkwtjh.js#re","doc":"判断当前 shell 能否就地确认费用：在 Claude Code 会话、CI/演示模式里都拒绝并给出该怎么跑。"}
+{"id":"chunk-gsmkwtjh.js#ne","doc":"用 gh CLI 取 PR 的合并状态、提交、增删行与改名文件数，处理非 github 主机、未登录、超时。"}
+{"id":"chunk-gsmkwtjh.js#ie","doc":"把目标仓库做成临时浅克隆：init、写 template、sparse-checkout 与 fetch，供本地审查评估用。"}
+{"id":"chunk-gsmkwtjh.js#me","doc":"ultrareview eval 的主流程：解析目标与费用上限、检查并启动审查、被信号中止时收尾，失败时给出 not_started 类说明。"}
+{"id":"chunk-gsmkwtjh.js#Q","doc":"把 --list 与参数里的 PR 写法（owner/repo#123、URL、编号）解析成目标，并给出歧义/缺主机的提示。"}
+{"id":"chunk-gsmkwtjh.js#yo","doc":"claude ultrareview 的命令入口：解析 eval/--list/--output/--max-cost，取政策与额度后发起请求，输出 JSON 或列表。"}
+{"id":"chunk-gsmkwtjh.js#ee","doc":"收到中止信号时的收尾：提示已启动的审查仍在云端继续计费。"}
+{"id":"chunk-hma1b5gv.js#Ae","doc":"把 diff 文件清单过滤成可展示的集合：剔除 .git、settings.json、node_modules 等噪声路径。"}
+{"id":"chunk-hma1b5gv.js#qt","doc":"diff 相关常量：空 blob/tree 的 SHA、UUID 与项目路径正则、默认忽略目录。"}
+{"id":"chunk-hma1b5gv.js#Wqn","doc":"启动目录不在 git 仓库里时的降级：给出 no-repository/diff-failed 原因并记一条 warn 日志。"}
+{"id":"chunk-hma1b5gv.js#NKs","doc":"在无仓库时用临时 git 目录（独立 objects/refs、ccdiff 前缀）算出文件清单，git 太旧或版本读不出时降级。"}
+{"id":"chunk-hma1b5gv.js#pn","doc":"用 ls-files --others --exclude-standard 列出未跟踪文件并应用忽略规则。"}
+{"id":"chunk-hma1b5gv.js#mn","doc":"用 commit-tree 造一个空提交、再用 update-index --index-info 把文件按 100644 写入，得到无仓库下的 diff 基线。"}
+{"id":"chunk-hma1b5gv.js#oe","doc":"跑一步 git 并在失败/超时时记 warn 日志、抛统一错误（超时写毫秒数）。"}
+{"id":"chunk-hma1b5gv.js#ke","doc":"判断“像密钥/凭据”的路径正则集合与环境文件、settings/config 白名单。"}
+{"id":"chunk-hma1b5gv.js#de","doc":"把路径集合转成相对前缀列表（目录补斜杠），用于在 diff 清单里还原嵌套目录。"}
+{"id":"chunk-hs37d1w3.js#ue","doc":"Gmail 调用参数的形状校验：未知参数、非文本参数、非法回复 id、过长主题、附件过多逐项返回原因码。"}
+{"id":"chunk-hs37d1w3.js#me","doc":"Gmail 附件校验：附件不是对象、inline 非布尔、缺字段、重名、文件名/类型不安全逐项返回原因码。"}
+{"id":"chunk-hs37d1w3.js#ye","doc":"算出收件人里的“不点名”情况：草稿更新、回复线程、只按 draftId 保存时提示哪些收件人没写。"}
+{"id":"chunk-hs37d1w3.js#_e","doc":"按码位判断一个字符是否算作 Gmail 的安全字符。"}
+{"id":"chunk-k3zg85zg.js#$ce","doc":"REPL 脚本会话表：按上下文登记会话、派发 eval 并按序号/深度/轮次排队，处理未结算上限、中止与结算。"}
+{"id":"chunk-k3zg85zg.js#q","doc":"单个上下文里脚本运行状态的容器：运行集合、投递链、待结算、扣留报告轮次与工具调用 id 映射。"}
+{"id":"chunk-mzw6m19v.js#HNr","doc":"本地会话迁往云之前的检查：登录、账号与组织是否匹配、轮次是否在跑、转录是否保存，返回 refusal 码。"}
+{"id":"chunk-mzw6m19v.js#W","doc":"读出并解析会话转录：处理损坏行、各类标记键（bridge-session、isolation-latch、credential_org 等）与开销。"}
+{"id":"chunk-mzw6m19v.js#F","doc":"把转录消息导出成纯文本：逐条渲染 content 块，附件渲染不了就记一条 left behind。"}
+{"id":"chunk-mzw6m19v.js#K","doc":"导出 attachment 时需要保留/重写的类型清单（移动文件、紧凑文件引用、@ 引用、PDF、MCP 资源、IDE 选中行等）。"}
+{"id":"chunk-mzw6m19v.js#V","doc":"按顺序读回存的转录记录，读不出时带 code 报错，末端给 nextSeq。"}
+{"id":"chunk-mzw6m19v.js#oe","doc":"取当前账号与组织 id：优先环境变量，其次存储凭证与配置，读不出返回 unreadable/no_login。"}
+{"id":"chunk-npgp1xzs.js#quo","doc":"foresight/Remote Control 不可用的原因诊断：值不是 1、被管理设置或 ~/.claude.json 覆盖、管理员不允许、政策读不到等。"}
+{"id":"chunk-npgp1xzs.js#Y0i","doc":"把 foresight 状态翻译成给人看的一行：开启（实验）、被拒、未询问等。"}
+{"id":"chunk-npgp1xzs.js#Gys","doc":"登录后需要重启校验时提示先 --resume 保住会话，然后退出。"}
+{"id":"chunk-npgp1xzs.js#REr","doc":"foresight 被拒后的说明：本次改用普通工具，并提示如何不再被询问。"}
+{"id":"chunk-npgp1xzs.js#qXe","doc":"说明当前会话所在环境不支持后台会话，无法移入或复制到后台。"}
+{"id":"chunk-npgp1xzs.js#jys","doc":"提示要使用 Remote Control 需退出并把对应变量设为 0 再启动。"}
+{"id":"chunk-npgp1xzs.js#q0i","doc":"说明 Remote Control 在当前环境尚不可用，会话未连接。"}
+{"id":"chunk-npgp1xzs.js#Wys","doc":"登录成功后提示将重启以校验该账号。"}
+{"id":"chunk-npgp1xzs.js#V0i","doc":"显示“已开启 · 本会话只能用某方式恢复”。"}
+{"id":"chunk-npgp1xzs.js#N9","doc":"给出在什么步骤下设置环境变量并重跑的命令。"}
+{"id":"chunk-nrv8bm0w.js#BFe","doc":"用起止标记把 artifact 正文包成内联信封，并附提示，避免模型把正文当指令。"}
+{"id":"chunk-nrv8bm0w.js#I","doc":"把已保存的 artifact 副本与前一份合成待保存项，返回信封化结果。"}
+{"id":"chunk-nrv8bm0w.js#w4e","doc":"登记一次 artifact 保存：写入待保存项与之前副本，记录信封化标记。"}
+{"id":"chunk-nrv8bm0w.js#E4e","doc":"取走待保存的 artifact 项并清理对应副本。"}
+{"id":"chunk-nrv8bm0w.js#Pwe","doc":"完结一次 artifact 保存：取待保存项、删除记录。"}
+{"id":"chunk-nrv8bm0w.js#bot","doc":"读文件失败时记一条日志并带出 filepath 的复制件。"}
+{"id":"chunk-nrv8bm0w.js#S","doc":"判断路径是否落在 artifact-files 工作副本的 index.html 上并切出名称。"}
+{"id":"chunk-q8dj26dj.js#Q","doc":"会话搬运时附在开头的大段说明：来自他人电脑、Artifact 与 Remote Control 文本要当数据看、对方还没说话时先汇报。"}
+{"id":"chunk-q8dj26dj.js#S","doc":"按字节预算从后往前拼回合文本，全放不下时取最后一回合尾部并标 isCut。"}
+{"id":"chunk-q8dj26dj.js#U","doc":"回合文本的包装：给每个回合加方括号与说话人标记，超预算的回合写明被截，并说明全文在附件里。"}
+{"id":"chunk-q8dj26dj.js#ne","doc":"渲染单个 content 块：文本、工具调用、结果（带错误标记）、图片/文档占位。"}
+{"id":"chunk-q8dj26dj.js#re","doc":"把一个回合（人类/助手消息）渲染成纯文本段落，压缩摘要与工具输出各自加标题。"}
+{"id":"chunk-q8dj26dj.js#ae","doc":"把本地会话搬到云端的主要流程：检查移动许可、读转录、上传、发第一条消息，失败时归档新会话并给恢复命令。"}
+{"id":"chunk-q8dj26dj.js#L","doc":"报告会话在别处打开：注册表读不出、另一窗口在用、后台在跑分别给命令。"}
+{"id":"chunk-q8dj26dj.js#mo","doc":"本会话不能搬去云端的各原因（找不到/多份副本、属于别的目录、被拒绝）及应对命令。"}
+{"id":"chunk-q8dj26dj.js#go","doc":"Remote Control 连着别的会话时如何断开再搬的步骤说明。"}
+{"id":"chunk-q8dj26dj.js#Y","doc":"拒绝搬移时的措辞：被标记留在本机、历史被扣留、移动能力未开等，各带释放步骤。"}
+{"id":"chunk-q8dj26dj.js#vo","doc":"搬移后的收尾：写事件、按结果归档新云会话、失败时给出在本地续上的命令。"}
+{"id":"chunk-q8dj26dj.js#ue","doc":"把会话文本作为 .txt 附件上传，失败只记一条 cloud-local-session-move 日志。"}
+{"id":"chunk-q8dj26dj.js#_o","doc":"搬移后发送第一条消息并退出，失败时归档新会话并给本地续上的命令。"}
+{"id":"chunk-q8dj26dj.js#po","doc":"搬移相关常量：新会话标题、历史被扣留的提示与断开 Remote Control 的步骤。"}
+{"id":"chunk-vn3g7zt8.js#Gb","doc":"计算当前实际生效的用例选择模式（per_grant/单个/默认）并做合法性收敛。"}
+{"id":"chunk-vn3g7zt8.js#Gc","doc":"生成用例摘要行：自动、未用、名称不可用、具体用例名，供状态提示使用。"}
+{"id":"chunk-vn3g7zt8.js#oMn","doc":"校验已保存的用例选择仍可用：不在候选中、只在会话内有效时给出标记。"}
+{"id":"chunk-vn3g7zt8.js#vOi","doc":"把用例选择渲染成“Use case: …”的一行文案。"}
+{"id":"chunk-y080jnb6.js#I","doc":"CPU 报告用的进程计数：读自身 stat 与监听端口，按会话排除自身树、只计新增端口，任何一步失败就整体略过并记日志。"}
+{"id":"chunk-y080jnb6.js#J","doc":"遍历 /proc 读各进程 stat，超时或解析失败时给出提示。"}
+{"id":"chunk-y080jnb6.js#T","doc":"读一张 socket 表（latin1），超大时放弃计数。"}
+{"id":"chunk-y080jnb6.js#q","doc":"读 /proc/net/tcp 与 tcp6 两张表。"}
+{"id":"chunk-y080jnb6.js#Q","doc":"读 /proc/self/fd 找本进程自己的 socket inode。"}
+{"id":"chunk-0yw3taqg.js#dC","doc":"判断后台等待能否提前醒来：仅当开关开启、没有待答询问、任务都已结算且存在可恢复的孤儿代理时才成立。"}
+{"id":"chunk-0yw3taqg.js#uC","doc":"一次性计算要锚定给远程读取的同步技能目录（字面路径 + realpath 解析路径），失败记错误日志。"}
+{"id":"chunk-0yw3taqg.js#Up","doc":"按权限上下文决定是否给出同步技能目录锚：传输、HIPAA、整目录读规则与写入者身份都会让它放弃，放弃时按原因记一次 sad 事件。"}
+{"id":"chunk-0yw3taqg.js#sy","doc":"命令列表刷新的节流器：同一时刻只跑一次重新读取，运行中被再问一次会排队再跑一遍，给得太频繁就放弃。"}
+{"id":"chunk-0yw3taqg.js#JH","doc":"扫描一轮 assistant 消息里工具调用参数，找出与撤回文件名匹配的 tool_use id，供桥接会话撤下附件时隐藏。"}
+{"id":"chunk-0yw3taqg.js#eI","doc":"从被中断的点取回续写所需的空缺消息（同侧链、含平台与轮次归属键），并带上这些回合被禁用的工具。"}
+{"id":"chunk-0yw3taqg.js#oF","doc":"解析 resume 预热开关：环境变量、实验配置与入口类型三者共同决定是否启用及延迟、上下文门槛与入口白名单。"}
+{"id":"chunk-0yw3taqg.js#sF","doc":"在 resume 后延迟启动一次预热尝试，返回取消函数；预算上限或被中断回合救援时跳过。"}
+{"id":"chunk-0yw3taqg.js#cG","doc":"预热主体的执行：检查上下文规模与各类不安全条件（侧查询标记、缓存关闭、tether、思考预算、掉落系统记录等），可行时重放提示以预热缓存，跳过原因都会记录。"}
+{"id":"chunk-0yw3taqg.js#pw","doc":"判断预热该不该放弃：会话关闭、预算用尽、第一条消息已被读到、队列里已有命令时返回原因码。"}
+{"id":"chunk-0yw3taqg.js#fG","doc":"从消息尾部倒推可安全重放的回合前缀，遇到掉落的工具发现或系统记录就判不可重放，返回可重放消息或阻塞原因。"}
+{"id":"chunk-0yw3taqg.js#gG","doc":"判断最后一条 assistant 消息是否还有未结算的 tool_use（用于确认该前缀不能重放）。"}
+{"id":"chunk-0yw3taqg.js#hG","doc":"逐条比较重放前缀与原始消息的类型和文本是否一致，并要求其后确有 assistant 消息。"}
+{"id":"chunk-2s9zwbhq.js#l7s","doc":"给脚本调用结果登记 Remote Control 的来源标签：有 servedText 直接取自该来源，否则按工具与 mcpContent 走存储文本。"}
+{"id":"chunk-gsmkwtjh.js#Me","doc":"ultrareview 中止阈值常量与对应文案：连续 3 个审查无结果或 10 个无成功即停止、被停止、找不到 git。"}
+{"id":"chunk-gsmkwtjh.js#he","doc":"PR 目标的解析常量：owner/repo#123、编号、URL 与 --list 行的正则及长度上限。"}
+{"id":"chunk-hma1b5gv.js#Me","doc":"把路径转成 gitignore 风格的一行（转义 *?[、行尾空格与 \r），含换行时返回空。"}
+{"id":"chunk-hs37d1w3.js#he","doc":"Gmail 附件内容允许的最大字节数。"}

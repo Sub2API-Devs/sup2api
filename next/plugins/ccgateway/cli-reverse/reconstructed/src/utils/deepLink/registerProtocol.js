@@ -3,10 +3,10 @@
  *
  * 并入已有模块：决定启动目标（当前二进制、版本目录、node 脚本）；查找已安装的最新版本二进制等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/registerProtocol.ts
- * pieces: chunk-fb29jded.js (11), chunk-qrnm62fg.js (7), chunk-x4gcvpxy.js (1)
- * attribution: callgraph-witnessed 2, fingerprint 9, placement 7, callgraph-fingerprint 1
+ * pieces: chunk-f8a5a0kt.js (12), chunk-gvr4gxa7.js (1), chunk-nh327nc2.js (7)
+ * attribution: callgraph-witnessed 2, fingerprint 9, callgraph-fingerprint 1, placement 7, layout 1
  */
 import * as pathModule from "path";
 import { sep, join } from "path";
@@ -23,23 +23,22 @@ import { getErrnoCode, sanitizeErrnoForTelemetry } from "../errors.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { logForDebugging } from "../debug.js";
 import { whichAsync } from "../which.js";
-import { embeddedSearchToolsBinaryPath } from "../embeddedTools.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getInitialSettings } from "../settings/settings.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qrnm62fg.js:375-392 placement
+//@ chunk-nh327nc2.js:375-392 placement
 /**
  * semver 模块的包装导入（用于版本排序）。
  */
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qrnm62fg.js:375", () => {
+deferInit("chunk-nh327nc2.js:375", () => {
   semverModule = __toESM(require_semver_3(), 1);
 });
-//@ chunk-qrnm62fg.js:477-562 placement
+//@ chunk-nh327nc2.js:477-562 placement
 /**
  * 是否从安装的版本目录运行。
  */
@@ -48,24 +47,24 @@ function isRunningFromVersionsDir_2() {
   let versionsPrefix = getNativeVersionsDir() + sep;
   return process.execPath.startsWith(versionsPrefix);
 }
-//@ chunk-qrnm62fg.js:562-598 placement
+//@ chunk-nh327nc2.js:562-598 placement
 /**
  * 生成重新启动 Claude Code 的命令。
  */
 function getLaunchCommand(options = {}) {
   return withProcessWrapper(resolveLaunchTarget(options));
 }
-//@ chunk-qrnm62fg.js:598-922 placement
+//@ chunk-nh327nc2.js:598-922 placement
 /**
  * 决定启动目标（当前二进制、版本目录、node 脚本）。
  */
 function resolveLaunchTarget(options = {}) {
   if (!options.pinToCurrentBinary && isRunningFromVersionsDir_2()) {
-    let claudePath = resolveClaudePath();
+    let binPath = claudeBinPath();
     return {
-      cmd: claudePath,
+      cmd: binPath,
       prefixArgs: [],
-      target: claudePath,
+      target: binPath,
     };
   }
   if (isStandaloneExecutable())
@@ -87,14 +86,14 @@ function resolveLaunchTarget(options = {}) {
     target: scriptPath,
   };
 }
-//@ chunk-qrnm62fg.js:922-961 callgraph-fingerprint (2.1.88 match: resolveClaudePath, 0.328)
+//@ chunk-nh327nc2.js:922-961 layout
 /**
  * 本地安装的 claude 路径 <用户 bin 目录>/claude。
  */
-function resolveClaudePath() {
+function claudeBinPath() {
   return join(getUserBinDir(), "claude");
 }
-//@ chunk-qrnm62fg.js:961-1108 placement
+//@ chunk-nh327nc2.js:961-1108 placement
 /**
  * 套上进程包装器前缀。
  */
@@ -107,7 +106,7 @@ function withProcessWrapper(target) {
     target: target.target,
   };
 }
-//@ chunk-qrnm62fg.js:1108-1367 placement
+//@ chunk-nh327nc2.js:1108-1367 placement
 /**
  * 查找已安装的最新版本二进制。
  */
@@ -131,14 +130,14 @@ async function findLatestInstalledVersion() {
   }
   return null;
 }
-//@ chunk-x4gcvpxy.js:2021-2103 placement
+//@ chunk-gvr4gxa7.js:2104-2186 placement
 /**
  * 判断当前进程是否从安装的版本目录运行。
  */
 function isRunningFromVersionsDir() {
   return process.execPath.startsWith(join(getXDGDataHome(), "claude", "versions") + sep);
 }
-//@ chunk-fb29jded.js:701-922 callgraph-witnessed (2.1.88 match: APP_NAME, 0.232)
+//@ chunk-f8a5a0kt.js:701-922 callgraph-witnessed (2.1.88 match: APP_NAME, 0.233)
 /**
  * 协议处理器常量：macOS 包 ~/Applications/Claude Code URL Handler.app（bundle id com.anthropic.claude-code-url-handler）、Linux .desktop 文件名。
  */
@@ -148,7 +147,7 @@ var DESKTOP_FILE_NAME;
 var MACOS_APP_NAME;
 var MACOS_APP_DIR;
 var MACOS_SYMLINK_PATH;
-deferInit("chunk-fb29jded.js:701", () => {
+deferInit("chunk-f8a5a0kt.js:701", () => {
   MACOS_BUNDLE_ID = "com.anthropic.claude-code-url-handler";
   APP_DISPLAY_NAME = "Claude Code URL Handler";
   DESKTOP_FILE_NAME = "claude-code-url-handler.desktop";
@@ -156,35 +155,35 @@ deferInit("chunk-fb29jded.js:701", () => {
   MACOS_APP_DIR = pathModule.join(osModule.homedir(), "Applications", MACOS_APP_NAME);
   MACOS_SYMLINK_PATH = pathModule.join(MACOS_APP_DIR, "Contents", "MacOS", "claude");
 });
-//@ chunk-fb29jded.js:922-973 fingerprint (2.1.88 match: linuxDesktopPath, 1)
+//@ chunk-f8a5a0kt.js:922-973 fingerprint (2.1.88 match: linuxDesktopPath, 1)
 /**
  * Linux .desktop 文件路径 $XDG_DATA_HOME/applications/claude-code-url-handler.desktop。
  */
 function linuxDesktopPath() {
   return pathModule.join(getXDGDataHome(), "applications", DESKTOP_FILE_NAME);
 }
-//@ chunk-fb29jded.js:973-1068 fingerprint (2.1.88 match: WINDOWS_REG_KEY, 0.667)
+//@ chunk-f8a5a0kt.js:973-1068 fingerprint (2.1.88 match: WINDOWS_REG_KEY, 0.667)
 /**
  * Windows 注册表键 HKCU\Software\Classes\claude-cli 及 shell\open\command；注册失败后的退避 24h。
  */
 var WINDOWS_REG_KEY = `HKEY_CURRENT_USER\\Software\\Classes\\${paths}`;
 var WINDOWS_COMMAND_KEY = `${WINDOWS_REG_KEY}\\shell\\open\\command`;
 var FAILURE_BACKOFF_MS = 86400000;
-//@ chunk-fb29jded.js:1068-1118 fingerprint (2.1.88 match: linuxExecLine, 1)
+//@ chunk-f8a5a0kt.js:1068-1118 fingerprint (2.1.88 match: linuxExecLine, 1)
 /**
  * Linux .desktop 的 Exec 行："<claude>" --handle-uri %u。
  */
 function linuxExecLine(claudePath) {
   return `Exec="${claudePath}" --handle-uri %u`;
 }
-//@ chunk-fb29jded.js:1118-1165 fingerprint (2.1.88 match: windowsCommandValue, 1)
+//@ chunk-f8a5a0kt.js:1118-1165 fingerprint (2.1.88 match: windowsCommandValue, 1)
 /**
  * Windows 注册表命令值："<claude>" --handle-uri "%1"。
  */
 function windowsCommandValue(claudePath) {
   return `"${claudePath}" --handle-uri "%1"`;
 }
-//@ chunk-fb29jded.js:1165-2336 fingerprint (2.1.88 match: registerMacos, 1)
+//@ chunk-f8a5a0kt.js:1165-2336 fingerprint (2.1.88 match: registerMacos, 1)
 /**
  * macOS：重建 URL Handler.app（Info.plist 声明 CFBundleURLSchemes claude-cli、LSBackgroundOnly），把 MacOS/claude 符号链接到 claude 可执行文件，并用 lsregister -R 注册。
  */
@@ -240,7 +239,7 @@ async function registerMacos(claudePath) {
   );
   logForDebugging(`Registered ${paths}:// protocol handler at ${MACOS_APP_DIR}`);
 }
-//@ chunk-fb29jded.js:2336-2844 fingerprint (2.1.88 match: registerLinux, 1)
+//@ chunk-f8a5a0kt.js:2336-2844 fingerprint (2.1.88 match: registerLinux, 1)
 /**
  * Linux：写 .desktop（MimeType x-scheme-handler/claude-cli），有 xdg-mime 时设为默认处理器。
  */
@@ -273,7 +272,7 @@ MimeType=x-scheme-handler/${paths};
   }
   logForDebugging(`Registered ${paths}:// protocol handler at ${linuxDesktopPath()}`);
 }
-//@ chunk-fb29jded.js:2844-3184 fingerprint (2.1.88 match: registerWindows, 1)
+//@ chunk-f8a5a0kt.js:2844-3184 fingerprint (2.1.88 match: registerWindows, 1)
 /**
  * Windows：reg add 写 URL 协议键与 open 命令。
  */
@@ -293,12 +292,12 @@ async function registerWindows(claudePath) {
   }
   logForDebugging(`Registered ${paths}:// protocol handler in Windows registry`);
 }
-//@ chunk-fb29jded.js:3184-3379 callgraph-witnessed (2.1.88 match: registerProtocolHandler, 0.599)
+//@ chunk-f8a5a0kt.js:3184-3379 callgraph-witnessed (2.1.88 match: registerProtocolHandler, 0.599)
 /**
  * 按平台注册 claude-cli:// 协议处理器（linux 构建常量折叠为 registerLinux）。
  */
 async function registerProtocolHandler(claudePath) {
-  let resolved = claudePath ?? (await embeddedSearchToolsBinaryPath());
+  let resolved = claudePath ?? (await resolveClaudePath());
   switch ("linux") {
     case "darwin":
       await registerMacos(resolved);
@@ -313,7 +312,17 @@ async function registerProtocolHandler(claudePath) {
       throw Error("Unsupported platform: linux");
   }
 }
-//@ chunk-fb29jded.js:3474-3767 fingerprint (2.1.88 match: isProtocolHandlerCurrent, 0.972)
+//@ chunk-f8a5a0kt.js:3379-3474 callgraph-fingerprint (2.1.88 match: resolveClaudePath, 0.372)
+async function resolveClaudePath() {
+  let binPath = claudeBinPath();
+  try {
+    await promises.realpath(binPath);
+    return binPath;
+  } catch {
+    return process.execPath;
+  }
+}
+//@ chunk-f8a5a0kt.js:3474-3767 fingerprint (2.1.88 match: isProtocolHandlerCurrent, 0.972)
 /**
  * 检查已注册的处理器是否指向当前 claude 路径（macOS 读符号链接、Linux 读 .desktop、Windows 查注册表）。
  */
@@ -337,14 +346,14 @@ async function isProtocolHandlerCurrent(claudePath) {
     return false;
   }
 }
-//@ chunk-fb29jded.js:3767-4756 fingerprint (2.1.88 match: ensureDeepLinkProtocolRegistered, 0.698)
+//@ chunk-f8a5a0kt.js:3767-4756 fingerprint (2.1.88 match: ensureDeepLinkProtocolRegistered, 0.698)
 /**
  * 后台自动注册深链接协议：设置 disableDeepLinkRegistration="disable" 时跳过；已是最新则跳过；24h 内失败过（失败标记文件 .deep-link-register-failed 或 storageV5 state）则跳过；EACCES/ENOSPC 失败时写失败标记。
  */
 async function ensureDeepLinkProtocolRegistered(storage) {
-  if (getInitialSettings_2().disableDeepLinkRegistration === "disable") return;
+  if (getInitialSettings().disableDeepLinkRegistration === "disable") return;
   if (!["darwin", "linux", "win32"].includes("linux")) return;
-  let claudePath = await embeddedSearchToolsBinaryPath();
+  let claudePath = await resolveClaudePath();
   if (await isProtocolHandlerCurrent(claudePath)) return;
   let failureMarkerPath = pathModule.join(getClaudeConfigDir(), ".deep-link-register-failed");
   if (isStorageV5Enabled() && storage !== undefined) {
@@ -385,12 +394,12 @@ async function ensureDeepLinkProtocolRegistered(storage) {
   }
 }
 export {
-  getLaunchCommand,
-  ensureDeepLinkProtocolRegistered,
-  resolveClaudePath,
-  isRunningFromVersionsDir,
+  claudeBinPath,
   withProcessWrapper,
+  resolveLaunchTarget,
+  getLaunchCommand,
   isRunningFromVersionsDir_2,
   findLatestInstalledVersion,
-  resolveLaunchTarget,
+  ensureDeepLinkProtocolRegistered,
+  isRunningFromVersionsDir,
 };

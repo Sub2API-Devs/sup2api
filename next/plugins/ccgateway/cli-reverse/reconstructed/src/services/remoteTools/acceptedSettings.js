@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具宿主接受的设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cc8an1p1.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pd9bp1k5.js (14)
  * attribution: placement 14
  */
 import { join, resolve, basename } from "path";
@@ -21,58 +21,72 @@ import { normalizeCaseForComparison } from "../../utils/permissions/filesystem.j
 import { servedCallsDir } from "../../remote/tools/servedCallLog.js";
 import { readFileSync } from "../../utils/fileRead.js";
 import { isENOENT, getErrnoCode, toError } from "../../utils/errors.js";
-import { writeAndPublishSync } from "../../utils/atomicPublishWrite.js";
+import { syncTarget } from "../../utils/atomicPublishWrite.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { getFirstLine } from "../../utils/stringUtils.js";
 import { logEvent } from "../analytics/index.js";
 import { lit, fromEnum } from "../analytics/safeMetadata.js";
 import { logError } from "../../utils/log.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cc8an1p1.js:1071-1149 placement
+//@ chunk-pd9bp1k5.js:1071-1149 placement
 /**
  * 已接受设置记录（settings-/folder- 两种 .jsonl）的常量：格式版本、文件大小上限、过期清理时间与各种文件名片段。
  */
-var ACCEPTED_SETTINGS_VERSION = 1;
-var MAX_ACCEPTED_SETTINGS_BYTES = 8 * MAX_SETTINGS_JSON_BYTES;
-var STALE_SETTINGS_PRUNE_MS = 900000;
-var ACCEPTED = "accepted-";
-var SETTINGS_FILE_EXT = ".jsonl";
-var SEEN_MARKER_EXT = ".seen";
-var ACCEPTING_TEMP_INFIX = ".accepting-";
-//@ chunk-cc8an1p1.js:1149-1192 placement
+var ACCEPTED_SETTINGS_VERSION; // deferred: uses MAX_SETTINGS_JSON_BYTES (../../utils/settings/settings.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_ACCEPTED_SETTINGS_BYTES;
+var STALE_SETTINGS_PRUNE_MS;
+var ACCEPTED;
+var SETTINGS_FILE_EXT;
+var SEEN_MARKER_EXT;
+var ACCEPTING_TEMP_INFIX;
+deferInit("chunk-pd9bp1k5.js:1071", () => {
+  ACCEPTED_SETTINGS_VERSION = 1;
+  MAX_ACCEPTED_SETTINGS_BYTES = 8 * MAX_SETTINGS_JSON_BYTES;
+  STALE_SETTINGS_PRUNE_MS = 900000;
+  ACCEPTED = "accepted-";
+  SETTINGS_FILE_EXT = ".jsonl";
+  SEEN_MARKER_EXT = ".seen";
+  ACCEPTING_TEMP_INFIX = ".accepting-";
+});
+//@ chunk-pd9bp1k5.js:1149-1192 placement
 /**
  * 计算设置内容哈希；内容为 null 时返回 null。
  */
 function hashOrNull(settings) {
   return settings === null ? null : computeContentHash(settings);
 }
-//@ chunk-cc8an1p1.js:1192-1479 placement
-var ACCEPTED_FILE_RECORD_SCHEMA = DoctorLazy(() =>
-  objectSchema({
-    v: literal(ACCEPTED_SETTINGS_VERSION),
-    kind: literal("file"),
-    path: stringSchema(),
-    text: stringSchema().nullable(),
-    sha256: stringSchema()
-      .regex(/^[0-9a-f]{64}$/)
-      .nullable(),
-    at: stringSchema(),
-    by: _enum(["first_attach", "own_write", "person"]),
-  }),
-);
-var ACCEPTED_FOLDER_RECORD_SCHEMA = DoctorLazy(() =>
-  objectSchema({
-    v: literal(ACCEPTED_SETTINGS_VERSION),
-    kind: literal("folder"),
-    key: stringSchema(),
-    project: stringSchema().nullable(),
-    local: stringSchema().nullable(),
-    legacy: stringSchema().nullable(),
-    at: stringSchema(),
-  }),
-);
-//@ chunk-cc8an1p1.js:1479-1536 placement
+//@ chunk-pd9bp1k5.js:1192-1479 placement
+var ACCEPTED_FILE_RECORD_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ACCEPTED_FOLDER_RECORD_SCHEMA;
+deferInit("chunk-pd9bp1k5.js:1192", () => {
+  ACCEPTED_FILE_RECORD_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      v: literal(ACCEPTED_SETTINGS_VERSION),
+      kind: literal("file"),
+      path: stringSchema(),
+      text: stringSchema().nullable(),
+      sha256: stringSchema()
+        .regex(/^[0-9a-f]{64}$/)
+        .nullable(),
+      at: stringSchema(),
+      by: _enum(["first_attach", "own_write", "person"]),
+    }),
+  );
+  ACCEPTED_FOLDER_RECORD_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      v: literal(ACCEPTED_SETTINGS_VERSION),
+      kind: literal("folder"),
+      key: stringSchema(),
+      project: stringSchema().nullable(),
+      local: stringSchema().nullable(),
+      legacy: stringSchema().nullable(),
+      at: stringSchema(),
+    }),
+  );
+});
+//@ chunk-pd9bp1k5.js:1479-1536 placement
 /**
  * 比较两个路径是否相同（Windows 下忽略盘符大小写）。
  */
@@ -81,18 +95,18 @@ function samePathCaseAware(left, right) {
     ? normalizeDriveLetter(left) === normalizeDriveLetter(right)
     : left === right;
 }
-//@ chunk-cc8an1p1.js:1536-1603 placement
+//@ chunk-pd9bp1k5.js:1536-1603 placement
 /**
  * 把路径的盘符字母转成大写，供 Windows 路径比较。
  */
 function normalizeDriveLetter(path) {
   return path.replace(/^[a-z](?=:)/, (letter) => letter.toUpperCase());
 }
-//@ chunk-cc8an1p1.js:1603-1647 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-pd9bp1k5.js:1603-1647 placement (2.1.88 match: setCwdState, 1)
 function nfcKey(cwd) {
   return normalizeCaseForComparison(cwd.normalize("NFC"));
 }
-//@ chunk-cc8an1p1.js:1647-1726 placement
+//@ chunk-pd9bp1k5.js:1647-1726 placement
 /**
  * 按规范化路径算出的哈希拼出「已接受设置」记录文件路径。
  */
@@ -102,7 +116,7 @@ function settingsRecordPath(serverPath, dir = servedCallsDir()) {
     `${ACCEPTED}settings-${computeContentHash(nfcKey(resolve(serverPath))).slice(0, 32)}${SETTINGS_FILE_EXT}`,
   );
 }
-//@ chunk-cc8an1p1.js:1726-1800 placement
+//@ chunk-pd9bp1k5.js:1726-1800 placement
 /**
  * 按文件夹名哈希拼出「已接受文件夹设置」记录路径。
  */
@@ -112,14 +126,14 @@ function folderRecordPath(folderKey, dir = servedCallsDir()) {
     `${ACCEPTED}folder-${computeContentHash(nfcKey(folderKey)).slice(0, 32)}${SETTINGS_FILE_EXT}`,
   );
 }
-//@ chunk-cc8an1p1.js:1800-1851 placement
+//@ chunk-pd9bp1k5.js:1800-1851 placement
 /**
  * 把 .jsonl 记录路径换成 .seen 存在标记路径。
  */
 function seenMarkerPath(recordPath) {
   return `${recordPath.slice(0, -SETTINGS_FILE_EXT.length)}${SEEN_MARKER_EXT}`;
 }
-//@ chunk-cc8an1p1.js:1851-1986 placement
+//@ chunk-pd9bp1k5.js:1851-1986 placement
 function readAcceptedRecord(recordPath) {
   try {
     return readFileSync(recordPath, MAX_ACCEPTED_SETTINGS_BYTES);
@@ -134,7 +148,7 @@ function readAcceptedRecord(recordPath) {
   }
   throw Error("record aged out");
 }
-//@ chunk-cc8an1p1.js:1986-2036 placement
+//@ chunk-pd9bp1k5.js:1986-2036 placement
 /**
  * 把文件的访问与修改时间更新为当前时间，用于保留标记（失败忽略）。
  */
@@ -144,7 +158,7 @@ function touchFile(path) {
     utimesSync(path, date, date);
   } catch {}
 }
-//@ chunk-cc8an1p1.js:2036-3582 placement
+//@ chunk-pd9bp1k5.js:2036-3582 placement
 /**
  * 远程工具宿主"已接受设置"的记录存储：按路径记录文件文本与哈希、按文件夹记录项目/本地/旧版设置；读取时校验格式与哈希，不可读返回 "unreadable"；写入采用原子发布并维护存在标记。
  */
@@ -166,7 +180,7 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
     try {
-      writeAndPublishSync(
+      syncTarget(
         recordPath,
         `${jsonStringify(record)}
 `,
@@ -290,7 +304,7 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
     },
   };
 }
-//@ chunk-cc8an1p1.js:3582-3826 placement
+//@ chunk-pd9bp1k5.js:3582-3826 placement
 async function pruneStaleSettingsCopies(dir) {
   try {
     let cutoffMs = Date.now() - STALE_SETTINGS_PRUNE_MS;
@@ -307,7 +321,7 @@ async function pruneStaleSettingsCopies(dir) {
     }
   } catch {}
 }
-//@ chunk-cc8an1p1.js:3826-4488 placement
+//@ chunk-pd9bp1k5.js:3826-4488 placement
 /**
  * 把待审设置写成临时文件交给检查函数，检查后确认文件未被替换（inode、大小、内容一致），返回 allowed/blocked/tampered，最后删除临时文件。
  */
@@ -357,4 +371,4 @@ async function checkSettingsCopy(settings, isBlocked) {
     }).catch(() => {});
   }
 }
-export { hashOrNull, checkSettingsCopy, createAcceptedSettingsStore };
+export { createAcceptedSettingsStore, hashOrNull, checkSettingsCopy };

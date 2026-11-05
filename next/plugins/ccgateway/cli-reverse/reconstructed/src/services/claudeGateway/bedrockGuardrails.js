@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Bedrock guardrails 配置与应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (19)
  * attribution: placement 19
  */
 import { randomBytes } from "crypto";
@@ -33,7 +33,7 @@ import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1337441-1337566 placement
+//@ chunk-1hnjmk23.js:1338404-1338529 placement
 /**
  * Bedrock guardrail 输入标记的四种范围。
  */
@@ -44,21 +44,21 @@ var GUARDRAIL_INPUT_TAGGING_MODES = [
   "all_messages",
   "all_messages_and_system",
 ];
-//@ chunk-1ny7cxrt.js:1337566-1337637 placement
+//@ chunk-1hnjmk23.js:1338529-1338600 placement
 /**
  * 判断值是否为普通对象（非 null、非数组）。
  */
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-1ny7cxrt.js:1337637-1337687 placement
+//@ chunk-1hnjmk23.js:1338600-1338650 placement
 /**
  * 判断内容块是否属于 assistant 消息（块上有 role==="assistant"）。
  */
 function isAssistantMessageBlock(message) {
   return isPlainObject(message) && message.role === "assistant";
 }
-//@ chunk-1ny7cxrt.js:1337687-1337793 placement
+//@ chunk-1hnjmk23.js:1338650-1338756 placement
 /**
  * 把文本包进 Bedrock guardContent 标签（带随机后缀），空文本不包。
  */
@@ -67,7 +67,7 @@ function wrapGuardContent(counter, text) {
   counter.used = true;
   return `<${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${counter.suffix}>${text}</${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${counter.suffix}>`;
 }
-//@ chunk-1ny7cxrt.js:1337793-1337894 placement
+//@ chunk-1hnjmk23.js:1338756-1338857 placement
 /**
  * 包裹消息内容（字符串或内容块数组）。
  */
@@ -75,7 +75,7 @@ function wrapContent(counter, content) {
   if (typeof content === "string") return wrapGuardContent(counter, content);
   return Array.isArray(content) ? content.map((block) => wrapContentBlock(counter, block)) : content;
 }
-//@ chunk-1ny7cxrt.js:1337894-1337964 placement
+//@ chunk-1hnjmk23.js:1338857-1338927 placement
 /**
  * 给消息的 content 套上 guardrail 标签（无 content 的消息原样返回）。
  */
@@ -87,7 +87,7 @@ function wrapMessageContentBlocks(counter, block) {
       }
     : block;
 }
-//@ chunk-1ny7cxrt.js:1337964-1338371 placement
+//@ chunk-1hnjmk23.js:1338927-1339334 placement
 /**
  * 包裹单个内容块：文本、文档（含上下文）、工具/搜索结果。
  */
@@ -118,7 +118,7 @@ function wrapContentBlock(counter, block) {
     ? wrapMessageContentBlocks(counter, block)
     : block;
 }
-//@ chunk-1ny7cxrt.js:1338371-1339013 placement
+//@ chunk-1hnjmk23.js:1339334-1339976 placement
 /**
  * 按模式（最后一条/用户消息/全部/含 system）给请求加 guardContent 标签与 guardrailConfig；没有包裹任何内容时原样返回。
  */
@@ -169,15 +169,15 @@ function applyBedrockGuardrails(body, inputTagging) {
     );
   return counter.used ? tagged : body;
 }
-//@ chunk-1ny7cxrt.js:1339013-1339031 placement
+//@ chunk-1hnjmk23.js:1339976-1339994 placement
 /**
  * 导入的转义正则工具模块；本文件未直接使用。
  */
 var escapeRegExpModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1339013", () => {
+deferInit("chunk-1hnjmk23.js:1339976", () => {
   escapeRegExpModule = __toESM(require_node_http_handler(), 1);
 });
-//@ chunk-1ny7cxrt.js:1339031-1339216 placement
+//@ chunk-1hnjmk23.js:1339994-1340179 placement
 /**
  * 字符串中是否以完整词出现某片段。
  */
@@ -190,7 +190,7 @@ function containsWholeWord(text, word) {
   }
   return false;
 }
-//@ chunk-1ny7cxrt.js:1339216-1339308 placement
+//@ chunk-1hnjmk23.js:1340179-1340271 placement
 /**
  * 判断列表里是否有以该名称开头、随后接 “-” 的更具体条目。
  */
@@ -198,7 +198,7 @@ function hasMoreSpecificNameEntry(name, entry) {
   if (!name.startsWith(entry)) return false;
   return name.length === entry.length || name[entry.length] === "-";
 }
-//@ chunk-1ny7cxrt.js:1339308-1339460 placement
+//@ chunk-1hnjmk23.js:1340271-1340423 placement
 /**
  * 列表中是否有以该名称加 “-” 开头的更具体条目。
  */
@@ -212,7 +212,7 @@ function hasLongerVariant(modelName, names) {
   }
   return false;
 }
-//@ chunk-1ny7cxrt.js:1339460-1339582 placement
+//@ chunk-1hnjmk23.js:1340423-1340545 placement
 /**
  * exact 匹配模式下模型条目是否匹配。
  */
@@ -222,7 +222,7 @@ function matchesExactEntry(modelName, entry) {
   let modelId = parseModelId(modelName);
   return modelId !== null && modelEntryMatches(classified, modelId, isLatestAlias(modelName, modelId));
 }
-//@ chunk-1ny7cxrt.js:1339582-1339954 placement
+//@ chunk-1hnjmk23.js:1340545-1340917 placement
 /**
  * 模型是否在可用模型列表中（支持别名、家族、词边界、claude- 前缀）。
  */
@@ -244,7 +244,7 @@ function isModelAvailable(model, availableModels, availableModelsMatch) {
   }
   return false;
 }
-//@ chunk-1ny7cxrt.js:1339954-1340082 placement
+//@ chunk-1hnjmk23.js:1340917-1341045 placement
 /**
  * 模型是否命中 deniedModels。
  */
@@ -256,7 +256,7 @@ function isModelDenied(modelName, deniedModels) {
     return entry !== null && deniedModelsEntryMatches(entry, lower, parsed);
   });
 }
-//@ chunk-1ny7cxrt.js:1340082-1340288 placement
+//@ chunk-1hnjmk23.js:1341045-1341251 placement
 /**
  * 模型限制结果：denied / unlisted / null。
  */
@@ -274,7 +274,7 @@ function modelRestriction(modelName, policy, model) {
     ? "unlisted"
     : null;
 }
-//@ chunk-1ny7cxrt.js:1340288-1340653 placement
+//@ chunk-1hnjmk23.js:1341251-1341616 placement
 /**
  * Bedrock guardrail trace 中各策略的列表字段与保留属性。
  */
@@ -287,7 +287,7 @@ var GUARDRAIL_POLICY_FIELDS = [
   ["sensitiveInformationPolicy", "regexes", ["name"]],
   ["contextualGroundingPolicy", "filters", ["type", "score", "threshold"]],
 ];
-//@ chunk-1ny7cxrt.js:1340653-1341143 placement
+//@ chunk-1hnjmk23.js:1341616-1342106 placement
 /**
  * 从 Bedrock 响应中取出 guardrail trace（删除原字段），有命中或干预时上报 guardrail.trace。
  */
@@ -314,7 +314,7 @@ function reportGuardrailTrace(event, logContext) {
       filters,
     });
 }
-//@ chunk-1ny7cxrt.js:1341143-1341439 placement
+//@ chunk-1hnjmk23.js:1342106-1342402 placement
 /**
  * 收集 trace 中检测到的过滤项（方向、guardrail、策略、动作等）。
  */

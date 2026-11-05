@@ -1,13 +1,13 @@
 /**
  * eventsource-parser/dist/stream.esm.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: eventsource-parser@3.0.8
- * pieces: chunk-j4cx2j3j.js (1)
+ * pieces: chunk-dqgw68pw.js (1)
  * attribution: esm-fingerprint 1
  */
 import { createParser } from "./index.js";
 
-//@ chunk-j4cx2j3j.js:228-487 esm-fingerprint
+//@ chunk-dqgw68pw.js:228-487 esm-fingerprint
 class EventSourceParserStream extends TransformStream {
   constructor({ onError, onRetry, onComment } = {}) {
     let parser;

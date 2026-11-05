@@ -3,9 +3,9 @@
  *
  * AWS SSO 客户端（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-kejz1rpb.js (18)
+ * pieces: chunk-tvcdn76c.js (18)
  * attribution: placement 3, esm-fingerprint 10, esm-layout 5
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
@@ -53,7 +53,7 @@ import { require_middleware_endpoint } from "../../../../../@smithy/middleware-e
 import { require_schema } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-kejz1rpb.js:4847-4957 placement
+//@ chunk-tvcdn76c.js:4847-4957 placement
 var import_core_2 = __toESM(require_core_2());
 var import_util_user_agent_node = __toESM(require_util_user_agent_node());
 var import_index_native = __toESM(require_index_native());
@@ -63,7 +63,7 @@ var import_node_config_provider = __toESM(require_node_config_provider());
 var import_node_http_handler = __toESM(require_node_http_handler());
 var import_util_body_length_node = __toESM(bodyLengthNodeModule());
 var import_index_browser_2 = __toESM(require_index_browser_2());
-//@ chunk-kejz1rpb.js:4957-5044 placement
+//@ chunk-tvcdn76c.js:4957-5044 placement
 var import_core_2_2 = __toESM(require_core_2());
 var import_protocols = __toESM(require_protocols());
 var import_core = __toESM(require_core());
@@ -71,15 +71,15 @@ var import_client = __toESM(require_client());
 var import_url_parser = __toESM(require_url_parser());
 var import_util_retry = __toESM(base64Module());
 var import_util_utf8 = __toESM(require_util_utf8());
-//@ chunk-kejz1rpb.js:5044-5071 placement
+//@ chunk-tvcdn76c.js:5044-5071 placement
 var import_util_endpoints = __toESM(require_util_endpoints());
 var import_index_browser = __toESM(require_index_browser());
-//@ chunk-kejz1rpb.js:7616-7669 esm-fingerprint
+//@ chunk-tvcdn76c.js:7616-7669 esm-fingerprint
 // deferred: uses import_util_endpoints of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:7616", () => {
+deferInit("chunk-tvcdn76c.js:7616", () => {
   import_index_browser.customEndpointFunctions.aws = import_util_endpoints.awsEndpointFunctions;
 });
-//@ chunk-kejz1rpb.js:7669-8528 esm-fingerprint
+//@ chunk-tvcdn76c.js:7669-8528 esm-fingerprint
 var getRuntimeConfig$1 = (config) => ({
   apiVersion: "2019-06-10",
   base64Decoder: config?.base64Decoder ?? import_util_retry.fromBase64,
@@ -111,12 +111,12 @@ var getRuntimeConfig$1 = (config) => ({
   utf8Decoder: config?.utf8Decoder ?? import_util_utf8.fromUtf8,
   utf8Encoder: config?.utf8Encoder ?? import_util_utf8.toUtf8,
 });
-//@ chunk-kejz1rpb.js:8528-9926 esm-layout
+//@ chunk-tvcdn76c.js:8528-9926 esm-layout
 var import_client_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var import_node_config_provider_2;
 var import_client_4;
 var getRuntimeConfig;
-deferInit("chunk-kejz1rpb.js:8528", () => {
+deferInit("chunk-tvcdn76c.js:8528", () => {
   import_client_3 = __toESM(require_client());
   import_node_config_provider_2 = __toESM(require_node_config_provider_2());
   import_client_4 = __toESM(require_client());
@@ -193,16 +193,16 @@ deferInit("chunk-kejz1rpb.js:8528", () => {
     };
   };
 });
-//@ chunk-kejz1rpb.js:9926-9964 esm-layout
+//@ chunk-tvcdn76c.js:9926-9964 esm-layout
 var import_region_config_resolver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var import_protocol_http;
 var import_client_5;
-deferInit("chunk-kejz1rpb.js:9926", () => {
+deferInit("chunk-tvcdn76c.js:9926", () => {
   import_region_config_resolver = __toESM(require_region_config_resolver());
   import_protocol_http = __toESM(require_protocol_http());
   import_client_5 = __toESM(require_client());
 });
-//@ chunk-kejz1rpb.js:9964-10431 esm-fingerprint
+//@ chunk-tvcdn76c.js:9964-10431 esm-fingerprint
 var getHttpAuthExtensionConfiguration = (config) => {
   let {
     httpAuthSchemes: _httpAuthSchemes,
@@ -237,7 +237,7 @@ var resolveHttpAuthRuntimeConfig = (config) => ({
   httpAuthSchemeProvider: config.httpAuthSchemeProvider(),
   credentials: config.credentials(),
 });
-//@ chunk-kejz1rpb.js:10431-10769 esm-fingerprint
+//@ chunk-tvcdn76c.js:10431-10769 esm-fingerprint
 var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
   let extensionConfiguration = Object.assign(
     import_region_config_resolver.getAwsRegionExtensionConfiguration(runtimeConfig),
@@ -254,9 +254,9 @@ var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
     resolveHttpAuthRuntimeConfig(extensionConfiguration),
   );
 };
-//@ chunk-kejz1rpb.js:10769-11828 esm-fingerprint
+//@ chunk-tvcdn76c.js:10769-11828 esm-fingerprint
 let SSOClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-kejz1rpb.js:10769", () => {
+deferInit("chunk-tvcdn76c.js:10769", () => {
   SSOClient = class SSOClient extends import_client_2.Client {
     config;
     constructor(...[configuration]) {
@@ -297,26 +297,26 @@ deferInit("chunk-kejz1rpb.js:10769", () => {
     }
   };
 });
-//@ chunk-kejz1rpb.js:11828-11856 esm-layout
+//@ chunk-tvcdn76c.js:11828-11856 esm-layout
 var import_middleware_endpoint_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var import_client_6;
-deferInit("chunk-kejz1rpb.js:11828", () => {
+deferInit("chunk-tvcdn76c.js:11828", () => {
   import_middleware_endpoint_2 = __toESM(require_middleware_endpoint());
   import_client_6 = __toESM(require_client());
 });
-//@ chunk-kejz1rpb.js:11856-11871 esm-layout
+//@ chunk-tvcdn76c.js:11856-11871 esm-layout
 var import_schema_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-kejz1rpb.js:11856", () => {
+deferInit("chunk-tvcdn76c.js:11856", () => {
   import_schema_2 = __toESM(require_schema());
 });
-//@ chunk-kejz1rpb.js:11871-11887 esm-layout
+//@ chunk-tvcdn76c.js:11871-11887 esm-layout
 var import_client_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-kejz1rpb.js:11871", () => {
+deferInit("chunk-tvcdn76c.js:11871", () => {
   import_client_7 = __toESM(require_client());
 });
-//@ chunk-kejz1rpb.js:11887-11988 esm-fingerprint
+//@ chunk-tvcdn76c.js:11887-11988 esm-fingerprint
 let SSOServiceException; // deferred: uses import_client_7 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:11887", () => {
+deferInit("chunk-tvcdn76c.js:11887", () => {
   SSOServiceException = class SSOServiceException extends import_client_7.ServiceException {
     constructor(options) {
       super(options);
@@ -324,9 +324,9 @@ deferInit("chunk-kejz1rpb.js:11887", () => {
     }
   };
 });
-//@ chunk-kejz1rpb.js:11988-12170 esm-fingerprint
+//@ chunk-tvcdn76c.js:11988-12170 esm-fingerprint
 let InvalidRequestException_2; // deferred: uses SSOServiceException of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:11988", () => {
+deferInit("chunk-tvcdn76c.js:11988", () => {
   InvalidRequestException_2 = class InvalidRequestException_2 extends SSOServiceException {
     name = "InvalidRequestException";
     $fault = "client";
@@ -340,9 +340,9 @@ deferInit("chunk-kejz1rpb.js:11988", () => {
     }
   };
 });
-//@ chunk-kejz1rpb.js:12170-12356 esm-fingerprint
+//@ chunk-tvcdn76c.js:12170-12356 esm-fingerprint
 let ResourceNotFoundException_2; // deferred: uses SSOServiceException of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:12170", () => {
+deferInit("chunk-tvcdn76c.js:12170", () => {
   ResourceNotFoundException_2 = class ResourceNotFoundException_2 extends SSOServiceException {
     name = "ResourceNotFoundException";
     $fault = "client";
@@ -356,9 +356,9 @@ deferInit("chunk-kejz1rpb.js:12170", () => {
     }
   };
 });
-//@ chunk-kejz1rpb.js:12356-12540 esm-fingerprint
+//@ chunk-tvcdn76c.js:12356-12540 esm-fingerprint
 let TooManyRequestsException_2; // deferred: uses SSOServiceException of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:12356", () => {
+deferInit("chunk-tvcdn76c.js:12356", () => {
   TooManyRequestsException_2 = class TooManyRequestsException_2 extends SSOServiceException {
     name = "TooManyRequestsException";
     $fault = "client";
@@ -372,9 +372,9 @@ deferInit("chunk-kejz1rpb.js:12356", () => {
     }
   };
 });
-//@ chunk-kejz1rpb.js:12540-12718 esm-fingerprint
+//@ chunk-tvcdn76c.js:12540-12718 esm-fingerprint
 let UnauthorizedException_2; // deferred: uses SSOServiceException of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:12540", () => {
+deferInit("chunk-tvcdn76c.js:12540", () => {
   UnauthorizedException_2 = class UnauthorizedException_2 extends SSOServiceException {
     name = "UnauthorizedException";
     $fault = "client";
@@ -389,6 +389,7 @@ deferInit("chunk-kejz1rpb.js:12540", () => {
   };
 });
 export {
+  import_index_browser,
   import_schema_2,
   InvalidRequestException_2,
   ResourceNotFoundException_2,
@@ -397,6 +398,5 @@ export {
   SSOServiceException,
   import_client_6,
   import_middleware_endpoint_2,
-  import_index_browser,
   SSOClient,
 };

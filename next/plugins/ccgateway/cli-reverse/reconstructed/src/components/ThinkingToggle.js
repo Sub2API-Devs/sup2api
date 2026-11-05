@@ -3,9 +3,9 @@
  *
  * /thinking 开关对话框：启用/禁用本会话的扩展思考。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ThinkingToggle.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -25,10 +25,10 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { Pane } from "./design-system/Pane.js";
 
-//@ chunk-18hwfzwa.js:676084-676166 affinity
+//@ chunk-czq1j3j2.js:696813-696895 affinity
 var THINKING_TOGGLE_TITLE = "Toggle thinking mode";
 var THINKING_TOGGLE_DESCRIPTION = "Enable or disable thinking for this session.";
-//@ chunk-18hwfzwa.js:676166-678371 fingerprint (2.1.88 match: ThinkingToggle, 0.819)
+//@ chunk-czq1j3j2.js:696895-699101 fingerprint (2.1.88 match: ThinkingToggle, 0.819)
 function ThinkingToggle(props) {
   let $ = useMemoCache(24);
   let { currentValue, onSelect, onCancel, isMidConversation } = props;

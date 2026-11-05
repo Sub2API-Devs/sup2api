@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：扫描 artifact 评论线程、发现新评论
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (30)
  * attribution: placement 30
  */
 import { createHash } from "crypto";
@@ -73,7 +73,7 @@ import { canHandToThreadAgent } from "./backgroundAgent.js";
 import { isAbortError } from "../../../utils/errors.js";
 import { logError } from "../../../utils/log.js";
 
-//@ chunk-9tgt55am.js:64634-64780 placement
+//@ chunk-c0pq6qyx.js:60542-60688 placement
 /**
  * 重置某 artifact 的自动回复记录：台账条目清空线程，内存状态清掉线程与基线并更新账号，随后立即刷写台账。
  */
@@ -92,7 +92,7 @@ function resetAutoReactForSlug(slug) {
     flush: true,
   });
 }
-//@ chunk-9tgt55am.js:64780-64891 placement
+//@ chunk-c0pq6qyx.js:60688-60799 placement
 function clearArtifactThreads(slug) {
   slug.threads.clear();
   slug.baselined = false;
@@ -100,7 +100,7 @@ function clearArtifactThreads(slug) {
   slug.stampHighWater = null;
   slug.lastReadDigest = null;
 }
-//@ chunk-9tgt55am.js:64891-65550 placement
+//@ chunk-c0pq6qyx.js:60799-61458 placement
 /**
  * 用台账条目恢复某 artifact 的自动回复状态：时间戳高水位、基线标志、回合时间戳、各线程已见/已发送/自己的回复 id 等，并打点。
  */
@@ -132,7 +132,7 @@ function rehydrateFromLedger(state, ledgerEntry) {
     ledger_threads: ledgerEntry.threads?.length ?? -1,
   });
 }
-//@ chunk-9tgt55am.js:65550-66220 placement
+//@ chunk-c0pq6qyx.js:61458-62128 placement
 /**
  * 取（或新建）某 artifact 的自动回复内存状态；新建时从台账恢复；账号变化且不在扫描中时清空线程并换账号。
  */
@@ -176,7 +176,7 @@ function getAutoReactArtifactState(slug) {
   }
   return state;
 }
-//@ chunk-9tgt55am.js:66220-66332 placement
+//@ chunk-c0pq6qyx.js:62128-62240 placement
 /**
  * 清掉一小时前的自动回合时间戳，返回本小时自动回合数是否仍低于上限。
  */
@@ -186,7 +186,7 @@ function withinHourlyTurnCap(artifactState, now) {
   );
   return artifactState.turnTimestamps.length < getMaxAutoTurns();
 }
-//@ chunk-9tgt55am.js:66332-66495 placement
+//@ chunk-c0pq6qyx.js:62240-62403 placement
 /**
  * 取 artifact 名字并做成带双引号的安全显示文本（内部引号与同形字换成单引号）；取不到时返回给定的默认值。
  */
@@ -197,7 +197,7 @@ function quoteArtifactName(getTitle, url) {
   if (safeTitle === null) return url;
   return `"${foldFullwidthColon(safeTitle.replace(/"/g, "'").replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'"))}"`;
 }
-//@ chunk-9tgt55am.js:66495-66712 placement
+//@ chunk-c0pq6qyx.js:62403-62620 placement
 function splitPublishMessages(transcript) {
   let publishTranscript = transcript.publishTranscript;
   let publishMessages = publishTranscript !== undefined ? getSyntheticToolMessages(publishTranscript) : [];
@@ -211,7 +211,7 @@ function splitPublishMessages(transcript) {
     publishTranscript: undefined,
   };
 }
-//@ chunk-9tgt55am.js:66712-66822 placement
+//@ chunk-c0pq6qyx.js:62620-62730 placement
 function appendContextMessages(context, publishMessages) {
   return {
     ...context,
@@ -219,7 +219,7 @@ function appendContextMessages(context, publishMessages) {
     sameTurnToolUses: undefined,
   };
 }
-//@ chunk-9tgt55am.js:66822-67009 placement
+//@ chunk-c0pq6qyx.js:62730-62917 placement
 function withPublishTranscript(request) {
   if (request.publishTranscript === undefined) return request;
   let { publishMessages, publishTranscript } = splitPublishMessages(request);
@@ -230,7 +230,7 @@ function withPublishTranscript(request) {
     context: appendContextMessages(request.context, publishMessages),
   };
 }
-//@ chunk-9tgt55am.js:67009-69418 placement
+//@ chunk-c0pq6qyx.js:62917-65326 placement
 /**
  * 安排一次评论线程扫描（防抖合并）：根据是 seed/confirm/reentry/普通唤醒决定延迟，正在扫描时登记重扫参数，已有定时器时合并待确认/待播种的唤醒并重设定时器；到点后执行扫描。
  */
@@ -381,7 +381,7 @@ function scheduleThreadScan(wake) {
     : null;
   wakeState.coalesceTimer = setTimeout(runScheduledScan, ceilRetryDelay(delayMs), wakeState, wakeArgs);
 }
-//@ chunk-9tgt55am.js:69418-69646 placement
+//@ chunk-c0pq6qyx.js:65326-65554 placement
 function runScheduledScan(wakeState, wake) {
   wakeState.coalesceTimer = null;
   wakeState.pendingConfirm = null;
@@ -395,7 +395,7 @@ function runScheduledScan(wakeState, wake) {
     });
   wakeState.inFlightScan = pendingScan;
 }
-//@ chunk-9tgt55am.js:69646-69885 placement
+//@ chunk-c0pq6qyx.js:65554-65793 placement
 function clearReadRetry(wakeState, wake) {
   if (wake && wakeState.readRetryAttempts > 0)
     logFeatureOk("artifact_comments_autoreact", {
@@ -408,7 +408,7 @@ function clearReadRetry(wakeState, wake) {
     wakeState.readRetryTimer = null;
   }
 }
-//@ chunk-9tgt55am.js:69885-70216 placement
+//@ chunk-c0pq6qyx.js:65793-66124 placement
 /**
  * 评论读取失败后按退避安排重试扫描；超过最大次数时打点放弃并清零。
  */
@@ -436,7 +436,7 @@ function scheduleReadRetry(scannerState, wake, retryDelayMs) {
   );
   scannerState.readRetryTimer.unref?.();
 }
-//@ chunk-9tgt55am.js:70216-70416 placement
+//@ chunk-c0pq6qyx.js:66124-66324 placement
 function runReadRetry(wakeState, wake) {
   wakeState.readRetryTimer = null;
   if (isSlugStoppedAnywhere(wake.slug) || wake.abort.signal.aborted) {
@@ -452,9 +452,9 @@ function runReadRetry(wakeState, wake) {
     reentry: true,
   });
 }
-//@ chunk-9tgt55am.js:70416-70429 placement
+//@ chunk-c0pq6qyx.js:66324-66337 placement
 var EMPTY_THREAD_GRACE_MS = 60000;
-//@ chunk-9tgt55am.js:70429-71253 placement
+//@ chunk-c0pq6qyx.js:66337-67161 placement
 /**
  * 对还没有任何评论线程的 artifact 提前完成基线：确认没有待处理唤醒、扫描、重试，自动回复已开启且读取不受规则限制后，取消定时器、记基线与空摘要并刷写台账；返回是否完成。
  */
@@ -513,7 +513,7 @@ function settleEmptyArtifact(slug, wakeSnapshot, readAt) {
   flushAutoreactLedger();
   return true;
 }
-//@ chunk-9tgt55am.js:71253-75009 placement
+//@ chunk-c0pq6qyx.js:67161-70917 placement
 /**
  * 扫描单个 artifact 的评论线程，处理空闲补扫、忙碌跳过并派发新评论。
  */
@@ -770,7 +770,7 @@ async function scanArtifactThreads(request) {
     }
   }
 }
-//@ chunk-9tgt55am.js:75009-75552 placement
+//@ chunk-c0pq6qyx.js:70917-71460 placement
 /**
  * 计算线程列表的 sha256 摘要（线程 id、外部解决时间、激活时间、非自己回复的评论 id 与发送时间），用于判断是否有变化；遇到降级数据返回 null。
  */
@@ -799,7 +799,7 @@ function digestThreads(threads, scanState) {
   }
   return hash.digest("hex");
 }
-//@ chunk-9tgt55am.js:75552-75733 placement
+//@ chunk-c0pq6qyx.js:71460-71641 placement
 /**
  * 记录本会话自己发出的回复 id（账户纪元不符且不是自己发的回复时忽略）；缺少 id 时标记记录不完整。
  */
@@ -811,7 +811,7 @@ function recordOwnReply(slug, { commentId, epoch }) {
     slug.ownReplyIds.add(commentId);
   } else slug.ownReplyIdsIncomplete = true;
 }
-//@ chunk-9tgt55am.js:75733-75834 placement
+//@ chunk-c0pq6qyx.js:71641-71742 placement
 /**
  * 返回自己回复的 id 集合与扫描行 id；记录不完整时返回 undefined。
  */
@@ -823,7 +823,7 @@ function getOwnReplyInfo(slug, scanRowIds) {
         scanRowIds,
       };
 }
-//@ chunk-9tgt55am.js:75834-76201 placement
+//@ chunk-c0pq6qyx.js:71742-72109 placement
 /**
  * 把回复权限被拒的原因归类：规则拒绝、自动模式拒绝（含分类器不可用、无结论），其他为 blocked。
  */
@@ -849,17 +849,17 @@ function describeReplyDenial(denial) {
     errorCode: "denied_other",
   };
 }
-//@ chunk-9tgt55am.js:76201-76238 placement
+//@ chunk-c0pq6qyx.js:72109-72146 placement
 var TENGU_SORREL_TRELLIS_GUSSET = "tengu_sorrel_trellis_gusset";
-//@ chunk-9tgt55am.js:76238-76273 placement
+//@ chunk-c0pq6qyx.js:72146-72181 placement
 function isGussetFlagOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_GUSSET, false) === true;
 }
-//@ chunk-9tgt55am.js:76273-76310 placement
+//@ chunk-c0pq6qyx.js:72181-72218 placement
 function canUseClassifierArbiter(context) {
   return getAutoModeArbiterIssue(context) === undefined;
 }
-//@ chunk-9tgt55am.js:76310-76444 placement
+//@ chunk-c0pq6qyx.js:72218-72352 placement
 /**
  * 检查自动模式下能否用分类器做仲裁：角色不是 arbiter 或该 beta 已退役时返回原因。
  */
@@ -868,7 +868,7 @@ function getAutoModeArbiterIssue(context) {
   if (getAutoModeClassifierRole(mode) !== "arbiter") return "classifier_role_not_arbiter";
   return canAttachServerClassifierBeta(mode) ? undefined : "arbiter_beta_retired";
 }
-//@ chunk-9tgt55am.js:76444-76906 placement
+//@ chunk-c0pq6qyx.js:72352-72814 placement
 /**
  * 判断线程最后一条代理回复之后是否没有新的召唤/人类评论/激活手势（即最后一条代理回复仍然是最新回应）。
  */
@@ -904,13 +904,13 @@ function isLastAgentReplyCurrent(thread) {
     !hasCommentSentAfter(summonsForOrdering, lastComment)
   );
 }
-//@ chunk-9tgt55am.js:76906-76942 placement
+//@ chunk-c0pq6qyx.js:72814-72850 placement
 var TENGU_SORREL_TRELLIS_NEWEL = "tengu_sorrel_trellis_newel";
-//@ chunk-9tgt55am.js:76942-76977 placement
+//@ chunk-c0pq6qyx.js:72850-72885 placement
 function isNewelFlagOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_NEWEL, false) === true;
 }
-//@ chunk-9tgt55am.js:76977-77497 placement
+//@ chunk-c0pq6qyx.js:72885-73406 placement
 /**
  * 判断能否为线程派生后台回复：线程已激活、有待处理召唤且未被宿主认领、有回复工具和本地源页、未超每小时上限、宿主入口下能交给线程代理，最后检查回复权限；出错返回 false。
  */
@@ -952,7 +952,7 @@ async function canForkThreadReply(options) {
     return false;
   }
 }
-//@ chunk-9tgt55am.js:77497-77626 placement
+//@ chunk-c0pq6qyx.js:73406-73535 placement
 /**
  * 安全地检查回复权限：出错时记日志打点（中断除外）并返回 false。
  */

@@ -3,9 +3,9 @@
  *
  * 远程工作密钥被拒时的刷新逻辑（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cg2r2hy6.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-66b9fbd5.js (8)
  * attribution: placement 8
  */
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_2 } from "../services/projects/threadRows.js";
@@ -24,8 +24,9 @@ import {
 } from "./workSecret.js";
 import { decodeJwtExpiry, getJwtSessionId } from "./jwtUtils.js";
 import { toSDKMessages } from "../utils/messages/mappers.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 
-//@ chunk-cg2r2hy6.js:24718-25015 placement
+//@ chunk-66b9fbd5.js:25929-26226 placement
 /**
  * 把转录消息逐条转发给桥接端（记录已发送 uuid），最后一条压缩边界附带保留的消息 id，子代理消息附带 agentId。
  */
@@ -47,7 +48,7 @@ function forwardTranscriptMessages(uploadRows, messages, serverUuids, agentId) {
     });
   }
 }
-//@ chunk-cg2r2hy6.js:25015-25131 placement (2.1.88 match: isCompactBoundaryMessage, 0.824)
+//@ chunk-66b9fbd5.js:26226-26342 placement (2.1.88 match: isCompactBoundaryMessage, 0.824)
 function isCompactBoundaryMessage(message) {
   return new Set(
     compactBoundaryUuids(
@@ -57,13 +58,13 @@ function isCompactBoundaryMessage(message) {
     ),
   );
 }
-//@ chunk-cg2r2hy6.js:25131-25218 placement
+//@ chunk-66b9fbd5.js:26342-26429 placement
 function compactBoundaryUuids(events) {
   return (events ?? []).map((event) => event.payload.uuid).filter((uuid) => typeof uuid === "string");
 }
-//@ chunk-cg2r2hy6.js:25218-25230 placement
+//@ chunk-66b9fbd5.js:26429-26441 placement
 var WORK_SECRET_REFRESH_LEAD_SEC = 2100;
-//@ chunk-cg2r2hy6.js:25230-27254 placement
+//@ chunk-66b9fbd5.js:26441-28465 placement
 /**
  * 远程工作密钥被拒时尝试刷新；宿主无刷新途径时报告
  */
@@ -188,7 +189,7 @@ function refreshWorkSecret(options) {
     },
   };
 }
-//@ chunk-cg2r2hy6.js:27254-27501 placement
+//@ chunk-66b9fbd5.js:28465-28712 placement
 function validateWorkSecretSession(secret, sessionId) {
   let parsed;
   try {
@@ -201,7 +202,7 @@ function validateWorkSecretSession(secret, sessionId) {
   if (!sameSessionId(jwtSessionId, sessionId)) return "token is for a different session";
   return parsed;
 }
-//@ chunk-cg2r2hy6.js:27501-27641 placement
+//@ chunk-66b9fbd5.js:28712-28852 placement
 /**
  * 工作密钥刷新相关常量：快速/耐心两档读取预算（单文件与总时长）、刷新时间窗口，以及视为功能开关不可用的原因集合。
  */
@@ -215,11 +216,16 @@ var PATIENT_READ_BUDGET = {
 };
 var WORK_SECRET_REFRESH_WINDOW_MS = 60000;
 var FLAG_UNAVAILABLE_CAUSES = new Set(["flags_disabled", "flags_unreachable", "gate_off"]);
-//@ chunk-cg2r2hy6.js:27641-27697 placement
-function transcriptForwarder(getTools) {
-  return (messages) => {
-    let tools = getTools?.();
-    return toSDKMessages(messages, tools);
+//@ chunk-66b9fbd5.js:28852-28974 placement
+function transcriptForwarder(messages) {
+  return (rows) => {
+    let tools = messages?.();
+    return toSDKMessages(
+      rows,
+      codeModeAccepted() && tools !== undefined
+        ? require("../remote/tools/forkHistoryTools.lazy.js").remoteRowTools(tools)
+        : tools,
+    );
   };
 }
 export {

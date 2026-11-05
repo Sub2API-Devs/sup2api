@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件清单读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
  * attribution: placement 20
  */
 import { readdir, lstat, open, realpath } from "fs/promises";
@@ -26,7 +26,7 @@ import {
   isPluginComponentDir,
 } from "./commandSource.js";
 import { O_NONBLOCK } from "../fsFlags.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import {
   hasNestedHooks,
   PLUGIN_SKIPPED_KEYS,
@@ -59,7 +59,7 @@ import {
 import { getFileReader } from "../fileStore.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:724536-724785 placement
+//@ chunk-5xgkngpb.js:735052-735301 placement
 /**
  * 读取目录项：存在插件根标志（非插件 manifest 的 .claude-plugin 市场目录除外）时返回 {kind:"plugin", marker}； 否则返回 collection（含 plugin.json 的子目录为 children、其余 skipped，以及是否市场根）。
  */
@@ -85,12 +85,12 @@ async function describePluginDirShape(dir) {
         marker: pluginRootMarker,
       };
 }
-//@ chunk-e6aww6q8.js:724785-724817 placement
+//@ chunk-5xgkngpb.js:735301-735333 placement
 /**
  * isNotDotPrefixed：不以点开头。
  */
 var isNotDotPrefixed = (name) => !name.startsWith(".");
-//@ chunk-e6aww6q8.js:724817-724938 placement
+//@ chunk-5xgkngpb.js:735333-735454 placement
 async function isMarketplaceOnlyManifestDir(dir, entries) {
   return (
     entries.some((entry) => entry.name === PLUGIN_MANIFEST_DIR) &&
@@ -98,7 +98,7 @@ async function isMarketplaceOnlyManifestDir(dir, entries) {
     (await probeFileOpen(join(dir, MARKETPLACE_MANIFEST_PATH))) === "there"
   );
 }
-//@ chunk-e6aww6q8.js:724938-725280 placement
+//@ chunk-5xgkngpb.js:735454-735796 placement
 /**
  * 找出使目录成为插件根的标志项。
  */
@@ -119,7 +119,7 @@ async function findPluginRootMarker(dir, entries) {
   );
   return markers.find((marker, index) => results[index] === "absent");
 }
-//@ chunk-e6aww6q8.js:725280-725581 placement
+//@ chunk-5xgkngpb.js:735796-736097 placement
 /**
  * 列出含 plugin.json 的子目录与跳过的子目录。
  */
@@ -139,7 +139,7 @@ async function listPluginCollection(root, entries, isMarketplaceRoot) {
     isMarketplaceRoot,
   };
 }
-//@ chunk-e6aww6q8.js:725581-725741 placement
+//@ chunk-5xgkngpb.js:736097-736257 placement
 async function probeFileOpen(path) {
   try {
     await (await open(path, constants.O_RDONLY | O_NONBLOCK)).close();
@@ -149,13 +149,13 @@ async function probeFileOpen(path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "unsure";
   }
 }
-//@ chunk-e6aww6q8.js:725741-727515 placement
+//@ chunk-5xgkngpb.js:736257-738038 placement
 /**
  * 校验插件清单（plugin.json）结构，报告字段错误。
  */
 function validatePluginManifest(candidate, documentKind, options) {
   let heading = formatManifestErrorHeading(documentKind, options);
-  if (!isPlainObject_5(candidate))
+  if (!isPlainObject_6(candidate))
     return {
       ok: false,
       unloadableGuard: false,
@@ -182,7 +182,7 @@ Validation errors: manifest must be an object`,
   let errors = [];
   let unloadableGuards = [];
   let unliftedExperimental = {};
-  if (isPlainObject_5(manifest.experimental)) {
+  if (isPlainObject_6(manifest.experimental)) {
     for (let [key, value] of Object.entries(manifest.experimental))
       if (!experimentalKeys.has(key)) unliftedExperimental[key] = value;
   }
@@ -210,11 +210,11 @@ Validation errors: manifest must be an object`,
     });
   if (manifest.hooks !== undefined && typeof manifest.hooks === "object")
     manifest.hooks = clone(manifest.hooks);
-  let hookEntries = isPlainObject_5(manifest.hooks)
+  let hookEntries = isPlainObject_6(manifest.hooks)
     ? [[manifest.hooks, "hooks"]]
     : Array.isArray(manifest.hooks)
       ? manifest.hooks.flatMap((hook, hookIndex) =>
-          isPlainObject_5(hook) ? [[hook, `hooks.${hookIndex}`]] : [],
+          isPlainObject_6(hook) ? [[hook, `hooks.${hookIndex}`]] : [],
         )
       : [];
   let hookNotes = [];
@@ -261,7 +261,7 @@ Validation errors: ${joined}`,
     manifest: schemaResult.success ? schemaResult.data : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:727515-727842 placement
+//@ chunk-5xgkngpb.js:738038-738365 placement
 /**
  * manifest 无效时的标题（plugin.json/SKILL.md/市场条目）。
  */
@@ -275,7 +275,7 @@ function formatManifestErrorHeading(documentKind, options) {
       return `Marketplace entry ${options.pluginName} has an invalid manifest.`;
   }
 }
-//@ chunk-e6aww6q8.js:727842-727904 placement
+//@ chunk-5xgkngpb.js:738365-738427 placement
 async function hasGitOnPath(binaryName) {
   try {
     return !!(await whichAsync(binaryName));
@@ -283,7 +283,7 @@ async function hasGitOnPath(binaryName) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:727904-728017 placement
+//@ chunk-5xgkngpb.js:738427-738540 placement
 /**
  * git 可用且未被环境禁止（结果缓存）。
  */
@@ -292,19 +292,19 @@ async function isGitUsable() {
   pluginRegistry.gitAvailable ??= hasGitOnPath("git");
   return (await pluginRegistry.gitAvailable) && !isGitMissingMessageSupported("git", process.env);
 }
-//@ chunk-e6aww6q8.js:728017-728070 placement
+//@ chunk-5xgkngpb.js:738540-738593 placement
 /**
  * markGitUnavailable：标记 git 不可用。
  */
 function markGitUnavailable() {
   getPluginRegistry().gitAvailable = Promise.resolve(false);
 }
-//@ chunk-e6aww6q8.js:728182-728195 placement
+//@ chunk-5xgkngpb.js:738705-738718 placement
 /**
  * GIT_PROBE_TIMEOUT_MS：git 探测超时。
  */
 var GIT_PROBE_TIMEOUT_MS = 5000;
-//@ chunk-e6aww6q8.js:985837-986000 placement
+//@ chunk-5xgkngpb.js:999549-999712 placement
 /**
  * manifest 错误分类码。
  */
@@ -314,9 +314,9 @@ var MANIFEST_ERROR_CLASSES = {
   schemaInvalid: "manifest_schema_invalid",
   containment: "manifest_containment_refused",
 };
-//@ chunk-e6aww6q8.js:986000-986114 placement
+//@ chunk-5xgkngpb.js:999712-999826 placement
 let ManifestLoadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:986000", () => {
+deferInit("chunk-5xgkngpb.js:999712", () => {
   ManifestLoadError = class ManifestLoadError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -329,7 +329,7 @@ deferInit("chunk-e6aww6q8.js:986000", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:986114-986521 placement
+//@ chunk-5xgkngpb.js:999826-1000233 placement
 /**
  * 分页列出存储作用域下的直接条目名。
  */
@@ -365,7 +365,7 @@ async function listStorageScopeNames(storage, query) {
     names,
   };
 }
-//@ chunk-e6aww6q8.js:986521-986669 placement
+//@ chunk-5xgkngpb.js:1000233-1000381 placement
 var MANIFEST_EXTRA_COMPONENT_KEYS = [
   "mcpServers",
   "lspServers",
@@ -380,7 +380,7 @@ var MANIFEST_EXTRA_COMPONENT_KEYS = [
   "experimental",
   ...[],
 ];
-//@ chunk-e6aww6q8.js:986669-986710 placement
+//@ chunk-5xgkngpb.js:1000381-1000422 placement
 /**
  * isSkillCustomizationBookingAllowed：技能定制允许时返回真（占位）。
  */
@@ -388,7 +388,7 @@ function isSkillCustomizationBookingAllowed(plugin, hasManifest) {
   if (hasManifest) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:986710-988822 placement
+//@ chunk-5xgkngpb.js:1000422-1002534 placement
 /**
  * 在未禁用技能定制且策略允许本地插件目录时，扫描用户与项目的 skills 目录，按同步清单排除已同步的文件夹， 把其余带插件结构的文件夹当作 skills-dir 插件加载。
  */
@@ -515,7 +515,7 @@ async function loadSkillsAsPlugins_2(storageV5) {
     }
   return found;
 }
-//@ chunk-e6aww6q8.js:988822-989195 placement
+//@ chunk-5xgkngpb.js:1002534-1002907 placement
 /**
  * 读技能同步清单，读失败返回 claim-all。
  */
@@ -540,18 +540,18 @@ async function readSyncedSkillNames(root, storageV5) {
     }
   return parseSkillsSyncManifest(text, root);
 }
-//@ chunk-e6aww6q8.js:989195-989207 placement
+//@ chunk-5xgkngpb.js:1002907-1002919 placement
 var foldNameForSkill = foldNameForSync;
 export {
-  isGitUsable,
-  markGitUnavailable,
+  validatePluginManifest,
   listStorageScopeNames,
   ManifestLoadError,
   MANIFEST_ERROR_CLASSES,
-  validatePluginManifest,
+  isGitUsable,
   describePluginDirShape,
   loadSkillsAsPlugins_2,
   isSkillCustomizationBookingAllowed,
   GIT_PROBE_TIMEOUT_MS,
   isNotDotPrefixed,
+  markGitUnavailable,
 };

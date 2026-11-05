@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Bedrock 访问验证与 AWS 错误描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sx9xc5ee.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3msz77wt.js (21)
  * attribution: placement 21
  */
 import { homedir } from "os";
@@ -49,14 +49,14 @@ import {
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { WizardDialogLayout } from "../../wizard/WizardDialogLayout.js";
 import { WorkerBadge } from "../../permissions/WorkerBadge.js";
-import { MethodStep } from "../../agents/new-agent-creation/wizard-steps/MethodStep.js";
+import { ToolsStep } from "../../agents/new-agent-creation/wizard-steps/ToolsStep.js";
 import { StatusIcon } from "../../design-system/StatusIcon.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-sx9xc5ee.js:9902-10865 placement
+//@ chunk-3msz77wt.js:9902-10865 placement
 async function testBedrockRequest(wizardData) {
   let [{ AnthropicBedrock }, { getProxyFetchOptions }] = await Promise.all([
     import("../../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js"),
@@ -131,7 +131,7 @@ async function testBedrockRequest(wizardData) {
     }
   }
 }
-//@ chunk-sx9xc5ee.js:10865-11127 placement
+//@ chunk-3msz77wt.js:10865-11127 placement
 async function bedrockSigningCredentials(wizardData) {
   if (wizardData.authMethod === "bearer")
     return {
@@ -151,7 +151,7 @@ async function bedrockSigningCredentials(wizardData) {
     sessionToken: credentials.sessionToken,
   };
 }
-//@ chunk-sx9xc5ee.js:11127-11982 placement
+//@ chunk-3msz77wt.js:11127-11982 placement
 async function bedrockApiKeyTestResult(wizardData) {
   let fallback = bedrockModelDefaults(wizardData.region).haiku.fallback;
   let result = await renderErrorSpecificGuidance(wizardData, fallback);
@@ -193,7 +193,7 @@ async function bedrockApiKeyTestResult(wizardData) {
       };
   }
 }
-//@ chunk-sx9xc5ee.js:11982-12250 placement
+//@ chunk-3msz77wt.js:11982-12250 placement
 /**
  * 按 Bedrock 设置向导选择的认证方式返回凭据提供函数：profile 走 AWS 节点凭据链（带代理与超时），accessKey 直接返回密钥，environment 返回 undefined（用默认链）。
  */
@@ -215,7 +215,7 @@ async function bedrockCredentialProvider(wizardData) {
       return;
   }
 }
-//@ chunk-sx9xc5ee.js:12250-12608 placement
+//@ chunk-3msz77wt.js:12250-12608 placement
 /**
  * 为指定 AWS profile 创建凭证提供者：动态加载 fromNodeProviderChain，配置经代理的 STS 请求处理器与超时，返回带解析超时的提供者函数。
  */
@@ -246,7 +246,7 @@ async function profileCredentialProvider(wizardData, profile) {
   return (credentials) =>
     withTimeout(provider(credentials), getAwsChainResolveTimeoutMs(), BEDROCK_VERIFY_TIMEOUT_TEXT);
 }
-//@ chunk-sx9xc5ee.js:12608-12738 placement
+//@ chunk-3msz77wt.js:12608-12738 placement
 /**
  * 判断 AWS 错误是否为超时（TimeoutError，或消息以 TimeoutError: 开头的凭证提供者错误）。
  */
@@ -256,7 +256,7 @@ function isAwsTimeoutError(error) {
     (error?.name === "CredentialsProviderError" && (error.message ?? "").startsWith("TimeoutError:"))
   );
 }
-//@ chunk-sx9xc5ee.js:12738-14252 placement
+//@ chunk-3msz77wt.js:12738-14252 placement
 function describeAwsError(error, fallbackModel, awsChainResolveTimeoutMs) {
   let cause = error;
   let errorName = cause?.name ?? "Error";
@@ -321,11 +321,11 @@ function describeAwsError(error, fallbackModel, awsChainResolveTimeoutMs) {
       };
   }
 }
-//@ chunk-sx9xc5ee.js:14252-14343 placement
+//@ chunk-3msz77wt.js:14252-14343 placement
 function filterProfiles(discovery, query) {
   return (discovery.discoveredProfiles ?? []).filter((state) => state.toLowerCase().includes(query));
 }
-//@ chunk-sx9xc5ee.js:14343-15228 placement
+//@ chunk-3msz77wt.js:14343-15228 placement
 var MODEL_CHECK_REASONS = {
   reasonLabel: {
     auth: "auth failed",
@@ -360,7 +360,7 @@ var MODEL_CHECK_REASONS = {
   },
   probe: (wizardData, modelId) => renderErrorSpecificGuidance(wizardData, modelId),
 };
-//@ chunk-sx9xc5ee.js:15228-15360 placement
+//@ chunk-3msz77wt.js:15228-15360 placement
 /**
  * Bedrock 向导中的模型检查步骤，检查结果写回向导数据。
  */
@@ -378,12 +378,12 @@ function BedrockModelCheckStep() {
   } else updatePins = $[1];
   return updatePins;
 }
-//@ chunk-sx9xc5ee.js:15360-15364 placement
+//@ chunk-3msz77wt.js:15360-15364 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:15360", () => {
+deferInit("chunk-3msz77wt.js:15360", () => {
   init_react_production();
 });
-//@ chunk-sx9xc5ee.js:15463-15790 placement
+//@ chunk-3msz77wt.js:15463-15790 placement
 /**
  * 列出本机 AWS profile：解析 ~/.aws/config 与 ~/.aws/credentials 的节名（忽略 sso-session），去重排序。
  */
@@ -408,32 +408,32 @@ async function listAwsProfiles() {
     } catch {}
   return [...profiles].sort();
 }
-//@ chunk-sx9xc5ee.js:15790-15813 placement
+//@ chunk-3msz77wt.js:15790-15813 placement
 function emptyProfiles() {
   return [];
 }
-//@ chunk-sx9xc5ee.js:15813-15849 placement
+//@ chunk-3msz77wt.js:15813-15849 placement
 function loadProfilesOrEmpty() {
   return listAwsProfiles().catch(emptyProfiles);
 }
-//@ chunk-sx9xc5ee.js:15849-15909 placement
+//@ chunk-3msz77wt.js:15849-15909 placement (2.1.88 match: getModelBetas, 1)
 /**
  * 判断一个 AWS profile 名里是否含 "bedrock"（用来在 profile 过多时预填第一个 bedrock profile），与“区域”无关。
  */
 function isBedrockProfileName(region) {
   return region.toLowerCase().includes("bedrock");
 }
-//@ chunk-sx9xc5ee.js:15909-15951 placement
+//@ chunk-3msz77wt.js:15909-15951 placement
 function toProfileOption(profileName) {
   return {
     label: profileName,
     value: profileName,
   };
 }
-//@ chunk-sx9xc5ee.js:15951-15977 placement
+//@ chunk-3msz77wt.js:15951-15977 placement
 var MANUAL_PROFILE_VALUE = "__manual__";
 var MAX_PROFILE_OPTIONS = 12;
-//@ chunk-sx9xc5ee.js:15977-16242 placement
+//@ chunk-3msz77wt.js:15977-16242 placement
 /**
  * Bedrock 向导中的 AWS profile 步骤：读取 ~/.aws/config 期间显示等待，完成后进入认证方式选择。
  */
@@ -454,7 +454,7 @@ function BedrockProfileStep() {
   if ($[1] !== profiles) {
     profilesElement = jsxProd_default(suspenseTypeExport, {
       fallback,
-      children: jsxProd_default(MethodStep, {
+      children: jsxProd_default(ToolsStep, {
         profilesPromise: profiles,
       }),
     });
@@ -463,17 +463,17 @@ function BedrockProfileStep() {
   } else profilesElement = $[2];
   return profilesElement;
 }
-//@ chunk-sx9xc5ee.js:19292-19296 placement
+//@ chunk-3msz77wt.js:19292-19296 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:19292", () => {
+deferInit("chunk-3msz77wt.js:19292", () => {
   init_react_production();
 });
-//@ chunk-sx9xc5ee.js:20653-20657 placement
+//@ chunk-3msz77wt.js:20653-20657 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:20653", () => {
+deferInit("chunk-3msz77wt.js:20653", () => {
   init_react_production();
 });
-//@ chunk-sx9xc5ee.js:20657-23427 placement
+//@ chunk-3msz77wt.js:20657-23427 placement
 /**
  * Bedrock 配置向导的凭据验证步骤：调用 verifyBedrockAccess，显示进行中提示；成功时写入身份与发现的推理 profile 并显示结果，失败时给出错误与返回/重试选项。
  */

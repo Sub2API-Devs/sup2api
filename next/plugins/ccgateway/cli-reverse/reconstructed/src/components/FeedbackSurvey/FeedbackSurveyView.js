@@ -3,11 +3,12 @@
  *
  * 调查问题与数字选项的视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/FeedbackSurveyView.tsx
- * pieces: chunk-18hwfzwa.js (14)
- * attribution: fingerprint 3, layout 1, placement 10
+ * pieces: chunk-czq1j3j2.js (14)
+ * attribution: placement 10, fingerprint 3, layout 1
  */
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { DIGIT_HOTKEY_HOLD_MS, useDigitHotkeys } from "../pluginUi/digitHotkeys.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -26,7 +27,6 @@ import {
   TRANSCRIPT_SHARE_RESPONSES,
 } from "./TranscriptSharePrompt.js";
 import { LearnMoreLink } from "../LearnMoreLink.js";
-import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { isFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
@@ -36,7 +36,12 @@ import { parseChord } from "../../keybindings/parser.js";
 import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:988815-989026 fingerprint (2.1.88 match: inputToResponse, 0.631)
+//@ chunk-czq1j3j2.js:1012677-1012681 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1012677", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1022847-1023058 fingerprint (2.1.88 match: inputToResponse, 0.632)
 var RESPONSE_BY_KEY = {
   0: "dismissed",
   1: "bad",
@@ -67,14 +72,14 @@ var DISMISS_OPTION = {
   label: "Dismiss",
 };
 var RATING_BUTTON_WIDTH = 10;
-//@ chunk-18hwfzwa.js:989026-989108 layout
+//@ chunk-czq1j3j2.js:1023058-1023140 layout
 function isSelectableResponseKey(key, allowFour = false) {
   if (key === "4") return allowFour;
   return key === "0" || key === "1" || key === "2" || key === "3";
 }
-//@ chunk-18hwfzwa.js:989108-989162 fingerprint (2.1.88 match: DEFAULT_MESSAGE, 1)
+//@ chunk-czq1j3j2.js:1023140-1023194 fingerprint (2.1.88 match: DEFAULT_MESSAGE, 1)
 var DEFAULT_MESSAGE = "How is Claude doing this session? (optional)";
-//@ chunk-18hwfzwa.js:989162-990745 fingerprint (2.1.88 match: FeedbackSurveyView, 0.496)
+//@ chunk-czq1j3j2.js:1023194-1024777 fingerprint (2.1.88 match: FeedbackSurveyView, 0.496)
 function FeedbackSurveyView(props) {
   let $ = useMemoCache(25);
   let { onSelect, inputValue, setInputValue, message, messageBold, mountDelayMs, showNotSure } = props;
@@ -208,7 +213,7 @@ function FeedbackSurveyView(props) {
   } else viewElement = $[24];
   return viewElement;
 }
-//@ chunk-18hwfzwa.js:995644-996368 placement
+//@ chunk-czq1j3j2.js:1029679-1030403 placement
 function SurveyOption(props) {
   let $ = useMemoCache(6);
   let { onSelect } = props;
@@ -290,18 +295,13 @@ function SurveyOption(props) {
   } else element = $[5];
   return element;
 }
-//@ chunk-18hwfzwa.js:996368-996372 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:996368", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:996372-996399 placement
+//@ chunk-czq1j3j2.js:1030407-1030434 placement
 function getIsFeedbackAllowed() {
   return isFeedbackAllowed();
 }
-//@ chunk-18hwfzwa.js:996399-996433 placement
+//@ chunk-czq1j3j2.js:1030434-1030468 placement
 var THANKS_FOR_FEEDBACK_TEXT = "Thanks for the feedback!";
-//@ chunk-18hwfzwa.js:996433-997685 placement
+//@ chunk-czq1j3j2.js:1030468-1031720 placement
 function TranscriptShareStatus(status) {
   let $ = useMemoCache(9);
   let [isFeedbackAllowed] = useState(getIsFeedbackAllowed);
@@ -411,19 +411,19 @@ function TranscriptShareStatus(status) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:997685-997732 placement
+//@ chunk-czq1j3j2.js:1031720-1031767 placement
 function hasShortcutChord(hint) {
   let { chord } = hint;
   return chord !== "";
 }
-//@ chunk-18hwfzwa.js:997732-997789 placement
+//@ chunk-czq1j3j2.js:1031767-1031824 placement
 function shortcutChordKey(hint) {
   let { chord } = hint;
   return SHORTCUT_CHORD_KEY_RE.exec(chord)?.[1];
 }
-//@ chunk-18hwfzwa.js:997789-997811 placement
+//@ chunk-czq1j3j2.js:1031824-1031846 placement
 var SHORTCUT_CHORD_KEY_RE = /^(\S+) \S+$/;
-//@ chunk-18hwfzwa.js:997811-999512 placement
+//@ chunk-czq1j3j2.js:1031846-1033547 placement
 function FeedbackRatingRow(props) {
   let $ = useMemoCache(16);
   let { onSelect } = props;
@@ -563,17 +563,17 @@ function FeedbackRatingRow(props) {
   } else ratingElement = $[15];
   return ratingElement;
 }
-//@ chunk-18hwfzwa.js:999512-999590 placement (2.1.88 match: getReservedShortcuts, 0.784)
+//@ chunk-czq1j3j2.js:1033547-1033625 placement (2.1.88 match: getReservedShortcuts, 0.784)
 function checkChordReserved(chord) {
   return formatKeyChords([parseChord(chord)], {
     platform: getShortcutDisplayPlatform() === "macos" ? "macos" : "other",
   });
 }
 export {
-  FeedbackSurveyView,
-  SurveyOption,
   TranscriptShareStatus,
   isSelectableResponseKey,
   FeedbackRatingRow,
+  FeedbackSurveyView,
   THANKS_FOR_FEEDBACK_TEXT,
+  SurveyOption,
 };

@@ -3,20 +3,21 @@
  *
  * 2.1.316 新增：mcp serve 容器启动记录与限额常量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m8aeec95.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78qefq0z.js (2), chunk-z0gd899m.js (2)
  * attribution: placement 4
  */
 import { join } from "path";
 import { writeFile, open, unlink, opendir, mkdir, lstat } from "fs/promises";
 import { randomUUID } from "crypto";
 import { constants } from "fs";
+import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "../../utils/remoteFileState.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
-import { logEvent } from "../analytics/index.js";
-import { publishWriteAtomic } from "../../utils/atomicPublishWrite.js";
+import { env } from "../../utils/env.js";
+import { filePath } from "../../utils/atomicPublishWrite.js";
 import {
   CALL_RECORD_EXT,
   MAX_CALL_RECORD_SCAN,
@@ -27,18 +28,30 @@ import {
   CALL_RECORD_RETENTION_MS,
 } from "./readCalls.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { env } from "../../utils/env.js";
+import { logError } from "../../utils/log.js";
 import { isTaskIdOfType } from "../../Task.js";
 import { chunk_default } from "../../../vendor/lodash-es/chunk.js";
 import { safeParseJSON } from "../../utils/json.js";
-import { count } from "../../utils/collections.js";
-import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "../../utils/remoteFileState.js";
-import { beginDeferredInits } from "../../../runtime/deferred-init.js";
+import { countWhere } from "../../utils/collections.js";
 
-// This module is the first evaluated of an import cycle of 3 modules closed by ./readCalls.js;
-// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
-beginDeferredInits("src/services/mcpServe/readCalls.js");
-//@ chunk-m8aeec95.js:3042-6963 placement
+//@ chunk-z0gd899m.js:409-455 placement
+/**
+ * 容器启动超时（300000 毫秒）。
+ */
+var MAX_START_RECORDS = 1024;
+var MAX_PENDING_STARTS = 1024;
+var MAX_CONCURRENT_STARTS = 32;
+var MAX_RETRY_ROUNDS = 16;
+var MAX_START_METADATA_BYTES = 524288;
+var START_TIMEOUT_MS = 300000;
+//@ chunk-z0gd899m.js:455-492 placement
+/**
+ * 读取容器启动记录。
+ */
+function readContainerStartRecord() {
+  return createRemoteFileState(READ_FILE_STATE_CACHE_SIZE, undefined, true);
+}
+//@ chunk-78qefq0z.js:2783-6702 placement
 /**
  * mcp serve：在 /dev/shm 记录容器启动标记，判断工具调用是否发生在当前容器生命周期内。
  */
@@ -94,8 +107,8 @@ class ContainerStartRecord {
     return this.#r;
   }
   write(record) {
-    this.#a(record.listed.taskId, async (folder, containerStart) => {
-      await publishWriteAtomic(
+    this.#i(record.listed.taskId, async (folder, containerStart) => {
+      await filePath(
         join(folder, record.listed.taskId + CALL_RECORD_EXT),
         jsonStringify({
           v: 1,
@@ -111,7 +124,7 @@ class ContainerStartRecord {
     });
   }
   remove(taskId) {
-    this.#a(taskId, async (folder) => {
+    this.#i(taskId, async (folder) => {
       await unlink(join(folder, taskId + CALL_RECORD_EXT)).catch((error) => {
         if (getErrnoCode(error) !== "ENOENT") throw error;
       });
@@ -122,7 +135,7 @@ class ContainerStartRecord {
   }
   async settledAll() {
     while (this.#t.size > 0) await Promise.all(this.#t.values());
-    await this.#i()
+    await this.#a()
       .then((folder) => (folder === undefined ? undefined : fsyncDirectory(folder)))
       .catch(this.#s);
   }
@@ -139,7 +152,7 @@ class ContainerStartRecord {
     let recordsFolder =
       containerStart === undefined
         ? undefined
-        : await this.#i().catch((error) => {
+        : await this.#a().catch((error) => {
             logForDebugging(
               `mcp serve: could not read the folder of saved background command records, so commands that earlier daemons started are not listed: ${errorMessage(error)}`,
               {
@@ -250,15 +263,15 @@ class ContainerStartRecord {
         .flatMap((fate) => ("command" in fate ? [fate.command] : []))
         .toSorted((left, right) => left.ended.at - right.ended.at),
       counted: {
-        with_end: count(fates, ({ fate }) => fate === "with_end"),
-        container_stopped: count(fates, ({ fate }) => fate === "container_stopped"),
-        maybe_still_running: count(fates, ({ fate }) => fate === "maybe_still_running"),
-        too_old: count(fates, ({ fate }) => fate === "too_old"),
-        unreadable: count(fates, ({ fate }) => fate === "unreadable"),
+        with_end: countWhere(fates, ({ fate }) => fate === "with_end"),
+        container_stopped: countWhere(fates, ({ fate }) => fate === "container_stopped"),
+        maybe_still_running: countWhere(fates, ({ fate }) => fate === "maybe_still_running"),
+        too_old: countWhere(fates, ({ fate }) => fate === "too_old"),
+        unreadable: countWhere(fates, ({ fate }) => fate === "unreadable"),
       },
     };
   }
-  async #i(create = false) {
+  async #a(create = false) {
     let folder = this.#o();
     if (create)
       await mkdir(folder, {
@@ -276,11 +289,11 @@ class ContainerStartRecord {
       );
     return folder;
   }
-  #a(taskId, run) {
+  #i(taskId, run) {
     let queued = (this.#t.get(taskId) ?? Promise.resolve())
       .then(async () => {
         let containerStart = await this.#n();
-        let folder = containerStart === undefined ? undefined : await this.#i(true);
+        let folder = containerStart === undefined ? undefined : await this.#a(true);
         if (containerStart !== undefined && folder !== undefined) await run(folder, containerStart);
       })
       .catch(this.#s);
@@ -290,7 +303,7 @@ class ContainerStartRecord {
     });
   }
 }
-//@ chunk-m8aeec95.js:6963-7083 placement
+//@ chunk-78qefq0z.js:6702-6822 placement
 async function fsyncDirectory(dirPath) {
   let handle = await open(dirPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try {
@@ -299,30 +312,13 @@ async function fsyncDirectory(dirPath) {
     await handle.close();
   }
 }
-//@ chunk-m8aeec95.js:7120-7172 placement
-/**
- * 容器启动超时（300000 毫秒）。
- */
-var MAX_START_RECORDS = 1024;
-var MAX_PENDING_STARTS = 1024;
-var MAX_CONCURRENT_STARTS = 32;
-var MAX_RETRY_ROUNDS = 16;
-var MAX_START_METADATA_BYTES = 524288;
-var START_TIMEOUT_MS = 300000;
-//@ chunk-m8aeec95.js:7172-7210 placement
-/**
- * 读取容器启动记录。
- */
-function readContainerStartRecord() {
-  return createRemoteFileState(READ_FILE_STATE_CACHE_SIZE, undefined, true);
-}
 export {
-  MAX_PENDING_STARTS,
-  ContainerStartRecord,
   readContainerStartRecord,
   MAX_START_RECORDS,
   MAX_START_METADATA_BYTES,
   START_TIMEOUT_MS,
   MAX_RETRY_ROUNDS,
   MAX_CONCURRENT_STARTS,
+  MAX_PENDING_STARTS,
+  ContainerStartRecord,
 };

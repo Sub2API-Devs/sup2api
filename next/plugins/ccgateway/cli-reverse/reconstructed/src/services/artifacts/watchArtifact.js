@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。监视 Artifact 变化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
  * attribution: placement 11
  */
 import { renameSession } from "../../utils/sessionTitle.js";
@@ -32,14 +32,14 @@ import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { mainObservedArtifactVersion } from "./readObservation.js";
 import { isAbortError } from "../../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:364649-364722 placement
+//@ chunk-czq1j3j2.js:402062-402135 placement
 function renameSessionQuietly(title, sessionId, storageV5, credentials) {
   return renameSession(title, sessionId, storageV5, false, false, credentials).then(
     () => {},
     (error) => logError(error),
   );
 }
-//@ chunk-18hwfzwa.js:364722-366016 placement
+//@ chunk-czq1j3j2.js:402135-403429 placement
 /**
  * artifact 监听的错误文案表：功能关闭、会话不支持、按原因（flag/remote/not_found/other_org 等）的具体说明与“监听未能重启”的提示。
  */
@@ -66,11 +66,11 @@ var ARTIFACT_WATCH_REASON_TEXTS = {
 };
 var WATCH_RESTART_PREFIX = "The artifact watch on ";
 var WATCH_RESTART_SUFFIX = " could not be restarted \u2014 you are NOT currently watching it.";
-//@ chunk-18hwfzwa.js:366016-366057 placement
+//@ chunk-czq1j3j2.js:403429-403470 placement
 function watchRestartText(text) {
   return `${WATCH_RESTART_PREFIX}${text}${WATCH_RESTART_SUFFIX}`;
 }
-//@ chunk-18hwfzwa.js:366057-366460 placement
+//@ chunk-czq1j3j2.js:403470-403873 placement
 function artifactWatchStartNotice(state, target, userMessageFinder) {
   let restartText = watchRestartText(target.url);
   let spellings = artifactViewerUrlSpellings({
@@ -98,13 +98,13 @@ function artifactWatchStartNotice(state, target, userMessageFinder) {
   if (max_2 !== -1 && max_2 > max) return restartText;
   return;
 }
-//@ chunk-18hwfzwa.js:366460-366782 placement
+//@ chunk-czq1j3j2.js:403873-404195 placement
 /**
  * 恢复会话时说明：此前用 --watch-artifact 开始的监视不会延续到本会话，当前并未监视该 artifact。
  */
 var WATCH_NOT_CARRIED_NOTICE =
   "The watch started with claude --watch-artifact earlier in this transcript does not carry into this session \u2014 you are NOT currently watching that artifact. Run claude --watch-artifact again to watch it from here. (Automatic version-change notices may still appear for artifacts this conversation worked on.)";
-//@ chunk-18hwfzwa.js:366782-367104 placement
+//@ chunk-czq1j3j2.js:404195-404517 placement
 /**
  * 从后往前扫描提醒文本：若找到"本会话通过 --watch-artifact 监听某 artifact"的记录且与当前监听目标不同（并且之后没有已发过的提示），返回"监听不会延续到本会话"的提示。
  */
@@ -126,11 +126,11 @@ function getWatchNotCarriedNotice(text, slugFromAnyText, url) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:367104-367153 placement
+//@ chunk-czq1j3j2.js:404517-404566 placement
 function userMessageTexts(messages) {
   return messages.flatMap((message) => getUserMessageText(message) ?? []);
 }
-//@ chunk-18hwfzwa.js:367153-367262 placement
+//@ chunk-czq1j3j2.js:404566-404675 placement
 function makeUserMessageFinder(messages) {
   return (text) => {
     for (let idx = messages.length - 1; idx >= 0; idx--)
@@ -138,13 +138,13 @@ function makeUserMessageFinder(messages) {
     return -1;
   };
 }
-//@ chunk-18hwfzwa.js:367262-367349 placement
+//@ chunk-czq1j3j2.js:404675-404762 placement
 function slugFromAnyText(text) {
   let lower = text.toLowerCase();
   if (ARTIFACT_SLUG_RE.test(lower)) return lower;
   return parseArtifactUrlAnyCase(text)?.slug ?? null;
 }
-//@ chunk-18hwfzwa.js:367349-368800 placement
+//@ chunk-czq1j3j2.js:404762-406213 placement
 async function startArtifactWatch(options) {
   let { target, commentVerbsInSchema, getKnownVer, context } = options;
   let hidden = isBuiltInArtifactHiddenForMcp();
@@ -207,7 +207,7 @@ async function startArtifactWatch(options) {
     metaMessage: `The user started this session watching the artifact ${target.url} (via claude --watch-artifact). It is the current artifact of interest. ${domains.contentReadsBlocked ?? `Re-read it before editing or republishing${hidden ? "" : ` (${domains.readRemedy})`}.`} A republish starts no turn${hidden ? "" : "; some Artifact results open with one line saying a newer version was published"}.${notice2 ? (hidden ? " You will be notified when the user sends you one of its comments." : " You will be notified when it receives comments.") : ""}`,
   };
 }
-//@ chunk-18hwfzwa.js:368800-369774 placement
+//@ chunk-czq1j3j2.js:406213-407187 placement
 function useArtifactWatchStartup({
   initialMessages,
   transcript,

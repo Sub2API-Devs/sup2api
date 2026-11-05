@@ -3,18 +3,18 @@
  *
  * 从消息中提取每回合的文件编辑结果，计算每回合增删统计（/diff 的 turn 视图）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTurnDiffs.ts
- * pieces: chunk-mtx4csef.js (8)
+ * pieces: chunk-r1fypyw9.js (8)
  * attribution: placement 2, fingerprint 5, file-local 1
  */
 import { init_react_production, useRef, useMemo } from "../../vendor/react/cjs/react.production.js";
 
-//@ chunk-mtx4csef.js:14813-14817 placement
+//@ chunk-r1fypyw9.js:15989-15993 placement
 init_react_production();
-//@ chunk-mtx4csef.js:14817-14821 placement
+//@ chunk-r1fypyw9.js:15993-15997 placement
 init_react_production();
-//@ chunk-mtx4csef.js:14821-15070 fingerprint (2.1.88 match: isFileEditResult, 0.874)
+//@ chunk-r1fypyw9.js:15997-16246 fingerprint (2.1.88 match: isFileEditResult, 0.873)
 function isFileEditResult(result) {
   if (!result || typeof result !== "object") return false;
   let editResult = result;
@@ -24,11 +24,11 @@ function isFileEditResult(result) {
   let isNewFile = editResult.type === "create" && typeof editResult.content === "string";
   return hasFilePath && (hasStructuredPatch || isNewFile);
 }
-//@ chunk-mtx4csef.js:15070-15142 fingerprint (2.1.88 match: isFileWriteOutput, 1)
+//@ chunk-r1fypyw9.js:16246-16318 fingerprint (2.1.88 match: isFileWriteOutput, 1)
 function isFileWriteOutput(result) {
   return "type" in result && (result.type === "create" || result.type === "update");
 }
-//@ chunk-mtx4csef.js:15142-15286 fingerprint (2.1.88 match: countHunkLines, 1)
+//@ chunk-r1fypyw9.js:16318-16462 fingerprint (2.1.88 match: countHunkLines, 1)
 function countHunkLines(hunks) {
   let added = 0;
   let removed = 0;
@@ -41,7 +41,7 @@ function countHunkLines(hunks) {
     removed,
   };
 }
-//@ chunk-mtx4csef.js:15286-15435 file-local
+//@ chunk-r1fypyw9.js:16462-16611 file-local
 function getUserPromptPreview(message) {
   if (message.type !== "user") return "";
   let content = message.message.content;
@@ -49,7 +49,7 @@ function getUserPromptPreview(message) {
   if (text.length <= 30) return text;
   return text.slice(0, 29) + "\u2026";
 }
-//@ chunk-mtx4csef.js:15435-15590 fingerprint (2.1.88 match: computeTurnStats, 1)
+//@ chunk-r1fypyw9.js:16611-16766 fingerprint (2.1.88 match: computeTurnStats, 1)
 function computeTurnStats(turn) {
   let totalAdded = 0;
   let totalRemoved = 0;
@@ -63,7 +63,7 @@ function computeTurnStats(turn) {
     linesRemoved: totalRemoved,
   };
 }
-//@ chunk-mtx4csef.js:15590-17021 fingerprint (2.1.88 match: useTurnDiffs, 1)
+//@ chunk-r1fypyw9.js:16766-18197 fingerprint (2.1.88 match: useTurnDiffs, 1)
 function useTurnDiffs(messages) {
   let cache = useRef({
     completedTurns: [],

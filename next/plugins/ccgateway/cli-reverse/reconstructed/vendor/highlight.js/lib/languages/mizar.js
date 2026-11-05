@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/mizar.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (1)
+ * pieces: chunk-636gp747.js (1)
  * attribution: cjs-fingerprint+context 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:301059-301777 cjs-fingerprint+context
+//@ chunk-636gp747.js:301059-301777 cjs-fingerprint+context
 var require_mizar = __commonJS(function (cjsExports, cjsModule) {
   function mizar(hljs) {
     return {

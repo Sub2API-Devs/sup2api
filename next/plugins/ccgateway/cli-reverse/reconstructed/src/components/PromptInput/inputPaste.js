@@ -3,10 +3,10 @@
  *
  * 超长输入截断：超过 10000 字符时中间部分折叠为 "[...Truncated text #N +M lines...]" 并存入 pastedContents。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/inputPaste.ts
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: placement 1, affinity 1, fingerprint 2
+ * pieces: chunk-4b7tnq3g.js (1), chunk-czq1j3j2.js (4)
+ * attribution: placement 2, affinity 1, fingerprint 2
  */
 import {
   stripPlaceholdersWithOptions,
@@ -17,9 +17,11 @@ import {
   parsePastedRefs,
 } from "../../history.js";
 import { stripSystemReminders } from "../messageActions.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-18hwfzwa.js:312232-312870 placement
+//@ chunk-4b7tnq3g.js:1891-1903 placement
+var TRUNCATE_THRESHOLD_CHARS = 1e4;
+//@ chunk-czq1j3j2.js:321824-322462 placement
 function resolvePastedTextReference(text, nextPasteId) {
   let { stripped, expanded, removed } = stripPlaceholdersWithOptions(text, nextPasteId);
   let isSlashText = text.trimStart().startsWith("/");
@@ -42,7 +44,7 @@ function resolvePastedTextReference(text, nextPasteId) {
       ? `Pasted text:
 ${trimmed}`
       : trimmed;
-  let truncatedLines = uniq(
+  let truncatedLines = normalizeCaseForComparison_2(
     [...getTypedPasteContents(text, nextPasteId), ...getInlinePasteTexts(nextPasteId)]
       .map((state) => state.trim())
       .filter(
@@ -61,10 +63,9 @@ ${trimmed}`
     images: filtered,
   };
 }
-//@ chunk-18hwfzwa.js:875921-875941 affinity
-var TRUNCATE_THRESHOLD_CHARS = 1e4;
+//@ chunk-czq1j3j2.js:908802-908814 affinity
 var TRUNCATE_KEEP_CHARS = 1000;
-//@ chunk-18hwfzwa.js:875941-876248 fingerprint (2.1.88 match: formatTruncatedTextRef, 0.784)
+//@ chunk-czq1j3j2.js:908814-909121 fingerprint (2.1.88 match: formatTruncatedTextRef, 0.784)
 /**
  * 超过阈值时保留首尾各 500 字符，中段替换为 "[...Truncated text #id +N lines...]"，返回 {truncatedText, placeholderContent}。
  */
@@ -86,7 +87,7 @@ function formatTruncatedTextRef(text, nextPasteId, force = false) {
     placeholderContent,
   };
 }
-//@ chunk-18hwfzwa.js:876248-877127 fingerprint (2.1.88 match: maybeTruncateInput, 0.926)
+//@ chunk-czq1j3j2.js:909121-910000 fingerprint (2.1.88 match: maybeTruncateInput, 0.926)
 /**
  * 对整段输入做截断：先把中段内已有的文本粘贴引用展开、图片引用移出，再调用 formatTruncatedTextRef；把被折叠的中段作为新的 text 粘贴内容存入 pastedContents。
  */
@@ -151,4 +152,4 @@ function maybeTruncateInput(input, pastedContents) {
     newPastedContents: keptContents,
   };
 }
-export { resolvePastedTextReference, maybeTruncateInput };
+export { resolvePastedTextReference, TRUNCATE_THRESHOLD_CHARS, maybeTruncateInput };

@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。回答 mcp serve 的工具输出对象请求：协商版本、核对拒绝规则摘要、执行工具并编码输出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e3wfm0b3.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8y2857ke.js (33)
  * attribution: placement 33
  */
 import { randomUUID } from "crypto";
 import { toolServerEnvAccessor } from "../../utils/subprocessEnvLoader.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
@@ -76,22 +76,22 @@ import { MIN_MAX_OUTPUT_LENGTH } from "../../constants/outputLimits.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { truncateMiddle } from "../../memdir/memoryTool.js";
 
-//@ chunk-e3wfm0b3.js:1351-1413 placement
+//@ chunk-8y2857ke.js:1382-1444 placement
 function isToolOutputEnvOn() {
   return toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT === true;
 }
-//@ chunk-e3wfm0b3.js:1413-1462 placement
+//@ chunk-8y2857ke.js:1444-1493 placement
 var OUTPUT_CAPABLE_TOOLS = new Set([
   BASH_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
+  READ,
+  EDIT,
   FILE_WRITE_TOOL_NAME,
   NOTEBOOK_EDIT_TOOL_NAME,
   GREP_TOOL_NAME,
   GLOB_TOOL_NAME,
 ]);
 var MAX_TOOL_OUTPUT_BYTES = 12582912;
-//@ chunk-e3wfm0b3.js:1462-1530 placement
+//@ chunk-8y2857ke.js:1493-1561 placement
 function toolOutputServerCapabilities(getTools, launchPermissionContext) {
   let announcedCapability = buildAnnouncedCapability(getTools, launchPermissionContext);
   return (
@@ -102,7 +102,7 @@ function toolOutputServerCapabilities(getTools, launchPermissionContext) {
     }
   );
 }
-//@ chunk-e3wfm0b3.js:1530-1778 placement
+//@ chunk-8y2857ke.js:1561-1809 placement
 function buildAnnouncedCapability(getTools, launchPermissionContext) {
   if (!isToolOutputEnvOn() || launchPermissionContext === undefined) return;
   let classification = classifyToolsForOutput(getTools(), launchPermissionContext);
@@ -119,23 +119,23 @@ function buildAnnouncedCapability(getTools, launchPermissionContext) {
     }),
   };
 }
-//@ chunk-e3wfm0b3.js:1778-1843 placement
+//@ chunk-8y2857ke.js:1809-1874 placement
 function bringsToolHostPermissionRequest(meta) {
   if (!isToolOutputRequested()) return false;
   return hasToolHostInterface(isPlainObject(meta) ? meta[ANTHROPIC_RETURNTOOLOUTPUT] : undefined);
 }
-//@ chunk-e3wfm0b3.js:1843-1874 placement
+//@ chunk-8y2857ke.js:1874-1905 placement
 function isToolOutputRequested() {
   return isToolOutputEnvOn() && isReturnOutputSupported();
 }
-//@ chunk-e3wfm0b3.js:1874-1954 placement
+//@ chunk-8y2857ke.js:1905-1985 placement
 function classifyToolsForOutput(tools, launchPermissionContext) {
   return buildReturnToolOutputPayload({
     tools: outputCapableToolNames(tools),
     denyRules: launchPermissionContext.alwaysDenyRules.cliArg ?? [],
   });
 }
-//@ chunk-e3wfm0b3.js:1954-3012 placement
+//@ chunk-8y2857ke.js:1985-3043 placement
 /**
  * 回答 mcp serve 的工具输出对象请求：协商版本、核对拒绝规则摘要、执行工具并编码输出。
  */
@@ -207,7 +207,7 @@ async function answerToolOutputRequest({
     release();
   }
 }
-//@ chunk-e3wfm0b3.js:3012-4881 placement
+//@ chunk-8y2857ke.js:3043-4912 placement
 /**
  * 检查输出对象请求（协议版本、规则摘要等）
  */
@@ -259,21 +259,21 @@ function checkToolOutputRequest(returnOutputRequest, name, tools, launchPermissi
         `${name} was not run: the tools this server answers with an output object are ${outputCapableToolNames(tools).join(", ") || "none"}. Call it without asking for its output object.`,
       );
 }
-//@ chunk-e3wfm0b3.js:4881-4913 placement
+//@ chunk-8y2857ke.js:4912-4944 placement
 function isAnsweredWithOutput(toolName) {
   return OUTPUT_CAPABLE_TOOLS.has(toolName);
 }
-//@ chunk-e3wfm0b3.js:4913-4975 placement
+//@ chunk-8y2857ke.js:4944-5006 placement
 function outputCapableToolNames(tools) {
   return tools.map((tool) => tool.name).filter((toolName) => OUTPUT_CAPABLE_TOOLS.has(toolName));
 }
-//@ chunk-e3wfm0b3.js:4975-5032 placement
+//@ chunk-8y2857ke.js:5006-5063 placement
 function toolNameForAnalytics(name) {
   return OUTPUT_CAPABLE_TOOLS.has(name) || SERVE_MODE_KEYS.has(name)
     ? sanitizeToolNameForAnalytics(name)
     : getUnknownToolAnalyticsName(name);
 }
-//@ chunk-e3wfm0b3.js:5032-5135 placement
+//@ chunk-8y2857ke.js:5063-5166 placement
 function refusedResult(refusal) {
   return buildRemoteToolCallResult({
     envelope: {
@@ -285,7 +285,7 @@ function refusedResult(refusal) {
     content: clipText(refusal.message),
   });
 }
-//@ chunk-e3wfm0b3.js:5135-5315 placement
+//@ chunk-8y2857ke.js:5166-5346 placement
 function acknowledgedResult(askId) {
   return buildRemoteToolCallResult({
     envelope: {
@@ -297,7 +297,7 @@ function acknowledgedResult(askId) {
     content: "Nothing was run: the permission question was answered with a no, or taken back.",
   });
 }
-//@ chunk-e3wfm0b3.js:5315-5379 placement
+//@ chunk-8y2857ke.js:5346-5410 placement
 function refusalResult(code, message, reason = code) {
   return {
     refusal: {
@@ -307,7 +307,7 @@ function refusalResult(code, message, reason = code) {
     reason,
   };
 }
-//@ chunk-e3wfm0b3.js:5379-5762 placement
+//@ chunk-8y2857ke.js:5410-5793 placement
 /**
  * 校验并执行工具，返回输出对象
  */
@@ -335,7 +335,7 @@ async function runToolForOutput(tool, args, toolUseContext, startHeartbeat) {
     wasSafetyAskSkipped: validated.wasSafetyAskSkipped,
   };
 }
-//@ chunk-e3wfm0b3.js:5762-6217 placement
+//@ chunk-8y2857ke.js:5793-6247 placement
 /**
  * 检查工具启用与输入校验
  */
@@ -372,7 +372,7 @@ async function validateToolCallInput(tool, args, toolUseContext) {
     };
   }
 }
-//@ chunk-e3wfm0b3.js:6217-6391 placement
+//@ chunk-8y2857ke.js:6247-6421 placement
 /**
  * 为远端调用构造工具上下文（标记来自其他机器、挂起沙箱自动允许）
  */
@@ -391,7 +391,7 @@ function buildServedToolUseContext(toolUseContext, permissionContext) {
     getAppState: () => appState,
   };
 }
-//@ chunk-e3wfm0b3.js:6391-7523 placement
+//@ chunk-8y2857ke.js:6421-7553 placement
 /**
  * 运行工具权限检查并处理崩溃
  */
@@ -443,7 +443,7 @@ async function runSafetyCheck(tool, input, toolUseContext) {
         objection: isImmune ? "circuit_breaker" : "other_ask",
       };
 }
-//@ chunk-e3wfm0b3.js:7523-8323 placement
+//@ chunk-8y2857ke.js:7553-8353 placement
 async function checkPlainCall(tool, args, toolUseContext, launchPermissionContext, session) {
   if (launchPermissionContext === undefined)
     return {
@@ -501,7 +501,7 @@ async function checkPlainCall(tool, args, toolUseContext, launchPermissionContex
     rejection: safety.rejection,
   };
 }
-//@ chunk-e3wfm0b3.js:8323-8529 placement
+//@ chunk-8y2857ke.js:8353-8559 placement
 /**
  * 权限异议映射为回答类别
  */
@@ -518,7 +518,7 @@ function objectionToAnswer(objection) {
       return "denied_by_rule";
   }
 }
-//@ chunk-e3wfm0b3.js:8529-8759 placement
+//@ chunk-8y2857ke.js:8559-8788 placement
 async function ranTool(
   tool,
   input,
@@ -555,7 +555,7 @@ async function ranTool(
     };
   }
 }
-//@ chunk-e3wfm0b3.js:8759-8889 placement
+//@ chunk-8y2857ke.js:8788-8918 placement
 function logUnexpectedThrow(tool, error) {
   if (isAbortOrCancelError(error) || classifyToolErrorCode(error).isSad) return;
   let error_2 = toError(error);
@@ -565,7 +565,7 @@ function logUnexpectedThrow(tool, error) {
       : withTelemetryMessage(error_2, `mcp server tool '${tool.name}' threw`),
   );
 }
-//@ chunk-e3wfm0b3.js:8889-9337 placement
+//@ chunk-8y2857ke.js:8918-9366 placement
 function outputAnswer(tool, output, notes, interfaceInfo) {
   try {
     let outputVariants = buildOutputVariants(tool, output, interfaceInfo);
@@ -596,7 +596,7 @@ function outputAnswer(tool, output, notes, interfaceInfo) {
     return unsentResult(tool, "result_unbuildable", notes);
   }
 }
-//@ chunk-e3wfm0b3.js:9337-9429 placement
+//@ chunk-8y2857ke.js:9366-9458 placement
 function logEncodeFailure(tool, error, suffix) {
   logError(
     withTelemetryMessage(
@@ -605,7 +605,7 @@ function logEncodeFailure(tool, error, suffix) {
     ),
   );
 }
-//@ chunk-e3wfm0b3.js:9429-10018 placement
+//@ chunk-8y2857ke.js:9458-10047 placement
 /**
  * 生成工具输出对象的若干裁剪版本
  */
@@ -616,7 +616,7 @@ function buildOutputVariants(tool, output, interfaceInfo) {
         output: toolOutputForWire(tool, output),
       },
     ]);
-  if (tool.name !== FILE_EDIT_TOOL_NAME || !isPlainObject(output))
+  if (tool.name !== EDIT || !isPlainObject(output))
     return [
       {
         output: toolOutputForWire(tool, output),
@@ -666,7 +666,7 @@ function buildOutputVariants(tool, output, interfaceInfo) {
         ],
   );
 }
-//@ chunk-e3wfm0b3.js:10018-10258 placement
+//@ chunk-8y2857ke.js:10047-10287 placement
 /**
  * 加上去掉 gitDiff 的变体
  */
@@ -696,7 +696,7 @@ function withDiffLeftOutVariants(output, variants) {
     },
   ];
 }
-//@ chunk-e3wfm0b3.js:10258-10922 placement
+//@ chunk-8y2857ke.js:10287-10950 placement
 /**
  * 输出对象转可发送形式（截断说明）
  */
@@ -731,7 +731,7 @@ function toolOutputForWire(tool, output) {
       return output;
   }
 }
-//@ chunk-e3wfm0b3.js:10922-11040 placement
+//@ chunk-8y2857ke.js:10950-11068 placement
 function hasPersistedBashOutput(tool, output) {
   return (
     tool.name === BASH_TOOL_NAME &&
@@ -741,7 +741,7 @@ function hasPersistedBashOutput(tool, output) {
     output.isImage !== true
   );
 }
-//@ chunk-e3wfm0b3.js:11040-11083 placement
+//@ chunk-8y2857ke.js:11068-11111 placement
 function mergeIfObject(base, patch) {
   return isPlainObject(base)
     ? {
@@ -750,7 +750,7 @@ function mergeIfObject(base, patch) {
       }
     : base;
 }
-//@ chunk-e3wfm0b3.js:11083-11235 placement
+//@ chunk-8y2857ke.js:11111-11263 placement
 /**
  * 结果无法回传时的说明
  */
@@ -763,7 +763,7 @@ function unsentResult(tool, unsent, notes) {
     unsent,
   };
 }
-//@ chunk-e3wfm0b3.js:11235-11379 placement
+//@ chunk-8y2857ke.js:11263-11407 placement
 function failedResult(message, notes) {
   return buildRemoteToolCallResult({
     envelope: {
@@ -779,7 +779,7 @@ function failedResult(message, notes) {
     content: message,
   });
 }
-//@ chunk-e3wfm0b3.js:11379-11544 placement
+//@ chunk-8y2857ke.js:11407-11572 placement
 function completedError(message, disposition, notes) {
   let content = truncateMiddle(message);
   return buildRemoteToolCallResult({

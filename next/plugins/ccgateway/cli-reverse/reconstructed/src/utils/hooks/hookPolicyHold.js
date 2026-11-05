@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子策略暂扣
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (27)
  * attribution: placement 27
  */
 import { isHookPolicyUnanswered } from "../../commands/goal/goal.js";
@@ -35,11 +35,15 @@ import {
 } from "../hooks.js";
 import { isAutoAllowedInMode, isPlanBypass } from "../permissions/browserToolNames.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { marketplaceNameAnswerState } from "../plugins/marketplaceNames.js";
 import { logForDebugging } from "../debug.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { describeHooksModulesOffReason, isAutoModeGateOpen } from "../plugins/hooksModulesRollout.js";
+import {
+  describeHooksModulesOffReason,
+  isAutoModeGateOpen,
+  isHooksModulesGateDisabled,
+} from "../plugins/hooksModulesRollout.js";
 import { isBuiltinPluginId, getBuiltinPluginNames } from "../../plugins/builtinPlugins.js";
 import {
   areHooksModulesAllowed,
@@ -61,7 +65,6 @@ import {
   getEligibilityMemo,
 } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { hasHelperPassInFlight } from "../settings/policyHelper/helperRemote.js";
-import { AUTO_MODE_ENABLED_DEFAULT } from "../permissions/permissionSetup.js";
 import { nfcLower } from "../stringUtils.js";
 import { pluginNameAliases, parsePluginIdentifier } from "../plugins/pluginIdentifier.js";
 import { BUILTIN } from "../telemetry/pluginTelemetry.js";
@@ -71,10 +74,10 @@ import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import { arePluginHooksHeld } from "../permissions/permissionsLoader.js";
 import { getPolicyAllowedSet } from "../plugins/pluginPolicy.js";
 
-//@ chunk-e6aww6q8.js:753062-753108 placement
+//@ chunk-5xgkngpb.js:763655-763701 placement
 var isHookPolicyHoldActive = () =>
   isHookPolicyUnanswered() || getManagedHooksHoldState("PreToolUse").isFaulted;
-//@ chunk-e6aww6q8.js:753108-753406 placement
+//@ chunk-5xgkngpb.js:763701-763999 placement
 /**
  * 等待组织托管设置对钩子策略给出答复（有上限时间，可被中止）；超时则标记等待预算已用尽，之后不再等待。
  */
@@ -96,7 +99,7 @@ function waitForOrganizationHookPolicy(signal, timeoutMs) {
     if (outcome === undefined) organizationAsk.isBoundSpent = true;
   });
 }
-//@ chunk-e6aww6q8.js:753406-753540 placement
+//@ chunk-5xgkngpb.js:763999-764133 placement
 function maybeWaitForHookPolicy(hookEvent, wanted, signal, timeoutMs) {
   try {
     if (!GUARD_AND_FEEDBACK_EVENTS.has(hookEvent) || !isHookPolicyUnanswered()) return;
@@ -112,9 +115,9 @@ function maybeWaitForHookPolicy(hookEvent, wanted, signal, timeoutMs) {
   }
   return proceed ? waitForOrganizationHookPolicy(signal, timeoutMs) : undefined;
 }
-//@ chunk-e6aww6q8.js:753540-753555 placement
+//@ chunk-5xgkngpb.js:764133-764148 placement
 var DENY = "deny";
-//@ chunk-e6aww6q8.js:753555-753779 placement
+//@ chunk-5xgkngpb.js:764148-764372 placement
 async function holdToolCallForHookPolicy(eventApplies, denyWanted, signal, timeoutMs) {
   let holding = false;
   try {
@@ -137,7 +140,7 @@ async function holdToolCallForHookPolicy(eventApplies, denyWanted, signal, timeo
     hookPermissionDecisionReason: HOOK_CHECK_UNAVAILABLE_MESSAGE,
   };
 }
-//@ chunk-e6aww6q8.js:753779-753972 placement
+//@ chunk-5xgkngpb.js:764372-764565 placement
 function isBypassPermissionsInEffect(toolByName, toolPermissionContext, mode) {
   let isBypass = mode === "bypassPermissions";
   if (toolPermissionContext === undefined) return isBypass;
@@ -148,7 +151,7 @@ function isBypassPermissionsInEffect(toolByName, toolPermissionContext, mode) {
     isPlanBypass(autoMode, toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-e6aww6q8.js:753972-754088 placement
+//@ chunk-5xgkngpb.js:764565-764681 placement
 function withHeldPermissionBehavior(result, denyWanted) {
   if (result === undefined) return;
   let deny = true;
@@ -162,7 +165,7 @@ function withHeldPermissionBehavior(result, denyWanted) {
     permissionBehavior: deny ? DENY : "ask",
   };
 }
-//@ chunk-e6aww6q8.js:754088-754359 placement
+//@ chunk-5xgkngpb.js:764681-764952 placement
 /**
  * 生成"钩子因托管设置未就绪/不可读而未运行"的说明，附上受影响的钩子事件（插件钩子带插件 id）列表。
  */
@@ -178,14 +181,14 @@ function hooksNotRunningMessage() {
         "pluginId" in matcher ? `${event} (plugin ${matcher.pluginId})` : event,
       ),
     );
-    let joined = uniq(flattened).toSorted().join(", ");
+    let joined = normalizeCaseForComparison_2(flattened).toSorted().join(", ");
     return flattened.length > 0 ? `${message} Hooks not running: ${joined}.` : message;
   } catch (error) {
     logError(error);
     return message;
   }
 }
-//@ chunk-e6aww6q8.js:754359-754458 placement (2.1.88 match: createMemoryFileCanUseTool, 0.484)
+//@ chunk-5xgkngpb.js:764952-765051 placement (2.1.88 match: createMemoryFileCanUseTool, 0.53)
 /**
  * 只允许 Edit 指定记忆文件的 canUseTool（会话记忆更新代理用）。
  */
@@ -199,7 +202,7 @@ function createMemoryFileCanUseTool() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:754458-755329 placement
+//@ chunk-5xgkngpb.js:765051-765926 placement
 function waitForCloudModsHold(reload, tell, timeoutMs) {
   let organizationAsk = getPluginRegistry().organizationAsk;
   let answerState = marketplaceNameAnswerState();
@@ -258,7 +261,7 @@ function waitForCloudModsHold(reload, tell, timeoutMs) {
     })
     .catch(logError);
 }
-//@ chunk-e6aww6q8.js:755329-755700 placement
+//@ chunk-5xgkngpb.js:765926-766297 placement
 /**
  * 等待组织托管 hook 策略回答后再运行启动 hook，并记录等待时长。
  */
@@ -285,7 +288,7 @@ function waitForStartHooksPolicy(signal) {
     .catch(logError);
   return organizationAsk.startHooksWait;
 }
-//@ chunk-e6aww6q8.js:755700-755779 placement
+//@ chunk-5xgkngpb.js:766297-766376 placement
 /**
  * 钩子策略未答复且有已配置钩子时，等待组织托管设置答复（有上限）。
  */
@@ -297,7 +300,7 @@ var waitForStartHooksPolicyIfNeeded = (hookEvent, signal) =>
         : undefined,
     )
     .catch(logError);
-//@ chunk-e6aww6q8.js:755779-756371 placement
+//@ chunk-5xgkngpb.js:766376-766968 placement
 /**
  * 在 hook 结果中找出最后一个给出阻止或权限决定的结果。
  */
@@ -329,7 +332,7 @@ function reconcileHeldHookResults(held, results) {
         updatedInput,
       };
 }
-//@ chunk-e6aww6q8.js:756371-757137 placement
+//@ chunk-5xgkngpb.js:766968-767734 placement
 function describeHooksModulesTurnedOff(isManaged, state) {
   if (state.builtinsOnly)
     return `hooks modules are turned off for installed plugins in this process: ${describeHooksModulesOffReason()}; built-in plugins load regardless`;
@@ -344,7 +347,7 @@ function describeHooksModulesTurnedOff(isManaged, state) {
     return "only managed plugins and built-in plugins run (allowManagedHooksOnly / disableAllHooks)";
   return state.organization === "unanswered" ? MODS_POLICY_UNKNOWN_REASON : undefined;
 }
-//@ chunk-e6aww6q8.js:757137-757259 placement
+//@ chunk-5xgkngpb.js:767734-767856 placement
 function pluginHooksRefusalReason(pluginId, held, state) {
   return isBuiltinPluginId(pluginId)
     ? undefined
@@ -355,13 +358,13 @@ function pluginHooksRefusalReason(pluginId, held, state) {
           personsHeld: state.personsHeld && !held.isPolicyEnabled,
         });
 }
-//@ chunk-e6aww6q8.js:757259-757319 placement
+//@ chunk-5xgkngpb.js:767856-767916 placement
 /**
  * 判断是否只允许内建插件的钩子模块（受限模式且等待已结束）。
  */
 var areBuiltinOnlyHooksModules = (registry) =>
   !areHooksModulesAllowed() || (isAutoModeGateOpen() && registry.hooksModulesWakeBound === "ahead");
-//@ chunk-e6aww6q8.js:757319-757412 placement
+//@ chunk-5xgkngpb.js:767916-768009 placement
 /**
  * 汇总钩子策略状态（总开关、仅托管、全禁用、组织答复状态）。
  */
@@ -371,7 +374,7 @@ var hookPolicySummaryState = () => ({
   allDisabled: shouldDisableAllHooksIncludingManaged(),
   organization: marketplaceNameAnswerState(),
 });
-//@ chunk-e6aww6q8.js:757412-757468 placement
+//@ chunk-5xgkngpb.js:768009-768065 placement
 function isCoworkSessionSafe() {
   try {
     return isCoworkSession();
@@ -380,13 +383,13 @@ function isCoworkSessionSafe() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:757468-757536 placement
+//@ chunk-5xgkngpb.js:768065-768133 placement
 var isRemoteSettingsAnswered = (lastLoadStatus) =>
   lastLoadStatus?.state === "ok" &&
   (!lastLoadStatus.hasSettings ||
     isRemoteManagedSettingsVerified() ||
     getRemoteSettingsPathOverride() !== undefined);
-//@ chunk-e6aww6q8.js:757536-757728 placement
+//@ chunk-5xgkngpb.js:768133-768325 placement
 function remoteSettingsAnswerState() {
   let lastLoadStatus = getLastLoadStatus();
   let answered = isRemoteSettingsAnswered(lastLoadStatus);
@@ -395,19 +398,19 @@ function remoteSettingsAnswerState() {
   let ok = getEligibilityMemo() === false || isCoworkSessionSafe() || answered;
   return hasHelperPassInFlight() || !(ok || failed) ? "pending" : ok ? "answered" : "failed";
 }
-//@ chunk-e6aww6q8.js:757728-757853 placement
+//@ chunk-5xgkngpb.js:768325-768450 placement
 function getHookPolicyAnswerState() {
   try {
     let settingsState = remoteSettingsAnswerState();
     let readable = !policySettingsUnreadable();
-    let autoModeOn = settingsState !== "pending" && AUTO_MODE_ENABLED_DEFAULT();
+    let autoModeOn = settingsState !== "pending" && isHooksModulesGateDisabled();
     return readable ? settingsState : autoModeOn ? "failed" : "pending";
   } catch (error) {
     logError(error);
     return "pending";
   }
 }
-//@ chunk-e6aww6q8.js:757853-757941 placement
+//@ chunk-5xgkngpb.js:768450-768538 placement
 /**
  * 判断个人安装的钩子模块是否需要暂扣等待 rollout 开关。
  */
@@ -415,8 +418,8 @@ var shouldHoldPersonalModuleHooks = (registry) =>
   registry.hooksModulesWakeBound !== "ahead" &&
   isAutoModeGateOpen() &&
   areHooksModulesAllowed() &&
-  !(AUTO_MODE_ENABLED_DEFAULT() && getHookPolicyAnswerState() === "answered");
-//@ chunk-e6aww6q8.js:757941-758119 placement
+  !(isHooksModulesGateDisabled() && getHookPolicyAnswerState() === "answered");
+//@ chunk-5xgkngpb.js:768538-768716 placement
 /**
  * 从托管来源集合中筛出与给定来源列表匹配的部分。
  */
@@ -431,7 +434,7 @@ function filterManagedHookSources(policyAllowedSet, sources) {
       .map((source) => source.source),
   );
 }
-//@ chunk-e6aww6q8.js:758119-758216 placement
+//@ chunk-5xgkngpb.js:768716-768813 placement
 /**
  * 判断某插件名是否为内建插件的别名。
  */
@@ -444,7 +447,7 @@ var isBuiltinPluginAlias = (plugin) =>
       }),
     )
     .some((alias) => nfcLower(alias) === nfcLower(plugin.name));
-//@ chunk-e6aww6q8.js:758216-758297 placement
+//@ chunk-5xgkngpb.js:768813-768894 placement
 /**
  * 判断某插件是否为已担保的托管插件（名称与来源一致且非内建别名）。
  */
@@ -452,7 +455,7 @@ var isManagedPluginVouched = (plugin) =>
   resolveManagedPluginDigests(plugin.source) !== undefined &&
   nfcLower(plugin.name) === nfcLower(parsePluginIdentifier(plugin.source).name) &&
   !isBuiltinPluginAlias(plugin);
-//@ chunk-e6aww6q8.js:758297-758562 placement
+//@ chunk-5xgkngpb.js:768894-769159 placement
 /**
  * 给出插件钩子模块不可运行的原因（未知/个人受限/策略限制等）。
  */
@@ -480,7 +483,7 @@ function hooksModuleRefusalReason(pluginId, plugin) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:758562-758786 placement
+//@ chunk-5xgkngpb.js:769159-769383 placement
 function assertPluginHooksAdmitted(state, plugin) {
   if (state.knownArgs.get(plugin.pluginName)?.sealed === true)
     throw new NotOrganizationPluginError(
@@ -493,11 +496,7 @@ function assertPluginHooksAdmitted(state, plugin) {
 export {
   waitForOrganizationHookPolicy,
   DENY,
-  isBypassPermissionsInEffect,
-  holdToolCallForHookPolicy,
-  reconcileHeldHookResults,
-  withHeldPermissionBehavior,
-  maybeWaitForHookPolicy,
+  waitForCloudModsHold,
   isManagedPluginVouched,
   filterManagedHookSources,
   pluginHooksRefusalReason,
@@ -508,8 +507,12 @@ export {
   remoteSettingsAnswerState,
   shouldHoldPersonalModuleHooks,
   assertPluginHooksAdmitted,
+  isBypassPermissionsInEffect,
+  holdToolCallForHookPolicy,
+  reconcileHeldHookResults,
+  withHeldPermissionBehavior,
+  maybeWaitForHookPolicy,
   isBuiltinPluginAlias,
   hooksModuleRefusalReason,
   waitForStartHooksPolicyIfNeeded,
-  waitForCloudModsHold,
 };

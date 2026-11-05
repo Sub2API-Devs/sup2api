@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。为 start_task/update_task 上传附件文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pcnabvxx.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pdtsqx7p.js (29)
  * attribution: placement 29
  */
 import { posix } from "path";
@@ -61,8 +61,9 @@ import { getOauthConfig } from "../../constants/oauth.js";
 import { StoredLoginHeldBackError } from "../oauth/storedLoginRefusal.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-pcnabvxx.js:1079-1983 placement
+//@ chunk-pdtsqx7p.js:1113-2017 placement
 /**
  * 任务附件上限与各动作文案
  */
@@ -107,7 +108,7 @@ var TASK_TOOL_WORDS = {
     wordsArg: "update_instructions",
   },
 };
-//@ chunk-pcnabvxx.js:1983-2129 placement
+//@ chunk-pdtsqx7p.js:2017-2163 placement
 /**
  * 判断是否可为该 MCP 服务器上传任务文件（工具箱服务器且开关开启），返回宿主信息。
  */
@@ -123,7 +124,7 @@ function taskFileUploadTarget(server, sessionCtx) {
     host,
   };
 }
-//@ chunk-pcnabvxx.js:2129-2659 placement
+//@ chunk-pdtsqx7p.js:2163-2693 placement
 async function prepareStartTaskFileInputs(toolConfig, taskKind, input, signal, onProgress, sessionCtx) {
   let files = input.files;
   if (!Array.isArray(files) || files.length === 0) return {};
@@ -159,16 +160,23 @@ async function prepareStartTaskFileInputs(toolConfig, taskKind, input, signal, o
     },
   };
 }
-//@ chunk-pcnabvxx.js:2659-2735 placement
+//@ chunk-pdtsqx7p.js:2693-2769 placement
 /**
  * 先上传再询问的时限与标记，以及上传总字节与租约时长。
  */
-var UPLOAD_MUST_START_WITHIN_MS = 600000;
-var START_TASK_UPLOAD_BEFORE_ASK = "start-task-upload-before-ask";
-var UPLOAD_BEFORE_ASK_MARK = MAX_TASK_FILE_BYTES;
-var UPLOAD_MAX_TOTAL_BYTES = 300000;
-var weakMap = new WeakMap();
-//@ chunk-pcnabvxx.js:2735-3464 placement
+var UPLOAD_MUST_START_WITHIN_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var START_TASK_UPLOAD_BEFORE_ASK;
+var UPLOAD_BEFORE_ASK_MARK;
+var UPLOAD_MAX_TOTAL_BYTES;
+var weakMap;
+deferInit("chunk-pdtsqx7p.js:2693", () => {
+  UPLOAD_MUST_START_WITHIN_MS = 600000;
+  START_TASK_UPLOAD_BEFORE_ASK = "start-task-upload-before-ask";
+  UPLOAD_BEFORE_ASK_MARK = MAX_TASK_FILE_BYTES;
+  UPLOAD_MAX_TOTAL_BYTES = 300000;
+  weakMap = new WeakMap();
+});
+//@ chunk-pdtsqx7p.js:2769-3498 placement
 function startTaskAskInputPreparer(tool, taskKind, input, signal, onProgress, sessionCtx, toolUseId) {
   let files = input.files;
   if (
@@ -226,7 +234,7 @@ function startTaskAskInputPreparer(tool, taskKind, input, signal, onProgress, se
     },
   };
 }
-//@ chunk-pcnabvxx.js:3464-4192 placement
+//@ chunk-pdtsqx7p.js:3498-4226 placement
 /**
  * 执行任务附件上传并维持 keepalive
  */
@@ -272,7 +280,7 @@ async function runStartTaskUploads(pendingEntry, words, files, host, signal, onP
     ok: true,
   };
 }
-//@ chunk-pcnabvxx.js:4192-4294 placement
+//@ chunk-pdtsqx7p.js:4226-4328 placement
 /**
  * 删除已上传的任务文件（本地或经宿主）。
  */
@@ -283,14 +291,14 @@ async function deleteUploadedTaskFiles(fileIds, host) {
   }
   await Promise.all(fileIds.map((fileId) => host.delete?.(fileId)));
 }
-//@ chunk-pcnabvxx.js:4294-4346 placement
+//@ chunk-pdtsqx7p.js:4328-4380 placement
 /**
  * 合法的 file_id 原样返回，否则用 ? 占位。
  */
 function sanitizedFileId(fileId) {
   return fileId !== undefined && FILE_ID_RE.test(fileId) ? fileId : "?";
 }
-//@ chunk-pcnabvxx.js:4346-4515 placement
+//@ chunk-pdtsqx7p.js:4380-4549 placement
 async function removeStartTaskUploadsFor(toolConfig, sessionCtx, files) {
   let target = taskFileUploadTarget(toolConfig, sessionCtx);
   if (target === undefined || !Array.isArray(files)) return;
@@ -299,7 +307,7 @@ async function removeStartTaskUploadsFor(toolConfig, sessionCtx, files) {
   );
   await deleteUploadedTaskFiles(fileIds, target.host);
 }
-//@ chunk-pcnabvxx.js:4515-4851 placement
+//@ chunk-pdtsqx7p.js:4549-4886 placement
 function startTaskSendRefusal(uploadedAtMs, taskKind) {
   let words = TASK_TOOL_WORDS[taskKind];
   if (Date.now() > uploadedAtMs + FILE_EXPIRY_SECONDS * 1000 - UPLOAD_MAX_TOTAL_BYTES)
@@ -312,7 +320,7 @@ function startTaskSendRefusal(uploadedAtMs, taskKind) {
     ).error;
   return isPolicyMissing ? policyPendingRefusal(words).error : undefined;
 }
-//@ chunk-pcnabvxx.js:4851-5213 placement
+//@ chunk-pdtsqx7p.js:4886-5248 placement
 function startTaskFilesPromptNote(toolConfig, taskKind, sessionCtx) {
   let isRemoteMode = getIsRemoteMode(sessionCtx);
   if (
@@ -324,7 +332,7 @@ function startTaskFilesPromptNote(toolConfig, taskKind, sessionCtx) {
     return;
   return `In this session, files the user attached to the chat are usually in ${isRemoteMode}. To give one to the task, put its full path in files as an object, such as files: [{"path": "${isRemoteMode}/report.csv"}]. Do that rather than copying the file's text into ${TASK_TOOL_WORDS[taskKind].wordsArg}.`;
 }
-//@ chunk-pcnabvxx.js:5213-5902 placement
+//@ chunk-pdtsqx7p.js:5248-5937 placement
 function startTaskInputRefusal(toolConfig, taskKind, input, schema, sessionCtx) {
   let files = input.files;
   if (
@@ -362,14 +370,14 @@ function startTaskInputRefusal(toolConfig, taskKind, input, schema, sessionCtx) 
       : ` ${fileRefusal.error.endsWith(nothingDoneSuffix) ? fileRefusal.error.slice(0, -nothingDoneSuffix.length) : fileRefusal.error}`;
   return `Cannot call ${taskKind} with these arguments: ${schemaViolation.listed}.${fileErrorPrefix}${schemaViolation.takes} ${words.nothingDone}`;
 }
-//@ chunk-pcnabvxx.js:5902-5931 placement
+//@ chunk-pdtsqx7p.js:5937-5966 placement
 /**
  * 删除上传文件时的时间参数（必须在多久内开始）。
  */
 var DELETE_UPLOAD_TIMINGS = {
   mustStartWithinMs: MUST_START_WITHIN_MS,
 };
-//@ chunk-pcnabvxx.js:5931-6837 placement
+//@ chunk-pdtsqx7p.js:5966-6873 placement
 /**
  * 删除 start_task 上传的文件
  */
@@ -428,7 +436,7 @@ async function deleteStartTaskFiles(files, words, sessionCtx, signal, timings = 
     files: uploaded,
   };
 }
-//@ chunk-pcnabvxx.js:6837-7983 placement
+//@ chunk-pdtsqx7p.js:6873-8020 placement
 /**
  * 上传 start_task/update_task 的附件
  */
@@ -475,7 +483,7 @@ async function uploadStartTaskFiles(files, words, host, sessionCtx, signal, timi
     files: uploaded,
   };
 }
-//@ chunk-pcnabvxx.js:7983-8782 placement
+//@ chunk-pdtsqx7p.js:8020-8819 placement
 /**
  * 为 start_task/update_task 上传附件文件。
  */
@@ -553,37 +561,44 @@ async function uploadStartTaskFileAt(realPath, requiredDigest, signal, totalBudg
     code: `upload_${failureReason}`,
   };
 }
-//@ chunk-pcnabvxx.js:8782-9097 placement
+//@ chunk-pdtsqx7p.js:8819-9134 placement
 /**
  * 上传/删除错误码分类
  */
-var RETRYABLE_UPLOAD_CODES = {
-  file_read: true,
-  too_large: true,
-  auth: true,
-  forbidden: true,
-  canceled: true,
-  server: true,
-  network: true,
-};
-var DELETE_RETRYABLE_CODES = {
-  auth: true,
-  forbidden: true,
-  not_found: true,
-  server: true,
-  network: true,
-};
-var START_TASK_FILE_DELETE_WORDS = [
-  "egress_blocked",
-  "essential_traffic",
-  "no_token",
-  "timeout",
-  "unexpected",
-  ...Object.keys(DELETE_RETRYABLE_CODES).map((key) => `delete_${key}`),
-];
-var DELETE_TIMEOUT_MS = 5000;
-var DELETE_TIMEOUT_MESSAGE = "start_task upload cleanup timed out";
-//@ chunk-pcnabvxx.js:9097-9363 placement
+var RETRYABLE_UPLOAD_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DELETE_RETRYABLE_CODES;
+var START_TASK_FILE_DELETE_WORDS;
+var DELETE_TIMEOUT_MS;
+var DELETE_TIMEOUT_MESSAGE;
+deferInit("chunk-pdtsqx7p.js:8819", () => {
+  RETRYABLE_UPLOAD_CODES = {
+    file_read: true,
+    too_large: true,
+    auth: true,
+    forbidden: true,
+    canceled: true,
+    server: true,
+    network: true,
+  };
+  DELETE_RETRYABLE_CODES = {
+    auth: true,
+    forbidden: true,
+    not_found: true,
+    server: true,
+    network: true,
+  };
+  START_TASK_FILE_DELETE_WORDS = [
+    "egress_blocked",
+    "essential_traffic",
+    "no_token",
+    "timeout",
+    "unexpected",
+    ...Object.keys(DELETE_RETRYABLE_CODES).map((key) => `delete_${key}`),
+  ];
+  DELETE_TIMEOUT_MS = 5000;
+  DELETE_TIMEOUT_MESSAGE = "start_task upload cleanup timed out";
+});
+//@ chunk-pdtsqx7p.js:9134-9400 placement
 async function deleteStartTaskFilesHere(fileIds) {
   if (fileIds.length === 0) return;
   let failureKind;
@@ -600,7 +615,7 @@ async function deleteStartTaskFilesHere(fileIds) {
   else logFeatureSad("managed_agents_task_file_cleanup", failureKind);
   return failureKind;
 }
-//@ chunk-pcnabvxx.js:9363-9727 placement
+//@ chunk-pdtsqx7p.js:9400-9764 placement
 /**
  * 删除已上传的文件
  */
@@ -632,16 +647,19 @@ async function deleteUploadedFiles(fileIds) {
   ).find((result) => !result.success);
   return found !== undefined && !found.success ? `delete_${found.reason}` : undefined;
 }
-//@ chunk-pcnabvxx.js:9727-9861 placement
-var START_TASK_FILE_UPLOAD_WORDS = [
-  ...Object.keys(ATTACH_FAILURE_KINDS),
-  ...Object.keys(RETRYABLE_UPLOAD_CODES).map((key) => `upload_${key}`),
-  "path_rejected",
-  "no_token",
-  "name_direction",
-  "too_large_total",
-];
-//@ chunk-pcnabvxx.js:9861-12528 placement
+//@ chunk-pdtsqx7p.js:9764-9898 placement
+var START_TASK_FILE_UPLOAD_WORDS; // deferred: uses ATTACH_FAILURE_KINDS (../fileInputs/screenPath.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pdtsqx7p.js:9764", () => {
+  START_TASK_FILE_UPLOAD_WORDS = [
+    ...Object.keys(ATTACH_FAILURE_KINDS),
+    ...Object.keys(RETRYABLE_UPLOAD_CODES).map((key) => `upload_${key}`),
+    "path_rejected",
+    "no_token",
+    "name_direction",
+    "too_large_total",
+  ];
+});
+//@ chunk-pdtsqx7p.js:9898-12565 placement
 /**
  * 单个文件不能附加的说明
  */
@@ -742,14 +760,14 @@ function fileRefusalFor(filePath, code, location, sessionCtx, words) {
       };
   }
 }
-//@ chunk-pcnabvxx.js:12528-12569 placement
+//@ chunk-pdtsqx7p.js:12565-12606 placement
 /**
  * 判断上传错误码是否可重试。
  */
 function isRetryableUploadCode(code) {
   return Object.hasOwn(RETRYABLE_UPLOAD_CODES, code);
 }
-//@ chunk-pcnabvxx.js:12569-12807 placement
+//@ chunk-pdtsqx7p.js:12606-12844 placement
 /**
  * 上传太慢的拒绝说明
  */
@@ -759,7 +777,7 @@ function uploadsTooSlowRefusal(words) {
     code: "uploads_too_slow",
   };
 }
-//@ chunk-pcnabvxx.js:12807-12991 placement
+//@ chunk-pdtsqx7p.js:12844-13028 placement
 /**
  * 非必要流量关闭时的拒绝说明
  */
@@ -769,7 +787,7 @@ function essentialTrafficRefusal(words) {
     code: "essential_traffic",
   };
 }
-//@ chunk-pcnabvxx.js:12991-13253 placement
+//@ chunk-pdtsqx7p.js:13028-13290 placement
 /**
  * 策略未加载时的拒绝说明
  */
@@ -779,7 +797,7 @@ function policyPendingRefusal(words) {
     code: "policy_pending",
   };
 }
-//@ chunk-pcnabvxx.js:13253-13415 placement
+//@ chunk-pdtsqx7p.js:13290-13452 placement
 /**
  * 出口被阻断时的拒绝说明
  */
@@ -789,7 +807,7 @@ function egressBlockedRefusal(words) {
     code: "egress_blocked",
   };
 }
-//@ chunk-pcnabvxx.js:13415-13540 placement
+//@ chunk-pdtsqx7p.js:13452-13577 placement
 /**
  * 附加文件需要 claude.ai 登录的拒绝结果。
  */
@@ -799,7 +817,7 @@ function signInRequiredRefusal(words) {
     code: "no_token",
   };
 }
-//@ chunk-pcnabvxx.js:13540-13635 placement
+//@ chunk-pdtsqx7p.js:13577-13672 placement
 /**
  * 生成「附件上传被中断」的拒绝结果（附错误码）。
  */
@@ -809,7 +827,7 @@ function interruptedUploadRefusal(code, words) {
     code,
   };
 }
-//@ chunk-pcnabvxx.js:13635-14379 placement
+//@ chunk-pdtsqx7p.js:13672-14416 placement
 /**
  * 上传失败的拒绝说明
  */

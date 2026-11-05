@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。终端标题更新。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
- * attribution: placement 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
+ * attribution: affinity 1, placement 3
  */
 import {
   jsxProd_default,
@@ -16,22 +16,23 @@ import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { logEvent } from "../../services/analytics/index.js";
 import { env } from "../../utils/env.js";
-import { logError } from "../../utils/log.js";
+import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import {
   subscribeSessionTitleChanged,
   getCurrentSessionTitle,
   getCurrentSessionAiTitle,
 } from "../../utils/sessionStorage.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { DEFAULT_TITLE } from "../../services/notifier.js";
+import { logError } from "../../utils/log.js";
 
-//@ chunk-18hwfzwa.js:173871-173945 placement
+//@ chunk-czq1j3j2.js:179221-179243 affinity (2.1.88 match: DEFAULT_TITLE, 1)
+var DEFAULT_TITLE = "Claude Code";
+//@ chunk-czq1j3j2.js:179243-179317 placement
 function terminalTitleFromRename(store) {
   return store.getState().settings.terminalTitleFromRename !== false;
 }
-//@ chunk-18hwfzwa.js:173945-174054 placement
+//@ chunk-czq1j3j2.js:179317-179426 placement
 var TERMINAL_TITLE_SOURCES = [
   "disabled",
   "serviceName",
@@ -41,25 +42,25 @@ var TERMINAL_TITLE_SOURCES = [
   "haikuTitle",
   "terminalTitle",
 ];
-//@ chunk-18hwfzwa.js:174054-175146 placement
+//@ chunk-czq1j3j2.js:179426-180518 placement
 class TerminalTitleController {
   #e = createSignal();
   #t;
   #o = [];
   #n;
-  #s;
   #r;
-  #c = false;
+  #s;
+  #l = false;
   #i = false;
   constructor(options) {
     this.#t = options;
-    this.#s = terminalTitleFromRename(options.store);
-    this.#r = options.store.getState().remoteSessionName;
-    this.#n = this.#l();
+    this.#r = terminalTitleFromRename(options.store);
+    this.#s = options.store.getState().remoteSessionName;
+    this.#n = this.#c();
   }
   connect() {
-    if (this.#c || this.#i) return;
-    this.#c = true;
+    if (this.#l || this.#i) return;
+    this.#l = true;
     let sources = this.#t;
     this.#o.push(
       subscribeSessionTitleChanged(this.#a),
@@ -69,9 +70,9 @@ class TerminalTitleController {
       sources.store.subscribe(() => {
         let renamedTitle = terminalTitleFromRename(sources.store);
         let remoteSessionName = sources.store.getState().remoteSessionName;
-        if (renamedTitle === this.#s && remoteSessionName === this.#r) return;
-        this.#s = renamedTitle;
-        this.#r = remoteSessionName;
+        if (renamedTitle === this.#r && remoteSessionName === this.#s) return;
+        this.#r = renamedTitle;
+        this.#s = remoteSessionName;
         this.#a();
       }),
     );
@@ -81,23 +82,23 @@ class TerminalTitleController {
   getSnapshot = () => this.#n;
   dispose = () => {
     this.#i = true;
-    this.#c = false;
+    this.#l = false;
     for (let unsubscribe of this.#o.splice(0)) unsubscribe();
   };
   #a = () => {
-    let nextTitle = this.#l();
+    let nextTitle = this.#c();
     let currentTitle = this.#n;
     if (TERMINAL_TITLE_SOURCES.every((source) => Object.is(nextTitle[source], currentTitle[source]))) return;
     this.#n = nextTitle;
     this.#e.emit();
   };
-  #l() {
+  #c() {
     let { session, sessionController, scope, disabled } = this.#t;
-    let sessionTitle = this.#s ? getCurrentSessionTitle(session.id) : undefined;
+    let sessionTitle = this.#r ? getCurrentSessionTitle(session.id) : undefined;
     let currentSessionAiTitle = getCurrentSessionAiTitle(session.id);
     let { haikuTitle } = sessionController.getSnapshot();
     let agentType = scope.getSnapshot().mainThreadAgentDefinition?.agentType;
-    let serviceName = this.#s ? this.#r : undefined;
+    let serviceName = this.#r ? this.#s : undefined;
     return {
       disabled,
       serviceName,

@@ -1,8 +1,8 @@
 /**
  * jose/dist/browser/runtime/pbes2kw.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (4)
+ * pieces: chunk-pd6th42n.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { __esm } from "../../../../../runtime/bun-runtime.js";
@@ -16,11 +16,11 @@ import { p2s } from "../../node/esm/lib/buffer_utils.js";
 import { wrap, unwrap } from "./aeskw.js";
 import { encode } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:11526-11547 esm-layout
+//@ chunk-pd6th42n.js:11526-11547 esm-layout
 var init_pbes2kw = __esm(() => {
   init_content_encryption_2();
 });
-//@ chunk-2tyrgda4.js:11547-11742 esm-fingerprint
+//@ chunk-pd6th42n.js:11547-11742 esm-fingerprint
 function getCryptoKey_2(key, alg) {
   if (key instanceof Uint8Array)
     return cryptoModule.subtle.importKey("raw", key, "PBKDF2", false, ["deriveBits"]);
@@ -30,7 +30,7 @@ function getCryptoKey_2(key, alg) {
   }
   throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes, "Uint8Array"));
 }
-//@ chunk-2tyrgda4.js:11742-12193 esm-fingerprint
+//@ chunk-pd6th42n.js:11742-12193 esm-fingerprint
 async function deriveKey_2(p2s_2, alg, p2c, key) {
   checkP2s(p2s_2);
   let salt = p2s(alg, p2s_2);
@@ -52,7 +52,7 @@ async function deriveKey_2(p2s_2, alg, p2c, key) {
     return cryptoModule.subtle.deriveKey(subtleAlg, cryptoKey, wrapAlg, false, ["wrapKey", "unwrapKey"]);
   throw TypeError('PBKDF2 key "usages" must include "deriveBits" or "deriveKey"');
 }
-//@ chunk-2tyrgda4.js:12193-12407 esm-fingerprint
+//@ chunk-pd6th42n.js:12193-12407 esm-fingerprint
 var encrypt = async (alg, key, plaintext, p2c = 2048, p2s = generateCek(new Uint8Array(16))) => {
   let derived = await deriveKey_2(p2s, alg, p2c, key);
   return {

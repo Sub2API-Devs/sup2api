@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：后台 worktree 守卫的逐命令规则：识别会写到 worktree 之外、远程执行（ssh/kubectl 等）或无法静态判定目标的命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63f0f3kd.js (56)
- * attribution: placement 56
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h2y5xkdx.js (79)
+ * attribution: placement 55, layout 24
  */
 import { basename } from "path";
 import {
@@ -14,9 +14,9 @@ import {
   EVAL_LIKE_BUILTINS,
   POSIX_SHELL_NAMES,
   parseForSecurityFromAst,
+  UNHANDLED_EXEC_WRAPPERS,
   POSIX_SPECIAL_BUILTINS_NONEVAL,
   APPLET_SHELL_NAMES,
-  UNHANDLED_EXEC_WRAPPERS,
   SET_O_SAFE_LETTERS,
   READ_DATA_FLAGS,
   READ_NUMERIC_ARG_FLAGS,
@@ -50,7 +50,8 @@ import {
   shortenForReason,
   analyzeAssignment,
   OPTION_POSITION_NOTE,
-  dynamicArgumentReason,
+  describeComputedValue,
+  describeWordRefusal,
   OPTION_POSITION_NOTE_LONG,
   WORD_NODE_TYPES,
   tooComplexReason,
@@ -105,11 +106,12 @@ import {
   describeUnsafeBinding,
 } from "./statementWalk.js";
 import { getParserModule } from "../../../utils/bash/bashParser.js";
-import { count } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
+import { countWhere } from "../../../utils/collections.js";
 import { getPlatform } from "../../../utils/platform.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-63f0f3kd.js:50717-50884 placement
+//@ chunk-h2y5xkdx.js:51169-51336 placement
 function programBaseName(program) {
   let replaced = basename(program.replace(/\\/g, "/"))
     .toLowerCase()
@@ -117,7 +119,7 @@ function programBaseName(program) {
   let replaced_2 = replaced.replace(/([a-z])-?\d[\d.]*$/, "$1");
   return INTERPRETER_RULES.has(replaced_2) || SHELL_PROGRAM_NAMES.has(replaced_2) ? replaced_2 : replaced;
 }
-//@ chunk-63f0f3kd.js:50884-51057 placement
+//@ chunk-h2y5xkdx.js:51336-51510 placement
 /**
  * 若命令是 git 或可能间接执行 git 的声明/eval 类内建命令，返回说明原因。
  */
@@ -128,7 +130,7 @@ function describeGitRunner(program) {
     ? `runs ${baseName} ${TOO_COMPLEX_SUFFIX}; what it reads or is handed as shell text cannot be shown not to run git`
     : null;
 }
-//@ chunk-63f0f3kd.js:51057-55417 placement
+//@ chunk-h2y5xkdx.js:51510-55870 placement
 /**
  * 各解释器（python/node/bun/deno/perl/ruby/php/lua/R/julia/osascript/groovy/tcl）的命令行规则表：内联代码选项、模块选项、取值选项、普通标志、能启动其他程序的代码特征（bridge）、启动时相关的环境变量前缀。
  */
@@ -141,7 +143,7 @@ var R_INTERPRETER_RULES;
 var TCL_INTERPRETER_RULES;
 var PYTHON_INTERPRETER_RULES;
 var INTERPRETER_RULES;
-deferInit("chunk-63f0f3kd.js:51057", () => {
+deferInit("chunk-h2y5xkdx.js:51510", () => {
   NEVER_MATCH_RE = /(?!)/;
   INTERPRETER_RULE_DEFAULTS = {
     module: NEVER_MATCH_RE,
@@ -283,20 +285,20 @@ deferInit("chunk-63f0f3kd.js:51057", () => {
     }),
   );
 });
-//@ chunk-63f0f3kd.js:55417-55509 placement
+//@ chunk-h2y5xkdx.js:55870-55962 placement
 /**
  * 判断词值无法静态验证：值是动态的、不是整数，且不是（选项安全且无展开）。
  */
 function isUnverifiableValue({ node, value }) {
   return value.kind === "dynamic" && !value.integer && !(value.optionSafe && !hasExpansion(node));
 }
-//@ chunk-63f0f3kd.js:55509-55609 placement
+//@ chunk-h2y5xkdx.js:55962-56062 placement
 /**
  * 匹配数组展开（$@、${@}、[@]、${!prefix@} 等），有它就无法静态判定。
  */
 var TENGU_HOLLOW_SANDPIPER = "tengu_hollow_sandpiper";
 var ARRAY_EXPANSION_RE = /\$@|\$\{@|(?<!\$\{#\w*)\[@\]|\$\{\([^)]*@[^)]*\)|\$\{![^}]*@\}/;
-//@ chunk-63f0f3kd.js:55609-55886 placement
+//@ chunk-h2y5xkdx.js:56062-56339 placement
 function isNonEmptyWordPart({ type, text }) {
   return (
     /^(?:raw_string|ansi_c_string|number|arithmetic_expansion|process_substitution)$/.test(type) ||
@@ -305,7 +307,7 @@ function isNonEmptyWordPart({ type, text }) {
     /^\$(?:\{?[?#$]\}?|\{#\w+(?:\[[^\]]*\])?\})$/.test(text)
   );
 }
-//@ chunk-63f0f3kd.js:55886-56003 placement
+//@ chunk-h2y5xkdx.js:56339-56456 placement
 function mayExpandToNothing(node) {
   return (
     !(node.type === "concatenation" ? node.children : [node]).every(isNonEmptyWordPart) &&
@@ -315,11 +317,11 @@ function mayExpandToNothing(node) {
     })
   );
 }
-//@ chunk-63f0f3kd.js:56003-56224 placement
+//@ chunk-h2y5xkdx.js:56456-56677 placement
 function emptyExpansionReason({ value }) {
   return `${describeWordValue(value)}, which may expand to no word at all (a pattern that matches no file, or an empty value), so the word after it would take its place (quote it, or name the files instead of a pattern)`;
 }
-//@ chunk-63f0f3kd.js:56224-56734 placement
+//@ chunk-h2y5xkdx.js:56677-57187 placement
 /**
  * 收集语法节点中各单词的字面前缀（跳过展开/替换、[ ] 测试表达式），动态单词只取通配前的前缀，无法确定时记为 "-"。
  */
@@ -340,21 +342,21 @@ function collectWordPrefixes(node, evalCtx) {
     evaluated.kind === "dynamic" && GLOB_SIMPLE_RE.test(node.text) ? /^[^\\*?[]*/.exec(node.text)[0] : "";
   return [literalPrefix === "" ? "-" : literalPrefix];
 }
-//@ chunk-63f0f3kd.js:56734-56795 placement
+//@ chunk-h2y5xkdx.js:57187-57248 placement
 /**
  * 判断词的前缀片段里是否含以 - 开头的部分（可能被当成选项）。
  */
 function hasOptionPrefix(node, evalCtx) {
   return collectWordPrefixes(node, evalCtx).some((prefix) => prefix.startsWith("-"));
 }
-//@ chunk-63f0f3kd.js:56795-56850 placement
+//@ chunk-h2y5xkdx.js:57248-57303 placement
 /**
  * 判断词前缀里除 -n/-N 之外是否还有其他字符。
  */
 function hasNonFlagPrefix(node, evalCtx) {
   return /[^-nN]/.test(collectWordPrefixes(node, evalCtx).join(""));
 }
-//@ chunk-63f0f3kd.js:56850-57031 placement
+//@ chunk-h2y5xkdx.js:57303-57484 placement
 /**
  * 判断语法节点是否含展开或命令替换（含 $@/$* 与数组下标）。
  */
@@ -366,7 +368,7 @@ function hasExpansion(node) {
       node.children.some((child) => /expansion|substitution/.test(child.type)))
   );
 }
-//@ chunk-63f0f3kd.js:57031-57122 placement
+//@ chunk-h2y5xkdx.js:57484-57575 placement
 /**
  * 判断词值是否无法验证（在 bot_protected_tengu_hushed_hyphen 开关下整数动态值也算）。
  */
@@ -381,7 +383,7 @@ function isRefusedValue(arg) {
       }))
   );
 }
-//@ chunk-63f0f3kd.js:57122-57305 placement
+//@ chunk-h2y5xkdx.js:57575-57758 placement
 /**
  * 判断节点是否为不含展开的引号字面量（或其拼接）。
  */
@@ -397,9 +399,9 @@ function isQuotedLiteral(node, typePattern = /^string$/) {
         )))
   );
 }
-//@ chunk-63f0f3kd.js:57305-57346 placement
+//@ chunk-h2y5xkdx.js:57758-57799 placement
 var BOT_PROTECTED_TENGU_SOFT_ISLAND = "bot_protected_tengu_soft_island";
-//@ chunk-63f0f3kd.js:57346-57383 placement
+//@ chunk-h2y5xkdx.js:57799-57836 placement
 /**
  * 读取 bot_protected_tengu_soft_island 开关：动态值一律按不可验证处理。
  */
@@ -408,13 +410,22 @@ function isStrictDynamicValuesEnabled() {
     safe: true,
   });
 }
-//@ chunk-63f0f3kd.js:57383-57455 placement
+//@ chunk-h2y5xkdx.js:57836-57881 layout
+var BOT_PROTECTED_TENGU_STURDY_TOLLGATE = "bot_protected_tengu_sturdy_tollgate";
+//@ chunk-h2y5xkdx.js:57881-57919 layout
+function isLabelNodeType() {
+  return readFlagWithOverride(BOT_PROTECTED_TENGU_STURDY_TOLLGATE, {
+    safe: true,
+  });
+}
+//@ chunk-h2y5xkdx.js:57919-58038 placement
 /**
  * 匹配数组引用展开；cs 匹配 ${#a[@]} 长度写法，求值前先替换成 0。
  */
 var ARRAY_REF_RE = /\$\{?@|\[@\]|\$\{![A-Za-z_]\w*@/;
 var ARRAY_LENGTH_RE = /\$\{#[A-Za-z_]\w*\[@\]\}/g;
-//@ chunk-63f0f3kd.js:57455-57682 placement
+var ARRAY_ELEMENT_REF_RE = /^(?:string_content|command_substitution)$/;
+//@ chunk-h2y5xkdx.js:58038-58265 placement
 /**
  * 判断单词节点在静态分析下是否确定（算术展开、少数特殊变量与不含通配的拼接视为确定）。
  */
@@ -431,7 +442,7 @@ function isStaticWord(node) {
       return isStaticWordPart(node);
   }
 }
-//@ chunk-63f0f3kd.js:57682-57907 placement
+//@ chunk-h2y5xkdx.js:58265-58490 placement
 function isStaticWordPart(node) {
   switch (node.type) {
     case "word":
@@ -448,30 +459,44 @@ function isStaticWordPart(node) {
       return false;
   }
 }
-//@ chunk-63f0f3kd.js:57907-57980 placement
+//@ chunk-h2y5xkdx.js:58490-58563 placement
 /**
  * 判断值不含“动态多值”，且单词本身是静态的。
  */
 function isFullyStaticValue({ node, value }) {
   return !(value.kind === "dynamic" && value.many) && isStaticWord(node);
 }
-//@ chunk-63f0f3kd.js:57980-58369 placement
+//@ chunk-h2y5xkdx.js:58563-58765 layout
+function isPlainWord(word) {
+  let { node, value } = word;
+  return (
+    isFullyStaticValue(word) ||
+    (/^(?:string|translated_string)$/.test(node.type) &&
+      !(value.kind === "dynamic" && value.many) &&
+      !node.children.some(
+        (child) =>
+          !ARRAY_ELEMENT_REF_RE.test(child.type) &&
+          ARRAY_REF_RE.test(child.text.replace(ARRAY_LENGTH_RE, "0")),
+      ))
+  );
+}
+//@ chunk-h2y5xkdx.js:58765-59154 placement
 /**
  * 在 argv 中查找 sh/bash 的 -c 命令字符串参数下标（解析组合短选项与 -o 参数）；不是 shell 或没有 -c 返回 -1。
  */
 function findShellCommandStringIndex(argv, shellIdx) {
   if (!POSIX_SHELL_NAMES.has(programBaseName(argv[shellIdx] ?? "-"))) return -1;
   let hasDashC = false;
-  for (let idx = shellIdx + 1; idx < argv.length; idx++) {
-    let arg = argv[idx];
+  for (let k = shellIdx + 1; k < argv.length; k++) {
+    let arg = argv[k];
     if (typeof arg !== "string") return -1;
     let match = /^[-+](?=.)[bcefhlmnptuvxBCEHP]*(o?)$/.exec(arg);
-    if (match && (!match[1] || typeof argv[idx + 1] === "string")) {
-      if (match[1] && !isSafeShellOption(argv[idx + 1] ?? "")) return -1;
+    if (match && (!match[1] || typeof argv[k + 1] === "string")) {
+      if (match[1] && !isSafeShellOption(argv[k + 1] ?? "")) return -1;
       hasDashC ||= arg.includes("c");
-      idx += match[1] ? 1 : 0;
+      k += match[1] ? 1 : 0;
     } else {
-      let commandIdx = arg === "--" ? idx + 1 : idx;
+      let commandIdx = arg === "--" ? k + 1 : k;
       return hasDashC && typeof argv[commandIdx] === "string" && !/^[-+]/.test(argv[commandIdx])
         ? commandIdx
         : -1;
@@ -479,15 +504,15 @@ function findShellCommandStringIndex(argv, shellIdx) {
   }
   return -1;
 }
-//@ chunk-63f0f3kd.js:58369-59406 placement
+//@ chunk-h2y5xkdx.js:59154-60221 layout
 function analyzeNestedShellText(launcher, shellText, parentState, stdinFed) {
   if (parentState.depth >= 2)
     return unverifiableRunReason(launcher, "with shell text that starts a third shell");
   if (/git/i.test(shellText))
     return `hands ${launcher} text naming git ${TOO_COMPLEX_SUFFIX}, which cannot be shown to stay inside the worktree`;
   let astRoot = getParserModule()?.parse(shellText) ?? null;
-  let parsed = astRoot ? parseForSecurityFromAst(shellText, astRoot) : null;
-  if (!astRoot || !parsed || (parsed.kind !== "simple" && isParseFailureNode(parsed)))
+  let analysis = astRoot ? parseForSecurityFromAst(shellText, astRoot) : null;
+  if (!astRoot || !analysis || (analysis.kind !== "simple" && isParseFailureNode(analysis)))
     return unverifiableRunReason(
       launcher,
       `with shell text it cannot parse (${shortenForReason(shellText)})`,
@@ -516,6 +541,7 @@ function analyzeNestedShellText(launcher, shellText, parentState, stdinFed) {
     deviceLinked: parentState.deviceLinked,
     scopes: [new Map()],
     depth: parentState.depth + 1,
+    sshTextBudget: parentState.sshTextBudget,
   };
   analyzeAssignment(astRoot, state, false);
   let verdict = withStdinState(astRoot, state, stdinFed);
@@ -525,27 +551,282 @@ function analyzeNestedShellText(launcher, shellText, parentState, stdinFed) {
     ? null
     : `hands ${launcher} the text ${shortenForReason(shellText)}, which ${verdict}`;
 }
-//@ chunk-63f0f3kd.js:59406-59486 placement
-var PUBLIC_IPV4_PATTERN = /^(?!127\.|0\.)(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?!$)|$)){4}$/;
-//@ chunk-63f0f3kd.js:59486-59710 placement
-function isRemoteSshHost(host) {
-  let replaced = host.replace(/^ssh:\/\/|:\d*$/gi, "").replace(/^[^@]*@/, "");
+//@ chunk-h2y5xkdx.js:60221-60629 layout
+function describeShellTextProblem(program, value, arg, fs = "rsync") {
+  return PLAIN_TEXT_RE.test(value.replace(/["']/g, "")) && !/#|""|''|%["']|(?:^|[:=])~(?!\/)/.test(value)
+    ? analyzeNestedShellText(program, value, arg, false)
+    : `hands ${fs} the remote shell ${shortenForReason(value)}, which rsync splits into words itself, with no shell, so what it runs cannot be shown not to be git (to pass, use only ASCII letters, digits, spaces, undoubled quotes and _ . , : / = + @ % ^ ~ -, with ~ only as ~/ at the start or after a : or =)`;
+}
+//@ chunk-h2y5xkdx.js:60629-61092 layout
+function describeEnvValue(envName, value, state, node = false) {
+  if (
+    envName !== "RSYNC_RSH" ||
+    !readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+      safe: true,
+    })
+  )
+    return null;
+  let prefix = "rsync, through RSYNC_RSH,";
+  if (node)
+    return `${unverifiableRunReason(prefix, "with a value set through += or a subscript")} (to pass, set the whole value in one RSYNC_RSH=)`;
+  if (value.kind !== "literal")
+    return `${unverifiableRunReason(prefix, `with ${describeWordValue(value)}`)} (to pass, spell the value out)`;
+  if (value.text === "") return null;
+  let replaced = value.text.replace(/\S*command=\S*/gi, (flag) => flag.replace(/%[a-z]/gi, "$9"));
   return (
-    /[^\w.-]|^$|(?:^|[.-])(?:localhost[46]?|localdomain[46]?|loopback)\.?$/i.test(replaced) ||
-    (/^(?:(?:0x[0-9a-f]*|\d+)(?:\.|$))+$/i.test(replaced) && !PUBLIC_IPV4_PATTERN.test(replaced))
+    describeShellTextProblem(prefix, value.text, state, prefix) ??
+    (replaced === value.text ? null : analyzeNestedShellText(prefix, replaced, state, false))
   );
 }
-//@ chunk-63f0f3kd.js:59710-59822 placement
+//@ chunk-h2y5xkdx.js:61092-61172 placement
+var PUBLIC_IPV4_PATTERN = /^(?!127\.|0\.)(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?!$)|$)){4}$/;
+//@ chunk-h2y5xkdx.js:61172-61250 layout
+function stripSshPrefix(url) {
+  return url.replace(/^ssh:\/\/|:\d*$/gi, "").replace(/^[^@]*@/, "");
+}
+//@ chunk-h2y5xkdx.js:61250-61424 placement
+function isRemoteSshHost(host) {
+  let hostName = stripSshPrefix(host);
+  return (
+    /[^\w.-]|^$|(?:^|[.-])(?:localhost[46]?|localdomain[46]?|loopback)\.?$/i.test(hostName) ||
+    (/^(?:(?:0x[0-9a-f]*|\d+)(?:\.|$))+$/i.test(hostName) && !PUBLIC_IPV4_PATTERN.test(hostName))
+  );
+}
+//@ chunk-h2y5xkdx.js:61424-61981 placement
 var SED_COMMAND_PARTS_RE = /^[\s="']*(\w*)["']?[\s=]*(.*)$/s;
+var DESTINATION_LABEL = "destination host";
 var SSH_OPTION_RE = /^-[46AaCfGgKkMNnqsTtVvXxYy]*(?:([BbcDEeFIiJLlmOoPpQRSWw])(.*))?$/s;
-//@ chunk-63f0f3kd.js:59822-61454 placement
+var SFTP_SOURCE_RE =
+  /^(?:sftp:\/\/(?:([^@]*)@)?(\[[^\]]*\]|[^:\/]*)|(?:([^:\/[]*)@)?(\[[^\]]*\](?=:|$)|[^:\/@[]+(?=:))|(.*))/is;
+var SCP_OPTION_RE = /^-[^-cDFiJloPSX]*([cDFiJloPSX])(.*)$/s;
+var SFTP_OPTION_RE = /^-[^-BbcDFiJloPRSsX]*([BbcDFiJloPRSsX])(.*)$/s;
+var LEADING_OPTION_ONLY_RE = /^-[^-cDFiJlMoPSX]+$|^-[^-cDFiJlMoPSX]*[cDFiJlMoPSX]/s;
+var LEADING_OPTION_END_RE = /^-[^-cDFiJlMoPSX]*[cDFiJlMoPSX]$/;
+var QUOTED_OPTION_NAME_RE = /^[\s="']*\w+["'][^\s=]/;
+var BOT_PROTECTED_TENGU_GLEAMING_TOME = "bot_protected_tengu_gleaming_tome";
+var BRACKET_HOST_PORT_RE = /(^|[,@])\[[\dA-Fa-f.]*:[\dA-Fa-f:.]*\](?=$|[,:])/g;
+//@ chunk-h2y5xkdx.js:61981-63058 layout
+function describeSshOptionValue(program, optionLetter, optionValue) {
+  let isConfigFile = optionLetter === "F";
+  let matches = /^(?:J|ProxyJump)$/i.test(optionLetter);
+  let matches_2 = /^HostName$/i.test(optionLetter);
+  let isDestination = optionLetter === DESTINATION_LABEL;
+  let cleaned = isConfigFile
+    ? optionValue
+    : optionValue
+        .replace(isDestination ? /%[\w.-]+(\]?)$/ : /(?!)/, "$1")
+        .replace(matches_2 ? /%[%h]/g : /%[%p]/g, "")
+        .replace(BRACKET_HOST_PORT_RE, "$1");
+  if (
+    (!isConfigFile && !matches && !matches_2 && !isDestination) ||
+    (PLAIN_TEXT_RE.test(cleaned) && !(isConfigFile ? /[ #=^%]|^~(?!\/)/ : /[ #=^%+~]/).test(cleaned)) ||
+    !readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+      safe: true,
+    })
+  )
+    return null;
+  let reason = isConfigFile
+    ? `the -F path ${shortenForReason(optionValue)}, which ssh pastes unquoted into a shell command when it connects through a jump host (the file itself can name one)`
+    : matches
+      ? `the jump host ${shortenForReason(optionValue)}, which ssh pastes unquoted into a shell command`
+      : `the ${matches_2 ? "HostName" : "destination host"} ${shortenForReason(optionValue)}, which ssh pastes into a shell command when it connects through a jump host (given here or in an ssh config file)`;
+  return `hands ${program} ${reason}, so what it runs cannot be shown not to be git (to pass, ${isConfigFile ? "use a path made only of ASCII letters, digits and _ . , : / + @ -, with ~ only as a leading ~/, such as a link to the file or a copy of it under a plain name" : matches ? "write each jump host as [user@]host[:port], separated by commas, with no + or ~ and no % token other than %p" : "write a host name or IP address"})`;
+}
+//@ chunk-h2y5xkdx.js:63058-63103 layout
+var SHELL_HAZARD_RE = /^\\*-|\\$|[\s'"`$;&|<>(){}*?[\]!#%]/;
+//@ chunk-h2y5xkdx.js:63103-63514 layout
+function describeSshUser(program, userName, isSftpUrl) {
+  return (SHELL_HAZARD_RE.test(userName) || (isSftpUrl && userName.includes("+"))) &&
+    readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+      safe: true,
+    })
+    ? `hands ${program} the user name ${shortenForReason(userName)}, which ssh pastes into a shell command if a ProxyCommand in an ssh config file uses it, so what it runs cannot be shown not to be git (to pass, use a user name with no leading -, no trailing \\, no whitespace and none of ' " \` $ ; & | < > ( ) { } * ? [ ] ! # %, and no + in an sftp:// address)`
+    : null;
+}
+//@ chunk-h2y5xkdx.js:63514-63742 layout
+function describeQuotedOption(program, option) {
+  return QUOTED_OPTION_NAME_RE.test(option) &&
+    readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+      safe: true,
+    })
+    ? `hands ${program} the option ${shortenForReason(option)}, whose name holds a quote that ssh ignores, so what it runs cannot be shown not to be git (to pass, write the option name without quotes)`
+    : null;
+}
+//@ chunk-h2y5xkdx.js:63742-63957 layout
+var BOT_PROTECTED_TENGU_PARTED_TOKEN; // deferred: uses POSIX_SHELL_NAMES (../../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SSH_TEXT_CHARS;
+var SSH_PLAIN_PLACEHOLDER_RE;
+var SSH_HAZARD_CHARS_RE;
+var EXEC;
+var SSH_PATH_PLACEHOLDER_RE;
+var EXEC_WRAPPER_NAMES;
+deferInit("chunk-h2y5xkdx.js:63742", () => {
+  BOT_PROTECTED_TENGU_PARTED_TOKEN = "bot_protected_tengu_parted_token";
+  MAX_SSH_TEXT_CHARS = 200000;
+  SSH_PLAIN_PLACEHOLDER_RE = /^%[hnrkjH]$/;
+  SSH_HAZARD_CHARS_RE = /["'\\#%$=~^{}\s]/;
+  EXEC = "exec";
+  SSH_PATH_PLACEHOLDER_RE = /^%[hkjHulL]$/;
+  EXEC_WRAPPER_NAMES = new Set([
+    ...UNHANDLED_EXEC_WRAPPERS,
+    "setpriv",
+    "setarch",
+    "linux32",
+    "linux64",
+    "arch",
+    "parallel",
+    "pkexec",
+    "chroot",
+  ]);
+});
+//@ chunk-h2y5xkdx.js:63957-63995 layout
+function isBotProtectionOn() {
+  return readFlagWithOverride(BOT_PROTECTED_TENGU_PARTED_TOKEN, {
+    safe: true,
+  });
+}
+//@ chunk-h2y5xkdx.js:63995-64372 layout
+function analyzeSshOption(text, token, node) {
+  let match = /^\s*(?:([^\s="']+)(?:\s*=|\s|$)|(?:"\w+"|'\w+')(?:\s|$))(?!\s*=)/.exec(token);
+  if (!isBotProtectionOn() || (match && (/^\w*$/.test(match[1] ?? "") || !mayExpandToNothing(node))))
+    return null;
+  return match
+    ? `${unverifiableRunReason(text, `with -o ${shortenForReason(token)}, whose option name the shell may expand as a file pattern`)}; quote the option name`
+    : `${unverifiableRunReason(text, `with -o ${shortenForReason(token)}, whose option name this check cannot read`)}; write the option name plainly`;
+}
+//@ chunk-h2y5xkdx.js:64372-64476 layout
+function stripUserPart(text) {
+  let userPart = /^\w+:\/\/([^@;]*)[^@]*@/.exec(text)?.[1];
+  return userPart === undefined ? [] : [userPart.replace(/\+/g, " ")];
+}
+//@ chunk-h2y5xkdx.js:64476-64651 layout
+function splitSftpTarget(text) {
+  let match = /^\w+:\/\/(.*)$/s.exec(text);
+  return [
+    ...(match ? match[1].split(/[@:/;]+/) : []),
+    ...stripUserPart(text),
+    ...text.split("@"),
+    text.replace(/@[^@]*$/, ""),
+  ].flatMap((part) => [part, part.replace(/[[\]]/g, "")]);
+}
+//@ chunk-h2y5xkdx.js:64651-64737 layout (2.1.88 match: ghIsDangerousCallback, 1)
+function ghIsDangerousCallback(_rawCommand, args) {
+  return args.startsWith(`${_rawCommand}://`) ? Boolean(stripUserPart(args)[0]) : /^[^@:/]+@/.test(args);
+}
+//@ chunk-h2y5xkdx.js:64737-64905 layout
+function collectCandidates(prefix, text) {
+  let flattened = prefix.flatMap((candidate) =>
+    [candidate, ...candidate.split(",")]
+      .flatMap((part) => [part, part.replace(/[:/][^:@]*$/, "")])
+      .flatMap(splitSftpTarget),
+  );
+  let hasExtra = text || prefix.length === 0;
+  return [...prefix, ...flattened, ...(hasExtra ? ["$9"] : [])];
+}
+//@ chunk-h2y5xkdx.js:64905-67976 layout
+function analyzeSshArg(state, program, optionLetter, optionValue, text, verdict) {
+  if (!isBotProtectionOn()) {
+    for (let sawRemote of optionLetter) {
+      let replaced = program.replace(/%[a-z]/gi, sawRemote);
+      let hostCandidates = analyzeNestedShellText(state, replaced, verdict, false);
+      if (hostCandidates !== null) return hostCandidates;
+    }
+    return null;
+  }
+  let filtered = normalizeCaseForComparison_2(program.match(/%[%a-z]/gi) ?? []).filter((arg) =>
+    SSH_PLAIN_PLACEHOLDER_RE.test(arg),
+  );
+  let entry = normalizeCaseForComparison_2(optionValue);
+  let snippet = [new Map()];
+  let reduced = filtered.reduce((acc, arg) => acc * (arg === "%j" ? entry.length + 1 : entry.length), 1);
+  let max = Math.max(0, ...entry.map((arg) => arg.length));
+  let match = program.length + countWhere(program.split(""), (arg) => arg === "%") * max;
+  verdict.sshTextBudget.left -= filtered.length && reduced * (match + 100);
+  if (verdict.sshTextBudget.left < 0)
+    return `${unverifiableRunReason(state, "with too many possible host and user values for its % tokens")}; write the host and user out in place of the tokens, or give fewer host, user and jump values`;
+  for (let arg of filtered)
+    snippet = snippet.flatMap((placeholderValue) =>
+      (arg === "%j" ? ["", ...entry] : entry).map((values) => new Map(placeholderValue).set(arg, values)),
+    );
+  let fallback = (arg) =>
+    program.replace(/%[%a-z]/gi, (templateChar, name) =>
+      templateChar === "%%"
+        ? "%"
+        : (arg.get(templateChar) ??
+          (/\w/.test(program[name - 1] ?? "") || /\w/.test(program[name + 2] ?? "")
+            ? "$9"
+            : templateChar === "%p"
+              ? "22"
+              : "x")),
+    );
+  for (let arg of snippet) {
+    let flags = fallback(arg);
+    let outer = analyzeNestedShellText(state, flags, verdict, false);
+    if (outer !== null)
+      return flags.includes("$9") && !program.includes("$9")
+        ? `${outer} ($9 there stands for a value computed or not read here; write the host, user or port out in place of the tokens)`
+        : outer;
+  }
+  let found = entry.find((arg) => SSH_HAZARD_CHARS_RE.test(arg));
+  if (filtered.length > 0 && found !== undefined)
+    return `${unverifiableRunReason(state, `with % tokens that may stand for ${found === "$9" ? "a host or user computed at runtime" : `${shortenForReason(found)}${found.includes(" ") && entry.some((arg) => arg.includes(found.replace(/ /g, "+"))) ? " (ssh reads + in a URI's user as a space)" : ""}, which holds a character (a quote, backslash, equals sign, tilde, caret, brace, #, %, $ or space) this check cannot follow`}`)}; write the host and user out in place of the tokens`;
+  if (filtered.includes("%r") && !text)
+    return `${unverifiableRunReason(state, "with %r and no user written for each host (-o User does not count)")}; ssh may fill %r from a config file this check does not read (a line there reading User git makes %r git), so write the user out, as user@host`;
+  let filtered_2 = normalizeCaseForComparison_2(program.match(/%[%a-z]/gi) ?? []).filter((arg) =>
+    SSH_PATH_PLACEHOLDER_RE.test(arg),
+  );
+  let rule = (arg) => (/[ulL]/.test(arg) ? "this machine" : "a config file");
+  let replaced = program.replace(/['"\\]/g, "");
+  let reason = (arg) => arg.replace(/['"\\]/g, "").split(/[\s;&|()`{}<>=!$@]+/);
+  let found_2 = [
+    ...reason(replaced).map(programBaseName),
+    ...snippet
+      .flatMap((arg) => reason(fallback(arg)))
+      .map((arg) =>
+        basename(arg)
+          .toLowerCase()
+          .replace(/\.(?:exe|bat|cmd)$/, ""),
+      ),
+  ].find((arg) => EXEC_WRAPPER_NAMES.has(arg));
+  if (found_2 !== undefined && filtered_2[0] !== undefined) {
+    let command = filtered_2[0];
+    return `${unverifiableRunReason(state, `with ${command} and the word ${found_2}, the name of a program that runs its arguments as a command`)}; ssh fills ${command} from ${rule(command)}, which this check does not read, so write the value out in place of ${command}`;
+  }
+  for (let command of filtered_2) {
+    let regExp = new RegExp(`[^\\s;&|()\`=<>]*${command}[^\\s;&|()\`=<>]*`, "g");
+    if (
+      (program.match(regExp) ?? []).some(
+        (remote) => /[\\#]/.test(remote) || (/['"]/.test(remote) && /[\\#]/.test(program)),
+      )
+    )
+      return `${unverifiableRunReason(state, `with ${command} in a word this check cannot rewrite, as it or the setting holds a backslash or #`)}; ssh fills ${command} from ${rule(command)}, which this check does not read, so write the value out in place of ${command}`;
+    let mapped = snippet.map((text) =>
+      fallback(new Map(text).set(command, "\x00")).replace(
+        new RegExp("[^\\s;&|()`=<>]*\\0[^\\s;&|()`=<>]*", "g"),
+        (text) => `${text.replace(/[^'"]/g, "")}${EXEC}`,
+      ),
+    );
+    for (let remote of normalizeCaseForComparison_2(mapped)) {
+      let text = analyzeNestedShellText(state, remote, verdict, false);
+      if (text !== null)
+        return verdict.sshTextBudget.left < 0
+          ? text
+          : `${unverifiableRunReason(state, `with ${command} where a program's name may go`)}; ssh fills ${command} from ${rule(command)}, which this check does not read, so write the program's name in place of ${command}`;
+    }
+  }
+  return null;
+}
+//@ chunk-h2y5xkdx.js:67976-70064 placement
 function analyzeSshArgs(args, startIdx, hasHost, state) {
   let mapped = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
   let hostFound = hasHost;
   let isRemoteHost = false;
   let commandAt = -1;
+  let entry = "";
   let hostParts = [];
-  let remoteCommands = [];
+  let hostPartList = [];
+  let hostPart = [];
+  let reason = false;
   for (let idx = startIdx; idx < args.length; idx++) {
     let text = mapped[idx] ?? null;
     let operandIdx = text === "--" && !hostFound ? idx + 1 : idx;
@@ -573,6 +854,7 @@ function analyzeSshArgs(args, startIdx, hasHost, state) {
         hostFound = true;
         isRemoteHost ||= mapped[hostIdx] === null || isRemoteSshHost(mapped[hostIdx] ?? "");
         hostParts.push(mapped[hostIdx] ?? "");
+        entry = mapped[hostIdx] ?? "";
         if (text !== "--") continue;
         hostIdx++;
       }
@@ -608,19 +890,34 @@ function analyzeSshArgs(args, startIdx, hasHost, state) {
         return {
           detail: unverifiableRunReason(
             "ssh",
-            `with ${dynamicArgumentReason("ssh", `-${optionLetters}`, args[idx])}`,
+            `with ${describeComputedValue("ssh", `-${optionLetters}`, args[idx])}`,
           ),
         };
       if (optionLetters === "l") hostParts.push("");
       continue;
     }
+    let optionLetter2 = optionLetters === "o" ? describeQuotedOption("ssh", optionValue.text) : null;
+    if (optionLetter2 !== null)
+      return {
+        detail: optionLetter2,
+      };
     let [, configKey = "", configValue = ""] =
       optionLetters === "o"
         ? (SED_COMMAND_PARTS_RE.exec(optionValue.text) ?? [])
         : ["", optionLetters, optionValue.text];
+    let key = optionLetters === "o" ? analyzeSshOption("ssh", optionValue.text, args[idx].node) : null;
+    if (key !== null)
+      return {
+        detail: key,
+      };
     isRemoteHost ||= /^hostname$/i.test(configKey) && isRemoteSshHost(configValue.trim());
     if (/^(?:hostname|user)$/i.test(configKey) || configKey === "l") hostParts.push(configValue.trim());
-    if (/command$/i.test(configKey)) remoteCommands.push([configKey, configValue]);
+    reason ||= optionLetters === "l";
+    if (/^(?:hostname|user|hostkeyalias|proxyjump)$/i.test(configKey) || /^[lJ]$/.test(configKey))
+      hostPartList.push(configValue);
+    if (/^canonicalizehostname$/i.test(configKey) && !/^no$/i.test(configValue.trim()))
+      hostPartList.push("$9");
+    if (/command$/i.test(configKey)) hostPart.push([configKey, configValue]);
     else if (
       configKey === "" ||
       (/[oFSI]/.test(optionLetters) && isDevicePath(configValue)) ||
@@ -629,30 +926,120 @@ function analyzeSshArgs(args, startIdx, hasHost, state) {
       return {
         detail: unverifiableRunReason("ssh", `with -${optionLetters} ${shortenForReason(optionValue.text)}`),
       };
+    let report = describeSshOptionValue("ssh", configKey, configValue);
+    if (report !== null)
+      return {
+        detail: report,
+      };
   }
-  let hostCandidates =
+  let sub =
     hostParts.length > 0 && !hostParts.includes("")
       ? hostParts.flatMap((hostText) => hostText.split("@"))
       : ["$9"];
-  for (let [key, commandText] of remoteCommands)
-    for (let hostPart of hostCandidates) {
-      let reason = analyzeNestedShellText(
-        `ssh -o ${key}`,
-        commandText.replace(/%[a-z]/gi, hostPart),
-        state,
-        false,
-      );
-      if (reason !== null)
-        return {
-          detail: reason,
-        };
-    }
+  let key = collectCandidates(
+    [...hostParts, ...hostPartList],
+    hasHost || !hostFound || hostParts.includes(""),
+  );
+  for (let [candidate, hostSegment] of hostPart) {
+    let detail = analyzeSshArg(
+      `ssh -o ${candidate}`,
+      hostSegment,
+      sub,
+      key,
+      reason || ghIsDangerousCallback("ssh", entry),
+      state,
+    );
+    if (detail !== null)
+      return {
+        detail,
+      };
+  }
+  let entryText = describeSshOptionValue("ssh", DESTINATION_LABEL, stripSshPrefix(entry));
+  if (entryText !== null)
+    return {
+      detail: entryText,
+    };
   return {
     commandAt,
     local: isRemoteHost,
   };
 }
-//@ chunk-63f0f3kd.js:61454-62302 placement
+//@ chunk-h2y5xkdx.js:70064-70132 layout
+function analyzeSsh(out, option, outText) {
+  return !isPlainWord(outText) && isLabelNodeType()
+    ? unverifiableRunReason(out, `with ${describeComputedValue(out, option, outText)}`)
+    : null;
+}
+//@ chunk-h2y5xkdx.js:70132-70256 layout
+var HOST_PLACEHOLDER = /^--(?:ssh-flag|scp-flag|flags-file)/;
+var SFTP_REMOTE_RE = /^(?:app|cloud-shell|instances|queued-resources|tpu-vm|tpus|workstations)$/;
+//@ chunk-h2y5xkdx.js:70256-70394 layout
+function analyzeSftp(scope, out) {
+  return (
+    (isLabelNodeType() ? /^(?:alpha|beta|compute|-.*)$/s : /^(?:alpha|beta|compute|-.*)$/).test(
+      scope[out] ?? "",
+    ) || /^--[^=]+$/.test(scope[out - 1] ?? "")
+  );
+}
+//@ chunk-h2y5xkdx.js:70394-70475 layout
+function describePortValue(out) {
+  let [, ...option] = out.node.children;
+  return option.length === 1
+    ? {
+        ...out,
+        node: option[0],
+      }
+    : out;
+}
+//@ chunk-h2y5xkdx.js:70475-71520 layout
+function analyzeSshPort(out, option, state) {
+  if (!isLabelNodeType()) return;
+  let found = out.find(
+    ({ node }, value) => option[value] === null && HOST_PLACEHOLDER.test(node.text.replace(/["'\\]/g, "")),
+  );
+  if (found)
+    return unverifiableRunReason(
+      "gcloud",
+      `with ${shortenForReason(found.node.text)}, whose computed value may pass options to ssh or scp that this check cannot read`,
+    );
+  let dirs;
+  let opts = false;
+  let seen = false;
+  for (let [entry, candidate] of option.entries()) {
+    if (candidate !== null) {
+      opts ||= candidate === "ssh" && dirs !== undefined && !seen;
+      let match =
+        seen && GCLOUD_OUTPUT_FLAGS.has(option[entry - 1] ?? "") && !/^(?:-.*|true|false)$/s.test(candidate);
+      if (analyzeSftp(option, entry) && !match) continue;
+      if (SFTP_REMOTE_RE.test(candidate)) {
+        seen = true;
+        continue;
+      }
+      break;
+    }
+    let text = out[entry];
+    let flags =
+      text.node.type === "concatenation" ? /^(--[^=]+)=$/.exec(text.node.children[0]?.text ?? "") : null;
+    let nodeText = flags?.[1] ?? option[entry - 1] ?? "";
+    let reason = flags !== null || GCLOUD_COMMON_FLAGS.has(nodeText);
+    if (!isPlainWord(flags ? describePortValue(text) : text)) {
+      if (!state.simple && !isPlainOrInertValue(text.value)) return;
+      return unverifiableRunReason(
+        "gcloud",
+        `with a computed ${reason ? `${nodeText} value` : "word before its command names"} ${describeWordRefusal(nodeText, text)}, and its words may spell out compute ssh and options for ssh,`,
+      );
+    }
+    opts ||= !reason;
+    dirs ??= text;
+  }
+  return dirs && opts
+    ? unverifiableRunReason(
+        "gcloud",
+        `with ${describeWordValue(dirs.value)} before its command names, where this check cannot tell whether the command runs ssh (spell the command names out first and put computed values after them, as --project="$p")`,
+      )
+    : undefined;
+}
+//@ chunk-h2y5xkdx.js:71520-72368 placement
 /**
  * gcloud 通用选项；Gi 是输出相关选项；Mi/zi 是 kubectl 通用与压缩选项，Hi/Ui 是带凭据/秘密值的选项正则。用于判定云命令参数是否影响目标。
  */
@@ -663,7 +1050,7 @@ var KUBECTL_GLOBAL_FLAGS;
 var KUBECTL_COMPRESSION_FLAGS;
 var KUBECTL_CREDENTIAL_RE;
 var KUBECTL_VALUE_FLAGS_RE;
-deferInit("chunk-63f0f3kd.js:61454", () => {
+deferInit("chunk-h2y5xkdx.js:71520", () => {
   BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN = "bot_protected_tengu_buzzing_fountain";
   GCLOUD_COMMON_FLAGS = wordSet(
     "--access-token-file --account --authority-selector --authorization-token-file --billing-project --configuration --flatten --format --http-timeout --impersonate-service-account --project --trace-token --universe-domain --verbosity",
@@ -679,7 +1066,7 @@ deferInit("chunk-63f0f3kd.js:61454", () => {
   KUBECTL_VALUE_FLAGS_RE =
     /^(?:-[itq]*s|--(?:cache[-_]dir|certificate[-_]authority|client[-_]certificate|client[-_]key|insecure[-_]skip[-_]tls[-_]verify|kubeconfig|kuberc|password|profile|profile[-_]output|proxy[-_]url|server|tls[-_]server[-_]name|token|username)(?:=|$))/;
 });
-//@ chunk-63f0f3kd.js:62302-62535 placement
+//@ chunk-h2y5xkdx.js:72368-72601 placement
 function hasRiskyOptionWord(words, literals, startIdx, valueFlagPattern) {
   let index = literals.indexOf("--", startIdx);
   return words
@@ -694,20 +1081,20 @@ function hasRiskyOptionWord(words, literals, startIdx, valueFlagPattern) {
         ),
     );
 }
-//@ chunk-63f0f3kd.js:62535-62892 placement
+//@ chunk-h2y5xkdx.js:72601-72958 placement
 /**
  * 拼出命令的程序词序列（跳过带值选项及其参数、忽略的词），到目标词为止；值缺失或可疑时返回空串。
  */
 function collectProgramWords(words, target, valueFlags, ignoredFlags, allowQuotedValue) {
   let collected = [];
-  for (let idx = 0; idx < words.length; idx++) {
-    let { node, value } = words[idx];
+  for (let k = 0; k < words.length; k++) {
+    let { node, value } = words[k];
     let text = value.kind === "literal" ? value.text : isQuotedLiteral(node) ? node.text : "-";
     let replaced = text.replace(/=.*$/s, "");
     if (valueFlags.has(replaced)) {
       if (replaced === text) {
-        idx++;
-        let nextWord = words[idx];
+        k++;
+        let nextWord = words[k];
         if (
           !nextWord ||
           (nextWord.value.kind === "literal"
@@ -723,12 +1110,12 @@ function collectProgramWords(words, target, valueFlags, ignoredFlags, allowQuote
   }
   return collected.join(" ");
 }
-//@ chunk-63f0f3kd.js:62892-67460 placement
+//@ chunk-h2y5xkdx.js:72958-77743 placement
 /**
  * 检查 ssh/rlogin/kubectl 等"在别处执行命令"的程序：目标可能是本机或参数无法静态判定时拒绝。
  */
 function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
-  let literals = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
+  let mapped = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
   switch (program) {
     case "rlogin":
     case "ssh": {
@@ -742,120 +1129,114 @@ function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
               "with a shell on what may be this machine reading its commands from stdin",
             )
           : null;
-      let sliced = literals.slice(sshResult.commandAt);
-      let found = args.slice(sshResult.commandAt).find((arg) => arg.value.kind !== "literal");
-      return found
+      let afterCommand = mapped.slice(sshResult.commandAt);
+      let nonLiteral = args.slice(sshResult.commandAt).find((arg) => arg.value.kind !== "literal");
+      return nonLiteral
         ? unverifiableRunReason(
             "ssh",
-            `with a command for what may be this machine computed at runtime (${describeWordValue(found.value)})`,
+            `with a command for what may be this machine computed at runtime (${describeWordValue(nonLiteral.value)})`,
           )
-        : analyzeNestedShellText("ssh", sliced.join(" "), state, stdinInfo.fed);
+        : analyzeNestedShellText("ssh", afterCommand.join(" "), state, stdinInfo.fed);
     }
     case "kubectl":
     case "oc": {
-      let index = literals.indexOf("exec");
-      let index_2 = literals.indexOf("--");
-      if (index === -1 || index_2 < index) return;
+      let execIdx = mapped.indexOf("exec");
+      let dashIdx = mapped.indexOf("--");
+      if (execIdx === -1 || dashIdx < execIdx) return;
       let isCleanExec =
         !readFlagWithOverride(BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN, {
           safe: true,
         }) ||
         (collectProgramWords(args, "exec", KUBECTL_GLOBAL_FLAGS, KUBECTL_COMPRESSION_FLAGS, true) ===
           "exec" &&
-          !hasRiskyOptionWord(args, literals, index + 1, KUBECTL_VALUE_FLAGS_RE));
-      for (let [idx, literal] of literals.entries()) {
+          !hasRiskyOptionWord(args, mapped, execIdx + 1, KUBECTL_VALUE_FLAGS_RE));
+      for (let [idx, literal] of mapped.entries()) {
         let reason =
-          idx > index_2
+          idx > dashIdx
             ? literal !== null && /\bgit\b/i.test(literal.replace(SHELL_QUOTE_CHARS_RE, ""))
               ? `remote text naming git (${shortenForReason(literal)}), which cannot be shown to stay inside the worktree`
               : null
             : literal === null
               ? stdinInfo.assembled || /[<>]\(/.test(args[idx].node.text)
                 ? `${describeWordValue(args[idx].value)} next to input assembled at runtime`
-                : null
+                : !isPlainWord(args[idx]) && isLabelNodeType()
+                  ? `a computed word before -- ${describeWordRefusal("--", args[idx])}, and a -- among its words would start a pod command this check does not read,`
+                  : null
               : stdinInfo.assembled && isDevicePath(literal)
                 ? `${literal} naming a descriptor fed here`
                 : null;
         if (reason !== null) return unverifiableRunReason(`${program} exec`, `with ${reason}`);
       }
-      let sliced = args.slice(index_2 + 1);
+      let rest = args.slice(dashIdx + 1);
       if (state.simple) {
-        let reason = checkLauncherInvocation(program, sliced, state, stdinInfo);
+        let reason = checkLauncherInvocation(program, rest, state, stdinInfo);
         return isCleanExec ? reason : (reason ?? undefined);
       }
-      let sliced_2 = literals.slice(index_2 + 1);
-      let index_3 = sliced_2.findIndex((word) => SHELL_PROGRAM_NAMES.has(programBaseName(word ?? "-")));
-      let shellCommandStringIndex = findShellCommandStringIndex(sliced_2, index_3);
-      let found = sliced.find(
-        (word, idx) =>
-          (shellCommandStringIndex === -1 || idx < index_3 || idx > shellCommandStringIndex) &&
-          !isPlainOrInertValue(word.value),
+      let tail = mapped.slice(dashIdx + 1);
+      let stopIdx = tail.findIndex((word) => SHELL_PROGRAM_NAMES.has(programBaseName(word ?? "-")));
+      let start = findShellCommandStringIndex(tail, stopIdx);
+      let candidate = rest.find(
+        (word, idx) => (start === -1 || idx < stopIdx || idx > start) && !isPlainOrInertValue(word.value),
       );
-      let reason = found
-        ? unverifiableRunReason(`${program} exec`, `with ${describeWordValue(found.value)}`)
+      let reason = candidate
+        ? unverifiableRunReason(`${program} exec`, `with ${describeWordValue(candidate.value)}`)
         : stdinInfo.fed && stdinInfo.assembled
           ? unverifiableRunReason(`${program} exec`, "with input assembled at runtime")
-          : shellCommandStringIndex === -1
+          : start === -1
             ? null
-            : analyzeNestedShellText(
-                programBaseName(sliced_2[index_3]),
-                sliced_2[shellCommandStringIndex],
-                state,
-                stdinInfo.fed,
-              );
+            : analyzeNestedShellText(programBaseName(tail[stopIdx]), tail[start], state, stdinInfo.fed);
       return isCleanExec ? reason : (reason ?? undefined);
     }
     case "gcloud": {
-      let index = literals.indexOf("ssh");
-      let flagWithOverride = readFlagWithOverride(BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN, {
+      let sshIdx = mapped.indexOf("ssh");
+      let gate = readFlagWithOverride(BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN, {
         safe: true,
       });
-      let index_2 = literals
-        .slice(0, index)
+      let beforeIdx = mapped
+        .slice(0, sshIdx)
         .findIndex(
-          (literal, idx) =>
-            literal !== null &&
-            !/^(?:alpha|beta|compute|-.*)$/.test(literal) &&
-            !/^--[^=]+$/.test(literals[idx - 1] ?? "") &&
-            !mayExpandToNothing(args[idx].node),
+          (entry, idx) => entry !== null && !analyzeSftp(mapped, idx) && !mayExpandToNothing(args[idx].node),
         );
-      let isComputeSsh = index > 0 && literals.slice(0, index).includes("compute");
-      let isWellFormed = !isComputeSsh || index_2 >= 0;
+      let isComputeSsh = sshIdx > 0 && mapped.slice(0, sshIdx).includes("compute");
+      let isWellFormed = !isComputeSsh || beforeIdx >= 0;
       let emptyExpansionWord =
         isComputeSsh &&
         args
-          .slice(0, index_2 < 0 ? index : index_2)
-          .find(({ node }) => mayExpandToNothing(node) && !/^--?[\w-]+=[^*?[]*$/.test(node.text));
+          .slice(0, beforeIdx < 0 ? sshIdx : beforeIdx)
+          .find(
+            ({ node: flagEntry }) =>
+              mayExpandToNothing(flagEntry) && !/^--?[\w-]+=[^*?[]*$/.test(flagEntry.text),
+          );
       if (emptyExpansionWord)
         return unverifiableRunReason(
           "gcloud",
           `with ${describeWordValue(emptyExpansionWord.value)} before the word ssh: it may expand to no word at all and the next word would take its place, so this cannot tell what gcloud will run (spell the value out)`,
         );
-      let included = literals.slice(0, index).includes(null);
-      let flagWithOverride_2 = readFlagWithOverride(TENGU_HOLLOW_SANDPIPER, {
+      let hasNullBefore = mapped.slice(0, sshIdx).includes(null);
+      let flagOn = readFlagWithOverride(TENGU_HOLLOW_SANDPIPER, {
         safe: true,
       });
-      if (isWellFormed || included) {
-        let matching = findMatching(literals, /^--(?:ssh-flag|scp-flag|flags-file)/);
-        if (matching !== null) return unverifiableRunReason("gcloud", `with ${matching}`);
-        let index_2 = literals.indexOf("compute");
-        let precedingWord = literals[index - 1];
+      if (isWellFormed || hasNullBefore) {
+        let match = findMatching(mapped, HOST_PLACEHOLDER);
+        if (match !== null) return unverifiableRunReason("gcloud", `with ${match}`);
+        let computeWordIdx = mapped.indexOf("compute");
+        let precedingWord = mapped[sshIdx - 1];
         let overrideReason =
-          flagWithOverride &&
-          index > 0 &&
+          (gate &&
+          sshIdx > 0 &&
           (precedingWord === null || precedingWord?.startsWith("-")) &&
-          index < index_2 &&
-          literals.includes("ssh", index_2)
+          sshIdx < computeWordIdx &&
+          mapped.includes("ssh", computeWordIdx)
             ? unverifiableRunReason(
                 "gcloud",
                 GCLOUD_COMMON_FLAGS.has(precedingWord ?? "")
                   ? `with ssh as the separate value of ${precedingWord} before compute (write ${precedingWord}=ssh instead)`
                   : "with ssh both before and after compute, where either could be the subcommand (join a flag's value to it with =, or drop the extra ssh)",
               )
-            : undefined;
-        if (!flagWithOverride_2) return overrideReason;
+            : undefined) ?? analyzeSshPort(args, mapped, state);
+        if (!flagOn) return overrideReason;
         if (isWellFormed) {
-          let doubleDashIdx = index < 0 ? -1 : literals.indexOf("--", index);
+          let doubleDashIdx = sshIdx < 0 ? -1 : mapped.indexOf("--", sshIdx);
           if (doubleDashIdx < 0) return overrideReason;
           let sshResult = analyzeSshArgs(args, doubleDashIdx + 1, true, state);
           return "detail" in sshResult
@@ -866,59 +1247,60 @@ function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
         }
       }
       let isCleanSshSubcommand =
-        !flagWithOverride ||
+        !gate ||
         (/^(?:(?:alpha|beta) )?compute ssh$/.test(
           collectProgramWords(args, "ssh", GCLOUD_COMMON_FLAGS, GCLOUD_OUTPUT_FLAGS, false),
         ) &&
-          !hasRiskyOptionWord(args, literals, index + 1, KUBECTL_CREDENTIAL_RE));
+          !hasRiskyOptionWord(args, mapped, sshIdx + 1, KUBECTL_CREDENTIAL_RE));
       let sshWords = [];
       let doubleDashPos = 1 / 0;
-      for (let idx = 0; idx < args.length; idx++) {
-        let literal = literals[idx] ?? null;
-        if (flagWithOverride && (idx <= index ? /^--(?:scp|ssh)-flag/ : /^--scp-flag/).test(literal ?? ""))
+      for (let entry = 0; entry < args.length; entry++) {
+        let literal = mapped[entry] ?? null;
+        if (gate && (entry <= sshIdx ? /^--(?:scp|ssh)-flag/ : /^--scp-flag/).test(literal ?? ""))
           return unverifiableRunReason(
             "gcloud",
             `with ${shortenForReason(literal ?? "")} (${/^--scp/.test(literal ?? "") ? "--scp-flag hands options to scp, which can run a local program; drop it" : "put --ssh-flag after the word ssh"})`,
           );
-        if (idx <= index) {
+        if (entry <= sshIdx) {
           if (/^--flags-file/.test(literal ?? "") || isDevicePath(literal ?? ""))
             return unverifiableRunReason("gcloud compute ssh", `with ${literal}`);
-          if (flagWithOverride_2 && /^--(?:ssh|scp)-flag/.test(literal ?? ""))
+          if (flagOn && /^--(?:ssh|scp)-flag/.test(literal ?? ""))
             return unverifiableRunReason("gcloud", `with ${shortenForReason(literal ?? "")} before ssh`);
           if (
-            flagWithOverride_2 &&
+            flagOn &&
             literal === null &&
-            isUnverifiableValue(args[idx]) &&
-            !/^--(?!flags-file|ssh-flag|scp-flag)[\w-]+=$/.test(args[idx].node.children[0]?.text ?? "")
+            isUnverifiableValue(args[entry]) &&
+            !/^--(?!flags-file|ssh-flag|scp-flag)[\w-]+=$/.test(args[entry].node.children[0]?.text ?? "")
           )
             return unverifiableRunReason(
               "gcloud",
-              `with ${describeWordValue(args[idx].value)} before ssh, which may be a flag of its own (spell it out)`,
+              `with ${describeWordValue(args[entry].value)} before ssh, which may be a flag of its own (spell it out)`,
             );
           continue;
         }
         if (literal === "--") {
           doubleDashPos = sshWords.length;
-          sshWords.push(...args.slice(idx + 1));
+          sshWords.push(...args.slice(entry + 1));
           break;
         }
         if (literal === null) {
-          let arg = args[idx];
-          if (
-            isUnverifiableValue(arg) &&
-            !(
-              arg.node.type === "concatenation" &&
-              /^--(?:command|zone|project)=$/.test(arg.node.children[0]?.text ?? "")
-            )
-          )
+          let arg = args[entry];
+          let nodeText =
+            arg.node.type === "concatenation"
+              ? /^(--(?:command|zone|project))=$/.exec(arg.node.children[0]?.text ?? "")
+              : null;
+          if (nodeText) {
+            let flagMatch = analyzeSsh("gcloud compute ssh", nodeText[1], describePortValue(arg));
+            if (flagMatch !== null) return flagMatch;
+          } else if (isUnverifiableValue(arg))
             return unverifiableRunReason(
               "gcloud compute ssh",
               `with ${describeWordValue(arg.value)} ${OPTION_POSITION_NOTE}`,
             );
           continue;
         }
-        let match = /^--(command|zone|project|ssh-flag)(?:=(.*))?$/s.exec(literal);
-        if (!match) {
+        let continueNote = /^--(command|zone|project|ssh-flag)(?:=(.*))?$/s.exec(literal);
+        if (!continueNote) {
           if (/^--flags-file/.test(literal) || isDevicePath(literal))
             return unverifiableRunReason("gcloud compute ssh", `with ${literal}`);
           if (
@@ -934,19 +1316,26 @@ function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
             );
           continue;
         }
-        let configValue = match[2] ?? literals[++idx];
-        if (match[1] !== "ssh-flag") continue;
+        let configValue = continueNote[2] ?? mapped[++entry];
+        if (continueNote[1] !== "ssh-flag") {
+          let value =
+            configValue === null
+              ? analyzeSsh("gcloud compute ssh", `--${continueNote[1]}`, args[entry])
+              : null;
+          if (value !== null) return value;
+          continue;
+        }
         if (typeof configValue !== "string")
           return unverifiableRunReason(
             "gcloud compute ssh",
-            `with --ssh-flag ${configValue === null ? describeWordValue(args[idx].value) : "lacking its value"}`,
+            `with --ssh-flag ${configValue === null ? describeWordValue(args[entry].value) : "lacking its value"}`,
           );
-        for (let text of configValue.trim().split(/\s+/))
+        for (let word of configValue.trim().split(/\s+/))
           sshWords.push({
-            node: args[idx].node,
+            node: args[entry].node,
             value: {
               kind: "literal",
-              text,
+              text: word,
             },
           });
       }
@@ -960,7 +1349,7 @@ function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
                 "gcloud compute ssh",
                 "with an --ssh-flag word ssh would not read as an option",
               )
-            : included || !isCleanSshSubcommand
+            : hasNullBefore || !isCleanSshSubcommand
               ? undefined
               : null;
     }
@@ -968,13 +1357,13 @@ function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
       return;
   }
 }
-//@ chunk-63f0f3kd.js:67460-67514 placement
+//@ chunk-h2y5xkdx.js:77743-77797 placement
 var TENGU_COMPOSED_TEACUP = "tengu_composed_teacup";
 var TENGU_WOOLLY_WALL = "tengu_woolly_wall";
-//@ chunk-63f0f3kd.js:67514-68621 placement
+//@ chunk-h2y5xkdx.js:77797-81255 placement
 function analyzeRsyncScp(program, args, state) {
   let mapped = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
-  let remoteRunPattern =
+  let optionPattern =
     program === "rsync"
       ? readFlagWithOverride(TENGU_COMPOSED_TEACUP, {
           safe: true,
@@ -984,82 +1373,187 @@ function analyzeRsyncScp(program, args, state) {
       : /^(?:scp|rcp|sftp)$/.test(program)
         ? /^-[^-]*?([oSD])(.*)$/s
         : null;
-  if (!remoteRunPattern) return null;
+  if (!optionPattern) return null;
+  let portPattern = program === "sftp" ? SFTP_OPTION_RE : program === "rsync" ? null : SCP_OPTION_RE;
   let flattened = mapped.flatMap((literal) =>
     literal !== null && /^[^-/][^:/]*:/.test(literal) ? [literal] : [],
   );
-  let found = flattened.find(
+  let hostCandidates = flattened.find(
     (target) => /[^\w.,:\/@~+=-]/.test(target) && isRemoteSshHost(target.replace(/:.*$/s, "")),
   );
-  if (found !== undefined) return unverifiableRunReason(program, `with ${shortenForReason(found)}`);
-  let hostCandidates =
+  if (hostCandidates !== undefined)
+    return unverifiableRunReason(program, `with ${shortenForReason(hostCandidates)}`);
+  let candidates =
     flattened.length > 0 &&
     mapped.every((literal) => !/^(?:-\w*o)?\W*(?:hostname|user)/i.test(literal ?? "user"))
       ? flattened.flatMap((target) => target.replace(/:.*$/s, "").split("@"))
       : ["$9"];
-  let flagWithOverride = readFlagWithOverride(TENGU_WOOLLY_WALL, {
+  let flagIdx = 0;
+  while (LEADING_OPTION_ONLY_RE.test(mapped[flagIdx] ?? ""))
+    flagIdx += LEADING_OPTION_END_RE.test(mapped[flagIdx]) ? 2 : 1;
+  let remoteTargets =
+    program === "sftp"
+      ? []
+      : mapped.slice(flagIdx).flatMap((flag) => (flag !== null && /^-[^:/]*:/.test(flag) ? [flag] : []));
+  let targetStart = program === "sftp" ? 0 : mapped.length;
+  while (/^-./s.test(mapped[targetStart] ?? "") && mapped[targetStart] !== "--")
+    targetStart += SFTP_OPTION_RE.exec(mapped[targetStart])?.[2] === "" ? 2 : 1;
+  let sliced = mapped.slice(targetStart + (mapped[targetStart] === "--" ? 1 : 0));
+  let targets = program === "sftp" ? sliced.slice(0, 1) : [...flattened, ...remoteTargets];
+  let allDangerous =
+    targets.length > 0 &&
+    targets.every((target) => ghIsDangerousCallback(program === "sftp" ? "sftp" : "scp", target ?? ""));
+  let hostStrings = collectCandidates(
+    [
+      ...(program === "sftp"
+        ? [
+            ...sliced,
+            ...mapped
+              .slice(-2)
+              .filter(
+                (arg, index) =>
+                  index === 1 || !/^-\w*o$/.test(mapped.at(-3) ?? "") || !/[\s%]/.test(arg ?? ""),
+              ),
+          ].flatMap((arg) => [(arg ?? "").replace(/:.*$/s, ""), (arg ?? "").replace(/[:/].*$/s, "")])
+        : []),
+      ...[...flattened, ...remoteTargets].flatMap((target) => [
+        ...stripUserPart(target),
+        target.replace(/:.*$/s, ""),
+        ...(/\]:/.test(target) ? [target.replace(/\]:.*$/s, "]")] : []),
+        ...(/^\w+:\/\//.test(target) ? [target.replace(/^(\w+:\/\/[^/]*).*$/s, "$1")] : []),
+      ]),
+      ...mapped.flatMap((arg, index) => {
+        let rshValue =
+          /^-\w*?o(.+)$/s.exec(arg ?? "")?.[1] ?? (/^-\w*o$/.test(mapped[index - 1] ?? "") ? arg : null);
+        let [, hostPart = "", userPart = ""] = SED_COMMAND_PARTS_RE.exec(rshValue ?? "") ?? [];
+        let portPart = program === "rsync" ? null : /^-\w*?J(.*)$/s.exec(arg ?? "");
+        return /^(?:hostname|user|hostkeyalias|proxyjump)$/i.test(hostPart)
+          ? userPart
+          : /^canonicalizehostname$/i.test(hostPart) && !/^no$/i.test(userPart.trim())
+            ? "$9"
+            : portPart
+              ? portPart[1] || mapped[index + 1] || []
+              : /^[^-\s:]+@[^\s:]+$/.test(arg ?? "")
+                ? arg
+                : [];
+      }),
+    ],
+    candidates[0] === "$9",
+  );
+  let hasExplicitHost = readFlagWithOverride(TENGU_WOOLLY_WALL, {
     safe: true,
   });
-  for (let idx = 0; idx < mapped.length; idx++) {
-    if (mapped[idx] === null) {
-      if (flagWithOverride && isUnverifiableValue(args[idx]))
+  for (let text = 0; text < mapped.length; text++) {
+    if (mapped[text] === null) {
+      if (hasExplicitHost && isUnverifiableValue(args[text]))
         return unverifiableRunReason(
           program,
-          `with ${describeWordValue(args[idx].value)} ${OPTION_POSITION_NOTE_LONG}`,
+          `with ${describeWordValue(args[text].value)} ${OPTION_POSITION_NOTE_LONG}`,
         );
       continue;
     }
-    let match = remoteRunPattern.exec(mapped[idx]);
+    let opt = portPattern?.exec(mapped[text]);
+    if (opt && /[FJ]/.test(opt[1])) {
+      let reason = opt[2] || mapped[text + 1];
+      let optionValue =
+        reason === null
+          ? readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+              safe: true,
+            })
+            ? `${unverifiableRunReason(program, `with -${opt[1]} ${describeWordValue(args[text + 1].value)}`)} (to pass, spell the value out)`
+            : null
+          : reason === undefined
+            ? null
+            : describeSshOptionValue(program, opt[1], reason);
+      if (optionValue !== null) return optionValue;
+    }
+    let match = optionPattern.exec(mapped[text]);
     if (!match) continue;
-    let optionValue = match[2] || mapped[++idx];
+    let flagEnabled = /^--[\w-]+=$/.test(mapped[text]) && isBotProtectionOn();
+    let optionValue = match[2] || (flagEnabled ? "" : mapped[++text]);
     if (typeof optionValue !== "string")
       return unverifiableRunReason(
         program,
-        `with ${match[0]} ${optionValue === null ? describeWordValue(args[idx].value) : "lacking its value"}`,
+        `with ${match[0]} ${optionValue === null ? describeWordValue(args[text].value) : "lacking its value"}`,
       );
-    let [, configKey = "", configValue = ""] =
-      match[1] === "o" ? (SED_COMMAND_PARTS_RE.exec(optionValue) ?? []) : ["", "Command", optionValue];
-    for (let hostPart of hostCandidates) {
-      let reason = /command$/i.test(configKey)
-        ? analyzeNestedShellText(
-            `${program} ${match[0]}`,
-            configValue.replace(/%[a-z]/gi, hostPart),
-            state,
-            false,
-          )
-        : configKey === "" || isDevicePath(configValue)
-          ? unverifiableRunReason(program, `with -o ${shortenForReason(optionValue)}`)
+    let isRshOption =
+      program === "rsync" &&
+      /^(?:--rsh|-[^-BfMT@]*e)/.test(match[0]) &&
+      readFlagWithOverride(BOT_PROTECTED_TENGU_GLEAMING_TOME, {
+        safe: true,
+      })
+        ? describeShellTextProblem(`${program} ${match[0]}`, optionValue, state)
+        : match[1] === "o"
+          ? describeQuotedOption(program, optionValue)
           : null;
-      if (reason !== null) return reason;
+    if (isRshOption !== null) return isRshOption;
+    let [, configKey = "", rshReason = ""] =
+      match[1] === "o" ? (SED_COMMAND_PARTS_RE.exec(optionValue) ?? []) : ["", "Command", optionValue];
+    let rshCommand = match[1] === "o" ? analyzeSshOption(program, optionValue, args[text].node) : null;
+    if (rshCommand !== null) return rshCommand;
+    if (/command$/i.test(configKey)) {
+      let unquotedCommand = match[1] !== "o" && isBotProtectionOn();
+      let commandText = rshReason.replace(/["']/g, "");
+      if (unquotedCommand && /[^\w .,:/=@+~-]/.test(commandText) && /command/i.test(commandText)) {
+        let pastedCommand = match[1] ? `-${match[1]}` : match[0].replace(/=.*$/s, "");
+        return `${unverifiableRunReason(`${program} ${pastedCommand}`, "with a program that sets a command (such as ProxyCommand) and holds more than plain words, which this check cannot follow")}; write that command in plain words, with the host and user spelled out`;
+      }
+      let prefix = `${program} ${match[0]}`;
+      let verdict = unquotedCommand
+        ? analyzeNestedShellText(prefix, rshReason, state, false)
+        : analyzeSshArg(prefix, rshReason, candidates, hostStrings, allDangerous, state);
+      if (verdict !== null) return verdict;
+    } else if (configKey === "" || isDevicePath(rshReason))
+      return unverifiableRunReason(program, `with -o ${shortenForReason(optionValue)}`);
+    else {
+      let userReason = /^User$/i.test(configKey)
+        ? describeSshUser(program, rshReason.trimEnd(), false)
+        : describeSshOptionValue(program, configKey, rshReason);
+      if (userReason !== null) return userReason;
     }
+  }
+  if (program !== "sftp") return null;
+  let atArg = false;
+  for (let arg = 0; arg < mapped.length; arg++) {
+    let text = mapped[arg] ?? null;
+    if (text !== null && (text[0] !== "-" || atArg)) {
+      let text_2 = SFTP_SOURCE_RE.exec(text);
+      let matched = text_2?.[1] ?? text_2?.[3] ?? /^(.*)@/s.exec(text_2?.[5] ?? "")?.[1] ?? "";
+      return (
+        describeSshUser(program, matched, text_2?.[1] !== undefined) ??
+        describeSshOptionValue(program, DESTINATION_LABEL, text_2?.[2] ?? text_2?.[4] ?? text_2?.[5] ?? "")
+      );
+    }
+    atArg ||= text === "--";
+    if (SFTP_OPTION_RE.exec(text ?? "")?.[2] === "") arg++;
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:68621-68772 placement
+//@ chunk-h2y5xkdx.js:81255-81406 placement
 var DEBUGGER_MODULES_RE =
   /^(?:timeit|[ip]?[pu]db|[iI][pP]ython|[bp]t?python|idlelib.*|code|trace|cProfile|profile|asyncio|_pyrepl|runpy|unittest|irb|debug|pry|byebug)$/;
-//@ chunk-63f0f3kd.js:68772-68852 placement
+//@ chunk-h2y5xkdx.js:81406-81486 placement
 /**
  * 判断词值是普通字面量（不含特殊字符），或不会展开的动态值。
  */
 function isPlainOrInertValue(value) {
   return value.kind === "literal" ? isPlainWordText(value.text) : value.kind === "dynamic" && value.inert;
 }
-//@ chunk-63f0f3kd.js:68852-68939 placement
+//@ chunk-h2y5xkdx.js:81486-81573 placement
 /**
  * 除指定下标外，是否还有其他动态且非 inert 的单词。
  */
 function hasOtherDynamicWord(words, skipIdx) {
   return words.some((word, idx) => idx !== skipIdx && word.value.kind === "dynamic" && !word.value.inert);
 }
-//@ chunk-63f0f3kd.js:68939-69356 placement
+//@ chunk-h2y5xkdx.js:81573-81990 placement
 /**
  * 某个可能展开为空的单词导致无法判定时，去掉它重新检查；超过 16 个这类单词直接判为无法验证，并在原因中提示加引号或写明文件。
  */
 function retryWithoutEmptyWord(wordIndex, program, rules, words, state, context) {
   let word = words[wordIndex];
   if (!word || !mayExpandToNothing(word.node)) return null;
-  if (count(words, (word) => mayExpandToNothing(word.node)) > 16)
+  if (countWhere(words, (word) => mayExpandToNothing(word.node)) > 16)
     return unverifiableRunReason(
       program,
       "with more than 16 words that may expand to no word at all (name the files, or quote the words)",
@@ -1072,7 +1566,7 @@ function retryWithoutEmptyWord(wordIndex, program, rules, words, state, context)
     ? null
     : `${reason}, since ${shortenForReason(word.node.text)} may expand to no word at all (quote it, or name the files instead of a pattern)`;
 }
-//@ chunk-63f0f3kd.js:69356-73556 placement
+//@ chunk-h2y5xkdx.js:81990-86190 placement
 /**
  * 后台 worktree 守卫：分析解释器调用（python/node/perl 等）能否证明不会运行 git——检查启动相关环境变量、内联代码与模块、选项、脚本操作数及运行时计算的输入，无法证明时返回原因。
  */
@@ -1278,7 +1772,7 @@ ${match[1]}`
       )
     : null;
 }
-//@ chunk-63f0f3kd.js:73556-74189 placement
+//@ chunk-h2y5xkdx.js:86190-86823 placement
 /**
  * find 中只影响匹配的路径谓词。
  */
@@ -1288,7 +1782,7 @@ var FIND_PATH_PREDICATE_RE =
   /^-(?:i?name|i?path|i?wholename|i?regex|i?lname|x?type|size|(?:max|min)depth|[amc](?:time|min)|newer(?:[aBcmt][aBcmt])?|user|group|[ug]id|perm|links|inum|samefile|fstype|regextype)$/;
 var FIND_SIDE_EFFECT_PREDICATE_RE =
   /^-(?:[acm]newer|B(?:min|newer|time)|context|used|flags|xattrname|files0-from|D|printf|fprintf|fprint0?|fls|f)$/;
-//@ chunk-63f0f3kd.js:74189-74717 placement
+//@ chunk-h2y5xkdx.js:86823-87351 placement
 /**
  * 判断语句是否为只用安全谓词、带 -print0 的 find 命令（允许文件重定向）。
  */
@@ -1329,7 +1823,7 @@ function isSafeFindPrint0(findStatement, state) {
     }) && sawPrint0
   );
 }
-//@ chunk-63f0f3kd.js:74717-80297 placement
+//@ chunk-h2y5xkdx.js:87351-92968 placement
 /**
  * 分析一个简单命令：环境赋值前缀、命令名、参数求值；按程序分派到 git/ssh/rsync/find/xargs/sudo/printf 等专用规则。
  */
@@ -1461,7 +1955,7 @@ function analyzeCommand(commandNode, state, redirects) {
       let envAssignmentReason =
         (GIT_LOCATION_ENV_RE.test(envVarName) || !PLAIN_TEXT_RE.test(envVarValue)) && !state.simple
           ? unverifiableRunReason("env", `with ${shortenForReason(argv[argStartIndex])}`)
-          : environmentAssignmentReason(
+          : (environmentAssignmentReason(
               envVarName,
               {
                 kind: "literal",
@@ -1470,7 +1964,15 @@ function analyzeCommand(commandNode, state, redirects) {
               envVarValue,
               nextIsKnown,
               nextIsStringExec,
-            );
+            ) ??
+            describeEnvValue(
+              envVarName,
+              {
+                kind: "literal",
+                text: envVarValue,
+              },
+              state,
+            ));
       if (envAssignmentReason !== null) return envAssignmentReason;
       prefixValues.push({
         kind: "literal",
@@ -1656,7 +2158,7 @@ function analyzeCommand(commandNode, state, redirects) {
         stdinFedToProgram,
       );
 }
-//@ chunk-63f0f3kd.js:80297-80390 placement
+//@ chunk-h2y5xkdx.js:92968-93061 placement
 /**
  * 返回第一个非选项参数的下标（跳过 -p/-f/-d/-P 这类带值选项）。
  */
@@ -1665,7 +2167,7 @@ function findNonOptionWordIndex(words) {
     (word, wordIndex) => !/^(?:-|$)/.test(word) && !/^-[pfdP]$/.test(words[wordIndex - 1] ?? ""),
   );
 }
-//@ chunk-63f0f3kd.js:80390-81547 placement
+//@ chunk-h2y5xkdx.js:93061-94218 placement
 /**
  * 分析 sshpass 调用：校验其选项可读，找出被包装的程序；若为 rsh/ssh/scp/rsync 则交给远程命令分析，若后续词可能指定远程客户端则拒绝。
  */
@@ -1726,7 +2228,7 @@ function checkSshpassInvocation(program, words, state, options) {
         null)
     : null;
 }
-//@ chunk-63f0f3kd.js:81547-83889 placement
+//@ chunk-h2y5xkdx.js:94218-96600 placement
 /**
  * 分析启动器类命令（sudo、env、nohup、timeout、xargs 等）的参数：stdin 喂 shell、sshpass/远程客户端、操作数中的 git、shell -c 字符串、环境赋值与计算值，无法证明安全时返回原因。
  */
@@ -1748,7 +2250,7 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
     (/^(?:at|batch|crontab|newgrp)$/.test(program) ||
       (program === "parallel" && literals.every((literal) => literal.startsWith("-"))) ||
       (/^(?:unshare|nsenter|chroot)$/.test(program) &&
-        count(literals, (literal) => !/^(?:-|\d*$)/.test(literal)) <= +(program === "chroot")) ||
+        countWhere(literals, (literal) => !/^(?:-|\d*$)/.test(literal)) <= +(program === "chroot")) ||
       (/^(?:sudo|doas)$/.test(program) &&
         literals.some((literal) => /^(?:-[A-Za-z]*[si]|--shell|--login)/.test(literal))))
   )
@@ -1831,14 +2333,22 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
     let firstProgram = isStrictExpansion ? (mapped.find((wordPart) => wordPart !== "") ?? "") : mapped[0];
     let assignmentMatch = isLauncher && /^([A-Za-z_]\w*)=(.*)$/s.exec(value.text);
     let assignmentReason = assignmentMatch
-      ? environmentAssignmentReason(
+      ? (environmentAssignmentReason(
           assignmentMatch[1],
           {
             kind: "literal",
             text: assignmentMatch[2],
           },
           assignmentMatch[2],
-        )
+        ) ??
+        describeEnvValue(
+          assignmentMatch[1],
+          {
+            kind: "literal",
+            text: assignmentMatch[2],
+          },
+          state,
+        ))
       : null;
     if (assignmentReason !== null) return assignmentReason;
     let wordReason = isLauncher
@@ -1866,29 +2376,29 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
         fed,
       );
 }
-//@ chunk-63f0f3kd.js:83889-83932 placement
+//@ chunk-h2y5xkdx.js:96600-96644 placement
 function isGitProgram(program) {
   return GIT_COMMAND_PATTERN.test(program) || SHELL_PROGRAM_NAMES.has(program);
 }
-//@ chunk-63f0f3kd.js:83932-84026 placement
+//@ chunk-h2y5xkdx.js:96644-96739 placement
 function mentionsGit(text) {
   return [text, text.replace(SHELL_QUOTE_CHARS_RE, "")].some((candidate) =>
     candidate.split(/[^\w.-]+/).some((wordPart) => GIT_COMMAND_PATTERN.test(wordPart)),
   );
 }
-//@ chunk-63f0f3kd.js:84026-84177 placement
+//@ chunk-h2y5xkdx.js:96739-96890 placement
 var SHELL_QUOTE_CHARS_RE = /\$\{[^}]*\}|\$\w*|[`'"\\]/g;
 var BOT_PROTECTED_TENGU_STEADY_THIMBLE = "bot_protected_tengu_steady_thimble";
 var STRING_NODE_TYPES_RE = /^(?:string|raw_string|ansi_c_string)$/;
 var GLOB_CHARS_RE = /(?:^|[^\\])(?:\\\\)*[*?[{]/;
-//@ chunk-63f0f3kd.js:84177-84240 placement
+//@ chunk-h2y5xkdx.js:96890-96953 placement
 /**
  * 判断词节点（或其子节点）是否含通配符。
  */
 function hasChildWordGlob(node) {
   return node.type === "word" ? GLOB_CHARS_RE.test(node.text) : hasChildWordMatching(node, GLOB_CHARS_RE);
 }
-//@ chunk-63f0f3kd.js:84240-93992 placement
+//@ chunk-h2y5xkdx.js:96953-106705 placement
 /**
  * 检查内建命令与常用工具（printf、test、set/shopt、rg/sort、cd、read/getopts/unset 等）的参数能否静态判定（计算值可能是选项、变量名可能被绑定等），不能时返回原因。
  */
@@ -1925,9 +2435,9 @@ function checkBuiltinArguments(program, words, state, context) {
       program === "rg" && GREP_PATTERN_OPTIONS.test(literalValues[idx - 1] ?? "");
     let isStrictValues = (program === "rg" || program === "sort") && isStrictDynamicValuesEnabled();
     let optionAt = [];
-    for (let idx = 0; isStrictValues && idx < literalValues.length; idx++) {
-      let prevLiteral = idx > 0 && optionAt[idx - 1] === null ? literalValues[idx - 1] : null;
-      optionAt[idx] =
+    for (let k = 0; isStrictValues && k < literalValues.length; k++) {
+      let prevLiteral = k > 0 && optionAt[k - 1] === null ? literalValues[k - 1] : null;
+      optionAt[k] =
         prevLiteral === null
           ? null
           : program === "sort"
@@ -1977,7 +2487,7 @@ function checkBuiltinArguments(program, words, state, context) {
       let optionText = isInsideCluster ? `${prevLiteral.slice(0, -1)} ${option}` : option;
       let positionText = `as the ${option} value${isInsideCluster ? ` of the cluster ${prevLiteral}` : ""}, where an option may stand`;
       if (word.value.kind === "dynamic" && word.value.many)
-        return dynamicArgumentReason(program, option, word);
+        return describeComputedValue(program, option, word);
       if (program !== "rg" || !GREP_PATTERN_OPTIONS.test(option))
         return valueOptionsRe.test(option)
           ? `${describeWordValue(word.value)} ${positionText} (give a spelled-out count or key: ${optionText} 4)`
@@ -1986,7 +2496,7 @@ function checkBuiltinArguments(program, words, state, context) {
         (isStrictValues ? isDynamicForOption(word, option) : true) ||
         (isPatternOption(idx) && optionAt[idx] !== null && hasExpansion(word.node))
       )
-        return dynamicArgumentReason(program, option, word, isInsideCluster ? prevLiteral : undefined);
+        return describeComputedValue(program, option, word, isInsideCluster ? prevLiteral : undefined);
       return isInsideCluster
         ? `${describeWordValue(word.value)} ${positionText} (write ${option} as its own word: ${optionText} "$x")`
         : `${describeWordValue(word.value)} ${optionPositionReason(`the ${prevLiteral} before it is itself the ${optionAt[idx - 1] ?? "previous option"} value here, so give each option its own value`)}`;
@@ -2059,15 +2569,15 @@ function checkBuiltinArguments(program, words, state, context) {
           `with the word ${shortenForReason(node.text)}: its unquoted *, ?, [ or { may make it no word or several, and the words after it may then be read as variable names (${isReadFlagWord ? "spell the option letters out, such as -d" : "write it as quoted text, such as '*'"})`,
         );
       if (isReadFlagWord) {
-        for (let idx = 1; idx < literal.length; idx++) {
-          let flag = `-${literal[idx]}`;
+        for (let k = 1; k < literal.length; k++) {
+          let flag = `-${literal[k]}`;
           if (!/^-[aA]$/.test(flag) && !READ_DATA_FLAGS.has(flag)) continue;
           let role = READ_NUMERIC_ARG_FLAGS.has(flag)
             ? "number"
             : READ_DATA_FLAGS.has(flag)
               ? "data"
               : "name";
-          let sliced = literal.slice(idx + 1);
+          let sliced = literal.slice(k + 1);
           if (sliced === "") argRole = role;
           else if (
             role === "number"
@@ -2138,7 +2648,7 @@ function checkBuiltinArguments(program, words, state, context) {
           hasExpansion(valueWord.node) ||
           (isStrictDynamicValuesEnabled() && !isFullyStaticValue(valueWord)))
       )
-        return unverifiableRunReason(program, `with ${dynamicArgumentReason(program, arg, valueWord)}`);
+        return unverifiableRunReason(program, `with ${describeComputedValue(program, arg, valueWord)}`);
       idx += match ? 1 : 2;
     }
     idx += literalValues[idx] === "--" ? 1 : 0;
@@ -2263,13 +2773,13 @@ function checkBuiltinArguments(program, words, state, context) {
     case "find": {
       let mapped = literalValues.map(() => null);
       let execIdxLimit = literalValues.length;
-      for (let idx = 0; isStrictDynamicValuesEnabled() && idx < execIdxLimit; idx++) {
-        let literal = literalValues[idx] ?? null;
-        if (literal === null || mapped[idx] !== null) continue;
-        if (FIND_EXEC_OPTIONS.has(literal)) execIdxLimit = idx;
+      for (let k = 0; isStrictDynamicValuesEnabled() && k < execIdxLimit; k++) {
+        let literal = literalValues[k] ?? null;
+        if (literal === null || mapped[k] !== null) continue;
+        if (FIND_EXEC_OPTIONS.has(literal)) execIdxLimit = k;
         else if (FIND_PATH_PREDICATE_RE.test(literal) || FIND_SIDE_EFFECT_PREDICATE_RE.test(literal)) {
-          for (let idx_2 = 1; idx_2 <= (literal === "-fprintf" ? 2 : 1); idx_2++)
-            if (idx + idx_2 < literalValues.length) mapped[idx + idx_2] = literal;
+          for (let k_2 = 1; k_2 <= (literal === "-fprintf" ? 2 : 1); k_2++)
+            if (k + k_2 < literalValues.length) mapped[k + k_2] = literal;
         }
       }
       let idx = 0;
@@ -2332,7 +2842,7 @@ function checkBuiltinArguments(program, words, state, context) {
               : null;
           return unverifiableRunReason(
             "find",
-            `with ${optionName !== null ? dynamicArgumentReason("find", optionName, words[idx]) : isAfterExec ? `${describeWordValue(values[idx])} after ${literalValues[idx - 1]} once an -exec action has begun, where no computed word is read as a value (spell it out, or put a find test before the -exec clause),` : describeWordValue(values[idx])}`,
+            `with ${optionName !== null ? describeComputedValue("find", optionName, words[idx]) : isAfterExec ? `${describeWordValue(values[idx])} after ${literalValues[idx - 1]} once an -exec action has begun, where no computed word is read as a value (spell it out, or put a find test before the -exec clause),` : describeWordValue(values[idx])}`,
           );
         }
         if (FIND_EXEC_OPTIONS.has(literal ?? "")) {
@@ -2407,15 +2917,15 @@ function checkBuiltinArguments(program, words, state, context) {
     case "xargs": {
       let replaceToken = null;
       let isNulSeparated = false;
-      for (let idx = 0; idx < literalValues.length; idx++) {
-        let literal = literalValues[idx] ?? null;
+      for (let k = 0; k < literalValues.length; k++) {
+        let literal = literalValues[k] ?? null;
         let match = /^(?:-I(.*)|-i(.*)|--replace(?:=(.*))?)$/.exec(literal ?? "");
         if (match && literal !== "-I") {
           replaceToken = match[1] || match[2] || match[3] || "{}";
           continue;
         }
-        if (literal === "-I" && literalValues[idx + 1]) {
-          replaceToken = literalValues[++idx];
+        if (literal === "-I" && literalValues[k + 1]) {
+          replaceToken = literalValues[++k];
           continue;
         }
         if (literal !== null && XARGS_OPTIONS_RE.test(literal)) {
@@ -2425,17 +2935,17 @@ function checkBuiltinArguments(program, words, state, context) {
               ? false
               : isNulSeparated;
           let matches = /^(?:-[nPLsdE]|--(?:max-args|max-procs|delimiter))$/.test(literal);
-          let valueWord = matches && literalValues[idx + 1] === null ? words[idx + 1] : null;
+          let valueWord = matches && literalValues[k + 1] === null ? words[k + 1] : null;
           if (valueWord && isStrictDynamicValuesEnabled() && !isFullyStaticValue(valueWord))
             return unverifiableRunReason(
               "xargs",
-              `with ${dynamicArgumentReason("xargs", literal, valueWord)}`,
+              `with ${describeComputedValue("xargs", literal, valueWord)}`,
             );
-          idx += matches ? 1 : 0;
+          k += matches ? 1 : 0;
           continue;
         }
         let appendedWords = {
-          node: words[idx].node,
+          node: words[k].node,
           value: dynamicValue(
             "the words xargs appends, which may begin with - unless they follow a -- operand or come NUL-separated from find -print0 into xargs -0",
             {
@@ -2450,7 +2960,7 @@ function checkBuiltinArguments(program, words, state, context) {
           ? checkExecSlotCommand(
               literal,
               [
-                ...words.slice(idx + 1).map((word) =>
+                ...words.slice(k + 1).map((word) =>
                   replaceToken !== null &&
                   (word.value.kind !== "literal" || word.value.text.includes(replaceToken))
                     ? {
@@ -2464,7 +2974,7 @@ function checkBuiltinArguments(program, words, state, context) {
               ],
               state,
             )
-          : unverifiableRunReason("xargs", `with ${literal ?? describeWordValue(values[idx])}`);
+          : unverifiableRunReason("xargs", `with ${literal ?? describeWordValue(values[k])}`);
       }
       return null;
     }
@@ -2472,9 +2982,9 @@ function checkBuiltinArguments(program, words, state, context) {
       return null;
   }
 }
-//@ chunk-63f0f3kd.js:93992-94027 placement
+//@ chunk-h2y5xkdx.js:106705-106740 placement
 var TENGU_RUSTLING_LIGHTHOUSE = "tengu_rustling_lighthouse";
-//@ chunk-63f0f3kd.js:94027-94310 placement
+//@ chunk-h2y5xkdx.js:106740-107024 placement
 function checkExecSlotCommand(programPath, words, state) {
   let program = programBaseName(programPath);
   if (KNOWN_PROGRAMS.has(program)) return checkBuiltinArguments(program, words, state);
@@ -2495,17 +3005,17 @@ function checkExecSlotCommand(programPath, words, state) {
       })
     : unverifiableRunReason(program, "from a find -exec or xargs slot");
 }
-//@ chunk-63f0f3kd.js:94310-94373 placement
+//@ chunk-h2y5xkdx.js:107024-107087 placement
 function findMatching(values, pattern) {
   return values.find((value) => value !== null && pattern.test(value)) ?? null;
 }
-//@ chunk-63f0f3kd.js:94373-94506 placement
+//@ chunk-h2y5xkdx.js:107087-107220 placement
 function isTestOperand(value) {
   return value.kind === "literal"
     ? PLAIN_TEXT_RE.test(value.text) || /^(?:!=?|==?|=~|\]|\(|\)|<|>)$/.test(value.text)
     : value.kind === "dynamic" && value.integer;
 }
-//@ chunk-63f0f3kd.js:94506-94632 placement
+//@ chunk-h2y5xkdx.js:107220-107346 placement
 function matchesWhole(pattern, script) {
   pattern.lastIndex = 0;
   while (pattern.lastIndex < script.length) {
@@ -2514,7 +3024,7 @@ function matchesWhole(pattern, script) {
   }
   return true;
 }
-//@ chunk-63f0f3kd.js:94632-94998 placement
+//@ chunk-h2y5xkdx.js:107346-107712 placement
 /**
  * 解析 sed 参数：找出脚本程序参数位置（被 -e/--expression 指定时为空）、选项结束下标与 -i 的后缀。
  */
@@ -2543,15 +3053,16 @@ function parseSedProgram(literalValues, allowInPlace) {
     suffixes,
   };
 }
-//@ chunk-63f0f3kd.js:94998-95061 placement
+//@ chunk-h2y5xkdx.js:107712-107775 placement
 function isOptionWord(word) {
   return !!word && word !== "-" && word !== "--" && word.startsWith("-");
 }
-//@ chunk-63f0f3kd.js:95061-95112 placement
+//@ chunk-h2y5xkdx.js:107775-107826 placement
 function isSedExpressionFlag(word) {
   return word === "-e" || word === "--expression";
 }
 export {
+  MAX_SSH_TEXT_CHARS,
   programBaseName,
   ARRAY_REF_RE,
   ARRAY_LENGTH_RE,
@@ -2563,6 +3074,7 @@ export {
   analyzeCommand,
   describeGitRunner,
   INTERPRETER_RULES,
+  describeEnvValue,
   isPlainOrInertValue,
   TENGU_HOLLOW_SANDPIPER,
 };

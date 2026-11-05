@@ -3,9 +3,9 @@
  *
  * 读取 Artifact 时附带的指引（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6ht21p2a.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z0t7mpxt.js (29)
  * attribution: placement 29
  */
 import { getLiveState, replicaKey } from "../liveReplica/liveReplica.js";
@@ -32,7 +32,7 @@ import {
 } from "../../tools/ArtifactTool/constants.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
-import { fetchArtifactBootWithProbe } from "./boot.js";
+import { fetchBoot } from "./boot.js";
 import { compareNumericPrefix } from "../../utils/textNormalize.js";
 import {
   checkedHandoverCoverage,
@@ -85,14 +85,14 @@ import { instructionsTypeKey, describeArtifactType } from "./artifactTypes.js";
 import { pathPinOn } from "./pathPins.js";
 import { shareAudience } from "./shareEntries.js";
 
-//@ chunk-6ht21p2a.js:38325-38399 placement
+//@ chunk-z0t7mpxt.js:38709-38783 placement
 /**
  * 导出函数 `noteRefusedPublishBody`：参数 e, n, s。
  */
 function noteRefusedPublishBody(agentId, agentArg, body) {
   getLiveState().refusedPublishBodies.get(replicaKey(agentId, agentArg))?.hashes.add(body);
 }
-//@ chunk-6ht21p2a.js:38399-38671 placement
+//@ chunk-z0t7mpxt.js:38783-39055 placement
 /**
  * 已被拒的内容又被重发时的指引：摘要模式给出"只能读取摘要"的说明，否则让模型遵循首次拒绝里的原因与做法、不要重发；附强制发布已被拒或强制建议。
  */
@@ -105,21 +105,21 @@ function describeRefusedResendGuidance(entry, options) {
     (options ? FORCE_REFUSED_SENTENCE : forceAdvisory)
   );
 }
-//@ chunk-6ht21p2a.js:38671-38810 placement
+//@ chunk-z0t7mpxt.js:39055-39194 placement
 function findRefusedBody(agentId, slug, body) {
   let stored = getLiveState().refusedPublishBodies.get(replicaKey(agentId, slug));
   return stored !== undefined && body !== undefined && stored.batch === body && stored.sourceless !== "none"
     ? stored
     : undefined;
 }
-//@ chunk-6ht21p2a.js:38810-38856 placement
+//@ chunk-z0t7mpxt.js:39194-39240 placement
 /**
  * 导出函数 `hasRefusedBody`：参数 e, n, s，返回 findRefusedBody(e, n, s) !== void 0。
  */
 function hasRefusedBody(agentId, slug, body) {
   return findRefusedBody(agentId, slug, body) !== undefined;
 }
-//@ chunk-6ht21p2a.js:38856-39017 placement
+//@ chunk-z0t7mpxt.js:39240-39401 placement
 /**
  * 取出已拒绝发布记录中的无源（sourceless）原因与是否拒绝强制发布，没有时返回 undefined。
  */
@@ -134,7 +134,7 @@ function getRefusedSourceless(agentId, slug, body) {
         forceRefused: refusedBody.forceRefused,
       };
 }
-//@ chunk-6ht21p2a.js:39017-39300 placement
+//@ chunk-z0t7mpxt.js:39401-39684 placement
 /**
  * 查找某次发布内容（按哈希）是否曾被拒：同一内容在已被确认可重发的版本上时不算；观察来源不一致时不算。命中时返回拒绝记录。
  */
@@ -151,7 +151,7 @@ function matchRefusedBody(agentId, slug, body, id, predicate = () => false) {
   if (observedFrom !== undefined && (observedFrom === "" || observedFrom !== (id ?? ""))) return null;
   return stored;
 }
-//@ chunk-6ht21p2a.js:39300-40641 placement
+//@ chunk-z0t7mpxt.js:39684-41025 placement
 async function checkArtifactResend(refusal, slug, url, id, context, withheldReason, extra) {
   let unchecked = {
     kind: "unchecked",
@@ -180,15 +180,10 @@ async function checkArtifactResend(refusal, slug, url, id, context, withheldReas
   let timeoutSignal = AbortSignal.timeout(PROBE_WAIT_MS);
   let boot;
   try {
-    boot = await fetchArtifactBootWithProbe(
-      artifactUrl,
-      "artifact_resend_check",
-      AbortSignal.any([signal, timeoutSignal]),
-      {
-        credentials: context.credentials,
-        speculative: true,
-      },
-    );
+    boot = await fetchBoot(artifactUrl, "artifact_resend_check", AbortSignal.any([signal, timeoutSignal]), {
+      credentials: context.credentials,
+      speculative: true,
+    });
   } catch (error) {
     if (signal.aborted) throw error;
     logFeatureSad("artifact_resend_check", timeoutSignal.aborted ? "boot_timeout" : "boot_threw", {
@@ -257,7 +252,7 @@ async function checkArtifactResend(refusal, slug, url, id, context, withheldReas
     handed: autoread,
   };
 }
-//@ chunk-6ht21p2a.js:40641-42987 placement
+//@ chunk-z0t7mpxt.js:41025-43373 placement
 async function describeResubmission(refusal, slug, context, remaining, sameFile = false) {
   let { live, forceRefused, sourceless } = refusal;
   let coverage =
@@ -326,14 +321,14 @@ async function describeResubmission(refusal, slug, context, remaining, sameFile 
     reasonCode: "identical_resubmission",
   };
 }
-//@ chunk-6ht21p2a.js:42987-43047 placement
+//@ chunk-z0t7mpxt.js:43373-43433 placement
 /**
  * 导出函数 `forgetRefusedBody`：参数 e, n。
  */
 function forgetRefusedBody(agentId, slug) {
   getLiveState().refusedPublishBodies.delete(replicaKey(agentId, slug));
 }
-//@ chunk-6ht21p2a.js:43047-43140 placement
+//@ chunk-z0t7mpxt.js:43433-43526 placement
 /**
  * 读取已存 frame 声明的超时（6 s / 5 s）与最多展示的键数 16。
  */
@@ -341,7 +336,7 @@ var STORED_DECLARATION_TIMEOUT_MS = 6000;
 var FRAME_DECLARATION_READ_TIMEOUT_MS = 5000;
 var MAX_DECLARED_KEYS = 16;
 var STORED_DECLARATION_NOTE = "Stored for the live version, as the artifact service holds it";
-//@ chunk-6ht21p2a.js:43140-43402 placement
+//@ chunk-z0t7mpxt.js:43526-43788 placement
 /**
  * 带超时读取 artifact 存储的 frame 声明；读取出错时记调试日志并返回错误对象。
  */
@@ -362,11 +357,11 @@ async function readStoredDeclaration(slug, signal, credentials) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-6ht21p2a.js:43402-43467 placement
+//@ chunk-z0t7mpxt.js:43788-43853 placement
 function hasTypeLock(decl) {
   return decl != null && !("err" in decl) && decl.typeLock !== undefined;
 }
-//@ chunk-6ht21p2a.js:43467-43593 placement
+//@ chunk-z0t7mpxt.js:43853-43979 placement
 /**
  * 把类型声明结果压缩为契约与能力摘要，出错或为空时返回 undefined。
  */
@@ -379,7 +374,7 @@ function toDeclarationSummary(decl) {
     }),
   };
 }
-//@ chunk-6ht21p2a.js:43593-44061 placement
+//@ chunk-z0t7mpxt.js:43979-44447 placement
 /**
  * 生成已存储声明的说明段：契约版本、能力摘要，并把声明 JSON（转义可疑字符、清洗、截断）放进专用标签内并注明是数据不是指令；无能力时说明未声明。
  */
@@ -405,7 +400,7 @@ ${scrubbed}
     return "";
   }
 }
-//@ chunk-6ht21p2a.js:44061-44542 placement
+//@ chunk-z0t7mpxt.js:44447-44928 placement
 /**
  * 概括声明的能力：每个能力名（不合法的标注）附规则/服务器数量与 MCP 动态标记，超出上限时附"及 N 个"。
  */
@@ -424,9 +419,9 @@ function summarizeCapabilities(capabilities) {
   let hiddenCount = keys.length - mapped.length;
   return hiddenCount > 0 ? `${mapped.join(", ")} and ${hiddenCount} more` : mapped.join(", ");
 }
-//@ chunk-6ht21p2a.js:44542-44572 placement
+//@ chunk-z0t7mpxt.js:44928-44958 placement
 var UNSAFE_INLINE_TEXT_RE = /[^\x20-\x7e]|[<>&]/gu;
-//@ chunk-6ht21p2a.js:44572-44731 placement
+//@ chunk-z0t7mpxt.js:44958-45117 placement
 function escapeDeclarationJson(capabilities, capsArg) {
   return jsonStringify(capabilities)
     .slice(0, 16 * capsArg)
@@ -439,12 +434,12 @@ function escapeDeclarationJson(capabilities, capsArg) {
       ).join(""),
     );
 }
-//@ chunk-6ht21p2a.js:44731-44814 placement
+//@ chunk-z0t7mpxt.js:45117-45200 placement
 function carriesFrameServeBlock(html) {
   let sliced = html.slice(0, FRAME_RUNTIME_HEAD_WINDOW + FRAME_RUNTIME_MAX_SPAN);
   return exciseFrameAssetServeBlock(Buffer.from(sliced, "utf8")) !== undefined;
 }
-//@ chunk-6ht21p2a.js:44814-45080 placement
+//@ chunk-z0t7mpxt.js:45200-45466 placement
 /**
  * 按工具集写法给出"列出文件 / 读取文件 / 二者"动作的称呼。
  */
@@ -456,7 +451,7 @@ var listOrReadActionLabel = () =>
     "list_files or read_file action",
     () => 'list action with `scope: "files"`, or its read action with a file `path`,',
   );
-//@ chunk-6ht21p2a.js:45080-46164 placement
+//@ chunk-z0t7mpxt.js:45466-46550 placement
 function describeArtifactInstructions(
   instructions,
   parsedArtifact,
@@ -499,15 +494,15 @@ function describeArtifactInstructions(
     return `${owned ? "Its type's instructions (below) name a type whose content may live in the Artifact's own files under `project/` rather than its store. Whether this Artifact's does" : "It declares a shared store and carries an instructions file (below; found on it, not verified as the type's) naming a type whose content would live in the Artifact's own files under `project/`. Whether this Artifact's content does"} is for those instructions to say: list its files (${listFilesActionLabel()}) and read \`${indexFile}\` if it is among them before writing anything; if it is files, read each one you will change (${readFileActionLabel()}) and ${buildRepublishFilesStep(url)}`;
   return describeArtifactStoreWrites(instructions.fromType, owned, storeRoute, url, hasEndpoints);
 }
-//@ chunk-6ht21p2a.js:46164-46213 placement
+//@ chunk-z0t7mpxt.js:46550-46599 placement
 function isKnownTypeRead(read, inline, firstParty) {
   return inline && firstParty && isKnownArtifactKind(instructionsTypeKey(read.text));
 }
-//@ chunk-6ht21p2a.js:46213-46268 placement
+//@ chunk-z0t7mpxt.js:46599-46654 placement
 function referencesDbWrite(read, storeDeclared) {
   return storeDeclared && referencedAddonActions(read.text).has("write_db");
 }
-//@ chunk-6ht21p2a.js:46268-46421 placement (2.1.88 match: isFileReadDenied, 0.77)
+//@ chunk-z0t7mpxt.js:46654-46807 placement (2.1.88 match: isFileReadDenied, 0.771)
 function isFileReadDenied(read, owned, listing, isNew = false) {
   if (read?.kind !== "read" || !isKnownTypeRead(read, owned, listing)) return "";
   let typeKey = instructionsTypeKey(read.text);
@@ -519,7 +514,7 @@ function isFileReadDenied(read, owned, listing, isNew = false) {
         list: listFilesActionLabel(),
       });
 }
-//@ chunk-6ht21p2a.js:46421-48220 placement
+//@ chunk-z0t7mpxt.js:46807-48606 placement
 function describeArtifactStoreWrites(fromType, fromTypeFlag, route, url, hasEndpoints) {
   let writeDbCall = `with the ${ARTIFACT_TOOL_NAME} tool's \`action: "write_db"\`, passing \`url\`: ${jsonStringify(url)}`;
   let runScriptCall = `the ${ARTIFACT_TOOL_NAME} tool's \`action: "run_script"\` with \`mode: "mutation"\` can write it (\`get_endpoints\` first)`;
@@ -550,7 +545,7 @@ function describeArtifactStoreWrites(fromType, fromTypeFlag, route, url, hasEndp
         : `${sourceNote}, and this type declares no endpoints, so this session has no call that writes its store \u2014 tell the user that; ${fileNote}`;
   }
 }
-//@ chunk-6ht21p2a.js:48220-48252 placement
+//@ chunk-z0t7mpxt.js:48606-48638 placement
 /**
  * 类型目录担保查询的默认结果（ships=false、firstParty=false）。
  */
@@ -558,7 +553,7 @@ var DEFAULT_TYPE_ASSURANCE = {
   ships: false,
   firstParty: false,
 };
-//@ chunk-6ht21p2a.js:48252-48638 placement
+//@ chunk-z0t7mpxt.js:48638-49024 placement
 /**
  * 带缓存查询类型目录对某类型发行版的担保：该发行版是否自带说明、是否第一方；查询失败时清除缓存并返回默认值。
  */
@@ -589,7 +584,7 @@ function getTypeCatalogVouch(typeSlug, release, env, signal, credentials) {
   }
   return cached;
 }
-//@ chunk-6ht21p2a.js:48638-49109 placement
+//@ chunk-z0t7mpxt.js:49024-49495 placement
 /**
  * 说明读取类型页面型 artifact 时为什么省略页面，以及如何（自身工具或 artifact 工具）读取页面本身。
  */
@@ -605,7 +600,7 @@ function describeTypePageOmitted(typePage, pageMode) {
         : "";
   return text + textOut;
 }
-//@ chunk-6ht21p2a.js:49109-49267 placement
+//@ chunk-z0t7mpxt.js:49495-49653 placement
 /**
  * 摘要被截断的标记，以及副本保存后被修改需要重新保存时的说明生成函数。
  */
@@ -615,7 +610,7 @@ var describeSavedAfresh = (editedCopy) =>
   editedCopy === undefined
     ? ""
     : ` (saved afresh: the copy at ${editedCopy} was modified after it was saved, so Reads of it no longer count)`;
-//@ chunk-6ht21p2a.js:49267-50057 placement
+//@ chunk-z0t7mpxt.js:49653-50443 placement
 function describeArtifactVisibility(entry) {
   let shareMenu = entry.shareMenu;
   if (entry.role !== "owner" || entry.typeLocked || shareMenu === undefined) return "";
@@ -642,11 +637,19 @@ function describeArtifactVisibility(entry) {
   return ` (from the page's Share menu the user's plan and organization allow: ${parts}${parts2}${parts3})`;
 }
 export {
+  describeStoredDeclaration,
+  readStoredDeclaration,
+  toDeclarationSummary,
+  hasRefusedBody,
+  noteRefusedPublishBody,
+  matchRefusedBody,
+  checkArtifactResend,
+  describeResubmission,
+  getRefusedSourceless,
+  describeRefusedResendGuidance,
+  forgetRefusedBody,
   readFileActionLabel,
   listFilesActionLabel,
-  readStoredDeclaration,
-  describeStoredDeclaration,
-  toDeclarationSummary,
   STORED_DECLARATION_TIMEOUT_MS,
   listOrReadActionLabel,
   SUMMARY_TRUNCATED_MARKER,
@@ -661,12 +664,4 @@ export {
   referencesDbWrite,
   isKnownTypeRead,
   carriesFrameServeBlock,
-  hasRefusedBody,
-  noteRefusedPublishBody,
-  matchRefusedBody,
-  checkArtifactResend,
-  describeResubmission,
-  getRefusedSourceless,
-  describeRefusedResendGuidance,
-  forgetRefusedBody,
 };

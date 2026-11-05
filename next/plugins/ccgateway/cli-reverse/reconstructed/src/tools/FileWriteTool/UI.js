@@ -3,12 +3,14 @@
  *
  * Write 工具的终端渲染：新建文件预览、更新 diff、拒绝/错误消息（混有 lodash 片段与误归声明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileWriteTool/UI.tsx
- * pieces: chunk-e6aww6q8.js (3), chunk-ek7g58h7.js (17)
- * attribution: fingerprint 5, callgraph-fingerprint 2, sole-consumer 3, affinity 1, file-local 1, layout 2, facade-majority 6
+ * pieces: chunk-4rfadb6m.js (17), chunk-5xgkngpb.js (3)
+ * attribution: sole-consumer 3, affinity 1, file-local 1, layout 2, facade-majority 6, fingerprint 5, callgraph-fingerprint 2
  */
 import { isAbsolute, resolve } from "path";
+import { lintBackgroundMemoryWrite, rememberLintedWrite } from "../../memdir/memoryWriteLint.js";
+import { expandPath } from "../../utils/path.js";
 import { getPlansDirectory } from "../../utils/plans.js";
 import { getDisplayPath } from "../../utils/file.js";
 import {
@@ -45,7 +47,20 @@ import { isScratchpadDisplayPath } from "../../utils/permissions/filesystem.js";
 import { FileEditToolUpdatedMessage } from "../../components/FileEditToolUpdatedMessage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1412415-1412500 fingerprint (2.1.88 match: userFacingName, 1)
+//@ chunk-5xgkngpb.js:1363614-1363734 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.519)
+/**
+ * 对 Edit/Write 输入的某个字段做记忆目录写入清洗（XQ），有变化时记录并返回替换后的输入（checkPermissions 用它产出 updatedInput）。
+ */
+function renderToolUseMessage_2(input, textField, memorySource, summaryContext) {
+  let lintedText = lintBackgroundMemoryWrite(expandPath(input.file_path), input[textField], memorySource);
+  if (lintedText === input[textField]) return input;
+  rememberLintedWrite(summaryContext.host, summaryContext.toolUseId);
+  return {
+    ...input,
+    [textField]: lintedText,
+  };
+}
+//@ chunk-5xgkngpb.js:1411896-1411981 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * Write 的用户可见名：计划文件 "Updated plan"，否则 "Write"。
  */
@@ -53,28 +68,20 @@ function userFacingName(input) {
   if (input?.file_path?.startsWith(getPlansDirectory())) return "Updated plan";
   return "Write";
 }
-//@ chunk-e6aww6q8.js:1412500-1412568 callgraph-fingerprint (2.1.88 match: getToolUseSummary, 1)
-/**
- * Write 工具使用摘要：显示路径。
- */
-function getToolUseSummary_3(input) {
-  if (!input?.file_path) return null;
-  return getDisplayPath(input.file_path);
-}
-//@ chunk-e6aww6q8.js:4648833-4648901 callgraph-fingerprint (2.1.88 match: renderToolUseMessage, 0.52)
+//@ chunk-5xgkngpb.js:4757418-4757486 callgraph-fingerprint (2.1.88 match: getToolUseSummary, 1)
 /**
  * Edit/Write 工具调用渲染：显示路径。
  */
-function renderToolUseMessage_2(input) {
+function getToolUseSummary_4(input) {
   if (!input?.file_path) return null;
   return getDisplayPath(input.file_path);
 }
-//@ chunk-ek7g58h7.js:1019-1023 sole-consumer
+//@ chunk-4rfadb6m.js:1019-1023 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ek7g58h7.js:1019", () => {
+deferInit("chunk-4rfadb6m.js:1019", () => {
   init_react_production();
 });
-//@ chunk-ek7g58h7.js:1072-1318 sole-consumer (2.1.88 match: measureText, 0.861)
+//@ chunk-4rfadb6m.js:1072-1318 sole-consumer (2.1.88 match: measureText, 0.811)
 function countWrappedLines(text, maxWidth, limit = 1 / 0) {
   let noWrap = maxWidth <= 0 || !Number.isFinite(maxWidth);
   let lineCount = 0;
@@ -97,26 +104,26 @@ function countWrappedLines(text, maxWidth, limit = 1 / 0) {
   }
   return lineCount;
 }
-//@ chunk-ek7g58h7.js:1318-1356 sole-consumer
+//@ chunk-4rfadb6m.js:1318-1356 sole-consumer
 /**
  * 判断文本按列宽换行后的行数是否超过上限。
  */
 function exceedsWrappedLineLimit(text, maxWidth, limit) {
   return countWrappedLines(text, maxWidth, limit) > limit;
 }
-//@ chunk-ek7g58h7.js:1356-1371 affinity
+//@ chunk-4rfadb6m.js:1356-1371 affinity
 /**
  * 文件内容预览最多显示的行数与换行分隔符。
  */
 var MAX_PREVIEW_LINES = 10;
 var LINE_SEPARATOR = `
 `;
-//@ chunk-ek7g58h7.js:1371-1443 file-local
+//@ chunk-4rfadb6m.js:1371-1443 file-local
 function countLines(content) {
   let parts = content.split(LINE_SEPARATOR);
   return content.endsWith(LINE_SEPARATOR) ? parts.length - 1 : parts.length;
 }
-//@ chunk-ek7g58h7.js:1443-1591 layout
+//@ chunk-4rfadb6m.js:1443-1591 layout
 function PreviousContentReplacedNote() {
   let $ = useMemoCache(1);
   let element;
@@ -129,7 +136,7 @@ function PreviousContentReplacedNote() {
   } else element = $[0];
   return element;
 }
-//@ chunk-ek7g58h7.js:1591-3786 facade-majority (2.1.88 match: FileWriteToolCreatedMessage, 0.46)
+//@ chunk-4rfadb6m.js:1591-3786 facade-majority (2.1.88 match: FileWriteToolCreatedMessage, 0.471)
 /**
  * Write 新建文件结果的终端渲染：显示行数与带高亮的内容预览（非 verbose 时截断）。
  */
@@ -330,7 +337,7 @@ function FileWriteToolCreatedMessage(props) {
   } else message = $[50];
   return message;
 }
-//@ chunk-ek7g58h7.js:3786-3942 layout
+//@ chunk-4rfadb6m.js:3786-3942 layout
 /**
  * update 结果但 structuredPatch 为空、originalFile 为 null（旧内容过大未 diff）时为真。
  */
@@ -344,7 +351,7 @@ function isUpdateWithOmittedDiff({ type: resultType, content, structuredPatch, o
     content !== ""
   );
 }
-//@ chunk-ek7g58h7.js:3942-4117 facade-majority (2.1.88 match: isResultTruncated, 0.818)
+//@ chunk-4rfadb6m.js:3942-4117 facade-majority (2.1.88 match: isResultTruncated, 0.817)
 function isResultTruncated(result, { columns }) {
   let { type: resultType, content } = result;
   if (resultType !== "create" && !isUpdateWithOmittedDiff(result)) return false;
@@ -352,7 +359,7 @@ function isResultTruncated(result, { columns }) {
   let lineBudget = content.endsWith(LINE_SEPARATOR) ? MAX_PREVIEW_LINES + 1 : MAX_PREVIEW_LINES;
   return exceedsWrappedLineLimit(content, Math.max(1, columns - 12), lineBudget);
 }
-//@ chunk-ek7g58h7.js:4117-4289 facade-majority (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-4rfadb6m.js:4117-4289 facade-majority (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage(file_path, { verbose }) {
   if (!file_path.file_path) return null;
   if (file_path.file_path.startsWith(getPlansDirectory())) return "";
@@ -361,7 +368,7 @@ function renderToolUseMessage(file_path, { verbose }) {
     children: verbose ? file_path.file_path : getDisplayPath(file_path.file_path),
   });
 }
-//@ chunk-ek7g58h7.js:4289-4401 facade-majority (2.1.88 match: renderToolUseRejectedMessage, 1)
+//@ chunk-4rfadb6m.js:4289-4401 facade-majority (2.1.88 match: renderToolUseRejectedMessage, 1)
 function renderToolUseRejectedMessage({ file_path, content }, { style, verbose }) {
   return jsxProd_default(WriteRejectionDiff, {
     filePath: file_path,
@@ -370,7 +377,7 @@ function renderToolUseRejectedMessage({ file_path, content }, { style, verbose }
     verbose,
   });
 }
-//@ chunk-ek7g58h7.js:4401-5107 fingerprint (2.1.88 match: WriteRejectionDiff, 1)
+//@ chunk-4rfadb6m.js:4401-5107 fingerprint (2.1.88 match: WriteRejectionDiff, 1)
 function WriteRejectionDiff(props) {
   let $ = useMemoCache(20);
   let { filePath, content, style, verbose } = props;
@@ -442,7 +449,7 @@ function WriteRejectionDiff(props) {
   } else t5 = $[19];
   return t5;
 }
-//@ chunk-ek7g58h7.js:5107-5644 fingerprint (2.1.88 match: WriteRejectionBody, 0.819)
+//@ chunk-4rfadb6m.js:5107-5644 fingerprint (2.1.88 match: WriteRejectionBody, 0.819)
 function WriteRejectionBody(props) {
   let $ = useMemoCache(8);
   let { promise, filePath, firstLine, createFallback, style, verbose } = props;
@@ -490,7 +497,7 @@ function WriteRejectionBody(props) {
   } else t1 = $[7];
   return t1;
 }
-//@ chunk-ek7g58h7.js:5644-6076 fingerprint (2.1.88 match: loadRejectionDiff, 0.898)
+//@ chunk-4rfadb6m.js:5644-6076 fingerprint (2.1.88 match: loadRejectionDiff, 0.898)
 async function loadRejectionDiff(filePath, content) {
   try {
     let fullFilePath = isAbsolute(filePath) ? filePath : resolve(getCwd(), filePath);
@@ -535,7 +542,7 @@ async function loadRejectionDiff(filePath, content) {
     };
   }
 }
-//@ chunk-ek7g58h7.js:6076-6304 facade-majority (2.1.88 match: renderToolUseErrorMessage, 0.509)
+//@ chunk-4rfadb6m.js:6076-6304 facade-majority (2.1.88 match: renderToolUseErrorMessage, 0.51)
 function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
@@ -554,7 +561,7 @@ function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
     verbose,
   });
 }
-//@ chunk-ek7g58h7.js:6304-6474 facade-majority
+//@ chunk-4rfadb6m.js:6304-6474 facade-majority
 function renderToolResultMessage(result, progressMessages, { style, verbose }) {
   if (result.staged && result.filePath)
     return jsxProd_default(MessageResponse, {
@@ -568,7 +575,7 @@ function renderToolResultMessage(result, progressMessages, { style, verbose }) {
     verbose,
   });
 }
-//@ chunk-ek7g58h7.js:6474-7479 fingerprint (2.1.88 match: renderToolResultMessage, 0.785)
+//@ chunk-4rfadb6m.js:6474-7479 fingerprint (2.1.88 match: renderToolResultMessage, 0.785)
 function renderToolResultMessage_2(
   result,
   _progressMessagesForMessage,
@@ -665,8 +672,8 @@ function renderToolResultMessage_2(
 }
 export {
   userFacingName,
-  getToolUseSummary_3,
   renderToolUseMessage_2,
+  getToolUseSummary_4,
   FileWriteToolCreatedMessage,
   isResultTruncated,
   renderToolResultMessage,

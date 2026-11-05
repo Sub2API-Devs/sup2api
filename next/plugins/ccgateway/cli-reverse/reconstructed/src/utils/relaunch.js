@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：重启自身进程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sv7j935w.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mww926q3.js (2)
  * attribution: placement 2
  */
 import { isatty } from "tty";
@@ -28,6 +28,8 @@ import { withoutProtectedEnv } from "./permissions/protectedSettingsPaths.js";
 import { noopStdinReset, resetWindowsStdinMode } from "./windowsStdin.js";
 import { CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE, getRelaunchTerminalSizeEnv } from "./relaunchTerminalSize.js";
 import { noopRelaunch } from "./stubs.js";
+import { getResumeHintLaunchFlags } from "./gracefulShutdown.js";
+import { CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS } from "./relaunchHintFlags.js";
 import {
   RELAUNCH_PROACTIVITY_BASELINE_ENV,
   CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED,
@@ -44,7 +46,7 @@ import { withTimeout } from "./sleep.js";
 import { drainRegisteredWriteQueues } from "./settings/writeQueues.js";
 import { setBgExitCause } from "./bgExitSidecars.js";
 
-//@ chunk-sv7j935w.js:4136-4222 placement
+//@ chunk-mww926q3.js:13445-13531 placement
 function closeInheritedTtyFds() {
   for (let i = 0; i < 32; i++) {
     if (i === 1 || i === 2) continue;
@@ -53,7 +55,7 @@ function closeInheritedTtyFds() {
     } catch {}
   }
 }
-//@ chunk-sv7j935w.js:4222-5704 placement
+//@ chunk-mww926q3.js:13531-15048 placement
 async function execRelaunch({ proactivity, pinToCurrentBinary } = {}) {
   assertProgramLaunchAllowed();
   await new Promise((resolve) => setImmediate(resolve));
@@ -79,6 +81,9 @@ ${processWrapperError() ?? `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperA
   delete childEnv[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
   Object.assign(childEnv, getRelaunchTerminalSizeEnv());
   noopRelaunch(childEnv, argv);
+  let resumeHintLaunchFlags = getResumeHintLaunchFlags();
+  if (resumeHintLaunchFlags !== undefined)
+    childEnv[CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS] = resumeHintLaunchFlags;
   delete childEnv[RELAUNCH_PROACTIVITY_BASELINE_ENV];
   delete childEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
   delete childEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON];

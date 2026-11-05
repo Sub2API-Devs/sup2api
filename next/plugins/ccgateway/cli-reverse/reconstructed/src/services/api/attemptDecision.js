@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：单次 API 尝试结果的判定（保留部分输出、失败、仅思考等）与影子比对
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -25,6 +25,7 @@ import {
   APIUserAbortError,
 } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { isStreamSuspendedError, isNetworkDownError } from "./errorUtils.js";
+import { findRouteTurnError } from "./gzipRequestBody.js";
 import { STOP_REASON_KEYS } from "../../utils/advisor.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
@@ -32,11 +33,11 @@ import { normalizeAgentQuerySource } from "./requestHeaders.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
 
-//@ chunk-e6aww6q8.js:2642526-2642579 placement
+//@ chunk-5xgkngpb.js:2703518-2703571 placement
 function eagerRainShadowBudget() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_rain", true) ? RETRY_POLICY_CONST_JEE : 0;
 }
-//@ chunk-e6aww6q8.js:2642579-2644257 placement
+//@ chunk-5xgkngpb.js:2703571-2705252 placement
 /**
  * 判定一次 API 尝试的结果（保留部分输出、失败、只有思考等），并与旧逻辑做影子比对。
  */
@@ -156,7 +157,7 @@ function decideAttemptOutcome(retryLimits, apiAttemptsLeft) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2644257-2644564 placement
+//@ chunk-5xgkngpb.js:2705252-2705601 placement
 /**
  * 把一次请求尝试的错误归类为无响应或 HTTP 错误（401/403 除外），标注是否挂起、断网与回退模型是否可能有用。
  */
@@ -166,6 +167,7 @@ function classifyAttemptError(error, fallbackModelCouldHelp) {
       kind: "noResponse",
       suspended: isStreamSuspendedError(error),
       networkDown: isNetworkDownError(error),
+      turnedAwayOverloaded: findRouteTurnError(error)?.status === 529,
     };
   let apiError =
     error instanceof APIError
@@ -180,7 +182,7 @@ function classifyAttemptError(error, fallbackModelCouldHelp) {
     fallbackModelCouldHelp,
   };
 }
-//@ chunk-e6aww6q8.js:2644564-2645030 placement
+//@ chunk-5xgkngpb.js:2705601-2706067 placement
 /**
  * 判定一次流式尝试是否算失败：按进度（output/thinkingOnly/partialOutput/started/nothing）与原因分类；已完整且原因是断线/挂起/截断/卡住、或已有输出时的过载/服务端错/超时，不视为失败。
  */
@@ -213,7 +215,7 @@ function classifyStreamFailure(attempt) {
     outlastedNonStreamingTimeout: attempt.outlastedNonStreamingTimeout,
   };
 }
-//@ chunk-e6aww6q8.js:2645030-2645526 placement
+//@ chunk-5xgkngpb.js:2706067-2706563 placement
 /**
  * 把流式请求失败归因：被拒绝、输出被过滤、过载、服务器错误或超时、停滞、截断、挂起、连接中断、格式错误、错误请求或未知。
  */
@@ -237,7 +239,7 @@ function streamFailureCause(attempt) {
     ? "badRequest"
     : "unknown";
 }
-//@ chunk-e6aww6q8.js:2645526-2646270 placement
+//@ chunk-5xgkngpb.js:2706563-2707307 placement
 function classifyAttemptOutcome(attempt, context) {
   try {
     let outcome =
@@ -271,7 +273,7 @@ function classifyAttemptOutcome(attempt, context) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2646270-2646737 placement
+//@ chunk-5xgkngpb.js:2707307-2707774 placement
 /**
  * 构造 thinking_drop 附件：请求与模型信息、已发送的思考块与轮数、新丢弃项、块哈希、是否首次报告与客户端变化。
  */
@@ -298,7 +300,7 @@ function buildThinkingDropAttachment(
     },
   };
 }
-//@ chunk-e6aww6q8.js:2646737-2647001 placement
+//@ chunk-5xgkngpb.js:2707774-2708038 placement
 function collectDroppedThinkingHashes(messages) {
   let hashes = [];
   for (let message of messages) {

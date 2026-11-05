@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：动态模型配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { toProviderWireModelId } from "./model.js";
@@ -24,23 +24,23 @@ import {
 } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2503901-2503981 placement
+//@ chunk-5xgkngpb.js:2545560-2545640 placement
 var DYNAMIC_CONFIG_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TIMEOUT_MESSAGE;
 var IN_FLIGHT_MARKER;
-deferInit("chunk-e6aww6q8.js:2503901", () => {
+deferInit("chunk-5xgkngpb.js:2545560", () => {
   DYNAMIC_CONFIG_TIMEOUT_MS = 5000;
   TIMEOUT_MESSAGE = "dynamic model config fetch timed out";
   IN_FLIGHT_MARKER = Symbol("in-flight");
 });
-//@ chunk-e6aww6q8.js:2503981-2504005 placement
+//@ chunk-5xgkngpb.js:2545640-2545664 placement
 /**
  * 判断动态模型配置是否启用（此构建恒为 false）。
  */
 function isDynamicModelConfigEnabled() {
   return false;
 }
-//@ chunk-e6aww6q8.js:2504005-2504086 placement
+//@ chunk-5xgkngpb.js:2545664-2545745 placement
 /**
  * 拉取动态模型配置（未启用时返回 null）。
  */
@@ -48,7 +48,7 @@ function fetchDynamicModelConfig(resolvedInitialModel, signal, options) {
   if (!isDynamicModelConfigEnabled()) return Promise.resolve(null);
   return getOrFetchModelConfig(toProviderWireModelId(resolvedInitialModel), signal, options);
 }
-//@ chunk-e6aww6q8.js:2504086-2504317 placement
+//@ chunk-5xgkngpb.js:2545745-2545976 placement
 /**
  * 在请求前等待动态模型配置获取完成，若需等待则记录等待时长。
  */
@@ -63,7 +63,7 @@ async function awaitModelConfigFetch(model, credentials, storageV5) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:2504317-2504433 placement
+//@ chunk-5xgkngpb.js:2545976-2546092 placement
 function getOrFetchModelConfig(modelId, credentials, storageV5) {
   let modelConfigs = getProviderState().providerCache.modelConfigs;
   let pending = modelConfigs.get(modelId);
@@ -73,7 +73,7 @@ function getOrFetchModelConfig(modelId, credentials, storageV5) {
   }
   return pending;
 }
-//@ chunk-e6aww6q8.js:2504433-2505397 placement
+//@ chunk-5xgkngpb.js:2546092-2547056 placement
 async function logDynamicModelConfig(modelId, credentials, storageV5) {
   let startTime = performance.now();
   let timeoutSignal = AbortSignal.timeout(DYNAMIC_CONFIG_TIMEOUT_MS);

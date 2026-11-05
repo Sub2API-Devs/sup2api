@@ -3,9 +3,9 @@
  *
  * computer-use 公共常量：MCP 服务器名 computer-use、终端 bundle id 映射、CLI 能力描述，以及内置 MCP 工具渲染分派。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/common.ts
- * pieces: chunk-ah34pb7m.js (1), chunk-dcmhvw5a.js (3)
+ * pieces: chunk-wjygkcr4.js (1), chunk-z20c443b.js (3)
  * attribution: fingerprint 4
  */
 import { env } from "../env.js";
@@ -14,7 +14,7 @@ import { createObjectResultRenderer, renderChromeViewTabLink } from "../claudeIn
 import { MCP_TOOL_NAME_PREFIX } from "../../components/messages/SkillProposalMessage.js";
 import { renderToolResultMessage_2 } from "./toolRendering.js";
 
-//@ chunk-dcmhvw5a.js:204760-205032 fingerprint (2.1.88 match: TERMINAL_BUNDLE_ID_FALLBACK, 0.903)
+//@ chunk-z20c443b.js:198886-199158 fingerprint (2.1.88 match: TERMINAL_BUNDLE_ID_FALLBACK, 0.903)
 /**
  * computer-use MCP 服务器名 "computer-use"、CLI 宿主 bundle id、TERM_PROGRAM→终端 bundle id 映射。
  */
@@ -28,7 +28,7 @@ var TERMINAL_BUNDLE_ID_FALLBACK = {
   WarpTerminal: "dev.warp.Warp-Stable",
   vscode: "com.microsoft.VSCode",
 };
-//@ chunk-dcmhvw5a.js:205032-205122 fingerprint (2.1.88 match: getTerminalBundleId, 1)
+//@ chunk-z20c443b.js:199158-199248 fingerprint (2.1.88 match: getTerminalBundleId, 1)
 /**
  * 取终端的 bundle id：优先 __CFBundleIdentifier，否则按 TERM_PROGRAM 查表。
  */
@@ -37,7 +37,7 @@ function getTerminalBundleId() {
   if (cfBundleId) return cfBundleId;
   return TERMINAL_BUNDLE_ID_FALLBACK[env.terminal ?? ""] ?? null;
 }
-//@ chunk-dcmhvw5a.js:205122-205215 fingerprint (2.1.88 match: CLI_CU_CAPABILITIES, 0.797)
+//@ chunk-z20c443b.js:199248-199341 fingerprint (2.1.88 match: CLI_CU_CAPABILITIES, 0.797)
 /**
  * CLI 宿主的 computer-use 能力描述（darwin、原生截图过滤、无自适应分辨率、不落盘）。
  */
@@ -47,7 +47,7 @@ var CLI_CU_CAPABILITIES = {
   adaptiveResolution: false,
   saveToDisk: false,
 };
-//@ chunk-ah34pb7m.js:265304-265606 fingerprint (2.1.88 match: COMPUTER_USE_MCP_SERVER_NAME, 0.378)
+//@ chunk-wjygkcr4.js:272989-273291 fingerprint (2.1.88 match: COMPUTER_USE_MCP_SERVER_NAME, 0.378)
 /**
  * 按 MCP 工具的 builtinRenderFamily（claude-in-chrome / computer-use）返回内置的结果渲染或标签渲染函数。
  */

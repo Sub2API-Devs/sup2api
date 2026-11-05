@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：输入框边框横幅、模式徽标与队友横幅
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (9)
  * attribution: placement 9
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -31,7 +31,7 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { NO_BREAK_SPACE } from "../../constants/figures.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0e8j1zzj.js:12356-13587 placement
+//@ chunk-8prszgkd.js:12622-13854 placement
 function PromptBorderBanner(props) {
   let $ = useMemoCache(27);
   let { banner, columns, fastModeTag, borderOnly } = props;
@@ -50,13 +50,13 @@ function PromptBorderBanner(props) {
     $[5] !== isScreenReaderEnabled
   ) {
     earlyResult = EARLY_RETURN_SENTINEL;
-    x: {
+    k: {
       let bannerLabel = collapseWhitespace(stripAnsiPerLine(banner.text));
       color = banner.bgColor === "promptBorder" ? undefined : banner.bgColor;
       if (isScreenReaderEnabled) {
         if (borderOnly || (!bannerLabel && !fastModeTag)) {
           earlyResult = null;
-          break x;
+          break k;
         }
         let fastModeElement;
         if ($[11] !== fastModeTag) {
@@ -81,7 +81,7 @@ function PromptBorderBanner(props) {
             fastModeElement,
           ],
         });
-        break x;
+        break k;
       }
       fastModeWidth = fastModeTag ? bunStringWidth(fastModeTag) + 2 : 0;
       let textBudget = columns - fastModeWidth - 3;
@@ -164,12 +164,12 @@ function PromptBorderBanner(props) {
   } else dashedTextElement = $[26];
   return dashedTextElement;
 }
-//@ chunk-0e8j1zzj.js:13587-13591 placement
+//@ chunk-8prszgkd.js:13854-13858 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:13587", () => {
+deferInit("chunk-8prszgkd.js:13854", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:13591-13825 placement
+//@ chunk-8prszgkd.js:13858-14092 placement
 function useTeammateBanner() {
   let teamContext = useAppState((state) => state.teamContext);
   useAppState((state) => state.viewingAgentTaskId);
@@ -188,9 +188,9 @@ function useTeammateBanner() {
     tmuxHint: useStableBanner(tmuxHint),
   };
 }
-//@ chunk-0e8j1zzj.js:15402-15412 placement
+//@ chunk-8prszgkd.js:15650-15660 placement
 var BORDER_COLOR_WIDTH = 24;
-//@ chunk-0e8j1zzj.js:15412-15909 placement
+//@ chunk-8prszgkd.js:15660-16157 placement
 function PromptModeBadge(props) {
   let $ = useMemoCache(11);
   let { mode, agent, maxWidth } = props;
@@ -243,7 +243,7 @@ function PromptModeBadge(props) {
   } else childrenElement = $[10];
   return childrenElement;
 }
-//@ chunk-0e8j1zzj.js:15909-16035 placement
+//@ chunk-8prszgkd.js:16157-16283 placement
 function promptModeBadgeText({ mode, agent, maxWidth }) {
   return (
     (mode === "bash"
@@ -256,16 +256,16 @@ function promptModeBadgeText({ mode, agent, maxWidth }) {
         : figures_default.pointer) + NO_BREAK_SPACE
   );
 }
-//@ chunk-0e8j1zzj.js:16035-16066 placement
+//@ chunk-8prszgkd.js:16283-16314 placement
 function badgeWidth(badgeText) {
   return bunStringWidth(badgeText) + 1;
 }
-//@ chunk-0e8j1zzj.js:16066-16070 placement
+//@ chunk-8prszgkd.js:16314-16318 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:16066", () => {
+deferInit("chunk-8prszgkd.js:16314", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:16070-16079 placement
+//@ chunk-8prszgkd.js:21470-21479 placement
 var BANNER_PADDING = 4;
 export {
   BANNER_PADDING,

@@ -3,9 +3,9 @@
  *
  * 路径审查与代理字符正则（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (6)
  * attribution: placement 6
  */
 import { getPathsForNetworkScreen, getPathsForNetworkScreenAsync } from "../fsOperations.js";
@@ -16,7 +16,7 @@ import {
   classifySuspiciousWindowsPathPattern,
 } from "./filesystem.js";
 
-//@ chunk-s61vbvea.js:583413-583466 placement
+//@ chunk-7jxyna5q.js:500775-500828 placement
 /**
  * vetPathSpellingsOrChain：先按拼写审查，再按解析链审查。
  */
@@ -26,7 +26,7 @@ function vetPathSpellingsOrChain(rawPath, resolvedPath, trustedNetworkDirectorie
     vetResolvedPathChain(getPathsForNetworkScreen(resolvedPath), trustedNetworkDirectories, options)
   );
 }
-//@ chunk-s61vbvea.js:583466-583529 placement
+//@ chunk-7jxyna5q.js:500828-500891 placement
 /**
  * vetPathSpellingsOrChainAsync：异步版：网络屏幕路径异步获取。
  */
@@ -36,7 +36,7 @@ async function vetPathSpellingsOrChainAsync(rawPath, resolvedPath, trustedNetwor
     vetResolvedPathChain(await getPathsForNetworkScreenAsync(resolvedPath), trustedNetworkDirectories)
   );
 }
-//@ chunk-s61vbvea.js:583529-583641 placement
+//@ chunk-7jxyna5q.js:500891-501003 placement
 function vetPathSpellings(rawPath, resolvedPath, trustedNetworkDirectories) {
   let trimmed = rawPath.trim();
   let spellings = trimmed === resolvedPath ? [resolvedPath] : [trimmed, resolvedPath];
@@ -46,7 +46,7 @@ function vetPathSpellings(rawPath, resolvedPath, trustedNetworkDirectories) {
   }
   return;
 }
-//@ chunk-s61vbvea.js:583641-583892 placement
+//@ chunk-7jxyna5q.js:501003-501254 placement
 /**
  * 审查路径解析链：链不可审查、任一路径命中 NT 命名空间/不可信 UNC/自动挂载/可疑 Windows 拼写，或链接文本向上越级（未允许时）则拒绝，否则返回待检查路径。
  */
@@ -70,14 +70,14 @@ function vetResolvedPathChain({ paths, vetted, linkTextClimbs }, trustedNetworkD
     pathsToCheck: paths,
   };
 }
-//@ chunk-s61vbvea.js:583892-583932 placement
+//@ chunk-7jxyna5q.js:501254-501294 placement
 /**
  * pathVettingReason：路径审查不通过的原因。
  */
 function pathVettingReason(spelling, trustedNetworkDirectories) {
   return vetPathSpelling(spelling, trustedNetworkDirectories)?.reason;
 }
-//@ chunk-s61vbvea.js:583932-584196 placement
+//@ chunk-7jxyna5q.js:501294-501558 placement
 function vetPathSpelling(spelling, trustedNetworkDirectories) {
   if (isDevicePrefixPath(spelling))
     return {

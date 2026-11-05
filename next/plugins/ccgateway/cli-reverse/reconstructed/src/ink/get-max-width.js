@@ -3,12 +3,12 @@
  *
  * 求节点内容区宽度（去掉 padding 与边框）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/get-max-width.ts
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-bzr73sfg.js:288084-288217 fingerprint (2.1.88 match: getMaxWidth, 0.706)
+//@ chunk-2avr6cej.js:287665-287798 fingerprint (2.1.88 match: getMaxWidth, 0.708)
 /**
  * yoga 节点的内容宽度：计算宽度减左右内边距与边框。
  */

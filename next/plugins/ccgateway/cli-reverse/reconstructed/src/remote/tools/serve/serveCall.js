@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：服务端执行一次远程工具调用的主流程与遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5ghnps9r.js (1), chunk-ad2e1aj6.js (21)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-azq8n2fy.js (1), chunk-nvm0wye1.js (22)
+ * attribution: placement 22, affinity 1
  */
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import { isWindowsSandboxPolicyViolation, SESSION_APPROVAL_STALE_MS } from "./servingState.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { sanitizeMarkName } from "../../../utils/startupMarks.js";
@@ -39,6 +39,7 @@ import { defaultServedCallRunner, callerKey, decidingInput, callFailedText } fro
 import { logRemoteTools } from "../../../services/remoteTools/remoteToolsDebug.js";
 import {
   tooManySessionsMessage,
+  describeMisfit,
   withdrawnRequestMessage,
   staleApprovalMessage,
   unsupportedFieldMessage,
@@ -68,6 +69,15 @@ import {
 } from "./servingPolicy.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../consentText.js";
 import { stableHashWithSalt } from "../../../utils/stableHash.js";
+import { TASKSTOP } from "../../../tools/TaskStopTool/prompt.js";
+import {
+  misfitOfFit,
+  isRanOutcome,
+  REMOTE_TOOL_PROTOCOL_VERSION,
+  serverVerdictKind,
+  interfaceTelemetry,
+  misfitDirection,
+} from "../protocolConstants.js";
 import { isSessionDenial, failedEnvelope, rebindEnvelopeCallId } from "./callStatusQuery.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 import { REPLACED_BY_RETRY, TERMINAL_CALL_STATES } from "../servedCallLog.js";
@@ -101,8 +111,8 @@ import {
 } from "./sessionApprovals.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage, toError, isAbortError, isENOENT } from "../../../utils/errors.js";
-import { createChildAbortController_2, createAbortController } from "../../../utils/abortController.js";
 import { needsApprovalSuggestions } from "../../../tools/PowerShellTool/PowerShellTool.js";
+import { createAbortController } from "../../../utils/abortController.js";
 import { clampToMaxPageSize } from "../callResults.js";
 import { formatDuration } from "../../../utils/format.js";
 import { isNonMcpShellTool, isShellToolName } from "../../../tools/shared/textSearchTools.js";
@@ -130,7 +140,6 @@ import { servedToolPath, isMountPointRule, stripDoubleSlashPrefix } from "./serv
 import { HOST_CREDENTIAL_RULE_SOURCE, isUnderUserProfiles } from "./credentialPathGuards.js";
 import { credentialRuleKind } from "./servedSafetyChecks.js";
 import { cancelledToolResult } from "./resultShaping.js";
-import { isRanOutcome, REMOTE_TOOL_PROTOCOL_VERSION, serverVerdictKind } from "../protocolConstants.js";
 import { SANDBOX_MAX_DEPTH } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
 import { isMultiEntryAliasTool } from "../../../services/tools/permissionCheckGuard.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
@@ -149,7 +158,7 @@ import { REMOTE_TOOL_PROTOCOL_LABEL } from "../protocolSchemas.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-5ghnps9r.js:1209-1360 placement
+//@ chunk-azq8n2fy.js:1242-1393 placement
 /**
  * （切分错误，权限 UI）可提供常驻更新时把它们并入会话权限更新。
  */
@@ -158,19 +167,29 @@ function sessionUpdatesForCaller(callerSession) {
     ? [...callerSession.sessionPermissionUpdates, ...callerSession.offeredStandingUpdates]
     : callerSession.sessionPermissionUpdates;
 }
-//@ chunk-ad2e1aj6.js:43267-43284 placement
+//@ chunk-nvm0wye1.js:43571-43681 affinity (2.1.88 match: createChildAbortController, 0.878)
+function createChildAbortController(signal) {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve();
+    else
+      signal.addEventListener("abort", () => resolve(), {
+        once: true,
+      });
+  });
+}
+//@ chunk-nvm0wye1.js:43681-43698 placement
 var SERVING_KIT_INSTANCE_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var servingKitFrameCounter;
-deferInit("chunk-ad2e1aj6.js:43267", () => {
+deferInit("chunk-nvm0wye1.js:43681", () => {
   SERVING_KIT_INSTANCE_ID = randomUUID();
   servingKitFrameCounter = 0;
 });
-//@ chunk-ad2e1aj6.js:43284-43314 placement
+//@ chunk-nvm0wye1.js:43698-43728 placement
 function nextServingKitFrameSeq() {
   servingKitFrameCounter += 1;
   return servingKitFrameCounter;
 }
-//@ chunk-ad2e1aj6.js:43314-43565 placement
+//@ chunk-nvm0wye1.js:43728-43979 placement
 function noteLateHoldRelease(facts, heldHold, ask) {
   if (!heldHold || !ask.wasAnsweredAheadOfItsKills()) return;
   facts.holdStandsAtAnswer = true;
@@ -185,7 +204,7 @@ function noteLateHoldRelease(facts, heldHold, ask) {
     )
     .catch(() => {});
 }
-//@ chunk-ad2e1aj6.js:43565-62338 placement
+//@ chunk-nvm0wye1.js:43979-63318 placement
 /**
  * 远程工具服务端的单次调用全流程：无人值守同意、输入校验、权限判定（会话询问/分类器/钩子）、执行、结果与遥测。
  */
@@ -276,6 +295,22 @@ async function serveToolCall(args) {
   }
   let inputFingerprint = stableHashWithSalt(tool.name, forwardedInput);
   facts.inputFingerprint = inputFingerprint;
+  let refuseForMisfit = (target) => {
+    let misfit =
+      tool.name === TASKSTOP ? undefined : facts.sessionInterface && misfitOfFit(facts.sessionInterface.fit);
+    return misfit === undefined
+      ? undefined
+      : refusedEnvelope(
+          target,
+          facts,
+          "unsupported_protocol",
+          describeMisfit({
+            misfit,
+            targetName: deps.targetName,
+            approvalCame: approval !== undefined,
+          }),
+        );
+  };
   let rememberOutcome = (callId, outcome) => {
     if (callId !== undefined) session.calls.remember(callId, outcome);
   };
@@ -300,6 +335,8 @@ async function serveToolCall(args) {
           facts,
           workerEpoch: ctx.workerEpoch,
         });
+      let refusal = refuseForMisfit(target);
+      if (refusal !== undefined) return refusal;
       logRemoteTools(callId, "retry replaced ask", {
         replaced_call: retry.callId,
         ask_id: pendingAskOfRetry.askId,
@@ -321,6 +358,8 @@ async function serveToolCall(args) {
       if (previousResult === undefined) rememberOutcome(retry.callId, replacedSummary);
       else session.calls.settle(retry.callId, previousResult, replacedSummary);
     }
+    let refusal = refuseForMisfit(target);
+    if (refusal !== undefined) return refusal;
     if (facts.enteredRecord)
       session.calls.rekey(callId, decidingInput(tool, args.toolInput, session.cwd ?? deps.launchDir));
   }
@@ -402,6 +441,22 @@ async function serveToolCall(args) {
         }
       }
       if (approval.decision === "allow") {
+        let refusal = refuseForMisfit(askTarget);
+        if (refusal !== undefined) {
+          let known =
+            ask.redeemingLegs > 1 && callId !== undefined ? session.calls.lookup(callId) : undefined;
+          if (known !== undefined && callId !== undefined)
+            return joinKnownCall({
+              known,
+              session,
+              hostEpoch: deps.sessions.epoch,
+              callId,
+              target: askTarget,
+              facts,
+            });
+          facts.askStillPending = true;
+          return refusal;
+        }
         let askAgeMs = Date.now() - ask.createdAt;
         let dated = arrivesOverSession(ask.raisedOver) || arrivesOverSession(facts.arrivedOver);
         if ((!dated || deps.policy.limits.max_ask_ms !== undefined) && askAgeMs > SYNC_ANSWER_TTL_MS) {
@@ -541,9 +596,9 @@ async function serveToolCall(args) {
         let now = Date.now();
         await Promise.race([
           holdPromise,
-          createChildAbortController_2(ctx.signal),
+          createChildAbortController(ctx.signal),
           ...(Number.isFinite(remainingMs)
-            ? [createChildAbortController_2(AbortSignal.timeout(Math.max(0, remainingMs)))]
+            ? [createChildAbortController(AbortSignal.timeout(Math.max(0, remainingMs)))]
             : []),
         ]);
         facts.holdMs = Date.now() - now;
@@ -807,7 +862,7 @@ async function serveToolCall(args) {
   noteCallState({
     state: "running",
   });
-  let askId = `ask_${randomUUID()}`;
+  let askId = facts.arrivedOver === "relay" ? `ask_${randomUUID()}` : randomBytes(32).toString("hex");
   if (stance.honorLocalRules)
     await settingsSourcesInReach(
       (await deps.reach.current()).map(normalizeCommandForPlatform),
@@ -965,7 +1020,7 @@ async function serveToolCall(args) {
           .then(() => {
             holdGranted = true;
           });
-        await Promise.race([holdPromise, createChildAbortController_2(abortController.signal)]);
+        await Promise.race([holdPromise, createChildAbortController(abortController.signal)]);
         facts.holdMs = Date.now() - now;
         if (abortController.signal.aborted && !holdGranted) {
           envelope = timedOutOrCancelled(state);
@@ -1286,31 +1341,31 @@ async function serveToolCall(args) {
   }
   return askEnvelope;
 }
-//@ chunk-ad2e1aj6.js:62338-62426 placement
+//@ chunk-nvm0wye1.js:63318-63406 placement
 function servableTools(deps) {
   return deps.tools.filter(
     (tool) =>
       !isMultiEntryAliasTool(tool) && getToolRemoteExecution(tool).supported && deps.policy.serves(tool),
   );
 }
-//@ chunk-ad2e1aj6.js:62426-62514 placement
+//@ chunk-nvm0wye1.js:63406-63494 placement
 function servedShellToolName(deps) {
   let names = new Set(servableTools(deps).map((tool) => tool.name));
   return [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME].find((name) => names.has(name));
 }
-//@ chunk-ad2e1aj6.js:62514-62584 placement
+//@ chunk-nvm0wye1.js:63494-63564 placement
 function allServedTools(deps) {
   return [...servableTools(deps), ...(deps.servedMcpTools?.().values() ?? [])];
 }
-//@ chunk-ad2e1aj6.js:62584-62650 placement
+//@ chunk-nvm0wye1.js:63564-63630 placement
 function findServedTool(deps, name) {
   return deps.servedMcpTools?.().get(name) ?? findToolByName(servableTools(deps), name);
 }
-//@ chunk-ad2e1aj6.js:62650-62711 placement
+//@ chunk-nvm0wye1.js:63630-63691 placement
 function servedMcpWireArgs(deps, toolName) {
   return deps.servedMcpWireArguments?.(toolName) ?? renamedFieldCacheMap();
 }
-//@ chunk-ad2e1aj6.js:62711-63290 placement
+//@ chunk-nvm0wye1.js:63691-64270 placement
 function executionPlacement(deps) {
   let vmMessage = vmUnavailableMessage({
     targetName: deps.targetName,
@@ -1353,7 +1408,7 @@ function executionPlacement(deps) {
         : vmMessage,
   };
 }
-//@ chunk-ad2e1aj6.js:63290-63437 placement
+//@ chunk-nvm0wye1.js:64270-64417 placement
 function executionPlacementRefusal(deps) {
   let placement = executionPlacement(deps);
   switch (placement.where) {
@@ -1367,7 +1422,7 @@ function executionPlacementRefusal(deps) {
       });
   }
 }
-//@ chunk-ad2e1aj6.js:63437-63547 placement
+//@ chunk-nvm0wye1.js:64417-64527 placement
 function isServedReadOnly(tool, input, deps) {
   if (parseExecutionMode(deps.execution).mode !== "in_process") return false;
   try {
@@ -1376,18 +1431,18 @@ function isServedReadOnly(tool, input, deps) {
     return false;
   }
 }
-//@ chunk-ad2e1aj6.js:63547-63698 placement
+//@ chunk-nvm0wye1.js:64527-64680 placement
 function callFailureEnvelope(error, target, facts, signal, extra) {
   if (signal.aborted || isAbortError(error))
     return failedEnvelope(target, facts, "cancelled", "The call was cancelled.", extra);
   logError(toError(error));
   return failedEnvelope(target, facts, "internal_error", callFailedText(target.name), extra);
 }
-//@ chunk-ad2e1aj6.js:63698-63743 placement
+//@ chunk-nvm0wye1.js:64680-64725 placement
 function isSettingsError(parseError) {
   return parseError.severity !== "warning";
 }
-//@ chunk-ad2e1aj6.js:63743-63812 placement
+//@ chunk-nvm0wye1.js:64725-64794 placement
 function isMissingPath(settingsFilePathForSource) {
   try {
     getFsImplementation().lstatSync(settingsFilePathForSource);
@@ -1396,7 +1451,7 @@ function isMissingPath(settingsFilePathForSource) {
     return isENOENT(error);
   }
 }
-//@ chunk-ad2e1aj6.js:63812-63907 placement
+//@ chunk-nvm0wye1.js:64794-64889 placement
 function isSymlinkedSettingsPath(settingsFilePathForSource) {
   let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(
     getFsImplementation(),
@@ -1404,7 +1459,7 @@ function isSymlinkedSettingsPath(settingsFilePathForSource) {
   );
   return isSymlink && (!isCanonical || isSpecialPath(resolvedPath));
 }
-//@ chunk-ad2e1aj6.js:63907-64167 placement
+//@ chunk-nvm0wye1.js:64889-65149 placement
 function userSettingsErrorWatcher() {
   let cache = new Map();
   return () => {
@@ -1423,7 +1478,7 @@ function userSettingsErrorWatcher() {
     }
   };
 }
-//@ chunk-ad2e1aj6.js:64167-65171 placement
+//@ chunk-nvm0wye1.js:65149-66153 placement
 function backgroundCommandStatusText(target, callId, status) {
   let { started, startedAt, ended } = status.command;
   let { outputTail } = status;
@@ -1480,7 +1535,7 @@ ${outputTail}`;
     content,
   };
 }
-//@ chunk-ad2e1aj6.js:65171-71408 placement
+//@ chunk-nvm0wye1.js:66153-72918 placement
 /**
  * 记录远程工具调用的 tengu_remote_tool_serve 遥测（结果、耗时、权限路径、分类器判定等）。
  */
@@ -1596,7 +1651,7 @@ function logServedCallTelemetry(envelope, facts, deps, session) {
       : undefined;
   if (queryCount?.report === false) return;
   logEvent("tengu_remote_tool_serve", {
-    call_id: sanitizeMarkName(facts.callId),
+    call_id: sanitizeMarkName(facts.callId ?? facts.refusedToolUseId),
     host_epoch: sanitizeMarkName(deps.sessions.epoch),
     handle_hash: shortHash(deps.targetName),
     host_device_id: sanitizeMarkName(deps.deviceId),
@@ -1639,7 +1694,16 @@ function logServedCallTelemetry(envelope, facts, deps, session) {
       untrusted_repositories: fromEnum(facts.untrustedRepositories),
     }),
     mode_stamp: fromEnum(facts.modeStamp ?? "absent"),
+    request_form: fromEnum(facts.requestForm),
+    ...(facts.sharedRequestRefusal !== undefined && {
+      shared_request_refusal: fromEnum(facts.sharedRequestRefusal),
+    }),
+    ...(facts.sharedRequestPart !== undefined && {
+      part: fromEnum(facts.sharedRequestPart),
+    }),
     server_verdict: fromEnum(serverVerdictKind(facts.serverVerdict)),
+    ...(facts.sessionInterface !== undefined &&
+      interfaceTelemetry(facts.sessionInterface.stated, facts.sessionInterface.fit)),
     ...(envelope.outcome === "refused" &&
       facts.seatsFull && {
         sessions_in_use: deps.sessions.size,
@@ -1718,6 +1782,7 @@ function logServedCallTelemetry(envelope, facts, deps, session) {
   });
   if (facts.query || facts.answeredFromRecord !== undefined) return;
   if (facts.arrivedOver === "relay") return;
+  let misfit = facts.sessionInterface && misfitOfFit(facts.sessionInterface.fit);
   if (envelope.outcome === "completed" && !envelope.is_error) logFeatureOk("remote_tool_serve");
   else if (envelope.outcome === "completed")
     logFeatureSad("remote_tool_serve", envelope.disposition ?? "completed_error");
@@ -1745,15 +1810,19 @@ function logServedCallTelemetry(envelope, facts, deps, session) {
       },
     );
   else if (facts.askSeatsFull) logFeatureSad("remote_tool_serve", "ask_seats_full");
+  else if (misfit !== undefined && envelope.code === "unsupported_protocol")
+    logFeatureSad("remote_tool_serve", misfitDirection(misfit));
+  else if (facts.sharedRequestRefusal !== undefined)
+    logFeatureBad("remote_tool_serve", `shared_request_${facts.sharedRequestRefusal}`);
   else logFeatureBad("remote_tool_serve", envelope.code);
 }
-//@ chunk-ad2e1aj6.js:71408-71526 placement
+//@ chunk-nvm0wye1.js:72918-73036 placement
 function servedShellKind(facts) {
   let resolvedToolName = facts.resolvedToolName;
   if (facts.isMcp === true || resolvedToolName === undefined || !isShellToolName(resolvedToolName)) return;
   return resolvedToolName === POWERSHELL_TOOL_NAME ? "powershell" : "bash";
 }
-//@ chunk-ad2e1aj6.js:71526-71537 placement
+//@ chunk-nvm0wye1.js:73036-73047 placement
 var MAX_TELEMETRY_STRING = 128;
 
 // The import cycle this module closes (3 modules) is complete: run the load-time work its statements

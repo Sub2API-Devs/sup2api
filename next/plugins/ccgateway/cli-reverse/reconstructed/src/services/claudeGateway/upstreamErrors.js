@@ -3,12 +3,16 @@
  *
  * 2.1.316 新增：网关上游错误映射
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (16)
  * attribution: placement 16
  */
-import { capabilityRejectedText, classifyBadRequest } from "../api/badRequestClassifier.js";
+import {
+  capabilityRejectedText,
+  classifyBadRequest,
+  isPlainInputTooLong,
+} from "../api/badRequestClassifier.js";
 import { UPSTREAM_REQUEST_ID_HEADERS } from "./proxyRequest.js";
 import { amazonRequestId } from "../api/errorUtils.js";
 import { jsonParse } from "../../utils/slowOperations.js";
@@ -16,7 +20,7 @@ import { gatewayLog } from "../gateway/gatewayBanner.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1349195-1349330 placement (2.1.88 match: renderToolResultMessage, 0.67)
+//@ chunk-1hnjmk23.js:1350158-1350293 placement (2.1.88 match: renderToolResultMessage, 0.67)
 /**
  * 构造 Anthropic 风格的 JSON 错误响应（与 RemoteTrigger 无关）。
  */
@@ -40,7 +44,7 @@ function jsonErrorResponse(status, type, message, requestId, extraHeaders) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1349330-1349396 placement
+//@ chunk-1hnjmk23.js:1350293-1350359 placement
 /**
  * 取某状态码对客户端的错误文本：400 且带详情时尽量用分类说明，否则用内置文案。
  */
@@ -49,7 +53,7 @@ function upstreamErrorMessageFor(status, rejected) {
     ? capabilityRejectedText(rejected)
     : (UPSTREAM_ERROR_MESSAGES[status] ?? "upstream error");
 }
-//@ chunk-1ny7cxrt.js:1349396-1349550 placement
+//@ chunk-1hnjmk23.js:1350359-1350513 placement
 /**
  * 去掉指定响应头与 anthropic-ratelimit-* 头。
  */
@@ -61,12 +65,12 @@ function stripResponseHeaders(headers, dropList) {
   });
   return headers_2;
 }
-//@ chunk-1ny7cxrt.js:1349550-1349657 placement
+//@ chunk-1hnjmk23.js:1350513-1350620 placement
 /**
  * 网关添加的诊断响应头（上游名、类型、模型、请求 id）。
  */
 var GATEWAY_DIAGNOSTIC_HEADERS; // deferred: uses UPSTREAM_REQUEST_ID_HEADERS (./proxyRequest.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1ny7cxrt.js:1349550", () => {
+deferInit("chunk-1hnjmk23.js:1350513", () => {
   GATEWAY_DIAGNOSTIC_HEADERS = [
     "x-gateway-upstream",
     "x-gateway-upstream-kind",
@@ -75,7 +79,7 @@ deferInit("chunk-1ny7cxrt.js:1349550", () => {
     ...UPSTREAM_REQUEST_ID_HEADERS,
   ];
 });
-//@ chunk-1ny7cxrt.js:1349657-1349730 placement
+//@ chunk-1hnjmk23.js:1350620-1350693 placement
 /**
  * 把上游响应里的诊断头复制到网关响应。
  */
@@ -85,7 +89,7 @@ function copyDiagnosticHeaders(headers, headers_2) {
     if (value !== null) headers_2.set(name, value);
   }
 }
-//@ chunk-1ny7cxrt.js:1349730-1349966 placement
+//@ chunk-1hnjmk23.js:1350693-1350929 placement
 /**
  * 上游错误替换为通用错误文本（保留 429 的 retry-after 与诊断头）。
  */
@@ -102,7 +106,7 @@ function sanitizeUpstreamError(upstreamResponse, requestId) {
   copyDiagnosticHeaders(upstreamResponse.headers, response.headers);
   return response;
 }
-//@ chunk-1ny7cxrt.js:1349966-1350193 placement
+//@ chunk-1hnjmk23.js:1350929-1351156 placement
 /**
  * 把上游 request-id 与 apim-request-id 写进 x-gateway-upstream-* 头。
  */
@@ -113,7 +117,7 @@ function withUpstreamRequestIds(response, headers) {
   if (cloudRequestId !== null) response.headers.set("x-gateway-upstream-cloud-request-id", cloudRequestId);
   return response;
 }
-//@ chunk-1ny7cxrt.js:1350193-1350449 placement
+//@ chunk-1hnjmk23.js:1351156-1351412 placement
 /**
  * 读取响应体前 n 字节为文本。
  */
@@ -135,12 +139,12 @@ async function readBodyPrefix(body, maxChars) {
   }
   return new TextDecoder().decode(Buffer.concat(chunks)).slice(0, maxChars);
 }
-//@ chunk-1ny7cxrt.js:1350449-1350670 placement
+//@ chunk-1hnjmk23.js:1351412-1351633 placement
 /**
  * Anthropic API 的错误类型集合。
  */
 var KNOWN_ERROR_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1350449", () => {
+deferInit("chunk-1hnjmk23.js:1351412", () => {
   KNOWN_ERROR_TYPES = new Set([
     "invalid_request_error",
     "authentication_error",
@@ -155,7 +159,7 @@ deferInit("chunk-1ny7cxrt.js:1350449", () => {
     "policy_blocked",
   ]);
 });
-//@ chunk-1ny7cxrt.js:1350670-1351129 placement
+//@ chunk-1hnjmk23.js:1351633-1352091 placement
 /**
  * 400/413 上游错误：读出原错误、按能力分类生成给 CRI 调用方的安全错误文本并记录。
  */
@@ -183,7 +187,7 @@ async function sanitizeBadRequest(response, capabilityList, requestId) {
   copyDiagnosticHeaders(response.headers, sanitized.headers);
   return sanitized;
 }
-//@ chunk-1ny7cxrt.js:1351129-1351591 placement
+//@ chunk-1hnjmk23.js:1352091-1352553 placement
 /**
  * 去掉组织 id 头；上游错误（≥300）改写为网关的标准错误响应。
  */
@@ -213,7 +217,7 @@ async function finalizeUpstreamResponse(response, request, requestId) {
     return sanitizeBadRequest(response, request.headers.get("anthropic-beta") ?? undefined, requestId);
   return sanitizeUpstreamError(response, requestId);
 }
-//@ chunk-1ny7cxrt.js:1351591-1351770 placement
+//@ chunk-1hnjmk23.js:1352553-1352732 placement
 /**
  * 带超时与外部取消信号的 fetch。
  */
@@ -229,19 +233,19 @@ async function fetchWithAbortTimeout(fetchFn, url, init, signal, timeoutMs) {
     clearTimeout(timer);
   }
 }
-//@ chunk-1ny7cxrt.js:1351770-1351851 placement
+//@ chunk-1hnjmk23.js:1352732-1352813 placement
 /**
  * 模型 id 无效时的固定错误文案。
  */
 var ERROR_RETRY_AFTER_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap;
 var INVALID_MODEL_ID_MESSAGE;
-deferInit("chunk-1ny7cxrt.js:1351770", () => {
+deferInit("chunk-1hnjmk23.js:1352732", () => {
   ERROR_RETRY_AFTER_MS = 3600000;
   weakMap = new WeakMap();
   INVALID_MODEL_ID_MESSAGE = "400 The provided model identifier is invalid.";
 });
-//@ chunk-1ny7cxrt.js:1374403-1374986 placement
+//@ chunk-1hnjmk23.js:1376181-1376764 placement
 /**
  * 上游状态码到错误类型与通用错误文本的映射。
  */
@@ -266,14 +270,14 @@ var UPSTREAM_ERROR_MESSAGES = {
   501: "upstream does not support this endpoint",
   529: "upstream overloaded",
 };
-//@ chunk-1ny7cxrt.js:1374986-1375039 placement
+//@ chunk-1hnjmk23.js:1376764-1376817 placement
 /**
  * 状态码到 API 错误类型的映射，未知默认 api_error。
  */
 function errorTypeForStatus(status) {
   return (status !== undefined && ERROR_TYPE_BY_STATUS[status]) || "api_error";
 }
-//@ chunk-1ny7cxrt.js:1375039-1375332 placement
+//@ chunk-1hnjmk23.js:1376817-1377163 placement
 /**
  * 上游错误给客户端的文本（400/413 时尽量用 API 原文或能力分类说明）。
  */
@@ -288,6 +292,7 @@ function upstreamErrorMessage(status, error, accept) {
     KNOWN_ERROR_TYPES.has(error_2.error.type)
   )
     return truncateToLength(error_2.error.message, 1000);
+  if (status === 400 && isPlainInputTooLong(error.message)) return "Input is too long.";
   return upstreamErrorMessageFor(status, classifyBadRequest(status, error.message, accept?.split(",")));
 }
 export {

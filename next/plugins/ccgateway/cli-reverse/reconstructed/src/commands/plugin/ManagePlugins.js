@@ -3,21 +3,20 @@
  *
  * /plugin 已安装页：插件、MCP 服务器与技能的统一列表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ManagePlugins.tsx
- * pieces: chunk-6zvphrsz.js (1), chunk-k9mgeeff.js (2), chunk-vrb44rx7.js (36)
- * attribution: fingerprint 5, affinity 1, placement 26, layout 6, sole-consumer 1
+ * pieces: chunk-wb51jffc.js (36), chunk-x6t8knrk.js (2)
+ * attribution: affinity 1, placement 26, layout 6, fingerprint 4, sole-consumer 1
  */
-import * as pathModule from "path";
-import { join } from "path";
 import * as fsPromisesModule from "fs/promises";
-import { getClaudeConfigDir, isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
+import * as pathModule from "path";
 import {
   logComponentReadError,
   readFileHead,
   MAX_PLUGIN_INVENTORY_FILE_BYTES,
   getPluginInventory,
 } from "../../utils/plugins/pluginInventory.js";
+import { findSymlinkEscape } from "../../utils/plugins/pluginPathContainment.js";
 import { parseFrontmatter } from "../../utils/frontmatterParser.js";
 import {
   pluginNamesEqual,
@@ -32,7 +31,7 @@ import {
   isOfficialMarketplace,
   findPluginName,
 } from "../../utils/plugins/pluginIdentifier.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { stripSyncedSkillPrefix } from "../../skills/syncedSkills.js";
 import {
   init_react_production,
@@ -107,6 +106,7 @@ import {
   hasFailedInstalledPluginsRead,
   hasInstallationForCurrentProject,
 } from "../../utils/plugins/installedPluginsManager.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   isSettingSourceEnabled,
   getSettingSourceName,
@@ -213,6 +213,7 @@ import {
 import { listUnscopedPluginForProject, formatCopyNotLoaded } from "./SkillDoctor.js";
 import { formatMcpOperationFailure } from "../../components/mcp/utils/reconnectHelpers.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
+import { describeMcpbSourceError } from "../../services/plugins/pluginCliCommands.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { mergePluginErrors } from "../../utils/plugins/refresh.js";
 import { installationAtTarget } from "../../utils/plugins/dependencyResolver.js";
@@ -235,15 +236,12 @@ import { MCPStdioServerMenu } from "../../components/mcp/MCPStdioServerMenu.js";
 import { RemoteServerMenuLoader, MCPToolListView } from "../../components/mcp/MCPToolListView.js";
 import { MCPToolDetailView } from "../../components/mcp/MCPToolDetailView.js";
 import { SearchBox } from "../../components/SearchBox.js";
+import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 import { AuthShortcutHint, InstalledItemRow } from "./UnifiedInstalledCell.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6zvphrsz.js:2539-2575 fingerprint (2.1.88 match: filterManagedDisabledPlugins, 1)
-function filterManagedDisabledPlugins() {
-  return join(getClaudeConfigDir(), "local");
-}
-//@ chunk-k9mgeeff.js:4312-4636 fingerprint (2.1.88 match: getBaseFileNames, 0.759)
+//@ chunk-x6t8knrk.js:4530-4854 fingerprint (2.1.88 match: getBaseFileNames, 0.759)
 async function getBaseFileNames(dirPath) {
   let entries = [];
   let seen = new Set();
@@ -272,8 +270,8 @@ async function getBaseFileNames(dirPath) {
   }
   return entries;
 }
-//@ chunk-k9mgeeff.js:4636-5291 fingerprint (2.1.88 match: getSkillDirNames, 0.844)
-async function getSkillDirNames(skillsDir, name) {
+//@ chunk-x6t8knrk.js:4854-5624 fingerprint (2.1.88 match: getSkillDirNames, 0.843)
+async function getSkillDirNames(skillsDir, name, entriesAnchor) {
   let skillNames = [];
   let seen = new Set();
   let collect = (name, dirName) => {
@@ -289,7 +287,11 @@ async function getSkillDirNames(skillsDir, name) {
     if (!entry) continue;
     try {
       let path = pathModule.join(entry, "SKILL.md");
-      if ((await fsPromisesModule.stat(path)).isFile()) {
+      if (
+        (await fsPromisesModule.stat(path)).isFile() &&
+        (entriesAnchor === undefined ||
+          (await findSymlinkEscape(entriesAnchor, entry, "SKILL.md")) === undefined)
+      ) {
         let skillName = "";
         try {
           let fileHead = await readFileHead(path, MAX_PLUGIN_INVENTORY_FILE_BYTES);
@@ -316,18 +318,23 @@ async function getSkillDirNames(skillsDir, name) {
       if (!dirEntry.isDirectory() && !dirEntry.isSymbolicLink()) continue;
       let dirName = pathModule.join(entry, dirEntry.name);
       try {
-        if ((await fsPromisesModule.stat(pathModule.join(dirName, "SKILL.md"))).isFile())
+        if (
+          (await fsPromisesModule.stat(pathModule.join(dirName, "SKILL.md"))).isFile() &&
+          (entriesAnchor === undefined ||
+            (await findSymlinkEscape(entriesAnchor, entry, pathModule.join(dirEntry.name, "SKILL.md"))) ===
+              undefined)
+        )
           collect(dirEntry.name, dirName);
       } catch {}
     }
   }
   return skillNames;
 }
-//@ chunk-vrb44rx7.js:146689-146757 affinity
+//@ chunk-wb51jffc.js:146888-146956 affinity
 function isListNavItem(row) {
   return row?.kind === "item" || row?.kind === "disabled-header";
 }
-//@ chunk-vrb44rx7.js:146757-146893 placement (2.1.88 match: _temp2, 0.306)
+//@ chunk-wb51jffc.js:146956-147092 placement (2.1.88 match: _temp2, 0.306)
 /**
  * 判断插件操作是否因插件未安装（或未在该作用域安装）而失败，且该插件不在已知列表中。
  */
@@ -338,7 +345,7 @@ function isUninstalledPluginFailure(pluginId, name, editableSources) {
     !editableSources.some((source) => pluginNamesEqual(source, name))
   );
 }
-//@ chunk-vrb44rx7.js:146893-147114 placement
+//@ chunk-wb51jffc.js:147092-147313 placement
 function needsAttention(item) {
   switch (item.type) {
     case "plugin":
@@ -352,16 +359,16 @@ function needsAttention(item) {
       return false;
   }
 }
-//@ chunk-vrb44rx7.js:147114-147168 placement
+//@ chunk-wb51jffc.js:147313-147367 placement
 var SKILL_STATE_CYCLE = ["on", "name-only", "user-invocable-only", "off"];
-//@ chunk-vrb44rx7.js:147168-147351 placement
+//@ chunk-wb51jffc.js:147367-147550 placement
 function nextSkillOverrideState(override, lockSource) {
   if (lockSource === "policy" || lockSource === "flag" || lockSource === "reserved-name") return override;
   if (lockSource === "author") return override === "off" ? "user-invocable-only" : "off";
   let index = SKILL_STATE_CYCLE.indexOf(override);
   return SKILL_STATE_CYCLE[(index + 1) % SKILL_STATE_CYCLE.length];
 }
-//@ chunk-vrb44rx7.js:147351-147482 placement
+//@ chunk-wb51jffc.js:147550-147681 placement
 function isInstalledItemDisabled(item) {
   return (
     (item.type === "plugin" && !item.isEnabled) ||
@@ -369,7 +376,7 @@ function isInstalledItemDisabled(item) {
     (item.type === "skill" && item.override === "off")
   );
 }
-//@ chunk-vrb44rx7.js:147482-147589 placement
+//@ chunk-wb51jffc.js:147681-147788 placement
 function isNeverConnectedMcpFailure(item) {
   return (
     item.type === "mcp" &&
@@ -377,7 +384,7 @@ function isNeverConnectedMcpFailure(item) {
     item.everConnected === false
   );
 }
-//@ chunk-vrb44rx7.js:147589-149317 placement
+//@ chunk-wb51jffc.js:147788-149516 placement
 function buildInstalledSections(
   unifiedItems,
   { searchQuery, favoriteIds, showDisabled, disusedDays, keepInPlaceIds },
@@ -490,23 +497,23 @@ function buildInstalledSections(
       });
     groups.push({
       kind: "disabled-header",
-      disabledCount: count(filtered, isInstalledItemDisabled),
-      unusedConnectorCount: count(filtered, isNeverConnectedMcpFailure),
+      disabledCount: countWhere(filtered, isInstalledItemDisabled),
+      unusedConnectorCount: countWhere(filtered, isNeverConnectedMcpFailure),
     });
     if (showDisabled) for (let item of filtered) add("disabled", item);
   }
   return groups;
 }
-//@ chunk-vrb44rx7.js:149317-149436 placement
+//@ chunk-wb51jffc.js:149516-149635 placement
 function getSkillItemKey(item) {
   return item.loadedFrom === "syncedSkills"
     ? `synced-skill:${item.source}:${item.name}`
     : `skill:${item.source}:${item.name}`;
 }
-//@ chunk-vrb44rx7.js:149436-149471 placement
+//@ chunk-wb51jffc.js:149635-149670 placement
 var SYNCED_SKILL = "synced-skill:";
 var SKILL = "skill:";
-//@ chunk-vrb44rx7.js:149471-149608 placement
+//@ chunk-wb51jffc.js:149670-149807 placement
 function getSyncedSkillAliasKeys(item) {
   if (!item.startsWith(SYNCED_SKILL)) return [];
   let sliced = item.slice(SYNCED_SKILL.length);
@@ -514,7 +521,7 @@ function getSyncedSkillAliasKeys(item) {
   let aliasKey = sliced.slice(0, colonIndex) + stripSyncedSkillPrefix(sliced.slice(colonIndex));
   return [SYNCED_SKILL + aliasKey, SKILL + aliasKey];
 }
-//@ chunk-vrb44rx7.js:149608-149863 placement
+//@ chunk-wb51jffc.js:149807-150062 placement
 function expandSyncedSkillSelection(selected, items) {
   let expanded = new Set();
   let visited = [];
@@ -535,7 +542,7 @@ function expandSyncedSkillSelection(selected, items) {
   }
   return match ?? selected;
 }
-//@ chunk-vrb44rx7.js:149863-150050 placement
+//@ chunk-wb51jffc.js:150062-150249 placement
 function toggleSkillKeySelection(selectedKeys, item, filteredItems) {
   let expanded = expandSyncedSkillSelection(selectedKeys, filteredItems);
   let nextSelection = new Set(selectedKeys);
@@ -551,31 +558,31 @@ function toggleSkillKeySelection(selectedKeys, item, filteredItems) {
       nextSelection.delete(aliasKey);
   return nextSelection;
 }
-//@ chunk-vrb44rx7.js:150050-150054 placement
+//@ chunk-wb51jffc.js:150249-150253 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:150050", () => {
+deferInit("chunk-wb51jffc.js:150249", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:150054-150177 placement
+//@ chunk-wb51jffc.js:150253-150376 placement
 var hooksLeftOutStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:150054", () => {
+deferInit("chunk-wb51jffc.js:150253", () => {
   hooksLeftOutStore = Object.freeze({
     subscribe: (listener) => getPluginRegistry().hooksLeftOutByNameChanged.subscribe(listener),
     getSnapshot: () => getPluginRegistry().hooksLeftOutByName,
   });
 });
-//@ chunk-vrb44rx7.js:150177-150205 placement
+//@ chunk-wb51jffc.js:150376-150404 placement
 function escapeDisplayText(text) {
   return stripInvisibleChars_2(text);
 }
-//@ chunk-vrb44rx7.js:150205-150845 placement
+//@ chunk-wb51jffc.js:150404-151044 placement
 /**
  * 插件管理页读取已加载模块的 store：ca 给出活动 mod 名列表，ua 为快照。
  */
 var loadedModulesStore; // deferred: uses subscribe_2 (../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js) of its import cycle while loading; runs once the cycle is complete
 var activeModNames;
 var loadedModsSnapshot;
-deferInit("chunk-vrb44rx7.js:150205", () => {
+deferInit("chunk-wb51jffc.js:150404", () => {
   loadedModulesStore = {
     subscribe: subscribe_2,
     getSnapshot: () => getPluginRegistry().loadedModules,
@@ -633,7 +640,7 @@ deferInit("chunk-vrb44rx7.js:150205", () => {
     return box;
   };
 });
-//@ chunk-vrb44rx7.js:150845-150954 placement
+//@ chunk-wb51jffc.js:151044-151153 placement
 /**
  * 汇总插件相关警告：AppState 里的插件加载警告、冻结/已加载模块存储里的警告，作为一个记忆化数组返回。
  */
@@ -646,7 +653,7 @@ function usePluginWarnings() {
     [warnings, storeSelector, storeSelector_2],
   );
 }
-//@ chunk-vrb44rx7.js:150954-151419 placement
+//@ chunk-wb51jffc.js:151153-151618 placement
 async function logPluginToggleScreen({ operation, pluginId, scope, savedKept, storageV5 }) {
   try {
     if (!isPluginDirectoryModeOn()) return;
@@ -681,7 +688,7 @@ async function logPluginToggleScreen({ operation, pluginId, scope, savedKept, st
     );
   }
 }
-//@ chunk-vrb44rx7.js:151419-151526 placement
+//@ chunk-wb51jffc.js:151618-151725 placement
 function renderComponentLabelRow(entry) {
   let [label, names] = entry;
   return jsxProd_default(
@@ -695,17 +702,17 @@ function renderComponentLabelRow(entry) {
     label,
   );
 }
-//@ chunk-vrb44rx7.js:151526-151577 placement
+//@ chunk-wb51jffc.js:151725-151776 placement
 function pluginDisplayLabel(plugin) {
   return printableLabel(printableName(plugin, 120)) || "this plugin";
 }
-//@ chunk-vrb44rx7.js:151577-151628 placement
+//@ chunk-wb51jffc.js:151776-151827 placement
 function marketplaceLabel(marketplace) {
   return marketplace === OFFICIAL_MARKETPLACE_NAME
     ? `the ${OFFICIAL_MARKETPLACE_DISPLAY}`
     : quotedPrintable(marketplace, 120);
 }
-//@ chunk-vrb44rx7.js:151628-152748 placement
+//@ chunk-wb51jffc.js:151827-152947 placement
 function formatToggleConsequence({
   newId,
   openedId,
@@ -750,7 +757,7 @@ function formatToggleConsequence({
   }
   return "";
 }
-//@ chunk-vrb44rx7.js:152748-152856 placement
+//@ chunk-wb51jffc.js:152947-153055 placement
 function findScopedInstallation(installations, scope) {
   let scoped = installations?.filter((installation) => installation.scope === scope) ?? [];
   return (
@@ -758,7 +765,7 @@ function findScopedInstallation(installations, scope) {
     scoped.find(isInstallationRelevantToCurrentProject)
   );
 }
-//@ chunk-vrb44rx7.js:152856-152994 placement
+//@ chunk-wb51jffc.js:153055-153193 placement
 function describePluginVersionPin(pluginId, gitCommitSha) {
   let shortSha = shortCommitSha(gitCommitSha);
   if (!shortSha) return "tracks the marketplace's latest";
@@ -766,11 +773,11 @@ function describePluginVersionPin(pluginId, gitCommitSha) {
     ? `pinned commit ${shortSha}`
     : `commit ${shortSha}`;
 }
-//@ chunk-vrb44rx7.js:152994-153076 placement
+//@ chunk-wb51jffc.js:153193-153275 placement
 function shortCommitSha(sha) {
   return sha !== undefined && /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : undefined;
 }
-//@ chunk-vrb44rx7.js:153076-153226 placement (2.1.88 match: isClaudeAISubscriber, 0.692)
+//@ chunk-wb51jffc.js:153275-153425 placement (2.1.88 match: isClaudeAISubscriber, 0.692)
 function getUncoveredPluginScopes(replaced, scope, pluginId) {
   let knownScopes = new Set([
     scope,
@@ -778,13 +785,13 @@ function getUncoveredPluginScopes(replaced, scope, pluginId) {
       .filter(isInstallationRelevantToCurrentProject)
       .map((installation) => installation.scope),
   ]);
-  return uniq(replaced.flatMap((installation) => installation.scopes)).filter(
+  return normalizeCaseForComparison_2(replaced.flatMap((installation) => installation.scopes)).filter(
     (scope) => !knownScopes.has(scope),
   );
 }
-//@ chunk-vrb44rx7.js:153226-153280 layout
+//@ chunk-wb51jffc.js:153425-153479 layout
 var SKILL_STATE_CYCLE_2 = ["on", "name-only", "user-invocable-only", "off"];
-//@ chunk-vrb44rx7.js:153280-153620 layout
+//@ chunk-wb51jffc.js:153479-153819 layout
 /**
  * 比较技能覆盖新值与 settings（local/project/user）里已生效的值；相同返回 undefined（无需写入），否则返回新值。作者锁定的技能默认值是 user-invocable-only。
  */
@@ -804,7 +811,7 @@ function diffSkillOverrideFromSettings(item, value) {
     item.lockSource === "author" ? (entry === "off" ? "off" : "user-invocable-only") : (entry ?? "on");
   return value === removalPatch ? undefined : value;
 }
-//@ chunk-vrb44rx7.js:153620-153912 layout
+//@ chunk-wb51jffc.js:153819-154111 layout
 function formatPluginScopeLabel(scope) {
   switch (scope) {
     case "flagged":
@@ -828,7 +835,7 @@ function formatPluginScopeLabel(scope) {
       return scope;
   }
 }
-//@ chunk-vrb44rx7.js:153912-155189 layout
+//@ chunk-wb51jffc.js:154111-155388 layout
 /**
  * 异步加载插件清单并渲染"Installed components"列表；市场已关闭/不可用时显示说明，加载失败时显示错误。
  */
@@ -953,7 +960,7 @@ function PluginInstalledComponents(props) {
   if (hintRows !== EARLY_RETURN_SENTINEL) return hintRows;
   return componentRows;
 }
-//@ chunk-vrb44rx7.js:155189-155429 fingerprint (2.1.88 match: checkIfLocalPlugin, 1)
+//@ chunk-wb51jffc.js:155388-155628 fingerprint (2.1.88 match: checkIfLocalPlugin, 1)
 async function checkIfLocalPlugin(pluginName, marketplaceName, storageV5) {
   if (marketplaceName === pluginManifestPathSchemas) return null;
   let entry = (await getMarketplace(marketplaceName, storageV5))?.plugins.find(
@@ -963,11 +970,11 @@ async function checkIfLocalPlugin(pluginName, marketplaceName, storageV5) {
     return `Local plugins cannot be updated remotely. To update, modify the source at: ${entry.source}`;
   return null;
 }
-//@ chunk-vrb44rx7.js:155429-155480 layout
+//@ chunk-wb51jffc.js:155628-155679 layout
 function dropPolicyBlockedPlugins(plugins) {
   return plugins.filter((plugin) => !isPluginBlockedByPolicy(plugin.source));
 }
-//@ chunk-vrb44rx7.js:155480-156237 layout
+//@ chunk-wb51jffc.js:155679-156436 layout
 /**
  * 渲染一组带颜色的插件消息（错误/警告）：标题"N 个 noun:"，每条消息下可带缩进的指导语。
  */
@@ -1042,7 +1049,7 @@ function PluginMessageList(props) {
   } else status = $[14];
   return status;
 }
-//@ chunk-vrb44rx7.js:156237-204832 fingerprint (2.1.88 match: ManagePlugins, 0.484)
+//@ chunk-wb51jffc.js:156436-204880 fingerprint (2.1.88 match: ManagePlugins, 0.482)
 function ManagePlugins({
   setViewState,
   setResult,
@@ -1376,8 +1383,6 @@ function ManagePlugins({
           errorCount: errors.length,
           errors,
           plugin: state.plugin,
-          pendingEnable: state.pendingEnable,
-          pendingUpdate: state.pendingUpdate,
           pendingToggle,
           activity: activity
             ? {
@@ -1839,7 +1844,7 @@ function ManagePlugins({
         let marketplaceInfos = [];
         let enabledPluginsBySource = getEnabledPluginsBySource();
         for (let [name, plugins] of Object.entries(pluginsByMarketplace)) {
-          let enabledCount = count(plugins, (plugin) => {
+          let enabledCount = countWhere(plugins, (plugin) => {
             let pluginInSettings = findPluginInSettings_2(plugin.source);
             return isPluginEffectivelyEnabled(pluginInSettings, plugin, enabledPluginsBySource);
           });
@@ -1847,7 +1852,6 @@ function ManagePlugins({
           marketplaceInfos.push({
             name,
             installedPlugins: plugins,
-            enabledCount,
             disabledCount,
           });
         }
@@ -1867,7 +1871,6 @@ function ManagePlugins({
               plugin,
               marketplace: marketplace.name,
               scope,
-              pendingEnable: undefined,
               pendingUpdate: false,
             });
           }
@@ -1909,7 +1912,6 @@ function ManagePlugins({
             plugin,
             marketplace: marketplace.name,
             scope,
-            pendingEnable: undefined,
             pendingUpdate: false,
           };
           setSelectedPlugin(pluginState);
@@ -2464,18 +2466,24 @@ function ManagePlugins({
                 setIsLoadingConfig(false);
                 return;
               }
-              let pluginId = selectedSource;
-              let result = await loadMcpbFile(
+              let addProblem = await describeMcpbSourceError(selectedPlugin.plugin, mcpbPath);
+              if (addProblem) {
+                setError(addProblem);
+                setIsLoadingConfig(false);
+                return;
+              }
+              let target = selectedSource;
+              let mcpbFile = await loadMcpbFile(
                 mcpbPath,
                 selectedPlugin.plugin.path,
-                pluginId,
+                target,
                 undefined,
                 undefined,
                 true,
                 storageV5,
               );
-              if ("status" in result && result.status === "needs-config") {
-                setConfigNeeded(result);
+              if ("status" in mcpbFile && mcpbFile.status === "needs-config") {
+                setConfigNeeded(mcpbFile);
                 setViewState_2("configuring");
               } else setError("Failed to load MCPB for configuration");
             } catch (err) {
@@ -3118,6 +3126,12 @@ function ManagePlugins({
         }
         if (!mcpbPath) {
           setError("No MCPB file found");
+          setViewState_2("plugin-details");
+          return;
+        }
+        let installProblem = await describeMcpbSourceError(selectedPlugin.plugin, mcpbPath);
+        if (installProblem) {
+          setError(installProblem);
           setViewState_2("plugin-details");
           return;
         }
@@ -4589,12 +4603,11 @@ function ManagePlugins({
     ],
   });
 }
-//@ chunk-vrb44rx7.js:204832-204871 sole-consumer
+//@ chunk-wb51jffc.js:204880-204919 sole-consumer
 function joinedToolNames(allowedTools) {
   return replaceControlChars(allowedTools.join(", "));
 }
 export {
-  filterManagedDisabledPlugins,
   usePluginWarnings,
   activeModNames,
   loadedModsSnapshot,

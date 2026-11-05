@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：策略缓存键（令牌、组织、登录账号）；判定策略缓存副本是否可信（组织固定）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-55ht3bcx.js (51)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0nvx3515.js (51)
  * attribution: placement 51
  */
 import { randomUUID } from "crypto";
@@ -33,7 +33,7 @@ import {
   latchComplianceTaints,
 } from "./complianceTaints.js";
 import { clearBetasCaches } from "../../utils/betas.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   TAINT_DISABLED_POLICIES,
   isEnforcedPolicyKey,
@@ -74,7 +74,7 @@ import {
 import { hasInferenceScope } from "../../constants/system.js";
 import { ApiKeySourceSchema_2 } from "../../entrypoints/sdk/coreSchemas.js";
 import { sessionHostKind } from "../../utils/telemetry/memorySummary.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { withoutSSHTunnelVars } from "../../utils/managedEnv.js";
 import { machineAdminMayPinSignInOrg } from "../../utils/settings/settings.js";
 import { hasMdmResult } from "../../utils/settings/mdm/mdmLoader.js";
@@ -99,7 +99,7 @@ import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { UNREADABLE_PRINCIPAL } from "./policyVerdicts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-55ht3bcx.js:7634-7707 placement (2.1.88 match: CACHE_FILENAME, 1)
+//@ chunk-0nvx3515.js:7668-7741 placement (2.1.88 match: CACHE_FILENAME, 1)
 /**
  * 策略状态里的重查间隔、被拒键名提示上限与「无戳」标记。
  */
@@ -110,17 +110,17 @@ var ABSENT_STAMP = {
   kind: "absent",
 };
 var UNCLASSIFIED_ORIGIN_MEMO_MS = 30000;
-//@ chunk-55ht3bcx.js:7707-7746 placement
+//@ chunk-0nvx3515.js:7741-7780 placement
 function readPolicyCacheStampForAdmission() {
   return isTwinklingGlobeOn() ? ABSENT_STAMP : readPolicyStampSync(getCachePath());
 }
-//@ chunk-55ht3bcx.js:7746-7805 placement
+//@ chunk-0nvx3515.js:7780-7839 placement
 function settleStampRead(policyCacheStampForAdmission) {
   return policyCacheStampForAdmission.kind === "absent" && !isTwinklingGlobeOn()
     ? readPolicyStampSync(getCachePath())
     : policyCacheStampForAdmission;
 }
-//@ chunk-55ht3bcx.js:7805-11150 placement
+//@ chunk-0nvx3515.js:7839-11185 placement
 class PolicyState {
   sessionCache = null;
   lastFetchOutcome = null;
@@ -190,7 +190,7 @@ class PolicyState {
   effectiveTaints(baseTaints = this.sessionCache?.compliance_taints ?? []) {
     return this.hintedTaints.length === 0
       ? baseTaints
-      : uniq([...this.hintedTaints, ...baseTaints]).slice(0, MAX_COMPLIANCE_TAINTS);
+      : normalizeCaseForComparison_2([...this.hintedTaints, ...baseTaints]).slice(0, MAX_COMPLIANCE_TAINTS);
   }
   dropHintedTaints() {
     if (
@@ -211,15 +211,21 @@ class PolicyState {
     let filtered = body.compliance_taints.filter((complianceTaint) =>
       TAINT_DISABLED_POLICIES.some(([taintName]) => taintName === complianceTaint),
     );
-    let nextTaints = uniq([...this.hintedTaints, ...filtered]);
+    let nextTaints = normalizeCaseForComparison_2([...this.hintedTaints, ...filtered]);
     let mapped = Object.entries(body.restrictions)
       .filter(([key, value]) => value?.allowed === false && !isEnforcedPolicyKey(key))
       .map(([key]) => key);
-    let sliced = uniq([...this.hintedDeniedKeys, ...mapped]).slice(0, MAX_HINTED_DENIED_KEYS);
+    let sliced = normalizeCaseForComparison_2([...this.hintedDeniedKeys, ...mapped]).slice(
+      0,
+      MAX_HINTED_DENIED_KEYS,
+    );
     let mapped_2 = Object.entries(body.restrictions)
       .filter(([key, value]) => value?.allowed === true && isEnforcedPolicyKey(key))
       .map(([key]) => key);
-    let sliced_2 = uniq([...this.hintedEnforcedKeys, ...mapped_2]).slice(0, MAX_HINTED_DENIED_KEYS);
+    let sliced_2 = normalizeCaseForComparison_2([...this.hintedEnforcedKeys, ...mapped_2]).slice(
+      0,
+      MAX_HINTED_DENIED_KEYS,
+    );
     let changed = false;
     if (body.core_skills !== undefined) {
       let narrowed = this.narrowedServedList(body.core_skills);
@@ -270,41 +276,41 @@ class PolicyState {
     }
   }
 }
-//@ chunk-55ht3bcx.js:11150-11177 placement
+//@ chunk-0nvx3515.js:11185-11212 placement
 var policyStates; // deferred: uses PolicyState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-55ht3bcx.js:11150", () => {
+deferInit("chunk-0nvx3515.js:11185", () => {
   policyStates = new HostScoped(() => new PolicyState());
 });
-//@ chunk-55ht3bcx.js:11177-11214 placement
+//@ chunk-0nvx3515.js:11212-11249 placement
 function getPolicyLimitsState() {
   return policyStates.of(getRootSession().host);
 }
-//@ chunk-55ht3bcx.js:11214-11342 placement
+//@ chunk-0nvx3515.js:11249-11377 placement
 function setSessionCache(cache) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.sessionFromServerFetch = cache !== null;
   if (cache === null) policyLimitsState.sessionBodyReceivedAtMs = null;
   policyLimitsState.replaceSessionCache(cache);
 }
-//@ chunk-55ht3bcx.js:11342-11388 placement
+//@ chunk-0nvx3515.js:11377-11423 placement
 function noteSessionBodyReceived(sessionBodyReceivedAtMs) {
   getPolicyLimitsState().sessionBodyReceivedAtMs = sessionBodyReceivedAtMs;
 }
-//@ chunk-55ht3bcx.js:11388-11438 placement
+//@ chunk-0nvx3515.js:11423-11473 placement
 function getSessionBodyReceivedAt() {
   return getPolicyLimitsState().sessionBodyReceivedAtMs;
 }
-//@ chunk-55ht3bcx.js:11438-11517 placement
+//@ chunk-0nvx3515.js:11473-11552 placement
 function setSessionCacheAsPriorEvidence(cache) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.sessionFromServerFetch = false;
   policyLimitsState.replaceSessionCache(cache);
 }
-//@ chunk-55ht3bcx.js:11517-11562 placement
+//@ chunk-0nvx3515.js:11552-11597 placement
 function noteSessionVerdictEnvBearer(verdictEnvBearerDigest) {
   getPolicyLimitsState().verdictEnvBearerDigest = verdictEnvBearerDigest;
 }
-//@ chunk-55ht3bcx.js:11562-11778 placement
+//@ chunk-0nvx3515.js:11597-11813 placement
 function envBearerVerdictOnWire() {
   let verdictEnvBearerDigest = getPolicyLimitsState().verdictEnvBearerDigest;
   if (verdictEnvBearerDigest === null) return null;
@@ -321,14 +327,14 @@ function envBearerVerdictOnWire() {
     return "gone";
   return tokenDigest(envToken) === verdictEnvBearerDigest ? "same" : "replaced";
 }
-//@ chunk-55ht3bcx.js:11778-11892 placement
+//@ chunk-0nvx3515.js:11813-11927 placement
 function installFailOpenSessionVerdict() {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.sessionFromServerFetch = false;
   policyLimitsState.sessionBodyReceivedAtMs = null;
   policyLimitsState.replaceSessionCache(EMPTY_POLICY_RESPONSE, true);
 }
-//@ chunk-55ht3bcx.js:11892-12313 placement
+//@ chunk-0nvx3515.js:11927-12348 placement
 function installDiskDerivedVerdict(verdict) {
   let policyLimitsState = getPolicyLimitsState();
   let hadSession = policyLimitsState.sessionCache !== null;
@@ -347,11 +353,11 @@ function installDiskDerivedVerdict(verdict) {
   }
   policyLimitsState.replaceSessionCache(verdict, false, hadSession);
 }
-//@ chunk-55ht3bcx.js:12313-12344 placement
+//@ chunk-0nvx3515.js:12348-12379 placement
 function latchComplianceTaintsBustingBetas(taints) {
   if (latchComplianceTaints(taints)) clearBetasCaches();
 }
-//@ chunk-55ht3bcx.js:12344-12731 placement
+//@ chunk-0nvx3515.js:12379-12766 placement
 function setLastFetchOutcome(outcome, principalIdentity, settleTransient = true) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.lastFetchOutcome = outcome;
@@ -370,7 +376,7 @@ function setLastFetchOutcome(outcome, principalIdentity, settleTransient = true)
   policyLimitsState.cacheRevision++;
   policyLimitsState.emitVerdictChanged();
 }
-//@ chunk-55ht3bcx.js:12731-12922 placement
+//@ chunk-0nvx3515.js:12766-12957 placement
 function isTransientFetchFailure(outcome) {
   return (
     outcome.errorCode === "network_error" ||
@@ -381,73 +387,73 @@ function isTransientFetchFailure(outcome) {
         (outcome.httpStatus >= 400 && !isNonRetryableClientError(outcome.httpStatus))))
   );
 }
-//@ chunk-55ht3bcx.js:12922-12965 placement
+//@ chunk-0nvx3515.js:12957-13000 placement
 function getLastFetchOutcome() {
   return getPolicyLimitsState().lastFetchOutcome;
 }
-//@ chunk-55ht3bcx.js:12965-13001 placement
+//@ chunk-0nvx3515.js:13000-13036 placement
 function detachPolicyLimitsBackend() {
   getPolicyLimitsState().storageV5 = undefined;
 }
-//@ chunk-55ht3bcx.js:13001-13042 placement
+//@ chunk-0nvx3515.js:13036-13077 placement
 function isPolicyCacheMemoryOnly() {
   return getPolicyLimitsTunnelSocket() !== undefined || isDiskless();
 }
-//@ chunk-55ht3bcx.js:13042-13078 placement
+//@ chunk-0nvx3515.js:13077-13113 placement
 function isAnthropicHosted() {
   return sessionHostKind() !== "none";
 }
-//@ chunk-55ht3bcx.js:13078-13134 placement
+//@ chunk-0nvx3515.js:13113-13169 placement
 function isDiskCacheForeign() {
   return isPolicyCacheMemoryOnly() || getPolicyLimitsState().diskAdoptionSuppressed;
 }
-//@ chunk-55ht3bcx.js:13134-13172 placement
+//@ chunk-0nvx3515.js:13169-13207 placement
 function getSessionCache() {
   return getPolicyLimitsState().sessionCache;
 }
-//@ chunk-55ht3bcx.js:13172-13247 placement
+//@ chunk-0nvx3515.js:13207-13282 placement
 function suppressDiskAdoption() {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.diskAdoptionSuppressed = true;
   policyLimitsState.diskAdoptionEpoch++;
 }
-//@ chunk-55ht3bcx.js:13247-13291 placement
+//@ chunk-0nvx3515.js:13282-13326 placement
 function getDiskAdoptionEpoch() {
   return getPolicyLimitsState().diskAdoptionEpoch;
 }
-//@ chunk-55ht3bcx.js:13291-13336 placement
+//@ chunk-0nvx3515.js:13326-13371 placement
 function liftDiskAdoptionSuppression() {
   getPolicyLimitsState().diskAdoptionSuppressed = false;
 }
-//@ chunk-55ht3bcx.js:13336-13385 placement
+//@ chunk-0nvx3515.js:13371-13420 placement
 function isDiskAdoptionSuppressed() {
   return getPolicyLimitsState().diskAdoptionSuppressed;
 }
-//@ chunk-55ht3bcx.js:13385-13425 placement
+//@ chunk-0nvx3515.js:13420-13460 placement
 function getPolicyCacheRevision() {
   return getPolicyLimitsState().cacheRevision;
 }
-//@ chunk-55ht3bcx.js:13425-13461 placement
+//@ chunk-0nvx3515.js:13460-13497 placement
 function policyVerdictRebuildKey() {
   return isLovelyUmbrellaOn() ? -1 : getPolicyCacheRevision();
 }
-//@ chunk-55ht3bcx.js:13461-13515 placement
+//@ chunk-0nvx3515.js:13497-13551 placement
 function onPolicyVerdictChanged(listener) {
   return getPolicyLimitsState().verdictChanged.subscribe(listener);
 }
-//@ chunk-55ht3bcx.js:13515-13571 placement
+//@ chunk-0nvx3515.js:13551-13607 placement
 function onPolicyVerdictHeldStart(listener) {
   return getPolicyLimitsState().heldStartSignal.subscribe(listener);
 }
-//@ chunk-55ht3bcx.js:13571-13605 placement
+//@ chunk-0nvx3515.js:13607-13641 placement
 function getCachePath() {
   return join(getClaudeConfigDir(), POLICY_LIMITS_CACHE_FILENAME);
 }
-//@ chunk-55ht3bcx.js:13605-13632 placement
+//@ chunk-0nvx3515.js:13641-13668 placement
 function getPolicyLimitsTunnelSocket() {
   return withoutSSHTunnelVars();
 }
-//@ chunk-55ht3bcx.js:13632-13767 placement
+//@ chunk-0nvx3515.js:13668-13803 placement
 function isSignInPinnedByMachine() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.machinePinsSignIn !== undefined) return policyLimitsState.machinePinsSignIn;
@@ -455,30 +461,30 @@ function isSignInPinnedByMachine() {
   if (hasMdmResult()) policyLimitsState.machinePinsSignIn = pinned;
   return pinned;
 }
-//@ chunk-55ht3bcx.js:13767-13811 placement
+//@ chunk-0nvx3515.js:13803-13847 placement
 function _resetMachinePinsSignInForTesting() {
   getPolicyLimitsState().machinePinsSignIn = undefined;
 }
-//@ chunk-55ht3bcx.js:13811-13888 placement
+//@ chunk-0nvx3515.js:13847-13924 placement
 var PRINCIPALS_NEVER_SERVED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-55ht3bcx.js:13811", () => {
+deferInit("chunk-0nvx3515.js:13847", () => {
   PRINCIPALS_NEVER_SERVED = new Set(["prosumer_oauth", "third_party_provider", "custom_base_url"]);
 });
-//@ chunk-55ht3bcx.js:13888-14027 placement
+//@ chunk-0nvx3515.js:13924-14063 placement
 function getCredentialIndependentIneligibleReason(options = {}) {
   if (getAPIProvider() !== "firstParty") return "third_party_provider";
   if (!options.skipBaseUrlCheck && !getPolicyLimitsTunnelSocket() && !isFirstPartyAnthropicBaseUrl())
     return "custom_base_url";
   return;
 }
-//@ chunk-55ht3bcx.js:14027-14062 placement
+//@ chunk-0nvx3515.js:14063-14098 placement
 /**
  * 策略限制（organization policy limits）是否适用：只对第一方 API、官方 base URL、带 user:inference 范围的 Claude.ai OAuth 的 team/enterprise 订阅适用；API key 用户直接适用。返回不适用原因或 undefined。
  */
 function isPolicyLimitsEligible() {
   return getPolicyLimitsIneligibleReason() === undefined;
 }
-//@ chunk-55ht3bcx.js:14062-14490 placement (2.1.88 match: isPolicyLimitsEligible, 0.63)
+//@ chunk-0nvx3515.js:14098-14526 placement (2.1.88 match: isPolicyLimitsEligible, 0.63)
 function getPolicyLimitsIneligibleReason(options = {}) {
   let credentialIndependentIneligibleReason = getCredentialIndependentIneligibleReason(options);
   if (credentialIndependentIneligibleReason !== undefined) return credentialIndependentIneligibleReason;
@@ -500,7 +506,7 @@ function getPolicyLimitsIneligibleReason(options = {}) {
     return isSignInPinnedByMachine() ? undefined : "prosumer_oauth";
   return;
 }
-//@ chunk-55ht3bcx.js:14490-14973 placement
+//@ chunk-0nvx3515.js:14526-15009 placement
 function loadCachedResponse() {
   let policyLimitsState = getPolicyLimitsState();
   if (isStorageV5Enabled() && policyLimitsState.storageV5 !== undefined && policyLimitsState.sessionCache)
@@ -531,7 +537,7 @@ function loadCachedResponse() {
     return null;
   }
 }
-//@ chunk-55ht3bcx.js:14973-16292 placement
+//@ chunk-0nvx3515.js:15009-16328 placement
 function admitCachedResponse(body, stampRead) {
   let policyLimitsState = getPolicyLimitsState();
   if (isTwinklingGlobeOn()) {
@@ -587,7 +593,7 @@ function admitCachedResponse(body, stampRead) {
       return null;
   }
 }
-//@ chunk-55ht3bcx.js:16292-17106 placement
+//@ chunk-0nvx3515.js:16328-17142 placement
 /**
  * 判定策略缓存副本是否可信（组织固定）。
  */
@@ -644,7 +650,7 @@ function applyStoredCopyTrust(body, checksum) {
   );
   return null;
 }
-//@ chunk-55ht3bcx.js:17106-19084 placement
+//@ chunk-0nvx3515.js:17142-19120 placement
 function getPolicyPrincipal() {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.principalRung = "none";
@@ -748,7 +754,7 @@ function getPolicyPrincipal() {
   }
   return null;
 }
-//@ chunk-55ht3bcx.js:19084-20142 placement
+//@ chunk-0nvx3515.js:19120-20178 placement
 function noteWifAccountAtWire() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.wifAccountDiverged || getAnthropicApiKeySafe() || !shouldUseWIFAuth()) return;
@@ -794,7 +800,7 @@ function noteWifAccountAtWire() {
     );
   }
 }
-//@ chunk-55ht3bcx.js:20142-20472 placement
+//@ chunk-0nvx3515.js:20178-20508 placement
 function compareWifAccountOnDisk() {
   let policyLimitsState = getPolicyLimitsState();
   try {
@@ -818,12 +824,12 @@ function compareWifAccountOnDisk() {
     return "unreadable";
   }
 }
-//@ chunk-55ht3bcx.js:20472-20574 placement
+//@ chunk-0nvx3515.js:20508-20610 placement
 function normalizedOrgUuid(info) {
   let organizationUuid = info?.organizationUuid;
   return typeof organizationUuid === "string" ? organizationUuid.trim().toLowerCase() || null : null;
 }
-//@ chunk-55ht3bcx.js:20574-20900 placement
+//@ chunk-0nvx3515.js:20610-20936 placement
 async function noteStoredLoginAccountAtWire(storageV5, credentials) {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken) return;
@@ -843,7 +849,7 @@ async function noteStoredLoginAccountAtWire(storageV5, credentials) {
     organizationUuid: accessToken_2 === accessToken ? storedLoginOrganizationAfresh : null,
   };
 }
-//@ chunk-55ht3bcx.js:20900-21144 placement
+//@ chunk-0nvx3515.js:20936-21180 placement
 function storedLoginAccountNeedsRead() {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken) return false;
@@ -858,7 +864,7 @@ function storedLoginAccountNeedsRead() {
       (normalizeUuidOrNull(getStoredOauthAccountInfo()?.organizationUuid) ?? null)
   );
 }
-//@ chunk-55ht3bcx.js:21144-22225 placement
+//@ chunk-0nvx3515.js:21180-22261 placement
 /**
  * 策略缓存键（令牌、组织、登录账号）。
  */
@@ -947,7 +953,7 @@ function policyCacheKey(accessToken) {
   };
   return principal;
 }
-//@ chunk-55ht3bcx.js:22225-22294 placement
+//@ chunk-0nvx3515.js:22261-22330 placement
 /**
  * 由短 artifact id 得到策略主体（不可用时返回 null）。
  */
@@ -957,7 +963,7 @@ function shortArtifactIdPrincipal(orgUuid) {
     descriptor: `org:${orgUuid.toLowerCase()}`,
   };
 }
-//@ chunk-55ht3bcx.js:22294-22629 placement
+//@ chunk-0nvx3515.js:22330-22665 placement
 function dropPolicyTaintHints(stampAtWire) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.sessionAttributed = true;
@@ -976,30 +982,31 @@ function dropPolicyTaintHints(stampAtWire) {
   policyLimitsState.dropHintedTaints();
 }
 export {
+  getPolicyCacheRevision,
+  onPolicyVerdictChanged,
   getPolicyLimitsIneligibleReason,
   getLastFetchOutcome,
   isTransientFetchFailure,
   isPolicyLimitsEligible,
   getPolicyLimitsState,
   getPolicyPrincipal,
-  getPolicyLimitsTunnelSocket,
-  onPolicyVerdictChanged,
-  policyVerdictRebuildKey,
-  getPolicyCacheRevision,
-  noteStoredLoginAccountAtWire,
-  noteWifAccountAtWire,
-  PRINCIPALS_NEVER_SERVED,
-  onPolicyVerdictHeldStart,
   isPolicyCacheMemoryOnly,
   ABSENT_STAMP,
   getCachePath,
   installDiskDerivedVerdict,
   envBearerVerdictOnWire,
   storedLoginAccountNeedsRead,
+  getPolicyLimitsTunnelSocket,
   getCredentialIndependentIneligibleReason,
   isAnthropicHosted,
   isSignInPinnedByMachine,
   loadCachedResponse,
+  onPolicyVerdictHeldStart,
+  PRINCIPALS_NEVER_SERVED,
+  POLICY_LIMITS_CACHE_FILENAME,
+  noteStoredLoginAccountAtWire,
+  noteWifAccountAtWire,
+  policyVerdictRebuildKey,
   isDiskCacheForeign,
   getSessionBodyReceivedAt,
   getSessionCache,
@@ -1021,7 +1028,6 @@ export {
   noteSessionBodyReceived,
   _resetMachinePinsSignInForTesting,
   UNCLASSIFIED_ORIGIN_MEMO_MS,
-  POLICY_LIMITS_CACHE_FILENAME,
   PolicyState,
   compareWifAccountOnDisk,
   policyStates,

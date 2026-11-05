@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：plugin.register 钩子：决定插件是否被接纳
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import { makeCoreEvent } from "./coreHandlers.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { MAX_KEPT_TEXT_CHARS } from "./sites/siteRules.js";
 import { ENGINE, EMPTY_TRACE, reportChainFailure } from "./dispatch/chain.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { hookMembersFor } from "./hookDispatch.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { hasLink } from "../../utils/hasLink.js";
@@ -22,17 +22,17 @@ import { UI_INVALIDATORS } from "./sameThreadHost.js";
 import { errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4050417-4050464 placement
+//@ chunk-5xgkngpb.js:4156265-4156312 placement
 /**
  * plugin.register 事件定义
  */
 var PLUGIN_REGISTER_EVENT; // deferred: uses makeCoreEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4050417", () => {
+deferInit("chunk-5xgkngpb.js:4156265", () => {
   PLUGIN_REGISTER_EVENT = makeCoreEvent("plugin.register", () => ({
     allow: true,
   }));
 });
-//@ chunk-e6aww6q8.js:4050464-4050594 placement
+//@ chunk-5xgkngpb.js:4156312-4156441 placement
 /**
  * plugin.register 拒绝说明："refused by <插件>: 原因" 或 "refused at plugin.register: 原因"。
  */
@@ -41,7 +41,7 @@ function describeRegisterRefusal({ by, reason }) {
   if (by === undefined) return `refused at plugin.register: ${shortReason}`;
   return `refused by ${by}: ${shortReason}`;
 }
-//@ chunk-e6aww6q8.js:4050594-4050725 placement
+//@ chunk-5xgkngpb.js:4156441-4156572 placement
 /**
  * 在钩子链轨迹里找最后一个以指定字段值作答的插件步骤。
  */
@@ -50,15 +50,15 @@ var findAnsweringStep = (steps, field, value) =>
     (step) =>
       step.plugin !== ENGINE &&
       (step.outcome === "returned" || step.outcome === "caught") &&
-      isPlainObject_5(step.returned) &&
+      isPlainObject_6(step.returned) &&
       step.returned[field] === value,
   );
-//@ chunk-e6aww6q8.js:4050725-4050766 placement
+//@ chunk-5xgkngpb.js:4156572-4156613 placement
 /**
  * 拒绝的插件
  */
 var refusingPlugin = (steps, refuse) => findAnsweringStep(steps, "refuse", refuse)?.plugin;
-//@ chunk-e6aww6q8.js:4050766-4050892 placement
+//@ chunk-5xgkngpb.js:4156613-4156739 placement
 function usesOfScan(scan) {
   let { hooks, calls, env, state } = scan;
   return {
@@ -72,7 +72,7 @@ function usesOfScan(scan) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4050892-4051064 placement
+//@ chunk-5xgkngpb.js:4156739-4156911 placement
 /**
  * plugin.register 事件里展示给评判插件的信息：名字、层级、根目录、版本、来源与用到的事件/调用/环境变量/状态。
  */
@@ -89,7 +89,7 @@ function shownPluginInfo(args, plugin) {
     uses: usesOfScan(args.scan),
   };
 }
-//@ chunk-e6aww6q8.js:4051064-4051518 placement
+//@ chunk-5xgkngpb.js:4156911-4157365 placement
 /**
  * 运行 plugin.register 钩子链评判一个插件是否接纳；被拒绝时返回拒绝者与原因并记录日志。
  */
@@ -123,7 +123,7 @@ async function judgePluginRegister({ args, plugin, judges }) {
   logForDebugging(`${logPrefix}${describeRegisterRefusal(refusal)}`);
   return refusal;
 }
-//@ chunk-e6aww6q8.js:4051518-4051698 placement
+//@ chunk-5xgkngpb.js:4157365-4157545 placement
 /**
  * 选出评判某插件的已接纳插件：用户层插件由之前的全部插件评判，否则只由非用户层（及原生）插件评判。
  */
@@ -133,13 +133,13 @@ function registerJudges({ before, after, isNative, tier }) {
   let filtered = after.filter((judge) => (isUserTier ? judge.tier !== "user" : hasLink(judge)));
   return isNative ? usableBefore.filter(hasLink) : [...usableBefore, ...filtered];
 }
-//@ chunk-e6aww6q8.js:4051698-4051813 placement
+//@ chunk-5xgkngpb.js:4157545-4157660 placement
 var admissionOrder = (built) => [
   ...built.filter(hasLink),
   ...built.filter((mod) => !hasLink(mod) && mod.tier !== "user"),
   ...built.filter((mod) => !hasLink(mod) && mod.tier === "user"),
 ];
-//@ chunk-e6aww6q8.js:4051813-4051861 placement
+//@ chunk-5xgkngpb.js:4157660-4157708 placement
 /**
  * 上报注册拒绝
  */
@@ -147,12 +147,12 @@ function reportRegisterRefusal(name, refusal) {
   if (!hasUiLogSink()) return;
   reportPluginProblem(name, describeRegisterRefusal(refusal));
 }
-//@ chunk-e6aww6q8.js:4051861-4051910 placement
+//@ chunk-5xgkngpb.js:4157708-4157757 placement
 /**
  * 之前版本已卸载
  */
 var PREVIOUS_VERSION_UNLOADED = "; the version loaded before is unloaded";
-//@ chunk-e6aww6q8.js:4051910-4051983 placement
+//@ chunk-5xgkngpb.js:4157757-4157829 placement
 /**
  * 记录拒绝文本
  */
@@ -161,7 +161,7 @@ function logRegisterRefusal(name, refusal, plugin) {
   uiLog(name, truncateToLength(message, MAX_KEPT_TEXT_CHARS));
   if (plugin !== undefined) reportInlinePluginNotice(plugin, message);
 }
-//@ chunk-e6aww6q8.js:4051983-4052767 placement
+//@ chunk-5xgkngpb.js:4157829-4158613 placement
 /**
  * 依次让已构建的模块经过 plugin.register 评判：接纳的移出未接纳集合，拒绝的报告并丢弃；返回接纳与拒绝列表。
  */
@@ -205,7 +205,7 @@ async function admitBuiltModules(context, { built, plugins, seated = new Set(), 
     refused,
   };
 }
-//@ chunk-e6aww6q8.js:4052767-4052818 placement
+//@ chunk-5xgkngpb.js:4158613-4158664 placement
 /**
  * 准入期间执行
  */
@@ -213,7 +213,7 @@ function runWhileAdmitting(context, admitting, fn) {
   context.state.admitting = admitting;
   return fn();
 }
-//@ chunk-e6aww6q8.js:4052818-4053009 placement
+//@ chunk-5xgkngpb.js:4158664-4158855 placement
 /**
  * 执行积压的 $.ui.invalidate 缓存失效（逐个捕获错误），然后清空。
  */
@@ -232,7 +232,6 @@ function applyPendingUiInvalidations(hooksHost) {
   hooksHost.state.pendingInvalidations.clear();
 }
 export {
-  findAnsweringStep,
   PREVIOUS_VERSION_UNLOADED,
   shownPluginInfo,
   admitBuiltModules,
@@ -241,4 +240,5 @@ export {
   registerJudges,
   describeRegisterRefusal,
   applyPendingUiInvalidations,
+  findAnsweringStep,
 };

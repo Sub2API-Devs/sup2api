@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分类器结果收紧
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nt9amew5.js (6)
  * attribution: placement 6
  */
 import {
@@ -31,7 +31,7 @@ import { fitsContextLimits } from "./context.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 
-//@ chunk-e6aww6q8.js:137136-139612 placement
+//@ chunk-nt9amew5.js:5713-8036 placement
 /**
  * 收紧发给分类器的 Artifact 状态：截断过长字符串与列表、能力过大时只留键、保留最近的若干 slug/路径条目；整体仍超上限时成半删减，出现截断时标记 truncated。
  */
@@ -190,24 +190,24 @@ function clampArtifactClassifierState(state) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:139612-139659 placement
+//@ chunk-nt9amew5.js:8036-8083 placement
 /**
  * jsonByteLength：JSON 字节长度。
  */
 function jsonByteLength(value) {
   return Buffer.byteLength(jsonStringify(value));
 }
-//@ chunk-e6aww6q8.js:139659-139733 placement
+//@ chunk-nt9amew5.js:8083-8156 placement
 function truncateWithFlag(text, maxLength, flags, flagName) {
   if (text.length <= maxLength) return text;
   flags[flagName] = true;
   return text.slice(0, maxLength);
 }
-//@ chunk-e6aww6q8.js:139733-139793 placement
+//@ chunk-nt9amew5.js:8156-8215 placement
 function addDroppedCount(state, behavior, count) {
   if (count > 0) state.dropped[behavior] = (state.dropped[behavior] ?? 0) + count;
 }
-//@ chunk-e6aww6q8.js:139793-142959 placement
+//@ chunk-nt9amew5.js:8215-11311 placement
 /**
  * 收紧分类器结论：路径或身份受限时把允许改为询问或拒绝。
  */
@@ -373,7 +373,7 @@ function clampClassifierVerdict(context, allowLimit, onTruncated) {
     return finalVerdict;
   }
 }
-//@ chunk-e6aww6q8.js:142959-143633 placement
+//@ chunk-nt9amew5.js:11311-11981 placement
 /**
  * 收紧发给分类器的 git 状态：路径/分支与主机名截断，remote 与可见性缓存条数限制，出现截断时标记 truncated。
  */
@@ -430,4 +430,4 @@ function clampGitStateForClassifier(gitState) {
     }),
   };
 }
-export { clampArtifactClassifierState, jsonByteLength, clampClassifierVerdict, clampGitStateForClassifier };
+export { jsonByteLength, clampArtifactClassifierState, clampClassifierVerdict, clampGitStateForClassifier };

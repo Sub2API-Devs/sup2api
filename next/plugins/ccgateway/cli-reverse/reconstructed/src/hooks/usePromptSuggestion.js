@@ -3,9 +3,9 @@
  *
  * 输入框预测建议（tengu_prompt_suggestion）：显示/接受/忽略的状态与统计。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePromptSuggestion.ts
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import {
@@ -26,12 +26,17 @@ import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:538827-538831 placement
+//@ chunk-czq1j3j2.js:541005-541009 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:538827", () => {
+deferInit("chunk-czq1j3j2.js:541005", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:538831-538877 placement
+//@ chunk-czq1j3j2.js:541009-541013 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:541009", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:559538-559584 placement
 /**
  * 函数 useFastModeOnForModel（订阅并计算某模型的 fast mode 状态）；位于「输入框预测建议（tengu_prompt_suggestion）：显示/接受/忽略的状态与统计」模块。
  */
@@ -40,12 +45,7 @@ function useFastModeOnForModel(model, fallbackModel) {
     isFastModeOnForModel(model, fallbackModel),
   );
 }
-//@ chunk-18hwfzwa.js:538877-538881 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:538877", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:538881-540532 fingerprint (2.1.88 match: usePromptSuggestion, 0.817)
+//@ chunk-czq1j3j2.js:559588-561218 fingerprint (2.1.88 match: usePromptSuggestion, 0.797)
 /**
  * 预测建议：tengu_prompt_suggestion 开启时显示模型生成的下一句建议，Tab/→ 接受，记录 shown/accepted/ignored。
  */
@@ -116,7 +116,7 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
     });
   }, [setAppState]);
   let logOutcomeAtSubmission = useCallback(
-    (finalInput, opts) => {
+    (finalInput) => {
       if (!isValidSuggestion) return null;
       let tabWasPressed = acceptedAt > shownAt;
       let wasAccepted = tabWasPressed || finalInput.toLowerCase() === suggestionText?.toLowerCase();
@@ -143,7 +143,7 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
         wasFocusedWhenShown: wasFocusedWhenShown.current,
         similarity: Math.round((finalInput.length / (suggestionText?.length || 1)) * 100) / 100,
       });
-      if (!opts?.skipReset) resetSuggestion();
+      resetSuggestion();
       return wasAccepted;
     },
     [isValidSuggestion, acceptedAt, shownAt, suggestionText, generationRequestId, resetSuggestion],
@@ -155,4 +155,4 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
     logOutcomeAtSubmission,
   };
 }
-export { usePromptSuggestion, useFastModeOnForModel };
+export { useFastModeOnForModel, usePromptSuggestion };

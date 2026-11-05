@@ -3,9 +3,9 @@
  *
  * 并入已有模块：把 overflow/margin/padding 等样式应用到 yoga 节点的函数组；省略号字符。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/styles.ts
- * pieces: chunk-bzr73sfg.js (5)
+ * pieces: chunk-2avr6cej.js (5)
  * attribution: fingerprint 2, placement 3
  */
 import {
@@ -19,7 +19,7 @@ import {
 import { resolveBorderStyle } from "./render-border.js";
 import { bunStringWidth } from "./stringWidth.js";
 
-//@ chunk-bzr73sfg.js:177867-178055 fingerprint (2.1.88 match: applyPositionStyles, 0.943)
+//@ chunk-2avr6cej.js:177616-177804 fingerprint (2.1.88 match: applyPositionStyles, 0.943)
 /**
  * 把 position/top/bottom/left/right 样式写进 yoga 节点。
  */
@@ -30,7 +30,7 @@ var applyPositionStyles = (node, style) => {
   if ("left" in style) applyPositionEdge(node, 0, style.left);
   if ("right" in style) applyPositionEdge(node, 2, style.right);
 };
-//@ chunk-bzr73sfg.js:178055-178223 fingerprint (2.1.88 match: applyPositionEdge, 1)
+//@ chunk-2avr6cej.js:177804-177972 fingerprint (2.1.88 match: applyPositionEdge, 1)
 /**
  * 写一个定位边：字符串按百分比、数字按点、其它清空（NaN）。
  */
@@ -39,7 +39,7 @@ function applyPositionEdge(node, edge, v) {
   else if (typeof v === "number") node.setPosition(edge, v);
   else node.setPosition(edge, Number.NaN);
 }
-//@ chunk-bzr73sfg.js:178223-181475 placement
+//@ chunk-2avr6cej.js:177972-181224 placement
 /**
  * 把 ink 样式映射到 yoga 节点：overflow、margin、padding、flex、宽高与 min/max、display、边框与 gap；$x 汇总全部。
  */
@@ -164,12 +164,12 @@ var applyAllStyles = (node, style = {}, resolvedStyle) => {
   applyGapStyles(node, style);
 };
 var applyAllStylesAlias = applyAllStyles;
-//@ chunk-bzr73sfg.js:181475-181492 placement
+//@ chunk-2avr6cej.js:181224-181241 placement
 /**
  * 省略号字符。
  */
 var ELLIPSIS = "\u2026";
-//@ chunk-bzr73sfg.js:181492-181595 placement
+//@ chunk-2avr6cej.js:181241-181344 placement
 /**
  * 按显示宽度截取含 ANSI 的字符串：先 Bun.sliceAnsi，宽度超出时逐个缩短终点直到不超过 end-start 列。
  */
@@ -181,4 +181,4 @@ function sliceAnsiToWidth(text, from, to) {
   }
   return sliced;
 }
-export { ELLIPSIS, applyAllStylesAlias, sliceAnsiToWidth };
+export { sliceAnsiToWidth, ELLIPSIS, applyAllStylesAlias };

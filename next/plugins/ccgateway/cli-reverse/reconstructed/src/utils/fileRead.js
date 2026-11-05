@@ -3,9 +3,9 @@
  *
  * 同步读文件元数据、行尾检测与 CRLF 还原
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fileRead.ts
- * pieces: chunk-7r5y3c3p.js (18)
+ * pieces: chunk-0fny85bv.js (18)
  * attribution: fingerprint 2, placement 16
  */
 import { isUtf8 } from "buffer";
@@ -19,7 +19,7 @@ import {
 } from "./fsOperations.js";
 import { detectLineEndings } from "./file.js";
 
-//@ chunk-7r5y3c3p.js:310-431 fingerprint (2.1.88 match: readFileSyncWithMetadata, 0.755)
+//@ chunk-0fny85bv.js:310-431 fingerprint (2.1.88 match: readFileSyncWithMetadata, 0.756)
 /**
  * 读取文件时若经过符号链接则记调试日志。
  */
@@ -28,7 +28,7 @@ function readFileSyncWithMetadata(fsImplementation, filePath) {
   let { resolvedPath, isSymlink } = safeResolvePath(fsImplementation, filePath);
   if (isSymlink) logForDebugging(`Reading through symlink: ${filePath} -> ${resolvedPath}`);
 }
-//@ chunk-7r5y3c3p.js:431-489 placement (2.1.88 match: isFileWithinReadSizeLimit, 1)
+//@ chunk-0fny85bv.js:431-489 placement (2.1.88 match: isFileWithinReadSizeLimit, 1)
 /**
  * statSync 后校验大小上限并返回 stats。
  */
@@ -37,7 +37,7 @@ function isFileWithinReadSizeLimit(fsImplementation, filePath, maxBytes) {
   assertReadableFile(stats, filePath, maxBytes);
   return stats;
 }
-//@ chunk-7r5y3c3p.js:489-920 placement
+//@ chunk-0fny85bv.js:489-920 placement
 /**
  * 校验是普通文件且不超大小。
  */
@@ -62,7 +62,7 @@ function assertReadableFile(stats, path, maxBytes) {
       maxBytes,
     });
 }
-//@ chunk-7r5y3c3p.js:920-1069 placement
+//@ chunk-0fny85bv.js:920-1069 placement
 /**
  * 拒绝多硬链接文件。
  */
@@ -73,7 +73,7 @@ function assertSingleLink(stats, path) {
       path,
     });
 }
-//@ chunk-7r5y3c3p.js:1069-1228 placement
+//@ chunk-0fny85bv.js:1069-1228 placement
 /**
  * 校验大小上限。
  */
@@ -87,7 +87,7 @@ function assertWithinMaxBytes(size, path, maxBytes) {
       maxBytes,
     });
 }
-//@ chunk-7r5y3c3p.js:1228-1325 placement
+//@ chunk-0fny85bv.js:1228-1325 placement
 /**
  * 判断错误是否为 ERR_NOT_REGULAR_FILE（不是普通文件）。
  */
@@ -96,14 +96,14 @@ function isNotRegularFileError(error) {
     error != null && typeof error === "object" && "code" in error && error.code === "ERR_NOT_REGULAR_FILE"
   );
 }
-//@ chunk-7r5y3c3p.js:1325-1419 placement
+//@ chunk-0fny85bv.js:1325-1419 placement
 /**
  * 判断错误是否为 ERR_FILE_TOO_LARGE（文件过大）。
  */
 function isFileTooLargeError(error) {
   return error != null && typeof error === "object" && "code" in error && error.code === "ERR_FILE_TOO_LARGE";
 }
-//@ chunk-7r5y3c3p.js:1419-1611 placement (2.1.88 match: encodePowerShellCommand, 0.748)
+//@ chunk-0fny85bv.js:1419-1611 placement (2.1.88 match: encodePowerShellCommand, 0.748)
 /**
  * 按 BOM 判断缓冲区编码（FF FE → utf16le，否则 utf8）；切分误归。
  */
@@ -116,20 +116,20 @@ function detectEncodingFromBom(psCommand) {
     return "utf8";
   return "utf8";
 }
-//@ chunk-7r5y3c3p.js:1611-1629 placement
+//@ chunk-0fny85bv.js:1611-1629 placement
 /**
  * 读取文件时用于嗅探 BOM 的头部字节数。
  */
 var BOM_SNIFF_BYTES = 4096;
 var NUL_SCAN_BYTES = 8000;
-//@ chunk-7r5y3c3p.js:1629-1680 placement
+//@ chunk-0fny85bv.js:1629-1680 placement
 /**
  * 判断文件头部（前 NUL_SCAN_BYTES 字节）是否含 NUL，用于识别二进制文件。
  */
 function hasNulByteInHead(buffer) {
   return buffer.subarray(0, NUL_SCAN_BYTES).includes(0);
 }
-//@ chunk-7r5y3c3p.js:1680-1936 placement
+//@ chunk-0fny85bv.js:1680-1936 placement
 function detectTextEncoding(buffer) {
   let encodingFromBom = detectEncodingFromBom(buffer.subarray(0, BOM_SNIFF_BYTES));
   if (encodingFromBom !== "utf8")
@@ -155,7 +155,7 @@ function detectTextEncoding(buffer) {
         notText: "not_utf8",
       };
 }
-//@ chunk-7r5y3c3p.js:1936-2034 placement
+//@ chunk-0fny85bv.js:1936-2034 placement
 /**
  * 若原文本有 BOM 而解码结果丢了，重新补上 BOM 前缀。
  */
@@ -164,7 +164,7 @@ function preserveBomPrefix(originalText, decodedText) {
     ? `\uFEFF${decodedText}`
     : decodedText;
 }
-//@ chunk-7r5y3c3p.js:2034-2166 placement
+//@ chunk-0fny85bv.js:2034-2165 placement
 /**
  * 按 BOM 解码并把 CRLF 换成 LF。
  */
@@ -179,7 +179,7 @@ function decodeTextBuffer(buffer) {
 `,
     );
 }
-//@ chunk-7r5y3c3p.js:2264-2391 fingerprint (2.1.88 match: detectLineEndingsForString, 1)
+//@ chunk-0fny85bv.js:2263-2390 fingerprint (2.1.88 match: detectLineEndingsForString, 1)
 /**
  * 统计 CRLF 与 LF 数量，多数为 CRLF 时返回 "CRLF"，否则 "LF"。
  */
@@ -196,7 +196,7 @@ function detectLineEndingsForString(content) {
       else lfCount++;
   return crlfCount > lfCount ? "CRLF" : "LF";
 }
-//@ chunk-7r5y3c3p.js:2391-2704 placement
+//@ chunk-0fny85bv.js:2390-2703 placement
 function detectEncodingForResolvedPath(filePath, maxBytes, onStats) {
   let fsImplementation = getFsImplementation();
   readFileSyncWithMetadata(fsImplementation, filePath);
@@ -227,11 +227,11 @@ function detectEncodingForResolvedPath(filePath, maxBytes, onStats) {
     lineEndings,
   };
 }
-//@ chunk-7r5y3c3p.js:2704-2749 placement
+//@ chunk-0fny85bv.js:2703-2748 placement
 function readFileSync(filePath, maxBytes, onStats) {
   return detectEncodingForResolvedPath(filePath, maxBytes, onStats).content;
 }
-//@ chunk-7r5y3c3p.js:2749-2870 placement
+//@ chunk-0fny85bv.js:2748-2869 placement
 /**
  * 校验后读取文件。
  */
@@ -242,7 +242,7 @@ async function readFileChecked(filePath, maxBytes) {
   await using handle = await open(filePath, nonblockingReadFlags());
   return await readFileHandleChecked(handle, filePath, maxBytes);
 }
-//@ chunk-7r5y3c3p.js:2870-3152 placement
+//@ chunk-0fny85bv.js:2869-3151 placement
 async function readFileHandleChecked(handle, path, maxBytes) {
   assertReadableFile(await handle.stat(), path, maxBytes);
   let buffer =
@@ -266,20 +266,20 @@ async function readFileHandleChecked(handle, path, maxBytes) {
   };
 }
 export {
+  BOM_SNIFF_BYTES,
   detectEncodingFromBom,
-  detectEncodingForResolvedPath,
   readFileSync,
   isNotRegularFileError,
-  detectLineEndingsForString,
   readFileChecked,
   decodeTextBuffer,
-  isFileTooLargeError,
-  BOM_SNIFF_BYTES,
-  assertReadableFile,
-  assertWithinMaxBytes,
   readFileHandleChecked,
   detectTextEncoding,
   preserveBomPrefix,
+  detectEncodingForResolvedPath,
+  isFileTooLargeError,
   hasNulByteInHead,
+  assertReadableFile,
+  detectLineEndingsForString,
+  assertWithinMaxBytes,
   assertSingleLink,
 };

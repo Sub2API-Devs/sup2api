@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：进行中的工具调用状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (3)
  * attribution: placement 3
  */
-//@ chunk-6vnxsn99.js:20588-20653 placement
+//@ chunk-01kgd7xg.js:20849-20914 placement
 /**
  * 空消息列表。
  */
@@ -18,7 +18,7 @@ var INITIAL_IN_PROGRESS_STATE = {
   messages: EMPTY_MESSAGES,
   inProgressToolUseIDs: EMPTY_TOOL_USE_IDS,
 };
-//@ chunk-6vnxsn99.js:20653-20780 placement
+//@ chunk-01kgd7xg.js:20914-21041 placement
 function inProgressToolUpdate(inProgressToolUseIDs, nextIds) {
   return inProgressToolUseIDs.size === 0 && nextIds.size > 0
     ? {
@@ -29,7 +29,7 @@ function inProgressToolUpdate(inProgressToolUseIDs, nextIds) {
         inProgressToolUseIDs: nextIds,
       };
 }
-//@ chunk-6vnxsn99.js:20780-21114 placement
+//@ chunk-01kgd7xg.js:21041-21375 placement
 /**
  * 维护某个代理的进行中工具调用集合（add/remove/clear），首个工具开始时记录 toolWindowStartTime。
  */
@@ -64,4 +64,4 @@ function applyInProgressToolUses(transcripts, transcriptId, update) {
     },
   };
 }
-export { inProgressToolUpdate, EMPTY_MESSAGES, INITIAL_IN_PROGRESS_STATE, applyInProgressToolUses };
+export { INITIAL_IN_PROGRESS_STATE, inProgressToolUpdate, EMPTY_MESSAGES, applyInProgressToolUses };

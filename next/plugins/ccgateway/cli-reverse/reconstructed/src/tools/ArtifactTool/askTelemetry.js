@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：权限询问遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (8)
  * attribution: placement 8
  */
 import { ARTIFACT_ACTION_NAME_SET } from "./actionInput.js";
@@ -22,7 +22,7 @@ import { isVsCodeTopSession } from "../../utils/sessionShape.js";
 import { isDesktopNonClaudecode } from "../../utils/entrypointKinds.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
-//@ chunk-8wvtd8sr.js:21788-21927 placement
+//@ chunk-xzmy9dn4.js:22099-22238 placement
 /**
  * 取 Artifact 工具输入的动作名用于埋点：缺省为 publish，未知动作为 other。
  */
@@ -31,7 +31,7 @@ function artifactActionLabel(input) {
   if (action === undefined) return "publish";
   return ARTIFACT_ACTION_NAME_SET.has(action) ? action : "other";
 }
-//@ chunk-8wvtd8sr.js:21927-22237 placement
+//@ chunk-xzmy9dn4.js:22238-22548 placement
 /**
  * 包装 checkPermissions：每个 toolUseId 首次得到 ask 时记录询问特征（动作、原因类型、仅限本人、询问类别、权限模式、能否回答）并上报 tengu_artifact_ask。
  */
@@ -57,7 +57,7 @@ function withAskTelemetry(base) {
     },
   });
 }
-//@ chunk-8wvtd8sr.js:22237-22510 placement
+//@ chunk-xzmy9dn4.js:22548-22821 placement
 /**
  * 询问获批时记录 tengu_artifact_ask_granted 事件（工具调用 id、消息 id 与询问时记下的字段），并清除记录。
  */
@@ -77,7 +77,7 @@ function logAskGranted(context, message) {
     });
   } catch {}
 }
-//@ chunk-8wvtd8sr.js:22510-22685 placement
+//@ chunk-xzmy9dn4.js:22821-22996 placement
 function askTelemetryFields(facts) {
   return {
     action: fromEnum(facts.action),
@@ -88,7 +88,7 @@ function askTelemetryFields(facts) {
     answerable: facts.answerable,
   };
 }
-//@ chunk-8wvtd8sr.js:22685-22916 placement
+//@ chunk-xzmy9dn4.js:22996-23227 placement
 function captureAskFacts(input, decision, context, toolUseId) {
   let decisionReason = decision.decisionReason;
   return {
@@ -100,7 +100,7 @@ function captureAskFacts(input, decision, context, toolUseId) {
     answerable: !consentMustDeny(context),
   };
 }
-//@ chunk-8wvtd8sr.js:22916-23064 placement
+//@ chunk-xzmy9dn4.js:23227-23375 placement
 function approvalSourceLabel(source) {
   switch (source) {
     case undefined:
@@ -114,7 +114,7 @@ function approvalSourceLabel(source) {
       return "other";
   }
 }
-//@ chunk-8wvtd8sr.js:23064-23172 placement (2.1.88 match: buildPermissionUpdates, 0.774)
+//@ chunk-xzmy9dn4.js:23375-23483 placement (2.1.88 match: buildPermissionUpdates, 0.774)
 function buildPermissionUpdates(sessionScoped) {
   return {
     type: "addRules",
@@ -127,7 +127,7 @@ function buildPermissionUpdates(sessionScoped) {
     destination: sessionScoped ? "session" : permissionRuleDestination(),
   };
 }
-//@ chunk-8wvtd8sr.js:23172-23245 placement
+//@ chunk-xzmy9dn4.js:23483-23556 placement
 /**
  * 判断是否应展示「总是允许」选项（VS Code 或桌面会话加开关）。
  */
@@ -139,9 +139,9 @@ function shouldOfferAlwaysAllow() {
   );
 }
 export {
-  artifactActionLabel,
   shouldOfferAlwaysAllow,
   buildPermissionUpdates,
   logAskGranted,
   withAskTelemetry,
+  artifactActionLabel,
 };

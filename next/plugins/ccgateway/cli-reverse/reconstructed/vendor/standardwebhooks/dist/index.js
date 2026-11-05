@@ -1,8 +1,8 @@
 /**
  * standardwebhooks/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: standardwebhooks@1.0.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_timing_safe_equal } from "./timing_safe_equal.js";
 import { require_base64 } from "../../@stablelib/base64/lib/base64.js";
 import { require_sha256 } from "../../fast-sha256/sha256.js";
 
-//@ chunk-hwmsct5x.js:14156-16042 cjs-fingerprint
+//@ chunk-vn3g7zt8.js:14524-16410 cjs-fingerprint
 var require_standardwebhooks = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

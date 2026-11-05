@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：直接解析 .git/index（DIRC）二进制并结合 cat-file 批量读取，得到工作区 diff。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (57)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (56), chunk-7wx1ncrk.js (1)
  * attribution: placement 57
  */
 import { createHash } from "crypto";
@@ -18,17 +18,17 @@ import { readOnlyNoFollowFlags } from "../platformTargets.js";
 import { getErrnoCode } from "../errors.js";
 import { readHandleBounded } from "../fsSafety/boundOpen.js";
 import { stripTrailingDotsSpaces } from "../ignorePatterns.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getFileExtensionsFromBashCommand } from "../../services/analytics/metadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:26111-26191 placement
+//@ chunk-7wx1ncrk.js:231-311 placement
 var DEV_NULL = "/dev/null";
 var ISOLATED_GIT_CONFIG_ENV = {
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_NOSYSTEM: "1",
 };
-//@ chunk-6vnxsn99.js:26319-26471 placement
+//@ chunk-01kgd7xg.js:27200-27352 placement
 function resolveEolConversion(attr, autocrlf) {
   let eol = attr?.eol;
   return (
@@ -41,7 +41,7 @@ function resolveEolConversion(attr, autocrlf) {
         : "never")
   );
 }
-//@ chunk-6vnxsn99.js:26471-26607 placement
+//@ chunk-01kgd7xg.js:27352-27488 placement
 function textAttrToConversion(attr) {
   switch (attr) {
     case "set":
@@ -55,7 +55,7 @@ function textAttrToConversion(attr) {
       return null;
   }
 }
-//@ chunk-6vnxsn99.js:26607-26850 placement
+//@ chunk-01kgd7xg.js:27488-27731 placement
 function parseGitBool(value) {
   switch (value?.toLowerCase()) {
     case "true":
@@ -73,10 +73,10 @@ function parseGitBool(value) {
     }
   }
 }
-//@ chunk-6vnxsn99.js:26850-26866 placement
+//@ chunk-01kgd7xg.js:27731-27747 placement
 var CARRIAGE_RETURN_CODE = 13;
 var LINE_FEED_CODE = 10;
-//@ chunk-6vnxsn99.js:26866-27118 placement
+//@ chunk-01kgd7xg.js:27747-27999 placement
 function looksBinary(bytes) {
   let printableCount = 0;
   let nonPrintableCount = 0;
@@ -94,7 +94,7 @@ function looksBinary(bytes) {
   if (bytes.at(-1) === 26) nonPrintableCount--;
   return printableCount >> 7 < nonPrintableCount;
 }
-//@ chunk-6vnxsn99.js:27118-27328 placement
+//@ chunk-01kgd7xg.js:27999-28209 placement
 function normalizeCrlf(buffer) {
   let index = buffer.indexOf(`\r
 `);
@@ -107,7 +107,7 @@ function normalizeCrlf(buffer) {
       normalized[writeIndex++] = buffer[readIndex];
   return normalized.subarray(0, writeIndex);
 }
-//@ chunk-6vnxsn99.js:27328-27451 placement
+//@ chunk-01kgd7xg.js:28209-28332 placement
 function normalizeWorktreeBytes(bytes, conversion, indexText) {
   if (
     conversion === "never" ||
@@ -121,7 +121,7 @@ function normalizeWorktreeBytes(bytes, conversion, indexText) {
     return null;
   return normalizeCrlf(bytes);
 }
-//@ chunk-6vnxsn99.js:27451-27670 placement
+//@ chunk-01kgd7xg.js:28332-28551 placement
 function parseCheckAttrOutput(stdout) {
   let parts = stdout.split("\x00");
   if (parts.pop() !== "" || parts.length % 3 !== 0) return null;
@@ -137,7 +137,7 @@ function parseCheckAttrOutput(stdout) {
   }
   return attrByPath;
 }
-//@ chunk-6vnxsn99.js:27707-27984 placement
+//@ chunk-01kgd7xg.js:28588-28865 placement
 var MAX_INDEX_ENTRIES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_PATH_BYTES;
 var MAX_EXTENSIONS;
@@ -160,7 +160,7 @@ var EXTENSION_HEADER_BYTES;
 var EMPTY_BUFFER;
 var SLASH_CODE;
 var DOT_CODE;
-deferInit("chunk-6vnxsn99.js:27707", () => {
+deferInit("chunk-01kgd7xg.js:28588", () => {
   MAX_INDEX_ENTRIES_2 = 1e6;
   MAX_PATH_BYTES = 67108864;
   MAX_EXTENSIONS = 1024;
@@ -192,7 +192,7 @@ deferInit("chunk-6vnxsn99.js:27707", () => {
   SLASH_CODE = 47;
   DOT_CODE = 46;
 });
-//@ chunk-6vnxsn99.js:27984-28903 placement
+//@ chunk-01kgd7xg.js:28865-29784 placement
 /**
  * 解析 .git/index（DIRC）二进制：版本、条目、扩展（EOIE/IEOT），超限或格式不支持时返回 refused。
  */
@@ -278,7 +278,7 @@ async function parseGitIndex(buffer, objectFormat, signal) {
         refused: "malformed",
       };
 }
-//@ chunk-6vnxsn99.js:28903-29649 placement
+//@ chunk-01kgd7xg.js:29784-30530 placement
 function parseIndexEntry(buffer, entryStart, version, hashLength, previousPath) {
   let flagsOffset = entryStart + INDEX_OID_OFFSET + hashLength;
   if (flagsOffset + 4 > buffer.length) return "malformed";
@@ -321,7 +321,7 @@ function parseIndexEntry(buffer, entryStart, version, hashLength, previousPath) 
     kept: pathResult.kept ?? 0,
   };
 }
-//@ chunk-6vnxsn99.js:29649-29824 placement
+//@ chunk-01kgd7xg.js:30530-30705 placement
 function readIndexEntryPath(buffer, entryStart, pathOffset, pathLength) {
   let pathEnd = pathLength < PATH_LENGTH_MASK ? pathOffset + pathLength : buffer.indexOf(0, pathOffset);
   if (pathEnd === -1) return "malformed";
@@ -333,7 +333,7 @@ function readIndexEntryPath(buffer, entryStart, pathOffset, pathLength) {
       }
     : "malformed";
 }
-//@ chunk-6vnxsn99.js:29824-30084 placement
+//@ chunk-01kgd7xg.js:30705-30965 placement
 function readCompressedEntryPath(buffer, pathOffset, previousPath) {
   let offsetVarint = readOffsetVarint(buffer, pathOffset, previousPath.length);
   let nulIndex = offsetVarint === null ? -1 : buffer.indexOf(0, offsetVarint.next);
@@ -349,7 +349,7 @@ function readCompressedEntryPath(buffer, pathOffset, previousPath) {
     kept: keptPrefix,
   };
 }
-//@ chunk-6vnxsn99.js:30084-30237 placement
+//@ chunk-01kgd7xg.js:30965-31118 placement
 function readOffsetVarint(buffer, start, limit) {
   let value = -1;
   for (let index = start; index < buffer.length; index++) {
@@ -363,7 +363,7 @@ function readOffsetVarint(buffer, start, limit) {
   }
   return null;
 }
-//@ chunk-6vnxsn99.js:30237-30425 placement
+//@ chunk-01kgd7xg.js:31118-31306 placement
 function isSafeIndexPath(pathBytes) {
   let segmentStart = 0;
   for (let j = 0; j <= pathBytes.length; j++)
@@ -379,12 +379,12 @@ function isSafeIndexPath(pathBytes) {
     } else if (pathBytes[j] === 0) return false;
   return true;
 }
-//@ chunk-6vnxsn99.js:30425-30523 placement
+//@ chunk-01kgd7xg.js:31306-31404 placement
 function isIndexEntryBefore(previous, entry) {
   let order = Buffer.compare(previous.pathBytes, entry.pathBytes);
   return order < 0 || (order === 0 && previous.stage < entry.stage);
 }
-//@ chunk-6vnxsn99.js:30523-30702 placement
+//@ chunk-01kgd7xg.js:31404-31583 placement
 function validateExtensionChain(buffer, start) {
   let offset = start;
   while (offset < buffer.length) {
@@ -394,7 +394,7 @@ function validateExtensionChain(buffer, start) {
   }
   return offset === buffer.length ? null : "malformed";
 }
-//@ chunk-6vnxsn99.js:30702-31650 placement
+//@ chunk-01kgd7xg.js:31583-32531 placement
 /**
  * 校验 EOIE/IEOT 扩展（哈希一致）。
  */
@@ -451,12 +451,12 @@ function checkIndexExtensions(buffer, extensionStart, entryOffsets, keptNames, o
   }
   return entryCount === entryOffsets.length ? null : "unsupported";
 }
-//@ chunk-6vnxsn99.js:31650-31719 placement
+//@ chunk-01kgd7xg.js:32531-32600 placement
 function isAllZeroBytes(buffer, start, end) {
   for (let index = start; index < end; index++) if (buffer[index] !== 0) return false;
   return true;
 }
-//@ chunk-6vnxsn99.js:31719-31841 placement
+//@ chunk-01kgd7xg.js:32600-32722 placement
 async function hashBufferChunked(buffer, objectFormat) {
   let hash = createHash(objectFormat);
   for (let offset = 0; offset < buffer.length; offset += HASH_CHUNK_BYTES) {
@@ -465,11 +465,11 @@ async function hashBufferChunked(buffer, objectFormat) {
   }
   return hash.digest();
 }
-//@ chunk-6vnxsn99.js:31841-31896 placement
+//@ chunk-01kgd7xg.js:32722-32777 placement
 function yieldToEventLoop() {
   return new Promise((resolve) => setImmediate(resolve));
 }
-//@ chunk-6vnxsn99.js:31896-32280 placement
+//@ chunk-01kgd7xg.js:32777-33161 placement
 /**
  * 读工作区 diff 的各种上限与模式常量。
  */
@@ -499,7 +499,7 @@ var MODE_BY_KIND = {
 };
 var RELEVANT_CONFIG_PATTERN =
   "^(core\\.(autocrlf|filemode|symlinks|trustctime|checkstat|quotepath|sparsecheckout)|sparse\\.expectfilesoutsideofpatterns|extensions\\.objectformat)$";
-//@ chunk-6vnxsn99.js:32280-34199 placement
+//@ chunk-01kgd7xg.js:33161-35080 placement
 /**
  * 不跑 git diff、直接读索引与工作区文件来计算改动（commit/work-tree/index 三方），供 diff 面板与工作区差异使用。
  */
@@ -641,7 +641,7 @@ async function readWorkTreeDiffViaIndex(repoDir, spawn, range, timeoutMs, signal
   return [...rawLines, ...numstatLines].join(`
 `);
 }
-//@ chunk-6vnxsn99.js:34199-34371 placement
+//@ chunk-01kgd7xg.js:35080-35252 placement
 function formatRawDiffLine(fromEntry, toEntry, quotedPath) {
   let statusCode = !fromEntry
     ? "A"
@@ -653,12 +653,12 @@ function formatRawDiffLine(fromEntry, toEntry, quotedPath) {
   let modeText = (mode) => (mode?.mode ?? 0).toString(8).padStart(6, "0");
   return `:${modeText(fromEntry)} ${modeText(toEntry)} 0000000 0000000 ${statusCode}	${quotedPath}`;
 }
-//@ chunk-6vnxsn99.js:34371-34390 placement
+//@ chunk-01kgd7xg.js:35252-35271 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6vnxsn99.js:34371", () => {
+deferInit("chunk-01kgd7xg.js:35252", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-6vnxsn99.js:34390-34495 placement
+//@ chunk-01kgd7xg.js:35271-35376 placement
 async function readIndexWithSettings(context) {
   let objectFormat = await readObjectFormat(context);
   let index = objectFormat && (await readIndexFile(context, objectFormat.objectFormat));
@@ -670,11 +670,11 @@ async function readIndexWithSettings(context) {
     }
   );
 }
-//@ chunk-6vnxsn99.js:34495-34567 placement
+//@ chunk-01kgd7xg.js:35376-35448 placement
 function isCancelledOrExpired({ signal, deadline }) {
   return signal?.aborted === true || Date.now() > deadline;
 }
-//@ chunk-6vnxsn99.js:34567-34853 placement
+//@ chunk-01kgd7xg.js:35448-35734 placement
 function runGitLiteral({ repoDir, spawn, signal, deadline }, args, input) {
   return execFileNoThrowWithCwd(gitExe(), ["--literal-pathspecs", ...GIT_SAFE_GLOBAL_ARGS, ...args], {
     ...spawn,
@@ -694,7 +694,7 @@ function runGitLiteral({ repoDir, spawn, signal, deadline }, args, input) {
         }),
   });
 }
-//@ chunk-6vnxsn99.js:34853-35546 placement
+//@ chunk-01kgd7xg.js:35734-36427 placement
 async function readObjectFormat(context) {
   let { stdout, exitCode } = await runGitLiteral(context, [
     "config",
@@ -725,11 +725,11 @@ async function readObjectFormat(context) {
       parseGitBool(config.get("sparse.expectfilesoutsideofpatterns")) !== true,
   };
 }
-//@ chunk-6vnxsn99.js:35546-35579 placement
+//@ chunk-01kgd7xg.js:36427-36460 placement
 function configBoolNotFalse(value) {
   return parseGitBool(value) !== false;
 }
-//@ chunk-6vnxsn99.js:35579-36465 placement
+//@ chunk-01kgd7xg.js:36460-37346 placement
 async function readIndexFile({ spawn, signal }, objectFormat) {
   let GIT_INDEX_FILE = spawn.env.GIT_INDEX_FILE;
   if (GIT_INDEX_FILE === undefined) return null;
@@ -785,9 +785,9 @@ async function readIndexFile({ spawn, signal }, objectFormat) {
     });
   }
 }
-//@ chunk-6vnxsn99.js:36465-36504 placement
+//@ chunk-01kgd7xg.js:37346-37385 placement
 var GIT_METADATA_NAME_RE = /^(?:\.git|git~1)[. ]*(?::|$)/i;
-//@ chunk-6vnxsn99.js:36504-36755 placement
+//@ chunk-01kgd7xg.js:37385-37636 placement
 function isSafeRelativePath(path, onWindows = sep === "\\") {
   if (/^\/|\/\/|\/$/.test(path)) return false;
   if (!/\.\.|\.git|git~1|[\\:]/i.test(path)) return true;
@@ -797,7 +797,7 @@ function isSafeRelativePath(path, onWindows = sep === "\\") {
     ? !/[:\\]/.test(path) && parts.every((part) => stripTrailingDotsSpaces(part) !== "..")
     : !path.split("/").includes("..");
 }
-//@ chunk-6vnxsn99.js:36755-37075 placement
+//@ chunk-01kgd7xg.js:37636-37956 placement
 async function lsTree(context, revision) {
   let { stdout, code } = await runGitLiteral(context, ["ls-tree", "-r", "-z", "--full-tree", revision]);
   if (code !== 0) return null;
@@ -813,7 +813,7 @@ async function lsTree(context, revision) {
   if (![...entries.keys()].every((key) => isSafeRelativePath(key))) return null;
   return entries;
 }
-//@ chunk-6vnxsn99.js:37075-38069 placement
+//@ chunk-01kgd7xg.js:37956-38950 placement
 /**
  * 批量检查索引条目对应的工作区文件。
  */
@@ -843,7 +843,7 @@ async function statWorktreeEntries(context, settings, index) {
     let sliced = toStat.slice(batchStart, batchStart + STAT_BATCH);
     let dirStates = new Map(
       await Promise.all(
-        uniq(sliced.map(({ path }) => dirnamePosix(path))).map(async (dir) => [
+        normalizeCaseForComparison_2(sliced.map(({ path }) => dirnamePosix(path))).map(async (dir) => [
           dir,
           await isRealPathWithinTeamDir(repoDir, dir, realPathMemo).catch(() => {
             return;
@@ -882,7 +882,7 @@ async function statWorktreeEntries(context, settings, index) {
     unseen,
   };
 }
-//@ chunk-6vnxsn99.js:38069-38719 placement
+//@ chunk-01kgd7xg.js:38950-39600 placement
 /**
  * 由 stat 结果推断工作区条目（未变用索引 id，否则读文件）。
  */
@@ -917,7 +917,7 @@ function resolveWorktreeEntry({ path, entry, stat }, statResult, context) {
   context.held.bytes += size;
   return hashWorktreeFile(path, mode, indexEntry.id, size, context);
 }
-//@ chunk-6vnxsn99.js:38719-39102 placement
+//@ chunk-01kgd7xg.js:39600-39983 placement
 /**
  * 读工作区文件或链接并计算对象 id。
  */
@@ -943,7 +943,7 @@ async function hashWorktreeFile(path, mode, expectedId, heldSize, { lookup, sett
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP" ? null : "cannot-tell";
   }
 }
-//@ chunk-6vnxsn99.js:39102-39645 placement
+//@ chunk-01kgd7xg.js:39983-40526 placement
 /**
  * 读文件内容并计算 blob id（大文件只哈希不保留）。
  */
@@ -989,7 +989,7 @@ async function readAndHashFile(filePath, mode, expectedId, lookup, { objectForma
     });
   }
 }
-//@ chunk-6vnxsn99.js:39645-39920 placement
+//@ chunk-01kgd7xg.js:40526-40801 placement
 function isStatUnchanged(stat, stats, { trustsChangeTime, checksWholeStat }, indexModifiedSeconds) {
   return (
     stat.size !== 0 &&
@@ -1001,11 +1001,11 @@ function isStatUnchanged(stat, stats, { trustsChangeTime, checksWholeStat }, ind
         (stat.inode === 0 || stat.inode === stats.ino % 4294967296)))
   );
 }
-//@ chunk-6vnxsn99.js:39920-39984 placement
+//@ chunk-01kgd7xg.js:40801-40865 placement
 function dirnamePosix(path) {
   return path.slice(0, Math.max(0, path.lastIndexOf("/")));
 }
-//@ chunk-6vnxsn99.js:39984-40249 placement
+//@ chunk-01kgd7xg.js:40865-41130 placement
 function isUnderSymlink(repoDir, dirPath, memo, onWindows) {
   if (dirPath === "") return Promise.resolve(false);
   let underSymlink = memo.get(dirPath);
@@ -1027,7 +1027,7 @@ function isUnderSymlink(repoDir, dirPath, memo, onWindows) {
   }
   return underSymlink;
 }
-//@ chunk-6vnxsn99.js:40249-40452 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-01kgd7xg.js:41130-41333 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isRealPathWithinTeamDir(repoDir, dirPath, memo) {
   let underRealDir = memo.get(dirPath);
   if (underRealDir === undefined) {
@@ -1047,13 +1047,13 @@ function isRealPathWithinTeamDir(repoDir, dirPath, memo) {
   }
   return underRealDir;
 }
-//@ chunk-6vnxsn99.js:40452-40574 placement
+//@ chunk-01kgd7xg.js:41333-41455 placement
 function joinPathLatin1(repoDir, path) {
   return Buffer.byteLength(path) === path.length
     ? repoDir + sep + path
     : Buffer.concat([Buffer.from(repoDir + sep), Buffer.from(path, "latin1")]);
 }
-//@ chunk-6vnxsn99.js:40574-40796 placement
+//@ chunk-01kgd7xg.js:41455-41677 placement
 async function gitCheckAttr(context, paths) {
   if (paths.length === 0) return new Map();
   let { stdout, code } = await runGitLiteral(
@@ -1063,9 +1063,9 @@ async function gitCheckAttr(context, paths) {
   );
   return code === 0 ? parseCheckAttrOutput(stdout) : null;
 }
-//@ chunk-6vnxsn99.js:40796-41562 placement
+//@ chunk-01kgd7xg.js:41677-42443 placement
 async function catFileBatch(context, ids, held) {
-  let uniqueIds = uniq(ids);
+  let uniqueIds = normalizeCaseForComparison_2(ids);
   if (uniqueIds.length === 0) return new Map();
   let checkResult = await runGitLiteral(
     context,
@@ -1121,7 +1121,7 @@ async function catFileBatch(context, ids, held) {
   }
   return blobs;
 }
-//@ chunk-6vnxsn99.js:41562-41762 placement
+//@ chunk-01kgd7xg.js:42443-42643 placement
 function applyEolToEntry(entry, conversion, indexText, objectFormat) {
   if (entry?.bytes === undefined || entry.mode === MODE_SYMLINK) return entry;
   let normalized = normalizeWorktreeBytes(
@@ -1141,11 +1141,11 @@ function applyEolToEntry(entry, conversion, indexText, objectFormat) {
         bytes: normalized,
       };
 }
-//@ chunk-6vnxsn99.js:41762-41847 placement
+//@ chunk-01kgd7xg.js:42643-42728 placement
 function gitBlobId(buffer, objectFormat) {
   return createHash(objectFormat).update(`blob ${buffer.length}\x00`).update(buffer).digest("hex");
 }
-//@ chunk-6vnxsn99.js:41847-42018 placement
+//@ chunk-01kgd7xg.js:42728-42899 placement
 function entryText(entry, blobs) {
   if (entry === undefined) return "";
   if (entry.mode === MODE_GITLINK)
@@ -1154,14 +1154,14 @@ function entryText(entry, blobs) {
   if (entry.uncounted) return null;
   return entry.bytes?.toString("latin1") ?? blobs.get(entry.id) ?? null;
 }
-//@ chunk-6vnxsn99.js:42018-42158 placement
+//@ chunk-01kgd7xg.js:42899-43039 placement
 function isBinaryEntry(entry, text, diff) {
   if ((entry?.mode === MODE_FILE || entry?.mode === MODE_EXECUTABLE) && (diff === "set" || diff === "unset"))
     return diff === "unset";
   let index = text.indexOf("\x00");
   return index !== -1 && index < BINARY_SNIFF_BYTES;
 }
-//@ chunk-6vnxsn99.js:42158-42850 placement
+//@ chunk-01kgd7xg.js:43039-43731 placement
 /**
  * 统计增删行数（Myers 差分，带预算，超出时按唯一行锚点分治）。
  */
@@ -1217,7 +1217,7 @@ function countLineChanges(command, simulatedSedEditFilePath, budget) {
   }
   return changes;
 }
-//@ chunk-6vnxsn99.js:42850-43248 placement
+//@ chunk-01kgd7xg.js:43731-44129 placement
 /**
  * Myers 算法求编辑距离（受预算限制）。
  */
@@ -1247,7 +1247,7 @@ function myersDistance(oldLines, newLines, budget, limit) {
   budget.left -= cost;
   return null;
 }
-//@ chunk-6vnxsn99.js:43248-43721 placement
+//@ chunk-01kgd7xg.js:44129-44602 placement
 /**
  * 两侧唯一行的最长递增匹配（patience 锚点）。
  */
@@ -1282,7 +1282,7 @@ function uniqueLineAnchors(oldLines, newLines) {
     pairs.push([anchors[chainIndex].oldAt, anchors[chainIndex].newAt]);
   return pairs.reverse();
 }
-//@ chunk-6vnxsn99.js:44057-44170 placement
+//@ chunk-01kgd7xg.js:44938-45051 placement
 function countLines(text) {
   let count =
     text === "" ||
@@ -1293,13 +1293,13 @@ function countLines(text) {
   for (let j = 0; j < text.length; j++) if (text.charCodeAt(j) === 10) count++;
   return count;
 }
-//@ chunk-6vnxsn99.js:44170-44235 placement
+//@ chunk-01kgd7xg.js:45051-45116 placement
 function splitKeepingNewlines(text) {
   return text === "" ? [] : (text.match(/[^\n]*\n|[^\n]+$/g) ?? []);
 }
-//@ chunk-6vnxsn99.js:44235-44351 placement
+//@ chunk-01kgd7xg.js:45116-45232 placement
 var C_ESCAPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6vnxsn99.js:44235", () => {
+deferInit("chunk-01kgd7xg.js:45116", () => {
   C_ESCAPES = new Map([
     [7, "\\a"],
     [8, "\\b"],
@@ -1312,7 +1312,7 @@ deferInit("chunk-6vnxsn99.js:44235", () => {
     [92, "\\\\"],
   ]);
 });
-//@ chunk-6vnxsn99.js:44351-44679 placement
+//@ chunk-01kgd7xg.js:45232-45560 placement
 function quoteGitPath(path, quotesPaths) {
   if (!(quotesPaths ? /[^\x20-\x7e]|["\\]/ : /[^\x20-\x7e\x80-\xff]|["\\]/).test(path))
     return Buffer.from(path, "latin1").toString("utf8");
@@ -1327,4 +1327,4 @@ function quoteGitPath(path, quotesPaths) {
   }).join("");
   return `"${Buffer.from(joined, "latin1").toString("utf8")}"`;
 }
-export { readWorkTreeDiffViaIndex, ISOLATED_GIT_CONFIG_ENV, DEV_NULL, normalizeCrlf };
+export { readWorkTreeDiffViaIndex, ISOLATED_GIT_CONFIG_ENV, normalizeCrlf, DEV_NULL };

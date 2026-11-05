@@ -3,9 +3,9 @@
  *
  * 工具错误结果：调用工具的 renderToolUseErrorMessage，非 verbose 时截断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/UserToolErrorMessage.tsx
- * pieces: chunk-ah34pb7m.js (6)
+ * pieces: chunk-wjygkcr4.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -18,10 +18,8 @@ import {
 import { MessageResponse } from "../../MessageResponse.js";
 import { Text, Link, Box } from "../../../ink/components/Text.js";
 import { plural } from "../../../utils/stringUtils.js";
-import { Byline } from "../../design-system/Byline.js";
-import { useFrozenValue } from "../../FreezeWhenOffscreen.js";
-import { useHasAutoModeDenialFor } from "../../Spinner/spinnerStatus.js";
 import {
+  NO_USABLE_ANSWER_TEXT,
   extractClassifierDenialReason,
   AUTO_MODE_PREFIX,
   isToolDenial,
@@ -33,6 +31,9 @@ import {
   PLAN_REJECTION_PREFIX,
   REJECT_MESSAGE_WITH_REASON_PREFIX,
 } from "../../../utils/messages.js";
+import { Byline } from "../../design-system/Byline.js";
+import { useFrozenValue } from "../../FreezeWhenOffscreen.js";
+import { useHasAutoModeDenialFor } from "../../Spinner/spinnerStatus.js";
 import { stripAnsiPerLine } from "../../../utils/stripAnsi.js";
 import { BULLET_OPERATOR } from "../../../constants/figures.js";
 import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
@@ -51,7 +52,7 @@ import { mcpRenderOverrideFor } from "../../Message.js";
 import { filterToolProgressMessages } from "../../../Tool.js";
 import { FallbackToolUseErrorMessage } from "../../FallbackToolUseErrorMessage.js";
 
-//@ chunk-ah34pb7m.js:152699-152842 placement
+//@ chunk-wjygkcr4.js:154369-154512 placement
 function ToolUseRejectedLine() {
   let $ = useMemoCache(1);
   let errorElement;
@@ -67,18 +68,18 @@ function ToolUseRejectedLine() {
   } else errorElement = $[0];
   return errorElement;
 }
-//@ chunk-ah34pb7m.js:152842-152896 placement
+//@ chunk-wjygkcr4.js:154512-154568 placement
 function selectActiveAgents_3(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:152896-152986 placement
+//@ chunk-wjygkcr4.js:154568-154658 placement
 function isAutoModeUnavailableKind(toolDenialKind, toolDenialMonitorBlocked) {
   return (
     (toolDenialKind === "automode-unavailable" || toolDenialKind === "automode-parsing-error") &&
     toolDenialMonitorBlocked !== true
   );
 }
-//@ chunk-ah34pb7m.js:152986-153361 placement
+//@ chunk-wjygkcr4.js:154658-154996 placement
 /**
  * "N actions not run" 行。
  */
@@ -102,7 +103,7 @@ function NotRunLine(props) {
   let noAnswerText;
   if ($[4] === MEMO_CACHE_SENTINEL) {
     noAnswerText = jsxProd_default(Text, {
-      children: "auto mode's check had no usable answer",
+      children: NO_USABLE_ANSWER_TEXT,
     });
     $[4] = noAnswerText;
   } else noAnswerText = $[4];
@@ -116,7 +117,7 @@ function NotRunLine(props) {
   } else bylineElement = $[6];
   return bylineElement;
 }
-//@ chunk-ah34pb7m.js:153361-154230 placement
+//@ chunk-wjygkcr4.js:154996-155866 placement
 /**
  * 被 auto mode 拦截的工具调用说明（含文档链接、/permissions）。
  */
@@ -206,7 +207,7 @@ function AutoModeBlockedMessage(props) {
   } else messageResponseElement = $[15];
   return messageResponseElement;
 }
-//@ chunk-ah34pb7m.js:154230-156010 fingerprint (2.1.88 match: UserToolErrorMessage, 0.405)
+//@ chunk-wjygkcr4.js:155866-157646 fingerprint (2.1.88 match: UserToolErrorMessage, 0.416)
 function UserToolErrorMessage(props) {
   let $ = useMemoCache(23);
   let {

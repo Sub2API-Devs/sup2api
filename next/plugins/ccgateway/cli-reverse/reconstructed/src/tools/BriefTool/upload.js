@@ -3,13 +3,32 @@
  *
  * Brief 附件上传到 Anthropic 文件存储：策略检查、multipart 缓冲/流式上传、重发、预览副本与缩放、项目文件夹写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/upload.ts
- * pieces: chunk-7kpfrhzn.js (47)
- * attribution: placement 21, layout 20, fingerprint 5, callgraph-witnessed 1
+ * pieces: chunk-033d1naw.js (49)
+ * attribution: placement 21, layout 22, fingerprint 4, facade-majority 2
  */
+import { realpath, opendir, lstat } from "fs/promises";
+import { join, extname, basename } from "path";
 import { randomUUID } from "crypto";
-import { extname, basename } from "path";
+import {
+  getChatFileRoots,
+  isAtOrUnderRoot,
+  DEFAULT_ATTACH_OUTPUTS_ROOT,
+  DEFAULT_STAGE_FILE_ROOT,
+  getStageFileRoot,
+  getProjectDocsRoot,
+  PROJECT_FILES_MOUNT_PATH,
+  TOOL_CONTAINER_RESULTS_ROOT,
+} from "../../utils/stageFileRoots.js";
+import { uploadsRootCandidates } from "../../utils/uploadsDir.js";
+import { sessionTempDirRealpath } from "../../utils/tempDirRealpaths.js";
+import { getSessionId } from "../../bootstrap/state.js";
+import { IMAGES } from "../../utils/cleanup.js";
+import { toolResultsDirOrNull } from "../../utils/toolResultStorage.js";
+import { getErrnoCode, errorMessage, findInCauseChain } from "../../utils/errors.js";
+import { sha256OfFile } from "../../bridge/inboundAttachmentSpill.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { parseWebpHeader, isAnimatedWebp } from "../../utils/imageFormats.js";
 import {
   MAX_IMAGE_DIMENSION,
@@ -23,7 +42,6 @@ import {
   isUnknownImageErrorType,
   classifyImageErrorCode,
 } from "../../utils/imageResizer.js";
-import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import {
   UPLOAD_CHUNK_BYTES,
@@ -31,7 +49,6 @@ import {
   uploadStreamWithProgress,
   UploadStalledError,
 } from "../../utils/telemetry/memorySummary.js";
-import { errorMessage, getErrnoCode, findInCauseChain } from "../../utils/errors.js";
 import { MAX_PEER_FILE_BYTES, MAX_PEER_SPOOL_BYTES } from "../../utils/peerFileTransfer.js";
 import { SSL_CERT_ERROR_CODES } from "../../services/api/errorUtils.js";
 import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
@@ -65,18 +82,18 @@ import {
 import { readHandleBounded } from "../../utils/fsSafety/boundOpen.js";
 import { isJetBrainsPluginInstalled_2 } from "../../utils/jetbrains.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { systemClock } from "../../utils/sleep.js";
+import { systemClock, withDeadline } from "../../utils/sleep.js";
 import { StoredLoginHeldBackError } from "../../services/oauth/storedLoginRefusal.js";
 import { storedLoginRefusalReason } from "../../utils/auth/storedLoginRefused.js";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 
-//@ chunk-7kpfrhzn.js:4387-4449 placement
+//@ chunk-033d1naw.js:1739-1801 placement
 /**
  * 上传文件名的合法形式：不含路径分隔符与控制字符，1 到 255 个字符。
  */
 var BRIEF_UPLOAD_LIMITS = 20971520;
 var UPLOAD_FILENAME_RE = /^[^\\/\p{Cc}\p{Cf}\uFE00-\uFE0F]{1,255}$/u;
-//@ chunk-7kpfrhzn.js:4449-4586 placement
+//@ chunk-033d1naw.js:1801-1938 placement
 function normalizeUploadFileName(fileName) {
   return (
     fileName
@@ -88,12 +105,68 @@ function normalizeUploadFileName(fileName) {
       .replace(/\u0131/g, "i") === "architecture.md"
   );
 }
-//@ chunk-7kpfrhzn.js:4586-4602 placement
+//@ chunk-033d1naw.js:2033-2063 layout
+var MAX_DEDUPE_BYTES = 67108864;
+var MAX_DIRS_TO_SCAN = 1000;
+var MAX_HASHES = 16;
+//@ chunk-033d1naw.js:2063-2725 layout
+async function isReceivedFile(fullPath, size) {
+  try {
+    if (size > MAX_DEDUPE_BYTES) return true;
+    let realPath = await realpath(fullPath);
+    let chatRoot = getChatFileRoots()[1];
+    if (
+      chatRoot === undefined ||
+      (!isAtOrUnderRoot(chatRoot, realPath) && !isAtOrUnderRoot(DEFAULT_ATTACH_OUTPUTS_ROOT, realPath))
+    )
+      return true;
+    let rootSet = new Set();
+    for (let root of [
+      DEFAULT_STAGE_FILE_ROOT,
+      getStageFileRoot(),
+      ...uploadsRootCandidates(),
+      getProjectDocsRoot(),
+      PROJECT_FILES_MOUNT_PATH,
+      join(sessionTempDirRealpath(), getSessionId(), IMAGES),
+      toolResultsDirOrNull(),
+      TOOL_CONTAINER_RESULTS_ROOT,
+    ])
+      try {
+        if (root !== null) rootSet.add(await realpath(root));
+      } catch (error) {
+        if (getErrnoCode(error) !== "ENOENT") throw error;
+      }
+    let dirsLeft = MAX_DIRS_TO_SCAN;
+    let hashesLeft = MAX_HASHES;
+    let targetHash;
+    for (let dir of rootSet)
+      for await (let { name: entryName } of await opendir(dir)) {
+        if (dirsLeft-- === 0) return true;
+        let entryPath = join(dir, entryName);
+        let entryStat = await lstat(entryPath);
+        if (entryStat.isSymbolicLink()) return true;
+        if (entryStat.isDirectory()) rootSet.add(entryPath);
+        else if (entryStat.isFile() && entryStat.size === size) {
+          if (hashesLeft-- === 0) return true;
+          targetHash ??= await sha256OfFile(realPath, size);
+          let entryHash = await sha256OfFile(entryPath, size);
+          if (targetHash === null || entryHash === null || entryHash === targetHash) return true;
+        }
+      }
+    return false;
+  } catch (error) {
+    logForDebugging(`isReceivedFile answers true: ${error}`, {
+      level: "error",
+    });
+    return true;
+  }
+}
+//@ chunk-033d1naw.js:2725-2741 placement
 /**
  * 图片像素数上限（4000 万）；超过就不生成预览副本。
  */
 var MAX_IMAGE_PIXELS = 40000000;
-//@ chunk-7kpfrhzn.js:4602-4731 placement
+//@ chunk-033d1naw.js:2741-2870 placement
 function imageMimeToFormat(mediaType) {
   switch (mediaType) {
     case "image/png":
@@ -106,11 +179,11 @@ function imageMimeToFormat(mediaType) {
       return;
   }
 }
-//@ chunk-7kpfrhzn.js:4731-4768 placement
+//@ chunk-033d1naw.js:2870-2907 placement
 function hasKnownImageType(mediaType) {
   return imageMimeToFormat(mediaType) !== undefined;
 }
-//@ chunk-7kpfrhzn.js:4768-4839 placement
+//@ chunk-033d1naw.js:2907-2978 placement
 function isOversizeImage(buffer) {
   let webpHeader = parseWebpHeader(buffer);
   return (
@@ -118,7 +191,7 @@ function isOversizeImage(buffer) {
     (webpHeader.width > MAX_IMAGE_DIMENSION || webpHeader.height > MAX_IMAGE_DIMENSION)
   );
 }
-//@ chunk-7kpfrhzn.js:4839-5052 placement
+//@ chunk-033d1naw.js:2978-3191 placement
 async function maybeScaleImage(buffer, mediaType, maxBytes, signal) {
   let format = imageMimeToFormat(mediaType);
   if (format === undefined || isAnimatedWebp(buffer)) return;
@@ -136,7 +209,7 @@ async function maybeScaleImage(buffer, mediaType, maxBytes, signal) {
     releaseLock();
   }
 }
-//@ chunk-7kpfrhzn.js:5052-5517 placement
+//@ chunk-033d1naw.js:3191-3656 placement
 async function scaleOversizeImage(buffer, format, maxBytes, signal) {
   if (signal?.aborted) return;
   try {
@@ -165,7 +238,7 @@ async function scaleOversizeImage(buffer, format, maxBytes, signal) {
     return;
   }
 }
-//@ chunk-7kpfrhzn.js:5554-5647 placement
+//@ chunk-033d1naw.js:3693-3786 placement
 /**
  * 生成 multipart 文件名：去掉换行、转义反斜杠与双引号。
  */
@@ -175,7 +248,7 @@ function escapeMultipartFilename(fileName) {
     .replaceAll("\\", "\\\\")
     .replaceAll('"', '\\"');
 }
-//@ chunk-7kpfrhzn.js:5647-5870 placement
+//@ chunk-033d1naw.js:3786-4009 placement
 function multipartParts(fileName, mediaType) {
   let boundary = `----FormBoundary${randomUUID()}`;
   return {
@@ -190,14 +263,14 @@ Content-Type: ${mediaType}\r
 `),
   };
 }
-//@ chunk-7kpfrhzn.js:5870-5951 placement
+//@ chunk-033d1naw.js:4009-4090 placement
 class UploadSourceError extends Error {
   constructor(message, options) {
     super(message, options);
     this.name = "UploadSourceError";
   }
 }
-//@ chunk-7kpfrhzn.js:5951-6200 placement
+//@ chunk-033d1naw.js:4090-4339 placement
 function bufferMultipartBody(buffer, fileName, mediaType) {
   let { boundary, head, tail } = multipartParts(fileName, mediaType);
   async function* slices() {
@@ -213,7 +286,7 @@ function bufferMultipartBody(buffer, fileName, mediaType) {
     finished: () => Promise.resolve(),
   };
 }
-//@ chunk-7kpfrhzn.js:6200-6748 placement
+//@ chunk-033d1naw.js:4339-4887 placement
 function streamMultipartBody(handle, totalBytes, fileName, mediaType) {
   let { boundary, head, tail } = multipartParts(fileName, mediaType);
   let started = false;
@@ -253,7 +326,7 @@ function streamMultipartBody(handle, totalBytes, fileName, mediaType) {
     finished: () => (started ? promise : Promise.resolve()),
   };
 }
-//@ chunk-7kpfrhzn.js:6748-6799 layout
+//@ chunk-033d1naw.js:4887-4937 layout
 /**
  * 上传相关的尺寸常量与开关：直接从 peer 文件传输模块取的默认/服务端上限，小文件阈值 1 MiB，以及重发窗口按帖计算的时长。
  */
@@ -263,16 +336,16 @@ var PEER_FILE_TRANSFER_SERVER_LIMIT = MAX_PEER_SPOOL_BYTES;
 var SMALL_UPLOAD_BYTES = MIB;
 var UPLOAD_LIMIT_MEMORY_MS = 600000;
 var RESEND_WINDOW_PER_POST_MS = 4 * UPLOAD_CHUNK_BYTES;
-//@ chunk-7kpfrhzn.js:6799-6846 layout
+//@ chunk-033d1naw.js:4937-4984 layout
 function formatMiB(bytes) {
   return `${(bytes / MIB).toFixed(1)} MiB`;
 }
-//@ chunk-7kpfrhzn.js:6846-6970 layout
+//@ chunk-033d1naw.js:4984-5108 layout
 function formatUploadLimitError(size, limit) {
   if (limit === undefined) return `${formatMiB(size)} exceeds the upload limit`;
   return `${formatMiB(size)} exceeds the ${formatMiB_2(limit)} upload limit`;
 }
-//@ chunk-7kpfrhzn.js:6970-7276 fingerprint (2.1.88 match: MIME_BY_EXT, 0.83)
+//@ chunk-033d1naw.js:5108-5414 fingerprint (2.1.88 match: MIME_BY_EXT, 0.83)
 /**
  * 判定不可重发的 errno 集合（ENOTFOUND、ERR_INVALID_URL 与证书类错误）。
  */
@@ -295,12 +368,12 @@ var IMAGE_MIME_BY_EXT = {
   ".gif": "image/gif",
   ".webp": "image/webp",
 };
-//@ chunk-7kpfrhzn.js:7276-7356 fingerprint (2.1.88 match: guessMimeType, 1)
+//@ chunk-033d1naw.js:5414-5494 fingerprint (2.1.88 match: guessMimeType, 1)
 function guessMimeType(filename) {
   let ext = extname(filename).toLowerCase();
   return IMAGE_MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
-//@ chunk-7kpfrhzn.js:7356-7508 layout
+//@ chunk-033d1naw.js:5494-5654 layout
 /**
  * 允许重发的错误码集合（http_413、http_5xx、network_error）。
  */
@@ -313,8 +386,9 @@ var PREVIEW_COPY_FORMAT_BY_EXT = {
   ".avif": "jpeg",
 };
 var PREVIEW_JPEG_QUALITY = 90;
+var PREVIEW_JPEG_QUALITY_LEVEL = 5000;
 var RESENDABLE_ERROR_CODES_SET = new Set(["http_413", "http_5xx", "network_error"]);
-//@ chunk-7kpfrhzn.js:7508-7671 layout
+//@ chunk-033d1naw.js:5654-5817 layout
 function hasAuxiliaryAlphaImage(text) {
   return (
     text.includes("urn:mpeg:hevc:2015:auxid:1") ||
@@ -322,7 +396,7 @@ function hasAuxiliaryAlphaImage(text) {
     text.includes("urn:mpeg:mpegB:cicp:systems:auxiliary:alpha")
   );
 }
-//@ chunk-7kpfrhzn.js:7671-8139 layout
+//@ chunk-033d1naw.js:5817-6285 layout
 function isTruncatedBmp(buffer) {
   if (buffer.length < 30 || buffer[0] !== 66 || buffer[1] !== 77) return false;
   let uInt32LE = buffer.readUInt32LE(14);
@@ -339,7 +413,7 @@ function isTruncatedBmp(buffer) {
   let lastRowBits = Math.ceil((width * uInt16LE) / 8);
   return height > 0 && rowBytes * (height - 1) + lastRowBits > availableBytes;
 }
-//@ chunk-7kpfrhzn.js:8139-8445 layout
+//@ chunk-033d1naw.js:6285-6591 layout
 function readIsoBmffBoxes(buffer, start, end, filterType) {
   let boxes = [];
   let offset = start;
@@ -363,7 +437,7 @@ function readIsoBmffBoxes(buffer, start, end, filterType) {
   }
   return boxes;
 }
-//@ chunk-7kpfrhzn.js:8445-9348 layout
+//@ chunk-033d1naw.js:6591-7494 layout
 function readHeifPrimaryItemTransform(buffer) {
   let [metaBox] = readIsoBmffBoxes(buffer, 0, buffer.length, "meta");
   if (metaBox === undefined) return;
@@ -411,7 +485,7 @@ function readHeifPrimaryItemTransform(buffer) {
     mirrored,
   };
 }
-//@ chunk-7kpfrhzn.js:9348-9663 layout
+//@ chunk-033d1naw.js:7494-7809 layout
 function isMultiPageTiff(bytes) {
   if (bytes.length < 8) return false;
   let isLittleEndian = bytes[0] === 73 && bytes[1] === 73;
@@ -423,7 +497,7 @@ function isMultiPageTiff(bytes) {
   let secondIfdOffset = uint32 + 2 + dataView.getUint16(uint32, isLittleEndian) * 12;
   return secondIfdOffset + 4 <= bytes.length && dataView.getUint32(secondIfdOffset, isLittleEndian) !== 0;
 }
-//@ chunk-7kpfrhzn.js:9663-11219 layout
+//@ chunk-033d1naw.js:7809-9365 layout
 /**
  * 为 bmp/tiff/heic/heif/avif 等生成 png/jpeg 预览副本；多页 TIFF、截断 BMP、旋转/镜像 HEIF、超尺寸等情况放弃并上传原文件。
  */
@@ -516,11 +590,11 @@ async function makePreviewCopy(bytes, filePath, signal, telemetry, copyLock) {
     releaseCopyLock();
   }
 }
-//@ chunk-7kpfrhzn.js:11219-11258 fingerprint (2.1.88 match: debug, 1)
+//@ chunk-033d1naw.js:9365-9404 fingerprint (2.1.88 match: debug, 1)
 function logUploadDebug(msg) {
   logForDebugging(`[brief:upload] ${msg}`);
 }
-//@ chunk-7kpfrhzn.js:11258-11887 layout
+//@ chunk-033d1naw.js:9404-10033 layout
 /**
  * 上传前置检查：非 firstParty 提供方、仅必要流量隐私配置、allow_send_file 策略不允许时返回错误。
  */
@@ -553,11 +627,11 @@ function checkUploadAllowed(props) {
   }
   return null;
 }
-//@ chunk-7kpfrhzn.js:11887-11954 fingerprint (2.1.88 match: getBridgeBaseUrl, 1)
+//@ chunk-033d1naw.js:10033-10100 fingerprint (2.1.88 match: getBridgeBaseUrl, 1)
 function getBridgeBaseUrl() {
   return getBridgeBaseUrlOverride() ?? env.ANTHROPIC_BASE_URL ?? getOauthConfig().BASE_API_URL;
 }
-//@ chunk-7kpfrhzn.js:11954-12057 layout
+//@ chunk-033d1naw.js:10100-10203 layout
 async function getUploadAuth(credentials) {
   let accessToken =
     isStorageV5Enabled() && credentials !== undefined
@@ -569,25 +643,28 @@ async function getUploadAuth(credentials) {
       }
     : bridgeHostState().sessionUploadRoute;
 }
-//@ chunk-7kpfrhzn.js:12057-12118 layout
-function getUploadUrl(route) {
-  return route.url ?? `${getBridgeBaseUrl()}/api/oauth/file_upload`;
+//@ chunk-033d1naw.js:10203-10325 layout
+function uploadFile(options, sessionReceived) {
+  let uploadUrl = options.url ?? `${getBridgeBaseUrl()}/api/oauth/file_upload`;
+  return sessionReceived === undefined
+    ? uploadUrl
+    : `${uploadUrl}?session_received=${sessionReceived ? "yes" : "no"}`;
 }
-//@ chunk-7kpfrhzn.js:12118-12176 layout
+//@ chunk-033d1naw.js:10325-10383 layout
 /**
  * 没有上传地址且登录被搁置时返回 true，表示需要先恢复登录。
  */
 function isBridgeFileLoginRefused(route) {
   return route.url === undefined && isBridgeFileLoginRefused_2(undefined, route.token);
 }
-//@ chunk-7kpfrhzn.js:12176-12311 layout
+//@ chunk-033d1naw.js:10383-10518 layout
 function httpStatusFailureCode(status) {
   if (status === 401 || status === 403 || status === 413) return `http_${status}`;
   if (status >= 500) return "http_5xx";
   if (status >= 400) return "http_4xx";
   return "http_other";
 }
-//@ chunk-7kpfrhzn.js:12311-12440 layout
+//@ chunk-033d1naw.js:10518-10647 layout
 var uploadSuccessSchema = DoctorLazy(() =>
   objectSchema({
     file_uuid: stringSchema(),
@@ -603,12 +680,12 @@ var uploadTooLargeSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-7kpfrhzn.js:12440-12531 fingerprint (2.1.88 match: uploadResponseSchema, 0.525)
-async function uploadResponseSchema(buffer, filename, mimeType, signal, telemetry, credentials) {
+//@ chunk-033d1naw.js:10647-10739 facade-majority (2.1.88 match: uploadResponseSchema, 0.52)
+async function uploadBytesToBridgeStore(buffer, filename, mimeType, signal, telemetry, credentials) {
   let uploadResult = await uploadBuffer(buffer, filename, mimeType, signal, telemetry, credentials);
   return "error" in uploadResult ? uploadResult : uploadResult.file_uuid;
 }
-//@ chunk-7kpfrhzn.js:19309-19483 placement
+//@ chunk-033d1naw.js:17543-17717 placement
 async function readBoundedFile({ handle, size }, maxBytes) {
   let readResult =
     size > maxBytes
@@ -617,7 +694,7 @@ async function readBoundedFile({ handle, size }, maxBytes) {
   if (readResult === undefined || readResult.overLimit) throw Error("the file is over the size limit");
   return readResult.bytes;
 }
-//@ chunk-7kpfrhzn.js:19483-19647 placement
+//@ chunk-033d1naw.js:17717-17881 placement
 async function withOpenedFile(fullPath, approvedIdentity, options, maxBytes, waitForTurn) {
   let uploadSource = await uploadBridgeAttachment(fullPath, approvedIdentity, options);
   try {
@@ -629,19 +706,19 @@ async function withOpenedFile(fullPath, approvedIdentity, options, maxBytes, wai
     await uploadSource.handle.close();
   }
 }
-//@ chunk-7kpfrhzn.js:19647-19800 placement
+//@ chunk-033d1naw.js:17881-18034 placement
 function timestampedFileName(fileName) {
   let extension = extname(fileName);
   let nameStem = extension ? fileName.slice(0, -extension.length) : fileName;
   let sliced = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
   return `${nameStem}-${sliced}-${randomUUID().slice(0, 4)}${extension}`;
 }
-//@ chunk-7kpfrhzn.js:19800-19814 layout
+//@ chunk-033d1naw.js:18034-18048 layout
 /**
  * 读取图片头部判断尺寸时最多读 512 KiB（避免整文件读入）。
  */
 var IMAGE_HEAD_BYTES = 524288;
-//@ chunk-7kpfrhzn.js:19814-20100 layout
+//@ chunk-033d1naw.js:18048-18334 layout
 async function readAndScaleImage(source, mimeType, signal) {
   if (!hasKnownImageType(mimeType) || source.size > MAX_UPLOAD_BYTES) return;
   try {
@@ -655,7 +732,7 @@ async function readAndScaleImage(source, mimeType, signal) {
     return;
   }
 }
-//@ chunk-7kpfrhzn.js:20100-20545 layout
+//@ chunk-033d1naw.js:18334-18779 layout
 async function uploadScaledImage(scaledImage, filename, ctx, telemetryFields, postState) {
   let mimeType = guessMimeType(filename);
   let uploadResult = await uploadWithResends(
@@ -702,7 +779,7 @@ async function uploadScaledImage(scaledImage, filename, ctx, telemetryFields, po
     },
   };
 }
-//@ chunk-7kpfrhzn.js:20545-23135 callgraph-witnessed (2.1.88 match: uploadBriefAttachment, 0.164)
+//@ chunk-033d1naw.js:18779-21460 facade-majority (2.1.88 match: uploadBriefAttachment, 0.161)
 /**
  * 上传 Brief 附件到 Anthropic 文件存储：策略/提供方检查（仅 firstParty、非仅必要流量、allow_send_file 策略），取 OAuth 凭证，等待轮次，按大小选择缓冲上传（可生成预览副本或缩放图）或流式上传，支持有限次重发与服务器上限记忆，返回 file_uuid 或错误。
  */
@@ -810,6 +887,15 @@ async function uploadBriefAttachment(fullPath, size, ctx) {
         error: `upload failed: could not read file (${errorMessage(error)})`,
       };
     }
+    if (ctx.saysIfReceived)
+      telemetryFields = {
+        ...telemetryFields,
+        session_received:
+          (await withDeadline(
+            isReceivedFile(fullPath, fileBytes?.length ?? source.size),
+            PREVIEW_JPEG_QUALITY_LEVEL,
+          )) ?? true,
+      };
     if (fileBytes !== undefined)
       return await uploadWithPreviewCopy(fileBytes, filename, ctx, telemetryFields, postState);
     let min = Math.min(PEER_FILE_TRANSFER_SERVER_LIMIT, baseUrl ?? PEER_FILE_TRANSFER_SERVER_LIMIT);
@@ -877,20 +963,20 @@ async function uploadBriefAttachment(fullPath, size, ctx) {
     });
   }
 }
-//@ chunk-7kpfrhzn.js:23135-23236 layout
+//@ chunk-033d1naw.js:21460-21561 layout
 function isResendableFailure(code, serverCode, waitedMs) {
   return code === "http_5xx"
     ? serverCode !== "any_post" && serverCode !== "reason_not_temporary"
     : waitedMs !== undefined && waitedMs > RESEND_WINDOW_PER_POST_MS;
 }
-//@ chunk-7kpfrhzn.js:23236-23334 placement
+//@ chunk-033d1naw.js:21561-21660 placement
 function getKnownServerUploadLimit() {
   let uploadLimitTold = bridgeHostState().uploadLimitTold;
   return uploadLimitTold !== undefined && Date.now() - uploadLimitTold.atMs < UPLOAD_LIMIT_MEMORY_MS
     ? uploadLimitTold.maxBytes
     : undefined;
 }
-//@ chunk-7kpfrhzn.js:23334-24341 placement
+//@ chunk-033d1naw.js:21660-22667 placement
 /**
  * 先传预览副本，失败再传原件
  */
@@ -971,7 +1057,7 @@ async function uploadWithPreviewCopy(bytes, filePath, ctx, telemetryFields, post
         file_uuid: originalResult.file_uuid,
       };
 }
-//@ chunk-7kpfrhzn.js:24341-24572 placement
+//@ chunk-033d1naw.js:22667-22898 placement
 async function uploadStreamWithAuth(body, contentLength, filename, ctx, telemetry, logSad) {
   let uploadAuth = await getUploadAuth(ctx.credentials);
   if (!uploadAuth) {
@@ -988,14 +1074,14 @@ async function uploadStreamWithAuth(body, contentLength, filename, ctx, telemetr
     logSad,
   });
 }
-//@ chunk-7kpfrhzn.js:24572-25343 placement
-async function uploadStream(streamBody, outputFileName, route, { filename, signal, telemetry, logSad }) {
+//@ chunk-033d1naw.js:22898-23692 placement
+async function uploadStream(streamBody, outputFileName, uploadAuth, { filename, signal, telemetry, logSad }) {
   let gateError = checkUploadAllowed(telemetry);
   if (gateError) {
     logUploadDebug(`skip ${filename}: policy/provider gate denied`);
     return gateError;
   }
-  if (isBridgeFileLoginRefused(route)) {
+  if (isBridgeFileLoginRefused(uploadAuth)) {
     logSad("stored_login_refused");
     return {
       error: new StoredLoginHeldBackError(storedLoginRefusalReason()).message,
@@ -1005,9 +1091,10 @@ async function uploadStream(streamBody, outputFileName, route, { filename, signa
     signal,
   });
   try {
-    let response = await axios_default.post(getUploadUrl(route), progressStream.body, {
+    let response = uploadFile(uploadAuth, telemetry.session_received);
+    let response_2 = await axios_default.post(response, progressStream.body, {
       headers: buildUploadHeaders(
-        route.token,
+        uploadAuth.token,
         streamBody.boundary,
         streamBody.contentLength,
         telemetry.upload_lane,
@@ -1017,7 +1104,7 @@ async function uploadStream(streamBody, outputFileName, route, { filename, signa
       validateStatus: () => true,
       maxRedirects: 0,
     });
-    return handleUploadResponse(response, filename, outputFileName, telemetry, logSad);
+    return handleUploadResponse(response_2, filename, outputFileName, telemetry, logSad);
   } catch (error) {
     logUploadDebug(`upload threw for ${filename}: ${error}`);
     let abortError = uploadAbortError(error, progressStream, signal?.aborted === true);
@@ -1039,7 +1126,7 @@ async function uploadStream(streamBody, outputFileName, route, { filename, signa
     await streamBody.finished();
   }
 }
-//@ chunk-7kpfrhzn.js:25343-26073 placement
+//@ chunk-033d1naw.js:23692-24422 placement
 /**
  * 上传中止/停滞的错误描述
  */
@@ -1091,7 +1178,7 @@ export {
   isBridgeFileLoginRefused,
   multipartParts,
   UPLOAD_TIMEOUT_MS,
-  getUploadUrl,
+  uploadFile,
   NON_TEMPORARY_ERRNOS,
   MIN_RESEND_MAX_BYTES,
   RESEND_DEADLINE_LONG_MS,
@@ -1109,6 +1196,6 @@ export {
   normalizeUploadFileName,
   withOpenedFile,
   timestampedFileName,
+  uploadBytesToBridgeStore,
   uploadBriefAttachment,
-  uploadResponseSchema,
 };

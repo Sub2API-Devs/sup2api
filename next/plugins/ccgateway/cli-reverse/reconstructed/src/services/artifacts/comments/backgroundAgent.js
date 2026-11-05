@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把评论线程交给后台 agent 处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (31)
  * attribution: placement 31
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.js";
@@ -18,7 +18,7 @@ import { WORKFLOW_TOOL_NAME } from "../../../tools/WorkflowTool/constants.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../../../tools/ScheduleWakeupTool/prompt.js";
 import { CRON_CREATE_TOOL_NAME, CRON_DELETE_TOOL_NAME } from "../../../tools/ScheduleCronTool/prompt.js";
 import { REMOTETRIGGER } from "../../../tools/RemoteTriggerTool/prompt.js";
-import { toolMatchesName } from "../../../Tool.js";
+import { matchesToolName } from "../../../Tool.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 import { coerceBooleanString } from "../../../utils/spellcheck.js";
@@ -35,12 +35,13 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../analytics/feat
 import { queuePendingMessage, killAsyncAgent } from "../../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { isAbortError } from "../../../utils/errors.js";
 import { logError } from "../../../utils/log.js";
+import { ARTIFACT_SLUG_RE } from "../../../tools/ArtifactTool/constants.js";
 import { createInformationalSystemMessage } from "../../../utils/messages.js";
 import { isForegroundBusy } from "../../../utils/plugins/hooksModulesLoadGate.js";
 import { observationStamp, sourcelessObservation } from "../readObservation.js";
 import { getTaskRunState } from "../../../utils/task/taskNotifications.js";
 import { emitArtifactSummonStatus, registerSummonHandOff } from "../artifactNotices.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { markAutoReactNoticePending } from "../shareEntries.js";
 import { enqueuePendingNotification } from "../../../utils/messageQueueManager.js";
 import { formatTaskNotification } from "../../../utils/xmlTags.js";
@@ -49,44 +50,44 @@ import { commentsWaitingNotice } from "../../../tools/ArtifactTool/artifactNotic
 import { buildMissedCommentPrompt } from "./threadPrompts.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:15307-15348 placement
+//@ chunk-c0pq6qyx.js:15421-15462 placement
 /**
  * 后台评论 agent 的开关名与每个会话最多 5 个线程 agent 的上限。
  */
 var TENGU_SORREL_TRELLIS_TENON = "tengu_sorrel_trellis_tenon";
 var MAX_THREAD_AGENTS = 5;
-//@ chunk-9tgt55am.js:15348-15384 placement
+//@ chunk-c0pq6qyx.js:15462-15498 placement
 /**
  * 导出函数 `isThreadAgentEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_TENON, !1) === !0。
  */
 function isThreadAgentEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_TENON, false) === true;
 }
-//@ chunk-9tgt55am.js:15384-15439 placement
+//@ chunk-c0pq6qyx.js:15498-15553 placement
 class ThreadAgentState {
   byThread = new Map();
   spawning = new Map();
   watching = false;
 }
-//@ chunk-9tgt55am.js:15439-15465 placement
+//@ chunk-c0pq6qyx.js:15553-15579 placement
 var threadAgentSlot; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9tgt55am.js:15439", () => {
+deferInit("chunk-c0pq6qyx.js:15553", () => {
   threadAgentSlot = new SessionRootSlot(() => new ThreadAgentState());
 });
-//@ chunk-9tgt55am.js:15465-15497 placement
+//@ chunk-c0pq6qyx.js:15579-15611 placement
 function threadAgentState() {
   return threadAgentSlot.of(getRootSession());
 }
-//@ chunk-9tgt55am.js:15497-15560 placement
+//@ chunk-c0pq6qyx.js:15611-15674 placement
 function threadKey(slug, threadId) {
   return `${slug.toLowerCase()}:${threadId.toLowerCase()}`;
 }
-//@ chunk-9tgt55am.js:15560-15593 placement
+//@ chunk-c0pq6qyx.js:15674-15707 placement
 /**
  * 后台评论 agent 权限包装里禁止它再调用的工具（Agent、SendMessage、Monitor、workflow、定时任务等）。
  */
 var FORBIDDEN_FROM_THREAD_AGENT; // deferred: uses AGENT (../../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9tgt55am.js:15560", () => {
+deferInit("chunk-c0pq6qyx.js:15674", () => {
   FORBIDDEN_FROM_THREAD_AGENT = [
     AGENT,
     SENDMESSAGE,
@@ -98,7 +99,7 @@ deferInit("chunk-9tgt55am.js:15560", () => {
     REMOTETRIGGER,
   ];
 });
-//@ chunk-9tgt55am.js:15593-16153 placement
+//@ chunk-c0pq6qyx.js:15707-16267 placement
 /**
  * 后台评论 agent 的权限包装：禁止其再派生后台任务等。
  */
@@ -106,9 +107,9 @@ function makeBackgroundAgentPermissionGate(options) {
   return async (tool, input, toolUseContext, message, toolUseID, permissionResult) => {
     let isLocalTool = tool.mcpInfo === undefined;
     let forbidden =
-      (toolMatchesName(tool, BASH_TOOL_NAME) || toolMatchesName(tool, POWERSHELL_TOOL_NAME)) &&
+      (matchesToolName(tool, BASH_TOOL_NAME) || matchesToolName(tool, POWERSHELL_TOOL_NAME)) &&
       coerceBooleanString(input.run_in_background) === true;
-    if (isLocalTool && (forbidden || FORBIDDEN_FROM_THREAD_AGENT.some((name) => toolMatchesName(tool, name))))
+    if (isLocalTool && (forbidden || FORBIDDEN_FROM_THREAD_AGENT.some((name) => matchesToolName(tool, name))))
       return {
         behavior: "deny",
         message:
@@ -121,11 +122,11 @@ function makeBackgroundAgentPermissionGate(options) {
     return options(tool, input, toolUseContext, message, toolUseID, permissionResult);
   };
 }
-//@ chunk-9tgt55am.js:16153-16206 placement
+//@ chunk-c0pq6qyx.js:16267-16320 placement
 function keepsLocalAgentAlive(state) {
   return useTeammateLifecycleNotification(state) || (isLocalAgent(state) && state.resuming === true);
 }
-//@ chunk-9tgt55am.js:16206-16515 placement
+//@ chunk-c0pq6qyx.js:16320-16629 placement
 /**
  * 判断已完成的本地代理是否仍有存活理由：工作流、未跳过记录的 monitor 任务，或非技能 fork 的子代理在保活它。
  */
@@ -144,7 +145,7 @@ function hasLiveKeepalive(state, taskRegistry) {
   }
   return false;
 }
-//@ chunk-9tgt55am.js:16515-16678 placement
+//@ chunk-c0pq6qyx.js:16629-16792 placement
 /**
  * 取某评论线程对应的后台代理；代理已不在运行时移除记录并把挂着的评论标为 cancelled。
  */
@@ -156,7 +157,7 @@ function getLiveThreadAgent(state, threadId) {
   settleComments(entry.comments, "cancelled");
   return;
 }
-//@ chunk-9tgt55am.js:16678-16877 placement
+//@ chunk-c0pq6qyx.js:16792-16991 placement
 /**
  * 判断某 artifact 是否有正在启动或运行的评论线程后台代理。
  */
@@ -168,19 +169,19 @@ function hasThreadAgentForSlug(slug) {
     if (key.startsWith(prefix) && getLiveThreadAgent(state, key) !== undefined) return true;
   return false;
 }
-//@ chunk-9tgt55am.js:16877-17027 placement
+//@ chunk-c0pq6qyx.js:16991-17141 placement
 function countThreadAgents(slug) {
   let count = 0;
   for (let key of slug.spawning.keys()) if (!slug.byThread.has(key)) count += 1;
   for (let key of [...slug.byThread.keys()]) if (getLiveThreadAgent(slug, key) !== undefined) count += 1;
   return count;
 }
-//@ chunk-9tgt55am.js:17027-17138 placement
+//@ chunk-c0pq6qyx.js:17141-17252 placement
 async function canForkThreadAgent() {
   let { getLastCacheSafeParams } = await import("../../../utils/forkedAgent.js");
   return getLastCacheSafeParams() !== null && !isCoordinatorMode_2();
 }
-//@ chunk-9tgt55am.js:17138-17258 placement
+//@ chunk-c0pq6qyx.js:17252-17372 placement
 /**
  * 判断能否把评论线程交给后台代理：该线程已有在启动/运行的代理，或代理总数未达上限且可以 fork。
  */
@@ -190,7 +191,7 @@ async function canHandToThreadAgent(slug, id) {
   if (state.spawning.has(key) || getLiveThreadAgent(state, key) !== undefined) return true;
   return countThreadAgents(state) < MAX_THREAD_AGENTS && (await canForkThreadAgent());
 }
-//@ chunk-9tgt55am.js:17258-17586 placement
+//@ chunk-c0pq6qyx.js:17372-17700 placement
 async function spawnOrJoinThreadAgent(request) {
   let state = threadAgentState();
   let key = threadKey(request.slug, request.threadId);
@@ -209,7 +210,7 @@ async function spawnOrJoinThreadAgent(request) {
     state.spawning.delete(key);
   }
 }
-//@ chunk-9tgt55am.js:17586-17964 placement
+//@ chunk-c0pq6qyx.js:17700-18078 placement
 /**
  * 把新评论并入已在运行的线程代理：不是同一召唤时追加跟进消息并恢复代理；登记评论回调并打点 joined。
  */
@@ -236,7 +237,7 @@ function joinThreadAgent(state, thread, key) {
     agentId: thread.agentId,
   };
 }
-//@ chunk-9tgt55am.js:17964-19321 placement
+//@ chunk-c0pq6qyx.js:18078-19437 placement
 function resumeThreadAgent(request, thread, threadState) {
   if (!getIsNonInteractiveSession() || !hasPendingAgentMessages(thread)) return;
   (async () => {
@@ -259,7 +260,7 @@ function resumeThreadAgent(request, thread, threadState) {
         import("../../../tools/AgentTool/resumeAgent.js"),
         import("../../../utils/gracefulShutdown.js"),
         import("../../../utils/terminalShutdown.js"),
-        import("../../../utils/permissions/toolPermissionContext.js"),
+        import("../../../utils/permissions/applyContextLayers.lazy.js"),
       ]);
       let snapshot = getCacheSafeParams();
       if (snapshot === null || isShuttingDown() || isTerminalShutdown() || !hasPendingAgentMessages(thread))
@@ -315,7 +316,7 @@ function resumeThreadAgent(request, thread, threadState) {
     }
   })();
 }
-//@ chunk-9tgt55am.js:19321-19460 placement
+//@ chunk-c0pq6qyx.js:19437-19576 placement
 function hasPendingAgentMessages(state) {
   let task = state.taskRegistry.get(state.agentId);
   return (
@@ -326,7 +327,7 @@ function hasPendingAgentMessages(state) {
     useTeammateLifecycleNotification(task)
   );
 }
-//@ chunk-9tgt55am.js:19460-20499 placement
+//@ chunk-c0pq6qyx.js:19576-20658 placement
 async function forkThreadAgent(state, threadKey, request) {
   let context;
   let forkMessages;
@@ -336,7 +337,7 @@ async function forkThreadAgent(state, threadKey, request) {
       await Promise.all([
         import("../../../utils/forkedAgent.js"),
         import("../../../tools/AgentTool/forkDirective.js"),
-        import("../../../utils/permissions/toolPermissionContext.js"),
+        import("../../../utils/permissions/applyContextLayers.lazy.js"),
       ]);
     let snapshot = getCacheSafeParams();
     if (snapshot === null) return fallbackFromFork(request, "no_snapshot");
@@ -349,6 +350,7 @@ async function forkThreadAgent(state, threadKey, request) {
     watchThreadAgents(state);
     let forked = await spawnForkFromDirective(request.directive, context, request.canUseTool, {
       nameHint: `comment ${request.slug.slice(0, 8)}`,
+      nameHintHoldsNoUserContent: ARTIFACT_SLUG_RE.test(request.slug),
       description: `Comment on ${request.artifactName}`,
       narrowCanUseTool: makeBackgroundAgentPermissionGate,
     });
@@ -390,7 +392,7 @@ async function forkThreadAgent(state, threadKey, request) {
     agentId: extra,
   };
 }
-//@ chunk-9tgt55am.js:20499-20772 placement
+//@ chunk-c0pq6qyx.js:20658-20931 placement
 function propagateReadVersion(agentContext, messages, slug, replyId) {
   let artifactReadObservation = agentContext.getArtifactReadObservation(slug);
   let main = artifactReadObservation.observers?.main;
@@ -411,7 +413,7 @@ function propagateReadVersion(agentContext, messages, slug, replyId) {
     ),
   );
 }
-//@ chunk-9tgt55am.js:20772-20928 placement
+//@ chunk-c0pq6qyx.js:20931-21087 placement
 function fallbackFromFork(agentId, key) {
   (key === "fork_error" ? logFeatureBad : logFeatureSad)(
     "artifact_comments_autoreact",
@@ -425,11 +427,11 @@ function fallbackFromFork(agentId, key) {
     reason: key,
   };
 }
-//@ chunk-9tgt55am.js:20928-20999 placement
+//@ chunk-c0pq6qyx.js:21087-21158 placement
 function settleComments(comments, outcome = "completed") {
   for (let comment of comments.splice(0)) comment.onSettled?.(outcome);
 }
-//@ chunk-9tgt55am.js:20999-21248 placement
+//@ chunk-c0pq6qyx.js:21158-21407 placement
 /**
  * 只订阅一次后台代理的结束与恢复失败事件：结束时处理线程代理收尾，终止性恢复失败时交回主会话，消息无法投递时提示。
  */
@@ -452,12 +454,12 @@ function watchThreadAgents(host) {
     }
   });
 }
-//@ chunk-9tgt55am.js:21248-21327 placement
+//@ chunk-c0pq6qyx.js:21407-21486 placement
 function findThreadAgentByAgentId(state, agentId) {
   for (let [threadKey, entry] of state.byThread) if (entry.agentId === agentId) return [threadKey, entry];
   return;
 }
-//@ chunk-9tgt55am.js:21327-21497 placement
+//@ chunk-c0pq6qyx.js:21486-21656 placement
 function settleSummonStatuses(comments, outcome) {
   let statuses =
     outcome === "failed"
@@ -472,7 +474,7 @@ function settleSummonStatuses(comments, outcome) {
   for (let comment of comments)
     if (comment.summon !== undefined) emitArtifactSummonStatus(comment.summon, statuses);
 }
-//@ chunk-9tgt55am.js:21497-22296 placement
+//@ chunk-c0pq6qyx.js:21656-22456 placement
 function onThreadAgentSettled(request, agentId, taskRegistry, settledNormally) {
   let threadAgentByAgentId = findThreadAgentByAgentId(request, agentId);
   if (threadAgentByAgentId === undefined) return;
@@ -503,7 +505,7 @@ function onThreadAgentSettled(request, agentId, taskRegistry, settledNormally) {
     return;
   }
   let followUpCount = isLocalAgent(task)
-    ? count(task.pendingMessages, (message) => threadState.followUps.has(message.text))
+    ? countWhere(task.pendingMessages, (message) => threadState.followUps.has(message.text))
     : 0;
   let dropped = settledNormally
     ? threadState.comments.splice(Math.max(1, threadState.comments.length - followUpCount))
@@ -523,7 +525,7 @@ function onThreadAgentSettled(request, agentId, taskRegistry, settledNormally) {
     killAsyncAgent(agentId, threadState.taskRegistry, "system");
   }
 }
-//@ chunk-9tgt55am.js:22296-22459 placement
+//@ chunk-c0pq6qyx.js:22456-22619 placement
 function handBackOnResumeFailure(agentId, threadKey) {
   let threadAgentByAgentId = findThreadAgentByAgentId(agentId, threadKey);
   if (threadAgentByAgentId === undefined) return;
@@ -532,7 +534,7 @@ function handBackOnResumeFailure(agentId, threadKey) {
   logFeatureBad("artifact_comments_autoreact", "fork_resume_failed");
   notifyThreadAgentHandoff(entry.request, entry.comments);
 }
-//@ chunk-9tgt55am.js:22459-22659 placement
+//@ chunk-c0pq6qyx.js:22619-22819 placement
 function notifyResumeDenied(agentId, threadKey, undeliverable) {
   let entry = findThreadAgentByAgentId(agentId, threadKey)?.[1];
   if (
@@ -544,7 +546,7 @@ function notifyResumeDenied(agentId, threadKey, undeliverable) {
   logFeatureSad("artifact_comments_autoreact", "fork_resume_denied");
   notifyThreadAgentHandoff(entry.request, entry.comments);
 }
-//@ chunk-9tgt55am.js:22659-23007 placement
+//@ chunk-c0pq6qyx.js:22819-23167 placement
 /**
  * 重新把评论交给线程代理；回退时打点（区分达到上限）并通知主会话接手，异常时把评论标为失败。
  */
@@ -569,7 +571,7 @@ async function rehandToThreadAgent(request, rehandRequest) {
     settleComments(rehandRequest);
   }
 }
-//@ chunk-9tgt55am.js:23007-23392 placement
+//@ chunk-c0pq6qyx.js:23167-23552 placement
 function notifyThreadAgentHandoff(request, comments) {
   let summon = comments.findLast((comment) => comment.summon !== undefined)?.summon;
   markAutoReactNoticePending(request.slug);
@@ -595,4 +597,4 @@ ${escapeXml(buildMissedCommentPrompt(request))}`,
   });
   settleComments(comments);
 }
-export { isThreadAgentEnabled, hasThreadAgentForSlug, canHandToThreadAgent, spawnOrJoinThreadAgent };
+export { isThreadAgentEnabled, spawnOrJoinThreadAgent, hasThreadAgentForSlug, canHandToThreadAgent };

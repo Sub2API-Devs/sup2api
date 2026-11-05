@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/endpoint/ruleset.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-y366fgzk.js (1)
+ * pieces: chunk-csa0qt1j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-y366fgzk.js:1795-4373 cjs-fingerprint
+//@ chunk-csa0qt1j.js:1795-4373 cjs-fingerprint
 var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

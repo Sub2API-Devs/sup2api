@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：带圆点前缀的一行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2y83cp75.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-61rtap81.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-2y83cp75.js:371-713 placement
+//@ chunk-61rtap81.js:371-713 placement
 /**
  * 带圆点前缀的一行。
  */

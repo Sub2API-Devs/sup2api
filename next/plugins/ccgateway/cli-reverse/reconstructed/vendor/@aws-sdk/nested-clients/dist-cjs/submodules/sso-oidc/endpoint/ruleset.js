@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sso-oidc/endpoint/ruleset.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-ddzww9ex.js (1)
+ * pieces: chunk-67qh5zdp.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-ddzww9ex.js:1796-3961 cjs-fingerprint
+//@ chunk-67qh5zdp.js:1796-3961 cjs-fingerprint
 var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -16,7 +16,7 @@ var require_ruleset = __commonJS(function (cjsExports) {
   var u_2 = "required";
   var v = "fn";
   var w = "argv";
-  var x = "ref";
+  var x_2 = "ref";
   var a = true;
   var b = "isSet";
   var c = "booleanEquals";
@@ -35,13 +35,13 @@ var require_ruleset = __commonJS(function (cjsExports) {
     type: "boolean",
   };
   var k = {
-    [x]: "Endpoint",
+    [x_2]: "Endpoint",
   };
   var l = {
     [v]: c,
     [w]: [
       {
-        [x]: "UseFIPS",
+        [x_2]: "UseFIPS",
       },
       true,
     ],
@@ -50,7 +50,7 @@ var require_ruleset = __commonJS(function (cjsExports) {
     [v]: c,
     [w]: [
       {
-        [x]: "UseDualStack",
+        [x_2]: "UseDualStack",
       },
       true,
     ],
@@ -60,13 +60,13 @@ var require_ruleset = __commonJS(function (cjsExports) {
     [v]: h,
     [w]: [
       {
-        [x]: g,
+        [x_2]: g,
       },
       "supportsFIPS",
     ],
   };
   var p = {
-    [x]: g,
+    [x_2]: g,
   };
   var q = {
     [v]: c,
@@ -82,7 +82,7 @@ var require_ruleset = __commonJS(function (cjsExports) {
   var s = [m];
   var t = [
     {
-      [x]: "Region",
+      [x_2]: "Region",
     },
   ];
   var _data = {

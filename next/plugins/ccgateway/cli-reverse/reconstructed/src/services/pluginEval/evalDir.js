@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 评测目录的定位与校验（--eval-dir、manifest experimental.evals、插件声明的组件路径）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (35)
  * attribution: placement 35
  */
 import { default as path_2 } from "path";
@@ -33,7 +33,7 @@ import { stripBom } from "../../utils/json.js";
 import { getPlatform } from "../../utils/platform.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-qchp9vrd.js:39526-39639 placement
+//@ chunk-af1hzzme.js:40866-40979 placement
 function toEvalPathError(parent, child, nfcKeyIfEnabled = identity) {
   let parentKey = nfcKeyIfEnabled(parent);
   let childKey = nfcKeyIfEnabled(child);
@@ -45,7 +45,7 @@ function toEvalPathError(parent, child, nfcKeyIfEnabled = identity) {
     })
   );
 }
-//@ chunk-qchp9vrd.js:39639-39784 placement
+//@ chunk-af1hzzme.js:40979-41124 placement
 function foldPathCase(segments, prefixSegments, mode) {
   let equals =
     mode === "folded"
@@ -56,14 +56,14 @@ function foldPathCase(segments, prefixSegments, mode) {
     prefixSegments.every((prefixSegment, index) => equals(segments[index], prefixSegment))
   );
 }
-//@ chunk-qchp9vrd.js:39784-39845 placement
+//@ chunk-af1hzzme.js:41124-41185 placement
 /**
  * 判断两组路径段是否等长且完全相同。
  */
 function isSameLengthAndPath(left, right) {
   return left.length === right.length && foldPathCase(left, right, "exact");
 }
-//@ chunk-qchp9vrd.js:39845-39946 placement
+//@ chunk-af1hzzme.js:41185-41286 placement
 /**
  * 判断路径段数组是否以另一段数组结尾（可大小写折叠比较）。
  */
@@ -74,20 +74,20 @@ function pathEndsWith(parts, suffix, foldMode = "exact") {
     foldPathCase(parts.slice(parts.length - suffix.length), suffix, foldMode)
   );
 }
-//@ chunk-qchp9vrd.js:39946-39970 placement
+//@ chunk-af1hzzme.js:41286-41310 placement
 /**
  * 恒等函数。
  */
 function identity(value) {
   return value;
 }
-//@ chunk-qchp9vrd.js:39970-39996 placement
+//@ chunk-af1hzzme.js:41310-41336 placement
 /**
  * 读取文本文件时的最大字节数（1 MiB）。
  */
 var EVALS_DIR_NAME = "evals";
 var MAX_TEXT_FILE_BYTES = 1048576;
-//@ chunk-qchp9vrd.js:39996-40232 placement
+//@ chunk-af1hzzme.js:41336-41572 placement
 /**
  * Windows 下非法文件名（结尾点/空格、冒号流、保留设备名）说明。
  */
@@ -99,7 +99,7 @@ function describeWindowsUnsafeName(segment) {
       ? 'contains ":", a stream selector on Windows'
       : "is a reserved device name on Windows";
 }
-//@ chunk-qchp9vrd.js:40232-41576 placement
+//@ chunk-af1hzzme.js:41572-42916 placement
 /**
  * 校验 --eval-dir / manifest 中的评测目录：相对、在插件根内、非根本身。
  */
@@ -172,25 +172,25 @@ function validateEvalDirSetting(setting) {
     segments: filtered,
   };
 }
-//@ chunk-qchp9vrd.js:41576-41670 placement
+//@ chunk-af1hzzme.js:42916-43010 placement
 /**
  * 扫描时跳过的子目录（node_modules、.claude 等）。
  */
 var EVAL_DIR_EXCLUDED_NAMES = [...PLUGIN_COMPONENT_DIRS, "bin"];
 var evalDirExcludedSet = new Set(EVAL_DIR_EXCLUDED_NAMES);
 var SKIPPED_SUBDIR_NAMES = new Set(["node_modules", ".claude", "results", "mocks"]);
-//@ chunk-qchp9vrd.js:41670-41736 placement
+//@ chunk-af1hzzme.js:43010-43076 placement
 function isFromEvalDirFlag(evalDir) {
   return evalDir.source === "flag" ? ` --eval-dir ${displayDir(evalDir)}` : "";
 }
-//@ chunk-qchp9vrd.js:41736-41808 placement
+//@ chunk-af1hzzme.js:43076-43148 placement
 /**
  * 展示用目录（反斜杠统一成 /）。
  */
 function displayDir(evalDir) {
   return (typeof evalDir === "string" ? evalDir : evalDir.dir).replaceAll("\\", "/");
 }
-//@ chunk-qchp9vrd.js:41808-42307 placement
+//@ chunk-af1hzzme.js:43148-43647 placement
 async function readPluginManifestAdvisory(request) {
   let manifestRead =
     request.pluginRoot === null
@@ -226,7 +226,7 @@ async function readPluginManifestAdvisory(request) {
       .join("; "),
   };
 }
-//@ chunk-qchp9vrd.js:42307-45222 placement
+//@ chunk-af1hzzme.js:43647-46562 placement
 /**
  * 检查评测目录不与插件声明的组件路径（commands/agents/skills 等）重叠。
  */
@@ -379,7 +379,7 @@ async function checkEvalDirAgainstComponents(evalDirFromManifest, manifestState,
       };
   }
 }
-//@ chunk-qchp9vrd.js:45222-46692 placement
+//@ chunk-af1hzzme.js:46562-48032 placement
 function resolveEvalDirFromManifest(flag, manifestRead) {
   if (flag !== undefined) {
     let validated = validateEvalDirSetting(flag);
@@ -447,7 +447,7 @@ function resolveEvalDirFromManifest(flag, manifestRead) {
     },
   };
 }
-//@ chunk-qchp9vrd.js:46692-46752 placement
+//@ chunk-af1hzzme.js:48032-48092 placement
 /**
  * 默认的评测目录描述（evals 目录）。
  */
@@ -458,7 +458,7 @@ function defaultEvalDir() {
     source: "default",
   };
 }
-//@ chunk-qchp9vrd.js:46752-47162 placement
+//@ chunk-af1hzzme.js:48092-48502 placement
 /**
  * 读取插件 manifest 以围住其列出的套件；读不了则拒绝运行。
  */
@@ -477,7 +477,7 @@ async function readManifestToFenceSuites(pluginRoot) {
     ...pluginManifest.candidates.map((candidate) => candidate.data),
   ]);
 }
-//@ chunk-qchp9vrd.js:47162-47355 placement
+//@ chunk-af1hzzme.js:48502-48695 placement
 function collectEvalDirSettings(candidates) {
   let segmentsList = [];
   for (let candidate of candidates)
@@ -492,7 +492,7 @@ function collectEvalDirSettings(candidates) {
     }
   return segmentsList;
 }
-//@ chunk-qchp9vrd.js:47355-47536 placement
+//@ chunk-af1hzzme.js:48695-48876 placement
 function findManifestField(manifest, readField) {
   let value = readField(manifest.raw);
   if (value !== undefined) return [value, manifest.manifestPath];
@@ -502,13 +502,13 @@ function findManifestField(manifest, readField) {
   }
   return [undefined, manifest.manifestPath];
 }
-//@ chunk-qchp9vrd.js:47536-47610 placement
+//@ chunk-af1hzzme.js:48876-48950 placement
 /**
  * 从 evals 取评测配置。
  */
 var experimentalEvalConfig = (raw) => (isPlainObject(raw.experimental) ? raw.experimental.evals : undefined);
 var evalConfig = (raw) => raw.evals;
-//@ chunk-qchp9vrd.js:47610-48098 placement
+//@ chunk-af1hzzme.js:48950-49438 placement
 function classifyManifestComponentPath(manifest) {
   let findField = (configKey) => findManifestField(manifest, configKey);
   let [experimentalValue, experimentalPath] = findField(experimentalEvalConfig);
@@ -550,7 +550,7 @@ function classifyManifestComponentPath(manifest) {
         manifestPath: legacyPath,
       };
 }
-//@ chunk-qchp9vrd.js:48098-48441 placement
+//@ chunk-af1hzzme.js:49438-49781 placement
 /**
  * 读取评测目录中的文本文件（须为仓库内路径、有大小上限）：不存在或路径不是目录时返回 fellThrough，过大或是目录返回 oversize 及原因。
  */
@@ -584,7 +584,7 @@ async function readEvalTextFile(root, filePath, label) {
     };
   }
 }
-//@ chunk-qchp9vrd.js:48441-48629 placement
+//@ chunk-af1hzzme.js:49781-49969 placement
 function readManifestCandidate(raw, pluginName, manifestPath) {
   return validatePluginManifest(raw, pluginName, {
     pluginName:
@@ -594,7 +594,7 @@ function readManifestCandidate(raw, pluginName, manifestPath) {
     manifestPath,
   }).rawCandidate;
 }
-//@ chunk-qchp9vrd.js:48629-49287 placement
+//@ chunk-af1hzzme.js:49969-50627 placement
 async function readPluginManifest(pluginRoot) {
   let found = null;
   for (let relativePath of [path_2.join(".claude-plugin", "plugin.json"), "plugin.json"]) {
@@ -650,14 +650,14 @@ async function readPluginManifest(pluginRoot) {
     kind: "absent",
   };
 }
-//@ chunk-qchp9vrd.js:49287-49382 placement
+//@ chunk-af1hzzme.js:50627-50722 placement
 /**
  * 目录里是否有 SKILL.md。
  */
 async function hasSkillFile(dir) {
   return (await readEvalTextFile(dir, path_2.join(dir, "SKILL.md"), "SKILL.md")).kind !== "fellThrough";
 }
-//@ chunk-qchp9vrd.js:49382-49506 placement
+//@ chunk-af1hzzme.js:50722-50846 placement
 var PLUGIN_COMPONENT_DIR_KEYS = [
   "commands",
   "agents",
@@ -668,7 +668,7 @@ var PLUGIN_COMPONENT_DIR_KEYS = [
   "monitors",
 ];
 var PLUGIN_COMPONENT_CONFIG_KEYS = ["mcpServers", "lspServers", "hooks"];
-//@ chunk-qchp9vrd.js:49506-49628 placement
+//@ chunk-af1hzzme.js:50846-50968 placement
 function getManifestFieldValues(manifest, field) {
   let values = [];
   if (manifest[field] !== undefined) values.push(manifest[field]);
@@ -676,7 +676,7 @@ function getManifestFieldValues(manifest, field) {
   if (isPlainObject(experimental) && experimental[field] !== undefined) values.push(experimental[field]);
   return values;
 }
-//@ chunk-qchp9vrd.js:49628-50310 placement
+//@ chunk-af1hzzme.js:50968-51650 placement
 function listDeclaredComponentPaths(manifestInfo, manifestPath) {
   let paths = [];
   let addPath = (key, rawValue, kind) => {
@@ -728,7 +728,7 @@ function listDeclaredComponentPaths(manifestInfo, manifestPath) {
   }
   return paths;
 }
-//@ chunk-qchp9vrd.js:50310-50675 placement
+//@ chunk-af1hzzme.js:51650-52015 placement
 /**
  * 检查评测目录与插件声明的组件路径是否重叠（大小写折叠比较），重叠时返回说明。
  */
@@ -744,7 +744,7 @@ function describeComponentOverlap(components, segments, segments_2 = segments, o
   let underText = overlapBase.length > 0 ? ` (under ${overlapBase.join("/")}/ of that plugin)` : "";
   return `${segments_2.join("/")}/${underText} overlaps ${found.describe ?? `the plugin's declared ${found.key} path ${formatGuardValueJson(found.raw)}`}`;
 }
-//@ chunk-qchp9vrd.js:50675-51247 placement
+//@ chunk-af1hzzme.js:52015-52587 placement
 async function describeDeclaredComponentPath(paths, rootDir) {
   let rootReal;
   try {
@@ -797,7 +797,7 @@ async function describeDeclaredComponentPath(paths, rootDir) {
   }
   return results;
 }
-//@ chunk-qchp9vrd.js:51247-51431 placement
+//@ chunk-af1hzzme.js:52587-52771 placement
 function resolveDeclaredPaths(pluginRoot, declaredPath) {
   let isWindows = getPlatform() === "windows";
   let resolved = new Set();
@@ -809,7 +809,7 @@ function resolveDeclaredPaths(pluginRoot, declaredPath) {
   }
   return [...resolved];
 }
-//@ chunk-qchp9vrd.js:51431-51686 placement
+//@ chunk-af1hzzme.js:52771-53026 placement
 function resolveRelativeToRoot(relativeRoot, path) {
   if (path_2.isAbsolute(path) || path_2.posix.isAbsolute(path)) return null;
   let replaced = relativeRoot.replaceAll("\\", "/");
@@ -819,14 +819,14 @@ function resolveRelativeToRoot(relativeRoot, path) {
   let relativePath = path_2.posix.relative(absoluteRoot, resolved);
   return relativePath === "" || relativePath === ".." || relativePath.startsWith("../") ? null : relativePath;
 }
-//@ chunk-qchp9vrd.js:51686-51788 placement
+//@ chunk-af1hzzme.js:53026-53128 placement
 function normalizePathSegments(path) {
   return path
     .split("/")
     .map((segment) => segment.replace(/[. ]+$/, "").toLowerCase())
     .filter((segment) => segment !== "");
 }
-//@ chunk-qchp9vrd.js:51788-52162 placement
+//@ chunk-af1hzzme.js:53128-53502 placement
 async function describeComponentSymlink(manifestState, manifestPath) {
   let declaredPaths =
     manifestState.kind === "ok" ? listDeclaredComponentPaths(manifestState, manifestPath) : [];
@@ -853,7 +853,7 @@ async function describeComponentSymlink(manifestState, manifestPath) {
   allPaths.push(...(await describeDeclaredComponentPath(paths, manifestPath)));
   return allPaths;
 }
-//@ chunk-qchp9vrd.js:52162-52409 placement
+//@ chunk-af1hzzme.js:53502-53749 placement
 async function checkDeclaredComponentPaths(pluginRoot, segments) {
   let manifestState = await readPluginManifest(pluginRoot);
   switch (manifestState.kind) {
@@ -865,7 +865,7 @@ async function checkDeclaredComponentPaths(pluginRoot, segments) {
       return describeComponentOverlap(await describeComponentSymlink(manifestState, pluginRoot), segments);
   }
 }
-//@ chunk-qchp9vrd.js:52409-52603 placement
+//@ chunk-af1hzzme.js:53749-53943 placement
 function pickFirstEvalsEntry(value, manifestPath, warnIfMany) {
   if (typeof value === "string") return value;
   if (warnIfMany && value.length > 1)

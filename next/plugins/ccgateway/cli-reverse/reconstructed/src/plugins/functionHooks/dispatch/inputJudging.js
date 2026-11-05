@@ -3,9 +3,9 @@
  *
  * 钩子输入判定与 ui.* 输入种类（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (4)
  * attribution: placement 4
  */
 import { isLoneSecDefaultShortcut } from "../modAdmission.js";
@@ -20,20 +20,20 @@ import { envSiteRuleFor } from "../sites/siteRules.js";
 import { wellFormedLeaves } from "../ui/validateTree.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:599735-599772 placement
+//@ chunk-7jxyna5q.js:517134-517171 placement
 /**
  * 界面/登记类输入集合
  */
 var REGISTRATION_INPUTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:599735", () => {
+deferInit("chunk-7jxyna5q.js:517134", () => {
   REGISTRATION_INPUTS = new Set(["session.identity"]);
 });
-//@ chunk-s61vbvea.js:599772-599949 placement
+//@ chunk-7jxyna5q.js:517171-517348 placement
 /**
  * 被视为"界面/登记类输入"的 $ 调用集合（ui.open/toast/notify/status/log/notice/ask、tool/command/agent.register、prompt.fill/suggest）。
  */
 var UI_INPUT_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:599772", () => {
+deferInit("chunk-7jxyna5q.js:517171", () => {
   UI_INPUT_EVENTS = new Set([
     "ui.open",
     "ui.toast",
@@ -49,7 +49,7 @@ deferInit("chunk-s61vbvea.js:599772", () => {
     "prompt.suggest",
   ]);
 });
-//@ chunk-s61vbvea.js:599949-600003 placement
+//@ chunk-7jxyna5q.js:517348-517402 placement
 /**
  * raise/among/drawn 结果
  */
@@ -58,7 +58,7 @@ var judgingResult = (judgement, drawn) => ({
   among: judgement.among,
   drawn,
 });
-//@ chunk-s61vbvea.js:600003-601196 placement
+//@ chunk-7jxyna5q.js:517402-518599 placement
 /**
  * （归属疑误：插件函数 hooks）派发插件函数 hook 事件：按来源筛选 hook、校验输入为对象、依次运行并合并结果。
  */

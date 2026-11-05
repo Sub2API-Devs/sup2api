@@ -3,10 +3,10 @@
  *
  * 会话调查触发逻辑：按 tengu_feedback_survey_config 的概率/间隔/消息数决定何时显示，并按评分决定是否询问分享记录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/useFeedbackSurvey.tsx
- * pieces: chunk-0sfjpx19.js (1), chunk-18hwfzwa.js (5), chunk-pzv0vqyf.js (1)
- * attribution: fingerprint 3, sole-consumer 3, affinity 1
+ * pieces: chunk-czq1j3j2.js (5), chunk-nh1pvp1m.js (1), chunk-spc1ee2a.js (1)
+ * attribution: sole-consumer 3, affinity 1, fingerprint 3
  */
 import { getLastAssistantMessage } from "../../utils/messages.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
@@ -22,7 +22,7 @@ import {
   useEffect,
 } from "../../../vendor/react/cjs/react.production.js";
 import { useDynamicConfigValue, useDelayedFlag, endsWithNumberedList } from "./SurveyHost.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { getLastCancelledAPIMessageId, getPromptIndex } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -60,13 +60,13 @@ import { getMainLoopModel } from "../../utils/model/model.js";
 import { env } from "../../utils/env.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 
-//@ chunk-pzv0vqyf.js:1697-1755 fingerprint (2.1.88 match: DEFAULT_TRANSCRIPT_ASK_CONFIG, 0.481)
+//@ chunk-spc1ee2a.js:1696-1754 fingerprint (2.1.88 match: DEFAULT_TRANSCRIPT_ASK_CONFIG, 0.481)
 var DEFAULT_TRANSCRIPT_ASK_CONFIG = {
   afterPromptCount: 5,
   probability: 0,
   maxImpressions: 3,
 };
-//@ chunk-0sfjpx19.js:134556-134912 fingerprint (2.1.88 match: DEFAULT_FEEDBACK_SURVEY_CONFIG, 0.728)
+//@ chunk-nh1pvp1m.js:129562-129918 fingerprint (2.1.88 match: DEFAULT_FEEDBACK_SURVEY_CONFIG, 0.728)
 var DEFAULT_FEEDBACK_SURVEY_CONFIG = "tengu_juniper_vale";
 var TENGU_RUSSET_WHIMBREL = "tengu_russet_whimbrel";
 var DEFAULT_SURVEY_TIMING = {
@@ -87,19 +87,19 @@ var DEFAULT_SURVEY_FOLLOWUP_CONFIG = {
   maxChars: 500,
   autoDismissAfterMs: 30000,
 };
-//@ chunk-18hwfzwa.js:1024512-1024535 sole-consumer
+//@ chunk-czq1j3j2.js:1058551-1058574 sole-consumer
 function isShareAlwaysAllowed() {
   return false;
 }
-//@ chunk-18hwfzwa.js:1024535-1024559 sole-consumer
+//@ chunk-czq1j3j2.js:1058574-1058598 sole-consumer
 function isFollowupAlwaysEnabled() {
   return false;
 }
-//@ chunk-18hwfzwa.js:1024559-1024611 sole-consumer
+//@ chunk-czq1j3j2.js:1058598-1058650 sole-consumer
 function getLastAssistantMessageId(snapshot) {
   return getLastAssistantMessage(snapshot)?.message?.id || "unknown";
 }
-//@ chunk-18hwfzwa.js:1024611-1024724 affinity
+//@ chunk-czq1j3j2.js:1058650-1058763 affinity
 function feedbackSurveyKindFor(response) {
   return response === "good"
     ? "good_feedback_survey"
@@ -107,7 +107,7 @@ function feedbackSurveyKindFor(response) {
       ? "fine_feedback_survey"
       : "bad_feedback_survey";
 }
-//@ chunk-18hwfzwa.js:1024724-1034274 fingerprint (2.1.88 match: useFeedbackSurvey, 0.589)
+//@ chunk-czq1j3j2.js:1058763-1068303 fingerprint (2.1.88 match: useFeedbackSurvey, 0.593)
 /**
  * 会话调查调度：读取 tengu_feedback_survey_config（概率、最少时长/消息数、冷却），按 good/fine/bad 评分读取对应的分享记录询问配置，管理显示与提交。
  */
@@ -142,7 +142,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
   let appearanceRef = useRef(null);
   let [transcriptGatePassed, setTranscriptGatePassed] = useState(false);
   let [isTypedOver, setIsTypedOver] = useState(false);
-  let settingsRate = getInitialSettings_2().feedbackSurveyRate;
+  let settingsRate = getInitialSettings().feedbackSurveyRate;
   let clock = useClock();
   let sessionStartTime = useRef(clock.now());
   let submitCountAtSessionStart = useRef(submitCount);
@@ -393,7 +393,6 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
         turn.getSnapshot().isLoading ||
         hasOpenDialogs(dialogStore.getState()) ||
         hasUnknownOtherKey(state.activeOverlays) ||
-        state_2.active ||
         state_2.value.trim() !== ""
       )
         return false;
@@ -685,9 +684,9 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
   };
 }
 export {
+  DEFAULT_SURVEY_TIMING,
   useFeedbackSurvey,
   DEFAULT_SURVEY_FOLLOWUP_CONFIG,
   TENGU_RUSSET_WHIMBREL,
   DEFAULT_TRANSCRIPT_ASK_CONFIG,
-  DEFAULT_SURVEY_TIMING,
 };

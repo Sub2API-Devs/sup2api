@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：/artifacts 对话框：列出、打开、附加、置顶、改名、删除 artifact
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qr2y97px.js (34)
- * attribution: placement 34
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gexfwx4v.js (38)
+ * attribution: placement 34, layout 4
  */
 import {
   init_react_production,
@@ -26,10 +26,12 @@ import {
   create_6,
   create_2,
   create_26,
-  create_3,
   create_25,
+  create_3,
 } from "../../../vendor/zod/lib/index.mjs";
+import { SHARE_ROLES, shareRoleVerb } from "../../services/artifacts/leftOutFiles.js";
 import { isMeaningfulFlag } from "../../services/artifacts/textSanitize.js";
+import { LIST_LIMIT_MAX, TITLE_MAX_RUNES } from "../../tools/ArtifactTool/artifactUrls.js";
 import {
   sanitizeAndTrim,
   sanitizeInvisibleChars,
@@ -37,18 +39,19 @@ import {
   stripJoinersKeepLeading,
   sanitizeDisplayTitle,
 } from "../../utils/textNormalize.js";
-import { listExternalArtifacts } from "../../services/artifacts/externalList.js";
-import { frameApi, wireOfThrow, wireOf } from "../../services/artifacts/frameRelay.js";
-import { buildFrameHeaders } from "../../services/artifacts/frameApi.js";
-import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { describeArtifactAuthFailure } from "../../services/artifacts/frameFlags.js";
 import {
   uuidSlugFromUrl,
   parseArtifactUrl,
   ARTIFACT_ATTACHED_NOTE_TAG,
 } from "../../tools/ArtifactTool/constants.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
+import { listExternalArtifacts } from "../../services/artifacts/externalList.js";
+import { frameApi, wireOfThrow, wireOf } from "../../services/artifacts/frameRelay.js";
+import { buildFrameHeaders } from "../../services/artifacts/frameApi.js";
+import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
+import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { describeArtifactAuthFailure } from "../../services/artifacts/frameFlags.js";
+import { listFrames, listArtifactsPage } from "../../services/artifacts/listArtifacts.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
 import { DOWN_RIGHT_ARROW, BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { formatShortcutHint, KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
@@ -61,13 +64,13 @@ import { useRecentInputGuard } from "../../hooks/useRecentInputGuard.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { DialogStoreContext, isDialogHiddenWhile, topAutoDialog } from "../../state/dialogQueue.js";
 import { useSearchInput } from "../../hooks/useSearchInput.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { env } from "../../utils/env.js";
 import { setArtifactPinned } from "../../services/artifacts/artifactShare.js";
 import { clampTextEdit, collapseToSingleLine } from "../FeedbackSurvey/SurveyFollowup.js";
-import { TITLE_MAX_RUNES } from "../../tools/ArtifactTool/artifactUrls.js";
 import { artifactViewerUrl } from "../../services/artifacts/publishInstanceFiles.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
+import { deleteDeferredSurface } from "../../services/liveReplica/liveReplica.js";
 import {
   probeArtifactForOpen,
   OPEN_PROBE_TIMEOUT_MS,
@@ -100,7 +103,6 @@ import { Byline } from "../design-system/Byline.js";
 import { Pane } from "../design-system/Pane.js";
 import { Tabs, Tab } from "../design-system/Tabs.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { shareRoleVerb } from "../../services/artifacts/leftOutFiles.js";
 import { formatRelativeTime } from "../../utils/format.js";
 import { getSubscriptionType } from "../../utils/auth.js";
 import { topBlockingDialog } from "../../screens/replDialogState.js";
@@ -123,11 +125,11 @@ import { useSetAppState, useAppStoreDirect, useAppState } from "../../state/AppS
 import { visibleArtifactFrames, framesForSlug, dismissFrameUrl } from "./artifactFrames.js";
 import { mainObservedArtifactVersion } from "../../services/artifacts/readObservation.js";
 
-//@ chunk-qr2y97px.js:16288-16292 placement
+//@ chunk-gexfwx4v.js:17516-17520 placement
 init_react_production();
-//@ chunk-qr2y97px.js:16292-16296 placement
+//@ chunk-gexfwx4v.js:17520-17524 placement
 init_react_production();
-//@ chunk-qr2y97px.js:16296-17286 placement
+//@ chunk-gexfwx4v.js:17524-18605 placement
 /**
  * /artifacts 列表响应的 schema（frames + starsEnabled）、ISO 时间戳校验正则与响应体上限（4MiB）。
  */
@@ -150,6 +152,8 @@ var artifactFrameSchema = DoctorLazy(() =>
     updatedAt: create_2().regex(ISO_DATE_TIME_PATTERN).optional().catch(undefined),
     created_at: create_2().regex(ISO_DATE_TIME_PATTERN).optional().catch(undefined),
     owner_email: create_2().optional().catch(undefined),
+    external: create_25(true).optional().catch(undefined),
+    role: create_26(SHARE_ROLES).optional().catch(undefined),
     view_count: create_3().optional().catch(undefined),
     unique_view_count: create_3().optional().catch(undefined),
     needs_pin: create_6().optional().catch(undefined),
@@ -163,22 +167,79 @@ var artifactFrameSchema = DoctorLazy(() =>
   }),
 );
 var ARTIFACT_LIST_MAX_BYTES = 4194304;
-//@ chunk-qr2y97px.js:17286-17344 placement
+var ARTIFACT_LIST_LIMIT_MAX = LIST_LIMIT_MAX;
+var MAX_ARTIFACT_PAGES = 25;
+//@ chunk-gexfwx4v.js:18605-18663 placement
 function sanitizeOptionalText(text) {
   if (text === undefined) return;
   return sanitizeAndTrim(text) ?? undefined;
 }
-//@ chunk-qr2y97px.js:17344-19554 placement
+//@ chunk-gexfwx4v.js:18663-19589 layout
+function collectArtifactRows(rows, seenSlugs, target, notInAll) {
+  let dropped = 0;
+  for (let rawFrame of rows) {
+    let parsedFrame = artifactFrameSchema().safeParse(rawFrame);
+    if (!parsedFrame.success) {
+      dropped++;
+      continue;
+    }
+    let frame = parsedFrame.data;
+    if (seenSlugs.has(frame.slug)) continue;
+    seenSlugs.add(frame.slug);
+    if (frame.softDeleted === true) continue;
+    let url = `https://claude.ai/code/artifact/${frame.slug}`;
+    if (uuidSlugFromUrl(url) !== frame.slug) {
+      dropped++;
+      continue;
+    }
+    let favicon =
+      frame.favicon === undefined ? undefined : (sanitizeInvisibleChars(frame.favicon) ?? undefined);
+    target.push({
+      slug: frame.slug,
+      title: sanitizeOptionalText(frame.title),
+      editableTitle: frame.title === undefined ? undefined : (sanitizeTitleText(frame.title) ?? undefined),
+      favicon: favicon !== undefined && bunStringWidth(favicon) <= 4 ? favicon : undefined,
+      description: sanitizeOptionalText(frame.description),
+      label: sanitizeOptionalText(frame.label),
+      rel: frame.rel,
+      ...(notInAll && {
+        notInAll: true,
+      }),
+      ...(frame.external === true && {
+        external: true,
+        role: frame.role,
+      }),
+      source_surface: frame.source_surface,
+      updatedAt: frame.updatedAt,
+      createdAt: frame.created_at,
+      ownerEmail: sanitizeOptionalText(frame.owner_email),
+      view_count: frame.view_count,
+      unique_view_count: frame.unique_view_count,
+      needs_pin: frame.needs_pin,
+      audience: frame.audience,
+      starred: frame.starred,
+      lastViewedAt: frame.last_viewed_at,
+      ...(frame.rel === "mine" &&
+        frame.outsidersMayHaveWritten === true && {
+          outsidersMayHaveWritten: true,
+        }),
+    });
+  }
+  return dropped;
+}
+//@ chunk-gexfwx4v.js:19589-20988 placement
 /**
  * 请求 /api/frame/frames 拉取当前账号可见的 artifact 列表（含错误分类）。
  */
-async function fetchArtifactGallery(credentials, signal) {
+async function fetchArtifactGallery(credentials, signal, onRest) {
   let externalList = listExternalArtifacts({
     credentials,
     ...(signal && {
       signal,
     }),
   });
+  let laneResult = await loadArtifactGalleryPage(credentials, signal, externalList, onRest);
+  if (laneResult !== null) return laneResult;
   let response;
   try {
     response = await frameApi.get("/api/frame/frames?limit=200", {
@@ -235,48 +296,24 @@ async function fetchArtifactGallery(credentials, signal) {
       err: "Couldn't load artifacts (unexpected response)",
     };
   }
-  let rows = [];
-  let droppedCount = 0;
-  for (let rawFrame of parsed.data.frames ?? []) {
-    let frameParsed = artifactFrameSchema().safeParse(rawFrame);
-    if (!frameParsed.success) {
-      droppedCount++;
-      continue;
-    }
-    let frame = frameParsed.data;
-    if (frame.softDeleted === true) continue;
-    let artifactUrl = `https://claude.ai/code/artifact/${frame.slug}`;
-    if (uuidSlugFromUrl(artifactUrl) !== frame.slug) {
-      droppedCount++;
-      continue;
-    }
-    let favicon =
-      frame.favicon === undefined ? undefined : (sanitizeInvisibleChars(frame.favicon) ?? undefined);
-    rows.push({
-      slug: frame.slug,
-      title: sanitizeOptionalText(frame.title),
-      editableTitle: frame.title === undefined ? undefined : (sanitizeTitleText(frame.title) ?? undefined),
-      favicon: favicon !== undefined && bunStringWidth(favicon) <= 4 ? favicon : undefined,
-      description: sanitizeOptionalText(frame.description),
-      label: sanitizeOptionalText(frame.label),
-      rel: frame.rel,
-      source_surface: frame.source_surface,
-      updatedAt: frame.updatedAt,
-      createdAt: frame.created_at,
-      ownerEmail: sanitizeOptionalText(frame.owner_email),
-      view_count: frame.view_count,
-      unique_view_count: frame.unique_view_count,
-      needs_pin: frame.needs_pin,
-      audience: frame.audience,
-      starred: frame.starred,
-      lastViewedAt: frame.last_viewed_at,
-      ...(frame.rel === "mine" &&
-        frame.outsidersMayHaveWritten === true && {
-          outsidersMayHaveWritten: true,
-        }),
-    });
-  }
-  if (rows.length === 0 && droppedCount > 0) {
+  let frames = parsed.data.frames ?? [];
+  let tailPages =
+    frames.length >= LIST_LIMIT_MAX
+      ? await listFrames({
+          credentials,
+          ...(signal && {
+            signal,
+          }),
+        })
+      : undefined;
+  let collected = [];
+  let droppedCount = collectArtifactRows(
+    [...frames, ...(tailPages?.listed ? tailPages.rows : [])],
+    new Set(),
+    collected,
+    false,
+  );
+  if (collected.length === 0 && droppedCount > 0) {
     logFeatureBad("artifact_gallery", "all_rows_dropped", {
       wire,
     });
@@ -284,19 +321,7 @@ async function fetchArtifactGallery(credentials, signal) {
       err: "Couldn't load artifacts (unexpected response)",
     };
   }
-  let seenSlugs = new Set(rows.map((row) => row.slug));
-  let external = await externalList;
-  for (let row of external.listed ? external.rows : []) {
-    if (seenSlugs.has(row.slug)) continue;
-    seenSlugs.add(row.slug);
-    rows.push({
-      slug: row.slug,
-      title: sanitizeOptionalText(row.title ?? "Untitled"),
-      rel: "shared",
-      external: true,
-      role: row.role,
-    });
-  }
+  await mergeExternalArtifacts(collected, externalList);
   if (droppedCount > 0)
     logFeatureSad("artifact_gallery", "rows_dropped", {
       count: droppedCount,
@@ -308,18 +333,109 @@ async function fetchArtifactGallery(credentials, signal) {
     });
   return {
     err: null,
-    frames: rows,
+    frames: collected,
     starsEnabled: parsed.data.starsEnabled === true,
   };
 }
-//@ chunk-qr2y97px.js:19554-19619 placement
+//@ chunk-gexfwx4v.js:20988-21218 layout
+async function mergeExternalArtifacts(target, externalList) {
+  let knownSlugs = new Set(target.map((frame) => frame.slug));
+  let external = await externalList;
+  for (let row of external.listed ? external.rows : []) {
+    if (knownSlugs.has(row.slug)) continue;
+    knownSlugs.add(row.slug);
+    target.push({
+      slug: row.slug,
+      title: sanitizeOptionalText(row.title ?? "Untitled"),
+      rel: "shared",
+      external: true,
+      role: row.role,
+    });
+  }
+}
+//@ chunk-gexfwx4v.js:21218-21914 layout
+async function loadArtifactGalleryPage(credentials, signal, externalList, onRest) {
+  let query = {
+    credentials,
+    ...(signal && {
+      signal,
+    }),
+    limit: ARTIFACT_LIST_LIMIT_MAX,
+  };
+  let [allLane, sharedLane] = await Promise.all([
+    listArtifactsPage({
+      ...query,
+      rel: "all",
+    }),
+    listArtifactsPage({
+      ...query,
+      rel: "shared",
+    }),
+  ]);
+  if (!allLane.served) return null;
+  let seenSlugs = new Set();
+  let collected = [];
+  let dropped = collectArtifactRows(allLane.rows, seenSlugs, collected, false);
+  if (sharedLane.served) dropped += collectArtifactRows(sharedLane.rows, seenSlugs, collected, true);
+  else logFeatureSad("artifact_gallery", "shared_lane_unserved");
+  if (collected.length === 0 && dropped > 0) {
+    logFeatureBad("artifact_gallery", "all_rows_dropped");
+    return {
+      err: "Couldn't load artifacts (unexpected response)",
+    };
+  }
+  await mergeExternalArtifacts(collected, externalList);
+  if (dropped > 0)
+    logFeatureSad("artifact_gallery", "rows_dropped", {
+      count: dropped,
+    });
+  else logFeatureOk("artifact_gallery");
+  let rest = Promise.all([
+    collectArtifactPages("all", allLane.nextPageToken, query, seenSlugs, collected, onRest),
+    collectArtifactPages(
+      "shared",
+      sharedLane.served ? sharedLane.nextPageToken : undefined,
+      query,
+      seenSlugs,
+      collected,
+      onRest,
+    ),
+  ]).then(() => {});
+  return {
+    err: null,
+    frames: collected,
+    starsEnabled: allLane.starsEnabled,
+    rest,
+  };
+}
+//@ chunk-gexfwx4v.js:21914-22239 layout
+async function collectArtifactPages(lane, pageToken, query, seenSlugs, collected, onRest) {
+  let token = pageToken;
+  for (let k = 1; token !== undefined && k < MAX_ARTIFACT_PAGES; k++) {
+    if (query.signal?.aborted) return;
+    let page = await listArtifactsPage({
+      ...query,
+      rel: lane,
+      pageToken: token,
+    });
+    if (!page.served) return;
+    collectArtifactRows(page.rows, seenSlugs, collected, lane === "shared");
+    if (lane === "all") {
+      let pageSlugs = new Set(page.rows.map((row) => row.slug));
+      for (let frame of collected) if (pageSlugs.has(frame.slug)) delete frame.notInAll;
+    }
+    onRest?.([...collected]);
+    token = page.nextPageToken;
+  }
+}
+//@ chunk-gexfwx4v.js:22239-22304 placement
 var ARTIFACT_BODY_MAX_BYTES = 65536;
 var artifactBodySchema = DoctorLazy(() =>
   create({
     title: create_2().optional().catch(undefined),
   }),
 );
-//@ chunk-qr2y97px.js:19619-20807 placement
+//@ chunk-gexfwx4v.js:22304-23492 placement
 async function renameArtifact(slug, title, credentials, signal) {
   let response;
   try {
@@ -387,11 +503,11 @@ async function renameArtifact(slug, title, credentials, signal) {
     title: savedTitle ?? sanitizeAndTrim(title) ?? "",
   };
 }
-//@ chunk-qr2y97px.js:20807-20888 placement
+//@ chunk-gexfwx4v.js:23492-23573 placement
 function artifactTabIds(includePinned) {
   return includePinned ? ["all", "mine", "shared", "pinned"] : ["all", "mine", "shared"];
 }
-//@ chunk-qr2y97px.js:20888-20958 placement
+//@ chunk-gexfwx4v.js:23573-23643 placement
 var TAB_POINTER_GLYPH = DOWN_RIGHT_ARROW;
 var ARTIFACT_TAB_TITLES = {
   all: "All",
@@ -399,16 +515,16 @@ var ARTIFACT_TAB_TITLES = {
   shared: "Shared",
   pinned: "Pinned",
 };
-//@ chunk-qr2y97px.js:20958-21025 placement
+//@ chunk-gexfwx4v.js:23643-23710 placement
 function escapeCloseHint() {
   return formatShortcutHint({
     chord: "escape",
     action: "close this list",
   });
 }
-//@ chunk-qr2y97px.js:21025-21036 placement
+//@ chunk-gexfwx4v.js:23710-23721 placement
 var ARTIFACT_REFRESH_DEBOUNCE_MS = 400;
-//@ chunk-qr2y97px.js:21036-35854 placement
+//@ chunk-gexfwx4v.js:23721-38981 placement
 /**
  * /artifacts 对话框：列出我的/共享/置顶 artifact，支持打开、附加到会话、复制链接、置顶、改名、删除。
  */
@@ -488,13 +604,38 @@ function ArtifactsDialog({
   let locallyToggledStarRef = useRef(new Set());
   let deletedSlugsRef = useRef(new Set());
   let pinRequestInFlightRef = useRef(false);
+  let abortControllerRef = useRef(null);
   let refreshGallery = useCallback(
-    (signal) => {
+    (parentSignal) => {
       setIsLoading(true);
       setLoadError(null);
-      fetchArtifactGallery(credentials, signal)
+      abortControllerRef.current?.abort();
+      let abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      parentSignal?.addEventListener("abort", () => abortController.abort());
+      fetchArtifactGallery(credentials, abortController.signal, (restFrames) => {
+        if (!abortController.signal.aborted) {
+          let restBySlug = new Map(restFrames.map((frame) => [frame.slug, frame]));
+          setGalleryFrames((previous) => {
+            let knownSlugs = new Set(previous.map((frame) => frame.slug));
+            return [
+              ...previous.map((frame) =>
+                frame.notInAll === true && restBySlug.get(frame.slug)?.notInAll !== true
+                  ? {
+                      ...frame,
+                      notInAll: undefined,
+                    }
+                  : frame,
+              ),
+              ...restFrames.filter(
+                (frame) => !knownSlugs.has(frame.slug) && !deletedSlugsRef.current.has(frame.slug),
+              ),
+            ];
+          });
+        }
+      })
         .then((artifactGallery) => {
-          if (signal?.aborted) return;
+          if (abortController.signal.aborted) return;
           if (artifactGallery.err !== null) setLoadError(artifactGallery.err);
           else {
             let filtered = artifactGallery.frames.filter((frame) => !deletedSlugsRef.current.has(frame.slug));
@@ -526,7 +667,10 @@ function ArtifactsDialog({
   useEffect(() => {
     let abortController = new AbortController();
     refreshGallery(abortController.signal);
-    return () => abortController.abort();
+    return () => {
+      abortController.abort();
+      abortControllerRef.current?.abort();
+    };
   }, [refreshGallery]);
   let sessionBySlug = useMemo(
     () => new Map(sessionArtifacts.map((sessionArtifact) => [sessionArtifact.slug, sessionArtifact])),
@@ -563,7 +707,7 @@ function ArtifactsDialog({
       );
     }
     return activeTab === "all"
-      ? currentRows
+      ? currentRows.filter((frame) => frame.notInAll !== true)
       : activeTab === "pinned"
         ? currentRows.filter((artifactRow) => artifactRow.starred === true)
         : currentRows.filter((artifactRow) => artifactRow.rel === activeTab);
@@ -600,7 +744,10 @@ function ArtifactsDialog({
     suppressActionsRef.current = false;
     pinRequestInFlightRef.current = false;
   });
-  let pinnedCount = useMemo(() => count(baseRows, (artifactRow) => artifactRow.starred === true), [baseRows]);
+  let pinnedCount = useMemo(
+    () => countWhere(baseRows, (artifactRow) => artifactRow.starred === true),
+    [baseRows],
+  );
   let showPinnedTab = starsEnabled && (pinnedCount > 0 || activeTab === "pinned");
   let capabilitiesOf = (artifactRow) => {
     let isInSession = sessionSlugs.has(artifactRow.slug);
@@ -617,7 +764,7 @@ function ArtifactsDialog({
   };
   let focusedRow = visibleRows[focusedIndex];
   let focusedCapabilities = focusedRow === undefined ? undefined : capabilitiesOf(focusedRow);
-  let attachedCount = count(visibleRows, (artifactRow) => sessionBySlug.has(artifactRow.slug));
+  let attachedCount = countWhere(visibleRows, (artifactRow) => sessionBySlug.has(artifactRow.slug));
   let hasVisibleRows = visibleRows.length > 0;
   let hasAnyRows = galleryFrames.length > 0 || sessionArtifacts.length > 0;
   let togglePin = useCallback(
@@ -777,6 +924,7 @@ function ArtifactsDialog({
           setNoticeText(`Couldn't open a browser \u2014 press c to copy ${viewerUrl}`);
           return;
         }
+        deleteDeferredSurface(slug);
         if (closingRef.current) return;
         if (titleRef.current !== null) {
           pendingCloseRef.current ??= "opened";
@@ -1605,7 +1753,7 @@ function ArtifactsDialog({
     }),
   });
 }
-//@ chunk-qr2y97px.js:35854-36282 placement
+//@ chunk-gexfwx4v.js:38981-39409 placement
 function buildArtifactRow(artifact, sessionArtifact) {
   let ownerLabel =
     artifact.rel === "shared" && artifact.ownerEmail ? firstLineOf(artifact.ownerEmail, "@") : null;
@@ -1633,14 +1781,14 @@ function buildArtifactRow(artifact, sessionArtifact) {
     ],
   };
 }
-//@ chunk-qr2y97px.js:36282-36389 placement
+//@ chunk-gexfwx4v.js:39409-39516 placement
 function sharedWithYouLabel() {
   let subscriptionType = getSubscriptionType();
   return subscriptionType === "team" || subscriptionType === "enterprise"
     ? "from another organization"
     : "shared with you";
 }
-//@ chunk-qr2y97px.js:36389-36558 placement
+//@ chunk-gexfwx4v.js:39516-39685 placement
 function audienceLabel(audience) {
   switch (audience) {
     case "owner":
@@ -1655,7 +1803,7 @@ function audienceLabel(audience) {
       return null;
   }
 }
-//@ chunk-qr2y97px.js:36558-36710 placement
+//@ chunk-gexfwx4v.js:39685-39837 placement
 function sortArtifactRows(rows) {
   return rows.toSorted((leftRow, rightRow) => {
     let starDiff = Number(rightRow.starred === true) - Number(leftRow.starred === true);
@@ -1665,14 +1813,14 @@ function sortArtifactRows(rows) {
     return leftTime === rightTime ? 0 : rightTime - leftTime;
   });
 }
-//@ chunk-qr2y97px.js:36710-36817 placement
+//@ chunk-gexfwx4v.js:39837-39944 placement
 function lastActivityTime(artifact) {
   let time = artifact.lastViewedAt ?? artifact.updatedAt ?? artifact.createdAt;
   return time === undefined ? -1 / 0 : new Date(time).getTime();
 }
-//@ chunk-qr2y97px.js:36817-36882 placement
+//@ chunk-gexfwx4v.js:39944-40009 placement
 var ARTIFACT_ACTION_NAMES = ["enter", "open", "copy", "pin", "rename", "delete", "dismiss"];
-//@ chunk-qr2y97px.js:36882-37109 placement
+//@ chunk-gexfwx4v.js:40009-40236 placement
 function keyToRowAction(event) {
   if (event.ctrl && event.key === "r") return "rename";
   if (event.ctrl || event.meta) return null;
@@ -1691,7 +1839,7 @@ function keyToRowAction(event) {
       return null;
   }
 }
-//@ chunk-qr2y97px.js:37109-37411 placement
+//@ chunk-gexfwx4v.js:40236-40538 placement
 function getArtifactActionLabel(actionName, artifactRow, capabilitiesOf) {
   switch (actionName) {
     case "enter":
@@ -1710,7 +1858,7 @@ function getArtifactActionLabel(actionName, artifactRow, capabilitiesOf) {
       return "Dismiss from this session's list";
   }
 }
-//@ chunk-qr2y97px.js:37411-37907 placement
+//@ chunk-gexfwx4v.js:40538-41034 placement
 function buildArtifactKeyHints(flags) {
   let hints = [];
   if (flags.enter !== null)
@@ -1759,7 +1907,7 @@ function buildArtifactKeyHints(flags) {
     });
   return hints;
 }
-//@ chunk-qr2y97px.js:37907-38013 placement
+//@ chunk-gexfwx4v.js:41034-41140 placement
 function sessionArtifactRow(sessionArtifact) {
   return {
     slug: sessionArtifact.slug,
@@ -1768,21 +1916,21 @@ function sessionArtifactRow(sessionArtifact) {
     updatedAt: new Date(sessionArtifact.updatedAt).toISOString(),
   };
 }
-//@ chunk-qr2y97px.js:38013-38060 placement
+//@ chunk-gexfwx4v.js:41140-41187 placement
 function artifactDisplayTitle(artifactRow) {
   return artifactRow.title || artifactRow.label || artifactRow.slug;
 }
-//@ chunk-qr2y97px.js:38060-38094 placement
+//@ chunk-gexfwx4v.js:41187-41221 placement
 function normalizeArtifactSearch(text) {
   return stripJoinersKeepLeading(collapseToSingleLine(text));
 }
-//@ chunk-qr2y97px.js:38094-38149 placement
+//@ chunk-gexfwx4v.js:41221-41276 placement
 function isPanelDialogHidden(state) {
   return topBlockingDialog(state) !== null && isDialogHiddenWhile(topAutoDialog(state), "panel");
 }
-//@ chunk-qr2y97px.js:38149-38167 placement
+//@ chunk-gexfwx4v.js:41276-41294 placement
 var noSubscription = () => () => {};
-//@ chunk-qr2y97px.js:38167-38314 placement
+//@ chunk-gexfwx4v.js:41294-41441 placement
 function useDialogOpenFlag() {
   let $ = useMemoCache(2);
   let dialogStore = useContext(DialogStoreContext);
@@ -1795,15 +1943,15 @@ function useDialogOpenFlag() {
   let isHidden = isHiddenCached;
   return useSyncExternalStore(dialogStore?.subscribe ?? noSubscription, isHidden, isHidden);
 }
-//@ chunk-qr2y97px.js:38314-38325 placement
+//@ chunk-gexfwx4v.js:41441-41452 placement
 var MAX_EXCERPT_CHARS = 120;
-//@ chunk-qr2y97px.js:38325-38405 placement
+//@ chunk-gexfwx4v.js:41452-41532 placement
 function frameIdBySlug(frameUrls, slug) {
   for (let [frameId, frame] of nonOpenedFrameUrls(frameUrls))
     if (!isCreatedFrameUrl(frameId) && uuidSlugFromUrl(frame.url) === slug) return frameId;
   return;
 }
-//@ chunk-qr2y97px.js:38405-41198 placement
+//@ chunk-gexfwx4v.js:41532-44328 placement
 /**
  * 把选中的 artifact 附加到当前会话（生成元消息，标注外部可写风险）。
  */
@@ -1956,11 +2104,11 @@ ${preamble}`
     metaMessage: `${noteTag}${extraPreamble}The user attached the artifact ${viewerUrl} to this session as the current artifact of interest. re-read it before editing or republishing (${describeArtifactReadMethod()}).${watchNote}`,
   };
 }
-//@ chunk-qr2y97px.js:41198-41234 placement
+//@ chunk-gexfwx4v.js:44328-44364 placement
 function selectFrameUrls(state) {
   return state.frameUrls;
 }
-//@ chunk-qr2y97px.js:41234-41380 placement
+//@ chunk-gexfwx4v.js:44364-44510 placement
 function appendMetaUserMessage(context, content) {
   let messages = [
     createUserMessage({
@@ -1977,7 +2125,7 @@ function appendMetaUserMessage(context, content) {
     messages,
   });
 }
-//@ chunk-qr2y97px.js:41380-41437 placement
+//@ chunk-gexfwx4v.js:44510-44567 placement
 /**
  * /artifacts 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -1987,7 +2135,7 @@ async function runArtifactsCommand(onDone, context) {
     context,
   });
 }
-//@ chunk-qr2y97px.js:41437-42532 placement
+//@ chunk-gexfwx4v.js:44567-45665 placement
 function ArtifactsCommandView(props) {
   let $ = useMemoCache(21);
   let { onDone, context } = props;

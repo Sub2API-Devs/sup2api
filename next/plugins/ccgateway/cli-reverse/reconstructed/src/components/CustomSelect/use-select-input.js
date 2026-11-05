@@ -3,9 +3,9 @@
  *
  * Select 的按键处理（select:next/previous/first/last、数字直选、回车确认、输入选项编辑）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/use-select-input.ts
- * pieces: chunk-ey2qag4x.js (6)
+ * pieces: chunk-p1yqn9ds.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import {
@@ -20,15 +20,15 @@ import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { isEscapeKey } from "./select-input-option.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
-import { normalizeFullWidthDigits_2, replaceIdeographicSpace } from "../../utils/stringUtils.js";
+import { normalizeFullWidthDigits_2 } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:33451-33455 placement
+//@ chunk-p1yqn9ds.js:33225-33229 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:33451", () => {
+deferInit("chunk-p1yqn9ds.js:33225", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:33455-33616 placement
+//@ chunk-p1yqn9ds.js:33229-33390 placement
 /**
  * 收集粘贴事件，等目标输入项获得焦点后再派发（t 为真时）。
  */
@@ -44,7 +44,7 @@ function useDeferredPasteForwarding(forwarding) {
     setQueue((previous) => [...previous, enqueue]);
   };
 }
-//@ chunk-ey2qag4x.js:33616-33806 placement
+//@ chunk-p1yqn9ds.js:33390-33580 placement
 /**
  * 粘贴事件未被阻止、去掉焦点尾序列后非空（macOS/WSL 允许空粘贴）且 canPaste 未否决时为真。
  */
@@ -55,7 +55,7 @@ function isForwardablePaste(event, guard) {
   let rawEmptyOnMac = event.rawEmpty && (platform === "macos" || platform === "wsl");
   return (text !== "" || rawEmptyOnMac) && guard?.() !== false;
 }
-//@ chunk-ey2qag4x.js:33806-34082 placement
+//@ chunk-p1yqn9ds.js:33580-33856 placement
 /**
  * 若选项里有接受其他行粘贴的输入项，返回粘贴处理器：焦点不在该项时拦截粘贴、转发并把焦点移过去。
  */
@@ -75,12 +75,12 @@ function usePasteIntoInputOption({ options, focusedValue, focusOption, canPaste 
     focusOption(found.value);
   };
 }
-//@ chunk-ey2qag4x.js:34082-34086 placement
+//@ chunk-p1yqn9ds.js:33856-33860 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:34082", () => {
+deferInit("chunk-p1yqn9ds.js:33856", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:34086-37014 fingerprint (2.1.88 match: useSelectInput, 0.738)
+//@ chunk-p1yqn9ds.js:33860-36635 fingerprint (2.1.88 match: useSelectInput, 0.724)
 /**
  * Select 按键：select:next/previous/first/last、数字直选、回车提交、输入选项内的编辑与粘贴。
  */
@@ -89,7 +89,6 @@ var useSelectInput = ({
   disableSelection = false,
   state,
   options,
-  isMultiSelect = false,
   onUpFromFirstItem,
   onDownFromLastItem,
   onInputModeToggle,
@@ -180,14 +179,13 @@ var useSelectInput = ({
       if (isDisabled) return;
       let normalizedInput = normalizeFullWidthDigits_2(event.key);
       let focusedValue = state.getFocusedValue();
-      let focusedOption = options.find((opt) => opt.value === focusedValue);
-      let currentIsInInput = focusedOption?.type === "input";
+      let isInputFocused = options.find((opt) => opt.value === focusedValue)?.type === "input";
       if (event.key === "tab") {
         event.preventDefault();
         if (onInputModeToggle && focusedValue !== undefined) onInputModeToggle(focusedValue);
         return;
       }
-      if (currentIsInInput) {
+      if (isInputFocused) {
         if (imagesSelected) {
           if (event.key === "up") {
             event.preventDefault();
@@ -266,14 +264,6 @@ var useSelectInput = ({
         return;
       }
       if (disableSelection !== true) {
-        if (isMultiSelect && replaceIdeographicSpace(event.key) === " " && focusedValue !== undefined) {
-          if (focusedOption?.disabled !== true) {
-            event.preventDefault();
-            state.selectFocusedOption?.();
-            state.onChange?.(focusedValue);
-          }
-          return;
-        }
         if (disableSelection !== "numeric" && /^[0-9]$/.test(normalizedInput)) {
           event.preventDefault();
           let index = parseInt(normalizedInput) - 1;
@@ -293,7 +283,6 @@ var useSelectInput = ({
               return;
             }
             state.onChange?.(selectedOption.value);
-            return;
           }
         }
       }

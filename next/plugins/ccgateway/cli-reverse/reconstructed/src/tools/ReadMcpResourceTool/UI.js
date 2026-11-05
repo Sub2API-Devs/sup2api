@@ -3,9 +3,9 @@
  *
  * ReadMcpResource 结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ReadMcpResourceTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -14,7 +14,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-ah34pb7m.js:32725-33057 fingerprint (2.1.88 match: renderToolResultMessage, 0.897)
+//@ chunk-wjygkcr4.js:33690-34022 fingerprint (2.1.88 match: renderToolResultMessage, 0.897)
 /**
  * ReadMcpResource 结果渲染：error 显示错误，无内容显示 (No content)，否则格式化 JSON。
  */

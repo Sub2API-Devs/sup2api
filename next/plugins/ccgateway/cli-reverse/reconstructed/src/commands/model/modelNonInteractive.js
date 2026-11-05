@@ -3,9 +3,9 @@
  *
  * 非交互 /model：检查模型可用性（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0pmcg6nh.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sg8kbk5k.js (2)
  * attribution: placement 2
  */
 import { LEGACY_MODEL_IDS } from "../../utils/model/modelIds.js";
@@ -30,9 +30,9 @@ import { firstWord } from "../../utils/model/thirdPartyModelDefaults.js";
 import { serializeModelSwitch } from "../../utils/model/modelSwitchHooks.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
-//@ chunk-0pmcg6nh.js:12127-12215 placement
+//@ chunk-sg8kbk5k.js:13276-13364 placement
 var MODEL_USAGE_TEXT = `Usage: /model <name>. Available: ${LEGACY_MODEL_IDS.join(", ")}, default, or a full model ID.`;
-//@ chunk-0pmcg6nh.js:12215-14286 placement
+//@ chunk-sg8kbk5k.js:13364-15436 placement
 /**
  * 非交互 /model：确认模型可用，检查超时时提示重试
  */

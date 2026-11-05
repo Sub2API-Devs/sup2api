@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{wt}from"./chunk-cdyva2jv.js";import{sne}from"./chunk-s4p9jscb.js";import{ur,Hd}from"./chunk-5xgkngpb.js";function s(){return require("./chunk-9hx1mne2.js").mcpClientModule()}async function ame(e,c,d){let i=ur(e.name,e.config),{captureDiscoveryGrantLeg:h,ensureDiscoveryCacheAccount:l,getMcpIdentityEpoch:f,persistRefreshedToolsIfPresent:m}=s();l();let a=Hd()?h(e.name,e.config):void 0,n=wt().toolRefreshSequences,r=n.get(e)??{started:0,applied:0};n.set(e,r),r.started+=1;let p=r.started,{fetchToolsForClient:t}=s(),v=t.cache.get(i),g=f();t.cache.delete(i);let o=await t(e,d),u=s().getToolsListErrorForResult(o);if(u)return{status:"kept-previous",error:u};if(e.discoveryAuthFailure&&o.length===0)return{status:"kept-previous",error:"the server rejected tool discovery as unauthorized \u2014 the user needs to authorize this connector (e.g. via /mcp) before its tools are available"};if(r.applied>p)return{status:"kept-previous",error:"superseded by a newer concurrent refresh of this server \u2014 the newer refresh result is the one applied"};if(r.applied=p,c(e.name,sne(e,o)),a)a.then((y)=>m(e,o,{identityEpoch:g,grantLeg:y}));return{status:"refreshed",newTools:o,previousToolsPromise:v}}
+export{ame};

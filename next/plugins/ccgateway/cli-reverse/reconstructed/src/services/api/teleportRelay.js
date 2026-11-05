@@ -3,9 +3,9 @@
  *
  * teleport 中继请求（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r1wk8q25.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n7kzs9r0.js (13)
  * attribution: placement 13
  */
 import { jsonStringifyRaw, jsonParseRaw } from "../../utils/slowOperations.js";
@@ -50,22 +50,23 @@ import { getSessionIngressAuthHeaders } from "../../utils/sessionIngressAuth.js"
 import { ANTHROPIC_USAGE_LIMIT } from "../lowPriority/headers.js";
 import { REQUEST_CLASSES, X_CLAUDE_CODE_REQUEST_CLASS } from "./requestHeaders.js";
 import { SANDY_PLOVER_HEADER, UNREADABLE_TOOLS_BEFORE_SUMMARY } from "./clientHelpers.js";
+import { isConnectorFieldsReported, connectorFields } from "./connectorFields.js";
 import { TOOL_NAME_PATTERN } from "../../bootstrap/stateSlices.js";
 import { testGuardedFetch } from "../../utils/testNetworkGuard.js";
 import { mcpProxyFetchOptions } from "../mcp/agentProxyFallback.js";
 import { takesRequestBodyBytes, markTakesRequestBodyBytes } from "./incrementalRequestBody.js";
 
-//@ chunk-r1wk8q25.js:12238-12368 placement
+//@ chunk-n7kzs9r0.js:13399-13529 placement
 function appendJsonFields(body, fields) {
   let sliced = jsonStringifyRaw(fields).slice(1, -1);
   if (sliced === "") return body;
   let endIndex = body.trimEnd().length;
   return `${body.slice(0, endIndex - 1)},${sliced}}${body.slice(endIndex)}`;
 }
-//@ chunk-r1wk8q25.js:12479-12498 placement
+//@ chunk-n7kzs9r0.js:13640-13660 placement
 var MAX_RELAY_ERROR_BODY_BYTES = 4096;
 var RELAY_ERROR_READ_TIMEOUT_MS = 5000;
-//@ chunk-r1wk8q25.js:12498-12947 placement
+//@ chunk-n7kzs9r0.js:13660-14110 placement
 /**
  * 读取中继响应体（有超时与大小上限），解析出 error.type；超时、过大或解析失败返回 null。
  */
@@ -104,7 +105,7 @@ async function readRelayErrorType(response, timeoutMs = RELAY_ERROR_READ_TIMEOUT
     return null;
   }
 }
-//@ chunk-r1wk8q25.js:12947-13222 placement
+//@ chunk-n7kzs9r0.js:14110-14385 placement
 function checkRelayAccountMemory(fetchImpl, init, loopKind, messages) {
   if (loopKind === "main") closeOpenRelayBootVerdict();
   if (
@@ -122,7 +123,7 @@ function checkRelayAccountMemory(fetchImpl, init, loopKind, messages) {
     isMemoryWithdrawn: () => hasAccountMemoryInRequest(messages),
   });
 }
-//@ chunk-r1wk8q25.js:13222-13388 placement
+//@ chunk-n7kzs9r0.js:14385-14551 placement
 function hasAccountMemoryInRequest(messages) {
   try {
     return accountMemoryRedactionActive() || messages.some(isAccountMemoryAttachment);
@@ -134,25 +135,25 @@ function hasAccountMemoryInRequest(messages) {
     return true;
   }
 }
-//@ chunk-r1wk8q25.js:13388-13482 placement
+//@ chunk-n7kzs9r0.js:14551-14645 placement
 function urlHref(input) {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
   return input.url;
 }
-//@ chunk-r1wk8q25.js:13482-13576 placement
+//@ chunk-n7kzs9r0.js:14645-14739 placement
 function isDeferredLoadingTool(tool) {
   return typeof tool === "object" && tool !== null && "defer_loading" in tool && tool.defer_loading === true;
 }
-//@ chunk-r1wk8q25.js:13576-13646 placement
+//@ chunk-n7kzs9r0.js:14739-14809 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-r1wk8q25.js:13646-13726 placement (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-n7kzs9r0.js:14809-14889 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockLoose(m) {
   return isPlainObject(m) && (m.type === "thinking" || m.type === "redacted_thinking");
 }
-//@ chunk-r1wk8q25.js:13726-13916 placement
+//@ chunk-n7kzs9r0.js:14889-15079 placement
 function stripThinkingFromApiMessage(message) {
   if (
     !isPlainObject(message) ||
@@ -167,7 +168,7 @@ function stripThinkingFromApiMessage(message) {
     content: filtered.length > 0 ? filtered : [thinkingRemovedPlaceholder()],
   };
 }
-//@ chunk-r1wk8q25.js:13916-14298 placement
+//@ chunk-n7kzs9r0.js:15079-15461 placement
 /**
  * 转发 teleport 请求前移除消息中的 thinking 块（末条为助手消息时不处理），保持原请求体末尾空白。
  */
@@ -198,7 +199,7 @@ function stripThinkingForRelay(init, parsedBody) {
     return init;
   }
 }
-//@ chunk-r1wk8q25.js:14298-14486 placement
+//@ chunk-n7kzs9r0.js:15461-15649 placement
 function isMessagesPost(input, init) {
   if ((init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase() !== "POST")
     return false;
@@ -210,7 +211,7 @@ function isMessagesPost(input, init) {
   }
   return pathname.endsWith("/v1/messages");
 }
-//@ chunk-r1wk8q25.js:14486-19478 placement
+//@ chunk-n7kzs9r0.js:15649-20818 placement
 /**
  * teleport 中继：转发派生会话请求，处理账号记忆撤回
  */
@@ -375,6 +376,7 @@ function relayTeleportRequest(
         if (found !== undefined) extraFields[UPGRADE_RELAY_REQUEST_CLASS] = found;
         let toolsUsedHeader = headers.get(SANDY_PLOVER_HEADER);
         if (toolsUsedHeader !== null) {
+          let requestClass = isConnectorFieldsReported();
           let inheritedTools;
           try {
             let parsedTools = jsonParseRaw(toolsUsedHeader);
@@ -389,8 +391,21 @@ function relayTeleportRequest(
                   inheritedTools = undefined;
                   break;
                 }
+                let toolsUsedHeader = requestClass
+                  ? connectorFields(toolEntry.url, toolEntry.directory_entry, toolEntry.unresolved)
+                  : {};
+                if (
+                  requestClass &&
+                  (toolsUsedHeader.url !== toolEntry.url ||
+                    toolsUsedHeader.directory_entry !== toolEntry.directory_entry ||
+                    toolsUsedHeader.unresolved !== toolEntry.unresolved)
+                ) {
+                  inheritedTools = undefined;
+                  break;
+                }
                 inheritedTools.push({
                   name: toolEntry.name,
+                  ...toolsUsedHeader,
                 });
               }
             }
@@ -399,7 +414,7 @@ function relayTeleportRequest(
           }
           if (inheritedTools === undefined)
             logForDebugging(
-              "upgrade relay: the tools-used header could not be read as a list of tool names; the relayed body carries the incomplete-list entry instead",
+              "upgrade relay: the tools-used header could not be read as a list of tool entries; the relayed body marks the tool list as incomplete instead",
               {
                 level: "error",
               },

@@ -3,9 +3,9 @@
  *
  * 子代理列表与表单字段（选择/必填校验）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentsList.tsx
- * pieces: chunk-6rcbehen.js (5)
+ * pieces: chunk-vmgws42z.js (5)
  * attribution: sole-consumer 3, affinity 1, callgraph-fingerprint 1
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -28,20 +28,20 @@ import { Dialog } from "../design-system/Dialog.js";
 import { TextInput } from "../TextInput.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6rcbehen.js:701-705 sole-consumer
+//@ chunk-vmgws42z.js:701-705 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6rcbehen.js:701", () => {
+deferInit("chunk-vmgws42z.js:701", () => {
   init_react_production();
 });
-//@ chunk-6rcbehen.js:705-741 sole-consumer
+//@ chunk-vmgws42z.js:705-741 sole-consumer
 function labelWidth(item) {
   return bunStringWidth(item.label);
 }
-//@ chunk-6rcbehen.js:741-774 affinity
+//@ chunk-vmgws42z.js:741-774 affinity
 function isNotNull_2(value) {
   return value !== null;
 }
-//@ chunk-6rcbehen.js:774-5753 callgraph-fingerprint (2.1.88 match: AgentsList, 0.176)
+//@ chunk-vmgws42z.js:774-5753 callgraph-fingerprint (2.1.88 match: AgentsList, 0.176)
 function AgentsList(props) {
   let $ = useMemoCache(107);
   let { title, subtitle, fields, values, onChange, onSubmit, onCancel, submitLabel } = props;
@@ -467,7 +467,7 @@ function AgentsList(props) {
   } else dialogElement = $[106];
   return dialogElement;
 }
-//@ chunk-6rcbehen.js:5753-7919 sole-consumer
+//@ chunk-vmgws42z.js:5753-7919 sole-consumer
 /**
  * 代理表单中的一行字段：左侧对齐标签与必填星号，select 字段显示 ◀ 值 ▶ 并左右切换，text 字段显示可编辑输入框；处理上下移动、回车与取消。
  */

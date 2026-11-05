@@ -1,8 +1,8 @@
 /**
  * @smithy/credential-provider-imds/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/credential-provider-imds@4.3.0..4.3.9
- * pieces: chunk-7bg2190x.js (32)
+ * pieces: chunk-s21g8j63.js (32)
  * attribution: esm-fingerprint 10, esm-layout 22
  */
 import { request } from "http";
@@ -13,7 +13,7 @@ import { require_property_provider } from "../../property-provider/dist-cjs/inde
 import { require_node_config_provider } from "../../node-config-provider/dist-cjs/index.js";
 import { require_url_parser } from "../../url-parser/dist-cjs/index.js";
 
-//@ chunk-7bg2190x.js:431-1060 esm-fingerprint
+//@ chunk-s21g8j63.js:431-1060 esm-fingerprint
 function httpRequest(options) {
   return new Promise((resolve, reject) => {
     let req = request({
@@ -61,13 +61,13 @@ function httpRequest(options) {
     req.end();
   });
 }
-//@ chunk-7bg2190x.js:1060-1066 esm-layout
+//@ chunk-s21g8j63.js:1060-1066 esm-layout
 var propertyProviderModule;
-//@ chunk-7bg2190x.js:1066-1093 esm-layout
+//@ chunk-s21g8j63.js:1066-1093 esm-layout
 var init_credential_provider_imds = __esm(() => {
   propertyProviderModule = __toESM(require_property_provider());
 });
-//@ chunk-7bg2190x.js:1093-1431 esm-fingerprint
+//@ chunk-s21g8j63.js:1093-1431 esm-fingerprint
 var isImdsCredentials = (arg) =>
   Boolean(arg) &&
   typeof arg === "object" &&
@@ -84,24 +84,24 @@ var fromImdsCredentials = (creds) => ({
     accountId: creds.AccountId,
   }),
 });
-//@ chunk-7bg2190x.js:1431-1444 esm-layout
+//@ chunk-s21g8j63.js:1431-1444 esm-layout
 var noopStub1 = () => {};
-//@ chunk-7bg2190x.js:1444-1512 esm-fingerprint
+//@ chunk-s21g8j63.js:1444-1512 esm-fingerprint
 var providerConfigFromInit = ({ maxRetries = 0, timeout = 1000 }) => ({
   maxRetries,
   timeout,
 });
-//@ chunk-7bg2190x.js:1512-1525 esm-layout
+//@ chunk-s21g8j63.js:1512-1525 esm-layout
 var noopStub2 = () => {};
-//@ chunk-7bg2190x.js:1525-1592 esm-layout
+//@ chunk-s21g8j63.js:1525-1592 esm-layout
 var retry = (toRetry, maxRetries) => {
   let promise = toRetry();
   for (let i = 0; i < maxRetries; i++) promise = promise.catch(toRetry);
   return promise;
 };
-//@ chunk-7bg2190x.js:1592-1605 esm-layout
+//@ chunk-s21g8j63.js:1592-1605 esm-layout
 var noopStub3 = () => {};
-//@ chunk-7bg2190x.js:1634-2878 esm-layout
+//@ chunk-s21g8j63.js:1634-2878 esm-layout
 var propertyProviderModule2;
 var AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
 var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
@@ -177,7 +177,7 @@ var getCmdsUri = async ({ logger }) => {
     },
   );
 };
-//@ chunk-7bg2190x.js:2878-2982 esm-layout
+//@ chunk-s21g8j63.js:2878-2982 esm-layout
 var init_credential_provider_imds_2 = __esm(() => {
   init_credential_provider_imds();
   noopStub1();
@@ -193,10 +193,10 @@ var init_credential_provider_imds_2 = __esm(() => {
     "https:": true,
   };
 });
-//@ chunk-7bg2190x.js:2982-2990 esm-layout
+//@ chunk-s21g8j63.js:2982-2990 esm-layout
 var propertyProviderModule3;
 var InstanceMetadataV1FallbackError;
-//@ chunk-7bg2190x.js:2990-3205 esm-fingerprint
+//@ chunk-s21g8j63.js:2990-3205 esm-fingerprint
 var init_credential_provider_imds_3 = __esm(() => {
   propertyProviderModule3 = __toESM(require_property_provider());
   InstanceMetadataV1FallbackError = class InstanceMetadataV1FallbackError extends (
@@ -211,18 +211,18 @@ var init_credential_provider_imds_3 = __esm(() => {
     }
   };
 });
-//@ chunk-7bg2190x.js:3205-3211 esm-layout
+//@ chunk-s21g8j63.js:3205-3211 esm-layout
 var Endpoint;
-//@ chunk-7bg2190x.js:3211-3317 esm-fingerprint
+//@ chunk-s21g8j63.js:3211-3317 esm-fingerprint
 var init_credential_provider_imds_4 = __esm(() => {
   (function (Endpoint) {
     Endpoint.IPv4 = "http://169.254.169.254";
     Endpoint.IPv6 = "http://[fd00:ec2::254]";
   })(Endpoint || (Endpoint = {}));
 });
-//@ chunk-7bg2190x.js:3317-3323 esm-layout
+//@ chunk-s21g8j63.js:3317-3323 esm-layout
 var ENDPOINT_CONFIG_OPTIONS;
-//@ chunk-7bg2190x.js:3323-3483 esm-layout
+//@ chunk-s21g8j63.js:3323-3483 esm-layout
 var init_credential_provider_imds_5 = __esm(() => {
   ENDPOINT_CONFIG_OPTIONS = {
     environmentVariableSelector: (env) => env.AWS_EC2_METADATA_SERVICE_ENDPOINT,
@@ -230,20 +230,20 @@ var init_credential_provider_imds_5 = __esm(() => {
     default: undefined,
   };
 });
-//@ chunk-7bg2190x.js:3483-3489 esm-layout
+//@ chunk-s21g8j63.js:3483-3489 esm-layout
 var EndpointMode;
-//@ chunk-7bg2190x.js:3489-3559 esm-fingerprint
+//@ chunk-s21g8j63.js:3489-3559 esm-fingerprint
 var init_credential_provider_imds_6 = __esm(() => {
   (function (EndpointMode) {
     EndpointMode.IPv4 = "IPv4";
     EndpointMode.IPv6 = "IPv6";
   })(EndpointMode || (EndpointMode = {}));
 });
-//@ chunk-7bg2190x.js:3559-3649 esm-fingerprint
+//@ chunk-s21g8j63.js:3559-3649 esm-fingerprint
 var AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE = "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE";
 var EC2_METADATA_SERVICE_ENDPOINT_MODE = "ec2_metadata_service_endpoint_mode";
 var ENDPOINT_MODE_CONFIG_OPTIONS;
-//@ chunk-7bg2190x.js:3649-3757 esm-fingerprint
+//@ chunk-s21g8j63.js:3649-3757 esm-fingerprint
 var getExtendedInstanceMetadataCredentials = __esm(() => {
   init_credential_provider_imds_6();
   ENDPOINT_MODE_CONFIG_OPTIONS = {
@@ -252,7 +252,7 @@ var getExtendedInstanceMetadataCredentials = __esm(() => {
     default: EndpointMode.IPv4,
   };
 });
-//@ chunk-7bg2190x.js:3757-4036 esm-layout
+//@ chunk-s21g8j63.js:3757-4036 esm-layout
 var config;
 var urlParserModule;
 var getInstanceMetadataEndpoint = async () =>
@@ -269,7 +269,7 @@ var getFromEndpointModeConfig = async () => {
       throw Error(`Unsupported endpoint mode: ${endpointMode}. Select from ${Object.values(EndpointMode)}`);
   }
 };
-//@ chunk-7bg2190x.js:4036-4090 esm-layout
+//@ chunk-s21g8j63.js:4036-4090 esm-layout
 var init_credential_provider_imds_7 = __esm(() => {
   init_credential_provider_imds_4();
   init_credential_provider_imds_5();
@@ -278,7 +278,7 @@ var init_credential_provider_imds_7 = __esm(() => {
   config = __toESM(require_node_config_provider());
   urlParserModule = __toESM(require_url_parser());
 });
-//@ chunk-7bg2190x.js:4090-4561 esm-fingerprint
+//@ chunk-s21g8j63.js:4090-4561 esm-fingerprint
 var extendInstanceMetadataCredentials = (credentials, logger) => {
   let refreshInterval = 300 + Math.floor(Math.random() * 300);
   let newExpiration = new Date(Date.now() + refreshInterval * 1000);
@@ -295,9 +295,9 @@ For more information, please visit: https://docs.aws.amazon.com/sdkref/latest/gu
     expiration: newExpiration,
   };
 };
-//@ chunk-7bg2190x.js:4561-4574 esm-layout
+//@ chunk-s21g8j63.js:4561-4574 esm-layout
 var noopStub4 = () => {};
-//@ chunk-7bg2190x.js:4574-4806 esm-fingerprint
+//@ chunk-s21g8j63.js:4574-4806 esm-fingerprint
 var staticStabilityProvider = (instanceMetadataProvider, options = {}) => {
   let logger = options?.logger || console;
   let pastCredentials;
@@ -317,11 +317,11 @@ var staticStabilityProvider = (instanceMetadataProvider, options = {}) => {
     return credentials;
   };
 };
-//@ chunk-7bg2190x.js:4806-4826 esm-layout
+//@ chunk-s21g8j63.js:4806-4826 esm-layout
 var init_credential_provider_imds_8 = __esm(() => {
   noopStub4();
 });
-//@ chunk-7bg2190x.js:4826-6960 esm-layout
+//@ chunk-s21g8j63.js:4826-6960 esm-layout
 var configModule;
 var config_2;
 var IMDS_PATH = "/latest/meta-data/iam/security-credentials/";
@@ -473,7 +473,7 @@ var getCredentialsFromProfile = async (profile, options, init) => {
     });
   return fromImdsCredentials(credentialsResponse);
 };
-//@ chunk-7bg2190x.js:6960-7027 esm-layout
+//@ chunk-s21g8j63.js:6960-7027 esm-layout
 var init_credential_provider_imds_9 = __esm(() => {
   init_credential_provider_imds_3();
   init_credential_provider_imds();
@@ -485,9 +485,9 @@ var init_credential_provider_imds_9 = __esm(() => {
   configModule = __toESM(require_node_config_provider());
   config_2 = __toESM(require_property_provider());
 });
-//@ chunk-7bg2190x.js:7027-7041 esm-layout
+//@ chunk-s21g8j63.js:7027-7041 esm-layout
 var noopStub5 = () => {};
-//@ chunk-7bg2190x.js:7041-7084 esm-layout
+//@ chunk-s21g8j63.js:7041-7084 esm-layout
 var init_credential_provider_imds_10 = __esm(() => {
   init_credential_provider_imds();
   init_credential_provider_imds_7();
@@ -496,7 +496,7 @@ var init_credential_provider_imds_10 = __esm(() => {
   noopStub2();
   noopStub5();
 });
-//@ chunk-7bg2190x.js:7084-7089 esm-layout
+//@ chunk-s21g8j63.js:7084-7089 esm-layout
 init_credential_provider_imds_10();
 export {
   AWS_CONTAINER_CREDENTIALS_FULL_URI,

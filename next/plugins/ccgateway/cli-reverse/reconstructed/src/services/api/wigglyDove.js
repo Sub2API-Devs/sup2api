@@ -3,332 +3,332 @@
  *
  * 2.1.316 新增：代号 wigglyDove 的一组小型桩函数（用途不明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (81)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (81)
  * attribution: placement 81
  */
 import { createHash } from "crypto";
 
-//@ chunk-hwmsct5x.js:255197-255302 placement
+//@ chunk-vn3g7zt8.js:260291-260396 placement
 /**
  * 混淆头 x-claude-code-wiggly-dove：头名常量与用于按 sha256 识别的摘要值。
  */
 var X_CLAUDE_CODE_WIGGLY_DOVE = "x-claude-code-wiggly-dove";
 var WIGGLY_DOVE_HASH = "983fad3bbb6cff8714b9f0c8bce0d76386cabd5e65e046625c159df3b953f99d";
-//@ chunk-hwmsct5x.js:255302-255350 placement
+//@ chunk-vn3g7zt8.js:260396-260444 placement
 function wigglyDoveHeaderName() {
   return "x-claude-code-wiggly-dove";
 }
-//@ chunk-hwmsct5x.js:255350-255374 placement
+//@ chunk-vn3g7zt8.js:260444-260468 placement
 function wigglyDoveFieldCodeV() {
   return "v";
 }
-//@ chunk-hwmsct5x.js:255374-255399 placement
+//@ chunk-vn3g7zt8.js:260468-260493 placement
 function wigglyDoveFieldCodeYw() {
   return "yw";
 }
-//@ chunk-hwmsct5x.js:255399-255424 placement
+//@ chunk-vn3g7zt8.js:260493-260518 placement
 function wigglyDoveFieldCodeHg() {
   return "hg";
 }
-//@ chunk-hwmsct5x.js:255424-255449 placement
+//@ chunk-vn3g7zt8.js:260518-260543 placement
 function wigglyDoveFieldCodeYl() {
   return "yl";
 }
-//@ chunk-hwmsct5x.js:255449-255474 placement
+//@ chunk-vn3g7zt8.js:260543-260568 placement
 function wigglyDoveFieldCodeOb() {
   return "ob";
 }
-//@ chunk-hwmsct5x.js:255474-255499 placement
+//@ chunk-vn3g7zt8.js:260568-260593 placement
 function wigglyDoveFieldCodeSk() {
   return "sk";
 }
-//@ chunk-hwmsct5x.js:255499-255524 placement
+//@ chunk-vn3g7zt8.js:260593-260618 placement
 function wigglyDoveFieldCodeRf() {
   return "rf";
 }
-//@ chunk-hwmsct5x.js:255524-255549 placement
+//@ chunk-vn3g7zt8.js:260618-260643 placement
 function wigglyDoveFieldCodeWl() {
   return "wl";
 }
-//@ chunk-hwmsct5x.js:255549-255574 placement
+//@ chunk-vn3g7zt8.js:260643-260668 placement
 function wigglyDoveFieldCodeTt() {
   return "tt";
 }
-//@ chunk-hwmsct5x.js:255574-255599 placement
+//@ chunk-vn3g7zt8.js:260668-260693 placement
 function wigglyDoveFieldCodeBf() {
   return "bf";
 }
-//@ chunk-hwmsct5x.js:255599-255624 placement
+//@ chunk-vn3g7zt8.js:260693-260718 placement
 function wigglyDoveFieldCodeVd() {
   return "vd";
 }
-//@ chunk-hwmsct5x.js:255624-255649 placement
+//@ chunk-vn3g7zt8.js:260718-260743 placement
 function wigglyDoveFieldCodeXf() {
   return "xf";
 }
-//@ chunk-hwmsct5x.js:255649-255674 placement
+//@ chunk-vn3g7zt8.js:260743-260768 placement
 function wigglyDoveFieldCodeZx() {
   return "zx";
 }
-//@ chunk-hwmsct5x.js:255674-255699 placement
+//@ chunk-vn3g7zt8.js:260768-260793 placement
 function wigglyDoveFieldCodeZi() {
   return "zi";
 }
-//@ chunk-hwmsct5x.js:255699-255724 placement
+//@ chunk-vn3g7zt8.js:260793-260818 placement
 function wigglyDoveFieldCodeFu() {
   return "fu";
 }
-//@ chunk-hwmsct5x.js:255724-255749 placement
+//@ chunk-vn3g7zt8.js:260818-260843 placement
 function wigglyDoveFieldCodeRt() {
   return "rt";
 }
-//@ chunk-hwmsct5x.js:255749-255774 placement
+//@ chunk-vn3g7zt8.js:260843-260868 placement
 function wigglyDoveFieldCodeMo() {
   return "mo";
 }
-//@ chunk-hwmsct5x.js:255774-255799 placement
+//@ chunk-vn3g7zt8.js:260868-260893 placement
 function wigglyDoveFieldCodeJy() {
   return "jy";
 }
-//@ chunk-hwmsct5x.js:255799-255824 placement
+//@ chunk-vn3g7zt8.js:260893-260918 placement
 function wigglyDoveFieldCodeJm() {
   return "jm";
 }
-//@ chunk-hwmsct5x.js:255824-255849 placement
+//@ chunk-vn3g7zt8.js:260918-260943 placement
 function wigglyDoveFieldCodeWm() {
   return "wm";
 }
-//@ chunk-hwmsct5x.js:255849-255874 placement
+//@ chunk-vn3g7zt8.js:260943-260968 placement
 function wigglyDoveFieldCodeYi() {
   return "yi";
 }
-//@ chunk-hwmsct5x.js:255874-255899 placement
+//@ chunk-vn3g7zt8.js:260968-260993 placement
 function wigglyDoveFieldCodeQi() {
   return "qi";
 }
-//@ chunk-hwmsct5x.js:255899-255924 placement
+//@ chunk-vn3g7zt8.js:260993-261018 placement
 function wigglyDoveFieldCodeBx() {
   return "bx";
 }
-//@ chunk-hwmsct5x.js:255924-255949 placement
+//@ chunk-vn3g7zt8.js:261018-261043 placement
 function wigglyDoveFieldCodeKi() {
   return "ki";
 }
-//@ chunk-hwmsct5x.js:255949-255974 placement
+//@ chunk-vn3g7zt8.js:261043-261068 placement
 function wigglyDoveFieldCodeNy() {
   return "ny";
 }
-//@ chunk-hwmsct5x.js:255974-255999 placement
+//@ chunk-vn3g7zt8.js:261068-261093 placement
 function wigglyDoveFieldCodeTn() {
   return "tn";
 }
-//@ chunk-hwmsct5x.js:255999-256024 placement
+//@ chunk-vn3g7zt8.js:261093-261118 placement
 function wigglyDoveFieldCodeNg() {
   return "ng";
 }
-//@ chunk-hwmsct5x.js:256024-256049 placement
+//@ chunk-vn3g7zt8.js:261118-261143 placement
 function wigglyDoveFieldCodeLr() {
   return "lr";
 }
-//@ chunk-hwmsct5x.js:256049-256074 placement
+//@ chunk-vn3g7zt8.js:261143-261168 placement
 function wigglyDoveFieldCodeFy() {
   return "fy";
 }
-//@ chunk-hwmsct5x.js:256074-256099 placement
+//@ chunk-vn3g7zt8.js:261168-261193 placement
 function wigglyDoveFieldCodeZr() {
   return "zr";
 }
-//@ chunk-hwmsct5x.js:256099-256124 placement
+//@ chunk-vn3g7zt8.js:261193-261218 placement
 function wigglyDoveFieldCodeOh() {
   return "oh";
 }
-//@ chunk-hwmsct5x.js:256124-256149 placement
+//@ chunk-vn3g7zt8.js:261218-261243 placement
 function wigglyDoveFieldCodeRl() {
   return "rl";
 }
-//@ chunk-hwmsct5x.js:256149-256174 placement
+//@ chunk-vn3g7zt8.js:261243-261268 placement
 function wigglyDoveFieldCodeVt() {
   return "vt";
 }
-//@ chunk-hwmsct5x.js:256174-256199 placement
+//@ chunk-vn3g7zt8.js:261268-261293 placement
 function wigglyDoveFieldCodeOz() {
   return "oz";
 }
-//@ chunk-hwmsct5x.js:256199-256224 placement
+//@ chunk-vn3g7zt8.js:261293-261318 placement
 function wigglyDoveFieldCodeAx() {
   return "ax";
 }
-//@ chunk-hwmsct5x.js:256224-256249 placement
+//@ chunk-vn3g7zt8.js:261318-261343 placement
 function wigglyDoveFieldCodeMz() {
   return "mz";
 }
-//@ chunk-hwmsct5x.js:256249-256274 placement
+//@ chunk-vn3g7zt8.js:261343-261368 placement
 function wigglyDoveFieldCodeIa() {
   return "ia";
 }
-//@ chunk-hwmsct5x.js:256274-256299 placement
+//@ chunk-vn3g7zt8.js:261368-261393 placement
 function wigglyDoveFieldCodeFs() {
   return "fs";
 }
-//@ chunk-hwmsct5x.js:256299-256324 placement
+//@ chunk-vn3g7zt8.js:261393-261418 placement
 function wigglyDoveFieldCodeYb() {
   return "yb";
 }
-//@ chunk-hwmsct5x.js:256324-256349 placement
+//@ chunk-vn3g7zt8.js:261418-261443 placement
 function wigglyDoveFieldCodeNv() {
   return "nv";
 }
-//@ chunk-hwmsct5x.js:256349-256374 placement
+//@ chunk-vn3g7zt8.js:261443-261468 placement
 function wigglyDoveFieldCodePh() {
   return "ph";
 }
-//@ chunk-hwmsct5x.js:256374-256399 placement
+//@ chunk-vn3g7zt8.js:261468-261493 placement
 function wigglyDoveFieldCodeZb() {
   return "zb";
 }
-//@ chunk-hwmsct5x.js:256399-256424 placement
+//@ chunk-vn3g7zt8.js:261493-261518 placement
 function wigglyDoveFieldCodeIi() {
   return "ii";
 }
-//@ chunk-hwmsct5x.js:256424-256449 placement
+//@ chunk-vn3g7zt8.js:261518-261543 placement
 function wigglyDoveFieldCodeFz() {
   return "fz";
 }
-//@ chunk-hwmsct5x.js:256449-256474 placement
+//@ chunk-vn3g7zt8.js:261543-261568 placement
 function wigglyDoveFieldCodeVy() {
   return "vy";
 }
-//@ chunk-hwmsct5x.js:256474-256499 placement
+//@ chunk-vn3g7zt8.js:261568-261593 placement
 function wigglyDoveFieldCodeBm() {
   return "bm";
 }
-//@ chunk-hwmsct5x.js:256499-256524 placement
+//@ chunk-vn3g7zt8.js:261593-261618 placement
 function wigglyDoveFieldCodeKb() {
   return "kb";
 }
-//@ chunk-hwmsct5x.js:256524-256549 placement
+//@ chunk-vn3g7zt8.js:261618-261643 placement
 function wigglyDoveFieldCodeVb() {
   return "vb";
 }
-//@ chunk-hwmsct5x.js:256549-256574 placement
+//@ chunk-vn3g7zt8.js:261643-261668 placement
 function wigglyDoveFieldCodeMa() {
   return "ma";
 }
-//@ chunk-hwmsct5x.js:256574-256599 placement
+//@ chunk-vn3g7zt8.js:261668-261693 placement
 function wigglyDoveFieldCodeWb() {
   return "wb";
 }
-//@ chunk-hwmsct5x.js:256599-256624 placement
+//@ chunk-vn3g7zt8.js:261693-261718 placement
 function wigglyDoveFieldCodeSw() {
   return "sw";
 }
-//@ chunk-hwmsct5x.js:256624-256649 placement
+//@ chunk-vn3g7zt8.js:261718-261743 placement
 function wigglyDoveFieldCodeWj() {
   return "wj";
 }
-//@ chunk-hwmsct5x.js:256649-256674 placement
+//@ chunk-vn3g7zt8.js:261743-261768 placement
 function wigglyDoveFieldCodeXu() {
   return "xu";
 }
-//@ chunk-hwmsct5x.js:256674-256699 placement
+//@ chunk-vn3g7zt8.js:261768-261793 placement
 function wigglyDoveFieldCodeUm() {
   return "um";
 }
-//@ chunk-hwmsct5x.js:256699-256724 placement
+//@ chunk-vn3g7zt8.js:261793-261818 placement
 function wigglyDoveFieldCodeSa() {
   return "sa";
 }
-//@ chunk-hwmsct5x.js:256724-256749 placement
+//@ chunk-vn3g7zt8.js:261818-261843 placement
 function wigglyDoveFieldCodeSu() {
   return "su";
 }
-//@ chunk-hwmsct5x.js:256749-256774 placement
+//@ chunk-vn3g7zt8.js:261843-261868 placement
 function wigglyDoveFieldCodeHo() {
   return "ho";
 }
-//@ chunk-hwmsct5x.js:256774-256799 placement
+//@ chunk-vn3g7zt8.js:261868-261893 placement
 function wigglyDoveFieldCodeZg() {
   return "zg";
 }
-//@ chunk-hwmsct5x.js:256799-256824 placement
+//@ chunk-vn3g7zt8.js:261893-261918 placement
 function wigglyDoveFieldCodeXb() {
   return "xb";
 }
-//@ chunk-hwmsct5x.js:256824-256849 placement
+//@ chunk-vn3g7zt8.js:261918-261943 placement
 function wigglyDoveFieldCodeKh() {
   return "kh";
 }
-//@ chunk-hwmsct5x.js:256849-256874 placement
+//@ chunk-vn3g7zt8.js:261943-261968 placement
 function wigglyDoveFieldCodeZl() {
   return "zl";
 }
-//@ chunk-hwmsct5x.js:256874-256899 placement
+//@ chunk-vn3g7zt8.js:261968-261993 placement
 function wigglyDoveFieldCodeXs() {
   return "xs";
 }
-//@ chunk-hwmsct5x.js:256899-256924 placement
+//@ chunk-vn3g7zt8.js:261993-262018 placement
 function wigglyDoveFieldCodeYm() {
   return "ym";
 }
-//@ chunk-hwmsct5x.js:256924-256949 placement
+//@ chunk-vn3g7zt8.js:262018-262043 placement
 function wigglyDoveFieldCodeNp() {
   return "np";
 }
-//@ chunk-hwmsct5x.js:256949-256974 placement
+//@ chunk-vn3g7zt8.js:262043-262068 placement
 function wigglyDoveFieldCodeOm() {
   return "om";
 }
-//@ chunk-hwmsct5x.js:256974-256999 placement
+//@ chunk-vn3g7zt8.js:262068-262093 placement
 function wigglyDoveFieldCodePf() {
   return "pf";
 }
-//@ chunk-hwmsct5x.js:256999-257024 placement
+//@ chunk-vn3g7zt8.js:262093-262118 placement
 function wigglyDoveFieldCodeBt() {
   return "bt";
 }
-//@ chunk-hwmsct5x.js:257024-257049 placement
+//@ chunk-vn3g7zt8.js:262118-262143 placement
 function wigglyDoveFieldCodeVo() {
   return "vo";
 }
-//@ chunk-hwmsct5x.js:257049-257074 placement
+//@ chunk-vn3g7zt8.js:262143-262168 placement
 function wigglyDoveFieldCodeIy() {
   return "iy";
 }
-//@ chunk-hwmsct5x.js:257074-257099 placement
+//@ chunk-vn3g7zt8.js:262168-262193 placement
 function wigglyDoveFieldCodeZz() {
   return "zz";
 }
-//@ chunk-hwmsct5x.js:257099-257124 placement
+//@ chunk-vn3g7zt8.js:262193-262218 placement
 function wigglyDoveFieldCodeBo() {
   return "bo";
 }
-//@ chunk-hwmsct5x.js:257124-257149 placement
+//@ chunk-vn3g7zt8.js:262218-262243 placement
 function wigglyDoveFieldCodeQl() {
   return "ql";
 }
-//@ chunk-hwmsct5x.js:257149-257174 placement
+//@ chunk-vn3g7zt8.js:262243-262268 placement
 function wigglyDoveFieldCodeMb() {
   return "mb";
 }
-//@ chunk-hwmsct5x.js:257174-257199 placement
+//@ chunk-vn3g7zt8.js:262268-262293 placement
 function wigglyDoveFieldCodePd() {
   return "pd";
 }
-//@ chunk-hwmsct5x.js:257199-257224 placement
+//@ chunk-vn3g7zt8.js:262293-262318 placement
 function wigglyDoveFieldCodeBq() {
   return "bq";
 }
-//@ chunk-hwmsct5x.js:257224-257249 placement
+//@ chunk-vn3g7zt8.js:262318-262343 placement
 function wigglyDoveFieldCodeTg() {
   return "tg";
 }
-//@ chunk-hwmsct5x.js:257249-257274 placement
+//@ chunk-vn3g7zt8.js:262343-262368 placement
 function wigglyDoveFieldCodeVr() {
   return "vr";
 }
-//@ chunk-hwmsct5x.js:257274-257368 placement
+//@ chunk-vn3g7zt8.js:262368-262462 placement
 function isWigglyDoveHeader(name) {
   let lower = name.toLowerCase();
   return (
@@ -336,7 +336,7 @@ function isWigglyDoveHeader(name) {
     createHash("sha256").update(lower).digest("hex") === WIGGLY_DOVE_HASH
   );
 }
-//@ chunk-hwmsct5x.js:257368-257395 placement
+//@ chunk-vn3g7zt8.js:262462-262489 placement
 var TENGU_WIGGLY_DOVE = "tengu_wiggly_dove";
 export {
   wigglyDoveFieldCodeLr,

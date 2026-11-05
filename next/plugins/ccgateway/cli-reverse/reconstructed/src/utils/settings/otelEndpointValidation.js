@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验 shell helper 设置；描述 helper 设置位置等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (21)
  * attribution: placement 21
  */
 import {
@@ -31,9 +31,9 @@ import { isEnvTruthy } from "../envUtils.js";
 import { SETTING_ALIASES } from "./marketplaceSettingsAliases.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:388586-388597 placement
+//@ chunk-z20c443b.js:386832-386843 placement
 var MAX_OTEL_HEADER_NAME_LENGTH = 120;
-//@ chunk-dcmhvw5a.js:388597-388834 placement
+//@ chunk-z20c443b.js:386843-387080 placement
 function sanitizeEndpointUrl(value) {
   if (/[\\\s\x00-\x1f\x7f]/.test(value)) return;
   let url;
@@ -47,11 +47,11 @@ function sanitizeEndpointUrl(value) {
   let redacted = safeOriginUrlRedacted(value);
   return redacted !== null && redacted.length <= MAX_OTEL_HEADER_NAME_LENGTH ? redacted : undefined;
 }
-//@ chunk-dcmhvw5a.js:388834-389022 placement
+//@ chunk-z20c443b.js:387080-387268 placement
 var SCHEME_PREFIX_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GRPC_RESOLVER_SCHEMES;
 var KNOWN_URL_SCHEMES;
-deferInit("chunk-dcmhvw5a.js:388834", () => {
+deferInit("chunk-z20c443b.js:387080", () => {
   SCHEME_PREFIX_PATTERN = /^\w{1,8}:\/\//;
   GRPC_RESOLVER_SCHEMES = new Set(["dns", "unix", "ipv4", "ipv6"]);
   KNOWN_URL_SCHEMES = new Set([
@@ -74,7 +74,7 @@ deferInit("chunk-dcmhvw5a.js:388834", () => {
     "http2",
   ]);
 });
-//@ chunk-dcmhvw5a.js:389022-389265 placement
+//@ chunk-z20c443b.js:387268-387511 placement
 function endpointHostForDisplay(value) {
   let urlOrNull = parseUrlOrNull(`https://${value}`);
   if (SCHEME_PREFIX_PATTERN.test(value)) {
@@ -90,13 +90,13 @@ function endpointHostForDisplay(value) {
     ? urlOrNull.host
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:389265-389343 placement
+//@ chunk-z20c443b.js:387511-387589 placement
 function trimTrailingDots(hostname) {
   let end = hostname.length;
   while (end > 0 && hostname[end - 1] === ".") end--;
   return hostname.slice(0, end);
 }
-//@ chunk-dcmhvw5a.js:389343-389399 placement
+//@ chunk-z20c443b.js:387589-387645 placement
 function parseUrlOrNull(text) {
   try {
     return new URL(text);
@@ -104,45 +104,45 @@ function parseUrlOrNull(text) {
     return null;
   }
 }
-//@ chunk-dcmhvw5a.js:389399-389458 placement
+//@ chunk-z20c443b.js:387645-387704 placement
 var OTEL_HEADER_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 var MAX_OTEL_ATTRIBUTE_LENGTH = 64;
 var MAX_OTEL_RESOURCE_LENGTH = 160;
 var MAX_OTEL_ENDPOINT_LENGTH = 400;
-//@ chunk-dcmhvw5a.js:389458-389489 placement
+//@ chunk-z20c443b.js:387704-387735 placement
 function truncateResourceValue(text) {
   return truncateWithNotShown(text, MAX_OTEL_RESOURCE_LENGTH);
 }
-//@ chunk-dcmhvw5a.js:389489-389520 placement
+//@ chunk-z20c443b.js:387735-387766 placement
 function truncateEndpointValue(text) {
   return truncateWithNotShown(text, MAX_OTEL_ENDPOINT_LENGTH);
 }
-//@ chunk-dcmhvw5a.js:389520-389615 placement
+//@ chunk-z20c443b.js:387766-387861 placement
 function truncateWithNotShown(text, maxLength) {
   return text.length <= maxLength
     ? text
     : `${text.slice(0, maxLength)}\u2026 (+${text.length - maxLength} chars NOT SHOWN)`;
 }
-//@ chunk-dcmhvw5a.js:389615-389716 placement
+//@ chunk-z20c443b.js:387861-387962 placement
 function maskEnvName(name) {
   let replaced = name.replace(/[^A-Za-z0-9_]+/g, "?");
   return replaced.length <= MAX_OTEL_ATTRIBUTE_LENGTH
     ? replaced
     : `${replaced.slice(0, MAX_OTEL_ATTRIBUTE_LENGTH)}\u2026`;
 }
-//@ chunk-dcmhvw5a.js:389716-389746 placement
+//@ chunk-z20c443b.js:387962-387992 placement
 var MAX_ENDPOINT_SCHEME_LENGTH = 256;
 var MAX_ENDPOINT_HOST_LENGTH = 180;
 var MAX_ENDPOINT_PATH_LENGTH = 60;
 var MAX_ENDPOINT_QUERY_LENGTH = 32;
-//@ chunk-dcmhvw5a.js:389746-389801 placement
+//@ chunk-z20c443b.js:387992-388047 placement
 /**
  * 非 ASCII 替换为 ?。
  */
 function asciiOnly(text) {
   return text.replace(/[^\x20-\x7e]/gu, "?");
 }
-//@ chunk-dcmhvw5a.js:389801-390244 placement
+//@ chunk-z20c443b.js:388047-388490 placement
 /**
  * 解析 helper 设置值。
  */
@@ -166,7 +166,7 @@ function parseHelperSetting(raw, sizes) {
     if (value != null) parts.push(`${key} ${typeof value === "number" ? `${value}ms` : "?"}`);
   return parts.length ? `${label} (${parts.join(", ")})` : label;
 }
-//@ chunk-dcmhvw5a.js:390244-390456 placement
+//@ chunk-z20c443b.js:388490-388702 placement
 function quoteHelperSetting(text) {
   let ascii = asciiOnly(text);
   let tooLong = ascii.length > MAX_ENDPOINT_SCHEME_LENGTH;
@@ -182,7 +182,7 @@ function quoteHelperSetting(text) {
     quoted = `${quoted} sha256:${normalizePathText(text).slice(0, MAX_ENDPOINT_QUERY_LENGTH)}`;
   return quoted;
 }
-//@ chunk-dcmhvw5a.js:390456-390627 placement
+//@ chunk-z20c443b.js:388702-388873 placement
 function describeEnvRows(doc) {
   let mapped = Object.entries(doc.envVars).map(([key, value]) => describeEnvVar(key, value, ""));
   for (let [prefix, slot] of riskyPayloadSlots(doc))
@@ -190,7 +190,7 @@ function describeEnvRows(doc) {
       mapped.push(describeEnvVar(key, value, `${prefix}.env.`));
   return mapped;
 }
-//@ chunk-dcmhvw5a.js:390627-390910 placement
+//@ chunk-z20c443b.js:388873-389156 placement
 function describeEnvVar(name, value, prefix) {
   if (!OTEL_HEADER_NAME_RE.test(name))
     return {
@@ -217,7 +217,7 @@ function describeEnvVar(name, value, prefix) {
         text: `${prefix}${name}`,
       };
 }
-//@ chunk-dcmhvw5a.js:390910-391083 placement
+//@ chunk-z20c443b.js:389156-389329 placement
 /**
  * 取出 shell helper 设置校验结果中给安全对话框展示的各组行（命令、沙箱、隔离、环境变量、类别）。
  */
@@ -231,7 +231,7 @@ function shellHelperRows(doc) {
     categoryRows,
   };
 }
-//@ chunk-dcmhvw5a.js:391083-391798 placement
+//@ chunk-z20c443b.js:389329-390044 placement
 /**
  * 校验 shell helper 设置。
  */
@@ -268,7 +268,7 @@ function validateShellHelperSettings(doc) {
     categoryRows,
   };
 }
-//@ chunk-dcmhvw5a.js:391798-392265 placement
+//@ chunk-z20c443b.js:390044-390511 placement
 /**
  * 描述 helper 设置位置。
  */
@@ -291,7 +291,7 @@ function describeHelperSettingPath(key, value, prefix) {
   }
   return label;
 }
-//@ chunk-dcmhvw5a.js:392265-392501 placement
+//@ chunk-z20c443b.js:390511-390747 placement
 function extraMarketplacesOf(doc) {
   let extraKnownMarketplaces = doc.extraKnownMarketplaces;
   if (extraKnownMarketplaces !== undefined && extraKnownMarketplaces !== null) return extraKnownMarketplaces;
@@ -303,4 +303,4 @@ function extraMarketplacesOf(doc) {
   }
   return;
 }
-export { shellHelperRows, asciiOnly, extraMarketplacesOf, describeEnvRows, parseHelperSetting };
+export { shellHelperRows, parseHelperSetting, asciiOnly, extraMarketplacesOf, describeEnvRows };

@@ -1,12 +1,12 @@
 /**
  * human-signals/build/src/core.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: human-signals@4.3.1..8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-m4p5zn6n.js:9900-13732 esm-fingerprint
+//@ chunk-t889g22j.js:9899-13731 esm-fingerprint
 var signals = [
   {
     name: "SIGHUP",

@@ -3,10 +3,10 @@
  *
  * 权限决策调试信息：决策原因（规则/hook/分类器/模式）字符串化与建议规则；本模块还混入了 React Compiler 的哨兵常量 S（被 800 处引用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionDecisionDebugInfo.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-e6aww6q8.js (7)
- * attribution: fingerprint 4, placement 3, layout 1
+ * pieces: chunk-5xgkngpb.js (7), chunk-czq1j3j2.js (1), chunk-w3ch4xq2.js (1)
+ * attribution: fingerprint 5, placement 3, layout 1
  */
 import {
   normalizePermissionModeAlias,
@@ -33,11 +33,13 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 import { TOOLS_HELD_UNTIL_A_PERSON_TYPES } from "../../utils/permissions/permissions.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 import { TOOL_CHECK } from "../../plugins/functionHooks/toolCheckHooks.js";
+import { untrackedWiredTools, rulesMatchingTool } from "../../services/mcp/serverIdentity.js";
+import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { generateSuggestions } from "../../utils/permissions/filesystem.js";
 import { parseModeSuggestions } from "./consentRows.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:39273-39452 fingerprint (2.1.88 match: extractMode, 0.676)
+//@ chunk-5xgkngpb.js:41861-42040 fingerprint (2.1.88 match: extractMode, 0.677)
 function extractMode(updates) {
   if (updates.behavior !== "allow") return updates;
   let { updatedPermissions } = updates;
@@ -55,7 +57,7 @@ function extractMode(updates) {
         ),
       };
 }
-//@ chunk-e6aww6q8.js:50309-50457 placement
+//@ chunk-5xgkngpb.js:52725-52873 placement
 function decisionReasonText(decision) {
   let decisionReason = decision.decisionReason;
   switch (decision.behavior) {
@@ -66,7 +68,7 @@ function decisionReasonText(decision) {
       return decision.message;
   }
 }
-//@ chunk-e6aww6q8.js:50457-50656 placement
+//@ chunk-5xgkngpb.js:52873-53072 placement
 /**
  * 在子命令结果中找出决定行为的规则
  */
@@ -80,13 +82,13 @@ function findDecidingRule(reason, behavior) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:50942-51058 fingerprint (2.1.88 match: PermissionDecisionInfoItem, 0.631)
+//@ chunk-5xgkngpb.js:53358-53474 fingerprint (2.1.88 match: PermissionDecisionInfoItem, 0.576)
 function PermissionDecisionInfoItem(t0) {
   return t0?.type === "subcommandResults"
     ? [...t0.reasons.values()].some((reason) => PermissionDecisionInfoItem(reason.decisionReason))
     : isOutsideReadsBlockedAsk(t0);
 }
-//@ chunk-e6aww6q8.js:3765551-3767426 fingerprint (2.1.88 match: decisionReasonDisplayString, 0.389)
+//@ chunk-5xgkngpb.js:3861343-3863218 fingerprint (2.1.88 match: decisionReasonDisplayString, 0.391)
 function decisionReasonDisplayString(reason, type, mode, permissionMode) {
   if (type !== undefined && type !== "config") {
     if (type === "hook") return "hook:PermissionRequest";
@@ -159,7 +161,7 @@ function decisionReasonDisplayString(reason, type, mode, permissionMode) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:3767426-3767598 layout
+//@ chunk-5xgkngpb.js:3863218-3863390 layout
 function formatClassifierReasonTag(classifierResult) {
   let reasonName = pickReasonFromList(CLASSIFIER_ANALYTICS_NAMES, classifierResult.classifier);
   if (classifierResult.reason === CLASSIFIER_UNAVAILABLE_REASON)
@@ -167,16 +169,41 @@ function formatClassifierReasonTag(classifierResult) {
   if (classifierResult.noVerdict) return `classifier:${reasonName}:no-verdict`;
   return `classifier:${reasonName}`;
 }
-//@ chunk-e6aww6q8.js:3767598-3767655 placement (2.1.88 match: getAutoModeDumpDir, 0.607)
+//@ chunk-5xgkngpb.js:3863390-3863447 placement (2.1.88 match: getAutoModeDumpDir, 0.608)
 var CLASSIFIER_ANALYTICS_NAMES; // deferred: uses HOOK_EVENTS (../../entrypoints/sdk/coreSchemas.js) of its import cycle while loading; runs once the cycle is complete
 var HOOK_ANALYTICS_NAMES;
 var SUBCOMMANDS;
-deferInit("chunk-e6aww6q8.js:3767598", () => {
+deferInit("chunk-5xgkngpb.js:3863390", () => {
   CLASSIFIER_ANALYTICS_NAMES = ["auto-mode"];
   HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK];
   SUBCOMMANDS = "subcommands:";
 });
-//@ chunk-18hwfzwa.js:1369049-1369244 fingerprint (2.1.88 match: extractDirectories, 0.651)
+//@ chunk-w3ch4xq2.js:128703-128992 fingerprint (2.1.88 match: _temp5, 0.632)
+function expandToolScopedRules(u_1, i) {
+  if (untrackedWiredTools().length === 0) return [...u_1];
+  let seenRules = new Set(u_1.map(({ rule, source }) => `${source} ${rule}`));
+  return [
+    ...u_1,
+    ...i.flatMap(({ ruleValue, source }) =>
+      rulesMatchingTool(ruleValue.toolName).flatMap((toolName) => {
+        let expandedRuleValue = permissionRuleValueFromString({
+          ...ruleValue,
+          toolName,
+        });
+        let dedupeKey = `${source} ${expandedRuleValue}`;
+        if (seenRules.has(dedupeKey)) return [];
+        seenRules.add(dedupeKey);
+        return [
+          {
+            rule: expandedRuleValue,
+            source,
+          },
+        ];
+      }),
+    ),
+  ];
+}
+//@ chunk-czq1j3j2.js:1391849-1392044 fingerprint (2.1.88 match: extractDirectories, 0.651)
 function extractDirectories(filePath, operationType, toolPermissionContext) {
   let found = generateSuggestions(filePath, operationType, toolPermissionContext).find(
     (update) => update.type === "addDirectories",
@@ -191,11 +218,12 @@ function extractDirectories(filePath, operationType, toolPermissionContext) {
       };
 }
 export {
-  extractDirectories,
-  decisionReasonDisplayString,
-  findDecidingRule,
   extractMode,
+  findDecidingRule,
   decisionReasonText,
   PermissionDecisionInfoItem,
+  extractDirectories,
+  decisionReasonDisplayString,
   SUBCOMMANDS,
+  expandToolScopedRules,
 };

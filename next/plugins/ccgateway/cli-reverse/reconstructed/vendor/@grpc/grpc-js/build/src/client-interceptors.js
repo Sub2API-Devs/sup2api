@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/client-interceptors.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_call_interface } from "./call-interface.js";
 import { require_constants } from "./constants.js";
 import { require_error } from "./error.js";
 
-//@ chunk-pwh5dx3n.js:56650-63395 cjs-fingerprint
+//@ chunk-3k21nfa0.js:56650-63395 cjs-fingerprint
 var require_client_interceptors = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：PublishPlugin 工具的常量、冻结的提示文本与参数说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hcckvqyb.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-crzaj3q3.js (39)
  * attribution: placement 39
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
@@ -35,7 +35,7 @@ import {
 import { SHA256_HEX_RE } from "../../utils/commitAttribution.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hcckvqyb.js:764-799 placement
+//@ chunk-crzaj3q3.js:764-799 placement
 /**
  * 构造拒绝详情对象 {kind, details}。
  */
@@ -43,7 +43,7 @@ var refusalDetail = (kind, details) => ({
   kind,
   details,
 });
-//@ chunk-hcckvqyb.js:799-851 placement
+//@ chunk-crzaj3q3.js:799-851 placement
 /**
  * 构造拒绝结果 {kind:"refused", refusal}。
  */
@@ -51,15 +51,15 @@ var refusalResult = (kind, details = []) => ({
   kind: "refused",
   refusal: refusalDetail(kind, details),
 });
-//@ chunk-hcckvqyb.js:851-1049 placement
+//@ chunk-crzaj3q3.js:851-1049 placement
 var CLOUD_SESSION_PUBLISH_TEXT =
   "Publishing from a cloud session isn't offered yet, and the plugin's files are in this cloud session, where the Claude app or a terminal on your computer can't reach them. Nothing was sent.";
-//@ chunk-hcckvqyb.js:1049-1092 placement
+//@ chunk-crzaj3q3.js:1049-1092 placement
 /**
  * 交互式会话且未禁用登录命令时才能提示 claude.ai 登录。
  */
 var canOfferClaudeAiSignIn = () => !getIsNonInteractiveSession() && !env.DISABLE_LOGIN_COMMAND;
-//@ chunk-hcckvqyb.js:1092-1230 placement
+//@ chunk-crzaj3q3.js:1092-1230 placement
 var isPolicyUnloaded = () => {
   let denyKind = policyDenyKind(ALLOW_PLUGIN_PUBLISH_KEY);
   return (
@@ -75,22 +75,22 @@ var isPolicyUnloaded = () => {
     )
   );
 };
-//@ chunk-hcckvqyb.js:1230-1413 placement
+//@ chunk-crzaj3q3.js:1230-1413 placement
 var POLICY_UNLOADED_TEXT =
   "Claude Code couldn't load your organization's policy, so publishing from here is off for now: try again in a moment, or publish this plugin from claude.ai. Nothing was sent.";
-//@ chunk-hcckvqyb.js:1413-1430 placement
+//@ chunk-crzaj3q3.js:1413-1430 placement
 /**
  * 发布插件的大小上限（50 MiB）。
  */
 var MAX_PUBLISH_BYTES = 52428800;
-//@ chunk-hcckvqyb.js:1430-1442 placement
+//@ chunk-crzaj3q3.js:1430-1442 placement
 /**
  * 发布插件的文件数上限（10000）。
  */
 var MAX_PUBLISH_FILES = 1e4;
-//@ chunk-hcckvqyb.js:1442-6560 placement
+//@ chunk-crzaj3q3.js:1442-6560 placement
 var PUBLISH_UNAVAILABLE_TEXTS; // deferred: uses formatFileSize (../../utils/format.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hcckvqyb.js:1442", () => {
+deferInit("chunk-crzaj3q3.js:1442", () => {
   PUBLISH_UNAVAILABLE_TEXTS = Object.freeze({
     "flag-off": "Publishing plugins isn't available in this session. Nothing was sent.",
     "third-party":
@@ -158,17 +158,17 @@ deferInit("chunk-hcckvqyb.js:1442", () => {
     other: "claude.ai didn't take the plugin.",
   });
 });
-//@ chunk-hcckvqyb.js:6560-6755 placement
+//@ chunk-crzaj3q3.js:6560-6755 placement
 var NO_CLAUDE_AI_SIGNIN_TEXT =
   "Publishing needs a claude.ai sign-in, and this session has none it can publish on. Publish this plugin from claude.ai, or ask Claude to publish it from a session signed in to claude.ai.";
-//@ chunk-hcckvqyb.js:6755-6891 placement
+//@ chunk-crzaj3q3.js:6755-6891 placement
 function publishRefusalText(kind) {
   if (kind === "signed-out" && !canOfferClaudeAiSignIn()) return NO_CLAUDE_AI_SIGNIN_TEXT;
   if (kind === "policy" && isPolicyUnloaded()) return POLICY_UNLOADED_TEXT;
   if (kind === "cloud-session" && isRemoteCowork()) return CLOUD_SESSION_PUBLISH_TEXT;
   return PUBLISH_UNAVAILABLE_TEXTS[kind];
 }
-//@ chunk-hcckvqyb.js:6891-7129 placement
+//@ chunk-crzaj3q3.js:6891-7129 placement
 function sharePublishedLines(result) {
   return result.kind === "published"
     ? [
@@ -179,15 +179,15 @@ function sharePublishedLines(result) {
       ]
     : [];
 }
-//@ chunk-hcckvqyb.js:7129-7210 placement
+//@ chunk-crzaj3q3.js:7129-7210 placement
 /**
  * 生成 claude.ai 上插件管理页的链接。
  */
 var pluginCustomizeUrl = (pluginId) =>
   `${getOauthConfig().CLAUDE_AI_ORIGIN}/customize/plugins/` + encodeURIComponent(pluginId);
-//@ chunk-hcckvqyb.js:7210-7708 placement
+//@ chunk-crzaj3q3.js:7210-7708 placement
 var PUBLISH_OUTCOME_TEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hcckvqyb.js:7210", () => {
+deferInit("chunk-crzaj3q3.js:7210", () => {
   PUBLISH_OUTCOME_TEXTS = Object.freeze({
     published: "published to your organization's library.",
     "in-review":
@@ -197,12 +197,12 @@ deferInit("chunk-hcckvqyb.js:7210", () => {
       "uploaded to your own shelf on claude.ai, and not submitted yet: its scan was still running when the wait for it ended. Submit it from claude.ai once the scan has passed.",
   });
 });
-//@ chunk-hcckvqyb.js:7708-7718 placement
+//@ chunk-crzaj3q3.js:7708-7718 placement
 /**
  * 安全扫描结论的最大展示字符数（40）。
  */
 var MAX_SCAN_VERDICT_CHARS = 40;
-//@ chunk-hcckvqyb.js:7718-7813 placement
+//@ chunk-crzaj3q3.js:7718-7813 placement
 /**
  * 把扫描结论渲染成“Security scan on claude.ai: …”行。
  */
@@ -210,7 +210,7 @@ var securityScanLines = (outcome) =>
   [outcome.verdict ?? ""]
     .filter(Boolean)
     .map((verdict) => "Security scan on claude.ai: " + printableName(verdict, MAX_SCAN_VERDICT_CHARS));
-//@ chunk-hcckvqyb.js:7813-8111 placement
+//@ chunk-crzaj3q3.js:7813-8111 placement
 var publishOutcomeLines = (outcome) => [
   PUBLISH_OUTCOME_TEXTS[outcome.kind],
   ...[outcome].flatMap((outcome) => ("verdict" in outcome ? [outcome] : [])).flatMap(securityScanLines),
@@ -222,22 +222,22 @@ var publishOutcomeLines = (outcome) => [
     .flatMap((outcome) => ("id" in outcome ? [outcome.id] : []))
     .map((pluginId) => `Follow it on claude.ai: ${pluginCustomizeUrl(pluginId)}`),
 ];
-//@ chunk-hcckvqyb.js:8111-8173 placement
+//@ chunk-crzaj3q3.js:8111-8173 placement
 /**
  * 把插件名与版本拼成展示名。
  */
 var pluginNameLine = (manifest) => printableName([manifest.name, manifest.version].filter(Boolean).join(" "));
-//@ chunk-hcckvqyb.js:8173-8249 placement
+//@ chunk-crzaj3q3.js:8173-8249 placement
 /**
  * 说明版本号来自插件自身而非库。
  */
 var OWN_VERSION_NOTE = " (the plugin's own version; the library numbers its copies itself)";
-//@ chunk-hcckvqyb.js:8249-8286 placement
+//@ chunk-crzaj3q3.js:8249-8286 placement
 /**
  * 插件名加版本说明，作为发布结果首行的前缀。
  */
 var pluginNameWithNote = (manifest) => pluginNameLine(manifest) + (manifest.version ? OWN_VERSION_NOTE : "");
-//@ chunk-hcckvqyb.js:8286-8439 placement
+//@ chunk-crzaj3q3.js:8286-8439 placement
 /**
  * 把插件发布结果转为展示行：被拒时给出拒绝原因说明与细节；否则按结果种类给出状态、扫描结论、未扫描提示、分享链接与 claude.ai 跟踪链接，首行前缀插件名。
  */
@@ -251,7 +251,7 @@ function publishResultLines(result) {
         (line, lineIndex) => (lineIndex === 0 ? `${pluginNameWithNote(result.manifest)}: ` : "") + line,
       );
 }
-//@ chunk-hcckvqyb.js:8439-8477 placement
+//@ chunk-crzaj3q3.js:8439-8477 placement
 /**
  * 构造 {type:"other", reason} 形式的拒绝原因。
  */
@@ -259,7 +259,7 @@ var denialReason = (reason) => ({
   type: "other",
   reason,
 });
-//@ chunk-hcckvqyb.js:8477-8540 placement
+//@ chunk-crzaj3q3.js:8477-8540 placement
 /**
  * 构造 behavior=deny 的权限结果。
  */
@@ -268,7 +268,7 @@ var denyWithMessage = (reason) => ({
   message: reason,
   decisionReason: denialReason(reason),
 });
-//@ chunk-hcckvqyb.js:8540-8585 placement
+//@ chunk-crzaj3q3.js:8540-8585 placement
 /**
  * 把发布拒绝结果转成带展示文本的 deny 权限结果。
  */
@@ -277,42 +277,42 @@ var publishRefusalDenial = (kind, details = []) =>
     publishResultLines(refusalResult(kind, details)).join(`
 `),
   );
-//@ chunk-hcckvqyb.js:8585-8597 placement
+//@ chunk-crzaj3q3.js:8585-8597 placement
 /**
  * 发布审批问题里步骤文本的最大长度（300）。
  */
 var MAX_PUBLISH_STEPS = 300;
-//@ chunk-hcckvqyb.js:8597-8609 placement
+//@ chunk-crzaj3q3.js:8597-8609 placement
 /**
  * 单个写入文本的最大字符数（4000）。
  */
 var MAX_PUBLISH_WRITE_TEXT_CHARS = 4000;
-//@ chunk-hcckvqyb.js:8609-8620 placement
+//@ chunk-crzaj3q3.js:8609-8620 placement
 /**
  * 路径字段的额外字符余量。
  */
 var MAX_PATH_EXTRA_CHARS = 128;
-//@ chunk-hcckvqyb.js:8620-8633 placement
+//@ chunk-crzaj3q3.js:8620-8633 placement
 /**
  * 单个路径字段的基础上限（4096）。
  */
 var MAX_PUBLISH_PATH_CHARS = 4096;
-//@ chunk-hcckvqyb.js:8633-8650 placement
+//@ chunk-crzaj3q3.js:8633-8650 placement
 /**
  * 单个路径字段的最大字符数（2*4096+128）。
  */
 var MAX_PUBLISH_META_CHARS = 2 * MAX_PUBLISH_PATH_CHARS + MAX_PATH_EXTRA_CHARS;
-//@ chunk-hcckvqyb.js:8650-8662 placement
+//@ chunk-crzaj3q3.js:8650-8662 placement
 /**
  * 审批问题中各列表的最大条目数（500）。
  */
 var MAX_PUBLISH_LIST_ITEMS = 500;
-//@ chunk-hcckvqyb.js:8662-10431 placement
+//@ chunk-crzaj3q3.js:8662-10431 placement
 /**
  * 发布插件审批问题的数据结构：确认所绑定的摘要、组织、插件、目标文件夹、新建/替换、步骤、警告、写入的 manifest、发送的文件清单与大小、留在本机的条目及原因、完整清单文件。
  */
 var PUBLISH_QUESTION_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hcckvqyb.js:8662", () => {
+deferInit("chunk-crzaj3q3.js:8662", () => {
   PUBLISH_QUESTION_SCHEMA = DoctorLazy(() =>
     objectSchema({
       digest: stringSchema()
@@ -393,32 +393,32 @@ deferInit("chunk-hcckvqyb.js:8662", () => {
     }),
   );
 });
-//@ chunk-hcckvqyb.js:10431-10443 placement
+//@ chunk-crzaj3q3.js:10431-10443 placement
 /**
  * 单条文件说明的最大字符数（1024）。
  */
 var MAX_PUBLISH_FILE_NOTE_CHARS = 1024;
-//@ chunk-hcckvqyb.js:10443-10454 placement
+//@ chunk-crzaj3q3.js:10443-10454 placement
 /**
  * shown 字段的最大长度。
  */
 var MAX_PUBLISH_SHOWN_CHARS = MAX_PUBLISH_META_CHARS;
-//@ chunk-hcckvqyb.js:10454-10465 placement
+//@ chunk-crzaj3q3.js:10454-10465 placement
 /**
  * 审批问题文本的额外长度余量（100）。
  */
 var MAX_PUBLISH_QUESTION_EXTRA = 100;
-//@ chunk-hcckvqyb.js:10465-10481 placement
+//@ chunk-crzaj3q3.js:10465-10481 placement
 /**
  * 审批问题整体允许的最大长度。
  */
 var MAX_PUBLISH_QUESTION_CHARS = 2 * MAX_PUBLISH_LIST_ITEMS + MAX_PUBLISH_QUESTION_EXTRA;
-//@ chunk-hcckvqyb.js:10481-11516 placement
+//@ chunk-crzaj3q3.js:10481-11516 placement
 /**
  * PublishPlugin 工具的输入结构：插件目录、发布目标（组织库）、无 manifest 时用的描述、是否替换同名插件，以及由工具自己填写的 shown/question 字段。
  */
 var PUBLISH_PLUGIN_INPUT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hcckvqyb.js:10481", () => {
+deferInit("chunk-crzaj3q3.js:10481", () => {
   PUBLISH_PLUGIN_INPUT_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
       path: stringSchema()
@@ -457,12 +457,12 @@ deferInit("chunk-hcckvqyb.js:10481", () => {
     }),
   );
 });
-//@ chunk-hcckvqyb.js:11516-11528 placement
+//@ chunk-crzaj3q3.js:11516-11528 placement
 /**
  * 输出展示行的最大长度（4000）。
  */
 var MAX_PUBLISH_OUTPUT_LINE_CHARS = 4000;
-//@ chunk-hcckvqyb.js:11528-11619 placement
+//@ chunk-crzaj3q3.js:11528-11619 placement
 /**
  * 把发布结果转成工具输出对象（状态、拒绝原因与展示行）。
  */
@@ -471,12 +471,12 @@ var publishResultToToolOutput = (result) => ({
   refusal: result.kind === "refused" ? result.refusal.kind : undefined,
   lines: publishResultLines(result),
 });
-//@ chunk-hcckvqyb.js:11619-11744 placement
+//@ chunk-crzaj3q3.js:11619-11744 placement
 /**
  * PublishPlugin 工具的输出结构：状态（已发布/审核中/发布中/已上架/被拒）、拒绝原因与展示行。
  */
 var PUBLISH_PLUGIN_OUTPUT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hcckvqyb.js:11619", () => {
+deferInit("chunk-crzaj3q3.js:11619", () => {
   PUBLISH_PLUGIN_OUTPUT_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
       state: _enum(["published", "in-review", "publishing", "on-shelf", "refused"]),
@@ -486,21 +486,21 @@ deferInit("chunk-hcckvqyb.js:11619", () => {
   );
 });
 export {
+  MAX_PUBLISH_META_CHARS,
   refusalResult,
+  MAX_PUBLISH_PATH_CHARS,
+  pluginNameLine,
+  MAX_PUBLISH_LIST_ITEMS,
+  publishRefusalDenial,
   MAX_PUBLISH_FILES,
   MAX_PUBLISH_STEPS,
   MAX_PUBLISH_BYTES,
   pluginCustomizeUrl,
   securityScanLines,
-  pluginNameLine,
   PUBLISH_QUESTION_SCHEMA,
-  MAX_PUBLISH_META_CHARS,
   MAX_PUBLISH_OUTPUT_LINE_CHARS,
   PUBLISH_PLUGIN_INPUT_SCHEMA,
   PUBLISH_PLUGIN_OUTPUT_SCHEMA,
-  publishRefusalDenial,
   publishResultToToolOutput,
   publishResultLines,
-  MAX_PUBLISH_PATH_CHARS,
-  MAX_PUBLISH_LIST_ITEMS,
 };

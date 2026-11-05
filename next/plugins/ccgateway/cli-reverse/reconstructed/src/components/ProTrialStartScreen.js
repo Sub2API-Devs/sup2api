@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Pro 套餐 Claude Code 试用开通确认界面（开始、出错、上报 tengu_pro_trial_*）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5qm79scx.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wphv12b5.js (2)
  * attribution: placement 2
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
@@ -25,9 +25,9 @@ import { WelcomeV2 } from "./LogoV2/WelcomeV2.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { Spinner } from "./Spinner.js";
 
-//@ chunk-5qm79scx.js:14105-14109 placement
+//@ chunk-wphv12b5.js:15253-15257 placement
 init_react_production();
-//@ chunk-5qm79scx.js:14109-15370 placement
+//@ chunk-wphv12b5.js:15257-16518 placement
 /**
  * Pro 套餐 Claude Code 试用开通确认界面（开始、出错、上报 tengu_pro_trial_*）。
  */

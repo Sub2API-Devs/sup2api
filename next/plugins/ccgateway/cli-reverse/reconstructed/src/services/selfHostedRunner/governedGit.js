@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 为会话仓库配置受管 git（凭据助手、推送 URL、git 代理、主机路由与 canonical 仓库清洗）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (45)
  * attribution: placement 45
  */
 import { join, dirname, sep } from "path";
@@ -44,7 +44,7 @@ import { isSafeRefName } from "../../utils/git/safeRefName.js";
 import { resolveInside } from "./repoSettingsConfinement.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hm0ce8vc.js:170087-170855 placement
+//@ chunk-asf5gh8x.js:181157-181925 placement
 function pluralizeEntries(toolConfig, onStatus) {
   let asArray = (list) => (Array.isArray(list) ? list : []);
   let governedEntries = asArray(toolConfig?.governed_hosts);
@@ -74,14 +74,14 @@ function pluralizeEntries(toolConfig, onStatus) {
     direct,
   };
 }
-//@ chunk-hm0ce8vc.js:170855-170974 placement
+//@ chunk-asf5gh8x.js:181925-182044 placement
 function isGovernedHost(hostSplit, remoteHostname) {
   if (!hostSplit) return true;
   if (!remoteHostname) return false;
   let host = normalizeHost(remoteHostname);
   return isGithubDotCom(host) ? hostSplit.governed.includes(GITHUB_HOST) : hostSplit.governed.includes(host);
 }
-//@ chunk-hm0ce8vc.js:170974-171275 placement
+//@ chunk-asf5gh8x.js:182044-182345 placement
 /**
  * 按 NO_PROXY 列表筛出受管 git 主机中应直连的主机。
  */
@@ -106,14 +106,14 @@ function governedNoProxyHosts(hostSplit, noProxy) {
     ),
   );
 }
-//@ chunk-hm0ce8vc.js:171275-172132 placement
+//@ chunk-asf5gh8x.js:182345-183202 placement
 function formatAskpassWarning(hostSplit, hasAskpass) {
   if (!hostSplit || !hasAskpass) return;
   let filtered = hostSplit.governed.filter((host) => host !== GITHUB_HOST);
   if (filtered.length === 0) return;
   return `[runner:warn] governed git: GIT_ASKPASS is set on this runner and the server governs ${plural(filtered.length, "host")} ${filtered.join(", ")}. An askpass program answers for every host. The session's own git config tells git to give up rather than ask for a credential for ${plural(filtered.length, "that host", "those hosts")}, because the session relay supplies it. Do not leave it to that alone: git config read after the session's own (a repository's, the command line, GIT_CONFIG_* variables) can switch that off, and if the program were then asked, this machine's credential would pass through Anthropic's relay. Make the program answer only for the hosts you mean (git passes it the URL in its prompt) or unset it; the same goes for core.askPass in git config and for SSH_ASKPASS.`;
 }
-//@ chunk-hm0ce8vc.js:172132-172992 placement
+//@ chunk-asf5gh8x.js:183202-184062 placement
 function formatSourcesOnHostWarning(hostSplit, hasPushBaseUrl, sourceHosts) {
   if (!hostSplit || !hasPushBaseUrl) return;
   let hosts = [];
@@ -126,7 +126,7 @@ function formatSourcesOnHostWarning(hostSplit, hasPushBaseUrl, sourceHosts) {
   if (hosts.length === 0) return;
   return `[runner:warn] governed git: this session has ${plural(hosts.length, "a source", "sources")} on ${hosts.join(", ")}, which the server does not route through Anthropic-managed git; ${plural(hosts.length, "it is", "they are")} cloned with this machine's own git credentials. This runner was started with --use-anthropic-git-proxy, which deletes and replaces the runner account's HOME-level git config at startup and before every session, so a credential for ${plural(hosts.length, "that host", "those hosts")} must live where that flag does not reach (for example /etc/gitconfig, GIT_ASKPASS, or an SSH key with --git-ssh-rewrite). Without one, the clone of a private repository there fails.`;
 }
-//@ chunk-hm0ce8vc.js:172992-174354 placement
+//@ chunk-asf5gh8x.js:184062-185424 placement
 function isLoopbackHttpUrl(governedGit, getSessionToken, onStatus, directUpstreams) {
   if (!governedGit) return;
   let gitMountBaseUrl = governedGit.git_mount_base_url;
@@ -190,19 +190,19 @@ function isLoopbackHttpUrl(governedGit, getSessionToken, onStatus, directUpstrea
       }),
   };
 }
-//@ chunk-hm0ce8vc.js:174354-174688 placement
+//@ chunk-asf5gh8x.js:185424-185758 placement
 /**
  * 受管 git 配置携带了不可用的 GitHub REST 挂载地址时的警告文字。
  */
 var BAD_REST_MOUNT_WARNING =
   "[runner:warn] the work item's governed-git configuration carried an unusable GitHub REST mount URL, so this session's gh keeps this machine's own GitHub access (the clone through the mount is unaffected). No operator action is needed; please report this warning to Anthropic support so the server-side delivery can be fixed.";
-//@ chunk-hm0ce8vc.js:174688-174814 placement
+//@ chunk-asf5gh8x.js:185758-185884 placement
 function matchesRepoList(governedGitUrl, directUpstreams) {
   let lower = `${governedGitUrl.host}/${governedGitUrl.owner}`.toLowerCase();
   let ownerPath = `${lower}/${governedGitUrl.repo.toLowerCase()}`;
   return directUpstreams.some((candidate) => candidate === lower || candidate === ownerPath);
 }
-//@ chunk-hm0ce8vc.js:174814-174919 placement
+//@ chunk-asf5gh8x.js:185884-185989 placement
 function splitMountRouting(governedRepo, gitProxyRepo, directUpstreams, hasDirectUpstreams) {
   let throughMount = new Set();
   let keptDirect = new Set();
@@ -211,7 +211,7 @@ function splitMountRouting(governedRepo, gitProxyRepo, directUpstreams, hasDirec
     keptDirect: [...keptDirect].sort(),
   };
 }
-//@ chunk-hm0ce8vc.js:174919-177235 placement
+//@ chunk-asf5gh8x.js:185989-188305 placement
 /**
  * 按服务器的逐主机路由判断源是 direct 还是 customer-managed。
  */
@@ -316,7 +316,7 @@ function classifySourceRouting(
   }
   return mappedSources;
 }
-//@ chunk-hm0ce8vc.js:177235-177897 placement
+//@ chunk-asf5gh8x.js:188305-188967 placement
 /**
  * 由源 URL 解析 owner/repo 生成 session_ingress git 代理地址。
  */
@@ -346,7 +346,7 @@ function buildGitProxyUrl(url, gitProxyConfig, onDebug) {
     repo,
   };
 }
-//@ chunk-hm0ce8vc.js:177897-178655 placement
+//@ chunk-asf5gh8x.js:188967-189725 placement
 function buildGovernedGitUrl(url, mountBaseUrl, onDebug) {
   let match = url.match(/^https:\/\/([^/@:]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
   if (!match) {
@@ -379,7 +379,7 @@ function buildGovernedGitUrl(url, mountBaseUrl, onDebug) {
     upstreamUrl: `https://${lower}/${owner}/${repo}`,
   };
 }
-//@ chunk-hm0ce8vc.js:178655-178939 placement
+//@ chunk-asf5gh8x.js:189725-190009 placement
 function formatNoPushUrlWarning(governedGitUrl, pushBaseUrl, onDebug) {
   if (pushBaseUrl === undefined) return;
   if (!isGithubDotCom(governedGitUrl.host)) {
@@ -390,7 +390,7 @@ function formatNoPushUrlWarning(governedGitUrl, pushBaseUrl, onDebug) {
   }
   return `${pushBaseUrl}/${governedGitUrl.host}/${governedGitUrl.owner}/${governedGitUrl.repo}`;
 }
-//@ chunk-hm0ce8vc.js:178939-179038 placement
+//@ chunk-asf5gh8x.js:190009-190108 placement
 /**
  * 判断仓库本地 git 配置属于本会话（own）、属于别的会话（another）或没有。
  */
@@ -399,7 +399,7 @@ function gitConfigOwnershipLabel(spawnedSessionIds, sessionId) {
     return "another";
   return spawnedSessionIds.size > 0 ? "own" : "none";
 }
-//@ chunk-hm0ce8vc.js:179038-179174 placement
+//@ chunk-asf5gh8x.js:190108-190244 placement
 function getDrainGraceMs(role, otherRole) {
   return (
     antEnv.CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM === true &&
@@ -407,7 +407,7 @@ function getDrainGraceMs(role, otherRole) {
     (role === "none" || role === otherRole)
   );
 }
-//@ chunk-hm0ce8vc.js:179174-179649 placement
+//@ chunk-asf5gh8x.js:190244-190719 placement
 function shouldSanitizeCanonical(onStatus, sessionId, role) {
   if (!antEnv.CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM) return true;
   if (!getDrainGraceMs(role, "own")) {
@@ -424,9 +424,9 @@ function shouldSanitizeCanonical(onStatus, sessionId, role) {
   );
   return false;
 }
-//@ chunk-hm0ce8vc.js:179649-179758 placement
+//@ chunk-asf5gh8x.js:190719-190828 placement
 var REPO_SANITIZE_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hm0ce8vc.js:179649", () => {
+deferInit("chunk-asf5gh8x.js:190719", () => {
   REPO_SANITIZE_ENTRIES = new Map([
     ["objects", "dir"],
     ["refs", "dir"],
@@ -435,7 +435,7 @@ deferInit("chunk-hm0ce8vc.js:179649", () => {
     ["shallow", "file"],
   ]);
 });
-//@ chunk-hm0ce8vc.js:179758-182117 placement
+//@ chunk-asf5gh8x.js:190828-193187 placement
 /**
  * 准备前清洗 canonical 仓库（objects、refs、packed-refs 等）。
  */
@@ -570,7 +570,7 @@ async function sanitizeCanonicalRepo(canonicalPath, onDebug, originUrl) {
     );
   }
 }
-//@ chunk-hm0ce8vc.js:182117-182441 placement
+//@ chunk-asf5gh8x.js:193187-193511 placement
 /**
  * 删除目录中的符号链接（可递归子目录）。
  */
@@ -602,7 +602,7 @@ async function removeSymlinksIn(dirPath, recurse) {
     if (recurse && entryStats.isDirectory()) await removeSymlinksIn(entryPath, true);
   }
 }
-//@ chunk-hm0ce8vc.js:182441-182558 placement
+//@ chunk-asf5gh8x.js:193511-193628 placement
 async function writeNewFile(path, content, mode) {
   let handle = await open(path, "wx", mode);
   try {
@@ -612,7 +612,7 @@ async function writeNewFile(path, content, mode) {
     await handle.close();
   }
 }
-//@ chunk-hm0ce8vc.js:182558-182687 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-asf5gh8x.js:193628-193757 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function rewriteFileWithMode(filePath, content, mode) {
   await rm(filePath, {
     recursive: true,
@@ -626,7 +626,7 @@ async function rewriteFileWithMode(filePath, content, mode) {
   });
   await chmod(filePath, mode);
 }
-//@ chunk-hm0ce8vc.js:182687-183435 placement
+//@ chunk-asf5gh8x.js:193757-194505 placement
 /**
  * 清空并重写会话间隔离用的 git 钩子桩。
  */
@@ -675,7 +675,7 @@ async function restoreHookStubs(configureGitHookStubs, configureGitSigningArtifa
     );
   }
 }
-//@ chunk-hm0ce8vc.js:183435-184848 placement
+//@ chunk-asf5gh8x.js:194505-195918 placement
 /**
  * 写 info/exclude 让 git 忽略 .claude/settings.local.json。
  */
@@ -749,7 +749,7 @@ async function ignoreLocalSettingsInGit(options, onDebug, onStatus) {
     );
   }
 }
-//@ chunk-hm0ce8vc.js:184848-185317 placement
+//@ chunk-asf5gh8x.js:195918-196387 placement
 async function runGitConfigLocal(repoPath, onDebug, resetFirst) {
   if (resetFirst)
     await rm(join(repoPath, ".git", "config.lock"), {
@@ -777,7 +777,7 @@ async function runGitConfigLocal(repoPath, onDebug, resetFirst) {
     child.on("error", () => onExit(null));
   });
 }
-//@ chunk-hm0ce8vc.js:185317-185874 placement
+//@ chunk-asf5gh8x.js:196387-196944 placement
 /**
  * 配置会话凭据助手（使用 CLAUDE_CODE_SESSION_ACCESS_TOKEN）。
  */
@@ -806,7 +806,7 @@ async function setCredentialHelper(repoPath, remoteUrl, onDebug, signal) {
     );
   onDebug(`[runner:session] git proxy: wired repo-local credential helper for ${origin} in ${repoPath}`);
 }
-//@ chunk-hm0ce8vc.js:185874-186523 placement
+//@ chunk-asf5gh8x.js:196944-197593 placement
 async function runGitWithAbort(
   args,
   onFailure,
@@ -875,7 +875,7 @@ async function runGitWithAbort(
     child.on("error", (error) => finish(error));
   });
 }
-//@ chunk-hm0ce8vc.js:186523-187108 placement
+//@ chunk-asf5gh8x.js:197593-198178 placement
 async function getRemoteOriginUrls(repoPath, upstreamUrl, onDebug, signal, spawnFn, onStdout) {
   let stdoutText = "";
   let failureInfo = {
@@ -910,7 +910,7 @@ async function getRemoteOriginUrls(repoPath, upstreamUrl, onDebug, signal, spawn
   );
   return "not_upstream";
 }
-//@ chunk-hm0ce8vc.js:187108-187741 placement
+//@ chunk-asf5gh8x.js:198178-198811 placement
 async function setHostCredentialHelper(repoPath, url, upstreamUrl, mountBaseUrl, onDebug, signal) {
   let helperKey = `credential.${mountBaseUrl}.helper`;
   let dottedUrl = upstreamUrl.endsWith(".git") ? upstreamUrl.slice(0, -4) : `${upstreamUrl}.git`;
@@ -934,7 +934,7 @@ async function setHostCredentialHelper(repoPath, url, upstreamUrl, mountBaseUrl,
     `[runner:session] governed git: fetches of ${upstreamUrl} rewritten to the mount (${url}) with a session-token credential helper scoped to ${mountBaseUrl} in ${repoPath}`,
   );
 }
-//@ chunk-hm0ce8vc.js:187741-188276 placement
+//@ chunk-asf5gh8x.js:198811-199346 placement
 async function setUrlInsteadOf(path, mountUrl, mountBaseUrl, onDebug, deadlineMs = SETUP_STEP_DEADLINE_MS) {
   let deadline = Date.now() + deadlineMs;
   for (let configKey of [`url.${mountUrl}.insteadOf`, `credential.${mountBaseUrl}.helper`])
@@ -962,7 +962,7 @@ async function setUrlInsteadOf(path, mountUrl, mountBaseUrl, onDebug, deadlineMs
     )
       return;
 }
-//@ chunk-hm0ce8vc.js:188276-189001 placement
+//@ chunk-asf5gh8x.js:199346-200071 placement
 function isLoopbackUrl(rawUrl, onDebug, unusableMessage) {
   let trimmed = rawUrl?.trim() ?? "";
   if (trimmed === "") return;
@@ -992,7 +992,7 @@ function isLoopbackUrl(rawUrl, onDebug, unusableMessage) {
   }
   return parsedUrl.href.replace(/\/+$/, "");
 }
-//@ chunk-hm0ce8vc.js:189001-189986 placement
+//@ chunk-asf5gh8x.js:200071-201056 placement
 /**
  * 设置/清除 remote.origin.pushurl 让推送走受管路径。
  */
@@ -1042,14 +1042,14 @@ async function configureGovernedPushUrl(canonicalPath, pushBaseUrl, origin, upst
     `[runner:session] governed git: pushes to ${upstreamUrl} rewritten to ${pushBaseUrl} (url.<pushUrl>.pushInsteadOf) with a session-token credential helper scoped to ${origin} in ${canonicalPath}`,
   );
 }
-//@ chunk-hm0ce8vc.js:189986-190032 placement
+//@ chunk-asf5gh8x.js:201056-201102 placement
 /**
  * 拼出 url.<url>.pushInsteadOf 配置键名。
  */
 function pushInsteadOfKey(pushBaseUrl) {
   return `url.${pushBaseUrl}.pushInsteadOf`;
 }
-//@ chunk-hm0ce8vc.js:190032-190510 placement
+//@ chunk-asf5gh8x.js:201102-201580 placement
 async function unsetCredentialHelper(canonicalPath, pushBaseUrl, origin, onDebug) {
   let allUnset = true;
   for (let configKey of [pushInsteadOfKey(pushBaseUrl), `credential.${origin}.helper`])
@@ -1071,14 +1071,14 @@ async function unsetCredentialHelper(canonicalPath, pushBaseUrl, origin, onDebug
     });
   return allUnset;
 }
-//@ chunk-hm0ce8vc.js:190510-190519 placement
+//@ chunk-asf5gh8x.js:201580-201589 placement
 var GIT_CONFIG_MISSING_EXIT_CODE = 5;
-//@ chunk-hm0ce8vc.js:190519-190543 placement
+//@ chunk-asf5gh8x.js:201589-201613 placement
 /**
  * 受管 git 配置读取/清理失败时使用的错误类型（可被判为可忽略）。
  */
 class GovernedGitError extends Error {}
-//@ chunk-hm0ce8vc.js:190543-193231 placement
+//@ chunk-asf5gh8x.js:201613-204301 placement
 /**
  * 对每个源核对推送 URL，失败则在下次 /remote 读取时再协调。
  */
@@ -1220,7 +1220,7 @@ function reconcileGovernedPushUrls(options) {
     },
   };
 }
-//@ chunk-hm0ce8vc.js:193231-193915 placement
+//@ chunk-asf5gh8x.js:204301-204985 placement
 async function retryGitOperation(options) {
   let isTransient = options.isTransient ?? isRetryableRunnerError;
   let now = options.nowMs ?? Date.now;
@@ -1269,11 +1269,11 @@ async function retryGitOperation(options) {
     }
   }
 }
-//@ chunk-hm0ce8vc.js:193915-193942 placement
+//@ chunk-asf5gh8x.js:204985-205012 placement
 var GOVERNED_REPRESENT_RETRY_MS = 15000;
 var GOVERNED_REPRESENT_RETRY_STEPS = 4;
-var GOVERNED_REPRESENT_RETRY_SLACK_MS = 30000;
-//@ chunk-hm0ce8vc.js:193942-194195 placement
+var REPRESENT_DEADLINE_SLACK_MS = 30000;
+//@ chunk-asf5gh8x.js:205012-205265 placement
 function rewriteSshUrl(url, sshHosts, onDebug) {
   if (sshHosts.size === 0) return url;
   let match = url.match(/^https:\/\/([^/]+)\/(.+?)(?:\.git)?$/);
@@ -1283,7 +1283,7 @@ function rewriteSshUrl(url, sshHosts, onDebug) {
   onDebug?.(`[runner:git] rewrote ${url} -> ${sshUrl} (--git-ssh-rewrite)`);
   return sshUrl;
 }
-//@ chunk-hm0ce8vc.js:194195-194450 placement
+//@ chunk-asf5gh8x.js:205265-205520 placement
 function rewriteHostUrl(url, hostRewrites, onDebug) {
   if (hostRewrites.size === 0) return url;
   let match = url.match(/^https:\/\/([^/]+)\/(.+)$/);
@@ -1294,12 +1294,12 @@ function rewriteHostUrl(url, hostRewrites, onDebug) {
   onDebug?.(`[runner:git] rewrote ${url} -> ${rewrittenUrl} (--git-host-rewrite)`);
   return rewrittenUrl;
 }
-//@ chunk-hm0ce8vc.js:194450-194553 placement
+//@ chunk-asf5gh8x.js:205520-205623 placement
 function isSshRemote(url) {
   if (url.startsWith("ssh://")) return true;
   return !url.includes("://") && /^[^@]+@[^:]+:.+$/.test(url);
 }
-//@ chunk-hm0ce8vc.js:194553-194723 placement
+//@ chunk-asf5gh8x.js:205623-205793 placement
 function gitRepositorySources(pushTargets) {
   let results = [];
   for (let pushTarget of pushTargets) {
@@ -1311,7 +1311,7 @@ function gitRepositorySources(pushTargets) {
   }
   return results;
 }
-//@ chunk-hm0ce8vc.js:194723-194900 placement
+//@ chunk-asf5gh8x.js:205793-205970 placement
 function branchesByRepo(sources) {
   let byRepo = new Map();
   for (let source of sources) {
@@ -1323,14 +1323,14 @@ function branchesByRepo(sources) {
   }
   return byRepo;
 }
-//@ chunk-hm0ce8vc.js:194900-194938 placement
+//@ chunk-asf5gh8x.js:205970-206008 placement
 /**
  * 把仓库名转小写，用于不区分大小写的比较。
  */
 function lowercaseRepoName(repo) {
   return repo.toLowerCase();
 }
-//@ chunk-hm0ce8vc.js:194938-195214 placement
+//@ chunk-asf5gh8x.js:206008-206284 placement
 function chooseChildCwd(baseDir, sourceDirs, preferredDir, isSessionHook = false) {
   let addDirs = isSessionHook ? [] : sourceDirs;
   if (preferredDir) {
@@ -1383,7 +1383,7 @@ export {
   isLoopbackUrl,
   BAD_REST_MOUNT_WARNING,
   GOVERNED_REPRESENT_RETRY_STEPS,
-  GOVERNED_REPRESENT_RETRY_SLACK_MS,
+  REPRESENT_DEADLINE_SLACK_MS,
   retryGitOperation,
   setUrlInsteadOf,
   writeNewFile,

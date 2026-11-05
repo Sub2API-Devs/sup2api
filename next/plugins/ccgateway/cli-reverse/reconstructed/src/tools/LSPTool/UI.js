@@ -3,9 +3,9 @@
  *
  * LSP 工具名、描述与调用/结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (4), chunk-hg2zbde4.js (1), chunk-kxyd0g16.js (1), chunk-q466qetm.js (1)
+ * pieces: chunk-fmnbrxwy.js (1), chunk-pfdb6yeg.js (1), chunk-wjygkcr4.js (4), chunk-wrav3w1r.js (1)
  * attribution: fingerprint 5, placement 1, callgraph-witnessed 1
  */
 import { getSymbolAtPosition } from "./symbolContext.js";
@@ -22,7 +22,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
-//@ chunk-hg2zbde4.js:1720-2980 fingerprint (2.1.88 match: userFacingName, 1)
+//@ chunk-pfdb6yeg.js:4199-5459 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * LSP 工具名 "LSP" 与工具描述（九种操作说明、行列 1 基）。
  */
@@ -49,7 +49,7 @@ The workspaceSymbol operation also takes:
 - query: The symbol name or partial name to search for. Always provide it \u2014 most language servers return no results for an empty query.
 
 Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.`;
-//@ chunk-kxyd0g16.js:105186-105853 fingerprint (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-fmnbrxwy.js:119900-120567 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 /**
  * LSP 调用渲染：位置类操作显示光标处符号名与路径，其余显示操作名与参数。
  */
@@ -85,7 +85,7 @@ function renderToolUseMessage(input, { verbose }) {
   }
   return parts.join(", ");
 }
-//@ chunk-q466qetm.js:9184-9415 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.509)
+//@ chunk-wrav3w1r.js:9829-10060 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.51)
 function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
@@ -104,7 +104,7 @@ function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:18778-19318 fingerprint (2.1.88 match: OPERATION_LABELS, 1)
+//@ chunk-wjygkcr4.js:19061-19601 fingerprint (2.1.88 match: OPERATION_LABELS, 1)
 var OPERATION_LABELS = {
   goToDefinition: {
     singular: "definition",
@@ -144,7 +144,7 @@ var OPERATION_LABELS = {
     plural: "callees",
   },
 };
-//@ chunk-ah34pb7m.js:19318-20567 fingerprint (2.1.88 match: LSPResultSummary, 0.7)
+//@ chunk-wjygkcr4.js:19601-20850 fingerprint (2.1.88 match: LSPResultSummary, 0.7)
 function LSPResultSummary(props) {
   let $ = useMemoCache(24);
   let { operation, resultCount, fileCount, content, verbose } = props;
@@ -268,11 +268,11 @@ function LSPResultSummary(props) {
   } else t5 = $[23];
   return t5;
 }
-//@ chunk-ah34pb7m.js:20567-20796 placement (2.1.88 match: renderToolUseErrorMessage, 0.509)
+//@ chunk-wjygkcr4.js:20850-21079 placement (2.1.88 match: renderToolUseErrorMessage, 0.51)
 /**
  * LSP 工具的错误渲染：非 verbose 时显示 "LSP operation failed"（归属疑似错误，应属 LSPTool/UI）。
  */
-function renderToolUseErrorMessage_2(result, { verbose, toolDenialKind }) {
+function renderToolUseErrorMessage_3(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
     toolDenialKind !== "permission-rule" &&
@@ -290,7 +290,7 @@ function renderToolUseErrorMessage_2(result, { verbose, toolDenialKind }) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:20796-21034 fingerprint (2.1.88 match: renderToolResultMessage, 1)
+//@ chunk-wjygkcr4.js:21079-21317 fingerprint (2.1.88 match: renderToolResultMessage, 1)
 /**
  * LSP 结果渲染：有计数时用 LSPResultSummary，否则原样显示文本。
  */
@@ -311,9 +311,9 @@ function renderToolResultMessage_4(output, _progressMessages, { verbose }) {
 }
 export {
   LSP_TOOL_NAME,
-  renderToolResultMessage_4,
-  renderToolUseErrorMessage_2,
   LSP_TOOL_DESCRIPTION,
   renderToolUseMessage,
+  renderToolResultMessage_4,
+  renderToolUseErrorMessage_3,
   renderToolUseErrorMessage,
 };

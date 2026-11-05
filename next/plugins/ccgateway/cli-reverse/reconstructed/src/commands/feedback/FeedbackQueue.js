@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/feedback 反馈队列界面：列出本会话与其他会话的待发反馈，打开、编辑、丢弃或新写。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v517dzda.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pghf5k6z.js (17)
  * attribution: placement 17
  */
 import {
@@ -38,7 +38,7 @@ import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useHost, useSession } from "../../context/session.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromNumber } from "../../services/analytics/safeMetadata.js";
 import { discardFeedbackDraft, submitFeedbackDraft } from "../../services/feedback/feedbackDraft.js";
@@ -63,12 +63,12 @@ import { useScrollViewportSize, useHasScrollViewport } from "../../components/Sc
 import { merged } from "../../components/CustomSelect/select.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v517dzda.js:1297-1301 placement
+//@ chunk-pghf5k6z.js:1298-1302 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v517dzda.js:1297", () => {
+deferInit("chunk-pghf5k6z.js:1298", () => {
   init_react_production();
 });
-//@ chunk-v517dzda.js:1301-1376 placement
+//@ chunk-pghf5k6z.js:1302-1377 placement
 function renderThisSessionFeedbackItem(draft) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -79,7 +79,7 @@ function renderThisSessionFeedbackItem(draft) {
     draft.draft_id,
   );
 }
-//@ chunk-v517dzda.js:1376-1455 placement
+//@ chunk-pghf5k6z.js:1377-1456 placement
 function renderOtherFeedbackItem(draft) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -90,12 +90,12 @@ function renderOtherFeedbackItem(draft) {
     draft.draft_id,
   );
 }
-//@ chunk-v517dzda.js:1455-1603 placement
+//@ chunk-pghf5k6z.js:1456-1604 placement
 var FEEDBACK_TYPES; // deferred: uses FEEDBACK_TYPES (../../services/feedback/feedbackDrafts.js) of its import cycle while loading; runs once the cycle is complete
 var FEEDBACK_TYPE_LABELS;
 var AREA_CHOICES;
 var FAILURE_MODE_CHOICES;
-deferInit("chunk-v517dzda.js:1455", () => {
+deferInit("chunk-pghf5k6z.js:1456", () => {
   FEEDBACK_TYPES = ["bug", "idea", "missing_capability"];
   FEEDBACK_TYPE_LABELS = {
     bug: "bug",
@@ -105,11 +105,11 @@ deferInit("chunk-v517dzda.js:1455", () => {
   AREA_CHOICES = [undefined, ...FEEDBACK_FAILURE_MODES];
   FAILURE_MODE_CHOICES = [undefined, ...FEEDBACK_TASK_CATEGORIES];
 });
-//@ chunk-v517dzda.js:1603-1665 placement
+//@ chunk-pghf5k6z.js:1604-1666 placement
 function snakeToWords(text) {
   return text === undefined ? "(none)" : text.replace(/_/g, " ");
 }
-//@ chunk-v517dzda.js:1665-1801 placement
+//@ chunk-pghf5k6z.js:1666-1802 placement
 /**
  * 反馈编辑表单的字段顺序，transcript 可用时含 transcript。
  */
@@ -125,12 +125,12 @@ function getFeedbackFormFields(draft) {
     "send",
   ];
 }
-//@ chunk-v517dzda.js:1801-1827 placement
+//@ chunk-pghf5k6z.js:1802-1828 placement
 var DRAFT_DEBOUNCE_MS = 500;
 var FEEDBACK_LIST_CHROME_ROWS = 6;
 var FEEDBACK_LIST_FIXED_ROWS = 3;
 var FEEDBACK_LIST_MIN_ROWS = 5;
-//@ chunk-v517dzda.js:1827-12269 placement
+//@ chunk-pghf5k6z.js:1828-12272 placement
 /**
  * /feedback 的反馈队列界面（2.1.316 新增）：列出本会话与其他会话的待发反馈，可打开、编辑字段、丢弃或新写一条。
  */
@@ -163,7 +163,7 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
       queued: [],
       expired: [],
     }));
-    setSessionDraftCount(count(queued, (draft) => draft.source_session_id === sessionId));
+    setSessionDraftCount(countWhere(queued, (draft) => draft.source_session_id === sessionId));
     setDrafts(queued);
     let maxCursor = queued.length - (canWriteNew ? 0 : 1);
     setCursor((cursorValue) => Math.min(cursorValue, Math.max(0, maxCursor)));
@@ -173,7 +173,7 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
     reloadDrafts().then((loaded) => {
       logEvent("tengu_feedback_queue_opened", {
         queued_count: fromNumber(loaded.length),
-        this_session_count: fromNumber(count(loaded, (draft) => draft.source_session_id === sessionId)),
+        this_session_count: fromNumber(countWhere(loaded, (draft) => draft.source_session_id === sessionId)),
       });
     });
   }, [reloadDrafts, sessionId]);
@@ -982,12 +982,12 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
     }),
   });
 }
-//@ chunk-v517dzda.js:12269-12373 placement
+//@ chunk-pghf5k6z.js:12272-12376 placement
 var DETAILS_TOO_LARGE_MESSAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v517dzda.js:12269", () => {
+deferInit("chunk-pghf5k6z.js:12272", () => {
   DETAILS_TOO_LARGE_MESSAGE = `That edit would push Details past the ${Math.floor(MAX_DETAILS_LENGTH / 1024)}KB limit. Trim the details first.`;
 });
-//@ chunk-v517dzda.js:12373-12470 placement
+//@ chunk-pghf5k6z.js:12376-12473 placement
 function normalizeFeedbackInput(text, multiline) {
   return stripCombiningRepeated(
     text.replace(
@@ -1008,7 +1008,7 @@ function normalizeFeedbackInput(text, multiline) {
         : " ",
     );
 }
-//@ chunk-v517dzda.js:12470-12665 placement
+//@ chunk-pghf5k6z.js:12473-12668 placement
 /**
  * 聚焦时显示指针，否则两个空格。
  */
@@ -1029,7 +1029,7 @@ function FocusPointer(props) {
   } else content = $[2];
   return content;
 }
-//@ chunk-v517dzda.js:12665-13065 placement
+//@ chunk-pghf5k6z.js:12668-13068 placement
 /**
  * 可左右切换的值：聚焦时两侧显示 ◀ ▶。
  */
@@ -1074,7 +1074,7 @@ function CycleValue(props) {
   } else status = $[5];
   return status;
 }
-//@ chunk-v517dzda.js:13065-14448 placement
+//@ chunk-pghf5k6z.js:13068-14451 placement
 function FeedbackField(props) {
   let $ = useMemoCache(24);
   let {
@@ -1207,9 +1207,9 @@ function FeedbackField(props) {
   } else hint = $[23];
   return hint;
 }
-//@ chunk-v517dzda.js:14448-14478 placement
+//@ chunk-pghf5k6z.js:14451-14481 placement
 var WRITE_NEW_FEEDBACK_LABEL = "+ Write new feedback";
-//@ chunk-v517dzda.js:14680-16295 placement
+//@ chunk-pghf5k6z.js:14683-16291 placement
 function FeedbackQueueList(props) {
   let $ = useMemoCache(34);
   let { thisSession, others, hasWriteNew, defaultFocusIndex, onFocus, onOpen, onWriteNew, onDiscard } = props;
@@ -1362,7 +1362,7 @@ function FeedbackQueueList(props) {
   } else details = $[33];
   return details;
 }
-//@ chunk-v517dzda.js:16295-16436 placement
+//@ chunk-pghf5k6z.js:16291-16432 placement
 /**
  * 反馈条目的元信息：类型、多久前、目录、transcript 是否可用。
  */
@@ -1374,7 +1374,7 @@ function feedbackItemMeta(meta) {
     meta.transcriptAvailable ? "transcript available" : "transcript expired (report only)",
   ];
 }
-//@ chunk-v517dzda.js:16436-16660 placement
+//@ chunk-pghf5k6z.js:16432-16656 placement
 function formatAgeShort(createdAt, now = Date.now()) {
   let ageMs = now - Date.parse(createdAt);
   if (!Number.isFinite(ageMs) || ageMs < 0) return "now";
@@ -1384,4 +1384,4 @@ function formatAgeShort(createdAt, now = Date.now()) {
   if (floored_2 < 24) return `${floored_2}h`;
   return `${Math.floor(floored_2 / 24)}d`;
 }
-export { WRITE_NEW_FEEDBACK_LABEL, FeedbackQueue };
+export { FeedbackQueue, WRITE_NEW_FEEDBACK_LABEL };

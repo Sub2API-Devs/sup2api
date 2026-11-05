@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布路径校验（受保护路径、长度上限）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (22)
  * attribution: placement 22
  */
 import { sep, normalize, isAbsolute, join, dirname, relative } from "path";
@@ -28,7 +28,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { MAX_ARTIFACT_BYTES } from "./frameFlags.js";
 import { MANIFEST_REQUEST_BUDGET, VERSION_TOTAL_BYTES } from "./publishInstanceFiles.js";
 
-//@ chunk-jv307fw4.js:5349-6579 placement
+//@ chunk-m0ks5273.js:5359-6589 placement
 /**
  * 校验发布路径的基本格式（NFC 规范化后）：非空且不超长，无控制/格式/私用字符，不含反斜杠、?#%、: ;，不以 / 开头，无空段、./..、__proto__ 等保留名；返回 nfc 或错误消息。
  */
@@ -83,7 +83,7 @@ function validatePublishedPath(path, label) {
     nfc,
   };
 }
-//@ chunk-jv307fw4.js:6579-7278 placement
+//@ chunk-m0ks5273.js:6589-7288 placement
 /**
  * 校验 files 里的发布路径：通过基本格式检查，且不能是 index.html、不能以 _ 开头、不能与服务自身视图同名（删除时除外）。
  */
@@ -108,14 +108,14 @@ function validateFilesPath(path, { removal = false } = {}) {
     key: nfc,
   };
 }
-//@ chunk-jv307fw4.js:7278-7355 placement
+//@ chunk-m0ks5273.js:7288-7365 placement
 /**
  * 导出函数 `isServiceViewPath`：参数 e，返回 e.startsWith("_") || e === "index.html.json" || e === ".json"。
  */
 function isServiceViewPath(path) {
   return path.startsWith("_") || path === "index.html.json" || path === ".json";
 }
-//@ chunk-jv307fw4.js:7355-7587 placement
+//@ chunk-m0ks5273.js:7365-7597 placement
 /**
  * 校验读取路径：规范化后不能是 artifact 服务自带的视图路径，合法时返回键名，否则返回错误消息。
  */
@@ -131,13 +131,13 @@ function validateReadPath(path) {
     key: nfc,
   };
 }
-//@ chunk-jv307fw4.js:7587-7626 placement
+//@ chunk-m0ks5273.js:7597-7636 placement
 /**
  * 缩略图 href 的校验：上限 1 MB 与 .png/.jpg/.jpeg 正则。
  */
 var MAX_THUMBNAIL_HREF_CHARS = 1048576;
 var THUMBNAIL_EXT_RE = /\.(?:png|jpe?g)$/i;
-//@ chunk-jv307fw4.js:7626-7868 placement
+//@ chunk-m0ks5273.js:7636-7878 placement
 /**
  * 校验缩略图 href：必须是 .png/.jpg/.jpeg 文件，合法时返回相对路径。
  */
@@ -152,7 +152,7 @@ function validateThumbnailHref(path) {
     rel: validated.nfc,
   };
 }
-//@ chunk-jv307fw4.js:7868-7948 placement
+//@ chunk-m0ks5273.js:7878-7958 placement
 /**
  * 导出函数 `isUnderAnchor`：参数 e, n, r，返回 e === n || e.startsWith(n + sep) || e === r || e.startsWith(r + sep)。
  */
@@ -164,7 +164,7 @@ function isUnderAnchor(localPath, lexAnchor, realAnchor) {
     localPath.startsWith(realAnchor + sep)
   );
 }
-//@ chunk-jv307fw4.js:7948-8068 placement
+//@ chunk-m0ks5273.js:7958-8078 placement
 /**
  * 把路径中的根前缀从旧根替换为新根（不在旧根下时原样返回）。
  */
@@ -174,7 +174,7 @@ function remapRootPrefix(path, cwd, realCwd) {
   if (path === normalizedCwd) return realCwd;
   return path.startsWith(normalizedCwd + sep) ? realCwd + path.slice(normalizedCwd.length) : path;
 }
-//@ chunk-jv307fw4.js:8068-8129 placement
+//@ chunk-m0ks5273.js:8078-8139 placement
 /**
  * 导出函数 `normalizeTrailingSlash`：参数 e，返回 replaced === "" ? e : replaced。
  */
@@ -182,7 +182,7 @@ function normalizeTrailingSlash(path) {
   let replaced = path.replace(/\/+$/, "");
   return replaced === "" ? path : replaced;
 }
-//@ chunk-jv307fw4.js:8129-8350 placement
+//@ chunk-m0ks5273.js:8139-8360 placement
 /**
  * 把用户给的路径解析为本地绝对路径：网络路径、~ 开头、越出基准目录的相对路径返回 null；绝对路径规范化；相对路径接到基准目录下。
  */
@@ -197,14 +197,14 @@ function resolveLocalPath(from, cwd) {
   if (normalized === ".." || normalized.startsWith(`..${sep}`)) return null;
   return join(cwd, normalized);
 }
-//@ chunk-jv307fw4.js:8350-8563 placement
+//@ chunk-m0ks5273.js:8360-8573 placement
 /**
  * 发布文件是无法安全解析的符号链接（网络目标、链接文本含 ..、或层级过多）时的错误说明。
  */
 function describeUnsafeSymlink(from) {
   return `files: ${JSON.stringify(from)} is a symlink whose chain cannot be safely resolved (network target, a \`..\` segment in link text, or too many links) \u2014 list the link's target path instead`;
 }
-//@ chunk-jv307fw4.js:8563-8780 placement
+//@ chunk-m0ks5273.js:8573-8791 placement
 /**
  * 沿符号链接链最多追 40 层，遇到网络目标、链接文本含 ..、链接过多或指向受保护位置时判定为不安全；不是链接时返回 false。
  */
@@ -224,19 +224,19 @@ async function isUnsafeSymlinkChain(path) {
   }
   return true;
 }
-//@ chunk-jv307fw4.js:8780-8837 placement
+//@ chunk-m0ks5273.js:8791-8848 placement
 function underAnyAnchor(localPath, anchors) {
   return anchors.some((anchor) => isUnderAnchor(localPath, anchor.lex, anchor.real));
 }
-//@ chunk-jv307fw4.js:8837-8910 placement
+//@ chunk-m0ks5273.js:8848-8921 placement
 function isUnderRealRoot(realRoot, anchors) {
   return anchors.some((anchor) => realRoot === anchor.real || realRoot.startsWith(anchor.real + sep));
 }
-//@ chunk-jv307fw4.js:8910-8968 placement
+//@ chunk-m0ks5273.js:8921-8979 placement
 function isRealDirectory(stat) {
   return !stat.isSymbolicLink() && stat.isDirectory();
 }
-//@ chunk-jv307fw4.js:8968-9304 placement
+//@ chunk-m0ks5273.js:8979-9316 placement
 /**
  * 计算 scratchpad 目录作为发布锚点：不存在时按原路径；是真实目录且不在网络位置时返回字面与真实路径。
  */
@@ -275,7 +275,7 @@ async function getScratchpadAnchor(scratchpadDir) {
       ]
     : [];
 }
-//@ chunk-jv307fw4.js:9304-9715 placement
+//@ chunk-m0ks5273.js:9316-9728 placement
 /**
  * 为会话额外工作目录建立发布锚点（目录、非不安全链接、真实路径不是网络路径、两次 lstat 一致），评测受限模式下原样接受原始 cwd。
  */
@@ -309,7 +309,7 @@ async function getWorkingDirAnchors(dirs, cwdAnchor) {
   }
   return anchors;
 }
-//@ chunk-jv307fw4.js:9715-10086 placement
+//@ chunk-m0ks5273.js:9728-10099 placement
 /**
  * 描述允许发布的锚点位置（一个或多个工作目录，及可选 scratchpad），用于错误提示。
  */
@@ -329,7 +329,7 @@ function describeAnchorSet(anchors) {
         under: scratchpadNote === "" ? "a path under it" : "a path under one of them",
       };
 }
-//@ chunk-jv307fw4.js:10086-10268 placement
+//@ chunk-m0ks5273.js:10099-10281 placement
 function describeAnchor(anchor) {
   return anchor.kind === "scratchpad"
     ? "your scratchpad directory"
@@ -337,7 +337,7 @@ function describeAnchor(anchor) {
       ? `the working directory (${jsonStringify(anchor.lex)})`
       : `${jsonStringify(anchor.lex)} (one of the session's working directories)`;
 }
-//@ chunk-jv307fw4.js:10268-11934 placement
+//@ chunk-m0ks5273.js:10281-11948 placement
 /**
  * 解析并校验发布根目录 root：必须位于工作目录/额外工作目录/scratchpad 之一，不能是网络路径、越界相对路径、受保护或不安全链接、被拒绝路径；真实路径须仍在同一锚点下且是目录；返回锚点、真实根与词法根。
  */
@@ -427,7 +427,7 @@ async function resolvePublishBase(cwd, root, options) {
     lexRoot,
   };
 }
-//@ chunk-jv307fw4.js:11934-16062 placement
+//@ chunk-m0ks5273.js:11948-16079 placement
 /**
  * 解析发布文件的锚定根目录（真实路径/词法路径），校验在期望根下并给出错误。
  */
@@ -639,7 +639,7 @@ async function resolvePublishRoot(files, cwd, root, options) {
     files: resolved,
   };
 }
-//@ chunk-jv307fw4.js:16062-16408 placement
+//@ chunk-m0ks5273.js:16079-16425 placement
 /**
  * 按发布根规则读取缩略图文件（png/jpg），返回其内容或带缺失/过大标志的错误。
  */
@@ -671,15 +671,15 @@ export {
   normalizeTrailingSlash,
   isUnsafeSymlinkChain,
   getWorkingDirAnchors,
-  validateThumbnailHref,
-  isUnderAnchor,
-  MAX_THUMBNAIL_HREF_CHARS,
-  readThumbnailFile,
-  isServiceViewPath,
   validateReadPath,
-  remapRootPrefix,
   validateFilesPath,
   resolveLocalPath,
   describeUnsafeSymlink,
+  isUnderAnchor,
   resolvePublishRoot,
+  isServiceViewPath,
+  validateThumbnailHref,
+  MAX_THUMBNAIL_HREF_CHARS,
+  readThumbnailFile,
+  remapRootPrefix,
 };

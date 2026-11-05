@@ -3,9 +3,9 @@
  *
  * /help 对话框：General/Commands/自定义命令等标签页，help:dismiss 关闭。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HelpV2/HelpV2.tsx
- * pieces: chunk-yxcx2jtr.js (3)
+ * pieces: chunk-ahfwxte3.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -31,14 +31,14 @@ import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Pane } from "../design-system/Pane.js";
 
-//@ chunk-yxcx2jtr.js:16345-16429 sole-consumer
+//@ chunk-ahfwxte3.js:17523-17607 sole-consumer
 function isShownCommand(command) {
   return command.type !== "prompt" || command.source === "builtin" || command.source === "bundled";
 }
-//@ chunk-yxcx2jtr.js:16429-16445 affinity
+//@ chunk-ahfwxte3.js:17607-17623 affinity
 var HELP_COLUMN_WIDTH = 44;
 var HELP_LIST_ROWS = 21;
-//@ chunk-yxcx2jtr.js:16445-19220 fingerprint (2.1.88 match: HelpV2, 0.573)
+//@ chunk-ahfwxte3.js:17623-20399 fingerprint (2.1.88 match: HelpV2, 0.573)
 /**
  * /help 对话框：标签页切换（General、Commands、自定义命令），help:dismiss 或 Esc 关闭并发系统消息 "Help dialog dismissed"。
  */

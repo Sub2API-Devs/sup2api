@@ -3,9 +3,9 @@
  *
  * 队友（swarm worker）徽章：显示请求来自哪个队友及颜色。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/WorkerBadge.tsx
- * pieces: chunk-znr63w8n.js (1)
+ * pieces: chunk-8x8rp0fx.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Spinner } from "../Spinner.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-znr63w8n.js:1479-1987 fingerprint (2.1.88 match: WorkerBadge, 0.721)
+//@ chunk-8x8rp0fx.js:1479-1987 fingerprint (2.1.88 match: WorkerBadge, 0.722)
 /**
  * 队友徽章：显示发起请求的队友名与颜色（被 37 处使用）。
  */

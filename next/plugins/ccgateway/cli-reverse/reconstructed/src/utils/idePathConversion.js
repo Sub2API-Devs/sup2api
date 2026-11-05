@@ -3,14 +3,14 @@
  *
  * Windows 与 WSL 路径互转（wslpath），供 IDE 集成使用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/idePathConversion.ts
- * pieces: chunk-j0y6ypnr.js (3)
+ * pieces: chunk-q39gsg86.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { execFileNoThrow } from "./execFileNoThrow.js";
 
-//@ chunk-j0y6ypnr.js:227-357 placement
+//@ chunk-q39gsg86.js:227-357 placement
 /**
  * 把 Windows 盘符路径转为 WSL 的 /mnt/<盘符> 路径，非盘符路径返回 null。
  */
@@ -19,7 +19,7 @@ function windowsToWslPath(windowsPath) {
   if (!match) return null;
   return `/mnt/${match[1].toLowerCase()}${match[2].replaceAll("\\", "/")}`;
 }
-//@ chunk-j0y6ypnr.js:357-846 fingerprint (2.1.88 match: WindowsToWSLConverter, 0.627)
+//@ chunk-q39gsg86.js:357-846 fingerprint (2.1.88 match: WindowsToWSLConverter, 0.627)
 class WindowsToWSLConverter {
   wslDistroName;
   constructor(wslDistroName) {
@@ -48,7 +48,7 @@ class WindowsToWSLConverter {
     return wslPath;
   }
 }
-//@ chunk-j0y6ypnr.js:846-953 placement
+//@ chunk-q39gsg86.js:846-953 placement
 /**
  * 判断 \\wsl$ 或 \\wsl.localhost 的 UNC 路径是否属于给定 WSL 发行版；不是 WSL 路径时视为匹配。
  */

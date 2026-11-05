@@ -3,9 +3,9 @@
  *
  * 并入已有模块：按当前 bearer 的 sha256 去重地发起订阅计划查询（超过时限重新拉取），结果缓存在全局状态里供 Remote Control 资格判断用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeEnabled.ts
- * pieces: chunk-0jk9tmkx.js (1), chunk-71c4j971.js (17), chunk-tpjqzh89.js (11)
+ * pieces: chunk-csb2jdt5.js (1), chunk-et4eevep.js (11), chunk-h3xdf7nq.js (17)
  * attribution: fingerprint 1, placement 23, facade-majority 4, layout 1
  */
 import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
@@ -61,14 +61,14 @@ import { canSeedAutoMode } from "../utils/permissions/permissionSetup.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isSemverString, splitOnDash } from "../utils/model/modelCatalog/catalogCapabilities.js";
-import { semverGte, lt_2 as lt } from "../utils/semver.js";
+import { semverGte, lt } from "../utils/semver.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage, isAbortError, ConfigParseError } from "../utils/errors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-71c4j971.js:1185-1215 placement
+//@ chunk-h3xdf7nq.js:1293-1323 placement
 var TENGU_REFLECTIVE_WOLF = "tengu_reflective_wolf";
-//@ chunk-71c4j971.js:1215-1364 placement
+//@ chunk-h3xdf7nq.js:1323-1472 placement
 function isAttributionAnnouncementEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.attributionAnnouncementEnabled ??=
@@ -76,7 +76,7 @@ function isAttributionAnnouncementEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_WOLF, true);
   return sessionFeatureValues.attributionAnnouncementEnabled;
 }
-//@ chunk-71c4j971.js:1364-1485 placement
+//@ chunk-h3xdf7nq.js:1472-1593 placement
 function withClientDataReseedOnModelChange(refresh) {
   let clientDataBefore = isAttributionAnnouncementEnabled() ? getFetchedClientData() : undefined;
   let mainLoopModel = getMainLoopModel();
@@ -87,7 +87,7 @@ function withClientDataReseedOnModelChange(refresh) {
   });
   return clientDataBefore;
 }
-//@ chunk-71c4j971.js:1485-1642 placement
+//@ chunk-h3xdf7nq.js:1593-1750 placement
 function refreshBootstrapDataTracked(storageV5, credentials, renderedClientData) {
   let fetchPromise = import("../services/api/bootstrap.js")
     .then(({ refreshBootstrapData }) =>
@@ -102,28 +102,28 @@ function refreshBootstrapDataTracked(storageV5, credentials, renderedClientData)
   trackClientDataFetch(fetchPromise);
   return fetchPromise;
 }
-//@ chunk-71c4j971.js:1642-1678 placement
+//@ chunk-h3xdf7nq.js:1750-1786 placement
 /**
  * refreshBootstrapDataTracked 的薄包装（同名导出已被占用，加后缀）；在清模型/应用状态变化时刷新启动数据。
  */
 function refreshBootstrapDataTracked_2(storageV5, credentials, renderedClientData) {
   return refreshBootstrapDataTracked(storageV5, credentials, renderedClientData);
 }
-//@ chunk-71c4j971.js:1678-1719 placement
+//@ chunk-h3xdf7nq.js:1786-1827 placement
 /**
  * 设置 providerState.fetchesClientData 开关（是否拉取 clientData）。
  */
 function setFetchesClientData(fetchesClientData) {
   getProviderState().fetchesClientData = fetchesClientData;
 }
-//@ chunk-71c4j971.js:1719-1785 placement
+//@ chunk-h3xdf7nq.js:1827-1893 placement
 /**
  * 判断是否应拉取 clientData：已开启该开关且当前 API 提供商为 firstParty。
  */
 function isFirstPartyClientDataFetchEnabled() {
   return getProviderState().fetchesClientData && getAPIProvider() === "firstParty";
 }
-//@ chunk-71c4j971.js:1785-2001 placement
+//@ chunk-h3xdf7nq.js:1893-2109 placement
 function trackClientDataFetch(fetchPromise) {
   let slotKey = clientDataSlotKey();
   let clientDataFetches = getProviderState().providerCache.clientDataFetches;
@@ -138,19 +138,19 @@ function trackClientDataFetch(fetchPromise) {
     });
   }
 }
-//@ chunk-71c4j971.js:2001-2095 placement
+//@ chunk-h3xdf7nq.js:2109-2203 placement
 function pendingClientDataFetches() {
   return [...getProviderState().providerCache.clientDataFetches.values()].filter(
     (clientDataFetch) => clientDataFetch !== "over",
   );
 }
-//@ chunk-71c4j971.js:2095-2196 placement
+//@ chunk-h3xdf7nq.js:2203-2304 placement
 function markClientDataFetchOver(clientDataFetch) {
   let clientDataFetches = getProviderState().providerCache.clientDataFetches;
   for (let [slotKey, value] of clientDataFetches)
     if (value === clientDataFetch) clientDataFetches.set(slotKey, "over");
 }
-//@ chunk-71c4j971.js:2196-2373 placement
+//@ chunk-h3xdf7nq.js:2304-2481 placement
 function ensureClientDataFetch(storageV5, credentials) {
   let slotKey = clientDataSlotKey();
   if (slotKey === undefined || !isFirstPartyClientDataFetchEnabled() || hasClientDataCacheSlot()) return;
@@ -158,14 +158,14 @@ function ensureClientDataFetch(storageV5, credentials) {
   if (existing !== undefined) return existing === "over" ? undefined : existing;
   return refreshBootstrapDataTracked(storageV5, credentials, getFetchedClientData());
 }
-//@ chunk-71c4j971.js:2373-2479 placement
+//@ chunk-h3xdf7nq.js:2481-2587 placement
 function isBridgeFirstParty() {
   if (!isFirstPartyProvider()) return false;
   if (getPolicyLimitsTunnelSocket() !== undefined) return true;
   if (env.ANTHROPIC_UNIX_SOCKET) return false;
   return isActualFirstPartyAnthropicBaseUrl();
 }
-//@ chunk-71c4j971.js:2479-2544 placement (2.1.88 match: isBridgeEnabled, 1)
+//@ chunk-h3xdf7nq.js:2587-2652 placement (2.1.88 match: isBridgeEnabled, 1)
 /**
  * Remote Control 是否可用：订阅用户、一方提供商，且 tengu_ccr_bridge 或另一条件成立。
  */
@@ -176,7 +176,7 @@ function hasBridgeEntitlement() {
     (getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_bridge", false) || isBridgeSubscriptionEligible())
   );
 }
-//@ chunk-71c4j971.js:2544-2819 placement
+//@ chunk-h3xdf7nq.js:2652-2927 placement
 /**
  * 判断当前账户订阅是否允许 Remote Control：优先用已知订阅类型（team/enterprise 还需策略限制资格），否则从 OAuth 令牌的 subscriptionType 判断。
  */
@@ -201,10 +201,10 @@ function isBridgeSubscriptionEligible() {
     return false;
   }
 }
-//@ chunk-71c4j971.js:3364-3383 placement
+//@ chunk-h3xdf7nq.js:3472-3491 placement
 var PREFETCH_BRIDGE_PLAN_TIMEOUT_MS = 6000;
 var BEARER_PLAN_REFRESH_MS = 60000;
-//@ chunk-71c4j971.js:3383-3524 placement
+//@ chunk-h3xdf7nq.js:3491-3632 placement
 async function prefetchBridgePlanInfo(options) {
   if (getBridgeAccessToken_2() === null || !isGrowthBookUnavailableOnNoTelemetry() || hasFreshBearerPlan())
     return;
@@ -218,7 +218,7 @@ async function prefetchBridgePlanInfo(options) {
     PREFETCH_BRIDGE_PLAN_TIMEOUT_MS,
   );
 }
-//@ chunk-71c4j971.js:3524-3910 placement
+//@ chunk-h3xdf7nq.js:3632-4018 placement
 /**
  * 按当前 bearer 的 sha256 去重地发起订阅计划查询（超过时限重新拉取），结果缓存在全局状态里供 Remote Control 资格判断用。
  */
@@ -246,7 +246,7 @@ function kickBearerPlanFetch({ storageV5, credentials }) {
     };
   return hostState.bearerPlanFetch.answered;
 }
-//@ chunk-0jk9tmkx.js:8226-8418 fingerprint (2.1.88 match: isClaudeAISubscriber, 0.321)
+//@ chunk-csb2jdt5.js:8226-8418 fingerprint (2.1.88 match: isClaudeAISubscriber, 0.322)
 /**
  * 是否应主动注册可信设备：非云容器、非 DISABLE_LOGIN_COMMAND、一方提供商、claude.ai 订阅、未设 CLAUDE_TRUSTED_DEVICE_TOKEN、非仅必要流量。
  */
@@ -261,9 +261,9 @@ function shouldProactivelyEnrollDevice() {
     isEssentialTrafficOnly()
   );
 }
-//@ chunk-tpjqzh89.js:626-642 placement
+//@ chunk-et4eevep.js:626-642 placement
 var REMOTE_CONTROL_SESSION_ORIGINS = [REMOTE_CONTROL_APP, REMOTE_CONTROL_CLI];
-//@ chunk-tpjqzh89.js:642-963 placement
+//@ chunk-et4eevep.js:642-963 placement
 /**
  * 按会话标签（hearth-rc-child、RC_CHILD、WORKFLOW_REMOTE_AGENT 等）判断 Remote Control 子会话的角色：rcChild、projectThreadChild、attended、mayBeAttended；标签未读到时视为可能有人值守。
  */
@@ -290,7 +290,7 @@ function classifyBridgeSessionRoles(tags) {
     mayBeAttended: !included && !isProjectThreadChild && !tags.includes(WORKFLOW_REMOTE_AGENT),
   };
 }
-//@ chunk-tpjqzh89.js:963-1064 placement
+//@ chunk-et4eevep.js:963-1064 placement
 function hasBridgeChildFeatureEnabled(entrypoint) {
   if (
     isBridgeChildAutoModeDefaultEnabled() ||
@@ -304,7 +304,7 @@ function hasBridgeChildFeatureEnabled(entrypoint) {
     (entrypoint === "spawn" && isBridgeChildMachineSettingsEnabled())
   );
 }
-//@ chunk-tpjqzh89.js:1064-1491 placement
+//@ chunk-et4eevep.js:1064-1491 placement
 /**
  * 根据会话角色与各 bridge 子会话特性开关，算出该子会话启用的功能：auto 模式默认、auto 覆盖设置、artifact、机器设置、自动压缩、Projects 入口、CLI 入口。
  */
@@ -332,10 +332,10 @@ function resolveBridgeChildFeatures(context) {
     cliEntrypoint: context.roles.mayBeAttended && isBridgeRcChildCliEntrypointEnabled(),
   };
 }
-//@ chunk-tpjqzh89.js:1491-1574 placement
+//@ chunk-et4eevep.js:1491-1574 placement
 var BUILTIN_BRIDGE_MIN_VERSION; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var bridgeMinVersionSchema;
-deferInit("chunk-tpjqzh89.js:1491", () => {
+deferInit("chunk-et4eevep.js:1491", () => {
   BUILTIN_BRIDGE_MIN_VERSION = "2.1.270";
   bridgeMinVersionSchema = DoctorLazy(() =>
     objectSchema({
@@ -345,7 +345,7 @@ deferInit("chunk-tpjqzh89.js:1491", () => {
     }),
   );
 });
-//@ chunk-tpjqzh89.js:1574-1901 placement
+//@ chunk-et4eevep.js:1574-1901 placement
 /**
  * 读取 GrowthBook tengu_bridge_min_version 并校验；开关关闭返回 null，未取到或格式错时返回内置最低版本并标注 unknown 原因，否则取配置与内置值中较高者。
  */
@@ -377,7 +377,7 @@ function getBridgeMinVersionConfig() {
     unknown: null,
   };
 }
-//@ chunk-tpjqzh89.js:1901-2631 facade-majority (2.1.88 match: checkBridgeMinVersion, 0.452)
+//@ chunk-et4eevep.js:1901-2631 facade-majority (2.1.88 match: checkBridgeMinVersion, 0.452)
 /**
  * 版本低于 tengu_bridge_min_version 配置时返回"请 claude update"提示。
  */
@@ -386,10 +386,10 @@ function checkBridgeMinVersion(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -401,16 +401,16 @@ function checkBridgeMinVersion(
 Version ${bridgeMinVersionConfig.minVersion} or higher is required. Run \`claude update\` to update.`;
   return null;
 }
-//@ chunk-tpjqzh89.js:2631-4110 facade-majority
+//@ chunk-et4eevep.js:2631-4110 facade-majority
 function machineLaneVersionRefusal(
   version = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -443,10 +443,10 @@ function machineLaneVersionRefusal(
       return null;
   }
 }
-//@ chunk-tpjqzh89.js:4110-4126 layout
+//@ chunk-et4eevep.js:4110-4126 layout
 var _ = 1e4;
 var MACHINE_LANE_VERSION_POLL_STEP_MS = 500;
-//@ chunk-tpjqzh89.js:4126-5093 facade-majority
+//@ chunk-et4eevep.js:4126-5093 facade-majority
 async function machineLaneVersionRefusalAfterHold(
   previousRefusal,
   loopSignal,
@@ -455,10 +455,10 @@ async function machineLaneVersionRefusalAfterHold(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -494,31 +494,31 @@ async function machineLaneVersionRefusalAfterHold(
   }
   return previousRefusal;
 }
-//@ chunk-tpjqzh89.js:5093-5194 facade-majority
+//@ chunk-et4eevep.js:5093-5194 facade-majority
 function isMachineLaneWork(tags, versionRefusal) {
   if (tags === null) return versionRefusal.reason !== "floor_unreachable";
   return classifyBridgeSessionRoles(tags).projectThreadChild;
 }
 export {
-  trackClientDataFetch,
-  shouldProactivelyEnrollDevice,
   isBridgeFirstParty,
   classifyBridgeSessionRoles,
   machineLaneVersionRefusal,
   isMachineLaneWork,
   machineLaneVersionRefusalAfterHold,
   hasBridgeChildFeatureEnabled,
-  isFirstPartyClientDataFetchEnabled,
   withClientDataReseedOnModelChange,
   refreshBootstrapDataTracked_2,
-  setFetchesClientData,
+  trackClientDataFetch,
   BEARER_PLAN_REFRESH_MS,
-  hasBridgeEntitlement,
-  prefetchBridgePlanInfo,
-  isBridgeSubscriptionEligible,
-  isAttributionAnnouncementEnabled,
-  resolveBridgeChildFeatures,
   ensureClientDataFetch,
   markClientDataFetchOver,
+  isAttributionAnnouncementEnabled,
+  hasBridgeEntitlement,
+  resolveBridgeChildFeatures,
+  isFirstPartyClientDataFetchEnabled,
+  setFetchesClientData,
+  shouldProactivelyEnrollDevice,
+  prefetchBridgePlanInfo,
+  isBridgeSubscriptionEligible,
   checkBridgeMinVersion,
 };

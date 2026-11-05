@@ -3,9 +3,9 @@
  *
  * 交互式权限处理：同时监听本地对话框、Remote Control bridge、channel 回复、服务器审批与 PermissionRequest hooks，谁先回复谁生效。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/handlers/interactiveHandler.ts
- * pieces: chunk-s4bxxzsw.js (6)
+ * pieces: chunk-g4tsxwy3.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { randomUUID } from "crypto";
@@ -34,13 +34,14 @@ import {
 import { sandboxReadBlockApplies } from "../../../utils/sandbox/sandbox-adapter.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
-import { isHookOrPluginSteered } from "../../../utils/agentContext.js";
+import { isHookOrPluginSteered, context } from "../../../utils/agentContext.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { requiresConnectorGrant_2 } from "../../../services/mcp/claudeai.js";
 import { mustBeLeftToAPerson } from "../../../types/permissions.js";
 import {
   clearClassifierChecking,
   findSafetyCheckReason,
+  shouldSuppressAlwaysAllow,
   answerUpdatesForMcpSkillAsk,
   withoutGrantsForRemoteScope,
   stripWholeToolGrantsForAsk,
@@ -68,7 +69,7 @@ import { getInteractiveHandlerHost } from "./interactiveHandlerState.js";
 import { sleep } from "../../../utils/sleep.js";
 import { logError } from "../../../utils/log.js";
 
-//@ chunk-s4bxxzsw.js:37374-37735 placement
+//@ chunk-g4tsxwy3.js:37546-37907 placement
 /**
  * 生成发到桥接端的批准提示文字：AskUserQuestion 用专门格式，ExitPlanMode 为 approve plan，其他工具为"approve 工具名: 命令/路径/URL"。
  */
@@ -96,7 +97,7 @@ function bridgeApprovalPrompt(request) {
         : `approve ${label}`,
   };
 }
-//@ chunk-s4bxxzsw.js:37772-38387 placement
+//@ chunk-g4tsxwy3.js:37944-38559 placement
 /**
  * 通过 Remote Control bridge 发送"自动模式读工作目录外文件"确认对话框（bridge 支持且开关 tengu_compressed_river 开启），回答时回调 onAnswer 并记埋点，返回撤回函数。
  */
@@ -139,7 +140,7 @@ function sendOutsideReadsBridgeDialog({ bridge, toolName, path, toolUseID, onAns
   }
   return forwarded.retire;
 }
-//@ chunk-s4bxxzsw.js:38387-38797 placement
+//@ chunk-g4tsxwy3.js:38559-38969 placement
 /**
  * 应用桥接端回答附带的权限更新：远程执行或 hook/插件主导时忽略；setMode 逐个尝试（失败退回 default），其余规则持久化；返回实际应用的更新。
  */
@@ -162,17 +163,17 @@ function applyBridgePermissionUpdates(ctx, updates) {
   if (otherUpdates.length > 0) ctx.persistPermissions(otherUpdates);
   return appliedModeUpdates.concat(otherUpdates);
 }
-//@ chunk-s4bxxzsw.js:38797-38962 placement
-function isLocalOnlyAsk(result, toolUseContext) {
+//@ chunk-g4tsxwy3.js:38969-39134 placement
+function isLocalOnlyAsk(ask, toolUseContext) {
   return (
-    Boolean(result.localDisplayOnly) ||
-    result.denialLimitFallback !== undefined ||
-    result.autoDenyWindow !== undefined ||
-    result.oneTimeAnswersOnly === true ||
+    Boolean(ask.localDisplayOnly) ||
+    ask.denialLimitFallback !== undefined ||
+    ask.autoDenyWindow !== undefined ||
+    ask.oneTimeAnswersOnly === true ||
     toolUseContext.forRemoteExecution === true
   );
 }
-//@ chunk-s4bxxzsw.js:38962-39090 placement
+//@ chunk-g4tsxwy3.js:39134-39262 placement
 function requiresLocalPerson(ctx, result) {
   return (
     ctx.tool.requiresUserInteraction?.() === true ||
@@ -180,7 +181,7 @@ function requiresLocalPerson(ctx, result) {
     mustBeLeftToAPerson(result, ctx.tool, ctx.input, ctx.toolUseContext, ctx.toolUseID)
   );
 }
-//@ chunk-s4bxxzsw.js:39090-44358 fingerprint (2.1.88 match: handleInteractivePermission, 0.477)
+//@ chunk-g4tsxwy3.js:39262-44622 fingerprint (2.1.88 match: handleInteractivePermission, 0.47)
 /**
  * 交互式权限竞速：除本地对话框外，同时向 Remote Control bridge 发送请求、监听 channel 回复、服务器审批 watcher 与 PermissionRequest hooks，任一方先给出决定即 claim 并 teardown 其余方。
  */
@@ -283,6 +284,14 @@ function handleInteractivePermission(params) {
       requiresLocalPerson(ctx, result) || undefined,
       isBrowserTool ? "browser" : undefined,
       undefined,
+      context(ctx.toolUseContext),
+      shouldSuppressAlwaysAllow(
+        ctx.tool,
+        displayInput,
+        ctx.toolUseContext,
+        result.suppressAlwaysAllowRule,
+        result.suggestions,
+      ),
     );
     let signal = ctx.toolUseContext.abortController.signal;
     bridgeAbortListener = bridge.onResponse(bridgeRequestId, ctx.tool.name, (response) => {
@@ -538,4 +547,4 @@ function handleInteractivePermission(params) {
     notifyBridgeAndTeardown: teardown,
   };
 }
-export { handleInteractivePermission, bridgeApprovalPrompt };
+export { handleInteractivePermission, bridgeApprovalPrompt, isLocalOnlyAsk };

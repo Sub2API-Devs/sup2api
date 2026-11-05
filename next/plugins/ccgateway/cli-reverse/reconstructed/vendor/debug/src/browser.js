@@ -1,14 +1,14 @@
 /**
  * debug/src/browser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: debug@4.4.0
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_common } from "./common.js";
 
-//@ chunk-h6b7mazd.js:30759-33381 cjs-fingerprint
+//@ chunk-ww9agm6g.js:30759-33381 cjs-fingerprint
 var require_browser = __commonJS(function (cjsExports, cjsModule) {
   cjsExports.formatArgs = formatArgs;
   cjsExports.save = save;

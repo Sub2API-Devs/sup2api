@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：claude plugin eval / plugin eval init 子命令入口、结果发布与 --json 输出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (13)
  * attribution: placement 13
  */
 import path from "path";
 import { mkdir, lstat, rm as rm_2 } from "fs/promises";
 import { spawnSync } from "child_process";
-import os_2 from "os";
+import os from "os";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { MIN_CONFIRM_ANSWER_DELAY_MS, confirmPrompt } from "../../utils/confirmPrompt.js";
 import { isPathTrusted } from "../../utils/config.js";
@@ -78,7 +78,7 @@ import { stripInvisibleChars } from "../../utils/confusables.js";
 import { jsonStringify, isStandaloneExecutable } from "../../utils/slowOperations.js";
 import { MOCK_RECORDINGS } from "./mocks/pluginMcpEnumeration.js";
 import { formatEvalReportTable, formatEvalSummary, optionalRunStopSchema } from "./evalReport.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { isOnClaudeCodeSessionSurface, isHeadlessToolCallOfClaudeCodeSession } from "../../utils/teammate.js";
 import { env } from "../../utils/env.js";
@@ -94,14 +94,14 @@ import { AGENT_PROMPT_TEMPLATE, GRADER_TEMPLATE } from "./caseSchema.js";
 import { doesEnterpriseMcpConfigExist } from "../mcp/config.js";
 import { withLaunchValuesOfHybridConnection } from "../../utils/managedEnvApply.js";
 
-//@ chunk-qchp9vrd.js:287335-287429 placement
+//@ chunk-af1hzzme.js:288792-288886 placement
 /**
  * 是否可以在终端里交互询问。
  */
 function canPromptInteractively({ json }) {
   return process.stdin.isTTY === true && process.stdout.isTTY === true && !json && !isEnvTruthy(false);
 }
-//@ chunk-qchp9vrd.js:287429-289079 placement
+//@ chunk-af1hzzme.js:288886-290536 placement
 /**
  * 确认是否信任被测插件（--trust-plugin、交互提示）。
  */
@@ -172,12 +172,12 @@ async function confirmPluginTrust({
     source: "gate",
   };
 }
-//@ chunk-qchp9vrd.js:289079-289088 placement
+//@ chunk-af1hzzme.js:290536-290545 placement
 /**
  * 并发上限（8）。
  */
 var MAX_CONCURRENCY = 8;
-//@ chunk-qchp9vrd.js:289088-290224 placement
+//@ chunk-af1hzzme.js:290545-291681 placement
 async function resolveEvalPluginTarget(target, storageV5) {
   if (target.includes(path.sep) || target.includes("/"))
     return {
@@ -283,7 +283,7 @@ async function resolveEvalPluginTarget(target, storageV5) {
     };
   return resolveEvalPluginTarget(matches[0], storageV5);
 }
-//@ chunk-qchp9vrd.js:290224-300960 placement
+//@ chunk-af1hzzme.js:291681-302420 placement
 /**
  * claude plugin eval 入口：解析插件与评测目录、预检、运行套件并输出报告（约 11 KB）。
  */
@@ -766,7 +766,7 @@ Re-run with --keep-temp to preserve each run's sandbox (workspace + trace.jsonl)
     process.off("SIGTERM", onSigterm);
   }
 }
-//@ chunk-qchp9vrd.js:300960-301754 placement
+//@ chunk-af1hzzme.js:302420-303214 placement
 async function logPluginEvalFailure(
   report,
   errors,
@@ -805,13 +805,13 @@ async function logPluginEvalFailure(
     await logFeatureSadAsync("cli_plugin_eval", "case_load_errors");
     return;
   }
-  let failingCount = count(report.cases, (caseReport) => caseReport.score < threshold);
+  let failingCount = countWhere(report.cases, (caseReport) => caseReport.score < threshold);
   await logFeatureOkAsync("cli_plugin_eval", {
     trust_source: fromEnum(source),
     all_passed: failingCount === 0,
     num_cases: report.cases.length,
     num_failing_cases: failingCount,
-    num_cases_with_run_errors: count(
+    num_cases_with_run_errors: countWhere(
       report.cases,
       (caseReport) =>
         caseReport.runs.some((run) => run.error) ||
@@ -819,7 +819,7 @@ async function logPluginEvalFailure(
     ),
   });
 }
-//@ chunk-qchp9vrd.js:301754-305060 placement
+//@ chunk-af1hzzme.js:303214-306524 placement
 /**
  * 把评测结果发布为 Artifact（中断时跳过）。
  */
@@ -954,12 +954,12 @@ async function publishEvalResults(input) {
       : logFeatureBadAsync("cli_plugin_eval_report", reasonCode));
   }
 }
-//@ chunk-qchp9vrd.js:305060-305098 placement
+//@ chunk-af1hzzme.js:306524-306562 placement
 /**
  * 输出名允许的字符正则。
  */
 var OUTPUT_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-//@ chunk-qchp9vrd.js:305098-305454 placement
+//@ chunk-af1hzzme.js:306562-306918 placement
 async function checkResultSchemaDrift(input) {
   let summary = formatEvalSummary(input);
   let parsed = optionalRunStopSchema().safeParse(summary);
@@ -976,7 +976,7 @@ async function checkResultSchemaDrift(input) {
     valid: parsed.success,
   };
 }
-//@ chunk-qchp9vrd.js:305454-306023 placement
+//@ chunk-af1hzzme.js:306918-307487 placement
 async function writeJsonResult(json, { result, valid }, preRendered) {
   if (!valid) {
     process.stderr.write(`warning: --json result withheld because it failed schema validation
@@ -1006,7 +1006,7 @@ async function writeJsonResult(json, { result, valid }, preRendered) {
     return false;
   }
 }
-//@ chunk-qchp9vrd.js:306023-310504 placement
+//@ chunk-af1hzzme.js:307487-311968 placement
 /**
  * claude plugin eval init 入口：需要交互终端，启动访谈式用例编写会话。
  */
@@ -1208,7 +1208,7 @@ async function pluginEvalInitHandler(caseNameArg, options = {}, storageV5) {
     return exitAfterAnalyticsFlush(1);
   }
 }
-//@ chunk-qchp9vrd.js:310504-311529 placement
+//@ chunk-af1hzzme.js:311968-312993 placement
 async function launchEvalInitSession(pluginDir, caseName, evalDirSource) {
   let evalInitInterviewPrompt = buildEvalInitInterviewPrompt(pluginDir, caseName, {
     evalDir: evalDirSource.dir,
@@ -1252,12 +1252,12 @@ async function launchEvalInitSession(pluginDir, caseName, evalDirSource) {
     await (child.signal === "SIGINT"
       ? logFeatureSadAsync("cli_plugin_eval_init_interactive", "interrupted")
       : logFeatureBadAsync("cli_plugin_eval_init_interactive", "signal_killed"));
-    return 128 + (os_2.constants.signals[child.signal] ?? 1);
+    return 128 + (os.constants.signals[child.signal] ?? 1);
   }
   await logFeatureBadAsync("cli_plugin_eval_init_interactive", "nonzero_exit");
   return child.status ?? 1;
 }
-//@ chunk-qchp9vrd.js:311529-311651 placement
+//@ chunk-af1hzzme.js:312993-313115 placement
 async function handleEvalInterrupt(signalName) {
   await logFeatureSadAsync("cli_plugin_eval", signalName === "SIGTERM" ? "terminated" : "interrupted");
   await gracefulShutdown(signalName === "SIGTERM" ? 143 : 130);

@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：临时目录真实路径
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (5)
  * attribution: placement 5
  */
 import { sep as sep_2, join as join_2 } from "path";
 import { getSessionPathsCache } from "./sessionPathsCache.js";
 import { isDiskless, getOriginalCwd } from "../bootstrap/state.js";
-import { claudeTempDir, childProcessTmpDir } from "./tempDir.js";
+import { claudeTempDir, childProcessTmpDir, projectTempDirName } from "./tempDir.js";
 import { getFsImplementation, findIntermediateUncJunction, NodeFsOperations } from "./fsOperations.js";
 import { sanitizePath } from "./sessionStoragePortable.js";
 import { isNonWslUncPath, isNetworkMountRoot } from "./networkPaths.js";
 
-//@ chunk-g54kbxqw.js:46174-46353 placement
+//@ chunk-a2q0x549.js:229935-230114 placement
 /**
  * 取 Claude 临时目录的真实路径（带分隔符结尾），有盘时缓存。
  */
@@ -32,7 +32,7 @@ function getClaudeTempDirRealpath() {
   sessionPathsCache.claudeTempDir = realTempDir + sep_2;
   return sessionPathsCache.claudeTempDir;
 }
-//@ chunk-g54kbxqw.js:46353-46554 placement
+//@ chunk-a2q0x549.js:230114-230315 placement
 /**
  * 取子进程临时目录的真实路径（带分隔符结尾），有盘时缓存。
  */
@@ -49,21 +49,21 @@ function getChildProcessTmpDirRealpath() {
   sessionPathsCache.childProcessTmpDir = realTempDir + sep_2;
   return sessionPathsCache.childProcessTmpDir;
 }
-//@ chunk-g54kbxqw.js:46554-46585 placement
+//@ chunk-a2q0x549.js:230315-230346 placement
 /**
  * 会话临时目录的真实路径。
  */
 function sessionTempDirRealpath() {
   return taskRootUnderTemp(getOriginalCwd());
 }
-//@ chunk-g54kbxqw.js:46585-46626 placement
+//@ chunk-a2q0x549.js:230346-230392 placement
 /**
  * 临时目录下按路径分目录的任务输出根。
  */
 function taskRootUnderTemp(id) {
-  return join_2(getClaudeTempDirRealpath(), sanitizePath(id)) + sep_2;
+  return join_2(getClaudeTempDirRealpath(), projectTempDirName(sanitizePath(id))) + sep_2;
 }
-//@ chunk-g54kbxqw.js:46626-46742 placement (2.1.88 match: normalizeFilePath, 1)
+//@ chunk-a2q0x549.js:230392-230508 placement (2.1.88 match: normalizeFilePath, 1)
 function normalizeFilePath(filePath) {
   if (
     isNonWslUncPath(filePath) ||

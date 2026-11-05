@@ -3,47 +3,60 @@
  *
  * 2.1.316 新增：工具权限上下文的分层合并与读取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-agvbmc7h.js (38)
- * attribution: placement 38
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8899qs36.js (41)
+ * attribution: placement 41
  */
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "./filesystem.js";
 import { isAutoClassifierActive } from "./autoModeState.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
-import { permissionRuleValueFromString } from "./permissionRuleParser.js";
+import { permissionRuleValueFromString, parseRuleString } from "./permissionRuleParser.js";
 import { createAbortController } from "../abortController.js";
-import { launchSnapshotUpdateDialog } from "../../dialogLaunchers.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
+import { stripWideningPermissionLayers } from "../../dialogLaunchers.js";
 import { isPlanBypass } from "./browserToolNames.js";
 import { SKILL, SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
 import { isBypassPermissionsModeDisabled } from "./permissionSetup.js";
-import { resolveEffortLevel, isSameModelSettings, resolveEffortWithoutHold } from "../effort.js";
+import {
+  resolveEffortLevel,
+  dropSessionLevelIfModelDiffers,
+  isSameModelSettings,
+  resolveEffortValue,
+  resolveEffortWithoutHold,
+} from "../effort.js";
+import { resolveRuntimeMainLoopModel } from "../model/planModeModel.js";
 import { isMainConversationContext } from "../agentContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-agvbmc7h.js:528-675 placement
+//@ chunk-8899qs36.js:575-722 placement
 function addCommandAllowRules(toolPermissionContext, rules) {
   if (rules.length === 0) return toolPermissionContext;
   return {
     ...toolPermissionContext,
     alwaysAllowRules: {
       ...toolPermissionContext.alwaysAllowRules,
-      command: uniq([...(toolPermissionContext.alwaysAllowRules.command || []), ...rules]),
+      command: normalizeCaseForComparison_2([
+        ...(toolPermissionContext.alwaysAllowRules.command || []),
+        ...rules,
+      ]),
     },
   };
 }
-//@ chunk-agvbmc7h.js:675-819 placement
+//@ chunk-8899qs36.js:722-866 placement
 function addCommandDenyRules(toolPermissionContext, rules) {
   if (rules.length === 0) return toolPermissionContext;
   return {
     ...toolPermissionContext,
     alwaysDenyRules: {
       ...toolPermissionContext.alwaysDenyRules,
-      command: uniq([...(toolPermissionContext.alwaysDenyRules.command || []), ...rules]),
+      command: normalizeCaseForComparison_2([
+        ...(toolPermissionContext.alwaysDenyRules.command || []),
+        ...rules,
+      ]),
     },
   };
 }
-//@ chunk-agvbmc7h.js:819-1524 placement
+//@ chunk-8899qs36.js:866-1571 placement
 /**
  * 包装 getAppState，在返回的权限上下文里叠加命令级 allow/deny 规则：可整体替换或追加，冻结的命令 deny 优先，轮次禁用工具并入 deny；pollEventDeliveryGuard 时不改 allow。
  */
@@ -83,7 +96,7 @@ function withCommandRuleOverrides(getAppState, allowRules, denyRules, options) {
             ...withAllow,
             alwaysDenyRules: {
               ...withAllow.alwaysDenyRules,
-              command: uniq([
+              command: normalizeCaseForComparison_2([
                 ...options.frozenCommandDenies,
                 ...(withAllow.alwaysDenyRules.command ?? []),
                 ...denyRules,
@@ -97,7 +110,7 @@ function withCommandRuleOverrides(getAppState, allowRules, denyRules, options) {
     };
   };
 }
-//@ chunk-agvbmc7h.js:1524-1632 placement
+//@ chunk-8899qs36.js:1571-1681 placement
 class ModeAtRequest {
   mode;
   autoClassifierActive;
@@ -109,21 +122,21 @@ class ModeAtRequest {
     return;
   }
 }
-//@ chunk-agvbmc7h.js:1632-1670 placement
+//@ chunk-8899qs36.js:1681-1721 placement
 /**
  * modeAtRequestFor：按当前上下文构造模式的按请求快照。
  */
 function modeAtRequestFor(mode) {
   return new ModeAtRequest(mode, isAutoClassifierActive(mode));
 }
-//@ chunk-agvbmc7h.js:1670-1733 placement
+//@ chunk-8899qs36.js:1721-1786 placement
 /**
  * isPlainModeAtRequest：模式快照且未启用分类器。
  */
 function isPlainModeAtRequest(permissionModeAtRequest) {
   return permissionModeAtRequest instanceof ModeAtRequest && !permissionModeAtRequest.autoClassifierActive;
 }
-//@ chunk-agvbmc7h.js:1733-1951 placement
+//@ chunk-8899qs36.js:1786-2004 placement
 function getFallbackModeForRequest(permissionModeAtRequest) {
   if (!isPlainModeAtRequest(permissionModeAtRequest)) return;
   let mode = permissionModeAtRequest.mode;
@@ -144,19 +157,19 @@ function getFallbackModeForRequest(permissionModeAtRequest) {
     }
   }
 }
-//@ chunk-agvbmc7h.js:1951-1965 placement
+//@ chunk-8899qs36.js:2004-2018 placement
 var EMPTY_RULE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-agvbmc7h.js:1951", () => {
+deferInit("chunk-8899qs36.js:2004", () => {
   EMPTY_RULE_SET = new Set();
 });
-//@ chunk-agvbmc7h.js:1965-1998 placement
+//@ chunk-8899qs36.js:2018-2051 placement
 /**
  * canonicalRuleString：规则的规范字符串。
  */
 function canonicalRuleString(ruleString) {
-  return formatPermissionRule(permissionRuleValueFromString(ruleString));
+  return permissionRuleValueFromString(parseRuleString(ruleString));
 }
-//@ chunk-agvbmc7h.js:1998-2112 placement
+//@ chunk-8899qs36.js:2051-2165 placement
 /**
  * 取远程浏览器卡片回答生成的会话规则集合；只在它仍对应当前 session allow 列表时有效。
  */
@@ -167,7 +180,7 @@ function getRemoteBrowserCardRules(context) {
     ? remoteBrowserCardAnswers.rules
     : EMPTY_RULE_SET;
 }
-//@ chunk-agvbmc7h.js:2112-2409 placement
+//@ chunk-8899qs36.js:2165-2462 placement
 /**
  * 会话 allow 列表变化后，重算远程浏览器卡片回答：只保留仍在新列表中的规则，为空时清除。
  */
@@ -194,7 +207,7 @@ function syncRemoteBrowserCardAnswers(previousContext, nextContext) {
           },
   };
 }
-//@ chunk-agvbmc7h.js:2742-2903 placement
+//@ chunk-8899qs36.js:2797-3030 placement
 function contextAfterTurn(toolUseContext) {
   return {
     ...toolUseContext,
@@ -202,15 +215,18 @@ function contextAfterTurn(toolUseContext) {
     toolUseId: undefined,
     permissionPhase: undefined,
     autoModeClassified: undefined,
-    ...false,
-    permissionLayers: launchSnapshotUpdateDialog(toolUseContext.permissionLayers),
+    ...(codeModeAccepted() && {
+      autoModeDenialLimitRun: undefined,
+      autoModeScriptCheckDeferred: undefined,
+    }),
+    permissionLayers: stripWideningPermissionLayers(toolUseContext.permissionLayers),
   };
 }
-//@ chunk-agvbmc7h.js:2903-2982 placement
+//@ chunk-8899qs36.js:3030-3109 placement
 function getSuppressedClaudeAiConnectors(toolUseContext) {
   return toolUseContext.getAppState?.().mcp?.suppressedClaudeAiConnectors ?? [];
 }
-//@ chunk-agvbmc7h.js:2982-3093 placement
+//@ chunk-8899qs36.js:3109-3220 placement
 function consentAskCanReachUser(toolUseContext) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   return (
@@ -218,27 +234,27 @@ function consentAskCanReachUser(toolUseContext) {
     !isPlanBypass(toolPermissionContext.mode, toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-agvbmc7h.js:3093-3153 placement
+//@ chunk-8899qs36.js:3220-3280 placement
 function planConsentMustDeny(toolUseContext) {
   if (getToolPermissionContext(toolUseContext).mode !== "plan") return false;
   return consentMustDeny(toolUseContext);
 }
-//@ chunk-agvbmc7h.js:3153-3192 placement
+//@ chunk-8899qs36.js:3280-3319 placement
 function artifactFilesConsentSlugs(toolUseContext) {
   return toolUseContext.getAppState();
 }
-//@ chunk-agvbmc7h.js:3192-3261 placement
+//@ chunk-8899qs36.js:3319-3388 placement
 function consentMustDeny(toolUseContext) {
   return (
     !consentAskCanReachUser(toolUseContext) ||
     getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts === true
   );
 }
-//@ chunk-agvbmc7h.js:3261-3331 placement
+//@ chunk-8899qs36.js:3388-3458 placement
 function isSkillRule(ruleString) {
   return ruleString === SKILL || ruleString.startsWith(`${SKILL}(`) || ruleString.startsWith(SKILL_2);
 }
-//@ chunk-agvbmc7h.js:3331-3740 placement
+//@ chunk-8899qs36.js:3458-3867 placement
 /**
  * 把 allow 规则中被判定为危险的移入 strippedDangerousRules（按来源去重），并同步远程浏览器卡片回答；无变化返回原上下文。
  */
@@ -269,11 +285,11 @@ function stripDangerousAllowRules(previousContext) {
     strippedDangerousRules: nextStripped,
   });
 }
-//@ chunk-agvbmc7h.js:3740-3801 placement (2.1.88 match: call, 0.777)
+//@ chunk-8899qs36.js:3867-3928 placement (2.1.88 match: call, 0.777)
 function storedToolPermissionContext(toolUseContext) {
   return toolUseContext.getAppState().toolPermissionContext;
 }
-//@ chunk-agvbmc7h.js:3801-4915 placement
+//@ chunk-8899qs36.js:3928-5042 placement
 function getToolPermissionContext(toolUseContext) {
   let toolPermissionContext = toolUseContext.getAppState().toolPermissionContext;
   let stripSkills =
@@ -354,14 +370,14 @@ function getToolPermissionContext(toolUseContext) {
     }
   return relaxContextForExecution(toolUseContext, toolPermissionContext);
 }
-//@ chunk-agvbmc7h.js:4915-4955 placement
+//@ chunk-8899qs36.js:5042-5082 placement
 function relaxContextForExecution(toolUseContext, context) {
   return downgradeAutoForPromptShell(
     toolUseContext,
     relaxForRemoteExecution(toolUseContext, downgradeAutoModeForRequest(toolUseContext, context)),
   );
 }
-//@ chunk-agvbmc7h.js:4955-5130 placement
+//@ chunk-8899qs36.js:5082-5257 placement
 function downgradeAutoModeForRequest(toolUseContext, context) {
   if (
     context === undefined ||
@@ -373,12 +389,12 @@ function downgradeAutoModeForRequest(toolUseContext, context) {
   let mode = getFallbackModeForRequest(toolUseContext.permissionModeAtRequest);
   return mode === undefined ? context : withModeAtRequest(mode, context);
 }
-//@ chunk-agvbmc7h.js:5130-5239 placement
+//@ chunk-8899qs36.js:5257-5366 placement
 function downgradeAutoForPromptShell(toolUseContext, context) {
   if (toolUseContext.forPromptShellCommand !== true || context === undefined) return context;
   return context.mode === "auto" ? withModeAtRequest("default", context) : context;
 }
-//@ chunk-agvbmc7h.js:5239-5321 placement
+//@ chunk-8899qs36.js:5366-5448 placement
 function withModeAtRequest(mode, context) {
   return {
     ...context,
@@ -386,7 +402,7 @@ function withModeAtRequest(mode, context) {
     modeBeforeRewrite: context.modeBeforeRewrite ?? context.mode,
   };
 }
-//@ chunk-agvbmc7h.js:5321-5553 placement
+//@ chunk-8899qs36.js:5448-5680 placement
 function relaxForRemoteExecution(toolUseContext, context) {
   if (toolUseContext.forRemoteExecution !== true || context === undefined) return context;
   let { blockReadsOutsideWorkingDirectories, blockWritesOutsideWorkingDirectories, ...relaxed } = context;
@@ -394,7 +410,7 @@ function relaxForRemoteExecution(toolUseContext, context) {
     ? withModeAtRequest("default", relaxed)
     : relaxed;
 }
-//@ chunk-agvbmc7h.js:5553-5645 placement (2.1.88 match: configureEffortParams, 0.608)
+//@ chunk-8899qs36.js:5680-5772 placement
 /**
  * 在权限层列表里取最后一个 kind=effort 的 effort 值（本轮 effort 覆盖）。旧版名 configureEffortParams 为错配。
  */
@@ -404,16 +420,53 @@ function getEffortLayerOverride(permissionLayers) {
   for (let layer of permissionLayers) if (layer.kind === "effort") effort = layer.effort;
   return effort;
 }
-//@ chunk-agvbmc7h.js:5645-5734 placement
-function getEffortValue(toolUseContext) {
-  return (
-    getEffortLayerOverride(toolUseContext.permissionLayers) ??
-    resolveEffortLevel(toolUseContext.getAppState(), getEffectiveMainLoopModel(toolUseContext), {
-      withHold: isSessionHoldFor(toolUseContext),
-    })
+//@ chunk-8899qs36.js:5772-5881 placement
+/**
+ * 由应用状态与该会话的模型算出工具权限上下文，可按 withHold 决定是否扣住。
+ */
+function getBaselineEffort(toolUseContext, withHold = isMainConversation(toolUseContext)) {
+  let effectiveMainLoopModel = getEffectiveMainLoopModel(toolUseContext);
+  return resolveEffortLevel(
+    dropSessionLevelIfModelDiffers(
+      toolUseContext.getAppState?.() ?? {},
+      effectiveMainLoopModel,
+      toolUseContext.pickedEffortModel,
+    ),
+    effectiveMainLoopModel,
+    {
+      withHold,
+    },
   );
 }
-//@ chunk-agvbmc7h.js:5734-5881 placement (2.1.88 match: _temp, 0.427)
+//@ chunk-8899qs36.js:5881-5934 placement
+function getEffortValue(toolUseContext) {
+  return getEffortLayerOverride(toolUseContext.permissionLayers) ?? getBaselineEffort(toolUseContext);
+}
+//@ chunk-8899qs36.js:5934-6036 placement
+/**
+ * 取会话选定的 effort 模型，没选则按权限模式与主循环模型推默认模型。
+ */
+function getPickedEffortModel(toolUseContext) {
+  return (
+    toolUseContext.pickedEffortModel ??
+    resolveRuntimeMainLoopModel({
+      permissionMode: getToolPermissionContext(toolUseContext).mode,
+      mainLoopModel: getMainLoopModel(toolUseContext),
+    }).model
+  );
+}
+//@ chunk-8899qs36.js:6036-6129 placement
+/**
+ * 模型不可用或被拒时给携带 effort 的权限上下文 overlay，否则 undefined。
+ */
+function getOwnEffortOffPickedModel(toolUseContext, model, pickedModel) {
+  return isSameModelSettings(model, pickedModel)
+    ? undefined
+    : resolveEffortValue(model, resolveEffortWithoutHold(toolUseContext.getAppState(), model), {
+        carriedEffort: null,
+      });
+}
+//@ chunk-8899qs36.js:6129-6276 placement (2.1.88 match: _temp, 0.428)
 function getHelperEffort(toolUseContext, model) {
   return isSameModelSettings(model, getMainLoopModel(toolUseContext))
     ? {
@@ -425,41 +478,37 @@ function getHelperEffort(toolUseContext, model) {
         turnEffort: undefined,
       };
 }
-//@ chunk-agvbmc7h.js:5881-5948 placement
-function isSessionHoldFor(toolUseContext) {
+//@ chunk-8899qs36.js:6276-6341 placement
+function isMainConversation(toolUseContext) {
   return toolUseContext.agentContext === undefined || isMainConversationContext(toolUseContext.agentContext);
 }
-//@ chunk-agvbmc7h.js:5948-6032 placement
+//@ chunk-8899qs36.js:6341-6396 placement
 function getEffortSetAsideByHold(toolUseContext) {
-  return getEffortValue(toolUseContext) === undefined
-    ? resolveEffortLevel(toolUseContext.getAppState(), getEffectiveMainLoopModel(toolUseContext), {
-        withHold: false,
-      })
-    : undefined;
+  return getEffortValue(toolUseContext) === undefined ? getBaselineEffort(toolUseContext, false) : undefined;
 }
-//@ chunk-agvbmc7h.js:6032-6160 placement
+//@ chunk-8899qs36.js:6396-6524 placement
 function getEffectiveMainLoopModel(toolUseContext) {
   let mainLoopModel = toolUseContext.options?.mainLoopModel;
   for (let layer of toolUseContext.permissionLayers ?? [])
     if (layer.kind === "model") mainLoopModel = layer.mainLoopModel;
   return mainLoopModel;
 }
-//@ chunk-agvbmc7h.js:6160-6213 placement
+//@ chunk-8899qs36.js:6524-6577 placement
 function getSessionEffort(toolUseContext) {
   return toolUseContext.getAppState().sessionEffort;
 }
-//@ chunk-agvbmc7h.js:6213-6265 placement
+//@ chunk-8899qs36.js:6577-6629 placement
 function getMainLoopModel(toolUseContext) {
   return getEffectiveMainLoopModel(toolUseContext) ?? toolUseContext.options.mainLoopModel;
 }
-//@ chunk-agvbmc7h.js:6265-6416 placement
+//@ chunk-8899qs36.js:6629-6780 placement
 function getThinkingConfig(toolUseContext) {
   let thinkingConfig = toolUseContext.options.thinkingConfig;
   for (let layer of toolUseContext.permissionLayers ?? [])
     if (layer.kind === "max_thinking_tokens") thinkingConfig = thinkingBudgetConfig(layer.maxThinkingTokens);
   return thinkingConfig;
 }
-//@ chunk-agvbmc7h.js:6416-6493 placement
+//@ chunk-8899qs36.js:6780-6857 placement
 function thinkingBudgetConfig(maxThinkingTokens) {
   return maxThinkingTokens === 0
     ? {
@@ -470,11 +519,11 @@ function thinkingBudgetConfig(maxThinkingTokens) {
         budgetTokens: maxThinkingTokens,
       };
 }
-//@ chunk-agvbmc7h.js:6493-6547 placement (2.1.88 match: getNestedMemoryAttachments, 0.431)
+//@ chunk-8899qs36.js:6857-6911 placement (2.1.88 match: getNestedMemoryAttachments, 0.431)
 function getUltracodeRequested(toolUseContext) {
   return toolUseContext.getAppState().ultracode === true;
 }
-//@ chunk-agvbmc7h.js:6547-7009 placement
+//@ chunk-8899qs36.js:6911-7373 placement
 function applyContextLayers(toolUseContext, newLayers) {
   if (newLayers.length === 0) return toolUseContext;
   let permissionLayers = toolUseContext.permissionLayers
@@ -515,26 +564,29 @@ function applyContextLayers(toolUseContext, newLayers) {
 export {
   getToolPermissionContext,
   getMainLoopModel,
+  contextAfterTurn,
+  consentMustDeny,
+  storedToolPermissionContext,
   getEffortLayerOverride,
-  applyContextLayers,
-  withCommandRuleOverrides,
+  getPickedEffortModel,
   planConsentMustDeny,
   consentAskCanReachUser,
-  getSessionEffort,
-  contextAfterTurn,
-  storedToolPermissionContext,
-  syncRemoteBrowserCardAnswers,
   getEffortValue,
-  getThinkingConfig,
-  getEffortSetAsideByHold,
-  isSessionHoldFor,
-  getHelperEffort,
-  getSuppressedClaudeAiConnectors,
-  consentMustDeny,
   getUltracodeRequested,
+  getHelperEffort,
+  getThinkingConfig,
+  getOwnEffortOffPickedModel,
+  getSuppressedClaudeAiConnectors,
+  getSessionEffort,
+  getBaselineEffort,
+  syncRemoteBrowserCardAnswers,
   getRemoteBrowserCardRules,
   canonicalRuleString,
   isPlainModeAtRequest,
-  modeAtRequestFor,
+  getEffortSetAsideByHold,
+  withCommandRuleOverrides,
+  ModeAtRequest,
+  applyContextLayers,
   artifactFilesConsentSlugs,
+  modeAtRequestFor,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：清除本地会话数据的子命令处理器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-shkzs7rp.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nhaxap13.js (3)
  * attribution: placement 3
  */
 import { createHelpConfig } from "../helpFormat.js";
@@ -14,11 +14,11 @@ import { logEventAsync } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
-//@ chunk-shkzs7rp.js:23454-23641 placement
+//@ chunk-nhaxap13.js:24935-25122 placement
 var PROJECT_PURGE_RENAMED_NOTICE = "`claude project purge` is now `claude purge`";
 var PURGE_DESCRIPTION =
   "Delete a project's Claude Code data (transcripts, tasks, file history, and its entry in ~/.claude.json) from this computer only";
-//@ chunk-shkzs7rp.js:23641-23765 placement
+//@ chunk-nhaxap13.js:25122-25246 placement
 /**
  * 注册 purge [path] 与其旧名 project purge（隐藏，打印改名提示）。
  */
@@ -33,7 +33,7 @@ function registerPurgeCommands(program, withStorageV5) {
   registerPurgeCommand(projectCommand, withStorageV5, true);
   return projectCommand;
 }
-//@ chunk-shkzs7rp.js:23765-24422 placement
+//@ chunk-nhaxap13.js:25246-25903 placement
 function registerPurgeCommand(program, withStorageV5, isAlias) {
   program
     .command("purge [path]", {

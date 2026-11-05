@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：一方 API 请求的 Bun fetch 扩展选项判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (11)
  * attribution: placement 11
  */
 import { hasSeenTrustOverride, isRuntimeStoreCABundle } from "../../utils/caCerts.js";
@@ -14,11 +14,11 @@ import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:183031-183200 placement
+//@ chunk-vn3g7zt8.js:183419-183588 placement
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ALLOWED_FETCH_OPTION_KEYS;
 var ALLOWED_TLS_OPTION_KEYS;
-deferInit("chunk-hwmsct5x.js:183031", () => {
+deferInit("chunk-vn3g7zt8.js:183419", () => {
   weakSet = new WeakSet();
   ALLOWED_FETCH_OPTION_KEYS = new Set([
     "method",
@@ -34,7 +34,7 @@ deferInit("chunk-hwmsct5x.js:183031", () => {
   ]);
   ALLOWED_TLS_OPTION_KEYS = new Set(["ca", "cert", "key", "passphrase"]);
 });
-//@ chunk-hwmsct5x.js:183200-183571 placement
+//@ chunk-vn3g7zt8.js:183588-183959 placement
 /**
  * 判断请求是否走一方 API 主机的 https 直连（用于启用 Bun fetch 的 tls/compress 等扩展选项）。
  */
@@ -64,12 +64,12 @@ function shouldUseFirstPartyFetchOptions({ provider, routedProvider, url, init }
     isRuntimeStoreCABundle(tls.ca)
   );
 }
-//@ chunk-hwmsct5x.js:183571-183712 placement
+//@ chunk-vn3g7zt8.js:183959-184100 placement
 function hasOnlyKeys(object, allowedKeys) {
   if (Object.getPrototypeOf(object) !== Object.prototype) return false;
   return Reflect.ownKeys(object).every((key) => typeof key === "string" && allowedKeys.has(key));
 }
-//@ chunk-hwmsct5x.js:183712-183788 placement
+//@ chunk-vn3g7zt8.js:184100-184176 placement
 function isSameUnredirectedUrl(response, url) {
   try {
     return !response.redirected && urlWithoutHash(response.url) === urlWithoutHash(url);
@@ -77,17 +77,17 @@ function isSameUnredirectedUrl(response, url) {
     return false;
   }
 }
-//@ chunk-hwmsct5x.js:183788-183844 placement
+//@ chunk-vn3g7zt8.js:184176-184232 placement
 function urlWithoutHash(url) {
   let parsed = new URL(url);
   parsed.hash = "";
   return parsed.href;
 }
-//@ chunk-hwmsct5x.js:183844-183869 placement
+//@ chunk-vn3g7zt8.js:184232-184257 placement
 function markFirstPartyFetch(headers) {
   weakSet.add(headers);
 }
-//@ chunk-hwmsct5x.js:183869-183979 placement
+//@ chunk-vn3g7zt8.js:184257-184367 placement
 function classifyFirstPartyRequest(error, facts) {
   return error?.headers !== undefined &&
     weakSet.has(error.headers) &&
@@ -96,7 +96,7 @@ function classifyFirstPartyRequest(error, facts) {
     ? "first_party"
     : undefined;
 }
-//@ chunk-hwmsct5x.js:183979-184139 placement
+//@ chunk-vn3g7zt8.js:184367-184527 placement
 function mentionsModel({ model, text }) {
   let lower = text.toLowerCase();
   let stripped = stripAnyVersatileSuffix(model);
@@ -105,14 +105,14 @@ function mentionsModel({ model, text }) {
     return lower_2 !== "" && lower.includes(lower_2);
   });
 }
-//@ chunk-hwmsct5x.js:184139-184645 placement
+//@ chunk-vn3g7zt8.js:184527-185033 placement
 /**
  * 已知的无效请求错误消息模式（提示过长、max_tokens 超限、图片类型、余额不足）以及错误信封允许的键集合。
  */
 var KNOWN_INVALID_REQUEST_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var INVALID_REQUEST_ENVELOPE_KEYS;
 var INVALID_REQUEST_ERROR_KEYS;
-deferInit("chunk-hwmsct5x.js:184139", () => {
+deferInit("chunk-vn3g7zt8.js:184527", () => {
   KNOWN_INVALID_REQUEST_PATTERNS = [
     /^prompt is too long: \d+ tokens > \d+ maximum$/,
     /^max_tokens: \d+ > \d+, which is the maximum allowed number of output tokens for this model$/,
@@ -122,11 +122,11 @@ deferInit("chunk-hwmsct5x.js:184139", () => {
   INVALID_REQUEST_ENVELOPE_KEYS = new Set(["type", "error", "request_id"]);
   INVALID_REQUEST_ERROR_KEYS = new Set(["type", "message", "details"]);
 });
-//@ chunk-hwmsct5x.js:184645-184732 placement
+//@ chunk-vn3g7zt8.js:185033-185120 placement
 function isInvalidRequestError(error) {
   return error.status === 400 || error.status === 422 || error.type === "invalid_request_error";
 }
-//@ chunk-hwmsct5x.js:184732-185012 placement
+//@ chunk-vn3g7zt8.js:185120-185400 placement
 function isKnownInvalidRequestBody({ error }) {
   if (
     typeof error !== "object" ||

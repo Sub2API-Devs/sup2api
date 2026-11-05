@@ -3,9 +3,9 @@
  *
  * builderGit：审查仓库 git 配置（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (37)
  * attribution: placement 37
  */
 import { isAbsolute, join, basename, dirname, resolve, sep } from "path";
@@ -14,7 +14,7 @@ import { homedir, userInfo } from "os";
 import {
   GIT_SAFE_GLOBAL_ARGS,
   GIT_ENV_VARS_TO_CLEAR,
-  regExp as regExp_17,
+  regExp as regExp_2,
   GIT_TRANSPORT_ENV_RE,
 } from "../gitSafeEnv.js";
 import {
@@ -40,7 +40,7 @@ import {
   reachForBoundSession,
   INCLUDE_PATH_CONFIG_KEY_RE,
   isCannotChangeToError,
-  regExp_7,
+  regExp,
   GIT_ISOLATION_CONFIG_ARGS,
 } from "./gitEnv.js";
 import { currentGitBinaryState, gitExeOnPathInEnv, windowsGitNote, GitBinaryError } from "./gitBinary.js";
@@ -74,7 +74,7 @@ import { annotateStderr, withholdGitStderr, firstGitFailureClass, seenStderr } f
 import { GIT_FILES_REF_BACKEND_ENV } from "../gitLanes.js";
 import {
   PROTECTED_ENV_VARS,
-  isPathInside as isPathInside_2,
+  isPathInside,
   collectGitProtectedPaths,
   getGitConfigPaths,
   systemGitConfigPaths,
@@ -87,8 +87,8 @@ import { GIT_SAFETY_ENV as GIT_SAFETY_ENV_2 } from "../gitSafeInvocation.js";
 import { DEFAULT_INVOCATION_ENCODING } from "../../detectRepository.js";
 import { execFileNoThrowWithCwd } from "../../execFileNoThrow.js";
 import { getLatchedPreSettingsEnvSnapshot } from "../../managedEnvApply.js";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
-import { uniq, count } from "../../collections.js";
+import { getPlatform } from "../../platform.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { findCanonicalGitRootUncached } from "../../git.js";
 import { hasBackslash } from "../../pathClassification.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
@@ -103,10 +103,11 @@ import {
 import { getFirstLine } from "../../stringUtils.js";
 import { mapped } from "../../gitSafeExec.js";
 import { readAttributesConfig } from "./repoCopy.js";
+import { countWhere } from "../../collections.js";
 import { readGitConfigFromEnv } from "./inTreeConfig.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:217511-218846 placement
+//@ chunk-fepf8jp6.js:12094-13421 placement
 function listGitRefs(cwd, args, options) {
   let inputOption =
     options.input === undefined
@@ -205,14 +206,14 @@ function listGitRefs(cwd, args, options) {
   ];
   return runGitWithEnv(...invocationArgs).then(withholdGitStderr);
 }
-//@ chunk-s61vbvea.js:218846-219554 placement
+//@ chunk-fepf8jp6.js:13421-14129 placement
 /**
  * 审查 git 时关注的环境变量集合与判断函数。
  */
 var AUDITED_ENV_VARS; // deferred: uses PROTECTED_ENV_VARS (../../permissions/protectedEnvAndGitPaths.js) of its import cycle while loading; runs once the cycle is complete
 var GIT_TRACE_ENV_RE;
 var isAuditedEnvVar;
-deferInit("chunk-s61vbvea.js:218846", () => {
+deferInit("chunk-fepf8jp6.js:13421", () => {
   AUDITED_ENV_VARS = new Set([
     ...GIT_ENV_VARS_TO_CLEAR,
     "GIT_CONFIG_NOSYSTEM",
@@ -253,13 +254,13 @@ deferInit("chunk-s61vbvea.js:218846", () => {
   GIT_TRACE_ENV_RE = /^GIT_(?:CURL_|LFS_|TRACE|TRANSFER_TRACE$|REDIRECT_STD)/i;
   isAuditedEnvVar = (varName) =>
     AUDITED_ENV_VARS.has(varName.toUpperCase()) ||
-    regExp_17.test(varName) ||
+    regExp_2.test(varName) ||
     GIT_TRACE_ENV_RE.test(varName) ||
     GIT_TRANSPORT_ENV_RE.test(varName) ||
     isDangerousEnvName(varName) ||
     isBuildToolEnvVar(varName);
 });
-//@ chunk-s61vbvea.js:219554-219675 placement
+//@ chunk-fepf8jp6.js:14129-14250 placement
 /**
  * 审查用 git 环境（恢复设置前的值与 OpenSSL include）。
  */
@@ -282,11 +283,11 @@ function buildAuditEnv(extraEnv) {
       }
     : {};
 }
-//@ chunk-s61vbvea.js:219675-219707 placement
+//@ chunk-fepf8jp6.js:14250-14281 placement
 function gitExeForAudit() {
   return gitExeOnPathInEnv(auditEnvironment());
 }
-//@ chunk-s61vbvea.js:219707-219865 placement
+//@ chunk-fepf8jp6.js:14281-14439 placement
 /**
  * 运行 git（找不到时返回 127 并隐藏 stderr）。
  */
@@ -304,7 +305,7 @@ function runGitForAudit(args, options) {
       })
     : execFileNoThrowWithCwd(gitExePath, args, invocationOptions).then(withholdGitStderr);
 }
-//@ chunk-s61vbvea.js:219865-219916 placement
+//@ chunk-fepf8jp6.js:14439-14490 placement
 /**
  * 构造 git 审查用的环境（进程环境叠加设置生效后的差异）。
  */
@@ -314,7 +315,7 @@ function auditEnvironment() {
     ...diffPreSettingsEnv(),
   });
 }
-//@ chunk-s61vbvea.js:219916-220321 placement
+//@ chunk-fepf8jp6.js:14490-14894 placement
 /**
  * 设置生效前后不同的被审查变量。
  */
@@ -322,11 +323,11 @@ function diffPreSettingsEnv() {
   if (getLatchedPreSettingsEnvSnapshot() === undefined) return {};
   let preSettingsEnv = getPreSettingsEnv();
   let env = process.env;
-  let foldCase = getPlatform_2() === "windows" ? (key) => key.toUpperCase() : (key) => key;
+  let foldCase = getPlatform() === "windows" ? (key) => key.toUpperCase() : (key) => key;
   let currentKeys = new Map(Object.keys(env).map((key) => [foldCase(key), key]));
   let preKeys = new Map(Object.keys(preSettingsEnv).map((key) => [foldCase(key), key]));
   return Object.fromEntries(
-    uniq([...currentKeys.keys(), ...preKeys.keys()]).flatMap((foldedKey) => {
+    normalizeCaseForComparison_2([...currentKeys.keys(), ...preKeys.keys()]).flatMap((foldedKey) => {
       let currentName = currentKeys.get(foldedKey);
       let preName = preKeys.get(foldedKey);
       let reportedName = currentName ?? preName ?? foldedKey;
@@ -340,21 +341,21 @@ function diffPreSettingsEnv() {
     }),
   );
 }
-//@ chunk-s61vbvea.js:220321-220395 placement
+//@ chunk-fepf8jp6.js:14894-14968 placement
 /**
  * git 安全相关环境变量的基准表及其取值函数，以及需要额外清空的变量。
  */
 var GIT_SAFETY_ENV; // deferred: uses GIT_SAFETY_CONFIG_KEYS (../gitSafeInvocation.js) of its import cycle while loading; runs once the cycle is complete
 var gitSafetyEnvValue;
 var UNSET_REFERENCE_BACKEND_ENV;
-deferInit("chunk-s61vbvea.js:220321", () => {
+deferInit("chunk-fepf8jp6.js:14894", () => {
   GIT_SAFETY_ENV = GIT_SAFETY_ENV_2;
   gitSafetyEnvValue = (varName) => GIT_SAFETY_ENV[varName.toUpperCase()];
   UNSET_REFERENCE_BACKEND_ENV = {
     GIT_REFERENCE_BACKEND: undefined,
   };
 });
-//@ chunk-s61vbvea.js:220395-220638 placement
+//@ chunk-fepf8jp6.js:14968-15211 placement
 function neutralizeGitConfigEnv(remoteHostSessionCount) {
   let neutralizedNames = new Set([
     "GIT_CONFIG",
@@ -370,11 +371,11 @@ function neutralizeGitConfigEnv(remoteHostSessionCount) {
     ...UNSET_REFERENCE_BACKEND_ENV,
   };
 }
-//@ chunk-s61vbvea.js:220638-220700 placement
+//@ chunk-fepf8jp6.js:15211-15273 placement
 function isUnsafeReferenceBackend(backend) {
   return backend !== undefined && backend !== "files" && backend !== "reftable";
 }
-//@ chunk-s61vbvea.js:220700-220918 placement
+//@ chunk-fepf8jp6.js:15273-15491 placement
 function classifyConfigFile(filePath, gitConfigPaths, gitProtectedPaths) {
   return {
     path: filePath,
@@ -386,14 +387,14 @@ function classifyConfigFile(filePath, gitConfigPaths, gitProtectedPaths) {
     ground: filePath.includes("\uFFFD")
       ? "not_text"
       : !gitProtectedPaths.fixed.includes(filePath) &&
-          gitProtectedPaths.roots.some((root) => isPathInside_2(root, filePath))
+          gitProtectedPaths.roots.some((root) => isPathInside(root, filePath))
         ? "inside"
         : "indirect",
   };
 }
-//@ chunk-s61vbvea.js:220918-220984 placement
+//@ chunk-fepf8jp6.js:15491-15557 placement
 var CONFIG_SCOPE_ORDER = ["user_level", "system", "condition", "unknown", "repository"];
-//@ chunk-s61vbvea.js:220984-221996 placement
+//@ chunk-fepf8jp6.js:15557-16569 placement
 function auditRefStorageSetting(keptBy) {
   if (keptBy === "ignored_setting")
     return "a git configuration file other than this repository\u2019s own config sets extensions.refStorage. git ignores that key there, but this upload does not start while git lists it with a location. The file is one of these: the system-wide git configuration, ~/.gitconfig, ~/.config/git/config (or $XDG_CONFIG_HOME/git/config), what GIT_CONFIG_GLOBAL or GIT_CONFIG_SYSTEM names, the repository\u2019s config.worktree, or a file that one of them or the repository\u2019s config includes. Remove the key from that file and retry";
@@ -401,7 +402,7 @@ function auditRefStorageSetting(keptBy) {
     ? "the variable GIT_REFERENCE_BACKEND tells git to keep branches and tags in another place, which this upload does not read; start claude without that variable (a Claude Code settings file may also set it, in its env block)"
     : "this repository\u2019s own git configuration (extensions.refStorage) keeps its branches and tags in another place, which this upload does not read; work from an ordinary clone of the repository";
 }
-//@ chunk-s61vbvea.js:221996-226988 placement
+//@ chunk-fepf8jp6.js:16569-21412 placement
 /**
  * 检查仓库 git 布局（common dir、worktree、admin dir）是否可信
  */
@@ -437,7 +438,7 @@ async function inspectGitLayout(
   if (bound) {
     if (
       (await checkSessionTempRoot(resolvedLaunchDir)).some(
-        (tempRoot) => isPathInside_2(tempRoot, resolvedLaunchDir) || isPathInside_2(tempRoot, launchDir),
+        (tempRoot) => isPathInside(tempRoot, resolvedLaunchDir) || isPathInside(tempRoot, launchDir),
       )
     )
       return {
@@ -479,7 +480,7 @@ async function inspectGitLayout(
     };
   let checkKeyedFolder = async (target) => {
     let results = await Promise.all(
-      uniq([launchDir, resolvedLaunchDir]).map((dir) =>
+      normalizeCaseForComparison_2([launchDir, resolvedLaunchDir]).map((dir) =>
         isSameGitDir(target, resolvedLaunchDir, findKeyedFolder(dir)),
       ),
     );
@@ -750,7 +751,7 @@ async function inspectGitLayout(
     },
   );
 }
-//@ chunk-s61vbvea.js:226988-228840 placement
+//@ chunk-fepf8jp6.js:21412-23240 placement
 async function auditGitDirConfig(
   launchDir,
   layout,
@@ -874,33 +875,33 @@ async function auditGitDirConfig(
     }
   }
 }
-//@ chunk-s61vbvea.js:228840-228950 placement
+//@ chunk-fepf8jp6.js:23240-23349 placement
 function isCommonDirConfigFile(filePath, { commonDir, workTree }) {
   let fileUrl = resolveFileUrl(filePath, workTree);
   return (
     fileUrl !== null &&
     basename(fileUrl) === "config" &&
-    isPathInside_2(commonDir, fileUrl) &&
-    isPathInside_2(dirname(fileUrl), commonDir)
+    isPathInside(commonDir, fileUrl) &&
+    isPathInside(dirname(fileUrl), commonDir)
   );
 }
-//@ chunk-s61vbvea.js:228950-229035 placement
+//@ chunk-fepf8jp6.js:23349-23434 placement
 var HOOK_CONFIG_KEY_RE; // deferred: uses NULL_HOOKS_PATH_PATTERN (../../gitSafeExec.js) of its import cycle while loading; runs once the cycle is complete
 var declaredHookNames;
-deferInit("chunk-s61vbvea.js:228950", () => {
+deferInit("chunk-fepf8jp6.js:23349", () => {
   HOOK_CONFIG_KEY_RE = /^hook\.(?:(.*)\.)?(?:command|event|enabled)$/s;
   declaredHookNames = new Set(mapped.map(([hookName]) => hookName));
 });
-//@ chunk-s61vbvea.js:229035-229067 placement
+//@ chunk-fepf8jp6.js:23434-23466 placement
 function isDeclaredHookName(name) {
   return declaredHookNames.has(name);
 }
-//@ chunk-s61vbvea.js:229067-229142 placement
+//@ chunk-fepf8jp6.js:23466-23541 placement
 function hookOwnerOfKey(name) {
   let match = isDeclaredHookName(name) ? null : HOOK_CONFIG_KEY_RE.exec(name);
   return match === null ? undefined : (match[1] ?? "");
 }
-//@ chunk-s61vbvea.js:229142-232019 placement
+//@ chunk-fepf8jp6.js:23541-26297 placement
 async function listGitConfigInForce(launchDir, layout, signal, probes) {
   let unlistable = {
     kind: "unlistable",
@@ -941,7 +942,7 @@ async function listGitConfigInForce(launchDir, layout, signal, probes) {
       return null;
     let entries = cannotChangeTo ? [] : parseGitConfigNullList(listResult.stdout);
     let flattened = [
-      ...entries.filter(({ key }) => regExp_7.test(key)),
+      ...entries.filter(({ key }) => regExp.test(key)),
       ...(includesResult.code === 0 ? parseGitConfigNullList(includesResult.stdout) : []),
     ].flatMap(({ origin, key, value }) =>
       resolveIncludePaths(value, origin, layout.workTree).map((target) => ({
@@ -1037,13 +1038,13 @@ async function listGitConfigInForce(launchDir, layout, signal, probes) {
   if ("contributes" in includedConfigs) return classifyIncluded(includedConfigs.contributes);
   let allEntries = [...systemConfig.keys, ...includedConfigs.keys];
   let filterDrivers = ((driverPattern) =>
-    uniq(
+    normalizeCaseForComparison_2(
       allEntries.flatMap(({ key }) => {
         let driverName = driverPattern.exec(key)?.[1];
         return driverName === undefined ? [] : [driverName];
       }),
     ))(/^filter\.(.*)\.(?:clean|smudge|process|required)$/s);
-  let hookNames = uniq(allEntries.flatMap(({ key }) => hookOwnerOfKey(key) ?? []));
+  let hookNames = normalizeCaseForComparison_2(allEntries.flatMap(({ key }) => hookOwnerOfKey(key) ?? []));
   if ([...filterDrivers, ...hookNames].some((name) => name.includes("\uFFFD")))
     return {
       kind: "unlistable",
@@ -1064,7 +1065,9 @@ async function listGitConfigInForce(launchDir, layout, signal, probes) {
   return {
     kind: "pins",
     listed: systemConfig.keys,
-    settingsFiles: uniq([...allConfigSources, ...systemConfig.targets].filter((path) => path !== null)),
+    settingsFiles: normalizeCaseForComparison_2(
+      [...allConfigSources, ...systemConfig.targets].filter((path) => path !== null),
+    ),
     pins: {
       filterDrivers,
       attributeSetting: readAttributesConfig(systemConfig.keys, includedConfigs.keys, gitConfigPaths, layout),
@@ -1078,14 +1081,14 @@ async function listGitConfigInForce(launchDir, layout, signal, probes) {
     },
   };
 }
-//@ chunk-s61vbvea.js:232019-232043 placement
+//@ chunk-fepf8jp6.js:26297-26321 placement
 /**
  * include 展开的轮数上限、文件数上限与集合大小上限。
  */
 var MAX_INCLUDE_ROUNDS = 8;
 var MAX_INCLUDE_FILES = 32;
 var MAX_INCLUDE_SET_SIZE = 4096;
-//@ chunk-s61vbvea.js:232043-232461 placement
+//@ chunk-fepf8jp6.js:26321-26739 placement
 /**
  * 判断 include 目标由哪类配置引入。
  */
@@ -1107,7 +1110,7 @@ function attributeIncludeSource(fileUrl, directives, { workTree, userFiles, syst
   );
   return CONFIG_SCOPE_ORDER.find((scope) => scopes.has(scope)) ?? "unknown";
 }
-//@ chunk-s61vbvea.js:232461-233138 placement
+//@ chunk-fepf8jp6.js:26739-27416 placement
 /**
  * 逐层追踪 include 的配置文件（限层数与数量）。
  */
@@ -1139,7 +1142,7 @@ async function collectIncludedConfigs(targets, readConfigFile, checkReachable) {
         !isWindowsNonDrivePath(target) && (await stat(target).catch(() => null))?.isFile() ? target : null,
       ),
     );
-    fileCount += count(results, isPresent);
+    fileCount += countWhere(results, isPresent);
     if (fileCount > MAX_INCLUDE_FILES)
       return {
         tooMany: true,
@@ -1147,9 +1150,9 @@ async function collectIncludedConfigs(targets, readConfigFile, checkReachable) {
     let results_2 = await Promise.all(results.filter(isPresent).map(readConfigFile));
     if (results_2.some((result) => result === null)) return null;
     collectedKeys.push(...results_2.flatMap((result) => result?.keys ?? []));
-    pending = uniq(results_2.flatMap((result) => result?.targets ?? []).filter(isPresent)).filter(
-      (target) => !seen.has(target),
-    );
+    pending = normalizeCaseForComparison_2(
+      results_2.flatMap((result) => result?.targets ?? []).filter(isPresent),
+    ).filter((target) => !seen.has(target));
     pending.forEach((target) => seen.add(target));
   }
   return {
@@ -1157,7 +1160,7 @@ async function collectIncludedConfigs(targets, readConfigFile, checkReachable) {
     keys: collectedKeys,
   };
 }
-//@ chunk-s61vbvea.js:233138-233352 placement
+//@ chunk-fepf8jp6.js:27416-27630 placement
 function parseGitConfigNullList(stdout) {
   let parts = stdout.split("\x00");
   return Array.from(
@@ -1177,7 +1180,7 @@ function parseGitConfigNullList(stdout) {
     },
   );
 }
-//@ chunk-s61vbvea.js:233352-233520 placement
+//@ chunk-fepf8jp6.js:27630-27797 placement
 function resolveIncludePaths(includeValue, originUrl, workTree) {
   let match = /^~[^/]*\//.exec(includeValue);
   if (match !== null)
@@ -1187,11 +1190,11 @@ function resolveIncludePaths(includeValue, originUrl, workTree) {
   let includePath = resolveIncludePath(includeValue, originUrl, workTree);
   return isAbsolute(includePath) ? [includePath] : [];
 }
-//@ chunk-s61vbvea.js:233520-233589 placement (2.1.88 match: _temp2, 1)
+//@ chunk-fepf8jp6.js:27797-27866 placement (2.1.88 match: _temp2, 1)
 function resolveFileUrl(filePath, workTree) {
   return filePath.startsWith("file:") ? resolveRelative(workTree, filePath.slice(5)) : null;
 }
-//@ chunk-s61vbvea.js:233589-233830 placement
+//@ chunk-fepf8jp6.js:27866-28105 placement
 function resolveIncludePath(includePath, origin, workTree) {
   let match = /^~([^/]*)\//.exec(includePath);
   if (match !== null)
@@ -1201,14 +1204,14 @@ function resolveIncludePath(includePath, origin, workTree) {
   if (isAbsolute(includePath) || includePath.startsWith("%(prefix)/")) return includePath;
   return `${origin.startsWith("file:") ? dirname(resolveRelative(workTree, origin.slice(5))) : workTree}${sep}${includePath}`;
 }
-//@ chunk-s61vbvea.js:233830-233909 placement
+//@ chunk-fepf8jp6.js:28105-28184 placement
 var INVALID_UTF8_NAME_DETAIL = "a configured filter driver or hook has a name that is not valid UTF-8";
-//@ chunk-s61vbvea.js:233909-233949 placement
+//@ chunk-fepf8jp6.js:28184-28224 placement
 var KNOWN_SAFE_FILTER_DRIVERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:233909", () => {
+deferInit("chunk-fepf8jp6.js:28184", () => {
   KNOWN_SAFE_FILTER_DRIVERS = new Set(["unset", "unspecified"]);
 });
-//@ chunk-s61vbvea.js:233949-234151 placement
+//@ chunk-fepf8jp6.js:28224-28426 placement
 /**
  * 涉及的 filter 驱动都是已知安全的。
  */
@@ -1223,7 +1226,7 @@ function hasOnlyKnownFilterDrivers(layout, env = buildGitEnv(undefined)) {
     ].some((driverName) => KNOWN_SAFE_FILTER_DRIVERS.has(driverName))
   );
 }
-//@ chunk-s61vbvea.js:234151-234209 placement
+//@ chunk-fepf8jp6.js:28426-28484 placement
 function currentUserName() {
   try {
     return userInfo().username;
@@ -1231,16 +1234,16 @@ function currentUserName() {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:234209-234296 placement
+//@ chunk-fepf8jp6.js:28484-28571 placement
 /**
  * 判断记录中的工作树 id 与当前实际身份不一致（工作树已被替换）。
  */
 async function workTreeReplacedSinceRecorded(layout) {
   return layout.workTreeId !== undefined && layout.workTreeId !== (await getFileIdentity_2(layout.workTree));
 }
-//@ chunk-s61vbvea.js:239490-239661 placement
+//@ chunk-fepf8jp6.js:33704-33875 placement
 var CHECKOUT_SHAPE_CONFIG_KEYS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:239490", () => {
+deferInit("chunk-fepf8jp6.js:33704", () => {
   CHECKOUT_SHAPE_CONFIG_KEYS_2 = new Set([
     "core.autocrlf",
     "core.eol",
@@ -1253,7 +1256,7 @@ deferInit("chunk-s61vbvea.js:239490", () => {
     "core.trustctime",
   ]);
 });
-//@ chunk-s61vbvea.js:239661-239788 placement
+//@ chunk-fepf8jp6.js:33875-34002 placement
 function quoteGitConfigValue(value) {
   return `"${value
     .replace(/[\\"]/g, (char) => `\\${char}`)
@@ -1261,12 +1264,12 @@ function quoteGitConfigValue(value) {
     .replace(/\t/g, "\\t")
     .replace(/\x08/g, "\\b")}"`;
 }
-//@ chunk-s61vbvea.js:239788-239839 placement
+//@ chunk-fepf8jp6.js:34002-34053 placement
 /**
  * 影响检出形态的 git 配置键（core.excludesfile、core.attributesfile）。
  */
 var CHECKOUT_SHAPE_CONFIG_KEYS = ["core.excludesfile", "core.attributesfile"];
-//@ chunk-s61vbvea.js:239839-240069 placement
+//@ chunk-fepf8jp6.js:34053-34283 placement
 function lastGlobalOrSystemValue(stdout) {
   let parts = stdout.split("\x00");
   let list = Array.from(
@@ -1283,7 +1286,7 @@ function lastGlobalOrSystemValue(stdout) {
     passedOver: list.some((entry) => !isUserLevel(entry)),
   };
 }
-//@ chunk-s61vbvea.js:240069-240144 placement
+//@ chunk-fepf8jp6.js:34283-34358 placement
 /**
  * 合法的可打印 git 配置值正则，以及配置文件大小、层级与总拷贝上限。
  */
@@ -1292,16 +1295,8 @@ var MAX_CONFIG_FILE_BYTES = 268435456;
 var MAX_PLACEMENT_DEPTH = 64;
 var MAX_CONFIG_COPY_BYTES = 1073741824;
 export {
-  listGitRefs,
   MAX_PLACEMENT_DEPTH,
-  UNSET_REFERENCE_BACKEND_ENV,
-  inspectGitLayout,
-  runGitForAudit,
-  buildAuditEnv,
-  MAX_INCLUDE_FILES,
-  auditRefStorageSetting,
-  hasOnlyKnownFilterDrivers,
-  auditEnvironment,
+  listGitRefs,
   workTreeReplacedSinceRecorded,
   CHECKOUT_SHAPE_CONFIG_KEYS,
   parseGitConfigNullList,
@@ -1313,4 +1308,12 @@ export {
   quoteGitConfigValue,
   resolveFileUrl,
   resolveIncludePaths,
+  MAX_INCLUDE_FILES,
+  auditEnvironment,
+  UNSET_REFERENCE_BACKEND_ENV,
+  inspectGitLayout,
+  runGitForAudit,
+  buildAuditEnv,
+  auditRefStorageSetting,
+  hasOnlyKnownFilterDrivers,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。本地 JSX 命令宿主。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { createSignal } from "../../utils/signal.js";
@@ -18,7 +18,7 @@ import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { LOCAL_JSX_DIALOG } from "../../commands/rate-limit-options/index.js";
 
-//@ chunk-18hwfzwa.js:183100-184170 placement
+//@ chunk-czq1j3j2.js:187897-188967 placement
 function requestLocalJsxDialog() {
   let signal = createSignal();
   let signal_2 = createSignal();
@@ -112,23 +112,23 @@ function requestLocalJsxDialog() {
     },
   };
 }
-//@ chunk-18hwfzwa.js:184170-184931 placement
+//@ chunk-czq1j3j2.js:188967-189728 placement
 class LocalJsxHost {
   #e;
   #t = new Map();
   #o = new Map();
   #n = createSignal();
-  #s = 0;
+  #r = 0;
   constructor(requestDialog) {
     this.#e = requestDialog;
   }
   subscribe = (listener) => this.#n.subscribe(listener);
   getSnapshot = () => this.#t;
   show(node, { commandName, immediate, hidesPrompt, retireAtTurnBoundary, holdsQueue = true }) {
-    this.#s += 1;
-    let nodeId = `local-jsx-${this.#s}`;
+    this.#r += 1;
+    let nodeId = `local-jsx-${this.#r}`;
     let abortController = new AbortController();
-    this.#r((panels) => panels.set(nodeId, node));
+    this.#s((panels) => panels.set(nodeId, node));
     if (retireAtTurnBoundary) this.#o.set(nodeId, () => abortController.abort());
     let closed = this.#e(
       LOCAL_JSX_DIALOG,
@@ -146,7 +146,7 @@ class LocalJsxHost {
       },
     ).then(() => {
       this.#o.delete(nodeId);
-      this.#r((panels) => panels.delete(nodeId));
+      this.#s((panels) => panels.delete(nodeId));
       return abortController.signal.aborted ? "closed" : "dismissed";
     });
     return {
@@ -161,14 +161,14 @@ class LocalJsxHost {
   get size() {
     return this.#t.size;
   }
-  #r(updatePanels) {
+  #s(updatePanels) {
     let nextPanels = new Map(this.#t);
     updatePanels(nextPanels);
     this.#t = nextPanels;
     this.#n.emit();
   }
 }
-//@ chunk-18hwfzwa.js:184931-185079 placement
+//@ chunk-czq1j3j2.js:189728-189876 placement
 async function clearMcpAuthCaches(serverName, serverConfig, storageV5) {
   let mcpClient = require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
   await mcpClient.clearServerCache(serverName, serverConfig);

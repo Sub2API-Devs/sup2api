@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的"受管 git"：git 挂载路由、GIT_SSL_CAINFO 信任包构建与会话 git 环境覆盖
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (35), chunk-t3sg9e26.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (35), chunk-rzkdv0c6.js (1)
  * attribution: placement 36
  */
 import { unlink, open } from "fs/promises";
@@ -26,14 +26,14 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { buildGitConfigEnv } from "../../utils/gitSafeExec.js";
 
-//@ chunk-t3sg9e26.js:1014-1126 placement
+//@ chunk-rzkdv0c6.js:1013-1125 placement
 function getGitSslConfig(env, envNames) {
   return {
     certificateFile: truncatePath(env, "GIT_SSL_CAINFO", envNames),
     skipVerification: truncatePath(env, "GIT_SSL_NO_VERIFY", envNames),
   };
 }
-//@ chunk-hm0ce8vc.js:39893-40086 placement
+//@ chunk-asf5gh8x.js:41818-42011 placement
 /**
  * 初始化受管 git 状态：操作员变量、路由、信任包（初始 unavailable）。
  */
@@ -56,7 +56,7 @@ function createGovernedGitState(
     anySourceOnGitMount: false,
   };
 }
-//@ chunk-hm0ce8vc.js:40086-40470 placement
+//@ chunk-asf5gh8x.js:42011-42395 placement
 /**
  * 根据 GIT_SSL_CAINFO 构建会话信任包；多会话共享账号时不构建。
  */
@@ -82,7 +82,7 @@ async function buildGitTrustBundle(state, readTrustBundleSource) {
   };
   state.trustBundle = await readTrustBundleSource(trimmed, state.trustBundlePath);
 }
-//@ chunk-hm0ce8vc.js:40470-40713 placement
+//@ chunk-asf5gh8x.js:42395-42638 placement
 /**
  * 按角色（prep/hook/child）计算 git 环境覆盖与命令级 config 项。
  */
@@ -100,7 +100,7 @@ function gitEnvironmentForRole(state, role, target) {
     commandScopeEntries,
   };
 }
-//@ chunk-hm0ce8vc.js:40713-40875 placement
+//@ chunk-asf5gh8x.js:42638-42800 placement
 /**
  * 给走 git 挂载的源设置 prep 阶段 git 环境，返回是否有源在挂载上。
  */
@@ -117,7 +117,7 @@ function applyMountGitEnvironment(state, sources) {
   state.anySourceOnGitMount = anyMount;
   return anyMount;
 }
-//@ chunk-hm0ce8vc.js:40875-42825 placement
+//@ chunk-asf5gh8x.js:42800-44750 placement
 /**
  * 信任包各失败原因的解释与修复建议文本。
  */
@@ -160,7 +160,7 @@ var TRUST_BUNDLE_FAILURE_EXPLANATIONS = {
       "Run with --capacity 1, or put the public certificate authorities into your company's file yourself.",
   },
 };
-//@ chunk-hm0ce8vc.js:42825-43765 placement
+//@ chunk-asf5gh8x.js:44750-45690 placement
 /**
  * 生成信任包不可用的 [runner:warn] 提示。
  */
@@ -179,7 +179,7 @@ function formatTrustBundleWarning(state) {
       : "Otherwise add the public certificate authorities to the file, or unset";
   return `[runner:warn] governed git: GIT_SSL_CAINFO is set on this runner and ${because}, so the runner did not build the certificate file it gives its own git for Anthropic-managed git (the git mount): the public certificate authorities plus yours. The runner's own fetches from the mount keep the variable as it is, and fail if the file holds only your company's certificate authority, because the mount presents a public certificate. ${first} ${elseInstruction} the variable for the runner and name your company's file for your own server in the machine's system git config (an http.<your server's URL>.sslCAInfo entry).`;
 }
-//@ chunk-hm0ce8vc.js:43765-44223 placement
+//@ chunk-asf5gh8x.js:45690-46148 placement
 function formatCertificatesLeftOutWarning(trustBundles) {
   let max = Math.max(
     0,
@@ -188,7 +188,7 @@ function formatCertificatesLeftOutWarning(trustBundles) {
   if (max === 0) return;
   return `[runner:warn] governed git: the certificate file the runner builds for Anthropic-managed git (the git mount) leaves out ${max} ${plural(max, "certificate")} because of Claude Code's deny list, from this machine's public certificate authorities or the file GIT_SSL_CAINFO names. A git given this file does not trust ${plural(max, "it", "them")} for the mount.`;
 }
-//@ chunk-hm0ce8vc.js:44223-44345 placement (2.1.88 match: handleFileDescriptorRedirection, 0.389)
+//@ chunk-asf5gh8x.js:46148-46270 placement (2.1.88 match: handleFileDescriptorRedirection, 0.389)
 /**
  * 按角色（如 prep）计算 git 挂载的信任判定：把 operator、routing、target、trustBundle 交给 Oln，取其 decision。旧版名 handleFileDescriptorRedirection 误配，属 runner/挂载模块。
  */
@@ -201,23 +201,23 @@ function gitTrustDecisionForRole(state, role, target) {
     trustBundle: state.trustBundle,
   }).decision;
 }
-//@ chunk-hm0ce8vc.js:44345-44426 placement
+//@ chunk-asf5gh8x.js:46270-46351 placement
 function needsMountFetchWithoutUpstream(source) {
   return Boolean(source.governedMount && !source.upstreamUrl && !source.fetchViaMount);
 }
-//@ chunk-hm0ce8vc.js:44426-44480 placement
+//@ chunk-asf5gh8x.js:46351-46405 placement
 function isOnGovernedMount(source) {
   return Boolean(source.governedMount && source.url);
 }
-//@ chunk-hm0ce8vc.js:44480-44518 placement
+//@ chunk-asf5gh8x.js:46405-46443 placement
 function isEnvAssignmentFree(href) {
   return !href.includes("=");
 }
-//@ chunk-hm0ce8vc.js:44518-44576 placement
+//@ chunk-asf5gh8x.js:46443-46501 placement
 function governedMountUrlOf(source) {
   return source.governedMount && source.url ? source.url : undefined;
 }
-//@ chunk-hm0ce8vc.js:44576-44805 placement
+//@ chunk-asf5gh8x.js:46501-46730 placement
 function gitEnvironmentForHook(state, reachesGitMount) {
   let { envOverrides, commandScopeEntries } = planGitTlsTrust({
     role: "hook",
@@ -231,20 +231,20 @@ function gitEnvironmentForHook(state, reachesGitMount) {
     commandScopeEntries,
   };
 }
-//@ chunk-hm0ce8vc.js:44805-44873 placement
+//@ chunk-asf5gh8x.js:46730-46798 placement
 function gitEnvironmentForSourceHook(state, source) {
   return gitEnvironmentForHook(state, governedMountUrlOf(source) !== undefined || state.anySourceOnGitMount);
 }
-//@ chunk-hm0ce8vc.js:44873-44923 placement
+//@ chunk-asf5gh8x.js:46798-46848 placement
 function gitEnvironmentForSessionHook(state) {
   return gitEnvironmentForHook(state, state.anySourceOnGitMount);
 }
-//@ chunk-hm0ce8vc.js:44923-44937 placement
+//@ chunk-asf5gh8x.js:46848-46862 placement
 /**
  * git 2.31：此版本起 git 允许 GIT_SSL_CAINFO 覆盖 config。
  */
 var MIN_GIT_VERSION_FOR_CAINFO = "2.31";
-//@ chunk-hm0ce8vc.js:44937-54229 placement
+//@ chunk-asf5gh8x.js:46862-56154 placement
 /**
  * 针对 GIT_SSL_CAINFO 等被移动/保留/未设置的各种决策生成长篇 [runner:warn] 说明。
  */
@@ -368,11 +368,11 @@ function formatGovernedGitDecisionWarnings({
   }
   return warnings;
 }
-//@ chunk-hm0ce8vc.js:54413-54455 placement
+//@ chunk-asf5gh8x.js:56338-56380 placement
 function stripWhitespace(text) {
   return text.replace(/\s/g, "");
 }
-//@ chunk-hm0ce8vc.js:54455-55655 placement
+//@ chunk-asf5gh8x.js:56380-57580 placement
 /**
  * 读取 GIT_SSL_CAINFO 指向的文件，检查大小/PEM/证书种类，合并系统根证书生成信任包。
  */
@@ -457,7 +457,7 @@ async function readTrustBundleSource(path, bundlePath, systemBundles = SYSTEM_CA
     }),
   };
 }
-//@ chunk-hm0ce8vc.js:55655-55719 placement
+//@ chunk-asf5gh8x.js:57580-57644 placement
 async function removeFileIfExists(path) {
   try {
     await unlink(path);
@@ -465,7 +465,7 @@ async function removeFileIfExists(path) {
     if (!isENOENT(error)) throw error;
   }
 }
-//@ chunk-hm0ce8vc.js:55719-56182 placement
+//@ chunk-asf5gh8x.js:57644-58107 placement
 async function readSmallTextFile(path, maxBytes) {
   let handle;
   try {
@@ -508,14 +508,14 @@ async function readSmallTextFile(path, maxBytes) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-hm0ce8vc.js:56182-56305 placement
+//@ chunk-asf5gh8x.js:58107-58230 placement
 function readServerGitSslVars(environmentVariables, checkUpper) {
   return {
     serverCertificateFile: getEnvCaseInsensitive(environmentVariables, "GIT_SSL_CAINFO", checkUpper),
     serverSkipVerification: getEnvCaseInsensitive(environmentVariables, "GIT_SSL_NO_VERIFY", checkUpper),
   };
 }
-//@ chunk-hm0ce8vc.js:56305-56464 placement
+//@ chunk-asf5gh8x.js:58230-58389 placement
 function getEnvCaseInsensitive(vars, varName, checkUpperCase) {
   if (vars === undefined) return;
   if (Object.hasOwn(vars, varName)) return vars[varName];
@@ -523,18 +523,18 @@ function getEnvCaseInsensitive(vars, varName, checkUpperCase) {
   for (let [key, value] of Object.entries(vars)) if (key.toUpperCase() === varName) return value;
   return;
 }
-//@ chunk-hm0ce8vc.js:56464-56555 placement
+//@ chunk-asf5gh8x.js:58389-58480 placement
 function getGitConfigParameters(environmentVariables, env, checkUpper) {
   return (
     getEnvCaseInsensitive(environmentVariables, "GIT_CONFIG_PARAMETERS", checkUpper) ??
     getEnvCaseInsensitive(env, "GIT_CONFIG_PARAMETERS", checkUpper)
   );
 }
-//@ chunk-hm0ce8vc.js:56555-56650 placement
+//@ chunk-asf5gh8x.js:58480-58575 placement
 function serverCertificateFileOf(serverVars) {
   return typeof serverVars.serverCertificateFile === "string" ? serverVars.serverCertificateFile : undefined;
 }
-//@ chunk-hm0ce8vc.js:56650-56895 placement
+//@ chunk-asf5gh8x.js:58575-58820 placement
 function gitEnvironmentForChild(state, serverVars, gitReadsEnvironmentConfig, trustBundle) {
   return planGitTlsTrust({
     role: "child",
@@ -547,7 +547,7 @@ function gitEnvironmentForChild(state, serverVars, gitReadsEnvironmentConfig, tr
     trustBundle,
   });
 }
-//@ chunk-hm0ce8vc.js:56895-57546 placement
+//@ chunk-asf5gh8x.js:58820-59471 placement
 /**
  * 计算子会话 git 环境；变量被移动时确认 git 版本后才采用。
  */
@@ -586,7 +586,7 @@ async function resolveChildGitEnvironment(state, serverVars, gitReadsEnvironment
     trustBundle,
   };
 }
-//@ chunk-hm0ce8vc.js:57546-57692 placement
+//@ chunk-asf5gh8x.js:59471-59617 placement
 function sslEntriesOfCommandScope(childGitEnvironment) {
   return (childGitEnvironment?.commandScopeEntries ?? []).filter(
     ([configKey, configValue]) =>
@@ -594,7 +594,7 @@ function sslEntriesOfCommandScope(childGitEnvironment) {
       /^http\..+\.sslCAInfo$/i.test(configKey),
   );
 }
-//@ chunk-hm0ce8vc.js:57692-57972 placement (2.1.88 match: shellQuote, 0.768)
+//@ chunk-asf5gh8x.js:59617-59897 placement (2.1.88 match: shellQuote, 0.77)
 function shellQuote(existing, entries) {
   if (entries.length === 0) return {};
   let base = existing === undefined || existing === null ? "" : String(existing);
@@ -609,7 +609,7 @@ function shellQuote(existing, entries) {
     GIT_CONFIG_PARAMETERS: [base, ...mapped].join(" "),
   };
 }
-//@ chunk-hm0ce8vc.js:57972-58125 placement
+//@ chunk-asf5gh8x.js:59897-60050 placement
 function buildChildGitEnv(childGitEnvironment, existing, sessionGitRulesPath, existing_2) {
   let entries = [
     ...(sessionGitRulesPath ? [["include.path", sessionGitRulesPath]] : []),
@@ -621,15 +621,15 @@ function buildChildGitEnv(childGitEnvironment, existing, sessionGitRulesPath, ex
     ...shellQuote(existing_2, sslEntriesOfCommandScope(childGitEnvironment)),
   };
 }
-//@ chunk-hm0ce8vc.js:58125-58139 placement
+//@ chunk-asf5gh8x.js:60050-60064 placement
 var MIN_GIT_VERSION_FOR_TRUST = [2, 31];
-//@ chunk-hm0ce8vc.js:58139-58219 placement
+//@ chunk-asf5gh8x.js:60064-60144 placement
 var SAFE_URL_CHARS = [..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"];
-//@ chunk-hm0ce8vc.js:58219-58292 placement
+//@ chunk-asf5gh8x.js:60144-60217 placement
 function silenceStretchMs(limitMs) {
   return limitMs <= 0 ? 0 : Math.max(1, Math.min(20000, Math.floor(limitMs / 4)));
 }
-//@ chunk-hm0ce8vc.js:58292-58843 placement
+//@ chunk-asf5gh8x.js:60217-60768 placement
 /**
  * 输出静默看门狗：limitMs 内无活动则回调 onSilent。
  */
@@ -668,7 +668,7 @@ class SilenceWatchdog {
     this.timer.unref?.();
   }
 }
-//@ chunk-hm0ce8vc.js:58843-58886 placement
+//@ chunk-asf5gh8x.js:60768-60811 placement
 var CLAUDE_CODE_REMOTE_SESSION_ORIGIN = "CLAUDE_CODE_REMOTE_SESSION_ORIGIN";
 export {
   createGovernedGitState,

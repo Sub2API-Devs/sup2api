@@ -3,9 +3,9 @@
  *
  * 云环境 API：列出 /v1/environment_providers、创建默认云环境。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/environments.ts
- * pieces: chunk-f25sswmp.js (7)
+ * pieces: chunk-vr5v4gzz.js (7)
  * attribution: placement 3, fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -39,7 +39,7 @@ import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { logError } from "../log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:15653-15750 placement
+//@ chunk-vr5v4gzz.js:16300-16397 placement
 function environmentSelector(environmentId) {
   return environmentId.startsWith("ccpool_")
     ? {
@@ -49,11 +49,11 @@ function environmentSelector(environmentId) {
         environment_id: environmentId,
       };
 }
-//@ chunk-f25sswmp.js:15750-15942 placement
+//@ chunk-vr5v4gzz.js:16397-16589 placement
 var environmentsPageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ENVIRONMENTS_PAGE_LIMIT;
 var MAX_ENVIRONMENT_PAGES;
-deferInit("chunk-f25sswmp.js:15750", () => {
+deferInit("chunk-vr5v4gzz.js:16397", () => {
   environmentsPageSchema = DoctorLazy(() =>
     objectSchema({
       environments: array(
@@ -66,7 +66,7 @@ deferInit("chunk-f25sswmp.js:15750", () => {
   ENVIRONMENTS_PAGE_LIMIT = 100;
   MAX_ENVIRONMENT_PAGES = 10;
 });
-//@ chunk-f25sswmp.js:15942-16728 placement
+//@ chunk-vr5v4gzz.js:16589-17375 placement
 function parseEnvironmentsResponse(body) {
   if (typeof body === "string" && body.trim().length === 0)
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -83,7 +83,7 @@ function parseEnvironmentsResponse(body) {
     "fetchEnvironments: HTTP 200 JSON body without a valid environments array",
   );
 }
-//@ chunk-f25sswmp.js:16728-18042 fingerprint (2.1.88 match: fetchEnvironments, 0.379)
+//@ chunk-vr5v4gzz.js:17375-18689 fingerprint (2.1.88 match: fetchEnvironments, 0.379)
 /**
  * GET /v1/environment_providers 列出可用的云端环境（仅第一方）。
  */
@@ -174,17 +174,17 @@ async function fetchEnvironments(options, storageV5, credentials) {
     classifyEnvironmentError,
   );
 }
-//@ chunk-f25sswmp.js:18042-18080 layout
+//@ chunk-vr5v4gzz.js:18689-18727 layout
 function isCloudSessionAccessError(value) {
   return value instanceof CloudSessionAccessError;
 }
-//@ chunk-f25sswmp.js:18080-18146 layout
+//@ chunk-vr5v4gzz.js:18727-18793 layout
 function classifyEnvironmentError(value) {
   return value instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
     ? "malformed_response"
     : "error";
 }
-//@ chunk-f25sswmp.js:18146-19007 fingerprint (2.1.88 match: createDefaultCloudEnvironment, 0.867)
+//@ chunk-vr5v4gzz.js:18793-19654 fingerprint (2.1.88 match: createDefaultCloudEnvironment, 0.867)
 /**
  * POST /v1/environment_providers/cloud/create 创建默认云环境。
  */
@@ -239,4 +239,4 @@ async function createDefaultCloudEnvironment(name = "Default", signal, accessTok
     ).data;
   });
 }
-export { fetchEnvironments, environmentSelector, createDefaultCloudEnvironment, isCloudSessionAccessError };
+export { fetchEnvironments, createDefaultCloudEnvironment, environmentSelector, isCloudSessionAccessError };

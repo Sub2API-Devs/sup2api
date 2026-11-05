@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增。REPL 控制器：提交提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
+ * attribution: placement 7, layout 1
  */
 import { randomUUID } from "crypto";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   loadingScansRead,
   mayRegisterCommands,
@@ -28,6 +29,7 @@ import {
   looksLikeCommand,
   isSlashCommandBlockedByEndedByModel,
 } from "../../utils/processUserInput/processSlashCommand.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -43,6 +45,7 @@ import {
   AUTOCOMPACT_OFFER,
 } from "../../components/nudges/nudgeIds.js";
 import { endDrawnOffer } from "../../utils/newerModelOffer.js";
+import { noBridgeControlContext } from "../../bridge/replBridgeControl.js";
 import { isFrozenMarker } from "../../utils/frozenMarkers.js";
 import { prependModeCharacterToInput as prependModeCharacterToInput_3 } from "../../components/PromptInput/inputModes.js";
 import { addHistoryEntryNoUndo, addPastedEntry, parsePastedRefs, addHistoryEntry } from "../../history.js";
@@ -61,12 +64,12 @@ import { logEvent } from "../../services/analytics/index.js";
 import { bumpClawdPoseRun, releaseKeptPoseIfStale } from "../../components/VirtualMessageList.js";
 import { runLocalCommandFromRepl } from "./runLocalCommand.js";
 import { createAbortController } from "../../utils/abortController.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { prependToShellHistoryCache } from "../../utils/suggestions/shellHistoryCompletion.js";
 import { recordSubmitTime, mainAgentId } from "../../bootstrap/state.js";
 import { remoteSessionAwaits } from "../../utils/remoteSessionCommands.js";
 import { env } from "../../utils/env.js";
 import { shouldUseResponsiveMode } from "../../plugins/bundled/responsiveMode.js";
+import { logError } from "../../utils/log.js";
 import { scanQueueBeforeTurn } from "./ComposerChrome.js";
 import { switchSerializerSlot } from "../../utils/model/modelSwitchHooks.js";
 import { getMainLoopModelFromState } from "../../hooks/useMainLoopModel.js";
@@ -89,7 +92,6 @@ import { dispatchCommandRunHooks, commandRunEvent } from "../../plugins/function
 import { getTipAttribution } from "../../services/tips/tipIds.js";
 import { hasSingleCommandRunHook } from "../../utils/processUserInput/surfaceCommandNotices.js";
 import { sendQueuedNow, handleSendNowKey } from "./sendNow.js";
-import { logError } from "../../utils/log.js";
 import { isQueuedSendNowEnabled, isSendNowKeyEnabled } from "../../components/PromptInput/promptFlags.js";
 import { hasRemoteControlChannel } from "../../remote/remoteMode.js";
 import { requestDialogWrapper } from "../../components/dialogs/dialogKinds.js";
@@ -116,14 +118,18 @@ import {
 } from "../../components/PromptInput/inputDecorations.js";
 import { offsetDecorations } from "../../plugins/functionHooks/prompt/decorationSpans.js";
 import { mergeTurnTags } from "../../utils/userTurnTags.js";
-import { isRefillableInput } from "../../utils/messageQueueManager.js";
+import { isQueuedCommandEditable } from "../../utils/messageQueueManager.js";
 import { shouldEscapeNdjsonForBridge } from "../../cli/ndjsonSafeStringify.js";
 import { areHooksEnabled } from "../../utils/hooks.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1628953-1629068 placement
+//@ chunk-czq1j3j2.js:1667531-1667535 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1667531", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1673119-1673234 placement
 /**
  * 等待前置任务后，在仍需要时先等扫描或回合，再等回合结束。
  */
@@ -135,7 +141,7 @@ async function awaitScanThenTurn(activeMessageQueue, isBusy, scan) {
   await Promise.race([activeMessageQueue, loadingScansRead()]);
   if (isBusy()) await activeMessageQueue;
 }
-//@ chunk-18hwfzwa.js:1629068-1629379 placement
+//@ chunk-czq1j3j2.js:1673234-1673545 placement
 /**
  * 解析斜杠命令（支持 “命令:子命令” 与子命令映射），返回启用的命令。
  */
@@ -152,7 +158,7 @@ function resolveSlashCommand({ commandName, args, isMcp }, commands) {
     subcommandMatch === undefined ? undefined : findCommand(subcommandMatch.targetName, commands);
   return targetCommand !== undefined && isCommandEnabled(targetCommand) ? targetCommand : resolved;
 }
-//@ chunk-18hwfzwa.js:1629379-1629688 placement
+//@ chunk-czq1j3j2.js:1673545-1673854 placement
 /**
  * 输入是否会发送给模型（普通提示、prompt 类命令或可被钩子处理的命令）。
  */
@@ -167,11 +173,15 @@ function mayReachModel({ value, mode, skipSlashCommands }, commands) {
     return !looksLikeCommand(slashCommand.commandName) || mayRegisterCommands();
   return slashCommand_2.type === "prompt" || mayHookCommand(getCommandName(slashCommand_2));
 }
-//@ chunk-18hwfzwa.js:1629688-1629730 placement
+//@ chunk-czq1j3j2.js:1673854-1673932 layout
+function scriptAskHolds() {
+  return codeModeAccepted() ? require("../../utils/codeMode/scriptAskDeclined.js").scriptAskHolds : null;
+}
+//@ chunk-czq1j3j2.js:1673932-1673974 placement
 function isCompactCommand(command) {
   return command.name === "compact";
 }
-//@ chunk-18hwfzwa.js:1629730-1644033 placement
+//@ chunk-czq1j3j2.js:1673974-1688955 placement
 /**
  * 提交控制器：处理 Enter 提交——斜杠命令（local/local-jsx/prompt）、bash 模式、/exit、建议接受、队列与发送到代理，记录 onSubmit 遥测。
  */
@@ -216,7 +226,7 @@ class PromptSubmitController {
     let submitText = isExitWord && transport.activeRemote.isRemoteMode ? "/exit" : text;
     let pastedContents = options?.pastedContentsOverride ?? draft.pastedContents;
     let isLoading = turn.getSnapshot().isLoading;
-    let shouldKeepComposer = false;
+    let shouldKeepComposer = codeModeAccepted() && scriptAskHolds()?.peek(session)?.getSnapshot() === true;
     let commands = scope.commands;
     let { ideSelection, onDetachToCaller } = chrome.getSnapshot();
     let slashCommand =
@@ -235,6 +245,8 @@ class PromptSubmitController {
     dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
     endDrawnOffer();
     dialogStore.dismissKind(AUTOCOMPACT_OFFER);
+    let bridgeControlKey = noBridgeControlContext();
+    if (bridgeControlKey !== null) dialogStore.dismissKind(bridgeControlKey);
     let sentByPerson =
       isFrozenMarker(options?.composerEnter) && options?.inputSource !== "suggestion_accepted";
     let fromQueue = false;
@@ -245,10 +257,8 @@ class PromptSubmitController {
             display: prependModeCharacterToInput_3(text, inputMode),
             pastedContents,
           };
-    if (
-      onDetachToCaller !== undefined &&
-      (isExitWord || (slashCommand?.name === "exit" && slashCommand.type !== "prompt"))
-    ) {
+    let isExitSelection = isExitWord || (slashCommand?.name === "exit" && slashCommand.type !== "prompt");
+    if (onDetachToCaller !== undefined && isExitSelection) {
       if (historyEntry) {
         draft.clear();
         helpers.clearBuffer();
@@ -264,7 +274,7 @@ class PromptSubmitController {
       let command_2 = command && isCommandEnabled(command) ? command : undefined;
       if (command_2?.name === "clear") idleNudge.onClearSubmitted();
       let runsImmediately = isImmediateCommand(command_2, args, this.#e.presentation);
-      let isActive = turn.guard.isActive || false;
+      let isActive = turn.guard.isActive || shouldKeepComposer;
       let runsBeside =
         runsBesideTurns(command_2) && (inputMode !== "bash" || options?.fromKeybinding === true);
       let dispatchesNow = (isActive && (runsImmediately || options?.fromKeybinding)) || runsBeside;
@@ -337,12 +347,12 @@ class PromptSubmitController {
             printRows: turn.appendAfterTurn,
             ranAs,
           }).finally(() => releaseKeptPoseIfStale(poseRun));
-          this.#s({
+          this.#r({
             toast: true,
           });
         } else if (commandDialog) {
           let poseRun = bumpClawdPoseRun();
-          this.#c({
+          this.#l({
             command: command_2,
             commandName,
             commandArgs: args,
@@ -366,7 +376,7 @@ class PromptSubmitController {
     )
       return;
     let isRemoteMode = transport.activeRemote.isRemoteMode;
-    let clearsComposer = (!isLoading && true) || isRemoteMode;
+    let clearsComposer = (!isLoading && !shouldKeepComposer) || isRemoteMode;
     if (
       !options?.fromKeybinding &&
       inputMode === "bash" &&
@@ -428,6 +438,7 @@ class PromptSubmitController {
       pastedContents,
       fromKeybinding: options?.fromKeybinding ?? false,
       sentByPerson,
+      sentNow: sendNowFeature !== undefined && remoteTarget?.workerSendsNow() === true,
       recordHistory: ({ startsTurn }) => {
         if (!historyEntry || shouldHoldPluginStorage()) return;
         if (startsTurn)
@@ -518,7 +529,9 @@ class PromptSubmitController {
       onPromptCameBack: draft.markCameBack,
       getCurrentInput: () => draft.value,
       composerClearedAtEnter: (clearsComposer && !options?.fromKeybinding) || options?.keepsComposer,
-      ...false,
+      ...(codeModeAccepted() && {
+        askOpenAtIdle: shouldKeepComposer,
+      }),
       restoreHandedBackPrompt: (prompt) => {
         turn.consumeRateLimitAutoContinuePrefill();
         restorePromptAfterCancel(draft, prompt);
@@ -543,7 +556,7 @@ class PromptSubmitController {
             if (cameBack) draft.markCameBack();
           }
         : undefined,
-      replaceDraftWithNextInput: (nextInput) => this.#r(nextInput),
+      replaceDraftWithNextInput: (nextInput) => this.#s(nextInput),
       ideSelection,
       takeIdeSelectionForQueue:
         usesIdeSelection && inputMode !== "bash" && (ideSelection?.text || ideSelection?.filePath)
@@ -576,12 +589,12 @@ class PromptSubmitController {
         )
     )
       scrollPin.repin(false, "commandOutput");
-    if (isSlash || isLoading)
-      this.#s({
+    if (isSlash || isLoading || shouldKeepComposer)
+      this.#r({
         toast: true,
       });
   };
-  #s({ toast }) {
+  #r({ toast }) {
     let { draft, addNotification } = this.#e;
     if (draft.stashedPrompt === undefined || draft.value.trim() !== "") return;
     draft.popStash("outside");
@@ -594,12 +607,12 @@ class PromptSubmitController {
         timeoutMs: 5000,
       });
   }
-  #r(value) {
+  #s(value) {
     let { draft } = this.#e;
     draft.setMode("prompt");
     draft.replaceValue(value);
   }
-  async #c({
+  async #l({
     command,
     commandName,
     commandArgs,
@@ -659,7 +672,7 @@ class PromptSubmitController {
           ),
         );
       turn.appendAfterTurn(rows);
-      this.#s({
+      this.#r({
         toast: !result?.nextInput,
       });
       if (result?.nextInput)
@@ -672,7 +685,7 @@ class PromptSubmitController {
               kind: "auto-continuation",
             },
           });
-        else this.#r(result.nextInput);
+        else this.#s(result.nextInput);
     };
     let toolUseContext = turn.buildToolUseContext(
       transcript.getSnapshot(),
@@ -746,20 +759,25 @@ class PromptSubmitController {
     subscribe: (listener) => {
       let unsubTurn = this.#e.turn.subscribe(listener);
       let unsubTransport = this.#e.transport.subscribe(listener);
-      let unsubDraft = this.#e.draft.subscribe(listener);
-      let unsubTranscript = this.#e.transcript.subscribe(listener);
+      let unsubDraft = this.#e.transport.waitingLines.subscribe(listener);
+      let unsubTranscript = this.#e.draft.subscribe(listener);
+      let unsubTranscript_2 = this.#e.transcript.subscribe(listener);
       return () => {
         unsubTurn();
         unsubTransport();
         unsubDraft();
         unsubTranscript();
+        unsubTranscript_2();
       };
     },
-    getSnapshot: () => this.#e.draft.mode === "prompt" && this.#i()?.workerSendsNow() === true,
+    getSnapshot: () =>
+      this.#e.draft.mode === "prompt" &&
+      this.#e.transport.hasLineToSendNow &&
+      this.#i()?.workerSendsNow() === true,
   };
   submitEmpty = () => {
     let mode = this.#e.draft.mode;
-    if (sendQueuedNow(this.#l(mode))) return true;
+    if (sendQueuedNow(this.#c(mode))) return true;
     let remoteTarget = this.#i();
     return (
       remoteTarget !== undefined &&
@@ -773,7 +791,7 @@ class PromptSubmitController {
     if (deliver === undefined) {
       if (
         handleSendNowKey({
-          ...this.#l(mode),
+          ...this.#c(mode),
           deliverWithoutCancel,
         })
       )
@@ -808,28 +826,41 @@ class PromptSubmitController {
       });
       return true;
     }
+    let { transport } = this.#e;
+    let linesToSendNow = [...transport.takeLinesToSendNow(), ...(deliver === undefined ? [] : [deliver])];
     remoteTarget.sendQueuedNow(deliver).then((outcome) => {
       switch (outcome) {
         case "delivering":
           logFeatureOk(featureName);
           return;
         case "stopped":
+        case "interrupted":
           logFeatureSad(featureName, "fell_back_to_cancel");
           return;
         case "nothing_waiting":
           logFeatureSad(featureName, "remote_nothing_waiting");
+          transport.sendNowMovedNothing(linesToSendNow);
           return;
         case "not_asked":
           logFeatureSad(featureName, "remote_not_asked");
+          transport.sendNowMovedNothing(linesToSendNow);
           return;
         case "failed":
           logFeatureBad(featureName, "remote_request_failed");
+          transport.sendNowMovedNothing(linesToSendNow);
+          if (this.#e.turn.isExternalLoading)
+            this.#e.addNotification({
+              key: "remote-send-now-no-answer",
+              kind: "feedback",
+              text: "Send now got no answer from the session \xB7 esc to interrupt and send",
+              priority: "immediate",
+            });
           return;
       }
     });
     return true;
   }
-  #l(mode) {
+  #c(mode) {
     let { store, spinnerStore, turn, messageQueue } = this.#e;
     let { mainLoopModel } = this.#n();
     return {
@@ -960,7 +991,7 @@ class PromptSubmitController {
     let insertOffset = position === "replace" ? 0 : draft.value.length;
     switch (position) {
       case "replace":
-        this.#r(text);
+        this.#s(text);
         break;
       case "append":
         draft.replaceValue(draft.value + text);
@@ -1039,7 +1070,7 @@ class PromptSubmitController {
       draft.setPastedContents((contents) => mergeTurnTags(contents, popped.images));
   };
   cancelAndDrainPending = () => {
-    let { turn, messageQueue } = this.#e;
+    let { turn, messageQueue, transport } = this.#e;
     let { userInputOnProcessing, followingPromptsOnProcessing } = turn.stream.getSnapshot();
     let processingText =
       turn.stream.placeholderTracker.pending && userInputOnProcessing
@@ -1048,7 +1079,7 @@ class PromptSubmitController {
         : undefined;
     let drained = [];
     for (;;) {
-      let pastedContents = messageQueue.getCommandQueue().find(isRefillableInput)?.pastedContents ?? {};
+      let pastedContents = messageQueue.getCommandQueue().find(isQueuedCommandEditable)?.pastedContents ?? {};
       let queued = messageQueue.popEditableAt(0, "", 0);
       if (!queued) break;
       let fixedImageIds = new Set(
@@ -1077,6 +1108,7 @@ class PromptSubmitController {
     let drainedText =
       drained.join(`
 `) || undefined;
+    transport.escTakeBack.forgetSends();
     turn.cancel("local");
     return (
       [processingText, drainedText].filter(Boolean).join(`
@@ -1085,16 +1117,11 @@ class PromptSubmitController {
     );
   };
 }
-//@ chunk-18hwfzwa.js:1644033-1644107 placement
+//@ chunk-czq1j3j2.js:1688955-1689029 placement
 function shouldHoldPluginStorage() {
   return (
     shouldEscapeNdjsonForBridge() ||
     (areHooksEnabled() && getPluginRegistry().unlatchedAbsentManagedIds.size > 0)
   );
 }
-//@ chunk-18hwfzwa.js:1644107-1644111 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1644107", () => {
-  init_react_production();
-});
 export { PromptSubmitController, isCompactCommand, awaitScanThenTurn, resolveSlashCommand, mayReachModel };

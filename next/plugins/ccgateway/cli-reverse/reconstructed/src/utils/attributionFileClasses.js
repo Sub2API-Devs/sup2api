@@ -3,9 +3,9 @@
  *
  * 提交归因：git 命令解析、测试命令、锁文件、生成文件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (20)
  * attribution: placement 20
  */
 import { posix, sep, basename, extname, isAbsolute, relative } from "path";
@@ -17,13 +17,13 @@ import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { containsPathTraversal } from "./path.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:200796-200854 placement
+//@ chunk-7jxyna5q.js:206292-206350 placement
 /**
  * 字符串参数的长度上限（2048）。
  */
 var MAX_STRING_ARG_CHARS = 2048;
 var CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/;
-//@ chunk-s61vbvea.js:200945-201453 placement
+//@ chunk-7jxyna5q.js:206441-206949 placement
 /**
  * 匹配 nice 的组合短选项（如 -n5、-c）。
  */
@@ -34,7 +34,7 @@ var SHELL_ASSIGNMENT_SUFFIX;
 var regExp_6;
 var GIT_PATH_OPTIONS;
 var GIT_OPTIONS_WITH_VALUE;
-deferInit("chunk-s61vbvea.js:200945", () => {
+deferInit("chunk-7jxyna5q.js:206441", () => {
   NICE_ADJUSTMENT_ARG_RE = /^(?:-n|-n?-?\d+|--adjustment(?:=.*)?)$/;
   TIMEOUT_DURATION_RE =
     /^\+?(?:(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|0[xX](?:[\da-fA-F]+\.?[\da-fA-F]*|\.[\da-fA-F]+)(?:[pP][+-]?\d+)?|[iI][nN][fF](?:[iI][nN][iI][tT][yY])?)[smhd]?$/;
@@ -51,14 +51,14 @@ deferInit("chunk-s61vbvea.js:200945", () => {
   ]);
   GIT_OPTIONS_WITH_VALUE = new Set(["-C", "-c", "--attr-source", "--shallow-file", ...GIT_PATH_OPTIONS]);
 });
-//@ chunk-s61vbvea.js:201453-201510 placement
+//@ chunk-7jxyna5q.js:206949-207006 placement
 /**
  * 判断参数是否为 git 可执行名（含 Windows 的 git.exe）。
  */
 function isGitExecutable(commandPath) {
   return /(?:^|[\\/])git(?:\.exe)?$/.test(commandPath);
 }
-//@ chunk-s61vbvea.js:201510-202828 placement
+//@ chunk-7jxyna5q.js:207006-208324 placement
 function stripShellPrefixWords(argv, hasPreamble, isGitName) {
   let fallbackIndex = hasPreamble ? -1 : undefined;
   let index = 0;
@@ -146,14 +146,14 @@ function stripShellPrefixWords(argv, hasPreamble, isGitName) {
   }
   return fallbackIndex;
 }
-//@ chunk-s61vbvea.js:202828-202924 placement
+//@ chunk-7jxyna5q.js:208324-208420 placement
 /**
  * 判断文本里是否出现 git commit 命令（允许前置 -C/-c 等全局选项）。
  */
 function looksLikeGitCommit(command) {
   return /\bgit\b(?:\s+(?:-C\s+\S+|-c\s+\S+=\S+|--\S+))*\s+commit(?:\s|$)/.test(command);
 }
-//@ chunk-s61vbvea.js:202924-203104 placement
+//@ chunk-7jxyna5q.js:208420-208600 placement
 function looksLikeCommitOutput(stdout, stderr, exitCode) {
   if (exitCode !== undefined) return exitCode === 0;
   let commitOutputPatterns = [
@@ -166,7 +166,7 @@ function looksLikeCommitOutput(stdout, stderr, exitCode) {
   let combinedOutput = stdout + stderr;
   return commitOutputPatterns.some((pattern) => pattern.test(combinedOutput));
 }
-//@ chunk-s61vbvea.js:203104-203535 placement
+//@ chunk-7jxyna5q.js:208600-209031 placement
 /**
  * 测试命令前的包运行器前缀（npx/bunx/uvx 等）。
  */
@@ -174,7 +174,7 @@ var TEST_COMMAND_PATTERNS; // deferred: has load-time effects after a deferred s
 var NPM_BIN_WRAPPER_PREFIX;
 var TEST_COMMAND_RE;
 var SECONDARY_TEST_COMMAND_RE;
-deferInit("chunk-s61vbvea.js:203104", () => {
+deferInit("chunk-7jxyna5q.js:208600", () => {
   TEST_COMMAND_PATTERNS = new Set([VERIFY, CODE_REVIEW]);
   NPM_BIN_WRAPPER_PREFIX = "(?:\\./)?(?:(?:npx|bunx|uvx|uv\\s+run)\\s+)?";
   TEST_COMMAND_RE = [
@@ -188,35 +188,35 @@ deferInit("chunk-s61vbvea.js:203104", () => {
     new RegExp(`^${NPM_BIN_WRAPPER_PREFIX}(?:tsc|mypy)\\b`),
   ];
 });
-//@ chunk-s61vbvea.js:203535-203574 placement
+//@ chunk-7jxyna5q.js:209031-209070 placement
 var AUTOMATED_TEST = "automated-test";
 var TYPECHECK = "typecheck";
-//@ chunk-s61vbvea.js:203574-203620 placement
+//@ chunk-7jxyna5q.js:209070-209116 placement
 /**
  * 把测试类模式名转成 “/name” 形式。
  */
 function slashTestPattern(name) {
   return TEST_COMMAND_PATTERNS.has(name) ? `/${name}` : null;
 }
-//@ chunk-s61vbvea.js:203620-203675 placement
+//@ chunk-7jxyna5q.js:209116-209171 placement
 /**
  * 测试相关模式的斜杠形式集合。
  */
 var SLASH_TEST_PATTERNS; // deferred: uses TEST_COMMAND_PATTERNS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:203620", () => {
+deferInit("chunk-7jxyna5q.js:209116", () => {
   SLASH_TEST_PATTERNS = new Set([
     AUTOMATED_TEST,
     TYPECHECK,
     ...Array.from(TEST_COMMAND_PATTERNS, (name) => `/${name}`),
   ]);
 });
-//@ chunk-s61vbvea.js:203675-203693 placement
+//@ chunk-7jxyna5q.js:209171-209189 placement
 /**
  * 通配模式 “*”。
  */
 var ANY_PATTERN = "*";
 var MAX_PATTERN_CHARS = 64;
-//@ chunk-s61vbvea.js:203966-204912 placement
+//@ chunk-7jxyna5q.js:209462-210408 placement
 /**
  * 视为生成/锁文件的扩展名集合。
  */
@@ -224,7 +224,7 @@ var LOCKFILE_NAMES; // deferred: has load-time effects after a deferred statemen
 var GENERATED_FILE_EXTENSIONS;
 var GENERATED_CONTENT_MARKERS;
 var GENERATED_HEADER_RE;
-deferInit("chunk-s61vbvea.js:203966", () => {
+deferInit("chunk-7jxyna5q.js:209462", () => {
   LOCKFILE_NAMES = new Set([
     "package-lock.json",
     "yarn.lock",
@@ -292,7 +292,7 @@ deferInit("chunk-s61vbvea.js:203966", () => {
     /\.snap$/i,
   ];
 });
-//@ chunk-s61vbvea.js:204912-205250 placement
+//@ chunk-7jxyna5q.js:210408-210746 placement
 /**
  * 判断文件是否为锁文件或生成文件（按文件名、扩展名与目录特征）。
  */
@@ -311,17 +311,17 @@ function isLockOrGeneratedFile(filePath) {
   for (let pattern of GENERATED_HEADER_RE) if (pattern.test(lower)) return true;
   return false;
 }
-//@ chunk-s61vbvea.js:205250-205273 placement
+//@ chunk-7jxyna5q.js:210746-210769 placement
 /**
  * git 命令输出的字节上限（10 MiB）。
  */
 var MAX_GIT_OUTPUT_BYTES = 10485760;
 var GIT_COMMAND_TIMEOUT_MS = 1e4;
-//@ chunk-s61vbvea.js:205273-205320 placement
+//@ chunk-7jxyna5q.js:210769-210816 placement
 class GitListingError extends Error {
   name = "GitListingError";
 }
-//@ chunk-s61vbvea.js:205320-205531 placement
+//@ chunk-7jxyna5q.js:210816-211026 placement
 function gitListingError(commandLabel, result) {
   let detail = result.stderr.trim() || result.error || "";
   return new GitListingError(
@@ -332,7 +332,7 @@ function gitListingError(commandLabel, result) {
         : `${commandLabel} failed (code ${result.code}): ${truncateToLength(detail, 200)}`,
   );
 }
-//@ chunk-s61vbvea.js:205531-206241 placement
+//@ chunk-7jxyna5q.js:211026-211736 placement
 async function checkLinguistGenerated(stagedFiles, repoRoot, options) {
   let generatedPaths = new Set();
   let linguistGeneratedByPath = getGitRepoCache().linguistGeneratedByPath;
@@ -373,7 +373,7 @@ async function checkLinguistGenerated(stagedFiles, repoRoot, options) {
   }
   return generatedPaths;
 }
-//@ chunk-s61vbvea.js:206241-206310 placement
+//@ chunk-7jxyna5q.js:211736-211805 placement
 /**
  * 判断路径是否位于仓库内（相对路径且不含 ..）。
  */
@@ -381,7 +381,7 @@ function isRepoRelativePath(filePath, repoRoot) {
   let repoRelative = isAbsolute(filePath) ? relative(repoRoot, filePath) : filePath;
   return repoRelative !== "" && !isAbsolute(repoRelative) && !containsPathTraversal(repoRelative);
 }
-//@ chunk-s61vbvea.js:206310-206536 placement
+//@ chunk-7jxyna5q.js:211805-212031 placement
 var TEST_DIR_SEGMENTS = [
   "/test/",
   "/tests/",
@@ -401,7 +401,7 @@ var TEST_FILE_PATTERNS = [
   /_spec\.[a-z]+$/i,
   /\.snap$/i,
 ];
-//@ chunk-s61vbvea.js:206536-206706 placement
+//@ chunk-7jxyna5q.js:212031-212201 placement
 function isTestFile(path) {
   let normalizedPath = posix.sep + path.split(sep).join(posix.sep).replace(/^\/+/, "");
   let fileName = basename(path);
@@ -410,21 +410,21 @@ function isTestFile(path) {
   return false;
 }
 export {
+  MAX_STRING_ARG_CHARS,
+  CONTROL_CHARS_RE,
+  GitListingError,
+  looksLikeGitCommit,
+  looksLikeCommitOutput,
+  ANY_PATTERN,
   slashTestPattern,
-  SHELL_ASSIGNMENT_SUFFIX,
+  GIT_OPTIONS_WITH_VALUE,
+  stripShellPrefixWords,
   MAX_PATTERN_CHARS,
   checkLinguistGenerated,
-  GitListingError,
   GIT_COMMAND_TIMEOUT_MS,
   MAX_GIT_OUTPUT_BYTES,
   gitListingError,
   isLockOrGeneratedFile,
   isTestFile,
-  MAX_STRING_ARG_CHARS,
-  CONTROL_CHARS_RE,
-  ANY_PATTERN,
-  GIT_OPTIONS_WITH_VALUE,
-  stripShellPrefixWords,
-  looksLikeGitCommit,
-  looksLikeCommitOutput,
+  SHELL_ASSIGNMENT_SUFFIX,
 };

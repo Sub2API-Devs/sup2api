@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。会话再水合（恢复状态）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { extractTextContent_2 } from "../../utils/messages.js";
@@ -18,7 +18,7 @@ import { closeWebViews, resetArtifactReadState } from "../../state/artifactReadS
 import { GOAL_PROPOSAL_DIALOG } from "../../components/goal/goalProposalDialog.js";
 import { logGoalCleared } from "../../commands/goal/goal.js";
 
-//@ chunk-18hwfzwa.js:341752-342090 placement
+//@ chunk-czq1j3j2.js:379473-379811 placement
 /**
  * 消息的首段文本（助手文本或工具结果）。
  */
@@ -44,11 +44,11 @@ function messageSnippet(message) {
   }
   return "";
 }
-//@ chunk-18hwfzwa.js:342090-342142 placement
+//@ chunk-czq1j3j2.js:379811-379863 placement
 function capTextChars(text) {
   return text.length > MAX_SESSION_TEXT_CHARS ? text.slice(-MAX_SESSION_TEXT_CHARS) : text;
 }
-//@ chunk-18hwfzwa.js:342142-342461 placement
+//@ chunk-czq1j3j2.js:379863-380182 placement
 function rehydrateSession(messages, state, { restoreAgentNames }) {
   if (isBareMode()) return state;
   let next = state;
@@ -74,7 +74,7 @@ function rehydrateSession(messages, state, { restoreAgentNames }) {
     };
   return next;
 }
-//@ chunk-18hwfzwa.js:342461-342595 placement
+//@ chunk-czq1j3j2.js:380182-380316 placement
 /**
  * 执行恢复步骤，出错时记日志并返回 null。
  */
@@ -89,9 +89,9 @@ function tryRehydrate(fn) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:342595-342608 placement
+//@ chunk-czq1j3j2.js:380316-380329 placement
 var responsePairRetirer = null;
-//@ chunk-18hwfzwa.js:342608-342789 placement
+//@ chunk-czq1j3j2.js:380329-380510 placement
 /**
  * 恢复时清掉面板文件视图、展开状态与无键的页脚链接。
  */
@@ -105,7 +105,7 @@ function resetTransientUiState(state) {
       : state.footerLinks,
   };
 }
-//@ chunk-18hwfzwa.js:342789-342935 placement
+//@ chunk-czq1j3j2.js:380510-380656 placement
 function retireResumeSwapPair(getState, setState, dialogStore, session) {
   closeWebViews(getState);
   responsePairRetirer?.retireResponsePair(session);
@@ -114,4 +114,4 @@ function retireResumeSwapPair(getState, setState, dialogStore, session) {
   if (activeGoal !== undefined) logGoalCleared(activeGoal, "resume_swap");
   setState(resetArtifactReadState);
 }
-export { resetTransientUiState, messageSnippet, retireResumeSwapPair, rehydrateSession };
+export { resetTransientUiState, retireResumeSwapPair, rehydrateSession, messageSnippet };

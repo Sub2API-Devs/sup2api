@@ -3,47 +3,81 @@
  *
  * 2.1.316 新增：/status 中"用量报告归属的 claude.ai Project"说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x08x6vab.js (3)
- * attribution: placement 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p56qwmr3.js (1), chunk-x5s1qnh1.js (3)
+ * attribution: placement 3, affinity 1
  */
-import { getSubscriberAttributionProject } from "../attributionProject.js";
 import { tildify } from "../path.js";
 import { getSettingsFilePathForSource } from "../settings/settings.js";
+import { getFlagSettingsInline } from "../../bootstrap/state.js";
+import { currentAttributionProject } from "../attributionProject.js";
 
-//@ chunk-x08x6vab.js:3380-4330 placement
+//@ chunk-x5s1qnh1.js:2854-3044 affinity
+function projectOriginLabel(attribution) {
+  let { project, written, ignored } = attribution;
+  if (project === undefined) return;
+  let [ignoredSource] = ignored;
+  let ignoredNote =
+    ignoredSource === undefined ? "" : `; ignored the invalid ${attributionSourceLabel(ignoredSource)}`;
+  return {
+    name: written ?? project.taggedId,
+    origin: `${sourceLabel(project.source)}${ignoredNote}`,
+  };
+}
+//@ chunk-x5s1qnh1.js:3044-3289 placement
+function attributionSourceLabel(source) {
+  switch (source) {
+    case "harness":
+      return "CLAUDE_CODE_ATTRIBUTION_PROJECT";
+    case "admin_default":
+      return "your organization's default Project";
+    case "flag":
+      return "attributionProject in --settings";
+    default:
+      return `attributionProject in ${sourceLabel(source)}`;
+  }
+}
+//@ chunk-x5s1qnh1.js:3289-3710 placement
+/**
+ * 归因 Project 来源的人类可读来源名（harness 环境变量、组织默认、各级 settings 文件等）。
+ */
+function sourceLabel(source) {
+  switch (source) {
+    case "harness":
+      return "CLAUDE_CODE_ATTRIBUTION_PROJECT";
+    case "admin_default":
+      return "your organization's default";
+    case "user":
+      return tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
+    case "project":
+      return ".claude/settings.json";
+    case "local":
+      return ".claude/settings.local.json";
+    case "flag":
+      return getFlagSettingsInline()?.attributionProject === undefined ? "--settings" : "set with /project";
+    case "managed":
+      return "managed settings";
+  }
+}
+//@ chunk-p56qwmr3.js:3680-4405 placement
 /**
  * /status 中关于用量报告归属的 claude.ai Project 的说明（来源、忽略的无效值或缺失警告）。
  */
 var ATTRIBUTION_PROJECT_NOTICE = {
   id: "attribution-project",
   compute: () => {
-    let subscriberAttributionProject = getSubscriberAttributionProject();
-    if (subscriberAttributionProject === undefined) return null;
-    let { project, written, ignored } = subscriberAttributionProject;
-    let [ignoredSource] = ignored;
-    if (project !== undefined) {
-      let sourceLabel;
-      switch (project.source) {
-        case "harness":
-          sourceLabel = "CLAUDE_CODE_ATTRIBUTION_PROJECT";
-          break;
-        case "admin_default":
-          sourceLabel = "your organization's default";
-          break;
-        default:
-          sourceLabel = settingsSourceLabel(project.source);
-      }
-      let ignoredSuffix =
-        ignoredSource === undefined ? "" : `; ignored the invalid ${attributionSourceLabel(ignoredSource)}`;
+    let attribution = currentAttributionProject();
+    if (attribution === undefined) return null;
+    let project = projectOriginLabel(attribution);
+    if (project !== undefined)
       return {
         key: "attribution-project",
         kind: "contextual",
-        text: `This session names claude.ai Project ${written ?? project.taggedId} for usage reports (${sourceLabel}${ignoredSuffix})`,
+        text: `This session names claude.ai Project ${project.name} for usage reports (${project.origin})`,
         priority: "low",
       };
-    }
+    let [ignoredSource] = attribution.ignored;
     switch (ignoredSource) {
       case undefined:
         return null;
@@ -67,30 +101,4 @@ var ATTRIBUTION_PROJECT_NOTICE = {
     }
   },
 };
-//@ chunk-x08x6vab.js:4330-4519 placement
-function attributionSourceLabel(source) {
-  switch (source) {
-    case "harness":
-      return "CLAUDE_CODE_ATTRIBUTION_PROJECT";
-    case "admin_default":
-      return "your organization's default Project";
-    default:
-      return `attributionProject in ${settingsSourceLabel(source)}`;
-  }
-}
-//@ chunk-x08x6vab.js:4519-4773 placement
-function settingsSourceLabel(source) {
-  switch (source) {
-    case "user":
-      return tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
-    case "project":
-      return ".claude/settings.json";
-    case "local":
-      return ".claude/settings.local.json";
-    case "flag":
-      return "--settings";
-    case "managed":
-      return "managed settings";
-  }
-}
-export { ATTRIBUTION_PROJECT_NOTICE };
+export { projectOriginLabel, sourceLabel, attributionSourceLabel, ATTRIBUTION_PROJECT_NOTICE };

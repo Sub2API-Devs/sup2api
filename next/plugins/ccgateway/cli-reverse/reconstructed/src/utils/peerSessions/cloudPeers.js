@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。云端同伴会话查找。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rwnj2eyf.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x7y4f088.js (27)
  * attribution: placement 27
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -24,9 +24,9 @@ import { parseCrossSessionInboundCapability } from "../sessionState.js";
 import { stripAnsiAndControls } from "../printableName.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rwnj2eyf.js:1874-1887 placement
+//@ chunk-x7y4f088.js:1874-1887 placement
 var BRIDGE_LISTING_TTL_MS = 300000;
-//@ chunk-rwnj2eyf.js:1887-2108 placement
+//@ chunk-x7y4f088.js:1887-2108 placement
 class BridgeListingSlot {
   listed = undefined;
   inFlight = undefined;
@@ -48,12 +48,12 @@ class BridgeListingSlot {
     if (this.inFlight === record) this.inFlight = undefined;
   }
 }
-//@ chunk-rwnj2eyf.js:2108-2132 placement
+//@ chunk-x7y4f088.js:2108-2132 placement
 var bridgeListingSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rwnj2eyf.js:2108", () => {
+deferInit("chunk-x7y4f088.js:2108", () => {
   bridgeListingSlot = new SessionRootSlot(() => new BridgeListingSlot());
 });
-//@ chunk-rwnj2eyf.js:2132-2241 placement
+//@ chunk-x7y4f088.js:2132-2241 placement
 /**
  * 预热同伴身份归属。
  */
@@ -67,13 +67,13 @@ async function primePeerIdentity(
     await primePeerIdentityOwner(options);
   }
 }
-//@ chunk-rwnj2eyf.js:2241-2346 placement
+//@ chunk-x7y4f088.js:2241-2346 placement
 function currentBridgeIdentityKey() {
   let { getPeerBridgeIdentity } = require("../../bridge/replBridgeHandle.js");
   let peerBridgeIdentity = getPeerBridgeIdentity();
   return peerBridgeIdentity?.live ? peerBridgeIdentity.key : null;
 }
-//@ chunk-rwnj2eyf.js:2346-3184 placement
+//@ chunk-x7y4f088.js:2346-3184 placement
 async function fetchBridgePopulation(session, options) {
   {
     let identityKey = currentBridgeIdentityKey();
@@ -141,7 +141,7 @@ async function fetchBridgePopulation(session, options) {
     identityKey: null,
   };
 }
-//@ chunk-rwnj2eyf.js:3184-3255 placement
+//@ chunk-x7y4f088.js:3184-3255 placement
 /**
  * isCurrentBridgeIdentity：桥接列表记录是否属于当前身份。
  */
@@ -152,7 +152,7 @@ function isCurrentBridgeIdentity(result) {
   }
   return false;
 }
-//@ chunk-rwnj2eyf.js:3255-3730 placement
+//@ chunk-x7y4f088.js:3255-3730 placement
 /**
  * 记录桥接列表结果（身份已变则忽略，失败时清空已记录集合）。
  */
@@ -181,7 +181,7 @@ function recordBridgeListing(session, fetchResult, rows) {
     logForDebugging(`[bridge:population] recorded ${rows.length} bridge rows (cloud-deduped)`);
   }
 }
-//@ chunk-rwnj2eyf.js:3730-3950 placement
+//@ chunk-x7y4f088.js:3730-3950 placement
 /**
  * 不可记录的列表取代时清除已记录集合。
  */
@@ -197,14 +197,14 @@ function forgetBridgeListing(session, fetchResult) {
     }
   }
 }
-//@ chunk-rwnj2eyf.js:3950-3986 placement
+//@ chunk-x7y4f088.js:3950-3986 placement
 /**
  * bridgeListingRows：未过期且身份一致的桥接会话行。
  */
 function bridgeListingRows(session) {
   return warmBridgeListing(session)?.rows;
 }
-//@ chunk-rwnj2eyf.js:3986-4242 placement
+//@ chunk-x7y4f088.js:3986-4242 placement
 /**
  * 未过期且身份一致的已记录桥接列表。
  */
@@ -224,7 +224,7 @@ function warmBridgeListing(session) {
   }
   return;
 }
-//@ chunk-rwnj2eyf.js:4242-4399 placement
+//@ chunk-x7y4f088.js:4242-4399 placement
 /**
  * 排除云端已列出或本机已知的会话。
  */
@@ -240,24 +240,24 @@ function excludeKnownPeerSessions(candidates, bridge, known) {
     return !bridgeIds.has(candidateId) && !knownIds.has(candidateId);
   });
 }
-//@ chunk-rwnj2eyf.js:4399-4436 placement
+//@ chunk-x7y4f088.js:4399-4436 placement
 /**
  * livePeerSessionsExcludingKnown：排除已知会话后的存活会话列表。
  */
 function livePeerSessionsExcludingKnown(rows, sessions) {
   return excludeKnownPeerSessions(rows, [], sessions);
 }
-//@ chunk-rwnj2eyf.js:4436-4493 placement
+//@ chunk-x7y4f088.js:4436-4493 placement
 /**
  * isTransientListingFailure：判断列表失败是否可重试（超时/取回失败）。
  */
 function isTransientListingFailure(unavailable) {
   return unavailable === "timeout" || unavailable === "fetch_failed";
 }
-//@ chunk-rwnj2eyf.js:4493-4512 placement
+//@ chunk-x7y4f088.js:4493-4512 placement
 var CLOUD_SESSIONS_MEMO_TTL_MS = 30000;
 var CLOUD_SESSION_LIST_DEADLINE_MS = 5000;
-//@ chunk-rwnj2eyf.js:4512-4865 placement
+//@ chunk-x7y4f088.js:4512-4865 placement
 /**
  * 云端会话列表缓存（按凭证，含进行中请求）。
  */
@@ -289,17 +289,17 @@ class CloudSessionsMemo {
     return age >= 0 && age < CLOUD_SESSIONS_MEMO_TTL_MS ? memo : undefined;
   }
 }
-//@ chunk-rwnj2eyf.js:4865-4945 placement
+//@ chunk-x7y4f088.js:4865-4945 placement
 function currentWalkCredentialKey() {
   let { walkCredentialKey } = require("../../bridge/replBridgeHandle.js");
   return walkCredentialKey();
 }
-//@ chunk-rwnj2eyf.js:4945-4969 placement
+//@ chunk-x7y4f088.js:4945-4969 placement
 var cloudSessionsMemoSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rwnj2eyf.js:4945", () => {
+deferInit("chunk-x7y4f088.js:4945", () => {
   cloudSessionsMemoSlot = new SessionRootSlot(() => new CloudSessionsMemo());
 });
-//@ chunk-rwnj2eyf.js:4969-5759 placement
+//@ chunk-x7y4f088.js:4969-5759 placement
 async function searchCloudPeers(session, credentials) {
   {
     let { hasCloudPeerAccess } = require("../../bridge/hasCloudPeerAccess.lazy.js");
@@ -357,7 +357,7 @@ async function searchCloudPeers(session, credentials) {
     unavailable: undefined,
   };
 }
-//@ chunk-rwnj2eyf.js:5759-7071 placement
+//@ chunk-x7y4f088.js:5759-7071 placement
 function walkCcrSessionList_2(session, walkCcrSessionList, credentialKey, credentials) {
   let isRemote = env.CLAUDE_CODE_REMOTE === true;
   let ownSessionBody = isRemote ? sessionIdBody(env.CLAUDE_CODE_REMOTE_SESSION_ID ?? "") : "";
@@ -434,7 +434,7 @@ function walkCcrSessionList_2(session, walkCcrSessionList, credentialKey, creden
   promise.finally(() => session.settle(promise));
   return promise;
 }
-//@ chunk-rwnj2eyf.js:7071-7202 placement
+//@ chunk-x7y4f088.js:7071-7202 placement
 /**
  * 未过期的云端会话列表（需云端同伴权限）。
  */
@@ -446,13 +446,13 @@ function warmCloudSessions(session) {
   }
   return;
 }
-//@ chunk-rwnj2eyf.js:7202-7354 placement
+//@ chunk-x7y4f088.js:7202-7354 placement
 /**
  * 高安全会话不可达与对方不收消息的拒绝原因。
  */
 var ELEVATED_UNREACHABLE_REASON = "target is an elevated-security session unreachable from a cloud session";
 var RECIPIENT_CANNOT_RECEIVE_REASON = "target session reports it cannot receive cross-session messages";
-//@ chunk-rwnj2eyf.js:7354-7593 placement
+//@ chunk-x7y4f088.js:7354-7593 placement
 /**
  * 发送被拒的类别（handler_rewrite/bridge_auth/recipient_gate_off/permission_denied）。
  */
@@ -464,7 +464,7 @@ function sendDenialKind(decision) {
   }
   return "permission_denied";
 }
-//@ chunk-rwnj2eyf.js:7593-8025 placement
+//@ chunk-x7y4f088.js:7593-8025 placement
 /**
  * 目标是云端不可达的高安全会话时生成拒绝文案。
  */
@@ -500,12 +500,12 @@ function unreachableElevatedRefusal(session, sessionId, displayName, describeSen
     return;
   }
 }
-//@ chunk-rwnj2eyf.js:8025-8094 placement
+//@ chunk-x7y4f088.js:8025-8094 placement
 /**
  * CANNOT_RECEIVE_REASON：目标会话不接收跨会话消息时的拒绝原因文案。
  */
 var CANNOT_RECEIVE_REASON = "can't receive cross-session messages (off in that session)";
-//@ chunk-rwnj2eyf.js:8094-8759 placement
+//@ chunk-x7y4f088.js:8094-8759 placement
 /**
  * 目标会话设置为不接收跨会话消息时生成拒绝文案。
  */
@@ -533,7 +533,7 @@ function cannotReceiveRefusal(session, sessionId, displayName) {
     return;
   }
 }
-//@ chunk-rwnj2eyf.js:8759-9194 placement
+//@ chunk-x7y4f088.js:8759-9194 placement
 /**
  * 目标会话是否未报告能否接收消息。
  */
@@ -564,15 +564,9 @@ function isInboundUnreported(session, target) {
   }
 }
 export {
-  unreachableElevatedRefusal,
-  ELEVATED_UNREACHABLE_REASON,
-  cannotReceiveRefusal,
-  RECIPIENT_CANNOT_RECEIVE_REASON,
-  sendDenialKind,
-  isInboundUnreported,
-  searchCloudPeers,
   primePeerIdentity,
   fetchBridgePopulation,
+  searchCloudPeers,
   excludeKnownPeerSessions,
   isTransientListingFailure,
   recordBridgeListing,
@@ -580,6 +574,12 @@ export {
   forgetBridgeListing,
   isCurrentBridgeIdentity,
   CANNOT_RECEIVE_REASON,
+  unreachableElevatedRefusal,
+  ELEVATED_UNREACHABLE_REASON,
+  cannotReceiveRefusal,
+  RECIPIENT_CANNOT_RECEIVE_REASON,
+  sendDenialKind,
+  isInboundUnreported,
   bridgeListingRows,
   warmBridgeListing,
   warmCloudSessions,

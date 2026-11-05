@@ -3,13 +3,12 @@
  *
  * 已有模块；g2 补充放置一个声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/schema.ts
- * pieces: chunk-6qssfmzs.js (12)
+ * pieces: chunk-q6fxvjg8.js (12)
  * attribution: placement 5, fingerprint 3, layout 4
  */
-import { NON_REBINDABLE } from "./reservedShortcuts.js";
-import { normalizeKeyForComparison } from "./parser.js";
+import { NON_REBINDABLE, normalizeKeyForComparison } from "./reservedShortcuts.js";
 import { DEFAULT_BINDINGS } from "./defaultBindings.js";
 import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -24,12 +23,12 @@ import {
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6qssfmzs.js:9545-9551 placement
+//@ chunk-q6fxvjg8.js:9551-9557 placement
 /**
  * 惰性缓存的按键集合，用于判断某个键是否不可重新绑定。
  */
 var nonRebindableKeySet;
-//@ chunk-6qssfmzs.js:9551-9738 placement
+//@ chunk-q6fxvjg8.js:9557-9744 placement
 /**
  * 判断动作是否绑定在不可重新绑定的按键上。
  */
@@ -44,7 +43,7 @@ function isNonRebindableAction(action) {
   }
   return nonRebindableKeySet.has(action);
 }
-//@ chunk-6qssfmzs.js:9738-10113 placement
+//@ chunk-q6fxvjg8.js:9744-10119 placement
 /**
  * 已弃用的快捷键动作名及其对应的新动作名。
  */
@@ -64,14 +63,14 @@ var DEPRECATED_ACTION_REPLACEMENTS = {
   "messageSelector:select": "select:accept",
   "diff:viewDetails": "select:accept",
 };
-//@ chunk-6qssfmzs.js:10113-10155 placement
+//@ chunk-q6fxvjg8.js:10119-10161 placement
 /**
  * 判断快捷键动作名是否在已弃用列表里。
  */
 function isDeprecatedAction(action) {
   return DEPRECATED_ACTIONS.some((deprecated) => deprecated === action);
 }
-//@ chunk-6qssfmzs.js:10155-10265 placement
+//@ chunk-q6fxvjg8.js:10161-10271 placement
 /**
  * 把用户快捷键配置中的弃用动作名迁移为新动作名。
  */
@@ -83,13 +82,13 @@ function migrateDeprecatedActions(blocks) {
     ),
   }));
 }
-//@ chunk-6qssfmzs.js:10265-10649 fingerprint (2.1.88 match: KEYBINDING_CONTEXTS, 0.752)
+//@ chunk-q6fxvjg8.js:10271-10669 fingerprint (2.1.88 match: KEYBINDING_CONTEXTS, 0.734)
 /**
  * 29 个快捷键上下文：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。
  */
 var KEYBINDING_CONTEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var KEYBINDING_CONTEXT_SET;
-deferInit("chunk-6qssfmzs.js:10265", () => {
+deferInit("chunk-q6fxvjg8.js:10271", () => {
   KEYBINDING_CONTEXTS = [
     "Global",
     "Chat",
@@ -114,6 +113,7 @@ deferInit("chunk-6qssfmzs.js:10265", () => {
     "DiffDialog",
     "DiffPanel",
     "FeedbackSurvey",
+    "SessionTabs",
     "ModelPicker",
     "EffortSlider",
     "Select",
@@ -123,11 +123,11 @@ deferInit("chunk-6qssfmzs.js:10265", () => {
   ];
   KEYBINDING_CONTEXT_SET = new Set(KEYBINDING_CONTEXTS);
 });
-//@ chunk-6qssfmzs.js:10649-10681 layout
+//@ chunk-q6fxvjg8.js:10669-10701 layout
 function isKeybindingContext(keybindingScope) {
   return KEYBINDING_CONTEXT_SET.has(keybindingScope);
 }
-//@ chunk-6qssfmzs.js:10681-15653 fingerprint (2.1.88 match: KEYBINDING_ACTIONS, 0.473)
+//@ chunk-q6fxvjg8.js:10701-15768 fingerprint (2.1.88 match: KEYBINDING_ACTIONS, 0.469)
 /**
  * 各上下文的说明文字（给 schema 和文档用）与全部合法动作名列表。
  */
@@ -155,6 +155,7 @@ var KEYBINDING_CONTEXT_DESCRIPTIONS = {
   DiffDialog: "When the diff dialog is open",
   DiffPanel: "When the diff sidebar panel is open",
   FeedbackSurvey: "When the session feedback survey has been typed over",
+  SessionTabs: "When a session on screen can be closed under the session tabs",
   ModelPicker: "When the model picker is open",
   EffortSlider: "When the effort slider is open",
   Select: "When a select/list component is focused",
@@ -174,6 +175,7 @@ var KEYBINDING_ACTIONS = [
   "app:diffFileListDown",
   "app:toggleDiffPreSession",
   "app:cycleDiffBase",
+  "app:closeSession",
   "app:toggleTerminal",
   "app:redraw",
   "app:openArtifact",
@@ -340,31 +342,31 @@ var KEYBINDING_ACTIONS = [
   "agents:rename",
   "agents:setGroup",
 ];
-//@ chunk-6qssfmzs.js:15653-15695 layout
+//@ chunk-q6fxvjg8.js:15768-15824 layout
 var TEMPLATE_EXCLUDED_CONTEXTS; // deferred: uses KEYBINDING_CONTEXT_DESCRIPTIONS of its import cycle while loading; runs once the cycle is complete
 var KEYBINDING_ACTION_SET;
-deferInit("chunk-6qssfmzs.js:15653", () => {
-  TEMPLATE_EXCLUDED_CONTEXTS = ["FeedbackSurvey"];
+deferInit("chunk-q6fxvjg8.js:15768", () => {
+  TEMPLATE_EXCLUDED_CONTEXTS = ["FeedbackSurvey", "SessionTabs"];
   KEYBINDING_ACTION_SET = new Set(KEYBINDING_ACTIONS);
 });
-//@ chunk-6qssfmzs.js:15695-15727 layout
+//@ chunk-q6fxvjg8.js:15824-15856 layout
 function isKeybindingAction(action) {
   return KEYBINDING_ACTION_SET.has(action);
 }
-//@ chunk-6qssfmzs.js:15727-15785 layout
+//@ chunk-q6fxvjg8.js:15856-15914 layout
 /**
  * 合法动作名或 command:* 。
  */
 function isValidBindingAction(action) {
   return KEYBINDING_ACTION_SET.has(action) || action.startsWith("command:");
 }
-//@ chunk-6qssfmzs.js:15785-16682 fingerprint (2.1.88 match: KeybindingBlockSchema, 0.694)
+//@ chunk-q6fxvjg8.js:15914-16811 fingerprint (2.1.88 match: KeybindingBlockSchema, 0.694)
 /**
  * keybindings.json 的 zod schema（用于生成 JSON Schema）：块 = {context: 上下文枚举, bindings: 按键串 → 动作枚举 | command:名字 | null}；文件 = {$schema?, $docs?, bindings: 块数组}。
  */
 var KeybindingBlockSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var KeybindingsSchema;
-deferInit("chunk-6qssfmzs.js:15785", () => {
+deferInit("chunk-q6fxvjg8.js:15914", () => {
   KeybindingBlockSchema = DoctorLazy(() =>
     objectSchema({
       context: _enum(KEYBINDING_CONTEXTS).describe(
@@ -393,14 +395,14 @@ deferInit("chunk-6qssfmzs.js:15785", () => {
   );
 });
 export {
-  TEMPLATE_EXCLUDED_CONTEXTS,
   isKeybindingAction,
   isNonRebindableAction,
-  KEYBINDING_CONTEXTS,
-  KEYBINDING_CONTEXT_DESCRIPTIONS,
-  KEYBINDING_ACTIONS,
+  TEMPLATE_EXCLUDED_CONTEXTS,
   migrateDeprecatedActions,
   isValidBindingAction,
+  KEYBINDING_CONTEXTS,
   isDeprecatedAction,
+  KEYBINDING_ACTIONS,
+  KEYBINDING_CONTEXT_DESCRIPTIONS,
   isKeybindingContext,
 };

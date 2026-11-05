@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主（SDK/嵌入方）对代理与后台能力的限制开关集合，以及按宿主/异步上下文存取策略。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5xbkq5z7.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a434vn9q.js (5)
  * attribution: placement 5
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -13,7 +13,7 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-5xbkq5z7.js:309-2187 placement
+//@ chunk-a434vn9q.js:309-2187 placement
 /**
  * 宿主（SDK/嵌入方）对代理与后台能力的限制开关集合：禁用后台任务、后台代理启动、远程隔离、非沙箱命令、fork 子代理等，以及安装后台启动规则、stoppedByPerson、subagentSends 钩子。
  */
@@ -123,27 +123,27 @@ class HostAgentPolicy {
     this.#t = sends;
   }
 }
-//@ chunk-5xbkq5z7.js:2187-2212 placement
+//@ chunk-a434vn9q.js:2187-2212 placement
 /**
  * 按宿主缓存 HostAgentPolicy 实例。
  */
 var hostAgentPolicies; // deferred: uses HostAgentPolicy of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-5xbkq5z7.js:2187", () => {
+deferInit("chunk-a434vn9q.js:2187", () => {
   hostAgentPolicies = new HostScoped(() => new HostAgentPolicy());
 });
-//@ chunk-5xbkq5z7.js:2212-2262 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-a434vn9q.js:2212-2262 placement
 /**
  * 取当前（ALS 覆盖的或宿主默认的）HostAgentPolicy。
  */
 function getHostAgentPolicy() {
   return hostAgentPolicyStorage.getStore() ?? hostAgentPolicies.of(getRootSession().host);
 }
-//@ chunk-5xbkq5z7.js:2262-2274 placement
+//@ chunk-a434vn9q.js:2262-2274 placement
 var hostAgentPolicyStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5xbkq5z7.js:2262", () => {
+deferInit("chunk-a434vn9q.js:2262", () => {
   hostAgentPolicyStorage = new AsyncLocalStorage();
 });
-//@ chunk-5xbkq5z7.js:2274-2310 placement
+//@ chunk-a434vn9q.js:2274-2310 placement
 /**
  * 在指定的 HostAgentPolicy 下运行函数。
  */

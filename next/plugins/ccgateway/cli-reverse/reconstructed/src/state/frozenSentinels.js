@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：冻结的空对象哨兵
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nvyvpw3y.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pt70g5m7.js (1)
  * attribution: placement 1
  */
-//@ chunk-nvyvpw3y.js:191-503 placement
+//@ chunk-pt70g5m7.js:191-503 placement
 var FROZEN_EMPTY_OBJECTS = Object.freeze({});
 var EMPTY_ARTIFACT_DB_READ_CONSENT = Object.freeze({});
 var EMPTY_ARTIFACT_DB_READ_HUMAN_CONSENT = Object.freeze({});

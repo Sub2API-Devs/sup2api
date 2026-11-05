@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：取会话引用使用的 CCR 会话 id，必要时从环境变量锁存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f9asxqh1.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q1gbn2mn.js (2)
  * attribution: placement 2
  */
 import { env } from "../env.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { isKnownCcrSessionRef } from "../../services/plugins/accountSync/listPlugins.js";
 
-//@ chunk-f9asxqh1.js:20883-21047 placement
+//@ chunk-q1gbn2mn.js:22566-22730 placement
 /**
  * 取会话引用使用的 CCR 会话 id（必要时从环境变量锁存）。
  */
@@ -25,7 +25,7 @@ function ccrSessionIdForRefs(session) {
   }
   return sessionRefsGate.ccrSessionID();
 }
-//@ chunk-f9asxqh1.js:21085-21245 placement
+//@ chunk-q1gbn2mn.js:22768-22928 placement
 /**
  * 判断会话引用同步是否启用（环境变量与条件满足时锁存为真）。
  */
@@ -36,4 +36,4 @@ function isSessionRefsSyncEnabled(session) {
     !!env.CLAUDE_CODE_SYNC_SESSION_REFS && isKnownCcrSessionRef(session),
   );
 }
-export { ccrSessionIdForRefs, isSessionRefsSyncEnabled };
+export { isSessionRefsSyncEnabled, ccrSessionIdForRefs };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：带防误触延迟的确认/取消选择组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q1cvb6kv.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7c7jcjs1.js (4)
  * attribution: placement 4
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -20,19 +20,19 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q1cvb6kv.js:418-422 placement
+//@ chunk-7c7jcjs1.js:418-422 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q1cvb6kv.js:418", () => {
+deferInit("chunk-7c7jcjs1.js:418", () => {
   init_react_production();
 });
-//@ chunk-q1cvb6kv.js:422-434 placement
+//@ chunk-7c7jcjs1.js:422-434 placement
 var CONFIRM_ARM_DELAY_MS = 500;
-//@ chunk-q1cvb6kv.js:434-480 placement
+//@ chunk-7c7jcjs1.js:434-480 placement
 function useConfirmArmed(delayMs = CONFIRM_ARM_DELAY_MS) {
   let terminalFocus = useTerminalFocus();
   return useTimeout(delayMs, terminalFocus);
 }
-//@ chunk-q1cvb6kv.js:480-1993 placement
+//@ chunk-7c7jcjs1.js:480-1993 placement
 function ConfirmSelect(props) {
   let $ = useMemoCache(33);
   let {

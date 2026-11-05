@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。附着远程会话时解析设备绑定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x1rd87x0.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7er3h6tn.js (14)
  * attribution: placement 14
  */
 import { isDeviceIdentityEnabled } from "../../services/analytics/violinGates.js";
@@ -29,7 +29,7 @@ import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { startDeviceRegistration } from "../../services/deviceBridge/deviceRegistrationSocket.js";
 import { NOT_HELD_LEASE } from "../../services/remoteTools/lease.js";
 
-//@ chunk-x1rd87x0.js:726-2064 placement
+//@ chunk-7er3h6tn.js:727-2066 placement
 /**
  * 附着远程会话时解析设备绑定。
  */
@@ -119,7 +119,7 @@ async function resolveAttachDeviceBinding(options) {
     toolHostLink,
   };
 }
-//@ chunk-x1rd87x0.js:2064-2220 placement
+//@ chunk-7er3h6tn.js:2066-2222 placement
 function sessionBindingFields(session) {
   return {
     archived: session.session_status === "archived",
@@ -127,7 +127,7 @@ function sessionBindingFields(session) {
     toolHostLink: deviceBindingState(session.tool_host_status, session.device_bind_posture),
   };
 }
-//@ chunk-x1rd87x0.js:2220-2426 placement
+//@ chunk-7er3h6tn.js:2222-2428 placement
 async function rereadBoundDevice(
   sessionPromise,
   { isEnabled = isDeviceIdentityEnabled, isEgressAllowed = isDeviceBindingAllowed } = {},
@@ -142,14 +142,14 @@ async function rereadBoundDevice(
     return;
   }
 }
-//@ chunk-x1rd87x0.js:2426-2488 placement
+//@ chunk-7er3h6tn.js:2428-2490 placement
 function pullsBackToThisMachine(binding) {
   return binding.then(
     (binding) => binding.status === "bound",
     () => false,
   );
 }
-//@ chunk-x1rd87x0.js:2488-2574 placement
+//@ chunk-7er3h6tn.js:2490-2576 placement
 function boundDeviceOf(binding) {
   return binding.then(
     (binding) => (binding.status === "bound" ? binding.deviceId : undefined),
@@ -158,7 +158,7 @@ function boundDeviceOf(binding) {
     },
   );
 }
-//@ chunk-x1rd87x0.js:2574-2656 placement
+//@ chunk-7er3h6tn.js:2576-2658 placement
 function boundDeviceKeyOf(binding) {
   return binding.then(
     (binding) => (binding.status === "bound" ? binding.held : undefined),
@@ -167,7 +167,7 @@ function boundDeviceKeyOf(binding) {
     },
   );
 }
-//@ chunk-x1rd87x0.js:2656-2785 placement
+//@ chunk-7er3h6tn.js:2658-2787 placement
 function getBindingOwnership({ viewerOnly, binding }) {
   return !viewerOnly && binding.status === "bound" && isKnownBindingState(binding.toolHostLink)
     ? {
@@ -178,7 +178,7 @@ function getBindingOwnership({ viewerOnly, binding }) {
         owner: false,
       };
 }
-//@ chunk-x1rd87x0.js:2785-3058 placement
+//@ chunk-7er3h6tn.js:2787-3060 placement
 async function sessionStillBoundTo(deviceId, readSession) {
   try {
     let session = await readSession();
@@ -194,7 +194,7 @@ async function sessionStillBoundTo(deviceId, readSession) {
     return;
   }
 }
-//@ chunk-x1rd87x0.js:3058-3561 placement
+//@ chunk-7er3h6tn.js:3060-3563 placement
 async function servedToolsForAttach({
   sessionId,
   binding,
@@ -241,10 +241,10 @@ async function servedToolsForAttach({
     ).servedSessionPlumbing(sessionId),
   });
 }
-//@ chunk-x1rd87x0.js:3561-3811 placement
+//@ chunk-7er3h6tn.js:3563-3813 placement
 var SETTINGS_NOT_KEPT_REFUSAL =
   "This session can run tools on this computer, so Claude Code must first keep a copy of this folder's settings, and it could not. Check free disk space and that ~/.claude/state can be written, then attach again; add --debug to see the cause.";
-//@ chunk-x1rd87x0.js:3811-4706 placement
+//@ chunk-7er3h6tn.js:3813-4708 placement
 function keepSettingsBesideAHelper(bindingPromise, options = {}) {
   let disabledStatus = {
     status: "disabled",
@@ -313,7 +313,7 @@ function keepSettingsBesideAHelper(bindingPromise, options = {}) {
     },
   };
 }
-//@ chunk-x1rd87x0.js:4706-5841 placement
+//@ chunk-7er3h6tn.js:4708-5843 placement
 function registerAttachedDevice(options) {
   let started = options.binding.catch((error) => {
     logForDebugging(`[deviceBind] attach binding failed unexpectedly: ${errorMessage(error)}`);
@@ -380,7 +380,7 @@ function registerAttachedDevice(options) {
     heldServedCall: (call) => registration?.heldServedCall(call) ?? NOT_HELD_LEASE,
   };
 }
-//@ chunk-x1rd87x0.js:5841-5961 placement
+//@ chunk-7er3h6tn.js:5843-5963 placement
 function unboundAtAttach(reason) {
   logEvent("tengu_device_bind_attach", {
     outcome: fromEnum(reason),
@@ -391,7 +391,7 @@ function unboundAtAttach(reason) {
     reason,
   };
 }
-//@ chunk-x1rd87x0.js:5961-6221 placement
+//@ chunk-7er3h6tn.js:5963-6223 placement
 /**
  * 附着时读不到会话绑定，记遥测并按未绑定处理
  */

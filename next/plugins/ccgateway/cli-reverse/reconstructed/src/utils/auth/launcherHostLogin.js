@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增（门面模块 launcherHostLoginRefusal）。启动器宿主登录令牌续期与拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-30p0tvt0.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vgaj51qh.js (39)
  * attribution: placement 39
  */
 import { PROVIDER_ENV_FLAGS } from "../model/modelIds.js";
@@ -24,7 +24,7 @@ import {
   getRootSession,
   wasDescriptorAnnouncementConsumed,
   getSdkOAuthTokenRefreshCallback,
-  setAuthenticatedAccount,
+  dropAuthenticatedAccountForNewToken,
 } from "../../bootstrap/state.js";
 import {
   getAPIProvider,
@@ -50,32 +50,32 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { computeContentHash } from "../commitAttribution.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-30p0tvt0.js:991-1030 placement
+//@ chunk-vgaj51qh.js:991-1030 placement
 /**
  * 判断是否设置了任一的第三方提供方环境变量。
  */
 function hasProviderEnvFlag() {
   return PROVIDER_ENV_FLAGS.some((flagName) => env[flagName]);
 }
-//@ chunk-30p0tvt0.js:1030-1101 placement
+//@ chunk-vgaj51qh.js:1030-1101 placement
 /**
  * 宿主登录结束的原因集合（登出、身份变化、临时失败、刷新失败）。
  */
 var LAUNCHER_END_REASONS = ["signed_out", "identity_changed", "transient", "refresh_failed"];
-//@ chunk-30p0tvt0.js:1101-1145 placement
+//@ chunk-vgaj51qh.js:1101-1145 placement
 /**
  * 判断字符串是否为已知的登录结束原因。
  */
 function isLauncherEndReason(endReason) {
   return LAUNCHER_END_REASONS.some((reason) => reason === endReason);
 }
-//@ chunk-30p0tvt0.js:1145-1155 placement
+//@ chunk-vgaj51qh.js:1145-1155 placement
 /**
  * 宿主登录的代次计数（每次结束或清除都递增）。
  */
 var launcherLoginGeneration = 0;
 var _;
-//@ chunk-30p0tvt0.js:1155-1201 placement
+//@ chunk-vgaj51qh.js:1155-1201 placement
 /**
  * 记录一次登录结束（原因与代次）。
  */
@@ -86,7 +86,7 @@ function recordLauncherLoginEnd(reason) {
     generation: launcherLoginGeneration,
   };
 }
-//@ chunk-30p0tvt0.js:1201-1229 placement
+//@ chunk-vgaj51qh.js:1201-1229 placement
 /**
  * 清除登录结束记录并递增代次。
  */
@@ -94,21 +94,21 @@ function clearLauncherLoginEnd() {
   launcherLoginGeneration++;
   _ = undefined;
 }
-//@ chunk-30p0tvt0.js:1229-1253 placement
+//@ chunk-vgaj51qh.js:1229-1253 placement
 /**
  * 读取当前的登录结束记录。
  */
 function getLauncherLoginEnd() {
   return _;
 }
-//@ chunk-30p0tvt0.js:1253-1277 placement
+//@ chunk-vgaj51qh.js:1253-1277 placement
 /**
  * 读取当前的登录代次。
  */
 function getLauncherLoginGeneration() {
   return launcherLoginGeneration;
 }
-//@ chunk-30p0tvt0.js:1277-1576 placement
+//@ chunk-vgaj51qh.js:1277-1576 placement
 class LauncherHostLoginState {
   token = null;
   everHeld = new Set();
@@ -126,7 +126,7 @@ class LauncherHostLoginState {
   wasLauncherStarted = false;
   wasOpenToSignIn = false;
 }
-//@ chunk-30p0tvt0.js:1576-1898 placement
+//@ chunk-vgaj51qh.js:1576-1898 placement
 /**
  * 启动器宿主登录的按会话状态、读取相关环境变量的访问器，以及身份重问间隔、续期重试间隔与续期暂停时长。
  */
@@ -135,7 +135,7 @@ var launcherEnv;
 var IDENTITY_REASK_MS;
 var RENEWAL_RETRY_DELAYS_MS;
 var RENEWAL_HOLD_OFF_MS;
-deferInit("chunk-30p0tvt0.js:1576", () => {
+deferInit("chunk-vgaj51qh.js:1576", () => {
   launcherHostLoginStates = new HostScoped(() => new LauncherHostLoginState());
   launcherEnv = createEnvAccessor(
     Object.fromEntries(
@@ -159,7 +159,7 @@ deferInit("chunk-30p0tvt0.js:1576", () => {
   RENEWAL_RETRY_DELAYS_MS = [5000, 30000, 120000];
   RENEWAL_HOLD_OFF_MS = 600000;
 });
-//@ chunk-30p0tvt0.js:1898-2154 placement
+//@ chunk-vgaj51qh.js:1898-2154 placement
 function isLauncherStartedProcess() {
   let state = launcherHostLoginStates.of(getRootSession().host);
   state.wasLauncherStarted ||= Boolean(
@@ -168,19 +168,19 @@ function isLauncherStartedProcess() {
   state.wasOpenToSignIn ||= state.wasLauncherStarted && env.CLAUDE_CODE_ENTRYPOINT !== "claude-desktop-3p";
   return state.wasLauncherStarted;
 }
-//@ chunk-30p0tvt0.js:2154-2212 placement
+//@ chunk-vgaj51qh.js:2154-2212 placement
 function mayHaveLauncherHostLoginInMemory() {
   isLauncherStartedProcess();
   return launcherHostLoginStates.of(getRootSession().host).wasOpenToSignIn;
 }
-//@ chunk-30p0tvt0.js:2212-2298 placement
+//@ chunk-vgaj51qh.js:2212-2298 placement
 function readLauncherStartAtClaim() {
   let state = launcherHostLoginStates.of(getRootSession().host);
   state.wasLauncherStarted = false;
   state.wasOpenToSignIn = false;
   isLauncherStartedProcess();
 }
-//@ chunk-30p0tvt0.js:2298-3532 placement
+//@ chunk-vgaj51qh.js:2298-3532 placement
 function launcherHostLoginRefusal() {
   if (!isLauncherStartedProcess()) return "not_launcher_started";
   if (env.CLAUDE_CODE_DISABLE_LAUNCHER_SIGN_IN) return "switched_off";
@@ -232,13 +232,13 @@ function launcherHostLoginRefusal() {
     return null;
   }
 }
-//@ chunk-30p0tvt0.js:3532-3636 placement
+//@ chunk-vgaj51qh.js:3532-3636 placement
 function usableLauncherHostLoginToken() {
   if (!isLauncherStartedProcess()) return null;
   let state = launcherHostLoginStates.of(getRootSession().host);
   return state.token !== null && dropRefusedToken(state) === null ? state.token : null;
 }
-//@ chunk-30p0tvt0.js:3636-3841 placement
+//@ chunk-vgaj51qh.js:3636-3841 placement
 function takeLauncherHostLoginEnd() {
   let state = launcherHostLoginStates.of(getRootSession().host);
   if (state.token !== null) dropRefusedToken(state);
@@ -250,15 +250,15 @@ function takeLauncherHostLoginEnd() {
   state.hasEndToSettle = false;
   return hasEndToSettle;
 }
-//@ chunk-30p0tvt0.js:3841-3883 placement
+//@ chunk-vgaj51qh.js:3841-3883 placement
 function setLauncherHostLoginFlagReader(readFlag) {
   launcherHostLoginStates.of(getRootSession().host).readFlag = readFlag;
 }
-//@ chunk-30p0tvt0.js:3883-3933 placement
+//@ chunk-vgaj51qh.js:3883-3933 placement
 function setLauncherHostLoginReplacementJudge(judgeReplacement) {
   launcherHostLoginStates.of(getRootSession().host).judgeReplacement = judgeReplacement;
 }
-//@ chunk-30p0tvt0.js:3933-4041 placement
+//@ chunk-vgaj51qh.js:3933-4041 placement
 function holdStartupLauncherHostLogin(token) {
   if (!token || launcherHostLoginRefusal() !== null) return false;
   let state = launcherHostLoginStates.of(getRootSession().host);
@@ -266,22 +266,22 @@ function holdStartupLauncherHostLogin(token) {
   state.everHeld.add(computeContentHash(token));
   return true;
 }
-//@ chunk-30p0tvt0.js:4041-4117 placement
+//@ chunk-vgaj51qh.js:4041-4117 placement
 function wasLauncherHostLoginToken(token) {
   let everHeld = launcherHostLoginStates.of(getRootSession().host).everHeld;
   return everHeld.size > 0 && everHeld.has(computeContentHash(token));
 }
-//@ chunk-30p0tvt0.js:4117-4160 placement
+//@ chunk-vgaj51qh.js:4117-4160 placement
 function isLauncherHostLoginRefusedNow(token) {
   return wasLauncherHostLoginToken(token) && usableLauncherHostLoginToken() === null;
 }
-//@ chunk-30p0tvt0.js:4160-4219 placement
+//@ chunk-vgaj51qh.js:4160-4219 placement
 function loginToHandOn(claudeAIOAuthTokens) {
   return claudeAIOAuthTokens !== null && wasLauncherHostLoginToken(claudeAIOAuthTokens.accessToken)
     ? null
     : claudeAIOAuthTokens;
 }
-//@ chunk-30p0tvt0.js:4219-4643 placement
+//@ chunk-vgaj51qh.js:4219-4643 placement
 function learnLauncherHostLoginIdentity(identityOf) {
   let state = launcherHostLoginStates.of(getRootSession().host);
   state.identityOf = identityOf;
@@ -300,7 +300,7 @@ function learnLauncherHostLoginIdentity(identityOf) {
   });
   return identityPromise;
 }
-//@ chunk-30p0tvt0.js:4643-4800 placement
+//@ chunk-vgaj51qh.js:4643-4800 placement
 function reaskIdentityIfCurrent(state, identityPromise, identityOf) {
   try {
     if (state.identity === identityPromise && launcherHostLoginStates.of(getRootSession().host) === state)
@@ -311,20 +311,20 @@ function reaskIdentityIfCurrent(state, identityPromise, identityOf) {
     });
   }
 }
-//@ chunk-30p0tvt0.js:4800-4846 placement
+//@ chunk-vgaj51qh.js:4800-4846 placement
 function launcherHostLoginIdentity() {
   return launcherHostLoginStates.of(getRootSession().host).identity;
 }
-//@ chunk-30p0tvt0.js:4846-4939 placement
+//@ chunk-vgaj51qh.js:4846-4939 placement
 function askLauncherHostLoginIdentityAgain() {
   let { identityOf } = launcherHostLoginStates.of(getRootSession().host);
   return identityOf === null ? Promise.resolve(null) : learnLauncherHostLoginIdentity(identityOf);
 }
-//@ chunk-30p0tvt0.js:4939-4991 placement
+//@ chunk-vgaj51qh.js:4939-4991 placement
 function noteLauncherStartupAsk(requestId) {
   launcherHostLoginStates.of(getRootSession().host).startupAskIds.add(requestId);
 }
-//@ chunk-30p0tvt0.js:4991-5077 placement
+//@ chunk-vgaj51qh.js:4991-5077 placement
 function isLauncherStartupAsk(requestId) {
   return (
     isLauncherStartedProcess() &&
@@ -332,7 +332,7 @@ function isLauncherStartupAsk(requestId) {
     launcherHostLoginStates.of(getRootSession().host).startupAskIds.has(requestId)
   );
 }
-//@ chunk-30p0tvt0.js:5077-5173 placement
+//@ chunk-vgaj51qh.js:5077-5173 placement
 function forgetLauncherHostLogin() {
   let state = launcherHostLoginStates.of(getRootSession().host);
   let hadToken = state.token !== null;
@@ -340,7 +340,7 @@ function forgetLauncherHostLogin() {
   state.hasEndToSettle ||= hadToken;
   return hadToken;
 }
-//@ chunk-30p0tvt0.js:5173-5405 placement
+//@ chunk-vgaj51qh.js:5173-5405 placement
 function dropRefusedToken(state) {
   let refusal = launcherHostLoginRefusal();
   if (refusal !== null && state.token !== null) {
@@ -356,12 +356,12 @@ function dropRefusedToken(state) {
   }
   return refusal;
 }
-//@ chunk-30p0tvt0.js:5405-5465 placement
+//@ chunk-vgaj51qh.js:5405-5465 placement
 function renewLauncherHostLogin(token) {
   let state = launcherHostLoginStates.of(getRootSession().host);
   return chainReplacement(state, () => renewLauncherHostLoginToken(state, token));
 }
-//@ chunk-30p0tvt0.js:5465-5715 placement
+//@ chunk-vgaj51qh.js:5465-5715 placement
 function holdPushedLauncherHostLogin(token) {
   let state = launcherHostLoginStates.of(getRootSession().host);
   let refusal;
@@ -382,7 +382,7 @@ function holdPushedLauncherHostLogin(token) {
   }
   return chainReplacement(state, () => judgeReplacementToken(state, token));
 }
-//@ chunk-30p0tvt0.js:5715-5802 placement
+//@ chunk-vgaj51qh.js:5715-5802 placement
 /**
  * 串行执行令牌替换任务，失败时记日志并返回 false。
  */
@@ -394,7 +394,7 @@ function chainReplacement(state, replace) {
   state.replacing = chained;
   return chained;
 }
-//@ chunk-30p0tvt0.js:5802-5931 placement
+//@ chunk-vgaj51qh.js:5802-5931 placement
 function logReplaceThrew(error) {
   logForDebugging(
     `[launcher-host-login] replacing the token held threw (${error instanceof Error ? error.name : "unknown"})`,
@@ -403,7 +403,7 @@ function logReplaceThrew(error) {
     },
   );
 }
-//@ chunk-30p0tvt0.js:5931-6648 placement
+//@ chunk-vgaj51qh.js:5931-6648 placement
 async function renewLauncherHostLoginToken(state, expectedToken) {
   if (state.token === null || dropRefusedToken(state) !== null) return false;
   if (state.token !== expectedToken) return true;
@@ -448,7 +448,7 @@ async function renewLauncherHostLoginToken(state, expectedToken) {
   }
   return judgeReplacementToken(state, newToken, true);
 }
-//@ chunk-30p0tvt0.js:6648-7368 placement
+//@ chunk-vgaj51qh.js:6648-7366 placement
 async function judgeReplacementToken(state, candidateToken, afterRefresh = false) {
   if (state.token === null || dropRefusedToken(state) !== null) return false;
   if (candidateToken === state.token) return true;
@@ -476,14 +476,14 @@ async function judgeReplacementToken(state, candidateToken, afterRefresh = false
   if (verdict === "allowed" && launcherHostLoginRefusal() === null) {
     state.token = candidateToken;
     state.everHeld.add(computeContentHash(candidateToken));
-    setAuthenticatedAccount(null);
+    dropAuthenticatedAccountForNewToken(true);
     logFeatureOk("auth_launcher_host_login");
     return true;
   }
   endLauncherHostLogin(state, verdict === "allowed" ? "refused_after_answer" : "replacement_refused");
   return false;
 }
-//@ chunk-30p0tvt0.js:7368-7549 placement
+//@ chunk-vgaj51qh.js:7366-7547 placement
 function endLauncherHostLogin(state, reason) {
   state.token = null;
   state.hasEndToSettle = true;
@@ -492,7 +492,7 @@ function endLauncherHostLogin(state, reason) {
   });
   logFeatureBad("auth_launcher_host_login", reason);
 }
-//@ chunk-30p0tvt0.js:7549-8235 placement
+//@ chunk-vgaj51qh.js:7547-8233 placement
 /**
  * 检查环境是否不允许使用桌面应用下发的登录：非一方提供方、Unix socket、自定义 OAuth、不安全的 base URL、端点覆盖、启动器凭据或关闭了 TLS 校验。
  */
@@ -526,7 +526,7 @@ function launcherEnvRefusal(readEnv) {
     return "tls_verification_disabled";
   return null;
 }
-//@ chunk-30p0tvt0.js:8235-8294 placement
+//@ chunk-vgaj51qh.js:8233-8292 placement
 /**
  * 判断 URL 是否为 https 的 Anthropic 主机。
  */
@@ -534,31 +534,31 @@ function isHttpsAnthropicHost(url) {
   return isFirstPartyAnthropicHost(url) && new URL(url).protocol === "https:";
 }
 export {
-  LAUNCHER_END_REASONS,
-  mayHaveLauncherHostLoginInMemory,
   isLauncherStartedProcess,
-  usableLauncherHostLoginToken,
-  forgetLauncherHostLogin,
-  renewLauncherHostLogin,
-  launcherHostLoginIdentity,
-  askLauncherHostLoginIdentityAgain,
   setLauncherHostLoginReplacementJudge,
-  hasProviderEnvFlag,
-  takeLauncherHostLoginEnd,
-  launcherHostLoginRefusal,
-  learnLauncherHostLoginIdentity,
-  getLauncherLoginEnd,
-  getLauncherLoginGeneration,
-  loginToHandOn,
   holdPushedLauncherHostLogin,
   isLauncherStartupAsk,
   clearLauncherLoginEnd,
   recordLauncherLoginEnd,
-  isLauncherHostLoginRefusedNow,
+  usableLauncherHostLoginToken,
+  loginToHandOn,
+  getLauncherLoginEnd,
+  getLauncherLoginGeneration,
+  forgetLauncherHostLogin,
+  renewLauncherHostLogin,
+  launcherHostLoginIdentity,
+  askLauncherHostLoginIdentityAgain,
   wasLauncherHostLoginToken,
+  hasProviderEnvFlag,
+  mayHaveLauncherHostLoginInMemory,
+  takeLauncherHostLoginEnd,
+  isLauncherHostLoginRefusedNow,
+  LAUNCHER_END_REASONS,
   setLauncherHostLoginFlagReader,
+  launcherHostLoginRefusal,
   noteLauncherStartupAsk,
   holdStartupLauncherHostLogin,
+  learnLauncherHostLoginIdentity,
   readLauncherStartAtClaim,
   isLauncherEndReason,
 };

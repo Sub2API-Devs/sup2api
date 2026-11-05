@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：重启 Claude Code（参数、启动器、恢复）；用 execve 原地重启进程（非 Windows）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-h52ct3be.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jynns2s2.js (17)
+ * attribution: placement 16, sole-consumer 1
  */
 import { isAbsolute, dirname } from "path";
 import { stat } from "fs/promises";
@@ -65,6 +65,7 @@ import {
   cleanupTerminalModes,
   emitScrollTelemetrySummary,
   flushAnalyticsSinks,
+  getResumeHintLaunchFlags,
   emitExitMessage,
 } from "./gracefulShutdown.js";
 import { withLaunchValuesOfHybridConnection } from "./managedEnvApply.js";
@@ -73,6 +74,7 @@ import { noopStdinReset, resetWindowsStdinMode } from "./windowsStdin.js";
 import { CLAUDE_RELAUNCH_SESSION_ADD_DIRS } from "../services/daemon/relaunchArgs.js";
 import { CLAUDE_CODE_RELAUNCH_HOME_TRUST, relaunchHomeTrustEnv } from "./relaunchHomeTrust.js";
 import { CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE, getRelaunchTerminalSizeEnv } from "./relaunchTerminalSize.js";
+import { CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS } from "./relaunchHintFlags.js";
 import { noopRelaunch } from "./stubs.js";
 import {
   RELAUNCH_PROACTIVITY_BASELINE_ENV,
@@ -83,10 +85,11 @@ import {
   proactivityLevelEnv,
 } from "./proactivityRelaunch.js";
 import { pauseNonBlockingStdout } from "../ink/nonBlockingStdout.js";
+import { resetGrowthBook_2 } from "../services/analytics/growthbook.js";
 import { setBgExitCause } from "./bgExitSidecars.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-h52ct3be.js:1479-1758 placement
+//@ chunk-jynns2s2.js:1486-1765 placement
 async function flushBeforeExec() {
   await Promise.all([
     withTimeout(flushDebugLogs(), 2000, "debug flush timeout (exec)").catch(() => {}),
@@ -95,7 +98,7 @@ async function flushBeforeExec() {
     withTimeout(drainRegisteredWriteQueues(), 2000, "write queue drain timeout (exec)").catch(() => {}),
   ]);
 }
-//@ chunk-h52ct3be.js:1792-2149 placement
+//@ chunk-jynns2s2.js:1799-2156 placement
 /**
  * 用 execve 原地重启进程（非 Windows）。
  */
@@ -129,13 +132,13 @@ function execveRelaunch(cmd, argv, env, cwd) {
   }
   return failure;
 }
-//@ chunk-h52ct3be.js:2149-2209 placement
+//@ chunk-jynns2s2.js:2156-2216 placement
 async function launcherFileUsable(storageV5) {
   let materializedSessionFile = getMaterializedSessionFile();
   if (!materializedSessionFile) return false;
   return isLauncherPresent(materializedSessionFile, storageV5);
 }
-//@ chunk-h52ct3be.js:2209-2515 placement
+//@ chunk-jynns2s2.js:2216-2522 placement
 /**
  * 启动器文件是否存在且可用。
  */
@@ -159,7 +162,7 @@ async function isLauncherPresent(materializedSessionFile, storageV5) {
     return false;
   }
 }
-//@ chunk-h52ct3be.js:2515-2728 placement
+//@ chunk-jynns2s2.js:2522-2735 placement
 /**
  * 重启前确认（流式响应中跳过）。
  */
@@ -181,7 +184,7 @@ async function confirmRelaunch(messages, reason, { responseStreaming = false } =
   }
   return true;
 }
-//@ chunk-h52ct3be.js:2728-2850 placement
+//@ chunk-jynns2s2.js:2735-2857 placement
 /**
  * 进程退出时确认并执行重启 Claude Code，出错只记录日志。
  */
@@ -199,17 +202,17 @@ async function relaunchForExit(messages, { responseStreaming = false } = {}, sto
     logError(error);
   }
 }
-//@ chunk-h52ct3be.js:2991-3207 placement
+//@ chunk-jynns2s2.js:2998-3216 placement
 var AUTO_CONTINUE_CANCELLED_NOTE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AUTO_CONTINUE_CANCELLED_SENTENCE;
 var AUTO_CONTINUE_CANCELLED_MESSAGE;
-deferInit("chunk-h52ct3be.js:2991", () => {
+deferInit("chunk-jynns2s2.js:2998", () => {
   AUTO_CONTINUE_CANCELLED_NOTE =
     "the automatic continue at the usage-limit reset was cancelled (/rate-limit-options to wait again)";
   AUTO_CONTINUE_CANCELLED_SENTENCE = `${AUTO_CONTINUE_CANCELLED_NOTE.charAt(0).toUpperCase()}${AUTO_CONTINUE_CANCELLED_NOTE.slice(1)}.`;
   AUTO_CONTINUE_CANCELLED_MESSAGE = "Automatic continue at the usage-limit reset was cancelled.";
 });
-//@ chunk-h52ct3be.js:3207-3290 placement
+//@ chunk-jynns2s2.js:3216-3301 placement
 /**
  * 命令附带恢复参数。
  */
@@ -220,7 +223,7 @@ function withResumeFlag(text, previousText) {
     ? `${text} ${AUTO_CONTINUE_CANCELLED_SENTENCE}`
     : text;
 }
-//@ chunk-h52ct3be.js:3290-3433 placement
+//@ chunk-jynns2s2.js:3301-3445 placement
 /**
  * 错误信息附加重启提示。
  */
@@ -231,7 +234,7 @@ function withRelaunchHint(text, cancelled, { as: style = "sentence", exitsAfterw
   return `${text}
 ${exitsAfterward ? AUTO_CONTINUE_CANCELLED_MESSAGE : AUTO_CONTINUE_CANCELLED_SENTENCE}`;
 }
-//@ chunk-h52ct3be.js:3433-3564 placement
+//@ chunk-jynns2s2.js:3445-3575 placement
 /**
  * 重启失败时附加说明再抛出。
  */
@@ -245,7 +248,7 @@ function relaunchOrExplain(text, options, storageV5) {
     throw error;
   });
 }
-//@ chunk-h52ct3be.js:3564-3703 placement
+//@ chunk-jynns2s2.js:3575-3714 placement
 /**
  * 保存恢复点（最后一条消息）。
  */
@@ -259,7 +262,7 @@ async function saveResumePoint(messages, storageV5) {
     logError(error);
   }
 }
-//@ chunk-h52ct3be.js:3703-3803 placement
+//@ chunk-jynns2s2.js:3714-3814 placement
 /**
  * 最后一条可恢复的消息。
  */
@@ -271,11 +274,11 @@ function lastResumableMessage(messages) {
       !isReorderedRow(message.uuid),
   );
 }
-//@ chunk-h52ct3be.js:3803-3983 placement
+//@ chunk-jynns2s2.js:3814-3994 placement
 var RESTART_FAILED_RESUME_MESSAGE =
   "Claude Code couldn't restart. Your conversation is saved. Start Claude Code again and run /resume to pick it up.";
 var RESTART_FAILED_MESSAGE = "Claude Code couldn't restart. Start Claude Code again.";
-//@ chunk-h52ct3be.js:3983-4300 placement
+//@ chunk-jynns2s2.js:3994-4311 placement
 /**
  * 确认启动器可运行，否则报错。
  */
@@ -288,7 +291,7 @@ async function ensureLauncherRunnable() {
     "CLAUDE_CODE_PROCESS_WRAPPER launcher is not runnable",
   );
 }
-//@ chunk-h52ct3be.js:4300-6252 placement
+//@ chunk-jynns2s2.js:4311-6465 placement
 /**
  * 重启 Claude Code（参数、启动器、恢复）。
  */
@@ -304,6 +307,8 @@ async function relaunchClaudeCode(options = {}, storageV5) {
   else if (options.freshIfNoTranscript && !(await launcherFileUsable(storageV5))) args = extraArgs;
   else args = ["--resume", getSessionId(), ...extraArgs];
   let isResumeRun = args[0] === "--resume" && !options.args;
+  let failedLine =
+    options.failedLine ?? (isResumeRun ? RESTART_FAILED_RESUME_MESSAGE : RESTART_FAILED_MESSAGE);
   let wasShuttingDown = isShuttingDown();
   claimShutdown();
   if (!wasShuttingDown) options.onShutdownClaimed?.();
@@ -326,6 +331,7 @@ async function relaunchClaudeCode(options = {}, storageV5) {
   noopStdinReset(env);
   delete env.CLAUDE_CODE_TUI_JUST_SWITCHED;
   delete env.CLAUDE_CODE_TUI_TRIAL;
+  delete env.CLAUDE_CODE_TELEPORT_MOVE;
   delete env.CLAUDE_BRIDGE_REATTACH_SESSION;
   delete env.CLAUDE_BRIDGE_REATTACH_SEQ;
   delete env.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY;
@@ -342,6 +348,10 @@ async function relaunchClaudeCode(options = {}, storageV5) {
     Object.assign(env, await relaunchHomeTrustEnv());
   }
   delete env[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
+  delete env[CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS];
+  let resumeHintLaunchFlags = getResumeHintLaunchFlags();
+  if (!options.args && resumeHintLaunchFlags !== undefined)
+    env[CLAUDE_CODE_RELAUNCH_RESUME_HINT_FLAGS] = resumeHintLaunchFlags;
   noopRelaunch(env, args);
   delete env[RELAUNCH_PROACTIVITY_BASELINE_ENV];
   delete env[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
@@ -355,12 +365,16 @@ async function relaunchClaudeCode(options = {}, storageV5) {
   let cwd = projectRootForRelaunch();
   await flushBeforeExec();
   pauseNonBlockingStdout();
+  let refusal = callRefuseAtSpawn(options.refuseAtSpawn, failedLine);
+  if (refusal !== undefined) return resetGrowthBook_2(refusal);
   execveRelaunch(cmd, [cmd, ...prefixArgs, ...args], env, cwd);
   for (let signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.removeAllListeners(signal);
     process.on(signal, () => {});
   }
   await flushBeforeExec();
+  let spawnRefusal = callRefuseAtSpawn(options.refuseAtSpawn, failedLine);
+  if (spawnRefusal !== undefined) return resetGrowthBook_2(spawnRefusal);
   resetWindowsStdinMode();
   let spawnResult = spawnSync(cmd, [...prefixArgs, ...args], {
     stdio: "inherit",
@@ -374,9 +388,7 @@ async function relaunchClaudeCode(options = {}, storageV5) {
       level: "error",
     });
     await flushBeforeExec();
-    emitExitMessage(
-      options.failedLine ?? (isResumeRun ? RESTART_FAILED_RESUME_MESSAGE : RESTART_FAILED_MESSAGE),
-    );
+    emitExitMessage(failedLine);
     setBgExitCause("relaunch_spawn_error");
     process.exit(1);
   }
@@ -387,7 +399,16 @@ async function relaunchClaudeCode(options = {}, storageV5) {
   }
   process.exit(spawnResult.status ?? (spawnResult.signal ? 1 : 0));
 }
-//@ chunk-h52ct3be.js:6252-6325 placement
+//@ chunk-jynns2s2.js:6465-6522 sole-consumer
+function callRefuseAtSpawn(refuseAtSpawn, fallback) {
+  try {
+    return refuseAtSpawn?.();
+  } catch (error) {
+    logError(error);
+    return fallback;
+  }
+}
+//@ chunk-jynns2s2.js:6650-6723 placement
 /**
  * projectRootForRelaunch：重启用的项目根目录。
  */
@@ -399,14 +420,16 @@ function projectRootForRelaunch() {
   return getProjectRoot();
 }
 export {
-  saveResumePoint,
-  lastResumableMessage,
-  confirmRelaunch,
-  withRelaunchHint,
-  withResumeFlag,
   relaunchClaudeCode,
-  relaunchForExit,
-  ensureLauncherRunnable,
   relaunchOrExplain,
+  lastResumableMessage,
   projectRootForRelaunch,
+  saveResumePoint,
+  ensureLauncherRunnable,
+  confirmRelaunch,
+  withResumeFlag,
+  withRelaunchHint,
+  AUTO_CONTINUE_CANCELLED_MESSAGE,
+  relaunchForExit,
+  flushBeforeExec,
 };

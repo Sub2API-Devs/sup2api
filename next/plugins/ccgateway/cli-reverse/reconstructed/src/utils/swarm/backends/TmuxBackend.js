@@ -3,9 +3,9 @@
  *
  * tmux pane 后端：在 leader 窗口内分屏（leader 占 30%）或在外部 claude-swarm 会话里平铺；设置边框颜色/标题，respawn-pane 运行 teammate 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/TmuxBackend.ts
- * pieces: chunk-27ewfych.js (6)
+ * pieces: chunk-qtbtjf1h.js (6)
  * attribution: affinity 1, fingerprint 1, layout 2, facade-exports 2
  */
 import { getUserTmuxSocket, isTmuxAvailable, isInsideTmux, getLeaderPaneId } from "./detection.js";
@@ -16,10 +16,10 @@ import { SwarmPaneError, assertNoControlChars } from "../teamHelpers.js";
 import { createMutex } from "../../promiseQueue.js";
 import { logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../../debug.js";
-import { count } from "../../collections.js";
+import { countWhere } from "../../collections.js";
 import { withLaunchValuesOfHybridConnection } from "../../managedEnvApply.js";
 
-//@ chunk-27ewfych.js:583-890 affinity
+//@ chunk-qtbtjf1h.js:584-891 affinity
 /**
  * 分屏失败的提示文案（空间不足时建议减少并发、放大终端或改用同进程 teammate）。
  */
@@ -30,7 +30,7 @@ function formatPaneCreateError(stderr) {
     ? `${message} \u2014 no room for another tmux split. Spawn fewer concurrent teammates, enlarge your terminal if running inside tmux, or switch to in-process teammates via /config.`
     : message;
 }
-//@ chunk-27ewfych.js:890-1032 fingerprint (2.1.88 match: getTmuxColorName, 1)
+//@ chunk-qtbtjf1h.js:891-1033 fingerprint (2.1.88 match: getTmuxColorName, 1)
 function getTmuxColorName(color) {
   return {
     red: "red",
@@ -43,7 +43,7 @@ function getTmuxColorName(color) {
     cyan: "cyan",
   }[color];
 }
-//@ chunk-27ewfych.js:1032-1095 layout
+//@ chunk-qtbtjf1h.js:1033-1096 layout
 /**
  * 在 leader 所在 tmux socket 上执行 tmux 命令。
  */
@@ -52,14 +52,14 @@ function runTmuxInLeaderSocket(args) {
   let socketArgs = userTmuxSocket ? ["-S", userTmuxSocket, ...args] : args;
   return execFileNoThrow(TMUX, socketArgs);
 }
-//@ chunk-27ewfych.js:1095-1146 layout
+//@ chunk-qtbtjf1h.js:1096-1147 layout
 /**
  * 在外部 swarm socket（-L claude-swarm-<pid>）上执行 tmux 命令。
  */
 function runTmuxInSwarmSocket(args, options) {
   return execFileNoThrow(TMUX, ["-L", getSwarmSocketName(), ...args], options);
 }
-//@ chunk-27ewfych.js:1146-1403 facade-exports
+//@ chunk-qtbtjf1h.js:1147-1404 facade-exports
 /**
  * 在 pane 中运行 teammate 命令：设 remain-on-exit=failed 后 respawn-pane -k。
  */
@@ -77,7 +77,7 @@ async function respawnPaneWithCommand(socketArgs, paneId, command, options) {
   if (result.code !== 0)
     throw new SwarmPaneError(`Failed to send command to pane ${paneId}: ${result.stderr}`);
 }
-//@ chunk-27ewfych.js:1403-7315 facade-exports (2.1.88 match: TmuxBackend, 0.901)
+//@ chunk-qtbtjf1h.js:1404-7317 facade-exports (2.1.88 match: TmuxBackend, 0.901)
 /**
  * tmux 后端：在 tmux 内时在 leader 窗口分屏（首个 teammate 横向 70%，之后交替纵横分割并 main-vertical 布局）；不在 tmux 时在外部 claude-swarm:swarm-view 窗口平铺；分屏有锁串行化。
  */
@@ -196,7 +196,7 @@ class TmuxBackend {
       if (target === this.cachedLeaderWindowTarget) this.cachedLeaderWindowTarget = null;
       return null;
     }
-    return count(
+    return countWhere(
       result.stdout.trim().split(`
 `),
       Boolean,

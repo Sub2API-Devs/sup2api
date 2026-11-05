@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示快照附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (27)
  * attribution: placement 27
  */
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
@@ -18,7 +18,7 @@ import {
   unknown,
   booleanSchema,
   _enum,
-  custom,
+  custom as custom_2,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { asSystemPrompt } from "../systemPromptType.js";
 import { isPlainToolDefinition } from "../../services/api/toolDefinitionShape.js";
@@ -28,27 +28,27 @@ import { logError } from "../log.js";
 import { env } from "../env.js";
 import { simpleModeEnv } from "../model/promptBundles.js";
 import { shortHash } from "../shortHash.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:117385-117416 placement
+//@ chunk-5xgkngpb.js:120159-120190 placement
 /**
  * 上下文渲染方式的取值（announced、inline）。
  */
 var CONTEXT_RENDERING_MODES = ["announced", "inline"];
-//@ chunk-e6aww6q8.js:117416-117443 placement
+//@ chunk-5xgkngpb.js:120190-120217 placement
 /**
  * 提示词快照特性开关（tengu_foamy_spring）。
  */
 function isPromptSnapshotFeatureOn() {
   return isFoamySpringEnabled();
 }
-//@ chunk-e6aww6q8.js:117443-118022 placement
+//@ chunk-5xgkngpb.js:120217-120796 placement
 /**
  * 提示词快照附件 schema：系统提示词、工具（名称、描述、schema、服务器）、CLI 前缀，以及提醒折叠、system 轮次、工具变更头、内联工具等线上形态开关。
  */
 var promptSnapshotSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:117443", () => {
+deferInit("chunk-5xgkngpb.js:120217", () => {
   promptSnapshotSchema = DoctorLazy(() =>
     objectSchema({
       systemPrompt: array(stringSchema()),
@@ -73,7 +73,7 @@ deferInit("chunk-e6aww6q8.js:117443", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:118022-118460 placement
+//@ chunk-5xgkngpb.js:120796-121234 placement
 /**
  * 从提示词快照中挑出线上形态相关字段（systemTurns、toolChangeHeader、inlineTools、keptReminders、toolResultSafeguards、systemTurnsAnsweredBy）。
  */
@@ -99,7 +99,7 @@ function pickWireShape(shape) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:118460-118555 placement
+//@ chunk-5xgkngpb.js:121234-121329 placement
 /**
  * 去掉线上的 systemTurnsAnsweredBy 字段。
  */
@@ -111,45 +111,45 @@ function dropSystemTurnsAnsweredBy(messages) {
         systemTurnsAnsweredBy: undefined,
       };
 }
-//@ chunk-e6aww6q8.js:118555-118638 placement
+//@ chunk-5xgkngpb.js:121329-121412 placement
 /**
  * 属于提示词记录的附件类型（快照、渲染点、延迟工具记录）。
  */
 var PROMPT_RECORD_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:118555", () => {
+deferInit("chunk-5xgkngpb.js:121329", () => {
   PROMPT_RECORD_ATTACHMENT_TYPES = new Set([
     "prompt_snapshot",
     "prompt_render_point",
     "deferred_tools_record",
   ]);
 });
-//@ chunk-e6aww6q8.js:118638-118727 placement (2.1.88 match: isNullRenderingAttachment, 1)
+//@ chunk-5xgkngpb.js:121412-121501 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment(msg) {
   return msg.filter(
     (message) =>
       message.type !== "attachment" || !PROMPT_RECORD_ATTACHMENT_TYPES.has(message.attachment.type),
   );
 }
-//@ chunk-e6aww6q8.js:118727-118811 placement
+//@ chunk-5xgkngpb.js:121501-121585 placement
 /**
  * 判断消息是否为提示词快照附件。
  */
 function isPromptSnapshotAttachment(attachment) {
   return attachment.type === "attachment" && attachment.attachment.type === "prompt_snapshot";
 }
-//@ chunk-e6aww6q8.js:118811-118899 placement
+//@ chunk-5xgkngpb.js:121585-121673 placement
 /**
  * 判断消息是否为提示词渲染点附件。
  */
 function isPromptRenderPointAttachment(attachment) {
   return attachment.type === "attachment" && attachment.attachment.type === "prompt_render_point";
 }
-//@ chunk-e6aww6q8.js:118899-118919 placement
+//@ chunk-5xgkngpb.js:121673-121693 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:118899", () => {
+deferInit("chunk-5xgkngpb.js:121673", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:118919-119597 placement
+//@ chunk-5xgkngpb.js:121693-122371 placement
 /**
  * 取消息中最新的 prompt_snapshot 附件并解析（WeakMap 缓存）：系统提示词及哈希、工具描述/schema/所属服务器、CLI 前缀、提醒折叠与线上形状等。
  */
@@ -187,7 +187,7 @@ function latestPromptSnapshot(messages) {
   weakMap.set(record, parsed);
   return parsed;
 }
-//@ chunk-e6aww6q8.js:119597-119651 placement
+//@ chunk-5xgkngpb.js:122371-122425 placement
 /**
  * 快照开启且没有更新的渲染点时，返回最新提示词快照。
  */
@@ -196,14 +196,14 @@ function promptSnapshotUnlessRenderPoint(messages, options) {
     ? latestPromptSnapshot(messages)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:119651-119696 placement
+//@ chunk-5xgkngpb.js:122425-122470 placement
 /**
  * 快照开启时返回最新提示词快照。
  */
 function snapshotIfEnabled(messages, options) {
   return shouldSnapshotSystemPrompt(options) ? latestPromptSnapshot(messages) : undefined;
 }
-//@ chunk-e6aww6q8.js:119696-119910 placement
+//@ chunk-5xgkngpb.js:122470-122684 placement
 /**
  * 把提示词快照中的工具转换成条目列表（名称、描述、schema、服务器），跳过指定的工具。
  */
@@ -226,7 +226,7 @@ function snapshotToolEntries(snapshot, toolNames) {
     ];
   });
 }
-//@ chunk-e6aww6q8.js:119910-120369 placement
+//@ chunk-5xgkngpb.js:122684-123143 placement
 /**
  * 压缩后若保留的消息涉及快照中的工具，生成新的 prompt_snapshot 附件（系统提示词、仍需要的工具、CLI 前缀与线上形状）。
  */
@@ -253,7 +253,7 @@ function buildPromptSnapshotAttachment(messagesToKeep, toolNames, options) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:120369-120451 placement
+//@ chunk-5xgkngpb.js:123143-123225 placement
 /**
  * 构造“设置模型导致 system 提示变更”的渲染点。
  */
@@ -263,14 +263,14 @@ function setModelRenderPoint() {
     cause: "set_model_system_prompt",
   };
 }
-//@ chunk-e6aww6q8.js:120451-120494 placement
+//@ chunk-5xgkngpb.js:123225-123268 placement
 /**
  * 渲染点晚于快照时返回该渲染点。
  */
 function renderPointIfStale(messagesToKeep) {
   return isRenderPointNewer(messagesToKeep) ? setModelRenderPoint() : undefined;
 }
-//@ chunk-e6aww6q8.js:120494-120559 placement
+//@ chunk-5xgkngpb.js:123268-123333 placement
 /**
  * 判断最近的渲染点是否晚于最近的快照。
  */
@@ -280,7 +280,7 @@ function isRenderPointNewer(attachment) {
     attachment.findLastIndex(isPromptSnapshotAttachment)
   );
 }
-//@ chunk-e6aww6q8.js:120559-120746 placement
+//@ chunk-5xgkngpb.js:123333-123520 placement
 /**
  * 判断最近的提示词快照是否包含给定系统提示词的全部分段。
  */
@@ -295,14 +295,14 @@ function snapshotContainsPrompt(messages, prompt) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:120746-120800 placement
+//@ chunk-5xgkngpb.js:123520-123574 placement
 /**
  * 取出所有提示词快照消息的 uuid。
  */
 function snapshotUuids(messages) {
   return messages.filter(isPromptSnapshotAttachment).map((attachment) => attachment.uuid);
 }
-//@ chunk-e6aww6q8.js:120800-121010 placement
+//@ chunk-5xgkngpb.js:123574-123784 placement
 function extractTaggedBlock(text, tagName) {
   let closingTag = `</${tagName}>`;
   let filtered = [`<${tagName}>`, `<${tagName} `]
@@ -314,7 +314,7 @@ function extractTaggedBlock(text, tagName) {
     ? undefined
     : text?.slice(startIndex, endIndex + closingTag.length);
 }
-//@ chunk-e6aww6q8.js:121010-121244 placement
+//@ chunk-5xgkngpb.js:123784-124018 placement
 /**
  * 比较快照中最后一段系统提示词与当前提示词里各标签块的内容，返回出现、消失或变化。
  */
@@ -335,7 +335,7 @@ function tagBlockChange(messages, prompt, liveAppendSections) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:121244-121400 placement
+//@ chunk-5xgkngpb.js:124018-124174 placement
 /**
  * 判断是否记录系统提示词快照：显式设置优先，后台会话、远程会话或特定条件下默认记录。
  */
@@ -348,20 +348,20 @@ function shouldSnapshotSystemPrompt(options) {
     !simpleModeEnv()
   );
 }
-//@ chunk-e6aww6q8.js:121400-121442 placement
+//@ chunk-5xgkngpb.js:124174-124216 placement
 /**
  * 计算系统提示各段以 NUL 连接后的哈希。
  */
 function hashSystemPrompt(systemPrompt) {
   return shortHash(systemPrompt.join("\x00"));
 }
-//@ chunk-e6aww6q8.js:121442-121674 placement
+//@ chunk-5xgkngpb.js:124216-124448 placement
 var deferredToolsAttachmentSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var toolInputCopySchema;
-deferInit("chunk-e6aww6q8.js:121442", () => {
+deferInit("chunk-5xgkngpb.js:124216", () => {
   deferredToolsAttachmentSchema = DoctorLazy(() =>
     objectSchema({
-      entries: custom((value) => Array.isArray(value)),
+      entries: custom_2((value) => Array.isArray(value)),
       nameOnlyAnnouncements: array(stringSchema()).optional(),
       strippedReferences: array(stringSchema()).optional(),
       toolInputCopies: array(unknown()).optional().catch(undefined),
@@ -374,14 +374,14 @@ deferInit("chunk-e6aww6q8.js:121442", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:121674-121764 placement
+//@ chunk-5xgkngpb.js:124448-124538 placement
 /**
  * 判断消息是否为延迟工具记录附件。
  */
 function isDeferredToolsRecord(message) {
   return message.type === "attachment" && message.attachment.type === "deferred_tools_record";
 }
-//@ chunk-e6aww6q8.js:121764-122325 placement
+//@ chunk-5xgkngpb.js:124538-125099 placement
 /**
  * 汇总消息中延迟工具附件记录的内容：工具条目、仅名称公告、已剥离引用与工具输入副本形态；解析出错时清空并记日志。
  */
@@ -395,7 +395,7 @@ function recordedDeferredTools(messages) {
       if (!isDeferredToolsRecord(message)) continue;
       let parsed = deferredToolsAttachmentSchema().safeParse(message.attachment).data;
       for (let entry of parsed?.entries ?? [])
-        if (isPlainObject_5(entry)) {
+        if (isPlainObject_6(entry)) {
           let toolName = entry.name;
           if (typeof toolName === "string") entries.set(toolName, entry);
         }
@@ -422,13 +422,13 @@ function recordedDeferredTools(messages) {
 }
 export {
   latestPromptSnapshot,
-  snapshotIfEnabled,
   recordedDeferredTools,
-  promptSnapshotUnlessRenderPoint,
   snapshotUuids,
   shouldSnapshotSystemPrompt,
   snapshotContainsPrompt,
   tagBlockChange,
+  promptSnapshotUnlessRenderPoint,
+  snapshotIfEnabled,
   buildPromptSnapshotAttachment,
   renderPointIfStale,
   isNullRenderingAttachment,

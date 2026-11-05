@@ -3,10 +3,10 @@
  *
  * 恢复会话：加载转录（最新/指定/fork）、反序列化与旧附件迁移、检测被打断的轮次并补续写提示，恢复技能状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/conversationRecovery.ts
- * pieces: chunk-0h4e7gnq.js (4), chunk-e6aww6q8.js (58), chunk-tyg7f3ek.js (2)
- * attribution: placement 56, fingerprint 5, layout 1, callgraph-witnessed 1, callgraph-fingerprint 1
+ * pieces: chunk-0yw3taqg.js (3), chunk-5xgkngpb.js (58), chunk-frs14hy1.js (4)
+ * attribution: sole-consumer 1, fingerprint 5, placement 57, file-local 1, callgraph-witnessed 1
  */
 import { stat } from "fs/promises";
 import { relative, join } from "path";
@@ -32,7 +32,7 @@ import { env } from "./env.js";
 import { classifyTailMessage, reportResumeLoad } from "./transcript/resumeLoadReport.js";
 import { logError } from "./log.js";
 import { HostScoped } from "./hostScoped.js";
-import { getRootSession, getCcrDerivedSurface, getSessionId, getOriginalCwd } from "../bootstrap/state.js";
+import { getRootSession, getSessionId, getOriginalCwd } from "../bootstrap/state.js";
 import { logForDebugging } from "./debug.js";
 import { singleToolResultId, wakeupDedupKey, WAKEUP_ORIGIN_TTL_MS } from "./promptSource.js";
 import {
@@ -45,6 +45,7 @@ import {
   findLastUserPromptUuid,
   ResumeRefusedError,
   isInterruptMarkerRow,
+  isRealPromptAt,
 } from "./transcript/deserialize.js";
 import { getCwdOrNull } from "./cwd.js";
 import { isContextAppendMessage, isHarnessMetaMessage } from "./messages.js";
@@ -66,6 +67,8 @@ import { isValidAdoptedSessionId } from "./background/adopt.js";
 import { copyPlanForResume } from "./plans.js";
 import { copyFileHistoryForResume } from "./fileHistory.js";
 import { censusResumeAnnouncements } from "./transcript/resumeAnnouncements.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { stripToolUseIdBookkeeping } from "./transcript/entryTypes.js";
 import { withDeadline } from "./sleep.js";
 import { startHookRun, processSessionStartHooks, takePendingHookSessionTitle } from "./sessionStart.js";
 import { getSessionIdentity } from "./shutdown/pendingWrites.js";
@@ -77,10 +80,15 @@ import { findProjectDirs, findSoleTranscriptWithMessagesById } from "./sessionSt
 import { getCanonicalName } from "./model/canonicalModelName.js";
 import { stripAnyVersatileSuffix } from "./model/modelIds.js";
 import { MAX_PROGRESS_ENTRIES } from "../services/AgentSummary/agentSummary.js";
-import { interruptedPromptUuid, countUserPromptsFromEntries_5 } from "../cli/print/wakeRouter.js";
+import {
+  interruptedPromptUuid,
+  countUserPromptsFromEntries_5,
+  disallowedToolsFromMessages,
+} from "../cli/print/wakeRouter.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:518079-518335 placement
+//@ chunk-5xgkngpb.js:524361-524616 placement
 /**
  * 由加载结果构造某会话的完整日志：选最新叶子建对话链，附带标题、tag、PR、模式、worktree、文件历史、署名、内容替换等元数据。
  */
@@ -99,7 +107,7 @@ async function getLastSessionLog(sessionId, host, storageV5, precedingEntries) {
     );
   return sessionLog;
 }
-//@ chunk-e6aww6q8.js:1630550-1630800 fingerprint (2.1.88 match: restoreSkillStateFromMessages, 0.719)
+//@ chunk-5xgkngpb.js:1698256-1698506 fingerprint (2.1.88 match: restoreSkillStateFromMessages, 0.717)
 /**
  * 判断某技能内容在历史里以正文（body）还是 invoked_skills 附件（attachment）形式出现，都没有返回 null。
  */
@@ -121,13 +129,13 @@ function restoreSkillStateFromMessages(messages, target) {
   }
   return anyAttached ? "attachment" : null;
 }
-//@ chunk-e6aww6q8.js:1807896-1808028 placement
+//@ chunk-5xgkngpb.js:1884786-1884918 placement
 /**
  * 已知的 stop_reason 值。
  */
 var STOP_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var weakMap_8;
-deferInit("chunk-e6aww6q8.js:1807896", () => {
+var weakMap_10;
+deferInit("chunk-5xgkngpb.js:1884786", () => {
   STOP_REASONS = [
     "end_turn",
     "tool_use",
@@ -137,9 +145,9 @@ deferInit("chunk-e6aww6q8.js:1807896", () => {
     "refusal",
     "model_context_window_exceeded",
   ];
-  weakMap_8 = new WeakMap();
+  weakMap_10 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:1808028-1808799 placement
+//@ chunk-5xgkngpb.js:1884918-1885704 placement
 /**
  * 加载会话时记录 transcript 尾部诊断（最后几行类型、最后提示位置、停止原因）。
  */
@@ -169,7 +177,7 @@ function recordTailDiagnostics(session, messages, isPromptBoundary, isRealMessag
         tailRows.push(message);
     }
     let timestamp = Date.parse(tailRows[0]?.timestamp ?? "");
-    weakMap_8.set(session, {
+    weakMap_10.set(session, {
       ...baseFields,
       tailRows: [
         classifyTailMessage(tailRows[0]),
@@ -191,20 +199,20 @@ function recordTailDiagnostics(session, messages, isPromptBoundary, isRealMessag
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:1808799-1808851 placement
+//@ chunk-5xgkngpb.js:1885704-1885756 placement
 /**
  * 按对象查 WeakMap 里的缓存值。
  */
 function weakMapLookup(session) {
-  return session === undefined ? undefined : weakMap_8.get(session);
+  return session === undefined ? undefined : weakMap_10.get(session);
 }
-//@ chunk-e6aww6q8.js:1808851-1808878 placement
+//@ chunk-5xgkngpb.js:1885756-1885783 placement
 /**
  * 尾部过旧的判定阈值（5 分钟）。
  */
 var TAIL_TOO_OLD_MS = 300000;
 var MAX_RESUME_TAIL_AGE_MS = 3600000;
-//@ chunk-e6aww6q8.js:1808878-1809667 placement
+//@ chunk-5xgkngpb.js:1885783-1886572 placement
 /**
  * 续接诊断遥测字段（尾部行、停止原因、无结果的工具调用等）。
  */
@@ -238,7 +246,7 @@ function tailDiagnosticsFields(diagnostics, context) {
     could_send_result: classifyTranscriptTail(diagnostics, ageMs, context),
   };
 }
-//@ chunk-e6aww6q8.js:1809667-1810427 placement
+//@ chunk-5xgkngpb.js:1886572-1887332 placement
 /**
  * 判断转录尾部状态（最后提示未加载、工具调用无结果等）。
  */
@@ -260,7 +268,7 @@ function classifyTranscriptTail(diagnostics, ageMs, context) {
   if (context.rerunOwed) return "rerun_owed";
   return context.shuttingDown ? "shutting_down" : "yes";
 }
-//@ chunk-e6aww6q8.js:1810427-1810591 placement
+//@ chunk-5xgkngpb.js:1887332-1887496 placement
 /**
  * 助手消息的停止原因类别。
  */
@@ -270,7 +278,7 @@ function stopReasonOf(message) {
   if (stopReason === undefined || stopReason === null) return "not_stored";
   return STOP_REASONS.find((knownReason) => knownReason === stopReason) ?? "other";
 }
-//@ chunk-e6aww6q8.js:1810591-1810667 placement
+//@ chunk-5xgkngpb.js:1887496-1887572 placement
 /**
  * 会话恢复的指标状态（计数、发送者与已报告标记）。
  */
@@ -280,36 +288,36 @@ class ConversationRecoveryMetrics {
   contentPaintSent = false;
   promptIdleSent = false;
 }
-//@ chunk-e6aww6q8.js:1810667-1810694 placement
+//@ chunk-5xgkngpb.js:1887572-1887599 placement
 /**
  * 按宿主隔离的会话恢复指标。
  */
 var conversationRecoveryMetricsByHost; // deferred: uses ConversationRecoveryMetrics of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1810667", () => {
+deferInit("chunk-5xgkngpb.js:1887572", () => {
   conversationRecoveryMetricsByHost = new HostScoped(() => new ConversationRecoveryMetrics());
 });
-//@ chunk-e6aww6q8.js:1810694-1810733 placement
+//@ chunk-5xgkngpb.js:1887599-1887638 placement
 /**
  * 取出当前宿主的会话恢复指标。
  */
 function getConversationRecoveryMetrics() {
   return conversationRecoveryMetricsByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1810733-1810764 placement
+//@ chunk-5xgkngpb.js:1887638-1887669 placement
 /**
  * 记录已加载与 JSONL 中的消息数。
  */
 function setRecoveryCounts(counts) {
   getConversationRecoveryMetrics().counts = counts;
 }
-//@ chunk-e6aww6q8.js:1810764-1810795 placement
+//@ chunk-5xgkngpb.js:1887669-1887700 placement
 /**
  * 记录恢复消息的发送者。
  */
 function setRecoverySender(sender) {
   getConversationRecoveryMetrics().sender = sender;
 }
-//@ chunk-e6aww6q8.js:1810795-1811014 placement
+//@ chunk-5xgkngpb.js:1887700-1887919 placement
 /**
  * 报告首次内容绘制（只一次）。
  */
@@ -326,7 +334,7 @@ function reportContentPaint(msgsRenderedAtFirstPaint) {
   )
     conversationRecoveryMetrics.contentPaintSent = true;
 }
-//@ chunk-e6aww6q8.js:1811014-1811154 placement
+//@ chunk-5xgkngpb.js:1887919-1888059 placement
 /**
  * 报告输入框空闲（内容绘制后，只一次）。
  */
@@ -345,10 +353,10 @@ function reportPromptIdle() {
   )
     conversationRecoveryMetrics.promptIdleSent = true;
 }
-//@ chunk-e6aww6q8.js:1811154-1811342 placement
+//@ chunk-5xgkngpb.js:1888059-1888247 placement
 var WORKER_RESTARTED_PROMPT_2 =
   "This session's worker process was restarted. If your previous turn was already complete, take no action and wait for the next event. Otherwise, continue from where you left off.";
-//@ chunk-e6aww6q8.js:1811342-1812930 placement
+//@ chunk-5xgkngpb.js:1888247-1889835 placement
 /**
  * 会话迁移到新 runner 时的续接提示（长版）。
  */
@@ -359,7 +367,7 @@ var WORKER_RESTARTED_PROMPT = [
   "Continue from where you left off. This session moved to a new runner; files you created earlier may no longer exist, so verify the working directory state before relying on prior edits.",
   `Continue from where you left off. This session moved to a new runner; files you created earlier may no longer exist, so verify the working directory state before relying on prior edits. If the result of a tool call above starts with "[Tool call interrupted", the runner that ran it stopped or lost its connection before the call's result was recorded. The call may have had nothing to do with that, or it may have caused it, for example by using too much memory. Before you run it again, check what it did and whether it could have brought the runner down; if it could, do the work another way.`,
 ];
-//@ chunk-e6aww6q8.js:1815469-1816209 placement
+//@ chunk-5xgkngpb.js:1892374-1893114 placement
 /**
  * 记录宿主分类器上下文（按消息与内容），恢复的消息降级、判断是否仍有效。
  */
@@ -402,64 +410,64 @@ class HostClassifierContextRegistry {
     return this.#e.get(wakeupDedupKey(row.uuid, resultId)) === row.hostClassifierContext;
   }
 }
-//@ chunk-e6aww6q8.js:1816209-1816236 placement
+//@ chunk-5xgkngpb.js:1893114-1893141 placement
 /**
  * 按宿主隔离的分类器上下文注册表。
  */
 var classifierContextByHost; // deferred: uses HostClassifierContextRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1816209", () => {
+deferInit("chunk-5xgkngpb.js:1893114", () => {
   classifierContextByHost = new HostScoped(() => new HostClassifierContextRegistry());
 });
-//@ chunk-e6aww6q8.js:1816236-1816274 placement
+//@ chunk-5xgkngpb.js:1893141-1893180 placement
 /**
  * 取出当前宿主的分类器上下文注册表。
  */
 function getClassifierContextRegistry() {
   return classifierContextByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1816274-1816307 placement
+//@ chunk-5xgkngpb.js:1893180-1893214 placement
 /**
  * 登记一次分类器运行。
  */
 function registerClassifiedRun(startId) {
   getClassifierContextRegistry().register(startId);
 }
-//@ chunk-e6aww6q8.js:1816307-1816335 placement
+//@ chunk-5xgkngpb.js:1893214-1893243 placement
 /**
  * 清空分类器上下文。
  */
 function clearClassifierContext() {
   getClassifierContextRegistry().clear();
 }
-//@ chunk-e6aww6q8.js:1816335-1816373 placement
+//@ chunk-5xgkngpb.js:1893243-1893282 placement
 /**
  * 读取分类器上下文的代次。
  */
 function getClassifierEpoch() {
   return getClassifierContextRegistry().getEpoch();
 }
-//@ chunk-e6aww6q8.js:1816373-1816413 placement
+//@ chunk-5xgkngpb.js:1893282-1893323 placement
 /**
  * 把恢复的消息标记为降级。
  */
 function degradeRestoredMessages(messages) {
   getClassifierContextRegistry().degradeRestored(messages);
 }
-//@ chunk-e6aww6q8.js:1816413-1816451 placement
+//@ chunk-5xgkngpb.js:1893323-1893362 placement
 /**
  * 判断该分类器运行是否仍是活的。
  */
 function isLiveClassifiedRun(message) {
   return getClassifierContextRegistry().isLive(message);
 }
-//@ chunk-e6aww6q8.js:1816451-1816504 placement
+//@ chunk-5xgkngpb.js:1893362-1893415 placement
 /**
  * 拼接 fork 标记（会话|边界时间|父会话）。
  */
 function formatForkMarker(forkSessionId, boundaryAt, forkParentSessionId) {
   return `${forkSessionId}|${boundaryAt}${forkParentSessionId ? `|${forkParentSessionId}` : ""}`;
 }
-//@ chunk-e6aww6q8.js:1816504-1816680 placement
+//@ chunk-5xgkngpb.js:1893415-1893591 placement
 /**
  * 解析 fork 标记 “会话|边界时间|父会话”。
  */
@@ -480,7 +488,7 @@ function parseForkMarker(marker) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1816680-1816932 placement
+//@ chunk-5xgkngpb.js:1893591-1893843 placement
 /**
  * fork 标记转为任务状态字段。
  */
@@ -496,13 +504,13 @@ function forkMarkerFields(marker) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1816932-1817132 placement
+//@ chunk-5xgkngpb.js:1893843-1894043 placement
 /**
  * 服务端工具类型的集合。
  */
 var SERVER_TOOL_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SERVER_TOOL_TYPE_SET;
-deferInit("chunk-e6aww6q8.js:1816932", () => {
+deferInit("chunk-5xgkngpb.js:1893843", () => {
   SERVER_TOOL_TYPES = {
     advisor: true,
     bash_code_execution: true,
@@ -515,19 +523,19 @@ deferInit("chunk-e6aww6q8.js:1816932", () => {
   };
   SERVER_TOOL_TYPE_SET = new Set(Object.keys(SERVER_TOOL_TYPES));
 });
-//@ chunk-e6aww6q8.js:1817132-1817187 placement
+//@ chunk-5xgkngpb.js:1894043-1894098 placement
 /**
  * 判断字符串是否为服务端工具类型。
  */
 function isServerToolType(name) {
   return typeof name === "string" && SERVER_TOOL_TYPE_SET.has(name);
 }
-//@ chunk-e6aww6q8.js:1817187-1817232 placement
+//@ chunk-5xgkngpb.js:1894098-1894143 placement
 /**
  * 不支持的工具内容被移除时的占位文本。
  */
 var UNSUPPORTED_TOOL_CONTENT_TEXT = "[Unsupported tool content removed]";
-//@ chunk-e6aww6q8.js:1826542-1826882 fingerprint (2.1.88 match: migrateLegacyAttachmentTypes, 0.51)
+//@ chunk-5xgkngpb.js:1902960-1903300 fingerprint (2.1.88 match: migrateLegacyAttachmentTypes, 0.511)
 /**
  * 迁移旧版附件：删除已废弃类型，给缺 displayPath 的附件补相对路径。
  */
@@ -557,7 +565,7 @@ function migrateLegacyAttachmentTypes(message) {
   }
   return message;
 }
-//@ chunk-e6aww6q8.js:1826882-1827152 layout
+//@ chunk-5xgkngpb.js:1903300-1903570 file-local
 /**
  * 去掉 text 字段不是字符串的文本块。
  */
@@ -575,25 +583,25 @@ function dropMalformedTextBlocks(message) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1827152-1827196 fingerprint (2.1.88 match: deserializeMessagesWithInterruptDetection, 0.343)
+//@ chunk-5xgkngpb.js:1903570-1903614 fingerprint (2.1.88 match: deserializeMessagesWithInterruptDetection, 0.345)
 /**
  * 恢复被打断轮次时追加的用户提示 "Continue from where you left off."。
  */
 var deserializeMessagesWithInterruptDetection = "Continue from where you left off.";
-//@ chunk-e6aww6q8.js:1827196-1827251 placement
+//@ chunk-5xgkngpb.js:1903614-1903669 placement
 /**
  * 续接提示的环境变量覆盖（未设置时用默认反序列化）。
  */
 function resumePromptOverride() {
   return env.CLAUDE_CODE_RESUME_PROMPT || deserializeMessagesWithInterruptDetection;
 }
-//@ chunk-e6aww6q8.js:1827251-1827299 placement
+//@ chunk-5xgkngpb.js:1903669-1903717 placement
 /**
  * 续接原因的合法形式（小写字母与下划线，最多 64）。
  */
 var INTERRUPTED_TURN = "interrupted_turn";
 var RESUME_REASON_RE = /^[a-z_]{1,64}$/;
-//@ chunk-e6aww6q8.js:1827299-1827385 placement
+//@ chunk-5xgkngpb.js:1903717-1903803 placement
 /**
  * 从环境变量读取合法的续接原因。
  */
@@ -603,7 +611,7 @@ function resumeReasonFromEnv() {
     ? CLAUDE_CODE_RESUME_REASON
     : INTERRUPTED_TURN;
 }
-//@ chunk-e6aww6q8.js:1827385-1827611 placement
+//@ chunk-5xgkngpb.js:1903803-1904029 placement
 /**
  * 某 uuid 是否为最后一条有效消息。
  */
@@ -622,7 +630,7 @@ function isTailMessage(messages, uuid) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1827611-1827769 placement
+//@ chunk-5xgkngpb.js:1904029-1904187 placement
 /**
  * CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS 的值。
  */
@@ -633,7 +641,7 @@ function envResumeMaxAge() {
   if (parsed === 0) return 0;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600000;
 }
-//@ chunk-e6aww6q8.js:1827769-1828053 placement
+//@ chunk-5xgkngpb.js:1904187-1904436 placement
 /**
  * 远程会话中断回合自动续接的时间上限（环境变量或开关）。
  */
@@ -648,13 +656,7 @@ function interruptedTurnResumePolicy(isRemote) {
           source: "env",
         }
       : undefined;
-  if (
-    isRemote ||
-    !isClaudeAiChatRemote() ||
-    isAgentSdkEntrypoint() ||
-    getCcrDerivedSurface() === "remote_cowork_trigger"
-  )
-    return;
+  if (isRemote || !isClaudeAiChatRemote() || isAgentSdkEntrypoint()) return;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_STEADY_SCROLL, null);
   return typeof featureValue_CACHED_MAY_BE_STALE === "number" &&
     featureValue_CACHED_MAY_BE_STALE >= MIN_RESUME_AGE_MS &&
@@ -665,13 +667,13 @@ function interruptedTurnResumePolicy(isRemote) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1828053-1828084 placement
+//@ chunk-5xgkngpb.js:1904436-1904467 placement
 /**
  * 续接年龄下限（90 分钟）。
  */
 var MIN_RESUME_AGE_MS = 5400000;
 var MAX_RESUME_AGE_MS = 2592000000;
-//@ chunk-e6aww6q8.js:1828084-1828160 placement
+//@ chunk-5xgkngpb.js:1904467-1904543 placement
 /**
  * 判断最后一条消息是否已超过续接年龄。
  */
@@ -680,13 +682,13 @@ function isResumeTooOld(messages, maxAgeMs = envResumeMaxAge()) {
   let ageMs = lastMessageAgeMs(messages);
   return ageMs === undefined || ageMs >= maxAgeMs;
 }
-//@ chunk-e6aww6q8.js:1828160-1828397 placement
+//@ chunk-5xgkngpb.js:1904543-1904780 placement (2.1.88 match: countUnseenAssistantTurns, 0.811)
 /**
  * 最后一条有效消息距今的毫秒数。
  */
 function lastMessageAgeMs(messages) {
-  for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let message = messages[idx];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
     if (
       message.type === "system" ||
       message.type === "progress" ||
@@ -700,7 +702,7 @@ function lastMessageAgeMs(messages) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1828397-1828469 placement
+//@ chunk-5xgkngpb.js:1904780-1904852 placement
 /**
  * 拒答重试的默认年龄上限（6 小时）。
  */
@@ -708,7 +710,7 @@ var DEFAULT_REFUSAL_RETRY_AGE_MS = 21600000;
 var TENGU_SHIMMERING_CHERNY = "tengu_shimmering_cherny";
 var MIN_REFUSAL_RETRY_AGE_MS = 60000;
 var MAX_REFUSAL_RETRY_AGE_MS = 2592000000;
-//@ chunk-e6aww6q8.js:1828469-1828681 placement
+//@ chunk-5xgkngpb.js:1904852-1905064 placement
 /**
  * 拒答重试的时间上限（环境变量、开关或默认）。
  */
@@ -735,7 +737,7 @@ function refusalRetryMaxAge() {
     source: "default",
   };
 }
-//@ chunk-e6aww6q8.js:1828681-1828785 placement
+//@ chunk-5xgkngpb.js:1905064-1905168 placement (2.1.88 match: sanitizePath, 0.708)
 /**
  * 消息时间是否早于 n 毫秒前（无时间视为旧）。
  */
@@ -743,7 +745,7 @@ function isOlderThan(message, maxAgeMs) {
   let timestamp = Date.parse(message.timestamp ?? "");
   return !Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) >= maxAgeMs;
 }
-//@ chunk-e6aww6q8.js:1828785-1828984 placement
+//@ chunk-5xgkngpb.js:1905168-1905367 placement
 /**
  * 取时间较新的消息。
  */
@@ -756,14 +758,14 @@ function newerMessage(skippedApiErrorRow, skippedApiErrorRow_2) {
   if (!Number.isFinite(timestamp_2)) return skippedApiErrorRow_2;
   return timestamp_2 > timestamp ? skippedApiErrorRow_2 : skippedApiErrorRow;
 }
-//@ chunk-e6aww6q8.js:1828984-1829790 placement
+//@ chunk-5xgkngpb.js:1905367-1906225 placement
 /**
  * 恢复中断的回合（打印模式、REPL 恢复、合成继续、重新提交）。
  */
 function resumeInterruptedTurn(
   surface,
   message,
-  { deferred, pendingActionClass, cutOffAgentCalls, tail } = {},
+  { deferred, pendingActionClass, cutOffAgentCalls, tail, cutOffMidWork } = {},
 ) {
   logEvent("tengu_resume_interrupted_turn", {
     surface: surface === "print" ? lit_2("print") : lit_2("repl_restore"),
@@ -776,6 +778,9 @@ function resumeInterruptedTurn(
     }),
     ...(cutOffAgentCalls !== undefined && {
       cut_off_agent_calls: cutOffAgentCalls,
+    }),
+    ...(cutOffMidWork !== undefined && {
+      cut_off_mid_work: cutOffMidWork,
     }),
     ...(tail !== undefined && {
       tail_kind: fromEnum(tail.kind),
@@ -796,14 +801,14 @@ function resumeInterruptedTurn(
     }),
   });
 }
-//@ chunk-e6aww6q8.js:1829790-1829817 placement
+//@ chunk-5xgkngpb.js:1906225-1906252 placement
 /**
  * 续接时是否显示被截断的工具调用。
  */
 function isCutOffPreviewEnabled() {
   return isFoamySpringEnabled();
 }
-//@ chunk-e6aww6q8.js:1829817-1829942 placement
+//@ chunk-5xgkngpb.js:1906252-1906378 placement
 /**
  * 是否在续接时显示被截断的工具调用。
  */
@@ -815,19 +820,19 @@ function showsCutOffCalls() {
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mutable_phoenix_killswitch", false)
   );
 }
-//@ chunk-e6aww6q8.js:1829942-1830026 placement
+//@ chunk-5xgkngpb.js:1906378-1906462 placement
 /**
  * 判断尾消息是否为带截断调用的中断提示。
  */
 function isInterruptedTail(state) {
   return state?.kind === "interrupted_prompt" && state.tail?.cutOffCalls !== undefined;
 }
-//@ chunk-e6aww6q8.js:1830026-1830039 placement
+//@ chunk-5xgkngpb.js:1906462-1906475 placement
 /**
  * 探测可续接日志时的等待时长（2 秒）。
  */
 var RESUME_LOG_PROBE_MS = 2000;
-//@ chunk-e6aww6q8.js:1852560-1853464 placement
+//@ chunk-5xgkngpb.js:1931221-1932125 placement
 /**
  * 找最近可续接的会话日志（跳过仍在后台运行的会话，发现被续接到运行中的会话时回调）。
  */
@@ -887,7 +892,7 @@ async function findLatestResumableLog({ storageV5, forkSession, onNewestRunningI
     storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:1853464-1858887 callgraph-witnessed (2.1.88 match: loadConversationForResume, 0.21)
+//@ chunk-5xgkngpb.js:1932125-1937649 callgraph-witnessed (2.1.88 match: loadConversationForResume, 0.208)
 /**
  * loadConversationForResume：按参数加载会话（最新一个/会话 id/转录路径/fork），反序列化、修复、检测中断，返回 messages、sessionId 与元数据；通知 onSessionResolved。
  */
@@ -973,6 +978,7 @@ async function loadConversationForResume(sessionRef, sessionArg, options) {
     let msgsInJsonl = messages?.length ?? 0;
     messages = dropRetractedMessages_2(messages);
     messages = dropMalformedAttachments(messages);
+    if (codeModeAccepted()) for (let message of messages) stripToolUseIdBookkeeping(message);
     restoreInvokedSkills(messages);
     let fullPath = log?.fullPath ?? sessionArg;
     let deferredToolUse = fullPath
@@ -1104,7 +1110,7 @@ async function loadConversationForResume(sessionRef, sessionArg, options) {
         errno: unreadableErrno,
       });
     else logFeatureOk("session_resume");
-    return {
+    let resolvedCopy = {
       messages,
       sessionStartHooks: {
         ...hookRun,
@@ -1153,6 +1159,9 @@ async function loadConversationForResume(sessionRef, sessionArg, options) {
       sessionHistorySuppressed: log?.sessionHistorySuppressed,
       fullPath: log?.fullPath,
     };
+    resolvedCopy.replMode = log?.replMode;
+    resolvedCopy.sessionOwner = log?.sessionOwner;
+    return resolvedCopy;
   } catch (error) {
     if (error instanceof ResumeRefusedError) {
       logFeatureSad("session_resume", "refused");
@@ -1169,7 +1178,7 @@ async function loadConversationForResume(sessionRef, sessionArg, options) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:1858887-1859090 placement
+//@ chunk-5xgkngpb.js:1937649-1937852 placement
 /**
  * 在各 worktree 的项目目录中找会话日志。
  */
@@ -1189,7 +1198,7 @@ async function findLogInWorktrees(sessionRef, storageV5) {
     }
   return null;
 }
-//@ chunk-e6aww6q8.js:1859090-1859253 placement
+//@ chunk-5xgkngpb.js:1937852-1938014 placement
 /**
  * 按会话 id 扫描找唯一的 transcript。
  */
@@ -1204,7 +1213,7 @@ async function findLogById(sessionRef, storageV5) {
   if (lastSessionLog) logEvent("tengu_transcript_id_scan_fallback", {});
   return lastSessionLog;
 }
-//@ chunk-e6aww6q8.js:3310099-3310228 fingerprint (2.1.88 match: LEGACY_BRIEF_TOOL_NAME, 0.325)
+//@ chunk-5xgkngpb.js:3395208-3395337 fingerprint (2.1.88 match: LEGACY_BRIEF_TOOL_NAME, 0.325)
 /**
  * require chunk-vswknp5v（BRIEF_TOOL_NAME/LEGACY_BRIEF_TOOL_NAME）与 chunk-cv3kgbt2（isBriefEnabled 等）。
  */
@@ -1212,13 +1221,13 @@ var briefToolModule; // deferred: loads other modules while loading; runs once i
 var briefEnablementModule;
 var BRIEF_TOOL_NAME;
 var LEGACY_BRIEF_TOOL_NAME;
-deferInit("chunk-e6aww6q8.js:3310099", () => {
+deferInit("chunk-5xgkngpb.js:3395208", () => {
   briefToolModule = require("../tools/BriefTool/prompt.js");
   briefEnablementModule = require("../tools/BriefTool/BriefTool.js");
   BRIEF_TOOL_NAME = briefToolModule.BRIEF_TOOL_NAME;
   LEGACY_BRIEF_TOOL_NAME = briefToolModule.LEGACY_BRIEF_TOOL_NAME;
 });
-//@ chunk-0h4e7gnq.js:133809-133923 placement
+//@ chunk-frs14hy1.js:144806-144920 placement
 /**
  * 内容块中有非空文本。
  */
@@ -1227,7 +1236,7 @@ function hasNonEmptyText(content) {
     .filter((block) => block.type === "text" && typeof block.text === "string")
     .some((block) => block.text.trim().length > 0);
 }
-//@ chunk-0h4e7gnq.js:133923-134539 placement
+//@ chunk-frs14hy1.js:144920-145536 placement
 function dropRetractedOnResume(messages, options) {
   let liveMessages = dropRetractedMessages(messages);
   if (options?.suppressDropTelemetry !== true && liveMessages.length !== messages.length)
@@ -1267,11 +1276,11 @@ function dropRetractedOnResume(messages, options) {
     notice,
   };
 }
-//@ chunk-0h4e7gnq.js:134539-134590 placement
+//@ chunk-frs14hy1.js:145536-145587 placement
 function stringOrUndefined(value) {
   return typeof value === "string" ? value : undefined;
 }
-//@ chunk-0h4e7gnq.js:134590-134868 placement
+//@ chunk-frs14hy1.js:145587-145865 placement
 /**
  * 去掉被拒答回退撤回的消息。
  */
@@ -1293,11 +1302,11 @@ function dropRetractedMessages(messages) {
       message.type === "system" || !retractedUuids.has(message.uuid.slice(0, MAX_PROGRESS_ENTRIES)),
   );
 }
-//@ chunk-tyg7f3ek.js:326687-326938 callgraph-fingerprint (2.1.88 match: isTerminalToolResult, 0.709)
+//@ chunk-0yw3taqg.js:358530-358781 sole-consumer
 /**
  * 轮次是否已正常结束：assistant 无 tool_use 且有非空文本，或非关机中断的 user 消息。
  */
-function isTerminalToolResult(message) {
+function isSettledTurnRow(message) {
   if (message.type === "assistant") {
     let content = Array.isArray(message.message.content) ? message.message.content : [];
     return (
@@ -1307,7 +1316,7 @@ function isTerminalToolResult(message) {
   }
   return message.type === "user" && !isHarnessMetaMessage(message) && message.interruptedByShutdown !== true;
 }
-//@ chunk-tyg7f3ek.js:326938-327185 fingerprint (2.1.88 match: detectTurnInterruption, 0.439)
+//@ chunk-0yw3taqg.js:358781-359028 fingerprint (2.1.88 match: detectTurnInterruption, 0.438)
 /**
  * 检测 interrupted_prompt：被打断的提示之后没有已完成的回答时返回该提示 uuid。
  */
@@ -1320,36 +1329,78 @@ function detectTurnInterruption(state, messages) {
     if (!isInterruptMarkerRow(message))
       lastPromptRow = countUserPromptsFromEntries_5(message) ? message : lastPromptRow;
     else if (message.uuid !== state.message.uuid) {
-      if (lastPromptRow !== undefined && isTerminalToolResult(lastPromptRow)) return;
+      if (lastPromptRow !== undefined && isSettledTurnRow(lastPromptRow)) return;
       lastPromptRow = undefined;
     }
   return promptUuid;
 }
+//@ chunk-0yw3taqg.js:359028-359584 placement
+/**
+ * 从被中断的点取回续写所需的空缺消息（同侧链、含平台与轮次归属键），并带上这些回合被禁用的工具。
+ */
+function collectInterruptedTurnsPrompt(messages, turnInterruption, fallbackMessages = messages) {
+  let interruptionIndex =
+    turnInterruption === undefined ? -1 : messages.findLastIndex((entry) => entry.uuid === turnInterruption);
+  let interruptedMessage = messages[interruptionIndex];
+  let turnsToReplay = interruptionIndex === -1 ? [] : messages.slice(interruptionIndex);
+  try {
+    let nextRealPromptIndex =
+      interruptionIndex === -1
+        ? -1
+        : messages.findIndex(
+            (entry, index) =>
+              index > interruptionIndex &&
+              Object(entry).isSidechain !== true &&
+              isRealPromptAt(messages, index),
+          );
+    if (nextRealPromptIndex !== -1) turnsToReplay = messages.slice(interruptionIndex, nextRealPromptIndex);
+  } catch (error) {
+    logError(error);
+  }
+  let flattened = [fallbackMessages, ...turnsToReplay.map((turn) => [turn])].flatMap(
+    (turnGroup) => disallowedToolsFromMessages(turnGroup) ?? [],
+  );
+  let prompt =
+    flattened.length > 0
+      ? {
+          carriedOnDisallowedTools: normalizeCaseForComparison_2(flattened.flatMap((entry) => entry.turn)),
+        }
+      : {};
+  if (interruptedMessage?.type !== "user") return prompt;
+  return {
+    ...prompt,
+    ...(typeof interruptedMessage.clientPlatform === "string" && {
+      clientPlatform: interruptedMessage.clientPlatform,
+    }),
+    ...(typeof interruptedMessage.turnAttributionKey === "string" && {
+      inheritedTurnAttributionKey: interruptedMessage.turnAttributionKey,
+    }),
+  };
+}
 export {
   BRIEF_TOOL_NAME,
   briefEnablementModule,
-  resumeInterruptedTurn,
-  dropRetractedOnResume,
-  hasNonEmptyText,
-  degradeRestoredMessages,
-  parseForkMarker,
-  loadConversationForResume,
-  clearClassifierContext,
-  getLastSessionLog,
   detectTurnInterruption,
+  collectInterruptedTurnsPrompt,
   weakMapLookup,
   tailDiagnosticsFields,
   isInterruptedTail,
   resumePromptOverride,
-  reportContentPaint,
-  reportPromptIdle,
-  isLiveClassifiedRun,
-  restoreSkillStateFromMessages,
-  isServerToolType,
-  formatForkMarker,
-  getClassifierEpoch,
-  registerClassifiedRun,
+  loadConversationForResume,
+  isResumeTooOld,
+  interruptedTurnResumePolicy,
+  MAX_RESUME_TAIL_AGE_MS,
+  clearClassifierContext,
+  resumeReasonFromEnv,
+  resumeInterruptedTurn,
   LEGACY_BRIEF_TOOL_NAME,
+  getLastSessionLog,
+  dropRetractedOnResume,
+  hasNonEmptyText,
+  isLiveClassifiedRun,
+  isServerToolType,
+  degradeRestoredMessages,
+  restoreSkillStateFromMessages,
   UNSUPPORTED_TOOL_CONTENT_TEXT,
   WORKER_RESTARTED_PROMPT_2,
   deserializeMessagesWithInterruptDetection,
@@ -1358,19 +1409,21 @@ export {
   migrateLegacyAttachmentTypes,
   dropMalformedTextBlocks,
   isTailMessage,
-  interruptedTurnResumePolicy,
-  isResumeTooOld,
   showsCutOffCalls,
   lastMessageAgeMs,
   newerMessage,
   refusalRetryMaxAge,
   isOlderThan,
   recordTailDiagnostics,
-  forkMarkerFields,
-  setRecoverySender,
+  getClassifierEpoch,
+  registerClassifiedRun,
+  findLatestResumableLog,
   SESSION_MOVED_TAIL_PROMPT,
   SESSION_MOVED_CONTINUE_PROMPT,
-  MAX_RESUME_TAIL_AGE_MS,
-  resumeReasonFromEnv,
-  findLatestResumableLog,
+  reportContentPaint,
+  reportPromptIdle,
+  formatForkMarker,
+  parseForkMarker,
+  forkMarkerFields,
+  setRecoverySender,
 };

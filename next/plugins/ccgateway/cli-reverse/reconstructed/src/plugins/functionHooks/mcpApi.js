@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.mcp.call/connect 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 import { requireBoundSession } from "./sessionApi.js";
@@ -25,7 +25,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { ZERO_TOKEN_USAGE } from "./api/operations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3976788-3977609 placement
+//@ chunk-5xgkngpb.js:4079025-4079849 placement
 /**
  * 插件 $.mcp.call：调用已连接 MCP 服务器上的工具，找不到时列出可用服务器。
  */
@@ -66,7 +66,7 @@ async function mcpCallForPlugin({ server, tool, args }, caller) {
     isError: outcome.isError === true,
   };
 }
-//@ chunk-e6aww6q8.js:3977609-3977663 placement
+//@ chunk-5xgkngpb.js:4079849-4079903 placement
 /**
  * MCP 连接失败结果
  */
@@ -75,7 +75,7 @@ var mcpConnectRefusal = (refused, message) => ({
   refused,
   message,
 });
-//@ chunk-e6aww6q8.js:3977663-3978088 placement
+//@ chunk-5xgkngpb.js:4079903-4080328 placement
 /**
  * 把 MCP 连接行的状态映射为 $.mcp.connect 结果：connected/cached 成功，pending 未定，needs-auth/failed/disabled 给出拒绝原因与说明。
  */
@@ -102,18 +102,18 @@ function mcpConnectOutcome(outcome) {
       return mcpConnectRefusal("failed", `The MCP server "${outcome.name}" is turned off in this session.`);
   }
 }
-//@ chunk-e6aww6q8.js:3978088-3978098 placement
+//@ chunk-5xgkngpb.js:4080328-4080338 placement
 /**
  * 3
  */
 var CONNECT_TIMEOUT_FACTOR = 3;
-//@ chunk-e6aww6q8.js:3978098-3978136 placement
+//@ chunk-5xgkngpb.js:4080338-4080376 placement
 /**
  * 连接等待时长
  */
 var connectWaitMs = () =>
   Math.min(getConnectionTimeoutMs() + getConnectionTimeoutMs() * CONNECT_TIMEOUT_FACTOR, MAX_TIMER_DELAY_MS);
-//@ chunk-e6aww6q8.js:3978136-3978370 placement
+//@ chunk-5xgkngpb.js:4080376-4080610 placement
 /**
  * 订阅 MCP 连接行，直到指定服务器的行满足条件或超时，返回是否满足。
  */
@@ -136,7 +136,7 @@ function waitForMcpRow({ rows, subscribe, name, isSettled, timeoutMs }) {
     checkSettled();
   });
 }
-//@ chunk-e6aww6q8.js:3978370-3978458 placement
+//@ chunk-5xgkngpb.js:4080610-4080698 placement
 /**
  * 等待 MCP 行
  */
@@ -147,14 +147,14 @@ var mcpWaitRequest = (connection, name, isSettled) => ({
   isSettled,
   timeoutMs: connectWaitMs(),
 });
-//@ chunk-e6aww6q8.js:3978458-3978604 placement
+//@ chunk-5xgkngpb.js:4080698-4080844 placement
 async function dropFailedMcpServer(connection, server) {
   connection.drop(server.name);
   await waitForMcpRow(mcpWaitRequest(connection, server.name, (row) => row !== server));
   if (!connection.rows().some((remainingRow) => remainingRow.name === server.name))
     await connection.forget(server.name, server.config);
 }
-//@ chunk-e6aww6q8.js:3978604-3979040 placement
+//@ chunk-5xgkngpb.js:4080844-4081280 placement
 /**
  * 插件请求连接 MCP 服务器：失败且由插件持有的先移除，已存在则返回状态，否则添加并等待结果（超时仍保留在会话中）。
  */
@@ -176,7 +176,7 @@ async function connectMcpServerForPlugin(connection, name, config) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:3979040-3979342 placement
+//@ chunk-5xgkngpb.js:4081280-4081582 placement
 /**
  * MCP 连接登记：合并同一服务器的并发连接请求，并记录插件持有的服务器。
  */
@@ -207,24 +207,24 @@ function createMcpConnectRegistry() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3979342-3979377 placement
+//@ chunk-5xgkngpb.js:4081582-4081617 placement
 /**
  * MCP 连接登记表
  */
 var mcpConnectRegistry; // deferred: uses createMcpConnectRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3979342", () => {
+deferInit("chunk-5xgkngpb.js:4081582", () => {
   mcpConnectRegistry = identity_2(createMcpConnectRegistry(), (registry) => {
     registry.clear();
   });
 });
-//@ chunk-e6aww6q8.js:3979377-3979444 placement
+//@ chunk-5xgkngpb.js:4081617-4081684 placement
 /**
  * 忘掉插件建立的 MCP 服务器
  */
 function forgetMcpConnectsFor(plugin) {
   for (let server of mcpConnectRegistry.forget(plugin)) currentSurfaceBinding()?.removeMcpServer(server);
 }
-//@ chunk-e6aww6q8.js:3979444-3979497 placement
+//@ chunk-5xgkngpb.js:4081684-4081737 placement
 /**
  * 连接失败结果
  */
@@ -233,14 +233,14 @@ var mcpConnectFailure = (reason, message) => ({
   reason,
   message,
 });
-//@ chunk-e6aww6q8.js:3979497-3979679 placement
+//@ chunk-5xgkngpb.js:4081737-4081919 placement
 function mcpConnectRefused(caller, refused, message) {
   if (refused === "failed") logFeatureBad("plugin_function_hooks_mcp_connect", "failed");
   else logFeatureSad("plugin_function_hooks_mcp_connect", refused);
   logForDebugging(`$.mcp.connect (${caller.plugin}): ${refused}: ${message}`);
   return mcpConnectFailure(refused, message);
 }
-//@ chunk-e6aww6q8.js:3979679-3980705 placement
+//@ chunk-5xgkngpb.js:4081919-4082945 placement
 /**
  * 插件 $.mcp.connect：以插件身份连接 MCP 服务器并记录遥测。
  */
@@ -293,7 +293,7 @@ async function mcpConnectForPlugin({ server }, caller) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:3980705-3980975 placement
+//@ chunk-5xgkngpb.js:4082945-4083215 placement
 /**
  * 等待指定 MCP 服务器结束 pending 状态并返回连接结果（不存在或超时时给出说明）。
  */
@@ -311,7 +311,7 @@ async function awaitMcpServerConnected(connection, name) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:3980975-3981064 placement
+//@ chunk-5xgkngpb.js:4083215-4083304 placement
 /**
  * API 错误转结果
  */
@@ -322,7 +322,7 @@ var modelApiError = (failure) => ({
   error: failure.kind,
   usage: ZERO_TOKEN_USAGE,
 });
-//@ chunk-e6aww6q8.js:3981064-3981077 placement
+//@ chunk-5xgkngpb.js:4083304-4083317 placement
 /**
  * 1024
  */
@@ -330,11 +330,11 @@ var MAX_ERROR_TEXT = 1024;
 export {
   awaitMcpServerConnected,
   mcpConnectRefusal,
-  connectMcpServerForPlugin,
-  modelApiError,
-  MAX_ERROR_TEXT,
+  mcpConnectOutcome,
   forgetMcpConnectsFor,
   mcpCallForPlugin,
   mcpConnectForPlugin,
-  mcpConnectOutcome,
+  modelApiError,
+  MAX_ERROR_TEXT,
+  connectMcpServerForPlugin,
 };

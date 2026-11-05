@@ -3,9 +3,9 @@
  *
  * 文件编辑/写入被拒绝时显示 "User rejected update/write to <文件>" 与被拒 diff 或内容。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FileEditToolUseRejectedMessage.tsx
- * pieces: chunk-vnfdjr3f.js (2)
+ * pieces: chunk-8tdq6z7n.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,9 +22,9 @@ import { HighlightedCode } from "./HighlightedCode.js";
 import { OverflowHint } from "./CtrlOToExpand.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
 
-//@ chunk-vnfdjr3f.js:627-636 affinity
+//@ chunk-8tdq6z7n.js:628-637 affinity
 var MAX_DIFF_PREVIEW_LINES = 10;
-//@ chunk-vnfdjr3f.js:636-2341 fingerprint (2.1.88 match: FileEditToolUseRejectedMessage, 0.879)
+//@ chunk-8tdq6z7n.js:637-2342 fingerprint (2.1.88 match: FileEditToolUseRejectedMessage, 0.893)
 /**
  * 编辑/写入被拒绝："User rejected update/write to <路径>"，写入显示被拒内容（高亮），编辑显示被拒 diff。
  */

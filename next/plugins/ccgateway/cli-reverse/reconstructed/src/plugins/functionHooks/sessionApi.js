@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：插件 $.session.* 接口（读取、追加、发送、授权等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (75)
- * attribution: placement 74, sole-consumer 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (90)
+ * attribution: placement 76, sole-consumer 2, layout 12
  */
 import { randomUUID } from "crypto";
 import { isDeepStrictEqual } from "util";
@@ -27,12 +27,14 @@ import { getResolvedWIFBaseUrlSnapshot, getWIFCredentials } from "../../services
 import { pluginInputHoldSlot, clearHeldInputAndReason, pluginInputHoldReason } from "./inputHold.js";
 import { isPersonInitiated } from "./uiHooks.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { isOfficialRepo } from "../../utils/plugins/fetchTelemetry.js";
+import { identity as identity_2 } from "../../utils/identity.js";
+import { createValueSlot } from "../../utils/valueSlot.js";
+import { normalizeGitRemoteUrl, findCanonicalGitRoot } from "../../utils/git.js";
 import { isAllowedGitRemote } from "../../utils/git/builderGit/gitEnv.js";
 import { isInternalModelRepo } from "../../utils/commitAttribution.js";
 import { projectRootFor } from "./panes.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import {
   COM_ANTHROPIC_PLUGIN_META_CUT,
   EDIT_SOURCE_KINDS,
@@ -53,7 +55,7 @@ import { TEXT_PASSTHROUGH_CORES } from "./coreHandlers.js";
 import { usableLauncherHostLoginToken } from "../../utils/auth/launcherHostLogin.js";
 import { guardTelemetryCredentials } from "../../services/analytics/telemetryCredentialGuard.js";
 import { getAuthHeadersAsync } from "../../utils/http.js";
-import { compactCommand } from "../../commands/compact/index.js";
+import { compactNonInteractiveCommand } from "../../commands/compact/index.js";
 import { currentTurn } from "./personHold.js";
 import { toError, errorMessage } from "../../utils/errors.js";
 import { getMachineAdminPolicyTier, getVouchedAdminPolicyTier } from "../../utils/settings/settings.js";
@@ -66,20 +68,19 @@ import {
   getTotalCostUSD,
 } from "../../bootstrap/state.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
+import { getEmail } from "../../utils/user.js";
 import { getCwd } from "../../utils/cwd.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
-import { identity as identity_2 } from "../../utils/identity.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { EMPTY_MESSAGES } from "../../state/inProgressToolUses.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import { noUncachedRoot } from "../../utils/settings/settingsStorage.js";
-import { findCanonicalGitRoot } from "../../utils/git.js";
 import { getRemoteUrlForDir } from "../../utils/git/gitFilesystem.js";
 import { udsAddressFromPath, bridgeAddressFromToken } from "../../utils/peerMessageHeaders.js";
 import { SENDMESSAGE } from "../../tools/SendMessageTool/constants.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { runIgnoringAbort } from "./dispatch/dispatchScope.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { buildContextWindowStatus, getLastApiUsage } from "../../utils/tokens.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { getContextWindow } from "../../utils/model/configs.js";
@@ -94,10 +95,13 @@ import {
   isAbortedCallResult,
   removeCall,
 } from "./promptApi.js";
+import { checkPaneId } from "./sites/siteRules.js";
+import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
+import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { isUiElementTypeName } from "./ui/renderSites.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:766112-766199 placement
+//@ chunk-5xgkngpb.js:776711-776798 placement
 /**
  * 字符串转文本块，数组浅拷贝
  */
@@ -113,7 +117,7 @@ function normalizeContentBlocks_2(content) {
         ...block,
       }));
 }
-//@ chunk-e6aww6q8.js:766199-766277 placement
+//@ chunk-5xgkngpb.js:776798-776876 placement
 /**
  * 插件可见的消息形状
  */
@@ -124,20 +128,20 @@ function messageForPlugin(message) {
     content: normalizeContentBlocks_2(content),
   };
 }
-//@ chunk-e6aww6q8.js:766277-766403 placement
+//@ chunk-5xgkngpb.js:776876-777002 placement
 function isHumanUserMessage(message) {
   let { role, content } = message.message;
   let hasToolResult = Array.isArray(content) && content.some((block) => block.type === "tool_result");
   return role === "user" && !hasToolResult;
 }
-//@ chunk-e6aww6q8.js:766403-766518 placement
+//@ chunk-5xgkngpb.js:777002-777117 placement
 function tailApiMessages(messages) {
   let isLong = messages.length > CLONE_DEPTH_THRESHOLD;
   let tail = isLong ? messages.slice(-CLONE_DEPTH_THRESHOLD) : messages;
   let startIndex = isLong ? Math.max(tail.findIndex(isHumanUserMessage), 0) : 0;
   return tail.slice(startIndex).map(messageForPlugin);
 }
-//@ chunk-e6aww6q8.js:766518-766738 placement
+//@ chunk-5xgkngpb.js:777117-777337 placement
 /**
  * 取当前绑定的会话，没有（REPL 未挂载且无无头会话）时抛 HooksError 说明该接口在此模式不可用。
  */
@@ -149,7 +153,7 @@ function requireBoundSession(pluginName, apiLabel) {
     );
   return binding;
 }
-//@ chunk-e6aww6q8.js:766738-766835 placement
+//@ chunk-5xgkngpb.js:777337-777434 placement
 /**
  * bearer 或 api-key
  */
@@ -158,35 +162,35 @@ function authKindOf(headers) {
   let hasApiKey = "x-api-key" in headers;
   return hasAuthorization ? "bearer" : hasApiKey ? "api-key" : undefined;
 }
-//@ chunk-e6aww6q8.js:766835-766871 placement
+//@ chunk-5xgkngpb.js:777434-777470 placement
 var HTTPS_API_ANTHROPIC_COM = "https://api.anthropic.com";
-//@ chunk-e6aww6q8.js:766871-766911 placement
+//@ chunk-5xgkngpb.js:777470-777510 placement
 /**
  * 无 API key 且用 WIF
  */
 function isWifWithoutApiKey() {
   return getAnthropicApiKeySafe() === null && shouldUseWIFAuth();
 }
-//@ chunk-e6aww6q8.js:766911-767041 placement
+//@ chunk-5xgkngpb.js:777510-777640 placement
 function workloadIdentityHost(endpointUrl) {
   let resolvedWIFBaseUrlSnapshot = getResolvedWIFBaseUrlSnapshot();
   if (resolvedWIFBaseUrlSnapshot === undefined) return;
   if (resolvedWIFBaseUrlSnapshot === null) return new URL(endpointUrl).host;
   return URL.canParse(resolvedWIFBaseUrlSnapshot) ? new URL(resolvedWIFBaseUrlSnapshot).host : undefined;
 }
-//@ chunk-e6aww6q8.js:767041-767084 placement
+//@ chunk-5xgkngpb.js:777640-777683 placement
 /**
  * 以 / 开头
  */
 var isSlashCommandText = (text) => text.trimStart().startsWith("/");
-//@ chunk-e6aww6q8.js:767084-767096 placement
+//@ chunk-5xgkngpb.js:777683-777695 placement
 /**
  * 200
  */
 var MAX_SESSION_TEXT_CHARS = 200;
-//@ chunk-e6aww6q8.js:767096-767112 placement
+//@ chunk-5xgkngpb.js:777695-777711 placement
 var LATER = "later";
-//@ chunk-e6aww6q8.js:767150-767357 placement
+//@ chunk-5xgkngpb.js:777749-777957 placement
 /**
  * 插件提交前检查输入暂扣：符合条件的按键可解除暂扣，否则返回拒绝原因并记录。
  */
@@ -204,7 +208,39 @@ function submitHoldRefusal(caller, apiLabel) {
   if (reason !== undefined) logForDebugging(`${apiLabel} (${caller.plugin}): refused: ${reason}`);
   return reason;
 }
-//@ chunk-e6aww6q8.js:770635-770725 sole-consumer
+//@ chunk-5xgkngpb.js:777957-777993 placement
+/**
+ * 宿主级一次性槽位：SessionStart 钩子在这里登记「已提前启动」，供后续判决是否允许等待启动。
+ */
+var sessionStartHostRefusedSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:777957", () => {
+  sessionStartHostRefusedSlot = identity_2(createValueSlot(), (sessionStartHostRefusedSlot) =>
+    sessionStartHostRefusedSlot.set(undefined),
+  );
+});
+//@ chunk-5xgkngpb.js:777993-778336 placement
+/**
+ * 拒绝在 classic.SessionStart 钩子里等待会话启动（宿主提前启动时会自锁），返回给用户的原因文本并记日志。
+ */
+function checkPromptSubmitArgs(hookContext, hookName) {
+  if (!(hookContext.rootEvent === "classic.SessionStart" && sessionStartHostRefusedSlot.get()?.() === true))
+    return;
+  let refusalReason =
+    "called from a classic.SessionStart hook in a session that a host started ahead of time, it would wait on the start-up this hook is holding; run it from session.start or a later event (turn.complete)";
+  logForDebugging(`${hookName} (${hookContext.plugin}): refused: ${refusalReason}`);
+  return refusalReason;
+}
+//@ chunk-5xgkngpb.js:781490-781733 sole-consumer (2.1.88 match: isOfficialRepo, 1)
+function isOfficialRepo(urlOrSpec) {
+  let [, ...segments] = (normalizeGitRemoteUrl(urlOrSpec.replace(/\/+$/, "")) ?? "")
+    .split("/")
+    .filter((segment) => segment !== "");
+  if (!segments.every((segment) => /^[a-z0-9_][a-z0-9._-]*$/i.test(segment))) return null;
+  let isOwnerRepo = segments.length === 2;
+  let isBareRepo = segments.length === 1;
+  return isOwnerRepo ? `${segments[0]}/${segments[1]}` : isBareRepo ? `anthropics/${segments[0]}` : null;
+}
+//@ chunk-5xgkngpb.js:781733-781823 sole-consumer
 /**
  * 官方仓库才返回
  */
@@ -212,30 +248,30 @@ function officialRepoOrNull(repo) {
   let urlOrSpec = `https://github.com/${repo}`;
   return repo !== null && isOfficialRepo(urlOrSpec) === repo && isAllowedGitRemote(urlOrSpec) ? repo : null;
 }
-//@ chunk-e6aww6q8.js:770725-770795 placement
+//@ chunk-5xgkngpb.js:781823-781893 placement
 /**
  * 含 tool_result 块
  */
-var hasToolResultBlock_2 = (content) =>
+var hasToolResultBlock = (content) =>
   typeof content !== "string" && content.some((block) => block.type === "tool_result");
-//@ chunk-e6aww6q8.js:770795-770820 placement
+//@ chunk-5xgkngpb.js:781893-781918 placement
 /**
  * 是否内部模型仓库
  */
 var isInternalRepo = (cwd) => isInternalModelRepo(projectRootFor(cwd));
-//@ chunk-e6aww6q8.js:770820-770850 placement
+//@ chunk-5xgkngpb.js:781918-781948 placement
 /**
  * 允许的 git 远程
  */
 var isAllowedRemote = (urlOrSpec) => urlOrSpec !== null && isAllowedGitRemote(urlOrSpec);
-//@ chunk-e6aww6q8.js:770850-770879 placement
+//@ chunk-5xgkngpb.js:781948-781977 placement
 /**
  * 空的异步实现
  */
 async function noopAsync_2(value) {
   return;
 }
-//@ chunk-e6aww6q8.js:770879-770979 placement (2.1.88 match: isOfficialRepo, 1)
+//@ chunk-5xgkngpb.js:781977-782077 placement (2.1.88 match: isOfficialRepo, 1)
 async function isOfficialRepo_2(cwd, urlOrSpec) {
   let repo =
     cwd !== null
@@ -245,25 +281,25 @@ async function isOfficialRepo_2(cwd, urlOrSpec) {
         : null;
   return officialRepoOrNull(repo);
 }
-//@ chunk-e6aww6q8.js:770979-771029 placement
+//@ chunk-5xgkngpb.js:782077-782127 placement
 /**
  * 开关开启才查
  */
 var officialRepoIfEnabled = (cwd, remoteUrlForDir, isEnabled) =>
   isEnabled ? isOfficialRepo_2(cwd, remoteUrlForDir) : Promise.resolve(null);
-//@ chunk-e6aww6q8.js:771029-771077 placement
+//@ chunk-5xgkngpb.js:782127-782175 placement
 /**
  * tengu_snappy_plum 开关
  */
 function isSnappyPlumOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_snappy_plum", false);
 }
-//@ chunk-e6aww6q8.js:771077-771392 placement
+//@ chunk-5xgkngpb.js:782175-782490 placement
 /**
  * 从 MCP 结果 _meta 中挑出给插件的字段（大小受限，被裁剪的记入 omitted）。
  */
 function pluginMetaForPlugins(meta) {
-  if (!isSnappyPlumOn() || !isPlainObject_5(meta)) return;
+  if (!isSnappyPlumOn() || !isPlainObject_6(meta)) return;
   let kept = {};
   let omitted = [];
   let omittedList = meta[COM_ANTHROPIC_PLUGIN_META_CUT];
@@ -277,7 +313,7 @@ function pluginMetaForPlugins(meta) {
   if (omitted.length > 0) kept[CLAUDE_OMITTED] = omitted;
   return Object.keys(kept).length === 0 ? undefined : kept;
 }
-//@ chunk-e6aww6q8.js:771392-771630 placement
+//@ chunk-5xgkngpb.js:782490-782728 placement
 function isMetaFieldSmall(field, value) {
   try {
     let size = utf8Length(jsonStringify(value));
@@ -294,14 +330,14 @@ function isMetaFieldSmall(field, value) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:771630-771795 placement
+//@ chunk-5xgkngpb.js:782728-782893 placement
 /**
  * 把请求 meta 中的字符串字段挑出（启用且无问题时）。
  */
 function stringRequestMeta(requestMeta) {
   if (
     !isSnappyPlumOn() ||
-    !isPlainObject_5(requestMeta) ||
+    !isPlainObject_6(requestMeta) ||
     Object.keys(requestMeta).length === 0 ||
     checkRequestMeta(requestMeta) !== undefined
   )
@@ -311,7 +347,7 @@ function stringRequestMeta(requestMeta) {
     if (typeof value === "string") stringFields[key] = value;
   return stringFields;
 }
-//@ chunk-e6aww6q8.js:771795-771895 placement
+//@ chunk-5xgkngpb.js:782893-782993 placement
 function logMetaError(what, error) {
   if (error instanceof TypeError) {
     logForDebugging(`Failed ${what}: ${error.name}`, {
@@ -321,7 +357,7 @@ function logMetaError(what, error) {
   }
   logError(error);
 }
-//@ chunk-e6aww6q8.js:771895-771976 placement
+//@ chunk-5xgkngpb.js:782993-783074 placement
 /**
  * 构造插件可见用户行
  */
@@ -333,7 +369,7 @@ var userRowForPlugin = (text, toolResults) => ({
     toolResults,
   }),
 });
-//@ chunk-e6aww6q8.js:771976-772710 placement
+//@ chunk-5xgkngpb.js:783074-783808 placement (2.1.88 match: createUserMessage, 0.418)
 /**
  * 把会话消息转换为插件可见形状：助手消息给文本与 tool_use，用户消息给文本与 tool_result（含结果与 meta），跳过 meta/虚拟消息。
  */
@@ -382,12 +418,12 @@ function toPluginMessage(message) {
       });
   return userRowForPlugin(texts.join(""), toolResults);
 }
-//@ chunk-e6aww6q8.js:772710-772753 placement
+//@ chunk-5xgkngpb.js:783808-783851 placement
 /**
  * URL 里的用户信息
  */
 var URL_USERINFO_RE = /^([a-z][a-z0-9+.-]*:\/\/)[^/]*@/i;
-//@ chunk-e6aww6q8.js:772753-772923 placement
+//@ chunk-5xgkngpb.js:783851-784021 placement
 function runUiNoticeOp({ event, pluginName, text, run }) {
   let binding = currentSurfaceBinding();
   let shownText = truncateUiLog(text);
@@ -398,7 +434,7 @@ function runUiNoticeOp({ event, pluginName, text, run }) {
   logForDebugging(`${event} (${pluginName}): ${shownText}`);
   run(binding);
 }
-//@ chunk-e6aww6q8.js:772923-772988 placement
+//@ chunk-5xgkngpb.js:784021-784086 placement
 /**
  * 去掉 URL 凭证
  */
@@ -407,7 +443,7 @@ function stripUrlUserinfo_2(remoteUrlForDir) {
     ? remoteUrlForDir.replace(URL_USERINFO_RE, "$1")
     : remoteUrlForDir;
 }
-//@ chunk-e6aww6q8.js:777796-777912 placement
+//@ chunk-5xgkngpb.js:788900-789016 placement
 /**
  * $.ui.status：设置或清除插件在状态区的文字。
  */
@@ -418,7 +454,7 @@ var uiStatusOp = (text, pluginName) =>
     text: text ?? "(cleared)",
     run: (binding) => binding.status(pluginName, text === undefined ? text : truncateUiLog(text)),
   });
-//@ chunk-e6aww6q8.js:777912-778021 placement
+//@ chunk-5xgkngpb.js:789016-789125 placement
 /**
  * $.ui.toast：弹出插件提示（文本截断，可设超时）。
  */
@@ -429,7 +465,7 @@ var uiToastOp = ({ text, timeoutMs }, pluginName) =>
     text,
     run: (binding) => binding.toast(pluginName, truncateUiLog(text), timeoutMs),
   });
-//@ chunk-e6aww6q8.js:778021-778206 placement
+//@ chunk-5xgkngpb.js:789125-789310 placement
 /**
  * $.session.append：把插件消息追加到会话（没有对话的进程中拒绝）。
  */
@@ -441,12 +477,12 @@ async function sessionAppendOp(message, caller) {
     );
   return (await appendCores()).pluginAppended(message, caller);
 }
-//@ chunk-e6aww6q8.js:778244-778254 placement
+//@ chunk-5xgkngpb.js:789348-789358 placement
 /**
  * 4
  */
 var MAX_AUTH_HANDLES = 4;
-//@ chunk-e6aww6q8.js:778254-778586 placement
+//@ chunk-5xgkngpb.js:789358-789690 placement
 /**
  * 授权句柄登记表：mint 为插件生成 auth_ 句柄（每插件最多保留 4 个），resolve 只认同一插件。
  */
@@ -478,15 +514,15 @@ function createAuthHandleRegistry() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:778586-778600 placement
+//@ chunk-5xgkngpb.js:789690-789704 placement
 /**
  * 授权句柄登记表
  */
 var authHandleRegistry; // deferred: uses createAuthHandleRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:778586", () => {
+deferInit("chunk-5xgkngpb.js:789690", () => {
   authHandleRegistry = createAuthHandleRegistry();
 });
-//@ chunk-e6aww6q8.js:778600-779274 placement
+//@ chunk-5xgkngpb.js:789704-790378 placement
 /**
  * 插件 $.session.authorize：生成访问第一方服务的授权句柄。
  */
@@ -526,12 +562,12 @@ async function sessionAuthorizeForPlugin(plugin) {
     kind,
   };
 }
-//@ chunk-e6aww6q8.js:780409-781039 placement
+//@ chunk-5xgkngpb.js:791513-792143 placement
 /**
  * 插件 $.session.compact：在回合之间压缩对话，压缩关闭或回合进行中时拒绝。
  */
 async function sessionCompactForPlugin(args, plugin, origin = [plugin]) {
-  if (!compactCommand.isEnabled())
+  if (!compactNonInteractiveCommand.isEnabled())
     throw new HooksError(
       `${plugin}: $.session.compact: compaction is switched off in this session (DISABLE_COMPACT), for /compact and plugins alike`,
     );
@@ -553,7 +589,7 @@ async function sessionCompactForPlugin(args, plugin, origin = [plugin]) {
     throw new HooksError(`${plugin}: $.session.compact: ${toError(error).message}`);
   }
 }
-//@ chunk-e6aww6q8.js:781039-781215 placement
+//@ chunk-5xgkngpb.js:792143-792319 placement
 function authKindOf_2(authKind, tokenSource) {
   let isConsole = authKind === "profile" || tokenSource === "/login managed key";
   let isNone = authKind === "none" && tokenSource === "none";
@@ -567,7 +603,7 @@ function authKindOf_2(authKind, tokenSource) {
           ? "none"
           : "api-key";
 }
-//@ chunk-e6aww6q8.js:781215-781484 placement
+//@ chunk-5xgkngpb.js:792319-792588 placement
 /**
  * $.session.identity 拒绝：只回答被托管设置启用并命名的插件。
  */
@@ -579,7 +615,7 @@ function identityRefusal(plugin) {
     deny: `$.session.identity answers only a mod that managed settings enable and that is loaded in place from a source they name; ${plugin} is not one`,
   };
 }
-//@ chunk-e6aww6q8.js:781484-781625 placement
+//@ chunk-5xgkngpb.js:792588-792730 placement
 function isForcedOrg(organizationUuid) {
   let forceLoginOrgUUID =
     getMachineAdminPolicyTier()?.forceLoginOrgUUID ?? getVouchedAdminPolicyTier()?.forceLoginOrgUUID;
@@ -591,14 +627,14 @@ function isForcedOrg(organizationUuid) {
     !isDiskless()
   );
 }
-//@ chunk-e6aww6q8.js:781625-781687 placement
+//@ chunk-5xgkngpb.js:792730-792792 placement
 var SKIP_API_KEY_HELPER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:781625", () => {
+deferInit("chunk-5xgkngpb.js:792730", () => {
   SKIP_API_KEY_HELPER = Object.freeze({
     skipRetrievingKeyFromApiKeyHelper: true,
   });
 });
-//@ chunk-e6aww6q8.js:781687-781784 placement
+//@ chunk-5xgkngpb.js:792792-792889 placement
 /**
  * 请求凭证与来源
  */
@@ -607,7 +643,7 @@ function credentialSources() {
   let requestCredentials = getRequestCredentials(getAuthTokenSource().source, source);
   return [requestCredentials.tokenSource, requestCredentials.apiKey ? source : "none"];
 }
-//@ chunk-e6aww6q8.js:781784-782253 placement
+//@ chunk-5xgkngpb.js:793009-793481 placement
 /**
  * $.session.identity：返回认证类型；第一方且组织被托管策略强制登录时给出组织 id、类型与邮箱。
  */
@@ -650,7 +686,18 @@ function sessionIdentity() {
     isVerified: hasOrganization,
   };
 }
-//@ chunk-e6aww6q8.js:782253-782455 placement
+//@ chunk-5xgkngpb.js:793481-793568 layout
+function sessionIdentityWithEmail() {
+  let identity = sessionIdentity();
+  let email = getEmail();
+  return identity.deny === undefined && email !== undefined
+    ? {
+        ...identity,
+        email,
+      }
+    : identity;
+}
+//@ chunk-5xgkngpb.js:793568-793770 placement
 /**
  * $.session：返回会话 id、cwd、项目根与当前模型（无会话时取进程值）。
  */
@@ -665,7 +712,7 @@ async function sessionInfoOp(plugin, cwd) {
     model: binding?.model() ?? getMainLoopModel(),
   };
 }
-//@ chunk-e6aww6q8.js:782455-782654 placement
+//@ chunk-5xgkngpb.js:793770-793969 placement
 function createHeldConversations() {
   let heldByAgentId = new Map();
   return {
@@ -685,17 +732,17 @@ function createHeldConversations() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:782654-782689 placement
+//@ chunk-5xgkngpb.js:793969-794004 placement
 /**
  * 已持有会话表
  */
 var heldConversations; // deferred: uses createHeldConversations of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:782654", () => {
+deferInit("chunk-5xgkngpb.js:793969", () => {
   heldConversations = identity_2(createHeldConversations(), (store) => {
     store.clear();
   });
 });
-//@ chunk-e6aww6q8.js:782689-782967 placement
+//@ chunk-5xgkngpb.js:794004-794282 placement
 async function readSavedAgentMessages(session, agentId) {
   try {
     let savedMessages = await session.savedAgentMessages(agentId);
@@ -712,7 +759,7 @@ async function readSavedAgentMessages(session, agentId) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:782967-783423 placement
+//@ chunk-5xgkngpb.js:794282-794738 placement
 /**
  * 把本地代理或进程内队友任务描述为统一形状：id、队友 id、描述、类型、父 id、名字。
  */
@@ -740,7 +787,7 @@ function describeAgentTask(task) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:783423-783536 placement
+//@ chunk-5xgkngpb.js:794738-794851 placement
 /**
  * 按代理 id 找任务（优先未结束的，否则最后一个）。
  */
@@ -748,7 +795,7 @@ function findAgentTask(tasks, agentId) {
   let filtered = Object.values(tasks).filter((task) => describeAgentTask(task)?.id === agentId);
   return filtered.find((task) => !isTerminalTaskStatus(task.status)) ?? filtered.at(-1);
 }
-//@ chunk-e6aww6q8.js:783536-783758 placement
+//@ chunk-5xgkngpb.js:794851-795073 placement
 /**
  * 取代理任务的转录消息（不可恢复的队友或 fork worker 返回 undefined）。
  */
@@ -763,7 +810,7 @@ function agentTranscriptMessages(taskRegistry, agentId) {
     ? undefined
     : (taskRegistry.getTranscript(agentTask.id)?.messages ?? EMPTY_MESSAGES);
 }
-//@ chunk-e6aww6q8.js:783758-783979 placement
+//@ chunk-5xgkngpb.js:795073-795294 placement
 async function agentConversation(session, agentId) {
   let savedAgentMessages = await readSavedAgentMessages(session, agentId);
   let transcript =
@@ -777,7 +824,7 @@ async function agentConversation(session, agentId) {
     ...heldMessages,
   ];
 }
-//@ chunk-e6aww6q8.js:783979-784186 placement
+//@ chunk-5xgkngpb.js:795294-795501 placement
 /**
  * turn.complete 期间暂存某代理的对话，返回释放函数。
  */
@@ -792,9 +839,9 @@ function holdAgentConversation(agentId) {
     return () => {};
   }
 }
-//@ chunk-e6aww6q8.js:784186-784338 placement
+//@ chunk-5xgkngpb.js:795501-795653 placement (2.1.88 match: _temp, 0.598)
 function agentResultSummary(result) {
-  if (!isPlainObject_5(result)) return {};
+  if (!isPlainObject_6(result)) return {};
   let { agentId, totalDurationMs } = result;
   return {
     ...(typeof agentId === "string" && {
@@ -805,7 +852,7 @@ function agentResultSummary(result) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:784338-784653 placement
+//@ chunk-5xgkngpb.js:795653-795968 placement
 /**
  * 生成映射函数：给 tool_use 附上对应结果文本、错误、meta，以及（Agent/Task 工具）子代理 id 与耗时。
  */
@@ -834,7 +881,7 @@ var attachToolResults = (resultsById, agentIdFor) => (toolUse) => {
     ...(isAgentTool && agentResultSummary(result?.result)),
   };
 };
-//@ chunk-e6aww6q8.js:784653-784896 placement
+//@ chunk-5xgkngpb.js:795968-796211 placement
 function toPluginTranscript(messages, agentIdFor) {
   let rows = [];
   let resultsById = new Map();
@@ -852,7 +899,7 @@ function toPluginTranscript(messages, agentIdFor) {
   }
   return rows.reverse();
 }
-//@ chunk-e6aww6q8.js:784896-785056 placement
+//@ chunk-5xgkngpb.js:796211-796371 placement
 function toolUseAgentMap(taskRegistry) {
   let byToolUseId = new Map();
   for (let task of Object.values(taskRegistry.all())) {
@@ -861,7 +908,7 @@ function toolUseAgentMap(taskRegistry) {
   }
   return (toolUseId) => byToolUseId.get(toolUseId);
 }
-//@ chunk-e6aww6q8.js:785056-785458 placement
+//@ chunk-5xgkngpb.js:796371-796773 placement
 /**
  * $.session.messages：返回主线程或指定代理的对话（as: "api" 时为请求消息尾部）；代理不存在时拒绝。
  */
@@ -878,7 +925,7 @@ async function sessionMessagesOp(args, plugin) {
     ? tailApiMessages(session.requestMessages(messages))
     : toPluginTranscript(messages, toolUseAgentMap(session.toolContext(new AbortController()).taskRegistry));
 }
-//@ chunk-e6aww6q8.js:785458-785643 placement
+//@ chunk-5xgkngpb.js:796773-796958 placement
 /**
  * $.session.repo：返回 git 根、远程地址、是否内部仓库与名字。
  */
@@ -895,7 +942,7 @@ async function sessionRepoOp(cwd) {
     name: await officialRepoIfEnabled(uncachedRoot, remoteUrlForDir, isInternal),
   };
 }
-//@ chunk-e6aww6q8.js:785643-785955 placement
+//@ chunk-5xgkngpb.js:796958-797270 placement
 /**
  * 解析会话地址：活跃会话用其 socket，否则 session_/cse_ 前缀视为远程会话。
  */
@@ -913,7 +960,7 @@ async function resolveSessionAddress(sessionId, findLive) {
         reason: `no live session on this machine has id ${sessionId} (a session that exited, or another machine's; a Remote Control or cloud session is addressed by its session_... id)`,
       };
 }
-//@ chunk-e6aww6q8.js:785955-786098 placement
+//@ chunk-5xgkngpb.js:797270-797413 placement
 function resolveSendTarget(target, findLive) {
   if (typeof target === "string")
     return Promise.resolve({
@@ -925,19 +972,19 @@ function resolveSendTarget(target, findLive) {
       })
     : resolveSessionAddress(target.sessionId, findLive);
 }
-//@ chunk-e6aww6q8.js:786098-786148 placement
+//@ chunk-5xgkngpb.js:797413-797463 placement
 /**
  * SendMessage 未投递
  */
 var SEND_MESSAGE_NOT_DELIVERED = "the SendMessage tool did not deliver it";
-//@ chunk-e6aww6q8.js:786148-786401 placement
+//@ chunk-5xgkngpb.js:797463-797716 placement
 function sendResultOf(outcome) {
   if (outcome.deny !== undefined)
     return {
       isDelivered: false,
       reason: outcome.deny,
     };
-  let result = isPlainObject_5(outcome.result) ? outcome.result : undefined;
+  let result = isPlainObject_6(outcome.result) ? outcome.result : undefined;
   if (outcome.isError !== true && result?.success === true)
     return {
       isDelivered: true,
@@ -949,7 +996,7 @@ function sendResultOf(outcome) {
       typeof message === "string" && message !== "" ? message : outcome.text || SEND_MESSAGE_NOT_DELIVERED,
   };
 }
-//@ chunk-e6aww6q8.js:786401-786767 placement
+//@ chunk-5xgkngpb.js:797716-798082 placement
 /**
  * 求队友的投递地址（按 agentId 找正在运行的进程内队友）。
  */
@@ -975,7 +1022,7 @@ function teammateAddressFor(target, tasks) {
         }
       : undefined;
 }
-//@ chunk-e6aww6q8.js:786767-787645 placement
+//@ chunk-5xgkngpb.js:798082-798961 placement
 /**
  * 插件 $.session.send：经 SendMessage 向其他会话发消息。
  */
@@ -1032,7 +1079,7 @@ async function sessionSendForPlugin(args, caller, deps) {
   );
   return result;
 }
-//@ chunk-e6aww6q8.js:787645-787844 placement
+//@ chunk-5xgkngpb.js:798961-799160 placement
 /**
  * $.session.turns：统计人类发起的用户消息数（不含 meta、虚拟与工具结果）。
  */
@@ -1042,16 +1089,16 @@ async function sessionTurnsOp(plugin) {
     logForDebugging(`$.session.turns (${plugin}): no session bound; 0`);
     return 0;
   }
-  return count(
+  return countWhere(
     binding.messages(),
     (message) =>
       message.type === "user" &&
       message.isMeta !== true &&
       message.isVirtual !== true &&
-      !hasToolResultBlock_2(message.message.content),
+      !hasToolResultBlock(message.message.content),
   );
 }
-//@ chunk-e6aww6q8.js:3693330-3693379 placement
+//@ chunk-5xgkngpb.js:3788755-3788804 placement
 /**
  * 用量窗口对象
  */
@@ -1060,7 +1107,7 @@ var usageWindow = (tokens, windowKind, percent) => ({
   window: windowKind,
   percent,
 });
-//@ chunk-e6aww6q8.js:3693379-3693591 placement
+//@ chunk-5xgkngpb.js:3788804-3789016 placement
 function contextUsageOf(messages, model) {
   let contextWindowStatus = buildContextWindowStatus(
     getLastApiUsage(messagesSinceCompactBoundary([...messages])),
@@ -1078,7 +1125,7 @@ function contextUsageOf(messages, model) {
     usedPercentage,
   );
 }
-//@ chunk-e6aww6q8.js:3693591-3693733 placement
+//@ chunk-5xgkngpb.js:3789016-3789158 placement
 var rateLimitWindow = (kind, rawWindow) => ({
   kind,
   percentUsed:
@@ -1087,7 +1134,7 @@ var rateLimitWindow = (kind, rawWindow) => ({
       : planWindowPercent(rawWindow.utilization),
   resetsAt: new Date(rawWindow.resets_at * SLOW_HOOK_REPORT_INTERVAL_MS_2).toISOString(),
 });
-//@ chunk-e6aww6q8.js:3693733-3693925 placement
+//@ chunk-5xgkngpb.js:3789158-3789350 placement
 function rateLimitWindows(windows, provider) {
   let overage = provider === "gateway" ? windows.overage : undefined;
   return [
@@ -1096,7 +1143,7 @@ function rateLimitWindows(windows, provider) {
     ...(overage ? [rateLimitWindow("spend_limit", overage)] : []),
   ];
 }
-//@ chunk-e6aww6q8.js:3693925-3694105 placement
+//@ chunk-5xgkngpb.js:3789350-3789530 placement
 var buildSessionUsage = ({ breakdown, ...usage }) => ({
   startedAt: usage.startedAt,
   context: {
@@ -1110,7 +1157,7 @@ var buildSessionUsage = ({ breakdown, ...usage }) => ({
     usd: usage.costUsd,
   },
 });
-//@ chunk-e6aww6q8.js:3694105-3694450 placement
+//@ chunk-5xgkngpb.js:3789530-3789875 placement
 /**
  * $.session.usage：返回会话开始时间、上下文用量（可含分类明细）、限额窗口与费用。
  */
@@ -1135,7 +1182,7 @@ async function sessionUsageOp(args, plugin) {
       : undefined,
   });
 }
-//@ chunk-e6aww6q8.js:3992260-3992999 placement
+//@ chunk-5xgkngpb.js:4095150-4095892 placement
 /**
  * session.start 在新副本中重跑时，复用之前已做过的 $.prompt.submit/command.run/agent.spawn 调用结果，避免重复执行。
  */
@@ -1179,7 +1226,7 @@ function dedupeSessionStartCalls(event, call) {
   };
   return dedupeOne;
 }
-//@ chunk-e6aww6q8.js:3992999-3993493 placement
+//@ chunk-5xgkngpb.js:4095892-4096386 placement
 /**
  * $.turn.abort：只能中止当前运行的回合（id 必须匹配且未在结束中）。
  */
@@ -1201,7 +1248,140 @@ function turnAbortOp(args, plugin) {
   turn.cancel();
   return Promise.resolve();
 }
-//@ chunk-e6aww6q8.js:3993493-3993711 placement
+//@ chunk-5xgkngpb.js:4096386-4096634 layout
+var MAX_BLUR_PX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_TINT_LENGTH;
+var NUMBER_SOURCE;
+var SEPARATOR_SOURCE;
+var regExp_19;
+deferInit("chunk-5xgkngpb.js:4096386", () => {
+  MAX_BLUR_PX = 64;
+  MAX_TINT_LENGTH = 64;
+  NUMBER_SOURCE = String.raw`(\d+(\.\d+)?|\.\d+)%?`;
+  SEPARATOR_SOURCE = String.raw`( *, *| +)`;
+  regExp_19 = new RegExp(
+    String.raw`^(#([0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})|(rgb|hsl)a?\( *` +
+      `${NUMBER_SOURCE}${SEPARATOR_SOURCE}${NUMBER_SOURCE}${SEPARATOR_SOURCE}${NUMBER_SOURCE}` +
+      String.raw`( *[,/] *${NUMBER_SOURCE})? *\))$`,
+  );
+});
+//@ chunk-5xgkngpb.js:4096634-4097564 layout
+function checkBackdrop(backdrop) {
+  if (backdrop === undefined) return;
+  if (typeof backdrop !== "object" || backdrop === null)
+    return "the argument is { id, glass?, colorScheme? } or undefined";
+  let idProblem = checkPaneId("id" in backdrop ? backdrop.id : undefined);
+  let glass = "glass" in backdrop ? backdrop.glass : undefined;
+  let colorScheme = "colorScheme" in backdrop ? backdrop.colorScheme : undefined;
+  if (idProblem !== undefined) return idProblem;
+  if (colorScheme !== undefined && colorScheme !== "light" && colorScheme !== "dark")
+    return "colorScheme is light or dark";
+  if (glass === undefined || glass === false) return;
+  if (typeof glass !== "object" || glass === null) return "glass is { blur?, tint?, opacity? } or false";
+  let blur = "blur" in glass ? glass.blur : undefined;
+  let opacity = "opacity" in glass ? glass.opacity : undefined;
+  let tint = "tint" in glass ? glass.tint : undefined;
+  if (blur !== undefined && !(typeof blur === "number" && blur >= 0 && blur <= MAX_BLUR_PX))
+    return `glass.blur is a number of CSS pixels, 0 to ${MAX_BLUR_PX}`;
+  if (opacity !== undefined && !(typeof opacity === "number" && opacity >= 0 && opacity <= 1))
+    return "glass.opacity is a number, 0 to 1";
+  if (
+    tint !== undefined &&
+    !(typeof tint === "string" && tint.length <= MAX_TINT_LENGTH && regExp_19.test(tint))
+  )
+    return `glass.tint is a raw color, #hex or rgb(), rgba(), hsl() or hsla() of numbers, at most ${MAX_TINT_LENGTH} characters`;
+  return;
+}
+//@ chunk-5xgkngpb.js:4097564-4097826 layout
+function checkBackdropArgs(event) {
+  if (typeof event !== "object" || event === null) return "the event is { backdrop }";
+  return !("backdrop" in event) && Object.keys(event).length > 0
+    ? "the event is { backdrop: { id, glass?, colorScheme? } }: pass the argument under backdrop"
+    : checkBackdrop("backdrop" in event ? event.backdrop : undefined);
+}
+//@ chunk-5xgkngpb.js:4097869-4097888 layout
+var BACKDROP = "backdrop";
+//@ chunk-5xgkngpb.js:4097888-4097956 layout
+function clearBackdropFor(plugin) {
+  getPluginRegistry().backdrop.setState((current) => (current?.plugin === plugin ? undefined : current));
+}
+//@ chunk-5xgkngpb.js:4097956-4097986 layout
+var DEFAULT_GLASS = {
+  blur: 16,
+  opacity: 0.6,
+};
+//@ chunk-5xgkngpb.js:4097986-4098119 layout
+function normalizeGlass(glass) {
+  if (glass === false) return false;
+  return {
+    blur: glass?.blur ?? DEFAULT_GLASS.blur,
+    opacity: glass?.opacity ?? DEFAULT_GLASS.opacity,
+    ...(glass?.tint !== undefined && {
+      tint: glass.tint,
+    }),
+  };
+}
+//@ chunk-5xgkngpb.js:4098119-4098166 layout
+function getBackdropState() {
+  return getPluginRegistry().backdrop.getState();
+}
+//@ chunk-5xgkngpb.js:4098166-4098738 layout
+function runBackdrop(backdrop, ctx, reason) {
+  if (backdrop === undefined) {
+    let samePlugin = getBackdropState()?.plugin === ctx.plugin;
+    clearBackdropFor(ctx.plugin);
+    if (samePlugin) logFeatureOk("plugin_function_hooks_backdrop");
+    return {
+      isDrawn: false,
+      reason: samePlugin
+        ? "the backdrop is cleared"
+        : "this plugin holds no backdrop, so nothing was cleared",
+    };
+  }
+  let requestId = BACKDROP;
+  let nextState = {
+    plugin: ctx.plugin,
+    id: backdrop.id,
+    glass: normalizeGlass(backdrop.glass),
+    ...(backdrop.colorScheme !== undefined && {
+      colorScheme: backdrop.colorScheme,
+    }),
+  };
+  let changed = !isDeepStrictEqual(getBackdropState(), nextState);
+  if (changed) getPluginRegistry().backdrop.setState(() => nextState);
+  if (reason === undefined) {
+    if (changed) logFeatureOk("plugin_function_hooks_backdrop");
+    return {
+      isDrawn: true,
+      requestId,
+    };
+  }
+  if (changed) logFeatureSad("plugin_function_hooks_backdrop", "undrawn");
+  return {
+    isDrawn: false,
+    requestId,
+    reason,
+  };
+}
+//@ chunk-5xgkngpb.js:4098738-4098895 layout
+function backdropInstanceOf(instanceId) {
+  let state = getBackdropState();
+  return state !== undefined && instanceId === BACKDROP
+    ? {
+        id: state.id,
+        plugin: state.plugin,
+        glass: state.glass,
+        ...(state.colorScheme !== undefined && {
+          colorScheme: state.colorScheme,
+        }),
+      }
+    : undefined;
+}
+//@ chunk-5xgkngpb.js:4098895-4098945 layout
+function subscribeBackdrop(listener) {
+  return getPluginRegistry().backdrop.subscribe(listener);
+}
+//@ chunk-5xgkngpb.js:4098945-4099163 placement
 /**
  * 校验 $.ui.notify 参数：text 为字符串，surface 合法。
  */
@@ -1213,28 +1393,25 @@ function checkNotifyArgs(args) {
     : "surface is not the name of a surface (terminal, desktop, mobile, vscode)";
 }
 export {
-  describeAgentTask,
-  holdAgentConversation,
-  sessionUsageOp,
-  findAgentTask,
-  normalizeContentBlocks_2,
-  isSnappyPlumOn,
+  sessionStartHostRefusedSlot,
+  subscribeBackdrop,
+  getBackdropState,
+  BACKDROP,
+  backdropInstanceOf,
   requireBoundSession,
+  clearBackdropFor,
   isSlashCommandText,
+  checkPromptSubmitArgs,
   submitHoldRefusal,
   MAX_SESSION_TEXT_CHARS,
   LATER,
   attachToolResults,
   toPluginMessage,
-  sessionAuthorizeForPlugin,
-  sessionIdentity,
-  identityRefusal,
-  authHandleRegistry,
-  stringRequestMeta,
   sessionInfoOp,
   sessionTurnsOp,
   sessionMessagesOp,
   sessionRepoOp,
+  sessionUsageOp,
   sessionCompactForPlugin,
   sessionSendForPlugin,
   sessionAppendOp,
@@ -1242,5 +1419,18 @@ export {
   dedupeSessionStartCalls,
   uiToastOp,
   uiStatusOp,
+  checkBackdropArgs,
+  runBackdrop,
   checkNotifyArgs,
+  sessionAuthorizeForPlugin,
+  sessionIdentityWithEmail,
+  sessionIdentity,
+  identityRefusal,
+  describeAgentTask,
+  authHandleRegistry,
+  isSnappyPlumOn,
+  stringRequestMeta,
+  findAgentTask,
+  normalizeContentBlocks_2,
+  holdAgentConversation,
 };

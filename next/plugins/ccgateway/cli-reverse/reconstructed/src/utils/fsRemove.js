@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：文件/目录删除辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jhrww53q.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xjnnz630.js (7)
  * attribution: placement 6, layout 1
  */
 import { unlink, rmdir, lstat, readdir } from "fs/promises";
@@ -15,7 +15,7 @@ import { safeResolvePath_2 } from "./fsOperations.js";
 import { getPlatform } from "./platform.js";
 import { readJunction } from "./fsJunctions.js";
 
-//@ chunk-jhrww53q.js:47118-47434 placement
+//@ chunk-xjnnz630.js:48472-48788 placement
 async function removePathEntry(entryPath) {
   try {
     await unlink(entryPath);
@@ -42,7 +42,7 @@ async function removePathEntry(entryPath) {
     }
   }
 }
-//@ chunk-jhrww53q.js:47579-48073 placement
+//@ chunk-xjnnz630.js:48933-49428 placement
 async function classifyDirEntry(dirPath, dirent) {
   let entryInfo;
   if (!safeResolvePath_2(dirent))
@@ -80,7 +80,7 @@ async function classifyDirEntry(dirPath, dirent) {
   }
   return entryInfo;
 }
-//@ chunk-jhrww53q.js:48073-48156 placement
+//@ chunk-xjnnz630.js:49755-49838 placement
 async function classifyDirEntrySafe(dirPath, dirent) {
   try {
     return await classifyDirEntry(dirPath, dirent);
@@ -89,7 +89,7 @@ async function classifyDirEntrySafe(dirPath, dirent) {
     throw error;
   }
 }
-//@ chunk-jhrww53q.js:48156-48343 placement
+//@ chunk-xjnnz630.js:49838-50025 placement
 async function removeLinkOrDir(entryPath) {
   let stats;
   try {
@@ -108,9 +108,9 @@ async function removeLinkOrDir(entryPath) {
   }
   await removeDirectoryTreeNoFollow(entryPath);
 }
-//@ chunk-jhrww53q.js:48343-48352 layout
+//@ chunk-xjnnz630.js:50025-50034 layout
 var RM_CONCURRENCY = 16;
-//@ chunk-jhrww53q.js:48352-48857 placement (2.1.88 match: isLocalMarketplaceSource, 0.272)
+//@ chunk-xjnnz630.js:50034-50539 placement (2.1.88 match: isLocalMarketplaceSource, 0.272)
 /**
  * 递归删除目录树（每批 16 个并发），不跟随符号链接（Windows 下也识别 junction）；删完发现目录又被写入时抛 ENOTEMPTY。旧版名 isLocalMarketplaceSource 是误配。
  */
@@ -151,7 +151,7 @@ async function removeDirectoryTreeNoFollow(source) {
       path: source,
     });
 }
-//@ chunk-jhrww53q.js:49040-49140 placement
+//@ chunk-xjnnz630.js:50722-50823 placement
 /**
  * 检查路径类型，出错就抛，类型为 junction（Windows 目录联接）时返回 true。
  */
@@ -161,9 +161,9 @@ async function isWindowsJunction(source) {
   return junction.kind === "junction";
 }
 export {
+  removePathEntry,
   removeDirectoryTreeNoFollow,
   classifyDirEntry,
   classifyDirEntrySafe,
-  removePathEntry,
   removeLinkOrDir,
 };

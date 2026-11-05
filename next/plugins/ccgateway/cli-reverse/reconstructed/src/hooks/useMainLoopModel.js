@@ -3,9 +3,9 @@
  *
  * 解析当前主循环模型（mainLoopModel 与 mainLoopModelForSession），含 plan 模式模型与若干模型选择器副本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useMainLoopModel.ts
- * pieces: chunk-kxxfj8vr.js (7)
+ * pieces: chunk-d7edkens.js (7)
  * attribution: placement 7
  */
 import {
@@ -23,18 +23,18 @@ import { useForceRender } from "./useForceRender.js";
 import { useSettingsState } from "./useSettings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-kxxfj8vr.js:424-428 placement
+//@ chunk-d7edkens.js:424-428 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-kxxfj8vr.js:424", () => {
+deferInit("chunk-d7edkens.js:424", () => {
   init_react_production();
 });
-//@ chunk-kxxfj8vr.js:428-491 placement
+//@ chunk-d7edkens.js:428-491 placement
 function useMainLoopModelVersion() {
   let [version, bumpVersion] = useReducer((count) => count + 1, 0);
   useEffect(() => subscribeTierMoves(bumpVersion), []);
   return version;
 }
-//@ chunk-kxxfj8vr.js:491-537 placement
+//@ chunk-d7edkens.js:491-537 placement
 /**
  * 函数 resolveMainLoopModel（多来源取主循环模型）；位于「解析当前主循环模型（mainLoopModel 与 mainLoopModelForSession），含 plan 模式模型与若干模型选择器副本」模块。
  */
@@ -45,11 +45,11 @@ function resolveMainLoopModel(mainLoopModelForSession, mainLoopModel) {
     getDefaultMainLoopModelSetting()
   );
 }
-//@ chunk-kxxfj8vr.js:537-610 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-d7edkens.js:537-610 placement (2.1.88 match: useMainLoopModel, 1)
 function getMainLoopModelFromState(state) {
   return parseUserSpecifiedModel(resolveMainLoopModel(state.mainLoopModelForSession, state.mainLoopModel));
 }
-//@ chunk-kxxfj8vr.js:610-746 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-d7edkens.js:610-746 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModelSetting() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
@@ -61,7 +61,7 @@ function useMainLoopModelSetting() {
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
-//@ chunk-kxxfj8vr.js:746-882 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-d7edkens.js:746-882 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel_2() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
@@ -73,7 +73,7 @@ function useMainLoopModel_2() {
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
-//@ chunk-kxxfj8vr.js:882-1056 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-d7edkens.js:882-1056 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel() {
   let mainLoopModel = useAppState((state) => state.mainLoopModel);
   let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
@@ -92,7 +92,7 @@ function useMainLoopModel() {
 export {
   useMainLoopModel,
   getMainLoopModelFromState,
+  resolveMainLoopModel,
   useMainLoopModelSetting,
   useMainLoopModel_2,
-  resolveMainLoopModel,
 };

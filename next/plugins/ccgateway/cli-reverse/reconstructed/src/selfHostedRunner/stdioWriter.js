@@ -3,9 +3,9 @@
  *
  * runner 标准输出写入器（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (2)
  * attribution: placement 2
  */
 import { isatty } from "tty";
@@ -24,7 +24,7 @@ import {
 } from "./healthServer.js";
 import { STREAM_GONE_CODES } from "../utils/process.js";
 
-//@ chunk-3nztfxrw.js:27630-30995 placement
+//@ chunk-a3r2kq46.js:28284-31649 placement
 /**
  * runner 标准输出写入器的底层操作：openOwn 重新打开 fd（终端或 Linux 管道）为非阻塞，sameFile 比较是否同一文件，writeOnAThread 在 Worker 线程用 SharedArrayBuffer 同步写（按整行、不超过 PIPE_BUF），sleep 用 Atomics.wait。
  */
@@ -195,7 +195,7 @@ var stdioWriterOps = {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
   },
 };
-//@ chunk-3nztfxrw.js:30995-36063 placement
+//@ chunk-a3r2kq46.js:31649-36717 placement
 /**
  * 打开 runner 的标准输出写入器（非阻塞描述符、独立线程、EPIPE 处理）
  */

@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增。转录流。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { createPromptRewriteStore } from "../replDialogState.js";
 import { PasteTracker } from "../../components/messages/UserPromptMessage.js";
 import {
-  pendingShellLines,
+  completedShellLines,
   inFlightByShell,
   drainedShells,
-  completedShellLines,
+  DRAINED_SHELL_MARK,
   createFlushBatcher,
   isLineNearlyFull,
   endsBeforeLastLine,
@@ -33,7 +33,7 @@ import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import { logError } from "../../utils/log.js";
 import { isHumanTurn_2 } from "../../utils/messagePredicates.js";
 
-//@ chunk-18hwfzwa.js:1502683-1510531 placement
+//@ chunk-czq1j3j2.js:1544178-1551999 placement
 /**
  * TranscriptStream：REPL 转录流，把引擎回合产生的消息增量追加到界面消息列表并处理批量刷新。
  */
@@ -50,11 +50,11 @@ class TranscriptStream {
     streamingThinking: null,
     userInputOnProcessing: undefined,
     placeholderOrigin: undefined,
-    followingPromptsOnProcessing: pendingShellLines,
+    followingPromptsOnProcessing: completedShellLines,
     placeholderWaitedInQueue: false,
     toolProgress: inFlightByShell,
     promptsAwaitingModel: drainedShells,
-    settledReply: completedShellLines,
+    settledReply: DRAINED_SHELL_MARK,
   };
   _changed = createSignal();
   _coalescer;
@@ -125,7 +125,7 @@ class TranscriptStream {
   setSettledReply = (reply) => {
     if (reply.length === 0 && this._snapshot.settledReply.length === 0) return;
     this._publish({
-      settledReply: reply.length === 0 ? completedShellLines : reply,
+      settledReply: reply.length === 0 ? DRAINED_SHELL_MARK : reply,
     });
   };
   setStreamingThinking = (next) => {
@@ -154,7 +154,7 @@ class TranscriptStream {
       origin,
       text !== undefined && text === this._snapshot.userInputOnProcessing
         ? this._snapshot.followingPromptsOnProcessing
-        : pendingShellLines,
+        : completedShellLines,
       waitedInQueue,
     );
   };
@@ -162,7 +162,7 @@ class TranscriptStream {
     this._showPromptsOnProcessing(
       prompt.text,
       prompt.origin,
-      followingPrompts.length === 0 ? pendingShellLines : followingPrompts,
+      followingPrompts.length === 0 ? completedShellLines : followingPrompts,
       true,
     );
   }
@@ -197,7 +197,7 @@ class TranscriptStream {
       this._publish({
         userInputOnProcessing: undefined,
         placeholderOrigin: undefined,
-        followingPromptsOnProcessing: pendingShellLines,
+        followingPromptsOnProcessing: completedShellLines,
         placeholderWaitedInQueue: false,
       });
     if (prompt !== shellId) this._sweepResolvedToolProgress(prompt);
@@ -298,10 +298,7 @@ class TranscriptStream {
     }
     if (length > 0 && this._apiMetrics.length > 0) {
       let last = this._apiMetrics.at(-1);
-      if (last.outputTokens == null) {
-        last.lastTokenTime = Date.now();
-        last.endResponseLength = this._responseLength;
-      }
+      if (last.outputTokens == null) last.endResponseLength = this._responseLength;
     }
   };
   onResponseLength = (nowMs) => {
@@ -383,7 +380,7 @@ class TranscriptStream {
     this._streamingTextShown = false;
     this.previewStore.setTransformed(null);
     this.previewStore.setRewrite(null);
-    this.setSettledReply(completedShellLines);
+    this.setSettledReply(DRAINED_SHELL_MARK);
   }
   reset() {
     this.setUserInputOnProcessing(undefined);
@@ -393,7 +390,7 @@ class TranscriptStream {
     this.setStreamingToolUses(clearIfAny);
     this.clearToolProgress();
     if (this.previewStore.getState().salvage !== null) this.previewStore.setSalvage(null);
-    this.setSettledReply(completedShellLines);
+    this.setSettledReply(DRAINED_SHELL_MARK);
   }
   dispose() {
     this._disposed = true;
@@ -420,11 +417,11 @@ class TranscriptStream {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1510531-1510570 placement
+//@ chunk-czq1j3j2.js:1551999-1552038 placement
 function clearIfAny(list) {
   return list.length > 0 ? [] : list;
 }
-//@ chunk-18hwfzwa.js:1510570-1510660 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-czq1j3j2.js:1552038-1552128 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 function isHumanTurnOrQueuedCommand(message) {
   return (
     isHumanTurn_2(message) || (message.type === "attachment" && message.attachment.type === "queued_command")

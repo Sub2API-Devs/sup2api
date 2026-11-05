@@ -3,14 +3,14 @@
  *
  * 启动 Logo 主组件：根据宽度/会话状态选择完整欢迎框或精简 Logo，并挂 Feed、通知、提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/LogoV2.tsx
- * pieces: chunk-ag5x7vhf.js (22)
- * attribution: placement 14, sole-consumer 7, callgraph-witnessed 1
+ * pieces: chunk-hnxhr3bs.js (23)
+ * attribution: placement 14, sole-consumer 8, callgraph-witnessed 1
  */
 import {
-  useSyncExternalStore,
   init_react_production,
+  useSyncExternalStore,
   useState,
   useEffect,
   useContext,
@@ -32,7 +32,7 @@ import {
 import { isNoticeableMcpServer } from "../../hooks/notifs/useMcpConnectivityStatus.js";
 import { getCliOwnedState } from "../../services/mcp/cliOwnedClients.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { count, stringArray } from "../../utils/collections.js";
+import { countWhere, stringArray } from "../../utils/collections.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { isClaudeMdLoadingDisabled } from "../../utils/settings/customizationDisabled.js";
 import { getMemoryFilesCached } from "../../utils/claudemd.js";
@@ -50,7 +50,6 @@ import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { getLayoutMode } from "../../utils/logoV2Utils.js";
 import { useSession } from "../../context/session.js";
 import { useAppStateSlice, appStoreContext } from "../../state/AppState.js";
-import { unknownModelWindowModel } from "../../commands/fast/fast.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useTasksV2 } from "../../hooks/useTasksV2.js";
 import { useModelSuccessorSubscriptions } from "./ModelSuccessorNotice.js";
@@ -73,36 +72,41 @@ import { InfoNotice } from "./Notices.js";
 import { plural } from "../../utils/stringUtils.js";
 import { noticeImpressionEnabled } from "./CondensedLogo.js";
 import { FreezeWhenOffscreen } from "../FreezeWhenOffscreen.js";
-import { SlashLinkContexts } from "../SlashCommandLink.js";
+import { SlashLinkContexts, slashCommandLinkContext } from "../SlashCommandLink.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:69058-69089 placement
+//@ chunk-hnxhr3bs.js:68610-68614 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:68610", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:68614-68645 placement
 function useComplianceTaints() {
   return useSyncExternalStore(onComplianceTaintsChanged, getComplianceTaints);
 }
-//@ chunk-ag5x7vhf.js:69089-69128 placement
+//@ chunk-hnxhr3bs.js:68645-68685 placement
 /**
  * 函数 useHasComplianceTaint（是否有合规标记）；位于「启动 Logo 主组件：根据宽度/会话状态选择完整欢迎框或精简 Logo，并挂 Feed、通知、提示」模块。
  */
 function useHasComplianceTaint(taints) {
   return useSyncExternalStore(onComplianceTaintsChanged, () => hasComplianceTaint(taints));
 }
-//@ chunk-ag5x7vhf.js:69128-69132 placement
+//@ chunk-hnxhr3bs.js:68685-68689 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:69128", () => {
+deferInit("chunk-hnxhr3bs.js:68685", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:69132-69164 placement
+//@ chunk-hnxhr3bs.js:68689-68721 placement
 function useLastLoadStatus() {
   return useSyncExternalStore(onLastLoadStatusChanged, getLastLoadStatus);
 }
-//@ chunk-ag5x7vhf.js:69164-69226 placement
+//@ chunk-hnxhr3bs.js:68721-68783 placement
 var MAX_NOTICED_MCP_SERVERS = 128;
 var MCP_CONNECTION_CHECKS = {
   hasEverConnected: hasClaudeAiMcpEverConnected,
   connectedThisSession: isClaudeAiMcpConnectedThisSession,
 };
-//@ chunk-ag5x7vhf.js:69226-69412 placement
+//@ chunk-hnxhr3bs.js:68783-68969 placement
 function isNeedsAuthNotice(client, { hasEverConnected, connectedThisSession }) {
   if (client.type !== "needs-auth" || !isNoticeableMcpServer(client, hasEverConnected, connectedThisSession))
     return false;
@@ -111,11 +115,11 @@ function isNeedsAuthNotice(client, { hasEverConnected, connectedThisSession }) {
     !stringArrayOf(getGlobalConfig()).includes(client.name)
   );
 }
-//@ chunk-ag5x7vhf.js:69412-69454 placement
+//@ chunk-hnxhr3bs.js:68969-69011 placement
 function countNeedsAuthServers_2(clients, connectionState) {
-  return count(clients, (client) => isNeedsAuthNotice(client, connectionState));
+  return countWhere(clients, (client) => isNeedsAuthNotice(client, connectionState));
 }
-//@ chunk-ag5x7vhf.js:69454-69757 placement
+//@ chunk-hnxhr3bs.js:69011-69314 placement
 function needsAuthNoticeServers(clients, connectionState, storageV5) {
   let needsAuthNoticedThisSession = getCliOwnedState().needsAuthNoticedThisSession;
   let noticed = [];
@@ -136,13 +140,13 @@ function needsAuthNoticeServers(clients, connectionState, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:69757-69870 placement (2.1.88 match: findChromeClient, 1)
+//@ chunk-hnxhr3bs.js:69314-69427 placement (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   let noticedList = stringArrayOf(getGlobalConfig());
   if (noticedList.length === 0) return 0;
-  return count(clients, (client) => client.type === "connected" && noticedList.includes(client.name));
+  return countWhere(clients, (client) => client.type === "connected" && noticedList.includes(client.name));
 }
-//@ chunk-ag5x7vhf.js:69870-70072 placement
+//@ chunk-hnxhr3bs.js:69427-69629 placement
 function clearNoticedMcpNeedsAuth(clients, storageV5) {
   saveGlobalConfig((config) => {
     let noticedList = stringArrayOf(config);
@@ -157,45 +161,44 @@ function clearNoticedMcpNeedsAuth(clients, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:70072-70120 placement
+//@ chunk-hnxhr3bs.js:69629-69677 placement
 function stringArrayOf(globalConfig) {
   return stringArray(globalConfig.mcpNeedsAuthNoticed);
 }
-//@ chunk-ag5x7vhf.js:70163-70176 placement
+//@ chunk-hnxhr3bs.js:69720-69733 placement
 var MCP_CONNECTED_TTL_MS = 15000;
-//@ chunk-ag5x7vhf.js:70599-70603 placement
+//@ chunk-hnxhr3bs.js:70156-70160 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:70599", () => {
+deferInit("chunk-hnxhr3bs.js:70156", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:74592-74596 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:74592", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:112980-113076 sole-consumer
+//@ chunk-hnxhr3bs.js:117015-117101 sole-consumer
+function unknownModelWindowModel(state) {
+  return state.setupIssues.unknownModelWindowWarning ? state.mainLoopModel : null;
+}
+//@ chunk-hnxhr3bs.js:117101-117197 sole-consumer
 function selectUnknownModelWindowModel(appState) {
   return appState.setupIssues.unknownModelWindowWarning ? appState.mainLoopModelForSession : null;
 }
-//@ chunk-ag5x7vhf.js:113076-113128 sole-consumer
+//@ chunk-hnxhr3bs.js:117197-117249 sole-consumer
 function selectReplBridgeAutoOn(state) {
   return state.replBridgeAutoOnByDefault;
 }
-//@ chunk-ag5x7vhf.js:113128-113175 sole-consumer (2.1.88 match: _temp4, 1)
+//@ chunk-hnxhr3bs.js:117249-117296 sole-consumer (2.1.88 match: _temp4, 1)
 function selectReplBridgeSessionUrl(s) {
   return s.replBridgeSessionUrl;
 }
-//@ chunk-ag5x7vhf.js:113175-113220 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-hnxhr3bs.js:117296-117341 sole-consumer (2.1.88 match: _temp, 1)
 function countNeedsAuthServers(s) {
   return countNeedsAuthServers_2(s.mcp.clients, MCP_CONNECTION_CHECKS);
 }
-//@ chunk-ag5x7vhf.js:113220-113262 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-hnxhr3bs.js:117341-117383 sole-consumer (2.1.88 match: _temp, 1)
 function countChromeClients(s) {
   return findChromeClient(s.mcp.clients);
 }
-//@ chunk-ag5x7vhf.js:113262-113272 sole-consumer
+//@ chunk-hnxhr3bs.js:117383-117393 sole-consumer
 var EMPTY_MEMORY_FILES = [];
-//@ chunk-ag5x7vhf.js:113272-113588 sole-consumer
+//@ chunk-hnxhr3bs.js:117393-117709 sole-consumer
 /**
  * 异步加载 CLAUDE.md 等记忆文件（关闭 CLAUDE.md 加载时为空），组件卸载后忽略结果；返回当前结果。
  */
@@ -240,7 +243,7 @@ function useMemoryFiles(showGuestPassesUpsell, storageV5, credentials) {
   useEffect(loadEffect, loadDeps);
   return memoryFiles;
 }
-//@ chunk-ag5x7vhf.js:113588-117168 callgraph-witnessed (2.1.88 match: LogoV2, 0.17)
+//@ chunk-hnxhr3bs.js:117709-121325 callgraph-witnessed (2.1.88 match: LogoV2, 0.172)
 function LogoV2(props) {
   let $ = useMemoCache(28);
   let options;
@@ -344,11 +347,11 @@ function LogoV2(props) {
     : reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
   const unusableManagedMcpConfigMessage = getIsRemoteMode() ? null : getUnusableEnterpriseMcpConfigMessage();
   let modelRestrictedWarning;
-  Qe: {
+  qe: {
     let modelRestrictedWarning_2 = appStateSlice?.modelRestrictedWarning;
     if (!modelRestrictedWarning_2) {
       modelRestrictedWarning = null;
-      break Qe;
+      break qe;
     }
     let model = getMainLoopModel();
     let fullModelDisplayName = strip1mSuffix(modelRestrictedWarning_2.requested.trim().toLowerCase());
@@ -358,7 +361,7 @@ function LogoV2(props) {
       parseUserSpecifiedModel(modelRestrictedWarning_2.requested).toLowerCase() === model.toLowerCase()
     ) {
       modelRestrictedWarning = null;
-      break Qe;
+      break qe;
     }
     modelRestrictedWarning = {
       requested: modelRestrictedWarning_2.requested,
@@ -457,23 +460,26 @@ function LogoV2(props) {
               }),
             slot === null
               ? null
-              : jsxProd_default_2(Box, {
-                  flexDirection: "column",
-                  marginTop: hasWarnings ? 1 : 0,
-                  children: [
-                    jsxProd_default(Box, {
-                      flexDirection: "column",
-                      paddingLeft: showAccentBar ? 1 : 2,
-                      borderStyle: showAccentBar ? "quote" : undefined,
-                      borderTop: false,
-                      borderBottom: false,
-                      borderRight: false,
-                      borderColor: slot.tier === "announcement" ? "claude" : undefined,
-                      borderDimColor: slot.tier !== "announcement",
-                      children: slot.render(noticeProps),
-                    }),
-                    overflowBox,
-                  ],
+              : jsxProd_default(slashCommandLinkContext.Provider, {
+                  value: false,
+                  children: jsxProd_default_2(Box, {
+                    flexDirection: "column",
+                    marginTop: hasWarnings ? 1 : 0,
+                    children: [
+                      jsxProd_default(Box, {
+                        flexDirection: "column",
+                        paddingLeft: showAccentBar ? 1 : 2,
+                        borderStyle: showAccentBar ? "quote" : undefined,
+                        borderTop: false,
+                        borderBottom: false,
+                        borderRight: false,
+                        borderColor: slot.tier === "announcement" ? "claude" : undefined,
+                        borderDimColor: slot.tier !== "announcement",
+                        children: slot.render(noticeProps),
+                      }),
+                      overflowBox,
+                    ],
+                  }),
                 }),
             hasAnt &&
               jsxProd_default(Box, {
@@ -514,4 +520,4 @@ function LogoV2(props) {
   } else wrapped = $[27];
   return wrapped;
 }
-export { LogoV2, useHasComplianceTaint, MCP_CONNECTED_TTL_MS, needsAuthNoticeServers, MCP_CONNECTION_CHECKS };
+export { useHasComplianceTaint, LogoV2, MCP_CONNECTED_TTL_MS, needsAuthNoticeServers, MCP_CONNECTION_CHECKS };

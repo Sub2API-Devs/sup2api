@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/BetaMessageStream.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (3)
+ * pieces: chunk-vn3g7zt8.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
@@ -14,7 +14,7 @@ import { sleepWithAbort } from "../tools/agent-toolset/memories.mjs";
 import { attachParsedOutput } from "./beta-parser.mjs";
 import { JSON_BUF_PROPERTY, withLazyInput } from "../internal/message-stream-utils.mjs";
 
-//@ chunk-hwmsct5x.js:94397-94479 esm-layout
+//@ chunk-vn3g7zt8.js:94777-94859 esm-layout
 var _BetaMessageStream_instances;
 var _BetaMessageStream_currentMessageSnapshot;
 var _BetaMessageStream_params;
@@ -41,11 +41,11 @@ var _BetaMessageStream_addStreamEvent;
 var _BetaMessageStream_endRequest;
 var _BetaMessageStream_accumulateMessage;
 var _BetaMessageStream_toolInputParseError;
-//@ chunk-hwmsct5x.js:94479-94574 esm-fingerprint
+//@ chunk-vn3g7zt8.js:94859-94954 esm-fingerprint
 function tracksToolInput(content) {
   return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
 }
-//@ chunk-hwmsct5x.js:94574-104825 esm-fingerprint
+//@ chunk-vn3g7zt8.js:94954-105205 esm-fingerprint
 var BetaMessageStream = (() => {
   class BetaMessageStream {
     constructor(params, opts) {

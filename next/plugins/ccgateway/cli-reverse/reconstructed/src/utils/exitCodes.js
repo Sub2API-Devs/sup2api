@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。守护进程等使用的 sysexits 退出码常量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a2g5s7cw.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j0ryhdyy.js (1)
  * attribution: placement 1
  */
-//@ chunk-a2g5s7cw.js:191-215 placement
+//@ chunk-j0ryhdyy.js:191-215 placement
 /**
  * 退出码 78（EX_TEMPFAIL，临时失败）。
  */

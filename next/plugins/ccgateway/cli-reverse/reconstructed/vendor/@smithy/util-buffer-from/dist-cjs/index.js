@@ -1,14 +1,14 @@
 /**
  * @smithy/util-buffer-from/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/util-buffer-from@2.2.0..3.0.0
- * pieces: chunk-wr8v03d0.js (1)
+ * pieces: chunk-2v4fe6xx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_is_array_buffer } from "../../is-array-buffer/dist-cjs/index.js";
 
-//@ chunk-wr8v03d0.js:440-877 cjs-fingerprint
+//@ chunk-2v4fe6xx.js:440-877 cjs-fingerprint
 var require_util_buffer_from = __commonJS(function (cjsExports) {
   var import_is_array_buffer = require_is_array_buffer();
   var import_buffer = importMetaRequire("buffer");

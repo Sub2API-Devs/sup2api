@@ -3,14 +3,13 @@
  *
  * OTel 初始化：CLAUDE_CODE_ENABLE_TELEMETRY、OTEL_*_EXPORTER、OTLP 配置与头、BigQuery reader、resource、flush 与关闭。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/instrumentation.ts
- * pieces: chunk-9vvvg0d3.js (49), chunk-jhrww53q.js (1)
- * attribution: sole-consumer 29, fingerprint 11, affinity 1, callgraph-witnessed 2, layout 6, file-local 1
+ * pieces: chunk-3wgj3rdg.js (50), chunk-xjnnz630.js (1)
+ * attribution: sole-consumer 30, fingerprint 11, affinity 1, callgraph-witnessed 2, layout 6, file-local 1
  */
 import { arch } from "os";
 import http from "http";
-import https from "https";
 import { __export, __toESM } from "../../../runtime/bun-runtime.js";
 import {
   EMPTY_ENV_DECLARATIONS,
@@ -56,14 +55,18 @@ import {
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
   OTEL_EXPORTER_OTLP_LOGS_HEADERS,
   OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_LOGS_TIMEOUT,
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
   OTEL_EXPORTER_OTLP_METRICS_HEADERS,
   OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
   OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE,
+  OTEL_EXPORTER_OTLP_METRICS_TIMEOUT,
   OTEL_EXPORTER_OTLP_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TIMEOUT,
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
   OTEL_EXPORTER_OTLP_TRACES_HEADERS,
   OTEL_EXPORTER_OTLP_TRACES_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TRACES_TIMEOUT,
   OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT,
   OTEL_LOGS_EXPORTER,
   OTEL_LOGS_EXPORT_INTERVAL,
@@ -166,11 +169,11 @@ import {
 import { decodeJwtPayload, isGatewayToken } from "../../bridge/jwtUtils.js";
 import { getAPIProvider } from "../model/providers.js";
 import { getSessionIngressAuthHeaders } from "../sessionIngressAuth.js";
-import { getUsableProxyUrl, shouldBypassProxy, TlsCheckingProxyAgent } from "../proxy.js";
+import { getUsableProxyUrl, shouldBypassProxy, otelKeptConnectionAgent } from "../proxy.js";
 import { anthropicHostOf } from "../anthropicHosts.js";
-import { getMTLSConfig, caListBehindProxy } from "../mtls.js";
+import { getMTLSConfig, caListBehindProxy, CheckSwitchTiedHttpsAgent } from "../mtls.js";
 
-//@ chunk-jhrww53q.js:3176-5552 fingerprint (2.1.88 match: bootstrapTelemetry, 0.317)
+//@ chunk-xjnnz630.js:3220-5752 fingerprint (2.1.88 match: bootstrapTelemetry, 0.302)
 __export(EMPTY_ENV_DECLARATIONS, {
   ANT_CLAUDE_CODE_METRICS_ENDPOINT: () => ANT_CLAUDE_CODE_METRICS_ENDPOINT,
   ANT_OTEL_EXPORTER_OTLP_ENDPOINT: () => ANT_OTEL_EXPORTER_OTLP_ENDPOINT,
@@ -214,14 +217,18 @@ __export(EMPTY_ENV_DECLARATIONS, {
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: () => OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
   OTEL_EXPORTER_OTLP_LOGS_HEADERS: () => OTEL_EXPORTER_OTLP_LOGS_HEADERS,
   OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: () => OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_LOGS_TIMEOUT: () => OTEL_EXPORTER_OTLP_LOGS_TIMEOUT,
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: () => OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
   OTEL_EXPORTER_OTLP_METRICS_HEADERS: () => OTEL_EXPORTER_OTLP_METRICS_HEADERS,
   OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: () => OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
   OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: () => OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE,
+  OTEL_EXPORTER_OTLP_METRICS_TIMEOUT: () => OTEL_EXPORTER_OTLP_METRICS_TIMEOUT,
   OTEL_EXPORTER_OTLP_PROTOCOL: () => OTEL_EXPORTER_OTLP_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TIMEOUT: () => OTEL_EXPORTER_OTLP_TIMEOUT,
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: () => OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
   OTEL_EXPORTER_OTLP_TRACES_HEADERS: () => OTEL_EXPORTER_OTLP_TRACES_HEADERS,
   OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: () => OTEL_EXPORTER_OTLP_TRACES_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TRACES_TIMEOUT: () => OTEL_EXPORTER_OTLP_TRACES_TIMEOUT,
   OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT,
   OTEL_LOGS_EXPORTER: () => OTEL_LOGS_EXPORTER,
   OTEL_LOGS_EXPORT_INTERVAL: () => OTEL_LOGS_EXPORT_INTERVAL,
@@ -238,9 +245,9 @@ __export(EMPTY_ENV_DECLARATIONS, {
   OTEL_TRACES_EXPORTER: () => OTEL_TRACES_EXPORTER,
   OTEL_TRACES_EXPORT_INTERVAL: () => OTEL_TRACES_EXPORT_INTERVAL,
 });
-//@ chunk-9vvvg0d3.js:24056-24074 sole-consumer
+//@ chunk-3wgj3rdg.js:24428-24447 sole-consumer
 var otelSemconv_2 = __toESM(require_error_3(), 1);
-//@ chunk-9vvvg0d3.js:24144-24241 fingerprint (2.1.88 match: isBigQueryMetricsEnabled, 1)
+//@ chunk-3wgj3rdg.js:24495-24592 fingerprint (2.1.88 match: isBigQueryMetricsEnabled, 1)
 /**
  * BigQuery 指标是否启用：隐私级别 default 且（Slt() 或 Claude.ai 的 team/enterprise 订阅）。
  */
@@ -251,22 +258,22 @@ function isBigQueryMetricsEnabled() {
     isClaudeAISubscriber() && (subscriptionType === "enterprise" || subscriptionType === "team");
   return is1PApiCustomer() || isC4EOrTeamUser;
 }
-//@ chunk-9vvvg0d3.js:31114-31176 sole-consumer
+//@ chunk-3wgj3rdg.js:31498-31560 sole-consumer
 var otelCore = __toESM(require_core(), 1);
 var MAX_BUFFERED_RECORDS = 64;
 var EXPORT_SUCCESS_RESULT = {
   code: otelCore.ExportResultCode.SUCCESS,
 };
-//@ chunk-9vvvg0d3.js:31176-31246 sole-consumer
+//@ chunk-3wgj3rdg.js:31560-31630 sole-consumer
 function exportFailureResult(error) {
   return {
     code: otelCore.ExportResultCode.FAILED,
     error: Error(error),
   };
 }
-//@ chunk-9vvvg0d3.js:31246-31261 sole-consumer
+//@ chunk-3wgj3rdg.js:31630-31645 sole-consumer
 function noopExportCallback() {}
-//@ chunk-9vvvg0d3.js:31261-31823 sole-consumer
+//@ chunk-3wgj3rdg.js:31645-32207 sole-consumer
 /**
  * 委托就绪前缓冲导出的导出器（span，支持 forceFlush）。
  */
@@ -306,7 +313,7 @@ class BufferingSpanExporter {
     if (this.delegate) await this.delegate.shutdown();
   }
 }
-//@ chunk-9vvvg0d3.js:31823-32304 sole-consumer
+//@ chunk-3wgj3rdg.js:32207-32688 sole-consumer
 /**
  * 委托就绪前缓冲导出的导出器。
  */
@@ -343,9 +350,9 @@ class BufferingExporter {
     if (this.delegate) await this.delegate.shutdown();
   }
 }
-//@ chunk-9vvvg0d3.js:32304-32322 sole-consumer
+//@ chunk-3wgj3rdg.js:32688-32706 sole-consumer
 var otelCore_2 = __toESM(require_core(), 1);
-//@ chunk-9vvvg0d3.js:32322-32920 sole-consumer
+//@ chunk-3wgj3rdg.js:32706-33304 sole-consumer
 /**
  * OTLP 导出错误归类（grpc/http 状态、headers helper、超时等）。
  */
@@ -384,7 +391,7 @@ function classifyExportError(error, protocol) {
       "other",
   };
 }
-//@ chunk-9vvvg0d3.js:32920-33393 sole-consumer
+//@ chunk-3wgj3rdg.js:33304-33777 sole-consumer
 function buildExporterDiagnostics(signal, transportInfo) {
   let baseAttrs = {
     signal: fromEnum(signal),
@@ -429,21 +436,21 @@ function buildExporterDiagnostics(signal, transportInfo) {
     );
   };
 }
-//@ chunk-9vvvg0d3.js:33393-33443 sole-consumer
+//@ chunk-3wgj3rdg.js:33777-33827 sole-consumer
 var DEFAULT_METRICS_EXPORT_INTERVAL_MS = 60000;
 var DEFAULT_LOGS_EXPORT_INTERVAL_MS = 5000;
 var DEFAULT_TRACES_EXPORT_INTERVAL_MS = 5000;
 var MIN_METRICS_EXPORT_INTERVAL_MS = 300000;
 var MAX_METRICS_EXPORT_INTERVAL_MS = 3600000;
-//@ chunk-9vvvg0d3.js:33443-33467 affinity
+//@ chunk-3wgj3rdg.js:33827-33851 affinity
 class TelemetryTimeoutError extends Error {}
-//@ chunk-9vvvg0d3.js:33467-33559 callgraph-witnessed (2.1.88 match: telemetryTimeout, 1)
+//@ chunk-3wgj3rdg.js:33851-33943 callgraph-witnessed (2.1.88 match: telemetryTimeout, 1)
 function telemetryTimeout(ms, message) {
   return new Promise((resolve, reject) => {
     setTimeout((rej, msg) => rej(new TelemetryTimeoutError(msg)), ms, reject, message).unref();
   });
 }
-//@ chunk-9vvvg0d3.js:33559-33759 sole-consumer
+//@ chunk-3wgj3rdg.js:33943-34143 sole-consumer
 /**
  * OTel 全局配置：注册 AsyncLocalStorage 上下文管理器，未设置时把 OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE 设为 delta。
  */
@@ -453,7 +460,7 @@ function configureOtelGlobals() {
     process.env.OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE = "delta";
   if (isBetaTracingEnabled() && !getTracerProvider()) initializeBetaTracing();
 }
-//@ chunk-9vvvg0d3.js:33759-34768 sole-consumer
+//@ chunk-3wgj3rdg.js:34143-35152 sole-consumer
 function getServiceVersion() {
   return hasRemoteOtelLogsEndpoint()
     ? firstLineOf(
@@ -461,10 +468,10 @@ function getServiceVersion() {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -474,15 +481,15 @@ function getServiceVersion() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION;
 }
-//@ chunk-9vvvg0d3.js:34883-35485 sole-consumer
+//@ chunk-3wgj3rdg.js:35267-35872 sole-consumer
 /**
  * OTel resource：service.name=claude-code、service.version、os/arch、wsl.version 及 OTEL_RESOURCE_ATTRIBUTES。
  */
@@ -526,7 +533,7 @@ function buildOtelResource() {
   setCachedTelemetryResource(mergedResource);
   return mergedResource;
 }
-//@ chunk-9vvvg0d3.js:35485-36594 fingerprint (2.1.88 match: initializeBetaTracing, 0.51)
+//@ chunk-3wgj3rdg.js:35872-36981 fingerprint (2.1.88 match: initializeBetaTracing, 0.51)
 /**
  * beta 详细追踪：把 trace/log 发到 BETA_TRACING_ENDPOINT。
  */
@@ -559,10 +566,10 @@ function initializeBetaTracing() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -582,7 +589,7 @@ function initializeBetaTracing() {
     }),
   );
 }
-//@ chunk-9vvvg0d3.js:36594-36876 layout
+//@ chunk-3wgj3rdg.js:36981-37263 layout
 /**
  * beta 追踪导出器：把 trace 与 log 分别发往 BETA_TRACING_ENDPOINT/v1/traces 与 /v1/logs。
  */
@@ -604,9 +611,9 @@ async function initializeBetaTracingExporters(traceExporter, logExporter) {
     }),
   );
 }
-//@ chunk-9vvvg0d3.js:36876-36897 layout
+//@ chunk-3wgj3rdg.js:37263-37284 layout
 async function initializeAntTelemetry() {}
-//@ chunk-9vvvg0d3.js:36897-37003 file-local
+//@ chunk-3wgj3rdg.js:37284-37390 file-local
 function parseExporterTypes(value) {
   return (value || "")
     .trim()
@@ -615,7 +622,7 @@ function parseExporterTypes(value) {
     .map((t) => t.trim())
     .filter((t) => t !== "none");
 }
-//@ chunk-9vvvg0d3.js:37003-37369 layout
+//@ chunk-3wgj3rdg.js:37390-37756 layout
 function wrapExporterWithFirstExportLog(signal, transportInfo) {
   let reportedFirstExport = false;
   let diagnostics = transportInfo && buildExporterDiagnostics(signal, transportInfo);
@@ -645,7 +652,7 @@ function wrapExporterWithFirstExportLog(signal, transportInfo) {
     return wrapExporter;
   };
 }
-//@ chunk-9vvvg0d3.js:37369-37511 layout
+//@ chunk-3wgj3rdg.js:37756-37898 layout
 function describeExporterTransport(protocol, httpConfig) {
   return {
     protocol,
@@ -656,7 +663,7 @@ function describeExporterTransport(protocol, httpConfig) {
           httpConfig.httpAgentOptions === getCachedOtlpHttpAgentFactory(true, "customer"),
   };
 }
-//@ chunk-9vvvg0d3.js:37511-37796 layout
+//@ chunk-3wgj3rdg.js:37898-38183 layout
 /**
  * 收集 OTLP 请求头：OTEL_EXPORTER_OTLP_HEADERS、OTEL_EXPORTER_OTLP_<SIGNAL>_HEADERS 与 otelHeadersHelper 输出。
  */
@@ -685,7 +692,7 @@ function getOtlpHeaders(signal, httpConfig) {
     },
   };
 }
-//@ chunk-9vvvg0d3.js:37796-39309 fingerprint (2.1.88 match: getOtlpReaders, 0.626)
+//@ chunk-3wgj3rdg.js:38183-39696 fingerprint (2.1.88 match: getOtlpReaders, 0.626)
 /**
  * 按 OTEL_METRICS_EXPORTER（otlp/prometheus/console）和 OTEL_EXPORTER_OTLP_PROTOCOL 创建 metric reader，导出间隔 OTEL_METRIC_EXPORT_INTERVAL（默认 60 秒）。
  */
@@ -761,7 +768,7 @@ async function getOtlpReaders(exporterTypes) {
     return exporter;
   });
 }
-//@ chunk-9vvvg0d3.js:39309-40257 fingerprint (2.1.88 match: getOtlpLogExporters, 0.86)
+//@ chunk-3wgj3rdg.js:39696-40644 fingerprint (2.1.88 match: getOtlpLogExporters, 0.86)
 /**
  * 按 OTEL_LOGS_EXPORTER 创建日志导出器（otlp/console）。
  */
@@ -809,7 +816,7 @@ async function getOtlpLogExporters() {
     } else throw Error(`Unknown exporter type set in OTEL_LOGS_EXPORTER env var: ${exporterType}`);
   return exporters.map(wrapExporterWithFirstExportLog("logs", transport));
 }
-//@ chunk-9vvvg0d3.js:40257-41145 fingerprint (2.1.88 match: getOtlpTraceExporters, 0.811)
+//@ chunk-3wgj3rdg.js:40644-41532 fingerprint (2.1.88 match: getOtlpTraceExporters, 0.811)
 /**
  * 按 OTEL_TRACES_EXPORTER 创建 trace 导出器。
  */
@@ -857,14 +864,14 @@ async function getOtlpTraceExporters() {
     } else throw Error(`Unknown exporter type set in OTEL_TRACES_EXPORTER env var: ${exporterType}`);
   return exporters.map(wrapExporterWithFirstExportLog("traces", transport));
 }
-//@ chunk-9vvvg0d3.js:41145-41211 fingerprint (2.1.88 match: isTelemetryEnabled, 1)
+//@ chunk-3wgj3rdg.js:41532-41598 fingerprint (2.1.88 match: isTelemetryEnabled, 1)
 /**
  * CLAUDE_CODE_ENABLE_TELEMETRY 是否为真（第三方 OTel 导出总开关）。
  */
 function isTelemetryEnabled() {
   return isEnvTruthy(process.env.CLAUDE_CODE_ENABLE_TELEMETRY);
 }
-//@ chunk-9vvvg0d3.js:41211-41333 layout
+//@ chunk-3wgj3rdg.js:41598-41720 layout
 /**
  * BigQuery 指标导出间隔：GrowthBook tengu_cozy_dusk，限制在 5–60 分钟，默认 5 分钟。
  */
@@ -881,7 +888,7 @@ function getBigQueryExportIntervalMs() {
       )
     : MIN_METRICS_EXPORT_INTERVAL_MS;
 }
-//@ chunk-9vvvg0d3.js:41333-41489 fingerprint (2.1.88 match: getBigQueryExportingReader, 0.665)
+//@ chunk-3wgj3rdg.js:41720-41876 fingerprint (2.1.88 match: getBigQueryExportingReader, 0.665)
 /**
  * BigQuery 指标 reader，导出间隔 tengu_cozy_dusk（默认 5 分钟）。
  */
@@ -895,7 +902,7 @@ function getBigQueryExportingReader(storageV5) {
     exportIntervalMillis: getBigQueryExportIntervalMs(),
   });
 }
-//@ chunk-9vvvg0d3.js:41489-44472 fingerprint (2.1.88 match: initializeTelemetry, 0.806)
+//@ chunk-3wgj3rdg.js:41876-44859 fingerprint (2.1.88 match: initializeTelemetry, 0.806)
 /**
  * 初始化 OTel：设置传播器与诊断 logger；CLAUDE_CODE_ENABLE_TELEMETRY 时按 OTEL_METRICS_EXPORTER 建 metric reader，team/enterprise 另加 BigQuery 指标；按 OTEL_LOGS_EXPORTER 建事件 logger（com.anthropic.claude_code.events）；增强遥测时按 OTEL_TRACES_EXPORTER 建 trace；注册退出 flush。
  */
@@ -1063,7 +1070,7 @@ Current timeout: ${timeoutMs}ms
     metricsExporterKinds: exporterTypes,
   };
 }
-//@ chunk-9vvvg0d3.js:44472-44991 fingerprint (2.1.88 match: flushTelemetry, 0.963)
+//@ chunk-3wgj3rdg.js:44859-45378 fingerprint (2.1.88 match: flushTelemetry, 0.963)
 /**
  * flush 全部 OTel provider，超时记录日志。
  */
@@ -1096,7 +1103,7 @@ async function flushTelemetry() {
       });
   }
 }
-//@ chunk-9vvvg0d3.js:44991-45159 fingerprint (2.1.88 match: parseOtelHeadersEnvVar, 1)
+//@ chunk-3wgj3rdg.js:45378-45546 fingerprint (2.1.88 match: parseOtelHeadersEnvVar, 1)
 function parseOtelHeadersEnvVar() {
   let headers = {};
   let envHeaders = env.OTEL_EXPORTER_OTLP_HEADERS;
@@ -1107,7 +1114,7 @@ function parseOtelHeadersEnvVar() {
     }
   return headers;
 }
-//@ chunk-9vvvg0d3.js:45159-46457 callgraph-witnessed (2.1.88 match: getOTLPExporterConfig, 0.158)
+//@ chunk-3wgj3rdg.js:45546-46844 callgraph-witnessed (2.1.88 match: getOTLPExporterConfig, 0.158)
 /**
  * OTLP 导出器配置：endpoint（OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT/ENDPOINT + /v1/<signal>）、headers（含 otelHeadersHelper）、代理与 mTLS。
  */
@@ -1199,7 +1206,7 @@ function getOTLPExporterConfig(signal, protocol) {
   }
   return config;
 }
-//@ chunk-9vvvg0d3.js:46457-46731 sole-consumer
+//@ chunk-3wgj3rdg.js:46844-47118 sole-consumer
 function gatewayManagedCollectorUrl(signal, auth, usesHeadersHelper) {
   if (usesHeadersHelper) return null;
   let url = resolveOtlpEndpoint(remotePolicySettings()?.env, signal);
@@ -1216,13 +1223,13 @@ function gatewayManagedCollectorUrl(signal, auth, usesHeadersHelper) {
   );
   return url;
 }
-//@ chunk-9vvvg0d3.js:46731-46833 sole-consumer
+//@ chunk-3wgj3rdg.js:47118-47220 sole-consumer
 function remotePolicySettings() {
   if (getPolicySettingsOrigin() !== "remote") return null;
   if (!isRemoteManagedSettingsVerified() && getRemoteSettingsPathOverride() === undefined) return null;
   return getAllPolicyTierSettings()[0] ?? null;
 }
-//@ chunk-9vvvg0d3.js:46833-47009 sole-consumer
+//@ chunk-3wgj3rdg.js:47220-47396 sole-consumer
 function envOtlpEndpoint(signal) {
   let suffix = SIGNAL_ENV_SUFFIX[signal];
   return resolveOtlpEndpoint(
@@ -1233,7 +1240,7 @@ function envOtlpEndpoint(signal) {
     signal,
   );
 }
-//@ chunk-9vvvg0d3.js:47009-47368 sole-consumer
+//@ chunk-3wgj3rdg.js:47396-47755 sole-consumer
 /**
  * 从环境映射中解析某信号的 OTLP 端点（专用或通用 + /v1/<信号>）。
  */
@@ -1250,7 +1257,7 @@ function resolveOtlpEndpoint(source, signal) {
   if (!baseEndpoint?.trim() || normalizeHttpUrl(baseEndpoint) === null) return null;
   return normalizeHttpUrl(`${baseEndpoint}${baseEndpoint.endsWith("/") ? "" : "/"}v1/${signal}`);
 }
-//@ chunk-9vvvg0d3.js:47368-47557 sole-consumer
+//@ chunk-3wgj3rdg.js:47755-47944 sole-consumer
 function isGatewayHost(url, auth) {
   let endpointHost = hostOfUrl(url);
   if (endpointHost === null) return false;
@@ -1265,22 +1272,22 @@ function isGatewayHost(url, auth) {
     allowedHosts.push(jwtPayload.iss);
   return allowedHosts.some((host) => hostOfUrl(host) === endpointHost);
 }
-//@ chunk-9vvvg0d3.js:47557-47644 sole-consumer
+//@ chunk-3wgj3rdg.js:47944-48031 sole-consumer
 function hostOfUrl(url) {
   let normalized = normalizeHttpUrl(url);
   return normalized === null ? null : new URL(normalized).host.replace(/\.(?=:|$)/, "");
 }
-//@ chunk-9vvvg0d3.js:47644-47737 sole-consumer
+//@ chunk-3wgj3rdg.js:48031-48124 sole-consumer
 function isOtlpSignalPath(url, signal) {
   let parsed = new URL(url);
   return parsed.pathname.endsWith(`/v1/${signal}`) && !parsed.search && !parsed.hash;
 }
-//@ chunk-9vvvg0d3.js:47737-47832 sole-consumer
+//@ chunk-3wgj3rdg.js:48124-48219 sole-consumer
 function isAllowedCollectorUrl(url) {
   let parsed = new URL(url);
   return parsed.protocol === "https:" || (parsed.protocol === "http:" && isLoopbackUrl(parsed.href));
 }
-//@ chunk-9vvvg0d3.js:47832-47958 sole-consumer
+//@ chunk-3wgj3rdg.js:48219-48345 sole-consumer
 function normalizeHttpUrl(url) {
   try {
     let parsed = new URL(url);
@@ -1289,7 +1296,7 @@ function normalizeHttpUrl(url) {
     return null;
   }
 }
-//@ chunk-9vvvg0d3.js:47958-48457 sole-consumer
+//@ chunk-3wgj3rdg.js:48345-48844 sole-consumer
 /**
  * 宿主托管网关令牌时经网关中继导出的配置。
  */
@@ -1327,9 +1334,9 @@ function gatewayRelayConfig(signal, usesHeadersHelper) {
     },
   };
 }
-//@ chunk-9vvvg0d3.js:48457-48468 sole-consumer
+//@ chunk-3wgj3rdg.js:48844-48855 sole-consumer
 var TRACE_RELAY_BATCH_MS = 100;
-//@ chunk-9vvvg0d3.js:48468-48601 sole-consumer
+//@ chunk-3wgj3rdg.js:48855-48988 sole-consumer
 function ccrTraceRelayConfig(signal) {
   let disabled = {
     send: false,
@@ -1343,7 +1350,7 @@ function ccrTraceRelayConfig(signal) {
     headers: async () => getSessionIngressAuthHeaders(),
   };
 }
-//@ chunk-9vvvg0d3.js:48601-48769 sole-consumer
+//@ chunk-3wgj3rdg.js:48988-49156 sole-consumer
 function isLoopbackUrl(url) {
   if (!url) return false;
   try {
@@ -1353,7 +1360,7 @@ function isLoopbackUrl(url) {
     return false;
   }
 }
-//@ chunk-9vvvg0d3.js:48769-49019 sole-consumer
+//@ chunk-3wgj3rdg.js:49156-49406 sole-consumer
 function toBufferChunk(chunk, encoding) {
   if (Buffer.isBuffer(chunk)) return chunk;
   if (typeof chunk === "string")
@@ -1361,7 +1368,7 @@ function toBufferChunk(chunk, encoding) {
   if (chunk instanceof Uint8Array) return Buffer.from(chunk);
   throw TypeError("OTLP request body chunk is not string or Uint8Array");
 }
-//@ chunk-9vvvg0d3.js:49019-49768 sole-consumer
+//@ chunk-3wgj3rdg.js:49406-50155 sole-consumer
 /**
  * 给 Agent 打补丁：无长度头的请求先缓冲整个请求体再发送。
  */
@@ -1416,7 +1423,12 @@ function bufferRequestBodies(request) {
   };
   return request;
 }
-//@ chunk-9vvvg0d3.js:49768-50235 sole-consumer
+//@ chunk-3wgj3rdg.js:50155-50247 sole-consumer
+function positiveMsOrUndefined(raw) {
+  let ms = raw?.trim() ? Number(raw) : Number.NaN;
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
+}
+//@ chunk-3wgj3rdg.js:50247-50992 sole-consumer
 /**
  * OTLP HTTP Agent 工厂（代理、mTLS、CA，按协议缓存）。
  */
@@ -1437,17 +1449,36 @@ function createOtlpAgentFactory(url, { carriesOurToken }) {
   };
   let httpAgent;
   let httpsAgent;
-  let proxyAgent;
-  let getAgent = (protocol) => {
+  let proxyAgents = new Map();
+  let defaultTimeoutMs = positiveMsOrUndefined(env.OTEL_EXPORTER_OTLP_TIMEOUT) ?? 1e4;
+  let tunnelOpensWithinMs = Math.min(
+    30000,
+    Math.max(
+      positiveMsOrUndefined(env.OTEL_EXPORTER_OTLP_LOGS_TIMEOUT) ?? defaultTimeoutMs,
+      positiveMsOrUndefined(env.OTEL_EXPORTER_OTLP_METRICS_TIMEOUT) ?? defaultTimeoutMs,
+      positiveMsOrUndefined(env.OTEL_EXPORTER_OTLP_TRACES_TIMEOUT) ?? defaultTimeoutMs,
+    ),
+  );
+  let factory = (protocol) => {
     if (usesProxy) {
+      let isSecure = protocol !== "http:";
+      let proxyAgent = proxyAgents.get(isSecure);
       if (!proxyAgent) {
         proxyAgent = bufferRequestBodies(
-          new TlsCheckingProxyAgent(usableProxyUrl, {
-            ...agentOptions,
-            keepAlive: true,
-            maxSockets: 1,
-          }),
+          new otelKeptConnectionAgent(
+            {
+              isSecure,
+              tunnelOpensWithinMs,
+            },
+            usableProxyUrl,
+            {
+              ...agentOptions,
+              keepAlive: true,
+              maxFreeSockets: 1,
+            },
+          ),
         );
+        proxyAgents.set(isSecure, proxyAgent);
         proxyAgent.options = {
           ...proxyAgent.options,
           ...agentOptions,
@@ -1467,7 +1498,7 @@ function createOtlpAgentFactory(url, { carriesOurToken }) {
     }
     if (!httpsAgent)
       httpsAgent = bufferRequestBodies(
-        new https.Agent({
+        new CheckSwitchTiedHttpsAgent({
           ...agentOptions,
           keepAlive: true,
           maxSockets: 1,
@@ -1475,8 +1506,8 @@ function createOtlpAgentFactory(url, { carriesOurToken }) {
       );
     return httpsAgent;
   };
-  setCachedOtlpHttpAgentFactory(usesProxy, proxyMode, getAgent);
-  return getAgent;
+  setCachedOtlpHttpAgentFactory(usesProxy, proxyMode, factory);
+  return factory;
 }
 export {
   getBigQueryExportIntervalMs,

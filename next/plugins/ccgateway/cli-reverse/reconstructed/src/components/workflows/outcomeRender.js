@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。工作流结果渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axsvbsqv.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6w10qzg.js (8)
  * attribution: placement 8
  */
 import { jsonParse, jsonStringifyRaw } from "../../utils/slowOperations.js";
@@ -13,13 +13,13 @@ import { truncateToWidth, splitByDisplayWidth } from "../../utils/format.js";
 import { expandTabsInText } from "../../ink/wrapAnsi.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 
-//@ chunk-axsvbsqv.js:5872-5983 placement
+//@ chunk-n6w10qzg.js:7321-7432 placement
 var OUTCOME_INDENT = "  ";
 var MAX_OUTCOME_KEY_WIDTH = 40;
 var MIN_JSON_RENDER_WIDTH = 8;
 var UNSAFE_OUTCOME_CHAR_RE = /[\x00-\x08\x0a-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 var KEY_SEPARATOR = ": ";
-//@ chunk-axsvbsqv.js:5983-6142 placement
+//@ chunk-n6w10qzg.js:7432-7591 placement
 function renderJsonOutcomeLines(text, width) {
   let trimmed = text.trim();
   if (width < MIN_JSON_RENDER_WIDTH || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
@@ -31,23 +31,23 @@ function renderJsonOutcomeLines(text, width) {
     return null;
   }
 }
-//@ chunk-axsvbsqv.js:6142-6236 placement
+//@ chunk-n6w10qzg.js:7591-7685 placement
 function progressBar(depth, width) {
   let floored = Math.floor(Math.max(0, width - MIN_JSON_RENDER_WIDTH) / OUTCOME_INDENT.length);
   return OUTCOME_INDENT.repeat(Math.min(depth, floored));
 }
-//@ chunk-axsvbsqv.js:6236-6330 placement
+//@ chunk-n6w10qzg.js:7685-7779 placement
 function escapeControlChars(text) {
   return text.replace(
     UNSAFE_OUTCOME_CHAR_RE,
     (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
   );
 }
-//@ chunk-axsvbsqv.js:6330-6362 placement
+//@ chunk-n6w10qzg.js:7779-7811 placement
 function escapeRenderedText(value) {
   return escapeControlChars(jsonStringifyRaw(value));
 }
-//@ chunk-axsvbsqv.js:6362-6459 placement
+//@ chunk-n6w10qzg.js:7811-7908 placement
 function withEllipsisSuffix(segment, width) {
   return segment === undefined
     ? []
@@ -62,7 +62,7 @@ function withEllipsisSuffix(segment, width) {
         },
       ];
 }
-//@ chunk-axsvbsqv.js:6459-6736 placement
+//@ chunk-n6w10qzg.js:7908-8185 placement
 function pushWrappedOutcome(lines, depth, keySegment, chunks, width, color) {
   if (keySegment) {
     let indent = progressBar(depth, width);
@@ -104,7 +104,7 @@ function pushWrappedOutcome(lines, depth, keySegment, chunks, width, color) {
       ]);
   }
 }
-//@ chunk-axsvbsqv.js:6736-7923 placement
+//@ chunk-n6w10qzg.js:8185-9372 placement
 function renderJsonOutcome(lines, value, depth, keyLabel, hasMore, width) {
   let indent = progressBar(depth, width);
   let availableWidth = width - indent.length;

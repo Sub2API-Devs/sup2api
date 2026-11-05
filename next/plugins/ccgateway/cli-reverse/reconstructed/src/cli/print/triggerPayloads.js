@@ -3,14 +3,15 @@
  *
  * 2.1.316 新增：触发器 webhook 负载解析与 Claude Doc 评论唤醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (15)
  * attribution: placement 15
  */
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
+import { REQUEST_FOLLOWS_INIT } from "../transports/ccrClient.js";
 import { DoctorLazy } from "../handlers/util.js";
 import { zodStrictObject, stringSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_SLUG_RE, ARTIFACT_COMMENTS_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
@@ -27,12 +28,12 @@ import { wrapCommandLifecycle } from "../../bridge/inboundMessageOrigin.js";
 import { isArtifactsAvailable } from "../../services/artifacts/artifactAvailability.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:485831-485880 placement
+//@ chunk-0yw3taqg.js:517434-517483 placement
 function withoutSessionId(payload) {
   let { session_id: sessionId, ...rest } = payload;
   return rest;
 }
-//@ chunk-tyg7f3ek.js:485880-486119 placement
+//@ chunk-0yw3taqg.js:517483-517722 placement
 function markMaxTurnsExit(message) {
   try {
     if (message.type !== "attachment" || message.attachment.type !== "max_turns_reached") return message;
@@ -50,12 +51,12 @@ function markMaxTurnsExit(message) {
     return message;
   }
 }
-//@ chunk-tyg7f3ek.js:486119-486194 placement
+//@ chunk-0yw3taqg.js:517722-517797 placement
 function appendUnique(items, recentErrorLog) {
   let seen = new Set(recentErrorLog);
   return [...items.filter((item) => !seen.has(item)), ...recentErrorLog];
 }
-//@ chunk-tyg7f3ek.js:486194-486323 placement
+//@ chunk-0yw3taqg.js:517797-517926 placement
 function withUserMessageUuids(message, record) {
   try {
     let fields = record.fields();
@@ -70,13 +71,21 @@ function withUserMessageUuids(message, record) {
     return message;
   }
 }
-//@ chunk-tyg7f3ek.js:486323-486410 placement
-function initWithUserMessageUuids(message, record) {
+//@ chunk-0yw3taqg.js:517926-518036 placement
+function initWithUserMessageUuids(message, record, markHandled = false) {
   return message.type === "system" && "subtype" in message && message.subtype === "init"
-    ? withUserMessageUuids(message, record)
+    ? withUserMessageUuids(
+        markHandled
+          ? {
+              ...message,
+              [REQUEST_FOLLOWS_INIT]: true,
+            }
+          : message,
+        record,
+      )
     : message;
 }
-//@ chunk-tyg7f3ek.js:486410-486838 placement
+//@ chunk-0yw3taqg.js:518036-518464 placement
 /**
  * 触发载荷解析常量与 schema：<webhook-payload> 标签、缩进、4096 字符上限、HTML 实体解码表，以及 comment/pointer 两种唤醒载荷的校验 schema。
  */
@@ -89,7 +98,7 @@ var ESCAPED_ENTITIES_PATTERN;
 var XML_ENTITY_DECODE_TABLE;
 var commentWakePayloadSchema;
 var pointerWakePayloadSchema;
-deferInit("chunk-tyg7f3ek.js:486410", () => {
+deferInit("chunk-0yw3taqg.js:518036", () => {
   TRIGGER_PAYLOAD_CONSTANTS = "trigger_fire";
   WEBHOOK_PAYLOAD_OPEN_TAG = `<webhook-payload>
 `;
@@ -126,7 +135,7 @@ deferInit("chunk-tyg7f3ek.js:486410", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:486838-487409 placement
+//@ chunk-0yw3taqg.js:518464-519035 placement
 /**
  * 解析 trigger_fire 的 <webhook-payload> 包裹，反转义 &#123; 等实体。
  */
@@ -178,12 +187,12 @@ function parseTriggerWebhookPayload(text, kind) {
   if (!pointerWakePayloadSchema().safeParse(payload).success) logCommentWakeMiss("pointer_shape");
   return null;
 }
-//@ chunk-tyg7f3ek.js:487409-487510 placement
+//@ chunk-0yw3taqg.js:519035-519136 placement
 function logCommentWakeMiss(reason) {
   if (durableRowList().some((row) => row.events.includes("comment")))
     logFeatureSad("artifact_durable_comment_wake", reason);
 }
-//@ chunk-tyg7f3ek.js:487510-487802 placement
+//@ chunk-0yw3taqg.js:519136-519428 placement
 function reportDurableCommentWake(pointer, options) {
   withCommentWakeTelemetry("report_threw", () => {
     let summon = {
@@ -201,7 +210,7 @@ function reportDurableCommentWake(pointer, options) {
       getLiveState().summonStatus.queuedWakes.set(wakeKey(options.carrier, options.carrierId), summon);
   });
 }
-//@ chunk-tyg7f3ek.js:487802-489105 placement
+//@ chunk-0yw3taqg.js:519428-520731 placement
 function claudeDocCommentPrompt({ slug }) {
   try {
     if (durableRowFor(slug)?.claudeDoc !== true || getLiveState().durable.stopLatches.isStopped(slug))
@@ -226,7 +235,7 @@ function claudeDocCommentPrompt({ slug }) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:489105-489296 placement
+//@ chunk-0yw3taqg.js:520731-520922 placement
 function reportCommentWakesStarted(carrier, ids) {
   withCommentWakeTelemetry("report_threw", () => {
     if (!hasLiveState()) return;
@@ -240,7 +249,7 @@ function reportCommentWakesStarted(carrier, ids) {
     }
   });
 }
-//@ chunk-tyg7f3ek.js:489296-489563 placement
+//@ chunk-0yw3taqg.js:520922-521189 placement
 function watchCommentWakeLifecycle(io) {
   wrapCommandLifecycle(io, (uuid, outcome) => {
     switch (outcome) {
@@ -260,11 +269,11 @@ function watchCommentWakeLifecycle(io) {
     }
   });
 }
-//@ chunk-tyg7f3ek.js:489563-489598 placement
+//@ chunk-0yw3taqg.js:521189-521224 placement
 function wakeKey(carrier, id) {
   return `${carrier}:${id}`;
 }
-//@ chunk-tyg7f3ek.js:489598-490139 placement
+//@ chunk-0yw3taqg.js:521224-521765 placement
 function noteDurableCommentWake(summon, phase) {
   let fields = {
     queued: phase === "queued",
@@ -301,7 +310,7 @@ function noteDurableCommentWake(summon, phase) {
   logFeatureOk("artifact_durable_comment_wake", fields);
   return true;
 }
-//@ chunk-tyg7f3ek.js:490139-490216 placement
+//@ chunk-0yw3taqg.js:521765-521842 placement
 function withCommentWakeTelemetry(reason, fn) {
   try {
     fn();

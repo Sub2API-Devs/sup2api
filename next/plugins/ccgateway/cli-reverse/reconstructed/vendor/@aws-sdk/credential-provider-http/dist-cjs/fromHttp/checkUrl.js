@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-http/dist-cjs/fromHttp/checkUrl.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-http@3.936.0..3.972.41
- * pieces: chunk-0c72454j.js (3)
+ * pieces: chunk-48h98ags.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -10,13 +10,13 @@ import { require_client as require_client_2 } from "../../../core/dist-cjs/submo
 import { require_node_http_handler } from "../../../../@smithy/node-http-handler/dist-cjs/index.js";
 import { require_property_provider } from "../../../../@smithy/property-provider/dist-cjs/index.js";
 
-//@ chunk-0c72454j.js:467-504 esm-layout
+//@ chunk-48h98ags.js:467-504 esm-layout
 var import_client = __toESM(require_client_2());
 var import_node_http_handler = __toESM(require_node_http_handler());
 var import_property_provider = __toESM(require_property_provider());
-//@ chunk-0c72454j.js:531-546 esm-layout
+//@ chunk-48h98ags.js:531-546 esm-layout
 var import_property_provider_2 = __toESM(require_property_provider());
-//@ chunk-0c72454j.js:546-1266 esm-fingerprint
+//@ chunk-48h98ags.js:546-1266 esm-fingerprint
 var ECS_CONTAINER_HOST = "169.254.170.2";
 var EKS_CONTAINER_HOST_IPv4 = "169.254.170.23";
 var EKS_CONTAINER_HOST_IPv6 = "[fd00:ec2::23]";

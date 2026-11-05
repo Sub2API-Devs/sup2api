@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：协调者模式下的 worker 代理定义（系统提示词）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ncsga3m8.js (3), chunk-rqnncghm.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y397wfab.js (3), chunk-zy9rp1xh.js (1)
  * attribution: placement 4
  */
 import { getMaxSubagentSpawnDepth } from "../tools/AgentTool/spawnDepth.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 
-//@ chunk-rqnncghm.js:191-208 placement (2.1.88 match: isCustomSubagentType, 0.834)
+//@ chunk-zy9rp1xh.js:191-208 placement (2.1.88 match: isCustomSubagentType, 0.833)
 /**
  * coordinator worker 代理类型名 "worker"。
  */
 var COORDINATOR_WORKER_AGENT_TYPE = "worker";
-//@ chunk-ncsga3m8.js:916-3383 placement
+//@ chunk-y397wfab.js:1000-3467 placement
 /**
  * 协调者模式下 worker 代理的系统提示词（其他 worker 可能同时修改分支等环境说明）。
  */
@@ -63,7 +63,7 @@ Structure your response as:
 Good summary: "Added Redis cache implementation. Tests pass, typecheck clean. Committed abc123."
 Bad summary: "I looked at files X, Y, and Z. Y has the changes you mentioned."`;
 }
-//@ chunk-ncsga3m8.js:3383-3611 placement (2.1.88 match: FORK_AGENT, 0.81)
+//@ chunk-y397wfab.js:3467-3695 placement (2.1.88 match: FORK_AGENT, 0.809)
 var COORDINATOR_WORKER_AGENT = {
   agentType: COORDINATOR_WORKER_AGENT_TYPE,
   whenToUse: "For executing tasks autonomously \u2014 research, implementation, or verification.",
@@ -74,7 +74,7 @@ var COORDINATOR_WORKER_AGENT = {
   baseDir: "built-in",
   getSystemPrompt: (agentContext) => getCoordinatorWorkerSystemPrompt(),
 };
-//@ chunk-ncsga3m8.js:3611-3634 placement
+//@ chunk-y397wfab.js:3695-3718 placement
 /**
  * coordinator 模式的内建代理列表：只有 worker 代理（maxTurns 500、bubble、工具 *）。
  */

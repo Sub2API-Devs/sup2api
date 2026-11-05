@@ -1,8 +1,8 @@
 /**
  * content-type/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: content-type@1.0.5
- * pieces: chunk-r1g76qsy.js (1)
+ * pieces: chunk-qq5knpkd.js (1)
  * attribution: cjs-fingerprint 1
  */
 import {
@@ -10,7 +10,7 @@ import {
   interopDefault,
 } from "../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
 
-//@ chunk-r1g76qsy.js:115925-117199 cjs-fingerprint
+//@ chunk-qq5knpkd.js:120233-121507 cjs-fingerprint
 var require_content_type = initModule((cjsExports) => {
   var PARAM_REGEXP =
     /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;

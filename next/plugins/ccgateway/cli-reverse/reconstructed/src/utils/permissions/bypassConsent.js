@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：bypass 权限同意
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-k88gsmtn.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g5ed4raj.js (4)
  * attribution: placement 4
  */
 import { envDynamicProbe } from "../envDynamic.js";
@@ -16,11 +16,11 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { getRootSession } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-k88gsmtn.js:3445-3527 placement
+//@ chunk-g5ed4raj.js:3753-3835 placement
 function wantsBypassPermissions(options) {
   return options?.permissionMode === "bypassPermissions" || options?.allowBypass === true;
 }
-//@ chunk-k88gsmtn.js:3527-3722 placement
+//@ chunk-g5ed4raj.js:3835-4030 placement
 /**
  * 以 root/sudo 运行且不在受控沙箱内时，使用 --dangerously-skip-permissions 直接报错退出。
  */
@@ -33,7 +33,7 @@ function exitIfRootWithBypass(options) {
     process.exit(1);
   }
 }
-//@ chunk-k88gsmtn.js:3722-3913 placement
+//@ chunk-g5ed4raj.js:4030-4221 placement
 /**
  * bypass 被禁用时打印原因，并从启动选项中去掉 bypassPermissions 模式与 allowBypass。
  */
@@ -48,7 +48,7 @@ function dropDisabledBypass(options) {
     allowBypass: undefined,
   };
 }
-//@ chunk-k88gsmtn.js:3913-4438 placement
+//@ chunk-g5ed4raj.js:4221-4746 placement
 /**
  * 需要 bypass 模式时弹出 BypassPermissionsModeDialog 让用户确认（已禁用、已同意或继承且免提示时跳过）；确认后检查设置里是否真的记下了同意。
  */

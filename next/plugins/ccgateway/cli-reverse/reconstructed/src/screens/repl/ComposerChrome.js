@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：REPL 输入区外框状态与相关控制器（IDE 选区去重、退出时费用报告、会话统计读取）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16), chunk-xe7zq1p4.js (2)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (18), chunk-swe0kb5q.js (2)
+ * attribution: placement 18, layout 2
  */
 import {
   useContext,
@@ -16,6 +16,12 @@ import {
   useSyncExternalStore,
 } from "../../../vendor/react/cjs/react.production.js";
 import { statsContext } from "../../context/stats.js";
+import {
+  takeAutomaticEnrollmentNotice,
+  AUTOMATIC_ENROLLMENT_NOTICE,
+  onAutomaticEnrollmentNotice,
+} from "../../bridge/trustedDevice.js";
+import { createSystemMessage } from "../../utils/messages.js";
 import { PERMISSION_CARD_KINDS } from "../../components/dialogs/dialogKinds.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
@@ -28,16 +34,15 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { errorMessage } from "../../utils/errors.js";
 import { alwaysFalseRemoteMode } from "../../remote/remoteMode.js";
 import { NOT_IN_CLOUD_SESSIONS } from "../../components/PromptInput/PromptInputModeHints.js";
-import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { sendDetachRequest, noopBackgroundConfirm } from "./backgroundConfirm.js";
 import { getCurrentWorktreeSession } from "../../utils/worktree.js";
@@ -78,19 +83,66 @@ import {
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xe7zq1p4.js:1971-2000 placement
+//@ chunk-swe0kb5q.js:1973-2002 placement
 /**
  * 导出函数 `isTerminalInterested`：返回 Se(ie)。
  */
 function isTerminalInterested() {
   return useContext(statsContext);
 }
-//@ chunk-xe7zq1p4.js:2000-2004 placement
+//@ chunk-swe0kb5q.js:2002-2006 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:2000", () => {
+deferInit("chunk-swe0kb5q.js:2002", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1624350-1624603 placement
+//@ chunk-czq1j3j2.js:1666863-1666867 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1666863", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1668028-1668032 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1668028", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1668032-1668242 layout
+var TRUSTED_DEVICE_ENROLLED = "trusted-device-enrolled";
+var trustedDeviceEnrolledNotice = {
+  fact: "this computer was enrolled as a trusted device for your account",
+  hint: " \xB7 you'll also get an email \xB7 not expected? review your devices in claude.ai settings",
+};
+//@ chunk-czq1j3j2.js:1668242-1668516 layout
+function useTrustedDeviceEnrolledNotice(addNotification, transcript) {
+  useEffect(() => {
+    function listener() {
+      if (!takeAutomaticEnrollmentNotice()) return;
+      transcript.apply({
+        type: "append",
+        messages: [createSystemMessage(AUTOMATIC_ENROLLMENT_NOTICE, "notice")],
+      });
+      addNotification({
+        key: TRUSTED_DEVICE_ENROLLED,
+        kind: "event",
+        segments: [
+          {
+            text: trustedDeviceEnrolledNotice.fact,
+            color: "warning",
+          },
+          {
+            text: trustedDeviceEnrolledNotice.hint,
+            dim: true,
+          },
+        ],
+        priority: "high",
+        timeoutMs: 30000,
+        fold: (previousNotice, nextNotice) => nextNotice,
+      });
+    }
+    listener();
+    return onAutomaticEnrollmentNotice(listener);
+  }, [addNotification, transcript]);
+}
+//@ chunk-czq1j3j2.js:1668516-1668769 placement
 /**
  * 决定对话框画在窗格中还是输入框上方、是否绘制。
  */
@@ -113,7 +165,7 @@ function resolveModalPlacement({
     drawn: showInPane || (showAbovePrompt && !(fullscreen && modalSlotActive)),
   };
 }
-//@ chunk-18hwfzwa.js:1624603-1624812 placement
+//@ chunk-czq1j3j2.js:1668769-1668978 placement
 /**
  * 提供无人值守提示占用的行数。
  */
@@ -134,23 +186,23 @@ function UnattendedNoticeProvider(props) {
   } else provider = $[2];
   return provider;
 }
-//@ chunk-18hwfzwa.js:1624812-1624816 placement
+//@ chunk-czq1j3j2.js:1668978-1668982 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1624812", () => {
+deferInit("chunk-czq1j3j2.js:1668978", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1626009-1626052 placement
+//@ chunk-czq1j3j2.js:1670175-1670218 placement
 function isExiting(chrome) {
   return chrome.exit.kind !== "none";
 }
-//@ chunk-18hwfzwa.js:1626052-1626185 placement
+//@ chunk-czq1j3j2.js:1670218-1670351 placement
 /**
  * 嵌入模式相关属性键与空状态。
  */
 var EMBEDDED_PROP_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var keys;
 var NO_EXIT_STATE;
-deferInit("chunk-18hwfzwa.js:1626052", () => {
+deferInit("chunk-czq1j3j2.js:1670218", () => {
   EMBEDDED_PROP_KEYS = {
     debug: true,
     embedded: true,
@@ -163,7 +215,7 @@ deferInit("chunk-18hwfzwa.js:1626052", () => {
     kind: "none",
   };
 });
-//@ chunk-18hwfzwa.js:1626185-1628696 placement
+//@ chunk-czq1j3j2.js:1670351-1672862 placement
 /**
  * 输入框外围（chrome）控制器：退出流程（interstitial/shutting-down）、IDE 选区、bash 对话框、rewind 在云会话不可用提示等。
  */
@@ -172,19 +224,19 @@ class ComposerChrome {
   #t;
   #o;
   #n;
-  #s;
-  exitReaders;
   #r;
-  #c = null;
+  exitReaders;
+  #s;
+  #l = null;
   #i = null;
   #a = undefined;
   constructor({ isRemoteSession, addNotification, store, storageV5, exitReaders, ...initialView }) {
     this.#t = isRemoteSession;
     this.#o = addNotification;
     this.#n = store;
-    this.#s = storageV5;
+    this.#r = storageV5;
     this.exitReaders = exitReaders;
-    this.#r = {
+    this.#s = {
       ...initialView,
       ideSelection: undefined,
       bashesDialog: false,
@@ -192,15 +244,15 @@ class ComposerChrome {
     };
   }
   subscribe = (listener) => this.#e.subscribe(listener);
-  getSnapshot = () => this.#r;
-  #l(view) {
-    this.#r = view;
+  getSnapshot = () => this.#s;
+  #c(view) {
+    this.#s = view;
     this.#e.emit();
   }
   setView(next) {
-    let current = this.#r;
+    let current = this.#s;
     if (keys.every((key) => Object.is(next[key], current[key]))) return;
-    this.#l({
+    this.#c({
       ...current,
       ...next,
     });
@@ -208,25 +260,25 @@ class ComposerChrome {
   setIdeSelection = (selection) => {
     this.#i = null;
     this.#a = undefined;
-    if (Object.is(selection, this.#r.ideSelection)) return;
-    this.#l({
-      ...this.#r,
+    if (Object.is(selection, this.#s.ideSelection)) return;
+    this.#c({
+      ...this.#s,
       ideSelection: selection,
     });
   };
   offerIdeSelection = (selection) => {
-    if (this.#r.ideSelection?.source === "diff" && !selection.text) return;
+    if (this.#s.ideSelection?.source === "diff" && !selection.text) return;
     if (ideSelectionKey(selection) === this.#i) return;
     this.setIdeSelection(selection);
   };
   dismissIdeSelection = () => {
-    let ideSelection = this.#r.ideSelection;
+    let ideSelection = this.#s.ideSelection;
     if (!ideSelection) return;
     this.setIdeSelection(undefined);
     this.#i = ideSelectionKey(ideSelection);
   };
   consumeIdeSelection = (promptUuid) => {
-    let ideSelection = this.#r.ideSelection;
+    let ideSelection = this.#s.ideSelection;
     this.setIdeSelection(undefined);
     if (ideSelection && promptUuid)
       this.#a = {
@@ -245,7 +297,7 @@ class ComposerChrome {
     };
   };
   returnIdeSelection = (selection) => {
-    let ideSelection = this.#r.ideSelection;
+    let ideSelection = this.#s.ideSelection;
     if (selection !== undefined && !ideSelection?.text && ideSelection?.source !== "diff")
       this.setIdeSelection(selection);
   };
@@ -256,9 +308,9 @@ class ComposerChrome {
     this.#d(false);
   };
   #d(open) {
-    if (open === this.#r.bashesDialog) return;
-    this.#l({
-      ...this.#r,
+    if (open === this.#s.bashesDialog) return;
+    this.#c({
+      ...this.#s,
       bashesDialog: open,
     });
   }
@@ -273,10 +325,10 @@ class ComposerChrome {
       });
       return;
     }
-    this.#m().openMessageSelector();
+    this.#u().openMessageSelector();
   };
   requestExit = () => {
-    let { onDetachToCaller } = this.#r;
+    let { onDetachToCaller } = this.#s;
     if (onDetachToCaller) {
       onDetachToCaller();
       return;
@@ -295,8 +347,8 @@ class ComposerChrome {
       mcpClients: mcp.clients,
     });
     if (inWorktree || backgroundItems.length > 0) {
-      this.#l({
-        ...this.#r,
+      this.#c({
+        ...this.#s,
         exit: {
           kind: "interstitial",
           showWorktree: inWorktree,
@@ -307,8 +359,8 @@ class ComposerChrome {
       });
       return;
     }
-    this.#l({
-      ...this.#r,
+    this.#c({
+      ...this.#s,
       exit: {
         kind: "shutting-down",
       },
@@ -318,7 +370,7 @@ class ComposerChrome {
       {
         responseStreaming: this.exitReaders.isResponseStreaming(),
       },
-      this.#s,
+      this.#r,
     )
       .catch((error) => {
         logError(error);
@@ -327,21 +379,21 @@ class ComposerChrome {
       .catch(logError);
   };
   cancelExit = () => {
-    if (this.#r.exit.kind === "none") return;
-    this.#l({
-      ...this.#r,
+    if (this.#s.exit.kind === "none") return;
+    this.#c({
+      ...this.#s,
       exit: NO_EXIT_STATE,
     });
   };
   bindHost(host) {
-    this.#c = host;
+    this.#l = host;
   }
-  #m() {
-    if (this.#c === null) throw Error("ComposerChrome: used before its screen bound a host");
-    return this.#c;
+  #u() {
+    if (this.#l === null) throw Error("ComposerChrome: used before its screen bound a host");
+    return this.#l;
   }
 }
-//@ chunk-18hwfzwa.js:1628696-1628831 placement
+//@ chunk-czq1j3j2.js:1672862-1672997 placement
 /**
  * IDE 选区的去重键。
  */
@@ -351,14 +403,19 @@ function ideSelectionKey(selection) {
     ? `${head}|${selection.lineStart ?? ""}|${selection.lineCount}|${selection.text.length}`
     : head;
 }
-//@ chunk-18hwfzwa.js:1628869-1628953 placement
+//@ chunk-czq1j3j2.js:1673035-1673119 placement
 function scanQueueBeforeTurn(isBusy, queued) {
   let activeMessageQueue = getActiveMessageQueue();
   return activeMessageQueue !== undefined && (queued !== undefined || isBusy())
     ? awaitScanThenTurn(activeMessageQueue, isBusy, queued)
     : undefined;
 }
-//@ chunk-18hwfzwa.js:1644111-1644605 placement
+//@ chunk-czq1j3j2.js:1689029-1689033 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1689029", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1689033-1689527 placement
 /**
  * 标记非正常退出、注册退出前刷新；进程退出时打印费用并保存状态。
  */
@@ -413,12 +470,7 @@ function useExitCostReport(enabled) {
     };
   }, [isScreenReaderEnabled, storageV5]);
 }
-//@ chunk-18hwfzwa.js:1644605-1644609 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1644605", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1644609-1645075 placement (2.1.88 match: getViewedTeammateTask, 0.79)
+//@ chunk-czq1j3j2.js:1689531-1689988 placement (2.1.88 match: getViewedTeammateTask, 0.79)
 function getViewedTeammateTask_2() {
   let setAppState = useSetAppState();
   let viewingTaskId = useAppState((state) => state.viewingAgentTaskId);
@@ -443,20 +495,12 @@ function getViewedTeammateTask_2() {
       return;
     }
     if (!inProcessTask) return;
-    if (isTaskFailedOrStopped(inProcessTask)) {
-      exitTeammateView(setAppState);
-      return;
-    }
+    if (isTaskFailedOrStopped(inProcessTask)) exitTeammateView(setAppState);
   }, [viewingTaskId, hasTask, isParentTaskPresent, inProcessTask, setAppState]);
 }
-//@ chunk-18hwfzwa.js:1645075-1645079 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1645075", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1645079-1645091 placement
+//@ chunk-czq1j3j2.js:1689992-1690004 placement
 var AGENTS_HINT_TIMEOUT_MS = 1e4;
-//@ chunk-18hwfzwa.js:1645091-1645224 placement
+//@ chunk-czq1j3j2.js:1690004-1690137 placement
 /**
  * 一段时间后标记 agents 提示过期。
  */
@@ -475,16 +519,12 @@ function useAgentsHintExpiry() {
     );
   }, [timeout, setAppState]);
 }
-//@ chunk-18hwfzwa.js:1645224-1645257 placement
+//@ chunk-czq1j3j2.js:1690137-1690170 placement
 function hasAttacherCaps() {
   return getAttacherCaps() != null;
 }
-//@ chunk-18hwfzwa.js:1645257-1645261 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1645257", () => {
-  init_react_production();
-});
 export {
+  useTrustedDeviceEnrolledNotice,
   ComposerChrome,
   isExiting,
   useExitCostReport,

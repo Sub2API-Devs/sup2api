@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：签名发布的模型目录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g6j7q15x.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4hx0rq5z.js (35)
  * attribution: placement 35
  */
 import { createPublicKey, createHash } from "crypto";
@@ -30,7 +30,7 @@ import { isAnthropicOwnedHost, isAnthropicHost } from "../../utils/anthropicHost
 import { publicCdnGuardedClient } from "../../utils/nativeInstaller/downloadsClient.js";
 import { externalHttp } from "../http/externalHttp.js";
 
-//@ chunk-g6j7q15x.js:732-1574 placement
+//@ chunk-4hx0rq5z.js:733-1575 placement
 /**
  * 内置的发布签名公钥（SPKI），用于校验发布的模型目录。
  */
@@ -41,7 +41,7 @@ var RELEASE_SIGNING_KEY = {
 };
 var COMPILED_CATALOG_ROOTS = [RELEASE_SIGNING_KEY];
 var MANAGED_MODEL_CATALOG_PUBLIC_KEY = "managed-model-catalog-public-key";
-//@ chunk-g6j7q15x.js:1574-1657 placement
+//@ chunk-4hx0rq5z.js:1575-1658 placement
 /**
  * 判断签名公钥来源（托管密钥/编译内置）。
  */
@@ -49,7 +49,7 @@ function classifyKeySource(key) {
   if (key === undefined) return;
   return key === MANAGED_MODEL_CATALOG_PUBLIC_KEY ? "managed_key" : "compiled_roots";
 }
-//@ chunk-g6j7q15x.js:1657-1974 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-4hx0rq5z.js:1658-1975 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   let match = /^-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----$/.exec(buffer.trim());
   if (match === null || match[1] === undefined) return;
@@ -60,12 +60,12 @@ function base64URLEncode(buffer) {
     ? new Uint8Array(buffer_2)
     : undefined;
 }
-//@ chunk-g6j7q15x.js:1974-1985 placement
+//@ chunk-4hx0rq5z.js:1975-1986 placement
 /**
  * RSA 公钥的最小位数（2048）。
  */
 var MIN_RSA_BITS = 2048;
-//@ chunk-g6j7q15x.js:1985-2355 placement
+//@ chunk-4hx0rq5z.js:1986-2356 placement
 /**
  * 解析目录签名公钥：要求 SPKI DER，记录密钥类型与长度，不合规时返回原因。
  */
@@ -107,20 +107,20 @@ function parseCatalogPublicKey(buffer) {
     der,
   };
 }
-//@ chunk-g6j7q15x.js:2355-2427 placement
+//@ chunk-4hx0rq5z.js:2356-2428 placement
 /**
  * 把 spkiBase64 转成字节。
  */
 function spkiBytes(root) {
   return new Uint8Array(Buffer.from(root.spkiBase64, "base64"));
 }
-//@ chunk-g6j7q15x.js:2427-2511 placement
+//@ chunk-4hx0rq5z.js:2428-2512 placement
 /**
  * 签名 sidecar 文件的后缀。
  */
 var _ = "https://downloads.claude.ai/model-catalog/v1/catalog.json";
 var SIG_SIDECAR_SUFFIX = ".raw-sig.json";
-//@ chunk-g6j7q15x.js:2511-2560 placement
+//@ chunk-4hx0rq5z.js:2512-2561 placement
 /**
  * 空的托管目录来源。
  */
@@ -130,7 +130,7 @@ function emptyManagedSource() {
     publicKey: undefined,
   };
 }
-//@ chunk-g6j7q15x.js:2560-2934 placement
+//@ chunk-4hx0rq5z.js:2561-2935 placement
 /**
  * 读取托管设置中的模型目录 URL/公钥，只有来自管理员策略（或服务器已确认的远程托管设置）时才采用。
  */
@@ -159,13 +159,13 @@ function getManagedCatalogSource() {
     publicKey,
   };
 }
-//@ chunk-g6j7q15x.js:2934-3041 placement
+//@ chunk-4hx0rq5z.js:2935-3042 placement
 function isManagedCatalogSourceUnverified() {
   let { url, publicKey } = emptyManagedSource();
   if (url === undefined && publicKey === undefined) return false;
   return getPolicySettingsOrigin() === "remote" && !isRemoteManagedSettingsVerified();
 }
-//@ chunk-g6j7q15x.js:3041-3163 placement
+//@ chunk-4hx0rq5z.js:3042-3164 placement
 function isUnverifiedFileCatalogSource() {
   if (!isManagedCatalogSourceUnverified()) return false;
   let { url } = emptyManagedSource();
@@ -176,14 +176,14 @@ function isUnverifiedFileCatalogSource() {
     return false;
   }
 }
-//@ chunk-g6j7q15x.js:3163-3230 placement
+//@ chunk-4hx0rq5z.js:3164-3231 placement
 /**
  * 取模型目录 URL（托管设置优先，其次环境变量）。
  */
 function catalogUrl(managedCatalogSource = getManagedCatalogSource()) {
   return managedCatalogSource.url ?? trimmedOrUndefined(env.CLAUDE_CODE_MODEL_CATALOG_URL);
 }
-//@ chunk-g6j7q15x.js:3230-3328 placement
+//@ chunk-4hx0rq5z.js:3231-3329 placement
 /**
  * 判断目录来源是否为 file://。
  */
@@ -196,7 +196,7 @@ function isFileCatalogSource() {
     return false;
   }
 }
-//@ chunk-g6j7q15x.js:3328-3376 placement
+//@ chunk-4hx0rq5z.js:3329-3377 placement
 /**
  * 去空白，空则 undefined。
  */
@@ -204,7 +204,7 @@ function trimmedOrUndefined(value) {
   let trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
-//@ chunk-g6j7q15x.js:3376-4001 placement
+//@ chunk-4hx0rq5z.js:3377-4002 placement
 /**
  * 确定已签名模型目录的来源：取托管设置或环境变量指定的 URL（默认官方地址），拒绝非法 URL、不支持的协议与私有/元数据主机，返回 {kind, url, trust, cacheKey}。
  */
@@ -251,7 +251,7 @@ function resolvePublishedCatalogSource({ ignoreEnvUrl = false } = {}) {
     },
   };
 }
-//@ chunk-g6j7q15x.js:4202-4836 placement
+//@ chunk-4hx0rq5z.js:4203-4837 placement
 /**
  * 决定目录签名的信任根：托管来源或未配置公钥时只用内置根；配置了公钥但无托管 URL 时也只用内置根；公钥无效时 untrusted；否则内置根加托管公钥。
  */
@@ -291,23 +291,23 @@ function resolveCatalogTrust(kind, managedCatalogSource) {
     ],
   };
 }
-//@ chunk-g6j7q15x.js:4836-4907 placement
+//@ chunk-4hx0rq5z.js:4837-4908 placement
 /**
  * 取 32 位十六进制短哈希。
  */
 function shortHash(url) {
   return createHash("sha256").update(url).digest("hex").slice(0, 32);
 }
-//@ chunk-g6j7q15x.js:4907-4937 placement
+//@ chunk-4hx0rq5z.js:4908-4938 placement
 /**
  * 把 file URL 转成本地路径。
  */
 function fileUrlToPathOf(state) {
   return fileURLToPath(state.url);
 }
-//@ chunk-g6j7q15x.js:4937-4947 placement
+//@ chunk-4hx0rq5z.js:4938-4948 placement
 var CATALOG_FETCH_TIMEOUT_MS = 1e4;
-//@ chunk-g6j7q15x.js:4947-5481 placement (2.1.88 match: fetchTeamMemoryHashes, 0.372)
+//@ chunk-4hx0rq5z.js:4948-5482 placement (2.1.88 match: fetchTeamMemoryHashes, 0.372)
 async function fetchPublishedCatalog(state, { etag, noCache = false } = {}) {
   try {
     return state.kind === "file"
@@ -352,7 +352,7 @@ async function fetchPublishedCatalog(state, { etag, noCache = false } = {}) {
     }
   }
 }
-//@ chunk-g6j7q15x.js:5481-6696 placement
+//@ chunk-4hx0rq5z.js:5482-6697 placement
 async function fetchPublishedCatalogHttp(state, { etag, noCache }) {
   let beforeRedirect = createPinnedRedirectGuard(state.url);
   let noCacheHeaders = noCache
@@ -433,7 +433,7 @@ async function fetchPublishedCatalogHttp(state, { etag, noCache }) {
     httpStatus: status,
   };
 }
-//@ chunk-g6j7q15x.js:6696-7470 placement
+//@ chunk-4hx0rq5z.js:6697-7471 placement
 /**
  * 读取本地模型目录文件：无盘会话不读，限制读取大小，失败返回 read_failed。
  */
@@ -489,7 +489,7 @@ async function readCatalogFile(state) {
     httpStatus: undefined,
   };
 }
-//@ chunk-g6j7q15x.js:7470-7523 placement
+//@ chunk-4hx0rq5z.js:7471-7524 placement
 /**
  * 按主机归属选择 fetch 实现（自有主机走内置通道）。
  */
@@ -498,7 +498,7 @@ function fetchByOwnership(url, options) {
     ? publicCdnGuardedClient.get(url, options)
     : externalHttp.get(url, options);
 }
-//@ chunk-g6j7q15x.js:7523-7818 placement
+//@ chunk-4hx0rq5z.js:7524-7820 placement
 function createPinnedRedirectGuard(url) {
   let isOwnedHost = isAnthropicOwnedHost(url);
   let isHttps = url.toLowerCase().startsWith("https:");
@@ -517,7 +517,7 @@ function createPinnedRedirectGuard(url) {
       throw Error("[publishedCatalog] redirect refused: a hop left the host the request was pinned to");
   };
 }
-//@ chunk-g6j7q15x.js:7818-7893 placement
+//@ chunk-4hx0rq5z.js:7820-7895 placement
 /**
  * 取 URL 主机名（无效返回空串）。
  */
@@ -528,7 +528,7 @@ function hostOf(url) {
     return "";
   }
 }
-//@ chunk-g6j7q15x.js:7893-7968 placement
+//@ chunk-4hx0rq5z.js:7895-7970 placement
 /**
  * 取 URL 协议（无效返回空串）。
  */
@@ -539,7 +539,7 @@ function protocolOf(url) {
     return "";
   }
 }
-//@ chunk-g6j7q15x.js:7968-8033 placement
+//@ chunk-4hx0rq5z.js:7970-8035 placement
 /**
  * 在地址后加上签名 sidecar 后缀。
  */
@@ -548,14 +548,14 @@ function sidecarUrl(url) {
   parsedUrl.pathname += SIG_SIDECAR_SUFFIX;
   return parsedUrl.toString();
 }
-//@ chunk-g6j7q15x.js:8033-8219 placement
+//@ chunk-4hx0rq5z.js:8035-8221 placement
 function toUint8Array(value) {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (typeof value === "string") return new TextEncoder().encode(value);
   return new Uint8Array(0);
 }
-//@ chunk-g6j7q15x.js:8219-8357 placement (2.1.88 match: isServerError, 0.751)
+//@ chunk-4hx0rq5z.js:8221-8359 placement (2.1.88 match: isServerError, 0.752)
 function isAxiosBodyOrResponseError(err) {
   return (
     typeof err === "object" &&
@@ -564,7 +564,7 @@ function isAxiosBodyOrResponseError(err) {
     (err.code === "ERR_FR_MAX_BODY_LENGTH_EXCEEDED" || err.code === "ERR_BAD_RESPONSE")
   );
 }
-//@ chunk-g6j7q15x.js:8357-8407 placement
+//@ chunk-4hx0rq5z.js:8359-8409 placement
 /**
  * 取合法 etag。
  */
@@ -572,7 +572,7 @@ function etagOf(headers) {
   let etag = headers?.etag;
   return isValidEtag(etag) ? etag : undefined;
 }
-//@ chunk-g6j7q15x.js:8407-8492 placement
+//@ chunk-4hx0rq5z.js:8409-8494 placement
 /**
  * 验签使用的 RSA 算法与哈希。
  */
@@ -581,7 +581,7 @@ var RSA_VERIFY_ALGO = {
   name: "RSASSA-PKCS1-v1_5",
   hash: "SHA-512",
 };
-//@ chunk-g6j7q15x.js:8492-9289 placement
+//@ chunk-4hx0rq5z.js:8494-9291 placement
 /**
  * 校验已签名模型目录：解析 sidecar 的签名与公钥 SHA-256，在信任根中找到对应公钥后用 WebCrypto RSA 验证"上下文前缀 + 文档字节"；返回 {ok, rootId} 或失败原因（sidecar_invalid/unknown_key/key_unusable/bad_signature）。
  */
@@ -646,7 +646,7 @@ async function verifyCatalogSignature({ documentBytes, sidecar, roots, context =
         reason: "bad_signature",
       };
 }
-//@ chunk-g6j7q15x.js:9289-9413 placement
+//@ chunk-4hx0rq5z.js:9291-9415 placement
 function prefixWithSigningContext(documentBytes, context = SIGNING_CONTEXT) {
   let contextBytes = new TextEncoder().encode(context);
   let uint8Array = new Uint8Array(contextBytes.length + documentBytes.length);
@@ -654,12 +654,12 @@ function prefixWithSigningContext(documentBytes, context = SIGNING_CONTEXT) {
   uint8Array.set(documentBytes, contextBytes.length);
   return uint8Array;
 }
-//@ chunk-g6j7q15x.js:9413-9520 placement
+//@ chunk-4hx0rq5z.js:9415-9522 placement
 async function sha256HexOfBytes(view) {
   let digest = await crypto.subtle.digest("SHA-256", toUint8(view));
   return Buffer.from(digest).toString("hex");
 }
-//@ chunk-g6j7q15x.js:9520-9587 placement
+//@ chunk-4hx0rq5z.js:9522-9589 placement
 /**
  * 把 Buffer 转成 Uint8Array。
  */
@@ -670,6 +670,8 @@ function toUint8(view) {
 }
 export {
   _,
+  MANAGED_MODEL_CATALOG_PUBLIC_KEY,
+  isFileCatalogSource,
   isManagedCatalogSourceUnverified,
   verifyCatalogSignature,
   classifyKeySource,
@@ -678,6 +680,4 @@ export {
   isUnverifiedFileCatalogSource,
   shortHash,
   COMPILED_CATALOG_ROOTS,
-  MANAGED_MODEL_CATALOG_PUBLIC_KEY,
-  isFileCatalogSource,
 };

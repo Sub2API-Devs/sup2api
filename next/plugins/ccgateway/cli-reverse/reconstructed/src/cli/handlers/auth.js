@@ -3,14 +3,20 @@
  *
  * 并入已有模块：claude auth logout：清除登录凭据，失败时写 stderr 并以 1 退出，成功时打印已登出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/auth.ts
- * pieces: chunk-84jf153s.js (11), chunk-th8w37yz.js (4), chunk-zbtr7f5k.js (1)
+ * pieces: chunk-bqqhmpn3.js (11), chunk-de28gzhb.js (1), chunk-wqfxt05n.js (4)
  * attribution: sole-consumer 4, affinity 1, fingerprint 3, layout 3, placement 5
  */
 import { createInterface } from "readline";
 import { resolve } from "path";
-import { saveGlobalConfig, clearClientDataSeed } from "../../utils/config.js";
+import {
+  saveGlobalConfigDurably,
+  configMayStillHold,
+  clearClientDataSeed,
+  readFreshOauthAccountFromDisk,
+  saveGlobalConfig,
+} from "../../utils/config.js";
 import {
   setResolvedOrgDefault,
   getRootSession,
@@ -23,10 +29,10 @@ import {
   sameOwnerAccount,
   getAuthenticatedAccountInfo,
   getClaudeAIOAuthTokenOriginAsync,
+  getStoredOauthAccountInfo,
   getForcedLoginMethod,
   providerAllowlistRefusal,
   resolveLoginOrgPin,
-  getStoredOauthAccountInfo,
   checkNewLoginTokenOrg,
   validateForceLoginOrg,
   getAuthTokenSource,
@@ -44,7 +50,7 @@ import { clearBetasCaches } from "../../utils/betas.js";
 import { resetEntitlementDenies } from "../../utils/model/sessionModelRestriction.js";
 import { deactivateServedCatalog } from "../../utils/model/modelCatalog/catalogEntries.js";
 import { invalidateToolDescriptions } from "../../services/api/toolDescriptionCache.js";
-import { replaceFileReferenceHintLatch } from "../../services/api/fileReferenceCalls.js";
+import { clearFileReferenceHintLatches } from "../../services/api/fileReferenceCalls.js";
 import { clearGzipBlockStore } from "../../services/api/gzipRequestBody.js";
 import { streamFallbackWarning } from "../../services/api/streamFallbackWarning.js";
 import { clearOrgMemoryCredential } from "../../services/orgMemory/credential.js";
@@ -70,6 +76,7 @@ import {
 import { cancelQuotaAutoResume } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { endLowPriority, clearBudgetSpent } from "../../services/lowPriority/lowPriorityMode.js";
 import { performLogout } from "../../commands/logout/logout.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { setHostSessionsBearerSource } from "../../utils/hostSessionsBearer.js";
 import { getOauthProfileFromOauthToken } from "../../services/oauth/getOauthProfile.js";
 import {
@@ -99,7 +106,7 @@ import {
 import { isSpawnedByClaudeCodeSession } from "../../utils/claudeSubprocessEnv.js";
 import { markPrintModeSignalHandlersRegistered } from "../../utils/gracefulShutdown.js";
 import { writeStdoutAndDrain, exitAfterAnalyticsFlush } from "../exit.js";
-import { getInitialSettings_2, getSettingsForSource } from "../../utils/settings/settings.js";
+import { getInitialSettings, getSettingsForSource } from "../../utils/settings/settings.js";
 import { declareNoConsentSurface } from "../../services/remoteManagedSettings/securityCheck.js";
 import { createRoot } from "../../ink/hooks/useTerminalHooks.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
@@ -115,9 +122,13 @@ import {
   saveLoginOrWarn,
   LOGIN_REFUSAL_REASONS,
   rollbackFailureText,
+  SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
 } from "../../services/oauth/refusedSignIn.js";
-import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
-import { logForDebugging } from "../../utils/debug.js";
+import {
+  isExpectedApiError,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+} from "../../utils/errors.js";
 import { getSSLErrorHint } from "../../services/api/errorUtils.js";
 import { OAuthService } from "../../services/oauth/index.js";
 import {
@@ -135,8 +146,9 @@ import {
 } from "../../services/oauth/oauthErrors.js";
 import { managedSettingsUrl, MANAGED_SETTINGS_NOTICE } from "../../components/ManagedSettingsNotice.js";
 import { markManagedSettingsNoticeSeen } from "../../services/remoteManagedSettings/loginNotice.js";
-import { getClaudeConfigDir, isAntBuild } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getProjectsDir } from "../../utils/sessionStoragePortable.js";
+import { isAntBuild } from "../../utils/envUtils.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import {
   probeRefreshTokenDead,
@@ -145,17 +157,23 @@ import {
   buildAPIProviderProperties,
   statusValueRows,
 } from "../../utils/status.js";
+import { formatExpiryWarning, credentialExpiresAtField } from "../../utils/auth/credentialExpiry.js";
 import { Text } from "../../ink/components/Text.js";
 import { isFirstPartyTelemetryBlocked } from "../../utils/hostEnvironment.js";
 import { getAllowedProviders } from "../../utils/model/allowedProviders.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { RenderOnceAndExit } from "../../utils/staticRender.js";
-import { waitForOAuthRefreshBeforeExit } from "../../utils/auth/oauthRefreshExitWait.js";
+import {
+  waitForOAuthRefreshUntilDeadlineAtExit,
+  beginExitWaitingForOAuthRefreshLast,
+  waitForOAuthRefreshBeforeExit,
+} from "../../utils/auth/oauthRefreshExitWait.js";
+import { LOGOUT_NOT_SAVED_MESSAGE } from "./performLogout.js";
 
-//@ chunk-th8w37yz.js:1472-1483 placement
+//@ chunk-wqfxt05n.js:1499-1510 placement
 var NO_CONSOLE_LOGIN = null;
-//@ chunk-th8w37yz.js:1483-2126 placement
-function clearOAuthAccountFields(config) {
+//@ chunk-wqfxt05n.js:1510-2155 placement
+function clearAccountScopedConfigFields(config) {
   config.oauthAccount = undefined;
   config.managedSettingsNoticeSeenOrg = undefined;
   config.additionalModelOptionsCache = undefined;
@@ -177,21 +195,28 @@ function clearOAuthAccountFields(config) {
   config.startupPrefetchedAt = undefined;
   return config;
 }
-//@ chunk-th8w37yz.js:2126-2187 placement
+//@ chunk-wqfxt05n.js:2155-2256 placement
 async function clearAccountScopedConfig(storageV5) {
-  await saveGlobalConfig(
+  let config = await saveGlobalConfigDurably(
     (config) =>
-      clearOAuthAccountFields({
+      clearAccountScopedConfigFields({
         ...config,
       }),
     storageV5,
   );
   setResolvedOrgDefault(undefined);
+  return config || (await configMayStillHold(storageV5)) === undefined;
 }
-//@ chunk-th8w37yz.js:4565-5345 placement
+//@ chunk-wqfxt05n.js:5767-6571 placement
 async function clearAuthRelatedCaches(
   storageV5,
-  { preserveQuotaAutoResume = false, artifactAccount = "signed_out", incomingIdentity, credentials } = {},
+  {
+    preserveQuotaAutoResume = false,
+    artifactAccount = "signed_out",
+    incomingIdentity,
+    keepStoredLogin = false,
+    credentials,
+  } = {},
 ) {
   clearOAuthTokenMemos();
   if (isStorageV5Enabled() && credentials === undefined) invalidatePlainTextStoreCopy();
@@ -204,7 +229,7 @@ async function clearAuthRelatedCaches(
   resetEntitlementDenies();
   deactivateServedCatalog();
   invalidateToolDescriptions();
-  replaceFileReferenceHintLatch(null);
+  clearFileReferenceHintLatches();
   clearGzipBlockStore(streamFallbackWarning().gzipRequestBody.blockStore);
   clearOrgMemoryCredential();
   let rootSession = getRootSession();
@@ -223,7 +248,7 @@ async function clearAuthRelatedCaches(
   GITHUB_CONNECTION_STATUS_CACHE.of(rootSession.host).clear();
   resetUserData();
   invalidateUserContext(rootSession, "account_change");
-  refreshGrowthBookAfterAuthChange();
+  if (!keepStoredLogin) refreshGrowthBookAfterAuthChange();
   getGroveNoticeConfig.cache?.clear?.();
   updateGroveSettings_2.cache?.clear?.();
   await clearRemoteManagedSettingsCache(storageV5);
@@ -238,11 +263,11 @@ async function clearAuthRelatedCaches(
   }
   resetCurrentLimits();
 }
-//@ chunk-zbtr7f5k.js:3736-5302 fingerprint (2.1.88 match: installOAuthTokens, 0.505)
+//@ chunk-de28gzhb.js:3967-5880 fingerprint (2.1.88 match: installOAuthTokens, 0.469)
 /**
  * installOAuthTokens：保存 OAuth 令牌并更新账户/组织信息，区分同账号刷新与切换账号。
  */
-async function installOAuthTokens(login, { storageV5, credentials }) {
+async function installOAuthTokens(login, { storageV5, credentials, keepStoredLogin = false }) {
   let oauthAccountInfo = getOauthAccountInfo();
   let account = {
     accountUuid: login.profile?.account?.uuid ?? login.tokenAccount?.uuid,
@@ -258,16 +283,40 @@ async function installOAuthTokens(login, { storageV5, credentials }) {
       (claudeAIOAuthTokenOrigin === "store" && isSameAsStored))
       ? "same_account"
       : "account_switch";
-  await performLogout({
+  let keepStoredLogin_2 =
+    keepStoredLogin &&
+    Boolean(account.organizationUuid) &&
+    sameOwnerAccount(getStoredOauthAccountInfo(), account) &&
+    sameOwnerAccount(await readFreshOauthAccountFromDisk(storageV5), account);
+  let logoutResult = await performLogout({
     clearOnboarding: false,
     preserveInProcessTokens: true,
     preserveNonAnthropicAuth: true,
+    keepStoredLogin: keepStoredLogin_2,
     storageV5,
     preserveQuotaAutoResume: isSameAsStored,
     artifactAccount,
     incomingIdentity: account,
     credentials,
   });
+  let departingLoginMayRemain = false;
+  if (logoutResult !== undefined) {
+    if (
+      !(await saveGlobalConfigDurably((err) => {
+        let config = {
+          ...err,
+        };
+        config.primaryApiKey = undefined;
+        return clearAccountScopedConfigFields(config);
+      }, storageV5)) &&
+      (await configMayStillHold(storageV5)) !== undefined
+    ) {
+      logForDebugging("A sign-in could not take the last account or API key off the config file.", {
+        level: "error",
+      });
+      departingLoginMayRemain = true;
+    }
+  }
   setAuthenticatedAccount(null);
   setHostSessionsBearerSource(null);
   let profile = login.profile ?? (await getOauthProfileFromOauthToken(login.accessToken));
@@ -310,9 +359,10 @@ async function installOAuthTokens(login, { storageV5, credentials }) {
     preserveQuotaAutoResume: isSameAsStored,
     artifactAccount,
     incomingIdentity: account,
+    departingLoginMayRemain,
   };
 }
-//@ chunk-84jf153s.js:14816-15055 sole-consumer
+//@ chunk-bqqhmpn3.js:16108-16347 sole-consumer
 async function exitLoginRefusedByPolicy(rejection) {
   process.stderr.write(
     rejection.message +
@@ -330,7 +380,7 @@ async function exitLoginRefusedByPolicy(rejection) {
   await drainRegisteredWriteQueues();
   process.exit(1);
 }
-//@ chunk-84jf153s.js:15055-15220 sole-consumer
+//@ chunk-bqqhmpn3.js:16347-16512 sole-consumer
 function subscriptionTypeFields(subscriptionType, isVerified) {
   if (subscriptionType === null)
     return {
@@ -344,10 +394,10 @@ function subscriptionTypeFields(subscriptionType, isVerified) {
     }),
   };
 }
-//@ chunk-84jf153s.js:15220-15359 sole-consumer
+//@ chunk-bqqhmpn3.js:16512-16651 sole-consumer
 var REFRESH_TOKEN_SPENT_MESSAGE =
   "The refresh token in CLAUDE_CODE_OAUTH_REFRESH_TOKEN was used for this attempt and cannot be used again; issue a new one to retry.";
-//@ chunk-84jf153s.js:15359-15520 sole-consumer
+//@ chunk-bqqhmpn3.js:16651-16812 sole-consumer
 async function exitLoginOrgConfigRefused(message) {
   process.stderr.write(
     message +
@@ -360,13 +410,13 @@ async function exitLoginOrgConfigRefused(message) {
   await drainRegisteredWriteQueues();
   process.exit(1);
 }
-//@ chunk-84jf153s.js:15520-15691 affinity
+//@ chunk-bqqhmpn3.js:16812-16983 affinity
 function warnOrgCheckDeferred(message) {
   process.stderr.write(`${message}
 The sign-in was saved but could not be checked against your organization yet; Claude Code checks it again when it next starts.
 `);
 }
-//@ chunk-84jf153s.js:15691-23088 fingerprint (2.1.88 match: authLogin, 0.367)
+//@ chunk-bqqhmpn3.js:16983-24505 fingerprint (2.1.88 match: authLogin, 0.364)
 /**
  * claude auth login：--console/--claudeai/--sso/--email/--gateway-json 互斥检查，执行 OAuth 登录（或云网关登录），安装令牌、校验组织策略。
  */
@@ -424,7 +474,7 @@ async function authLogin({ email, sso, console: isConsole, claudeai, gatewayJson
 `);
     process.exit(1);
   }
-  let settings = getInitialSettings_2();
+  let settings = getInitialSettings();
   let forcedLoginMethod = getForcedLoginMethod();
   if (forcedLoginMethod === "gateway") {
     declareNoConsentSurface();
@@ -600,6 +650,9 @@ ${REFRESH_TOKEN_SPENT_MESSAGE}`);
       });
       process.stdout.write(`Login successful.
 `);
+      if (saved?.departingLoginMayRemain)
+        process.stderr.write(`${SIGN_IN_AGAIN_TO_CLEAR_MESSAGE}
+`);
       await offerPostLoginTips(storage);
       await logFeatureOkAsync("cli_auth_login");
       await flushAnalyticsSinks();
@@ -747,6 +800,9 @@ ${revokeNote}`,
     });
     process.stdout.write(`Login successful.
 `);
+    if (saved?.departingLoginMayRemain)
+      process.stderr.write(`${SIGN_IN_AGAIN_TO_CLEAR_MESSAGE}
+`);
     await offerPostLoginTips(storage);
     await logFeatureOkAsync("cli_auth_login");
     await flushAnalyticsSinks();
@@ -799,14 +855,14 @@ ${
     oauthService.cleanup();
   }
 }
-//@ chunk-84jf153s.js:23088-23246 layout
+//@ chunk-bqqhmpn3.js:24505-24663 layout
 class PasteInputClosedError extends Error {
   constructor() {
     super("Input ended before a code was pasted. Sign in again and paste the code shown.");
     this.name = "PasteInputClosedError";
   }
 }
-//@ chunk-84jf153s.js:23246-23388 layout
+//@ chunk-bqqhmpn3.js:24663-24807 layout
 async function offerPostLoginTips(storage) {
   if (!process.stdout.isTTY) return;
   let url = managedSettingsUrl();
@@ -815,7 +871,7 @@ async function offerPostLoginTips(storage) {
 `);
   await markManagedSettingsNoticeSeen(url, "auth_cli", storage);
 }
-//@ chunk-84jf153s.js:23388-23601 layout
+//@ chunk-bqqhmpn3.js:24807-25020 layout
 function getConfigHomeIfNotOverridden() {
   let configDir = resolve(getClaudeConfigDir());
   for (let sourceName of ["projectSettings", "localSettings"]) {
@@ -826,7 +882,7 @@ function getConfigHomeIfNotOverridden() {
   }
   return getProjectsDir();
 }
-//@ chunk-84jf153s.js:23601-25349 fingerprint (2.1.88 match: authStatus, 0.719)
+//@ chunk-bqqhmpn3.js:25020-26863 fingerprint (2.1.88 match: authStatus, 0.697)
 /**
  * claude auth status：汇总令牌来源、API key 来源、提供方与账户信息，--json（默认）或 --text 输出。
  */
@@ -840,7 +896,8 @@ async function authStatus(root, options, storage) {
   let subscriptionType = getSubscriptionType();
   let using3P = isUsing3PServices();
   let isGatewayWithoutAuth = getAPIProvider() === "gateway" && !getGatewayAuth();
-  let loggedIn = !isGatewayWithoutAuth && (hasToken || apiKeySource !== "none" || hasApiKeyEnvVar || using3P);
+  let isLoggedIn =
+    !isGatewayWithoutAuth && (hasToken || apiKeySource !== "none" || hasApiKeyEnvVar || using3P);
   let authMethod = "none";
   if (using3P) authMethod = isGatewayWithoutAuth ? "none" : "third_party";
   else if (tokenSource === "claude.ai") authMethod = "claude.ai";
@@ -862,7 +919,9 @@ async function authStatus(root, options, storage) {
       row.label ? `${row.label}: ${row.value}` : row.value,
     );
     if (mapped.length === 0 && hasApiKeyEnvVar) mapped.push("API key: ANTHROPIC_API_KEY");
-    if (!loggedIn)
+    let bedrockHint = formatExpiryWarning();
+    if (bedrockHint !== null) mapped.push(bedrockHint);
+    if (!isLoggedIn)
       mapped.push(
         isGatewayWithoutAuth
           ? "Not logged in. This session uses a Cloud gateway; start `claude` and sign in with /login."
@@ -876,12 +935,13 @@ async function authStatus(root, options, storage) {
     let apiProvider = getAPIProvider();
     let apiKeyHint = apiKeySource !== "none" ? apiKeySource : hasApiKeyEnvVar ? "ANTHROPIC_API_KEY" : null;
     let status = {
-      loggedIn,
+      loggedIn: isLoggedIn,
       authMethod,
       apiProvider,
       analyticsDisabled: isFirstPartyTelemetryBlocked(),
       projectsDirectory: getConfigHomeIfNotOverridden(),
       configDirectory: getClaudeConfigDir(),
+      loginExpiresAt: credentialExpiresAtField().credential_expires_at ?? null,
     };
     let apiProvider_2 = getForcedLoginMethod();
     if (apiProvider_2) status.forcedLoginMethod = apiProvider_2;
@@ -912,20 +972,28 @@ async function authStatus(root, options, storage) {
     }),
   );
   await root.waitUntilExit();
+  waitForOAuthRefreshUntilDeadlineAtExit();
+  beginExitWaitingForOAuthRefreshLast();
   await waitForOAuthRefreshBeforeExit();
-  process.exit(loggedIn ? 0 : 1);
+  process.exit(isLoggedIn ? 0 : 1);
 }
-//@ chunk-84jf153s.js:25349-25728 placement
+//@ chunk-bqqhmpn3.js:26863-27311 placement (2.1.88 match: authLogout, 0.218)
 /**
  * claude auth logout：清除登录凭据，失败时写 stderr 并以 1 退出，成功时打印已登出。
  */
 async function authLogout(root, storageV5, credentials) {
   try {
-    await performLogout({
-      clearOnboarding: false,
-      storageV5,
-      credentials,
-    });
+    if (
+      (await performLogout({
+        clearOnboarding: false,
+        storageV5,
+        credentials,
+      })) !== undefined
+    )
+      throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        LOGOUT_NOT_SAVED_MESSAGE,
+        "logout could not save the config file",
+      );
   } catch (error) {
     logError(error);
     process.stderr.write(`Logout failed: ${errorMessage(error)}
@@ -945,10 +1013,10 @@ async function authLogout(root, storageV5, credentials) {
   await logFeatureOkAsync("cli_auth_logout");
 }
 export {
-  clearAuthRelatedCaches,
-  clearOAuthAccountFields,
   installOAuthTokens,
+  clearAuthRelatedCaches,
   clearAccountScopedConfig,
+  clearAccountScopedConfigFields,
   authLogin,
   authLogout,
   authStatus,

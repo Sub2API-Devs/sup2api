@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论线程分析器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (6)
  * attribution: placement 6
  */
 import { extractTextContent_2, createUserMessage } from "../../../utils/messages.js";
@@ -28,19 +28,19 @@ import { asSystemPrompt } from "../../../utils/systemPromptType.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:40474-40576 placement
+//@ chunk-c0pq6qyx.js:36384-36486 placement
 function getAssistantJsonText(modelWithoutStreaming) {
   let content = modelWithoutStreaming.message?.content;
   if (!Array.isArray(content)) return "";
   let trimmed = extractTextContent_2(content).trim();
   return stripJsonCodeFence(trimmed);
 }
-//@ chunk-9tgt55am.js:40576-40622 placement
+//@ chunk-c0pq6qyx.js:36486-36532 placement
 var ALLOWED_ANALYST_ACTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9tgt55am.js:40576", () => {
+deferInit("chunk-c0pq6qyx.js:36486", () => {
   ALLOWED_ANALYST_ACTIONS = new Set(["comments", "read_page_data"]);
 });
-//@ chunk-9tgt55am.js:40622-41455 placement
+//@ chunk-c0pq6qyx.js:36532-37365 placement
 /**
  * 构造评论线程分析子代理的 canUseTool：只允许针对同一 artifact、同一线程的只读 Artifact 评论读取类动作（权限检查改写后的输入也要仍在范围内），其他一律拒绝。
  */
@@ -101,10 +101,10 @@ function makeAnalystCanUseTool(slug, threadId) {
     return deny();
   };
 }
-//@ chunk-9tgt55am.js:41455-41487 placement
+//@ chunk-c0pq6qyx.js:37365-37397 placement
 var MAX_BRIEF_CHARS = 4000;
 var BRIEF_PREFIX = "ANALYSIS BRIEF";
-//@ chunk-9tgt55am.js:41487-43010 placement
+//@ chunk-c0pq6qyx.js:37397-38919 placement
 /**
  * 交互会话里同步运行内置"评论线程分析"子代理（受代理深度限制），以只读权限分析某个线程并返回分析简报；运行出错、空结果或不以预期前缀开头时返回 null。
  */
@@ -186,7 +186,7 @@ async function runCommentThreadAnalyst(options) {
     return null;
   }
 }
-//@ chunk-9tgt55am.js:43010-43261 placement
+//@ chunk-c0pq6qyx.js:38919-39170 placement
 /**
  * 消费代理消息流，记下最后一条非空助手文本；若最后出现的是 API 错误消息则返回 null。
  */

@@ -3,9 +3,9 @@
  *
  * 记忆库技能加载（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (14)
  * attribution: placement 14
  */
 import { readdir, realpath, open } from "fs/promises";
@@ -41,14 +41,14 @@ import { ok as ok_2, err } from "../../utils/resultError.js";
 import { formatStorageError, LEAFMOVED, OTHERNAMES } from "../../utils/storage/storageErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:166798-166835 placement
+//@ chunk-7jxyna5q.js:170009-170046 placement
 /**
  * 最多加载的技能目录数（100）。
  */
 var MEMORIES = "memories::";
 var MAX_SKILL_FILE_BYTES = 131072;
 var MAX_SKILL_FOLDERS = 100;
-//@ chunk-s61vbvea.js:166835-167096 placement
+//@ chunk-7jxyna5q.js:170046-170307 placement
 /**
  * 记忆库技能命令集合：replace 替换命令并在名称集合变化时更新稳定快照，changed 信号通知。
  */
@@ -66,43 +66,43 @@ class MemorySkillCommands {
   }
   changed = createSignal();
 }
-//@ chunk-s61vbvea.js:167096-167121 placement
+//@ chunk-7jxyna5q.js:170307-170332 placement
 /**
  * 按宿主保存的记忆库技能命令状态。
  */
 var memorySkillCommandsState; // deferred: uses MemorySkillCommands of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:167096", () => {
+deferInit("chunk-7jxyna5q.js:170307", () => {
   memorySkillCommandsState = new HostScoped(() => new MemorySkillCommands());
 });
-//@ chunk-s61vbvea.js:167121-167158 placement
+//@ chunk-7jxyna5q.js:170332-170369 placement
 /**
  * 取当前宿主的记忆库技能命令状态。
  */
 function getMemorySkillCommands() {
   return memorySkillCommandsState.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:167158-167194 placement
+//@ chunk-7jxyna5q.js:170369-170405 placement
 /**
  * 取记忆库技能命令集合。
  */
 function memorySkillCommands() {
   return getMemorySkillCommands().commands;
 }
-//@ chunk-s61vbvea.js:167194-167240 placement
+//@ chunk-7jxyna5q.js:170405-170451 placement
 /**
  * 取技能名的稳定快照。
  */
 function memorySkillNamesSnapshot() {
   return getMemorySkillCommands().nameStableSnapshot;
 }
-//@ chunk-s61vbvea.js:167240-167289 placement
+//@ chunk-7jxyna5q.js:170451-170500 placement
 /**
  * 订阅技能变化。
  */
 function onMemorySkillsChanged(refresh) {
   return getMemorySkillCommands().changed.subscribe(refresh);
 }
-//@ chunk-s61vbvea.js:167289-169499 placement
+//@ chunk-7jxyna5q.js:170500-172715 placement
 /**
  * 从记忆库加载技能（Windows 不支持 O_NOFOLLOW 时跳过）
  */
@@ -225,7 +225,7 @@ async function loadMemoryStoreSkills(storeSkillConfigs, syncStates, storageV5) {
     logFeatureBad("memory_store_skills", "register_failed");
   }
 }
-//@ chunk-s61vbvea.js:169499-172086 placement
+//@ chunk-7jxyna5q.js:172715-175304 placement
 async function listMemorySkillFolders(realAutoMemPath, reportSkip, config, storage, scope) {
   let { createSkillCommand, parseSkillFrontmatterFields } = getMCPSkillBuilders();
   let folders;
@@ -383,7 +383,7 @@ async function listMemorySkillFolders(realAutoMemPath, reportSkip, config, stora
     truncated,
   };
 }
-//@ chunk-s61vbvea.js:172086-172621 placement
+//@ chunk-7jxyna5q.js:175304-175839 placement
 /**
  * 列出记忆存储中某路径下的子作用域（技能目录）及是否经符号链接，分页读取完返回结果。
  */
@@ -426,7 +426,7 @@ async function listMemorySkillDirs(storage, scope) {
       return err("the listing did not finish");
   }
 }
-//@ chunk-s61vbvea.js:172621-173086 placement
+//@ chunk-7jxyna5q.js:175839-176304 placement
 /**
  * 以加固模式读取记忆存储中的技能文件，把各类存储错误（不在位置、已移动、多个名称、非小文件）映射为结果类型。
  */
@@ -480,7 +480,7 @@ async function readMemorySkillFile(storage, key) {
     content: item.value,
   };
 }
-//@ chunk-s61vbvea.js:173086-173191 placement
+//@ chunk-7jxyna5q.js:176304-176409 placement (2.1.88 match: WorkerStateUploader, 0.338)
 class PendingQueue {
   pending = [];
   enqueue(item) {
@@ -492,15 +492,15 @@ class PendingQueue {
     return pending;
   }
 }
-//@ chunk-s61vbvea.js:173191-173217 placement
+//@ chunk-7jxyna5q.js:176409-176435 placement
 /**
  * 按宿主保存的记忆技能加载队列。
  */
 var pendingMemorySkillQueue; // deferred: uses PendingQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:173191", () => {
+deferInit("chunk-7jxyna5q.js:176409", () => {
   pendingMemorySkillQueue = new HostScoped(() => new PendingQueue());
 });
-//@ chunk-s61vbvea.js:173217-173260 placement
+//@ chunk-7jxyna5q.js:176435-176478 placement
 /**
  * 把一次技能加载加入队列。
  */
@@ -508,10 +508,10 @@ function enqueueMemorySkillLoad(text) {
   pendingMemorySkillQueue.of(getRootSession().host).enqueue(text);
 }
 export {
-  onMemorySkillsChanged,
-  memorySkillNamesSnapshot,
   memorySkillCommands,
   pendingMemorySkillQueue,
   loadMemoryStoreSkills,
   enqueueMemorySkillLoad,
+  onMemorySkillsChanged,
+  memorySkillNamesSnapshot,
 };

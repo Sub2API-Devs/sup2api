@@ -3,9 +3,9 @@
  *
  * TaskGet 工具：按 id 读取任务详情
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskGetTool/TaskGetTool.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -22,14 +22,14 @@ import { TASK_GET_DESCRIPTION, TASK_GET_PROMPT } from "./prompt.js";
 import { areTaskToolsEnabled, getTaskListId, getTask } from "../../utils/tasks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:142476-143782 fingerprint (2.1.88 match: TaskGetTool, 0.911)
+//@ chunk-fmnbrxwy.js:157473-158779 fingerprint (2.1.88 match: TaskGetTool, 0.911)
 /**
  * TaskGet 工具（只读、并发安全、shouldDefer）：按 taskId 返回 subject/description/status/blocks/blockedBy。
  */
 var taskGetInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var taskGetOutputSchema;
 var TaskGetTool;
-deferInit("chunk-kxyd0g16.js:142476", () => {
+deferInit("chunk-fmnbrxwy.js:157473", () => {
   taskGetInputSchema = DoctorLazy(() =>
     zodStrictObject({
       taskId: stringSchema().describe("The ID of the task to retrieve"),

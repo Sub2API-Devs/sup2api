@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关代理请求构造
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (7)
  * attribution: placement 7
  */
 import { resolveUpstreamModel } from "./models.js";
@@ -20,12 +20,12 @@ import {
 } from "../../utils/model/bedrock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1345635-1345745 placement
+//@ chunk-1hnjmk23.js:1346598-1346708 placement
 /**
  * 转发给上游的请求头白名单（另含 x-stainless-*）。
  */
 var FORWARDED_REQUEST_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1345635", () => {
+deferInit("chunk-1hnjmk23.js:1346598", () => {
   FORWARDED_REQUEST_HEADERS = new Set([
     "content-type",
     "accept",
@@ -35,7 +35,7 @@ deferInit("chunk-1ny7cxrt.js:1345635", () => {
     "user-agent",
   ]);
 });
-//@ chunk-1ny7cxrt.js:1345745-1345883 placement
+//@ chunk-1hnjmk23.js:1346708-1346846 placement
 /**
  * 从客户端请求头中挑出允许转发的头。
  */
@@ -47,7 +47,7 @@ function pickForwardedHeaders(headers) {
   });
   return headers_2;
 }
-//@ chunk-1ny7cxrt.js:1345883-1345957 placement
+//@ chunk-1hnjmk23.js:1346846-1346920 placement
 /**
  * 取要转发的请求部分（查询串与允许转发的请求头）。
  */
@@ -57,7 +57,7 @@ function forwardedRequestParts(request) {
     headers: pickForwardedHeaders(request.headers),
   };
 }
-//@ chunk-1ny7cxrt.js:1345957-1346344 placement
+//@ chunk-1hnjmk23.js:1346920-1347307 placement
 /**
  * 代理常量：上游请求 id 头、不回传的响应头、SSE 响应头、心跳间隔与 ping 帧、请求超时、可代理路径。
  */
@@ -84,7 +84,7 @@ data: {"type": "ping"}
 `;
 var UPSTREAM_TIMEOUT_MS = 600000;
 var PROXIED_PATHS = ["/v1/messages", "/v1/messages/count_tokens"];
-//@ chunk-1ny7cxrt.js:1346344-1347543 placement
+//@ chunk-1hnjmk23.js:1347307-1348506 placement
 /**
  * 依次尝试各上游的 count_tokens（SDK 或 HTTP），Bedrock 用 countTokens 或 max_tokens=1 的请求；都失败时按字符数/4 估算。
  */
@@ -154,14 +154,14 @@ async function countTokensViaUpstreams(payload, upstreams, models, autoIncludeBu
   }
   return Math.ceil(jsonStringify(countPayload).length / 4);
 }
-//@ chunk-1ny7cxrt.js:1347543-1347580 placement
+//@ chunk-1hnjmk23.js:1348506-1348543 placement
 /**
  * 判断该路径是否属于可代理路径。
  */
 function isProxiedPath(pathname) {
   return PROXIED_PATHS.includes(pathname);
 }
-//@ chunk-1ny7cxrt.js:1347580-1347664 placement
+//@ chunk-1hnjmk23.js:1348543-1348627 placement
 /**
  * 从 Bedrock ARN 或模型名里取出基础模型名（区域前缀剥掉后校验）。
  */

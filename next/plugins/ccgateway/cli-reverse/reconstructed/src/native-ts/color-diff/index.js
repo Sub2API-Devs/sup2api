@@ -3,10 +3,10 @@
  *
  * 并入颜色差异模块的少量声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/native-ts/color-diff/index.ts
- * pieces: chunk-cwwxybjc.js (54)
- * attribution: fingerprint 21, layout 19, callgraph-fingerprint 4, file-local 3, sole-consumer 2, affinity 1, callgraph-witnessed 1, placement 3
+ * pieces: chunk-f2v3cjkz.js (1), chunk-td0w5pj1.js (54)
+ * attribution: fingerprint 21, layout 20, callgraph-fingerprint 4, file-local 3, sole-consumer 2, affinity 1, callgraph-witnessed 1, placement 3
  */
 import { basename, extname } from "path";
 import { sequential } from "../../utils/sequential.js";
@@ -35,7 +35,29 @@ import { regExp_2 } from "../../ink/layout/node.js";
 import { getColorModuleUnavailableReason } from "../../components/StructuredDiff/colorDiff.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cwwxybjc.js:1032-1076 fingerprint (2.1.88 match: rgb, 1)
+//@ chunk-f2v3cjkz.js:21781-22026 fingerprint (2.1.88 match: wordDiffStrings, 1)
+function countLineChanges(oldStr, newStr) {
+  let lineCounts = new Map();
+  for (let line of oldStr.split(`
+`))
+    lineCounts.set(line, (lineCounts.get(line) ?? 0) + 1);
+  let added = newStr
+    .split(
+      `
+`,
+    )
+    .reduce((acc, line) => {
+      let count = lineCounts.get(line) ?? 0;
+      lineCounts.set(line, count - 1);
+      return count > 0 ? acc : acc + 1;
+    }, 0);
+  let len = [...lineCounts.values()].reduce((acc, n) => acc + Math.max(n, 0), 0);
+  return {
+    added,
+    removed: len,
+  };
+}
+//@ chunk-td0w5pj1.js:1030-1074 fingerprint (2.1.88 match: rgb, 1)
 /**
  * 真彩色 Color（a=255）。
  */
@@ -47,7 +69,7 @@ function rgb(r, g, b) {
     a: 255,
   };
 }
-//@ chunk-cwwxybjc.js:1076-1114 layout (2.1.88 match: rgb, 1)
+//@ chunk-td0w5pj1.js:1074-1112 layout (2.1.88 match: rgb, 1)
 /**
  * 调色板索引色（a=0，r 存索引）。
  */
@@ -59,7 +81,7 @@ function ansiIdx(index) {
     a: 0,
   };
 }
-//@ chunk-cwwxybjc.js:1114-1138 callgraph-fingerprint (2.1.88 match: DEFAULT_BG, 1)
+//@ chunk-td0w5pj1.js:1112-1136 callgraph-fingerprint (2.1.88 match: DEFAULT_BG, 1)
 /**
  * 终端默认色标记（a=1，输出 39/49）。
  */
@@ -69,7 +91,7 @@ var DEFAULT_BG = {
   b: 0,
   a: 1,
 };
-//@ chunk-cwwxybjc.js:1138-1229 fingerprint (2.1.88 match: detectColorMode, 0.919)
+//@ chunk-td0w5pj1.js:1136-1227 fingerprint (2.1.88 match: detectColorMode, 0.919)
 /**
  * 颜色模式：主题名含 ansi → ansi；chalk 级别≥3 → truecolor；否则 color256。
  */
@@ -77,9 +99,9 @@ function detectColorMode(theme) {
   if (theme.includes("ansi")) return "ansi";
   return sequential.level >= 3 ? "truecolor" : "color256";
 }
-//@ chunk-cwwxybjc.js:1229-1258 layout
+//@ chunk-td0w5pj1.js:1227-1256 layout
 var CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
-//@ chunk-cwwxybjc.js:1258-1597 file-local
+//@ chunk-td0w5pj1.js:1256-1595 file-local
 /**
  * RGB 转 xterm-256 色号：在 6×6×6 色立方与 24 级灰阶中取欧氏距离更近者（与 syntect/ansi_colours 一致）。
  */
@@ -102,23 +124,23 @@ function ansi256FromRgb(r_2, g_2, b_2) {
   let dCube = (r_2 - cubeR) ** 2 + (g_2 - cubeG) ** 2 + (b_2 - cb) ** 2;
   return (r_2 - greyRgb) ** 2 + (g_2 - greyRgb) ** 2 + (b_2 - greyRgb) ** 2 < dCube ? greyIdx : cubeIdx;
 }
-//@ chunk-cwwxybjc.js:1597-1904 fingerprint (2.1.88 match: colorToEscape, 1)
+//@ chunk-td0w5pj1.js:1595-1902 fingerprint (2.1.88 match: colorToEscape, 1)
 /**
  * Color 转 SGR 转义：索引色 0-7/8-15 用 30-37/90-97（背景 40/100），其余用 38;5；默认色 39/49；真彩色 38;2 或降级到 256 色。
  */
-function colorToEscape(c_2, fg, mode) {
-  if (c_2.a === 0) {
-    let idx = c_2.r;
+function colorToEscape(c, fg, mode) {
+  if (c.a === 0) {
+    let idx = c.r;
     if (idx < 8) return `\x1B[${(fg ? 30 : 40) + idx}m`;
     if (idx < 16) return `\x1B[${(fg ? 90 : 100) + (idx - 8)}m`;
     return `\x1B[${fg ? 38 : 48};5;${idx}m`;
   }
-  if (c_2.a === 1) return fg ? "\x1B[39m" : "\x1B[49m";
+  if (c.a === 1) return fg ? "\x1B[39m" : "\x1B[49m";
   let codeType = fg ? 38 : 48;
-  if (mode === "truecolor") return `\x1B[${codeType};2;${c_2.r};${c_2.g};${c_2.b}m`;
-  return `\x1B[${codeType};5;${ansi256FromRgb(c_2.r, c_2.g, c_2.b)}m`;
+  if (mode === "truecolor") return `\x1B[${codeType};2;${c.r};${c.g};${c.b}m`;
+  return `\x1B[${codeType};5;${ansi256FromRgb(c.r, c.g, c.b)}m`;
 }
-//@ chunk-cwwxybjc.js:1904-2026 fingerprint (2.1.88 match: asTerminalEscaped, 1)
+//@ chunk-td0w5pj1.js:1902-2024 fingerprint (2.1.88 match: asTerminalEscaped, 1)
 /**
  * 把 [样式, 文本] 块序列拼成带转义的一行（可只输出前景、整行变暗），以 RESET 开头结尾。
  */
@@ -131,7 +153,7 @@ function asTerminalEscaped(blocks, mode, skipBackground, dim) {
   }
   return out + ANSI_RESET;
 }
-//@ chunk-cwwxybjc.js:2026-2138 fingerprint (2.1.88 match: defaultSyntaxThemeName, 1)
+//@ chunk-td0w5pj1.js:2024-2136 fingerprint (2.1.88 match: defaultSyntaxThemeName, 1)
 /**
  * 按界面主题选语法主题名：ansi → ansi；dark → Monokai Extended；其他 → GitHub。
  */
@@ -140,7 +162,7 @@ function defaultSyntaxThemeName(themeName) {
   if (themeName.includes("dark")) return "Monokai Extended";
   return "GitHub";
 }
-//@ chunk-cwwxybjc.js:2138-3828 fingerprint (2.1.88 match: STORAGE_KEYWORDS, 0.577)
+//@ chunk-td0w5pj1.js:2136-3826 fingerprint (2.1.88 match: STORAGE_KEYWORDS, 0.577)
 /**
  * highlight.js 作用域到颜色的映射：Monokai Extended（深色）、GitHub（浅色）、ANSI 16 色；STORAGE_KEYWORDS（const/let/function/class/def/fn/struct 等）在 keyword 作用域里改用 _storage 颜色。
  */
@@ -148,7 +170,7 @@ var MONOKAI_SCOPES; // deferred: uses rgb of its import cycle while loading; run
 var GITHUB_SCOPES;
 var STORAGE_KEYWORDS;
 var ANSI_SCOPES;
-deferInit("chunk-cwwxybjc.js:2138", () => {
+deferInit("chunk-td0w5pj1.js:2136", () => {
   MONOKAI_SCOPES = new Map([
     ["keyword", rgb(249, 38, 114)],
     ["_storage", rgb(102, 217, 239)],
@@ -234,7 +256,7 @@ deferInit("chunk-cwwxybjc.js:2138", () => {
     ["meta", ansiIdx(8)],
   ]);
 });
-//@ chunk-cwwxybjc.js:3828-4884 fingerprint (2.1.88 match: buildTheme, 1)
+//@ chunk-td0w5pj1.js:3826-4882 fingerprint (2.1.88 match: buildTheme, 1)
 /**
  * 按主题名与颜色模式组装 diff 主题：增删行背景、增删单词背景、增删标记色、前景、语法作用域表；有 dark/light × 普通/色盲友好（daltonized，新增行用蓝色）× ansi 几种组合；256 色下深色主题的增行背景改用调色板索引。
  */
@@ -312,7 +334,7 @@ function buildTheme(themeName, mode) {
     scopes: GITHUB_SCOPES,
   };
 }
-//@ chunk-cwwxybjc.js:5146-5687 sole-consumer (2.1.88 match: toInkColor, 1)
+//@ chunk-td0w5pj1.js:5144-5685 sole-consumer (2.1.88 match: toInkColor, 1)
 function toInkColor(color) {
   if (color === undefined) return null;
   let match = /^rgb\(\s?(\d{1,3}),\s?(\d{1,3}),\s?(\d{1,3})\s?\)$/.exec(color);
@@ -335,7 +357,7 @@ function toInkColor(color) {
   }
   return null;
 }
-//@ chunk-cwwxybjc.js:5687-5961 sole-consumer
+//@ chunk-td0w5pj1.js:5685-5959 sole-consumer
 function applyThemeDiffColors(theme, diffColors, dimmed) {
   let inkColor = toInkColor((dimmed ? diffColors.diffAddedDimmed : undefined) ?? diffColors.diffAdded);
   let inkColor_2 = toInkColor((dimmed ? diffColors.diffRemovedDimmed : undefined) ?? diffColors.diffRemoved);
@@ -349,14 +371,14 @@ function applyThemeDiffColors(theme, diffColors, dimmed) {
     deleteWord: inkColor_4 ?? theme.deleteWord,
   };
 }
-//@ chunk-cwwxybjc.js:5961-6031 affinity (2.1.88 match: asTerminalEscaped, 1)
+//@ chunk-td0w5pj1.js:5959-6029 affinity (2.1.88 match: asTerminalEscaped, 1)
 function defaultStyle(theme) {
   return {
     foreground: theme.foreground,
     background: theme.background,
   };
 }
-//@ chunk-cwwxybjc.js:6031-6139 fingerprint (2.1.88 match: lineBackground, 1)
+//@ chunk-td0w5pj1.js:6029-6137 fingerprint (2.1.88 match: lineBackground, 1)
 function lineBackground(marker, theme) {
   switch (marker) {
     case "+":
@@ -367,7 +389,7 @@ function lineBackground(marker, theme) {
       return theme.background;
   }
 }
-//@ chunk-cwwxybjc.js:6139-6248 fingerprint (2.1.88 match: wordBackground, 1)
+//@ chunk-td0w5pj1.js:6137-6246 fingerprint (2.1.88 match: wordBackground, 1)
 function wordBackground(marker, theme) {
   switch (marker) {
     case "+":
@@ -378,7 +400,7 @@ function wordBackground(marker, theme) {
       return theme.background;
   }
 }
-//@ chunk-cwwxybjc.js:6248-6368 fingerprint (2.1.88 match: decorationColor, 1)
+//@ chunk-td0w5pj1.js:6246-6366 fingerprint (2.1.88 match: decorationColor, 1)
 function decorationColor(marker, theme) {
   switch (marker) {
     case "+":
@@ -389,9 +411,9 @@ function decorationColor(marker, theme) {
       return theme.foreground;
   }
 }
-//@ chunk-cwwxybjc.js:6368-6499 fingerprint (2.1.88 match: FILENAME_LANGS, 0.588)
+//@ chunk-td0w5pj1.js:6366-6497 fingerprint (2.1.88 match: FILENAME_LANGS, 0.581)
 var FILENAME_LANGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cwwxybjc.js:6368", () => {
+deferInit("chunk-td0w5pj1.js:6366", () => {
   FILENAME_LANGS = new Map([
     ["Dockerfile", "dockerfile"],
     ["Makefile", "makefile"],
@@ -400,7 +422,7 @@ deferInit("chunk-cwwxybjc.js:6368", () => {
     ["CMakeLists", "cmake"],
   ]);
 });
-//@ chunk-cwwxybjc.js:6499-7046 fingerprint (2.1.88 match: detectLanguage, 0.973)
+//@ chunk-td0w5pj1.js:6497-7045 fingerprint (2.1.88 match: detectLanguage, 0.973)
 /**
  * 识别文件语言：先按文件名（Dockerfile/Makefile 等），再按扩展名，再按首行 shebang（bash/python/node/ruby/perl）或 <?php、<?xml。
  */
@@ -431,7 +453,7 @@ function detectLanguage(filePath, firstLine) {
   }
   return null;
 }
-//@ chunk-cwwxybjc.js:7046-7234 fingerprint (2.1.88 match: scopeColor, 1)
+//@ chunk-td0w5pj1.js:7045-7233 fingerprint (2.1.88 match: scopeColor, 1)
 /**
  * 作用域取色：keyword 中的声明类关键字用 _storage 色；找不到完整作用域时退回首段（如 title.function → title）；都没有用前景色。
  */
@@ -441,7 +463,7 @@ function scopeColor(scope, text, theme) {
     return theme.scopes.get("_storage") ?? theme.foreground;
   return theme.scopes.get(scope) ?? theme.scopes.get(firstLineOf(scope, ".")) ?? theme.foreground;
 }
-//@ chunk-cwwxybjc.js:7234-7412 layout (2.1.88 match: asTerminalEscaped, 1)
+//@ chunk-td0w5pj1.js:7233-7411 layout (2.1.88 match: asTerminalEscaped, 1)
 /**
  * 递归展开 highlight.js 的 emitter 节点树，按继承的作用域给每段文本配色。
  */
@@ -459,7 +481,7 @@ function flattenHljsNode(node, theme, parentScope, out) {
       ]);
     } else flattenHljsNode(child, theme, scope, out);
 }
-//@ chunk-cwwxybjc.js:7412-7554 fingerprint (2.1.88 match: hasRootNode, 1)
+//@ chunk-td0w5pj1.js:7411-7553 fingerprint (2.1.88 match: hasRootNode, 1)
 function hasRootNode(emitter) {
   return (
     typeof emitter === "object" &&
@@ -470,7 +492,7 @@ function hasRootNode(emitter) {
     "children" in emitter.rootNode
   );
 }
-//@ chunk-cwwxybjc.js:7554-8116 fingerprint (2.1.88 match: highlightLine, 0.706)
+//@ chunk-td0w5pj1.js:7553-8115 fingerprint (2.1.88 match: highlightLine, 0.706)
 /**
  * 高亮一行代码：语言未知直接用默认样式；长行先换成受限语言（O2o）避免慢；累计复杂度超过阈值后不再高亮；highlight.js 抛错时关闭此文件的高亮；emitter 形状不符记一次错误。
  */
@@ -508,7 +530,7 @@ function highlightLine(state, line, theme) {
   flattenHljsNode(result._emitter.rootNode, theme, undefined, blocks);
   return sanitizeBlocks(blocks);
 }
-//@ chunk-cwwxybjc.js:8116-8272 layout
+//@ chunk-td0w5pj1.js:8115-8271 layout
 function sanitizeBlocks(blocks) {
   let graphemes = blocks.map(([, text]) => text);
   let merged = mergeCombiningGraphemes(graphemes);
@@ -520,12 +542,12 @@ function sanitizeBlocks(blocks) {
   }
   return result;
 }
-//@ chunk-cwwxybjc.js:8272-8283 layout
+//@ chunk-td0w5pj1.js:8271-8282 layout
 /**
  * 单词级 diff 改动占比超过 40% 时放弃单词高亮（整行变化太大）。
  */
 var CHANGE_THRESHOLD = 0.4;
-//@ chunk-cwwxybjc.js:8283-8624 callgraph-fingerprint (2.1.88 match: tokenize, 1)
+//@ chunk-td0w5pj1.js:8282-8623 callgraph-fingerprint (2.1.88 match: tokenize, 1)
 /**
  * 单词级 diff 的分词：字母数字下划线连续段、空白连续段、其他按单个码点。
  */
@@ -552,7 +574,7 @@ function tokenize(text) {
   }
   return tokens;
 }
-//@ chunk-cwwxybjc.js:8624-8888 file-local
+//@ chunk-td0w5pj1.js:8623-8887 file-local
 /**
  * 在行标记序列中找相邻的删除块与新增块，按顺序一一配对（用于单词级 diff）。
  */
@@ -576,7 +598,7 @@ function findAdjacentPairs(markers) {
     } else i++;
   return pairs;
 }
-//@ chunk-cwwxybjc.js:8888-9191 fingerprint (2.1.88 match: wordDiffStrings, 1)
+//@ chunk-td0w5pj1.js:8887-9190 layout (2.1.88 match: wordDiffStrings, 1)
 /**
  * 两行之间的单词级 diff：返回旧行被删范围和新行新增范围；改动占比超过 40% 时返回空。
  */
@@ -614,7 +636,7 @@ function wordDiffStrings(oldStr, newStr) {
   if (totalLen > 0 && changedLen / totalLen > CHANGE_THRESHOLD) return [[], []];
   return [oldRanges, newRanges];
 }
-//@ chunk-cwwxybjc.js:9191-9305 callgraph-witnessed (2.1.88 match: removeNewlines, 1)
+//@ chunk-td0w5pj1.js:9190-9304 callgraph-witnessed (2.1.88 match: removeNewlines, 1)
 function splitBlocksOnNewlines(h) {
   h.lines = h.lines.map((line) =>
     line.flatMap(([style, text]) =>
@@ -628,7 +650,7 @@ function splitBlocksOnNewlines(h) {
     ),
   );
 }
-//@ chunk-cwwxybjc.js:9305-9419 file-local
+//@ chunk-td0w5pj1.js:9304-9418 file-local
 function isAmbiguousWidthChar(char) {
   if (char.length !== 1) return false;
   let firstCp = char.codePointAt(0);
@@ -636,15 +658,15 @@ function isAmbiguousWidthChar(char) {
     if (firstCp >= rangeStart && firstCp <= rangeEnd) return true;
   return false;
 }
-//@ chunk-cwwxybjc.js:9419-9443 layout
+//@ chunk-td0w5pj1.js:9418-9442 layout
 var PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
-//@ chunk-cwwxybjc.js:9443-9509 layout
+//@ chunk-td0w5pj1.js:9442-9508 layout
 function graphemeWidth(char) {
   if (char === "\t") return 8;
   if (isAmbiguousWidthChar(char)) return 1;
   return bunStringWidth(char);
 }
-//@ chunk-cwwxybjc.js:9509-9617 layout
+//@ chunk-td0w5pj1.js:9508-9616 layout
 function textWidth(text) {
   if (!regExp_2.test(text)) return bunStringWidth(text);
   let parts = text.split(regExp);
@@ -652,26 +674,26 @@ function textWidth(text) {
   for (let part of parts) width += bunStringWidth(part);
   return width;
 }
-//@ chunk-cwwxybjc.js:9617-9664 layout
+//@ chunk-td0w5pj1.js:9616-9663 layout
 function blocksText(line) {
   return line.map(([, text]) => text).join("");
 }
-//@ chunk-cwwxybjc.js:9664-9675 layout
+//@ chunk-td0w5pj1.js:9663-9674 layout
 var WIDTH_CONTEXT_CHARS = 256;
-//@ chunk-cwwxybjc.js:9675-9760 layout
+//@ chunk-td0w5pj1.js:9674-9759 layout
 function appendedWidth(prefix, text) {
   if (PRINTABLE_ASCII.test(text)) return text.length;
   let sliced = prefix.slice(-WIDTH_CONTEXT_CHARS);
   return textWidth(sliced + text) - textWidth(sliced);
 }
-//@ chunk-cwwxybjc.js:9760-9835 layout (2.1.88 match: asTerminalEscaped, 1)
+//@ chunk-td0w5pj1.js:9759-9834 layout (2.1.88 match: asTerminalEscaped, 1)
 function styleEscape(style, mode, skipBackground) {
   return (
     colorToEscape(style.foreground, true, mode) +
     (skipBackground ? "" : colorToEscape(style.background, false, mode))
   );
 }
-//@ chunk-cwwxybjc.js:9835-9987 layout
+//@ chunk-td0w5pj1.js:9834-9986 layout
 function mergeSameStyleBlocks(line, mode, skipBackground) {
   let merged = [];
   let lastEscape = null;
@@ -686,7 +708,7 @@ function mergeSameStyleBlocks(line, mode, skipBackground) {
   }
   return merged;
 }
-//@ chunk-cwwxybjc.js:9987-10217 layout
+//@ chunk-td0w5pj1.js:9986-10216 layout
 function expandTabs(blocks) {
   if (!blocks.some(([, text]) => text.includes("\t"))) return blocks;
   let lineText = "";
@@ -705,7 +727,7 @@ function expandTabs(blocks) {
   }
   return out;
 }
-//@ chunk-cwwxybjc.js:10217-11590 layout (2.1.88 match: addMarker, 0.806)
+//@ chunk-td0w5pj1.js:10216-11589 layout (2.1.88 match: addMarker, 0.806)
 /**
  * 把一行的样式块按宽度折行（纯 ASCII 快速路径，其余按字素宽度）；超长时截断并加省略号；有增删标记时用行背景色补齐到整宽。
  */
@@ -823,7 +845,7 @@ function wrapLines(wrappedLine, effectiveWidth, theme, mode, skipBackground) {
     }
   }
 }
-//@ chunk-cwwxybjc.js:11590-11901 fingerprint (2.1.88 match: addLineNumber, 1)
+//@ chunk-td0w5pj1.js:11589-11900 fingerprint (2.1.88 match: addLineNumber, 1)
 /**
  * 在每个折行前加行号栏（首行显示行号，续行空白；上下文行变暗）。
  */
@@ -839,7 +861,7 @@ function addLineNumber(h, theme, maxDigits, fullDim) {
     h.lines[i].unshift([style, wrapped]);
   }
 }
-//@ chunk-cwwxybjc.js:11901-12041 fingerprint (2.1.88 match: addMarker, 1)
+//@ chunk-td0w5pj1.js:11900-12040 fingerprint (2.1.88 match: addMarker, 1)
 function addMarker(h, theme) {
   if (!h.marker) return;
   let style = {
@@ -848,7 +870,7 @@ function addMarker(h, theme) {
   };
   for (let line of h.lines) line.unshift([style, h.marker]);
 }
-//@ chunk-cwwxybjc.js:12041-12146 callgraph-fingerprint (2.1.88 match: dimContent, 1)
+//@ chunk-td0w5pj1.js:12040-12145 callgraph-fingerprint (2.1.88 match: dimContent, 1)
 /**
  * ansi 模式下删除行整行变暗。
  */
@@ -860,7 +882,7 @@ function dimContent(h) {
       line[last][1] = line[last][1] + ANSI_NORMAL_INTENSITY;
     }
 }
-//@ chunk-cwwxybjc.js:12146-12637 layout
+//@ chunk-td0w5pj1.js:12145-12636 layout
 function snapRangesToGraphemes(text, ranges) {
   if (ranges.length === 0) return ranges;
   let boundaries = [0];
@@ -900,7 +922,7 @@ function snapRangesToGraphemes(text, ranges) {
   }
   return snapped;
 }
-//@ chunk-cwwxybjc.js:12637-13280 fingerprint (2.1.88 match: applyBackground, 1)
+//@ chunk-td0w5pj1.js:12636-13279 fingerprint (2.1.88 match: applyBackground, 1)
 /**
  * 给增删行着背景：单词级改动范围用单词背景，其余用行背景（按样式块切分）。
  */
@@ -964,20 +986,20 @@ function applyBackground(h_2, theme, ranges) {
     h_2.lines[idx] = newLine;
   }
 }
-//@ chunk-cwwxybjc.js:13280-13396 layout (2.1.88 match: computeGutterWidth, 1)
+//@ chunk-td0w5pj1.js:13279-13395 layout (2.1.88 match: computeGutterWidth, 1)
 function getMaxLineNumber(patch) {
   let maxLineNumber = Math.max(0, patch.oldStart + patch.oldLines - 1);
   let max = Math.max(0, patch.newStart + patch.newLines - 1);
   return Math.max(maxLineNumber, max);
 }
-//@ chunk-cwwxybjc.js:13396-13441 layout
+//@ chunk-td0w5pj1.js:13395-13440 layout
 function normalizeMarker(marker) {
   return marker === "+" || marker === "-" ? marker : " ";
 }
-//@ chunk-cwwxybjc.js:13441-13453 layout
+//@ chunk-td0w5pj1.js:13440-13452 layout
 var DIFF_GUTTER_BLOCKS = 2;
 var FILE_GUTTER_BLOCKS = 1;
-//@ chunk-cwwxybjc.js:13453-14737 fingerprint (2.1.88 match: ColorDiff, 0.801)
+//@ chunk-td0w5pj1.js:13452-14737 fingerprint (2.1.88 match: ColorDiff, 0.801)
 /**
  * 带语法高亮与单词级 diff 的 hunk 渲染器（2.1.88 中替代原生 Rust color-diff 的 TS 实现）：buildRows 依次求颜色模式、主题（可被用户 diff 颜色覆盖）、语言、行号，配对增删行做单词 diff，逐行高亮（删除行不高亮）、着背景、折行、加标记与行号；render 输出整行，renderSplit 输出行号栏与内容两列。
  */
@@ -1075,7 +1097,7 @@ class ColorDiff {
     };
   }
 }
-//@ chunk-cwwxybjc.js:14737-15473 fingerprint (2.1.88 match: ColorFile, 0.671)
+//@ chunk-td0w5pj1.js:14737-15474 fingerprint (2.1.88 match: ColorFile, 0.67)
 /**
  * 整文件语法高亮渲染器（带行号，不做 diff）。
  */
@@ -1132,32 +1154,32 @@ class ColorFile {
     };
   }
 }
-//@ chunk-cwwxybjc.js:15473-15520 callgraph-fingerprint (2.1.88 match: getSyntaxTheme, 0.397)
+//@ chunk-td0w5pj1.js:15474-15521 callgraph-fingerprint (2.1.88 match: getSyntaxTheme, 0.397)
 function getSyntaxTheme(themeName) {
   return {
     theme: defaultSyntaxThemeName(themeName),
     source: null,
   };
 }
-//@ chunk-cwwxybjc.js:15597-15639 placement
+//@ chunk-td0w5pj1.js:15598-15640 placement
 /**
  * 颜色差异能力不可用时返回 null，否则返回 ColorDiff。
  */
 function getColorDiff() {
   return getColorModuleUnavailableReason() === null ? ColorDiff : null;
 }
-//@ chunk-cwwxybjc.js:15639-15681 placement
+//@ chunk-td0w5pj1.js:15640-15682 placement
 /**
  * 颜色模块不可用时返回 null，否则返回 ColorFile。
  */
 function getColorFile() {
   return getColorModuleUnavailableReason() === null ? ColorFile : null;
 }
-//@ chunk-cwwxybjc.js:15681-15728 placement
+//@ chunk-td0w5pj1.js:15682-15729 placement
 /**
  * 颜色模块可用时返回指定语法主题，否则 null。
  */
 function getColorSyntaxTheme(themeName) {
   return getColorModuleUnavailableReason() === null ? getSyntaxTheme(themeName) : null;
 }
-export { getColorDiff, getColorSyntaxTheme, getColorFile };
+export { getColorFile, getColorDiff, getColorSyntaxTheme, countLineChanges };

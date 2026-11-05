@@ -3,12 +3,12 @@
  *
  * AppState 的默认值 getDefaultAppState（设置、任务、权限上下文、MCP/插件、todos、文件历史、UI 开关等字段）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/AppStateStore.ts
- * pieces: chunk-30s1dxp3.js (2), chunk-pyk0acyv.js (1)
+ * pieces: chunk-aq66mwq1.js (2), chunk-n75cktq8.js (1)
  * attribution: placement 2, fingerprint 1
  */
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { getEmptyToolPermissionContext } from "../Tool.js";
 import { UNLIMITED } from "./statusLineWidth.js";
 import { DEFAULT } from "../utils/proactivityMode.js";
@@ -33,7 +33,7 @@ import { isBetaHeaderAllowed } from "../utils/betas.js";
 import { shouldEnablePromptSuggestion } from "../services/PromptSuggestion/promptSuggestion.js";
 import { isAwaySummaryEnabled } from "../services/awaySummary.js";
 
-//@ chunk-pyk0acyv.js:540-3233 fingerprint (2.1.88 match: getDefaultAppState, 0.414)
+//@ chunk-n75cktq8.js:540-3312 fingerprint (2.1.88 match: getDefaultAppState, 0.429)
 /**
  * AppState 默认值：settings、tasks、transcripts、toolPermissionContext（队友需 plan 时初始为 plan）、mcp/plugins、todos、fileHistory、attribution、thinking/fastMode/effort 等 UI 与会话状态，以及大量 artifact 授权字段。
  */
@@ -44,7 +44,7 @@ function getDefaultAppState_2(overrides = {}) {
     sessionNoticesPoll: {
       pendingDeliveryUuids: [],
     },
-    settings: getInitialSettings_2(),
+    settings: getInitialSettings(),
     tasks: {},
     transcripts: {},
     runningSubagents: 0,
@@ -64,6 +64,9 @@ function getDefaultAppState_2(overrides = {}) {
     replBridgeSessionActive: false,
     replBridgeSkipNextArchive: false,
     replBridgeSessionGroupingId: undefined,
+    replBridgeInitialName: undefined,
+    replBridgeError: undefined,
+    replBridgeErrorKind: undefined,
     toolPermissionContext: {
       ...getEmptyToolPermissionContext(),
       mode: initialMode,
@@ -178,13 +181,13 @@ function getDefaultAppState_2(overrides = {}) {
     webBrowser: require("./webBrowserSlice.js").getDefaultWebBrowserState(),
   };
 }
-//@ chunk-30s1dxp3.js:228-290 placement
+//@ chunk-aq66mwq1.js:228-290 placement
 var EMPTY_PROJECTS_SELF_IDENTITY = {
   accountKey: null,
   ownMessageIds: [],
   wireAccountId: null,
 };
-//@ chunk-30s1dxp3.js:290-1575 placement
+//@ chunk-aq66mwq1.js:290-1496 placement
 /**
  * AppState 默认值。
  */
@@ -223,9 +226,6 @@ function getDefaultAppState() {
     replBridgeSessionUrl: undefined,
     replBridgeEnvironmentId: undefined,
     replBridgeSessionId: undefined,
-    replBridgeError: undefined,
-    replBridgeErrorKind: undefined,
-    replBridgeInitialName: undefined,
     setupIssues: {
       settingsErrorCount: 0,
       lspFailedCount: 0,

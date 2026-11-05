@@ -3,13 +3,13 @@
  *
  * shell 任务类型守卫
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalShellTask/guards.ts
- * pieces: chunk-s61vbvea.js (1)
+ * pieces: chunk-7jxyna5q.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-s61vbvea.js:377065-377152 fingerprint (2.1.88 match: isLocalShellTask, 1)
+//@ chunk-7jxyna5q.js:302155-302242 fingerprint (2.1.88 match: isLocalShellTask, 1)
 /**
  * 是否是 local_bash 任务。
  */

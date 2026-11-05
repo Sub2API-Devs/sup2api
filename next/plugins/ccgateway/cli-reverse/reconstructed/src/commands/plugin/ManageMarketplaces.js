@@ -3,9 +3,9 @@
  *
  * 管理已添加的插件市场
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ManageMarketplaces.tsx
- * pieces: chunk-vrb44rx7.js (8)
+ * pieces: chunk-wb51jffc.js (8)
  * attribution: placement 4, fingerprint 2, layout 2
  */
 import { basename } from "path";
@@ -59,7 +59,7 @@ import {
   noCliNameLabel,
   formatClaudeAiMarketplaceLabel,
 } from "../../utils/plugins/claudeAiMarketplaces.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { listReservedNameRefusals } from "../../utils/plugins/marketplaceSources.js";
 import { isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 import { quotedPrintable, printableMessage, printableName } from "../../utils/printableName.js";
@@ -116,12 +116,12 @@ import { commandSourceSession } from "../../utils/plugins/commandSourceErrors.js
 import { isMarketplaceAutoUpdate, ANTHROPIC_PLUGIN_DIRECTORY } from "../../utils/plugins/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:103318-103453 placement
+//@ chunk-wb51jffc.js:103141-103276 placement
 var BUILTIN_MARKETPLACE_OFF_NOTICE; // deferred: uses OFFICIAL_MARKETPLACE_DISPLAY (../../utils/plugins/officialMarketplaceNames.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vrb44rx7.js:103318", () => {
+deferInit("chunk-wb51jffc.js:103141", () => {
   BUILTIN_MARKETPLACE_OFF_NOTICE = `${OFFICIAL_MARKETPLACE_DISPLAY} is off. Plugins you installed from it stay installed and keep updating. Turn it back on in /plugin \u2192 Marketplaces.`;
 });
-//@ chunk-vrb44rx7.js:103453-122462 fingerprint (2.1.88 match: ManageMarketplaces, 0.48)
+//@ chunk-wb51jffc.js:103276-122291 fingerprint (2.1.88 match: ManageMarketplaces, 0.48)
 function ManageMarketplaces({
   setViewState,
   error,
@@ -183,7 +183,7 @@ function ManageMarketplaces({
           knownMarketplaces,
         );
         setMarketplaceStates(rows);
-        let successCount = count(marketplaces, (m) => m.data !== null);
+        let successCount = countWhere(marketplaces, (m) => m.data !== null);
         let errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult)
           if (
@@ -308,8 +308,8 @@ function ManageMarketplaces({
   }, [targetMarketplace, action, error]);
   let hasPendingChanges = () => marketplaceStates.some((state) => state.pendingUpdate || state.pendingRemove);
   let getPendingCounts = () => {
-    let updateCount = count(marketplaceStates, (state) => state.pendingUpdate);
-    let removeCount = count(marketplaceStates, (state) => state.pendingRemove);
+    let updateCount = countWhere(marketplaceStates, (state) => state.pendingUpdate);
+    let removeCount = countWhere(marketplaceStates, (state) => state.pendingRemove);
     return {
       updateCount,
       removeCount,
@@ -421,9 +421,15 @@ function ManageMarketplaces({
         );
         updatedPluginCount = updated.length;
         failedStates = commandSourceSkipped;
-        deferredPluginCount = count(blocked, (entry) => entry.type === "autoupdate-deferred-entry-helper");
-        policyBlockedPluginCount = count(blocked, (entry) => entry.type === "autoupdate-disabled-by-policy");
-        blockedByPinner = count(blocked, (entry) => entry.type === "autoupdate-blocked-by-pinner");
+        deferredPluginCount = countWhere(
+          blocked,
+          (entry) => entry.type === "autoupdate-deferred-entry-helper",
+        );
+        policyBlockedPluginCount = countWhere(
+          blocked,
+          (entry) => entry.type === "autoupdate-disabled-by-policy",
+        );
+        blockedByPinner = countWhere(blocked, (entry) => entry.type === "autoupdate-blocked-by-pinner");
         failedCount = updateFailedCount;
         let filtered = blocked.filter(
           (entry) =>
@@ -1610,7 +1616,7 @@ function ManageMarketplaces({
     ],
   });
 }
-//@ chunk-vrb44rx7.js:122462-123736 fingerprint (2.1.88 match: ManageMarketplacesKeyHints, 0.783)
+//@ chunk-wb51jffc.js:122291-123565 fingerprint (2.1.88 match: ManageMarketplacesKeyHints, 0.783)
 function ManageMarketplacesKeyHints(props) {
   let $ = useMemoCache(23);
   let { exitState, hasPendingActions, isOnInertRow, builtInRow } = props;
@@ -1720,13 +1726,13 @@ function ManageMarketplacesKeyHints(props) {
   } else t7 = $[22];
   return t7;
 }
-//@ chunk-vrb44rx7.js:123736-123791 layout
+//@ chunk-wb51jffc.js:123565-123620 layout
 function getMarketplaceDisplayName(marketplace) {
   return marketplace.builtIn !== undefined
     ? OFFICIAL_MARKETPLACE_DISPLAY
     : displayMarketplaceName(marketplace.name);
 }
-//@ chunk-vrb44rx7.js:123791-124310 layout
+//@ chunk-wb51jffc.js:123620-124139 layout
 /**
  * 按官方市场可用状态（unavailable/blocked/off/on）在市场列表前插入或修正内置官方市场行：被组织屏蔽或关闭时插入占位行；已添加时标记 builtIn 并在插件全被策略隐藏时加标志。
  */
@@ -1777,7 +1783,7 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
   }
   return marketplaces;
 }
-//@ chunk-vrb44rx7.js:124310-125186 placement
+//@ chunk-wb51jffc.js:124139-125015 placement
 function buildMarketplaceRows(marketplaces, failures, allPlugins, claudeAiMarketplaceRegistry) {
   let declaredMarketplaces = getDeclaredMarketplaces();
   return marketplaces
@@ -1790,7 +1796,7 @@ function buildMarketplaceRows(marketplaces, failures, allPlugins, claudeAiMarket
         let claudeAiNote =
           data === null
             ? 0
-            : count(filtered, (plugin) => {
+            : countWhere(filtered, (plugin) => {
                 let found = data.plugins.find((plugin_2) => plugin_2.name === plugin.name);
                 return (
                   found !== undefined &&
@@ -1830,14 +1836,14 @@ function buildMarketplaceRows(marketplaces, failures, allPlugins, claudeAiMarket
       return a.name.localeCompare(b.name);
     });
 }
-//@ chunk-vrb44rx7.js:125186-125190 placement
+//@ chunk-wb51jffc.js:125015-125019 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:125186", () => {
+deferInit("chunk-wb51jffc.js:125015", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:125190-125194 placement
+//@ chunk-wb51jffc.js:125019-125023 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:125190", () => {
+deferInit("chunk-wb51jffc.js:125019", () => {
   init_react_production();
 });
 export { ManageMarketplaces };

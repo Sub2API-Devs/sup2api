@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件函数钩子 $.agent.spawn/register 接口实现
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (14)
  * attribution: placement 14
  */
 import { AgentJsonSchema } from "../../tools/AgentTool/loadAgentsDir.js";
@@ -30,7 +30,7 @@ import { sleep } from "../../utils/sleep.js";
 import { claimTaskNotification } from "../../utils/task/framework.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3730319-3730484 placement
+//@ chunk-5xgkngpb.js:3826053-3826218 placement
 function validateAgentDefinition(definition) {
   let { name, ...rest } = definition;
   let joined = (AgentJsonSchema().safeParse(rest).error?.issues ?? [])
@@ -38,7 +38,7 @@ function validateAgentDefinition(definition) {
     .join("; ");
   return joined === "" ? undefined : joined;
 }
-//@ chunk-e6aww6q8.js:3730484-3731121 placement
+//@ chunk-5xgkngpb.js:3826218-3826855 placement
 /**
  * $.agent.register 实现：校验代理定义，键为"插件显示名:代理名"；内容未变则跳过，否则登记或替换并刷新代理列表。
  */
@@ -77,7 +77,7 @@ async function registerAgentForPlugin(definition, { pluginName, pluginStorageId,
     agent: agentId,
   };
 }
-//@ chunk-e6aww6q8.js:3750768-3751183 placement
+//@ chunk-5xgkngpb.js:3846521-3846936 placement
 /**
  * 把代理/队友任务状态映射为对外状态：running 时区分等待/空闲，completed 时按保活原因与是否在收尾区分 running/waiting/idle/completed，paused→idle。
  */
@@ -102,7 +102,7 @@ function agentDisplayStatus(task, isTeammate) {
       return task.status;
   }
 }
-//@ chunk-e6aww6q8.js:3751546-3752385 placement
+//@ chunk-5xgkngpb.js:3847299-3848140 placement
 /**
  * $.agent.list 实现：遍历任务注册表中的本地代理与进程内队友，按代理去重，给出 id、队友 id、描述、类型、状态、父 id、发起插件与名字。
  */
@@ -150,7 +150,7 @@ async function listAgentsForPlugin(plugin) {
   }
   return [...entries.values()];
 }
-//@ chunk-e6aww6q8.js:3971994-3972395 placement
+//@ chunk-5xgkngpb.js:4074224-4074625 placement
 /**
  * $.agent.spawn 并发控制：每个插件同时运行的派生数有上限，超出拒绝；以 launch-only 方式调用工具，仍在运行的派生结束后才释放计数。
  */
@@ -185,36 +185,36 @@ function createAgentSpawner(runTool = toolCallForPlugin, getMaxSpawns = maxSubag
     },
   };
 }
-//@ chunk-e6aww6q8.js:3972395-3972448 placement
+//@ chunk-5xgkngpb.js:4074625-4074678 placement
 /**
  * 取最后一条助手文本
  */
 var lastAssistantTextOf = (registry, agentId) =>
   lastAssistantText(registry.getTranscript(agentId)?.messages ?? []);
-//@ chunk-e6aww6q8.js:3972448-3972460 placement
+//@ chunk-5xgkngpb.js:4074678-4074690 placement
 /**
  * 150
  */
 var AGENT_WAIT_POLL_MS = 150;
-//@ chunk-e6aww6q8.js:3972460-3972471 placement
+//@ chunk-5xgkngpb.js:4074690-4074701 placement
 /**
  * 10
  */
 var SLOW_HOOK_MINUTES = 10;
-//@ chunk-e6aww6q8.js:3972471-3972482 placement
+//@ chunk-5xgkngpb.js:4074701-4074712 placement
 /**
  * 60
  */
 var SECONDS_PER_MINUTE = 60;
-//@ chunk-e6aww6q8.js:3972482-3972501 placement
+//@ chunk-5xgkngpb.js:4074712-4074731 placement
 /**
  * 慢钩子上报间隔
  */
 var SLOW_HOOK_REPORT_MS; // deferred: uses SLOW_HOOK_REPORT_INTERVAL_MS_2 (./dispatch/slowHookReports.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3972482", () => {
+deferInit("chunk-5xgkngpb.js:4074712", () => {
   SLOW_HOOK_REPORT_MS = SLOW_HOOK_MINUTES * SECONDS_PER_MINUTE * SLOW_HOOK_REPORT_INTERVAL_MS_2;
 });
-//@ chunk-e6aww6q8.js:3972501-3972661 placement
+//@ chunk-5xgkngpb.js:4074731-4074891 placement
 function evictedAnswerResult(registry, agentId, pluginName) {
   let lastText = lastAssistantTextOf(registry, agentId);
   return lastText === ""
@@ -226,7 +226,7 @@ function evictedAnswerResult(registry, agentId, pluginName) {
         text: lastText,
       };
 }
-//@ chunk-e6aww6q8.js:3972661-3972757 placement
+//@ chunk-5xgkngpb.js:4074891-4074987 placement
 /**
  * 轮询等待代理结束
  */
@@ -237,7 +237,7 @@ async function waitForAgentDone(registry, agentId) {
     await sleep(AGENT_WAIT_POLL_MS);
   }
 }
-//@ chunk-e6aww6q8.js:3972757-3972859 placement
+//@ chunk-5xgkngpb.js:4074987-4075089 placement
 function abandonWaitResult(registry, agentId, text) {
   registry.update(agentId, (task) => ({
     ...task,
@@ -249,7 +249,7 @@ function abandonWaitResult(registry, agentId, text) {
     settled: waitForAgentDone(registry, agentId),
   };
 }
-//@ chunk-e6aww6q8.js:3972859-3973570 placement
+//@ chunk-5xgkngpb.js:4075089-4075803 placement
 /**
  * 轮询等待插件派生的子代理结束：完成返回其最后回答，失败/被杀返回错误；超时（10 分钟）或中止时返回错误并在后台继续等待结算。
  */

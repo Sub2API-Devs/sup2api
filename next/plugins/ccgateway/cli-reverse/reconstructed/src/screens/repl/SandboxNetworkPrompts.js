@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增。沙箱网络请求提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { randomUUID } from "crypto";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -25,15 +26,20 @@ import { logForDebugging } from "../../utils/debug.js";
 import { toApprovalLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { SANDBOX_NETWORK_ACCESS_TOOL_NAME } from "../../cli/structuredIO.js";
 import { CountedAsk } from "../../utils/countedAsk.js";
+import { setUnansweredWindowExpired } from "../../tools/BashTool/bashPermissionFlags.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { persistValidatedPermissionUpdate } from "../../utils/permissions/PermissionUpdate.js";
 import { reportSandboxErrorUnderStandIn } from "../../utils/sandbox/sandboxErrors.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:175184-175459 placement
+//@ chunk-czq1j3j2.js:165450-165454 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:165450", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:180556-180831 placement
 var sandboxNetworkAccessDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:175184", () => {
+deferInit("chunk-czq1j3j2.js:180556", () => {
   sandboxNetworkAccessDialogDef = withHideWhile({
     kind: "sandbox_network_access",
     payload: DoctorLazy(() =>
@@ -57,7 +63,7 @@ deferInit("chunk-18hwfzwa.js:175184", () => {
     default: "cancelled",
   });
 });
-//@ chunk-18hwfzwa.js:175459-176551 placement
+//@ chunk-czq1j3j2.js:180831-182080 placement
 /**
  * 沙箱网络访问询问器：沙箱运行时(srt)请求访问未在白名单的主机时，弹出 "Allow network connection to …" 对话框；拒绝 srt 会改写拼写的主机；可转发到 bridge/leader。
  */
@@ -130,8 +136,23 @@ class SandboxNetworkPrompts {
       },
     );
     countedAsk.settleWhen(answerPromise);
+    if (expiry !== undefined) {
+      expiryTimer = setTimeout(() => {
+        if (revealed)
+          setUnansweredWindowExpired({
+            expired: true,
+          });
+        expiry.onExpired();
+        abortController.abort();
+      }, expiry.afterMs);
+      expiryTimer.unref();
+    }
     let answer = await answerPromise;
     clearTimeout(expiryTimer);
+    if (expiry !== undefined && answer !== "cancelled")
+      setUnansweredWindowExpired({
+        expired: false,
+      });
     finishBridgeAsk(bridgeAnswer !== undefined);
     if (answer === "cancelled") {
       if (bridgeAnswer) SandboxManager.addSessionAllowedHost(host);
@@ -141,7 +162,7 @@ class SandboxNetworkPrompts {
     return answer.allow;
   }
 }
-//@ chunk-18hwfzwa.js:176551-177218 placement
+//@ chunk-czq1j3j2.js:182080-182747 placement
 async function askSandboxNetworkFromWorker({ host, workerName, requestId }, deps) {
   for (let idx = 0; idx < 2; idx++) {
     let countedAsk = new CountedAsk();
@@ -179,7 +200,7 @@ async function askSandboxNetworkFromWorker({ host, workerName, requestId }, deps
     return;
   }
 }
-//@ chunk-18hwfzwa.js:177218-177486 placement
+//@ chunk-czq1j3j2.js:182747-183015 placement
 function applySandboxNetworkAnswer({ allow, persistToSettings, persistRow }, host, applyPermissionUpdate) {
   if (persistToSettings && allow && persistRow !== undefined && isConsentRow(persistRow)) {
     for (let update of persistRow.applies) {
@@ -191,19 +212,14 @@ function applySandboxNetworkAnswer({ allow, persistToSettings, persistRow }, hos
     SandboxManager.addSessionAllowedHost(host);
   } else if (allow) SandboxManager.addSessionAllowedHost(host);
 }
-//@ chunk-18hwfzwa.js:177486-177490 placement
+//@ chunk-czq1j3j2.js:183015-183019 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:177486", () => {
+deferInit("chunk-czq1j3j2.js:183015", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:177490-177494 placement
+//@ chunk-czq1j3j2.js:183019-183023 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:177490", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:177494-177498 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:177494", () => {
+deferInit("chunk-czq1j3j2.js:183019", () => {
   init_react_production();
 });
 export { SandboxNetworkPrompts, sandboxNetworkAccessDialogDef, askSandboxNetworkFromWorker };

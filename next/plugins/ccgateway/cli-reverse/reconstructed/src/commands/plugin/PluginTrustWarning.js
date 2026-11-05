@@ -3,9 +3,9 @@
  *
  * 安装插件前的信任警告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/PluginTrustWarning.tsx
- * pieces: chunk-vrb44rx7.js (1)
+ * pieces: chunk-wb51jffc.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -15,7 +15,7 @@ import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runti
 import { Text, Box } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
-//@ chunk-vrb44rx7.js:52001-52587 fingerprint (2.1.88 match: PluginTrustWarning, 0.578)
+//@ chunk-wb51jffc.js:52152-52738 fingerprint (2.1.88 match: PluginTrustWarning, 0.577)
 function PluginTrustWarning() {
   let $ = useMemoCache(3);
   let t0;

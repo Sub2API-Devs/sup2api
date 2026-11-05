@@ -3,10 +3,10 @@
  *
  * claude-code-docs（及 claude-api）内置 skill 的注册与提示词组装，附带文档文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/claudeApi.ts
- * pieces: chunk-hantmvxa.js (2), chunk-jy3v56kg.js (1), chunk-v8425tx0.js (1), chunk-ym2xht5h.js (5)
- * attribution: placement 1, fingerprint 4, sole-consumer 3, affinity 1
+ * pieces: chunk-847e240k.js (5), chunk-az5scn6b.js (1), chunk-cm73gsrm.js (1), chunk-ne2890fx.js (2)
+ * attribution: sole-consumer 3, affinity 1, fingerprint 4, placement 1
  */
 import { parseFrontmatter } from "../../utils/frontmatterParser.js";
 import { listAvailablePluginSubcommands } from "../../cli/handlers/plugins.js";
@@ -20,7 +20,7 @@ import { registerBundledSkill } from "../bundledSkills.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-v8425tx0.js:2570-2852 fingerprint (2.1.88 match: LANGUAGE_INDICATORS, 1)
+//@ chunk-az5scn6b.js:2570-2852 fingerprint (2.1.88 match: LANGUAGE_INDICATORS, 1)
 var LANGUAGE_INDICATORS = {
   python: [".py", "requirements.txt", "pyproject.toml", "setup.py", "Pipfile"],
   typescript: [".ts", ".tsx", "tsconfig.json", "package.json"],
@@ -31,19 +31,19 @@ var LANGUAGE_INDICATORS = {
   php: [".php", "composer.json"],
   curl: [],
 };
-//@ chunk-hantmvxa.js:111817-111868 placement
+//@ chunk-ne2890fx.js:111998-112049 placement
 /**
  * 惰性加载含 SKILL_FILES 的模块。
  */
 function loadSkillFilesModule() {
-  return import("./SKILL_FILES_4.lazy.js");
+  return import("./SKILL_FILES.lazy.js");
 }
-//@ chunk-hantmvxa.js:111868-111927 fingerprint (2.1.88 match: getFilesForLanguage, 1)
+//@ chunk-ne2890fx.js:112049-112108 fingerprint (2.1.88 match: getFilesForLanguage, 1)
 async function getFilesForLanguage() {
   let { SKILL_FILES } = await loadSkillFilesModule();
   return SKILL_FILES;
 }
-//@ chunk-jy3v56kg.js:41132-41250 fingerprint (2.1.88 match: buildPrompt, 0.561)
+//@ chunk-cm73gsrm.js:42120-42238 fingerprint (2.1.88 match: buildPrompt, 0.561)
 /**
  * 去掉 SKILL.md 的 frontmatter 后拼接用户参数，生成内置 skill 提示词（claude-api 类 skill 使用）。
  */
@@ -63,14 +63,14 @@ function buildPrompt(skillContent, userRequest) {
 
 ${userRequest}`;
 }
-//@ chunk-ym2xht5h.js:5336-5386 sole-consumer
+//@ chunk-847e240k.js:5616-5666 sole-consumer
 /**
  * 惰性加载 claude-code-docs 技能内容模块。
  */
 function loadClaudeCodeDocsContent() {
-  return import("./SKILL_FILES_5.lazy.js");
+  return import("./SKILL_FILES_2.lazy.js");
 }
-//@ chunk-ym2xht5h.js:5386-6494 sole-consumer
+//@ chunk-847e240k.js:5666-6774 sole-consumer
 /**
  * claude-code-docs 技能的描述文本（首段与其加触发条件的版本）。
  */
@@ -82,7 +82,7 @@ var DOCS_SKILL_DESCRIPTION_WITH_TRIGGERS =
   `TRIGGER when: user asks how Claude Code works ("Can Claude\u2026", "Does Claude\u2026", "How do I\u2026", "Is there a way to\u2026"); user asks about a slash command, CLI flag, settings key, hook, skill, MCP server, subagent, keybinding, or .claude/ directory; user wants to configure, customize, or troubleshoot Claude Code; user asks about Claude in Slack or Claude Tag ("what is Claude Tag", "can Claude live in Slack", "@Claude in Slack", "/install-slack-app", "set up Claude for my Slack workspace"); YOU are about to recommend a Claude Code slash command, flag, or setting and have not verified it exists in this build.
 ` +
   "SKIP: questions about building applications with the Claude API or Anthropic SDK (use /claude-api), general programming questions, questions about the user's own codebase.";
-//@ chunk-ym2xht5h.js:6494-9801 sole-consumer
+//@ chunk-847e240k.js:6774-10081 sole-consumer
 /**
  * 为 claude-code-docs 技能拼接本会话环境概况：可用斜杠命令与别名、`claude plugin` 子命令、plugin eval 可用性、自定义技能与代理、已配置 MCP 服务器、已设置的设置键名（不含值）、版本等，作为提示词的一部分。
  */
@@ -153,10 +153,10 @@ ${sorted.join(`
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -179,10 +179,10 @@ ${sorted.join(`
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -199,7 +199,7 @@ ${mapped.join(`
 
 `);
 }
-//@ chunk-ym2xht5h.js:9801-10147 affinity
+//@ chunk-847e240k.js:10081-10427 affinity
 function buildClaudeCodeDocsPrompt(skillPrompt, userRequest, context, changelog) {
   let parts = [skillPrompt];
   let claudeCodeEnvironmentSummary = buildClaudeCodeEnvironmentSummary(context, changelog);
@@ -220,7 +220,7 @@ ${userRequest}`);
 
 `);
 }
-//@ chunk-ym2xht5h.js:10147-10723 fingerprint (2.1.88 match: registerClaudeApiSkill, 0.401)
+//@ chunk-847e240k.js:10427-11003 fingerprint (2.1.88 match: registerClaudeApiSkill, 0.399)
 /**
  * 注册 claude-code-docs 内置 skill（回答 Claude Code 功能与设置问题，允许 Read/Grep/Glob 和 code.claude.com/platform.claude.com 的 WebFetch）；受 GrowthBook tengu_birch_kettle 门控，CLAUDE_CODE_DISABLE_CLAUDE_CODE_SKILL 可关闭。
  */
@@ -261,9 +261,9 @@ function registerClaudeCodeSkill({ disabled = false } = {}) {
   });
 }
 export {
+  LANGUAGE_INDICATORS,
+  buildPrompt,
   getFilesForLanguage,
   loadSkillFilesModule,
-  buildPrompt,
-  LANGUAGE_INDICATORS,
   registerClaudeCodeSkill,
 };

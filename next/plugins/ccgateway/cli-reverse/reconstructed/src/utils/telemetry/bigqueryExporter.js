@@ -3,9 +3,9 @@
  *
  * BigQuery 指标导出器：POST <BASE_API_URL>/api/claude_code/metrics（team/enterprise）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/bigqueryExporter.ts
- * pieces: chunk-9vvvg0d3.js (8)
+ * pieces: chunk-3wgj3rdg.js (8)
  * attribution: placement 6, affinity 1, fingerprint 1
  */
 import {
@@ -47,7 +47,7 @@ import { isPolicyLimitsCacheMissing } from "../../services/policyLimits/policyVe
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 import { applyMetricAttribution } from "../../services/analytics/metadata.js";
 
-//@ chunk-9vvvg0d3.js:24241-24416 placement
+//@ chunk-3wgj3rdg.js:24592-24767 placement
 function customerTypeAttributes() {
   if (!isClaudeAISubscriber())
     return {
@@ -63,10 +63,10 @@ function customerTypeAttributes() {
         "user.customer_type": "claude_ai",
       };
 }
-//@ chunk-9vvvg0d3.js:24416-24448 placement
+//@ chunk-3wgj3rdg.js:24767-24799 placement
 var otelSemconv = __toESM(require_core(), 1);
 var promClient = __toESM(require_sdk_metrics(), 1);
-//@ chunk-9vvvg0d3.js:24448-24772 placement
+//@ chunk-3wgj3rdg.js:24799-25123 placement
 /**
  * BigQuery 导出错误归类。
  */
@@ -85,14 +85,14 @@ function classifyBigQueryError(error) {
       return status !== undefined ? ["unknown_error", status] : ["unknown_error"];
   }
 }
-//@ chunk-9vvvg0d3.js:24772-24855 placement
+//@ chunk-3wgj3rdg.js:25123-25206 placement
 function describeAxiosFailure(error) {
   let { status, message } = classifyAxiosError(error);
   return status === undefined ? message : `HTTP ${status}: ${message}`;
 }
-//@ chunk-9vvvg0d3.js:24855-24866 placement
+//@ chunk-3wgj3rdg.js:25206-25217 placement
 var SHUTDOWN_MARGIN_MS = 250;
-//@ chunk-9vvvg0d3.js:24866-24960 placement
+//@ chunk-3wgj3rdg.js:25217-25309 placement
 function shutdownTimeoutMs() {
   return Math.max(
     0,
@@ -100,11 +100,11 @@ function shutdownTimeoutMs() {
       SHUTDOWN_MARGIN_MS,
   );
 }
-//@ chunk-9vvvg0d3.js:25161-25205 affinity
+//@ chunk-3wgj3rdg.js:25510-25554 affinity
 function reportMetricsAtShutdown(exporter) {
   exporter.reportInFlightAtShutdown();
 }
-//@ chunk-9vvvg0d3.js:25205-31114 fingerprint (2.1.88 match: BigQueryMetricsExporter, 0.642)
+//@ chunk-3wgj3rdg.js:25554-31498 fingerprint (2.1.88 match: BigQueryMetricsExporter, 0.637)
 /**
  * BigQuery 指标导出器：POST <BASE_API_URL>/api/claude_code/metrics（OAuth/API key），失败重试与 OAuth 刷新。
  */
@@ -360,21 +360,19 @@ class BigQueryMetricsExporter {
       ),
     };
   }
-  extractDataPoints(metric, useValidator) {
+  extractDataPoints(metric, sanitize) {
     let dataPoints = metric.dataPoints || [];
     let byDataPointKey = new Map();
     for (let dataPoint of dataPoints) {
       if (typeof dataPoint.value !== "number") continue;
       let attrKey = applyMetricAttribution(dataPoint.attributes);
       let sanitizedAttrs = this.convertAttributes(attrKey);
-      let cleanAttrs = useValidator
-        ? sanitizeByValidators(sanitizedAttrs, sanitizeFieldValue)
-        : sanitizedAttrs;
+      let cleanAttrs = sanitize ? sanitizeByValidators(sanitizedAttrs, sanitizeFieldValue) : sanitizedAttrs;
       let timestamp = this.hrTimeToISOString(
         dataPoint.endTime || dataPoint.startTime || [Date.now() / 1000, 0],
       );
       let pointKey = jsonStringifyRaw(
-        Object.entries(useValidator ? cleanAttrs : attrKey).sort(([keyA], [keyB]) => (keyA < keyB ? -1 : 1)),
+        Object.entries(cleanAttrs).sort(([keyA], [keyB]) => (keyA < keyB ? -1 : 1)),
       );
       let existingPoint = byDataPointKey.get(pointKey);
       if (existingPoint) {
@@ -417,6 +415,7 @@ class BigQueryMetricsExporter {
     if (attributes)
       for (let [key, value] of Object.entries(attributes)) {
         if (key.startsWith("vcs.")) continue;
+        if (key.startsWith("anthropic.")) continue;
         if (value !== undefined && value !== null) result[key] = String(value);
       }
     return result;

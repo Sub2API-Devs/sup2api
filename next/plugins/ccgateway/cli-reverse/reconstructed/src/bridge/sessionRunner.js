@@ -3,30 +3,32 @@
  *
  * 并入会话运行器的少量辅助声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/sessionRunner.ts
- * pieces: chunk-pjm08t7p.js (9)
+ * pieces: chunk-jx5trqed.js (9)
  * attribution: placement 3, fingerprint 5, file-local 1
  */
 import { join, dirname } from "path";
 import { createWriteStream } from "fs";
-import { rm } from "fs/promises";
+import { rm, stat } from "fs/promises";
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
 import { claudeTempDir } from "../utils/tempDir.js";
 import { resolveBridgeChildFeatures } from "./bridgeEnabled.js";
 import { invalidateCommandNames } from "../utils/settings/commandSyncNames.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { withLaunchValuesOfHybridConnection } from "../utils/managedEnvApply.js";
 import { KNOWN_HOST_ENV_VARS, KNOWN_ENV_VARS } from "../utils/knownEnvVars.js";
 import { stripCoworkHostEnvKeys, stripInternalEntrypoint } from "../utils/background/envCarry.js";
 import { REMOTE_IO_WARNING_PREFIX } from "./deviceAttestation.js";
 import { collapseWhitespace } from "../utils/stringUtils.js";
 import { debugTruncate } from "./debugUtils.js";
+import { isENOENT, isPathAbsent } from "../utils/errors.js";
+import { withDeadline } from "../utils/sleep.js";
 import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
 
-//@ chunk-pjm08t7p.js:1515-1763 placement
+//@ chunk-jx5trqed.js:1601-1849 placement
 /**
  * 为派生的会话生成 --settings JSON：按需带 permissions.defaultMode=auto、autoCompactEnabled 和 autoMode.environment；都没有时返回 undefined。
  */
@@ -48,15 +50,16 @@ function buildSpawnSettingsJson(options) {
   };
   return Object.keys(settings).length > 0 ? jsonStringify(settings) : undefined;
 }
-//@ chunk-pjm08t7p.js:1763-1790 placement
+//@ chunk-jx5trqed.js:1849-1884 placement
 var MAX_RECENT_WORKER_STATUSES = 10;
 var MAX_RECENT_PENDING_ASKS = 10;
+var RECENT_STATUS_TTL_MS = 1000;
 var BOUND_RESUMED_TURN_EPOCH_TAG = 3600000;
-//@ chunk-pjm08t7p.js:1790-1846 placement
+//@ chunk-jx5trqed.js:1884-1940 placement
 function safeFilenameId(id) {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
-//@ chunk-pjm08t7p.js:1846-2209 fingerprint (2.1.88 match: TOOL_VERBS, 1)
+//@ chunk-jx5trqed.js:1940-2136 fingerprint (2.1.88 match: TOOL_VERBS, 0.962)
 var TOOL_VERBS = {
   Read: "Reading",
   Write: "Writing",
@@ -68,16 +71,9 @@ var TOOL_VERBS = {
   WebFetch: "Fetching",
   WebSearch: "Searching",
   Task: "Running task",
-  FileReadTool: "Reading",
-  FileWriteTool: "Writing",
-  FileEditTool: "Editing",
-  GlobTool: "Searching",
-  GrepTool: "Searching",
-  BashTool: "Running",
-  NotebookEditTool: "Editing notebook",
   LSP: "LSP",
 };
-//@ chunk-pjm08t7p.js:2209-2360 fingerprint (2.1.88 match: toolSummary, 1)
+//@ chunk-jx5trqed.js:2136-2287 fingerprint (2.1.88 match: toolSummary, 1)
 function toolSummary(toolName, input, unused, activities, unusedOther) {
   let verb = TOOL_VERBS[toolName] ?? toolName;
   let target =
@@ -91,7 +87,7 @@ function toolSummary(toolName, input, unused, activities, unusedOther) {
   if (target) return `${verb} ${target}`;
   return verb;
 }
-//@ chunk-pjm08t7p.js:2360-3459 fingerprint (2.1.88 match: extractActivities, 1)
+//@ chunk-jx5trqed.js:2287-3386 fingerprint (2.1.88 match: extractActivities, 1)
 /**
  * 解析子进程一行 stream-json：assistant 中的 tool_use/text 生成活动，result 生成完成或错误活动。
  */
@@ -165,7 +161,7 @@ function extractActivities(line, sessionId, debug, unused, unused_2) {
   }
   return activities;
 }
-//@ chunk-pjm08t7p.js:3459-3723 fingerprint (2.1.88 match: extractUserMessageText, 1)
+//@ chunk-jx5trqed.js:3386-3650 fingerprint (2.1.88 match: extractUserMessageText, 1)
 function extractUserMessageText(msg) {
   if (msg.parent_tool_use_id != null || msg.isSynthetic || msg.isReplay) return;
   let content = msg.message?.content;
@@ -181,7 +177,7 @@ function extractUserMessageText(msg) {
   text = text?.trim();
   return text ? text : undefined;
 }
-//@ chunk-pjm08t7p.js:3723-3879 file-local
+//@ chunk-jx5trqed.js:3650-3806 file-local
 function inputPreview(input) {
   let parts = [];
   for (let [key, val] of Object.entries(input)) {
@@ -190,7 +186,7 @@ function inputPreview(input) {
   }
   return parts.join(" ");
 }
-//@ chunk-pjm08t7p.js:3879-10276 fingerprint (2.1.88 match: createSessionSpawner, 0.696)
+//@ chunk-jx5trqed.js:3806-10448 fingerprint (2.1.88 match: createSessionSpawner, 0.684)
 /**
  * 返回 {spawn}：为会话拼子进程参数（--print --sdk-url --session-id --input/output-format stream-json --replay-user-messages --resume、权限模式、chrome、settings、mcp-config、追加系统提示词、模型参数），
  * 设置环境（CLAUDE_CODE_SESSION_ACCESS_TOKEN、CLAUDE_CODE_ENVIRONMENT_KIND=bridge、CLAUDE_CODE_WORKER_EPOCH、属主账号/组织等，清除宿主凭证变量），
@@ -198,7 +194,8 @@ function inputPreview(input) {
  */
 function createSessionSpawner(deps) {
   return {
-    spawn(opts, dir) {
+    chooseStandIn: deps.chooseStandIn,
+    spawn(opts, cwd) {
       let safeId = safeFilenameId(opts.sessionId);
       let debugFile;
       if (deps.debugFile) {
@@ -211,7 +208,7 @@ function createSessionSpawner(deps) {
         modePinned: deps.permissionMode !== undefined,
         settings: () => {
           invalidateCommandNames();
-          return getInitialSettings_2();
+          return getInitialSettings();
         },
       });
       let { autoDefault, autoOverSettings, artifact, machineSettings } = bridgeChildFeatures;
@@ -229,7 +226,7 @@ function createSessionSpawner(deps) {
         deps.onDebug(`[bridge:session] Transcript log: ${transcriptPath}`);
       }
       let childArgs = [
-        ...deps.scriptArgs,
+        ...(opts.standIn?.prefixArgs ?? deps.scriptArgs),
         "--print",
         "--sdk-url",
         opts.sdkUrl,
@@ -263,10 +260,10 @@ function createSessionSpawner(deps) {
       if (serverConfig) childArgs.push(...serverConfig.extraArgs);
       let serverConfigArgCount = childArgs.length - serverConfigStart;
       childArgs.push(...opts.modelArgs);
-      let dir_2 = serverConfig?.dir;
+      let dir = serverConfig?.dir;
       let cleanupDir = () => {
-        let pendingDir = dir_2;
-        dir_2 = undefined;
+        let pendingDir = dir;
+        dir = undefined;
         return pendingDir
           ? rm(pendingDir, {
               recursive: true,
@@ -333,8 +330,8 @@ function createSessionSpawner(deps) {
       if (debugFile) deps.onDebug(`[bridge:session] Debug log: ${debugFile}`);
       let child;
       try {
-        child = spawn(deps.execPath, childArgs, {
-          cwd: dir,
+        child = spawn(opts.standIn?.cmd ?? deps.execPath, childArgs, {
+          cwd,
           stdio: ["pipe", "pipe", "pipe"],
           env: childEnv,
           windowsHide: true,
@@ -348,7 +345,8 @@ function createSessionSpawner(deps) {
       let unused = undefined;
       let currentActivity = null;
       let lastStderr = [];
-      let isForceKilled = false;
+      let exitCode;
+      let seenStdinEnd = false;
       let isTerminating = false;
       let firstUserMessageSeen = false;
       if (child.stderr)
@@ -441,12 +439,20 @@ function createSessionSpawner(deps) {
             );
             outcome = "failed";
           }
-          cleanupDir().then(() => resolve(outcome));
+          Promise.all([exitCode, cleanupDir()]).then(() => resolve(outcome));
         });
         child.on("error", (err) => {
           deps.onDebug(`[bridge:session] sessionId=${opts.sessionId} spawn error: ${err.message}`);
-          lastStderr.push(`spawn error: ${err.message}`);
-          cleanupDir().then(() => resolve("failed"));
+          let a = isENOENT(err)
+            ? withDeadline(
+                stat(cwd).then((b) => !b.isDirectory(), isPathAbsent),
+                RECENT_STATUS_TTL_MS,
+              )
+            : undefined;
+          exitCode = Promise.resolve(a).then((c) => {
+            lastStderr.push(c ? `working folder not found: '${cwd}'` : `spawn error: ${err.message}`);
+          });
+          Promise.all([exitCode, cleanupDir()]).then(() => resolve("failed"));
         });
       });
       let handle = {
@@ -466,8 +472,8 @@ function createSessionSpawner(deps) {
           }
         },
         forceKill() {
-          if (!isForceKilled && child.pid) {
-            isForceKilled = true;
+          if (!seenStdinEnd && child.pid) {
+            seenStdinEnd = true;
             deps.onDebug(`[bridge:session] Sending SIGKILL to sessionId=${opts.sessionId} pid=${child.pid}`);
             child.kill("SIGKILL");
           }

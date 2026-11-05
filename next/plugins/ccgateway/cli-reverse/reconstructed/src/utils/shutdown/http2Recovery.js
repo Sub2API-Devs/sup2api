@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：HTTP/2 恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-e6aww6q8.js:244366-244427 placement
+//@ chunk-5xgkngpb.js:245142-245203 placement
 var HTTP2_STREAM_CLOSED_PATTERN = /^Stream closed with error code NGHTTP2_[A-Z0-9_]+$/;
-//@ chunk-e6aww6q8.js:244427-244589 placement (2.1.88 match: shortErrorStack, 0.824)
+//@ chunk-5xgkngpb.js:245203-245365 placement (2.1.88 match: shortErrorStack, 0.826)
 var HTTP2_SESSION_CLOSED_RE = /^Session closed with error code \d+$/;
 var stackHasFrame = (stack, framePattern) =>
   typeof stack === "string" &&
@@ -24,7 +24,7 @@ var stackHasFrame = (stack, framePattern) =>
       let trimmed = line.trim();
       return trimmed.startsWith("at ") && trimmed.includes(framePattern);
     });
-//@ chunk-e6aww6q8.js:244589-245076 placement
+//@ chunk-5xgkngpb.js:245365-245852 placement
 function isHttp2TransportError(error) {
   try {
     let code = error.code;

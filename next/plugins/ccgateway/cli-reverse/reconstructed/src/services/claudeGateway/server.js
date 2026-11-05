@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude gateway 服务主体
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { createHash, randomBytes, timingSafeEqual, randomUUID } from "crypto";
@@ -71,7 +71,7 @@ import {
 import { createGoogleGroupsLookup } from "./auth/googleGroups.js";
 import { createUpstreamForwarders } from "./upstreams/forward.js";
 import { resolveManagedPolicies, matchPolicy } from "./config/managedPolicies.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { claimOnce } from "../api/verificationRequired.js";
 import { isIpInRanges, resolveClientIp } from "./accessControl.js";
 import { withTimeout, sleep } from "../../utils/sleep.js";
@@ -89,7 +89,7 @@ import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { handleGatewayMessagesRequest } from "./messagesHandler.js";
 import { collectGatewayConfigWarnings } from "./config/warnings.js";
 
-//@ chunk-1ny7cxrt.js:1521692-1553390 placement
+//@ chunk-1hnjmk23.js:1534807-1567298 placement
 /**
  * claude gateway 入口：加载并校验配置、建立存储与认证、启动 HTTP 服务与遥测。
  */
@@ -204,7 +204,14 @@ async function startClaudeGateway(configPath) {
   function hasEmailClaim(claims) {
     return readFirstClaim(claims, emailClaim) !== undefined;
   }
-  async function mintSessionForClaims(claims, eventName, clientIp, requestId, userinfoClaims) {
+  async function mintSessionForClaims(
+    claims,
+    eventName,
+    clientIp,
+    requestId,
+    userinfoClaims,
+    noIdTokenOnRefresh = false,
+  ) {
     gatewayLog(
       "debug",
       `oidc id_token claim names request_id=${requestId}: ${Object.keys(claims).sort().join(",")}` +
@@ -260,7 +267,7 @@ async function startClaudeGateway(configPath) {
       )
         gatewayLog(
           "info",
-          `refresh request_id=${requestId}: no groups claim for sub=${sub}, so only upstreams without groups serve them. If your IdP leaves groups out of the refreshed id_token, set oidc.userinfo_fallback: true`,
+          `refresh request_id=${requestId}: no groups claim for sub=${sub}, so only upstreams without groups serve them. ${noIdTokenOnRefresh ? "Your IdP sent no id_token on this refresh, and its userinfo response had no groups. If this developer is in a group, set your IdP to add groups to its userinfo response. Some IdPs send an id_token on refresh only when oidc.scope_on_refresh is true" : "If your IdP leaves groups out of the refreshed id_token, set oidc.userinfo_fallback: true"}`,
         );
     }
     assertGroupAllowed(groups, gatewayConfig.oidc?.allowed_groups);
@@ -312,7 +319,9 @@ async function startClaudeGateway(configPath) {
       : undefined;
   let desktopPolicies =
     managedPolicies?.some((managedPolicy) => managedPolicy.desktop !== undefined) ?? false;
-  let scope = uniq(gatewayConfig.oidc?.scopes ?? ["openid", "profile", "email", "offline_access"]).join(" ");
+  let scope = normalizeCaseForComparison_2(
+    gatewayConfig.oidc?.scopes ?? ["openid", "profile", "email", "offline_access"],
+  ).join(" ");
   async function fetchUserinfo(claims, accessToken) {
     if (!gatewayConfig.oidc?.userinfo_fallback || !accessToken || !oidcClient) return;
     if (hasEmailClaim(claims) && (googleGroupsLookup !== undefined || hasGroupsClaim(claims))) return;
@@ -369,7 +378,7 @@ async function startClaudeGateway(configPath) {
     );
   let idpOrigin =
     oidcClient && gatewayConfig.oidc
-      ? uniq([
+      ? normalizeCaseForComparison_2([
           new URL(oidcClient.issuer.metadata.authorization_endpoint ?? gatewayConfig.oidc.issuer).origin,
           ...gatewayConfig.oidc.form_action_origins,
         ]).join(" ")
@@ -404,7 +413,7 @@ async function startClaudeGateway(configPath) {
       rateLimitWarnAt[kind] = now;
       let { max, window_seconds: windowSeconds } = gatewayConfig.rate_limits[kind];
       let advice = ignoredXff
-        ? ` This request carried X-Forwarded-For, which the gateway ignored because ${clientIp} is not in listen.trusted_proxies. If ${clientIp} is your load balancer, add it there first so each developer is counted separately. If many developers still share an address after that`
+        ? ` This request carried X-Forwarded-For, which the gateway ignored because ${clientIp} is not in listen.trusted_proxies. If ${clientIp} is your load balancer and adds the connecting address to that header itself, list it there first so each developer is counted separately. If it is your load balancer but does not, or many developers still share an address after that`
         : " If many developers share that address";
       gatewayLog(
         "warn",
@@ -564,14 +573,14 @@ async function startClaudeGateway(configPath) {
       });
       gatewayLog(
         "warn",
-        `request from ${clientIp}, which is not a private address: this gateway may be reachable from the public internet. It must not be: it can push settings that run commands on developer machines. Check the network in front of it, then set access_control.allow_cidrs (behind a proxy, set listen.trusted_proxies first so the gateway sees real client addresses)`,
+        `request from ${clientIp}, which is not a private address: this gateway may be reachable from the public internet. It must not be: it can push settings that run commands on developer machines. Check the network in front of it, then set access_control.allow_cidrs (behind a proxy that adds X-Forwarded-For itself, set listen.trusted_proxies first so the gateway sees real client addresses)`,
       );
     }
     if (ignoredXff && !ignoredXffWarned) {
       ignoredXffWarned = true;
       gatewayLog(
         "warn",
-        `request from ${clientIp} carried an X-Forwarded-For header, but ${cidrList.length === 0 ? "listen.trusted_proxies is not set" : `${clientIp} is not in listen.trusted_proxies`}, so the gateway ignored the header and used ${clientIp} as the client address. If ${clientIp} is your load balancer or ingress, every developer behind it shares one sign-in rate limit (rate_limits) and one address in audit events: add its source range to listen.trusted_proxies. If developers connect directly and something on their side adds the header, nothing needs to change. Logged once per start, however many requests are affected.`,
+        `request from ${clientIp} carried an X-Forwarded-For header, but ${cidrList.length === 0 ? "listen.trusted_proxies is not set" : `${clientIp} is not in listen.trusted_proxies`}, so the gateway ignored the header and used ${clientIp} as the client address. If ${clientIp} is your load balancer or ingress, every developer behind it shares one sign-in rate limit (rate_limits), and access_control and audit events see only that address. List its source range, and nothing wider, in listen.trusted_proxies only if it adds the connecting address to the header itself, or if clients can reach it only through another proxy that does. If it only passes on what clients send, listing it lets them fake their address and get past access_control and rate_limits. Have it add the address before you list it, or raise rate_limits instead. If developers connect to the gateway directly and something on their side adds the header, nothing needs to change. Logged once per start, however many requests are affected.`,
       );
     }
     let limits = gatewayConfig.limits;
@@ -598,10 +607,10 @@ async function startClaudeGateway(configPath) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         } !== "undefined"
@@ -609,10 +618,10 @@ async function startClaudeGateway(configPath) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION
@@ -1057,6 +1066,7 @@ async function startClaudeGateway(configPath) {
             clientIp,
             requestId,
             userinfoClaims,
+            claims === undefined,
           );
           return Response.json(
             {
@@ -1146,10 +1156,10 @@ async function startClaudeGateway(configPath) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           } !== "undefined"
@@ -1157,10 +1167,10 @@ async function startClaudeGateway(configPath) {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",

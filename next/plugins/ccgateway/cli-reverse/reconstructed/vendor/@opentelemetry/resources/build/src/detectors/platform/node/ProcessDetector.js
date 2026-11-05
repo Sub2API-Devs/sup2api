@@ -1,15 +1,15 @@
 /**
  * @opentelemetry/resources/build/src/detectors/platform/node/ProcessDetector.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../../../runtime/bun-runtime.js";
 import { require_api } from "../../../../../../api/build/src/index.js";
 import { require_semconv_2 } from "../../../semconv.js";
 
-//@ chunk-bwbq4xvm.js:145387-146145 cjs-fingerprint
+//@ chunk-7kayq7nc.js:145489-146247 cjs-fingerprint
 var require_ProcessDetector = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

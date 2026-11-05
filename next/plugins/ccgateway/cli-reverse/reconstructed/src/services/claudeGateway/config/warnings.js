@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关配置警告检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { isLoopbackHost } from "../../../../vendor/@modelcontextprotocol/client/dist/src-CeKsbNLO.mjs";
@@ -18,13 +18,13 @@ import {
 } from "../../../utils/model/modelCatalog.js";
 import { findModelConfigById } from "../../../utils/model/providerCaches.js";
 import { resolveUpstreamModel, findPricingOverride } from "../models.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { isModelKeyAlias, isBaseModelKey } from "../../../utils/model/modelIds.js";
 import { isModelAvailable } from "../bedrockGuardrails.js";
 import { hasKnownModelCost } from "../../../utils/modelCost.js";
 import { firstUpstreamForModel } from "./managedPolicies.js";
 
-//@ chunk-1ny7cxrt.js:1553390-1563206 placement
+//@ chunk-1hnjmk23.js:1567298-1577374 placement
 /**
  * 检查网关配置（压测模式、凭据、公开地址、上游等）并返回警告列表。
  */
@@ -44,7 +44,7 @@ function collectGatewayConfigWarnings(config, managedPolicies = null) {
   ) {
     let denyNote = config.access_control.deny_cidrs.length > 0 ? " outside deny_cidrs" : "";
     warnings.push(
-      `access_control.allow_cidrs is empty: the gateway serves any client address${denyNote}, so only your network limits who can reach it. Never expose this gateway to the public internet: it can push settings that run commands on developer machines. Allow only private ranges, e.g. allow_cidrs: [${PRIVATE_NETWORK_RANGES.join(", ")}], plus any other internal ranges your developers connect from (behind a load balancer, set listen.trusted_proxies first)`,
+      `access_control.allow_cidrs is empty: the gateway serves any client address${denyNote}, so only your network limits who can reach it. Never expose this gateway to the public internet: it can push settings that run commands on developer machines. Allow only private ranges, e.g. allow_cidrs: [${PRIVATE_NETWORK_RANGES.join(", ")}], plus any other internal ranges your developers connect from (behind a load balancer that adds X-Forwarded-For itself, set listen.trusted_proxies first)`,
     );
   }
   if (managedPolicies?.some(isManagedClaudeCodeDesktopSession))
@@ -89,7 +89,7 @@ function collectGatewayConfigWarnings(config, managedPolicies = null) {
       flaggedModels.push("claude-sonnet-4-5 (via auto_include_builtin_models)");
     if (flaggedModels.length > 0)
       warnings.push(
-        `vertex upstream serves ${uniq(flaggedModels).join(", ")}: Sonnet 4.5/Sonnet 4 do not support 1M context on Vertex \u2014 requests with the context-1m beta (the [1m] model suffix) for these models will be rejected with a 400. Vertex 1M lineup: Opus 4.6+/Sonnet 4.6.`,
+        `vertex upstream serves ${normalizeCaseForComparison_2(flaggedModels).join(", ")}: Sonnet 4.5/Sonnet 4 do not support 1M context on Vertex \u2014 requests with the context-1m beta (the [1m] model suffix) for these models will be rejected with a 400. Vertex 1M lineup: Opus 4.6+/Sonnet 4.6.`,
       );
   }
   for (let upstream of config.upstreams) {
@@ -142,15 +142,16 @@ function collectGatewayConfigWarnings(config, managedPolicies = null) {
           `models[] entry '${model.id}' sets upstream_model.${upstream.name}, but '${model.id}' is not in upstream '${upstream.name}' models, so that mapping never applies. Add '${model.id}' to the upstream's models list, or remove that mapping.`,
         );
     }
-    for (let upstream_2 of config.upstreams)
-      if (
-        upstream.provider === "mantle" &&
-        upstream_2.provider === "bedrock" &&
-        upstream_2.assume_role?.session_name
-      )
+    for (let upstream_2 of config.upstreams) {
+      if (upstream.provider !== "mantle" || upstream_2.provider !== "bedrock") continue;
+      let [bearing, lacking] = upstream.assume_role?.session_name
+        ? [upstream, upstream_2]
+        : [upstream_2, upstream];
+      if (bearing.assume_role?.session_name && !lacking.assume_role?.session_name)
         warnings.push(
-          `upstream '${upstream_2.name}' sets assume_role.session_name for per-developer AWS attribution, but requests upstream '${upstream.name}' serves are sent to Mantle with its own credentials and are not attributed per developer.`,
+          `upstream '${bearing.name}' sets assume_role.session_name for per-developer AWS attribution, but upstream '${lacking.name}' sets none, so the requests '${lacking.name}' serves are not attributed per developer. Set assume_role (role_arn and session_name) on '${lacking.name}' too, with a role that allows the ${lacking.provider === "mantle" ? "bedrock-mantle" : "bedrock"} actions.`,
         );
+    }
   }
   let providerIds = getCatalogEntry(resolveCatalogAlias("opus", "gateway") ?? "")?.provider_ids;
   let defaultModelId = providerIds && (providerIds.gateway ?? providerIds.first_party);
@@ -267,7 +268,7 @@ function collectGatewayConfigWarnings(config, managedPolicies = null) {
           unpricedModels.push(`${model.id} (${value})`);
     if (unpricedModels.length > 0)
       warnings.push(
-        `spend meter has no exact rates for ${uniq(unpricedModels).join(", ")} \u2014 these will be metered at the unknown-model default tier`,
+        `spend meter has no exact rates for ${normalizeCaseForComparison_2(unpricedModels).join(", ")} \u2014 these will be metered at the unknown-model default tier`,
       );
   }
   let multiplier = config.pricing?.multiplier ?? 1;

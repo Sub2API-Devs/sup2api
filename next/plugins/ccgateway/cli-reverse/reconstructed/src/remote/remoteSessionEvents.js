@@ -3,17 +3,17 @@
  *
  * 远程会话事件处理：限流帧丢弃、拒答撤回、任务状态（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3xdfvx0n.js (33)
- * attribution: placement 33
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0p9n1dy7.js (34)
+ * attribution: placement 34
  */
 import { RateLimitInfoSchema } from "../entrypoints/sdk/coreSchemas.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { sanitizeLabel, sameBackgroundTaskList } from "../services/homeSeed/firstSend.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -38,17 +38,17 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { OPENED } from "../tools/ArtifactTool/artifactResumeCarry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3xdfvx0n.js:13943-13984 placement (2.1.88 match: _temp, 1)
+//@ chunk-0p9n1dy7.js:14269-14310 placement (2.1.88 match: _temp, 1)
 /**
  * 导出函数 `isResultEvent`：参数 r，返回 r.type === "result"。
  */
 function isResultEvent(r) {
   return r.type === "result";
 }
-//@ chunk-3xdfvx0n.js:13984-14001 placement
+//@ chunk-0p9n1dy7.js:14310-14327 placement
 var MAX_RETRACTED_UUIDS = 64;
 var MAX_MESSAGE_UUID_LENGTH = 128;
-//@ chunk-3xdfvx0n.js:14001-14068 placement
+//@ chunk-0p9n1dy7.js:14327-14394 placement
 function isValidMessageUuid(userMessageUuid) {
   return (
     typeof userMessageUuid === "string" &&
@@ -56,7 +56,7 @@ function isValidMessageUuid(userMessageUuid) {
     userMessageUuid.length <= MAX_MESSAGE_UUID_LENGTH
   );
 }
-//@ chunk-3xdfvx0n.js:14068-14289 placement
+//@ chunk-0p9n1dy7.js:14394-14616 placement
 /**
  * 拒答撤回事件中的用户消息 uuid 列表。
  */
@@ -69,7 +69,7 @@ function retractedUserMessageUuids(event) {
   let userMessageUuid = "user_message_uuid" in event ? event.user_message_uuid : undefined;
   return isValidMessageUuid(userMessageUuid) ? [userMessageUuid] : undefined;
 }
-//@ chunk-3xdfvx0n.js:14289-14382 placement
+//@ chunk-0p9n1dy7.js:14616-14710 placement
 /**
  * 导出函数 `shouldDeliverEvent`：参数 e, n, r，返回 r.taskWake || (s === void 0 ? r.sent : s.some((i) => n.has(i)))。
  */
@@ -79,7 +79,7 @@ function shouldDeliverEvent(event, sentUuids, state) {
     state.taskWake || (retracted === undefined ? state.sent : retracted.some((uuid) => sentUuids.has(uuid)))
   );
 }
-//@ chunk-3xdfvx0n.js:14382-14734 placement
+//@ chunk-0p9n1dy7.js:14710-15062 placement
 function dropRemoteRateLimitFrame(rateLimitInfo) {
   let schema = RateLimitInfoSchema();
   let shapeNames = new Map(Object.entries(schema.shape));
@@ -99,7 +99,7 @@ function dropRemoteRateLimitFrame(rateLimitInfo) {
     });
   return;
 }
-//@ chunk-3xdfvx0n.js:14734-14852 placement
+//@ chunk-0p9n1dy7.js:15062-15180 placement
 /**
  * 拒答撤回跟踪状态的初始值。
  */
@@ -111,7 +111,7 @@ function createRetractionState() {
     nestedUuidAliases: new Map(),
   };
 }
-//@ chunk-3xdfvx0n.js:14852-14942 placement
+//@ chunk-0p9n1dy7.js:15180-15270 placement
 /**
  * 导出函数 `recordNestedUuidAliases`：参数 e, n, r。
  */
@@ -119,7 +119,7 @@ function recordNestedUuidAliases(aliases, uuid, aliasUuids) {
   let filtered = aliasUuids.filter((aliasUuid) => aliasUuid !== uuid);
   if (filtered.length > 0) aliases.nestedUuidAliases.set(uuid, filtered);
 }
-//@ chunk-3xdfvx0n.js:14942-15303 placement
+//@ chunk-0p9n1dy7.js:15270-15631 placement
 function isModelRefusalFallback(value) {
   if (typeof value !== "object" || value === null) return null;
   let record = value;
@@ -144,7 +144,7 @@ function isModelRefusalFallback(value) {
   }
   return null;
 }
-//@ chunk-3xdfvx0n.js:15303-15425 placement
+//@ chunk-0p9n1dy7.js:15631-15753 placement
 /**
  * 数组中不等于 n 的字符串（没有则 null）。
  */
@@ -153,7 +153,7 @@ function otherStrings(uuids, uuid) {
   let filtered = uuids.filter((value) => typeof value === "string" && value !== uuid);
   return filtered.length > 0 ? filtered : null;
 }
-//@ chunk-3xdfvx0n.js:15425-15532 placement
+//@ chunk-0p9n1dy7.js:15753-15860 placement
 /**
  * 去掉 uuid 在集合中的消息。
  */
@@ -162,24 +162,24 @@ function dropMessagesByUuid(messages, retracted) {
   let filtered = messages.filter((message) => !retracted.has(message.uuid));
   return filtered.length === messages.length ? messages : filtered;
 }
-//@ chunk-3xdfvx0n.js:15532-15597 placement
+//@ chunk-0p9n1dy7.js:15860-15925 placement
 /**
  * 导出函数 `recordInProgressToolUses`：参数 e, n, r。
  */
 function recordInProgressToolUses(index, uuid, toolUseIds) {
   for (let toolUseId of toolUseIds) index.inProgressToolUses.set(toolUseId, uuid);
 }
-//@ chunk-3xdfvx0n.js:15597-15661 placement
+//@ chunk-0p9n1dy7.js:15925-15989 placement
 /**
  * 导出函数 `clearInProgressToolUses`：参数 e, n。
  */
 function clearInProgressToolUses(index, toolUseIds) {
   for (let toolUseId of toolUseIds) index.inProgressToolUses.delete(toolUseId);
 }
-//@ chunk-3xdfvx0n.js:15661-16247 placement
+//@ chunk-0p9n1dy7.js:15989-16575 placement
 function evictRefusalRetraction(runtime) {
   let { index, signal, surface, setMessages, setInProgressToolUseIDs } = runtime;
-  let newlyRetractedCount = count(signal.uuids, (uuid) => !index.retracted.has(uuid));
+  let newlyRetractedCount = countWhere(signal.uuids, (uuid) => !index.retracted.has(uuid));
   for (let uuid of signal.uuids) {
     index.retracted.add(uuid);
     for (let aliasUuid of index.nestedUuidAliases.get(uuid) ?? []) index.retracted.add(aliasUuid);
@@ -203,13 +203,13 @@ function evictRefusalRetraction(runtime) {
     tool_use_cleared_count: toolUseIds.length,
   });
 }
-//@ chunk-3xdfvx0n.js:16247-16439 placement
+//@ chunk-0p9n1dy7.js:16575-16767 placement
 /**
  * 统计撤回后孤立的工具结果并上报。
  */
 function countOrphanToolResults(index, toolUseIds, surface, uuid) {
   if (uuid !== null && index.retracted.has(uuid)) return 0;
-  let orphanCount = count(toolUseIds, (toolUseId) => index.evictedToolUses.has(toolUseId));
+  let orphanCount = countWhere(toolUseIds, (toolUseId) => index.evictedToolUses.has(toolUseId));
   if (orphanCount > 0)
     logEvent("tengu_refusal_retraction_orphan_tool_result", {
       surface: fromEnum(surface),
@@ -217,7 +217,7 @@ function countOrphanToolResults(index, toolUseIds, surface, uuid) {
     });
   return orphanCount;
 }
-//@ chunk-3xdfvx0n.js:16439-16976 placement
+//@ chunk-0p9n1dy7.js:16767-17304 placement
 function checkRefusalRetractionSource(runtime) {
   let { index, events, surface, setMessages, setInProgressToolUseIDs } = runtime;
   let evictedCount = 0;
@@ -256,7 +256,7 @@ function checkRefusalRetractionSource(runtime) {
     });
   return evictedCount;
 }
-//@ chunk-3xdfvx0n.js:16976-17093 placement
+//@ chunk-0p9n1dy7.js:17304-17421 placement
 /**
  * 已撤回消息的迟到帧：丢弃并上报。
  */
@@ -267,7 +267,7 @@ function dropLateRetracted(refusalState, uuid, surface) {
   });
   return true;
 }
-//@ chunk-3xdfvx0n.js:17093-17141 placement
+//@ chunk-0p9n1dy7.js:17421-17469 placement
 /**
  * 远程会话事件限额：最多保留 20 条运行中任务进度、任务时长上限 30 天、展示文本 40 行。
  */
@@ -275,7 +275,7 @@ var LOCAL_WORKFLOW = "local_workflow";
 var MAX_RUNTIME_PROGRESS_TASKS = 20;
 var MAX_TASK_DURATION_MS = 2592000000;
 var MAX_DISPLAY_TEXT_LINES = 40;
-//@ chunk-3xdfvx0n.js:17141-18738 placement
+//@ chunk-0p9n1dy7.js:17469-19066 placement
 function applyRemoteTaskEvent(tasks, event, startTime) {
   if (event.type !== "system") return;
   switch (event.subtype) {
@@ -360,7 +360,7 @@ function applyRemoteTaskEvent(tasks, event, startTime) {
       return;
   }
 }
-//@ chunk-3xdfvx0n.js:18738-19556 placement
+//@ chunk-0p9n1dy7.js:19066-19884 placement
 /**
  * 合并远程任务列表：补齐工作流任务、标记未列出的、按上限淘汰已结束的。
  */
@@ -415,7 +415,7 @@ function reconcileRemoteTasks(remoteTasks, runningTasks, startTime) {
   for (let task of overflowTasks) remoteTasks.delete(task.id);
   return overflowTasks.size === 0 ? keptTasks : keptTasks.filter((task) => !overflowTasks.has(task));
 }
-//@ chunk-3xdfvx0n.js:19556-19867 placement
+//@ chunk-0p9n1dy7.js:19884-20195 placement
 /**
  * 把前台任务、后台任务与工作流运行写回应用状态（未变则原样返回）。
  */
@@ -433,7 +433,7 @@ function applyRemoteTaskState(state, backgroundTasks, workflowRuns, foregroundTa
         remoteWorkflowRuns: sameRuns ? state.remoteWorkflowRuns : workflowRuns,
       };
 }
-//@ chunk-3xdfvx0n.js:19867-19988 placement
+//@ chunk-0p9n1dy7.js:20195-20316 placement
 /**
  * 把所有未结束任务标记为未列出。
  */
@@ -445,17 +445,31 @@ function markTasksUnlisted(tasks) {
         presence: "unlisted",
       });
 }
-//@ chunk-3xdfvx0n.js:19988-20082 placement
+//@ chunk-0p9n1dy7.js:20316-20409 placement
 /**
  * 导出函数 `parseWorkflowProgressList`：参数 e，返回 e.flatMap((n) => { let safeParse = WORKFLOW_PROGRESS_SCHEMA().safeParse(n); return safeParse.success ? [safePa…。
  */
-function parseWorkflowProgressList(wireProgress) {
-  return wireProgress.flatMap((entry) => {
+function parseWorkflowProgressList(entries) {
+  return entries.flatMap((entry) => {
     let parsed = WORKFLOW_PROGRESS_SCHEMA().safeParse(entry);
     return parsed.success ? [parsed.data] : [];
   });
 }
-//@ chunk-3xdfvx0n.js:20082-20268 placement
+//@ chunk-0p9n1dy7.js:20409-20544 placement
+/**
+ * 按会话缓存 frame→快照的映射，读不到时用 ue 现算并写入。
+ */
+class SnapshotCache {
+  snapshots = new WeakMap();
+  of(object) {
+    let cached = this.snapshots.get(object);
+    if (cached !== undefined) return cached;
+    let snapshot = parseWorkflowProgressList(object);
+    this.snapshots.set(object, snapshot);
+    return snapshot;
+  }
+}
+//@ chunk-0p9n1dy7.js:20997-21183 placement
 /**
  * 远程工作流任务的初始记录。
  */
@@ -474,7 +488,7 @@ function newRemoteWorkflowTask(id, startTime) {
     endTime: undefined,
   };
 }
-//@ chunk-3xdfvx0n.js:20268-20453 placement
+//@ chunk-0p9n1dy7.js:21183-21368 placement
 /**
  * 用任务用量更新 token、工具调用与开始时间。
  */
@@ -488,18 +502,18 @@ function applyTaskUsage(task, usage, nowMs) {
     startTime: Math.min(task.startTime, nowMs - parsedUsage.duration_ms),
   };
 }
-//@ chunk-3xdfvx0n.js:20453-20501 placement
+//@ chunk-0p9n1dy7.js:21368-21416 placement
 function optionalSchema(schema) {
   return schema.optional().catch(undefined);
 }
-//@ chunk-3xdfvx0n.js:20501-21480 placement
+//@ chunk-0p9n1dy7.js:21416-22395 placement
 /**
  * 远程任务事件 schema：用量、状态、工作流进度。
  */
 var TASK_USAGE_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var TASK_STATUS_SCHEMA;
 var WORKFLOW_PROGRESS_SCHEMA;
-deferInit("chunk-3xdfvx0n.js:20501", () => {
+deferInit("chunk-0p9n1dy7.js:21416", () => {
   TASK_USAGE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       total_tokens: numberSchema(),
@@ -564,13 +578,13 @@ deferInit("chunk-3xdfvx0n.js:20501", () => {
     ]);
   });
 });
-//@ chunk-3xdfvx0n.js:21480-21498 placement
+//@ chunk-0p9n1dy7.js:22395-22413 placement
 /**
  * 远程会话事件里的展示限额：artifacts 列表最多 100 项、标题截断到 256 字符。
  */
 var MAX_ARTIFACT_LIST_ITEMS = 100;
 var MAX_TITLE_CHARS_EVENTS = 256;
-//@ chunk-3xdfvx0n.js:21498-21716 placement
+//@ chunk-0p9n1dy7.js:22413-22631 placement
 /**
  * session_metadata 事件里的 artifacts 列表。
  */
@@ -581,7 +595,7 @@ function sessionMetadataArtifacts(message) {
   let artifacts = "artifacts" in metadata ? metadata.artifacts : undefined;
   return artifacts === null || Array.isArray(artifacts) ? artifacts : undefined;
 }
-//@ chunk-3xdfvx0n.js:21716-22237 placement
+//@ chunk-0p9n1dy7.js:22631-23152 placement
 /**
  * 把云会话 artifacts 合并进 frameUrls（未变化则原样返回）。
  */
@@ -612,9 +626,9 @@ function mergeCloudArtifactFrames(state, urls) {
         frameUrls: merged,
       };
 }
-//@ chunk-3xdfvx0n.js:22237-22339 placement
+//@ chunk-0p9n1dy7.js:23152-23254 placement
 var ARTIFACT_ENTRY_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3xdfvx0n.js:22237", () => {
+deferInit("chunk-0p9n1dy7.js:23152", () => {
   ARTIFACT_ENTRY_SCHEMA = DoctorLazy(() =>
     objectSchema({
       url: stringSchema(),
@@ -623,7 +637,7 @@ deferInit("chunk-3xdfvx0n.js:22237", () => {
     }),
   );
 });
-//@ chunk-3xdfvx0n.js:22339-22810 placement
+//@ chunk-0p9n1dy7.js:23254-23724 placement
 /**
  * 解析云会话 artifacts，按 slug 取最新并转为 frameUrls 条目。
  */
@@ -653,7 +667,7 @@ function cloudArtifactFrames(entries) {
     .slice(-MAX_ARTIFACT_LIST_ITEMS)
     .map(([slug, frame]) => [`${OPENED}${slug}`, frame]);
 }
-//@ chunk-3xdfvx0n.js:22810-23036 placement
+//@ chunk-0p9n1dy7.js:23724-23950 placement
 /**
  * 合并会话的技能、插件、工具与命令列表。
  */
@@ -673,24 +687,25 @@ function mergeSessionCapabilities(capabilities, next) {
   };
 }
 export {
+  SnapshotCache,
+  isModelRefusalFallback,
+  sessionMetadataArtifacts,
+  dropRemoteRateLimitFrame,
+  applyRemoteTaskEvent,
+  mergeSessionCapabilities,
   createRetractionState,
   reconcileRemoteTasks,
   applyRemoteTaskState,
   markTasksUnlisted,
-  isModelRefusalFallback,
   evictRefusalRetraction,
   isResultEvent,
-  applyRemoteTaskEvent,
-  dropRemoteRateLimitFrame,
   clearInProgressToolUses,
   countOrphanToolResults,
   dropLateRetracted,
   recordNestedUuidAliases,
   recordInProgressToolUses,
   mergeCloudArtifactFrames,
-  sessionMetadataArtifacts,
+  retractedUserMessageUuids,
   shouldDeliverEvent,
   checkRefusalRetractionSource,
-  mergeSessionCapabilities,
-  parseWorkflowProgressList,
 };

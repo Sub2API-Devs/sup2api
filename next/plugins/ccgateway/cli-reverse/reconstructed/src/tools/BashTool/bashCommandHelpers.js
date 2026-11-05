@@ -3,9 +3,9 @@
  *
  * 管道/操作符分段的权限合成：子 shell 与命令组要求确认，管道各段逐个检查，处理多 cd、cd+git、写 git 内部文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/bashCommandHelpers.ts
- * pieces: chunk-e6aww6q8.js (7)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 3, fingerprint 4
  */
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
@@ -23,7 +23,7 @@ import { ParsedCommand, buildParsedCommandFromRoot } from "../../utils/bash/Pars
 import { PARSE_ABORTED } from "../../utils/bash/parser.js";
 import { isBypassImmuneCircuitBreaker, isClassifierRoutedCircuitBreaker } from "../../types/permissions.js";
 
-//@ chunk-e6aww6q8.js:1159153-1159211 placement
+//@ chunk-5xgkngpb.js:1154508-1154566 placement
 /**
  * 读取 tengu_moonlit_kettle 开关：管道分段权限检查时，是否额外核对去掉输出重定向后的原命令。
  */
@@ -32,7 +32,7 @@ function shouldDedupeSubcommandRules() {
     safe: true,
   });
 }
-//@ chunk-e6aww6q8.js:1159211-1159327 placement
+//@ chunk-5xgkngpb.js:1154566-1154682 placement
 /**
  * 给重复的键加 " #2"、" #3" 后缀，返回键唯一的新 Map。
  */
@@ -45,7 +45,7 @@ function dedupeMapKeys(entries) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1159327-1162254 fingerprint (2.1.88 match: segmentedCommandPermissionResult, 0.634)
+//@ chunk-5xgkngpb.js:1154682-1157612 fingerprint (2.1.88 match: segmentedCommandPermissionResult, 0.623)
 /**
  * 管道分段的权限合成：逐段（去掉输出重定向后）检查，任一 deny 即拒；多个 cd、cd+git 组合、创建 git 内部文件再运行 git 都要求确认；全部 allow 才放行，否则 ask 并合并建议规则。
  */
@@ -251,12 +251,12 @@ async function segmentedCommandPermissionResult(
     suggestions: suggestions.length > 0 ? suggestions : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1162254-1162364 fingerprint (2.1.88 match: buildSegmentWithoutRedirections, 1)
+//@ chunk-5xgkngpb.js:1157612-1157722 fingerprint (2.1.88 match: buildSegmentWithoutRedirections, 1)
 async function buildSegmentWithoutRedirections(segmentCommand) {
   if (!segmentCommand.includes(">")) return segmentCommand;
   return (await ParsedCommand.parse(segmentCommand))?.withoutOutputRedirections() ?? segmentCommand;
 }
-//@ chunk-e6aww6q8.js:1162364-1162555 fingerprint (2.1.88 match: checkCommandOperatorPermissions, 1)
+//@ chunk-5xgkngpb.js:1157722-1157913 fingerprint (2.1.88 match: checkCommandOperatorPermissions, 1)
 /**
  * 解析命令（可复用已有 tree-sitter 根），有子 shell/命令组直接 ask；有管道则按段走 segmentedCommandPermissionResult，否则 passthrough。
  */
@@ -288,7 +288,7 @@ async function checkCommandOperatorPermissions(
     findExtraAsk,
   );
 }
-//@ chunk-e6aww6q8.js:1162555-1163042 fingerprint (2.1.88 match: bashToolCheckCommandOperatorPermissions, 0.845)
+//@ chunk-5xgkngpb.js:1157913-1158405 fingerprint (2.1.88 match: bashToolCheckCommandOperatorPermissions, 0.838)
 async function bashToolCheckCommandOperatorPermissions(
   input,
   bashToolHasPermission,
@@ -329,7 +329,7 @@ async function bashToolCheckCommandOperatorPermissions(
     findExtraAsk,
   );
 }
-//@ chunk-e6aww6q8.js:1163042-1163179 placement
+//@ chunk-5xgkngpb.js:1158405-1158542 placement
 /**
  * 在权限结果中找出第一个由不可绕过的安全熔断引起的 ask（可排除由分类器处理的熔断）。
  */

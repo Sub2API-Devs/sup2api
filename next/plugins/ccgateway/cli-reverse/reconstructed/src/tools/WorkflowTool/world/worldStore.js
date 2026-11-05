@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流 world 存储（事实、模式匹配、规则触发）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y1shfdfm.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kgbsr4tm.js (22)
  * attribution: placement 22
  */
 import { isPlainObject } from "../../../utils/isPlainObject.js";
@@ -30,7 +30,7 @@ import {
 import { truncateMiddle } from "../../../memdir/memoryTool.js";
 import { logForDebugging } from "../../../utils/debug.js";
 
-//@ chunk-y1shfdfm.js:13860-14329 placement
+//@ chunk-kgbsr4tm.js:15076-15545 placement
 function parseWorkflowArgs(rawInput, { apply }) {
   if (!isPlainObject(rawInput)) return null;
   let args = rawInput.args;
@@ -59,11 +59,11 @@ function parseWorkflowArgs(rawInput, { apply }) {
     shapeClass: `${shapeClass}${namedSuffix}`,
   };
 }
-//@ chunk-y1shfdfm.js:14329-14383 placement
+//@ chunk-kgbsr4tm.js:15545-15599 placement
 var ROW_STATUSES = ["live", "pending", "done", "failed", "retracted"];
-//@ chunk-y1shfdfm.js:14383-14392 placement
+//@ chunk-kgbsr4tm.js:15599-15608 placement
 var HOST_SCOPE = -1;
-//@ chunk-y1shfdfm.js:14392-14489 placement
+//@ chunk-kgbsr4tm.js:15608-15705 placement
 /**
  * 判断对象是否为 {$var: name} 形式的模式变量。
  */
@@ -72,13 +72,13 @@ function isPatternVariable(value) {
     value !== null && typeof value === "object" && !Array.isArray(value) && typeof value.$var === "string"
   );
 }
-//@ chunk-y1shfdfm.js:14489-14590 placement
+//@ chunk-kgbsr4tm.js:15705-15806 placement
 function isAtLeastPattern(value) {
   return (
     value !== null && typeof value === "object" && !Array.isArray(value) && typeof value.$atleast === "number"
   );
 }
-//@ chunk-y1shfdfm.js:14590-14795 placement
+//@ chunk-kgbsr4tm.js:15806-16011 placement
 function parsePattern(pattern) {
   let parsed = worldFactSchema().safeParse(pattern);
   if (!parsed.success || isAtLeastPattern(parsed.data))
@@ -88,7 +88,7 @@ function parsePattern(pattern) {
     );
   return parsed.data;
 }
-//@ chunk-y1shfdfm.js:14795-15012 placement
+//@ chunk-kgbsr4tm.js:16011-16228 placement
 function parseAtLeastPattern(pattern) {
   if (isAtLeastPattern(pattern)) {
     let $atleast = pattern.$atleast;
@@ -104,7 +104,7 @@ function parseAtLeastPattern(pattern) {
   }
   return parsePattern(pattern);
 }
-//@ chunk-y1shfdfm.js:15012-15111 placement
+//@ chunk-kgbsr4tm.js:16228-16327 placement
 /**
  * 事实里不允许使用的保留键（addr、by、status、at、in）。
  */
@@ -113,28 +113,28 @@ var RULE_ROW_STATUSES = new Set(["live", "done"]);
 var MAX_WORLD_ROWS = 1e5;
 var MAX_ROWS_PER_SCOPE = 20000;
 var YIELD_EVERY_N = 32;
-//@ chunk-y1shfdfm.js:15111-15150 placement
+//@ chunk-kgbsr4tm.js:16327-16366 placement
 /**
  * 是否为数组（模式解析时区分数组与对象）。
  */
 function isArrayValue(value) {
   return Array.isArray(value);
 }
-//@ chunk-y1shfdfm.js:15150-15189 placement
+//@ chunk-kgbsr4tm.js:16366-16405 placement
 /**
  * 是否为数组（读取参数时把单值包成数组）。
  */
 function isArrayOrSingle(value) {
   return Array.isArray(value);
 }
-//@ chunk-y1shfdfm.js:15189-15241 placement
+//@ chunk-kgbsr4tm.js:16405-16457 placement
 /**
  * 判断两个值是否相等（原始值相等或 JSON 序列化后相同）。
  */
 function sameValue(left, right) {
   return Object.is(left, right) || jsonStringify(left) === jsonStringify(right);
 }
-//@ chunk-y1shfdfm.js:15241-15766 placement
+//@ chunk-kgbsr4tm.js:16457-16982 placement
 /**
  * 把 world 模式（含 $atleast 等特殊项）与事实做结构匹配，返回绑定。
  */
@@ -168,7 +168,7 @@ function matchPattern(pattern, value, bindings = {}) {
   }
   return currentBindings;
 }
-//@ chunk-y1shfdfm.js:15766-15893 placement
+//@ chunk-kgbsr4tm.js:16982-17109 placement
 function rowToFact(row) {
   return {
     ...row.fact,
@@ -182,35 +182,35 @@ function rowToFact(row) {
     }),
   };
 }
-//@ chunk-y1shfdfm.js:15893-16028 placement
+//@ chunk-kgbsr4tm.js:17109-17244 placement
 function hasPatternVariable(value) {
   if (value === null || typeof value !== "object") return false;
   if (isPatternVariable(value)) return true;
   if (isArrayValue(value)) return value.some(hasPatternVariable);
   return Object.values(value).some(hasPatternVariable);
 }
-//@ chunk-y1shfdfm.js:16028-16073 placement
+//@ chunk-kgbsr4tm.js:17244-17289 placement
 /**
  * 判断行是否匹配给定模式。
  */
 function rowMatchesPattern(pattern, row) {
   return matchPattern(pattern, rowToFact(row)) !== undefined;
 }
-//@ chunk-y1shfdfm.js:16073-16144 placement
+//@ chunk-kgbsr4tm.js:17289-17360 placement
 /**
  * 判断对象是否有 status 自有属性。
  */
 function hasStatusField(pattern) {
   return Object.prototype.hasOwnProperty.call(pattern, "status");
 }
-//@ chunk-y1shfdfm.js:16144-16185 placement
+//@ chunk-kgbsr4tm.js:17360-17401 placement
 /**
  * 行是否匹配模式（布尔形式）。
  */
 function rowMatches(pattern, row) {
   return matchPatternOrUndefined(pattern, row) !== undefined;
 }
-//@ chunk-y1shfdfm.js:16185-16257 placement
+//@ chunk-kgbsr4tm.js:17401-17473 placement
 /**
  * 行匹配模式时返回绑定结果，否则 undefined。
  */
@@ -218,7 +218,7 @@ function matchPatternOrUndefined(pattern, row) {
   if (!hasStatusField(pattern) && !RULE_ROW_STATUSES.has(row.status)) return;
   return matchPattern(pattern, rowToFact(row));
 }
-//@ chunk-y1shfdfm.js:16257-16473 placement
+//@ chunk-kgbsr4tm.js:17473-17689 placement
 /**
  * world 事实的 schema（topic 必填且不得含保留键）。
  */
@@ -242,7 +242,7 @@ var worldFactSchema = DoctorLazy(() => {
   );
   return record(stringSchema(), worldValue);
 });
-//@ chunk-y1shfdfm.js:16473-16841 placement
+//@ chunk-kgbsr4tm.js:17689-18057 placement
 function parseFact(fact) {
   let parsed = factSchema().safeParse(fact);
   if (parsed.success) return parsed.data;
@@ -260,7 +260,7 @@ function parseFact(fact) {
     "world: not a fact",
   );
 }
-//@ chunk-y1shfdfm.js:16841-16915 placement
+//@ chunk-kgbsr4tm.js:18057-18131 placement
 /**
  * 把世界操作错误转成简短文本（无法转成字符串时给占位）。
  */
@@ -271,7 +271,7 @@ function describeWorldError(error) {
     return "non-stringifiable error";
   }
 }
-//@ chunk-y1shfdfm.js:16915-25123 placement
+//@ chunk-kgbsr4tm.js:18131-26339 placement
 /**
  * 工作流 world 存储：行、规则、触发、评估控制器与父子关系，实现 put/retract/read 与规则触发。
  */

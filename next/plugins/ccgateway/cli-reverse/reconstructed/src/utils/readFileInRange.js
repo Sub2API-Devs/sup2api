@@ -3,10 +3,10 @@
  *
  * 按行区间读文件（小文件整读、大文件流式），字节/选区上限错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/readFileInRange.ts
- * pieces: chunk-wn385gmf.js (19)
- * attribution: fingerprint 7, layout 2, placement 10
+ * pieces: chunk-z68qgrbt.js (20)
+ * attribution: fingerprint 7, layout 3, placement 10
  */
 import { stat, readFile, open, readlink } from "fs/promises";
 import { fstat, createReadStream, constants } from "fs";
@@ -30,7 +30,7 @@ import { statChain, openNoFollow } from "./fsSafety/pathRevalidation.js";
 import { isSentinelInode } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wn385gmf.js:19715-20071 fingerprint (2.1.88 match: FileTooLargeError, 0.887)
+//@ chunk-z68qgrbt.js:897-1253 fingerprint (2.1.88 match: FileTooLargeError, 0.888)
 /**
  * 文件总大小超过 maxSizeBytes 的错误（带 sizeInBytes/maxSizeBytes）。
  */
@@ -46,7 +46,7 @@ class FileTooLargeError extends Error {
     this.name = "FileTooLargeError";
   }
 }
-//@ chunk-wn385gmf.js:20071-20454 layout
+//@ chunk-z68qgrbt.js:1253-1636 layout
 /**
  * 所选行区间字节数超过上限的错误。
  */
@@ -62,7 +62,7 @@ class SelectedRangeTooLargeError extends Error {
     this.name = "SelectedRangeTooLargeError";
   }
 }
-//@ chunk-wn385gmf.js:20454-21238 fingerprint (2.1.88 match: readFileInRange, 0.505)
+//@ chunk-z68qgrbt.js:1636-2416 fingerprint (2.1.88 match: readFileInRange, 0.506)
 /**
  * 按行区间读文件：目录报 EISDIR；小于快速路径阈值的普通文件整读（超过 maxBytes 抛 FileTooLargeError），检测编码后切行；否则流式读取。返回内容、行数、总行数、字节数、mtime、notText。
  */
@@ -128,7 +128,7 @@ async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal,
       : undefined,
   );
 }
-//@ chunk-wn385gmf.js:21238-22228 fingerprint (2.1.88 match: readFileInRangeFast, 1)
+//@ chunk-z68qgrbt.js:2416-3406 fingerprint (2.1.88 match: readFileInRangeFast, 1)
 /**
  * 内存中按行切片（处理 BOM、CRLF、字节截断与选区上限）。
  */
@@ -222,13 +222,13 @@ function readFileInRangeFast(text, totalBytes, mtimeMs, offset, maxLines, maxByt
     truncatedByBytes,
   };
 }
-//@ chunk-wn385gmf.js:22228-22291 fingerprint (2.1.88 match: streamOnOpen, 1)
+//@ chunk-z68qgrbt.js:3406-3467 fingerprint (2.1.88 match: streamOnOpen, 1)
 function streamOnOpen(fd) {
   fstat(fd, (err, stats) => {
     this.resolveMtime(err ? 0 : stats.mtimeMs);
   });
 }
-//@ chunk-wn385gmf.js:22291-22436 layout
+//@ chunk-z68qgrbt.js:3467-3609 layout
 /**
  * 流式读取的数据回调：首块检测 UTF-16LE 后切换解码器。
  */
@@ -238,7 +238,7 @@ function streamOnDataWithBomDetection(chunk) {
   let decoded = this.decoder.write(chunk);
   if (decoded.length > 0) streamOnData.call(this, decoded);
 }
-//@ chunk-wn385gmf.js:22436-24210 fingerprint (2.1.88 match: streamOnData, 0.885)
+//@ chunk-z68qgrbt.js:3609-5382 fingerprint (2.1.88 match: streamOnData, 0.885)
 function streamOnData(chunk) {
   let chunk_2 = chunk;
   if (this.isFirstChunk) {
@@ -313,7 +313,7 @@ function streamOnData(chunk) {
     }
   }
 }
-//@ chunk-wn385gmf.js:24210-24985 fingerprint (2.1.88 match: streamOnEnd, 0.923)
+//@ chunk-z68qgrbt.js:5382-6155 fingerprint (2.1.88 match: streamOnEnd, 0.923)
 /**
  * 流式读取结束：冲刷解码器与最后一行，完成统计。
  */
@@ -347,7 +347,7 @@ function streamOnEnd() {
     });
   });
 }
-//@ chunk-wn385gmf.js:24985-25653 fingerprint (2.1.88 match: readFileInRangeStreaming, 0.846)
+//@ chunk-z68qgrbt.js:6155-6817 fingerprint (2.1.88 match: readFileInRangeStreaming, 0.846)
 function readFileInRangeStreaming(
   filePath,
   offset,
@@ -400,14 +400,14 @@ function readFileInRangeStreaming(
     state.stream.once("error", reject);
   });
 }
-//@ chunk-wn385gmf.js:25747-25771 placement
+//@ chunk-z68qgrbt.js:6910-6928 placement
 var decodeWithBomDetection; // deferred: uses STREAM_DECODE_OPTS_2 (../cli/transports/SSETransport.js) of its import cycle while loading; runs once the cycle is complete
 var decodeStreamEnd;
-deferInit("chunk-wn385gmf.js:25747", () => {
+deferInit("chunk-z68qgrbt.js:6910", () => {
   decodeWithBomDetection = STREAM_DECODE_OPTS_2(streamOnDataWithBomDetection);
   decodeStreamEnd = STREAM_DECODE_OPTS_2(streamOnEnd);
 });
-//@ chunk-wn385gmf.js:25771-26264 placement
+//@ chunk-z68qgrbt.js:6928-7420 placement
 function createAbortableStream(handle, fileHandle, signal) {
   let buffer = Buffer.allocUnsafe(524288);
   let position = fileHandle ? 0 : null;
@@ -448,7 +448,7 @@ function createAbortableStream(handle, fileHandle, signal) {
   }
   return stream;
 }
-//@ chunk-wn385gmf.js:26347-26646 placement
+//@ chunk-z68qgrbt.js:7500-7797 placement
 async function logFileStateResync(fileState, filePath, options = {}) {
   if (isDiskless()) {
     if (fileState.has(filePath)) reportOnce("file_state_resync");
@@ -473,7 +473,7 @@ async function logFileStateResync(fileState, filePath, options = {}) {
     return null;
   }
 }
-//@ chunk-wn385gmf.js:26646-26782 placement
+//@ chunk-z68qgrbt.js:7797-7932 placement
 /**
  * 取该文件的完整读取状态（或从头开始的部分视图）。
  */
@@ -483,7 +483,7 @@ function fullReadState(fileState, filePath) {
   let fullPartial = state.isPartialView === true && (state.offset ?? 1) <= 1 && state.limit === undefined;
   return isFullFileView(state) || fullPartial ? state : null;
 }
-//@ chunk-wn385gmf.js:26782-27186 placement
+//@ chunk-z68qgrbt.js:7932-8335 placement
 function compareFileContent(fileState, filePath, previous, timestamp, content, requireReadBeforeWrite) {
   let unchanged = matchesContentHash(previous, content);
   fileState.set(filePath, {
@@ -510,7 +510,7 @@ function compareFileContent(fileState, filePath, previous, timestamp, content, r
   });
   return unchanged ? "unchanged" : "changed";
 }
-//@ chunk-wn385gmf.js:27186-27424 placement
+//@ chunk-z68qgrbt.js:8335-8572 placement
 /**
  * 磁盘大小与记录的内容长度（考虑换行转换）是否不符。
  */
@@ -535,7 +535,7 @@ function isSizeInconsistent(state, actualSize) {
   }
   return actualSize < contentBytes || actualSize > contentBytes + newlineCount + 3;
 }
-//@ chunk-wn385gmf.js:27424-27483 placement
+//@ chunk-z68qgrbt.js:8572-8631 placement
 /**
  * defaultOutputRoots：默认输出根目录。
  */
@@ -547,7 +547,7 @@ function defaultOutputRoots() {
       }
     : undefined;
 }
-//@ chunk-wn385gmf.js:27483-27660 placement
+//@ chunk-z68qgrbt.js:8631-8808 placement
 /**
  * 路径是否在产品同步目录下且与附件路径对应。
  */
@@ -560,7 +560,16 @@ function isSyncedAttachPath(outputPath, attachPath, outputsLink) {
     attachPath === `${outputsLink.attach}/${sliced}`
   );
 }
-//@ chunk-wn385gmf.js:27660-27828 placement
+//@ chunk-z68qgrbt.js:8808-8935 layout
+function isThroughOutputsLink(productPath, attachPath, options) {
+  let roots = defaultOutputRoots();
+  if (roots === undefined) return false;
+  return (
+    isSyncedAttachPath(productPath, attachPath, roots) ||
+    (options?.orTheLinkItself === true && productPath === roots.product && attachPath === roots.attach)
+  );
+}
+//@ chunk-z68qgrbt.js:8935-9102 placement
 /**
  * 检查文件状态是否需要重新同步，结果只回调一次。
  */
@@ -579,7 +588,7 @@ async function checkFileStateResyncOnce(fileState, filePath, previous, maxBytes,
     throw error;
   }
 }
-//@ chunk-wn385gmf.js:27828-29146 placement
+//@ chunk-z68qgrbt.js:9102-10415 placement
 /**
  * 检查读过的文件是否在别处被改动（部分视图、链接、超大、同/异）。
  */
@@ -678,13 +687,14 @@ async function checkFileStateResync(fileState, filePath, previous, maxBytes, sig
   }
 }
 export {
-  isSyncedAttachPath,
-  readFileInRange,
-  logFileStateResync,
   FileTooLargeError,
   SelectedRangeTooLargeError,
+  readFileInRange,
+  isThroughOutputsLink,
   readFileInRangeFast,
   defaultOutputRoots,
   checkFileStateResyncOnce,
+  isSyncedAttachPath,
+  logFileStateResync,
   createAbortableStream,
 };

@@ -3,15 +3,20 @@
  *
  * /plugin 添加市场界面（含策略拦截提示）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/AddMarketplace.tsx
- * pieces: chunk-vrb44rx7.js (2)
+ * pieces: chunk-wb51jffc.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useHasScrollViewport } from "../../components/ScrollViewportContext.js";
 import { useRef, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../../ink/components/Input.js";
+import {
+  useRecentInputStamp,
+  isWithinRecentInput,
+  RECENT_INPUT_GUARD_MS,
+} from "../../hooks/useRecentInputGuard.js";
 import { useRefusalTracker } from "../../components/CustomSelect/selectTypeahead.js";
 import {
   getPluginDirectoryState,
@@ -47,7 +52,6 @@ import {
   formatSourceForDisplay,
 } from "../../utils/plugins/marketplaceHelpers.js";
 import { parseDeepLinkMarketplace, validateDeepLinkPlugin } from "../../utils/deepLink/parseDeepLink.js";
-import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../../hooks/useRecentInputGuard.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -67,10 +71,10 @@ import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutHint.js";
 
-//@ chunk-vrb44rx7.js:37819-37903 affinity
+//@ chunk-wb51jffc.js:37945-38029 affinity
 var INVALID_MARKETPLACE_SOURCE_MESSAGE =
   "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
-//@ chunk-vrb44rx7.js:37903-43972 fingerprint (2.1.88 match: AddMarketplace, 0.44)
+//@ chunk-wb51jffc.js:38029-44123 fingerprint (2.1.88 match: AddMarketplace, 0.44)
 function AddMarketplace({
   inputValue,
   setInputValue,
@@ -99,6 +103,7 @@ function AddMarketplace({
   let refreshing = useRef(false);
   let inputClock = useInputClock();
   let refusedRef = useRef(null);
+  let refusedTick = useRecentInputStamp(refusedRef.current ?? 0);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let processing = useRef(false);
   let handleAdd = async () => {
@@ -312,10 +317,10 @@ function AddMarketplace({
     if (event.ctrl || event.meta || busy) return;
     if ((event.key === "y" || event.key === "Y") && pendingConfirm) {
       event.preventDefault();
-      let clock = refusedRef.current;
+      let pending = refusedRef.current;
       if (
-        clock === null ||
-        isWithinRecentInput(inputClock, clock, RECENT_INPUT_GUARD_MS) ||
+        pending === null ||
+        isWithinRecentInput(inputClock, refusedTick(pending), RECENT_INPUT_GUARD_MS) ||
         refusedWithin(RECENT_INPUT_GUARD_MS)
       ) {
         noteRefused();

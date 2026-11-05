@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：远程会话下的刷新钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ts9rfgqd.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ke6sf0r9.js (1)
  * attribution: placement 1
  */
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { primeFileDescriptorCredentials } from "./fileDescriptorCredentials.js";
 
-//@ chunk-ts9rfgqd.js:1383-1435 placement
+//@ chunk-ke6sf0r9.js:1467-1519 placement
 async function flushRemoteCredentials(credentials) {
   if (isStorageV5Enabled() && credentials !== undefined) await primeFileDescriptorCredentials(credentials);
 }

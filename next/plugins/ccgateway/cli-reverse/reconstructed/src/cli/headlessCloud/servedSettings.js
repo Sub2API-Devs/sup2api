@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头云会话的插件转发与项目设置提供、无人值守同意。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (10)
  * attribution: placement 10
  */
 import { createSignal } from "../../utils/signal.js";
@@ -55,7 +55,7 @@ import { createDeviceHookDecider } from "../../utils/hooks/deviceHooks/runDevice
 import { createNoticeBacklog } from "../../utils/noticeBacklog.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 
-//@ chunk-fe6rs39h.js:120657-120966 placement
+//@ chunk-keyy05re.js:120516-120825 placement
 function createServedSettingsTracker() {
   let entries = new Map();
   let signal = createSignal();
@@ -80,9 +80,9 @@ function createServedSettingsTracker() {
     },
   };
 }
-//@ chunk-fe6rs39h.js:120966-121005 placement
+//@ chunk-keyy05re.js:120825-120864 placement
 var SERVED_FOLDER_CONFIG_NOT_USED = "served-folder-config-not-used";
-//@ chunk-fe6rs39h.js:121005-121208 placement
+//@ chunk-keyy05re.js:120864-121067 placement
 function servedFolderConfigNotice(mode) {
   let withheld = loadedManagedKeyGroupsList();
   if (withheld.length === 0) return;
@@ -93,9 +93,9 @@ function servedFolderConfigNotice(mode) {
   });
   return REMOTE_TOOLS_CONSENT_TEXT["served_settings.folder_config_not_used"];
 }
-//@ chunk-fe6rs39h.js:121208-121248 placement
+//@ chunk-keyy05re.js:121067-121107 placement
 var SERVED_PROJECT_ENV_NOT_APPLIED = "served-project-env-not-applied";
-//@ chunk-fe6rs39h.js:121248-121384 placement
+//@ chunk-keyy05re.js:121107-121243 placement
 function servedProjectEnvNotice(mode) {
   if (!servedFolderEnvWasWithheld()) return;
   logFeatureOk("remote_served_project_env_withheld", {
@@ -103,7 +103,7 @@ function servedProjectEnvNotice(mode) {
   });
   return REMOTE_TOOLS_CONSENT_TEXT["served_settings.project_env_not_applied"];
 }
-//@ chunk-fe6rs39h.js:121384-122229 placement
+//@ chunk-keyy05re.js:121243-122088 placement
 async function askUnattendedServingConsent({ dialogs, permissionMode, signal, seams = {} }) {
   let surface = lit("desktop");
   let logAction = (action) => {
@@ -151,7 +151,7 @@ async function askUnattendedServingConsent({ dialogs, permissionMode, signal, se
     else logError(error);
   }
 }
-//@ chunk-fe6rs39h.js:122229-124978 placement
+//@ chunk-keyy05re.js:122088-124836 placement
 /**
  * 无头云会话的插件转发特性：判断启动目录与同步根的关系、本机同意状态，决定是否把启用的插件带到云会话。
  */
@@ -347,7 +347,7 @@ function createPluginForwardingFeature(options) {
     };
   };
 }
-//@ chunk-fe6rs39h.js:124978-125255 placement
+//@ chunk-keyy05re.js:124836-125113 placement
 /**
  * 带超时与中止读取云插件同意状态：超时返回 unreadable，中止返回 aborted。
  */
@@ -368,11 +368,11 @@ function readCloudPluginsConsentWithTimeout(consentPin, pin, untrustedStoreJudge
       });
   });
 }
-//@ chunk-fe6rs39h.js:125255-125305 placement
+//@ chunk-keyy05re.js:125113-125163 placement
 function isSettledWithoutAnswer(state) {
   return state.settled && !state.answerPending;
 }
-//@ chunk-fe6rs39h.js:125305-125430 placement (2.1.88 match: startFileWatcher, 0.581)
+//@ chunk-keyy05re.js:125163-125288 placement (2.1.88 match: startFileWatcher, 0.581)
 function mapLogLevel(teamDir) {
   switch (teamDir) {
     case "warning":

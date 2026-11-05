@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 SSRF 防护
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (20)
  * attribution: placement 20
  */
 import { lookup, promises } from "dns";
@@ -21,22 +21,22 @@ import { getUsableProxyUrl, shouldBypassProxy } from "../../utils/proxy.js";
 import { gatewayLog } from "../gateway/gatewayBanner.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1316760-1316778 placement
+//@ chunk-1hnjmk23.js:1317723-1317741 placement
 /**
  * 懒加载的 ipaddr.js 模块（判断地址段）。
  */
 var ipaddrModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1316760", () => {
+deferInit("chunk-1hnjmk23.js:1317723", () => {
   ipaddrModule = __toESM(require_ipaddr_min(), 1);
 });
-//@ chunk-1ny7cxrt.js:1316931-1317116 placement
+//@ chunk-1hnjmk23.js:1317894-1318079 placement
 /**
  * SSRF 拦截错误前缀（云元数据/链路本地、回环）。
  */
 var SSRF_METADATA_BLOCKED = "ECONNREFUSED_SSRF: blocked (cloud metadata / link-local)";
 var SSRF_LOOPBACK_BLOCKED =
   "ECONNREFUSED_SSRF: blocked (loopback; set CLAUDE_GATEWAY_ALLOW_LOOPBACK=1 in the gateway environment to allow it)";
-//@ chunk-1ny7cxrt.js:1317116-1317204 placement
+//@ chunk-1hnjmk23.js:1318079-1318167 placement
 /**
  * 给出被拦截地址的说明：回环/未指定 → 回环拦截，否则 → 云元数据拦截。
  */
@@ -44,21 +44,21 @@ function describeBlockedAddress(address) {
   let range = ipaddrModule.parse(address).range();
   return range === "loopback" || range === "unspecified" ? SSRF_LOOPBACK_BLOCKED : SSRF_METADATA_BLOCKED;
 }
-//@ chunk-1ny7cxrt.js:1317204-1317257 placement
+//@ chunk-1hnjmk23.js:1318167-1318220 placement
 /**
  * 是否通过 CLAUDE_GATEWAY_ALLOW_LOOPBACK 允许回环地址。
  */
 function isLoopbackAllowed() {
   return env.CLAUDE_GATEWAY_ALLOW_LOOPBACK;
 }
-//@ chunk-1ny7cxrt.js:1317257-1317291 placement
+//@ chunk-1hnjmk23.js:1318220-1318254 placement
 /**
  * 判断 URL 主机是否为 localhost 或回环地址（且允许回环时放行判断）。
  */
 function isAllowedLoopbackUrl(url) {
   return isLoopbackAllowed() && isLoopbackUrl(url);
 }
-//@ chunk-1ny7cxrt.js:1317291-1317502 placement
+//@ chunk-1hnjmk23.js:1318254-1318465 placement
 /**
  * URL 主机是否为 localhost 或回环/未指定地址。
  */
@@ -75,7 +75,7 @@ function isLoopbackUrl(url) {
     return false;
   }
 }
-//@ chunk-1ny7cxrt.js:1317502-1317751 placement
+//@ chunk-1hnjmk23.js:1318465-1318714 placement
 /**
  * IP 是否被拦截（回环在未允许时、私有/元数据地址）。
  */
@@ -92,9 +92,9 @@ function isBlockedAddress(address) {
   if (range === "loopback" || range === "unspecified") return !isLoopbackAllowed();
   return isPrivateHost(parsed.toString().replace(/%.*$/, ""));
 }
-//@ chunk-1ny7cxrt.js:1317751-1317868 placement
+//@ chunk-1hnjmk23.js:1318714-1318831 placement
 var METADATA_HOSTNAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1317751", () => {
+deferInit("chunk-1hnjmk23.js:1318714", () => {
   METADATA_HOSTNAMES = new Set([
     "metadata.google.internal",
     "metadata.goog",
@@ -103,7 +103,7 @@ deferInit("chunk-1ny7cxrt.js:1317751", () => {
     "instance-data.ec2.internal",
   ]);
 });
-//@ chunk-1ny7cxrt.js:1317868-1318121 placement
+//@ chunk-1hnjmk23.js:1318831-1319084 placement
 /**
  * 出站 URL 是否允许：http(s)、主机名合法、非元数据主机、非受限地址。
  */
@@ -122,7 +122,7 @@ function isAllowedOutboundUrl(url) {
     return false;
   }
 }
-//@ chunk-1ny7cxrt.js:1318121-1318520 placement
+//@ chunk-1hnjmk23.js:1319084-1319483 placement
 /**
  * DNS lookup 包装：解析结果含受限地址时拒绝，优先返回 IPv4。
  */
@@ -152,7 +152,7 @@ var guardedLookup = (host, optionsOrCallback, callback) => {
     },
   );
 };
-//@ chunk-1ny7cxrt.js:1318520-1319482 placement
+//@ chunk-1hnjmk23.js:1319483-1320445 placement
 /**
  * SSRF 安全的 fetch：校验 URL；经代理时交给代理；直连时先解析并检查所有地址，再按 IP 连接并保留 Host/SNI。
  */
@@ -211,7 +211,7 @@ async function ssrfSafeFetch(url, init) {
     }),
   });
 }
-//@ chunk-1ny7cxrt.js:1319482-1320078 placement
+//@ chunk-1hnjmk23.js:1320445-1321041 placement
 /**
  * NO_PROXY 直连时用 node http(s) 发送请求（使用受保护的 lookup），只返回状态。
  */
@@ -250,7 +250,7 @@ async function requestViaNodeHttp(url, init) {
     httpRequest.end(bodyBuffer);
   });
 }
-//@ chunk-1ny7cxrt.js:1320078-1320363 placement
+//@ chunk-1hnjmk23.js:1321041-1321326 placement
 /**
  * 能访问 169.254.169.254 时警告需要出口网络策略。
  */
@@ -267,15 +267,15 @@ async function warnIfMetadataReachable() {
     );
   } catch {}
 }
-//@ chunk-1ny7cxrt.js:1336032-1336050 placement
+//@ chunk-1hnjmk23.js:1336995-1337013 placement
 /**
  * 懒加载的 ipaddr.js 模块（解析 CIDR）。
  */
 var ipaddrModule2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1336032", () => {
+deferInit("chunk-1hnjmk23.js:1336995", () => {
   ipaddrModule2 = __toESM(require_ipaddr_min(), 1);
 });
-//@ chunk-1ny7cxrt.js:1336050-1336340 placement
+//@ chunk-1hnjmk23.js:1337013-1337303 placement
 /**
  * 解析 CIDR 或单个 IP（IPv4 映射地址转为 IPv4）。
  */
@@ -291,14 +291,14 @@ function parseCidr(cidr) {
     return [address.toIPv4Address(), 32];
   return [address, address.kind() === "ipv6" ? 128 : 32];
 }
-//@ chunk-1ny7cxrt.js:1336340-1336372 placement
+//@ chunk-1hnjmk23.js:1337303-1337335 placement
 /**
  * 把 CIDR 字符串列表解析成范围列表。
  */
 function parseCidrList(entries) {
   return entries.map(parseCidr);
 }
-//@ chunk-1ny7cxrt.js:1336372-1336511 placement
+//@ chunk-1hnjmk23.js:1337335-1337474 placement
 /**
  * 解析 IP（IPv4 映射转 IPv4），失败返回 null。
  */
@@ -311,13 +311,13 @@ function parseIp(text) {
     return null;
   }
 }
-//@ chunk-1ny7cxrt.js:1336511-1336589 placement
+//@ chunk-1hnjmk23.js:1337474-1337552 placement
 /**
  * 匹配 [IPv6] 或 [IPv6]:端口 的正则。
  */
 var IPV4_WITH_PORT_RE = /^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$/;
 var BRACKETED_IPV6_RE = /^\[([^\]]+)\](?::\d{1,5})?$/;
-//@ chunk-1ny7cxrt.js:1336589-1336649 placement
+//@ chunk-1hnjmk23.js:1337552-1337612 placement
 /**
  * 从主机字符串里去掉端口取出 IP（不是 IP 形状就原样返回）。
  */
@@ -325,7 +325,7 @@ function extractIpFromHost(host) {
   let match = IPV4_WITH_PORT_RE.exec(host) ?? BRACKETED_IPV6_RE.exec(host);
   return match ? match[1] : host;
 }
-//@ chunk-1ny7cxrt.js:1336649-1336831 placement
+//@ chunk-1hnjmk23.js:1337612-1337794 placement
 /**
  * IP 是否在任一 CIDR 范围内。
  */

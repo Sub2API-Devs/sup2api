@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/resources/build/src/detectors/EnvDetector.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_api } from "../../../../api/build/src/index.js";
 import { require_error_3 } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 import { require_core } from "../../../../core/build/src/index.js";
 
-//@ chunk-bwbq4xvm.js:139777-141261 cjs-require-graph
+//@ chunk-7kayq7nc.js:139879-141363 cjs-require-graph
 var require_EnvDetector = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

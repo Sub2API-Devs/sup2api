@@ -3,9 +3,9 @@
  *
  * AWS 辅助：STS 凭证形状校验、GetCallerIdentity 检查凭证、清 ini 凭证缓存、CredentialsProviderError 判断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/aws.ts
- * pieces: chunk-bwbq4xvm.js (10), chunk-nm3tp7ry.js (3)
+ * pieces: chunk-7kayq7nc.js (10), chunk-te3thhf2.js (3)
  * attribution: fingerprint 4, placement 2, layout 5, sole-consumer 2
  */
 import { findInCauseChain, errorMessage } from "./errors.js";
@@ -22,18 +22,18 @@ import { logForDebugging } from "./debug.js";
 import { require_sts } from "../../vendor/@aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:156069-156148 fingerprint (2.1.88 match: isAwsCredentialsProviderError, 1)
+//@ chunk-7kayq7nc.js:155318-155397 fingerprint (2.1.88 match: isAwsCredentialsProviderError, 1)
 function isAwsCredentialsProviderError(err) {
   return findInCauseChain(err, (cause) => cause.name === "CredentialsProviderError") !== undefined;
 }
-//@ chunk-bwbq4xvm.js:156148-156422 placement
+//@ chunk-7kayq7nc.js:155397-155671 placement
 var AWS_AUTH_ERROR_PATTERN =
   /ExpiredToken|InvalidSignature|SignatureDoesNotMatch|UnrecognizedClient|InvalidClientTokenId|security token.*(invalid|expired)|signature we calculated does not match|Bearer Token has expired|Authentication failed.*API Key|Missing required parameters in the API Key/i;
-//@ chunk-bwbq4xvm.js:157362-157416 placement
+//@ chunk-7kayq7nc.js:156611-156665 placement
 function isAwsCredentialError(name, message) {
   return AWS_AUTH_ERROR_PATTERN.test(`${name ?? ""} ${message ?? ""}`);
 }
-//@ chunk-bwbq4xvm.js:157701-157947 fingerprint (2.1.88 match: isValidAwsStsOutput, 0.85)
+//@ chunk-7kayq7nc.js:156950-157196 fingerprint (2.1.88 match: isValidAwsStsOutput, 0.85)
 /**
  * 校验对象是否为 STS 凭证形状（AccessKeyId/SecretAccessKey/SessionToken 字符串）。
  */
@@ -49,7 +49,7 @@ function isValidAwsStsOutput(obj) {
     credentials.SessionToken.length > 0
   );
 }
-//@ chunk-bwbq4xvm.js:157947-158082 layout
+//@ chunk-7kayq7nc.js:157196-157331 layout
 function extractStsCredentials(value) {
   if (!value || typeof value !== "object") return null;
   let record = value;
@@ -57,13 +57,13 @@ function extractStsCredentials(value) {
   if (isValidAwsStsOutput(record)) return record;
   return null;
 }
-//@ chunk-bwbq4xvm.js:158082-158095 layout
+//@ chunk-7kayq7nc.js:157331-157344 layout
 var AWS_STS_TIMEOUT_MS = 30000;
-//@ chunk-bwbq4xvm.js:158095-158167 layout
+//@ chunk-7kayq7nc.js:157344-157416 layout
 function getAwsChainResolveTimeoutMs() {
   return env.CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS ?? 60000;
 }
-//@ chunk-bwbq4xvm.js:158167-158550 layout
+//@ chunk-7kayq7nc.js:157416-157799 layout
 /**
  * 用 STS GetCallerIdentity 检查当前 AWS 凭证是否有效（先强制重读共享配置）。
  */
@@ -90,7 +90,7 @@ async function checkStsCallerIdentity() {
   });
   await withTimeout(client.send(new GetCallerIdentityCommand({})), getAwsChainResolveTimeoutMs(), "AWS STS");
 }
-//@ chunk-bwbq4xvm.js:158550-158912 layout
+//@ chunk-7kayq7nc.js:157799-158161 layout
 async function getAwsProfileRegionHints() {
   let { loadSharedConfigFiles } = await import("../../vendor/@smithy/shared-ini-file-loader/default.js").then(
     (sdkModule) => __toESM(sdkModule.default, 1),
@@ -112,7 +112,7 @@ async function getAwsProfileRegionHints() {
   }
   return false;
 }
-//@ chunk-bwbq4xvm.js:158912-159363 fingerprint (2.1.88 match: clearAwsIniCache, 0.549)
+//@ chunk-7kayq7nc.js:158161-158612 fingerprint (2.1.88 match: clearAwsIniCache, 0.549)
 /**
  * 清 AWS SDK 的 ini 凭证文件缓存，让刷新后的 ~/.aws/credentials 生效。
  */
@@ -145,32 +145,32 @@ async function clearAwsIniCache() {
     logForDebugging(`Failed to refresh AWS credential cache: ${errorMessage(error)}`);
   }
 }
-//@ chunk-nm3tp7ry.js:544-560 sole-consumer
+//@ chunk-te3thhf2.js:544-560 sole-consumer
 /**
  * 惰性加载的 AWS SDK（共享配置文件读取）模块。
  */
 var awsSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nm3tp7ry.js:544", () => {
+deferInit("chunk-te3thhf2.js:544", () => {
   awsSdkModule = __toESM(require_sts());
 });
-//@ chunk-nm3tp7ry.js:560-586 sole-consumer
+//@ chunk-te3thhf2.js:560-586 sole-consumer
 var AssumeRoleCommand; // deferred: uses awsSdkModule of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nm3tp7ry.js:560", () => {
+deferInit("chunk-te3thhf2.js:560", () => {
   AssumeRoleCommand = awsSdkModule.AssumeRoleCommand;
 });
-//@ chunk-nm3tp7ry.js:586-604 fingerprint (2.1.88 match: checkStsCallerIdentity, 0.333)
+//@ chunk-te3thhf2.js:586-604 fingerprint (2.1.88 match: checkStsCallerIdentity, 0.333)
 var STSClient; // deferred: uses awsSdkModule of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nm3tp7ry.js:586", () => {
+deferInit("chunk-te3thhf2.js:586", () => {
   STSClient = awsSdkModule.STSClient;
 });
 export {
+  isAwsCredentialError,
+  getAwsChainResolveTimeoutMs,
   checkStsCallerIdentity,
   getAwsProfileRegionHints,
   extractStsCredentials,
   clearAwsIniCache,
-  isAwsCredentialError,
   isAwsCredentialsProviderError,
-  getAwsChainResolveTimeoutMs,
   AssumeRoleCommand,
   STSClient,
 };

@@ -3,12 +3,13 @@
  *
  * 桥消息助手：control_request/response 识别、出站可转发消息过滤、入站消息分派 handleIngressMessage、服务端控制请求应答、UUID 去重集合、结果消息合并
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeMessaging.ts
- * pieces: chunk-1qpz7qcd.js (15)
+ * pieces: chunk-ck4jrdtf.js (15)
  * attribution: fingerprint 6, layout 7, callgraph-fingerprint 2
  */
 import { bridgeHostState } from "./bridgeHostState.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { isHumanOrAutoContinuation } from "../utils/messageProvenance.js";
 import { isLocalCommandMessage } from "../utils/messages/localCommandTags.js";
 import { isHumanTurn_3 } from "../utils/messagePredicates.js";
@@ -28,7 +29,7 @@ import { objectSchema, stringSchema, literal } from "../../vendor/zod/v4/classic
 import { RELAY_SOURCE_KINDS_2 } from "../services/projectsRelay/relayConfig.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1qpz7qcd.js:3281-3408 fingerprint (2.1.88 match: isSDKControlResponse, 0.932)
+//@ chunk-ck4jrdtf.js:3360-3487 fingerprint (2.1.88 match: isSDKControlResponse, 0.932)
 function isSDKControlResponse(value) {
   return (
     value !== null &&
@@ -39,7 +40,7 @@ function isSDKControlResponse(value) {
     value.response != null
   );
 }
-//@ chunk-1qpz7qcd.js:3408-3550 fingerprint (2.1.88 match: isSDKControlRequest, 0.949)
+//@ chunk-ck4jrdtf.js:3487-3629 fingerprint (2.1.88 match: isSDKControlRequest, 0.95)
 function isSDKControlRequest(value) {
   return (
     value !== null &&
@@ -51,19 +52,21 @@ function isSDKControlRequest(value) {
     value.request != null
   );
 }
-//@ chunk-1qpz7qcd.js:3550-3595 layout
+//@ chunk-ck4jrdtf.js:3629-3674 layout
 /**
  * 设置"状态帧"闸门（决定 compact_boundary 等是否转发）。
  */
 function setBridgeStateFramesGate(gate) {
   bridgeHostState().bridgeStateFramesGate = gate;
 }
-//@ chunk-1qpz7qcd.js:3595-4144 callgraph-fingerprint (2.1.88 match: isEligibleBridgeMessage, 0.273)
+//@ chunk-ck4jrdtf.js:3674-4266 layout
 /**
  * 出站过滤：哪些本地消息要镜像到 Remote Control（user/assistant、非虚拟；hook_system_message、tool_host_result_lines、来自用户的 prompt 型 queued_command 附件；local_command、model_consent_fallback、受闸门控制的 compact_boundary）。
  */
-function isEligibleBridgeMessage(message) {
-  if ((message.type === "user" || message.type === "assistant") && message.isVirtual) return false;
+function isBridgeableMessage(message) {
+  if ((message.type === "user" || message.type === "assistant") && message.isVirtual) {
+    if (!(codeModeAccepted() && message.visibleToRemoteClients === true)) return false;
+  }
   if (message.type === "attachment") {
     if (message.attachment.type === "hook_system_message") return true;
     if (message.attachment.type === "tool_host_result_lines") return true;
@@ -83,24 +86,21 @@ function isEligibleBridgeMessage(message) {
         (message.subtype === "compact_boundary" && (bridgeHostState().bridgeStateFramesGate?.() ?? true))))
   );
 }
-//@ chunk-1qpz7qcd.js:4144-4213 layout
+//@ chunk-ck4jrdtf.js:4266-4382 callgraph-fingerprint (2.1.88 match: isEligibleBridgeMessage, 0.386)
 /**
  * 是否是真实用户回合（非压缩摘要、非合成消息）。
  */
 function isRealUserTurn(message) {
+  if (codeModeAccepted() && message.type === "user" && message.isVirtual) return false;
   return message.type === "user" && !message.isCompactSummary && !isLocalCommandMessage(message);
 }
-//@ chunk-1qpz7qcd.js:4213-4315 layout
-/**
- * 是否是附件消息或 model_consent_fallback 系统消息。
- */
-function isAttachmentOrConsentFallback(message) {
-  return (
-    message.type === "attachment" ||
-    (message.type === "system" && message.subtype === "model_consent_fallback")
-  );
+//@ chunk-ck4jrdtf.js:4382-4560 layout
+function isVirtualRow(m) {
+  if (codeModeAccepted() && (m.type === "user" || m.type === "assistant") && m.isVirtual === true)
+    return true;
+  return m.type === "attachment" || (m.type === "system" && m.subtype === "model_consent_fallback");
 }
-//@ chunk-1qpz7qcd.js:4315-4733 layout
+//@ chunk-ck4jrdtf.js:4560-4978 layout
 /**
  * 是否是瞬时 SDK 帧（conversation_reset、stream_event、status、task_* 系列、background_tasks_changed、thinking_tokens、code_change_published、vcs_state_changed、file_attachments_missing）。
  */
@@ -120,7 +120,7 @@ function isEphemeralSdkFrame(frame) {
     frame.subtype === "file_attachments_missing"
   );
 }
-//@ chunk-1qpz7qcd.js:4733-4910 layout
+//@ chunk-ck4jrdtf.js:4978-5155 layout
 /**
  * 从人类回合的首段文本派生会话标题。
  */
@@ -138,7 +138,7 @@ function deriveTitleFromHumanTurn(message) {
   if (!raw) return;
   return unwrapReminderText(raw) || undefined;
 }
-//@ chunk-1qpz7qcd.js:4910-6723 fingerprint (2.1.88 match: handleIngressMessage, 0.59)
+//@ chunk-ck4jrdtf.js:5155-7208 fingerprint (2.1.88 match: handleIngressMessage, 0.53)
 /**
  * 解析一条入站帧并分派：control_response → onPermissionResponse；control_request → onControlRequest；control_cancel_request → onControlCancel；
  * queued_notification（MCP send_message 形状的转成合成 user 帧，否则交给通知缓冲）；user 帧去掉回显（recentPosted）、重复投递、replay、带 parent_tool_use_id、fork 显示帧后交给 onInboundMessage。其余类型忽略。
@@ -198,6 +198,18 @@ function handleIngressMessage(
       logForDebugging(`[bridge:repl] Ignoring echo: type=${parsed.type} uuid=${uuid}`);
       return;
     }
+    if (codeModeAccepted()) {
+      let mod = require("../utils/codeMode/scriptRowUUIDs.js");
+      if (
+        (uuid !== undefined && mod.isScriptRowUUID(recentPostedUUIDs, uuid)) ||
+        (parsed.type === "user" && "is_virtual" in parsed && parsed.is_virtual === true)
+      ) {
+        logForDebugging(
+          `[bridge:repl] Ignoring a script call's row at ingress: type=${parsed.type} uuid=${uuid ?? "none"}`,
+        );
+        return;
+      }
+    }
     if (uuid && recentInboundUUIDs.has(uuid)) {
       logForDebugging(`[bridge:repl] Ignoring re-delivered inbound: type=${parsed.type} uuid=${uuid}`);
       return;
@@ -230,7 +242,7 @@ function handleIngressMessage(
     logFeatureBad("bridge_message_receive", "bridge_message_receive_parse_failed");
   }
 }
-//@ chunk-1qpz7qcd.js:6723-7139 fingerprint (2.1.88 match: OUTBOUND_ONLY_ERROR, 0.304)
+//@ chunk-ck4jrdtf.js:7208-7624 fingerprint (2.1.88 match: OUTBOUND_ONLY_ERROR, 0.305)
 /**
  * 服务端控制请求处理用的常量：可接受的 flag 设置键、超时与提示文本（outbound-only 拒绝、get_workspace_diff 超时、side_question 超时/无答案）。
  */
@@ -243,7 +255,7 @@ var WORKSPACE_DIFF_TIMEOUT_MESSAGE;
 var SIDE_QUESTION_TIMEOUT_MS;
 var SIDE_QUESTION_TIMEOUT_MESSAGE;
 var SIDE_QUESTION_NO_ANSWER;
-deferInit("chunk-1qpz7qcd.js:6723", () => {
+deferInit("chunk-ck4jrdtf.js:7208", () => {
   ALLOWED_FLAG_SETTING_KEYS = new Set(["effortLevel", "ultracode"]);
   MAX_FLAG_SETTING_CHANGE_KEYS = 5;
   MAX_FLAG_SETTING_VALUE_CHARS = 40;
@@ -257,7 +269,7 @@ deferInit("chunk-1qpz7qcd.js:6723", () => {
   SIDE_QUESTION_NO_ANSWER =
     "(No answer available for this side question. Try again, or ask in the main conversation.)";
 });
-//@ chunk-1qpz7qcd.js:8103-8506 fingerprint (2.1.88 match: handleServerControlRequest, 0.312)
+//@ chunk-ck4jrdtf.js:8588-8991 fingerprint (2.1.88 match: handleServerControlRequest, 0.312)
 /**
  * （旧版 handleServerControlRequest 的 316 对应物在 _unattributed 的 chunk-1qpz7qcd.js#__i；本函数只负责回写）等待控制请求的处理结果后写回 control_response（错误映射为 error/error_code，实时回复用专门帧），附 session_id。
  */
@@ -286,7 +298,7 @@ function sendControlResponseWhenSettled(request, writeFrame, sessionId, response
       );
     });
 }
-//@ chunk-1qpz7qcd.js:25657-26034 fingerprint (2.1.88 match: BoundedUUIDSet, 1)
+//@ chunk-ck4jrdtf.js:26160-26537 fingerprint (2.1.88 match: BoundedUUIDSet, 1)
 /**
  * 固定容量的环形 UUID 去重集合（满了淘汰最旧）。
  */
@@ -316,9 +328,9 @@ class BoundedUUIDSet {
     this.writeIdx = 0;
   }
 }
-//@ chunk-1qpz7qcd.js:26034-26106 layout
+//@ chunk-ck4jrdtf.js:26537-26609 layout
 var mcpSendMessageNotificationSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1qpz7qcd.js:26034", () => {
+deferInit("chunk-ck4jrdtf.js:26537", () => {
   mcpSendMessageNotificationSchema = DoctorLazy(() =>
     objectSchema({
       notification_id: stringSchema().min(1),
@@ -327,7 +339,7 @@ deferInit("chunk-1qpz7qcd.js:26034", () => {
     }),
   );
 });
-//@ chunk-1qpz7qcd.js:26106-26317 layout
+//@ chunk-ck4jrdtf.js:26609-26820 layout
 /**
  * 把 MCP send_message 来源的 queued_notification 转成合成 user 帧（uuid=notification_id）。
  */
@@ -346,19 +358,23 @@ function notificationToUserFrame(notification) {
     inbound_origin: RELAY_SOURCE_KINDS_2,
   };
 }
-//@ chunk-1qpz7qcd.js:26317-26413 callgraph-fingerprint (2.1.88 match: isSDKMessage, 0.548)
+//@ chunk-ck4jrdtf.js:26820-26916 callgraph-fingerprint (2.1.88 match: isSDKMessage, 0.546)
 function isQueuedNotificationFrame(value) {
   return (
     typeof value === "object" && value !== null && "type" in value && value.type === "queued_notification"
   );
 }
 export {
-  BoundedUUIDSet,
-  isEligibleBridgeMessage,
+  isBridgeableMessage,
   isEphemeralSdkFrame,
   SIDE_QUESTION_TIMEOUT_MS,
   SIDE_QUESTION_TIMEOUT_MESSAGE,
+  BoundedUUIDSet,
+  isVirtualRow,
+  isRealUserTurn,
+  handleIngressMessage,
   deriveTitleFromHumanTurn,
+  setBridgeStateFramesGate,
   SIDE_QUESTION_NO_ANSWER,
   sendControlResponseWhenSettled,
   OUTBOUND_ONLY_ERROR,
@@ -367,8 +383,4 @@ export {
   ALLOWED_FLAG_SETTING_KEYS,
   MAX_FLAG_SETTING_CHANGE_KEYS,
   MAX_FLAG_SETTING_VALUE_CHARS,
-  isAttachmentOrConsentFallback,
-  isRealUserTurn,
-  handleIngressMessage,
-  setBridgeStateFramesGate,
 };

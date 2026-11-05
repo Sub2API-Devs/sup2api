@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Bash 命令分类（vcs、网络、测试…）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fym4r1th.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wrq65rh8.js (22)
  * attribution: placement 22
  */
 import { lit, fromEnum, fromEnumArr } from "../../services/analytics/safeMetadata.js";
@@ -13,7 +13,7 @@ import { SPLIT_MAX_LEN } from "../../utils/bash/commands.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fym4r1th.js:11663-37722 placement
+//@ chunk-wrq65rh8.js:10630-36689 placement
 /**
  * Bash 命令分类表：把命令名归到 vcs/network/包管理/测试等类别，并给出类别下的程序清单、子命令表、包装命令与测试范围规则；classifyBashCommand 用它生成遥测字段。
  */
@@ -85,7 +85,7 @@ var UNPARSED_COMMAND_INFO;
 var CHAIN_OPERATORS;
 var SUBSHELL_NODE_TYPES;
 var HARMLESS_REDIRECT_RE;
-deferInit("chunk-fym4r1th.js:11663", () => {
+deferInit("chunk-wrq65rh8.js:10630", () => {
   COMMAND_CLASSES = [
     "vcs",
     "github_cli",
@@ -2275,7 +2275,7 @@ deferInit("chunk-fym4r1th.js:11663", () => {
   SUBSHELL_NODE_TYPES = new Set(["subshell", "command_substitution", "process_substitution"]);
   HARMLESS_REDIRECT_RE = /^\d*>&\d+$|^&?\d*>{1,2}\s*\/dev\/null$/;
 });
-//@ chunk-fym4r1th.js:37722-38121 placement
+//@ chunk-wrq65rh8.js:36689-37088 placement
 /**
  * 遍历语法树收集命令形状：各简单命令，以及是否有管道、重定向、heredoc、链式/后台、子 shell。
  */
@@ -2302,7 +2302,7 @@ function collectCommandShape(node, shape) {
   }
   for (let child of node.children) collectCommandShape(child, shape);
 }
-//@ chunk-fym4r1th.js:38121-38188 placement
+//@ chunk-wrq65rh8.js:37088-37155 placement
 /**
  * 取程序名的最后一段（去掉目录部分）。
  */
@@ -2310,7 +2310,7 @@ function baseNameOfProgram(program) {
   let index = program.lastIndexOf("/");
   return index >= 0 ? program.slice(index + 1) : program;
 }
-//@ chunk-fym4r1th.js:38188-38325 placement
+//@ chunk-wrq65rh8.js:37155-37292 placement
 function normalizeProgramName(program) {
   let baseName = baseNameOfProgram(program);
   return (
@@ -2318,7 +2318,7 @@ function normalizeProgramName(program) {
     (/^python[0-9.]+$/.test(baseName) ? "python" : /^pip[0-9.]+$/.test(baseName) ? "pip" : baseName)
   );
 }
-//@ chunk-fym4r1th.js:38325-38413 placement
+//@ chunk-wrq65rh8.js:37292-37380 placement
 /**
  * 按规范化后的程序名查出类别与 argv0 记录。
  */
@@ -2329,19 +2329,19 @@ function lookupProgramCategory(program) {
     ? PROGRAM_CLASS_BY_NAME[normalizedName]
     : undefined;
 }
-//@ chunk-fym4r1th.js:38413-38532 placement
+//@ chunk-wrq65rh8.js:37380-37499 placement
 function stripLeadingWrappers(command) {
   let argv = command.trim().split(/\s+/).filter(Boolean);
   while (argv.length > 0 && ENV_ASSIGNMENT_RE.test(argv[0])) argv = argv.slice(1);
   return skipWrapperCommands(argv, WRAPPER_VALUE_FLAGS);
 }
-//@ chunk-fym4r1th.js:38532-38937 placement
+//@ chunk-wrq65rh8.js:37499-37904 placement
 /**
  * 跳过 argv 开头的包装命令（timeout、nice 等）及其选项与参数（有次数上限），返回实际执行的命令部分。
  */
 function skipWrapperCommands(argv, valueFlagsByProgram) {
   let remaining = argv;
-  for (let j = 0; j < MAX_WRAPPER_DEPTH; j++) {
+  for (let k = 0; k < MAX_WRAPPER_DEPTH; k++) {
     let programName = remaining[0] === undefined ? undefined : baseNameOfProgram(remaining[0]);
     let valueFlags =
       programName !== undefined && Object.hasOwn(valueFlagsByProgram, programName)
@@ -2366,7 +2366,7 @@ function skipWrapperCommands(argv, valueFlagsByProgram) {
   }
   return remaining;
 }
-//@ chunk-fym4r1th.js:38937-39102 placement
+//@ chunk-wrq65rh8.js:37904-38069 placement
 function nextOperand(argv, from, valueFlags) {
   let idx = from;
   while (idx < argv.length) {
@@ -2384,7 +2384,7 @@ function nextOperand(argv, from, valueFlags) {
     index: idx,
   };
 }
-//@ chunk-fym4r1th.js:39102-39404 placement
+//@ chunk-wrq65rh8.js:38069-38371 placement
 /**
  * 对已知程序取子命令分类（gh 还取第二级子命令），不在列表中的记为 other。
  */
@@ -2404,28 +2404,28 @@ function classifySubcommand(argv0, argv) {
   }
   return fields;
 }
-//@ chunk-fym4r1th.js:39404-39553 placement
+//@ chunk-wrq65rh8.js:38371-38520 placement
 function normalizePackageName(spec) {
   let index = spec.indexOf("@", spec.lastIndexOf("/") + 2);
   let packageName = index < 0 ? spec : spec.slice(0, index);
   if (!packageName.startsWith("@")) return normalizeProgramName(packageName);
   return Object.hasOwn(PACKAGE_NAME_ALIASES, packageName) ? PACKAGE_NAME_ALIASES[packageName] : "";
 }
-//@ chunk-fym4r1th.js:39553-39655 placement
+//@ chunk-wrq65rh8.js:38520-38622 placement
 function nextNonAssignmentOperand(argv, from, valueFlags) {
   let operand = nextOperand(argv, from, valueFlags);
   while (operand.token !== undefined && ENV_ASSIGNMENT_RE.test(operand.token))
     operand = nextOperand(argv, operand.index + 1, valueFlags);
   return operand;
 }
-//@ chunk-fym4r1th.js:39655-39710 placement
+//@ chunk-wrq65rh8.js:38622-38677 placement
 /**
  * 在测试范围表里找第一个满足谓词的范围名。
  */
 function findScopeForPredicate(record, predicate) {
   return record && TEST_SCOPES.find((scope) => record[scope]?.some(predicate));
 }
-//@ chunk-fym4r1th.js:39710-39830 placement
+//@ chunk-wrq65rh8.js:38677-38797 placement
 function matchKnownScriptPrefix(token) {
   return token === undefined
     ? undefined
@@ -2436,14 +2436,14 @@ function matchKnownScriptPrefix(token) {
           (token.length === prefix.length || ":-_".includes(token[prefix.length])),
       );
 }
-//@ chunk-fym4r1th.js:39830-39889 placement
+//@ chunk-wrq65rh8.js:38797-38856 placement
 /**
  * 在选项效果表里找该选项对应的效果名。
  */
 function findFlagEffect(record, effect) {
   return record && FLAG_EFFECT_KEYS.find((key) => record[key]?.includes(effect));
 }
-//@ chunk-fym4r1th.js:39889-41456 placement
+//@ chunk-wrq65rh8.js:38856-40423 placement
 function classifyTestCommand(program, argv, startIdx, fedMoreWords) {
   let rule = Object.hasOwn(TEST_COMMAND_RULES, program) ? TEST_COMMAND_RULES[program] : undefined;
   let isChangedOrFailedOnly = false;
@@ -2506,7 +2506,7 @@ function classifyTestCommand(program, argv, startIdx, fedMoreWords) {
   if (!rule?.wholeNeedsOperand || hasWholeOperand) return "whole";
   return isLessThanPackage ? "narrowed" : "narrowed_to_folders";
 }
-//@ chunk-fym4r1th.js:41456-41852 placement
+//@ chunk-wrq65rh8.js:40423-40819 placement
 /**
  * 对解析出的每条命令去掉赋值与重定向、解开引号后进行分类，并记录是否启动后台任务。
  */
@@ -2531,7 +2531,7 @@ function classifyParsedCommands(shape, result) {
     classifyShellCommand(words, result, 0);
   }
 }
-//@ chunk-fym4r1th.js:41852-42142 placement
+//@ chunk-wrq65rh8.js:40819-41109 placement
 function classifyScriptText(text, state) {
   state.scriptTextDeadline ??= performance.now() + PARSE_TIME_BUDGET_MS;
   let max = Math.max(0, state.scriptTextDeadline - performance.now());
@@ -2548,30 +2548,30 @@ function classifyScriptText(text, state) {
   classifyParsedCommands(shape, state);
   state.scriptTextDepth--;
 }
-//@ chunk-fym4r1th.js:42142-42424 placement
+//@ chunk-wrq65rh8.js:41109-41391 placement
 function classifyShellInvocation(argv, state) {
-  for (let j = 1; j < argv.length; j++) {
-    let arg = argv[j];
+  for (let k = 1; k < argv.length; k++) {
+    let arg = argv[k];
     if (/^-[A-Za-z]+$/.test(arg) && arg.includes("c")) {
-      let scriptText = argv[j + 1] === "--" ? argv[j + 2] : argv[j + 1];
+      let scriptText = argv[k + 1] === "--" ? argv[k + 2] : argv[k + 1];
       if (scriptText) {
         classifyScriptText(scriptText, state);
         return;
       }
       break;
     }
-    if (/^[-+][A-Za-z]*[oO]$|^--(rcfile|init-file)$/.test(arg)) j++;
+    if (/^[-+][A-Za-z]*[oO]$|^--(rcfile|init-file)$/.test(arg)) k++;
     else if (!arg.startsWith("-")) break;
   }
   state.kinds.add("shell_script");
 }
-//@ chunk-fym4r1th.js:42424-43010 placement
+//@ chunk-wrq65rh8.js:41391-41977 placement
 /**
  * 分类 python 调用：-m 模块按已知模块表归类（含测试框架），-c 为内联代码，其他递归分类；--version/-h 不计。
  */
 function classifyPythonInvocation(argv, state, depth) {
-  for (let j = 1; j < argv.length && argv[j] !== "-"; j++) {
-    let arg = argv[j];
+  for (let k = 1; k < argv.length && argv[k] !== "-"; k++) {
+    let arg = argv[k];
     if (!arg.startsWith("-") || /^--(version|help)/.test(arg)) return;
     let flagIdx = arg.startsWith("--") ? -1 : arg.search(/[Vh?cmWX]/);
     let flag = arg[flagIdx];
@@ -2579,7 +2579,7 @@ function classifyPythonInvocation(argv, state, depth) {
     if (flag === "V" || flag === "h" || flag === "?") return;
     if (flag === "c") break;
     if (flag === "m") {
-      let rest = sliced ? [sliced, ...argv.slice(j + 1)] : argv.slice(j + 1);
+      let rest = sliced ? [sliced, ...argv.slice(k + 1)] : argv.slice(k + 1);
       let moduleName = rest[0] ?? "";
       if (Object.hasOwn(PYTHON_MODULE_KINDS, moduleName)) {
         state.kinds.add(PYTHON_MODULE_KINDS[moduleName]);
@@ -2592,11 +2592,11 @@ function classifyPythonInvocation(argv, state, depth) {
       else classifyShellCommand(rest, state, depth + 1, "python");
       return;
     }
-    if ((flag === "W" || flag === "X") && !sliced) j++;
+    if ((flag === "W" || flag === "X") && !sliced) k++;
   }
   state.kinds.add("python_inline");
 }
-//@ chunk-fym4r1th.js:43010-44872 placement
+//@ chunk-wrq65rh8.js:41977-43839 placement
 function classifyShellCommand(argv, state, depth, expectedCategory, verbIsTarget) {
   if (depth > MAX_NESTING_DEPTH) state.gaveUp = true;
   if (state.gaveUp) return;
@@ -2626,12 +2626,12 @@ function classifyShellCommand(argv, state, depth, expectedCategory, verbIsTarget
     return;
   }
   if (program === "find") {
-    for (let idx = 1; idx < rest.length; idx++)
-      if (FIND_EXEC_FLAGS.includes(rest[idx])) {
-        let execEnd = idx + 1;
+    for (let index = 1; index < rest.length; index++)
+      if (FIND_EXEC_FLAGS.includes(rest[index])) {
+        let execEnd = index + 1;
         while (execEnd < rest.length && rest[execEnd] !== ";" && rest[execEnd] !== "+") execEnd++;
-        classifyShellCommand(rest.slice(idx + 1, execEnd), state, depth + 1);
-        idx = execEnd;
+        classifyShellCommand(rest.slice(index + 1, execEnd), state, depth + 1);
+        index = execEnd;
       }
   }
   if (category === undefined) {
@@ -2688,7 +2688,7 @@ function classifyShellCommand(argv, state, depth, expectedCategory, verbIsTarget
     state.testScopes.add(classifyTestCommand(program, rest, testStartIdx, state.fedMoreWords));
   if (SERVE_FLAGS.some((flag) => rest.includes(flag, 1))) kinds.add("serves_or_watches");
 }
-//@ chunk-fym4r1th.js:44872-45117 placement
+//@ chunk-wrq65rh8.js:43839-44084 placement
 function parseCommandShape(text, timeoutMs) {
   if (!text || text.length > SPLIT_MAX_LEN) return null;
   let tree;
@@ -2710,7 +2710,7 @@ function parseCommandShape(text, timeoutMs) {
   collectCommandShape(tree, shape);
   return shape;
 }
-//@ chunk-fym4r1th.js:45117-46066 placement
+//@ chunk-wrq65rh8.js:44084-45032 placement
 function classifyBashCommand(command) {
   let shape = parseCommandShape(command);
   if (!shape) return UNPARSED_COMMAND_INFO;

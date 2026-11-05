@@ -3,14 +3,14 @@
  *
  * /copy 实现：复制最近第 N 条回复或选择其中代码块，写剪贴板或落盘 response.md
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/copy/copy.tsx
- * pieces: chunk-0knprqgt.js (16), chunk-5nte8cwj.js (1), chunk-e6aww6q8.js (1)
- * attribution: sole-consumer 1, affinity 1, fingerprint 10, layout 5, placement 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (1), chunk-pnckc079.js (17)
+ * attribution: fingerprint 10, sole-consumer 2, affinity 1, layout 5, placement 1
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";
-import { isDesktopInstalled } from "../../utils/desktopDeepLink.js";
+import { sanitizeModelName } from "../../utils/commitAttribution.js";
 import { countCharInString, repeatString, truncateToLength } from "../../utils/stringUtils.js";
 import {
   jsxProd_default,
@@ -22,7 +22,7 @@ import { marked } from "../../../vendor/marked/lib/marked.esm.js";
 import { stripPromptXMLTags, extractTextContent_2 } from "../../utils/messages.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { claudeTempDir } from "../../utils/tempDir.js";
-import { writeFileAtomic } from "../../utils/file.js";
+import { readJsonFile_2 } from "../../utils/file.js";
 import { setClipboard, getOsc52Utf8Warning } from "../../ink/termio/osc.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
@@ -30,8 +30,7 @@ import { useGlobalExitKeybindings, useKeybinding } from "../../keybindings/useKe
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
-import { count } from "../../utils/collections.js";
-import { isCodeSegment } from "../../bridge/bridgeMain.js";
+import { countWhere } from "../../utils/collections.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { Text, Box } from "../../ink/components/Text.js";
@@ -40,7 +39,12 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { Pane } from "../../components/design-system/Pane.js";
 import { stripMemoryTags } from "../../services/orgMemory/promptIndex.js";
 
-//@ chunk-e6aww6q8.js:2659669-2659812 fingerprint (2.1.88 match: collectRecentAssistantTexts, 0.709)
+//@ chunk-7jxyna5q.js:213908-213983 fingerprint (2.1.88 match: COPY_DIR, 1)
+function getModelFamilyForAttribution(rawModelName) {
+  let found = sanitizeModelName.find(([prefix]) => rawModelName.includes(prefix));
+  return found ? found[1] : "claude";
+}
+//@ chunk-5xgkngpb.js:2720923-2721066 fingerprint (2.1.88 match: collectRecentAssistantTexts, 0.708)
 function collectRecentAssistantTexts(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -48,26 +52,26 @@ function collectRecentAssistantTexts(messages) {
   }
   return;
 }
-//@ chunk-5nte8cwj.js:1546-1584 fingerprint (2.1.88 match: COPY_DIR, 1)
-async function COPY_DIR() {
-  return isDesktopInstalled("claude");
+//@ chunk-pnckc079.js:14857-14897 sole-consumer (2.1.88 match: isConnectionError, 1)
+function isCodeSegment(err) {
+  return err.kind === "code";
 }
-//@ chunk-0knprqgt.js:13722-13751 sole-consumer
+//@ chunk-pnckc079.js:14897-14926 sole-consumer
 function returnSecond(first, second) {
   return second;
 }
-//@ chunk-0knprqgt.js:13751-13791 affinity (2.1.88 match: isConnectionError, 1)
+//@ chunk-pnckc079.js:14926-14966 affinity (2.1.88 match: isConnectionError, 1)
 function isCodeSegment_2(err) {
   return err.kind === "code";
 }
-//@ chunk-0knprqgt.js:13791-13841 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-pnckc079.js:14966-15016 fingerprint (2.1.88 match: _temp2, 1)
 function withCopyFullResponse(c) {
   return {
     ...c,
     copyFullResponse: true,
   };
 }
-//@ chunk-0knprqgt.js:13841-14028 fingerprint (2.1.88 match: _temp, 0.615)
+//@ chunk-pnckc079.js:15016-15203 fingerprint (2.1.88 match: _temp, 0.613)
 function renderCopyBlockItem(block, index) {
   let blockLines =
     countCharInString(
@@ -85,7 +89,7 @@ function renderCopyBlockItem(block, index) {
     index,
   );
 }
-//@ chunk-0knprqgt.js:14028-14096 fingerprint (2.1.88 match: RESPONSE_FILENAME, 0.5)
+//@ chunk-pnckc079.js:15203-15271 fingerprint (2.1.88 match: RESPONSE_FILENAME, 0.5)
 /**
  * RESPONSE_FILENAME：同旧版。
  */
@@ -93,7 +97,7 @@ var RESPONSE_FILENAME = "response.md";
 var COPY_FILENAME = "copy.md";
 var MAX_LOOKBACK = 20;
 var COPY_PICKER_TITLE = "Select content to copy";
-//@ chunk-0knprqgt.js:14096-14450 fingerprint (2.1.88 match: extractCodeBlocks, 0.374)
+//@ chunk-pnckc079.js:15271-15625 fingerprint (2.1.88 match: extractCodeBlocks, 0.374)
 function extractCodeBlocks(markdown) {
   let { tokens } = lexMarkdownWindowed(marked, stripPromptXMLTags(markdown));
   let blocks = [];
@@ -128,11 +132,11 @@ ${text}`;
   }
   return blocks;
 }
-//@ chunk-0knprqgt.js:14450-14506 layout
+//@ chunk-pnckc079.js:15625-15681 layout
 function tableCellText(cell) {
   return cell.tokens.map((token) => token.raw).join("");
 }
-//@ chunk-0knprqgt.js:14506-15048 layout
+//@ chunk-pnckc079.js:15681-16223 layout
 /**
  * 把表格数据渲染为 Markdown 表格文本：转义竖线与换行，按显示宽度对齐列（最少 3 列宽），按对齐方式生成分隔行。
  */
@@ -162,7 +166,7 @@ function formatMarkdownTable(table) {
   return [formatRow(header), separator, ...body.map(formatRow)].join(`
 `);
 }
-//@ chunk-0knprqgt.js:15048-15329 layout
+//@ chunk-pnckc079.js:16223-16504 layout
 function normalizeMarkdownTables(markdown) {
   let { tokens } = lexMarkdownWindowed(marked, markdown);
   let rest = markdown;
@@ -180,7 +184,7 @@ function normalizeMarkdownTables(markdown) {
   }
   return rest;
 }
-//@ chunk-0knprqgt.js:15329-15558 layout
+//@ chunk-pnckc079.js:16504-16733 layout
 function recentAssistantTexts(messages) {
   let texts = [];
   for (let i = messages.length - 1; i >= 0 && texts.length < MAX_LOOKBACK; i--) {
@@ -198,7 +202,7 @@ function recentAssistantTexts(messages) {
   }
   return texts;
 }
-//@ chunk-0knprqgt.js:15558-15664 fingerprint (2.1.88 match: fileExtension, 1)
+//@ chunk-pnckc079.js:16733-16839 fingerprint (2.1.88 match: fileExtension, 1)
 function fileExtension(lang) {
   if (lang) {
     let sanitized = lang.replace(/[^a-zA-Z0-9]/g, "");
@@ -206,7 +210,7 @@ function fileExtension(lang) {
   }
   return ".txt";
 }
-//@ chunk-0knprqgt.js:15664-15786 placement (2.1.88 match: copySnapshotToLocal, 0.871)
+//@ chunk-pnckc079.js:16839-16961 placement (2.1.88 match: copySnapshotToLocal, 0.871)
 /**
  * /copy 命令：把文本写入临时目录下的文件并返回路径。
  */
@@ -217,12 +221,12 @@ async function writeTempCopyFile(agentType, scope) {
     recursive: true,
     mode: 448,
   });
-  await writeFileAtomic(localMemDir, agentType, {
+  await readJsonFile_2(localMemDir, agentType, {
     encoding: "utf-8",
   });
   return localMemDir;
 }
-//@ chunk-0knprqgt.js:15786-16107 fingerprint (2.1.88 match: copyOrWriteToFile, 0.744)
+//@ chunk-pnckc079.js:16961-17282 fingerprint (2.1.88 match: copyOrWriteToFile, 0.744)
 async function copyOrWriteToFile(text, filename) {
   let raw = await setClipboard(text);
   if (raw) process.stdout.write(raw);
@@ -250,7 +254,7 @@ Also written to ${filePath}`;
     return `${charCount}${fallbackNotice}`;
   }
 }
-//@ chunk-0knprqgt.js:16107-19748 fingerprint (2.1.88 match: CopyPicker, 0.705)
+//@ chunk-pnckc079.js:17282-20930 fingerprint (2.1.88 match: CopyPicker, 0.705)
 function CopyPicker(props) {
   let $ = useMemoCache(54);
   let { fullText, blocks, messageAge, onDone } = props;
@@ -282,7 +286,7 @@ function CopyPicker(props) {
     $[3] = selectedBlock;
   } else selectedBlock = $[3];
   let selected = selectedBlock;
-  let codeCount = count(blocks, isCodeSegment);
+  let codeCount = countWhere(blocks, isCodeSegment);
   let quoteCount = blocks.length - codeCount;
   let mode;
   if ($[4] !== blocks) {
@@ -312,7 +316,7 @@ function CopyPicker(props) {
       return {
         text: block.text,
         filename: `copy${fileExtension(block.lang)}`,
-        blockIndex: count(blocks.slice(0, selected), isCodeSegment_2),
+        blockIndex: countWhere(blocks.slice(0, selected), isCodeSegment_2),
         isQuote: false,
       };
     };
@@ -570,7 +574,7 @@ Preference saved. Use /config to change copyFullResponse`);
   } else footer = $[53];
   return footer;
 }
-//@ chunk-0knprqgt.js:19748-19885 layout
+//@ chunk-pnckc079.js:20930-21066 layout
 function blockLabel(text) {
   let found = text
     .split(
@@ -582,7 +586,7 @@ function blockLabel(text) {
   let label = truncateToLength(found, MAX_BLOCK_LABEL_WIDTH);
   return label === found ? found : `${label}\u2026`;
 }
-//@ chunk-0knprqgt.js:19885-20560 fingerprint (2.1.88 match: call, 0.933)
+//@ chunk-pnckc079.js:21066-21741 fingerprint (2.1.88 match: call, 0.933)
 /**
  * MAX_BLOCK_LABEL_WIDTH：120。
  */
@@ -613,7 +617,7 @@ var call = async (onDone, context, args) => {
   let codeBlocks = extractCodeBlocks(text);
   let config = getGlobalConfig();
   if (codeBlocks.length === 0 || config.copyFullResponse) {
-    let codeBlockCount = count(codeBlocks, (block) => block.kind === "code");
+    let codeBlockCount = countWhere(codeBlocks, (block) => block.kind === "code");
     logEvent("tengu_copy", {
       always: config.copyFullResponse,
       block_count: codeBlockCount,
@@ -633,7 +637,7 @@ var call = async (onDone, context, args) => {
 };
 export {
   collectRecentAssistantTexts,
-  COPY_DIR,
+  getModelFamilyForAttribution,
   call,
   recentAssistantTexts,
   fileExtension,

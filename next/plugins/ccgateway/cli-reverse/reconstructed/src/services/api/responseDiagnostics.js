@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：异常响应诊断（代理/网关错误签名、响应体描述）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (36)
  * attribution: placement 36
  */
 import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
@@ -37,7 +37,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1560527-1560723 placement
+//@ chunk-5xgkngpb.js:1626109-1626305 placement
 var API_ERROR_TYPES = [
   "invalid_request_error",
   "authentication_error",
@@ -50,15 +50,15 @@ var API_ERROR_TYPES = [
   "api_error",
   "overloaded_error",
 ];
-//@ chunk-e6aww6q8.js:1560723-1560775 placement
+//@ chunk-5xgkngpb.js:1626305-1626358 placement
 function normalizeApiErrorTypeDiag(type) {
   return API_ERROR_TYPES.find((errorType) => errorType === type) ?? "other";
 }
-//@ chunk-e6aww6q8.js:1560775-1560821 placement
+//@ chunk-5xgkngpb.js:1626358-1626404 placement
 function requestIdFromHeaders(headers) {
   return isSessionsToken(headers) ? (sanitizeMarkName(headers) ?? null) : null;
 }
-//@ chunk-e6aww6q8.js:1560821-1561242 placement
+//@ chunk-5xgkngpb.js:1626404-1626825 placement
 /**
  * 把响应 Content-Type 归类为 none、json、event-stream、html、text、xml、aws-eventstream 或 other。
  */
@@ -85,7 +85,7 @@ function contentTypeKind(contentType) {
       return base.endsWith("+json") ? "json" : "other";
   }
 }
-//@ chunk-e6aww6q8.js:1561242-1561807 placement
+//@ chunk-5xgkngpb.js:1626825-1627390 placement
 var PROXY_VENDOR_NAMES = [
   ["cloudflare", /cloudflare/],
   ["envoy", /envoy|istio/],
@@ -109,13 +109,13 @@ var PROXY_VENDOR_NAMES = [
   ["kestrel", /kestrel/],
   ["python", /uvicorn|gunicorn|hypercorn/],
 ];
-//@ chunk-e6aww6q8.js:1561807-1561915 placement
+//@ chunk-5xgkngpb.js:1627390-1627498 placement
 function serverKind(server) {
   if (!server) return "absent";
   let lower = server.toLowerCase();
   return PROXY_VENDOR_NAMES.find(([, pattern]) => pattern.test(lower))?.[0] ?? "other";
 }
-//@ chunk-e6aww6q8.js:1561915-1563801 placement
+//@ chunk-5xgkngpb.js:1627498-1629384 placement
 /**
  * 代理与网关错误特征表（Apigee、Envoy 等），用于识别异常响应来自哪一层。
  */
@@ -176,13 +176,13 @@ var APIGEE_FLOW_NAMES = [
   "mintstep",
   "scripts",
 ];
-//@ chunk-e6aww6q8.js:1563801-1563901 placement
+//@ chunk-5xgkngpb.js:1629384-1629484 placement
 function apigeeFaultSource(server) {
   if (!server) return null;
   let lower = server.trim().toLowerCase();
   return PROXY_ERROR_SIGNATURES.find((signature) => signature === lower) ?? "other";
 }
-//@ chunk-e6aww6q8.js:1563901-1564056 placement
+//@ chunk-5xgkngpb.js:1629484-1629639 placement
 function apigeeFaultCode(server) {
   if (!server) return null;
   let trimmed = server.trim();
@@ -192,20 +192,20 @@ function apigeeFaultCode(server) {
   let found_2 = APIGEE_FLOW_NAMES.find((name) => name === firstPart);
   return found_2 ? `${found_2}.other` : "other";
 }
-//@ chunk-e6aww6q8.js:1564056-1564138 placement
+//@ chunk-5xgkngpb.js:1629639-1629721 placement
 var VERSION_STRING_RE = /^\d{1,3}\.\d{1,4}\.\d{1,4}(?:(?:a|b|rc)\d{1,4}|\.(?:dev|post)\d{1,4})?$/;
-//@ chunk-e6aww6q8.js:1564138-1564226 placement
+//@ chunk-5xgkngpb.js:1629721-1629809 placement
 function gatewayVersion(headers) {
   if (typeof headers !== "string") return null;
   return VERSION_STRING_RE.test(headers) ? headers : "nonconforming";
 }
-//@ chunk-e6aww6q8.js:1564226-1564824 placement
+//@ chunk-5xgkngpb.js:1629809-1630407 placement
 /**
  * 诊断用的缓存/代理响应头名单与网关头前缀（anthropic-、x-amz-、x-goog- 等），用于识别中间层。
  */
 var CACHE_HEADER_NAMES; // deferred: uses GATEWAY_FINGERPRINTS (./logging.js) of its import cycle while loading; runs once the cycle is complete
 var GATEWAY_HEADER_PREFIXES;
-deferInit("chunk-e6aww6q8.js:1564226", () => {
+deferInit("chunk-5xgkngpb.js:1629809", () => {
   CACHE_HEADER_NAMES = new Set([
     "via",
     "x-cache",
@@ -249,7 +249,7 @@ deferInit("chunk-e6aww6q8.js:1564226", () => {
     ...GATEWAY_FINGERPRINT_ENTRIES.flatMap(([, { headerPrefixes: prefixes }]) => prefixes ?? []),
   ];
 });
-//@ chunk-e6aww6q8.js:1564824-1565509 placement
+//@ chunk-5xgkngpb.js:1630407-1631096 placement
 /**
  * 从响应状态与头部提取诊断信息：内容类型、长度、request-id 是否为 Anthropic、server 厂商、Apigee 故障来源/代码、中间代理头、识别出的网关及版本。
  */
@@ -285,9 +285,9 @@ function describeResponseHeaders(status, headers) {
     gateway_version: gatewayVersion(versionHeader ? headers?.get(versionHeader) : undefined),
   };
 }
-//@ chunk-e6aww6q8.js:1565509-1565544 placement
+//@ chunk-5xgkngpb.js:1631096-1631131 placement
 var SSE_FIELD_RE = /^(event|data|id|retry)?:/;
-//@ chunk-e6aww6q8.js:1565544-1565914 placement
+//@ chunk-5xgkngpb.js:1631131-1631501 placement
 /**
  * 判断响应体的形态：空、事件流、HTML/XML、像 JSON 的文本、非 Message 的 JSON 或其他。
  */
@@ -303,7 +303,7 @@ function bodyKind(body) {
   }
   return typeof body === "object" ? "json-not-message" : "other";
 }
-//@ chunk-e6aww6q8.js:1565914-1566036 placement
+//@ chunk-5xgkngpb.js:1631501-1631623 placement
 var STREAM_EVENT_TYPES = [
   "message_start",
   "message_delta",
@@ -312,11 +312,11 @@ var STREAM_EVENT_TYPES = [
   "content_block_delta",
   "content_block_stop",
 ];
-//@ chunk-e6aww6q8.js:1566036-1566089 placement
+//@ chunk-5xgkngpb.js:1631623-1631676 placement
 function normalizeStreamEventType(type) {
   return STREAM_EVENT_TYPES.find((eventType) => eventType === type) ?? "other";
 }
-//@ chunk-e6aww6q8.js:1566089-1566683 placement
+//@ chunk-5xgkngpb.js:1631676-1632272 placement
 function classifyApiErrorKind(error, errorKind, observedResponse) {
   let connectionErrorDetails = extractConnectionErrorDetails(error);
   let apiError = error instanceof APIError ? error : undefined;
@@ -352,7 +352,7 @@ function classifyApiErrorKind(error, errorKind, observedResponse) {
         }),
   };
 }
-//@ chunk-e6aww6q8.js:1566683-1566996 placement
+//@ chunk-5xgkngpb.js:1632272-1632586 placement
 /**
  * 汇总连接配置事实：提供方、基地址类型、网关、是否有代理、自定义头、额外 CA、客户端证书。
  */
@@ -372,7 +372,7 @@ function connectionSetupFacts() {
     client_cert: Boolean(env.CLAUDE_CODE_CLIENT_CERT),
   };
 }
-//@ chunk-e6aww6q8.js:1566996-1567475 placement
+//@ chunk-5xgkngpb.js:1632586-1633066 placement
 /**
  * 从错误或响应头提取诊断字段：状态码、是否带 request-id 头、服务器类型、代理与额外 CA。
  */
@@ -404,7 +404,7 @@ function responseDiagnosticFields(error, response) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1567475-1567884 placement
+//@ chunk-5xgkngpb.js:1633066-1633475 placement
 /**
  * 按提供方取对应的基地址环境变量。
  */
@@ -427,7 +427,7 @@ function providerBaseUrl(apiProvider) {
       return env.ANTHROPIC_FOUNDRY_BASE_URL;
   }
 }
-//@ chunk-e6aww6q8.js:1567884-1568243 placement
+//@ chunk-5xgkngpb.js:1633475-1633834 placement
 /**
  * 各种响应体形态的说明文字。
  */
@@ -441,7 +441,7 @@ var BODY_KIND_DESCRIPTIONS = {
   "other-text": "body is unrecognized text",
   other: "body is unrecognized",
 };
-//@ chunk-e6aww6q8.js:1568243-1569479 placement
+//@ chunk-5xgkngpb.js:1633834-1635072 placement
 /**
  * 描述异常响应体（内容类型、大小、是否为空），用于错误日志。
  */
@@ -495,12 +495,12 @@ function describeResponseBody({ data: body, status, headers, originating }) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1569479-1569869 placement
+//@ chunk-5xgkngpb.js:1635072-1635463 placement
 /**
  * API 返回空或格式错误响应时的错误类，记录响应体形态、字节数和响应摘要，提示检查是否有代理或网关拦截。
  */
 let UnexpectedApiResponseError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1569479", () => {
+deferInit("chunk-5xgkngpb.js:1635072", () => {
   UnexpectedApiResponseError = class UnexpectedApiResponseError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -520,18 +520,18 @@ deferInit("chunk-e6aww6q8.js:1569479", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:1569869-1569898 placement
-function alwaysFalseResponseDiag(extraBodyParams, model, provider) {
+//@ chunk-5xgkngpb.js:1635463-1635492 placement
+function alwaysFalseResponseDiag(messages, model, provider) {
   return false;
 }
-//@ chunk-e6aww6q8.js:1569898-1569923 placement
+//@ chunk-5xgkngpb.js:1635492-1635517 placement
 function alwaysFalseB(error) {
   return false;
 }
-//@ chunk-e6aww6q8.js:1569923-1569981 placement
+//@ chunk-5xgkngpb.js:1635517-1635575 placement
 var SAFEGUARD_CATEGORIES = ["bio", "cyber", "aup", "agentic", "control"];
 var SAFEGUARD_CATEGORIES_ALIAS = SAFEGUARD_CATEGORIES;
-//@ chunk-e6aww6q8.js:1569981-1570047 placement
+//@ chunk-5xgkngpb.js:1635575-1635641 placement
 /**
  * 按宿主保存的安全拒绝设置状态（跳过的类别、被设置拒绝的类别、变更信号）。
  */
@@ -540,20 +540,20 @@ class RefusalSettingsState {
   refusedFromSetting = new Set();
   changed = createSignal();
 }
-//@ chunk-e6aww6q8.js:1570047-1570074 placement
+//@ chunk-5xgkngpb.js:1635641-1635668 placement
 var refusalSettingsSlot; // deferred: uses RefusalSettingsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1570047", () => {
+deferInit("chunk-5xgkngpb.js:1635641", () => {
   refusalSettingsSlot = new HostScoped(() => new RefusalSettingsState());
 });
-//@ chunk-e6aww6q8.js:1570074-1570113 placement
+//@ chunk-5xgkngpb.js:1635668-1635707 placement
 function refusalSettingsState() {
   return refusalSettingsSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1570113-1570137 placement
+//@ chunk-5xgkngpb.js:1635707-1635731 placement
 function alwaysFalseC() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1570137-1570210 placement
+//@ chunk-5xgkngpb.js:1635731-1635804 placement
 /**
  * 导出函数 `onRefusalSettingsChange`：参数 e，返回 () => {}; return l5o().changed.subscribe(e)。
  */
@@ -561,27 +561,26 @@ function onRefusalSettingsChange(settings) {
   if (!alwaysFalseC()) return () => {};
   return refusalSettingsState().changed.subscribe(settings);
 }
-//@ chunk-e6aww6q8.js:1570210-1570252 placement
+//@ chunk-5xgkngpb.js:1635804-1635846 placement
 var OTHER; // deferred: uses SAFEGUARD_CATEGORIES of its import cycle while loading; runs once the cycle is complete
 var SAFEGUARD_CATEGORY_SET;
-deferInit("chunk-e6aww6q8.js:1570210", () => {
+deferInit("chunk-5xgkngpb.js:1635804", () => {
   OTHER = "other";
   SAFEGUARD_CATEGORY_SET = new Set([...SAFEGUARD_CATEGORIES_ALIAS, OTHER]);
 });
-//@ chunk-e6aww6q8.js:1570252-1570283 placement
+//@ chunk-5xgkngpb.js:1635846-1635877 placement
 function alwaysFalseD(error, providerForModel = getAPIProvider()) {
   return false;
 }
-//@ chunk-e6aww6q8.js:1570283-1570312 placement
+//@ chunk-5xgkngpb.js:1635877-1635906 placement
 function alwaysFalseE(error, baseError, retryDirective) {
   return false;
 }
-//@ chunk-e6aww6q8.js:1570312-1570337 placement
+//@ chunk-5xgkngpb.js:1635906-1635931 placement
 function emptyString(message) {
   return "";
 }
 export {
-  onRefusalSettingsChange,
   describeResponseHeaders,
   connectionSetupFacts,
   UnexpectedApiResponseError,
@@ -595,4 +594,5 @@ export {
   normalizeApiErrorTypeDiag,
   alwaysFalseE,
   emptyString,
+  onRefusalSettingsChange,
 };

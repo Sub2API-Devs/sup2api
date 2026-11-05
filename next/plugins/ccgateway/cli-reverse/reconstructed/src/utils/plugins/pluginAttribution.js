@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件归属 sidecar 读取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f3qhjfah.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (10)
  * attribution: placement 10
  */
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../sanitization.js";
@@ -24,14 +24,14 @@ import { env } from "../env.js";
 import { parseJsonRegistryFile, normalizeRegistryKey } from "./localMarketplacePaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:38283-38467 placement
-var PLUGIN_META_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-5s0qaz1x.js:38545-38729 placement
+var PLUGIN_META_SUFFIX; // deferred: uses INVISIBLE_CHAR_CLASSES (../sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var SERVER_PLUGIN_ID;
 var MARKETPLACE_NAME;
 var INSTALLATION_PREFERENCE;
 var MARKETPLACE_KIND;
 var regExp;
-deferInit("chunk-f3qhjfah.js:38283", () => {
+deferInit("chunk-5s0qaz1x.js:38545", () => {
   PLUGIN_META_SUFFIX = ".meta.json";
   SERVER_PLUGIN_ID = "server_plugin_id";
   MARKETPLACE_NAME = "marketplace_name";
@@ -39,26 +39,26 @@ deferInit("chunk-f3qhjfah.js:38283", () => {
   MARKETPLACE_KIND = "marketplace_kind";
   regExp = new RegExp(`^(?!\\s)(?![\\s\\S]*\\s$)[^@${INVISIBLE_CHAR_CLASS_SOURCE}]{1,128}$`, "u");
 });
-//@ chunk-f3qhjfah.js:38467-38501 placement
+//@ chunk-5s0qaz1x.js:38729-38763 placement
 /**
  * isAttributionNameValid：归属市场名格式合法。
  */
 function isAttributionNameValid(name) {
   return regExp.test(name);
 }
-//@ chunk-f3qhjfah.js:38501-38558 placement
+//@ chunk-5s0qaz1x.js:38763-38820 placement
 var SERVER_PLUGIN_ID_PATTERN = /^plugin_(?:staging_|local_)?[A-Za-z0-9]{1,64}$/;
-//@ chunk-f3qhjfah.js:38558-38593 placement
+//@ chunk-5s0qaz1x.js:38820-38855 placement
 function isServerPluginId(id) {
   return SERVER_PLUGIN_ID_PATTERN.test(id);
 }
-//@ chunk-f3qhjfah.js:38593-38786 placement
+//@ chunk-5s0qaz1x.js:38855-39048 placement
 /**
  * 插件归属 sidecar：un 是侧车文件的 schema（四个可选字段，键来自常量，解析失败按缺省忽略）；dZo 是读取该文件时 4096 字节的上限。
  */
 var PluginAttributionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_ATTRIBUTION_FILE_BYTES;
-deferInit("chunk-f3qhjfah.js:38593", () => {
+deferInit("chunk-5s0qaz1x.js:38855", () => {
   PluginAttributionSchema = DoctorLazy(() =>
     objectSchema({
       [SERVER_PLUGIN_ID]: stringSchema().regex(SERVER_PLUGIN_ID_PATTERN).optional().catch(undefined),
@@ -69,7 +69,7 @@ deferInit("chunk-f3qhjfah.js:38593", () => {
   );
   MAX_ATTRIBUTION_FILE_BYTES = 4096;
 });
-//@ chunk-f3qhjfah.js:38786-39029 placement
+//@ chunk-5s0qaz1x.js:39048-39291 placement
 async function readPluginAttributionSidecar(pluginPath) {
   let sidecarPath = pluginPath + PLUGIN_META_SUFFIX;
   let unread = false;
@@ -93,7 +93,7 @@ async function readPluginAttributionSidecar(pluginPath) {
   }
   return parsePluginAttribution(parsed, `sidecar at ${sidecarPath}`);
 }
-//@ chunk-f3qhjfah.js:39029-39691 placement
+//@ chunk-5s0qaz1x.js:39291-39953 placement
 /**
  * 校验一条插件归属：取合法的 serverPluginId、marketplaceName、installationPreference、marketplaceKind； 存在但非法的字段记调试日志，市场名非法时标记 unread。整体不是对象时返回 {unread:true}。
  */
@@ -130,9 +130,9 @@ function parsePluginAttribution(raw, label) {
   }
   return result;
 }
-//@ chunk-f3qhjfah.js:39691-39704 placement
+//@ chunk-5s0qaz1x.js:39953-39966 placement
 var MAX_ATTRIBUTION_FILE_BYTES_2 = 65536;
-//@ chunk-f3qhjfah.js:39704-39891 placement
+//@ chunk-5s0qaz1x.js:39966-40153 placement
 function getEnvPluginAttribution(pluginKey) {
   let CLAUDE_CODE_PLUGIN_ATTRIBUTION = env.CLAUDE_CODE_PLUGIN_ATTRIBUTION;
   if (CLAUDE_CODE_PLUGIN_ATTRIBUTION === undefined) return;
@@ -143,20 +143,20 @@ function getEnvPluginAttribution(pluginKey) {
     (entry) => parsePluginAttribution(entry, "CLAUDE_CODE_PLUGIN_ATTRIBUTION entry"),
   ).get(normalizeRegistryKey(pluginKey));
 }
-//@ chunk-f3qhjfah.js:39891-39940 placement
+//@ chunk-5s0qaz1x.js:40153-40202 placement
 async function getPluginAttribution(pluginPath) {
   return getEnvPluginAttribution(pluginPath) ?? (await readPluginAttributionSidecar(pluginPath));
 }
 export {
-  getPluginAttribution,
   isServerPluginId,
-  SERVER_PLUGIN_ID,
-  SERVER_PLUGIN_ID_PATTERN,
+  getPluginAttribution,
   PLUGIN_META_SUFFIX,
   isAttributionNameValid,
+  SERVER_PLUGIN_ID,
   MARKETPLACE_NAME,
   INSTALLATION_PREFERENCE,
   MARKETPLACE_KIND,
   MAX_ATTRIBUTION_FILE_BYTES,
   readPluginAttributionSidecar,
+  SERVER_PLUGIN_ID_PATTERN,
 };

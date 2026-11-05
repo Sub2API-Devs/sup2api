@@ -1,22 +1,22 @@
 /**
  * lodash-es/upperFirst.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-s61vbvea.js (17)
+ * pieces: chunk-7jxyna5q.js (17)
  * attribution: placement 17
  */
 import { baseSliceAlias as baseSliceAlias_2 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { toStringExport } from "./toString.js";
 
-//@ chunk-s61vbvea.js:584196-584276 placement
+//@ chunk-7jxyna5q.js:501558-501638 placement
 function baseSlice(array, start, end) {
   var length = array.length;
   end = end === undefined ? length : end;
   return !start && end >= length ? array : baseSliceAlias_2(array, start, end);
 }
-//@ chunk-s61vbvea.js:584276-584286 placement
+//@ chunk-7jxyna5q.js:501638-501648 placement
 var baseSliceAlias = baseSlice;
-//@ chunk-s61vbvea.js:584286-584450 placement
+//@ chunk-7jxyna5q.js:501648-501812 placement
 var rsAstralRange = "\\ud800-\\udfff";
 var rsComboMarksRange = "\\u0300-\\u036f";
 var rsComboSymbolsRange = "\\ufe20-\\ufe2f";
@@ -25,19 +25,19 @@ var rsComboRange = rsComboMarksRange + rsComboSymbolsRange + rsDingbatRange;
 var rsVarRange = "\\ufe0e\\ufe0f";
 var rsZWJ = "\\u200d";
 var reHasUnicode = RegExp("[" + rsZWJ + rsAstralRange + rsComboRange + rsVarRange + "]");
-//@ chunk-s61vbvea.js:584450-584483 placement
+//@ chunk-7jxyna5q.js:501812-501845 placement
 function hasUnicode(string) {
   return reHasUnicode.test(string);
 }
-//@ chunk-s61vbvea.js:584483-584493 placement
+//@ chunk-7jxyna5q.js:501845-501855 placement
 var hasUnicodeAlias = hasUnicode;
-//@ chunk-s61vbvea.js:584493-584527 placement
+//@ chunk-7jxyna5q.js:501855-501889 placement
 function asciiToArray(string) {
   return string.split("");
 }
-//@ chunk-s61vbvea.js:584527-584537 placement
+//@ chunk-7jxyna5q.js:501889-501899 placement
 var asciiToArrayAlias = asciiToArray;
-//@ chunk-s61vbvea.js:584537-585019 placement
+//@ chunk-7jxyna5q.js:501899-502381 placement
 var rsUnicodeAstralRange = "\\ud800-\\udfff";
 var rsUnicodeComboMarksRange = "\\u0300-\\u036f";
 var rsUnicodeComboSymbolsRange = "\\ufe20-\\ufe2f";
@@ -67,19 +67,19 @@ var rsSeq = rsOptVar + rsOptMod + rsOptJoin;
 var rsSymbol =
   "(?:" + [rsNonAstral + rsCombo + "?", rsCombo, rsRegional, rsSurrPair, rsAstral].join("|") + ")";
 var reUnicode = RegExp(rsFitz + "(?=" + rsFitz + ")|" + rsSymbol + rsSeq, "g");
-//@ chunk-s61vbvea.js:585019-585057 placement
+//@ chunk-7jxyna5q.js:502381-502419 placement
 function unicodeToArray(string) {
   return string.match(reUnicode) || [];
 }
-//@ chunk-s61vbvea.js:585057-585067 placement
+//@ chunk-7jxyna5q.js:502419-502429 placement
 var unicodeToArrayAlias = unicodeToArray;
-//@ chunk-s61vbvea.js:585067-585107 placement
+//@ chunk-7jxyna5q.js:502429-502469 placement
 function stringToArray(string) {
   return hasUnicodeAlias(string) ? unicodeToArrayAlias(string) : asciiToArrayAlias(string);
 }
-//@ chunk-s61vbvea.js:585107-585117 placement
+//@ chunk-7jxyna5q.js:502469-502479 placement
 var stringToArrayAlias = stringToArray;
-//@ chunk-s61vbvea.js:585117-585255 placement
+//@ chunk-7jxyna5q.js:502479-502617 placement
 function createCaseFirst(methodName) {
   return function (string) {
     string = toStringExport(string);
@@ -89,15 +89,15 @@ function createCaseFirst(methodName) {
     return chr[methodName]() + trailing;
   };
 }
-//@ chunk-s61vbvea.js:585255-585265 placement
+//@ chunk-7jxyna5q.js:502617-502627 placement
 var createCaseFirstAlias = createCaseFirst;
-//@ chunk-s61vbvea.js:585265-585297 placement
+//@ chunk-7jxyna5q.js:502627-502659 placement
 var upperFirst = createCaseFirstAlias("toUpperCase");
 var upperFirstAlias = upperFirst;
-//@ chunk-s61vbvea.js:585297-585345 placement
+//@ chunk-7jxyna5q.js:502659-502707 placement
 function capitalize(string) {
   return upperFirstAlias(toStringExport(string).toLowerCase());
 }
-//@ chunk-s61vbvea.js:585345-585356 placement
+//@ chunk-7jxyna5q.js:502707-502718 placement
 var capitalizeAlias = capitalize;
 export { capitalizeAlias, upperFirstAlias };

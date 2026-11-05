@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件面板数字快捷键。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 import { uiSignals } from "../../state/uiSignals.js";
@@ -17,7 +17,7 @@ import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { usePreDispatchKeyHandler } from "../../keybindings/useActionHandlers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:475961-476111 placement
+//@ chunk-czq1j3j2.js:502437-502587 placement
 function capturePromptDigits() {
   uiSignals.promptDigitCaptures.setState((state) => ({
     count: state.count + 1,
@@ -28,15 +28,15 @@ function capturePromptDigits() {
     }));
   };
 }
-//@ chunk-18hwfzwa.js:476111-476175 placement
+//@ chunk-czq1j3j2.js:502587-502651 placement
 function hasDigitCaptures() {
   return uiSignals.promptDigitCaptures.getState().count > 0;
 }
-//@ chunk-18hwfzwa.js:476175-476334 placement
+//@ chunk-czq1j3j2.js:502651-502810 placement
 var DIGIT_HOTKEY_DELAY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DIGIT_HOTKEY_HOLD_MS;
 var AZERTY_DIGIT_MAP;
-deferInit("chunk-18hwfzwa.js:476175", () => {
+deferInit("chunk-czq1j3j2.js:502651", () => {
   DIGIT_HOTKEY_DELAY_MS = 400;
   DIGIT_HOTKEY_HOLD_MS = 600;
   AZERTY_DIGIT_MAP = new Map([
@@ -53,11 +53,11 @@ deferInit("chunk-18hwfzwa.js:476175", () => {
     ["\xE0", "0"],
   ]);
 });
-//@ chunk-18hwfzwa.js:476334-476388 placement
+//@ chunk-czq1j3j2.js:502810-502864 placement
 function normalizeDigitKey(inputValue) {
   return AZERTY_DIGIT_MAP.get(inputValue) ?? inputValue.normalize("NFKC");
 }
-//@ chunk-18hwfzwa.js:476388-477875 placement
+//@ chunk-czq1j3j2.js:502864-504351 placement
 function useDigitHotkeys({
   inputValue,
   isValidDigit,

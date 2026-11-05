@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动后台会话
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89ebz077.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6a0t823.js (5)
  * attribution: placement 5
  */
 import { isAbsolute } from "path";
@@ -49,7 +49,7 @@ import {
 } from "../../utils/managedEnvConstants.js";
 import { PROCESS_WRAPPER_ENV } from "../../utils/processWrapper.js";
 
-//@ chunk-89ebz077.js:11865-12726 placement
+//@ chunk-v6a0t823.js:11933-12794 placement
 /**
  * 返回启动 bg-pty-host 进程的函数：用当前二进制带 --bg-pty-host 参数分离启动，stderr 写到 socket 旁的日志；打不开日志文件时丢弃 stderr 并去掉 cgroup 重试；最后连接 pty 宿主。
  */
@@ -113,7 +113,7 @@ function createPtyHostSpawner() {
     });
   };
 }
-//@ chunk-89ebz077.js:12726-13141 placement
+//@ chunk-v6a0t823.js:12794-13209 placement
 /**
  * 计算后台会话启动参数：exec 直接用原参数；重启时按是否有会话记录用 --resume 或 --session-id；resume 模式（可 fork）带 --resume；去掉转发与环境标志。
  */
@@ -136,7 +136,7 @@ function buildSessionLaunchArgs(dispatch, attempt, hasMessages, sessionId, resum
     ]);
   return stripForwardedFlags(stripEnvironmentFlags(dispatch.launch.args));
 }
-//@ chunk-89ebz077.js:13141-15895 placement
+//@ chunk-v6a0t823.js:13209-16042 placement
 function buildBgSessionEnv(dispatch, jobDir, authSnapshotPath, rvSock, auth) {
   let baseEnv = {
     ...process.env,
@@ -156,6 +156,7 @@ function buildBgSessionEnv(dispatch, jobDir, authSnapshotPath, rvSock, auth) {
       CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT: "1",
     }),
     ...dispatch.env,
+    CLAUDE_CODE_HOST_SHORT_TEMP_DIRS: dispatch.env?.CLAUDE_CODE_HOST_SHORT_TEMP_DIRS ?? "0",
     CLAUDE_CODE_SESSION_KIND: "bg",
     CLAUDE_BG_BACKEND: "daemon",
     CLAUDE_BG_SOURCE: dispatch.source,
@@ -272,13 +273,13 @@ function buildBgSessionEnv(dispatch, jobDir, authSnapshotPath, rvSock, auth) {
   applySilentPeersFlag(env);
   return env;
 }
-//@ chunk-89ebz077.js:15895-15998 placement
+//@ chunk-v6a0t823.js:16042-16145 placement
 function syncProcessWrapperEnv(bgSessionEnv, sessionEnv) {
   let wrapperEnv = process.env[PROCESS_WRAPPER_ENV];
   if (sessionEnv.launch.mode === "exec" || wrapperEnv === undefined) delete bgSessionEnv[PROCESS_WRAPPER_ENV];
   else bgSessionEnv[PROCESS_WRAPPER_ENV] = wrapperEnv;
 }
-//@ chunk-89ebz077.js:15998-16227 placement
+//@ chunk-v6a0t823.js:16145-16374 placement
 async function writeAuthSnapshot(short, snapshot) {
   if (!snapshot || getPlatform() !== "macos") return;
   let path = daemonAuthFile(short);

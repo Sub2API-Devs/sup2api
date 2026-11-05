@@ -3,9 +3,9 @@
  *
  * 队友 Spinner 树；本模块大部分是被误归的 viewingAgentTaskId 选择器副本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/TeammateSpinnerTree.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-v517dzda.js (1)
+ * pieces: chunk-czq1j3j2.js (1), chunk-pghf5k6z.js (1)
  * attribution: fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -14,11 +14,11 @@ import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runti
 import { Text } from "../../ink/components/Text.js";
 import { WRITE_NEW_FEEDBACK_LABEL } from "../../commands/feedback/FeedbackQueue.js";
 
-//@ chunk-18hwfzwa.js:120864-120911 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:121865-121912 fingerprint (2.1.88 match: _temp2, 1)
 function selectIsViewingAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
-//@ chunk-v517dzda.js:14478-14680 fingerprint (2.1.88 match: HideRow, 0.818)
+//@ chunk-pghf5k6z.js:14481-14683 fingerprint (2.1.88 match: HideRow, 0.818)
 function HideRow(props) {
   let $ = useMemoCache(3);
   let { isSelected } = props;

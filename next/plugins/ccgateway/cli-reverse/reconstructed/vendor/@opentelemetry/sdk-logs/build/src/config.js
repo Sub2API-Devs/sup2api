@@ -1,16 +1,16 @@
 /**
  * @opentelemetry/sdk-logs/build/src/config.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (3)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_core } from "../../../core/build/src/index.js";
 
-//@ chunk-aepeg2w5.js:653495-653511 esm-layout
+//@ chunk-exfmq47h.js:666101-666117 esm-layout
 var import_core_3 = __toESM(require_core());
-//@ chunk-aepeg2w5.js:653511-653787 esm-fingerprint
+//@ chunk-exfmq47h.js:666117-666393 esm-fingerprint
 function loadDefaultConfig() {
   return {
     forceFlushTimeoutMillis: 30000,
@@ -22,7 +22,7 @@ function loadDefaultConfig() {
     includeTraceContext: true,
   };
 }
-//@ chunk-aepeg2w5.js:653787-654154 esm-fingerprint
+//@ chunk-exfmq47h.js:666393-666760 esm-fingerprint
 function reconfigureLimits(logRecordLimits) {
   return {
     attributeCountLimit:

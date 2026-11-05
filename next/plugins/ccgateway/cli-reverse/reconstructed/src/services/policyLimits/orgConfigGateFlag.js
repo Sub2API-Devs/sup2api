@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。读取组织配置必需开关并决定灰度分桶。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad1qk1kv.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1w8nnvss.js (6)
  * attribution: placement 6
  */
 import { createHash } from "crypto";
@@ -18,7 +18,7 @@ import { TENGU_ORG_CONFIG_REQUIRED } from "./orgConfigRequired.js";
 import { parseRelayFlag } from "../../utils/messageProvenance.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-ad1qk1kv.js:346-423 placement
+//@ chunk-1w8nnvss.js:346-423 placement
 function readOrgConfigRequiredFlagWithSource() {
   let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_ORG_CONFIG_REQUIRED, null);
   return {
@@ -26,7 +26,7 @@ function readOrgConfigRequiredFlagWithSource() {
     source,
   };
 }
-//@ chunk-ad1qk1kv.js:423-570 placement
+//@ chunk-1w8nnvss.js:423-570 placement
 function readOrgConfigRequiredFlag(value) {
   let { flag, problem } = parseRelayFlag(value);
   if (problem !== undefined)
@@ -38,7 +38,7 @@ function readOrgConfigRequiredFlag(value) {
     );
   return flag;
 }
-//@ chunk-ad1qk1kv.js:570-686 placement
+//@ chunk-1w8nnvss.js:570-686 placement
 /**
  * 读取组织配置必需开关并决定灰度分桶。
  */
@@ -57,7 +57,7 @@ async function fetchOrgConfigRequiredFlagServedToBearer(accessToken, identity, t
       }
     : undefined;
 }
-//@ chunk-ad1qk1kv.js:686-774 placement (2.1.88 match: ensureTaskListLockFile, 0.505)
+//@ chunk-1w8nnvss.js:686-774 placement (2.1.88 match: ensureTaskListLockFile, 0.505)
 function orgConfigGateFlagCouldArm(
   readFlag = readOrgConfigRequiredFlagWithSource,
   isCacheEmpty = isGrowthBookCacheEmpty,
@@ -65,12 +65,12 @@ function orgConfigGateFlagCouldArm(
   let { flag, source } = readFlag();
   return flag.enabled || (source === "fallback" && isCacheEmpty());
 }
-//@ chunk-ad1qk1kv.js:774-890 placement
+//@ chunk-1w8nnvss.js:774-890 placement
 function orgConfigGateBucket(identity) {
   let hex = createHash("sha256").update(`org_config_gate:${identity}`).digest("hex");
   return parseInt(hex.slice(0, 8), 16) % 100;
 }
-//@ chunk-ad1qk1kv.js:890-938 placement
+//@ chunk-1w8nnvss.js:890-938 placement
 function inOrgConfigGateRollout(flag, bucket) {
   return flag.enabled && bucket < flag.percent;
 }

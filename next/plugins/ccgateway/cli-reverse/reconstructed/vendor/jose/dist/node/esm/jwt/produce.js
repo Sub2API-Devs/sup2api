@@ -1,15 +1,15 @@
 /**
  * jose/dist/node/esm/jwt/produce.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (1)
+ * pieces: chunk-pd6th42n.js (1)
  * attribution: esm-fingerprint 1
  */
 import { isPlainObject } from "../../../webapi/lib/validate.js";
 import { epoch_2 } from "../../../webapi/lib/jwt_claims_set.js";
 import { parseSecs } from "../lib/secs.js";
 
-//@ chunk-2tyrgda4.js:39526-40328 esm-fingerprint
+//@ chunk-pd6th42n.js:39526-40328 esm-fingerprint
 class ProduceJWT {
   constructor(payload) {
     if (!isPlainObject(payload)) throw TypeError("JWT Claims Set MUST be an object");

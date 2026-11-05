@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：恢复会话时的工作目录与工作树比对（是否同一位置、覆盖判断）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6bye9wca.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v0jacdy4.js (5)
  * attribution: placement 5
  */
 import { identityPath } from "./cwd.js";
@@ -20,12 +20,12 @@ import { findCanonicalGitRoot } from "./git.js";
 import { gitRootsForPath, compareSameContainment } from "./worktreeIsolation.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6bye9wca.js:356-432 placement
+//@ chunk-v0jacdy4.js:389-465 placement
 /**
  * STARTUP_CWD_REALPATH：启动时解析出的 cwd。
  */
 var STARTUP_CWD_REALPATH; // deferred: uses identityPath (./cwd.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6bye9wca.js:356", () => {
+deferInit("chunk-v0jacdy4.js:389", () => {
   STARTUP_CWD_REALPATH = (() => {
     try {
       return identityPath(process.cwd());
@@ -34,7 +34,7 @@ deferInit("chunk-6bye9wca.js:356", () => {
     }
   })();
 });
-//@ chunk-6bye9wca.js:432-545 placement
+//@ chunk-v0jacdy4.js:465-578 placement
 /**
  * 比较两个路径的包含目标（解析失败或一方被跳过视为相同）。
  */
@@ -46,7 +46,7 @@ function isSameRestoreLocation(path, otherPath) {
   if (containmentTarget.skipped !== containmentTarget_2.skipped) return true;
   return isOutsideContainment(containmentTarget, containmentTarget_2);
 }
-//@ chunk-6bye9wca.js:545-725 placement
+//@ chunk-v0jacdy4.js:578-758 placement
 /**
  * 恢复会话时要比对的根目录：规范 git 根或所在工作树，可排除与指定路径相同者。
  */
@@ -64,7 +64,7 @@ function restoreRootsFor(liveLaunchAnchor, worktreePath) {
     ? roots
     : roots.filter((root) => compareSameContainment(root, worktreePath) !== "same");
 }
-//@ chunk-6bye9wca.js:725-865 placement
+//@ chunk-v0jacdy4.js:758-898 placement
 /**
  * 退出工作树时要比对的根目录：规范 git 根或所在工作树，可排除与指定路径相同者。
  */
@@ -79,7 +79,7 @@ function worktreeRootsFor(liveLaunchAnchor, worktreePath) {
     ? roots
     : roots.filter((root) => compareSameContainment(root, worktreePath) !== "same");
 }
-//@ chunk-6bye9wca.js:865-1222 placement
+//@ chunk-v0jacdy4.js:898-1255 placement
 function isCoveredByWorktrees(path, roots, options) {
   if (roots.length === 0) return false;
   if (

@@ -3,15 +3,15 @@
  *
  * 迁移：replBridgeEnabled 改为 remoteControlAtStartup
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateReplBridgeEnabledToRemoteControlAtStartup.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { saveGlobalConfig } from "../utils/config.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-cjydagjy.js:10767-11037 fingerprint (2.1.88 match: migrateReplBridgeEnabledToRemoteControlAtStartup, 0.628)
+//@ chunk-h61dq9nz.js:10944-11214 fingerprint (2.1.88 match: migrateReplBridgeEnabledToRemoteControlAtStartup, 0.626)
 /**
  * 迁移：全局配置 replBridgeEnabled → remoteControlAtStartup。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：保存新的网关凭据（失败时报告原因）；托管设置强制的网关登录 URL 与内网列表等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (11)
  * attribution: placement 11
  */
 import {
@@ -28,7 +28,7 @@ import {
   isMachineAdminDocumentUnreadable,
   getSettingsForSource,
   getHostPolicyLoginPins,
-  getInitialSettings_2,
+  getInitialSettings,
   getSettingsForSourceTightenOnly,
   getMachineAdminDocumentTier,
 } from "../../utils/settings/settings.js";
@@ -42,7 +42,7 @@ import { hasRemoteHelperState } from "../../utils/settings/policyHelper/helperRe
 import { hasPolicyHelperConfig } from "../../utils/settings/policyHelper/helperPayload.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:498909-499423 placement
+//@ chunk-exfmq47h.js:510903-511417 placement
 /**
  * 保存新的网关凭据（失败时报告原因）。
  */
@@ -89,7 +89,7 @@ async function saveGatewayCredential(credential, credentials, allowlistEntry) {
     replacedAllowlistEntry,
   };
 }
-//@ chunk-aepeg2w5.js:499423-499481 placement
+//@ chunk-exfmq47h.js:511417-511475 placement
 /**
  * 等待并取后台进程的认证快照（没有则 undefined）。
  */
@@ -97,19 +97,19 @@ async function consumeBgAuthSnapshot() {
   await waitForBgAuthSnapshot();
   return hasBgAuthSnapshotPending() ? consumeBgAuthSnapshot_2() : undefined;
 }
-//@ chunk-aepeg2w5.js:499481-499519 placement
+//@ chunk-exfmq47h.js:511475-511513 placement
 /**
  * 判断错误码是否为权限被拒（EPERM、EACCES）。
  */
 var isPermissionDeniedCode = (code) => code === "EPERM" || code === "EACCES";
-//@ chunk-aepeg2w5.js:499519-499619 placement
+//@ chunk-exfmq47h.js:511513-511613 placement
 var SECURE_STORAGE_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FALLBACK_STORAGE_RE;
-deferInit("chunk-aepeg2w5.js:499519", () => {
+deferInit("chunk-exfmq47h.js:511513", () => {
   SECURE_STORAGE_KINDS = new Set(["keychain", "plaintext", "windows-credman"]);
   FALLBACK_STORAGE_RE = /^([a-z-]+)-with-([a-z-]+)-fallback$/;
 });
-//@ chunk-aepeg2w5.js:499619-499731 placement
+//@ chunk-exfmq47h.js:511613-511725 placement
 function storageKindForTelemetry_2(name) {
   if (SECURE_STORAGE_KINDS.has(name)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
   let match = FALLBACK_STORAGE_RE.exec(name);
@@ -117,14 +117,14 @@ function storageKindForTelemetry_2(name) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(name)
     : lit("other");
 }
-//@ chunk-aepeg2w5.js:499731-499815 placement
+//@ chunk-exfmq47h.js:511725-511809 placement
 /**
  * 取用户设置里强制网关登录的地址。
  */
 function forcedLoginGatewayUrl(settings) {
   return settings?.forceLoginMethod === "gateway" ? settings.forceLoginGatewayUrl : undefined;
 }
-//@ chunk-aepeg2w5.js:499815-499861 placement
+//@ chunk-exfmq47h.js:511809-511855 placement
 /**
  * 是否受机器管理员策略管理（或文档不可读）。
  */
@@ -133,14 +133,14 @@ function isMachineAdminManaged() {
     getMachineAdminPolicyTier() !== null || isMachineAdminDocumentUnreadable() || hasManagedForceLoginOrg()
   );
 }
-//@ chunk-aepeg2w5.js:499861-499923 placement
+//@ chunk-exfmq47h.js:511855-511916 placement
 /**
  * 托管设置里是否指定 forceLoginOrgUUID 或托管设置无效。
  */
 function hasManagedForceLoginOrg() {
   return getParentManagedSettings()?.forceLoginOrgUUID !== undefined || getParentManagedSettingsInvalid();
 }
-//@ chunk-aepeg2w5.js:499923-500037 placement
+//@ chunk-exfmq47h.js:511916-512030 placement
 /**
  * 读取 userSettings 中的网关配置。
  */
@@ -153,7 +153,7 @@ function getUserSettingsGateway() {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:500037-500313 placement
+//@ chunk-exfmq47h.js:512030-512306 placement
 /**
  * 托管设置强制的网关登录 URL 与内网列表。
  */
@@ -170,14 +170,14 @@ function getForcedGatewayLogin(developerUrl) {
           internalNetworks: gatewayInternalNetworks,
         };
   }
-  let forceLoginMethod = getInitialSettings_2().forceLoginMethod;
+  let forceLoginMethod = getInitialSettings().forceLoginMethod;
   if (developerUrl === undefined || forceLoginMethod === "claudeai" || forceLoginMethod === "console") return;
   return {
     url: developerUrl,
     namedBy: "developer",
   };
 }
-//@ chunk-aepeg2w5.js:500313-500590 placement
+//@ chunk-exfmq47h.js:512306-512584 placement
 function isGatewayLoginRequired(url) {
   {
     let settings = getMachineAdminPolicyTier();
@@ -202,7 +202,7 @@ export {
   isPermissionDeniedCode,
   isGatewayLoginRequired,
   storageKindForTelemetry_2,
+  getForcedGatewayLogin,
   getUserSettingsGateway,
   saveGatewayCredential,
-  getForcedGatewayLogin,
 };

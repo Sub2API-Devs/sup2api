@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：项目钩子沙箱（bwrap/sandbox-exec）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (52)
  * attribution: placement 52
  */
-import { lstat, readFile, realpath, open, mkdtemp, writeFile, unlink, rm as rm_2, rmdir } from "fs/promises";
+import { lstat, readFile, realpath, open, mkdtemp, writeFile, unlink, rm, rmdir } from "fs/promises";
 import { isAbsolute, dirname, basename, join } from "path";
 import { constants } from "fs";
 import { userInfo, tmpdir as tmpdir_2 } from "os";
@@ -39,32 +39,31 @@ import {
 import { secondRootMounts } from "../../wslMounts.js";
 import { getFsImplementation, getPathsForPermissionCheck } from "../../fsOperations.js";
 import { isPathWithinCaseAware, isSameOrUnderPath, isPathUnder as isPathUnder_2 } from "../../pathPrefix.js";
-import { normalizeCaseForComparison } from "../../permissions/filesystem.js";
+import { normalizeCaseForComparison, normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { APPLY_SECCOMP_FD, seccompExecPlan } from "../../sandbox/linuxSandboxExec.js";
 import {
   capabilityArgs,
   processHasBoundingCapability,
   CAP_SETFCAP,
 } from "../../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/linux-sandbox-utils.js";
-import { uniq } from "../../collections.js";
 import { identity as identity_2 } from "../../identity.js";
 import { resolveProgramOnPathInReach } from "../hookCommandResolution.js";
 import { getApplySeccompBinaryPath_2 } from "../../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/generate-seccomp-filter.js";
 import { anyPairMatches } from "../../settings/stickyRoots.js";
 import { weakensSandboxIsolation } from "../../../remote/tools/servedCallLog.js";
-import { permissionRuleValueFromString } from "../../permissions/permissionRuleParser.js";
-import { FILE_READ_TOOL_NAME } from "../../../tools/FileReadTool/constants.js";
+import { parseRuleString } from "../../permissions/permissionRuleParser.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
 import { SETTING_SOURCES } from "../../settings/constants.js";
 import { getSettingsForSourceTightenOnly } from "../../settings/settings.js";
 import { wrapCommandWithSandboxMacOS } from "../../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/macos-sandbox-utils.js";
 import { quote } from "../../../../vendor/@anthropic-ai/sandbox-runtime/dist/utils/shell-quote.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:887497-887526 placement
+//@ chunk-5xgkngpb.js:897971-898000 placement
 var GROUP_WRITE_BIT = 18;
 var STICKY_BIT = 512;
 var NOBODY_UID = 65534;
-//@ chunk-e6aww6q8.js:887526-887665 placement
+//@ chunk-5xgkngpb.js:898000-898139 placement
 function privateDirFingerprint(dirPath, deps) {
   return deps.statNoFollow(dirPath).then(
     (stats) =>
@@ -74,7 +73,7 @@ function privateDirFingerprint(dirPath, deps) {
     () => null,
   );
 }
-//@ chunk-e6aww6q8.js:887665-887884 placement
+//@ chunk-5xgkngpb.js:898139-898358 placement
 function createTmpBaseCheck(deps) {
   return {
     held: async (dirPath) => {
@@ -91,7 +90,7 @@ function createTmpBaseCheck(deps) {
     fingerprint: (dirPath) => privateDirFingerprint(dirPath, deps),
   };
 }
-//@ chunk-e6aww6q8.js:887884-888062 placement
+//@ chunk-5xgkngpb.js:898358-898536 placement
 function defaultTmpBaseCheck() {
   return createTmpBaseCheck({
     uid: process.getuid?.() ?? -1,
@@ -103,11 +102,11 @@ function defaultTmpBaseCheck() {
       ),
   });
 }
-//@ chunk-e6aww6q8.js:888062-888326 placement
-function fallbackTmpBaseCandidates(platform, uid, latchedPreSettingsEnvSnapshot) {
+//@ chunk-5xgkngpb.js:898536-898800 placement
+function fallbackTmpBaseCandidates(hook, uid, latchedPreSettingsEnvSnapshot) {
   let replaced = latchedPreSettingsEnvSnapshot?.TMPDIR?.replace(/\/+$/, "");
   let extraCandidates =
-    platform !== "macos"
+    hook !== "macos"
       ? [
           {
             label: "runtime",
@@ -133,7 +132,7 @@ function fallbackTmpBaseCandidates(platform, uid, latchedPreSettingsEnvSnapshot)
     ...extraCandidates,
   ];
 }
-//@ chunk-e6aww6q8.js:888326-888944 placement
+//@ chunk-5xgkngpb.js:898800-899418 placement
 /**
  * 检查备用临时目录各级父目录的属主与链接情况，确认可安全作为沙箱临时根。
  */
@@ -179,7 +178,7 @@ async function vetFallbackTmpBases(candidates, fs) {
     } catch {}
   return verified;
 }
-//@ chunk-e6aww6q8.js:888944-889185 placement
+//@ chunk-5xgkngpb.js:899418-899659 placement
 function sandboxProbeDepsForUid(uid) {
   return {
     uid,
@@ -202,7 +201,7 @@ function sandboxProbeDepsForUid(uid) {
       ).code === 0,
   };
 }
-//@ chunk-e6aww6q8.js:889185-889235 placement
+//@ chunk-5xgkngpb.js:899659-899709 placement
 function canApplyBackend() {
   try {
     getDefaultWritePaths();
@@ -211,7 +210,7 @@ function canApplyBackend() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:889235-889350 placement
+//@ chunk-5xgkngpb.js:899709-899824 placement
 async function getFallbackTmpBases(canApply = canApplyBackend) {
   let uid = process.getuid?.();
   if (uid === undefined || !canApply()) return [];
@@ -220,7 +219,7 @@ async function getFallbackTmpBases(canApply = canApplyBackend) {
     sandboxProbeDepsForUid(uid),
   );
 }
-//@ chunk-e6aww6q8.js:889350-889740 placement
+//@ chunk-5xgkngpb.js:899824-900214 placement
 /**
  * 校验固定的脚本：真实路径未变、内容摘要一致，否则返回原因。
  */
@@ -265,13 +264,13 @@ async function verifyPinnedScript(pinned, deps) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:889740-889881 placement
+//@ chunk-5xgkngpb.js:900214-900355 placement
 var CLAUDE_DEVICE_HOOKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEVICE_HOOK_STAGING_PREFIX;
 var EXECUTE_PROBE_DIRNAME;
 var buffer_3;
 var RESOURCE_EXHAUSTION_ERRNOS;
-deferInit("chunk-e6aww6q8.js:889740", () => {
+deferInit("chunk-5xgkngpb.js:900214", () => {
   CLAUDE_DEVICE_HOOKS = "claude-device-hooks-";
   DEVICE_HOOK_STAGING_PREFIX = "run+";
   EXECUTE_PROBE_DIRNAME = "execute+probe";
@@ -280,16 +279,16 @@ exit 0
 `);
   RESOURCE_EXHAUSTION_ERRNOS = new Set(["EMFILE", "ENFILE", "ENOMEM"]);
 });
-//@ chunk-e6aww6q8.js:889881-889922 placement
+//@ chunk-5xgkngpb.js:900355-900396 placement
 function isResourceExhaustionErrno(error) {
   return RESOURCE_EXHAUSTION_ERRNOS.has(getErrnoCode(error) ?? "");
 }
-//@ chunk-e6aww6q8.js:889922-890025 placement
+//@ chunk-5xgkngpb.js:900396-900499 placement
 function safeScriptFileName(scriptPath) {
   let replaced = basename(scriptPath).replace(/[^A-Za-z0-9._-]/g, "_");
   return replaced === "" || replaced === "." || replaced === ".." ? "hook" : replaced;
 }
-//@ chunk-e6aww6q8.js:890025-894397 placement
+//@ chunk-5xgkngpb.js:900499-904881 placement
 /**
  * 暂存设备钩子：把校验过的钩子副本放到只有本人可写的目录。
  */
@@ -546,7 +545,7 @@ function stageDeviceHooks(deps, sessionDirs) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:894397-894619 placement
+//@ chunk-5xgkngpb.js:904881-905103 placement
 function replaceCommandProgram(invocation, site, program) {
   switch (site.form) {
     case "shell":
@@ -569,7 +568,7 @@ function replaceCommandProgram(invocation, site, program) {
           };
   }
 }
-//@ chunk-e6aww6q8.js:894619-894733 placement
+//@ chunk-5xgkngpb.js:905103-905217 placement
 function scriptFileReaderDeps() {
   return {
     realpath,
@@ -578,7 +577,7 @@ function scriptFileReaderDeps() {
     lstat,
   };
 }
-//@ chunk-e6aww6q8.js:894733-894945 placement
+//@ chunk-5xgkngpb.js:905217-905429 placement
 function stagingFsDeps() {
   return {
     tmpBase: tmpdir,
@@ -593,14 +592,14 @@ function stagingFsDeps() {
       }),
     unlink,
     rm: (targetPath) =>
-      rm_2(targetPath, {
+      rm(targetPath, {
         recursive: true,
         force: true,
       }),
     rmdir,
   };
 }
-//@ chunk-e6aww6q8.js:894945-895131 placement
+//@ chunk-5xgkngpb.js:905429-905615 placement
 /**
  * 判断 tengu_violin_overstand 开关是否显式开启（非 override 来源）。
  */
@@ -620,9 +619,9 @@ function isViolinOverstandOn() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:895131-895158 placement
+//@ chunk-5xgkngpb.js:905615-905642 placement
 var TENGU_VIOLIN_PEG = "tengu_violin_peg";
-//@ chunk-e6aww6q8.js:895158-895215 placement
+//@ chunk-5xgkngpb.js:905642-905699 placement
 /**
  * 判断 tengu_violin_peg 开关是否开启（依赖 violin 总开关）。
  */
@@ -633,9 +632,9 @@ function isViolinPegOn() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:895256-895284 placement
+//@ chunk-5xgkngpb.js:905740-905768 placement
 var TENGU_VIOLIN_HEEL = "tengu_violin_heel";
-//@ chunk-e6aww6q8.js:895284-895388 placement
+//@ chunk-5xgkngpb.js:905768-905872 placement
 function isLinuxHookSandboxEnabled() {
   try {
     let { value: featureValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -647,9 +646,9 @@ function isLinuxHookSandboxEnabled() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:895388-895418 placement
+//@ chunk-5xgkngpb.js:905872-905902 placement
 var TENGU_VIOLIN_SADDLE = "tengu_violin_saddle";
-//@ chunk-e6aww6q8.js:895418-895522 placement
+//@ chunk-5xgkngpb.js:905902-906006 placement
 function isPersonSandboxHookEnabled() {
   try {
     let { value: featureValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -661,14 +660,14 @@ function isPersonSandboxHookEnabled() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:895552-895591 placement
+//@ chunk-5xgkngpb.js:906036-906075 placement
 /**
  * 严格模式的 realpath 缓存（出错不记录）。
  */
 function strictRealpathCache() {
   return createRealpathCache_2(cautiousPathDeps(() => {}));
 }
-//@ chunk-e6aww6q8.js:895591-895660 placement
+//@ chunk-5xgkngpb.js:906075-906144 placement
 function cautiousPathCache() {
   let vouched = true;
   return {
@@ -680,7 +679,7 @@ function cautiousPathCache() {
     vouched,
   };
 }
-//@ chunk-e6aww6q8.js:895660-895802 placement
+//@ chunk-5xgkngpb.js:906144-906286 placement
 /**
  * 判断严格沙箱是否已完整配置（文件系统策略为 strict 且无放行目录）。
  */
@@ -695,7 +694,7 @@ function isStrictSandboxFullyConfigured() {
     return false;
   return cautiousPathCache().vouched;
 }
-//@ chunk-e6aww6q8.js:895802-896296 placement
+//@ chunk-5xgkngpb.js:906286-906780 placement
 /**
  * 构造只在文件存在时返回真实路径的辅助对象，遇到团队目录内错误时忽略。
  */
@@ -740,12 +739,12 @@ function cautiousPathDeps(onUnexpectedError) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:896296-896358 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-5xgkngpb.js:906780-906842 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isRealPathWithinTeamDir(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-e6aww6q8.js:896517-896933 placement
+//@ chunk-5xgkngpb.js:907001-907417 placement
 /**
  * 沙箱使用的 shell 及默认可读的系统目录列表。
  */
@@ -753,7 +752,7 @@ var SANDBOX_SHELL; // deferred: has load-time effects after a deferred statement
 var SYSTEM_READONLY_PATHS;
 var SYSTEM_REAL_PREFIXES;
 var MIN_BWRAP_VERSION;
-deferInit("chunk-e6aww6q8.js:896517", () => {
+deferInit("chunk-5xgkngpb.js:907001", () => {
   SANDBOX_SHELL = "/bin/sh";
   SYSTEM_READONLY_PATHS = [
     ...["/usr", "/usr/local"].flatMap((prefix) =>
@@ -779,12 +778,12 @@ deferInit("chunk-e6aww6q8.js:896517", () => {
   SYSTEM_REAL_PREFIXES = ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"];
   MIN_BWRAP_VERSION = "0.10.0";
 });
-//@ chunk-e6aww6q8.js:896933-897052 placement
+//@ chunk-5xgkngpb.js:907417-907536 placement
 function parseVersionNumber(versionText) {
   let match = /(\d+)\.(\d+)\.(\d+)/.exec(versionText);
   return match === null ? -1 : Number(match[1]) * 1e6 + Number(match[2]) * 1000 + Number(match[3]);
 }
-//@ chunk-e6aww6q8.js:897052-897131 placement
+//@ chunk-5xgkngpb.js:907536-907615 placement
 /**
  * 归一化大小写与 NFKC 后判断两路径是否相同或包含。
  */
@@ -795,14 +794,14 @@ function isPathWithinNormalizedCase(pathA, pathB) {
     false,
   );
 }
-//@ chunk-e6aww6q8.js:897131-897355 placement
+//@ chunk-5xgkngpb.js:907615-907839 placement
 var SECCOMP_HELPER_PATH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FIRST_ROOT_FD;
 var MAX_INHERITED_FD;
 var MAX_SANDBOX_ROOTS;
 var OOM_SCORE_ADJ_PREFIX;
 var CLOSE_INHERITED_FDS_COMMAND;
-deferInit("chunk-e6aww6q8.js:897131", () => {
+deferInit("chunk-5xgkngpb.js:907615", () => {
   SECCOMP_HELPER_PATH = "/run/claude-hook/apply-seccomp";
   FIRST_ROOT_FD = APPLY_SECCOMP_FD + 1;
   MAX_INHERITED_FD = 9;
@@ -815,7 +814,7 @@ deferInit("chunk-e6aww6q8.js:897131", () => {
     (ignored, index) => `${APPLY_SECCOMP_FD + index}<&-`,
   ).join(" ")} || exit 126; `;
 });
-//@ chunk-e6aww6q8.js:897355-897503 placement
+//@ chunk-5xgkngpb.js:907839-907987 placement
 function sandboxRootFdBindings(options) {
   return [
     ...options.roots.map((root) => ({
@@ -831,7 +830,7 @@ function sandboxRootFdBindings(options) {
     fd: FIRST_ROOT_FD + index,
   }));
 }
-//@ chunk-e6aww6q8.js:897503-898148 placement
+//@ chunk-5xgkngpb.js:907987-908632 placement
 /**
  * 为沙箱化的钩子构造 bwrap 参数（新会话、独立命名空间等）。
  */
@@ -868,7 +867,7 @@ function buildBwrapArgs(options, capabilityArgs) {
     options.cwd,
   ];
 }
-//@ chunk-e6aww6q8.js:898148-898657 placement
+//@ chunk-5xgkngpb.js:908632-909141 placement
 /**
  * 生成在 bubblewrap 中运行项目钩子的 shell 命令：调整 oom_score_adj，用文件描述符只读绑定各根目录（校验 fd 指向的真实路径）并可写绑定私有 tmp，关闭继承的 fd，经 seccomp 辅助程序执行 /bin/sh -c。
  */
@@ -894,7 +893,7 @@ function buildBwrapHookCommand(hookCommand, options) {
     ? `${OOM_SCORE_ADJ_PREFIX}${joined}exec ${shellQuoteArgs([options.bwrap, ...bwrapArgs, "--", SECCOMP_HELPER_PATH, ...shellArgs])}`
     : `${OOM_SCORE_ADJ_PREFIX}${fdCommand(APPLY_SECCOMP_FD, `/proc/${process.pid}/exe`)}${joined}exec ${shellQuoteArgs([options.bwrap, ...bwrapArgs, "--", `/proc/self/fd/${APPLY_SECCOMP_FD}`, ...shellArgs])}`;
 }
-//@ chunk-e6aww6q8.js:898657-899158 placement
+//@ chunk-5xgkngpb.js:909141-909641 placement
 /**
  * 解析沙箱可达目录与可读目录的真实路径，检查可读目录是否在可达范围内。
  */
@@ -903,7 +902,7 @@ async function resolveSandboxRoots(plan) {
     realpath(readableDir).catch(() => {
       return;
     });
-  let reachPaths = uniq([
+  let reachPaths = normalizeCaseForComparison_2([
     ...plan.reach,
     ...(await Promise.all(plan.reach.map(realpathIfExists))).flatMap((realPath) =>
       realPath === undefined ? [] : [realPath],
@@ -917,7 +916,10 @@ async function resolveSandboxRoots(plan) {
       return {
         unavailable: "root_outside_reach",
       };
-    spellingsByReal.set(realPath, uniq([...(spellingsByReal.get(realPath) ?? []), readableDir]));
+    spellingsByReal.set(
+      realPath,
+      normalizeCaseForComparison_2([...(spellingsByReal.get(realPath) ?? []), readableDir]),
+    );
   }
   let realRoots = [...spellingsByReal.keys()];
   let mapped = realRoots
@@ -932,13 +934,13 @@ async function resolveSandboxRoots(plan) {
       }
     : mapped;
 }
-//@ chunk-e6aww6q8.js:899158-899492 placement
+//@ chunk-5xgkngpb.js:909641-909975 placement
 /**
  * 检查沙箱视图是否会泄露：家目录在只读视图内（或视图包含家目录）返回 home_in_view，凭据路径在视图内返回 credentials_in_view。
  */
 function sandboxViewLeak(plan) {
   let flattened = plan.roots.flatMap((root) => [root.real, ...root.alsoAt]);
-  let visiblePaths = uniq([
+  let visiblePaths = normalizeCaseForComparison_2([
     ...SYSTEM_READONLY_PATHS,
     ...plan.system.flatMap((viewPath) => [viewPath.real, viewPath.at]),
   ]);
@@ -962,7 +964,7 @@ function sandboxViewLeak(plan) {
     return "credentials_in_view";
   return;
 }
-//@ chunk-e6aww6q8.js:899492-900045 placement
+//@ chunk-5xgkngpb.js:909975-910527 placement
 /**
  * 解析系统视图候选路径的真实路径。
  */
@@ -977,13 +979,13 @@ async function resolveSystemViewPaths(options) {
       real: await realpathIfExists(candidate),
     })),
   );
-  let reachPaths = uniq([
+  let reachPaths = normalizeCaseForComparison_2([
     ...options.reach,
     ...(await Promise.all(options.reach.map(realpathIfExists))).flatMap((realPath) =>
       realPath === undefined ? [] : [realPath],
     ),
   ]);
-  let visiblePaths = uniq([
+  let visiblePaths = normalizeCaseForComparison_2([
     ...options.realPrefixes,
     ...results.flatMap(({ at, real }) => (real === undefined ? [at] : [at, real])),
   ]);
@@ -1014,18 +1016,18 @@ async function resolveSystemViewPaths(options) {
       : [],
   );
 }
-//@ chunk-e6aww6q8.js:900045-900110 placement
+//@ chunk-5xgkngpb.js:910527-910592 placement
 var PROBE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FAILED_PROBE_TTL_MS;
 var PASSED_PROBE_TTL_MS;
 var sandboxProbeCache;
-deferInit("chunk-e6aww6q8.js:900045", () => {
+deferInit("chunk-5xgkngpb.js:910527", () => {
   PROBE_TIMEOUT_MS = 5000;
   FAILED_PROBE_TTL_MS = 60000;
   PASSED_PROBE_TTL_MS = 600000;
   sandboxProbeCache = identity_2(new Map(), (cache) => cache.clear());
 });
-//@ chunk-e6aww6q8.js:900110-901245 placement
+//@ chunk-5xgkngpb.js:910592-911730 placement
 /**
  * 检查当前环境能否为钩子提供沙箱（bwrap、seccomp 等）。
  */
@@ -1034,8 +1036,8 @@ async function checkHookSandboxAvailable(plan) {
   try {
     homedir = userInfo().homedir;
   } catch {}
-  let homeSpellings = uniq([plan.home, homedir].filter((home) => home !== ""));
-  let homes = uniq([
+  let homeSpellings = normalizeCaseForComparison_2([plan.home, homedir].filter((home) => home !== ""));
+  let homes = normalizeCaseForComparison_2([
     ...homeSpellings,
     ...(await Promise.all(homeSpellings.map((home) => realpath(home).catch(() => home)))),
   ]);
@@ -1125,7 +1127,7 @@ async function checkHookSandboxAvailable(plan) {
         unavailable: outcome,
       };
 }
-//@ chunk-e6aww6q8.js:901245-902278 placement
+//@ chunk-5xgkngpb.js:911730-912763 placement
 /**
  * 探测 bubblewrap 版本，过旧时不在沙箱中运行项目钩子。
  */
@@ -1183,17 +1185,17 @@ async function probeBubblewrapVersion(options) {
     return "bubblewrap_failed";
   } finally {
     if (probeDir !== undefined)
-      await rm_2(probeDir, {
+      await rm(probeDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:902278-902382 placement
+//@ chunk-5xgkngpb.js:912763-912867 placement
 var SANDBOX_EXEC_PROFILE_PREFIX = `(version 1)
 (deny default (with message "`;
 var SHELL_TOKEN_RE = /[A-Za-z0-9_./:=@+,-]+|'[^']*'(?:"'"'[^']*')*/g;
-//@ chunk-e6aww6q8.js:902382-903056 placement
+//@ chunk-5xgkngpb.js:912867-913541 placement
 /**
  * 判断项目钩子能否在沙箱中运行及使用哪种模式：平台不支持、个人沙箱开启但开关未开、存在 unix socket 授权或弱化配置、个人读规则等情况返回 unavailable 原因，否则返回 linux/person/locked 模式。
  */
@@ -1238,15 +1240,14 @@ function resolveHookSandboxMode(readRules) {
     mode,
   };
 }
-//@ chunk-e6aww6q8.js:903056-903081 placement
+//@ chunk-5xgkngpb.js:913541-913566 placement
 var HOSTCREDENTIAL = "hostCredential";
-//@ chunk-e6aww6q8.js:903081-903463 placement
+//@ chunk-5xgkngpb.js:913566-913948 placement
 /**
  * 判断个人权限设置是否限制了读取（阻止工作目录外读取或有 Read 的拒绝/询问规则）。
  */
 function hasPersonalReadRestrictions(readRules) {
-  let isFileReadRule = (ruleString) =>
-    permissionRuleValueFromString(ruleString).toolName === FILE_READ_TOOL_NAME;
+  let isFileReadRule = (ruleString) => parseRuleString(ruleString).toolName === READ;
   return (
     readRules.blockReadsOutsideWorkingDirectories === true ||
     [readRules.alwaysDenyRules, readRules.alwaysAskRules].some((rules) =>
@@ -1263,7 +1264,7 @@ function hasPersonalReadRestrictions(readRules) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:903463-904086 placement
+//@ chunk-5xgkngpb.js:913948-914571 placement
 /**
  * 钩子沙箱中只读保护的宿主系统路径（/etc、/Library/*、/usr/local/etc 等）与允许读的设备节点。
  */
@@ -1310,10 +1311,10 @@ var SANDBOX_DEVICE_PATHS = [
   "/dev/dtracehelper",
   "/dev/autofs_nowait",
 ];
-//@ chunk-e6aww6q8.js:904086-904707 placement
+//@ chunk-5xgkngpb.js:914571-915192 placement
 async function buildHookSandboxDevices(options) {
   let withRealpaths = async (paths) =>
-    uniq(
+    normalizeCaseForComparison_2(
       (await Promise.all(paths.map(async (path) => [path, await realpath(path).catch(() => path)]))).flat(),
     );
   return {
@@ -1341,7 +1342,7 @@ async function buildHookSandboxDevices(options) {
         ...(SandboxManager.getConfig()?.filesystem?.denyRead ?? []),
         ...strictRealpathCache(),
       ]),
-      allowRead: uniq([
+      allowRead: normalizeCaseForComparison_2([
         ...(await withRealpaths(SANDBOX_READONLY_SYSTEM_PATHS)),
         ...SANDBOX_DEVICE_PATHS,
         ...options.projectRoots,
@@ -1354,7 +1355,7 @@ async function buildHookSandboxDevices(options) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:904707-904939 placement
+//@ chunk-5xgkngpb.js:915192-915424 placement
 function buildSandboxedHookEnv(options) {
   let env = {
     PATH: options.pathValue,
@@ -1367,7 +1368,7 @@ function buildSandboxedHookEnv(options) {
     if (value !== undefined && (key === "LANG" || key.startsWith("LC_"))) env[key] = value;
   return env;
 }
-//@ chunk-e6aww6q8.js:904939-906087 placement
+//@ chunk-5xgkngpb.js:915424-916572 placement
 /**
  * 把项目钩子包进沙箱运行，并在结束后清理。
  */
@@ -1448,7 +1449,7 @@ async function wrapProjectHookInSandbox(command, config, signal, readRules, opti
   }
   return wrapped;
 }
-//@ chunk-e6aww6q8.js:906087-906310 placement
+//@ chunk-5xgkngpb.js:916572-916795 placement
 function wrapLinuxHookCommand(command, options, readRules) {
   try {
     let hookSandboxMode = resolveHookSandboxMode(readRules);
@@ -1464,7 +1465,7 @@ function wrapLinuxHookCommand(command, options, readRules) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:906310-906616 placement
+//@ chunk-5xgkngpb.js:916795-917101 placement
 /**
  * 判断命令是否为预期形式的沙箱执行命令（跳过 -u 与环境变量赋值）。
  */
@@ -1492,20 +1493,20 @@ function isExpectedSandboxExecCommand(wrappedCommand, hookCommand) {
   );
 }
 export {
-  strictRealpathCache,
   scriptFileReaderDeps,
+  replaceCommandProgram,
+  verifyPinnedScript,
+  stageDeviceHooks,
+  stagingFsDeps,
   isViolinPegOn,
   isViolinOverstandOn,
   resolveHookSandboxMode,
   checkHookSandboxAvailable,
   isPathWithinNormalizedCase,
-  replaceCommandProgram,
   buildHookSandboxDevices,
   buildSandboxedHookEnv,
   wrapLinuxHookCommand,
   wrapProjectHookInSandbox,
-  verifyPinnedScript,
-  stageDeviceHooks,
-  stagingFsDeps,
   isStrictSandboxFullyConfigured,
+  strictRealpathCache,
 };

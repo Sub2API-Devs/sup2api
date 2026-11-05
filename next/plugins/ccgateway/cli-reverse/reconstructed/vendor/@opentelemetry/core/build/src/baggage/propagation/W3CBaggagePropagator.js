@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/core/build/src/baggage/propagation/W3CBaggagePropagator.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/core@2.7.1
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_suppress_tracing } from "../../trace/suppress-tracing.js";
 import { require_constants_2 } from "../constants.js";
 import { require_utils } from "../utils.js";
 
-//@ chunk-bwbq4xvm.js:55712-56619 cjs-fingerprint
+//@ chunk-7kayq7nc.js:55798-56705 cjs-fingerprint
 var require_W3CBaggagePropagator = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

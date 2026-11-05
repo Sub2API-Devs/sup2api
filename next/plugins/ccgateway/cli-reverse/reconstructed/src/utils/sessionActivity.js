@@ -3,10 +3,10 @@
  *
  * 会话活动计数、保活心跳与空闲计时。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionActivity.ts
- * pieces: chunk-frha7zp8.js (26), chunk-z4g2ta8k.js (3)
- * attribution: sole-consumer 5, affinity 2, fingerprint 4, layout 13, placement 4, shared-adjacent 1
+ * pieces: chunk-1kk50rk6.js (3), chunk-eknyxrgq.js (28)
+ * attribution: affinity 2, fingerprint 4, shared-adjacent 1, sole-consumer 5, layout 15, placement 4
  */
 import { createSignal } from "./signal.js";
 import { HostScoped } from "./hostScoped.js";
@@ -18,9 +18,9 @@ import { getRemoteFeatureGateState, needsGrowthBookRefresh } from "./permissions
 import { stopNoticeWasSent } from "../tools/AgentTool/backgroundGates.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-frha7zp8.js:407-419 sole-consumer
+//@ chunk-eknyxrgq.js:407-419 sole-consumer
 var IDLE_TIMEOUT_MS = 30000;
-//@ chunk-frha7zp8.js:419-629 sole-consumer
+//@ chunk-eknyxrgq.js:419-629 sole-consumer
 /**
  * 会话活动状态初始值（引用计数、等待用户数、心跳与空闲计时器）。
  */
@@ -38,10 +38,10 @@ function createActivityState() {
     cleanupHandle: null,
   };
 }
-//@ chunk-frha7zp8.js:629-648 sole-consumer (2.1.88 match: getClientSurface, 0.78)
+//@ chunk-eknyxrgq.js:629-648 sole-consumer (2.1.88 match: getClientSurface, 0.779)
 var SESSION_ACTIVITY_KEY = "cli";
 var SESSION_ACTIVITY_TICK_MS = 1000;
-//@ chunk-frha7zp8.js:648-1703 sole-consumer
+//@ chunk-eknyxrgq.js:648-1747 sole-consumer
 /**
  * 按活动键保存会话活动状态（淘汰时清理计时器）。
  */
@@ -50,6 +50,7 @@ class SessionActivityRegistry {
   mainLoopActivityListener = null;
   nestedChainDropListener = null;
   workStarted = createSignal();
+  processSlept = createSignal();
   statesByKey = new Map();
   evictedKeys = new Set();
   setActivityKey(activityKey) {
@@ -81,6 +82,7 @@ class SessionActivityRegistry {
     this.mainLoopActivityListener = null;
     this.nestedChainDropListener = null;
     this.workStarted.clear();
+    this.processSlept.clear();
   }
   evictKey(key) {
     this.evictedKeys.add(key);
@@ -96,16 +98,16 @@ class SessionActivityRegistry {
     this.statesByKey.delete(key);
   }
 }
-//@ chunk-frha7zp8.js:1703-1726 sole-consumer
+//@ chunk-eknyxrgq.js:1747-1770 sole-consumer
 var sessionActivityRegistry; // deferred: uses SessionActivityRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-frha7zp8.js:1703", () => {
+deferInit("chunk-eknyxrgq.js:1747", () => {
   sessionActivityRegistry = new HostScoped(() => new SessionActivityRegistry());
 });
-//@ chunk-frha7zp8.js:1726-1761 affinity
+//@ chunk-eknyxrgq.js:1770-1805 affinity
 function getSessionActivityState() {
   return sessionActivityRegistry.of(getRootSession().host);
 }
-//@ chunk-frha7zp8.js:1761-2142 fingerprint (2.1.88 match: startHeartbeatTimer, 0.498)
+//@ chunk-eknyxrgq.js:1805-2186 fingerprint (2.1.88 match: startHeartbeatTimer, 0.498)
 /**
  * 活动期间定时发送会话保活心跳。
  */
@@ -131,7 +133,7 @@ function startHeartbeatTimer(state) {
     state,
   );
 }
-//@ chunk-frha7zp8.js:2142-2278 fingerprint (2.1.88 match: startIdleTimer, 0.764)
+//@ chunk-eknyxrgq.js:2186-2322 fingerprint (2.1.88 match: startIdleTimer, 0.764)
 /**
  * 活动结束 30 秒后记录 session_idle_30s。
  */
@@ -147,14 +149,14 @@ function startIdleTimer(state) {
     state,
   );
 }
-//@ chunk-frha7zp8.js:2278-2357 layout
+//@ chunk-eknyxrgq.js:2322-2401 layout
 function clearIdleTimer(state) {
   if (state.idleTimer !== null) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
   }
 }
-//@ chunk-frha7zp8.js:2357-2486 layout
+//@ chunk-eknyxrgq.js:2401-2530 layout
 /**
  * 设置活动回调；有活动时启动心跳。
  */
@@ -164,7 +166,7 @@ function setActivityCallback(activityCallback) {
   state.activityCallback = activityCallback;
   if (state.refcount > 0 && state.heartbeatTimer === null) startHeartbeatTimer(state);
 }
-//@ chunk-frha7zp8.js:2486-2655 layout
+//@ chunk-eknyxrgq.js:2530-2699 layout
 /**
  * 清除活动回调并停止心跳与空闲计时。
  */
@@ -178,7 +180,7 @@ function clearActivityCallback() {
   }
   clearIdleTimer(state);
 }
-//@ chunk-frha7zp8.js:2655-2767 layout
+//@ chunk-eknyxrgq.js:2699-2811 layout
 /**
  * 开启远程保活时立即触发一次活动回调。
  */
@@ -186,54 +188,62 @@ function sendKeepaliveNow() {
   let state = getSessionActivityState().currentStateOrNull();
   if (state && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) state.activityCallback?.();
 }
-//@ chunk-frha7zp8.js:2767-2846 layout
+//@ chunk-eknyxrgq.js:2811-2890 layout
 function activityCallbackActive() {
   return (getSessionActivityState().currentStateOrNull()?.activityCallback ?? null) !== null;
 }
-//@ chunk-frha7zp8.js:2846-2893 layout
+//@ chunk-eknyxrgq.js:2890-2937 layout
 /**
  * setMainLoopActivityListener：设置主循环活动监听。
  */
 function setMainLoopActivityListener(mainLoopActivityListener) {
   getSessionActivityState().mainLoopActivityListener = mainLoopActivityListener;
 }
-//@ chunk-frha7zp8.js:2893-2939 layout
+//@ chunk-eknyxrgq.js:2937-2983 layout
 /**
  * setNestedChainDropListener：设置嵌套链丢弃监听。
  */
 function setNestedChainDropListener(nestedChainDropListener) {
   getSessionActivityState().nestedChainDropListener = nestedChainDropListener;
 }
-//@ chunk-frha7zp8.js:2939-2988 layout
+//@ chunk-eknyxrgq.js:2983-3032 layout
 /**
  * notifyNestedChainDropped：通知嵌套链被丢弃。
  */
 function notifyNestedChainDropped(taskId) {
   getSessionActivityState().nestedChainDropListener?.(taskId);
 }
-//@ chunk-frha7zp8.js:2988-3064 layout
+//@ chunk-eknyxrgq.js:3032-3108 layout
 function isActivityReasonActive(reason) {
   return (getSessionActivityState().currentStateOrNull()?.activeReasons.get(reason) ?? 0) > 0;
 }
-//@ chunk-frha7zp8.js:3064-3158 layout
+//@ chunk-eknyxrgq.js:3108-3202 layout
 function hasActiveWork() {
   for (let state of getSessionActivityState().statesByKey.values())
     if (state.refcount > 0 && !isParkedOnUser(state)) return true;
   return false;
 }
-//@ chunk-frha7zp8.js:3158-3210 layout
+//@ chunk-eknyxrgq.js:3202-3254 layout
 function onWorkStarted(listener) {
   return getSessionActivityState().workStarted.subscribe(listener);
 }
-//@ chunk-frha7zp8.js:3210-3278 layout
+//@ chunk-eknyxrgq.js:3254-3307 layout
+function onProcessSlept(handler) {
+  return getSessionActivityState().processSlept.subscribe(handler);
+}
+//@ chunk-eknyxrgq.js:3307-3348 layout
+function emitProcessSlept(event) {
+  getSessionActivityState().processSlept.emit(event);
+}
+//@ chunk-eknyxrgq.js:3348-3416 layout
 function getMainLoopRefcount() {
   return getSessionActivityState().currentStateOrNull()?.mainLoopRefcount ?? 0;
 }
-//@ chunk-frha7zp8.js:3278-3315 layout
+//@ chunk-eknyxrgq.js:3416-3453 layout
 function isSessionActive() {
   return getMainQueryRunning() || getMainLoopRefcount() > 0;
 }
-//@ chunk-frha7zp8.js:3315-4008 fingerprint (2.1.88 match: startSessionActivity, 0.504)
+//@ chunk-eknyxrgq.js:3453-4146 fingerprint (2.1.88 match: startSessionActivity, 0.503)
 /**
  * 开始会话活动计数，驱动心跳与空闲计时（session_activity_at_shutdown）。
  */
@@ -267,7 +277,7 @@ function startSessionActivity(reason, owner) {
     });
   }
 }
-//@ chunk-frha7zp8.js:4008-4611 placement
+//@ chunk-eknyxrgq.js:4146-4749 placement
 /**
  * 结束一次活动（减引用计数，归零时停止心跳并开始空闲计时）。
  */
@@ -302,7 +312,7 @@ function endActivity(reason, owner) {
     }
   }
 }
-//@ chunk-frha7zp8.js:4611-5075 placement
+//@ chunk-eknyxrgq.js:4749-5213 placement
 /**
  * 标记正在等待用户（不计入活跃工作），返回释放函数。
  */
@@ -330,7 +340,7 @@ function parkOnUser() {
     }
   };
 }
-//@ chunk-frha7zp8.js:5075-5143 placement
+//@ chunk-eknyxrgq.js:5213-5281 placement
 /**
  * currentActivityState：当前活动状态。
  */
@@ -338,7 +348,7 @@ function currentActivityState() {
   let state = getSessionActivityState().currentStateOrNull();
   return state !== null && isParkedOnUser(state);
 }
-//@ chunk-frha7zp8.js:5143-5253 placement
+//@ chunk-eknyxrgq.js:5281-5391 placement
 /**
  * 全部活动都在等待用户。
  */
@@ -349,9 +359,9 @@ function isParkedOnUser(state) {
     state.refcount - state.parkedOnUser <= 0
   );
 }
-//@ chunk-z4g2ta8k.js:42463-42497 affinity
+//@ chunk-1kk50rk6.js:45367-45401 affinity
 var TENGU_ENCAPSULATED_HONEY = "tengu_encapsulated_honey";
-//@ chunk-z4g2ta8k.js:42497-42575 fingerprint (2.1.88 match: sendSessionActivitySignal, 1)
+//@ chunk-1kk50rk6.js:45401-45479 fingerprint (2.1.88 match: sendSessionActivitySignal, 1)
 function sendSessionActivitySignal() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
@@ -359,7 +369,7 @@ function sendSessionActivitySignal() {
     getRemoteFeatureGateState(TENGU_ENCAPSULATED_HONEY) === "on"
   );
 }
-//@ chunk-z4g2ta8k.js:42575-42671 shared-adjacent (2.1.88 match: sendSessionActivitySignal, 1)
+//@ chunk-1kk50rk6.js:45479-45575 shared-adjacent (2.1.88 match: sendSessionActivitySignal, 1)
 function sendSessionActivitySignal_2() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
@@ -370,21 +380,23 @@ function sendSessionActivitySignal_2() {
   );
 }
 export {
-  sendKeepaliveNow,
-  notifyNestedChainDropped,
-  isActivityReasonActive,
-  getMainLoopRefcount,
-  parkOnUser,
-  sendSessionActivitySignal_2,
-  sendSessionActivitySignal,
   startSessionActivity,
   endActivity,
-  onWorkStarted,
+  sendSessionActivitySignal_2,
+  sendSessionActivitySignal,
+  parkOnUser,
+  sendKeepaliveNow,
+  isSessionActive,
   hasActiveWork,
+  setMainLoopActivityListener,
+  getMainLoopRefcount,
+  setNestedChainDropListener,
+  onProcessSlept,
+  isActivityReasonActive,
+  onWorkStarted,
+  emitProcessSlept,
+  notifyNestedChainDropped,
+  currentActivityState,
   setActivityCallback,
   clearActivityCallback,
-  isSessionActive,
-  currentActivityState,
-  setMainLoopActivityListener,
-  setNestedChainDropListener,
 };

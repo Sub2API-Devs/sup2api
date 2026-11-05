@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动记忆与整理（dream）状态汇总
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7sekx49c.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y9j01yc9.js (5)
  * attribution: placement 5
  */
 import { lstat } from "fs/promises";
@@ -34,12 +34,12 @@ import { findRelevantMemories } from "./findRelevantMemories.js";
 import { resolveSetting } from "../utils/settings/userIntentSettings.js";
 import { getSettingSourceDisplayNameLowercase } from "../utils/settings/constants.js";
 
-//@ chunk-7sekx49c.js:12708-12719 placement
+//@ chunk-y9j01yc9.js:13857-13868 placement
 /**
  * 惰性挂载的账号记忆对话框模块
  */
 var accountMemoryDialogModule = null;
-//@ chunk-7sekx49c.js:12719-13752 placement
+//@ chunk-y9j01yc9.js:13868-14902 placement
 /**
  * 汇总自动记忆状态：记忆文件、活动代理与整理（dream）是否在运行。
  */
@@ -119,14 +119,14 @@ async function autoMemoryStatus({ session, storageV5, credentials, activeAgents,
     }),
   };
 }
-//@ chunk-7sekx49c.js:13752-13867 placement
+//@ chunk-y9j01yc9.js:14902-15017 placement
 function settingSourceLabel(settingKey) {
   let { source } = resolveSetting(settingKey, true);
   return source === "default" || source === "legacyGlobalConfig" || source === "userSettings"
     ? null
     : getSettingSourceDisplayNameLowercase(source);
 }
-//@ chunk-7sekx49c.js:13867-13928 placement
+//@ chunk-y9j01yc9.js:15017-15078 placement
 /**
  * 路径存在即 true
  */
@@ -138,7 +138,7 @@ async function fileExists(path) {
     return false;
   }
 }
-//@ chunk-7sekx49c.js:13928-13982 placement
+//@ chunk-y9j01yc9.js:15078-15132 placement
 /**
  * 追加 “, set by …”
  */

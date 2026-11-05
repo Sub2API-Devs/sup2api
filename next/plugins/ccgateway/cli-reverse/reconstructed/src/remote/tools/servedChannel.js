@@ -3,16 +3,18 @@
  *
  * 2.1.316 新增：远程会话连接与服务通道请求处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (19)
+ * attribution: placement 18, layout 1
  */
 import { randomUUID } from "crypto";
 import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { printableExcerpt } from "../RemoteSessionManager.js";
 import { parseServedCallRequest, parseMachineAdvert } from "./toolDescriptors.js";
+import { REQUEST_REAUTHORED } from "./reauthoredRequest.js";
+import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logRemoteTools, remoteToolsLogLevel } from "../../services/remoteTools/remoteToolsDebug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -22,8 +24,14 @@ import {
   UNVERIFIED_SENDER_2,
   createAnnounceLoop,
 } from "../../utils/hooks/deviceHooks/deviceHookSession.js";
-import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { STILL_HERE_TEXT } from "./protocolConstants.js";
+import {
+  compareWithStated,
+  misfitOfFit,
+  interfaceTelemetry,
+  misfitDirection,
+  STILL_HERE_TEXT,
+} from "./protocolConstants.js";
+import { MINIMAL_INTERFACE_VERSION } from "./protocolNegotiation.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "./consentText.js";
 import { untrustedDeviceHint } from "../../bridge/trustedDevice.js";
 import { REANNOUNCE_DELAYS_MS } from "../../bridge/deviceRegistration.js";
@@ -42,7 +50,7 @@ import { isServedCornerEnabled } from "./serve/servingFlags.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:148048-148610 placement
+//@ chunk-4z1ntdgk.js:162247-162809 placement
 /**
  * 处理会话通道上的 served-call 请求：为每个请求建立中止控制、转交服务端、回帖结果。
  */
@@ -78,7 +86,7 @@ function createServedChannelHandler({ serving, manager, observer }) {
     },
   };
 }
-//@ chunk-mthxbav8.js:148610-149832 placement
+//@ chunk-4z1ntdgk.js:162809-164283 placement
 async function answerServedChannelRequest(request, serving, manager, observer) {
   let logNotAnswered = (reason) => {
     logForDebugging(
@@ -89,7 +97,20 @@ async function answerServedChannelRequest(request, serving, manager, observer) {
   let current = serving();
   if (current === null) return logNotAnswered("nothing serving");
   let startTime = performance.now();
-  let parsed = request.subtype === "remote_tool_call" ? parseServedCallRequest(request.request) : undefined;
+  let parsed =
+    request.subtype === "remote_tool_call"
+      ? parseServedCallRequest(request.request, request.modeStamp)
+      : undefined;
+  if (
+    request.subtype === "remote_tool_call" &&
+    parsed === undefined &&
+    request.modeStamp === REQUEST_REAUTHORED
+  ) {
+    logFeatureBad("remote_tool_serve", "shared_request_frame_unreadable");
+    return logNotAnswered(
+      "the session service vouched for this request's envelope, but the rest of the request could not be read",
+    );
+  }
   let legInfo =
     parsed?.request.ok === true && parsed.instance_id === current.instanceId
       ? {
@@ -148,7 +169,7 @@ async function answerServedChannelRequest(request, serving, manager, observer) {
       `[servedChannel] ${request.subtype} ${printableExcerpt(request.requestId)} answered after it was withdrawn \u2014 result dropped`,
     );
 }
-//@ chunk-mthxbav8.js:149832-150320 placement
+//@ chunk-4z1ntdgk.js:164283-164771 placement
 function logServedChannelReply(legInfo, serveMs, reply, replyMs) {
   let signMs = reply.outcome === "accepted" ? reply.signMs : undefined;
   let postMs = reply.outcome === "accepted" ? reply.postMs : undefined;
@@ -179,7 +200,7 @@ function logServedChannelReply(legInfo, serveMs, reply, replyMs) {
     reply_accepted: reply.outcome === "accepted",
   });
 }
-//@ chunk-mthxbav8.js:150320-150358 placement
+//@ chunk-4z1ntdgk.js:164771-164809 placement
 function runSafely(fn) {
   try {
     fn();
@@ -187,7 +208,7 @@ function runSafely(fn) {
     logError(error);
   }
 }
-//@ chunk-mthxbav8.js:150358-150852 placement
+//@ chunk-4z1ntdgk.js:164809-165303 placement
 async function handleServedChannelRequest(request, serving, parsed) {
   let ctx = {
     signal: request.signal,
@@ -210,11 +231,11 @@ async function handleServedChannelRequest(request, serving, parsed) {
       return;
   }
 }
-//@ chunk-mthxbav8.js:150852-151067 placement
+//@ chunk-4z1ntdgk.js:165303-165518 placement
 var isEmptyAnnouncement; // deferred: uses announceResponseSchema (../../utils/hooks/deviceHooks/deviceHookSession.js) of its import cycle while loading; runs once the cycle is complete
 var REANNOUNCE_DEBOUNCE_MS;
 var KNOWN_ANNOUNCE_FAILURE_REASONS;
-deferInit("chunk-mthxbav8.js:150852", () => {
+deferInit("chunk-4z1ntdgk.js:165303", () => {
   isEmptyAnnouncement = (announcement) =>
     announcement.tools.length + announcement.plumbing.length + (announcement.passthrough?.length ?? 0) === 0;
   REANNOUNCE_DEBOUNCE_MS = 1e4;
@@ -228,16 +249,31 @@ deferInit("chunk-mthxbav8.js:150852", () => {
     UNVERIFIED_SENDER_2,
   ]);
 });
-//@ chunk-mthxbav8.js:151067-151158 placement
+//@ chunk-4z1ntdgk.js:165518-165609 placement
 function normalizeAnnounceFailureReason(reason) {
   let prefix = /^[a-z_]+(?=:|$)/.exec(reason)?.[0];
   return prefix !== undefined && KNOWN_ANNOUNCE_FAILURE_REASONS.has(prefix) ? prefix : "other";
 }
-//@ chunk-mthxbav8.js:151158-151389 placement
-function logAnnounceOutcome(outcome) {
+//@ chunk-4z1ntdgk.js:165609-165769 layout
+function judgeAnnouncedInterface(ours, outcome) {
+  if (outcome.kind !== "announced" || outcome.status !== "announced") return;
+  let stated = outcome.sessionInterface ?? {
+    kind: "none",
+  };
+  let fit = compareWithStated(ours, stated);
+  return {
+    stated,
+    fit,
+    misfit: misfitOfFit(fit),
+  };
+}
+//@ chunk-4z1ntdgk.js:165769-166110 placement
+function logAnnounceOutcome(outcome, judgement) {
   if (outcome.kind === "failed" && outcome.reason === "replaced") return;
   if (outcome.kind === "announced") {
-    logFeatureOk("remote_tools_client_announce");
+    let telemetry = judgement && interfaceTelemetry(judgement.stated, judgement.fit);
+    if (judgement?.misfit === undefined) logFeatureOk("remote_tools_client_announce", telemetry);
+    else logFeatureSad("remote_tools_client_announce", misfitDirection(judgement.misfit), telemetry);
     return;
   }
   logFeatureSad(
@@ -247,7 +283,7 @@ function logAnnounceOutcome(outcome) {
       : `${outcome.kind}_${normalizeAnnounceFailureReason(outcome.reason)}`,
   );
 }
-//@ chunk-mthxbav8.js:151389-157149 placement
+//@ chunk-4z1ntdgk.js:166110-172251 placement
 /**
  * REPL 远程会话连接（云会话）：注册设备钩子与远程工具、维持心跳与重连、同步权限模式与 served 调用。
  */
@@ -271,6 +307,7 @@ function createRemoteSessionConnection(options) {
   let announcedNothing = false;
   let workerWantsStillHere = false;
   let toldUnverified = false;
+  let seenEpoch;
   let hostAsleep = false;
   let lastWokeAt;
   let heldRequests = new Map();
@@ -289,6 +326,7 @@ function createRemoteSessionConnection(options) {
       let epochAtBuild = announcedAtBuild;
       inflightEpoch = undefined;
       let returnedFailed = mode === "returned" && outcome.kind === "failed";
+      let judgement = judgeAnnouncedInterface(options.interfaceRange ?? MINIMAL_INTERFACE_VERSION, outcome);
       if (outcome.kind === "announced") {
         if (outcome.workerEpoch !== undefined)
           highestEpoch = Math.max(highestEpoch ?? 0, outcome.workerEpoch);
@@ -308,6 +346,19 @@ function createRemoteSessionConnection(options) {
         answeredSinceAsk = false;
         announcedNothing = announcedEmpty;
         workerWantsStillHere = outcome.workerCapabilities?.includes(STILL_HERE_TEXT) === true;
+        if (judgement !== undefined)
+          logRemoteTools(undefined, "session ToolHost interface versions", {
+            stated: judgement.stated.kind,
+            fit: judgement.fit.kind,
+          });
+        if (
+          judgement?.misfit !== undefined &&
+          (seenEpoch === undefined || (outcome.workerEpoch ?? 0) > seenEpoch)
+        ) {
+          seenEpoch = outcome.workerEpoch ?? 0;
+          let misfit = misfitDirection(judgement.misfit);
+          options.onNotice?.(misfit, REMOTE_TOOLS_CONSENT_TEXT[`serving_off.${misfit}`]);
+        }
       } else if (!returnedFailed) {
         announcedEpoch = undefined;
         answeredSinceAsk =
@@ -330,8 +381,8 @@ function createRemoteSessionConnection(options) {
         }
       }
       if (mode !== "returned" || (!returnedFailed && outcome.kind !== "announced"))
-        logAnnounceOutcome(outcome);
-      options.onAnnounceOutcome?.(outcome, mode);
+        logAnnounceOutcome(outcome, judgement);
+      options.onAnnounceOutcome?.(outcome, mode, judgement?.misfit);
     },
     ...(options.signal && {
       signal: options.signal,
@@ -609,7 +660,7 @@ function createRemoteSessionConnection(options) {
   if (closed) unsubscribeRevoked();
   return handle;
 }
-//@ chunk-mthxbav8.js:157149-157581 placement
+//@ chunk-4z1ntdgk.js:172251-172683 placement
 /**
  * 权限模式推送失败的退避与三段提示文案：重试 400/1200 ms、5 s 窗口，以及 server 未保存、会话空闲、会话未激活三种说明。
  */
@@ -621,7 +672,7 @@ var MODE_NOT_SAVED_TEXT =
   "Switch permission modes away and back once: this session's mode couldn't be saved on the server.";
 var MODE_NOT_SAVED_INACTIVE_TEXT =
   "This session's permission mode couldn't be saved: the server says the session isn't active. Switch modes away and back once it is.";
-//@ chunk-mthxbav8.js:157581-157698 placement
+//@ chunk-4z1ntdgk.js:172683-172800 placement
 function isRetryablePostFailure(posted) {
   return (
     posted.outcome === "failed" &&
@@ -629,7 +680,7 @@ function isRetryablePostFailure(posted) {
       (posted.cause === "http" && (posted.status >= 500 || posted.status === 429)))
   );
 }
-//@ chunk-mthxbav8.js:157698-159927 placement
+//@ chunk-4z1ntdgk.js:172800-175029 placement
 function syncRemotePermissionMode({
   manager,
   mode,
@@ -812,7 +863,7 @@ function syncRemotePermissionMode({
     return result;
   });
 }
-//@ chunk-mthxbav8.js:159927-160292 placement
+//@ chunk-4z1ntdgk.js:175029-175394 placement
 function retirePostedMode({ posted, mode, latch, retire, now = Date.now }) {
   let accepted = posted.then(
     (posted) => posted.outcome === "accepted",
@@ -834,7 +885,7 @@ function retirePostedMode({ posted, mode, latch, retire, now = Date.now }) {
     return;
   };
 }
-//@ chunk-mthxbav8.js:160292-160489 placement
+//@ chunk-4z1ntdgk.js:175394-175591 placement
 /**
  * 远程响应等待超时与提示：普通 60 s、等待用户答复 180 s，以及“云端可能无响应”“Claude 在等你回答”两段文案。
  */
@@ -843,11 +894,11 @@ var REMOTE_RESPONSE_ASK_TIMEOUT_MS = 180000;
 var UNRESPONSIVE_NOTICE = "Cloud session may be unresponsive. Attempting to reconnect\u2026";
 var WAITING_FOR_ANSWER_NOTICE =
   "Claude is waiting for you to answer its request and will continue with this message once you do.";
-//@ chunk-mthxbav8.js:160489-160520 placement
+//@ chunk-4z1ntdgk.js:175591-175622 placement
 function responseTimeoutMs(whileAsked) {
   return whileAsked ? REMOTE_RESPONSE_ASK_TIMEOUT_MS : REMOTE_RESPONSE_TIMEOUTS;
 }
-//@ chunk-mthxbav8.js:160520-161274 placement
+//@ chunk-4z1ntdgk.js:175622-176376 placement
 class ServedCallWatch {
   holdsWhileAsked;
   openRequests = new Set();
@@ -895,9 +946,9 @@ class ServedCallWatch {
     });
   }
 }
-//@ chunk-mthxbav8.js:161274-161306 placement
+//@ chunk-4z1ntdgk.js:176376-176408 placement
 var TENGU_VIOLIN_COLOPHONY = "tengu_violin_colophony";
-//@ chunk-mthxbav8.js:161306-161363 placement
+//@ chunk-4z1ntdgk.js:176408-176465 placement
 function isServedCallWatchEnabled() {
   try {
     return getFeatureValue_SESSION_PINNED(TENGU_VIOLIN_COLOPHONY, false) === true;

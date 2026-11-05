@@ -3,9 +3,9 @@
  *
  * 读取 gh 令牌（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (7)
  * attribution: placement 7
  */
 import { join, isAbsolute, normalize } from "path";
@@ -22,23 +22,23 @@ import { isENOENT } from "../errors.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:523910-523964 placement
+//@ chunk-7jxyna5q.js:441013-441067 placement
 class GhTokenCache {
   resultsByHost = new Map();
   inFlightByHost = new Map();
 }
-//@ chunk-s61vbvea.js:523964-523996 placement
+//@ chunk-7jxyna5q.js:441067-441099 placement
 var ghTokenCacheRegistry; // deferred: uses GhTokenCache of its import cycle while loading; runs once the cycle is complete
 var GH_TOKEN_CACHE_TTL_MS;
-deferInit("chunk-s61vbvea.js:523964", () => {
+deferInit("chunk-7jxyna5q.js:441067", () => {
   ghTokenCacheRegistry = new HostScoped(() => new GhTokenCache());
   GH_TOKEN_CACHE_TTL_MS = 500;
 });
-//@ chunk-s61vbvea.js:523996-524033 placement
+//@ chunk-7jxyna5q.js:441099-441136 placement
 function currentGhTokenCache() {
   return ghTokenCacheRegistry.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:524033-524109 placement
+//@ chunk-7jxyna5q.js:441136-441212 placement
 /**
  * 取指定主机的 gh 令牌，未登录时返回 null。
  */
@@ -46,7 +46,7 @@ async function ghTokenOrNull(host) {
   let ghToken = await getGhTokenCached(host);
   return ghToken.kind === "token" ? ghToken.token : null;
 }
-//@ chunk-s61vbvea.js:524109-524369 placement
+//@ chunk-7jxyna5q.js:441212-441472 placement
 /**
  * 按主机缓存 gh 令牌读取结果，并发请求共享。
  */
@@ -67,7 +67,7 @@ async function getGhTokenCached(host) {
   inFlightByHost.set(host, tokenPromise);
   return tokenPromise;
 }
-//@ chunk-s61vbvea.js:524369-524451 placement
+//@ chunk-7jxyna5q.js:441472-441554 placement
 /**
  * 清除指定主机的 gh 令牌缓存与在途请求记录。
  */
@@ -76,7 +76,7 @@ function clearGhTokenCache(host) {
   resultsByHost.delete(host);
   inFlightByHost.delete(host);
 }
-//@ chunk-s61vbvea.js:524451-525349 placement
+//@ chunk-7jxyna5q.js:441554-442452 placement
 async function readGhToken(host) {
   let ghConfigDir = isGithubDotCom(host)
     ? process.env.GH_TOKEN || process.env.GITHUB_TOKEN

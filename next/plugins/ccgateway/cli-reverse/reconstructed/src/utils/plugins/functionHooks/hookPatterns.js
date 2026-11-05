@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。函数钩子匹配模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pab450vg.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mfhpffxs.js (6)
  * attribution: placement 6
  */
 import { HOOK_EVENTS_2 } from "../../../plugins/functionHooks/hookApiSurface.js";
@@ -13,15 +13,15 @@ import { matchesEventPattern, routesToUser } from "../../../plugins/functionHook
 import { isSecDefaultModule } from "../../../plugins/hooksModules/loadedModuleFilters.js";
 import { matcherDoors } from "../../../plugins/functionHooks/sites/uiSites.js";
 import { firstLineOf } from "../../stringUtils.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-pab450vg.js:380-446 placement
+//@ chunk-mfhpffxs.js:380-446 placement
 var SESSION_ATTACHMENT_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pab450vg.js:380", () => {
+deferInit("chunk-mfhpffxs.js:380", () => {
   SESSION_ATTACHMENT_KINDS = Object.freeze(["attachment", "hook-context", "compaction"]);
 });
-//@ chunk-pab450vg.js:446-566 placement
+//@ chunk-mfhpffxs.js:446-566 placement
 /**
  * 门列表全部可冻结时转成 session.append{door=…} 模式。
  */
@@ -32,9 +32,9 @@ function toSessionAppendDoorPatterns(patterns) {
     ? patterns.map((door) => `session.append{door=${door}}`)
     : [];
 }
-//@ chunk-pab450vg.js:566-730 placement
+//@ chunk-mfhpffxs.js:566-730 placement
 var SESSION_APPEND_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pab450vg.js:566", () => {
+deferInit("chunk-mfhpffxs.js:566", () => {
   SESSION_APPEND_HOOK_EVENTS = Object.freeze([
     "prompt.section",
     "prompt.context",
@@ -46,7 +46,7 @@ deferInit("chunk-pab450vg.js:566", () => {
     "settings.read",
   ]);
 });
-//@ chunk-pab450vg.js:730-876 placement
+//@ chunk-mfhpffxs.js:730-876 placement
 /**
  * 只匹配 classic.* 或可冻结事件的模式。
  */
@@ -61,7 +61,7 @@ function filterFreezablePatterns(patterns) {
     );
   });
 }
-//@ chunk-pab450vg.js:876-1331 placement
+//@ chunk-mfhpffxs.js:876-1331 placement
 /**
  * 找出排在前面、会重新打开这些模式的插件。
  */
@@ -96,7 +96,7 @@ var findReopeningPlugins = (before, candidates) =>
         ]
       : [];
   });
-//@ chunk-pab450vg.js:1331-1706 placement
+//@ chunk-mfhpffxs.js:1331-1706 placement
 /**
  * 用户级插件中被跳过的钩子模式（hooks-passed-over 诊断）。
  */
@@ -105,7 +105,7 @@ function collectPassedOverHooks(before) {
     before.some(isSecDefaultModule) ? before.filter((loadedModule) => loadedModule.tier === "user") : []
   ).flatMap((loadedModule) => {
     let registrations = loadedModule.registrationsFor("session.append");
-    let patterns = uniq([
+    let patterns = normalizeCaseForComparison_2([
       ...filterFreezablePatterns(loadedModule.patterns),
       ...registrations.flatMap((registration) =>
         toSessionAppendDoorPatterns(
@@ -135,10 +135,10 @@ function collectPassedOverHooks(before) {
   });
 }
 export {
-  collectPassedOverHooks,
   SESSION_ATTACHMENT_KINDS,
   SESSION_APPEND_HOOK_EVENTS,
   toSessionAppendDoorPatterns,
+  collectPassedOverHooks,
   filterFreezablePatterns,
   findReopeningPlugins,
 };

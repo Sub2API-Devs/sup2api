@@ -3,13 +3,13 @@
  *
  * 判定生成文件/锁文件/构建产物的目录、文件名、扩展名与正则列表，署名统计时排除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/generatedFiles.ts
- * pieces: chunk-wyqg6m3h.js (4)
+ * pieces: chunk-c7hntn0y.js (4)
  * attribution: fingerprint 3, layout 1
  */
 
-//@ chunk-wyqg6m3h.js:25928-26222 fingerprint (2.1.88 match: EXCLUDED_DIRECTORIES, 0.954)
+//@ chunk-c7hntn0y.js:26292-26586 fingerprint (2.1.88 match: EXCLUDED_DIRECTORIES, 0.954)
 var GENERATED_DIRECTORIES = [
   "/dist/",
   "/build/",
@@ -34,7 +34,7 @@ var GENERATED_DIRECTORIES = [
   ".generated/",
   "/__snapshots__/",
 ];
-//@ chunk-wyqg6m3h.js:26222-26532 layout
+//@ chunk-c7hntn0y.js:26586-26896 layout
 var GENERATED_FILENAME_PATTERNS = Object.freeze([
   /\.min\.[a-z]+$/i,
   /-min\.[a-z]+$/i,
@@ -52,7 +52,7 @@ var GENERATED_FILENAME_PATTERNS = Object.freeze([
   /\.openapi\.[a-z]+$/i,
   /\.snap$/i,
 ]);
-//@ chunk-wyqg6m3h.js:26532-26735 fingerprint (2.1.88 match: EXCLUDED_FILENAMES, 1)
+//@ chunk-c7hntn0y.js:26896-27099 fingerprint (2.1.88 match: EXCLUDED_FILENAMES, 1)
 var GENERATED_FILENAMES = new Set([
   "package-lock.json",
   "yarn.lock",
@@ -67,7 +67,7 @@ var GENERATED_FILENAMES = new Set([
   "shrinkwrap.json",
   "npm-shrinkwrap.json",
 ]);
-//@ chunk-wyqg6m3h.js:26735-26852 fingerprint (2.1.88 match: EXCLUDED_EXTENSIONS, 1)
+//@ chunk-c7hntn0y.js:27099-27216 fingerprint (2.1.88 match: EXCLUDED_EXTENSIONS, 1)
 var GENERATED_SUFFIXES = [
   ".lock",
   ".min.js",

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：/compact 命令的补充逻辑。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/compact/compact.ts
- * pieces: chunk-p5wtay00.js (3), chunk-vrrvwm85.js (5)
+ * pieces: chunk-4yapqwwv.js (5), chunk-kwfzs2kb.js (3)
  * attribution: placement 4, fingerprint 3, layout 1
  */
 import { getLastCacheSafeParamsForSameModel } from "../../utils/forkedAgent.js";
@@ -20,6 +20,7 @@ import {
   CompactionError,
   mergeHookInstructions,
   buildReactiveCompactionResult,
+  API_REQUEST_ABORTED_MESSAGE,
   buildPostCompactMessages,
   runCompactHooks,
 } from "../../services/compact/compact.js";
@@ -46,9 +47,8 @@ import { roughTokenCountEstimationForMessages } from "../../services/tokenEstima
 import { executePreCompactHooks } from "../../utils/hooks.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { tryReactiveCompact } from "../../services/compact/reactiveCompact.js";
-import { API_REQUEST_ABORTED_MESSAGE } from "../../utils/messages.js";
 import {
-  getTokenCountFromUsage_3,
+  getTokenCountFromUsage_5,
   dispatchSessionCompactHooks,
   reuuidAssistantRows,
 } from "../../plugins/functionHooks/sessionCompactHook.js";
@@ -68,7 +68,7 @@ import { getUpgradeMessage } from "../../utils/model/contextWindowUpgradeCheck.j
 import { getShortcutDisplay } from "../../keybindings/shortcutFormat.js";
 import { sequential } from "../../utils/sequential.js";
 
-//@ chunk-p5wtay00.js:312-598 placement
+//@ chunk-kwfzs2kb.js:312-598 placement
 /**
  * 组装压缩用的缓存安全参数：优先复用同模型最近一次的 system/user/system context，否则重新构建。
  */
@@ -89,7 +89,7 @@ async function buildCompactCacheSafeParams({
     advisorModel: toolUseContext.getAdvisorSetting(),
   };
 }
-//@ chunk-p5wtay00.js:598-819 placement
+//@ chunk-kwfzs2kb.js:598-819 placement
 /**
  * 并行生成 system prompt、user context 与 system context。
  */
@@ -105,7 +105,7 @@ async function buildCacheSafePromptParts(context, forkContextMessages) {
     systemContext: cachedSystemContext,
   };
 }
-//@ chunk-p5wtay00.js:819-1123 fingerprint (2.1.88 match: getCacheSharingParams, 0.585)
+//@ chunk-kwfzs2kb.js:819-1123 fingerprint (2.1.88 match: getCacheSharingParams, 0.585)
 async function getCacheSharingParams(context, forkContextMessages) {
   let systemPrompt = getToolPermissionContext(context);
   let defaultSysPrompt = await getSystemPrompt(
@@ -123,7 +123,7 @@ async function getCacheSharingParams(context, forkContextMessages) {
     appendSystemPrompt: context.options.appendSystemPrompt,
   });
 }
-//@ chunk-vrrvwm85.js:12092-12311 placement (2.1.88 match: buildMagicDocsUpdatePrompt, 0.349)
+//@ chunk-4yapqwwv.js:13235-13454 placement (2.1.88 match: buildMagicDocsUpdatePrompt, 0.349)
 /**
  * /compact 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -143,7 +143,7 @@ var runCompactCommand = async (args, context) => {
         value: `Not compacted \xB7 ${result.reason}`,
       };
 };
-//@ chunk-vrrvwm85.js:12311-13047 placement
+//@ chunk-4yapqwwv.js:13454-14190 placement
 async function call(args, { customInstructions, mainThreadAgentDefinition, trigger = "manual", origin }) {
   let { abortController } = args;
   let { messages } = args;
@@ -183,7 +183,7 @@ async function call(args, { customInstructions, mainThreadAgentDefinition, trigg
     }
   }
 }
-//@ chunk-vrrvwm85.js:13047-16941 fingerprint (2.1.88 match: compactViaReactive, 0.389)
+//@ chunk-4yapqwwv.js:14190-18084 fingerprint (2.1.88 match: compactViaReactive, 0.384)
 async function compactViaReactive(
   messages,
   context,
@@ -323,7 +323,7 @@ async function compactViaReactive(
       messages: buildPostCompactMessages(compaction.result),
       tokensBefore: compactMetadata?.preTokens,
       tokensAfter: compactMetadata?.postTokens,
-      usage: getTokenCountFromUsage_3(compaction.result.compactionUsage),
+      usage: getTokenCountFromUsage_5(compaction.result.compactionUsage),
       record: {
         kind: "compacted",
         compactionResult: compaction.result,
@@ -450,7 +450,7 @@ async function compactViaReactive(
     });
   }
 }
-//@ chunk-vrrvwm85.js:16941-18671 layout
+//@ chunk-4yapqwwv.js:18084-19814 layout
 /**
  * tryReusePrecomputedCompaction：命中 session.precompute 的预计算摘要则复用。
  */
@@ -575,7 +575,7 @@ async function tryReusePrecomputedCompaction(session, context, newCustomInstruct
     },
   };
 }
-//@ chunk-vrrvwm85.js:18671-18900 fingerprint (2.1.88 match: buildDisplayText, 0.9)
+//@ chunk-4yapqwwv.js:19814-20043 fingerprint (2.1.88 match: buildDisplayText, 0.9)
 function buildDisplayText(context, userDisplayMessage) {
   let upgradeMessage = getUpgradeMessage("tip");
   let expandShortcut = getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");

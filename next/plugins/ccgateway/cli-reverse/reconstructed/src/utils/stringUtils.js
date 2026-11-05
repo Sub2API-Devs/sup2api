@@ -3,43 +3,41 @@
  *
  * 字符串工具：截断（UTF-16 安全、中间截断）、前后缀、良构字符串修复、plural、首行；另混入 deniedModels 条目解析与标签中和代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/stringUtils.ts
- * pieces: chunk-ae5g0zb5.js (1), chunk-bwbq4xvm.js (2), chunk-dcmhvw5a.js (1), chunk-m41h77x8.js (51)
- * attribution: fingerprint 4, placement 26, layout 20, callgraph-witnessed 2, file-local 3
+ * pieces: chunk-7kayq7nc.js (2), chunk-8824h7w7.js (51), chunk-z20c443b.js (1)
+ * attribution: placement 26, fingerprint 3, callgraph-witnessed 2, layout 20, file-local 3
  */
 import { MAX_SEED_NAME_CHARS } from "./swarm/teammateIds.js";
 import { replaceControlChars } from "./resultError.js";
-import { isPlainObjectNonArray } from "../plugins/bundled/claudeTest/appFacts.js";
-import { APP_STATE_LABELS } from "../plugins/bundled/claudeTest/runState.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m41h77x8.js:191-253 placement (2.1.88 match: joinContinuationLines, 0.701)
+//@ chunk-8824h7w7.js:191-253 placement
 /**
  * 把字符串重复 n 次（n 非有限或不大于 0 时视为 0）。旧版名 joinContinuationLines 误配，属第三方或通用工具。
  */
 function repeatString(text, count) {
   return text.repeat(Number.isFinite(count) && count > 0 ? count : 0);
 }
-//@ chunk-m41h77x8.js:253-315 placement (2.1.88 match: urlPatternToRegex, 1)
+//@ chunk-8824h7w7.js:253-315 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   return pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-//@ chunk-m41h77x8.js:315-374 layout (2.1.88 match: capitalize, 1)
+//@ chunk-8824h7w7.js:315-374 fingerprint (2.1.88 match: capitalize, 1)
 /**
  * 首字母大写。
  */
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
-//@ chunk-m41h77x8.js:374-415 callgraph-witnessed (2.1.88 match: plural, 0)
+//@ chunk-8824h7w7.js:374-415 callgraph-witnessed (2.1.88 match: plural, 0)
 /**
  * 按数量选单复数：n===1 用单数，否则用复数（默认单数加 s）。
  */
 function plural(n_2, word, pluralWord = word + "s") {
   return n_2 === 1 ? word : pluralWord;
 }
-//@ chunk-m41h77x8.js:415-588 layout
+//@ chunk-8824h7w7.js:415-588 layout
 /**
  * 按码点统计字符串长度（代理对计 1）。
  */
@@ -55,7 +53,7 @@ function countCodePoints(text) {
   }
   return count;
 }
-//@ chunk-m41h77x8.js:588-703 layout
+//@ chunk-8824h7w7.js:588-703 layout
 /**
  * 按码点截断到 n 个字符。
  */
@@ -68,7 +66,7 @@ function truncateCodePoints(text, maxLength) {
   }
   return chars.join("");
 }
-//@ chunk-m41h77x8.js:703-847 layout
+//@ chunk-8824h7w7.js:703-846 layout
 /**
  * 截断到 n 个 UTF-16 单元，切点落在代理对中间时少取一个，保证结果良构。
  */
@@ -79,7 +77,7 @@ function truncateToLength(text, maxLength) {
   let code = sliced.charCodeAt(maxLength - 1);
   return repairUtf16(code >= 55296 && code <= 56319 ? sliced.slice(0, -1) : sliced);
 }
-//@ chunk-m41h77x8.js:847-985 layout
+//@ chunk-8824h7w7.js:846-984 layout
 /**
  * 取末尾 n 个 UTF-16 单元，起点落在低代理项时跳过一个。
  */
@@ -90,7 +88,7 @@ function takeLastChars(text, maxLength) {
   let code = sliced.charCodeAt(0);
   return repairUtf16(code >= 56320 && code <= 57343 ? sliced.slice(1) : sliced);
 }
-//@ chunk-m41h77x8.js:985-1120 layout
+//@ chunk-8824h7w7.js:984-1117 layout
 /**
  * 中间截断：保留开头 headChars 与结尾 tailChars，中间替换为回调生成的“省略 N 字”文本；长度足够时原样返回。
  */
@@ -100,12 +98,12 @@ function truncateMiddle(text, headChars, tailChars, formatOmitted) {
   let tail = tailChars > 0 ? takeLastChars(text, tailChars) : "";
   return `${head}${formatOmitted(text.length - head.length - tail.length)}${tail}`;
 }
-//@ chunk-m41h77x8.js:1120-1221 layout
+//@ chunk-8824h7w7.js:1117-1218 layout
 function repairUtf16(text) {
   if (typeof Buffer !== "undefined") return Buffer.from(text, "utf16le").toString("utf16le");
   return normalizeFullWidthDigits(text);
 }
-//@ chunk-m41h77x8.js:1221-1426 fingerprint (2.1.88 match: normalizeFullWidthDigits, 1)
+//@ chunk-8824h7w7.js:1218-1423 layout (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits(input) {
   let parts = [];
   for (let start = 0; start < input.length; start += 8192) {
@@ -116,7 +114,7 @@ function normalizeFullWidthDigits(input) {
   }
   return parts.join("");
 }
-//@ chunk-m41h77x8.js:1426-1819 layout
+//@ chunk-8824h7w7.js:1423-1816 layout
 /**
  * 孤立 UTF-16 代理项模式（非全局版），用于一次性检测。
  */
@@ -124,7 +122,7 @@ var LONE_SURROGATE_PATTERN; // deferred: has load-time effects after a deferred 
 var LONE_SURROGATE_GLOBAL_RE;
 var isWellFormedNative;
 var toWellFormedNative;
-deferInit("chunk-m41h77x8.js:1426", () => {
+deferInit("chunk-8824h7w7.js:1423", () => {
   LONE_SURROGATE_PATTERN = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
   LONE_SURROGATE_GLOBAL_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
   isWellFormedNative =
@@ -136,7 +134,7 @@ deferInit("chunk-m41h77x8.js:1426", () => {
       ? Function.prototype.call.bind(String.prototype.toWellFormed)
       : undefined;
 });
-//@ chunk-m41h77x8.js:1819-1868 layout
+//@ chunk-8824h7w7.js:1816-1865 layout
 /**
  * 字符串是否良构（无孤立 UTF-16 代理项）；优先用 String.prototype.isWellFormed。
  */
@@ -144,7 +142,7 @@ function isWellFormedString(text) {
   if (isWellFormedNative) return isWellFormedNative(text);
   return !LONE_SURROGATE_PATTERN.test(text);
 }
-//@ chunk-m41h77x8.js:1868-1929 file-local
+//@ chunk-8824h7w7.js:1865-1926 file-local
 /**
  * 把非良构 UTF-16（孤立代理）替换为 U+FFFD；有原生 toWellFormed 时直接用。
  */
@@ -152,7 +150,7 @@ function normalizeFullWidthSpace(input) {
   if (toWellFormedNative) return toWellFormedNative(input);
   return input.replace(LONE_SURROGATE_GLOBAL_RE, "\uFFFD");
 }
-//@ chunk-m41h77x8.js:1929-1987 layout
+//@ chunk-8824h7w7.js:1926-1984 layout
 /**
  * 去掉字符串中的孤立代理项，得到良构字符串。
  */
@@ -160,7 +158,7 @@ function toWellFormedString(text) {
   if (isWellFormedNative && isWellFormedNative(text)) return text;
   return text.replace(LONE_SURROGATE_GLOBAL_RE, "");
 }
-//@ chunk-m41h77x8.js:1987-2403 layout
+//@ chunk-8824h7w7.js:1984-2400 layout
 /**
  * 深度遍历数组/对象，把非良构字符串原地修复，返回是否有改动（发送 API 前清洗 JSON 用）。
  */
@@ -194,7 +192,7 @@ function repairMalformedStringsDeep(root) {
   }
   return repaired;
 }
-//@ chunk-m41h77x8.js:2403-2800 layout
+//@ chunk-8824h7w7.js:2400-2797 layout
 /**
  * 深度遍历判断结构中是否含非良构字符串。
  */
@@ -221,7 +219,7 @@ function containsMalformedStringDeep(root) {
   }
   return false;
 }
-//@ chunk-m41h77x8.js:2800-2865 file-local
+//@ chunk-8824h7w7.js:2797-2862 file-local
 /**
  * 返回字符串中第一个分隔符之前的部分（找不到分隔符时返回原串）。
  */
@@ -229,7 +227,7 @@ function firstLineOf(text, separator) {
   let index = text.indexOf(separator);
   return index === -1 ? text : text.slice(0, index);
 }
-//@ chunk-m41h77x8.js:2865-2952 layout
+//@ chunk-8824h7w7.js:2862-2948 layout
 /**
  * 去掉末尾属于给定字符集合的字符（类似 trimEnd 指定字符）。
  */
@@ -238,23 +236,23 @@ function trimEndChars(text, chars) {
   while (end > 0 && chars.includes(text[end - 1])) end--;
   return text.slice(0, end);
 }
-//@ chunk-m41h77x8.js:2952-3012 layout
+//@ chunk-8824h7w7.js:2948-3008 layout
 /**
  * 若以前缀开头则去掉前缀。
  */
 function stripPrefix(text, prefix) {
   return text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
-//@ chunk-m41h77x8.js:3012-3081 layout
+//@ chunk-8824h7w7.js:3008-3077 layout
 /**
  * 若以后缀结尾则去掉后缀。
  */
 function stripSuffix(text, suffix) {
   return text.endsWith(suffix) ? text.slice(0, text.length - suffix.length) : text;
 }
-//@ chunk-m41h77x8.js:3081-3104 layout
+//@ chunk-8824h7w7.js:3077-3100 layout
 var ASCII_ONLY_PATTERN = /^[\x00-\x7f]*$/;
-//@ chunk-m41h77x8.js:3104-3234 layout
+//@ chunk-8824h7w7.js:3100-3230 layout
 function compareStringsGrouped(left, right) {
   let matches = ASCII_ONLY_PATTERN.test(left);
   if (matches !== ASCII_ONLY_PATTERN.test(right)) return matches ? -1 : 1;
@@ -262,7 +260,7 @@ function compareStringsGrouped(left, right) {
   if (left === right) return 0;
   return left < right ? -1 : 1;
 }
-//@ chunk-m41h77x8.js:3234-3266 layout
+//@ chunk-8824h7w7.js:3230-3262 layout
 /**
  * 取第一行（firstLineOf(t, '\n')）。
  */
@@ -273,7 +271,7 @@ function getFirstLine(text) {
 `,
   );
 }
-//@ chunk-m41h77x8.js:3266-3357 file-local
+//@ chunk-8824h7w7.js:3262-3353 file-local
 /**
  * 统计字符（子串）在字符串中出现的次数，可指定起始位置。
  */
@@ -286,20 +284,20 @@ function countCharInString(str, char, start = 0) {
   }
   return count;
 }
-//@ chunk-m41h77x8.js:3357-3458 layout (2.1.88 match: normalizeFullWidthDigits, 1)
+//@ chunk-8824h7w7.js:3353-3454 layout (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits_2(input) {
   return input.replace(/[\uFF10-\uFF19]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 65248));
 }
-//@ chunk-m41h77x8.js:3458-3507 layout
+//@ chunk-8824h7w7.js:3454-3504 layout
 /**
  * 把全角空格 U+3000 换成普通空格。
  */
 function replaceIdeographicSpace(input) {
   return input.replaceAll("\u3000", " ");
 }
-//@ chunk-m41h77x8.js:3507-3522 callgraph-witnessed (2.1.88 match: MAX_STRING_LENGTH, 0)
+//@ chunk-8824h7w7.js:3504-3519 callgraph-witnessed (2.1.88 match: MAX_STRING_LENGTH, 0)
 var MAX_STRING_LENGTH = 33554432;
-//@ chunk-m41h77x8.js:3522-3741 fingerprint (2.1.88 match: safeJoinLines, 1)
+//@ chunk-8824h7w7.js:3519-3738 fingerprint (2.1.88 match: safeJoinLines, 1)
 function safeJoinLines(lines, delimiter = ",", maxSize = MAX_STRING_LENGTH) {
   let result = "";
   for (let line of lines) {
@@ -315,7 +313,7 @@ function safeJoinLines(lines, delimiter = ",", maxSize = MAX_STRING_LENGTH) {
   }
   return result;
 }
-//@ chunk-m41h77x8.js:3741-4523 fingerprint (2.1.88 match: EndTruncatingAccumulator, 1)
+//@ chunk-8824h7w7.js:3738-4520 fingerprint (2.1.88 match: EndTruncatingAccumulator, 1)
 /**
  * 有上限的字符串累加器：超过上限后丢弃后续内容并记录被截断的字节数（工具输出截断用）。
  */
@@ -362,7 +360,7 @@ class EndTruncatingAccumulator {
     return this.totalBytesReceived;
   }
 }
-//@ chunk-m41h77x8.js:4523-4623 placement
+//@ chunk-8824h7w7.js:4520-4620 placement
 function truncateToLines(text, maxLines) {
   let lines = text.split(`
 `);
@@ -372,7 +370,7 @@ function truncateToLines(text, maxLines) {
 `) + "\u2026"
   );
 }
-//@ chunk-m41h77x8.js:4623-4727 placement
+//@ chunk-8824h7w7.js:4620-4723 placement
 /**
  * 截断字符串并附上被截掉的字符数。
  */
@@ -381,7 +379,7 @@ function truncateWithCount(text, maxLength) {
   let truncated = truncateToLength(text, maxLength);
   return `${truncated}\u2026 [+${text.length - truncated.length} chars]`;
 }
-//@ chunk-m41h77x8.js:4727-4884 placement
+//@ chunk-8824h7w7.js:4723-4879 placement
 /**
  * 在单词边界截断字符串并加省略号（边界太靠前时直接截断）。
  */
@@ -392,28 +390,28 @@ function truncateAtWord(text, maxLength) {
   let wordEnd = lastSpace === -1 ? "" : truncated.slice(0, lastSpace).trimEnd();
   return `${wordEnd.length > maxLength / 2 ? wordEnd : truncated.trimEnd()}\u2026`;
 }
-//@ chunk-m41h77x8.js:4884-5030 placement
+//@ chunk-8824h7w7.js:4879-5025 placement
 /**
  * 控制字符正则（除换行类空白、全部控制字符）与 Windows 保留设备名正则。
  */
 var CONTROL_CHARS_EXCEPT_WS_RE = /[\x00-\x08\x0E-\x1F\x7F-\x9F]/g;
 var ANY_CONTROL_CHAR_RE = /[\x00-\x1F\x7F-\x9F]/;
 var WINDOWS_RESERVED_NAME_RE = /^(con|prn|aux|nul|com[0-9\u00B9\u00B2\u00B3]|lpt[0-9\u00B9\u00B2\u00B3])$/;
-//@ chunk-m41h77x8.js:5030-5096 placement
+//@ chunk-8824h7w7.js:5025-5091 placement
 /**
  * 去控制字符、压缩空白并 trim。
  */
 function collapseWhitespace(text) {
   return text.replace(CONTROL_CHARS_EXCEPT_WS_RE, "").replace(/\s+/g, " ").trim();
 }
-//@ chunk-m41h77x8.js:5096-5171 placement
+//@ chunk-8824h7w7.js:5091-5166 placement
 var LINE_BREAK_RE; // deferred: uses CONTROL_CHARS_EXCEPT_WS_RE of its import cycle while loading; runs once the cycle is complete
 var regExp;
-deferInit("chunk-m41h77x8.js:5096", () => {
+deferInit("chunk-8824h7w7.js:5091", () => {
   LINE_BREAK_RE = /[\t\n\v\f\r\u2028\u2029]/g;
   regExp = new RegExp(`${CONTROL_CHARS_EXCEPT_WS_RE.source}|${LINE_BREAK_RE.source}`);
 });
-//@ chunk-m41h77x8.js:5171-5249 placement
+//@ chunk-8824h7w7.js:5166-5244 placement
 /**
  * 若含控制/行分隔字符则替换为空格。
  */
@@ -421,17 +419,17 @@ function stripLineBreaks(displayText) {
   if (!regExp.test(displayText)) return displayText;
   return displayText.replace(CONTROL_CHARS_EXCEPT_WS_RE, "").replace(LINE_BREAK_RE, " ");
 }
-//@ chunk-m41h77x8.js:5249-5354 placement
+//@ chunk-8824h7w7.js:5244-5349 placement
 /**
  * 去掉控制、格式、代理与默认可忽略字符及行/段分隔符。
  */
 function stripFormatChars(text) {
   return text.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu, "");
 }
-//@ chunk-m41h77x8.js:5354-5555 placement
+//@ chunk-8824h7w7.js:5349-5550 placement
 var ANSI_ESCAPE_RE =
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d/#&.:=?%@~_]*)*)?(?:\u0007|\u001B\u005C|\u009C))|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g;
-//@ chunk-m41h77x8.js:5555-5640 placement
+//@ chunk-8824h7w7.js:5550-5635 placement
 /**
  * 转成良构字符串并去掉 ANSI 与控制/格式字符。
  */
@@ -440,7 +438,7 @@ function printableText(text) {
     .replace(ANSI_ESCAPE_RE, "")
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, "");
 }
-//@ chunk-m41h77x8.js:5640-6371 placement
+//@ chunk-8824h7w7.js:5635-6366 placement
 /**
  * 把控制字符、格式字符和默认可忽略码点转成可见形式（ESC→␛、C0→␀ 系列、DEL→␡，其余 \u{…}），保留换行/Tab 以及 emoji 序列中必需的变体选择符、ZWJ 与标签字符。
  */
@@ -480,14 +478,14 @@ function escapeControlChars(text) {
   }
   return out;
 }
-//@ chunk-m41h77x8.js:6371-6447 placement
+//@ chunk-8824h7w7.js:6366-6442 placement
 /**
  * 把控制字符转成可见符号，换行/制表符转 ␤/␉。
  */
 function escapeControlCharsForDisplay(text) {
   return escapeControlChars(text).replace(/\n/g, "\u2424").replace(/\t/g, "\u2409");
 }
-//@ chunk-m41h77x8.js:6447-6521 placement
+//@ chunk-8824h7w7.js:6442-6515 placement
 /**
  * 取首行可打印文本并按 200 字符截断。
  */
@@ -495,23 +493,23 @@ function oneLineClipped(text) {
   let firstLine = printableText(getFirstLine(text));
   return firstLine.length > 200 ? `${truncateToLength(firstLine, 200)}\u2026` : firstLine;
 }
-//@ chunk-m41h77x8.js:6521-6557 placement
+//@ chunk-8824h7w7.js:6515-6550 placement
 /**
  * 清洗后按长度截断。
  */
 function clippedMessage(text, maxLength) {
   return truncateToLength(cleanForDisplay(text), maxLength);
 }
-//@ chunk-m41h77x8.js:6557-6610 placement
+//@ chunk-8824h7w7.js:6550-6603 placement
 /**
  * 去 ANSI、控制字符并压缩空白的一行文本。
  */
 function cleanForDisplay(text) {
   return stripFormatChars(collapseWhitespace(text.replace(ANSI_ESCAPE_RE, ""))).trim();
 }
-//@ chunk-m41h77x8.js:6610-6618 placement
+//@ chunk-8824h7w7.js:6603-6611 placement
 var MAX_COERCE_DEPTH = 8;
-//@ chunk-m41h77x8.js:6618-7021 placement
+//@ chunk-8824h7w7.js:6611-7014 placement
 /**
  * 把值按 JS 字符串转换规则转成字符串：字符串/数字/布尔直接转换，数组递归用逗号连接（限深度），普通对象为 [object Object]，其他返回 undefined。
  */
@@ -535,12 +533,12 @@ function coerceToPlainString(value, depth = 0) {
     ? "[object Object]"
     : undefined;
 }
-//@ chunk-m41h77x8.js:7021-7033 placement
+//@ chunk-8824h7w7.js:7014-7026 placement
 /**
  * 截断提示的默认字符上限（500）。
  */
 var MAX_CLIP_CHARS = 500;
-//@ chunk-m41h77x8.js:7033-7338 placement
+//@ chunk-8824h7w7.js:7026-7331 placement
 /**
  * 按 UTF-8 字节数截断字符串（不切断字符），长度一定不超限时直接返回原串。
  */
@@ -561,7 +559,7 @@ function truncateUtf8Bytes(text, maxBytes) {
   }
   return readChars >= text.length ? text : text.slice(0, readChars);
 }
-//@ chunk-m41h77x8.js:7338-7505 placement
+//@ chunk-8824h7w7.js:7331-7498 placement
 /**
  * 用足够长的反引号围栏包裹代码块（比内容中最长的反引号串多一个，至少 3 个），可带语言标记。
  */
@@ -572,100 +570,73 @@ function fenceCodeBlock(code, language = "") {
 ${code}
 ${fence}`;
 }
-//@ chunk-m41h77x8.js:7505-7532 placement
+//@ chunk-8824h7w7.js:7498-7525 placement
 /**
  * 已以省略号结尾的文本模式。
  */
 var TRAILING_ELLIPSIS_RE = /(\u2026|\.\.\.)$/;
-//@ chunk-dcmhvw5a.js:141176-141231 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-z20c443b.js:141322-141377 placement (2.1.88 match: setCwdState, 1)
 /**
  * NFC 规范化后转小写，用于大小写不敏感的名字/路径比较（被 50 多处使用）。
  */
 function nfcLower(cwd) {
   return cwd.normalize("NFC").toLowerCase();
 }
-//@ chunk-bwbq4xvm.js:775124-775209 placement
+//@ chunk-7kayq7nc.js:824228-824313 placement
 function stripControlCharsTruncated(text) {
   return [...text.replace(/[\x00-\x1f\x7f-\x9f]/g, "")].slice(0, MAX_SEED_NAME_CHARS).join("");
 }
-//@ chunk-bwbq4xvm.js:775209-775255 placement
+//@ chunk-7kayq7nc.js:824313-824359 placement
 function sanitizeSessionTitle(title) {
   return stripControlCharsTruncated(replaceControlChars(title.trim())).trim();
 }
-//@ chunk-ae5g0zb5.js:38606-39033 fingerprint (2.1.88 match: capitalize, 1)
-function capitalize_2(configJson, fallbackName) {
-  let parsed = null;
-  try {
-    parsed = configJson === undefined ? null : JSON.parse(configJson);
-  } catch {
-    parsed = null;
-  }
-  let configuredName = isPlainObjectNonArray(parsed) ? parsed.name : null;
-  let safeConfiguredName =
-    typeof configuredName === "string" &&
-    configuredName.length <= 214 &&
-    /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(configuredName)
-      ? configuredName
-      : null;
-  let safeFallbackName =
-    fallbackName.length <= 214 && /^[A-Za-z0-9][A-Za-z0-9-._~]*$/.test(fallbackName) ? fallbackName : null;
-  let trimmed = (safeConfiguredName ?? safeFallbackName ?? "")
-    .replace(/^@[^/]*\//, "")
-    .replace(/[-._~]+/g, " ")
-    .trim()
-    .slice(0, 30)
-    .trim();
-  let label = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-  return APP_STATE_LABELS.test(label) ? label : null;
-}
 export {
   firstLineOf,
-  plural,
-  countCharInString,
-  truncateToLength,
-  urlPatternToRegex,
-  collapseWhitespace,
-  cleanForDisplay,
-  clippedMessage,
-  MAX_CLIP_CHARS,
-  isWellFormedString,
-  countCodePoints,
-  truncateWithCount,
-  getFirstLine,
-  sanitizeSessionTitle,
   trimEndChars,
-  capitalize,
-  repairMalformedStringsDeep,
-  repeatString,
-  compareStringsGrouped,
-  oneLineClipped,
-  stripPrefix,
-  takeLastChars,
-  toWellFormedString,
-  TRAILING_ELLIPSIS_RE,
-  normalizeFullWidthSpace,
-  stripSuffix,
-  ANY_CONTROL_CHAR_RE,
-  truncateCodePoints,
-  truncateToLines,
-  normalizeFullWidthDigits_2,
-  printableText,
+  plural,
+  urlPatternToRegex,
+  countCharInString,
+  truncateUtf8Bytes,
+  truncateToLength,
+  countCodePoints,
   CONTROL_CHARS_EXCEPT_WS_RE,
   containsMalformedStringDeep,
-  truncateAtWord,
-  nfcLower,
-  stripFormatChars,
-  truncateUtf8Bytes,
-  escapeControlCharsForDisplay,
-  EndTruncatingAccumulator,
-  truncateMiddle,
-  WINDOWS_RESERVED_NAME_RE,
+  repairMalformedStringsDeep,
+  getFirstLine,
+  sanitizeSessionTitle,
+  capitalize,
+  cleanForDisplay,
   stripLineBreaks,
-  capitalize_2,
+  isWellFormedString,
+  normalizeFullWidthSpace,
+  toWellFormedString,
+  collapseWhitespace,
+  truncateWithCount,
+  clippedMessage,
+  truncateCodePoints,
   escapeControlChars,
-  coerceToPlainString,
-  safeJoinLines,
-  repairUtf16,
+  escapeControlCharsForDisplay,
+  nfcLower,
   replaceIdeographicSpace,
+  takeLastChars,
+  stripPrefix,
+  truncateAtWord,
+  compareStringsGrouped,
+  repeatString,
+  ANY_CONTROL_CHAR_RE,
+  stripSuffix,
+  MAX_CLIP_CHARS,
+  WINDOWS_RESERVED_NAME_RE,
+  repairUtf16,
+  oneLineClipped,
+  EndTruncatingAccumulator,
+  safeJoinLines,
+  printableText,
+  truncateMiddle,
+  stripFormatChars,
   fenceCodeBlock,
+  TRAILING_ELLIPSIS_RE,
+  truncateToLines,
+  normalizeFullWidthDigits_2,
+  coerceToPlainString,
 };

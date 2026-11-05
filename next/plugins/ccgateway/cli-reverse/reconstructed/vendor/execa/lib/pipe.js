@@ -1,18 +1,18 @@
 /**
  * execa/lib/pipe.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (3)
+ * pieces: chunk-t889g22j.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { ChildProcess } from "child_process";
 import { createWriteStream } from "fs";
 
-//@ chunk-m4p5zn6n.js:20393-20473 esm-layout
+//@ chunk-t889g22j.js:20392-20472 esm-layout
 function isStream(stream) {
   return stream !== null && typeof stream === "object" && typeof stream.pipe === "function";
 }
-//@ chunk-m4p5zn6n.js:20473-20584 esm-layout
+//@ chunk-t889g22j.js:20472-20583 esm-layout
 function isWritableStream(stream) {
   return (
     isStream(stream) &&
@@ -21,7 +21,7 @@ function isWritableStream(stream) {
     typeof stream._writableState === "object"
   );
 }
-//@ chunk-m4p5zn6n.js:20584-21132 esm-fingerprint
+//@ chunk-t889g22j.js:20583-21131 esm-fingerprint
 var isChildProcessPromise = (target) => target instanceof ChildProcess && typeof target.then === "function";
 var pipeToTarget = (spawned, streamName, target) => {
   if (typeof target === "string") {

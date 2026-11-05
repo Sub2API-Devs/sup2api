@@ -3,9 +3,9 @@
  *
  * 316 无 TeamCreate 工具：此处是会话隐式团队的初始化函数（团队文件、lead 成员、任务列表迁移）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TeamCreateTool/TeamCreateTool.ts
- * pieces: chunk-6cc2zqkz.js (1)
+ * pieces: chunk-4ht4pcp0.js (1)
  * attribution: fingerprint 1
  */
 import { rename } from "fs/promises";
@@ -28,7 +28,7 @@ import { env } from "../../utils/env.js";
 import { getTaskOutputDir, ensureTaskListDir } from "../../utils/tasks.js";
 import { AGENT_COLOR_NAMES } from "../AgentTool/agentColorManager.js";
 
-//@ chunk-6cc2zqkz.js:3286-4232 fingerprint (2.1.88 match: TeamCreateTool, 0.482)
+//@ chunk-4ht4pcp0.js:3473-4419 fingerprint (2.1.88 match: TeamCreateTool, 0.482)
 /**
  * 建立会话唯一的隐式团队：写团队文件（lead 成员 team-lead，in-process 后端）、迁移会话任务列表目录、注册清理，返回 teamContext 与队友颜色分配。316 没有 TeamCreate 工具，此函数由会话启动流程调用。
  */

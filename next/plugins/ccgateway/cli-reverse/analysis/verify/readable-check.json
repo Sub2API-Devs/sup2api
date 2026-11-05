@@ -1,8 +1,8 @@
 {
- "files": 7325,
+ "files": 7562,
  "declarations": {
-  "expected": 81667,
-  "found": 81667,
+  "expected": 84503,
+  "found": 84503,
   "duplicated": 0,
   "missing": []
  },
@@ -10,34 +10,35 @@
  "duplicateDeclarations": 0,
  "missingImportFiles": 0,
  "missingImportNames": 0,
- "freeIdentifiers": 32,
+ "freeIdentifiers": 33,
  "freeNames": [
-  "Af",
   "AsyncIterator",
   "C",
-  "Dn",
   "EdgeRuntime",
   "ErrorEvent",
   "F",
   "FileReader",
   "INTERVAL_PRESETS",
-  "Jh",
   "L",
   "M",
+  "Nm",
+  "On",
   "QUIET_PRESETS",
   "QuotaExceededError",
-  "Rh",
   "THRESHOLD_PRESETS",
   "Worker",
+  "__",
   "__REACT_DEVTOOLS_GLOBAL_HOOK__",
   "__values",
+  "fmt",
+  "ft",
   "h",
   "i",
   "jQuery",
   "keyOf",
-  "lt",
   "m",
   "n",
+  "np",
   "r",
   "reportError",
   "rowDescription",
@@ -56,6 +57,12 @@
     "rowDescription",
     [
      "src/commands/mcp/mcp.js"
+    ]
+   ],
+   [
+    "fmt",
+    [
+     "src/components/FullscreenLayout.js"
     ]
    ],
    [
@@ -170,25 +177,25 @@
     ]
    ],
    [
-    "Rh",
+    "Nm",
     [
      "src/utils/teleport.js"
     ]
    ],
    [
-    "Af",
+    "np",
     [
      "src/utils/teleport.js"
     ]
    ],
    [
-    "Jh",
+    "__",
     [
      "src/utils/teleport.js"
     ]
    ],
    [
-    "lt",
+    "ft",
     [
      "src/utils/worktree.js"
     ]
@@ -219,7 +226,7 @@
     ]
    ],
    [
-    "Dn",
+    "On",
     [
      "vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs"
     ]

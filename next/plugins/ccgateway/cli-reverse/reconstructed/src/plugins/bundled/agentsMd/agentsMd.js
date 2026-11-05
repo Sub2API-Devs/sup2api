@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置插件：把 AGENTS.md 作为项目指令加载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8jbcmznm.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pyd7te4t.js (29)
  * attribution: placement 29
  */
 import {
@@ -34,18 +34,18 @@ import { beginDeferredInits, runDeferredInits } from "../../../../runtime/deferr
 // This module is the first evaluated of an import cycle of 3 modules closed by ./agentsMdFiles.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/plugins/bundled/agentsMd/agentsMdFiles.js");
-//@ chunk-8jbcmznm.js:5228-5433 placement
+//@ chunk-pyd7te4t.js:5536-5741 placement
 var PLUGIN_DESCRIPTION =
   "AGENTS.md as project instructions: by default loaded where the project has no CLAUDE.md; by its instructionFiles option, loaded beside CLAUDE.md, left out, or with the project instructions dropped";
-//@ chunk-8jbcmznm.js:5433-5523 placement (2.1.88 match: isEnvTruthy, 1)
+//@ chunk-pyd7te4t.js:5741-5831 placement (2.1.88 match: isEnvTruthy, 1)
 /**
  * 1/true/yes/on
  */
 var TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 var isSwitchedOn = (value) => value !== undefined && TRUTHY_ENV_VALUES.has(value.trim().toLowerCase());
-//@ chunk-8jbcmznm.js:5523-5541 placement
+//@ chunk-pyd7te4t.js:5831-5849 placement
 var FEATURE_NAME = "agents_md";
-//@ chunk-8jbcmznm.js:5541-5737 placement
+//@ chunk-pyd7te4t.js:5849-6045 placement
 function loadCountsOf(entries, isYielded, isWalkFailed) {
   let reduced = entries.reduce((acc, entry) => acc + (entry.parent === undefined ? 0 : 1), 0);
   return {
@@ -56,11 +56,11 @@ function loadCountsOf(entries, isYielded, isWalkFailed) {
     isWalkFailed,
   };
 }
-//@ chunk-8jbcmznm.js:5737-5760 placement
+//@ chunk-pyd7te4t.js:6045-6068 placement
 var LOAD_EVENT = "agents_md_load";
-//@ chunk-8jbcmznm.js:5760-5780 placement
+//@ chunk-pyd7te4t.js:6068-6088 placement
 var WALK_FAILED_REASON = "walk_failed";
-//@ chunk-8jbcmznm.js:5780-5860 placement
+//@ chunk-pyd7te4t.js:6088-6168 placement
 var loadMarkOf = (countsOf) =>
   countsOf.isWalkFailed
     ? {
@@ -72,12 +72,12 @@ var loadMarkOf = (countsOf) =>
         feature: FEATURE_NAME,
         kind: "ok",
       };
-//@ chunk-8jbcmznm.js:5860-5890 placement
+//@ chunk-pyd7te4t.js:6168-6198 placement
 var modeChoiceOf = (value) => ({
   value,
   of: AGENTS_MD_MODES,
 });
-//@ chunk-8jbcmznm.js:5890-6073 placement
+//@ chunk-pyd7te4t.js:6198-6381 placement
 var loadRowOf = (state, countsOf) => ({
   event: LOAD_EVENT,
   props: {
@@ -89,9 +89,9 @@ var loadRowOf = (state, countsOf) => ({
     walk_failed: countsOf.isWalkFailed,
   },
 });
-//@ chunk-8jbcmznm.js:6073-6096 placement
+//@ chunk-pyd7te4t.js:6381-6404 placement
 var MODE_EVENT = "agents_md_mode";
-//@ chunk-8jbcmznm.js:6096-6157 placement
+//@ chunk-pyd7te4t.js:6404-6465 placement
 var modeRowOf = (state, isInteractive) => ({
   event: MODE_EVENT,
   props: {
@@ -99,9 +99,9 @@ var modeRowOf = (state, isInteractive) => ({
     is_interactive: isInteractive,
   },
 });
-//@ chunk-8jbcmznm.js:6157-6182 placement
+//@ chunk-pyd7te4t.js:6465-6490 placement
 var NESTED_EVENT = "agents_md_nested";
-//@ chunk-8jbcmznm.js:6182-6239 placement
+//@ chunk-pyd7te4t.js:6490-6547 placement
 var nestedRowOf = (mode, fileCount) => ({
   event: NESTED_EVENT,
   props: {
@@ -109,7 +109,7 @@ var nestedRowOf = (mode, fileCount) => ({
     file_count: fileCount,
   },
 });
-//@ chunk-8jbcmznm.js:6239-6298 placement
+//@ chunk-pyd7te4t.js:6547-6606 placement
 var quietly = (fn) => {
   Promise.resolve()
     .then(fn)
@@ -117,17 +117,17 @@ var quietly = (fn) => {
       return;
     });
 };
-//@ chunk-8jbcmznm.js:6298-6404 placement (2.1.88 match: isFileReadDenied, 0.778)
+//@ chunk-pyd7te4t.js:6606-6712 placement (2.1.88 match: isFileReadDenied, 0.78)
 function holdPending(state, loop, files) {
   let byPath = state.pending.get(loop) ?? new Map();
   state.pending.set(loop, byPath);
   for (let file of files) byPath.set(file.path, "read");
 }
-//@ chunk-8jbcmznm.js:6404-6440 placement
+//@ chunk-pyd7te4t.js:6712-6748 placement
 var PENDING_STAGES = ["read", "submitted", "riding"];
-//@ chunk-8jbcmznm.js:6440-6457 placement
+//@ chunk-pyd7te4t.js:6748-6765 placement
 var RIDING = ["riding"];
-//@ chunk-8jbcmznm.js:6457-6591 placement
+//@ chunk-pyd7te4t.js:6765-6899 placement
 function takeBack(state, loop, stages) {
   let pendingByPath = state.pending.get(loop);
   let givenByPath = state.given.get(loop);
@@ -137,7 +137,7 @@ function takeBack(state, loop, stages) {
       pendingByPath?.delete(filePath);
     }
 }
-//@ chunk-8jbcmznm.js:6591-6775 placement
+//@ chunk-pyd7te4t.js:6899-7083 placement
 function settlePending(state, loop, signal) {
   let pendingByPath = state.pending.get(loop);
   let stages = [...(pendingByPath?.values() ?? [])].includes("riding") ? RIDING : undefined;
@@ -145,26 +145,26 @@ function settlePending(state, loop, signal) {
   for (let [filePath, stage] of [...(pendingByPath ?? [])])
     if (stages === undefined || stages.includes(stage)) pendingByPath?.delete(filePath);
 }
-//@ chunk-8jbcmznm.js:6775-6886 placement
+//@ chunk-pyd7te4t.js:7083-7194 placement
 function stagePending(state, loop, stage) {
   let pendingByPath = state.pending.get(loop);
   let index = PENDING_STAGES.indexOf(stage);
   for (let [filePath, currentStage] of [...(pendingByPath ?? [])])
     if (PENDING_STAGES.indexOf(currentStage) < index) pendingByPath?.set(filePath, stage);
 }
-//@ chunk-8jbcmznm.js:6886-6974 placement
+//@ chunk-pyd7te4t.js:7194-7282 placement
 function startOver(state) {
   state.given.clear();
   for (let [loop, stages] of state.pending) state.given.set(loop, new Set(stages.keys()));
 }
-//@ chunk-8jbcmznm.js:6974-7071 placement
+//@ chunk-pyd7te4t.js:7282-7379 placement
 var touchedOf = (path, touched, road) => ({
   path,
   road,
   loop: touched.agentId ?? MAIN_THREAD,
   isWhole: touched.offset === undefined && touched.limit === undefined,
 });
-//@ chunk-8jbcmznm.js:7071-7228 placement
+//@ chunk-pyd7te4t.js:7379-7536 placement
 var walkOf = (mode) => ({
   mode,
   isFallback: mode === "claude-md-or-agents-md",
@@ -175,17 +175,17 @@ var walkOf = (mode) => ({
   isClaudeProject: undefined,
   rootSeen: undefined,
 });
-//@ chunk-8jbcmznm.js:7228-7242 placement
+//@ chunk-pyd7te4t.js:7536-7550 placement
 /**
  * agentsMd 插件里使用的空数组与空对象占位。
  */
 var EMPTY_LIST = [];
 var EMPTY_OBJECT = {};
-//@ chunk-8jbcmznm.js:7242-10262 placement
+//@ chunk-pyd7te4t.js:7550-10570 placement
 /**
  * 在 session.start 时把 AGENTS.md 作为项目指令加载。
  */
-function loadAgentsMdInstructions(on, options) {
+function register(on, options) {
   let agentsMdMode = resolveAgentsMdMode(options.instructionFiles);
   let projectModeLabel = instructionModeLabel(options.projectInstructions);
   let projectModeOverrides = projectModeLabel !== undefined && agentsMdMode === DEFAULT_AGENTS_MD_MODE;
@@ -392,7 +392,7 @@ function loadAgentsMdInstructions(on, options) {
       : result;
   });
 }
-//@ chunk-8jbcmznm.js:10262-11156 placement
+//@ chunk-pyd7te4t.js:10570-11464 placement
 async function agentsMdForMention(ctx, touched, walkState) {
   if (!(await isAgentsMdAttachmentEnabled(ctx))) return [];
   let [root, cwd] = await Promise.all([ctx.session.root(), ctx.session.cwd()]);
@@ -442,7 +442,7 @@ async function agentsMdForMention(ctx, touched, walkState) {
   if (filtered_3.length > 0) quietly(() => ctx.telemetry.log(nestedRowOf(walkState.mode, filtered_3.length)));
   return filtered_3;
 }
-//@ chunk-8jbcmznm.js:11156-11303 placement
+//@ chunk-pyd7te4t.js:11464-11611 placement
 /**
  * CLAUDE_CODE_SIMPLE 与 CLAUDE_CODE_DISABLE_ATTACHMENTS 都未开启时为 true。
  */
@@ -453,7 +453,7 @@ async function isAgentsMdAttachmentEnabled(ctx) {
   ]);
   return !isSwitchedOn(simpleMode) && !isSwitchedOn(attachmentsDisabled);
 }
-//@ chunk-8jbcmznm.js:11303-11647 placement
+//@ chunk-pyd7te4t.js:11611-11955 placement
 /**
  * 用量行去重键（会话 id + 名字）；设置 CLAUDE_CODE_AGENTS_MD_ROWS_EVERY_PROCESS 或读取失败时每个进程都发送。
  */
@@ -475,7 +475,7 @@ async function getUsageRowsDedupKey(ctx, mode) {
     return EMPTY_OBJECT;
   }
 }
-//@ chunk-8jbcmznm.js:11647-11777 placement
+//@ chunk-pyd7te4t.js:11955-12085 placement
 /**
  * 取 HOME 或 USERPROFILE（路径含反斜杠时优先 USERPROFILE）。
  */
@@ -505,7 +505,7 @@ export {
   modeRowOf,
   nestedRowOf,
   quietly,
-  loadAgentsMdInstructions,
+  register,
   settlePending,
   stagePending,
   startOver,

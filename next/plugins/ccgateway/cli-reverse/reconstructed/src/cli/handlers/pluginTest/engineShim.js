@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。claude plugin test 中模拟引擎事件、会话存储与 hooks 模块源。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1tz177x8.js (58)
- * attribution: placement 58
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f284hj51.js (59)
+ * attribution: placement 58, layout 1
  */
 import { join } from "path";
 import {
@@ -59,7 +59,7 @@ import {
   normalizeAppendedToolResult,
   refuseSessionAppend,
 } from "../../../plugins/functionHooks/api/sessionAppend.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import {
   checkAppendMessage,
   isPluginNoteRefusal,
@@ -87,11 +87,12 @@ import {
 import { isUiElementTypeName, RENDER_SITES } from "../../../plugins/functionHooks/ui/renderSites.js";
 import { bumpRenderPaced } from "../../../plugins/functionHooks/ui/renderInstances.js";
 import {
-  validateStateSetArgs,
-  stateSetForPlugin,
-  flushStaleFold,
+  stateGetProblem,
+  stateGet,
+  stateSetProblem,
+  stateSet,
+  flushStale,
 } from "../../../plugins/functionHooks/api/state.js";
-import { check } from "../../../utils/lockfile.js";
 import { judgeHookInput } from "../../../plugins/functionHooks/dispatch/inputJudging.js";
 import { isReservedHookName } from "../../../plugins/functionHooks/eventPatterns.js";
 import { normalizePluginHostAction } from "../../../plugins/functionHooks/hostBridge.js";
@@ -100,9 +101,9 @@ import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
 import { setTestPluginStateSlot } from "./uiDriver.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1tz177x8.js:14394-14407 placement (2.1.88 match: resetStateForTests, 0.751)
+//@ chunk-f284hj51.js:15547-15560 placement (2.1.88 match: resetStateForTests, 0.751)
 var resetStateForTests = "test";
-//@ chunk-1tz177x8.js:14407-14637 placement
+//@ chunk-f284hj51.js:15560-15790 placement
 async function hooksModuleSource(dir, hookEvents) {
   let moduleDir = join(dir, resetStateForTests);
   let joined = hookEvents.map((hookEvent) => {
@@ -123,7 +124,7 @@ ${joined}
     modulePath,
   };
 }
-//@ chunk-1tz177x8.js:14637-14729 placement
+//@ chunk-f284hj51.js:15790-15882 placement
 var hookInputForTest = (hookEventName, extraInput) => ({
   session_id: getSessionId(),
   transcript_path: "",
@@ -131,7 +132,7 @@ var hookInputForTest = (hookEventName, extraInput) => ({
   ...(isPlainObject(extraInput) ? extraInput : {}),
   hook_event_name: hookEventName,
 });
-//@ chunk-1tz177x8.js:14729-15025 placement
+//@ chunk-f284hj51.js:15882-16178 placement
 function classicHookCaller(path, signal) {
   let sliced = path.slice(8);
   if (sliced === "PreToolUse")
@@ -145,9 +146,9 @@ function classicHookCaller(path, signal) {
       signal,
     });
 }
-//@ chunk-1tz177x8.js:15025-15069 placement
+//@ chunk-f284hj51.js:16178-16222 placement
 var classicHooksAsPairs = () => HOOK_EVENTS.filter(isClassicHookEvent).map((hookEvent) => [hookEvent, false]);
-//@ chunk-1tz177x8.js:15069-15207 placement
+//@ chunk-f284hj51.js:16222-16360 placement
 function applyRecordedDenial(call, denials) {
   let recorded = denials.of(call.ref);
   return recorded !== undefined &&
@@ -158,7 +159,7 @@ function applyRecordedDenial(call, denials) {
       }
     : call;
 }
-//@ chunk-1tz177x8.js:15207-15375 placement
+//@ chunk-f284hj51.js:16360-16528 placement
 function denyToolCall(call, reason, denials) {
   let message = reason || `Hook PreToolUse:${call.tool} ${getRuleBehaviorDescription("deny")} this tool`;
   let result = `Error: ${message}`;
@@ -172,14 +173,14 @@ function denyToolCall(call, reason, denials) {
     isError: true,
   };
 }
-//@ chunk-1tz177x8.js:15375-15449 placement
+//@ chunk-f284hj51.js:16528-16602 placement
 var toolCallWithUpdatedInput = (call, updatedInput) =>
   restoreMissingKeys_2(
     ["agentId", "consent", REQUESTMETA],
     toolCallEvent(call.tool, call.tool_use_id, updatedInput),
     call,
   );
-//@ chunk-1tz177x8.js:15449-15785 placement
+//@ chunk-f284hj51.js:16602-16938 placement
 /**
  * 把插件测试中钩子的 allow/ask/deny 决定转换为权限结果对象。
  */
@@ -210,7 +211,7 @@ function toPermissionResult({ decision, reason }, toolName, updatedInput) {
       };
   }
 }
-//@ chunk-1tz177x8.js:15785-15881 placement
+//@ chunk-f284hj51.js:16938-17034 placement
 var coreEngineMember = (record) => ({
   name: "core",
   isCore: true,
@@ -221,7 +222,7 @@ var coreEngineMember = (record) => ({
     return result;
   },
 });
-//@ chunk-1tz177x8.js:15881-15954 placement
+//@ chunk-f284hj51.js:17034-17107 placement
 function runCorePermissionChain(toolName, updatedInput) {
   let result;
   return {
@@ -231,14 +232,14 @@ function runCorePermissionChain(toolName, updatedInput) {
     decided: () => result,
   };
 }
-//@ chunk-1tz177x8.js:15954-16030 placement
+//@ chunk-f284hj51.js:17107-17183 placement
 var coreNoopEngineMember = () => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
   run: () => Promise.resolve({}),
 });
-//@ chunk-1tz177x8.js:16030-16362 placement
+//@ chunk-f284hj51.js:17183-17515 placement
 /**
  * 钩子改写工具输入后重新跑一遍 tool.check（只用替引擎作答的成员），把决定转换成 {updatedInput} 或 {deny}。
  */
@@ -276,7 +277,7 @@ async function checkUpdatedInput(call, signal, stack) {
         deny: permissionResult.message,
       };
 }
-//@ chunk-1tz177x8.js:16362-16770 placement
+//@ chunk-f284hj51.js:17515-17923 placement
 /**
  * ask 决定时跑 PermissionRequest 钩子：allow 时若改写输入再检查一次；deny 用钩子消息；无人作答时用自动拒绝消息。
  */
@@ -309,7 +310,7 @@ async function askPermissionRequestHook(call, signal, origin) {
       };
   }
 }
-//@ chunk-1tz177x8.js:16770-17420 placement
+//@ chunk-f284hj51.js:17923-18573 placement
 /**
  * 测试引擎里的 tool.check 链：跑插件的 tool.check 处理器，汇总为 allow/deny/ask；ask 交给 PermissionRequest 钩子。
  */
@@ -367,7 +368,7 @@ async function runToolCheckChain({ e: call, next: { signal }, settled, stated },
       return askPermissionRequestHook(call, signal, stack);
   }
 }
-//@ chunk-1tz177x8.js:17420-17553 placement
+//@ chunk-f284hj51.js:18573-18706 placement
 async function checkThenCall(step, stack, denials) {
   let { e: call, next } = step;
   let { deny, updatedInput } = await runToolCheckChain(step, stack);
@@ -375,7 +376,7 @@ async function checkThenCall(step, stack, denials) {
     ? denyToolCall(call, deny, denials)
     : next(updatedInput ? toolCallWithUpdatedInput(call, updatedInput) : call);
 }
-//@ chunk-1tz177x8.js:17553-17698 placement
+//@ chunk-f284hj51.js:18706-18851 placement
 function settledFromPreToolUse({ ask, allow }) {
   return typeof ask === "string"
     ? {
@@ -390,7 +391,7 @@ function settledFromPreToolUse({ ask, allow }) {
         }),
       };
 }
-//@ chunk-1tz177x8.js:17698-18034 placement
+//@ chunk-f284hj51.js:18851-19187 placement
 /**
  * 测试引擎里 tool.call 链底的核心步骤：先跑 classic PreToolUse 钩子（可拒绝或改写输入），再走 tool.check。
  */
@@ -422,7 +423,7 @@ var coreToolCallStep = (stack, denials, stated) => ({
         );
   },
 });
-//@ chunk-1tz177x8.js:18034-18139 placement
+//@ chunk-f284hj51.js:19187-19292 placement
 function withheldCoreSteps(stack, denials = createStepRecorder(), stated = {}) {
   return hasModuleHookingSite("classic.PreToolUse") || hasModuleHookingSite("tool.check")
     ? {
@@ -430,29 +431,29 @@ function withheldCoreSteps(stack, denials = createStepRecorder(), stated = {}) {
       }
     : {};
 }
-//@ chunk-1tz177x8.js:18139-18204 placement
+//@ chunk-f284hj51.js:19292-19357 placement
 var hookableRefusalStub = Object.freeze({
   isHookable: true,
   keep: () => {},
   arrived: () => {},
 });
-//@ chunk-1tz177x8.js:18204-18339 placement
+//@ chunk-f284hj51.js:19357-19492 placement
 function newAppendedBlockTypes(content, content_2) {
   let newKeys = new Set(contentBlockStableKeys(parseTypedBlocks(content_2)));
   let oldKeys = contentBlockStableKeys(content);
-  return uniq(
+  return normalizeCaseForComparison_2(
     content.flatMap((block, index) => {
       let key = oldKeys[index];
       return key !== undefined && !newKeys.has(key) ? [block.type] : [];
     }),
   );
 }
-//@ chunk-1tz177x8.js:18339-18406 placement
+//@ chunk-f284hj51.js:19492-19559 placement
 var textOfContentBlocks = (result) =>
   result.content.map((block) => (typeof block.text === "string" ? block.text : ""));
-//@ chunk-1tz177x8.js:18406-18438 placement
+//@ chunk-f284hj51.js:19559-19591 placement
 var POLL_EVENTS_ONLY_TOOL_NAMES = new Set(["poll_events"]);
-//@ chunk-1tz177x8.js:18438-18549 placement
+//@ chunk-f284hj51.js:19591-19702 placement
 function freezeToolResultContent(result, replacements) {
   let keepRaw = POLL_EVENTS_ONLY_TOOL_NAMES.has(result.name ?? "");
   let blocks = resolveBlocks(textOfContentBlocks(result), replacements);
@@ -463,7 +464,7 @@ function freezeToolResultContent(result, replacements) {
         text,
       }));
 }
-//@ chunk-1tz177x8.js:18549-18641 placement
+//@ chunk-f284hj51.js:19702-19794 placement
 var collapseToTextContent = (result, replacements) =>
   [
     resolveBlocks(textOfContentBlocks(result), replacements).join(`
@@ -474,12 +475,12 @@ var collapseToTextContent = (result, replacements) =>
       type: "text",
       text,
     }));
-//@ chunk-1tz177x8.js:18641-18719 placement
+//@ chunk-f284hj51.js:19794-19872 placement
 function mergeAppendedContent(content, content_2) {
   let base = Array.isArray(content) ? content : undefined;
   return content_2 === undefined ? content : reconcileAppendContent(base, content_2);
 }
-//@ chunk-1tz177x8.js:18719-18808 placement
+//@ chunk-f284hj51.js:19872-19961 placement
 function withErrorFlag(result, isError) {
   let { is_error: isError_2, ...rest } = result;
   return isError === (isError_2 === true)
@@ -491,7 +492,7 @@ function withErrorFlag(result, isError) {
         }),
       };
 }
-//@ chunk-1tz177x8.js:18808-18934 placement
+//@ chunk-f284hj51.js:19961-20087 placement
 function applyEditToToolResult(result, edit) {
   return edit.kind === "tool-result" && result.type === "tool_result"
     ? withErrorFlag(
@@ -503,7 +504,7 @@ function applyEditToToolResult(result, edit) {
       )
     : result;
 }
-//@ chunk-1tz177x8.js:18934-19013 placement
+//@ chunk-f284hj51.js:20087-20166 placement
 var textBlockForMessage = (message, text) => ({
   type: "text",
   text,
@@ -511,22 +512,22 @@ var textBlockForMessage = (message, text) => ({
     citations: null,
   }),
 });
-//@ chunk-1tz177x8.js:19013-19161 placement
+//@ chunk-f284hj51.js:20166-20314 placement
 function sliceEditedBlocks(message, edit) {
   if (edit.kind === "text") return [textBlockForMessage(message, edit.text)];
   let sliced = message.content.slice(edit.index, edit.index + 1);
   return message.type === "assistant" ? sliced : sliced.map((block) => applyEditToToolResult(block, edit));
 }
-//@ chunk-1tz177x8.js:19161-19199 placement
+//@ chunk-f284hj51.js:20314-20352 placement
 var sliceBlocksForRole = (message, edits) => edits.flatMap((edit) => sliceEditedBlocks(message, edit));
-//@ chunk-1tz177x8.js:19199-19268 placement
+//@ chunk-f284hj51.js:20352-20421 placement
 var roleBlockSlicers = Object.freeze({
   user: sliceBlocksForRole,
   assistant: sliceBlocksForRole,
   attachment: freezeToolResultContent,
   system: collapseToTextContent,
 });
-//@ chunk-1tz177x8.js:19268-19457 placement
+//@ chunk-f284hj51.js:20421-20610 placement
 function normalizeAppendedMessage(message, message_2) {
   if (!(
     checkAppendMessage(message) === undefined &&
@@ -540,7 +541,7 @@ function normalizeAppendedMessage(message, message_2) {
     content: roleBlockSlicers[message.type](message, content),
   };
 }
-//@ chunk-1tz177x8.js:19457-20291 placement
+//@ chunk-f284hj51.js:20610-21444 placement
 function storeSessionAppendRow(row, message, storedMessage) {
   if (storedMessage === message || safeDeepEqual(storedMessage.content, message.content)) return;
   let appendedBlockTypes = newAppendedBlockTypes(row.message.content, message.content);
@@ -553,7 +554,7 @@ function storeSessionAppendRow(row, message, storedMessage) {
         scrubHint
     : `${prefix}as a session stores it, not as the hooks left it: a pinned block a hook changed is put back as raised, new or changed media and empty texts are not kept, a response's new text carries citations: null, a notice is one text, and an attachment rendered per request stays as raised.`;
 }
-//@ chunk-1tz177x8.js:20291-20421 placement
+//@ chunk-f284hj51.js:21444-21574 placement
 function storeAppendedRow(row, appended) {
   let normalized = normalizeAppendedMessage(row.message, appended.message);
   let problem = storeSessionAppendRow(row, appended.message, normalized);
@@ -563,16 +564,16 @@ function storeAppendedRow(row, appended) {
     uuid: row.uuid,
   };
 }
-//@ chunk-1tz177x8.js:20421-20468 placement
+//@ chunk-f284hj51.js:21574-21621 placement
 var sessionAppendHandler = (caller) => async (input) =>
   isPluginNoteRefusal(caller)
     ? refuseSessionAppend(input, hookableRefusalStub)
     : storeAppendedRow(caller, input);
-//@ chunk-1tz177x8.js:20468-20512 placement
+//@ chunk-f284hj51.js:21621-21665 placement
 var engineFloorCallers = Object.freeze({
   "session.append": sessionAppendHandler,
 });
-//@ chunk-1tz177x8.js:20512-20904 placement
+//@ chunk-f284hj51.js:21665-22057 placement
 /**
  * 按 "事件.方法" 路径取出测试引擎 $ 上可调用的函数；classic.* 走经典钩子；调用时要求传完整事件输入。
  */
@@ -596,7 +597,7 @@ function engineCallFor(path, signal) {
     return call(input);
   };
 }
-//@ chunk-1tz177x8.js:20904-21023 placement
+//@ chunk-f284hj51.js:22057-22176 placement
 var describeEngineCalls = () => [
   ...Object.entries(createEventCallers()).map(([key, value]) => [
     key,
@@ -604,7 +605,7 @@ var describeEngineCalls = () => [
   ]),
   ["classic", classicHooksAsPairs()],
 ];
-//@ chunk-1tz177x8.js:21023-21610 placement
+//@ chunk-f284hj51.js:22176-22763 placement
 /**
  * 在已绘制的插件 UI 中按标签、插件、key（及可选 requestId/surface）找唯一一个元素；找不到或多于一个时抛出带说明的 HooksError。
  */
@@ -630,7 +631,7 @@ function findHostedElement({ act, tag, plugin, key, requestId, surface }) {
     );
   return first;
 }
-//@ chunk-1tz177x8.js:21639-22172 placement
+//@ chunk-f284hj51.js:22792-23325 placement
 /**
  * 把测试里内联给的 register 源码（方法简写、function 或箭头函数）改写成 export function register(...) 模块源码；格式不对时报错。
  */
@@ -654,13 +655,13 @@ function registerSourceAsModule(pluginName, source) {
     `test(name, { plugins }): ${pluginName}'s register is written \`register(on) { ... }\``,
   );
 }
-//@ chunk-1tz177x8.js:22172-22256 placement
+//@ chunk-f284hj51.js:23325-23409 placement
 async function scaffoldPluginTestRoot(rootDir, { name: pluginName, source }) {
   let pluginDir = join(rootDir, pluginName);
   await scaffoldPluginTestDir(pluginDir, pluginName, registerSourceAsModule(pluginName, source));
   return pluginDir;
 }
-//@ chunk-1tz177x8.js:22256-22523 placement
+//@ chunk-f284hj51.js:23409-23676 placement
 function submitTestInput({ plugin, key, text, kind, requestId, surface }) {
   let hostedElement = findHostedElement({
     act: "input",
@@ -680,7 +681,7 @@ function submitTestInput({ plugin, key, text, kind, requestId, surface }) {
     value: text,
   });
 }
-//@ chunk-1tz177x8.js:22523-22688 placement
+//@ chunk-f284hj51.js:23676-23841 placement
 var INPUT_ACTION_SCHEMA = DoctorLazy(() =>
   objectSchema({
     plugin: stringSchema(),
@@ -691,13 +692,13 @@ var INPUT_ACTION_SCHEMA = DoctorLazy(() =>
     surface: stringSchema().refine(isUiElementTypeName, "is not a surface").optional(),
   }),
 );
-//@ chunk-1tz177x8.js:22688-22698 placement
+//@ chunk-f284hj51.js:23841-23851 placement
 var HOOKS_SAME_THREAD_FORCED = true;
-//@ chunk-1tz177x8.js:22698-22752 placement
+//@ chunk-f284hj51.js:23851-23905 placement
 var isRenderSiteName = (siteName) => typeof siteName === "string" && Object.hasOwn(RENDER_SITES, siteName);
-//@ chunk-1tz177x8.js:22752-22768 placement
+//@ chunk-f284hj51.js:23905-23921 placement
 var resetStateLogPrefix = `${resetStateForTests}: `;
-//@ chunk-1tz177x8.js:38481-38937 placement
+//@ chunk-f284hj51.js:39634-40090 placement
 /**
  * 插件测试引擎中各操作对应的钩子链名。
  */
@@ -718,7 +719,7 @@ var ENGINE_CHAIN_FOR_OP = {
   "session.send": "session.send",
   "session.append": "session.append",
 };
-//@ chunk-1tz177x8.js:38937-39242 placement
+//@ chunk-f284hj51.js:40090-40395 placement
 /**
  * 对引擎链结果做收尾：tool.call 应用拒绝记录，遥测写入日志，prompt.fill 返回填充后的文本与光标。
  */
@@ -738,7 +739,7 @@ async function finishEngineResult(spelling, result, context) {
     cursor,
   };
 }
-//@ chunk-1tz177x8.js:39242-39326 placement
+//@ chunk-f284hj51.js:40395-40479 placement
 var uiBottomRenderHook = {
   run: (input, context) => {
     bumpRenderPaced(context.plugin, "steady");
@@ -746,23 +747,28 @@ var uiBottomRenderHook = {
     return Promise.resolve();
   },
 };
-//@ chunk-1tz177x8.js:39353-39463 placement
+//@ chunk-f284hj51.js:40479-40506 layout
+var STATE_GET_STEP = {
+  check: stateGetProblem,
+  run: stateGet,
+};
+//@ chunk-f284hj51.js:40506-40616 placement
 var STATE_SET_STEP = {
-  check: validateStateSetArgs,
+  check: stateSetProblem,
   run: async (input, context) => {
-    let state = await stateSetForPlugin(input, context);
+    let state = await stateSet(input, context);
     let now = Date.now();
-    flushStaleFold("steady", now);
-    flushStaleFold("live", now);
+    flushStale("steady", now);
+    flushStale("live", now);
     return state;
   },
 };
-//@ chunk-1tz177x8.js:39463-39502 placement
+//@ chunk-f284hj51.js:40616-40655 placement
 var RESERVED_ENGINE_HOST_CALLS = {
-  "state.get": check,
+  "state.get": STATE_GET_STEP,
   "state.set": STATE_SET_STEP,
 };
-//@ chunk-1tz177x8.js:39502-40049 placement
+//@ chunk-f284hj51.js:40655-41202 placement
 /**
  * 插件测试的宿主调用分发：ui.invalidate 与保留钩子直接判定；其他操作按 ENGINE_CHAIN_FOR_OP 映射到引擎链执行，结果再按事件后处理。
  */
@@ -818,13 +824,13 @@ function handleTestHostCall({ op, args, caller }, raise, scan) {
     }),
   );
 }
-//@ chunk-1tz177x8.js:40049-40154 placement
+//@ chunk-f284hj51.js:41202-41307 placement
 function installTestHost() {
   env.set("CLAUDE_CODE_HOOKS_SAME_THREAD", HOOKS_SAME_THREAD_FORCED);
   getPluginRegistry().hookRegistration ??= Promise.resolve();
   setTestPluginStateSlot(handleTestHostCall);
 }
-//@ chunk-1tz177x8.js:40154-40572 placement
+//@ chunk-f284hj51.js:41307-41725 placement
 /**
  * 校验测试声明的插件名（格式、与保留名冲突、重复），并登记插件来源。
  */
@@ -847,9 +853,9 @@ function validateTestPlugins(plugins) {
     names.add(pluginName);
   }
 }
-//@ chunk-1tz177x8.js:40572-40699 placement
+//@ chunk-f284hj51.js:41725-41852 placement
 var SELECT_ACTION_SCHEMA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1tz177x8.js:40572", () => {
+deferInit("chunk-f284hj51.js:41725", () => {
   SELECT_ACTION_SCHEMA = DoctorLazy(() =>
     objectSchema({
       plugin: stringSchema(),
@@ -860,11 +866,11 @@ deferInit("chunk-1tz177x8.js:40572", () => {
     }),
   );
 });
-//@ chunk-1tz177x8.js:40699-40751 placement
+//@ chunk-f284hj51.js:41852-41904 placement
 var pluginTierSchema = () => _enum(["prepend", "user", "append", "builtin"]);
-//@ chunk-1tz177x8.js:40751-40878 placement
+//@ chunk-f284hj51.js:41904-42031 placement
 var TEST_PLUGINS_SCHEMA; // deferred: uses pluginTierSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1tz177x8.js:40751", () => {
+deferInit("chunk-f284hj51.js:41904", () => {
   TEST_PLUGINS_SCHEMA = DoctorLazy(() =>
     objectSchema({
       tier: pluginTierSchema(),

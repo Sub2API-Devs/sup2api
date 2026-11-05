@@ -3,12 +3,12 @@
  *
  * ReadMcpResourceTool 名称常量、description 与 prompt
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ReadMcpResourceTool/prompt.ts
- * pieces: chunk-sfy7bm1n.js (1)
+ * pieces: chunk-gg17c06d.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-sfy7bm1n.js:5989-6520 fingerprint (2.1.88 match: DESCRIPTION, 0.508)
+//@ chunk-gg17c06d.js:6993-7524 fingerprint (2.1.88 match: DESCRIPTION, 0.508)
 /**
  * ReadMcpResourceTool 名称常量与 description/prompt 文本。
  */

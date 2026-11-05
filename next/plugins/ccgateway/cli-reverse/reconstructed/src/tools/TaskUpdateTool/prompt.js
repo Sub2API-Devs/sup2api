@@ -3,12 +3,12 @@
  *
  * TaskUpdate 描述与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskUpdateTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-kxyd0g16.js:143782-146123 fingerprint (2.1.88 match: DESCRIPTION, 1)
+//@ chunk-fmnbrxwy.js:158779-161120 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskUpdate 描述与提示词。
  */

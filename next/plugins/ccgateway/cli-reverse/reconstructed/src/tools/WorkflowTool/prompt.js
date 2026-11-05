@@ -3,9 +3,9 @@
  *
  * Workflow 工具脚本 API 提示词（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f9mnszgj.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cbpzb6eb.js (4)
  * attribution: placement 4
  */
 import { AGENT } from "../AgentTool/constants.js";
@@ -17,7 +17,7 @@ import { CLONE_DEPTH_THRESHOLD } from "../../utils/structuredCloneLimits.js";
 import { WORKFLOW_AUTHORING } from "../../skills/bundled/bundledSkillNames.js";
 import { WORKFLOW_TOOL_DESCRIPTION as WORKFLOW_TOOL_DESCRIPTION_2 } from "../../constants/promptSections.js";
 
-//@ chunk-f9mnszgj.js:481-3598 placement
+//@ chunk-cbpzb6eb.js:481-3598 placement
 /**
  * Workflow 工具提示词的组成部分：按开关编入的可选片段（多为空串）、隔离选项字面量，以及工具的完整用途说明与示例脚本。
  */
@@ -56,7 +56,7 @@ The canonical multi-stage pattern \u2014 pipeline by default, each dimension ver
   const confirmed = results.flat().filter(Boolean).filter(f => f.verdict?.isReal)
   return { confirmed }
   // Dimension 'bugs' findings verify while dimension 'perf' is still reviewing. No wasted wall-clock.`;
-//@ chunk-f9mnszgj.js:3598-21263 placement
+//@ chunk-cbpzb6eb.js:3598-21263 placement
 /**
  * Workflow 工具的脚本 API 文档（阶段、模型、effort、agent 调用参数）
  */
@@ -197,9 +197,9 @@ Use this tool for multi-step orchestration where control flow should be determin
 
 The tool result includes a runId. To resume after a pause, kill, or script edit, relaunch with Workflow({scriptPath, resumeFromRunId}) \u2014 the longest unchanged prefix of agent() calls returns cached results instantly; the first edited/new call and everything after it runs live. Same script + same args \u2192 100% cache hit. Before diagnosing why a completed workflow returned an empty or unexpected result, Read <transcriptDir>/journal.jsonl \u2014 it records each agent's actual return value; do not assume cached results are non-empty. Date.now()/Math.random()/new Date() are unavailable in scripts (they would break this) \u2014 stamp results after the workflow returns, or pass timestamps via args. Fallback when no journal is available: Read agent-<id>.jsonl files in the transcript directory and hand-author a continuation script.`;
 }
-//@ chunk-f9mnszgj.js:21263-21456 placement
+//@ chunk-cbpzb6eb.js:21263-21456 placement
 var LOAD_AUTHORING_SKILL_HINT = `Before writing a script, load the \`${WORKFLOW_AUTHORING}\` skill \u2014 the workflow authoring reference: script API and gotchas, resume, the **Ultracode** section, quality patterns, worked examples.`;
-//@ chunk-f9mnszgj.js:21456-21530 placement
+//@ chunk-cbpzb6eb.js:21456-21530 placement
 /**
  * 按是否加载作者技能拼出 Workflow 工具描述。
  */

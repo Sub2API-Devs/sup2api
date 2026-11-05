@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程控制服务器详情页与添加表单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b7gstm5r.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k82fyra0.js (7)
  * attribution: placement 7
  */
 import { basename, resolve } from "path";
@@ -36,17 +36,17 @@ import {
   readUnattendedServingConsent,
   managedSettingsForbidUnattendedServing,
 } from "../../services/remoteTools/unattendedConsentStore.js";
-import { BARE_SUBSCRIPT_NAME_BUILTINS_2 } from "../../utils/bash/ast.js";
 import {
+  fallback,
   isUnattendedServingAccepted,
   unattendedServingForbiddenText,
 } from "../../services/remoteTools/unattendedServingConsent.js";
 
-//@ chunk-b7gstm5r.js:14682-14686 placement
+//@ chunk-k82fyra0.js:15859-15863 placement
 init_react_production();
-//@ chunk-b7gstm5r.js:14686-14690 placement
+//@ chunk-k82fyra0.js:15863-15867 placement
 init_react_production();
-//@ chunk-b7gstm5r.js:14737-14876 placement
+//@ chunk-k82fyra0.js:15914-16053 placement
 /**
  * 会话隔离方式说明（每个会话独立 worktree 或共享目录）。
  */
@@ -55,7 +55,7 @@ function describeSessionIsolation(isolationMode) {
     ? "Each session gets its own git worktree (requires a git repo)."
     : "All sessions share the directory.";
 }
-//@ chunk-b7gstm5r.js:14876-15069 placement
+//@ chunk-k82fyra0.js:16053-16246 placement
 async function readRemoteControlServers(isRunning, storageV5) {
   let jsonConfigFile = await readJsonConfigFile(daemonJsonPath(), storageV5);
   if (!jsonConfigFile.ok) return [];
@@ -66,7 +66,7 @@ async function readRemoteControlServers(isRunning, storageV5) {
     isRunning,
   }));
 }
-//@ chunk-b7gstm5r.js:15069-17350 placement
+//@ chunk-k82fyra0.js:16246-18527 placement
 /**
  * 远程控制服务器详情页：状态、无人值守同意、启停与删除。
  */
@@ -262,7 +262,7 @@ function RemoteControlServerDetail(props) {
   } else dialogElement = $[40];
   return dialogElement;
 }
-//@ chunk-b7gstm5r.js:17350-20584 placement
+//@ chunk-k82fyra0.js:18527-21761 placement
 function AddRemoteControlServerForm(props) {
   let $ = useMemoCache(50);
   let { defaultDir, onCancel, onAdded, storageV5 } = props;
@@ -528,13 +528,13 @@ function AddRemoteControlServerForm(props) {
   } else formElement = $[49];
   return formElement;
 }
-//@ chunk-b7gstm5r.js:21796-21984 placement
+//@ chunk-k82fyra0.js:22973-23161 placement
 async function readServingConsentState(override) {
   let servingOn = override?.servingOn ?? isRemoteToolServingOnForSettings();
   let choice = await readUnattendedServingConsent().catch(() => "unset");
   return {
     servingOn,
-    visible: override?.visible === true || BARE_SUBSCRIPT_NAME_BUILTINS_2(servingOn),
+    visible: override?.visible === true || fallback(servingOn),
     choice,
     canWithdraw: isUnattendedServingAccepted(),
     lockReason: managedSettingsForbidUnattendedServing() ? unattendedServingForbiddenText() : undefined,

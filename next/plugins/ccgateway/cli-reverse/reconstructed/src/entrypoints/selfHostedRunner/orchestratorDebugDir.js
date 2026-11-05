@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：编排器调试目录写入（工作单与输出）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (4)
  * attribution: placement 4
  */
 import { join } from "path";
@@ -15,13 +15,13 @@ import { open, unlink, writeFile, readdir, stat } from "fs/promises";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-2cbdmxy9.js:4616-4661 placement
+//@ chunk-h7hgs1mf.js:5052-5097 placement
 var ORCHESTRATOR_DEBUG_LIMITS = 5000;
 var DEBUG_LOG_MAX_BYTES = 512;
 var DEBUG_LOG_FLUSH_MS = 1000;
 var DEBUG_LOG_CHUNK_BYTES = 65536;
 var DEBUG_LOG_TTL_MS = 300000;
-//@ chunk-2cbdmxy9.js:4661-4855 placement
+//@ chunk-h7hgs1mf.js:5097-5291 placement
 async function writeWorkOrderFile(jti, content) {
   let filePath = join(tmpdir(), `${jti}-${randomBytes(6).toString("hex")}`);
   let handle = await open(filePath, "wx", 384);
@@ -35,7 +35,7 @@ async function writeWorkOrderFile(jti, content) {
   }
   return filePath;
 }
-//@ chunk-2cbdmxy9.js:4855-5417 placement
+//@ chunk-h7hgs1mf.js:5291-5853 placement
 async function writeDebugArtifacts(debugDir, claims, workOrder, stderrText, onDebug) {
   let prefix = join(debugDir, claims.jti);
   try {
@@ -64,7 +64,7 @@ async function writeDebugArtifacts(debugDir, claims, workOrder, stderrText, onDe
     onDebug(`[runner:orchestrator] debug-dir prune failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-2cbdmxy9.js:5417-5544 placement
+//@ chunk-h7hgs1mf.js:5853-5980 placement
 function hasControlChars(text) {
   for (let j = 0; j < text.length; j++) {
     let code = text.charCodeAt(j);

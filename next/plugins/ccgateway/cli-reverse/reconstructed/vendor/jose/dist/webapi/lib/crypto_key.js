@@ -1,23 +1,23 @@
 /**
  * jose/dist/webapi/lib/crypto_key.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (7)
+ * pieces: chunk-0f6azspv.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
  */
-//@ chunk-5h78gfwc.js:2140-2268 esm-fingerprint
+//@ chunk-0f6azspv.js:2140-2268 esm-fingerprint
 var unusable = (name, prop = "algorithm.name") =>
   TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name}`);
 var isAlgorithm = (algorithm, name) => algorithm.name === name;
-//@ chunk-5h78gfwc.js:2268-2319 esm-layout
+//@ chunk-0f6azspv.js:2268-2319 esm-layout
 function getHashLength(hash) {
   return parseInt(hash.name.slice(4), 10);
 }
-//@ chunk-5h78gfwc.js:2319-2391 esm-fingerprint
+//@ chunk-0f6azspv.js:2319-2391 esm-fingerprint
 function checkHashLength(algorithm, expected) {
   if (getHashLength(algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
 }
-//@ chunk-5h78gfwc.js:2391-2530 esm-fingerprint
+//@ chunk-0f6azspv.js:2391-2530 esm-fingerprint
 function getNamedCurve(alg) {
   switch (alg) {
     case "ES256":
@@ -30,12 +30,12 @@ function getNamedCurve(alg) {
       throw Error("unreachable");
   }
 }
-//@ chunk-5h78gfwc.js:2530-2667 esm-fingerprint
+//@ chunk-0f6azspv.js:2530-2667 esm-fingerprint
 function checkUsage(key, usage) {
   if (usage && !key.usages.includes(usage))
     throw TypeError(`CryptoKey does not support this operation, its usages must include ${usage}.`);
 }
-//@ chunk-5h78gfwc.js:2667-3511 esm-fingerprint
+//@ chunk-0f6azspv.js:2667-3511 esm-fingerprint
 function checkSigCryptoKey(key, alg, usage) {
   switch (alg) {
     case "HS256":
@@ -83,7 +83,7 @@ function checkSigCryptoKey(key, alg, usage) {
   }
   checkUsage(key, usage);
 }
-//@ chunk-5h78gfwc.js:3511-4387 esm-fingerprint
+//@ chunk-0f6azspv.js:3511-4387 esm-fingerprint
 function checkEncCryptoKey(key, alg, usage) {
   switch (alg) {
     case "A128GCM":

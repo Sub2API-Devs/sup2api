@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能健康度看板数据（/api/claude_code/skills，tengu_skills_dashboard_enabled）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (11)
  * attribution: placement 11
  */
 import { join, resolve, sep } from "path";
@@ -23,27 +23,27 @@ import { getPluginsDirectory } from "../../utils/plugins/pluginDirectories.js";
 import { marketplaceOf, marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { INLINE_PLUGIN_MARKETPLACE } from "../../utils/telemetry/pluginTelemetry.js";
 import { loadKnownMarketplacesSafe, seedDirFor } from "../../utils/plugins/marketplaceManager.js";
-import { isLocalMarketplaceSource } from "../../utils/plugins/reconciler.js";
+import { isLocalMarketplaceSource } from "../../utils/plugins/schemas.js";
 import { useSettingsSyncEffect } from "../../state/AppState.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { formatErrorMessage } from "./PluginErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:125194-125233 placement
+//@ chunk-wb51jffc.js:125023-125062 placement
 var SKILL_HEALTH_LEVELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:125194", () => {
+deferInit("chunk-wb51jffc.js:125023", () => {
   SKILL_HEALTH_LEVELS = new Set(["good", "warn", "poor"]);
 });
-//@ chunk-vrb44rx7.js:125233-125286 placement
+//@ chunk-wb51jffc.js:125062-125115 placement
 function isSkillHealthLevel(health) {
   return typeof health === "string" && SKILL_HEALTH_LEVELS.has(health);
 }
-//@ chunk-vrb44rx7.js:125286-125352 placement
+//@ chunk-wb51jffc.js:125115-125181 placement
 function cachedSkillHealth(streamWarning, credentials) {
   streamWarning.skillHealthMap ??= fetchSkillHealth(credentials);
   return streamWarning.skillHealthMap;
 }
-//@ chunk-vrb44rx7.js:125352-125900 placement
+//@ chunk-wb51jffc.js:125181-125729 placement
 /**
  * 拉取技能健康度（开关关闭或失败时返回 null）。
  */
@@ -75,7 +75,7 @@ async function fetchSkillHealth(credentials) {
     return null;
   }
 }
-//@ chunk-vrb44rx7.js:125900-126039 placement
+//@ chunk-wb51jffc.js:125729-125868 placement
 /**
  * 按当前凭据异步拉取技能健康度看板数据，组件卸载后忽略结果；返回数据或 null。
  */
@@ -93,7 +93,7 @@ function useSkillHealthData() {
   }, [credentials]);
   return health;
 }
-//@ chunk-vrb44rx7.js:126132-126345 placement (2.1.88 match: readMarketplaceJsonContent, 0.844)
+//@ chunk-wb51jffc.js:125961-126174 placement (2.1.88 match: readMarketplaceJsonContent, 0.844)
 /**
  * 读取工作区 .claude-plugin/marketplace.json 内容（存储后端模式经存储层）。
  */
@@ -106,7 +106,7 @@ async function readMarketplaceJsonContent(storageV5, plugin) {
   }
   return readFile(marketplacePath, "utf-8");
 }
-//@ chunk-vrb44rx7.js:126345-126608 placement
+//@ chunk-wb51jffc.js:126174-126437 placement
 /**
  * 判断插件是否只在本机存在（不在插件目录/会话缓存里）：内联市场插件，或来自本地市场源且没有种子目录的插件。
  */
@@ -128,18 +128,18 @@ async function isLocalOnlyPlugin(storageV5, plugin) {
     seedDirFor(known.installLocation) === undefined
   );
 }
-//@ chunk-vrb44rx7.js:126608-126678 placement
+//@ chunk-wb51jffc.js:126437-126507 placement
 function isPathInsideDir(dir, path) {
   let parent = resolve(dir);
   let child = resolve(path);
   return child === parent || child.startsWith(parent + sep);
 }
-//@ chunk-vrb44rx7.js:126678-126682 placement
+//@ chunk-wb51jffc.js:126507-126511 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:126678", () => {
+deferInit("chunk-wb51jffc.js:126507", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:126682-126762 placement
+//@ chunk-wb51jffc.js:126511-126591 placement
 function watchSkillHealthInvalidation(getEnabledPluginsBySource, enabledPluginsEqual) {
   let [current, setCurrent] = useState(getEnabledPluginsBySource);
   useSettingsSyncEffect(() => {
@@ -148,13 +148,13 @@ function watchSkillHealthInvalidation(getEnabledPluginsBySource, enabledPluginsE
   });
   return current;
 }
-//@ chunk-vrb44rx7.js:126762-126794 placement
+//@ chunk-wb51jffc.js:126591-126623 placement
 function formatSkillErrorMessage(error) {
   return stripInvisibleKeepEmoji(formatErrorMessage(error));
 }
 export {
+  formatSkillErrorMessage,
   useSkillHealthData,
   watchSkillHealthInvalidation,
   readMarketplaceJsonContent,
-  formatSkillErrorMessage,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：额度用尽后自动继续：额度重置时自动提交续写提示，可由对话框或自动装配、取消。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3y22eg7d.js (79)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-peqtdyy5.js (79)
  * attribution: placement 79
  */
 import { randomUUID } from "crypto";
@@ -37,10 +37,10 @@ import {
 import {
   getCommandQueue,
   someInFlightDrainCommand,
-  isPromptModeQueuedCommand as isPromptModeQueuedCommand_2,
-  isRefillableCommand,
-  removeQueuedByFilter,
-  enqueueCommand,
+  isQueuedUserPrompt,
+  isBatchHeadHumanCommand,
+  removeByFilter,
+  enqueue,
 } from "../../utils/messageQueueManager.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
@@ -65,7 +65,7 @@ import { overageIncludedModels } from "../api/usage.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3y22eg7d.js:928-1319 placement
+//@ chunk-peqtdyy5.js:928-1319 placement
 /**
  * 额度重置提示语、按模型恢复的特性开关名，以及「额度提前可用」的续写提示文案。
  */
@@ -75,7 +75,7 @@ var USAGE_RESET_PROMPT =
 var TENGU_LANTERN_WICK_RESUME_BY_MODEL = "tengu_lantern_wick_resume_by_model";
 var AVAILABLE_AGAIN_PROMPT =
   "Your claude.ai usage is available again before the usage-limit reset. Continue the task you were working on when the limit was reached; do not repeat work that is already complete.";
-//@ chunk-3y22eg7d.js:1319-1385 placement
+//@ chunk-peqtdyy5.js:1319-1385 placement
 function isAutoContinuationPrompt(text) {
   return (
     text === USAGE_RESET_PROMPT ||
@@ -83,7 +83,7 @@ function isAutoContinuationPrompt(text) {
     (isEpisodeActiveNow() && text.trim() === autoResumePrompt().trim())
   );
 }
-//@ chunk-3y22eg7d.js:1385-1449 placement
+//@ chunk-peqtdyy5.js:1385-1449 placement
 /**
  * 自动继续的时序常量：一条人类提示后最多续写次数、重装延迟表、触发抖动范围、宽限与延迟上限。
  */
@@ -93,7 +93,7 @@ var MIN_JITTER_MS = 30000;
 var MAX_JITTER_MS = 90000;
 var MIN_GRACE_MS = 1800000;
 var MAX_DELAY_MS = 21600000;
-//@ chunk-3y22eg7d.js:1449-2227 placement
+//@ chunk-peqtdyy5.js:1449-2227 placement
 function createQuotaAutoResumeState() {
   return {
     state: {
@@ -130,15 +130,15 @@ function createQuotaAutoResumeState() {
     unsubscribeSessionSwitch: null,
   };
 }
-//@ chunk-3y22eg7d.js:2227-2244 placement
+//@ chunk-peqtdyy5.js:2227-2244 placement
 /**
  * 按 host 保存的额度自动继续状态。
  */
 var quotaResumeStateSlots; // deferred: uses createQuotaAutoResumeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3y22eg7d.js:2227", () => {
+deferInit("chunk-peqtdyy5.js:2227", () => {
   quotaResumeStateSlots = new HostScoped(createQuotaAutoResumeState);
 });
-//@ chunk-3y22eg7d.js:2244-2339 placement
+//@ chunk-peqtdyy5.js:2244-2339 placement
 /**
  * 取当前 host 的额度自动继续状态对象（HostScoped），首次调用时登记 episode 活跃判定。
  */
@@ -149,27 +149,27 @@ function currentQuotaResumeState() {
   if (!provider.provided) provider.provide(() => isEpisodeActive(state));
   return state;
 }
-//@ chunk-3y22eg7d.js:2339-2511 placement
+//@ chunk-peqtdyy5.js:2339-2511 placement
 function clampMs(value, fallback, minMs = 0) {
   if (typeof value !== "number" && typeof value !== "string") return fallback;
   let ms = Number(value);
   if (!Number.isFinite(ms) || ms < 0) return fallback;
   return Math.min(Math.max(Math.round(ms), minMs), MAX_DELAY_MS);
 }
-//@ chunk-3y22eg7d.js:2511-2524 placement
+//@ chunk-peqtdyy5.js:2511-2524 placement
 var MAX_GRACE_MS = 60000;
-//@ chunk-3y22eg7d.js:2524-2553 placement
+//@ chunk-peqtdyy5.js:2524-2553 placement
 function isAutoContinueEnabled() {
   return hasUnknownAutoContinueSetting(currentQuotaResumeState());
 }
-//@ chunk-3y22eg7d.js:2553-2605 placement
+//@ chunk-peqtdyy5.js:2553-2605 placement
 /**
  * 自动继续设置是否处于「未知」状态（出现 auto_restore_cancel 键）。
  */
 function hasUnknownAutoContinueSetting(state) {
   return resolveAutoContinueEnabled(state.autoContinueKeyPresence);
 }
-//@ chunk-3y22eg7d.js:2605-2709 placement
+//@ chunk-peqtdyy5.js:2605-2709 placement
 /**
  * 会话重置时取消自动继续（auto_restore_cancel 除外）。
  */
@@ -179,9 +179,9 @@ function cancelOnConversationReset(reason) {
   if (!isEpisodeActive(state)) return;
   cancelAutoResume(state, "conversation_reset");
 }
-//@ chunk-3y22eg7d.js:2709-2718 placement
+//@ chunk-peqtdyy5.js:2709-2718 placement
 var MAX_SIDE_EFFECT_RESCANS = 2;
-//@ chunk-3y22eg7d.js:2718-3182 placement
+//@ chunk-peqtdyy5.js:2718-3182 placement
 /**
  * 读取 autoContinueAtUsageLimit 的设置存在性，不可知时定时重试。
  */
@@ -209,7 +209,7 @@ async function rescanAutoContinueSetting(state, remainingRescans = MAX_SIDE_EFFE
     state.unknowableRescanTimer.unref?.();
   }
 }
-//@ chunk-3y22eg7d.js:3182-3283 placement
+//@ chunk-peqtdyy5.js:3182-3284 placement
 /**
  * autoContinueAtUsageLimit 仅来自用户设置（或未设置）。
  */
@@ -217,7 +217,7 @@ function isAutoContinueUserSetting() {
   let source = getSecuritySensitiveSettingWithSources("autoContinueAtUsageLimit")[0]?.source;
   return source === undefined || source === "userSettings";
 }
-//@ chunk-3y22eg7d.js:3283-3360 placement
+//@ chunk-peqtdyy5.js:3284-3361 placement
 /**
  * 判断该限额能否自动继续：订阅用户、非按量计费、限额可续且开关允许。
  */
@@ -229,11 +229,11 @@ function canAutoResumeThisLimit(limit) {
     isAutoContinueFeatureEnabled()
   );
 }
-//@ chunk-3y22eg7d.js:3360-3392 placement
+//@ chunk-peqtdyy5.js:3361-3393 placement
 function quotaAutoResumeState() {
   return currentQuotaResumeState().state;
 }
-//@ chunk-3y22eg7d.js:3392-3477 placement
+//@ chunk-peqtdyy5.js:3393-3478 placement
 /**
  * 当前是否由 auto 路径装配了自动继续。
  */
@@ -241,24 +241,24 @@ function isAutoArmedByItself() {
   let state = currentQuotaResumeState();
   return state.state.phase === "armed" && state.episodeArmOrigin === "auto";
 }
-//@ chunk-3y22eg7d.js:3477-3581 placement
+//@ chunk-peqtdyy5.js:3478-3582 placement
 function noteRejectedResetKey(state) {
   let currentLimits = getCurrentLimits();
   if (currentLimits.status === "rejected" && currentLimits.resetsAt !== undefined)
     state.armedResetKeys.add(currentLimits.resetsAt);
 }
-//@ chunk-3y22eg7d.js:3581-3630 placement
+//@ chunk-peqtdyy5.js:3582-3631 placement
 /**
  * 该重置键是否已被装配过。
  */
 function isResetKeyArmed(resetsAt) {
   return currentQuotaResumeState().armedResetKeys.has(resetsAt);
 }
-//@ chunk-3y22eg7d.js:3630-3677 placement
+//@ chunk-peqtdyy5.js:3631-3678 placement
 function isQuotaAutoResumeArmed() {
   return currentQuotaResumeState().state.phase === "armed";
 }
-//@ chunk-3y22eg7d.js:3677-3850 placement
+//@ chunk-peqtdyy5.js:3678-3851 placement
 function isEpisodeActive(state) {
   return (
     state.state.phase === "armed" ||
@@ -269,49 +269,49 @@ function isEpisodeActive(state) {
     someInFlightDrainCommand((command) => isEpisodeCommand(state, command))
   );
 }
-//@ chunk-3y22eg7d.js:3850-3887 placement
+//@ chunk-peqtdyy5.js:3851-3887 placement
 /**
  * 排队命令是提示模式且可自动续写。
  */
 function isPromptModeQueuedCommand(command) {
-  return isPromptModeQueuedCommand_2(command) && isRefillableCommand(command);
+  return isQueuedUserPrompt(command) && isBatchHeadHumanCommand(command);
 }
-//@ chunk-3y22eg7d.js:3887-3993 placement
+//@ chunk-peqtdyy5.js:3887-3993 placement
 function isEpisodeCommand(state, command) {
   return (
     command.uuid !== undefined &&
     (command.uuid === state.pendingContinuationUuid || state.takeoverUuids.has(command.uuid))
   );
 }
-//@ chunk-3y22eg7d.js:3993-4022 placement
+//@ chunk-peqtdyy5.js:3993-4022 placement
 /**
  * 当前是否有进行中的自动继续 episode。
  */
 function isEpisodeActiveNow() {
   return isEpisodeActive(currentQuotaResumeState());
 }
-//@ chunk-3y22eg7d.js:4022-4054 placement
+//@ chunk-peqtdyy5.js:4022-4054 placement
 /**
  * 给定阶段是否算作活跃（结合 pending 判断）。
  */
 function isPhaseActive(phase) {
   return isActivePhase(currentQuotaResumeState(), phase);
 }
-//@ chunk-3y22eg7d.js:4054-4108 placement
+//@ chunk-peqtdyy5.js:4054-4108 placement
 /**
  * 阶段为 armed/stale 或存在待继续的 uuid 即视为活跃。
  */
 function isActivePhase(state, phase) {
   return phase === "armed" || phase === "stale" || isPendingContinuationPresent(state);
 }
-//@ chunk-3y22eg7d.js:4108-4137 placement
+//@ chunk-peqtdyy5.js:4108-4137 placement
 /**
  * 当前是否有待继续的排队命令。
  */
 function hasPendingContinuation() {
   return isPendingContinuationPresent(currentQuotaResumeState());
 }
-//@ chunk-3y22eg7d.js:4137-4227 placement
+//@ chunk-peqtdyy5.js:4137-4227 placement
 /**
  * 待继续的 uuid 仍存在于排队命令中。
  */
@@ -322,51 +322,51 @@ function isPendingContinuationPresent(state) {
     getCommandQueue().some((command) => command.uuid === pendingContinuationUuid)
   );
 }
-//@ chunk-3y22eg7d.js:4227-4294 placement
+//@ chunk-peqtdyy5.js:4227-4294 placement
 /**
  * 给定 uuid 是否为当前待继续的 uuid。
  */
 function isPendingContinuationUuid(uuid) {
   return uuid !== undefined && uuid === currentQuotaResumeState().pendingContinuationUuid;
 }
-//@ chunk-3y22eg7d.js:4294-4341 placement
+//@ chunk-peqtdyy5.js:4294-4341 placement
 /**
  * 订阅自动继续事件。
  */
 function onQuotaResumeEvent(listener) {
   return currentQuotaResumeState().events.subscribe(listener);
 }
-//@ chunk-3y22eg7d.js:4341-4389 placement
+//@ chunk-peqtdyy5.js:4341-4389 placement
 /**
  * 订阅自动继续状态变化。
  */
 function onQuotaResumeChange(listener) {
   return currentQuotaResumeState().changed.subscribe(listener);
 }
-//@ chunk-3y22eg7d.js:4389-4432 placement
+//@ chunk-peqtdyy5.js:4389-4432 placement
 function _(slice, state) {
   slice.state = state;
   slice.changed.emit();
 }
-//@ chunk-3y22eg7d.js:4432-4553 placement
+//@ chunk-peqtdyy5.js:4432-4553 placement
 function jitterMs() {
   let autoContinueConfig = getAutoContinueConfig();
   let minMs = clampMs(autoContinueConfig.jitterMinMs, MIN_JITTER_MS);
   let max = Math.max(minMs, clampMs(autoContinueConfig.jitterMaxMs, MAX_JITTER_MS));
   return Math.round(minMs + Math.random() * (max - minMs));
 }
-//@ chunk-3y22eg7d.js:4553-4658 placement
+//@ chunk-peqtdyy5.js:4553-4658 placement
 function computeFireAtMs(resetsAtSeconds, rearmCount, nowMs) {
   let resetAtMs = resetsAtSeconds * 1000 + jitterMs();
   if (rearmCount === null) return resetAtMs;
   let rearmDelayMs = REARM_DELAYS_MS[rearmCount] ?? REARM_DELAYS_MS.at(-1) ?? 0;
   return Math.max(resetAtMs, nowMs + rearmDelayMs);
 }
-//@ chunk-3y22eg7d.js:4658-4722 placement
+//@ chunk-peqtdyy5.js:4658-4722 placement
 function armQuotaAutoResumeFromDialog(limits, nowMs = Date.now(), origin = "dialog", storageV5) {
   return armAutoResume(currentQuotaResumeState(), limits, nowMs, origin, storageV5);
 }
-//@ chunk-3y22eg7d.js:4722-5186 placement
+//@ chunk-peqtdyy5.js:4722-5185 placement
 /**
  * 装配自动继续（记录排队前的命令、上报事件）。
  */
@@ -379,7 +379,7 @@ function armAutoResume(state, limits, nowMs, episodeArmOrigin, storageV5) {
   state.dispatchingTakeoverUuids.clear();
   state.queuedBeforeArmUuids.clear();
   for (let command of getCommandQueue())
-    if (isPromptModeQueuedCommand(command) || (command.mode === "bash" && isRefillableCommand(command))) {
+    if (isPromptModeQueuedCommand(command) || (command.mode === "bash" && isBatchHeadHumanCommand(command))) {
       command.uuid ??= randomUUID();
       state.queuedBeforeArmUuids.add(command.uuid);
     }
@@ -392,7 +392,7 @@ function armAutoResume(state, limits, nowMs, episodeArmOrigin, storageV5) {
   state.events.emit("armed");
   return true;
 }
-//@ chunk-3y22eg7d.js:5186-5597 placement
+//@ chunk-peqtdyy5.js:5185-5596 placement
 function autoArmQuotaAutoResume(limits, nowMs = Date.now(), storageV5) {
   let state = currentQuotaResumeState();
   if (!canAutoResumeThisLimit(limits)) return false;
@@ -411,7 +411,7 @@ function autoArmQuotaAutoResume(limits, nowMs = Date.now(), storageV5) {
   state.events.emit("auto-armed");
   return true;
 }
-//@ chunk-3y22eg7d.js:5597-5843 placement
+//@ chunk-peqtdyy5.js:5596-5842 placement
 /**
  * 回合结束时若停在额度上限：取状态变化（limitHitAtMs 毫秒时间戳），已 armed 则更新拒绝记录并比较重置时刻，否则走自动装配。
  */
@@ -430,7 +430,7 @@ function handleTurnCompletedAtLimit(isMainThread, terminalReason, limitHitAtMs =
     return false;
   }
 }
-//@ chunk-3y22eg7d.js:5843-6264 placement
+//@ chunk-peqtdyy5.js:5842-6263 placement
 /**
  * 进入 armed 状态并记录重置时刻与触发时间。
  */
@@ -456,14 +456,14 @@ function setArmedState(state, resetsAtSeconds, rearmCount, nowMs, episodeArmOrig
     consecutiveRearms: state.consecutiveRearms,
   });
 }
-//@ chunk-3y22eg7d.js:6264-6287 placement
+//@ chunk-peqtdyy5.js:6263-6286 placement
 /**
  * 触发前再确认一次并提交续写。
  */
 function confirmAndFire() {
   confirmAndFire_2(currentQuotaResumeState());
 }
-//@ chunk-3y22eg7d.js:6287-6358 placement
+//@ chunk-peqtdyy5.js:6286-6357 placement
 /**
  * 包装一个函数：调用后（除非返回 false）再确认一次并触发续写。
  */
@@ -474,7 +474,7 @@ function withQuotaResumeFire(onDone) {
     return result;
   };
 }
-//@ chunk-3y22eg7d.js:6358-6837 placement
+//@ chunk-peqtdyy5.js:6357-6836 placement
 /**
  * 触发前再查一次主模型额度，确认可用才提交续写。
  */
@@ -489,15 +489,11 @@ async function confirmAndFire_2(state) {
     for (;;) {
       state.recheckRequestedWhileConfirming = false;
       if (planModeConstituentFamily(getUserSpecifiedModelSetting()) !== null) return;
-      let mainLoopModel = getMainLoopModel();
+      let source = getMainLoopModel();
       let state_2 = state.state;
-      let probe = await probeQuotaStatus(mainLoopModel, undefined, state.storageV5);
+      let probe = await probeQuotaStatus(source, undefined, state.storageV5);
       if (state.state.phase !== "armed" || isAutoResumeDisabled(state)) return;
-      if (
-        state.recheckRequestedWhileConfirming ||
-        getMainLoopModel() !== mainLoopModel ||
-        state.state !== state_2
-      )
+      if (state.recheckRequestedWhileConfirming || getMainLoopModel() !== source || state.state !== state_2)
         continue;
       if (probe === null || !isRejectionWorthRearming(probe)) return;
       fireAutoResume(state);
@@ -509,7 +505,7 @@ async function confirmAndFire_2(state) {
     state.confirmingMainModel = false;
   }
 }
-//@ chunk-3y22eg7d.js:6837-7056 placement
+//@ chunk-peqtdyy5.js:6836-7055 placement
 function fireAutoResume(state) {
   submitContinuationPrompt(state, AVAILABLE_AGAIN_PROMPT);
   logEvent("tengu_quota_auto_resume_fired", {
@@ -523,7 +519,7 @@ function fireAutoResume(state) {
   });
   state.events.emit("fired-now");
 }
-//@ chunk-3y22eg7d.js:7056-7366 placement
+//@ chunk-peqtdyy5.js:7055-7365 placement
 /**
  * 取消原因是否来自用户按键。
  */
@@ -547,7 +543,7 @@ function isUserCancelReason(reason) {
       return false;
   }
 }
-//@ chunk-3y22eg7d.js:7366-7676 placement
+//@ chunk-peqtdyy5.js:7365-7675 placement
 /**
  * 取消原因是否系统性（不发 cancelled 事件但清除去重键）。
  */
@@ -571,11 +567,11 @@ function isSilentCancelReason(reason) {
       return false;
   }
 }
-//@ chunk-3y22eg7d.js:7676-7700 placement
+//@ chunk-peqtdyy5.js:7675-7699 placement
 function cancelQuotaAutoResume(reason) {
   cancelAutoResume(currentQuotaResumeState(), reason);
 }
-//@ chunk-3y22eg7d.js:7700-7927 placement
+//@ chunk-peqtdyy5.js:7699-7926 placement
 function cancelAutoResume(state, reason) {
   if (isEpisodeActive(state)) noteRejectedResetKey(state);
   if (isSilentCancelReason(reason)) state.autoArmDedupeResetKeys.clear();
@@ -587,7 +583,7 @@ function cancelAutoResume(state, reason) {
   goIdle(state, reason);
   if (wasActive && isUserCancelReason(reason)) state.events.emit("cancelled");
 }
-//@ chunk-3y22eg7d.js:7927-8847 placement
+//@ chunk-peqtdyy5.js:7926-8846 placement
 var AUTO_CONTINUE_CANCEL_MESSAGES = {
   background_handoff:
     "Automatic continue cancelled \xB7 this session moved to the background, so the task will not resume on its own when the usage limit resets",
@@ -600,7 +596,7 @@ var AUTO_CONTINUE_CANCEL_MESSAGES = {
   process_exit:
     "Automatic continue cancelled \xB7 Claude Code exited during the wait, so the task will not resume on its own when the usage limit resets (send a prompt after the reset to continue)",
 };
-//@ chunk-3y22eg7d.js:8847-8955 placement
+//@ chunk-peqtdyy5.js:8846-8954 placement
 /**
  * 交接时取消自动继续，返回是否原本处于活动。
  */
@@ -612,14 +608,14 @@ function cancelForHandoff(reason) {
   cancelAutoResume(state, reason);
   return wasActive;
 }
-//@ chunk-3y22eg7d.js:8955-8995 placement
+//@ chunk-peqtdyy5.js:8954-8994 placement
 /**
  * 清除「接管进行中」标记。
  */
 function clearHandoffInProgress() {
   currentQuotaResumeState().handoffInProgress = false;
 }
-//@ chunk-3y22eg7d.js:8995-9177 placement
+//@ chunk-peqtdyy5.js:8994-9176 placement
 /**
  * 用户提交命令时标记接管。
  */
@@ -632,18 +628,18 @@ function noteHumanTakeover(uuid, { dispatching = false } = {}) {
   if (dispatching) state.dispatchingTakeoverUuids.add(uuid);
   state.changed.emit();
 }
-//@ chunk-3y22eg7d.js:9177-9389 placement
+//@ chunk-peqtdyy5.js:9176-9388 placement
 function clearPendingContinuation(state, { keepIfDrained = false } = {}) {
   if (state.pendingContinuationUuid === null) return false;
   let pendingContinuationUuid = state.pendingContinuationUuid;
-  let removed = removeQueuedByFilter((command) => command.uuid === pendingContinuationUuid).length > 0;
+  let removed = removeByFilter((command) => command.uuid === pendingContinuationUuid).length > 0;
   if (removed || !keepIfDrained) {
     state.pendingContinuationUuid = null;
     state.changed.emit();
   }
   return removed;
 }
-//@ chunk-3y22eg7d.js:9389-9867 placement
+//@ chunk-peqtdyy5.js:9388-9866 placement
 /**
  * 需要上报的取消原因。
  */
@@ -676,7 +672,7 @@ function isReportedCancelReason(reason) {
       return false;
   }
 }
-//@ chunk-3y22eg7d.js:9867-9998 placement
+//@ chunk-peqtdyy5.js:9866-9997 placement
 function goIdle(state, reason) {
   if (state.state.phase === "idle") return;
   if (isReportedCancelReason(reason))
@@ -687,7 +683,7 @@ function goIdle(state, reason) {
     phase: "idle",
   });
 }
-//@ chunk-3y22eg7d.js:9998-10624 placement
+//@ chunk-peqtdyy5.js:9997-10623 placement
 /**
  * 每次时钟检查：记录观察时间，若中间间隔超过宽限且已过触发点则标记“睡过了”；未到触发点返回 pending； 睡过时转 stale 并上报；否则提交续写提示、上报 fired 并回到 idle。
  */
@@ -720,7 +716,7 @@ function tickAutoResume(nowMs, isLoading) {
   goIdle(state, "fired");
   return "fired";
 }
-//@ chunk-3y22eg7d.js:10624-10954 placement
+//@ chunk-peqtdyy5.js:10623-10953 placement
 function autoResumePrompt() {
   let servedText = servedTextForModel(TENGU_LANTERN_WICK_RESUME_BY_MODEL, getMainLoopModel());
   if (isBotProtectedWrapUpTextOn()) {
@@ -741,7 +737,7 @@ function autoResumePrompt() {
   }
   return servedText !== undefined && servedText.trim() !== "" ? servedText : USAGE_RESET_PROMPT;
 }
-//@ chunk-3y22eg7d.js:10954-11228 placement
+//@ chunk-peqtdyy5.js:10953-11227 placement
 function submitContinuationPrompt(state, value = autoResumePrompt()) {
   clearPendingContinuation(state);
   state.continuationsSinceHumanPrompt++;
@@ -749,7 +745,7 @@ function submitContinuationPrompt(state, value = autoResumePrompt()) {
   state.pendingContinuationUuid = uuid;
   state.activeTurnClaim = null;
   state.changed.emit();
-  enqueueCommand({
+  enqueue({
     agentId: mainAgentId(),
     mode: "prompt",
     priority: LATER,
@@ -763,14 +759,14 @@ function submitContinuationPrompt(state, value = autoResumePrompt()) {
     workload: WORKLOAD_CRON,
   });
 }
-//@ chunk-3y22eg7d.js:11228-11265 placement
+//@ chunk-peqtdyy5.js:11227-11264 placement
 /**
  * 处于 stale 且未被禁用时返回续写提示，否则 null。
  */
 function autoResumePromptIfStale() {
   return shouldOfferAutoResumePrompt() ? autoResumePrompt() : null;
 }
-//@ chunk-3y22eg7d.js:11265-11328 placement
+//@ chunk-peqtdyy5.js:11264-11327 placement
 /**
  * 当前是否应提供续写提示（stale 且未被禁用）。
  */
@@ -778,7 +774,7 @@ function shouldOfferAutoResumePrompt() {
   let state = currentQuotaResumeState();
   return state.state.phase === "stale" && !isAutoResumeDisabled(state);
 }
-//@ chunk-3y22eg7d.js:11328-11480 placement
+//@ chunk-peqtdyy5.js:11327-11479 placement
 /**
  * 续写已无效时从待执行命令中移除。
  */
@@ -793,7 +789,7 @@ function dropStaleContinuation(commands) {
   if (!isAutoResumeDisabled(state)) return commands;
   return commands.filter((command) => command.uuid !== pendingContinuationUuid);
 }
-//@ chunk-3y22eg7d.js:11480-11930 placement
+//@ chunk-peqtdyy5.js:11479-11929 placement
 /**
  * 自动装配是否仍被设置允许（必要时重新扫描）。
  */
@@ -817,7 +813,7 @@ function shouldHonorAutoArm(state) {
   state.revocationRescan = "idle";
   return true;
 }
-//@ chunk-3y22eg7d.js:11930-12029 placement
+//@ chunk-peqtdyy5.js:11929-12028 placement
 /**
  * 自动继续是否被禁用（开关或设置）。
  */
@@ -832,7 +828,7 @@ function isAutoResumeDisabled(state) {
   }
   return false;
 }
-//@ chunk-3y22eg7d.js:12029-12250 placement
+//@ chunk-peqtdyy5.js:12028-12249 placement
 function settleOnManualSubmit(state) {
   clearPendingContinuation(state, {
     keepIfDrained: true,
@@ -846,7 +842,7 @@ function settleOnManualSubmit(state) {
     goIdle(state, "manual_submit");
   }
 }
-//@ chunk-3y22eg7d.js:12250-12468 placement
+//@ chunk-peqtdyy5.js:12249-12467 placement
 function disableAutoResume(state, reason) {
   logEvent("tengu_quota_auto_resume_cancelled", {
     reason: fromEnum(reason),
@@ -863,7 +859,7 @@ function disableAutoResume(state, reason) {
         : "disabled",
   );
 }
-//@ chunk-3y22eg7d.js:12468-12550 placement
+//@ chunk-peqtdyy5.js:12467-12549 placement
 /**
  * 上报坏事件、记录去重键并禁用自动继续。
  */
@@ -872,14 +868,14 @@ function disableAutoResumeWithReason(state, resetsAt, reason) {
   state.autoArmDedupeResetKeys.add(resetsAt);
   disableAutoResume(state, reason);
 }
-//@ chunk-3y22eg7d.js:12550-12625 placement
+//@ chunk-peqtdyy5.js:12549-12624 placement
 /**
  * 是否由 auto 装配且重置时间仍在可等待范围内。
  */
 function isAutoArmBeyondHorizon(state, resetsAtSeconds) {
   return state.episodeArmOrigin === "auto" && resetsAtSeconds * 1000 - Date.now() > RATE_LIMIT_RESET_MAX_MS;
 }
-//@ chunk-3y22eg7d.js:12625-13413 placement
+//@ chunk-peqtdyy5.js:12624-13412 placement
 /**
  * 回合开始时判定是续写还是接管并认领。
  */
@@ -917,7 +913,7 @@ function claimTurn(turn) {
   state.changed.emit();
   return claim;
 }
-//@ chunk-3y22eg7d.js:13413-13914 placement
+//@ chunk-peqtdyy5.js:13412-13913 placement
 /**
  * 回合结束释放认领，续写被丢弃时上报。
  */
@@ -946,7 +942,7 @@ function releaseTurnClaim(claim, turnUuids) {
     if (hadPending) reportContinuationDropped(state);
   }
 }
-//@ chunk-3y22eg7d.js:13914-14086 placement
+//@ chunk-peqtdyy5.js:13913-14085 placement
 function reportContinuationDropped(state) {
   logFeatureBad("quota_auto_resume", "continuation_dropped");
   logEvent("tengu_quota_auto_resume_cancelled", {
@@ -954,7 +950,7 @@ function reportContinuationDropped(state) {
   });
   state.events.emit("continuation-dropped");
 }
-//@ chunk-3y22eg7d.js:14086-14408 placement
+//@ chunk-peqtdyy5.js:14085-14407 placement
 /**
  * 重置本次自动继续的全部计数与集合。
  */
@@ -973,14 +969,14 @@ function resetEpisode(state) {
   state.changed.emit();
   return removed;
 }
-//@ chunk-3y22eg7d.js:14408-14496 placement
+//@ chunk-peqtdyy5.js:14407-14495 placement
 /**
  * 该拒绝结果是否仍值得重新装配（非 rejected 或正在用超额额度）。
  */
 function isRejectionWorthRearming(limits) {
   return limits.status !== "rejected" || limits.isUsingOverage === true || limits.overageInUse === true;
 }
-//@ chunk-3y22eg7d.js:14496-15141 placement
+//@ chunk-peqtdyy5.js:14495-15140 placement
 /**
  * 收到额度拒绝时重新装配或推迟。
  */
@@ -1025,7 +1021,7 @@ function onQuotaRejected(state, limits, source) {
   state.consecutiveRearms++;
   rearm(state, resetsAt, consecutiveRearms);
 }
-//@ chunk-3y22eg7d.js:15141-15295 placement
+//@ chunk-peqtdyy5.js:15140-15294 placement
 function rearm(state, resetsAtSeconds, rearmCount) {
   if (isAutoResumeDisabled(state)) return false;
   if (isAutoArmBeyondHorizon(state, resetsAtSeconds)) {
@@ -1036,7 +1032,7 @@ function rearm(state, resetsAtSeconds, rearmCount) {
   state.events.emit("rearmed");
   return true;
 }
-//@ chunk-3y22eg7d.js:15295-15507 placement
+//@ chunk-peqtdyy5.js:15294-15506 placement
 function isOtherModelWeeklyLimit(rateLimitType, mainLoopModel) {
   if (rateLimitType !== "seven_day_opus" && rateLimitType !== "seven_day_sonnet") return false;
   if (limitAppliesToModel(rateLimitType, mainLoopModel)) return false;
@@ -1045,7 +1041,7 @@ function isOtherModelWeeklyLimit(rateLimitType, mainLoopModel) {
   if (rateLimitType === "seven_day_sonnet" && configuredModel === "sonnet") return false;
   return true;
 }
-//@ chunk-3y22eg7d.js:15507-15835 placement
+//@ chunk-peqtdyy5.js:15506-15834 placement
 /**
  * 限额类型是否作用于当前模型。
  */
@@ -1070,7 +1066,7 @@ function limitAppliesToModel(rateLimitType, mainLoopModel) {
   }
   return false;
 }
-//@ chunk-3y22eg7d.js:15835-15930 placement
+//@ chunk-peqtdyy5.js:15834-15929 placement
 /**
  * 限额适用于该模型，或两者规范名相同。
  */
@@ -1085,14 +1081,14 @@ function limitAppliesToModelOrCanonical(limits, model) {
       })
   );
 }
-//@ chunk-3y22eg7d.js:15930-15955 placement
+//@ chunk-peqtdyy5.js:15929-15954 placement
 /**
  * 启动该会话的额度订阅。
  */
 function startQuotaSubscriptionsFor(storageV5) {
   startQuotaSubscriptions(currentQuotaResumeState(), storageV5);
 }
-//@ chunk-3y22eg7d.js:15955-16260 placement
+//@ chunk-peqtdyy5.js:15954-16259 placement
 /**
  * 订阅额度拒绝、设置变化与会话切换。
  */
@@ -1114,7 +1110,7 @@ function startQuotaSubscriptions(state, storageV5) {
     }
   });
 }
-//@ chunk-3y22eg7d.js:16260-16426 placement
+//@ chunk-peqtdyy5.js:16259-16425 placement
 /**
  * 会话切换是否等同重置（clear/resume/remote_attach）。
  */
@@ -1134,37 +1130,37 @@ function isConversationResetSwitch(switchReason) {
 }
 export {
   limitAppliesToModelOrCanonical,
-  clearHandoffInProgress,
-  autoResumePromptIfStale,
-  isQuotaAutoResumeArmed,
-  onQuotaResumeEvent,
-  isConversationResetSwitch,
-  cancelOnConversationReset,
-  cancelQuotaAutoResume,
+  confirmAndFire,
   isPhaseActive,
-  hasPendingContinuation,
-  isAutoArmedByItself,
+  armQuotaAutoResumeFromDialog,
   withQuotaResumeFire,
+  cancelQuotaAutoResume,
+  hasPendingContinuation,
+  canAutoResumeThisLimit,
   shouldOfferAutoResumePrompt,
   noteHumanTakeover,
   dropStaleContinuation,
   claimTurn,
   releaseTurnClaim,
-  autoArmQuotaAutoResume,
+  isQuotaAutoResumeArmed,
   isPendingContinuationUuid,
+  cancelForHandoff,
+  AUTO_CONTINUE_CANCEL_MESSAGES,
+  clearHandoffInProgress,
+  autoResumePromptIfStale,
+  onQuotaResumeEvent,
+  isConversationResetSwitch,
+  cancelOnConversationReset,
+  isAutoArmedByItself,
+  autoArmQuotaAutoResume,
   isAutoContinuationPrompt,
   handleTurnCompletedAtLimit,
   isEpisodeActiveNow,
   isResetKeyArmed,
-  confirmAndFire,
+  quotaAutoResumeState,
   isAutoContinueEnabled,
   isAutoContinueUserSetting,
-  quotaAutoResumeState,
-  canAutoResumeThisLimit,
-  armQuotaAutoResumeFromDialog,
   onQuotaResumeChange,
   startQuotaSubscriptionsFor,
   tickAutoResume,
-  cancelForHandoff,
-  AUTO_CONTINUE_CANCEL_MESSAGES,
 };

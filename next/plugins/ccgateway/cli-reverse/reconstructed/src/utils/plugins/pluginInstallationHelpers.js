@@ -3,9 +3,9 @@
  *
  * 插件安装主流程：依赖闭包、缓存与注册、command 来源同意、回滚，以及从市场安装的简化入口与错误文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginInstallationHelpers.ts
- * pieces: chunk-e6aww6q8.js (18)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: fingerprint 4, callgraph-fingerprint 1, placement 11, callgraph-witnessed 1, layout 1
  */
 import { basename, resolve as resolve_2, sep } from "path";
@@ -79,17 +79,16 @@ import {
   bindingsWithReadFailure,
 } from "./pluginDirectoryBindings.js";
 import { samePluginSource, parseRepoWithRef } from "./pluginSourceUrl.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { OFFICIAL_MARKETPLACE_NAME, OFFICIAL_MARKETPLACE_DISPLAY } from "./officialMarketplaceNames.js";
 import { getPluginSeedDirs, isLocalMarketplaceEntry } from "./pluginDirectories.js";
 import { isClaudeAiMarketplaceSource } from "./claudeAiMarketplaces.js";
-import { isLocalMarketplaceSource } from "./reconciler.js";
+import { isLocalMarketplaceSource, MAX_PREVIOUS_PRODUCER_PATHS, isRelativeSourcePath } from "./schemas.js";
 import {
   isPluginBlockedByPolicy,
   isSourceDisallowedOrUnverifiable,
   isListingRepositoryBlockedByHostPolicy,
 } from "./marketplacePolicy.js";
-import { MAX_PREVIOUS_PRODUCER_PATHS, isRelativeSourcePath } from "./schemas.js";
 import {
   displaySafePluginId,
   quoteName,
@@ -163,7 +162,7 @@ import { claudeCommand } from "../worktreeResumeHint.js";
 import { redactUrlsInMessage } from "../redaction/urlRedaction.js";
 import { CommandSourceError } from "./commandSource.js";
 
-//@ chunk-e6aww6q8.js:4354776-4354890 fingerprint (2.1.88 match: registerPluginInstallation, 0.567)
+//@ chunk-5xgkngpb.js:4461361-4461475 fingerprint (2.1.88 match: registerPluginInstallation, 0.568)
 /**
  * 两条安装记录是否等价（路径、更新时间相同且 auto 标记不降级）。
  */
@@ -174,7 +173,7 @@ function registerPluginInstallation(existing, next) {
     (next.auto !== true || existing.auto === true)
   );
 }
-//@ chunk-e6aww6q8.js:4365510-4366714 callgraph-fingerprint (2.1.88 match: cacheAndRegisterPlugin, 0.165)
+//@ chunk-5xgkngpb.js:4472101-4473307 callgraph-fingerprint (2.1.88 match: cacheAndRegisterPlugin, 0.165)
 /**
  * 把一个 marketplace 插件下载缓存并写入安装记录（拒绝不安全的条目路径）。
  */
@@ -281,21 +280,21 @@ async function cacheAndRegisterPlugin(
       (cacheResult.repo && cacheResult.sha === null) || (isOfficialPinned && pinnedShaValue === undefined),
   };
 }
-//@ chunk-e6aww6q8.js:4366714-4366773 placement (2.1.88 match: getVersionedZipCachePath, 1)
+//@ chunk-5xgkngpb.js:4473307-4473366 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 安装路径是否存在（zip 查文件，目录查缓存完整）。
  */
 function pluginInstallPathExists(pluginId, version) {
   return pluginId.endsWith(".zip") ? pathExists(pluginId) : cacheDirHasPluginContentStrict(pluginId, version);
 }
-//@ chunk-e6aww6q8.js:4366773-4366842 placement
+//@ chunk-5xgkngpb.js:4473366-4473435 placement
 /**
  * bindingKeysFor：找绑定键与其值。
  */
 function bindingKeysFor(plugins, pluginId) {
   return findBindingKeysFor(Object.keys(plugins), pluginId).map((key) => [key, plugins[key] ?? []]);
 }
-//@ chunk-e6aww6q8.js:4366842-4366922 placement
+//@ chunk-5xgkngpb.js:4473435-4473515 placement
 /**
  * pluginBindingValues：绑定的插件名列表。
  */
@@ -303,14 +302,14 @@ function pluginBindingValues(installationMap, pluginId) {
   let pairs = bindingKeysFor(installationMap, pluginId);
   return pairs.length === 0 ? undefined : pairs.flatMap(([, installations]) => installations);
 }
-//@ chunk-e6aww6q8.js:4366922-4367185 placement
+//@ chunk-5xgkngpb.js:4473515-4473778 placement
 /**
  * 同目录名插件绑定到不同仓库时返回冲突者。
  */
 function findDataDirConflictingRecord(plugins, bindings, pluginId, source) {
   let sourceKey = samePluginSource(source, undefined);
   let isDifferent = (key) => key !== undefined && parseRepoWithRef(key) !== sourceKey;
-  let found = uniq([
+  let found = normalizeCaseForComparison_2([
     ...findBindingKeysFor(Object.keys(plugins), pluginId),
     ...findBindingKeysFor(bindings.keys(), pluginId),
   ]).find(
@@ -325,7 +324,7 @@ function findDataDirConflictingRecord(plugins, bindings, pluginId, source) {
         installed: (plugins[found]?.length ?? 0) > 0,
       };
 }
-//@ chunk-e6aww6q8.js:4367185-4367294 placement
+//@ chunk-5xgkngpb.js:4473778-4473887 placement
 /**
  * 官方插件目录插件的仓库与当前来源不同。
  */
@@ -337,7 +336,7 @@ function isDirectoryRepositoryChanged(pluginId, values, source, bindings) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4367294-4367426 placement
+//@ chunk-5xgkngpb.js:4473887-4474019 placement
 /**
  * 官方插件目录插件且尚无仓库绑定。
  */
@@ -347,7 +346,7 @@ function isUnboundOfficialPlugin(pluginId, values, bindings, readFailed = false)
     readFailed || (values ?? []).every((installation) => installation.directoryRepositoryKey === undefined)
   );
 }
-//@ chunk-e6aww6q8.js:4367426-4367596 placement
+//@ chunk-5xgkngpb.js:4474019-4474189 placement
 /**
  * 官方插件目录插件已记录的仓库键。
  */
@@ -358,7 +357,7 @@ function getBoundRepositoryKeys(pluginId, values, bindings) {
     ...findBindingKeysFor(bindings.keys(), pluginId).flatMap((key) => bindings.get(key) ?? []),
   ].map(parseRepoWithRef);
 }
-//@ chunk-e6aww6q8.js:4367596-4367739 placement
+//@ chunk-5xgkngpb.js:4474189-4474332 placement
 async function parsePluginIdSafe(pluginId, record, version, loadKnown) {
   try {
     return await parsePluginId(pluginId, record, version, loadKnown);
@@ -367,7 +366,7 @@ async function parsePluginIdSafe(pluginId, record, version, loadKnown) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:4367739-4368179 placement
+//@ chunk-5xgkngpb.js:4474332-4474772 placement
 async function parsePluginId(pluginId, { installPath, claudeaiPluginId }, version, loadKnown) {
   if (claudeaiPluginId !== undefined) return true;
   let { absolute, suspect } = classifyMarketplacePath(installPath);
@@ -387,7 +386,7 @@ async function parsePluginId(pluginId, { installPath, claudeaiPluginId }, versio
   if (!isLocalMarketplaceSource(source)) return false;
   return typeof (await getPluginByIdCacheOnly(pluginId, version))?.entry?.source === "string";
 }
-//@ chunk-e6aww6q8.js:4368179-4368533 placement
+//@ chunk-5xgkngpb.js:4474772-4475126 placement
 /**
  * 托管记录缺失缓存时从市场重新缓存注册。
  */
@@ -417,7 +416,7 @@ async function healManagedRecord(pluginId, known, version) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4368533-4368762 placement
+//@ chunk-5xgkngpb.js:4475126-4475355 placement
 function mergePreviousProducerPaths(record, producerPath) {
   let currentAsPrevious =
     record.sourceProducerPath !== undefined && record.sourceProducerPath !== producerPath
@@ -432,7 +431,7 @@ function mergePreviousProducerPaths(record, producerPath) {
     .filter((path) => path !== "")
     .slice(-MAX_PREVIOUS_PRODUCER_PATHS);
 }
-//@ chunk-e6aww6q8.js:4431505-4431671 fingerprint (2.1.88 match: validatePathWithinBase, 1)
+//@ chunk-5xgkngpb.js:4538154-4538320 fingerprint (2.1.88 match: validatePathWithinBase, 1)
 /**
  * 解析 base 下的相对路径，越界抛“Path traversal detected”。
  */
@@ -443,7 +442,7 @@ function validatePathWithinBase(basePath, relativePath) {
     throw Error(`Path traversal detected: "${relativePath}" would escape the base directory`);
   return resolvedPath;
 }
-//@ chunk-e6aww6q8.js:4450972-4451911 fingerprint (2.1.88 match: formatResolutionError, 0.713)
+//@ chunk-5xgkngpb.js:4557636-4558575 fingerprint (2.1.88 match: formatResolutionError, 0.713)
 /**
  * 依赖解析错误转文本：依赖环、跨市场依赖不被允许（提示 allowCrossMarketplaceDependenciesOn）、依赖找不到等。
  */
@@ -470,7 +469,7 @@ function formatResolutionError(r_2) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:4462968-4478634 callgraph-witnessed (2.1.88 match: installResolvedPlugin, 0.121)
+//@ chunk-5xgkngpb.js:4569653-4585323 callgraph-witnessed (2.1.88 match: installResolvedPlugin, 0.121)
 /**
  * 安装已解析好的插件（核心安装流程）：解析依赖闭包、逐个缓存（cachePlugin+copyPluginToVersionedCache）、写安装记录与 enabledPlugins、处理 command 来源同意、userConfig、失败回滚；返回安装结果与依赖信息。
  */
@@ -1409,7 +1408,7 @@ async function installResolvedPlugin({
           : pluginDirectoryState === "blocked"
             ? `the ${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization`
             : `the ${OFFICIAL_MARKETPLACE_DISPLAY} could not be read, or does not list it`;
-      let ids = uniq(notFoundDeps);
+      let ids = normalizeCaseForComparison_2(notFoundDeps);
       let sliced = ids.slice(0, 5);
       let moreCount = ids.length - sliced.length;
       depWarning = `. Warning: ${sliced.map((id) => `dependency "${quotedPrintable(id, 120)}" was not installed (${id.endsWith(suffix) ? stateReason : "no marketplace you have added lists it"})`).join("; ")}${moreCount > 0 ? `; and ${moreCount} more` : ""}. "${quotedPrintable(entry.name, 120)}" will not load without ${plural(ids.length, "it", "them")}`;
@@ -1417,7 +1416,7 @@ async function installResolvedPlugin({
   }
   let directoryWarning = "";
   if (nowLoadingFalse.length > 0) {
-    let depNote = uniq(nowLoadingFalse);
+    let depNote = normalizeCaseForComparison_2(nowLoadingFalse);
     let isSingle = depNote.length === 1;
     let joined = depNote
       .slice(0, 5)
@@ -1443,7 +1442,7 @@ async function installResolvedPlugin({
         : [],
   };
 }
-//@ chunk-e6aww6q8.js:4478634-4478990 layout
+//@ chunk-5xgkngpb.js:4585323-4585679 layout
 /**
  * 记 tengu_plugin_install_failed。
  */
@@ -1467,7 +1466,7 @@ function logInstallFailed({ reason, errorKind, pluginId, entry, marketplaceName,
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4478990-4483311 fingerprint (2.1.88 match: installPluginFromMarketplace, 0.494)
+//@ chunk-5xgkngpb.js:4585679-4590044 fingerprint (2.1.88 match: installPluginFromMarketplace, 0.494)
 /**
  * 从市场安装一个插件（界面/推荐用的简化入口）：取条目、调用 installResolvedPlugin，失败记 tengu_plugin_install_failed。
  */
@@ -1720,20 +1719,20 @@ async function installPluginFromMarketplace(request) {
   }
 }
 export {
-  installPluginFromMarketplace,
-  bindingKeysFor,
-  isUnboundOfficialPlugin,
-  isDirectoryRepositoryChanged,
-  findDataDirConflictingRecord,
-  installResolvedPlugin,
-  formatResolutionError,
-  getBoundRepositoryKeys,
   validatePathWithinBase,
   pluginBindingValues,
+  isUnboundOfficialPlugin,
+  isDirectoryRepositoryChanged,
+  getBoundRepositoryKeys,
   registerPluginInstallation,
   mergePreviousProducerPaths,
   parsePluginIdSafe,
   healManagedRecord,
   cacheAndRegisterPlugin,
   pluginInstallPathExists,
+  bindingKeysFor,
+  findDataDirConflictingRecord,
+  installResolvedPlugin,
+  formatResolutionError,
+  installPluginFromMarketplace,
 };

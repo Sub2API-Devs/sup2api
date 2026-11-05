@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云端会话使用本机 MCP 服务器的同意对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tmg3f18n.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e6b8wm2j.js (4)
  * attribution: placement 4
  */
 import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -36,11 +36,11 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 
-//@ chunk-tmg3f18n.js:14337-14341 placement
+//@ chunk-e6b8wm2j.js:15513-15517 placement
 init_react_production();
-//@ chunk-tmg3f18n.js:14341-14349 placement
+//@ chunk-e6b8wm2j.js:15517-15525 placement
 var MAX_LISTED_CONSENT_SERVERS = 8;
-//@ chunk-tmg3f18n.js:14349-14546 placement
+//@ chunk-e6b8wm2j.js:15525-15722 placement
 function describeMcpScopeOwner(scope) {
   switch (scope) {
     case "user":
@@ -56,7 +56,7 @@ function describeMcpScopeOwner(scope) {
       return "other";
   }
 }
-//@ chunk-tmg3f18n.js:14546-17127 placement
+//@ chunk-e6b8wm2j.js:15722-18303 placement
 /**
  * 询问是否让云端会话使用本机 MCP 服务器的同意对话框。
  */

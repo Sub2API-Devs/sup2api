@@ -3,9 +3,9 @@
  *
  * npm/JS 安装方式的自动更新器：定期检查最新版本、无权限/文件被锁时跳过、安装并提示重启。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AutoUpdater.tsx
- * pieces: chunk-tzghj6zv.js (8)
+ * pieces: chunk-18rrbwq1.js (8)
  * attribution: placement 6, layout 1, fingerprint 1
  */
 import { basename, dirname } from "path";
@@ -55,27 +55,27 @@ import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:21690-21694 placement
+//@ chunk-18rrbwq1.js:20273-20277 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:21690", () => {
+deferInit("chunk-18rrbwq1.js:20273", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:21694-21698 placement
+//@ chunk-18rrbwq1.js:21701-21705 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:21694", () => {
+deferInit("chunk-18rrbwq1.js:21701", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:21745-21749 placement
+//@ chunk-18rrbwq1.js:21705-21709 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:21745", () => {
+deferInit("chunk-18rrbwq1.js:21705", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:21749-21767 placement
+//@ chunk-18rrbwq1.js:21760-21778 placement
 var installedVersionSemver_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:21749", () => {
+deferInit("chunk-18rrbwq1.js:21760", () => {
   installedVersionSemver_2 = __toESM(require_semver_3(), 1);
 });
-//@ chunk-tzghj6zv.js:21767-21868 placement
+//@ chunk-18rrbwq1.js:21778-21879 placement
 /**
  * 宽松解析版本，只保留 major.minor.patch。
  */
@@ -88,7 +88,7 @@ function toMajorMinorPatch(version) {
     loose: true,
   })}`;
 }
-//@ chunk-tzghj6zv.js:21868-22448 placement
+//@ chunk-18rrbwq1.js:21879-22459 placement
 /**
  * 给定版本与当前版本（只比 major.minor.patch）不同时返回规范化版本，否则 null。
  */
@@ -98,10 +98,10 @@ function useChangedVersion(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -112,9 +112,9 @@ function useChangedVersion(
     return majorMinorPatch === toMajorMinorPatch(currentVersion) ? null : majorMinorPatch;
   }, [version, currentVersion]);
 }
-//@ chunk-tzghj6zv.js:22448-22457 layout
+//@ chunk-18rrbwq1.js:22459-22468 layout
 var MAX_UPDATE_RESTARTS = 2;
-//@ chunk-tzghj6zv.js:22457-31073 fingerprint (2.1.88 match: AutoUpdater, 0.576)
+//@ chunk-18rrbwq1.js:22468-31071 fingerprint (2.1.88 match: AutoUpdater, 0.576)
 /**
  * JS 安装的自动更新：间隔检查最新版本，跳过无权限或 claude.exe 被锁的情况，执行全局安装并显示结果。
  */
@@ -154,10 +154,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION;
@@ -424,10 +424,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                                   "report the issue at https://github.com/anthropics/claude-code/issues",
                                 PACKAGE_URL: "@anthropic-ai/claude-code",
                                 README_URL: "https://code.claude.com/docs/en/overview",
-                                VERSION: "2.1.316",
+                                VERSION: "2.1.318",
                                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                                BUILD_TIME: "2026-10-30T23:28:13Z",
-                                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                                BUILD_TIME: "2026-11-03T18:52:53Z",
+                                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                                 HOOKS_WORKER_URL:
                                   import.meta.dir +
                                   "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
@@ -453,10 +453,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                                   "report the issue at https://github.com/anthropics/claude-code/issues",
                                 PACKAGE_URL: "@anthropic-ai/claude-code",
                                 README_URL: "https://code.claude.com/docs/en/overview",
-                                VERSION: "2.1.316",
+                                VERSION: "2.1.318",
                                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                                BUILD_TIME: "2026-10-30T23:28:13Z",
-                                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                                BUILD_TIME: "2026-11-03T18:52:53Z",
+                                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                                 HOOKS_WORKER_URL:
                                   import.meta.dir +
                                   "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
@@ -489,10 +489,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                           "report the issue at https://github.com/anthropics/claude-code/issues",
                         PACKAGE_URL: "@anthropic-ai/claude-code",
                         README_URL: "https://code.claude.com/docs/en/overview",
-                        VERSION: "2.1.316",
+                        VERSION: "2.1.318",
                         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                        BUILD_TIME: "2026-10-30T23:28:13Z",
-                        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                        BUILD_TIME: "2026-11-03T18:52:53Z",
+                        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                         HOOKS_WORKER_URL:
                           import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                         DD_SOURCEMAP_GROUP: "default",
@@ -544,10 +544,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                               "report the issue at https://github.com/anthropics/claude-code/issues",
                             PACKAGE_URL: "@anthropic-ai/claude-code",
                             README_URL: "https://code.claude.com/docs/en/overview",
-                            VERSION: "2.1.316",
+                            VERSION: "2.1.318",
                             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                            BUILD_TIME: "2026-10-30T23:28:13Z",
-                            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                            BUILD_TIME: "2026-11-03T18:52:53Z",
+                            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                             HOOKS_WORKER_URL:
                               import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                             DD_SOURCEMAP_GROUP: "default",
@@ -559,10 +559,10 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                               "report the issue at https://github.com/anthropics/claude-code/issues",
                             PACKAGE_URL: "@anthropic-ai/claude-code",
                             README_URL: "https://code.claude.com/docs/en/overview",
-                            VERSION: "2.1.316",
+                            VERSION: "2.1.318",
                             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                            BUILD_TIME: "2026-10-30T23:28:13Z",
-                            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                            BUILD_TIME: "2026-11-03T18:52:53Z",
+                            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                             HOOKS_WORKER_URL:
                               import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                             DD_SOURCEMAP_GROUP: "default",

@@ -1,14 +1,14 @@
 /**
  * jsonc-parser/lib/esm/impl/edit.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonc-parser@3.2.1..3.3.1
- * pieces: chunk-kndsyy4v.js (3)
+ * pieces: chunk-aj4djjd6.js (3)
  * attribution: esm-fingerprint 3
  */
 import { parseTree_2, findNodeAtLocation } from "./parser.js";
 import { isEOL, format } from "./format.js";
 
-//@ chunk-kndsyy4v.js:12432-14948 esm-fingerprint
+//@ chunk-aj4djjd6.js:12432-14948 esm-fingerprint
 function modify(text, path, value, options) {
   let path_2 = path.slice();
   let root = parseTree_2(text, []);
@@ -179,7 +179,7 @@ function modify(text, path, value, options) {
       `Can not add ${typeof lastSegment !== "number" ? "index" : "property"} to parent of type ${parent.type}`,
     );
 }
-//@ chunk-kndsyy4v.js:14948-15435 esm-fingerprint
+//@ chunk-aj4djjd6.js:14948-15435 esm-fingerprint
 function withFormatting(text, edit, options) {
   if (!options.formattingOptions) return [edit];
   let newText = applyEdit(text, edit);
@@ -216,7 +216,7 @@ function withFormatting(text, edit, options) {
     },
   ];
 }
-//@ chunk-kndsyy4v.js:15435-15523 esm-fingerprint
+//@ chunk-aj4djjd6.js:15435-15523 esm-fingerprint
 function applyEdit(text, edit) {
   return text.substring(0, edit.offset) + edit.content + text.substring(edit.offset + edit.length);
 }

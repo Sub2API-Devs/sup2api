@@ -3,9 +3,9 @@
  *
  * 并入已有模块：读取插件选项值（缓存）；按仓库或来源查找市场等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginOptionsStorage.ts
- * pieces: chunk-e6aww6q8.js (2), chunk-vr8smdd9.js (25)
+ * pieces: chunk-5xgkngpb.js (2), chunk-pzdhtgn4.js (25)
  * attribution: placement 5, fingerprint 5, layout 16, sole-consumer 1
  */
 import { lstat, rmdir } from "fs/promises";
@@ -28,7 +28,7 @@ import { errorMessage, isENOENT, getErrnoCode } from "../errors.js";
 import { invalidateCommandNames } from "../settings/commandSyncNames.js";
 import { pathPresence } from "../fsSafety/atomicWriteStaging.js";
 import { READ_FAILED } from "../secureStorage/storageWriteLock.js";
-import { pluginDataDirPath, ensurePluginDataDir } from "./pluginDirectories.js";
+import { pluginDataDirPath } from "./pluginDirectories.js";
 import { isSameFilesystem } from "./safeCopy.js";
 import { removeDirectoryTreeNoFollow, removePathEntry } from "../fsRemove.js";
 import { retryFsOp } from "../atomicPublishWrite.js";
@@ -36,25 +36,26 @@ import { getOwn } from "../objectSafety.js";
 import { validateUserConfig } from "./mcpbHandler.js";
 import { getProjectDirForTools } from "../../bootstrap/state.js";
 import { NoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
+import { ensurePluginDataDir } from "../sessionStorage.js";
 import { MAX_CLEAN_IDENTIFIER_LENGTH } from "../sanitization.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { jsonStringify } from "../slowOperations.js";
 
-//@ chunk-vr8smdd9.js:20170-20201 placement
+//@ chunk-pzdhtgn4.js:20234-20265 placement
 /**
  * 取市场来源。
  */
 function marketplaceSource(plugin) {
   return plugin.source;
 }
-//@ chunk-vr8smdd9.js:20201-20270 placement
+//@ chunk-pzdhtgn4.js:20265-20334 placement
 /**
  * 按仓库或来源查找市场。
  */
 function findMarketplace(plugins, id) {
   return plugins.find((plugin) => plugin.repository === id || plugin.source === id);
 }
-//@ chunk-vr8smdd9.js:20270-20459 placement
+//@ chunk-pzdhtgn4.js:20334-20523 placement
 /**
  * 读取插件选项值（缓存）。
  */
@@ -70,7 +71,7 @@ function loadPluginOptions(pluginId, credentials) {
   });
   return pluginOptions;
 }
-//@ chunk-vr8smdd9.js:20459-20633 placement
+//@ chunk-pzdhtgn4.js:20523-20697 placement
 async function readPluginOptions(pluginId, credentials) {
   let options = trustedPluginSetting(pluginId).options ?? {};
   let pluginSecrets = (await getSecureStorage().readAsync(credentials))?.pluginSecrets;
@@ -86,14 +87,14 @@ async function readPluginOptions(pluginId, credentials) {
     ...reduced,
   };
 }
-//@ chunk-vr8smdd9.js:20633-20674 layout
+//@ chunk-pzdhtgn4.js:20697-20738 layout
 /**
  * 清空插件选项值的内存缓存。
  */
 function clearPluginOptionsCache() {
   getPluginRegistry().optionValues.clear();
 }
-//@ chunk-vr8smdd9.js:20674-22061 fingerprint (2.1.88 match: savePluginOptions, 0.827)
+//@ chunk-pzdhtgn4.js:20738-22125 fingerprint (2.1.88 match: savePluginOptions, 0.827)
 /**
  * 保存插件选项：sensitive 字段写安全存储（keychain/凭据文件的 pluginSecrets），其余写 userSettings 的 pluginConfigs[插件].options；同时清掉另一侧的同名旧值。
  */
@@ -190,7 +191,7 @@ async function savePluginOptions(pluginId, values, schema, storageV5, credential
   }
   clearPluginOptionsCache();
 }
-//@ chunk-vr8smdd9.js:22061-22624 layout
+//@ chunk-pzdhtgn4.js:22125-22688 layout
 /**
  * 列出 settings.pluginConfigs 与安全存储里出现过的插件选项键（用于清理）。
  */
@@ -226,7 +227,7 @@ async function listStoredPluginOptionKeys(credentials) {
     unreadable,
   };
 }
-//@ chunk-vr8smdd9.js:22624-22935 layout
+//@ chunk-pzdhtgn4.js:22688-22999 layout
 async function readUserSettingsForOptions(pluginId) {
   invalidateCommandNames();
   let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
@@ -243,7 +244,7 @@ async function readUserSettingsForOptions(pluginId) {
   );
   return "unreadable";
 }
-//@ chunk-vr8smdd9.js:22935-24670 fingerprint (2.1.88 match: deletePluginOptions, 0.431)
+//@ chunk-pzdhtgn4.js:22999-24734 fingerprint (2.1.88 match: deletePluginOptions, 0.431)
 /**
  * 删除插件的全部选项（settings.pluginConfigs 与安全存储里的 pluginSecrets），卸载时调用。
  */
@@ -345,7 +346,7 @@ async function deletePluginOptions(pluginId, storageV5, credentials, unreadable)
   clearPluginOptionsCache();
   return clean;
 }
-//@ chunk-vr8smdd9.js:24670-27533 layout
+//@ chunk-pzdhtgn4.js:24734-27597 layout
 /**
  * --replace 切换副本时把旧插件 ID 的选项与密钥复制到新 ID（目标已有值则不覆盖）。
  */
@@ -564,7 +565,7 @@ async function copyPluginOptions(fromId, toId, copyDir, storageV5, credentials) 
     targetHadOwn: false,
   };
 }
-//@ chunk-vr8smdd9.js:27533-27640 layout
+//@ chunk-pzdhtgn4.js:27597-27704 layout
 function remapSecretKey(key, fromId, toId) {
   {
     let prefix = `${fromId}/`;
@@ -572,7 +573,7 @@ function remapSecretKey(key, fromId, toId) {
   }
   return;
 }
-//@ chunk-vr8smdd9.js:27640-28052 layout
+//@ chunk-pzdhtgn4.js:27704-28116 layout
 /**
  * --replace 切换时目标副本是否已有自己的选项（有则不复制）；安全存储读不到时为 unknown。
  */
@@ -598,7 +599,7 @@ async function wouldTargetKeepOwnPluginOptions(fromId, toId) {
   }
   return false;
 }
-//@ chunk-vr8smdd9.js:28052-28308 fingerprint (2.1.88 match: getUnconfiguredOptions, 0.829)
+//@ chunk-pzdhtgn4.js:28116-28371 fingerprint (2.1.88 match: getUnconfiguredOptions, 0.829)
 /**
  * 返回 manifest.userConfig 中尚未配置（或非敏感值不合法）的选项，启用插件时据此弹出配置对话框。
  */
@@ -626,7 +627,7 @@ async function getUnconfiguredOptions(plugin, credentials) {
   }
   return unconfigured;
 }
-//@ chunk-vr8smdd9.js:28308-28400 layout
+//@ chunk-pzdhtgn4.js:28371-28463 layout
 /**
  * 值是否不在字段的 options 列表内。
  */
@@ -634,7 +635,7 @@ function isOutsideOptions(fieldSchema, value) {
   let options = fieldSchema?.options;
   return options !== undefined && !(typeof value === "string" && options.includes(value));
 }
-//@ chunk-vr8smdd9.js:28400-28736 layout
+//@ chunk-pzdhtgn4.js:28463-28799 layout
 /**
  * 已保存选项与 schema 默认值合并；值不在 options 列表内的视为未设置。
  */
@@ -660,7 +661,7 @@ function applyUserConfigDefaults(values, userConfig) {
     ...kept,
   };
 }
-//@ chunk-vr8smdd9.js:28736-29120 layout
+//@ chunk-pzdhtgn4.js:28799-29183 layout
 /**
  * 替换插件路径变量：${CLAUDE_PLUGIN_ROOT} → 插件目录，${CLAUDE_PROJECT_DIR} → 项目目录，${CLAUDE_PLUGIN_DATA} → 插件数据目录（远端无数据目录时抛 PluginDataDirUnknownError）；可传转义函数。
  */
@@ -689,7 +690,7 @@ function substitutePluginVariables(value, plugin, transform = (value) => value) 
   }
   return out;
 }
-//@ chunk-vr8smdd9.js:29120-29321 layout
+//@ chunk-pzdhtgn4.js:29183-29384 layout
 class PluginDataDirUnknownError extends Error {
   name = "PluginDataDirUnknownError";
   constructor() {
@@ -698,7 +699,7 @@ class PluginDataDirUnknownError extends Error {
     );
   }
 }
-//@ chunk-vr8smdd9.js:29321-29445 layout
+//@ chunk-pzdhtgn4.js:29384-29508 layout
 /**
  * 文本是否引用了本机无法确定的 ${CLAUDE_PLUGIN_DATA}。
  */
@@ -714,13 +715,13 @@ function needsUnknownDataDir(value, pluginInfo) {
     return error instanceof PluginDataDirUnknownError;
   }
 }
-//@ chunk-vr8smdd9.js:29445-29510 layout
+//@ chunk-pzdhtgn4.js:29508-29573 layout
 function resolveDataDir(pluginInfo, ensureDir) {
   return pluginInfo.dataDir === undefined ? ensureDir(pluginInfo.source) : pluginInfo.dataDir;
 }
-//@ chunk-vr8smdd9.js:29510-29529 layout
+//@ chunk-pzdhtgn4.js:29573-29592 layout
 var CLAUDE_VAR_PREFIX = "${CLAUDE_";
-//@ chunk-vr8smdd9.js:29529-29759 layout
+//@ chunk-pzdhtgn4.js:29592-29822 layout
 /**
  * 估算变量替换后的最大增长长度（防止替换后超长）。
  */
@@ -742,7 +743,7 @@ function estimateSubstitutedGrowth(value, substitutionInfo, filePath = "") {
           filePath.length,
         );
 }
-//@ chunk-vr8smdd9.js:29759-30078 layout
+//@ chunk-pzdhtgn4.js:29822-30141 layout
 /**
  * 替换 ${user_config.KEY}：缺失时默认抛错（提示到 /plugin manage 配置），也可保留原文。
  */
@@ -758,7 +759,7 @@ function substituteUserConfigVariables(value, userConfig, { missingKey = "throw"
     return String(configValue);
   });
 }
-//@ chunk-vr8smdd9.js:30078-30136 layout
+//@ chunk-pzdhtgn4.js:30141-30199 layout
 /**
  * 文本中是否含 ${user_config.*} 引用。
  */
@@ -769,7 +770,7 @@ function hasUserConfigVariables(value, userConfig) {
     return true;
   }
 }
-//@ chunk-vr8smdd9.js:30136-30373 fingerprint (2.1.88 match: substituteUserConfigInContent, 1)
+//@ chunk-pzdhtgn4.js:30199-30436 fingerprint (2.1.88 match: substituteUserConfigInContent, 1)
 /**
  * 在技能/代理正文中替换 ${user_config.KEY}：sensitive 值不替换，改为占位说明。
  */
@@ -782,7 +783,7 @@ function substituteUserConfigInContent(content, options, schema, transform) {
     return transform ? transform(valueText) : valueText;
   });
 }
-//@ chunk-vr8smdd9.js:30373-30936 sole-consumer
+//@ chunk-pzdhtgn4.js:30436-30999 sole-consumer
 /**
  * 插件改名时合并旧 id 的选项与 MCP 配置到新 id。
  */
@@ -805,7 +806,9 @@ function mergeRenamedPluginSettings(pluginConfigs, pluginId, updates) {
     ),
     ...rest[target.written]?.options,
   };
-  let serverNames = uniq(sources.flatMap((id) => Object.keys(pluginConfigs?.[id]?.mcpServers ?? {})));
+  let serverNames = normalizeCaseForComparison_2(
+    sources.flatMap((id) => Object.keys(pluginConfigs?.[id]?.mcpServers ?? {})),
+  );
   return {
     ...rest,
     ...Object.fromEntries(target.replaced.map((id) => [id, undefined])),
@@ -830,9 +833,9 @@ function mergeRenamedPluginSettings(pluginConfigs, pluginId, updates) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:762563-762603 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 0.808)
+//@ chunk-5xgkngpb.js:773160-773200 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 0.808)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings"];
-//@ chunk-e6aww6q8.js:762603-762691 fingerprint (2.1.88 match: loadPluginOptions, 0.646)
+//@ chunk-5xgkngpb.js:773200-773288 fingerprint (2.1.88 match: loadPluginOptions, 0.646)
 /**
  * 序列化插件在各受信设置源中的 pluginConfigs options，作为插件选项的变化指纹（名字配错，见 lead 建议）。
  */
@@ -845,24 +848,24 @@ var pluginOptionsFingerprint = (pluginId) =>
     ),
   );
 export {
-  findMarketplace,
-  savePluginOptions,
-  marketplaceSource,
-  getUnconfiguredOptions,
-  loadPluginOptions,
-  hasUserConfigVariables,
+  clearPluginOptionsCache,
   substitutePluginVariables,
-  copyPluginOptions,
   substituteUserConfigVariables,
   applyUserConfigDefaults,
-  wouldTargetKeepOwnPluginOptions,
-  substituteUserConfigInContent,
+  loadPluginOptions,
+  marketplaceSource,
+  hasUserConfigVariables,
   isOutsideOptions,
-  clearPluginOptionsCache,
   pluginOptionsFingerprint,
   TRUSTED_SETTING_SOURCES,
   estimateSubstitutedGrowth,
   needsUnknownDataDir,
+  substituteUserConfigInContent,
   deletePluginOptions,
   listStoredPluginOptionKeys,
+  copyPluginOptions,
+  savePluginOptions,
+  findMarketplace,
+  getUnconfiguredOptions,
+  wouldTargetKeepOwnPluginOptions,
 };

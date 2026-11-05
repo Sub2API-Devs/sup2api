@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：AskUserQuestion 答案校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a91k35xs.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zxdsqmea.js (11)
  * attribution: placement 11
  */
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -14,7 +14,7 @@ import { isSameAnswerInput } from "../../utils/permissions/permissionAnswer.js";
 import { displayText, hasSuspiciousText } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a91k35xs.js:859-946 placement
+//@ chunk-zxdsqmea.js:892-979 placement
 /**
  * 把选择的答案列表用 “, ” 连成一行；含 “, ” 或双引号的项用 jsonStringify 加引号，避免歧义。
  */
@@ -25,7 +25,7 @@ function formatSelectionList(selections) {
     )
     .join(", ");
 }
-//@ chunk-a91k35xs.js:946-1473 placement
+//@ chunk-zxdsqmea.js:979-1506 placement
 /**
  * 解析 ", " 分隔的值列表，支持 JSON 双引号字符串；格式不合法返回 null。
  */
@@ -74,7 +74,7 @@ function parseCommaSeparatedValues(input) {
   }
   return values;
 }
-//@ chunk-a91k35xs.js:1473-1649 placement
+//@ chunk-zxdsqmea.js:1506-1682 placement
 var MAX_ANSWER_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_NOTES_CHARS;
 var MAX_TEXT_CHARS;
@@ -84,7 +84,7 @@ var MAX_PREVIEW_COMPARE_CHARS;
 var UNANSWERED_REASONS;
 var ANSWER_FIELDS;
 var AFKTIMEOUTMS;
-deferInit("chunk-a91k35xs.js:1473", () => {
+deferInit("chunk-zxdsqmea.js:1506", () => {
   MAX_ANSWER_CHARS = 32768;
   MAX_NOTES_CHARS = 8192;
   MAX_TEXT_CHARS = 32768;
@@ -95,7 +95,7 @@ deferInit("chunk-a91k35xs.js:1473", () => {
   ANSWER_FIELDS = new Set(["answers", "annotations", "response", "followUp"]);
   AFKTIMEOUTMS = "afkTimeoutMs";
 });
-//@ chunk-a91k35xs.js:1649-1709 placement
+//@ chunk-zxdsqmea.js:1682-1742 placement
 /**
  * 安全版 admitAnswerInput：宿主回传答案校验抛出异常时，按 “threw” 规则返回拒绝。
  */
@@ -106,7 +106,7 @@ function admitAnswerInputSafely(shownInput, reply) {
     return answerRefusal("threw");
   }
 }
-//@ chunk-a91k35xs.js:1709-3613 placement
+//@ chunk-zxdsqmea.js:1742-3646 placement
 /**
  * 校验宿主回传的 AskUserQuestion 答案：不得改动已展示字段，answers/annotations/response/followUp 逐项检查类型、长度与问题对应关系，总大小受限；通过返回 {kind:'admitted', input}。
  */
@@ -228,7 +228,7 @@ function admitAnswerInput(shownInput, reply) {
     input: admitted,
   };
 }
-//@ chunk-a91k35xs.js:3613-4090 placement
+//@ chunk-zxdsqmea.js:3646-4123 placement
 /**
  * 把问题数组整理为 question→{multiSelect、选项数、预览集合}，并判断是否全部使用扩展格式（带 kind）。
  */
@@ -266,7 +266,7 @@ function indexShownQuestions(ownPropertyOrUndefined) {
     extended: isExtended,
   };
 }
-//@ chunk-a91k35xs.js:4090-4419 placement
+//@ chunk-zxdsqmea.js:4123-4649 placement
 /**
  * 比较两组问题，忽略补上的默认字段（kind=choice、multiSelect=false）后是否一致。
  */
@@ -293,11 +293,25 @@ function questionsMatchIgnoringDefaults(actualQuestions, defaultedQuestions) {
       !Object.hasOwn(actualQuestion, "multiSelect")
     )
       delete normalized.multiSelect;
+    let ownPropertyOrUndefined = getOwnPropertyOrUndefined(defaultedQuestion, "options");
+    let ownPropertyOrUndefined_2 = getOwnPropertyOrUndefined(actualQuestion, "options");
+    if (Array.isArray(ownPropertyOrUndefined) && Array.isArray(ownPropertyOrUndefined_2))
+      normalized.options = ownPropertyOrUndefined.map((option, index) => {
+        let defaultedOption = ownPropertyOrUndefined_2[index];
+        if (
+          !isPlainObject(option) ||
+          !isPlainObject(defaultedOption) ||
+          Object.hasOwn(defaultedOption, "preview")
+        )
+          return option;
+        let { preview, ...withoutPreview } = option;
+        return withoutPreview;
+      });
     return normalized;
   });
   return isSameAnswerInput(actualQuestions, mapped);
 }
-//@ chunk-a91k35xs.js:4419-4544 placement
+//@ chunk-zxdsqmea.js:4649-4774 placement
 function isShownPreview(question, text) {
   if (question.previews.has(text)) return true;
   for (let shownPreview of question.previews)
@@ -309,20 +323,20 @@ function isShownPreview(question, text) {
       return true;
   return false;
 }
-//@ chunk-a91k35xs.js:4544-4687 placement
+//@ chunk-zxdsqmea.js:4774-4917 placement
 function isPlainObject(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
-//@ chunk-a91k35xs.js:4687-4741 placement
+//@ chunk-zxdsqmea.js:4917-4971 placement
 /**
  * 只读自有属性（Object.hasOwn），不存在或来自原型时返回 undefined；答案校验用它逐个读取 answers/annotations/response 等字段。
  */
 function getOwnPropertyOrUndefined(object, key) {
   return Object.hasOwn(object, key) ? object[key] : undefined;
 }
-//@ chunk-a91k35xs.js:4741-4785 placement
+//@ chunk-zxdsqmea.js:4971-5015 placement
 /**
  * 构造答案校验的拒绝结果 {kind:"refused", rule}，rule 是命中的拒绝规则名。
  */
@@ -332,4 +346,4 @@ function answerRefusal(rule) {
     rule,
   };
 }
-export { formatSelectionList, UNANSWERED_REASONS, admitAnswerInputSafely, parseCommaSeparatedValues };
+export { UNANSWERED_REASONS, admitAnswerInputSafely, parseCommaSeparatedValues, formatSelectionList };

@@ -3,16 +3,20 @@
  *
  * 并入旧版已有路径：/logout 命令（登出失败提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/logout/logout.tsx
- * pieces: chunk-emh405f3.js (1), chunk-th8w37yz.js (5), chunk-tndsj50r.js (1)
- * attribution: placement 1, facade-exports 2, affinity 1, sole-consumer 2, fingerprint 1
+ * pieces: chunk-fmp5a427.js (1), chunk-raxstmkp.js (1), chunk-wqfxt05n.js (5)
+ * attribution: fingerprint 1, placement 6
  */
 import { flushReplicasBeforeLogout } from "../../services/liveReplica/liveReplica.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { clearAuthRelatedCaches, clearOAuthAccountFields } from "../../cli/handlers/auth.js";
+import { clearAuthRelatedCaches, clearAccountScopedConfigFields } from "../../cli/handlers/auth.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
-import { getSecureStorage, primarySecureStoreKind } from "../../utils/secureStorage/index.js";
+import {
+  getSecureStorage,
+  getUnselectedGuardedStorages,
+  primarySecureStoreKind,
+} from "../../utils/secureStorage/index.js";
 import { revokeOAuthToken } from "../../services/oauth/client.js";
 import {
   getGatewayRefreshInFlight,
@@ -24,31 +28,49 @@ import {
 import { withDeadline } from "../../utils/sleep.js";
 import { revokeGatewayToken } from "../../services/gateway/gatewayAuth.js";
 import { env } from "../../utils/env.js";
-import { removeApiKey } from "../../utils/auth.js";
+import { removeApiKey, getStoredOauthAccountInfo, sameOwnerAccount } from "../../utils/auth.js";
 import { removeConsoleProfileCredentials } from "../../utils/anthropicProfile.js";
 import { forgetConsoleProfileCloudSessionsBearer } from "../../utils/teleport/api.js";
-import { getErrnoCode, isEnvFsErrno, errorMessage } from "../../utils/errors.js";
-import { logForDebugging } from "../../utils/debug.js";
-import { logError } from "../../utils/log.js";
 import {
   withStorageWriteLock,
   runInsideWriteLock,
   READ_FAILED,
 } from "../../utils/secureStorage/storageWriteLock.js";
+import {
+  readGlobalConfigFromDiskOrThrow,
+  oauthAccountIn,
+  saveGlobalConfigDurably,
+  customApiKeyResponsesOf,
+  configMayStillHold,
+} from "../../utils/config.js";
+import {
+  CONFIG_READ_TIMEOUT_MS,
+  withoutLoginFields,
+  pruneGuardedStorage,
+  LOGOUT_NOT_SAVED_MESSAGE,
+} from "../../cli/handlers/performLogout.js";
+import { logForDebugging } from "../../utils/debug.js";
+import {
+  getErrnoCode,
+  isEnvFsErrno,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+} from "../../utils/errors.js";
+import { logError } from "../../utils/log.js";
 import { setHostSessionsBearerSource } from "../../utils/hostSessionsBearer.js";
-import { saveGlobalConfig, customApiKeyResponsesOf } from "../../utils/config.js";
 import { SUBSCRIPTION_SWITCH } from "../../utils/subscriptionNoticeIds.js";
-import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logAuthEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
+import { gracefulShutdown, gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 
-//@ chunk-th8w37yz.js:2187-4545 facade-exports (2.1.88 match: performLogout, 0.295)
+//@ chunk-wqfxt05n.js:2793-5747 placement (2.1.88 match: performLogout, 0.234)
 async function performLogout({
   clearOnboarding = false,
   preserveInProcessTokens = false,
   preserveNonAnthropicAuth = false,
+  keepStoredLogin = false,
   storageV5,
   preserveQuotaAutoResume = false,
   artifactAccount = "signed_out",
@@ -69,25 +91,25 @@ async function performLogout({
   if (!preserveInProcessTokens && getAPIProvider() === "firstParty") {
     let secureStorage = getSecureStorage();
     secureStorage.invalidateCache?.();
-    let async = await secureStorage.readAsync(credentials);
-    let claudeAiOauth = async?.claudeAiOauth;
+    let stored = await secureStorage.readAsync(credentials);
+    let claudeAiOauth = stored?.claudeAiOauth;
     if (claudeAiOauth?.refreshToken)
       await revokeOAuthToken(claudeAiOauth.refreshToken, claudeAiOauth.clientId);
-    let designOauth = async?.designOauth;
+    let designOauth = stored?.designOauth;
     if (designOauth?.refreshToken) await revokeOAuthToken(designOauth.refreshToken, designOauth.clientId);
-    let cloudSessionsOauth = async?.cloudSessionsOauth;
+    let cloudSessionsOauth = stored?.cloudSessionsOauth;
     if (cloudSessionsOauth?.refreshToken)
       await revokeOAuthToken(cloudSessionsOauth.refreshToken, cloudSessionsOauth.clientId);
   }
   if (getAPIProvider() === "gateway") {
     let deadline = Date.now() + 5000;
     for (
-      let gatewayRefreshInFlight = getGatewayRefreshInFlight();
-      gatewayRefreshInFlight && Date.now() < deadline;
-      gatewayRefreshInFlight = getGatewayRefreshInFlight()
+      let inFlight = getGatewayRefreshInFlight();
+      inFlight && Date.now() < deadline;
+      inFlight = getGatewayRefreshInFlight()
     )
       await withDeadline(
-        gatewayRefreshInFlight.catch(() => {}),
+        inFlight.catch(() => {}),
         deadline - Date.now(),
       );
     let secureStorage = getSecureStorage();
@@ -108,54 +130,78 @@ async function performLogout({
   });
   forgetConsoleProfileCloudSessionsBearer();
   let secureStorage = getSecureStorage();
-  let result;
+  let keepLogin;
+  let pruned = false;
   if (preserveNonAnthropicAuth) {
     if (getAPIProvider() === "firstParty") {
       secureStorage.invalidateCache?.();
       let designOauth = (await secureStorage.readAsync(credentials))?.designOauth;
       if (designOauth?.refreshToken) await revokeOAuthToken(designOauth.refreshToken, designOauth.clientId);
     }
-    await secureStorage
-      .mutate((current) => {
-        let updated = {
-          ...current,
-        };
-        delete updated.claudeAiOauth;
-        delete updated.organizationUuid;
-        delete updated.trustedDeviceToken;
-        delete updated.trustedDeviceEnrolledAfterRefusalAtMs;
-        delete updated.enterpriseGateway;
-        delete updated.designOauth;
-        delete updated.cloudSessionsOauth;
-        return updated;
-      }, credentials)
-      .catch((error) => {
-        let errnoCode = getErrnoCode(error);
-        if (errnoCode === "EPERM" || errnoCode === "ENOENT" || isEnvFsErrno(error)) {
+    pruned = await withStorageWriteLock(async () => {
+      let stillOurs = keepStoredLogin;
+      if (keepStoredLogin) {
+        let storedConfig = await withDeadline(
+          readGlobalConfigFromDiskOrThrow(storageV5).catch(() => {
+            return;
+          }),
+          CONFIG_READ_TIMEOUT_MS,
+        );
+        let keepsLogin = getStoredOauthAccountInfo();
+        stillOurs =
+          (keepsLogin === undefined || sameOwnerAccount(keepsLogin, incomingIdentity)) &&
+          (storedConfig === undefined || sameOwnerAccount(oauthAccountIn(storedConfig), incomingIdentity));
+        if (!stillOurs)
           logForDebugging(
-            `[performLogout] re-login secure-storage prune failed (${errnoCode}): ${errorMessage(error)}`,
-            {
-              level: "error",
-            },
+            "[performLogout] re-login: the account entry no longer names the account the sign-in judged it by; removing the stored login",
           );
-          return;
-        }
-        logError(error);
+      }
+      return (
+        await secureStorage.mutate((current) => {
+          let stripped = withoutLoginFields(current);
+          if (!stillOurs || !current.claudeAiOauth) return stripped;
+          let kept = {
+            ...stripped,
+            claudeAiOauth: current.claudeAiOauth,
+          };
+          return Object.keys(kept).length === Object.keys(current).length ? current : kept;
+        }, credentials)
+      ).success
+        ? stillOurs
+        : keepStoredLogin;
+    }).catch((error) => {
+      let errnoCode = getErrnoCode(error);
+      if (errnoCode === "EPERM" || errnoCode === "ENOENT" || isEnvFsErrno(error))
+        logForDebugging(
+          `[performLogout] re-login secure-storage prune failed (${errnoCode}): ${errorMessage(error)}`,
+          {
+            level: "error",
+          },
+        );
+      else logError(error);
+      return keepStoredLogin;
+    });
+    for (let storage of getUnselectedGuardedStorages())
+      await pruneGuardedStorage(storage).catch((error) => {
+        logForDebugging(`[performLogout] re-login prune of ${storage.name} failed: ${errorMessage(error)}`, {
+          level: "error",
+        });
       });
   } else {
-    let failed = false;
-    let clearAuth = async () => {
-      failed = true;
+    let failedInsideLock = false;
+    let deleteAll = async () => {
+      failedInsideLock = true;
       let coworkRemoteDevice = (await readSecureStorageWithRetry(secureStorage, credentials))
         ?.coworkRemoteDevice;
       await secureStorage.delete(credentials);
       if (coworkRemoteDevice && Object.keys(coworkRemoteDevice).length > 0)
         await restoreDeviceIdentity(secureStorage, coworkRemoteDevice, credentials);
+      for (let storage of getUnselectedGuardedStorages()) await storage.delete();
     };
-    await withStorageWriteLock(clearAuth).catch((error) => {
-      if (failed) throw error;
+    await withStorageWriteLock(deleteAll).catch((error) => {
+      if (failedInsideLock) throw error;
       logError(error);
-      return runInsideWriteLock(clearAuth);
+      return runInsideWriteLock(deleteAll);
     });
   }
   setGatewayAuth(null);
@@ -165,37 +211,45 @@ async function performLogout({
     preserveQuotaAutoResume,
     artifactAccount,
     incomingIdentity,
+    keepStoredLogin: pruned,
     credentials,
   });
-  await saveGlobalConfig((current) => {
-    let config = {
-      ...current,
+  let saved = await saveGlobalConfigDurably((config) => {
+    let updated = {
+      ...config,
     };
+    updated.primaryApiKey = undefined;
     if (clearOnboarding) {
-      config.hasCompletedOnboarding = false;
-      config.subscriptionNoticeCount = 0;
-      config.hasAvailableSubscription = false;
-      if (config.customApiKeyResponses !== undefined)
-        config.customApiKeyResponses = {
+      updated.hasCompletedOnboarding = false;
+      updated.subscriptionNoticeCount = 0;
+      updated.hasAvailableSubscription = false;
+      if (updated.customApiKeyResponses !== undefined)
+        updated.customApiKeyResponses = {
           approved: [],
-          rejected: customApiKeyResponsesOf(config).rejected,
+          rejected: customApiKeyResponsesOf(updated).rejected,
         };
-      let key = SUBSCRIPTION_SWITCH;
-      if (config.seenNotifications?.[key] !== undefined) {
-        let { [key]: dropped, ...rest } = config.seenNotifications;
-        config.seenNotifications = rest;
+      let noticeKey = SUBSCRIPTION_SWITCH;
+      if (updated.seenNotifications?.[noticeKey] !== undefined) {
+        let { [noticeKey]: notice, ...otherNotices } = updated.seenNotifications;
+        updated.seenNotifications = otherNotices;
       }
     }
-    clearOAuthAccountFields(config);
-    return config;
+    clearAccountScopedConfigFields(updated);
+    return updated;
   }, storageV5);
   await noopAsync();
   setResolvedOrgDefault(undefined);
+  let onFile = saved ? undefined : await configMayStillHold(storageV5);
+  if (onFile !== undefined) {
+    logFeatureSad("oauth_logout", "config_not_saved");
+    return onFile === "key" ? "key_on_file" : "account_on_file";
+  }
   logFeatureOk("oauth_logout");
+  return;
 }
-//@ chunk-th8w37yz.js:4545-4565 affinity
+//@ chunk-wqfxt05n.js:5747-5767 placement
 async function noopAsync() {}
-//@ chunk-th8w37yz.js:5345-5650 facade-exports (2.1.88 match: authLogout, 0.251)
+//@ chunk-wqfxt05n.js:6571-6945 placement
 /**
  * 登出（fleet 宿主侧）：清除凭证与 onboarding 后退出。
  */
@@ -207,18 +261,24 @@ async function fleetHostLogout({ exit, setError, setInfo, storageV5, credentials
     authMethod: "oauth",
   });
   try {
-    await performLogout({
-      clearOnboarding: true,
-      storageV5,
-      credentials,
-    });
+    if (
+      (await performLogout({
+        clearOnboarding: true,
+        storageV5,
+        credentials,
+      })) !== undefined
+    )
+      throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        LOGOUT_NOT_SAVED_MESSAGE,
+        "logout could not save the config file",
+      );
     exit();
   } catch (error) {
     logError(error);
     setError(`Couldn't sign out \u2014 ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-//@ chunk-th8w37yz.js:5650-5908 sole-consumer
+//@ chunk-wqfxt05n.js:6945-7203 placement
 async function restoreDeviceIdentity(secureStorage, coworkRemoteDevice, credentials) {
   let attempt;
   for (let j = 0; j < 2; j++)
@@ -237,7 +297,7 @@ async function restoreDeviceIdentity(secureStorage, coworkRemoteDevice, credenti
     }
   logError(attempt);
 }
-//@ chunk-th8w37yz.js:5908-6137 sole-consumer
+//@ chunk-wqfxt05n.js:7203-7432 placement
 async function readSecureStorageWithRetry(secureStorage, credentials) {
   for (let j = 0; j < 2; j++) {
     let read = await (secureStorage.readAsyncStrict?.(credentials) ?? secureStorage.readAsync(credentials));
@@ -248,7 +308,7 @@ async function readSecureStorageWithRetry(secureStorage, credentials) {
   );
   return;
 }
-//@ chunk-emh405f3.js:228-1000 placement
+//@ chunk-raxstmkp.js:228-1000 placement
 function signOutFailureMessage(error, reason, detail) {
   switch (reason) {
     case "credential_store_failed":
@@ -259,10 +319,7 @@ function signOutFailureMessage(error, reason, detail) {
       return `Couldn't confirm the sign-out from "${error}": Claude Code could not read the macOS keychain, so a saved sign-in may still be there. The keychain may be locked. Unlock it, for example with \`security unlock-keychain\`, then ${detail}.`;
   }
 }
-//@ chunk-tndsj50r.js:12979-13456 fingerprint (2.1.88 match: call, 0.431)
-/**
- * /logout 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
- */
+//@ chunk-fmp5a427.js:14134-14707 fingerprint (2.1.88 match: call, 0.402)
 async function call(onDone, context) {
   let isBackground = isBgSession();
   if (!isBackground)
@@ -271,7 +328,7 @@ async function call(onDone, context) {
       success: true,
       authMethod: "oauth",
     });
-  await performLogout({
+  let notSaved = await performLogout({
     clearOnboarding: true,
     storageV5: context.storageV5,
     credentials: context.credentials,
@@ -285,6 +342,14 @@ async function call(onDone, context) {
     );
     return null;
   }
+  if (notSaved !== undefined) {
+    setTimeout(gracefulShutdown, 200, 1, "logout", {
+      finalMessage: LOGOUT_NOT_SAVED_MESSAGE,
+    });
+    return jsxProd_default(Text, {
+      children: LOGOUT_NOT_SAVED_MESSAGE,
+    });
+  }
   let message = jsxProd_default(Text, {
     children: "Successfully logged out from your Anthropic account.",
   });
@@ -293,4 +358,4 @@ async function call(onDone, context) {
   }, 200);
   return message;
 }
-export { signOutFailureMessage, performLogout, call, fleetHostLogout };
+export { signOutFailureMessage, performLogout, fleetHostLogout, call };

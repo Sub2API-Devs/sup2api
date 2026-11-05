@@ -3,9 +3,9 @@
  *
  * v2 REPL 传输：worker 注册（epoch）、SSE 读流 /worker/events/stream + CCRClient 写事件/心跳/状态上报，暴露统一的 transport 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/replBridgeTransport.ts
- * pieces: chunk-fp6aqx1j.js (1)
+ * pieces: chunk-qyz2x025.js (1)
  * attribution: fingerprint 1
  */
 import { configureApiKeyHeaders } from "../services/api/client.js";
@@ -14,12 +14,17 @@ import { registerWorker } from "./workSecret.js";
 import { logForDebugging } from "../utils/debug.js";
 import { SSETransport, LONG_POLL_TIMEOUT_MS, SHORT_POLL_TIMEOUT_MS } from "../cli/transports/SSETransport.js";
 import { logError } from "../utils/log.js";
-import { CCRClient, WORKER_CONFLICT_CLOSE_CODES, isUserPayload } from "../cli/transports/ccrClient.js";
+import {
+  CCRClient,
+  WORKER_CONFLICT_CLOSE_CODES,
+  isUserPayload,
+  CCRInitError,
+} from "../cli/transports/ccrClient.js";
 import { withholdHeldReceipt, redeliveryKind } from "./readReceipts.js";
 import { evaluateInboundAttestationWithPolicy } from "./attestationGate.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-fp6aqx1j.js:172333-177999 fingerprint (2.1.88 match: createV2ReplTransport, 0.45)
+//@ chunk-qyz2x025.js:181972-187637 fingerprint (2.1.88 match: createV2ReplTransport, 0.39)
 /**
  * 建 v2 传输：epoch 取 /bridge 给的值或调 registerWorker；SSETransport 读 `{sessionUrl}/worker/events/stream`，CCRClient 负责写事件、心跳、投递回执、内部事件；
  * epoch 不匹配等请求路径终态时按 4090/4094 关闭，心跳失败而 SSE 正常时 4093，初始化失败 4091；connect() 先 initialize(epoch) 成功后再开读流（outboundOnly 不开）。
@@ -61,7 +66,7 @@ async function createV2ReplTransport(opts) {
     });
   let onCloseCallback;
   let closed = false;
-  function closeOnce(code, reason, closeInfo) {
+  function closeOnce(code, reason, closeInfo, closeInfo2) {
     if (closed) return;
     closed = true;
     try {
@@ -74,7 +79,7 @@ async function createV2ReplTransport(opts) {
       logError(error);
     }
     try {
-      onCloseCallback?.(code, reason, closeInfo);
+      onCloseCallback?.(code, reason, closeInfo, closeInfo2);
     } catch (error) {
       logError(error);
     }
@@ -141,8 +146,8 @@ async function createV2ReplTransport(opts) {
   let onConnectCallback;
   let writesReady = false;
   return {
-    write(msg) {
-      return ccr.writeEvent(msg);
+    write(event) {
+      return ccr.writeEvent(event);
     },
     writeBatch(events) {
       return ccr.writeEvents(events);
@@ -171,13 +176,8 @@ async function createV2ReplTransport(opts) {
     isConnectedStatus() {
       return writesReady;
     },
-    getStateLabel() {
-      if (sseTransport.isClosedStatus()) return "closed";
-      if (sseTransport.isConnectedStatus()) return writesReady ? "connected" : "init";
-      return "connecting";
-    },
-    setOnData(cb) {
-      sseTransport.setOnData(cb);
+    setOnData(fn) {
+      sseTransport.setOnData(fn);
     },
     setOnClose(cb) {
       onCloseCallback = cb;
@@ -185,8 +185,8 @@ async function createV2ReplTransport(opts) {
         closeOnce(code ?? 4092, undefined, info);
       });
     },
-    setOnConnect(cb) {
-      onConnectCallback = cb;
+    setOnConnect(fn) {
+      onConnectCallback = fn;
     },
     getLastSequenceNum() {
       return sseTransport.getLastSequenceNum();
@@ -220,8 +220,8 @@ async function createV2ReplTransport(opts) {
     droppedWorkerStatePatchCount() {
       return ccr.droppedWorkerStatePatches;
     },
-    reportDelivery(eventId, status) {
-      ccr.reportDelivery(eventId, status);
+    reportDelivery(eventId, orphan) {
+      ccr.reportDelivery(eventId, orphan);
     },
     setStreamEventFlushIntervalMs(ms) {
       ccr.setStreamEventFlushIntervalMs(ms);
@@ -297,7 +297,17 @@ async function createV2ReplTransport(opts) {
           logForDebugging(`[bridge:repl] CCR v2 initialize failed: ${errorMessage(err)}`, {
             level: "error",
           });
-          closeOnce(4091);
+          closeOnce(
+            4091,
+            undefined,
+            undefined,
+            err instanceof CCRInitError && err.reason === "worker_register_failed"
+              ? {
+                  httpStatus: err.httpStatus,
+                  noAnswer: err.noAnswer,
+                }
+              : undefined,
+          );
         },
       );
     },

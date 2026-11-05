@@ -3,10 +3,10 @@
  *
  * 子命令出口辅助：cliError/cliOk 打印后退出（另有 9 个同模块函数被切到 _unattributed/chunk-437rqrst）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/exit.ts
- * pieces: chunk-437rqrst.js (11), chunk-fnk5kvbf.js (1)
- * attribution: placement 11, fingerprint 1
+ * pieces: chunk-323717f6.js (1), chunk-n49ac0t1.js (11), chunk-sbrfdm61.js (1)
+ * attribution: fingerprint 1, placement 12
  */
 import { getOutermostCallFrame } from "../utils/cwd.js";
 import { remoteCallFrameStorage } from "../remote/remoteMode.js";
@@ -14,24 +14,28 @@ import { sequential } from "../utils/sequential.js";
 import { isDisklessProcess } from "../bootstrap/state.js";
 import { setBgExitCause } from "../utils/bgExitSidecars.js";
 import { stripControlChars, drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
-import { waitForOAuthRefreshBeforeExit } from "../utils/auth/oauthRefreshExitWait.js";
+import {
+  beginExitWaitingForOAuthRefreshLast,
+  waitForOAuthRefreshBeforeExit,
+} from "../utils/auth/oauthRefreshExitWait.js";
 import { withDeadline } from "../utils/sleep.js";
+import { SERVER_NEVER_SENT_ERROR_CODES } from "../services/mcp/connectionLifecycle.js";
 
-//@ chunk-fnk5kvbf.js:2273-2338 fingerprint (2.1.88 match: cliError, 0.708)
+//@ chunk-sbrfdm61.js:2441-2506 placement
 /**
  * 在异步上下文外运行回调（AsyncLocalStorage.exit/run），旧版名 cliError 配错。
  */
-function cliError_2(msg) {
+function runInOutermostCallFrame(exitCode) {
   let outermostCallFrame = getOutermostCallFrame();
   return outermostCallFrame === undefined
-    ? remoteCallFrameStorage.exit(msg)
-    : remoteCallFrameStorage.run(outermostCallFrame, msg);
+    ? remoteCallFrameStorage.exit(exitCode)
+    : remoteCallFrameStorage.run(outermostCallFrame, exitCode);
 }
-//@ chunk-437rqrst.js:411-451 placement
+//@ chunk-n49ac0t1.js:448-488 placement
 function printCliError(message) {
   console.error(sequential.red(message));
 }
-//@ chunk-437rqrst.js:451-529 placement (2.1.88 match: cliOk, 0.415)
+//@ chunk-n49ac0t1.js:488-566 placement (2.1.88 match: cliOk, 0.414)
 /**
  * cliError：输出红色错误（可选）并以 1 退出；非 diskless 进程先记录退出原因。（旧版名 cliOk 配错，门面导出名为 cliError）
  */
@@ -41,7 +45,7 @@ function cliError(message, cause = "cli_error") {
   process.exit(1);
   return;
 }
-//@ chunk-437rqrst.js:529-600 placement
+//@ chunk-n49ac0t1.js:566-637 placement
 function cliOk(message) {
   if (message)
     process.stdout.write(
@@ -52,18 +56,18 @@ function cliOk(message) {
   process.exit(0);
   return;
 }
-//@ chunk-437rqrst.js:600-639 placement
+//@ chunk-n49ac0t1.js:637-676 placement
 function cliExit(code) {
   process.exit(code);
   return;
 }
-//@ chunk-437rqrst.js:639-718 placement
+//@ chunk-n49ac0t1.js:676-755 placement
 async function writeStdoutAndDrain(text) {
   await new Promise((resolve) => {
     process.stdout.write(text, () => resolve());
   });
 }
-//@ chunk-437rqrst.js:718-776 placement
+//@ chunk-n49ac0t1.js:755-813 placement
 function cliWarn(message) {
   process.stderr.write(
     sequential.yellow(stripControlChars(message)) +
@@ -71,30 +75,36 @@ function cliWarn(message) {
 `,
   );
 }
-//@ chunk-437rqrst.js:776-787 placement
+//@ chunk-n49ac0t1.js:813-830 placement
 var WRITE_DRAIN_TIMEOUT_MS = 2000;
-//@ chunk-437rqrst.js:787-955 placement
+var REFRESHED_WRITE_DRAIN_TIMEOUT_MS = 250;
+//@ chunk-n49ac0t1.js:830-1050 placement
 async function flushAnalyticsBeforeExit({ waitForOAuthRefresh = true } = {}) {
-  if (waitForOAuthRefresh) await waitForOAuthRefreshBeforeExit();
+  let refreshOwnedByUs = beginExitWaitingForOAuthRefreshLast();
+  if (waitForOAuthRefresh && !refreshOwnedByUs) await waitForOAuthRefreshBeforeExit();
   await withDeadline(drainRegisteredWriteQueues(), WRITE_DRAIN_TIMEOUT_MS);
   try {
     let { flushAnalyticsSinks } = await import("../services/analytics/flushSinks.js");
     await flushAnalyticsSinks();
   } catch {}
+  if (waitForOAuthRefresh && refreshOwnedByUs) {
+    await waitForOAuthRefreshBeforeExit();
+    await withDeadline(drainRegisteredWriteQueues(), REFRESHED_WRITE_DRAIN_TIMEOUT_MS);
+  }
 }
-//@ chunk-437rqrst.js:955-1010 placement
+//@ chunk-n49ac0t1.js:1050-1105 placement
 async function exitAfterAnalyticsFlush(code) {
   await flushAnalyticsBeforeExit();
   process.exit(code);
   return;
 }
-//@ chunk-437rqrst.js:1010-1065 placement
+//@ chunk-n49ac0t1.js:1105-1160 placement
 async function cliErrorAfterAnalyticsFlush(message) {
   if (message) printCliError(message);
   await flushAnalyticsBeforeExit();
   return cliError();
 }
-//@ chunk-437rqrst.js:1065-1142 placement
+//@ chunk-n49ac0t1.js:1160-1237 placement
 async function cliOkAfterAnalyticsFlush(message) {
   if (message)
     process.stdout.write(
@@ -105,16 +115,29 @@ async function cliOkAfterAnalyticsFlush(message) {
   await flushAnalyticsBeforeExit();
   return cliOk();
 }
+//@ chunk-323717f6.js:8422-8500 fingerprint (2.1.88 match: cliError, 0.709)
+function cliError_2(toolUseId, tool, options) {
+  return toolUseId === undefined
+    ? SERVER_NEVER_SENT_ERROR_CODES.exit(options)
+    : SERVER_NEVER_SENT_ERROR_CODES.run(
+        {
+          tool,
+          toolUseId,
+        },
+        options,
+      );
+}
 export {
-  writeStdoutAndDrain,
-  exitAfterAnalyticsFlush,
-  cliErrorAfterAnalyticsFlush,
+  printCliError,
+  runInOutermostCallFrame,
   cliError,
   cliWarn,
-  printCliError,
-  cliError_2,
-  cliOkAfterAnalyticsFlush,
-  cliOk,
+  exitAfterAnalyticsFlush,
+  cliErrorAfterAnalyticsFlush,
+  writeStdoutAndDrain,
   flushAnalyticsBeforeExit,
   cliExit,
+  cliOkAfterAnalyticsFlush,
+  cliError_2,
+  cliOk,
 };

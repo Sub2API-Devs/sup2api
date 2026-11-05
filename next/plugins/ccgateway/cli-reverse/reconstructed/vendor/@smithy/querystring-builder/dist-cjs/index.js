@@ -1,14 +1,14 @@
 /**
  * @smithy/querystring-builder/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/querystring-builder@2.2.0
- * pieces: chunk-hq88884p.js (1)
+ * pieces: chunk-355mdh7x.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
-//@ chunk-hq88884p.js:5166-5498 cjs-fingerprint
+//@ chunk-355mdh7x.js:5176-5508 cjs-fingerprint
 var require_querystring_builder = __commonJS(function (cjsExports) {
   var import_util_uri_escape = require_util_uri_escape();
   function buildQueryString(query) {

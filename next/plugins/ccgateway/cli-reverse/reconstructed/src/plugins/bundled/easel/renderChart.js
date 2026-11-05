@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：easel 终端图表渲染：颜色、分组、"其他"合并、折线/柱状/迷你图/占比条布局
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3s7ydtfd.js (214)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7stfs6p0.js (214)
  * attribution: placement 214
  */
 import {
@@ -40,89 +40,89 @@ import { tickTextAt, tickStepsFor } from "./timeFormat.js";
 import { parseNumberCell } from "./parseValues.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-3s7ydtfd.js:54522-54592 placement (2.1.88 match: AGENT_COLORS, 0.646)
+//@ chunk-7stfs6p0.js:54522-54592 placement (2.1.88 match: AGENT_COLORS, 0.646)
 /**
  * 队友颜色轮换表。
  */
 var AGENT_COLORS = ["blue", "orange", "green", "pink", "teal", "red", "violet", "olive"];
-//@ chunk-3s7ydtfd.js:54592-54606 placement
+//@ chunk-7stfs6p0.js:54592-54606 placement
 var BLUE = "blue";
-//@ chunk-3s7ydtfd.js:54606-54617 placement
+//@ chunk-7stfs6p0.js:54606-54617 placement
 /**
  * 100
  */
 var MAX_ROW_CHARS = 100;
-//@ chunk-3s7ydtfd.js:54617-54627 placement
+//@ chunk-7stfs6p0.js:54617-54627 placement
 /**
  * 10
  */
 var MAX_ROW_INK = 10;
-//@ chunk-3s7ydtfd.js:54627-54636 placement
+//@ chunk-7stfs6p0.js:54627-54636 placement
 /**
  * 3
  */
 var MIN_BAR_HEIGHT = 3;
-//@ chunk-3s7ydtfd.js:54636-54647 placement
+//@ chunk-7stfs6p0.js:54636-54647 placement
 /**
  * 0.1
  */
 var MIN_BAR_RATIO = 0.1;
-//@ chunk-3s7ydtfd.js:54647-54656 placement
+//@ chunk-7stfs6p0.js:54647-54656 placement
 /**
  * 2
  */
 var MIN_LANE_HEIGHT = 2;
-//@ chunk-3s7ydtfd.js:54656-54675 placement
+//@ chunk-7stfs6p0.js:54656-54675 placement
 /**
  * 1e-9
  */
 var NEGLIGIBLE_VALUE = 0.000000001;
-//@ chunk-3s7ydtfd.js:54675-54684 placement
+//@ chunk-7stfs6p0.js:54675-54684 placement
 /**
  * 2
  */
 var MIN_PLOT_HEIGHT = 2;
-//@ chunk-3s7ydtfd.js:54684-54696 placement
+//@ chunk-7stfs6p0.js:54684-54696 placement
 /**
  * 8000
  */
 var MAX_PLOT_WIDTH = 8000;
-//@ chunk-3s7ydtfd.js:54696-54705 placement
+//@ chunk-7stfs6p0.js:54696-54705 placement
 /**
  * 2
  */
 var MIN_SPARK_ROWS = 2;
-//@ chunk-3s7ydtfd.js:54705-54714 placement
+//@ chunk-7stfs6p0.js:54705-54714 placement
 /**
  * 2
  */
 var MIN_SHARE_SEGS = 2;
-//@ chunk-3s7ydtfd.js:54714-54723 placement
+//@ chunk-7stfs6p0.js:54714-54723 placement
 /**
  * 1
  */
 var MIN_LEGEND_ROWS = 1;
-//@ chunk-3s7ydtfd.js:54723-54733 placement
+//@ chunk-7stfs6p0.js:54723-54733 placement
 /**
  * 16
  */
 var DEFAULT_TABLE_WIDTH = 16;
-//@ chunk-3s7ydtfd.js:54733-54743 placement
+//@ chunk-7stfs6p0.js:54733-54743 placement
 /**
  * 24
  */
 var DEFAULT_TABLE_HEIGHT = 24;
-//@ chunk-3s7ydtfd.js:54743-54769 placement
+//@ chunk-7stfs6p0.js:54743-54769 placement
 /**
  * 取首个系列的单位
  */
 var firstSeriesUnit = (series) => series[0]?.unit ?? "";
-//@ chunk-3s7ydtfd.js:54769-54782 placement
+//@ chunk-7stfs6p0.js:54769-54782 placement
 /**
  * 红色
  */
 var RED = "red";
-//@ chunk-3s7ydtfd.js:54782-55209 placement
+//@ chunk-7stfs6p0.js:54782-55209 placement
 function pickSeriesColors(series, values, options) {
   let total = stableSum(values);
   let mapped = series.map(firstValue);
@@ -149,7 +149,7 @@ function pickSeriesColors(series, values, options) {
     relativeLength: firstValue(series) / maxAbsolute,
   }));
 }
-//@ chunk-3s7ydtfd.js:55209-55232 placement
+//@ chunk-7stfs6p0.js:55209-55232 placement
 /**
  * 柱状图合计行
  */
@@ -157,7 +157,7 @@ var TOTAL_ROW = {
   key: "",
   ink: BLUE,
 };
-//@ chunk-3s7ydtfd.js:55232-55343 placement
+//@ chunk-7stfs6p0.js:55232-55343 placement
 /**
  * 柱状图的合计行。
  */
@@ -175,7 +175,7 @@ var totalRow = (series, values) => ({
   ],
   relativeLength: 0,
 });
-//@ chunk-3s7ydtfd.js:55343-55675 placement
+//@ chunk-7stfs6p0.js:55343-55675 placement
 function describeBarsLimit(context) {
   let isSummed = context.request.combine === "sum";
   let shownSeries =
@@ -195,7 +195,7 @@ function describeBarsLimit(context) {
     notes: context.frame.notes,
   };
 }
-//@ chunk-3s7ydtfd.js:55675-55814 placement
+//@ chunk-7stfs6p0.js:55675-55814 placement
 /**
  * 给系列补上非空值列表与最大绝对值。
  */
@@ -208,19 +208,19 @@ function withSeriesValues(series) {
     isOthers: false,
   };
 }
-//@ chunk-3s7ydtfd.js:55814-55856 placement
+//@ chunk-7stfs6p0.js:55814-55856 placement
 /**
  * 名字用逗号拼接
  */
 var joinNames = (series) => series.map((series) => series.name).join(", ");
-//@ chunk-3s7ydtfd.js:55856-55935 placement
+//@ chunk-7stfs6p0.js:55856-55935 placement
 /**
  * “这是最大值”/“这 N 个最大”
  */
 function largestNote(drawnAloneCount) {
   return drawnAloneCount === 1 ? "this is the largest" : `these are the ${drawnAloneCount} largest`;
 }
-//@ chunk-3s7ydtfd.js:55935-56441 placement
+//@ chunk-7stfs6p0.js:55935-56441 placement
 function describeGroupedOthers(context) {
   let cutCount = context.cutSeries.length;
   if (cutCount === 0) return [];
@@ -241,7 +241,7 @@ function describeGroupedOthers(context) {
       ]
     : [note];
 }
-//@ chunk-3s7ydtfd.js:56441-56717 placement
+//@ chunk-7stfs6p0.js:56441-56717 placement
 /**
  * 按单位与量级把系列分组到同一坐标轴。
  */
@@ -264,7 +264,7 @@ function groupSeriesByScale(drawnSeries, isBars) {
     pairs.map((pair) => pair[0]),
   );
 }
-//@ chunk-3s7ydtfd.js:56717-56776 placement
+//@ chunk-7stfs6p0.js:56717-56776 placement
 /**
  * 图的标题/事实/来源
  */
@@ -273,7 +273,7 @@ var plotFrame = (table, options, facts) => ({
   facts,
   source: tableSource(table),
 });
-//@ chunk-3s7ydtfd.js:56776-56961 placement
+//@ chunk-7stfs6p0.js:56776-56961 placement
 /**
  * 按时刻求各系列之和。
  */
@@ -292,7 +292,7 @@ var sumSamplesByTime = (series) =>
         value: filtered.length > 0 ? stableSum(filtered) : null,
       };
     });
-//@ chunk-3s7ydtfd.js:56961-57038 placement
+//@ chunk-7stfs6p0.js:56961-57038 placement
 /**
  * 同一时刻求和的系列
  */
@@ -303,7 +303,7 @@ var sumSeries = (series, name) =>
     measure: series[0]?.measure ?? "",
     samples: sumSamplesByTime(series),
   });
-//@ chunk-3s7ydtfd.js:57038-57358 placement
+//@ chunk-7stfs6p0.js:57038-57358 placement
 function describeTotalColumn(series, plural) {
   if (series.length <= MIN_LANE_HEIGHT) return [];
   let sumByMs = new Map(sumSeries(series, "").samples.map(({ ms, value }) => [ms, value]));
@@ -316,7 +316,7 @@ function describeTotalColumn(series, plural) {
       (series) => `${series.name} equals the sum of the other ${plural}: if it is their total, leave it out`,
     );
 }
-//@ chunk-3s7ydtfd.js:57358-57491 placement
+//@ chunk-7stfs6p0.js:57358-57491 placement
 /**
  * 系列峰值所在时刻的标签。
  */
@@ -333,7 +333,7 @@ function peakTimeLabel(series, timeline) {
       };
   return tickTextAt(timeline, peak.ms);
 }
-//@ chunk-3s7ydtfd.js:57491-57607 placement
+//@ chunk-7stfs6p0.js:57491-57607 placement
 /**
  * “total max X at T” 说明。
  */
@@ -342,12 +342,12 @@ function totalPeakNote(series, timeline) {
   let [peakLabel = ""] = formatSeriesValues(totalSeries.unit, [Math.max(...totalSeries.values)]);
   return `total max ${peakLabel} at ${peakTimeLabel(totalSeries, timeline)}`;
 }
-//@ chunk-3s7ydtfd.js:57607-57640 placement
+//@ chunk-7stfs6p0.js:57607-57640 placement
 /**
  * 按名字比较
  */
 var byName = (a, b) => (a.name < b.name ? -1 : 1);
-//@ chunk-3s7ydtfd.js:57640-57698 placement
+//@ chunk-7stfs6p0.js:57640-57698 placement
 /**
  * 合并出的 “N others”
  */
@@ -355,7 +355,7 @@ var othersSeries = (series) => ({
   ...sumSeries(series, `${series.length} others`),
   isOthers: true,
 });
-//@ chunk-3s7ydtfd.js:57698-57922 placement
+//@ chunk-7stfs6p0.js:57698-57922 placement
 /**
  * 按大小选前若干系列，其余合并为 “others”。
  */
@@ -371,7 +371,7 @@ function pickTopSeries(series, top, isRestDrawnAsOne) {
     drawnSeries: hasCut ? [...sliced, othersSeries(series_2)] : sliced,
   };
 }
-//@ chunk-3s7ydtfd.js:57922-57950 placement
+//@ chunk-7stfs6p0.js:57922-57950 placement
 /**
  * 弱化样式行
  */
@@ -379,15 +379,15 @@ var QUIET_ROW = {
   key: "",
   ink: "quiet",
 };
-//@ chunk-3s7ydtfd.js:57950-58009 placement
+//@ chunk-7stfs6p0.js:57950-58009 placement
 var mapped; // deferred: uses returnValue (./chartSchema.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3s7ydtfd.js:57950", () => {
+deferInit("chunk-7stfs6p0.js:57950", () => {
   mapped = returnValue([..."abcdefgh"], AGENT_COLORS).map(([key, color]) => ({
     key,
     ink: color,
   }));
 });
-//@ chunk-3s7ydtfd.js:58009-58267 placement
+//@ chunk-7stfs6p0.js:58009-58267 placement
 /**
  * 占比图布局（各项份额与颜色）。
  */
@@ -412,7 +412,7 @@ function layoutShareChart(frame, selection, series) {
     notes: frame.notes,
   };
 }
-//@ chunk-3s7ydtfd.js:58267-58351 placement
+//@ chunk-7stfs6p0.js:58267-58351 placement
 /**
  * 迷你图结果对象
  */
@@ -423,7 +423,7 @@ var sparksFrame = (frame, rows, medianStep) => ({
   medianStep,
   notes: frame.notes,
 });
-//@ chunk-3s7ydtfd.js:58351-58511 placement
+//@ chunk-7stfs6p0.js:58351-58511 placement
 /**
  * 缺失样本的说明。
  */
@@ -433,7 +433,7 @@ function missingSampleNotes(series) {
     ? [`${formatCount(missingCount, "missing sample")}, left blank where the gap is wide enough to see`]
     : [];
 }
-//@ chunk-3s7ydtfd.js:58511-58612 placement
+//@ chunk-7stfs6p0.js:58511-58612 placement
 /**
  * 列图的行（名称、统计、线段）。
  */
@@ -445,7 +445,7 @@ var toColumnRow =
     stats,
     stretches: columns.map((column) => column.map(toLine)),
   });
-//@ chunk-3s7ydtfd.js:58612-58667 placement
+//@ chunk-7stfs6p0.js:58612-58667 placement
 /**
  * 折线的坐标函数
  */
@@ -453,7 +453,7 @@ var linePoint = (xOf, axis) => (point) => ({
   x: xOf(point.ms),
   y: axis.positionOf(point.top),
 });
-//@ chunk-3s7ydtfd.js:58667-59164 placement
+//@ chunk-7stfs6p0.js:58667-59164 placement
 function summarizeSparkStat({ seriesOfPlot, axisValues, timeline, isSummed }) {
   let unit = firstSeriesUnit(seriesOfPlot);
   let mapped = seriesOfPlot.map((series) => series.values);
@@ -478,7 +478,7 @@ function summarizeSparkStat({ seriesOfPlot, axisValues, timeline, isSummed }) {
     return isSummed ? [...stats, ["total", totalStats[index] ?? "", ""]] : stats;
   });
 }
-//@ chunk-3s7ydtfd.js:59164-59283 placement
+//@ chunk-7stfs6p0.js:59164-59283 placement
 /**
  * 坐标轴上下文（系列映射、值、时间线、是否求和）。
  */
@@ -488,7 +488,7 @@ var axisContext = (context, axisValues) => ({
   timeline: context.data.timeline,
   isSummed: context.request.combine === "sum",
 });
-//@ chunk-3s7ydtfd.js:59283-59827 placement
+//@ chunk-7stfs6p0.js:59283-59827 placement
 function layoutColumns(context) {
   let isColumns = context.data.form === "columns";
   let runningStack = new Map();
@@ -526,7 +526,7 @@ function layoutColumns(context) {
     ).map(toColumnRow(context, linePoint(tickStepsFor(context.data.timeline), axis))),
   };
 }
-//@ chunk-3s7ydtfd.js:59827-59861 placement
+//@ chunk-7stfs6p0.js:59827-59861 placement
 /**
  * 单图 5 个系列、多图 2 个
  */
@@ -534,7 +534,7 @@ var PLOT_LIMITS = {
   onePlot: 5,
   severalPlots: 2,
 };
-//@ chunk-3s7ydtfd.js:59861-60312 placement
+//@ chunk-7stfs6p0.js:59861-60312 placement
 function describeStretch({ topSeries, frame: { header, notes }, request, data }) {
   let { ticks, rows } = layoutColumns({
     seriesOfPlot: topSeries,
@@ -562,7 +562,7 @@ function describeStretch({ topSeries, frame: { header, notes }, request, data })
     deltas[Math.floor(deltas.length / MIN_SHARE_SEGS)] ?? 1,
   );
 }
-//@ chunk-3s7ydtfd.js:60312-60484 placement
+//@ chunk-7stfs6p0.js:60312-60484 placement
 /**
  * 多条折线在同一列靠得太近。
  */
@@ -575,7 +575,7 @@ function hasCrowdedLines(layout) {
   }
   return false;
 }
-//@ chunk-3s7ydtfd.js:60484-60803 placement
+//@ chunk-7stfs6p0.js:60484-60803 placement
 /**
  * 按请求里 y 的顺序排列系列分组。
  */
@@ -594,7 +594,7 @@ function orderSeriesByRequest(groups, data, request) {
     .map((group) => group.toSorted((a, b) => requestIndexOf(a) - requestIndexOf(b)))
     .toSorted((groupA, groupB) => groupIndexOf(groupA) - groupIndexOf(groupB));
 }
-//@ chunk-3s7ydtfd.js:60803-60892 placement
+//@ chunk-7stfs6p0.js:60803-60892 placement
 /**
  * 时间刻度标签
  */
@@ -606,7 +606,7 @@ function tickLabelFor(timeline) {
     label: mark.label,
   });
 }
-//@ chunk-3s7ydtfd.js:60892-61942 placement
+//@ chunk-7stfs6p0.js:60892-61942 placement
 /**
  * 把序列分配到一个或多个图（同单位共享，柱状最多若干组）。
  */
@@ -669,7 +669,7 @@ function layoutPlots(context) {
     modelOnlyNotes,
   };
 }
-//@ chunk-3s7ydtfd.js:61942-62983 placement
+//@ chunk-7stfs6p0.js:61942-62983 placement
 /**
  * 决定绘制方式（合并、对数刻度、序列上限）。
  */
@@ -758,26 +758,26 @@ function planChartLayout(chartRequestData, request) {
       });
   }
 }
-//@ chunk-3s7ydtfd.js:62983-63070 placement
+//@ chunk-7stfs6p0.js:62983-63070 placement
 /**
  * 标记点文本
  */
 function markLabel(mark) {
   return mark.label !== "" ? `mark at ${mark.when}: ${mark.label}` : `mark at ${mark.when}`;
 }
-//@ chunk-3s7ydtfd.js:63070-63137 placement
+//@ chunk-7stfs6p0.js:63070-63137 placement
 /**
  * 汇总注释
  */
 var allNotes = (layout) => ("plots" in layout ? [...layout.notes, ...layout.modelOnlyNotes] : layout.notes);
-//@ chunk-3s7ydtfd.js:63137-63153 placement (2.1.88 match: SEP_WIDTH, 1)
+//@ chunk-7stfs6p0.js:63137-63153 placement (2.1.88 match: SEP_WIDTH, 1)
 var SEP = " \xB7 ";
-//@ chunk-3s7ydtfd.js:63153-63217 placement
+//@ chunk-7stfs6p0.js:63153-63217 placement
 /**
  * 带引号的标题
  */
 var quotedPlotTitle = (header) => (header.title === "" ? "" : ` "${header.title.replaceAll('"', "'")}"`);
-//@ chunk-3s7ydtfd.js:63217-63725 placement
+//@ chunk-7stfs6p0.js:63217-63725 placement
 function renderLegend(layout) {
   let joined = [
     `${CHART_FORMS[layout.form].label}` + quotedPlotTitle(layout.header),
@@ -814,12 +814,12 @@ function renderLegend(layout) {
     ...tailLines,
   ];
 }
-//@ chunk-3s7ydtfd.js:63725-63782 placement
+//@ chunk-7stfs6p0.js:63725-63782 placement
 /**
  * 展示名数量相符
  */
 var hasExactlyNames = (count) => (rowLayout) => new Set(rowLayout.shownNames.values()).size === count;
-//@ chunk-3s7ydtfd.js:63782-63876 placement
+//@ chunk-7stfs6p0.js:63782-63876 placement
 /**
  * 是否还有空间
  */
@@ -827,117 +827,117 @@ var hasRoomFor = (rowLayout, statsWidth, nameWidth) => (range, index) => {
   let isStat = index < rowLayout.lane.statsBeforeNames;
   return rowLayout.widthPastKey - range.end >= (isStat ? statsWidth : nameWidth);
 };
-//@ chunk-3s7ydtfd.js:63876-63885 placement
+//@ chunk-7stfs6p0.js:63876-63885 placement
 /**
  * 2
  */
 var MIN_LANE_GAP = 2;
-//@ chunk-3s7ydtfd.js:63885-63894 placement
+//@ chunk-7stfs6p0.js:63885-63894 placement
 /**
  * 4
  */
 var KEY_COLUMN_WIDTH = 4;
-//@ chunk-3s7ydtfd.js:63894-63903 placement
+//@ chunk-7stfs6p0.js:63894-63903 placement
 /**
  * 2
  */
 var MIN_STATS_WIDTH = 2;
-//@ chunk-3s7ydtfd.js:63903-63912 placement
+//@ chunk-7stfs6p0.js:63903-63912 placement
 /**
  * 2
  */
 var MIN_LANE_WIDTH = 2;
-//@ chunk-3s7ydtfd.js:63912-63925 placement
+//@ chunk-7stfs6p0.js:63912-63925 placement
 /**
  * 0.125
  */
 var BAR_FRACTION = 0.125;
-//@ chunk-3s7ydtfd.js:63925-63936 placement
+//@ chunk-7stfs6p0.js:63925-63936 placement
 /**
  * 0.5
  */
 var HALF = 0.5;
-//@ chunk-3s7ydtfd.js:63936-63949 placement
+//@ chunk-7stfs6p0.js:63936-63949 placement
 /**
  * 0.125
  */
 var BAR_GAP_FRACTION = 0.125;
-//@ chunk-3s7ydtfd.js:63949-63958 placement
+//@ chunk-7stfs6p0.js:63949-63958 placement
 /**
  * 2
  */
 var MIN_SEGMENT = 2;
-//@ chunk-3s7ydtfd.js:63958-63969 placement
+//@ chunk-7stfs6p0.js:63958-63969 placement
 /**
  * 0.4
  */
 var SHARE_MIN_FRACTION = 0.4;
-//@ chunk-3s7ydtfd.js:63969-63978 placement
+//@ chunk-7stfs6p0.js:63969-63978 placement
 /**
  * 8
  */
 var MAX_LEGEND_ENTRIES = 8;
-//@ chunk-3s7ydtfd.js:63978-63987 placement
+//@ chunk-7stfs6p0.js:63978-63987 placement
 /**
  * 2
  */
 var LANE_WIDTH_DIVISOR = 2;
-//@ chunk-3s7ydtfd.js:63987-63996 placement
+//@ chunk-7stfs6p0.js:63987-63996 placement
 /**
  * 1
  */
 var TITLE_ROW_INDEX = 1;
-//@ chunk-3s7ydtfd.js:63996-64006 placement
+//@ chunk-7stfs6p0.js:63996-64006 placement
 /**
  * 40
  */
 var MIN_PLOT_WIDTH = 40;
-//@ chunk-3s7ydtfd.js:64006-64016 placement
+//@ chunk-7stfs6p0.js:64006-64016 placement
 /**
  * 16
  */
 var AXIS_LABEL_INDENT = 16;
-//@ chunk-3s7ydtfd.js:64016-64025 placement
+//@ chunk-7stfs6p0.js:64016-64025 placement
 /**
  * 8
  */
 var MIN_AXIS_WIDTH = 8;
-//@ chunk-3s7ydtfd.js:64025-64034 placement
+//@ chunk-7stfs6p0.js:64025-64034 placement
 /**
  * 2
  */
 var MIN_CHART_WIDTH = 2;
-//@ chunk-3s7ydtfd.js:64034-64043 placement
+//@ chunk-7stfs6p0.js:64034-64043 placement
 /**
  * 1
  */
 var MIN_ROWS_TO_DRAW = 1;
-//@ chunk-3s7ydtfd.js:64043-64058 placement
+//@ chunk-7stfs6p0.js:64043-64058 placement
 /**
  * 1048576
  */
 var BAR_SCALE = 1048576;
-//@ chunk-3s7ydtfd.js:64058-64069 placement
+//@ chunk-7stfs6p0.js:64058-64069 placement
 /**
  * 0.5
  */
 var MARK_FRACTION = 0.5;
-//@ chunk-3s7ydtfd.js:64069-64078 placement
+//@ chunk-7stfs6p0.js:64069-64078 placement
 /**
  * 2
  */
 var MIN_MARK_ROWS = 2;
-//@ chunk-3s7ydtfd.js:64078-64087 placement
+//@ chunk-7stfs6p0.js:64078-64087 placement
 /**
  * 1
  */
 var MIN_LEGEND_COLUMN = 1;
-//@ chunk-3s7ydtfd.js:64087-64096 placement
+//@ chunk-7stfs6p0.js:64087-64096 placement
 /**
  * 1
  */
 var DEFAULT_ROW_OPTIONS = 1;
-//@ chunk-3s7ydtfd.js:64096-64385 placement
+//@ chunk-7stfs6p0.js:64096-64385 placement
 /**
  * 行布局的输入（名称是否已在标题中、缩进、键宽）。
  */
@@ -955,12 +955,12 @@ function prepareRowLayout(options) {
     widthPastKey: options.columns - keyWidth - MIN_LANE_GAP,
   };
 }
-//@ chunk-3s7ydtfd.js:64385-64421 placement
+//@ chunk-7stfs6p0.js:64385-64421 placement
 /**
  * 最长显示宽度
  */
 var maxDisplayWidth = (names) => Math.max(0, ...names.map(displayWidth));
-//@ chunk-3s7ydtfd.js:64421-64484 placement
+//@ chunk-7stfs6p0.js:64421-64484 placement
 /**
  * 计算列位置
  */
@@ -968,7 +968,7 @@ var columnPositions = (columns, lane, isSplit) =>
   isSplit
     ? Math.min(Math.floor(columns / LANE_WIDTH_DIVISOR), columns - lane.minWidth - DEFAULT_ROW_OPTIONS)
     : columns;
-//@ chunk-3s7ydtfd.js:64484-64851 placement
+//@ chunk-7stfs6p0.js:64484-64851 placement
 /**
  * 计算行的列位置：名称、色道、统计列。
  */
@@ -995,7 +995,7 @@ function computeRowLayout(rowLayout, statColumns) {
     statColumns,
   };
 }
-//@ chunk-3s7ydtfd.js:64851-64972 placement
+//@ chunk-7stfs6p0.js:64851-64972 placement
 /**
  * 名称列的最小宽度。
  */
@@ -1007,11 +1007,11 @@ var minNameWidth = (rowLayout, columns) =>
     ),
     rowLayout.lane.minWidth > 0 ? MAX_LEGEND_ENTRIES + rowLayout.lane.minWidth : 0,
   );
-//@ chunk-3s7ydtfd.js:64972-64987 placement
+//@ chunk-7stfs6p0.js:64972-64987 placement
 var COLUMN_INDEXES = [0, 1, 2];
-//@ chunk-3s7ydtfd.js:64987-65041 placement
+//@ chunk-7stfs6p0.js:64987-65041 placement
 var maxStatsLength = (rows) => Math.max(0, ...rows.map((row) => row.stats.length));
-//@ chunk-3s7ydtfd.js:65041-65247 placement (2.1.88 match: rollFrom, 0.363)
+//@ chunk-7stfs6p0.js:65041-65247 placement (2.1.88 match: rollFrom, 0.364)
 function layoutStatColumns(rows) {
   let columns = [];
   let end = -MIN_LANE_GAP;
@@ -1033,7 +1033,7 @@ function layoutStatColumns(rows) {
   }
   return columns;
 }
-//@ chunk-3s7ydtfd.js:65247-65487 placement
+//@ chunk-7stfs6p0.js:65247-65487 placement
 /**
  * 选择能放下的统计列数并计算行布局。
  */
@@ -1054,7 +1054,7 @@ function layoutRows(options) {
       .find(hasExactlyNames(new Set(rowLayout.fullNames).size)) ?? computeRowLayout(rowLayout, statColumns)
   );
 }
-//@ chunk-3s7ydtfd.js:65487-65540 placement
+//@ chunk-7stfs6p0.js:65487-65540 placement
 /**
  * 带色道的行布局
  */
@@ -1066,7 +1066,7 @@ var laneFrame = (shapes, y, laneLeft) => ({
     y,
   },
 });
-//@ chunk-3s7ydtfd.js:65540-65621 placement
+//@ chunk-7stfs6p0.js:65540-65621 placement
 /**
  * 文字图形
  */
@@ -1077,30 +1077,30 @@ var textShape = (shape) => ({
   ink: shape.ink,
   isAboutPartsLeftOut: false,
 });
-//@ chunk-3s7ydtfd.js:65621-65672 placement
+//@ chunk-7stfs6p0.js:65621-65672 placement
 /**
  * 空白文本返回空数组
  */
 function textShapeOrEmpty(shape) {
   return shape.text.trim() === "" ? [] : [textShape(shape)];
 }
-//@ chunk-3s7ydtfd.js:65672-65707 placement
+//@ chunk-7stfs6p0.js:65672-65707 placement
 /**
  * 名字前留白
  */
 var keyPadding = (part, partIndex, text) => (partIndex > 0 ? part.width - displayWidth(text) : 0);
-//@ chunk-3s7ydtfd.js:65707-65747 placement
+//@ chunk-7stfs6p0.js:65707-65747 placement
 /**
  * 名称的颜色
  */
 var nameInk = (rowLayout, row) => (rowLayout.wantsLane ? "title" : row.ink);
-//@ chunk-3s7ydtfd.js:65747-65786 placement
+//@ chunk-7stfs6p0.js:65747-65786 placement
 /**
  * 统计列的颜色
  */
 var statInk = (rowLayout, row, partIndex) =>
   partIndex === TITLE_ROW_INDEX ? nameInk(rowLayout, row) : "quiet";
-//@ chunk-3s7ydtfd.js:65786-66149 placement
+//@ chunk-7stfs6p0.js:65786-66149 placement
 /**
  * 画一行的键、名称与统计值。
  */
@@ -1139,7 +1139,7 @@ function drawRowLabels(rowLayout, row, y) {
     }
   return laneFrame(shapes, y, rowLayout.laneLeft);
 }
-//@ chunk-3s7ydtfd.js:66149-66188 placement
+//@ chunk-7stfs6p0.js:66149-66188 placement
 /**
  * 默认列布局
  */
@@ -1147,7 +1147,7 @@ var DEFAULT_LANE_OPTIONS = {
   minWidth: 0,
   statsBeforeNames: 1,
 };
-//@ chunk-3s7ydtfd.js:66188-66227 placement
+//@ chunk-7stfs6p0.js:66188-66227 placement
 /**
  * 最窄列布局
  */
@@ -1155,7 +1155,7 @@ var MIN_LANE_OPTIONS = {
   minWidth: 8,
   statsBeforeNames: 1,
 };
-//@ chunk-3s7ydtfd.js:66227-66360 placement
+//@ chunk-7stfs6p0.js:66227-66360 placement
 /**
  * 柱形（宽度按相对长度，负值加斜线）。
  */
@@ -1166,7 +1166,7 @@ var barShape = (at, row, rowLayout) => ({
   ink: row.ink,
   isHatched: row.relativeLength < 0,
 });
-//@ chunk-3s7ydtfd.js:66360-66605 placement
+//@ chunk-7stfs6p0.js:66360-66605 placement
 /**
  * 画柱状图的各行。
  */
@@ -1188,12 +1188,12 @@ function drawBarRows(frame, rows, headerTexts) {
     rows: frame.rows + rows.length,
   };
 }
-//@ chunk-3s7ydtfd.js:66605-66637 placement
+//@ chunk-7stfs6p0.js:66605-66637 placement
 /**
  * 按精度取整
  */
 var roundToScale = (value) => Math.round(value * BAR_SCALE) / BAR_SCALE;
-//@ chunk-3s7ydtfd.js:66637-66681 placement
+//@ chunk-7stfs6p0.js:66637-66681 placement
 /**
  * 键标记
  */
@@ -1202,7 +1202,7 @@ var laneKeyMark = (row, row_2) => ({
   ink: row.ink,
   row: row_2,
 });
-//@ chunk-3s7ydtfd.js:66681-66770 placement
+//@ chunk-7stfs6p0.js:66681-66770 placement
 /**
  * 最后一个伸展段的标记
  */
@@ -1210,7 +1210,7 @@ function lastStretchMark(row, yOf) {
   let last = row.stretches.at(-1)?.at(-1);
   return last ? [laneKeyMark(row, Math.floor(yOf(last.y)))] : [];
 }
-//@ chunk-3s7ydtfd.js:66770-66841 placement
+//@ chunk-7stfs6p0.js:66770-66841 placement
 /**
  * 按行分组标记
  */
@@ -1219,11 +1219,11 @@ var groupMarksByRow = (rows, yOf) =>
     rows.filter((row) => row.key).flatMap((row) => lastStretchMark(row, yOf)),
     (mark) => mark.row,
   );
-//@ chunk-3s7ydtfd.js:66841-66857 placement
+//@ chunk-7stfs6p0.js:66841-66857 placement
 var CHART_ROW_DENSITIES = [11, 7, 5];
-//@ chunk-3s7ydtfd.js:66857-66891 placement
+//@ chunk-7stfs6p0.js:66857-66891 placement
 var rowsPerTick = (rows, ticks) => Math.floor((rows - 1) / ticks);
-//@ chunk-3s7ydtfd.js:66891-66964 placement
+//@ chunk-7stfs6p0.js:66891-66964 placement
 var chartRowScale = (plotCount, valueSpan) =>
   Math.max(
     1,
@@ -1232,10 +1232,10 @@ var chartRowScale = (plotCount, valueSpan) =>
       KEY_COLUMN_WIDTH,
     ),
   );
-//@ chunk-3s7ydtfd.js:66964-67030 placement
+//@ chunk-7stfs6p0.js:66964-67030 placement
 var ticksInRange = (plot, from, to) =>
   plot.ticks.filter((tick) => tick.position >= from && tick.position <= to);
-//@ chunk-3s7ydtfd.js:67030-67227 placement
+//@ chunk-7stfs6p0.js:67030-67227 placement
 function unstackColumnRows(rows) {
   let lastY = new Map();
   let out = [];
@@ -1253,7 +1253,7 @@ function unstackColumnRows(rows) {
   }
   return out;
 }
-//@ chunk-3s7ydtfd.js:67227-67610 placement
+//@ chunk-7stfs6p0.js:67227-67610 placement
 function layoutPlotRows(plot, layout, isSinglePlot) {
   let isColumns = layout.form === "columns";
   let rows = isColumns && !isSinglePlot ? unstackColumnRows(plot.rows) : plot.rows;
@@ -1276,16 +1276,16 @@ function layoutPlotRows(plot, layout, isSinglePlot) {
     endKeys: groupMarksByRow(isSinglePlot ? [] : rows, yOf),
   };
 }
-//@ chunk-3s7ydtfd.js:67610-67674 placement
+//@ chunk-7stfs6p0.js:67610-67674 placement
 function keyColumnWidth(plots) {
   return plots.some((plot) => plot.rows.some((row) => row.key)) ? MIN_SEGMENT : 0;
 }
-//@ chunk-3s7ydtfd.js:67674-67787 placement
+//@ chunk-7stfs6p0.js:67674-67787 placement
 function endKeysWidth(rows) {
   let max = Math.max(0, ...rows.flatMap((row) => [...row.endKeys.values()]).map((mark) => mark.length));
   return max > 0 ? DEFAULT_ROW_OPTIONS + max : 0;
 }
-//@ chunk-3s7ydtfd.js:67787-67952 placement
+//@ chunk-7stfs6p0.js:67787-67952 placement
 function columnAreaLayout(left, columnWidth, columnCount) {
   let max = Math.max(1, columnWidth - 1);
   let xOf = (fraction) => left + Math.floor(roundToScale(fraction * columnCount)) * columnWidth;
@@ -1298,7 +1298,7 @@ function columnAreaLayout(left, columnWidth, columnCount) {
     tickXOf,
   };
 }
-//@ chunk-3s7ydtfd.js:67952-68044 placement
+//@ chunk-7stfs6p0.js:67952-68044 placement
 function continuousAreaLayout(left, width) {
   let xOf = (fraction) => left + fraction * (width - HALF);
   return {
@@ -1309,7 +1309,7 @@ function continuousAreaLayout(left, width) {
     tickXOf: xOf,
   };
 }
-//@ chunk-3s7ydtfd.js:68044-68179 placement
+//@ chunk-7stfs6p0.js:68044-68179 placement
 function layoutChartArea(plots, width, columnCount) {
   let labelWidth =
     maxDisplayWidth(plots.flatMap((plot) => plot.ticks.map((tick) => tick.label))) + MIN_MARK_ROWS;
@@ -1319,7 +1319,7 @@ function layoutChartArea(plots, width, columnCount) {
     ? continuousAreaLayout(labelWidth, areaWidth)
     : columnAreaLayout(labelWidth, cellWidth, columnCount);
 }
-//@ chunk-3s7ydtfd.js:68179-68366 placement
+//@ chunk-7stfs6p0.js:68179-68366 placement
 function layoutPlots_2(layout, columns) {
   let plots = layout.plots;
   let area = layoutChartArea(plots, columns - keyColumnWidth(plots), layout.timeline.periodStarts.length);
@@ -1335,26 +1335,26 @@ function layoutPlots_2(layout, columns) {
         drawnPlots: rows,
       };
 }
-//@ chunk-3s7ydtfd.js:68366-68416 placement
+//@ chunk-7stfs6p0.js:68366-68416 placement
 var axisRowShape = (at, gridWidth) => ({
   kind: "axisRow",
   at,
   gridWidth,
 });
-//@ chunk-3s7ydtfd.js:68416-68472 placement
+//@ chunk-7stfs6p0.js:68416-68472 placement
 var flattenThinStack = (parts) =>
   parts.map((part, index) => ({
     ink: part.ink,
     height: index > 0 ? 0 : BAR_GAP_FRACTION,
   }));
-//@ chunk-3s7ydtfd.js:68472-68538 placement
+//@ chunk-7stfs6p0.js:68472-68538 placement
 var stackShape = (at, area, parts) => ({
   kind: "stack",
   at,
   width: area.columnWidth,
   parts,
 });
-//@ chunk-3s7ydtfd.js:68538-68711 placement
+//@ chunk-7stfs6p0.js:68538-68711 placement
 var toColumnStack =
   (baseline, area) =>
   ([x, points]) => {
@@ -1380,7 +1380,7 @@ var toColumnStack =
       baseline - previous.y < BAR_GAP_FRACTION ? flattenThinStack(parts) : parts,
     );
   };
-//@ chunk-3s7ydtfd.js:68711-68828 placement
+//@ chunk-7stfs6p0.js:68711-68828 placement
 var groupPointsByColumn = (plot) =>
   groupIndexBy(
     plot.rows.flatMap((row) =>
@@ -1392,7 +1392,7 @@ var groupPointsByColumn = (plot) =>
     ),
     (point) => point.x,
   );
-//@ chunk-3s7ydtfd.js:68828-68890 placement
+//@ chunk-7stfs6p0.js:68828-68890 placement
 var columnStacks = (plot) =>
   [...groupPointsByColumn(plot)].map(
     toColumnStack(
@@ -1403,34 +1403,34 @@ var columnStacks = (plot) =>
       plot.area,
     ),
   );
-//@ chunk-3s7ydtfd.js:68890-68954 placement
+//@ chunk-7stfs6p0.js:68890-68954 placement
 var markFlag = (area) => (mark) => ({
   x: area.tickXOf(mark.position),
   text: truncateMiddle(mark.label, AXIS_LABEL_INDENT),
 });
-//@ chunk-3s7ydtfd.js:68954-68999 placement
+//@ chunk-7stfs6p0.js:68954-68999 placement
 var lineShape = (points, ink) => ({
   kind: "line",
   ink,
   points,
 });
-//@ chunk-3s7ydtfd.js:68999-69098 placement (2.1.88 match: diff, 0.798)
+//@ chunk-7stfs6p0.js:68999-69098 placement (2.1.88 match: diff, 0.8)
 var pointSegment = (prev, next) =>
   [prev.x - HALF, prev.x + HALF].map((x) => ({
     x: Math.max(next.left, Math.min(x, next.left + next.width - BAR_FRACTION)),
     y: prev.y,
   }));
-//@ chunk-3s7ydtfd.js:69098-69270 placement (2.1.88 match: diff, 0.794)
+//@ chunk-7stfs6p0.js:69098-69270 placement (2.1.88 match: diff, 0.795)
 var decimateLinePoints = (points) =>
   [...groupIndexBy(points, (point) => Math.floor(point.x / HALF)).values()].flatMap((points) => {
     let sorted = points.toSorted((a, b) => a.y - b.y);
     let kept = [points[0], sorted[0], sorted.at(-1), points.at(-1)];
     return points.filter((point) => kept.includes(point));
   });
-//@ chunk-3s7ydtfd.js:69270-69312 placement
+//@ chunk-7stfs6p0.js:69270-69312 placement
 var linePoints = (points, area) =>
   points.length > 1 ? decimateLinePoints(points) : pointSegment(points[0], area);
-//@ chunk-3s7ydtfd.js:69312-69508 placement
+//@ chunk-7stfs6p0.js:69312-69508 placement
 function splitLineRuns(stretches) {
   let runs = [];
   let current = [];
@@ -1448,7 +1448,7 @@ function splitLineRuns(stretches) {
   }
   return runs;
 }
-//@ chunk-3s7ydtfd.js:69508-69667 placement
+//@ chunk-7stfs6p0.js:69508-69667 placement
 function lineShapes({ rows, area, toCells }) {
   let shapes = [];
   for (let row of rows.toReversed())
@@ -1456,12 +1456,12 @@ function lineShapes({ rows, area, toCells }) {
       shapes.push(lineShape(linePoints(run, area), row.ink));
   return shapes;
 }
-//@ chunk-3s7ydtfd.js:69667-69756 placement
+//@ chunk-7stfs6p0.js:69667-69756 placement
 var axisTickRow = (markCells, area) =>
   rangeIndices(area.width)
     .map((index) => (markCells.some((mark) => mark.column === index) ? "\u252C" : "\u2500"))
     .join("");
-//@ chunk-3s7ydtfd.js:69756-69851 placement
+//@ chunk-7stfs6p0.js:69756-69851 placement
 var xAxisShapes = (layout, labels) =>
   textShapeOrEmpty({
     at: {
@@ -1471,7 +1471,7 @@ var xAxisShapes = (layout, labels) =>
     text: `\u2514${axisTickRow(labels, layout.area)}`,
     ink: "quiet",
   });
-//@ chunk-3s7ydtfd.js:69851-69938 placement
+//@ chunk-7stfs6p0.js:69851-69938 placement
 var xLabelShapes = (labels, area, y) =>
   labels.flatMap((label) =>
     textShapeOrEmpty({
@@ -1483,13 +1483,13 @@ var xLabelShapes = (labels, area, y) =>
       ink: "quiet",
     }),
   );
-//@ chunk-3s7ydtfd.js:69938-70018 placement
+//@ chunk-7stfs6p0.js:69938-70018 placement
 var periodPosition = (timeline) => (ms) =>
   (timeline.periodStarts.findIndex((periodStart) => periodStart >= ms) + MARK_FRACTION) /
   timeline.periodStarts.length;
-//@ chunk-3s7ydtfd.js:70018-70072 placement
+//@ chunk-7stfs6p0.js:70018-70072 placement
 var columnOfTime = (area, steps) => (ms) => Math.floor(area.tickXOf(steps(ms)) - area.left);
-//@ chunk-3s7ydtfd.js:70072-70253 placement
+//@ chunk-7stfs6p0.js:70072-70253 placement
 function xAxisLabels(layout) {
   let isColumns = layout.area.columnWidth > 0;
   let columnOf = columnOfTime(
@@ -1502,7 +1502,7 @@ function xAxisLabels(layout) {
     areCentred: isColumns,
   });
 }
-//@ chunk-3s7ydtfd.js:70253-70563 placement
+//@ chunk-7stfs6p0.js:70253-70563 placement
 function drawXAxis(layout) {
   let labels = xAxisLabels(layout);
   let labelRow = layout.room.rows + 1;
@@ -1530,12 +1530,12 @@ function drawXAxis(layout) {
     rows,
   };
 }
-//@ chunk-3s7ydtfd.js:70563-70616 placement
+//@ chunk-7stfs6p0.js:70563-70616 placement
 var toPlotCells = (area, drawnPlot, baseRow) => (point) => ({
   x: area.xOf(point.x),
   y: baseRow + drawnPlot.yOf(point.y),
 });
-//@ chunk-3s7ydtfd.js:70616-71621 placement
+//@ chunk-7stfs6p0.js:70616-71621 placement
 function drawLineOrColumnChart({ room, chart, plotsLayout, headerTexts }) {
   let { area, drawnPlots } = plotsLayout;
   let isColumns = area.columnWidth > 0;
@@ -1630,7 +1630,7 @@ function drawLineOrColumnChart({ room, chart, plotsLayout, headerTexts }) {
     notes: mergedColumns ? [chart.mergedColumnsNote] : [],
   };
 }
-//@ chunk-3s7ydtfd.js:71621-71680 placement
+//@ chunk-7stfs6p0.js:71621-71680 placement
 var bandShape = (rows, parts) => ({
   kind: "band",
   at: {
@@ -1640,7 +1640,7 @@ var bandShape = (rows, parts) => ({
   rows: MIN_CHART_WIDTH,
   parts,
 });
-//@ chunk-3s7ydtfd.js:71680-71752 placement
+//@ chunk-7stfs6p0.js:71680-71752 placement
 var shareKeyShape = (part, y) =>
   textShapeOrEmpty({
     at: {
@@ -1650,13 +1650,13 @@ var shareKeyShape = (part, y) =>
     text: part.key,
     ink: part.ink,
   });
-//@ chunk-3s7ydtfd.js:71752-71799 placement
+//@ chunk-7stfs6p0.js:71752-71799 placement
 var sharePart = (row, width, end) => ({
   ...row,
   width,
   middle: end - width / MIN_LANE_WIDTH,
 });
-//@ chunk-3s7ydtfd.js:71799-72215 placement
+//@ chunk-7stfs6p0.js:71799-72215 placement
 function drawShareBar(frame, rows) {
   let mapped = rows.map((row) => (row.share > 0 ? Math.max(row.share * frame.columns, MIN_ROWS_TO_DRAW) : 0));
   let overflow = stableSum(mapped) - frame.columns;
@@ -1688,11 +1688,11 @@ function drawShareBar(frame, rows) {
     rows: labelRows + rows.length,
   };
 }
-//@ chunk-3s7ydtfd.js:72215-72264 placement
+//@ chunk-7stfs6p0.js:72215-72264 placement
 var fartherFrom = (target, a, b) => (Math.abs(a - target) >= Math.abs(b - target) ? a : b);
-//@ chunk-3s7ydtfd.js:72264-72311 placement
+//@ chunk-7stfs6p0.js:72264-72311 placement
 var bucketIndex = (bucketCount) => (x) => Math.min(bucketCount - 1, Math.floor(x * bucketCount));
-//@ chunk-3s7ydtfd.js:72311-72571 placement (2.1.88 match: diff, 0.806)
+//@ chunk-7stfs6p0.js:72311-72571 placement (2.1.88 match: diff, 0.806)
 function resampleSparkline(prev, next) {
   let list = Array.from(Array(next), () => null);
   let mapped = prev.flat().map((point) => point.y);
@@ -1707,24 +1707,24 @@ function resampleSparkline(prev, next) {
     }
   return list;
 }
-//@ chunk-3s7ydtfd.js:72571-72670 placement
+//@ chunk-7stfs6p0.js:72571-72670 placement
 var sparklineHeights = (row, rowLayout, step) =>
   resampleSparkline(row.stretches, step).flatMap((height) =>
     Array.from(Array(Math.floor(rowLayout.laneWidth / step)), () => height),
   );
-//@ chunk-3s7ydtfd.js:72670-72710 placement
+//@ chunk-7stfs6p0.js:72670-72710 placement
 var SPARK_LANE = {
   minWidth: 16,
   statsBeforeNames: 0,
 };
-//@ chunk-3s7ydtfd.js:72710-72764 placement
+//@ chunk-7stfs6p0.js:72710-72764 placement
 var stripShape = (at, heights, ink) => ({
   kind: "strip",
   at,
   heights,
   ink,
 });
-//@ chunk-3s7ydtfd.js:72764-73043 placement
+//@ chunk-7stfs6p0.js:72764-73043 placement
 function drawSparklines(frame, chart, headerTexts) {
   let rowLayout = layoutRows({
     rows: chart.rows,
@@ -1742,7 +1742,7 @@ function drawSparklines(frame, chart, headerTexts) {
     rows: frame.rows + chart.rows.length,
   };
 }
-//@ chunk-3s7ydtfd.js:73043-73341 placement
+//@ chunk-7stfs6p0.js:73043-73341 placement
 function drawChartBody(chart, frame, headerTexts) {
   switch (chart.form) {
     case "bars":
@@ -1774,7 +1774,7 @@ function drawChartBody(chart, frame, headerTexts) {
     }
   }
 }
-//@ chunk-3s7ydtfd.js:73341-73490 placement
+//@ chunk-7stfs6p0.js:73341-73490 placement
 function wrappedTextRows(room, lines, ink) {
   let flattened = lines.flatMap((line) => wrapToWidth(line, room.columns));
   return {
@@ -1791,7 +1791,7 @@ function wrappedTextRows(room, lines, ink) {
     rows: room.rows + flattened.length,
   };
 }
-//@ chunk-3s7ydtfd.js:73490-73570 placement
+//@ chunk-7stfs6p0.js:73490-73570 placement
 var headerFactShape = (rows, x, fact) =>
   textShapeOrEmpty({
     at: {
@@ -1801,12 +1801,12 @@ var headerFactShape = (rows, x, fact) =>
     text: `${SEP.trimStart()}${fact}`,
     ink: "quiet",
   });
-//@ chunk-3s7ydtfd.js:73570-73583 placement
+//@ chunk-7stfs6p0.js:73570-73583 placement
 var SEPARATOR_WIDTH; // deferred: uses displayWidth (./chartSchema.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3s7ydtfd.js:73570", () => {
+deferInit("chunk-7stfs6p0.js:73570", () => {
   SEPARATOR_WIDTH = displayWidth(SEP);
 });
-//@ chunk-3s7ydtfd.js:73583-73893 placement
+//@ chunk-7stfs6p0.js:73583-73893 placement
 function drawHeader(room, header) {
   let filtered = [header.title, ...header.facts].filter((part) => part !== "");
   let shapes = [];
@@ -1837,13 +1837,13 @@ function drawHeader(room, header) {
     texts: filtered,
   };
 }
-//@ chunk-3s7ydtfd.js:73893-73949 placement
+//@ chunk-7stfs6p0.js:73893-73949 placement
 var chartResult = (columns, body) => ({
   columns,
   rows: body.rows,
   shapes: body.shapes,
 });
-//@ chunk-3s7ydtfd.js:73949-74006 placement
+//@ chunk-7stfs6p0.js:73949-74006 placement
 var chartAsText = (chart, columns) =>
   chartResult(
     columns,
@@ -1856,7 +1856,7 @@ var chartAsText = (chart, columns) =>
       "words",
     ),
   );
-//@ chunk-3s7ydtfd.js:74006-74091 placement
+//@ chunk-7stfs6p0.js:74006-74091 placement
 var partsLeftOutShape = (text, y) => ({
   kind: "text",
   at: {
@@ -1867,7 +1867,7 @@ var partsLeftOutShape = (text, y) => ({
   ink: "quiet",
   isAboutPartsLeftOut: true,
 });
-//@ chunk-3s7ydtfd.js:74091-74195 placement
+//@ chunk-7stfs6p0.js:74091-74195 placement
 function drawThinPartsNote(room, thinPartsNote) {
   let lines = wrapToWidth(thinPartsNote, room.columns);
   return {
@@ -1875,7 +1875,7 @@ function drawThinPartsNote(room, thinPartsNote) {
     rows: room.rows + lines.length,
   };
 }
-//@ chunk-3s7ydtfd.js:74195-74581 placement
+//@ chunk-7stfs6p0.js:74195-74581 placement
 function layoutChart(chart, columns) {
   if (columns < MIN_PLOT_WIDTH) return chartAsText(chart, columns);
   let header = drawHeader(
@@ -1920,37 +1920,37 @@ function layoutChart(chart, columns) {
     rows: thinNote.rows,
   });
 }
-//@ chunk-3s7ydtfd.js:74581-74628 placement
+//@ chunk-7stfs6p0.js:74581-74628 placement
 var glyphCell = (glyph, ink, background) => ({
   glyph,
   ink,
   background,
 });
-//@ chunk-3s7ydtfd.js:74628-74639 placement
+//@ chunk-7stfs6p0.js:74628-74639 placement
 var MIN_PART_EIGHTHS = 0.5;
-//@ chunk-3s7ydtfd.js:74639-74648 placement
+//@ chunk-7stfs6p0.js:74639-74648 placement
 var MAX_BLEND_PARTS = 2;
-//@ chunk-3s7ydtfd.js:74648-74657 placement
+//@ chunk-7stfs6p0.js:74648-74657 placement
 var EIGHTHS = 8;
-//@ chunk-3s7ydtfd.js:74657-74666 placement
+//@ chunk-7stfs6p0.js:74657-74666 placement
 var THIN_TOP_EIGHTHS = 3;
-//@ chunk-3s7ydtfd.js:74666-74679 placement
+//@ chunk-7stfs6p0.js:74666-74679 placement
 var BRAILLE_BASE = 10240;
-//@ chunk-3s7ydtfd.js:74679-74688 placement
+//@ chunk-7stfs6p0.js:74679-74688 placement
 var BRAILLE_COLS = 2;
-//@ chunk-3s7ydtfd.js:74688-74697 placement
+//@ chunk-7stfs6p0.js:74688-74697 placement
 var BRAILLE_ROWS = 4;
-//@ chunk-3s7ydtfd.js:74697-74708 placement
+//@ chunk-7stfs6p0.js:74697-74708 placement
 var BLANK = " ";
-//@ chunk-3s7ydtfd.js:74708-74724 placement
+//@ chunk-7stfs6p0.js:74708-74724 placement
 var FULL_BLOCK = "\u2588";
-//@ chunk-3s7ydtfd.js:74724-74740 placement
+//@ chunk-7stfs6p0.js:74724-74740 placement
 var LOWER_THREE_QUARTERS = "\u2586";
-//@ chunk-3s7ydtfd.js:74740-74756 placement
+//@ chunk-7stfs6p0.js:74740-74756 placement
 var MEDIUM_SHADE = "\u2592";
-//@ chunk-3s7ydtfd.js:74756-74811 placement
+//@ chunk-7stfs6p0.js:74756-74811 placement
 var topTwoParts = (parts, sorted) => parts.filter((part) => sorted.slice(0, MAX_BLEND_PARTS).includes(part));
-//@ chunk-3s7ydtfd.js:74811-75203 placement
+//@ chunk-7stfs6p0.js:74811-75203 placement
 function blendEighthGlyph(parts, base, glyphs) {
   let parts_2 = parts
     .map((part) => ({
@@ -1980,19 +1980,19 @@ function blendEighthGlyph(parts, base, glyphs) {
         ink: largest.ink,
       };
 }
-//@ chunk-3s7ydtfd.js:75203-75239 placement
+//@ chunk-7stfs6p0.js:75203-75239 placement
 var GRID_DOT = {
   glyph: "\u2508",
   ink: "quiet",
 };
-//@ chunk-3s7ydtfd.js:75239-75273 placement
+//@ chunk-7stfs6p0.js:75239-75273 placement
 var axisGlyph = (gridWidth) => (gridWidth > 0 ? "\u2524" : "\u2502");
-//@ chunk-3s7ydtfd.js:75273-75303 placement
+//@ chunk-7stfs6p0.js:75273-75303 placement
 var BLANK_CELL = {
   glyph: BLANK,
   ink: "words",
 };
-//@ chunk-3s7ydtfd.js:75303-75622 placement
+//@ chunk-7stfs6p0.js:75303-75622 placement
 function createGlyphGrid(size) {
   let list = Array.from(
     {
@@ -2018,31 +2018,31 @@ function createGlyphGrid(size) {
       rangeIndices(size.rows).map((row) => list.slice(row * size.columns, (row + 1) * size.columns)),
   };
 }
-//@ chunk-3s7ydtfd.js:75622-75679 placement
+//@ chunk-7stfs6p0.js:75622-75679 placement
 var thinTopGlyph = (part, remaining) => ({
   glyph: remaining < THIN_TOP_EIGHTHS ? "\u2501" : "\u2580",
   ink: part.ink,
 });
-//@ chunk-3s7ydtfd.js:75679-75754 placement
+//@ chunk-7stfs6p0.js:75679-75754 placement
 var LOWER_EIGHTHS = ["", "\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587"];
-//@ chunk-3s7ydtfd.js:75754-75784 placement
+//@ chunk-7stfs6p0.js:75754-75784 placement
 var BRAILLE_DOT_BITS = [1, 2, 4, 64, 8, 16, 32, 128];
-//@ chunk-3s7ydtfd.js:75784-75859 placement
+//@ chunk-7stfs6p0.js:75784-75859 placement
 var LEFT_EIGHTHS = ["", "\u258F", "\u258E", "\u258D", "\u258C", "\u258B", "\u258A", "\u2589"];
-//@ chunk-3s7ydtfd.js:75859-75897 placement
+//@ chunk-7stfs6p0.js:75859-75897 placement
 var partRange = (from, to, ink) => ({
   from,
   to,
   ink,
 });
-//@ chunk-3s7ydtfd.js:75897-75994 placement
+//@ chunk-7stfs6p0.js:75897-75994 placement
 function stackRanges(parts, heightOf, offset) {
   let eighthsOf = (part) => heightOf(part) * EIGHTHS;
   return prefixSums(parts, eighthsOf, offset).map(({ part, end }) =>
     partRange(end - eighthsOf(part), end, part.ink),
   );
 }
-//@ chunk-3s7ydtfd.js:75994-76330 placement
+//@ chunk-7stfs6p0.js:75994-76330 placement
 function drawStack(glyphGrid, { at, width, parts }) {
   let row = Math.ceil(at.y);
   let subRow = (row - at.y) * EIGHTHS;
@@ -2065,7 +2065,7 @@ function drawStack(glyphGrid, { at, width, parts }) {
   }
   return parts.every((part) => inks.has(part.ink));
 }
-//@ chunk-3s7ydtfd.js:76330-76557 placement
+//@ chunk-7stfs6p0.js:76330-76557 placement
 function drawBar(glyphGrid, { at, width, ink, isHatched }) {
   let glyph = LEFT_EIGHTHS[Math.max(1, Math.round(width * EIGHTHS))];
   if (glyph !== undefined && !isHatched) {
@@ -2087,17 +2087,17 @@ function drawBar(glyphGrid, { at, width, ink, isHatched }) {
       },
     );
 }
-//@ chunk-3s7ydtfd.js:76557-76647 placement
+//@ chunk-7stfs6p0.js:76557-76647 placement
 var brailleDotBit = (x, y) =>
   BRAILLE_DOT_BITS[
     Math.floor((x - Math.floor(x)) * BRAILLE_COLS) * BRAILLE_ROWS +
       Math.floor((y - Math.floor(y)) * BRAILLE_ROWS)
   ] ?? 0;
-//@ chunk-3s7ydtfd.js:76647-76695 placement
+//@ chunk-7stfs6p0.js:76647-76695 placement
 var countBits = (bits) => BRAILLE_DOT_BITS.reduce((acc, bit) => ((bits & bit) === 0 ? acc : acc + 1), 0);
-//@ chunk-3s7ydtfd.js:76695-76727 placement
+//@ chunk-7stfs6p0.js:76695-76727 placement
 var hasBitCount = (count) => (line) => countBits(line.bits) === count;
-//@ chunk-3s7ydtfd.js:76727-77053 placement
+//@ chunk-7stfs6p0.js:76727-77053 placement
 function mergeBrailleCell(cell, addition) {
   let lines = cell.lines ?? [];
   let mergedLines = [
@@ -2117,7 +2117,7 @@ function mergeBrailleCell(cell, addition) {
     lines: mergedLines,
   };
 }
-//@ chunk-3s7ydtfd.js:77053-77408 placement
+//@ chunk-7stfs6p0.js:77053-77408 placement
 function drawBrailleLine(glyphGrid, { points, ink }) {
   for (let [index, point] of points.entries()) {
     let from = points[index - 1] ?? point;
@@ -2143,7 +2143,7 @@ function drawBrailleLine(glyphGrid, { points, ink }) {
     }
   }
 }
-//@ chunk-3s7ydtfd.js:77408-77595 placement
+//@ chunk-7stfs6p0.js:77408-77595 placement
 function drawText(glyphGrid, { at, text, ink }) {
   let rounded = Math.round(at.x);
   for (let grapheme of splitGraphemes(text)) {
@@ -2172,13 +2172,13 @@ function drawText(glyphGrid, { at, text, ink }) {
     rounded += width;
   }
 }
-//@ chunk-3s7ydtfd.js:77595-77658 placement
+//@ chunk-7stfs6p0.js:77595-77658 placement
 var cellToRun = (cell) => ({
   text: cell.glyph,
   ink: cell.ink,
   background: cell.background,
 });
-//@ chunk-3s7ydtfd.js:77658-77883 placement
+//@ chunk-7stfs6p0.js:77658-77883 placement
 function rowToRuns(cells) {
   let runs = [];
   for (let cell of cells.slice(0, cells.findLastIndex((cell) => cell.glyph !== BLANK) + 1)) {
@@ -2193,9 +2193,9 @@ function rowToRuns(cells) {
   }
   return runs;
 }
-//@ chunk-3s7ydtfd.js:77883-77920 placement
+//@ chunk-7stfs6p0.js:77883-77920 placement
 var sparkGlyph = (height) => LOWER_EIGHTHS[Math.round(height * EIGHTHS)] ?? FULL_BLOCK;
-//@ chunk-3s7ydtfd.js:77920-78608 placement
+//@ chunk-7stfs6p0.js:77920-78608 placement
 function rasterizeChart(chart) {
   let glyphGrid = createGlyphGrid(chart);
   let dropped = false;
@@ -2271,38 +2271,38 @@ function rasterizeChart(chart) {
     .slice(0, chart.rows - droppedRows)
     .map(rowToRuns);
 }
-//@ chunk-3s7ydtfd.js:78608-78669 placement
+//@ chunk-7stfs6p0.js:78608-78669 placement
 var svgFill = (ink, extraAttrs = "") => `fill="var(--${ink})"${extraAttrs} data-series="${ink}"`;
-//@ chunk-3s7ydtfd.js:78669-78678 placement
+//@ chunk-7stfs6p0.js:78669-78678 placement
 var SVG_HALF = 2;
-//@ chunk-3s7ydtfd.js:78678-78689 placement
+//@ chunk-7stfs6p0.js:78678-78689 placement
 var SVG_THIN_BAR = 0.7;
-//@ chunk-3s7ydtfd.js:78689-78700 placement
+//@ chunk-7stfs6p0.js:78689-78700 placement
 var SVG_TEXT_DY = 4.5;
-//@ chunk-3s7ydtfd.js:78700-78710 placement
+//@ chunk-7stfs6p0.js:78700-78710 placement
 var SVG_ROW_HEIGHT = 18;
-//@ chunk-3s7ydtfd.js:78710-78721 placement
+//@ chunk-7stfs6p0.js:78710-78721 placement
 var SVG_HALF_CELL = 0.5;
-//@ chunk-3s7ydtfd.js:78721-78730 placement
+//@ chunk-7stfs6p0.js:78721-78730 placement
 var SVG_COL_WIDTH = 8;
-//@ chunk-3s7ydtfd.js:78730-78742 placement
+//@ chunk-7stfs6p0.js:78730-78742 placement
 var SVG_FONT_SIZE = 13.3;
-//@ chunk-3s7ydtfd.js:78742-78755 placement
+//@ chunk-7stfs6p0.js:78742-78755 placement
 var SVG_STROKE = 0.125;
-//@ chunk-3s7ydtfd.js:78755-78766 placement
+//@ chunk-7stfs6p0.js:78755-78766 placement
 var SVG_BAND_PAD = 0.1;
-//@ chunk-3s7ydtfd.js:78766-78796 placement
+//@ chunk-7stfs6p0.js:78766-78796 placement
 var svgY = (row) => (row * SVG_ROW_HEIGHT).toFixed(1);
-//@ chunk-3s7ydtfd.js:78796-78829 placement
+//@ chunk-7stfs6p0.js:78796-78829 placement
 var hasSvgHeight = (part) => svgY(part.height) !== svgY(0);
-//@ chunk-3s7ydtfd.js:78829-78858 placement
+//@ chunk-7stfs6p0.js:78829-78858 placement
 var svgX = (column) => (column * SVG_COL_WIDTH).toFixed(1);
-//@ chunk-3s7ydtfd.js:78858-78891 placement
+//@ chunk-7stfs6p0.js:78858-78891 placement
 var svgPoint = (x, y) => `${svgX(x)},${svgY(y)}`;
-//@ chunk-3s7ydtfd.js:78891-79008 placement
+//@ chunk-7stfs6p0.js:78891-79008 placement
 var svgLine = (from, to, extraAttrs = "") =>
   `<line${extraAttrs} x1="${svgX(from.x)}" y1="${svgY(from.y)}" x2="${svgX(to.x)}" y2="${svgY(to.y)}" stroke="var(--quiet)"/>`;
-//@ chunk-3s7ydtfd.js:79008-79082 placement (2.1.88 match: diff, 1)
+//@ chunk-7stfs6p0.js:79008-79082 placement (2.1.88 match: diff, 1)
 function svgTickLine(line) {
   let x = line.at.x + SVG_HALF_CELL;
   return svgLine(
@@ -2316,7 +2316,7 @@ function svgTickLine(line) {
     },
   );
 }
-//@ chunk-3s7ydtfd.js:79082-79187 placement
+//@ chunk-7stfs6p0.js:79082-79187 placement
 var bandPartRect = (cell, entry) => ({
   x: entry.end - entry.part.width,
   y: cell.at.y + SVG_BAND_PAD,
@@ -2324,7 +2324,7 @@ var bandPartRect = (cell, entry) => ({
   height: cell.rows - SVG_HALF * SVG_BAND_PAD,
   ink: entry.part.ink,
 });
-//@ chunk-3s7ydtfd.js:79187-79265 placement (2.1.88 match: unionRect, 0.845)
+//@ chunk-7stfs6p0.js:79187-79265 placement (2.1.88 match: unionRect, 0.845)
 var thinBarRect = (bar) => ({
   x: bar.at.x,
   y: bar.at.y + (1 - SVG_THIN_BAR) / SVG_HALF,

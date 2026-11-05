@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：账户记忆脱敏：在发给模型的消息中清掉 account memory 相关内容。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f25sswmp.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vr5v4gzz.js (24)
  * attribution: placement 24
  */
 import { types } from "util";
@@ -20,7 +20,7 @@ import { jsonStringify } from "../slowOperations.js";
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:2441-2871 placement (2.1.88 match: isToolResultBlockWithContent, 0.805)
+//@ chunk-vr5v4gzz.js:2474-2904 placement (2.1.88 match: isToolResultBlockWithContent, 0.804)
 /**
  * 逐条检查 user 消息与工具结果里的图片，尺寸/大小超限时抛 ImageSizeError（发请求前）。
  */
@@ -47,16 +47,16 @@ function validateImagesInMessages(messages, enforceLimits) {
   }
   if (violations.length > 0) throw new ImageSizeError(violations, enforceLimits);
 }
-//@ chunk-f25sswmp.js:2901-2914 placement
+//@ chunk-vr5v4gzz.js:2934-2947 placement
 var accountMemoryRedactionEnabler = () => false;
-//@ chunk-f25sswmp.js:2914-2934 placement
+//@ chunk-vr5v4gzz.js:2947-2967 placement
 /**
  * 安装账户记忆脱敏的启用判定函数。
  */
 function setAccountMemoryRedaction(isMemoryContextOff) {
   accountMemoryRedactionEnabler = isMemoryContextOff;
 }
-//@ chunk-f25sswmp.js:2934-2989 placement
+//@ chunk-vr5v4gzz.js:2967-3022 placement
 /**
  * 判断账户记忆脱敏是否开启（读取异常按关闭处理）。
  */
@@ -68,21 +68,21 @@ function isAccountMemoryRedactionOn() {
     return false;
   }
 }
-//@ chunk-f25sswmp.js:2989-3015 placement
+//@ chunk-vr5v4gzz.js:3022-3048 placement
 /**
  * 直接查询账户记忆脱敏开关。
  */
 function accountMemoryRedactionActive() {
   return accountMemoryRedactionEnabler();
 }
-//@ chunk-f25sswmp.js:3015-3412 placement
+//@ chunk-vr5v4gzz.js:3048-3445 placement
 /**
  * 账户记忆脱敏的占位文本，以及"可原样保留的字段"与"需要替换的文本字段"分类表。
  */
 var ACCOUNT_MEMORY_REMOVED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MEMORY_TOOL_FIELD_CLASSES;
 var PLAIN_MEMORY_FIELDS;
-deferInit("chunk-f25sswmp.js:3015", () => {
+deferInit("chunk-vr5v4gzz.js:3048", () => {
   ACCOUNT_MEMORY_REMOVED = "[account memory text removed from this conversation]";
   MEMORY_TOOL_FIELD_CLASSES = {
     top: {
@@ -104,16 +104,16 @@ deferInit("chunk-f25sswmp.js:3015", () => {
   };
   PLAIN_MEMORY_FIELDS = new Set(["path", "path_prefix", "cursor", "source_item", "name"]);
 });
-//@ chunk-f25sswmp.js:3412-3454 placement
+//@ chunk-vr5v4gzz.js:3445-3487 placement
 function isMemoryToolCall(name, placementOf) {
   return isTrustedMemoryTool(name, placementOf, "history");
 }
-//@ chunk-f25sswmp.js:3454-3473 placement
+//@ chunk-vr5v4gzz.js:3487-3506 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f25sswmp.js:3454", () => {
+deferInit("chunk-vr5v4gzz.js:3487", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-f25sswmp.js:3473-3618 placement
+//@ chunk-vr5v4gzz.js:3506-3651 placement
 function isAccountMemoryAttachment(message) {
   return (
     message.type === "attachment" &&
@@ -122,7 +122,7 @@ function isAccountMemoryAttachment(message) {
     message.attachment.anchor !== true
   );
 }
-//@ chunk-f25sswmp.js:3618-4919 placement
+//@ chunk-vr5v4gzz.js:3651-4952 placement
 /**
  * 在发给模型的消息里清掉账户记忆（cowork_memory_context / account_memory_recall 工具结果）文本，替换为占位说明。
  */
@@ -234,8 +234,8 @@ function redactAccountMemory(messages, redactAll = isAccountMemoryRedactionOn(),
         epoch: `${redactedCount}:${lastRedactedUuid}`,
       };
 }
-//@ chunk-f25sswmp.js:4919-5189 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
+//@ chunk-vr5v4gzz.js:4952-5222 placement
+function needsToolsOnlyMemoryContext(messages, placementOf) {
   let memoryPausedToolUseIds = collectMemoryPausedToolUseIds(messages);
   for (let j = messages.length - 1; j >= 0; j--) {
     let message = messages[j];
@@ -246,7 +246,7 @@ function countToolCallsSince(messages, sinceUuid) {
       message.message.content.some(
         (block) =>
           block.type === "tool_use" &&
-          isMemoryToolCall(block.name, sinceUuid) &&
+          isMemoryToolCall(block.name, placementOf) &&
           (!memoryPausedToolUseIds.has(block.id) || redactAccountMemoryInput(block.input) !== block.input),
       )
     )
@@ -254,7 +254,7 @@ function countToolCallsSince(messages, sinceUuid) {
   }
   return false;
 }
-//@ chunk-f25sswmp.js:5189-5449 placement
+//@ chunk-vr5v4gzz.js:5222-5482 placement
 /**
  * 从账号记忆工具输入里收集需遮盖的正文字符串（顶层与 ops 里各操作的文本字段）。
  */
@@ -270,19 +270,19 @@ function collectMemoryTextFields(input) {
   walk(input, "top");
   return texts;
 }
-//@ chunk-f25sswmp.js:5449-5971 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_2(messages, sinceUuid) {
+//@ chunk-vr5v4gzz.js:5482-6004 placement
+function collectMemoryToolTexts(folded, placementOf) {
   let texts = [];
   let memoryToolIds = new Set();
-  for (let message of messages)
-    if (message.type === "assistant" && Array.isArray(message.message.content)) {
-      for (let block of message.message.content)
-        if (block.type === "tool_use" && isMemoryToolCall(block.name, sinceUuid)) {
-          memoryToolIds.add(block.id);
-          texts.push(...collectMemoryTextFields(block.input));
+  for (let block of folded)
+    if (block.type === "assistant" && Array.isArray(block.message.content)) {
+      for (let block_2 of block.message.content)
+        if (block_2.type === "tool_use" && isMemoryToolCall(block_2.name, placementOf)) {
+          memoryToolIds.add(block_2.id);
+          texts.push(...collectMemoryTextFields(block_2.input));
         }
-    } else if (message.type === "user" && memoryToolIds.size > 0 && Array.isArray(message.message.content))
-      for (let resultBlock of message.message.content) {
+    } else if (block.type === "user" && memoryToolIds.size > 0 && Array.isArray(block.message.content))
+      for (let resultBlock of block.message.content) {
         if (resultBlock.type !== "tool_result" || !memoryToolIds.has(resultBlock.tool_use_id)) continue;
         if (typeof resultBlock.content === "string") texts.push(resultBlock.content);
         else if (Array.isArray(resultBlock.content)) {
@@ -292,7 +292,7 @@ function countToolCallsSince_2(messages, sinceUuid) {
       }
   return texts;
 }
-//@ chunk-f25sswmp.js:5971-6259 placement
+//@ chunk-vr5v4gzz.js:6004-6292 placement
 function collectMemoryPausedToolUseIds(messages) {
   let pausedIds = new Set();
   for (let message of messages) {
@@ -308,20 +308,20 @@ function collectMemoryPausedToolUseIds(messages) {
   }
   return pausedIds;
 }
-//@ chunk-f25sswmp.js:6259-6306 placement
+//@ chunk-vr5v4gzz.js:6292-6339 placement
 function messagesWithoutAccountMemory(messages, knownKeys, redactPaths) {
   return redactAccountMemory(messages, knownKeys, redactPaths).messages;
 }
-//@ chunk-f25sswmp.js:6306-6346 placement
+//@ chunk-vr5v4gzz.js:6339-6379 placement
 var MAX_MEMORY_INPUT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REMOVED_MEMORY_STATE;
-deferInit("chunk-f25sswmp.js:6306", () => {
+deferInit("chunk-vr5v4gzz.js:6339", () => {
   MAX_MEMORY_INPUT_KEYS = 32;
   REMOVED_MEMORY_STATE = Object.freeze({
     content: ACCOUNT_MEMORY_REMOVED,
   });
 });
-//@ chunk-f25sswmp.js:6346-6403 placement
+//@ chunk-vr5v4gzz.js:6379-6436 placement
 function placeholderBlock(placeholder) {
   return placeholder === ACCOUNT_MEMORY_REMOVED
     ? REMOVED_MEMORY_STATE
@@ -329,7 +329,7 @@ function placeholderBlock(placeholder) {
         content: placeholder,
       });
 }
-//@ chunk-f25sswmp.js:6403-7462 placement
+//@ chunk-vr5v4gzz.js:6436-7495 placement
 /**
  * 递归遮盖账号记忆工具输入：保留结构与白名单普通字段（op、路径等），文本字段替换为占位；函数、访问器、过深、过宽或代理对象整体替换；没有变化时返回原对象。
  */
@@ -411,14 +411,14 @@ function redactAccountMemoryInput(
     });
   return result;
 }
-//@ chunk-f25sswmp.js:7462-7533 placement
+//@ chunk-vr5v4gzz.js:7495-7566 placement
 var MEMORY_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DROPPED_SYMBOL;
-deferInit("chunk-f25sswmp.js:7462", () => {
+deferInit("chunk-vr5v4gzz.js:7495", () => {
   MEMORY_OPS = new Set(["append", "str_replace", "delete"]);
   DROPPED_SYMBOL = Symbol("dropped");
 });
-//@ chunk-f25sswmp.js:7533-7608 placement
+//@ chunk-vr5v4gzz.js:7566-7641 placement
 class PreservedStrings {
   strings;
   pristine;
@@ -427,7 +427,7 @@ class PreservedStrings {
     this.pristine = pristine;
   }
 }
-//@ chunk-f25sswmp.js:7608-8071 placement
+//@ chunk-vr5v4gzz.js:7641-8104 placement
 /**
  * 对账号记忆工具输入的单个字段做脱敏：允许原样保留的标量（op 只保留已知值）保留，可选敏感字段替换为占位；顶层 path 数组逐项处理；其他替换为占位。
  */
@@ -454,7 +454,7 @@ function redactMemoryField(level, key, value, depth, placeholder, redactPaths) {
       : placeholder;
   return DROPPED_SYMBOL;
 }
-//@ chunk-f25sswmp.js:8071-8570 placement
+//@ chunk-vr5v4gzz.js:8104-8603 placement
 /**
  * 对路径数组做脱敏：只有严格的普通数组（无额外属性、符号或访问器）才逐项处理，否则整体替换为占位。
  */
@@ -485,7 +485,7 @@ function redactPathArray(paths, placeholder, redactPaths) {
   }
   return new PreservedStrings(strings, isPristineArray && !redactPaths);
 }
-//@ chunk-f25sswmp.js:8570-8761 placement
+//@ chunk-vr5v4gzz.js:8603-8794 placement
 function pickKnownKeys(wireToolInputs, knownKeys) {
   let cacheKey = jsonStringify(
     Object.keys(wireToolInputs)
@@ -504,22 +504,22 @@ function pickKnownKeys(wireToolInputs, knownKeys) {
   }
   return picked;
 }
-//@ chunk-f25sswmp.js:8761-8771 placement
+//@ chunk-vr5v4gzz.js:8794-8804 placement
 /**
  * 校验时可检查的图片数量上限。
  */
 var MAX_VALIDATED_IMAGES = 64;
 export {
-  messagesWithoutAccountMemory,
-  countToolCallsSince_2,
   isAccountMemoryRedactionOn,
   validateImagesInMessages,
   redactAccountMemory,
+  messagesWithoutAccountMemory,
+  collectMemoryToolTexts,
   redactAccountMemoryInput,
   collectMemoryTextFields,
-  MAX_VALIDATED_IMAGES,
+  setAccountMemoryRedaction,
+  needsToolsOnlyMemoryContext,
   accountMemoryRedactionActive,
   isAccountMemoryAttachment,
-  setAccountMemoryRedaction,
-  countToolCallsSince,
+  MAX_VALIDATED_IMAGES,
 };

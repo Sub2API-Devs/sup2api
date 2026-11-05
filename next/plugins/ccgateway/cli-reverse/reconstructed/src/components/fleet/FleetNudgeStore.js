@@ -3,9 +3,9 @@
  *
  * fleet 提示状态存储（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5gatfnjn.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g02g7h43.js (9)
  * attribution: placement 9
  */
 import {
@@ -27,12 +27,12 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5gatfnjn.js:426-430 placement
+//@ chunk-g02g7h43.js:426-430 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5gatfnjn.js:426", () => {
+deferInit("chunk-g02g7h43.js:426", () => {
   init_react_production();
 });
-//@ chunk-5gatfnjn.js:430-509 placement
+//@ chunk-g02g7h43.js:430-509 placement
 /**
  * 函数 requestNudgeOnce（未获批时返回 nudge）；位于「fleet 提示状态存储（2.1.316 新增）」模块。
  */
@@ -43,22 +43,22 @@ async function requestNudgeOnce(storageV5) {
   });
   return failed ? null : jobs;
 }
-//@ chunk-5gatfnjn.js:509-542 placement
+//@ chunk-g02g7h43.js:509-542 placement
 var NUDGE_MIN_GAP_MS = 120000;
 var NUDGE_MAX_GAP_MS = 1800000;
 var NUDGE_POLL_MS = 1e4;
 var NUDGE_MAX_COUNT = 3;
-//@ chunk-5gatfnjn.js:542-605 placement
+//@ chunk-g02g7h43.js:542-605 placement
 function isBlockedNeedingNudge(riskLevel) {
   return !isDoneJob(riskLevel) && riskLevel.tempo === "blocked" && riskLevel.needs !== IDLE_NEEDS;
 }
-//@ chunk-5gatfnjn.js:605-669 placement (2.1.88 match: getRiskColor, 1)
+//@ chunk-g02g7h43.js:605-669 placement (2.1.88 match: getRiskColor, 1)
 function isDoneJob(riskLevel) {
   return (
     isSettled(riskLevel) && !(terminalOutcome(riskLevel.state) === "success" && isSelfDriving(riskLevel))
   );
 }
-//@ chunk-5gatfnjn.js:669-2632 placement
+//@ chunk-g02g7h43.js:669-2632 placement
 class FleetNudgeStore {
   #p;
   #g;
@@ -228,19 +228,19 @@ class FleetNudgeStore {
     this.#n = false;
   }
 }
-//@ chunk-5gatfnjn.js:2632-2718 placement
+//@ chunk-g02g7h43.js:2632-2718 placement
 function ensureFleetNudgeStore(state, storageV5) {
   state.fleetNudgeStore ??= new FleetNudgeStore({
     storageV5,
   });
   return state.fleetNudgeStore;
 }
-//@ chunk-5gatfnjn.js:2718-2735 placement
+//@ chunk-g02g7h43.js:2718-2735 placement
 var FleetNudgeStoreContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5gatfnjn.js:2718", () => {
+deferInit("chunk-g02g7h43.js:2718", () => {
   FleetNudgeStoreContext = createContext(null);
 });
-//@ chunk-5gatfnjn.js:2735-2918 placement
+//@ chunk-g02g7h43.js:2735-2918 placement
 function useFleetNudgeStore() {
   let store = useContext(FleetNudgeStoreContext);
   if (!store)
@@ -250,10 +250,10 @@ function useFleetNudgeStore() {
   return store;
 }
 export {
-  useFleetNudgeStore,
   FleetNudgeStore,
-  requestNudgeOnce,
-  isDoneJob,
   FleetNudgeStoreContext,
+  requestNudgeOnce,
+  useFleetNudgeStore,
+  isDoneJob,
   ensureFleetNudgeStore,
 };

@@ -1,13 +1,13 @@
 /**
  * @smithy/util-hex-encoding/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/util-hex-encoding@2.2.0..3.0.0
- * pieces: chunk-g7fzcphx.js (1)
+ * pieces: chunk-ekgx5y4s.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-g7fzcphx.js:226-761 cjs-fingerprint
+//@ chunk-ekgx5y4s.js:226-761 cjs-fingerprint
 var require_util_hex_encoding = __commonJS(function (cjsExports) {
   var SHORT_TO_HEX = {};
   var HEX_TO_SHORT = {};

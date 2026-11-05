@@ -1,8 +1,8 @@
 /**
  * zod/v4/locales/index.cjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -69,7 +69,7 @@ import { require_zh_CN } from "./zh-CN.cjs";
 import { require_zh_TW } from "./zh-TW.cjs";
 import { require_yo } from "./yo.cjs";
 
-//@ chunk-1ny7cxrt.js:501263-508147 cjs-fingerprint
+//@ chunk-1hnjmk23.js:501632-508516 cjs-fingerprint
 var require_locales = __commonJS(function (cjsExports) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||

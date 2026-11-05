@@ -1,13 +1,14 @@
 /**
  * @anthropic-ai/claude-agent-sdk/query.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/claude-agent-sdk/query.js
- * pieces: chunk-y805ph4h.js (4)
+ * pieces: chunk-tp1gh0pb.js (4)
  * attribution: placement 4
  */
 import { randomUUID } from "crypto";
 import { Stream } from "../../../src/utils/stream.js";
 import { DEFAULT_PRINT_BG_WAIT_CEILING_MS } from "../../../src/tasks/LocalShellTask/backgroundNotices.js";
+import { RESUME_TIMEOUT_MS, extractSessionIdFromIngressToken } from "./index.js";
 import { logForDebugging } from "../../../src/utils/debug.js";
 import {
   errorMessage,
@@ -22,6 +23,7 @@ import {
   suppressControlResponse,
   SDK_MANIFEST_CAPTURE,
   MANIFEST_CAPTURE_TIMEOUT_MS,
+  PROMPT_HOLD_SUBTYPES,
   logIgnoredMcpServerFields,
 } from "./transport.js";
 import { jsonStringify, jsonParse } from "../../../src/utils/slowOperations.js";
@@ -40,12 +42,12 @@ import {
   logFeatureOk,
   withFeatureTelemetry,
 } from "../../../src/services/analytics/featureTelemetry.js";
-import { extractSessionIdFromIngressToken } from "./index.js";
 import { parseMcpServerSettings, sameToolPolicies } from "../../../src/services/mcp/serverIdentity.js";
 import { MAX_TIMER_DELAY_MS } from "../../../src/utils/timerDelayClamp.js";
+import { NO_HOOK_CALLBACK_MESSAGE } from "../../../src/utils/hooks/AsyncHookRegistry.js";
 import { isToolListChangedNotification } from "../../../src/services/mcp/toolsListChanged.js";
 
-//@ chunk-y805ph4h.js:25477-62908 placement
+//@ chunk-tp1gh0pb.js:25850-65320 placement
 /**
  * Agent SDK 的 Query 对象：包装子进程传输，按消息流产出 SDK 消息，并提供 interrupt、setPermissionMode、setModel、MCP 控制等控制请求以及清理逻辑（[Query.cleanup]）。
  */
@@ -80,6 +82,7 @@ class Query {
   initializeHasBeenWritten = false;
   markInitializeWritten;
   writingFirstInitialize = false;
+  promptHold;
   stopSdkMcpManifestCapture;
   sdkMcpToolsChangedDuringCapture = new Set();
   pendingMcpResponses = new Map();
@@ -179,6 +182,50 @@ class Query {
       first: true,
     });
     this.initialization.catch(() => {});
+    if (this.hasHookSetToBlock()) {
+      let timer = setTimeout(() => {
+        this.cleanup(
+          Error(
+            'Claude Code did not answer initialize, so a hook set to onFailure: "block" could not be confirmed and the prompt was not sent. Check the connection and start a new session.',
+          ),
+        );
+      }, RESUME_TIMEOUT_MS);
+      timer.unref?.();
+      this.promptHold = this.initialization.then(
+        () => {
+          clearTimeout(timer);
+          return true;
+        },
+        (error) => {
+          clearTimeout(timer);
+          this.cleanup(error);
+          return false;
+        },
+      );
+      this.writeBehindPromptHold(this.promptHold, () => {});
+    }
+  }
+  writeBehindPromptHold(promise, writeFn) {
+    let tied = promise.then(async (ready) => {
+      if (!ready || this.abortController?.signal.aborted) return false;
+      await writeFn();
+      return true;
+    });
+    let chained = tied
+      .catch(() => true)
+      .then((written) => {
+        if (written && this.promptHold === chained) this.promptHold = undefined;
+        return written;
+      });
+    this.promptHold = chained;
+    return tied;
+  }
+  hasHookSetToBlock() {
+    return Object.values(this.hooks ?? {}).some(
+      (hookList) =>
+        Array.isArray(hookList) &&
+        hookList.some((hook) => hook?.onFailure != null && hook.onFailure !== "continue"),
+    );
   }
   setError(error) {
     this.inputStream.error(error);
@@ -369,7 +416,7 @@ class Query {
             else if (this.resultReceived) this.armRunEndCeiling();
           }
           if ("sdk_host_only" in frame && frame.sdk_host_only === true) continue;
-        } else {
+        } else if (!(frame.type === "system" && frame.subtype === "session_writes_lost")) {
           this.lastErrorResultText = undefined;
           this.lastStartupFailureReason = undefined;
           if (frame.type === "system" && frame.subtype === "init") this.modelLessTurnEnded = false;
@@ -759,6 +806,22 @@ class Query {
       if (first) this.markInitializeWritten();
     }
     let response = (await toolChange).response;
+    if (this.hasHookSetToBlock()) {
+      let hookSupportError =
+        response.hook_on_failure_supported !== true
+          ? Error(
+              'The process answering initialize does not honor onFailure on hook matchers, so a hook that fails would not block. Update Claude Code if it is old, or remove onFailure: "block" from your hooks.',
+            )
+          : first && response.hooks_applied === false
+            ? Error(
+                'This session was already running and did not register your hooks, so a hook set to onFailure: "block" would never run. Start a new session, or remove onFailure: "block" from your hooks.',
+              )
+            : undefined;
+      if (hookSupportError !== undefined) {
+        this.cleanup(hookSupportError);
+        throw hookSupportError;
+      }
+    }
     if (
       this.initConfig?.plugins !== undefined &&
       this.initConfig.plugins.length > 0 &&
@@ -788,6 +851,7 @@ class Query {
               matcher: hook.matcher,
               hookCallbackIds: callbacks,
               timeout: hook.timeout,
+              onFailure: hook.onFailure,
             };
           });
     }
@@ -856,10 +920,10 @@ class Query {
                         "report the issue at https://github.com/anthropics/claude-code/issues",
                       PACKAGE_URL: "@anthropic-ai/claude-code",
                       README_URL: "https://code.claude.com/docs/en/overview",
-                      VERSION: "2.1.316",
+                      VERSION: "2.1.318",
                       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                      BUILD_TIME: "2026-10-30T23:28:13Z",
-                      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                      BUILD_TIME: "2026-11-03T18:52:53Z",
+                      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                       HOOKS_WORKER_URL:
                         import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                       DD_SOURCEMAP_GROUP: "default",
@@ -1497,9 +1561,12 @@ class Query {
         return this.transport.write(stringified);
       };
       try {
-        (this.initializeHasBeenWritten || this.writingFirstInitialize
-          ? Promise.resolve(onAbort_2())
-          : this.initializeWritten.then(onAbort_2)
+        let promptHold = this.promptHold;
+        (promptHold !== undefined && PROMPT_HOLD_SUBTYPES.has(request.subtype)
+          ? this.writeBehindPromptHold(promptHold, onAbort_2)
+          : this.initializeHasBeenWritten || this.writingFirstInitialize
+            ? Promise.resolve(onAbort_2())
+            : this.initializeWritten.then(onAbort_2)
         ).catch(onError);
       } catch (error) {
         onError(error);
@@ -1512,6 +1579,10 @@ class Query {
   writeAfterInitialize(message) {
     if (this.initializeHasBeenWritten) return Promise.resolve(this.transport.write(message));
     return this.initializeWritten.then(() => this.transport.write(message));
+  }
+  writePrompt(message) {
+    if (this.promptHold === undefined) return this.writeAfterInitialize(message);
+    return this.writeBehindPromptHold(this.promptHold, () => this.transport.write(message)).then(() => {});
   }
   reinitialize() {
     return withFeatureTelemetry("sdk_reinitialize", () =>
@@ -1562,12 +1633,13 @@ class Query {
       });
     });
   }
-  async mcpAuthenticate(serverName, redirectUri) {
+  async mcpAuthenticate(serverName, redirectUri, options) {
     return (
       await this.request({
         subtype: "mcp_authenticate",
         serverName,
         redirectUri,
+        redirectUriOnly: options?.redirectUriOnly,
       })
     ).response;
   }
@@ -1823,29 +1895,32 @@ class Query {
     try {
       if (!this.initializeHasBeenWritten) await this.initializeWritten;
       let messageCount = 0;
+      let writePromises = [];
       for await (let message of input) {
         messageCount++;
         logForDebugging(`[Query.streamInput] Processing message ${messageCount}: ${message.type}`);
-        if (this.abortController?.signal.aborted) break;
-        this.runEnded = false;
-        this.resultReceived = false;
-        this.clearRunEndCeiling();
-        await Promise.resolve(
-          this.transport.write(
-            jsonStringify(
-              this.verbatimPrompts
-                ? {
-                    ...message,
-                    client_composed: true,
-                  }
-                : message,
-            ) +
-              `
-`,
-          ),
-        );
+        if (this.abortController?.signal.aborted || (this.promptHold !== undefined && this.cleanupPerformed))
+          break;
+        let line =
+          jsonStringify(
+            this.verbatimPrompts
+              ? {
+                  ...message,
+                  client_composed: true,
+                }
+              : message,
+          ) +
+          `
+`;
+        if (this.promptHold === undefined) await Promise.resolve(this.writeStreamMessage(line));
+        else
+          writePromises.push(
+            this.writeBehindPromptHold(this.promptHold, () => this.writeStreamMessage(line)),
+          );
       }
       logForDebugging(`[Query.streamInput] Finished processing ${messageCount} messages from input stream`);
+      if (this.promptHold !== undefined) writePromises.push(this.promptHold);
+      if ((await Promise.all(writePromises)).includes(false)) return;
       if (messageCount > 0 && this.hasBidirectionalNeeds()) {
         logForDebugging("[Query.streamInput] Has bidirectional needs, waiting for the run to end");
         await this.waitForRunEnd();
@@ -1855,6 +1930,12 @@ class Query {
     } catch (error) {
       if (!(error instanceof HookConfigError)) throw error;
     }
+  }
+  writeStreamMessage(text) {
+    this.runEnded = false;
+    this.resultReceived = false;
+    this.clearRunEndCeiling();
+    return this.transport.write(text);
   }
   endRun() {
     if (this.runEnded) return;
@@ -1911,7 +1992,7 @@ class Query {
   }
   handleHookCallbacks(callbackId, input, outputOptions, signal) {
     let callback = this.hookCallbacks.get(callbackId);
-    if (!callback) throw Error(`No hook callback found for ID: ${callbackId}`);
+    if (!callback) throw Error(`${NO_HOOK_CALLBACK_MESSAGE}: ${callbackId}`);
     return callback(input, outputOptions, {
       signal,
     });
@@ -2012,13 +2093,13 @@ class Query {
     });
   }
 }
-//@ chunk-y805ph4h.js:62908-62976 placement
+//@ chunk-tp1gh0pb.js:65320-65388 placement
 function closedBeforeResponseError() {
   return Error("Query closed before response received");
 }
-//@ chunk-y805ph4h.js:62976-63008 placement
+//@ chunk-tp1gh0pb.js:65388-65420 placement
 var CALLBACK_ID_SUFFIX_RE = /^[a-z][a-z0-9_]{0,63}$/;
-//@ chunk-y805ph4h.js:63008-63137 placement
+//@ chunk-tp1gh0pb.js:65420-65549 placement
 function sharesCallbackSuffix(sessionId, otherId) {
   if (sessionId === otherId) return true;
   let sliced = sessionId.slice(sessionId.lastIndexOf("_") + 1);

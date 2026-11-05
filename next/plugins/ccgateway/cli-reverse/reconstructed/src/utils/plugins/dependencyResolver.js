@@ -3,10 +3,10 @@
  *
  * 并入已有模块：插件依赖解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/dependencyResolver.ts
- * pieces: chunk-czx62zen.js (39), chunk-e6aww6q8.js (1)
- * attribution: placement 16, callgraph-witnessed 1, layout 17, fingerprint 6
+ * pieces: chunk-5xgkngpb.js (1), chunk-r7hswen6.js (39)
+ * attribution: fingerprint 5, placement 16, callgraph-witnessed 1, layout 18
  */
 import { win32 } from "path";
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -23,23 +23,23 @@ import { nfcLower, plural } from "../stringUtils.js";
 import { LEADING_INVISIBLE_TEXT_RE } from "../settings/marketplaceSettingsAliases.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-czx62zen.js:3092-3109 placement
+//@ chunk-r7hswen6.js:3095-3112 placement
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-czx62zen.js:3092", () => {
+deferInit("chunk-r7hswen6.js:3095", () => {
   semverModule = __toESM(require_semver_3(), 1);
 });
-//@ chunk-czx62zen.js:3138-3175 placement
+//@ chunk-r7hswen6.js:3141-3178 placement
 /**
  * isSameNormalizedProjectPath：Windows 项目路径规范化后相同。
  */
 function isSameNormalizedProjectPath(projectPath, otherProjectPath) {
   return normalizeWindowsProjectPath(projectPath) === normalizeWindowsProjectPath(otherProjectPath);
 }
-//@ chunk-czx62zen.js:3175-3231 placement
+//@ chunk-r7hswen6.js:3178-3234 placement
 function isSameInstallTarget(record, scope, projectPath) {
   return record.scope === scope && record.projectPath === projectPath;
 }
-//@ chunk-czx62zen.js:3231-3366 placement
+//@ chunk-r7hswen6.js:3234-3369 placement
 /**
  * 安装记录 scope 相同且项目路径相同。
  */
@@ -49,14 +49,14 @@ function isSameInstallScope(record, scope, projectPath) {
     return record.projectPath === projectPath;
   return isSameNormalizedProjectPath(record.projectPath, projectPath);
 }
-//@ chunk-czx62zen.js:3366-3414 placement
+//@ chunk-r7hswen6.js:3369-3417 placement
 /**
  * isStaleInstallTarget：作用域相同但记录不同。
  */
 function isStaleInstallTarget(record, scope, projectPath) {
   return !isSameInstallTarget(record, scope, projectPath) && isSameInstallScope(record, scope, projectPath);
 }
-//@ chunk-czx62zen.js:3414-3476 placement
+//@ chunk-r7hswen6.js:3417-3479 placement
 /**
  * installationAtTarget：取某作用域/项目的安装记录。
  */
@@ -64,7 +64,7 @@ function installationAtTarget(installations, scope, projectPath) {
   let installationIndex = findInstallationIndex(installations, scope, projectPath);
   return installationIndex >= 0 ? installations?.[installationIndex] : undefined;
 }
-//@ chunk-czx62zen.js:3476-3595 placement
+//@ chunk-r7hswen6.js:3479-3598 placement
 /**
  * 先精确匹配、再按 scope/项目路径找安装记录下标。
  */
@@ -75,7 +75,7 @@ function findInstallationIndex(installations, scope, projectPath) {
     ? index
     : installations.findIndex((record) => isSameInstallScope(record, scope, projectPath));
 }
-//@ chunk-czx62zen.js:3595-3715 placement
+//@ chunk-r7hswen6.js:3598-3718 placement
 /**
  * 精确匹配的安装记录，否则退回按 scope 匹配的一条。
  */
@@ -85,7 +85,7 @@ function findMatchingInstallations(installations, scope, projectPath) {
   let fallbackRecord = installationAtTarget(installations, scope, projectPath);
   return fallbackRecord === undefined ? [] : [fallbackRecord];
 }
-//@ chunk-czx62zen.js:3715-3983 placement
+//@ chunk-r7hswen6.js:3718-3986 placement
 function normalizeWindowsProjectPath(projectPath) {
   if (
     getPlatform() !== "windows" ||
@@ -99,7 +99,7 @@ function normalizeWindowsProjectPath(projectPath) {
     normalized.length > win32.parse(normalized).root.length ? normalized.replace(/[\\/]+$/, "") : normalized;
   return /^[a-z]:/i.test(trimmed) ? trimmed[0].toLowerCase() + trimmed.slice(1) : trimmed;
 }
-//@ chunk-czx62zen.js:3983-4562 placement
+//@ chunk-r7hswen6.js:3986-4565 placement
 /**
  * 读取 manifest.dependencies 中带 version 或 sha 的条目，返回 "名@市场"→{version, sha} 映射；没有则 undefined。
  */
@@ -128,7 +128,7 @@ function readManifestDependencyPins(rawCandidate) {
   }
   return pins.size > 0 ? pins : undefined;
 }
-//@ chunk-czx62zen.js:4562-4673 callgraph-witnessed (2.1.88 match: qualifyDependency, 1)
+//@ chunk-r7hswen6.js:4565-4676 callgraph-witnessed (2.1.88 match: qualifyDependency, 1)
 /**
  * 依赖引用补全市场：不带 @marketplace 的依赖名按声明它的插件所在市场补全（inline 等保留市场除外）。
  */
@@ -138,7 +138,7 @@ function qualifyDependency(dep, declaringPluginId) {
   if (!mkt || isOfficialMarketplace(mkt)) return dep;
   return `${dep}@${mkt}`;
 }
-//@ chunk-czx62zen.js:4673-4834 layout
+//@ chunk-r7hswen6.js:4676-4837 layout
 /**
  * 依赖引用是否指向给定插件（名字相同且市场一致，或 inline/同步等效 ID）。
  */
@@ -157,7 +157,7 @@ function dependencyRefMatches(dependencyId, reference, source) {
     reference === toSyncedDependencyId(canonicalId, source)
   );
 }
-//@ chunk-czx62zen.js:4834-4989 layout
+//@ chunk-r7hswen6.js:4837-4992 layout
 function toSyncedDependencyId(dependencyId, reference) {
   let { name, marketplace } = parsePluginIdentifier(dependencyId);
   if (
@@ -169,10 +169,10 @@ function toSyncedDependencyId(dependencyId, reference) {
   let syncedId = `${name}@${SYNCED}`;
   return syncedId === reference ? undefined : syncedId;
 }
-//@ chunk-czx62zen.js:4989-5007 layout
+//@ chunk-r7hswen6.js:4992-5010 layout
 var MAX_CONSTRAINT_LENGTH = 1024;
 var MAX_CONSTRAINTS_TOTAL_LENGTH = 4096;
-//@ chunk-czx62zen.js:5007-5135 layout
+//@ chunk-r7hswen6.js:5010-5138 layout
 function tooComplexConstraint(reason) {
   logForDebugging(`intersectConstraints: ${reason} \u2014 treating as too complex`, {
     level: "warn",
@@ -182,7 +182,7 @@ function tooComplexConstraint(reason) {
     reason: "too-complex",
   };
 }
-//@ chunk-czx62zen.js:5135-5944 layout
+//@ chunk-r7hswen6.js:5138-5947 layout
 /**
  * 求多个 semver 范围约束的交集（依赖插件的 @^x 约束），过长或过复杂视为 too-complex，无交集为 disjoint。
  */
@@ -247,21 +247,21 @@ function intersectVersionConstraints(ranges) {
         range: mergedRange,
       };
 }
-//@ chunk-czx62zen.js:5944-5954 layout
+//@ chunk-r7hswen6.js:5947-5957 layout
 var MAX_CONSTRAINT_DISPLAY = 200;
-//@ chunk-czx62zen.js:5954-6054 layout
+//@ chunk-r7hswen6.js:5957-6057 layout
 function displayVersionRange(range) {
   return /^[\x20-\x7e]+$/.test(range) && semverModule.validRange(range) !== null
     ? range
     : printableLabel(printableName(range, 64)) || "\u201C\u201D";
 }
-//@ chunk-czx62zen.js:6054-6150 layout
+//@ chunk-r7hswen6.js:6057-6153 layout
 function displayVersion(version) {
   return /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(version)
     ? version
     : printableLabel(printableName(version, 64)) || "\u201C\u201D";
 }
-//@ chunk-czx62zen.js:6150-6343 layout
+//@ chunk-r7hswen6.js:6153-6346 layout
 function truncateForDisplay(text) {
   if (text.length <= MAX_CONSTRAINT_DISPLAY) return text;
   let sliced = text.slice(0, MAX_CONSTRAINT_DISPLAY);
@@ -271,7 +271,7 @@ function truncateForDisplay(text) {
       : sliced;
   return `${trimmed}\u2026 (+${text.length - trimmed.length} chars)`;
 }
-//@ chunk-czx62zen.js:6343-6960 layout
+//@ chunk-r7hswen6.js:6346-6963 layout
 /**
  * 依赖版本约束冲突的说明文本（disjoint、too-complex、无匹配 tag 等）。
  */
@@ -295,7 +295,7 @@ function describeConstraintConflict(targetLabel, pluginId, ranges, reason, versi
       }`;
   }
 }
-//@ chunk-czx62zen.js:6960-7053 layout
+//@ chunk-r7hswen6.js:6963-7056 layout
 /**
  * “插件没有满足约束的 git tag”的说明。
  */
@@ -303,7 +303,7 @@ function noMatchingTagMessage(targetLabel, pluginId, range) {
   let rangeText = truncateForDisplay(displayVersionRange(range));
   return `${targetLabel} ${quoteName(displaySafePluginId(pluginId))} has no git tag satisfying ${rangeText}`;
 }
-//@ chunk-czx62zen.js:7053-7146 layout
+//@ chunk-r7hswen6.js:7056-7149 layout
 /**
  * 版本字符串（可 coerce）是否满足 semver 范围。
  */
@@ -311,7 +311,7 @@ function versionSatisfies(version, range) {
   let normalizedVersion = semverModule.valid(version) ?? semverModule.coerce(version)?.version;
   return normalizedVersion !== undefined && semverModule.satisfies(normalizedVersion, range);
 }
-//@ chunk-czx62zen.js:7146-7322 layout
+//@ chunk-r7hswen6.js:7149-7325 layout
 /**
  * 收集所有已加载插件对某依赖 ID 的版本约束。
  */
@@ -330,7 +330,7 @@ function collectConstraintsOn(dependencyId, plugins) {
   }
   return constraints;
 }
-//@ chunk-czx62zen.js:7322-8079 fingerprint (2.1.88 match: resolveDependencyClosure, 0.846)
+//@ chunk-r7hswen6.js:7325-8082 fingerprint (2.1.88 match: resolveDependencyClosure, 0.846)
 /**
  * 解析安装一个插件需要的依赖闭包（DFS）：跨市场依赖只在根市场 allowCrossMarketplaceDependenciesOn 允许时接受；检测环；已安装的跳过。返回按安装顺序的 ID 列表或错误。
  */
@@ -399,7 +399,7 @@ async function resolveDependencyClosure(
     closure,
   };
 }
-//@ chunk-czx62zen.js:8079-9787 fingerprint (2.1.88 match: verifyAndDemote, 0.749)
+//@ chunk-r7hswen6.js:8082-9790 fingerprint (2.1.88 match: verifyAndDemote, 0.749)
 /**
  * 加载后的依赖校验：反复把依赖未满足（找不到、未启用、版本约束不符）的启用插件降级为禁用，直到不动点；返回被降级集合与 dependency-unsatisfied 错误。
  */
@@ -511,14 +511,14 @@ function verifyAndDemote(plugins) {
     }),
   };
 }
-//@ chunk-czx62zen.js:9787-9836 layout
+//@ chunk-r7hswen6.js:9790-9839 layout
 /**
  * 反向依赖插件名列表。
  */
 function findReverseDependentNames(pluginId, plugins) {
   return findReverseDependents(pluginId, plugins).map((dependent) => dependent.name);
 }
-//@ chunk-czx62zen.js:9836-9971 fingerprint (2.1.88 match: findReverseDependents, 0.826)
+//@ chunk-r7hswen6.js:9839-9974 layout (2.1.88 match: findReverseDependents, 0.826)
 /**
  * 找出依赖给定插件的已启用插件（反向依赖），用于禁用/卸载时警告。
  */
@@ -532,7 +532,7 @@ function findReverseDependents(pluginId, plugins) {
       ),
   );
 }
-//@ chunk-czx62zen.js:9971-10110 placement
+//@ chunk-r7hswen6.js:9974-10113 placement
 /**
  * 递归收集反向依赖（深度优先，去重）。
  */
@@ -550,14 +550,14 @@ function collectTransitiveDependents(pluginId, plugins) {
   visit(pluginId);
   return dependents;
 }
-//@ chunk-czx62zen.js:10110-10157 placement
+//@ chunk-r7hswen6.js:10113-10160 placement
 /**
  * isDependencyAutoInstallState：依赖自动安装标记或记录数组。
  */
 function isDependencyAutoInstallState(value) {
   return value === true || Array.isArray(value);
 }
-//@ chunk-czx62zen.js:10267-10903 placement
+//@ chunk-r7hswen6.js:10270-10906 placement
 /**
  * 在某作用域已安装插件里找"作为依赖自动安装、但已没有显式安装插件需要"的孤儿：先确认都能加载（否则返回 unloadable），再从显式安装的插件沿 manifest.dependencies 做可达性遍历。返回 {orphans, unloadable, autoCount}。
  */
@@ -603,7 +603,7 @@ function findOrphanedAutoDependencies(plugins, pluginEntries, scope, projectPath
     autoCount: autoIds.size,
   };
 }
-//@ chunk-czx62zen.js:10903-11225 placement
+//@ chunk-r7hswen6.js:10906-11228 placement
 /**
  * 生成提示 "N auto-installed dependencies no longer needed: …. Run claude plugin prune [--scope s] to remove."（最多列 5 个）。
  */
@@ -617,7 +617,7 @@ function formatOrphanedDependenciesNotice(orphans, scope) {
   return `
 ${orphans.size} auto-installed ${plural(orphans.size, "dependency", "dependencies")} no longer needed: ${namesText}. Run \`claude plugin prune${scopeArg}\` to remove.`;
 }
-//@ chunk-czx62zen.js:11225-11281 placement
+//@ chunk-r7hswen6.js:11228-11284 placement
 /**
  * 展示名安全化：ye 是允许的展示名字符正则；Pe 是默认长度上限 64；bJr 是完整展示名的长度上限 256；E 是一次最多列出的段数 5。
  */
@@ -625,7 +625,7 @@ var SAFE_DISPLAY_NAME_RE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/;
 var MAX_SAFE_DISPLAY_NAME_CHARS = 64;
 var MAX_DISPLAY_NAME_LENGTH = 256;
 var MAX_DISPLAY_NAME_SEGMENTS = 5;
-//@ chunk-czx62zen.js:11281-11380 placement
+//@ chunk-r7hswen6.js:11284-11383 placement
 /**
  * 名字展示安全化：合规短名原样，否则截断并去掉不可见字符。
  */
@@ -634,7 +634,7 @@ function displaySafeName(name, maxLength = MAX_SAFE_DISPLAY_NAME_CHARS) {
     ? name
     : printableLabel(printableName(name.replace(LEADING_INVISIBLE_TEXT_RE, ""), 64)) || "\u201C\u201D";
 }
-//@ chunk-czx62zen.js:11380-11507 layout
+//@ chunk-r7hswen6.js:11383-11510 layout
 /**
  * 插件 ID 展示安全化（name@marketplace 两段分别处理）。
  */
@@ -645,14 +645,14 @@ function displaySafePluginId(pluginId) {
     ? `${displaySafeName(name)}@${displaySafeName(marketplace)}`
     : displaySafeName(pluginId);
 }
-//@ chunk-czx62zen.js:11507-11564 layout
+//@ chunk-r7hswen6.js:11510-11567 layout
 /**
  * 给名字加引号用于提示文案（已以弯引号开头的不重复加）。
  */
 function quoteName(name) {
   return name.startsWith("\u201C") ? name : `"${name}"`;
 }
-//@ chunk-czx62zen.js:11564-11767 fingerprint (2.1.88 match: formatDependencyCountSuffix, 0.804)
+//@ chunk-r7hswen6.js:11567-11770 fingerprint (2.1.88 match: formatDependencyCountSuffix, 0.804)
 /**
  * 生成“（并安装了 N 个依赖：a, b…）”后缀文本。
  */
@@ -665,7 +665,7 @@ function formatDependencyCountSuffix(installedDeps) {
   let namesText = count <= MAX_DISPLAY_NAME_SEGMENTS ? mapped.join(", ") : `${mapped.join(", ")}, \u2026`;
   return ` (+ ${count} ${plural(count, "dependency", "dependencies")}: ${namesText})`;
 }
-//@ chunk-czx62zen.js:11767-12170 layout
+//@ chunk-r7hswen6.js:11770-12173 layout
 /**
  * 依赖找不到时的提示（“marketplace X 是否已添加？”）。
  */
@@ -688,7 +688,7 @@ function missingDependenciesHint(dependencyIds, marketplaceMissing) {
       : `${joined} and ${count - MAX_DISPLAY_NAME_SEGMENTS} more.`;
   return ` \u2014 ${count} ${plural(count, "dependency", "dependencies")} still unresolved: ${idsText}${marketplaceHint}`;
 }
-//@ chunk-czx62zen.js:12170-12277 fingerprint (2.1.88 match: formatReverseDependentsSuffix, 1)
+//@ chunk-r7hswen6.js:12173-12280 fingerprint (2.1.88 match: formatReverseDependentsSuffix, 1)
 /**
  * 生成“ — warning: required by …”后缀文本。
  */
@@ -696,7 +696,7 @@ function formatReverseDependentsSuffix(rdeps) {
   if (!rdeps || rdeps.length === 0) return "";
   return ` \u2014 warning: required by ${rdeps.map(displaySafePluginId).join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:4320708-4320786 fingerprint (2.1.88 match: getEnabledPluginIdsForScope, 0.707)
+//@ chunk-5xgkngpb.js:4427234-4427312 fingerprint (2.1.88 match: getEnabledPluginIdsForScope, 0.708)
 /**
  * 构造把一组插件 ID 全部设为 false 的 enabledPlugins 补丁。
  */
@@ -706,26 +706,14 @@ function getEnabledPluginIdsForScope(settingSource) {
   };
 }
 export {
-  findOrphanedAutoDependencies,
-  formatOrphanedDependenciesNotice,
-  installationAtTarget,
-  isSameInstallScope,
-  intersectVersionConstraints,
-  describeConstraintConflict,
-  noMatchingTagMessage,
-  isDependencyAutoInstallState,
-  findMatchingInstallations,
-  findReverseDependentNames,
-  formatReverseDependentsSuffix,
-  collectTransitiveDependents,
-  collectConstraintsOn,
   readManifestDependencyPins,
+  isDependencyAutoInstallState,
   verifyAndDemote,
-  formatDependencyCountSuffix,
-  toSyncedDependencyId,
-  qualifyDependency,
   getEnabledPluginIdsForScope,
   dependencyRefMatches,
+  qualifyDependency,
+  findMatchingInstallations,
+  installationAtTarget,
   isSameNormalizedProjectPath,
   isStaleInstallTarget,
   findInstallationIndex,
@@ -735,5 +723,17 @@ export {
   MAX_DISPLAY_NAME_LENGTH,
   versionSatisfies,
   resolveDependencyClosure,
+  intersectVersionConstraints,
+  formatDependencyCountSuffix,
+  describeConstraintConflict,
+  noMatchingTagMessage,
+  findReverseDependentNames,
+  isSameInstallScope,
+  formatReverseDependentsSuffix,
+  collectTransitiveDependents,
+  collectConstraintsOn,
+  findOrphanedAutoDependencies,
+  formatOrphanedDependenciesNotice,
   missingDependenciesHint,
+  toSyncedDependencyId,
 };

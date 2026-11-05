@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--client-data-url：从 downloads.claude.ai 拉取签名的客户端配置文档（模型条目、第一方 base URL 假设），校验签名与适用范围
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5ghme4bp.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f1trgkby.js (23)
  * attribution: placement 23
  */
 import { stripVTControlCharacters } from "util";
@@ -38,15 +38,15 @@ import { clearBetasCaches } from "../utils/betas.js";
 import { invalidateToolDescriptions } from "./api/toolDescriptionCache.js";
 import { stripAnyVersatileSuffix } from "../utils/model/modelIds.js";
 import { getMainLoopModel } from "../utils/model/model.js";
-import { lt_2 as lt } from "../utils/semver.js";
+import { lt } from "../utils/semver.js";
 import { splitOnDash } from "../utils/model/modelCatalog/catalogCapabilities.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-5ghme4bp.js:689-921 placement
+//@ chunk-f1trgkby.js:722-954 placement
 function formatClientDataFatal(error) {
   return `Error: --client-data-url: ${error}. Claude Code does not start without the configuration it was given; to start without it, remove the flag, or remove CLAUDE_CODE_CLIENT_DATA_URL from your environment or settings.`;
 }
-//@ chunk-5ghme4bp.js:921-2769 placement
+//@ chunk-f1trgkby.js:954-2802 placement
 /**
  * --client-data-url 各类失败（URL 无效、云/远程/ssh 会话不可用、第三方提供商、策略、不存在、超时、过大、签名错误）的说明。
  */
@@ -86,14 +86,14 @@ function CLIENT_DATA_URL_ERRORS(failure, { httpStatus, minClaudeCodeVersion, bui
       return "Claude Code hit an internal error loading it; run with --debug for details";
   }
 }
-//@ chunk-5ghme4bp.js:2769-3283 placement
+//@ chunk-f1trgkby.js:2802-3316 placement
 function describeNoModelEntry(doc, model) {
   let patterns = describePatterns(doc);
   return patterns === ""
     ? "Error: --client-data-url: the document has nothing for any model (its publisher switched it off). Remove --client-data-url or CLAUDE_CODE_CLIENT_DATA_URL, or pass --allow-other-models (CLAUDE_CODE_ALLOW_OTHER_MODELS=1) to start without applying it."
     : `Error: --client-data-url: the document has no entry for ${sanitizeForMessage(model)}; it has entries for models matching ${patterns}. Pass a matching --model, or --allow-other-models (CLAUDE_CODE_ALLOW_OTHER_MODELS=1) to start without applying it.`;
 }
-//@ chunk-5ghme4bp.js:3283-3637 placement
+//@ chunk-f1trgkby.js:3316-3670 placement
 function describeDocumentApplied(doc, model, assumesFirstPartyBaseUrl) {
   let patterns = describePatterns(doc);
   let summary =
@@ -104,21 +104,21 @@ function describeDocumentApplied(doc, model, assumesFirstPartyBaseUrl) {
         : `loaded (document v${doc.version}), nothing in it for ${sanitizeForMessage(model)}; it has entries for models matching ${patterns}`;
   return assumesFirstPartyBaseUrl ? `${summary}; base URL treated as the Anthropic API` : summary;
 }
-//@ chunk-5ghme4bp.js:3637-3709 placement
+//@ chunk-f1trgkby.js:3670-3742 placement
 /**
  * 把各条目模式拼成可读列表（再清洗控制字符）。
  */
 function describePatterns(doc) {
   return sanitizeForMessage(doc.entries.map((entry) => entry.pattern.source).join(", "));
 }
-//@ chunk-5ghme4bp.js:3709-3739 placement
+//@ chunk-f1trgkby.js:3742-3772 placement
 /**
  * 去掉终端控制字符并替换控制字符，用于报错文案。
  */
 function sanitizeForMessage(text) {
   return replaceControlChars(stripVTControlCharacters(text));
 }
-//@ chunk-5ghme4bp.js:3739-4144 placement
+//@ chunk-f1trgkby.js:3772-4177 placement
 function parseClientDataUrl() {
   let trimmed = env.CLAUDE_CODE_CLIENT_DATA_URL?.trim();
   if (!trimmed)
@@ -155,14 +155,14 @@ function parseClientDataUrl() {
     },
   };
 }
-//@ chunk-5ghme4bp.js:4144-4183 placement
+//@ chunk-f1trgkby.js:4177-4216 placement
 /**
  * 取当前提供方的客户端数据文档状态槽。
  */
 function clientDataState() {
   return getProviderState().clientDataUrl;
 }
-//@ chunk-5ghme4bp.js:4183-4939 placement
+//@ chunk-f1trgkby.js:4216-4972 placement
 /**
  * 启动时加载客户端数据文档（失败则拒绝启动并说明）。
  */
@@ -173,10 +173,10 @@ function loadClientDataForStartup({
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -200,7 +200,7 @@ function loadClientDataForStartup({
     logError(error);
   }
 }
-//@ chunk-5ghme4bp.js:4939-5087 placement
+//@ chunk-f1trgkby.js:4972-5120 placement
 /**
  * 等待客户端数据文档加载完成，并据此应用"视为第一方 base URL"设置。
  */
@@ -215,17 +215,17 @@ async function applyPendingClientDataBaseUrl() {
     return false;
   }
 }
-//@ chunk-5ghme4bp.js:5087-6415 placement
+//@ chunk-f1trgkby.js:5120-6448 placement
 async function applyClientDataToSession({
   runsOnAnotherMachine = false,
   buildVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -273,7 +273,7 @@ async function applyClientDataToSession({
     return formatClientDataFatal(CLIENT_DATA_URL_ERRORS("exception"));
   }
 }
-//@ chunk-5ghme4bp.js:6415-7013 placement
+//@ chunk-f1trgkby.js:6448-7046 placement
 function applyAssumeFirstPartyBaseUrl(doc) {
   if (clientDataState().assumesFirstPartyBaseUrl) return false;
   let found = doc.entries.find((entry) => entry.clientData.assume_first_party_base_url === true);
@@ -292,7 +292,7 @@ function applyAssumeFirstPartyBaseUrl(doc) {
   );
   return true;
 }
-//@ chunk-5ghme4bp.js:7013-7155 placement
+//@ chunk-f1trgkby.js:7046-7188 placement
 /**
  * 客户端数据文档中没有当前模型的条目时返回说明（允许其他模型时跳过）。
  */
@@ -302,7 +302,7 @@ function checkClientDataModelEntry() {
   let model = stripAnyVersatileSuffix(getMainLoopModel());
   return clientDataForModel(doc, model) === null ? describeNoModelEntry(doc, model) : undefined;
 }
-//@ chunk-5ghme4bp.js:7155-7271 placement
+//@ chunk-f1trgkby.js:7188-7304 placement
 /**
  * 用客户端数据文档中当前模型的条目覆盖传入的客户端数据。
  */
@@ -317,7 +317,7 @@ function applyClientDataModelOverrides(modelConfig, model) {
         ...override,
       };
 }
-//@ chunk-5ghme4bp.js:7271-7372 placement
+//@ chunk-f1trgkby.js:7304-7405 placement
 /**
  * 判断客户端数据文档非空但缺少指定模型的条目。
  */
@@ -329,7 +329,7 @@ function isModelMissingFromClientData(mainLoopModel) {
     clientDataForModel(doc, stripAnyVersatileSuffix(mainLoopModel ?? getMainLoopModel())) === null
   );
 }
-//@ chunk-5ghme4bp.js:7372-7475 placement
+//@ chunk-f1trgkby.js:7405-7508 placement
 /**
  * 描述客户端数据文档对当前模型的应用状态。
  */
@@ -343,7 +343,7 @@ function describeClientDataStatus() {
         clientDataState().assumesFirstPartyBaseUrl,
       );
 }
-//@ chunk-5ghme4bp.js:7475-8493 placement
+//@ chunk-f1trgkby.js:7508-8526 placement
 /**
  * 下载并校验签名文档（hosted、编译内置根）。
  */
@@ -425,18 +425,18 @@ async function fetchSignedClientData(clientDataUrl, runsOnAnotherMachine, buildV
     document: doc,
   };
 }
-//@ chunk-5ghme4bp.js:8493-8642 placement
+//@ chunk-f1trgkby.js:8526-8675 placement
 function getClientDataSkipReason(clientDataUrl, runsOnAnotherMachine) {
   if (clientDataUrl.kind === "invalid_url") return "invalid_url";
   if (runsOnAnotherMachine) return "remote_session";
   if (getAPIProvider() !== "firstParty") return "third_party_provider";
   return;
 }
-//@ chunk-5ghme4bp.js:8642-8743 placement
+//@ chunk-f1trgkby.js:8675-8776 placement
 function isProviderManagedByHost() {
   return env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST || env.CLAUDE_CODE_HOST_AUTH_ENV_VAR !== undefined;
 }
-//@ chunk-5ghme4bp.js:8743-8849 placement
+//@ chunk-f1trgkby.js:8776-8882 placement
 function needsFirstPartyBaseUrlAssumption() {
   return (
     getAPIProvider() === "firstParty" &&
@@ -445,21 +445,21 @@ function needsFirstPartyBaseUrlAssumption() {
     !isProviderManagedByHost()
   );
 }
-//@ chunk-5ghme4bp.js:8849-8904 placement
+//@ chunk-f1trgkby.js:8882-8937 placement
 /**
  * 需要重新拉取签名文档的失败类型（network、http_status、read_failed）。
  */
 var FAILURE_KINDS_REQUIRING_REFETCH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5ghme4bp.js:8849", () => {
+deferInit("chunk-f1trgkby.js:8882", () => {
   FAILURE_KINDS_REQUIRING_REFETCH = new Set(["network", "http_status", "read_failed"]);
 });
-//@ chunk-5ghme4bp.js:8904-9007 placement
+//@ chunk-f1trgkby.js:8937-9040 placement
 function isSameClientDataSource(resolution, clientDataUrl) {
   return resolution.kind === "ok"
     ? clientDataUrl.kind === "ok" && resolution.source.url === clientDataUrl.source.url
     : clientDataUrl.kind === "invalid_url";
 }
-//@ chunk-5ghme4bp.js:9007-9212 placement
+//@ chunk-f1trgkby.js:9040-9245 placement
 function withdrawFirstPartyBaseUrlAssumption() {
   if (!clientDataState().assumesFirstPartyBaseUrl) return;
   clientDataState().assumesFirstPartyBaseUrl = false;
@@ -470,11 +470,11 @@ function withdrawFirstPartyBaseUrlAssumption() {
   );
 }
 export {
-  describeClientDataStatus,
+  isModelMissingFromClientData,
   loadClientDataForStartup,
   applyPendingClientDataBaseUrl,
-  isModelMissingFromClientData,
+  describeClientDataStatus,
+  applyClientDataModelOverrides,
   applyClientDataToSession,
   checkClientDataModelEntry,
-  applyClientDataModelOverrides,
 };

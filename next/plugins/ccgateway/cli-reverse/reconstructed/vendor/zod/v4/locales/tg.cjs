@@ -1,14 +1,14 @@
 /**
  * zod/v4/locales/tg.cjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util } from "../core/util.cjs";
 
-//@ chunk-1ny7cxrt.js:443954-451038 cjs-fingerprint
+//@ chunk-1hnjmk23.js:444323-451407 cjs-fingerprint
 var require_tg = __commonJS(function (cjsExports, cjsModule) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

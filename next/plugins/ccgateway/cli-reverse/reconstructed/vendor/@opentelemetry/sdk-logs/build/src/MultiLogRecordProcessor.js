@@ -1,16 +1,16 @@
 /**
  * @opentelemetry/sdk-logs/build/src/MultiLogRecordProcessor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (2)
+ * pieces: chunk-exfmq47h.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_core } from "../../../core/build/src/index.js";
 
-//@ chunk-aepeg2w5.js:654251-654267 esm-layout
+//@ chunk-exfmq47h.js:666857-666873 esm-layout
 var import_core_4 = __toESM(require_core());
-//@ chunk-aepeg2w5.js:654267-654645 esm-fingerprint
+//@ chunk-exfmq47h.js:666873-667251 esm-fingerprint
 class MultiLogRecordProcessor {
   processors;
   forceFlushTimeoutMillis;

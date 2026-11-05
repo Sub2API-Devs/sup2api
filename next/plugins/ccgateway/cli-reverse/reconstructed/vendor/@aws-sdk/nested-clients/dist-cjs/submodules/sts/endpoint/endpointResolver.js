@@ -3,10 +3,10 @@
  *
  * AWS STS 端点解析（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1), chunk-heg39xxp.js (3)
- * attribution: cjs-require-graph 1, placement 1, esm-fingerprint 2
+ * pieces: chunk-539esr4f.js (3), chunk-brqnbz3r.js (1)
+ * attribution: placement 1, esm-fingerprint 2, cjs-require-graph 1
  */
 import { __toESM, __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 import { require_util_endpoints } from "../../../../../util-endpoints/dist-cjs/index.js";
@@ -14,10 +14,10 @@ import { require_index_browser } from "../../../../../../@smithy/core/dist-cjs/s
 import { ruleSet } from "./ruleset.js";
 import { require_ruleset } from "../../../../../client-sts/dist-cjs/endpoint/ruleset.js";
 
-//@ chunk-heg39xxp.js:5391-5419 placement
+//@ chunk-539esr4f.js:5391-5419 placement
 var cache = __toESM(require_util_endpoints());
 var import_index_browser_2 = __toESM(require_index_browser());
-//@ chunk-heg39xxp.js:10036-10232 esm-fingerprint
+//@ chunk-539esr4f.js:10036-10232 esm-fingerprint
 var endpointCache = new import_index_browser_2.EndpointCache({
   size: 50,
   params: ["Endpoint", "Region", "UseDualStack", "UseFIPS", "UseGlobalEndpoint"],
@@ -29,9 +29,9 @@ var defaultEndpointResolver = (endpointParams, context = {}) =>
       logger: context.logger,
     }),
   );
-//@ chunk-heg39xxp.js:10232-10286 esm-fingerprint
+//@ chunk-539esr4f.js:10232-10286 esm-fingerprint
 import_index_browser_2.customEndpointFunctions.aws = cache.awsEndpointFunctions;
-//@ chunk-a8ee6x44.js:6233-6653 cjs-require-graph
+//@ chunk-brqnbz3r.js:6233-6653 cjs-require-graph
 var require_endpointResolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

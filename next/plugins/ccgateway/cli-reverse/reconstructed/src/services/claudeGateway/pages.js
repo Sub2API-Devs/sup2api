@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：网关 HTML 页面（登录/状态）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (6)
  * attribution: placement 6
  */
 import { randomBytes } from "crypto";
 import { renderCallbackPage, brokenLinkSvg, checkmarkSvg } from "../oauth/callbackPage.js";
 import { escapeHtml } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
 
-//@ chunk-1ny7cxrt.js:1330688-1332239 placement
+//@ chunk-1hnjmk23.js:1331651-1333202 placement
 /**
  * 设备登录页样式与字符画 logo。
  */
@@ -34,7 +34,7 @@ button.go:focus-visible,button.deny:focus-visible{outline:2px solid #2A78D6;outl
 var CLAUDE_ASCII_LOGO = ` \u2590\u259B\u2588\u2588\u2588\u259B\u2588
 \u259D\u259C\u2588\u2588\u2588\u2588\u2588\u2588\u2580
  \u259D\u259D   \u259D\u259D`;
-//@ chunk-1ny7cxrt.js:1332239-1332711 placement
+//@ chunk-1hnjmk23.js:1333202-1333674 placement
 /**
  * 渲染网关 HTML 页面（CSP、可选关闭标签脚本 nonce、禁止缓存）。
  */
@@ -58,7 +58,7 @@ function htmlPageResponse(body, options) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1332711-1333797 placement
+//@ chunk-1hnjmk23.js:1333674-1334760 placement
 /**
  * 网关首页：版本、身份提供方与连接说明。
  */
@@ -102,7 +102,7 @@ Version             ${escapeHtml(version)}
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1333797-1335062 placement
+//@ chunk-1hnjmk23.js:1334760-1336025 placement
 /**
  * 设备码页面：预填时确认/拒绝，否则输入码。
  */
@@ -135,7 +135,7 @@ ${errorHtml}</form>`,
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1335062-1335588 placement
+//@ chunk-1hnjmk23.js:1336025-1336551 placement
 /**
  * 拒绝登录后的页面（或未在等待批准）。
  */
@@ -147,7 +147,7 @@ function deviceDeniedPage(denied) {
 <h1>You stopped this sign-in.</h1>
 <p class="sub">No access was granted, and the code is no longer valid. If you didn&rsquo;t start this sign-in, tell your IT administrator. If you stopped your own sign-in by mistake, start it again from your device.</p>`);
 }
-//@ chunk-1ny7cxrt.js:1335588-1336032 placement
+//@ chunk-1hnjmk23.js:1336551-1336995 placement
 /**
  * 登录完成或失败页面。
  */

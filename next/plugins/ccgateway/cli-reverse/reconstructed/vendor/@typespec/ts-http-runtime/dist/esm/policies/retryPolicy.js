@@ -1,20 +1,20 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/policies/retryPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { createClientLogger } from "../../../../../@azure/logger/dist/esm/index.js";
 import { AbortError_2 } from "../restError.js";
 import { delay_2 } from "../util/helpers.js";
 
-//@ chunk-mrx6y2r5.js:45267-45276 esm-layout
+//@ chunk-b5df2wx1.js:45267-45276 esm-layout
 var DEFAULT_RETRY_POLICY_COUNT = 3;
-//@ chunk-mrx6y2r5.js:45276-45334 esm-fingerprint
+//@ chunk-b5df2wx1.js:45276-45334 esm-fingerprint
 var retryPolicyLogger = createClientLogger("ts-http-runtime retryPolicy");
 var retryPolicyName = "retryPolicy";
-//@ chunk-mrx6y2r5.js:45334-46988 esm-fingerprint
+//@ chunk-b5df2wx1.js:45334-46988 esm-fingerprint
 function retryPolicy_2(
   strategies,
   options = {

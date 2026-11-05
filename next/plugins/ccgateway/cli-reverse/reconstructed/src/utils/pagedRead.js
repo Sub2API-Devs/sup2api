@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：分页读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qh6wfbga.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-azxev8na.js (5)
  * attribution: placement 5
  */
 
-//@ chunk-qh6wfbga.js:191-202 placement
+//@ chunk-azxev8na.js:191-202 placement
 var DEFAULT_MAX_PAGES = 1e4;
-//@ chunk-qh6wfbga.js:202-582 placement
+//@ chunk-azxev8na.js:202-582 placement
 /**
  * 按页读取直到结束或达到最大页数，支持中止。
  */
@@ -47,14 +47,14 @@ async function readAllPages(fetchPage, onPage, options) {
     status: "capped",
   };
 }
-//@ chunk-qh6wfbga.js:582-631 placement
+//@ chunk-azxev8na.js:582-631 placement
 function createPageBudget(pagesLeft = 1e4) {
   return {
     pagesLeft,
     capped: 0,
   };
 }
-//@ chunk-qh6wfbga.js:631-772 placement (2.1.88 match: _temp11, 0.509)
+//@ chunk-azxev8na.js:631-772 placement (2.1.88 match: _temp11, 0.512)
 /**
  * 校验错误或首次截断。
  */
@@ -66,7 +66,7 @@ function noteValidationIssue(validation, i_1) {
   }
   return;
 }
-//@ chunk-qh6wfbga.js:772-818 placement
+//@ chunk-azxev8na.js:772-818 placement
 function cappedPagesBeyondFirst(budget) {
   return Math.max(0, budget.capped - 1);
 }

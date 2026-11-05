@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话预览面板：日志尾、回复输入、附加、停止、重命名；Agents 视图主体（列表、预览、标签页、云会话行）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (49)
  * attribution: placement 49
  */
 import { FLEET_KEY_ACTIONS, useFleetBindings, FLEET_EDITOR_SAFE_ACTIONS } from "./FleetList.js";
@@ -48,6 +48,18 @@ import {
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import {
+  deleteMethodName,
+  hasNonDefaultDispatchSettings,
+  DispatchDefaultsLine,
+  jobPreviewText,
+  returnFalse_2,
+  stripJobPreviewText,
+  isFailedSettledJob,
+  jobTempo,
+  jobSortKey_2,
+  remoteRowIdOf,
+} from "./fleetRows.js";
 import { KeepHoldingHint, VoiceStateIndicator, VoiceLevelGlyph } from "../PromptInput/VoiceIndicator.js";
 import {
   isSettled,
@@ -61,17 +73,6 @@ import {
   isReservedGroupName,
   writeJobGroup,
 } from "../../services/daemon/jobState.js";
-import {
-  hasNonDefaultDispatchSettings,
-  DispatchDefaultsLine,
-  jobPreviewText,
-  returnFalse_2,
-  stripJobPreviewText,
-  isFailedSettledJob,
-  jobTempo,
-  jobSortKey_2,
-  remoteRowIdOf,
-} from "./fleetRows.js";
 import { parseNewSessionPrefix, isPasteImageKey, pasteImageFromClipboard } from "./fleetSessions.js";
 import {
   init_react_production,
@@ -109,7 +110,7 @@ import { isNonPromptInput } from "../../services/daemon/spawnLauncher.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage, isFsInaccessible } from "../../utils/errors.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
+import { lit } from "../../services/analytics/safeMetadata.js";
 import { recordSuggestionOutcome } from "../../services/PromptSuggestion/backOff.js";
 import { cacheImagePath } from "../../utils/imageStore.js";
 import { usePasteHandler } from "../../hooks/usePasteHandler.js";
@@ -123,7 +124,7 @@ import { BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { expandPrUrlIfTemplate } from "../../utils/ghPrStatus.js";
 import { SearchBox } from "../SearchBox.js";
 import { isNoForceUpdateRenders } from "../../utils/Cursor.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { supportsExtendedKeys } from "../../ink/terminal.js";
 import { AutoUpdaterWrapper } from "../AutoUpdaterWrapper.js";
 import { PromptToast } from "../PromptInput/Notifications.js";
@@ -140,17 +141,17 @@ import { onExit } from "../../../vendor/signal-exit/dist/mjs/index.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
-import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getGlobalConfig } from "../../utils/config.js";
 import { sendControlToUdsSocket } from "../../utils/udsMessaging/udsClient.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { renderListResultMessage } from "../../tools/ScheduleCronTool/UI.js";
 
-//@ chunk-93kwxas0.js:123639-123687 placement
+//@ chunk-avy0g5d4.js:123736-123784 placement
 function matchFleetKeyAction(singleKeyActionInContexts) {
   return FLEET_KEY_ACTIONS.find((action) => action === singleKeyActionInContexts) ?? null;
 }
-//@ chunk-93kwxas0.js:123687-123790 placement
+//@ chunk-avy0g5d4.js:123784-123887 placement
 /**
  * 按两组快捷键上下文解析单键动作。
  */
@@ -160,7 +161,7 @@ function resolveFleetKeyAction(key, bindings) {
   if (singleKeyActionInContexts !== undefined) return matchFleetKeyAction(singleKeyActionInContexts);
   return matchFleetKeyAction(getSingleKeyActionInContexts(key, GLOBAL_CHAT_GROUP_PATH, bindings));
 }
-//@ chunk-93kwxas0.js:123790-123967 placement
+//@ chunk-avy0g5d4.js:123887-124064 placement
 /**
  * 找某动作的单键快捷键显示文本。
  */
@@ -174,28 +175,28 @@ function shortcutDisplayFor(action, bindings) {
   }
   return "";
 }
-//@ chunk-93kwxas0.js:123967-124003 placement
+//@ chunk-avy0g5d4.js:124064-124100 placement
 function selectCollapsedKeys(state) {
   return state.collapsed;
 }
-//@ chunk-93kwxas0.js:124003-124058 placement
+//@ chunk-avy0g5d4.js:124100-124155 placement
 function selectVoiceMode(state) {
   return state.settings.voice?.mode ?? "hold";
 }
-//@ chunk-93kwxas0.js:124058-124095 placement
+//@ chunk-avy0g5d4.js:124155-124192 placement
 function selectVoiceState(state) {
   return state.voiceState;
 }
-//@ chunk-93kwxas0.js:124095-124136 placement
+//@ chunk-avy0g5d4.js:124192-124233 placement
 function selectVoiceWarmingUp(state) {
   return state.voiceWarmingUp;
 }
-//@ chunk-93kwxas0.js:124136-124226 placement
+//@ chunk-avy0g5d4.js:124233-124323 placement
 var EXIT_HINT_TEXT = {
   "Ctrl-C": "press ctrl+c or q again to exit",
   "Ctrl-D": "press ctrl+d again to exit",
 };
-//@ chunk-93kwxas0.js:124226-127689 placement
+//@ chunk-avy0g5d4.js:124323-127811 placement
 /**
  * Agents 视图底部快捷键提示栏。
  */
@@ -298,16 +299,15 @@ function FleetFooter(props) {
         : pending
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: simpleView
-                ? jsxProd_default(Text, {
-                    children: pending.justKilled
-                      ? "stopped \xB7 ctrl+x again to delete \xB7 esc to keep"
-                      : "ctrl+x again to delete \xB7 esc to keep",
-                  })
-                : jsxProd_default(KeyboardShortcutHint, {
-                    chord: "ctrl+x",
-                    action: "confirm",
-                  }),
+              children:
+                simpleView && pending.backend !== null
+                  ? jsxProd_default(Text, {
+                      children: `${pending.justKilled ? "stopped \xB7 " : ""}ctrl+x again to ${deleteMethodName(pending.backend)} \xB7 esc to keep`,
+                    })
+                  : jsxProd_default(KeyboardShortcutHint, {
+                      chord: "ctrl+x",
+                      action: "confirm",
+                    }),
             })
           : error
             ? jsxProd_default(Text, {
@@ -342,7 +342,9 @@ function FleetFooter(props) {
                             focused &&
                               !focusedIsPending &&
                               jsxProd_default(Text, {
-                                children: isSettled(focused.state) ? "ctrl+x to delete" : "ctrl+x to stop",
+                                children: isSettled(focused.state)
+                                  ? `ctrl+x to ${deleteMethodName(focused.state.backend)}`
+                                  : "ctrl+x to stop",
                               }),
                             jsxProd_default(Text, {
                               children: "? for shortcuts",
@@ -426,7 +428,7 @@ function FleetFooter(props) {
                                   (focused && !focusedIsPending && query === ""
                                     ? jsxProd_default(KeyboardShortcutHint, {
                                         chord: "ctrl+x",
-                                        action: "delete",
+                                        action: deleteMethodName(focused.state.backend),
                                       })
                                     : !hasComposedDispatch && byGroup && focusedRow?.kind === "header"
                                       ? focusedRow.group !== "pinned" &&
@@ -499,18 +501,18 @@ function FleetFooter(props) {
   } else footer = $[5];
   return footer;
 }
-//@ chunk-93kwxas0.js:127689-127693 placement
+//@ chunk-avy0g5d4.js:127811-127815 placement
 init_react_production();
-//@ chunk-93kwxas0.js:127693-127697 placement
+//@ chunk-avy0g5d4.js:127815-127819 placement
 init_react_production();
-//@ chunk-93kwxas0.js:127697-127729 placement
+//@ chunk-avy0g5d4.js:127819-127851 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-93kwxas0.js:127729-127743 placement
+//@ chunk-avy0g5d4.js:127851-127865 placement
 var HINT_PADDING = 2;
 var HINT_ITEM_GAP = 4;
-//@ chunk-93kwxas0.js:127743-129270 placement
+//@ chunk-avy0g5d4.js:127865-129392 placement
 /**
  * 根据当前可用操作生成快捷键提示。
  */
@@ -602,7 +604,7 @@ function FleetKeyHints({
     ),
   });
 }
-//@ chunk-93kwxas0.js:129270-132789 placement
+//@ chunk-avy0g5d4.js:129392-132912 placement
 /**
  * 会话预览头部（更新时间定时刷新）。
  */
@@ -772,10 +774,10 @@ function JobPeekHeader(props) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION
@@ -795,10 +797,10 @@ function JobPeekHeader(props) {
                         "report the issue at https://github.com/anthropics/claude-code/issues",
                       PACKAGE_URL: "@anthropic-ai/claude-code",
                       README_URL: "https://code.claude.com/docs/en/overview",
-                      VERSION: "2.1.316",
+                      VERSION: "2.1.318",
                       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                      BUILD_TIME: "2026-10-30T23:28:13Z",
-                      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                      BUILD_TIME: "2026-11-03T18:52:53Z",
+                      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                       HOOKS_WORKER_URL:
                         import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                       DD_SOURCEMAP_GROUP: "default",
@@ -861,11 +863,11 @@ function JobPeekHeader(props) {
   } else header = $[42];
   return header;
 }
-//@ chunk-93kwxas0.js:132789-132793 placement
+//@ chunk-avy0g5d4.js:132912-132916 placement
 init_react_production();
-//@ chunk-93kwxas0.js:132793-132797 placement
+//@ chunk-avy0g5d4.js:132916-132920 placement
 init_react_production();
-//@ chunk-93kwxas0.js:132797-133089 placement
+//@ chunk-avy0g5d4.js:132920-133212 placement
 /**
  * 渲染待回答问题的一个选项行（序号、标签、说明）。
  */
@@ -903,7 +905,7 @@ function renderQuestionOption(option, optionIndex) {
     option.label,
   );
 }
-//@ chunk-93kwxas0.js:133089-133837 placement
+//@ chunk-avy0g5d4.js:133212-133960 placement
 /**
  * 显示会话等待中的第一个问题。
  */
@@ -976,7 +978,7 @@ function PendingQuestionLine(props) {
   } else line = $[13];
   return line;
 }
-//@ chunk-93kwxas0.js:133837-133965 placement
+//@ chunk-avy0g5d4.js:133960-134088 placement
 /**
  * 数字键 1–9 对应的第一个问题的选项标签。
  */
@@ -986,12 +988,12 @@ function optionLabelForDigit(key, questions) {
   let optionIndex = Number(key) - 1;
   return question.options[optionIndex]?.label.replace(CONTROL_CHARS_EXCEPT_WS_RE, "") ?? null;
 }
-//@ chunk-93kwxas0.js:133965-133993 placement
+//@ chunk-avy0g5d4.js:134088-134116 placement
 var PREVIEW_MAX_CHILD_ROWS = 8;
 var PREVIEW_MIN_ROWS = 5;
 var PREVIEW_BACK_TIMEOUT_MS = 500;
 var PREVIEW_HINT_DELAY_MS = 150;
-//@ chunk-93kwxas0.js:133993-143138 placement
+//@ chunk-avy0g5d4.js:134116-143275 placement
 /**
  * 会话预览面板：日志尾、回复输入、附加、停止、重命名。
  */
@@ -1063,8 +1065,8 @@ function JobPeek({
     job.state.tempo === "blocked" && !job.state.block?.questions && job.state.suggestedReply
       ? collapseWhitespace(job.state.suggestedReply) || undefined
       : undefined;
-  let Bt = false;
-  let lt = false;
+  let isPlain = false;
+  let needQuestions = false;
   let voiceAvailable = useVoiceAvailable();
   let voiceMode = useAppState((appState) => appState.settings.voice?.mode ?? "hold");
   let clock = useClock();
@@ -1710,7 +1712,7 @@ function JobPeek({
                             : null,
                           jsxProd_default(KeyboardShortcutHint, {
                             chord: "ctrl+x",
-                            action: deleteArmed ? "confirm" : "delete",
+                            action: deleteArmed ? "confirm" : deleteMethodName(job.state.backend),
                           }),
                         ],
                       }),
@@ -1719,19 +1721,19 @@ function JobPeek({
     ],
   });
 }
-//@ chunk-93kwxas0.js:143138-143175 placement
+//@ chunk-avy0g5d4.js:143275-143312 placement
 function selectReplyError(editor) {
   return editor.replyError;
 }
-//@ chunk-93kwxas0.js:143175-143212 placement
+//@ chunk-avy0g5d4.js:143312-143349 placement
 function selectPrStatuses(roster) {
   return roster.prStatuses;
 }
-//@ chunk-93kwxas0.js:143212-143266 placement
+//@ chunk-avy0g5d4.js:143349-143403 placement
 function isPinnedJobRow(row) {
   return row.kind === "job" && row.group === SIMPLE_PINNED;
 }
-//@ chunk-93kwxas0.js:143266-148818 placement
+//@ chunk-avy0g5d4.js:143403-148969 placement
 /**
  * Agents 视图主体（列表、预览、标签页、云会话行）。
  */
@@ -1993,7 +1995,7 @@ function FleetBody(props) {
             canReorder:
               !!focused &&
               (simpleView
-                ? (focused.state.pinned ?? false) && count(rows, isPinnedJobRow) > 1
+                ? (focused.state.pinned ?? false) && countWhere(rows, isPinnedJobRow) > 1
                 : (!byState && !byGroup) || (focused.state.pinned ?? false)),
             canRename:
               (byGroup &&
@@ -2012,10 +2014,14 @@ function FleetBody(props) {
             canDispatchAndOpen: activeTab === "local" && supportsExtendedKeys(),
             altOpenCount: Math.min(
               9,
-              count(rows, (row) => row.kind === "job" && row.origin === altOpenOrigin),
+              countWhere(rows, (row) => row.kind === "job" && row.origin === altOpenOrigin),
             ),
             canDelete:
-              focused && !focusedIsPending ? (isSettled(focused.state) ? "delete" : "stop") : undefined,
+              focused && !focusedIsPending
+                ? isSettled(focused.state)
+                  ? deleteMethodName(focused.state.backend)
+                  : "stop"
+                : undefined,
             canGoBack: false,
           })
         : debugOpen && !previewOpen
@@ -2165,17 +2171,17 @@ function FleetBody(props) {
   } else body = $[56];
   return body;
 }
-//@ chunk-93kwxas0.js:148818-148822 placement
+//@ chunk-avy0g5d4.js:148969-148973 placement
 init_react_production();
-//@ chunk-93kwxas0.js:148822-148859 placement
+//@ chunk-avy0g5d4.js:148973-149010 placement
 function selectVoiceState_2(appState) {
   return appState.voiceState;
 }
-//@ chunk-93kwxas0.js:148859-148900 placement
+//@ chunk-avy0g5d4.js:149010-149051 placement
 function selectVoiceWarmingUp_2(appState) {
   return appState.voiceWarmingUp;
 }
-//@ chunk-93kwxas0.js:148900-152228 placement
+//@ chunk-avy0g5d4.js:149051-152379 placement
 /**
  * Agents 视图搜索/派发输入框（高亮、语音、建议列表）。
  */
@@ -2425,7 +2431,7 @@ function FleetSearchInput(props) {
   } else inputArea = $[46];
   return inputArea;
 }
-//@ chunk-93kwxas0.js:152228-153447 placement
+//@ chunk-avy0g5d4.js:152379-153598 placement
 /**
  * 派发模式提示行。
  */
@@ -2542,7 +2548,7 @@ function DispatchModeLine(props) {
   }
   useEffect(exitFlushEffect, exitFlushDeps);
 }
-//@ chunk-93kwxas0.js:153447-153572 placement
+//@ chunk-avy0g5d4.js:153598-153723 placement
 /**
  * 保存或清除 Agents 视图的草稿与折叠状态。
  */
@@ -2560,11 +2566,11 @@ function persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5) {
     );
   else deleteJobDraft(canonicalLauncherCwd, storageV5);
 }
-//@ chunk-93kwxas0.js:153572-153594 placement
+//@ chunk-avy0g5d4.js:153723-153745 placement
 var INITIAL_AWAY_STATE = {
   pending: null,
 };
-//@ chunk-93kwxas0.js:153594-154228 placement
+//@ chunk-avy0g5d4.js:153745-154467 placement
 /**
  * 离开期间循环（away loop）状态存储。
  */
@@ -2600,16 +2606,27 @@ class AwayLoopStore {
   get generation() {
     return this.#t;
   }
-  arm(jobId, justKilled = false, group, sortKey) {
+  arm(id, backend, justKilled = false, group, sortKey) {
+    this.#u({
+      id,
+      justKilled,
+      group,
+      sortKey,
+      backend,
+    });
+  }
+  armHeader(id) {
+    this.#u({
+      id,
+      justKilled: false,
+      backend: null,
+    });
+  }
+  #u(entry) {
     this.#i();
-    this.#r.delete(jobId);
+    this.#r.delete(entry.id);
     this.#e = {
-      pending: {
-        id: jobId,
-        justKilled,
-        group,
-        sortKey,
-      },
+      pending: entry,
     };
     this.#n.emit();
   }
@@ -2628,11 +2645,11 @@ class AwayLoopStore {
     return this.#r.has(jobId);
   }
 }
-//@ chunk-93kwxas0.js:154228-154280 placement
+//@ chunk-avy0g5d4.js:154467-154519 placement
 function ensureDeleteConfirmStore(visit, options) {
   return (visit.deleteConfirm ??= new AwayLoopStore(options));
 }
-//@ chunk-93kwxas0.js:154280-154486 placement
+//@ chunk-avy0g5d4.js:154519-154725 placement
 var FLEET_VIEW_SNAPSHOT_KEYS = [
   "groupMode",
   "activeTab",
@@ -2649,7 +2666,7 @@ var FLEET_VIEW_SNAPSHOT_KEYS = [
   "debugOpen",
   "exitPending",
 ];
-//@ chunk-93kwxas0.js:154486-154701 placement
+//@ chunk-avy0g5d4.js:154725-154940 placement
 /**
  * Agents 视图浮层状态初始值。
  */
@@ -2669,7 +2686,7 @@ function createInitialFleetViewOverlays() {
     exitPending: null,
   };
 }
-//@ chunk-93kwxas0.js:154701-156979 placement
+//@ chunk-avy0g5d4.js:154940-157218 placement
 /**
  * Agents 视图状态存储（分组模式、标签页、重命名、分组编辑等）。
  */
@@ -2680,7 +2697,7 @@ class FleetViewStore {
   #t = 0;
   #r = null;
   #i = null;
-  #c = 0;
+  #u = 0;
   #s = null;
   #a = new Set();
   constructor(options) {
@@ -2713,7 +2730,7 @@ class FleetViewStore {
       if (this.#l === 0) {
         this.#t++;
         this.#i = null;
-        this.#c = 0;
+        this.#u = 0;
         this.#r = null;
         this.cancelPeekTap();
         this.#a.clear();
@@ -2812,14 +2829,14 @@ class FleetViewStore {
     this.#i = sessionId;
   }
   refuseResumePick(timestamp) {
-    this.#c = timestamp;
+    this.#u = timestamp;
     this.closeResumePicker();
   }
   get resumePickerRefusedAt() {
-    return this.#c;
+    return this.#u;
   }
   clearResumePickerRefusal() {
-    this.#c = 0;
+    this.#u = 0;
   }
   openSettingPicker(settingPicker, settingPickerIdx) {
     this.#o({
@@ -2890,7 +2907,7 @@ class FleetViewStore {
     return true;
   }
 }
-//@ chunk-93kwxas0.js:156979-157133 placement
+//@ chunk-avy0g5d4.js:157218-157372 placement
 /**
  * 取或创建 FleetViewStore，分组模式取全局配置。
  */
@@ -2902,7 +2919,7 @@ function ensureFleetViewStore(visit, groupsEnabled, activeTab) {
     activeTab,
   }));
 }
-//@ chunk-93kwxas0.js:157133-157421 placement
+//@ chunk-avy0g5d4.js:157372-157660 placement
 /**
  * 退出 Agents 视图时的动作：直接退出、等待启动、提示或回到来源会话。
  */
@@ -2927,10 +2944,10 @@ function resolveExitAction(ctx) {
         kind: "exit-with-hint",
       };
 }
-//@ chunk-93kwxas0.js:157421-157490 placement
+//@ chunk-avy0g5d4.js:157660-157729 placement
 var RENAME_SAVE_WAIT_MS = 300;
 var RENAME_BUSY_TEXT = "Still saving the last rename. Try again in a moment.";
-//@ chunk-93kwxas0.js:157490-158765 placement
+//@ chunk-avy0g5d4.js:157729-159004 placement
 /**
  * 提交会话重命名。
  */
@@ -3038,7 +3055,7 @@ function submitRename(ctx) {
     );
   });
 }
-//@ chunk-93kwxas0.js:158765-159980 placement
+//@ chunk-avy0g5d4.js:159004-160219 placement
 /**
  * 提交会话分组编辑。
  */
@@ -3113,7 +3130,7 @@ function submitGroupEdit(ctx) {
       for (let releaseHold of mapped_2) releaseHold();
     });
 }
-//@ chunk-93kwxas0.js:159980-161116 placement
+//@ chunk-avy0g5d4.js:160219-161387 placement
 /**
  * 停止或删除会话（非 daemon 会话拒绝），带二次确认。
  */
@@ -3146,7 +3163,7 @@ function stopOrDeleteJob(ctx, key, job, bulk = false) {
     let group = groupOf.get(job.id);
     let sortKey = jobSortKey_2(job.state, group);
     let generation = deleteConfirm.generation;
-    deleteConfirm.arm(job.id, found.label === "stop", group, sortKey);
+    deleteConfirm.arm(job.id, job.state.backend, found.label === "stop", group, sortKey);
     let shouldRunNow = !(simpleView && isSettled(job.state));
     if (found_2 && shouldRunNow)
       Promise.resolve(
@@ -3161,7 +3178,7 @@ function stopOrDeleteJob(ctx, key, job, bulk = false) {
           (deleteConfirm.pending === null || deleteConfirm.pending.id === job.id) &&
           !deleteConfirm.isDismissed(job.id)
         )
-          deleteConfirm.arm(job.id, false, group, sortKey);
+          deleteConfirm.arm(job.id, job.state.backend, false, group, sortKey);
         reportFailure(found_2.label, error);
       });
     return;
@@ -3179,7 +3196,7 @@ function stopOrDeleteJob(ctx, key, job, bulk = false) {
     (error) => reportFailure(action.label, error),
   );
 }
-//@ chunk-93kwxas0.js:161116-161403 placement
+//@ chunk-avy0g5d4.js:161387-161674 placement
 /**
  * 按方向找下一个可聚焦的行（跳过标题或非会话行）。
  */
@@ -3199,7 +3216,7 @@ function nextFocusableRow(ctx, focusedIdx, delta) {
       nextIdx = (nextIdx + delta + rowCount) % rowCount;
   return nextIdx;
 }
-//@ chunk-93kwxas0.js:161403-161717 placement
+//@ chunk-avy0g5d4.js:161674-161988 placement
 /**
  * 处理跳到上/下一个分组的快捷键。
  */
@@ -3218,7 +3235,7 @@ function jumpGroupHeader(ctx, fleetKeyAction, focusedIdx) {
   while (rows[index] && rows[index]?.kind !== "header") index += step;
   return rows[index] ? index : focusedIdx;
 }
-//@ chunk-93kwxas0.js:161717-162441 placement
+//@ chunk-avy0g5d4.js:161988-162712 placement
 /**
  * 设置会话分组（新建/加入/取消分组）并上报。
  */
@@ -3281,7 +3298,7 @@ function setJobGroup(ctx, jobId, group, isRemote) {
     })
     .finally(releaseHold);
 }
-//@ chunk-93kwxas0.js:162441-163145 placement
+//@ chunk-avy0g5d4.js:162712-163416 placement
 /**
  * 停止某分组内所有 daemon 会话。
  */
@@ -3328,7 +3345,7 @@ function stopGroup(ctx, group) {
       for (let releaseHold of mapped_2) releaseHold();
     });
 }
-//@ chunk-93kwxas0.js:163145-163163 placement
+//@ chunk-avy0g5d4.js:163416-163434 placement
 function logFleetActionFailure(setError, featureKey) {}
 export {
   RENAME_SAVE_WAIT_MS,

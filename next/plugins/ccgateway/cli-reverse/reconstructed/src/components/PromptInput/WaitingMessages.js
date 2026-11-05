@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增。等待中的消息（排队提示）显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (21)
+ * attribution: placement 20, layout 1
  */
-import { isMainAgentCommand, isRefillableInput } from "../../utils/messageQueueManager.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isMainAgentCommand, isQueuedCommandEditable } from "../../utils/messageQueueManager.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useIdeConnectionStatusValue } from "../../commands/chrome/chrome.js";
@@ -36,7 +37,7 @@ import {
 } from "../../utils/fullscreen.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { formatShortcutHint } from "../design-system/KeyboardShortcutHint.js";
-import { ScrollArrowButton } from "../CustomSelect/select.js";
+import { PressableRow } from "../CustomSelect/select.js";
 import {
   QueuedCommandsList,
   selectAbortController2,
@@ -71,13 +72,20 @@ import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types
 import { identityAgentId2 } from "../../utils/agentId.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:125411-125565 placement
+//@ chunk-czq1j3j2.js:126412-126647 placement
 function hasAbortedSignal(commandQueue, storeSelector, appState) {
   if (storeSelector === null || storeSelector.signal.aborted) return false;
-  let filtered = commandQueue.filter((command) => isMainAgentCommand(command) && isRefillableInput(command));
+  if (
+    codeModeAccepted() &&
+    require("../../utils/codeMode/waitForNews.js").typedMessageJoinsRunningTurn(appState)
+  )
+    return false;
+  let filtered = commandQueue.filter(
+    (command) => isMainAgentCommand(command) && isQueuedCommandEditable(command),
+  );
   return filtered.length > 0 && !filtered.some((state) => state.screeningPending === true);
 }
-//@ chunk-18hwfzwa.js:125565-126391 placement
+//@ chunk-czq1j3j2.js:126647-127473 placement
 function QueuedCommandRow(props) {
   let $ = useMemoCache(21);
   let { command } = props;
@@ -92,11 +100,11 @@ function QueuedCommandRow(props) {
   let resultElement;
   if ($[0] !== command.ideSelection || $[1] !== connectionState) {
     resultElement = EARLY_RETURN_SENTINEL;
-    kt: {
+    bt: {
       let selectionLabel = ideSelectionLabel(connectionState, command.ideSelection);
       if (selectionLabel === null) {
         resultElement = null;
-        break kt;
+        break bt;
       }
       boxComponent = Box;
       paddingLeft = 2;
@@ -166,7 +174,7 @@ function QueuedCommandRow(props) {
   } else boxComponentElement = $[20];
   return boxComponentElement;
 }
-//@ chunk-18hwfzwa.js:126391-127104 placement
+//@ chunk-czq1j3j2.js:127473-128186 placement
 function SendNowButton(props) {
   let $ = useMemoCache(10);
   let { marginTop } = props;
@@ -207,7 +215,7 @@ function SendNowButton(props) {
   } else children = $[3];
   let children_2;
   if ($[4] !== onPress || $[5] !== children) {
-    children_2 = jsxProd_default(ScrollArrowButton, {
+    children_2 = jsxProd_default(PressableRow, {
       onPress,
       children,
     });
@@ -228,12 +236,12 @@ function SendNowButton(props) {
   } else buttonBox = $[9];
   return buttonBox;
 }
-//@ chunk-18hwfzwa.js:127104-127120 placement
-var QueuedCommandsListMemo; // deferred: uses QueuedCommandsList (./PromptInputQueuedCommands.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:127104", () => {
-  QueuedCommandsListMemo = memo(QueuedCommandsList);
+//@ chunk-czq1j3j2.js:128186-128202 layout
+var MemoizedQueuedCommandsList; // deferred: uses QueuedCommandsList (./PromptInputQueuedCommands.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czq1j3j2.js:128186", () => {
+  MemoizedQueuedCommandsList = memo(QueuedCommandsList);
 });
-//@ chunk-18hwfzwa.js:127120-127663 placement
+//@ chunk-czq1j3j2.js:128202-128745 placement
 function WaitingLines(props) {
   let $ = useMemoCache(12);
   let { sendsNow, turn, promptMounted, waitingLines } = props;
@@ -281,11 +289,11 @@ function WaitingLines(props) {
   } else sendNowRow = $[11];
   return sendNowRow;
 }
-//@ chunk-18hwfzwa.js:127663-127742 placement
+//@ chunk-czq1j3j2.js:128745-128824 placement
 function peerOrObserverFrom(origin) {
   return origin && (origin.kind === "peer" || origin.kind === "observer") ? origin.from : undefined;
 }
-//@ chunk-18hwfzwa.js:127742-127891 placement
+//@ chunk-czq1j3j2.js:128824-128973 placement
 function isNonHumanQueuedOrigin(message) {
   if (message.verifiedSlackHumanTurn === true) return true;
   switch (message.origin?.kind) {
@@ -297,7 +305,7 @@ function isNonHumanQueuedOrigin(message) {
       return true;
   }
 }
-//@ chunk-18hwfzwa.js:127891-128002 placement
+//@ chunk-czq1j3j2.js:128973-129084 placement
 function framePreviewText(
   rawFrameText,
   viewingAgent,
@@ -312,7 +320,7 @@ function framePreviewText(
 ${FRAME_SANITIZED_FOR_DISPLAY_MARKER}`
     : body;
 }
-//@ chunk-18hwfzwa.js:128002-128353 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-czq1j3j2.js:129084-129434 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 把内容块截取为不超过 maxChars 的文本预览。
  */
@@ -344,7 +352,7 @@ function previewContentBlocks(content, budgetChars, renderNonText) {
   return parts.join(`
 `);
 }
-//@ chunk-18hwfzwa.js:128353-128668 placement
+//@ chunk-czq1j3j2.js:129434-129748 placement
 /**
  * 把任意内容（字符串、数组、对象）递归截取成不超过 maxChars 的纯文本预览，深度受限，每层最多取若干项。
  */
@@ -366,7 +374,7 @@ function previewContentText(content, budgetChars, depth) {
   return parts.join(`
 `);
 }
-//@ chunk-18hwfzwa.js:128668-130111 placement
+//@ chunk-czq1j3j2.js:129748-131180 placement
 function renderContentBlockPreview(block, budgetChars, renderRich) {
   if (typeof block !== "object" || block === null || !("type" in block)) return null;
   let blockType = block.type;
@@ -450,27 +458,27 @@ function renderContentBlockPreview(block, budgetChars, renderRich) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:130111-130145 placement
+//@ chunk-czq1j3j2.js:131180-131214 placement
 function createMessageWeakMap() {
   return new WeakMap();
 }
-//@ chunk-18hwfzwa.js:130145-130179 placement
+//@ chunk-czq1j3j2.js:131214-131248 placement
 function createFolderWaitWeakMap() {
   return new WeakMap();
 }
-//@ chunk-18hwfzwa.js:130179-130223 placement
+//@ chunk-czq1j3j2.js:131248-131292 placement
 function isNotShownAs(message) {
   return message.shownAs === undefined;
 }
-//@ chunk-18hwfzwa.js:130223-130270 placement
+//@ chunk-czq1j3j2.js:131292-131339 placement
 function hasDeliveryId(message) {
   return message.deliveryId !== undefined;
 }
-//@ chunk-18hwfzwa.js:130270-130306 placement
+//@ chunk-czq1j3j2.js:131339-131375 placement
 function messageDeliveryIds(message) {
   return getDeliveryId(message) ?? [];
 }
-//@ chunk-18hwfzwa.js:130306-130555 placement (2.1.88 match: VerboseAgentTranscript, 0.912)
+//@ chunk-czq1j3j2.js:131375-131624 placement (2.1.88 match: VerboseAgentTranscript, 0.912)
 /**
  * 静态（转录模式）渲染单条子代理消息。
  */
@@ -495,17 +503,17 @@ function VerboseAgentTranscript(props, index) {
     message.uuid,
   );
 }
-//@ chunk-18hwfzwa.js:130555-130577 placement
+//@ chunk-czq1j3j2.js:131624-131646 placement
 /**
  * 渲染用空集合/空数组常量。
  */
 var EMPTY_TOOL_USE_ID_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_CONFIG_ARRAY;
-deferInit("chunk-18hwfzwa.js:130555", () => {
+deferInit("chunk-czq1j3j2.js:131624", () => {
   EMPTY_TOOL_USE_ID_SET = new Set();
   EMPTY_CONFIG_ARRAY = [];
 });
-//@ chunk-18hwfzwa.js:130577-132669 placement
+//@ chunk-czq1j3j2.js:131646-133738 placement
 function AgentWaitingMessages(props) {
   let $ = useMemoCache(34);
   let { focused } = props;
@@ -554,7 +562,7 @@ function AgentWaitingMessages(props) {
     const humanCommands = humanQueuedCommands([...commandQueue, ...mapped]);
     let belongsHere;
     if ($[10] !== targetAgentId) {
-      belongsHere = (command) => command.agentId === targetAgentId && !isRefillableInput(command);
+      belongsHere = (command) => command.agentId === targetAgentId && !isQueuedCommandEditable(command);
       $[10] = targetAgentId;
       $[11] = belongsHere;
     } else belongsHere = $[11];
@@ -662,7 +670,7 @@ function AgentWaitingMessages(props) {
   } else container = $[33];
   return container;
 }
-//@ chunk-18hwfzwa.js:132669-132908 placement
+//@ chunk-czq1j3j2.js:133738-133977 placement
 function mergeWaitingRows(previous, rows, transcriptLength, isLoading) {
   let rowSet = new Set(rows);
   let merged = [
@@ -680,9 +688,9 @@ function mergeWaitingRows(previous, rows, transcriptLength, isLoading) {
         transcriptLength,
       };
 }
-//@ chunk-18hwfzwa.js:132908-132912 placement
+//@ chunk-czq1j3j2.js:133977-133981 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:132908", () => {
+deferInit("chunk-czq1j3j2.js:133977", () => {
   init_react_production();
 });
 export {
@@ -694,6 +702,6 @@ export {
   framePreviewText,
   renderContentBlockPreview,
   AgentWaitingMessages,
-  QueuedCommandsListMemo,
+  MemoizedQueuedCommandsList,
   WaitingLines,
 };

@@ -1,8 +1,8 @@
 /**
  * @azure/msal-node/dist/client/ManagedIdentitySources/AzureArc.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-fingerprint 2
  */
 import { accessSync, constants, statSync, readFileSync } from "fs";
@@ -36,13 +36,13 @@ import {
 } from "../../../../msal-common/lib/index-node-DhUjlPuB.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:273815-274154 esm-fingerprint
+//@ chunk-b5df2wx1.js:273815-274154 esm-fingerprint
 var ARC_API_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_AZURE_ARC_IDENTITY_ENDPOINT;
 var HIMDS_EXECUTABLE_HELPER_STRING;
 var SUPPORTED_AZURE_ARC_PLATFORMS;
 var AZURE_ARC_FILE_DETECTION;
-deferInit("chunk-mrx6y2r5.js:273815", () => {
+deferInit("chunk-b5df2wx1.js:273815", () => {
   ARC_API_VERSION = "2019-11-01";
   DEFAULT_AZURE_ARC_IDENTITY_ENDPOINT = "http://127.0.0.1:40342/metadata/identity/oauth2/token";
   HIMDS_EXECUTABLE_HELPER_STRING = "N/A: himds executable exists";
@@ -55,9 +55,9 @@ deferInit("chunk-mrx6y2r5.js:273815", () => {
     linux: "/opt/azcmagent/bin/himds",
   };
 });
-//@ chunk-mrx6y2r5.js:274154-276388 esm-fingerprint
+//@ chunk-b5df2wx1.js:274154-276388 esm-fingerprint
 let AzureArc; // deferred: uses BaseManagedIdentitySource (../../../lib/msal-node.cjs) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:274154", () => {
+deferInit("chunk-b5df2wx1.js:274154", () => {
   AzureArc = class AzureArc extends BaseManagedIdentitySource {
     constructor(
       logger,

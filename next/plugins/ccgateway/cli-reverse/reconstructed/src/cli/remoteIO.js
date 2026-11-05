@@ -3,14 +3,14 @@
  *
  * 沿用旧版路径（门面模块 RemoteIO）：云 worker 的 SDK 输入输出（事件流、认证、交接）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/remoteIO.ts
- * pieces: chunk-z4g2ta8k.js (53)
- * attribution: placement 53
+ * pieces: chunk-1kk50rk6.js (56)
+ * attribution: placement 53, layout 3
  */
 import { PassThrough } from "stream";
-import { URL as As } from "url";
-import { fstatSync, createWriteStream } from "fs";
+import { URL as Ls } from "url";
+import { fstatSync, createWriteStream, statSync } from "fs";
 import { sessionWritersSchema, isCoalescableControlRequest } from "./transports/streamEventCoalescing.js";
 import { DoctorLazy } from "./handlers/util.js";
 import { zodStrictObject, union, stringSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
@@ -36,8 +36,8 @@ import {
 import { logForDiagnosticsNoPII, isDiagLogging } from "../utils/diagLogs.js";
 import { jsonParse, alwaysTrue } from "../utils/slowOperations.js";
 import { stripBom, safeParseJSON } from "../utils/json.js";
-import { SESSION_EVENT_TYPES_WITH_EVENT_TYPE, ATTESTATION_FLOOR_VERSION } from "./transports/SSETransport.js";
 import { logForDebugging, isDebugMode } from "../utils/debug.js";
+import { SESSION_EVENT_TYPES_WITH_EVENT_TYPE, ATTESTATION_FLOOR_VERSION } from "./transports/SSETransport.js";
 import { ndjsonStringify } from "./ndjsonSafeStringify.js";
 import { StructuredIO } from "./structuredIO.js";
 import {
@@ -87,8 +87,9 @@ import {
   markResponseBelowFloor,
 } from "./remoteIO/servedCalls.js";
 import { controlErrorResponse } from "./print.js";
-import { getTransportForUrl } from "./transports/transportUtils.js";
+import { httpUrlFromWs } from "./transports/transportUtils.js";
 import { isEnvTruthy } from "../utils/envUtils.js";
+import { mainReplyHoldMs } from "../services/api/unwatchedReplyHold.js";
 import {
   isRemoteToolForwardingSwitchOn,
   isSessionChannelDisabled,
@@ -104,6 +105,7 @@ import {
 } from "../services/analytics/growthbook.js";
 import {
   waitForSessionAuthHeaders,
+  GIT_CREDENTIAL_ENTRYPOINTS,
   ccrAuthRefreshAdmission,
   sessionAuthAdmission,
   ccrAuthRefresherFor,
@@ -115,10 +117,10 @@ import {
   SHUTDOWN_REQUEST_TIMEOUT_MS,
   WORKER_CONFLICT_CLOSE_CODES,
   DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
+  DEFAULT_HELD_BUNCH_FLUSH_MS,
   CCRClient,
   workerEpochFromEnv,
   createIdleTracker,
-  TENGU_PATIENT_LEDGER,
 } from "./transports/ccrClient.js";
 import { gracefulShutdown, isShuttingDown } from "../utils/gracefulShutdown.js";
 import {
@@ -134,10 +136,12 @@ import {
 import { recordPhase, markHydratePrefetchSettled } from "../utils/startupTiming.js";
 import { getAttestationFilterPolicy } from "../bridge/trustedDevice.js";
 import { env } from "../utils/env.js";
+import { isRemoteEnvPlaceholder, isRemoteManagedEnvironment } from "../utils/remoteEnvironment.js";
 import {
   setMainLoopActivityListener,
   getMainLoopRefcount,
   setNestedChainDropListener,
+  onProcessSlept,
   sendSessionActivitySignal_2,
   isActivityReasonActive,
 } from "../utils/sessionActivity.js";
@@ -154,9 +158,13 @@ import { isHermeticRemoteSession } from "../services/cloudSessions/eligibility.j
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { knownSubtypeOrUndefined } from "./structuredIOProtocol.js";
+import { listForRefusal } from "./cloudSession/hostedSessionRestrictions.js";
 import { isHumanInboundMessage } from "../bridge/inboundMessageOrigin.js";
 import { isProjectsHumanOriginEnabled } from "../utils/crossSessionMessagingGate.js";
+import { launchedCwd } from "../utils/cwd.js";
+import { isCommandMetadata } from "../utils/suggestions/commandSuggestions.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../tools/ScheduleWakeupTool/prompt.js";
+import { CRON_CREATE_TOOL_NAME } from "../tools/ScheduleCronTool/prompt.js";
 import { remoteSessionUrlId } from "../utils/sessionUrl.js";
 import { isWondrousIslandGateOn } from "./remoteIO/gates.js";
 import { getSessionIngressAuthHeaders } from "../utils/sessionIngressAuth.js";
@@ -165,39 +173,45 @@ import { convertWsUrlToPostUrl } from "./transports/HybridTransport.js";
 import { isClaudeAiChatOrigin } from "../utils/entrypointKinds.js";
 import { getSessionId } from "../bootstrap/state.js";
 import { getClientPlatform } from "../utils/http.js";
-import { isRemoteManagedEnvironment, isSelfHostedRemoteEnvironment } from "../utils/remoteEnvironment.js";
 import { WorkerSocket, openWorkerWebSocket } from "./transports/WorkerSocket.js";
 import { wouldGzipForHost, createGzipFetchWrapper } from "../services/api/gzipRequestBody.js";
+import {
+  setModelApiPoolRetiresAfterServerError,
+  makeHttpsAgentCloseAfterServerError,
+} from "../utils/mtls.js";
+import { configureGlobalAgents } from "../utils/proxy.js";
 import { isHostedWorkerFetchEnabled } from "../services/mcp/hostedWorkerTrust.js";
 import { TENGU_TOASTY_BEACON } from "../services/api/withRetry.js";
-import { isReviewSession } from "../utils/sessionAccessToken.js";
+import { getPatientLedgerReader } from "./remoteIO/servedTokenProvider.js";
 import { isFirstPartyProvider } from "../utils/model/providers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-z4g2ta8k.js:69084-69122 placement
+//@ chunk-1kk50rk6.js:72729-72767 placement
 var teleportRelayEnvModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-z4g2ta8k.js:69084", () => {
+deferInit("chunk-1kk50rk6.js:72729", () => {
   teleportRelayEnvModule = require("../utils/teleport/relayEnv.js");
 });
-//@ chunk-z4g2ta8k.js:69122-69243 placement
+//@ chunk-1kk50rk6.js:72767-72938 placement
 var remoteIOSingleton; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPLAYABLE_ACCEPT_STATUSES;
 var LOCAL_ONLY_CONTROL_SUBTYPES;
 var SESSION_STREAM_CREATED_AT;
 var SESSION_STREAM_STARTED_AT;
-deferInit("chunk-z4g2ta8k.js:69122", () => {
+deferInit("chunk-1kk50rk6.js:72767", () => {
   remoteIOSingleton = null;
+  REPLAYABLE_ACCEPT_STATUSES = new Set(["SERVER_AUTHORED", "SERVER_REPLAYED"]);
   LOCAL_ONLY_CONTROL_SUBTYPES = new Set(["set_chrome_browser_hints", ...[]]);
   SESSION_STREAM_CREATED_AT = "session_stream_created_at";
   SESSION_STREAM_STARTED_AT = "session_stream_started_at";
 });
-//@ chunk-z4g2ta8k.js:69243-69323 placement
+//@ chunk-1kk50rk6.js:72938-73018 placement
 function sessionStreamStartedBefore(payload) {
   return (
     Object.hasOwn(payload, SESSION_STREAM_STARTED_AT) &&
     typeof Reflect.get(payload, SESSION_STREAM_STARTED_AT) === "string"
   );
 }
-//@ chunk-z4g2ta8k.js:69323-69476 placement
+//@ chunk-1kk50rk6.js:73018-73171 placement
 function sessionStreamCreatedAt(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_CREATED_AT)) return;
   let value = Reflect.get(payload, SESSION_STREAM_CREATED_AT);
@@ -205,35 +219,35 @@ function sessionStreamCreatedAt(payload) {
   let timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? undefined : timestamp;
 }
-//@ chunk-z4g2ta8k.js:69476-69515 placement
+//@ chunk-1kk50rk6.js:73171-73210 placement
 var SESSION_STREAM_RECEIVED_AT_MS = "session_stream_received_at_ms";
-//@ chunk-z4g2ta8k.js:69515-69642 placement
+//@ chunk-1kk50rk6.js:73210-73337 placement
 function sessionStreamReceivedAtMs(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_RECEIVED_AT_MS)) return;
   let value = Reflect.get(payload, SESSION_STREAM_RECEIVED_AT_MS);
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-z4g2ta8k.js:69642-69674 placement
+//@ chunk-1kk50rk6.js:73337-73369 placement
 var SESSION_STREAM_WRITERS = "session_stream_writers";
-//@ chunk-z4g2ta8k.js:69674-69793 placement
+//@ chunk-1kk50rk6.js:73369-73488 placement
 function sessionStreamWriters(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_WRITERS)) return;
   let parsed = sessionWritersSchema().safeParse(Reflect.get(payload, SESSION_STREAM_WRITERS));
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-z4g2ta8k.js:69793-69826 placement
+//@ chunk-1kk50rk6.js:73488-73521 placement
 var SESSION_STREAM_AT_FLOOR = "session_stream_at_floor";
-//@ chunk-z4g2ta8k.js:69826-69959 placement
+//@ chunk-1kk50rk6.js:73521-73654 placement
 function getAtFloorMarker(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_AT_FLOOR)) return;
   let value = Reflect.get(payload, SESSION_STREAM_AT_FLOOR);
   if (value === true) return "stands";
   return value === "leaving" ? "leaving" : undefined;
 }
-//@ chunk-z4g2ta8k.js:69959-70107 placement
+//@ chunk-1kk50rk6.js:73654-73802 placement
 var SESSION_STREAM_SENDER; // deferred: uses DoctorLazy (./handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var sessionStreamSenderSchema;
-deferInit("chunk-z4g2ta8k.js:69959", () => {
+deferInit("chunk-1kk50rk6.js:73654", () => {
   SESSION_STREAM_SENDER = "session_stream_sender";
   sessionStreamSenderSchema = DoctorLazy(() =>
     zodStrictObject({
@@ -243,42 +257,42 @@ deferInit("chunk-z4g2ta8k.js:69959", () => {
     }),
   );
 });
-//@ chunk-z4g2ta8k.js:70107-70224 placement
+//@ chunk-1kk50rk6.js:73802-73919 placement
 function getStreamSenderInfo(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_SENDER)) return;
   let parsed = sessionStreamSenderSchema().safeParse(Reflect.get(payload, SESSION_STREAM_SENDER));
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-z4g2ta8k.js:70224-70372 placement
+//@ chunk-1kk50rk6.js:73919-74067 placement
 function getRequestClientId(payload) {
   let request = Reflect.get(payload, "request");
   let clientId =
     typeof request === "object" && request !== null ? Reflect.get(request, "client_id") : undefined;
   return typeof clientId === "string" ? clientId : undefined;
 }
-//@ chunk-z4g2ta8k.js:70372-70431 placement
+//@ chunk-1kk50rk6.js:74067-74126 placement
 function nonEmptyStringOrUndefined(value) {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
-//@ chunk-z4g2ta8k.js:70431-70461 placement
+//@ chunk-1kk50rk6.js:74126-74156 placement
 var SESSION_STREAM_FRAME = "session_stream_frame";
-//@ chunk-z4g2ta8k.js:70461-70524 placement
+//@ chunk-1kk50rk6.js:74156-74219 placement
 function streamFrameKey(frame) {
   return `${String(frame.sequence_num)}/${frame.event_id}`;
 }
-//@ chunk-z4g2ta8k.js:70524-70630 placement
+//@ chunk-1kk50rk6.js:74219-74325 placement
 function getStreamFrame(payload) {
   if (!Object.hasOwn(payload, SESSION_STREAM_FRAME)) return;
   let frame = Reflect.get(payload, SESSION_STREAM_FRAME);
   return typeof frame === "string" ? frame : undefined;
 }
-//@ chunk-z4g2ta8k.js:70630-70723 placement
+//@ chunk-1kk50rk6.js:74325-74418 placement
 function stampSurfaceFrameKey(frame) {
   if (attestedRequestSubtype(frame.payload) === "ui_surface")
     frame.payload[SESSION_STREAM_FRAME] = streamFrameKey(frame);
   else delete frame.payload[SESSION_STREAM_FRAME];
 }
-//@ chunk-z4g2ta8k.js:70723-71001 placement
+//@ chunk-1kk50rk6.js:74418-74696 placement
 function extractDeviceAttestationSender(payload) {
   let deviceAttestationStatus = payload.device_attestation_status;
   let trustedDevice = nonEmptyStringOrUndefined(payload.device_attestation_trusted_device_tagged_id);
@@ -295,7 +309,7 @@ function extractDeviceAttestationSender(payload) {
     }),
   };
 }
-//@ chunk-z4g2ta8k.js:71001-71195 placement
+//@ chunk-1kk50rk6.js:74696-74890 placement
 function tagUiSurfaceFloorAndSender(frame, floor) {
   if (
     floor !== undefined &&
@@ -309,7 +323,7 @@ function tagUiSurfaceFloorAndSender(frame, floor) {
     delete frame.payload[SESSION_STREAM_SENDER];
   }
 }
-//@ chunk-z4g2ta8k.js:71195-71773 placement
+//@ chunk-1kk50rk6.js:74890-75468 placement
 /**
  * 给 initialize/界面面类 control_request 事件的 payload 打上流元数据：created_at 与当前写者集合；事件类型与 payload 不符时清除这些字段并记诊断日志。
  */
@@ -338,14 +352,14 @@ function stampInitializeStreamMeta(event, writersInfo) {
     };
   else delete event.payload[SESSION_STREAM_WRITERS];
 }
-//@ chunk-z4g2ta8k.js:71773-71956 placement
+//@ chunk-1kk50rk6.js:75468-75651 placement
 function stampControlResponseCreatedAt(frame) {
   if (frame.payload.type !== "control_response") return;
   if (frame.event_type === "control_response" && typeof frame.created_at === "string")
     frame.payload[SESSION_STREAM_CREATED_AT] = frame.created_at;
   else delete frame.payload[SESSION_STREAM_CREATED_AT];
 }
-//@ chunk-z4g2ta8k.js:71956-72255 placement
+//@ chunk-1kk50rk6.js:75651-75950 placement
 function stampBashCommandTimes(frame) {
   if (frame.payload.type !== "bash_command") return;
   if (frame.event_type === "bash_command" && typeof frame.created_at === "string")
@@ -355,7 +369,7 @@ function stampBashCommandTimes(frame) {
     frame.payload[SESSION_STREAM_STARTED_AT] = frame.processing_at;
   else delete frame.payload[SESSION_STREAM_STARTED_AT];
 }
-//@ chunk-z4g2ta8k.js:72255-72539 placement
+//@ chunk-1kk50rk6.js:75950-76234 placement
 function stampHandoffReceivedAt(frame, receivedAtMs) {
   let subtype =
     frame.payload.type === "control_request" ? getControlRequestSubtype(frame.payload) : undefined;
@@ -365,7 +379,7 @@ function stampHandoffReceivedAt(frame, receivedAtMs) {
   if (typeof frame.created_at === "string") frame.payload[SESSION_STREAM_CREATED_AT] = frame.created_at;
   else delete frame.payload[SESSION_STREAM_CREATED_AT];
 }
-//@ chunk-z4g2ta8k.js:72539-72702 placement
+//@ chunk-1kk50rk6.js:76234-76397 placement
 function getControlRequestSubtype(payload) {
   if (typeof payload !== "object" || payload === null) return;
   let request = payload.request;
@@ -373,8 +387,8 @@ function getControlRequestSubtype(payload) {
   let subtype = request.subtype;
   return typeof subtype === "string" ? subtype : undefined;
 }
-//@ chunk-z4g2ta8k.js:72702-73638 placement
-function dropServerOnlyStdinTypes(text, takeRunnerLine) {
+//@ chunk-1kk50rk6.js:76397-77578 placement
+function dropServerOnlyStdinTypes(text, takeRunnerLine, mayArriveByStream) {
   let flattened = text
     .split(
       `
@@ -389,6 +403,16 @@ function dropServerOnlyStdinTypes(text, takeRunnerLine) {
       }
       let type = typeof parsed === "object" && parsed !== null ? parsed.type : undefined;
       if (typeof type === "string" && takeRunnerLine?.(type, parsed)) return [];
+      if (mayArriveByStream?.(type, parsed) === false) {
+        logForDiagnosticsNoPII("warn", "cli_stdin_line_dropped_on_granted_child");
+        logForDebugging(
+          "[remote-io] dropped a line from stdin: on this worker only the session stream may deliver it, so nothing was done with it",
+          {
+            level: "warn",
+          },
+        );
+        return [];
+      }
       if (typeof type === "string" && SESSION_EVENT_TYPES_WITH_EVENT_TYPE.has(type)) {
         logForDiagnosticsNoPII("warn", "cli_stdin_server_only_type_dropped", {
           payload_type: type,
@@ -425,6 +449,7 @@ function dropServerOnlyStdinTypes(text, takeRunnerLine) {
         SESSION_STREAM_AT_FLOOR,
         SESSION_STREAM_SENDER,
         SESSION_STREAM_FRAME,
+        "program_use_case_id",
         ...[],
       ]);
       let entries = Object.entries(parsed);
@@ -436,17 +461,17 @@ function dropServerOnlyStdinTypes(text, takeRunnerLine) {
     : flattened.join(`
 `);
 }
-//@ chunk-z4g2ta8k.js:73638-73749 placement
+//@ chunk-1kk50rk6.js:77578-77689 placement
 class UnreadableInputError extends Error {
   name = "UnreadableInputError";
   constructor() {
     super("stream-json input could not be read");
   }
 }
-//@ chunk-z4g2ta8k.js:73749-73769 placement
+//@ chunk-1kk50rk6.js:77689-77709 placement
 var MAX_QUEUED_FRAMES = 256;
 var REMOTE_IO_TIMEOUT_MS = 30000;
-//@ chunk-z4g2ta8k.js:73769-74271 placement
+//@ chunk-1kk50rk6.js:77709-78211 placement
 /**
  * 云 worker 控制请求子类型到能力的映射，以及声明/必需的三个能力集合。
  */
@@ -468,7 +493,7 @@ var CAPABILITY_ANSWER_WORDING = {
 };
 var UI_OTHER = "ui_other";
 var FIRST_STREAM_POLICY_TIMEOUT_MS = 30000;
-//@ chunk-z4g2ta8k.js:74271-74546 placement
+//@ chunk-1kk50rk6.js:78211-78486 placement
 function resolveCarriedPolicy(storedEventPolicy, carried, fallback) {
   if (
     carried.fault === "policy_unparseable" ||
@@ -494,16 +519,16 @@ function resolveCarriedPolicy(storedEventPolicy, carried, fallback) {
         carried: true,
       };
 }
-//@ chunk-z4g2ta8k.js:74546-74637 placement
+//@ chunk-1kk50rk6.js:78486-78577 placement
 var PERMISSION_WITHDRAWN_MESSAGE =
   "This permission request was withdrawn because it was not answered in time.";
 var MAX_VOUCHED_MODEL_REQUEST_IDS = 256;
-//@ chunk-z4g2ta8k.js:74637-104943 placement (2.1.88 match: RemoteIO, 0.126)
+//@ chunk-1kk50rk6.js:78577-111651 placement (2.1.88 match: RemoteIO, 0.12)
 /**
  * RemoteIO（云 worker 的 SDK I/O 类，继承自通用 I/O 基类）：管理与客户端表面的连接状态、会话写入者、表面策略（stands/leaving）、入站消息与回合交接，是云会话 worker 的核心。
  */
 let RemoteIO; // deferred: uses StructuredIO (./structuredIO.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z4g2ta8k.js:74637", () => {
+deferInit("chunk-1kk50rk6.js:78577", () => {
   RemoteIO = class RemoteIO extends StructuredIO {
     isRemoteTransport() {
       return true;
@@ -672,7 +697,8 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
     surfaceClientsOnRecord = new Map();
     surfaceRoster;
     countedSenderStatuses = new Set();
-    countedDroppedAnswers = new Set();
+    countedSessionRefusals = new Set();
+    warnedSessionWritersMissing = false;
     countedRefusedSurfaceRequests = new Set();
     surfaceRefusals = servedCallDispatcher({
       isAwaited: (requestId) => this.liveDeviceRequestKind(requestId) !== undefined,
@@ -774,7 +800,7 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
       super(stream, replayUserMessages, sessionState);
       this.inputStream = stream;
       this.hosting = hosting;
-      this.url = getTransportForUrl(new As(streamUrl));
+      this.url = httpUrlFromWs(new Ls(streamUrl));
       let authHeaders = getAuthHeaders();
       if (Object.keys(authHeaders).length === 0)
         logForDebugging(
@@ -805,6 +831,8 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
             this.activityFd = undefined;
           });
           this.activityFd = writeStream;
+          let startLine = startFolderFrameLine();
+          if (this.teeStdout && !this.isBridge && startLine !== undefined) writeStream.write(startLine);
         } catch (error) {
           logForDebugging(
             `[remote-io] activity fd ${fd} unavailable (${errorMessage(error)}); falling back to stdout`,
@@ -813,9 +841,12 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
       if (earlyRemoteLink && hosting.kind !== "owns-process")
         throw Error("earlyRemoteLink is only valid for an owns-process RemoteIO");
       if (earlyRemoteLink) {
+        earlyRemoteLink.ccrClient.flagsRefreshed();
         earlyRemoteLink.ccrClient.setFeatureGatedOptions(getHeartbeatFeatureFlags());
         earlyRemoteLink.ccrClient.setStreamEventFlushIntervalMs(isCcrStreamEventFlushMsGateOn());
         earlyRemoteLink.ccrClient.setStreamEventFirstFlushMs(isCcrStreamFirstFlushMsGateOn());
+        earlyRemoteLink.ccrClient.setStreamEventWindowRunsFromLastFlush(mainReplyHoldMs() > 0);
+        earlyRemoteLink.ccrClient.setHeldBunchFlushMs(getVirtualParasolHeldBunchFlushMs());
         earlyRemoteLink.ccrClient.setToolInputFlushMs(isIdempotentPineGateOn());
         earlyRemoteLink.ccrClient.setNoSubscriberStreamEventFlushIntervalMs(isCcrNoSubscriberFlushMsGateOn());
         earlyRemoteLink.ccrClient.setDropUnwatchedStreamEvents(isCcrDropUnwatchedStreamEventsGateOn());
@@ -948,8 +979,10 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         });
       }
       this.unsubscribeGrowthBookRefresh = onGrowthBookRefresh(() => {
+        this.ccrClient.flagsRefreshed();
         this.ccrClient.setStreamEventFlushIntervalMs(isCcrStreamEventFlushMsGateOn());
         this.ccrClient.setStreamEventFirstFlushMs(isCcrStreamFirstFlushMsGateOn());
+        this.ccrClient.setHeldBunchFlushMs(getVirtualParasolHeldBunchFlushMs());
         this.ccrClient.setToolInputFlushMs(isIdempotentPineGateOn());
         this.ccrClient.setNoSubscriberStreamEventFlushIntervalMs(isCcrNoSubscriberFlushMsGateOn());
         this.ccrClient.setDropUnwatchedStreamEvents(isCcrDropUnwatchedStreamEventsGateOn());
@@ -1028,8 +1061,21 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         (uuid) => this.ccrClient.readInternalEvents(uuid),
         () => this.ccrClient.readSubagentInternalEvents(),
         isResume || fetchesAgentTranscriptsOnDemand
-          ? (agentId, storageV5, options) =>
-              this.ccrClient.readAgentInternalEvents(agentId, storageV5, agentTranscriptBound, options)
+          ? (agentId, storageV5, options, maxTimestamp) =>
+              this.ccrClient.readAgentInternalEvents(
+                agentId,
+                storageV5,
+                agentTranscriptBound ??
+                  (maxTimestamp === undefined
+                    ? undefined
+                    : {
+                        maxEvents: 1 / 0,
+                        maxBytes: maxTimestamp,
+                        maxTimestampChars: undefined,
+                        takesCompressedPages: true,
+                      }),
+                options,
+              )
           : undefined,
       );
       this.ccrClient.onInternalBatchAcked = (batch) => updateCCRTipFromAckedBatch(batch, storageV5);
@@ -1084,7 +1130,7 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         )
           this.newestFrameCreatedAt = createdAt;
         let { type, request } = frame.payload;
-        if (type === "user") runSafely(() => onUserFrameDelivered?.());
+        if (type === "user") runSafely(() => onUserFrameDelivered?.(frame.payload));
         else if (
           type === "control_request" &&
           getControlRequestSubtype(frame.payload) === "stage_file" &&
@@ -1114,11 +1160,13 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         this.transport.setStatementRenewalGate((frame, writers) =>
           this.awaitsFresherStatement(frame, writers),
         );
-        let isManagedCloudWorker = env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined;
+        let isHostedKind = hosting.kind === "hosted" || env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined;
+        let holdsToFloor = isHostedKind || isRemoteEnvPlaceholder();
         this.transport.setEventFilter((event) => {
           let admitted = this.judgeNotingAdmission(event, () =>
             this.judgeInboundFrame(event, {
-              isManagedCloudWorker,
+              isManagedCloudWorker: isHostedKind,
+              holdsToFloor,
               sessionWriters: this.transport.sessionWritersOf(event),
             }),
           );
@@ -1248,7 +1296,11 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
     pumpStdinLane(lane) {
       (async () => {
         for await (let chunk of lane) {
-          let text = dropServerOnlyStdinTypes(String(chunk).replace(/\n$/, ""), this.takeRunnerLine);
+          let text = dropServerOnlyStdinTypes(
+            String(chunk).replace(/\n$/, ""),
+            this.takeRunnerLine,
+            undefined,
+          );
           if (text !== undefined)
             this.writeInbound(
               text +
@@ -1334,6 +1386,24 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         return "dropped";
       }
     }
+    enforcesDevicePolicy() {
+      let workerAttestationPolicy = this.workerAttestationPolicy;
+      return (
+        workerAttestationPolicy?.enforce === true &&
+        !this.isSurfacePolicyUnreadable &&
+        [...workerAttestationPolicy.acceptStatuses].every((acceptStatus) =>
+          REPLAYABLE_ACCEPT_STATUSES.has(acceptStatus),
+        )
+      );
+    }
+    whyNotSending() {
+      return;
+    }
+    sendServedCallRequest(families) {
+      return this.whyNotSending() === undefined
+        ? super.sendServedCallRequest(families)
+        : this.unsentServedCall();
+    }
     takeWorkerAttestationPolicy(policy) {
       this.workerAttestationPolicy = policy.policy;
       this.storedEventPolicy = resolveCarriedPolicy(
@@ -1356,6 +1426,16 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
             ? sessionWritersStatement.statedAtMs
             : undefined,
         );
+        if (sessionWritersStatement === undefined && !this.warnedSessionWritersMissing) {
+          let families = this.guardedFamilies();
+          if (
+            env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined &&
+            (families.remoteTools || families.plugins || families.settings !== false)
+          ) {
+            this.warnedSessionWritersMissing = true;
+            logForDiagnosticsNoPII("warn", "cli_session_writers_header_missing");
+          }
+        }
       } catch (error) {
         logError(toError(error));
       }
@@ -1421,10 +1501,10 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
       }
       return admitted;
     }
-    judgeInboundFrame(frame, { isManagedCloudWorker, sessionWriters }) {
+    judgeInboundFrame(frame, { isManagedCloudWorker, holdsToFloor, sessionWriters }) {
       if (isManagedCloudWorker) this.countHookOrPluginSender(frame);
       let verdict =
-        isManagedCloudWorker || attestedRequestSubtype(frame.payload) === "ui_surface"
+        holdsToFloor || attestedRequestSubtype(frame.payload) === "ui_surface"
           ? this.sessionChannelFloorVerdict(frame, sessionWriters)
           : "passed";
       if (verdict === "dropped") return true;
@@ -1465,9 +1545,14 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
         remoteTools,
         hooks: false,
         plugins: false,
+        settings: false,
         hostAsks,
         surfaces: true,
       };
+    }
+    cutsSettingsToList() {
+      let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
+      return CLAUDE_CODE_ENTRYPOINT === undefined || GIT_CREDENTIAL_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
     }
     hookAndPluginAdmissions() {
       return {
@@ -1562,9 +1647,14 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
       let lower = verdict.status.toLowerCase();
       switch (verdict.kind) {
         case "refuse_request":
-          logFeatureBad(CONTROL_SUBTYPE_TO_CAPABILITY[verdict.subtype], `unverified_sender_${lower}`);
+          if (verdict.why === undefined)
+            logFeatureBad(CONTROL_SUBTYPE_TO_CAPABILITY[verdict.subtype], `unverified_sender_${lower}`);
+          else if (!this.countedSessionRefusals.has(`${verdict.subtype}:${verdict.why}`)) {
+            this.countedSessionRefusals.add(`${verdict.subtype}:${verdict.why}`);
+            logFeatureBad(CONTROL_SUBTYPE_TO_CAPABILITY[verdict.subtype], `request_refused_${verdict.why}`);
+          }
           logForDebugging(
-            `[remote-io] dropped a below-floor ${verdict.subtype} (attestation ${lower}) unanswered`,
+            `[remote-io] dropped a ${verdict.subtype} (attestation ${lower}, ${verdict.why ?? "below the floor"}) unanswered`,
           );
           return "dropped";
         case "refuse_surface_request": {
@@ -1602,27 +1692,56 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
           let why = verdict.why === undefined || verdict.why === "below_floor" ? undefined : verdict.why;
           if (why === undefined)
             logFeatureBad(CAPABILITY_NAMES[verdict.answers], `unverified_answer_dropped_${lower}`);
-          else if (!this.countedDroppedAnswers.has(why)) {
-            this.countedDroppedAnswers.add(why);
+          else if (!this.countedSessionRefusals.has(`${verdict.answers}:${why}`)) {
+            this.countedSessionRefusals.add(`${verdict.answers}:${why}`);
             logFeatureBad(CAPABILITY_NAMES[verdict.answers], `answer_dropped_${why}`);
           }
           logForDebugging(
-            `[remote-io] dropped a reply to ${CAPABILITY_ANSWER_WORDING[verdict.answers][0]} request ${verdict.requestId} (attestation ${lower}, ${why ?? "below the floor"}); the request keeps waiting for ${CAPABILITY_ANSWER_WORDING[verdict.answers][1]}`,
+            `[remote-io] dropped a reply to ${CAPABILITY_ANSWER_WORDING[verdict.answers][0]} request ${verdict.requestId} (attestation ${lower}, ${why ?? "below the floor"}); the request keeps waiting for ${why === undefined ? CAPABILITY_ANSWER_WORDING[verdict.answers][1] : "an answer it can take, or its deadline"}`,
           );
           return "dropped";
         }
         case "strip_forwarded_plugins":
           setRequestSettings(frame.payload, verdict.remainder);
-          logFeatureSad("ccr_cloud_plugins_forward", `unverified_patch_stripped_${lower}`);
+          if (verdict.why === undefined)
+            logFeatureSad("ccr_cloud_plugins_forward", `unverified_patch_stripped_${lower}`);
+          else if (!this.countedSessionRefusals.has(`patch_stripped:${verdict.why}`)) {
+            this.countedSessionRefusals.add(`patch_stripped:${verdict.why}`);
+            logFeatureBad("ccr_cloud_plugins_forward", `patch_stripped_${verdict.why}`);
+          }
           logForDebugging(
-            `[remote-io] stripped below-floor forwarded plugin choices from an apply_flag_settings (attestation ${lower}); its other keys go on`,
+            `[remote-io] stripped forwarded plugin choices from an apply_flag_settings (attestation ${lower}, ${verdict.why ?? "below the floor"}); its other keys go on`,
+          );
+          return "passed";
+        case "strip_unlisted_settings":
+          setRequestSettings(frame.payload, verdict.remainder);
+          if (!this.countedSessionRefusals.has(`settings_stripped:${verdict.why}`)) {
+            this.countedSessionRefusals.add(`settings_stripped:${verdict.why}`);
+            logFeatureBad("ccr_flag_settings_floor", `settings_stripped_${verdict.why}`, {
+              removed_count: verdict.removed.length,
+            });
+          }
+          if (verdict.forwardedPlugins && !this.countedSessionRefusals.has(`patch_stripped:${verdict.why}`)) {
+            this.countedSessionRefusals.add(`patch_stripped:${verdict.why}`);
+            logFeatureBad("ccr_cloud_plugins_forward", `patch_stripped_${verdict.why}`);
+          }
+          logForDebugging(
+            `[remote-io] removed these settings from an apply_flag_settings because the session service ${verdict.why === "session_writers_unknown" ? "said nothing about who can write to this session" : "did not say that only the owner's account can write to this session"} (${verdict.why}; attestation ${lower}): ${listForRefusal(verdict.removed)}${verdict.forwardedPlugins ? ", and its forwarded plugin choices" : ""}. The rest of the request goes on`,
+            {
+              level: "warn",
+            },
           );
           return "passed";
         case "admit_refusal":
           markResponseBelowFloor(frame.payload, verdict.requestId, verdict.result);
-          logFeatureSad("remote_tool_forward", `unverified_refusal_admitted_${lower}`);
+          logFeatureSad(
+            "remote_tool_forward",
+            verdict.why === undefined
+              ? `unverified_refusal_admitted_${lower}`
+              : `refusal_rebuilt_${verdict.why}`,
+          );
           logForDebugging(
-            `[remote-io] admitted a below-floor refusal of served-call request ${verdict.requestId} (attestation ${lower}) rebuilt and marked unverified: the machine is asked what became of the call`,
+            `[remote-io] admitted a refusal of served-call request ${verdict.requestId} (attestation ${lower}, ${verdict.why ?? "below the floor"}) rebuilt from its code and marked as if from below the floor: the machine is asked what became of the call`,
           );
           return "rebuilt";
       }
@@ -1768,6 +1887,9 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
     writeActivityLine(line) {
       this.teeActivity(line);
     }
+    takesHostPick() {
+      return false;
+    }
     acceptsInboundEnvUpdates() {
       switch (this.hosting.kind) {
         case "owns-process":
@@ -1830,6 +1952,11 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
           },
         },
       });
+    }
+    writePlainDeltaNow(requestId) {
+      if (this.isBridge || !this.ccrClient.bufferLoneDelta(requestId)) return false;
+      this.trackWrite(requestId);
+      return true;
     }
     async write(message) {
       if (message.type === "transcript_mirror") return;
@@ -1975,7 +2102,7 @@ deferInit("chunk-z4g2ta8k.js:74637", () => {
     }
   };
 });
-//@ chunk-z4g2ta8k.js:104943-104984 placement
+//@ chunk-1kk50rk6.js:111651-111692 placement
 function runSafely(fn) {
   try {
     fn();
@@ -1983,7 +2110,7 @@ function runSafely(fn) {
     logError(toError(error));
   }
 }
-//@ chunk-z4g2ta8k.js:104984-105082 placement
+//@ chunk-1kk50rk6.js:111692-111790 placement
 function authRefreshForOwnerKind(hosting) {
   switch (hosting.kind) {
     case "owns-process":
@@ -1992,7 +2119,7 @@ function authRefreshForOwnerKind(hosting) {
       return;
   }
 }
-//@ chunk-z4g2ta8k.js:105082-105242 placement
+//@ chunk-1kk50rk6.js:111790-111950 placement
 function classifyStreamCloseCode(code) {
   let mapped = WORKER_CONFLICT_CLOSE_CODES[code];
   switch (mapped) {
@@ -2010,26 +2137,30 @@ function classifyStreamCloseCode(code) {
       };
   }
 }
-//@ chunk-z4g2ta8k.js:105242-105304 placement
+//@ chunk-1kk50rk6.js:111950-112012 placement
 function isCcrStreamEventFlushMsGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_ccr_stream_event_flush_ms",
     DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
   );
 }
-//@ chunk-z4g2ta8k.js:105304-105364 placement
+//@ chunk-1kk50rk6.js:112012-112072 placement
 function isCcrStreamFirstFlushMsGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_stream_first_flush_ms", 0);
 }
-//@ chunk-z4g2ta8k.js:105364-105414 placement
+//@ chunk-1kk50rk6.js:112072-112124 layout
+function getVirtualParasolHeldBunchFlushMs() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_virtual_parasol", DEFAULT_HELD_BUNCH_FLUSH_MS);
+}
+//@ chunk-1kk50rk6.js:112124-112174 placement
 function isIdempotentPineGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_idempotent_pine", 0);
 }
-//@ chunk-z4g2ta8k.js:105414-105475 placement
+//@ chunk-1kk50rk6.js:112174-112235 placement
 function isCcrNoSubscriberFlushMsGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_no_subscriber_flush_ms", 0);
 }
-//@ chunk-z4g2ta8k.js:105475-105737 placement
+//@ chunk-1kk50rk6.js:112235-112497 placement
 function getHeartbeatFeatureFlags() {
   return {
     advertiseHeartbeatProbeSupport: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_idle_heartbeat", false),
@@ -2038,11 +2169,33 @@ function getHeartbeatFeatureFlags() {
     skipRedundantHeartbeats: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_skip_redundant_heartbeat", false),
   };
 }
-//@ chunk-z4g2ta8k.js:105737-105805 placement
+//@ chunk-1kk50rk6.js:112497-112545 layout
+function shouldRetireModelApiPoolAfterServerError() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_nifty_harbor", true);
+}
+//@ chunk-1kk50rk6.js:112545-112613 placement
 function isCcrDropUnwatchedStreamEventsGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_drop_unwatched_stream_events", false);
 }
-//@ chunk-z4g2ta8k.js:105805-107157 placement
+//@ chunk-1kk50rk6.js:112613-112786 layout
+function startFolderFrameLine() {
+  try {
+    if (launchedCwd === null) return;
+    let { dev, ino } = statSync(launchedCwd, {
+      bigint: true,
+    });
+    return `${ndjsonStringify({
+      type: "system",
+      subtype: "start_folder",
+      dev: String(dev),
+      ino: String(ino),
+    })}
+`;
+  } catch {
+    return;
+  }
+}
+//@ chunk-1kk50rk6.js:112786-114201 placement
 function projectSdkEventForStream(m) {
   let message = m;
   let subtype = message.subtype;
@@ -2113,15 +2266,17 @@ function projectSdkEventForStream(m) {
   if (m.type === "assistant") {
     let content = message.message?.content;
     if (Array.isArray(content)) {
-      let found = content.find(
-        (block) =>
-          block &&
-          typeof block === "object" &&
-          block.type === "tool_use" &&
-          block.name === SCHEDULE_WAKEUP_TOOL_NAME,
-      );
-      if (found) {
-        let input = found.input;
+      let wakeupMeta = isCommandMetadata(content, SCHEDULE_WAKEUP_TOOL_NAME);
+      let cronUseBlocks = isCommandMetadata(content, CRON_CREATE_TOOL_NAME)
+        ? [
+            {
+              type: "tool_use",
+              name: CRON_CREATE_TOOL_NAME,
+            },
+          ]
+        : [];
+      if (wakeupMeta) {
+        let input = wakeupMeta.input;
         return {
           type: "assistant",
           subtype,
@@ -2135,10 +2290,20 @@ function projectSdkEventForStream(m) {
                   delaySeconds: input?.delaySeconds,
                 },
               },
+              ...cronUseBlocks,
             ],
           },
         };
       }
+      if (cronUseBlocks.length > 0)
+        return {
+          type: "assistant",
+          subtype,
+          ...subagentOriginFields(message),
+          message: {
+            content: cronUseBlocks,
+          },
+        };
     }
     return {
       type: m.type,
@@ -2148,7 +2313,7 @@ function projectSdkEventForStream(m) {
   }
   return;
 }
-//@ chunk-z4g2ta8k.js:107157-107228 placement
+//@ chunk-1kk50rk6.js:114201-114272 placement
 function subagentOriginFields(event) {
   return event.parent_tool_use_id != null
     ? {
@@ -2156,7 +2321,7 @@ function subagentOriginFields(event) {
       }
     : {};
 }
-//@ chunk-z4g2ta8k.js:107228-107367 placement
+//@ chunk-1kk50rk6.js:114272-114411 placement
 function collectControlRequestIds(events) {
   return events.flatMap((event) =>
     event.payload.type === "control_request" && typeof event.payload.request_id === "string"
@@ -2164,7 +2329,7 @@ function collectControlRequestIds(events) {
       : [],
   );
 }
-//@ chunk-z4g2ta8k.js:107367-107493 placement
+//@ chunk-1kk50rk6.js:114411-114537 placement
 function hasResumeFlag(argv) {
   for (let arg of argv) {
     if (arg === "--") return false;
@@ -2172,7 +2337,7 @@ function hasResumeFlag(argv) {
   }
   return false;
 }
-//@ chunk-z4g2ta8k.js:107493-107699 placement
+//@ chunk-1kk50rk6.js:114537-114743 placement
 async function readInternalEventsFromTip(readTip, readSubagent, storageV5) {
   let sessionId = remoteSessionUrlId();
   let tail = sessionId ? await readTranscriptTailForTip(sessionId, storageV5) : undefined;
@@ -2185,14 +2350,14 @@ async function readInternalEventsFromTip(readTip, readSubagent, storageV5) {
   ]);
   return [events, subagentEvents, tip];
 }
-//@ chunk-z4g2ta8k.js:107699-107963 placement
+//@ chunk-1kk50rk6.js:114743-115007 placement
 function startEarlyRemoteWork(url, storageV5, { hydrate, connect }) {
   if (Object.keys(getSessionIngressAuthHeaders()).length === 0)
     return {
       hydrateReads: undefined,
       link: undefined,
     };
-  let url_2 = getTransportForUrl(new As(url));
+  let url_2 = httpUrlFromWs(new Ls(url));
   addStartupContext({
     ...(hydrate && {
       early_hydrate_prefetch: 1,
@@ -2206,7 +2371,7 @@ function startEarlyRemoteWork(url, storageV5, { hydrate, connect }) {
     link: connect ? remoteIOWorkerEnv(url_2, storageV5) : undefined,
   };
 }
-//@ chunk-z4g2ta8k.js:107963-108184 placement
+//@ chunk-1kk50rk6.js:115007-115228 placement
 function loadCcrInternalEvents(url, storageV5) {
   return (async () => {
     let conflict = false;
@@ -2227,7 +2392,7 @@ function loadCcrInternalEvents(url, storageV5) {
     return;
   });
 }
-//@ chunk-z4g2ta8k.js:108184-108232 placement
+//@ chunk-1kk50rk6.js:115228-115276 placement
 function turnHandoffRegistrationNow(handoff, workerEpoch, carriedWrites) {
   return turnHandoffRegistration(
     handoff,
@@ -2237,14 +2402,14 @@ function turnHandoffRegistrationNow(handoff, workerEpoch, carriedWrites) {
     isCarriedWritesEnabled(),
   );
 }
-//@ chunk-z4g2ta8k.js:108232-108343 placement
+//@ chunk-1kk50rk6.js:115276-115387 placement
 function turnHandoffRegistrationToAnnounce(handoff, workerEpoch, carriedWrites) {
   if (handoff.admitted && isClaudeAiChatOrigin()) logHandoffFlagAdvert();
   let registration = turnHandoffRegistrationNow(handoff, workerEpoch, carriedWrites);
   if (registration?.turn_handoff?.carried_writes) markSaidCarriedWrites();
   return registration;
 }
-//@ chunk-z4g2ta8k.js:108343-109134 placement
+//@ chunk-1kk50rk6.js:115387-116177 placement
 function remoteIOWorkerEnv(url, storageV5) {
   let inputs = cliRemoteWorkerInputs();
   let admission = turnHandoffAdmission({
@@ -2284,7 +2449,7 @@ function remoteIOWorkerEnv(url, storageV5) {
     usesRelayMarker: carriedWrites,
   };
 }
-//@ chunk-z4g2ta8k.js:109134-109423 placement
+//@ chunk-1kk50rk6.js:116177-116466 placement
 function cliRemoteWorkerInputs() {
   let CLAUDE_CODE_ENVIRONMENT_KIND = process.env.CLAUDE_CODE_ENVIRONMENT_KIND ?? null;
   return {
@@ -2298,7 +2463,7 @@ function cliRemoteWorkerInputs() {
     reportParkAtInit: env.CLAUDE_CODE_HOLD_REPORT_PARK_AT_INIT && env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN,
   };
 }
-//@ chunk-z4g2ta8k.js:109423-112627 placement
+//@ chunk-1kk50rk6.js:116466-119951 placement
 /**
  * 启动云 worker：组装 RemoteIO 所需环境、认证与事件流，启动并接管会话。
  */
@@ -2352,15 +2517,32 @@ function startRemoteWorker({
     isRemoteManagedEnvironment()
       ? new WorkerSocket(openWorkerWebSocket, (body) => wouldGzipForHost(body, storageV5, "ccr_worker"))
       : undefined;
-  let reported = new Set();
+  let modelApiPoolRetires =
+    hosting.kind === "owns-process" && environmentKind === "byoc"
+      ? shouldRetireModelApiPoolAfterServerError
+      : undefined;
+  if (modelApiPoolRetires) {
+    setModelApiPoolRetiresAfterServerError(modelApiPoolRetires);
+    makeHttpsAgentCloseAfterServerError();
+    configureGlobalAgents();
+  }
+  let seenContentTypes = new Set();
   let transport = createWorkerEventsTransport(url, headers, {
     sessionId,
+    leavesPoolAfterServerError: modelApiPoolRetires,
     refreshHeaders,
     getAuthHeaders,
     deferDelivery,
     streamOpener,
     mostMembersInAFrame: hosting.kind === "hosted" ? hosting.mostMembersInAFrame : undefined,
     lighterFrame: redactSdkMcpManifests,
+    onProcessSlept:
+      hosting.kind === "owns-process"
+        ? (afterSettle) =>
+            onProcessSlept((next) => {
+              if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_tranquil_cocoa", false)) afterSettle(next);
+            })
+        : undefined,
     connectTimeoutMs: () => getPollIntervalConfig().sse_connect_timeout_ms,
     sseKeepaliveMaxIntervalSeconds: () =>
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_sse_keepalive_max_interval_s", 0),
@@ -2368,12 +2550,12 @@ function startRemoteWorker({
       hosting.kind === "owns-process" &&
       !isRemoteManagedEnvironment() &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_sse_long_poll_fallback", true),
-    requireStreamEvidence: false,
+    requireStreamEvidence: isRemoteEnvPlaceholder() || false,
     onUnexpectedContentType: ({ status, contentType, accepted }) => {
       try {
         let key = `${contentType}:${accepted}`;
-        if (reported.has(key)) return;
-        reported.add(key);
+        if (seenContentTypes.has(key)) return;
+        seenContentTypes.add(key);
         logEvent("tengu_ccr_sse_unexpected_content_type", {
           status,
           content_type: fromEnum(contentType),
@@ -2409,8 +2591,11 @@ function startRemoteWorker({
       (environmentKind === null || environmentKind === "anthropic_cloud") && {
         ownConnectionPool: isHostedWorkerFetchEnabled,
       }),
+    leavesPoolAfterServerError: modelApiPoolRetires,
     streamEventFlushIntervalMs: isCcrStreamEventFlushMsGateOn(),
     streamEventFirstFlushMs: isCcrStreamFirstFlushMsGateOn(),
+    streamEventWindowRunsFromLastFlush: mainReplyHoldMs() > 0,
+    heldBunchFlushMs: getVirtualParasolHeldBunchFlushMs(),
     toolInputFlushMs: isIdempotentPineGateOn(),
     noSubscriberStreamEventFlushIntervalMs: isCcrNoSubscriberFlushMsGateOn(),
     dropUnwatchedStreamEvents: isCcrDropUnwatchedStreamEventsGateOn(),
@@ -2449,10 +2634,7 @@ function startRemoteWorker({
       maxEventPostTimeoutMs: REMOTE_IO_TIMEOUT_MS,
     }),
     ...(hosting.kind === "owns-process" && {
-      guardsClientRows: () =>
-        isSelfHostedRemoteEnvironment() &&
-        !isReviewSession() &&
-        getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PATIENT_LEDGER, false),
+      guardsClientRows: getPatientLedgerReader(),
     }),
     processExiting: isShuttingDown,
     gatesToolCalls: environmentKind !== "bridge",

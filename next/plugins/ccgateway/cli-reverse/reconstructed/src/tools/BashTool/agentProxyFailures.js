@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：代理（agent proxy）失败识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import {
@@ -20,14 +20,14 @@ import { isCoworkAny } from "../../utils/entrypointKinds.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-e6aww6q8.js:189484-189515 placement
+//@ chunk-5xgkngpb.js:190147-190178 placement
 /**
  * 读取本次命令期间记录的代理失败连接列表（未知主机、连接错误等），供错误信息使用。
  */
 function getAgentProxyFailures() {
   return getProxyRelayState().seq;
 }
-//@ chunk-e6aww6q8.js:189515-190349 placement
+//@ chunk-5xgkngpb.js:190178-191012 placement
 /**
  * 汇总命令运行期间经代理失败的连接（未知主机等）。
  */

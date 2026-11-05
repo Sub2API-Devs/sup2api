@@ -3,12 +3,12 @@
  *
  * TaskGet 描述与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskGetTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-kxyd0g16.js:141693-142476 fingerprint (2.1.88 match: DESCRIPTION, 1)
+//@ chunk-fmnbrxwy.js:156690-157473 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskGet 描述与提示词。
  */

@@ -3,31 +3,21 @@
  *
  * 2.1.316 新增：计算本次请求的提示快照（实时/快照/继承来源）；记录本回合发送的工具描述等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (32)
  * attribution: placement 32
  */
 import { isDeepStrictEqual } from "util";
 import { logError } from "../utils/log.js";
-import { FOREIGN_ORG_THINKING_NOTICE } from "../constants/messages.js";
+import { FOREIGN_ORG_THINKING_NOTICE, createInformationalSystemMessage } from "../utils/messages.js";
 import { classifyQuerySource } from "../services/api/requestHeaders.js";
-import {
-  isAnthropicAuthEnabled,
-  isHostManagedProviderAuth,
-  getStoredOauthAccountInfo,
-} from "../utils/auth.js";
-import { normalizeUuidOrNull } from "../utils/agentId.js";
-import { env } from "../utils/env.js";
-import { usableLauncherHostLoginToken } from "../utils/auth/launcherHostLogin.js";
-import { getOAuthTokenFromFileDescriptor } from "../utils/authFileDescriptor.js";
-import { isOauthTokenFromBgSnapshot, getSystemPromptSectionEpoch } from "../bootstrap/state.js";
+import { getTelemetryOrganizationUuid } from "../commands/team-onboarding/api.js";
 import { createAttachmentMessage_2 } from "../utils/debug.js";
 import { isModelCapabilityEnabled } from "../utils/model/promptBundles.js";
 import { getCanonicalName } from "../utils/model/canonicalModelName.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
-import { createInformationalSystemMessage } from "../utils/messages.js";
 import { isHookDescribed, redescribeEpoch } from "../services/api/toolDescriptionCache.js";
 import { toError } from "../utils/errors.js";
 import { identity } from "../utils/identity.js";
@@ -44,6 +34,7 @@ import {
   setModelRenderPoint,
   recordedDeferredTools,
 } from "../utils/contextAttachments/promptSnapshot.js";
+import { getSystemPromptSectionEpoch } from "../bootstrap/state.js";
 import { sectionAnswers } from "../plugins/functionHooks/promptComposition.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { resolveReminderFold, isThreadStateFeatureOn } from "../utils/contextAttachments/threadState.js";
@@ -55,7 +46,7 @@ import { TOOL_SEARCH_TOOL_NAME } from "../tools/ToolSearchTool/prompt.js";
 import { isToolSearchLockedOffByDefault } from "../utils/toolSearch.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:129854-129924 placement
+//@ chunk-w3ch4xq2.js:138905-138975 placement
 /**
  * 是否被放回
  */
@@ -67,7 +58,7 @@ function wasPutBackSafe(messageQueue, uuid) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:129924-129981 placement
+//@ chunk-w3ch4xq2.js:138975-139032 placement
 /**
  * 打开重新入队窗口
  */
@@ -78,7 +69,7 @@ function startRequeueWindowSafe(messageQueue) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:129981-130032 placement
+//@ chunk-w3ch4xq2.js:139032-139083 placement
 /**
  * 标记已被取走
  */
@@ -89,42 +80,38 @@ function settleTakenSafe(messageQueue) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:130032-130465 placement
+//@ chunk-w3ch4xq2.js:139083-139516 placement
 /**
  * 切换组织后之前的思考内容不可用的说明文本。
  */
-var CROSS_ORG_THINKING_NOTICE = `${FOREIGN_ORG_THINKING_NOTICE}
+var CROSS_ORG_THINKING_NOTICE; // deferred: uses NO_RESPONSE_REQUESTED (../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-w3ch4xq2.js:139083", () => {
+  CROSS_ORG_THINKING_NOTICE = `${FOREIGN_ORG_THINKING_NOTICE}
 Claude's earlier thinking was written while you were signed in to another organization, so Claude can't use it now. It isn't deleted: resume this session signed in to that organization to use it again. Claude's next responses may be slower and use more tokens because it has to reread this session and generate new thinking. See docs for more: https://platform.claude.com/docs/en/build-with-claude/preserved-thinking`;
-//@ chunk-ha3km179.js:130465-131326 placement
+});
+//@ chunk-w3ch4xq2.js:139516-140231 placement
 /**
  * 检测跨组织的思考块并生成说明附件。
  */
-function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread, model, stamp }) {
+function crossOrgThinkingAttachments(messages, { querySource, mainThread, model, stamp }) {
   if (classifyQuerySource(querySource) === "auxiliary") return [];
   try {
-    if (!isAnthropicAuthEnabled()) return [];
-    let lower = normalizeUuidOrNull(
-      env.CLAUDE_CODE_OAUTH_TOKEN ||
-        usableLauncherHostLoginToken() !== null ||
-        (getOAuthTokenFromFileDescriptor() && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
-        ? env.CLAUDE_CODE_ORGANIZATION_UUID
-        : getStoredOauthAccountInfo()?.organizationUuid,
-    )?.toLowerCase();
-    let organizationUuid = messagesForQuery.findLast(
+    let currentOrgUuid = getTelemetryOrganizationUuid();
+    let organizationUuid = messages.findLast(
       (message) => message.type === "attachment" && message.attachment?.type === "credential_org",
     )?.attachment.organizationUuid;
-    if (lower === undefined || lower === organizationUuid) return [];
+    if (currentOrgUuid === undefined || currentOrgUuid === organizationUuid) return [];
     let attachmentMessage = createAttachmentMessage_2(
       {
         type: "credential_org",
-        organizationUuid: lower,
+        organizationUuid: currentOrgUuid,
       },
       stamp,
     );
     if (typeof organizationUuid !== "string") return [attachmentMessage];
     let warnThinking =
       mainThread &&
-      messagesForQuery.some(
+      messages.some(
         (message) =>
           message.type === "assistant" &&
           Array.isArray(message.message?.content) &&
@@ -146,18 +133,18 @@ function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread
     return [];
   }
 }
-//@ chunk-ha3km179.js:131368-131398 placement
+//@ chunk-w3ch4xq2.js:140273-140303 placement
 /**
  * 无待发工具描述
  */
 var EMPTY_TOOL_STANDING; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ha3km179.js:131368", () => {
+deferInit("chunk-w3ch4xq2.js:140273", () => {
   EMPTY_TOOL_STANDING = {
     epoch: 0,
     owed: new Set(),
   };
 });
-//@ chunk-ha3km179.js:131398-132074 placement
+//@ chunk-w3ch4xq2.js:140303-140979 placement
 /**
  * 跟踪工具描述的待发送状态。
  */
@@ -209,17 +196,17 @@ function createToolDescriptionStandings() {
     },
   };
 }
-//@ chunk-ha3km179.js:132074-132115 placement
+//@ chunk-w3ch4xq2.js:140979-141020 placement
 /**
  * 工具描述待发状态
  */
 var toolDescriptionStandings; // deferred: uses createToolDescriptionStandings of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ha3km179.js:132074", () => {
+deferInit("chunk-w3ch4xq2.js:140979", () => {
   toolDescriptionStandings = identity(createToolDescriptionStandings(), (standings) =>
     standings.forgetStandings(),
   );
 });
-//@ chunk-ha3km179.js:132115-132198 placement
+//@ chunk-w3ch4xq2.js:141020-141103 placement
 /**
  * 需要重新描述时的代次
  */
@@ -231,12 +218,12 @@ function redescribeEpochFor(options) {
     return;
   }
 }
-//@ chunk-ha3km179.js:132198-132208 placement
+//@ chunk-w3ch4xq2.js:141103-141113 placement
 /**
  * 16
  */
 var MAX_PROMPT_HASHES = 16;
-//@ chunk-ha3km179.js:132208-132818 placement
+//@ chunk-w3ch4xq2.js:141113-141723 placement
 /**
  * 记录最近的系统提示哈希（有上限）。
  */
@@ -282,15 +269,15 @@ function createSystemPromptHistory() {
     forgetStandings: () => history.clear(),
   };
 }
-//@ chunk-ha3km179.js:132818-132859 placement
+//@ chunk-w3ch4xq2.js:141723-141764 placement
 /**
  * 系统提示哈希历史
  */
 var systemPromptHistory; // deferred: uses createSystemPromptHistory of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ha3km179.js:132818", () => {
+deferInit("chunk-w3ch4xq2.js:141723", () => {
   systemPromptHistory = identity(createSystemPromptHistory(), (history) => history.forgetStandings());
 });
-//@ chunk-ha3km179.js:132859-132999 placement
+//@ chunk-w3ch4xq2.js:141764-141904 placement
 function sectionAnswersSnapshot(toolUseContext, promptRenderEpoch) {
   try {
     return !toolUseContext.options.settingsHooksOff && toolUseContext.agentId === undefined
@@ -304,14 +291,14 @@ function sectionAnswersSnapshot(toolUseContext, promptRenderEpoch) {
     return;
   }
 }
-//@ chunk-ha3km179.js:132999-133035 placement
+//@ chunk-w3ch4xq2.js:141904-141940 placement
 /**
  * 空串转 null
  */
 function nonEmptyOrNull(text) {
   return text === "" ? null : text;
 }
-//@ chunk-ha3km179.js:133035-133306 placement
+//@ chunk-w3ch4xq2.js:141940-142211 placement
 function changedSectionAnswers(held, answers) {
   return new Map(
     [...answers].flatMap(([hash, answer]) => {
@@ -336,7 +323,7 @@ function changedSectionAnswers(held, answers) {
     }),
   );
 }
-//@ chunk-ha3km179.js:133306-133587 placement
+//@ chunk-w3ch4xq2.js:142211-142492 placement
 function resolveHeldAnswers({ held, answers, owed, sent }) {
   return new Map(
     [...answers].flatMap(([hash, answer]) => {
@@ -349,7 +336,7 @@ function resolveHeldAnswers({ held, answers, owed, sent }) {
     }),
   );
 }
-//@ chunk-ha3km179.js:133587-134155 placement
+//@ chunk-w3ch4xq2.js:142492-143060 placement
 /**
  * 比较两版提示段落的顺序与增删。
  */
@@ -388,7 +375,7 @@ function diffPromptSections(parts, nextPrompt, edits) {
     filtered_2.length === filtered_3.length && filtered_2.every((part, index) => part === filtered_3[index]);
   return !all || isUnchanged ? undefined : asSystemPrompt(flattened);
 }
-//@ chunk-ha3km179.js:134155-134291 placement
+//@ chunk-w3ch4xq2.js:143060-143196 placement
 function indexParts(parts) {
   let counts = new Map();
   let places = new Map();
@@ -402,18 +389,18 @@ function indexParts(parts) {
     places,
   };
 }
-//@ chunk-ha3km179.js:134291-134411 placement
+//@ chunk-w3ch4xq2.js:143196-143316 placement
 function partsBetween(index, fromPart, toPart) {
   return index.parts.slice(
     fromPart === undefined ? 0 : (index.places.get(fromPart) ?? -1) + 1,
     toPart === undefined ? index.parts.length : index.places.get(toPart),
   );
 }
-//@ chunk-ha3km179.js:134411-134491 placement (2.1.88 match: formatSnippet, 0.806)
+//@ chunk-w3ch4xq2.js:143316-143396 placement (2.1.88 match: formatSnippet, 0.806)
 function formatSnippet(parts, edits, before) {
   return parts.filter((part) => edits.some((edit) => edit.after === part && edit.before === before));
 }
-//@ chunk-ha3km179.js:134491-134854 placement (2.1.88 match: formatSnippet, 0.806)
+//@ chunk-w3ch4xq2.js:143396-143759 placement (2.1.88 match: formatSnippet, 0.806)
 /**
  * 应用提示段落编辑。
  */
@@ -432,14 +419,14 @@ function applyPromptSectionEdits(prevParts, nextParts, edits) {
     ? parts
     : flattened;
 }
-//@ chunk-ha3km179.js:134854-134932 placement
+//@ chunk-w3ch4xq2.js:143759-143837 placement
 /**
  * 非 bareFork 且辅助查询以外的
  */
 function isRedescribable({ options, querySource }) {
   return !options.bareFork && classifyQuerySource(querySource) !== "auxiliary";
 }
-//@ chunk-ha3km179.js:134932-135162 placement
+//@ chunk-w3ch4xq2.js:143837-144067 placement
 function recordReminderFold(carriedForward, inheritedFold) {
   let { fold, cached } = resolveReminderFold(inheritedFold);
   try {
@@ -458,7 +445,7 @@ function recordReminderFold(carriedForward, inheritedFold) {
   }
   return fold;
 }
-//@ chunk-ha3km179.js:135162-135257 placement
+//@ chunk-w3ch4xq2.js:144067-144162 placement
 /**
  * 线形相关字段
  */
@@ -469,7 +456,7 @@ var REQUEST_SHAPE_KEYS = [
   "keptReminders",
   "toolResultSafeguards",
 ];
-//@ chunk-ha3km179.js:135257-135920 placement
+//@ chunk-w3ch4xq2.js:144162-144825 placement
 /**
  * 应用请求线形（systemTurns、toolChangeHeader、inlineTools 等）。
  */
@@ -505,7 +492,7 @@ function applyWireShape(wireShape, wireShape_2) {
     changed: any || merged.systemTurnsAnsweredBy !== wireShape.systemTurnsAnsweredBy,
   };
 }
-//@ chunk-ha3km179.js:135920-136157 placement
+//@ chunk-w3ch4xq2.js:144825-145062 placement
 function recordWireToolInputEcho(carriedForward, inheritedEcho) {
   let { echo, cached } = getEchoWireToolInputsState(inheritedEcho);
   try {
@@ -524,7 +511,7 @@ function recordWireToolInputEcho(carriedForward, inheritedEcho) {
   }
   return echo;
 }
-//@ chunk-ha3km179.js:136157-136294 placement
+//@ chunk-w3ch4xq2.js:145062-145199 placement
 function recordContextRendering(carriedForward, contextRendering) {
   if (contextRendering === undefined) return;
   try {
@@ -537,7 +524,7 @@ function recordContextRendering(carriedForward, contextRendering) {
   }
   return contextRendering;
 }
-//@ chunk-ha3km179.js:136294-136722 placement
+//@ chunk-w3ch4xq2.js:145199-145627 placement
 /**
  * 记录提示快照并处理复制关系。
  */
@@ -564,7 +551,7 @@ function recordPromptSnapshot(messages, systemPrompt, options) {
     return promptSnapshot;
   }
 }
-//@ chunk-ha3km179.js:136722-138963 placement
+//@ chunk-w3ch4xq2.js:145627-147871 placement
 /**
  * 计算本次请求的提示快照（实时/快照/继承来源）。
  */
@@ -728,11 +715,11 @@ function resolvePromptSnapshot(
     return emptySnapshot;
   }
 }
-//@ chunk-ha3km179.js:138963-140211 placement
+//@ chunk-w3ch4xq2.js:147871-149122 placement
 /**
  * 记录本回合发送的工具描述。
  */
-function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, stamp, handed, ...options }) {
+function recordToolDescriptions(promptSnapshot, inlineToolsDeclared, { head, stamp, handed, ...options }) {
   try {
     if (
       inlineToolsDeclared === undefined ||
@@ -740,7 +727,7 @@ function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, s
       !isRedescribable(options)
     )
       return;
-    let snapshot = promptSnapshotUnlessRenderPoint(messagesForQuery, options.options);
+    let snapshot = promptSnapshotUnlessRenderPoint(promptSnapshot, options.options);
     if (!snapshot) return;
     let filtered = inlineToolsDeclared.filter(
       (inlineTool) => !snapshot.toolDescriptions.has(inlineTool.name),
@@ -819,22 +806,22 @@ function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, s
     return;
   }
 }
-//@ chunk-ha3km179.js:140211-140246 placement
+//@ chunk-w3ch4xq2.js:149122-149157 placement
 /**
  * 延迟加载工具附件
  */
 function lazyToolAttachment(stamp) {
   return createAttachmentMessage_2(setModelRenderPoint(), stamp);
 }
-//@ chunk-ha3km179.js:140246-140987 placement
+//@ chunk-w3ch4xq2.js:149157-149898 placement
 /**
  * 记录延迟加载的工具。
  */
-function recordDeferredTools(messagesForQuery, deferredToolsSent, { stamp, toolInputCopies, ...options }) {
+function recordDeferredTools(promptSnapshot, deferredToolsSent, { stamp, toolInputCopies, ...options }) {
   try {
     if (!isRedescribable(options)) return;
     if (deferredToolsSent === undefined && (toolInputCopies?.size ?? 0) === 0) return;
-    let recorded = recordedDeferredTools(messagesForQuery);
+    let recorded = recordedDeferredTools(promptSnapshot);
     let newEntries = new Map();
     for (let entry of deferredToolsSent?.entries ?? [])
       if (!newEntries.has(entry.name) && !isDeepStrictEqual(recorded.entries.get(entry.name), entry))

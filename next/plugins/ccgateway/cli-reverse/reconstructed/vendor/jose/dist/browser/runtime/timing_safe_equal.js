@@ -1,13 +1,13 @@
 /**
  * jose/dist/browser/runtime/timing_safe_equal.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2)
+ * pieces: chunk-pd6th42n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-2tyrgda4.js:3996-4322 esm-fingerprint
+//@ chunk-pd6th42n.js:3996-4322 esm-fingerprint
 var timingSafeEqual = (a, b) => {
   if (!(a instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
   if (!(b instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
@@ -19,7 +19,7 @@ var timingSafeEqual = (a, b) => {
   return out === 0;
 };
 var timingSafeEqual_default;
-//@ chunk-2tyrgda4.js:4322-4345 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:4322-4345 esm-layout (moved: shares a binding it assigns)
 var init_crypto_key = __esm(() => {
   timingSafeEqual_default = timingSafeEqual;
 });

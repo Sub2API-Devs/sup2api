@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：/limit-reset 命令：选择并使用额度重置券（周限额、Fable 限额）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 
-//@ chunk-e6aww6q8.js:2043361-2043382 placement
+//@ chunk-5xgkngpb.js:2099491-2099512 placement
 var LIMIT_RESET = "limit-reset";
-//@ chunk-e6aww6q8.js:2043382-2045061 placement
+//@ chunk-5xgkngpb.js:2099512-2101191 placement
 /**
  * /limit-reset 的界面文案模板（额度种类、剩余、到期日、确认语句）。
  */
@@ -44,7 +44,7 @@ var CEDAR_EMBER_DEFAULT_TEXTS = {
   earlyLine: "You still have {percent}% of your {limit} left \u2014 use your {kind} anyway?",
   earlyNoNumberLine: "You haven't reached a limit yet \u2014 use your {kind} anyway?",
 };
-//@ chunk-e6aww6q8.js:2045061-2045153 placement
+//@ chunk-5xgkngpb.js:2101191-2101283 placement
 /**
  * getCedarEmberConfig：tengu_cedar_ember（额度重置的另一形态）。
  */
@@ -56,11 +56,11 @@ function getCedarEmberConfig() {
     ? featureValue_CACHED_MAY_BE_STALE
     : {};
 }
-//@ chunk-e6aww6q8.js:2045153-2045194 placement
+//@ chunk-5xgkngpb.js:2101283-2101324 placement
 function isCedarEmberEnabled() {
   return getCedarEmberConfig().enabled === true;
 }
-//@ chunk-e6aww6q8.js:2045194-2045280 placement
+//@ chunk-5xgkngpb.js:2101324-2101410 placement
 /**
  * 读取 cedarEmber 配置里的 version（非法时按 0）。
  */
@@ -68,18 +68,18 @@ function cedarEmberVersion() {
   let version = getCedarEmberConfig().version;
   return typeof version === "number" && Number.isFinite(version) ? version : 0;
 }
-//@ chunk-e6aww6q8.js:2045280-2045326 placement
+//@ chunk-5xgkngpb.js:2101410-2101456 placement
 /**
  * cedarEmber 的 autoContinue 开关（缺省视为 true）。
  */
 function cedarEmberAutoContinue() {
   return getCedarEmberConfig().autoContinue !== false;
 }
-//@ chunk-e6aww6q8.js:2045326-2045389 placement
+//@ chunk-5xgkngpb.js:2101456-2101519 placement
 function stringOrDefault(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
-//@ chunk-e6aww6q8.js:2045389-2046524 placement
+//@ chunk-5xgkngpb.js:2101519-2102654 placement
 function getCedarEmberCopy() {
   let cedarEmberConfig = getCedarEmberConfig();
   return {
@@ -134,12 +134,12 @@ function getCedarEmberCopy() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:2046524-2046541 placement (2.1.88 match: SEP_WIDTH, 1)
+//@ chunk-5xgkngpb.js:2102654-2102671 placement (2.1.88 match: SEP_WIDTH, 1)
 /**
  * 终端/摘要输出里多处使用的分隔串 " · "（split/join 与 trim 后拼接）。
  */
 var SEP = " \xB7 ";
-//@ chunk-e6aww6q8.js:2046541-2047364 placement
+//@ chunk-5xgkngpb.js:2102671-2103494 placement
 function formatLimitResetTemplate(template, values) {
   let templateVars = {
     "{kind}": values.kind,
@@ -181,7 +181,7 @@ function formatLimitResetTemplate(template, values) {
     if (value !== undefined) filled = filled.replaceAll(key, value);
   return filled;
 }
-//@ chunk-e6aww6q8.js:2047364-2047768 placement
+//@ chunk-5xgkngpb.js:2103494-2103899 placement
 /**
  * 限额重置功能的默认界面文案（按钮、通知、成功/不可用等）。
  */
@@ -193,7 +193,7 @@ var LIMIT_RESET_DEFAULT_TEXTS = {
   successLine: "5-hour limit reset \xB7 next reset available {date} \xB7 your weekly limit still applies",
   unavailableLine: "Couldn't reset your 5-hour limit right now \xB7 try again in a moment",
 };
-//@ chunk-e6aww6q8.js:2047768-2047860 placement
+//@ chunk-5xgkngpb.js:2103899-2103991 placement
 /**
  * getLimitResetConfig：tengu_nifty_lemur。
  */
@@ -205,11 +205,11 @@ function getLimitResetConfig() {
     ? featureValue_CACHED_MAY_BE_STALE
     : {};
 }
-//@ chunk-e6aww6q8.js:2047860-2047901 placement
+//@ chunk-5xgkngpb.js:2103991-2104032 placement
 function isLimitResetEnabled() {
   return getLimitResetConfig().enabled === true;
 }
-//@ chunk-e6aww6q8.js:2047901-2047987 placement
+//@ chunk-5xgkngpb.js:2104032-2104118 placement
 /**
  * 读取 limitReset 配置里的 version（非法时按 0）。
  */
@@ -217,18 +217,18 @@ function limitResetConfigVersion() {
   let version = getLimitResetConfig().version;
   return typeof version === "number" && Number.isFinite(version) ? version : 0;
 }
-//@ chunk-e6aww6q8.js:2047987-2048033 placement
+//@ chunk-5xgkngpb.js:2104118-2104164 placement
 /**
  * limitReset 的 autoContinue 开关（缺省视为 true）。
  */
 function limitResetAutoContinue() {
   return getLimitResetConfig().autoContinue !== false;
 }
-//@ chunk-e6aww6q8.js:2048033-2048096 placement
+//@ chunk-5xgkngpb.js:2104164-2104228 placement
 function stringOrDefault_2(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
-//@ chunk-e6aww6q8.js:2048096-2048341 placement
+//@ chunk-5xgkngpb.js:2104228-2104483 placement
 function getLimitResetCopy() {
   let limitResetConfig = getLimitResetConfig();
   return {
@@ -242,7 +242,7 @@ function getLimitResetCopy() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:2048341-2048560 placement
+//@ chunk-5xgkngpb.js:2104483-2104702 placement
 /**
  * 填充文案中的 {date} 占位：有日期则替换；没有则删去含占位的分段，全部被删时改用 later。
  */
@@ -255,7 +255,7 @@ function fillDatePlaceholder(template, values) {
     .join(" \xB7 ");
   return joined !== "" ? joined : template.replaceAll("{date}", "later");
 }
-//@ chunk-e6aww6q8.js:2048560-2048898 placement
+//@ chunk-5xgkngpb.js:2104702-2105040 placement
 /**
  * /limit-reset 命令对象（local-jsx）；描述：{return kse()?"Use an available limit reset and keep working":"Reset your 5-hour limit now and keep working; once a week, still counts towar；isEnabled: ()=>vt()&&(Tbe()||kse())；isHidden: true；实现 chunk-q8p98373.js 的 ge。
  */
@@ -275,15 +275,15 @@ var limitResetCommandDefinition = {
 };
 var limitResetCommand = limitResetCommandDefinition;
 export {
-  formatLimitResetTemplate,
-  getCedarEmberCopy,
-  getLimitResetCopy,
   limitResetCommand,
+  getLimitResetCopy,
+  getCedarEmberCopy,
+  formatLimitResetTemplate,
+  isLimitResetEnabled,
+  LIMIT_RESET,
   isCedarEmberEnabled,
   cedarEmberVersion,
-  LIMIT_RESET,
   cedarEmberAutoContinue,
-  isLimitResetEnabled,
   fillDatePlaceholder,
   limitResetConfigVersion,
   limitResetAutoContinue,

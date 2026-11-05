@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 数据库写入输入解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (18)
  * attribution: placement 18
  */
 import { join } from "path";
@@ -26,9 +26,9 @@ import { UNREADABLE_ARRAY, readUntrustedArray } from "../../../utils/untrustedAr
 import { DB_BATCH_OP } from "../promptText.js";
 import { sanitizeDisplayText } from "../../../services/artifacts/capabilityDeclaration.js";
 import { getPlatform } from "../../../utils/platform.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 
-//@ chunk-qxvqcab6.js:6699-6980 placement
+//@ chunk-nfkwcnxd.js:6674-6955 placement
 function assetDownloadTarget(input) {
   let { assetId, outDir } = assetFieldsFrom(input);
   if (assetId === undefined || !ASSET_ID_RE.test(assetId)) return;
@@ -52,7 +52,7 @@ function assetDownloadTarget(input) {
     }),
   };
 }
-//@ chunk-qxvqcab6.js:6980-7212 placement
+//@ chunk-nfkwcnxd.js:6955-7187 placement
 function urlSubPathError(url, suffix = "", fieldName = "url") {
   if (artifactUrlSubPath(url) === undefined) return;
   let artifactUrl = parseArtifactUrl(url);
@@ -63,7 +63,7 @@ function urlSubPathError(url, suffix = "", fieldName = "url") {
     errorCode: 4,
   };
 }
-//@ chunk-qxvqcab6.js:7212-7719 placement
+//@ chunk-nfkwcnxd.js:7187-7694 placement
 function dbWriteFields(input) {
   let readField = (key) => {
     let value = input[key];
@@ -90,18 +90,18 @@ function dbWriteFields(input) {
     ifVersion: isPositiveInt(ifVersion) ? ifVersion : undefined,
   };
 }
-//@ chunk-qxvqcab6.js:7719-7793 placement
+//@ chunk-nfkwcnxd.js:7694-7768 placement
 function isPositiveInt(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }
-//@ chunk-qxvqcab6.js:7793-7830 placement
+//@ chunk-nfkwcnxd.js:7768-7805 placement
 var DB_WRITE_OPS = ["set", "update", STR_REPLACE, "delete"];
-//@ chunk-qxvqcab6.js:7830-7877 placement
+//@ chunk-nfkwcnxd.js:7805-7852 placement
 function batchWrites(input) {
   let batchWrites = parseBatchWrites(input);
   return batchWrites === UNREADABLE_ARRAY ? [] : batchWrites;
 }
-//@ chunk-qxvqcab6.js:7877-8319 placement
+//@ chunk-nfkwcnxd.js:7852-8294 placement
 function parseBatchWrites(input) {
   let untrustedArray = readUntrustedArray(input.writes);
   if (untrustedArray === undefined || untrustedArray === UNREADABLE_ARRAY) return untrustedArray ?? [];
@@ -128,27 +128,27 @@ function parseBatchWrites(input) {
     };
   });
 }
-//@ chunk-qxvqcab6.js:8319-8384 placement
+//@ chunk-nfkwcnxd.js:8294-8359 placement
 /**
  * 批量写入时取出各项的版本前置条件。
  */
 function batchWriteVersions(input) {
   return input.db_op === DB_BATCH_OP ? batchWrites(input).map((write) => write.ifVersion) : [];
 }
-//@ chunk-qxvqcab6.js:8384-8460 placement
+//@ chunk-nfkwcnxd.js:8359-8435 placement
 function hasVersionPreconditions(input) {
   return (
     dbWriteFields(input).ifVersion !== undefined ||
     batchWriteVersions(input).some((version) => version !== undefined)
   );
 }
-//@ chunk-qxvqcab6.js:8460-8550 placement
+//@ chunk-nfkwcnxd.js:8435-8525 placement
 function isArtifactBatchWrite(input) {
   return (
     typeof input === "object" && input !== null && input.action === "write_db" && input.db_op === DB_BATCH_OP
   );
 }
-//@ chunk-qxvqcab6.js:8550-8641 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-nfkwcnxd.js:8525-8616 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function formatRuleContentForDisplay(rule) {
   return markDisplayTokens(
     scrubArtifactEnvelopeTags(
@@ -158,25 +158,25 @@ function formatRuleContentForDisplay(rule) {
     ),
   );
 }
-//@ chunk-qxvqcab6.js:8641-8710 placement
+//@ chunk-nfkwcnxd.js:8616-8685 placement
 function typeUrlOf(input) {
   let typeUrl = input?.type_url;
   return typeof typeUrl === "string" ? typeUrl : undefined;
 }
-//@ chunk-qxvqcab6.js:8710-8776 placement
+//@ chunk-nfkwcnxd.js:8685-8751 placement
 function typeOf(input) {
   let typeName = input?.type;
   return typeof typeName === "string" ? typeName : undefined;
 }
-//@ chunk-qxvqcab6.js:8776-8897 placement
+//@ chunk-nfkwcnxd.js:8751-8872 placement
 function notTypeUrlError(value) {
   return `type_url: not an Artifact type's link: ${value} \u2014 pass a ${artifactLinkShapeHint()} link from a list_types result`;
 }
-//@ chunk-qxvqcab6.js:8897-8986 placement
+//@ chunk-nfkwcnxd.js:8872-8961 placement
 function autoOpenMode(input) {
   return input.auto_open === "after_first_write" ? "after_first_write" : "at_create";
 }
-//@ chunk-qxvqcab6.js:8986-9230 placement
+//@ chunk-nfkwcnxd.js:8961-9205 placement
 function dbOutputTarget(input) {
   let { outDir, collection } = dbWriteFields(input);
   if (outDir === undefined)
@@ -201,15 +201,15 @@ function dbOutputTarget(input) {
     dir,
   };
 }
-//@ chunk-qxvqcab6.js:9230-9338 placement
+//@ chunk-nfkwcnxd.js:9205-9313 placement
 function escapeDbPathSegment(segment) {
   let replaced = segment.replaceAll("~", "@");
   let platform = getPlatform();
   return platform === "windows" || platform === "wsl" ? replaced.replaceAll(":", "%3A") : replaced;
 }
-//@ chunk-qxvqcab6.js:9338-9381 placement
+//@ chunk-nfkwcnxd.js:9313-9356 placement
 function dbRowKey(source, ruleValue) {
-  return `${source}\x00${formatPermissionRule(ruleValue)}`;
+  return `${source}\x00${permissionRuleValueFromString(ruleValue)}`;
 }
 export {
   dbRowKey,
@@ -224,9 +224,9 @@ export {
   hasVersionPreconditions,
   parseBatchWrites,
   typeUrlOf,
-  formatRuleContentForDisplay,
-  typeOf,
-  notTypeUrlError,
   assetDownloadTarget,
+  formatRuleContentForDisplay,
+  notTypeUrlError,
   autoOpenMode,
+  typeOf,
 };

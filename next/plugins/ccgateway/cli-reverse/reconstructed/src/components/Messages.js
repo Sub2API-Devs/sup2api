@@ -3,21 +3,20 @@
  *
  * 消息列表（MessagesImpl）：过滤/折叠/分组消息、brief 模式裁剪、按阈值切片（transcript 显示全部切换）、交给 VirtualMessageList 或静态渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Messages.tsx
- * pieces: chunk-0sfjpx19.js (1), chunk-ag5x7vhf.js (80)
- * attribution: fingerprint 6, callgraph-fingerprint 1, placement 55, sole-consumer 1, file-local 3, layout 15
+ * pieces: chunk-5yfs8sfq.js (5), chunk-aac6cgbf.js (1), chunk-hnxhr3bs.js (79)
+ * attribution: placement 58, layout 18, callgraph-fingerprint 1, fingerprint 5, file-local 3
  */
 import { randomUUID } from "crypto";
 import {
   hasToolResultBlock,
   hasMultipleContentBlocks,
-  normalizeMessages,
-  isNotEmptyMessage,
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
   getToolUseID,
   hasUnresolvedHooksFromLookup,
+  IncrementalMessageNormalizer,
   TranscriptProgressSplitter,
   UnresolvedToolUseTracker,
   MessageLookupsBuilder,
@@ -26,6 +25,7 @@ import {
   filterFoldedScheduledTaskMessages,
   createAssistantMessage,
   deriveUUID,
+  normalizeMessages,
   shouldShowUserMessage,
   reorderMessagesInUI,
   buildProgressLookups,
@@ -34,17 +34,18 @@ import {
   isPositiveCountInSwarm,
 } from "../utils/messages.js";
 import {
+  init_react_production,
+  createContext,
   memo,
   suspenseTypeExport,
-  init_react_production,
   useSyncExternalStore,
   useRef,
   useEffect,
-  createContext,
   useState,
   useLayoutEffect,
   useContext,
 } from "../../vendor/react/cjs/react.production.js";
+import { isPlainObject } from "../utils/objectUtils.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useSessionOrUndefined, useHost } from "../context/session.js";
 import {
@@ -56,7 +57,6 @@ import { LogoV2 } from "./LogoV2/LogoV2.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { FreezeWhenOffscreen } from "./FreezeWhenOffscreen.js";
 import { noticeImpressionEnabled } from "./LogoV2/CondensedLogo.js";
-import { RetainedOutputChecker } from "../utils/messages/incrementalNormalizer.js";
 import { computeSearchText } from "../utils/transcriptSearch.js";
 import { isSubsetOf } from "../utils/fsWatchProbe.js";
 import { collectToolUseIds, isNavigableMessage } from "./messageActions.js";
@@ -82,7 +82,7 @@ import { isNonHumanInboundOrigin } from "../utils/backgroundSessionResume.js";
 import { isHumanOrAutoContinuation, joinTextContent, isPeerOrObserver } from "../utils/messageProvenance.js";
 import { shortUuid, reportMessageWithoutUuid } from "../utils/transcriptDiagnostics.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
-import { shouldShowNotice } from "./SlashCommandLink.js";
+import { shouldShowNotice, slashCommandLinkContext } from "./SlashCommandLink.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { SPINNER_COLUMN_MIN_WIDTH } from "./Spinner/SpinnerColumn.js";
 import { useShortcutDisplay } from "../keybindings/useShortcutDisplay.js";
@@ -90,7 +90,8 @@ import { env } from "../utils/env.js";
 import { resolveTranscriptMode, useTranscriptMode } from "./messages/transcriptModeContext.js";
 import { isBashOutputText } from "../constants/xml.js";
 import { messagesSinceCompactBoundary } from "../services/projects/threadRows.js";
-import { countToolCallsSince_2 } from "../utils/groupToolUses.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import { groupToolUses } from "../utils/groupToolUses.js";
 import { collapseBackgroundBashNotifications } from "../utils/collapseBackgroundBashNotifications.js";
 import { collapseHookSummaries } from "../utils/collapseHookSummaries.js";
 import {
@@ -106,8 +107,9 @@ import { getMaterializedSessionFile } from "../utils/sessionStorage.js";
 import { isScreenReaderMode } from "../utils/accessibility/screenReader.js";
 import { setTranscriptFrontCut } from "../ink/render-to-screen-reader.js";
 import { hasContentAfterIndex, MessageRow } from "./MessageRow.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { agentMessageOverflows } from "./messages/AgentMessage.js";
+import { isEvalToolCallName } from "../tools/REPLTool/constants.js";
 import { getErrorMessageIfRefusal } from "../services/api/errors.js";
 import { getAdvisorRefusalText } from "../utils/advisor.js";
 import { mcpRenderOverrideFor } from "./Message.js";
@@ -133,10 +135,10 @@ import { isTaggedPeerText } from "../utils/crossSessionMessages.js";
 import { crossSessionPreviewHidesBody } from "./messages/UserCrossSessionMessage.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:33717-34121 fingerprint (2.1.88 match: dropTextInBriefTurns, 1)
-function dropTextInBriefTurns(snapshot) {
+//@ chunk-aac6cgbf.js:2042-2446 placement
+function unansweredToolBriefs(snapshot) {
   let briefByTurn = new Map();
-  let turnsWithBrief = new Set();
+  let answeredIds = new Set();
   for (let j = snapshot.length - 1; j >= 0; j--) {
     let message = snapshot[j];
     if (message.type === "assistant") {
@@ -151,31 +153,66 @@ function dropTextInBriefTurns(snapshot) {
       continue;
     }
     for (let block of content)
-      if (typeof block !== "string" && block.type === "tool_result") turnsWithBrief.add(block.tool_use_id);
+      if (typeof block !== "string" && block.type === "tool_result") answeredIds.add(block.tool_use_id);
   }
-  for (let toolUseId of turnsWithBrief) briefByTurn.delete(toolUseId);
+  for (let toolUseId of answeredIds) briefByTurn.delete(toolUseId);
   return briefByTurn;
 }
-//@ chunk-ag5x7vhf.js:117168-117911 callgraph-fingerprint (2.1.88 match: LogoHeader, 0.199)
+//@ chunk-5yfs8sfq.js:265-269 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5yfs8sfq.js:265", () => {
+  init_react_production();
+});
+//@ chunk-5yfs8sfq.js:269-298 placement
+var SCRIPT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SuggestionSlot;
+deferInit("chunk-5yfs8sfq.js:269", () => {
+  SCRIPT = "script:";
+  SuggestionSlot = createContext(null);
+});
+//@ chunk-5yfs8sfq.js:298-331 layout
+function withScriptPrefix(text) {
+  return `${SCRIPT}${text}`;
+}
+//@ chunk-5yfs8sfq.js:331-370 layout
+function hasScriptPrefix(text) {
+  return text.startsWith(SCRIPT);
+}
+//@ chunk-5yfs8sfq.js:370-459 placement
+/**
+ * 从工具结果里取可展示的 code 字段（非空白字符串才给）。
+ */
+function getCode(value) {
+  return isPlainObject(value) && typeof value.code === "string" && value.code.trim() !== ""
+    ? value.code
+    : undefined;
+}
+//@ chunk-hnxhr3bs.js:116405-116409 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:116405", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:121325-122102 callgraph-fingerprint (2.1.88 match: LogoHeader, 0.199)
 var LogoHeader; // deferred: uses useSessionOrUndefined (../context/session.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ag5x7vhf.js:117168", () => {
+deferInit("chunk-hnxhr3bs.js:121325", () => {
   LogoHeader = memo(function (props) {
-    let $ = useMemoCache(14);
+    let $ = useMemoCache(15);
     let { latchAnnouncementSlot, hideWelcomeChrome, homeMessage, hideLogo } = props;
     let latchAnnouncement = latchAnnouncementSlot === undefined ? true : latchAnnouncementSlot;
     let hideWelcome = hideWelcomeChrome === undefined ? false : hideWelcomeChrome;
     let homeMessageFlag = homeMessage === undefined ? false : homeMessage;
-    let hideLogo_2 = hideLogo === undefined ? false : hideLogo;
+    let hideLogoFlag = hideLogo === undefined ? false : hideLogo;
     let hasSession = useSessionOrUndefined() !== undefined;
+    const gap = hideLogoFlag ? 0 : 1;
     const flexGrow = homeMessageFlag ? 1 : 0;
     let updateSummary;
-    if ($[0] !== hideLogo_2 || $[1] !== hideWelcome) {
+    if ($[0] !== hideLogoFlag || $[1] !== hideWelcome) {
       updateSummary =
         !hideWelcome &&
         jsxProd_default(StartupUpdateSummary, {
-          hideLogo: hideLogo_2,
+          hideLogo: hideLogoFlag,
         });
-      $[0] = hideLogo_2;
+      $[0] = hideLogoFlag;
       $[1] = hideWelcome;
       $[2] = updateSummary;
     } else updateSummary = $[2];
@@ -196,34 +233,40 @@ deferInit("chunk-ag5x7vhf.js:117168", () => {
       $[6] = logoElement;
     } else logoElement = $[6];
     let children;
-    if ($[7] !== flexGrow || $[8] !== updateSummary || $[9] !== logoElement) {
+    if ($[7] !== gap || $[8] !== flexGrow || $[9] !== updateSummary || $[10] !== logoElement) {
       children = jsxProd_default_2(Box, {
         flexDirection: "column",
-        gap: 1,
+        gap,
         flexGrow,
         children: [updateSummary, null, logoElement],
       });
-      $[7] = flexGrow;
-      $[8] = updateSummary;
-      $[9] = logoElement;
-      $[10] = children;
-    } else children = $[10];
+      $[7] = gap;
+      $[8] = flexGrow;
+      $[9] = updateSummary;
+      $[10] = logoElement;
+      $[11] = children;
+    } else children = $[11];
     let freezeWhenOffscreenElement;
-    if ($[11] !== latchAnnouncement || $[12] !== children) {
+    if ($[12] !== latchAnnouncement || $[13] !== children) {
       freezeWhenOffscreenElement = jsxProd_default(FreezeWhenOffscreen, {
         children: jsxProd_default(noticeImpressionEnabled.Provider, {
           value: latchAnnouncement,
           children,
         }),
       });
-      $[11] = latchAnnouncement;
-      $[12] = children;
-      $[13] = freezeWhenOffscreenElement;
-    } else freezeWhenOffscreenElement = $[13];
+      $[12] = latchAnnouncement;
+      $[13] = children;
+      $[14] = freezeWhenOffscreenElement;
+    } else freezeWhenOffscreenElement = $[14];
     return freezeWhenOffscreenElement;
   });
 });
-//@ chunk-ag5x7vhf.js:126968-127017 placement
+//@ chunk-hnxhr3bs.js:122143-122147 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:122143", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:131159-131208 placement
 function createEmptySlice() {
   return {
     head: undefined,
@@ -231,7 +274,7 @@ function createEmptySlice() {
     seed: false,
   };
 }
-//@ chunk-ag5x7vhf.js:127017-127168 placement
+//@ chunk-hnxhr3bs.js:131208-131359 placement
 function scanForMultiBlockMessage(messages, count, cache) {
   if (messages[0] !== cache.head || count < cache.upTo) {
     cache.head = messages[0];
@@ -243,132 +286,14 @@ function scanForMultiBlockMessage(messages, count, cache) {
   cache.upTo = count;
   return cache.seed;
 }
-//@ chunk-ag5x7vhf.js:127168-128928 sole-consumer
-/**
- * UI 侧增量规范化缓存：复用与上次输入相同的前后缀（末尾 RECENT=4 条总是重算），只对变化部分调用 normalizeMessages；探针发现损坏时整体重建（damageRebuilds）。
- */
-class IncrementalMessageNormalizer {
-  cache;
-  static RECENT = 4;
-  static PRUNE_PENDING_AT = 64;
-  input = [];
-  output = [];
-  starts = [0];
-  chainAt = [false];
-  pending = new Map();
-  lastWalked = 0;
-  damageRebuilds = 0;
-  probe = new RetainedOutputChecker();
-  inputLength = 0;
-  constructor(cache) {
-    this.cache = cache;
-  }
-  normalize(messages, chainFlag) {
-    let input = this.input;
-    let max = Math.max(0, messages.length - IncrementalMessageNormalizer.RECENT);
-    let headMatches = 0;
-    let tailMatches = 0;
-    if (this.chainAt[0] === chainFlag) {
-      let min = Math.min(input.length, max);
-      while (headMatches < min && input[headMatches] === messages[headMatches]) headMatches++;
-      let min_2 = Math.min(input.length - headMatches, max - headMatches);
-      while (
-        tailMatches < min_2 &&
-        input[input.length - 1 - tailMatches] === messages[messages.length - 1 - tailMatches]
-      )
-        tailMatches++;
-    }
-    if (input.length !== this.inputLength) {
-      headMatches = 0;
-      tailMatches = 0;
-    }
-    if (
-      !this.probe.intact(
-        this.output,
-        this.starts,
-        this.chainAt,
-        headMatches,
-        tailMatches,
-        this.inputLength,
-        messages.length,
-        "normalize",
-      )
-    ) {
-      headMatches = 0;
-      tailMatches = 0;
-      this.input = [];
-      this.inputLength = 0;
-      this.output = [];
-      this.starts = [0];
-      this.chainAt = [false];
-      this.damageRebuilds++;
-    }
-    let sliced = this.output.slice(0, this.starts[headMatches]);
-    let sliced_2 = this.starts.slice(0, headMatches + 1);
-    let sliced_3 = this.chainAt.slice(0, headMatches + 1);
-    if (headMatches === 0) sliced_3[0] = chainFlag;
-    let chain = sliced_3[headMatches];
-    let walked = 0;
-    let walkRange = (from, to) => {
-      for (let index = from; index < to; index++) {
-        let message = messages[index];
-        for (let normalized of normalizeMessages([message], chain, this.cache))
-          if (isNotEmptyMessage(normalized)) sliced.push(normalized);
-        this.notePending(message, chain);
-        if (hasMultipleContentBlocks(message)) chain = true;
-        sliced_2.push(sliced.length);
-        sliced_3.push(chain);
-        walked++;
-      }
-    };
-    let tailStart = messages.length - tailMatches;
-    walkRange(headMatches, tailStart);
-    let tailIndex = input.length - tailMatches;
-    if (tailMatches > 0 && this.chainAt[tailIndex] === chain) {
-      let offset = sliced.length - this.starts[tailIndex];
-      for (let index = this.starts[tailIndex]; index < this.output.length; index++)
-        sliced.push(this.output[index]);
-      for (let idx = tailIndex + 1; idx <= input.length; idx++) {
-        sliced_2.push(this.starts[idx] + offset);
-        sliced_3.push(this.chainAt[idx]);
-      }
-    } else walkRange(tailStart, messages.length);
-    this.refreshPending(messages);
-    this.input = messages;
-    this.inputLength = messages.length;
-    this.output = sliced;
-    this.starts = sliced_2;
-    this.chainAt = sliced_3;
-    this.lastWalked = walked;
-    return sliced;
-  }
-  notePending(message, chain) {
-    if (message.type !== "assistant") return;
-    if (message.message.stop_reason === null) this.pending.set(message, chain);
-    else this.pending.delete(message);
-  }
-  refreshPending(messages) {
-    if (this.pending.size === 0) return;
-    let liveSet =
-      this.pending.size > IncrementalMessageNormalizer.PRUNE_PENDING_AT ? new Set(messages) : null;
-    for (let [message, chain] of this.pending) {
-      if (liveSet !== null && !liveSet.has(message)) {
-        this.pending.delete(message);
-        continue;
-      }
-      normalizeMessages([message], chain, this.cache);
-      this.notePending(message, chain);
-    }
-  }
-}
-//@ chunk-ag5x7vhf.js:136421-136460 placement
+//@ chunk-hnxhr3bs.js:140611-140650 placement
 var INTERRUPT_MESSAGE_TEXTS; // deferred: uses INTERRUPT_MESSAGE (../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
 var weakMap_3;
-deferInit("chunk-ag5x7vhf.js:136421", () => {
+deferInit("chunk-hnxhr3bs.js:140611", () => {
   INTERRUPT_MESSAGE_TEXTS = new Set([INTERRUPT_MESSAGE, INTERRUPT_MESSAGE_FOR_TOOL_USE]);
   weakMap_3 = new WeakMap();
 });
-//@ chunk-ag5x7vhf.js:136460-136561 placement
+//@ chunk-hnxhr3bs.js:140650-140751 placement
 /**
  * 取消息的小写搜索文本，按消息对象 WeakMap 缓存。
  */
@@ -379,12 +304,12 @@ function getMessageSearchText(msg) {
   weakMap_3.set(msg, lower);
   return lower;
 }
-//@ chunk-ag5x7vhf.js:138975-138979 placement
+//@ chunk-hnxhr3bs.js:143165-143169 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:138975", () => {
+deferInit("chunk-hnxhr3bs.js:143165", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:147372-148064 fingerprint (2.1.88 match: shouldRenderStatically, 0.736)
+//@ chunk-hnxhr3bs.js:151692-152384 fingerprint (2.1.88 match: shouldRenderStatically, 0.715)
 function shouldRenderStatically(
   message,
   streamingToolUseIDs,
@@ -427,13 +352,18 @@ function shouldRenderStatically(
       return true;
   }
 }
-//@ chunk-ag5x7vhf.js:148068-148926 placement
+//@ chunk-hnxhr3bs.js:152384-152388 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:152384", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:152388-153246 placement
 /**
  * 说话人标签组件槽（初始 null）；同一声明里的 ql 是流式输出文本行组件。
  */
 var speakerLabelComponent; // deferred: uses Box (../ink/components/Text.js) of its import cycle while loading; runs once the cycle is complete
 var StreamingTextRow;
-deferInit("chunk-ag5x7vhf.js:148068", () => {
+deferInit("chunk-hnxhr3bs.js:152388", () => {
   speakerLabelComponent = null;
   StreamingTextRow = memo(function (props) {
     let $ = useMemoCache(14);
@@ -511,34 +441,34 @@ deferInit("chunk-ag5x7vhf.js:148068", () => {
     return columnElement;
   });
 });
-//@ chunk-ag5x7vhf.js:148926-148930 placement
+//@ chunk-hnxhr3bs.js:153246-153250 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:148926", () => {
+deferInit("chunk-hnxhr3bs.js:153246", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:148930-148934 placement
+//@ chunk-hnxhr3bs.js:153250-153254 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:148930", () => {
+deferInit("chunk-hnxhr3bs.js:153250", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:148934-149008 placement
+//@ chunk-hnxhr3bs.js:153254-153328 placement
 function useCommandQueue() {
   let commandQueueOrDefault = useCommandQueueOrDefault();
   return useSyncExternalStore(commandQueueOrDefault.subscribe, commandQueueOrDefault.getCommandQueueSnapshot);
 }
-//@ chunk-ag5x7vhf.js:149162-149198 placement
+//@ chunk-hnxhr3bs.js:153482-153518 placement
 function selectIsLoading(state) {
   return state.isLoading;
 }
-//@ chunk-ag5x7vhf.js:149198-149230 placement
+//@ chunk-hnxhr3bs.js:153518-153550 placement
 function selectTasks(state) {
   return state.tasks;
 }
-//@ chunk-ag5x7vhf.js:149230-149293 placement
+//@ chunk-hnxhr3bs.js:153550-153613 placement
 function terminalProgressEnabled() {
   return resolveSetting("terminalProgressBarEnabled", true).value;
 }
-//@ chunk-ag5x7vhf.js:149293-149989 placement
+//@ chunk-hnxhr3bs.js:153613-154309 placement
 /**
  * 根据加载状态、进行中的工具与后台 agent/工作流，计算任务进度并通过终端通知（OSC 进度）上报；卸载时清除。
  */
@@ -618,12 +548,7 @@ function TerminalTaskProgress(props) {
   useEffect(cleanupProgress, cleanupProgressDeps);
   return null;
 }
-//@ chunk-ag5x7vhf.js:149989-149993 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:149989", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:149993-150071 placement
+//@ chunk-hnxhr3bs.js:154313-154391 placement
 function shrinkTerminalSize(size, reservedColumns) {
   return reservedColumns === 0
     ? size
@@ -632,117 +557,102 @@ function shrinkTerminalSize(size, reservedColumns) {
         rows: size.rows,
       };
 }
-//@ chunk-ag5x7vhf.js:150628-150632 placement
+//@ chunk-hnxhr3bs.js:154948-154952 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:150628", () => {
+deferInit("chunk-hnxhr3bs.js:154948", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:150632-150636 placement
+//@ chunk-hnxhr3bs.js:154952-154956 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:150632", () => {
+deferInit("chunk-hnxhr3bs.js:154952", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:151691-151707 placement
-var SuggestionSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:151691", () => {
-  SuggestionSlot = createContext(null);
-});
-//@ chunk-ag5x7vhf.js:151707-151711 placement
+//@ chunk-hnxhr3bs.js:156007-156011 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:151707", () => {
+deferInit("chunk-hnxhr3bs.js:156007", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:151711-151715 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:151711", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:158357-158361 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:158357", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:176529-176563 placement
+//@ chunk-hnxhr3bs.js:180831-180865 placement
 function selectVerbose_2(state) {
   return state.verbose;
 }
-//@ chunk-ag5x7vhf.js:176563-176605 placement
+//@ chunk-hnxhr3bs.js:180865-180907 placement
 function selectBriefTranscript(state) {
   return state.briefTranscript;
 }
-//@ chunk-ag5x7vhf.js:176605-176653 placement
+//@ chunk-hnxhr3bs.js:180907-180955 placement
 function selectHasRemoteReplyChannel(state) {
   return state.hasRemoteReplyChannel;
 }
-//@ chunk-ag5x7vhf.js:176653-176709 placement
+//@ chunk-hnxhr3bs.js:180955-181011 placement
 function selectActiveAgents(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ag5x7vhf.js:176709-176757 placement
+//@ chunk-hnxhr3bs.js:181011-181059 placement
 function selectShowMessageTimestamps(state) {
   return state.showMessageTimestamps;
 }
-//@ chunk-ag5x7vhf.js:176757-176803 placement
+//@ chunk-hnxhr3bs.js:181059-181105 placement
 function isSilkHingeEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_silk_hinge", false);
 }
-//@ chunk-ag5x7vhf.js:176803-176828 placement
+//@ chunk-hnxhr3bs.js:181105-181130 placement
 function returnFalse_2(state) {
   return false;
 }
-//@ chunk-ag5x7vhf.js:176828-176869 placement
+//@ chunk-hnxhr3bs.js:181130-181171 placement
 function createIncrementalNormalizer() {
   return new IncrementalMessageNormalizer(new WeakMap());
 }
-//@ chunk-ag5x7vhf.js:176869-176897 placement
+//@ chunk-hnxhr3bs.js:181171-181199 placement
 function createProgressSplitter() {
   return new TranscriptProgressSplitter();
 }
-//@ chunk-ag5x7vhf.js:176897-176925 placement
+//@ chunk-hnxhr3bs.js:181199-181227 placement
 function createToolUseTracker() {
   return new UnresolvedToolUseTracker();
 }
-//@ chunk-ag5x7vhf.js:176925-176953 placement
+//@ chunk-hnxhr3bs.js:181227-181255 placement
 function createLookupsBuilder() {
   return new MessageLookupsBuilder();
 }
-//@ chunk-ag5x7vhf.js:176953-176982 placement
+//@ chunk-hnxhr3bs.js:181255-181284 placement
 function createIncrementalCollapser() {
   return new IncrementalCollapser();
 }
-//@ chunk-ag5x7vhf.js:176982-177010 placement
+//@ chunk-hnxhr3bs.js:181284-181312 placement
 function createRowProjector() {
   return new RowLookupsProjector();
 }
-//@ chunk-ag5x7vhf.js:177010-177043 placement
+//@ chunk-hnxhr3bs.js:181312-181345 placement
 function createWeakMap() {
   return new WeakMap();
 }
-//@ chunk-ag5x7vhf.js:177043-177076 placement
+//@ chunk-hnxhr3bs.js:181345-181378 placement
 function createWeakMap_2() {
   return new WeakMap();
 }
-//@ chunk-ag5x7vhf.js:177076-177104 placement
+//@ chunk-hnxhr3bs.js:181378-181406 placement
 function createDedupeState() {
   return new StreamingToolUseDeduper();
 }
-//@ chunk-ag5x7vhf.js:177104-177137 placement
+//@ chunk-hnxhr3bs.js:181406-181439 placement
 function createWeakMap_3() {
   return new WeakMap();
 }
-//@ chunk-ag5x7vhf.js:177137-177167 placement
+//@ chunk-hnxhr3bs.js:181439-181469 placement
 function isVisibleMessage(message) {
   return !isInvisibleMessage(message);
 }
-//@ chunk-ag5x7vhf.js:177167-177198 placement
+//@ chunk-hnxhr3bs.js:181469-181500 placement
 function messageUuid(message) {
   return message.uuid;
 }
-//@ chunk-ag5x7vhf.js:177198-177261 placement
+//@ chunk-hnxhr3bs.js:181500-181563 placement
 function createSegmenter() {
   return transcriptPlugin === null ? null : new transcriptPlugin.TranscriptSegmenter();
 }
-//@ chunk-ag5x7vhf.js:177261-177351 placement
+//@ chunk-hnxhr3bs.js:181563-181653 placement
 function pendingToUserMessage(pending, imageId) {
   let { text, origin } = pending;
   return createUserMessage({
@@ -751,59 +661,63 @@ function pendingToUserMessage(pending, imageId) {
     uuid: placeholderImageId(imageId),
   });
 }
-//@ chunk-ag5x7vhf.js:177351-177380 placement
+//@ chunk-hnxhr3bs.js:181653-181682 placement
 function createIdSet() {
   return new Set();
 }
-//@ chunk-ag5x7vhf.js:177380-177413 placement
+//@ chunk-hnxhr3bs.js:181682-181754 layout
+function isNotInformational(message) {
+  return message.type !== "system" || message.subtype !== "informational";
+}
+//@ chunk-hnxhr3bs.js:181754-181787 placement
 function createWeakMap_4() {
   return new WeakMap();
 }
-//@ chunk-ag5x7vhf.js:177413-177460 placement
+//@ chunk-hnxhr3bs.js:181787-181834 placement
 function isToolResultContent(content) {
   return content.type === "tool_result";
 }
-//@ chunk-ag5x7vhf.js:177460-177496 placement
+//@ chunk-hnxhr3bs.js:181834-181870 placement
 function selectLoading(state) {
   return state.isLoading;
 }
-//@ chunk-ag5x7vhf.js:177496-177540 placement
+//@ chunk-hnxhr3bs.js:181870-181914 placement
 function selectStreamingToolUses(state) {
   return state.streamingToolUses;
 }
-//@ chunk-ag5x7vhf.js:177540-177588 placement
+//@ chunk-hnxhr3bs.js:181914-181962 placement
 function selectUserInputOnProcessing(state) {
   return state.userInputOnProcessing;
 }
-//@ chunk-ag5x7vhf.js:177588-177632 placement
+//@ chunk-hnxhr3bs.js:181962-182006 placement
 function selectPlaceholderOrigin(state) {
   return state.placeholderOrigin;
 }
-//@ chunk-ag5x7vhf.js:177632-177687 placement
+//@ chunk-hnxhr3bs.js:182006-182061 placement
 function selectFollowingPrompts(state) {
   return state.followingPromptsOnProcessing;
 }
-//@ chunk-ag5x7vhf.js:177687-177738 placement
+//@ chunk-hnxhr3bs.js:182061-182112 placement
 function selectPlaceholderWaitedInQueue(state) {
   return state.placeholderWaitedInQueue;
 }
-//@ chunk-ag5x7vhf.js:177738-177776 placement
+//@ chunk-hnxhr3bs.js:182112-182150 placement
 function selectIsBriefOnly(state) {
   return state.isBriefOnly;
 }
-//@ chunk-ag5x7vhf.js:177776-177810 placement
+//@ chunk-hnxhr3bs.js:182150-182184 placement
 function selectVerbose_2_2(state) {
   return state.verbose;
 }
-//@ chunk-ag5x7vhf.js:177810-177849 placement
+//@ chunk-hnxhr3bs.js:182184-182223 placement
 function selectSettledReply(state) {
   return state.settledReply;
 }
-//@ chunk-ag5x7vhf.js:177849-177880 placement
+//@ chunk-hnxhr3bs.js:182223-182254 placement
 function selectUuid(state) {
   return state.uuid;
 }
-//@ chunk-ag5x7vhf.js:177880-178116 file-local
+//@ chunk-hnxhr3bs.js:182254-182490 file-local
 var BRIEF_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
 var SEND_USER_FILE_TOOL_NAME;
 var isBriefEnabled;
@@ -811,7 +725,7 @@ var replyChannelProjectorModule;
 var isPewterOwlTool;
 var transcriptPlugin;
 var replyPlugin;
-deferInit("chunk-ag5x7vhf.js:177880", () => {
+deferInit("chunk-hnxhr3bs.js:182254", () => {
   BRIEF_TOOL_NAME = require("../tools/BriefTool/prompt.js").BRIEF_TOOL_NAME;
   SEND_USER_FILE_TOOL_NAME = require("../tools/SendUserFileTool/prompt.js").SEND_USER_FILE_TOOL_NAME;
   isBriefEnabled = require("../tools/BriefTool/BriefTool.js").isBriefEnabled;
@@ -820,7 +734,7 @@ deferInit("chunk-ag5x7vhf.js:177880", () => {
   transcriptPlugin = null;
   replyPlugin = null;
 });
-//@ chunk-ag5x7vhf.js:178116-179178 fingerprint (2.1.88 match: filterForBriefTool, 0.892)
+//@ chunk-hnxhr3bs.js:182490-183552 fingerprint (2.1.88 match: filterForBriefTool, 0.875)
 function filterForBriefTool(messages, briefToolNames, briefOnlyToolNames) {
   let nameSet = new Set(briefToolNames);
   let briefOnlyNames = new Set(briefOnlyToolNames);
@@ -886,15 +800,15 @@ function filterForBriefTool(messages, briefToolNames, briefOnlyToolNames) {
     return false;
   });
 }
-//@ chunk-ag5x7vhf.js:179178-179721 layout (2.1.88 match: hasSuccessfulToolCall, 0.85)
-function hasSuccessfulToolCall(messages, toolName) {
-  let toolNameSet = new Set(toolName);
+//@ chunk-hnxhr3bs.js:183552-184095 layout
+function dropSucceededBriefTurns(messages, briefToolNames) {
+  let toolNameSet = new Set(briefToolNames);
   let successfulTurns = new Set();
   let turnByToolUseId = new Map();
   let turnByMessageIndex = [];
   let humanTurnIndex = 0;
-  for (let idx = 0; idx < messages.length; idx++) {
-    let message = messages[idx];
+  for (let i = 0; i < messages.length; i++) {
+    let message = messages[i];
     let firstBlock = message.message?.content[0];
     if (message.type === "user" && firstBlock?.type !== "tool_result" && !message.isMeta) {
       humanTurnIndex++;
@@ -902,7 +816,7 @@ function hasSuccessfulToolCall(messages, toolName) {
     }
     if (message.type === "assistant") {
       if (firstBlock?.type === "text" || isSignedThinkingBlock(firstBlock))
-        turnByMessageIndex[idx] = humanTurnIndex;
+        turnByMessageIndex[i] = humanTurnIndex;
       else if (
         firstBlock?.type === "tool_use" &&
         firstBlock.name &&
@@ -921,37 +835,37 @@ function hasSuccessfulToolCall(messages, toolName) {
   }
   if (successfulTurns.size === 0) return messages;
   return messages.filter((message, index) => {
-    let toolName = turnByMessageIndex[index];
-    return toolName === undefined || !successfulTurns.has(toolName);
+    let t = turnByMessageIndex[index];
+    return t === undefined || !successfulTurns.has(t);
   });
 }
-//@ chunk-ag5x7vhf.js:179721-179749 layout
+//@ chunk-hnxhr3bs.js:184095-184123 layout
 var MAX_RECENT_MESSAGES = 30;
 var SLICE_STEP = 50;
 var MAX_THINKING_ROWS = 200;
 var GUTTER_WIDTH = 2;
-//@ chunk-ag5x7vhf.js:179749-179897 layout
-function isSplitUserMessagePart(msg, prevType) {
-  if (msg.type !== "user" || prevType?.type !== "user") return false;
-  let shortId = shortUuid(msg);
+//@ chunk-hnxhr3bs.js:184123-184271 layout
+function isSplitUserMessagePart(message, prevType) {
+  if (message.type !== "user" || prevType?.type !== "user") return false;
+  let shortId = shortUuid(message);
   return (
     shortId !== undefined &&
     shortId === shortUuid(prevType) &&
     prevType.message.content[0]?.type !== "tool_result"
   );
 }
-//@ chunk-ag5x7vhf.js:179897-180008 layout
+//@ chunk-hnxhr3bs.js:184271-184382 layout
 function findSpeakerLabelAbove(messages, startIndex) {
   let index = startIndex;
   while (index > 0 && isSplitUserMessagePart(messages[index], messages[index - 1])) index--;
   let candidate = messages[index - 1];
   return candidate?.type === "speaker_label" ? candidate : undefined;
 }
-//@ chunk-ag5x7vhf.js:180008-180052 layout
+//@ chunk-hnxhr3bs.js:184382-184426 layout
 function streamingThinkingRows(rows, isFullscreen) {
   return isFullscreen ? Math.min(MAX_THINKING_ROWS, rows) : MAX_THINKING_ROWS;
 }
-//@ chunk-ag5x7vhf.js:180052-180371 layout
+//@ chunk-hnxhr3bs.js:184426-184745 layout
 /**
  * 消息列表切片缓存：会话 id 或 verbose 变化时失效 preCap/slice。
  */
@@ -982,7 +896,7 @@ class MessagesSliceCache {
     }
   }
 }
-//@ chunk-ag5x7vhf.js:180371-180761 fingerprint (2.1.88 match: computeSliceStart, 0.738)
+//@ chunk-hnxhr3bs.js:184745-185135 fingerprint (2.1.88 match: computeSliceStart, 0.738)
 function computeSliceStart(collapsed, anchorRef, cap, step = SLICE_STEP) {
   let anchor = anchorRef.current;
   let anchorIdx = anchor
@@ -1005,7 +919,7 @@ function computeSliceStart(collapsed, anchorRef, cap, step = SLICE_STEP) {
   else if (msgAtStart === undefined && anchor) anchorRef.current = null;
   return start;
 }
-//@ chunk-ag5x7vhf.js:180761-181053 layout
+//@ chunk-hnxhr3bs.js:185135-185427 layout
 function adjustSliceStartForReplies(messages, start, step = SLICE_STEP) {
   if (transcriptPlugin === null) return start;
   let { isLabelledReply, replyRunRowAbove, sitsBetweenReplies } = transcriptPlugin;
@@ -1021,9 +935,9 @@ function adjustSliceStartForReplies(messages, start, step = SLICE_STEP) {
   } else index = start;
   return index > 0 && messages[index - 1]?.type === "speaker_label" ? index - 1 : Math.min(index, start);
 }
-//@ chunk-ag5x7vhf.js:181053-199016 fingerprint (2.1.88 match: MessagesImpl, 0.526)
+//@ chunk-hnxhr3bs.js:185427-204031 fingerprint (2.1.88 match: MessagesImpl, 0.507)
 function MessagesImpl(props) {
-  let $ = useMemoCache(284);
+  let $ = useMemoCache(294);
   let {
     messages,
     tools,
@@ -1287,7 +1201,14 @@ function MessagesImpl(props) {
       $[62] = showUserMessage;
     } else showUserMessage = $[62];
     let dropTextToolNames = briefToolNames.filter(showUserMessage);
-    let reordered = reorderMessagesInUI(dropTextToolNames, syntheticStreamingToolUseMessages);
+    let reordered = reorderMessagesInUI(
+      codeModeAccepted()
+        ? require("../utils/codeMode/isReplScriptHelperCall.lazy.js").withoutScriptHelperPairs(
+            dropTextToolNames,
+          )
+        : dropTextToolNames,
+      syntheticStreamingToolUseMessages,
+    );
     let messages =
       replyChannelProjectorModule !== null && hasRemoteReplyChannel
         ? replyChannelProjectorModule.projectReplyChannelToolUses(
@@ -1305,12 +1226,12 @@ function MessagesImpl(props) {
       !isTranscriptScreen && (isBriefEnabled() || !isPewterOwlTool())
         ? briefMessagesOnly
           ? filterForBriefTool(messages, briefToolNames_2, briefOnlyToolNames)
-          : hasSuccessfulToolCall(messages, briefOnlyToolNames)
+          : dropSucceededBriefTurns(messages, briefOnlyToolNames)
         : messages;
     let briefFiltered_2 = briefFiltered;
     let windowed = isWindowed ? briefFiltered_2.slice(-MAX_RECENT_MESSAGES) : briefFiltered_2;
     let isTruncated = isWindowed && briefFiltered.length > MAX_RECENT_MESSAGES;
-    let { messages: messages_2 } = countToolCallsSince_2(windowed, tools, isVerbose, activeAgents);
+    let { messages: messages_2 } = groupToolUses(windowed, tools, isVerbose, activeAgents);
     let collapsed = collapseBackgroundBashNotifications(
       collapseHookSummaries(
         collapseHookAttachments(
@@ -1411,12 +1332,12 @@ function MessagesImpl(props) {
   } else mergedLookups = $[73];
   let lookups_2 = mergedLookups;
   let navigableBase;
-  UL: {
+  PU: {
     let keepTextReplies =
       replyChannelProjectorModule !== null && hasRemoteReplyChannel && !isTranscriptScreen && !isVerbose;
     if (!(isFullscreen && (briefTranscript || keepTextReplies) && !isTranscriptScreen)) {
       navigableBase = collapsedBase_2;
-      break UL;
+      break PU;
     }
     let getTaskStats;
     if ($[74] !== appStoreDirect) {
@@ -1537,10 +1458,10 @@ function MessagesImpl(props) {
   } else foldedAgents = $[101];
   let foldedAgentMessages = foldedAgents;
   let collapsedMessages;
-  mJ: {
+  BJ: {
     if (!isTranscriptV2 || segmenter === null) {
       collapsedMessages = transcriptMessages;
-      break mJ;
+      break BJ;
     }
     let segmented;
     if (
@@ -1604,7 +1525,7 @@ function MessagesImpl(props) {
     $[122] !== sliceCache.slice ||
     $[123] !== isVirtualized
   ) {
-    pJ: {
+    FJ: {
       let sliceStart =
         !isVirtualized && !isUncapped
           ? computeSliceStart(messages_2, sliceCache.slice, isStreamingThinkingVisible)
@@ -1629,7 +1550,7 @@ function MessagesImpl(props) {
           $[131] = sliceResult_2;
         } else sliceResult_2 = $[131];
         sliceResult = sliceResult_2;
-        break pJ;
+        break FJ;
       }
       if (sliceStart > 0) {
         let adjustedStart = hasFoldedAgents ? adjustSliceStartForReplies(messages_2, sliceStart) : sliceStart;
@@ -1645,7 +1566,7 @@ function MessagesImpl(props) {
           $[134] = sliceResult_3;
         } else sliceResult_3 = $[134];
         sliceResult = sliceResult_3;
-        break pJ;
+        break FJ;
       }
       let sliceResult_4;
       if ($[135] !== messages_2) {
@@ -1735,10 +1656,10 @@ function MessagesImpl(props) {
     $[152] !== isTranscriptV2 ||
     $[153] !== unseenDivider
   ) {
-    fJ: {
+    HJ: {
       if (!unseenDivider) {
         unseenIndex = -1;
-        break fJ;
+        break HJ;
       }
       let unseenUuidShort;
       let foundIndex;
@@ -1761,13 +1682,13 @@ function MessagesImpl(props) {
       let foundIndex_2 = foundIndex;
       if (foundIndex_2 !== -1 || foldedAgentMessages === null) {
         unseenIndex = foundIndex_2;
-        break fJ;
+        break HJ;
       }
       let index = transcriptMessages.findIndex((message) => shortUuid(message) === unseenUuidShort);
       let firstUnseen = index === -1 ? undefined : transcriptMessages[index];
       if (firstUnseen === undefined || !foldedAgentMessages.folded.has(firstUnseen)) {
         unseenIndex = -1;
-        break fJ;
+        break HJ;
       }
       let selectedIdx = buildShortUuidIndex(renderableMessages, isTranscriptV2);
       for (let idx = index + 1; idx < transcriptMessages.length; idx++) {
@@ -1779,7 +1700,7 @@ function MessagesImpl(props) {
         let index = candidateShortUuid === undefined ? undefined : selectedIdx.get(candidateShortUuid);
         if (index !== undefined) {
           unseenIndex = index;
-          break fJ;
+          break HJ;
         }
       }
       unseenIndex = -1;
@@ -1800,11 +1721,11 @@ function MessagesImpl(props) {
     $[163] !== renderableMessages ||
     $[164] !== messages_2
   ) {
-    gJ: {
+    VJ: {
       let hiddenRows = new Set();
       if (!hasFoldedAgents) {
         replyHiddenRows = hiddenRows;
-        break gJ;
+        break VJ;
       }
       let { isLabelledReply, replyRunRowAbove } = transcriptPlugin;
       for (let idx = 0; idx < renderableMessages.length; idx++) {
@@ -1841,9 +1762,10 @@ function MessagesImpl(props) {
         : undefined;
   let [expandedKeys, setExpandedKeys] = useState(createIdSet);
   let toggleExpanded;
-  if ($[166] === MEMO_CACHE_SENTINEL) {
+  if ($[166] !== expandedKeys) {
     toggleExpanded = (msg) => {
       let k = expandKey(msg);
+      if (hasScriptPrefix(k) && !expandedKeys.has(k)) logFeatureOk("repl_script_source_open");
       setExpandedKeys((prev) => {
         let next = new Set(prev);
         if (next.has(k)) next.delete(k);
@@ -1851,19 +1773,34 @@ function MessagesImpl(props) {
         return next;
       });
     };
-    $[166] = toggleExpanded;
-  } else toggleExpanded = $[166];
+    $[166] = expandedKeys;
+    $[167] = toggleExpanded;
+  } else toggleExpanded = $[167];
   let onItemClick = toggleExpanded;
   let isExpanded;
-  if ($[167] !== expandedKeys) {
+  if ($[168] !== expandedKeys) {
     isExpanded = (msg_5) => expandedKeys.size > 0 && expandedKeys.has(expandKey(msg_5));
-    $[167] = expandedKeys;
-    $[168] = isExpanded;
-  } else isExpanded = $[168];
+    $[168] = expandedKeys;
+    $[169] = isExpanded;
+  } else isExpanded = $[169];
   let isExpandedStable = isExpanded;
+  let scriptSourceSelection;
+  if ($[170] !== expandedKeys || $[171] !== scriptSources) {
+    scriptSourceSelection =
+      codeModeAccepted() && scriptSources
+        ? {
+            all: scriptSources === "whole",
+            keys: expandedKeys,
+          }
+        : null;
+    $[170] = expandedKeys;
+    $[171] = scriptSources;
+    $[172] = scriptSourceSelection;
+  } else scriptSourceSelection = $[172];
+  let scriptSourceSelectionStable = scriptSourceSelection;
   let reportMissingUuid;
   let reportDeps;
-  if ($[169] !== host || $[170] !== renderableMessages || $[171] !== screen || $[172] !== isVirtualized) {
+  if ($[173] !== host || $[174] !== renderableMessages || $[175] !== screen || $[176] !== isVirtualized) {
     reportMissingUuid = () => {
       reportMessageWithoutUuid(host, renderableMessages, {
         virtualized: isVirtualized,
@@ -1871,24 +1808,24 @@ function MessagesImpl(props) {
       });
     };
     reportDeps = [host, renderableMessages, isVirtualized, screen];
-    $[169] = host;
-    $[170] = renderableMessages;
-    $[171] = screen;
-    $[172] = isVirtualized;
-    $[173] = reportMissingUuid;
-    $[174] = reportDeps;
+    $[173] = host;
+    $[174] = renderableMessages;
+    $[175] = screen;
+    $[176] = isVirtualized;
+    $[177] = reportMissingUuid;
+    $[178] = reportDeps;
   } else {
-    reportMissingUuid = $[173];
-    reportDeps = $[174];
+    reportMissingUuid = $[177];
+    reportDeps = $[178];
   }
   useEffect(reportMissingUuid, reportDeps);
   let inboundLabelRows;
-  if ($[175] !== messages_2 || $[176] !== isTranscriptV2) {
-    hJ: {
+  if ($[179] !== messages_2 || $[180] !== isTranscriptV2) {
+    WJ: {
       let rows = new Set();
       if (!isTranscriptV2) {
         inboundLabelRows = rows;
-        break hJ;
+        break WJ;
       }
       inboundLabelRows =
         (messages_2.forEach((message, idx) => {
@@ -1900,24 +1837,25 @@ function MessagesImpl(props) {
         }),
         rows);
     }
-    $[175] = messages_2;
-    $[176] = isTranscriptV2;
-    $[177] = inboundLabelRows;
-  } else inboundLabelRows = $[177];
+    $[179] = messages_2;
+    $[180] = isTranscriptV2;
+    $[181] = inboundLabelRows;
+  } else inboundLabelRows = $[181];
   let inboundLabelRows_2 = inboundLabelRows;
   let isItemClickableRaw;
   if (
-    $[178] !== bashSplitCache ||
-    $[179] !== columns ||
-    $[180] !== crossSessionBodies ||
-    $[181] !== host ||
-    $[182] !== isTranscriptScreen ||
-    $[183] !== gutterSize ||
-    $[184] !== latestBashOutputUuid_2 ||
-    $[185] !== lookups_2 ||
-    $[186] !== inboundLabelRows_2 ||
-    $[187] !== tools ||
-    $[188] !== isVerbose
+    $[182] !== bashSplitCache ||
+    $[183] !== columns ||
+    $[184] !== crossSessionBodies ||
+    $[185] !== host ||
+    $[186] !== isTranscriptScreen ||
+    $[187] !== gutterSize ||
+    $[188] !== latestBashOutputUuid_2 ||
+    $[189] !== lookups_2 ||
+    $[190] !== inboundLabelRows_2 ||
+    $[191] !== scriptSourceSelectionStable ||
+    $[192] !== tools ||
+    $[193] !== isVerbose
   ) {
     isItemClickableRaw = (msg_6) => {
       if (msg_6.type === "collapsed_read_search") {
@@ -1951,6 +1889,13 @@ function MessagesImpl(props) {
       }
       if (msg_6.type === "assistant") {
         let block = msg_6.message.content[0];
+        if (
+          scriptSourceSelectionStable !== null &&
+          block?.type === "tool_use" &&
+          isEvalToolCallName(block.name)
+        ) {
+          return getCode(block.input) !== undefined;
+        }
         if (isVerbose || isTranscriptScreen) {
           return false;
         }
@@ -2019,26 +1964,27 @@ function MessagesImpl(props) {
           : undefined) ?? false
       );
     };
-    $[178] = bashSplitCache;
-    $[179] = columns;
-    $[180] = crossSessionBodies;
-    $[181] = host;
-    $[182] = isTranscriptScreen;
-    $[183] = gutterSize;
-    $[184] = latestBashOutputUuid_2;
-    $[185] = lookups_2;
-    $[186] = inboundLabelRows_2;
-    $[187] = tools;
-    $[188] = isVerbose;
-    $[189] = isItemClickableRaw;
-  } else isItemClickableRaw = $[189];
+    $[182] = bashSplitCache;
+    $[183] = columns;
+    $[184] = crossSessionBodies;
+    $[185] = host;
+    $[186] = isTranscriptScreen;
+    $[187] = gutterSize;
+    $[188] = latestBashOutputUuid_2;
+    $[189] = lookups_2;
+    $[190] = inboundLabelRows_2;
+    $[191] = scriptSourceSelectionStable;
+    $[192] = tools;
+    $[193] = isVerbose;
+    $[194] = isItemClickableRaw;
+  } else isItemClickableRaw = $[194];
   let isItemClickable = isItemClickableRaw;
   let dialogOfKind = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
   let canAnimate = !pauseAnimation_2 && !dialogOfKind;
   let prevProgressState = useContext(TerminalWriteContext);
   let historyWriterEffect;
   let historyWriterDeps;
-  if ($[190] !== prevProgressState) {
+  if ($[195] !== prevProgressState) {
     historyWriterEffect = () => {
       if (!prevProgressState) {
         return;
@@ -2047,51 +1993,69 @@ function MessagesImpl(props) {
       return () => clearHistoryWriter(prevProgressState);
     };
     historyWriterDeps = [prevProgressState];
-    $[190] = prevProgressState;
-    $[191] = historyWriterEffect;
-    $[192] = historyWriterDeps;
+    $[195] = prevProgressState;
+    $[196] = historyWriterEffect;
+    $[197] = historyWriterDeps;
   } else {
-    historyWriterEffect = $[191];
-    historyWriterDeps = $[192];
+    historyWriterEffect = $[196];
+    historyWriterDeps = $[197];
   }
   useEffect(historyWriterEffect, historyWriterDeps);
   let itemKey;
-  if ($[193] !== conversationId) {
+  if ($[198] !== conversationId) {
     itemKey = (msg_7) => `${msg_7.uuid}-${conversationId}`;
-    $[193] = conversationId;
-    $[194] = itemKey;
-  } else itemKey = $[194];
+    $[198] = conversationId;
+    $[199] = itemKey;
+  } else itemKey = $[199];
   let itemKey_2 = itemKey;
+  let suggestionSlotEnabled = useContext(slashCommandLinkContext);
+  let topNoticeBoundary;
+  jJ: {
+    if (!suggestionSlotEnabled) {
+      topNoticeBoundary = 0;
+      break jJ;
+    }
+    let firstNonInformationalIndex;
+    if ($[200] !== messages_2) {
+      firstNonInformationalIndex = messages_2.findIndex(isNotInformational);
+      $[200] = messages_2;
+      $[201] = firstNonInformationalIndex;
+    } else firstNonInformationalIndex = $[201];
+    let cutIndex = firstNonInformationalIndex;
+    topNoticeBoundary = cutIndex === -1 ? messages_2.length : cutIndex;
+  }
+  let topNoticeCutIndex = topNoticeBoundary;
   let renderItem;
   if (
-    $[195] !== canAnimate ||
-    $[196] !== columns ||
-    $[197] !== commands ||
-    $[198] !== conversationId ||
-    $[199] !== unseenIndex_2 ||
-    $[200] !== hasStreamingText ||
-    $[201] !== inProgressToolUseIDs ||
-    $[202] !== isExpandedStable ||
-    $[203] !== isLoading ||
-    $[204] !== replyHiddenRows_2 ||
-    $[205] !== gutterSize ||
-    $[206] !== hasContentAfter ||
-    $[207] !== latestBashOutputUuid_2 ||
-    $[208] !== spinnerWidth ||
-    $[209] !== lookups_2 ||
-    $[210] !== itemKey_2 ||
-    $[211] !== renderOffset ||
-    $[212] !== renderableMessages ||
-    $[213] !== rowProjector ||
-    $[214] !== screen ||
-    $[215] !== messages_2 ||
-    $[216] !== showMessageTimestamps_2 ||
-    $[217] !== streamingIds_2 ||
-    $[218] !== tools ||
-    $[219] !== turn?.armRateLimitAutoContinue ||
-    $[220] !== turn?.openRateLimitOptions ||
-    $[221] !== unseenDivider ||
-    $[222] !== isVerbose
+    $[202] !== canAnimate ||
+    $[203] !== columns ||
+    $[204] !== commands ||
+    $[205] !== conversationId ||
+    $[206] !== unseenIndex_2 ||
+    $[207] !== hasStreamingText ||
+    $[208] !== inProgressToolUseIDs ||
+    $[209] !== isExpandedStable ||
+    $[210] !== isLoading ||
+    $[211] !== replyHiddenRows_2 ||
+    $[212] !== gutterSize ||
+    $[213] !== hasContentAfter ||
+    $[214] !== latestBashOutputUuid_2 ||
+    $[215] !== spinnerWidth ||
+    $[216] !== lookups_2 ||
+    $[217] !== itemKey_2 ||
+    $[218] !== renderOffset ||
+    $[219] !== renderableMessages ||
+    $[220] !== rowProjector ||
+    $[221] !== screen ||
+    $[222] !== messages_2 ||
+    $[223] !== showMessageTimestamps_2 ||
+    $[224] !== streamingIds_2 ||
+    $[225] !== tools ||
+    $[226] !== topNoticeCutIndex ||
+    $[227] !== turn?.armRateLimitAutoContinue ||
+    $[228] !== turn?.openRateLimitOptions ||
+    $[229] !== unseenDivider ||
+    $[230] !== isVerbose
   ) {
     renderItem = (msg, index) => {
       let prevType = index > 0 ? renderableMessages[index - 1] : undefined;
@@ -2102,6 +2066,7 @@ function MessagesImpl(props) {
         findSpeakerLabelAbove(messages_2, renderOffset + index)?.speaker.kind === "inbound";
       let followsSpeakerLabel = prevCollapsed?.type === "speaker_label";
       let continuesLabelledReply = !followsSpeakerLabel && replyHiddenRows_2.has(index);
+      let joinsTopNotices = renderOffset + index < topNoticeCutIndex;
       let hasContentAfter_2 =
         msg.type === "collapsed_read_search" && (hasStreamingText || index < hasContentAfter);
       let afterInboundLabel_2 = afterInboundLabel;
@@ -2114,6 +2079,7 @@ function MessagesImpl(props) {
           isSplitUserContinuation,
           followsSpeakerLabel,
           continuesLabelledReply,
+          joinsTopNotices,
           followsInboundLabel: afterInboundLabel,
           hasContentAfter: hasContentAfter_2,
           tools,
@@ -2175,40 +2141,41 @@ function MessagesImpl(props) {
       }
       return wrapped;
     };
-    $[195] = canAnimate;
-    $[196] = columns;
-    $[197] = commands;
-    $[198] = conversationId;
-    $[199] = unseenIndex_2;
-    $[200] = hasStreamingText;
-    $[201] = inProgressToolUseIDs;
-    $[202] = isExpandedStable;
-    $[203] = isLoading;
-    $[204] = replyHiddenRows_2;
-    $[205] = gutterSize;
-    $[206] = hasContentAfter;
-    $[207] = latestBashOutputUuid_2;
-    $[208] = spinnerWidth;
-    $[209] = lookups_2;
-    $[210] = itemKey_2;
-    $[211] = renderOffset;
-    $[212] = renderableMessages;
-    $[213] = rowProjector;
-    $[214] = screen;
-    $[215] = messages_2;
-    $[216] = showMessageTimestamps_2;
-    $[217] = streamingIds_2;
-    $[218] = tools;
-    $[219] = turn?.armRateLimitAutoContinue;
-    $[220] = turn?.openRateLimitOptions;
-    $[221] = unseenDivider;
-    $[222] = isVerbose;
-    $[223] = renderItem;
-  } else renderItem = $[223];
+    $[202] = canAnimate;
+    $[203] = columns;
+    $[204] = commands;
+    $[205] = conversationId;
+    $[206] = unseenIndex_2;
+    $[207] = hasStreamingText;
+    $[208] = inProgressToolUseIDs;
+    $[209] = isExpandedStable;
+    $[210] = isLoading;
+    $[211] = replyHiddenRows_2;
+    $[212] = gutterSize;
+    $[213] = hasContentAfter;
+    $[214] = latestBashOutputUuid_2;
+    $[215] = spinnerWidth;
+    $[216] = lookups_2;
+    $[217] = itemKey_2;
+    $[218] = renderOffset;
+    $[219] = renderableMessages;
+    $[220] = rowProjector;
+    $[221] = screen;
+    $[222] = messages_2;
+    $[223] = showMessageTimestamps_2;
+    $[224] = streamingIds_2;
+    $[225] = tools;
+    $[226] = topNoticeCutIndex;
+    $[227] = turn?.armRateLimitAutoContinue;
+    $[228] = turn?.openRateLimitOptions;
+    $[229] = unseenDivider;
+    $[230] = isVerbose;
+    $[231] = renderItem;
+  } else renderItem = $[231];
   let renderItemStable = renderItem;
   let [searchTextCache] = useState(createWeakMap_4);
   let extractSearchTextImpl;
-  if ($[224] !== lookups_2 || $[225] !== searchTextCache || $[226] !== tools) {
+  if ($[232] !== lookups_2 || $[233] !== searchTextCache || $[234] !== tools) {
     extractSearchTextImpl = (msg) => {
       let cached = searchTextCache.get(msg);
       if (cached !== undefined) {
@@ -2233,18 +2200,18 @@ function MessagesImpl(props) {
       if (shouldCache) searchTextCache.set(msg, lowered);
       return lowered;
     };
-    $[224] = lookups_2;
-    $[225] = searchTextCache;
-    $[226] = tools;
-    $[227] = extractSearchTextImpl;
-  } else extractSearchTextImpl = $[227];
+    $[232] = lookups_2;
+    $[233] = searchTextCache;
+    $[234] = tools;
+    $[235] = extractSearchTextImpl;
+  } else extractSearchTextImpl = $[235];
   let extractSearchText = extractSearchTextImpl;
   let streamingTextRow;
   if (
-    $[228] !== hasStreamingText ||
-    $[229] !== briefMessagesOnly ||
-    $[230] !== transcriptV2 ||
-    $[231] !== turn
+    $[236] !== hasStreamingText ||
+    $[237] !== briefMessagesOnly ||
+    $[238] !== transcriptV2 ||
+    $[239] !== turn
   ) {
     streamingTextRow =
       hasStreamingText && !briefMessagesOnly && turn
@@ -2253,32 +2220,33 @@ function MessagesImpl(props) {
             transcriptV2,
           })
         : null;
-    $[228] = hasStreamingText;
-    $[229] = briefMessagesOnly;
-    $[230] = transcriptV2;
-    $[231] = turn;
-    $[232] = streamingTextRow;
-  } else streamingTextRow = $[232];
+    $[236] = hasStreamingText;
+    $[237] = briefMessagesOnly;
+    $[238] = transcriptV2;
+    $[239] = turn;
+    $[240] = streamingTextRow;
+  } else streamingTextRow = $[240];
   let streamingTextRow_2 = streamingTextRow;
   let children;
   if (
-    $[233] !== columns ||
-    $[234] !== extractSearchText ||
-    $[235] !== isFullscreen ||
-    $[236] !== isItemClickable ||
-    $[237] !== isExpandedStable ||
-    $[238] !== isTranscriptScreen ||
-    $[239] !== itemKey_2 ||
-    $[240] !== renderItemStable ||
-    $[241] !== renderableMessages ||
-    $[242] !== reveal ||
-    $[243] !== screenReaderLayout ||
-    $[244] !== scrollViewport ||
-    $[245] !== search?.jumpRef ||
-    $[246] !== search?.onSearchMatchesChange ||
-    $[247] !== search?.scanElement ||
-    $[248] !== search?.setPositions ||
-    $[249] !== isVirtualized
+    $[241] !== columns ||
+    $[242] !== extractSearchText ||
+    $[243] !== isFullscreen ||
+    $[244] !== isItemClickable ||
+    $[245] !== isExpandedStable ||
+    $[246] !== isTranscriptScreen ||
+    $[247] !== itemKey_2 ||
+    $[248] !== onItemClick ||
+    $[249] !== renderItemStable ||
+    $[250] !== renderableMessages ||
+    $[251] !== reveal ||
+    $[252] !== screenReaderLayout ||
+    $[253] !== scrollViewport ||
+    $[254] !== search?.jumpRef ||
+    $[255] !== search?.onSearchMatchesChange ||
+    $[256] !== search?.scanElement ||
+    $[257] !== search?.setPositions ||
+    $[258] !== isVirtualized
   ) {
     children = isVirtualized
       ? jsxProd_default(expandContextSignal.Provider, {
@@ -2308,62 +2276,63 @@ function MessagesImpl(props) {
             children: renderableMessages.flatMap(renderItemStable),
           })
         : renderableMessages.flatMap(renderItemStable);
-    $[233] = columns;
-    $[234] = extractSearchText;
-    $[235] = isFullscreen;
-    $[236] = isItemClickable;
-    $[237] = isExpandedStable;
-    $[238] = isTranscriptScreen;
-    $[239] = itemKey_2;
-    $[240] = renderItemStable;
-    $[241] = renderableMessages;
-    $[242] = reveal;
-    $[243] = screenReaderLayout;
-    $[244] = scrollViewport;
-    $[245] = search?.jumpRef;
-    $[246] = search?.onSearchMatchesChange;
-    $[247] = search?.scanElement;
-    $[248] = search?.setPositions;
-    $[249] = isVirtualized;
-    $[250] = children;
-  } else children = $[250];
+    $[241] = columns;
+    $[242] = extractSearchText;
+    $[243] = isFullscreen;
+    $[244] = isItemClickable;
+    $[245] = isExpandedStable;
+    $[246] = isTranscriptScreen;
+    $[247] = itemKey_2;
+    $[248] = onItemClick;
+    $[249] = renderItemStable;
+    $[250] = renderableMessages;
+    $[251] = reveal;
+    $[252] = screenReaderLayout;
+    $[253] = scrollViewport;
+    $[254] = search?.jumpRef;
+    $[255] = search?.onSearchMatchesChange;
+    $[256] = search?.scanElement;
+    $[257] = search?.setPositions;
+    $[258] = isVirtualized;
+    $[259] = children;
+  } else children = $[259];
   let children_2 = children;
   const value_2 = foldedAgentMessages?.counts ?? monitorEventCache;
   let children_3;
-  if ($[251] !== value || $[252] !== children_2) {
+  if ($[260] !== value || $[261] !== children_2) {
     children_3 = jsxProd_default(CompactSummaryContext, {
       value,
       children: children_2,
     });
-    $[251] = value;
-    $[252] = children_2;
-    $[253] = children_3;
-  } else children_3 = $[253];
+    $[260] = value;
+    $[261] = children_2;
+    $[262] = children_3;
+  } else children_3 = $[262];
   let withMonitorCache;
-  if ($[254] !== value_2 || $[255] !== children_3) {
+  if ($[263] !== value_2 || $[264] !== children_3) {
     withMonitorCache = jsxProd_default(monitorEventCacheStore, {
       value: value_2,
       children: children_3,
     });
-    $[254] = value_2;
-    $[255] = children_3;
-    $[256] = withMonitorCache;
-  } else withMonitorCache = $[256];
+    $[263] = value_2;
+    $[264] = children_3;
+    $[265] = withMonitorCache;
+  } else withMonitorCache = $[265];
   let children_4 = withMonitorCache;
   let hiddenCountLabel;
-  if ($[257] !== hiddenMessageCount_2 || $[258] !== screenReaderLayout) {
+  if ($[266] !== hiddenMessageCount_2 || $[267] !== screenReaderLayout) {
     hiddenCountLabel = screenReaderLayout ? "" : `${sequential.bold(hiddenMessageCount_2)} `;
-    $[257] = hiddenMessageCount_2;
-    $[258] = screenReaderLayout;
-    $[259] = hiddenCountLabel;
-  } else hiddenCountLabel = $[259];
+    $[266] = hiddenMessageCount_2;
+    $[267] = screenReaderLayout;
+    $[268] = hiddenCountLabel;
+  } else hiddenCountLabel = $[268];
   let hiddenCountLabel_2 = hiddenCountLabel;
   let showOlderDivider;
   if (
-    $[260] !== columns ||
-    $[261] !== hasTruncatedMessages_2 ||
-    $[262] !== hiddenCountLabel_2 ||
-    $[263] !== toggleShowAllShortcut
+    $[269] !== columns ||
+    $[270] !== hasTruncatedMessages_2 ||
+    $[271] !== hiddenCountLabel_2 ||
+    $[272] !== toggleShowAllShortcut
   ) {
     showOlderDivider =
       hasTruncatedMessages_2 &&
@@ -2371,21 +2340,21 @@ function MessagesImpl(props) {
         title: `${toggleShowAllShortcut} to show ${hiddenCountLabel_2}previous messages`,
         width: columns,
       });
-    $[260] = columns;
-    $[261] = hasTruncatedMessages_2;
-    $[262] = hiddenCountLabel_2;
-    $[263] = toggleShowAllShortcut;
-    $[264] = showOlderDivider;
-  } else showOlderDivider = $[264];
+    $[269] = columns;
+    $[270] = hasTruncatedMessages_2;
+    $[271] = hiddenCountLabel_2;
+    $[272] = toggleShowAllShortcut;
+    $[273] = showOlderDivider;
+  } else showOlderDivider = $[273];
   let hideOlderDivider;
   if (
-    $[265] !== columns ||
-    $[266] !== isUncapped ||
-    $[267] !== hiddenCountLabel_2 ||
-    $[268] !== hiddenMessageCount_2 ||
-    $[269] !== isTranscriptScreen ||
-    $[270] !== hasHistory ||
-    $[271] !== toggleShowAllShortcut
+    $[274] !== columns ||
+    $[275] !== isUncapped ||
+    $[276] !== hiddenCountLabel_2 ||
+    $[277] !== hiddenMessageCount_2 ||
+    $[278] !== isTranscriptScreen ||
+    $[279] !== hasHistory ||
+    $[280] !== toggleShowAllShortcut
   ) {
     hideOlderDivider =
       isTranscriptScreen &&
@@ -2396,26 +2365,27 @@ function MessagesImpl(props) {
         title: `${toggleShowAllShortcut} to hide ${hiddenCountLabel_2}previous messages`,
         width: columns,
       });
-    $[265] = columns;
-    $[266] = isUncapped;
-    $[267] = hiddenCountLabel_2;
-    $[268] = hiddenMessageCount_2;
-    $[269] = isTranscriptScreen;
-    $[270] = hasHistory;
-    $[271] = toggleShowAllShortcut;
-    $[272] = hideOlderDivider;
-  } else hideOlderDivider = $[272];
+    $[274] = columns;
+    $[275] = isUncapped;
+    $[276] = hiddenCountLabel_2;
+    $[277] = hiddenMessageCount_2;
+    $[278] = isTranscriptScreen;
+    $[279] = hasHistory;
+    $[280] = toggleShowAllShortcut;
+    $[281] = hideOlderDivider;
+  } else hideOlderDivider = $[281];
   let withSuggestionSlot;
-  if ($[273] !== children_4) {
+  if ($[282] !== children_4 || $[283] !== scriptSourceSelectionStable) {
     withSuggestionSlot = jsxProd_default(SuggestionSlot, {
-      value: null,
+      value: scriptSourceSelectionStable,
       children: children_4,
     });
-    $[273] = children_4;
-    $[274] = withSuggestionSlot;
-  } else withSuggestionSlot = $[274];
+    $[282] = children_4;
+    $[283] = scriptSourceSelectionStable;
+    $[284] = withSuggestionSlot;
+  } else withSuggestionSlot = $[284];
   let withSpinnerGutter;
-  if ($[275] !== spinnerWidth || $[276] !== streamingTextRow_2) {
+  if ($[285] !== spinnerWidth || $[286] !== streamingTextRow_2) {
     withSpinnerGutter =
       streamingTextRow_2 !== null && spinnerWidth > 0
         ? jsxProd_default_2(Box, {
@@ -2429,32 +2399,32 @@ function MessagesImpl(props) {
             ],
           })
         : streamingTextRow_2;
-    $[275] = spinnerWidth;
-    $[276] = streamingTextRow_2;
-    $[277] = withSpinnerGutter;
-  } else withSpinnerGutter = $[277];
+    $[285] = spinnerWidth;
+    $[286] = streamingTextRow_2;
+    $[287] = withSpinnerGutter;
+  } else withSpinnerGutter = $[287];
   let finalContent;
   if (
-    $[278] !== contentSize ||
-    $[279] !== showOlderDivider ||
-    $[280] !== hideOlderDivider ||
-    $[281] !== withSuggestionSlot ||
-    $[282] !== withSpinnerGutter
+    $[288] !== contentSize ||
+    $[289] !== showOlderDivider ||
+    $[290] !== hideOlderDivider ||
+    $[291] !== withSuggestionSlot ||
+    $[292] !== withSpinnerGutter
   ) {
     finalContent = jsxProd_default_2(TerminalSizeContext, {
       value: contentSize,
       children: [showOlderDivider, hideOlderDivider, withSuggestionSlot, withSpinnerGutter],
     });
-    $[278] = contentSize;
-    $[279] = showOlderDivider;
-    $[280] = hideOlderDivider;
-    $[281] = withSuggestionSlot;
-    $[282] = withSpinnerGutter;
-    $[283] = finalContent;
-  } else finalContent = $[283];
+    $[288] = contentSize;
+    $[289] = showOlderDivider;
+    $[290] = hideOlderDivider;
+    $[291] = withSuggestionSlot;
+    $[292] = withSpinnerGutter;
+    $[293] = finalContent;
+  } else finalContent = $[293];
   return finalContent;
 }
-//@ chunk-ag5x7vhf.js:199016-199223 layout
+//@ chunk-hnxhr3bs.js:204031-204238 layout
 function findMessageIndexByShortUuid(renderableMessages, searchNested, shortId) {
   return renderableMessages.findIndex(
     (row) =>
@@ -2465,7 +2435,7 @@ function findMessageIndexByShortUuid(renderableMessages, searchNested, shortId) 
           collapsedRowOf(row)?.some((nested) => shortUuid(nested) === shortId) === true)),
   );
 }
-//@ chunk-ag5x7vhf.js:199223-199537 layout
+//@ chunk-hnxhr3bs.js:204238-204552 layout
 /**
  * 为渲染行建立 短 uuid → 行下标 的索引；展开时也收录 work_segment/recap_fold 等折叠组内的消息。
  */
@@ -2490,11 +2460,16 @@ function buildShortUuidIndex(renderableMessages, includeNested) {
   }
   return indexById;
 }
-//@ chunk-ag5x7vhf.js:199537-199618 file-local
+//@ chunk-hnxhr3bs.js:204552-204744 file-local
 function expandKey(msg) {
+  if (codeModeAccepted() && msg.type === "assistant") {
+    let firstBlock = msg.message.content[0];
+    if (firstBlock?.type === "tool_use" && isEvalToolCallName(firstBlock.name))
+      return withScriptPrefix(firstBlock.id);
+  }
   return (msg.type === "assistant" || msg.type === "user" ? getToolUseID(msg) : null) ?? msg.uuid;
 }
-//@ chunk-ag5x7vhf.js:199618-199755 layout
+//@ chunk-hnxhr3bs.js:204744-204881 layout
 function isCrossSessionBodyHidden(cache, text, body, origin) {
   if (isTaggedPeerText(body)) {
     let isHidden = cache.get(text);
@@ -2506,19 +2481,19 @@ function isCrossSessionBodyHidden(cache, text, body, origin) {
   }
   return false;
 }
-//@ chunk-ag5x7vhf.js:199755-199846 file-local
+//@ chunk-hnxhr3bs.js:204881-204972 file-local
 function setsEqual(a, b) {
   if (a.size !== b.size) return false;
   for (let item of a) if (!b.has(item)) return false;
   return true;
 }
-//@ chunk-ag5x7vhf.js:199846-199856 layout
+//@ chunk-hnxhr3bs.js:204972-204982 layout
 var EMPTY_TOOL_USE_LIST = [];
-//@ chunk-ag5x7vhf.js:199856-199910 layout
+//@ chunk-hnxhr3bs.js:204982-205036 layout
 function isNonEmptyString(id) {
   return typeof id === "string" && id.length > 0;
 }
-//@ chunk-ag5x7vhf.js:199910-200003 layout
+//@ chunk-hnxhr3bs.js:205036-205129 layout
 class StreamingToolUseDeduper {
   previous = EMPTY_TOOL_USE_LIST;
   next(streamingToolUses, inProgressIds, resolvedIds) {
@@ -2526,7 +2501,7 @@ class StreamingToolUseDeduper {
     return this.previous;
   }
 }
-//@ chunk-ag5x7vhf.js:200003-200250 layout
+//@ chunk-hnxhr3bs.js:205129-205376 layout
 function dedupeStreamingToolUses(previous, previousList, inProgressIds, resolvedIds) {
   let seenIds = new Set();
   let deduped = [];
@@ -2544,11 +2519,11 @@ function dedupeStreamingToolUses(previous, previousList, inProgressIds, resolved
     return previous;
   return deduped;
 }
-//@ chunk-ag5x7vhf.js:200250-200295 layout
+//@ chunk-hnxhr3bs.js:205376-205421 layout
 function keepPreviousIfSame(previous, messages, canReuse) {
   return canReuse && previous[0] === messages[0] ? previous : messages;
 }
-//@ chunk-ag5x7vhf.js:200295-200980 fingerprint (2.1.88 match: Messages, 0.801)
+//@ chunk-hnxhr3bs.js:205421-206106 fingerprint (2.1.88 match: Messages, 0.794)
 /**
  * 消息列表组件：MessagesImpl 的 memo 版本，自定义比较忽略 scrollViewport/search/reveal，并对 streamingToolUses、inProgressToolUseIDs、unseenDivider、tools 做浅比较。
  */
@@ -2557,7 +2532,7 @@ var EMPTY_ID_SET;
 var EMPTY_ARRAY_A;
 var EMPTY_ARRAY_B;
 var EMPTY_ARRAY_C;
-deferInit("chunk-ag5x7vhf.js:200295", () => {
+deferInit("chunk-hnxhr3bs.js:205421", () => {
   Messages = memo(MessagesImpl, (prev, next) => {
     let keys = Object.keys(prev);
     for (let key of keys) {
@@ -2597,13 +2572,8 @@ deferInit("chunk-ag5x7vhf.js:200295", () => {
   EMPTY_ARRAY_C = [];
 });
 export {
-  dropTextInBriefTurns,
   useCommandQueue,
-  LogoHeader,
-  INTERRUPT_MESSAGE_TEXTS,
-  shouldRenderStatically,
-  shrinkTerminalSize,
-  getMessageSearchText,
+  unansweredToolBriefs,
   selectLoading,
   selectStreamingToolUses,
   EMPTY_TOOL_USE_LIST,
@@ -2623,4 +2593,12 @@ export {
   EMPTY_ID_SET,
   Messages,
   TerminalTaskProgress,
+  LogoHeader,
+  shrinkTerminalSize,
+  INTERRUPT_MESSAGE_TEXTS,
+  shouldRenderStatically,
+  getMessageSearchText,
+  SuggestionSlot,
+  withScriptPrefix,
+  getCode,
 };

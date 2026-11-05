@@ -3,9 +3,9 @@
  *
  * 表格组件 Table（列宽 fill/ratio/min/max、表头、Row）的前半部分（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2nmyajw8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tkka6eha.js (13)
  * attribution: placement 13
  */
 import {
@@ -27,24 +27,24 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2nmyajw8.js:567-571 placement
+//@ chunk-tkka6eha.js:568-572 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2nmyajw8.js:567", () => {
+deferInit("chunk-tkka6eha.js:568", () => {
   init_react_production();
 });
-//@ chunk-2nmyajw8.js:571-624 placement
+//@ chunk-tkka6eha.js:572-625 placement
 function childArray(cell) {
   return childrenExport.toArray(cell.props.children);
 }
-//@ chunk-2nmyajw8.js:624-666 placement
+//@ chunk-tkka6eha.js:625-667 placement
 function hasHeader(row) {
   return row.header !== undefined;
 }
-//@ chunk-2nmyajw8.js:666-699 placement
+//@ chunk-tkka6eha.js:667-700 placement
 function headerOf(row) {
   return row.header;
 }
-//@ chunk-2nmyajw8.js:699-768 placement
+//@ chunk-tkka6eha.js:700-769 placement
 /**
  * 表格列间距 2 与 fill 列的最小宽度 12。
  */
@@ -55,13 +55,13 @@ var TABLE_ALIGN_TO_FLEX = {
 };
 var TABLE_COLUMN_GAP = 2;
 var TABLE_FILL_MIN_WIDTH = 12;
-//@ chunk-2nmyajw8.js:768-875 placement
+//@ chunk-tkka6eha.js:769-876 placement
 function isTextLike(cell) {
   if (typeof cell === "string" || typeof cell === "number") return true;
   if (isValidElement_default(cell) && cell.type === fragmentTypeExport) return true;
   return false;
 }
-//@ chunk-2nmyajw8.js:875-970 placement (2.1.88 match: StyledText, 1)
+//@ chunk-tkka6eha.js:876-971 placement (2.1.88 match: StyledText, 1)
 function applyEmphasis(cell, style, isHeader) {
   if (!isTextLike(cell)) return cell;
   return jsxProd_default(Text, {
@@ -70,11 +70,11 @@ function applyEmphasis(cell, style, isHeader) {
     children: cell,
   });
 }
-//@ chunk-2nmyajw8.js:970-1001 placement
+//@ chunk-tkka6eha.js:971-1002 placement
 function nodeWidth(header) {
   return bunStringWidth(reactNodeText(header));
 }
-//@ chunk-2nmyajw8.js:1001-1575 placement
+//@ chunk-tkka6eha.js:1002-1576 placement
 /**
  * 计算表格各列宽度：固定数字直接用，fill 先置 0，ratio 列按比例分配剩余宽度（扣除列间距），其余按内容最大宽度夹在 min/max 内。
  */
@@ -109,7 +109,7 @@ function computeColumnWidths(columns, rows, hasHeaders, totalWidth) {
   }
   return widths;
 }
-//@ chunk-2nmyajw8.js:1575-2503 placement
+//@ chunk-tkka6eha.js:1576-2504 placement
 /**
  * 表格行：按列宽渲染单元格，最后一列可填满剩余宽度并换行。
  */
@@ -199,7 +199,7 @@ function TableRow(props) {
   } else rowElement = $[15];
   return rowElement;
 }
-//@ chunk-2nmyajw8.js:2503-2612 placement
+//@ chunk-tkka6eha.js:2504-2614 placement
 function TableRowGroup(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -213,7 +213,7 @@ function TableRowGroup(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-2nmyajw8.js:2612-3202 placement
+//@ chunk-tkka6eha.js:2614-3204 placement
 /**
  * 表格组件：按终端宽度（或 forceWidth）计算列宽，有表头时先渲染表头行，再逐行渲染子元素的单元格。
  */
@@ -280,9 +280,9 @@ function Table(props) {
   } else table = $[11];
   return table;
 }
-//@ chunk-2nmyajw8.js:3202-3234 placement (2.1.88 match: FlexDirection, 1)
+//@ chunk-tkka6eha.js:3204-3236 placement (2.1.88 match: FlexDirection, 1)
 var FlexDirectionRow; // deferred: uses Table of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2nmyajw8.js:3202", () => {
+deferInit("chunk-tkka6eha.js:3204", () => {
   FlexDirectionRow = Object.assign(Table, {
     Row: TableRowGroup,
   });

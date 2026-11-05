@@ -3,9 +3,9 @@
  *
  * Artifact 实时订阅提示文本（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tsrpnscb.js (39)
  * attribution: placement 39
  */
 import { enqueuePendingNotification } from "../../utils/messageQueueManager.js";
@@ -38,7 +38,7 @@ import { monitorStorage, stopCommentMonitorIntent } from "./commentMonitor.js";
 import { setLedgerStorage, forgetArtifactAndFlush } from "./comments/autoreactLedger.js";
 import { isSlugYielded, isSlugSwept, emitSummonArm, isSlugStopped } from "./summonArms.js";
 import { hasWatchArtifactArg } from "../../cli/watchArtifactArgs.js";
-import { forgetHeardVersion, isRetryableStatus, recordHeardVersion } from "./liveSubscribe.js";
+import { forgetHeardVersion, isUnavailableStatus, recordHeardVersion } from "./liveSubscribe.js";
 import { touchCommentReadState, markCensusDirty } from "./comments/threadPrompts.js";
 import { isAutoreactArmed } from "./comments/postReply.js";
 import { formatDuration } from "../../utils/format.js";
@@ -48,11 +48,11 @@ import {
   toWebSocketUrl,
 } from "../../tools/MonitorTool/websocketMonitor.js";
 import {
-  ACCESS_PROBE_TIMEOUT_MS,
-  isOtherOrg,
-  OTHER_ORG_PHRASE as OTHER_ORG_PHRASE_2,
-  PUBLIC_OUTSIDE_ORG_NOTE,
-  LOGIN_OTHER_ORG_REMEDY,
+  CONTROL_PLANE_REQUEST_TIMEOUT_MS,
+  isArtifactInOtherOrg,
+  ARTIFACT_OTHER_ORG_CAUSE,
+  PUBLIC_OUTSIDE_ORG_WATCH_CAUSE,
+  ARTIFACT_OTHER_ORG_REMEDY,
 } from "./orgScope.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isFrameLiveTokenLeaseEnabled } from "./frameFlags.js";
@@ -63,8 +63,8 @@ import { ARTIFACT_WATCH_LIFECYCLE } from "../../constants/xml.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { stoppedWatchingNotice } from "../../tools/ArtifactTool/artifactNotices.js";
 import { mainAgentId } from "../../bootstrap/state.js";
-import { fetchArtifactBoot } from "./boot.js";
-import { getLiveSubscriptionToken } from "./audience.js";
+import { fetchBootUngated } from "./boot.js";
+import { liveChannelCredential } from "./audience.js";
 import { createTokenBucket, BUCKET_CAPACITY, TOKEN_REFILL_MS } from "../../utils/tokenBucket.js";
 import { VER_SHAPE, isOwnPublishedVer, isPublishInFlight } from "./ownPublishes.js";
 import { PASSIVE } from "./pageScripts.js";
@@ -72,7 +72,7 @@ import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { pickByToolset, commentsToolAction } from "./artifactToolGates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqdf5t3e.js:25720-25795 placement
+//@ chunk-tsrpnscb.js:25761-25836 placement
 /**
  * frame-live 实时订阅的协议标识 frame-live.v1、通知入队函数与 25 s 重试间隔。
  */
@@ -81,11 +81,11 @@ var liveNotificationEnqueuer = {
   enqueuePendingNotification: (notice) => enqueuePendingNotification(notice),
 };
 var ARM_RETRY_DELAY_WORDING_MS = 25000;
-//@ chunk-aqdf5t3e.js:25795-25854 placement
+//@ chunk-tsrpnscb.js:25836-25895 placement
 function noteArtifactToolActivity() {
   getLiveState().live.lastArtifactToolCallAt = Date.now();
 }
-//@ chunk-aqdf5t3e.js:25854-26204 placement
+//@ chunk-tsrpnscb.js:25895-26245 placement
 /**
  * 自动回复恢复相关的常量：时间窗口，以及"如何再次暂停/彻底停止自动回复"与"非本意时如何停止"的提示文字。
  */
@@ -94,7 +94,7 @@ var PAUSE_AUTO_REPLIES_HINT =
   "To pause them again, press Ctrl+C at an idle prompt (Stop in Desktop/SDK); to stop them for good, \u2715 the watch in the tasks list or use the kill-all-agents gesture.";
 var UNINTENDED_RESUME_HINT =
   "If this wasn't intended, kill the task again to stop them for this artifact, or use the kill-all-agents gesture to disarm auto-replies for the whole session.";
-//@ chunk-aqdf5t3e.js:26204-26548 placement
+//@ chunk-tsrpnscb.js:26245-26589 placement
 /**
  * 把某 slug 的监听从"显式"降为自动布防：更新监听器标志与运行中监听任务的描述。
  */
@@ -128,7 +128,7 @@ function demoteExplicitWatch(live, slug, registry) {
           : task,
       );
 }
-//@ chunk-aqdf5t3e.js:26548-27039 placement
+//@ chunk-tsrpnscb.js:26589-27080 placement
 /**
  * 响应停止某个监听任务：任务被用户停止时确认停止锁存、停止评论监听意图并停掉同 slug 的其他任务；否则只在任务与监听器匹配时停掉监听器。非模型发起时记录停止。返回之前是否在监听。
  */
@@ -165,7 +165,7 @@ function stopWatchFromTask(slug, event) {
   if (event.modelOrigin !== true) hasWatchArtifactArg(slug, storage);
   return unsub;
 }
-//@ chunk-aqdf5t3e.js:27039-27543 placement
+//@ chunk-tsrpnscb.js:27080-27584 placement
 /**
  * 停掉某 slug 的监听器与所有运行中的监听任务（可宣告结束），清除自动回复状态与被清扫标记，忘掉该 artifact 的缓存；返回之前是否在监听。
  */
@@ -200,7 +200,7 @@ function stopWatchesForSlug(options) {
     wasWatching,
   };
 }
-//@ chunk-aqdf5t3e.js:27543-27786 placement
+//@ chunk-tsrpnscb.js:27584-27827 placement
 function supervisorOwnsTask(live, slug, taskId) {
   let supervisor = live.supervisors.get(slug);
   if (supervisor === undefined || supervisor.stopped) return false;
@@ -208,7 +208,7 @@ function supervisorOwnsTask(live, slug, taskId) {
   if (supervisor.taskId === undefined || supervisor.taskId !== taskId.taskId) return false;
   return supervisor.timer !== undefined || live.inFlightSubscribes.has(slug);
 }
-//@ chunk-aqdf5t3e.js:27786-27901 placement
+//@ chunk-tsrpnscb.js:27827-27942 placement
 /**
  * 停止并移除某 slug 的监听器，清除相关缓存，并通知头部订阅源结束。
  */
@@ -222,18 +222,26 @@ function removeSupervisor(live, slug) {
   disposePresenceSlug(slug);
   liveDocHeadSink(slug)?.sourceEnded();
 }
-//@ chunk-aqdf5t3e.js:27901-28130 placement
+//@ chunk-tsrpnscb.js:27942-28225 placement
 /**
  * 合并自动响应接线配置：人类回合快照时只打标记；否则用新的上下文与发布转录设置覆盖。
  */
 function mergeAutoReactWiring(autoReactWiring, autoReactWiring_2, snapshot) {
+  let title = autoReactWiring_2.title ?? autoReactWiring?.title;
+  let withTitle =
+    title === undefined
+      ? autoReactWiring_2
+      : {
+          ...autoReactWiring_2,
+          title,
+        };
   if (snapshot)
     return {
-      ...autoReactWiring_2,
+      ...withTitle,
       humanTurnSnapshot: true,
     };
   if (autoReactWiring === undefined) return autoReactWiring_2;
-  let { humanTurnSnapshot, ...rest } = autoReactWiring_2;
+  let { humanTurnSnapshot, ...rest } = withTitle;
   return {
     ...rest,
     context: autoReactWiring.context,
@@ -243,7 +251,7 @@ function mergeAutoReactWiring(autoReactWiring, autoReactWiring_2, snapshot) {
     }),
   };
 }
-//@ chunk-aqdf5t3e.js:28130-28278 placement
+//@ chunk-tsrpnscb.js:28225-28373 placement
 /**
  * 判断监督器的人类回合快照接线是否已过期（新接线不是快照或上下文不同）。
  */
@@ -254,7 +262,7 @@ function isHumanTurnWiringStale(live, slug, autoReactWiring) {
     (autoReactWiring?.humanTurnSnapshot !== true || autoReactWiring_2.context !== autoReactWiring.context)
   );
 }
-//@ chunk-aqdf5t3e.js:28278-29576 placement
+//@ chunk-tsrpnscb.js:28373-29671 placement
 /**
  * 新建或更新某 slug 的实时监听器：已有时刷新活动时间、取消重连定时器、按需更新布防来源与显式标志、合并自动回复接线（新接上时广播）；没有时创建并初始化评论阅读状态。
  */
@@ -324,7 +332,7 @@ function upsertSupervisor(live, options) {
   touchCommentReadState(options.slug, supervisor.watchedSince);
   return supervisor;
 }
-//@ chunk-aqdf5t3e.js:29636-29845 placement
+//@ chunk-tsrpnscb.js:29731-29940 placement
 function isIdleAutoWatch(state, slug) {
   let { rewatchTiming } = state;
   if (rewatchTiming.idleTtlMs <= 0) return false;
@@ -340,19 +348,19 @@ function isIdleAutoWatch(state, slug) {
     (!isSlugStopped(slug.slug) || isSlugSwept(slug.slug))
   );
 }
-//@ chunk-aqdf5t3e.js:29845-29928 placement
+//@ chunk-tsrpnscb.js:29940-30023 placement
 function isRecentOwnPublish(state, slug) {
   return slug.slug === state.mostRecentPublishSlug && slug.armedVia !== "mcp_write";
 }
-//@ chunk-aqdf5t3e.js:29928-29993 placement
+//@ chunk-tsrpnscb.js:30023-30088 placement
 function labelledArmedVia(options, armedVia) {
   return options ? "watch" : armedVia === "watch" ? "watch_stopped" : armedVia;
 }
-//@ chunk-aqdf5t3e.js:29993-30048 placement
+//@ chunk-tsrpnscb.js:30088-30143 placement
 function parseArmedVia(value) {
   return MONITOR_WS_ACTIVITY_KINDS.find((kind) => kind === value) ?? "publish";
 }
-//@ chunk-aqdf5t3e.js:30048-31200 placement
+//@ chunk-tsrpnscb.js:30143-31295 placement
 function armedViaWording(via) {
   switch (via) {
     case "publish":
@@ -399,7 +407,7 @@ function armedViaWording(via) {
       };
   }
 }
-//@ chunk-aqdf5t3e.js:31200-31506 placement
+//@ chunk-tsrpnscb.js:31295-31601 placement
 /**
  * 描述空闲退役的原因：何时如何布防、超过多久没有活动。
  */
@@ -416,27 +424,28 @@ function describeIdleRetirement(state, slug) {
     },
   )} ${text}`;
 }
-//@ chunk-aqdf5t3e.js:31506-31563 placement
+//@ chunk-tsrpnscb.js:31601-31658 placement
 function isHandshakeStall(code, info, rewatchTiming) {
   return code === HANDSHAKE_TIMEOUT || info >= rewatchTiming.stallThresholdMs;
 }
-//@ chunk-aqdf5t3e.js:31563-31638 placement
+//@ chunk-tsrpnscb.js:31658-31733 placement
 function isRetryableUpgradeRejection(code) {
   let upgradeRejection = parseUpgradeRejection(code);
   return (
-    upgradeRejection !== null && (isRetryableStatus(upgradeRejection.status) || upgradeRejection.cfMitigated)
+    upgradeRejection !== null &&
+    (isUnavailableStatus(upgradeRejection.status) || upgradeRejection.cfMitigated)
   );
 }
-//@ chunk-aqdf5t3e.js:31638-31734 placement
+//@ chunk-tsrpnscb.js:31733-31829 placement
 function maxStallAge(rewatchTiming) {
   return (
     Math.max(rewatchTiming.stallMaxMs, rewatchTiming.longStallMaxMs) +
-    2 * ACCESS_PROBE_TIMEOUT_MS +
+    2 * CONTROL_PLANE_REQUEST_TIMEOUT_MS +
     rewatchTiming.handshakeDeadlineMs +
     60000
   );
 }
-//@ chunk-aqdf5t3e.js:31734-33741 placement
+//@ chunk-tsrpnscb.js:31829-33836 placement
 function describeResumedWatchFailure(liveState, slug, failure) {
   let { uptimeMs, resumeNeverOpened = false, stalled = false } = failure;
   let { rewatchTiming } = liveState;
@@ -547,7 +556,7 @@ function describeResumedWatchFailure(liveState, slug, failure) {
   supervisor.timer.unref?.();
   supervisor.nextRewatchAt = Date.now() + reconnectDelay;
 }
-//@ chunk-aqdf5t3e.js:33741-34559 placement
+//@ chunk-tsrpnscb.js:33836-34654 placement
 /**
  * 结束一个监听：移除监听器（未被停止锁存时记结束结果，自动回复的交还接管），处理恢复宣告的放弃回调；非 MCP 写入布防时向主会话发送"监听已结束"的任务通知（附原因与建议）。
  */
@@ -595,7 +604,7 @@ function endWatch(
     agentId: mainAgentId(),
   });
 }
-//@ chunk-aqdf5t3e.js:34559-34744 placement
+//@ chunk-tsrpnscb.js:34654-34839 placement
 /**
  * 以"本会话早先已停止监视"为由结束监视，并建议除非用户要求不要再监视。
  */
@@ -609,7 +618,7 @@ function endStoppedWatch(
     advice: "do not watch it again unless the user asks you to",
   });
 }
-//@ chunk-aqdf5t3e.js:34744-34946 placement
+//@ chunk-tsrpnscb.js:34839-35041 placement
 /**
  * 布防被跳过时的统一处理：必要时描述恢复失败、记录布防失败，返回 skipped 结果（可带不可用与 HTTP 状态）。
  */
@@ -631,7 +640,7 @@ function skipArm(state, slug, machineArm, stateSlug, reason, { unavailable = fal
       }),
   };
 }
-//@ chunk-aqdf5t3e.js:34946-35144 placement
+//@ chunk-tsrpnscb.js:35041-35239 placement
 /**
  * 恢复监视被跳过时，若监督器仍在且没有定时器，则报告恢复失败（可带停滞与 HTTP 状态）。
  */
@@ -647,7 +656,7 @@ function describeSkippedResume(state, slug, argSlug, { unavailable = false, http
       }),
     });
 }
-//@ chunk-aqdf5t3e.js:35144-36316 placement
+//@ chunk-tsrpnscb.js:35239-36411 placement
 /**
  * 重连定时器到点后重新布防监听：已停止锁存的结束监听；否则以机器布防方式重新订阅，连接类失败记录并描述，其他跳过原因则结束监听并给出建议。
  */
@@ -715,7 +724,7 @@ async function rewatchSupervisor(live, slug) {
       );
     }
 }
-//@ chunk-aqdf5t3e.js:36316-37357 placement
+//@ chunk-tsrpnscb.js:36411-37452 placement
 async function describeSubscribeFailure(state, slug) {
   let supervisor = state.supervisors.get(slug);
   let lease = supervisor?.lease;
@@ -730,7 +739,7 @@ async function describeSubscribeFailure(state, slug) {
   lease.probed = true;
   let failure;
   try {
-    failure = await fetchArtifactBoot(
+    failure = await fetchBootUngated(
       {
         slug,
         env: claudeAiEnvironment(),
@@ -754,7 +763,7 @@ async function describeSubscribeFailure(state, slug) {
         : undefined
       : failure.status === 404
         ? "not_found"
-        : isOtherOrg(failure)
+        : isArtifactInOtherOrg(failure)
           ? "other_org"
           : undefined;
   if (detail !== undefined) {
@@ -775,7 +784,7 @@ async function describeSubscribeFailure(state, slug) {
         });
     return;
   }
-  if (failure.err === null && getLiveSubscriptionToken(failure.data) !== undefined) {
+  if (failure.err === null && liveChannelCredential(failure.data) !== undefined) {
     logFeatureOk("artifact_live_subscribe", {
       read_refused_boot_ok: true,
     });
@@ -791,13 +800,13 @@ async function describeSubscribeFailure(state, slug) {
     delete supervisor.renewable;
   }
 }
-//@ chunk-aqdf5t3e.js:37357-37430 placement
+//@ chunk-tsrpnscb.js:37452-37525 placement
 function frameLiveWsUrl(slug) {
   return toWebSocketUrl(new URL(`/edge-api/frame-live/${slug}/ws`, getClaudeAiOrigin()));
 }
-//@ chunk-aqdf5t3e.js:37430-37439 placement
+//@ chunk-tsrpnscb.js:37525-37534 placement
 var MAX_SURFACED_VERSIONS = 8;
-//@ chunk-aqdf5t3e.js:37439-38633 placement
+//@ chunk-tsrpnscb.js:37534-38728 placement
 /**
  * 为实时订阅创建事件处理：comment 事件刷新活动并在自动回复开启时安排线程扫描；ver 事件过滤掉自己发布的、已知的、发布中的版本并限速，记下新版本后回调 onSurfaced。
  */
@@ -894,7 +903,7 @@ function createLiveEventHandlers(options) {
     ver: surfaceVersion,
   };
 }
-//@ chunk-aqdf5t3e.js:58569-59765 placement
+//@ chunk-tsrpnscb.js:58664-59860 placement
 var AUTO_REPLIES_ARMED_TOKEN = "auto-replies armed";
 var AUTO_REPLIES_PAUSED_ROW =
   "auto-replies paused by the user's interrupt (Ctrl+C or Stop) \u2014 the user's next message resumes them, as does a publish of this artifact the user asks for or an asked-for resume (publishing it without being asked, while handling a notification or a wake-up, leaves them paused); comments sent to Claude meanwhile are answered then; no comment notifications arrive until then (do not republish or resume just to re-enable them)";
@@ -904,13 +913,13 @@ var AUTO_REPLIES_DECLINED_ROW =
   "auto mode did not approve the last comment's auto-reply; the next comment is checked again unless repeated refusals pause the thread";
 var AUTO_REPLIES_DENIED_ROW =
   "a permission rule or setting blocked the last comment's auto-reply (no notice); later comments are still checked";
-//@ chunk-aqdf5t3e.js:59765-60016 placement
+//@ chunk-tsrpnscb.js:59860-60111 placement
 function commentNotifyNote() {
   return isArtifactsAvailable()
     ? `; a comment on it sent to Claude reaches this session while this artifact's status row says ${AUTO_REPLIES_ARMED_TOKEN}, and plain comments never notify \u2014 read them with ${pickByToolset('action "comments"', () => `the ${commentsToolAction("comments")}`)} when asked`
     : "";
 }
-//@ chunk-aqdf5t3e.js:60016-62347 placement
+//@ chunk-tsrpnscb.js:60111-62442 placement
 /**
  * 实时订阅不可用的原因文本（特性开关关闭、非主循环会话等）
  */
@@ -931,9 +940,9 @@ function frameLiveSkipReasonPhrase(reason) {
     case "not_found":
       return "no such artifact for this account (it was deleted, or it has not been shared with the user)";
     case "other_org":
-      return OTHER_ORG_PHRASE_2;
+      return ARTIFACT_OTHER_ORG_CAUSE;
     case "public_outside_org":
-      return PUBLIC_OUTSIDE_ORG_NOTE;
+      return PUBLIC_OUTSIDE_ORG_WATCH_CAUSE;
     case "not_editor":
       return "a restored publish decision does not carry for an artifact this account cannot publish to";
     case "no_subscription_token":
@@ -956,7 +965,7 @@ function frameLiveSkipReasonPhrase(reason) {
       return null;
   }
 }
-//@ chunk-aqdf5t3e.js:62347-64058 placement
+//@ chunk-tsrpnscb.js:62442-64153 placement
 function frameLiveSubscriptionLine(state) {
   switch (state) {
     case "arming":
@@ -979,14 +988,14 @@ function frameLiveSubscriptionLine(state) {
     }
   }
 }
-//@ chunk-aqdf5t3e.js:64058-64164 placement
+//@ chunk-tsrpnscb.js:64153-64259 placement
 var FRAME_LIVE_PUBLISH_CONTEXT_BRIEF_LINE =
   "Live subscription: none in this kind of session (see the earlier publish result); not an error.";
-//@ chunk-aqdf5t3e.js:86647-87194 placement
+//@ chunk-tsrpnscb.js:86817-87364 placement
 /**
  * 监听失败/结束的短语与建议文案：未找到、其他组织、组织外公开、不会自行恢复、下次工作时再监听、实时更新已关闭。
  */
-var ARTIFACT_NOT_FOUND_PHRASE; // deferred: uses OTHER_ORG_PHRASE (./orgScope.js) of its import cycle while loading; runs once the cycle is complete
+var ARTIFACT_NOT_FOUND_PHRASE; // deferred: uses ARTIFACT_OTHER_ORG_CAUSE (./orgScope.js) of its import cycle while loading; runs once the cycle is complete
 var NOT_SHARED_ADVICE;
 var OTHER_ORG_PHRASE;
 var PUBLIC_OUTSIDE_ORG_PHRASE;
@@ -995,19 +1004,19 @@ var READ_INSTEAD_ADVICE;
 var NO_AUTO_RETURN_ADVICE;
 var WATCH_LATER_ADVICE;
 var LIVE_OFF_ADVICE;
-deferInit("chunk-aqdf5t3e.js:86647", () => {
+deferInit("chunk-tsrpnscb.js:86817", () => {
   ARTIFACT_NOT_FOUND_PHRASE = "artifact not found";
   NOT_SHARED_ADVICE = "there is nothing to retry unless the artifact is shared with the user again";
   OTHER_ORG_PHRASE = "other organization";
   PUBLIC_OUTSIDE_ORG_PHRASE = "public, outside your organization";
-  RETRY_AFTER_ADVICE = `there is nothing to retry until ${LOGIN_OTHER_ORG_REMEDY}`;
+  RETRY_AFTER_ADVICE = `there is nothing to retry until ${ARTIFACT_OTHER_ORG_REMEDY}`;
   READ_INSTEAD_ADVICE = "there is nothing to retry: read it with the read action instead";
   NO_AUTO_RETURN_ADVICE =
     "it will not come back on its own \u2014 watch it again only if the user asks or your current task still depends on its republishes";
   WATCH_LATER_ADVICE = "watch it again when you next work on this artifact";
   LIVE_OFF_ADVICE = "there is nothing to re-watch while live updates are switched off";
 });
-//@ chunk-aqdf5t3e.js:87194-87380 placement
+//@ chunk-tsrpnscb.js:87364-87550 placement
 function getEndWatchAdvice(reason) {
   switch (reason) {
     case "not_found":
@@ -1028,7 +1037,7 @@ function getEndWatchAdvice(reason) {
       };
   }
 }
-//@ chunk-aqdf5t3e.js:87380-87575 placement
+//@ chunk-tsrpnscb.js:87550-87745 placement
 function noRewatchAdvice(reason) {
   switch (reason) {
     case "not_found":
@@ -1049,7 +1058,7 @@ function noRewatchAdvice(reason) {
       return;
   }
 }
-//@ chunk-aqdf5t3e.js:87575-87895 placement
+//@ chunk-tsrpnscb.js:87745-88065 placement
 /**
  * 监听状态短语：连接丢失、没有实时凭据、无法重连、为其他监听腾位置，以及各跳过原因对应的短语表。
  */
@@ -1058,7 +1067,7 @@ var NO_LIVE_CREDENTIAL_PHRASE;
 var COULD_NOT_RECONNECT_PHRASE;
 var MADE_ROOM_PHRASE;
 var SKIP_REASON_PHRASES;
-deferInit("chunk-aqdf5t3e.js:87575", () => {
+deferInit("chunk-tsrpnscb.js:87745", () => {
   CONNECTION_LOST_PHRASE = "connection lost";
   NO_LIVE_CREDENTIAL_PHRASE = "no live credential";
   COULD_NOT_RECONNECT_PHRASE = "could not reconnect";
@@ -1078,15 +1087,6 @@ export {
   frameLiveSkipReasonPhrase,
   frameLiveSubscriptionLine,
   noRewatchAdvice,
-  AUTO_REPLIES_ARMED_TOKEN,
-  AUTO_REPLIES_PAUSED_ROW,
-  AUTO_REPLIES_YIELDED_ROW,
-  AUTO_REPLIES_DECLINED_ROW,
-  AUTO_REPLIES_DENIED_ROW,
-  armedViaWording,
-  labelledArmedVia,
-  parseArmedVia,
-  FRAME_LIVE_PUBLISH_CONTEXT_BRIEF_LINE,
   noteArtifactToolActivity,
   demoteExplicitWatch,
   removeSupervisor,
@@ -1095,6 +1095,8 @@ export {
   isRecentOwnPublish,
   MADE_ROOM_PHRASE,
   stopWatchesForSlug,
+  armedViaWording,
+  labelledArmedVia,
   frameLiveWsUrl,
   upsertSupervisor,
   mergeAutoReactWiring,
@@ -1116,4 +1118,11 @@ export {
   endStoppedWatch,
   SKIP_REASON_PHRASES,
   rewatchSupervisor,
+  AUTO_REPLIES_ARMED_TOKEN,
+  AUTO_REPLIES_PAUSED_ROW,
+  AUTO_REPLIES_YIELDED_ROW,
+  AUTO_REPLIES_DECLINED_ROW,
+  AUTO_REPLIES_DENIED_ROW,
+  parseArmedVia,
+  FRAME_LIVE_PUBLISH_CONTEXT_BRIEF_LINE,
 };

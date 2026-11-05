@@ -3,21 +3,23 @@
  *
  * 2.1.316 新增：远程工具协议常量（结果表、拒绝码、错误码、服务限额）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (24), chunk-s61vbvea.js (8)
- * attribution: placement 32
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (8), chunk-k0v80sg8.js (30)
+ * attribution: placement 32, layout 6
  */
 import { baseIterateeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { import_baseForOwn } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { assignValueRaw } from "../../utils/git/gitSafeEnv.js";
+import { parseInterfaceVersion, compareInterfaceVersions } from "./protocolNegotiation.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, literal, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { CLAUDE_CODE_REMOTE } from "../../services/mcp/ccrMetaMcp.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:2890-2977 placement
+//@ chunk-k0v80sg8.js:967-1054 placement
 function identityMapObject(sourceObject, iteratee) {
   var result = {};
   iteratee = baseIterateeAlias(iteratee, 3);
@@ -26,9 +28,56 @@ function identityMapObject(sourceObject, iteratee) {
   });
   return result;
 }
-//@ chunk-g54kbxqw.js:2977-2987 placement
+//@ chunk-k0v80sg8.js:1054-1064 placement
 var identityMap = identityMapObject;
-//@ chunk-g54kbxqw.js:2987-3035 placement
+//@ chunk-k0v80sg8.js:1064-1189 layout
+function interfaceFitOf(toolHostInterface) {
+  if (toolHostInterface === undefined)
+    return {
+      kind: "none",
+    };
+  let interfaceVersion = parseInterfaceVersion(toolHostInterface);
+  return interfaceVersion === undefined
+    ? {
+        kind: "unreadable",
+      }
+    : {
+        kind: "stated",
+        range: interfaceVersion,
+      };
+}
+//@ chunk-k0v80sg8.js:1189-1222 layout
+var DEFAULT_INTERFACE_RANGE = {
+  version: 1,
+  min_version: 1,
+};
+//@ chunk-k0v80sg8.js:1222-1283 layout
+function compareWithStated(ours, theirs) {
+  return compareInterfaceVersions(ours, theirs.kind === "stated" ? theirs.range : DEFAULT_INTERFACE_RANGE);
+}
+//@ chunk-k0v80sg8.js:1283-1362 layout
+function misfitDirection(misfit) {
+  return misfit === "self_too_old" ? "computer_too_old" : "session_too_old";
+}
+//@ chunk-k0v80sg8.js:1362-1417 layout
+function misfitOfFit(fit) {
+  return fit.kind === "agreed" ? undefined : fit.kind;
+}
+//@ chunk-k0v80sg8.js:1417-1670 layout
+function interfaceTelemetry(stated, fit) {
+  return {
+    session_interface: fromEnum(stated.kind),
+    ...(stated.kind === "stated" && {
+      session_interface_version: stated.range.version,
+      session_interface_min_version: stated.range.min_version,
+    }),
+    interface_fit: fromEnum(fit.kind),
+    ...(fit.kind === "agreed" && {
+      interface_agreed_version: fit.version,
+    }),
+  };
+}
+//@ chunk-k0v80sg8.js:1670-1718 placement
 /**
  * 远程工具协议版本常量：协议版本 1、受支持版本列表、溢出输出字节字段名 spilledOutputBytes。
  */
@@ -36,12 +85,12 @@ var REMOTE_TOOL_PROTOCOL_VERSION = 1;
 var SUPPORTED_PROTOCOL_VERSIONS = [1];
 var CURRENT_PROTOCOL_VERSION = 1;
 var SPILLEDOUTPUTBYTES = "spilledOutputBytes";
-//@ chunk-g54kbxqw.js:3035-3087 placement
+//@ chunk-k0v80sg8.js:1718-1770 placement
 function outputTruncatedNote(targetName) {
   return `
 (output truncated on ${targetName})`;
 }
-//@ chunk-g54kbxqw.js:3087-3502 placement
+//@ chunk-k0v80sg8.js:1770-2182 placement
 /**
  * 远程工具服务端限额：截断提示正则、限额默认值（进度 20 s、2 次丢失、最长询问 120 s、对账 30 s）及各限额上下界。
  */
@@ -87,7 +136,7 @@ var SERVING_LIMIT_BOUNDS = {
     max: MAX_INT32,
   },
 };
-//@ chunk-g54kbxqw.js:3502-3622 placement
+//@ chunk-k0v80sg8.js:2182-2301 placement
 /**
  * 机器在线状态取值：sleeping、says_still_here、still_here、released，以及 left_idle/left_released 的映射。
  */
@@ -99,18 +148,18 @@ var LEFT_STATE_NAMES = {
   released: "left_released",
 };
 var RELEASED = "released";
-//@ chunk-g54kbxqw.js:3622-3651 placement
+//@ chunk-k0v80sg8.js:2301-2329 placement
 function leftStateFor(stateCode) {
   return LEFT_STATE_NAMES[stateCode];
 }
-//@ chunk-g54kbxqw.js:3651-3775 placement
+//@ chunk-k0v80sg8.js:2329-2451 placement
 function parseLeftState(capabilities) {
   if (capabilities === undefined) return;
   if (capabilities.includes(LEFT_STATE_NAMES.idle)) return "idle";
   if (capabilities.includes(LEFT_STATE_NAMES.released)) return "released";
   return;
 }
-//@ chunk-g54kbxqw.js:3775-3847 placement
+//@ chunk-k0v80sg8.js:2451-2523 placement
 /**
  * 远程宿主 id 与能力校验：still_here 文案、睡眠/探测时长、能力名正则、能力个数上限。
  */
@@ -119,13 +168,13 @@ var SLEEPING_GRACE_MS = 1e4;
 var LIVENESS_PROBE_TIMEOUT_MS = 2000;
 var CAPABILITY_NAME_RE = /^[a-z][a-z0-9_]{0,47}$/;
 var MAX_CAPABILITIES = 32;
-//@ chunk-g54kbxqw.js:3847-3943 placement
+//@ chunk-k0v80sg8.js:2523-2619 placement
 function clampServingLimit(limitKey, pendingAsksMax) {
   if (pendingAsksMax === undefined) return;
   let { min, max } = SERVING_LIMIT_BOUNDS[limitKey];
   return Math.min(Math.max(pendingAsksMax, min), max);
 }
-//@ chunk-g54kbxqw.js:3943-4036 placement
+//@ chunk-k0v80sg8.js:2619-2712 placement
 /**
  * 导出常量或表 `TOOL_HOST_ID_RE`：值为 /^[a-z0-9][a-z0-9+._-]{0,31}(@[0-9][0-9A-Za-z.+_-]{0,23})?$/, xXr = 96, PXr = 1e6, IXr = 2048。
  */
@@ -133,7 +182,7 @@ var TOOL_HOST_ID_RE = /^[a-z0-9][a-z0-9+._-]{0,31}(@[0-9][0-9A-Za-z.+_-]{0,23})?
 var MAX_INVENTORY_TOOLS = 96;
 var MAX_NONNEGATIVE_INT = 1e6;
 var MAX_INVENTORY_JSON_BYTES = 2048;
-//@ chunk-g54kbxqw.js:4036-4143 placement (2.1.88 match: detectTerminal, 0.92)
+//@ chunk-k0v80sg8.js:2712-2819 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(platform) {
   switch (platform) {
     case undefined:
@@ -145,11 +194,11 @@ function detectTerminal(platform) {
       return "other";
   }
 }
-//@ chunk-g54kbxqw.js:4143-4302 placement (2.1.88 match: EXTERNAL_PERMISSION_MODES, 0.908)
+//@ chunk-k0v80sg8.js:2819-2977 placement (2.1.88 match: EXTERNAL_PERMISSION_MODES, 0.908)
 var SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 var SAFE_ID_WITH_BRACKETS_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,63}$/;
 var PERMISSION_MODE_WIRE_ORDER = ["default", "acceptEdits", "plan", "auto", "bypassPermissions", "dontAsk"];
-//@ chunk-g54kbxqw.js:4302-4806 placement
+//@ chunk-k0v80sg8.js:2977-3481 placement
 /**
  * 远程工具拒绝/撤回/取消原因码表：拒绝码、撤回原因码、答复丢失原因码及其合并集合。
  */
@@ -186,7 +235,7 @@ var WITHDRAW_REASON_CODES = [
 ];
 var ANSWER_GONE_REASONS = ["no_answer", "host_withdrawn", "superseded"];
 var WITHDRAW_OR_ANSWER_GONE_REASONS = [...WITHDRAW_REASON_CODES, ...ANSWER_GONE_REASONS];
-//@ chunk-g54kbxqw.js:4806-4936 placement
+//@ chunk-k0v80sg8.js:3481-3611 placement
 function normalizeWithdrawReason(reason) {
   return (
     (reason === "displaced" ? "superseded" : reason === "withdrawn" ? "host_withdrawn" : undefined) ??
@@ -194,7 +243,7 @@ function normalizeWithdrawReason(reason) {
     "unrecognized"
   );
 }
-//@ chunk-g54kbxqw.js:4936-5279 placement
+//@ chunk-k0v80sg8.js:3611-3954 placement
 /**
  * 远程工具错误码三个表：错误分类（in_flight/queue/sessions）、错误种类（tool_error/internal_error/cancelled/timed_out）、执行结论（ran/denied_by_* 等）。
  */
@@ -214,7 +263,7 @@ var RAN_OUTCOME_KINDS = [
   "ask_expired",
   "unrecognized",
 ];
-//@ chunk-g54kbxqw.js:5279-5590 placement
+//@ chunk-k0v80sg8.js:3954-4265 placement
 function isRanOutcome(disposition) {
   switch (disposition) {
     case undefined:
@@ -234,7 +283,7 @@ function isRanOutcome(disposition) {
       return false;
   }
 }
-//@ chunk-g54kbxqw.js:5590-10181 placement
+//@ chunk-k0v80sg8.js:4265-8856 placement
 var SERVED_OUTCOME_TABLE = {
   ran: {
     kind: "completed",
@@ -593,11 +642,11 @@ var SERVED_OUTCOME_TABLE = {
     phase: "call",
   },
 };
-//@ chunk-g54kbxqw.js:10181-10253 placement
+//@ chunk-k0v80sg8.js:8856-8928 placement
 function isUnverifiedRefusal(outcome) {
   return outcome.kind === "dropped" && outcome.why === "unverified_refusal";
 }
-//@ chunk-g54kbxqw.js:10253-10433 placement
+//@ chunk-k0v80sg8.js:8928-9108 placement
 function unexpectedValueFingerprint(value, listedValues) {
   let text = typeof value === "string" ? value : "";
   if (typeof value === "string" && listedValues.includes(value)) return;
@@ -607,13 +656,13 @@ function unexpectedValueFingerprint(value, listedValues) {
     variantOfListed: listedValues.includes(text.trim().toLowerCase()),
   };
 }
-//@ chunk-g54kbxqw.js:10433-10690 placement
+//@ chunk-k0v80sg8.js:9108-9366 placement
 /**
  * 服务端校验结论（server_verdict）的字段名与 zod schema：匹配状态、是否标记、依据、上下文与年龄。
  */
 var SERVER_VERDICT_KEY; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var serverVerdictSchema;
-deferInit("chunk-g54kbxqw.js:10433", () => {
+deferInit("chunk-k0v80sg8.js:9108", () => {
   SERVER_VERDICT_KEY = "server_verdict";
   serverVerdictSchema = DoctorLazy(() =>
     objectSchema({
@@ -626,7 +675,7 @@ deferInit("chunk-g54kbxqw.js:10433", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:10690-10824 placement
+//@ chunk-k0v80sg8.js:9366-9500 placement
 function readServerVerdict(payload) {
   let parsed = serverVerdictSchema().safeParse(payload);
   if (!parsed.success || stampOutcomeKey(parsed.data) === undefined)
@@ -638,7 +687,7 @@ function readServerVerdict(payload) {
     stamp: parsed.data,
   };
 }
-//@ chunk-g54kbxqw.js:10824-10960 placement
+//@ chunk-k0v80sg8.js:9500-9636 placement
 function serverVerdictKind(serverVerdict) {
   switch (serverVerdict.kind) {
     case "absent":
@@ -649,42 +698,42 @@ function serverVerdictKind(serverVerdict) {
       return stampOutcomeKey(serverVerdict.stamp) ?? "unreadable";
   }
 }
-//@ chunk-g54kbxqw.js:10960-11123 placement
+//@ chunk-k0v80sg8.js:9636-9799 placement
 function stampOutcomeKey({ status, outcome }) {
   if (status === "none" || status === "id_split") return outcome === undefined ? status : undefined;
   if (outcome === undefined) return status === "mismatch" ? "mismatch" : undefined;
   return `${status}_${outcome}`;
 }
-//@ chunk-s61vbvea.js:588744-588836 placement
+//@ chunk-7jxyna5q.js:506106-506198 placement
 var CONFIRM_REPOSITORY_TRUST = "confirm_repository_trust";
 var REQUEST_COMPUTER_FOLDER = "request_computer_folder";
 var LIST_COMPUTER_FOLDERS = "list_computer_folders";
-//@ chunk-s61vbvea.js:588836-588883 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-7jxyna5q.js:506198-506245 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(actualToolName, expectedToolName) {
   return actualToolName === `mcp__${CLAUDE_CODE_REMOTE}__${expectedToolName}`;
 }
-//@ chunk-s61vbvea.js:588883-588915 placement
+//@ chunk-7jxyna5q.js:506245-506277 placement
 /**
  * 导出函数 `isConfirmRepositoryTrustTool`：参数 e，返回 getMcpPrefix(e, CONFIRM_REPOSITORY_TRUST)。
  */
 function isConfirmRepositoryTrustTool(toolName) {
   return getMcpPrefix(toolName, CONFIRM_REPOSITORY_TRUST);
 }
-//@ chunk-s61vbvea.js:588915-588947 placement
+//@ chunk-7jxyna5q.js:506277-506309 placement
 /**
  * 导出函数 `isRequestComputerFolderTool`：参数 e，返回 getMcpPrefix(e, REQUEST_COMPUTER_FOLDER)。
  */
 function isRequestComputerFolderTool(actualToolName) {
   return getMcpPrefix(actualToolName, REQUEST_COMPUTER_FOLDER);
 }
-//@ chunk-s61vbvea.js:588947-588980 placement
+//@ chunk-7jxyna5q.js:506309-506342 placement
 /**
  * 导出函数 `isListComputerFoldersTool`：参数 e，返回 getMcpPrefix(e, LIST_COMPUTER_FOLDERS)。
  */
 function isListComputerFoldersTool(toolName) {
   return getMcpPrefix(toolName, LIST_COMPUTER_FOLDERS);
 }
-//@ chunk-s61vbvea.js:588980-589408 placement
+//@ chunk-7jxyna5q.js:506342-506770 placement
 /**
  * 把服务端工具权限请求转换为 can_use_tool 控制请求，只带上存在的可选字段。
  */
@@ -714,7 +763,7 @@ function toCanUseToolRequest(request) {
     requires_user_interaction: true,
   };
 }
-//@ chunk-s61vbvea.js:589408-589569 placement
+//@ chunk-7jxyna5q.js:506770-506931 placement
 function isComputerFolderTarget(target) {
   return (
     Object.keys(target).length === 3 &&
@@ -724,7 +773,7 @@ function isComputerFolderTarget(target) {
     })
   );
 }
-//@ chunk-s61vbvea.js:589569-589975 placement
+//@ chunk-7jxyna5q.js:506931-507337 placement
 /**
  * 把权限请求转换为可服务端处理的权限请求对象，只带上存在的可选字段。
  */
@@ -752,18 +801,35 @@ function toServedPermissionRequest(request) {
   };
 }
 export {
-  REMOTE_TOOL_PROTOCOL_VERSION,
-  unexpectedValueFingerprint,
   isConfirmRepositoryTrustTool,
   isRequestComputerFolderTool,
-  isComputerFolderTarget,
-  toCanUseToolRequest,
-  toServedPermissionRequest,
   identityMap,
-  SLEEPING_GRACE_MS,
-  LIVENESS_PROBE_TIMEOUT_MS,
-  detectTerminal,
+  REMOTE_TOOL_PROTOCOL_VERSION,
+  MAX_INT32,
+  RELEASED,
   isRanOutcome,
+  REMOTE_TOOL_SERVING_LIMITS,
+  normalizeWithdrawReason,
+  STILL_HERE,
+  MACHINE_PRESENCE_STATES,
+  SAYS_STILL_HERE,
+  STILL_HERE_TEXT,
+  interfaceFitOf,
+  leftStateFor,
+  SAFE_ID_PATTERN,
+  SERVER_VERDICT_KEY,
+  compareWithStated,
+  misfitOfFit,
+  interfaceTelemetry,
+  misfitDirection,
+  LIVENESS_PROBE_TIMEOUT_MS,
+  SERVING_LIMIT_BOUNDS,
+  DEFAULT_SERVING_LIMITS,
+  isUnverifiedRefusal,
+  SPILLEDOUTPUTBYTES,
+  LIST_COMPUTER_FOLDERS,
+  REQUEST_COMPUTER_FOLDER,
+  isListComputerFoldersTool,
   RAN_OUTCOME_KINDS,
   TOOL_HOST_ID_RE,
   MAX_INVENTORY_TOOLS,
@@ -771,36 +837,24 @@ export {
   CAPABILITY_NAME_RE,
   MAX_CAPABILITIES,
   CURRENT_PROTOCOL_VERSION,
-  RELEASED,
-  serverVerdictKind,
-  MAX_NONNEGATIVE_INT,
-  DEFAULT_SERVING_LIMITS,
-  outputTruncatedNote,
-  SPILLEDOUTPUTBYTES,
+  REMOTE_TOOL_REFUSAL_CODES,
+  ERROR_OUTCOME_CODES,
+  WITHDRAW_REASON_CODES,
+  parseLeftState,
+  SLEEPING_GRACE_MS,
   SUPPORTED_PROTOCOL_VERSIONS,
-  SERVED_OUTCOME_TABLE,
-  clampServingLimit,
-  normalizeWithdrawReason,
-  isUnverifiedRefusal,
-  REMOTE_TOOL_SERVING_LIMITS,
-  SAFE_ID_PATTERN,
-  SAYS_STILL_HERE,
-  leftStateFor,
+  serverVerdictKind,
+  isComputerFolderTarget,
+  toCanUseToolRequest,
+  toServedPermissionRequest,
+  unexpectedValueFingerprint,
   PERMISSION_MODE_WIRE_ORDER,
   SAFE_ID_WITH_BRACKETS_PATTERN,
-  MAX_INT32,
-  SERVING_LIMIT_BOUNDS,
-  REMOTE_TOOL_REFUSAL_CODES,
-  WITHDRAW_REASON_CODES,
+  MAX_NONNEGATIVE_INT,
   REMOTE_TOOL_ERROR_CODES,
-  ERROR_OUTCOME_CODES,
-  SERVER_VERDICT_KEY,
   readServerVerdict,
-  MACHINE_PRESENCE_STATES,
-  STILL_HERE,
-  STILL_HERE_TEXT,
-  LIST_COMPUTER_FOLDERS,
-  REQUEST_COMPUTER_FOLDER,
-  isListComputerFoldersTool,
-  parseLeftState,
+  outputTruncatedNote,
+  detectTerminal,
+  SERVED_OUTCOME_TABLE,
+  clampServingLimit,
 };

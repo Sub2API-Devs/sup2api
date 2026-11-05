@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/managedIdentityCredential/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { credentialLogger, formatSuccess, formatError } from "../../util/logging.js";
@@ -16,9 +16,9 @@ import { serviceFabricErrorMessage, mapScopesToResource } from "./utils.js";
 import { tracingClient } from "../../util/tracing.js";
 import { imdsMsi } from "./imdsMsi.js";
 
-//@ chunk-mrx6y2r5.js:306645-306683 esm-fingerprint
+//@ chunk-b5df2wx1.js:306645-306683 esm-fingerprint
 var logger_6 = credentialLogger("ManagedIdentityCredential");
-//@ chunk-mrx6y2r5.js:306683-311239 esm-fingerprint
+//@ chunk-b5df2wx1.js:306683-311239 esm-fingerprint
 class ManagedIdentityCredential {
   constructor(clientIdOrOptions, options) {
     var _a;
@@ -226,7 +226,7 @@ class ManagedIdentityCredential {
     if (!msalToken.accessToken) throw createError('Response had no "accessToken" property.');
   }
 }
-//@ chunk-mrx6y2r5.js:311239-311448 esm-fingerprint
+//@ chunk-b5df2wx1.js:311239-311448 esm-fingerprint
 function isNetworkError(err) {
   if (err.errorCode === "network_error") return true;
   if (err.code === "ENETUNREACH" || err.code === "EHOSTUNREACH") return true;

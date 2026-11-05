@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增：等待后台任务与队列空闲（等待器、心跳、排队提示计数）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (14)
  * attribution: placement 14
  */
-import { isDiskless } from "../../bootstrap/state.js";
+import { systemClock, sleep } from "../../utils/sleep.js";
+import { snapshotCounters } from "../../tools/BashTool/bashEditDiff/snapshot.js";
 import { env } from "../../utils/env.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { sendSessionActivitySignal_2, hasActiveWork } from "../../utils/sessionActivity.js";
@@ -25,13 +26,14 @@ import {
   shouldStayRunningForInput,
   isAwaitedBackgroundTask,
 } from "./backgroundWindDown.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { fromEnumArr } from "../../services/analytics/safeMetadata.js";
-import { systemClock, sleep } from "../../utils/sleep.js";
+import { isDiskless } from "../../bootstrap/state.js";
 import { taskKindLabel, isParkedMcpTask, isHoldCappedMcpTask, isHeldMcpTask } from "../../tasks/taskKinds.js";
 import { clippedMessage } from "../../utils/stringUtils.js";
 import { getRunningTasks, createTaskFramework } from "../../utils/task/framework.js";
 import { waitForTaskCompletion } from "../../tools/TaskOutputTool/TaskOutputTool.js";
-import { isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { hasReachedBudget } from "../../cost-tracker.js";
 import {
   printBackgroundWaitCeilingMs,
@@ -42,167 +44,20 @@ import {
   hasNonLeadTeammate,
   hasWorkingInProcessTeammates,
 } from "../../utils/teammate.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { formatDuration } from "../../utils/format.js";
 import { maybeStartCcrRecap } from "../../services/awaySummary.js";
+import { shouldKeepTurnOpen } from "../remoteIO/orphanAgentRestore.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isProjectsRelay, isHumanOrAutoContinuation } from "../../utils/messageProvenance.js";
 import { chatOriginField } from "./transcriptLeaves.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 
-//@ chunk-tyg7f3ek.js:104475-104732 placement
-var BACKGROUND_WAIT_PRIORITY_KINDS = [
-  "queued_command",
-  "task_notification",
-  "owed_detached_result",
-  "eval_tool",
-  "schedule_wakeup",
-];
-var BACKGROUND_TASK_KIND_MAP = {
-  local_bash: "shell",
-  monitor_mcp: "monitor",
-  monitor_ws: "monitor",
-  local_agent: "agent",
-  local_workflow: "agent",
-  remote_agent: "remote_agent",
-  mcp_task: "mcp_task",
-};
-//@ chunk-tyg7f3ek.js:104732-104835 placement
-function readProcessCpuMs() {
-  try {
-    if (isDiskless()) return;
-    let { user, system } = process.cpuUsage();
-    return (user + system) / 1000;
-  } catch {
-    return;
-  }
-}
-//@ chunk-tyg7f3ek.js:104835-107324 placement
-/**
- * print 模式结束后等待后台任务时的心跳/CPU/空闲统计与 keepalive 帧节流。
- */
-class BackgroundWaitPulse {
-  pulse;
-  readCpuMs;
-  waitStartedAt = null;
-  lastPassAt = 0;
-  cpuMsAtStart;
-  cpuMsAtLastPass;
-  lastFrameAt = 0;
-  passes = 0;
-  longSleeps = 0;
-  framesSent = 0;
-  framesDueBackgroundOnly = 0;
-  idleMs = 0;
-  idleStretchMs = 0;
-  longestIdleMs = 0;
-  forWorkOnly = false;
-  holds = new Set();
-  exitCleanup;
-  broken = false;
-  constructor(pulse, lastFrameAt = Date.now(), readCpuMs = readProcessCpuMs) {
-    this.pulse = pulse;
-    this.readCpuMs = readCpuMs;
-    this.lastFrameAt = lastFrameAt;
-  }
-  pass({ backgroundTasks, otherWork, ownedWorkPending, now }) {
-    let ownedWork = ownedWorkPending.schedule_wakeup || ownedWorkPending.eval_tool;
-    let any = BACKGROUND_WAIT_PRIORITY_KINDS.some((kind) => otherWork[kind]);
-    let hasWork = backgroundTasks.length > 0 || any;
-    if (this.broken || !env.CLAUDE_CODE_REMOTE) return hasWork && this.pulse();
-    let backgroundOnly = hasWork && !any && !ownedWork;
-    let idleOnly = false;
-    try {
-      this.cpuMsAtLastPass = this.readCpuMs();
-      if (this.waitStartedAt === null) {
-        this.waitStartedAt = now;
-        this.lastPassAt = now;
-        this.cpuMsAtStart = this.cpuMsAtLastPass;
-        this.exitCleanup = registerCleanup(async () => this.end());
-      }
-      let elapsedMs = now - this.lastPassAt;
-      this.lastPassAt = now;
-      this.passes++;
-      for (let backgroundTask of backgroundTasks)
-        this.holds.add(
-          backgroundTask.type === "local_bash" && backgroundTask.kind === "monitor"
-            ? "monitor"
-            : (BACKGROUND_TASK_KIND_MAP[backgroundTask.type] ?? "other_task"),
-        );
-      for (let kind of BACKGROUND_WAIT_PRIORITY_KINDS) if (otherWork[kind]) this.holds.add(kind);
-      if (hasWork && ownedWorkPending.schedule_wakeup) this.holds.add("schedule_wakeup");
-      if (hasWork && ownedWorkPending.eval_tool) this.holds.add("eval_tool");
-      if (hasWork) this.forWorkOnly = sendSessionActivitySignal_2();
-      idleOnly = backgroundOnly && !hasActiveWork();
-      if (idleOnly) {
-        this.idleMs += elapsedMs;
-        this.idleStretchMs += elapsedMs;
-        this.longestIdleMs = Math.max(this.longestIdleMs, this.idleStretchMs);
-      } else this.idleStretchMs = 0;
-    } catch (error) {
-      this.broken = true;
-      logError(error);
-      logFeatureSad("ccr_keepalive_post_turn_wait", "pass_throw");
-    }
-    if (!hasWork) return false;
-    if (backgroundOnly && this.forWorkOnly && !this.broken) {
-      if (now - this.lastFrameAt >= WIND_DOWN_LOG_INTERVAL_MS) {
-        this.framesDueBackgroundOnly++;
-        this.lastFrameAt = now;
-      }
-      return false;
-    }
-    if (!this.pulse()) return false;
-    this.framesSent++;
-    this.lastFrameAt = now;
-    if (backgroundOnly) this.framesDueBackgroundOnly++;
-    return true;
-  }
-  countLongSleep() {
-    if (this.waitStartedAt !== null && !this.broken) this.longSleeps++;
-  }
-  end() {
-    if (this.waitStartedAt === null) return;
-    try {
-      this.exitCleanup?.();
-      if (this.holds.size > 0)
-        logFeatureOk("ccr_keepalive_post_turn_wait", {
-          keepalive_for_work_only: this.forWorkOnly,
-          frames_sent: this.framesSent,
-          frames_due_background_only: this.framesDueBackgroundOnly,
-          wait_ms: this.lastPassAt - this.waitStartedAt,
-          ...(this.cpuMsAtStart !== undefined &&
-            this.cpuMsAtLastPass !== undefined && {
-              cli_cpu_ms: Math.round(this.cpuMsAtLastPass - this.cpuMsAtStart),
-            }),
-          passes: this.passes,
-          long_sleeps: this.longSleeps,
-          idle_background_only_ms: this.idleMs,
-          longest_idle_background_only_ms: this.longestIdleMs,
-          held_by: fromEnumArr([...this.holds]),
-        });
-    } catch (error) {
-      logError(error);
-      logFeatureSad("ccr_keepalive_post_turn_wait", "end_throw");
-    }
-    this.waitStartedAt = null;
-    this.exitCleanup = undefined;
-    this.broken = false;
-    this.passes = 0;
-    this.longSleeps = 0;
-    this.framesSent = 0;
-    this.framesDueBackgroundOnly = 0;
-    this.idleMs = 0;
-    this.idleStretchMs = 0;
-    this.longestIdleMs = 0;
-    this.holds.clear();
-  }
-}
-//@ chunk-tyg7f3ek.js:107324-107343 placement
+//@ chunk-0yw3taqg.js:131944-131970 placement
 var BACKGROUND_POLL_MS = 100;
 var BACKGROUND_WAIT_HEARTBEAT_MS = 1000;
-//@ chunk-tyg7f3ek.js:107343-107846 placement
+var BACKGROUND_WAIT_CEILING_MAX_MS = 1e4;
+//@ chunk-0yw3taqg.js:131970-132538 placement
 function waitForQueueOrIdle({
   messageQueue,
   store,
@@ -210,6 +65,8 @@ function waitForQueueOrIdle({
   spendRecorded,
   turnSignal,
   sessionSignal,
+  longestMs,
+  onLongest,
   clock = systemClock,
 }) {
   return new Promise((resolve) => {
@@ -229,7 +86,11 @@ function waitForQueueOrIdle({
         BACKGROUND_POLL_MS - ((clock.monotonicNow() - startedAt) % BACKGROUND_POLL_MS),
       );
     };
-    let heartbeatTimer = clock.setTimeout(finish, BACKGROUND_WAIT_HEARTBEAT_MS);
+    let heartbeatTimer = clock.setTimeout(() => {
+      let noWakeScheduled = wakeTimer === undefined;
+      finish();
+      if (noWakeScheduled) onLongest();
+    }, longestMs);
     let unsubscribes = [
       messageQueue.subscribe(requestWake),
       store.subscribe(requestWake),
@@ -244,15 +105,214 @@ function waitForQueueOrIdle({
     });
   });
 }
-//@ chunk-tyg7f3ek.js:107846-107856 placement
+//@ chunk-0yw3taqg.js:132538-132795 placement
+var BACKGROUND_WAIT_PRIORITY_KINDS = [
+  "queued_command",
+  "task_notification",
+  "owed_detached_result",
+  "eval_tool",
+  "schedule_wakeup",
+];
+var BACKGROUND_TASK_KIND_MAP = {
+  local_bash: "shell",
+  monitor_mcp: "monitor",
+  monitor_ws: "monitor",
+  local_agent: "agent",
+  local_workflow: "agent",
+  remote_agent: "remote_agent",
+  mcp_task: "mcp_task",
+};
+//@ chunk-0yw3taqg.js:132795-136688 placement
+/**
+ * print 模式结束后等待后台任务时的心跳/CPU/空闲统计与 keepalive 帧节流。
+ */
+class BackgroundWaitPulse {
+  pulse;
+  readCpuMs;
+  readActivity;
+  waitStartedAt = null;
+  lastPassAt = 0;
+  cpuMsAtStart;
+  cpuMsAtLastPass;
+  activityAtStart;
+  activityAtLastPass;
+  lastFrameAt = 0;
+  passes = 0;
+  longSleeps = 0;
+  longSleepCeilingMs = 0;
+  fullLongSleeps = 0;
+  lastSleepWasFull = false;
+  framesSent = 0;
+  framesDueBackgroundOnly = 0;
+  idleMs = 0;
+  idleStretchMs = 0;
+  longestIdleMs = 0;
+  atCardMs = 0;
+  forWorkOnly = false;
+  holds = new Set();
+  exitCleanup;
+  broken = false;
+  constructor(
+    pulse,
+    lastFrameAt = Date.now(),
+    readCpuMs = readProcessCpuMs,
+    readActivity = snapshotCounters,
+  ) {
+    this.pulse = pulse;
+    this.readCpuMs = readCpuMs;
+    this.readActivity = readActivity;
+    this.lastFrameAt = lastFrameAt;
+    this.activityAtStart = readActivity();
+    this.activityAtLastPass = this.activityAtStart;
+  }
+  pass({ backgroundTasks, waitsOnlyOnACard, otherWork, ownedWorkPending, now }) {
+    let ownedWork = ownedWorkPending.schedule_wakeup || ownedWorkPending.eval_tool;
+    let any = BACKGROUND_WAIT_PRIORITY_KINDS.some((kind) => otherWork[kind]);
+    let hasWork = backgroundTasks.length > 0 || any;
+    if (this.broken || !env.CLAUDE_CODE_REMOTE) return hasWork && this.pulse();
+    let backgroundOnly = hasWork && !any && !ownedWork;
+    let isBackgroundOnly = false;
+    let waitsOnlyOnCard = false;
+    try {
+      this.cpuMsAtLastPass = this.readCpuMs();
+      this.activityAtLastPass = this.readActivity();
+      if (this.waitStartedAt === null) {
+        this.waitStartedAt = now;
+        this.lastPassAt = now;
+        this.cpuMsAtStart = this.cpuMsAtLastPass;
+        this.activityAtStart = this.activityAtLastPass;
+        this.exitCleanup = registerCleanup(async () => this.end());
+      }
+      let elapsedMs = now - this.lastPassAt;
+      this.lastPassAt = now;
+      this.passes++;
+      this.lastSleepWasFull = false;
+      for (let backgroundTask of backgroundTasks)
+        this.holds.add(
+          backgroundTask.type === "local_bash" && backgroundTask.kind === "monitor"
+            ? "monitor"
+            : (BACKGROUND_TASK_KIND_MAP[backgroundTask.type] ?? "other_task"),
+        );
+      for (let kind of BACKGROUND_WAIT_PRIORITY_KINDS) if (otherWork[kind]) this.holds.add(kind);
+      if (hasWork && ownedWorkPending.schedule_wakeup) this.holds.add("schedule_wakeup");
+      if (hasWork && ownedWorkPending.eval_tool) this.holds.add("eval_tool");
+      if (hasWork) this.forWorkOnly = sendSessionActivitySignal_2();
+      isBackgroundOnly = backgroundOnly && !hasActiveWork();
+      waitsOnlyOnCard = isBackgroundOnly && waitsOnlyOnACard?.() === true;
+      if (waitsOnlyOnCard) this.atCardMs += elapsedMs;
+      if (isBackgroundOnly) {
+        this.idleMs += elapsedMs;
+        this.idleStretchMs += elapsedMs;
+        this.longestIdleMs = Math.max(this.longestIdleMs, this.idleStretchMs);
+      } else this.idleStretchMs = 0;
+    } catch (error) {
+      this.broken = true;
+      logError(error);
+      logFeatureSad("ccr_keepalive_post_turn_wait", "pass_throw");
+    }
+    if (!hasWork) return false;
+    if (backgroundOnly && (this.forWorkOnly || waitsOnlyOnCard) && !this.broken) {
+      if (now - this.lastFrameAt >= WIND_DOWN_LOG_INTERVAL_MS) {
+        this.framesDueBackgroundOnly++;
+        this.lastFrameAt = now;
+      }
+      return false;
+    }
+    if (!this.pulse()) return false;
+    this.framesSent++;
+    this.lastFrameAt = now;
+    if (backgroundOnly) this.framesDueBackgroundOnly++;
+    return true;
+  }
+  startLongSleep(ceilingMs, now) {
+    if (this.waitStartedAt !== null && !this.broken) {
+      this.longSleeps++;
+      this.longSleepCeilingMs = Math.max(this.longSleepCeilingMs, ceilingMs);
+    }
+    return Math.min(
+      ceilingMs,
+      Math.max(this.lastFrameAt + WIND_DOWN_LOG_INTERVAL_MS - now, BACKGROUND_WAIT_HEARTBEAT_MS),
+    );
+  }
+  countFullLongSleep() {
+    if (this.waitStartedAt !== null && !this.broken) {
+      this.fullLongSleeps++;
+      this.lastSleepWasFull = true;
+    }
+  }
+  end() {
+    if (this.waitStartedAt === null) return;
+    try {
+      this.exitCleanup?.();
+      if (this.holds.size > 0)
+        logFeatureOk("ccr_keepalive_post_turn_wait", {
+          keepalive_for_work_only: this.forWorkOnly,
+          frames_sent: this.framesSent,
+          frames_due_background_only: this.framesDueBackgroundOnly,
+          wait_ms: this.lastPassAt - this.waitStartedAt,
+          ...(this.cpuMsAtStart !== undefined &&
+            this.cpuMsAtLastPass !== undefined && {
+              cli_cpu_ms: Math.round(this.cpuMsAtLastPass - this.cpuMsAtStart),
+            }),
+          edit_diff_watch_events:
+            this.activityAtLastPass.edit_diff_watch_events - this.activityAtStart.edit_diff_watch_events,
+          edit_diff_watch_dirs:
+            this.activityAtLastPass.edit_diff_watch_dirs - this.activityAtStart.edit_diff_watch_dirs,
+          relay_connections:
+            this.activityAtLastPass.relay_connections - this.activityAtStart.relay_connections,
+          relay_dials: this.activityAtLastPass.relay_dials - this.activityAtStart.relay_dials,
+          relay_bytes: this.activityAtLastPass.relay_bytes - this.activityAtStart.relay_bytes,
+          edit_diff_skip_flag: getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_badger", false) === true,
+          passes: this.passes,
+          long_sleeps: this.longSleeps,
+          long_sleep_ceiling_ms: this.longSleepCeilingMs,
+          full_long_sleeps: this.fullLongSleeps,
+          ended_after_full_long_sleep: this.lastSleepWasFull,
+          idle_background_only_ms: this.idleMs,
+          longest_idle_background_only_ms: this.longestIdleMs,
+          at_card_ms: this.atCardMs,
+          held_by: fromEnumArr([...this.holds]),
+        });
+    } catch (error) {
+      logError(error);
+      logFeatureSad("ccr_keepalive_post_turn_wait", "end_throw");
+    }
+    this.waitStartedAt = null;
+    this.exitCleanup = undefined;
+    this.broken = false;
+    this.passes = 0;
+    this.longSleeps = 0;
+    this.longSleepCeilingMs = 0;
+    this.fullLongSleeps = 0;
+    this.lastSleepWasFull = false;
+    this.framesSent = 0;
+    this.framesDueBackgroundOnly = 0;
+    this.idleMs = 0;
+    this.idleStretchMs = 0;
+    this.longestIdleMs = 0;
+    this.atCardMs = 0;
+    this.holds.clear();
+  }
+}
+//@ chunk-0yw3taqg.js:136688-136791 placement
+function readProcessCpuMs() {
+  try {
+    if (isDiskless()) return;
+    let { user, system } = process.cpuUsage();
+    return (user + system) / 1000;
+  } catch {
+    return;
+  }
+}
+//@ chunk-0yw3taqg.js:136791-136801 placement
 var backgroundWaitClock = WIND_DOWN_GRACE_MS;
-//@ chunk-tyg7f3ek.js:107856-107972 placement
+//@ chunk-0yw3taqg.js:136801-136917 placement
 function shouldShowBackgroundWaitStatus({ outputFormat, stderrIsTerminal, stdoutIsTerminal }) {
   return (
     stderrIsTerminal && !((outputFormat === "json" || outputFormat === "stream-json") && stdoutIsTerminal)
   );
 }
-//@ chunk-tyg7f3ek.js:107972-108137 placement
+//@ chunk-0yw3taqg.js:136917-137082 placement
 function describeRunningBackgroundTasks(tasks) {
   return tasks
     .map((task) => {
@@ -263,7 +323,7 @@ function describeRunningBackgroundTasks(tasks) {
     })
     .join(", ");
 }
-//@ chunk-tyg7f3ek.js:108137-114105 placement
+//@ chunk-0yw3taqg.js:137082-143454 placement
 /**
  * print 模式最后一轮后等待后台任务（shell、monitor、agent、MCP 任务等）完成；支持等待上限 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS、预算与 keepalive。
  */
@@ -273,6 +333,7 @@ class BackgroundTaskWaiter {
   io;
   store;
   toolState;
+  currentTools;
   detachedToolCalls;
   pendingNotificationWaits;
   ccrRecap;
@@ -302,6 +363,7 @@ class BackgroundTaskWaiter {
     io,
     store,
     toolState,
+    currentTools,
     detachedToolCalls,
     pendingNotificationWaits,
     ccrRecap,
@@ -324,6 +386,7 @@ class BackgroundTaskWaiter {
     this.io = io;
     this.store = store;
     this.toolState = toolState;
+    this.currentTools = currentTools;
     this.detachedToolCalls = detachedToolCalls;
     this.pendingNotificationWaits = pendingNotificationWaits;
     this.ccrRecap = ccrRecap;
@@ -360,7 +423,7 @@ class BackgroundTaskWaiter {
       setAppState: this.store.setState,
       storageV5: this.storageV5,
     });
-    let hasMainQueued = this.messageQueue.peek(isActiveMainAgentCommand) !== undefined;
+    let hasMainQueued = this.messageQueue.peek(isDrainableMainThreadCommand) !== undefined;
     let holdsEvalSettles = hasMainQueued && !this.holdsEvalSettles();
     let now = Date.now();
     let owedTaskNotifications = collectOwedTaskNotifications({
@@ -466,6 +529,14 @@ class BackgroundTaskWaiter {
         if (
           this.keepAlive.pass({
             backgroundTasks: tasksToWait,
+            waitsOnlyOnACard: () =>
+              shouldKeepTurnOpen({
+                state: appState,
+                runningTasks: tasks,
+                sessionState: this.io.sessionState,
+                messageQueue: this.messageQueue,
+                tools: this.currentTools,
+              }),
             otherWork: {
               queued_command: hasMainQueued,
               task_notification: owedTaskNotifications,
@@ -516,11 +587,20 @@ class BackgroundTaskWaiter {
           }) &&
           !hasActiveInProcessTeammates(appState) &&
           this.store.getState() === appState &&
-          this.messageQueue.peek(isActiveMainAgentCommand) === undefined &&
+          this.messageQueue.peek(isDrainableMainThreadCommand) === undefined &&
           !env.CLAUDE_CODE_DISABLE_QUIET_BACKGROUND_WAIT
         ))
           return sleep(BACKGROUND_POLL_MS);
-        this.keepAlive.countLongSleep();
+        let ceilingMs =
+          env.CLAUDE_CODE_REMOTE && tasks.every((task) => task.type === "local_bash")
+            ? getFeatureValue_CACHED_MAY_BE_STALE("tengu_snazzy_starlight", BACKGROUND_WAIT_HEARTBEAT_MS)
+            : BACKGROUND_WAIT_HEARTBEAT_MS;
+        let clampedCeilingMs =
+          Number.isFinite(ceilingMs) &&
+          ceilingMs >= BACKGROUND_WAIT_HEARTBEAT_MS &&
+          ceilingMs <= BACKGROUND_WAIT_CEILING_MAX_MS
+            ? ceilingMs
+            : BACKGROUND_WAIT_HEARTBEAT_MS;
         return waitForQueueOrIdle({
           messageQueue: this.messageQueue,
           store: this.store,
@@ -528,6 +608,8 @@ class BackgroundTaskWaiter {
           spendRecorded: this.spendRecorded,
           turnSignal: this.drain.abortController?.signal,
           sessionSignal: this.sessionSignal,
+          longestMs: this.keepAlive.startLongSleep(clampedCeilingMs, now),
+          onLongest: () => this.keepAlive.countFullLongSleep(),
         });
       }
     }
@@ -569,10 +651,10 @@ ${notice}
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:114105-114268 placement
+//@ chunk-0yw3taqg.js:143454-143617 placement
 function isPeerHandbackPrompt(command) {
   return (
-    isActiveMainAgentCommand(command) &&
+    isDrainableMainThreadCommand(command) &&
     command.mode === "prompt" &&
     command.shouldQuery !== false &&
     command.isMeta === true &&
@@ -581,7 +663,7 @@ function isPeerHandbackPrompt(command) {
     command.origin.handback === true
   );
 }
-//@ chunk-tyg7f3ek.js:114268-114724 placement
+//@ chunk-0yw3taqg.js:143617-144073 placement
 function countQueuedPromptKinds(queued) {
   let counts = {
     handbacks: 0,
@@ -595,7 +677,7 @@ function countQueuedPromptKinds(queued) {
       counts.handbacks++;
       continue;
     }
-    if (!isActiveMainAgentCommand(item) || item.mode !== "prompt" || item.shouldQuery === false) continue;
+    if (!isDrainableMainThreadCommand(item) || item.mode !== "prompt" || item.shouldQuery === false) continue;
     if (isProjectsRelay(item.origin)) {
       counts.projects_relays++;
       continue;
@@ -608,12 +690,20 @@ function countQueuedPromptKinds(queued) {
   }
   return counts;
 }
-//@ chunk-tyg7f3ek.js:114724-115000 placement
-function logQueuedInterruptDecision({ queued, turnUnderWay, lateBind, cancelQueued, sendNow }, report) {
+//@ chunk-0yw3taqg.js:144073-144577 placement
+function logQueuedInterruptDecision(
+  { queued, drain, sessionState, lateBind, cancelQueued, sendNow },
+  report,
+) {
   try {
     let fields = {
       ...countQueuedPromptKinds(queued),
-      turn_under_way: turnUnderWay,
+      turn_under_way: drain.turnUnderWay,
+      turn_end_summary_outstanding: sessionState.turnEndSummaryOutstanding(),
+      abort_controller_present: drain.abortController !== undefined,
+      ...(drain.lastResultAt !== undefined && {
+        ms_since_last_result: Math.round(performance.now() - drain.lastResultAt),
+      }),
       late_bind_interrupt: lateBind,
       cancel_queued: cancelQueued,
       send_now: sendNow,
@@ -626,11 +716,12 @@ function logQueuedInterruptDecision({ queued, turnUnderWay, lateBind, cancelQueu
     logForDiagnosticsNoPII("error", "cli_queued_at_interrupt_failed");
   }
 }
-//@ chunk-tyg7f3ek.js:115000-115061 placement
+//@ chunk-0yw3taqg.js:144577-144662 placement
 var RESUME_RESCUE_YIELD_FLAG = "tengu_cosmic_crayon";
 var TENGU_COZY_PINWHEEL = "tengu_cozy_pinwheel";
+var TENGU_GIGGLY_OASIS = "tengu_giggly_oasis";
 var QUEUED_INTERRUPT_BUDGET_MS = 250;
-//@ chunk-tyg7f3ek.js:115061-115396 placement
+//@ chunk-0yw3taqg.js:144662-144997 placement
 class FetchingUserFilesCounter {
   count = 0;
   none;
@@ -667,6 +758,7 @@ export {
   QUEUED_INTERRUPT_BUDGET_MS,
   RESUME_RESCUE_YIELD_FLAG,
   TENGU_COZY_PINWHEEL,
+  TENGU_GIGGLY_OASIS,
   isPeerHandbackPrompt,
   FetchingUserFilesCounter,
 };

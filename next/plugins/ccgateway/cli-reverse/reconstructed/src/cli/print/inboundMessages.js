@@ -3,15 +3,17 @@
  *
  * 2.1.316 新增：入站提示命令合并、打印运行状态与持久化后的跟进检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (19)
+ * attribution: placement 18, layout 1
  */
+import { dirname } from "path";
+import { randomUUID } from "crypto";
 import {
   sameSchedulingPlugin,
   isMainAgentCommand,
-  isPassiveMainAgentCommand,
+  isPassiveMainThreadCommand,
   processQueuedCommands,
 } from "../../utils/messageQueueManager.js";
 import { originKindForWakeup } from "../../utils/promptSource.js";
@@ -30,7 +32,7 @@ import { isPollEventMode } from "../../utils/pollEvents.js";
 import { TASK_NOTIFICATION, STATUS } from "../../constants/xml.js";
 import {
   extractTag,
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
   isInterruptionOnlyMessage,
   isToolResultMessage,
 } from "../../utils/messages.js";
@@ -44,8 +46,20 @@ import { heldMessageUuidSet } from "./queuedMessageUtils.js";
 import { isNonPromptUserRow } from "../../utils/transcript/deserialize.js";
 import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
+import { isHostEntrypoint } from "../../utils/entrypointKinds.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { withDeadline } from "../../utils/sleep.js";
+import { isSessionPersistenceDisabled, getSessionId } from "../../bootstrap/state.js";
+import { flushSessionStorage, getTranscriptWriterHealth } from "../../utils/sessionStorage.js";
+import { drainConfigWrites, getConfigSaveFullDiskCode } from "../../utils/config.js";
+import { CLEANUP_TIMEOUT_MS } from "../../utils/cleanupRegistry.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
+import { isSameOrUnderPath } from "../../utils/pathPrefix.js";
+import { transcriptKeyFor } from "../../utils/transcript/transcriptFiles.js";
+import { describeGlobalConfigFile } from "../../utils/env.js";
 import { lastTextBlockText } from "../../utils/historyFile.js";
 import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
 import { releaseServerHold } from "../../plugins/functionHooks/pluginLifecycle.js";
@@ -59,7 +73,7 @@ import { isVsCodeTopSession } from "../../utils/sessionShape.js";
 import { isVsCodeHooksSuppressed } from "../sdkMcpManifests.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:72484-73731 placement
+//@ chunk-0yw3taqg.js:93307-94684 placement
 /**
  * 判断两个排队 prompt 能否合并为一次轮次（mode、workload、isMeta、来源等一致）。
  */
@@ -86,6 +100,8 @@ function canMergePromptCommands(a, b) {
     !!b.skipSlashCommands === !!a.skipSlashCommands &&
     !isDrainOnlyResume(a) &&
     !isDrainOnlyResume(b) &&
+    !a.continuesInterruptedWork &&
+    !b.continuesInterruptedWork &&
     a.seededSummon !== true &&
     b.seededSummon !== true &&
     !isCommentNotificationText(a.value) &&
@@ -96,7 +112,8 @@ function canMergePromptCommands(a, b) {
     b.hearthRelayThreadTs === undefined &&
     a.hearthRelayMessageIds === undefined &&
     b.hearthRelayMessageIds === undefined &&
-    b.priority === a.priority &&
+    (b.priority === a.priority ||
+      (a.priority === "now" && a.raisedFrom !== undefined && b.priority === a.raisedFrom)) &&
     !a.inlinedImagePaths?.length &&
     !b.inlinedImagePaths?.length &&
     !a.imageFileUuids?.length &&
@@ -112,9 +129,9 @@ function canMergePromptCommands(a, b) {
     !looksLikeSlashInput(b.value)
   );
 }
-//@ chunk-tyg7f3ek.js:73731-73742 placement
+//@ chunk-0yw3taqg.js:94684-94695 placement
 var MAX_MERGED_PROMPTS = MAX_MERGED_PROMPTS_2;
-//@ chunk-tyg7f3ek.js:73742-73984 placement
+//@ chunk-0yw3taqg.js:94695-94937 placement
 function canBatchCommands(a, b) {
   return (
     b.priority === a.priority &&
@@ -129,11 +146,11 @@ function canBatchCommands(a, b) {
     isTaskDeliveredPrompt(b)
   );
 }
-//@ chunk-tyg7f3ek.js:73984-74028 placement
+//@ chunk-0yw3taqg.js:94937-94981 placement
 function isDispatchablePrompt(command) {
-  return isMainAgentCommand(command) && !isPollEventMode(command) && !isPassiveMainAgentCommand(command);
+  return isMainAgentCommand(command) && !isPollEventMode(command) && !isPassiveMainThreadCommand(command);
 }
-//@ chunk-tyg7f3ek.js:74028-74390 placement
+//@ chunk-0yw3taqg.js:94981-95343 placement
 function isTaskDeliveredPrompt(queuedCommands) {
   if (
     !processQueuedCommands(queuedCommands) ||
@@ -158,13 +175,13 @@ function isTaskDeliveredPrompt(queuedCommands) {
     extractTag(trimmed, STATUS) !== null
   );
 }
-//@ chunk-tyg7f3ek.js:74390-74438 placement
+//@ chunk-0yw3taqg.js:95343-95390 placement
 function isAcceptedOrigin(origin) {
   return (
     origin === undefined || (isSessionTaskNotificationOrigin(origin) && isBareTaskNotificationOrigin(origin))
   );
 }
-//@ chunk-tyg7f3ek.js:74438-74557 placement
+//@ chunk-0yw3taqg.js:95390-95509 placement
 var INBOUND_ORIGIN_KEYS = [
   "from",
   "name",
@@ -175,11 +192,11 @@ var INBOUND_ORIGIN_KEYS = [
   "activityObservation",
   "plugin",
 ];
-//@ chunk-tyg7f3ek.js:74557-74613 placement
+//@ chunk-0yw3taqg.js:95509-95565 placement
 function isHandbackOrigin(origin) {
   return origin?.kind === "peer" && origin.handback === true;
 }
-//@ chunk-tyg7f3ek.js:74613-75273 placement
+//@ chunk-0yw3taqg.js:95565-96225 placement
 function isSameOrigin(origin, origin_2) {
   if (origin === origin_2) return true;
   if (!origin || !origin_2) return false;
@@ -202,7 +219,7 @@ function isSameOrigin(origin, origin_2) {
     return origin.subkind === origin_2.subkind && origin.fireReason === origin_2.fireReason;
   return true;
 }
-//@ chunk-tyg7f3ek.js:75273-75399 placement
+//@ chunk-0yw3taqg.js:96225-96351 placement
 function mergeTurnUuids(currentTurn, batch) {
   if (isHandedOffBatch(batch))
     return {
@@ -219,7 +236,7 @@ function mergeTurnUuids(currentTurn, batch) {
         uuids: [...currentTurn.uuids, ...batchUuids(batch)],
       };
 }
-//@ chunk-tyg7f3ek.js:75399-76475 placement
+//@ chunk-0yw3taqg.js:96351-97440 placement
 /**
  * print 主循环的运行状态：轮次运行/报告标志、阶段、输入关闭与结束会话门闩。
  */
@@ -246,6 +263,7 @@ class PrintRunState {
   }
   abortController;
   turnUnderWay = false;
+  lastResultAt;
   stopReachedTurn = false;
   sendNowCutTurn = false;
   currentTurn = {
@@ -284,7 +302,7 @@ class PrintRunState {
     };
   }
 }
-//@ chunk-tyg7f3ek.js:76475-76657 placement (2.1.88 match: countUserPromptsFromEntries, 0.884)
+//@ chunk-0yw3taqg.js:97440-97622 placement (2.1.88 match: countUserPromptsFromEntries, 0.885)
 function countUserPromptsFromEntries_4(entries, options) {
   return (
     countUserPromptsFromEntries_3(entries, options, true) === true &&
@@ -292,12 +310,12 @@ function countUserPromptsFromEntries_4(entries, options) {
       (entry) =>
         (entry.type === "user" || entry.type === "assistant") &&
         !("isSidechain" in entry && entry.isSidechain === true) &&
-        !isSyntheticApiErrorMessage(entry) &&
+        !isNoResponseRequestedMessage(entry) &&
         !isSyntheticUserMessage(entry),
     )?.type === "user"
   );
 }
-//@ chunk-tyg7f3ek.js:76657-76938 placement
+//@ chunk-0yw3taqg.js:97622-97903 placement
 function interruptedTurnUuids(messages) {
   let uuids = new Set();
   try {
@@ -324,7 +342,7 @@ function interruptedTurnUuids(messages) {
   }
   return uuids;
 }
-//@ chunk-tyg7f3ek.js:76938-77670 placement
+//@ chunk-0yw3taqg.js:97903-98635 placement
 function wrapPersistenceWithFollowupCheck(persistenceChecker, isFollowup, readRows) {
   let closed = new Set();
   return () => {
@@ -371,7 +389,95 @@ function wrapPersistenceWithFollowupCheck(persistenceChecker, isFollowup, readRo
     };
   };
 }
-//@ chunk-tyg7f3ek.js:77670-77918 placement
+//@ chunk-0yw3taqg.js:98704-100448 layout
+async function sweepOnFullDisk(context) {
+  let exitCode = context.exitCode;
+  try {
+    if (context.sdkUrl || isHostEntrypoint()) return exitCode;
+    if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_rosy_crab", true)) return exitCode;
+    await withDeadline(
+      Promise.allSettled([
+        isSessionPersistenceDisabled() ? undefined : flushSessionStorage(),
+        drainConfigWrites(),
+      ]),
+      CLEANUP_TIMEOUT_MS,
+    );
+    let transcriptWriterHealth = getTranscriptWriterHealth();
+    let fullDiskCode = transcriptWriterHealth.fullDiskCode;
+    let configSaveFullDiskCode = getConfigSaveFullDiskCode();
+    let diskErrorCode = fullDiskCode ?? configSaveFullDiskCode;
+    if (diskErrorCode === undefined) return exitCode;
+    let outputFormat =
+      context.outputFormat === "stream-json" || context.outputFormat === "json"
+        ? context.outputFormat
+        : "text";
+    if (outputFormat !== "stream-json") exitCode = 1;
+    logFeatureSad("print_full_disk_exit", diskErrorCode === "EDQUOT" ? "edquot" : "enospc", {
+      outcome: fromEnum(exitCode === context.exitCode ? "notice_only" : "exit_code_changed"),
+      output_format: fromEnum(outputFormat),
+      exit_code: exitCode,
+    });
+    let claudeConfigDir = getClaudeConfigDir();
+    let [firstFullDiskPath] = transcriptWriterHealth.fullDiskPaths;
+    let transcriptBaseDir =
+      typeof firstFullDiskPath === "string" && !isSameOrUnderPath(firstFullDiskPath, claudeConfigDir)
+        ? dirname(firstFullDiskPath)
+        : claudeConfigDir;
+    let sessionId = getSessionId();
+    let affectedSessionIds = new Set();
+    for (let fullDiskPath of transcriptWriterHealth.fullDiskPaths) {
+      let transcriptKey = transcriptKeyFor(fullDiskPath);
+      affectedSessionIds.add(transcriptKey?.namespace === "transcript" ? transcriptKey.sessionId : sessionId);
+    }
+    let any = Array.from(affectedSessionIds).some((sessionIdEntry) => sessionIdEntry !== sessionId);
+    let transcriptClause = `all of this ${any ? "run's" : "session's"} transcript under ${transcriptBaseDir}`;
+    let configClause = `changes this run made to ${describeGlobalConfigFile()}`;
+    let lostClause = `${transcriptClause} and ${configClause}`;
+    if (configSaveFullDiskCode === undefined) lostClause = transcriptClause;
+    else if (fullDiskCode === undefined) lostClause = configClause;
+    let causePhrase =
+      diskErrorCode === "EDQUOT"
+        ? "your disk quota is used up (EDQUOT)"
+        : `the disk is full (${diskErrorCode})`;
+    let messageParts = [`Error: Claude Code could not save ${lostClause} because ${causePhrase}.`];
+    if (fullDiskCode !== undefined) {
+      let resumeTarget = any
+        ? `session ${new Intl.ListFormat("en", {
+            type: "disjunction",
+          }).format(affectedSessionIds)}`
+        : "this session";
+      messageParts.push(`If you resume ${resumeTarget}, part of the conversation may be missing.`);
+    }
+    messageParts.push(
+      diskErrorCode === "EDQUOT"
+        ? "Free up space, or ask for a larger quota, before the next run."
+        : "Free up space on that disk before the next run.",
+    );
+    process.stderr.write(`${messageParts.join(" ")}
+`);
+    if (outputFormat === "stream-json") {
+      let lostKinds = [];
+      if (fullDiskCode !== undefined) lostKinds.push("transcript");
+      if (configSaveFullDiskCode !== undefined) lostKinds.push("global_config");
+      await context.io.write({
+        type: "system",
+        subtype: "session_writes_lost",
+        error_code: diskErrorCode === "EDQUOT" ? "EDQUOT" : "ENOSPC",
+        lost: lostKinds,
+        ...(affectedSessionIds.size > 0 && {
+          transcript_session_ids: Array.from(affectedSessionIds),
+        }),
+        uuid: randomUUID(),
+        session_id: sessionId,
+      });
+    }
+  } catch (error) {
+    logError(error);
+    logFeatureBad("print_full_disk_exit", "check_threw");
+  }
+  return exitCode;
+}
+//@ chunk-0yw3taqg.js:100448-100696 placement
 function isImmediateCommandCandidate(command, commands) {
   if (command.mode === "poll-event") return false;
   if (
@@ -384,7 +490,7 @@ function isImmediateCommandCandidate(command, commands) {
   let parsed = text === null ? null : parseSlashCommand(text);
   return parsed !== null && !hasCommand(parsed.commandName, [...commands()]);
 }
-//@ chunk-tyg7f3ek.js:77918-78379 placement
+//@ chunk-0yw3taqg.js:100696-101157 placement
 function runCommandInGate(uuid, plan) {
   let deferred = Promise.withResolvers();
   let abortController = new AbortController();
@@ -422,16 +528,17 @@ function runCommandInGate(uuid, plan) {
     },
   });
 }
-//@ chunk-tyg7f3ek.js:78379-78413 placement
+//@ chunk-0yw3taqg.js:101157-101191 placement
 function isImmediateCommandsEnabled() {
   return isVsCodeTopSession() && !isVsCodeHooksSuppressed();
 }
-//@ chunk-tyg7f3ek.js:78413-78432 placement
+//@ chunk-0yw3taqg.js:101191-101210 placement
 var WATCHED_IMMEDIATE_IOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:78413", () => {
+deferInit("chunk-0yw3taqg.js:101191", () => {
   WATCHED_IMMEDIATE_IOS = new WeakSet();
 });
 export {
+  sweepOnFullDisk,
   interruptedTurnUuids,
   PrintRunState,
   wrapPersistenceWithFollowupCheck,

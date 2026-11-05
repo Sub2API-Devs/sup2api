@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP SDK 代际。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5br6r47d.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4x7ersf7.js (3)
  * attribution: placement 3
  */
 import { identity } from "../../utils/identity.js";
@@ -16,7 +16,7 @@ import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5br6r47d.js:403-479 placement
+//@ chunk-4x7ersf7.js:403-479 placement
 /**
  * 锁存 MCP SDK 代际（v1/v2）的容器。
  */
@@ -29,15 +29,15 @@ class SdkGenerationLatch {
     this.latched = undefined;
   }
 }
-//@ chunk-5br6r47d.js:479-510 placement
+//@ chunk-4x7ersf7.js:479-510 placement
 /**
  * 全局的 SDK 代际锁存器（可重置）。
  */
 var sdkGenerationLatch; // deferred: uses SdkGenerationLatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-5br6r47d.js:479", () => {
+deferInit("chunk-4x7ersf7.js:479", () => {
   sdkGenerationLatch = identity(new SdkGenerationLatch(), (latch) => latch.reset());
 });
-//@ chunk-5br6r47d.js:510-1048 placement
+//@ chunk-4x7ersf7.js:510-1048 placement
 /**
  * 决定并锁存使用的 MCP SDK 代（v1 或 v2）：环境变量 MCP_SDK_GENERATION 优先，否则看特性开关，记录来源与遥测。
  */

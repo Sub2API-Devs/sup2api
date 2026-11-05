@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子代理待投递消息的追加与排空，插件可拒绝恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
@@ -16,7 +16,7 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { queueAgentMessage } from "./childWork.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:4718913-4718996 placement
+//@ chunk-5xgkngpb.js:4830116-4830199 placement
 /**
  * 往子代理的 transcript 追加一条消息。
  */
@@ -26,21 +26,21 @@ function appendAgentTranscriptMessage(taskId, message, taskRegistry) {
     messages: [...transcript.messages, message],
   }));
 }
-//@ chunk-e6aww6q8.js:4718996-4719155 placement (2.1.88 match: queuePendingMessage, 0.752)
+//@ chunk-5xgkngpb.js:4830199-4830359 placement
 /**
  * 取出并清空子代理的 pendingMessages。
  */
 function drainPendingMessages(taskId, taskRegistry) {
   let task = taskRegistry.get(taskId);
   if (!isLocalAgent(task) || task.pendingMessages.length === 0) return [];
-  let drained = task.pendingMessages;
-  taskRegistry.update(taskId, (t) => ({
-    ...t,
+  let pendingMessages = task.pendingMessages;
+  taskRegistry.update(taskId, (task) => ({
+    ...task,
     pendingMessages: [],
   }));
-  return drained;
+  return pendingMessages;
 }
-//@ chunk-e6aww6q8.js:4719236-4719571 placement
+//@ chunk-5xgkngpb.js:4830440-4830776 placement
 /**
  * 插件拒绝恢复代理时，丢弃对应的排队消息并发出恢复失败事件。
  */
@@ -61,7 +61,7 @@ function dropDeniedResumeMessages(agentId, taskRegistry, deniedMessages, { denie
   });
   if (filtered.length > 0) getTaskRunState().agentStrandedMessages.emit(agentId);
 }
-//@ chunk-e6aww6q8.js:4719571-4719714 placement
+//@ chunk-5xgkngpb.js:4830776-4830919 placement
 /**
  * 向代理发送消息，代理未运行时发出消息滞留事件，返回代理是否存在。
  */
@@ -71,7 +71,7 @@ function sendMessageToAgent(agentId, text, taskRegistry, options = {}) {
   if (status !== undefined && status !== "running") getTaskRunState().agentStrandedMessages.emit(agentId);
   return status !== undefined;
 }
-//@ chunk-e6aww6q8.js:4719714-4719839 placement
+//@ chunk-5xgkngpb.js:4830919-4831044 placement
 /**
  * 发送消息后清除代理的等待通知接收者（若匹配）。
  */
@@ -88,8 +88,8 @@ function clearWaitingNotice(agentId, agentId_2, taskRegistry) {
 }
 export {
   sendMessageToAgent,
-  appendAgentTranscriptMessage,
   drainPendingMessages,
-  dropDeniedResumeMessages,
   clearWaitingNotice,
+  dropDeniedResumeMessages,
+  appendAgentTranscriptMessage,
 };

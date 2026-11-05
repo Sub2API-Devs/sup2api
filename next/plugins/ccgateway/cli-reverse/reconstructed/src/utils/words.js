@@ -3,14 +3,14 @@
  *
  * 随机 slug 词表（形容词/名词/动词）与三词 slug 生成
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/words.ts
- * pieces: chunk-bwbq4xvm.js (10)
+ * pieces: chunk-7kayq7nc.js (10)
  * attribution: fingerprint 2, file-local 1, layout 1, placement 6
  */
 import { randomBytes } from "crypto";
 
-//@ chunk-bwbq4xvm.js:775327-782403 fingerprint (2.1.88 match: ADJECTIVES, 0.695)
+//@ chunk-7kayq7nc.js:824397-831473 fingerprint (2.1.88 match: ADJECTIVES, 0.695)
 /**
  * 形容词词表（随机 slug 用）。
  */
@@ -757,18 +757,18 @@ var NOUNS = [
   "yawning",
   "zooming",
 ];
-//@ chunk-bwbq4xvm.js:782403-782449 fingerprint (2.1.88 match: randomInt, 1)
+//@ chunk-7kayq7nc.js:831473-831519 fingerprint (2.1.88 match: randomInt, 1)
 /**
  * crypto 随机整数 [0, max)。
  */
 function randomInt(max) {
   return randomBytes(4).readUInt32BE(0) % max;
 }
-//@ chunk-bwbq4xvm.js:782449-782487 file-local
+//@ chunk-7kayq7nc.js:831519-831557 file-local
 function pickRandom(array) {
   return array[randomInt(array.length)];
 }
-//@ chunk-bwbq4xvm.js:782487-782556 layout
+//@ chunk-7kayq7nc.js:831557-831626 layout
 /**
  * 生成三词随机 slug（形容词-名词-动词式），用于计划文件名、会话名等。
  */
@@ -778,10 +778,10 @@ function generateWordSlug() {
   let verb = pickRandom(VERBS);
   return `${adjective}-${noun}-${verb}`;
 }
-//@ chunk-bwbq4xvm.js:782556-782709 placement
+//@ chunk-7kayq7nc.js:831626-831779 placement
 var PASTED_PLACEHOLDER_PATTERN =
   /\[(?:Pasted text #\d+(?: \+\d+ lines)?|\u2726 Team setup guide #\d+(?: \+\d+ lines)?|Image #\d+|\.\.\.Truncated text #\d+ \+\d+ lines\.\.\.)\]/g;
-//@ chunk-bwbq4xvm.js:782709-782909 placement
+//@ chunk-7kayq7nc.js:831779-831979 placement
 /**
  * 取文本前 N 个词（去掉粘贴/图片占位符）生成小写短横线 slug。
  */
@@ -798,13 +798,13 @@ function slugifyPromptWords(text, options = {}) {
     .slice(0, maxLen)
     .replace(/^-+|-+$/g, "");
 }
-//@ chunk-bwbq4xvm.js:782909-782964 placement
+//@ chunk-7kayq7nc.js:831979-832034 placement
 function randomWordSlug() {
   let adjective = pickRandom(ADJECTIVES);
   let verb = pickRandom(VERBS);
   return `${adjective}-${verb}`;
 }
-//@ chunk-bwbq4xvm.js:782964-783194 placement
+//@ chunk-7kayq7nc.js:832034-832264 placement
 function shortWordSlugFromSeed(seed) {
   if (seed.length < 8) throw Error("shortWordSlugFromSeed needs at least 8 seed bytes");
   let dataView = new DataView(seed.buffer, seed.byteOffset, seed.byteLength);
@@ -812,7 +812,7 @@ function shortWordSlugFromSeed(seed) {
   let verb = VERBS[dataView.getUint32(4) % VERBS.length];
   return `${adjective}-${verb}`;
 }
-//@ chunk-bwbq4xvm.js:783194-783368 placement
+//@ chunk-7kayq7nc.js:832264-832438 placement
 function isWordSlug(lowerCase) {
   let [firstWord, secondWord, ...extraParts] = lowerCase.split("-");
   let wordSets = (wordSlugSets ??= {
@@ -827,6 +827,6 @@ function isWordSlug(lowerCase) {
     wordSets.nouns.has(secondWord)
   );
 }
-//@ chunk-bwbq4xvm.js:783368-783375 placement
+//@ chunk-7kayq7nc.js:832438-832445 placement
 var wordSlugSets;
-export { randomWordSlug, slugifyPromptWords, shortWordSlugFromSeed, generateWordSlug, isWordSlug };
+export { slugifyPromptWords, shortWordSlugFromSeed, randomWordSlug, generateWordSlug, isWordSlug };

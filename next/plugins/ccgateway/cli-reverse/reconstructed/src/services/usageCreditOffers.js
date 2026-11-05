@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：用量额度相关的服务端优惠/补偿（starry_waterfall 用量积分邀约、cedar_ember 限额重置授予）的状态获取与领取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zv6whf9m.js (55)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0467wazv.js (55)
  * attribution: placement 55
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -57,7 +57,7 @@ import { getEntrypointKind } from "../utils/entrypointKinds.js";
 import { arePromoOffersAllowed } from "../utils/planTiers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-zv6whf9m.js:981-2671 placement
+//@ chunk-0467wazv.js:981-2671 placement
 /**
  * starry_waterfall（用量积分邀约）配置：资格、展示位置（CLI 菜单、限额带、IDE 横幅）与文案键。
  */
@@ -67,7 +67,7 @@ var OFFER_SURFACES;
 var offerArmSchema;
 var offerEventPropsSchema;
 var offerStatusSchema;
-deferInit("chunk-zv6whf9m.js:981", () => {
+deferInit("chunk-0467wazv.js:981", () => {
   STARRY_WATERFALL = "starry_waterfall";
   OFFER_INELIGIBLE_REASONS = [
     "org_not_eligible",
@@ -137,7 +137,7 @@ deferInit("chunk-zv6whf9m.js:981", () => {
     }),
   );
 });
-//@ chunk-zv6whf9m.js:2671-3542 placement
+//@ chunk-0467wazv.js:2671-3542 placement
 function parseCreditOfferStatus(raw) {
   if (raw === undefined || raw === null) return null;
   let parsed = offerStatusSchema().safeParse(raw);
@@ -176,7 +176,7 @@ function parseCreditOfferStatus(raw) {
       : null,
   };
 }
-//@ chunk-zv6whf9m.js:3542-3704 placement
+//@ chunk-0467wazv.js:3542-3704 placement
 function isActiveCreditOffer(currentWallOffer) {
   return (
     currentWallOffer !== undefined &&
@@ -189,7 +189,7 @@ function isActiveCreditOffer(currentWallOffer) {
     currentWallOffer.daysLeft > 0
   );
 }
-//@ chunk-zv6whf9m.js:3704-4183 placement
+//@ chunk-0467wazv.js:3704-4183 placement
 async function fetchCreditOfferStatus(credentials, surface) {
   try {
     if (!hasProfileScope())
@@ -230,7 +230,7 @@ async function fetchCreditOfferStatus(credentials, surface) {
     };
   }
 }
-//@ chunk-zv6whf9m.js:4183-4268 placement
+//@ chunk-0467wazv.js:4183-4268 placement
 /**
  * 优惠提示的初始状态。
  */
@@ -244,29 +244,29 @@ function createCreditOfferPromptState() {
     changed: createSignal(),
   };
 }
-//@ chunk-zv6whf9m.js:4268-4283 placement
+//@ chunk-0467wazv.js:4268-4283 placement
 /**
  * 按 host 保存的优惠提示状态。
  */
 var creditOfferPromptStateSlots; // deferred: uses createCreditOfferPromptState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zv6whf9m.js:4268", () => {
+deferInit("chunk-0467wazv.js:4268", () => {
   creditOfferPromptStateSlots = new HostScoped(createCreditOfferPromptState);
 });
-//@ chunk-zv6whf9m.js:4283-4318 placement
+//@ chunk-0467wazv.js:4283-4318 placement
 /**
  * 取当前 host 的优惠提示状态。
  */
 function currentCreditOfferPromptState() {
   return creditOfferPromptStateSlots.of(getRootSession().host);
 }
-//@ chunk-zv6whf9m.js:4318-4350 placement
+//@ chunk-0467wazv.js:4318-4350 placement
 /**
  * 当前优惠提示的阶段。
  */
 function getCreditOfferPhase() {
   return currentCreditOfferPromptState().state;
 }
-//@ chunk-zv6whf9m.js:4350-4401 placement
+//@ chunk-0467wazv.js:4350-4401 placement
 /**
  * 写入优惠提示状态并发出变更信号。
  */
@@ -275,14 +275,14 @@ function setCreditOfferPromptState(state) {
   promptState.state = state;
   promptState.changed.emit();
 }
-//@ chunk-zv6whf9m.js:4401-4449 placement
+//@ chunk-0467wazv.js:4401-4449 placement
 /**
  * 订阅优惠提示状态变化。
  */
 function onCreditOfferPromptChange(listener) {
   return currentCreditOfferPromptState().changed.subscribe(listener);
 }
-//@ chunk-zv6whf9m.js:4449-4497 placement
+//@ chunk-0467wazv.js:4449-4497 placement
 /**
  * 优惠提示的三个时间与次数常量（失败上限、拉取超时、已答复有效期）。
  */
@@ -290,7 +290,7 @@ var MAX_OFFER_FETCH_FAILURES = 3;
 var OFFER_FETCH_TIMEOUT_MS = 12000;
 var ANSWERED_OFFER_TTL_MS = 600000;
 var CREDITS_REQUIRED = "credits_required";
-//@ chunk-zv6whf9m.js:4497-4590 placement
+//@ chunk-0467wazv.js:4497-4590 placement
 /**
  * 由可自动继续的限额生成墙键（限额类型:重置时间）。
  */
@@ -299,7 +299,7 @@ function wallKeyForLimit(limit) {
     ? `${limit.rateLimitType}:${limit.resetsAt}`
     : null;
 }
-//@ chunk-zv6whf9m.js:4590-4636 placement
+//@ chunk-0467wazv.js:4590-4636 placement
 /**
  * 把墙键与账号 epoch 打包。
  */
@@ -309,14 +309,14 @@ function wrapWallKey(key) {
     accountEpoch: getLimitsAccountEpoch(),
   };
 }
-//@ chunk-zv6whf9m.js:4636-4706 placement
+//@ chunk-0467wazv.js:4636-4706 placement
 /**
  * 比较两个墙记录是否指向同一墙且同一账号 epoch。
  */
 function isSameWallKey(wall, other) {
   return wall.key === other.key && wall.accountEpoch === other.accountEpoch;
 }
-//@ chunk-zv6whf9m.js:4706-4773 placement
+//@ chunk-0467wazv.js:4706-4773 placement
 /**
  * 会话是否为可领取优惠的 claude.ai 订阅。
  */
@@ -325,7 +325,7 @@ function isCreditOfferEligibleSession() {
     isClaudeAISubscriber() && getOauthAccountInfo()?.billingType !== "usage_based" && isFirstPartyApiBackend()
   );
 }
-//@ chunk-zv6whf9m.js:4773-4952 placement
+//@ chunk-0467wazv.js:4773-4952 placement
 function getCurrentWallOffer() {
   let creditOfferPhase = getCreditOfferPhase();
   if (creditOfferPhase.phase === "idle" || creditOfferPhase.wall.accountEpoch !== getLimitsAccountEpoch())
@@ -339,7 +339,7 @@ function getCurrentWallOffer() {
       return;
   }
 }
-//@ chunk-zv6whf9m.js:4952-5003 placement
+//@ chunk-0467wazv.js:4952-5003 placement
 /**
  * 当前墙上有生效且开关允许的优惠。
  */
@@ -347,7 +347,7 @@ function activeOfferAtWall() {
   let currentWallOffer = getCurrentWallOffer();
   return isActiveCreditOffer(currentWallOffer) && isPromoOfferEnabled() ? currentWallOffer : undefined;
 }
-//@ chunk-zv6whf9m.js:5003-5175 placement
+//@ chunk-0467wazv.js:5003-5175 placement
 /**
  * 按当前额度优惠（折扣或额外额度）生成菜单项后缀文案。
  */
@@ -363,7 +363,7 @@ function getOfferMenuSuffix() {
     },
   );
 }
-//@ chunk-zv6whf9m.js:5175-5335 placement
+//@ chunk-0467wazv.js:5175-5335 placement
 /**
  * 按当前额度优惠生成提示文案。
  */
@@ -376,7 +376,7 @@ function getOfferHint() {
     daysLeft: offer.daysLeft,
   });
 }
-//@ chunk-zv6whf9m.js:5335-5506 placement
+//@ chunk-0467wazv.js:5335-5506 placement
 function getOfferBannerPill() {
   let offer = activeOfferAtWall();
   if (offer === undefined) return;
@@ -389,7 +389,7 @@ function getOfferBannerPill() {
     },
   );
 }
-//@ chunk-zv6whf9m.js:5506-5645 placement
+//@ chunk-0467wazv.js:5506-5645 placement
 /**
  * 返回额度优惠横幅信息：类型、百分比、剩余天数与胶囊文案；没有有效优惠时 undefined。
  */
@@ -404,7 +404,7 @@ function getOfferBanner() {
     label: offerBannerPill,
   };
 }
-//@ chunk-zv6whf9m.js:5645-6153 placement
+//@ chunk-0467wazv.js:5645-6153 placement
 function getCreditOfferForRateLimit() {
   let currentWallOffer = getCurrentWallOffer();
   if (currentWallOffer === undefined || currentWallOffer === null) return {};
@@ -422,7 +422,7 @@ function getCreditOfferForRateLimit() {
     offer_surface: fromEnumOpt(eventProps?.offerSurface) ?? undefined,
   };
 }
-//@ chunk-zv6whf9m.js:6153-6235 placement
+//@ chunk-0467wazv.js:6153-6235 placement
 /**
  * 为 CLI 菜单生成额度赠送入口。
  */
@@ -431,7 +431,7 @@ function offerForCliMenu(limit, credentials) {
   if (!isPromoOfferEnabled() || !isAutoContinueEligible() || wallKey === null) return;
   CreditOfferPromptState(wallKey, "cli_menu", credentials);
 }
-//@ chunk-zv6whf9m.js:6235-6307 placement
+//@ chunk-0467wazv.js:6235-6307 placement
 /**
  * 在 IDE 里请求额度赠送。
  */
@@ -439,7 +439,7 @@ function requestCreditOfferInIde(credentials) {
   if (!isPromoOfferEnabled() || !isAutoContinueEligible()) return;
   CreditOfferPromptState(CREDITS_REQUIRED, "cli_credits_required", credentials);
 }
-//@ chunk-zv6whf9m.js:6307-6400 placement
+//@ chunk-0467wazv.js:6307-6400 placement
 /**
  * 在额度区间处提供赠送入口。
  */
@@ -449,7 +449,7 @@ function offerCreditAtBand(quotaLimits) {
     return;
   CreditOfferPromptState(wallKey, "ide_banner", undefined);
 }
-//@ chunk-zv6whf9m.js:6400-6567 placement
+//@ chunk-0467wazv.js:6400-6567 placement
 /**
  * 优惠查询曾失败且仍在同一限额墙、失败次数未超上限时，从 CLI 菜单重新弹出额度优惠提示；返回是否弹出。
  */
@@ -467,7 +467,7 @@ function retryOfferPrompt(limit, credentials) {
   }
   return false;
 }
-//@ chunk-zv6whf9m.js:6567-7280 placement
+//@ chunk-0467wazv.js:6567-7280 placement
 function CreditOfferPromptState(key, surface, credentials, nowMs = Date.now()) {
   let wrappedWall = wrapWallKey(key);
   let promptState = currentCreditOfferPromptState();
@@ -525,7 +525,7 @@ function CreditOfferPromptState(key, surface, credentials, nowMs = Date.now()) {
   promptState.pendingAsk = fetchPromise;
   return fetchPromise;
 }
-//@ chunk-zv6whf9m.js:7280-8027 placement
+//@ chunk-0467wazv.js:7280-8027 placement
 function claimCreditOffer({ wall, surface, failures, result }) {
   let creditOfferPhase = getCreditOfferPhase();
   if (creditOfferPhase.phase !== "asking" || !isSameWallKey(creditOfferPhase.wall, wall)) return;
@@ -576,7 +576,7 @@ function claimCreditOffer({ wall, surface, failures, result }) {
     config_version: promoOfferVersion(),
   });
 }
-//@ chunk-zv6whf9m.js:8027-8239 placement
+//@ chunk-0467wazv.js:8027-8239 placement
 function logCreditOfferShown(surface, offerAnalytics = {}) {
   let promptState = currentCreditOfferPromptState();
   let state = promptState.state;
@@ -590,7 +590,7 @@ function logCreditOfferShown(surface, offerAnalytics = {}) {
     config_version: promoOfferVersion(),
   });
 }
-//@ chunk-zv6whf9m.js:8239-8484 placement
+//@ chunk-0467wazv.js:8239-8484 placement
 /**
  * 使用额度优惠后，把当前回答或待定状态中的优惠标记为已兑换且不再生效。
  */
@@ -616,7 +616,7 @@ function markOfferRedeemed({ usedOffer }) {
       standing: markUsed(creditOfferPhase.standing),
     });
 }
-//@ chunk-zv6whf9m.js:8484-10252 placement
+//@ chunk-0467wazv.js:8484-10252 placement
 /**
  * cedar_ember（五小时/七天限额重置授予）的配置与文本。
  */
@@ -631,7 +631,7 @@ var GRANT_RESULT_REASONS;
 var grantEventPropsSchema;
 var clearedLimitsSchema;
 var grantSchema;
-deferInit("chunk-zv6whf9m.js:8484", () => {
+deferInit("chunk-0467wazv.js:8484", () => {
   CEDAR_EMBER = "cedar_ember";
   CEDAR_EMBER_GRANT_TIMEOUT_MS = 25000;
   grantIdRegex = /^[a-z0-9_-]{1,40}$/;
@@ -722,7 +722,7 @@ deferInit("chunk-zv6whf9m.js:8484", () => {
     }),
   );
 });
-//@ chunk-zv6whf9m.js:10252-10379 placement
+//@ chunk-0467wazv.js:10252-10379 placement
 function pickPercentFields(percentUsed) {
   let picked = {};
   for (let limitType of CREDIT_RESETTABLE_LIMIT_TYPES) {
@@ -732,13 +732,13 @@ function pickPercentFields(percentUsed) {
   }
   return picked;
 }
-//@ chunk-zv6whf9m.js:10379-11165 placement
+//@ chunk-0467wazv.js:10379-11165 placement
 /**
  * 领取赠送结果的校验 schema。
  */
 var CedarEmberStatusSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var grantClaimResultSchema;
-deferInit("chunk-zv6whf9m.js:10379", () => {
+deferInit("chunk-0467wazv.js:10379", () => {
   CedarEmberStatusSchema = DoctorLazy(() =>
     objectSchema({
       eligible: booleanSchema(),
@@ -765,7 +765,7 @@ deferInit("chunk-zv6whf9m.js:10379", () => {
     }),
   );
 });
-//@ chunk-zv6whf9m.js:11165-11684 placement
+//@ chunk-0467wazv.js:11165-11684 placement
 function parseCedarEmberGrant(raw) {
   let parsed = grantSchema().safeParse(raw);
   if (!parsed.success) {
@@ -791,7 +791,7 @@ function parseCedarEmberGrant(raw) {
     unavailableReason: grant.unavailable_reason ?? null,
   };
 }
-//@ chunk-zv6whf9m.js:11684-12436 placement
+//@ chunk-0467wazv.js:11684-12436 placement
 function parseCedarEmberStatus(cedarEmber) {
   if (cedarEmber === undefined || cedarEmber === null) return null;
   let parsed = CedarEmberStatusSchema().safeParse(cedarEmber);
@@ -829,7 +829,7 @@ function parseCedarEmberStatus(cedarEmber) {
       : null,
   };
 }
-//@ chunk-zv6whf9m.js:12436-12640 placement
+//@ chunk-0467wazv.js:12436-12640 placement
 /**
  * 在可用的限额重置授予中找出结束时间晚于当前的最晚一个，没有返回 undefined。
  */
@@ -841,7 +841,7 @@ function getLatestResetGrantEnd(status, nowMs) {
     .filter((endMs) => endMs > nowMs);
   return filtered.length === 0 ? undefined : Math.max(...filtered);
 }
-//@ chunk-zv6whf9m.js:12640-13129 placement
+//@ chunk-0467wazv.js:12640-13129 placement
 async function fetchCedarEmberStatus(credentials, { read = "at_wall", surface } = {}) {
   try {
     if (!hasProfileScope())
@@ -884,14 +884,14 @@ async function fetchCedarEmberStatus(credentials, { read = "at_wall", surface } 
     };
   }
 }
-//@ chunk-zv6whf9m.js:13129-13196 placement
+//@ chunk-0467wazv.js:13129-13196 placement
 var EMPTY_GRANT_RESULT = {
   reason: null,
   resetsLeft: null,
   cleared: [],
   weeklyResetsAt: null,
 };
-//@ chunk-zv6whf9m.js:13196-14515 placement
+//@ chunk-0467wazv.js:13196-14515 placement
 /**
  * 领取限额重置授予（需要 OAuth 组织，校验授予格式）。
  */
@@ -993,7 +993,7 @@ async function claimCedarEmberGrant(credentials, id, requestId) {
     };
   }
 }
-//@ chunk-zv6whf9m.js:14515-14605 placement
+//@ chunk-0467wazv.js:14515-14605 placement
 /**
  * 解析时间戳为毫秒数，非法返回 undefined。
  */
@@ -1002,7 +1002,7 @@ function parseTimestampOrUndefined(value) {
   let timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
-//@ chunk-zv6whf9m.js:14605-14992 placement
+//@ chunk-0467wazv.js:14605-14992 placement
 /**
  * 创建用量额度优惠的初始状态（空闲阶段、各种待定与认领记录为空）。
  */
@@ -1029,29 +1029,29 @@ function createUsageCreditState() {
     events: createSignal(),
   };
 }
-//@ chunk-zv6whf9m.js:14992-15009 placement
+//@ chunk-0467wazv.js:14992-15009 placement
 /**
  * 按 host 保存的用量额度状态。
  */
 var usageCreditHostStates; // deferred: uses createUsageCreditState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zv6whf9m.js:14992", () => {
+deferInit("chunk-0467wazv.js:14992", () => {
   usageCreditHostStates = new HostScoped(createUsageCreditState);
 });
-//@ chunk-zv6whf9m.js:15009-15046 placement
+//@ chunk-0467wazv.js:15009-15046 placement
 /**
  * 取当前 host 的用量额度状态。
  */
 function usageCreditStateSlots() {
   return usageCreditHostStates.of(getRootSession().host);
 }
-//@ chunk-zv6whf9m.js:15046-15078 placement
+//@ chunk-0467wazv.js:15046-15078 placement
 /**
  * 当前用量额度状态对象。
  */
 function currentUsageCreditState() {
   return usageCreditStateSlots().state;
 }
-//@ chunk-zv6whf9m.js:15078-15132 placement
+//@ chunk-0467wazv.js:15078-15132 placement
 /**
  * 写入用量额度状态并发出变更信号。
  */
@@ -1060,28 +1060,28 @@ function setUsageCreditState(state) {
   slots.state = state;
   slots.changed.emit();
 }
-//@ chunk-zv6whf9m.js:15132-15180 placement
+//@ chunk-0467wazv.js:15132-15180 placement
 /**
  * 订阅用量额度状态变化。
  */
 function onUsageCreditStateChange(listener) {
   return usageCreditStateSlots().changed.subscribe(listener);
 }
-//@ chunk-zv6whf9m.js:15180-15228 placement
+//@ chunk-0467wazv.js:15180-15228 placement
 /**
  * 订阅用量额度事件。
  */
 function onUsageCreditEvent(listener) {
   return usageCreditStateSlots().events.subscribe(listener);
 }
-//@ chunk-zv6whf9m.js:15228-15341 placement
+//@ chunk-0467wazv.js:15228-15341 placement
 /**
  * 未使用限额重置状态缓存的有效期、查询超时与缓存 schema。
  */
 var UNUSED_RESET_CACHE_TTL_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var UNUSED_RESET_TIMEOUT_MS;
 var UNUSED_RESET_CACHE_SCHEMA;
-deferInit("chunk-zv6whf9m.js:15228", () => {
+deferInit("chunk-0467wazv.js:15228", () => {
   UNUSED_RESET_CACHE_TTL_MS = 259200000;
   UNUSED_RESET_TIMEOUT_MS = 12000;
   UNUSED_RESET_CACHE_SCHEMA = DoctorLazy(() =>
@@ -1093,7 +1093,7 @@ deferInit("chunk-zv6whf9m.js:15228", () => {
     }),
   );
 });
-//@ chunk-zv6whf9m.js:15341-15628 placement
+//@ chunk-0467wazv.js:15341-15628 placement
 /**
  * 根据缓存判断当前账号是否持有未使用的限额重置：CLI 入口、同一账号、缓存未过期且在有效期内、使用 claude.ai 令牌且允许促销。
  */
@@ -1117,7 +1117,7 @@ function holdsUnusedReset(nowMs = Date.now()) {
     return false;
   }
 }
-//@ chunk-zv6whf9m.js:15628-15789 placement
+//@ chunk-0467wazv.js:15628-15789 placement
 /**
  * 刷新"未使用的限额重置"可用性（同一时间只发起一次请求，出错记日志）。
  */
@@ -1130,7 +1130,7 @@ function refreshUnusedResetStatus(credentials, storageV5) {
     });
   return slots.pendingUnusedResetRead;
 }
-//@ chunk-zv6whf9m.js:15789-15958 placement
+//@ chunk-0467wazv.js:15789-15958 placement
 /**
  * 丢弃未使用限额重置状态的缓存（内存与全局配置），并计数。
  */
@@ -1147,7 +1147,7 @@ function dropUnusedResetCache() {
         },
   );
 }
-//@ chunk-zv6whf9m.js:15958-16705 placement
+//@ chunk-0467wazv.js:15958-16705 placement
 async function describeCedarEmberAvailability(credentials, storageV5) {
   let slots = usageCreditStateSlots();
   let accountUuid = getOauthAccountInfo()?.accountUuid;
@@ -1203,16 +1203,16 @@ async function describeCedarEmberAvailability(credentials, storageV5) {
     storageV5,
   );
 }
-//@ chunk-zv6whf9m.js:16705-16736 placement
+//@ chunk-0467wazv.js:16705-16736 placement
 var TENGU_WISE_BEAR_COPY = "tengu_wise_bear_copy";
-//@ chunk-zv6whf9m.js:16932-17029 placement
+//@ chunk-0467wazv.js:16932-17029 placement
 /**
  * 优惠里的备注是否只在本周重置未使用时才展示。
  */
 function isOnlyIfUnusedResetNote(note) {
   return typeof note === "object" && note !== null && Reflect.get(note, "only_if_unused_reset") === true;
 }
-//@ chunk-zv6whf9m.js:17029-17266 placement
+//@ chunk-0467wazv.js:17029-17266 placement
 function readOfferNote(note, noteKind, cleanTaskDescription, allowOnlyIfUnused) {
   if (typeof note !== "object" || note === null) return;
   if (isOnlyIfUnusedResetNote(note) && allowOnlyIfUnused !== true) return;
@@ -1224,21 +1224,21 @@ function readOfferNote(note, noteKind, cleanTaskDescription, allowOnlyIfUnused) 
     : undefined;
 }
 export {
-  onUsageCreditEvent,
-  currentUsageCreditState,
-  markOfferRedeemed,
-  logCreditOfferShown,
-  offerForCliMenu,
-  requestCreditOfferInIde,
-  onUsageCreditStateChange,
-  readOfferNote,
-  TENGU_WISE_BEAR_COPY,
+  offerCreditAtBand,
+  getOfferBanner,
   onCreditOfferPromptChange,
-  getOfferHint,
+  TENGU_WISE_BEAR_COPY,
+  onUsageCreditStateChange,
+  currentUsageCreditState,
   getCreditOfferPhase,
   getOfferMenuSuffix,
   getCreditOfferForRateLimit,
+  logCreditOfferShown,
   retryOfferPrompt,
+  onUsageCreditEvent,
+  markOfferRedeemed,
+  offerForCliMenu,
+  requestCreditOfferInIde,
   holdsUnusedReset,
   refreshUnusedResetStatus,
   parseTimestampOrUndefined,
@@ -1250,6 +1250,6 @@ export {
   fetchCedarEmberStatus,
   claimCedarEmberGrant,
   dropUnusedResetCache,
-  offerCreditAtBand,
-  getOfferBanner,
+  readOfferNote,
+  getOfferHint,
 };

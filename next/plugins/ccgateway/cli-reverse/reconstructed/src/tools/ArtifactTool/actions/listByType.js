@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按类型列出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (20)
  * attribution: placement 20
  */
 import {
@@ -30,56 +30,60 @@ import {
   listTypeInstances,
   typeTitleMatchKeys,
 } from "../../../services/artifacts/artifactTypes.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { ArtifactInputError } from "../constants.js";
 import { getToolPermissionContext } from "../../../utils/permissions/toolPermissionContext.js";
 import { parseArtifactUrlOrThrow, formatRuleForDisplay } from "../permissions/artifactPermissionRules.js";
-import { getDenyAndAskUrlRules, matchesWildcardPattern } from "../permissions/urlRules.js";
+import {
+  getDenyAndAskUrlRules,
+  getRuleExactDomain,
+  filterRulesMatchingUrls,
+  matchesWildcardPattern,
+} from "../permissions/urlRules.js";
 import { artifactViewerUrl } from "../../../services/artifacts/publishInstanceFiles.js";
 import { findUrlContentRule } from "../permissions/ruleTarget.js";
-import { getRuleExactDomain, filterRulesMatchingUrls } from "../../../utils/permissions/permissions.js";
 import { typeRowTitle } from "../typeCatalog.js";
 import { sweepScalarField } from "../../../services/artifacts/artifactPeople.js";
 import { clearQuickstartNoneFlags } from "../designSystems.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:106809-106924 placement
+//@ chunk-xzmy9dn4.js:107149-107264 placement
 function describeTypeTarget(input, classifierArtifactTargetFor = canonicalArtifactTargetFor) {
   let typeName = typeOf(input);
   return typeName !== undefined
     ? `the type named ${quoteForDecisionSurface(typeName, TITLE_MAX_CHARS)}`
     : classifierArtifactTargetFor(typeUrlOf(input), "(unrecognized address)");
 }
-//@ chunk-8wvtd8sr.js:106924-106977 placement
+//@ chunk-xzmy9dn4.js:107264-107317 placement
 /**
  * 取列表 scope，未设置时按 all 处理。
  */
 function listScopeOrDefault(input) {
   return input.scope === undefined ? "all" : listScopeFrom(input);
 }
-//@ chunk-8wvtd8sr.js:106977-107255 placement
+//@ chunk-xzmy9dn4.js:107317-107595 placement
 var LIST_BY_TYPE_UNAVAILABLE = "listing the Artifacts made from a type is not available in this session";
 var TYPE_AND_TYPE_URL_BOTH = "`type` and `type_url` both name the type to list \u2014 pass one of them";
 var EMPTY_TYPE_NAME =
   '`type` is empty \u2014 pass an Artifact type\'s name (as action "list_types" shows it), or its link as `type_url`';
-//@ chunk-8wvtd8sr.js:107255-107390 placement
+//@ chunk-xzmy9dn4.js:107595-107730 placement
 function noTypeNamedMessage(typeName) {
   return `no Artifact type named ${jsonStringify(typeName)} is published for this account \u2014 action "list_types" shows the ones that are`;
 }
-//@ chunk-8wvtd8sr.js:107390-107632 placement
+//@ chunk-xzmy9dn4.js:107730-107972 placement
 function typeNotFoundPartialMessage(typeName, listed) {
   return `none of the ${listed} Artifact ${plural(listed, "type")} read is named ${jsonStringify(typeName)} exactly, and the listing could not be read completely \u2014 action "list_types" shows what is published; pass the type's link from there as \`type_url\``;
 }
-//@ chunk-8wvtd8sr.js:107632-107853 placement
+//@ chunk-xzmy9dn4.js:107972-108193 placement
 function ambiguousTypeNameMessage(typeName, named) {
   return `${named.length} published Artifact types are named ${jsonStringify(typeName)}: ${named.map((type) => `${jsonStringify(type.title)} \u2014 ${type.typeUrl}`).join("; ")} \u2014 pass the one you mean by its link, as \`type_url\` instead of \`type\``;
 }
-//@ chunk-8wvtd8sr.js:107853-107914 placement
+//@ chunk-xzmy9dn4.js:108193-108254 placement
 var LIST_BY_TYPE_ALLOWED_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8wvtd8sr.js:107853", () => {
+deferInit("chunk-xzmy9dn4.js:108193", () => {
   LIST_BY_TYPE_ALLOWED_KEYS = new Set(["action", "type", "type_url", "scope", "limit"]);
 });
-//@ chunk-8wvtd8sr.js:107914-108673 placement
+//@ chunk-xzmy9dn4.js:108254-109013 placement
 /**
  * 校验 list + type/type_url：类型目录需开启，只能带 scope/limit，type 与 type_url 只能二选一，type 名不能为空，type_url 必须是合法类型链接。
  */
@@ -117,20 +121,20 @@ function validateListByTypeInput(input) {
       : {
           result: true,
         };
-  let sessionArtifactUrl = parseSessionArtifactUrl(typeUrl ?? "", {
+  let urlCheck = validateSessionArtifactUrl(typeUrl ?? "", {
     notUrlMessage: notTypeUrlError(typeUrl ?? ""),
   });
-  if (!sessionArtifactUrl.ok)
+  if (!urlCheck.ok)
     return {
       result: false,
-      message: sessionArtifactUrl.message,
-      errorCode: sessionArtifactUrl.errorCode,
+      message: urlCheck.message,
+      errorCode: urlCheck.errorCode,
     };
   return {
     result: true,
   };
 }
-//@ chunk-8wvtd8sr.js:108673-108893 placement
+//@ chunk-xzmy9dn4.js:109013-109233 placement
 /**
  * 按类型列出 Artifact 为只读操作的说明，以及会把组织内他人发布的标题与链接读入对话的提示。
  */
@@ -138,7 +142,7 @@ var LIST_BY_TYPE_READ_ONLY_REASON =
   "Listing the Artifacts made from a type that the user can open is a read-only action";
 var OTHERS_TITLES_READ_CLAUSE =
   "titles, descriptions and links of Artifacts other people in the organization published will be read into the conversation";
-//@ chunk-8wvtd8sr.js:108893-109113 placement
+//@ chunk-xzmy9dn4.js:109233-109453 placement
 /**
  * 按类型列出 Artifact 的分类器摘要（含范围与目标类型）。
  */
@@ -146,7 +150,7 @@ function describeListByTypeSummary(input) {
   let scope = listScopeOrDefault(input);
   return `list artifacts made from a type (read-only, scope: ${scope}${scope === "mine" ? "" : " \u2014 includes titles and descriptions of artifacts other users in the organization published"}): ${describeTypeTarget(input, classifierArtifactTargetFor)}`;
 }
-//@ chunk-8wvtd8sr.js:109113-109439 placement
+//@ chunk-xzmy9dn4.js:109453-109779 placement
 /**
  * 按类型列出 Artifact 的权限询问描述：区分只列自己的、组织内他人发布的、或用户能打开的（只读）。
  */
@@ -157,7 +161,7 @@ function describeListByTypeAsk(input) {
     ? `List the user's own Artifacts made from one Artifact type (${target}) \u2014 titles and links (read-only).`
     : `List the Artifacts made from one Artifact type (${target}) that ${scope === "shared" ? "other people in the organization published" : "the user can open"} \u2014 ${OTHERS_TITLES_READ_CLAUSE} (read-only).`;
 }
-//@ chunk-8wvtd8sr.js:109439-109603 placement
+//@ chunk-xzmy9dn4.js:109779-109943 placement
 /**
  * 按类型列出 Artifact 的简短描述（范围非 mine 时附他人内容读入的提示）。
  */
@@ -167,7 +171,7 @@ function describeListByTypeShort(input) {
     ? "list artifacts made from a type (read-only)"
     : `list artifacts made from a type (read-only, scope: ${scope} \u2014 ${OTHERS_TITLES_READ_CLAUSE})`;
 }
-//@ chunk-8wvtd8sr.js:109603-113502 placement
+//@ chunk-xzmy9dn4.js:109943-113849 placement
 async function listArtifactsByType(input, context, tool) {
   if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== true)
     throw new ArtifactInputError(LIST_BY_TYPE_UNAVAILABLE, "list_type_unavailable");
@@ -373,7 +377,7 @@ async function listArtifactsByType(input, context, tool) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:113502-113567 placement
+//@ chunk-xzmy9dn4.js:113849-113914 placement
 /**
  * 把类型实例列表格式化成工具结果。
  */
@@ -382,7 +386,7 @@ var typeInstanceListToolResult = (result, toolUseId) => ({
   type: "tool_result",
   content: formatArtifactListEntry(result),
 });
-//@ chunk-8wvtd8sr.js:113567-113657 placement
+//@ chunk-xzmy9dn4.js:113914-114004 placement
 /**
  * 类型列表不可用时的空结果（instances 为空、unavailable）。
  */
@@ -398,7 +402,7 @@ function typeListUnavailableResult(typeRef, scope) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:113657-113915 placement
+//@ chunk-xzmy9dn4.js:114004-114262 placement
 function assertTypeListNotDenied(toolPermissionContext, listInput, title) {
   let urlContentRule = findUrlContentRule(toolPermissionContext, listInput, "deny");
   if (urlContentRule !== null)
@@ -407,7 +411,7 @@ function assertTypeListNotDenied(toolPermissionContext, listInput, title) {
       "list_type_rule_denied",
     );
 }
-//@ chunk-8wvtd8sr.js:113915-114253 placement
+//@ chunk-xzmy9dn4.js:114262-114600 placement
 function assertListTypeNotDenied(toolPermissionContext, listInput, title, extraMatchKey) {
   let titleKeys = typeTitleMatchKeys(title);
   let denyRule = filterRulesMatchingUrls(
@@ -422,13 +426,13 @@ function assertListTypeNotDenied(toolPermissionContext, listInput, title, extraM
       "list_type_rule_denied",
     );
 }
-//@ chunk-8wvtd8sr.js:114253-114326 placement
+//@ chunk-xzmy9dn4.js:114600-114673 placement
 function findAskTypeRule(toolPermissionContext, toolPermissionContext_2, tool, title, titleMatchKey) {
   return hasAskRuleForUrl(toolPermissionContext_2, tool, title, titleMatchKey)
     ? undefined
     : filterRulesMatchingUrls(toolPermissionContext, tool, typeTitleMatchKeys(title), "ask")[0];
 }
-//@ chunk-8wvtd8sr.js:114326-114434 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-xzmy9dn4.js:114673-114781 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function hasAskRuleForUrl(toolPermissionContext, tool, title, titleMatchKey) {
   return (
     titleMatchKey !== undefined &&
@@ -437,11 +441,12 @@ function hasAskRuleForUrl(toolPermissionContext, tool, title, titleMatchKey) {
     )
   );
 }
-//@ chunk-8wvtd8sr.js:114434-114698 placement
+//@ chunk-xzmy9dn4.js:114781-115045 placement
 function typeRuleAskNote(askTypeRule, quotedTitle, exactName) {
   return `The permission rule ${formatRuleForDisplay(askTypeRule)} asks the user before the ${quotedTitle} type is listed, and the user is asked only when \`type\` matches the rule, so nothing was listed. To have the user asked, list it again with \`type\` set to exactly ${jsonStringify(typeRowTitle(exactName))}.`;
 }
 export {
+  listScopeOrDefault,
   describeListByTypeAsk,
   LIST_BY_TYPE_READ_ONLY_REASON,
   validateListByTypeInput,
@@ -449,5 +454,4 @@ export {
   describeListByTypeShort,
   listArtifactsByType,
   typeInstanceListToolResult,
-  listScopeOrDefault,
 };

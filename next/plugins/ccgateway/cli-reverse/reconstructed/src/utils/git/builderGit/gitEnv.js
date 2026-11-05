@@ -3,9 +3,9 @@
  *
  * builderGit：隔离 git 子进程环境（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (6), chunk-fepf8jp6.js (35)
  * attribution: placement 41
  */
 import { isAbsolute, dirname, delimiter, sep, parse, resolve, join } from "path";
@@ -22,7 +22,7 @@ import {
 } from "./sandboxReach.js";
 import { GIT_FAILURE_CLASSIFIERS, seenStderr } from "./gitRun.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
+import { getPlatform } from "../../platform.js";
 import { sanitizePathEnv, stripPathQuotes } from "../../which.js";
 import {
   PROTECTED_ENV_VARS,
@@ -33,7 +33,7 @@ import { omitAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mer
 import { jsonStringify } from "../../slowOperations.js";
 import { listProgramNames, isProgramDirSafe, findXcodeGit, isProgramDirSafeFor } from "./gitBinary.js";
 import { runInvocation } from "../../detectRepository.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { getLatchedPreSettingsEnvSnapshot } from "../../managedEnvApply.js";
 import { getSettingsAppliedEnv } from "../../permissions/protectedSettingsPaths.js";
 import { pickByHelper, GIT_ALLOW_PROTOCOL_VALUE } from "../gitSafeEnv.js";
@@ -52,7 +52,7 @@ import { getOriginalCwd } from "../../../bootstrap/state.js";
 import { noUncachedRoot } from "../../settings/settingsStorage.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:210150-213675 placement
+//@ chunk-fepf8jp6.js:4735-8260 placement
 /**
  * 运行构建工具的敏感环境变量名单（PATH/PYTHONPATH/各类工具链与预加载变量）。
  */
@@ -60,7 +60,7 @@ var BUILD_TOOL_ENV_VARS; // deferred: has load-time effects after a deferred sta
 var DANGEROUS_ENV_NAME_LIST;
 var DIRECTORY_ENV_NAMES;
 var FILE_ENV_NAMES;
-deferInit("chunk-s61vbvea.js:210150", () => {
+deferInit("chunk-fepf8jp6.js:4735", () => {
   BUILD_TOOL_ENV_VARS = [
     "PATH",
     "PYTHONPATH",
@@ -311,38 +311,38 @@ deferInit("chunk-s61vbvea.js:210150", () => {
     "R_ENVIRON_USER",
   ]);
 });
-//@ chunk-s61vbvea.js:213675-213781 placement (2.1.88 match: normalizeSource, 0.887)
+//@ chunk-fepf8jp6.js:8260-8366 placement (2.1.88 match: normalizeSource, 0.887)
 /**
  * 环境变量名分类：路径列表类（PATH 等）→ directory，文件类 → file。名字配错，见 lead 建议。
  */
-function normalizeSource(varName) {
+function normalizeSource_2(varName) {
   let replaced = varName.toUpperCase().replace(/-/g, "_");
   return DIRECTORY_ENV_NAMES.has(replaced) ? "directory" : FILE_ENV_NAMES.has(replaced) ? "file" : null;
 }
-//@ chunk-s61vbvea.js:213781-214191 placement
+//@ chunk-fepf8jp6.js:8366-8776 placement
 /**
  * 会影响 git 或编译器行为的危险环境变量名正则与额外名单。
  */
 var DANGEROUS_ENV_NAME_RE; // deferred: uses BUILD_TOOL_ENV_VARS of its import cycle while loading; runs once the cycle is complete
 var DANGEROUS_ENV_NAMES;
-deferInit("chunk-s61vbvea.js:213781", () => {
+deferInit("chunk-fepf8jp6.js:8366", () => {
   DANGEROUS_ENV_NAME_RE =
     /^(?:DYLD_|LD_|BASH_FUNC_|GIT_CONFIG_|LUA_|TF_CLI_ARGS|CARGO_ALIAS_|CARGO_TARGET_[A-Z0-9_]+_(?:RUNNER|LINKER|RUSTFLAGS|RUSTDOCFLAGS)$|(?:CC|CXX|AR|RANLIB|(?:AR|RANLIB)FLAGS|FC?FLAGS|CFLAGS|CXXFLAGS|LDFLAGS)_(?:X86_64|I[3-6]86|AARCH64|ARM|RISCV|WASM|POWERPC|S390X|MIPS|SPARC|LOONGARCH|THUMB)[A-Z0-9_-]*$|[A-Z0-9][A-Z0-9_]*_(?:EXTERNAL_DIFF|PAGER|EDITOR)$)/;
   DANGEROUS_ENV_NAMES = new Set([...DANGEROUS_ENV_NAME_LIST].map((name) => name.toUpperCase()));
 });
-//@ chunk-s61vbvea.js:214191-214256 placement
+//@ chunk-fepf8jp6.js:8776-8841 placement
 /**
  * 判断变量名是否属于构建工具环境变量名单（大小写与连字符归一）。
  */
 function isBuildToolEnvVar(name) {
   return BUILD_TOOL_ENV_VAR_SET.has(name.toUpperCase().replace(/-/g, "_"));
 }
-//@ chunk-s61vbvea.js:214256-214276 placement
+//@ chunk-fepf8jp6.js:8841-8861 placement
 var BUILD_TOOL_ENV_VAR_SET; // deferred: uses BUILD_TOOL_ENV_VARS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:214256", () => {
+deferInit("chunk-fepf8jp6.js:8841", () => {
   BUILD_TOOL_ENV_VAR_SET = new Set(BUILD_TOOL_ENV_VARS);
 });
-//@ chunk-s61vbvea.js:214276-214361 placement
+//@ chunk-fepf8jp6.js:8861-8946 placement
 /**
  * 判断环境变量名是否危险（命中危险名单或危险模式）。
  */
@@ -350,20 +350,20 @@ function isDangerousEnvName(name) {
   let replaced = name.toUpperCase().replace(/-/g, "_");
   return DANGEROUS_ENV_NAMES.has(replaced) || DANGEROUS_ENV_NAME_RE.test(replaced);
 }
-//@ chunk-s61vbvea.js:257197-257461 placement
+//@ chunk-fepf8jp6.js:51263-51525 placement
 /**
  * 检出内设置不可读的标记与提示。
  */
 var IN_TREE_SETTINGS_UNREADABLE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_VALUE;
 var IN_TREE_SETTINGS_UNREADABLE_MESSAGE;
-deferInit("chunk-s61vbvea.js:257197", () => {
+deferInit("chunk-fepf8jp6.js:51263", () => {
   IN_TREE_SETTINGS_UNREADABLE = Symbol("in-tree settings unreadable");
   EMPTY_VALUE = "";
   IN_TREE_SETTINGS_UNREADABLE_MESSAGE =
     "this checkout's .claude/settings.json or .claude/settings.local.json cannot be read or parsed: fix or remove it (see /status), then retry \u2014 what it may grant a bound session is unknown, so no git runs";
 });
-//@ chunk-s61vbvea.js:257461-257550 placement
+//@ chunk-fepf8jp6.js:51525-51613 placement
 /**
  * 把仓库可达根集合归一为可用的根列表；不可读时返回"不可读"标记。
  */
@@ -373,7 +373,7 @@ function reachRootsOrUnreadable(reach) {
     ? IN_TREE_SETTINGS_UNREADABLE
     : resolveReachRoots([...reach.roots, ...repoSettingsReachRoots], reach.tree);
 }
-//@ chunk-s61vbvea.js:257550-257638 placement
+//@ chunk-fepf8jp6.js:51613-51697 placement
 /**
  * 以可达根和预设置环境构造隔离的 git 环境。
  */
@@ -390,7 +390,7 @@ function buildGitEnvForReach(
     classifiers,
   );
 }
-//@ chunk-s61vbvea.js:257638-257718 placement
+//@ chunk-fepf8jp6.js:51697-51777 placement
 /**
  * 把 OPENSSL_CONF_INCLUDE 派生变量合并进环境。
  */
@@ -403,7 +403,7 @@ function applyOpenSslConfInclude(env) {
         ...confIncludeEnv,
       };
 }
-//@ chunk-s61vbvea.js:257718-257857 placement
+//@ chunk-fepf8jp6.js:51777-51914 placement
 function opensslConfIncludeEnv(env) {
   let envCaseInsensitive = getEnvCaseInsensitive(env, "OPENSSL_CONF");
   return envCaseInsensitive === undefined ||
@@ -414,10 +414,10 @@ function opensslConfIncludeEnv(env) {
         OPENSSL_CONF_INCLUDE: dirname(envCaseInsensitive),
       };
 }
-//@ chunk-s61vbvea.js:257857-258041 placement
+//@ chunk-fepf8jp6.js:51914-52098 placement
 function sanitizePathVars(env) {
   let filtered = Object.keys(env).filter((key) =>
-    getPlatform_2() === "windows" ? key.toUpperCase() === "PATH" : key === "PATH",
+    getPlatform() === "windows" ? key.toUpperCase() === "PATH" : key === "PATH",
   );
   return {
     ...env,
@@ -426,7 +426,7 @@ function sanitizePathVars(env) {
     ),
   };
 }
-//@ chunk-s61vbvea.js:258041-260207 placement
+//@ chunk-fepf8jp6.js:52098-54110 placement
 /**
  * 为隔离 git 子进程构造环境（清 GIT_CONFIG*、OPENSSL_CONF、PATH 等）
  */
@@ -434,11 +434,11 @@ function buildGitEnv(reach, loaders, baseEnv = getPreSettingsEnv()) {
   let env = sanitizePathVars(applyOpenSslConfInclude(baseEnv));
   if (reach === undefined) return env;
   let filtered = Object.keys(env).filter((key) =>
-    getPlatform_2() === "windows" ? key.toUpperCase() === "PATH" : key === "PATH",
+    getPlatform() === "windows" ? key.toUpperCase() === "PATH" : key === "PATH",
   );
   let flattened = Object.keys(env).flatMap((key) => {
     let protectedName =
-      getPlatform_2() === "windows"
+      getPlatform() === "windows"
         ? PROTECTED_ENV_VARS.find((name) => name === key.toUpperCase())
         : PROTECTED_ENV_VARS.find((name) => name === key);
     return protectedName === undefined ? [] : [[key, protectedName]];
@@ -448,7 +448,7 @@ function buildGitEnv(reach, loaders, baseEnv = getPreSettingsEnv()) {
     (key) =>
       !protectedKeys.has(key) && isDangerousEnvName(key) && key.toUpperCase() !== "GIT_CONFIG_NOSYSTEM",
   );
-  let mapped = filtered_2.map((key) => [key, normalizeSource(key)]);
+  let mapped = filtered_2.map((key) => [key, normalizeSource_2(key)]);
   let flattened_2 = mapped.flatMap(([kind, kind_2]) => (kind_2 === null ? [] : [[kind, kind_2]]));
   let flattened_3 = mapped.flatMap(([key, kind]) => (kind === null ? [key] : []));
   let dangerousKeys = new Set(filtered_2);
@@ -456,7 +456,7 @@ function buildGitEnv(reach, loaders, baseEnv = getPreSettingsEnv()) {
     (key) =>
       !protectedKeys.has(key) &&
       !dangerousKeys.has(key) &&
-      (getPlatform_2() === "windows" ? key.toUpperCase() !== "PATH" : key !== "PATH") &&
+      (getPlatform() === "windows" ? key.toUpperCase() !== "PATH" : key !== "PATH") &&
       isBuildToolEnvVar(key),
   );
   if (reach === IN_TREE_SETTINGS_UNREADABLE)
@@ -506,7 +506,7 @@ function buildGitEnv(reach, loaders, baseEnv = getPreSettingsEnv()) {
     if (value === undefined) return [];
     let path = stripPathQuotes(value);
     return !(
-      (getPlatform_2() !== "windows" &&
+      (getPlatform() !== "windows" &&
         path === "/dev/null" &&
         !reachPredicate("/dev") &&
         lstatOrUndefined(path)?.isCharacterDevice() === true) ||
@@ -540,17 +540,17 @@ function buildGitEnv(reach, loaders, baseEnv = getPreSettingsEnv()) {
     ),
   };
 }
-//@ chunk-s61vbvea.js:260207-260217 placement
+//@ chunk-fepf8jp6.js:54110-54120 placement
 var PATH_LIST_DELIMITER = delimiter;
-//@ chunk-s61vbvea.js:260217-260386 placement
+//@ chunk-fepf8jp6.js:54120-54289 placement
 function neutralCwd() {
   let systemRoot =
-    getPlatform_2() === "windows" ? getEnvCaseInsensitive(buildGitEnv(undefined), "SystemRoot") : undefined;
+    getPlatform() === "windows" ? getEnvCaseInsensitive(buildGitEnv(undefined), "SystemRoot") : undefined;
   return systemRoot !== undefined && /^[A-Za-z]:[\\/]/.test(systemRoot)
     ? `${systemRoot.slice(0, 2)}${sep}`
     : parse(process.execPath).root || sep;
 }
-//@ chunk-s61vbvea.js:260386-260604 placement
+//@ chunk-fepf8jp6.js:54289-54506 placement
 /**
  * git 调用参数：项目外起点时用 -C 并去掉 PWD。
  */
@@ -570,7 +570,7 @@ function buildGitInvocation({ file, startsOutside }, args, { dir, env }) {
     env: omitAlias(env, filtered),
   };
 }
-//@ chunk-s61vbvea.js:260604-260678 placement
+//@ chunk-fepf8jp6.js:54506-54578 placement
 /**
  * 用给定目录与环境运行一次 git 调用。
  */
@@ -583,26 +583,28 @@ function runGitWithEnv(invocation, args, { dir, env, ...runOptions }) {
     runOptions,
   );
 }
-//@ chunk-s61vbvea.js:260678-260761 placement
+//@ chunk-fepf8jp6.js:54578-54661 placement
 /**
  * 判断是否为 "fatal: cannot change to '…'"（退出码 128）错误。
  */
 function isCannotChangeToError(result) {
   return result.exitCode === 128 && /^fatal: cannot change to '/m.test(seenStderr(result));
 }
-//@ chunk-s61vbvea.js:260761-260790 placement
+//@ chunk-fepf8jp6.js:54661-54689 placement
 var NO_CLASSPATH_SENTINEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:260761", () => {
+deferInit("chunk-fepf8jp6.js:54661", () => {
   NO_CLASSPATH_SENTINEL = join(devNull, "no-classpath");
 });
-//@ chunk-s61vbvea.js:260790-260969 placement
+//@ chunk-fepf8jp6.js:54689-54868 placement
 function blankClasspathEnv(env) {
   let filtered = Object.keys(env).filter((key) => key.toUpperCase() === "CLASSPATH");
   let classpathKeys =
-    getPlatform_2() === "windows" && filtered.length > 0 ? filtered : uniq(["CLASSPATH", ...filtered]);
+    getPlatform() === "windows" && filtered.length > 0
+      ? filtered
+      : normalizeCaseForComparison_2(["CLASSPATH", ...filtered]);
   return Object.fromEntries(classpathKeys.map((key) => [key, NO_CLASSPATH_SENTINEL]));
 }
-//@ chunk-s61vbvea.js:260969-261377 placement
+//@ chunk-fepf8jp6.js:54868-55276 placement
 function SCRUBBED_LOADER_ENV(varName, value) {
   if (varName === "GIT_EXEC_PATH")
     return value.includes(delimiter) ? [value, ...value.split(delimiter)] : [value];
@@ -615,12 +617,12 @@ function SCRUBBED_LOADER_ENV(varName, value) {
     varName === "OPENSSL_ENGINES"
   )
     return [value];
-  if (getPlatform_2() === "windows") return value.split(delimiter);
+  if (getPlatform() === "windows") return value.split(delimiter);
   if (varName === "LD_PRELOAD") return value.split(/[\s:]+/).filter((part) => part !== "");
   if (varName === "LD_LIBRARY_PATH") return value.split(/[:;]/);
   return value.split(":");
 }
-//@ chunk-s61vbvea.js:261377-261575 placement
+//@ chunk-fepf8jp6.js:55276-55474 placement
 var PATH_LIKE_GIT_ENV_VARS = [
   "GIT_EXEC_PATH",
   "DEVELOPER_DIR",
@@ -630,16 +632,16 @@ var PATH_LIKE_GIT_ENV_VARS = [
   "OPENSSL_ENGINES",
 ];
 var INJECTION_ENV_VARS = ["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "NLSPATH", "OPENSSL_CONF"];
-//@ chunk-s61vbvea.js:261575-261663 placement
+//@ chunk-fepf8jp6.js:55474-55562 placement
 function hasShellVariableReference(varName, value) {
   return (
     (EXPANSION_SENSITIVE_LOADER_VARS.includes(varName) && value.includes("$")) ||
     (varName === "NLSPATH" && value.includes("%"))
   );
 }
-//@ chunk-s61vbvea.js:261663-261714 placement
+//@ chunk-fepf8jp6.js:55562-55613 placement
 var EXPANSION_SENSITIVE_LOADER_VARS = ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"];
-//@ chunk-s61vbvea.js:261714-262069 placement
+//@ chunk-fepf8jp6.js:55613-55967 placement
 function scrubGitTrace2Env(env) {
   let readOrDefault = (varName, fallback) => {
     let envCaseInsensitive = getEnvCaseInsensitive(env, varName);
@@ -654,9 +656,9 @@ function scrubGitTrace2Env(env) {
     GIT_TRACE2_MAX_FILES: readOrDefault("GIT_TRACE2_MAX_FILES", "0"),
   };
 }
-//@ chunk-s61vbvea.js:262069-262080 placement
+//@ chunk-fepf8jp6.js:55967-55978 placement
 var EMPTY_CONFIG_VALUE = "-";
-//@ chunk-s61vbvea.js:262080-262238 placement
+//@ chunk-fepf8jp6.js:55978-56135 placement
 /**
  * 取 GIT_CONFIG_GLOBAL/SYSTEM。
  */
@@ -672,12 +674,12 @@ function gitConfigLocationEnv(env) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:262238-262562 placement
+//@ chunk-fepf8jp6.js:56135-56458 placement
 function resolveTempDir() {
   let preSettingsEnv = getPreSettingsEnv();
   let envCaseInsensitive = getEnvCaseInsensitive(preSettingsEnv, "CLAUDE_CODE_TMPDIR");
   if (envCaseInsensitive !== undefined && envCaseInsensitive !== "") return envCaseInsensitive;
-  let platform = getPlatform_2();
+  let platform = getPlatform();
   if (platform === "windows") {
     let tempDir =
       getEnvCaseInsensitive(preSettingsEnv, "TEMP") ?? getEnvCaseInsensitive(preSettingsEnv, "TMP");
@@ -695,7 +697,7 @@ function resolveTempDir() {
       : tmpDirValue
     : "/tmp";
 }
-//@ chunk-s61vbvea.js:262562-262779 placement
+//@ chunk-fepf8jp6.js:56458-56674 placement
 /**
  * 设置生效前锁存的环境（合并后续覆盖）。
  */
@@ -703,7 +705,7 @@ function getPreSettingsEnv() {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   if (latchedPreSettingsEnvSnapshot === undefined) return process.env;
   let settingsAppliedEnv = getSettingsAppliedEnv();
-  if (getPlatform_2() !== "windows")
+  if (getPlatform() !== "windows")
     return {
       ...latchedPreSettingsEnvSnapshot,
       ...settingsAppliedEnv,
@@ -714,7 +716,7 @@ function getPreSettingsEnv() {
     ...settingsAppliedEnv,
   };
 }
-//@ chunk-s61vbvea.js:262779-262838 placement
+//@ chunk-fepf8jp6.js:56674-56733 placement
 /**
  * 取绑定会话（bound session）的可达根。
  */
@@ -722,7 +724,7 @@ function boundSessionReachRoots(layout) {
   let reach = reachForBoundSession(layout);
   return reach === undefined ? undefined : reachRootsOrUnreadable(reach);
 }
-//@ chunk-s61vbvea.js:262838-263048 placement
+//@ chunk-fepf8jp6.js:56733-56941 placement
 /**
  * 被设置改动的 git 配置位置变量。
  */
@@ -741,7 +743,7 @@ function findOverriddenGitConfigVar(layout, screenMemo) {
       ),
   );
 }
-//@ chunk-s61vbvea.js:263048-263156 placement
+//@ chunk-fepf8jp6.js:56941-57049 placement
 /**
  * 绑定会话的工作树可达范围。
  */
@@ -755,24 +757,24 @@ function reachForBoundSession(layout) {
       }
     : undefined;
 }
-//@ chunk-s61vbvea.js:263156-263193 placement
+//@ chunk-fepf8jp6.js:57049-57085 placement
 /**
  * 取某工作树的可达根。
  */
 function workTreeReachRoots(workTree, layout) {
   return reachRootsOrUnreadable(reachForWorkTree(workTree, layout));
 }
-//@ chunk-s61vbvea.js:288580-288653 placement
+//@ chunk-fepf8jp6.js:82210-82283 placement
 /**
  * 匹配 include/includeIf 的 path 配置键的正则。
  */
 var INCLUDE_PATH_CONFIG_KEY_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var regExp_7;
-deferInit("chunk-s61vbvea.js:288580", () => {
+var regExp;
+deferInit("chunk-fepf8jp6.js:82210", () => {
   INCLUDE_PATH_CONFIG_KEY_RE = String.raw`^(include|includeif\..*)\.path$`;
-  regExp_7 = new RegExp(INCLUDE_PATH_CONFIG_KEY_RE, "s");
+  regExp = new RegExp(INCLUDE_PATH_CONFIG_KEY_RE, "s");
 });
-//@ chunk-s61vbvea.js:288653-289461 placement
+//@ chunk-fepf8jp6.js:82283-83091 placement
 /**
  * 隔离 git 用的常量组：条件 include 正则、C 语言环境、禁用诊断用测试变量、只读运行的环境与 -c 参数。
  */
@@ -790,7 +792,7 @@ var GIT_REPLACE_REFS_CONFIG_ARGS;
 var SAFECRLF_ARGS;
 var GIT_READ_ARGS;
 var MAX_GIT_BUFFER_BYTES;
-deferInit("chunk-s61vbvea.js:288653", () => {
+deferInit("chunk-fepf8jp6.js:82283", () => {
   GIT_ISOLATION_CONFIG_ARGS = /^includeif\.(?:gitdir(?:\/i)?|hasconfig):/s;
   C_LOCALE_ENV = {
     LC_ALL: "C",
@@ -807,7 +809,7 @@ deferInit("chunk-s61vbvea.js:288653", () => {
     ...C_LOCALE_ENV,
     GIT_NO_LAZY_FETCH: "1",
     GIT_NO_REPLACE_OBJECTS: "1",
-    GIT_GRAFT_FILE: getPlatform_2() === "windows" ? "\\\\.\\NUL\\no-grafts" : "/dev/null/no-grafts",
+    GIT_GRAFT_FILE: getPlatform() === "windows" ? "\\\\.\\NUL\\no-grafts" : "/dev/null/no-grafts",
   };
   GIT_REF_PARANOIA_ENV = {
     GIT_REF_PARANOIA: "1",
@@ -815,7 +817,7 @@ deferInit("chunk-s61vbvea.js:288653", () => {
   GIT_LIST_ENV = {
     ...GIT_TEST_DISABLE_ENV,
     GIT_NO_REPLACE_OBJECTS: "1",
-    GIT_GRAFT_FILE: getPlatform_2() === "windows" ? "\\\\.\\NUL\\no-grafts" : "/dev/null/no-grafts",
+    GIT_GRAFT_FILE: getPlatform() === "windows" ? "\\\\.\\NUL\\no-grafts" : "/dev/null/no-grafts",
   };
   REPLACE_REFS_CONFIG = ["core.useReplaceRefs", "false"];
   GIT_READ_CONFIG_OVERRIDES = [
@@ -832,10 +834,10 @@ deferInit("chunk-s61vbvea.js:288653", () => {
   GIT_READ_ARGS = ["-c", "submodule.recurse=false", ...SAFECRLF_ARGS, ...GIT_READ_CONFIG_ARGS];
   MAX_GIT_BUFFER_BYTES = 67108864;
 });
-//@ chunk-s61vbvea.js:289461-289530 placement
+//@ chunk-7jxyna5q.js:212879-212948 placement
 var ALLOWED_CCR_GIT_REMOTES = [];
 var REPO_SLUG_RE = /^[a-z0-9.-]+(?::[0-9]+)?\/[a-z0-9._-]+\/[a-z0-9._-]+$/;
-//@ chunk-s61vbvea.js:289530-290055 placement
+//@ chunk-7jxyna5q.js:212948-213474 placement
 /**
  * 远端 URL 是否为允许的仓库（含 CCR git 代理）。
  */
@@ -861,7 +863,7 @@ function isAllowedGitRemote(remoteUrl) {
     return sliced === "" || sliced === ".git" || sliced.startsWith("/");
   });
 }
-//@ chunk-s61vbvea.js:290055-290100 placement
+//@ chunk-7jxyna5q.js:213474-213519 placement
 /**
  * 当前工作目录的 git 根（取不到时返回初始 cwd）。
  */
@@ -869,16 +871,16 @@ function cwdOrGitRoot() {
   let cwd = getCwd();
   return findGitRoot(cwd) ?? getOriginalCwd();
 }
-//@ chunk-s61vbvea.js:290100-290110 placement
+//@ chunk-7jxyna5q.js:213519-213529 placement
 var FORCE_NOT_IN_GIT_REPO = false;
-//@ chunk-s61vbvea.js:290110-290149 placement
+//@ chunk-7jxyna5q.js:213529-213568 placement
 /**
  * 判断给定目录不在 git 仓库内。
  */
 function isNotInGitRepo(startPath) {
   return FORCE_NOT_IN_GIT_REPO || findGitRoot(startPath) === null;
 }
-//@ chunk-s61vbvea.js:290149-290187 placement
+//@ chunk-7jxyna5q.js:213568-213606 placement
 /**
  * 取路径的规范 git 根，取不到时回退为网络挂载归一或原值。
  */
@@ -886,44 +888,44 @@ function canonicalRootOrSelf(path) {
   return noUncachedRoot(path) ?? findCanonicalGitRoot(path) ?? path;
 }
 export {
-  isAllowedGitRemote,
-  canonicalRootOrSelf,
   cwdOrGitRoot,
-  isNotInGitRepo,
-  buildGitEnv,
-  GIT_READ_CONFIG_ARGS,
-  GIT_LIST_ENV,
+  BUILD_TOOL_ENV_VARS,
+  isAllowedGitRemote,
   isDangerousEnvName,
   isBuildToolEnvVar,
-  resolveTempDir,
-  BUILD_TOOL_ENV_VARS,
   IN_TREE_SETTINGS_UNREADABLE,
-  buildGitEnvForReach,
   runGitWithEnv,
-  C_LOCALE_ENV,
-  IN_TREE_SETTINGS_UNREADABLE_MESSAGE,
-  gitConfigLocationEnv,
-  scrubGitTrace2Env,
-  workTreeReachRoots,
-  buildGitInvocation,
-  getPreSettingsEnv,
   GIT_REPLACE_REFS_CONFIG_ARGS,
+  GIT_READ_CONFIG_ARGS,
   DANGEROUS_ENV_NAME_LIST,
-  reachForBoundSession,
-  SAFECRLF_ARGS,
-  findOverriddenGitConfigVar,
+  canonicalRootOrSelf,
+  isNotInGitRepo,
+  buildGitEnv,
+  GIT_LIST_ENV,
   reachRootsOrUnreadable,
   DIRECTORY_ENV_NAMES,
   boundSessionReachRoots,
+  IN_TREE_SETTINGS_UNREADABLE_MESSAGE,
+  buildGitEnvForReach,
   EMPTY_VALUE,
   GIT_READ_ARGS,
   MAX_GIT_BUFFER_BYTES,
+  gitConfigLocationEnv,
+  scrubGitTrace2Env,
   GIT_READ_ENV,
   GIT_REF_PARANOIA_ENV,
   opensslConfIncludeEnv,
   applyOpenSslConfInclude,
+  getPreSettingsEnv,
+  reachForBoundSession,
   INCLUDE_PATH_CONFIG_KEY_RE,
   isCannotChangeToError,
-  regExp_7,
+  regExp,
   GIT_ISOLATION_CONFIG_ARGS,
+  C_LOCALE_ENV,
+  workTreeReachRoots,
+  buildGitInvocation,
+  resolveTempDir,
+  SAFECRLF_ARGS,
+  findOverriddenGitConfigVar,
 };

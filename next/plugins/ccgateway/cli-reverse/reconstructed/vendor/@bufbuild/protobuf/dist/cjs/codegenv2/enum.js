@@ -1,13 +1,13 @@
 /**
  * @bufbuild/protobuf/dist/cjs/codegenv2/enum.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-fq0cr76a.js:378397-378745 cjs-require-graph
+//@ chunk-qg41pqt6.js:378967-379315 cjs-require-graph
 var require_enum = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

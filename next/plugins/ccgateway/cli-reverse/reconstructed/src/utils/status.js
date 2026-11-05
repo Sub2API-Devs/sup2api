@@ -3,12 +3,22 @@
  *
  * /status 与 doctor 的各分区数据：账号、API 提供方、设置来源、IDE、MCP、记忆诊断、沙箱
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/status.tsx
- * pieces: chunk-06y4szbn.js (1), chunk-2wrddneh.js (1), chunk-j8bb1zkh.js (24)
- * attribution: fingerprint 8, placement 9, layout 8, file-local 1
+ * pieces: chunk-456z28kn.js (1), chunk-51jy8ztq.js (1), chunk-yt1xsmrj.js (25)
+ * attribution: placement 9, fingerprint 8, layout 9, file-local 1
  */
-import { toIDEDisplayName, isJetBrainsIde, VSCODE_EXTENSION_DOCS_URL, getIdeClientName } from "./ide.js";
+import { currentAttributionProject } from "./attributionProject.js";
+import { projectOriginLabel } from "./status/attributionProjectNotice.js";
+import { logError } from "./log.js";
+import { toError } from "./errors.js";
+import {
+  toIDEDisplayName,
+  isJetBrainsIde,
+  VSCODE_EXTENSION_DOCS_URL,
+  getIdeClientName,
+  isVSCodeTerminal,
+} from "./ide.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -16,6 +26,7 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { color } from "../components/design-system/color.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
+import { getIsInteractive, getGatewayAuth, getSessionId } from "../bootstrap/state.js";
 import { isArtifacts404Failure } from "../services/mcp/redactMcpErrors.js";
 import { isClaudeMdLoadingDisabled } from "./settings/customizationDisabled.js";
 import {
@@ -60,6 +71,9 @@ import {
 } from "../services/policyLimits/policyFetchStatus.js";
 import { describeClientDataStatus } from "../services/clientDataUrl.js";
 import { canAttachServerClassifierBeta } from "./permissions/serverClassifier/arbiter.js";
+import { codeModeStatusText } from "./foresightStatus.js";
+import { isCodeModeEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { CODE_MODE_LABEL } from "../constants/codeMode.js";
 import { checkInstall } from "./nativeInstaller/installer.js";
 import { processWrapperRecord, processWrapperError, isProcessWrapperUsable } from "./processWrapper.js";
 import { getLaunchCommand } from "./deepLink/registerProtocol.js";
@@ -75,7 +89,7 @@ import { stripAnsi } from "./stripAnsi.js";
 import { getDoctorDiagnostic } from "./doctorDiagnostic.js";
 import { splitStatusNotices } from "./settings/settingsErrorsHeadless.js";
 import { formatInvalidSettingNotice } from "./settings/settingsNotices.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { retentionCleanupSkipReason } from "./cleanup.js";
 import { collectPermissionRuleWarningLines } from "./permissions/securityWarnings.js";
 import { managedHelperEnvNotes } from "./auth/managedHelpers.js";
@@ -101,7 +115,6 @@ import {
 } from "./model/providers.js";
 import { getAllowedProviders } from "./model/allowedProviders.js";
 import { getDefaultVertexRegion, getDefaultAwsRegion } from "./envUtils.js";
-import { getGatewayAuth, getSessionId } from "../bootstrap/state.js";
 import { getProxyUrl, parseProxyUrl } from "./proxy.js";
 import { getMTLSConfig } from "./mtls.js";
 import { describeAwsRegion, resolveAwsRegion } from "./awsRegion.js";
@@ -116,7 +129,7 @@ import {
 } from "../components/Settings/Status.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:65501-65613 fingerprint (2.1.88 match: buildInstallationHealthDiagnostics, 0.329)
+//@ chunk-51jy8ztq.js:67753-67865 fingerprint (2.1.88 match: buildInstallationHealthDiagnostics, 0.329)
 async function buildInstallationHealthDiagnostics(backAfterPublish, extraWarnings) {
   let result = await backAfterPublish;
   return result.err === null && extraWarnings.length > 0
@@ -126,7 +139,7 @@ async function buildInstallationHealthDiagnostics(backAfterPublish, extraWarning
       }
     : result;
 }
-//@ chunk-j8bb1zkh.js:1796-2024 placement
+//@ chunk-yt1xsmrj.js:2056-2284 placement
 /**
  * 把状态项转为显示行，跳过空值或 none。
  */
@@ -149,7 +162,7 @@ function statusValueRows(rows) {
   }
   return out;
 }
-//@ chunk-j8bb1zkh.js:2024-2142 placement
+//@ chunk-yt1xsmrj.js:2284-2402 placement
 /**
  * 把各组中仅内部的状态项移到最后一组。
  */
@@ -158,33 +171,51 @@ function moveAntOnlyToEnd(columns) {
   mapped.push(columns.flatMap((column) => column.filter((row) => row.antOnly)));
   return mapped;
 }
-//@ chunk-j8bb1zkh.js:2142-2180 placement
+//@ chunk-yt1xsmrj.js:2402-2440 placement
 var legacyStatusModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-j8bb1zkh.js:2142", () => {
+deferInit("chunk-yt1xsmrj.js:2402", () => {
   legacyStatusModule = require("../services/artifactPreview/browserDiscovery.js");
 });
-//@ chunk-j8bb1zkh.js:2180-2204 placement
+//@ chunk-yt1xsmrj.js:2440-2464 placement
 /**
  * buildSecondarySection 里 MCP 分区（外部构建为空）。
  */
 function mcpStatusRows() {
   return [];
 }
-//@ chunk-j8bb1zkh.js:2204-2228 placement
+//@ chunk-yt1xsmrj.js:2464-2488 placement
 /**
  * buildSecondarySection 里工具搜索分区（外部构建为空）。
  */
 function toolSearchStatusRows() {
   return [];
 }
-//@ chunk-j8bb1zkh.js:2228-2252 placement
+//@ chunk-yt1xsmrj.js:2488-2642 layout
+function claudeAiProjectStatusItem() {
+  try {
+    let attribution = currentAttributionProject();
+    let project = attribution && projectOriginLabel(attribution);
+    return project === undefined
+      ? []
+      : [
+          {
+            label: "claude.ai Project",
+            value: `${project.name} (${project.origin})`,
+          },
+        ];
+  } catch (error) {
+    logError(toError(error));
+    return [];
+  }
+}
+//@ chunk-yt1xsmrj.js:2642-2666 placement
 /**
  * buildSecondarySection 里模型分区（外部构建为空）。
  */
 function modelStatusRows() {
   return [];
 }
-//@ chunk-j8bb1zkh.js:2252-3173 fingerprint (2.1.88 match: buildIDEProperties, 0.875)
+//@ chunk-yt1xsmrj.js:2666-3710 fingerprint (2.1.88 match: buildIDEProperties, 0.837)
 function buildIDEProperties(mcpClients, ideInstallationStatus = null, theme) {
   let ideClient = mcpClients?.find((client) => client.name === "ide");
   let ideErrored = Boolean(ideInstallationStatus?.error) && ideClient?.type === "connected";
@@ -253,10 +284,16 @@ function buildIDEProperties(mcpClients, ideInstallationStatus = null, theme) {
           value: `${color("error", theme)(figures_default.cross)} Not connected to ${ideName}`,
         },
       ];
-  }
+  } else if (getIsInteractive() && isVSCodeTerminal())
+    return [
+      {
+        label: "IDE",
+        value: `Not connected. To install the Claude Code extension yourself, see ${VSCODE_EXTENSION_DOCS_URL}`,
+      },
+    ];
   return [];
 }
-//@ chunk-j8bb1zkh.js:3173-4041 fingerprint (2.1.88 match: buildMcpProperties, 0.892)
+//@ chunk-yt1xsmrj.js:3710-4578 fingerprint (2.1.88 match: buildMcpProperties, 0.892)
 function buildMcpProperties(clients = [], theme) {
   let servers = clients.filter((client) => client.name !== "ide" && !isArtifacts404Failure(client));
   if (!servers.length) return [];
@@ -304,7 +341,7 @@ function buildMcpProperties(clients = [], theme) {
     },
   ];
 }
-//@ chunk-j8bb1zkh.js:4041-4783 fingerprint (2.1.88 match: buildMemoryDiagnostics, 0.402)
+//@ chunk-yt1xsmrj.js:4578-5320 fingerprint (2.1.88 match: buildMemoryDiagnostics, 0.402)
 /**
  * /status 与 doctor 的记忆诊断：CLAUDE.md 过大等警告。
  */
@@ -364,13 +401,13 @@ async function buildMemoryDiagnostics(mcpClients, options, context) {
   if (withheld.more > 0) diagnostics.push(moreInstructionFilesText(withheld));
   return diagnostics;
 }
-//@ chunk-j8bb1zkh.js:4783-4929 layout
+//@ chunk-yt1xsmrj.js:5320-5466 layout
 function formatMergedManagedSettingsLabel(remoteLabel = "remote") {
   let mergedPolicySources = getMergedPolicySources();
   if (!mergedPolicySources) return null;
   return `Enterprise managed settings (${mergedPolicySources.map((mergedPolicySource) => (mergedPolicySource === "remote" ? remoteLabel : buildSettingSourcesProperties(mergedPolicySource))).join(" + ")}, merged)`;
 }
-//@ chunk-j8bb1zkh.js:4929-6036 layout
+//@ chunk-yt1xsmrj.js:5466-6574 layout
 function buildSettingSourcesStatusProperties() {
   let enabledSettingSources = getEnabledSettingSources();
   let armedHelperOutput = getArmedHelperOutput();
@@ -451,7 +488,7 @@ function buildSettingSourcesStatusProperties() {
     });
   return properties;
 }
-//@ chunk-j8bb1zkh.js:6036-6121 fingerprint (2.1.88 match: buildSandboxProperties, 0.534)
+//@ chunk-yt1xsmrj.js:6574-6659 fingerprint (2.1.88 match: buildSandboxProperties, 0.535)
 function buildSandboxProperties(isSandboxed) {
   return [
     {
@@ -460,14 +497,25 @@ function buildSandboxProperties(isSandboxed) {
     },
   ];
 }
-//@ chunk-j8bb1zkh.js:6121-6145 layout
+//@ chunk-yt1xsmrj.js:6659-6742 layout
 /**
  * buildSecondarySection 的追加分区（外部构建为空）。
  */
 function extraStatusRows() {
+  {
+    let value = codeModeStatusText(isCodeModeEnabled());
+    return value === undefined
+      ? []
+      : [
+          {
+            label: CODE_MODE_LABEL,
+            value,
+          },
+        ];
+  }
   return [];
 }
-//@ chunk-j8bb1zkh.js:6145-6406 fingerprint (2.1.88 match: buildSettingSourcesProperties, 0.539)
+//@ chunk-yt1xsmrj.js:6742-7003 fingerprint (2.1.88 match: buildSettingSourcesProperties, 0.539)
 /**
  * /status 的设置来源行：列出启用的来源与托管设置来源（helper/remote/plist/HKLM/file/HKCU）。
  */
@@ -490,15 +538,15 @@ function buildSettingSourcesProperties(source) {
       return "HKCU";
   }
 }
-//@ chunk-j8bb1zkh.js:6406-6466 layout
+//@ chunk-yt1xsmrj.js:7003-7063 layout
 function formatManagedSettingsLabel(source) {
   return `Enterprise managed settings (${buildSettingSourcesProperties(source)})`;
 }
-//@ chunk-j8bb1zkh.js:6466-6557 file-local
+//@ chunk-yt1xsmrj.js:7063-7154 file-local
 async function buildInstallationDiagnostics() {
   return (await checkInstall()).filter((check) => check.type !== "error").map((warning) => warning.message);
 }
-//@ chunk-j8bb1zkh.js:6557-7982 layout
+//@ chunk-yt1xsmrj.js:7154-8578 layout
 async function getProcessWrapperStatusNotices(storage) {
   let wrapperRecord = processWrapperRecord();
   let wrapperError = processWrapperError();
@@ -543,7 +591,7 @@ async function getProcessWrapperStatusNotices(storage) {
     );
   return notices;
 }
-//@ chunk-j8bb1zkh.js:7982-8678 layout
+//@ chunk-yt1xsmrj.js:8578-9274 layout
 /**
  * 设置相关状态提示：无效条目所在文件、托管设置读取问题、转录保留期等。
  */
@@ -554,7 +602,7 @@ async function getSettingsStatusNotices(storage) {
   let lines = [];
   let { statusNotices, invalidEntries } = splitStatusNotices(formatInvalidSettingNotice().errors);
   if (invalidEntries.length > 0) {
-    let joined = uniq(
+    let joined = normalizeCaseForComparison_2(
       invalidEntries.map((invalidEntry) => invalidEntry.file && cleanForDisplay(invalidEntry.file)),
     ).join(", ");
     lines.push(`Found invalid entries in: ${joined}.`);
@@ -576,7 +624,7 @@ ${warningText}`);
   if (diagnostic.hasUpdatePermissions === false) lines.push("No write permissions for auto-updates");
   return lines;
 }
-//@ chunk-j8bb1zkh.js:8678-8816 layout
+//@ chunk-yt1xsmrj.js:9274-9412 layout
 function probeRefreshTokenDead(storageV5) {
   if (!(isStorageV5Enabled() && storageV5 !== undefined)) return;
   return (async () => ({
@@ -585,7 +633,7 @@ function probeRefreshTokenDead(storageV5) {
     refreshKnownDead: false,
   }));
 }
-//@ chunk-j8bb1zkh.js:8816-10182 fingerprint (2.1.88 match: buildAccountProperties, 0.552)
+//@ chunk-yt1xsmrj.js:9412-10778 fingerprint (2.1.88 match: buildAccountProperties, 0.552)
 /**
  * /status 的账号信息：登录方式、组织、邮箱、令牌是否过期。
  */
@@ -680,7 +728,7 @@ function buildAccountProperties(storage) {
     });
   return properties;
 }
-//@ chunk-j8bb1zkh.js:10182-10462 layout
+//@ chunk-yt1xsmrj.js:10778-11058 layout
 /**
  * URL 含用户名或密码时脱敏后再显示。
  */
@@ -702,7 +750,7 @@ function redactUrlCredentials(url) {
   if (index < 0) return url;
   return `${/^[a-z][a-z0-9+.-]*:\/\//i.exec(url)?.[0] ?? ""}***${url.slice(index)}`;
 }
-//@ chunk-j8bb1zkh.js:10462-13570 fingerprint (2.1.88 match: buildAPIProviderProperties, 0.615)
+//@ chunk-yt1xsmrj.js:11058-14166 fingerprint (2.1.88 match: buildAPIProviderProperties, 0.615)
 /**
  * /status 的 API 提供方信息：提供方、base URL、区域、代理、允许的提供方等。
  */
@@ -901,7 +949,7 @@ function buildAPIProviderProperties() {
   }
   return properties;
 }
-//@ chunk-j8bb1zkh.js:13570-13931 placement
+//@ chunk-yt1xsmrj.js:14166-14527 placement
 function formatAwsRegionForStatus() {
   let { region, source } = describeAwsRegion();
   switch (source) {
@@ -917,7 +965,7 @@ function formatAwsRegionForStatus() {
         : `${region} (default \u2014 set AWS_REGION or add a region to your AWS config)`;
   }
 }
-//@ chunk-j8bb1zkh.js:13931-14033 placement
+//@ chunk-yt1xsmrj.js:14527-14629 placement
 function modelStatusLabel(mainLoopModel) {
   let label = modelDisplayString(mainLoopModel);
   let activeModelFallback = getActiveModelFallback();
@@ -925,7 +973,7 @@ function modelStatusLabel(mainLoopModel) {
     return `${label} (${describeAutoSwitchedModel(modelDisplayString(activeModelFallback.previousModel))})`;
   return label;
 }
-//@ chunk-2wrddneh.js:14173-14717 placement
+//@ chunk-456z28kn.js:15377-15921 placement
 async function buildStatusSections({ credentials, mainLoopModel, mcp, permissionMode, remoteSessionName }) {
   let cwd = getCwd();
   let [accountStatus, machineStatus] = await Promise.all([
@@ -971,8 +1019,12 @@ async function buildStatusSections({ credentials, mainLoopModel, mcp, permission
 }
 export {
   buildInstallationHealthDiagnostics,
+  probeRefreshTokenDead,
+  moveAntOnlyToEnd,
   buildAccountProperties,
   buildAPIProviderProperties,
+  statusValueRows,
+  claudeAiProjectStatusItem,
   modelStatusLabel,
   modelStatusRows,
   buildIDEProperties,
@@ -986,8 +1038,5 @@ export {
   getSettingsStatusNotices,
   getProcessWrapperStatusNotices,
   buildMemoryDiagnostics,
-  probeRefreshTokenDead,
-  moveAntOnlyToEnd,
-  statusValueRows,
   buildStatusSections,
 };

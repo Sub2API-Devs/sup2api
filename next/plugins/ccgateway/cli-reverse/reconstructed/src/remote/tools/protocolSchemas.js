@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：远程工具协议的请求/结果信封结构与解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (41)
- * attribution: placement 41
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k0v80sg8.js (43)
+ * attribution: placement 40, layout 2, affinity 1
  */
 import {
   HOST_TOOL_INPUT_FIELD,
@@ -23,7 +23,7 @@ import {
 } from "./callResults.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { stripControlChars_2, stripControlChars } from "../../utils/stripControlChars.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
@@ -54,6 +54,7 @@ import {
   REMOTE_TOOL_ERROR_CODES,
   ERROR_OUTCOME_CODES,
   unexpectedValueFingerprint,
+  interfaceFitOf,
   SUPPORTED_PROTOCOL_VERSIONS,
   SERVER_VERDICT_KEY,
   readServerVerdict,
@@ -75,7 +76,7 @@ import { DEFAULTS_PLACEHOLDER } from "../../utils/permissions/autoModeRulesPromp
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:13342-13632 placement
+//@ chunk-k0v80sg8.js:12010-12300 placement
 /**
  * remote_tool_call 元数据键与别名：__remote_tool_call、协议标签 2.1、caller 字段集合，以及 anthropic/remoteToolExecution 等类型名和若干大小上限。
  */
@@ -94,7 +95,7 @@ var MAX_TEXT_BYTES;
 var MAX_REFUSAL_NOTES;
 var MAX_LIST_FIELD_LENGTH;
 var SENDER_BELOW_FLOOR;
-deferInit("chunk-g54kbxqw.js:13342", () => {
+deferInit("chunk-k0v80sg8.js:12010", () => {
   REMOTE_TOOL_CALL_META = "__remote_tool_call";
   REMOTE_TOOL_PROTOCOL_LABEL = "2.1";
   BASE_CALLER_FIELDS = ["session_id", "trigger_id", "ccr_card_approval"];
@@ -111,11 +112,11 @@ deferInit("chunk-g54kbxqw.js:13342", () => {
   MAX_LIST_FIELD_LENGTH = 1024;
   SENDER_BELOW_FLOOR = "sender_below_floor";
 });
-//@ chunk-g54kbxqw.js:13632-13674 placement
+//@ chunk-k0v80sg8.js:12300-12341 placement
 function isRemoteToolCallMeta(value) {
   return isPlainRecord(value) && value[SENDER_BELOW_FLOOR] === true;
 }
-//@ chunk-g54kbxqw.js:13674-14030 placement
+//@ chunk-k0v80sg8.js:12341-12696 placement
 /**
  * 远程调用结果的大小限额与各工具保留字段：行数/行长/结果字节等上限，以及 Bash、PowerShell、Edit、Write 工具允许透传的结果字段。
  */
@@ -128,7 +129,7 @@ var KEPT_RESULT_FIELDS_BY_TOOL;
 var MAX_PERMISSION_UPDATES;
 var MAX_SUGGESTIONS;
 var MAX_SUGGESTION_CHARS;
-deferInit("chunk-g54kbxqw.js:13674", () => {
+deferInit("chunk-k0v80sg8.js:12341", () => {
   REMOTE_TOOL_LIMITS = 300;
   MAX_TRUNCATED_LINES = 64;
   MAX_TAIL_LINES = 16;
@@ -137,19 +138,19 @@ deferInit("chunk-g54kbxqw.js:13674", () => {
   KEPT_RESULT_FIELDS_BY_TOOL = new Map([
     [BASH_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs", "noOutputExpected"])],
     [POWERSHELL_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs"])],
-    [FILE_EDIT_TOOL_NAME, new Set(["structuredPatch", "staged", "stagedWording"])],
+    [EDIT, new Set(["structuredPatch", "staged", "stagedWording"])],
     [FILE_WRITE_TOOL_NAME, new Set(["type", "structuredPatch", "staged", "stagedWording"])],
   ]);
   MAX_PERMISSION_UPDATES = 32;
   MAX_SUGGESTIONS = 16;
   MAX_SUGGESTION_CHARS = 256;
 });
-//@ chunk-g54kbxqw.js:14030-14106 placement
+//@ chunk-k0v80sg8.js:12696-12771 placement
 function clipText(text, maxChars = MAX_MESSAGE_CHARS) {
   let stripped = stripControlChars_2(text);
   return stripped.length <= maxChars ? stripped : `${truncateToLength(stripped, maxChars - 1)}\u2026`;
 }
-//@ chunk-g54kbxqw.js:14106-14158 placement
+//@ chunk-k0v80sg8.js:12771-12822 placement
 /**
  * 远程工具字段限额：工具名 64、工作目录 1024、id 形态 8–64 位、工具名长度 128。
  */
@@ -157,14 +158,14 @@ var REMOTE_TOOL_FIELD_LIMITS = 64;
 var MAX_WORKING_DIR_CHARS = 1024;
 var SAFE_ID_WITH_DASH_RE = /^[A-Za-z0-9_-]{8,64}$/;
 var MAX_TOOL_NAME_CHARS = 128;
-//@ chunk-g54kbxqw.js:14158-14233 placement
+//@ chunk-k0v80sg8.js:12822-12896 placement
 function clipTarget(target) {
   return {
     name: clipText(target.name, REMOTE_TOOL_FIELD_LIMITS),
     working_dir: clipText(target.working_dir, MAX_WORKING_DIR_CHARS),
   };
 }
-//@ chunk-g54kbxqw.js:14233-15279 placement
+//@ chunk-k0v80sg8.js:12896-13927 placement
 /**
  * 远程工具（remote tools）协议的 zod 模式：调用信封、目标、caller、协议版本等。
  */
@@ -177,7 +178,7 @@ var hostEpochSchema;
 var MAX_SINCE_MS;
 var callOutcomeSchema;
 var servedResponseSchema;
-deferInit("chunk-g54kbxqw.js:14233", () => {
+deferInit("chunk-k0v80sg8.js:12896", () => {
   REMOTE_TOOL_SCHEMAS = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
   callIdSchema = DoctorLazy(() => stringSchema().regex(REMOTE_TOOL_SCHEMAS));
   optionalSafeIdSchema = DoctorLazy(() => stringSchema().regex(SAFE_ID_PATTERN).optional().catch(undefined));
@@ -228,7 +229,7 @@ deferInit("chunk-g54kbxqw.js:14233", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:15279-15398 placement
+//@ chunk-k0v80sg8.js:13927-14044 placement
 function optionalBoundedIntSchema(min = 1) {
   return unknown()
     .transform((value) =>
@@ -238,9 +239,9 @@ function optionalBoundedIntSchema(min = 1) {
     )
     .optional();
 }
-//@ chunk-g54kbxqw.js:15398-15760 placement
+//@ chunk-k0v80sg8.js:14044-14396 placement
 var SERVING_LIMITS_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:15398", () => {
+deferInit("chunk-k0v80sg8.js:14044", () => {
   SERVING_LIMITS_SCHEMA = DoctorLazy(() =>
     objectSchema({
       max_call_ms: numberSchema().int().positive(),
@@ -258,7 +259,7 @@ deferInit("chunk-g54kbxqw.js:15398", () => {
     }).transform(dropUndefined),
   );
 });
-//@ chunk-g54kbxqw.js:15760-15854 placement
+//@ chunk-k0v80sg8.js:14396-14489 placement
 function dropUndefined(value) {
   let copy = {
     ...value,
@@ -266,13 +267,13 @@ function dropUndefined(value) {
   for (let key of Object.keys(copy)) if (copy[key] === undefined) delete copy[key];
   return copy;
 }
-//@ chunk-g54kbxqw.js:15854-15966 placement
+//@ chunk-k0v80sg8.js:14489-14599 placement
 /**
  * 工具名 schema：匹配安全名字正则并排除危险名；另定义统一的 name/working_dir 目标 schema。
  */
 var SAFE_NAME_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var callTargetSchema;
-deferInit("chunk-g54kbxqw.js:15854", () => {
+deferInit("chunk-k0v80sg8.js:14489", () => {
   SAFE_NAME_SCHEMA = DoctorLazy(() =>
     stringSchema()
       .regex(MACHINE_SLUG_PATTERN)
@@ -285,11 +286,11 @@ deferInit("chunk-g54kbxqw.js:15854", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:15966-16031 placement
+//@ chunk-k0v80sg8.js:14599-14663 placement
 function optionalByteCount() {
   return numberSchema().int().nonnegative().max(MAX_NONNEGATIVE_INT).optional();
 }
-//@ chunk-g54kbxqw.js:18433-18557 placement
+//@ chunk-k0v80sg8.js:17052-17176 placement
 function optionalStringListSchema(maxEntries) {
   return unknown()
     .transform((value) =>
@@ -299,20 +300,20 @@ function optionalStringListSchema(maxEntries) {
     )
     .optional();
 }
-//@ chunk-g54kbxqw.js:18557-18596 placement
+//@ chunk-k0v80sg8.js:17176-17214 placement
 var acceptNotesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var refusalNotesSchema;
-deferInit("chunk-g54kbxqw.js:18557", () => {
+deferInit("chunk-k0v80sg8.js:17176", () => {
   acceptNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_ACCEPT_NOTES));
   refusalNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_REFUSAL_NOTES));
 });
-//@ chunk-g54kbxqw.js:18596-18677 placement
+//@ chunk-k0v80sg8.js:17214-17295 placement
 function codeEnumSchema(allowed) {
   return stringSchema()
     .max(64)
     .transform((value) => (allowed.includes(value) ? value : "unrecognized"));
 }
-//@ chunk-g54kbxqw.js:18677-18847 placement
+//@ chunk-k0v80sg8.js:17295-17464 placement
 function optionalEnumOrUnrecognizedSchema(allowed, unknownMode = "dropped") {
   return unknown()
     .transform((value) =>
@@ -326,9 +327,9 @@ function optionalEnumOrUnrecognizedSchema(allowed, unknownMode = "dropped") {
     )
     .optional();
 }
-//@ chunk-g54kbxqw.js:18847-20540 placement
+//@ chunk-k0v80sg8.js:17464-19167 placement
 var CALL_RESULT_ENVELOPE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:18847", () => {
+deferInit("chunk-k0v80sg8.js:17464", () => {
   CALL_RESULT_ENVELOPE_SCHEMA = DoctorLazy(() =>
     discriminatedUnion("outcome", [
       objectSchema({
@@ -400,6 +401,7 @@ deferInit("chunk-g54kbxqw.js:18847", () => {
         suggestions: array(stringSchema().max(MAX_SUGGESTION_CHARS)).max(MAX_SUGGESTIONS).optional(),
         classifier_eligible: booleanSchema().optional(),
         prior_answer_ok: booleanSchema().optional(),
+        unreadable_line_only: booleanSchema().optional(),
         auto_mode: filePolicySchema()
           .optional()
           .catch(() => {
@@ -428,7 +430,7 @@ deferInit("chunk-g54kbxqw.js:18847", () => {
     ]),
   );
 });
-//@ chunk-g54kbxqw.js:20540-21094 placement
+//@ chunk-k0v80sg8.js:19167-19721 placement
 function buildRemoteToolCallMeta({
   callId,
   expiresInMs,
@@ -474,7 +476,7 @@ function buildRemoteToolCallMeta({
       }),
   };
 }
-//@ chunk-g54kbxqw.js:21094-21336 placement
+//@ chunk-k0v80sg8.js:19721-19962 placement
 function modelFieldForEnvelope(model) {
   if (model === undefined) return {};
   if (SAFE_ID_WITH_BRACKETS_PATTERN.test(model))
@@ -486,7 +488,7 @@ function modelFieldForEnvelope(model) {
   );
   return {};
 }
-//@ chunk-g54kbxqw.js:21336-21502 placement
+//@ chunk-k0v80sg8.js:19962-20128 placement
 function sanitizeApprovalForWire(approval) {
   let { attested, feedback, permission_updates: permissionUpdates, ...rest } = approval;
   return {
@@ -499,7 +501,7 @@ function sanitizeApprovalForWire(approval) {
     }),
   };
 }
-//@ chunk-g54kbxqw.js:21502-21612 placement
+//@ chunk-k0v80sg8.js:20128-20238 placement
 function wirePermissionMode(mode) {
   switch (mode) {
     case "bubble":
@@ -510,13 +512,13 @@ function wirePermissionMode(mode) {
       return mode;
   }
 }
-//@ chunk-g54kbxqw.js:21612-21641 placement
+//@ chunk-k0v80sg8.js:20238-20267 placement
 var UNEXPECTED_VALUE_FIELDS = ["call", "outcome_of"];
-//@ chunk-g54kbxqw.js:21641-22035 placement
-function parseRemoteToolRequest(value) {
-  let op = asPlainRecord(value)?.op;
+//@ chunk-k0v80sg8.js:20267-20670 layout
+function parseRemoteToolRequest(remoteMeta) {
+  let op = asPlainRecord(remoteMeta)?.op;
   if (op !== "outcome_of") {
-    let callEnvelope = parseCallEnvelope(value);
+    let callEnvelope = parseCallEnvelope(remoteMeta);
     if (callEnvelope.ok)
       return {
         ...callEnvelope,
@@ -533,12 +535,12 @@ function parseRemoteToolRequest(value) {
           unlistedOp,
         };
   }
-  if (hasDifferentProtocolVersion(value))
+  if (hasDifferentProtocolVersion(remoteMeta))
     return {
       ok: false,
       why: "unsupported_protocol",
     };
-  let parsed = servedResponseSchema().safeParse(value);
+  let parsed = servedResponseSchema().safeParse(remoteMeta);
   return parsed.success
     ? {
         ok: true,
@@ -548,13 +550,23 @@ function parseRemoteToolRequest(value) {
           op: "outcome_of",
           call_id: parsed.data.call_id,
         },
+        ...withSessionInterface(remoteMeta),
       }
     : {
         ok: false,
         why: "malformed",
       };
 }
-//@ chunk-g54kbxqw.js:22035-22123 placement
+//@ chunk-k0v80sg8.js:20670-20780 layout
+function withSessionInterface(remoteMeta) {
+  let interfaceFit = interfaceFitOf(asPlainRecord(asPlainRecord(remoteMeta)?.caller)?.tool_host_interface);
+  return interfaceFit.kind === "none"
+    ? {}
+    : {
+        sessionInterface: interfaceFit,
+      };
+}
+//@ chunk-k0v80sg8.js:20780-20868 placement
 function outcomeQueryEnvelope(callId) {
   return {
     v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -565,9 +577,9 @@ function outcomeQueryEnvelope(callId) {
     },
   };
 }
-//@ chunk-g54kbxqw.js:22123-22132 placement
+//@ chunk-k0v80sg8.js:20868-20877 placement
 var MIN_COMPATIBLE_VERSION = 1;
-//@ chunk-g54kbxqw.js:22132-22336 placement
+//@ chunk-k0v80sg8.js:20877-21081 placement
 function negotiateProtocol(announced) {
   if (announced === undefined)
     return {
@@ -585,7 +597,7 @@ function negotiateProtocol(announced) {
         announced: [...announced],
       };
 }
-//@ chunk-g54kbxqw.js:22336-22474 placement
+//@ chunk-k0v80sg8.js:21081-21219 placement
 function encodeCallArgs(args) {
   let normalized =
     "approval" in args && args.approval !== undefined
@@ -600,9 +612,9 @@ function encodeCallArgs(args) {
     ? normalized
     : undefined;
 }
-//@ chunk-g54kbxqw.js:22474-22494 placement
+//@ chunk-k0v80sg8.js:21219-21239 placement
 var WITHDRAWN = "withdrawn";
-//@ chunk-g54kbxqw.js:22494-22713 placement
+//@ chunk-k0v80sg8.js:21239-21458 placement (2.1.88 match: SDKControlElicitationResponseSchema, 0.311)
 function approvalToElicitResult(approval) {
   let _meta = {
     [ANTHROPIC_REMOTETOOLEXECUTION]: {
@@ -625,13 +637,13 @@ function approvalToElicitResult(approval) {
         _meta,
       };
 }
-//@ chunk-g54kbxqw.js:22713-22847 placement
+//@ chunk-k0v80sg8.js:21458-21591 placement
 function withinDepth(value, depth) {
   let children = Array.isArray(value) ? value : isPlainRecord(value) ? Object.values(value) : undefined;
   if (children === undefined) return true;
   return depth >= 1 && children.every((child) => withinDepth(child, depth - 1));
 }
-//@ chunk-g54kbxqw.js:22847-23237 placement
+//@ chunk-k0v80sg8.js:21591-21991 placement
 function parseCallEnvelope(value) {
   if (value === undefined || value === null)
     return {
@@ -667,9 +679,10 @@ function parseCallEnvelope(value) {
       Object.hasOwn(caller, SERVER_VERDICT_KEY) && {
         serverVerdict: readServerVerdict(caller[SERVER_VERDICT_KEY]),
       }),
+    ...withSessionInterface(value),
   };
 }
-//@ chunk-g54kbxqw.js:23237-23300 placement
+//@ chunk-k0v80sg8.js:21991-22054 placement
 function autoModeField(rules) {
   let wireRules = autoModeRulesForWire(rules);
   return wireRules === undefined
@@ -678,7 +691,7 @@ function autoModeField(rules) {
         auto_mode: wireRules,
       };
 }
-//@ chunk-g54kbxqw.js:23300-23764 placement
+//@ chunk-k0v80sg8.js:22054-22516 placement
 function autoModeRulesForWire(rules) {
   if (rules === undefined) return;
   let clipLines = (lines, side) => {
@@ -710,17 +723,17 @@ function autoModeRulesForWire(rules) {
       }
     : undefined;
 }
-//@ chunk-g54kbxqw.js:23764-23835 placement
+//@ chunk-k0v80sg8.js:22516-22586 placement
 function parseAnnounce(epoch) {
   let parsed = hostEpochSchema().safeParse(epoch);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-g54kbxqw.js:23835-23909 placement
+//@ chunk-k0v80sg8.js:22586-22660 placement
 function parseAdvert(value) {
   let parsed = toolHostTargetSchema().safeParse(value);
   return parsed.success ? sanitizeDeep(parsed.data) : undefined;
 }
-//@ chunk-g54kbxqw.js:23909-24002 placement
+//@ chunk-k0v80sg8.js:22660-22753 placement
 function intList(protocolVersions) {
   return Array.isArray(protocolVersions) &&
     protocolVersions.length <= 64 &&
@@ -728,7 +741,7 @@ function intList(protocolVersions) {
     ? protocolVersions
     : [];
 }
-//@ chunk-g54kbxqw.js:24002-24151 placement
+//@ chunk-k0v80sg8.js:22753-22901 placement
 function peerProtocolVersions(value) {
   if (value === undefined) return;
   let record = asPlainRecord(value);
@@ -736,19 +749,19 @@ function peerProtocolVersions(value) {
   if (record.v === CURRENT_PROTOCOL_VERSION) return;
   return "protocol_versions" in record ? intList(record.protocol_versions) : [];
 }
-//@ chunk-g54kbxqw.js:24151-24264 placement
+//@ chunk-k0v80sg8.js:22901-23013 placement
 function advertisedProtocolVersions(value) {
   let record = asPlainRecord(value);
   return record !== undefined && record.v === CURRENT_PROTOCOL_VERSION && "protocol_versions" in record
     ? intList(record.protocol_versions)
     : undefined;
 }
-//@ chunk-g54kbxqw.js:24264-24338 placement
+//@ chunk-k0v80sg8.js:23013-23087 placement
 function parseRegistration(value) {
   let parsed = toolInvocationRequestSchema().safeParse(value);
   return parsed.success ? sanitizeDeep(parsed.data) : undefined;
 }
-//@ chunk-g54kbxqw.js:24338-24497 placement
+//@ chunk-k0v80sg8.js:23087-23246 placement
 function sanitizeDeep(value) {
   if (typeof value === "string") return stripControlChars(value);
   if (Array.isArray(value)) return value.map(sanitizeDeep);
@@ -759,64 +772,74 @@ function sanitizeDeep(value) {
     );
   return value;
 }
-//@ chunk-g54kbxqw.js:24497-24571 placement
+//@ chunk-k0v80sg8.js:23246-23320 placement
 function parseResultEnvelope(value) {
   let parsed = CALL_RESULT_ENVELOPE_SCHEMA().safeParse(value);
   return parsed.success ? sanitizeRemoteToolEnvelope(parsed.data) : undefined;
 }
+//@ chunk-k0v80sg8.js:23320-23390 affinity
+function splitRemoteMeta(input) {
+  let { [REMOTE_TOOL_CALL_META]: remoteMeta, ...rest } = input;
+  return {
+    request: parseRemoteToolRequest(remoteMeta),
+    toolInput: rest,
+  };
+}
 export {
-  REMOTE_TOOL_CALL_META,
-  parseRemoteToolRequest,
-  encodeCallArgs,
-  CLAUDECODE_TOOLUSEID,
-  CLAUDECODE_REMOTETOOLCALL,
-  ANTHROPIC_REMOTETOOLEXECUTION,
-  peerProtocolVersions,
-  advertisedProtocolVersions,
-  negotiateProtocol,
-  parseRegistration,
-  isRemoteToolCallMeta,
+  clipText,
   SENDER_BELOW_FLOOR,
-  parseAnnounce,
+  ANTHROPIC_REMOTETOOLEXECUTION,
+  parseResultEnvelope,
+  clipTarget,
+  MAX_ACCEPT_NOTES,
+  MAX_TOOL_NAME_CHARS,
+  MAX_SUGGESTIONS,
+  MAX_SUGGESTION_CHARS,
+  autoModeField,
+  sanitizeDeep,
+  MAX_REFUSAL_NOTES,
+  MAX_LIST_FIELD_LENGTH,
+  REMOTE_TOOL_FIELD_LIMITS,
+  CALLER_FIELDS,
+  withinDepth,
+  parseAdvert,
+  dropUndefined,
+  callIdSchema,
+  MAX_SINCE_MS,
+  parseRemoteToolRequest,
+  REMOTE_TOOL_CALL_META,
+  MAX_RESULT_BYTES,
+  MAX_PERMISSION_UPDATES,
+  outcomeQueryEnvelope,
+  KEPT_RESULT_FIELDS_BY_TOOL,
+  REMOTE_TOOL_LIMITS,
   optionalByteCount,
   SAFE_NAME_SCHEMA,
   MAX_TRUNCATED_LINES,
   SERVING_LIMITS_SCHEMA,
-  REMOTE_TOOL_LIMITS,
   hostEpochSchema,
   SAFE_ID_WITH_DASH_RE,
-  dropUndefined,
   intList,
   MAX_LINE_CHARS,
   MAX_TAIL_LINES,
   MAX_MESSAGE_CHARS,
   askIdSchema,
-  callIdSchema,
-  clipText,
+  negotiateProtocol,
+  parseRegistration,
   autoModeRulesForWire,
   REMOTE_TOOL_PROTOCOL_LABEL,
-  MAX_RESULT_BYTES,
-  KEPT_RESULT_FIELDS_BY_TOOL,
-  MAX_ACCEPT_NOTES,
-  MAX_TEXT_BYTES,
-  outcomeQueryEnvelope,
-  buildRemoteToolCallMeta,
+  parseCallEnvelope,
   WITHDRAWN,
-  wirePermissionMode,
-  CALLER_FIELDS,
-  withinDepth,
-  MAX_TOOL_NAME_CHARS,
-  sanitizeDeep,
-  REMOTE_TOOL_FIELD_LIMITS,
-  MAX_SINCE_MS,
-  parseResultEnvelope,
-  clipTarget,
-  MAX_SUGGESTIONS,
-  MAX_SUGGESTION_CHARS,
-  autoModeField,
-  MAX_REFUSAL_NOTES,
-  MAX_LIST_FIELD_LENGTH,
-  MAX_PERMISSION_UPDATES,
-  parseAdvert,
+  MAX_TEXT_BYTES,
+  splitRemoteMeta,
   BASE_CALLER_FIELDS,
+  encodeCallArgs,
+  CLAUDECODE_TOOLUSEID,
+  CLAUDECODE_REMOTETOOLCALL,
+  peerProtocolVersions,
+  advertisedProtocolVersions,
+  isRemoteToolCallMeta,
+  parseAnnounce,
+  buildRemoteToolCallMeta,
+  wirePermissionMode,
 };

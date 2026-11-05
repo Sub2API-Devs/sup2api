@@ -3,9 +3,9 @@
  *
  * /rate-limit-options 实现：升级、用量额度、自动恢复、等待等选项
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/rate-limit-options/rate-limit-options.tsx
- * pieces: chunk-dg94x42s.js (22)
+ * pieces: chunk-3ccfy8g8.js (22)
  * attribution: sole-consumer 17, affinity 1, fingerprint 1, layout 2, callgraph-fingerprint 1
  */
 import {
@@ -101,41 +101,46 @@ import {
 import { usageCreditsCommand } from "../extra-usage/index.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { getUsageCreditsFlowConfig, call as call_2 } from "../usage-credits/usageCredits.js";
+import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
+import {
+  useRecentInputStamp,
+  isWithinRecentInput,
+  RECENT_INPUT_GUARD_MS,
+} from "../../hooks/useRecentInputGuard.js";
 import { runExtraUsage } from "../extra-usage/extra-usage-core.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useRefusalTracker } from "../../components/CustomSelect/selectTypeahead.js";
 import { upgradeCommand } from "../upgrade/index.js";
 import { getLimitResetCopy } from "../limit-reset/index.js";
 import { statusLineShouldDisplay } from "../../components/StatusLine.js";
-import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../../hooks/useRecentInputGuard.js";
 import { isFrozenMarker } from "../../utils/frozenMarkers.js";
 import { isAutoResumableLimit } from "../../services/api/errors.js";
 import { ResetLimits, ResetLimitsOffers } from "./ResetLimits.js";
 import { callUpgradeFromSurface } from "../upgrade/upgrade.js";
+import { call as call_2 } from "../usage-credits/usageCredits.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../components/CustomSelect/select.js";
 
-//@ chunk-dg94x42s.js:18401-18405 sole-consumer
+//@ chunk-3ccfy8g8.js:19615-19619 sole-consumer
 init_react_production();
-//@ chunk-dg94x42s.js:18405-18409 sole-consumer
+//@ chunk-3ccfy8g8.js:19619-19623 sole-consumer
 init_react_production();
-//@ chunk-dg94x42s.js:18409-18449 sole-consumer
+//@ chunk-3ccfy8g8.js:19623-19663 sole-consumer
 function decrementNonNegative(count) {
   return Math.max(0, count - 1);
 }
-//@ chunk-dg94x42s.js:18449-18491 sole-consumer
+//@ chunk-3ccfy8g8.js:19663-19705 sole-consumer
 var RESET_TIME_BUCKET_MS = 500;
 var RESET_TIME_MARGIN_MS = 1000;
 var MAX_RESET_TIME_MS = 10000000000;
 var DEFAULT_RESET_SECONDS = 4000;
-//@ chunk-dg94x42s.js:18491-18589 sole-consumer
+//@ chunk-3ccfy8g8.js:19705-19803 sole-consumer
 function isOrgLevelRejectionWithBalance(rateLimitInfo) {
   return (
     rateLimitInfo.overageDisabledReason === "org_level_disabled_until" && rateLimitInfo.balanceMinorUnits > 0
   );
 }
-//@ chunk-dg94x42s.js:18589-18758 sole-consumer
+//@ chunk-3ccfy8g8.js:19803-19972 sole-consumer
 function stepCreditAmount(currentSeconds, direction, usedCredits = null) {
   let baseSeconds = currentSeconds ?? DEFAULT_RESET_SECONDS;
   let roundedBaseSeconds =
@@ -150,7 +155,7 @@ function stepCreditAmount(currentSeconds, direction, usedCredits = null) {
         : usedCredits;
   return Math.min(MAX_RESET_TIME_MS, Math.max(usedCreditsSeconds, roundedBaseSeconds));
 }
-//@ chunk-dg94x42s.js:18758-24302 sole-consumer
+//@ chunk-3ccfy8g8.js:19972-25566 sole-consumer
 /**
  * 限流选项菜单：升级、额外用量、自动恢复、等待等。
  */
@@ -222,7 +227,7 @@ function RateLimitOptionsMenu(props) {
   }
   useEffect(loadLimitEffect, loadLimitDeps);
   let computedResetLabel;
-  Te: {
+  Me: {
     if (rateLimitState.resetsAt) {
       let formattedResetTime;
       if ($[5] !== rateLimitState.resetsAt) {
@@ -231,7 +236,7 @@ function RateLimitOptionsMenu(props) {
         $[6] = formattedResetTime;
       } else formattedResetTime = $[6];
       computedResetLabel = formattedResetTime;
-      break Te;
+      break Me;
     }
     computedResetLabel = undefined;
   }
@@ -280,12 +285,14 @@ function RateLimitOptionsMenu(props) {
   if ($[16] !== waitItem || $[17] !== adjustItem) {
     menuItemsDraft = [adjustItem, waitItem];
     if (showUpgradeOption) {
-      let maxPlanLabel = subscriptionType === "max" ? "Max 20x" : "Max";
       let upgradeItem;
       if ($[19] === MEMO_CACHE_SENTINEL) {
         upgradeItem = {
           id: "upgrade",
-          label: `Upgrade to ${maxPlanLabel} for higher session limits every month`,
+          label:
+            subscriptionType === "max"
+              ? "Upgrade your plan for higher session limits every month"
+              : "Upgrade to Max for higher session limits every month",
           hint: "",
         };
         $[19] = upgradeItem;
@@ -579,35 +586,35 @@ function RateLimitOptionsMenu(props) {
   } else dialog = $[60];
   return dialog;
 }
-//@ chunk-dg94x42s.js:24302-24339 sole-consumer
+//@ chunk-3ccfy8g8.js:25566-25603 sole-consumer
 function emitStatusChangeNow() {
   return emitStatusChange(Date.now());
 }
-//@ chunk-dg94x42s.js:24339-24379 sole-consumer
+//@ chunk-3ccfy8g8.js:25603-25643 sole-consumer
 function resetOfferPair(offer) {
   return [offer.kind, resetOfferLabel(offer)];
 }
-//@ chunk-dg94x42s.js:24379-24394 sole-consumer
+//@ chunk-3ccfy8g8.js:25643-25658 sole-consumer
 function noop() {}
-//@ chunk-dg94x42s.js:24394-24409 sole-consumer
+//@ chunk-3ccfy8g8.js:25658-25673 sole-consumer
 function noop_2() {}
-//@ chunk-dg94x42s.js:24409-24441 sole-consumer
+//@ chunk-3ccfy8g8.js:25673-25705 sole-consumer
 function optionValue(option) {
   return option.value;
 }
-//@ chunk-dg94x42s.js:24441-24476 sole-consumer
+//@ chunk-3ccfy8g8.js:25705-25740 sole-consumer
 function enumOfOptionValue(option) {
   return fromEnum(option.value);
 }
-//@ chunk-dg94x42s.js:24476-24491 sole-consumer
+//@ chunk-3ccfy8g8.js:25740-25755 sole-consumer
 function noop_3() {}
-//@ chunk-dg94x42s.js:24491-24506 sole-consumer
+//@ chunk-3ccfy8g8.js:25755-25770 sole-consumer
 function noop_4() {}
-//@ chunk-dg94x42s.js:24506-24521 sole-consumer
+//@ chunk-3ccfy8g8.js:25770-25785 sole-consumer
 function noop_5() {}
-//@ chunk-dg94x42s.js:24521-24552 sole-consumer
+//@ chunk-3ccfy8g8.js:25785-25816 sole-consumer
 var overageOptionsSchema = DoctorLazy(() => array(tuple([stringSchema(), stringSchema()])));
-//@ chunk-dg94x42s.js:24552-24869 affinity
+//@ chunk-3ccfy8g8.js:25816-26133 affinity
 /**
  * 选项是升级或额外用量。
  */
@@ -630,9 +637,9 @@ function isUpgradeOption(value) {
       return false;
   }
 }
-//@ chunk-dg94x42s.js:24869-37678 fingerprint (2.1.88 match: RateLimitOptionsMenu, 0.363)
+//@ chunk-3ccfy8g8.js:26133-38944 fingerprint (2.1.88 match: RateLimitOptionsMenu, 0.367)
 function RateLimitOptionsMenu_2(props) {
-  let $ = useMemoCache(177);
+  let $ = useMemoCache(179);
   let { onDone, context } = props;
   let [localJsx, setLocalJsx] = useState(null);
   let claudeAiLimits = useRateLimitState();
@@ -809,8 +816,8 @@ function RateLimitOptionsMenu_2(props) {
       isAutoResumeOfferEnabled(upgradePaths) &&
       !isBgSession() &&
       !isScreenReaderEnabled &&
-      claudeAiLimits.overageScope !== "group_pool" &&
-      getUsageCreditsFlowConfig()?.mode === "one_step";
+      !isEssentialTrafficOnly() &&
+      claudeAiLimits.overageScope !== "group_pool";
     $[25] = claudeAiLimits.overageScope;
     $[26] = isScreenReaderEnabled;
     $[27] = upgradePaths;
@@ -818,16 +825,17 @@ function RateLimitOptionsMenu_2(props) {
   } else canOfferExtraUsageCached = $[28];
   let canOfferExtraUsage = canOfferExtraUsageCached;
   let [extraUsageResult, setExtraUsageResult] = useState(null);
-  let extraUsageFetchedAtRef = useRef(null);
-  let extraUsageRequestedRef = useRef(false);
+  let [extraUsageFetchedAt, setExtraUsageFetchedAt] = useState(null);
+  let useFreshness = useRecentInputStamp(extraUsageFetchedAt ?? 0);
+  let extraUsageRequested = useRef(false);
   let extraUsageEffect;
   let extraUsageDeps;
   if ($[29] !== context.credentials || $[30] !== canOfferExtraUsage) {
     extraUsageEffect = () => {
-      if (!canOfferExtraUsage || extraUsageRequestedRef.current) {
+      if (!canOfferExtraUsage || extraUsageRequested.current) {
         return;
       }
-      extraUsageRequestedRef.current = true;
+      extraUsageRequested.current = true;
       runExtraUsage(
         {
           openInBrowser: false,
@@ -835,7 +843,7 @@ function RateLimitOptionsMenu_2(props) {
         context.credentials,
       )
         .then((extraUsageResponse) => {
-          extraUsageFetchedAtRef.current = Date.now();
+          setExtraUsageFetchedAt(Date.now());
           setExtraUsageResult(extraUsageResponse);
         })
         .catch(noop_2);
@@ -1064,7 +1072,7 @@ function RateLimitOptionsMenu_2(props) {
     $[68] = refusedWithin;
     $[69] = shouldRefuseInputCached;
   } else shouldRefuseInputCached = $[69];
-  let shouldRefuseInput = shouldRefuseInputCached;
+  let confirmAllowsClose = shouldRefuseInputCached;
   let loggedShownRef = useRef(false);
   let logMenuShownEffect;
   let logMenuShownDeps;
@@ -1244,14 +1252,14 @@ function RateLimitOptionsMenu_2(props) {
     retryOfferPromptDeps = $[107];
   }
   useEffect(retryOfferPromptEffect, retryOfferPromptDeps);
-  let onAutoResume;
-  let onCancelAutoResume;
-  let onResetLimit;
+  let selectAutoResume;
+  let cancelAutoResume;
+  let selectCedarEmber;
   let onCancel;
-  let onClaimReset;
-  let onLowPriority;
-  let onExtraUsage;
-  let onCancelPress;
+  let selectFlagJuniperTide;
+  let selectLowPriority;
+  let selectExtraUsage;
+  let cancelWithPrefill;
   if (
     $[108] !== statusChangeCallback ||
     $[109] !== phase ||
@@ -1260,7 +1268,7 @@ function RateLimitOptionsMenu_2(props) {
     $[112] !== onDone ||
     $[113] !== storageV5
   ) {
-    onAutoResume = function handleAutoResume() {
+    selectAutoResume = function handleAutoResume() {
       logEvent("tengu_rate_limit_options_menu_select_auto_resume", {});
       let limitsForResume = currentLimitsOrLatest(claudeAiLimits, statusChangeCallback);
       if (
@@ -1292,7 +1300,7 @@ function RateLimitOptionsMenu_2(props) {
       $[122] = onDone;
       $[123] = lowPriorityHandler;
     } else lowPriorityHandler = $[123];
-    onLowPriority = lowPriorityHandler;
+    selectLowPriority = lowPriorityHandler;
     let claimResetHandler;
     if ($[124] !== context.credentials || $[125] !== onDone) {
       claimResetHandler = function handleClaimReset() {
@@ -1310,7 +1318,7 @@ function RateLimitOptionsMenu_2(props) {
       $[125] = onDone;
       $[126] = claimResetHandler;
     } else claimResetHandler = $[126];
-    onClaimReset = claimResetHandler;
+    selectFlagJuniperTide = claimResetHandler;
     let resetLimitHandler;
     if ($[127] !== context.credentials || $[128] !== onDone) {
       resetLimitHandler = function handleResetLimit(category) {
@@ -1363,7 +1371,7 @@ function RateLimitOptionsMenu_2(props) {
       $[128] = onDone;
       $[129] = resetLimitHandler;
     } else resetLimitHandler = $[129];
-    onResetLimit = resetLimitHandler;
+    selectCedarEmber = resetLimitHandler;
     let extraUsageHandler;
     if ($[130] !== context || $[131] !== onDone) {
       extraUsageHandler = function handleExtraUsage(category) {
@@ -1374,7 +1382,6 @@ function RateLimitOptionsMenu_2(props) {
           .then((adminRequestResult) => {
             logEvent("tengu_rate_limit_options_menu_admin_ask", {
               filed: adminRequestResult.filed,
-              mode: lit("one_step"),
             });
             withQuotaResumeFire(onDone)(adminRequestResult.value);
           })
@@ -1386,7 +1393,7 @@ function RateLimitOptionsMenu_2(props) {
       $[131] = onDone;
       $[132] = extraUsageHandler;
     } else extraUsageHandler = $[132];
-    onExtraUsage = extraUsageHandler;
+    selectExtraUsage = extraUsageHandler;
     let cancelAutoResumeAndFinishCached;
     if ($[133] !== onDone) {
       cancelAutoResumeAndFinishCached = function cancelAutoResumeAndFinish_2() {
@@ -1408,8 +1415,8 @@ function RateLimitOptionsMenu_2(props) {
       $[135] = cancelAutoResumeAndFinish;
       $[136] = cancelAutoResumeHandler;
     } else cancelAutoResumeHandler = $[136];
-    onCancelAutoResume = cancelAutoResumeHandler;
-    onCancelPress = function handleCancelPress() {
+    cancelAutoResume = cancelAutoResumeHandler;
+    cancelWithPrefill = function handleCancelPress() {
       logEvent("tengu_rate_limit_options_menu_cancel", {});
       if (hasPendingContinuation() || phase === "stale") {
         cancelAutoResumeAndFinish();
@@ -1433,42 +1440,44 @@ function RateLimitOptionsMenu_2(props) {
     $[111] = context;
     $[112] = onDone;
     $[113] = storageV5;
-    $[114] = onAutoResume;
-    $[115] = onCancelAutoResume;
-    $[116] = onResetLimit;
+    $[114] = selectAutoResume;
+    $[115] = cancelAutoResume;
+    $[116] = selectCedarEmber;
     $[117] = onCancel;
-    $[118] = onClaimReset;
-    $[119] = onLowPriority;
-    $[120] = onExtraUsage;
-    $[121] = onCancelPress;
+    $[118] = selectFlagJuniperTide;
+    $[119] = selectLowPriority;
+    $[120] = selectExtraUsage;
+    $[121] = cancelWithPrefill;
   } else {
-    onAutoResume = $[114];
-    onCancelAutoResume = $[115];
-    onResetLimit = $[116];
+    selectAutoResume = $[114];
+    cancelAutoResume = $[115];
+    selectCedarEmber = $[116];
     onCancel = $[117];
-    onClaimReset = $[118];
-    onLowPriority = $[119];
-    onExtraUsage = $[120];
-    onCancelPress = $[121];
+    selectFlagJuniperTide = $[118];
+    selectLowPriority = $[119];
+    selectExtraUsage = $[120];
+    cancelWithPrefill = $[121];
   }
   let handleSelect;
   if (
     $[137] !== extraUsageResult ||
-    $[138] !== context ||
-    $[139] !== onAutoResume ||
-    $[140] !== onCancelAutoResume ||
-    $[141] !== onResetLimit ||
-    $[142] !== onClaimReset ||
-    $[143] !== onLowPriority ||
-    $[144] !== onExtraUsage ||
-    $[145] !== onCancelPress ||
-    $[146] !== hasBillingAccess ||
-    $[147] !== onDone ||
-    $[148] !== canOfferExtraUsage ||
-    $[149] !== shouldRefuseInput
+    $[138] !== extraUsageFetchedAt ||
+    $[139] !== useFreshness ||
+    $[140] !== context ||
+    $[141] !== selectAutoResume ||
+    $[142] !== cancelAutoResume ||
+    $[143] !== selectCedarEmber ||
+    $[144] !== selectFlagJuniperTide ||
+    $[145] !== selectLowPriority ||
+    $[146] !== selectExtraUsage ||
+    $[147] !== cancelWithPrefill ||
+    $[148] !== hasBillingAccess ||
+    $[149] !== onDone ||
+    $[150] !== canOfferExtraUsage ||
+    $[151] !== confirmAllowsClose
   ) {
     handleSelect = function handleSelectOption(value) {
-      if (shouldRefuseInput()) {
+      if (confirmAllowsClose()) {
         return;
       }
       if (value === "extra-usage" && canOfferExtraUsage) {
@@ -1484,11 +1493,11 @@ function RateLimitOptionsMenu_2(props) {
         extraUsageResult?.type === "confirm-admin-request" &&
         extraUsageResult.checked &&
         lastFocusAtRef.current !== null &&
-        extraUsageFetchedAtRef.current !== null &&
-        hasBillingAccess() - Math.max(lastFocusAtRef.current, extraUsageFetchedAtRef.current) >=
+        extraUsageFetchedAt !== null &&
+        hasBillingAccess() - Math.max(lastFocusAtRef.current, useFreshness(extraUsageFetchedAt)) >=
           RECENT_INPUT_GUARD_MS
       ) {
-        onExtraUsage(extraUsageResult.extraUsage);
+        selectExtraUsage(extraUsageResult.extraUsage);
         return;
       }
       if (isUpgradeOption(value)) context.cancelRateLimitAutoQueueContinue?.();
@@ -1502,68 +1511,70 @@ function RateLimitOptionsMenu_2(props) {
         call_2(onDone, context).then((jsx_0) => {
           if (jsx_0) setLocalJsx(jsx_0);
         });
-      } else if (value === "auto-resume") onAutoResume();
-      else if (value === "cancel-auto-resume") onCancelAutoResume();
-      else if (value === "low-priority") onLowPriority();
-      else if (value === "juniper-tide") onClaimReset();
+      } else if (value === "auto-resume") selectAutoResume();
+      else if (value === "cancel-auto-resume") cancelAutoResume();
+      else if (value === "low-priority") selectLowPriority();
+      else if (value === "juniper-tide") selectFlagJuniperTide();
       else if (value.startsWith("cedar-ember-")) {
         let found = LIMIT_CATEGORIES.find((category) => value === `cedar-ember-${category}`);
-        if (found !== undefined) onResetLimit(found);
-      } else if (value === "cancel") onCancelPress();
+        if (found !== undefined) selectCedarEmber(found);
+      } else if (value === "cancel") cancelWithPrefill();
     };
     $[137] = extraUsageResult;
-    $[138] = context;
-    $[139] = onAutoResume;
-    $[140] = onCancelAutoResume;
-    $[141] = onResetLimit;
-    $[142] = onClaimReset;
-    $[143] = onLowPriority;
-    $[144] = onExtraUsage;
-    $[145] = onCancelPress;
-    $[146] = hasBillingAccess;
-    $[147] = onDone;
-    $[148] = canOfferExtraUsage;
-    $[149] = shouldRefuseInput;
-    $[150] = handleSelect;
-  } else handleSelect = $[150];
+    $[138] = extraUsageFetchedAt;
+    $[139] = useFreshness;
+    $[140] = context;
+    $[141] = selectAutoResume;
+    $[142] = cancelAutoResume;
+    $[143] = selectCedarEmber;
+    $[144] = selectFlagJuniperTide;
+    $[145] = selectLowPriority;
+    $[146] = selectExtraUsage;
+    $[147] = cancelWithPrefill;
+    $[148] = hasBillingAccess;
+    $[149] = onDone;
+    $[150] = canOfferExtraUsage;
+    $[151] = confirmAllowsClose;
+    $[152] = handleSelect;
+  } else handleSelect = $[152];
   let onChange = handleSelect;
   if (localJsx) {
     return localJsx;
   }
   if (isCheckingReset) {
     let onCancel_2;
-    if ($[151] !== onCancel) {
+    if ($[153] !== onCancel) {
       onCancel_2 = () => {
         resetCancelledRef.current = true;
         onCancel();
       };
-      $[151] = onCancel;
-      $[152] = onCancel_2;
-    } else onCancel_2 = $[152];
+      $[153] = onCancel;
+      $[154] = onCancel_2;
+    } else onCancel_2 = $[154];
     let children;
-    if ($[153] === MEMO_CACHE_SENTINEL) {
+    if ($[155] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(Text, {
         dimColor: true,
         children: CHECKING_FOR_RESET_LINE,
       });
-      $[153] = children;
-    } else children = $[153];
+      $[155] = children;
+    } else children = $[155];
     let checkingResetDialog;
-    if ($[154] !== onCancel_2) {
+    if ($[156] !== onCancel_2) {
       checkingResetDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
         onCancel: onCancel_2,
         color: "suggestion",
         children,
       });
-      $[154] = onCancel_2;
-      $[155] = checkingResetDialog;
-    } else checkingResetDialog = $[155];
+      $[156] = onCancel_2;
+      $[157] = checkingResetDialog;
+    } else checkingResetDialog = $[157];
     return checkingResetDialog;
   }
   if (isResettingLimits) {
     let resettingDialog;
-    if ($[156] === MEMO_CACHE_SENTINEL) {
+    if ($[158] === MEMO_CACHE_SENTINEL) {
       resettingDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
         onCancel: noop_3,
@@ -1575,13 +1586,13 @@ function RateLimitOptionsMenu_2(props) {
           children: "Resetting your 5-hour limit\u2026 this usually takes a few seconds",
         }),
       });
-      $[156] = resettingDialog;
-    } else resettingDialog = $[156];
+      $[158] = resettingDialog;
+    } else resettingDialog = $[158];
     return resettingDialog;
   }
   if (isSendingAdminRequest) {
     let adminRequestDialog;
-    if ($[157] === MEMO_CACHE_SENTINEL) {
+    if ($[159] === MEMO_CACHE_SENTINEL) {
       adminRequestDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
         onCancel: noop_4,
@@ -1593,34 +1604,34 @@ function RateLimitOptionsMenu_2(props) {
           children: "Sending request to your admin\u2026",
         }),
       });
-      $[157] = adminRequestDialog;
-    } else adminRequestDialog = $[157];
+      $[159] = adminRequestDialog;
+    } else adminRequestDialog = $[159];
     return adminRequestDialog;
   }
   if (prepaidBalance) {
     let onDone_2;
-    if ($[158] !== onDone) {
+    if ($[160] !== onDone) {
       onDone_2 = withQuotaResumeFire(onDone);
-      $[158] = onDone;
-      $[159] = onDone_2;
-    } else onDone_2 = $[159];
+      $[160] = onDone;
+      $[161] = onDone_2;
+    } else onDone_2 = $[161];
     let prepaidBalanceDialog;
-    if ($[160] !== context || $[161] !== prepaidBalance || $[162] !== onDone_2) {
+    if ($[162] !== context || $[163] !== prepaidBalance || $[164] !== onDone_2) {
       prepaidBalanceDialog = jsxProd_default(RateLimitOptionsMenu, {
         balance: prepaidBalance,
         onDone: onDone_2,
         context,
       });
-      $[160] = context;
-      $[161] = prepaidBalance;
-      $[162] = onDone_2;
-      $[163] = prepaidBalanceDialog;
-    } else prepaidBalanceDialog = $[163];
+      $[162] = context;
+      $[163] = prepaidBalance;
+      $[164] = onDone_2;
+      $[165] = prepaidBalanceDialog;
+    } else prepaidBalanceDialog = $[165];
     return prepaidBalanceDialog;
   }
   let onKeyDownCapture;
   let onPasteCapture;
-  if ($[164] === MEMO_CACHE_SENTINEL) {
+  if ($[166] === MEMO_CACHE_SENTINEL) {
     onKeyDownCapture = (event) => {
       if (
         !event.ctrl &&
@@ -1632,28 +1643,28 @@ function RateLimitOptionsMenu_2(props) {
     onPasteCapture = () => {
       typedInputRef.current = true;
     };
-    $[164] = onKeyDownCapture;
-    $[165] = onPasteCapture;
+    $[166] = onKeyDownCapture;
+    $[167] = onPasteCapture;
   } else {
-    onKeyDownCapture = $[164];
-    onPasteCapture = $[165];
+    onKeyDownCapture = $[166];
+    onPasteCapture = $[167];
   }
   let onFocus;
-  if ($[166] !== canOfferExtraUsage) {
+  if ($[168] !== canOfferExtraUsage) {
     onFocus = (value) => {
       lastFocusAtRef.current = value === "extra-usage" && canOfferExtraUsage ? Date.now() : null;
     };
-    $[166] = canOfferExtraUsage;
-    $[167] = onFocus;
-  } else onFocus = $[167];
+    $[168] = canOfferExtraUsage;
+    $[169] = onFocus;
+  } else onFocus = $[169];
   const onUpFromFirstItem = canOfferExtraUsage ? noop_5 : undefined;
   let children;
   if (
-    $[168] !== onChange ||
-    $[169] !== options ||
-    $[170] !== shouldRefuseInput ||
-    $[171] !== onFocus ||
-    $[172] !== onUpFromFirstItem
+    $[170] !== onChange ||
+    $[171] !== options ||
+    $[172] !== confirmAllowsClose ||
+    $[173] !== onFocus ||
+    $[174] !== onUpFromFirstItem
   ) {
     children = jsxProd_default(Box, {
       flexDirection: "column",
@@ -1662,35 +1673,35 @@ function RateLimitOptionsMenu_2(props) {
       children: jsxProd_default(ModelSelector, {
         options,
         onChange,
-        refuseInput: shouldRefuseInput,
+        refuseInput: confirmAllowsClose,
         selectedValue: NO_COMMITTED_ROW,
         onFocus,
         onUpFromFirstItem,
         visibleOptionCount: options.length,
       }),
     });
-    $[168] = onChange;
-    $[169] = options;
-    $[170] = shouldRefuseInput;
-    $[171] = onFocus;
-    $[172] = onUpFromFirstItem;
-    $[173] = children;
-  } else children = $[173];
+    $[170] = onChange;
+    $[171] = options;
+    $[172] = confirmAllowsClose;
+    $[173] = onFocus;
+    $[174] = onUpFromFirstItem;
+    $[175] = children;
+  } else children = $[175];
   let menuDialog;
-  if ($[174] !== onCancel || $[175] !== children) {
+  if ($[176] !== onCancel || $[177] !== children) {
     menuDialog = jsxProd_default(Dialog, {
       title: "What do you want to do?",
       onCancel,
       color: "suggestion",
       children,
     });
-    $[174] = onCancel;
-    $[175] = children;
-    $[176] = menuDialog;
-  } else menuDialog = $[176];
+    $[176] = onCancel;
+    $[177] = children;
+    $[178] = menuDialog;
+  } else menuDialog = $[178];
   return menuDialog;
 }
-//@ chunk-dg94x42s.js:37678-38028 layout
+//@ chunk-3ccfy8g8.js:38944-39294 layout
 function getWaitOptionLabel(resetsAt, immediate) {
   if (immediate)
     return {
@@ -1708,12 +1719,12 @@ function getWaitOptionLabel(resetsAt, immediate) {
     confirmationPhrase: "when your usage limit resets",
   };
 }
-//@ chunk-dg94x42s.js:38028-38095 layout
+//@ chunk-3ccfy8g8.js:39294-39361 layout
 function currentLimitsOrLatest(claudeAiLimits, latestLimits) {
   if (canAutoResumeThisLimit(claudeAiLimits)) return claudeAiLimits;
   return latestLimits !== null && canAutoResumeThisLimit(latestLimits) ? latestLimits : null;
 }
-//@ chunk-dg94x42s.js:38095-38152 callgraph-fingerprint (2.1.88 match: call, 1)
+//@ chunk-3ccfy8g8.js:39361-39418 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /rate-limit-options 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

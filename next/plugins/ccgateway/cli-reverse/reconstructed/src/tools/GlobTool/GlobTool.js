@@ -3,9 +3,9 @@
  *
  * Glob 工具：按文件名模式用 ripgrep --files 查找，按修改时间排序，默认 100 条
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GlobTool/GlobTool.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -39,7 +39,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { separateCopyHint } from "../../utils/remoteTools/folderSync.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { GLOB_TOOL_NAME, getGlobToolDescription } from "./prompt.js";
-import { getToolUseSummary_4 } from "./UI.js";
+import { getToolUseSummary_3 } from "./UI.js";
 import { remoteRoutingCandidate } from "../../utils/remoteTools/toolHostRouting.js";
 import { resolveAbsoluteGlobPattern, globFiles } from "../../utils/glob.js";
 import { isRemoteOnlyCheck } from "../../utils/permissions/checkRegistry.js";
@@ -48,12 +48,13 @@ import { renderToolUseMessage } from "../GrepTool/UI.js";
 import { rejectNullBytes } from "../../utils/filePathValidation.js";
 import { checkReadPermissionForTool } from "../../utils/permissions/filesystem.js";
 import { consumeReadPermission } from "../../utils/fsSafety/atomicWriteStaging.js";
+import { SEARCH_INCOMPLETE_NOTE } from "../GrepTool/GrepTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1441401-1442549 fingerprint (2.1.88 match: outputSchema, 0.549)
+//@ chunk-5xgkngpb.js:1441416-1442718 fingerprint (2.1.88 match: outputSchema, 0.511)
 var globInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var globOutputSchema;
-deferInit("chunk-e6aww6q8.js:1441401", () => {
+deferInit("chunk-5xgkngpb.js:1441416", () => {
   globInputSchema = DoctorLazy(() =>
     zodStrictObject({
       pattern: stringSchema().describe("The glob pattern to match files against"),
@@ -81,10 +82,15 @@ deferInit("chunk-e6aww6q8.js:1441401", () => {
         .describe(
           "Whether totalMatches is the exact total (true) or a floor because the underlying search truncated its own output (false). Absent on results persisted by CLI versions predating this field.",
         ),
+      timedOut: booleanSchema()
+        .optional()
+        .describe(
+          "True when the time limit stopped the search after these paths were read, so more matches may exist. Absent otherwise.",
+        ),
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1442549-1443004 layout
+//@ chunk-5xgkngpb.js:1442718-1443173 layout
 /**
  * Glob 结果截断时的提示：未知总数、精确总数或"多于 N"三种。
  */
@@ -98,7 +104,7 @@ function formatGlobTruncationNote(output) {
   }
   return `(Showing the first ${shownCount} files; there are more than ${output.totalMatches} matches. Narrow the pattern or path to see the rest.)`;
 }
-//@ chunk-e6aww6q8.js:1443004-1443397 layout
+//@ chunk-5xgkngpb.js:1443173-1443566 layout
 /**
  * 显式 path 不存在或不是目录时抛 TelemetrySafeError（附 cwd 说明、Did you mean、远程提示）。
  */
@@ -128,12 +134,12 @@ async function assertGlobDirectoryExists(path, permittedPaths, checkContext) {
       "Path is not a directory",
     );
 }
-//@ chunk-e6aww6q8.js:1443397-1445523 fingerprint (2.1.88 match: GlobTool, 0.653)
+//@ chunk-5xgkngpb.js:1443566-1445764 fingerprint (2.1.88 match: GlobTool, 0.655)
 /**
  * Glob 工具定义（name "Glob"）。只读、可并发；pattern 加可选 path；绝对路径模式自动拆出搜索目录；validateInput 查空字节；checkPermissions 读权限；call 用 ripgrep --files 按修改时间排序，默认最多 100 个，截断时给出说明。
  */
 var GlobTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1443397", () => {
+deferInit("chunk-5xgkngpb.js:1443566", () => {
   GlobTool = buildTool({
     name: GLOB_TOOL_NAME,
     searchHint: "find files by name pattern or wildcard",
@@ -148,9 +154,9 @@ deferInit("chunk-e6aww6q8.js:1443397", () => {
     userFacingName() {
       return "Search";
     },
-    getToolUseSummary: getToolUseSummary_4,
+    getToolUseSummary: getToolUseSummary_3,
     getActivityDescription(input) {
-      let summary = getToolUseSummary_4(input);
+      let summary = getToolUseSummary_3(input);
       return summary ? `Finding ${summary}` : "Finding files";
     },
     get inputSchema() {
@@ -252,7 +258,7 @@ deferInit("chunk-e6aww6q8.js:1443397", () => {
           let permittedPaths = consumeReadPermission(checkContext, path);
           if (input.path && path === expandPath(input.path))
             await assertGlobDirectoryExists(input.path, permittedPaths, checkContext);
-          let { files, truncated, totalMatches, countIsComplete } = await globFiles(
+          let { files, truncated, totalMatches, countIsComplete, timedOut } = await globFiles(
             input.pattern,
             path,
             {
@@ -273,22 +279,32 @@ deferInit("chunk-e6aww6q8.js:1443397", () => {
               truncated,
               totalMatches,
               countIsComplete,
+              ...(timedOut && {
+                timedOut,
+              }),
             },
           };
         },
       };
     },
     mapToolResultToToolResultBlockParam(output, toolUseID) {
+      let timeoutNote = output.timedOut
+        ? `${SEARCH_INCOMPLETE_NOTE}
+
+`
+        : "";
       if (output.filenames.length === 0)
         return {
           tool_use_id: toolUseID,
           type: "tool_result",
-          content: "No files found",
+          content: `${timeoutNote}No files found`,
         };
       return {
         tool_use_id: toolUseID,
         type: "tool_result",
-        content: [...output.filenames, ...(output.truncated ? [formatGlobTruncationNote(output)] : [])].join(`
+        content:
+          timeoutNote +
+          [...output.filenames, ...(output.truncated ? [formatGlobTruncationNote(output)] : [])].join(`
 `),
       };
     },

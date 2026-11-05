@@ -3,9 +3,9 @@
  *
  * 设置对话框外壳：Status/Config/Usage/Stats/Gates 等标签页。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Settings.tsx
- * pieces: chunk-9h8dr0qb.js (4)
+ * pieces: chunk-j6tt9nsa.js (4)
  * attribution: sole-consumer 3, fingerprint 1
  */
 import { EMPTY_MACHINE_STATUS, noopMachineStatusHook } from "../../utils/machineStatus.js";
@@ -28,19 +28,19 @@ import { Stats } from "../Stats.js";
 import { Pane } from "../design-system/Pane.js";
 import { Box } from "../../ink/components/Text.js";
 
-//@ chunk-9h8dr0qb.js:113320-113343 sole-consumer
+//@ chunk-j6tt9nsa.js:112973-112996 sole-consumer
 function emptySettingsExtra() {
   return [];
 }
-//@ chunk-9h8dr0qb.js:113343-113368 sole-consumer
+//@ chunk-j6tt9nsa.js:112996-113021 sole-consumer
 function defaultSettingsExtra() {
   return EMPTY_MACHINE_STATUS;
 }
-//@ chunk-9h8dr0qb.js:113368-113394 sole-consumer
+//@ chunk-j6tt9nsa.js:113021-113047 sole-consumer
 function currentSettingsExtra() {
   return createSignal();
 }
-//@ chunk-9h8dr0qb.js:113394-116279 fingerprint (2.1.88 match: Settings, 0.737)
+//@ chunk-j6tt9nsa.js:113047-115928 fingerprint (2.1.88 match: Settings, 0.737)
 /**
  * 设置对话框外壳：Status / Config / Usage / Stats（/ Gates 仅内部）标签页，关闭时发系统消息。
  */

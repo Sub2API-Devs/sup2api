@@ -3,19 +3,11 @@
  *
  * 2.1.316 新增。Artifact MCP 服务切换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kmc5hpaz.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-70g559f4.js (1), chunk-v7crmwhb.js (14)
  * attribution: placement 15
  */
-import { isRemoteToolForwardingEnabledCached } from "../remoteTools/servingGates.js";
-import {
-  REMOTE_DEVICES_SERVER_NAME,
-  getToolNameForPermissionCheck_3 as getToolNameForPermissionCheck_3_2,
-  getToolNameForPermissionCheck_2 as getToolNameForPermissionCheck_2_2,
-  DEVICE_BASH,
-} from "../remoteTools/backgroundCommands.js";
-import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { isRunnerDynamicServer } from "../analytics/metadata.js";
 import { artifactsMcpClient, isEntryRowNotServed } from "../mcp/client.js";
@@ -30,51 +22,42 @@ import { getLiveState } from "../liveReplica/liveReplica.js";
 import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { emitSummonArmsForActivity } from "./summonArms.js";
 import { isArtifactFamilyTool } from "./rosterWait.js";
+import { isRemoteToolsForwardEnabled2 } from "../../bridge/deviceRegistration.js";
+import { isRemoteToolForwardingEnabledCached } from "../remoteTools/servingGates.js";
+import {
+  REMOTE_DEVICES_SERVER_NAME,
+  getToolNameForPermissionCheck_3 as getToolNameForPermissionCheck_3_2,
+  getToolNameForPermissionCheck_2 as getToolNameForPermissionCheck_2_2,
+  DEVICE_BASH,
+} from "../remoteTools/backgroundCommands.js";
+import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 
-//@ chunk-kmc5hpaz.js:622-808 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
-/**
- * （归属疑误：工具集组装）远程设备工具在特定条件下隐藏重复的工具。
- */
-function getToolNameForPermissionCheck(tool, permissionTool = tool) {
-  let serverName =
-    isRemoteToolForwardingEnabledCached() &&
-    permissionTool.some(
-      (tool) =>
-        tool.mcpInfo?.serverName === REMOTE_DEVICES_SERVER_NAME && tool.mcpInfo.toolName === BASH_TOOL_NAME,
-    );
-  return getToolNameForPermissionCheck_3_2(getToolNameForPermissionCheck_2_2(tool)).filter(
-    (tool) =>
-      !serverName ||
-      tool.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME ||
-      tool.mcpInfo.toolName !== DEVICE_BASH,
-  );
-}
-//@ chunk-kmc5hpaz.js:808-962 placement
+//@ chunk-v7crmwhb.js:535-689 placement
 function getArtifactsMcpEntryPredicate() {
   if (startupCcrEnv.isSelfHostedRunnerChild) return isRunnerDynamicServer;
   if (artifactsMcpClient() === undefined && !isBuiltInArtifactHiddenForMcp()) return null;
   return require("./artifactsMcpLaptop.js").isArtifactsMcpLaptopEntry;
 }
-//@ chunk-kmc5hpaz.js:962-1028 placement
+//@ chunk-v7crmwhb.js:689-755 placement
 function findMcpRowEntry(matchesConfig) {
   let client = artifactsMcpClient();
   return client !== undefined && matchesConfig(client.config) ? client : undefined;
 }
-//@ chunk-kmc5hpaz.js:1028-1131 placement
+//@ chunk-v7crmwhb.js:755-858 placement
 function isMcpEntryUsable(name) {
   let mcpRowEntry = findMcpRowEntry(name);
   if (mcpRowEntry === undefined || isEntryRowNotServed(mcpRowEntry)) return false;
   return mcpRowEntry.type === "connected" || mcpRowEntry.type === "cached";
 }
-//@ chunk-kmc5hpaz.js:1131-1219 placement
+//@ chunk-v7crmwhb.js:858-946 placement
 function _() {
   return require("./artifactToolGates.js").artifactToolWithholdingGate() !== null;
 }
-//@ chunk-kmc5hpaz.js:1219-1289 placement
+//@ chunk-v7crmwhb.js:946-1016 placement
 function mcpRowToolNames() {
   return require("./artifactMcpWire.js").MCP_ROW_TOOL_NAMES;
 }
-//@ chunk-kmc5hpaz.js:1289-1429 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-v7crmwhb.js:1016-1156 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_2(tool) {
   let flattened = tool.flatMap((tool) =>
     tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS ? [tool.mcpInfo.toolName] : [],
@@ -86,7 +69,7 @@ function getToolNameForPermissionCheck_2(tool) {
       flattened.includes(ARTIFACTS_MCP_REPLY_SHARED_COMMENT_TOOL))
   );
 }
-//@ chunk-kmc5hpaz.js:1429-1539 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-v7crmwhb.js:1156-1266 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_3(tool) {
   let names = mcpRowToolNames();
   return (
@@ -95,7 +78,7 @@ function getToolNameForPermissionCheck_3(tool) {
     ) && getToolNameForPermissionCheck_2(tool)
   );
 }
-//@ chunk-kmc5hpaz.js:1539-1800 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-v7crmwhb.js:1266-1527 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * （归属疑误：工具集组装/Artifacts）Artifacts 内置工具与 MCP 版本的切换过滤。
  */
@@ -114,7 +97,7 @@ function getToolNameForPermissionCheck_4(tool, permissionTools = tool) {
     return [...tool];
   return others();
 }
-//@ chunk-kmc5hpaz.js:1800-2030 placement
+//@ chunk-v7crmwhb.js:1527-1757 placement
 /**
  * （归属疑误：Artifacts）首次切换到 Artifacts MCP 时隐藏内置工具并记录 artifact_mcp_swap。
  */
@@ -137,7 +120,7 @@ function swapToArtifactsMcp(tools, tool) {
   }
   return filterOutArtifactReplTools(tools);
 }
-//@ chunk-kmc5hpaz.js:2030-2664 placement
+//@ chunk-v7crmwhb.js:1757-2391 placement
 /**
  * （归属疑误：Artifacts）Artifacts MCP 条目状态变化时恢复或保持内置工具。
  */
@@ -176,18 +159,18 @@ function swapBackFromArtifactsMcp() {
     import("./replyYieldHolder.js").then((mod) => mod.handBackTakenOverSlug(key));
   clearCommandCaches();
 }
-//@ chunk-kmc5hpaz.js:2664-2740 placement
+//@ chunk-v7crmwhb.js:2391-2467 placement
 function clearCommandCaches() {
   require("../../commands.js").clearCommandMemoizationCaches();
 }
-//@ chunk-kmc5hpaz.js:2740-2780 placement
+//@ chunk-v7crmwhb.js:2467-2507 placement
 /**
  * 导出函数 `visibleTools`：参数 e，返回 isBuiltInArtifactHiddenForMcp() ? T(e) : [...e]。
  */
 function visibleTools(tools) {
   return isBuiltInArtifactHiddenForMcp() ? filterOutArtifactReplTools(tools) : [...tools];
 }
-//@ chunk-kmc5hpaz.js:2780-2926 placement
+//@ chunk-v7crmwhb.js:2507-2653 placement
 /**
  * 判断工具是否是 Artifact 相关工具，或是（非 MCP 的）Artifact REPL 工具。
  */
@@ -200,15 +183,34 @@ function isArtifactReplTool(tool) {
     tool.name === APPIFACT_REPL_TOOL_NAME
   );
 }
-//@ chunk-kmc5hpaz.js:2926-2970 placement
+//@ chunk-v7crmwhb.js:2653-2697 placement
 function filterOutArtifactReplTools(tools) {
   return tools.filter((tool) => !isArtifactReplTool(tool));
 }
+//@ chunk-70g559f4.js:347-539 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+/**
+ * （归属疑误：工具集组装）远程设备工具在特定条件下隐藏重复的工具。
+ */
+function getToolNameForPermissionCheck(tool, permissionTool = tool) {
+  let serverName =
+    isRemoteToolsForwardEnabled2() &&
+    isRemoteToolForwardingEnabledCached() &&
+    permissionTool.some(
+      (tool) =>
+        tool.mcpInfo?.serverName === REMOTE_DEVICES_SERVER_NAME && tool.mcpInfo.toolName === BASH_TOOL_NAME,
+    );
+  return getToolNameForPermissionCheck_3_2(getToolNameForPermissionCheck_2_2(tool)).filter(
+    (tool) =>
+      !serverName ||
+      tool.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME ||
+      tool.mcpInfo.toolName !== DEVICE_BASH,
+  );
+}
 export {
-  getToolNameForPermissionCheck,
-  visibleTools,
-  getToolNameForPermissionCheck_4,
   isArtifactReplTool,
   swapBackFromArtifactsMcp,
+  getToolNameForPermissionCheck_4,
+  getToolNameForPermissionCheck,
   swapToArtifactsMcp,
+  visibleTools,
 };

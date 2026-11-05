@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：内置 diff 插件包 manifest。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (1)
  * attribution: placement 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-wyqg6m3h.js:4629-5213 placement
+//@ chunk-c7hntn0y.js:4993-5577 placement
 /**
  * 内置 diff 插件包的 manifest（CommonJS 包裹）：声明扫描到的钩子（session.start、ui.render、command.run…）与调用的宿主能力。
  */

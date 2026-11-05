@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：处理技能状态编辑请求（开关模型调用等），检查插件/作者/保留名/更高优先级配置限制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wf4qcsws.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tehxjwcj.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -27,7 +27,7 @@ import {
 import { getCommands } from "../../commands.js";
 import { updateSettingsForSource, settleBackgroundSettingsWork } from "../../utils/settings/settings.js";
 
-//@ chunk-wf4qcsws.js:11911-12154 placement
+//@ chunk-tehxjwcj.js:13059-13302 placement
 var SkillOverrideEditSchema = DoctorLazy(() =>
   zodStrictObject({
     name: stringSchema().min(1).max(500),
@@ -39,7 +39,7 @@ var SkillOverrideEditSchema = DoctorLazy(() =>
     }).optional(),
   }),
 );
-//@ chunk-wf4qcsws.js:12154-13666 placement
+//@ chunk-tehxjwcj.js:13302-14814 placement
 /**
  * 处理技能状态编辑请求（开关模型调用等），检查插件/作者/保留名/更高优先级配置限制。
  */

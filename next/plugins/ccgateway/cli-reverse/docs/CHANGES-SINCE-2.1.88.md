@@ -1,5 +1,7 @@
 # 2.1.88 → 2.1.316 变化总表
 
+> 2026-11-05：阅读树已升级到 2.1.318，本表仍是 2.1.88 → 2.1.316 的对比，代码引用已按 2.1.318 校验；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
+
 > 对比对象：旧版是 `references/claude-code-analysis`（约 2.1.88，2026-03 source map 泄露的 TS 源码）；新版是官方 2.1.316 linux-x64 二进制（`original/`）。
 >
 > 素材：10 本手册的"与 2.1.88 的差异"一节、放置组过程文档 `docs/process/placement-g0.md`…`docs/process/placement-g7.md` 的"新功能"一节。本文去重、合并同类、按重要性排序；每条一句话加证据位置。
@@ -251,7 +253,7 @@
 
 | 变化 | 证据 |
 |---|---|
-| 工具定义改为"定义对象 + `create(ctx)` 工厂"，支持"工具在别处运行"（原生转发、跨机器）；新增约 35 个工具字段 | `buildTool`（`chunk-g54kbxqw.js#on`）；手册 tools §3、§8 |
+| 工具定义改为"定义对象 + `create(ctx)` 工厂"，支持"工具在别处运行"（原生转发、跨机器）；新增约 35 个工具字段 | `buildTool`（`chunk-2c3jp4kn.js#ln`）；手册 tools §3、§8 |
 | 执行：`contextModifier` → `contextLayers`；新增 `detached` 结果、`afterResultCommitted`、中断宽限放弃、隔离锁、检查与调用之间 cwd 变化拒绝 | `reconstructed/src/services/tools/StreamingToolExecutor.js`、`reconstructed/src/services/tools/toolExecution.js`；手册 tools §5、§8 |
 | **Glob/Grep 默认不注册**（嵌入式搜索为构建常量），新增"点名即恢复" | `reconstructed/src/tools.js`；手册 tools §4.4 |
 | LSP、Worktree 工具总是注册；TodoWrite/Task* 加主模型门（新模型默认不给） | 手册 tools §8 |
@@ -366,8 +368,8 @@
 
 ## 4. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 472 处引用：路径 180/182（另 2 个只在 2.1.88 中存在），字面量 138/146（另 8 个只在 2.1.88 中存在），名字 134/143（另 9 个只在 2.1.88 中存在），声明id 1/1；占位符与含空格的说明性文字 34 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`CLAUDE_CODE_UNATTENDED_RETRY`、`--session-timeout`、`buddy/`、`bridge/replBridge.ts`、`tengu_sm_compact*`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`、`validateIFSInjection`、`validateBraceExpansion`、`assistantAutoBackgrounded`、`bypass_permissions_disabled`、`--computer-use-mcp`、`/think-back`、`/thinkback-play`、`/pr-comments`、`/init-verifiers`、`migrateFennecToOpus`
+- 共检查 473 处引用：路径 182/183（另 1 个只在 2.1.88 中存在），字面量 138/146（另 8 个只在 2.1.88 中存在），名字 133/143（另 10 个只在 2.1.88 中存在），声明id 1/1；占位符与含空格的说明性文字 34 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`CLAUDE_CODE_UNATTENDED_RETRY`、`contextModifier`、`--session-timeout`、`bridge/replBridge.ts`、`tengu_sm_compact*`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`、`validateIFSInjection`、`validateBraceExpansion`、`assistantAutoBackgrounded`、`bypass_permissions_disabled`、`--computer-use-mcp`、`/think-back`、`/thinkback-play`、`/pr-comments`、`/init-verifiers`、`migrateFennecToOpus`
 - 未通过：0 处。

@@ -3,9 +3,9 @@
  *
  * 托管设置（企业策略）含危险设置时的安全确认对话框：列出变化的危险项，要求用户批准或退出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ManagedSettingsSecurityDialog/ManagedSettingsSecurityDialog.tsx
- * pieces: chunk-7sw8gya5.js (13)
+ * pieces: chunk-583ea5vc.js (13)
  * attribution: placement 11, layout 1, fingerprint 1
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -16,7 +16,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { countCharInString, plural } from "../../utils/stringUtils.js";
 import { wrapText } from "../../ink/wrap-text.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { RECENT_INPUT_GUARD_MS } from "../../hooks/useRecentInputGuard.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -30,7 +30,7 @@ import {
 import { shellHelperRows } from "../../utils/settings/otelEndpointValidation.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -44,16 +44,16 @@ import { Byline } from "../design-system/Byline.js";
 import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7sw8gya5.js:909-913 placement
+//@ chunk-583ea5vc.js:910-914 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7sw8gya5.js:909", () => {
+deferInit("chunk-583ea5vc.js:910", () => {
   init_react_production();
 });
-//@ chunk-7sw8gya5.js:913-941 layout
+//@ chunk-583ea5vc.js:914-942 layout
 function incrementByOne(value) {
   return value + 1;
 }
-//@ chunk-7sw8gya5.js:941-1077 placement (2.1.88 match: renderToolResultMessage, 0.676)
+//@ chunk-583ea5vc.js:942-1078 placement (2.1.88 match: renderToolResultMessage, 0.677)
 /**
  * 渲染一行 "· 文本"（灰色圆点前缀），供托管设置安全对话框使用。
  */
@@ -76,7 +76,7 @@ function renderToolResultMessage(children, key) {
     key,
   );
 }
-//@ chunk-7sw8gya5.js:1077-1223 placement
+//@ chunk-583ea5vc.js:1078-1224 placement
 function renderTailRow(children, index) {
   return jsxProd_default_2(
     Box,
@@ -96,13 +96,13 @@ function renderTailRow(children, index) {
     `tail-${index}`,
   );
 }
-//@ chunk-7sw8gya5.js:1223-1254 placement
+//@ chunk-583ea5vc.js:1224-1255 placement
 var DIALOG_MIN_ROWS = 20;
 var DIALOG_MAX_ROWS = 40;
 var DIALOG_HEADER_ROWS = 14;
 var DIALOG_FOOTER_ROWS = 4;
 var DIALOG_SIDE_PADDING = 6;
-//@ chunk-7sw8gya5.js:1254-1325 placement
+//@ chunk-583ea5vc.js:1255-1326 placement
 function textHeight(text, width) {
   let max = Math.max(1, width - DIALOG_SIDE_PADDING);
   return (
@@ -113,12 +113,12 @@ function textHeight(text, width) {
     ) + 1
   );
 }
-//@ chunk-7sw8gya5.js:1325-1405 placement
+//@ chunk-583ea5vc.js:1326-1406 placement
 function clampBodyRows(rows, columns, headerLines) {
   let headerRows = DIALOG_HEADER_ROWS + headerLines.reduce((acc, line) => acc + textHeight(line, columns), 0);
   return Math.min(DIALOG_MAX_ROWS, rows - headerRows);
 }
-//@ chunk-7sw8gya5.js:1405-1876 placement
+//@ chunk-583ea5vc.js:1406-1877 placement
 /**
  * 托管设置确认框中"还有 N 项未显示"的说明行，附带其中执行命令、沙箱、隔离设置的数量，并提醒除非预期全部设置否则选 No。
  */
@@ -132,7 +132,7 @@ function hiddenSettingsLine(hiddenCount, useEllipsis, atMost, commandCount, sand
     ? `\u22EF and ${hiddenCount} more not shown ${atMostText}${countsSuffix} \u2014 choose No unless you expected every one of these settings`
     : `${hiddenCount} ${plural(hiddenCount, "setting")} not shown ${atMostText}${countsSuffix} \u2014 choose No unless you expected every one of these settings`;
 }
-//@ chunk-7sw8gya5.js:1876-2392 placement
+//@ chunk-583ea5vc.js:1877-2393 placement
 /**
  * 让危险设置列表适应屏幕：最多 z 行，优先保留首行与尾部若干行，按渲染高度在预算内填充，返回 {head, tail, elided}。
  */
@@ -185,12 +185,12 @@ function fitSettingsList(rows, width, budget) {
     elided: tailStart - headCount,
   };
 }
-//@ chunk-7sw8gya5.js:2392-2892 placement
+//@ chunk-583ea5vc.js:2393-2893 placement
 /**
  * 汇总托管设置各类别数量的文字（命令设置、沙箱、隔离、环境变量、hooks），用逗号连接。
  */
 function describeSettingCounts(settings, { commandRows, sandboxRows, isolationRows, envRows, categoryRows }) {
-  let hookSlots = count(
+  let hookSlots = countWhere(
     Object.values(settings.payloadSlots),
     (slot) => slot?.shellSettings.hooks !== undefined,
   );
@@ -205,7 +205,7 @@ function describeSettingCounts(settings, { commandRows, sandboxRows, isolationRo
   if (categoryRows.length > 0 || hookSlots > 0) parts.push("hooks");
   return parts.join(", ");
 }
-//@ chunk-7sw8gya5.js:2892-3898 placement
+//@ chunk-583ea5vc.js:2893-3899 placement
 /**
  * 托管设置确认对话框三种文案：危险设置（可执行代码/截获流量）、仅遥测目的地、VM 隔离设置。
  */
@@ -232,7 +232,7 @@ var ISOLATION_SETTINGS_COPY = {
   risk: "these can change where Claude Code runs or what it can connect to.",
 };
 var ACCENT_COLOR = RECENT_INPUT_GUARD_MS;
-//@ chunk-7sw8gya5.js:3898-3998 placement
+//@ chunk-583ea5vc.js:3899-3999 placement
 /**
  * 托管设置安全对话框的外壳：以 reveal 作为 key 渲染对话框，使每次重新显示都重置内部状态。
  */
@@ -252,7 +252,7 @@ function ManagedSettingsSecurityDialogHost(props) {
   } else dialog = $[1];
   return dialog;
 }
-//@ chunk-7sw8gya5.js:3998-9257 fingerprint (2.1.88 match: ManagedSettingsSecurityDialog, 0.312)
+//@ chunk-583ea5vc.js:3999-9259 fingerprint (2.1.88 match: ManagedSettingsSecurityDialog, 0.312)
 /**
  * 托管设置安全对话框：比较危险设置与上次批准时是否变化，列出变化项（hooks、apiKeyHelper、env 等），批准后记录，拒绝则退出。
  */
@@ -407,7 +407,7 @@ function ManagedSettingsSecurityDialog(props) {
     $[26] = onAnswer;
   } else onAnswer = $[26];
   let refusableAnswer = useRefusableAnswer(onAnswer);
-  let inputRefusalWindow = useInputRefusalWindow(ACCENT_COLOR);
+  let dialogCopy = useRecentInputWithin(ACCENT_COLOR);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let exitState = useMountTime();
   let [resetCount, setResetCount] = useState(0);
@@ -427,24 +427,19 @@ function ManagedSettingsSecurityDialog(props) {
   useEffect(bumpReset, settingsDeps);
   let settle = settleKey(`${epoch}:${resetCount}`, ACCENT_COLOR);
   let windowGuard;
-  if (
-    $[30] !== isInterstitial ||
-    $[31] !== inputRefusalWindow ||
-    $[32] !== noteRefused ||
-    $[33] !== refusedWithin
-  ) {
+  if ($[30] !== isInterstitial || $[31] !== dialogCopy || $[32] !== noteRefused || $[33] !== refusedWithin) {
     windowGuard = function windowGuard() {
       if (!isInterstitial) {
         return false;
       }
-      if (inputRefusalWindow() || refusedWithin(ACCENT_COLOR)) {
+      if (dialogCopy() || refusedWithin(ACCENT_COLOR)) {
         noteRefused();
         return true;
       }
       return false;
     };
     $[30] = isInterstitial;
-    $[31] = inputRefusalWindow;
+    $[31] = dialogCopy;
     $[32] = noteRefused;
     $[33] = refusedWithin;
     $[34] = windowGuard;

@@ -3,16 +3,29 @@
  *
  * 2.1.316 新增：自托管 runner 处理单个会话的主流程（准备源码与配置、启动 claude 子进程、监控、清理）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (31)
+ * attribution: placement 25, layout 2, affinity 1, sole-consumer 3
  */
 import { join, dirname, sep, normalize } from "path";
+import { open, link, unlink, rm, mkdir, lstat, realpath, writeFile } from "fs/promises";
+import { constants } from "fs";
+import { randomUUID } from "crypto";
 import { homedir } from "os";
-import { rm, mkdir, lstat, realpath, unlink, writeFile } from "fs/promises";
 import { spawn } from "child_process";
 import { createInterface } from "readline";
+import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
+import {
+  isENOENT,
+  getErrnoCode,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  isPathAbsent,
+} from "../../utils/errors.js";
+import { normalizeUuidOrNull } from "../../utils/agentId.js";
+import { withBoundedTimeout, withFsOpTimeout, FS_OP_TIMEOUT_MS } from "../../utils/boundedTimeout.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import {
   GOVERNED_REPRESENT_RETRY_MS,
   splitMountRouting,
@@ -38,7 +51,7 @@ import {
   isLoopbackUrl,
   BAD_REST_MOUNT_WARNING,
   GOVERNED_REPRESENT_RETRY_STEPS,
-  GOVERNED_REPRESENT_RETRY_SLACK_MS,
+  REPRESENT_DEADLINE_SLACK_MS,
   retryGitOperation,
   setUrlInsteadOf,
 } from "./governedGit.js";
@@ -84,8 +97,6 @@ import {
   SIGKILL_DELAY_MS,
   cleanupSessionIngressTokenFiles,
   getStartupTimeoutMs,
-  CHILD_EXTRA_FORWARDED_FLAGS,
-  CHILD_FORWARDED_FLAGS,
   envPositiveMs,
 } from "./launcherHooks.js";
 import {
@@ -100,6 +111,7 @@ import { systemClock, withDeadline, sleep } from "../../utils/sleep.js";
 import {
   createPrepTimer,
   isEpochMismatchError,
+  isRestrictedSession,
   isNotFoundOrInactive,
   decodeSessionJwt,
   getJwtExpiry,
@@ -111,17 +123,16 @@ import {
   getSessionIdFromJwt,
   CCR_SHR_START_MARKS,
   describeSpawnFailure,
+  checkOwnFolder,
+  parseStartFolderLine,
 } from "./sessionLaunch.js";
-import {
-  errorMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  getErrnoCode,
-  isPathAbsent,
-  isENOENT,
-} from "../../utils/errors.js";
 import { isRetryableRunnerError, getHttpStatus } from "../../selfHostedRunner/runnerApiErrors.js";
+import {
+  withLatestIdleRelease,
+  getRunnerIdleMs,
+  CCR_SHR_IDLE_RELEASE_DEFAULT_MINUTES,
+} from "./idleRelease.js";
 import { disableCoreDumps } from "../../utils/processHardening.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getPlatform } from "../../utils/platform.js";
 import { getProcessStartTimeAsync } from "../../utils/processIdentity.js";
 import {
@@ -135,16 +146,15 @@ import { env, antEnv } from "../../utils/env.js";
 import { isEgressProxyActive, egressProxyChildEnv } from "./egressProxy.js";
 import {
   getRemoteHostname,
+  revParseVerify,
   fetchOutcomeBranches,
   resumePushOnRelease,
   fetchSourceBranch,
-  revParseVerify,
   isLocalhostUrl,
   hasGovernedMountAndUpstream,
   pushOnRelease,
   runGitQuiet,
 } from "./outcomeBranches.js";
-import { withBoundedTimeout, withFsOpTimeout, FS_OP_TIMEOUT_MS } from "../../utils/boundedTimeout.js";
 import {
   ensureSessionConfigDirs,
   isHostConfigSnapshotError,
@@ -232,6 +242,9 @@ import {
   DECLARES_DIFF_FINDS_NESTED_REPOSITORY,
   DECLARES_NO_REPOSITORY_CHECKED_OUT,
   runnerDeclarationArgument,
+  CHILD_EXTRA_FORWARDED_FLAGS,
+  CHILD_FORWARDED_FLAGS,
+  REPLY_GATE_POLICY,
 } from "./runnerDeclaration.js";
 import { normalizeToolsArg, hasDisallowedToolSpec } from "./runnerToolNames.js";
 import { appendServerArgs } from "./childArgs.js";
@@ -243,7 +256,9 @@ import {
   SESSION_MOVED_TAIL_PROMPT,
   SESSION_MOVED_CONTINUE_PROMPT,
 } from "../../utils/conversationRecovery.js";
+import { createWorkLookChecker } from "./releaseReasons.js";
 import { formatDuration } from "../../utils/format.js";
+import { CRON_CREATE_TOOL_NAME } from "../../tools/ScheduleCronTool/prompt.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../../tools/ScheduleWakeupTool/prompt.js";
 import { OTEL_DIAG_ERROR_PREFIX } from "../../utils/telemetry/logger.js";
 import { isChangesPaneProblemMessage } from "./changesPaneRefusals.js";
@@ -257,7 +272,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { normalizeHost, HOST_LABEL_RE, isGithubDotCom, GITHUB_HOST } from "../../utils/git/githubUrl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hm0ce8vc.js:58886-59069 placement
+//@ chunk-asf5gh8x.js:60811-60994 placement
 /**
  * getRemoteSessionOrigin：environment_variables.CLAUDE_CODE_REMOTE_SESSION_ORIGIN。
  */
@@ -273,14 +288,101 @@ function getRemoteSessionOrigin(joinResponse) {
     ? CLAUDE_CODE_REMOTE_SESSION_ORIGIN
     : undefined;
 }
-//@ chunk-hm0ce8vc.js:59069-59108 placement (2.1.88 match: review, 0.384)
+//@ chunk-asf5gh8x.js:60994-61210 layout
+function reviewExitAfterStopDelay(config) {
+  let environmentVariables = config.environment_variables ?? {};
+  let CLAUDE_CODE_EXIT_AFTER_STOP_DELAY = Object.hasOwn(
+    environmentVariables,
+    "CLAUDE_CODE_EXIT_AFTER_STOP_DELAY",
+  )
+    ? environmentVariables.CLAUDE_CODE_EXIT_AFTER_STOP_DELAY
+    : undefined;
+  return isReviewOriginSession(config) &&
+    typeof CLAUDE_CODE_EXIT_AFTER_STOP_DELAY === "string" &&
+    /^[1-9]\d{0,8}$/.test(CLAUDE_CODE_EXIT_AFTER_STOP_DELAY)
+    ? CLAUDE_CODE_EXIT_AFTER_STOP_DELAY
+    : undefined;
+}
+//@ chunk-asf5gh8x.js:61210-61249 placement
 /**
  * isReviewOriginSession：旧版名 review 配错。
  */
 function isReviewOriginSession(joinResponse) {
   return getRemoteSessionOrigin(joinResponse) === "review";
 }
-//@ chunk-hm0ce8vc.js:82431-140444 placement
+//@ chunk-asf5gh8x.js:64762-64781 placement
+var MAX_LISTED_SESSION_IDS = 64;
+var SESSION_POLL_MS = 30000;
+//@ chunk-asf5gh8x.js:64781-64840 affinity
+function diskMarkPath(baseDir, sessionId) {
+  return join(baseDir, "_sessions", `${sessionId}.disk-mark`);
+}
+//@ chunk-asf5gh8x.js:64840-65124 sole-consumer
+async function readDiskMark(markPath) {
+  let handle;
+  try {
+    handle = await open(markPath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+  } catch (error) {
+    if (isENOENT(error)) return;
+    throw error;
+  }
+  try {
+    let { buffer, bytesRead } = await handle.read(
+      Buffer.alloc(MAX_LISTED_SESSION_IDS),
+      0,
+      MAX_LISTED_SESSION_IDS,
+      0,
+    );
+    let decodedId = normalizeUuidOrNull(buffer.toString("utf8", 0, bytesRead));
+    if (decodedId === null) throw Error("the file does not hold a valid id");
+    return decodedId;
+  } finally {
+    await handle.close();
+  }
+}
+//@ chunk-asf5gh8x.js:65124-65493 sole-consumer
+async function writeDiskMark(markPath) {
+  let tempPath = await readDiskMark(markPath);
+  if (tempPath !== undefined) return tempPath;
+  let tempHandle = `${markPath}.${randomUUID()}`;
+  try {
+    let markHandle = await open(tempHandle, "wx", 384);
+    try {
+      await markHandle.writeFile(randomUUID());
+      await markHandle.sync();
+    } finally {
+      await markHandle.close();
+    }
+    await link(tempHandle, markPath);
+  } catch (error) {
+    if (getErrnoCode(error) !== "EEXIST") throw error;
+  } finally {
+    await unlink(tempHandle).catch(() => {});
+  }
+  let writtenId = await readDiskMark(markPath);
+  if (writtenId === undefined) throw Error("the file was gone straight after it was written");
+  return writtenId;
+}
+//@ chunk-asf5gh8x.js:65493-65793 sole-consumer
+async function withDiskMark(sessionId, markPath, onStatus) {
+  try {
+    return {
+      disk: await withBoundedTimeout(
+        writeDiskMark(markPath),
+        SESSION_POLL_MS,
+        "reading or writing the disk mark",
+      ),
+      launch: randomUUID(),
+    };
+  } catch (error) {
+    onStatus(
+      `[runner:warn] ${sessionId}: could not read or write the disk mark ${markPath}, so the session will not be told if its files are lost: ${errorMessage(error)}`,
+    );
+    logFeatureSad("self_hosted_tools_host", "no_disk_mark");
+    return;
+  }
+}
+//@ chunk-asf5gh8x.js:91638-150485 placement
 /**
  * 处理一个会话工单：准备目录/配置/仓库、合成环境、启动子进程并在结束后发布结果与清理（约 58 KB）。
  */
@@ -303,6 +405,9 @@ async function handleSelfHostedSession(sessionId, options, signal) {
     onBgTaskLedger,
     onBgFollowupPending,
     onPostTurnSettle,
+    onServerIdleLimit,
+    onCheckouts,
+    onOwnFolder,
     onSessionTokenIssued,
     onChildLifecycle,
     clientPlatform,
@@ -310,6 +415,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
     onSessionStartHookError,
     onMaxLifetime,
     onChildTerminating,
+    onToolServerReady,
     canonicalLocks,
     spawnedSessionIds,
     tokenFileOpTimeoutMs,
@@ -373,12 +479,13 @@ async function handleSelfHostedSession(sessionId, options, signal) {
   let result = "failed";
   let restartingForUpdate = false;
   let failedOnUpdateBuild = false;
+  let reviewDone;
   let failureReason;
   let setupFailureKind;
   let failureKind;
   let mcpConfigPath;
   let launcherSettingsPath;
-  let launcherStagedPaths = [];
+  let writtenPaths = [];
   let stagedPaths = [];
   let sessionClaudeConfigDir = getSessionClaudeConfigDir(baseDir, sessionId);
   let gitConfigPins =
@@ -434,6 +541,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
   let abortController = new AbortController();
   let childSignal = AbortSignal.any([signal, abortController.signal]);
   let workspacePaths = [];
+  let checkoutStarts = new Map();
   let initBaseDir;
   let childStarted = false;
   let epochStale = false;
@@ -517,7 +625,10 @@ async function handleSelfHostedSession(sessionId, options, signal) {
     }
     let getRemoteConfig =
       toolsHost === undefined
-        ? (...remoteConfigArgs) => apiClient.getSessionRemoteConfig(...remoteConfigArgs)
+        ? withLatestIdleRelease(
+            (...remoteConfigArgs) => apiClient.getSessionRemoteConfig(...remoteConfigArgs),
+            (args) => onServerIdleLimit?.(args),
+          )
         : async () => ({
             sources: [],
             push_targets: [],
@@ -1793,6 +1904,21 @@ async function handleSelfHostedSession(sessionId, options, signal) {
         }
         await resetToRelease();
         prepTimer.mark("runner_prep_reset_remote_ms");
+        if (!getRunnerIdleMs())
+          await Promise.all(
+            preparedRepos.map(async (worktreePath, index) => {
+              let canonicalRepoPath =
+                sessionWorktrees.find((sessionWorktree) => sessionWorktree.worktreePath === worktreePath)
+                  ?.canonicalRepoPath ?? worktreePath;
+              checkoutStarts.set(worktreePath, {
+                commit:
+                  preparedCheckouts.get(canonicalRepoPath) === true
+                    ? undefined
+                    : await revParseVerify(worktreePath, "HEAD"),
+                branch: branchMap.get(lowercaseRepoName(repoSlugs[index]))?.[0],
+              });
+            }),
+          );
         for (let idx = 0; idx < preparedRepos.length; idx++) {
           let branches = branchMap.get(lowercaseRepoName(repoSlugs[idx]));
           if (!branches || branches.length === 0) continue;
@@ -2005,7 +2131,11 @@ async function handleSelfHostedSession(sessionId, options, signal) {
         [claudeTempDir(), getChildProcessTmpDirRealpath().replace(/[/\\]$/, "")],
       );
       prepTimer.mark("runner_prep_repo_settings_ms");
-      if (trustWorkspace) {
+      if (trustWorkspace && isRestrictedSession(remoteConfig))
+        onDebug(
+          `[runner:session] Seeded no persisted trust: ${sessionId} starts without the project setting source`,
+        );
+      else if (trustWorkspace) {
         let projects = {};
         for (let dirPath of new Set([
           childCwd,
@@ -2123,7 +2253,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
             hooks: remoteConfig.launcher_hooks === undefined ? [] : remoteConfig.launcher_hooks,
             autoMode: serverAutoModeRules.autoMode,
           },
-          launcherStagedPaths,
+          writtenPaths,
           onDebug,
           onStatus,
         );
@@ -2250,7 +2380,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
             ? maxBudgetMs
             : Math.max(
                 0,
-                Math.min(maxBudgetMs, expiryEpoch * 1000 - Date.now() - GOVERNED_REPRESENT_RETRY_SLACK_MS),
+                Math.min(maxBudgetMs, expiryEpoch * 1000 - Date.now() - REPRESENT_DEADLINE_SLACK_MS),
               );
         let representOutcome = await retryGitOperation({
           represent: () =>
@@ -2489,7 +2619,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
             let token = tokenRef.current;
             let finishRemoteCall = inferenceRefresher?.onRemoteCallStarted();
             let config = await getRemoteConfig(sessionId, token, signal, {
-              timeoutMs: SESSION_POLL_MS,
+              timeoutMs: GOVERNED_REPRESENT_RETRY_SLACK_MS,
             });
             finishRemoteCall?.();
             await reconcileRemote(config, token);
@@ -2559,6 +2689,15 @@ async function handleSelfHostedSession(sessionId, options, signal) {
           );
           return outcome;
         };
+        if (hosting.kind === "tool-server") {
+          let toolHostResult = await withDiskMark(sessionId, diskMarkPath(baseDir, sessionId), onStatus);
+          hosting = {
+            ...hosting,
+            ...(toolHostResult && {
+              toolHost: toolHostResult,
+            }),
+          };
+        }
         let probeResult = await withBoundedTimeout(
           startupProbe ?? Promise.resolve(undefined),
           CHECKOUT_DISPLAY_LIMIT,
@@ -2605,6 +2744,11 @@ async function handleSelfHostedSession(sessionId, options, signal) {
             execPath,
             execArgs,
             updatedChildBin,
+            checkouts: workspacePaths,
+            checkoutStarts,
+            onCheckouts,
+            sessionFolder: sessionDir,
+            onOwnFolder,
             childUpdateBin: inPrivateCheckout || isReviewSession ? undefined : childUpdateBin,
             onChildUpdateReady: inPrivateCheckout || isReviewSession ? undefined : onChildUpdateReady,
             config: remoteConfig,
@@ -2612,7 +2756,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
             sessionId,
             sessionToken: tokenRef.current,
             child: hosting,
-            trustWorkspace: trustWorkspace === true,
+            trustWorkspace: trustWorkspace === true && !isRestrictedSession(remoteConfig),
             ghRoutePath: ghRoute?.path,
             ghRouteBasePath: ghRoute?.basePath,
             sessionGitRulesPath: sessionGitRules && sessionGitRulesPath,
@@ -2655,6 +2799,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
                 kind: "end",
                 durationSec: (Date.now() - initStartMs) / 1000,
               });
+              if (toolServerHosting !== undefined) onToolServerReady?.();
             },
             onSessionStartHookError,
             onMaxLifetime,
@@ -2701,6 +2846,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
       result = childResult.result;
       let stderrTail = rewriteContractionError(childResult.stderrTail);
       let reason = typeof signal.reason === "string" ? signal.reason : undefined;
+      if (isReviewSession && childResult.result === "completed" && !sessionGoneSent) reviewDone = true;
       if (childResult.result === "failed") {
         failureReason = childResult.startError
           ? `child failed to start (${childResult.startError.class}): ${stderrTail}`
@@ -3087,7 +3233,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
       await withFsOpTimeout(unlink(mcpConfigPath), `unlink ${mcpConfigPath}`).catch(() => {});
     for (let path of [
       ...(launcherSettingsPath ? [launcherSettingsPath] : []),
-      ...launcherStagedPaths,
+      ...writtenPaths,
       ...stagedPaths,
     ])
       await withFsOpTimeout(unlink(path), `unlink ${path}`).catch(() => {});
@@ -3227,6 +3373,7 @@ async function handleSelfHostedSession(sessionId, options, signal) {
         getToolServerConfigDir(baseDir, sessionId),
         stageFileRoot,
         sessionDir,
+        diskMarkPath(baseDir, sessionId),
         governedGitConfigPath,
         governedGitConfigPath + ".lock",
         caBundlePath,
@@ -3256,13 +3403,18 @@ async function handleSelfHostedSession(sessionId, options, signal) {
     setupFailureKind,
     failureKind,
     failedOnUpdateBuild,
+    ...(reviewDone &&
+      result === "completed" &&
+      signal.reason !== "deassign" && {
+        reviewDone,
+      }),
   };
 }
-//@ chunk-hm0ce8vc.js:140444-140512 placement
+//@ chunk-asf5gh8x.js:150485-150553 placement
 function sessionHostingKey(hosting) {
   return hosting.kind === "agent-loop" ? hosting.workerEpoch : hosting.hosting;
 }
-//@ chunk-hm0ce8vc.js:140512-159381 placement
+//@ chunk-asf5gh8x.js:150553-170451 placement
 /**
  * 启动并监管会话子进程：转发 stdin 控制、活动心跳、令牌刷新、输出转发与退出处理。
  */
@@ -3337,7 +3489,8 @@ function runSessionChild(options) {
   let startupTimeoutMs = env.CLAUDE_RUNNER_DISABLE_TURN_BEGAN_BEFORE_INIT ? 0 : getStartupTimeoutMs();
   let { sdkUrl, resumeUrl } = isLocalhostUrl(config.api_base_url, sessionId);
   let isReviewSession = isReviewOriginSession(config);
-  let declarations = [
+  let takeStartCommandPhases = false;
+  let names = [
     ...(diffFindsNestedRepository && capacity === 1
       ? [
           DECLARES_DIFF_FINDS_NESTED_REPOSITORY,
@@ -3348,7 +3501,7 @@ function runSessionChild(options) {
   ];
   let childArgs = [
     ...execArgs,
-    ...(declarations.length > 0 ? [runnerDeclarationArgument(declarations)] : []),
+    ...(names.length > 0 ? [runnerDeclarationArgument(names)] : []),
     "--print",
     "--sdk-url",
     sdkUrl,
@@ -3390,7 +3543,7 @@ function runSessionChild(options) {
     onDebug(
       `[runner:session] Added ${forwardedCount}/${Object.keys(config.claude_code_args).length} claude_code_args`,
     );
-  if (isReviewSession) childArgs.push("--setting-sources=");
+  if (isReviewSession || normalizedArgs["setting-sources"] === "") childArgs.push("--setting-sources=");
   let inferenceAuth = config.inference_auth;
   if (child.kind === "agent-loop" && !inferenceAuth?.access_token)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -3486,6 +3639,8 @@ function runSessionChild(options) {
     CLAUDE_CODE_REMOTE_SESSION_UUID: decodeTaggedUuid(sessionId),
     CLAUDE_CODE_ACCOUNT_UUID: config.environment_variables?.CLAUDE_CODE_ACCOUNT_UUID ?? undefined,
     CLAUDE_CODE_ORGANIZATION_UUID: config.environment_variables?.CLAUDE_CODE_ORGANIZATION_UUID ?? undefined,
+    CLAUDE_CODE_REPLY_GATE_POLICY:
+      child.kind === "agent-loop" ? (config.claude_code_args[REPLY_GATE_POLICY] ?? undefined) : undefined,
     CCR_SESSION_ACCOUNT_EMAIL: sessionIdFromJwt ?? undefined,
     ANTHROPIC_BASE_URL: config.api_base_url,
     SESSION_INGRESS_URL: config.api_base_url,
@@ -3536,9 +3691,11 @@ function runSessionChild(options) {
     SELF_HOSTED_RUNNER_HOST_CONFIG_DIR: undefined,
     SELF_HOSTED_RUNNER_HOLD_IDLE_FILE: undefined,
     SELF_HOSTED_RUNNER_MAX_HOLD_MS: undefined,
-    CLAUDE_CODE_EXIT_AFTER_STOP_DELAY: undefined,
+    CLAUDE_CODE_EXIT_AFTER_STOP_DELAY: reviewExitAfterStopDelay(config),
+    [CCR_SHR_IDLE_RELEASE_DEFAULT_MINUTES]: undefined,
     CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN: undefined,
     CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS: undefined,
+    CLAUDE_CODE_MCP_SERVE_TUNNEL_BINARY_FRAMES: undefined,
     CLAUDE_CODE_BRIDGE_PROMPT_SHA256: undefined,
     CLAUDE_CODE_BRIDGE_MCP_CARRIER: undefined,
     ...false,
@@ -3546,6 +3703,7 @@ function runSessionChild(options) {
     CCR_AUTO_MODE_ALLOW: undefined,
     CCR_AUTO_MODE_ENVIRONMENT: undefined,
     CCR_AUTO_MODE_SOFT_DENY: undefined,
+    ...false,
     ...{},
     CLAUDE_CODE_WORKER_EPOCH: workerEpoch?.toString(),
     CLAUDE_CODE_RESUME_INTERRUPTED_TURN: (workerEpoch ?? 0) > 1 ? "1" : undefined,
@@ -3605,6 +3763,36 @@ function runSessionChild(options) {
     windowsHide: true,
     detached: true,
   };
+  let checkouts = [...options.checkouts];
+  let childIsOwnBin = execPath === process.execPath || execPath === options.updatedChildBin;
+  let startFolder;
+  options.onCheckouts?.(
+    checkouts,
+    childIsOwnBin
+      ? createWorkLookChecker(
+          {
+            execPath,
+            execArgs,
+            env: childEnv,
+            cwd,
+            checkoutStarts: options.checkoutStarts,
+          },
+          signal,
+          (line) => onDebug(`[runner:session] ${sessionId} ${line}`),
+        )
+      : undefined,
+  );
+  options.onOwnFolder?.(
+    checkOwnFolder(
+      {
+        sessionFolder: options.sessionFolder,
+        startFolder: cwd,
+        checkouts,
+        saidByChildOfScript: childIsOwnBin ? undefined : () => startFolder,
+      },
+      (line) => onDebug(`[runner:session] ${sessionId} ${line}`),
+    ),
+  );
   let childProcess;
   try {
     childProcess = spawn(execPath, spawnArgs, spawnOptions);
@@ -3679,6 +3867,9 @@ function runSessionChild(options) {
         session_token: sessionToken,
         api_base_url: config.api_base_url,
         runner: child.runner,
+        ...(child.toolHost && {
+          tool_host: child.toolHost,
+        }),
       }) +
         `
 `,
@@ -3725,6 +3916,8 @@ function runSessionChild(options) {
   });
   if (signal.aborted) lifetimeWatchdog.terminate();
   let liveTasks = new Map();
+  let inProcessTeammates = new Set();
+  let sawToolUse = false;
   let countLiveTasks = () => {
     let count = 0;
     for (let kind of liveTasks.values()) if (kind !== "monitor_mcp" && kind !== "monitor_ws") count++;
@@ -3845,13 +4038,27 @@ function runSessionChild(options) {
     notifiedTaskIds.add(taskId);
     markFollowupPending();
   };
+  let finishTurn = () => {
+    let outstanding = inProcessTeammates.size > 0 || sawToolUse;
+    if (awaitingUser || outstanding)
+      reportActivity?.("turn-end", {
+        ...ledgerSnapshot(),
+        ...(awaitingUser && {
+          promptParked: true,
+        }),
+        ...(outstanding && {
+          goesOnUnasked: true,
+        }),
+      });
+    else reportActivity?.("turn-end");
+  };
   let maybeEndTurn = () => {
     if (turnOpen || liveTasks.size > 0 || wakeupPending() || followupPending) return;
     if (turnEndTimer !== undefined) {
       clearTimeout(turnEndTimer);
       turnEndTimer = undefined;
     }
-    reportActivity?.("turn-end");
+    finishTurn();
   };
   let endTurnDeferred = () => {
     for (let key of liveTasks.keys()) endedTaskIds.add(key);
@@ -3919,6 +4126,7 @@ function runSessionChild(options) {
       let requestId = record.response?.request_id;
       if (typeof requestId === "string" && requestId.startsWith("shr-token-")) onTokenAck?.(requestId);
     }
+    if (record.type === "system" && record.subtype === "start_folder") return;
     if (record.type === "assistant") onDebug("[runner:session] Activity: assistant message");
     else if (record.type === "result") {
       onDebug(`[runner:session] Result: subtype=${record.subtype}`);
@@ -3926,7 +4134,9 @@ function runSessionChild(options) {
         onResultApiError?.(record.api_error_status);
     }
     if (record.type === "system" && record.subtype === "task_started") {
-      if (typeof record.task_id === "string" && record.task_type !== "in_process_teammate") {
+      if (typeof record.task_id === "string" && record.task_type === "in_process_teammate")
+        inProcessTeammates.add(record.task_id);
+      else if (typeof record.task_id === "string") {
         liveTasks.set(record.task_id, typeof record.task_type === "string" ? record.task_type : "unknown");
         if (record.owned_by_subagent === true) subagentTasks.add(record.task_id);
         else subagentTasks.delete(record.task_id);
@@ -3943,18 +4153,21 @@ function runSessionChild(options) {
         liveTasks.has(record.task_id)
       )
         endedTaskIds.add(record.task_id);
-      if (
+      let taskId =
         typeof record.task_id === "string" &&
-        (status === "completed" || status === "failed" || status === "killed") &&
-        liveTasks.delete(record.task_id)
-      ) {
-        handleTaskEnded(record.task_id);
+        (status === "completed" || status === "failed" || status === "killed")
+          ? record.task_id
+          : undefined;
+      if (taskId !== undefined) inProcessTeammates.delete(taskId);
+      if (taskId !== undefined && liveTasks.delete(taskId)) {
+        handleTaskEnded(taskId);
         onBgTaskLedger?.(countLiveTasks());
         maybeEndTurn();
       }
       return;
     }
     if (record.type === "system" && record.subtype === "task_notification") {
+      if (typeof record.task_id === "string") inProcessTeammates.delete(record.task_id);
       if (typeof record.task_id === "string" && liveTasks.delete(record.task_id)) {
         if (record.status === "stopped") finishTask(record.task_id);
         else handleTaskEnded(record.task_id);
@@ -4027,7 +4240,7 @@ function runSessionChild(options) {
           everStartedTurn = false;
           if (sawResult && turnHadTasks && countLiveTasks() === 0 && !awaitingUser) markFollowupPending();
           if (sawResult && (liveTasks.size > 0 || wakeupPending() || followupPending)) endTurnDeferred();
-          else reportActivity?.("turn-end");
+          else finishTurn();
         }
         return;
       }
@@ -4054,8 +4267,15 @@ function runSessionChild(options) {
     }
     if (record.type === "assistant") {
       let content = record.message?.content;
-      if (Array.isArray(content)) {
-        for (let contentBlock of content)
+      if (Array.isArray(content))
+        for (let contentBlock of content) {
+          if (
+            contentBlock &&
+            typeof contentBlock === "object" &&
+            contentBlock.type === "tool_use" &&
+            contentBlock.name === CRON_CREATE_TOOL_NAME
+          )
+            sawToolUse = true;
           if (
             contentBlock &&
             typeof contentBlock === "object" &&
@@ -4069,7 +4289,7 @@ function runSessionChild(options) {
               wakeupAt = Date.now() + min * 1000 + wakeupSlackMs;
             }
           }
-      }
+        }
     }
     if (record.type === "result") {
       noteTurnSettled();
@@ -4078,7 +4298,7 @@ function runSessionChild(options) {
       everStartedTurn = false;
       sawResult = true;
       if (turnHadTasks && countLiveTasks() === 0 && !awaitingUser) markFollowupPending();
-      if (liveTasks.size === 0 && !wakeupPending() && !followupPending) reportActivity?.("turn-end");
+      if (liveTasks.size === 0 && !wakeupPending() && !followupPending) finishTurn();
       else if (awaitingUser && !env.CLAUDE_RUNNER_DISABLE_AWAITING_ACTION_OVERRIDE) {
         reportActivity?.("awaiting-action", ledgerSnapshot());
         clearFollowup("child parked at a prompt", true);
@@ -4114,7 +4334,10 @@ function runSessionChild(options) {
   if (activityPipe)
     createInterface({
       input: activityPipe,
-    }).on("line", onChildLine);
+    }).on("line", (line) => {
+      startFolder ??= parseStartFolderLine(line) ?? "unusable";
+      onChildLine(line);
+    });
   let maxStderrLines = 50;
   let maxStderrChars = 500;
   let stderrTail = [];
@@ -4236,13 +4459,13 @@ function runSessionChild(options) {
     });
   });
 }
-//@ chunk-hm0ce8vc.js:159381-159405 placement
+//@ chunk-asf5gh8x.js:170451-170475 placement
 /**
  * 会话钩子的默认超时：结束钩子 1 分钟、检出钩子 30 分钟。
  */
 var POST_SESSION_HOOK_TIMEOUT_MS = 60000;
 var CHECKOUT_HOOK_TIMEOUT_MS = 1800000;
-//@ chunk-hm0ce8vc.js:159405-159615 placement
+//@ chunk-asf5gh8x.js:170475-170685 placement
 function getCheckoutHookTimeoutMs() {
   let envSelfHostedRunnerCheckoutHookTimeoutMs = process.env.SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS;
   if (
@@ -4257,7 +4480,7 @@ function getCheckoutHookTimeoutMs() {
     ? timeoutMs
     : CHECKOUT_HOOK_TIMEOUT_MS;
 }
-//@ chunk-hm0ce8vc.js:159615-159693 placement
+//@ chunk-asf5gh8x.js:170685-170763 placement
 /**
  * 会话监控的各类等待与超时（后台结果宽限、回合结算、进程树快照、SIGKILL 宽限等）。
  */
@@ -4270,23 +4493,23 @@ var DESCENDANT_REAP_GRACE_MS = 1000;
 var STOP_SIGKILL_WAIT_MS = 1500;
 var SIGKILL_GRACE_BASE_MS = 15000;
 var GIT_ARTIFACTS_REFRESH_TIMEOUT_MS = 1000;
-//@ chunk-hm0ce8vc.js:159693-159760 placement
+//@ chunk-asf5gh8x.js:170763-170830 placement
 function graceSeconds(postSessionHookMs, pushReleaseMs, sigkillGraceMs = 0, drainWaitMs = 0, maxHoldMs = 0) {
   return Math.ceil(
     (postSessionHookMs + pushReleaseMs + sigkillGraceMs + drainWaitMs + maxHoldMs + SIGKILL_GRACE_BASE_MS) /
       1000,
   );
 }
-//@ chunk-hm0ce8vc.js:159760-159854 placement
+//@ chunk-asf5gh8x.js:170830-170924 placement
 function redactAndTruncate(text, maxChars) {
   let redacted = redactSecretsInText(text);
   return redacted.length > maxChars
     ? redacted.slice(0, maxChars) + ` \u2026[+${redacted.length - maxChars} chars]`
     : redacted;
 }
-//@ chunk-hm0ce8vc.js:159854-159868 placement
+//@ chunk-asf5gh8x.js:170924-170938 placement
 var MAX_LIFETIME_GRACE_MS = 900000;
-//@ chunk-hm0ce8vc.js:159868-166298 placement
+//@ chunk-asf5gh8x.js:170938-177368 placement
 /**
  * 会话最长存活时间看门狗：可调用 max-lifetime 钩子决定 wait/kill。
  */
@@ -4527,7 +4750,7 @@ class SessionLifetimeWatchdog {
     return this.terminating;
   }
 }
-//@ chunk-hm0ce8vc.js:166298-166615 placement
+//@ chunk-asf5gh8x.js:177368-177685 placement
 /**
  * 带抖动的指数退避重试，可设最大次数、是否重试判断、重试回调与中止信号。
  */
@@ -4549,7 +4772,7 @@ async function retryWithBackoff(fn, options) {
     }
   }
 }
-//@ chunk-hm0ce8vc.js:166615-166657 placement
+//@ chunk-asf5gh8x.js:177685-177727 placement
 /**
  * 每 host 的单调递增计数器（用于生成唯一的临时标签）。
  */
@@ -4559,19 +4782,19 @@ class TokenCounter {
     return ++this.last;
   }
 }
-//@ chunk-hm0ce8vc.js:166657-166682 placement
+//@ chunk-asf5gh8x.js:177727-177752 placement
 /**
  * 按 host 保存的计数器实例。
  */
 var tokenCounters; // deferred: uses TokenCounter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hm0ce8vc.js:166657", () => {
+deferInit("chunk-asf5gh8x.js:177727", () => {
   tokenCounters = new HostScoped(() => new TokenCounter());
 });
-//@ chunk-hm0ce8vc.js:166682-166719 placement
+//@ chunk-asf5gh8x.js:177752-177789 placement
 function nextTokenCounter() {
   return tokenCounters.of(getRootSession().host);
 }
-//@ chunk-hm0ce8vc.js:166719-167351 placement
+//@ chunk-asf5gh8x.js:177789-178421 placement
 /**
  * 把刷新的会话令牌写入子进程 stdin（未接好时记录未投递）。
  */
@@ -4608,7 +4831,7 @@ function deliverRefreshedToken(options) {
     `[runner:session] ${options.label} refreshed for ${options.sessionId} \u2014 pushed to child via stdin${expiryNote}${requestId ? ` [${requestId}]` : ""}`,
   );
 }
-//@ chunk-hm0ce8vc.js:167351-167833 placement
+//@ chunk-asf5gh8x.js:178421-178903 placement
 function warnTokenUpdateNotAcked(options) {
   let nowMs = options.nowMs ?? Date.now();
   let graceMs = options.graceMs ?? 90000;
@@ -4620,7 +4843,7 @@ function warnTokenUpdateNotAcked(options) {
       options.pendingAcks.delete(requestId);
     }
 }
-//@ chunk-hm0ce8vc.js:167833-169415 placement
+//@ chunk-asf5gh8x.js:178903-180485 placement
 function createDebouncedSender(options) {
   let errorRetryMs = options.errorRetryMs ?? 30000;
   let max = Math.max(errorRetryMs, options.errorRetryMaxMs ?? 0);
@@ -4740,18 +4963,18 @@ function createDebouncedSender(options) {
     refreshNow,
   };
 }
-//@ chunk-hm0ce8vc.js:169415-169529 placement
+//@ chunk-asf5gh8x.js:180485-180599 placement
 function tokenRefreshIntervalMs(expiresInSeconds) {
   if (!expiresInSeconds || expiresInSeconds <= 0) return 1440000;
   let floored = Math.floor(expiresInSeconds * 1000 * 0.8);
   return Math.max(30000, Math.min(1440000, floored));
 }
-//@ chunk-hm0ce8vc.js:169529-169573 placement
+//@ chunk-asf5gh8x.js:180599-180643 placement
 function ttlMsFromSeconds(expiresInSeconds) {
   return expiresInSeconds && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 1800000;
 }
-//@ chunk-hm0ce8vc.js:169573-169726 placement
-var SESSION_POLL_MS = 30000;
+//@ chunk-asf5gh8x.js:180643-180796 layout
+var GOVERNED_REPRESENT_RETRY_SLACK_MS = 30000;
 var TOKEN_REFRESH_TIMING = {
   errorRetryMs: 5000,
   errorRetryMaxMs: 60000,
@@ -4763,14 +4986,14 @@ var TOKEN_REFRESH_TIMING = {
   },
   minRefreshGapMs: 30000,
 };
-//@ chunk-hm0ce8vc.js:169726-169886 placement
+//@ chunk-asf5gh8x.js:180796-180956 placement
 class RemoteConfigWithoutInferenceAuthError extends Error {
   constructor() {
     super("getSessionRemoteConfig returned no inference_auth.access_token");
     this.name = "RemoteConfigWithoutInferenceAuthError";
   }
 }
-//@ chunk-hm0ce8vc.js:169886-169967 placement
+//@ chunk-asf5gh8x.js:180956-181037 placement
 function isTransientRunnerError(error) {
   let httpStatus = getHttpStatus(error);
   return (
@@ -4778,7 +5001,7 @@ function isTransientRunnerError(error) {
     (isRetryableRunnerError(error) || httpStatus === 401 || httpStatus === 403)
   );
 }
-//@ chunk-hm0ce8vc.js:169967-170087 placement
+//@ chunk-asf5gh8x.js:181037-181157 placement
 function normalizeGovernedHost(host) {
   if (typeof host !== "string") return;
   let normalizedHost = normalizeHost(host);
@@ -4786,6 +5009,7 @@ function normalizeGovernedHost(host) {
   return isGithubDotCom(normalizedHost) ? GITHUB_HOST : normalizedHost;
 }
 export {
+  isReviewOriginSession,
   normalizeGovernedHost,
   SIGKILL_TIMEOUT_DEFAULT_MS,
   POST_SESSION_HOOK_TIMEOUT_MS,

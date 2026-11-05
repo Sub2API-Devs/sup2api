@@ -3,19 +3,24 @@
  *
  * 生成 BuiltinToolInputs/McpToolInputs 类型声明（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (10), chunk-98xr2khk.js (1)
  * attribution: placement 11
  */
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../../utils/debug.js";
 
-//@ chunk-s61vbvea.js:624308-624372 placement
+//@ chunk-98xr2khk.js:191-220 placement
+/**
+ * TypeScript 标识符
+ */
+var TS_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
+//@ chunk-7jxyna5q.js:545831-545895 placement
 var sanitizeJsDocText = (description) => description.replace(/\s+/g, " ").trim().replace(/\*\//g, "* /");
-//@ chunk-s61vbvea.js:624372-624477 placement (2.1.88 match: parseSkillPaths, 0.822)
+//@ chunk-7jxyna5q.js:545895-546000 placement (2.1.88 match: parseSkillPaths, 0.822)
 function formatJsDocLine(schema, indent) {
   let { description } = schema;
   let docText = typeof description === "string" ? sanitizeJsDocText(description) : "";
@@ -24,17 +29,12 @@ function formatJsDocLine(schema, indent) {
     : `${indent}/** ${docText} */
 `;
 }
-//@ chunk-s61vbvea.js:624477-624505 placement
-/**
- * TypeScript 标识符
- */
-var TS_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
-//@ chunk-s61vbvea.js:624505-624535 placement
+//@ chunk-7jxyna5q.js:546000-546032 placement
 /**
  * 非标识符则加引号
  */
 var quoteIfNotIdentifier = (name) => (TS_IDENTIFIER_RE.test(name) ? name : jsonStringify(name));
-//@ chunk-s61vbvea.js:624535-624645 placement
+//@ chunk-7jxyna5q.js:546032-546142 placement
 function literalTsType(value) {
   return typeof value === "string" ||
     typeof value === "number" ||
@@ -43,12 +43,12 @@ function literalTsType(value) {
     ? jsonStringify(value)
     : "unknown";
 }
-//@ chunk-s61vbvea.js:624645-624655 placement
+//@ chunk-7jxyna5q.js:546142-546152 placement
 /**
  * 32
  */
 var MAX_TS_TYPE_DEPTH = 32;
-//@ chunk-s61vbvea.js:624655-626035 placement
+//@ chunk-7jxyna5q.js:546152-547540 placement
 /**
  * 把 JSON Schema 转成 TypeScript 类型文本（用于生成工具输入 d.ts）
  */
@@ -60,7 +60,7 @@ function jsonSchemaToTs(schema, indent = "", depth = 0) {
   if (Array.isArray(schema.enum)) return schema.enum.map(literalTsType).join(" | ") || "never";
   if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf)) {
     let mapped = (schema.anyOf ?? schema.oneOf).map((branch) => jsonSchemaToTs(branch, indent, depth + 1));
-    return mapped.length === 0 ? "unknown" : uniq(mapped).join(" | ");
+    return mapped.length === 0 ? "unknown" : normalizeCaseForComparison_2(mapped).join(" | ");
   }
   if (Array.isArray(schema.allOf)) {
     let mapped = schema.allOf.map((branch) => jsonSchemaToTs(branch, indent, depth + 1));
@@ -70,7 +70,7 @@ function jsonSchemaToTs(schema, indent = "", depth = 0) {
   }
   if (Array.isArray(schema.type))
     return (
-      uniq(
+      normalizeCaseForComparison_2(
         schema.type.map((type) =>
           jsonSchemaToTs(
             {
@@ -131,7 +131,7 @@ ${indent}}`;
       return "unknown";
   }
 }
-//@ chunk-s61vbvea.js:626035-626325 placement
+//@ chunk-7jxyna5q.js:547540-547832 placement
 /**
  * 生成 declare module 'claude-code' 中某工具输入接口的声明行（按名排序，带 JSDoc 描述）。
  */
@@ -160,7 +160,7 @@ var declareToolInputsInterface = (
   "  }",
   "}",
 ];
-//@ chunk-s61vbvea.js:626325-626893 placement
+//@ chunk-7jxyna5q.js:547832-548401 placement
 var BUILTIN_TOOL_INPUTS_HEADER = (tools) =>
   [
     "// The inputs of the built-in tools this build has, from each tool's",
@@ -177,7 +177,7 @@ var BUILTIN_TOOL_INPUTS_HEADER = (tools) =>
     "",
   ].join(`
 `);
-//@ chunk-s61vbvea.js:627203-627616 placement
+//@ chunk-7jxyna5q.js:548847-549260 placement
 var MCP_TOOL_INPUTS_HEADER = (tools) =>
   [
     "// The inputs of the MCP tools the session had connected when this mod",
@@ -190,7 +190,7 @@ var MCP_TOOL_INPUTS_HEADER = (tools) =>
     "",
   ].join(`
 `);
-//@ chunk-s61vbvea.js:627616-627912 placement
+//@ chunk-7jxyna5q.js:549260-549556 placement
 function buildMcpToolInputTypes(tools) {
   let entries = [];
   for (let tool of tools) {
@@ -209,4 +209,11 @@ function buildMcpToolInputTypes(tools) {
   }
   return entries;
 }
-export { BUILTIN_TOOL_INPUTS_HEADER, buildMcpToolInputTypes, MCP_TOOL_INPUTS_HEADER };
+export {
+  BUILTIN_TOOL_INPUTS_HEADER,
+  TS_IDENTIFIER_RE,
+  buildMcpToolInputTypes,
+  MCP_TOOL_INPUTS_HEADER,
+  quoteIfNotIdentifier,
+  jsonSchemaToTs,
+};

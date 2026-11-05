@@ -1,15 +1,15 @@
 /**
  * node-forge/lib/asn1-validator.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_asn1 } from "./asn1.js";
 
-//@ chunk-fq0cr76a.js:259538-260717 cjs-fingerprint
+//@ chunk-qg41pqt6.js:260036-261215 cjs-fingerprint
 var require_asn1_validator = __commonJS(function (cjsExports) {
   var forge = require_forge();
   require_asn1();

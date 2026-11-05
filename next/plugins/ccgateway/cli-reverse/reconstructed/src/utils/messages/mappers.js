@@ -3,51 +3,59 @@
  *
  * 内部消息与 SDK 消息（stream-json/SDK 协议）之间的互相转换：toSDKMessages、toInternalMessages、压缩元数据转换、本地命令输出转 assistant 消息、限额信息裁剪。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messages/mappers.ts
- * pieces: chunk-0h4e7gnq.js (32), chunk-w5ndchqs.js (1)
- * attribution: placement 25, fingerprint 5, callgraph-witnessed 2, layout 1
+ * pieces: chunk-7pwjpdkw.js (1), chunk-frs14hy1.js (33)
+ * attribution: fingerprint 3, placement 25, layout 4, callgraph-witnessed 2
  */
 import { randomUUID } from "crypto";
 import { replaceControlChars } from "../resultError.js";
 import { stripCombiningRepeated } from "../sanitization.js";
 import { stripAnsi, stripAnsiPerLine } from "../stripAnsi.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { TENGU_SQUISHY_ULLMAN } from "../../services/api/withRetry.js";
 import { isModelCapabilityEnabled } from "../model/promptBundles.js";
 import { getCanonicalName } from "../model/canonicalModelName.js";
 import { sanitizeDisplayText } from "../sanitizeDisplayText.js";
+import { BUILT_IN_TOOL_RUN_SYMBOL, MESSAGE_MARK_SYMBOLS_2 } from "../messageKinds.js";
 import { findToolByName } from "../../Tool.js";
 import { humanizeToolName } from "../../bridge/bridgePermissionResponse.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, _enum, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { NON_EXECUTION_KINDS, isKnownMessageKind } from "../../entrypoints/sdk/coreSchemas.js";
-import { countToolCallsSince } from "../taggedId.js";
+import { clipOverlongToolNames } from "../taggedId.js";
 import {
-  countToolCallsSince_2,
+  wireToolInputsForContent,
   restoreWireInputStamps,
-  countToolCallsSince_3,
+  wireToolInputsForContentLenient,
 } from "../wireToolInputEcho.js";
 import {
   toTextBlocks,
+  singleTextContent,
   parseQueuedCommandAttachment,
   localCommandOutputOf,
   createAssistantMessage,
 } from "../messages.js";
 import { API_ERROR_MESSAGE_PREFIX } from "../../services/api/errors.js";
 import { sanitizeVerificationMessage } from "../../services/api/verificationRequired.js";
-import { MESSAGE_MARK_SYMBOLS_2 } from "../messageKinds.js";
-import { nonEmptyObjectOrUndefined } from "../../services/claudeAiLimits.js";
+import { sourceLabel } from "./nonUserMessages.js";
+import { parseWrappedPluginPrompt } from "./pluginPrompts.js";
+import {
+  lastCommandMessageParsed,
+  commandMessageText,
+  narrationThinkingIndexes,
+} from "./apiNormalization.js";
+import { logError } from "../log.js";
+import { nonEmptyObjectOrUndefined, latestUsageAt } from "../../services/claudeAiLimits.js";
 import { pickByHelper } from "../git/gitSafeEnv.js";
-import { narrationThinkingIndexes } from "./apiNormalization.js";
 import { getEntrypointKind } from "../entrypointKinds.js";
 import { getSessionId } from "../../bootstrap/state.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
 import { LOCAL_COMMAND_STDOUT, LOCAL_COMMAND_STDERR } from "../../constants/xml.js";
 import { unescapeHtmlEntities } from "../confusables.js";
-import { stripMemoryTagsFromBlocks } from "../../services/orgMemory/promptIndex.js";
-import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
-import { isDisklessSession, notePlanFileForgotten, getPlanFilePath, getPlan } from "../plans.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:33580-33674 fingerprint (2.1.88 match: toSDKRateLimitInfo, 0.578)
+//@ chunk-7pwjpdkw.js:33787-33881 fingerprint (2.1.88 match: toSDKRateLimitInfo, 0.578)
 /**
  * 去掉 overageStatus/overageResetsAt/overageDisabledReason 后的限额信息（SDK rate_limit_info）。
  */
@@ -55,7 +63,7 @@ function toSDKRateLimitInfo(limits) {
   let { overageStatus, overageResetsAt, overageDisabledReason, ...rest } = limits;
   return rest;
 }
-//@ chunk-0h4e7gnq.js:31691-31797 placement
+//@ chunk-frs14hy1.js:36217-36323 placement
 function toSafeLines(text) {
   return text
     .replace(
@@ -69,13 +77,13 @@ function toSafeLines(text) {
     )
     .map((line) => replaceControlChars(stripCombiningRepeated(stripAnsi(line))));
 }
-//@ chunk-0h4e7gnq.js:31797-31900 placement
+//@ chunk-frs14hy1.js:36323-36426 placement
 function formatHookSaysLines(event) {
   let prefix = `${toSafeLines(event.hookName).join(" ")} says: `;
   return toSafeLines(event.content).map((line) => prefix + line).join(`
 `);
 }
-//@ chunk-0h4e7gnq.js:31900-31991 placement
+//@ chunk-frs14hy1.js:36426-36517 placement
 /**
  * 构造 informational 系统消息（notice 级别）。
  */
@@ -87,7 +95,37 @@ function informationalSystemMessage(event) {
     level: "notice",
   };
 }
-//@ chunk-0h4e7gnq.js:32028-32102 placement
+//@ chunk-frs14hy1.js:36517-37156 layout (2.1.88 match: hasThinkingContent, 0.763)
+/**
+ * 补写 assistant 行时决定保留哪些同轮消息。
+ */
+function messagesToKeepForAssistant(messages, messageRows, mutableMessages = []) {
+  let mutableUuids = new Set(mutableMessages.map((message) => message.uuid));
+  let filtered = messages.filter((message) => !mutableUuids.has(message.uuid));
+  let keptUuids = new Set(filtered.map((message) => message.uuid));
+  let allUuids = new Set(messages.map((message) => message.uuid));
+  let rowUuids = new Set(messageRows?.map((row) => row.uuid));
+  let hasBlockOfType = (message, ...types) =>
+    Array.isArray(message.message.content) &&
+    message.message.content.some((block) => types.includes(block.type));
+  let toolUseRows = messageRows?.filter((row) => hasBlockOfType(row, "tool_use")) ?? [];
+  if (
+    messageRows === undefined ||
+    !messages.every((message) => rowUuids.has(message.uuid)) ||
+    messageRows.some((row) => row.resumedFromIncompleteThinking === true) ||
+    (toolUseRows.some((row) => !allUuids.has(row.uuid)) &&
+      (messageRows
+        .slice(messageRows.indexOf(toolUseRows[0]) + 1)
+        .some((row) => hasBlockOfType(row, "thinking", "redacted_thinking")) ||
+        !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SQUISHY_ULLMAN, false)))
+  )
+    return filtered;
+  let lastIndex = messageRows.findLastIndex((row) => mutableUuids.has(row.uuid));
+  return messageRows.filter(
+    (row, rowIndex) => keptUuids.has(row.uuid) || (rowIndex > lastIndex && !hasBlockOfType(row, "tool_use")),
+  );
+}
+//@ chunk-frs14hy1.js:37193-37267 placement
 /**
  * 判断模型是否启用 quizzical_shore 能力。
  */
@@ -97,36 +135,36 @@ function isQuizzicalShoreModel(modelName) {
     isModelCapabilityEnabled("quizzical_shore", getCanonicalName(modelName), modelName)
   );
 }
-//@ chunk-0h4e7gnq.js:32102-32148 placement
+//@ chunk-frs14hy1.js:37267-37313 placement
 function hiddenOrFaintLevel(modelName) {
   return isQuizzicalShoreModel(modelName) ? "hidden" : "faint";
 }
-//@ chunk-0h4e7gnq.js:32148-32219 placement
+//@ chunk-frs14hy1.js:37313-37384 placement
 function isApiErrorMessageFlagged(message) {
   return "isApiErrorMessage" in message && message.isApiErrorMessage === true;
 }
-//@ chunk-0h4e7gnq.js:32219-32289 placement
+//@ chunk-frs14hy1.js:37384-37454 placement
 /**
  * 判断是否为无附带错误信息的 API 错误消息。
  */
 function isBareApiErrorMessage(message) {
   return isApiErrorMessageFlagged(message) && message.error == null && message.api_error_status == null;
 }
-//@ chunk-0h4e7gnq.js:32289-32347 placement
+//@ chunk-frs14hy1.js:37454-37512 placement
 /**
  * 判断消息是否为 API 错误消息。
  */
 function isApiErrorMessage(message) {
   return message.is_api_error_message === true || isApiErrorMessageFlagged(message);
 }
-//@ chunk-0h4e7gnq.js:32347-32380 placement
+//@ chunk-frs14hy1.js:37512-37545 placement
 /**
  * 取消息的安全清洗文本。
  */
 function sanitizedMessageText(text) {
   return sanitizeDisplayText(stripAnsiPerLine(text));
 }
-//@ chunk-0h4e7gnq.js:32380-32497 placement
+//@ chunk-frs14hy1.js:37545-37662 placement
 /**
  * 对文本块内容做安全清洗，其他块原样保留。
  */
@@ -140,11 +178,13 @@ function sanitizeTextBlocks(content) {
       : block,
   );
 }
-//@ chunk-0h4e7gnq.js:32497-33032 placement
+//@ chunk-frs14hy1.js:37662-38307 placement
 function toolResultRemedy(message) {
   let { toolDenialKind, toolResultRemedy, permissionDecision } = message;
-  if (toolDenialKind === undefined && toolResultRemedy === undefined && permissionDecision === undefined)
-    return [];
+  let hasRemedyFields =
+    toolDenialKind !== undefined || toolResultRemedy !== undefined || permissionDecision !== undefined;
+  let authoredText = toolDenialKind === undefined ? message[BUILT_IN_TOOL_RUN_SYMBOL] : undefined;
+  if (!hasRemedyFields && authoredText === undefined) return [];
   let content = message.message.content;
   if (!Array.isArray(content)) return [];
   let filtered = content.filter((block) => block.type === "tool_result");
@@ -152,6 +192,8 @@ function toolResultRemedy(message) {
   let meta = {
     id: filtered[0].tool_use_id,
   };
+  if (authoredText?.toolUseId === meta.id) meta.built_in_tool = authoredText.name;
+  else if (!hasRemedyFields) return [];
   if (toolDenialKind !== undefined) {
     meta.non_execution_kind = toolDenialKind;
     if (message.userFeedback !== undefined) meta.user_feedback = message.userFeedback;
@@ -167,7 +209,7 @@ function toolResultRemedy(message) {
     };
   return [meta];
 }
-//@ chunk-0h4e7gnq.js:33032-33277 placement
+//@ chunk-frs14hy1.js:38307-38552 placement
 /**
  * 只保留在给定内容中有对应 tool_result 的工具调用。
  */
@@ -182,7 +224,7 @@ function filterToolUsesWithResults(toolUseBlocks, content) {
     }
   return toolUseBlocks.filter((toolUse) => resultIds.has(toolUse.id));
 }
-//@ chunk-0h4e7gnq.js:33277-33819 placement
+//@ chunk-frs14hy1.js:38552-39094 placement
 /**
  * 为助手消息里的工具调用生成 SDK 显示信息：显示名（MCP 标题或人性化名称，和原名相同时跳过），MCP 工具附服务器显示名、图标、服务器 id 与工具名。
  */
@@ -211,13 +253,13 @@ function buildToolDisplayNames(content, tools) {
   }
   return names;
 }
-//@ chunk-0h4e7gnq.js:33819-33967 placement
+//@ chunk-frs14hy1.js:39094-39242 placement
 /**
  * 工具结果附加信息的 schema：未执行原因，以及被分类器拒绝的权限决定。
  */
 var NON_EXECUTION_ENTRY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CLASSIFIER_REJECT_SCHEMA;
-deferInit("chunk-0h4e7gnq.js:33819", () => {
+deferInit("chunk-frs14hy1.js:39094", () => {
   NON_EXECUTION_ENTRY_SCHEMA = DoctorLazy(() =>
     objectSchema({
       id: stringSchema(),
@@ -234,7 +276,7 @@ deferInit("chunk-0h4e7gnq.js:33819", () => {
     }),
   );
 });
-//@ chunk-0h4e7gnq.js:33967-34191 placement
+//@ chunk-frs14hy1.js:39242-39466 placement
 function findToolResultMeta(schema, toolResultMetaInput, content) {
   let filtered = content.filter((block) => block.type === "tool_result");
   let [toolResult] = filtered;
@@ -248,14 +290,14 @@ function findToolResultMeta(schema, toolResultMetaInput, content) {
   }
   return;
 }
-//@ chunk-0h4e7gnq.js:34191-34249 placement
+//@ chunk-frs14hy1.js:39466-39524 placement
 /**
  * 取工具结果的 non_execution_kind 标记。
  */
 function nonExecutionKindOf(toolResultMetaInput, content) {
   return findToolResultMeta(NON_EXECUTION_ENTRY_SCHEMA(), toolResultMetaInput, content)?.non_execution_kind;
 }
-//@ chunk-0h4e7gnq.js:34249-34329 placement
+//@ chunk-frs14hy1.js:39524-39604 placement
 /**
  * 判断数值是否为合法 HTTP 状态码。
  */
@@ -267,11 +309,11 @@ function isHttpStatus(apiErrorStatus) {
     apiErrorStatus <= 599
   );
 }
-//@ chunk-0h4e7gnq.js:34329-36733 fingerprint (2.1.88 match: toInternalMessages, 0.356)
+//@ chunk-frs14hy1.js:39604-42008 layout
 /**
  * SDK 消息数组转内部消息：assistant（含 local_command_source 转 local_command 系统消息）、user、系统事件（compact_boundary、model_fallback 等）还原。
  */
-function toInternalMessages(messages) {
+function sdkMessagesToInternal(messages) {
   return messages.flatMap((message) => {
     switch (message.type) {
       case "assistant":
@@ -305,7 +347,7 @@ function toInternalMessages(messages) {
             },
           ];
         if (message.is_meta === true) return [];
-        let content = countToolCallsSince(message.message.content);
+        let content = clipOverlongToolNames(message.message.content);
         let normalizedMessage =
           content === message.message.content
             ? message.message
@@ -313,7 +355,7 @@ function toInternalMessages(messages) {
                 ...message.message,
                 content,
               };
-        let wireToolInputs = countToolCallsSince_2(
+        let wireToolInputs = wireToolInputsForContent(
           message.wire_tool_inputs,
           normalizedMessage.content,
           message.batch_tool_uses,
@@ -435,7 +477,7 @@ function toInternalMessages(messages) {
     }
   });
 }
-//@ chunk-0h4e7gnq.js:36733-36984 placement
+//@ chunk-frs14hy1.js:42008-42259 placement
 /**
  * 对 API 错误消息里的文本块做验证信息清洗：保留"API Error: "前缀，清洗其后内容，清洗为空时只留前缀。
  */
@@ -459,11 +501,39 @@ function sanitizeApiErrorMessage(message) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:36984-37073 placement (2.1.88 match: selectableUserMessagesFilter, 1)
+//@ chunk-frs14hy1.js:42259-42348 placement (2.1.88 match: selectableUserMessagesFilter, 1)
 function selectableUserMessagesFilter(message) {
   return message.isMeta || message.isVisibleInTranscriptOnly || message.isCompactSummary || undefined;
 }
-//@ chunk-0h4e7gnq.js:37073-37997 fingerprint (2.1.88 match: toSDKCompactMetadata, 0.528)
+//@ chunk-frs14hy1.js:42348-42658 layout
+function pluginPromptFieldOf(message) {
+  if (message.origin?.kind !== "plugin" || message.origin.asUser === true) return {};
+  try {
+    let label = sourceLabel(message.origin.name);
+    let content = singleTextContent(message.message.content) ?? "";
+    let wrappedPluginPrompt = parseWrappedPluginPrompt(content, message.pluginPrompt);
+    if (wrappedPluginPrompt?.label === label)
+      return {
+        plugin_prompt: {
+          name: label,
+          text: wrappedPluginPrompt.text,
+        },
+      };
+    let commandMessage = lastCommandMessageParsed(content);
+    return commandMessage === null
+      ? {}
+      : {
+          plugin_prompt: {
+            name: label,
+            text: commandMessageText(commandMessage),
+          },
+        };
+  } catch (error) {
+    logError(error);
+    return {};
+  }
+}
+//@ chunk-frs14hy1.js:42658-43582 fingerprint (2.1.88 match: toSDKCompactMetadata, 0.528)
 /**
  * 内部 compactMetadata（camelCase）转 SDK compact_metadata（snake_case），含 preserved_segment/preserved_messages。
  */
@@ -514,7 +584,7 @@ function toSDKCompactMetadata(meta) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:37997-38969 callgraph-witnessed (2.1.88 match: fromSDKCompactMetadata, 0.528)
+//@ chunk-frs14hy1.js:43582-44554 callgraph-witnessed (2.1.88 match: fromSDKCompactMetadata, 0.528)
 /**
  * SDK compact_metadata 转内部 compactMetadata。
  */
@@ -569,12 +639,12 @@ function fromSDKCompactMetadata(meta) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:41678-42470 placement
+//@ chunk-frs14hy1.js:47371-48163 placement
 function isAssistantResultComplete(message, content) {
   let wireInputs =
     content === undefined
       ? message.wireToolInputs
-      : countToolCallsSince_3(message.wireToolInputs, content, message.batchToolUses);
+      : wireToolInputsForContentLenient(message.wireToolInputs, content, message.batchToolUses);
   let fields = {
     aborted: message.isAbortedMidStream ? true : undefined,
     is_api_error_message: message.isApiErrorMessage === true ? true : undefined,
@@ -600,7 +670,7 @@ function isAssistantResultComplete(message, content) {
   };
   return pickByHelper(fields, (value) => value !== undefined);
 }
-//@ chunk-0h4e7gnq.js:42470-42665 placement
+//@ chunk-frs14hy1.js:48163-48358 placement
 /**
  * 生成 SDK 消息的旁白字段：旁白块下标，以及 VS Code 入口下的旁白提示。
  */
@@ -616,7 +686,7 @@ function getNarrationFields(messages, model) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:42665-42951 placement
+//@ chunk-frs14hy1.js:48358-48644 placement
 /**
  * 消息只含一个思考块时，生成思考耗时与显示方式字段。
  */
@@ -640,7 +710,7 @@ function getThinkingFields(message, content) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:42951-43283 placement
+//@ chunk-frs14hy1.js:48644-48976 placement
 /**
  * 把队列命令附件转成回放用的 SDK user 消息（内容、uuid、时间戳、isReplay，元消息标 isSynthetic，附文件附件与来源）。
  */
@@ -669,7 +739,7 @@ function queuedCommandToSdkUser(attachment, message) {
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:43283-43479 placement
+//@ chunk-frs14hy1.js:48976-49172 placement
 /**
  * 把用户消息转成 SDK 回放 user 消息（压缩摘要不算回放，标记是否为合成消息）。
  */
@@ -688,7 +758,7 @@ function userMessageToSdkReplay(message, content) {
     isSynthetic: selectableUserMessagesFilter(message),
   };
 }
-//@ chunk-0h4e7gnq.js:43479-45297 fingerprint (2.1.88 match: toSDKMessages, 0.431)
+//@ chunk-frs14hy1.js:49172-51263 fingerprint (2.1.88 match: toSDKMessages, 0.369)
 /**
  * 内部消息转 SDK 消息：assistant（带 session_id、request_id、tool_use_meta）、user（按来源分类）、system 子类型、附件等。
  */
@@ -696,7 +766,12 @@ function toSDKMessages(messages, tools) {
   return messages.flatMap((message) => {
     switch (message.type) {
       case "assistant": {
-        let normalized = normalizeAssistantMessageForSDK(message);
+        if (codeModeAccepted() && message.visibleToRemoteClients === true)
+          return require("../../services/remoteTools/storedRemoteToolResult.js").remoteClientAssistantFrames(
+            message,
+            (frame) => toSDKMessages([frame], tools),
+          );
+        let normalized = latestUsageAt(message);
         let toolDisplayNames = buildToolDisplayNames(normalized.content, tools);
         return [
           {
@@ -720,6 +795,12 @@ function toSDKMessages(messages, tools) {
         ];
       }
       case "user": {
+        if (codeModeAccepted() && (message.isVirtual === true || message.hiddenToolUseIds !== undefined))
+          return require("../../services/remoteTools/storedRemoteToolResult.js").remoteClientUserFrames(
+            message,
+            (frame) => toSDKMessages([frame], tools),
+            tools,
+          );
         let localOutput = localCommandOutputOf(message);
         switch (localOutput) {
           case "terminal-hint":
@@ -752,6 +833,7 @@ function toSDKMessages(messages, tools) {
             ...(message.origin !== undefined && {
               origin: message.origin,
             }),
+            ...pluginPromptFieldOf(message),
             ...(message.refusedMessageId !== undefined && {
               refused_message_id: message.refusedMessageId,
             }),
@@ -821,7 +903,7 @@ function toSDKMessages(messages, tools) {
     }
   });
 }
-//@ chunk-0h4e7gnq.js:45297-45626 layout
+//@ chunk-frs14hy1.js:51263-51592 layout
 /**
  * tool_host_result_lines 附件 → SDK system/tool_host_result（host、disposition、label、lines）。
  */
@@ -850,7 +932,7 @@ function toSDKToolHostResultMessage(attachment, uuid, sessionId) {
     session_id: sessionId,
   };
 }
-//@ chunk-0h4e7gnq.js:45626-46448 callgraph-witnessed (2.1.88 match: localCommandOutputToSDKAssistantMessage, 0.219)
+//@ chunk-frs14hy1.js:51592-52421 callgraph-witnessed (2.1.88 match: localCommandOutputToSDKAssistantMessage, 0.219)
 /**
  * 本地命令输出（local-command-stdout/stderr 标签）转 SDK assistant 文本消息。
  */
@@ -927,7 +1009,7 @@ function localCommandOutputToSDKAssistantMessage(
     }),
   };
 }
-//@ chunk-0h4e7gnq.js:46448-46697 placement
+//@ chunk-frs14hy1.js:52421-52670 placement
 /**
  * 内部 model_consent_fallback 系统消息转 SDK 字段（original_model、fallback_model、persisted_as_default）。
  */
@@ -943,44 +1025,8 @@ function toSDKModelConsentFallbackMessage(message) {
     content: message.content,
   };
 }
-//@ chunk-0h4e7gnq.js:49182-49444 fingerprint (2.1.88 match: normalizeAssistantMessageForSDK, 1)
-/**
- * 给 SDK 的 assistant message：去内部块，ExitPlanMode 的 tool_use 输入补上计划文本。
- */
-function normalizeAssistantMessageForSDK(message) {
-  let content = message.message.content;
-  if (!Array.isArray(content)) return message.message;
-  let normalizedContent = stripMemoryTagsFromBlocks(content).map((block) => {
-    if (block.type !== "tool_use") return block;
-    if (block.name === EXITPLANMODE_2 && !isDisklessSession()) {
-      notePlanFileForgotten(getPlanFilePath());
-      let plan = getPlan();
-      if (plan)
-        return {
-          ...block,
-          input: {
-            ...block.input,
-            plan,
-          },
-        };
-    }
-    return block;
-  });
-  return {
-    ...message.message,
-    content: normalizedContent,
-  };
-}
 export {
-  toolResultRemedy,
-  buildToolDisplayNames,
-  getNarrationFields,
-  filterToolUsesWithResults,
-  selectableUserMessagesFilter,
-  isAssistantResultComplete,
-  getThinkingFields,
-  toSDKToolHostResultMessage,
-  informationalSystemMessage,
+  sdkMessagesToInternal,
   fromSDKCompactMetadata,
   isBareApiErrorMessage,
   sanitizeApiErrorMessage,
@@ -989,13 +1035,23 @@ export {
   isHttpStatus,
   sanitizedMessageText,
   nonExecutionKindOf,
-  toSDKRateLimitInfo,
-  toInternalMessages,
-  isQuizzicalShoreModel,
-  toSDKMessages,
+  selectableUserMessagesFilter,
+  pluginPromptFieldOf,
   queuedCommandToSdkUser,
+  toSDKToolHostResultMessage,
   userMessageToSdkReplay,
   localCommandOutputToSDKAssistantMessage,
   toSDKCompactMetadata,
+  informationalSystemMessage,
+  messagesToKeepForAssistant,
+  toolResultRemedy,
+  buildToolDisplayNames,
+  getNarrationFields,
+  filterToolUsesWithResults,
+  isAssistantResultComplete,
+  getThinkingFields,
+  toSDKMessages,
+  toSDKRateLimitInfo,
   toSDKModelConsentFallbackMessage,
+  isQuizzicalShoreModel,
 };

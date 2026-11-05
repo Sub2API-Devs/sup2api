@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/otlp-exporter-base/build/src/is-export-retryable.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/otlp-exporter-base@0.208.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-798ashq9.js:258116-258518 cjs-fingerprint
+//@ chunk-vxhm2nqe.js:258116-258518 cjs-fingerprint
 var require_is_export_retryable = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

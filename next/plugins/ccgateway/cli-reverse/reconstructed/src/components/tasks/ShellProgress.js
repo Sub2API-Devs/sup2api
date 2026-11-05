@@ -3,15 +3,15 @@
  *
  * 后台 shell 任务状态文字。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/ShellProgress.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: callgraph-fingerprint 1, fingerprint 1
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 
-//@ chunk-18hwfzwa.js:698417-698759 callgraph-fingerprint (2.1.88 match: TaskStatusText, 0.375)
+//@ chunk-czq1j3j2.js:719155-719497 callgraph-fingerprint (2.1.88 match: TaskStatusText, 0.376)
 function TaskStatusText(t0) {
   switch (t0) {
     case "running":
@@ -42,7 +42,7 @@ function TaskStatusText(t0) {
       });
   }
 }
-//@ chunk-18hwfzwa.js:698759-698928 fingerprint (2.1.88 match: ShellProgress, 0.736)
+//@ chunk-czq1j3j2.js:719497-719666 fingerprint (2.1.88 match: ShellProgress, 0.736)
 function ShellProgress(t0) {
   switch (t0) {
     case "completed":

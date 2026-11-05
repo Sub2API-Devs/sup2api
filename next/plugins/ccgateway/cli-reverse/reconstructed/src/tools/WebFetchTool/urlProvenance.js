@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：WebFetch URL 来源检查与批准
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (17)
  * attribution: placement 17
  */
 import { randomUUID } from "crypto";
@@ -17,10 +17,10 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { KeyedSemaphore } from "../../utils/keyedSemaphore.js";
 import { REJECT_MESSAGE } from "../../utils/messages.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isRecordableDenial } from "../../types/permissions.js";
 
-//@ chunk-e6aww6q8.js:2157803-2158492 placement
+//@ chunk-5xgkngpb.js:2211232-2211921 placement
 /**
  * 记入拒绝记录的 URL 长度上限（2048）。
  */
@@ -39,7 +39,7 @@ var PROVENANCE_OUTCOME_EVENTS = {
 };
 var PROVENANCE_REQUIRED_MESSAGE =
   "URL not in provenance set. web_fetch can only retrieve URLs that appeared in a user message or a prior web_fetch result. Ask the user to include the URL in a message first.";
-//@ chunk-e6aww6q8.js:2158492-2158603 placement
+//@ chunk-5xgkngpb.js:2211921-2212032 placement
 /**
  * 构造 URL 来源检查不通过时的遥测安全错误（PROVENANCE_REQUIRED），附带按结果映射的状态码。
  */
@@ -54,7 +54,7 @@ function provenanceRequiredError(outcome, message) {
     PROVENANCE_OUTCOME_EVENTS[outcome],
   );
 }
-//@ chunk-e6aww6q8.js:2158603-2158801 placement
+//@ chunk-5xgkngpb.js:2212032-2212230 placement
 /**
  * 每会话的 URL 来源审批状态：请求计数、串行队列、上次是否无人答复及时间、已批准的 URL 与源。
  */
@@ -71,7 +71,7 @@ class UrlProvenanceState {
     this.approvedOrigins.clear();
   }
 }
-//@ chunk-e6aww6q8.js:2158801-2159584 placement
+//@ chunk-5xgkngpb.js:2212230-2213013 placement
 /**
  * URL 权限等待的超时常量组：Dir 是特性开关名 tengu_orderly_lantern；ain 等待答复 300000 ms；Wir 提示升级占预算的比例 0.1；zir/qir/Kir 是超时、撤回、过期三种文案；O8e 是要求模型不要重试的提示。
  */
@@ -86,7 +86,7 @@ var URL_EXPIRED_MESSAGE =
   "The user did not answer an earlier permission request in time, so the request for this URL was not sent to them. Ask the user to include the URL in a message, or retry once they reply: a retry sends them a new permission request and waits for them again.";
 var PROVENANCE_RETRY_HINT =
   "Do not retry. Continue without this page and report the blocked URL in your findings.";
-//@ chunk-e6aww6q8.js:2159584-2160150 placement
+//@ chunk-5xgkngpb.js:2213013-2213579 placement
 /**
  * 按来源审批结果（超时、因前一请求未答而未发出、被拒绝、其他）生成给模型的说明，提示不要重试、无法询问时跳过该页面并报告被拦的 URL。
  */
@@ -105,7 +105,7 @@ function provenanceDenialText(outcome, message, fallback) {
       return `${message ?? fallback ?? PROVENANCE_REQUIRED_MESSAGE} Retries will fail. If you cannot ask the user (e.g. from a subagent), continue without this page and report the blocked URL in your findings.`;
   }
 }
-//@ chunk-e6aww6q8.js:2160150-2161476 placement
+//@ chunk-5xgkngpb.js:2213579-2214909 placement
 /**
  * WebFetch 的 URL 来源检查：判断是否需要用户批准。
  */
@@ -198,7 +198,7 @@ async function checkUrlProvenance(request) {
     releaseSlot?.();
   }
 }
-//@ chunk-e6aww6q8.js:2161476-2161573 placement
+//@ chunk-5xgkngpb.js:2214909-2215006 placement
 /**
  * 释放一次权限请求占用的预算，计数归零时清空已批准记录。
  */
@@ -208,9 +208,9 @@ function releasePromptBudget(promptsUp, ticket) {
   promptsUp.count--;
   if (promptsUp.count === 0) promptsUp.forgetApprovals();
 }
-//@ chunk-e6aww6q8.js:2161573-2161594 placement
+//@ chunk-5xgkngpb.js:2215006-2215027 placement
 var PROVENANCE = "provenance";
-//@ chunk-e6aww6q8.js:2161594-2161940 placement
+//@ chunk-5xgkngpb.js:2215027-2215373 placement
 /**
  * 判断是否不应弹出 URL 来源审批：bypass/dontAsk 模式或应避免权限提示、URL 过长、命中 deny 规则时返回相应原因。
  */
@@ -234,7 +234,7 @@ async function suppressedAskReason({ denial, prompt, env }) {
     return "suppressed_deny_rule";
   return;
 }
-//@ chunk-e6aww6q8.js:2161940-2162063 placement
+//@ chunk-5xgkngpb.js:2215373-2215496 placement
 function queueTimingFields(promptsUp, queuedMs) {
   let upCount = promptsUp.count - 1;
   return {
@@ -246,7 +246,7 @@ function queueTimingFields(promptsUp, queuedMs) {
     oneAtATime: true,
   };
 }
-//@ chunk-e6aww6q8.js:2162063-2162144 placement
+//@ chunk-5xgkngpb.js:2215496-2215577 placement
 /**
  * 取出 URL 的 https origin。
  */
@@ -254,7 +254,7 @@ function httpsOriginOf(url) {
   let parsedUrl = URL.parse(url);
   return parsedUrl?.protocol === "https:" ? parsedUrl.origin : undefined;
 }
-//@ chunk-e6aww6q8.js:2162144-2162253 placement
+//@ chunk-5xgkngpb.js:2215577-2215686 placement
 function approvalMatch(promptsUp, url) {
   let origin = httpsOriginOf(url);
   return {
@@ -262,7 +262,7 @@ function approvalMatch(promptsUp, url) {
     origin: origin !== undefined && promptsUp.approvedOrigins.has(origin),
   };
 }
-//@ chunk-e6aww6q8.js:2162253-2162343 placement
+//@ chunk-5xgkngpb.js:2215686-2215776 placement
 /**
  * 判断错误是否为“抓取目标”类的遥测安全错误。
  */
@@ -272,22 +272,22 @@ function isTargetProvenanceError(error) {
     error.errorClass?.startsWith("web_fetch_target_") === true
   );
 }
-//@ chunk-e6aww6q8.js:2162343-2162596 placement
+//@ chunk-5xgkngpb.js:2215776-2216029 placement
 function addsAllowRules(decision) {
   let toolResult =
     decision.decisionReason?.type === "permissionPromptTool" ? decision.decisionReason.toolResult : undefined;
-  let updatedPermissions = isPlainObject_5(toolResult) ? toolResult.updatedPermissions : undefined;
+  let updatedPermissions = isPlainObject_6(toolResult) ? toolResult.updatedPermissions : undefined;
   return (
     Array.isArray(updatedPermissions) &&
     updatedPermissions.some(
       (updatedPermission) =>
-        isPlainObject_5(updatedPermission) &&
+        isPlainObject_6(updatedPermission) &&
         updatedPermission.behavior === "allow" &&
         (updatedPermission.type === "addRules" || updatedPermission.type === "replaceRules"),
     )
   );
 }
-//@ chunk-e6aww6q8.js:2162596-2162691 placement
+//@ chunk-5xgkngpb.js:2216029-2216124 placement
 /**
  * 判断结果是否为来源被拒。
  */
@@ -299,7 +299,7 @@ function isProvenanceDenied(response) {
     response.type === "provenance_denied"
   );
 }
-//@ chunk-e6aww6q8.js:2162691-2164631 placement
+//@ chunk-5xgkngpb.js:2216124-2218068 placement
 /**
  * 请求用户批准抓取某个 URL，支持逐个或一次性批准，处理超时与过期。
  */
@@ -412,7 +412,7 @@ async function askUrlProvenanceApproval(request, ticket, queuedMs, fetchedBefore
     clearTimeout(timeoutTimer);
   }
 }
-//@ chunk-e6aww6q8.js:2164631-2165666 placement
+//@ chunk-5xgkngpb.js:2218068-2219103 placement
 /**
  * 记录 URL 来源检查的结果。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 枚举被测插件声明的 MCP 服务器与工具，用于生成模拟替身
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (14)
  * attribution: placement 14
  */
 import path, { basename } from "path";
@@ -23,7 +23,7 @@ import {
   loadPluginMcpServersFromSources,
   addPluginScopeToServers_2,
 } from "../../../utils/plugins/mcpPluginIntegration.js";
-import { normalizeNameForMCP } from "../../mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../mcp/normalization.js";
 import { buildMcpToolName } from "../../mcp/mcpStringUtils.js";
 import { isMcpbSource } from "../../../utils/plugins/mcpbHandler.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
@@ -31,7 +31,7 @@ import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.j
 import { computeContentHash } from "../../../utils/commitAttribution.js";
 import { REPLAY_DIR_SUFFIX } from "./mockRecordings.js";
 
-//@ chunk-qchp9vrd.js:101446-102879 placement
+//@ chunk-af1hzzme.js:102799-104232 placement
 /**
  * 加载被测插件并列出其 MCP 服务器（归档插件在录制模式下无法枚举）。
  */
@@ -94,7 +94,7 @@ async function enumeratePluginMcpServers(pluginPath) {
   }
   return serverMap;
 }
-//@ chunk-qchp9vrd.js:102879-107299 placement
+//@ chunk-af1hzzme.js:104232-108652 placement
 /**
  * 为被测插件的 MCP 服务器规划模拟替身，检查工具名冲突。
  */
@@ -102,7 +102,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
   let serverNameByToolPrefix = new Map();
   let keysBySegment = new Map();
   for (let [serverKey, { serverName }] of servers) {
-    let toolPrefix = normalizeNameForMCP(serverKey);
+    let toolPrefix = CLAUDEAI_SERVER_PREFIX(serverKey);
     let existingKey = serverNameByToolPrefix.get(toolPrefix);
     if (existingKey !== undefined) {
       if (mockServers.servers.size === 0) continue;
@@ -112,14 +112,14 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
       );
     }
     serverNameByToolPrefix.set(toolPrefix, serverKey);
-    let segment = normalizeNameForMCP(serverName);
+    let segment = CLAUDEAI_SERVER_PREFIX(serverName);
     keysBySegment.set(segment, [...(keysBySegment.get(segment) ?? []), serverKey]);
   }
   let standIns = [];
   for (let [dirName, loaded] of mockServers.servers) {
-    if (normalizeNameForMCP(dirName) !== dirName)
+    if (CLAUDEAI_SERVER_PREFIX(dirName) !== dirName)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `mocks/${dirName}/: name the directory after the server segment of the tool name (letters, digits, "_" and "-" only), e.g. mocks/${normalizeNameForMCP(dirName)}/`,
+        `mocks/${dirName}/: name the directory after the server segment of the tool name (letters, digits, "_" and "-" only), e.g. mocks/${CLAUDEAI_SERVER_PREFIX(dirName)}/`,
         "mocks: directory name not a tool-name segment",
       );
     let declaredKey = serverNameByToolPrefix.get(dirName);
@@ -136,7 +136,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
     if (matchingKeys.length > 1) {
       let mapped = matchingKeys.map((serverKey) => servers.get(serverKey)?.pluginName ?? serverKey);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `ambiguous mock server "${dirName}": declared by plugins ${mapped.join(" and ")} \u2014 rename mocks/${dirName}/ to ${matchingKeys.map((serverKey) => `mocks/${normalizeNameForMCP(serverKey)}/`).join(" or ")}`,
+        `ambiguous mock server "${dirName}": declared by plugins ${mapped.join(" and ")} \u2014 rename mocks/${dirName}/ to ${matchingKeys.map((serverKey) => `mocks/${CLAUDEAI_SERVER_PREFIX(serverKey)}/`).join(" or ")}`,
         "mocks: ambiguous server name",
       );
     }
@@ -145,7 +145,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
       standIns.push({
         kind: "shadow",
         registeredName: serverKey,
-        segment: normalizeNameForMCP(serverKey),
+        segment: CLAUDEAI_SERVER_PREFIX(serverKey),
         loaded,
       });
       continue;
@@ -153,7 +153,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
     standIns.push({
       kind: "standalone",
       registeredName: dirName,
-      segment: normalizeNameForMCP(dirName),
+      segment: CLAUDEAI_SERVER_PREFIX(dirName),
       loaded,
     });
   }
@@ -179,9 +179,9 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
       );
       let usedDirNames = new Set(standIns.map((standIn) => standIn.loaded.dirName));
       for (let serverKey of filtered_2) {
-        let segment = normalizeNameForMCP(serverKey);
+        let segment = CLAUDEAI_SERVER_PREFIX(serverKey);
         let withheldDirName = segment;
-        for (let idx = 2; usedDirNames.has(withheldDirName); idx++) withheldDirName = `${segment}~${idx}`;
+        for (let j = 2; usedDirNames.has(withheldDirName); j++) withheldDirName = `${segment}~${j}`;
         usedDirNames.add(withheldDirName);
         standIns.push({
           kind: "shadow",
@@ -228,7 +228,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
   );
   let mapped = [...servers.keys()]
     .filter((key) => !shadowedKeys.has(key))
-    .map((key) => `mcp__${normalizeNameForMCP(key)}__`);
+    .map((key) => `mcp__${CLAUDEAI_SERVER_PREFIX(key)}__`);
   for (let standIn of standIns)
     for (let key of standIn.loaded.tools.keys()) {
       let mcpToolName = buildMcpToolName(standIn.registeredName, key);
@@ -254,7 +254,7 @@ function planMockStandIns(mockServers, servers, { allowRealServers, unenumerable
     notes,
   };
 }
-//@ chunk-qchp9vrd.js:107299-107385 placement
+//@ chunk-af1hzzme.js:108652-108738 placement
 /**
  * 从 manifest 里找出 MCP 服务器来源字符串。
  */
@@ -263,14 +263,14 @@ function mcpbSources(mcpServers) {
     (source) => typeof source === "string" && isMcpbSource(source),
   );
 }
-//@ chunk-qchp9vrd.js:107385-107467 placement
+//@ chunk-af1hzzme.js:108738-108820 placement
 /**
  * 按 arm 过滤服务器（without 只保留独立服务器）。
  */
 function filterForArm(servers, arm) {
   return arm === "without" ? servers.filter((server) => server.kind === "standalone") : [...servers];
 }
-//@ chunk-qchp9vrd.js:107467-107575 placement
+//@ chunk-af1hzzme.js:108820-108928 placement
 /**
  * 判断"无插件"一组是否没有可用的模拟服务器。
  */
@@ -278,14 +278,14 @@ function isWithoutArmEmpty(servers, arm) {
   let filtered = servers.filter((server) => !server.withheld);
   return arm !== undefined && filtered.length > 0 && filterForArm(filtered, "without").length === 0;
 }
-//@ chunk-qchp9vrd.js:107575-107643 placement
+//@ chunk-af1hzzme.js:108928-108996 placement
 /**
  * 列出被扣留服务器的段名。
  */
 function withheldSegments(servers) {
   return servers.filter((server) => server.withheld).map((server) => server.segment);
 }
-//@ chunk-qchp9vrd.js:107643-107757 placement
+//@ chunk-af1hzzme.js:108996-109110 placement
 /**
  * 列出所有模拟 MCP 服务器提供的工具全名。
  */
@@ -295,10 +295,10 @@ function listMockedToolNames(servers) {
     for (let key of server.loaded.tools.keys()) names.push(buildMcpToolName(server.registeredName, key));
   return names;
 }
-//@ chunk-qchp9vrd.js:107757-107798 placement
+//@ chunk-af1hzzme.js:109110-109151 placement
 var MOCKS_JSON_FILE = "mocks.json";
 var MOCK_RECORDINGS = "mock-recordings";
-//@ chunk-qchp9vrd.js:107798-108700 placement
+//@ chunk-af1hzzme.js:109151-110053 placement
 /**
  * 生成本次运行的 mocks.json、mock-calls.jsonl 等文件。
  */
@@ -357,7 +357,7 @@ function buildRunMockFiles(options) {
     nonce,
   };
 }
-//@ chunk-qchp9vrd.js:108700-108819 placement
+//@ chunk-af1hzzme.js:110053-110172 placement
 function getToolListing(serverName, loaded) {
   return (
     loaded.listings.get(serverName) ?? {
@@ -370,7 +370,7 @@ function getToolListing(serverName, loaded) {
     }
   );
 }
-//@ chunk-qchp9vrd.js:108819-109127 placement
+//@ chunk-af1hzzme.js:110172-110480 placement
 /**
  * 把 MCP 模拟响应定义转换为响应器配置：fixed 直接返回固定内容，agent 带提示词、终止条件与回放目录。
  */
@@ -399,7 +399,7 @@ function toResponderSpec(responder, serverDirName, recordings) {
       };
   }
 }
-//@ chunk-qchp9vrd.js:109127-109304 placement
+//@ chunk-af1hzzme.js:110480-110657 placement
 /**
  * 列出各模拟服务器中定义了但未在 listings 中列出的工具。
  */
@@ -415,14 +415,14 @@ function listUnlistedTools(servers) {
   }
   return unlisted;
 }
-//@ chunk-qchp9vrd.js:109304-109396 placement
+//@ chunk-af1hzzme.js:110657-110749 placement
 /**
  * 判断是否有 agent 类型的应答者。
  */
 function usesAgentResponder(servers) {
   return servers.some((server) => [...server.loaded.tools.values()].some((tool) => tool.kind === "agent"));
 }
-//@ chunk-qchp9vrd.js:109396-109471 placement
+//@ chunk-af1hzzme.js:110749-110824 placement
 /**
  * 计算某服务器的回放目录路径。
  */

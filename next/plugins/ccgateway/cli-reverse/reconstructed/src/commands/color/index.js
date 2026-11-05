@@ -3,9 +3,9 @@
  *
  * /color 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/color/index.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-pghq0ca2.js (1)
+ * pieces: chunk-5xgkngpb.js (1), chunk-d8ygv17y.js (1)
  * attribution: fingerprint 1, placement 1
  */
 import { AGENT_COLOR_NAMES } from "../../tools/AgentTool/agentColorManager.js";
@@ -14,21 +14,21 @@ import { isFullscreenEnvEnabled } from "../../utils/fullscreen.js";
 import { isScreenReaderMode } from "../../utils/accessibility/screenReader.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-pghq0ca2.js:191-215 placement
+//@ chunk-d8ygv17y.js:191-215 placement
 /**
  * 恒返回 false：/color 命令在本构建里不额外隐藏。
  */
 function isColorCommandForceHidden() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1687135-1687693 fingerprint (2.1.88 match: color, 0.589)
+//@ chunk-5xgkngpb.js:1762344-1762902 fingerprint (2.1.88 match: color, 0.589)
 /**
  * /color 命令对象（local-jsx）；描述：Set the prompt bar color for this session；isHidden: {return Vd()&&Zee()&&wd()&&!ym()}；实现 chunk-b5scw0qq.js 的 Xzi。
  */
 var colorCommandDefinition; // deferred: uses AGENT_COLOR_TO_THEME_COLOR (../../tools/AgentTool/agentColorManager.js) of its import cycle while loading; runs once the cycle is complete
 var colorNonInteractiveCommand;
 var colorCommand;
-deferInit("chunk-e6aww6q8.js:1687135", () => {
+deferInit("chunk-5xgkngpb.js:1762344", () => {
   colorCommandDefinition = {
     type: "local-jsx",
     name: "color",
@@ -61,4 +61,4 @@ deferInit("chunk-e6aww6q8.js:1687135", () => {
   };
   colorCommand = colorCommandDefinition;
 });
-export { isColorCommandForceHidden, colorCommand, colorNonInteractiveCommand };
+export { colorCommand, colorNonInteractiveCommand, isColorCommandForceHidden };

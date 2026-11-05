@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：MCP needs-auth 缓存文件与认证失败提示（claude.ai 连接器需重新连接、headersHelper 被拒、令牌刷新失败）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rbwn7je9.js (26)
- * attribution: placement 26
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k8ag9amq.js (30)
+ * attribution: placement 26, layout 4
  */
 import { join } from "path";
 import {
@@ -15,36 +15,39 @@ import {
   getIsRemoteMode,
   getIsNonInteractiveSession,
 } from "../../bootstrap/state.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { isDisklessWithoutState } from "../orgMemory/memoryStores.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import { findMissingPlugins } from "../../utils/plugins/pluginStartupCheck.js";
 import { getFileReader } from "../../utils/fileStore.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
+import {
+  isClaudeAiChatCowork,
+  isClaudeAiChatRemote,
+  isCcsCoworkSurface,
+} from "../../utils/entrypointKinds.js";
+import { isCcrSessionScopedMcpUrl } from "./ccrMcpUrls.js";
 import { isArtifactPathMounted, isArtifactMountUsable } from "../artifacts/artifactMount.js";
 import {
   isHiddenReplyServer,
   APP_TOOL_ACCESS_FAILED_TEXT,
   appToolServerUnavailableText,
 } from "./appToolServerErrors.js";
-import {
-  isClaudeAiChatCowork,
-  isClaudeAiChatOrigin,
-  isCcsCoworkSurface,
-} from "../../utils/entrypointKinds.js";
 import { normalizeMcpServerName, normalizeServerNameShort, AUTHENTICATE } from "../api/deferredToolsState.js";
 import { LRUCache } from "../../../vendor/lru-cache/dist/esm/index.min.js";
 import { retainCacheKey } from "../../utils/memoize.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
-import { isToolSearchEnabledOptimistic } from "../../utils/toolSearch.js";
-import { alwaysFalseDefer, alwaysFalseFeed } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getFeatureValue_SESSION_PINNED } from "../analytics/growthbook.js";
+import { isToolSearchEnabledOptimistic } from "../../utils/toolSearch.js";
+import {
+  isCodeModeOnlyToolsEnabled,
+  willHideCodeModeOnlyTools,
+} from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { serverCacheKey } from "./client.js";
 import { buildMcpToolName } from "./mcpStringUtils.js";
 import { mcpServerSource } from "./fileReference/fileReferencePolicy.js";
@@ -54,9 +57,10 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { env } from "../../utils/env.js";
 import { describeMcpServerOrigin } from "./mcpServerOrigin.js";
 import { createMcpAuthTool, COMPLETE_AUTH_TOOL } from "../../tools/McpAuthTool/McpAuthTool.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rbwn7je9.js:1490-1676 placement
+//@ chunk-k8ag9amq.js:1595-1781 placement (2.1.88 match: getMcpAuthCachePath, 0.644)
 /**
  * 返回 MCP needs-auth 缓存文件路径（无盘会话不可用）。
  */
@@ -67,38 +71,53 @@ function needsAuthCachePath() {
     );
   return join(getClaudeConfigDir(), "mcp-needs-auth-cache.json");
 }
-//@ chunk-rbwn7je9.js:1676-1731 placement
+//@ chunk-k8ag9amq.js:1781-1836 placement
 /**
  * needs-auth 缓存的存储空间。
  */
 function needsAuthCacheSpace() {
   return STORAGE_SPACES.state("mcp-needs-auth-cache");
 }
-//@ chunk-rbwn7je9.js:1731-1925 placement
+//@ chunk-k8ag9amq.js:1836-2029 placement
 /**
  * 读取 MCP needs-auth 缓存（每会话只读一次，存储 V5 或文件，失败为空对象）。
  */
-function readNeedsAuthCache(enabledPlugins) {
-  if (isDisklessWithoutState(enabledPlugins)) return Promise.resolve({});
+function readNeedsAuthCache(storageV5) {
+  if (isDisklessWithoutState(storageV5)) return Promise.resolve({});
   let cliOwnedState = getCliOwnedState();
   if (!cliOwnedState.authCacheRead)
     cliOwnedState.authCacheRead =
-      isStorageV5Enabled() && enabledPlugins !== undefined
-        ? findMissingPlugins(enabledPlugins)
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? readAuthCacheV5(storageV5)
         : getFileReader()
             .read(needsAuthCachePath())
             .then((raw) => jsonParse(raw))
             .catch(() => ({}));
   return cliOwnedState.authCacheRead;
 }
-//@ chunk-rbwn7je9.js:2104-2143 placement
+//@ chunk-k8ag9amq.js:2029-2208 layout
+/**
+ * 经存储层读取一个 JSON 文件（失败返回空对象）。名字配错，见 lead 建议。
+ */
+async function readAuthCacheV5(storageV5) {
+  try {
+    let storageV5_2 = await storageV5.read([needsAuthCacheSpace()]);
+    if (!storageV5_2.ok) return {};
+    let item = storageV5_2.value.items[0];
+    if (!item.found) return {};
+    return jsonParse(Buffer.from(item.value).toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+//@ chunk-k8ag9amq.js:2208-2247 placement
 /**
  * 清空已读取的认证缓存。
  */
 function clearAuthCacheRead() {
   getCliOwnedState().authCacheRead = null;
 }
-//@ chunk-rbwn7je9.js:2143-2381 placement
+//@ chunk-k8ag9amq.js:2247-2485 placement
 function deleteNeedsAuthCache(storageV5) {
   getCliOwnedState().authCacheRead = null;
   if (isStorageV5Enabled() && storageV5 !== undefined) {
@@ -118,22 +137,29 @@ function deleteNeedsAuthCache(storageV5) {
     .delete(needsAuthCachePath())
     .catch(() => {});
 }
-//@ chunk-rbwn7je9.js:2381-3774 placement
+//@ chunk-k8ag9amq.js:2485-2723 layout
+var RECONNECT_IN_SETTINGS_HINT = "the user can reconnect it in their claude.ai connector settings";
+var SIGN_IN_CARD_HINT =
+  "the chat may now show the user a sign-in card for it; ask them to sign in there or in their claude.ai connector settings, and retry only after they say they have";
+//@ chunk-k8ag9amq.js:2723-2772 layout (2.1.88 match: getServerUrl, 1)
+function getServerUrl(config) {
+  return isClaudeAiChatCowork() && "url" in config && isCcrSessionScopedMcpUrl(config.url);
+}
+//@ chunk-k8ag9amq.js:2772-4136 placement
 /**
  * 认证相关给用户/模型的提示文案表。
  */
-var RECONNECT_IN_CLAUDE_AI_HINT = "the user can reconnect it in their claude.ai connector settings";
 var AUTH_MESSAGES = {
   notConnected(serverName) {
     return isArtifactPathMounted()
       ? `MCP server "${serverName}" needs to be connected in claude.ai`
       : `MCP server "${serverName}" needs to be connected in claude.ai (run /mcp to connect it)`;
   },
-  signInAgain(serverName) {
+  signInAgain(serverName, config) {
     if (isHiddenReplyServer(serverName)) return APP_TOOL_ACCESS_FAILED_TEXT;
     let base = `MCP server "${serverName}" needs you to sign in again`;
     return isClaudeAiChatCowork()
-      ? `${base} (${RECONNECT_IN_CLAUDE_AI_HINT})`
+      ? `${base} (${getServerUrl(config) ? SIGN_IN_CARD_HINT : RECONNECT_IN_SETTINGS_HINT})`
       : isArtifactMountUsable()
         ? base
         : `${base} (run /mcp to re-authenticate)`;
@@ -150,9 +176,10 @@ var AUTH_MESSAGES = {
       ? `${base} (update it, then start a new task or chat)`
       : `${base} (update it, then run /mcp to reconnect)`;
   },
-  dialNeedsAuth(serverName) {
+  dialNeedsAuth(serverName, config) {
     if (isHiddenReplyServer(serverName)) return appToolServerUnavailableText("needs_auth");
-    return `MCP server "${serverName}" needs authentication`;
+    let message = `MCP server "${serverName}" needs authentication`;
+    return getServerUrl(config) ? `${message} (${SIGN_IN_CARD_HINT})` : message;
   },
   dialNotConnected(serverName, detail) {
     if (isHiddenReplyServer(serverName)) return appToolServerUnavailableText("failed");
@@ -167,20 +194,17 @@ var AUTH_MESSAGES = {
     let scopeLabel = normalizeMcpServerName(scope ?? "", undefined, "none");
     let base = `MCP server "${serverName}" needs additional permissions (scope: "${scopeLabel}")`;
     return isClaudeAiChatCowork()
-      ? `${base} \u2014 ${RECONNECT_IN_CLAUDE_AI_HINT}`
+      ? `${base} \u2014 ${RECONNECT_IN_SETTINGS_HINT}`
       : `${base} \u2014 run /mcp to re-authenticate`;
   },
 };
-//@ chunk-rbwn7je9.js:3774-3978 placement
+//@ chunk-k8ag9amq.js:4136-4285 placement
 /**
  * CCR 票据的有效期（10 秒）。
  */
 var MAX_ERROR_BODY_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CCR_LAPSED_TOKEN_CODES;
-var X_CCR_TICKET_MCP;
-var CCR_TICKET_RE;
-var CCR_TICKET_TTL_MS;
-deferInit("chunk-rbwn7je9.js:3774", () => {
+deferInit("chunk-k8ag9amq.js:4136", () => {
   MAX_ERROR_BODY_CHARS = 20;
   CCR_LAPSED_TOKEN_CODES = new Set([
     "mcp_invalid_oauth_token",
@@ -188,11 +212,8 @@ deferInit("chunk-rbwn7je9.js:3774", () => {
     "mcp_oauth_token_refresh_failed",
     "mcp_oauth_no_refresh_token",
   ]);
-  X_CCR_TICKET_MCP = "x-ccr-ticket-mcp";
-  CCR_TICKET_RE = /^[A-Za-z0-9_-]{1,8192}$/;
-  CCR_TICKET_TTL_MS = 1e4;
 });
-//@ chunk-rbwn7je9.js:3978-5037 placement
+//@ chunk-k8ag9amq.js:4285-5118 placement
 class McpAuthError {
   connections = new Map();
   toolLists = new LRUCache({
@@ -211,36 +232,22 @@ class McpAuthError {
   settledCachedDialFailures = new Map();
   refusedCachedRows = new Set();
   lapsedCcrSignIns = new Set();
-  ccrTickets = new Map();
+  urlsOnDrainingHosts = new Set();
   liveClients = new Set();
   noteCcrDialAnswer(connectionKey, response) {
     if (response.status === 401 && CCR_LAPSED_TOKEN_CODES.has(response.headers.get("X-Mcp-Error-Code") ?? ""))
       this.lapsedCcrSignIns.add(connectionKey);
     else this.lapsedCcrSignIns.delete(connectionKey);
   }
-  attachCcrTicket(url, headers) {
-    let ticket = this.ccrTickets.get(String(url));
-    if (
-      ticket?.authorization === headers.get("Authorization") &&
-      Date.now() - ticket.arrivedAt < CCR_TICKET_TTL_MS
-    )
-      headers.set(X_CCR_TICKET_MCP, ticket.value);
-    else headers.delete(X_CCR_TICKET_MCP);
+  lapsedSignInKey(signInKey) {
+    return this.lapsedCcrSignIns.has(signInKey) ? signInKey : undefined;
   }
-  noteCcrTicket(url, requestHeaders, response) {
-    let authorization = requestHeaders.get("Authorization");
-    let ticketValue = response.headers.get(X_CCR_TICKET_MCP);
-    if (ticketValue === "") this.ccrTickets.delete(String(url));
-    else if (authorization !== null && ticketValue !== null && CCR_TICKET_RE.test(ticketValue)) {
-      let now = Date.now();
-      for (let [key, existing] of this.ccrTickets)
-        if (now - existing.arrivedAt >= CCR_TICKET_TTL_MS) this.ccrTickets.delete(key);
-      this.ccrTickets.set(String(url), {
-        authorization,
-        value: ticketValue,
-        arrivedAt: now,
-      });
-    }
+  restoreLapsed(key, lapsedKey) {
+    if (key === lapsedKey) this.lapsedCcrSignIns.add(lapsedKey);
+  }
+  noteHostDraining(key, existing) {
+    if (existing.headers.get("x-ccr-tool-container-host-draining") === "1")
+      this.urlsOnDrainingHosts.add(String(key));
   }
   forgetListings() {
     this.toolLists.clear();
@@ -249,7 +256,7 @@ class McpAuthError {
     this.commandLists.clear();
   }
 }
-//@ chunk-rbwn7je9.js:5037-5300 placement
+//@ chunk-k8ag9amq.js:5118-5423 placement
 /**
  * 获取（必要时创建）MCP 连接缓存，并为其中几个映射启用调试追踪。
  */
@@ -261,10 +268,11 @@ function getConnectionCache() {
     retainCacheKey(cliOwnedState.connectionCache.settledCachedDialFailures);
     retainCacheKey(cliOwnedState.connectionCache.refusedCachedRows);
     retainCacheKey(cliOwnedState.connectionCache.lapsedCcrSignIns);
+    retainCacheKey(cliOwnedState.connectionCache.urlsOnDrainingHosts);
   }
   return cliOwnedState.connectionCache;
 }
-//@ chunk-rbwn7je9.js:5300-5588 placement
+//@ chunk-k8ag9amq.js:5423-5711 placement
 /**
  * 用外部提供的缓存对函数做记忆化，并暴露 get/set/has/delete/clear 接口。
  */
@@ -294,7 +302,7 @@ function memoizeWithExternalCache(fn, serverCacheKey, getCache, wrap) {
     cache: cacheApi,
   });
 }
-//@ chunk-rbwn7je9.js:5588-5829 placement (2.1.88 match: memoizeWithLRU, 1)
+//@ chunk-k8ag9amq.js:5711-5952 placement (2.1.88 match: memoizeWithLRU, 1)
 function memoizeWithLRU(f, cacheFn, maxCacheSize) {
   function memoized(...args) {
     return getOrCompute(maxCacheSize(), cacheFn(...args), () => f(...args));
@@ -310,7 +318,7 @@ function memoizeWithLRU(f, cacheFn, maxCacheSize) {
     },
   });
 }
-//@ chunk-rbwn7je9.js:5829-5915 placement
+//@ chunk-k8ag9amq.js:5952-6038 placement
 function getOrCompute(cache, key, compute) {
   let existing = cache.get(key);
   if (existing !== undefined) return existing;
@@ -318,32 +326,36 @@ function getOrCompute(cache, key, compute) {
   cache.set(key, value);
   return value;
 }
-//@ chunk-rbwn7je9.js:5915-5980 placement
+//@ chunk-k8ag9amq.js:6038-6129 placement
 /**
  * 按宿主保存的 eager raccoon 状态。
  */
 var TENGU_EAGER_RACCOON; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TENGU_PATIENT_RACCOON;
 var emptyRecordSchema;
 var eagerRaccoonStates;
-deferInit("chunk-rbwn7je9.js:5915", () => {
+deferInit("chunk-k8ag9amq.js:6038", () => {
   TENGU_EAGER_RACCOON = "tengu_eager_raccoon";
+  TENGU_PATIENT_RACCOON = "tengu_patient_raccoon";
   emptyRecordSchema = DoctorLazy(() => objectSchema({}));
   eagerRaccoonStates = new HostScoped(() => new Map());
 });
-//@ chunk-rbwn7je9.js:5980-6036 placement
+//@ chunk-k8ag9amq.js:6129-6184 layout
+function isCachedAuthStaleButUsable() {
+  return (
+    isClaudeAiChatRemote() &&
+    getFeatureValue_SESSION_PINNED(TENGU_EAGER_RACCOON, false) &&
+    (isCcsCoworkSurface() || getFeatureValue_SESSION_PINNED(TENGU_PATIENT_RACCOON, false))
+  );
+}
+//@ chunk-k8ag9amq.js:6184-6224 placement
 /**
  * eager raccoon 是否可用。
  */
 function isEagerRaccoonEnabled() {
-  return (
-    isClaudeAiChatOrigin() &&
-    isCcsCoworkSurface() &&
-    isToolSearchEnabledOptimistic() &&
-    !alwaysFalseDefer() &&
-    getFeatureValue_SESSION_PINNED(TENGU_EAGER_RACCOON, false)
-  );
+  return isCachedAuthStaleButUsable() && isToolSearchEnabledOptimistic() && !isCodeModeOnlyToolsEnabled();
 }
-//@ chunk-rbwn7je9.js:6036-6102 placement
+//@ chunk-k8ag9amq.js:6224-6290 placement
 /**
  * 该服务器是否出现过 CCR 登录失效。
  */
@@ -352,7 +364,7 @@ function hasLapsedCcrSignIn(serverName, config) {
     isEagerRaccoonEnabled() && getConnectionCache().lapsedCcrSignIns.has(serverCacheKey(serverName, config))
   );
 }
-//@ chunk-rbwn7je9.js:6102-8631 placement
+//@ chunk-k8ag9amq.js:6290-8954 placement
 /**
  * 说明 claude.ai 连接器登录已失效、需要用户重新登录，并指导模型继续不依赖它的部分。
  */
@@ -428,7 +440,7 @@ function describeConnectorSignInStopped(serverName, config, mcpClientModule) {
         if (connected.discoveryAuthFailure)
           throw Object.assign(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              AUTH_MESSAGES.dialNeedsAuth(shortName),
+              AUTH_MESSAGES.dialNeedsAuth(shortName, config),
               "MCP server needs authentication",
             ),
             {
@@ -445,6 +457,11 @@ function describeConnectorSignInStopped(serverName, config, mcpClientModule) {
             message: `The "${shortName}" connector is connected again. Its tools are being added and should be available shortly.`,
           },
         };
+      } catch (error) {
+        let notConnected = AUTH_MESSAGES.dialNotConnected(serverName, "");
+        if (error instanceof Error && error.message.startsWith(notConnected))
+          error.message = AUTH_MESSAGES.dialNotConnected(shortName, "");
+        throw error;
       } finally {
         deferred.resolve();
       }
@@ -458,31 +475,31 @@ function describeConnectorSignInStopped(serverName, config, mcpClientModule) {
     },
   };
 }
-//@ chunk-rbwn7je9.js:8631-8682 placement
+//@ chunk-k8ag9amq.js:8954-9005 placement
 /**
  * 加载懒模块集合。
  */
 function mcpModules() {
   return require("./emitTripwireEvent.lazy.js");
 }
-//@ chunk-rbwn7je9.js:8682-8722 placement
+//@ chunk-k8ag9amq.js:9005-9045 placement
 /**
  * 取 MCP 认证模块。
  */
 function mcpAuthModule() {
   return mcpModules().mcpAuthModule();
 }
-//@ chunk-rbwn7je9.js:8722-8764 placement
+//@ chunk-k8ag9amq.js:9045-9087 placement
 /**
  * 取 MCP 客户端模块。
  */
 function mcpClientModule() {
   return mcpModules().mcpClientModule();
 }
-//@ chunk-rbwn7je9.js:8764-8955 placement
+//@ chunk-k8ag9amq.js:9087-9278 placement
 var emptyAuthInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var completeAuthInputSchema;
-deferInit("chunk-rbwn7je9.js:8764", () => {
+deferInit("chunk-k8ag9amq.js:9087", () => {
   emptyAuthInputSchema = DoctorLazy(() => objectSchema({}));
   completeAuthInputSchema = DoctorLazy(() =>
     objectSchema({
@@ -492,24 +509,24 @@ deferInit("chunk-rbwn7je9.js:8764", () => {
     }),
   );
 });
-//@ chunk-rbwn7je9.js:8955-9014 placement
+//@ chunk-k8ag9amq.js:9278-9337 placement
 /**
  * 是否处于远程/SSH 环境。
  */
 function isRemoteEnvironment() {
   return env.isSSH() || env.CLAUDE_CODE_REMOTE || getIsRemoteMode();
 }
-//@ chunk-rbwn7je9.js:9014-9050 placement
+//@ chunk-k8ag9amq.js:9337-9373 placement
 /**
  * 回调地址缓存的有效期（180 秒）。
  */
 var redirectUrisByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REDIRECT_URI_TTL_MS;
-deferInit("chunk-rbwn7je9.js:9014", () => {
+deferInit("chunk-k8ag9amq.js:9337", () => {
   redirectUrisByHost = new HostScoped(() => new Map());
   REDIRECT_URI_TTL_MS = 180000;
 });
-//@ chunk-rbwn7je9.js:9050-9181 placement
+//@ chunk-k8ag9amq.js:9373-9504 placement
 function redirectUriOf(url) {
   try {
     let redirectUri = new URL(url).searchParams.get("redirect_uri");
@@ -517,7 +534,7 @@ function redirectUriOf(url) {
   } catch {}
   return "http://localhost:<port>/callback";
 }
-//@ chunk-rbwn7je9.js:9181-9294 placement
+//@ chunk-k8ag9amq.js:9504-9617 placement
 /**
  * 为需要认证的 MCP 服务器生成认证工具：非交互会话只给登录已停止的说明，否则给出开始认证与完成认证两个工具。
  */
@@ -531,33 +548,38 @@ function mcpAuthToolsFor(serverName, config) {
   });
   return [createMcpAuthTool(serverName, config, origin), COMPLETE_AUTH_TOOL(serverName, config)];
 }
-//@ chunk-rbwn7je9.js:9294-9369 placement
+//@ chunk-k8ag9amq.js:9617-9836 placement
 /**
  * “工具已自动可用”的说明文本。
  */
 function toolsAvailableAutomaticallyText(tools) {
-  let connection = tools !== undefined ? alwaysFalseFeed(tools) : alwaysFalseDefer();
-  return "available automatically";
+  let connection = tools !== undefined ? willHideCodeModeOnlyTools(tools) : isCodeModeOnlyToolsEnabled();
+  return codeModeAccepted() && connection
+    ? "callable inside the REPL environment (this surface routes MCP tools through the REPL rather than advertising them as top-level tools)"
+    : "available automatically";
 }
-//@ chunk-rbwn7je9.js:9369-9435 placement
+//@ chunk-k8ag9amq.js:9836-10079 placement
 /**
  * “工具现在应该可用了”的说明文本。
  */
 function toolsAvailableNowText(tools) {
-  return "The server's tools should now be available.";
+  return codeModeAccepted() && willHideCodeModeOnlyTools(tools)
+    ? "The server's tools are now callable inside the REPL environment (this surface routes MCP tools through the REPL rather than advertising them as top-level tools)."
+    : "The server's tools should now be available.";
 }
 export {
+  mcpAuthToolsFor,
+  hasLapsedCcrSignIn,
+  isCachedAuthStaleButUsable,
+  deleteNeedsAuthCache,
   readNeedsAuthCache,
+  getConnectionCache,
   needsAuthCacheSpace,
   needsAuthCachePath,
   clearAuthCacheRead,
-  getConnectionCache,
   memoizeWithExternalCache,
   AUTH_MESSAGES,
   memoizeWithLRU,
-  hasLapsedCcrSignIn,
-  mcpAuthToolsFor,
-  deleteNeedsAuthCache,
   toolsAvailableAutomaticallyText,
   emptyAuthInputSchema,
   redirectUrisByHost,

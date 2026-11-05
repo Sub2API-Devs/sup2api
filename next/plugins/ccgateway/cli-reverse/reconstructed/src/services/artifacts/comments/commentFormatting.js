@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论线程解析与锚点区域读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (27)
  * attribution: placement 27
  */
 import { create, create_2, create_12, create_6, create_15 } from "../../../../vendor/zod/lib/index.mjs";
@@ -27,7 +27,7 @@ import {
 } from "../../../utils/stringUtils.js";
 import { normalizePresence, MAX_PRESENCE_BYTES } from "./presence.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
-import { extractPageText } from "../audience.js";
+import { scrubThirdPartyText } from "../audience.js";
 import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   INVISIBLE_BLANKS,
@@ -41,7 +41,7 @@ import { logFeatureSad, logFeatureOk } from "../../analytics/featureTelemetry.js
 import { fromEnumArr } from "../../analytics/safeMetadata.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-b0a246e7.js:9212-10500 placement
+//@ chunk-78ymyfsy.js:9245-10533 placement
 function commentsPayloadSchema(counter) {
   let comment = create({
     id: create_2(),
@@ -112,47 +112,47 @@ function commentsPayloadSchema(counter) {
     payload,
   };
 }
-//@ chunk-b0a246e7.js:10500-10559 placement
+//@ chunk-78ymyfsy.js:10533-10592 placement
 /**
  * 评论 id 与时间戳文本的正则（id 64 位 hex/横线、时间戳 40 字符）。
  */
 var COMMENT_ID_RE = /^[0-9a-fA-F-]{1,64}$/;
 var TIMESTAMP_TEXT_RE = /^[0-9T:.\-+Z ]{1,40}$/;
-//@ chunk-b0a246e7.js:10559-10607 placement
+//@ chunk-78ymyfsy.js:10592-10640 placement
 function isCommentId(value) {
   return COMMENT_ID_RE.test(value) || PRINCIPAL_TOKEN_RE.test(value);
 }
-//@ chunk-b0a246e7.js:10607-10669 placement
+//@ chunk-78ymyfsy.js:10640-10702 placement
 function boundedAccountId(counter, field, account) {
   if (isCommentId(account)) return account;
   countGate(counter, field);
   return "unknown";
 }
-//@ chunk-b0a246e7.js:10669-10751 placement
+//@ chunk-78ymyfsy.js:10702-10784 placement
 function authorAccount(counter, account) {
   if (account === null || account === undefined) return "unknown";
   return boundedAccountId(counter, "account", account);
 }
-//@ chunk-b0a246e7.js:10751-10834 placement
+//@ chunk-78ymyfsy.js:10784-10867 placement
 function boundedRole(counter, role) {
   if (role === undefined || ORIGINAL_ROLE_RE.test(role)) return role;
   countGate(counter, "role");
   return "degraded";
 }
-//@ chunk-b0a246e7.js:10834-10943 placement
+//@ chunk-78ymyfsy.js:10867-10976 placement
 function parseCommentCapability(counter, claudeCapability) {
   if (claudeCapability === "edit") return true;
   if (claudeCapability !== undefined && claudeCapability !== null && claudeCapability !== "reply")
     countGate(counter, "claude_capability");
   return;
 }
-//@ chunk-b0a246e7.js:10943-11019 placement
+//@ chunk-78ymyfsy.js:10976-11052 placement
 function hasAuthorAccountSource(counter, account, account_2) {
   if (!hasAuthorAccount(account, account_2)) return;
   if (account !== "page") countGate(counter, "source");
   return true;
 }
-//@ chunk-b0a246e7.js:11019-11167 placement
+//@ chunk-78ymyfsy.js:11052-11200 placement
 function parseResolvedAt(counter, resolvedAt) {
   if (resolvedAt === undefined || resolvedAt === "") return;
   if (parseTimestamp(resolvedAt) !== null)
@@ -164,13 +164,13 @@ function parseResolvedAt(counter, resolvedAt) {
     resolvedDegraded: true,
   };
 }
-//@ chunk-b0a246e7.js:11167-11259 placement
+//@ chunk-78ymyfsy.js:11200-11292 placement
 function resolvedByClaudeFlag(counter, resolvedBy) {
   if (resolvedBy === "claude") return true;
   if (resolvedBy !== undefined && resolvedBy !== null) countGate(counter, "resolved_by");
   return;
 }
-//@ chunk-b0a246e7.js:11259-11667 placement
+//@ chunk-78ymyfsy.js:11292-11700 placement
 /**
  * 锚点提示标签（[anchored at]、[on page]、[region of] 等）与 CSS 选择器片段正则，及 128 字节的锚点文本上限。
  */
@@ -189,7 +189,7 @@ var ANCHOR_DATA_ID_SELECTOR_RE = /^\[data-id="([A-Za-z0-9_-]{1,64})"\]$/;
 var ANCHOR_NTH_OF_TYPE_RE = /^[a-z][a-z0-9-]{0,23}:nth-of-type\([1-9][0-9]{0,3}\)$/;
 var MAX_ANCHOR_TEXT_BYTES = 128;
 var INVISIBLE_CHAR_RE = /^[\p{Cc}\p{Cf}\p{Variation_Selector}\u2028\u2029]$/u;
-//@ chunk-b0a246e7.js:11667-11905 placement
+//@ chunk-78ymyfsy.js:11700-11938 placement
 function isUnsafeCodePoint(codePoint, char) {
   if (INVISIBLE_CHAR_RE.test(char)) return true;
   switch (codePoint) {
@@ -206,7 +206,7 @@ function isUnsafeCodePoint(codePoint, char) {
   if ((codePoint & 65534) === 65534 || (codePoint >= 64976 && codePoint <= 65007)) return true;
   return (codePoint >= 65520 && codePoint <= 65528) || (codePoint >= 917504 && codePoint <= 921599);
 }
-//@ chunk-b0a246e7.js:11905-12065 placement
+//@ chunk-78ymyfsy.js:11938-12098 placement
 /**
  * 判断文本可作为安全标识展示：不超长（字符与 UTF-8 字节）、是良构字符串、无控制字符和不可见/私用/非字符码点。
  */
@@ -223,7 +223,7 @@ function isSafeIdentifierText(text) {
   }
   return true;
 }
-//@ chunk-b0a246e7.js:12065-12350 placement
+//@ chunk-78ymyfsy.js:12098-12383 placement
 function readAnchorPath(counter, text) {
   if (text === undefined || text === null || text === "") return;
   if (typeof text !== "string") {
@@ -244,7 +244,7 @@ function readAnchorPath(counter, text) {
   countGate(counter, isSafeIdentifierText(text) ? "anchor_path_opaque" : "anchor_path");
   return;
 }
-//@ chunk-b0a246e7.js:12350-12460 placement
+//@ chunk-78ymyfsy.js:12383-12493 placement
 /**
  * 锚点上限：位置 2^24、标签 128、详情 512、子节点 8 个且索引 <4096、文件 sha256 正则与降级标记。
  */
@@ -256,7 +256,7 @@ var MAX_ANCHOR_CHILDREN;
 var MAX_ANCHOR_CHILD_INDEX;
 var ANCHOR_FILE_SHA_RE;
 var DEGRADED_ANCHOR_FILE;
-deferInit("chunk-b0a246e7.js:12350", () => {
+deferInit("chunk-78ymyfsy.js:12383", () => {
   MAX_ANCHOR_QUOTE_BYTES = 512;
   MAX_ANCHOR_POSITION = 16777216;
   MAX_ANCHOR_LABEL_CHARS = 128;
@@ -266,7 +266,7 @@ deferInit("chunk-b0a246e7.js:12350", () => {
   ANCHOR_FILE_SHA_RE = /^[a-f0-9]{64}$/;
   DEGRADED_ANCHOR_FILE = Symbol("degraded-wire-anchor-file");
 });
-//@ chunk-b0a246e7.js:12460-13204 placement
+//@ chunk-78ymyfsy.js:12493-13237 placement
 function readAnchorFile(counter, anchor) {
   let file = anchor?.file;
   if (file === undefined || file === null || file === "") return;
@@ -309,21 +309,21 @@ function readAnchorFile(counter, anchor) {
     anchorFileSha: fileSha,
   };
 }
-//@ chunk-b0a246e7.js:13204-13335 placement
+//@ chunk-78ymyfsy.js:13237-13368 placement
 function parseAnchorMovedAt(counter, movedAt) {
   if (movedAt === undefined || movedAt === null || movedAt === "") return;
   if (typeof movedAt === "string" && TIMESTAMP_TEXT_RE.test(movedAt)) return movedAt;
   countGate(counter, "anchor_moved_at");
   return;
 }
-//@ chunk-b0a246e7.js:13335-13474 placement
+//@ chunk-78ymyfsy.js:13368-13507 placement
 function parseAnchorMovedCommentId(counter, movedCommentId) {
   if (movedCommentId === undefined || movedCommentId === null || movedCommentId === "") return;
   if (typeof movedCommentId === "string" && COMMENT_ID_RE.test(movedCommentId)) return movedCommentId;
   countGate(counter, "anchor_moved_comment_id");
   return;
 }
-//@ chunk-b0a246e7.js:13474-13788 placement
+//@ chunk-78ymyfsy.js:13507-13821 placement
 function readAnchorSpan(counter, span) {
   if (span === undefined || span === null) return;
   if (typeof span !== "object") {
@@ -345,7 +345,7 @@ function readAnchorSpan(counter, span) {
   }
   return value.quote;
 }
-//@ chunk-b0a246e7.js:13788-14019 placement
+//@ chunk-78ymyfsy.js:13821-14052 placement
 /**
  * 只对人类作者的评论规范化 presence 数据，把其中字符串转成页面纯文本后序列化；无效、未变化或超出字节上限时计入 gate 统计并丢弃。
  */
@@ -368,14 +368,14 @@ function serializeCommentPresence(counter, presence, role) {
   }
   return text;
 }
-//@ chunk-b0a246e7.js:14019-14162 placement
+//@ chunk-78ymyfsy.js:14052-14195 placement
 function toPlainTextDeep(value) {
-  if (typeof value === "string") return extractPageText(value);
+  if (typeof value === "string") return scrubThirdPartyText(value);
   if (Array.isArray(value)) return value.map(toPlainTextDeep);
   if (value !== null && typeof value === "object") return import_mapValues(value, toPlainTextDeep);
   return value;
 }
-//@ chunk-b0a246e7.js:14162-14377 placement
+//@ chunk-78ymyfsy.js:14195-14410 placement
 function cleanBoundedText(counter, field, value, maxBytes) {
   if (value === undefined || value === null || value === "") return;
   if (typeof value !== "string" || new TextEncoder().encode(value).length > maxBytes) {
@@ -385,9 +385,9 @@ function cleanBoundedText(counter, field, value, maxBytes) {
   let trimmed = stripControlChars(value).replace(INVISIBLE_BLANKS, " ").replace(/\s+/g, " ").trim();
   return trimmed === "" ? undefined : trimmed;
 }
-//@ chunk-b0a246e7.js:14377-14387 placement
+//@ chunk-78ymyfsy.js:14410-14420 placement
 var MAX_DEGRADED_TEXT_CHARS = 40;
-//@ chunk-b0a246e7.js:14387-14588 placement
+//@ chunk-78ymyfsy.js:14420-14621 placement
 function cleanAnchorText(text) {
   if (typeof text !== "string") return;
   let trimmed = characterReferencesAsBrackets(
@@ -401,7 +401,7 @@ function cleanAnchorText(text) {
   let bounded = truncateCodePoints(trimmed, MAX_DEGRADED_TEXT_CHARS).trimEnd();
   return bounded === "" ? undefined : bounded;
 }
-//@ chunk-b0a246e7.js:14588-15093 placement
+//@ chunk-78ymyfsy.js:14621-15126 placement
 function readAnchorRegion(counter, region) {
   if (region === undefined || region === null) return;
   if (typeof region !== "object") {
@@ -447,14 +447,14 @@ function readAnchorRegion(counter, region) {
     kids,
   };
 }
-//@ chunk-b0a246e7.js:15093-15176 placement
+//@ chunk-78ymyfsy.js:15126-15209 placement
 function boundedTimestamp(counter, field, createdAt) {
   if (createdAt === undefined) return false;
   if (TIMESTAMP_TEXT_RE.test(createdAt)) return true;
   countGate(counter, field);
   return false;
 }
-//@ chunk-b0a246e7.js:15176-18315 placement
+//@ chunk-78ymyfsy.js:15209-18348 placement
 /**
  * 解析 /api/frame/comments 返回的线程：作者/角色/锚点（路径、文件、文本区间、区域）等，降级字段计数。
  */
@@ -666,23 +666,23 @@ function parseCommentThreads(payload, featureName = "artifact_comments_read") {
   };
 }
 export {
+  parseCommentThreads,
   isCommentId,
   cleanAnchorText,
-  ANCHOR_LABEL_NAMES,
-  ANCHOR_LABEL_ON_TEXT,
-  ANCHOR_LABEL_REGION_OF,
-  ANCHOR_LABEL_ANCHORED_AT,
-  ANCHOR_LABEL_ELEMENT,
-  MAX_ANCHOR_CHILDREN,
-  ANCHOR_LABEL_REGION,
-  ANCHOR_LABEL_LOCATION,
-  ANCHOR_LABELS,
-  TIMESTAMP_TEXT_RE,
-  ANCHOR_LABEL_ON_PAGE,
-  ANCHOR_LABEL_PRESENCE,
   COMMENT_ID_RE,
   ANCHOR_ID_SELECTOR_RE,
   ANCHOR_DATA_ID_SELECTOR_RE,
   ANCHOR_NTH_OF_TYPE_RE,
-  parseCommentThreads,
+  ANCHOR_LABEL_ON_PAGE,
+  ANCHOR_LABEL_LOCATION,
+  ANCHOR_LABELS,
+  ANCHOR_LABEL_REGION_OF,
+  ANCHOR_LABEL_ANCHORED_AT,
+  ANCHOR_LABEL_ELEMENT,
+  ANCHOR_LABEL_REGION,
+  TIMESTAMP_TEXT_RE,
+  ANCHOR_LABEL_NAMES,
+  ANCHOR_LABEL_ON_TEXT,
+  MAX_ANCHOR_CHILDREN,
+  ANCHOR_LABEL_PRESENCE,
 };

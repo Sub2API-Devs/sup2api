@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：消息来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 
-//@ chunk-e6aww6q8.js:74091-74167 placement
+//@ chunk-5xgkngpb.js:76641-76717 placement
 var SUBMISSION_SUBKINDS = new Set(["scheduled-trigger", "peer-send-message", "projects-relay"]);
-//@ chunk-e6aww6q8.js:74167-74191 placement
+//@ chunk-5xgkngpb.js:76717-76741 placement
 var isKnownSubmissionSubkind = (subkind) => SUBMISSION_SUBKINDS.has(subkind);
-//@ chunk-e6aww6q8.js:74191-74690 placement
+//@ chunk-5xgkngpb.js:76741-77240 placement
 /**
  * 把提交来源描述转成消息来源：human 区分桥接与输入框，plugin/channel/task-notification 保留细节，其余只保留 kind。
  */
@@ -66,12 +66,12 @@ function originFromSubmission(submission, fromBridge) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:74690-74787 placement
+//@ chunk-5xgkngpb.js:77240-77337 placement
 /**
  * 把未知来源对象解析成消息来源，无法识别时归为 unclassified。
  */
 function originFromUnknown(unknown) {
-  if (!isPlainObject_5(unknown))
+  if (!isPlainObject_6(unknown))
     return {
       kind: "unclassified",
     };
@@ -81,7 +81,7 @@ function originFromUnknown(unknown) {
     }
   );
 }
-//@ chunk-e6aww6q8.js:74787-75143 placement
+//@ chunk-5xgkngpb.js:77337-77693 placement
 /**
  * 推断用户消息的来源：有显式来源就转换，否则按任务通知、定时唤醒或提示来源（sdk/typed/queued 等）判断。
  */
@@ -112,7 +112,7 @@ function resolveMessageOrigin({ origin, bridgeOrigin, wakeupSource, mode, prompt
       };
   }
 }
-//@ chunk-e6aww6q8.js:75143-75506 placement
+//@ chunk-5xgkngpb.js:77693-78056 placement
 /**
  * 由桥接消息的元数据推断来源：human→bridge、任务通知子类、peer/coordinator（带插件）、slack-ping，其余 unclassified。
  */
@@ -151,7 +151,7 @@ function originFromBridgeMetadata(metadata) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:84692-84851 placement
+//@ chunk-5xgkngpb.js:87242-87401 placement
 /**
  * 由提交来源、是否经桥接与提示来源推断消息来源（mode=prompt）。
  */
@@ -163,15 +163,15 @@ var resolvePromptOrigin = ({ submissionOrigin, dispatchedOverBridge, promptSourc
     mode: "prompt",
     promptSource: promptSource ?? "typed",
   });
-//@ chunk-e6aww6q8.js:84851-84862 placement
+//@ chunk-5xgkngpb.js:87401-87412 placement
 /**
  * 来源描述文本的最大字符数。
  */
 var MAX_ORIGIN_TEXT_CHARS = 80;
 export {
-  resolvePromptOrigin,
   originFromBridgeMetadata,
+  resolvePromptOrigin,
+  MAX_ORIGIN_TEXT_CHARS,
   originFromUnknown,
   resolveMessageOrigin,
-  MAX_ORIGIN_TEXT_CHARS,
 };

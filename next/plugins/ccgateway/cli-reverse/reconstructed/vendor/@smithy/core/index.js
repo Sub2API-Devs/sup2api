@@ -1,9 +1,9 @@
 /**
  * @smithy/core/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-ayrvc8dg.js (1), chunk-edce4vxq.js (1), chunk-wjd9n4jx.js (2)
- * attribution: placement 1, cjs-layout 3
+ * pieces: chunk-1fkvp0h1.js (2), chunk-3p78mpxm.js (1), chunk-7tj1as7s.js (1)
+ * attribution: cjs-layout 3, placement 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_tslib } from "../../tslib/tslib.js";
@@ -16,7 +16,7 @@ beginDeferredInits("vendor/@smithy/core/dist-cjs/index.js");
 // This module is the first evaluated of an import cycle of 4 modules closed by ./dist-cjs/index.js (in the hooks worker thread);
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("worker:vendor/@smithy/core/dist-cjs/index.js");
-//@ chunk-wjd9n4jx.js:22053-22250 cjs-layout
+//@ chunk-1fkvp0h1.js:22053-22250 cjs-layout
 var require_uuid = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -26,7 +26,7 @@ var require_uuid = __commonJS(function (cjsExports) {
   var cryptoImport = tslib.__importDefault(importMetaRequire("crypto"));
   cjsExports.randomUUID = cryptoImport.default.randomUUID.bind(cryptoImport.default);
 });
-//@ chunk-wjd9n4jx.js:22250-22651 cjs-layout
+//@ chunk-1fkvp0h1.js:22250-22651 cjs-layout
 var require_v4 = __commonJS(function (cjsExports) {
   var uuid = require_uuid();
   var list = Array.from(
@@ -66,7 +66,7 @@ var require_v4 = __commonJS(function (cjsExports) {
   };
   cjsExports.v4 = v4;
 });
-//@ chunk-edce4vxq.js:128258-128507 cjs-layout
+//@ chunk-3p78mpxm.js:128258-128507 cjs-layout
 var require_isStreamingPayload = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -78,9 +78,9 @@ var require_isStreamingPayload = __commonJS(function (cjsExports) {
     (typeof ReadableStream !== "undefined" && request?.body instanceof ReadableStream);
   cjsExports.isStreamingPayload = isStreamingPayload;
 });
-//@ chunk-ayrvc8dg.js:311-331 placement
+//@ chunk-7tj1as7s.js:311-331 placement
 let defaultExport; // deferred: uses require_core (./dist-cjs/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ayrvc8dg.js:311", () => {
+deferInit("chunk-7tj1as7s.js:311", () => {
   defaultExport = require_core();
 });
 export { defaultExport as default };

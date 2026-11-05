@@ -3,9 +3,9 @@
  *
  * 自定义状态栏：构造状态栏命令的 JSON 输入（会话、模型、成本、rate_limits、prompt_cache 等），按 refreshInterval 运行用户命令并显示输出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StatusLine.tsx
- * pieces: chunk-18hwfzwa.js (10), chunk-e6aww6q8.js (13), chunk-hwmsct5x.js (2)
+ * pieces: chunk-5xgkngpb.js (13), chunk-czq1j3j2.js (10), chunk-vn3g7zt8.js (2)
  * attribution: placement 15, fingerprint 3, layout 5, sole-consumer 1, affinity 1
  */
 import { getToastyBreezeConfig, LOW_PRIORITY_COPY } from "../services/lowPriority/headers.js";
@@ -26,7 +26,7 @@ import {
 } from "../bootstrap/state.js";
 import { getCurrentWorktreeSession } from "../utils/worktree.js";
 import { getRuntimeMainLoopModel } from "../utils/model/planModeModel.js";
-import { DEFAULT } from "../constants/outputStyles.js";
+import { DEFAULT_2 } from "../constants/outputStyles.js";
 import {
   getLastApiUsage,
   buildContextWindowStatus,
@@ -45,24 +45,35 @@ import { getSessionProject, SessionRootSlot } from "../bootstrap/sessionSlices.j
 import { modelSupportsEffort, getEffortLevelOrHigh } from "../utils/effort.js";
 import { isThinkingEffectivelyEnabled } from "../utils/thinking.js";
 import { logForDebugging } from "../utils/debug.js";
-import { stringSchema, objectSchema, numberSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, literal, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { env } from "../utils/env.js";
-import { logEvent } from "../services/analytics/index.js";
-import { errorMessage, getErrnoCode } from "../utils/errors.js";
-import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { logError } from "../utils/log.js";
+import { errorMessage, getErrnoCode } from "../utils/errors.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
+import { logEvent } from "../services/analytics/index.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { jsonStringify } from "../utils/slowOperations.js";
+import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { logSetupIssues } from "../utils/notifications/setupIssues.js";
 import { MAX_TIMER_DELAY_MS } from "../utils/timerDelayClamp.js";
 import { messagesSinceCompactBoundary } from "../services/projects/threadRows.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { applyCloudCwd } from "../utils/cwd.js";
 import { getPromptCacheSummary, estimateRecacheTokens } from "../services/api/promptCacheBreakDetection.js";
+import { useRenderMode, useIsFullscreen } from "../ink/renderModeContext.js";
+import { useTerminalSize } from "../hooks/useTerminalSize.js";
+import {
+  useContext,
+  useSyncExternalStore,
+  init_react_production,
+  useState,
+  useEffect,
+  memo,
+} from "../../vendor/react/cjs/react.production.js";
+import { noticeDialogSlot } from "./PromptInput/Notifications.js";
+import { rootSessionSlot } from "../context/replRootContext.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
-import { useIsFullscreen, useRenderMode } from "../ink/renderModeContext.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { useSession } from "../context/session.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
@@ -84,29 +95,18 @@ import { getEffectiveStatusLine } from "../utils/hooks/hooksConfigSnapshot.js";
 import { useMainLoopModel as useMainLoopModel_3 } from "../hooks/useMainLoopModel.js";
 import { useFastModeOnForModel } from "../hooks/usePromptSuggestion.js";
 import { useQueuedMessageText } from "../context/QueuedMessageContext.js";
-import {
-  useState,
-  useEffect,
-  memo,
-  init_react_production,
-  useContext,
-  useSyncExternalStore,
-} from "../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Ansi } from "../ink/components/AnsiText.js";
 import { CollapseLabel } from "./TokenWarning.js";
-import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { noticeDialogSlot } from "./PromptInput/Notifications.js";
-import { rootSessionSlot } from "../context/replRootContext.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:186950-187013 affinity
+//@ chunk-vn3g7zt8.js:187338-187401 affinity
 function textOrFallback(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
-//@ chunk-hwmsct5x.js:187013-187320 fingerprint (2.1.88 match: statusLineShouldDisplay, 0.301)
+//@ chunk-vn3g7zt8.js:187401-187708 fingerprint (2.1.88 match: statusLineShouldDisplay, 0.301)
 function statusLineShouldDisplay() {
   let toastyBreezeConfig = getToastyBreezeConfig();
   return {
@@ -121,16 +121,16 @@ function statusLineShouldDisplay() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3685449-3685470 placement
+//@ chunk-5xgkngpb.js:3780870-3780891 placement
 var STATUS_LINE_SETTLE_MS = 300;
 var STATUS_LINE_REDRAW_MS = 1000;
-//@ chunk-e6aww6q8.js:3685470-3685535 placement
+//@ chunk-5xgkngpb.js:3780891-3780956 placement
 function logStatusLineEventOnce(ref, event, getFields, logFn) {
   if (!ref.current) return;
   ref.current = false;
   logFn(event, getFields());
 }
-//@ chunk-e6aww6q8.js:3685535-3685902 placement
+//@ chunk-5xgkngpb.js:3780956-3781325 placement
 /**
  * 运行一次状态栏命令：未被中止时回调结果，并（去重后）上报输出字符数、显示宽度、行数与命令长度。
  */
@@ -164,11 +164,11 @@ async function runStatusLineCommand(options) {
       );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3686171-3686212 placement
+//@ chunk-5xgkngpb.js:3781594-3781635 placement
 function getLastAssistantMessageId(messages) {
   return getLastAssistantMessage(messages)?.uuid ?? null;
 }
-//@ chunk-e6aww6q8.js:3686212-3686344 placement
+//@ chunk-5xgkngpb.js:3781635-3781767 placement
 /**
  * 并行取 git worktree 名与（非特殊环境下的）远程地址，返回 {gitWorktree, repo}。
  */
@@ -182,7 +182,7 @@ async function getStatusLineGitInfo(cwd) {
     repo: remoteUrl ? parseGitRemote(remoteUrl) : null,
   };
 }
-//@ chunk-e6aww6q8.js:3686344-3688795 fingerprint (2.1.88 match: buildStatusLineCommandInput, 0.609)
+//@ chunk-5xgkngpb.js:3781767-3784220 fingerprint (2.1.88 match: buildStatusLineCommandInput, 0.608)
 function buildStatusLineCommandInput({
   session,
   permissionMode,
@@ -210,7 +210,7 @@ function buildStatusLineCommandInput({
     mainLoopModel,
     exceeds200kTokens,
   });
-  let outputStyleName = settings?.outputStyle || DEFAULT;
+  let outputStyleName = settings?.outputStyle || DEFAULT_2;
   let currentUsage = getLastApiUsage(messages);
   let contextWindowSize = getContextWindow(runtimeModel, getSdkBetas());
   let sessionName = remoteSessionName ?? getCurrentSessionDisplayTitle(session.id);
@@ -279,10 +279,10 @@ function buildStatusLineCommandInput({
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -350,17 +350,17 @@ function buildStatusLineCommandInput({
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3688795-3688821 layout
+//@ chunk-5xgkngpb.js:3784220-3784246 layout
 class StatusLineLastTextStore {
   lastText = undefined;
 }
-//@ chunk-e6aww6q8.js:3688821-3688985 layout
+//@ chunk-5xgkngpb.js:3784246-3784410 layout
 /**
  * 状态栏上次输出的存储，以及会触发状态栏刷新的状态字段名。
  */
 var statusLineLastTextStore; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var STATUS_LINE_DEPENDENCY_KEYS;
-deferInit("chunk-e6aww6q8.js:3688821", () => {
+deferInit("chunk-5xgkngpb.js:3784246", () => {
   statusLineLastTextStore = new SessionRootSlot(() => new StatusLineLastTextStore());
   STATUS_LINE_DEPENDENCY_KEYS = [
     "tokenUsage",
@@ -374,12 +374,12 @@ deferInit("chunk-e6aww6q8.js:3688821", () => {
     "remoteSessionName",
   ];
 });
-//@ chunk-e6aww6q8.js:3688985-3689068 layout
+//@ chunk-5xgkngpb.js:3784410-3784493 layout
 function statusLineRefreshMs(statusLine) {
   let refreshInterval = statusLine?.refreshInterval;
   return refreshInterval === undefined ? null : Math.max(1, refreshInterval) * 1000;
 }
-//@ chunk-e6aww6q8.js:3689068-3689291 layout
+//@ chunk-5xgkngpb.js:3784493-3784716 layout
 function getEarliestRateLimitReset(utilization) {
   let filtered = [
     utilization.rate_limits?.five_hour?.resets_at,
@@ -388,7 +388,7 @@ function getEarliestRateLimitReset(utilization) {
   ].filter((resetAt) => resetAt !== undefined && Number.isFinite(resetAt));
   return filtered.length === 0 ? null : Math.min(...filtered) * 1000;
 }
-//@ chunk-e6aww6q8.js:3689291-3689495 layout
+//@ chunk-5xgkngpb.js:3784716-3784920 layout
 function getNextStatusLineRefreshAt(utilization) {
   let filtered = [
     getEarliestRateLimitReset(utilization),
@@ -398,7 +398,7 @@ function getNextStatusLineRefreshAt(utilization) {
   ].filter((resetAt) => resetAt !== null && Number.isFinite(resetAt));
   return filtered.length === 0 ? null : Math.min(...filtered);
 }
-//@ chunk-e6aww6q8.js:3689495-3692443 fingerprint (2.1.88 match: StatusLineInner, 0.455)
+//@ chunk-5xgkngpb.js:3784920-3787868 fingerprint (2.1.88 match: StatusLineInner, 0.455)
 class StatusLineInner {
   #e;
   #t;
@@ -409,18 +409,18 @@ class StatusLineInner {
   #s = undefined;
   #a = null;
   #d = null;
-  #c = null;
+  #m = null;
   #l = null;
-  #u = null;
-  #m = false;
-  #g = true;
-  #S = {
-    current: true,
-  };
+  #p = null;
+  #g = false;
+  #u = true;
   #y = {
     current: true,
   };
-  #p = false;
+  #_ = {
+    current: true,
+  };
+  #c = false;
   constructor(executor, initialInputs) {
     this.#e = executor;
     this.#t = initialInputs;
@@ -439,7 +439,7 @@ class StatusLineInner {
       isReleased = true;
       unsubscribeStore();
       this.#r--;
-      if (this.#r === 0) this.#v();
+      if (this.#r === 0) this.#S();
     };
   };
   setInputs(nextInputs) {
@@ -449,39 +449,39 @@ class StatusLineInner {
     let any = STATUS_LINE_DEPENDENCY_KEYS.some((key) => !Object.is(previousInputs[key], nextInputs[key]));
     let messageChanged =
       !Object.is(previousInputs.lastAssistantMessageId, nextInputs.lastAssistantMessageId) &&
-      nextInputs.lastAssistantMessageId !== this.#u;
-    if (any || messageChanged) this.#_();
+      nextInputs.lastAssistantMessageId !== this.#p;
+    if (any || messageChanged) this.#k();
     if (statusLineRefreshMs(previousInputs.statusLine) !== statusLineRefreshMs(nextInputs.statusLine))
       this.#f();
     if (previousInputs.statusLine?.command !== nextInputs.statusLine?.command) {
-      this.#g = true;
-      this.#S.current = true;
+      this.#u = true;
       this.#y.current = true;
-      this.#b();
+      this.#_.current = true;
+      this.#w();
     }
-    this.#k();
+    this.#b();
   }
   #h() {
     this.#i = true;
     this.#f();
-    this.#k();
     this.#b();
+    this.#w();
   }
-  #v() {
+  #S() {
     this.#i = false;
     this.#a?.();
     this.#a = null;
     this.#d?.();
     this.#d = null;
-    this.#w(null);
+    this.#T(null);
     this.#s?.abort();
     this.#s = undefined;
   }
-  #k() {
+  #b() {
     let { statusLine, settings } = this.#t;
     if (!statusLine) return;
     logStatusLineEventOnce(
-      this.#S,
+      this.#y,
       "tengu_status_line_mount",
       () => ({
         command_length: statusLine.command.length,
@@ -489,8 +489,8 @@ class StatusLineInner {
       }),
       this.#e.logEvent,
     );
-    if (this.#p) return;
-    this.#p = true;
+    if (this.#c) return;
+    this.#c = true;
     if (settings?.disableAllHooks === true)
       logForDebugging("Status line is configured but disableAllHooks is true", {
         level: "warn",
@@ -503,11 +503,11 @@ class StatusLineInner {
       });
     }
   }
-  #_() {
+  #k() {
     this.#a?.();
     this.#a = this.#e.setTimeout(() => {
       this.#a = null;
-      this.#b();
+      this.#w();
     }, STATUS_LINE_SETTLE_MS);
   }
   #f() {
@@ -517,39 +517,39 @@ class StatusLineInner {
     if (refreshMs === null) return;
     let min = Math.min(MAX_TIMER_DELAY_MS, refreshMs);
     let tick = () => {
-      this.#_();
+      this.#k();
       this.#d = this.#e.setTimeout(tick, min);
     };
     this.#d = this.#e.setTimeout(tick, min);
   }
-  #w(nextRefreshAt) {
+  #T(nextRefreshAt) {
     if (nextRefreshAt === this.#l) return;
-    this.#c?.();
-    this.#c = null;
+    this.#m?.();
+    this.#m = null;
     this.#l = nextRefreshAt;
     if (nextRefreshAt === null) return;
     let min = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, nextRefreshAt + STATUS_LINE_REDRAW_MS - Date.now()));
-    this.#c = this.#e.setTimeout(() => {
-      this.#c = null;
+    this.#m = this.#e.setTimeout(() => {
+      this.#m = null;
       this.#l = null;
-      this.#_();
+      this.#k();
     }, min);
   }
-  #b() {
+  #w() {
     this.#s?.abort();
     let abortController = new AbortController();
     this.#s = abortController;
     let messages = messagesSinceCompactBoundary(this.#e.getMessages());
-    let forceRefresh = this.#g;
-    this.#g = false;
+    let forceRefresh = this.#u;
+    this.#u = false;
     let lastAssistantMessageId = getLastAssistantMessageId(messages);
-    if (lastAssistantMessageId !== this.#u) {
-      this.#u = lastAssistantMessageId;
-      this.#m = doesMostRecentAssistantMessageExceed200k(messages);
+    if (lastAssistantMessageId !== this.#p) {
+      this.#p = lastAssistantMessageId;
+      this.#g = doesMostRecentAssistantMessageExceed200k(messages);
     }
-    this.#E(abortController.signal, messages, forceRefresh, this.#m).catch(logError);
+    this.#v(abortController.signal, messages, forceRefresh, this.#g).catch(logError);
   }
-  async #E(signal, messages, isCommandRefresh, exceeds200kTokens) {
+  async #v(signal, messages, isCommandRefresh, exceeds200kTokens) {
     let { session } = this.#e;
     let cwd = getSessionProject(session).cwd;
     let { gitWorktree, repo } = await this.#e.getWorkspaceGit(cwd);
@@ -577,16 +577,16 @@ class StatusLineInner {
           remoteSessionName: inputs.remoteSessionName,
           credentials: this.#e.credentials,
         });
-        if (!signal.aborted) this.#w(getNextStatusLineRefreshAt(statusLineCommandInput));
+        if (!signal.aborted) this.#T(getNextStatusLineRefreshAt(statusLineCommandInput));
         return this.#e.execute(statusLineCommandInput, signal, isCommandRefresh);
       },
       getCommandLength: () => this.#t.statusLine?.command.length,
-      pendingResultLogRef: this.#y,
-      onResult: (result) => this.#T(result),
+      pendingResultLogRef: this.#_,
+      onResult: (result) => this.#E(result),
       logFn: this.#e.logEvent,
     });
   }
-  #T(text) {
+  #E(text) {
     if (this.#n.text === text) return;
     this.#n = {
       text,
@@ -595,7 +595,7 @@ class StatusLineInner {
     this.#o.emit();
   }
 }
-//@ chunk-e6aww6q8.js:3692443-3693330 sole-consumer
+//@ chunk-5xgkngpb.js:3787868-3788755 sole-consumer
 /**
  * 构造状态栏输入里的 prompt_cache 段：是否热、TTL、过期时间、请求/未命中次数、命中率、写入与重建 token、最近一次未命中原因等。
  */
@@ -633,7 +633,39 @@ function buildPromptCacheStatus(now = Date.now()) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:802710-804967 placement
+//@ chunk-czq1j3j2.js:500239-500352 placement
+/**
+ * 读取渲染模式、终端行数与附着端能力等状态（结果未使用），恒返回 false。
+ */
+function useStatusLineSuppressed() {
+  let renderMode = useRenderMode();
+  let rows = useTerminalSize().rows;
+  let noticeRows = useContext(noticeDialogSlot) ?? rows;
+  let caps = useSyncExternalStore(onAttacherCapsChange, () => false);
+  useSyncExternalStore(noopListener, () => false);
+  let hasRootSession = useContext(rootSessionSlot) !== null;
+  return false;
+}
+//@ chunk-czq1j3j2.js:500352-500380 placement
+function noopListener() {
+  return () => {};
+}
+//@ chunk-czq1j3j2.js:819367-819371 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:819367", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:827277-827281 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:827277", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:827727-827731 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:827727", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:835332-837589 placement
 function StatusLine(props) {
   let $ = useMemoCache(43);
   let { transcript, vimMode } = props;
@@ -838,7 +870,7 @@ function StatusLine(props) {
   } else boxElement = $[42];
   return boxElement;
 }
-//@ chunk-18hwfzwa.js:804967-805476 placement
+//@ chunk-czq1j3j2.js:837589-838098 placement
 /**
  * 渲染状态栏命令输出：单行直接截断显示，多行逐行展示（每行带上前几行累积的 ANSI 样式）。
  */
@@ -851,7 +883,7 @@ function StatusLineOutput(props) {
   let earlyResult;
   if ($[0] !== text) {
     earlyResult = EARLY_RETURN_SENTINEL;
-    ze: {
+    Ve: {
       let lines = carryAnsiAcrossLines(text);
       if (lines.length === 1) {
         const children = jsxProd_default(Ansi, {
@@ -868,7 +900,7 @@ function StatusLineOutput(props) {
           $[6] = singleLine;
         } else singleLine = $[6];
         earlyResult = singleLine;
-        break ze;
+        break Ve;
       }
       Container = Box;
       direction = "column";
@@ -899,9 +931,9 @@ function StatusLineOutput(props) {
   } else containerElement = $[10];
   return containerElement;
 }
-//@ chunk-18hwfzwa.js:805476-805537 placement
+//@ chunk-czq1j3j2.js:838098-838159 placement
 var ANSI_SEQUENCE_RE = /\x1b\[[\d;]*m|\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/g;
-//@ chunk-18hwfzwa.js:805537-805707 placement
+//@ chunk-czq1j3j2.js:838159-838329 placement
 function carryAnsiAcrossLines(text) {
   let lines = text.split(`
 `);
@@ -914,41 +946,9 @@ function carryAnsiAcrossLines(text) {
   }
   return outLines;
 }
-//@ chunk-18hwfzwa.js:805707-805723 placement
+//@ chunk-czq1j3j2.js:838329-838345 placement
 var StatusLineMemo; // deferred: uses StatusLine of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:805707", () => {
+deferInit("chunk-czq1j3j2.js:838329", () => {
   StatusLineMemo = memo(StatusLine);
 });
-//@ chunk-18hwfzwa.js:805723-805727 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:805723", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:805727-805840 placement
-/**
- * 读取渲染模式、终端行数与附着端能力等状态（结果未使用），恒返回 false。
- */
-function useStatusLineSuppressed() {
-  let renderMode = useRenderMode();
-  let rows = useTerminalSize().rows;
-  let noticeRows = useContext(noticeDialogSlot) ?? rows;
-  let caps = useSyncExternalStore(onAttacherCapsChange, () => false);
-  useSyncExternalStore(noopListener, () => false);
-  let hasRootSession = useContext(rootSessionSlot) !== null;
-  return false;
-}
-//@ chunk-18hwfzwa.js:805840-805868 placement
-function noopListener() {
-  return () => {};
-}
-//@ chunk-18hwfzwa.js:805868-805872 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:805868", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:805872-805876 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:805872", () => {
-  init_react_production();
-});
-export { statusLineShouldDisplay, useStatusLineSuppressed, StatusLineMemo };
+export { useStatusLineSuppressed, statusLineShouldDisplay, StatusLineMemo };

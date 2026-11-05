@@ -3,10 +3,10 @@
  *
  * 大工具结果落盘与预算：单个结果超阈值时写入会话 tool-results 目录并替换成 <persisted-output> 预览；同一批工具结果总量超 200K 字符时按大小挑最大的替换（applyToolResultBudget），替换决定记在 contentReplacementState 里以保证后续请求前缀稳定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolResultStorage.ts
- * pieces: chunk-6nqjztgx.js (1), chunk-dcd8bnv7.js (4), chunk-f25sswmp.js (2), chunk-jcnpfn31.js (46), chunk-t0gq9gyw.js (16)
- * attribution: placement 23, fingerprint 17, file-local 9, callgraph-fingerprint 1, layout 19
+ * pieces: chunk-03m9p8vx.js (51), chunk-2s9zwbhq.js (2), chunk-51bt13vw.js (1), chunk-85eyj5gy.js (16), chunk-ka648m95.js (4), chunk-vr5v4gzz.js (2)
+ * attribution: placement 36, fingerprint 17, layout 11, file-local 9, sole-consumer 1, affinity 2
  */
 import { join, basename, relative, sep, isAbsolute, dirname } from "path";
 import { getSessionProject, SessionRootSlot } from "../bootstrap/sessionSlices.js";
@@ -27,8 +27,9 @@ import {
   getErrnoCode,
   toError,
 } from "./errors.js";
-import { isPlainObject } from "./isPlainObject.js";
 import { isBase64ImageBlock } from "./imageValidation.js";
+import { isPlainObject } from "./isPlainObject.js";
+import { logEvent } from "../services/analytics/index.js";
 import {
   OUTPUT_SIZE_LIMITS,
   MAX_RESULT_BUFFER_BYTES,
@@ -42,48 +43,48 @@ import { isReservedDeviceName } from "./windowsProfileFolders.js";
 import { jsonStringify } from "./slowOperations.js";
 import { truncateUtf8Bytes, truncateToLength } from "./stringUtils.js";
 import { formatFileSize } from "./format.js";
-import { logEvent } from "../services/analytics/index.js";
 import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js";
-import { ARTIFACT_CONTENT_AUTHORED_TAG_LEAD } from "../constants/xml.js";
+import { stripLeafPrefixes } from "../constants/xml.js";
+import { hasMediaContent } from "../services/api/claude.js";
 import { storageErrorCode } from "./storage/storageErrors.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:44789-44812 fingerprint (2.1.88 match: TOOL_RESULTS_SUBDIR, 1)
+//@ chunk-85eyj5gy.js:44853-44876 fingerprint (2.1.88 match: TOOL_RESULTS_SUBDIR, 1)
 /**
  * 落盘子目录名 "tool-results"。
  */
 var TOOL_RESULTS_SUBDIR = "tool-results";
-//@ chunk-t0gq9gyw.js:44812-44875 placement (2.1.88 match: getOriginalCwd, 0.722)
+//@ chunk-85eyj5gy.js:44876-44939 placement (2.1.88 match: getOriginalCwd, 0.722)
 function getOriginalCwd(session) {
   return toolResultsDirFor(session.root.id, () => getSessionProject(session.root).originalCwd);
 }
-//@ chunk-t0gq9gyw.js:44875-44907 placement
+//@ chunk-85eyj5gy.js:44939-44971 placement
 /**
  * 工具结果目录。
  */
 function toolResultsDir() {
   return toolResultsDirFor(getSessionId(), getOriginalCwd_2);
 }
-//@ chunk-t0gq9gyw.js:44907-44944 placement
+//@ chunk-85eyj5gy.js:44971-45008 placement
 /**
  * 指定会话的工具结果目录。
  */
 function toolResultsDirFor_2(session) {
   return isDiskless() ? null : getOriginalCwd(session);
 }
-//@ chunk-t0gq9gyw.js:44944-44980 placement
+//@ chunk-85eyj5gy.js:45008-45044 placement
 /**
  * 非 diskless 时返回 tool-results 目录。
  */
 function toolResultsDirOrNull() {
   return isDiskless() ? null : toolResultsDir();
 }
-//@ chunk-t0gq9gyw.js:44980-45029 placement
+//@ chunk-85eyj5gy.js:45044-45093 placement
 function toolResultsDirFor(sessionId, storageV5) {
   return join(getPinnedProjectDir() ?? getProjectDir(storageV5()), sessionId, TOOL_RESULTS_SUBDIR);
 }
-//@ chunk-t0gq9gyw.js:45029-45095 placement
+//@ chunk-85eyj5gy.js:45093-45159 placement
 /**
  * 工具结果文件对应的存储键。
  */
@@ -91,7 +92,7 @@ function toolResultsKey(dir, fileName) {
   if (basename(dir) !== TOOL_RESULTS_SUBDIR || !isValidKeySegment(fileName)) return;
   return pathToSessionSideKey(join(dir, fileName));
 }
-//@ chunk-t0gq9gyw.js:45095-45280 placement
+//@ chunk-85eyj5gy.js:45159-45344 placement
 function getSidecarParentKey(dir) {
   let key = toolResultsKey(dir, "probe");
   if (key === undefined || key.namespace !== "sidecar") return;
@@ -102,7 +103,7 @@ function getSidecarParentKey(dir) {
     relPath: key.relPath.slice(0, -1),
   };
 }
-//@ chunk-t0gq9gyw.js:45280-45562 placement
+//@ chunk-85eyj5gy.js:45344-45626 placement
 /**
  * 确保工具结果目录存在。
  */
@@ -130,14 +131,14 @@ async function ensureToolResultsDir(dir, storageV5) {
     return error;
   }
 }
-//@ chunk-t0gq9gyw.js:45562-45571 placement
+//@ chunk-85eyj5gy.js:45626-45635 placement
 var MAX_WRITE_RETRIES = 3;
-//@ chunk-t0gq9gyw.js:45571-45624 placement
+//@ chunk-85eyj5gy.js:45635-45688 placement
 async function hasOnlyDirectoryAncestors(fileReader, path) {
   return (await findNonDirectoryAncestor(fileReader, path)) === undefined;
 }
-//@ chunk-t0gq9gyw.js:45624-45865 placement
-async function findNonDirectoryAncestor(a_2, b) {
+//@ chunk-85eyj5gy.js:45688-45929 placement
+async function findNonDirectoryAncestor(a, b) {
   let projectsDir = getProjectsDir();
   let relativePath = relative(projectsDir, b);
   if (
@@ -150,13 +151,13 @@ async function findNonDirectoryAncestor(a_2, b) {
   let currentPath = projectsDir;
   for (let extra of relativePath.split(sep)) {
     currentPath = join(currentPath, extra);
-    let stats = await a_2.lstat(currentPath);
+    let stats = await a.lstat(currentPath);
     if (stats === undefined) return;
     if (stats.isSymbolicLink || !stats.isDirectory) return currentPath;
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:45865-46173 placement
+//@ chunk-85eyj5gy.js:45929-46237 placement
 /**
  * 检查工具结果目录可写（无本地文件会话拒绝）。
  */
@@ -172,32 +173,32 @@ async function checkToolResultsWritable(path, fileReader) {
       "tool-results path refused: a directory on the way is a link or not a directory",
     );
 }
-//@ chunk-t0gq9gyw.js:46173-46379 placement
+//@ chunk-85eyj5gy.js:46237-46443 placement
 /**
  * 写入工具结果文件（重试）。
  */
 async function writeToolResultFile(a, b, c) {
   let fileReader = getFileReader();
   await checkToolResultsWritable(dirname(a), fileReader);
-  for (let j = 1; ; j++) {
-    if (j > 1) await unlinkQuietly(fileReader, a);
+  for (let idx = 1; ; idx++) {
+    if (idx > 1) await unlinkQuietly(fileReader, a);
     else await unlinkIfSymlink(a, fileReader);
     try {
       await fileReader.writeBytesExclusive(a, b, c);
       return;
     } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST" || j >= MAX_WRITE_RETRIES) throw error;
+      if (getErrnoCode(error) !== "EEXIST" || idx >= MAX_WRITE_RETRIES) throw error;
     }
   }
 }
-//@ chunk-t0gq9gyw.js:46379-46455 placement
+//@ chunk-85eyj5gy.js:46443-46519 placement
 /**
  * 目标是符号链接时先删除。
  */
 async function unlinkIfSymlink(path, fileReader) {
   if ((await fileReader.lstat(path))?.isSymbolicLink) await unlinkQuietly(fileReader, path);
 }
-//@ chunk-t0gq9gyw.js:46455-46537 placement
+//@ chunk-85eyj5gy.js:46519-46601 placement
 async function unlinkQuietly(a, b) {
   try {
     await a.delete(b);
@@ -205,14 +206,7 @@ async function unlinkQuietly(a, b) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
 }
-//@ chunk-6nqjztgx.js:226-253 placement
-/**
- * 是否是普通对象。
- */
-function isObjectBlock(block) {
-  return isPlainObject(block);
-}
-//@ chunk-f25sswmp.js:2019-2135 fingerprint (2.1.88 match: hasImageBlock, 1)
+//@ chunk-vr5v4gzz.js:2052-2168 fingerprint (2.1.88 match: hasImageBlock, 1)
 /**
  * 是否为合法 base64 image 块。
  */
@@ -221,16 +215,16 @@ function hasImageBlock(content) {
   if (!("type" in content) || content.type !== "image") return false;
   return isBase64ImageBlock(content);
 }
-//@ chunk-f25sswmp.js:2135-2288 placement (2.1.88 match: isToolResultBlockWithContent, 1)
+//@ chunk-vr5v4gzz.js:2168-2321 placement (2.1.88 match: isToolResultBlockWithContent, 1)
 function isToolResultWithArrayContent(obj) {
   if (typeof obj !== "object" || obj === null) return false;
   if (!("type" in obj) || obj.type !== "tool_result") return false;
   return "content" in obj && Array.isArray(obj.content);
 }
-//@ chunk-dcd8bnv7.js:264-333 placement
+//@ chunk-ka648m95.js:297-366 placement
 var toolResultStoreSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var NOOP_RESULT_SAVE;
-deferInit("chunk-dcd8bnv7.js:264", () => {
+deferInit("chunk-ka648m95.js:297", () => {
   toolResultStoreSlot = new SessionRootSlot(() => ({
     store: undefined,
   }));
@@ -239,7 +233,7 @@ deferInit("chunk-dcd8bnv7.js:264", () => {
     save: async () => null,
   };
 });
-//@ chunk-dcd8bnv7.js:333-417 placement
+//@ chunk-ka648m95.js:366-450 placement
 /**
  * 取会话的工具结果存储（diskless 用空实现）。
  */
@@ -249,14 +243,14 @@ function toolResultStore(host) {
     (host.host.launchOptions.diskless() ? NOOP_RESULT_SAVE : undefined)
   );
 }
-//@ chunk-dcd8bnv7.js:417-447 placement
+//@ chunk-ka648m95.js:450-480 placement
 /**
  * 取当前会话的工具结果存储。
  */
 function toolResultStoreOrNull() {
   return toolResultStore(getRootSession());
 }
-//@ chunk-dcd8bnv7.js:447-594 placement
+//@ chunk-ka648m95.js:480-627 placement
 /**
  * 保存结果到模型可读的位置，失败时记错误日志并返回 null。
  */
@@ -270,7 +264,140 @@ async function saveResultSafely(store, result) {
     return null;
   }
 }
-//@ chunk-jcnpfn31.js:866-1034 file-local
+//@ chunk-51bt13vw.js:226-253 placement
+/**
+ * 是否是普通对象。
+ */
+function isObjectBlock(block) {
+  return isPlainObject(block);
+}
+//@ chunk-03m9p8vx.js:938-1322 placement
+/**
+ * Drive 下载结果去向的遥测事件名与按会话的计数器状态（保留/存文本/被裁掉/未读/重打）。
+ */
+var MCP_DRIVE_DOWNLOAD_EVENTS; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var EMPTY_COUNTS;
+var MAX_KEPT_SIZES;
+var MAX_RESULT_CHARACTERS;
+var MAX_DELAY_MS;
+var UNSETTLED_LIMIT;
+var driveDownloadMetrics;
+deferInit("chunk-03m9p8vx.js:938", () => {
+  MCP_DRIVE_DOWNLOAD_EVENTS = {
+    kept_in_conversation: "tengu_mcp_drive_download_kept_in_conversation",
+    saved_as_text: "tengu_mcp_drive_download_saved_as_text",
+    cut_not_saved: "tengu_mcp_drive_download_cut_not_saved",
+    save_failed: "tengu_mcp_drive_download_save_failed",
+  };
+  EMPTY_COUNTS = {
+    kept: 0,
+    saved: 0,
+    cut: 0,
+    not_read: 0,
+    retyped: 0,
+  };
+  MAX_KEPT_SIZES = 16;
+  MAX_RESULT_CHARACTERS = 5000;
+  MAX_DELAY_MS = 300;
+  UNSETTLED_LIMIT = 3;
+  driveDownloadMetrics = new SessionRootSlot(() => ({
+    counts: {
+      ...EMPTY_COUNTS,
+    },
+    unsettled: new Map(),
+    kept: [],
+    callsSinceKept: 0,
+  }));
+});
+//@ chunk-03m9p8vx.js:1322-1579 placement
+/**
+ * 按去向累计 Drive 下载计数并维护最近保留结果的大小列表。
+ */
+function recordOutcome(outcome, resultChars) {
+  logEvent(MCP_DRIVE_DOWNLOAD_EVENTS[outcome], {
+    resultChars,
+  });
+  let metrics = driveDownloadMetrics.of(getRootSession());
+  if (outcome === "kept_in_conversation") {
+    metrics.counts.kept++;
+    metrics.kept.push(resultChars);
+    metrics.kept.splice(0, metrics.kept.length - MAX_KEPT_SIZES);
+    metrics.callsSinceKept = 0;
+  } else if (outcome === "saved_as_text") metrics.counts.saved++;
+  else if (outcome === "cut_not_saved") metrics.counts.cut++;
+}
+//@ chunk-03m9p8vx.js:1579-1854 placement
+/**
+ * 记录一次 Drive 下载结果的去处与字节数：保留类先挂起，等确认后再结算；services/mcp/client 在拼装结果时调用。
+ */
+function noteResult(toolUseId, outcome, content) {
+  if (toolUseId === undefined) return;
+  let metrics =
+    typeof content === "string"
+      ? content.length
+      : (content ?? []).reduce(
+          (key, content) => key + (content.type === "text" ? content.text.length : 0),
+          0,
+        );
+  if (outcome !== "kept_in_conversation") {
+    recordOutcome(outcome, metrics);
+    return;
+  }
+  let { unsettled } = driveDownloadMetrics.of(getRootSession());
+  unsettled.set(toolUseId, metrics);
+  for (let key of unsettled.keys()) {
+    if (unsettled.size <= MAX_KEPT_SIZES) break;
+    unsettled.delete(key);
+  }
+}
+//@ chunk-03m9p8vx.js:1854-1945 placement
+/**
+ * 把挂起的“保留在对话里”下载结果结算为已保留；utils/toolResultStorage 在结果真正进入消息时调用。
+ */
+function settleResult(toolUseId, outcome) {
+  let unsettled = driveDownloadMetrics.peek(getRootSession())?.unsettled;
+  let chars = unsettled?.get(toolUseId);
+  if (chars !== undefined) {
+    unsettled?.delete(toolUseId);
+    recordOutcome(outcome, chars);
+  }
+}
+//@ chunk-03m9p8vx.js:1945-2111 placement
+/**
+ * 记录 Drive 下载未被读取（http body 溢出或格式错误）的遥测。
+ */
+function recordNotRead(reason) {
+  logEvent(
+    reason === "http body overflow"
+      ? "tengu_mcp_drive_download_not_read_over_cap"
+      : "tengu_mcp_drive_download_not_read_malformed",
+    {},
+  );
+  driveDownloadMetrics.of(getRootSession()).counts.not_read++;
+}
+//@ chunk-03m9p8vx.js:2111-2426 placement
+/**
+ * 判断新一次工具结果是否为最近保留的 Drive 下载的重打，是则计为重打并移除；多次未命中后清空保留列表。
+ */
+function recordRetypedLikely(charCount) {
+  let metrics = driveDownloadMetrics.peek(getRootSession());
+  if (metrics === undefined || metrics.kept.length === 0) return;
+  let index = metrics.kept.findLastIndex(
+    (keptSize) =>
+      keptSize >= MAX_RESULT_CHARACTERS &&
+      charCount >= keptSize * 0.9 &&
+      charCount <= keptSize + MAX_DELAY_MS,
+  );
+  if (index !== -1) {
+    let [keptSize] = metrics.kept.splice(index, 1);
+    logEvent("tengu_mcp_drive_download_retyped_likely", {
+      resultChars: keptSize,
+    });
+    metrics.counts.retyped++;
+    metrics.callsSinceKept = 0;
+  } else if (++metrics.callsSinceKept >= UNSETTLED_LIMIT) metrics.kept.length = 0;
+}
+//@ chunk-03m9p8vx.js:2426-2595 placement
 /**
  * "<persisted-output>" 等：落盘结果标签、截断结果标签、旧结果清除占位 "[Old tool result content cleared]"、阈值开关名 tengu_velvet_ibis。
  */
@@ -280,7 +407,7 @@ var TRUNCATED_OUTPUT_TAG = "<truncated-output>";
 var TRUNCATED_OUTPUT_CLOSING_TAG = "</truncated-output>";
 var TOOL_RESULT_CLEARED_MESSAGE = "[Old tool result content cleared]";
 var TENGU_VELVET_IBIS = "tengu_velvet_ibis";
-//@ chunk-jcnpfn31.js:1034-1217 callgraph-fingerprint (2.1.88 match: getPersistenceThreshold, 1)
+//@ chunk-03m9p8vx.js:2595-2778 placement
 /**
  * 单工具落盘阈值：工具声明 maxResultSizeChars 与默认 50000 取小；tengu_velvet_ibis 可按工具名覆盖；跳过聚合预算的工具只受上限。
  */
@@ -296,13 +423,13 @@ function getPersistenceThreshold(
   if (typeof override === "number" && Number.isFinite(override) && override > 0) return override;
   return Math.min(declaredMaxResultSizeChars, persistenceThresholdCeiling);
 }
-//@ chunk-jcnpfn31.js:1217-1259 layout
+//@ chunk-03m9p8vx.js:2778-2820 placement
 /**
  * 2000：落盘结果预览长度；"tool result was not saved" 为落盘失败文本。
  */
 var PREVIEW_SIZE_CHARS = 2000;
 var PERSIST_FAILED_MESSAGE = "tool result was not saved";
-//@ chunk-jcnpfn31.js:1259-1472 layout
+//@ chunk-03m9p8vx.js:2820-3033 placement
 /**
  * 单字符按 UTF-8 字节百分号编码（孤立代理项用 %uXXXX）。
  */
@@ -313,7 +440,7 @@ function percentEncodeChar(char) {
     "",
   );
 }
-//@ chunk-jcnpfn31.js:1472-1641 layout
+//@ chunk-03m9p8vx.js:3033-3203 placement
 /**
  * 把 tool_use_id 转成安全文件名（非 [A-Za-z0-9_-.] 百分号编码，避开 Windows 保留名）。
  */
@@ -326,21 +453,21 @@ function sanitizeToolResultFileStem(id) {
   if (stem === "") return "%";
   return isReservedDeviceName(stem) ? percentEncodeChar(stem.charAt(0)) + stem.slice(1) : stem;
 }
-//@ chunk-jcnpfn31.js:1641-1691 fingerprint (2.1.88 match: getToolResultPath, 1)
+//@ chunk-03m9p8vx.js:3203-3254 fingerprint (2.1.88 match: getToolResultPath, 1)
 /**
  * 落盘文件名 <id>.json（数组内容）或 <id>.txt。
  */
 function getToolResultPath(id, isJson) {
   return `${sanitizeToolResultFileStem(id)}.${isJson ? "json" : "txt"}`;
 }
-//@ chunk-jcnpfn31.js:1691-1730 layout
+//@ chunk-03m9p8vx.js:3254-3294 layout
 /**
  * 会话 tool-results 目录下的完整路径。
  */
 function getToolResultFilePath(originalCwd, id, isJson) {
   return join(originalCwd, getToolResultPath(id, isJson));
 }
-//@ chunk-jcnpfn31.js:1730-3561 fingerprint (2.1.88 match: persistToolResult, 0.454)
+//@ chunk-03m9p8vx.js:3294-5126 fingerprint (2.1.88 match: persistToolResult, 0.454)
 /**
  * 写出工具结果：宿主存储可用时存入宿主（截断到上限），否则写会话目录 tool-results/<id>.txt|json（排他创建，超 1GB 截断）；返回 {filepath, originalSize, isJson, preview, hasMore, truncatedAtBytes}。
  */
@@ -479,7 +606,7 @@ async function persistToolResult(content, id, result, storageV5, maxBytes = MAX_
     truncatedAtBytes,
   };
 }
-//@ chunk-jcnpfn31.js:3561-3608 layout
+//@ chunk-03m9p8vx.js:5126-5173 layout
 /**
  * 用 <persisted-output> 包装 buildLargeToolResultMessage 的文本。
  */
@@ -487,7 +614,7 @@ function buildPersistedOutputMessage(result) {
   return `${PERSISTED_OUTPUT_TAG}
 ${buildLargeToolResultMessage(result)}${PERSISTED_OUTPUT_CLOSING_TAG}`;
 }
-//@ chunk-jcnpfn31.js:3608-4175 fingerprint (2.1.88 match: buildLargeToolResultMessage, 0.576)
+//@ chunk-03m9p8vx.js:5173-5740 fingerprint (2.1.88 match: buildLargeToolResultMessage, 0.577)
 /**
  * 落盘后替换文本："Output too large (X). Full output saved to: <路径>" + 预览（开头或首尾）。
  */
@@ -522,12 +649,12 @@ ${result.previewEnd}
 `;
   return text;
 }
-//@ chunk-jcnpfn31.js:4175-4194 layout
+//@ chunk-03m9p8vx.js:5740-5760 layout
 /**
  * "1023 bytes"：估算截断说明长度用的占位。
  */
 var TRUNCATION_NOTE_RESERVE = "1023 bytes";
-//@ chunk-jcnpfn31.js:4194-4577 layout
+//@ chunk-03m9p8vx.js:5760-6143 fingerprint (2.1.88 match: buildReplacement, 0.68)
 /**
  * 无法落盘时就地截断：<truncated-output> 说明 + 开头部分。
  */
@@ -553,7 +680,7 @@ function buildTruncatedInlineResult(content, maxChars) {
     originalSize: text.length,
   };
 }
-//@ chunk-jcnpfn31.js:4577-4808 layout
+//@ chunk-03m9p8vx.js:6143-6374 layout
 /**
  * <truncated-output> 文案："Output too large… only the first N are shown…"。
  */
@@ -564,24 +691,24 @@ Output too large (${text}). It could not be saved, so only the first ${shownSize
 ${shownText}
 ${TRUNCATED_OUTPUT_CLOSING_TAG}`;
 }
-//@ chunk-jcnpfn31.js:4808-4899 layout
+//@ chunk-03m9p8vx.js:6374-6465 layout
 /**
  * 工具输出映射成 tool_result 块后走 processToolResultBlock。
  */
 async function mapAndMaybePersistToolResult(tool, toolUseResult, toolUseID, storageV5, storageV5_2) {
-  return processToolResultBlock(
+  return persistLargeToolResult(
     tool.mapToolResultToToolResultBlockParam(toolUseResult, toolUseID),
     tool,
     storageV5,
     storageV5_2,
   );
 }
-//@ chunk-jcnpfn31.js:4899-5050 fingerprint (2.1.88 match: processToolResultBlock, 0.358)
+//@ chunk-03m9p8vx.js:6465-6670 layout
 /**
  * 按工具阈值调用 maybePersistLargeToolResult。
  */
-async function processToolResultBlock(toolResultBlock, tool, storageV5, storageV5_2) {
-  return maybePersistLargeToolResult(
+async function persistLargeToolResult(toolResultBlock, tool, storageV5, storageV5_2) {
+  let persisted = await maybePersistLargeToolResult(
     toolResultBlock,
     tool.name,
     storageV5,
@@ -593,8 +720,10 @@ async function processToolResultBlock(toolResultBlock, tool, storageV5, storageV
     ),
     storageV5_2,
   );
+  settleResult(toolResultBlock.tool_use_id, "kept_in_conversation");
+  return persisted;
 }
-//@ chunk-jcnpfn31.js:5050-5286 file-local
+//@ chunk-03m9p8vx.js:6670-6906 file-local
 /**
  * 内容是否为空（空串、空数组或只有空白文本）。旧版名 contentSize 不准确。
  */
@@ -611,7 +740,7 @@ function isToolResultContentEmpty(content) {
       (typeof block.text !== "string" || block.text.trim() === ""),
   );
 }
-//@ chunk-jcnpfn31.js:5286-6260 fingerprint (2.1.88 match: maybePersistLargeToolResult, 0.872)
+//@ chunk-03m9p8vx.js:6906-7948 fingerprint (2.1.88 match: maybePersistLargeToolResult, 0.776)
 /**
  * 单个工具结果处理：空结果替换为 "(<工具> completed with no output)"；超阈值时落盘并换成 <persisted-output> 预览，宿主存储落盘失败则就地截断；记 tengu_tool_result_persisted。
  */
@@ -655,6 +784,7 @@ async function maybePersistLargeToolResult(
         thresholdUsed: threshold,
         stored: false,
       });
+      settleResult(toolResultBlock.tool_use_id, "cut_not_saved");
       return {
         ...toolResultBlock,
         content: truncatedInlineResult.message,
@@ -672,12 +802,13 @@ async function maybePersistLargeToolResult(
     thresholdUsed: threshold,
     truncatedAtCap: result.truncatedAtBytes !== undefined,
   });
+  settleResult(toolResultBlock.tool_use_id, "saved_as_text");
   return {
     ...toolResultBlock,
     content: message,
   };
 }
-//@ chunk-jcnpfn31.js:6260-6407 fingerprint (2.1.88 match: generatePreview, 1)
+//@ chunk-03m9p8vx.js:7948-8094 fingerprint (2.1.88 match: generatePreview, 1)
 /**
  * 预览：超长时在最后一个换行处截断（换行位置要超过一半），返回 {preview, hasMore}。
  */
@@ -695,14 +826,14 @@ function generatePreview(content, maxBytes) {
     hasMore: true,
   };
 }
-//@ chunk-jcnpfn31.js:6407-6440 file-local
+//@ chunk-03m9p8vx.js:8094-8127 file-local
 /**
  * persistToolResult 返回值是否为错误。
  */
 function isPersistError(result) {
   return "error" in result;
 }
-//@ chunk-jcnpfn31.js:6440-6500 fingerprint (2.1.88 match: createContentReplacementState, 1)
+//@ chunk-03m9p8vx.js:8127-8187 fingerprint (2.1.88 match: createContentReplacementState, 1)
 /**
  * 新建 contentReplacementState {seenIds:Set, replacements:Map}。
  */
@@ -712,7 +843,7 @@ function createContentReplacementState() {
     replacements: new Map(),
   };
 }
-//@ chunk-jcnpfn31.js:6500-6588 layout (2.1.88 match: createContentReplacementState, 1)
+//@ chunk-03m9p8vx.js:8187-8275 layout (2.1.88 match: createContentReplacementState, 1)
 /**
  * 复制替换状态（分叉/子代理用）。
  */
@@ -722,7 +853,7 @@ function cloneContentReplacementState(source) {
     replacements: new Map(source.replacements),
   };
 }
-//@ chunk-jcnpfn31.js:6588-6686 fingerprint (2.1.88 match: provisionContentReplacementState, 1)
+//@ chunk-03m9p8vx.js:8275-8373 fingerprint (2.1.88 match: provisionContentReplacementState, 1)
 /**
  * tengu_hawthorn_steeple 开启时为会话准备替换状态：有历史则重建，否则新建。
  */
@@ -732,65 +863,53 @@ function provisionContentReplacementState(initialMessages, initialContentReplace
     return reconstructContentReplacementState(initialMessages, initialContentReplacements ?? []);
   return createContentReplacementState();
 }
-//@ chunk-jcnpfn31.js:6686-6812 layout
+//@ chunk-03m9p8vx.js:8373-8466 file-local
 /**
  * 内容已是落盘替换或 "[Old tool result content cleared]"。
  */
 function isReplacedToolResultContent(content) {
   if (typeof content !== "string") return false;
-  let text = content.startsWith(ARTIFACT_CONTENT_AUTHORED_TAG_LEAD)
-    ? content.slice(ARTIFACT_CONTENT_AUTHORED_TAG_LEAD.length)
-    : content;
+  let text = stripLeafPrefixes(content);
   return text.startsWith(PERSISTED_OUTPUT_TAG) || text === TOOL_RESULT_CLEARED_MESSAGE;
 }
-//@ chunk-jcnpfn31.js:6812-6888 file-local
+//@ chunk-03m9p8vx.js:8466-8542 layout
 /**
  * 内容非空且未被替换/截断。
  */
-function isContentAlreadyCompacted(content) {
+function isPersistableContent(content) {
   return (
     !!content &&
     !isReplacedToolResultContent(content) &&
     !(typeof content === "string" && content.startsWith(TRUNCATED_OUTPUT_TAG))
   );
 }
-//@ chunk-jcnpfn31.js:6888-7143 layout
+//@ chunk-03m9p8vx.js:8542-8797 placement
 /**
  * 历史里该 tool_use 的结果非错误且仍是原文。
  */
 function wasToolResultKeptInFull(messages, toolUseId) {
-  for (let j = messages.length - 1; j >= 0; j--) {
-    let message = messages[j];
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
     if (message.type !== "user" || message.isVirtual || !Array.isArray(message.message.content)) continue;
     for (let block of message.message.content)
       if (block.type === "tool_result" && block.tool_use_id === toolUseId)
-        return !block.is_error && isContentAlreadyCompacted(block.content);
+        return !block.is_error && isPersistableContent(block.content);
   }
   return false;
 }
-//@ chunk-jcnpfn31.js:7143-7183 layout
+//@ chunk-03m9p8vx.js:8797-8837 placement
 /**
  * 内容不含媒体且字符数超过阈值。
  */
 function exceedsPersistThreshold(block, threshold) {
   return !hasMediaContent(block) && getToolResultTextLength(block) > threshold;
 }
-//@ chunk-jcnpfn31.js:7183-7282 layout (2.1.88 match: isMedia, 1)
-/**
- * 内容数组含 image/document 块。
- */
-function hasMediaContent(block) {
-  return (
-    Array.isArray(block) &&
-    block.some((block) => isObjectBlock(block) && (block.type === "image" || block.type === "document"))
-  );
-}
-//@ chunk-jcnpfn31.js:7282-7293 layout
+//@ chunk-03m9p8vx.js:8936-8948 sole-consumer
 /**
  * 5000：连续无空白字符的长度阈值。
  */
 var LONG_UNBROKEN_RUN_CHARS = 5000;
-//@ chunk-jcnpfn31.js:7293-7569 layout
+//@ chunk-03m9p8vx.js:8948-9226 affinity
 /**
  * 文本中有超过 5000 个连续非空白字符（这类结果不交给宿主内联）。
  */
@@ -815,7 +934,7 @@ function hasLongUnbrokenRun(content) {
     return false;
   });
 }
-//@ chunk-jcnpfn31.js:7569-7761 file-local
+//@ chunk-03m9p8vx.js:9226-9418 file-local
 /**
  * 字符串或文本块总字符数。
  */
@@ -834,7 +953,7 @@ function getToolResultTextLength(content) {
     0,
   );
 }
-//@ chunk-jcnpfn31.js:7761-7966 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-03m9p8vx.js:9418-9623 file-local
 /**
  * 所有 assistant tool_use 的 id → 工具名。
  */
@@ -849,7 +968,7 @@ function mapToolUseIdToName(messages) {
   }
   return byId;
 }
-//@ chunk-jcnpfn31.js:7966-8262 layout
+//@ chunk-03m9p8vx.js:9623-9919 file-local
 /**
  * 一条 user 消息里可替换的 tool_result（非空、未替换、不含媒体）及其大小。
  */
@@ -868,7 +987,7 @@ function collectToolResultCandidates(message) {
     ];
   });
 }
-//@ chunk-jcnpfn31.js:8262-8479 file-local
+//@ chunk-03m9p8vx.js:9919-10136 file-local
 /**
  * 按"同一次助手回答后的工具结果"分组收集候选（并行工具结果算一组）。
  */
@@ -891,7 +1010,7 @@ function collectCandidatesByMessage(messages) {
   flush();
   return groups;
 }
-//@ chunk-jcnpfn31.js:8479-8733 fingerprint (2.1.88 match: partitionByPriorDecision, 1)
+//@ chunk-03m9p8vx.js:10136-10390 fingerprint (2.1.88 match: partitionByPriorDecision, 1)
 /**
  * 按替换状态把候选分为 mustReapply（已替换，需重放）、frozen（已见过、不再动）、fresh（新的）。
  */
@@ -915,7 +1034,7 @@ function partitionByPriorDecision(candidates, state) {
     },
   );
 }
-//@ chunk-jcnpfn31.js:8733-8888 file-local
+//@ chunk-03m9p8vx.js:10390-10545 file-local
 /**
  * 从 fresh 里按大小降序挑选，直到 frozen+剩余 ≤ 预算。
  */
@@ -930,7 +1049,7 @@ function selectFreshToReplace(fresh, frozenSize, limit) {
   }
   return selected;
 }
-//@ chunk-jcnpfn31.js:8888-9256 file-local
+//@ chunk-03m9p8vx.js:10545-10913 file-local
 /**
  * 把消息中指定 tool_use_id 的 tool_result 内容替换为新文本。
  */
@@ -962,11 +1081,11 @@ function replaceToolResultContents(messages, replacementMap) {
     };
   });
 }
-//@ chunk-jcnpfn31.js:9256-9438 fingerprint (2.1.88 match: buildReplacement, 0.591)
+//@ chunk-03m9p8vx.js:10913-11095 layout
 /**
  * 落盘一个候选并生成替换文本。
  */
-async function buildReplacement(candidate, left, right) {
+async function candidate(candidate, left, right) {
   let result = await persistToolResult(candidate.content, candidate.toolUseId, left, right);
   if (isPersistError(result)) return null;
   return {
@@ -975,7 +1094,7 @@ async function buildReplacement(candidate, left, right) {
     truncatedAtCap: result.truncatedAtBytes !== undefined,
   };
 }
-//@ chunk-jcnpfn31.js:9438-9623 file-local
+//@ chunk-03m9p8vx.js:11095-11280 layout
 /**
  * 不参与聚合预算的工具名集合（maxResultSizeChars 无限或 skipAggregateToolResultBudget）。旧版名 getPerMessageBudgetLimit 不准确。
  */
@@ -988,7 +1107,7 @@ function getBudgetExemptToolNames(tools) {
     }
   return names;
 }
-//@ chunk-jcnpfn31.js:9623-11298 fingerprint (2.1.88 match: enforceToolResultBudget, 0.888)
+//@ chunk-03m9p8vx.js:11280-12955 fingerprint (2.1.88 match: enforceToolResultBudget, 0.886)
 /**
  * 每组工具结果的聚合预算（200,000 字符）：重放已有替换；新结果超预算时落盘最大的若干个；所有见过的 id 记入 seenIds，保证同一结果的决定不再改变（缓存前缀稳定）；记 tengu_message_level_tool_result_budget_enforced。
  */
@@ -1033,10 +1152,7 @@ async function enforceToolResultBudget(messages, state, storagePath, storageV5, 
       newlyReplaced: [],
     };
   let freshReplacements = await Promise.all(
-    toPersist.map(async (candidate) => [
-      candidate,
-      await buildReplacement(candidate, storagePath, storageV5),
-    ]),
+    toPersist.map(async (candidate_2) => [candidate_2, await candidate(candidate_2, storagePath, storageV5)]),
   );
   let newlyReplaced = [];
   let replacedSize = 0;
@@ -1080,7 +1196,7 @@ async function enforceToolResultBudget(messages, state, storagePath, storageV5, 
     newlyReplaced,
   };
 }
-//@ chunk-jcnpfn31.js:11298-11438 fingerprint (2.1.88 match: applyToolResultBudget, 1)
+//@ chunk-03m9p8vx.js:12955-13095 fingerprint (2.1.88 match: applyToolResultBudget, 1)
 /**
  * applyToolResultBudget：queryLoop 每轮调用；有替换状态时执行 enforceToolResultBudget，新替换通过回调记录到会话存储。
  */
@@ -1090,7 +1206,7 @@ async function applyToolResultBudget(messages, state, storagePath, onPersisted, 
   if (result.newlyReplaced.length > 0) onPersisted?.(result.newlyReplaced);
   return result.messages;
 }
-//@ chunk-jcnpfn31.js:11438-11746 fingerprint (2.1.88 match: reconstructContentReplacementState, 1)
+//@ chunk-03m9p8vx.js:13095-13403 fingerprint (2.1.88 match: reconstructContentReplacementState, 1)
 /**
  * 从对话与存储的替换记录重建替换状态（恢复会话用）。
  */
@@ -1111,7 +1227,7 @@ function reconstructContentReplacementState(messages, records, inheritedReplacem
   }
   return state;
 }
-//@ chunk-jcnpfn31.js:11746-11810 fingerprint (2.1.88 match: reconstructForSubagentResume, 1)
+//@ chunk-03m9p8vx.js:13403-13467 fingerprint (2.1.88 match: reconstructForSubagentResume, 1)
 /**
  * 子代理恢复时以父替换为补充重建状态。
  */
@@ -1119,7 +1235,7 @@ function reconstructForSubagentResume(parentState, resumedMessages, sidechainRec
   if (!parentState) return;
   return reconstructContentReplacementState(resumedMessages, sidechainRecords, parentState.replacements);
 }
-//@ chunk-jcnpfn31.js:11810-11959 layout
+//@ chunk-03m9p8vx.js:13467-13616 layout
 /**
  * 宿主存储写失败的错误文本。
  */
@@ -1131,7 +1247,7 @@ function formatStorageWriteError(error, path) {
   syntheticError.path = path;
   return getFileSystemErrorMessage(syntheticError);
 }
-//@ chunk-jcnpfn31.js:11959-12393 fingerprint (2.1.88 match: getFileSystemErrorMessage, 1)
+//@ chunk-03m9p8vx.js:13616-14050 fingerprint (2.1.88 match: getFileSystemErrorMessage, 1)
 /**
  * 文件系统错误码 → 可读文本（ENOENT/EACCES/ENOSPC/EROFS/EMFILE/EEXIST）。
  */
@@ -1156,7 +1272,7 @@ function getFileSystemErrorMessage(error) {
     }
   return error.message;
 }
-//@ chunk-jcnpfn31.js:12393-12983 placement
+//@ chunk-03m9p8vx.js:14050-14639 placement
 /**
  * 钩子输出超 10000 字符时落盘为 hook-<id>-<source> 并换成预览；失败时截断并说明。
  */
@@ -1196,7 +1312,7 @@ async function persistLargeHookOutput(
   });
   return persistedOutputMessage;
 }
-//@ chunk-jcnpfn31.js:12983-13050 placement
+//@ chunk-03m9p8vx.js:14639-14706 placement
 function isPersistedHookOutputPath(original, value) {
   return (
     value.startsWith(PERSISTED_OUTPUT_TAG) &&
@@ -1204,50 +1320,82 @@ function isPersistedHookOutputPath(original, value) {
     value !== original
   );
 }
+//@ chunk-2s9zwbhq.js:1168-1436 affinity
+function oversizeOutputNotice(output, toolUseID) {
+  let { preview, hasMore } = generatePreview(output, PREVIEW_SIZE_CHARS);
+  let head = truncateToLength(output, preview.length);
+  let whereNote = toolUseID
+    ? " The whole output is in the Claude Code session on the computer running it."
+    : "";
+  return `Output too large to show here (${formatFileSize(Buffer.byteLength(output, "utf8"))}).${whereNote} First ${formatFileSize(PREVIEW_SIZE_CHARS)}:
+${head}${
+    hasMore
+      ? `
+...`
+      : ""
+  }`;
+}
+//@ chunk-2s9zwbhq.js:1436-1630 fingerprint (2.1.88 match: processToolResultBlock, 0.361)
+function processToolResultBlock(tool, toolUseResult, toolUseID) {
+  if (toolUseResult === "") return;
+  let persistenceThreshold = getPersistenceThreshold(
+    tool.name,
+    tool.maxResultSizeChars,
+    tool.persistenceThresholdCeiling,
+    tool.skipAggregateToolResultBudget === true,
+  );
+  let limit = Number.isFinite(persistenceThreshold) ? persistenceThreshold : OUTPUT_SIZE_LIMITS;
+  return toolUseResult.length <= limit ? toolUseResult : oversizeOutputNotice(toolUseResult, toolUseID);
+}
 export {
-  toolResultsDir,
-  toolResultsKey,
+  toolResultsDirOrNull,
   isObjectBlock,
-  getPersistenceThreshold,
+  toolResultStoreOrNull,
+  noteResult,
   persistToolResult,
-  toolResultsDirFor_2,
+  toolResultsDir,
   isPersistError,
   toolResultStore,
-  buildTruncatedInlineResult,
-  buildPersistedOutputMessage,
-  reconstructForSubagentResume,
-  provisionContentReplacementState,
-  reconstructContentReplacementState,
-  toolResultStoreOrNull,
+  saveResultSafely,
+  ensureToolResultsDir,
+  writeToolResultFile,
+  toolResultsKey,
   TOOL_RESULTS_SUBDIR,
-  applyToolResultBudget,
-  getBudgetExemptToolNames,
+  createContentReplacementState,
+  processToolResultBlock,
+  getPersistenceThreshold,
+  oversizeOutputNotice,
+  recordNotRead,
+  hasImageBlock,
+  getOriginalCwd,
+  getToolResultFilePath,
+  PREVIEW_SIZE_CHARS,
+  buildLargeToolResultMessage,
+  generatePreview,
+  buildPersistedOutputMessage,
+  persistLargeToolResult,
+  toolResultsDirFor_2,
   persistLargeHookOutput,
   isPersistedHookOutputPath,
-  generatePreview,
-  PREVIEW_SIZE_CHARS,
-  getOriginalCwd,
-  ensureToolResultsDir,
-  getToolResultFilePath,
-  writeToolResultFile,
-  createContentReplacementState,
-  checkToolResultsWritable,
-  saveResultSafely,
-  PERSISTED_OUTPUT_TAG,
-  PERSISTED_OUTPUT_CLOSING_TAG,
-  TRUNCATED_OUTPUT_TAG,
-  TRUNCATED_OUTPUT_CLOSING_TAG,
   mapAndMaybePersistToolResult,
-  isToolResultContentEmpty,
-  exceedsPersistThreshold,
-  processToolResultBlock,
-  hasImageBlock,
-  buildLargeToolResultMessage,
+  reconstructForSubagentResume,
+  PERSISTED_OUTPUT_TAG,
   getToolResultTextLength,
   wasToolResultKeptInFull,
   cloneContentReplacementState,
-  isToolResultWithArrayContent,
-  toolResultsDirOrNull,
+  PERSISTED_OUTPUT_CLOSING_TAG,
+  TRUNCATED_OUTPUT_TAG,
+  TRUNCATED_OUTPUT_CLOSING_TAG,
+  isToolResultContentEmpty,
+  exceedsPersistThreshold,
+  recordRetypedLikely,
   TOOL_RESULT_CLEARED_MESSAGE,
-  isContentAlreadyCompacted,
+  isPersistableContent,
+  checkToolResultsWritable,
+  provisionContentReplacementState,
+  reconstructContentReplacementState,
+  applyToolResultBudget,
+  getBudgetExemptToolNames,
+  isToolResultWithArrayContent,
+  buildTruncatedInlineResult,
 };

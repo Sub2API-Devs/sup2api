@@ -3,29 +3,29 @@
  *
  * 2.1.316 新增：遥测中的账户记忆脱敏
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p52gp8zk.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s584m62r.js (17)
  * attribution: placement 17
  */
 import { createHash } from "crypto";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { jsonStringify } from "../slowOperations.js";
 import { escapeXml_2 as escapeXml } from "../confusables.js";
 import { MAX_EVENT_RECORD_POOL, recordStateOf } from "./thirdPartyEventRecords.js";
 import { urlPatternToRegex } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:9407-9461 placement
+//@ chunk-s584m62r.js:1225-1278 placement
 function touchSetEntry(set, item) {
   let existed = set.delete(item);
   set.add(item);
   return !existed;
 }
-//@ chunk-p52gp8zk.js:9461-9607 placement
+//@ chunk-s584m62r.js:1278-1423 placement
 var EMPTY_REDACTION_INDEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NOT_RECORDED_PLACEHOLDER;
-deferInit("chunk-p52gp8zk.js:9461", () => {
+deferInit("chunk-s584m62r.js:1278", () => {
   EMPTY_REDACTION_INDEX = Object.freeze({
     blocks: Object.freeze([]),
     lines: Object.freeze([]),
@@ -34,15 +34,15 @@ deferInit("chunk-p52gp8zk.js:9461", () => {
   });
   NOT_RECORDED_PLACEHOLDER = "[account memory text not recorded]";
 });
-//@ chunk-p52gp8zk.js:9607-9664 placement
+//@ chunk-s584m62r.js:1423-1480 placement
 function notRecordedLength(value) {
   return `<${value.length} chars; not recorded>`;
 }
-//@ chunk-p52gp8zk.js:9664-9709 placement
+//@ chunk-s584m62r.js:1480-1525 placement
 function notRecordedReason(withheld) {
   return `<not recorded: ${withheld}>`;
 }
-//@ chunk-p52gp8zk.js:9709-9799 placement
+//@ chunk-s584m62r.js:1525-1616 placement
 function isMemoryOperationQuerySource(querySource) {
   return (
     querySource === "extract_memories" ||
@@ -50,7 +50,7 @@ function isMemoryOperationQuerySource(querySource) {
     querySource === "auto_dream"
   );
 }
-//@ chunk-p52gp8zk.js:9799-10027 placement
+//@ chunk-s584m62r.js:1616-1845 placement
 function redactWithIndex(keySource, querySource, transform) {
   if (isMemoryOperationQuerySource(querySource))
     return {
@@ -71,7 +71,7 @@ function redactWithIndex(keySource, querySource, transform) {
     };
   }
 }
-//@ chunk-p52gp8zk.js:10027-10180 placement
+//@ chunk-s584m62r.js:1845-1998 placement
 /**
  * 在遥测记录中隐去账户记忆内容（未识别时整段不记录）。
  */
@@ -84,9 +84,9 @@ function redactAccountMemoryText(keySource, querySource, apply) {
       : redactWithIndex(keySource, querySource, (index) => applyRedactions(apply, index));
   return "withheld" in redacted ? notRecordedReason(redacted.withheld) : redacted.value;
 }
-//@ chunk-p52gp8zk.js:10180-10219 placement
+//@ chunk-s584m62r.js:1998-2036 placement
 var MARKDOWN_PREFIX_RE = /^(?:[-*+>]|\d+[.)]|#{1,6})\s+/;
-//@ chunk-p52gp8zk.js:10219-10838 placement
+//@ chunk-s584m62r.js:2036-2652 placement
 function buildRedactionIndex({
   rendered,
   verbatim,
@@ -94,14 +94,14 @@ function buildRedactionIndex({
   unsearchable = false,
 }) {
   let rendered_2 = (text) => text.trim() !== "";
-  let renderedLines = uniq(rendered.map((line) => line.trim()).filter(rendered_2));
-  let verbatimLines = uniq(verbatim.map((line) => line.trim()).filter(rendered_2));
+  let renderedLines = normalizeCaseForComparison_2(rendered.map((line) => line.trim()).filter(rendered_2));
+  let verbatimLines = normalizeCaseForComparison_2(verbatim.map((line) => line.trim()).filter(rendered_2));
   if (renderedLines.length === 0 && verbatimLines.length === 0 && toolNames.size === 0 && !unsearchable)
     return EMPTY_REDACTION_INDEX;
   let byLengthDesc = (left, right) => right.length - left.length;
   let stripJsonQuotes = (text) => (jsonStringify(text) ?? `"${text}"`).slice(1, -1);
   let expandVariants = (text) =>
-    uniq(
+    normalizeCaseForComparison_2(
       text.flatMap((text) => {
         let escaped = escapeXml(text);
         return [
@@ -138,7 +138,7 @@ function buildRedactionIndex({
     toolNames,
   };
 }
-//@ chunk-p52gp8zk.js:10838-11061 placement
+//@ chunk-s584m62r.js:2652-2873 placement
 function accountMemoryRedactionKeys(host) {
   let state = recordStateOf(host);
   let cached = weakMap.get(host);
@@ -154,29 +154,29 @@ function accountMemoryRedactionKeys(host) {
   });
   return redactionIndex;
 }
-//@ chunk-p52gp8zk.js:11061-11080 placement
+//@ chunk-s584m62r.js:2873-2891 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:11061", () => {
+deferInit("chunk-s584m62r.js:2873", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-p52gp8zk.js:11080-11199 placement
+//@ chunk-s584m62r.js:2891-3007 placement
 function applyRedactions(text, index) {
   if (index.blocks.length === 0 && index.lines.length === 0) return text;
   let { blocks, lines } = compiledRedactions(index);
   return replaceAllPatterns(replaceAllPatterns(text, blocks), lines);
 }
-//@ chunk-p52gp8zk.js:11199-11243 placement
+//@ chunk-s584m62r.js:3007-3048 placement
 var MAX_PATTERN_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_COMPILED_REDACTIONS;
 var compiledRedactionCache;
 var weakMap_2;
-deferInit("chunk-p52gp8zk.js:11199", () => {
+deferInit("chunk-s584m62r.js:3007", () => {
   MAX_PATTERN_CHARS = 131072;
   MAX_COMPILED_REDACTIONS = 8;
   compiledRedactionCache = new Map();
   weakMap_2 = new WeakMap();
 });
-//@ chunk-p52gp8zk.js:11243-11506 placement
+//@ chunk-s584m62r.js:3048-3304 placement
 function compiledRedactions(index) {
   let cached = weakMap_2.get(index);
   if (cached !== undefined) return cached;
@@ -196,7 +196,7 @@ function compiledRedactions(index) {
   weakMap_2.set(index, compiled);
   return compiled;
 }
-//@ chunk-p52gp8zk.js:11506-11795 placement
+//@ chunk-s584m62r.js:3304-3591 placement
 function buildRedactionPatterns(source) {
   let mapped = source
     .filter((item) => item !== "" && !NOT_RECORDED_PLACEHOLDER.includes(item))
@@ -217,30 +217,31 @@ function buildRedactionPatterns(source) {
   if (lines.length > 0) blocks.push(new RegExp(lines.join("|"), "g"));
   return blocks;
 }
-//@ chunk-p52gp8zk.js:11795-12057 placement
+//@ chunk-s584m62r.js:3591-3852 placement
 function replaceAllPatterns(text, patterns) {
   let result = text;
   for (let pattern of patterns) result = result.replace(pattern, NOT_RECORDED_PLACEHOLDER);
   if (result === text) return text;
-  for (let idx = 0; patterns.some((pattern) => result.search(pattern) !== -1); idx++) {
-    if (idx >= 16) throw Error("account-memory text still matched a search key after 16 replacement rounds");
+  for (let i = 0; patterns.some((pattern) => result.search(pattern) !== -1); i++) {
+    if (i >= 16) throw Error("account-memory text still matched a search key after 16 replacement rounds");
     for (let pattern of patterns) result = result.replace(pattern, NOT_RECORDED_PLACEHOLDER);
   }
   return result;
 }
-//@ chunk-p52gp8zk.js:12057-12080 placement
+//@ chunk-s584m62r.js:3852-3875 placement
 function identityRedaction(value) {
   return value;
 }
 export {
-  buildRedactionIndex,
   notRecordedLength,
-  redactAccountMemoryText,
+  buildRedactionIndex,
   accountMemoryRedactionKeys,
+  redactAccountMemoryText,
   redactWithIndex,
   applyRedactions,
   notRecordedReason,
   touchSetEntry,
   identityRedaction,
   NOT_RECORDED_PLACEHOLDER,
+  isMemoryOperationQuerySource,
 };

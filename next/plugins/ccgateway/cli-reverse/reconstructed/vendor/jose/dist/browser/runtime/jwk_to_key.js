@@ -1,30 +1,30 @@
 /**
  * jose/dist/browser/runtime/jwk_to_key.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (5)
+ * pieces: chunk-pd6th42n.js (5)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import {
   generateCek,
   init_content_encryption_2,
   init_content_encryption_3,
-  JOSENotSupported,
+  JOSENotSupported_3,
   init_content_encryption,
 } from "../../webapi/lib/content_encryption.js";
 import { bitLength } from "../../node/esm/lib/cek.js";
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { cryptoModule, init_buffer_utils } from "../../webapi/lib/buffer_utils.js";
-import { decode } from "./base64url.js";
+import { decode_2 } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:14034-14073 esm-layout
+//@ chunk-pd6th42n.js:14034-14073 esm-layout
 var aesGcmKwEncrypt = (bitLengthInline) => generateCek(new Uint8Array(bitLength(bitLengthInline) >> 3));
-//@ chunk-2tyrgda4.js:14073-14099 esm-layout
+//@ chunk-pd6th42n.js:14073-14099 esm-layout
 var init_jwk_to_key = __esm(() => {
   init_content_encryption_2();
   init_content_encryption_3();
 });
-//@ chunk-2tyrgda4.js:14099-16294 esm-fingerprint
+//@ chunk-pd6th42n.js:14099-16294 esm-fingerprint
 function subtleMapping(jwk) {
   let algorithm;
   let keyUsages;
@@ -43,7 +43,7 @@ function subtleMapping(jwk) {
         case "A128CBC-HS256":
         case "A192CBC-HS384":
         case "A256CBC-HS512":
-          throw new JOSENotSupported(`${jwk.alg} keys cannot be imported as CryptoKey instances`);
+          throw new JOSENotSupported_3(`${jwk.alg} keys cannot be imported as CryptoKey instances`);
         case "A128GCM":
         case "A192GCM":
         case "A256GCM":
@@ -72,7 +72,7 @@ function subtleMapping(jwk) {
           keyUsages = ["deriveBits"];
           break;
         default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+          throw new JOSENotSupported_3('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
       }
       break;
     }
@@ -107,7 +107,7 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
           break;
         default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+          throw new JOSENotSupported_3('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
       }
       break;
     }
@@ -145,7 +145,7 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+          throw new JOSENotSupported_3('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
       }
       break;
     }
@@ -167,19 +167,19 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+          throw new JOSENotSupported_3('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
       }
       break;
     }
     default:
-      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
+      throw new JOSENotSupported_3('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
   }
   return {
     algorithm,
     keyUsages,
   };
 }
-//@ chunk-2tyrgda4.js:16294-16667 esm-fingerprint
+//@ chunk-pd6th42n.js:16294-16667 esm-fingerprint
 var parse = async (jwk) => {
   var _a;
   var _b;
@@ -190,7 +190,7 @@ var parse = async (jwk) => {
     (_a = jwk.ext) !== null && _a !== undefined ? _a : false,
     (_b = jwk.key_ops) !== null && _b !== undefined ? _b : keyUsages,
   ];
-  if (algorithm.name === "PBKDF2") return cryptoModule.subtle.importKey("raw", decode(jwk.k), ...rest);
+  if (algorithm.name === "PBKDF2") return cryptoModule.subtle.importKey("raw", decode_2(jwk.k), ...rest);
   let keyData = {
     ...jwk,
   };
@@ -199,11 +199,11 @@ var parse = async (jwk) => {
   return cryptoModule.subtle.importKey("jwk", keyData, ...rest);
 };
 var parse_default;
-//@ chunk-2tyrgda4.js:16667-16702 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:16667-16702 esm-layout (moved: shares a binding it assigns)
 var init_import = __esm(() => {
   init_buffer_utils();
   init_content_encryption_2();
   init_content_encryption();
   parse_default = parse;
 });
-export { parse_default, init_import, init_jwk_to_key, aesGcmKwEncrypt };
+export { init_jwk_to_key, parse_default, init_import, aesGcmKwEncrypt };

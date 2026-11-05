@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：目录同步规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (36)
  * attribution: placement 36
  */
 import { join, relative as relative_2, sep, isAbsolute } from "path";
@@ -26,23 +26,23 @@ import {
 } from "../permissions/sensitivePaths.js";
 import { foldPathCase } from "../pathCaseFolding.js";
 import { getPlatform } from "../platform.js";
-import { uniq, count } from "../collections.js";
 import {
+  normalizeCaseForComparison_2,
   patternWithRoot,
   rootPathForSource,
   READ_PATH_PROBE,
   matchingRuleForInput,
 } from "../permissions/filesystem.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import {
   applyPermissionRulesToPermissionContext,
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   getContentRulesMapForToolName,
 } from "../permissions/permissions.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { getOriginalCwd, getOriginalCwdOrNull, getProjectConfigRoot } from "../../bootstrap/state.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { jsonStringify } from "../slowOperations.js";
@@ -54,7 +54,7 @@ import { getKeptServedOwnerSettings } from "../../remote/tools/servedOwnerSettin
 import {
   isRepoTierFreezeHeld,
   withRepoTiersLive,
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
   getSettingsFilePathForSource,
   getLegacyLocalSettingsFilePath,
   isRepoTierAnsweredByACopy,
@@ -79,6 +79,7 @@ import {
   isSettingSourceEnabled,
   REPO_DIR_SETTING_SOURCES,
 } from "../settings/constants.js";
+import { countWhere } from "../collections.js";
 import { identity as identity_2 } from "../identity.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { env } from "../env.js";
@@ -87,7 +88,7 @@ import { sanitizeDisplayText } from "../resultError.js";
 import { tildify } from "../path.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1897069-1899609 placement
+//@ chunk-5xgkngpb.js:1975957-1978499 placement
 /**
  * 解析目录同步规则（启动位置、项目设置、根目录规则）。
  */
@@ -219,7 +220,7 @@ function resolveDirSyncRules(
       ...sandboxMovedToRoot,
       reopens: [
         ...sandboxMovedToRoot.reopens,
-        ...uniq(
+        ...normalizeCaseForComparison_2(
           readRuleSet.sandbox.reopens
             .filter((reopen) => !sandboxMovedToRoot.reopens.includes(reopen))
             .flatMap((reopen) =>
@@ -274,21 +275,21 @@ function resolveDirSyncRules(
     },
   );
 }
-//@ chunk-e6aww6q8.js:1899609-1899758 placement
+//@ chunk-5xgkngpb.js:1978499-1978648 placement
 function isRuleAnchoredAtProjectRoot({ source, ruleValue }) {
   if (ruleValue.ruleContent === undefined) return true;
   let { root } = patternWithRoot(ruleValue.ruleContent, source);
   return root === null || root === rootPathForSource("projectSettings");
 }
-//@ chunk-e6aww6q8.js:1899758-1899938 placement
+//@ chunk-5xgkngpb.js:1978648-1978828 placement
 var DENY_OR_ASK_BEHAVIORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EDIT_WRITE_TOOL_STUBS;
 var ASCII_ONLY_RE_2;
 var LINE_BREAK_RE;
 var MAX_LINE_BREAK_VARIANTS;
-deferInit("chunk-e6aww6q8.js:1899758", () => {
+deferInit("chunk-5xgkngpb.js:1978648", () => {
   DENY_OR_ASK_BEHAVIORS = ["deny", "ask"];
-  EDIT_WRITE_TOOL_STUBS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].map((name) => ({
+  EDIT_WRITE_TOOL_STUBS = [EDIT, FILE_WRITE_TOOL_NAME].map((name) => ({
     name,
     mcpInfo: undefined,
     familyParentToolName: undefined,
@@ -298,7 +299,7 @@ deferInit("chunk-e6aww6q8.js:1899758", () => {
   LINE_BREAK_RE = /[\n\r\u2028\u2029]/g;
   MAX_LINE_BREAK_VARIANTS = 16;
 });
-//@ chunk-e6aww6q8.js:1899938-1900070 placement
+//@ chunk-5xgkngpb.js:1978828-1978960 placement
 function lineBreakVariants(text) {
   return [
     text,
@@ -307,7 +308,7 @@ function lineBreakVariants(text) {
       .map(({ index }) => text.slice(0, index) + text.slice(index).replace(LINE_BREAK_RE, "\x01")),
   ];
 }
-//@ chunk-e6aww6q8.js:1900070-1902037 placement
+//@ chunk-5xgkngpb.js:1978960-1980927 placement
 /**
  * 检查一条路径是否被目录同步规则拒绝读取或编辑。
  */
@@ -340,21 +341,17 @@ function checkDirSyncRule(
   if (
     ctx === "read"
       ? getDenyRuleForTool(contexts.asWritten, READ_PATH_PROBE) !== null ||
-        getAskRuleForTool(contexts.asWritten, READ_PATH_PROBE) !== null
+        findAskRuleForTool(contexts.asWritten, READ_PATH_PROBE) !== null
       : EDIT_WRITE_TOOL_STUBS.some(
           (rule_2) =>
-            (behavior === "deny" ? getDenyRuleForTool : getAskRuleForTool)(contexts.asWritten, rule_2) !==
+            (behavior === "deny" ? getDenyRuleForTool : findAskRuleForTool)(contexts.asWritten, rule_2) !==
             null,
         )
   )
     return staticReasonResult("read_denied");
   let filtered = (ctx === "read" ? DENY_OR_ASK_BEHAVIORS : [behavior]).filter(
     (rule_3) =>
-      getContentRulesMapForToolName(
-        contexts.asWritten,
-        ctx === "read" ? FILE_READ_TOOL_NAME : FILE_EDIT_TOOL_NAME,
-        rule_3,
-      ).size > 0,
+      getContentRulesMapForToolName(contexts.asWritten, ctx === "read" ? READ : EDIT, rule_3).size > 0,
   );
   if (filtered.length === 0) return staticReasonResult(null);
   let all = [...target, ...rules.map((rule) => rule.ruleValue.ruleContent ?? "")].every((rule_4) =>
@@ -372,7 +369,7 @@ function checkDirSyncRule(
   };
   let anyMatch = (rules, tool) =>
     rules.some((rule) => (rule.match(LINE_BREAK_RE)?.length ?? 0) > MAX_LINE_BREAK_VARIANTS) ||
-    uniq(rules.flatMap(lineBreakVariants)).some((variant) =>
+    normalizeCaseForComparison_2(rules.flatMap(lineBreakVariants)).some((variant) =>
       filtered.some(
         (trialBehavior) =>
           (ctx === "edit" && behavior === "deny" && variant !== variant.trim()) ||
@@ -420,7 +417,7 @@ function checkDirSyncRule(
   let asWrittenPaths = (relativePath) =>
     depth === "as_from_root"
       ? fromRootCwd(relativePath)
-      : uniq([
+      : normalizeCaseForComparison_2([
           ...target.map((root) => join(root, relativePath)),
           ...belowVariants(relativePath, (segment) => segment),
         ]);
@@ -458,14 +455,14 @@ function checkDirSyncRule(
     reasonForEveryFile: null,
   };
 }
-//@ chunk-e6aww6q8.js:1902037-1902105 placement
+//@ chunk-5xgkngpb.js:1980927-1980995 placement
 function staticReasonResult(reason) {
   return {
     getReasonForFile: () => reason,
     reasonForEveryFile: reason,
   };
 }
-//@ chunk-e6aww6q8.js:1902105-1902716 placement
+//@ chunk-5xgkngpb.js:1980995-1981610 placement
 /**
  * 计算上传过滤规则：合并启动规则与仓库根目录规则，按过滤根目录换算路径。
  */
@@ -507,11 +504,11 @@ function resolveUploadFilterRules({
   );
   return finish(mergedRules, asFiltersOwnRoot.isLaunchDirBelowRoot);
 }
-//@ chunk-e6aww6q8.js:1902716-1902757 placement
+//@ chunk-5xgkngpb.js:1981610-1981651 placement
 function filterPermissionErrors(errors, errors_2, root) {
   return errors.filter(isPermissionSettingsError);
 }
-//@ chunk-e6aww6q8.js:1902757-1903680 placement
+//@ chunk-5xgkngpb.js:1981651-1982574 placement
 /**
  * 计算启动时的同步规则；仓库层设置冻结时，合并冻结值与实时值（规则去重、拒绝与凭据取并集），保证只会更严格。
  */
@@ -537,35 +534,41 @@ function collectLaunchRules(syncedRoot) {
       jsonStringify,
     ),
     sandbox: {
-      denies: uniq([...frozenRules.sandbox.denies, ...liveRules.sandbox.denies]),
-      credentials: uniq([...frozenRules.sandbox.credentials, ...liveRules.sandbox.credentials]),
+      denies: normalizeCaseForComparison_2([...frozenRules.sandbox.denies, ...liveRules.sandbox.denies]),
+      credentials: normalizeCaseForComparison_2([
+        ...frozenRules.sandbox.credentials,
+        ...liveRules.sandbox.credentials,
+      ]),
       reopens: frozenRules.sandbox.reopens,
     },
     sandboxMovedToRoot:
       frozenRules.sandboxMovedToRoot === undefined || liveRules.sandboxMovedToRoot === undefined
         ? undefined
         : {
-            denies: uniq([...frozenRules.sandboxMovedToRoot.denies, ...liveRules.sandboxMovedToRoot.denies]),
-            credentials: uniq([
+            denies: normalizeCaseForComparison_2([
+              ...frozenRules.sandboxMovedToRoot.denies,
+              ...liveRules.sandboxMovedToRoot.denies,
+            ]),
+            credentials: normalizeCaseForComparison_2([
               ...frozenRules.sandboxMovedToRoot.credentials,
               ...liveRules.sandboxMovedToRoot.credentials,
             ]),
             reopens: frozenRules.sandboxMovedToRoot.reopens,
           },
     complete: frozenRules.complete && liveRules.complete,
-    unreadableSettingsFiles: uniq([
+    unreadableSettingsFiles: normalizeCaseForComparison_2([
       ...(frozenRules.unreadableSettingsFiles ?? []),
       ...(liveRules.unreadableSettingsFiles ?? []),
     ]),
   };
 }
-//@ chunk-e6aww6q8.js:1903680-1905458 placement
+//@ chunk-5xgkngpb.js:1982574-1984354 placement
 /**
  * 汇总目录同步上传要遵守的规则：磁盘上的 deny/ask 权限规则（含用户设置补充）、各设置源的沙箱 denyRead/凭据文件/allowRead（reopen），并记录无法解析的来源。
  */
 function loadDirSyncRules(includeAll, userRules, syncedRoot) {
   invalidateCommandNames();
-  let { errors } = getSettingsWithErrors_2();
+  let { errors } = getSettingsWithErrors();
   let filtered = loadAllPermissionRulesFromDisk().filter(
     (rule) => rule.ruleBehavior === "deny" || rule.ruleBehavior === "ask",
   );
@@ -574,7 +577,7 @@ function loadDirSyncRules(includeAll, userRules, syncedRoot) {
     (rule_3) => rule_3.ruleBehavior !== "allow",
   );
   let readRules = [...filtered, ...filtered_2.filter((rule_4) => !seenRules.has(jsonStringify(rule_4)))];
-  let startupReadRules = launchDenyRulesForRead(FILE_READ_TOOL_NAME, [READ_PATH_PROBE]);
+  let startupReadRules = launchDenyRulesForRead(READ, [READ_PATH_PROBE]);
   let extraRules = [];
   let managedReadOnly = shouldAllowManagedReadPathsOnly();
   let flattened = SETTING_SOURCES.flatMap((rule_5) => sandboxReadEntriesForSource(rule_5, managedReadOnly));
@@ -616,15 +619,15 @@ function loadDirSyncRules(includeAll, userRules, syncedRoot) {
   let filtered_3 = sandboxEntries.filter((entry) => entry.kind === "unresolvable");
   let complete = permissionErrors.length === 0 && filtered_3.length === 0;
   let resolvedOfKind = (kind, entries = sandboxEntries) =>
-    uniq(entries.flatMap((entry) => (entry.kind === kind ? entry.resolved : [])));
+    normalizeCaseForComparison_2(entries.flatMap((entry) => (entry.kind === kind ? entry.resolved : [])));
   let entries = sandboxEntries.filter((entry) => entry.isMovedToRoot === true);
   if (includeAll)
     logDirSyncUploadRules({
       read_rules: readRules.length,
       startup_read_rules: startupReadRules.length,
-      sandbox_deny_read: count(sandboxEntries, (entry) => entry.kind === "deny_read"),
-      sandbox_credential_files: count(sandboxEntries, (entry) => entry.kind === "credential_file"),
-      sandbox_reopens: count(sandboxEntries, (entry) => entry.kind === "reopen"),
+      sandbox_deny_read: countWhere(sandboxEntries, (entry) => entry.kind === "deny_read"),
+      sandbox_credential_files: countWhere(sandboxEntries, (entry) => entry.kind === "credential_file"),
+      sandbox_reopens: countWhere(sandboxEntries, (entry) => entry.kind === "reopen"),
       sandbox_from_user: sandboxEntries.some((entry) => entry.source === "userSettings"),
       sandbox_from_project: sandboxEntries.some((entry) => REPO_DIR_SETTING_SOURCES.has(entry.source)),
       sandbox_from_flag: sandboxEntries.some((entry) => entry.source === "flagSettings"),
@@ -646,24 +649,24 @@ function loadDirSyncRules(includeAll, userRules, syncedRoot) {
       reopens: resolvedOfKind("reopen", entries),
     },
     complete,
-    unreadableSettingsFiles: uniq([
+    unreadableSettingsFiles: normalizeCaseForComparison_2([
       ...permissionErrors.flatMap((error) => error.file ?? []),
       ...filtered_3.flatMap((entry) => entry.file ?? []),
     ]),
   };
 }
-//@ chunk-e6aww6q8.js:1905458-1905574 placement
+//@ chunk-5xgkngpb.js:1984354-1984470 placement
 function relativePosixPath(from, to) {
   let relative = relative_2(from, to);
   return relative === "" || relative === ".." || relative.startsWith(".." + sep) || isAbsolute(relative)
     ? null
     : relative.split(sep).join("/");
 }
-//@ chunk-e6aww6q8.js:1905574-1905624 placement
+//@ chunk-5xgkngpb.js:1984470-1984520 placement
 function relativePosixOrNull(from, to) {
   return relative_2(from, to) === "" ? "" : relativePosixPath(from, to);
 }
-//@ chunk-e6aww6q8.js:1905624-1905742 placement
+//@ chunk-5xgkngpb.js:1984520-1984638 placement
 var EMPTY_LAUNCH_DIR_INFO = {
   launchDirSpellings: [],
   isLaunchDirResolved: false,
@@ -671,7 +674,7 @@ var EMPTY_LAUNCH_DIR_INFO = {
   isBelowRoot: false,
   isRootThatWasRead: false,
 };
-//@ chunk-e6aww6q8.js:1905742-1906136 placement
+//@ chunk-5xgkngpb.js:1984638-1985032 placement
 /**
  * 计算启动目录的同步信息（拼写、是否已解析、是否在根下、根是否被读过）。
  */
@@ -687,7 +690,7 @@ function launchDirInfo(dirs, realRoot, root) {
     return "unknown";
   let relative = cwdReal === null ? null : relativePosixOrNull(realRoot, cwdReal);
   return {
-    launchDirSpellings: uniq([originalCwdOrNull, cwdReal ?? originalCwdOrNull]),
+    launchDirSpellings: normalizeCaseForComparison_2([originalCwdOrNull, cwdReal ?? originalCwdOrNull]),
     isLaunchDirResolved: cwdReal !== null,
     resolvedPathBelowRoot: relative,
     isBelowRoot:
@@ -696,7 +699,7 @@ function launchDirInfo(dirs, realRoot, root) {
     isRootThatWasRead: root !== undefined && relativePosixOrNull(realRoot, rootReal) === "",
   };
 }
-//@ chunk-e6aww6q8.js:1906136-1906426 placement
+//@ chunk-5xgkngpb.js:1985032-1985322 placement
 function isPermissionSettingsError(error) {
   return (
     isBlockingSandboxSettingsError(error) ||
@@ -708,7 +711,7 @@ function isPermissionSettingsError(error) {
           !error.path.startsWith("sandbox.filesystem.allowWrite"))))
   );
 }
-//@ chunk-e6aww6q8.js:1906426-1906585 placement
+//@ chunk-5xgkngpb.js:1985322-1985481 placement
 function isBlockingSandboxSettingsError(error) {
   return (
     !error.removal &&
@@ -718,7 +721,7 @@ function isBlockingSandboxSettingsError(error) {
       error.path.startsWith("sandbox.credentials.files"))
   );
 }
-//@ chunk-e6aww6q8.js:1906585-1908176 placement
+//@ chunk-5xgkngpb.js:1985481-1987075 placement
 /**
  * 把仓库根设置里的上传过滤规则叠加到已有规则上（冻结仓库层、去重、只更严格）。
  */
@@ -779,7 +782,8 @@ function addLaunchRules(root, rules, { asFiltersOwnRoot, source = "projectSettin
       credentials: resolvedOfKind(otherEntries, "credential_file"),
     },
   });
-  let mergeEntries = (rule, existing = []) => uniq([...existing, ...repoRuleSet.flatMap(rule)]);
+  let mergeEntries = (rule, existing = []) =>
+    normalizeCaseForComparison_2([...existing, ...repoRuleSet.flatMap(rule)]);
   let fromRoot = rules.fromRoot?.root === root ? rules.fromRoot : undefined;
   return {
     ...rules,
@@ -800,17 +804,17 @@ function addLaunchRules(root, rules, { asFiltersOwnRoot, source = "projectSettin
     complete: rules.complete && complete,
     unreadableSettingsFiles: complete
       ? rules.unreadableSettingsFiles
-      : uniq([...(rules.unreadableSettingsFiles ?? []), settingsPath]),
+      : normalizeCaseForComparison_2([...(rules.unreadableSettingsFiles ?? []), settingsPath]),
   };
 }
-//@ chunk-e6aww6q8.js:1908176-1908227 placement
+//@ chunk-5xgkngpb.js:1987075-1987126 placement
 var repoFreezeRuleCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakSet_4;
-deferInit("chunk-e6aww6q8.js:1908176", () => {
+deferInit("chunk-5xgkngpb.js:1987075", () => {
   repoFreezeRuleCache = identity_2(new Map(), (map) => map.clear());
   weakSet_4 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:1908227-1908419 placement
+//@ chunk-5xgkngpb.js:1987126-1987318 placement
 function rulesWithFrozenRepo(settingsPath, settingsPath_2, rules) {
   if (!isRepoTierFreezeHeld()) return [rules];
   let state = commandSyncNameState();
@@ -825,7 +829,7 @@ function rulesWithFrozenRepo(settingsPath, settingsPath_2, rules) {
   if (settingsPath_2) repoFreezeRuleCache.set(settingsPath, rules);
   return [rules];
 }
-//@ chunk-e6aww6q8.js:1908419-1908583 placement
+//@ chunk-5xgkngpb.js:1987318-1987482 placement
 function launchDenyRulesForRead(toolName, ruleContent) {
   return launchDenyRules(getLaunchPermissions()).filter((rule) =>
     rule.ruleValue.ruleContent !== undefined
@@ -836,14 +840,14 @@ function launchDenyRulesForRead(toolName, ruleContent) {
         ),
   );
 }
-//@ chunk-e6aww6q8.js:1908583-1908627 placement
+//@ chunk-5xgkngpb.js:1987482-1987526 placement
 var lastLoggedUploadRules; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var lastLoggedHostConfig;
-deferInit("chunk-e6aww6q8.js:1908583", () => {
+deferInit("chunk-5xgkngpb.js:1987482", () => {
   lastLoggedUploadRules = null;
   lastLoggedHostConfig = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:1908627-1908740 placement
+//@ chunk-5xgkngpb.js:1987526-1987639 placement
 function logDirSyncHostConfig(source, hostConfig, extra) {
   let json = jsonStringify(hostConfig);
   if (lastLoggedHostConfig.get(source) === json) return;
@@ -853,19 +857,19 @@ function logDirSyncHostConfig(source, hostConfig, extra) {
     ...extra,
   });
 }
-//@ chunk-e6aww6q8.js:1908740-1908775 placement
+//@ chunk-5xgkngpb.js:1987639-1987674 placement
 var lastLoggedFilterEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1908740", () => {
+deferInit("chunk-5xgkngpb.js:1987639", () => {
   lastLoggedFilterEvent = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:1908775-1908876 placement
+//@ chunk-5xgkngpb.js:1987674-1987775 placement
 function logUploadFilterEvent(key, value, extra) {
   let json = jsonStringify(extra);
   if (lastLoggedFilterEvent.get(key) === json) return;
   lastLoggedFilterEvent.set(key, json);
   logEvent(`tengu_upload_filter_${value}`, extra);
 }
-//@ chunk-e6aww6q8.js:1908876-1909100 placement
+//@ chunk-5xgkngpb.js:1987775-1987999 placement
 function logDirSyncUploadRules(rulesResult) {
   let complete =
     rulesResult.complete &&
@@ -880,7 +884,7 @@ function logDirSyncUploadRules(rulesResult) {
   lastLoggedUploadRules = reason;
   logEvent("tengu_dir_sync_upload_rules", rulesResult);
 }
-//@ chunk-e6aww6q8.js:1909192-1909843 placement
+//@ chunk-5xgkngpb.js:1988091-1988745 placement
 /**
  * 收集某个设置源的沙箱读取相关条目，无法解析时标记为 unresolvable。
  */
@@ -928,7 +932,7 @@ function sandboxReadEntriesForSource(source, source_2, extra) {
     }),
   ];
 }
-//@ chunk-e6aww6q8.js:1909843-1910215 placement
+//@ chunk-5xgkngpb.js:1988745-1989117 placement
 /**
  * 在 Windows 上为沙箱拒绝路径补上大小写/别名拼写，避免漏拒。
  */
@@ -964,17 +968,17 @@ function withWindowsSandboxSpellings(settings) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1910215-1910292 placement (2.1.88 match: getEnabledSettingSources, 1)
+//@ chunk-5xgkngpb.js:1989117-1989194 placement (2.1.88 match: getEnabledSettingSources, 1)
 function getWritableSettingsPathForSource(source) {
   return source === "policySettings" || source === "flagSettings"
     ? undefined
     : getSettingsFilePathForSource(source);
 }
-//@ chunk-e6aww6q8.js:1910292-1910338 placement
+//@ chunk-5xgkngpb.js:1989194-1989240 placement
 function isReadableSettingsFile(path) {
   return !parseSettingsFile(path).errors.some(isBlockingSandboxSettingsError);
 }
-//@ chunk-e6aww6q8.js:1910338-1910559 placement
+//@ chunk-5xgkngpb.js:1989240-1989461 placement
 function resolveSandboxReadEntry(kind, source, resolve, extra) {
   try {
     return {
@@ -996,7 +1000,7 @@ function resolveSandboxReadEntry(kind, source, resolve, extra) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1910559-1910780 placement
+//@ chunk-5xgkngpb.js:1989461-1989682 placement
 function maskSweepSpellings(sandboxDenyReadEntry) {
   let isWindows = getPlatform() === "windows";
   let index = sandboxDenyReadEntry.search(isWindows ? /[*?]/ : /[*?[\]]/);
@@ -1014,7 +1018,7 @@ function maskSweepSpellings(sandboxDenyReadEntry) {
     ? [sandboxDenyReadEntry]
     : [sandboxDenyReadEntry, canonicalizedEntry];
 }
-//@ chunk-e6aww6q8.js:1910780-1911738 placement
+//@ chunk-5xgkngpb.js:1989682-1990640 placement
 function classifySyncedFileSensitivity(
   options = resolveUploadFilterRules(),
   {
@@ -1077,9 +1081,9 @@ function classifySyncedFileSensitivity(
     unreadableSettingsFiles: options.unreadableSettingsFiles ?? [],
   };
 }
-//@ chunk-e6aww6q8.js:1911738-1911748 placement
+//@ chunk-5xgkngpb.js:1990640-1990650 placement
 var MAX_LISTED_FAILURES = 3;
-//@ chunk-e6aww6q8.js:1911748-1911921 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-5xgkngpb.js:1990650-1990823 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails_3(errors) {
   if (errors === undefined || errors.length === 0) return "";
   let mapped = errors
@@ -1088,12 +1092,12 @@ function formatFailureDetails_3(errors) {
   let remaining = errors.length - mapped.length;
   return `${mapped.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
-//@ chunk-e6aww6q8.js:1911921-1911987 placement
+//@ chunk-5xgkngpb.js:1990823-1990889 placement
 function settingsReadErrorsSuffix(errors) {
   let details = formatFailureDetails_3(errors);
   return details === "" ? "" : ` (errors in ${details})`;
 }
-//@ chunk-e6aww6q8.js:1911987-1912056 placement
+//@ chunk-5xgkngpb.js:1990889-1990958 placement
 /**
  * 「设置未能全部读取」提示。
  */
@@ -1101,12 +1105,12 @@ function settingsReadFailureText(errors) {
   return `your settings could not all be read${settingsReadErrorsSuffix(errors)}`;
 }
 export {
+  logDirSyncHostConfig,
   collectLaunchRules,
   classifySyncedFileSensitivity,
   resolveUploadFilterRules,
   settingsReadErrorsSuffix,
-  resolveDirSyncRules,
-  logDirSyncHostConfig,
   formatFailureDetails_3,
   settingsReadFailureText,
+  resolveDirSyncRules,
 };

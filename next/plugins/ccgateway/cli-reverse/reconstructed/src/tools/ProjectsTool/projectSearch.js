@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 工具方法分派与搜索结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (2)
  * attribution: placement 2
  */
 import { createHash } from "crypto";
@@ -68,7 +68,7 @@ import { ProjectsPreconditionError } from "./projectsAuth.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 
-//@ chunk-eg496hkq.js:51502-56595 placement
+//@ chunk-y2k9w57g.js:53706-58799 placement
 /**
  * Projects 工具按 method 分派到 info/read/search/write/delete/memory 等具体实现。
  */
@@ -415,7 +415,7 @@ async function runProjectsMethod(
     }
   }
 }
-//@ chunk-eg496hkq.js:56595-57051 placement
+//@ chunk-y2k9w57g.js:58799-59255 placement
 function extractSearchResults(response) {
   if (response === null || typeof response !== "object") return [];
   let body = response;

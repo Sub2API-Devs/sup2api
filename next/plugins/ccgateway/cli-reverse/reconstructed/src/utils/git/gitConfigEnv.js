@@ -3,25 +3,25 @@
  *
  * GIT_CONFIG_* 环境构造（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (3)
  * attribution: placement 3
  */
 import { isAbsolute } from "path";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:4038-4159 placement
+//@ chunk-5fn9rb8r.js:4176-4297 placement
 var QUOTED_PARAM_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_CONFIG_PARAMETERS_RE;
-deferInit("chunk-q8cqcff6.js:4038", () => {
+deferInit("chunk-5fn9rb8r.js:4176", () => {
   QUOTED_PARAM_RE = String.raw`'([^']*)'(?:(=)(?:'([^']*)')?)?`;
   GIT_CONFIG_PARAMETERS_RE = new RegExp(
     String.raw`^(?:${QUOTED_PARAM_RE}(?:[ \t\r\n]+${QUOTED_PARAM_RE})*)?[ \t\r\n]*$`,
   );
 });
-//@ chunk-q8cqcff6.js:4159-4811 placement
+//@ chunk-5fn9rb8r.js:4297-4949 placement
 function buildGitConfigEnv(env = process.env) {
   let pairs = [];
   let GIT_CONFIG_COUNT = env.GIT_CONFIG_COUNT;
@@ -58,7 +58,7 @@ function buildGitConfigEnv(env = process.env) {
   envOut.GIT_CONFIG_COUNT = String(index);
   return envOut;
 }
-//@ chunk-q8cqcff6.js:4811-4976 placement
+//@ chunk-5fn9rb8r.js:4949-5114 placement
 /**
  * 保留绝对的 GIT_CONFIG_GLOBAL/SYSTEM 并构造安全 git 环境。
  */
@@ -73,4 +73,4 @@ function buildGitConfigScopedEnv() {
     ...buildGitConfigEnv(),
   });
 }
-export { buildGitConfigEnv, buildGitConfigScopedEnv };
+export { buildGitConfigScopedEnv, buildGitConfigEnv };

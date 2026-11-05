@@ -1,20 +1,20 @@
 /**
  * fflate/esm/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fflate@0.8.2
- * pieces: chunk-9t1jcaah.js (33)
+ * pieces: chunk-9h5cg2dh.js (33)
  * attribution: esm-layout 18, esm-fingerprint 11, layout 4
  */
 import { createRequire } from "module";
 
-//@ chunk-9t1jcaah.js:231-249 esm-layout
+//@ chunk-9h5cg2dh.js:231-249 esm-layout
 var requireModule = createRequire("/");
 var Worker;
-//@ chunk-9t1jcaah.js:249-294 esm-fingerprint
+//@ chunk-9h5cg2dh.js:249-294 esm-fingerprint
 try {
   Worker = requireModule("worker_threads").Worker;
 } catch (e) {}
-//@ chunk-9t1jcaah.js:294-760 esm-layout
+//@ chunk-9h5cg2dh.js:294-760 esm-layout
 /**
  * fflate 解压常量表（第三方库 fflate 的 inflate 实现，被误归到 AnimatedAsterisk）。
  */
@@ -41,21 +41,21 @@ var freb = function (eb, start) {
 };
 var frebFleb = freb(fleb, 2);
 var { b: flt, r: revfl } = frebFleb;
-//@ chunk-9t1jcaah.js:760-782 esm-layout
+//@ chunk-9h5cg2dh.js:760-782 esm-layout
 flt[28] = 258;
 revfl[258] = 28;
-//@ chunk-9t1jcaah.js:782-829 esm-layout
+//@ chunk-9h5cg2dh.js:782-829 esm-layout
 var frebFdeb = freb(fdeb, 0);
 var { b: fdt, r: revfd } = frebFdeb;
 var rev = new u16(32768);
-//@ chunk-9t1jcaah.js:829-967 esm-fingerprint
+//@ chunk-9h5cg2dh.js:829-967 esm-fingerprint
 for (i = 0; i < 32768; ++i) {
   x = ((i & 43690) >> 1) | ((i & 21845) << 1);
   x = ((x & 52428) >> 2) | ((x & 13107) << 2);
   x = ((x & 61680) >> 4) | ((x & 3855) << 4);
   rev[i] = (((x & 65280) >> 8) | ((x & 255) << 8)) >> 1;
 }
-//@ chunk-9t1jcaah.js:967-1352 esm-layout
+//@ chunk-9h5cg2dh.js:967-1352 esm-layout
 var x;
 var i;
 var hMap = function (cd, mb, r) {
@@ -83,31 +83,31 @@ var hMap = function (cd, mb, r) {
   return co;
 };
 var flt_2 = new u8(288);
-//@ chunk-9t1jcaah.js:1352-1377 esm-layout
+//@ chunk-9h5cg2dh.js:1352-1377 esm-layout
 for (i = 0; i < 144; ++i) flt_2[i] = 8;
-//@ chunk-9t1jcaah.js:1377-1383 esm-layout
+//@ chunk-9h5cg2dh.js:1377-1383 esm-layout
 var i;
-//@ chunk-9t1jcaah.js:1383-1410 esm-layout
+//@ chunk-9h5cg2dh.js:1383-1410 esm-layout
 for (i = 144; i < 256; ++i) flt_2[i] = 9;
-//@ chunk-9t1jcaah.js:1410-1416 esm-layout
+//@ chunk-9h5cg2dh.js:1410-1416 esm-layout
 var i;
-//@ chunk-9t1jcaah.js:1416-1443 esm-layout
+//@ chunk-9h5cg2dh.js:1416-1443 esm-layout
 for (i = 256; i < 280; ++i) flt_2[i] = 7;
-//@ chunk-9t1jcaah.js:1443-1449 esm-layout
+//@ chunk-9h5cg2dh.js:1443-1449 esm-layout
 var i;
-//@ chunk-9t1jcaah.js:1449-1476 esm-layout
+//@ chunk-9h5cg2dh.js:1449-1476 esm-layout
 for (i = 280; i < 288; ++i) flt_2[i] = 8;
-//@ chunk-9t1jcaah.js:1476-1495 esm-layout
+//@ chunk-9h5cg2dh.js:1476-1495 esm-layout
 var i;
 var fdt_2 = new u8(32);
-//@ chunk-9t1jcaah.js:1495-1520 esm-layout
+//@ chunk-9h5cg2dh.js:1495-1520 esm-layout
 for (i = 0; i < 32; ++i) fdt_2[i] = 5;
-//@ chunk-9t1jcaah.js:1520-1539 esm-layout
+//@ chunk-9h5cg2dh.js:1520-1539 esm-layout
 var i;
 var import_hMap = hMap(flt_2, 9, 0);
-//@ chunk-9t1jcaah.js:1539-1557 esm-layout
+//@ chunk-9h5cg2dh.js:1539-1557 esm-layout
 var import_hMapDict = hMap(fdt_2, 5, 0);
-//@ chunk-9t1jcaah.js:1557-1697 esm-layout
+//@ chunk-9h5cg2dh.js:1557-1697 esm-layout
 var shft = function (pos) {
   return ((pos + 7) / 8) | 0;
 };
@@ -116,7 +116,7 @@ var slc = function (v, s, e) {
   if (e == null || e > v.length) e = v.length;
   return new u8(v.subarray(s, e));
 };
-//@ chunk-9t1jcaah.js:1697-2102 esm-fingerprint
+//@ chunk-9h5cg2dh.js:1697-2102 esm-fingerprint
 var ec = [
   "unexpected EOF",
   "invalid block type",
@@ -140,7 +140,7 @@ var err = function (ind, msg, nt) {
   if (!nt) throw error;
   return error;
 };
-//@ chunk-9t1jcaah.js:2102-6473 esm-layout
+//@ chunk-9h5cg2dh.js:2102-6473 esm-layout
 var wbits = function (d, p, v) {
   v <<= p & 7;
   var o = (p / 8) | 0;
@@ -537,7 +537,7 @@ var crc = function () {
     },
   };
 };
-//@ chunk-9t1jcaah.js:6473-6857 esm-fingerprint
+//@ chunk-9h5cg2dh.js:6473-6857 esm-fingerprint
 var deflateStream = function (dat, opt, pre, post, st) {
   if (!st) {
     st = {
@@ -571,14 +571,14 @@ var mrg = function (a, b) {
   for (var k in b) o[k] = b[k];
   return o;
 };
-//@ chunk-9t1jcaah.js:6857-6905 esm-layout
+//@ chunk-9h5cg2dh.js:6857-6905 esm-layout
 var wbytes = function (out, b, v) {
   for (; v; ++b) {
     out[b] = v;
     v >>>= 8;
   }
 };
-//@ chunk-9t1jcaah.js:6905-7948 esm-fingerprint
+//@ chunk-9h5cg2dh.js:6905-7948 esm-fingerprint
 var Deflate = (function () {
   function Deflate(opts, cb) {
     if (typeof opts == "function") {
@@ -642,11 +642,11 @@ var Deflate = (function () {
   };
   return Deflate;
 })();
-//@ chunk-9t1jcaah.js:7948-7988 esm-layout
+//@ chunk-9h5cg2dh.js:7948-7988 esm-layout
 function deflateSync(file, opts) {
   return deflateStream(file, opts || {}, 0, 0);
 }
-//@ chunk-9t1jcaah.js:7988-8252 esm-layout
+//@ chunk-9h5cg2dh.js:7988-8252 esm-layout
 var fltn = function (d, p, files, o_2) {
   for (var k in d) {
     var val = d[k];
@@ -666,14 +666,14 @@ var fltn = function (d, p, files, o_2) {
 var te = typeof TextEncoder !== "undefined" && new TextEncoder();
 var td = typeof TextDecoder !== "undefined" && new TextDecoder();
 var tds = 0;
-//@ chunk-9t1jcaah.js:8252-8297 esm-fingerprint
+//@ chunk-9h5cg2dh.js:8252-8297 esm-fingerprint
 try {
   td.decode(et, {
     stream: true,
   });
   tds = 1;
 } catch (e) {}
-//@ chunk-9t1jcaah.js:8297-8841 esm-fingerprint
+//@ chunk-9h5cg2dh.js:8297-8841 esm-fingerprint
 function strToU8(str, latin1) {
   if (latin1) {
     var ar_1 = new u8(str.length);
@@ -712,11 +712,11 @@ function strToU8(str, latin1) {
   }
   return slc(ar, 0, ai);
 }
-//@ chunk-9t1jcaah.js:8841-8890 esm-layout
+//@ chunk-9h5cg2dh.js:8841-8890 esm-layout
 var dbf = function (l) {
   return l == 1 ? 3 : l < 6 ? 2 : l == 9 ? 1 : 0;
 };
-//@ chunk-9t1jcaah.js:8890-10082 esm-fingerprint
+//@ chunk-9h5cg2dh.js:8890-10082 esm-fingerprint
 var exfl = function (ex) {
   var le = 0;
   if (ex)
@@ -815,7 +815,7 @@ var ZipPassThrough = (function () {
   };
   return ZipPassThrough;
 })();
-//@ chunk-9t1jcaah.js:10082-10411 esm-fingerprint
+//@ chunk-9h5cg2dh.js:10082-10411 esm-fingerprint
 var ZipDeflate = (function () {
   function ZipDeflate(filename, opts) {
     var _this = this;
@@ -839,7 +839,7 @@ var ZipDeflate = (function () {
   };
   return ZipDeflate;
 })();
-//@ chunk-9t1jcaah.js:10411-11990 esm-fingerprint
+//@ chunk-9h5cg2dh.js:10411-11990 esm-fingerprint
 var Zip = (function () {
   function Zip(ondata) {
     this.ondata = ondata;
@@ -961,7 +961,7 @@ var Zip = (function () {
   };
   return Zip;
 })();
-//@ chunk-9t1jcaah.js:11990-12619 esm-fingerprint
+//@ chunk-9h5cg2dh.js:11990-12619 esm-fingerprint
 function zipSync(data, opts) {
   if (!opts) opts = {};
   var r = {};

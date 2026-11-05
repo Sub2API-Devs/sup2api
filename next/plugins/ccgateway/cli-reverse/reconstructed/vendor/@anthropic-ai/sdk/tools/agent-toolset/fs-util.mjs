@@ -1,37 +1,37 @@
 /**
  * @anthropic-ai/sdk/tools/agent-toolset/fs-util.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (9)
+ * pieces: chunk-m6wtswwx.js (9)
  * attribution: esm-fingerprint 7, esm-layout 2
  */
-import * as hat from "fs";
-import * as zp from "path";
-import * as BRt from "crypto";
+import * as Jpt from "fs";
+import * as Nm from "path";
+import * as pHt from "crypto";
 import { ToolError } from "../../lib/tools/ToolError.mjs";
 
-//@ chunk-2cw52qnf.js:796-828 esm-fingerprint
-var fs = hat.promises;
+//@ chunk-m6wtswwx.js:796-828 esm-fingerprint
+var fs = Jpt.promises;
 var DIR_CREATE_MODE = 448;
 var FILE_CREATE_MODE = 384;
-//@ chunk-2cw52qnf.js:828-939 esm-fingerprint
+//@ chunk-m6wtswwx.js:828-939 esm-fingerprint
 function isWithin(root, p) {
-  let rel = zp.relative(root, p);
-  return rel === "" || (!rel.startsWith(".." + zp.sep) && rel !== ".." && !zp.isAbsolute(rel));
+  let rel = Nm.relative(root, p);
+  return rel === "" || (!rel.startsWith(".." + Nm.sep) && rel !== ".." && !Nm.isAbsolute(rel));
 }
-//@ chunk-2cw52qnf.js:939-1025 esm-layout
+//@ chunk-m6wtswwx.js:939-1025 esm-layout
 async function containingRoot(roots, target) {
-  for (let root of roots) if (isWithin(await canonicalize(zp.resolve(root)), target)) return root;
+  for (let root of roots) if (isWithin(await canonicalize(Nm.resolve(root)), target)) return root;
   return;
 }
-//@ chunk-2cw52qnf.js:1025-1035 esm-layout
+//@ chunk-m6wtswwx.js:1025-1035 esm-layout
 var MAX_SYMLINK_HOPS = 40;
-//@ chunk-2cw52qnf.js:1035-1099 esm-fingerprint
+//@ chunk-m6wtswwx.js:1035-1099 esm-fingerprint
 function errnoCode(err) {
   let code = err?.code;
   return typeof code === "string" ? code : undefined;
 }
-//@ chunk-2cw52qnf.js:1099-1570 esm-fingerprint
+//@ chunk-m6wtswwx.js:1099-1570 esm-fingerprint
 async function canonicalize(abs) {
   let tail = [];
   let prefix = abs;
@@ -47,9 +47,9 @@ async function canonicalize(abs) {
       } catch (lstatErr) {
         let code = errnoCode(lstatErr);
         if (code !== "ENOENT" && code !== "ENOTDIR") throw lstatErr;
-        let parent = zp.dirname(prefix);
+        let parent = Nm.dirname(prefix);
         if (parent === prefix) throw lstatErr;
-        tail.push(zp.basename(prefix));
+        tail.push(Nm.basename(prefix));
         prefix = parent;
         continue;
       }
@@ -58,19 +58,19 @@ async function canonicalize(abs) {
         throw Object.assign(Error("too many levels of symbolic links"), {
           code: "ELOOP",
         });
-      prefix = zp.resolve(zp.dirname(prefix), await fs.readlink(prefix));
+      prefix = Nm.resolve(Nm.dirname(prefix), await fs.readlink(prefix));
       continue;
     }
-    return tail.length ? zp.join(real, ...tail.reverse()) : real;
+    return tail.length ? Nm.join(real, ...tail.reverse()) : real;
   }
 }
-//@ chunk-2cw52qnf.js:1570-1956 esm-fingerprint
+//@ chunk-m6wtswwx.js:1570-1956 esm-fingerprint
 async function confineToRoot(root, p, opts) {
   let allowedRoots = opts?.allowedRoots ?? [];
-  let realRoot = await canonicalize(zp.resolve(root));
+  let realRoot = await canonicalize(Nm.resolve(root));
   let real;
   try {
-    real = await canonicalize(zp.resolve(realRoot, p));
+    real = await canonicalize(Nm.resolve(realRoot, p));
   } catch (err) {
     throw new ToolError(fsErrorMessage(err, `path ${JSON.stringify(p)}`));
   }
@@ -80,10 +80,10 @@ async function confineToRoot(root, p, opts) {
     : "the session's working directory";
   throw new ToolError(`path ${JSON.stringify(p)} is outside ${permitted}`);
 }
-//@ chunk-2cw52qnf.js:1956-2344 esm-fingerprint
+//@ chunk-m6wtswwx.js:1956-2344 esm-fingerprint
 async function atomicWriteFile(targetPath, content) {
-  let dir = zp.dirname(targetPath);
-  let tempPath = zp.join(dir, `.tmp-${process.pid}-${BRt.randomUUID()}`);
+  let dir = Nm.dirname(targetPath);
+  let tempPath = Nm.join(dir, `.tmp-${process.pid}-${pHt.randomUUID()}`);
   let existingMode = await fs.stat(targetPath).then(
     (st) => st.mode & 511,
     () => {
@@ -105,7 +105,7 @@ async function atomicWriteFile(targetPath, content) {
     throw err;
   }
 }
-//@ chunk-2cw52qnf.js:2344-2868 esm-fingerprint
+//@ chunk-m6wtswwx.js:2344-2868 esm-fingerprint
 function fsErrorMessage(err, file) {
   let code = errnoCode(err);
   switch (code) {

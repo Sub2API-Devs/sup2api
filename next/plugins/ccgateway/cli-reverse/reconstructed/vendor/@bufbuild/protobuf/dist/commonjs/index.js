@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -22,7 +22,7 @@ import { require_merge } from "./merge.js";
 import { require_extensions } from "./extensions.js";
 import { require_proto_int64 } from "./proto-int64.js";
 
-//@ chunk-fq0cr76a.js:466118-467800 cjs-fingerprint
+//@ chunk-qg41pqt6.js:466692-468374 cjs-fingerprint
 var require_protobuf = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

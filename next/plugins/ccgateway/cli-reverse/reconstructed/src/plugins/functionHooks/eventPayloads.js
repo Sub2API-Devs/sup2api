@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子事件载荷的构造与校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { randomUUID } from "crypto";
@@ -13,7 +13,7 @@ import { checkPlainObject, checkPlainData, FORBIDDEN_OBJECT_KEYS } from "./sites
 import { HooksError } from "./hooksErrors.js";
 import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
 
-//@ chunk-e6aww6q8.js:44192-44581 placement
+//@ chunk-5xgkngpb.js:46791-47180 placement
 /**
  * 规整 skill.prompt 的事件负载：frontmatter 转纯数据，来源字段必须是字符串。
  */
@@ -34,7 +34,7 @@ function normalizeSkillPromptPayload(payload) {
     source: payload.source ?? "built-in",
   };
 }
-//@ chunk-e6aww6q8.js:44581-44643 placement
+//@ chunk-5xgkngpb.js:47180-47242 placement
 /**
  * to 默认 anthropic
  */
@@ -45,7 +45,7 @@ var defaultRoute = (entry) =>
         ...entry,
         to: entry.to ?? "anthropic",
       };
-//@ chunk-e6aww6q8.js:44643-45582 placement
+//@ chunk-5xgkngpb.js:47242-48181 placement
 var EVENT_PAYLOAD_SHAPES = {
   "tool.call": (payload) => ({
     ...payload,
@@ -89,7 +89,7 @@ var EVENT_PAYLOAD_SHAPES = {
   "ui.scroll": (payload) => payload,
   "ui.focus": (payload) => payload,
 };
-//@ chunk-e6aww6q8.js:75595-76168 placement
+//@ chunk-5xgkngpb.js:78145-78718 placement
 function isPlainDataValue(value, seen = new Map(), stack = new Set()) {
   if (typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;

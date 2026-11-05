@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具调用的 ask 座席：记录每次 ask 的状态（asking、answered、lapsed、withdrawn）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4nx37fzw.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y4mvty5x.js (3)
  * attribution: placement 3
  */
 import { logRemoteTools } from "./remoteToolsDebug.js";
@@ -13,9 +13,9 @@ import { stableHashWithSalt } from "../../utils/stableHash.js";
 import { SHELL_TOOL_NAMES } from "../../utils/shell/shellToolUtils.js";
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-4nx37fzw.js:334-344 placement
+//@ chunk-y4mvty5x.js:334-344 placement
 var MAX_ASK_CARDS_TRACKED = 256;
-//@ chunk-4nx37fzw.js:344-3731 placement
+//@ chunk-y4mvty5x.js:344-3731 placement
 /**
  * 一次远程 ask 的状态机（发起、继承的请求撤回、超时、回答）。
  */
@@ -274,7 +274,7 @@ class RemoteAskCard {
     return this.#o;
   }
 }
-//@ chunk-4nx37fzw.js:3731-4680 placement
+//@ chunk-y4mvty5x.js:3731-4680 placement
 class RemoteAskSeat {
   now = Date.now;
   #e = new Map();

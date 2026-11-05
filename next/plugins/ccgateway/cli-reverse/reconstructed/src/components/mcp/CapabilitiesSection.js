@@ -3,9 +3,9 @@
  *
  * MCP 服务器能力摘要（tools/resources/prompts）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/CapabilitiesSection.tsx
- * pieces: chunk-vrb44rx7.js (4)
+ * pieces: chunk-wb51jffc.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -25,12 +25,12 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { Byline } from "../design-system/Byline.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:6073-6077 placement
+//@ chunk-wb51jffc.js:6185-6189 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:6073", () => {
+deferInit("chunk-wb51jffc.js:6185", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:6077-6273 placement
+//@ chunk-wb51jffc.js:6189-6385 placement
 function formatToolConnectionState(cacheSavedAt, toolCount) {
   let facts = [
     `cached ${formatRelativeTimeAgo(new Date(cacheSavedAt))}`,
@@ -44,7 +44,7 @@ function formatToolConnectionState(cacheSavedAt, toolCount) {
     facts,
   };
 }
-//@ chunk-vrb44rx7.js:6273-6381 placement
+//@ chunk-wb51jffc.js:6385-6493 placement
 /**
  * 该 MCP 服务器存有 access token 且未过期/未失效。
  */
@@ -56,7 +56,7 @@ async function hasValidMcpOAuthToken(name, config) {
     !!store?.[getServerKey(name, config)]?.accessToken && !hasExpiredAccessTokenOnly(name, config, store)
   );
 }
-//@ chunk-vrb44rx7.js:6381-6898 fingerprint (2.1.88 match: CapabilitiesSection, 0.777)
+//@ chunk-wb51jffc.js:6493-7010 fingerprint (2.1.88 match: CapabilitiesSection, 0.777)
 function CapabilitiesSection(props) {
   let $ = useMemoCache(9);
   let { serverToolsCount, serverPromptsCount, serverResourcesCount } = props;

@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{Jo,YH,ARe}from"./chunk-5ythzcas.js";import{W}from"./chunk-0qffyy27.js";import{gs,t}from"./chunk-6hadbefe.js";import{IZe,kk}from"./chunk-m1f5npav.js";import{y_s}from"./chunk-71parphm.js";import{nd}from"./chunk-daj7hxcs.js";import{R4}from"./chunk-33dv8bes.js";import{closeSync as c,openSync as d}from"fs";import{devNull as g}from"os";class p{line}var l=new W(()=>new p);function MNo(e=0){{if(!process.argv.includes("--session-tunnel")||!nd())return;R4((u)=>t(`[session tunnel] ${u}`,{level:"warn"}));let o=IZe(e,"the session tunnel's line of JSON")??void 0;Jo(l).line=o;let f=d(g,"r");if(f!==e)c(f);let n;try{n=gs(o??"null")}catch{n=null}let r=typeof n?.oauth_token==="string"?n.oauth_token.trim():"",i=typeof n?.agent_proxy_token==="string"?n.agent_proxy_token.trim():"";if(r!=="")kk(),YH(r),ARe("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR");let a=typeof n?.env==="object"&&n.env!==null&&!Array.isArray(n.env)?Object.entries(n.env):[],s={};for(let[u,m]of a)if(typeof m==="string")s[u]=m;return y_s(s),t(`[session tunnel] the line has ${r===""?"no":"an"} OAuth token, ${i===""?"no":"an"} agent proxy token; variables: ${Object.keys(s).length} of ${a.length}`),i===""?void 0:i}return}function Osa(){return Jo(l).line}function DNo(){let e=Jo(l),o=e.line;return e.line=void 0,o}
+export{MNo,Osa,DNo};

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/help 的命令标签页：空提示或标题加去重排序后的可滚动命令列表（读屏模式下为纯列表）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yxcx2jtr.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ahfwxte3.js (8)
  * attribution: placement 8
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -22,11 +22,11 @@ import { HintText } from "../design-system/HintText.js";
 import { useTabHeaderFocus } from "../design-system/Tabs.js";
 import { formatDescriptionWithSource, getHumanFacingDescription } from "../../commands.js";
 
-//@ chunk-yxcx2jtr.js:14074-14078 placement
+//@ chunk-ahfwxte3.js:15251-15255 placement
 init_react_production();
-//@ chunk-yxcx2jtr.js:14078-14082 placement
+//@ chunk-ahfwxte3.js:15255-15259 placement
 init_react_production();
-//@ chunk-yxcx2jtr.js:14082-14173 placement
+//@ chunk-ahfwxte3.js:15259-15350 placement
 function renderNumberedCommand(command, index) {
   return jsxProd_default_2(
     Text,
@@ -36,7 +36,7 @@ function renderNumberedCommand(command, index) {
     command.name,
   );
 }
-//@ chunk-yxcx2jtr.js:14173-14255 placement
+//@ chunk-ahfwxte3.js:15350-15432 placement
 function renderCommandItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -47,7 +47,7 @@ function renderCommandItem(item) {
     item.name,
   );
 }
-//@ chunk-yxcx2jtr.js:14255-14336 placement
+//@ chunk-ahfwxte3.js:15432-15513 placement
 function renderCommandItemCompact(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -58,7 +58,7 @@ function renderCommandItemCompact(item) {
     item.name,
   );
 }
-//@ chunk-yxcx2jtr.js:14336-14731 placement
+//@ chunk-ahfwxte3.js:15513-15909 placement
 /**
  * /help 的命令标签页：无命令时显示空提示，否则显示标题与命令列表。
  */
@@ -106,7 +106,7 @@ function CommandsTab(props) {
   } else content = $[5];
   return content;
 }
-//@ chunk-yxcx2jtr.js:14731-15314 placement
+//@ chunk-ahfwxte3.js:15909-16492 placement
 /**
  * 命令列表：去重排序后渲染；读屏模式下为纯列表，否则为可滚动的有序列表（向上可回到标签头）。
  */
@@ -163,7 +163,7 @@ function CommandList(props) {
   } else list = $[12];
   return list;
 }
-//@ chunk-yxcx2jtr.js:15314-15530 placement
+//@ chunk-ahfwxte3.js:16492-16708 placement
 function toCommandItems(commands) {
   let seenNames = new Set();
   return commands

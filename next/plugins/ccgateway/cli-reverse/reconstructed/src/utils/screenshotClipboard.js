@@ -3,9 +3,9 @@
  *
  * 把 ANSI 文本渲染为 PNG 并复制到剪贴板（按平台用 osascript/xclip/PowerShell）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/screenshotClipboard.ts
- * pieces: chunk-9h8dr0qb.js (3)
+ * pieces: chunk-j6tt9nsa.js (3)
  * attribution: fingerprint 2, sole-consumer 1
  */
 import { unlink } from "fs/promises";
@@ -18,7 +18,7 @@ import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { quotePowerShellSingleQuoted } from "./powershell/quoting.js";
 import { moveKeeperPid } from "./toolCgroup.js";
 
-//@ chunk-9h8dr0qb.js:70640-71227 fingerprint (2.1.88 match: copyAnsiToClipboard, 0.559)
+//@ chunk-j6tt9nsa.js:70599-71186 fingerprint (2.1.88 match: copyAnsiToClipboard, 0.562)
 /**
  * 把 ANSI 文本渲染成 PNG 截图并复制到剪贴板（临时文件放 screenshots 目录）。
  */
@@ -52,7 +52,7 @@ async function copyAnsiToClipboard(ansiText, options) {
     };
   }
 }
-//@ chunk-9h8dr0qb.js:71227-72357 fingerprint (2.1.88 match: copyPngToClipboard, 0.791)
+//@ chunk-j6tt9nsa.js:71186-72316 fingerprint (2.1.88 match: copyPngToClipboard, 0.791)
 /**
  * 按平台把 PNG 写入剪贴板：macOS osascript、Linux xclip/wl-copy、Windows PowerShell。
  */
@@ -113,7 +113,7 @@ async function copyPngToClipboard(pngPath) {
     message: `Screenshot to clipboard is not supported on ${platform}`,
   };
 }
-//@ chunk-9h8dr0qb.js:72357-72690 sole-consumer
+//@ chunk-j6tt9nsa.js:72316-72649 sole-consumer
 function spawnDetachedWithTimeout(command, args, timeoutMs = 5000) {
   return new Promise((resolve) => {
     let child;

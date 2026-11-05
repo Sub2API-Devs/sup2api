@@ -3,9 +3,9 @@
  *
  * /auto-mode-setup 写入设置（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2a8yx6fc.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fta1hp2w.js (15)
  * attribution: placement 15
  */
 import {
@@ -27,7 +27,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2a8yx6fc.js:55219-55301 placement
+//@ chunk-fta1hp2w.js:55285-55367 placement
 /**
  * autoMode.environment 的最大字节数（50000）。
  */
@@ -37,7 +37,7 @@ var MAX_RULE_ENTRY_CHARS;
 var MAX_PERMISSIONS_JSON_BYTES;
 var MAX_ENVIRONMENT_ENTRIES;
 var MAX_ENVIRONMENT_BYTES;
-deferInit("chunk-2a8yx6fc.js:55219", () => {
+deferInit("chunk-fta1hp2w.js:55285", () => {
   AUTO_MODE_DECISION_KINDS = ["allow", "soft_deny", "hard_deny"];
   MAX_RULES_PER_DECISION_KIND = 200;
   MAX_RULE_ENTRY_CHARS = 1e4;
@@ -45,7 +45,7 @@ deferInit("chunk-2a8yx6fc.js:55219", () => {
   MAX_ENVIRONMENT_ENTRIES = 200;
   MAX_ENVIRONMENT_BYTES = 50000;
 });
-//@ chunk-2a8yx6fc.js:55301-55405 placement
+//@ chunk-fta1hp2w.js:55367-55471 placement
 class AutoModeSetupWriteError extends Error {
   code;
   constructor(code, message) {
@@ -54,7 +54,7 @@ class AutoModeSetupWriteError extends Error {
     this.code = code;
   }
 }
-//@ chunk-2a8yx6fc.js:55405-55658 placement
+//@ chunk-fta1hp2w.js:55471-55724 placement
 /**
  * 写入自动模式设置并记录特性状态：失败按错误码记录，跳过 permissions.allow 时记为 sad。
  */
@@ -70,7 +70,7 @@ async function applyAutoModeSettings(input, storageV5) {
   else logFeatureOk("auto_mode_setup_write");
   return result;
 }
-//@ chunk-2a8yx6fc.js:55658-56972 placement
+//@ chunk-fta1hp2w.js:55724-57038 placement
 function validateAutoModeBlock(input) {
   let { autoMode } = input;
   if (autoMode === undefined && (input.removeFromPermissionsAllow ?? []).length === 0)
@@ -112,7 +112,7 @@ function validateAutoModeBlock(input) {
   }
   return null;
 }
-//@ chunk-2a8yx6fc.js:56972-59238 placement
+//@ chunk-fta1hp2w.js:57038-59304 placement
 /**
  * 把自动模式设置写入用户设置文件（校验、解析失败时报错）
  */
@@ -232,14 +232,14 @@ async function writeAutoModeSettings(input, storageV5) {
     warnings,
   };
 }
-//@ chunk-2a8yx6fc.js:59238-59355 placement
+//@ chunk-fta1hp2w.js:59304-59421 placement
 /**
  * 设置文件 JSON 无效时的提示：修复或删除后重新运行命令。
  */
 function invalidSettingsJsonMessage(settingsPath, commandName) {
   return `The settings file at ${settingsPath} contains invalid JSON \u2014 fix or remove it, then re-run ${commandName}.`;
 }
-//@ chunk-2a8yx6fc.js:59355-59623 placement
+//@ chunk-fta1hp2w.js:59421-59689 placement
 /**
  * 把设置写入失败转换为错误码与提示：JSON 语法错误或一般写入失败（检查权限与磁盘空间）。
  */
@@ -254,18 +254,18 @@ function describeSettingsWriteFailure(error, settingsPath, commandName) {
     message: `Could not write ${settingsPath} \u2014 check file permissions and disk space (run with --debug for the underlying error).`,
   };
 }
-//@ chunk-2a8yx6fc.js:59623-59723 placement
+//@ chunk-fta1hp2w.js:59689-59789 placement
 function formatZodIssues(error) {
   return error.issues.map((issue) => `${issue.path.map(String).join(".")}: ${issue.message}`).join("; ");
 }
-//@ chunk-2a8yx6fc.js:59723-59800 placement
+//@ chunk-fta1hp2w.js:59789-59866 placement
 /**
  * 把值规范成字符串数组：非数组给空数组，并过滤掉非字符串项。
  */
 function toStringList(environment) {
   return Array.isArray(environment) ? environment.filter((entry) => typeof entry === "string") : [];
 }
-//@ chunk-2a8yx6fc.js:59800-60382 placement
+//@ chunk-fta1hp2w.js:59866-60448 placement
 /**
  * 把新的环境说明条目合并到已有 autoMode.environment：按 "### " 小节分组，相同小节内已存在的条目跳过，新条目插到对应小节末尾，新小节追加到最后，空的新小节会被删除。
  */
@@ -327,7 +327,7 @@ function mergeEnvironmentEntries(existing, incoming) {
   pruneEmptyNewSection();
   return merged;
 }
-//@ chunk-2a8yx6fc.js:60382-60593 placement
+//@ chunk-fta1hp2w.js:60448-60659 placement
 function mergeRuleEntries(decisionKind, stringList, incomingEntries) {
   let keepPlaceholder =
     decisionKind !== "allow" ||
@@ -345,7 +345,7 @@ function mergeRuleEntries(decisionKind, stringList, incomingEntries) {
   }
   return merged;
 }
-//@ chunk-2a8yx6fc.js:60593-60717 placement
+//@ chunk-fta1hp2w.js:60659-60783 placement
 function normalizeAutoModeBlock(autoMode) {
   let normalized = {
     environment: autoMode.environment.map(stripVariationSelectors),
@@ -356,7 +356,7 @@ function normalizeAutoModeBlock(autoMode) {
   }
   return normalized;
 }
-//@ chunk-2a8yx6fc.js:60717-61555 placement
+//@ chunk-fta1hp2w.js:60783-61621 placement
 function checkAutoModeEntries(fieldName, entries) {
   if (entries.length > MAX_RULES_PER_DECISION_KIND)
     return `${fieldName} has ${entries.length} entries; the maximum is ${MAX_RULES_PER_DECISION_KIND}.`;
@@ -380,12 +380,12 @@ function checkAutoModeEntries(fieldName, entries) {
   }
   return null;
 }
-//@ chunk-2a8yx6fc.js:61555-61601 placement
+//@ chunk-fta1hp2w.js:61621-61667 placement
 /**
  * 匹配变体选择符（VS1–VS16 与 VS17–VS256）的正则。
  */
 var VARIATION_SELECTOR_RE = /[\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/gu;
-//@ chunk-2a8yx6fc.js:61601-61640 placement
+//@ chunk-fta1hp2w.js:61667-61706 placement
 /**
  * 去掉字符串中的变体选择符，用于规则条目比较。
  */
@@ -393,14 +393,14 @@ function stripVariationSelectors(text) {
   return text.replace(VARIATION_SELECTOR_RE, "");
 }
 export {
-  invalidSettingsJsonMessage,
-  describeSettingsWriteFailure,
   applyAutoModeSettings,
   AutoModeSetupWriteError,
-  checkAutoModeEntries,
-  MAX_RULES_PER_DECISION_KIND,
+  invalidSettingsJsonMessage,
+  describeSettingsWriteFailure,
   stripVariationSelectors,
+  MAX_RULES_PER_DECISION_KIND,
   MAX_RULE_ENTRY_CHARS,
   validateAutoModeBlock,
+  checkAutoModeEntries,
   AUTO_MODE_DECISION_KINDS,
 };

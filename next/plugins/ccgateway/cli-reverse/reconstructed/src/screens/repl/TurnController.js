@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增。REPL 控制器：回合执行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
- * attribution: placement 8
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (10)
+ * attribution: placement 8, sole-consumer 1, affinity 1
  */
 import { randomUUID } from "crypto";
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { QueryGuard } from "../../utils/QueryGuard.js";
 import { createMutex } from "../../utils/promiseQueue.js";
 import { createSignal } from "../../utils/signal.js";
@@ -20,9 +21,17 @@ import {
   updateLastInteractionTime,
   mainAgentId,
   setLastCancelledAPIMessageId,
+  getConversationToolsUsed,
   getSystemPromptSectionEpoch,
 } from "../../bootstrap/state.js";
 import { tipSeatSlots } from "../../services/tips/orgTips.js";
+import { hostScopedEmptyObject } from "../../services/tips/tipRegistry.js";
+import {
+  getSecurityReviewClosingTipSafely,
+  getTipToShowOnSpinner,
+  getTipContentSafe,
+  recordShownTip,
+} from "../../services/tips/tipScheduler.js";
 import { restoreDroppedInput, isQueueFreeOfPrompts } from "./messageBatching.js";
 import { restorePromptAfterCancel } from "./SessionController.js";
 import { isThinkingEffectivelyEnabled, resolveThinkingConfig } from "../../utils/thinking.js";
@@ -43,12 +52,15 @@ import {
 } from "../../cli/print/turnStreaming.js";
 import { joinPartialResponse } from "../../services/api/partialResponse.js";
 import { setMainLoopBusy } from "../../components/LogoV2/Notices.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { getFileUnchangedMessage } from "../../services/tools/toolAbort.js";
 import { raceWithAbortSignal, sleep } from "../../utils/sleep.js";
 import { AbortError, withTelemetryMessage, toError } from "../../utils/errors.js";
 import {
   EFFORT_MEDIUM_NUDGE,
   NUDGE_ID_C,
   AUTO_DEFAULT_NUDGE,
+  PROGRAM_USE_CASE_QUESTION,
   AUTOCOMPACT_OFFER,
   RESUME_RETURN,
   COLD_RESUME_QUOTA,
@@ -56,28 +68,20 @@ import {
   COST_THRESHOLD,
   NUDGE_ID_B,
 } from "../../components/nudges/nudgeIds.js";
-import { coordinatorContextCache, getCoordinatorUserContext } from "../../QueryEngine.js";
 import { onUserInput } from "../../services/api/cacheKeepalive.js";
 import { startBackgroundHousekeeping } from "../../utils/backgroundHousekeeping.js";
 import { endInteractionSpan } from "../../utils/telemetry/sessionTracing.js";
-import { classifyTurnEnd, routeDialogOverBridge } from "./turnResult.js";
+import { classifyTurnEnd, sumScores, routeDialogOverBridge } from "./turnResult.js";
 import { laptopMemoryTipsPluginEnabled, replayWithoutLaptopMemory } from "../../utils/requestReplay.js";
-import {
-  getTipToShowOnSpinner,
-  getTipContentSafe,
-  recordShownTip,
-} from "../../services/tips/tipScheduler.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { androidEvidenceByHost } from "../../tools/BashTool/androidCommands.js";
 import { isHumanTurn, isNonTypedInput } from "../../utils/turnOrigin.js";
-import { isExplainRequest } from "../../query/presenceCheck.js";
 import { stripIdeContextTags } from "../../utils/systemReminder.js";
 import {
   getContentText,
   createTurnDurationMessage,
   createAssistantMessage,
-  USER_REJECTED_TOOL_USE,
-  isInterruptionOnlyMessage,
+  isRejectOrInterruptMessage,
   isNonRenderableSystemMessage,
   createSystemMessage,
   getAutoModeSparseInstructions,
@@ -89,6 +93,9 @@ import {
   wrapInSystemReminder,
   nextTurnPosition,
 } from "../../utils/messages.js";
+import { isExplainRequest, normalizeSecurityPrompt } from "../../query/presenceCheck.js";
+import { findLastCommandMessage, startsWithCommandTag } from "../../utils/messages/apiNormalization.js";
+import { looksLikeSlashInput } from "../../commands.js";
 import {
   extractBashCliNames,
   referencedBashToolNames,
@@ -97,7 +104,7 @@ import {
 } from "../../utils/queryHelpers.js";
 import { lastPromptRestampSlot } from "./lastPromptTracker.js";
 import { getAllInProcessTeammateTasks } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   isLoggableMessage,
   isEphemeralToolProgress,
@@ -117,13 +124,22 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { MODEL_SWITCH_STATE } from "../../cli/print/setModelControl.js";
+import {
+  hasEditableMainThreadCommand,
+  normalizedQueueOrigin,
+  queuedNotificationMode,
+  shouldSkipQueueAttachments,
+  queueInputFlags,
+  isBatchHeadHumanCommand,
+} from "../../utils/messageQueueManager.js";
+import { REPL_MAIN_THREAD_KEY } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { resolveTurnTerminalReason } from "../../bridge/replControlHandler.js";
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
 import { TOOL_CATALOG } from "../../tools.js";
 import { query } from "../../query.js";
 import { getSecondRootError } from "../../ink/terminal.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { createAppStateAccessors } from "../../state/appStateSetters.js";
 import { createNotificationDrain } from "../../services/queuedNotifications/queuedNotifications.js";
@@ -139,7 +155,7 @@ import { toggleDiffPanel, DIFF_RETRY_MS, diffToggleResultText } from "../../hook
 import { applySessionSettingsPatch } from "../../state/applySessionSettingsPatch.js";
 import { emitStatusChange } from "../../state/onChangeAppState.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_2 } from "../../services/projects/threadRows.js";
-import { getTokenCountFromUsage_4 } from "../../services/compact/compact.js";
+import { getTokenCountFromUsage_6 } from "../../services/compact/compact.js";
 import { isHiddenAttachmentMessage } from "../../components/messages/nullRenderingAttachments.js";
 import {
   autoArmQuotaAutoResume,
@@ -168,14 +184,6 @@ import {
 } from "../../utils/backgroundSessionResume.js";
 import { extractTaggedGroup } from "../../utils/messages/untrustedArtifactContent.js";
 import {
-  normalizedQueueOrigin,
-  queuedNotificationMode,
-  shouldSkipQueueAttachments,
-  queueInputFlags,
-  hasRefillableMainAgentCommand,
-  isRefillableCommand,
-} from "../../utils/messageQueueManager.js";
-import {
   shouldDropAutoReactNotice,
   markAutoReactNotice,
 } from "../../services/artifacts/comments/postReply.js";
@@ -185,6 +193,7 @@ import { wakeupSourceField } from "../../utils/cronFireTexts.js";
 import { WORKLOAD_CRON } from "../../utils/workloadContext.js";
 import { relayTurnFlags } from "../../services/projectsRelay/relayConfig.js";
 import { endDrawnOffer } from "../../utils/newerModelOffer.js";
+import { noBridgeControlContext } from "../../bridge/replBridgeControl.js";
 import { logPolicyLimitsCacheStateAtFirstPrompt } from "../../services/policyLimits/PolicyLimitsClient.js";
 import { logFirstPromptReady } from "../../services/policyLimits/startupGate.js";
 import { getOriginKindLabel } from "../../utils/messages/promptOrigin.js";
@@ -247,20 +256,47 @@ import { isHumanOrUnset } from "../../utils/messageProvenance.js";
 import { sanitizePromptText_2 } from "../../utils/promptTextSanitize.js";
 import { formatInvisibleCharsRemoved } from "../../utils/invisibleChars.js";
 import { NOTIFICATION_TIMEOUT_MS } from "../../components/PromptInput/Notifications.js";
-import { cliError_2 } from "../../cli/exit.js";
+import { isPromptFromEarlyInputField } from "../../utils/earlyInput.js";
+import { runInOutermostCallFrame } from "../../cli/exit.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { handlePromptSubmit } from "../../utils/handlePromptSubmit.js";
 import { CONTINUE_COMMAND, normalizeContinueInput } from "../../commands/continue/continueState.js";
 import { getCurrentLimits } from "../../services/claudeAiLimits.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { hasStringUuid } from "../../bridge/inboundMessages.js";
-import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useHost } from "../../context/session.js";
 import { useDialogStore, useDialogSelector } from "../../state/dialogQueue.js";
 import { ASK_USER_QUESTION_PERMISSION_CARD } from "../../components/permissions/permissionCardKinds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1510734-1565335 placement
+//@ chunk-czq1j3j2.js:1495401-1495405 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1495401", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1499899-1499903 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1499899", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1504788-1504792 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1504788", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1552128-1552141 sole-consumer
+var FILE_CHANGED_NOTICE_MS = 2000;
+//@ chunk-czq1j3j2.js:1552141-1552215 affinity
+/**
+ * coordinator 用户上下文缓存（初始 null）。
+ */
+var getCoordinatorUserContext; // deferred: loads other modules while loading; runs once its import cycle is complete
+var responsePairRegistry;
+deferInit("chunk-czq1j3j2.js:1552141", () => {
+  getCoordinatorUserContext = require("../../coordinator/coordinatorMode.js").getCoordinatorUserContext;
+  responsePairRegistry = null;
+});
+//@ chunk-czq1j3j2.js:1552215-1609236 placement
 /**
  * TurnController：REPL 回合控制器，负责发起查询、跟踪进行中的回合、中断与结果收尾。
  */
@@ -299,6 +335,7 @@ class TurnController {
   _toolUsesThisTurn = 0;
   _toolUseIdsCounted = new Set();
   _explanationRequestIds = new Set();
+  _securityCheckRequestScores = new Map();
   _signalsAbsorbedLength = 0;
   _spinnerTipHandoff = {
     context: () => this._freshTipContext(),
@@ -470,6 +507,7 @@ class TurnController {
   _mount(host) {
     let { store, dialogStore, messageQueue } = host;
     tipSeatSlots.of(host.session.host).seat(this._spinnerTipHandoff);
+    hostScopedEmptyObject.of(host.session.host).closingTip = getSecurityReviewClosingTipSafely;
     this._unwatchQueue = messageQueue.subscribe(() => {
       this._syncMainLoopBusy();
       this._abortOnNowPriorityCommand();
@@ -601,7 +639,23 @@ class TurnController {
     if (params === undefined) throw Error("engine: queryParams called before send \u2014 turn wiring bug");
     return params;
   };
-  _boundStopWait() {}
+  _boundStopWait() {
+    if (codeModeAccepted()) {
+      let generation = this.guard.generation;
+      this._clearStopWaitTimer?.();
+      this._clearStopWaitTimer = this._scheduleTimeout(() => {
+        this._clearStopWaitTimer = undefined;
+        if (!this._snapshot.stopWaitPending || !this.guard.isRunning || this.guard.generation !== generation)
+          return;
+        this._stopWaitGeneration = undefined;
+        this._publish({
+          stopWaitPending: false,
+        });
+        this.guard.forceEnd();
+        this._host?.sendBridgeResult();
+      }, getFileUnchangedMessage() + FILE_CHANGED_NOTICE_MS);
+    }
+  }
   setAbortController = (controller) => {
     if (controller?.signal !== this._sendNowCutSignal) this._sendNowCutSignal = null;
     this._publish({
@@ -629,8 +683,9 @@ class TurnController {
         _host.dialogStore.dismissKind(EFFORT_MEDIUM_NUDGE);
         if (NUDGE_ID_C !== null) _host.dialogStore.dismissKind(NUDGE_ID_C);
         _host.dialogStore.dismissKind(AUTO_DEFAULT_NUDGE);
+        _host.dialogStore.dismissKind(PROGRAM_USE_CASE_QUESTION);
         _host.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
-        coordinatorContextCache?.retireResponsePair(_host.session);
+        responsePairRegistry?.retireResponsePair(_host.session);
       }
     }
   };
@@ -774,6 +829,7 @@ class TurnController {
       devIntents: androidEvidenceByHost.of(session.host).intents,
       lastTurnToolUseCount: this._toolUsesThisTurn,
       explanationRequestCount: this._explanationRequestIds.size,
+      securityCheckRequestScore: sumScores([...this._securityCheckRequestScores.values()]),
       storageV5: isStorageV5Enabled() ? storageV5 : undefined,
       credentials: isStorageV5Enabled() ? credentials : undefined,
     };
@@ -806,8 +862,17 @@ class TurnController {
               message.attachment.inputSource !== "suggestion_accepted"
             ? message.attachment.prompt
             : undefined;
-      if (isHuman !== undefined && isExplainRequest(stripIdeContextTags(getContentText(isHuman) ?? "")))
-        this._explanationRequestIds.add(message.uuid);
+      if (isHuman !== undefined) {
+        let promptText = stripIdeContextTags(getContentText(isHuman) ?? "");
+        if (isExplainRequest(promptText)) this._explanationRequestIds.add(message.uuid);
+        let securityScore =
+          findLastCommandMessage(isHuman) !== null ||
+          startsWithCommandTag(promptText) ||
+          looksLikeSlashInput(isHuman)
+            ? 0
+            : normalizeSecurityPrompt(promptText);
+        if (securityScore !== 0) this._securityCheckRequestScores.set(message.uuid, securityScore);
+      }
       if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
       for (let block of message.message.content)
         if (block.type === "tool_use" && !this._toolUseIdsCounted.has(block.id)) {
@@ -827,6 +892,7 @@ class TurnController {
     this._toolUsesThisTurn = 0;
     this._toolUseIdsCounted.clear();
     this._explanationRequestIds.clear();
+    this._securityCheckRequestScores.clear();
     if (this._host !== null) androidEvidenceByHost.of(this._host.session.host).reset();
     this._signalsAbsorbedLength = 0;
     this._tipHeldForTurnEnd = undefined;
@@ -874,6 +940,8 @@ class TurnController {
         let uuids = new Set(this._host?.transcript.getSnapshot().map((row) => row.uuid));
         for (let _explanationRequestId of this._explanationRequestIds)
           if (!uuids.has(_explanationRequestId)) this._explanationRequestIds.delete(_explanationRequestId);
+        for (let key of this._securityCheckRequestScores.keys())
+          if (!uuids.has(key)) this._securityCheckRequestScores.delete(key);
         this._backgroundWaitStartTime = null;
         this._releaseHeldDetachedToolCalls();
         this._rowsHeldForTurnEnd = [];
@@ -910,7 +978,7 @@ class TurnController {
         messages: [
           createTurnDurationMessage(
             durationMs,
-            count(this._requireHost().transcript.getSnapshot(), isLoggableMessage),
+            countWhere(this._requireHost().transcript.getSnapshot(), isLoggableMessage),
           ),
         ],
       });
@@ -946,7 +1014,7 @@ class TurnController {
             messages: [
               createTurnDurationMessage(
                 turnDurationInfo.durationMs,
-                count(host.transcript.getSnapshot(), isLoggableMessage),
+                countWhere(host.transcript.getSnapshot(), isLoggableMessage),
                 turnDurationInfo.pendingBackgroundAgentCount,
                 turnDurationInfo.pendingWorkflowCount,
               ),
@@ -1020,6 +1088,9 @@ class TurnController {
       gesture,
       draft,
       scope,
+      messageQueue,
+      escTakeBack,
+      restoreDraftsFrom,
     } = this._requireHost();
     let abortController = this.abortController;
     let state =
@@ -1039,6 +1110,13 @@ class TurnController {
         activeRemote.isRemoteMode &&
         activeRemote.cancelHeldMessages()
       );
+    if (
+      codeModeAccepted() &&
+      !abortController &&
+      this._snapshot.stopWaitPending &&
+      this._stopWaitGeneration === this.guard.generation
+    )
+      return false;
     logForDebugging(`[onCancel] source=${source} streamMode=${spinnerStore.get().mode}`);
     this._publish({
       lastTurnEnd: "stopped",
@@ -1047,8 +1125,15 @@ class TurnController {
     gesture.cancelPendingForStoppedTurn();
     gesture.cancelHeldAttach();
     this._frameNotifier.flush();
-    let interrupted = false;
-    this.guard.forceEnd();
+    let interrupted =
+      codeModeAccepted() && abortController !== null && (this._stopWaits.get(abortController) ?? 0) > 0;
+    if (codeModeAccepted() && interrupted) {
+      this._stopWaitGeneration = this.guard.generation;
+      this._publish({
+        stopWaitPending: true,
+      });
+      this._boundStopWait();
+    } else this.guard.forceEnd();
     let trimmed = this.stream.getSnapshot().streamingThinking?.thinking?.trim();
     if (trimmed && spinnerStore.get().thinkingStartedAt !== null)
       transcript.apply({
@@ -1090,12 +1175,45 @@ class TurnController {
     noteAuthRefreshStop();
     MODEL_SWITCH_STATE();
     if (activeRemote.isRemoteMode) {
-      activeRemote.cancelRequest();
+      let takeBack =
+        source === "local" && abortController === null
+          ? escTakeBack.beforeInterrupt(activeRemote, {
+              mayRestore: () =>
+                draft.value === "" &&
+                !hasEditableMainThreadCommand(messageQueue) &&
+                !store.getState().viewingAgentTaskId &&
+                !partialText,
+              restoreDrafts: restoreDraftsFrom,
+            })
+          : undefined;
+      activeRemote.cancelRequest({
+        noTurnRunning: takeBack?.noTurnRunning,
+      });
+      takeBack?.afterInterrupt?.();
       abortController?.abort(userAbortReason(abortReason));
     } else {
       abortController?.abort(userAbortReason(abortReason));
       if (source !== "remote") this._engine.interrupt(abortReason, cancelScopeFor(source));
     }
+    if (
+      codeModeAccepted() &&
+      interrupted &&
+      abortController !== null &&
+      (this._stopWaits.get(abortController) ?? 0) === 0
+    ) {
+      interrupted = false;
+      this._clearStopWaitTimer?.();
+      this._clearStopWaitTimer = undefined;
+      this._stopWaitGeneration = undefined;
+      this._publish({
+        stopWaitPending: false,
+      });
+      this.guard.forceEnd();
+    }
+    if (codeModeAccepted())
+      scope.toolState
+        .get(require("../../state/replSessions.js").ReplSessions)
+        .interrupt([REPL_MAIN_THREAD_KEY]);
     this.setAbortController(null);
     if (!interrupted) {
       let suffix = text === undefined || isCancelAbortReason(text) || text === "interrupt";
@@ -1123,9 +1241,7 @@ class TurnController {
     return true;
   };
   _stampSendNowCut(message, signal) {
-    return signal === this._sendNowCutSignal &&
-      message.type === "user" &&
-      (message.toolUseResult === USER_REJECTED_TOOL_USE || isInterruptionOnlyMessage(message))
+    return signal === this._sendNowCutSignal && message.type === "user" && isRejectOrInterruptMessage(message)
       ? {
           ...message,
           interruptedBySendNow: true,
@@ -1185,7 +1301,7 @@ class TurnController {
     };
     return bridged;
   }
-  _buildToolUseContextWith(messages, messages_2, abortController, abortController_2, model) {
+  _buildToolUseContextWith(messages, messages_2, abortController, turnAbortController, model) {
     let {
       store,
       scope,
@@ -1231,8 +1347,15 @@ class TurnController {
     let { tools, allowedAgentTypes, primitiveToolGrant } = scope.computeToolPoolFresh();
     let { commands } = scope.getSnapshot();
     return {
-      abortController: abortController_2,
-      ...false,
+      abortController: turnAbortController,
+      ...(codeModeAccepted() && {
+        onStopWaitChange: (stopWaitDelta) => {
+          this._stopWaits.set(
+            turnAbortController,
+            (this._stopWaits.get(turnAbortController) ?? 0) + stopWaitDelta,
+          );
+        },
+      }),
       primitiveToolGrant,
       shouldStopBeforeNextApiCall: () => gesture.pending !== null,
       messageQueue,
@@ -1260,7 +1383,7 @@ class TurnController {
         runQuery: query,
         resolveCommandDialog,
         renderDebugControls: getSecondRootError().get(process.stdout)?.renderDebug,
-        requiresStructuredOutput: tools.some((tool) => toolMatchesName(tool, STRUCTUREDOUTPUT)),
+        requiresStructuredOutput: tools.some((tool) => matchesToolName(tool, STRUCTUREDOUTPUT)),
         dynamicMcpConfig: scope.dynamicMcpConfig,
         theme,
         agentDefinitions: allowedAgentTypes
@@ -1453,7 +1576,7 @@ class TurnController {
       let mapped = (preservedMessages?.allUuids ?? preservedMessages?.uuids ?? [])
         .map((uuid) => transcript.getSnapshot().find((row) => row.uuid === uuid))
         .filter((row) => row !== undefined)
-        .map(getTokenCountFromUsage_4);
+        .map(getTokenCountFromUsage_6);
       let excludeUuids = new Set(mapped.map((row) => row.uuid));
       this.stream.pendingPreservedInsert =
         preservedMessages && mapped.length > 0
@@ -1484,7 +1607,9 @@ class TurnController {
       }
       setAppState((state) => pruneDisplayedContent(state, [...transcript.getSnapshot(), ...mapped]));
     } else if (stamped.type === "progress" && isEphemeralToolProgress(stamped.data.type)) {
-      let reply = stamped;
+      let reply = codeModeAccepted()
+        ? require("../../utils/codeMode/toolCallTicks.js").tickToStore(stamped)
+        : stamped;
       if (reply !== undefined)
         keep({
           type: "replace-last-ephemeral-progress",
@@ -1584,7 +1709,7 @@ class TurnController {
       type: "compact_end",
     });
   };
-  applyEvent = (messages, rows = null) => {
+  applyEvent = (event, rows = null) => {
     let host = this._requireHost();
     let {
       transcript,
@@ -1600,45 +1725,45 @@ class TurnController {
     let { apply: applyTranscript, replace } = transcript;
     let previewStore = this.stream.previewStore;
     if (
-      messages.type === "compact_progress" &&
-      messages.event.type === "compact_end" &&
+      event.type === "compact_progress" &&
+      event.event.type === "compact_end" &&
       currentToolPermissionContext()
     ) {
       this._compactEndHeld = true;
       return;
     }
-    if (!(messages.type === "sdk_status" && messages.metadata?.compactResult === "success"))
+    if (!(event.type === "sdk_status" && event.metadata?.compactResult === "success"))
       this._releaseCompactEnd();
-    if (messages.type === "attachment") this.stream.awaitModelFor([messages]);
-    if (messages.type === "stream_event") {
-      rows?.onStreamEvent(messages);
-      if (messages.event.type === "message_start") {
+    if (event.type === "attachment") this.stream.awaitModelFor([event]);
+    if (event.type === "stream_event") {
+      rows?.onStreamEvent(event);
+      if (event.event.type === "message_start") {
         this.stream.markModelReceived();
-        spinnerStore.main.setSentEffort(messages.sentEffort ?? null);
-        if (messages.turnEffort !== undefined) spinnerStore.main.setTurnEffort(messages.turnEffort);
+        spinnerStore.main.setSentEffort(event.sentEffort ?? null);
+        if (event.turnEffort !== undefined) spinnerStore.main.setTurnEffort(event.turnEffort);
       }
-    } else if (messages.type === "assistant") {
+    } else if (event.type === "assistant") {
       this.stream.markModelReceived();
-      if (messages.effort !== undefined) spinnerStore.main.setSentEffort(messages.effort);
-      rows?.onAssistantMessage(messages);
-      for (let block of messages.message.content) {
+      if (event.effort !== undefined) spinnerStore.main.setSentEffort(event.effort);
+      rows?.onAssistantMessage(event);
+      for (let block of event.message.content) {
         if (block.type !== "tool_use") continue;
         this._toolUseThisTurn = true;
         if (rows && BRIEF_TOOL_NAME_SET.has(block.name))
-          this._pendingReplyToolUses.set(block.id, messages.message.id);
+          this._pendingReplyToolUses.set(block.id, event.message.id);
       }
     } else if (
-      messages.type === "user" &&
+      event.type === "user" &&
       this._pendingReplyToolUses.size > 0 &&
-      Array.isArray(messages.message.content)
+      Array.isArray(event.message.content)
     )
-      for (let block of messages.message.content) {
+      for (let block of event.message.content) {
         if (block.type !== "tool_result") continue;
         let pendingUse = this._pendingReplyToolUses.get(block.tool_use_id);
         this._pendingReplyToolUses.delete(block.tool_use_id);
         if (pendingUse !== undefined && block.is_error !== true) this._noteTextBlockShown(rows, pendingUse);
       }
-    isNonRenderableSystemMessage(messages, {
+    isNonRenderableSystemMessage(event, {
       onMessage: this._applyMessage,
       onUpdateLength: this.stream.addResponseLength,
       onSetStreamMode: spinnerStore.main.setMode,
@@ -1720,8 +1845,8 @@ class TurnController {
       displayTransform: this._displayTransform(host),
       onCompactEvent: this.applyCompactEvent,
     });
-    if (messages.type === "assistant" && collectReadNotificationsToolUseIds(messages))
-      this._noteTextBlockShown(rows, messages.message.id);
+    if (event.type === "assistant" && collectReadNotificationsToolUseIds(event))
+      this._noteTextBlockShown(rows, event.message.id);
   };
   _noteTextBlockShown(text, startedAt) {
     if (this._getStreamingPreviewHold() === "focus") this._textHeldToTurnEnd = startedAt;
@@ -1780,14 +1905,15 @@ class TurnController {
       if (teamName && memberName) setMemberActive(teamName, memberName, true, storageV5);
     }
     let mainLoopModelFromState = getMainLoopModelFromState(host.store.getState());
-    let guardHandle = this.guard.tryStart();
+    let rows = isNewTurn && host.askAboutSessionOwner?.() === true;
+    let guardHandle = rows ? null : this.guard.tryStart();
     if (guardHandle === null) {
-      logEvent("tengu_concurrent_onquery_detected", {});
+      if (!rows) logEvent("tengu_concurrent_onquery_detected", {});
       let finished = false;
       let continueIds;
       for (let prompt of newMessages) {
         if (prompt.type !== "user") continue;
-        let previousIds = continueIds;
+        let previousIds = getConversationToolsUsed().takeDelivered(prompt.uuid) ?? continueIds;
         continueIds = undefined;
         let isPendingContinuation = isPendingContinuationUuid(prompt.uuid);
         if (prompt.isMeta && !isNonHumanInboundOrigin(prompt.origin) && !isPendingContinuation) {
@@ -1881,6 +2007,12 @@ class TurnController {
             pickAsWritten: getMainLoopModelOverride(),
             generation: guardHandle,
           };
+    if (codeModeAccepted() && this._snapshot.stopWaitPending) {
+      this._stopWaitGeneration = undefined;
+      this._publish({
+        stopWaitPending: false,
+      });
+    }
     host.dialogStore.dismissKind(RESUME_RETURN);
     host.dialogStore.dismissKind(COLD_RESUME_QUOTA);
     host.dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
@@ -1888,11 +2020,14 @@ class TurnController {
     host.dialogStore.dismissKind(COST_THRESHOLD);
     host.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
     if (NUDGE_ID_B !== null) host.dialogStore.dismissKind(NUDGE_ID_B);
+    let taskHost = noBridgeControlContext();
+    if (taskHost !== null) host.dialogStore.dismissKind(taskHost);
     if (isNewTurn) {
       host.dialogStore.dismissKind(EFFORT_MEDIUM_NUDGE);
       if (NUDGE_ID_C !== null) host.dialogStore.dismissKind(NUDGE_ID_C);
       host.dialogStore.dismissKind(AUTO_DEFAULT_NUDGE);
-      coordinatorContextCache?.retireResponsePair(host.session);
+      host.dialogStore.dismissKind(PROGRAM_USE_CASE_QUESTION);
+      responsePairRegistry?.retireResponsePair(host.session);
     }
     let abortedEarly = false;
     let replyToolUse = null;
@@ -2017,7 +2152,21 @@ class TurnController {
       }
       updateFooterLinks(transcript.getSnapshot(), setAppState);
       if (abortedEarly) markTurnDone();
-      let endedEarly = false;
+      let endedEarly =
+        codeModeAccepted() &&
+        this._snapshot.stopWaitPending &&
+        this._stopWaitGeneration === guardHandle &&
+        this.guard.isRunning &&
+        this.guard.generation === guardHandle;
+      if (codeModeAccepted() && endedEarly) {
+        this._clearStopWaitTimer?.();
+        this._clearStopWaitTimer = undefined;
+        this._stopWaitGeneration = undefined;
+        this._publish({
+          stopWaitPending: false,
+        });
+        this.guard.forceEnd();
+      }
       let guardReleased = endedEarly || this.guard.end(guardHandle);
       this._releaseRowsHeldForTurnEnd();
       let durationMs = guardReleased
@@ -2079,7 +2228,7 @@ class TurnController {
               messages: [
                 createTurnDurationMessage(
                   turnDurationInfo.durationMs,
-                  count(this._requireHost().transcript.getSnapshot(), isLoggableMessage),
+                  countWhere(this._requireHost().transcript.getSnapshot(), isLoggableMessage),
                   turnDurationInfo.pendingBackgroundAgentCount,
                   turnDurationInfo.pendingWorkflowCount,
                 ),
@@ -2108,7 +2257,7 @@ class TurnController {
         (reason === "user-cancel" || isRefusalEdit) &&
         !this.guard.isActive &&
         draft.value === "" &&
-        !hasRefillableMainAgentCommand(messageQueue) &&
+        !hasEditableMainThreadCommand(messageQueue) &&
         !store.getState().viewingAgentTaskId &&
         !isThinClient
       ) {
@@ -2758,6 +2907,7 @@ ${escaped}
           },
           {
             inputModeOverride: "prompt",
+            keepsComposer: isPromptFromEarlyInputField(),
           },
         );
       } else if (typeof content === "string" && !params.message.planContent)
@@ -2779,7 +2929,7 @@ ${escaped}
       }
       return true;
     };
-    cliError_2(() => run(initial))
+    runInOutermostCallFrame(() => run(initial))
       .then(
         (state) => {
           this._launchPromptPhase = state && !this._snapshot.isLoading ? "dispatched" : "idle";
@@ -2818,7 +2968,7 @@ ${escaped}
       content,
       isMeta: options?.isMeta ? true : undefined,
     });
-    cliError_2(() =>
+    runInOutermostCallFrame(() =>
       this.run([this.withDirectRunTurnPosition(userMessage)], abortController, true, [], mainLoopModel),
     );
     return true;
@@ -2883,9 +3033,9 @@ ${escaped}
       let filtered_2 = commands.filter((command) => command.mode !== "bash");
       return filtered_2.length === 0 ? undefined : this.executeQueuedInput(filtered_2);
     }
-    let found = commands.find(isRefillableCommand);
+    let found = commands.find(isBatchHeadHumanCommand);
     let [first, ...rest] = commands.flatMap((command) =>
-      isRefillableCommand(command) && command.mode === "prompt" && typeof command.value === "string"
+      isBatchHeadHumanCommand(command) && command.mode === "prompt" && typeof command.value === "string"
         ? [
             {
               text: command.value,
@@ -3021,6 +3171,10 @@ ${escaped}
     }
   };
   dispose() {
+    if (codeModeAccepted()) {
+      this._clearStopWaitTimer?.();
+      this._clearStopWaitTimer = undefined;
+    }
     this._disposed = true;
     this._frameNotifier.flush();
     this.stream.dispose();
@@ -3106,7 +3260,7 @@ ${escaped}
     }
   }
 }
-//@ chunk-18hwfzwa.js:1565335-1565498 placement
+//@ chunk-czq1j3j2.js:1609236-1609399 placement
 /**
  * 计划会话启动失败时保存计划并追加警告消息。
  */
@@ -3122,7 +3276,7 @@ async function reportUltraplanStartFailure(preservePlanOnDrop, storageV5, append
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1565498-1565855 placement
+//@ chunk-czq1j3j2.js:1609399-1609756 placement
 /**
  * 找出与某条用户提示同一批提交的其他提示。
  */
@@ -3141,7 +3295,7 @@ function findBatchedPrompts(messages, index, candidates) {
   }
   return missing.length === uuids.size - 1 ? missing.reverse() : [];
 }
-//@ chunk-18hwfzwa.js:1565855-1565961 placement
+//@ chunk-czq1j3j2.js:1609756-1609862 placement
 /**
  * 某位置之后是否有 poll_events 附件。
  */
@@ -3150,12 +3304,7 @@ function hasPollEventsAfter(messages, index) {
     .slice(index + 1)
     .some((message) => message.type === "attachment" && message.attachment.type === "poll_events");
 }
-//@ chunk-18hwfzwa.js:1565961-1565965 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1565961", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1565965-1566458 placement
+//@ chunk-czq1j3j2.js:1609866-1610359 placement
 /**
  * 后台会话中把输入直接作为 AskUserQuestion 的回答。
  */
@@ -3196,14 +3345,4 @@ function useBackgroundQuestionAnswer() {
     registerRendezvousResolver(host, null);
   }, [host, dialogStore, dialogSelector, isAskDialog]);
 }
-//@ chunk-18hwfzwa.js:1566458-1566462 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1566458", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1566462-1566466 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1566462", () => {
-  init_react_production();
-});
 export { TurnController, useBackgroundQuestionAnswer };

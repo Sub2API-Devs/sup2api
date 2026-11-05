@@ -3,9 +3,9 @@
  *
  * 并入已有模块：/install-github-app 入口（后台会话中拒绝运行）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/install-github-app.tsx
- * pieces: chunk-4v9zy7gn.js (3)
+ * pieces: chunk-2xbvbqx2.js (3)
  * attribution: fingerprint 2, placement 1
  */
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
@@ -53,7 +53,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { ghIsDangerousCallback, getGitHostKind } from "../../utils/gitHosts.js";
 import { createStore } from "../../state/store.js";
 
-//@ chunk-4v9zy7gn.js:48997-49567 fingerprint (2.1.88 match: INITIAL_STATE, 0.885)
+//@ chunk-2xbvbqx2.js:50041-50593 fingerprint (2.1.88 match: INITIAL_STATE, 0.881)
 /**
  * INITIAL_STATE：同旧版。
  */
@@ -63,7 +63,6 @@ var INITIAL_STATE = {
   currentRepo: "",
   useCurrentRepo: false,
   apiKeyOrOAuthToken: "",
-  useExistingKey: true,
   currentWorkflowInstallStep: 0,
   errorInstructions: [],
   warnings: [],
@@ -82,7 +81,7 @@ var NO_TERMINAL_ERROR_STATE = {
   errorReason: "No terminal attached",
   errorInstructions: [],
 };
-//@ chunk-4v9zy7gn.js:49567-63101 fingerprint (2.1.88 match: InstallGitHubApp, 0.848)
+//@ chunk-2xbvbqx2.js:50593-63910 fingerprint (2.1.88 match: InstallGitHubApp, 0.847)
 function InstallGitHubApp({ onDone, wizard }) {
   let { storageV5 } = useTheme_2();
   let { cancellation, existingApiKey } = wizard;
@@ -344,7 +343,6 @@ function InstallGitHubApp({ onDone, wizard }) {
         setState((prev) => ({
           ...prev,
           apiKeyOrOAuthToken: existingApiKey,
-          useExistingKey: true,
         }));
         await runSetupGitHubActions(existingApiKey, state.secretName);
       } else
@@ -356,7 +354,6 @@ function InstallGitHubApp({ onDone, wizard }) {
       setState((prev) => ({
         ...prev,
         apiKeyOrOAuthToken: existingApiKey,
-        useExistingKey: true,
       }));
       await runSetupGitHubActions(existingApiKey, state.secretName);
     } else
@@ -512,7 +509,6 @@ function InstallGitHubApp({ onDone, wizard }) {
       setState((prev) => ({
         ...prev,
         apiKeyOrOAuthToken: apiKeyToUse,
-        useExistingKey: state.selectedApiKeyOption === "existing",
         isCheckingSecret: true,
       }));
       let checkSecretsResult_0 = await execFileNoThrow("gh", [
@@ -604,7 +600,6 @@ function InstallGitHubApp({ onDone, wizard }) {
       setState((prev) => ({
         ...prev,
         apiKeyOrOAuthToken: token,
-        useExistingKey: false,
         secretName: "CLAUDE_CODE_OAUTH_TOKEN",
         authType: "oauth_token",
       }));
@@ -636,37 +631,31 @@ function InstallGitHubApp({ onDone, wizard }) {
           },
     );
   };
-  let handleToggleUseExistingKey = (useExistingKey) => {
-    setState((prev) => ({
-      ...prev,
-      useExistingKey,
-    }));
-  };
-  let handleToggleUseExistingSecret = (useExistingSecret) => {
-    setState((prev) =>
-      prev.useExistingSecret === useExistingSecret
-        ? prev
+  let handleToggleUseExistingKey = (useExistingSecret) => {
+    setState((prev_27) =>
+      prev_27.useExistingSecret === useExistingSecret
+        ? prev_27
         : {
-            ...prev,
+            ...prev_27,
             useExistingSecret,
             secretName: useExistingSecret ? "ANTHROPIC_API_KEY" : "",
           },
     );
   };
-  let handleWorkflowAction = (action) => {
+  let handleToggleUseExistingSecret = (useExistingSecret) => {
     logEvent("tengu_install_github_app_step_completed", {
       step: lit("setup-actions-prompt"),
-      action: fromEnum(action),
+      action: fromEnum(useExistingSecret),
     });
-    if (action === "skip")
-      setState((prev_29) => ({
-        ...prev_29,
+    if (useExistingSecret === "skip")
+      setState((prev_28) => ({
+        ...prev_28,
         step: "success",
         appOnlyInstall: true,
       }));
     else if (storeSelector.workflowExists)
-      setState((prev_30) => ({
-        ...prev_30,
+      setState((state) => ({
+        ...state,
         step: "check-existing-workflow",
       }));
     else
@@ -675,7 +664,7 @@ function InstallGitHubApp({ onDone, wizard }) {
         step: "select-workflows",
       }));
   };
-  let handleWorkflowAction_2 = async (action) => {
+  let handleWorkflowAction = async (action) => {
     if (action === "exit") {
       handleCancel();
       return;
@@ -750,7 +739,7 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       title = "Set up GitHub Actions";
       canContinue = true;
       stepContent = jsxProd_default(OptionalActionsSetupStep, {
-        onSelect: handleWorkflowAction,
+        onSelect: handleToggleUseExistingSecret,
         onCancel: handleCancel,
       });
       break;
@@ -758,7 +747,7 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       title = `Repository: ${storeSelector.selectedRepoName}`;
       canContinue = true;
       stepContent = jsxProd_default(ExistingWorkflowStep, {
-        onSelectAction: handleWorkflowAction_2,
+        onSelectAction: handleWorkflowAction,
       });
       break;
     case "check-existing-secret":
@@ -767,7 +756,7 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       stepContent = jsxProd_default(CheckExistingSecretStep, {
         useExistingSecret: storeSelector.useExistingSecret,
         secretName: storeSelector.secretName,
-        onToggleUseExistingSecret: handleToggleUseExistingSecret,
+        onToggleUseExistingSecret: handleToggleUseExistingKey,
         onSecretNameChange: handleSecretNameChange,
         onSubmit: handleSubmit,
       });
@@ -781,10 +770,8 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
         children: [
           jsxProd_default(ApiKeyStep, {
             existingApiKey,
-            useExistingKey: storeSelector.useExistingKey,
             apiKeyOrOAuthToken: storeSelector.apiKeyOrOAuthToken,
             onApiKeyChange: handleApiKeyChange,
-            onToggleUseExistingKey: handleToggleUseExistingKey,
             onSubmit: handleSubmit,
             onCreateOAuthToken: isAnthropicAuthEnabled() ? handleCreateOAuthToken : undefined,
             selectedOption: storeSelector.selectedApiKeyOption,
@@ -900,7 +887,7 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
     isStopping ? "stopping" : "open",
   );
 }
-//@ chunk-4v9zy7gn.js:63101-64479 placement
+//@ chunk-2xbvbqx2.js:63910-65269 placement
 /**
  * /install-github-app 入口：无终端的后台会话中拒绝运行，校验是 GitHub 仓库后打开安装向导。
  */
@@ -949,7 +936,6 @@ async function runInstallGitHubApp(onDone, context) {
     wizard: {
       state: createStore({
         ...INITIAL_STATE,
-        useExistingKey: !!anthropicApiKey,
         selectedApiKeyOption: anthropicApiKey ? "existing" : isAnthropicAuthEnabled() ? "oauth" : "new",
       }),
       cancellation: new AbortController(),

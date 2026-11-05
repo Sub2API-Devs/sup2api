@@ -3,17 +3,19 @@
  *
  * 向导生成步骤；实际内容为 API key 输入（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/GenerateStep.tsx
- * pieces: chunk-sx9xc5ee.js (1)
- * attribution: callgraph-fingerprint 1
+ * pieces: chunk-1gcg79yh.js (2)
+ * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
-import { useWizard } from "../../../wizard/useWizard.js";
 import { useState } from "../../../../../vendor/react/cjs/react.production.js";
+import { useTerminalSize } from "../../../../hooks/useTerminalSize.js";
+import { useRecentInputWithin, useRefusalTracker } from "../../../CustomSelect/selectTypeahead.js";
+import { DECAY_TICK_MS } from "../../../ResumeStaleConversationDialog.js";
+import { validateSummaryProblem } from "../../../../services/projects/proposalValidation.js";
+import { composeSubtitle, COMPOSE_TITLE } from "../../../projects/continueInProjectsComposeRequest.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
-import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
-import { BEDROCK_STEPS } from "../../../providerSetup/bedrock/BedrockCredentialsStep.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -23,47 +25,84 @@ import { KeyboardShortcutHint } from "../../../design-system/KeyboardShortcutHin
 import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
 import { Text, Box } from "../../../../ink/components/Text.js";
 import { TextInput } from "../../../TextInput.js";
-import { ErrorText } from "../../../ErrorText.js";
-import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
+import { Dialog } from "../../../design-system/Dialog.js";
 
-//@ chunk-sx9xc5ee.js:3821-5151 callgraph-fingerprint (2.1.88 match: GenerateStep, 0.446)
-function GenerateStep() {
-  let $ = useMemoCache(17);
-  let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let [bearerToken, setBearerToken] = useState(wizardData.bearerToken ?? "");
-  let [cursorOffset, setCursorOffset] = useState(bearerToken.length);
-  let [error, setError] = useState(null);
-  let keybindingsContext;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    keybindingsContext = {
-      context: "Settings",
+//@ chunk-1gcg79yh.js:15025-15033 affinity
+var PROMPT_CHROME_COLUMNS = 8;
+//@ chunk-1gcg79yh.js:15033-16727 fingerprint (2.1.88 match: GenerateStep, 0.384)
+function GenerateStep(props) {
+  let $ = useMemoCache(28);
+  let { payload, answer } = props;
+  let [draft, setDraft] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [problemText, setProblemText] = useState(null);
+  let { columns } = useTerminalSize();
+  let model = useRecentInputWithin();
+  let abortControllerRef = useRecentInputWithin(DECAY_TICK_MS);
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  let shouldRefuse;
+  if ($[0] !== noteRefused || $[1] !== refusedWithin) {
+    shouldRefuse = function refuse(isActive) {
+      if (!isActive() && !refusedWithin()) {
+        return false;
+      }
+      noteRefused();
+      return true;
     };
-    $[0] = keybindingsContext;
-  } else keybindingsContext = $[0];
-  useKeybinding("confirm:no", goBack, keybindingsContext);
-  let handleSubmit;
-  if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== bearerToken) {
-    handleSubmit = () => {
-      let trimmedPrompt = bearerToken.trim();
-      if (!trimmedPrompt) {
-        setError("API key is required");
+    $[0] = noteRefused;
+    $[1] = refusedWithin;
+    $[2] = shouldRefuse;
+  } else shouldRefuse = $[2];
+  let refuseInput = shouldRefuse;
+  let onSubmit;
+  if ($[3] !== answer || $[4] !== abortControllerRef || $[5] !== refuseInput) {
+    onSubmit = function submit(input) {
+      if (refuseInput(abortControllerRef)) {
         return;
       }
-      setError(null);
-      updateWizardData({
-        bearerToken: trimmedPrompt,
+      let trimmedPrompt = input.trim();
+      if (trimmedPrompt === "") {
+        return;
+      }
+      let inputProblem = validateSummaryProblem(trimmedPrompt);
+      if (inputProblem !== null) {
+        setProblemText(`That can\u2019t be sent as typed: ${inputProblem.problem}.`);
+        return;
+      }
+      answer({
+        choice: "send",
+        message: trimmedPrompt,
       });
-      goToStep(BEDROCK_STEPS.REGION);
     };
-    $[1] = goToStep;
-    $[2] = updateWizardData;
-    $[3] = bearerToken;
-    $[4] = handleSubmit;
-  } else handleSubmit = $[4];
-  let onSubmit = handleSubmit;
-  let footerText;
-  if ($[5] === MEMO_CACHE_SENTINEL) {
-    footerText = jsxProd_default_2(Byline, {
+    $[3] = answer;
+    $[4] = abortControllerRef;
+    $[5] = refuseInput;
+    $[6] = onSubmit;
+  } else onSubmit = $[6];
+  let onSubmit_2 = onSubmit;
+  let onCancel;
+  if ($[7] !== answer || $[8] !== model || $[9] !== refuseInput) {
+    onCancel = function cancel() {
+      if (!refuseInput(model))
+        answer({
+          choice: "cancel",
+        });
+    };
+    $[7] = answer;
+    $[8] = model;
+    $[9] = refuseInput;
+    $[10] = onCancel;
+  } else onCancel = $[10];
+  let onCancel_2 = onCancel;
+  let subtitle;
+  if ($[11] !== payload) {
+    subtitle = composeSubtitle(payload);
+    $[11] = payload;
+    $[12] = subtitle;
+  } else subtitle = $[12];
+  let inputGuide;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    inputGuide = jsxProd_default_2(Byline, {
       children: [
         jsxProd_default(KeyboardShortcutHint, {
           chord: "enter",
@@ -71,79 +110,86 @@ function GenerateStep() {
         }),
         jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
-          context: "Settings",
+          context: "Confirmation",
           fallback: "Esc",
-          description: "go back",
+          description: "cancel",
         }),
       ],
     });
-    $[5] = footerText;
-  } else footerText = $[5];
-  let introText;
-  let keyNote;
-  if ($[6] === MEMO_CACHE_SENTINEL) {
-    introText = jsxProd_default(Text, {
-      children: "Paste your Bedrock API key.",
-    });
-    keyNote = jsxProd_default(Text, {
+    $[13] = inputGuide;
+  } else inputGuide = $[13];
+  let promptMarker;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    promptMarker = jsxProd_default(Text, {
       dimColor: true,
-      children: "Generate one in the AWS console under Bedrock \u2192 API keys.",
+      children: ">",
     });
-    $[6] = introText;
-    $[7] = keyNote;
-  } else {
-    introText = $[6];
-    keyNote = $[7];
-  }
-  let _;
-  if ($[8] !== cursorOffset || $[9] !== onSubmit || $[10] !== bearerToken) {
-    _ = jsxProd_default(Box, {
-      marginTop: 1,
-      children: jsxProd_default(TextInput, {
-        value: bearerToken,
-        onChange: setBearerToken,
-        onSubmit,
-        placeholder: "bedrock-api-key-\u2026",
-        mask: "*",
-        columns: 60,
-        cursorOffset,
-        onChangeCursorOffset: setCursorOffset,
-        focus: true,
-        showCursor: true,
-      }),
-    });
-    $[8] = cursorOffset;
-    $[9] = onSubmit;
-    $[10] = bearerToken;
-    $[11] = _;
-  } else _ = $[11];
-  let errorBox;
-  if ($[12] !== error) {
-    errorBox =
-      error &&
-      jsxProd_default(Box, {
-        marginTop: 1,
-        children: jsxProd_default(ErrorText, {
-          error,
+    $[14] = promptMarker;
+  } else promptMarker = $[14];
+  let onChange;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    onChange = (value) => {
+      setDraft(value);
+      setProblemText(null);
+    };
+    $[15] = onChange;
+  } else onChange = $[15];
+  const columns_2 = Math.max(10, columns - PROMPT_CHROME_COLUMNS);
+  let inputRow;
+  if ($[16] !== cursorOffset || $[17] !== draft || $[18] !== onSubmit_2 || $[19] !== columns_2) {
+    inputRow = jsxProd_default_2(Box, {
+      flexDirection: "row",
+      gap: 1,
+      children: [
+        promptMarker,
+        jsxProd_default(TextInput, {
+          value: draft,
+          onChange,
+          onSubmit: onSubmit_2,
+          disableEscapeDoublePress: true,
+          clearOnSubmit: false,
+          focus: true,
+          showCursor: true,
+          columns: columns_2,
+          cursorOffset,
+          onChangeCursorOffset: setCursorOffset,
         }),
-      });
-    $[12] = error;
-    $[13] = errorBox;
-  } else errorBox = $[13];
-  let layout;
-  if ($[14] !== _ || $[15] !== errorBox) {
-    layout = jsxProd_default(WizardDialogLayout, {
-      subtitle: "Bedrock API key",
-      footerText,
-      children: jsxProd_default_2(Box, {
-        flexDirection: "column",
-        children: [introText, keyNote, _, errorBox],
-      }),
+      ],
     });
-    $[14] = _;
-    $[15] = errorBox;
-    $[16] = layout;
-  } else layout = $[16];
-  return layout;
+    $[16] = cursorOffset;
+    $[17] = draft;
+    $[18] = onSubmit_2;
+    $[19] = columns_2;
+    $[20] = inputRow;
+  } else inputRow = $[20];
+  let problemRow;
+  if ($[21] !== problemText) {
+    problemRow =
+      problemText === null
+        ? null
+        : jsxProd_default(Text, {
+            color: "warning",
+            children: problemText,
+          });
+    $[21] = problemText;
+    $[22] = problemRow;
+  } else problemRow = $[22];
+  let dialog;
+  if ($[23] !== onCancel_2 || $[24] !== problemRow || $[25] !== subtitle || $[26] !== inputRow) {
+    dialog = jsxProd_default_2(Dialog, {
+      title: COMPOSE_TITLE,
+      subtitle,
+      color: "suggestion",
+      onCancel: onCancel_2,
+      inputGuide,
+      children: [inputRow, problemRow],
+    });
+    $[23] = onCancel_2;
+    $[24] = problemRow;
+    $[25] = subtitle;
+    $[26] = inputRow;
+    $[27] = dialog;
+  } else dialog = $[27];
+  return dialog;
 }
 export { GenerateStep };

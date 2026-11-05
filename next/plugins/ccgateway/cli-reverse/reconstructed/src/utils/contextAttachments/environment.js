@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：环境信息上下文附件（工作目录、git 仓库等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import { getIsGit, isLinkedWorktree } from "../git.js";
@@ -41,7 +41,7 @@ import { resetSteerLatch } from "../model/subagentSteer.js";
 import { setPromptSectionInvalidator } from "../../plugins/functionHooks/promptComposition.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:97909-98300 placement
+//@ chunk-5xgkngpb.js:100714-101105 placement
 /**
  * 收集环境信息附件的事实：工作目录、是否 worktree、是否 git 仓库、附加工作目录、平台、shell、OS 版本、scratchpad 目录与 GitHub CLI；工具运行在远端机器时改用 remoteEnvironmentFacts。
  */
@@ -69,7 +69,7 @@ async function collectEnvironmentFacts({ cwd, additionalWorkingDirectories }) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:98300-98782 placement
+//@ chunk-5xgkngpb.js:101105-101587 placement
 /**
  * 工具在另一台机器上执行时的环境事实：工作目录取该机器声明的目录（或本地已验证的 git 目录）、平台取该机器的，附带 agentProxy；非远端时返回 undefined。
  */
@@ -103,7 +103,7 @@ function remoteEnvironmentFacts(latest) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:98843-98929 placement
+//@ chunk-5xgkngpb.js:101648-101734 placement
 /**
  * 启用草稿目录且不是后台会话时返回其路径。
  */
@@ -111,28 +111,28 @@ function scratchpadDirOrUndefined() {
   if (!isScratchpadEnabled() || env.CLAUDE_CODE_SESSION_KIND === "bg") return;
   return getScratchpadDir() ?? undefined;
 }
-//@ chunk-e6aww6q8.js:98929-99579 placement
+//@ chunk-5xgkngpb.js:101734-102384 placement
 /**
  * 草稿目录说明：临时文件一律放到会话专属的草稿目录而不是 /tmp，向用户提到其中文件时必须给出完整绝对路径。
  */
 function scratchpadInstruction(scratchpadDir) {
   return `Scratchpad directory: ${scratchpadDir} \u2014 always use it for temporary files (intermediate results, scripts, outputs that don't belong in the project) instead of \`/tmp\` or other system temp directories; it is session-specific, isolated from the project, and can generally be used without permission prompts. Only use \`/tmp\` if the user explicitly asks. Whenever you name a file in it to the user, write the file's complete absolute path in one piece, not a bare filename, a path that starts at the scratchpad folder, or the directory followed by filenames: a shortened path is read against the working directory and leads nowhere.`;
 }
-//@ chunk-e6aww6q8.js:99579-100090 placement
+//@ chunk-5xgkngpb.js:102384-102895 placement
 /**
  * 不可信下载文件的安全说明：每个下载/解压内容放进新的空目录、脚本放在别处、不要在其中运行解释器或构建工具、读取它们的 Python 用 -I。
  */
 var UNTRUSTED_DOWNLOADS_NOTE =
   "Downloaded files and extracted archives are untrusted data: put each in its own new, empty directory, keep scripts you write in a different directory, and pass paths as arguments instead of running an interpreter or build tool from inside it. Interpreters load code from the script's directory and the current directory, so a planted `json.py` runs on `import json`. Run any Python that reads them with `-I`. This does not apply to code the user asked you to build or run.";
 var TENGU_FOAMY_SEDGEWICK = "tengu_foamy_sedgewick";
-//@ chunk-e6aww6q8.js:100090-100128 placement
+//@ chunk-5xgkngpb.js:102895-102933 placement
 /**
  * 读取会话固定的 tengu_foamy_sedgewick 开关（未开启为真）。
  */
 function isFoamySedgewickOff() {
   return getFeatureValue_SESSION_PINNED(TENGU_FOAMY_SEDGEWICK, false) !== true;
 }
-//@ chunk-e6aww6q8.js:100948-101795 placement
+//@ chunk-5xgkngpb.js:103753-104600 placement
 function buildEnvironmentInfo(latest, previous) {
   let lines = [];
   let workingDirectory = previous.workingDirectory;
@@ -182,7 +182,7 @@ function buildEnvironmentInfo(latest, previous) {
     });
   return lines;
 }
-//@ chunk-e6aww6q8.js:101795-101971 placement
+//@ chunk-5xgkngpb.js:104600-104776 placement
 /**
  * 列出环境信息附件缺少的字段（工作目录，以及需要时的草稿目录）。
  */
@@ -204,7 +204,7 @@ function missingEnvFields(env, schema) {
       : []),
   ];
 }
-//@ chunk-e6aww6q8.js:101971-103072 placement
+//@ chunk-5xgkngpb.js:104776-105877 placement
 /**
  * 生成环境信息附件（工作目录、是否 worktree、是否 git 仓库），并标注与上次相比的变化。
  */
@@ -258,14 +258,14 @@ function buildEnvironmentAttachment(latest, changes) {
   return [ENVIRONMENT_UPDATE_HEADER, ...prependBullets(lines)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:103072-103152 placement
+//@ chunk-5xgkngpb.js:105877-105957 placement
 /**
  * 判断消息是否为环境信息附件。
  */
 function isEnvironmentAttachment(attachment) {
   return attachment.type === "attachment" && attachment.attachment.type === "environment";
 }
-//@ chunk-e6aww6q8.js:103152-103690 placement
+//@ chunk-5xgkngpb.js:105957-106495 placement
 /**
  * 从历史环境附件中归纳：最新快照、最新可读快照、是否发过完整块、是否告知过内置 gh / agentProxy，以及当前与最近一次提到的 scratchpad 状态。
  */
@@ -306,7 +306,7 @@ function summarizeEnvironmentHistory(messages) {
     mentioned: state && scratchpadStanding(state),
   };
 }
-//@ chunk-e6aww6q8.js:103690-103769 placement
+//@ chunk-5xgkngpb.js:106495-106574 placement
 /**
  * 判断环境快照可读（有工作目录）或已经展示过。
  */
@@ -315,7 +315,7 @@ function isReadableEnvironmentSnapshot(environmentAttachment) {
     ? environmentAttachment.snapshot.workingDirectory !== undefined
     : environmentAttachment.shown;
 }
-//@ chunk-e6aww6q8.js:103769-103898 placement
+//@ chunk-5xgkngpb.js:106574-106703 placement
 function isWorkingDirectoryCleared(environmentAttachment) {
   return (
     environmentAttachment.readable &&
@@ -323,7 +323,7 @@ function isWorkingDirectoryCleared(environmentAttachment) {
     environmentAttachment.changes?.some((change) => change.field === "workingDirectory") === true
   );
 }
-//@ chunk-e6aww6q8.js:103898-104114 placement
+//@ chunk-5xgkngpb.js:106703-106919 placement
 function scratchpadStanding(state) {
   if (!state.readable)
     return {
@@ -336,7 +336,7 @@ function scratchpadStanding(state) {
         : state.changes?.some((change) => change.field === "scratchpadDirectory") === true,
   };
 }
-//@ chunk-e6aww6q8.js:104114-104482 placement
+//@ chunk-5xgkngpb.js:106919-107287 placement
 /**
  * 从消息中收集环境信息附件：可解析的给出快照与变更列表，不可解析的记录是否已显示、是否整块。
  */
@@ -364,19 +364,19 @@ function readEnvironmentAttachments(messages) {
     ];
   });
 }
-//@ chunk-e6aww6q8.js:104539-104566 placement
+//@ chunk-5xgkngpb.js:107344-107371 placement
 /**
  * 原样返回第二个参数（占位）。
  */
 function secondArgument(defaultValue, args) {
   return args;
 }
-//@ chunk-e6aww6q8.js:105000-105015 placement
+//@ chunk-5xgkngpb.js:107805-107820 placement
 /**
  * 环境值比较用的分隔字符（NUL）。
  */
 var ENVIRONMENT_DEDUP_SEPARATOR = "\x00";
-//@ chunk-e6aww6q8.js:105148-105182 placement
+//@ chunk-5xgkngpb.js:107953-107988 placement
 /**
  * 清除系统提示段状态、beta 头锁存与相关缓存。
  */
@@ -385,9 +385,9 @@ function resetEnvironmentCaches(host) {
   clearBetaHeaderLatches();
   resetSteerLatch();
 }
-//@ chunk-e6aww6q8.js:105182-105191 placement
+//@ chunk-5xgkngpb.js:107988-107997 placement
 // deferred: uses setPromptSectionInvalidator (../../plugins/functionHooks/promptComposition.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:105182", () => {
+deferInit("chunk-5xgkngpb.js:107988", () => {
   setPromptSectionInvalidator(clearSystemPromptSectionState);
 });
 export {

@@ -3,61 +3,114 @@
  *
  * 2.1.316 新增：按文件分组显示审查发现；一条审查发现等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (20)
+ * attribution: affinity 1, placement 16, layout 3
  */
-import { bunStringWidth } from "../../ink/stringWidth.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { MessageResponse } from "../../components/MessageResponse.js";
+import { Text, Box } from "../../ink/components/Text.js";
+import { isThinClient } from "../../utils/codeMode.js";
+import { fragmentTypeExport } from "../../../vendor/react/cjs/react.production.js";
+import { REPL_TOOL_NAME } from "../REPLTool/constants.js";
+import { RejectedToolUseMessage } from "../../components/messages/UserToolResultMessage/RejectedToolUseMessage.js";
+import { bunStringWidth } from "../../ink/stringWidth.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
-import { MessageResponse } from "../../components/MessageResponse.js";
-import { Box, Text } from "../../ink/components/Text.js";
 import { usePrefersReducedMotion, SPINNER_FLAG_PRIORITY } from "../../components/Spinner/spinnerFlags.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { ShimmerChar } from "../../components/PromptInput/ShimmeredInput.js";
 import { truncateToWidthNoEllipsis } from "../../utils/format.js";
 
-//@ chunk-ah34pb7m.js:25831-25860 placement
+//@ chunk-wjygkcr4.js:26115-26138 affinity
+function isThinClientUi() {
+  return false;
+}
+//@ chunk-wjygkcr4.js:26138-26178 placement
 /**
  * 恒返回 null：该工具没有工具调用展示。
  */
 function noFindingToolUseMessage(input, progressMessages) {
-  return null;
+  return codeModeAccepted() ? renderRunningLine(input) : null;
 }
-//@ chunk-ah34pb7m.js:25860-25886 placement
+//@ chunk-wjygkcr4.js:26178-26314 layout
+function renderRunningLine(progressMessages) {
+  let lastData = progressMessages.at(-1)?.data;
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
+      dimColor: true,
+      children: lastData ? `Running ${lastData.toolName}\u2026` : "Working\u2026",
+    }),
+  });
+}
+//@ chunk-wjygkcr4.js:26314-26350 placement
 /**
  * 恒返回 null：该工具没有进度展示。
  */
 function noFindingProgressMessage() {
-  return null;
+  return codeModeAccepted() ? renderRejectedLine() : null;
 }
-//@ chunk-ah34pb7m.js:25886-25915 placement
+//@ chunk-wjygkcr4.js:26350-26431 layout
+function renderRejectedLine() {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
+      color: "warning",
+      children: "Rejected",
+    }),
+  });
+}
+//@ chunk-wjygkcr4.js:26431-26471 placement
 /**
  * 恒返回 null：该工具没有错误展示。
  */
 function noFindingError(result, progressMessages) {
-  return null;
+  return codeModeAccepted() ? renderScriptErrorLine(progressMessages) : null;
 }
-//@ chunk-ah34pb7m.js:25915-25980 placement
+//@ chunk-wjygkcr4.js:26471-26879 layout
+function renderScriptErrorLine(progressMessages) {
+  if (progressMessages.output === undefined && isThinClient()) return null;
+  if (
+    codeModeAccepted() &&
+    require("../../utils/codeMode/scriptErrors.js").isErrorRowCopy(progressMessages.output)
+  )
+    return jsxProd_default(fragmentTypeExport, {});
+  if (isThinClientUi()) return jsxProd_default(fragmentTypeExport, {});
+  if (
+    codeModeAccepted() &&
+    require("../REPLTool/stopReport.js").drawsInterruptedRow(REPL_TOOL_NAME, progressMessages.output)
+  )
+    return jsxProd_default(RejectedToolUseMessage, {});
+  let errorLine = codeModeAccepted()
+    ? require("../../utils/codeMode/scriptErrors.js").scriptResultErrorLine(progressMessages.output)
+    : null;
+  if (errorLine === null) return null;
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
+      color: "error",
+      children: errorLine,
+    }),
+  });
+}
+//@ chunk-wjygkcr4.js:26879-26944 placement
 /**
  * 计算行号列的显示宽度。
  */
 function lineNumberWidth(finding) {
   return finding.line === undefined ? 0 : String(finding.line).length;
 }
-//@ chunk-ah34pb7m.js:25980-26040 placement
+//@ chunk-wjygkcr4.js:26944-27004 placement
 /**
  * 计算类别标签 “[类别]” 的显示宽度。
  */
 function categoryTagWidth(finding) {
   return finding.category ? bunStringWidth(`[${finding.category}]`) : 0;
 }
-//@ chunk-ah34pb7m.js:26040-26093 placement
+//@ chunk-wjygkcr4.js:27004-27057 placement
 /**
  * 结论到颜色的映射（CONFIRMED→error、PLAUSIBLE→warning）。
  */
@@ -66,7 +119,7 @@ var VERDICT_COLORS = {
   PLAUSIBLE: "warning",
 };
 var MIN_VERDICT_ROW_WIDTH = 16;
-//@ chunk-ah34pb7m.js:26093-26208 placement
+//@ chunk-wjygkcr4.js:27057-27172 placement
 function renderFindingsResult(result, progressMessages, { verbose }) {
   let findings = result?.findings ?? [];
   if (findings.length === 0) return null;
@@ -75,7 +128,7 @@ function renderFindingsResult(result, progressMessages, { verbose }) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:26208-27947 placement
+//@ chunk-wjygkcr4.js:27172-28911 placement
 /**
  * 按文件分组显示审查发现。
  */
@@ -262,7 +315,7 @@ function FindingsList(props) {
   } else wrapped = $[22];
   return wrapped;
 }
-//@ chunk-ah34pb7m.js:27947-28194 placement
+//@ chunk-wjygkcr4.js:28911-29158 placement
 function FindingStatusIcon(props) {
   let $ = useMemoCache(3);
   let { finding } = props;
@@ -281,7 +334,7 @@ function FindingStatusIcon(props) {
   } else icon = $[2];
   return icon;
 }
-//@ chunk-ah34pb7m.js:28194-28548 placement
+//@ chunk-wjygkcr4.js:29158-29512 placement
 /**
  * 一条审查发现。
  */
@@ -312,12 +365,12 @@ function FindingRow(props) {
   } else row = $[4];
   return row;
 }
-//@ chunk-ah34pb7m.js:28548-28558 placement
+//@ chunk-wjygkcr4.js:29512-29522 placement
 /**
  * 微光动画的边缘留白（10）。
  */
 var SHIMMER_MARGIN = 10;
-//@ chunk-ah34pb7m.js:28558-28744 placement
+//@ chunk-wjygkcr4.js:29522-29708 placement
 function useShimmerOffset(textWidth) {
   let $ = useMemoCache(3);
   let prefersReducedMotion = usePrefersReducedMotion();
@@ -336,7 +389,7 @@ function useShimmerOffset(textWidth) {
   } else result = $[2];
   return result;
 }
-//@ chunk-ah34pb7m.js:28744-29075 placement (2.1.88 match: ShimmerChar, 0.914)
+//@ chunk-wjygkcr4.js:29708-30039 placement (2.1.88 match: ShimmerChar, 0.913)
 /**
  * 闪烁文字。
  */
@@ -374,20 +427,20 @@ function ShimmerText(props) {
   } else element = $[6];
   return element;
 }
-//@ chunk-ah34pb7m.js:29075-29102 placement
+//@ chunk-wjygkcr4.js:30039-30066 placement
 /**
  * 恒返回 null：该工具没有结果展示。
  */
 function noFindingResultMessage(input) {
   return null;
 }
-//@ chunk-ah34pb7m.js:29102-29118 placement
+//@ chunk-wjygkcr4.js:30066-30082 placement
 /**
  * 摘要最多显示的行数（2）。
  */
 var MAX_SUMMARY_LINES = 2;
 var MAX_SUMMARY_DISPLAY_COLS = 160;
-//@ chunk-ah34pb7m.js:29118-29236 placement
+//@ chunk-wjygkcr4.js:30082-30200 placement
 function truncateFindingSummary(rawCommand) {
   let lines = rawCommand.split(`
 `);
@@ -400,9 +453,9 @@ function truncateFindingSummary(rawCommand) {
   return summary.trim();
 }
 export {
-  truncateFindingSummary,
   useShimmerOffset,
   ShimmerText,
+  truncateFindingSummary,
   renderFindingsResult,
   noFindingError,
   noFindingToolUseMessage,

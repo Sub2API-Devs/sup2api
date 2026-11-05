@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9qwbw2qr.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d2msvdm6.js (12)
  * attribution: placement 12
  */
 import { parsePluginGitUrl } from "./gitUrl.js";
@@ -17,7 +17,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { buildPluginTelemetryFields, buildPluginEventFieldsFromId } from "../telemetry/pluginTelemetry.js";
 
-//@ chunk-9qwbw2qr.js:5013-5074 placement
+//@ chunk-d2msvdm6.js:5013-5074 placement
 /**
  * pluginGitUrlError：解析插件 git URL 的错误。
  */
@@ -29,21 +29,21 @@ function pluginGitUrlError(url) {
     return toError(error);
   }
 }
-//@ chunk-9qwbw2qr.js:5074-5111 placement
+//@ chunk-d2msvdm6.js:5074-5111 placement
 /**
  * isPluginGitUrlValid：插件 git URL 可解析。
  */
 function isPluginGitUrlValid(url) {
   return pluginGitUrlError(url) === null;
 }
-//@ chunk-9qwbw2qr.js:5111-5156 placement
+//@ chunk-d2msvdm6.js:5111-5156 placement (2.1.88 match: getVersionedCachePathIn, 0.472)
 /**
  * isOfficialDirectoryPlugin：插件来自官方目录。
  */
 function isOfficialDirectoryPlugin(pluginId) {
   return isOfficialNameUsableHere(parsePluginIdentifier_2(pluginId).marketplace);
 }
-//@ chunk-9qwbw2qr.js:5156-5272 placement
+//@ chunk-d2msvdm6.js:5156-5272 placement
 /**
  * 插件安装事件的 surface/replaced/is_directory 字段。
  */
@@ -56,7 +56,7 @@ function directoryInstallFields({ pluginId, surface, replaced }) {
     is_directory: isOfficialDirectoryPlugin(pluginId),
   };
 }
-//@ chunk-9qwbw2qr.js:5272-6527 placement
+//@ chunk-d2msvdm6.js:5272-6527 placement
 /**
  * 上报插件目录 catalog 加载事件（页数、条目数、各类跳过数、耗时、缓存年龄等）， 再按 outcome 记 feature 状态：fresh_cache/walked 为 ok，陈旧/退避类为 sad，不完整/重复 id 为 bad，refused 按拒绝原因区分。
  */
@@ -119,7 +119,7 @@ function logDirectoryCatalogLoad(fields) {
       }
   }
 }
-//@ chunk-9qwbw2qr.js:6527-6789 placement
+//@ chunk-d2msvdm6.js:6527-6789 placement
 /**
  * 记 tengu_plugin_discover_shown（发现页展示统计）。
  */
@@ -142,7 +142,7 @@ function logDiscoverShown({
     known_marketplace_count: knownMarketplaceCount,
   });
 }
-//@ chunk-9qwbw2qr.js:6789-7565 placement
+//@ chunk-d2msvdm6.js:6789-7565 placement
 /**
  * 记录插件从一个市场切换到另一个：bad 直接记 feature bad；主切换按结果记 sad/ok； 再上报 tengu_plugin_marketplace_switched（作用域变化、数据目录迁移、钉住变化、替换数及前后插件的脱敏标识）。
  */
@@ -182,7 +182,7 @@ function logMarketplaceSwitch({ fromPluginId, toPluginId, surface, managedNames,
     });
   }
 }
-//@ chunk-9qwbw2qr.js:7565-7768 placement
+//@ chunk-d2msvdm6.js:7565-7768 placement
 /**
  * 记插件目录开关（成功时另记 tengu_plugin_directory_toggled）。
  */
@@ -200,7 +200,7 @@ function logDirectoryToggle({ enabled, surface, failure }) {
     logEvent("tengu_plugin_directory_toggled", fields);
   }
 }
-//@ chunk-9qwbw2qr.js:7768-7899 placement
+//@ chunk-d2msvdm6.js:7768-7899 placement
 /**
  * 每种原因只记一次 tengu_plugin_directory_blocked。
  */
@@ -214,7 +214,7 @@ function logDirectoryBlockedOnce(blockKind) {
     });
   }
 }
-//@ chunk-9qwbw2qr.js:7899-8086 placement
+//@ chunk-d2msvdm6.js:7899-8086 placement
 /**
  * 记插件目录条目被查看。
  */
@@ -229,7 +229,7 @@ function logDirectoryListingViewed({ pluginId, surface, resultIndex }) {
     });
   }
 }
-//@ chunk-9qwbw2qr.js:8086-8244 placement
+//@ chunk-d2msvdm6.js:8086-8244 placement
 /**
  * 记插件目录链接被打开。
  */
@@ -243,7 +243,7 @@ function logDirectoryLinkOpened({ pluginId, linkKind }) {
     });
   }
 }
-//@ chunk-9qwbw2qr.js:8244-8449 placement
+//@ chunk-d2msvdm6.js:8244-8449 placement
 /**
  * 记 tengu_marketplace_add_failed（来源类别归并）。
  */
@@ -261,15 +261,15 @@ function logMarketplaceAddFailed({ reason, sourceKind, surface }) {
   });
 }
 export {
+  logDirectoryCatalogLoad,
+  logDirectoryBlockedOnce,
+  isPluginGitUrlValid,
   isOfficialDirectoryPlugin,
+  pluginGitUrlError,
   directoryInstallFields,
   logMarketplaceSwitch,
   logMarketplaceAddFailed,
-  logDirectoryBlockedOnce,
   logDirectoryToggle,
-  pluginGitUrlError,
-  isPluginGitUrlValid,
-  logDirectoryCatalogLoad,
   logDirectoryLinkOpened,
   logDirectoryListingViewed,
   logDiscoverShown,

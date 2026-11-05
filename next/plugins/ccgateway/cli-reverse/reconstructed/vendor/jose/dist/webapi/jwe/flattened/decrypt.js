@@ -1,15 +1,15 @@
 /**
  * jose/dist/webapi/jwe/flattened/decrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (1)
+ * pieces: chunk-0f6azspv.js (1)
  * attribution: esm-fingerprint 1
  */
 import { isObject, isDisjoint } from "../../lib/type_checks.js";
 import { JWEInvalid_2, JOSENotSupported_2, JOSEAlgNotAllowed } from "../../../node/esm/util/errors.js";
-import { decode_2 } from "../../util/base64url.js";
+import { decode } from "../../util/base64url.js";
 import { textDecoder, encode, concat } from "../../lib/buffer_utils.js";
-import { validateCrit, validateAlgorithms_2 } from "../../lib/options.js";
+import { validateCrit, validateAlgorithms } from "../../lib/options.js";
 import { decodeBase64url } from "../../lib/helpers.js";
 import { checkKeyType } from "../../lib/check_key_type.js";
 import { normalizeKey } from "../../lib/normalize_key.js";
@@ -17,8 +17,8 @@ import { decryptKeyManagement } from "../../lib/key_management.js";
 import { generateCek_2, decrypt } from "../../lib/content_encryption.js";
 import { decompress } from "../../lib/deflate.js";
 
-//@ chunk-5h78gfwc.js:31501-34826 esm-fingerprint
-async function flattenedDecrypt_2(jwe, key, options) {
+//@ chunk-0f6azspv.js:31501-34826 esm-fingerprint
+async function flattenedDecrypt(jwe, key, options) {
   if (!isObject(jwe)) throw new JWEInvalid_2("Flattened JWE must be an object");
   if (jwe.protected === undefined && jwe.header === undefined && jwe.unprotected === undefined)
     throw new JWEInvalid_2("JOSE Header missing");
@@ -39,7 +39,7 @@ async function flattenedDecrypt_2(jwe, key, options) {
   let parsedProt;
   if (jwe.protected)
     try {
-      let protectedHeader = decode_2(jwe.protected);
+      let protectedHeader = decode(jwe.protected);
       parsedProt = JSON.parse(textDecoder.decode(protectedHeader));
     } catch {
       throw new JWEInvalid_2("JWE Protected Header is invalid");
@@ -65,9 +65,9 @@ async function flattenedDecrypt_2(jwe, key, options) {
   if (typeof enc !== "string" || !enc)
     throw new JWEInvalid_2("missing JWE Encryption Algorithm (enc) in JWE Header");
   let keyManagementAlgorithms =
-    options && validateAlgorithms_2("keyManagementAlgorithms", options.keyManagementAlgorithms);
+    options && validateAlgorithms("keyManagementAlgorithms", options.keyManagementAlgorithms);
   let contentEncryptionAlgorithms =
-    options && validateAlgorithms_2("contentEncryptionAlgorithms", options.contentEncryptionAlgorithms);
+    options && validateAlgorithms("contentEncryptionAlgorithms", options.contentEncryptionAlgorithms);
   if (
     (keyManagementAlgorithms && !keyManagementAlgorithms.has(alg)) ||
     (!keyManagementAlgorithms && alg.startsWith("PBES2"))
@@ -134,4 +134,4 @@ async function flattenedDecrypt_2(jwe, key, options) {
     };
   return result;
 }
-export { flattenedDecrypt_2 };
+export { flattenedDecrypt };

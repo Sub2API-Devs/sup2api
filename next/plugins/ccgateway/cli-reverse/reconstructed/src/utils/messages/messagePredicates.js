@@ -3,24 +3,24 @@
  *
  * 消息判定小函数（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qz53w8v8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkc3d9jc.js (7)
  * attribution: placement 7
  */
 
-//@ chunk-qz53w8v8.js:500-567 placement
+//@ chunk-rkc3d9jc.js:410-477 placement
 /**
  * 归一化队列优先级（now/next/later）。
  */
 function queuePriorityOrUndefined(priority) {
   return priority === "now" || priority === "next" || priority === "later" ? priority : undefined;
 }
-//@ chunk-qz53w8v8.js:567-627 placement (2.1.88 match: _temp, 1)
+//@ chunk-rkc3d9jc.js:477-537 placement (2.1.88 match: _temp, 1)
 function isNonEmptyImageAttachment(c) {
   return c.type === "image" && c.content.length > 0;
 }
-//@ chunk-qz53w8v8.js:627-726 placement
+//@ chunk-rkc3d9jc.js:537-636 placement
 /**
  * 判断命令是否为被动/附带型（poll-event、任务通知、跳过附件）。
  */
@@ -29,7 +29,7 @@ function isPassiveOrAttachedCommand(command) {
     command.mode === "poll-event" || command.mode === "task-notification" || command.skipAttachments === true
   );
 }
-//@ chunk-qz53w8v8.js:726-870 placement
+//@ chunk-rkc3d9jc.js:636-780 placement
 /**
  * 判断是否为真实的助手消息：类型为 assistant、不是交接产生的，且 uuid 不是版本 5（合成）格式。
  */
@@ -40,14 +40,14 @@ function isRealAssistantMessage(message) {
     !/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.uuid)
   );
 }
-//@ chunk-qz53w8v8.js:870-948 placement
+//@ chunk-rkc3d9jc.js:780-858 placement
 /**
  * 取最后一条 user/assistant 消息。
  */
 function lastConversationMessage(messages) {
   return messages.findLast((message) => message.type === "user" || message.type === "assistant");
 }
-//@ chunk-qz53w8v8.js:948-1544 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-rkc3d9jc.js:858-1454 placement
 function isToolResultForToolUse(messages) {
   let isToolResultMessage = (message) =>
     message.type === "user" &&
@@ -76,26 +76,26 @@ function isToolResultForToolUse(messages) {
   }
   return false;
 }
-//@ chunk-qz53w8v8.js:1544-1699 placement (2.1.88 match: getLastToolUseName, 1)
+//@ chunk-rkc3d9jc.js:1454-1609 placement
 /**
  * 找最后一条包含 tool_use 的 assistant 消息，找不到时取最后一条消息。
  */
-function findLastToolUseAssistantMessage(message) {
+function findLastToolUseAssistantMessage(messages) {
   return (
-    message.findLast(
+    messages.findLast(
       (message) =>
         message.type === "assistant" &&
         Array.isArray(message.message.content) &&
         message.message.content.some((block) => block.type === "tool_use"),
-    ) ?? message.at(-1)
+    ) ?? messages.at(-1)
   );
 }
 export {
   isToolResultForToolUse,
-  findLastToolUseAssistantMessage,
-  lastConversationMessage,
   queuePriorityOrUndefined,
   isPassiveOrAttachedCommand,
+  lastConversationMessage,
+  findLastToolUseAssistantMessage,
   isNonEmptyImageAttachment,
   isRealAssistantMessage,
 };

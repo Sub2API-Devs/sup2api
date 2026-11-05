@@ -3,10 +3,10 @@
  *
  * 远程线帧形状规范化（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c8ynteey.js (23)
- * attribution: placement 23
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0a5t4wvn.js (23), chunk-z6e3cpmy.js (1)
+ * attribution: placement 24
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -32,14 +32,14 @@ import { isConfirmRepositoryTrustTool, isRequestComputerFolderTool } from "./too
 import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-c8ynteey.js:438-483 placement
+//@ chunk-z6e3cpmy.js:191-236 placement
 /**
  * 导出常量或表 `UNSUPPORTED_CONTROL_SUBTYPE_TEXT`：值为 "Unsupported control request subtype"。
  */
 var UNSUPPORTED_CONTROL_SUBTYPE_TEXT = "Unsupported control request subtype";
-//@ chunk-c8ynteey.js:519-1345 placement
+//@ chunk-0a5t4wvn.js:474-1300 placement
 var CONTENT_BLOCK_TYPES; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c8ynteey.js:519", () => {
+deferInit("chunk-0a5t4wvn.js:474", () => {
   CONTENT_BLOCK_TYPES = DoctorLazy(() => {
     let input = record(stringSchema(), unknown());
     let text = looseObject({
@@ -105,14 +105,14 @@ deferInit("chunk-c8ynteey.js:519", () => {
     };
   });
 });
-//@ chunk-c8ynteey.js:1345-1415 placement
+//@ chunk-0a5t4wvn.js:1300-1370 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-c8ynteey.js:1415-1451 placement
+//@ chunk-0a5t4wvn.js:1370-1406 placement
 var MAX_FRAME_DEPTH = 256;
 var TRUNCATED_DEPTH_TEXT = "[truncated: too deep]";
-//@ chunk-c8ynteey.js:1451-1696 placement
+//@ chunk-0a5t4wvn.js:1406-1651 placement
 function exceedsFrameDepth(value) {
   let stack = [];
   if (typeof value === "object" && value !== null)
@@ -132,7 +132,7 @@ function exceedsFrameDepth(value) {
   }
   return false;
 }
-//@ chunk-c8ynteey.js:1696-2010 placement
+//@ chunk-0a5t4wvn.js:1651-1965 placement
 /**
  * 遍历对象，把超过最大深度的嵌套值替换为占位符，返回替换次数。
  */
@@ -163,17 +163,17 @@ function capNestedDepth(value) {
   }
   return cappedCount;
 }
-//@ chunk-c8ynteey.js:2010-2074 placement
+//@ chunk-0a5t4wvn.js:1965-2029 placement
 function getTypeField(value) {
   return isPlainObject(value) && typeof value.type === "string" ? value.type : null;
 }
-//@ chunk-c8ynteey.js:2074-2177 placement (2.1.88 match: getReceivedType, 0.776)
+//@ chunk-0a5t4wvn.js:2029-2132 placement (2.1.88 match: getReceivedType, 0.777)
 function getReceivedType(value) {
   let typeField = getTypeField(value);
   if (typeField !== null) return typeField;
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
-//@ chunk-c8ynteey.js:2177-2344 placement
+//@ chunk-0a5t4wvn.js:2132-2299 placement
 function isValidAssistantBlock(block) {
   let typeField = getTypeField(block);
   if (typeField === null) return false;
@@ -183,7 +183,7 @@ function isValidAssistantBlock(block) {
     (typeField.endsWith("_tool_result") ? types.toolResultLike : types.generic)
   ).safeParse(block).success;
 }
-//@ chunk-c8ynteey.js:2344-2703 placement
+//@ chunk-0a5t4wvn.js:2299-2658 placement
 /**
  * 规范化工具结果内容：数组只保留合法块，非字符串对象序列化为 JSON，失败返回 false。
  */
@@ -212,7 +212,7 @@ function normalizeToolResultContent(block) {
     return false;
   }
 }
-//@ chunk-c8ynteey.js:2703-2934 placement
+//@ chunk-0a5t4wvn.js:2658-2889 placement
 function isValidUserBlock(block) {
   let typeField = getTypeField(block);
   if (typeField === null || !isPlainObject(block)) return false;
@@ -224,7 +224,7 @@ function isValidUserBlock(block) {
   }
   return types.generic.safeParse(block).success;
 }
-//@ chunk-c8ynteey.js:2934-3044 placement
+//@ chunk-0a5t4wvn.js:2889-2999 placement
 function logFrameProblem(role, uuid, problem) {
   logForDebugging(
     `[wireFrameShape] ${role} frame ${typeof uuid === "string" ? uuid : "(no uuid)"}: ${problem}`,
@@ -233,7 +233,7 @@ function logFrameProblem(role, uuid, problem) {
     },
   );
 }
-//@ chunk-c8ynteey.js:3044-3299 placement
+//@ chunk-0a5t4wvn.js:2999-3254 placement
 function dropMalformedBlocks(blocks, isValid, role, uuid) {
   let problems = [];
   let filtered = blocks.filter((block) => {
@@ -254,7 +254,7 @@ function dropMalformedBlocks(blocks, isValid, role, uuid) {
   );
   return filtered;
 }
-//@ chunk-c8ynteey.js:3299-4105 placement
+//@ chunk-0a5t4wvn.js:3254-4060 placement
 function normalizeAssistantFrame(frame) {
   let uuid;
   if (typeof frame.uuid === "string" && frame.uuid !== "") uuid = frame.uuid;
@@ -294,7 +294,7 @@ function normalizeAssistantFrame(frame) {
   stripMalformedEnvelopeFields(message, uuid);
   return true;
 }
-//@ chunk-c8ynteey.js:4105-4506 placement
+//@ chunk-0a5t4wvn.js:4060-4461 placement
 /**
  * 移除助手帧中格式错误的信封字段（model、stop_reason、usage）并记录。
  */
@@ -319,7 +319,7 @@ function stripMalformedEnvelopeFields(message, uuid) {
   if (stripped.length > 0)
     logFrameProblem("assistant", uuid, `removed malformed envelope field(s): ${stripped.join(", ")}`);
 }
-//@ chunk-c8ynteey.js:4506-5078 placement
+//@ chunk-0a5t4wvn.js:4461-5033 placement
 function normalizeUserFrame(frame) {
   if (frame.uuid !== undefined && (typeof frame.uuid !== "string" || frame.uuid === "")) {
     logFrameProblem("user", frame.uuid, "minted a uuid \u2014 original was not a non-empty string");
@@ -344,7 +344,7 @@ function normalizeUserFrame(frame) {
   if (validBlocks !== content) message.content = validBlocks;
   return true;
 }
-//@ chunk-c8ynteey.js:5078-5850 placement
+//@ chunk-0a5t4wvn.js:5033-5805 placement
 function normalizeStreamEvent(event) {
   if (!isPlainObject(event)) return false;
   switch (event.type) {
@@ -385,7 +385,7 @@ function normalizeStreamEvent(event) {
       return true;
   }
 }
-//@ chunk-c8ynteey.js:5850-6510 placement
+//@ chunk-0a5t4wvn.js:5805-6465 placement
 function capFrameDepth(frame) {
   if (!isPlainObject(frame)) return true;
   try {
@@ -435,7 +435,7 @@ function capFrameDepth(frame) {
     return false;
   }
 }
-//@ chunk-c8ynteey.js:6510-6968 placement
+//@ chunk-0a5t4wvn.js:6465-6923 placement
 /**
  * can_use_tool 请求中需要按字符串、枚举与布尔规范化的字段列表。
  */
@@ -465,7 +465,7 @@ var CAN_USE_TOOL_BOOLEAN_FIELDS = [
   "requires_user_interaction",
   "server_policy_ask_only",
 ];
-//@ chunk-c8ynteey.js:6968-7104 placement
+//@ chunk-0a5t4wvn.js:6923-7059 placement
 /**
  * 判断工具请求来自子代理（有 agent_id 且不是特殊工具）。
  */
@@ -478,7 +478,7 @@ function isSubagentToolRequest(request) {
     !isRequestComputerFolderTool(request.tool_name)
   );
 }
-//@ chunk-c8ynteey.js:7104-9093 placement
+//@ chunk-0a5t4wvn.js:7059-9048 placement
 function normalizeCanUseToolRequest(request) {
   if (!isPlainObject(request)) return false;
   try {
@@ -595,7 +595,7 @@ function normalizeCanUseToolRequest(request) {
     return false;
   }
 }
-//@ chunk-c8ynteey.js:9093-9267 placement
+//@ chunk-0a5t4wvn.js:9048-9222 placement
 function parsePermissionRequest(request) {
   let toolUseId = "tool_use_id" in request ? request.tool_use_id : undefined;
   return {
@@ -606,7 +606,7 @@ function parsePermissionRequest(request) {
     }),
   };
 }
-//@ chunk-c8ynteey.js:9267-9370 placement
+//@ chunk-0a5t4wvn.js:9222-9325 placement
 /**
  * 读取有效的 worker_epoch（正整数）。
  */
@@ -616,12 +616,25 @@ function readWorkerEpoch(request) {
     ? workerEpoch
     : undefined;
 }
+//@ chunk-0a5t4wvn.js:9325-9467 placement
+/**
+ * 判定一条消息是否为“正在请求/init”的 system 帧，供远端会话事件识别。
+ */
+function isRequestingStatus(message) {
+  let system = message;
+  return (
+    system.type === "system" &&
+    ((system.subtype === "status" && system.status === "requesting") ||
+      (system.subtype === "init" && system.request_at_init === true))
+  );
+}
 export {
-  normalizeStreamEvent,
-  isSubagentToolRequest,
   UNSUPPORTED_CONTROL_SUBTYPE_TEXT,
   readWorkerEpoch,
   capFrameDepth,
+  isRequestingStatus,
+  isSubagentToolRequest,
   normalizeCanUseToolRequest,
   parsePermissionRequest,
+  normalizeStreamEvent,
 };

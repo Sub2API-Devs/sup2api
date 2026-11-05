@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design 调用流程与错误类型（需同意、需项目授权、作用域不足、401）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-171dhyhe.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ma8ytfb3.js (16)
  * attribution: placement 16
  */
 import { isDesignConsentName, hasDesignOAuthToken } from "../../services/design/designApi.js";
@@ -34,7 +34,7 @@ import { env } from "../../utils/env.js";
 import { isOauthTokenFromBgSnapshot } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-171dhyhe.js:44646-44783 placement
+//@ chunk-ma8ytfb3.js:45794-45931 placement
 class DesignNeedsConsentError extends Error {
   consent;
   constructor(consent) {
@@ -43,13 +43,13 @@ class DesignNeedsConsentError extends Error {
     this.name = "DesignNeedsConsentError";
   }
 }
-//@ chunk-171dhyhe.js:44783-44906 placement
+//@ chunk-ma8ytfb3.js:45931-46054 placement
 function parseConsentError(body) {
   if (body == null || typeof body !== "object" || body.error !== "needs_consent") return null;
   let consent = body.consent;
   return isDesignConsentName(consent) ? consent : null;
 }
-//@ chunk-171dhyhe.js:44906-45066 placement
+//@ chunk-ma8ytfb3.js:46054-46214 placement
 class DesignNeedsProjectGrantError extends Error {
   projectId;
   constructor(projectId) {
@@ -58,7 +58,7 @@ class DesignNeedsProjectGrantError extends Error {
     this.name = "DesignNeedsProjectGrantError";
   }
 }
-//@ chunk-171dhyhe.js:45066-45281 placement
+//@ chunk-ma8ytfb3.js:46214-46429 placement
 function parseProjectGrantError(body) {
   if (body == null || typeof body !== "object" || body.error !== "needs_project_grant") return null;
   let projectId = body.project_id;
@@ -71,9 +71,9 @@ function parseProjectGrantError(body) {
     return null;
   return projectId;
 }
-//@ chunk-171dhyhe.js:45281-46137 placement
+//@ chunk-ma8ytfb3.js:46429-47285 placement
 let DesignNeedsScopesError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-171dhyhe.js:45281", () => {
+deferInit("chunk-ma8ytfb3.js:46429", () => {
   DesignNeedsScopesError = class DesignNeedsScopesError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -92,12 +92,12 @@ deferInit("chunk-171dhyhe.js:45281", () => {
     }
   };
 });
-//@ chunk-171dhyhe.js:46137-46147 placement
+//@ chunk-ma8ytfb3.js:47285-47295 placement
 /**
  * 记住已下发目录哈希的条数上限（64），超出逐出最旧的。
  */
 var MAX_SERVED_CATALOG_HASHES = 64;
-//@ chunk-171dhyhe.js:46147-46358 placement
+//@ chunk-ma8ytfb3.js:47295-47506 placement
 function rememberCatalogHash(state, agentId, hash) {
   state.servedCatalogHashes.delete(agentId);
   state.servedCatalogHashes.set(agentId, hash);
@@ -106,14 +106,14 @@ function rememberCatalogHash(state, agentId, hash) {
     if (oldestAgentId !== undefined) state.servedCatalogHashes.delete(oldestAgentId);
   }
 }
-//@ chunk-171dhyhe.js:46358-46500 placement
+//@ chunk-ma8ytfb3.js:47506-47647 placement
 function firstSentence(description) {
   let trimmed = description.replace(/\s+/g, " ").trim();
   let index = trimmed.indexOf(". ");
   let firstClause = index > 0 ? trimmed.slice(0, index + 1) : trimmed;
   return firstClause.length > 140 ? truncateToLength(firstClause, 140).trimEnd() + "\u2026" : firstClause;
 }
-//@ chunk-171dhyhe.js:46500-48615 placement
+//@ chunk-ma8ytfb3.js:47647-49764 placement
 /**
  * 执行一次 Claude Design 操作：必要时先发现目录（tools/list）、初始化 MCP 会话，再 tools/call；处理同意、项目授权、作用域不足等错误。
  */
@@ -255,7 +255,7 @@ async function callDesignOperation(state, operation, args, accessToken, signal, 
     );
   }
 }
-//@ chunk-171dhyhe.js:48615-48760 placement
+//@ chunk-ma8ytfb3.js:49764-49909 placement
 function isCancelError(error) {
   if (typeof error !== "object" || error === null) return false;
   let errorObject = error;
@@ -265,7 +265,7 @@ function isCancelError(error) {
     errorObject.code === "ERR_CANCELED"
   );
 }
-//@ chunk-171dhyhe.js:48760-48942 placement
+//@ chunk-ma8ytfb3.js:49909-50091 placement
 function discoverDesignToolsOnce(state, accessToken, signal, credentials) {
   if (state.discoverInFlight) return state.discoverInFlight;
   let designTools = discoverDesignTools(state, accessToken, signal, credentials);
@@ -274,7 +274,7 @@ function discoverDesignToolsOnce(state, accessToken, signal, credentials) {
     if (state.discoverInFlight === designTools) state.discoverInFlight = null;
   });
 }
-//@ chunk-171dhyhe.js:48942-49325 placement
+//@ chunk-ma8ytfb3.js:50091-50476 placement
 async function discoverDesignTools(state, accessToken, signal, credentials) {
   let listTools = (designSession) =>
     postDesignMcp(
@@ -302,14 +302,14 @@ async function discoverDesignTools(state, accessToken, signal, credentials) {
     );
   return recordDesignTools(response.data.result.tools);
 }
-//@ chunk-171dhyhe.js:49325-49430 placement
+//@ chunk-ma8ytfb3.js:50476-50581 placement
 function resetDesignSession(state) {
   state.cachedSessionId = null;
   state.initialized = false;
   state.initializeInFlight = null;
   state.discoverInFlight = null;
 }
-//@ chunk-171dhyhe.js:49430-50121 placement
+//@ chunk-ma8ytfb3.js:50581-51273 placement
 async function initializeDesignSession(state, accessToken, signal, credentials) {
   if (state.initialized) return state.cachedSessionId;
   if (state.initializeInFlight) return state.initializeInFlight;
@@ -351,9 +351,9 @@ async function initializeDesignSession(state, accessToken, signal, credentials) 
     if (state.initializeInFlight === initializePromise) state.initializeInFlight = null;
   }
 }
-//@ chunk-171dhyhe.js:50121-50416 placement
+//@ chunk-ma8ytfb3.js:51273-51568 placement
 let DesignAuth401Error; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-171dhyhe.js:50121", () => {
+deferInit("chunk-ma8ytfb3.js:51273", () => {
   DesignAuth401Error = class DesignAuth401Error extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -368,7 +368,7 @@ deferInit("chunk-171dhyhe.js:50121", () => {
     }
   };
 });
-//@ chunk-171dhyhe.js:50760-53132 placement
+//@ chunk-ma8ytfb3.js:51912-54284 placement
 async function handleDesignAuth401(credentials, options) {
   let isNonInteractive = options?.isNonInteractiveSession === true;
   let failureText =

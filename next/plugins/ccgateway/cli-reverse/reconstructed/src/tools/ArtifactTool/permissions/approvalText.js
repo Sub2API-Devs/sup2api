@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 写入批准文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (11)
  * attribution: placement 11
  */
 import { jsonStringify } from "../../../utils/slowOperations.js";
@@ -23,7 +23,7 @@ import {
 import { readUntrustedArray, UNREADABLE_ARRAY } from "../../../utils/untrustedArray.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-qxvqcab6.js:13435-13585 placement
+//@ chunk-nfkwcnxd.js:13410-13560 placement
 function approvalPayloadExcerpt(payload) {
   if (payload === undefined) return "";
   try {
@@ -35,13 +35,13 @@ function approvalPayloadExcerpt(payload) {
     return "(unserializable payload)";
   }
 }
-//@ chunk-qxvqcab6.js:13585-13723 placement
+//@ chunk-nfkwcnxd.js:13560-13698 placement
 function truncatedSuffix(text, maxChars) {
   return Array.from(text.slice(0, 2 * maxChars + 2)).length <= maxChars
     ? ""
     : `\u2026 [truncated \u2014 ${Buffer.byteLength(text, "utf8")} bytes total]`;
 }
-//@ chunk-qxvqcab6.js:13723-14005 placement
+//@ chunk-nfkwcnxd.js:13698-13980 placement
 function strReplaceApprovalText({ field, oldStr, newStr, replaceAll }) {
   let label = (value, max) => {
     if (value === undefined) return "(missing)";
@@ -55,26 +55,26 @@ function strReplaceApprovalText({ field, oldStr, newStr, replaceAll }) {
   };
   return `field ${label(field, MAX_EDITS_PER_CALL)}: replace ${replaceAll === true ? "every " : ""}${label(oldStr, 200)} with ${label(newStr, 200)}`;
 }
-//@ chunk-qxvqcab6.js:14005-14098 placement
+//@ chunk-nfkwcnxd.js:13980-14073 placement
 function isLiveOffOnly(value) {
   return (
     value !== null && typeof value === "object" && value.live === false && Object.keys(value).length === 1
   );
 }
-//@ chunk-qxvqcab6.js:14098-14129 placement
+//@ chunk-nfkwcnxd.js:14073-14104 placement
 /**
  * 可当作文本处理的 media type 集合。
  */
 var TEXTUAL_MEDIA_TYPES; // deferred: uses MARKUP_CONTENT_TYPES (../../../services/artifacts/contentTypes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qxvqcab6.js:14098", () => {
+deferInit("chunk-nfkwcnxd.js:14073", () => {
   TEXTUAL_MEDIA_TYPES = new Set([...WWW_CONTENT_TYPES, ...SCRIPT_CONTENT_TYPES]);
 });
-//@ chunk-qxvqcab6.js:14129-14233 placement
+//@ chunk-nfkwcnxd.js:14104-14208 placement
 function isTextualMediaType(filePath, contentType) {
   if (typeof contentType === "string") return TEXTUAL_MEDIA_TYPES.has(baseMediaType(contentType));
   return typeof filePath === "string" && TEXTUAL_MEDIA_TYPES.has(contentTypeForPath(filePath) ?? "");
 }
-//@ chunk-qxvqcab6.js:14233-14672 placement
+//@ chunk-nfkwcnxd.js:14208-14647 placement
 function countApprovedFiles(input) {
   if (typeof input !== "object" || input === null) return 0;
   let { file_path: filePath, files } = input;
@@ -103,12 +103,12 @@ function countApprovedFiles(input) {
     }
   return count;
 }
-//@ chunk-qxvqcab6.js:14672-14703 placement
+//@ chunk-nfkwcnxd.js:14647-14678 placement
 var APPROVABLE_CONTENT_TYPES; // deferred: uses MARKUP_CONTENT_TYPES (../../../services/artifacts/contentTypes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qxvqcab6.js:14672", () => {
+deferInit("chunk-nfkwcnxd.js:14647", () => {
   APPROVABLE_CONTENT_TYPES = new Set([...SERVABLE_CONTENT_TYPES, ...MARKUP_CONTENT_TYPES]);
 });
-//@ chunk-qxvqcab6.js:14703-14856 placement
+//@ chunk-nfkwcnxd.js:14678-14831 placement
 function isApprovableFile(filePath, contentType, allowedTypes) {
   if (typeof filePath !== "string") return false;
   let pathContentType = contentTypeForPath(filePath);
@@ -118,13 +118,13 @@ function isApprovableFile(filePath, contentType, allowedTypes) {
     (typeof contentType === "string" && allowedTypes.has(baseMediaType(contentType)))
   );
 }
-//@ chunk-qxvqcab6.js:14856-14910 placement
+//@ chunk-nfkwcnxd.js:14831-14885 placement
 function areBothApprovable(filePath, path, allowedTypes) {
   return (
     isApprovableFile(filePath, undefined, allowedTypes) && isApprovableFile(path, undefined, allowedTypes)
   );
 }
-//@ chunk-qxvqcab6.js:14910-14966 placement
+//@ chunk-nfkwcnxd.js:14885-14941 placement
 function isLiveOrReseed(value) {
   return value.live !== undefined || value.reseed !== undefined;
 }
@@ -133,9 +133,9 @@ export {
   truncatedSuffix,
   countApprovedFiles,
   isLiveOffOnly,
+  strReplaceApprovalText,
   APPROVABLE_CONTENT_TYPES,
   isLiveOrReseed,
   isApprovableFile,
   areBothApprovable,
-  strReplaceApprovalText,
 };

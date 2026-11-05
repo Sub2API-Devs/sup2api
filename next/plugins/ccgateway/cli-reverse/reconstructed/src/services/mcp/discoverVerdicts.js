@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：MCP discover 判定文件的读写。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (15)
  * attribution: placement 15
  */
 import { join, dirname } from "path";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   objectSchema,
@@ -32,7 +32,7 @@ import { isDisklessWithoutState } from "../orgMemory/memoryStores.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:27904-27992 placement
+//@ chunk-sywnjtqb.js:29643-29731 placement
 /**
  * discover 判定持久化常量：状态名 mcp-discover-verdicts、远程 TTL 1 天、stdio TTL 7 天、文件上限 256 KiB、键前缀 ccr:/stdio:。
  */
@@ -42,20 +42,20 @@ var DISCOVER_VERDICTS_STATE_NAME = "mcp-discover-verdicts";
 var MAX_VERDICTS_FILE_BYTES = 262144;
 var CCR_VERDICT_PREFIX = "ccr:";
 var STDIO_VERDICT_PREFIX = "stdio:";
-//@ chunk-8t8n4kdh.js:27992-28043 placement
+//@ chunk-sywnjtqb.js:29731-29782 placement
 /**
  * getDiscoverVerdictsPath：<CLAUDE 配置目录>/state/mcp-discover-verdicts.json。
  */
 function getDiscoverVerdictsPath() {
   return join(getClaudeConfigDir(), "state", `${DISCOVER_VERDICTS_STATE_NAME}.json`);
 }
-//@ chunk-8t8n4kdh.js:28043-28126 placement
+//@ chunk-sywnjtqb.js:29782-29865 placement
 /**
  * 判定记录表的 schema。
  */
 var DiscoverVerdictSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var verdictMapSchema;
-deferInit("chunk-8t8n4kdh.js:28043", () => {
+deferInit("chunk-sywnjtqb.js:29782", () => {
   DiscoverVerdictSchema = DoctorLazy(() =>
     objectSchema({
       observedAt: numberSchema(),
@@ -64,11 +64,11 @@ deferInit("chunk-8t8n4kdh.js:28043", () => {
   );
   verdictMapSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-8t8n4kdh.js:28126-28180 placement
+//@ chunk-sywnjtqb.js:29865-29919 placement
 function isDiscoverVerdictMemoryEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_dreamy_sundae", true) !== false;
 }
-//@ chunk-8t8n4kdh.js:28180-28271 placement
+//@ chunk-sywnjtqb.js:29919-30010 placement
 /**
  * 判断该服务器的判定是否值得记住。
  */
@@ -79,14 +79,14 @@ function shouldRememberVerdict(discoverVerdictKey) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_gentle_brooks", true) !== false
   );
 }
-//@ chunk-8t8n4kdh.js:28271-28316 placement
+//@ chunk-sywnjtqb.js:30010-30055 placement
 /**
  * 判定的有效期（stdio 用较短 TTL）。
  */
 function verdictTtlMs(verdictKey) {
   return verdictKey.startsWith(STDIO_VERDICT_PREFIX) ? STDIO_VERDICT_TTL_MS : VERDICT_TTL_MS;
 }
-//@ chunk-8t8n4kdh.js:28316-28408 placement
+//@ chunk-sywnjtqb.js:30055-30147 placement
 /**
  * 判定是否仍有效且协议为现代版本。
  */
@@ -98,7 +98,7 @@ function isModernVerdictValid(verdictKey, discoverVerdict, now) {
     ageMs < verdictTtlMs(verdictKey)
   );
 }
-//@ chunk-8t8n4kdh.js:28408-28469 placement
+//@ chunk-sywnjtqb.js:30147-30208 placement
 /**
  * 判定是否仍有效（不区分协议）。
  */
@@ -106,7 +106,7 @@ function isVerdictValid(verdictKey, verdict, now) {
   let ageMs = now - verdict.observedAt;
   return ageMs >= 0 && ageMs < verdictTtlMs(verdictKey);
 }
-//@ chunk-8t8n4kdh.js:28469-28896 placement
+//@ chunk-sywnjtqb.js:30208-30635 placement
 /**
  * readDiscoverVerdicts：读取记住的 discover 判定（v5 存储或文件），读失败当作没有记录（服务器照常被 server/discover 探测）。
  */
@@ -130,7 +130,7 @@ async function readDiscoverVerdicts(storage) {
   let parseResult = verdictMapSchema().safeParse(parsed);
   return parseResult.success ? parseResult.data : {};
 }
-//@ chunk-8t8n4kdh.js:28896-29664 placement
+//@ chunk-sywnjtqb.js:30635-31403 placement
 /**
  * readDiscoverVerdictsFile：只读普通文件且不跟随符号链接、≤256 KiB。
  */
@@ -168,7 +168,7 @@ async function readDiscoverVerdictsFile(discoverVerdictsPath) {
   }
   return buffer.toString("utf8");
 }
-//@ chunk-8t8n4kdh.js:29664-29804 placement
+//@ chunk-sywnjtqb.js:31403-31542 placement
 /**
  * getDiscoverVerdicts：进程内记忆化的判定表读取。
  */
@@ -178,7 +178,7 @@ function getDiscoverVerdicts(storage) {
   cliOwnedState.discoverVerdictsRead ??= readDiscoverVerdicts(storage).catch(() => ({}));
   return cliOwnedState.discoverVerdictsRead;
 }
-//@ chunk-8t8n4kdh.js:29804-30040 placement (2.1.88 match: ensureScratchpadDir, 0.624)
+//@ chunk-sywnjtqb.js:31542-31778 placement (2.1.88 match: ensureScratchpadDir, 0.624)
 /**
  * 把 MCP discover 判定结果写入状态：有托管存储时写存储（0600），否则在本地路径原子写入（目录 0700、文件 0600），失败返回错误。旧版名 ensureScratchpadDir 误配，应归 MCP 模块。
  */
@@ -199,13 +199,13 @@ async function writeDiscoverVerdicts(verdicts, storage) {
     return errorMessage(error);
   }
 }
-//@ chunk-8t8n4kdh.js:30040-30145 placement
+//@ chunk-sywnjtqb.js:31778-31883 placement
 function readDiscoverVerdict(verdicts, discoverVerdictKey) {
   if (!Object.hasOwn(verdicts, discoverVerdictKey)) return;
   let parseResult = DiscoverVerdictSchema().safeParse(verdicts[discoverVerdictKey]);
   return parseResult.success ? parseResult.data : undefined;
 }
-//@ chunk-8t8n4kdh.js:30145-30279 placement
+//@ chunk-sywnjtqb.js:31883-32017 placement
 function retainValidDiscoverVerdicts(verdicts, now) {
   let kept = {};
   for (let [key, value] of Object.entries(verdicts)) {
@@ -214,7 +214,7 @@ function retainValidDiscoverVerdicts(verdicts, now) {
   }
   return kept;
 }
-//@ chunk-8t8n4kdh.js:30279-30726 placement
+//@ chunk-sywnjtqb.js:32017-32463 placement
 /**
  * updateDiscoverVerdicts：串行化的读-改-写；写失败丢弃改动并在下次重新读取。
  */

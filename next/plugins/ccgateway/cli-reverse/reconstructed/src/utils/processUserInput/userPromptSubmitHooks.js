@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：UserPromptSubmit 钩子执行与结果合并。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8fqgaf3a.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y8xj45e1.js (45)
  * attribution: placement 45
  */
 import { randomUUID } from "crypto";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../debug.js";
-import { createSystemMessage, HOOK_STOPPED_MESSAGE, createUserMessage } from "../messages.js";
+import { createSystemMessage, createUserMessage } from "../messages.js";
 import { wrapPluginPrompt, reasonFromText, singleLineFieldText } from "../messages/nonUserMessages.js";
 import { StreamClosedAbortError } from "../errors.js";
 import { stableStringifySafe } from "../hooks/hookSerialization.js";
@@ -18,6 +18,7 @@ import {
   findPluginRenderHooks,
   uiRenderRegistry,
 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
+import { HOOK_STOPPED_MESSAGE } from "../../services/compact/compact.js";
 import { promptOriginForHooks } from "../promptSource.js";
 import {
   snapshotHookRegistration,
@@ -52,7 +53,7 @@ import { createEventCallersRef } from "../../plugins/functionHooks/eventCatalog.
 import { resolveMessageOrigin } from "../messageOrigin.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8fqgaf3a.js:1017-1099 placement
+//@ chunk-y8xj45e1.js:1018-1100 placement
 var hookSubmitResult = (text, blocked) =>
   blocked
     ? {
@@ -61,7 +62,7 @@ var hookSubmitResult = (text, blocked) =>
     : {
         text,
       };
-//@ chunk-8fqgaf3a.js:1136-1287 placement
+//@ chunk-y8xj45e1.js:1137-1288 placement
 /**
  * 创建 UserPromptSubmit 的附加上下文附件消息。
  */
@@ -73,9 +74,9 @@ var createHookContextAttachment = (contexts, hookName = "UserPromptSubmit") =>
     toolUseID: `hook-${randomUUID()}`,
     hookEvent: "UserPromptSubmit",
   });
-//@ chunk-8fqgaf3a.js:1287-1296 placement
+//@ chunk-y8xj45e1.js:1288-1297 placement
 var IS_META_MESSAGE = true;
-//@ chunk-8fqgaf3a.js:1296-1426 placement
+//@ chunk-y8xj45e1.js:1297-1427 placement
 var blockedPromptResult = (message, ending) => ({
   messages: [
     {
@@ -89,7 +90,7 @@ var blockedPromptResult = (message, ending) => ({
   shouldQuery: false,
   resultText: message,
 });
-//@ chunk-8fqgaf3a.js:1426-1490 placement
+//@ chunk-y8xj45e1.js:1427-1491 placement
 function appendOriginalPrompt(userPromptSubmitHookBlockingMessage, text, suppressOriginal) {
   return suppressOriginal === true
     ? userPromptSubmitHookBlockingMessage
@@ -97,17 +98,17 @@ function appendOriginalPrompt(userPromptSubmitHookBlockingMessage, text, suppres
 
 Original prompt: ${text}`;
 }
-//@ chunk-8fqgaf3a.js:1490-1516 placement
+//@ chunk-y8xj45e1.js:1491-1517 placement
 /**
  * CANCELLED_RESULT：已取消的提示提交结果。
  */
 var CANCELLED_RESULT = {
   wasCancelled: true,
 };
-//@ chunk-8fqgaf3a.js:1516-1589 placement
+//@ chunk-y8xj45e1.js:1517-1590 placement
 var wasCancelledAndStopped = (result) =>
   result.wasCancelled === true && (result.blocked === undefined || result.stopped !== undefined);
-//@ chunk-8fqgaf3a.js:1589-1676 placement
+//@ chunk-y8xj45e1.js:1590-1677 placement
 var cancelledSubmitOutcome = (result, ended, text) =>
   wasCancelledAndStopped(result)
     ? CANCELLED_RESULT
@@ -117,13 +118,13 @@ var cancelledSubmitOutcome = (result, ended, text) =>
         text,
         wasCancelled: result.wasCancelled,
       };
-//@ chunk-8fqgaf3a.js:1676-1823 placement
+//@ chunk-y8xj45e1.js:1677-1824 placement
 var hooksNeverRanResult = () =>
   blockedPromptResult("Prompt blocked: the UserPromptSubmit hooks did not run over the submitted text.", {
     kind: "no_verdict",
     noVerdictKind: "hooks_never_ran",
   });
-//@ chunk-8fqgaf3a.js:1823-1932 placement
+//@ chunk-y8xj45e1.js:1824-1933 placement
 function promptTextForHooks(submission) {
   let origin = submission.origin;
   return origin?.kind === "plugin" && origin.asUser !== true
@@ -132,7 +133,7 @@ function promptTextForHooks(submission) {
       })
     : submission.text;
 }
-//@ chunk-8fqgaf3a.js:1932-2023 placement
+//@ chunk-y8xj45e1.js:1933-2024 placement
 var proceedsResult = (text, sessionTitle, context) => ({
   proceeds: {
     text,
@@ -143,14 +144,14 @@ var proceedsResult = (text, sessionTitle, context) => ({
       }),
   },
 });
-//@ chunk-8fqgaf3a.js:2023-2071 placement
+//@ chunk-y8xj45e1.js:2024-2072 placement
 var withContext = (outcome, context) => ({
   ...outcome,
   ...(context?.length && {
     context,
   }),
 });
-//@ chunk-8fqgaf3a.js:2071-2200 placement
+//@ chunk-y8xj45e1.js:2072-2201 placement
 var submitOutcome_2 = (result, submission, sessionTitle) =>
   !result
     ? {
@@ -162,32 +163,32 @@ var submitOutcome_2 = (result, submission, sessionTitle) =>
           ...proceedsResult(promptTextForHooks(submission), sessionTitle, submission.context),
           wasCancelled: result.wasCancelled,
         };
-//@ chunk-8fqgaf3a.js:2200-2222 placement
+//@ chunk-y8xj45e1.js:2201-2223 placement
 var isAborted = (state) => state.aborted;
-//@ chunk-8fqgaf3a.js:2222-2315 placement
+//@ chunk-y8xj45e1.js:2223-2316 placement
 function keepUsefulHookAttachment(message) {
   return message && (message.attachment.type !== "hook_success" || message.attachment.content)
     ? message
     : undefined;
 }
-//@ chunk-8fqgaf3a.js:2315-2378 placement
+//@ chunk-y8xj45e1.js:2316-2379 placement
 var INTERRUPTED_DURING_CHECK_MESSAGE = "the turn was interrupted while the prompt was checked";
-//@ chunk-8fqgaf3a.js:2378-2406 placement
+//@ chunk-y8xj45e1.js:2379-2407 placement
 var isStreamClosedAbort = (error) => error instanceof StreamClosedAbortError;
-//@ chunk-8fqgaf3a.js:2406-2440 placement
+//@ chunk-y8xj45e1.js:2407-2441 placement
 var isSameMade = (answered, recording) =>
   stableStringifySafe(answered) === stableStringifySafe(recording?.made);
-//@ chunk-8fqgaf3a.js:2440-2462 placement
+//@ chunk-y8xj45e1.js:2441-2463 placement
 var isBlockedOrAborted = (aborted, signal) => aborted || isAborted(signal);
-//@ chunk-8fqgaf3a.js:2462-2585 placement
+//@ chunk-y8xj45e1.js:2463-2586 placement
 var NOT_THROUGH_PROMPT_SUBMIT =
   "the prompt did not go through prompt.submit (a command, bash mode, an input that did not query, or a failed pass)";
-//@ chunk-8fqgaf3a.js:2585-2622 placement
+//@ chunk-y8xj45e1.js:2586-2623 placement
 /**
  * pluginsChanged：插件列表是否变化。
  */
 var pluginsChanged = (under, snapshot) => under.plugins !== snapshot.plugins;
-//@ chunk-8fqgaf3a.js:2622-2734 placement
+//@ chunk-y8xj45e1.js:2623-2735 placement
 function createObjectIds() {
   let weakMap = new WeakMap();
   let nextId = 0;
@@ -203,12 +204,12 @@ function createObjectIds() {
     },
   };
 }
-//@ chunk-8fqgaf3a.js:2734-2746 placement
+//@ chunk-y8xj45e1.js:2735-2747 placement
 var objectIds; // deferred: uses createObjectIds of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8fqgaf3a.js:2734", () => {
+deferInit("chunk-y8xj45e1.js:2735", () => {
   objectIds = createObjectIds();
 });
-//@ chunk-8fqgaf3a.js:2746-2884 placement
+//@ chunk-y8xj45e1.js:2747-2885 placement
 function promptSubmitRenderKey() {
   let pluginRenderHooks = findPluginRenderHooks("prompt.submit");
   return pluginRenderHooks.length === 0
@@ -218,7 +219,7 @@ function promptSubmitRenderKey() {
         pluginRenderHooks.map((pluginRenderHook) => [pluginRenderHook.plugin, pluginRenderHook.generation]),
       ]);
 }
-//@ chunk-8fqgaf3a.js:2884-2975 placement
+//@ chunk-y8xj45e1.js:2885-2976 placement
 /**
  * hookStopWarningMessage：钩子停止时保留提示词的警告消息。
  */
@@ -229,10 +230,10 @@ var hookStopWarningMessage = (text, ending) => ({
     promptKept: true,
   },
 });
-//@ chunk-8fqgaf3a.js:2975-3017 placement
+//@ chunk-y8xj45e1.js:2976-3018 placement
 var hookStoppedText = (stopReason) =>
   stopReason === undefined ? HOOK_STOPPED_MESSAGE : `${HOOK_STOPPED_MESSAGE}: ${stopReason}`;
-//@ chunk-8fqgaf3a.js:3017-3056 placement
+//@ chunk-y8xj45e1.js:3018-3057 placement
 /**
  * makeMetaUserMessage：构造 meta 用户消息。
  */
@@ -241,7 +242,7 @@ var makeMetaUserMessage = (content) =>
     content,
     isMeta: true,
   });
-//@ chunk-8fqgaf3a.js:3056-3120 placement
+//@ chunk-y8xj45e1.js:3057-3121 placement
 var submitOutcome = (blocked, stopped, cancelled) => ({
   blocked,
   stopped,
@@ -249,13 +250,13 @@ var submitOutcome = (blocked, stopped, cancelled) => ({
     wasCancelled: true,
   }),
 });
-//@ chunk-8fqgaf3a.js:3120-3178 placement
+//@ chunk-y8xj45e1.js:3121-3179 placement
 var promptOriginFromSource = (promptSource, wakeupSource) =>
   promptOriginForHooks({
     promptSource: promptSource ?? "sdk",
     wakeupSource,
   });
-//@ chunk-8fqgaf3a.js:3178-3326 placement
+//@ chunk-y8xj45e1.js:3179-3327 placement
 function isHookCancelledByAbort(result, signal) {
   return (
     result.message?.type === "attachment" &&
@@ -264,7 +265,7 @@ function isHookCancelledByAbort(result, signal) {
     signal.aborted
   );
 }
-//@ chunk-8fqgaf3a.js:3326-4646 placement
+//@ chunk-y8xj45e1.js:3327-4647 placement
 /**
  * 运行 UserPromptSubmit 钩子：阻止时返回阻止结果，阻止继续时停止查询，收集会话标题与附加上下文。
  */
@@ -363,19 +364,19 @@ async function runUserPromptSubmitHooks({
         sessionTitle,
       };
 }
-//@ chunk-8fqgaf3a.js:4646-4741 placement
+//@ chunk-y8xj45e1.js:4647-4742 placement
 var cloneInputSnapshot = (input) => ({
   ...input,
   messages: [...input.messages],
   allowedTools: input.allowedTools && [...input.allowedTools],
 });
-//@ chunk-8fqgaf3a.js:4741-4776 placement
+//@ chunk-y8xj45e1.js:4742-4777 placement
 /**
  * hasPromptSubmitHooks：存在 UserPromptSubmit 钩子或渲染键。
  */
 var hasPromptSubmitHooks = (context) =>
   userPromptSubmitHooksKey(context) !== "" || promptSubmitRenderKey() !== "";
-//@ chunk-8fqgaf3a.js:4776-4918 placement
+//@ chunk-y8xj45e1.js:4777-4919 placement
 /**
  * 是否有非官方市场插件挂了 prompt.submit 或 classic.UserPromptSubmit。
  */
@@ -386,14 +387,14 @@ var hasThirdPartyPromptHooks = () =>
       isModuleAdmitted(loadedModule) &&
       (loadedModule.hooks("prompt.submit") || loadedModule.hooks("classic.UserPromptSubmit")),
   );
-//@ chunk-8fqgaf3a.js:4918-5049 placement
+//@ chunk-y8xj45e1.js:4919-5050 placement
 var needsPromptScreening = (snapshot) =>
   snapshot === undefined ||
   snapshot.hooks !== "" ||
   ["prompt.submit", "classic.UserPromptSubmit"].some((eventName) =>
     findPluginRenderHooks(eventName).some((hook) => hook.tier !== "builtin"),
   );
-//@ chunk-8fqgaf3a.js:5049-5142 placement
+//@ chunk-y8xj45e1.js:5050-5143 placement
 /**
  * hooksSnapshotKey：钩子与插件快照键。
  */
@@ -403,7 +404,7 @@ var hooksSnapshotKey = (context) => ({
   plugins: promptSubmitRenderKey(),
   hooksSkippedByTrust: shouldSkipHookDueToTrust(),
 });
-//@ chunk-8fqgaf3a.js:5142-5325 placement
+//@ chunk-y8xj45e1.js:5143-5326 placement
 /**
  * 创建读取当前提示筛查配置的函数（可在出错后锁定为 undefined）。
  */
@@ -424,7 +425,7 @@ function createScreensReader(context, { latch }) {
     return key;
   };
 }
-//@ chunk-8fqgaf3a.js:5325-5479 placement
+//@ chunk-y8xj45e1.js:5326-5480 placement
 /**
  * 比较两份提示筛查配置是否变化（钩子、信任跳过、插件、权限模式）。
  */
@@ -433,7 +434,7 @@ var screensChanged = (under, current) =>
   under.hooksSkippedByTrust !== current.hooksSkippedByTrust ||
   under.plugins !== current.plugins ||
   (under.permissionMode !== current.permissionMode && current.hooks !== "");
-//@ chunk-8fqgaf3a.js:5479-5599 placement
+//@ chunk-y8xj45e1.js:5480-5600 placement
 var passResult = (scratch, result) => ({
   scratch,
   blocked: result.blocked,
@@ -441,7 +442,7 @@ var passResult = (scratch, result) => ({
   stopped: result.stopped,
   wasCancelled: result.wasCancelled,
 });
-//@ chunk-8fqgaf3a.js:5599-6516 placement
+//@ chunk-y8xj45e1.js:5600-6517 placement
 /**
  * 为提示提交创建钩子执行器：按文本缓存每次执行结果，提供托管层执行、提交结果与查询阻止文本等方法。
  */
@@ -507,7 +508,7 @@ function createHookPassRunner({ typed, result, context, promptSource, wakeupSour
     sessionTitle: () => sessionTitle,
   };
 }
-//@ chunk-8fqgaf3a.js:6516-6754 placement
+//@ chunk-y8xj45e1.js:6517-6755 placement
 var toPromptSubmitEvent = ({ submission, attachments, origin, turnId, shouldWait }) => ({
   text: submission.text,
   wait: shouldWait,
@@ -525,7 +526,7 @@ var toPromptSubmitEvent = ({ submission, attachments, origin, turnId, shouldWait
     isMeta: submission.isMeta,
   }),
 });
-//@ chunk-8fqgaf3a.js:6754-6956 placement
+//@ chunk-y8xj45e1.js:6755-6957 placement
 /**
  * 包装排队提交的结算句柄：确保只结算一次，未结算即释放时按"未经 prompt.submit"丢弃。
  */
@@ -557,12 +558,12 @@ function createQueuedSettler(waiter) {
     },
   };
 }
-//@ chunk-8fqgaf3a.js:6956-7035 placement
+//@ chunk-y8xj45e1.js:6957-7036 placement
 function maybeRunModuleHook(enter, run) {
   let hasHookSite = hasModuleHookingSite("prompt.submit");
   return !enter || !hasHookSite ? Promise.resolve() : enter(run);
 }
-//@ chunk-8fqgaf3a.js:7035-7474 placement
+//@ chunk-y8xj45e1.js:7036-7475 placement
 /**
  * 警告插件在 next() 之后才加入的 context（未附加）。
  */
@@ -583,7 +584,7 @@ function warnLateContext(results, context) {
     );
   }
 }
-//@ chunk-8fqgaf3a.js:7474-9830 placement
+//@ chunk-y8xj45e1.js:7475-9832 placement
 /**
  * 经 prompt.submit 钩子链提交提示：核心处理运行 UserPromptSubmit 钩子，处理改写、丢弃、阻止与中断，返回继续或结束结果。
  */
@@ -765,13 +766,13 @@ export {
   submitPromptWithHooks,
   hasThirdPartyPromptHooks,
   hasPromptSubmitHooks,
-  createScreensReader,
-  createHookContextAttachment,
-  screensChanged,
   makeMetaUserMessage,
   hookStopWarningMessage,
+  createHookContextAttachment,
   createQueuedSettler,
+  screensChanged,
   pluginsChanged,
   runUserPromptSubmitHooks,
   CANCELLED_RESULT,
+  createScreensReader,
 };

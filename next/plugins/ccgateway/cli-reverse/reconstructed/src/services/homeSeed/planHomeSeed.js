@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：规划要转发的 home seed 内容
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axmbhcjg.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vb7ng9fr.js (19)
  * attribution: placement 19
  */
 import {
@@ -23,7 +23,7 @@ import { isAbortError } from "../../utils/errors.js";
 import { isAborted } from "../../utils/abortSignalUtils.js";
 import { logError } from "../../utils/log.js";
 import { getEnabledSettingSources } from "../../utils/settings/constants.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { resolveUploadFilterRules, resolveDirSyncRules } from "../../utils/teleport/dirSyncRules.js";
 import { buildHomeInventory } from "./homeInventory.js";
 import { logEvent } from "../analytics/index.js";
@@ -31,7 +31,7 @@ import { lit, fromEnum } from "../analytics/safeMetadata.js";
 import { filterPortableSettings } from "./portableSettings.js";
 import { settingsSourceLabel } from "../../utils/settings/settingsLabel.js";
 import { encodeHomePack, packFileEntry } from "./homePack.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   CLAUDE_MD,
   MAX_WORKING_PATH_CHARS,
@@ -45,13 +45,13 @@ import { tildify } from "../../utils/path.js";
 import { formatFileSize } from "../../utils/format.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 
-//@ chunk-axmbhcjg.js:34831-34845 placement
+//@ chunk-vb7ng9fr.js:34866-34880 placement
 /**
  * writtenAtMs 的初始值（0）。
  */
 var MAX_PLANNED_FILES = 3;
 var WRITTEN_AT_PLACEHOLDER = 0;
-//@ chunk-axmbhcjg.js:34845-35258 placement
+//@ chunk-vb7ng9fr.js:34880-35293 placement
 async function planHomeSeed({
   signal,
   storageV5: pluginOptions,
@@ -90,7 +90,7 @@ async function planHomeSeed({
   logHomeSeedPlan(plan, opts() - result);
   return plan;
 }
-//@ chunk-axmbhcjg.js:35258-36430 placement
+//@ chunk-vb7ng9fr.js:35293-36465 placement
 /**
  * 规划要转发到云会话的本机设置包：检查同意与用户设置开关，并行清点 home 目录与 PreToolUse 钩子覆盖（记 tengu_home_seed_hook_guard），筛选可移植设置，最后组装为 ready/empty/none 计划。
  */
@@ -158,7 +158,7 @@ async function buildHomeSeedPlan(signal, getHookCoverage, consent, flags, withRu
     withRunnerPack,
   });
 }
-//@ chunk-axmbhcjg.js:36430-37138 placement
+//@ chunk-vb7ng9fr.js:36465-37173 placement
 /**
  * 由清点结果与可移植设置组装计划：规则不可读或无内容时返回 empty，否则打包为 ready（含 pack 与描述）。
  */
@@ -208,15 +208,15 @@ function assembleHomeSeedPlan({
   let pack = withRunnerPack ? inventory.entries.find((entry) => entry.kind === "claude_md") : undefined;
   return plan;
 }
-//@ chunk-axmbhcjg.js:37138-37498 placement
+//@ chunk-vb7ng9fr.js:37173-37533 placement
 /**
  * 描述打包内容：是否含 CLAUDE.md、规则与输出样式数、内联 import 数、设置键与权限规则数。
  */
 function describeHomeSeedPack(inventory, settings) {
   return {
     claudeMd: inventory.entries.some((entry) => entry.kind === "claude_md"),
-    rules: count(inventory.entries, (inventory) => inventory.kind === "rule"),
-    outputStyles: count(inventory.entries, (settings) => settings.kind === "output_style"),
+    rules: countWhere(inventory.entries, (inventory) => inventory.kind === "rule"),
+    outputStyles: countWhere(inventory.entries, (settings) => settings.kind === "output_style"),
     inlinedImports: inventory.summary.inlinedImports,
     settingsKeys: settings === null ? [] : portableSettingKeys(settings),
     permissionRules:
@@ -225,14 +225,14 @@ function describeHomeSeedPack(inventory, settings) {
       (settings?.permissions?.ask?.length ?? 0),
   };
 }
-//@ chunk-axmbhcjg.js:37498-37563 placement
+//@ chunk-vb7ng9fr.js:37533-37598 placement
 /**
  * 取对象里出现的可移植设置键。
  */
 function portableSettingKeys(settings) {
   return Object.keys(PORTABLE_SETTING_LABELS).filter((key) => settings[key] !== undefined);
 }
-//@ chunk-axmbhcjg.js:37563-38327 placement
+//@ chunk-vb7ng9fr.js:37598-38362 placement
 /**
  * 合并清点摘要与设置筛选计数，得到打包摘要（各类未发送数、被丢弃规则的分类计数）。
  */
@@ -261,16 +261,16 @@ function buildHomeSeedSummary(plan, filtered) {
     },
   };
 }
-//@ chunk-axmbhcjg.js:38327-38377 placement
+//@ chunk-vb7ng9fr.js:38362-38412 placement
 var SELF_HOSTED_RUNNER_PLAN = {
   kind: "none",
   reason: "self_hosted_runner",
 };
-//@ chunk-axmbhcjg.js:38377-38402 placement
+//@ chunk-vb7ng9fr.js:38412-38437 placement
 function logSelfHostedRunnerPlan() {
   logHomeSeedPlan(SELF_HOSTED_RUNNER_PLAN, 0);
 }
-//@ chunk-axmbhcjg.js:38402-39986 placement
+//@ chunk-vb7ng9fr.js:38437-40021 placement
 /**
  * 记录 tengu_home_seed_plan 事件：none 只记原因；empty/ready 附带各类计数、文件数、包大小与保留规则数。
  */
@@ -332,7 +332,7 @@ function logHomeSeedPlan(plan, durationMs) {
     ...commonFields,
   });
 }
-//@ chunk-axmbhcjg.js:39986-40291 placement
+//@ chunk-vb7ng9fr.js:40021-40326 placement
 /**
  * 可转发设置键与其面向用户的名称。
  */
@@ -346,7 +346,7 @@ var PORTABLE_SETTING_LABELS = {
   showThinkingSummaries: "thinking-summary preference",
   permissions: "permission rules",
 };
-//@ chunk-axmbhcjg.js:40291-40800 placement
+//@ chunk-vb7ng9fr.js:40326-40835 placement
 function formatHomeSeedSentLine(pack) {
   let parts = [
     ...(pack.claudeMd ? ["CLAUDE.md"] : []),
@@ -364,18 +364,18 @@ function formatHomeSeedSentLine(pack) {
     ? "Sent settings from this machine to the cloud session: only the narrowed permission allow list"
     : `Sent settings from this machine to the cloud session: ${parts.join(", ")}`;
 }
-//@ chunk-axmbhcjg.js:40800-40850 placement
+//@ chunk-vb7ng9fr.js:40835-40885 placement
 /**
  * 生成 “N 个 X” 的计数行（数量为 0 时为空）。
  */
 function formatCountLine(count, noun) {
   return count > 0 ? [`${count} ${plural(count, noun)}`] : [];
 }
-//@ chunk-axmbhcjg.js:40850-41046 placement
+//@ chunk-vb7ng9fr.js:40885-41081 placement
 var RULES_NOT_IN_FORCE = "Your deny and ask rules are not in force in the cloud session";
 var SETTINGS_STAY = "The cloud session's settings stay as they were";
 var RULES_MAY_NOT_BE_IN_FORCE = "Your deny and ask rules may not be in force in the cloud session";
-//@ chunk-axmbhcjg.js:41046-43652 placement
+//@ chunk-vb7ng9fr.js:41081-43687 placement
 function formatHomeSeedLeftBehindLine(
   { summary, leftBehind, unreadable, settings, configHome },
   { launch, settingsFile },
@@ -429,13 +429,13 @@ function formatHomeSeedLeftBehindLine(
     formatLeftBehindList(
       leftBehind,
       "undefusable",
-      count(leftBehind, (entry) => entry.reason === "undefusable"),
+      countWhere(leftBehind, (entry) => entry.reason === "undefusable"),
       (count) => `${count} ${plural(count, "file")} whose @imports could not be made safe`,
     ),
     formatLeftBehindList(
       leftBehind,
       "credential",
-      count(leftBehind, (entry) => entry.reason === "credential"),
+      countWhere(leftBehind, (entry) => entry.reason === "credential"),
       (count) => `${count} ${plural(count, "file")} ${describeCredentialLike(count)}`,
     ),
   ].flatMap((line) => (line === null ? [] : [line]));
@@ -502,15 +502,15 @@ function formatHomeSeedLeftBehindLine(
       : [...notSentLines, ...keptLine];
   return lines.length === 0 ? null : lines.join(". ");
 }
-//@ chunk-axmbhcjg.js:43652-43788 placement
+//@ chunk-vb7ng9fr.js:43687-43823 placement
 function filesKeptForCredential(leftBehind) {
   let mapped = leftBehind.filter((entry) => entry.reason === "credential").map((entry) => entry.path);
   return {
     claudeMd: mapped.includes(CLAUDE_MD),
-    others: count(mapped, (entry) => entry !== CLAUDE_MD),
+    others: countWhere(mapped, (entry) => entry !== CLAUDE_MD),
   };
 }
-//@ chunk-axmbhcjg.js:43788-44019 placement
+//@ chunk-vb7ng9fr.js:43823-44054 placement
 function filesKeptAsLinks(leftBehind) {
   let mapped = leftBehind.filter((entry) => entry.reason === "symlink_not_sent").map((entry) => entry.path);
   let mapped_2 = [
@@ -524,11 +524,11 @@ function filesKeptAsLinks(leftBehind) {
     more: mapped.length - mapped_2.length,
   };
 }
-//@ chunk-axmbhcjg.js:44019-44119 placement
+//@ chunk-vb7ng9fr.js:44054-44154 placement
 function describeCredentialLike(count) {
   return `that ${plural(count, "looks", "look")} like ${plural(count, "it holds", "they hold")} a credential`;
 }
-//@ chunk-axmbhcjg.js:44119-44364 placement
+//@ chunk-vb7ng9fr.js:44154-44399 placement
 function formatLeftBehindList(leftBehind, reason, count, describe) {
   if (count === 0) return null;
   let mapped = leftBehind

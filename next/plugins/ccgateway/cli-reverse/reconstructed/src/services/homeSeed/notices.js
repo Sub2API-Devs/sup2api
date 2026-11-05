@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 用户通知
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2yrk0gy1.js (1), chunk-twq47pff.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-12yz0000.js (1), chunk-9x09krra.js (4)
  * attribution: placement 5
  */
 import { join } from "path";
@@ -47,7 +47,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { settingsToCloudCapability } from "../../cli/remoteIO/workerAuth.js";
 import { isSettingsToCloudEnabledCached } from "../analytics/violinGates.js";
 
-//@ chunk-2yrk0gy1.js:191-331 placement
+//@ chunk-12yz0000.js:191-331 placement
 /**
  * 设置未完全应用到云端时的原因说明（文件跳过、设置文件未应用、部分未应用）。
  */
@@ -56,7 +56,7 @@ var HOME_SEED_PARTIAL_REASONS = {
   settings: "your settings file was not applied there",
   part: "part of it was not applied there",
 };
-//@ chunk-twq47pff.js:53774-55457 placement
+//@ chunk-9x09krra.js:54928-56611 placement
 /**
  * 生成云环境重建后本机设置恢复情况的提示：未恢复时说明原因；恢复时列出 deny/ask 规则数、生效时间与被省略的规则，并说明其他设置未恢复。
  */
@@ -99,7 +99,7 @@ function formatHomeSeedRestoreNotice(status) {
     level: "notice",
   };
 }
-//@ chunk-twq47pff.js:55457-58474 placement
+//@ chunk-9x09krra.js:56611-59628 placement
 function formatHomeSeedAppliedNotice(input) {
   let { applied } = input;
   let appliedNames = [
@@ -195,7 +195,7 @@ function formatHomeSeedAppliedNotice(input) {
           : "notice",
   };
 }
-//@ chunk-twq47pff.js:58474-58640 placement
+//@ chunk-9x09krra.js:59628-59794 placement
 function getHomeSeedHoldLimits() {
   return {
     holdMaxMs: Math.min(env.CLAUDE_CODE_HOME_SEED_HOLD_TIMEOUT_MS ?? HOLD_MAX_MS, HOLD_MAX_MS),
@@ -205,7 +205,7 @@ function getHomeSeedHoldLimits() {
     ),
   };
 }
-//@ chunk-twq47pff.js:58640-59650 placement
+//@ chunk-9x09krra.js:59794-60828 placement
 /**
  * 为云会话创建本机设置（home seed）公告器：注入读写同步文件、读 sidecar、应用种子、应用后刷新设置/记忆/输出样式等依赖，以及等待上限与开关。
  */
@@ -219,7 +219,10 @@ function createCloudHomeSeedAnnouncer({
   storageV5,
 }) {
   let reloaders = {
-    reloadUserSettings: () => settingsChangeDetector.notifyChange("userSettings"),
+    reloadUserSettings: (countsAsStart) =>
+      settingsChangeDetector.notifyChange("userSettings", {
+        countsAsStart,
+      }),
     clearMemoryFiles: () => clearMemoryFilesCache(session),
     clearUserContext: () => invalidateUserContext(session, "settings_sync"),
     clearSystemPromptSections: resetEnvironmentCaches,
@@ -228,7 +231,7 @@ function createCloudHomeSeedAnnouncer({
       clearOutputStylesCache();
     },
   };
-  let P = false;
+  let applied = false;
   let isLaterEpoch = (env.CLAUDE_CODE_WORKER_EPOCH ?? 1) > 1 && true;
   return createHomeSeedAnnouncer(
     {
@@ -258,7 +261,8 @@ function createCloudHomeSeedAnnouncer({
           configHome,
         }),
       ),
-      afterApply: (report, extra) => reloadAfterSeedApply(report, extra, reloaders),
+      afterApply: (applyReport, reloaders_2, report) =>
+        reloadAfterSeedApply(applyReport, reloaders_2, reloaders, report),
       telemetry: createHomeSeedTelemetry(),
       now: () => Date.now(),
       setTimer: (callback, delayMs) => {

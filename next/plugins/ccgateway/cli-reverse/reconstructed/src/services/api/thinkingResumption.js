@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：思考块被截断后的续接
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { isThinkingResumptionRefused, getSdkBetas } from "../../bootstrap/state.js";
@@ -26,7 +26,7 @@ import {
 } from "./errors.js";
 import { canSendFirstPartyBetas, modelSupportsISP } from "../../utils/betas.js";
 
-//@ chunk-e6aww6q8.js:2531723-2531847 placement
+//@ chunk-5xgkngpb.js:2575549-2575673 placement
 function canResumeThinking(model) {
   try {
     return isThinkingResumptionSupported(model) && !isThinkingResumptionRefused();
@@ -36,7 +36,7 @@ function canResumeThinking(model) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2531847-2532256 placement
+//@ chunk-5xgkngpb.js:2575673-2576082 placement
 /**
  * 判断被截断的思考是否可续写：模型支持、开关开启、响应可续写且上下文还有余量。
  */
@@ -66,7 +66,7 @@ function shouldResumeThinking(model, resumable, contextTokens) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2532256-2532502 placement
+//@ chunk-5xgkngpb.js:2576082-2576328 placement
 function markAbandonedThinking(messages, resolvedModel) {
   try {
     if (!isThinkingResumptionSupported(resolvedModel)) return;
@@ -82,7 +82,7 @@ function markAbandonedThinking(messages, resolvedModel) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2532502-2532677 placement
+//@ chunk-5xgkngpb.js:2576328-2576503 placement
 /**
  * 判断助手消息是否为可重试的 API 错误（排除 DLP 拒绝、版本过旧、安全监控拦截）。
  */
@@ -97,7 +97,7 @@ function isRetryableApiErrorMessage(message) {
     message.apiError !== SAFETY_MONITOR_BLOCKED
   );
 }
-//@ chunk-e6aww6q8.js:2532677-2533310 placement
+//@ chunk-5xgkngpb.js:2576503-2577136 placement
 /**
  * 输出达到 max_output_tokens 截断思考块后，请求服务端续接，被拒时改用文字提示。
  */
@@ -132,7 +132,7 @@ function resumeTruncatedThinking(assistantMessages, { healedElsewhere, attempt }
   }
   return retryable;
 }
-//@ chunk-e6aww6q8.js:2533310-2533388 placement
+//@ chunk-5xgkngpb.js:2577136-2577214 placement
 function isThinkingResumptionSupported(model) {
   return (
     getFeatureValue_SESSION_PINNED("tengu_thinking_block_resumption", false) &&

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/tls-terminate-proxy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (26)
+ * pieces: chunk-qg41pqt6.js (26)
  * attribution: esm-layout 4, esm-fingerprint 22
  */
 import { Duplex } from "stream";
@@ -45,15 +45,15 @@ import { prepareBodySubstitution } from "./body-substitution.js";
 import { sha256Hex } from "./aws-sigv4.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:670166-670182 esm-layout
+//@ chunk-qg41pqt6.js:670688-670704 esm-layout
 var MAX_SIGV4_RESIGN_BODY_BYTES = 67108864;
-//@ chunk-fq0cr76a.js:670182-670206 esm-layout
+//@ chunk-qg41pqt6.js:670704-670728 esm-layout
 class BodyTooLargeError extends Error {}
-//@ chunk-fq0cr76a.js:670206-670270 esm-layout
+//@ chunk-qg41pqt6.js:670728-670792 esm-layout
 function looksLikeClientHello(buf) {
   return buf.length >= 3 && buf[0] === 22 && buf[1] === 3 && buf[2] <= 3;
 }
-//@ chunk-fq0cr76a.js:670270-670592 esm-fingerprint
+//@ chunk-qg41pqt6.js:670792-671114 esm-fingerprint
 function peekForClientHello(socket, head) {
   if (head.length >= 3)
     return Promise.resolve({
@@ -80,7 +80,7 @@ function peekForClientHello(socket, head) {
     socket.once("close", done);
   });
 }
-//@ chunk-fq0cr76a.js:670592-671114 esm-fingerprint
+//@ chunk-qg41pqt6.js:671114-671636 esm-fingerprint
 function duplexOverSocket(socket, head, onClosed) {
   let waiting = false;
   let consumer;
@@ -137,7 +137,7 @@ function duplexOverSocket(socket, head, onClosed) {
     },
   };
 }
-//@ chunk-fq0cr76a.js:671114-671361 esm-fingerprint
+//@ chunk-qg41pqt6.js:671636-671883 esm-fingerprint
 function serverTlsOn(socket, head, options, onClosed) {
   if (!runsOnBun()) {
     if (head.length) socket.unshift(head);
@@ -162,14 +162,14 @@ function serverTlsOn(socket, head, options, onClosed) {
     outbound: duplex,
   };
 }
-//@ chunk-fq0cr76a.js:671361-671503 esm-layout
+//@ chunk-qg41pqt6.js:671883-672025 esm-layout
 var outboundOf; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var budgetOf;
 var MAX_QUEUED_FOR_CLIENT;
 var MAX_BUFFERED_REQUEST_BODY;
 var TUNNEL_TIMEOUTS;
 var LOOKS;
-deferInit("chunk-fq0cr76a.js:671361", () => {
+deferInit("chunk-qg41pqt6.js:671883", () => {
   outboundOf = new WeakMap();
   budgetOf = new WeakMap();
   MAX_QUEUED_FOR_CLIENT = 1048576;
@@ -182,7 +182,7 @@ deferInit("chunk-fq0cr76a.js:671361", () => {
   };
   LOOKS = 5;
 });
-//@ chunk-fq0cr76a.js:671503-674301 esm-fingerprint
+//@ chunk-qg41pqt6.js:672025-674846 esm-fingerprint
 function terminateAndForward(
   ca,
   filterRequest,
@@ -366,7 +366,7 @@ function terminateAndForward(
     keepFlushedHeaderBatches(tls);
   };
 }
-//@ chunk-fq0cr76a.js:674301-675177 esm-fingerprint
+//@ chunk-qg41pqt6.js:674846-675729 esm-fingerprint
 function boundTunnel(
   inner,
   tls,
@@ -423,7 +423,7 @@ function boundTunnel(
     clearInterval(stalled);
   });
 }
-//@ chunk-fq0cr76a.js:675177-675556 esm-fingerprint
+//@ chunk-qg41pqt6.js:675729-676108 esm-fingerprint
 function readFirstRecord(socket, head) {
   let want = (b) => (b.length >= 5 ? 5 + Math.min(b.readUInt16BE(3), 16384) : 5);
   if (head.length >= want(head)) return Promise.resolve(head);
@@ -451,7 +451,7 @@ function readFirstRecord(socket, head) {
     pull();
   });
 }
-//@ chunk-fq0cr76a.js:675556-676148 esm-fingerprint
+//@ chunk-qg41pqt6.js:676108-676700 esm-fingerprint
 function serverNameFromClientHello(record) {
   let unreadable = {
     kind: "unreadable",
@@ -496,7 +496,7 @@ function serverNameFromClientHello(record) {
       }
     : unreadable;
 }
-//@ chunk-fq0cr76a.js:676148-676495 esm-fingerprint
+//@ chunk-qg41pqt6.js:676700-677047 esm-fingerprint
 function hostNameEntry(body) {
   if (body.length < 5 || body.readUInt16BE(0) !== body.length - 2)
     return {
@@ -519,7 +519,7 @@ function hostNameEntry(body) {
         kind: "unreadable",
       };
 }
-//@ chunk-fq0cr76a.js:676495-677099 esm-fingerprint
+//@ chunk-qg41pqt6.js:677047-677651 esm-fingerprint
 function closeAfterFlush(socket, done, stalledMs = TUNNEL_TIMEOUTS.stalledMs) {
   if (socket.destroyed) {
     done("the client, earlier");
@@ -558,7 +558,7 @@ function closeAfterFlush(socket, done, stalledMs = TUNNEL_TIMEOUTS.stalledMs) {
   else socket.once("finish", onFinish);
   socket.end();
 }
-//@ chunk-fq0cr76a.js:677099-677386 esm-fingerprint
+//@ chunk-qg41pqt6.js:677651-677938 esm-fingerprint
 function createUpstreamLeg(target) {
   let agent = new Agent_2({
     keepAlive: true,
@@ -588,7 +588,7 @@ function createUpstreamLeg(target) {
     },
   };
 }
-//@ chunk-fq0cr76a.js:677386-677451 esm-fingerprint
+//@ chunk-qg41pqt6.js:677938-678003 esm-fingerprint
 /**
  * ECONNRESET/EPIPE 视为陈旧连接错误。
  */
@@ -596,7 +596,7 @@ function isStaleSocketError(err) {
   let code = err.code;
   return code === "ECONNRESET" || code === "EPIPE";
 }
-//@ chunk-fq0cr76a.js:677451-677623 esm-fingerprint
+//@ chunk-qg41pqt6.js:678003-678175 esm-fingerprint
 function destroyAfterDenial(req, res) {
   if (res.destroyed) {
     req.destroy();
@@ -611,12 +611,12 @@ function destroyAfterDenial(req, res) {
     if (!res.writableFinished) req.destroy();
   });
 }
-//@ chunk-fq0cr76a.js:677623-677671 esm-fingerprint
+//@ chunk-qg41pqt6.js:678175-678223 esm-fingerprint
 function endDeniedRequest(req, res, body) {
   if (body !== req) body.destroy();
   destroyAfterDenial(req, res);
 }
-//@ chunk-fq0cr76a.js:677671-677832 esm-fingerprint
+//@ chunk-qg41pqt6.js:678223-678384 esm-fingerprint
 function forwardUpstreamGuarded(...args) {
   let [, , , req, res, target] = args;
   forwardUpstream(...args).catch((err) => {
@@ -627,7 +627,7 @@ function forwardUpstreamGuarded(...args) {
     destroyAfterDenial(req, res);
   });
 }
-//@ chunk-fq0cr76a.js:677832-681457 esm-fingerprint
+//@ chunk-qg41pqt6.js:678384-682024 esm-fingerprint
 async function forwardUpstream(
   filterRequest,
   mutateHeaders,
@@ -834,7 +834,7 @@ async function forwardUpstream(
     body.pipe(upstream);
   }
 }
-//@ chunk-fq0cr76a.js:681457-681716 esm-fingerprint
+//@ chunk-qg41pqt6.js:682024-682283 esm-fingerprint
 function collectBody(body, maxBytes) {
   return new Promise((resolve, reject) => {
     let chunks = [];
@@ -854,17 +854,17 @@ function collectBody(body, maxBytes) {
     body.once("error", reject);
   });
 }
-//@ chunk-fq0cr76a.js:681716-681811 esm-fingerprint
+//@ chunk-qg41pqt6.js:682283-682378 esm-fingerprint
 function absoluteFormAuthority(reqUrl) {
   let m = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/?#]*)/.exec(reqUrl ?? "");
   return m ? m[1] : undefined;
 }
-//@ chunk-fq0cr76a.js:681811-681896 esm-fingerprint
+//@ chunk-qg41pqt6.js:682378-682463 esm-fingerprint
 function serverNameOf(req) {
   let name = req.socket.servername;
   return typeof name === "string" && name !== "" ? name : undefined;
 }
-//@ chunk-fq0cr76a.js:681896-682491 esm-fingerprint
+//@ chunk-qg41pqt6.js:682463-683058 esm-fingerprint
 function relayResponse(src, res) {
   let outbound = outboundOf.get(res.socket);
   let budget = budgetOf.get(res.socket);
@@ -921,7 +921,7 @@ function relayResponse(src, res) {
   res.once("close", release);
   res.once("finish", release);
 }
-//@ chunk-fq0cr76a.js:682491-682624 esm-fingerprint
+//@ chunk-qg41pqt6.js:683058-683191 esm-fingerprint
 function originFormPath(reqUrl) {
   let raw = reqUrl ?? "/";
   if (raw.startsWith("/")) return raw;
@@ -932,12 +932,12 @@ function originFormPath(reqUrl) {
     return raw;
   }
 }
-//@ chunk-fq0cr76a.js:682624-682647 esm-fingerprint
+//@ chunk-qg41pqt6.js:683191-683214 esm-fingerprint
 var EMPTY_CHUNK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:682624", () => {
+deferInit("chunk-qg41pqt6.js:683191", () => {
   EMPTY_CHUNK = Buffer.alloc(0);
 });
-//@ chunk-fq0cr76a.js:682647-682727 esm-fingerprint
+//@ chunk-qg41pqt6.js:683214-683294 esm-fingerprint
 function isTlsHandshakeDone(tls) {
   return Boolean(tls.getPeerFinished?.()) || tls._secureEstablished === true;
 }

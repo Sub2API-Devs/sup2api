@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。ultraplan 选择对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -26,17 +26,22 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1252276-1252280 placement
+//@ chunk-czq1j3j2.js:1263961-1263965 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1252276", () => {
+deferInit("chunk-czq1j3j2.js:1263961", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1252280-1252296 placement
+//@ chunk-czq1j3j2.js:1273932-1273936 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1273932", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1278033-1278049 placement
 function noopUltraplanCancel() {}
-//@ chunk-18hwfzwa.js:1252296-1252314 placement
+//@ chunk-czq1j3j2.js:1278049-1278067 placement
 var MAX_PLAN_ROWS = 24;
 var PLAN_ROWS_RESERVED = 11;
-//@ chunk-18hwfzwa.js:1252314-1254970 placement
+//@ chunk-czq1j3j2.js:1278067-1280723 placement
 function UltraplanChoiceDialog(props) {
   let $ = useMemoCache(40);
   let { plan, onDone } = props;
@@ -239,9 +244,4 @@ function UltraplanChoiceDialog(props) {
   } else dialogElement = $[39];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1254970-1254974 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1254970", () => {
-  init_react_production();
-});
 export { UltraplanChoiceDialog };

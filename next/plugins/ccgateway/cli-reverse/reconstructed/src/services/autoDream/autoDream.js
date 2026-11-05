@@ -3,10 +3,10 @@
  *
  * autoDream 后台记忆整理：按 tengu_onyx_plover 阈值（24 小时、5 个会话）触发 dream 子代理整理记忆。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/autoDream/autoDream.ts
- * pieces: chunk-rsht1tdj.js (8)
- * attribution: sole-consumer 1, fingerprint 4, layout 2, placement 1
+ * pieces: chunk-arvn22xd.js (9)
+ * attribution: sole-consumer 1, fingerprint 4, layout 3, placement 1
  */
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
@@ -38,12 +38,7 @@ import {
   describeMemoryRuleBlock,
   resyncMemoryWrites,
 } from "../extractMemories/memdirResync.js";
-import {
-  createSystemMessage,
-  createUserMessage,
-  collectErroredToolUseIds,
-  createMemorySavedMessage,
-} from "../../utils/messages.js";
+import { createSystemMessage, createUserMessage, createMemorySavedMessage } from "../../utils/messages.js";
 import { canUseTeamMemory } from "../../memdir/teamMemPaths.js";
 import {
   registerDreamTask,
@@ -57,12 +52,12 @@ import { isSharedMemoryServedViaTools } from "../../memdir/memoryStoresPrompt.js
 import { runForkedAgent, createCacheSafeParams } from "../../utils/forkedAgent.js";
 import { isBasaltSpurEnabled } from "../api/claude.js";
 import { plural } from "../../utils/stringUtils.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { SHELL_TOOL_NAMES } from "../../utils/shell/shellToolUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rsht1tdj.js:7527-7722 sole-consumer
+//@ chunk-arvn22xd.js:7527-7722 sole-consumer
 function markDreamTaskFailed(taskId, taskRegistry) {
   taskRegistry.update(taskId, (task) => ({
     ...task,
@@ -77,7 +72,7 @@ function markDreamTaskFailed(taskId, taskRegistry) {
     ambient: true,
   });
 }
-//@ chunk-rsht1tdj.js:7722-7814 fingerprint (2.1.88 match: DEFAULTS, 0.522)
+//@ chunk-arvn22xd.js:7722-7814 fingerprint (2.1.88 match: DEFAULTS, 0.522)
 /**
  * autoDream 默认阈值 minHours=24、minSessions=5，会话扫描节流 10 分钟。
  */
@@ -85,7 +80,7 @@ var AUTO_DREAM_DEFAULTS; // deferred: has load-time effects after a deferred sta
 var SESSION_SCAN_THROTTLE_MS;
 var regExp;
 var DEFAULT_DREAM_THRESHOLDS;
-deferInit("chunk-rsht1tdj.js:7722", () => {
+deferInit("chunk-arvn22xd.js:7722", () => {
   AUTO_DREAM_DEFAULTS = null;
   SESSION_SCAN_THROTTLE_MS = 600000;
   regExp = new RegExp(`^\\s*(?:${DELETE_COMMAND_NAMES})\\b`, "i");
@@ -94,7 +89,7 @@ deferInit("chunk-rsht1tdj.js:7722", () => {
     minSessions: 5,
   };
 });
-//@ chunk-rsht1tdj.js:7814-8098 fingerprint (2.1.88 match: getConfig, 1)
+//@ chunk-arvn22xd.js:7814-8098 fingerprint (2.1.88 match: getConfig, 1)
 /**
  * 读取 tengu_onyx_plover 中的 minHours/minSessions，非法值回落到 24/5。
  */
@@ -111,7 +106,7 @@ function getConfig() {
         : DEFAULT_DREAM_THRESHOLDS.minSessions,
   };
 }
-//@ chunk-rsht1tdj.js:8098-8202 layout
+//@ chunk-arvn22xd.js:8098-8202 layout
 /**
  * autoDream 前置条件：不是宿主托管会话、无嵌入式搜索工具、自动记忆可用、非 --add-dir 场景且 Sgt() 为真。
  */
@@ -122,11 +117,11 @@ function isAutoDreamAllowed() {
   if (isAutoMemReadFenced()) return false;
   return isAutoDreamEnabled();
 }
-//@ chunk-rsht1tdj.js:8202-8225 layout
+//@ chunk-arvn22xd.js:8202-8225 layout
 function isAutoDreamForced() {
   return false;
 }
-//@ chunk-rsht1tdj.js:8225-13121 fingerprint (2.1.88 match: initAutoDream, 0.65)
+//@ chunk-arvn22xd.js:8225-13121 fingerprint (2.1.88 match: initAutoDream, 0.648)
 /**
  * autoDream（后台记忆整理）：每回合检查——tengu_onyx_plover 配置存在且 isAutoDreamAllowed；距上次整理 ≥ minHours（默认 24h）；10 分钟扫描节流；自上次整理后改动过的其他会话 ≥ minSessions（默认 5）；拿到 .consolidate-lock 后派生 dream 子代理整理记忆，失败回滚锁时间。
  */
@@ -400,7 +395,21 @@ ${sessionIds.map((id) => `- ${id}`).join(`
     }
   };
 }
-//@ chunk-rsht1tdj.js:13323-13882 fingerprint (2.1.88 match: makeDreamProgressWatcher, 0.885)
+//@ chunk-arvn22xd.js:13121-13323 layout
+/**
+ * 把 user 消息里 is_error 的 tool_result id 加入集合（无 toolDenialKind 时）。旧版名 createToolResultStopMessage 为错配。
+ */
+function collectErroredToolUseIds(message, erroredIds) {
+  if (
+    message.type !== "user" ||
+    message.toolDenialKind !== undefined ||
+    typeof message.message.content === "string"
+  )
+    return;
+  for (let block of message.message.content)
+    if (block.type === "tool_result" && block.is_error === true) erroredIds.add(block.tool_use_id);
+}
+//@ chunk-arvn22xd.js:13323-13882 fingerprint (2.1.88 match: makeDreamProgressWatcher, 0.822)
 /**
  * 监视 dream 子代理输出，更新任务进度（touch 的文件、文本）。
  */
@@ -414,7 +423,7 @@ function makeDreamProgressWatcher(taskId, setAppState, autoMemDir) {
       if (block.type === "text") text += block.text;
       else if (block.type === "tool_use") {
         toolUseCount++;
-        if (block.name === FILE_EDIT_TOOL_NAME || block.name === FILE_WRITE_TOOL_NAME) {
+        if (block.name === EDIT || block.name === FILE_WRITE_TOOL_NAME) {
           let input = block.input;
           if (typeof input.file_path === "string") touchedPaths.push(input.file_path);
         } else if (SHELL_TOOL_NAMES.includes(block.name)) {
@@ -437,7 +446,7 @@ function makeDreamProgressWatcher(taskId, setAppState, autoMemDir) {
     );
   };
 }
-//@ chunk-rsht1tdj.js:13882-13962 placement
+//@ chunk-arvn22xd.js:13882-13962 placement
 /**
  * 在给定宿主的 autoDream 状态里取 runner 并执行一次整理（runner 未注册时什么都不做）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：达到用量上限后在重置时自动继续对话的控制组件（通知、取消、重新布防）；额度自动继续的开关名与提示文本模板等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fm6h4dv7.js (47)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sp3m4m72.js (47)
  * attribution: placement 47
  */
 import {
@@ -62,14 +62,14 @@ import { useInterval } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fm6h4dv7.js:1911-1941 placement
+//@ chunk-sp3m4m72.js:1912-1942 placement
 var TENGU_PEWTER_SUMMIT = "tengu_pewter_summit";
-//@ chunk-fm6h4dv7.js:1941-1945 placement
+//@ chunk-sp3m4m72.js:1942-1946 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fm6h4dv7.js:1941", () => {
+deferInit("chunk-sp3m4m72.js:1942", () => {
   init_react_production();
 });
-//@ chunk-fm6h4dv7.js:1945-2022 placement
+//@ chunk-sp3m4m72.js:1946-2023 placement
 /**
  * 订阅当前限额状态的 hook。
  */
@@ -88,15 +88,15 @@ function useRateLimitState() {
   );
   return limits;
 }
-//@ chunk-fm6h4dv7.js:2022-2088 placement
+//@ chunk-sp3m4m72.js:2023-2089 placement
 var autoResumeKeyStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fm6h4dv7.js:2022", () => {
+deferInit("chunk-sp3m4m72.js:2023", () => {
   autoResumeKeyStore = new HostScoped(() => ({
     messageKeys: new Set(),
     footerOfferKeys: new Set(),
   }));
 });
-//@ chunk-fm6h4dv7.js:2088-2225 placement
+//@ chunk-sp3m4m72.js:2089-2226 placement
 /**
  * 构造限流相关事件的公共字段：limit_type（只有已知类型才上报）、订阅档位 tier、resets_at。
  */
@@ -111,7 +111,7 @@ function getRateLimitEventProps(state) {
     resets_at: state.resetsAt,
   };
 }
-//@ chunk-fm6h4dv7.js:2225-2462 placement
+//@ chunk-sp3m4m72.js:2226-2463 placement
 /**
  * 对同一 (重置时间, 是否显示提示) 只打点一次 tengu_rate_limit_message_shown，附带提示类型与是否在实时等待。
  */
@@ -128,7 +128,7 @@ function logRateLimitMessageShownOnce(host, sessionHost, state) {
     wait_live: state.waitLive,
   });
 }
-//@ chunk-fm6h4dv7.js:2462-2653 placement
+//@ chunk-sp3m4m72.js:2463-2654 placement
 /**
  * 对同一 (重置时间, offer) 只打点一次 tengu_limit_footer_offer_shown。
  */
@@ -143,19 +143,19 @@ function logLimitFooterOfferShownOnce(host, state, state_2) {
     offer: fromEnum(state_2),
   });
 }
-//@ chunk-fm6h4dv7.js:2653-2657 placement
+//@ chunk-sp3m4m72.js:2654-2658 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fm6h4dv7.js:2653", () => {
+deferInit("chunk-sp3m4m72.js:2654", () => {
   init_react_production();
 });
-//@ chunk-fm6h4dv7.js:2657-2732 placement
+//@ chunk-sp3m4m72.js:2658-2734 placement
 /**
  * 函数 isAutoResumeOfferEnabled（开关开且含 overage）。
  */
 function isAutoResumeOfferEnabled(upgradePaths) {
   return usageCreditsCommand.isEnabled() && (upgradePaths === undefined || upgradePaths.includes("overage"));
 }
-//@ chunk-fm6h4dv7.js:2732-2832 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
+//@ chunk-sp3m4m72.js:2734-2834 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
 function isBigQueryMetricsEnabled(upgradePaths) {
   let subscriptionType = getSubscriptionType();
   let isC4EOrTeamUser = subscriptionType === "team" || subscriptionType === "enterprise";
@@ -166,14 +166,14 @@ function isBigQueryMetricsEnabled(upgradePaths) {
     planModeConstituentFamily(getUserSpecifiedModelSetting()) === null
   );
 }
-//@ chunk-fm6h4dv7.js:2832-2836 placement
+//@ chunk-sp3m4m72.js:2834-2838 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fm6h4dv7.js:2832", () => {
+deferInit("chunk-sp3m4m72.js:2834", () => {
   init_react_production();
 });
-//@ chunk-fm6h4dv7.js:2836-2849 placement
+//@ chunk-sp3m4m72.js:2838-2851 placement
 var AUTO_RESUME_PROMPT_MS = 30000;
-//@ chunk-fm6h4dv7.js:2849-3026 placement
+//@ chunk-sp3m4m72.js:2851-3028 placement
 /**
  * 在目标时间戳到达时调用回调：分段 setTimeout（每段不超过上限）避免长定时器漂移；返回取消函数；时间戳无效时什么都不做。
  */
@@ -196,7 +196,7 @@ function scheduleAtTimestamp(targetMs, scheduleFn, onReached) {
     cancel();
   };
 }
-//@ chunk-fm6h4dv7.js:3026-3173 placement
+//@ chunk-sp3m4m72.js:3028-3175 placement
 /**
  * 判断某重置时间是否已到（带定时器）。
  */
@@ -208,19 +208,19 @@ function useResetReached(resetsAtMs) {
   }, [resetsAtMs, scheduleFn]);
   return useSyncExternalStore(schedule, () => resetsAtMs !== null && Date.now() >= resetsAtMs);
 }
-//@ chunk-fm6h4dv7.js:3173-3317 placement
+//@ chunk-sp3m4m72.js:3175-3319 placement
 var QUOTA_AUTO_RESUME_MIN_DELAY_MS = 30000;
 var QUOTA_AUTO_RESUME_CAP = "quota-auto-resume-cap";
 var QUOTA_AUTO_RESUME_CANCELLED = "quota-auto-resume-cancelled";
 var AUTO_CONTINUE_CANCELLED_TEXT = "Automatic continue cancelled \xB7 /rate-limit-options to re-arm";
-//@ chunk-fm6h4dv7.js:3317-3355 placement
+//@ chunk-sp3m4m72.js:3319-3357 placement
 /**
  * 订阅额度自动继续的状态。
  */
 function useQuotaAutoResumeState() {
   return useSyncExternalStore(onQuotaResumeChange, quotaAutoResumeState, quotaAutoResumeState);
 }
-//@ chunk-fm6h4dv7.js:3355-3842 placement
+//@ chunk-sp3m4m72.js:3357-3844 placement
 /**
  * 额度自动继续的开关名与提示文本模板。
  */
@@ -228,7 +228,7 @@ var QUOTA_AUTO_RESUME_GATE; // deferred: uses DoctorLazy (../../cli/handlers/uti
 var AUTO_RESUME_COPY;
 var COPY_MAX_WIDTH;
 var AutoResumeCopySchema;
-deferInit("chunk-fm6h4dv7.js:3355", () => {
+deferInit("chunk-sp3m4m72.js:3357", () => {
   QUOTA_AUTO_RESUME_GATE = "tengu_functional_llama";
   AUTO_RESUME_COPY = {
     waiting: "Continuing automatically {when} \xB7 Esc to cancel",
@@ -246,14 +246,14 @@ deferInit("chunk-fm6h4dv7.js:3355", () => {
     }),
   );
 });
-//@ chunk-fm6h4dv7.js:3842-3967 placement
+//@ chunk-sp3m4m72.js:3844-3969 placement
 function resolveAutoResumeText(phase, copy) {
   let custom = cleanTaskDescription(copy);
   if (custom === undefined) return AUTO_RESUME_COPY[phase];
   if (phase === "credits") return truncateToWidth(custom, COPY_MAX_WIDTH);
   return custom.includes("{when}") ? custom : AUTO_RESUME_COPY[phase];
 }
-//@ chunk-fm6h4dv7.js:3967-4164 placement
+//@ chunk-sp3m4m72.js:3969-4166 placement
 function getAutoResumeTexts(featureValue_CACHED_MAY_BE_STALE) {
   let parsed = AutoResumeCopySchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
   let copyOverrides = parsed.success ? parsed.data : {};
@@ -264,31 +264,31 @@ function getAutoResumeTexts(featureValue_CACHED_MAY_BE_STALE) {
     credits: resolveAutoResumeText("credits", copyOverrides.credits),
   };
 }
-//@ chunk-fm6h4dv7.js:4164-4200 placement
+//@ chunk-sp3m4m72.js:4166-4202 placement
 function autoResumeCopy() {
   return getAutoResumeTexts(getFeatureValue_CACHED_MAY_BE_STALE(QUOTA_AUTO_RESUME_GATE, null));
 }
-//@ chunk-fm6h4dv7.js:4200-4253 placement
+//@ chunk-sp3m4m72.js:4202-4255 placement
 function fillWhen(template, whenText) {
   return truncateToWidth(template.replace("{when}", whenText), COPY_MAX_WIDTH);
 }
-//@ chunk-fm6h4dv7.js:4253-4367 placement
+//@ chunk-sp3m4m72.js:4255-4369 placement
 function describeResumeTime(state, nowMs) {
   let resetsAtSeconds = state.phase === "armed" ? state.resetsAtSeconds : 0;
   let resetLabel = resetsAtSeconds * 1000 > nowMs ? formatResetTime(resetsAtSeconds) : undefined;
   return resetLabel ? `at ${resetLabel}` : "shortly";
 }
-//@ chunk-fm6h4dv7.js:4367-4416 placement
+//@ chunk-sp3m4m72.js:4369-4418 placement
 function startedMessage(state, nowMs) {
   return fillWhen(autoResumeCopy().started, describeResumeTime(state, nowMs));
 }
-//@ chunk-fm6h4dv7.js:4416-4465 placement
+//@ chunk-sp3m4m72.js:4418-4467 placement
 function rearmedMessage(state, nowMs) {
   return fillWhen(autoResumeCopy().rearmed, describeResumeTime(state, nowMs));
 }
-//@ chunk-fm6h4dv7.js:4465-4494 placement
+//@ chunk-sp3m4m72.js:4467-4496 placement
 var USAGE_LIMIT_REACHED_TEXT = "Usage limit reached";
-//@ chunk-fm6h4dv7.js:4494-4565 placement
+//@ chunk-sp3m4m72.js:4496-4567 placement
 /**
  * 函数 usageLimitStatusText（带重置时间的限流文案）。
  */
@@ -298,7 +298,7 @@ function usageLimitStatusText(resetsAtSeconds) {
     ? `${USAGE_LIMIT_REACHED_TEXT} \xB7 limit resets ${resetLabel}`
     : USAGE_LIMIT_REACHED_TEXT;
 }
-//@ chunk-fm6h4dv7.js:4565-4995 placement
+//@ chunk-sp3m4m72.js:4567-4997 placement
 /**
  * 根据阶段（armed/stale）生成自动继续的状态行与下一步提示。
  */
@@ -326,19 +326,19 @@ function quotaAutoResumeStatus(quotaAutoResumeState, nowMs) {
     next: nextText,
   };
 }
-//@ chunk-fm6h4dv7.js:4995-5046 placement
+//@ chunk-sp3m4m72.js:4997-5048 placement
 function isArmedIdle(quotaAutoResumeState, isBusy, isPromptEmpty) {
   return quotaAutoResumeState.phase === "armed" && !isBusy && isPromptEmpty;
 }
-//@ chunk-fm6h4dv7.js:5046-5089 placement
+//@ chunk-sp3m4m72.js:5048-5091 placement
 function upgradePathsEnabled() {
   return isBigQueryMetricsEnabled(getCurrentLimits().upgradePaths);
 }
-//@ chunk-fm6h4dv7.js:5089-5110 placement
+//@ chunk-sp3m4m72.js:5091-5112 placement
 function noopEffect() {
   return;
 }
-//@ chunk-fm6h4dv7.js:5110-5203 placement
+//@ chunk-sp3m4m72.js:5112-5205 placement
 function timeUntilFire(quotaAutoResumeState) {
   return useResetReached(
     quotaAutoResumeState.phase === "armed"
@@ -346,7 +346,7 @@ function timeUntilFire(quotaAutoResumeState) {
       : null,
   );
 }
-//@ chunk-fm6h4dv7.js:5203-9093 placement
+//@ chunk-sp3m4m72.js:5205-9095 placement
 /**
  * 达到用量上限后在重置时自动继续对话的控制组件（通知、取消、重新布防）。
  */
@@ -606,12 +606,12 @@ function QuotaAutoResume(props) {
   } else result = $[35];
   return result;
 }
-//@ chunk-fm6h4dv7.js:9130-9174 placement
+//@ chunk-sp3m4m72.js:9132-9176 placement
 /**
  * 导出值：LIMIT_CATEGORIES（session/weekly/fable/full）。
  */
 var LIMIT_CATEGORIES = ["session", "weekly", "fable", "full"];
-//@ chunk-fm6h4dv7.js:9174-9375 placement
+//@ chunk-sp3m4m72.js:9176-9377 placement
 /**
  * 判断一次额度重置属于哪种：givesBackWeekly 时为 fable；有明确 type 用 type；否则按清空的窗口：只有 five_hour 为 session、只有其他窗口为 weekly、都有为 full。
  */
@@ -622,18 +622,18 @@ function getLimitResetKind(grant) {
   let any = grant.clears.some((clear) => clear !== "five_hour");
   return included && !any ? "session" : any && !included ? "weekly" : "full";
 }
-//@ chunk-fm6h4dv7.js:9375-9437 placement
+//@ chunk-sp3m4m72.js:9377-9439 placement
 function isUsableLimit(grant) {
   return !grant.paused && (grant.resetsLeft > 0 || grant.usableNow);
 }
-//@ chunk-fm6h4dv7.js:9437-9523 placement
+//@ chunk-sp3m4m72.js:9439-9525 placement
 function clearsLimit(grant, rateLimitType) {
   return (
     grant.clears.some((clear) => clear === rateLimitType) ||
     (rateLimitType === "seven_day" && grant.givesBackWeekly)
   );
 }
-//@ chunk-fm6h4dv7.js:9523-9661 placement
+//@ chunk-sp3m4m72.js:9525-9663 placement
 var RESET_KIND_BY_LIMIT_TYPE = {
   five_hour: "session",
   seven_day: "weekly",
@@ -642,7 +642,7 @@ var RESET_KIND_BY_LIMIT_TYPE = {
   seven_day_sonnet: null,
   overage: null,
 };
-//@ chunk-fm6h4dv7.js:9661-9782 placement
+//@ chunk-sp3m4m72.js:9663-9784 placement
 /**
  * 给重置种类排序：与当前限流类型对应的种类排最前（-1），seven_day 限流下 fable 排最后，其余按默认顺序。
  */
@@ -651,7 +651,7 @@ function rankResetKindForLimit(kind, limitType) {
   if (limitType === "seven_day" && kind === "fable") return LIMIT_CATEGORIES.length;
   return LIMIT_CATEGORIES.indexOf(kind);
 }
-//@ chunk-fm6h4dv7.js:9782-9938 placement
+//@ chunk-sp3m4m72.js:9784-9940 placement
 /**
  * 重置种类的显示名："5-hour reset"、"Fable reset"、"full reset"、"weekly reset"。
  */
@@ -667,7 +667,7 @@ function formatResetKindName(kind) {
       return "weekly reset";
   }
 }
-//@ chunk-fm6h4dv7.js:9938-10050 placement
+//@ chunk-sp3m4m72.js:9940-10052 placement
 /**
  * 按数量格式化重置次数："no X resets"、"1 X"、"N Xs"（session 写作 five-hour reset）。
  */
@@ -675,7 +675,7 @@ function formatResetCount(kind, count) {
   let kindName = kind === "session" ? "five-hour reset" : formatResetKindName(kind);
   return count === 0 ? `no ${kindName}s` : count === 1 ? `1 ${kindName}` : `${count} ${kindName}s`;
 }
-//@ chunk-fm6h4dv7.js:10050-10167 placement
+//@ chunk-sp3m4m72.js:10052-10169 placement
 /**
  * 把 [{kind, count}] 拼成 "N 5-hour, M weekly resets" 一样的摘要。
  */
@@ -684,11 +684,11 @@ function formatResetCountsSummary(counts) {
     .map(({ kind, count }) => `${count} ${formatResetCount(kind, 1).replace(/^1 | reset$/g, "")}`)
     .join(", ")} resets`;
 }
-//@ chunk-fm6h4dv7.js:10167-10255 placement
+//@ chunk-sp3m4m72.js:10169-10257 placement
 function limitDescription(kind) {
   return kind === "fable" ? "returns what Fable used to your weekly limit" : undefined;
 }
-//@ chunk-fm6h4dv7.js:10255-10482 placement
+//@ chunk-sp3m4m72.js:10257-10484 placement
 /**
  * 重置生效后的提示文字（5-hour/Fable/全部/每周限额已重置）。
  */
@@ -704,13 +704,13 @@ function formatResetAppliedText(kind) {
       return "Weekly limits reset";
   }
 }
-//@ chunk-fm6h4dv7.js:10482-10528 placement
+//@ chunk-sp3m4m72.js:10484-10530 placement
 var MAX_ATTEMPTS = 3;
 var RETRY_AFTER_MS = 12000;
 var RETRY_MAX_MS = 35000;
 var POLL_INTERVAL_MS = 600000;
 var RETRY_BACKOFF_MS = 20000;
-//@ chunk-fm6h4dv7.js:10528-10693 placement
+//@ chunk-sp3m4m72.js:10530-10695 placement
 /**
  * 对可重置的限流状态记下 {rateLimitType, wallResetsAt, accountEpoch}，用于之后判断是否还是同一次限流；不满足时返回 null。
  */
@@ -723,7 +723,7 @@ function captureWallResetIdentity(limits) {
     accountEpoch: getLimitsAccountEpoch(),
   };
 }
-//@ chunk-fm6h4dv7.js:10693-10803 placement
+//@ chunk-sp3m4m72.js:10695-10805 placement
 /**
  * 判断当前限流状态与之前记下的是否是同一次（类型、重置时间、账号纪元都一致）。
  */
@@ -734,7 +734,7 @@ function isSameWallReset(wall, status) {
     wall.accountEpoch === getLimitsAccountEpoch()
   );
 }
-//@ chunk-fm6h4dv7.js:10803-10887 placement
+//@ chunk-sp3m4m72.js:10805-10889 placement
 function usableStatusForWall(wall) {
   let creditState = currentUsageCreditState();
   return creditState.phase === "answered" && isSameWallReset(creditState.wall, wall)
@@ -742,22 +742,21 @@ function usableStatusForWall(wall) {
     : undefined;
 }
 export {
+  useRateLimitState,
+  useResetReached,
+  useQuotaAutoResumeState,
+  TENGU_PEWTER_SUMMIT,
+  isAutoResumeOfferEnabled,
+  LIMIT_CATEGORIES,
+  getRateLimitEventProps,
+  isSameWallReset,
   QUOTA_AUTO_RESUME_CANCELLED,
   AUTO_CONTINUE_CANCELLED_TEXT,
-  useQuotaAutoResumeState,
-  useRateLimitState,
-  isSameWallReset,
-  useResetReached,
   scheduleAtTimestamp,
   formatResetCountsSummary,
   usageLimitStatusText,
   QuotaAutoResume,
   logLimitFooterOfferShownOnce,
-  TENGU_PEWTER_SUMMIT,
-  logRateLimitMessageShownOnce,
-  isAutoResumeOfferEnabled,
-  LIMIT_CATEGORIES,
-  getRateLimitEventProps,
   RETRY_BACKOFF_MS,
   POLL_INTERVAL_MS,
   isUsableLimit,
@@ -773,4 +772,5 @@ export {
   MAX_ATTEMPTS,
   RETRY_AFTER_MS,
   RETRY_MAX_MS,
+  logRateLimitMessageShownOnce,
 };

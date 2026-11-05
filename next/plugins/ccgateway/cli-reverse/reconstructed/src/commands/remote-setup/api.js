@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：remote-setup 的 API（claude.ai GitHub 连接状态）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/remote-setup/api.ts
- * pieces: chunk-0wa2vg6f.js (14), chunk-3nztfxrw.js (2)
- * attribution: fingerprint 3, layout 4, placement 8, callgraph-witnessed 1
+ * pieces: chunk-a3r2kq46.js (2), chunk-kkdpfy3w.js (14)
+ * attribution: placement 8, callgraph-witnessed 1, fingerprint 3, layout 4
  */
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import {
@@ -45,7 +45,7 @@ import { getOauthAccountInfo, getClaudeAIOAuthTokenOrigin } from "../../utils/au
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:5177-5348 placement (2.1.88 match: getOAuthHeaders, 0.778)
+//@ chunk-a3r2kq46.js:5177-5348 placement (2.1.88 match: getOAuthHeaders, 0.779)
 function getOAuthHeaders_3(accessToken) {
   return {
     "User-Agent": claudeCodeUserAgent(),
@@ -55,7 +55,7 @@ function getOAuthHeaders_3(accessToken) {
     "x-self-hosted-runner-version": RUNNER_CLIENT_VERSION,
   };
 }
-//@ chunk-3nztfxrw.js:8831-17921 callgraph-witnessed (2.1.88 match: createDefaultEnvironment, 0.009)
+//@ chunk-a3r2kq46.js:8831-17995 callgraph-witnessed (2.1.88 match: createDefaultEnvironment, 0.009)
 function createDefaultEnvironment(config) {
   function debugLog(message) {
     config.onDebug?.(message);
@@ -341,6 +341,11 @@ function createDefaultEnvironment(config) {
           "User-Agent": claudeCodeUserAgent(),
           ...capabilityHeaders,
         },
+        ...(config.agentProxyUrl && {
+          params: {
+            agent_proxy_url: config.agentProxyUrl,
+          },
+        }),
         timeout: requestOptions?.timeoutMs ?? 15000,
         signal,
         validateStatus: (status) => status < 500,
@@ -477,9 +482,9 @@ function createDefaultEnvironment(config) {
     },
   };
 }
-//@ chunk-0wa2vg6f.js:713-925 fingerprint (2.1.88 match: RedactedGithubToken, 1)
+//@ chunk-kkdpfy3w.js:713-925 fingerprint (2.1.88 match: RedactedGithubToken, 1)
 let GithubWebConnectionStatus; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0wa2vg6f.js:713", () => {
+deferInit("chunk-kkdpfy3w.js:713", () => {
   GithubWebConnectionStatus = class GithubWebConnectionStatus {
     #t;
     constructor(raw) {
@@ -499,7 +504,7 @@ deferInit("chunk-0wa2vg6f.js:713", () => {
     }
   };
 });
-//@ chunk-0wa2vg6f.js:925-1708 fingerprint (2.1.88 match: importGithubToken, 0.79)
+//@ chunk-kkdpfy3w.js:925-1708 fingerprint (2.1.88 match: importGithubToken, 0.79)
 async function importGithubToken(token, credentials) {
   let response;
   try {
@@ -583,7 +588,7 @@ async function importGithubToken(token, credentials) {
     },
   };
 }
-//@ chunk-0wa2vg6f.js:1708-1775 layout
+//@ chunk-kkdpfy3w.js:1708-1775 layout
 async function hasValidOAuthToken(credentials) {
   try {
     await prepareApiRequest(credentials, false);
@@ -592,7 +597,7 @@ async function hasValidOAuthToken(credentials) {
     return false;
   }
 }
-//@ chunk-0wa2vg6f.js:1775-2166 layout
+//@ chunk-kkdpfy3w.js:1775-2166 layout
 async function fetchGithubAuthStatus(credentials, { timeout, isBackground }) {
   try {
     let response = await apiClient.get("/api/oauth/organizations/:orgUUID/sync/github/auth", {
@@ -612,7 +617,7 @@ async function fetchGithubAuthStatus(credentials, { timeout, isBackground }) {
     return null;
   }
 }
-//@ chunk-0wa2vg6f.js:2166-2279 layout
+//@ chunk-kkdpfy3w.js:2166-2279 layout
 async function getGithubAuthSource(credentials) {
   let githubAuthStatus = await fetchGithubAuthStatus(credentials, {
     timeout: 1e4,
@@ -620,7 +625,7 @@ async function getGithubAuthSource(credentials) {
   });
   return githubAuthStatus?.isAuthenticated ? githubAuthStatus.authSource : null;
 }
-//@ chunk-0wa2vg6f.js:2279-2514 layout
+//@ chunk-kkdpfy3w.js:2279-2514 layout
 async function getGithubConnectionStatus(credentials) {
   let githubAuthStatus = await fetchGithubAuthStatus(credentials, {
     timeout: 3000,
@@ -633,11 +638,11 @@ async function getGithubConnectionStatus(credentials) {
   logFeatureOk("api_github_connection_status");
   return githubAuthStatus.isAuthenticated ? "connected" : "not_connected";
 }
-//@ chunk-0wa2vg6f.js:2514-2567 fingerprint (2.1.88 match: getCodeWebUrl, 1)
+//@ chunk-kkdpfy3w.js:2514-2567 fingerprint (2.1.88 match: getCodeWebUrl, 1)
 function getCodeWebUrl() {
   return `${getOauthConfig().CLAUDE_AI_ORIGIN}/code`;
 }
-//@ chunk-0wa2vg6f.js:2567-3604 placement
+//@ chunk-kkdpfy3w.js:2567-3604 placement
 /**
  * claude.ai GitHub 连接状态缓存：先从全局配置的持久值播种，按代号丢弃过期请求，结果写回持久缓存。
  */
@@ -708,21 +713,21 @@ class GithubConnectionStatusCache {
     persistGithubStatus(status, timeoutOptions);
   }
 }
-//@ chunk-0wa2vg6f.js:3604-3628 placement
+//@ chunk-kkdpfy3w.js:3604-3628 placement
 /**
  * 按宿主缓存的 GitHub 连接状态缓存（remote-setup/promo/auth 共用）。
  */
 var GITHUB_CONNECTION_STATUS_CACHE; // deferred: uses GithubConnectionStatusCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0wa2vg6f.js:3604", () => {
+deferInit("chunk-kkdpfy3w.js:3604", () => {
   GITHUB_CONNECTION_STATUS_CACHE = new HostScoped(() => new GithubConnectionStatusCache());
 });
-//@ chunk-0wa2vg6f.js:3628-3679 placement
+//@ chunk-kkdpfy3w.js:3628-3679 placement
 function isCheerfulHorizonGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cheerful_horizon", false);
 }
-//@ chunk-0wa2vg6f.js:3679-3765 placement
+//@ chunk-kkdpfy3w.js:3679-3765 placement
 var githubConnectionStatusSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0wa2vg6f.js:3679", () => {
+deferInit("chunk-kkdpfy3w.js:3679", () => {
   githubConnectionStatusSchema = DoctorLazy(() =>
     objectSchema({
       accountUuid: stringSchema(),
@@ -731,7 +736,7 @@ deferInit("chunk-0wa2vg6f.js:3679", () => {
     }),
   );
 });
-//@ chunk-0wa2vg6f.js:3765-3980 placement
+//@ chunk-kkdpfy3w.js:3765-3980 placement
 function getConnectionCacheAccount() {
   let oauthAccountInfo = getOauthAccountInfo();
   if (!oauthAccountInfo?.organizationUuid) return;
@@ -744,7 +749,7 @@ function getConnectionCacheAccount() {
     orgUuid: oauthAccountInfo.organizationUuid,
   };
 }
-//@ chunk-0wa2vg6f.js:3980-4156 placement
+//@ chunk-kkdpfy3w.js:3980-4156 placement
 function readPersistedGithubStatus(config, connectionCacheAccount) {
   let parsed = githubConnectionStatusSchema().safeParse(config.githubWebConnectionStatusCache);
   if (
@@ -755,7 +760,7 @@ function readPersistedGithubStatus(config, connectionCacheAccount) {
     return;
   return parsed.data.status;
 }
-//@ chunk-0wa2vg6f.js:4156-4273 placement
+//@ chunk-kkdpfy3w.js:4156-4273 placement
 function persistGithubStatus(status, storage) {
   let connectionCacheAccount = getConnectionCacheAccount();
   if (!connectionCacheAccount) return;
@@ -774,8 +779,8 @@ function persistGithubStatus(status, storage) {
   );
 }
 export {
-  createDefaultEnvironment,
   GITHUB_CONNECTION_STATUS_CACHE,
+  createDefaultEnvironment,
   hasValidOAuthToken,
   GithubWebConnectionStatus,
   getCodeWebUrl,

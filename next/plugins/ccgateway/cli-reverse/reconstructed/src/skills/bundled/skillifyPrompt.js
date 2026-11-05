@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：skillify 内置技能：把本次会话的可复用流程整理成 SKILL.md。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-hantmvxa.js:190259-197617 placement
+//@ chunk-ne2890fx.js:190441-197799 placement
 function getSkillifyPrompt() {
   return `# Skillify {{userDescriptionBlock}}
 
@@ -137,7 +137,7 @@ After writing, tell the user:
 - That they can edit the SKILL.md directly to refine it
 `;
 }
-//@ chunk-hantmvxa.js:197617-197638 placement
+//@ chunk-ne2890fx.js:197799-197820 placement
 function noopStuckSkillStub() {
   return;
 }

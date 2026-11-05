@@ -1,14 +1,14 @@
 /**
  * commander/lib/help.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: commander@12.0.0
- * pieces: chunk-b7dyevzy.js (1)
+ * pieces: chunk-ardnz7sf.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_argument } from "./argument.js";
 
-//@ chunk-b7dyevzy.js:1889-6481 cjs-fingerprint
+//@ chunk-ardnz7sf.js:1889-6481 cjs-fingerprint
 var require_help = __commonJS(function (cjsExports) {
   var { humanReadableArgName } = require_argument();
   class Help {

@@ -3,12 +3,25 @@
  *
  * 2.1.316 新增：回合开始前检查（账号插件、提示建议、云插件开关、SDK MCP 等待）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (31)
- * attribution: placement 31
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (28), chunk-tmsx2mh0.js (7)
+ * attribution: placement 32, layout 3
  */
 import { randomUUID } from "crypto";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { TASK_CREATE_TOOL_NAME } from "../../tools/TaskCreateTool/constants.js";
+import { coerceTaskCreateInput } from "../../tools/TaskCreateTool/inputAliases.js";
+import { normalizeTaskInputAliases } from "../../tools/TaskUpdateTool/inputAliases.js";
+import { extractTextContent_2 } from "../../utils/messages.js";
+import { DoctorLazy } from "../handlers/util.js";
+import { array, objectSchema, _enum, unknown, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
+import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
+import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
+import { TASK_CREATED_RE } from "../../utils/task/framework.js";
 import {
   getAdminRequestPhase,
   adminRequestKeyForRateLimit,
@@ -38,7 +51,6 @@ import { withDeadline } from "../../utils/sleep.js";
 import { runExtraUsage } from "../../commands/extra-usage/extra-usage-core.js";
 import { logError } from "../../utils/log.js";
 import { toError, errorMessage } from "../../utils/errors.js";
-import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { fileAdminLimitRequest as fileAdminLimitRequest_2 } from "../../services/api/adminRequests.js";
@@ -59,16 +71,25 @@ import { setTaskNotificationListener, enqueueTaskNotification } from "../../util
 import { getConnectTimeoutMs, TRANSPORT_FALLBACK_TIMEOUT_MS } from "../../services/mcp/client.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { recordPhase, recordFirstMessageReadFromSpawn } from "../../utils/startupTiming.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
   logSuggestionOutcome,
   logSuggestionSuppressed,
   tryGenerateSuggestion,
 } from "../../services/PromptSuggestion/promptSuggestion.js";
 import { env } from "../../utils/env.js";
-import { getSessionId, getSyncedPluginReloadDebt, getSyncedPluginDirs } from "../../bootstrap/state.js";
+import {
+  getSessionId,
+  getStickyBetas,
+  getSyncedPluginReloadDebt,
+  getSyncedPluginDirs,
+} from "../../bootstrap/state.js";
 import { getLastCacheSafeParams, isMainThreadCacheWarm } from "../../utils/forkedAgent.js";
 import { getTurnOrigin } from "../../utils/messages/promptOrigin.js";
+import { WrapUpTool } from "../../tools/WrapUpTool/WrapUpTool.js";
+import { isDeferredToolInConversation } from "../../tools/ToolSearchTool/prompt.js";
+import { cachedDeclaredTools } from "../../services/api/declaredToolSet.js";
+import { extractDiscoveredToolNames } from "../../utils/toolSearch.js";
+import { getSurfacedToolNames } from "../../bootstrap/stateSlices.js";
 import { isSessionRefsSyncEnabled } from "../../utils/claudeAiSync/sessionRefsGate.js";
 import {
   refreshSyncVeto,
@@ -95,9 +116,9 @@ import { remoteToolsState } from "../../remote/tools/callResults.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { marketplaceNameAnswerState } from "../../utils/plugins/marketplaceNames.js";
 import { waitForOrganizationAnswer, askOrganizationOnce } from "../../utils/plugins/commandSource.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
-import { count } from "../../utils/collections.js";
-import { isSelfHostedRemoteEnvironment } from "../../utils/remoteEnvironment.js";
+import { getPrefixServerKey } from "../../services/mcp/mcpStringUtils.js";
+import { countWhere } from "../../utils/collections.js";
+import { isSelfHostedByocEnvironment } from "../../utils/remoteEnvironment.js";
 import { switchOffMcpServers, getSwitchedOffMcpServers } from "../../services/mcp/config.js";
 import { NoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import {
@@ -107,16 +128,177 @@ import {
 import { isClaudeInChromeMCPServer } from "../../utils/claudeInChrome/common.js";
 import { normalizeMessage } from "../../utils/queryHelpers.js";
 import { emitLoadError } from "../print.js";
-import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
-import { TASK_CREATE_TOOL_NAME } from "../../tools/TaskCreateTool/constants.js";
-import { coerceTaskCreateInput } from "../../tools/TaskCreateTool/inputAliases.js";
-import { normalizeTaskInputAliases } from "../../tools/TaskUpdateTool/inputAliases.js";
-import { extractTextContent_2 } from "../../utils/messages.js";
-import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
-import { TASK_CREATED_RE } from "../../utils/task/framework.js";
+import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:181110-181791 placement
+//@ chunk-tmsx2mh0.js:6739-6771 placement
+var TASK_UPDATE_PREFIX = "Updated task #";
+var MAX_TASK_NUMBER = 1e6;
+//@ chunk-tmsx2mh0.js:6771-6842 placement
+function parseTaskNumber(id) {
+  let number = Number(id);
+  return /^\d+$/.test(id) && number <= MAX_TASK_NUMBER ? number : undefined;
+}
+//@ chunk-tmsx2mh0.js:6842-7462 placement
+/**
+ * 任务工具记录提取辅助：从 tool_use/tool_result 输入里取字段、拼出任务创建/更新参数与结果文本。
+ */
+var taskToolInputFields; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var taskToolInputForTelemetry;
+var taskInputFieldNames;
+var toolResultText;
+var TASK_CALLS_PAYLOAD_SCHEMA;
+deferInit("chunk-tmsx2mh0.js:6842", () => {
+  taskToolInputFields = (input, key) => (isPlainObject(input) ? input[key] : undefined);
+  taskToolInputForTelemetry = (use) =>
+    (use.name === TASK_CREATE_TOOL_NAME
+      ? coerceTaskCreateInput(use.input)
+      : normalizeTaskInputAliases(use.input)
+    )?.input ?? use.input;
+  taskInputFieldNames = (task) => {
+    let readStringField = (fieldName) => {
+      let fields = taskToolInputFields(task, fieldName);
+      return typeof fields === "string" ? fields : undefined;
+    };
+    let readField = (id) => {
+      let fields = taskToolInputFields(task, id);
+      return Array.isArray(fields) ? fields.filter((field) => typeof field === "string") : undefined;
+    };
+    let metadataFields = taskToolInputFields(task, "metadata");
+    return {
+      subject: readStringField("subject"),
+      description: readStringField("description"),
+      activeForm: readStringField("activeForm"),
+      status: readStringField("status"),
+      owner: readStringField("owner"),
+      metadata: isPlainObject(metadataFields) ? metadataFields : undefined,
+      addBlocks: readField("addBlocks"),
+      addBlockedBy: readField("addBlockedBy"),
+    };
+  };
+  toolResultText = (task) =>
+    typeof task.content === "string"
+      ? task.content
+      : Array.isArray(task.content)
+        ? extractTextContent_2(task.content)
+        : "";
+  TASK_CALLS_PAYLOAD_SCHEMA = DoctorLazy(() =>
+    array(
+      objectSchema({
+        name: _enum([TASK_CREATE_TOOL_NAME, TASK_UPDATE_TOOL_NAME]),
+        input: unknown(),
+        result: stringSchema(),
+      }),
+    ),
+  );
+});
+//@ chunk-tmsx2mh0.js:7462-7511 layout
+function isTaskListSubagentCallsOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bright_kettle", false);
+}
+//@ chunk-tmsx2mh0.js:7511-7524 layout
+var TASK_SUBAGENT_CALLS_MAX_BYTES = 16384;
+//@ chunk-tmsx2mh0.js:7524-7804 layout
+function collectTaskSubagentCalls(messages) {
+  if (!isTaskListSubagentCallsOn()) return;
+  let list = Array.from(taskToolCallsInTranscript(messages), (call) => ({
+    name: call.kind === "create" ? TASK_CREATE_TOOL_NAME : TASK_UPDATE_TOOL_NAME,
+    input: call.use.input,
+    result: toolResultText(call.result),
+  }));
+  if (list.length === 0) return;
+  if (Buffer.byteLength(jsonStringify(list)) > TASK_SUBAGENT_CALLS_MAX_BYTES) {
+    logFeatureSad("task_list_subagent_calls", "over_size_limit");
+    return;
+  }
+  logFeatureOk("task_list_subagent_calls");
+  return list;
+}
+//@ chunk-tmsx2mh0.js:7804-9006 placement
+function* taskToolCallsInTranscript(messages, askedEarlier = () => false) {
+  let indexByUuid = new Map();
+  let subagentTasks = isTaskListSubagentCallsOn();
+  for (let [index, row] of messages.entries())
+    if (row.type === "assistant") {
+      let response = row.message.id ?? row.uuid ?? `row ${index}`;
+      for (let block of row.message.content)
+        if (
+          block.type === "tool_use" &&
+          (block.name === TASK_CREATE_TOOL_NAME ||
+            block.name === TASK_UPDATE_TOOL_NAME ||
+            (subagentTasks && (block.name === AGENT || block.name === TASK)))
+        )
+          indexByUuid.set(block.id, {
+            use: block,
+            response,
+            askedEarlier: askedEarlier(row, index),
+          });
+    }
+  for (let [index, row] of messages.entries())
+    if (row.type === "user" && typeof row.message.content !== "string")
+      for (let block of row.message.content) {
+        if (block.type !== "tool_result") continue;
+        let call = indexByUuid.get(block.tool_use_id);
+        if (call === undefined) continue;
+        indexByUuid.delete(block.tool_use_id);
+        if (block.is_error === true) continue;
+        let calls =
+          call.use.name === TASK_CREATE_TOOL_NAME || call.use.name === TASK_UPDATE_TOOL_NAME
+            ? [
+                {
+                  use: call.use,
+                  result: block,
+                },
+              ]
+            : (
+                TASK_CALLS_PAYLOAD_SCHEMA().safeParse(taskToolInputFields(row.toolUseResult, "taskCalls"))
+                  .data ?? []
+              ).map(({ name, input, result }, index) => {
+                let callId = `${block.tool_use_id}/${index}`;
+                return {
+                  use: {
+                    id: callId,
+                    name,
+                    input,
+                  },
+                  result: {
+                    tool_use_id: callId,
+                    content: result,
+                  },
+                };
+              });
+        for (let { use, result: task } of calls) {
+          let resultText = toolResultText(task);
+          let input = taskToolInputForTelemetry(use);
+          let callFields = {
+            named: taskInputFieldNames(input),
+            use,
+            result: task,
+            response: call.response,
+            fromSubagent: use !== call.use,
+            askedEarlier: call.askedEarlier,
+            answeredEarlier: askedEarlier(row, index),
+          };
+          if (use.name === TASK_CREATE_TOOL_NAME) {
+            let createdId = resultText.match(TASK_CREATED_RE)?.[1];
+            if (createdId !== undefined)
+              yield {
+                kind: "create",
+                taskId: createdId,
+                ...callFields,
+              };
+          } else if (resultText.startsWith(TASK_UPDATE_PREFIX)) {
+            let taskId = taskToolInputFields(input, "taskId");
+            yield {
+              kind: "update",
+              taskId: typeof taskId === "string" ? taskId : "",
+              ...callFields,
+            };
+          }
+        }
+      }
+}
+//@ chunk-0yw3taqg.js:214562-215243 placement
 /**
  * 遇到组织/席位额度上限的限流事件时，评估是否可在 IDE 横幅中"向管理员申请额度"。
  */
@@ -190,7 +372,7 @@ function evaluateAdminRequestWall(limitState) {
     }),
   );
 }
-//@ chunk-tyg7f3ek.js:181791-181902 placement
+//@ chunk-0yw3taqg.js:215243-215354 placement
 function trackAdminRequest(promise) {
   let adminRequestState = getAdminRequestState();
   let tracked = promise
@@ -202,7 +384,7 @@ function trackAdminRequest(promise) {
     });
   adminRequestState.pending = tracked;
 }
-//@ chunk-tyg7f3ek.js:181902-182987 placement
+//@ chunk-0yw3taqg.js:215354-216439 placement
 function settleAdminRequestCheck(wall, outcome, recheck) {
   let adminRequestPhase = getAdminRequestPhase();
   if (adminRequestPhase.phase !== "checking" || !isSameAdminRequestKey(adminRequestPhase.wall, wall)) return;
@@ -291,7 +473,7 @@ function settleAdminRequestCheck(wall, outcome, recheck) {
     revision: 0,
   });
 }
-//@ chunk-tyg7f3ek.js:182987-183389 placement
+//@ chunk-0yw3taqg.js:216439-216841 placement
 function adminRequestVerdict(result, reason) {
   switch (result.type) {
     case "confirm-admin-request":
@@ -309,7 +491,7 @@ function adminRequestVerdict(result, reason) {
       return "nothing_to_file";
   }
 }
-//@ chunk-tyg7f3ek.js:183389-183796 placement
+//@ chunk-0yw3taqg.js:216841-217248 placement
 function adminRequestBannerState(phase) {
   switch (phase.phase) {
     case "quiet":
@@ -338,7 +520,7 @@ function adminRequestBannerState(phase) {
       };
   }
 }
-//@ chunk-tyg7f3ek.js:183796-184193 placement
+//@ chunk-0yw3taqg.js:217248-217645 placement
 function adminRequestStateForEvent(limits) {
   let key = adminRequestKeyForRateLimit(limits);
   let phase = getAdminRequestPhase();
@@ -368,7 +550,7 @@ function adminRequestStateForEvent(limits) {
       };
   }
 }
-//@ chunk-tyg7f3ek.js:184193-184895 placement
+//@ chunk-0yw3taqg.js:217645-218347 placement
 /**
  * 用户确认后提交"向管理员申请额度"请求并上报 tengu_tallow_quoit_filed。
  */
@@ -430,7 +612,7 @@ function fileAdminLimitRequest() {
     }),
   );
 }
-//@ chunk-tyg7f3ek.js:184895-185073 placement
+//@ chunk-0yw3taqg.js:218347-218525 placement
 function markAdminRequestSent(wall, doneLabel) {
   let adminRequestPhase = getAdminRequestPhase();
   if (adminRequestPhase.phase !== "sending" || !isSameAdminRequestKey(adminRequestPhase.wall, wall)) return;
@@ -447,7 +629,7 @@ function markAdminRequestSent(wall, doneLabel) {
     settledAt: Date.now(),
   });
 }
-//@ chunk-tyg7f3ek.js:185073-185803 placement
+//@ chunk-0yw3taqg.js:218525-219255 placement
 function reportAdminRequestFiled(wall, outcome) {
   let ok = outcome === "filed" || outcome === "already_filed" || outcome === "granted";
   logEvent("tengu_tallow_quoit_filed", {
@@ -503,7 +685,7 @@ function reportAdminRequestFiled(wall, outcome) {
   }
   evaluateAdminRequestWall(getCurrentLimits());
 }
-//@ chunk-tyg7f3ek.js:185803-186643 placement
+//@ chunk-0yw3taqg.js:219255-220097 placement
 /**
  * 把限流事件转成 SDK rate_limit_event 帧发给宿主，并附带额度申请横幅状态。
  */
@@ -574,7 +756,7 @@ function createRateLimitFrameRelay({ emit, sessionState, bridgeHandle }) {
     unsubscribeAdmin();
   };
 }
-//@ chunk-tyg7f3ek.js:186643-186749 placement
+//@ chunk-0yw3taqg.js:220097-220203 placement
 function installSdkEventDrain({ drain, emit }) {
   let drainEvents = () => {
     for (let event of drain()) emit(event);
@@ -587,7 +769,7 @@ function installSdkEventDrain({ drain, emit }) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:186749-188220 placement
+//@ chunk-0yw3taqg.js:220203-221674 placement
 class SdkMcpServerWait {
   sdkUrl;
   unconnectedServers;
@@ -657,9 +839,9 @@ class SdkMcpServerWait {
       .catch(logError);
   }
 }
-//@ chunk-tyg7f3ek.js:188257-188353 placement
+//@ chunk-0yw3taqg.js:221711-221807 placement
 var NON_HUMAN_TURN_ORIGINS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:188257", () => {
+deferInit("chunk-0yw3taqg.js:221711", () => {
   NON_HUMAN_TURN_ORIGINS = new Set([
     "scheduled",
     "task_notification",
@@ -668,7 +850,7 @@ deferInit("chunk-tyg7f3ek.js:188257", () => {
     "system",
   ]);
 });
-//@ chunk-tyg7f3ek.js:188353-188415 placement
+//@ chunk-0yw3taqg.js:221807-221869 placement
 function pausedSuggestionReasonSafe(state) {
   try {
     return pausedPromptSuggestionReason(state);
@@ -677,7 +859,7 @@ function pausedSuggestionReasonSafe(state) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:188415-188593 placement
+//@ chunk-0yw3taqg.js:221869-222047 placement
 function pausedPromptSuggestionReason({ paused, turnOrigin }) {
   let reason;
   if (paused) reason = "host_paused";
@@ -688,9 +870,9 @@ function pausedPromptSuggestionReason({ paused, turnOrigin }) {
   }
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_chomp_sable", false) ? reason : null;
 }
-//@ chunk-tyg7f3ek.js:188593-188606 placement
+//@ chunk-0yw3taqg.js:222047-222060 placement
 var PROMPT_SUGGESTION_TIMEOUT_MS = 30000;
-//@ chunk-tyg7f3ek.js:188606-191278 placement
+//@ chunk-0yw3taqg.js:222060-224732 placement
 /**
  * SDK 模式下在轮次之间生成并发送 prompt_suggestion（仅缓存热时）。
  */
@@ -858,13 +1040,25 @@ class PromptSuggestionEmitter {
     this.abortController = null;
   }
 }
-//@ chunk-tyg7f3ek.js:191278-191524 placement
+//@ chunk-0yw3taqg.js:224732-225176 placement
 function createPromptSuggestionEmitter({ messages, getAppState, ...options }) {
   return new PromptSuggestionEmitter({
     ...options,
     cacheSafeParams: getLastCacheSafeParams,
     turnOrigin: () => getTurnOrigin(messages),
     generate: (abortController, params) => {
+      let { toolUseContext } = params;
+      let { tools } = toolUseContext.options;
+      if (
+        tools.includes(WrapUpTool) &&
+        (!isDeferredToolInConversation(WrapUpTool, cachedDeclaredTools(toolUseContext), tools) ||
+          extractDiscoveredToolNames(messages, {
+            surfaced: getSurfacedToolNames(toolUseContext.stickyBetas ?? getStickyBetas()),
+          }).has(WrapUpTool.name))
+      ) {
+        logSuggestionSuppressed("wrap_up_offered", "sdk");
+        return Promise.resolve(null);
+      }
       if (!isMainThreadCacheWarm()) {
         logSuggestionSuppressed("cache_cold", "sdk", {
           cacheColdBy: "prefix_not_warm",
@@ -875,7 +1069,7 @@ function createPromptSuggestionEmitter({ messages, getAppState, ...options }) {
     },
   });
 }
-//@ chunk-tyg7f3ek.js:191524-191928 placement
+//@ chunk-0yw3taqg.js:225176-225580 placement
 /**
  * 账号插件启动检查：特性默认值、检查间隔与退避（60s 起、2 倍、30 分钟上限）、超时与连续拒绝上限，以及两项未检查/未重载提示文本。
  */
@@ -894,7 +1088,7 @@ var ACCOUNT_PLUGINS_UNCHECKED_TEXT =
 var ACCOUNT_PLUGINS_NOT_RELOADED = "account-plugins-not-reloaded";
 var ACCOUNT_PLUGINS_NOT_RELOADED_TEXT =
   "Couldn't finish reloading your plugins after a change. Parts of their earlier versions may still be in use until a reload succeeds.";
-//@ chunk-tyg7f3ek.js:191928-192027 placement
+//@ chunk-0yw3taqg.js:225580-225679 placement
 function isAccountPluginsCheckEnabled(session) {
   return (
     env.CLAUDE_CODE_REMOTE === true &&
@@ -903,7 +1097,7 @@ function isAccountPluginsCheckEnabled(session) {
     getFeatureValue_CACHED_MAY_BE_STALE(ACCOUNT_PLUGINS_CHECK_CONSTANTS, ACCOUNT_PLUGINS_CHECK_DEFAULT)
   );
 }
-//@ chunk-tyg7f3ek.js:192027-192130 placement
+//@ chunk-0yw3taqg.js:225679-225782 placement
 var notifyAccountPluginsUnchecked = () =>
   enqueueTaskNotification({
     type: "system",
@@ -913,7 +1107,7 @@ var notifyAccountPluginsUnchecked = () =>
     priority: "medium",
     color: "warning",
   });
-//@ chunk-tyg7f3ek.js:192130-195841 placement
+//@ chunk-0yw3taqg.js:225782-229493 placement
 /**
  * CCR 会话每轮开始检查账户插件是否有更新（tengu_ccr_plugins_turn_start_check_enabled），失败/拒绝时告知用户。
  */
@@ -1110,7 +1304,7 @@ class AccountPluginsChecker {
     if (this.failuresInARow === ACCOUNT_PLUGINS_MAX_REFUSALS) notifyAccountPluginsUnchecked();
   }
 }
-//@ chunk-tyg7f3ek.js:195841-211742 placement
+//@ chunk-0yw3taqg.js:229493-245402 placement
 /**
  * 轮次开始前的检查集合：延迟命令、SessionStart 钩子、SDK MCP 更新、插件检查、parked 权限退役等。
  */
@@ -1792,7 +1986,10 @@ class TurnStartChecks {
                     : "none",
         ),
         pendingRequiredBeforeJoin: pendingRequired.length,
-        pendingAfterJoin: count(this.store.getState().mcp.clients, (client) => client.type === "pending"),
+        pendingAfterJoin: countWhere(
+          this.store.getState().mcp.clients,
+          (client) => client.type === "pending",
+        ),
         relayMarked: this.mcpPrewait.relayMarked,
         relayHold: this.mcpPrewait.relayHold,
         relayHoldFollowsBootVerdict: this.mcpPrewait.relayHoldFollowsBootVerdict,
@@ -1835,7 +2032,7 @@ class TurnStartChecks {
     return this.buildAllTools(state);
   }
 }
-//@ chunk-tyg7f3ek.js:211742-211867 placement
+//@ chunk-0yw3taqg.js:245402-245527 placement
 var MAX_PREWAIT_SERVERS = 64;
 var MAX_SERVER_NAME_LENGTH = 256;
 var SDK_MCP_WAIT_MS = 5000;
@@ -1845,10 +2042,10 @@ var EMPTY_MCP_WIRING = {
   dynamicClients: () => [],
   markDynamicServerDisabled: () => {},
 };
-//@ chunk-tyg7f3ek.js:211867-214082 placement
+//@ chunk-0yw3taqg.js:245527-247741 placement
 class CloudPluginSwitches {
   io;
-  isKept = isSelfHostedRemoteEnvironment();
+  isKept = isSelfHostedByocEnvironment();
   isUnread = false;
   switchedOnWhileUnread = new Set();
   foundLate = new Set();
@@ -1970,7 +2167,7 @@ class CloudPluginSwitches {
     }
   }
 }
-//@ chunk-tyg7f3ek.js:214082-214252 placement
+//@ chunk-0yw3taqg.js:247741-247911 placement
 function normalizeServerNameList(disabledMcpServers) {
   let list = Array.isArray(disabledMcpServers) ? disabledMcpServers : [];
   let names = new Set();
@@ -1986,7 +2183,7 @@ function normalizeServerNameList(disabledMcpServers) {
     }
   return [...names].slice(-MAX_PREWAIT_SERVERS);
 }
-//@ chunk-tyg7f3ek.js:214252-214647 placement
+//@ chunk-0yw3taqg.js:247911-248306 placement
 function retirementPromptRows({ sessionId, prompt, listed, retirementRows, othersToCome }) {
   let rows = [];
   try {
@@ -2018,105 +2215,19 @@ function retirementPromptRows({ sessionId, prompt, listed, retirementRows, other
     },
   ];
 }
-//@ chunk-tyg7f3ek.js:214647-214678 placement
-var TASK_UPDATE_PREFIX = "Updated task #";
-var MAX_TASK_NUMBER = 1e6;
-//@ chunk-tyg7f3ek.js:214678-214747 placement
-function parseTaskNumber(id) {
-  let number = Number(id);
-  return /^\d+$/.test(id) && number <= MAX_TASK_NUMBER ? number : undefined;
-}
-//@ chunk-tyg7f3ek.js:214747-215311 placement
-/**
- * 任务工具记录提取辅助：从 tool_use/tool_result 输入里取字段、拼出任务创建/更新参数与结果文本。
- */
-var taskToolInputFields = (input, key) => (isPlainObject_2(input) ? input[key] : undefined);
-var taskToolInputForTelemetry = (use) =>
-  (use.name === TASK_CREATE_TOOL_NAME
-    ? coerceTaskCreateInput(use.input)
-    : normalizeTaskInputAliases(use.input)
-  )?.input ?? use.input;
-var taskInputFieldNames = (task) => {
-  let readStringField = (fieldName) => {
-    let fields = taskToolInputFields(task, fieldName);
-    return typeof fields === "string" ? fields : undefined;
-  };
-  let readField = (id) => {
-    let fields = taskToolInputFields(task, id);
-    return Array.isArray(fields) ? fields.filter((field) => typeof field === "string") : undefined;
-  };
-  let metadataFields = taskToolInputFields(task, "metadata");
-  return {
-    subject: readStringField("subject"),
-    description: readStringField("description"),
-    activeForm: readStringField("activeForm"),
-    status: readStringField("status"),
-    owner: readStringField("owner"),
-    metadata: isPlainObject_2(metadataFields) ? metadataFields : undefined,
-    addBlocks: readField("addBlocks"),
-    addBlockedBy: readField("addBlockedBy"),
-  };
-};
-var toolResultText = (task) =>
-  typeof task.content === "string"
-    ? task.content
-    : Array.isArray(task.content)
-      ? extractTextContent_2(task.content)
-      : "";
-//@ chunk-tyg7f3ek.js:215311-216137 placement
-function* taskToolCallsInTranscript(messages, askedEarlier = () => false) {
-  let indexByUuid = new Map();
-  for (let [index, row] of messages.entries())
-    if (row.type === "assistant") {
-      let response = row.message.id ?? row.uuid ?? `row ${index}`;
-      for (let block of row.message.content)
-        if (
-          block.type === "tool_use" &&
-          (block.name === TASK_CREATE_TOOL_NAME || block.name === TASK_UPDATE_TOOL_NAME)
-        )
-          indexByUuid.set(block.id, {
-            use: block,
-            response,
-            askedEarlier: askedEarlier(row, index),
-          });
-    }
-  for (let [index, row] of messages.entries())
-    if (row.type === "user" && typeof row.message.content !== "string")
-      for (let block of row.message.content) {
-        if (block.type !== "tool_result") continue;
-        let call = indexByUuid.get(block.tool_use_id);
-        if (call === undefined) continue;
-        indexByUuid.delete(block.tool_use_id);
-        if (block.is_error === true) continue;
-        let text = toolResultText(block);
-        let input = taskToolInputForTelemetry(call.use);
-        if (call.use.name === TASK_CREATE_TOOL_NAME) {
-          let taskId = text.match(TASK_CREATED_RE)?.[1];
-          if (taskId !== undefined)
-            yield {
-              kind: "create",
-              taskId,
-              named: taskInputFieldNames(input),
-              result: block,
-              answeredEarlier: askedEarlier(row, index),
-              ...call,
-            };
-        } else if (text.startsWith(TASK_UPDATE_PREFIX)) {
-          let taskId = taskToolInputFields(input, "taskId");
-          yield {
-            kind: "update",
-            taskId: typeof taskId === "string" ? taskId : "",
-            named: taskInputFieldNames(input),
-            result: block,
-            answeredEarlier: askedEarlier(row, index),
-            ...call,
-          };
-        }
-      }
+//@ chunk-0yw3taqg.js:248306-248421 placement
+function isStopOfHeldMessagesEnabled() {
+  return (
+    !env.CLAUDE_CODE_DISABLE_STOP_OF_HELD_MESSAGES &&
+    !readFlagWithOverride("tengu_patient_harbor_killswitch", {
+      safe: false,
+    })
+  );
 }
 export {
   CloudPluginSwitches,
   retirementPromptRows,
+  isStopOfHeldMessagesEnabled,
   installSdkEventDrain,
   createPromptSuggestionEmitter,
   createRateLimitFrameRelay,
@@ -2126,4 +2237,6 @@ export {
   MAX_TASK_NUMBER,
   parseTaskNumber,
   taskToolCallsInTranscript,
+  TASK_CALLS_PAYLOAD_SCHEMA,
+  collectTaskSubagentCalls,
 };

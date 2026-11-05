@@ -3,9 +3,9 @@
  *
  * 事件派发器：捕获/冒泡路径收集、按事件类型决定 React 更新优先级
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/dispatcher.ts
- * pieces: chunk-bzr73sfg.js (5)
+ * pieces: chunk-2avr6cej.js (5)
  * attribution: fingerprint 5
  */
 import { HANDLER_FOR_EVENT } from "./event-handlers.js";
@@ -18,7 +18,7 @@ import {
   noEventPriority,
 } from "../../../vendor/yoga-layout/dist/src/generated/YGEnums.js";
 
-//@ chunk-bzr73sfg.js:188315-188447 fingerprint (2.1.88 match: getHandler, 1)
+//@ chunk-2avr6cej.js:187962-188094 fingerprint (2.1.88 match: getHandler, 1)
 /**
  * 取节点上某事件类型的冒泡或捕获处理器。
  */
@@ -31,7 +31,7 @@ function getHandler(node, eventType, capture) {
   if (!propName) return;
   return handlers[propName];
 }
-//@ chunk-bzr73sfg.js:188447-188704 fingerprint (2.1.88 match: collectListeners, 1)
+//@ chunk-2avr6cej.js:188094-188351 fingerprint (2.1.88 match: collectListeners, 1)
 /**
  * 从目标沿父链收集监听器：捕获处理器放前面（unshift），冒泡处理器放后面（事件不冒泡时只取目标自身），标注阶段。
  */
@@ -58,7 +58,7 @@ function collectListeners(target, event) {
   }
   return listeners;
 }
-//@ chunk-bzr73sfg.js:188704-188979 fingerprint (2.1.88 match: processDispatchQueue, 0.875)
+//@ chunk-2avr6cej.js:188351-188626 fingerprint (2.1.88 match: processDispatchQueue, 0.875)
 /**
  * 按顺序执行监听器：立即停止传播则中断，停止传播则在换节点时中断；处理器抛错只记日志。
  */
@@ -78,7 +78,7 @@ function processDispatchQueue(listeners, event) {
     previousNode = node;
   }
 }
-//@ chunk-bzr73sfg.js:188979-189183 fingerprint (2.1.88 match: getEventPriority, 0.905)
+//@ chunk-2avr6cej.js:188626-188830 fingerprint (2.1.88 match: getEventPriority, 0.905)
 /**
  * 事件类型 → React 更新优先级：离散事件（按键、点击、焦点、粘贴、action）为 Discrete，连续事件（resize/scroll/wheel/mousemove）为 Continuous，其余 Default。
  */
@@ -101,7 +101,7 @@ function getEventPriority(eventType) {
       return defaultEventPriority;
   }
 }
-//@ chunk-bzr73sfg.js:189183-190017 fingerprint (2.1.88 match: Dispatcher, 0.956)
+//@ chunk-2avr6cej.js:188830-189664 fingerprint (2.1.88 match: Dispatcher, 0.956)
 /**
  * Ink 的 DOM 事件分发器：dispatch 收集监听器并执行，返回是否未被 preventDefault；dispatchDiscrete 走 reconciler.discreteUpdates；dispatchContinuous 临时把优先级设为 Continuous。resolveEventPriority 供 reconciler 的 getCurrentUpdatePriority 使用。
  */

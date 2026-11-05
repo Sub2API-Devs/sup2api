@@ -3,9 +3,9 @@
  *
  * Markdown → ANSI 的令牌格式化（标题/列表/代码/引用/链接/表格），issue 引用自动链接（GitHub/GitLab 等），marked 配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/markdown.ts
- * pieces: chunk-wj577vf9.js (29)
+ * pieces: chunk-ptrwzav4.js (29)
  * attribution: fingerprint 4, layout 20, placement 4, file-local 1
  */
 import {
@@ -53,18 +53,18 @@ import { getGitHostKind } from "./gitHosts.js";
 import { normalizeHostCached, GITHUB_HOST } from "./git/githubUrl.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wj577vf9.js:13206-13268 fingerprint (2.1.88 match: configureMarked, 0.369)
+//@ chunk-ptrwzav4.js:13206-13268 fingerprint (2.1.88 match: configureMarked, 0.369)
 function configureMarked() {
   if (markedConfigStateMemo.configured) return;
   markedConfigStateMemo.set();
   marked.use(MARKED_CONFIG_CACHE_SIZE, markedExtensions);
 }
-//@ chunk-wj577vf9.js:13268-13497 layout
+//@ chunk-ptrwzav4.js:13268-13497 layout
 /**
  * 插件 Markdown 用的受限词法器：关闭表格、引用、分隔线、链接、自动链接、转义与换行等语法。
  */
 var pluginMarkdownLexer; // deferred: uses markdownRendererPool (./markdownInlineRendering.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-wj577vf9.js:13268", () => {
+deferInit("chunk-ptrwzav4.js:13268", () => {
   pluginMarkdownLexer = new Marked(MARKED_CONFIG_CACHE_SIZE, {
     tokenizer: {
       emStrong(source) {
@@ -100,7 +100,7 @@ deferInit("chunk-wj577vf9.js:13268", () => {
     },
   });
 });
-//@ chunk-wj577vf9.js:13497-13710 layout
+//@ chunk-ptrwzav4.js:13497-13710 layout
 /**
  * 把 Markdown 渲染为 ANSI 文本（去除提示 XML 标签，支持窗口化词法与超链接）。
  */
@@ -122,14 +122,14 @@ function renderMarkdownToAnsi(content, theme, highlight = null) {
     .join("")
     .trim();
 }
-//@ chunk-wj577vf9.js:13710-13774 layout
+//@ chunk-ptrwzav4.js:13710-13774 layout
 /**
  * Markdown 渲染用空白正则、&nbsp; 实体正则与最大缩进空格数。
  */
 var WHITESPACE_RE = /\s/;
 var NBSP_ENTITY_RE = /&(?:nbsp|#0{0,4}160|#[xX]0{0,4}[aA]0);/g;
 var MAX_INDENT_SPACES = 32;
-//@ chunk-wj577vf9.js:13774-13914 layout
+//@ chunk-ptrwzav4.js:13774-13914 layout
 function endsWithHardBreak(text) {
   if (
     !text.endsWith(`
@@ -148,14 +148,14 @@ function endsWithHardBreak(text) {
   }
   return false;
 }
-//@ chunk-wj577vf9.js:13914-14028 layout
+//@ chunk-ptrwzav4.js:13914-14028 layout
 function formatTokenWindowed(token, theme, options) {
   let rendered = formatToken(token, theme, options);
   return options.windowed && ESC_NON_CSI_RE.test(rendered)
     ? rendered.replace(OSC8_LINK_PATTERN, "").replace(C1_OSC_RE, "").replace(ESC_NON_CSI_GLOBAL_RE, "")
     : rendered;
 }
-//@ chunk-wj577vf9.js:14028-19907 fingerprint (2.1.88 match: formatToken, 0.729)
+//@ chunk-ptrwzav4.js:14028-19907 fingerprint (2.1.88 match: formatToken, 0.729)
 function formatToken(token, theme, options) {
   let {
     listDepth = 0,
@@ -606,7 +606,7 @@ function formatToken(token, theme, options) {
   }
   return token.raw;
 }
-//@ chunk-wj577vf9.js:19907-20150 layout
+//@ chunk-ptrwzav4.js:19907-20150 layout
 /**
  * issue 引用正则、被视为非 GitHub 的托管站点列表以及 URL 正则。
  */
@@ -614,7 +614,7 @@ var ISSUE_REFERENCE_RE; // deferred: has load-time effects after a deferred stat
 var NON_GITHUB_ISSUE_HOSTS;
 var URL_SCHEME_RE;
 var HTTP_URL_RE;
-deferInit("chunk-wj577vf9.js:19907", () => {
+deferInit("chunk-ptrwzav4.js:19907", () => {
   ISSUE_REFERENCE_RE = /(^|[^\w./-])([A-Za-z0-9][\w-]*\/[A-Za-z0-9][\w.-]*)#(\d+)\b/g;
   NON_GITHUB_ISSUE_HOSTS = new Set([
     "gitlab.com",
@@ -627,14 +627,14 @@ deferInit("chunk-wj577vf9.js:19907", () => {
   URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
   HTTP_URL_RE = /^https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/i;
 });
-//@ chunk-wj577vf9.js:20150-20313 layout
+//@ chunk-ptrwzav4.js:20150-20313 layout
 function isUnsafeLinkHref(href, allowedSchemes) {
   let scheme = URL_SCHEME_RE.exec(href)?.[0];
   if (scheme !== undefined) return !allowedSchemes.has(scheme.slice(0, -1).toLowerCase());
   let firstSegment = href.split(/[/?#]/, 1)[0] ?? "";
   return !/^[A-Za-z0-9._~-]*$/.test(firstSegment);
 }
-//@ chunk-wj577vf9.js:20313-20644 layout
+//@ chunk-ptrwzav4.js:20313-20644 layout
 /**
  * 递归标记不安全的链接与代码片段为 defanged（表格、列表、子令牌都处理）。
  */
@@ -651,7 +651,7 @@ function defangTokens(tokens, theme) {
     else if ("tokens" in token && Array.isArray(token.tokens)) defangTokens(token.tokens, theme);
   }
 }
-//@ chunk-wj577vf9.js:20644-20837 layout
+//@ chunk-ptrwzav4.js:20644-20837 layout
 function localFileLinkPath(url) {
   let filePath = fileUrlToPath(url);
   if (
@@ -666,7 +666,7 @@ function localFileLinkPath(url) {
   let any = decodedCandidates.some((candidate) => /^file:/i.test(stripLeadingInvisibleChars(candidate)));
   return isUnsafePathAfterDecode(filePath, decodedCandidates) || any ? null : filePath;
 }
-//@ chunk-wj577vf9.js:20837-21446 placement
+//@ chunk-ptrwzav4.js:20837-21446 placement
 function escapePipesInCode(text) {
   if (!text.includes("`") || !text.includes("|")) return text;
   let fenceStarts = [];
@@ -726,7 +726,7 @@ function escapePipesInCode(text) {
   }
   return result;
 }
-//@ chunk-wj577vf9.js:21446-21566 placement
+//@ chunk-ptrwzav4.js:21446-21566 placement
 function tableHasExtraCells(lines, columnCount) {
   for (let k = 2; k < lines.length; k++) {
     let cells = addToInMemoryErrorLog(lines[k]);
@@ -734,7 +734,7 @@ function tableHasExtraCells(lines, columnCount) {
   }
   return false;
 }
-//@ chunk-wj577vf9.js:21566-21767 placement (2.1.88 match: addToInMemoryErrorLog, 0.678)
+//@ chunk-ptrwzav4.js:21566-21767 placement (2.1.88 match: addToInMemoryErrorLog, 0.679)
 function addToInMemoryErrorLog(errorInfo) {
   let parts = errorInfo
     .replace(/\|/g, (match, offset, input) => {
@@ -748,16 +748,16 @@ function addToInMemoryErrorLog(errorInfo) {
   if (parts.length > 0 && !parts.at(-1)?.trim()) parts.pop();
   return parts;
 }
-//@ chunk-wj577vf9.js:21767-21831 layout
+//@ chunk-ptrwzav4.js:21767-21831 layout
 function linkifyInline(text, theme, linkCap, parent, promptMode) {
   if (promptMode) return text;
   return withHyperlinks(linkifyIssueReferences(text, theme, linkCap), theme, linkCap, parent);
 }
-//@ chunk-wj577vf9.js:21831-21866 layout
+//@ chunk-ptrwzav4.js:21831-21866 layout
 function withHyperlinks(text, theme, linkCap = supportsHyperlinks(), parent) {
   return text;
 }
-//@ chunk-wj577vf9.js:21866-22169 fingerprint (2.1.88 match: linkifyIssueReferences, 0.327)
+//@ chunk-ptrwzav4.js:21866-22169 fingerprint (2.1.88 match: linkifyIssueReferences, 0.328)
 function linkifyIssueReferences(text, themeName, linkCap = supportsHyperlinks()) {
   if (!linkCap) return text;
   if (!text.includes("#")) return text;
@@ -781,7 +781,7 @@ function linkifyIssueReferences(text, themeName, linkCap = supportsHyperlinks())
       }),
   );
 }
-//@ chunk-wj577vf9.js:22169-22268 file-local
+//@ chunk-ptrwzav4.js:22169-22268 file-local
 function numberToLetter(n) {
   let result = "";
   while (n > 0) {
@@ -791,7 +791,7 @@ function numberToLetter(n) {
   }
   return result;
 }
-//@ chunk-wj577vf9.js:22268-22402 layout
+//@ chunk-ptrwzav4.js:22268-22402 layout
 var ROMAN_NUMERALS = [
   [1000, "m"],
   [900, "cm"],
@@ -807,7 +807,7 @@ var ROMAN_NUMERALS = [
   [4, "iv"],
   [1, "i"],
 ];
-//@ chunk-wj577vf9.js:22402-22474 layout
+//@ chunk-ptrwzav4.js:22402-22474 layout
 function toRomanNumeral(number) {
   let roman = "";
   for (let [value, symbol] of ROMAN_NUMERALS)
@@ -817,11 +817,11 @@ function toRomanNumeral(number) {
     }
   return roman;
 }
-//@ chunk-wj577vf9.js:22474-22540 layout
+//@ chunk-ptrwzav4.js:22474-22540 layout
 function glueListMarkers(text) {
   return text.replace(/ (\d{1,9}[.)])(?!\w)/g, "\xA0$1");
 }
-//@ chunk-wj577vf9.js:22540-22625 layout
+//@ chunk-ptrwzav4.js:22540-22625 layout
 /**
  * 取有序列表的首末编号。
  */
@@ -832,7 +832,7 @@ function orderedListRange(token) {
     last: start + token.items.length - 1,
   };
 }
-//@ chunk-wj577vf9.js:22625-22941 layout
+//@ chunk-ptrwzav4.js:22625-22941 layout
 /**
  * 把只含编号、没有内容的有序列表折成纯文本（避免渲染为空列表）。
  */
@@ -860,7 +860,7 @@ function flattenNumberOnlyLists(token) {
         tokens: mapped,
       };
 }
-//@ chunk-wj577vf9.js:22941-23178 layout
+//@ chunk-ptrwzav4.js:22941-23178 layout
 function isBlankToken(token, highlight) {
   switch (token.type) {
     case "space":
@@ -875,7 +875,7 @@ function isBlankToken(token, highlight) {
       return false;
   }
 }
-//@ chunk-wj577vf9.js:23178-23361 layout
+//@ chunk-ptrwzav4.js:23178-23361 layout
 /**
  * 跳过空白令牌，返回以首个实质块（代码或引用中的代码）开头的令牌。
  */
@@ -895,14 +895,14 @@ function leadingBlockToken(token, highlight) {
     }
   );
 }
-//@ chunk-wj577vf9.js:23361-23415 layout
+//@ chunk-ptrwzav4.js:23361-23415 layout
 /**
  * 根据列表序号与编号样式生成列表符号。
  */
 function listMarkerText(listDepth, listToken) {
   return listToken === null ? "-" : `${listMarkerText_2(listDepth + 1, listToken)}.`;
 }
-//@ chunk-wj577vf9.js:23415-23580 layout
+//@ chunk-ptrwzav4.js:23415-23580 layout
 function listMarkerText_2(listDepth, { number, first, last }) {
   switch (listDepth) {
     case 2:
@@ -913,7 +913,7 @@ function listMarkerText_2(listDepth, { number, first, last }) {
       return number.toString();
   }
 }
-//@ chunk-wj577vf9.js:23580-23757 fingerprint (2.1.88 match: padAligned, 1)
+//@ chunk-ptrwzav4.js:23580-23757 fingerprint (2.1.88 match: padAligned, 1)
 function padAligned(content, displayWidth, targetWidth, align) {
   let padding = Math.max(0, targetWidth - displayWidth);
   if (align === "center") {
@@ -923,7 +923,7 @@ function padAligned(content, displayWidth, targetWidth, align) {
   if (align === "right") return " ".repeat(padding) + content;
   return content + " ".repeat(padding);
 }
-//@ chunk-wj577vf9.js:23757-24133 placement
+//@ chunk-ptrwzav4.js:23757-24133 placement
 function summarizeMarkdownText(summaryLines, groups) {
   function collapseWhitespace(text) {
     return text.replace(/\s+/g, " ").trim();
@@ -952,6 +952,9 @@ function summarizeMarkdownText(summaryLines, groups) {
 }
 export {
   renderMarkdownToAnsi,
+  HTTP_URL_RE,
+  escapePipesInCode,
+  tableHasExtraCells,
   formatTokenWindowed,
   summarizeMarkdownText,
   padAligned,
@@ -964,7 +967,4 @@ export {
   pluginMarkdownLexer,
   configureMarked,
   defangTokens,
-  HTTP_URL_RE,
-  escapePipesInCode,
-  tableHasExtraCells,
 };

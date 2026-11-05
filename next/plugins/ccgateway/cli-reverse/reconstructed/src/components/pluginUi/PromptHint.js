@@ -3,12 +3,18 @@
  *
  * 2.1.316 新增。插件在输入框的提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (20)
  * attribution: placement 20
  */
 import { __export } from "../../../runtime/bun-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useLayoutEffect,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { MAX_KEPT_TEXT_CHARS } from "../../plugins/functionHooks/sites/siteRules.js";
 import { screenReaderText } from "../../ink/render-to-screen-reader.js";
@@ -19,12 +25,6 @@ import {
   PromptInputFooterLeftSide,
 } from "../PromptInput/PromptInputFooterLeftSide.js";
 import { permissionModeIndicator } from "../../utils/permissions/PermissionMode.js";
-import {
-  init_react_production,
-  useState,
-  useLayoutEffect,
-  useRef,
-} from "../../../vendor/react/cjs/react.production.js";
 import { findEngineRef, VALIDATE_TREE_NAMESPACE } from "../../plugins/functionHooks/ui/index.js";
 import { heldRenderInput } from "../../plugins/functionHooks/ui/renderDispatch.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -41,11 +41,11 @@ import { measureElement } from "../../ink/hooks/useTerminalHooks.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:36007-36017 placement
+//@ chunk-czq1j3j2.js:37568-37578 placement
 var PromptHintNamespace = {};
-//@ chunk-18hwfzwa.js:36017-36239 placement
+//@ chunk-czq1j3j2.js:37578-37800 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36017", () => {
+deferInit("chunk-czq1j3j2.js:37578", () => {
   __export(PromptHintNamespace, {
     FooterHintLine: () => FooterHintLine,
     IS_READ_AS_ROW_WIDE: () => IS_READ_AS_ROW_WIDE,
@@ -60,33 +60,33 @@ deferInit("chunk-18hwfzwa.js:36017", () => {
     tailOf: () => tailOf,
   });
 });
-//@ chunk-18hwfzwa.js:36239-36249 placement
+//@ chunk-czq1j3j2.js:37800-37810 placement
 var PromptHintNamespace2 = {};
-//@ chunk-18hwfzwa.js:36249-36319 placement
+//@ chunk-czq1j3j2.js:37810-37880 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36249", () => {
+deferInit("chunk-czq1j3j2.js:37810", () => {
   __export(PromptHintNamespace2, {
     PromptHintPart: () => PromptHintPart,
     TAIL_MIN_COLUMNS: () => TAIL_MIN_COLUMNS,
     default: () => PromptHintNamespace2,
   });
 });
-//@ chunk-18hwfzwa.js:36319-36329 placement
+//@ chunk-czq1j3j2.js:37880-37890 placement
 var PromptHintNamespace3 = {};
-//@ chunk-18hwfzwa.js:36329-36379 placement
+//@ chunk-czq1j3j2.js:37890-37940 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36329", () => {
+deferInit("chunk-czq1j3j2.js:37890", () => {
   __export(PromptHintNamespace3, {
     clean: () => clean,
     default: () => PromptHintNamespace3,
     read: () => read,
   });
 });
-//@ chunk-18hwfzwa.js:36379-36389 placement
+//@ chunk-czq1j3j2.js:37940-37950 placement
 var PromptHintNamespace4 = {};
-//@ chunk-18hwfzwa.js:36389-36516 placement
+//@ chunk-czq1j3j2.js:37950-38077 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36389", () => {
+deferInit("chunk-czq1j3j2.js:37950", () => {
   __export(PromptHintNamespace4, {
     IS_READ_AS_ROW_WIDE: () => IS_READ_AS_ROW_WIDE,
     PromptHintSite: () => PromptHintSite,
@@ -96,11 +96,16 @@ deferInit("chunk-18hwfzwa.js:36389", () => {
     tailOf: () => tailOf,
   });
 });
-//@ chunk-18hwfzwa.js:840631-840679 placement
+//@ chunk-czq1j3j2.js:848856-848860 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:848856", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:873489-873536 placement
 var clean = (text) => truncateToLength(text.replace(/\s+/g, " ").trim(), MAX_KEPT_TEXT_CHARS);
-//@ chunk-18hwfzwa.js:840679-840729 placement
+//@ chunk-czq1j3j2.js:873536-873586 placement
 var EMPTY_HINT_RE = /^(-- [A-Z ]+ -- )?(\u2193 )?$| \u00B7 $/;
-//@ chunk-18hwfzwa.js:840729-841134 placement
+//@ chunk-czq1j3j2.js:873586-873991 placement
 function read(component, mode, reading, isComposer) {
   let fullText = clean(screenReaderText(component));
   let modeText = isComposer ? permissionModeLabelLower(mode) : `${permissionModeIndicator(mode)} on`;
@@ -127,17 +132,12 @@ function read(component, mode, reading, isComposer) {
     hint,
   };
 }
-//@ chunk-18hwfzwa.js:841134-841144 placement
+//@ chunk-czq1j3j2.js:873991-874001 placement
 var IS_READ_AS_ROW_WIDE = false;
-//@ chunk-18hwfzwa.js:841144-841224 placement
+//@ chunk-czq1j3j2.js:874001-874081 placement
 var isTailStandingIn = ({ tail, isHeldOver, wasTailStoodIn, isRewritten }) =>
   tail !== "" && (isHeldOver ? wasTailStoodIn : !isRewritten);
-//@ chunk-18hwfzwa.js:841224-841228 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:841224", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:841228-841391 placement
+//@ chunk-czq1j3j2.js:874085-874248 placement
 function tailOf(component, reading) {
   let engineRef = findEngineRef(component);
   let renderInput = engineRef === undefined ? undefined : heldRenderInput(component, engineRef);
@@ -147,7 +147,7 @@ function tailOf(component, reading) {
     ? clean(renderInput.props.tail ?? "")
     : "";
 }
-//@ chunk-18hwfzwa.js:841391-841567 placement
+//@ chunk-czq1j3j2.js:874248-874424 placement
 function standsIn(component, reading, checkTail) {
   let engineRef = findEngineRef(component);
   let renderInput = engineRef === undefined ? undefined : heldRenderInput(component, engineRef);
@@ -155,7 +155,7 @@ function standsIn(component, reading, checkTail) {
   if (renderInput === undefined) return !isEngineNode;
   return renderInput.props.hint !== reading.hint || (checkTail && tailOf(component, reading) !== "");
 }
-//@ chunk-18hwfzwa.js:841567-843544 placement
+//@ chunk-czq1j3j2.js:874424-876401 placement
 function PromptHintSite(props) {
   let $ = useMemoCache(40);
   let { reading, onHidden, onTail } = props;
@@ -323,9 +323,9 @@ function PromptHintSite(props) {
   useLayoutEffect(cleanup, cleanupDeps);
   return drawing.node;
 }
-//@ chunk-18hwfzwa.js:843544-843553 placement
+//@ chunk-czq1j3j2.js:876401-876410 placement
 var TAIL_MIN_COLUMNS = 4;
-//@ chunk-18hwfzwa.js:843553-845610 placement
+//@ chunk-czq1j3j2.js:876410-878467 placement
 function PromptHintPart(props) {
   let $ = useMemoCache(35);
   let { isDraft, isWorking, isInteractive, mode, rowColumns, wrappedRowColumns, children } = props;
@@ -504,7 +504,7 @@ function PromptHintPart(props) {
   } else content = $[34];
   return content;
 }
-//@ chunk-18hwfzwa.js:845610-846384 placement
+//@ chunk-czq1j3j2.js:878467-879241 placement
 var FooterHintLine = (props) => {
   let $ = useMemoCache(14);
   let footerProps;

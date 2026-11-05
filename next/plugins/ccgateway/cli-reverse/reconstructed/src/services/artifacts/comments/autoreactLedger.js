@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论自动响应台账的读写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (32)
  * attribution: placement 32
  */
 import { MAX_LOG_LINE_CHARS } from "../../../types/logs.js";
@@ -51,11 +51,11 @@ import { logError } from "../../../utils/log.js";
 import { registerCleanup } from "../../../utils/cleanupRegistry.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:3469-4182 placement
+//@ chunk-c0pq6qyx.js:3583-4296 placement
 /**
  * 自动回复台账（autoreact ledger）的限额与 schema：最长 1 天、最短写入间隔 1 小时、防抖 10 s、未来偏差 5 分钟、每部分 160 KB、2000 线程、每线程 500 条、600 个回合时间戳。
  */
-var AUTOREACT_LEDGER_LIMITS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var AUTOREACT_LEDGER_LIMITS; // deferred: uses MAX_LOG_LINE_CHARS (../../../types/logs.js) of its import cycle while loading; runs once the cycle is complete
 var LEDGER_MIN_WRITE_INTERVAL_MS;
 var LEDGER_DEBOUNCE_MS;
 var LEDGER_MAX_FUTURE_SKEW_MS;
@@ -67,7 +67,7 @@ var MAX_THREAD_ENTRIES;
 var MAX_ENTRY_ID_CHARS;
 var MAX_TURN_TIMESTAMPS;
 var autoreactLedgerSchema;
-deferInit("chunk-9tgt55am.js:3469", () => {
+deferInit("chunk-c0pq6qyx.js:3583", () => {
   AUTOREACT_LEDGER_LIMITS = 86400000;
   LEDGER_MIN_WRITE_INTERVAL_MS = 3600000;
   LEDGER_DEBOUNCE_MS = 1e4;
@@ -117,15 +117,15 @@ deferInit("chunk-9tgt55am.js:3469", () => {
     };
   });
 });
-//@ chunk-9tgt55am.js:4182-4245 placement
+//@ chunk-c0pq6qyx.js:4296-4359 placement
 function ledgerMaxAgeMs() {
   return getLiveState().autoReact.ledgerMaxAgeMsOverride ?? AUTOREACT_LEDGER_LIMITS;
 }
-//@ chunk-9tgt55am.js:4245-4306 placement
+//@ chunk-c0pq6qyx.js:4359-4420 placement
 function gatewayAccountUuidLower() {
   return getGatewayAccountInfo()?.accountUuid?.toLowerCase() ?? null;
 }
-//@ chunk-9tgt55am.js:4306-4874 placement
+//@ chunk-c0pq6qyx.js:4420-4988 placement
 /**
  * 读取会话的评论自动响应台账（已见评论、激活时间、自己的回复），校验会话与账号。
  */
@@ -154,7 +154,7 @@ function parseAutoreactLedger(raw) {
   }
   return out;
 }
-//@ chunk-9tgt55am.js:4874-5295 placement
+//@ chunk-c0pq6qyx.js:4988-5409 placement
 function loadAutoreactLedger() {
   let { autoReact } = getLiveState();
   let sessionId = getSessionId();
@@ -185,7 +185,7 @@ function loadAutoreactLedger() {
     ? pendingLedger.slugs
     : null;
 }
-//@ chunk-9tgt55am.js:5295-5452 placement
+//@ chunk-c0pq6qyx.js:5409-5566 placement
 function getPendingLedgerFor(sessionId = getSessionId()) {
   if (sessionId === getSessionId()) loadAutoreactLedger();
   let { pendingLedger } = getLiveState().autoReact;
@@ -196,7 +196,7 @@ function getPendingLedgerFor(sessionId = getSessionId()) {
       }
     : null;
 }
-//@ chunk-9tgt55am.js:5452-5570 placement
+//@ chunk-c0pq6qyx.js:5566-5684 placement
 function listLedgerSlugs(options) {
   let pendingLedgerFor = getPendingLedgerFor(options);
   if (pendingLedgerFor === null) return [];
@@ -205,17 +205,17 @@ function listLedgerSlugs(options) {
     ? entries
     : entries.map(([slug, entry]) => [slug, resetLedgerEntryKeepingTimes(entry)]);
 }
-//@ chunk-9tgt55am.js:5570-5658 placement
+//@ chunk-c0pq6qyx.js:5684-5772 placement
 function ledgerSessionId(sessionId) {
   return typeof sessionId === "object" && sessionId !== null && "sessionId" in sessionId
     ? sessionId.sessionId
     : undefined;
 }
-//@ chunk-9tgt55am.js:5658-5678 placement
+//@ chunk-c0pq6qyx.js:5772-5792 placement
 function initAutoreactLedger() {
   loadAutoreactLedger();
 }
-//@ chunk-9tgt55am.js:5678-5984 placement
+//@ chunk-c0pq6qyx.js:5792-6098 placement
 function takeLedgerEntry(slug, now = Date.now()) {
   let pendingLedgerFor = getPendingLedgerFor();
   let entry = pendingLedgerFor?.slugs.get(slug);
@@ -234,7 +234,7 @@ function takeLedgerEntry(slug, now = Date.now()) {
       .map((turnTimestamp) => Math.min(turnTimestamp, now)),
   };
 }
-//@ chunk-9tgt55am.js:5984-6137 placement
+//@ chunk-c0pq6qyx.js:6098-6251 placement
 function resetLedgerEntry(slug) {
   return {
     savedAt: slug.savedAt,
@@ -245,7 +245,7 @@ function resetLedgerEntry(slug) {
     threads: [],
   };
 }
-//@ chunk-9tgt55am.js:6137-6209 placement
+//@ chunk-c0pq6qyx.js:6251-6323 placement
 function resetLedgerEntryKeepingTimes(slug) {
   return {
     ...resetLedgerEntry(slug),
@@ -254,7 +254,7 @@ function resetLedgerEntryKeepingTimes(slug) {
     }),
   };
 }
-//@ chunk-9tgt55am.js:6209-6324 placement
+//@ chunk-c0pq6qyx.js:6323-6438 placement
 /**
  * 把台账里某个 slug 的自动回复记录重置为空线程（保留保存时间与回合时间戳），并标记锁存已变化。
  */
@@ -267,7 +267,7 @@ function resetLedgerSlug(slug) {
     markLatchChanged(slug);
   }
 }
-//@ chunk-9tgt55am.js:6324-6434 placement
+//@ chunk-c0pq6qyx.js:6438-6548 placement
 /**
  * 把台账里所有 slug 的自动回复记录重置为空线程，并标记锁存已变化。
  */
@@ -279,7 +279,7 @@ function resetAllLedgerSlugs() {
     markLatchChanged(slug);
   }
 }
-//@ chunk-9tgt55am.js:6434-6762 placement
+//@ chunk-c0pq6qyx.js:6548-6876 placement
 function serializeThreadStates(state) {
   return [...state.threads.entries()]
     .map(([key, value]) => ({
@@ -295,7 +295,7 @@ function serializeThreadStates(state) {
     }))
     .filter((thread) => autoreactLedgerSchema().thread.safeParse(thread).success);
 }
-//@ chunk-9tgt55am.js:6762-7167 placement
+//@ chunk-c0pq6qyx.js:6876-7281 placement
 function buildLedgerArtifactEntry(slug, entry, thread, savedAt) {
   let { autoReact } = getLiveState();
   let swept = !autoReact.userDisarmed && isSlugSwept(slug);
@@ -317,7 +317,7 @@ function buildLedgerArtifactEntry(slug, entry, thread, savedAt) {
     }),
   };
 }
-//@ chunk-9tgt55am.js:7167-7299 placement
+//@ chunk-c0pq6qyx.js:7281-7413 placement
 function makeInterruptedLedgerEntry(savedAt) {
   return {
     savedAt,
@@ -329,7 +329,7 @@ function makeInterruptedLedgerEntry(savedAt) {
     interrupted: true,
   };
 }
-//@ chunk-9tgt55am.js:7299-7442 placement
+//@ chunk-c0pq6qyx.js:7413-7556 placement
 function markLedgerEntryInterrupted(systemRow) {
   return {
     savedAt: systemRow.savedAt,
@@ -340,7 +340,7 @@ function markLedgerEntryInterrupted(systemRow) {
     interrupted: true,
   };
 }
-//@ chunk-9tgt55am.js:7442-8840 placement
+//@ chunk-c0pq6qyx.js:7556-8954 placement
 function buildLedgerSnapshot(store, entry, options) {
   let { autoReact } = getLiveState();
   let ledgerSlugs = listLedgerSlugs(store);
@@ -440,7 +440,7 @@ function buildLedgerSnapshot(store, entry, options) {
     artifacts,
   };
 }
-//@ chunk-9tgt55am.js:8840-9014 placement
+//@ chunk-c0pq6qyx.js:8954-9128 placement
 function ledgerFingerprint(artifacts) {
   return jsonStringify(
     Object.entries(artifacts).map(([key, value]) => [
@@ -457,7 +457,7 @@ function ledgerFingerprint(artifacts) {
     ]),
   );
 }
-//@ chunk-9tgt55am.js:9014-9112 placement
+//@ chunk-c0pq6qyx.js:9128-9226 placement
 function scheduleLedgerWriteSafely(options = {}) {
   try {
     scheduleLedgerWrite(options);
@@ -466,7 +466,7 @@ function scheduleLedgerWriteSafely(options = {}) {
     logFeatureSad("artifact_comments_autoreact", "ledger_write_failed");
   }
 }
-//@ chunk-9tgt55am.js:9112-9288 placement
+//@ chunk-c0pq6qyx.js:9226-9402 placement
 function buildLedgerEntry(slug, entry) {
   let account = gatewayAccountUuidLower();
   let { artifacts } = buildLedgerSnapshot(slug, entry, account);
@@ -479,7 +479,7 @@ function buildLedgerEntry(slug, entry) {
     artifacts,
   };
 }
-//@ chunk-9tgt55am.js:9288-9606 placement
+//@ chunk-c0pq6qyx.js:9402-9720 placement
 function scheduleLedgerWrite({ force = false, urgent = false }) {
   let { autoReact } = getLiveState();
   if (autoReact.ledgerTimer !== undefined) {
@@ -498,7 +498,7 @@ function scheduleLedgerWrite({ force = false, urgent = false }) {
   writeAutoreactLedger(ledgerOwnerSid, now, force);
   if (ledgerOwnerSid !== sessionId) writeAutoreactLedger(sessionId, now, force);
 }
-//@ chunk-9tgt55am.js:9606-10380 placement
+//@ chunk-c0pq6qyx.js:9720-10494 placement
 function writeAutoreactLedger(sessionId, force, force_2) {
   let { autoReact } = getLiveState();
   if (autoReact.ledgerRetiredSids.has(sessionId)) return;
@@ -534,11 +534,11 @@ function writeAutoreactLedger(sessionId, force, force_2) {
   });
   autoReact.ledgerLastAppend = Promise.all([autoReact.ledgerLastAppend, written]).then(() => {});
 }
-//@ chunk-9tgt55am.js:10380-10443 placement
+//@ chunk-c0pq6qyx.js:10494-10557 placement
 function setLedgerStorage(storageV5) {
   if (storageV5 !== undefined) getLiveState().autoReact.ledgerStorageV5 = storageV5;
 }
-//@ chunk-9tgt55am.js:10443-10568 placement
+//@ chunk-c0pq6qyx.js:10557-10682 placement
 /**
  * 记下台账使用的存储，并在当前会话未被退役时把它设为台账所属会话。
  */
@@ -547,7 +547,7 @@ function claimLedgerOwnership(storageV5) {
   if (storageV5 !== undefined) autoReact.ledgerStorageV5 = storageV5;
   if (!autoReact.ledgerRetiredSids.has(getSessionId())) autoReact.ledgerOwnerSid = getSessionId();
 }
-//@ chunk-9tgt55am.js:10568-10831 placement
+//@ chunk-c0pq6qyx.js:10682-10945 placement
 function flushAutoreactLedger(options) {
   let { autoReact } = getLiveState();
   setLedgerStorage(options?.storageV5);
@@ -563,7 +563,7 @@ function flushAutoreactLedger(options) {
   }
   scheduleLedgerFlush();
 }
-//@ chunk-9tgt55am.js:10831-10992 placement
+//@ chunk-c0pq6qyx.js:10945-11106 placement
 function scheduleLedgerFlush() {
   let { autoReact } = getLiveState();
   let ledgerDebounceMsOverride = autoReact.ledgerDebounceMsOverride ?? LEDGER_DEBOUNCE_MS;
@@ -572,7 +572,7 @@ function scheduleLedgerFlush() {
     autoReact.ledgerTimer.unref?.();
   }
 }
-//@ chunk-9tgt55am.js:10992-11086 placement
+//@ chunk-c0pq6qyx.js:11106-11200 placement
 async function flushLedgerOnExit() {
   scheduleLedgerWriteSafely({
     force: true,
@@ -581,7 +581,7 @@ async function flushLedgerOnExit() {
   await getLiveState().autoReact.ledgerLastAppend;
   await flushSessionStorage();
 }
-//@ chunk-9tgt55am.js:11086-11284 placement
+//@ chunk-c0pq6qyx.js:11200-11398 placement
 function buildExitLedgerEntry() {
   let { autoReact } = getLiveState();
   let slug = getSessionId();
@@ -593,7 +593,7 @@ function buildExitLedgerEntry() {
     return;
   return buildLedgerEntry(slug, Date.now()) ?? undefined;
 }
-//@ chunk-9tgt55am.js:11284-11806 placement
+//@ chunk-c0pq6qyx.js:11398-11920 placement
 function retireAutoreactLedger(reason) {
   let { autoReact } = getLiveState();
   if (reason?.stillCurrent !== false) {
@@ -617,7 +617,7 @@ function retireAutoreactLedger(reason) {
   autoReact.ledgerDeferredSince = null;
   autoReact.ledgerOwnerSid = null;
 }
-//@ chunk-9tgt55am.js:11806-11844 placement
+//@ chunk-c0pq6qyx.js:11920-11958 placement
 function forgetArtifactAndFlush(slug) {
   resetLedgerSlug(slug);
   flushAutoreactLedger({

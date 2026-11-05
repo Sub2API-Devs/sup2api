@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台代理转录落盘等待
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (4)
  * attribution: placement 4
  */
 import { normalizeMessagesForAPI } from "../../utils/messages.js";
@@ -18,15 +18,15 @@ import {
   getAgentTranscript,
 } from "../../utils/sessionStorage.js";
 
-//@ chunk-0sfjpx19.js:134912-134944 placement
+//@ chunk-nh1pvp1m.js:129918-129950 placement
 /**
  * 把代理消息列表规范化为 API 形状。
  */
 var normalizeAgentMessagesForApi = (messages, extra) =>
   normalizeMessagesForAPI(messagesSinceCompactBoundary([...messages]), extra);
-//@ chunk-0sfjpx19.js:134944-134956 placement
+//@ chunk-nh1pvp1m.js:129950-129962 placement
 var AGENT_TRANSCRIPT_FLUSH_TIMEOUT_MS = 2000;
-//@ chunk-0sfjpx19.js:134956-135190 placement
+//@ chunk-nh1pvp1m.js:129962-130196 placement
 async function waitForAgentTranscriptFlush(agentId, storageV5) {
   if (!isSafeIdSegment(agentId)) return null;
   await withTimeout(
@@ -41,7 +41,7 @@ async function waitForAgentTranscriptFlush(agentId, storageV5) {
     : null;
   return transcript ? transcript.messages.filter((message) => isMessageFromAgent(message, agentId)) : null;
 }
-//@ chunk-0sfjpx19.js:135190-135242 placement
+//@ chunk-nh1pvp1m.js:130196-130248 placement
 /**
  * 判断消息是否来自给定代理。
  */

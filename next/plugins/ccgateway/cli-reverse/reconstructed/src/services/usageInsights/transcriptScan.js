@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。扫描转录统计用量行为。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ya28b76p.js (53)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xefjhmwx.js (53)
  * attribution: placement 53
  */
 import { sep, join, extname } from "path";
@@ -20,7 +20,6 @@ import { getCurrentTaints } from "../policyLimits/complianceTaints.js";
 import { WORKFLOW_TRANSCRIPT_SUBDIR } from "../../tools/WorkflowTool/constants.js";
 import {
   INTERRUPT_MESSAGE,
-  HOOK_STOPPED_MESSAGE,
   HOOK_FEEDBACK_EVENTS,
   HOOK_FEEDBACK_SEPARATOR,
   STRUCTURED_OUTPUT_ENFORCE_PREFIX,
@@ -48,6 +47,7 @@ import {
   BASH_STDERR,
 } from "../../constants/xml.js";
 import { jsonStringify, jsonParseRaw } from "../../utils/slowOperations.js";
+import { HOOK_STOPPED_MESSAGE } from "../compact/compact.js";
 import { BRIEF_ENFORCE_SENTINEL } from "../../tools/BriefTool/prompt.js";
 import { getProjectsDir, listedProjectKey } from "../../utils/sessionStoragePortable.js";
 import { isFsInaccessible } from "../../utils/errors.js";
@@ -65,7 +65,7 @@ import { logError } from "../../utils/log.js";
 import { clippedMessage } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ya28b76p.js:753-1314 placement
+//@ chunk-xefjhmwx.js:753-1314 placement
 /**
  * 三类「扫描本机会话转录」功能的策略键与 HIPAA 下的说明文案。
  */
@@ -87,7 +87,7 @@ var STATS_SCAN_POLICY = {
   hipaaReason:
     "Not shown under your organization's policy: these stats are built by scanning the session transcripts saved on this machine.",
 };
-//@ chunk-ya28b76p.js:1314-1579 placement
+//@ chunk-xefjhmwx.js:1314-1579 placement
 function checkUsagePolicy(request) {
   if (isPolicyAllowed(request.policy))
     return {
@@ -106,33 +106,33 @@ function checkUsagePolicy(request) {
       `${featureLabel} ${verb} unavailable right now.`,
   };
 }
-//@ chunk-ya28b76p.js:1579-1607 placement
+//@ chunk-xefjhmwx.js:1579-1607 placement
 /**
  * 是否允许扫描 /usage 用量。
  */
 function isUsageScanAllowed() {
   return checkUsagePolicy(USAGE_SCAN_POLICY);
 }
-//@ chunk-ya28b76p.js:1607-1635 placement
+//@ chunk-xefjhmwx.js:1607-1635 placement
 /**
  * 是否允许扫描技能体检数据。
  */
 function isSkillDoctorScanAllowed() {
   return checkUsagePolicy(SKILL_DOCTOR_SCAN_POLICY);
 }
-//@ chunk-ya28b76p.js:1635-1663 placement
+//@ chunk-xefjhmwx.js:1635-1663 placement
 /**
  * 是否允许扫描统计信息。
  */
 function isStatsScanAllowed() {
   return checkUsagePolicy(STATS_SCAN_POLICY);
 }
-//@ chunk-ya28b76p.js:1762-1774 placement
+//@ chunk-xefjhmwx.js:1762-1774 placement
 /**
  * 每百万 token 金额的换算比例。
  */
 var USD_PER_MTOK_SCALE = 2.5;
-//@ chunk-ya28b76p.js:1774-1926 placement
+//@ chunk-xefjhmwx.js:1774-1926 placement
 function createContextTracker() {
   return {
     lastRequest: undefined,
@@ -144,28 +144,28 @@ function createContextTracker() {
     largeToolResultTokens: 0,
   };
 }
-//@ chunk-ya28b76p.js:1926-1990 placement
+//@ chunk-xefjhmwx.js:1926-1990 placement
 /**
  * 会话尚未发出请求时，把当前内容计入首条提示的字节数。
  */
 function addFirstPromptBytes(scanState, bytes) {
   if (scanState.lastRequest === undefined) scanState.firstPromptBytes += bytes;
 }
-//@ chunk-ya28b76p.js:1990-2023 placement
+//@ chunk-xefjhmwx.js:1990-2023 placement
 /**
  * 判断工具结果是否属于大体积。
  */
 function isLargeToolResultBytes(bytes) {
   return bytes / 2.5 > 1e4;
 }
-//@ chunk-ya28b76p.js:2023-2077 placement
+//@ chunk-xefjhmwx.js:2023-2077 placement
 /**
  * 工具结果足够大时才把字节数计入待处理大结果。
  */
 function addLargeToolResultBytes(scanState, bytes) {
   if (isLargeToolResultBytes(bytes)) scanState.pendingToolResultBytes += bytes;
 }
-//@ chunk-ya28b76p.js:2077-2747 placement
+//@ chunk-xefjhmwx.js:2077-2747 placement
 /**
  * 按请求跟踪上下文增长：估算会话起始常驻 token、累计大工具结果带来的 token，并把常驻 token（主线程且超 40k）与大结果 token 写入记录。
  */
@@ -194,7 +194,7 @@ function trackContextGrowth(tracker, record) {
   record.largeToolResultTokens = tracker.largeToolResultTokens;
   record.alwaysOnTokens = !record.isSubagent && tracker.startTokens > 40000 ? tracker.startTokens : 0;
 }
-//@ chunk-ya28b76p.js:2747-5100 placement
+//@ chunk-xefjhmwx.js:2747-5100 placement
 /**
  * 转录扫描的常量：读取分块、统计窗口、各种「行为」阈值（缓存未命中、长上下文、子代理、高并行、cron）与扫描用的字节标记。
  */
@@ -277,7 +277,7 @@ var OPEN_BRACKET_BYTE;
 var CLOSE_BRACKET_BYTE;
 var DIGIT_ZERO_BYTE;
 var DIGIT_NINE_BYTE;
-deferInit("chunk-ya28b76p.js:2747", () => {
+deferInit("chunk-xefjhmwx.js:2747", () => {
   TRANSCRIPT_SCAN_MARKERS = 4;
   TRANSCRIPT_READ_CHUNK_BYTES = 4194304;
   TRANSCRIPT_READ_CHUNK_BYTES_2 = TRANSCRIPT_READ_CHUNK_BYTES;
@@ -396,7 +396,7 @@ deferInit("chunk-ya28b76p.js:2747", () => {
   DIGIT_ZERO_BYTE = 48;
   DIGIT_NINE_BYTE = 57;
 });
-//@ chunk-ya28b76p.js:5100-5172 placement
+//@ chunk-xefjhmwx.js:5100-5172 placement
 /**
  * 在字节缓冲里查找子串位置。
  */
@@ -404,7 +404,7 @@ function indexOfBytes(buffer, needle, start, end) {
   let index = buffer.subarray(start, end).indexOf(needle);
   return index < 0 ? -1 : start + index;
 }
-//@ chunk-ya28b76p.js:5172-5300 placement
+//@ chunk-xefjhmwx.js:5172-5300 placement
 /**
  * 在缓冲区内找到指定 JSON 字段后读出其字符串值（到下一个引号为止）。
  */
@@ -416,7 +416,7 @@ function readJsonStringField(buffer, key, start, end) {
   while (cursor < end && buffer[cursor] !== QUOTE_BYTE) cursor++;
   return buffer.toString("utf8", valueStart, cursor);
 }
-//@ chunk-ya28b76p.js:5300-5648 placement
+//@ chunk-xefjhmwx.js:5300-5648 placement
 /**
  * 从原始 JSON 行字节中读取某键的字符串值（有长度上限，截断时修正 UTF-8 与半个 \u 转义），按 JSON 字符串解码。
  */
@@ -442,7 +442,7 @@ function readJsonStringFieldBounded(buffer, key, start, end, maxBytes) {
     return;
   }
 }
-//@ chunk-ya28b76p.js:5648-5794 placement
+//@ chunk-xefjhmwx.js:5648-5794 placement
 function trimPartialUtf8(buffer, start, end) {
   let cursor = end;
   while (cursor > start && (buffer[cursor - 1] & 192) === 128) cursor--;
@@ -451,7 +451,7 @@ function trimPartialUtf8(buffer, start, end) {
   let seqLength = leadByte >= 240 ? 4 : leadByte >= 224 ? 3 : leadByte >= 192 ? 2 : 1;
   return end - (cursor - 1) < seqLength ? cursor - 1 : end;
 }
-//@ chunk-ya28b76p.js:5794-5970 placement
+//@ chunk-xefjhmwx.js:5794-5970 placement
 function findCommandField(buffer, start, end) {
   let cursor = start;
   while (true) {
@@ -466,7 +466,7 @@ function findCommandField(buffer, start, end) {
     cursor = idStart;
   }
 }
-//@ chunk-ya28b76p.js:5970-6103 placement
+//@ chunk-xefjhmwx.js:5970-6103 placement
 function readJsonIntField(buffer, key, start, end) {
   let keyIndex = indexOfBytes(buffer, key, start, end);
   if (keyIndex < 0) return 0;
@@ -478,7 +478,7 @@ function readJsonIntField(buffer, key, start, end) {
   }
   return value;
 }
-//@ chunk-ya28b76p.js:6103-6260 placement
+//@ chunk-xefjhmwx.js:6103-6260 placement
 function getModelCostWeight(model) {
   if (!model) return 3;
   let lower = model.toLowerCase();
@@ -487,7 +487,7 @@ function getModelCostWeight(model) {
   if (lower.includes("haiku")) return 1;
   return 3;
 }
-//@ chunk-ya28b76p.js:6260-6350 placement
+//@ chunk-xefjhmwx.js:6260-6350 placement
 /**
  * 按模型价格加权的 token 数。
  */
@@ -496,7 +496,7 @@ function costWeightedTokens(record) {
     (record.cached + record.uncached * 10 + record.cacheCreate * 12.5 + record.output * 50) * record.modelTier
   );
 }
-//@ chunk-ya28b76p.js:6350-6546 placement
+//@ chunk-xefjhmwx.js:6350-6546 placement
 /**
  * 汇总最近 7 天与 1 天的转录用量：按行为聚合记录并统计 loop 运行，返回日/周的分桶结果。
  */
@@ -523,7 +523,7 @@ async function aggregateRecentUsage_2(storage, foldOptions) {
     week: usageBuckets(usageAggregate_2),
   };
 }
-//@ chunk-ya28b76p.js:6546-6890 placement
+//@ chunk-xefjhmwx.js:6546-6890 placement
 /**
  * 扫描转录：存储 v5 可用时走存储；否则读取各项目目录的全部转录（含子代理），分批解析并回调记录与 loop 触发。
  */
@@ -556,7 +556,7 @@ async function scanTranscripts(minMtimeMs, foldSpec, storage, foldOptions, start
     });
   }
 }
-//@ chunk-ya28b76p.js:6890-7085 placement
+//@ chunk-xefjhmwx.js:6890-7085 placement
 function makeDedupingSink(foldSpec, foldOptions) {
   let seenIds = new Set();
   let isFirst = (uuid) => {
@@ -572,7 +572,7 @@ function makeDedupingSink(foldSpec, foldOptions) {
     }
   };
 }
-//@ chunk-ya28b76p.js:7085-7678 placement
+//@ chunk-xefjhmwx.js:7085-7678 placement
 /**
  * 通过存储 v5 分页列出各项目的转录（受页数预算限制），分批读取解析并回调，被截断时记日志。
  */
@@ -627,7 +627,7 @@ async function scanStoredTranscripts(storage, minMtimeMs, foldSpec, foldOptions,
       `foldRecentRecords: ${cappedPages} more v5 listings were cut short after the scan's ${DEFAULT_MAX_PAGES}-page budget ran out`,
     );
 }
-//@ chunk-ya28b76p.js:7678-8280 placement
+//@ chunk-xefjhmwx.js:7678-8280 placement
 /**
  * 列出项目下的会话转录键：分页读取主转录键与会话目录，按修改时间过滤会话，再并行列出各会话的子代理转录键。
  */
@@ -673,7 +673,7 @@ async function listProjectTranscriptKeys(storage, projectKey, minMtimeMs, budget
   );
   return keys.concat(results.flat());
 }
-//@ chunk-ya28b76p.js:8280-8863 placement
+//@ chunk-xefjhmwx.js:8280-8863 placement
 /**
  * 递归列出某会话（或子代理路径）下的子代理与日志转录键。
  */
@@ -725,7 +725,7 @@ async function listSessionTranscriptKeys(storage, projectKey, sessionId, budget,
   );
   return keys.concat(results.flat());
 }
-//@ chunk-ya28b76p.js:8863-9128 placement
+//@ chunk-xefjhmwx.js:8863-9128 placement
 function logListingOutcome(kind, pages, budget) {
   let issue = noteValidationIssue(pages, budget);
   if (pages.status === "error")
@@ -735,7 +735,7 @@ function logListingOutcome(kind, pages, budget) {
       `foldRecentRecords: v5 ${kind} listing cut short (the scan's ${DEFAULT_MAX_PAGES}-page budget is spent); keeping what was listed`,
     );
 }
-//@ chunk-ya28b76p.js:9128-9282 placement
+//@ chunk-xefjhmwx.js:9128-9282 placement
 function pushTranscriptKey(keys, entry) {
   if (
     entry.kind === "key" &&
@@ -749,7 +749,7 @@ function pushTranscriptKey(keys, entry) {
       mtimeMs: entry.mtimeMs,
     });
 }
-//@ chunk-ya28b76p.js:9282-9431 placement
+//@ chunk-xefjhmwx.js:9282-9431 placement
 async function readStoredTranscript(storage, entry, sinceTs, span) {
   let usageTotals = newUsageTotals();
   if (entry.mtimeMs >= sinceTs)
@@ -765,7 +765,7 @@ async function readStoredTranscript(storage, entry, sinceTs, span) {
     );
   return usageTotals;
 }
-//@ chunk-ya28b76p.js:9431-10077 placement
+//@ chunk-xefjhmwx.js:9431-10077 placement
 /**
  * 按块从存储读取转录并按换行切分逐行回调（跨块拼接不完整的行）。
  */
@@ -819,7 +819,7 @@ async function readStoredTranscriptLines(storage, entry, onLine) {
   if (pendingBytes > 0)
     onLine(pendingChunks.length === 1 ? pendingChunks[0] : Buffer.concat(pendingChunks, pendingBytes));
 }
-//@ chunk-ya28b76p.js:10077-10224 placement
+//@ chunk-xefjhmwx.js:10077-10224 placement
 function addSkillAttribution(skillTokens, record) {
   if (!record.attributionSkill) return;
   skillTokens.set(
@@ -831,7 +831,7 @@ function addSkillAttribution(skillTokens, record) {
       record.output,
   );
 }
-//@ chunk-ya28b76p.js:10224-10312 placement
+//@ chunk-xefjhmwx.js:10224-10312 placement
 /**
  * 汇总最近的用量记录。
  */
@@ -841,7 +841,7 @@ async function aggregateRecentUsage(storageV5) {
   await scanTranscripts(minMtimeMs, (record) => addSkillAttribution(skillTokens, record), storageV5);
   return skillTokens;
 }
-//@ chunk-ya28b76p.js:10312-10772 placement (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.769)
+//@ chunk-xefjhmwx.js:10312-10772 placement (2.1.88 match: loadAllSubagentTranscriptsFromDisk, 0.769)
 async function loadAllSubagentTranscriptsFromDisk(projectDir) {
   let entries;
   try {
@@ -877,7 +877,7 @@ async function loadAllSubagentTranscriptsFromDisk(projectDir) {
   for (let nestedPaths of results) for (let nestedPath of nestedPaths) paths.push(nestedPath);
   return paths;
 }
-//@ chunk-ya28b76p.js:10772-10856 placement
+//@ chunk-xefjhmwx.js:10772-10856 placement
 async function scanTranscriptIntoUsage(filePath, minMtimeMs, span) {
   let usageTotals = newUsageTotals();
   await readTranscriptFileLines(
@@ -887,7 +887,7 @@ async function scanTranscriptIntoUsage(filePath, minMtimeMs, span) {
   );
   return usageTotals;
 }
-//@ chunk-ya28b76p.js:10856-11042 placement
+//@ chunk-xefjhmwx.js:10856-11042 placement
 async function readTranscriptFileLines(filePath, minMtimeMs, onLine) {
   let stats;
   try {
@@ -904,14 +904,14 @@ async function readTranscriptFileLines(filePath, minMtimeMs, onLine) {
     throw error;
   }
 }
-//@ chunk-ya28b76p.js:11042-11084 placement
+//@ chunk-xefjhmwx.js:11042-11084 placement
 function newUsageTotals() {
   return {
     records: [],
     fires: [],
   };
 }
-//@ chunk-ya28b76p.js:11084-11166 placement
+//@ chunk-xefjhmwx.js:11084-11166 placement
 function transcriptReadPlan(sink, sinceTs, isWorkflow, span) {
   let lineSink = attributeLoopRuns(sink, sinceTs, isWorkflow);
   if (!span) return lineSink;
@@ -920,7 +920,7 @@ function transcriptReadPlan(sink, sinceTs, isWorkflow, span) {
     span.line(line, sink);
   };
 }
-//@ chunk-ya28b76p.js:11166-11304 placement
+//@ chunk-xefjhmwx.js:11166-11304 placement
 function safeLineSink(inner) {
   let isAlive = true;
   let guarded = (fn) => {
@@ -937,11 +937,11 @@ function safeLineSink(inner) {
     end: (sink) => guarded(() => inner.end(sink)),
   };
 }
-//@ chunk-ya28b76p.js:11304-11369 placement
+//@ chunk-xefjhmwx.js:11304-11369 placement
 var COMMAND_NAME_REGEX = /<command-name>([^<]{1,200})<\/command-name>/;
 var MAX_COMMAND_NAME_CHARS = 200;
 var MAX_COMMAND_NAME_BOUND = 6 * MAX_COMMAND_NAME_CHARS;
-//@ chunk-ya28b76p.js:11369-13867 placement
+//@ chunk-xefjhmwx.js:11369-13867 placement
 function attributeLoopRuns(sink, sinceTs, isWorkflow) {
   let phaseSeq = 0;
   let loopQueue = [];
@@ -1179,7 +1179,7 @@ function attributeLoopRuns(sink, sinceTs, isWorkflow) {
     }
   };
 }
-//@ chunk-ya28b76p.js:13867-14003 placement
+//@ chunk-xefjhmwx.js:13867-14003 placement
 function hasNumericTurnField(text, length) {
   let markerIndex = indexOfBytes(text, CONTENT_ARRAY_MARKER, 0, length);
   if (markerIndex < 0) return false;
@@ -1188,16 +1188,16 @@ function hasNumericTurnField(text, length) {
   while (cursor < length && text[cursor] >= DIGIT_ZERO_BYTE && text[cursor] <= DIGIT_NINE_BYTE) cursor++;
   return cursor > digitsStart && indexOfBytes(text, LOOP_WAKEUP_SUFFIX_MARKER, cursor, length) === cursor;
 }
-//@ chunk-ya28b76p.js:14003-14021 placement
+//@ chunk-xefjhmwx.js:14003-14021 placement
 var MAX_CRON_FIELD_CHARS = 64;
 var MAX_CRON_FIELD_BOUND = 6 * MAX_CRON_FIELD_CHARS;
-//@ chunk-ya28b76p.js:14021-14070 placement
+//@ chunk-xefjhmwx.js:14021-14070 placement
 function normalizeCronExpression(jsonStringFieldBounded) {
   return jsonStringFieldBounded === undefined
     ? undefined
     : clippedMessage(jsonStringFieldBounded, MAX_CRON_FIELD_CHARS);
 }
-//@ chunk-ya28b76p.js:14070-14230 placement
+//@ chunk-xefjhmwx.js:14070-14230 placement
 function parseLoopRecord(text, length) {
   let rawPrompt =
     readJsonStringFieldBounded(text, CONTENT_FIELD_MARKER, 0, length, MAX_COMMAND_NAME_BOUND) ??
@@ -1213,7 +1213,7 @@ function parseLoopRecord(text, length) {
       }
     : null;
 }
-//@ chunk-ya28b76p.js:14230-14934 placement
+//@ chunk-xefjhmwx.js:14230-14934 placement
 /**
  * 从转录行字节中解析用量记录：时间戳、会话、各类 token、是否子代理/最大 effort/工作流、模型档位、uuid 及归属（代理、技能、插件、MCP 服务器）。
  */
@@ -1262,7 +1262,7 @@ function parseUsageRecord(text, start, length, isWorkflow) {
     }),
   };
 }
-//@ chunk-ya28b76p.js:14934-15251 placement
+//@ chunk-xefjhmwx.js:14934-15251 placement
 /**
  * 判断文本末尾的闭合括号是否正好闭合某个字段的值（跳过字符串与转义，配对括号）。
  */
@@ -1289,7 +1289,7 @@ function isTrailingFieldOf(buffer, marker) {
   }
   return false;
 }
-//@ chunk-ya28b76p.js:15251-15618 placement
+//@ chunk-xefjhmwx.js:15251-15618 placement
 /**
  * 创建用量聚合对象：总成本与请求数、各类附加成本计数，以及按会话、时间桶、代理、技能、插件、MCP 服务器与循环的映射。
  */
@@ -1318,7 +1318,7 @@ function createUsageAggregate() {
     loops: new Map(),
   };
 }
-//@ chunk-ya28b76p.js:15618-15784 placement
+//@ chunk-xefjhmwx.js:15618-15784 placement
 function getLoopEntry(aggregate, loop) {
   let entry = aggregate.loops.get(loop.prompt);
   if (!entry) {
@@ -1334,7 +1334,7 @@ function getLoopEntry(aggregate, loop) {
   }
   return entry;
 }
-//@ chunk-ya28b76p.js:15784-15923 placement
+//@ chunk-xefjhmwx.js:15784-15923 placement
 function recordLoopRun(aggregate, fire) {
   let loopEntry = getLoopEntry(aggregate, fire.loop);
   loopEntry.runs++;
@@ -1344,14 +1344,14 @@ function recordLoopRun(aggregate, fire) {
     loopEntry.isDynamic = fire.loop.isDynamic;
   }
 }
-//@ chunk-ya28b76p.js:15923-15971 placement
+//@ chunk-xefjhmwx.js:15923-15971 placement
 /**
  * 把一次请求的费用按名字累加到占比统计里。
  */
 function addToShare(target, name, tokens) {
   if (name) target.set(name, (target.get(name) ?? 0) + tokens);
 }
-//@ chunk-ya28b76p.js:15971-17303 placement
+//@ chunk-xefjhmwx.js:15971-17303 placement
 function aggregateUsageByBehavior(aggregate, record, sinceTs = -1 / 0) {
   let cost = costWeightedTokens(record);
   aggregate.totalCost += cost;
@@ -1430,7 +1430,7 @@ function aggregateUsageByBehavior(aggregate, record, sinceTs = -1 / 0) {
   bucket.cost += cost;
   bucket.count++;
 }
-//@ chunk-ya28b76p.js:17303-18479 placement
+//@ chunk-xefjhmwx.js:17303-18479 placement
 function usageBuckets(usageAggregate) {
   let cost = 0;
   let count = 0;
@@ -1525,7 +1525,7 @@ function usageBuckets(usageAggregate) {
     peakParallel,
   };
 }
-//@ chunk-ya28b76p.js:18479-18641 placement
+//@ chunk-xefjhmwx.js:18479-18641 placement
 function rankShares(shares, totalCost) {
   if (shares.size === 0 || totalCost === 0) return [];
   return [...shares.entries()]
@@ -1537,6 +1537,10 @@ function rankShares(shares, totalCost) {
     .filter((share) => share.pct > 0);
 }
 export {
+  isUsageScanAllowed,
+  isSkillDoctorScanAllowed,
+  aggregateRecentUsage,
+  isStatsScanAllowed,
   readJsonStringField,
   indexOfBytes,
   ASSISTANT_RECORD_MARKER,
@@ -1547,10 +1551,6 @@ export {
   TOOL_USE_RESULT_FIELD_MARKER,
   USD_PER_MTOK_SCALE,
   costWeightedTokens,
-  aggregateRecentUsage_2,
   ID_FIELD_MARKER,
-  isStatsScanAllowed,
-  isUsageScanAllowed,
-  isSkillDoctorScanAllowed,
-  aggregateRecentUsage,
+  aggregateRecentUsage_2,
 };

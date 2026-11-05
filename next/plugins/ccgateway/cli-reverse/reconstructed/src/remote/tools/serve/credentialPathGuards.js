@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：凭证文件路径与凭证命令识别守卫
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (42)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (42)
  * attribution: placement 42
  */
 import { homedir } from "os";
 import { join } from "path";
 import { getFeatureValueWithSource_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { logError } from "../../../utils/log.js";
-import { count, uniq } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { memoizeAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getSessionPathsCache } from "../../../utils/sessionPathsCache.js";
 import { useSecurityParser } from "../../../tools/BashTool/readOnlyShellCheck.js";
@@ -27,13 +27,17 @@ import {
   claudeStateGlobEntries,
   claudeStateGlobEntriesExact,
 } from "../../../utils/permissions/claudeStatePaths.js";
-import { FILE_READ_TOOL_NAME } from "../../../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../../tools/FileWriteTool/prompt.js";
-import { getDenyRuleForTool, getAskRuleForTool } from "../../../utils/permissions/permissions.js";
+import { getDenyRuleForTool, findAskRuleForTool } from "../../../utils/permissions/permissions.js";
 import { walkPermissionCheckPaths, getFsImplementation } from "../../../utils/fsOperations.js";
 import { isUntrustedLinkPath } from "../../../utils/pathResolution.js";
-import { pathInAllowedWorkingPath, matchingRuleForInput } from "../../../utils/permissions/filesystem.js";
+import {
+  pathInAllowedWorkingPath,
+  matchingRuleForInput,
+  normalizeCaseForComparison_2,
+} from "../../../utils/permissions/filesystem.js";
 import { isENOENT } from "../../../utils/errors.js";
 import { isPathAllowed } from "../../../utils/permissions/pathValidation.js";
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -49,7 +53,7 @@ import {
 import { SHELL_SPAWNER_PATTERN } from "../../../utils/powershell/dangerousCmdlets.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-tr0s0d0k.js:13957-14130 placement
+//@ chunk-6d2p9h2d.js:14204-14377 placement
 function isServedEyeEnabled() {
   try {
     let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_eye", false);
@@ -63,15 +67,15 @@ function isServedEyeEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:14130-14347 placement
+//@ chunk-6d2p9h2d.js:14377-14594 placement
 var MAX_PATH_DEPTH_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var stripTrailingGlobstar;
 var countPathSegments;
 var claudeStateGlobDepth;
-deferInit("chunk-tr0s0d0k.js:14130", () => {
+deferInit("chunk-6d2p9h2d.js:14377", () => {
   MAX_PATH_DEPTH_PREFIX = 32;
   stripTrailingGlobstar = (pattern) => pattern.replace(/\/\*\*$/, "");
-  countPathSegments = (path) => count(path.split("/"), Boolean);
+  countPathSegments = (path) => countWhere(path.split("/"), Boolean);
   claudeStateGlobDepth = memoizeAlias(
     (globs) => {
       let mapped = globs.map(stripTrailingGlobstar);
@@ -82,7 +86,7 @@ deferInit("chunk-tr0s0d0k.js:14130", () => {
     (globs) => globs.join("\x00"),
   );
 });
-//@ chunk-tr0s0d0k.js:14347-14468 placement
+//@ chunk-6d2p9h2d.js:14594-14715 placement
 function physicalTwinPatternDepth() {
   return (
     Math.max(
@@ -93,16 +97,16 @@ function physicalTwinPatternDepth() {
     ) + 1
   );
 }
-//@ chunk-tr0s0d0k.js:14468-14526 placement
+//@ chunk-6d2p9h2d.js:14715-14773 placement
 var pathDepthPrefixRegex; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tr0s0d0k.js:14468", () => {
+deferInit("chunk-6d2p9h2d.js:14715", () => {
   pathDepthPrefixRegex = memoizeAlias((depth) => new RegExp(`^/*[^/]+(?:/+[^/]+){${depth - 1}}`));
 });
-//@ chunk-tr0s0d0k.js:14526-14572 placement
+//@ chunk-6d2p9h2d.js:14773-14819 placement
 function truncateToPathDepth(path, depth) {
   return pathDepthPrefixRegex(depth).exec(path)?.[0] ?? path;
 }
-//@ chunk-tr0s0d0k.js:14572-14719 placement
+//@ chunk-6d2p9h2d.js:14819-14966 placement
 function truncateToGuardDepth(path) {
   if (!useSecurityParser() || getPlatform() === "windows") return path;
   let expanded = expandPath(path);
@@ -112,23 +116,23 @@ function truncateToGuardDepth(path) {
     ? path
     : truncateToPathDepth(expanded, Math.max(stateDepth, physicalTwinPatternDepth()));
 }
-//@ chunk-tr0s0d0k.js:14719-14798 placement
+//@ chunk-6d2p9h2d.js:14966-15045 placement
 function isCredentialBasename(path) {
   let guardTruncated = truncateToGuardDepth(path);
   if (isClaudeStatePath(guardTruncated)) return true;
   let stateTruncated = truncateToGuardDepth(path);
   return stateTruncated !== guardTruncated && isClaudeStatePath(stateTruncated);
 }
-//@ chunk-tr0s0d0k.js:14798-15574 placement
+//@ chunk-6d2p9h2d.js:15045-15821 placement
 function classifyCredentialPath(name, toolPermissionContext, cwd) {
   try {
     if (
-      [FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].some(
+      [READ, EDIT, FILE_WRITE_TOOL_NAME].some(
         (name) =>
           getDenyRuleForTool(toolPermissionContext, {
             name,
           }) !== null ||
-          getAskRuleForTool(toolPermissionContext, {
+          findAskRuleForTool(toolPermissionContext, {
             name,
           }) !== null,
       )
@@ -168,12 +172,12 @@ function classifyCredentialPath(name, toolPermissionContext, cwd) {
     return "unreadable";
   }
 }
-//@ chunk-tr0s0d0k.js:15574-15593 placement
+//@ chunk-6d2p9h2d.js:15821-15840 placement
 var isPathValidModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tr0s0d0k.js:15574", () => {
+deferInit("chunk-6d2p9h2d.js:15821", () => {
   isPathValidModule = __toESM(require_ignore(), 1);
 });
-//@ chunk-tr0s0d0k.js:15652-15777 placement
+//@ chunk-6d2p9h2d.js:15899-16024 placement
 function wslProfileMountRules() {
   if (getPlatform() !== "wsl") return [];
   return [
@@ -185,7 +189,7 @@ function wslProfileMountRules() {
     ...driveMountsUnder("/").flatMap(userProfileMountRules),
   ];
 }
-//@ chunk-tr0s0d0k.js:15777-16183 placement
+//@ chunk-6d2p9h2d.js:16024-16430 placement
 function userProfileMountRules({ mountPoint, within }) {
   let [, rest] = /^users\/[^/]+((?:\/[^/]+)*)$/i.exec(within) ?? [];
   if (rest !== undefined)
@@ -221,14 +225,14 @@ function userProfileMountRules({ mountPoint, within }) {
         },
       ];
 }
-//@ chunk-tr0s0d0k.js:16183-16303 placement
+//@ chunk-6d2p9h2d.js:16430-16550 placement
 function isUnderUserProfiles(path) {
   return wslProfileMountRules().some(
     ({ literal, profilesGlob, startsAt }) =>
       (startsAt.length > 0 && path === literal) || path.startsWith(`${literal}${profilesGlob}/`),
   );
 }
-//@ chunk-tr0s0d0k.js:16303-16456 placement
+//@ chunk-6d2p9h2d.js:16550-16703 placement
 function credentialPathRules() {
   return [
     ...CREDENTIAL_LITERAL_MATCHERS(),
@@ -240,7 +244,7 @@ function credentialPathRules() {
     ),
   ];
 }
-//@ chunk-tr0s0d0k.js:16456-16728 placement
+//@ chunk-6d2p9h2d.js:16703-16975 placement
 function expandCredentialGlobs(glob, startsAt) {
   let parts = glob.split("/");
   let joined = startsAt.join("/");
@@ -255,7 +259,7 @@ function expandCredentialGlobs(glob, startsAt) {
     return [];
   return startsAt.length >= parts.length ? ["", "/**"] : [`/${parts.slice(startsAt.length).join("/")}`];
 }
-//@ chunk-tr0s0d0k.js:16728-17651 placement
+//@ chunk-6d2p9h2d.js:16975-17898 placement
 /**
  * 凭据路径清单：Unix 凭据目录（.ssh/.aws/.config/gcloud 等）、凭据文件（.netrc/.npmrc/.pgpass 等）、Windows 凭据目录与文件、.claude 配置，以及编辑器备份/临时变体展开。
  */
@@ -267,7 +271,7 @@ var CLAUDE_DIR_NAMES;
 var CLAUDE_CONFIG_FILE_GLOBS;
 var flattened;
 var WINDOWS_VAULT_DIRS;
-deferInit("chunk-tr0s0d0k.js:16728", () => {
+deferInit("chunk-6d2p9h2d.js:16975", () => {
   CREDENTIAL_PATHS = [
     ".ssh",
     ".aws",
@@ -322,7 +326,7 @@ deferInit("chunk-tr0s0d0k.js:16728", () => {
     "AppData/Roaming/Microsoft/Protect",
   ];
 });
-//@ chunk-tr0s0d0k.js:17651-17983 placement
+//@ chunk-6d2p9h2d.js:17898-18230 placement
 function shortNameVariants(name) {
   let replaced = name
     .replace(/^\.+/, "")
@@ -341,7 +345,7 @@ function shortNameVariants(name) {
     `${prefix}~?${ext && "."}${ext.slice(0, 3)}`.toUpperCase(),
   );
 }
-//@ chunk-tr0s0d0k.js:17983-18425 placement
+//@ chunk-6d2p9h2d.js:18230-18672 placement
 /**
  * 凭据路径的 glob 组合：目录与其 `/**`、文件与 `.*` 变体、短名别名变体，以及用于字面量匹配的 matcher 构造。
  */
@@ -349,7 +353,7 @@ var CREDENTIAL_PATH_GLOBS; // deferred: uses CREDENTIAL_PATHS of its import cycl
 var CREDENTIAL_FILE_GLOBS;
 var CREDENTIAL_GLOB_PATTERNS;
 var CREDENTIAL_LITERAL_MATCHERS;
-deferInit("chunk-tr0s0d0k.js:17983", () => {
+deferInit("chunk-6d2p9h2d.js:18230", () => {
   CREDENTIAL_PATH_GLOBS = [
     ...CREDENTIAL_PATHS,
     ...WINDOWS_CREDENTIAL_DIRS,
@@ -403,71 +407,71 @@ deferInit("chunk-tr0s0d0k.js:17983", () => {
     () => homedir(),
   );
 });
-//@ chunk-tr0s0d0k.js:18425-18474 placement
+//@ chunk-6d2p9h2d.js:18672-18721 placement
 function expandCredentialHomedirPaths(relPaths) {
   return withPathAliases(relPaths.map((relPath) => join(homedir(), relPath)));
 }
-//@ chunk-tr0s0d0k.js:18474-18499 placement
+//@ chunk-6d2p9h2d.js:18721-18746 placement
 var HOST_CREDENTIAL_RULE_SOURCE = "hostCredential";
-//@ chunk-tr0s0d0k.js:18499-18576 placement
+//@ chunk-6d2p9h2d.js:18746-18823 placement
 function hostCredentialDenyRules() {
   let stateGlobs = useSecurityParser()
     ? [...claudeStateGlobEntries(), ...credentialPathRules()]
     : claudeStateGlobEntries();
   return [...credentialReadDenyRules(stateGlobs), ...credentialMountDenyRules(stateGlobs)];
 }
-//@ chunk-tr0s0d0k.js:18576-18737 placement
+//@ chunk-6d2p9h2d.js:18823-18984 placement
 function credentialMountDenyRules(stateGlobs) {
   return secondRootMounts().flatMap(({ mountPoint, readOnly }) =>
     claudeStateGlobs(prefixRuleLiterals(mountPoint, stateGlobs)).flatMap((ruleContent) => [
       {
-        toolName: FILE_READ_TOOL_NAME,
+        toolName: READ,
         ruleContent,
       },
       ...(readOnly
         ? []
         : [
             {
-              toolName: FILE_EDIT_TOOL_NAME,
+              toolName: EDIT,
               ruleContent,
             },
           ]),
     ]),
   );
 }
-//@ chunk-tr0s0d0k.js:18737-18809 placement
+//@ chunk-6d2p9h2d.js:18984-19056 placement
 function prefixRuleLiterals(mountPoint, entries) {
   return entries.map((entry) => ({
     ...entry,
     literal: `${mountPoint}${entry.literal}`,
   }));
 }
-//@ chunk-tr0s0d0k.js:18809-18857 placement
+//@ chunk-6d2p9h2d.js:19056-19104 placement
 function defaultCredentialDenyRules() {
   return [
     ...credentialReadDenyRules(claudeStateGlobEntriesExact()),
     ...credentialMountDenyRules(claudeStateGlobEntriesExact()),
   ];
 }
-//@ chunk-tr0s0d0k.js:18857-19181 placement
+//@ chunk-6d2p9h2d.js:19104-19428 placement
 function credentialReadDenyRules(stateGlobs) {
   let platform = getPlatform();
   let isUnix = platform === "linux" || platform === "wsl";
   return [
     ...claudeStateGlobs(stateGlobs).flatMap((ruleContent) => [
       {
-        toolName: FILE_READ_TOOL_NAME,
+        toolName: READ,
         ruleContent,
       },
       {
-        toolName: FILE_EDIT_TOOL_NAME,
+        toolName: EDIT,
         ruleContent,
       },
     ]),
     ...(isUnix
       ? [
           {
-            toolName: FILE_READ_TOOL_NAME,
+            toolName: READ,
             ruleContent: "//proc/**/environ",
           },
         ]
@@ -484,7 +488,7 @@ function credentialReadDenyRules(stateGlobs) {
           .map(bashPrefixRule)),
   ];
 }
-//@ chunk-tr0s0d0k.js:19181-19353 placement
+//@ chunk-6d2p9h2d.js:19428-19600 placement
 function keychainCommands() {
   switch (getPlatform()) {
     case "macos":
@@ -498,7 +502,7 @@ function keychainCommands() {
       return [];
   }
 }
-//@ chunk-tr0s0d0k.js:19353-20092 placement
+//@ chunk-6d2p9h2d.js:19600-20339 placement
 /**
  * Windows 凭据工具名清单：cmdkey/vaultcmd、PowerShell 凭据管理函数及常见凭据模块名。
  */
@@ -506,7 +510,7 @@ var CREDENTIAL_CMDLETS; // deferred: has load-time effects after a deferred stat
 var CREDENTIAL_MODULE_NAMES;
 var CREDENTIAL_CMDLET_NAMES_EXPANDED;
 var mapped;
-deferInit("chunk-tr0s0d0k.js:19353", () => {
+deferInit("chunk-6d2p9h2d.js:19600", () => {
   CREDENTIAL_CMDLETS = ["cmdkey", "vaultcmd"];
   CREDENTIAL_MODULE_NAMES = ["PSCredentialManager", "BetterCredentials"];
   CREDENTIAL_CMDLET_NAMES_EXPANDED = [
@@ -546,7 +550,7 @@ deferInit("chunk-tr0s0d0k.js:19353", () => {
   ];
   mapped = CREDENTIAL_CMDLETS.map((cmdlet) => `*${cmdlet}*`);
 });
-//@ chunk-tr0s0d0k.js:20092-20474 placement
+//@ chunk-6d2p9h2d.js:20339-20721 placement
 function cmdletPattern(name) {
   if (CREDENTIAL_CMDLETS.includes(name)) return `${name}(?:\\.exe)?`;
   if (/^Cred/.test(name)) return `${name}[AW]?`;
@@ -557,7 +561,7 @@ function cmdletPattern(name) {
     ? `${name.slice(0, index)}-(?:[^\\s'"\`;&|(){}\\[\\],-]*|[^\\s'"\`;&|(){}\\[\\],]{0,64})${name.slice(index + 1)}`
     : name;
 }
-//@ chunk-tr0s0d0k.js:20474-21808 placement
+//@ chunk-6d2p9h2d.js:20721-22055 placement
 /**
  * Windows 命令行里的凭据访问/混淆检测正则：凭据 cmdlet、模块加载、凭据管理器类型、PasswordVault、runas、/savecred、动态执行与 powershell 调用等。
  */
@@ -571,7 +575,7 @@ var RUNAS_COMMAND_RE;
 var SAVE_CREDENTIAL_FLAG_RE;
 var DYNAMIC_CODE_RE;
 var POWERSHELL_INVOCATION_RE;
-deferInit("chunk-tr0s0d0k.js:20474", () => {
+deferInit("chunk-6d2p9h2d.js:20721", () => {
   CREDENTIAL_COMMAND_RE = new RegExp(
     `(?:^|[^A-Za-z0-9_])(?:${CREDENTIAL_CMDLET_NAMES_EXPANDED.map((name) => `(${cmdletPattern(name)})`).join("|")})\\.*(?![A-Za-z0-9_.-])`,
     "i",
@@ -589,18 +593,18 @@ deferInit("chunk-tr0s0d0k.js:20474", () => {
     /(?:^|[^A-Za-z0-9_-])(?:iex|invoke-expression)(?![A-Za-z0-9_-])|scriptblock\s*\]|invokescript|newscriptblock|addscript|expandstring/i;
   POWERSHELL_INVOCATION_RE = /(?:^|[^\w.-])(?:powershell|pwsh(?:-preview)?|cmd)(?:\.exe)?(?![\w-])/i;
 });
-//@ chunk-tr0s0d0k.js:21808-21862 placement
+//@ chunk-6d2p9h2d.js:22055-22109 placement
 function looksLikeObfuscatedPowerShell(command) {
   return POWERSHELL_INVOCATION_RE.test(command) && /[($@{%!|]/.test(command);
 }
-//@ chunk-tr0s0d0k.js:21862-21961 placement
+//@ chunk-6d2p9h2d.js:22109-22208 placement
 var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DASH_VARIANTS_RE;
-deferInit("chunk-tr0s0d0k.js:21862", () => {
+deferInit("chunk-6d2p9h2d.js:22109", () => {
   regExp = new RegExp(POWERSHELL_WHITESPACE.source.replace(/\\[tnr]| /g, "").replace(/\+$/, ""), "g");
   DASH_VARIANTS_RE = /[\u2013-\u2015]/g;
 });
-//@ chunk-tr0s0d0k.js:21961-22081 placement
+//@ chunk-6d2p9h2d.js:22208-22328 placement
 function normalizeCommandQuotes(command) {
   return command
     .replace(regExp, " ")
@@ -608,7 +612,7 @@ function normalizeCommandQuotes(command) {
     .replace(/[\u2018-\u201b]/g, "'")
     .replace(/[\u201c-\u201e]/g, '"');
 }
-//@ chunk-tr0s0d0k.js:22081-22510 placement
+//@ chunk-6d2p9h2d.js:22328-22757 placement
 /**
  * 检测命令中是否调用了凭证存储工具（cmdkey、vaultcmd、CredRead*、security、secret-tool 等）。
  */
@@ -629,7 +633,7 @@ function credentialCommandIn(command) {
   if (RUNAS_COMMAND_RE.test(normalized) && SAVE_CREDENTIAL_FLAG_RE.test(normalized)) return "runas";
   return;
 }
-//@ chunk-tr0s0d0k.js:22510-22771 placement
+//@ chunk-6d2p9h2d.js:22757-23018 placement
 function readsCredentialStore(command, mode = "either") {
   let unquoted = unquoteShellWord(command);
   let whitespaceNormalized = normalizeQuotedWhitespace(command);
@@ -642,7 +646,7 @@ function readsCredentialStore(command, mode = "either") {
         SHELL_SPAWNER_PATTERN.test(normalizeTurkishLetters(folded.normalize("NFKC")))
       );
     });
-  return uniq(
+  return normalizeCaseForComparison_2(
     [
       command,
       unquoted,
@@ -654,29 +658,29 @@ function readsCredentialStore(command, mode = "either") {
     }),
   );
 }
-//@ chunk-tr0s0d0k.js:22978-23045 placement
+//@ chunk-6d2p9h2d.js:23225-23292 placement
 function joinLineContinuations(command) {
   return command.replace(/\\\r?\n/g, "").replaceAll("\\", "");
 }
-//@ chunk-tr0s0d0k.js:23045-23115 placement
+//@ chunk-6d2p9h2d.js:23292-23362 placement
 function normalizeTurkishLetters(text) {
   return text.replace(/\u0131/g, "i").replace(/\u017f/g, "s");
 }
-//@ chunk-tr0s0d0k.js:23115-23146 placement
+//@ chunk-6d2p9h2d.js:23362-23393 placement
 function unquoteShellWord(word) {
   return normalizePowerShellArg(word, "");
 }
-//@ chunk-tr0s0d0k.js:23146-23178 placement
+//@ chunk-6d2p9h2d.js:23393-23425 placement
 function normalizeQuotedWhitespace(word) {
   return normalizePowerShellArg(word, " ");
 }
-//@ chunk-tr0s0d0k.js:23178-23275 placement
+//@ chunk-6d2p9h2d.js:23425-23522 placement
 function normalizePowerShellArg(arg, replacement) {
   return decodeAnsiCQuotes(unescapePsDoubleQuoted(arg.replace(/\^\r?\n/g, "")))
     .replace(/\$(?=["'])/g, "")
     .replace(QUOTE_AND_CARET_RE, replacement);
 }
-//@ chunk-tr0s0d0k.js:23275-23313 placement
+//@ chunk-6d2p9h2d.js:23522-23560 placement
 var ANSI_ESCAPE_CHARS = {
   n: `
 `,
@@ -684,7 +688,7 @@ var ANSI_ESCAPE_CHARS = {
   r: "\r",
   e: "\x1B",
 };
-//@ chunk-tr0s0d0k.js:23313-23698 placement
+//@ chunk-6d2p9h2d.js:23560-23945 placement
 function decodeAnsiCQuotes(text) {
   return text.replace(
     /\$'((?:[^'\\]|\\.)*)'/g,
@@ -708,9 +712,9 @@ function decodeAnsiCQuotes(text) {
       )}'`,
   );
 }
-//@ chunk-tr0s0d0k.js:23698-23728 placement
+//@ chunk-6d2p9h2d.js:23945-23975 placement
 var QUOTE_AND_CARET_RE = /["'`^\u2018-\u201e]/g;
-//@ chunk-tr0s0d0k.js:23728-23784 placement
+//@ chunk-6d2p9h2d.js:23975-24031 placement
 function bashPrefixRule(prefix) {
   return {
     toolName: BASH_TOOL_NAME,
@@ -723,14 +727,14 @@ export {
   HOST_CREDENTIAL_RULE_SOURCE,
   keychainCommands,
   bashPrefixRule,
-  isUnderUserProfiles,
   isServedEyeEnabled,
   isCredentialBasename,
   classifyCredentialPath,
-  joinLineContinuations,
   unquoteShellWord,
+  joinLineContinuations,
   credentialPathRules,
   prefixRuleLiterals,
   defaultCredentialDenyRules,
   hostCredentialDenyRules,
+  isUnderUserProfiles,
 };

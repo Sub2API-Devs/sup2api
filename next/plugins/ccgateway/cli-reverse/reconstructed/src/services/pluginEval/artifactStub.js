@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 中 Artifact 发布的桩目录（.eval-artifacts/stub-publishes）及其完整性检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (3)
  * attribution: placement 3
  */
 import path from "path";
@@ -20,20 +20,20 @@ import { logForDebugging } from "../../utils/debug.js";
 import { detectPlatformFlavor } from "./caseDiscovery.js";
 import { readStubPublishDir, readStubPublishesJson } from "./runTrace.js";
 
-//@ chunk-qchp9vrd.js:120803-120840 placement
+//@ chunk-af1hzzme.js:122156-122193 placement
 /**
  * 评测产物桩目录名 .eval-artifacts。
  */
 var MAX_STUB_PUBLISH_BYTES = 67108864;
 var EVAL_ARTIFACTS_DIR = ".eval-artifacts";
-//@ chunk-qchp9vrd.js:120840-120896 placement
+//@ chunk-af1hzzme.js:122193-122249 placement
 /**
  * 发布桩记录的目录。
  */
 function stubPublishDir(evalTempDir) {
   return path.join(evalTempDir.outDir, "stub-publishes");
 }
-//@ chunk-qchp9vrd.js:120896-122550 placement
+//@ chunk-af1hzzme.js:122249-123903 placement
 /**
  * 检查发布桩目录未消失/被替换/改动后收集本次运行的发布记录。
  */

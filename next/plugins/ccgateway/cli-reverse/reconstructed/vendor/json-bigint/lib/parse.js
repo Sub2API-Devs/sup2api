@@ -1,14 +1,14 @@
 /**
  * json-bigint/lib/parse.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: json-bigint@1.0.0
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_bignumber } from "../../bignumber.js/bignumber.js";
 
-//@ chunk-na3pph4p.js:39504-43194 cjs-fingerprint
+//@ chunk-e8d3a8an.js:39504-43194 cjs-fingerprint
 var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var BigNumber = null;
   var suspectProtoRx =

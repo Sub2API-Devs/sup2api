@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。记录 Claude in Chrome 桥给出的浏览器提示（首选设备、本机设备 id、主机平台），会话内已选的浏览器优先于重发的提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-09jqgwgm.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8ntqfva8.js (5)
  * attribution: placement 5
  */
 import { claudeInChromeSession } from "../../commands/mobile/mobile.js";
 import { logForDebugging } from "../debug.js";
 import { releaseBrowserSelection } from "./chromeMcpServer.js";
 
-//@ chunk-09jqgwgm.js:299-959 placement
+//@ chunk-8ntqfva8.js:299-959 placement
 /**
  * 记录 Claude in Chrome 桥给出的浏览器提示（首选设备、本机设备 id、主机平台），会话内已选的浏览器优先于重发的提示。
  */
@@ -46,7 +46,7 @@ function setChromeBrowserHints(hints) {
   )
     releaseBrowserSelection(bridgeBinding.socketClient);
 }
-//@ chunk-09jqgwgm.js:959-1118 placement
+//@ chunk-8ntqfva8.js:959-1118 placement
 function supersedeHintedPreferredDeviceId(deviceId) {
   let session = claudeInChromeSession();
   let browserHints = session.browserHints;
@@ -61,17 +61,17 @@ function supersedeHintedPreferredDeviceId(deviceId) {
     preferredDeviceId: undefined,
   };
 }
-//@ chunk-09jqgwgm.js:1118-1183 placement
+//@ chunk-8ntqfva8.js:1118-1183 placement
 function hintedPreferredDeviceId(fallbackDeviceId) {
   return claudeInChromeSession().browserHints?.preferredDeviceId ?? fallbackDeviceId();
 }
-//@ chunk-09jqgwgm.js:1183-1289 placement
+//@ chunk-8ntqfva8.js:1183-1289 placement
 function hintedLocalDeviceIds() {
   let browserHints = claudeInChromeSession().browserHints;
   if (!browserHints) return;
   return new Map(browserHints.localDeviceIds.map((localDeviceId) => [localDeviceId, "live"]));
 }
-//@ chunk-09jqgwgm.js:1289-1343 placement
+//@ chunk-8ntqfva8.js:1289-1343 placement
 function hintedHostPlatform() {
   return claudeInChromeSession().browserHints?.hostPlatform;
 }

@@ -1,14 +1,14 @@
 /**
  * default-browser/windows.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: default-browser@5.5.1
- * pieces: chunk-20ppca50.js (3)
+ * pieces: chunk-j8hasev3.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { promisify } from "util";
 import { execFile } from "child_process";
 
-//@ chunk-20ppca50.js:3149-3679 esm-layout
+//@ chunk-j8hasev3.js:3149-3679 esm-layout
 var WINDOWS_BROWSER_PROG_IDS = promisify(execFile);
 var windowsBrowserProgIds = {
   AppXq0fevzme2pys62n3e0fbqa7peapykr8v: {
@@ -48,9 +48,9 @@ var windowsBrowserProgIds = {
     id: "com.brave.Browser.nightly",
   },
 };
-//@ chunk-20ppca50.js:3679-3702 esm-layout
+//@ chunk-j8hasev3.js:3679-3702 esm-layout
 class UnknownBrowserError extends Error {}
-//@ chunk-20ppca50.js:3702-4089 esm-fingerprint
+//@ chunk-j8hasev3.js:3702-4089 esm-fingerprint
 async function getWindowsDefaultBrowser(_execFileAsync = WINDOWS_BROWSER_PROG_IDS) {
   let { stdout } = await _execFileAsync("reg", [
     "QUERY",

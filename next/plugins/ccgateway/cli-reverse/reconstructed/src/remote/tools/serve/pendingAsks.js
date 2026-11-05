@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：待答复询问登记与调用者会话
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (13)
  * attribution: placement 13
  */
 import { randomUUID } from "crypto";
@@ -18,9 +18,9 @@ import { InstanceRegistry } from "../../../utils/instanceRegistry.js";
 import { ServedCallLog } from "../servedCallLog.js";
 import { ServedBackgroundCommands } from "./backgroundCommands.js";
 
-//@ chunk-tr0s0d0k.js:10966-10997 placement
+//@ chunk-6d2p9h2d.js:11213-11244 placement
 var ASK_ENDED_REASON = "remote_call_ask_ended";
-//@ chunk-tr0s0d0k.js:10997-11113 placement
+//@ chunk-6d2p9h2d.js:11244-11360 placement
 function askEndedDenial(message) {
   return {
     behavior: "deny",
@@ -32,7 +32,7 @@ function askEndedDenial(message) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-tr0s0d0k.js:11113-11365 placement
+//@ chunk-6d2p9h2d.js:11360-11612 placement
 function createPendingAskRegistry() {
   let asks = new Map();
   return {
@@ -50,7 +50,7 @@ function createPendingAskRegistry() {
     },
   };
 }
-//@ chunk-tr0s0d0k.js:11365-11504 placement
+//@ chunk-6d2p9h2d.js:11612-11751 placement
 function takePendingAsk(session, askId, onSettled, denial) {
   let ask = session.pendingAsks.take(askId);
   if (ask === undefined) return;
@@ -59,7 +59,7 @@ function takePendingAsk(session, askId, onSettled, denial) {
   ask.answer(denial);
   return ask;
 }
-//@ chunk-tr0s0d0k.js:11504-11601 placement
+//@ chunk-6d2p9h2d.js:11751-11848 placement
 function recordSessionDenial(session, askId, onMissing) {
   takePendingAsk(
     session,
@@ -72,7 +72,7 @@ function recordSessionDenial(session, askId, onMissing) {
     onMissing,
   );
 }
-//@ chunk-tr0s0d0k.js:11601-11681 placement
+//@ chunk-6d2p9h2d.js:11848-11928 placement
 function settleAskedCall(session, askId, envelope, onMissing) {
   return (
     takePendingAsk(
@@ -83,7 +83,7 @@ function settleAskedCall(session, askId, envelope, onMissing) {
     ) !== undefined
   );
 }
-//@ chunk-tr0s0d0k.js:11681-12356 placement
+//@ chunk-6d2p9h2d.js:11928-12603 placement
 function withdrawAskedCall(session, askId, withdrawal) {
   let ended = takePendingAsk(
     session,
@@ -134,9 +134,9 @@ function withdrawAskedCall(session, askId, withdrawal) {
     });
   }
 }
-//@ chunk-tr0s0d0k.js:12356-12366 placement
+//@ chunk-6d2p9h2d.js:12603-12613 placement
 var MAX_REMEMBERED_IDS = 16;
-//@ chunk-tr0s0d0k.js:12366-12949 placement
+//@ chunk-6d2p9h2d.js:12613-13196 placement
 function resetCallerReadStateOnClear(readState, envelope) {
   if (envelope === undefined) return;
   let conversationId = envelope.caller.conversation_id;
@@ -162,12 +162,12 @@ function resetCallerReadStateOnClear(readState, envelope) {
     logRemoteTools(envelope.call_id, "caller conversation compacted: read state reset");
   }
 }
-//@ chunk-tr0s0d0k.js:12949-13001 placement
+//@ chunk-6d2p9h2d.js:13196-13248 placement
 function pushBoundedId(ids, id) {
   ids.push(id);
   if (ids.length > MAX_REMEMBERED_IDS) ids.shift();
 }
-//@ chunk-tr0s0d0k.js:13001-13345 placement
+//@ chunk-6d2p9h2d.js:13248-13592 placement
 function newCallerSession(callerSessionId, options = {}) {
   return {
     callerSessionId,
@@ -187,9 +187,9 @@ function newCallerSession(callerSessionId, options = {}) {
     onAskEnded: options.onAskEnded,
   };
 }
-//@ chunk-tr0s0d0k.js:13345-13356 placement
+//@ chunk-6d2p9h2d.js:13592-13603 placement
 var MAX_CALLER_SESSIONS = 20;
-//@ chunk-tr0s0d0k.js:13356-13854 placement
+//@ chunk-6d2p9h2d.js:13603-14101 placement
 /**
  * 远程工具服务端的调用方会话表：每个云会话一份 readFileState、工具状态、调用记录与待答询问（有上限）。
  */
@@ -230,11 +230,11 @@ function createCallerSessions(options = {}) {
 }
 export {
   withdrawAskedCall,
+  ASK_ENDED_REASON,
   resetCallerReadStateOnClear,
   recordSessionDenial,
   settleAskedCall,
   askEndedDenial,
   MAX_CALLER_SESSIONS,
   createCallerSessions,
-  ASK_ENDED_REASON,
 };

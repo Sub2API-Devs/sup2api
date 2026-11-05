@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SDK 提交满意度反馈（可附带对话，仅 Pro/Max）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-25hrjv6b.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85a5w51b.js (1)
  * attribution: placement 1
  */
 import { SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema } from "../../entrypoints/sdk/controlSchemas.js";
@@ -13,7 +13,7 @@ import { feedbackUnavailableReason, orgFeedbackRefusalMessage } from "./submitFe
 import { isConsumerSubscriber } from "../../utils/auth.js";
 import { postFeedbackSubmission } from "./feedbackBundle.js";
 
-//@ chunk-25hrjv6b.js:11873-12660 placement
+//@ chunk-85a5w51b.js:13049-13836 placement
 /**
  * SDK 提交满意度反馈（可附带对话，仅 Pro/Max）。
  */

@@ -3,9 +3,9 @@
  *
  * ExitPlanMode 结果与被拒渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitPlanModeTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (2)
+ * pieces: chunk-wjygkcr4.js (2)
  * attribution: fingerprint 2
  */
 import { getDisplayPath } from "../../utils/file.js";
@@ -21,7 +21,7 @@ import { MarkdownText_2 } from "../../components/pluginUi/render/MarkdownBlock.j
 import { getPlan } from "../../utils/plans.js";
 import { RejectedPlanMessage } from "../../components/messages/UserToolResultMessage/RejectedPlanMessage.js";
 
-//@ chunk-ah34pb7m.js:15144-16142 fingerprint (2.1.88 match: renderToolResultMessage, 0.445)
+//@ chunk-wjygkcr4.js:15427-16425 fingerprint (2.1.88 match: renderToolResultMessage, 0.445)
 /**
  * ExitPlanMode 结果渲染：已退出、已提交 team lead 审批、或"User approved Claude's plan"并显示计划与保存路径。
  */
@@ -116,7 +116,7 @@ function renderToolResultMessage_10(output, _progressMessagesForMessage, { theme
     ],
   });
 }
-//@ chunk-ah34pb7m.js:16142-16266 fingerprint (2.1.88 match: renderToolUseRejectedMessage, 1)
+//@ chunk-wjygkcr4.js:16425-16549 fingerprint (2.1.88 match: renderToolUseRejectedMessage, 1)
 /**
  * ExitPlanMode 被拒时渲染被拒绝的计划内容（无 plan 时读计划文件）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。定时唤醒。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-425yaf76.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-50ktwjzn.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -19,14 +19,14 @@ import { isENOENT } from "./errors.js";
 import { readSmallFileOrNull } from "./readSmallFile.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-425yaf76.js:659-808 placement
+//@ chunk-50ktwjzn.js:659-808 placement
 /**
  * 待唤醒记录文件名、大小上限与 schema。
  */
 var PENDING_WAKEUP_FILE; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_PENDING_WAKEUP_BYTES;
 var PENDING_WAKEUP_SCHEMA;
-deferInit("chunk-425yaf76.js:659", () => {
+deferInit("chunk-50ktwjzn.js:659", () => {
   PENDING_WAKEUP_FILE = ".pending-wakeup";
   MAX_PENDING_WAKEUP_BYTES = 1024;
   PENDING_WAKEUP_SCHEMA = DoctorLazy(() =>
@@ -37,7 +37,7 @@ deferInit("chunk-425yaf76.js:659", () => {
     }),
   );
 });
-//@ chunk-425yaf76.js:808-982 placement
+//@ chunk-50ktwjzn.js:808-982 placement
 /**
  * 写入（或删除）待唤醒记录。
  */
@@ -63,7 +63,7 @@ async function writePendingWakeup(dir, snapshot) {
     if (!isENOENT(error)) logJobWriteError(error);
   }
 }
-//@ chunk-425yaf76.js:982-1126 placement
+//@ chunk-50ktwjzn.js:982-1126 placement
 /**
  * 读取并校验待唤醒记录。
  */
@@ -80,4 +80,4 @@ async function readPendingWakeup(bgJobDir) {
     return null;
   }
 }
-export { readPendingWakeup, writePendingWakeup };
+export { writePendingWakeup, readPendingWakeup };

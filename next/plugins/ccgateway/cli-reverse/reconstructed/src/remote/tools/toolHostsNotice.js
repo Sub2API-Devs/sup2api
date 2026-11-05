@@ -3,9 +3,9 @@
  *
  * 工具宿主提示附件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (20)
  * attribution: placement 20
  */
 import {
@@ -27,18 +27,18 @@ import { toError } from "../../utils/errors.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "./consentText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:590791-590937 placement
-var regExp_15; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:590791", () => {
-  regExp_15 = new RegExp(
+//@ chunk-7jxyna5q.js:508153-508299 placement
+var regExp_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jxyna5q.js:508153", () => {
+  regExp_14 = new RegExp(
     `^(?:<tool_use_error>)?\\s*(${REQUEST_COMPUTER_FOLDER}|${LIST_COMPUTER_FOLDERS}): \\[(?:repository_trust_(required|declined|unavailable)|session_(not_elevated))\\]`,
   );
 });
-//@ chunk-s61vbvea.js:590937-591029 placement
+//@ chunk-7jxyna5q.js:508299-508391 placement
 function isAttestationState(state) {
   return state === "required" || state === "declined" || state === "unavailable" || state === "not_elevated";
 }
-//@ chunk-s61vbvea.js:591029-591317 placement
+//@ chunk-7jxyna5q.js:508391-508679 placement
 function readComputerFolderReplyTarget(toolName, input) {
   let template = isRequestComputerFolderTool(toolName)
     ? REQUEST_COMPUTER_FOLDER
@@ -53,19 +53,19 @@ function readComputerFolderReplyTarget(toolName, input) {
       : typeof first === "object" && first !== null && "text" in first && typeof first.text === "string"
         ? first.text
         : "";
-  let match = regExp_15.exec(target);
+  let match = regExp_14.exec(target);
   if (match === null || match[1] !== template) return;
   let state = match[2] ?? match[3];
   return isAttestationState(state) ? state : undefined;
 }
-//@ chunk-s61vbvea.js:591317-591405 placement
+//@ chunk-7jxyna5q.js:508679-508767 placement
 /**
  * 导出常量或表 `SERVED_CALLS_UNATTESTED`：值为 "served-calls-unattested", SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO = "served-calls-unattested-untrusted-repo", _j = 30000。
  */
 var SERVED_CALLS_UNATTESTED = "served-calls-unattested";
 var SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO = "served-calls-unattested-untrusted-repo";
 var REFRESH_THROTTLE_MS = 30000;
-//@ chunk-s61vbvea.js:591405-591886 placement
+//@ chunk-7jxyna5q.js:508767-509248 placement
 /**
  * 创建可刷新的异步值：read 的结果缓存并在变化时通知订阅者，refresh 在节流间隔内直接返回缓存，并发刷新复用进行中的 Promise，force 时排队再读一次。
  */
@@ -117,19 +117,19 @@ function createRefreshableValue({ read, initial, now = Date.now }) {
     onChanged: (listener) => signal.subscribe(listener),
   };
 }
-//@ chunk-s61vbvea.js:591886-591916 placement
+//@ chunk-7jxyna5q.js:509248-509278 placement
 /**
  * 导出函数 `attachStateSchema`。
  */
 var attachStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:591886", () => {
+deferInit("chunk-7jxyna5q.js:509248", () => {
   attachStateSchema = DoctorLazy(() =>
     objectSchema({
       state: stringSchema(),
     }),
   );
 });
-//@ chunk-s61vbvea.js:591916-592644 placement
+//@ chunk-7jxyna5q.js:509278-510006 placement
 /**
  * （归属疑误：bridge/远程设备）在最近一轮工具结果中找远程设备 attach 成功（state=attached）的 tool_use_id。
  */
@@ -164,7 +164,7 @@ function buildToolHostsNotice(messages) {
   }
   return;
 }
-//@ chunk-s61vbvea.js:592644-592882 placement
+//@ chunk-7jxyna5q.js:510006-510244 placement
 /**
  * （归属疑误：bridge/远程设备）取消息中最后一个 tool_hosts_notice 附件的 lines/away。
  */
@@ -179,9 +179,9 @@ function getLastToolHostsNotice(messages) {
       }
     : undefined;
 }
-//@ chunk-s61vbvea.js:592882-592892 placement
+//@ chunk-7jxyna5q.js:510244-510254 placement
 var MAX_TRACKED_HOSTS = 32;
-//@ chunk-s61vbvea.js:592892-593213 placement
+//@ chunk-7jxyna5q.js:510254-510575 placement
 /**
  * 记录各工具宿主转发状态（已接入、被拒绝及原因）。
  */
@@ -212,26 +212,31 @@ class ToolHostsForwardingState {
     return [...this.#e.values()].at(-1) ?? this.#t;
   }
 }
-//@ chunk-s61vbvea.js:593213-593264 placement
+//@ chunk-7jxyna5q.js:510575-510626 placement
 var SKIPPED_DEVICE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:593213", () => {
+deferInit("chunk-7jxyna5q.js:510575", () => {
   SKIPPED_DEVICE_TOOLS = new Set(["get_device_info", "list_devices"]);
 });
-//@ chunk-s61vbvea.js:593264-593355 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-7jxyna5q.js:510626-510717 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool) {
   return tool.some(
     (tool) => tool.mcpInfo?.serverName === REMOTE_DEVICES && !SKIPPED_DEVICE_TOOLS.has(tool.mcpInfo.toolName),
   );
 }
-//@ chunk-s61vbvea.js:593355-593426 placement
+//@ chunk-7jxyna5q.js:510717-510788 placement
 function isRemoteDevicesPending(context) {
   return currentMcpClients(context).some(
     (client) => client.name === REMOTE_DEVICES && client.type === "pending",
   );
 }
-//@ chunk-s61vbvea.js:593426-593489 placement
-var FORWARDING_OFF_REASONS = ["disabled_switch_off", "disabled_flag_off", "not_ready"];
-//@ chunk-s61vbvea.js:593489-593592 placement
+//@ chunk-7jxyna5q.js:510788-510876 placement
+var FORWARDING_OFF_REASONS = [
+  "disabled_switch_off",
+  "disabled_flag_off",
+  "disabled_device_policy",
+  "not_ready",
+];
+//@ chunk-7jxyna5q.js:510876-510979 placement
 function shouldConsiderToolHostsNotice(toolState, messages) {
   try {
     return (
@@ -243,7 +248,7 @@ function shouldConsiderToolHostsNotice(toolState, messages) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:593592-593720 placement
+//@ chunk-7jxyna5q.js:510979-511107 placement
 function forwardingOffNoticeLines(reason) {
   let detail = REMOTE_TOOLS_CONSENT_TEXT[`forwarding_off.reason.${reason}`];
   return [
@@ -252,19 +257,19 @@ function forwardingOffNoticeLines(reason) {
       : REMOTE_TOOLS_CONSENT_TEXT.forwarding_off(detail),
   ];
 }
-//@ chunk-s61vbvea.js:593720-593773 placement
+//@ chunk-7jxyna5q.js:511107-511160 placement
 function retractedForwardingLines() {
   return [REMOTE_TOOLS_CONSENT_TEXT["forwarding_off.retracted"]];
 }
-//@ chunk-s61vbvea.js:593773-593821 placement
+//@ chunk-7jxyna5q.js:511160-511208 placement
 function isForwardingOffNotice(lines) {
   return FORWARDING_OFF_REASONS.some((reason) => isSameLines(lines, forwardingOffNoticeLines(reason)));
 }
-//@ chunk-s61vbvea.js:593821-593891 placement
+//@ chunk-7jxyna5q.js:511208-511278 placement
 function isSameLines(lines, other) {
   return lines.length === other.length && lines.every((line, otherLine) => line === other[otherLine]);
 }
-//@ chunk-s61vbvea.js:593891-594290 placement
+//@ chunk-7jxyna5q.js:511278-511677 placement
 /**
  * 生成 tool_hosts_notice 附件：在主线程、远程工具转发关闭（或尚未就绪）时，把关闭原因转成提示行；与上次已发的提示相同时不重复发送。
  */
@@ -304,14 +309,14 @@ function buildToolHostsNoticeAttachments(context, messages, isForwardingOffNotic
       ];
 }
 export {
-  SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO,
   SERVED_CALLS_UNATTESTED,
-  readComputerFolderReplyTarget,
   shouldConsiderToolHostsNotice,
   buildToolHostsNoticeAttachments,
-  attachStateSchema,
+  SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO,
+  ToolHostsForwardingState,
   buildToolHostsNotice,
   getLastToolHostsNotice,
-  ToolHostsForwardingState,
+  attachStateSchema,
   createRefreshableValue,
+  readComputerFolderReplyTarget,
 };

@@ -3,9 +3,9 @@
  *
  * PR 徽章：PR 号 + 审查状态颜色（approved/changes_requested/pending/merged…）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PrBadge.tsx
- * pieces: chunk-qgpgvvwv.js (10)
+ * pieces: chunk-84xc132a.js (10)
  * attribution: placement 4, fingerprint 2, layout 4
  */
 import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -20,19 +20,19 @@ import {
 import { Text, Link } from "../ink/components/Text.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qgpgvvwv.js:595-599 placement
+//@ chunk-84xc132a.js:596-600 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qgpgvvwv.js:595", () => {
+deferInit("chunk-84xc132a.js:596", () => {
   init_react_production();
 });
-//@ chunk-qgpgvvwv.js:599-603 placement
+//@ chunk-84xc132a.js:600-604 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qgpgvvwv.js:599", () => {
+deferInit("chunk-84xc132a.js:600", () => {
   init_react_production();
 });
-//@ chunk-qgpgvvwv.js:603-624 placement
+//@ chunk-84xc132a.js:604-625 placement
 var CURRENT_PR = "current-pr";
-//@ chunk-qgpgvvwv.js:808-976 fingerprint (2.1.88 match: getPrStatusColor, 1)
+//@ chunk-84xc132a.js:809-977 fingerprint (2.1.88 match: getPrStatusColor, 1)
 function getPrStatusColor(state) {
   switch (state) {
     case "approved":
@@ -47,11 +47,11 @@ function getPrStatusColor(state) {
       return;
   }
 }
-//@ chunk-qgpgvvwv.js:976-1001 layout
+//@ chunk-84xc132a.js:977-1002 layout
 function noopPrAction(state, url, isMergeRequest) {
   return;
 }
-//@ chunk-qgpgvvwv.js:1001-1085 layout
+//@ chunk-84xc132a.js:1002-1086 layout
 /**
  * 函数 usePrActionEffect（PR 动作 effect）；位于「PR 徽章：PR 号 + 审查状态颜色（approved/changes_requested/pending/merged…）」模块。
  */
@@ -61,11 +61,11 @@ function usePrActionEffect(state, url, kind) {
     noopPrAction(state, url, kind === "cr" || kind === "mr");
   }, [state, url, kind]);
 }
-//@ chunk-qgpgvvwv.js:1085-1135 layout
+//@ chunk-84xc132a.js:1086-1136 layout
 function selectPrUrlTemplate(state) {
   return state.settings?.prUrlTemplate;
 }
-//@ chunk-qgpgvvwv.js:1135-2596 fingerprint (2.1.88 match: PrBadge, 0.723)
+//@ chunk-84xc132a.js:1136-2593 fingerprint (2.1.88 match: PrBadge, 0.723)
 function PrBadge(props) {
   let $ = useMemoCache(41);
   let { number, url, reviewState, bold, color, dimColor, inverse, underline, hidePrefix, kind } = props;
@@ -207,7 +207,7 @@ function PrBadge(props) {
   } else rowElement = $[40];
   return rowElement;
 }
-//@ chunk-qgpgvvwv.js:2596-2763 layout (2.1.88 match: getPrStatusColor, 1)
+//@ chunk-84xc132a.js:2593-2760 layout (2.1.88 match: getPrStatusColor, 1)
 function getPrStatusColor_2(state) {
   switch (state) {
     case "approved":
@@ -222,7 +222,7 @@ function getPrStatusColor_2(state) {
       return;
   }
 }
-//@ chunk-qgpgvvwv.js:2763-3227 placement
+//@ chunk-84xc132a.js:2760-3224 placement
 /**
  * 显示增删行数（+N 绿色、-N 红色），都为 0 时不渲染。
  */
@@ -271,4 +271,4 @@ function DiffStatCounts(props) {
   } else textElement = $[9];
   return textElement;
 }
-export { DiffStatCounts, usePrActionEffect, CURRENT_PR, PrBadge, getPrStatusColor };
+export { usePrActionEffect, CURRENT_PR, DiffStatCounts, getPrStatusColor, PrBadge };

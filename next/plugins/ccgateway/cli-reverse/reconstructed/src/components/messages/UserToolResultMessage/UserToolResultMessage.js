@@ -3,9 +3,9 @@
  *
  * tool_result 分派：按 is_error/拒绝/成功分别交给 UserToolErrorMessage/UserToolRejectMessage/UserToolSuccessMessage。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/UserToolResultMessage.tsx
- * pieces: chunk-ah34pb7m.js (2)
+ * pieces: chunk-wjygkcr4.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { UserToolSuccessMessage } from "./UserToolSuccessMessage.js";
@@ -33,13 +33,13 @@ import { isDetachedToolResult } from "../../../services/tools/detachedToolCalls.
 import { GET_TASK_TOOL_TEXT, GET_TASK_TOOL_ERROR_TEXT } from "../../../remote/tools/nativeToolErrors.js";
 import { Box } from "../../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:220929-220968 placement
+//@ chunk-wjygkcr4.js:227874-227913 placement
 var TOOL_RESULT_MESSAGE_BY_KIND = {
   Success: UserToolSuccessMessage,
   Reject: UserToolRejectMessage,
   Error: UserToolErrorMessage,
 };
-//@ chunk-ah34pb7m.js:221816-225018 fingerprint (2.1.88 match: UserToolResultMessage, 0.567)
+//@ chunk-wjygkcr4.js:228761-231963 fingerprint (2.1.88 match: UserToolResultMessage, 0.567)
 /**
  * tool_result 分派：is_error 时 UserToolErrorMessage（非 verbose 时可能按工具格式化错误），拒绝内容时 UserToolRejectMessage，否则 UserToolSuccessMessage；找不到对应 tool_use 时不渲染。
  */

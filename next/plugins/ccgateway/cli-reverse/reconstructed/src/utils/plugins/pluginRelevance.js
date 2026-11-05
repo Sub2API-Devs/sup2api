@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：匹配插件相关性信号（CLI、主机、文件、依赖）；插件是否声明了相关性信号。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fj1bjh0z.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kt6vd7kv.js (5)
  * attribution: placement 5
  */
 import { stat, readFile } from "fs/promises";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { getClaudeTempDirRealpath } from "../tempDirRealpaths.js";
 import { isPathWithinCaseAware } from "../pathPrefix.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -24,7 +24,7 @@ import { reportOnce } from "../reportOnce.js";
 import { withTimeout } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fj1bjh0z.js:667-754 placement
+//@ chunk-kt6vd7kv.js:667-754 placement
 /**
  * pluginRelevanceRoots：插件相关性检查的根目录。
  */
@@ -35,12 +35,12 @@ function pluginRelevanceRoots() {
   } catch {}
   return (path) => roots.some((root) => isPathWithinCaseAware(path, root, true));
 }
-//@ chunk-fj1bjh0z.js:754-772 placement
+//@ chunk-kt6vd7kv.js:754-772 placement
 var caddyModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fj1bjh0z.js:754", () => {
+deferInit("chunk-kt6vd7kv.js:754", () => {
   caddyModule = __toESM(require_picomatch_2(), 1);
 });
-//@ chunk-fj1bjh0z.js:821-897 placement
+//@ chunk-kt6vd7kv.js:821-897 placement
 /**
  * pluginRelevanceInputs：插件相关性输入（读状态、Bash 工具与主机）。
  */
@@ -51,7 +51,7 @@ function pluginRelevanceInputs(messages, readFileState) {
     bashHosts: referencedBashToolNames(messages),
   };
 }
-//@ chunk-fj1bjh0z.js:897-1495 placement
+//@ chunk-kt6vd7kv.js:897-1495 placement
 /**
  * 插件是否声明了相关性信号。
  */
@@ -91,7 +91,7 @@ function hasRelevanceSignals(name, relevance) {
     cwd: relevance_2.signals.cwd,
   };
 }
-//@ chunk-fj1bjh0z.js:1495-2793 placement
+//@ chunk-kt6vd7kv.js:1495-2793 placement
 /**
  * 匹配插件相关性信号（CLI、主机、文件、依赖）。
  */
@@ -185,4 +185,4 @@ async function matchRelevanceSignal(signals, context) {
   }
   return null;
 }
-export { hasRelevanceSignals, matchRelevanceSignal, pluginRelevanceRoots, pluginRelevanceInputs };
+export { pluginRelevanceInputs, hasRelevanceSignals, matchRelevanceSignal, pluginRelevanceRoots };

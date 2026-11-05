@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Artifact 变更通知合并与入队。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xf84t5b0.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cx778tm5.js (28)
  * attribution: placement 28
  */
 import { randomUUID, createHmac } from "crypto";
@@ -29,14 +29,14 @@ import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { readSummonStatus } from "./comments/commentReply.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xf84t5b0.js:1236-1262 placement
+//@ chunk-cx778tm5.js:1237-1263 placement
 /**
  * artifact 通知的聚合参数：默认 15 s、最长 60 s 结算窗口、最多保留 20 条明细。
  */
 var DEFAULT_SETTLE_MS = 15000;
 var MAX_SETTLE_MS = 60000;
 var MAX_NOTICE_DETAILS = 20;
-//@ chunk-xf84t5b0.js:1262-1356 placement
+//@ chunk-cx778tm5.js:1263-1357 placement
 function noticeForFamily(family, artifactName, count, familyName) {
   return family === "auto-replied"
     ? autoRepliedNotice(artifactName, count)
@@ -44,7 +44,7 @@ function noticeForFamily(family, artifactName, count, familyName) {
       ? autoEditedNotice(artifactName, count)
       : artifactChangedNotice(artifactName, count, familyName);
 }
-//@ chunk-xf84t5b0.js:1356-2194 placement
+//@ chunk-cx778tm5.js:1357-2195 placement
 function coalesceArtifactNotices(family) {
   let noticeCoalesce = getLiveState().noticeCoalesce;
   let entry = noticeCoalesce.get(family);
@@ -90,7 +90,7 @@ ${escapeXml(
     agentId: mainAgentId(),
   });
 }
-//@ chunk-xf84t5b0.js:2194-3097 placement
+//@ chunk-cx778tm5.js:2195-3098 placement
 function enqueueArtifactChanged(notice) {
   let { queue, slug, family, artifactName, detail, mergeDetails } = notice;
   let now = (notice.now ?? Date.now)();
@@ -138,7 +138,7 @@ ${slug}`;
   timer.unref?.();
   entry.timer = timer;
 }
-//@ chunk-xf84t5b0.js:3097-3380 placement
+//@ chunk-cx778tm5.js:3098-3381 placement
 /**
  * 取出并清除合并中的 Artifact 通知（可只取某个 slug；artifact-changed 类除外），取消其定时器，返回 {slug, family, artifactName, count} 列表。
  */
@@ -159,7 +159,7 @@ function flushCoalescedNotices(slug) {
   }
   return out;
 }
-//@ chunk-xf84t5b0.js:3380-3499 placement
+//@ chunk-cx778tm5.js:3381-3500 placement
 /**
  * 判断某个 slug 是否还有合并中的（非 artifact-changed）通知。
  */
@@ -168,12 +168,12 @@ function hasPendingNotice(family) {
     if (notice.slug === family && notice.family !== "artifact-changed") return true;
   return false;
 }
-//@ chunk-xf84t5b0.js:3499-3515 placement
+//@ chunk-cx778tm5.js:3500-3516 placement
 /**
  * 导出常量或表 `SUMMON_STATE_TTL_MS`：值为 3600000。
  */
 var SUMMON_STATE_TTL_MS = 3600000;
-//@ chunk-xf84t5b0.js:3515-3563 placement
+//@ chunk-cx778tm5.js:3516-3564 placement
 /**
  * 导出常量或表 `ROUTE_ABSENT_4001`：值为 "4001", OFt = "4503", MFt = "4403", k2n = 900000。
  */
@@ -181,13 +181,13 @@ var ROUTE_ABSENT_4001 = "4001";
 var ROUTE_ABSENT_4503 = "4503";
 var ROUTE_ABSENT_4403 = "4403";
 var ROUTE_ABSENT_GRACE_MS = 900000;
-//@ chunk-xf84t5b0.js:3563-3584 placement
+//@ chunk-cx778tm5.js:3564-3585 placement
 /**
  * 导出常量或表 `TOKEN_MIN_GRACE_MS`：值为 300000, HBs = 3。
  */
 var TOKEN_MIN_GRACE_MS = 300000;
 var MAX_REALTIME_TOKEN_ATTEMPTS = 3;
-//@ chunk-xf84t5b0.js:3584-3778 placement
+//@ chunk-cx778tm5.js:3585-3779 placement
 /**
  * 用新取得的实时连接令牌建立状态：令牌、版本、账号纪元、按传输方式计算的过期时间，以及打开/失败拨号/探测标志。
  */
@@ -204,7 +204,7 @@ function createLiveTokenState(lease) {
     probed: false,
   };
 }
-//@ chunk-xf84t5b0.js:3778-3895 placement
+//@ chunk-cx778tm5.js:3779-3896 placement
 /**
  * 用新令牌刷新状态：更新令牌与过期时间，重置探测标志与失败拨号计数。
  */
@@ -214,14 +214,14 @@ function refreshLiveTokenState(state, refresh) {
   state.probed = false;
   state.failedDials = 0;
 }
-//@ chunk-xf84t5b0.js:3895-4032 placement
+//@ chunk-cx778tm5.js:3896-4033 placement
 function computeTokenExpiry(transport, expUnixSeconds, receivedAtMs) {
   let syncTtl = transport === "sync" ? 900000 : 3600000;
   let liveTtl = transport === "sync" ? 300000 : 1800000;
   let expiresInMs = expUnixSeconds === undefined ? syncTtl : expUnixSeconds * 1000 - receivedAtMs;
   return receivedAtMs + Math.min(syncTtl, Math.max(liveTtl, expiresInMs));
 }
-//@ chunk-xf84t5b0.js:4032-4161 placement
+//@ chunk-cx778tm5.js:4033-4162 placement
 /**
  * 一次拨号后决定是否继续用当前令牌：已过期或被拒为否；健康则清零失败计数为是；否则累加失败，未满 3 次为是。
  */
@@ -234,10 +234,10 @@ function shouldRetryDial(lease, options) {
   lease.failedDials++;
   return lease.failedDials < 3;
 }
-//@ chunk-xf84t5b0.js:4161-4183 placement
+//@ chunk-cx778tm5.js:4162-4184 placement
 var TOKEN_HANDSHAKE_GRACE_MS = 60000;
 var SYNC_TOKEN_DECAY_MS = 60000;
-//@ chunk-xf84t5b0.js:4183-4325 placement
+//@ chunk-cx778tm5.js:4184-4326 placement
 /**
  * 判断实时令牌还能用：账号纪元一致，且距过期至少还有握手+最短运行时间（sync 传输用固定余量）。
  */
@@ -248,7 +248,7 @@ function isLiveTokenFresh(lease, rewatchTiming, accountEpoch, nowMs = Date.now()
       : rewatchTiming.handshakeDeadlineMs + rewatchTiming.minUptimeMs + TOKEN_HANDSHAKE_GRACE_MS;
   return lease.accountEpoch === accountEpoch && lease.expMs - nowMs >= elapsed;
 }
-//@ chunk-xf84t5b0.js:4325-4665 placement
+//@ chunk-cx778tm5.js:4326-4666 placement
 /**
  * 计算实时连接重连等待时间：卡住时取短/长停顿区间随机值；租约模式且需要打散时在打散区间随机；否则指数退避（封顶）并加 ±25%/50% 抖动。
  */
@@ -261,38 +261,38 @@ function computeReconnectDelay(timing) {
   let jitter = leaseMode ? 0.5 : 0.25;
   return Math.max(0, Math.round(min * (1 - jitter + Math.random() * 2 * jitter)));
 }
-//@ chunk-xf84t5b0.js:4665-4821 placement
+//@ chunk-cx778tm5.js:4666-4822 placement
 function randomStallDelay(timing, kind = "short") {
   let minMs = kind === "long" ? timing.longStallMinMs : timing.stallMinMs;
   let maxMs = kind === "long" ? timing.longStallMaxMs : timing.stallMaxMs;
   return Math.round(minMs + Math.random() * (maxMs - minMs));
 }
-//@ chunk-xf84t5b0.js:4821-4887 placement
+//@ chunk-cx778tm5.js:4822-4888 placement
 /**
  * 导出函数 `seedJitter`：参数 e，返回 Math.round(Math.random() * e.seedDeferMaxMs)。
  */
 function seedJitter(rewatchTiming) {
   return Math.round(Math.random() * rewatchTiming.seedDeferMaxMs);
 }
-//@ chunk-xf84t5b0.js:4941-4989 placement
+//@ chunk-cx778tm5.js:4942-4990 placement
 var SUMMON_HANDOFF_TTL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_SUMMON_HANDOFFS;
 var MAX_SAFE_INTEGER;
-deferInit("chunk-xf84t5b0.js:4941", () => {
+deferInit("chunk-cx778tm5.js:4942", () => {
   SUMMON_HANDOFF_TTL_MS = 3600000;
   MAX_SUMMON_HANDOFFS = 64;
   MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 });
-//@ chunk-xf84t5b0.js:4989-5080 placement
+//@ chunk-cx778tm5.js:4990-5081 placement
 function summonSidForSlug(sessionId, slug, globalConfig) {
   return createHmac("sha256", getOrCreateSummonSidKey(globalConfig))
     .update(sessionId + slug, "utf8")
     .digest("hex")
     .slice(0, 16);
 }
-//@ chunk-xf84t5b0.js:5080-5154 placement
+//@ chunk-cx778tm5.js:5081-5155 placement
 var ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-//@ chunk-xf84t5b0.js:5154-5415 placement
+//@ chunk-cx778tm5.js:5155-5416 placement
 function isValidUtcTimestampParts(text) {
   let year = Number(text.slice(0, 4));
   let month = Number(text.slice(5, 7));
@@ -303,7 +303,7 @@ function isValidUtcTimestampParts(text) {
   if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return false;
   return new Date(Date.UTC(year, month - 1, day)).getUTCDate() === day;
 }
-//@ chunk-xf84t5b0.js:5415-5561 placement
+//@ chunk-cx778tm5.js:5416-5562 placement
 /**
  * 从字符串列表里挑出格式合法、日期有效的最晚时间戳（返回原字符串）。
  */
@@ -326,7 +326,7 @@ function latestValidTimestamp(stamps) {
   }
   return latest;
 }
-//@ chunk-xf84t5b0.js:5561-5852 placement
+//@ chunk-cx778tm5.js:5562-5853 placement
 /**
  * 登记一个评论召唤的交接项（生成 uuid）；超过上限时淘汰最早的、且不在当前队列里的交接项并打点。返回 uuid。
  */
@@ -352,7 +352,7 @@ function registerSummonHandOff(summon) {
   }
   return id;
 }
-//@ chunk-xf84t5b0.js:5852-6139 placement
+//@ chunk-cx778tm5.js:5853-6140 placement
 /**
  * 对给定消息里仍挂着的召唤交接项发出 declined(auto_reply_off) 状态并移除，打点是否成功上报。
  */
@@ -370,7 +370,7 @@ function declineSweptHandOffs(commands) {
     logFeatureSad("artifact_comments_autoreact", emitted ? "handoff_swept" : "handoff_swept_unreported");
   }
 }
-//@ chunk-xf84t5b0.js:6139-6301 placement
+//@ chunk-cx778tm5.js:6140-6302 placement
 /**
  * 移除某个 slug 下已不在当前队列里的召唤交接项。
  */
@@ -380,7 +380,7 @@ function dropStaleHandOffs(slug) {
   let queued = new Set(getCommandQueue().map((command) => command.uuid));
   for (let [key, handOff] of handOffs) if (handOff.slug === slug && !queued.has(key)) handOffs.delete(key);
 }
-//@ chunk-xf84t5b0.js:6301-6415 placement
+//@ chunk-cx778tm5.js:6302-6416 placement
 /**
  * 删除某 slug 某评论线程的排队唤醒。
  */
@@ -389,7 +389,7 @@ function dropQueuedWakes(slug, threadId) {
   for (let [wakeSlug, wake] of queuedWakes)
     if (wake.slug === slug && wake.threadId === threadId) queuedWakes.delete(wakeSlug);
 }
-//@ chunk-xf84t5b0.js:6415-7647 placement
+//@ chunk-cx778tm5.js:6416-7648 placement
 function emitArtifactSummonStatus(status, options) {
   let { slug, threadId, gestureAt, suppressed } = status;
   if (suppressed) return false;
@@ -458,13 +458,16 @@ function emitArtifactSummonStatus(status, options) {
   return true;
 }
 export {
-  dropStaleHandOffs,
-  dropQueuedWakes,
   emitArtifactSummonStatus,
+  dropQueuedWakes,
+  dropStaleHandOffs,
   registerSummonHandOff,
   latestValidTimestamp,
-  ROUTE_ABSENT_GRACE_MS,
   SUMMON_STATE_TTL_MS,
+  flushCoalescedNotices,
+  declineSweptHandOffs,
+  hasPendingNotice,
+  ROUTE_ABSENT_GRACE_MS,
   isLiveTokenFresh,
   createLiveTokenState,
   enqueueArtifactChanged,
@@ -477,7 +480,4 @@ export {
   TOKEN_MIN_GRACE_MS,
   MAX_REALTIME_TOKEN_ATTEMPTS,
   computeReconnectDelay,
-  flushCoalescedNotices,
-  declineSweptHandOffs,
-  hasPendingNotice,
 };

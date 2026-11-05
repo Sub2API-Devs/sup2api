@@ -3,10 +3,10 @@
  *
  * 队友关停请求消息显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/ShutdownMessage.tsx
- * pieces: chunk-ah34pb7m.js (3), chunk-bwbq4xvm.js (1), chunk-kf9b436m.js (1)
- * attribution: placement 3, fingerprint 2
+ * pieces: chunk-7kayq7nc.js (1), chunk-s7rn5gf4.js (1), chunk-wjygkcr4.js (3)
+ * attribution: fingerprint 2, placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -29,7 +29,7 @@ import {
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-bwbq4xvm.js:760324-760384 fingerprint (2.1.88 match: tryRenderShutdownMessage, 0.663)
+//@ chunk-7kayq7nc.js:808729-808789 fingerprint (2.1.88 match: tryRenderShutdownMessage, 0.663)
 function tryRenderShutdownMessage(request, originator, response) {
   return {
     request,
@@ -37,7 +37,7 @@ function tryRenderShutdownMessage(request, originator, response) {
     response,
   };
 }
-//@ chunk-kf9b436m.js:303-739 fingerprint (2.1.88 match: ShutdownRequestDisplay, 0.704)
+//@ chunk-s7rn5gf4.js:303-739 fingerprint (2.1.88 match: ShutdownRequestDisplay, 0.706)
 function ShutdownRequestDisplay(props) {
   let $ = useMemoCache(10);
   let { children, color, title } = props;
@@ -85,7 +85,7 @@ function ShutdownRequestDisplay(props) {
   } else dialogBox = $[9];
   return dialogBox;
 }
-//@ chunk-ah34pb7m.js:81968-82563 placement
+//@ chunk-wjygkcr4.js:85951-86546 placement
 /**
  * 队友关闭请求消息（发送方、原因、回复说明）。
  */
@@ -146,7 +146,7 @@ function ShutdownRequestMessage(content) {
   } else boxElement = $[11];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:82563-83141 placement
+//@ chunk-wjygkcr4.js:86546-87124 placement
 /**
  * 队友拒绝关闭的消息。
  */
@@ -197,7 +197,7 @@ function ShutdownRejectedMessage(props) {
   } else t4 = $[7];
   return t4;
 }
-//@ chunk-ah34pb7m.js:83141-83471 placement (2.1.88 match: tryRenderPlanApprovalMessage, 0.786)
+//@ chunk-wjygkcr4.js:87124-87454 placement (2.1.88 match: tryRenderPlanApprovalMessage, 0.786)
 /**
  * 解析文本是否为关闭请求/拒绝，返回对应组件。
  */

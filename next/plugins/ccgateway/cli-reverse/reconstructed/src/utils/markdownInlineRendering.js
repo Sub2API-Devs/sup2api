@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Markdown 行内渲染（控制字符、OSC 8 超链接）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wj577vf9.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ptrwzav4.js (20)
  * attribution: placement 20
  */
 import { stripAnsi } from "./stripAnsi.js";
@@ -26,7 +26,7 @@ import { nestingGuard, normalizeBlockText } from "../ink/render-border.js";
 import { markdownHeldGuard, regExp, MARKDOWN_LIMITS_2 } from "./doctorContextWarnings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wj577vf9.js:7634-7772 placement
+//@ chunk-ptrwzav4.js:7634-7772 placement
 var MAX_PREVIEW_LINES = 6;
 var MAX_PREVIEW_ROWS = 16;
 var NEWLINE_STR = `
@@ -38,7 +38,7 @@ var makeRows = (rows) => ({
 var ensureTrailingNewline = (text) => (text === "" || text.endsWith(NEWLINE_STR) ? text : text + NEWLINE_STR);
 var rowsOf = (rows) => (rows === "" ? [] : [makeRows(rows)]);
 var isNonBlankLine = (line) => stripAnsi(line).trim() !== "";
-//@ chunk-wj577vf9.js:7772-7876 placement (2.1.88 match: styleBorderLine, 0.66)
+//@ chunk-ptrwzav4.js:7772-7876 placement (2.1.88 match: styleBorderLine, 0.661)
 function styleQuotedPreview(text) {
   let bar = sequential.dim(VERTICAL_LEFT_BAR_GLYPH);
   return makeRows(
@@ -48,12 +48,12 @@ function styleQuotedPreview(text) {
       .join(NEWLINE_STR),
   );
 }
-//@ chunk-wj577vf9.js:7876-7972 placement
+//@ chunk-ptrwzav4.js:7876-7972 placement
 function gutterPrefix(depth) {
   let bars = `${VERTICAL_LEFT_BAR_GLYPH} `.repeat(Math.max(0, depth)).trimEnd();
   return bars === "" ? "" : `${sequential.dim(bars)} `;
 }
-//@ chunk-wj577vf9.js:7972-8158 placement
+//@ chunk-ptrwzav4.js:7972-8158 placement
 function quotedPreviewRows(text, linesUsed, options) {
   let availableLines = Math.min(linesUsed + 1, MAX_PREVIEW_ROWS) - options.around;
   let isShallow = options.around === 0;
@@ -68,7 +68,7 @@ function quotedPreviewRows(text, linesUsed, options) {
     isDone: true,
   };
 }
-//@ chunk-wj577vf9.js:8158-8279 placement
+//@ chunk-ptrwzav4.js:8158-8279 placement
 function mergePreviewRows(rows) {
   let merged = [];
   let pendingText = "";
@@ -79,7 +79,7 @@ function mergePreviewRows(rows) {
     } else pendingText += rowEntry.rows;
   return [...merged, ...rowsOf(pendingText)];
 }
-//@ chunk-wj577vf9.js:8279-8450 placement
+//@ chunk-ptrwzav4.js:8279-8450 placement
 function renderBlockquoteRows(tokens, depth, context) {
   let styleRows =
     depth < MAX_PREVIEW_LINES ? styleQuotedPreview : (text) => quotedPreviewRows(text, depth, context);
@@ -91,7 +91,7 @@ function renderBlockquoteRows(tokens, depth, context) {
     ),
   ).map((rowEntry) => (rowEntry.isDone ? rowEntry : styleRows(rowEntry.rows)));
 }
-//@ chunk-wj577vf9.js:8450-8518 placement
+//@ chunk-ptrwzav4.js:8450-8518 placement
 var drawAround = (tokens, depth, draw) =>
   renderBlockquoteRows(tokens, depth, {
     around: depth,
@@ -99,14 +99,14 @@ var drawAround = (tokens, depth, draw) =>
   })
     .map((rowEntry) => rowEntry.rows)
     .join("");
-//@ chunk-wj577vf9.js:8518-8655 placement
+//@ chunk-ptrwzav4.js:8518-8655 placement
 /**
  * 去除内联文本中的控制字符（保留行分隔符等）。
  */
 var CONTROL_CHAR_PATTERN; // deferred: uses sgrPatternSource (../ink/wrapAnsi.js) of its import cycle while loading; runs once the cycle is complete
 var regExp_2;
 var stripControlCharsForInline;
-deferInit("chunk-wj577vf9.js:8518", () => {
+deferInit("chunk-ptrwzav4.js:8518", () => {
   CONTROL_CHAR_PATTERN = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/;
   regExp_2 = new RegExp(`(?!${sgrPatternSource(";:")})${CONTROL_CHAR_PATTERN.source}`, "g");
   stripControlCharsForInline = (text) =>
@@ -118,7 +118,7 @@ deferInit("chunk-wj577vf9.js:8518", () => {
       )
       .replace(regExp_2, "");
 });
-//@ chunk-wj577vf9.js:8655-9130 placement
+//@ chunk-ptrwzav4.js:8655-9130 placement
 function controlCharTokens(tokens) {
   let pending = tokens.some((token) => CONTROL_CHAR_PATTERN.test(token.raw)) ? [tokens] : [];
   for (let node of pending)
@@ -141,22 +141,22 @@ function controlCharTokens(tokens) {
     });
   return tokens;
 }
-//@ chunk-wj577vf9.js:9130-9221 placement
+//@ chunk-ptrwzav4.js:9130-9221 placement
 var WORD_BOUNDARY_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_3;
 var regExp_4;
-deferInit("chunk-wj577vf9.js:9130", () => {
+deferInit("chunk-ptrwzav4.js:9130", () => {
   WORD_BOUNDARY_PATTERNS = `
 `;
   regExp_3 = new RegExp(`^[${INVISIBLE_CHAR_CLASS}]+`, "u");
   regExp_4 = new RegExp(`(?:^|[^${INVISIBLE_CHAR_CLASS}])([${INVISIBLE_CHAR_CLASS}]*)$`, "u");
 });
-//@ chunk-wj577vf9.js:9221-9306 placement
+//@ chunk-ptrwzav4.js:9221-9306 placement
 function stripTrailingLinkHint(label) {
   let hintLength = regExp_4.exec(label)?.[1]?.length ?? 0;
   return hintLength === 0 ? label : label.slice(0, label.length - hintLength);
 }
-//@ chunk-wj577vf9.js:9306-9671 placement
+//@ chunk-ptrwzav4.js:9306-9671 placement
 /**
  * OSC 8 超链接与游离 ESC/C1 序列正则，以及去掉决策面控制字符的函数。
  */
@@ -177,7 +177,7 @@ var afterStyleReset = (token) =>
 var labelWithReset = (label, reset) => `${reset}${stripDecisionSurfaceChars(label)}`;
 var labelWithHint = (href, reset, hint = "") => `${reset} (${stripDecisionSurfaceChars(href)}${hint})`;
 var labelForLink = (href) => labelWithHint(href, SGR_RESET_SEQUENCE);
-//@ chunk-wj577vf9.js:9671-10714 placement
+//@ chunk-ptrwzav4.js:9671-10714 placement
 /**
  * 去掉嵌套或无效的 OSC 8 超链接序列，保留文本。
  */
@@ -259,7 +259,7 @@ function stripNestedHyperlinks(text) {
   }
   return output + text.slice(copiedUntil);
 }
-//@ chunk-wj577vf9.js:10714-10991 placement
+//@ chunk-ptrwzav4.js:10714-10991 placement
 function renderWithSafeLinks(tokens, render) {
   let rendered = render();
   if (!rendered.includes("\x1B]8;")) return rendered;
@@ -278,7 +278,7 @@ function renderWithSafeLinks(tokens, render) {
       Reflect.deleteProperty(suspiciousCodespan, "defanged");
   }
 }
-//@ chunk-wj577vf9.js:10991-11181 placement
+//@ chunk-ptrwzav4.js:10991-11181 placement
 function findSuspiciousCodespans(tokens) {
   return tokens.flatMap((token) => {
     if (token.type === "codespan")
@@ -286,7 +286,7 @@ function findSuspiciousCodespans(tokens) {
     return "tokens" in token && Array.isArray(token.tokens) ? findSuspiciousCodespans(token.tokens) : [];
   });
 }
-//@ chunk-wj577vf9.js:11181-11297 placement
+//@ chunk-ptrwzav4.js:11181-11297 placement
 class MarkedConfigState {
   #e = false;
   get configured() {
@@ -300,15 +300,15 @@ class MarkedConfigState {
     marked.setOptions(marked.getDefaults());
   }
 }
-//@ chunk-wj577vf9.js:11297-11330 placement
+//@ chunk-ptrwzav4.js:11297-11330 placement
 /**
  * 宿主隔离的 marked 配置状态缓存（含重置）。
  */
 var markedConfigStateMemo; // deferred: uses MarkedConfigState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-wj577vf9.js:11297", () => {
+deferInit("chunk-ptrwzav4.js:11297", () => {
   markedConfigStateMemo = identity(new MarkedConfigState(), (state) => state.reset());
 });
-//@ chunk-wj577vf9.js:11330-11429 placement
+//@ chunk-ptrwzav4.js:11330-11429 placement
 class MarkedConfigCache {
   #e = new LRUCache({
     max: 200,
@@ -321,7 +321,7 @@ class MarkedConfigCache {
     this.#e.set(key, value);
   }
 }
-//@ chunk-wj577vf9.js:11429-13024 placement
+//@ chunk-ptrwzav4.js:11429-13024 placement
 /**
  * marked 渲染器池、扩展原型方法与渲染配置（后台词、表格、列表、加粗、代码管道转义等）。
  */
@@ -335,7 +335,7 @@ var CLOSING_TO_OPENING;
 var BACKSLASH_ESCAPE_RE;
 var WORD_END_RE;
 var markedExtensions;
-deferInit("chunk-wj577vf9.js:11429", () => {
+deferInit("chunk-ptrwzav4.js:11429", () => {
   markdownRendererPool = new HostScoped(() => new MarkedConfigCache());
   table = _Tokenizer.prototype.table;
   blockquote = _Tokenizer.prototype.blockquote;
@@ -464,7 +464,7 @@ deferInit("chunk-wj577vf9.js:11429", () => {
     ],
   };
 });
-//@ chunk-wj577vf9.js:13024-13206 placement
+//@ chunk-ptrwzav4.js:13024-13206 placement
 function flattenDeepList(tokenizer, source) {
   if (
     !nestingGuard.isAtMaxNesting(tokenizer.lexer) ||
@@ -479,22 +479,22 @@ function flattenDeepList(tokenizer, source) {
   };
 }
 export {
-  renderWithSafeLinks,
-  controlCharTokens,
-  stripControlCharsForInline,
   markedConfigStateMemo,
   MARKED_CONFIG_CACHE_SIZE,
   markedExtensions,
+  controlCharTokens,
   ESC_NON_CSI_RE,
   OSC8_LINK_PATTERN,
   C1_OSC_RE,
   ESC_NON_CSI_GLOBAL_RE,
   drawAround,
   WORD_BOUNDARY_PATTERNS,
+  renderWithSafeLinks,
   labelWithReset,
   afterStyleReset,
   labelWithHint,
   stripDecisionSurfaceChars,
   regExp_3,
   labelForLink,
+  stripControlCharsForInline,
 };

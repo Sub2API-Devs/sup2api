@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。后台工作项列表 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (16)
  * attribution: placement 12, sole-consumer 3, affinity 1
  */
 import {
@@ -22,32 +22,47 @@ import { cleanTaskDescription } from "../utils/taskDescription.js";
 import { hashString31 } from "../utils/pastedContent.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
-import { summarizeBackgroundWork } from "../tasks/backgroundTaskLabels.js";
+import { summarizeBackgroundWork, pendingTaskDescriptions } from "../tasks/backgroundTaskLabels.js";
 import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
 import { useSession } from "../context/session.js";
 import { todoToolsEnabled } from "../utils/sessionKind.js";
 import { useTaskListSnapshot } from "./useTasksV2.js";
 import { buildProgressSignature, publishSessionCronSnapshot } from "../services/daemon/sessionCron.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1094819-1094823 placement
+//@ chunk-czq1j3j2.js:1091826-1091830 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1094819", () => {
+deferInit("chunk-czq1j3j2.js:1091826", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1094823-1094827 placement
+//@ chunk-czq1j3j2.js:1108173-1108177 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1094823", () => {
+deferInit("chunk-czq1j3j2.js:1108173", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1094827-1094839 placement
+//@ chunk-czq1j3j2.js:1115981-1115985 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1115981", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1118512-1118516 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1118512", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1118516-1118520 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1118516", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1128863-1128875 placement
 var PREVIEW_TEXT_MAX_LENGTH = 200;
-//@ chunk-18hwfzwa.js:1094839-1094902 placement
+//@ chunk-czq1j3j2.js:1128875-1128938 placement
 function sanitizePreviewText(text) {
   return truncateWithEllipsis(redactSecrets(text).replace(/\s+/g, " ").trim(), PREVIEW_TEXT_MAX_LENGTH);
 }
-//@ chunk-18hwfzwa.js:1094959-1096710 sole-consumer
+//@ chunk-czq1j3j2.js:1128995-1130746 sole-consumer
 /**
  * 把后台任务表转成工作项列表：代理、工作流（按阶段拆开）、shell/monitor、MCP 任务各自生成 id、种类、标签、开始/结束时间与失败标记。
  */
@@ -156,11 +171,11 @@ function tasksToWorkItems(tasks) {
   }
   return items;
 }
-//@ chunk-18hwfzwa.js:1096710-1096759 sole-consumer
+//@ chunk-czq1j3j2.js:1130746-1130795 sole-consumer
 function isWorkflowAgentItem(item) {
   return item.type === "workflow_agent";
 }
-//@ chunk-18hwfzwa.js:1096759-1097017 sole-consumer
+//@ chunk-czq1j3j2.js:1130795-1131053 sole-consumer
 function todosToWorkItems(todos) {
   if (!todos || todos.length === 0) return [];
   return todos.map((todo) => ({
@@ -171,7 +186,7 @@ function todosToWorkItems(todos) {
     doneAt: todo.status === "completed" ? 0 : undefined,
   }));
 }
-//@ chunk-18hwfzwa.js:1097017-1097263 affinity
+//@ chunk-czq1j3j2.js:1131053-1131299 affinity
 function tasksV2ToWorkItems(taskListSnapshot) {
   if (!taskListSnapshot || taskListSnapshot.length === 0) return [];
   return taskListSnapshot.map((task) => ({
@@ -184,17 +199,17 @@ function tasksV2ToWorkItems(taskListSnapshot) {
     doneAt: task.status === "completed" ? 0 : undefined,
   }));
 }
-//@ chunk-18hwfzwa.js:1097263-1097296 placement
+//@ chunk-czq1j3j2.js:1131299-1131332 placement
 function selectTasks3(state) {
   return state.tasks;
 }
-//@ chunk-18hwfzwa.js:1097296-1097326 placement
+//@ chunk-czq1j3j2.js:1131332-1131362 placement
 function selectId4(session) {
   return session.id;
 }
-//@ chunk-18hwfzwa.js:1097326-1098292 placement
+//@ chunk-czq1j3j2.js:1131362-1132308 placement
 function useBackgroundWorkItems() {
-  let $ = useMemoCache(18);
+  let $ = useMemoCache(17);
   let tasks = useAppState(selectTasks3);
   let summary = summarizeBackgroundWork(tasks, {
     sessionCrons: false,
@@ -236,23 +251,19 @@ function useBackgroundWorkItems() {
     $[9] = signature;
   } else signature = $[9];
   let progressSignature = signature;
-  let joinedKinds;
-  if ($[10] === MEMO_CACHE_SENTINEL) {
-    joinedKinds = undefined?.join(`
+  let joinedKinds = codeModeAccepted() ? pendingTaskDescriptions(tasks) : undefined;
+  let kindsText = joinedKinds?.join(`
 `);
-    $[10] = joinedKinds;
-  } else joinedKinds = $[10];
-  let kindsText = joinedKinds;
   const count = summary.count;
   const joined = summary.kinds.join(",");
   let effectDeps;
   if (
-    $[11] !== summary.count ||
-    $[12] !== summary.drainableMonitors ||
-    $[13] !== progressSignature ||
-    $[14] !== mainThreadQueueLength ||
-    $[15] !== kindsText ||
-    $[16] !== joined
+    $[10] !== summary.count ||
+    $[11] !== summary.drainableMonitors ||
+    $[12] !== progressSignature ||
+    $[13] !== mainThreadQueueLength ||
+    $[14] !== kindsText ||
+    $[15] !== joined
   ) {
     effectDeps = [
       count,
@@ -262,14 +273,14 @@ function useBackgroundWorkItems() {
       progressSignature,
       kindsText,
     ];
-    $[11] = summary.count;
-    $[12] = summary.drainableMonitors;
-    $[13] = progressSignature;
-    $[14] = mainThreadQueueLength;
-    $[15] = kindsText;
-    $[16] = joined;
-    $[17] = effectDeps;
-  } else effectDeps = $[17];
+    $[10] = summary.count;
+    $[11] = summary.drainableMonitors;
+    $[12] = progressSignature;
+    $[13] = mainThreadQueueLength;
+    $[14] = kindsText;
+    $[15] = joined;
+    $[16] = effectDeps;
+  } else effectDeps = $[16];
   useEffect(() => {
     publishSessionCronSnapshot({
       tasks: summary.count,
@@ -277,33 +288,20 @@ function useBackgroundWorkItems() {
       kinds: summary.kinds,
       drainableMonitors: summary.drainableMonitors,
       items: workItems,
-      ...false,
+      ...(codeModeAccepted() && {
+        scripts: joinedKinds,
+      }),
     });
   }, effectDeps);
   return null;
 }
-//@ chunk-18hwfzwa.js:1098292-1098296 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1098292", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1098296-1098312 placement
+//@ chunk-czq1j3j2.js:1132312-1132328 placement
 var backgroundWorkSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1098296", () => {
+deferInit("chunk-czq1j3j2.js:1132312", () => {
   backgroundWorkSignal = createContext(null);
 });
-//@ chunk-18hwfzwa.js:1098312-1098341 placement
+//@ chunk-czq1j3j2.js:1132328-1132357 placement
 function useBackgroundWorkSignal() {
   return useContext(backgroundWorkSignal);
 }
-//@ chunk-18hwfzwa.js:1098341-1098345 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1098341", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1098345-1098349 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1098345", () => {
-  init_react_production();
-});
 export { useBackgroundWorkSignal, useBackgroundWorkItems, backgroundWorkSignal };

@@ -1,5 +1,5 @@
 {
- "files": 2653,
+ "files": 2862,
  "declarations": {
   "expected": 0,
   "found": 0,
@@ -10,34 +10,35 @@
  "duplicateDeclarations": 0,
  "missingImportFiles": 0,
  "missingImportNames": 0,
- "freeIdentifiers": 32,
+ "freeIdentifiers": 33,
  "freeNames": [
-  "Af",
   "AsyncIterator",
   "C",
-  "Dn",
   "EdgeRuntime",
   "ErrorEvent",
   "F",
   "FileReader",
   "INTERVAL_PRESETS",
-  "Jh",
   "L",
   "M",
+  "Nm",
+  "On",
   "QUIET_PRESETS",
   "QuotaExceededError",
-  "Rh",
   "THRESHOLD_PRESETS",
   "Worker",
+  "__",
   "__REACT_DEVTOOLS_GLOBAL_HOOK__",
   "__values",
+  "fmt",
+  "ft",
   "h",
   "i",
   "jQuery",
   "keyOf",
-  "lt",
   "m",
   "n",
+  "np",
   "r",
   "reportError",
   "rowDescription",
@@ -45,6 +46,7 @@
   "t",
   "w"
  ],
+ "freeSameAsOriginal": null,
  "samples": {
   "parseErrors": [
    {
@@ -65,204 +67,210 @@
   "missingNames": [],
   "free": [
    [
-    "Worker",
-    [
-     "chunk-3nztfxrw.js",
-     "chunk-e6aww6q8.js",
-     "chunk-fq0cr76a.js"
-    ]
-   ],
-   [
-    "h",
-    [
-     "chunk-3s7ydtfd.js",
-     "chunk-bss4k1z9.js",
-     "chunk-sc72x544.js",
-     "chunk-wyqg6m3h.js"
-    ]
-   ],
-   [
-    "EdgeRuntime",
-    [
-     "chunk-3wydcdvj.js"
-    ]
-   ],
-   [
-    "INTERVAL_PRESETS",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "spanOf",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "C",
-    [
-     "chunk-a7sxm3q7.js",
-     "chunk-z0q4jgnc.js"
-    ]
-   ],
-   [
-    "THRESHOLD_PRESETS",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "M",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "i",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "QUIET_PRESETS",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "keyOf",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "t",
-    [
-     "chunk-a7sxm3q7.js"
-    ]
-   ],
-   [
-    "n",
-    [
-     "chunk-aepeg2w5.js"
-    ]
-   ],
-   [
-    "r",
-    [
-     "chunk-aepeg2w5.js",
-     "chunk-ynfp53zr.js"
-    ]
-   ],
-   [
     "reportError",
     [
-     "chunk-bzr73sfg.js",
-     "chunk-p86mcgbc.js"
+     "chunk-2avr6cej.js",
+     "chunk-zsz062c7.js"
     ]
    ],
    [
     "__REACT_DEVTOOLS_GLOBAL_HOOK__",
     [
-     "chunk-bzr73sfg.js"
-    ]
-   ],
-   [
-    "rowDescription",
-    [
-     "chunk-cpqpnzp4.js"
-    ]
-   ],
-   [
-    "Dn",
-    [
-     "chunk-dcmhvw5a.js"
-    ]
-   ],
-   [
-    "Rh",
-    [
-     "chunk-e6aww6q8.js"
-    ]
-   ],
-   [
-    "Af",
-    [
-     "chunk-e6aww6q8.js"
-    ]
-   ],
-   [
-    "Jh",
-    [
-     "chunk-e6aww6q8.js"
-    ]
-   ],
-   [
-    "lt",
-    [
-     "chunk-e6aww6q8.js"
-    ]
-   ],
-   [
-    "ErrorEvent",
-    [
-     "chunk-e6aww6q8.js"
-    ]
-   ],
-   [
-    "w",
-    [
-     "chunk-fe6rs39h.js"
-    ]
-   ],
-   [
-    "QuotaExceededError",
-    [
-     "chunk-fq0cr76a.js"
-    ]
-   ],
-   [
-    "jQuery",
-    [
-     "chunk-fq0cr76a.js"
-    ]
-   ],
-   [
-    "__values",
-    [
-     "chunk-fq0cr76a.js"
-    ]
-   ],
-   [
-    "AsyncIterator",
-    [
-     "chunk-fq0cr76a.js",
-     "chunk-spyfntaa.js"
-    ]
-   ],
-   [
-    "F",
-    [
-     "chunk-hny2rpzz.js"
-    ]
-   ],
-   [
-    "m",
-    [
-     "chunk-jvez4qde.js"
+     "chunk-2avr6cej.js"
     ]
    ],
    [
     "FileReader",
     [
-     "chunk-wr8v03d0.js"
+     "chunk-2v4fe6xx.js"
+    ]
+   ],
+   [
+    "Nm",
+    [
+     "chunk-5xgkngpb.js"
+    ]
+   ],
+   [
+    "np",
+    [
+     "chunk-5xgkngpb.js"
+    ]
+   ],
+   [
+    "__",
+    [
+     "chunk-5xgkngpb.js"
+    ]
+   ],
+   [
+    "ft",
+    [
+     "chunk-5xgkngpb.js"
+    ]
+   ],
+   [
+    "Worker",
+    [
+     "chunk-5xgkngpb.js",
+     "chunk-a3r2kq46.js",
+     "chunk-qg41pqt6.js"
+    ]
+   ],
+   [
+    "ErrorEvent",
+    [
+     "chunk-5xgkngpb.js"
+    ]
+   ],
+   [
+    "h",
+    [
+     "chunk-775n2x67.js",
+     "chunk-7stfs6p0.js",
+     "chunk-c7hntn0y.js",
+     "chunk-y4bgqkdt.js"
+    ]
+   ],
+   [
+    "m",
+    [
+     "chunk-ad798f12.js"
+    ]
+   ],
+   [
+    "r",
+    [
+     "chunk-b1v2msyk.js",
+     "chunk-exfmq47h.js"
+    ]
+   ],
+   [
+    "n",
+    [
+     "chunk-exfmq47h.js"
+    ]
+   ],
+   [
+    "EdgeRuntime",
+    [
+     "chunk-gjbr82c9.js"
+    ]
+   ],
+   [
+    "rowDescription",
+    [
+     "chunk-h6004nzv.js"
+    ]
+   ],
+   [
+    "fmt",
+    [
+     "chunk-hnxhr3bs.js"
+    ]
+   ],
+   [
+    "INTERVAL_PRESETS",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "spanOf",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "C",
+    [
+     "chunk-jqzj18s4.js",
+     "chunk-wwjb4dqs.js"
+    ]
+   ],
+   [
+    "THRESHOLD_PRESETS",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "M",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "i",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "QUIET_PRESETS",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "keyOf",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "t",
+    [
+     "chunk-jqzj18s4.js"
+    ]
+   ],
+   [
+    "w",
+    [
+     "chunk-keyy05re.js"
+    ]
+   ],
+   [
+    "QuotaExceededError",
+    [
+     "chunk-qg41pqt6.js"
+    ]
+   ],
+   [
+    "jQuery",
+    [
+     "chunk-qg41pqt6.js"
+    ]
+   ],
+   [
+    "__values",
+    [
+     "chunk-qg41pqt6.js"
+    ]
+   ],
+   [
+    "AsyncIterator",
+    [
+     "chunk-qg41pqt6.js",
+     "chunk-xw24zrg8.js"
+    ]
+   ],
+   [
+    "F",
+    [
+     "chunk-w7hwdb2a.js"
     ]
    ],
    [
     "L",
     [
-     "chunk-z0q4jgnc.js"
+     "chunk-wwjb4dqs.js"
+    ]
+   ],
+   [
+    "On",
+    [
+     "chunk-z20c443b.js"
     ]
    ]
   ]

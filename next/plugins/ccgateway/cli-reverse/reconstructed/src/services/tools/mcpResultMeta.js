@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 工具结果的结构化内容与元数据处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { hasUiResource } from "../mcp/toolNameLimits.js";
@@ -17,15 +17,15 @@ import { countJsonMembers } from "../../utils/jsonScan.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1805174-1805233 placement
+//@ chunk-5xgkngpb.js:1882065-1882124 placement
 var CLAUDE_ENDTURN = "claude/endTurn";
 var CLAUDE_ENDTURNHONORSSTOPHOOKS = "claude/endTurnHonorsStopHooks";
-//@ chunk-e6aww6q8.js:1805233-1805337 placement
+//@ chunk-5xgkngpb.js:1882124-1882228 placement
 function getEndTurnMetaKind(toolResult) {
   if (toolResult?._meta?.[CLAUDE_ENDTURN] !== true) return false;
   return toolResult._meta[CLAUDE_ENDTURNHONORSSTOPHOOKS] === true ? "mcp_meta_blockable" : "mcp_meta";
 }
-//@ chunk-e6aww6q8.js:1805337-1805456 placement
+//@ chunk-5xgkngpb.js:1882228-1882347 placement
 /**
  * 判断用户消息是否结束本轮：工具声明或 MCP 元数据给出结束原因，且结果不是错误时返回该原因。
  */
@@ -35,9 +35,9 @@ function getToolEndsTurnKind(message) {
   if (!kind || hasToolResultError(message)) return false;
   return kind;
 }
-//@ chunk-e6aww6q8.js:1805456-1805508 placement
+//@ chunk-5xgkngpb.js:1882347-1882399 placement
 var MCP_META_SOURCE_RANK = [false, "mcp_meta_blockable", "mcp_meta", "tool"];
-//@ chunk-e6aww6q8.js:1805508-1805567 placement
+//@ chunk-5xgkngpb.js:1882399-1882458 placement
 /**
  * 比较两个元信息来源的优先级，返回更高者。
  */
@@ -46,7 +46,7 @@ function higherSourceRank(toolRequestedEndTurn, toolEndsTurnKind) {
     ? toolEndsTurnKind
     : toolRequestedEndTurn;
 }
-//@ chunk-e6aww6q8.js:1805567-1805710 placement
+//@ chunk-5xgkngpb.js:1882458-1882601 placement
 /**
  * 用户消息中是否含 is_error 的工具结果。
  */
@@ -57,12 +57,12 @@ function hasToolResultError(message) {
     message.message.content.some((block) => block.type === "tool_result" && block.is_error === true)
   );
 }
-//@ chunk-e6aww6q8.js:1805710-1805843 placement
+//@ chunk-5xgkngpb.js:1882601-1882734 placement
 var MAX_STRUCTURED_CONTENT_DEPTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_META_KEYS;
 var MCP_RESULT_META;
 var MCP_RESULT_META_BLOCKABLE;
-deferInit("chunk-e6aww6q8.js:1805710", () => {
+deferInit("chunk-5xgkngpb.js:1882601", () => {
   MAX_STRUCTURED_CONTENT_DEPTH = 8192;
   MAX_META_KEYS = 128;
   MCP_RESULT_META = Object.freeze({
@@ -77,7 +77,7 @@ deferInit("chunk-e6aww6q8.js:1805710", () => {
     }),
   });
 });
-//@ chunk-e6aww6q8.js:1805843-1805951 placement
+//@ chunk-5xgkngpb.js:1882734-1882842 placement
 function getEndTurnMeta(toolResult) {
   switch (getEndTurnMetaKind(toolResult)) {
     case "mcp_meta":
@@ -88,12 +88,12 @@ function getEndTurnMeta(toolResult) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:1805951-1806124 placement
+//@ chunk-5xgkngpb.js:1882842-1883015 placement
 var MAX_STRUCTURED_CONTENT_BYTES = 1048576;
 var DEFAULT_STRUCTURED_CONTENT_LIMIT = MAX_STRUCTURED_CONTENT_BYTES;
 var UI_RESOURCE_STRUCTURED_CONTENT_LIMIT = 8388608;
 var UI_RESOURCE_LIMIT_NOTE = `The limit is ${UI_RESOURCE_STRUCTURED_CONTENT_LIMIT} for a tool whose tools/list entry names a ui:// resource (_meta.ui.resourceUri, or the older ui/resourceUri). `;
-//@ chunk-e6aww6q8.js:1806124-1807170 placement
+//@ chunk-5xgkngpb.js:1883015-1884060 placement
 /**
  * 处理 MCP 工具返回的 structuredContent：过大或不可序列化时省略并说明。
  */
@@ -145,7 +145,7 @@ function formatMcpStructuredContent(agentId, mcpMeta, tool, isAppTool = false) {
     };
   return getEndTurnMeta(mcpMeta);
 }
-//@ chunk-e6aww6q8.js:1807170-1807850 placement
+//@ chunk-5xgkngpb.js:1884060-1884740 placement
 /**
  * 检查 MCP 工具结果 _meta 的大小与可序列化性。
  */
@@ -173,7 +173,7 @@ function checkMcpResultMetaSize(mcpMeta, mcpInfo, isAppTool) {
     };
   return Object.keys(rest).length > 0 ? rest : undefined;
 }
-//@ chunk-e6aww6q8.js:1807850-1807896 placement
+//@ chunk-5xgkngpb.js:1884740-1884786 placement
 /**
  * 把值序列化成 JSON，循环等异常时返回 undefined。
  */
@@ -186,9 +186,9 @@ function safeJsonStringify(value) {
 }
 export {
   getToolEndsTurnKind,
-  higherSourceRank,
+  hasToolResultError,
   CLAUDE_ENDTURN,
   CLAUDE_ENDTURNHONORSSTOPHOOKS,
   formatMcpStructuredContent,
-  hasToolResultError,
+  higherSourceRank,
 };

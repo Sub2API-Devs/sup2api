@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 设置提案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (7)
  * attribution: placement 7
  */
 import {
@@ -19,19 +19,19 @@ import {
 import { printableName } from "../../utils/printableName.js";
 import { apiClient } from "../routines/routinesApi.js";
 
-//@ chunk-dz3q485w.js:34702-34739 placement
+//@ chunk-jndyh8cy.js:34446-34483 placement
 var CHANNEL_MESSAGE_ID_REGEX = /^cmsg_[A-Za-z0-9_-]{1,160}$/;
-//@ chunk-dz3q485w.js:34739-34790 placement
+//@ chunk-jndyh8cy.js:34483-34534 placement
 function setupProposalsPath(channelId, action) {
   return channelPath(channelId, "/setup-proposals", action);
 }
-//@ chunk-dz3q485w.js:34790-34877 placement
+//@ chunk-jndyh8cy.js:34534-34621 placement
 function apiErrorReasonCode(error) {
   let body = apiErrorBody(error);
   let rawCode = body?.reason ?? body?.code;
   return typeof rawCode === "string" ? printableName(rawCode, 64) : "";
 }
-//@ chunk-dz3q485w.js:34877-35080 placement
+//@ chunk-jndyh8cy.js:34621-34824 placement
 var TRANSIENT_SUBMIT_ERRORS = new Set(["channel_session_unavailable"]);
 var NO_RETRY_SUBMIT_ERRORS = new Set([
   "channel_disabled",
@@ -41,7 +41,7 @@ var NO_RETRY_SUBMIT_ERRORS = new Set([
   "proposal_too_large",
   "setup_submit_disabled",
 ]);
-//@ chunk-dz3q485w.js:35080-36213 placement
+//@ chunk-jndyh8cy.js:34824-35957 placement
 /**
  * 提交项目设置提案：先带来源会话 id 提交，400 且错误码不在已知集合时去掉来源会话重试；非 2xx 归为 unavailable（区分未部署、瞬时、可能已存储），成功时返回被丢弃的部分与是否已提交过。
  */
@@ -116,13 +116,13 @@ async function submitSetupProposal(
     sourceSessionSent: withSource,
   };
 }
-//@ chunk-dz3q485w.js:36213-36337 placement
+//@ chunk-jndyh8cy.js:35957-36081 placement
 function droppedSourceSession(dropped) {
   return dropped.some((part) =>
     /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SOURCE_SESSION$/.test(part.trim().toUpperCase()),
   );
 }
-//@ chunk-dz3q485w.js:36337-36455 placement
+//@ chunk-jndyh8cy.js:36081-36199 placement
 function droppedSessions(dropped) {
   return dropped.some((part) =>
     /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SESSIONS$/.test(part.trim().toUpperCase()),

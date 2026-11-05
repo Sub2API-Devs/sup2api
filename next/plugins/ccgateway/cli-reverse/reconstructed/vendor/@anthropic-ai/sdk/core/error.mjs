@@ -3,19 +3,19 @@
  *
  * @anthropic-ai/sdk 的 API 错误类（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2g090z7k.js (14)
+ * pieces: chunk-63094ahz.js (14)
  * attribution: esm-layout 1, esm-fingerprint 5, layout 1, placement 7
  */
 import { castToError } from "../internal/errors.mjs";
 
-//@ chunk-2g090z7k.js:792-841 esm-layout
+//@ chunk-63094ahz.js:792-841 esm-layout
 var AnthropicError = (() => {
   class AnthropicError extends Error {}
   return AnthropicError;
 })();
-//@ chunk-2g090z7k.js:841-1727 esm-fingerprint
+//@ chunk-63094ahz.js:841-1727 esm-fingerprint
 class APIError extends AnthropicError {
   constructor(status, error, message, headers, type) {
     super(`${APIError.makeMessage(status, error, message)}`);
@@ -58,20 +58,20 @@ class APIError extends AnthropicError {
     return new APIError(status, error, message, headers, type);
   }
 }
-//@ chunk-2g090z7k.js:1727-1830 esm-fingerprint
+//@ chunk-63094ahz.js:1727-1830 esm-fingerprint
 class APIUserAbortError extends APIError {
   constructor({ message } = {}) {
     super(undefined, undefined, message || "Request was aborted.", undefined);
   }
 }
-//@ chunk-2g090z7k.js:1830-1953 esm-fingerprint
+//@ chunk-63094ahz.js:1830-1953 esm-fingerprint
 class APIConnectionError extends APIError {
   constructor({ message, cause }) {
     super(undefined, undefined, message || "Connection error.", undefined);
     if (cause) this.cause = cause;
   }
 }
-//@ chunk-2g090z7k.js:1953-2043 esm-fingerprint
+//@ chunk-63094ahz.js:1953-2043 esm-fingerprint
 class APIConnectionTimeoutError extends APIConnectionError {
   constructor({ message } = {}) {
     super({
@@ -79,34 +79,34 @@ class APIConnectionTimeoutError extends APIConnectionError {
     });
   }
 }
-//@ chunk-2g090z7k.js:2043-2149 esm-fingerprint
+//@ chunk-63094ahz.js:2043-2149 esm-fingerprint
 class RetryableError extends AnthropicError {
   constructor(message, { cause } = {}) {
     super(message ?? "Retryable error.");
     if (cause !== undefined) this.cause = cause;
   }
 }
-//@ chunk-2g090z7k.js:2149-2171 layout
+//@ chunk-63094ahz.js:2149-2171 layout
 class BadRequestError extends APIError {}
-//@ chunk-2g090z7k.js:2171-2193 placement
+//@ chunk-63094ahz.js:2171-2193 placement
 class AuthenticationError extends APIError {}
-//@ chunk-2g090z7k.js:2193-2215 placement
+//@ chunk-63094ahz.js:2193-2215 placement
 class PermissionDeniedError extends APIError {}
-//@ chunk-2g090z7k.js:2215-2237 placement
+//@ chunk-63094ahz.js:2215-2237 placement
 class NotFoundError extends APIError {}
-//@ chunk-2g090z7k.js:2237-2259 placement
+//@ chunk-63094ahz.js:2237-2259 placement
 class ConflictError extends APIError {}
-//@ chunk-2g090z7k.js:2259-2281 placement
+//@ chunk-63094ahz.js:2259-2281 placement
 class UnprocessableEntityError extends APIError {}
-//@ chunk-2g090z7k.js:2281-2303 placement
+//@ chunk-63094ahz.js:2281-2303 placement
 class RateLimitError extends APIError {}
-//@ chunk-2g090z7k.js:2303-2325 placement
+//@ chunk-63094ahz.js:2303-2325 placement
 class InternalServerError extends APIError {}
 export {
   APIUserAbortError,
   APIError,
-  APIConnectionTimeoutError,
   APIConnectionError,
+  APIConnectionTimeoutError,
   AnthropicError,
   NotFoundError,
   AuthenticationError,

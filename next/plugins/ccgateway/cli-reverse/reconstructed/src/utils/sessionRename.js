@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：会话重命名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5h69ret3.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g7snec79.js (1)
  * attribution: placement 1
  */
 import { performRename } from "../commands/rename/rename.js";
 
-//@ chunk-5h69ret3.js:11876-11959 placement
+//@ chunk-g7snec79.js:13024-13107 placement
 /**
  * /rename 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

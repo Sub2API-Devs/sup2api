@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sts/endpoint/EndpointParameters.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1)
+ * pieces: chunk-brqnbz3r.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-a8ee6x44.js:1925-2573 cjs-require-graph
+//@ chunk-brqnbz3r.js:1925-2573 cjs-require-graph
 var require_EndpointParameters = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

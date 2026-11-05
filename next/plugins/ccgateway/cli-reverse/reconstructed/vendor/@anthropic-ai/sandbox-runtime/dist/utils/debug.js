@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/utils/debug.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-r0ads4ty.js (1)
+ * pieces: chunk-getdj2mr.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-r0ads4ty.js:614-840 esm-fingerprint
+//@ chunk-getdj2mr.js:614-840 esm-fingerprint
 function logForDebugging(message, options) {
   if (!process.env.SRT_DEBUG) return;
   let level = options?.level || "info";

@@ -3,9 +3,9 @@
  *
  * 解析 marketplace add 的输入（SSH/HTTPS git URL、owner/repo#ref、JSON URL、本地路径、npm 包）为市场来源对象。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/parseMarketplaceInput.ts
- * pieces: chunk-dcmhvw5a.js (3)
+ * pieces: chunk-z20c443b.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { resolve } from "path";
@@ -25,14 +25,14 @@ import { getErrnoCode } from "../errors.js";
 import { isSuspiciousUrl } from "../fsBoundRead.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:72144-72261 placement
+//@ chunk-z20c443b.js:72252-72369 placement
 var GITHUB_REPO_SLUG_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MARKETPLACE_INPUT_ERRNOS;
-deferInit("chunk-dcmhvw5a.js:72144", () => {
+deferInit("chunk-z20c443b.js:72252", () => {
   GITHUB_REPO_SLUG_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
   MARKETPLACE_INPUT_ERRNOS = new Set(["ENOTDIR", "ENAMETOOLONG", "ELOOP"]);
 });
-//@ chunk-dcmhvw5a.js:72261-75406 fingerprint (2.1.88 match: parseMarketplaceInput, 0.677)
+//@ chunk-z20c443b.js:72369-75514 fingerprint (2.1.88 match: parseMarketplaceInput, 0.676)
 /**
  * 解析 /plugin marketplace add 的输入：git@ SSH URL（可带 #ref）、https URL（.git 视为 git，.json 视为 url，github.com 转 github）、owner/repo[#ref]、本地路径（目录或 .json 文件）、npm 包等，返回市场来源对象或错误。
  */
@@ -225,7 +225,7 @@ async function parseMarketplaceInput(input) {
   }
   return null;
 }
-//@ chunk-dcmhvw5a.js:75406-75983 placement
+//@ chunk-z20c443b.js:75514-76092 placement
 /**
  * 把 GitHub 仓库引用（https/ssh URL、git@host:owner/repo、owner/repo）规范成小写 `owner/repo`；非 GitHub 主机、带非法路径段或解析失败返回 null。
  */
@@ -264,4 +264,4 @@ function normalizeGithubRepoSlug(input) {
   if (!GITHUB_REPO_SLUG_RE.test(replaced) || /\/\.\.?$/.test(replaced)) return null;
   return replaced.toLowerCase();
 }
-export { GITHUB_REPO_SLUG_RE, normalizeGithubRepoSlug, parseMarketplaceInput };
+export { normalizeGithubRepoSlug, GITHUB_REPO_SLUG_RE, parseMarketplaceInput };

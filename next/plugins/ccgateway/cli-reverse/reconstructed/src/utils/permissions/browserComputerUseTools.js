@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：浏览器与计算机操作工具清单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (38)
  * attribution: placement 38
  */
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { LSP_TOOL_NAME } from "../../tools/LSPTool/UI.js";
@@ -46,7 +46,7 @@ import {
 } from "../../services/selfHostedRunner/runnerToolNames.js";
 import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import {
-  getMcpPrefix as getMcpPrefix_2,
+  getMcpPrefix as getMcpPrefix_4,
   getToolNameForPermissionCheck as getToolNameForPermissionCheck_4,
 } from "../../services/mcp/mcpStringUtils.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../computerUse/common.js";
@@ -56,24 +56,24 @@ import { READ_ONLY_CU_ACTIONS, REGION_DURATION_ARG_KEYS } from "../computerUse/t
 import { isComputerUseTool } from "./browserToolNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1278962-1279002 placement
+//@ chunk-5xgkngpb.js:1269640-1269680 placement
 /**
  * lacksCreateIfEmpty：输入未要求 createIfEmpty（只读工具判定）。
  */
 function lacksCreateIfEmpty(store) {
   return !store?.createIfEmpty;
 }
-//@ chunk-e6aww6q8.js:1279002-1279034 placement
+//@ chunk-5xgkngpb.js:1269680-1269712 placement
 /**
  * lacksClear：输入未要求 clear（只读工具判定）。
  */
 function lacksClear(store) {
   return !store?.clear;
 }
-//@ chunk-e6aww6q8.js:1279034-1279245 placement
+//@ chunk-5xgkngpb.js:1269712-1269923 placement
 var BROWSER_TOOL_INPUT_CHECKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BROWSER_HOUSEKEEPING_TOOLS;
-deferInit("chunk-e6aww6q8.js:1279034", () => {
+deferInit("chunk-5xgkngpb.js:1269712", () => {
   BROWSER_TOOL_INPUT_CHECKS = new Map([
     ["read_console_messages", lacksClear],
     ["read_network_requests", lacksClear],
@@ -87,7 +87,7 @@ deferInit("chunk-e6aww6q8.js:1279034", () => {
     "tabs_close_mcp",
   ]);
 });
-//@ chunk-e6aww6q8.js:1279245-1279328 placement
+//@ chunk-5xgkngpb.js:1269923-1270006 placement
 /**
  * isBrowserHousekeepingCall：浏览器内务类工具或输入检查通过即为真。
  */
@@ -97,12 +97,12 @@ function isBrowserHousekeepingCall(name, input) {
   if (check) return check(input);
   return false;
 }
-//@ chunk-e6aww6q8.js:1279328-1279384 placement
+//@ chunk-5xgkngpb.js:1270006-1270062 placement
 var HIDDEN_INPUT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1279328", () => {
+deferInit("chunk-5xgkngpb.js:1270006", () => {
   HIDDEN_INPUT_KEYS = new Set(["includePermissionState", "checkUrls"]);
 });
-//@ chunk-e6aww6q8.js:1279384-1279495 placement
+//@ chunk-5xgkngpb.js:1270062-1270173 placement
 function makeWalkFrame(source) {
   return {
     source,
@@ -112,7 +112,7 @@ function makeWalkFrame(source) {
     dropped: false,
   };
 }
-//@ chunk-e6aww6q8.js:1279495-1279720 placement
+//@ chunk-5xgkngpb.js:1270173-1270398 placement
 function rebuildWalkFrame({ source, keys, replaced, dropped }) {
   if (replaced === undefined && !dropped) return source;
   if (keys === undefined)
@@ -123,7 +123,7 @@ function rebuildWalkFrame({ source, keys, replaced, dropped }) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:1279720-1280235 placement
+//@ chunk-5xgkngpb.js:1270398-1270913 placement
 /**
  * 非递归遍历对象图：删掉保留键（j4t 集合），把循环引用替换为 undefined，只在有改动时复制容器。
  */
@@ -159,7 +159,7 @@ function stripCyclesAndHiddenKeys(root) {
     last_2.next++;
   }
 }
-//@ chunk-e6aww6q8.js:1280235-1281393 placement
+//@ chunk-5xgkngpb.js:1270913-1272071 placement
 /**
  * 浏览器与计算机操作工具清单（延迟加载的工具模块）。
  */
@@ -173,7 +173,7 @@ var OPTIONAL_TOOL_NAME_B;
 var OPTIONAL_TOOL_NAME_C;
 var OPTIONAL_TOOL_NAME_D;
 var BENIGN_TOOL_NAMES;
-var MCP_RESOURCE_TOOL_NAMES;
+var MCP_RESOURCE_TOOL_NAMES_2;
 var BROWSER_READ_ONLY_SUFFIXES;
 var PERMISSION_INSPECTION_TOOL_NAMES;
 var COMPUTER_READ_ONLY_ACTIONS;
@@ -181,7 +181,7 @@ var BROWSER_TOOL_NAMES_WITH_INPUT;
 var BATCH_TOOL_NAMES;
 var READ_ONLY_COMPUTER_ACTIONS;
 var COMPUTER_NO_SAVE_ACTIONS;
-deferInit("chunk-e6aww6q8.js:1280235", () => {
+deferInit("chunk-5xgkngpb.js:1270913", () => {
   BROWSER_COMPUTER_USE_TOOLS = null;
   SEARCH_MCP_REGISTRY_TOOL_NAME =
     require("../../tools/SearchMcpRegistryTool/prompt.js").SEARCH_MCP_REGISTRY_TOOL_NAME;
@@ -195,7 +195,7 @@ deferInit("chunk-e6aww6q8.js:1280235", () => {
   OPTIONAL_TOOL_NAME_C = null;
   OPTIONAL_TOOL_NAME_D = null;
   BENIGN_TOOL_NAMES = new Set([
-    FILE_READ_TOOL_NAME,
+    READ,
     GREP_TOOL_NAME,
     GLOB_TOOL_NAME,
     LSP_TOOL_NAME,
@@ -221,7 +221,7 @@ deferInit("chunk-e6aww6q8.js:1280235", () => {
     ...(LIST_CONNECTORS_TOOL_NAME ? [LIST_CONNECTORS_TOOL_NAME] : []),
     ...PLUGIN_SKILL_SAFE_TOOL_NAMES,
   ]);
-  MCP_RESOURCE_TOOL_NAMES = new Set([READMCPRESOURCETOOL, READ_MCP_RESOURCE_DIR_TOOL_NAME]);
+  MCP_RESOURCE_TOOL_NAMES_2 = new Set([READMCPRESOURCETOOL, READ_MCP_RESOURCE_DIR_TOOL_NAME]);
   BROWSER_READ_ONLY_SUFFIXES = [
     "find",
     "get_page_text",
@@ -268,27 +268,27 @@ deferInit("chunk-e6aww6q8.js:1280235", () => {
     ...READ_ONLY_COMPUTER_ACTIONS,
   ]);
 });
-//@ chunk-e6aww6q8.js:1281393-1281480 placement
+//@ chunk-5xgkngpb.js:1272071-1272158 placement
 function isComputerActionWithoutSave(input) {
   let toolInput = input;
   if (!COMPUTER_NO_SAVE_ACTIONS.has(String(toolInput?.action))) return false;
   return !toolInput?.save_to_disk;
 }
-//@ chunk-e6aww6q8.js:1281480-1281539 placement
+//@ chunk-5xgkngpb.js:1272158-1272217 placement
 var BROWSER_READ_ONLY_TOOL_SET; // deferred: uses BROWSER_COMPUTER_USE_TOOLS of its import cycle while loading; runs once the cycle is complete
 var COMPUTER_READ_ONLY_INPUT_CHECKS;
-deferInit("chunk-e6aww6q8.js:1281480", () => {
+deferInit("chunk-5xgkngpb.js:1272158", () => {
   BROWSER_READ_ONLY_TOOL_SET = new Set(BROWSER_READ_ONLY_SUFFIXES);
   COMPUTER_READ_ONLY_INPUT_CHECKS = new Map([
     ["computer", isComputerActionWithoutSave],
     ...BROWSER_TOOL_INPUT_CHECKS,
   ]);
 });
-//@ chunk-e6aww6q8.js:1281539-1281577 placement
+//@ chunk-5xgkngpb.js:1272217-1272255 placement
 function isReadOnlyComputerCall(input) {
   return matchesToolSet(input, COMPUTER_READ_ONLY_INPUT_CHECKS, BROWSER_READ_ONLY_TOOL_SET);
 }
-//@ chunk-e6aww6q8.js:1281577-1281738 placement
+//@ chunk-5xgkngpb.js:1272255-1272416 placement
 function matchesToolSet(tool, inputChecks, nameSet) {
   if (typeof tool !== "object" || tool === null) return false;
   let toolName = tool.name;
@@ -297,14 +297,14 @@ function matchesToolSet(tool, inputChecks, nameSet) {
   if (check) return check(tool.input);
   return nameSet.has(toolName);
 }
-//@ chunk-e6aww6q8.js:1281738-1282062 placement
+//@ chunk-5xgkngpb.js:1272416-1272740 placement
 /**
  * auto 模式下浏览器/计算机操作工具是否可直接放行：排除列表外的只读工具、按工具输入判定的工具、批量动作全部为只读时为真。
  */
 function isBrowserToolAutoAllowed(tool, input) {
   if (tool.excludedFromAutoModeAllowlist?.() === true) return false;
   let toolName = tool.name;
-  if (MCP_RESOURCE_TOOL_NAMES.has(toolName)) return !greedyShoreEnabled();
+  if (MCP_RESOURCE_TOOL_NAMES_2.has(toolName)) return !greedyShoreEnabled();
   if (BENIGN_TOOL_NAMES.has(toolName)) return true;
   if (PERMISSION_INSPECTION_TOOL_NAMES.has(toolName)) return true;
   let check = COMPUTER_READ_ONLY_ACTIONS.get(toolName);
@@ -317,18 +317,18 @@ function isBrowserToolAutoAllowed(tool, input) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1282062-1282112 placement
+//@ chunk-5xgkngpb.js:1272740-1272790 placement
 function isReadOnlyComputerActionOnly(input) {
   return READ_ONLY_COMPUTER_ACTIONS.has(String(input?.action));
 }
-//@ chunk-e6aww6q8.js:1282112-1282160 placement
+//@ chunk-5xgkngpb.js:1272790-1272838 placement
 var READ_ONLY_CU_ACTION_CHECKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_TOOL_NAME_SET;
-deferInit("chunk-e6aww6q8.js:1282112", () => {
+deferInit("chunk-5xgkngpb.js:1272790", () => {
   READ_ONLY_CU_ACTION_CHECKS = new Map([["computer", isReadOnlyComputerActionOnly]]);
   EMPTY_TOOL_NAME_SET = new Set();
 });
-//@ chunk-e6aww6q8.js:1282160-1282300 placement
+//@ chunk-5xgkngpb.js:1272838-1272978 placement
 function hasBrowserWriteAction(toolName, input) {
   if (BROWSER_TOOL_NAMES_WITH_INPUT.has(toolName)) return isReadOnlyComputerActionOnly(input);
   if (BATCH_TOOL_NAMES.has(toolName)) {
@@ -340,7 +340,7 @@ function hasBrowserWriteAction(toolName, input) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1282300-1282373 placement
+//@ chunk-5xgkngpb.js:1272978-1273051 placement
 /**
  * shouldClassifyBrowserWrite：开启点击分类器且有浏览器写动作。
  */
@@ -349,11 +349,11 @@ function shouldClassifyBrowserWrite(toolPermissionContext, toolName, input) {
     toolPermissionContext.chromeClickClassifierEnabled === true && hasBrowserWriteAction(toolName, input)
   );
 }
-//@ chunk-e6aww6q8.js:1282373-1282586 placement
+//@ chunk-5xgkngpb.js:1273051-1273264 placement
 var READ_ONLY_BROWSER_TOOL_SUFFIXES; // deferred: uses MCP_CLAUDE_DEVICE_CHROME (../claudeInChrome/chromeToolNames.js) of its import cycle while loading; runs once the cycle is complete
 var READ_ONLY_BROWSER_TOOLS;
 var READ_ONLY_COMPUTER_ACTIONS_2;
-deferInit("chunk-e6aww6q8.js:1282373", () => {
+deferInit("chunk-5xgkngpb.js:1273051", () => {
   READ_ONLY_BROWSER_TOOL_SUFFIXES = [
     "find",
     "get_page_text",
@@ -368,25 +368,25 @@ deferInit("chunk-e6aww6q8.js:1282373", () => {
   );
   READ_ONLY_COMPUTER_ACTIONS_2 = new Set(["screenshot", "wait", "get_page_text", "find", "cursor_position"]);
 });
-//@ chunk-e6aww6q8.js:1282586-1282644 placement
+//@ chunk-5xgkngpb.js:1273264-1273322 placement
 function isReadOnlyComputerAction(input) {
   return READ_ONLY_COMPUTER_ACTIONS_2.has(String(input?.action)) && isComputerActionWithoutSave(input);
 }
-//@ chunk-e6aww6q8.js:1282644-1282703 placement
+//@ chunk-5xgkngpb.js:1273322-1273381 placement
 var READ_ONLY_BROWSER_SUFFIX_SET; // deferred: uses READ_ONLY_BROWSER_TOOL_SUFFIXES of its import cycle while loading; runs once the cycle is complete
 var READ_ONLY_COMPUTER_INPUT_CHECKS;
-deferInit("chunk-e6aww6q8.js:1282644", () => {
+deferInit("chunk-5xgkngpb.js:1273322", () => {
   READ_ONLY_BROWSER_SUFFIX_SET = new Set(READ_ONLY_BROWSER_TOOL_SUFFIXES);
   READ_ONLY_COMPUTER_INPUT_CHECKS = new Map([
     ["computer", isReadOnlyComputerAction],
     ...BROWSER_TOOL_INPUT_CHECKS,
   ]);
 });
-//@ chunk-e6aww6q8.js:1282703-1282741 placement
+//@ chunk-5xgkngpb.js:1273381-1273419 placement
 function isReadOnlyBrowserAction(input) {
   return matchesToolSet(input, READ_ONLY_COMPUTER_INPUT_CHECKS, READ_ONLY_BROWSER_SUFFIX_SET);
 }
-//@ chunk-e6aww6q8.js:1282741-1282948 placement
+//@ chunk-5xgkngpb.js:1273419-1273626 placement
 function isReadOnlyBrowserCall(toolNameForPermissionCheck, input) {
   if (READ_ONLY_BROWSER_TOOLS.has(toolNameForPermissionCheck)) return true;
   let check = COMPUTER_READ_ONLY_ACTIONS.get(toolNameForPermissionCheck);
@@ -399,9 +399,9 @@ function isReadOnlyBrowserCall(toolNameForPermissionCheck, input) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1282948-1283066 placement
+//@ chunk-5xgkngpb.js:1273626-1273744 placement
 var AGENT_SPAWNING_TOOLS; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1282948", () => {
+deferInit("chunk-5xgkngpb.js:1273626", () => {
   AGENT_SPAWNING_TOOLS = new Set([
     AGENT,
     CRON_CREATE_TOOL_NAME,
@@ -420,20 +420,20 @@ deferInit("chunk-e6aww6q8.js:1282948", () => {
     REPL_TOOL_NAME,
   ]);
 });
-//@ chunk-e6aww6q8.js:1283066-1283100 placement
+//@ chunk-5xgkngpb.js:1273744-1273777 placement
 /**
  * isAgentSpawningTool：是否为会派生代理的工具。
  */
 function isAgentSpawningTool(name) {
   return AGENT_SPAWNING_TOOLS.has(name);
 }
-//@ chunk-e6aww6q8.js:1283100-1283976 placement
+//@ chunk-5xgkngpb.js:1273777-1274653 placement
 /**
  * BROWSER_ACTION_KINDS_COPY：BROWSER_ACTION_KINDS 的副本（未被使用）。
  */
 var BROWSER_ACTION_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BROWSER_ACTION_KINDS_COPY;
-deferInit("chunk-e6aww6q8.js:1283100", () => {
+deferInit("chunk-5xgkngpb.js:1273777", () => {
   BROWSER_ACTION_KINDS = new Map(
     [
       [
@@ -483,18 +483,18 @@ deferInit("chunk-e6aww6q8.js:1283100", () => {
   );
   BROWSER_ACTION_KINDS_COPY = new Map(BROWSER_ACTION_KINDS);
 });
-//@ chunk-e6aww6q8.js:1283976-1284035 placement
+//@ chunk-5xgkngpb.js:1274653-1274712 placement
 var computerUseToolPrefix; // deferred: uses getMcpPrefix (../../services/mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
 var remoteDevicesToolPrefix;
 var COMPUTER;
 var COMPUTER_2;
-deferInit("chunk-e6aww6q8.js:1283976", () => {
-  computerUseToolPrefix = getMcpPrefix_2(COMPUTER_USE_MCP_SERVER_NAME);
-  remoteDevicesToolPrefix = getMcpPrefix_2(REMOTE_DEVICES);
+deferInit("chunk-5xgkngpb.js:1274653", () => {
+  computerUseToolPrefix = getMcpPrefix_4(COMPUTER_USE_MCP_SERVER_NAME);
+  remoteDevicesToolPrefix = getMcpPrefix_4(REMOTE_DEVICES);
   COMPUTER = "computer_";
   COMPUTER_2 = "computer__";
 });
-//@ chunk-e6aww6q8.js:1284035-1284242 placement
+//@ chunk-5xgkngpb.js:1274712-1274919 placement
 function getBrowserActionName(toolName) {
   if (toolName.startsWith(computerUseToolPrefix)) return toolName.slice(computerUseToolPrefix.length);
   if (!toolName.startsWith(remoteDevicesToolPrefix)) return;
@@ -502,23 +502,23 @@ function getBrowserActionName(toolName) {
   if (!sliced.startsWith(COMPUTER) || sliced.startsWith(COMPUTER_2)) return;
   return BROWSER_ACTION_KINDS.has(sliced) ? sliced : sliced.slice(COMPUTER.length);
 }
-//@ chunk-e6aww6q8.js:1284242-1284281 placement
+//@ chunk-5xgkngpb.js:1274919-1274958 placement
 /**
  * isClassifiableBrowserCall：能取到浏览器动作名的调用。
  */
 function isClassifiableBrowserCall(toolName) {
   return getBrowserActionName(toolName) !== undefined;
 }
-//@ chunk-e6aww6q8.js:1284281-1284357 placement
+//@ chunk-5xgkngpb.js:1274958-1275034 placement
 function savesObservedContent(input) {
   return Boolean(readObjectField(input, "text")) || Boolean(readObjectField(input, "save_to_disk"));
 }
-//@ chunk-e6aww6q8.js:1284357-1284437 placement
+//@ chunk-5xgkngpb.js:1275034-1275114 placement
 function readObjectField(object, field) {
   if (typeof object !== "object" || object === null || !(field in object)) return;
   return object[field];
 }
-//@ chunk-e6aww6q8.js:1284437-1284784 placement
+//@ chunk-5xgkngpb.js:1275114-1275461 placement
 /**
  * 批量计算机操作（含 teach_batch 的各步）是否全部为不落盘的观察类动作。
  */
@@ -549,7 +549,7 @@ function isObserveOnlyBatch(browserActionName, input) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1284784-1284969 placement
+//@ chunk-5xgkngpb.js:1275461-1275646 placement
 function classifyBrowserAction(toolName, input) {
   let browserActionName = getBrowserActionName(toolName);
   if (browserActionName === undefined) return;
@@ -558,20 +558,20 @@ function classifyBrowserAction(toolName, input) {
   if (kind === "batch") return isObserveOnlyBatch(browserActionName, input) ? "observe" : "batch";
   return kind;
 }
-//@ chunk-e6aww6q8.js:1284969-1285013 placement
+//@ chunk-5xgkngpb.js:1275646-1275690 placement
 /**
  * normalizeAutoModeValue：只把 “on” 归一为 “on”。
  */
 function normalizeAutoModeValue(featureValue_CACHED_MAY_BE_STALE) {
   return featureValue_CACHED_MAY_BE_STALE === "on" ? "on" : undefined;
 }
-//@ chunk-e6aww6q8.js:1285013-1285113 placement
+//@ chunk-5xgkngpb.js:1275690-1275789 placement
 function getClassifiableBrowserAction(tool, input, toolPermissionContext) {
   if (!isAutoClassifierActive(toolPermissionContext)) return;
   let kind = classifyBrowserAction(getToolNameForPermissionCheck_4(tool), input);
   return kind === "observe" || kind === "access" ? undefined : kind;
 }
-//@ chunk-e6aww6q8.js:1285113-1285193 placement
+//@ chunk-5xgkngpb.js:1275789-1275868 placement
 /**
  * shouldRouteBrowserCallToClassifier：分类器开启且动作可判定时才交给分类器。
  */
@@ -588,7 +588,7 @@ function shouldRouteBrowserCallToClassifier(
     getClassifiableBrowserAction(tool, input, callContext) !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:1285193-1285387 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-5xgkngpb.js:1275868-1276063 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool, input) {
   let { mcpInfo } = tool;
   let isReadOnlyAction =
@@ -600,7 +600,7 @@ function getToolNameForPermissionCheck(tool, input) {
         Object.keys(input).every((key) => REGION_DURATION_ARG_KEYS.includes(key))));
   return isComputerUseTool(mcpInfo) && !isReadOnlyAction;
 }
-//@ chunk-e6aww6q8.js:1285387-1285727 placement
+//@ chunk-5xgkngpb.js:1276063-1276404 placement
 /**
  * 可能作用于本会话桌面的工具每次调用都需要审阅：生成不可被 allow 规则、钩子或插件放行的 ask（可由分类器批准）。
  */
@@ -633,8 +633,8 @@ export {
   hasBrowserWriteAction,
   isAgentSpawningTool,
   getToolNameForPermissionCheck,
-  getClassifiableBrowserAction,
   buildDesktopActionReviewAsk,
+  getClassifiableBrowserAction,
   isBrowserHousekeepingCall,
   stripCyclesAndHiddenKeys,
   isClassifiableBrowserCall,

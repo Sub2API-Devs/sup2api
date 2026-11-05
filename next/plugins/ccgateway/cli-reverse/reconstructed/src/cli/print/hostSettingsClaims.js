@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：宿主设置认领跟踪、登录受阻消息与 SDK 钩子注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (15)
- * attribution: placement 15
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (16)
+ * attribution: placement 15, layout 1
  */
 import { MCP_POLICY_SETTING_KEYS } from "../../services/mcp/config.js";
 import {
@@ -29,11 +29,18 @@ import {
 } from "../../services/oauth/refusedSignIn.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { gateBlockReasonCode } from "../../services/policyLimits/orgConfigGate.js";
+import { getBackdropState, BACKDROP } from "../../plugins/functionHooks/sessionApi.js";
+import { redrawSite } from "../../plugins/functionHooks/api/state.js";
+import { RENDER_COMPONENT_SURFACES } from "../../plugins/functionHooks/sites/uiSites.js";
+import { logError } from "../../utils/log.js";
+import { toError } from "../../utils/errors.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { notifyHookCallbackFailure } from "../../utils/hooks/hookFailures.js";
 import { isNoPromptHost } from "../../utils/permissions/permissionPromptHost.js";
 import { isHostDisplayFeatureOn } from "../../utils/hooks/hookMessages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:510177-512319 placement
+//@ chunk-0yw3taqg.js:549650-551816 placement
 /**
  * 备用进程（spare）在未被 claim_session 前收到请求的拒绝文本：等待认领 / 认领失败需冷启动。
  */
@@ -116,6 +123,7 @@ var SDK_REQUESTS_ALLOWED_BEFORE_CLAIM = {
   prefetch_attachments: false,
   send_task_message: false,
   mcp_tasks_changed: false,
+  set_attached_project: false,
   channel_enable: false,
   remote_control: false,
   set_color: false,
@@ -143,18 +151,18 @@ var SPARE_NOT_CLAIMED_TEXT =
   "not_claimed: this process is a spare waiting for claim_session; send this request after the claim";
 var SPARE_CLAIM_FAILED_TEXT =
   "not_claimed: the claim of this spare failed; discard the process and start the session cold";
-//@ chunk-tyg7f3ek.js:512319-512391 placement
+//@ chunk-0yw3taqg.js:551816-551888 placement
 function isAllowedBeforeClaim(subtype) {
   return typeof subtype === "string" && Object.hasOwn(SDK_REQUESTS_ALLOWED_BEFORE_CLAIM, subtype)
     ? SDK_REQUESTS_ALLOWED_BEFORE_CLAIM[subtype]
     : true;
 }
-//@ chunk-tyg7f3ek.js:512391-512424 placement
+//@ chunk-0yw3taqg.js:551888-551921 placement
 var FLAG_SETTINGS_PLUGIN_KEYS; // deferred: uses MCP_POLICY_SETTING_KEYS (../../services/mcp/config.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:512391", () => {
+deferInit("chunk-0yw3taqg.js:551888", () => {
   FLAG_SETTINGS_PLUGIN_KEYS = [...MCP_POLICY_SETTING_KEYS, "enabledPlugins"];
 });
-//@ chunk-tyg7f3ek.js:512424-513063 placement
+//@ chunk-0yw3taqg.js:551921-552560 placement
 class FlagSettingsClaimTracker {
   latestRequestId;
   latestRefusal;
@@ -185,10 +193,10 @@ class FlagSettingsClaimTracker {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:513063-513116 placement
+//@ chunk-0yw3taqg.js:552560-552613 placement
 var MODEL_DATE_SUFFIX_RE = /-\d{8}$/;
 var MODEL_WITH_1M_SUFFIX_PATTERN = /^(claude-[a-z0-9-]+)(\[1m\])?$/;
-//@ chunk-tyg7f3ek.js:513116-513278 placement
+//@ chunk-0yw3taqg.js:552613-552775 placement
 function isAutoModeCapableModel(model) {
   let baseModel = MODEL_WITH_1M_SUFFIX_PATTERN.exec(model)?.[1];
   if (baseModel === undefined || baseModel.includes("-fast")) return false;
@@ -200,7 +208,7 @@ function isAutoModeCapableModel(model) {
     modelSupportsAutoMode(model)
   );
 }
-//@ chunk-tyg7f3ek.js:513278-513584 placement
+//@ chunk-0yw3taqg.js:552775-553081 placement
 /**
  * SDK claude_authenticate：校验新登录的组织策略/托管设置，通过后切换凭证。
  */
@@ -216,7 +224,7 @@ async function sdkClaudeAuthenticate(err) {
   let revokeMessage = await revokeRefusedSignInToken(err);
   return `${loginBlockedMessage(loginSettingsOutcome(gate.evaluation))} ${revokeMessage}`;
 }
-//@ chunk-tyg7f3ek.js:513584-514533 placement
+//@ chunk-0yw3taqg.js:553081-554030 placement
 function loginBlockedMessage(outcome) {
   switch (outcome) {
     case "refused":
@@ -227,7 +235,23 @@ function loginBlockedMessage(outcome) {
       return "Login blocked: your organization's policy and managed settings could not be loaded, and the organization requires them before a session can start. Retry shortly, and check the network or proxy if it persists; run claude auth login from a terminal for details.";
   }
 }
-//@ chunk-tyg7f3ek.js:514533-514934 placement
+//@ chunk-0yw3taqg.js:554030-554216 layout
+function burstBackdropRedraw(backdropState, shouldShow) {
+  try {
+    backdropState.hasEverStood = backdropState.hasEverStood || getBackdropState() !== undefined;
+    if (shouldShow || backdropState.hasEverStood)
+      redrawSite(
+        ...RENDER_COMPONENT_SURFACES.Backdrop.map((surface) => ({
+          surface,
+          component: "Backdrop",
+          requestId: BACKDROP,
+        })),
+      );
+  } catch (error) {
+    logError(toError(error));
+  }
+}
+//@ chunk-0yw3taqg.js:554216-554617 placement
 /**
  * SDK 宿主在 PreModelSwitch 与 prompt 钩子期间重连时给用户的两条说明：模型未切换、提示未提交，可重试。
  */
@@ -237,7 +261,7 @@ var SDK_PRE_MODEL_SWITCH_RECONNECT_TEXT =
   "The SDK host that registered this PreModelSwitch hook re-initialized before answering; the model was not switched. Retry the switch.";
 var SDK_PROMPT_HOOK_RECONNECT_TEXT =
   "The SDK host reconnected before its prompt hook answered, so this prompt was not submitted. Send it again.";
-//@ chunk-tyg7f3ek.js:514934-515537 placement
+//@ chunk-0yw3taqg.js:554617-555220 placement
 function sdkHookReconnectFallback(hookInput) {
   switch (hookInput.hook_event_name) {
     case "PreToolUse":
@@ -278,21 +302,36 @@ function sdkHookReconnectFallback(hookInput) {
       return {};
   }
 }
-//@ chunk-tyg7f3ek.js:515537-516032 placement
+//@ chunk-0yw3taqg.js:555220-556063 placement
 function buildSdkHookRegistrations(hooksByEvent, makeHook, options) {
   let registrations = {};
   for (let [key, value] of Object.entries(hooksByEvent)) {
     if (value.length === 0) continue;
-    registrations[key] = value.map((registration) => ({
-      matcher: registration.matcher ?? undefined,
-      hooks: registration.hookCallbackIds.map((hookCallbackId) =>
-        makeHook(hookCallbackId, registration.timeout),
-      ),
-      origin: "sdkHost",
-      ...(options.hostOwnsStdinOrigin && {
-        hostOwnsStdin: true,
-      }),
-    }));
+    registrations[key] = value.map((registration) => {
+      let onFailure = registration.onFailure;
+      let onFailureKnown =
+        onFailure === undefined || onFailure === null || onFailure === "continue" || onFailure === "block";
+      if (!onFailureKnown) {
+        logForDebugging(`initialize: unknown onFailure on a ${key} hook matcher; reading it as "block"`, {
+          level: "warn",
+        });
+        notifyHookCallbackFailure(
+          `${key}: a hook matcher's onFailure isn't "continue" or "block", so its callbacks are set to "block".`,
+          "hook_on_failure_unknown",
+        );
+      }
+      let effectiveFailureMode = onFailureKnown ? (registration.onFailure ?? undefined) : "block";
+      return {
+        matcher: registration.matcher ?? undefined,
+        hooks: registration.hookCallbackIds.map((hookCallbackId) =>
+          makeHook(hookCallbackId, registration.timeout, effectiveFailureMode),
+        ),
+        origin: "sdkHost",
+        ...(options.hostOwnsStdinOrigin && {
+          hostOwnsStdin: true,
+        }),
+      };
+    });
   }
   let registeredHooks = getRegisteredHooks();
   if (registeredHooks) {
@@ -312,7 +351,7 @@ function buildSdkHookRegistrations(hooksByEvent, makeHook, options) {
   }
   if (Object.keys(registrations).length > 0) registerHookCallbacks(registrations);
 }
-//@ chunk-tyg7f3ek.js:516032-516157 placement
+//@ chunk-0yw3taqg.js:556063-556188 placement
 function hasSdkHostHooks() {
   let registeredHooks = getRegisteredHooks();
   if (!registeredHooks) return false;
@@ -320,11 +359,11 @@ function hasSdkHostHooks() {
     registrations.some((registration) => "origin" in registration && registration.origin === "sdkHost"),
   );
 }
-//@ chunk-tyg7f3ek.js:516157-516218 placement
+//@ chunk-0yw3taqg.js:556188-556249 placement
 function sdkHooksIfHostOwnsStdin(initialize, options) {
   return options.hostOwnsStdinOrigin ? initialize.hooks : undefined;
 }
-//@ chunk-tyg7f3ek.js:516218-516367 placement
+//@ chunk-0yw3taqg.js:556249-556398 placement
 function withHostWordedAsks(payload, options, host) {
   return options.hostOwnsStdinOrigin &&
     host.permissionPromptToolName === "stdio" &&
@@ -336,12 +375,13 @@ function withHostWordedAsks(payload, options, host) {
       }
     : payload;
 }
-//@ chunk-tyg7f3ek.js:516409-516479 placement
+//@ chunk-0yw3taqg.js:556440-556510 placement
 function mcpClientModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 export {
   isAutoModeCapableModel,
+  burstBackdropRedraw,
   FlagSettingsClaimTracker,
   isAllowedBeforeClaim,
   SPARE_CLAIM_FAILED_TEXT,

@@ -3,9 +3,9 @@
  *
  * Explore 内建代理：只读代码搜索专员及其系统提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/exploreAgent.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 2
  */
 import { isBashAvailable } from "../../../utils/shell/shellToolUtils.js";
@@ -14,16 +14,16 @@ import { POWERSHELL_TOOL_NAME } from "../../PowerShellTool/toolName.js";
 import { hasEmbeddedSearchTools } from "../../../utils/embeddedTools.js";
 import { GLOB_TOOL_NAME } from "../../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../GrepTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../../FileReadTool/constants.js";
+import { READ } from "../../FileReadTool/constants.js";
 import { AGENT } from "../constants.js";
 import { ARTIFACT_FAMILY_TOOL_NAMES } from "../../ArtifactTool/constants.js";
 import { EXITPLANMODE } from "../../ExitPlanModeTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../FileEditTool/constants.js";
+import { EDIT } from "../../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:179523-181888 fingerprint (2.1.88 match: getExploreSystemPrompt, 0.647)
+//@ chunk-5xgkngpb.js:179633-181998 fingerprint (2.1.88 match: getExploreSystemPrompt, 0.647)
 function getExploreSystemPrompt() {
   let embedded = isBashAvailable();
   let shellToolName = embedded ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
@@ -56,7 +56,7 @@ Your strengths:
 Guidelines:
 ${globGuidance}
 ${grepGuidance}
-- Use ${FILE_READ_TOOL_NAME} when you know the specific file path you need to read
+- Use ${READ} when you know the specific file path you need to read
 - Use ${shellToolName} ONLY for read-only operations (${embedded ? `ls, git status, git log, git diff, find${useEmbeddedSearch ? ", grep" : ""}, cat, head, tail` : "Get-ChildItem, git status, git log, git diff, Get-Content, Select-Object -First/-Last"})
 - NEVER use ${shellToolName} for: ${embedded ? "mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install" : "New-Item, Remove-Item, Copy-Item, Move-Item, git add, git commit, npm install, pip install"}, or any file creation/modification
 - Adapt your search approach based on the thoroughness level specified by the caller
@@ -68,7 +68,7 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 
 Complete the user's search request efficiently and report your findings clearly.`;
 }
-//@ chunk-e6aww6q8.js:181888-183116 fingerprint (2.1.88 match: EXPLORE_AGENT, 0.716)
+//@ chunk-5xgkngpb.js:181998-183226 fingerprint (2.1.88 match: EXPLORE_AGENT, 0.716)
 /**
  * Explore 内建代理及其 whenToUse 文本；EXPLORE_AGENT_MIN_QUERIES=3 用于主提示词"超过 3 次查询改用 Explore"。
  */
@@ -76,7 +76,7 @@ var EXPLORE_AGENT_MIN_QUERIES; // deferred: uses AGENT (../constants.js) of its 
 var EXPLORE_WHEN_TO_USE;
 var EXPLORE_WHEN_TO_USE_LEAN;
 var EXPLORE_AGENT;
-deferInit("chunk-e6aww6q8.js:181888", () => {
+deferInit("chunk-5xgkngpb.js:181998", () => {
   EXPLORE_AGENT_MIN_QUERIES = 3;
   EXPLORE_WHEN_TO_USE =
     'Fast read-only search agent for locating code. Use it to find files by pattern (eg. "src/components/**/*.tsx"), grep for symbols or keywords (eg. "API endpoints"), or answer "where is X defined / which files reference Y." Do NOT use it for code review, design-doc auditing, cross-file consistency checks, or open-ended analysis \u2014 it reads excerpts rather than whole files and will miss content past its read window. When calling, specify search breadth: "quick" for a single targeted lookup, "medium" for moderate exploration, or "very thorough" to search across multiple locations and naming conventions.';
@@ -89,7 +89,7 @@ deferInit("chunk-e6aww6q8.js:181888", () => {
       AGENT,
       ...ARTIFACT_FAMILY_TOOL_NAMES,
       EXITPLANMODE,
-      FILE_EDIT_TOOL_NAME,
+      EDIT,
       FILE_WRITE_TOOL_NAME,
       NOTEBOOK_EDIT_TOOL_NAME,
     ],

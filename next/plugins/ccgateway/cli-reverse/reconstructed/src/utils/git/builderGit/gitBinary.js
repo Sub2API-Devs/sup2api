@@ -3,15 +3,15 @@
  *
  * builderGit：定位 git 可执行文件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (17)
  * attribution: placement 17
  */
 import { readdirSync } from "fs";
 import { join } from "path";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
-import { uniq } from "../../collections.js";
+import { getPlatform } from "../../platform.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { isReachableOrUnsafe, isPathDirSafe, createReachCollector } from "./sandboxReach.js";
 import { getErrnoCode } from "../../errors.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
@@ -21,12 +21,12 @@ import { HostScoped } from "../../hostScoped.js";
 import { getRootSession } from "../../../bootstrap/state.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:277278-277426 placement
+//@ chunk-fepf8jp6.js:70958-71106 placement
 var PROBED_PROGRAMS; // deferred: uses getPlatform (../../platform.js) of its import cycle while loading; runs once the cycle is complete
 var WINDOWS_EXEC_EXTENSIONS;
 var MAX_PATHEXT_ENTRIES;
-deferInit("chunk-s61vbvea.js:277278", () => {
-  PROBED_PROGRAMS = getPlatform_2() === "windows" ? ["git", "powershell.exe"] : ["git", "ps"];
+deferInit("chunk-fepf8jp6.js:70958", () => {
+  PROBED_PROGRAMS = getPlatform() === "windows" ? ["git", "powershell.exe"] : ["git", "ps"];
   WINDOWS_EXEC_EXTENSIONS = [
     ".exe",
     ".com",
@@ -42,11 +42,11 @@ deferInit("chunk-s61vbvea.js:277278", () => {
   ];
   MAX_PATHEXT_ENTRIES = 32;
 });
-//@ chunk-s61vbvea.js:277426-277665 placement
+//@ chunk-fepf8jp6.js:71106-71345 placement
 function listProgramNames(envCaseInsensitive) {
   let execExtensions =
-    getPlatform_2() === "windows"
-      ? uniq([
+    getPlatform() === "windows"
+      ? normalizeCaseForComparison_2([
           ...WINDOWS_EXEC_EXTENSIONS,
           ...(envCaseInsensitive ?? "")
             .split(";")
@@ -56,19 +56,19 @@ function listProgramNames(envCaseInsensitive) {
         ])
       : [];
   return PROBED_PROGRAMS.flatMap((program) =>
-    getPlatform_2() === "windows" && !program.includes(".")
+    getPlatform() === "windows" && !program.includes(".")
       ? [program, ...execExtensions.map((extension) => program + extension)]
       : [program],
   );
 }
-//@ chunk-s61vbvea.js:277665-277704 placement
+//@ chunk-fepf8jp6.js:71345-71384 placement
 /**
  * 用探测程序列表判断某个程序目录是否安全（无越权文件）。
  */
 function isProgramDirSafe(realCandidate, reachPredicate, collector) {
   return isProgramDirSafeFor(realCandidate, reachPredicate, PROBED_PROGRAMS, collector);
 }
-//@ chunk-s61vbvea.js:277704-277799 placement
+//@ chunk-fepf8jp6.js:71384-71479 placement
 /**
  * 判断目录 e 对路径 n 是否安全：可达或不在团队目录内即可。
  */
@@ -79,13 +79,13 @@ function isProgramDirSafeFor(realCandidate, programDir, expectedEntries, collect
     entries === null || !isPathDirSafe(realCandidate, programDir, [...entries, ...expectedEntries], collector)
   );
 }
-//@ chunk-s61vbvea.js:277799-277998 placement (2.1.88 match: isRealPathWithinTeamDir, 0.762)
+//@ chunk-fepf8jp6.js:71479-71678 placement (2.1.88 match: isRealPathWithinTeamDir, 0.762)
 function isRealPathWithinTeamDir(realCandidate) {
   try {
     let mapped = readdirSync(realCandidate, {
       withFileTypes: true,
     })
-      .filter((dirent) => getPlatform_2() === "windows" || !dirent.isFile())
+      .filter((dirent) => getPlatform() === "windows" || !dirent.isFile())
       .map((dirent) => dirent.name);
     return mapped.length > MAX_DIRECTORY_ENTRIES ? null : mapped;
   } catch (error) {
@@ -93,7 +93,7 @@ function isRealPathWithinTeamDir(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR" ? [] : null;
   }
 }
-//@ chunk-s61vbvea.js:277998-278413 placement
+//@ chunk-fepf8jp6.js:71678-72085 placement
 function findXcodeGit(xcodeRoot, reachPredicate, collector) {
   return [xcodeRoot, join(xcodeRoot, "Contents", "Developer")].some((candidateRoot) => {
     if (isReachableOrUnsafe(candidateRoot, reachPredicate, collector)) return true;
@@ -119,7 +119,7 @@ function findXcodeGit(xcodeRoot, reachPredicate, collector) {
     );
   });
 }
-//@ chunk-s61vbvea.js:278413-278534 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-fepf8jp6.js:72085-72206 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isRealPathWithinTeamDir_2(realCandidate) {
   try {
     let entries = readdirSync(realCandidate);
@@ -129,9 +129,9 @@ function isRealPathWithinTeamDir_2(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR" ? [] : null;
   }
 }
-//@ chunk-s61vbvea.js:278534-278546 placement
+//@ chunk-fepf8jp6.js:72206-72218 placement
 var MAX_DIRECTORY_ENTRIES = 1024;
-//@ chunk-s61vbvea.js:278546-278785 placement
+//@ chunk-fepf8jp6.js:72218-72457 placement
 class GitBinaryError {
   #e = new Map();
   screenMemo;
@@ -147,16 +147,16 @@ class GitBinaryError {
     return gitOnPath;
   }
 }
-//@ chunk-s61vbvea.js:278785-278810 placement
+//@ chunk-fepf8jp6.js:72457-72482 placement
 var WINDOWS_EXEC_RE = /\.(?:exe|com)$/i;
-//@ chunk-s61vbvea.js:278810-278956 placement
+//@ chunk-fepf8jp6.js:72482-72628 placement
 function findGitOnPath(pathValue, platform = "linux") {
   let gitPath = whichOnPath("git", pathValue);
   if (platform !== "win32" || gitPath === null || WINDOWS_EXEC_RE.test(gitPath)) return gitPath;
   let gitExePath = whichOnPath("git.exe", pathValue);
   return gitExePath !== null && WINDOWS_EXEC_RE.test(gitExePath) ? gitExePath : null;
 }
-//@ chunk-s61vbvea.js:278956-279038 placement
+//@ chunk-fepf8jp6.js:72628-72710 placement
 /**
  * 判断 PATH 上只有 shim（git 解析不到 exe，但 which 能找到）。
  */
@@ -164,34 +164,34 @@ function isGitShimOnly() {
   let pathValue = getEnvCaseInsensitive(auditEnvironment(), "PATH") ?? "";
   return findGitOnPath(pathValue) === null && whichOnPath("git", pathValue) !== null;
 }
-//@ chunk-s61vbvea.js:279038-279145 placement
+//@ chunk-fepf8jp6.js:72710-72817 placement
 function windowsGitNote() {
-  return getPlatform_2() === "windows"
+  return getPlatform() === "windows"
     ? " (only git.exe counts; git.cmd and git.bat wrappers are skipped)"
     : "";
 }
-//@ chunk-s61vbvea.js:279145-279290 placement
+//@ chunk-fepf8jp6.js:72817-72962 placement
 /**
  * Windows 目录须含 git.exe 的说明。
  */
 function windowsGitDirNote() {
-  return getPlatform_2() === "windows"
+  return getPlatform() === "windows"
     ? " On Windows, that directory must hold git.exe itself, since git.cmd and git.bat wrappers are skipped."
     : "";
 }
-//@ chunk-s61vbvea.js:279290-279316 placement
+//@ chunk-fepf8jp6.js:72962-72988 placement
 var gitBinaryStateRegistry; // deferred: uses GitBinaryError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:279290", () => {
+deferInit("chunk-fepf8jp6.js:72962", () => {
   gitBinaryStateRegistry = new HostScoped(() => new GitBinaryError());
 });
-//@ chunk-s61vbvea.js:279316-279354 placement
+//@ chunk-fepf8jp6.js:72988-73026 placement
 /**
  * 取当前宿主的 git 二进制状态缓存。
  */
 function currentGitBinaryState() {
   return gitBinaryStateRegistry.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:279354-279403 placement
+//@ chunk-fepf8jp6.js:73026-73074 placement
 /**
  * 在给定环境中解析 PATH 上的 git 可执行文件。
  */
@@ -199,14 +199,14 @@ function gitExeOnPathInEnv(gitEnv, probes = currentGitBinaryState()) {
   return probes.gitExeOnPath(gitEnv);
 }
 export {
-  GitBinaryError,
-  gitExeOnPathInEnv,
-  currentGitBinaryState,
-  isGitShimOnly,
-  windowsGitDirNote,
   listProgramNames,
   isProgramDirSafe,
   findXcodeGit,
   isProgramDirSafeFor,
+  currentGitBinaryState,
+  gitExeOnPathInEnv,
   windowsGitNote,
+  GitBinaryError,
+  isGitShimOnly,
+  windowsGitDirNote,
 };

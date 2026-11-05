@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端 shell 命令行读取与静态词判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (8)
  * attribution: placement 8
  */
 import { ZSH_MODULE_NAME_WRITERS, isAssignmentNameUnsafeForSandbox } from "../../../utils/bash/ast.js";
@@ -14,7 +14,7 @@ import { isAbortError } from "../../../utils/errors.js";
 import { logError } from "../../../utils/log.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 
-//@ chunk-tr0s0d0k.js:42043-44632 placement
+//@ chunk-6d2p9h2d.js:42371-44960 placement
 /**
  * shell 行解析限额：最多 16 段；变量名、路径、赋值字符集；重定向操作符；保留 bash/zsh 变量与前缀；会读取路径的命令集合。
  */
@@ -296,7 +296,7 @@ var PATH_READ_COMMANDS = new Set([
   "exit",
   "return",
 ]);
-//@ chunk-tr0s0d0k.js:44632-45067 placement
+//@ chunk-6d2p9h2d.js:44960-45395 placement
 async function parseServedShellLine(source) {
   try {
     if (!/^[\t\n\x20-\x7e]*$/.test(source)) return;
@@ -323,7 +323,7 @@ async function parseServedShellLine(source) {
     return;
   }
 }
-//@ chunk-tr0s0d0k.js:45067-46024 placement
+//@ chunk-6d2p9h2d.js:45395-46352 placement
 function collectProgramVariables(commandRaw, source, secondPass) {
   if (commandRaw.type !== "program") return;
   let values = new Map();
@@ -388,7 +388,7 @@ function collectProgramVariables(commandRaw, source, secondPass) {
     replacements,
   };
 }
-//@ chunk-tr0s0d0k.js:46024-47218 placement
+//@ chunk-6d2p9h2d.js:46352-47546 placement
 function readShellNode(node, source, values, replacements) {
   if (node.type === "list" || node.type === "pipeline") {
     let out = `${node.type}(`;
@@ -447,7 +447,7 @@ function readShellNode(node, source, values, replacements) {
     }
   return sawName ? `${out})` : undefined;
 }
-//@ chunk-tr0s0d0k.js:47218-47933 placement
+//@ chunk-6d2p9h2d.js:47546-48261 placement
 function isStaticWord(node, source, values, replacements) {
   switch (node.type) {
     case "word":
@@ -492,7 +492,7 @@ function isStaticWord(node, source, values, replacements) {
       return false;
   }
 }
-//@ chunk-tr0s0d0k.js:47933-48005 placement
+//@ chunk-6d2p9h2d.js:48261-48333 placement
 function isServedHairEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_hair", false) === true;
@@ -500,7 +500,7 @@ function isServedHairEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:48005-48080 placement
+//@ chunk-6d2p9h2d.js:48333-48408 placement
 function isServedFerruleEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_ferrule", false) === true;
@@ -508,7 +508,7 @@ function isServedFerruleEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:48167-48209 placement
+//@ chunk-6d2p9h2d.js:48495-48537 placement
 var SERVED_SHELL_READ_LIMITS = 2000;
 var MAX_PATH_PIECES = 112;
 var CUT_SHORT = Symbol("cut short");

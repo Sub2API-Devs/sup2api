@@ -3,11 +3,12 @@
  *
  * 插件 MCP 服务器：发现 .mcp.json/manifest.mcpServers/MCPB 包，解析 ${CLAUDE_PLUGIN_ROOT}/${user_config.*} 等变量，名字加 plugin:<插件>: 前缀，频道（channels）用户配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/mcpPluginIntegration.ts
- * pieces: chunk-d4eg9at2.js (1), chunk-e6aww6q8.js (22), chunk-k9mgeeff.js (1)
- * attribution: fingerprint 9, placement 8, layout 6, file-local 1
+ * pieces: chunk-5xgkngpb.js (21), chunk-jdfzheem.js (1), chunk-phjrnmh9.js (2), chunk-x6t8knrk.js (1)
+ * attribution: fingerprint 9, placement 8, layout 7, file-local 1
  */
+import * as pathModule from "path";
 import { join } from "path";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isFlagSyncWanted } from "../../services/plugins/accountSync/syncedPluginHooks.js";
@@ -26,25 +27,35 @@ import {
   isFreshTimestamp,
   MAX_REGISTRATION_AGE_MS,
 } from "../../services/mcp/registrationStatus.js";
-import { getIsInteractive, onProcessRootHost } from "../../bootstrap/state.js";
 import { readMcpOAuthStore } from "../../services/mcp/credentialStoreRead.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage, isENOENT } from "../errors.js";
+import { onProcessRootHost } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { safeOrigin } from "../../services/mcp/ccrMcpUrls.js";
 import { getLoggingSafeMcpBaseUrl } from "../../services/mcp/utils.js";
 import { redactUrlQuery, redactUrlsInMessage, replaceAll } from "../redaction/urlRedaction.js";
-import { loadMcpbFile, isMcpbSource, loadMcpServerUserConfig, validateUserConfig } from "./mcpbHandler.js";
+import {
+  loadMcpbFile,
+  isMcpbSource,
+  isLocalMcpbSource,
+  loadMcpServerUserConfig,
+  validateUserConfig,
+} from "./mcpbHandler.js";
 import { quotedPrintable, printableMessage } from "../printableName.js";
 import { jsonStringify, jsonParse } from "../slowOperations.js";
 import { env } from "../env.js";
 import { containsPathTraversal } from "../path.js";
 import { unaddableTransportReason } from "../../services/mcp/config.js";
+import {
+  pathEscapeError,
+  resolvePluginDirComponentPath,
+  findEscapeForRelPath,
+} from "./pluginPathContainment.js";
 import { getFsImplementation } from "../fsOperations.js";
-import { resolvePluginDirComponentPath } from "./pluginPathContainment.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
-import { cacheStorageKeyOrFallback, ensurePluginDataDir } from "./pluginDirectories.js";
+import { cacheStorageKeyOrFallback } from "./pluginDirectories.js";
 import { projectPluginCacheDir } from "./pluginCachePaths.js";
 import { formatStorageError } from "../storage/storageErrors.js";
 import { McpServerConfigSchema } from "../../services/mcp/types.js";
@@ -58,20 +69,21 @@ import {
   hasUserConfigVariables,
 } from "./pluginOptionsStorage.js";
 import { scrubbedEnvKeys, expandMcpCredentialEnvVars } from "../envExpansion.js";
+import { ensurePluginDataDir } from "../sessionStorage.js";
 import { PLUGIN_ENV_VAR_SET } from "./lspPluginIntegration.js";
 import { stdioIdentityDiff } from "../../services/mcp/serverIdentity.js";
 import { subprocessEnv } from "../subprocessEnv.js";
 import { listSecretEnvNames } from "../settings/policyHelper/helperEnv.js";
 import { sanitizeEnvCredentials } from "../settings/policyHelper/helperExec.js";
 import { ENV_REF_PATTERN } from "../../services/mcp/envExpansion.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { formatWithheldEnvNotice } from "../settings/hostEnvWrites.js";
 import { isManagedPluginScope, runWithPluginWriteScope } from "./pluginScopedWrite.js";
 import { readMcpServerNames, resolveComponentPath, objectKeysOf } from "./pluginInventory.js";
 import { hasDotDotWithSpaceSegment } from "../pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:605143-605292 fingerprint (2.1.88 match: addPluginScopeToServers, 1)
+//@ chunk-5xgkngpb.js:615213-615362 fingerprint (2.1.88 match: addPluginScopeToServers, 1)
 /**
  * 给插件 MCP 服务器加作用域前缀：名字改为 plugin:<插件名>:<服务器名>，scope=dynamic，记录来源插件。
  */
@@ -88,32 +100,23 @@ function addPluginScopeToServers(servers, pluginName, pluginSource) {
   }
   return scopedServers;
 }
-//@ chunk-e6aww6q8.js:3808451-3808485 placement
-var TENGU_RECURSIVE_LOBSTER = "tengu_recursive_lobster";
-//@ chunk-e6aww6q8.js:3808485-3808522 placement
-/**
- * recursiveLobsterOn：开关 tengu_recursive_lobster。
- */
-function recursiveLobsterOn() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_RECURSIVE_LOBSTER, false) === true;
-}
-//@ chunk-e6aww6q8.js:3808522-3808578 placement
+//@ chunk-5xgkngpb.js:3905658-3905714 placement
 var TENGU_STARRY_LOCKET = "tengu_starry_locket";
 var TENGU_TWINKLY_PRISM = "tengu_twinkly_prism";
-//@ chunk-e6aww6q8.js:3808578-3808622 placement
+//@ chunk-5xgkngpb.js:3905714-3905758 placement
 function twinklyPrismOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TWINKLY_PRISM, false) === true && isFlagSyncWanted();
 }
-//@ chunk-e6aww6q8.js:3808622-3808670 placement
+//@ chunk-5xgkngpb.js:3905758-3905806 placement
 function isSyncedMarketplacePluginEnabled(plugin) {
   return marketplaceOf(plugin.source) === SYNCED && twinklyPrismOn();
 }
-//@ chunk-e6aww6q8.js:3808670-3808697 placement
+//@ chunk-5xgkngpb.js:3905806-3905833 placement
 var mcpPluginIntegrationSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3808670", () => {
+deferInit("chunk-5xgkngpb.js:3905806", () => {
   mcpPluginIntegrationSlot = new HostScoped(() => new Set());
 });
-//@ chunk-e6aww6q8.js:3808697-3808887 placement
+//@ chunk-5xgkngpb.js:3905833-3906023 placement
 function getMcpRegistrationOfferState(serverName, config, store) {
   let entry = store?.[getServerKey(serverName, config)];
   if (!isRegistrationPendingEntry(entry) || entry.clientId) return "unknown";
@@ -121,7 +124,7 @@ function getMcpRegistrationOfferState(serverName, config, store) {
   if (registrationNotOfferedAt === undefined) return "unknown";
   return isFreshTimestamp(registrationNotOfferedAt) ? "unable" : "recheck";
 }
-//@ chunk-e6aww6q8.js:3808887-3810244 placement
+//@ chunk-5xgkngpb.js:3906023-3907368 placement
 /**
  * 按凭据存储判断插件提供的 MCP 服务器哪些可用。
  */
@@ -136,8 +139,7 @@ async function filterPluginMcpServersByCredentials(plugin, servers, { sessionLoa
     }
   if (
     marketplaceOf(plugin.source) !== SYNCED ||
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_STARRY_LOCKET, false) !== true ||
-    (recursiveLobsterOn() && getIsInteractive())
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_STARRY_LOCKET, false) !== true
   )
     return;
   let candidates = [];
@@ -202,7 +204,7 @@ ${name}`;
     });
   }
 }
-//@ chunk-e6aww6q8.js:3810244-3811399 fingerprint (2.1.88 match: loadMcpServersFromMcpb, 0.907)
+//@ chunk-5xgkngpb.js:3907368-3908525 fingerprint (2.1.88 match: loadMcpServersFromMcpb, 0.907)
 /**
  * 从插件里的 .mcpb/.dxt 包加载 MCP 服务器：loadMcpbFile 解压与生成配置，需要用户配置时返回 needs-config 状态。
  */
@@ -279,12 +281,12 @@ async function loadMcpServersFromMcpb(plugin, source, errors, warnings, storageV
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3811399-3811551 layout
+//@ chunk-5xgkngpb.js:3908525-3908677 layout
 function mcpbNeedsUserConfig(manifest) {
   if (manifest.user_config && Object.keys(manifest.user_config).length > 0) return true;
   return /\$\{(?:HOME|DESKTOP|DOCUMENTS|DOWNLOADS)\}/.test(jsonStringify(manifest.server ?? {}));
 }
-//@ chunk-e6aww6q8.js:3811551-3811812 layout
+//@ chunk-5xgkngpb.js:3908677-3908938 layout
 function isExemptFromSkipPluginMcp(plugin, { fullIdsOnly }) {
   let exemptList = env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT;
   if (!exemptList) return false;
@@ -299,7 +301,7 @@ function isExemptFromSkipPluginMcp(plugin, { fullIdsOnly }) {
       : allowBareName && pluginNamesEqual(trimmed, plugin.name);
   });
 }
-//@ chunk-e6aww6q8.js:3811812-3815254 layout
+//@ chunk-5xgkngpb.js:3908938-3912452 layout
 /**
  * 发现一个插件提供的 MCP 服务器：.mcp.json + manifest.mcpServers（路径/内联/MCPB 包），受 CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS(_EXCEPT)、CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES 等控制；返回 名字→配置。
  */
@@ -376,11 +378,12 @@ async function loadPluginMcpServersFromSources(
     }
     return false;
   };
-  let fileServers = readOnlyDirPlugin
-    ? null
-    : await loadMcpServersFromFile(plugin, ".mcp.json", storageV5, {
-        confine: isProjectLocal,
-      });
+  let fileServers =
+    readOnlyDirPlugin || (await checkMcpSourceEscape(plugin, ".mcp.json", errors))
+      ? null
+      : await loadMcpServersFromFile(plugin, ".mcp.json", storageV5, {
+          confine: isProjectLocal,
+        });
   if (fileServers)
     servers = {
       ...servers,
@@ -389,7 +392,7 @@ async function loadPluginMcpServersFromSources(
   if (plugin.manifest.mcpServers) {
     let mcpServers = plugin.manifest.mcpServers;
     if (typeof mcpServers === "string") {
-      if (isSkippedSpec(mcpServers));
+      if (isSkippedSpec(mcpServers) || (await checkMcpSourceEscape(plugin, mcpServers, errors)));
       else if (isMcpbSource(mcpServers)) {
         let mcpServersFromMcpb = await loadMcpServersFromMcpb(
           plugin,
@@ -423,7 +426,7 @@ async function loadPluginMcpServersFromSources(
         mapped.map(async ({ spec, specWarnings }) => {
           try {
             if (typeof spec === "string") {
-              if (isSkippedSpec(spec)) return null;
+              if (isSkippedSpec(spec) || (await checkMcpSourceEscape(plugin, spec, errors))) return null;
               if (isMcpbSource(spec))
                 return await loadMcpServersFromMcpb(
                   plugin,
@@ -509,7 +512,7 @@ async function loadPluginMcpServersFromSources(
   });
   return Object.keys(servers).length > 0 ? servers : undefined;
 }
-//@ chunk-e6aww6q8.js:3815254-3815416 file-local
+//@ chunk-5xgkngpb.js:3912452-3912614 file-local
 /**
  * 返回插件的 MCP 服务器（已缓存在插件对象上则直接用，否则发现后写回）。
  */
@@ -530,12 +533,12 @@ async function extractMcpServersFromPlugins(plugin, errors, storageV5, { warning
   if (pluginMcpServersFromSources) plugin.mcpServers = pluginMcpServersFromSources;
   return pluginMcpServersFromSources;
 }
-//@ chunk-e6aww6q8.js:3815416-3815494 layout
+//@ chunk-5xgkngpb.js:3912614-3912692 layout
 function pushMcpbNeedsConfigWarnings(plugin, warnings) {
   for (let serverName of plugin.mcpServersNeedingConfig ?? [])
     warnings.push(mcpbNeedsConfigWarning(plugin, serverName));
 }
-//@ chunk-e6aww6q8.js:3815494-3815592 layout
+//@ chunk-5xgkngpb.js:3912692-3912790 layout
 function mcpbNeedsConfigWarning(plugin, serverName) {
   return {
     type: "mcpb-needs-config",
@@ -544,7 +547,15 @@ function mcpbNeedsConfigWarning(plugin, serverName) {
     serverName,
   };
 }
-//@ chunk-e6aww6q8.js:3815592-3816522 fingerprint (2.1.88 match: loadMcpServersFromFile, 0.864)
+//@ chunk-5xgkngpb.js:3912790-3912921 layout
+async function checkMcpSourceEscape(plugin, declaration, errors) {
+  if (isMcpbSource(declaration) && !isLocalMcpbSource(declaration)) return false;
+  let escapeError = await pathEscapeError(plugin, declaration, "mcp-servers");
+  if (escapeError === undefined) return false;
+  errors.push(escapeError);
+  return true;
+}
+//@ chunk-5xgkngpb.js:3912921-3913854 fingerprint (2.1.88 match: loadMcpServersFromFile, 0.864)
 /**
  * 读取插件内一个 MCP 配置文件（.mcp.json 形状），可限定不逃出插件目录；存储后端模式下经存储层读。
  */
@@ -612,7 +623,7 @@ async function loadMcpServersFromFile(plugin, relPath, storageV5, { confine = fa
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3816522-3816871 fingerprint (2.1.88 match: getUnconfiguredChannels, 1)
+//@ chunk-5xgkngpb.js:3913854-3914202 fingerprint (2.1.88 match: getUnconfiguredChannels, 1)
 /**
  * 列出插件 manifest.channels 中缺少必填用户配置的频道（供启用时弹出配置对话框）。
  */
@@ -633,7 +644,7 @@ async function getUnconfiguredChannels(plugin, storageV5) {
   }
   return unconfigured;
 }
-//@ chunk-e6aww6q8.js:3816871-3817125 layout (2.1.88 match: addPluginScopeToServers, 0.786)
+//@ chunk-5xgkngpb.js:3914202-3914456 layout (2.1.88 match: addPluginScopeToServers, 0.786)
 /**
  * 给插件 MCP 服务器加 plugin:<插件>:<服务器> 前缀并标 scope=dynamic、pluginSource/pluginPath，官方背书时标 pluginOfficialSourceVouched。
  */
@@ -654,7 +665,7 @@ function addPluginScopeToServers_2(servers, name, pluginSource, pluginPath, offi
   }
   return scopedServers;
 }
-//@ chunk-e6aww6q8.js:3817125-3817371 fingerprint (2.1.88 match: loadChannelUserConfig, 1)
+//@ chunk-5xgkngpb.js:3914456-3914702 fingerprint (2.1.88 match: loadChannelUserConfig, 1)
 /**
  * 合并插件级 userConfig 与频道级 userConfig 的已保存值（含默认值），供替换 ${user_config.X}。
  */
@@ -677,7 +688,7 @@ async function loadChannelUserConfig(plugin, serverName, storageV5) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3817440-3820347 fingerprint (2.1.88 match: resolvePluginMcpEnvironment, 0.42)
+//@ chunk-5xgkngpb.js:3914771-3917681 fingerprint (2.1.88 match: resolvePluginMcpEnvironment, 0.42)
 /**
  * 解析插件 MCP 服务器配置中的变量：${CLAUDE_PLUGIN_ROOT}/${CLAUDE_PLUGIN_DATA}/${CLAUDE_PROJECT_DIR}/${user_config.X}/${ENV}，并为 stdio 服务器注入 CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA 环境变量；缺失变量记错误。
  */
@@ -812,7 +823,7 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       break;
   }
   if (errors && missingVars.length > 0) {
-    let uniqueVars = uniq(missingVars);
+    let uniqueVars = normalizeCaseForComparison_2(missingVars);
     let varList = uniqueVars.join(", ");
     logForDebugging(`Missing environment variables in plugin MCP config: ${varList}`, {
       level: "warn",
@@ -845,7 +856,7 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       } else if (urlMissingVars.length > 0) {
         errorReason = "env_missing";
         configError = formatWithheldEnvNotice(
-          uniq(urlMissingVars),
+          normalizeCaseForComparison_2(urlMissingVars),
           isManagedPluginScope({
             pluginSource: plugin.source,
           }),
@@ -884,7 +895,7 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       }
     : resolvedConfig;
 }
-//@ chunk-e6aww6q8.js:3820347-3820777 fingerprint (2.1.88 match: getPluginMcpServers, 0.644)
+//@ chunk-5xgkngpb.js:3917681-3918111 fingerprint (2.1.88 match: getPluginMcpServers, 0.644)
 /**
  * 已启用插件的最终 MCP 服务器配置（变量已解析）；供 MCP 配置合并（services/mcp/config）使用。
  */
@@ -924,7 +935,16 @@ async function getPluginMcpServers(plugin, errors = [], storageV5, credentials, 
     plugin.officialMarketplaceSourceVouched === true,
   );
 }
-//@ chunk-k9mgeeff.js:3581-3828 fingerprint (2.1.88 match: loadPluginMcpServers, 0.615)
+//@ chunk-phjrnmh9.js:625-654 placement
+var TENGU_CRYPTIC_CONWAY = "tengu_cryptic_conway";
+//@ chunk-phjrnmh9.js:654-687 placement
+/**
+ * recursiveLobsterOn：开关 tengu_recursive_lobster。
+ */
+function recursiveLobsterOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_CRYPTIC_CONWAY, false) === true;
+}
+//@ chunk-x6t8knrk.js:3637-3963 fingerprint (2.1.88 match: loadPluginMcpServers, 0.554)
 /**
  * 列出插件声明的 MCP 服务器配置（.mcp.json 与 manifest.mcpServers 中的文件/内联项，不含 MCPB 包），用于展示。
  */
@@ -938,10 +958,18 @@ async function loadPluginMcpServers(plugin) {
       !containsPathTraversal(declaration) &&
       !hasDotDotWithSpaceSegment(declaration)
     )
-      nameLists.push(await readMcpServerNames(await resolvePluginDirComponentPath(plugin, declaration)));
+      nameLists.push(
+        await readMcpServerNames(
+          plugin.filesAnchor === undefined
+            ? await resolvePluginDirComponentPath(plugin, declaration)
+            : (await findEscapeForRelPath(plugin.filesAnchor, plugin.path, declaration))
+              ? null
+              : pathModule.join(plugin.path, declaration),
+        ),
+      );
   return nameLists.flat();
 }
-//@ chunk-d4eg9at2.js:46214-46302 fingerprint (2.1.88 match: buildMcpUserConfig, 1)
+//@ chunk-jdfzheem.js:46318-46406 fingerprint (2.1.88 match: buildMcpUserConfig, 1)
 /**
  * 插件是否声明了 userConfig（名字配错，见 lead 建议）。
  */
@@ -950,13 +978,13 @@ function hasPluginUserConfig(plugin) {
   return userConfig && Object.keys(userConfig).length > 0 ? true : undefined;
 }
 export {
-  getPluginMcpServers,
   extractMcpServersFromPlugins,
   addPluginScopeToServers,
+  getPluginMcpServers,
   loadPluginMcpServersFromSources,
   hasPluginUserConfig,
+  addPluginScopeToServers_2,
   recursiveLobsterOn,
   getUnconfiguredChannels,
   loadPluginMcpServers,
-  addPluginScopeToServers_2,
 };

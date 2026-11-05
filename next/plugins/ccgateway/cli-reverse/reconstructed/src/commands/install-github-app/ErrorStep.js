@@ -3,10 +3,10 @@
  *
  * GitHub App 安装向导：错误步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/ErrorStep.tsx
- * pieces: chunk-4v9zy7gn.js (2)
- * attribution: file-last-pair 1, fingerprint 1
+ * pieces: chunk-2xbvbqx2.js (2)
+ * attribution: sole-consumer 1, fingerprint 1
  */
 import {
   jsxProd_default,
@@ -18,17 +18,17 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
-//@ chunk-4v9zy7gn.js:30650-30695 file-last-pair
-function renderErrorInstruction(instruction, index) {
+//@ chunk-2xbvbqx2.js:31695-31740 sole-consumer
+function renderErrorInstruction(children, key) {
   return jsxProd_default(
     BulletRow,
     {
-      children: instruction,
+      children,
     },
-    index,
+    key,
   );
 }
-//@ chunk-4v9zy7gn.js:30695-31502 fingerprint (2.1.88 match: ErrorStep, 0.389)
+//@ chunk-2xbvbqx2.js:31740-32546 fingerprint (2.1.88 match: ErrorStep, 0.389)
 function ErrorStep(props) {
   let $ = useMemoCache(11);
   let { error, errorReason, errorInstructions } = props;

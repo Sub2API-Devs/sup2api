@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：各平台 Chrome/Chromium/Edge/Brave 的候选路径；检查路径在挂载目录内且没有链接等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r0perv8y.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1ap3yadm.js (23)
  * attribution: placement 23
  */
 import { join, relative, sep, isAbsolute } from "path";
@@ -21,9 +21,9 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-r0perv8y.js:641-1367 placement
+//@ chunk-1ap3yadm.js:641-1367 placement
 /**
  * 各平台 Chrome/Chromium/Edge/Brave 的候选路径。
  */
@@ -55,7 +55,7 @@ function chromeCandidatePaths() {
       ];
   }
 }
-//@ chunk-r0perv8y.js:1367-1485 placement
+//@ chunk-1ap3yadm.js:1367-1485 placement
 async function isExecutableFile(path, fallback) {
   try {
     let fileStat = await stat(path);
@@ -65,7 +65,7 @@ async function isExecutableFile(path, fallback) {
     return false;
   }
 }
-//@ chunk-r0perv8y.js:1485-1598 placement
+//@ chunk-1ap3yadm.js:1485-1598 placement
 async function findChromeCandidates(options) {
   let found = [];
   for (let path of chromeCandidatePaths()) {
@@ -74,7 +74,7 @@ async function findChromeCandidates(options) {
   }
   return found;
 }
-//@ chunk-r0perv8y.js:1696-1829 placement
+//@ chunk-1ap3yadm.js:1696-1829 placement
 /**
  * 预览模拟器的技能挂载路径与常量。
  */
@@ -86,14 +86,14 @@ var SKILLS_MOUNT_SPEC = {
   base: SKILLS_MOUNT,
   ownerUid: 0,
 };
-//@ chunk-r0perv8y.js:1829-1863 placement
+//@ chunk-1ap3yadm.js:1829-1863 placement
 /**
  * 导出函数 `artifactEmulatorDir`：返回 join_2(SKILLS_MOUNT_SPEC.base, EXAMPLES_ARTIFACT_EMULATOR)。
  */
 function artifactEmulatorDir() {
   return join(SKILLS_MOUNT_SPEC.base, EXAMPLES_ARTIFACT_EMULATOR);
 }
-//@ chunk-r0perv8y.js:1863-2324 placement
+//@ chunk-1ap3yadm.js:1863-2324 placement
 /**
  * 检查路径在挂载目录内且没有链接。
  */
@@ -118,7 +118,7 @@ function checkInsideMount(path) {
   }
   return;
 }
-//@ chunk-r0perv8y.js:2324-2390 placement
+//@ chunk-1ap3yadm.js:2324-2390 placement
 /**
  * 内嵌 artifact 预览（emulator）：启动脚本挂载位置检查、是否编译进本构（compiledPreviewModule）、emulator 可用性开关与远端启用判断。
  */
@@ -126,11 +126,11 @@ function bootstrapScriptMount() {
   if (!isRemoteManagedEnvironment()) return "not_hosted";
   return checkInsideMount(join(artifactEmulatorDir(), SCRIPTS_BOOTSTRAP_PY));
 }
-//@ chunk-r0perv8y.js:2390-2417 placement
+//@ chunk-1ap3yadm.js:2390-2417 placement
 function isEmulatorAvailable() {
   return getEmulatorAvailability().on;
 }
-//@ chunk-r0perv8y.js:2417-2661 placement
+//@ chunk-1ap3yadm.js:2417-2661 placement
 function getEmulatorAvailability() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.artifactPreviewEmulator === undefined) {
@@ -142,7 +142,7 @@ function getEmulatorAvailability() {
   }
   return sessionFeatureValues.artifactPreviewEmulator;
 }
-//@ chunk-r0perv8y.js:2661-3057 placement
+//@ chunk-1ap3yadm.js:2661-3057 placement
 /**
  * Artifact 预览模拟器是否可用（CLAUDE_CODE_ARTIFACT_PREVIEW_EMULATOR）。
  */
@@ -182,13 +182,13 @@ function emulatorAvailability() {
         reason: "flag_off",
       };
 }
-//@ chunk-r0perv8y.js:3057-3068 placement
+//@ chunk-1ap3yadm.js:3057-3068 placement
 var compiledPreviewModule = null;
-//@ chunk-r0perv8y.js:3068-3101 placement
+//@ chunk-1ap3yadm.js:3068-3101 placement
 function hasCompiledPreview() {
   return compiledPreviewModule !== null && true;
 }
-//@ chunk-r0perv8y.js:3101-3279 placement
+//@ chunk-1ap3yadm.js:3101-3279 placement
 function isArtifactPreviewEnabled() {
   if (env.CLAUDE_CODE_ARTIFACT_PREVIEW === false) return false;
   if (previewEngineKind() === "emulator") return true;
@@ -196,11 +196,11 @@ function isArtifactPreviewEnabled() {
   if (env.CLAUDE_CODE_ARTIFACT_PREVIEW === true) return true;
   return getPreviewBrowserVerdict() !== "none";
 }
-//@ chunk-r0perv8y.js:3279-3293 placement
+//@ chunk-1ap3yadm.js:3279-3293 placement
 var emulatorAvailabilityState = {
   on: false,
 };
-//@ chunk-r0perv8y.js:3293-3448 placement
+//@ chunk-1ap3yadm.js:3293-3448 placement
 function previewEngineKind() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.artifactPreviewEngine ??=
@@ -209,11 +209,11 @@ function previewEngineKind() {
       : "local_chrome";
   return sessionFeatureValues.artifactPreviewEngine;
 }
-//@ chunk-r0perv8y.js:3448-3499 placement
+//@ chunk-1ap3yadm.js:3448-3499 placement
 function isRemoteEmulatorEnabled() {
   return env.CLAUDE_CODE_REMOTE === true && isEmulatorAvailable();
 }
-//@ chunk-r0perv8y.js:3499-3624 placement
+//@ chunk-1ap3yadm.js:3499-3624 placement
 function isArtifactPreviewEnabled_2() {
   if (env.CLAUDE_CODE_REMOTE || !hasCompiledPreview()) return false;
   return (
@@ -221,14 +221,17 @@ function isArtifactPreviewEnabled_2() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_aspen", false)
   );
 }
-//@ chunk-r0perv8y.js:3624-3983 placement
+//@ chunk-1ap3yadm.js:3624-3983 placement
 function requirePreviewChrome() {
   if (compiledPreviewModule === null) throw Error("artifact preview is not compiled into this build");
   let { findPlaywrightChromes } = compiledPreviewModule;
   let run = async (opts) =>
     env.BUN_CHROME_PATH
       ? [env.BUN_CHROME_PATH]
-      : uniq([...(await findPlaywrightChromes(opts)), ...(await findChromeCandidates(opts))]);
+      : normalizeCaseForComparison_2([
+          ...(await findPlaywrightChromes(opts)),
+          ...(await findChromeCandidates(opts)),
+        ]);
   return {
     chromeCandidates: run,
     resolveChrome: async () => (await run())[0],
@@ -237,12 +240,12 @@ function requirePreviewChrome() {
     installDir: compiledPreviewModule.chromeInstallDir,
   };
 }
-//@ chunk-r0perv8y.js:3983-4063 placement
+//@ chunk-1ap3yadm.js:3983-4063 placement
 function browserEnvKey() {
   return `${env.BUN_CHROME_PATH ?? ""}
 ${env.PLAYWRIGHT_BROWSERS_PATH ?? ""}`;
 }
-//@ chunk-r0perv8y.js:4063-4555 placement
+//@ chunk-1ap3yadm.js:4063-4555 placement
 async function startPreviewBrowserDiscovery() {
   let cached;
   try {
@@ -269,7 +272,7 @@ async function startPreviewBrowserDiscovery() {
     logForDebugging(`Artifact preview: the startup browser search failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-r0perv8y.js:4555-4839 placement
+//@ chunk-1ap3yadm.js:4555-4839 placement
 function getPreviewBrowserVerdict() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.artifactPreviewBrowser === undefined) {
@@ -283,11 +286,11 @@ function getPreviewBrowserVerdict() {
   }
   return sessionFeatureValues.artifactPreviewBrowser.verdict;
 }
-//@ chunk-r0perv8y.js:4839-4889 placement
+//@ chunk-1ap3yadm.js:4839-4889 placement
 function latchedPreviewBrowserVerdict() {
   return getSessionFeatureValues().artifactPreviewBrowser;
 }
-//@ chunk-r0perv8y.js:4889-5148 placement
+//@ chunk-1ap3yadm.js:4889-5148 placement
 function browserSearchVerdict(artifactPreviewBrowserSearch) {
   if (artifactPreviewBrowserSearch === undefined)
     return {
@@ -310,12 +313,12 @@ function browserSearchVerdict(artifactPreviewBrowserSearch) {
   };
 }
 export {
+  previewEngineKind,
+  isArtifactPreviewEnabled,
+  latchedPreviewBrowserVerdict,
   artifactEmulatorDir,
   SCRIPTS_BOOTSTRAP_PY,
   checkInsideMount,
   requirePreviewChrome,
-  previewEngineKind,
-  isArtifactPreviewEnabled,
-  latchedPreviewBrowserVerdict,
   startPreviewBrowserDiscovery,
 };

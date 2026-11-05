@@ -3,20 +3,20 @@
  *
  * 选项链表映射（OptionMap：按 value 查前后选项，用于键盘导航）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/option-map.ts
- * pieces: chunk-ey2qag4x.js (7)
+ * pieces: chunk-p1yqn9ds.js (7)
  * attribution: placement 6, fingerprint 1
  */
 import { init_react_production, useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-ey2qag4x.js:37014-37018 placement
+//@ chunk-p1yqn9ds.js:36635-36639 placement
 init_react_production();
-//@ chunk-ey2qag4x.js:37018-37022 placement
+//@ chunk-p1yqn9ds.js:36639-36643 placement
 init_react_production();
-//@ chunk-ey2qag4x.js:37064-37068 placement
+//@ chunk-p1yqn9ds.js:36685-36689 placement
 init_react_production();
-//@ chunk-ey2qag4x.js:37068-37264 placement
+//@ chunk-p1yqn9ds.js:36689-36885 placement
 /**
  * 同时返回状态值、setter 与读取最新值的 getter 的 state hook。
  */
@@ -37,15 +37,15 @@ function useLatestState(initial) {
   let getLatest = useCallback(() => holder.value, [holder]);
   return [value, update, getLatest];
 }
-//@ chunk-ey2qag4x.js:37264-37308 placement
+//@ chunk-p1yqn9ds.js:36885-36929 placement
 function isFunction(value) {
   return typeof value === "function";
 }
-//@ chunk-ey2qag4x.js:37308-37352 placement
+//@ chunk-p1yqn9ds.js:36929-36973 placement
 function isFunction_2(value) {
   return typeof value === "function";
 }
-//@ chunk-ey2qag4x.js:37352-37574 fingerprint (2.1.88 match: OptionMap, 1)
+//@ chunk-p1yqn9ds.js:36973-37195 fingerprint (2.1.88 match: OptionMap, 1)
 class OptionMap extends Map {
   first;
   last;

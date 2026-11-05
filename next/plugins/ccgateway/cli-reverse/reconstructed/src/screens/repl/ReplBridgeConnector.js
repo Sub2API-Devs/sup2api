@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把 REPL 的转录、命令、模型、工具与 MCP 客户端接到 Remote Control 桥，并提供写入/撤回会话内提示消息的接口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { init_react_production, useCallback, useMemo } from "../../../vendor/react/cjs/react.production.js";
@@ -20,12 +20,22 @@ import { useRegisterNotificationTranscriptSink } from "../../context/notificatio
 import { identity as identity_4 } from "../../utils/identity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1622704-1622708 placement
+//@ chunk-czq1j3j2.js:1610363-1610367 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1622704", () => {
+deferInit("chunk-czq1j3j2.js:1610363", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1622708-1623365 placement
+//@ chunk-czq1j3j2.js:1618181-1618185 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1618181", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1662623-1662627 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1662623", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1666867-1667531 placement
 /**
  * 把 REPL 的转录、命令、模型、工具、MCP 客户端、系统提示等接到 Remote Control 桥（useReplBridge）。
  */
@@ -69,14 +79,10 @@ function ReplBridgeConnector({
     scope.updateDynamicMcpConfig,
     isTurnLive,
     thinkingDisplayFlag,
+    undefined,
   );
 }
-//@ chunk-18hwfzwa.js:1623365-1623369 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1623365", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1623369-1623795 placement
+//@ chunk-czq1j3j2.js:1667535-1667961 placement
 /**
  * 提供写入/撤回会话内提示消息的接口：写入时追加或替换最后一条系统消息（查看子代理时不写），撤回时把该消息降级为 info。
  */
@@ -115,9 +121,9 @@ function useInformationalMessageSink(transcript) {
   );
   useRegisterNotificationTranscriptSink(sink);
 }
-//@ chunk-18hwfzwa.js:1623795-1623838 placement
+//@ chunk-czq1j3j2.js:1667961-1668004 placement
 var isOwedStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1623795", () => {
+deferInit("chunk-czq1j3j2.js:1667961", () => {
   isOwedStore = identity_4(
     {
       isOwed: true,
@@ -127,13 +133,8 @@ deferInit("chunk-18hwfzwa.js:1623795", () => {
     },
   );
 });
-//@ chunk-18hwfzwa.js:1623838-1623862 placement
+//@ chunk-czq1j3j2.js:1668004-1668028 placement
 function createEmptyList() {
   return [];
 }
-//@ chunk-18hwfzwa.js:1623862-1623866 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1623862", () => {
-  init_react_production();
-});
 export { createEmptyList, useInformationalMessageSink, ReplBridgeConnector };

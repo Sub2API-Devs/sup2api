@@ -3,10 +3,10 @@
  *
  * /feedback 实现：反馈/报错对话框与分享开关
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/feedback/feedback.tsx
- * pieces: chunk-bzb0qnrm.js (1), chunk-seqjkch8.js (5)
- * attribution: fingerprint 1, facade-majority 3, layout 2
+ * pieces: chunk-y656fhcx.js (5)
+ * attribution: facade-majority 3, layout 2
  */
 import { feedbackMode } from "../../services/feedback/submitFeedback.js";
 import {
@@ -23,10 +23,8 @@ import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { FeedbackQueue } from "./FeedbackQueue.js";
 import { isFeedbackDraftsEnabled } from "../../services/feedbackDrafts.js";
 import { createStore } from "../../state/store.js";
-import { runRemotePluginHook } from "../../services/remoteTools/runPluginHook.js";
-import { resyncForMissingEntry } from "../../services/remoteTools/commandRendering.js";
 
-//@ chunk-seqjkch8.js:15835-16264 facade-majority (2.1.88 match: renderFeedbackComponent, 0.262)
+//@ chunk-y656fhcx.js:16263-16692 facade-majority (2.1.88 match: renderFeedbackComponent, 0.269)
 function renderFeedbackComponent(
   context,
   abortController,
@@ -61,7 +59,7 @@ function renderFeedbackComponent(
     send,
   });
 }
-//@ chunk-seqjkch8.js:16264-16378 layout
+//@ chunk-y656fhcx.js:16692-16806 layout
 function renderFeedbackFromContext(onDone, caller, initialDescription, commandName) {
   return renderFeedbackComponent(
     onDone,
@@ -76,12 +74,12 @@ function renderFeedbackFromContext(onDone, caller, initialDescription, commandNa
     commandName,
   );
 }
-//@ chunk-seqjkch8.js:16378-16473 facade-majority
+//@ chunk-y656fhcx.js:16806-16901 facade-majority
 async function callLegacyFeedbackDialog(onDone, caller, arg, commandName = "/feedback") {
   let description = arg?.trim() === "public" ? "" : arg || "";
   return renderFeedbackFromContext(onDone, caller, description, commandName);
 }
-//@ chunk-seqjkch8.js:16473-16958 layout
+//@ chunk-y656fhcx.js:16901-17386 layout
 /**
  * /feedback 入口：有手动对话框时直接显示，否则显示反馈队列，“新写”时打开反馈对话框。
  */
@@ -127,7 +125,7 @@ function FeedbackCommandView(props) {
   } else footer = $[9];
   return footer;
 }
-//@ chunk-seqjkch8.js:16958-17087 facade-majority
+//@ chunk-y656fhcx.js:17386-17515 facade-majority
 async function call(onDone, context, args) {
   if (isFeedbackDraftsEnabled() && !args?.trim() && !hasPendingSurveyFeedbackSource())
     return jsxProd_default(FeedbackCommandView, {
@@ -137,11 +135,4 @@ async function call(onDone, context, args) {
     });
   return callLegacyFeedbackDialog(onDone, context, args);
 }
-//@ chunk-bzb0qnrm.js:5187-5293 fingerprint (2.1.88 match: call, 0.643)
-async function call_2(onDone, context, args) {
-  let toolContext = args.toolUseContext();
-  return runRemotePluginHook(onDone, toolContext, (recheck) =>
-    resyncForMissingEntry(args, toolContext.abortController.signal, recheck),
-  );
-}
-export { callLegacyFeedbackDialog, call_2, call, renderFeedbackComponent };
+export { callLegacyFeedbackDialog, call, renderFeedbackComponent };

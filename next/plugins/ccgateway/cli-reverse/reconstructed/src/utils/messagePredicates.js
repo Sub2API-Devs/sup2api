@@ -3,10 +3,10 @@
  *
  * 消息判定：是否人类回合、最后一条真实用户输入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messagePredicates.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-aepeg2w5.js (4)
- * attribution: placement 4, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (2), chunk-exfmq47h.js (4)
+ * attribution: affinity 1, placement 4, fingerprint 1
  */
 import {
   isHumanQueuedCommand,
@@ -14,10 +14,10 @@ import {
   matchesTaggedCommand,
   isHumanOrUnset,
 } from "./messageProvenance.js";
-import { SYSTEM_REMINDER_OPEN_PREFIX, USER_SENT_MESSAGE_PREFIX } from "./messages.js";
+import { USER_SENT_MESSAGE_PREFIX } from "../services/compact/compact.js";
 import { UNNAMED_SOURCE_LABEL, BOUND_THREAD_MESSAGES_HEADER } from "./messages/nonUserMessages.js";
 
-//@ chunk-aepeg2w5.js:605381-605515 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-exfmq47h.js:617893-618027 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 /**
  * 是否为人类亲自发出的回合：用户发出的 queued_command 附件，或既不是工具结果也不是压缩摘要的 user 消息。
  */
@@ -26,11 +26,11 @@ function isHumanAuthoredTurn(message) {
     return isHumanQueuedCommand(message.attachment);
   return message.type === "user" && !isToolResultOrCompactSummary(message);
 }
-//@ chunk-aepeg2w5.js:608640-608715 fingerprint (2.1.88 match: isHumanTurn, 1)
+//@ chunk-exfmq47h.js:621150-621225 fingerprint (2.1.88 match: isHumanTurn, 1)
 function isHumanTurn_2(m) {
   return m.type === "user" && !m.isMeta && m.toolUseResult === undefined;
 }
-//@ chunk-aepeg2w5.js:608715-608909 placement
+//@ chunk-exfmq47h.js:621225-621419 placement
 function isHumanInitiatedMessage(message, commandTags) {
   return (
     isHumanTurn_2(message) ||
@@ -42,7 +42,7 @@ function isHumanInitiatedMessage(message, commandTags) {
       message.attachment.origin?.kind === "human")
   );
 }
-//@ chunk-aepeg2w5.js:608909-609020 placement (2.1.88 match: isHumanTurn, 0.779)
+//@ chunk-exfmq47h.js:621419-621530 placement (2.1.88 match: isHumanTurn, 0.778)
 function isHumanTurn_3(m) {
   return (
     m.type === "user" &&
@@ -52,7 +52,13 @@ function isHumanTurn_3(m) {
     isHumanOrUnset(m.origin)
   );
 }
-//@ chunk-18hwfzwa.js:341504-341752 placement
+//@ chunk-czq1j3j2.js:379196-379225 affinity
+/**
+ * "<system-reminder>\n"，判断插话前缀时先剥掉它。
+ */
+var SYSTEM_REMINDER_OPEN_PREFIX = `<system-reminder>
+`;
+//@ chunk-czq1j3j2.js:379225-379473 placement
 /**
  * user 消息正文（剥 system-reminder 前缀后）以“用户在你工作时发来新消息”“协调者发来消息”等插话前缀开头。旧版名 relocateToolReferenceSiblings 为错配。
  */
@@ -76,8 +82,8 @@ function isMidTurnInterjectionMessage(message) {
 }
 export {
   isHumanTurn_2,
-  isMidTurnInterjectionMessage,
   isHumanTurn_3,
   isHumanAuthoredTurn,
+  isMidTurnInterjectionMessage,
   isHumanInitiatedMessage,
 };

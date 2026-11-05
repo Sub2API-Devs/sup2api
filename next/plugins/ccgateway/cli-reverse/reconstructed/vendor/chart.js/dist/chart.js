@@ -1,17 +1,17 @@
 /**
  * chart.js/dist/chart.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chart.js@4.6.1
- * pieces: chunk-dcmhvw5a.js (2)
+ * pieces: chunk-z20c443b.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { BRAILLE_SPINNER_FRAMES } from "../../../src/constants/figures.js";
 
-//@ chunk-dcmhvw5a.js:203657-203682 esm-layout
+//@ chunk-z20c443b.js:197783-197808 esm-layout
 function getBrailleSpinnerFrames() {
   return BRAILLE_SPINNER_FRAMES;
 }
-//@ chunk-dcmhvw5a.js:203682-203861 esm-fingerprint
+//@ chunk-z20c443b.js:197808-197987 esm-fingerprint
 var ROUNDED_BOX_CORNERS = {
   topLeft: "\u256D",
   topRight: "\u256E",
@@ -26,4 +26,4 @@ var TREE_GLYPHS = {
   teeDown: "\u252C",
   teeUp: "\u2534",
 };
-export { TREE_GLYPHS, EN_DASH, ROUNDED_BOX_CORNERS, getBrailleSpinnerFrames };
+export { TREE_GLYPHS, getBrailleSpinnerFrames, EN_DASH, ROUNDED_BOX_CORNERS };

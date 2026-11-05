@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：监听单个守护进程配置文件（daemon-config）的增删改，只关注目标目录与文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g3mpnrhd.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s24mfyjz.js (1)
  * attribution: placement 1
  */
 import { dirname, normalize, basename } from "path";
@@ -14,7 +14,7 @@ import { getPlatform } from "../utils/platform.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-g3mpnrhd.js:2183-2629 placement (2.1.88 match: initialize, 0.744)
+//@ chunk-s24mfyjz.js:2216-2662 placement (2.1.88 match: initialize, 0.744)
 /**
  * 监听单个配置文件（daemon-config）的增删改。旧版名 initialize 不准确。
  */

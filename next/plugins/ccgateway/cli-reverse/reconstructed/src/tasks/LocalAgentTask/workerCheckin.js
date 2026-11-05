@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：协调者模式下对仍在运行的派出工作定时检查（check-in）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 import { isObserverAgentTask } from "./LocalAgentTask.js";
@@ -18,24 +18,24 @@ import { stripIgnorables } from "../../utils/sanitization.js";
 import { logError } from "../../utils/log.js";
 import { getWorkerCheckinScheduleMs } from "../../tools/AgentTool/AgentTool.js";
 import {
-  removeQueuedByFilter,
-  peekQueuedCommand,
+  removeByFilter,
+  peek,
   someInFlightDrainCommand,
   WORKER_CHECKIN_ORIGIN,
 } from "../../utils/messageQueueManager.js";
 import { enqueueHookTaskNotification } from "../../utils/hooks/hookMessages.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:4709381-4709477 placement
+//@ chunk-5xgkngpb.js:4820225-4820321 placement
 /**
  * 判断通知是否来自 worker-checkin。
  */
 function isWorkerCheckinNotification(message) {
   return message.origin?.kind === "task-notification" && message.origin.source === "worker-checkin";
 }
-//@ chunk-e6aww6q8.js:4709477-4709491 placement
+//@ chunk-5xgkngpb.js:4820321-4820335 placement
 var MAX_CHECKIN_POLL_MS = 60000;
-//@ chunk-e6aww6q8.js:4709738-4709812 placement
+//@ chunk-5xgkngpb.js:4820582-4820656 placement
 /**
  * 按调度表与轮询间隔计算还要几轮才检查。
  */
@@ -43,7 +43,7 @@ function ticksUntilCheckin(checkinCount, scheduleMs, pollMs) {
   let delayMs = scheduleMs[Math.min(checkinCount, scheduleMs.length - 1)];
   return Math.ceil(delayMs / pollMs);
 }
-//@ chunk-e6aww6q8.js:4709812-4709911 placement (2.1.88 match: isPanelAgentTask, 0.77)
+//@ chunk-5xgkngpb.js:4820656-4820755 placement (2.1.88 match: isPanelAgentTask, 0.771)
 /**
  * 运行中的、可见的子代理任务：local_agent、非观察者、非 main-session、未到终态。
  */
@@ -55,12 +55,12 @@ function isRunningVisibleSubagent(task) {
     !isTerminalTaskStatus(task.status)
   );
 }
-//@ chunk-e6aww6q8.js:4709911-4709950 placement
+//@ chunk-5xgkngpb.js:4820755-4820794 placement
 /**
  * 表示"在等子工作"的保活原因前缀：bash:、agent:、workflow:。
  */
 var CHILD_WORK_KEEPALIVE_PREFIXES = ["bash:", "agent:", "workflow:"];
-//@ chunk-e6aww6q8.js:4709950-4710095 placement (2.1.88 match: isPanelAgentTask, 0.77)
+//@ chunk-5xgkngpb.js:4820794-4820939 placement (2.1.88 match: isPanelAgentTask, 0.771)
 /**
  * 子代理已停但仍有子工作（保活原因以 bash:/agent:/workflow: 开头）在跑。
  */
@@ -75,25 +75,25 @@ function isSubagentWaitingOnChildren(task) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:4710095-4710120 placement
+//@ chunk-5xgkngpb.js:4820939-4820964 placement
 var MAX_WORKERS_LISTED = 10;
 var MAX_WORKER_DESCRIPTION_CHARS = 80;
 var MAX_ACTIVITY_CHARS = 60;
-//@ chunk-e6aww6q8.js:4710120-4710165 placement
+//@ chunk-5xgkngpb.js:4820964-4821009 placement
 /**
  * 去不可见字符、去掉易混字符、转义并按长度截断。
  */
 function escapeAndTruncate(text, maxChars) {
   return escapeXml(truncateWithCount(foldLookalikeChars(stripIgnorables(text)), maxChars));
 }
-//@ chunk-e6aww6q8.js:4710165-4710225 placement
+//@ chunk-5xgkngpb.js:4821009-4821069 placement
 /**
  * 拼出「约 N 分钟前」。
  */
 function minutesAgoText(elapsedMs) {
   return `~${Math.floor(elapsedMs / 60000)} minutes ago`;
 }
-//@ chunk-e6aww6q8.js:4710225-4710724 placement
+//@ chunk-5xgkngpb.js:4821069-4821568 placement
 /**
  * 生成工作代理的状态行：工具调用次数、最近一次调用及时间、是否在等子代理。
  */
@@ -118,7 +118,7 @@ function workerStatusLine(task, nowMs) {
   if (isSubagentWaitingOnChildren(task)) parts.push("agent finished; parked on pending background work");
   return `- ${escapeAndTruncate(task.description, MAX_WORKER_DESCRIPTION_CHARS)} (${parts.join(", ")})`;
 }
-//@ chunk-e6aww6q8.js:4710724-4710978 placement
+//@ chunk-5xgkngpb.js:4821568-4821822 placement
 function stillRunningSummary(agents, nowMs) {
   let sorted = agents.toSorted((left, right) => left.startTime - right.startTime);
   let filtered = sorted.filter((agent) => !isSubagentWaitingOnChildren(agent));
@@ -132,7 +132,7 @@ function stillRunningSummary(agents, nowMs) {
 ${mapped.join(`
 `)}`;
 }
-//@ chunk-e6aww6q8.js:4710978-4711247 placement
+//@ chunk-5xgkngpb.js:4821822-4822091 placement
 function trackWorkerForCheckin(task, taskRegistry, sessionScratch, armedAtMs = Date.now()) {
   try {
     if (!isRunningVisibleSubagent(task)) return;
@@ -151,7 +151,7 @@ function trackWorkerForCheckin(task, taskRegistry, sessionScratch, armedAtMs = D
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:4711247-4711333 placement
+//@ chunk-5xgkngpb.js:4822091-4822177 placement
 /**
  * 除该 worker 外是否还有运行中或等子工作的 worker。
  */
@@ -160,7 +160,7 @@ function hasOtherRunningWorker(taskRegistry, id) {
     (task) => (isRunningVisibleSubagent(task) || isSubagentWaitingOnChildren(task)) && task.id !== id,
   );
 }
-//@ chunk-e6aww6q8.js:4711333-4711495 placement
+//@ chunk-5xgkngpb.js:4822177-4822339 placement
 function resetCheckinIfOnlyWorker(checkin, taskRegistry, task) {
   if (!isRunningVisibleSubagent(task)) return;
   if (
@@ -172,7 +172,7 @@ function resetCheckinIfOnlyWorker(checkin, taskRegistry, task) {
     checkin.ticksUntilCheckin = ticksUntilCheckin(0, checkin.scheduleMs, checkin.pollMs);
   }
 }
-//@ chunk-e6aww6q8.js:4711495-4711626 placement
+//@ chunk-5xgkngpb.js:4822339-4822470 placement
 function restartCheckin(task, taskRegistry, sessionScratch, armedAtMs) {
   let checkin = sessionScratch.workerCheckin();
   if (checkin === undefined) return;
@@ -181,7 +181,7 @@ function restartCheckin(task, taskRegistry, sessionScratch, armedAtMs) {
   disarmWorkerCheckin(sessionScratch);
   armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtMs);
 }
-//@ chunk-e6aww6q8.js:4711626-4711887 placement
+//@ chunk-5xgkngpb.js:4822470-4822731 placement
 function armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtMs) {
   let workerCheckinScheduleMs = getWorkerCheckinScheduleMs();
   if (workerCheckinScheduleMs === undefined) return;
@@ -200,7 +200,7 @@ function armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtM
     ticksUntilCheckin: ticksUntilCheckin_2,
   });
 }
-//@ chunk-e6aww6q8.js:4711887-4712003 placement
+//@ chunk-5xgkngpb.js:4822731-4822847 placement
 /**
  * 停止工作代理定期检查的计时器。
  */
@@ -209,10 +209,10 @@ function disarmWorkerCheckin(sessionScratch) {
   if (checkin !== undefined) {
     clearInterval(checkin.timer);
     sessionScratch.replaceWorkerCheckin(undefined);
-    removeQueuedByFilter(isWorkerCheckinNotification);
+    removeByFilter(isWorkerCheckinNotification);
   }
 }
-//@ chunk-e6aww6q8.js:4712003-4713141 placement
+//@ chunk-5xgkngpb.js:4822847-4823985 placement
 /**
  * 协调者模式下的定时 check-in：派出的工作仍在运行时提醒模型查看进度。
  */
@@ -240,7 +240,7 @@ function runWorkerCheckin(sessionScratch) {
       return;
     }
     if (
-      peekQueuedCommand(isWorkerCheckinNotification) !== undefined ||
+      peek(isWorkerCheckinNotification) !== undefined ||
       someInFlightDrainCommand(isWorkerCheckinNotification)
     )
       return;
@@ -268,9 +268,9 @@ ${stillRunningSummary(agents, now)}`,
   }
 }
 export {
-  disarmWorkerCheckin,
   trackWorkerForCheckin,
   hasOtherRunningWorker,
   resetCheckinIfOnlyWorker,
   restartCheckin,
+  disarmWorkerCheckin,
 };

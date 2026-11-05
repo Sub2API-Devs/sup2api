@@ -1,14 +1,14 @@
 /**
  * shebang-command/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: shebang-command@2.0.0
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_shebang_regex } from "../shebang-regex/index.js";
 
-//@ chunk-m4p5zn6n.js:4922-5128 cjs-fingerprint
+//@ chunk-t889g22j.js:4922-5128 cjs-fingerprint
 var require_shebang_command = __commonJS(function (cjsExports, cjsModule) {
   var shebangRegex = require_shebang_regex();
   cjsModule.exports = (string = "") => {

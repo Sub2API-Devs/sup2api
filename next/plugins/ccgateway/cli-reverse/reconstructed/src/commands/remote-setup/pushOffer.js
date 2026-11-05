@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。remote-setup 中推送未推送提交的提议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p8zkbd8d.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fvt6xawn.js (6)
  * attribution: placement 6
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -28,7 +28,7 @@ import {
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p8zkbd8d.js:567-821 placement
+//@ chunk-fvt6xawn.js:567-821 placement
 /**
  * Web setup 推送优惠相关常量：模式 off/survey、最多展示 3 次、间隔 1 天，以及按宿主的 offer 状态槽与推送槽。
  */
@@ -40,7 +40,7 @@ var TENGU_WEB_SETUP_PUSH_OFFER;
 var WEB_SETUP_PUSH_OFFER_QUESTION;
 var WEB_SETUP_PUSH_OFFER_DELAY_MS;
 var WEB_SETUP_PUSH_OFFER_SLOT;
-deferInit("chunk-p8zkbd8d.js:567", () => {
+deferInit("chunk-fvt6xawn.js:567", () => {
   TENGU_REFLECTIVE_BEE = "tengu_reflective_bee";
   WEB_SETUP_OFFER_MODES = ["off", "survey"];
   MAX_WEB_SETUP_OFFER_SHOWS = 3;
@@ -55,7 +55,7 @@ deferInit("chunk-p8zkbd8d.js:567", () => {
     }),
   );
 });
-//@ chunk-p8zkbd8d.js:821-1237 placement
+//@ chunk-fvt6xawn.js:821-1237 placement
 /**
  * 满足条件（第一方订阅、web-setup 开启、未屏蔽、GitHub 未连接）时根据 tengu_reflective_bee 变体把推送提议置为 pending。
  */
@@ -85,7 +85,7 @@ function maybeArmWebSetupPushOffer({ trigger, host, storageV5 }) {
         },
   );
 }
-//@ chunk-p8zkbd8d.js:1237-1443 placement
+//@ chunk-fvt6xawn.js:1237-1443 placement
 function isPushOfferSuppressed() {
   let webSetupPushOffer = getGlobalConfig().webSetupPushOffer;
   if (webSetupPushOffer?.dismissedForever) return true;
@@ -94,7 +94,7 @@ function isPushOfferSuppressed() {
     return true;
   return (webSetupPushOffer?.shownCount ?? 0) >= MAX_WEB_SETUP_OFFER_SHOWS;
 }
-//@ chunk-p8zkbd8d.js:1443-1629 placement
+//@ chunk-fvt6xawn.js:1443-1629 placement
 /**
  * 把会话中待处理的远程推送提议标记为已解决；未处于 pending 或仍未连接时返回 false。
  */
@@ -111,7 +111,7 @@ function resolvePendingPushOffer(host, storageV5) {
   }));
   return true;
 }
-//@ chunk-p8zkbd8d.js:1629-2096 placement
+//@ chunk-fvt6xawn.js:1629-2096 placement
 /**
  * 把 pending 提议标为 shown，上报事件，并记录全局 lastShownAt/shownCount 与项目已展示标记。
  */
@@ -155,7 +155,7 @@ function markPushOfferShown(host, storageV5) {
     storageV5,
   );
 }
-//@ chunk-p8zkbd8d.js:2096-2419 placement
+//@ chunk-fvt6xawn.js:2096-2419 placement
 /**
  * 用户对已展示的提议作答后置为 resolved 并上报；选 dont_ask_again 时永久关闭。
  */

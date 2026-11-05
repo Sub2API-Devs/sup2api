@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：PublishPlugin 工具：发布插件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hcckvqyb.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-crzaj3q3.js (2)
  * attribution: placement 2
  */
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
@@ -21,14 +21,14 @@ import { isPluginPublishAllowed } from "../../services/plugins/publish/publishGa
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hcckvqyb.js:11744-11853 placement (2.1.88 match: getErrnoPath, 1)
+//@ chunk-crzaj3q3.js:11744-11853 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(error) {
   let path = typeof error === "object" && error !== null && "path" in error ? error.path : undefined;
   return typeof path === "string" ? path : "";
 }
-//@ chunk-hcckvqyb.js:11853-12930 placement
+//@ chunk-crzaj3q3.js:11853-12930 placement
 var PublishPluginTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hcckvqyb.js:11853", () => {
+deferInit("chunk-crzaj3q3.js:11853", () => {
   PublishPluginTool = buildTool({
     name: PUBLISH_PLUGIN_TOOL_NAME,
     searchHint: "publish or share a plugin or mod with the team or organization library",

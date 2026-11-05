@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 账号键（区分不同登录账号的连接）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import { filterCommandsByAllowlist, getSkillToolCommands } from "../../commands.js";
@@ -16,26 +16,26 @@ import { LocalFileStore } from "../../utils/fileStore.js";
 import { sleep } from "../../utils/sleep.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 
-//@ chunk-e6aww6q8.js:2303366-2303421 placement
+//@ chunk-5xgkngpb.js:2358763-2358818 placement
 /**
  * 取当前会话可用且被允许的技能命令。
  */
 async function getSessionSkillCommands(cwd, storageV5) {
   return filterCommandsByAllowlist(await getSkillToolCommands(cwd, storageV5), getSessionSkillAllowlist());
 }
-//@ chunk-e6aww6q8.js:2303421-2303434 placement
+//@ chunk-5xgkngpb.js:2358818-2358831 placement
 /**
  * 解析账号身份的超时（3000 毫秒）。
  */
 var ACCOUNT_RESOLVE_TIMEOUT_MS = 3000;
-//@ chunk-e6aww6q8.js:2303434-2303470 placement
+//@ chunk-5xgkngpb.js:2358831-2358867 placement
 /**
  * 发现缓存是否开启。
  */
 function isDiscoveryCacheOn() {
   return discoveryCacheOffReason() === undefined;
 }
-//@ chunk-e6aww6q8.js:2303470-2303537 placement
+//@ chunk-5xgkngpb.js:2358867-2358934 placement
 /**
  * 发现缓存是否可用（关闭原因为空或仅键不可用）。
  */
@@ -43,21 +43,21 @@ function isDiscoveryCacheUsable() {
   let offReason = discoveryCacheOffReason();
   return offReason === undefined || offReason === "key-unavailable";
 }
-//@ chunk-e6aww6q8.js:2303537-2303571 placement
+//@ chunk-5xgkngpb.js:2358934-2358968 placement
 /**
  * 设置发现缓存的熔断（kill switch）。
  */
 function setCacheKillSwitch(killSwitch) {
   getDiscoveryCacheStore().killSwitch = killSwitch;
 }
-//@ chunk-e6aww6q8.js:2303571-2303618 placement
+//@ chunk-5xgkngpb.js:2358968-2359015 placement
 /**
  * 是否已设置熔断。
  */
 function hasCacheKillSwitch() {
   return getDiscoveryCacheStore().killSwitch !== undefined;
 }
-//@ chunk-e6aww6q8.js:2303618-2303816 placement
+//@ chunk-5xgkngpb.js:2359015-2359213 placement
 /**
  * 返回发现缓存关闭的原因（无盘、环境变量禁用、熔断等），确定的原因会被锁存。
  */
@@ -73,7 +73,7 @@ function discoveryCacheOffReason() {
     discoveryCacheStore.offLatched = discoveryCacheOffReason;
   return discoveryCacheOffReason;
 }
-//@ chunk-e6aww6q8.js:2303816-2303860 placement
+//@ chunk-5xgkngpb.js:2359213-2359257 placement
 /**
  * 取发现缓存关闭的锁存原因。
  */
@@ -81,14 +81,14 @@ function getCacheOffLatched() {
   discoveryCacheOffReason();
   return getDiscoveryCacheStore().offLatched;
 }
-//@ chunk-e6aww6q8.js:2303860-2303911 placement
+//@ chunk-5xgkngpb.js:2359257-2359308 placement
 /**
  * 把关闭原因锁存为 key-unavailable。
  */
 function latchCacheOff() {
   getDiscoveryCacheStore().offLatched ??= "key-unavailable";
 }
-//@ chunk-e6aww6q8.js:2303911-2304096 placement
+//@ chunk-5xgkngpb.js:2359308-2359493 placement
 function computeDiscoveryCacheOffReason(discoveryCacheStore) {
   if (env.MCP_DISCOVERY_CACHE === false) return "env-disabled";
   let killSwitchState = discoveryCacheStore.killSwitch?.();
@@ -96,11 +96,11 @@ function computeDiscoveryCacheOffReason(discoveryCacheStore) {
   if (env.MCP_DISCOVERY_CACHE !== true && killSwitchState !== true) return "not-enabled";
   return;
 }
-//@ chunk-e6aww6q8.js:2304096-2304163 placement
+//@ chunk-5xgkngpb.js:2359493-2359560 placement
 var ACCT_UNWIRED = "acct:unwired";
 var ACCT_LOGGED_OUT = "acct:logged-out";
 var ACCT_INCOMPLETE = "acct:incomplete";
-//@ chunk-e6aww6q8.js:2304163-2304486 placement
+//@ chunk-5xgkngpb.js:2359560-2359883 placement
 /**
  * 解析当前 MCP 账号身份：未接入解析器、未登录、不完整，或账号与组织组成的身份令牌。
  */
@@ -131,19 +131,19 @@ function resolveMcpAccountIdentity() {
     orgUuid: organizationUuid,
   };
 }
-//@ chunk-e6aww6q8.js:2304486-2304529 placement (2.1.88 match: getResolvedDir, 1)
+//@ chunk-5xgkngpb.js:2359883-2359926 placement (2.1.88 match: getResolvedDir, 1)
 /**
  * 目标是否未解析（kind!=="resolved"）。
  */
 function isUnresolved(target) {
   return target.kind !== "resolved";
 }
-//@ chunk-e6aww6q8.js:2304529-2304557 placement
+//@ chunk-5xgkngpb.js:2359926-2359954 placement
 /**
  * 协议时代枚举（legacy、modern）。
  */
 var PROTOCOL_ERAS = ["legacy", "modern"];
-//@ chunk-e6aww6q8.js:2304557-2305434 placement
+//@ chunk-5xgkngpb.js:2359954-2360831 placement
 /**
  * 发现缓存的进程级状态：账号解析器、开关、缓存路径记忆、按路径串行化的写队列、删除代际、协议代解析器等；drain 在限定时间内等待写入完成。
  */
@@ -198,7 +198,7 @@ class DiscoveryCacheStore {
     this.#e = flushPromise;
   }
 }
-//@ chunk-e6aww6q8.js:2305434-2305550 placement
+//@ chunk-5xgkngpb.js:2360831-2360947 placement
 /**
  * 获取（必要时创建）发现缓存的进程级状态对象。
  */
@@ -210,16 +210,16 @@ function getDiscoveryCacheStore() {
 }
 export {
   isDiscoveryCacheOn,
+  isDiscoveryCacheUsable,
+  isUnresolved,
+  getSessionSkillCommands,
   getDiscoveryCacheStore,
   resolveMcpAccountIdentity,
   PROTOCOL_ERAS,
   discoveryCacheOffReason,
   latchCacheOff,
-  isDiscoveryCacheUsable,
   ACCOUNT_RESOLVE_TIMEOUT_MS,
   getCacheOffLatched,
-  isUnresolved,
   hasCacheKillSwitch,
   setCacheKillSwitch,
-  getSessionSkillCommands,
 };

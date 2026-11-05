@@ -3,15 +3,16 @@
  *
  * 2.1.316 新增。Claude in Chrome 设置对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
-import { useRef, init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../ink/components/Input.js";
-import { useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
+import { useRefusalTracker, useMountTime, settleKey } from "./CustomSelect/selectTypeahead.js";
 import {
+  useRecentInputStamp,
   isWithinRecentInput,
   RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3,
 } from "../hooks/useRecentInputGuard.js";
@@ -30,13 +31,18 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1340424-1340532 placement
+//@ chunk-czq1j3j2.js:1362741-1362745 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1362741", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1362745-1362853 placement
 var CHROME_SETUP_SKIP_OPTION = {
   value: "skip",
   label: "Continue without browser tools",
   description: "Finish setup later with /chrome",
 };
-//@ chunk-18hwfzwa.js:1340532-1342499 placement
+//@ chunk-czq1j3j2.js:1362853-1364846 placement
 function ChromeInstallFlow({ payload, answer }) {
   let { phase, installPageOpened } = payload;
   let phaseRef = useRef(phase);
@@ -47,9 +53,10 @@ function ChromeInstallFlow({ payload, answer }) {
     phaseRef.current = phase;
     phaseStartedAtRef.current = Date.now();
   }
+  let usePhaseStamp = useRecentInputStamp(phaseStartedAtRef.current);
   function refuseInput() {
     if (
-      isWithinRecentInput(inputClock, phaseStartedAtRef.current, RECENT_INPUT_GUARD_MS_3) ||
+      isWithinRecentInput(inputClock, usePhaseStamp(phaseStartedAtRef.current), RECENT_INPUT_GUARD_MS_3) ||
       refusedWithin(RECENT_INPUT_GUARD_MS_3)
     ) {
       noteRefused();
@@ -175,16 +182,16 @@ function ChromeInstallFlow({ payload, answer }) {
     }),
   });
 }
-//@ chunk-18hwfzwa.js:1342499-1342503 placement
+//@ chunk-czq1j3j2.js:1364846-1364850 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1342499", () => {
+deferInit("chunk-czq1j3j2.js:1364846", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1342503-1342560 placement
+//@ chunk-czq1j3j2.js:1364850-1364907 placement
 function logChromeUpsellShown() {
   logEvent("tengu_chrome_install_upsell_shown", {});
 }
-//@ chunk-18hwfzwa.js:1342560-1342832 placement
+//@ chunk-czq1j3j2.js:1364907-1365179 placement
 var CHROME_EXTENSION_PROMPT_OPTIONS = [
   {
     value: "install",
@@ -202,7 +209,7 @@ var CHROME_EXTENSION_PROMPT_OPTIONS = [
     description: "Revisit anytime with /chrome",
   },
 ];
-//@ chunk-18hwfzwa.js:1342832-1344083 placement
+//@ chunk-czq1j3j2.js:1365179-1366388 placement
 function ChromeSetupDialog(props) {
   let $ = useMemoCache(17);
   let { answer } = props;
@@ -213,18 +220,13 @@ function ChromeSetupDialog(props) {
   } else shownDeps = $[0];
   useEffect(logChromeUpsellShown, shownDeps);
   let inputClock = useInputClock();
-  let shownAt;
-  if ($[1] === MEMO_CACHE_SENTINEL) {
-    shownAt = Date.now();
-    $[1] = shownAt;
-  } else shownAt = $[1];
-  let shownAtRef = useRef(shownAt);
+  let shownAtRef = useMountTime();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let refuseInput;
-  if ($[2] !== inputClock || $[3] !== noteRefused || $[4] !== refusedWithin) {
+  if ($[1] !== inputClock || $[2] !== noteRefused || $[3] !== shownAtRef || $[4] !== refusedWithin) {
     refuseInput = function refuseInputFn() {
       if (
-        isWithinRecentInput(inputClock, shownAtRef.current, RECENT_INPUT_GUARD_MS_3) ||
+        isWithinRecentInput(inputClock, shownAtRef(), RECENT_INPUT_GUARD_MS_3) ||
         refusedWithin(RECENT_INPUT_GUARD_MS_3)
       ) {
         noteRefused();
@@ -232,8 +234,9 @@ function ChromeSetupDialog(props) {
       }
       return false;
     };
-    $[2] = inputClock;
-    $[3] = noteRefused;
+    $[1] = inputClock;
+    $[2] = noteRefused;
+    $[3] = shownAtRef;
     $[4] = refusedWithin;
     $[5] = refuseInput;
   } else refuseInput = $[5];
@@ -304,9 +307,4 @@ function ChromeSetupDialog(props) {
   } else dialog = $[16];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:1344083-1344087 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1344083", () => {
-  init_react_production();
-});
 export { ChromeSetupDialog, ChromeInstallFlow };

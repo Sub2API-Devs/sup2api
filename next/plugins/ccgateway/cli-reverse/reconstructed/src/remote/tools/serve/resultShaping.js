@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端工具运行与结果整形（内容/文档拆分、图片块）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (20)
  * attribution: placement 20
  */
 import {
@@ -37,9 +37,9 @@ import {
 import { formatFileSize } from "../../../utils/format.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
-//@ chunk-ad2e1aj6.js:22511-22525 placement
+//@ chunk-nvm0wye1.js:22856-22870 placement
 var MAX_STRUCTURED_RESULT_BYTES = 262144;
-//@ chunk-ad2e1aj6.js:22525-22792 placement
+//@ chunk-nvm0wye1.js:22870-23137 placement
 function resultSizeLimitsFor(arrivedOver) {
   switch (arrivedOver) {
     case "session":
@@ -63,10 +63,10 @@ function resultSizeLimitsFor(arrivedOver) {
     }
   }
 }
-//@ chunk-ad2e1aj6.js:22792-22812 placement
+//@ chunk-nvm0wye1.js:23137-23157 placement
 var RESULT_NOTE_MAX_CHARS = 5000;
 var MAX_INLINE_OUTPUT_BYTES = 8000;
-//@ chunk-ad2e1aj6.js:22812-23112 placement
+//@ chunk-nvm0wye1.js:23157-23457 placement
 function cancelledToolResult(toolUseId, content) {
   return {
     result: {
@@ -90,7 +90,7 @@ function cancelledToolResult(toolUseId, content) {
     servedShellToolName: undefined,
   };
 }
-//@ chunk-ad2e1aj6.js:23112-24784 placement
+//@ chunk-nvm0wye1.js:23457-25127 placement
 /**
  * 在本机执行被云会话调用的工具（构造 assistant 消息、写工具结果文件、收集进度）。
  */
@@ -203,7 +203,7 @@ async function runServedTool(call) {
     servedShellToolName: shellToolOrDefault(call.toolUse.name, call.servedShellToolName),
   };
 }
-//@ chunk-ad2e1aj6.js:24784-26012 placement
+//@ chunk-nvm0wye1.js:25127-26355 placement
 function shapeServedResult(input) {
   let { run } = input;
   let spillOptions = {
@@ -285,13 +285,13 @@ function shapeServedResult(input) {
     truncated,
   };
 }
-//@ chunk-ad2e1aj6.js:26012-26158 placement
+//@ chunk-nvm0wye1.js:26355-26501 placement
 function readPersistedOutputPath(toolUseResult) {
   if (typeof toolUseResult !== "object" || toolUseResult === null) return;
   let path = Reflect.get(toolUseResult, "persistedOutputPath");
   return typeof path === "string" && path.length > 0 ? path : undefined;
 }
-//@ chunk-ad2e1aj6.js:26158-26294 placement
+//@ chunk-nvm0wye1.js:26501-26637 placement
 function didToolRunToCompletion(toolUseResult, block) {
   let interrupted =
     typeof toolUseResult === "object" && toolUseResult !== null
@@ -299,7 +299,7 @@ function didToolRunToCompletion(toolUseResult, block) {
       : undefined;
   return typeof interrupted === "boolean" ? !interrupted : block.is_error !== true;
 }
-//@ chunk-ad2e1aj6.js:26294-26392 placement
+//@ chunk-nvm0wye1.js:26637-26735 placement
 function toContentBlocks(content) {
   if (content === undefined || content === "") return [];
   return typeof content === "string"
@@ -311,14 +311,14 @@ function toContentBlocks(content) {
       ]
     : content;
 }
-//@ chunk-ad2e1aj6.js:26392-26536 placement
+//@ chunk-nvm0wye1.js:26735-26879 placement
 function mapStringsDeep(value, mapString) {
   if (typeof value === "string") return mapString(value);
   if (Array.isArray(value)) return value.map((item) => mapStringsDeep(item, mapString));
   if (isPlainObject(value)) return import_mapValues(value, (item) => mapStringsDeep(item, mapString));
   return value;
 }
-//@ chunk-ad2e1aj6.js:26536-26669 placement
+//@ chunk-nvm0wye1.js:26879-27012 placement
 function pickReportedToolResultFields(name, toolUseResult) {
   let keptFields = KEPT_RESULT_FIELDS_BY_TOOL.get(name);
   if (keptFields === undefined || toolUseResult === undefined) return;
@@ -326,7 +326,7 @@ function pickReportedToolResultFields(name, toolUseResult) {
   if (!isPlainObject(toolUseResult)) return;
   return pickByHelper(toolUseResult, (value, key) => keptFields.has(key));
 }
-//@ chunk-ad2e1aj6.js:26669-27041 placement
+//@ chunk-nvm0wye1.js:27012-27384 placement
 function readFurtherHint(servedShellToolName) {
   let searchHint =
     servedShellToolName === undefined
@@ -336,7 +336,7 @@ function readFurtherHint(servedShellToolName) {
         : `, else grep through ${servedShellToolName} there`;
   return `(on that machine: read further with offset/limit and the same machine argument; to search it there, ${GREP_TOOL_NAME} with that argument if this session's ${GREP_TOOL_NAME} accepts one${searchHint} \u2014 without the argument ${GREP_TOOL_NAME} and ${GLOB_TOOL_NAME} search only this session's own files)`;
 }
-//@ chunk-ad2e1aj6.js:27041-27926 placement
+//@ chunk-nvm0wye1.js:27384-28269 placement
 function splitContentAndDocuments(blocks, targetName, documentRemaining) {
   return blocks.reduce(
     (acc, block) => {
@@ -386,7 +386,7 @@ function splitContentAndDocuments(blocks, targetName, documentRemaining) {
     },
   );
 }
-//@ chunk-ad2e1aj6.js:27926-28028 placement
+//@ chunk-nvm0wye1.js:28269-28371 placement
 function isSameTextBlock(left, right) {
   return (
     left?.type === "text" &&
@@ -395,7 +395,7 @@ function isSameTextBlock(left, right) {
     left.text === right.text
   );
 }
-//@ chunk-ad2e1aj6.js:28028-28326 placement
+//@ chunk-nvm0wye1.js:28371-28669 placement
 function documentBlockOf(block) {
   if (block.type !== "document") return;
   let source = Reflect.get(block, "source");
@@ -410,7 +410,7 @@ function documentBlockOf(block) {
       }
     : undefined;
 }
-//@ chunk-ad2e1aj6.js:28326-28441 placement
+//@ chunk-nvm0wye1.js:28669-28784 placement
 function toTextBlock(block) {
   let text = Reflect.get(block, "text");
   return block.type === "text" && typeof text === "string"
@@ -420,7 +420,7 @@ function toTextBlock(block) {
       }
     : undefined;
 }
-//@ chunk-ad2e1aj6.js:28441-28813 placement
+//@ chunk-nvm0wye1.js:28784-29156 placement
 function imageBlockOf(block) {
   if (block.type !== "image") return;
   let source = Reflect.get(block, "source");
@@ -444,7 +444,7 @@ function imageBlockOf(block) {
       }
     : undefined;
 }
-//@ chunk-ad2e1aj6.js:28813-29072 placement
+//@ chunk-nvm0wye1.js:29156-29415 placement
 function servedDisposition(permissionOutcome, run) {
   if (permissionOutcome !== undefined) {
     if (permissionOutcome.kind === "allowed") return "ran";
@@ -454,7 +454,7 @@ function servedDisposition(permissionOutcome, run) {
   if (run.result?.is_error !== true) return "ran";
   return run.denialRecorded ? "denied_by_rule" : "validation_failed";
 }
-//@ chunk-ad2e1aj6.js:29072-29235 placement
+//@ chunk-nvm0wye1.js:29415-29578 placement
 function resultNotes(run, targetName) {
   return (
     buildResultNotes(run.notes, {
@@ -465,7 +465,7 @@ function resultNotes(run, targetName) {
     }).notes ?? []
   );
 }
-//@ chunk-ad2e1aj6.js:29235-29436 placement
+//@ chunk-nvm0wye1.js:29578-29778 placement
 function buildResultNotes(notes, spillOptions) {
   if (notes.length === 0) return {};
   return {

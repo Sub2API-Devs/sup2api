@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/team-onboarding 命令：生成发给队友的引导式入门指南
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { SHAREONBOARDINGGUIDE } from "../../tools/ShareOnboardingGuideTool/prompt.js";
@@ -15,7 +15,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { isTeamOnboardingShareEnabled } from "./api.js";
 
-//@ chunk-e6aww6q8.js:1741001-1749817 placement
+//@ chunk-5xgkngpb.js:1817380-1826506 placement
 /**
  * /team-onboarding 命令对象（prompt）；描述：Help teammates ramp on Claude Code with a guide from your usage；isHidden: false。
  */
@@ -128,6 +128,8 @@ Generate the guide immediately, then ask for revisions. Don't wait for answers f
 {{GUIDE_TEMPLATE}}
 \`\`\`
 
+   If \`sessionsLeftOut\` is above 0, that many sessions were left out because they couldn't be tied to the way the guide creator is signed in now, so the numbers may not cover everything from this period: say so in one plain sentence under "How We Use Claude" and again when you present the draft.
+
    Fill in real numbers from the usage data (not placeholders). Use \`generatedBy\` for the name; if it's missing, omit the name. Ascii bar charts: \`\u2588\` for filled, \`\u2591\` for empty, 20 chars wide. Keep the HTML comment instruction at the bottom exactly as shown.
 
 5. **Render the guide in a code block, then close out the first turn.** You're co-authoring this guide with the guide creator \u2014 frame the follow-up as collaboration, not corrections.
@@ -215,8 +217,8 @@ var teamOnboardingCommandDefinition = {
     let text =
       promptTemplate
         .replaceAll("{{WINDOW_DAYS}}", String(windowDays))
-        .replaceAll("{{GUIDE_TEMPLATE}}", guideTemplate)
-        .replaceAll("{{USAGE_DATA}}", usageData) +
+        .replaceAll("{{GUIDE_TEMPLATE}}", () => guideTemplate)
+        .replaceAll("{{USAGE_DATA}}", () => usageData) +
       (isTeamOnboardingShareEnabled() ? getTeamOnboardingSharingInstructions() : "");
     logEvent("tengu_team_onboarding_generated", {
       session_count: sessionCount,

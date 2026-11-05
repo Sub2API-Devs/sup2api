@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/internal/errors.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2g090z7k.js (2)
+ * pieces: chunk-63094ahz.js (2)
  * attribution: esm-fingerprint 2
  */
 
-//@ chunk-2g090z7k.js:229-399 esm-fingerprint
+//@ chunk-63094ahz.js:229-399 esm-fingerprint
 function isAbortError_2(err) {
   return (
     typeof err === "object" &&
@@ -15,7 +15,7 @@ function isAbortError_2(err) {
       ("message" in err && String(err.message).includes("FetchRequestCanceledException")))
   );
 }
-//@ chunk-2g090z7k.js:399-792 esm-fingerprint
+//@ chunk-63094ahz.js:399-792 esm-fingerprint
 var castToError = (err) => {
   if (err instanceof Error) return err;
   if (typeof err === "object" && err !== null) {

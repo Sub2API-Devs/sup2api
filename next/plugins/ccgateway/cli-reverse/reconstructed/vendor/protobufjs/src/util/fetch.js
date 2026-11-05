@@ -1,15 +1,14 @@
 /**
  * protobufjs/src/util/fetch.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint+context 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
-import { require_aspromise } from "./aspromise.js";
-import { require_inquire } from "../../../unresolved-cjs/index.js";
+import { require_aspromise, require_inquire } from "../../../@protobufjs/aspromise/index.js";
 
-//@ chunk-pwh5dx3n.js:78403-79292 cjs-fingerprint+context
+//@ chunk-3k21nfa0.js:78403-79292 cjs-fingerprint+context
 var require_fetch = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = fetchFile;
   var asPromise = require_aspromise();

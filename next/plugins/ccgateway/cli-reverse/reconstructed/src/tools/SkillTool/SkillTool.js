@@ -3,10 +3,10 @@
  *
  * Skill 工具：解析与校验 skill 名、权限规则、inline 展开或 fork 子代理执行，返回 contextLayers
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SkillTool/SkillTool.ts
- * pieces: chunk-a5k9jscj.js (20), chunk-csq9ftr9.js (1), chunk-e6aww6q8.js (1)
- * attribution: sole-consumer 10, fingerprint 6, layout 1, file-local 1, placement 4
+ * pieces: chunk-5xgkngpb.js (1), chunk-6kmb8me5.js (21), chunk-n0gp41wj.js (1)
+ * attribution: fingerprint 6, sole-consumer 10, layout 2, file-local 1, placement 4
  */
 import {
   isOfficialMarketplaceName_3,
@@ -53,7 +53,7 @@ import { memorySkillCommands } from "../../services/memorySync/memorySkills.js";
 import {
   slashSkillRuleRegex,
   checkSkillPermission,
-  matchesSkillRule,
+  matchesSkillRuleOrBaseName,
   skillAllowedByRules,
   reservedSkillRuleMatch,
   describeSyncedSkillRuleScope,
@@ -105,7 +105,7 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 import { memoryModeForSession } from "../../services/accountMemory/memoryContext.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isBuiltInAgent } from "../AgentTool/loadAgentsDir.js";
-import { runAgent, filterIncompleteToolCalls_2 } from "../AgentTool/runAgent.js";
+import { runAgent, shouldForwardNestedToolCall } from "../AgentTool/runAgent.js";
 import { agentModelRestrictedReporter } from "../../utils/model/agentModelRestriction.js";
 import { unreadableToolsLine, toolsUsedForSummary } from "../../utils/agentListing.js";
 import { withUntrustedPreamble, isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
@@ -140,7 +140,7 @@ import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { getSkillToolPrompt } from "./prompt.js";
 import { stripSyncedSkillPrefix } from "../../skills/syncedSkills.js";
 import {
-  isSkillsSyncActive,
+  isSkillsSyncForced,
   isSyncedSkillPlaceholder,
   hasPendingSkillDownload,
   startPendingDownload,
@@ -153,12 +153,15 @@ import { usesReservedSkillNamespace } from "../../skills/reservedSkillNames.js";
 import { isPluginLoadCacheOnly } from "../../utils/plugins/pluginLoadState.js";
 import { pluginLoadFailureNote } from "./pluginLoadFailureNote.js";
 import { areSkillsConvertedAsPlugins } from "../../utils/permissions/permissionRulePayload.js";
+import { isPinnedOrWildcardRule } from "../../utils/permissions/classifierApprovalRules.js";
 import { renderToolUseMessage } from "./UI.js";
+import { contextKeyAccepted } from "../../utils/codeMode/accepted.js";
+import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
 import { restoreSkillStateFromMessages } from "../../utils/conversationRecovery.js";
 import { getSubagentSteer } from "../../utils/model/subagentSteer.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-csq9ftr9.js:9850-9976 fingerprint (2.1.88 match: isOfficialMarketplaceSkill, 1)
+//@ chunk-n0gp41wj.js:9850-9976 fingerprint (2.1.88 match: isOfficialMarketplaceSkill, 1)
 /**
  * skill 是否来自官方市场插件。
  */
@@ -166,28 +169,28 @@ function isOfficialMarketplaceSkill(command) {
   if (command.source !== "plugin" || !command.pluginInfo?.repository) return false;
   return isOfficialMarketplaceName_3(parsePluginIdentifier_2(command.pluginInfo.repository).marketplace);
 }
-//@ chunk-e6aww6q8.js:2804890-2805133 fingerprint (2.1.88 match: getAllCommands, 0.414)
+//@ chunk-5xgkngpb.js:2872888-2873131 fingerprint (2.1.88 match: getAllCommands, 0.413)
 /**
  * 构造工具名 → 来源（mcp / static）映射，额外登记 DeferredToolPlaceholder 为 static；供 API 层判定工具类别。
  */
-function getToolNameKinds(tools, extraToolSchemas) {
+function getToolNameKinds(tools, schemas) {
   let kinds = new Map();
   for (let tool of tools)
     if (tool.isMcp === true) kinds.set(tool.name, "mcp");
     else if (tool.uiTableKey === undefined) kinds.set(tool.name, "static");
-  for (let schema of extraToolSchemas)
+  for (let schema of schemas)
     if ("name" in schema && typeof schema.name === "string") kinds.set(schema.name, "static");
   kinds.set(DEFERREDTOOLPLACEHOLDER, "static");
   return kinds;
 }
-//@ chunk-a5k9jscj.js:3587-3613 sole-consumer
+//@ chunk-6kmb8me5.js:3799-3825 sole-consumer
 /**
  * 无采纳的 MCP 技能命令（当前恒返回 null）。
  */
 function noAdoptedSkillCommands() {
   return null;
 }
-//@ chunk-a5k9jscj.js:3613-3830 sole-consumer
+//@ chunk-6kmb8me5.js:3825-4042 sole-consumer
 function dedupeSkillsByName(commandList) {
   let byName = new Map();
   let isHidden = (command) => Boolean(command.disableModelInvocation) || isHiddenFromModel(command);
@@ -204,7 +207,7 @@ function dedupeSkillsByName(commandList) {
   }
   return [...byName.values()];
 }
-//@ chunk-a5k9jscj.js:3830-4061 sole-consumer
+//@ chunk-6kmb8me5.js:4042-4273 sole-consumer
 function logReservedRuleHeldBack(kind) {
   if (!claimOnce().claim(`skill_reserved_namespace_rule_held_back_${kind}`)) return;
   logFeatureSad(
@@ -216,7 +219,7 @@ function logReservedRuleHeldBack(kind) {
     },
   );
 }
-//@ chunk-a5k9jscj.js:4061-4370 sole-consumer
+//@ chunk-6kmb8me5.js:4273-4582 sole-consumer
 /**
  * 汇总 Skill 工具可调用的命令：本地命令、MCP 技能（含收编的）与内置技能，按名去重并去掉被遮蔽的后备技能。
  */
@@ -237,7 +240,7 @@ async function getSkillToolCommandList(toolContext) {
   let commands = dedupeSkillsByName([...skillCommands, ...memoryCommands, ...sliced]);
   return [...dropShadowedFallbackSkills(commands), ...sliced_2];
 }
-//@ chunk-a5k9jscj.js:4370-4430 sole-consumer
+//@ chunk-6kmb8me5.js:4582-4642 sole-consumer
 /**
  * 过滤出技能命令；主代理时再按会话允许清单过滤。
  */
@@ -245,7 +248,7 @@ function listSkillCommands(commands, isMainAgent) {
   let filtered = commands.filter(isSkillToolCommand);
   return isMainAgent ? filterCommandsByAllowlist(filtered, getSessionSkillAllowlist()) : filtered;
 }
-//@ chunk-a5k9jscj.js:4430-4535 sole-consumer (2.1.88 match: formatCommandDescription, 0.874)
+//@ chunk-6kmb8me5.js:4642-4747 sole-consumer (2.1.88 match: formatCommandDescription, 0.874)
 /**
  * 插件 prompt skill 是否是通过别名（不是正名）被命中的。
  */
@@ -257,7 +260,7 @@ function formatCommandDescription(command, name) {
     (command.aliases?.includes(name) ?? false)
   );
 }
-//@ chunk-a5k9jscj.js:4535-5257 sole-consumer
+//@ chunk-6kmb8me5.js:4747-5469 sole-consumer
 /**
  * 按名称解析 Skill 工具要调用的技能：目录列表名命中、精确命中（同名限定版本有多个时为 ambiguous）、一方命令或未限定名命中时为 none，否则尝试按插件技能的裸名给出唯一建议或歧义候选。
  */
@@ -318,7 +321,7 @@ function resolveSkillName(name, commands, context) {
       };
   }
 }
-//@ chunk-a5k9jscj.js:5257-5399 sole-consumer
+//@ chunk-6kmb8me5.js:5469-5611 sole-consumer
 function isSelfForkedSkill(command, toolContext) {
   return (
     command.type === "prompt" &&
@@ -327,7 +330,7 @@ function isSelfForkedSkill(command, toolContext) {
     toolContext.spawnedBySkill === getBareCommandName(command)
   );
 }
-//@ chunk-a5k9jscj.js:5399-5591 sole-consumer
+//@ chunk-6kmb8me5.js:5611-5803 sole-consumer
 async function isYieldedSkillTarget(skillName, command, commands, storageV5) {
   if (
     !commands.some(
@@ -340,7 +343,7 @@ async function isYieldedSkillTarget(skillName, command, commands, storageV5) {
   let commands_2 = await getCommands(getProjectRootOrNull(), storageV5, undefined, true);
   return findCommand(skillName, commands_2)?.name === command.name;
 }
-//@ chunk-a5k9jscj.js:5591-6044 sole-consumer
+//@ chunk-6kmb8me5.js:5803-6256 sole-consumer
 /**
  * 主会话本轮中用户是否亲手输入了该 skill 名（排除 meta、压缩摘要、交接、非键入文本、工具结果与命令消息），影响 userTypedThisTurn 判断。
  */
@@ -371,7 +374,7 @@ function userTypedSkillThisTurn(commandName, toolContext) {
   }
   return false;
 }
-//@ chunk-a5k9jscj.js:6044-10399 fingerprint (2.1.88 match: executeForkedSkill, 0.557)
+//@ chunk-6kmb8me5.js:6256-10612 fingerprint (2.1.88 match: executeForkedSkill, 0.556)
 /**
  * 以子代理执行 fork 型 skill：准备 fork 上下文（工具集、权限层、文件读状态、技能正文），可选后台运行（返回 "Running in the background as @名字"）；前台用 runAgent 跑完，转发子代理进度（skill_progress），最终返回 forked 结果文本与首行 toolsUsedLine。
  */
@@ -620,7 +623,7 @@ async function executeForkedSkill(
         continue;
       agentMessages.push(message);
       if (extractAgentIdsFromMessages_2(message)) {
-        if (filterIncompleteToolCalls_2(toolUseContext, message))
+        if (shouldForwardNestedToolCall(toolUseContext, message))
           onProgress?.(createProgressMessage_2(message));
         continue;
       }
@@ -669,13 +672,13 @@ async function executeForkedSkill(
     clearInvokedSkillsForAgent(agentId);
   }
 }
-//@ chunk-a5k9jscj.js:10399-11777 fingerprint (2.1.88 match: outputSchema, 0.662)
+//@ chunk-6kmb8me5.js:10612-11990 fingerprint (2.1.88 match: outputSchema, 0.662)
 /**
  * Skill 输入 schema（skill 名、args 可选）与输出 schema（inline：allowedTools/model/readOnly；forked：agentId/result/background/toolsUsedLine）。
  */
 var skillInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var skillOutputSchema;
-deferInit("chunk-a5k9jscj.js:10399", () => {
+deferInit("chunk-6kmb8me5.js:10612", () => {
   skillInputSchema = DoctorLazy(() =>
     objectSchema({
       skill: stringSchema().describe(
@@ -719,7 +722,7 @@ deferInit("chunk-a5k9jscj.js:10399", () => {
     return union([inlineOutputSchema, forkedOutputSchema]);
   });
 });
-//@ chunk-a5k9jscj.js:11777-11888 layout
+//@ chunk-6kmb8me5.js:11990-12101 layout
 function makeSkillCommandSource(toolUseContext) {
   return {
     storageV5: toolUseContext.storageV5,
@@ -727,7 +730,7 @@ function makeSkillCommandSource(toolUseContext) {
     mcpClients: () => currentMcpClients(toolUseContext),
   };
 }
-//@ chunk-a5k9jscj.js:11888-15630 fingerprint (2.1.88 match: SkillTool, 0.407)
+//@ chunk-6kmb8me5.js:12101-15843 fingerprint (2.1.88 match: SkillTool, 0.409)
 /**
  * Skill 调用主体（runEngine 执行）：停止中的代理不能再启动 skill；解析 skill 名（重名报歧义），设置 options.activeSkill；fork 型 skill（且非只读加载）交给 executeForkedSkill；否则 processPromptSlashCommand 展开 skill 正文为新消息（过滤进度与命令标签消息，标注 toolUseID），记录遥测，返回 allowedTools/模型/effort 三类 contextLayers 供后续回合生效。
  */
@@ -954,13 +957,13 @@ async function runSkillInvocation({
     if (isReadOnlyLoad || !completed) toolUseContext.options.activeSkill = activeSkill;
   }
 }
-//@ chunk-a5k9jscj.js:15630-25436 fingerprint (2.1.88 match: SAFE_SKILL_PROPERTIES, 0.302)
+//@ chunk-6kmb8me5.js:15843-25647 fingerprint (2.1.88 match: SAFE_SKILL_PROPERTIES, 0.303)
 /**
  * Skill 工具定义（name "Skill"，backgrounding never，maxResultSizeChars 100000；isEnabled 为 !Wb()）。validateInput：去前导 /，解析命令（可能需要从远端物化或加载定义），拒绝 MCP 来源 skill、被同步否决或主机目录隐藏的 skill，未找到时给出近似名/目录作用域变体/插件加载错误提示，拒绝在自己 fork 的上下文里递归调用，并用 jKe 检查 disable-model-invocation、未加白名单等。checkPermissions：Skill deny 规则 → MCP skill 拒绝 → ask 规则 → allow 规则（含插件边界 held-back 情况）→ 只含安全属性的 prompt skill 或协调者只读加载直接允许 → 否则询问并建议加 Skill(name) 或 Skill(name:*) 规则。call 通过 runEngine 执行 runSkillInvocation。
  */
 var SkillTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
 var SAFE_SKILL_PROPERTIES;
-deferInit("chunk-a5k9jscj.js:15630", () => {
+deferInit("chunk-6kmb8me5.js:15843", () => {
   SkillTool = buildTool({
     name: SKILL,
     searchHint: "invoke a slash-command skill",
@@ -1008,7 +1011,7 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
           let command = resolution.command;
           let unprefixedName = stripSyncedSkillPrefix(skillName);
           if (
-            isSkillsSyncActive(toolContext.session) &&
+            isSkillsSyncForced(toolContext.session) &&
             (!command || isSyncedSkillPlaceholder(command)) &&
             (command !== undefined || hasPendingSkillDownload(unprefixedName))
           ) {
@@ -1294,10 +1297,7 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
           let unusedOther = undefined;
           let contentRulesMapForTool = getContentRulesMapForTool(permissions, SkillTool, "deny");
           for (let [rulePattern, rule] of contentRulesMapForTool.entries())
-            if (
-              (rulePattern.startsWith("/") ? rulePattern.substring(1) : rulePattern) === undefined ||
-              candidateCommands.some((command) => matchesSkillRule(rulePattern, skillName, command))
-            )
+            if (matchesSkillRuleOrBaseName(rulePattern, skillName, candidateCommands, undefined))
               return {
                 behavior: "deny",
                 message: "Skill execution blocked by permission rules",
@@ -1330,7 +1330,7 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
                     type: "rule",
                     rule,
                   },
-                  ...(isReservedNamespace() && {
+                  ...((isReservedNamespace() || isPinnedOrWildcardRule(skillName)) && {
                     suppressAlwaysAllowRule: true,
                   }),
                   updatedInput: {
@@ -1347,6 +1347,7 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
           let contentRulesMapForTool_3 = getContentRulesMapForTool(permissions, SkillTool, "allow");
           let heldBackAllowRule;
           for (let [rulePattern, rule] of contentRulesMapForTool_3.entries()) {
+            if (isPinnedOrWildcardRule(rulePattern)) continue;
             let reservedMatch = reservedSkillRuleMatch(rulePattern, skillName, command);
             if (reservedMatch === "allow")
               return {
@@ -1373,7 +1374,8 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
           }
           if (
             command?.type === "prompt" &&
-            (skillHasOnlySafeProperties(command) || isCoordinatorMainThread(toolContext))
+            (skillHasOnlySafeProperties(command) || isCoordinatorMainThread(toolContext)) &&
+            !isAutoAllowedScriptSkill(command, toolContext, permissions)
           )
             return {
               behavior: "allow",
@@ -1422,7 +1424,7 @@ deferInit("chunk-a5k9jscj.js:15630", () => {
                   type: "other",
                   reason: heldBackScope,
                 };
-          if (suppressAlwaysAllow)
+          if (suppressAlwaysAllow || isPinnedOrWildcardRule(skillName))
             return {
               behavior: "ask",
               message: `Execute skill: ${skillName}${heldBackScope ? ` \u2014 ${heldBackScope}` : ""}`,
@@ -1583,7 +1585,19 @@ ${result.result}`),
     "getArgumentCompletions",
   ]);
 });
-//@ chunk-a5k9jscj.js:25436-25685 file-local
+//@ chunk-6kmb8me5.js:25647-25852 layout
+function isAutoAllowedScriptSkill(command, toolContext, permissions) {
+  return (
+    contextKeyAccepted() &&
+    toolContext.replScriptCall === true &&
+    (isAutoClassifierActive(permissions.mode) ||
+      (permissions.modeBeforeRewrite !== undefined &&
+        isAutoClassifierActive(permissions.modeBeforeRewrite))) &&
+    command.type === "prompt" &&
+    (command.context !== undefined || command.agent !== undefined || command.getContext !== undefined)
+  );
+}
+//@ chunk-6kmb8me5.js:25852-26101 file-local
 /**
  * prompt 型 skill 的属性是否全部在 SAFE_SKILL_PROPERTIES 内（或为空值）；是则无需权限询问。
  */
@@ -1598,7 +1612,7 @@ function skillHasOnlySafeProperties(command) {
   }
   return true;
 }
-//@ chunk-a5k9jscj.js:25685-26706 placement
+//@ chunk-6kmb8me5.js:26101-27122 placement
 function dedupeRenderedSkillContent({
   messages,
   contextMessages,
@@ -1645,7 +1659,7 @@ function dedupeRenderedSkillContent({
   if (elided) logForDebugging(`SkillTool eliding byte-identical re-invocation of skill ${commandName}`);
   return mapped;
 }
-//@ chunk-a5k9jscj.js:26706-26818 placement (2.1.88 match: tagMessagesWithToolUseID, 1)
+//@ chunk-6kmb8me5.js:27122-27234 placement (2.1.88 match: tagMessagesWithToolUseID, 1)
 /**
  * tagMessagesWithToolUseID：给 user 消息加 sourceToolUseID（技能/命令展开出的消息归属到发起它的工具调用）。
  */
@@ -1660,13 +1674,15 @@ function tagMessagesWithToolUseID(messages, toolUseID) {
     return m;
   });
 }
-//@ chunk-a5k9jscj.js:26818-26944 placement (2.1.88 match: countToolCallsSince, 1)
-function findToolUseIdByName(messages, sinceUuid) {
-  let found = messages.message.content.find((block) => block.type === "tool_use" && block.name === sinceUuid);
+//@ chunk-6kmb8me5.js:27234-27360 placement
+function findToolUseIdByName(parentMessage, toolName) {
+  let found = parentMessage.message.content.find(
+    (block) => block.type === "tool_use" && block.name === toolName,
+  );
   return found && found.type === "tool_use" ? found.id : undefined;
 }
-//@ chunk-a5k9jscj.js:26944-27017 placement
+//@ chunk-6kmb8me5.js:27360-27433 placement
 function agentToolHintSuffix() {
   return getSubagentSteer() === "default" ? " (use the Agent tool instead)" : "";
 }
-export { isOfficialMarketplaceSkill, getToolNameKinds, agentToolHintSuffix, SkillTool };
+export { getToolNameKinds, SkillTool, isOfficialMarketplaceSkill, agentToolHintSuffix };

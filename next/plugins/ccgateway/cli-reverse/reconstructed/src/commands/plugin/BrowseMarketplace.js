@@ -3,9 +3,9 @@
  *
  * 浏览市场插件列表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/BrowseMarketplace.tsx
- * pieces: chunk-vrb44rx7.js (2)
+ * pieces: chunk-wb51jffc.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
@@ -32,7 +32,7 @@ import {
   formatMarketplaceLoadingErrors,
   filterSuccessfulMarketplaces,
 } from "../../utils/plugins/marketplaceHelpers.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isPluginInstalled, isPluginGloballyInstalled } from "../../utils/plugins/installedPluginsManager.js";
 import { ANTHROPIC_PLUGIN_DIRECTORY } from "../../utils/plugins/schemas.js";
 import { oneLineClipped, plural } from "../../utils/stringUtils.js";
@@ -61,17 +61,17 @@ import { renderContextCost } from "./DiscoverPluginsScreen.js";
 import { isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 import { HintText } from "../../components/design-system/HintText.js";
 import { SearchBox } from "../../components/SearchBox.js";
+import { MoreItemsIndicator, TwoColumnRow } from "../../components/CustomSelect/select.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { TwoColumnRow } from "../../components/CustomSelect/select.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { isNonInstallableClaudeAiPlugin } from "../../utils/plugins/claudeAiMarketplaces.js";
 import { ParenHint } from "../../components/diff/DiffDetailView.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "../../utils/plugins/officialMarketplace.js";
 import { truncateToWidth } from "../../utils/format.js";
 
-//@ chunk-vrb44rx7.js:74454-74469 placement
+//@ chunk-wb51jffc.js:74608-74623 placement
 function noopBrowseMarketplaceHandler() {}
-//@ chunk-vrb44rx7.js:74469-83483 fingerprint (2.1.88 match: BrowseMarketplace, 0.468)
+//@ chunk-wb51jffc.js:74623-83416 fingerprint (2.1.88 match: BrowseMarketplace, 0.449)
 function BrowseMarketplace({
   screen,
   onInstallComplete,
@@ -192,7 +192,7 @@ function BrowseMarketplace({
         let marketplaceInfos = [];
         for (let { name, config: marketplaceConfig, data: marketplace } of marketplaces)
           if (marketplace) {
-            let installedFromThisMarketplace = count(marketplace.plugins, (plugin) =>
+            let installedFromThisMarketplace = countWhere(marketplace.plugins, (plugin) =>
               isPluginInstalled(formatPluginId(plugin.name, name)),
             );
             marketplaceInfos.push({
@@ -208,7 +208,7 @@ function BrowseMarketplace({
           return 0;
         });
         setPlugins(marketplaceInfos);
-        let successCount = count(marketplaces, (m) => m.data !== null);
+        let successCount = countWhere(marketplaces, (m) => m.data !== null);
         let errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult)
           if (errorResult.type === "warning")
@@ -634,13 +634,10 @@ function BrowseMarketplace({
             children: ['No plugins match "', searchQuery, '"'],
           }),
         }),
-      pagination.scrollPosition.canScrollUp &&
-        jsxProd_default(Box, {
-          children: jsxProd_default_2(Text, {
-            dimColor: true,
-            children: [" ", figures_default.arrowUp, " more above"],
-          }),
-        }),
+      jsxProd_default(MoreItemsIndicator, {
+        direction: "above",
+        count: pagination.startIndex,
+      }),
       visiblePlugins.map((plugin, visibleIndex) => {
         let actualIndex = pagination.toActualIndex(visibleIndex);
         let isSelected = selectedIndex === actualIndex;
@@ -653,7 +650,7 @@ function BrowseMarketplace({
           {
             active: isSelected && !isSearchMode,
             flexDirection: "column",
-            marginBottom: isLast && !storeSelector ? 0 : 1,
+            marginBottom: isLast ? 0 : 1,
             children: [
               jsxProd_default_2(Box, {
                 children: [
@@ -723,27 +720,10 @@ function BrowseMarketplace({
           plugin.pluginId,
         );
       }),
-      pagination.scrollPosition.canScrollDown &&
-        jsxProd_default(Box, {
-          children: jsxProd_default_2(Text, {
-            dimColor: true,
-            children: [" ", figures_default.arrowDown, " more below"],
-          }),
-        }),
-      storeSelector &&
-        jsxProd_default(Box, {
-          marginTop: 1,
-          children: jsxProd_default_2(Text, {
-            color: "error",
-            children: [
-              jsxProd_default(StatusIcon, {
-                status: "error",
-                withSpace: true,
-              }),
-              storeSelector,
-            ],
-          }),
-        }),
+      jsxProd_default(MoreItemsIndicator, {
+        direction: "below",
+        count: filteredPlugins.length - pagination.endIndex,
+      }),
       jsxProd_default(DiscoverPluginsKeyHint, {
         ...keyHintProps,
       }),

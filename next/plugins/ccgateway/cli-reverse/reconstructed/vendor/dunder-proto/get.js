@@ -1,15 +1,15 @@
 /**
  * dunder-proto/get.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: dunder-proto@1.0.1
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_call_bind_apply_helpers_2 } from "../call-bind-apply-helpers/index.js";
 import { require_gopd } from "../gopd/index.js";
 
-//@ chunk-h6b7mazd.js:11418-11796 cjs-fingerprint
+//@ chunk-ww9agm6g.js:11418-11796 cjs-fingerprint
 var require_get = __commonJS(function (cjsExports, cjsModule) {
   var callBind = require_call_bind_apply_helpers_2();
   var gOPD = require_gopd();

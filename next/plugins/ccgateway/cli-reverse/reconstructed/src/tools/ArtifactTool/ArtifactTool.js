@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增（门面模块 ARTIFACT_TOOL_HEAD）。Artifact 工具。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (153), chunk-cdrjna5f.js (2), chunk-qxvqcab6.js (1)
- * attribution: placement 156
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-283n6avd.js (2), chunk-nfkwcnxd.js (1), chunk-xzmy9dn4.js (154)
+ * attribution: placement 156, layout 1
  */
 import { extname, sep, isAbsolute, join, basename, dirname, relative, parse } from "path";
 import { lstat, writeFile, unlink, stat, open, realpath, readFile } from "fs/promises";
@@ -85,7 +85,7 @@ import {
   isCreatedFrameUrl,
   nonOpenedFrameUrls,
   CREATED,
-  hasSuccessfulToolCall_3,
+  createToolResultStopMessage,
 } from "./artifactResumeCarry.js";
 import {
   shareAudience,
@@ -138,9 +138,9 @@ import {
 } from "../../utils/permissions/toolPermissionContext.js";
 import {
   toolMatchesRule,
-  getAskRules,
-  getDenyRules,
-  getAskRuleForTool,
+  askedBashRules,
+  deniedBashRules,
+  findAskRuleForTool,
   matchToolRule,
   hasPersonOnlyAskFloor,
   isChainOnAllowActive,
@@ -457,7 +457,18 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { getUserClaudeRulesDir_2 } from "../../utils/config.js";
 import { isPlainObjectConnector } from "../../services/artifacts/connectorNames.js";
 import { readUntrustedArray, UNREADABLE_ARRAY, UNREADABLE_LIST_TEXT } from "../../utils/untrustedArray.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
+import {
+  normalizeCaseForComparison_2,
+  isScratchpadPath as isScratchpadPath_2,
+  checkWritePermissionForTool,
+  ensureScratchpadDir,
+  checkReadPermissionForTool,
+  pathInAllowedWorkingPath,
+  readPermissionDecisionForPath,
+  READ_PATH_PROBE,
+  normalizeCaseForComparison,
+} from "../../utils/permissions/filesystem.js";
 import {
   ownershipSuffix,
   ownershipClassifierTag,
@@ -544,11 +555,11 @@ import {
   resolvePublishRoot,
 } from "../../services/artifacts/publishPaths.js";
 import {
-  parseSessionArtifactUrl,
-  isGone,
-  isOtherOrg,
-  isNeverPublished,
-  stripInviteHints,
+  validateSessionArtifactUrl,
+  isArtifactGone,
+  isArtifactInOtherOrg,
+  isArtifactNeverPublished,
+  withoutAccessHints,
 } from "../../services/artifacts/orgScope.js";
 import {
   MAX_COPY_SOURCES,
@@ -619,16 +630,6 @@ import {
   ARTIFACT_FILES,
 } from "./readFilePaths.js";
 import {
-  isScratchpadPath as isScratchpadPath_2,
-  checkWritePermissionForTool,
-  ensureScratchpadDir,
-  checkReadPermissionForTool,
-  pathInAllowedWorkingPath,
-  readPermissionDecisionForPath,
-  READ_PATH_PROBE,
-  normalizeCaseForComparison,
-} from "../../utils/permissions/filesystem.js";
-import {
   artifactTitleForUrl,
   IMAGE_EXTENSIONS,
   isRoomPublishCall,
@@ -653,7 +654,7 @@ import { normalizePathForComparison, findSimilarFile, FILE_NOT_FOUND_CWD_NOTE } 
 import { encodeControlChars } from "../../utils/sanitization.js";
 import { getCwd } from "../../utils/cwd.js";
 import { walkPermissionCheckPaths, getPathsForPermissionCheck } from "../../utils/fsOperations.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import {
   MAX_ANCHORS,
   describeTooLargePage,
@@ -662,6 +663,7 @@ import {
   describePublishPath,
   classifierGated,
   runPublishToolCheck,
+  isSpelledInsidePin,
   checkWindowsPathSpelling,
   MAX_HOSTS,
   describePathAnnotations,
@@ -669,6 +671,12 @@ import {
   readPublishFile,
   findNulByte,
 } from "../../services/artifacts/publishReadChecks.js";
+import {
+  abandonSavedArtifactCopy,
+  settleSavedArtifactCopy,
+  recordSavedArtifactCopy,
+  recordSavedArtifactCopyBeforeWrite,
+} from "../../services/artifacts/framedCopies.js";
 import { makeTempSiblingPath, assertPathSafeAsync } from "../../utils/atomicPublishWrite.js";
 import { pinWriteTarget } from "../../utils/fsSafety/pathRevalidation.js";
 import { getErrnoCode, isENOENT, isAbortError, AbortError } from "../../utils/errors.js";
@@ -760,7 +768,6 @@ import {
   extensionForMimeType,
 } from "./actions/uploadAsset.js";
 import { isStrictHumanTurn, analyzeTurnTail, isUserDrivenTurn } from "../../utils/turnOrigin.js";
-import { formatQuotedNameList } from "../../components/agents/new-agent-creation/wizard-steps/ConfirmStep.js";
 import {
   getAttestationKind,
   describeAttestationKind,
@@ -825,7 +832,7 @@ import {
   logAskGranted,
   withAskTelemetry,
 } from "./askTelemetry.js";
-import { staleServerClassifierContext, countToolCallsSince } from "./ownershipContext.js";
+import { staleServerClassifierContext, isDelegatedObservation } from "./ownershipContext.js";
 import { editRemovalCapValue, editRemovalVisibilityValue } from "../../utils/envFlagValues.js";
 import {
   buildArtifactCorePrompt,
@@ -849,6 +856,11 @@ import { findToolByName, hasAfterResultCommitted } from "../../Tool.js";
 import { CLAUDE_DESIGN_TOOL_NAME } from "../ClaudeDesignTool/constants.js";
 import { checkWorktreeIsolation_2 } from "../../utils/worktreeIsolation.js";
 import { normalizeArtifactInput } from "../../services/artifacts/artifactInputNormalize.js";
+import {
+  isMarkedOutput,
+  markReadIfOurs,
+  stripMarkOnResult,
+} from "../../services/artifacts/artifactReadMarks.js";
 import {
   carryVersionWatch,
   heldVersionForCall,
@@ -890,6 +902,7 @@ import {
 } from "../../services/artifacts/readArtifactGuidance.js";
 import {
   fileInlineEnvelopeIfClean,
+  readFileCopyFraming,
   readFileInlineText,
   readArtifactForModel,
   readActionAsksForeignRead,
@@ -961,10 +974,14 @@ import {
 import { sleep } from "../../utils/sleep.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit, fromNumber } from "../../services/analytics/safeMetadata.js";
-import { getRecentProbeBoot, isWriterRole, probeArtifactAccess } from "../../services/artifacts/audience.js";
+import {
+  keptProbeReadBack,
+  isPublishingRole,
+  getFrameShareStatus,
+} from "../../services/artifacts/audience.js";
 import {
   listArtifactFiles,
-  readArtifactFile,
+  readArtifactFile as readArtifactFile_2,
   validateArtifactFilePath,
 } from "../../services/artifacts/publishedFiles.js";
 import { PERMISSION_STASH_EVICTED_SYMBOL } from "../../bootstrap/sessionSlices.js";
@@ -984,7 +1001,7 @@ import {
   isFullFileView,
   hasFullFileContent,
 } from "../../utils/remoteFileState.js";
-import { fetchArtifactBootWithProbe } from "../../services/artifacts/boot.js";
+import { fetchBoot } from "../../services/artifacts/boot.js";
 import {
   TYPE_FILE_WRITE_REFUSAL,
   SLUG_GONE_MSG,
@@ -1041,9 +1058,9 @@ import { registerWritersArm } from "./actionNames.js";
 import { trackDurableClaudeDocSlug } from "../../services/artifacts/artifactPresence.js";
 import { docsCreateCommentWakeSlot } from "./docsCreateWake.js";
 
-//@ chunk-cdrjna5f.js:359-381 placement
+//@ chunk-283n6avd.js:359-381 placement
 registerReaderAvailability(() => isArtifactToolRegistered() && !isArtifactReadOnlySurface());
-//@ chunk-cdrjna5f.js:381-915 placement
+//@ chunk-283n6avd.js:381-915 placement
 var ARTIFACT_TOOL_HEAD = {
   name: ARTIFACT_TOOL_NAME,
   aliases: undefined,
@@ -1071,19 +1088,19 @@ var ARTIFACT_TOOL_HEAD = {
     return withholdingReason === null && !isBuiltInArtifactHiddenForMcp();
   },
 };
-//@ chunk-qxvqcab6.js:14966-15043 placement (2.1.88 match: createNodeWsClient, 1)
+//@ chunk-nfkwcnxd.js:14941-15018 placement (2.1.88 match: createNodeWsClient, 1)
 /**
  * 判断一个对象是否自带 `mcp` 键（Object.hasOwn）。被 artifact/页面配置相关代码使用，与 MCP 客户端无关；旧版名 createNodeWsClient 配错。
  */
 function hasOwnMcpKey(value) {
   return value !== null && typeof value === "object" && Object.hasOwn(value, "mcp");
 }
-//@ chunk-8wvtd8sr.js:361925-362035 placement
+//@ chunk-xzmy9dn4.js:364195-364305 placement
 function pickSessionMintedFrameEntry(entries) {
   let filtered = entries.filter(([key]) => !isPersistableFrameUrl(key) || isCreatedFrameUrl(key));
   return (filtered.find(([, entry]) => entry.sessionMinted === true) ?? filtered[0])?.[1];
 }
-//@ chunk-8wvtd8sr.js:362035-362261 placement
+//@ chunk-xzmy9dn4.js:364305-364531 placement
 function deleteCardAudience(shareEntry) {
   switch (shareEntry?.mode) {
     case undefined:
@@ -1098,7 +1115,7 @@ function deleteCardAudience(shareEntry) {
       return `shared with ${shareAudience(shareEntry.mode)}`;
   }
 }
-//@ chunk-8wvtd8sr.js:362261-362488 placement
+//@ chunk-xzmy9dn4.js:364531-364758 placement
 function hasArtifactAskOrDenyRule(toolUseContext, skipWildcard) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   let isUrlScopedRule = (rule) => {
@@ -1113,11 +1130,11 @@ function hasArtifactAskOrDenyRule(toolUseContext, skipWildcard) {
   let matchesOtherRule = (rule) =>
     toolMatchesRule(toolPermissionContext, ArtifactTool, rule) && !isUrlScopedRule(rule);
   return (
-    getAskRules(toolPermissionContext).some(matchesOtherRule) ||
-    getDenyRules(toolPermissionContext).some(matchesOtherRule)
+    askedBashRules(toolPermissionContext).some(matchesOtherRule) ||
+    deniedBashRules(toolPermissionContext).some(matchesOtherRule)
   );
 }
-//@ chunk-8wvtd8sr.js:362488-362557 placement
+//@ chunk-xzmy9dn4.js:364758-364827 placement
 /**
  * 少数扩展名到 MIME 类型的映射表。
  */
@@ -1125,7 +1142,7 @@ var CONTENT_TYPES_BY_EXT = new Map([
   [".html", "text/html"],
   [".json", "application/json"],
 ]);
-//@ chunk-8wvtd8sr.js:362557-362690 placement
+//@ chunk-xzmy9dn4.js:364827-364960 placement
 function allRenamesKeepMediaType(entries) {
   return entries.every((entry) => {
     let expectedType = CONTENT_TYPES_BY_EXT.get(asciiLowerCase(extname(entry.to)));
@@ -1135,7 +1152,7 @@ function allRenamesKeepMediaType(entries) {
     );
   });
 }
-//@ chunk-8wvtd8sr.js:362690-362851 placement
+//@ chunk-xzmy9dn4.js:364960-365121 placement
 async function typeDeclaresRoomCapability(slug, toolUseContext) {
   if (
     !artifactRoomSurfaceOpen() ||
@@ -1145,7 +1162,7 @@ async function typeDeclaresRoomCapability(slug, toolUseContext) {
     return false;
   return (await warmTypeCapabilities(slug, toolUseContext))?.includes("room") === true;
 }
-//@ chunk-8wvtd8sr.js:362851-363040 placement
+//@ chunk-xzmy9dn4.js:365121-365310 placement
 async function typeCatalogReadableWithoutRoom(slug, toolUseContext) {
   if (getLiveState().frozenArtifactTypes?.typeCatalogOn !== true) return false;
   let capabilities = await warmTypeCapabilities(slug, toolUseContext);
@@ -1160,7 +1177,7 @@ async function typeCatalogReadableWithoutRoom(slug, toolUseContext) {
     )
   );
 }
-//@ chunk-8wvtd8sr.js:363040-363860 placement
+//@ chunk-xzmy9dn4.js:365310-366130 placement
 /**
  * 若设置了 CLAUDE_ARTIFACT_HOST_GRANT（本机本地服务授权），读取 Artifact 类型的能力声明并与授权比对，得出该会话能否从此类型创建 Artifact。
  * 读类型失败或声明格式错误时返回 {ok:false, err}；无授权或无声明时放行。
@@ -1197,7 +1214,7 @@ async function checkHostGrantCarry(typeSlug, context) {
     };
   return carryVerdict(typeRead.detail.declaration, hostGrant, "type");
 }
-//@ chunk-8wvtd8sr.js:363860-363933 placement
+//@ chunk-xzmy9dn4.js:366130-366203 placement
 /**
  * 该 artifact URL 的类型声明带 room 时返回 room 标记。
  */
@@ -1209,14 +1226,14 @@ function roomArmForUrl(url) {
       }
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:363933-364010 placement
+//@ chunk-xzmy9dn4.js:366203-366280 placement
 /**
  * 用户是否拒绝过新页面 room，或本会话已询问过。
  */
 function hasRoomArmHistory(liveState) {
   return liveState.roomArmRefusedByUser.has(NEW_PAGE_ARM_REFUSED_KEY) || liveState.roomArmAsked.size > 0;
 }
-//@ chunk-8wvtd8sr.js:364010-364093 placement
+//@ chunk-xzmy9dn4.js:366280-366363 placement
 /**
  * 可用的 toolUseId：非远程执行且未记录过。
  */
@@ -1225,7 +1242,7 @@ function eligibleToolUseId(context, allowed) {
     ? context.toolUseId
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:364093-364356 placement
+//@ chunk-xzmy9dn4.js:366363-366626 placement
 function roomArmingKeyFor(input) {
   let artifactUrl = typeof input?.url === "string" ? parseArtifactUrl(input.url) : null;
   if (artifactUrl !== null) return `slug:${artifactUrl.slug}`;
@@ -1239,7 +1256,7 @@ function roomArmingKeyFor(input) {
   let typeArtifactUrl = typeUrl !== undefined ? parseArtifactUrl(typeUrl) : null;
   return typeArtifactUrl !== null ? `type:${typeArtifactUrl.slug}` : undefined;
 }
-//@ chunk-8wvtd8sr.js:364356-365024 placement
+//@ chunk-xzmy9dn4.js:366626-367294 placement
 /**
  * 判断本次调用是否应当"预备加入房间"（room join arming）：需已披露房间、未同意、未被用户停止/拒绝、非 plan 模式、自动分类器开启等。
  * 副作用：更新 roomJoinArming 集合并记录本次房间预备询问（noteRoomArmAsk）。
@@ -1283,7 +1300,7 @@ function shouldArmRoomJoin(context, request) {
   }
   return shouldArm;
 }
-//@ chunk-8wvtd8sr.js:365024-365154 placement
+//@ chunk-xzmy9dn4.js:367294-367424 placement
 function artifactRoomJoinConsentHeld(toolUseContext, slug) {
   let consent = consentEpochGuard(toolUseContext.getAppState()).artifactRoomJoinConsentSlugs?.[slug];
   return (
@@ -1292,7 +1309,7 @@ function artifactRoomJoinConsentHeld(toolUseContext, slug) {
       classifierRoomConsentStands(getToolPermissionContext(toolUseContext).mode, slug))
   );
 }
-//@ chunk-8wvtd8sr.js:365154-365425 placement
+//@ chunk-xzmy9dn4.js:367424-367695 placement
 /**
  * 若某 slug 的房间加入同意来自分类器，则离开该房间并从 AppState.artifactRoomJoinConsentSlugs 删除该条。
  */
@@ -1308,7 +1325,7 @@ function revokeClassifierRoomConsent(getAppState, setAppState, slug) {
     };
   });
 }
-//@ chunk-8wvtd8sr.js:365425-365603 placement
+//@ chunk-xzmy9dn4.js:367695-367873 placement
 function lapsedClassifierRoomSweep(getAppState, setAppState) {
   return () => {
     let { artifactRoomJoinConsentSlugs, toolPermissionContext } = getAppState();
@@ -1317,7 +1334,7 @@ function lapsedClassifierRoomSweep(getAppState, setAppState) {
         revokeClassifierRoomConsent(getAppState, setAppState, key);
   };
 }
-//@ chunk-8wvtd8sr.js:365603-365755 placement
+//@ chunk-xzmy9dn4.js:367873-368025 placement
 function makeRoomConsentLapseWatcher(getAppState, setAppState, slug) {
   return {
     gone: () =>
@@ -1326,7 +1343,7 @@ function makeRoomConsentLapseWatcher(getAppState, setAppState, slug) {
     onLapse: () => revokeClassifierRoomConsent(getAppState, setAppState, slug),
   };
 }
-//@ chunk-8wvtd8sr.js:365755-366092 placement
+//@ chunk-xzmy9dn4.js:368025-368362 placement
 function makeRoomJoinConsentRevoker(setAppState) {
   return (slug) => {
     let revoked = [];
@@ -1354,7 +1371,7 @@ function makeRoomJoinConsentRevoker(setAppState) {
     return revoked.length;
   };
 }
-//@ chunk-8wvtd8sr.js:366092-366375 placement
+//@ chunk-xzmy9dn4.js:368362-368645 placement
 function makeRoomNamesSilentReader(getAppState, url) {
   let artifactUrl = parseArtifactUrl(url);
   return () => {
@@ -1381,9 +1398,9 @@ function makeRoomNamesSilentReader(getAppState, url) {
     );
   };
 }
-//@ chunk-8wvtd8sr.js:366375-366384 placement
+//@ chunk-xzmy9dn4.js:368645-368654 placement
 var MAX_CONSENT_PAYLOADS_LISTED = 3;
-//@ chunk-8wvtd8sr.js:366384-366582 placement
+//@ chunk-xzmy9dn4.js:368654-368852 placement
 function dbBatchPayloadsForConsent(writes) {
   let flattened = writes.flatMap((write) =>
     write.data !== undefined ? [approvalPayloadExcerpt(write.data)] : [],
@@ -1392,7 +1409,7 @@ function dbBatchPayloadsForConsent(writes) {
   if (flattened.length <= MAX_CONSENT_PAYLOADS_LISTED) return flattened.join("; ");
   return `${flattened[0]} and ${flattened.length - 1} more ${plural(flattened.length - 1, "payload")}`;
 }
-//@ chunk-8wvtd8sr.js:366582-366698 placement (2.1.88 match: getClaudeConfigFiles, 0.418)
+//@ chunk-xzmy9dn4.js:368852-368968 placement (2.1.88 match: getClaudeConfigFiles, 0.418)
 function dbBatchFileSpellings(cwd) {
   return cwd.flatMap((subdir) =>
     subdir.filePath !== undefined
@@ -1400,7 +1417,7 @@ function dbBatchFileSpellings(cwd) {
       : [],
   );
 }
-//@ chunk-8wvtd8sr.js:366698-367236 placement
+//@ chunk-xzmy9dn4.js:368968-369506 placement
 /**
  * 把 Artifact 类型的一个发布版本（contract、能力、读取范围、数据库访问规则）拼成一行摘要，截断到 600 字符。
  */
@@ -1427,7 +1444,7 @@ function describeTypeReleaseLine(release) {
   ].filter(Boolean);
   return sweepResultLineText(filtered.join(" \xB7 "), 600);
 }
-//@ chunk-8wvtd8sr.js:367236-367313 placement
+//@ chunk-xzmy9dn4.js:369506-369583 placement
 /**
  * 把用户规则目录里的数据库规则摘要成一行（最多 8 条）。
  */
@@ -1435,9 +1452,9 @@ function describeUserDbRules(dbCapabilities) {
   let rules = getUserClaudeRulesDir_2(dbCapabilities) ?? [];
   return rules.length === 0 ? "" : capListForDisplay(rules, 8, describeDbRule).join("; ");
 }
-//@ chunk-8wvtd8sr.js:367313-367323 placement
+//@ chunk-xzmy9dn4.js:369583-369593 placement
 var MAX_DB_RULE_DESC_CHARS = 80;
-//@ chunk-8wvtd8sr.js:367323-367487 placement
+//@ chunk-xzmy9dn4.js:369593-369757 placement
 function describeDbRule(rule) {
   let record = isPlainObjectConnector(rule) ? rule : {};
   let path = record.path;
@@ -1453,7 +1470,7 @@ function describeDbRule(rule) {
     .filter(Boolean)
     .join(" ");
 }
-//@ chunk-8wvtd8sr.js:367487-367584 placement
+//@ chunk-xzmy9dn4.js:369757-369854 placement
 /**
  * 拼出「键 值」描述；值不是已知合法值时用 ?。
  */
@@ -1463,7 +1480,7 @@ function describeKeyValue(record, key) {
     ? ""
     : `${key} ${typeof value === "string" && DB_RULE_SCOPES.has(value) ? value : "?"}`;
 }
-//@ chunk-8wvtd8sr.js:367584-367994 placement
+//@ chunk-xzmy9dn4.js:369854-370264 placement
 /**
  * 类型功能开启时，查找 file_path（或 url）对应的分享记录；记录带 typeLock 则返回 {share}，否则对非 html/md 的 url 发布也返回。
  */
@@ -1491,7 +1508,7 @@ function lockedTypeShareFor(input) {
       }
     : null;
 }
-//@ chunk-8wvtd8sr.js:367994-368136 placement
+//@ chunk-xzmy9dn4.js:370264-370406 placement
 function gatedThumbnailNamesFor(input) {
   if (typeof input?.file_path !== "string") return [];
   try {
@@ -1500,7 +1517,7 @@ function gatedThumbnailNamesFor(input) {
     return [];
   }
 }
-//@ chunk-8wvtd8sr.js:368136-368266 placement
+//@ chunk-xzmy9dn4.js:370406-370536 placement
 function countPublishEdits(input) {
   let edits;
   try {
@@ -1516,7 +1533,7 @@ function countPublishEdits(input) {
       ? null
       : untrustedArray.length;
 }
-//@ chunk-8wvtd8sr.js:368266-368443 placement
+//@ chunk-xzmy9dn4.js:370536-370713 placement
 function describeLocalEditsClause(input, prefix, fileLabel = "that local file") {
   let editCount = countPublishEdits(input);
   if (editCount === 0) return "";
@@ -1524,29 +1541,29 @@ function describeLocalEditsClause(input, prefix, fileLabel = "that local file") 
     ? `${prefix}also making edits to ${fileLabel} on disk`
     : `${prefix}also making ${editCount} ${plural(editCount, "edit")} to ${fileLabel} on disk`;
 }
-//@ chunk-8wvtd8sr.js:368443-368593 placement
+//@ chunk-xzmy9dn4.js:370713-370863 placement
 function countFileEntries(files) {
   if (Array.isArray(files)) return files.length;
   if (files !== null && typeof files === "object")
-    return count(
+    return countWhere(
       Object.values(files),
       (entry) => entry !== null && !isLiveOffOnlyEntry(entry) && !isServerSideCopyEntry(entry),
     );
   return 0;
 }
-//@ chunk-8wvtd8sr.js:368593-368699 placement
+//@ chunk-xzmy9dn4.js:370863-370969 placement
 function countCopiedFileEntries(files) {
   if (files !== null && typeof files === "object" && !Array.isArray(files))
-    return count(Object.values(files), isServerSideCopyEntry);
+    return countWhere(Object.values(files), isServerSideCopyEntry);
   return 0;
 }
-//@ chunk-8wvtd8sr.js:368699-368816 placement
+//@ chunk-xzmy9dn4.js:370969-371086 placement
 function countRemovedFileEntries(files) {
   if (files !== null && typeof files === "object" && !Array.isArray(files))
-    return count(Object.values(files), (entry) => entry === null);
+    return countWhere(Object.values(files), (entry) => entry === null);
   return 0;
 }
-//@ chunk-8wvtd8sr.js:368816-368930 placement
+//@ chunk-xzmy9dn4.js:371086-371200 placement
 function isServerSideCopyEntry(entry) {
   return (
     entry !== null &&
@@ -1556,7 +1573,7 @@ function isServerSideCopyEntry(entry) {
     artifactCopyFromFrozen()
   );
 }
-//@ chunk-8wvtd8sr.js:368930-369429 placement
+//@ chunk-xzmy9dn4.js:371200-371699 placement
 /**
  * 描述 files 中"服务端从其他 Artifact 复制"的条目：列出来源地址（含版本、归属标注），用于权限询问文案。
  */
@@ -1564,7 +1581,7 @@ function describeServerSideCopies(files, prefix) {
   if (files === null || typeof files !== "object" || Array.isArray(files)) return "";
   let filtered = Object.values(files).filter(isServerSideCopyEntry);
   if (filtered.length === 0) return "";
-  let sources = uniq(
+  let sources = normalizeCaseForComparison_2(
     filtered.map((entry) => {
       let { artifact, ver } = entry;
       let artifactUrl = typeof artifact === "string" ? parseArtifactUrl(artifact) : null;
@@ -1581,7 +1598,7 @@ function describeServerSideCopies(files, prefix) {
   );
   return `${prefix}${filtered.length} ${plural(filtered.length, "file")} copied server side from ${sources.join(", ")}`;
 }
-//@ chunk-8wvtd8sr.js:369429-369525 placement
+//@ chunk-xzmy9dn4.js:371699-371795 placement
 /**
  * 该输入是否会被发布 shim 接管处理。
  */
@@ -1593,9 +1610,9 @@ function isPublishShimUrl(input) {
     publishShimModule.isPublishShim(publishShimModule.fillShimUrl(input))
   );
 }
-//@ chunk-8wvtd8sr.js:369525-369535 placement
+//@ chunk-xzmy9dn4.js:371795-371805 placement
 var EDIT_REFUSAL_ERROR_CODE = 24;
-//@ chunk-8wvtd8sr.js:369535-369747 placement
+//@ chunk-xzmy9dn4.js:371805-372017 placement
 function editsRefusalReason(input, toolUseId) {
   let record = input;
   if (input.action !== undefined && input.action !== "publish") return "action";
@@ -1604,7 +1621,7 @@ function editsRefusalReason(input, toolUseId) {
   if (isPublishShimUrl(input)) return "live_doc";
   return hasChainPublishId(toolUseId) ? "chain" : undefined;
 }
-//@ chunk-8wvtd8sr.js:369747-370550 placement
+//@ chunk-xzmy9dn4.js:372017-372820 placement
 /**
  * 把 editsRefusalReason 的原因码（action/type_url/files/live_doc/chain）映射成给模型的拒绝文案。
  */
@@ -1622,7 +1639,7 @@ function editsRefusalMessage(reason, action) {
       return "`edits` can't accompany this automatic republish of a comment's edit. Nothing was published.";
   }
 }
-//@ chunk-8wvtd8sr.js:370550-370930 placement
+//@ chunk-xzmy9dn4.js:372820-373200 placement
 /**
  * 校验发布时附带的 edits：不允许的组合直接拒绝（errorCode 8），编辑本身非法时返回 editsFailedMessage；均记 logFeatureSad。
  */
@@ -1656,9 +1673,9 @@ function validatePublishEdits(input, toolUseId) {
   }
   return null;
 }
-//@ chunk-8wvtd8sr.js:370930-370941 placement
+//@ chunk-xzmy9dn4.js:373200-373211 placement
 var MAX_UNREAD_REFUSAL_NOTES = 256;
-//@ chunk-8wvtd8sr.js:370941-371319 placement
+//@ chunk-xzmy9dn4.js:373211-373589 placement
 /**
  * 判断一次发布是否需要"未读先发"守卫：有 toolUseId、非远程执行、开启基版本功能、本会话未读过该 slug、也没有自己发布过/发布中。
  */
@@ -1683,7 +1700,7 @@ function shouldStaleGuardPublish(slug, isStale, toolUseContext) {
     !isPublishInFlight(ownPublishes, slug)
   );
 }
-//@ chunk-8wvtd8sr.js:371319-371480 placement
+//@ chunk-xzmy9dn4.js:373589-373750 placement
 function readNeedsAsk(target, toolUseContext) {
   let facts = classFactsFor("read", target, toolUseContext);
   let entryFacts = factsFromEntry(getShareEntry(target.slug));
@@ -1698,7 +1715,7 @@ function readNeedsAsk(target, toolUseContext) {
     }).ask
   );
 }
-//@ chunk-8wvtd8sr.js:371480-371828 placement
+//@ chunk-xzmy9dn4.js:373750-374098 placement
 /**
  * 判断一个 ask 权限结果是否必须真正询问用户（不能被自动分类器批准）：处理 safetyCheck、ask 规则、整工具允许规则等分支。
  */
@@ -1707,7 +1724,7 @@ function permissionAskNotAutoApprovable(decision, input, toolUseContext) {
   let { mode } = toolPermissionContext;
   if (decision.behavior !== "ask" || consentMustDeny(toolUseContext) || mode === "dontAsk") return false;
   let hasAskRule =
-    getAskRuleForTool(toolPermissionContext, ArtifactTool) !== null ||
+    findAskRuleForTool(toolPermissionContext, ArtifactTool) !== null ||
     matchToolRule(toolPermissionContext, ArtifactTool, input, "ask") !== null;
   let classifierMayApprove =
     isAutoClassifierActive(mode) &&
@@ -1725,7 +1742,7 @@ function permissionAskNotAutoApprovable(decision, input, toolUseContext) {
     ) && !classifierMayApprove
   );
 }
-//@ chunk-8wvtd8sr.js:371828-371995 placement
+//@ chunk-xzmy9dn4.js:374098-374265 placement
 function liveFilesConsentClause(input, prefix) {
   if (publishShimModule == null || !artifactLivePathsSchemaOpen()) return "";
   let isShim =
@@ -1737,7 +1754,7 @@ function liveFilesConsentClause(input, prefix) {
     (isShim ? "" : describeKeptLiveFiles(input, prefix))
   );
 }
-//@ chunk-8wvtd8sr.js:371995-372306 placement
+//@ chunk-xzmy9dn4.js:374265-374576 placement
 /**
  * 新建 Artifact 的发布里出现 files 的 null 条目（删除文件）时的拒绝文案；e 为是否带 type_url。
  */
@@ -1747,17 +1764,17 @@ function nullRemovalOnNewArtifactMessage(hasTypeUrl) {
     (hasTypeUrl ? " and omit `type_url`, which always creates a new artifact." : ".")
   );
 }
-//@ chunk-8wvtd8sr.js:372306-372497 placement
+//@ chunk-xzmy9dn4.js:374576-374767 placement
 var INDEX_HTML_REMOVAL_REFUSAL =
   "\"index.html\" is the artifact's page itself and can't be removed, so drop that `null` entry from `files`. To change the page, publish the new page as `file_path` to the same `url`.";
-//@ chunk-8wvtd8sr.js:372497-372744 placement
+//@ chunk-xzmy9dn4.js:374767-375014 placement
 function prePublishReadFailedMessage(readError, hint) {
   let base = `Couldn't read this artifact before publishing: ${readError.err}. Nothing was published`;
   return isClientErrorStatus(readError.status)
     ? `${base}, and an HTTP ${readError.status} isn't transient, so retrying won't help. Check the URL with ${WEBFETCH}${hint}.`
     : `${base}. Try again.`;
 }
-//@ chunk-8wvtd8sr.js:372744-373801 placement
+//@ chunk-xzmy9dn4.js:375014-376074 placement
 /**
  * 发布时列出"保持现状、不发送本地内容"的 live 文件：从探测到的 live 路径中排除本次显式重新播种或关闭 live 的文件，最多列 8 个。
  */
@@ -1811,21 +1828,21 @@ function describeKeptLiveFiles(input, prefix) {
     unreadableNote
   );
 }
-//@ chunk-8wvtd8sr.js:373801-373962 placement
+//@ chunk-xzmy9dn4.js:376074-376235 placement
 function describeFileRemovals(input, prefix, suffix = "") {
   let removeCount = countRemovedFileEntries(input?.files);
   if (removeCount === 0) return "";
   let phrase = `${removeCount} ${plural(removeCount, "file")} from its current version`;
   return suffix === "" ? `${prefix}removing ${phrase}` : `${prefix}${phrase}${suffix}`;
 }
-//@ chunk-8wvtd8sr.js:373962-374069 placement
+//@ chunk-xzmy9dn4.js:376235-376342 placement
 function describeRunnableFilesClause(input, separator = " \u2014 ") {
   let count = countApprovedFiles(input);
   return count === 0
     ? ""
     : `${separator}${count === UNREADABLE_ARRAY ? "?" : count} can run as a page or script`;
 }
-//@ chunk-8wvtd8sr.js:374069-374356 placement
+//@ chunk-xzmy9dn4.js:376342-376629 placement
 function describeRunnableFilesAsk(input, prefix) {
   let count = countApprovedFiles(input);
   if (count === 0) return "";
@@ -1835,7 +1852,7 @@ function describeRunnableFilesAsk(input, prefix) {
     ? `${prefix}this file can run as a page or script`
     : `${prefix}${count} of these files can run as a page or script`;
 }
-//@ chunk-8wvtd8sr.js:374356-374531 placement
+//@ chunk-xzmy9dn4.js:376629-376804 placement
 function urlHasExtraParts(artifact) {
   if (artifactUrlSubPath(artifact) !== undefined || artifact.includes("#")) return true;
   let index = artifact.indexOf("?");
@@ -1843,7 +1860,7 @@ function urlHasExtraParts(artifact) {
   let parts = artifact.slice(index + 1).split("&");
   return parts.length !== 1 || !parts[0].startsWith("sk=");
 }
-//@ chunk-8wvtd8sr.js:374531-374592 placement
+//@ chunk-xzmy9dn4.js:376804-376865 placement
 /**
  * 该路径的 MIME 类型是否属于可直接内联渲染的类型。
  */
@@ -1851,7 +1868,7 @@ function isDirectlyRenderableType(path) {
   let contentType = contentTypeForPath(path);
   return contentType !== undefined && MARKUP_WITHOUT_SVG_TYPES.has(baseMediaType(contentType));
 }
-//@ chunk-8wvtd8sr.js:374592-378477 placement
+//@ chunk-xzmy9dn4.js:376865-380750 placement
 function normalizeArtifactFiles(files, cwd) {
   if (files === undefined || files === null) return;
   let firstError;
@@ -1962,16 +1979,16 @@ function normalizeArtifactFiles(files, cwd) {
         typeof value.artifact === "string"
       ) {
         let record = value;
-        let sessionArtifactUrl = parseSessionArtifactUrl(record.artifact, {
+        let urlCheck = validateSessionArtifactUrl(record.artifact, {
           field: "artifact",
         });
-        let artifactUrl = sessionArtifactUrl.ok ? parseArtifactUrl(record.artifact) : null;
+        let artifactUrl = urlCheck.ok ? parseArtifactUrl(record.artifact) : null;
         let checkedPath = typeof record.path === "string" ? validateReadPath(record.path) : null;
-        if (!sessionArtifactUrl.ok || artifactUrl === null)
+        if (!urlCheck.ok || artifactUrl === null)
           recordError(
-            sessionArtifactUrl.ok
+            urlCheck.ok
               ? `files: the source for ${jsonStringify(key)} is not an Artifact URL \u2014 pass the source Artifact's claude.ai URL as \`artifact\``
-              : `files: the source for ${jsonStringify(key)}: ${sessionArtifactUrl.message}`,
+              : `files: the source for ${jsonStringify(key)}: ${urlCheck.message}`,
           );
         else if (urlHasExtraParts(record.artifact))
           recordError(
@@ -2021,7 +2038,9 @@ function normalizeArtifactFiles(files, cwd) {
             : `In \`files\`, the value for ${jsonStringify(key)} needs to be a source path string, \`{ from, contentType? }\`, or \`null\` (to remove that file).`,
         );
     }
-    let sourceKeys = uniq(serverCopies.map((copy) => `${copy.from.slug}@${copy.from.ver ?? ""}`));
+    let sourceKeys = normalizeCaseForComparison_2(
+      serverCopies.map((copy) => `${copy.from.slug}@${copy.from.ver ?? ""}`),
+    );
     if (sourceKeys.length > MAX_COPY_SOURCES)
       recordError(
         `files: copies from ${sourceKeys.length} source Artifact versions; at most ${MAX_COPY_SOURCES} per publish \u2014 split the publish`,
@@ -2044,7 +2063,7 @@ function normalizeArtifactFiles(files, cwd) {
     errMsg: "files: pass a list of paths or a published-path map",
   };
 }
-//@ chunk-8wvtd8sr.js:378477-378973 placement
+//@ chunk-xzmy9dn4.js:380750-381246 placement
 /**
  * 一次发布的条目数（file_path + files + 复制 + 删除 + 分离）超过 JL 上限时返回拒绝文案，否则 undefined。
  */
@@ -2059,7 +2078,7 @@ function publishEntryLimitMessage(hasFilePath, normalized) {
   if (entryCount <= MAX_URL_SEGMENT_CHARS) return;
   return `${hasFilePath ? "`file_path` and `files` list" : "`files` lists"} ${entryCount} entries (${copyCount > 0 ? "copies and " : ""}removals included), over the limit of ${MAX_URL_SEGMENT_CHARS} one publish may send. Nothing was published: send at most ${MAX_URL_SEGMENT_CHARS} now and add the rest with another publish to the same url \u2014 files left out of a later publish are kept, and a version holds up to ${MAX_VERSION_INDEX} in all.`;
 }
-//@ chunk-8wvtd8sr.js:378973-379393 placement
+//@ chunk-xzmy9dn4.js:381246-381666 placement
 /**
  * 只传了 root 而没有 files、且 file_path 不在 root 下时的拒绝文案。
  */
@@ -2069,7 +2088,7 @@ function rootWithoutFilesMessage(root, filePath, resolvedFilePath) {
   if (resolvedFilePath === resolvedRoot || resolvedFilePath.startsWith(rootPrefix)) return;
   return `\`root\` (${quotedSweptPath(root)}) only resolves \`files\` sources and this call sent no \`files\`, while \`file_path\` (${quotedSweptPath(filePath)}) is not under it \u2014 nothing was published. If you meant the page under that directory, pass its path in \`file_path\` (e.g. ${quotedSweptPath(join(root, basename(resolvedFilePath)))}) and drop \`root\`; if you meant this page, drop \`root\`.`;
 }
-//@ chunk-8wvtd8sr.js:379393-379518 placement
+//@ chunk-xzmy9dn4.js:381666-381791 placement
 function hasServerSideCopies(input) {
   let files = input?.files;
   return (
@@ -2080,14 +2099,14 @@ function hasServerSideCopies(input) {
     Object.values(files).some(isServerSideCopyEntry)
   );
 }
-//@ chunk-8wvtd8sr.js:379518-379563 placement
+//@ chunk-xzmy9dn4.js:381791-381836 placement
 /**
  * 带 MCP 键且存在锁定的类型分享。
  */
 function hasLockedMcpShare(capabilities, input) {
   return hasOwnMcpKey(capabilities) && lockedTypeShareFor(input) !== null;
 }
-//@ chunk-8wvtd8sr.js:379563-379897 placement
+//@ chunk-xzmy9dn4.js:381836-382170 placement
 /**
  * 收集 files 中服务端复制来源的归属分类标签（[ownership:…] 改写成 [copy source:…]），供分类器使用。
  */
@@ -2104,7 +2123,7 @@ function copySourceOwnershipTags(input) {
   }
   return [...tags].join("");
 }
-//@ chunk-8wvtd8sr.js:379897-380100 placement
+//@ chunk-xzmy9dn4.js:382170-382373 placement
 function sessionOwnershipMark(target, shareEntry) {
   if (target === null) return "";
   let liveState = getLiveState();
@@ -2114,7 +2133,7 @@ function sessionOwnershipMark(target, shareEntry) {
     ? SESSION_PUBLISHED_CLASSIFIER_MARK
     : "";
 }
-//@ chunk-8wvtd8sr.js:380100-380261 placement
+//@ chunk-xzmy9dn4.js:382373-382534 placement
 var LINK_SCAN_EXAMINED = {
   hidden: [],
   location: [],
@@ -2127,7 +2146,7 @@ var LINK_SCAN_UNEXAMINABLE = {
   deceptive: false,
   state: "unexaminable",
 };
-//@ chunk-8wvtd8sr.js:380261-380318 placement
+//@ chunk-xzmy9dn4.js:382534-382591 placement
 /**
  * 文件列表里有需筛查的名字时返回分类器标记。
  */
@@ -2136,21 +2155,21 @@ function screenedNameClassifierMark(paths) {
     ? SCREENED_NAME_CLASSIFIER_MARK
     : "";
 }
-//@ chunk-8wvtd8sr.js:380318-380399 placement
+//@ chunk-xzmy9dn4.js:382591-382672 placement
 /**
  * 规范化后是否是 index.html。
  */
 function isIndexHtml(key) {
   return key.normalize("NFC").replace(/^(?:\.\/)+/, "") === "index.html";
 }
-//@ chunk-8wvtd8sr.js:380399-380434 placement
+//@ chunk-xzmy9dn4.js:382672-382707 placement
 /**
  * 实时路径 schema 开启且该条目只有 live-off。
  */
 function isLiveOffOnlyEntry(entry) {
   return artifactLivePathsSchemaOpen() && isLiveOffOnly(entry);
 }
-//@ chunk-8wvtd8sr.js:380434-380528 placement
+//@ chunk-xzmy9dn4.js:382707-382801 placement
 /**
  * 由路径推断 live 键（schema 未开启时原样返回）。
  */
@@ -2163,7 +2182,7 @@ function impliedLiveKeys(path, contentType, flags) {
       )
     : flags;
 }
-//@ chunk-8wvtd8sr.js:380528-380653 placement
+//@ chunk-xzmy9dn4.js:382801-382926 placement
 function liveFlagsOf(entry) {
   if (!artifactLivePathsSchemaOpen()) return {};
   let record = entry;
@@ -2176,7 +2195,7 @@ function liveFlagsOf(entry) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:380653-380790 placement
+//@ chunk-xzmy9dn4.js:382926-383063 placement
 async function publishStubExists(slug) {
   let artifactPublishStubDir = getArtifactPublishStubDir();
   if (artifactPublishStubDir === null || !ARTIFACT_SLUG_RE.test(slug)) return false;
@@ -2186,17 +2205,17 @@ async function publishStubExists(slug) {
     return false;
   }
 }
-//@ chunk-8wvtd8sr.js:380790-380834 placement
+//@ chunk-xzmy9dn4.js:383063-383107 placement
 /**
  * 未被抑制时返回 artifact 标题。
  */
 function titleIfNotSuppressed(url, title, suppress) {
   return suppress ? undefined : artifactTitleForUrl(url, title);
 }
-//@ chunk-8wvtd8sr.js:380834-380933 placement
+//@ chunk-xzmy9dn4.js:383107-383206 placement
 var RESUME_LOST_FILES_NOTE =
   "this happens when a session resumes on another machine or its temporary files are cleared";
-//@ chunk-8wvtd8sr.js:380933-381128 placement
+//@ chunk-xzmy9dn4.js:383206-383401 placement
 async function suggestSimilarHtmlPath(filePath) {
   let similarPath = await normalizePathForComparison(filePath);
   if (similarPath) return `Did you mean ${encodeControlChars(similarPath)}?`;
@@ -2206,7 +2225,7 @@ async function suggestSimilarHtmlPath(filePath) {
     return `Did you mean ${encodeControlChars(similarFile)}?`;
   return null;
 }
-//@ chunk-8wvtd8sr.js:381128-382702 placement
+//@ chunk-xzmy9dn4.js:383401-384975 placement
 /**
  * 发布源文件不存在时的报错文案：给出相似文件建议；若该路径曾发布过（n 为目标信息），按 remedy（read/blocked/gone）说明如何恢复或重建。
  */
@@ -2248,14 +2267,21 @@ async function fileNotFoundMessage(filePath, target = null, restoreInfo) {
     return `${baseMessage} A markdown sibling ${encodeControlChars(similarFile)} exists \u2014 author an HTML page from its content and publish that .html file.`;
   return `${baseMessage} Create the file first (Write tool, or via shell if Write is unavailable), then retry with the same path.`;
 }
-//@ chunk-8wvtd8sr.js:382702-382724 placement
+//@ chunk-xzmy9dn4.js:384975-384997 placement
 var MAX_PENDING_EDITS = 3;
 var MAX_LISTED_FILES = 64;
 var MAX_LISTED_PATH_CHARS = 120;
-//@ chunk-8wvtd8sr.js:382848-382974 placement
+//@ chunk-xzmy9dn4.js:384997-385121 layout
+function formatQuotedNameList(path) {
+  let mapped = path.map((path) => `"${path}"`);
+  return mapped.length <= 2
+    ? mapped.join(" and ")
+    : `${mapped.slice(0, -1).join(", ")}, and ${mapped.at(-1)}`;
+}
+//@ chunk-xzmy9dn4.js:385121-385247 placement
 var ALL_PATHS_PROTECTED_NOTE =
   "Every file in this read would be saved to a path the file-edit safety rules protect, so each must be read on its own";
-//@ chunk-8wvtd8sr.js:382974-383795 placement
+//@ chunk-xzmy9dn4.js:385247-386068 placement
 /**
  * read_file 多文件落盘前逐个检查写入权限：受保护路径（safetyCheck/scratchpad 外链接）和命中 Edit ask 规则的路径放到一边单独读。
  * 全部都能读时返回 null，否则返回 {aside, ruleMatched, rules, resolved, verdicts…}。
@@ -2286,7 +2312,7 @@ function partitionProtectedReadPaths(entries, permCheck) {
       protectedPaths.add(entry.path);
     else if (verdict.decisionReason?.type === "rule") {
       ruledPaths.push(entry.path);
-      rules.add(formatPermissionRule(verdict.decisionReason.rule.ruleValue));
+      rules.add(permissionRuleValueFromString(verdict.decisionReason.rule.ruleValue));
     }
   }
   let ruleCoversAll = ruledPaths.length === entries.length - protectedPaths.size;
@@ -2307,7 +2333,7 @@ function partitionProtectedReadPaths(entries, permCheck) {
         verdicts,
       };
 }
-//@ chunk-8wvtd8sr.js:383795-384440 placement
+//@ chunk-xzmy9dn4.js:386068-386713 placement
 /**
  * 说明某个 read_file 落盘路径被放到一边的原因（scratchpad 外链接、受保护文件名、safetyCheck、ask 规则）。
  */
@@ -2317,7 +2343,7 @@ function setAsideReason(path, input, toolPermissionContext) {
   let checkVerdict = () => checkWritePermissionForTool(ArtifactTool, input, toolPermissionContext, walked);
   return `set aside: ${isWithinScratchpad(path) && !isAllScratchpadPaths([spellings]) ? (isScratchpadPath_2(path) ? "a link where it would be saved leads out of the scratchpad" : "its name is one the file-edit safety rules screen even in the scratchpad (git, hook, tool, and agent settings)") : checkVerdict().decisionReason?.type === "safetyCheck" ? "it would be saved at a path Claude Code protects (settings, hooks, .git, shell profiles and other sensitive files) or under a suspicious spelling" : checkVerdict().decisionReason?.type === "rule" ? "an Edit ask rule of the user\u2019s asks before this file is written" : "the approval set it aside"} \u2014 read it by itself with \`path\``;
 }
-//@ chunk-8wvtd8sr.js:384440-384843 placement
+//@ chunk-xzmy9dn4.js:386713-387116 placement
 /**
  * read_file 的全部路径都受保护时的拒绝文案（最多列出 Vjn 个路径）。
  */
@@ -2325,30 +2351,30 @@ function allPathsProtectedMessage(paths) {
   let mapped = paths.slice(0, MAX_ANCHORS).map((path) => safeJsonQuote(path));
   return `every path in this read (${mapped.join(", ")}${paths.length > mapped.length ? ", \u2026" : ""}) would be saved at a path Claude Code protects (git, hook, tool, and agent settings, shell profiles and other sensitive files), under a suspicious spelling, or through a link leading out of the scratchpad \u2014 nothing was read; read them one at a time with \`path\``;
 }
-//@ chunk-8wvtd8sr.js:384843-384915 placement
+//@ chunk-xzmy9dn4.js:387116-387188 placement
 /**
  * 生成两组值的笛卡尔积键（组名与值以 NUL 分隔）。
  */
 function crossProductKeys(prefixes, groups) {
   return groups.flatMap((suffixes, index) => suffixes.map((suffix) => `${prefixes[index]}\x00${suffix}`));
 }
-//@ chunk-8wvtd8sr.js:384915-385036 placement
+//@ chunk-xzmy9dn4.js:387188-387309 placement
 function groupKeysByPrefix(keys, prefixes) {
   return prefixes.map((prefix) => {
     let marker = `${prefix}\x00`;
     return keys.filter((key) => key.startsWith(marker)).map((key) => key.slice(marker.length));
   });
 }
-//@ chunk-8wvtd8sr.js:385036-385106 placement
+//@ chunk-xzmy9dn4.js:387309-387379 placement
 /**
  * 两个字符串数组逐项相等。
  */
 function sameStringArray(paths, other) {
   return paths.length === other.length && paths.every((value, index) => value === other[index]);
 }
-//@ chunk-8wvtd8sr.js:385106-385120 placement
+//@ chunk-xzmy9dn4.js:387379-387393 placement
 var RESULT_OVERHEAD_RESERVE_CHARS = 131072;
-//@ chunk-8wvtd8sr.js:385120-385169 placement
+//@ chunk-xzmy9dn4.js:387393-387442 placement
 /**
  * 数据库内联读取结果的上限（页面内联上限与总上限减去预留后的较小者）。
  */
@@ -2358,7 +2384,7 @@ function inlineReadResultCap() {
     ARTIFACT_DB_READ_MAX_RESULT_SIZE_CHARS - RESULT_OVERHEAD_RESERVE_CHARS - 16384,
   );
 }
-//@ chunk-8wvtd8sr.js:385169-385265 placement
+//@ chunk-xzmy9dn4.js:387442-387538 placement
 var READ_FILE_FAILURE_CODES = new Set([
   "batch_budget",
   "http_404",
@@ -2367,19 +2393,22 @@ var READ_FILE_FAILURE_CODES = new Set([
   "size",
   "unexpected_type",
 ]);
-//@ chunk-8wvtd8sr.js:385265-386674 placement
+//@ chunk-xzmy9dn4.js:387538-389066 placement
 /**
  * 把 read_file 拉回的内容原子写到本地：临时兄弟文件 wx 写入后 rename；不允许覆盖绑定的工作副本。
  * 失败时清理临时文件并抛 ArtifactInputError（write_kept/write_moved/write_error），r 为 true 时记功能埋点。
  */
-async function writeFetchedFileAtomically(destPath, content, spellings, logOutcome = true) {
-  if (publishShimModule != null && (await publishShimModule.isBoundWorkingCopy(destPath)))
+async function writeFetchedFileAtomically(destPath, content, spellings, fileCopyFraming, logOutcome = true) {
+  if (publishShimModule != null && (await publishShimModule.isBoundWorkingCopy(destPath))) {
+    await abandonSavedArtifactCopy(destPath, fileCopyFraming);
     throw new ArtifactInputError(
       publishShimModule.snapshotOntoWorkingCopyRefusal(basename(destPath)),
       "file_read_onto_working_copy",
     );
+  }
   let tempPath = makeTempSiblingPath(destPath);
   let tempCreated = false;
+  let loadError = false;
   let pinned;
   try {
     if (isWithinScratchpad(destPath)) await ensureScratchpadDir();
@@ -2405,7 +2434,11 @@ async function writeFetchedFileAtomically(destPath, content, spellings, logOutco
         );
       throw error;
     });
+    await settleSavedArtifactCopy(destPath, fileCopyFraming);
+    loadError = true;
   } catch (error) {
+    if (error instanceof PartialKeptError) await recordSavedArtifactCopy(error.partial, fileCopyFraming);
+    if (!loadError) await abandonSavedArtifactCopy(destPath, fileCopyFraming);
     if (error instanceof PartialKeptError) {
       if (logOutcome) logFeatureBad("artifact_file_read", "write_kept");
       let utils = getErrnoCode(error.renameError) ?? "unexpected error";
@@ -2416,7 +2449,10 @@ async function writeFetchedFileAtomically(destPath, content, spellings, logOutco
         "file_read_write_kept",
       );
     }
-    if (tempCreated) await unlink(tempPath).catch(() => {});
+    if (tempCreated)
+      await unlink(tempPath).catch(() =>
+        recordSavedArtifactCopy(join(dirname(destPath), basename(tempPath)), fileCopyFraming),
+      );
     if (error instanceof SymlinkWriteRefusedError) {
       if (logOutcome) logFeatureBad("artifact_file_read", "write_moved");
       throw new ArtifactInputError(
@@ -2433,7 +2469,7 @@ async function writeFetchedFileAtomically(destPath, content, spellings, logOutco
     await pinned?.close();
   }
 }
-//@ chunk-8wvtd8sr.js:386674-386940 placement
+//@ chunk-xzmy9dn4.js:389066-389332 placement
 function publishTargetForPath(input, filePath, toolUseContext, pinnedTarget) {
   if (typeUrlOf(input) !== undefined) return null;
   let url = toolUseContext.getAppState().frameUrls[filePath]?.url;
@@ -2448,7 +2484,7 @@ function publishTargetForPath(input, filePath, toolUseContext, pinnedTarget) {
     linked,
   };
 }
-//@ chunk-8wvtd8sr.js:386940-387102 placement
+//@ chunk-xzmy9dn4.js:389332-389494 placement
 function canAutoRestoreSource(filePath, input, toolUseContext, walked = walkPermissionCheckPaths(filePath)) {
   let lower = extname(filePath).toLowerCase();
   return (
@@ -2460,7 +2496,7 @@ function canAutoRestoreSource(filePath, input, toolUseContext, walked = walkPerm
       .behavior === "allow"
   );
 }
-//@ chunk-8wvtd8sr.js:387102-387546 placement
+//@ chunk-xzmy9dn4.js:389494-389938 placement
 /**
  * 源文件缺失而已把上次发布的版本恢复到该路径时的结果文案。
  */
@@ -2473,7 +2509,7 @@ function sourceRestoredMessage(filePath, slug, ver, hasUrl, viewed, note) {
         : "";
   return `Nothing was published: the source file ${filePath} was missing on this machine (${RESUME_LOST_FILES_NOTE}). The last published version of ${artifactViewerUrl(slug)} (${ver}) has been restored to that path \u2014 Read it, re-apply your change there, then publish again with the same file_path${hasUrl ? " and url" : ""}.${viewedNote}${note}`;
 }
-//@ chunk-8wvtd8sr.js:387546-389269 placement
+//@ chunk-xzmy9dn4.js:389938-391768 placement
 /**
  * 发布源文件缺失时尝试从 Artifact 拉回上次发布的页面写回 scratchpad；权限变化、他组织、写失败等情况返回对应的 file_not_found 错误。
  */
@@ -2529,7 +2565,7 @@ async function restoreMissingSource(filePath, input, context, options) {
   if (
     !canAutoRestoreSource(filePath, input, context, {
       ...rechecked,
-      spellings: uniq([...spellings, ...rechecked.spellings]),
+      spellings: normalizeCaseForComparison_2([...spellings, ...rechecked.spellings]),
     })
   ) {
     logFeatureSad("artifact_source_restore", "write_refused_late");
@@ -2537,6 +2573,7 @@ async function restoreMissingSource(filePath, input, context, options) {
   }
   let pinned;
   let created = false;
+  await recordSavedArtifactCopyBeforeWrite(filePath, restore.framing);
   try {
     await ensureScratchpadDir();
     pinned = await pinWriteTarget(filePath, spellings, {
@@ -2552,9 +2589,15 @@ async function restoreMissingSource(filePath, input, context, options) {
       throw error;
     });
     created = true;
+    await settleSavedArtifactCopy(filePath, restore.framing);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if (created && pinned !== undefined) await unlink(pinned.ioPath).catch(() => {});
+    if (created && pinned !== undefined)
+      await unlink(pinned.ioPath).then(
+        () => abandonSavedArtifactCopy(filePath, restore.framing),
+        () => settleSavedArtifactCopy(filePath, restore.framing),
+      );
+    else await abandonSavedArtifactCopy(filePath, restore.framing);
     let moved = error instanceof SymlinkWriteRefusedError;
     if (moved || errnoCode === "EEXIST")
       logFeatureSad("artifact_source_restore", moved ? "write_moved" : "write_exists");
@@ -2577,7 +2620,7 @@ async function restoreMissingSource(filePath, input, context, options) {
     "source_restored",
   );
 }
-//@ chunk-8wvtd8sr.js:389269-389717 placement
+//@ chunk-xzmy9dn4.js:391768-392216 placement
 /**
  * 发布前检查源文件：超出 MAX_ARTIFACT_BYTES 返回 errorCode 3；不存在且无法自动恢复时返回 fileNotFoundMessage（errorCode 2）。
  */
@@ -2617,7 +2660,7 @@ async function precheckPublishSource(input, toolUseContext) {
   }
   return null;
 }
-//@ chunk-8wvtd8sr.js:389717-390377 placement
+//@ chunk-xzmy9dn4.js:392216-392876 placement
 /**
  * 不支持的扩展名的拒绝文案，按图片 / 纯文本 / 其他分别给出改写成 .html 的建议。
  */
@@ -2630,7 +2673,7 @@ function unsupportedFileTypeMessage(ext, filesSupported) {
     return `${base} Author an .html page from the text (or wrap it in a <pre> block in an .html file) and retry with that path.`;
   return `${base} Write the content as an .html page and retry with that path.`;
 }
-//@ chunk-8wvtd8sr.js:390377-390442 placement
+//@ chunk-xzmy9dn4.js:392876-392941 placement
 /**
  * 是否可发布 artifact（非 localOnly、非禁用、无发布桩目录）。
  */
@@ -2641,7 +2684,7 @@ function canPublishArtifact(input) {
     getArtifactPublishStubDir() === null
   );
 }
-//@ chunk-8wvtd8sr.js:390442-390526 placement
+//@ chunk-xzmy9dn4.js:392941-393025 placement
 /**
  * 登录受阻时的错误与补救说明（附重试提示）。
  */
@@ -2654,7 +2697,7 @@ ${ARTIFACT_LOGIN_RETRY_NOTE}`,
     remedy,
   };
 }
-//@ chunk-8wvtd8sr.js:390526-390991 placement
+//@ chunk-xzmy9dn4.js:393025-393490 placement
 /**
  * 按组织策略检查 Artifact 是否可用：管理员拒绝、策略未取得、持有的拒绝原因三种情况返回 {message, errorCode, reasonCode, remedy, decision}，可用时返回 null。
  */
@@ -2688,7 +2731,7 @@ function artifactPolicyRefusal() {
     decision: "organization policy",
   };
 }
-//@ chunk-8wvtd8sr.js:390991-391135 placement
+//@ chunk-xzmy9dn4.js:393490-393634 placement
 function loginBeforeShapeRefusal(input) {
   if (!canPublishArtifact(typeof input === "object" && input !== null ? input : undefined)) return null;
   let { message, remedy } = artifactLoginBlockedReason();
@@ -2699,7 +2742,7 @@ ${ARTIFACT_LOGIN_BEFORE_SHAPE_NOTE}`,
     remedy,
   };
 }
-//@ chunk-8wvtd8sr.js:391135-391345 placement
+//@ chunk-xzmy9dn4.js:393634-393844 placement
 function liveDocRedeployKind(input) {
   try {
     let record = input;
@@ -2711,7 +2754,7 @@ function liveDocRedeployKind(input) {
     return null;
   }
 }
-//@ chunk-8wvtd8sr.js:391345-391582 placement
+//@ chunk-xzmy9dn4.js:393844-394081 placement
 function readRuleVerdict(toolPermissionContext, agentContext, targetUrl, scopeContext, path) {
   let ruleInput = {
     action: "read",
@@ -2735,11 +2778,11 @@ function readRuleVerdict(toolPermissionContext, agentContext, targetUrl, scopeCo
       }
     : null;
 }
-//@ chunk-8wvtd8sr.js:391582-391625 placement
+//@ chunk-xzmy9dn4.js:394081-394124 placement
 function publishInputJoinsRoom(input) {
   return isRoomPublishCall(input) && input[ROOM_CONSENT_DISCLOSED_TAG] !== false;
 }
-//@ chunk-8wvtd8sr.js:391625-605185 placement
+//@ chunk-xzmy9dn4.js:394124-608362 placement
 /**
  * Artifact 工具定义主体（输入处理、权限、各动作分发、结果渲染与存储裁剪）。
  */
@@ -4528,17 +4571,18 @@ var ArtifactToolDefinition = {
           }),
       });
       let needsApproval = readFileOutsideScratchpad || assetOutsideWorking;
-      let modeClassifierGated =
+      let any_2 = mapped.some(
+        (candidate) =>
+          candidate.spellings.length > 1 && (fileEntries !== undefined || !isSpelledInsidePin(candidate)),
+      );
+      let hasAmbiguity =
         toolPermissionContext.servedCall === true ||
         (needsApproval &&
-          (notScratchpadPath ||
-            screenedInsideScratchpad ||
-            assetOutsideScratchpad ||
-            groups.some((spelling) => spelling.length > 1)) &&
+          (notScratchpadPath || screenedInsideScratchpad || assetOutsideScratchpad || any_2) &&
           classifierGated(toolPermissionContext.mode));
       let reasonFor = (suffix) =>
         ((isPlanMode && (readFileOutsideScratchpad || !consentHeld)) ||
-        (!isPlanMode && needsApproval && modeClassifierGated) ||
+        (!isPlanMode && needsApproval && hasAmbiguity) ||
         (tooManyListed && askRule === null)
           ? safetyReason(suffix)
           : undefined) ??
@@ -4895,6 +4939,7 @@ var ArtifactToolDefinition = {
             owned: true,
             public: false,
             outsideOrg: false,
+            outsideAudience: false,
             networkOff: false,
             turnStartedByHuman: false,
             canWrite: true,
@@ -4948,6 +4993,7 @@ var ArtifactToolDefinition = {
           artifactId: "",
           owned: true,
           public: false,
+          outsideAudience: false,
           outsideOrg: false,
           networkOff: false,
           turnStartedByHuman: isStrictHumanTurn(toolUseContext.messages),
@@ -5211,22 +5257,22 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
           }
         }
       }
-    let askRuleForTool = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE);
-    if (askRuleForTool) {
+    let ruleCheck = findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE);
+    if (ruleCheck) {
       if (ruleAskDecision === undefined)
         ruleAskDecision = {
           behavior: "ask",
           message: "Publishing reads file contents.",
           decisionReason: {
             type: "rule",
-            rule: askRuleForTool,
+            rule: ruleCheck,
           },
         };
       readAsks = true;
     }
     let env_2 = claudeAiEnvironment();
     let copyDenyRule = (mode, toolPermissionContext_2 = toolPermissionContext) => {
-      for (let slug of uniq(copied.map((copy) => copy.from.slug))) {
+      for (let slug of normalizeCaseForComparison_2(copied.map((copy) => copy.from.slug))) {
         let copyRule = artifactReadRule(
           toolPermissionContext_2,
           {
@@ -5338,7 +5384,7 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
         sourcePin.sha256 === undefined &&
         sourcePin.pin.kind === "file" &&
         readCheck.behavior === "allow" &&
-        askRuleForTool === null
+        ruleCheck === null
       ) {
         let sha256 = await hashSourceIfUnchanged(absPath, sourcePin.pin);
         if (sha256 !== undefined) sourcePin.sha256 = sha256;
@@ -5744,11 +5790,11 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
     let underRootCount =
       root === undefined
         ? 0
-        : count(
+        : countWhere(
             mapped,
             (entry) => entry.relative || (entry.lex !== null && isUnderAnchor(entry.lex, base, rootExpanded)),
           );
-    let scratchElsewhereCount = count(
+    let scratchElsewhereCount = countWhere(
       mapped,
       (entry) =>
         !entry.relative &&
@@ -5788,7 +5834,7 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
         .map(slugOf)
         .filter((slug) => slug !== undefined);
       if (filtered.length === 0) return "";
-      let artifactSlugs = uniq(filtered);
+      let artifactSlugs = normalizeCaseForComparison_2(filtered);
       for (let slugBatch of chunk_default(artifactSlugs, SCRATCH_SUFFIX_CHARS))
         await Promise.all(
           slugBatch.map((slug) =>
@@ -5845,7 +5891,7 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
     })();
     let copiesNote = await (async () => {
       if (copied.length === 0) return "";
-      let copySlugs = uniq(copied.map((copy) => copy.from.slug));
+      let copySlugs = normalizeCaseForComparison_2(copied.map((copy) => copy.from.slug));
       await Promise.all(
         copySlugs.map((slug) =>
           warmShareEntry(
@@ -5870,7 +5916,9 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
         ),
       );
       copiedOtherOrgs = copySlugs.filter((slug) => otherOrgCopySource(getShareEntry(slug)));
-      let copyKeys = uniq(copied.map((copy) => `${copy.from.slug}\x00${copy.from.ver ?? ""}`));
+      let copyKeys = normalizeCaseForComparison_2(
+        copied.map((copy) => `${copy.from.slug}\x00${copy.from.ver ?? ""}`),
+      );
       let multiSource = copyKeys.length > 1;
       let parts = copyKeys.map((copyKey) => {
         let [copySlug, copyVersion] = copyKey.split("\x00");
@@ -5886,7 +5934,7 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
           }),
         );
         return multiSource
-          ? `${count(copied, (copy) => `${copy.from.slug}\x00${copy.from.ver ?? ""}` === copyKey)} from ${quotedCopyTitle}${versionNote} (${copyOwnership.slice(2)})`
+          ? `${countWhere(copied, (copy) => `${copy.from.slug}\x00${copy.from.ver ?? ""}` === copyKey)} from ${quotedCopyTitle}${versionNote} (${copyOwnership.slice(2)})`
           : `${quotedCopyTitle}${versionNote}${copyOwnership}`;
       });
       let copyCount = `${copied.length} ${plural(copied.length, "file")}`;
@@ -6030,7 +6078,7 @@ type: ${artifactViewerUrlFor(typeArtifactUrl)}`;
         ? checkWindowsPathSpelling(pathText, spellingContext)
         : spellingCheck;
     });
-    let deceptiveCount = count(mapped_2, (spellingCheck) => spellingCheck.deceptive);
+    let deceptiveCount = countWhere(mapped_2, (spellingCheck) => spellingCheck.deceptive);
     let hasDeceptive = deceptiveCount > 0;
     let any_2 = mapped_2.some((spellingCheck) => spellingCheck.state === "unexaminable");
     let tooManyLinks =
@@ -6242,6 +6290,7 @@ ${sourceList.join(`
       artifactId: "",
       owned: true,
       public: false,
+      outsideAudience: false,
       outsideOrg: false,
       networkOff: false,
       turnStartedByHuman: humanTurn,
@@ -6545,7 +6594,7 @@ ${sourceList.join(`
                     action: "write",
                   },
                 ]),
-            ...uniq(copied.map((copy) => copy.from.slug)).map((slug) => ({
+            ...normalizeCaseForComparison_2(copied.map((copy) => copy.from.slug)).map((slug) => ({
               ruling: copySourceRulingFor(
                 {
                   slug,
@@ -6874,8 +6923,8 @@ ${sourceList.join(`
     let describeFiles = (count, describe, extra = 0) => {
       let noted = [];
       let plain = [];
-      for (let j = 0; j < count; j++) {
-        let file = describe(j);
+      for (let idx = 0; idx < count; idx++) {
+        let file = describe(idx);
         let canExamine = file.local !== undefined && rootBase !== null && examinedCount < MAX_HOSTS;
         if (file.local !== undefined && !canExamine) unexaminedCount++;
         if (!canExamine && plain.length >= MAX_ANCHORS) continue;
@@ -7493,7 +7542,7 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
       let versionError = validateReadVersionInput(input_2);
       if (versionError !== undefined) return versionError;
       let canonicalUrl = canonicalizeArtifactUrlInput(url);
-      let sessionArtifactUrl = parseSessionArtifactUrl(canonicalUrl, {
+      let urlCheck = validateSessionArtifactUrl(canonicalUrl, {
         notUrlMessage: explainNonArtifactUrl(canonicalUrl, {
           designToolName:
             findToolByName(context.options.tools ?? [], CLAUDE_DESIGN_TOOL_NAME) !== undefined
@@ -7501,11 +7550,11 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
               : undefined,
         }),
       });
-      if (!sessionArtifactUrl.ok)
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       let urlError = urlSubPathError(
         canonicalUrl,
@@ -7552,14 +7601,14 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
             'action "describe_type" requires `type_url` \u2014 the Artifact type\'s link, from a list_types result.',
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(typeUrl, {
+      let urlCheck = validateSessionArtifactUrl(typeUrl, {
         notUrlMessage: notTypeUrlError(typeUrl),
       });
-      if (!sessionArtifactUrl.ok)
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       return {
         result: true,
@@ -7584,12 +7633,12 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
             'action "upload_asset" requires `url` \u2014 the artifact\'s claude.ai URL (find it with action: "list").',
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let urlCheck = validateSessionArtifactUrl(url);
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       let urlError = urlSubPathError(url);
       if (urlError !== undefined) return urlError;
@@ -7645,12 +7694,12 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
             'action "delete" requires `url` \u2014 the claude.ai URL of the Artifact to delete (the publish result has it; action: "list" shows earlier ones).',
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let urlCheck = validateSessionArtifactUrl(url);
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       let urlError = urlSubPathError(url, "; deleting removes the whole Artifact, never one file of it");
       if (urlError !== undefined) return urlError;
@@ -7683,12 +7732,12 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
           message: `action "${action}" requires \`url\` \u2014 the artifact's claude.ai URL (find it with action: "list").`,
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let urlCheck = validateSessionArtifactUrl(url);
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       let urlError = urlSubPathError(url);
       if (urlError !== undefined) return urlError;
@@ -7755,12 +7804,12 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
           message: `action "${action}" requires \`url\` \u2014 the artifact's claude.ai URL (find it with action: "list").`,
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let urlCheck = validateSessionArtifactUrl(url);
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
       let urlError = urlSubPathError(
         url,
@@ -7821,16 +7870,16 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
           message: "creating an Artifact from an Artifact type is not available in eval stub mode",
           errorCode: 16,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(typeUrl, {
+      let urlCheck = validateSessionArtifactUrl(typeUrl, {
         notUrlMessage: `type_url: not an Artifact URL: ${typeUrl}`,
       });
-      if (!sessionArtifactUrl.ok)
+      if (!urlCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: urlCheck.message,
+          errorCode: urlCheck.errorCode,
         };
-      typeSlug = sessionArtifactUrl.parsed.slug;
+      typeSlug = urlCheck.parsed.slug;
       let mapped = ["url", "capabilities", "contract", "force", "deadline"]
         .filter((field) => {
           let value = input_2[field];
@@ -8184,7 +8233,9 @@ ${VERIFY_PROMPT_PARAGRAPH}`;
       return `\`label\` is a short name (max ${VERSION_LABEL_MAX} chars). Move longer text into the page content.`;
     return null;
   },
-  restoreTransientForRemap: carryVersionWatch,
+  restoreTransientForRemap(output, target) {
+    return isMarkedOutput(output, carryVersionWatch(output, target));
+  },
   mapToolResultToToolResultBlockParam(result, toolUseId) {
     let renderer = resultRendererFor(result);
     if (renderer) return renderer(result, toolUseId);
@@ -8488,7 +8539,7 @@ ${scrubNote}`
       }
       if (keptTexts.length < filesRead.files.length) {
         let sliced = filesRead.files.slice(keptTexts.length);
-        let savedCount = count(sliced, (slicedEntry) => "saved_to" in slicedEntry);
+        let savedCount = countWhere(sliced, (slicedEntry) => "saved_to" in slicedEntry);
         keptTexts.push(
           `- \u2026 and ${sliced.length} more not listed here: ${savedCount} saved under that directory at their published paths, ${sliced.length - savedCount} not read`,
         );
@@ -9143,7 +9194,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       if (!isDelegatedObservationContext(context.agentContext))
         verify.reads.set(verifyTarget.slug, {
           agentId: context.agentContext?.agentId ?? null,
-          humanTurns: count(context.messages, isNonAbortHumanTurn),
+          humanTurns: countWhere(context.messages, isNonAbortHumanTurn),
           at: Date.now(),
         });
       let shareEntry = getShareEntry(verifyTarget.slug);
@@ -9204,7 +9255,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           "reading file_path is blocked by a Read permission rule \u2014 the upload was not attempted",
           "asset_upload_read_denied",
         );
-      let needsAskRule = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
+      let needsAskRule = findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
       let uploadPin = input_2[ASSET_UPLOAD_PIN_TAG];
       if (
         carriesForeignPin(input_2, ASSET_UPLOAD_PIN_TAG) ||
@@ -9369,8 +9420,8 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         let readDeclaration = () =>
           readStoredDeclaration(target.slug, context.abortController.signal, context.credentials);
         let probeDeclaration =
-          getRecentProbeBoot(target.slug, context.toolUseId) === undefined &&
-          isWriterRole(getShareEntry(target.slug)?.role)
+          keptProbeReadBack(target.slug, context.toolUseId) === undefined &&
+          isPublishingRole(getShareEntry(target.slug)?.role)
             ? readDeclaration()
             : undefined;
         let listing = await listArtifactFiles(target, context.abortController.signal, context.credentials, {
@@ -9401,10 +9452,10 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             pinListedPaths(target.slug, listing.ver, listing.files.slice(0, MAX_LISTED_FILES_SHOWN), pinSeq),
           );
         }
-        let recentProbeBoot = getRecentProbeBoot(target.slug, context.toolUseId);
+        let recordAsset = keptProbeReadBack(target.slug, context.toolUseId);
         let [lockedType, declaration] = await Promise.all([
           listing.typeLocked ? (typeInfo ?? typeLinkInfo()) : undefined,
-          listing.writerClass ? (recentProbeBoot ?? probeDeclaration ?? readDeclaration()) : undefined,
+          listing.writerClass ? (recordAsset ?? probeDeclaration ?? readDeclaration()) : undefined,
         ]);
         let declarationSummary = toDeclarationSummary(declaration);
         return withCommits({
@@ -9524,7 +9575,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             : mapped.some((walked, index) =>
                   isDenied({
                     ...walked,
-                    spellings: uniq([...pathsByDest[index], ...walked.spellings]),
+                    spellings: normalizeCaseForComparison_2([...pathsByDest[index], ...walked.spellings]),
                   }),
                 )
               ? ""
@@ -9545,7 +9596,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             admittedOutsideOrgRead(input_2, context, target.slug),
           );
         let typeSlug = typeLinkInfo();
-        let artifactFile = await readArtifactFile(
+        let artifactFile = await readArtifactFile_2(
           target,
           filtered.map((file) => file.path),
           context.abortController.signal,
@@ -9608,8 +9659,10 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             continue;
           }
           let { bytes, sha256 } = file;
+          let fileCopyFraming = readFileCopyFraming(true, artifactFile, target.slug);
+          await recordSavedArtifactCopyBeforeWrite(dest, fileCopyFraming);
           try {
-            await writeFetchedFileAtomically(dest, bytes, pathsByDest[index], false);
+            await writeFetchedFileAtomically(dest, bytes, pathsByDest[index], fileCopyFraming, false);
           } catch (error) {
             if (error instanceof ArtifactInputError) {
               results.push({
@@ -9652,6 +9705,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
                   : unpinPath(target.slug, file.path, pinSeq),
             );
           }
+          await recordSavedArtifactCopy(dest, readFileCopyFraming(sanitized, artifactFile, target.slug));
           results.push({
             path: file.path,
             saved_to: dest,
@@ -9676,7 +9730,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             }),
           });
         }
-        let savedCount = count(results, (file) => "saved_to" in file);
+        let savedCount = countWhere(results, (file) => "saved_to" in file);
         let result = {
           relay: artifactFile.relay,
           batch: true,
@@ -9787,7 +9841,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         return (
           checkWritePermissionForTool(ArtifactTool, input_2, getToolPermissionContext(context), {
             ...walked,
-            spellings: uniq([...spellings, ...walked.spellings]),
+            spellings: normalizeCaseForComparison_2([...spellings, ...walked.spellings]),
           }).behavior === "deny"
         );
       };
@@ -9917,7 +9971,9 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           resolvedDest = publishShimModule.LIVE_FILE_COPY_TAKEN_LINE;
       } else if (publishShimModule != null && artifactFile.listing === "live")
         resolvedDest = publishShimModule.viewOnlyLiveFileNote(target.slug);
-      await writeFetchedFileAtomically(dest, bytes, spellings);
+      let fileCopyFraming = readFileCopyFraming(true, artifactFile, target.slug);
+      await recordSavedArtifactCopyBeforeWrite(dest, fileCopyFraming);
+      await writeFetchedFileAtomically(dest, bytes, spellings, fileCopyFraming);
       let lockedType =
         artifactFile.listing === "live" ||
         resolvedDest !== undefined ||
@@ -9932,6 +9988,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
               scope: artifactFile.writerClass ? "page" : "all",
             });
       let declaration = await lockedTypeSlug;
+      await recordSavedArtifactCopy(dest, readFileCopyFraming(liveRead, artifactFile, target.slug));
       if (artifactFile.listing !== "live" && pathPinOn()) {
         let { listedSha256 } = artifactFile;
         let pinSeq = nextPathPinSeq();
@@ -10355,7 +10412,10 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         return (
           checkWritePermissionForTool(ArtifactTool, input_2, getToolPermissionContext(context), {
             ...pathChecks,
-            spellings: uniq([...(candidatePath === stem ? writePermission : []), ...pathChecks.spellings]),
+            spellings: normalizeCaseForComparison_2([
+              ...(candidatePath === stem ? writePermission : []),
+              ...pathChecks.spellings,
+            ]),
           }).behavior === "deny"
         );
       };
@@ -10414,6 +10474,15 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           "asset_read_onto_working_copy",
         );
       let sha256 = createHash("sha256").update(artifactAsset.bytes).digest("hex");
+      let fileCopyFraming = readFileCopyFraming(
+        true,
+        {
+          outsideOrg: entryOutsideOrgContent(getShareEntry(artifactUrl.slug)),
+          publicRead: artifactAsset.publicRead,
+        },
+        artifactUrl.slug,
+      );
+      await recordSavedArtifactCopyBeforeWrite(assetPath, fileCopyFraming);
       let tempSiblingPath = makeTempSiblingPath(assetPath);
       let pinnedWritten = false;
       let writtenTarget;
@@ -10441,7 +10510,10 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             );
           throw error;
         });
+        await settleSavedArtifactCopy(assetPath, fileCopyFraming);
       } catch (error) {
+        if (error instanceof PartialKeptError) await recordSavedArtifactCopy(error.partial, fileCopyFraming);
+        await abandonSavedArtifactCopy(assetPath, fileCopyFraming);
         if (error instanceof PartialKeptError) {
           logFeatureBad("artifact_asset_read", "write_kept");
           let renameErrno = getErrnoCode(error.renameError) ?? "unexpected error";
@@ -10452,7 +10524,10 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             "asset_read_write_kept",
           );
         }
-        if (pinnedWritten) await unlink(tempSiblingPath).catch(() => {});
+        if (pinnedWritten)
+          await unlink(tempSiblingPath).catch(() =>
+            recordSavedArtifactCopy(join(dirname(assetPath), basename(tempSiblingPath)), fileCopyFraming),
+          );
         if (error instanceof SymlinkWriteRefusedError) {
           logFeatureBad("artifact_asset_read", "write_moved");
           throw new ArtifactInputError(
@@ -10468,6 +10543,20 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       } finally {
         await writtenTarget?.close();
       }
+      let recordRead =
+        artifactForeign(getShareEntry(artifactUrl.slug)) ||
+        context.artifactRegistries.recordedPages.isWorkshopPage(artifactUrl.slug);
+      await recordSavedArtifactCopy(
+        assetPath,
+        readFileCopyFraming(
+          recordRead,
+          {
+            outsideOrg: entryOutsideOrgContent(getShareEntry(artifactUrl.slug)),
+            publicRead: artifactAsset.publicRead,
+          },
+          artifactUrl.slug,
+        ),
+      );
       logFeatureOk("artifact_asset_read", {
         relay: artifactAsset.relay,
         size_bytes: artifactAsset.bytes.length,
@@ -10495,8 +10584,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             ...(artifactAsset.publicRead && {
               public_read: true,
             }),
-            ...((artifactForeign(getShareEntry(artifactUrl.slug)) ||
-              context.artifactRegistries.recordedPages.isWorkshopPage(artifactUrl.slug)) && {
+            ...(recordRead && {
               foreign: true,
             }),
           },
@@ -10670,7 +10758,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           throw error;
         });
         if (routineFirstPublish) recordRoutineTypeInstance(createdFromType, consentScope);
-        let title = recordCreatedFrameUrl(context, createdFromType, input_2.title);
+        recordCreatedFrameUrl(context, createdFromType, input_2.title);
         let { hasInteractiveUI, publishContext } = derivePublishContext(context);
         let autoOpen = autoOpenMode(input_2);
         if (autoOpen === "after_first_write" && !isFreshReadPagesStore(createdFromType))
@@ -10714,7 +10802,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         let { liveSubscription, armingTranscript } = armLiveSubscriptionUnlessAborted(
           createdFromType,
           {
-            title,
+            title: sanitizeArtifactTitle(input_2.title ?? "") ?? undefined,
             publishContext,
             unattendedChainPublish: false,
           },
@@ -10886,7 +10974,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           throw new ArtifactInputError(READ_CHECK_NEEDS_APPROVAL, "source_refused");
         let publishReadDenial = getPublishReadDenial(toolPermissionContext);
         if (publishReadDenial) throw new ArtifactInputError(publishReadDenial.message, "source_refused");
-        if (getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE))
+        if (findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE))
           throw new ArtifactInputError(READ_CHECK_NEEDS_APPROVAL, "source_refused");
         let edits = input_2.edits;
         if (edits !== undefined) {
@@ -11265,7 +11353,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
     let loadLock;
     let loadLiveInfo = () =>
       (loadLock ??= (async () => {
-        let readError = await fetchArtifactBootWithProbe(
+        let readError = await fetchBoot(
           {
             slug: targetSlug,
             env: claudeAiEnvironment(),
@@ -11278,8 +11366,9 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           },
         );
         if (readError.err !== null) {
-          if (isGone(readError)) throwPublishTargetGone(targetSlug, context, readError.err, !isTemplateFile);
-          if (isOtherOrg(readError)) throwPublishTargetOtherOrg(targetSlug);
+          if (isArtifactGone(readError))
+            throwPublishTargetGone(targetSlug, context, readError.err, !isTemplateFile);
+          if (isArtifactInOtherOrg(readError)) throwPublishTargetOtherOrg(targetSlug);
           throw new ArtifactInputError(
             prePublishReadFailedMessage(
               readError,
@@ -11314,6 +11403,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       titleIfNotSuppressed(frameEntry, targetUrl, fromType || publishTargetTag === null) ??
       (typeLock !== null ? sanitizeArtifactTitle((await loadLiveInfo()).title ?? "") : null) ??
       (isMarkdown ? parse(absolutePath).base : parse(absolutePath).name);
+    let title_2 = existingTarget ? (paramTitle ?? undefined) : title;
     let clipTitle = (titleText) => {
       let chars = [...titleText];
       return chars.length > 120 ? `${chars.slice(0, 120).join("")}\u2026` : titleText;
@@ -11365,7 +11455,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         "copy_source_changed",
       );
     if (copied.length > 0) {
-      for (let slug of uniq(copied.map((copiedEntry) => copiedEntry.from.slug))) {
+      for (let slug of normalizeCaseForComparison_2(copied.map((copiedEntry) => copiedEntry.from.slug))) {
         let deniedByRule = readDeniedByRule(
           context,
           {
@@ -11382,7 +11472,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         if (deniedByRule !== undefined) throw deniedByRule;
       }
       if (previousConsentSlugs === undefined || consentCarried) {
-        let copiedSourceSlugs = uniq(copied.map((copyItem) => copyItem.from.slug));
+        let copiedSourceSlugs = normalizeCaseForComparison_2(copied.map((copyItem) => copyItem.from.slug));
         await Promise.all(
           copiedSourceSlugs.map((slug) =>
             warmShareEntry(
@@ -11469,7 +11559,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         return otherOrgCopySource(shareEntry) ? crossOrgOk(everyItem.from.slug) : placedInOwnOrg(shareEntry);
       });
     let unconfirmedOwners = () =>
-      uniq(copied.map((slugItem) => slugItem.from.slug))
+      normalizeCaseForComparison_2(copied.map((slugItem) => slugItem.from.slug))
         .filter((slugEntry) => {
           let shareEntry = getShareEntry(slugEntry);
           return !otherOrgCopySource(shareEntry) && !placedInOwnOrg(shareEntry);
@@ -11900,7 +11990,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             absolutePath,
             `${jsonStringify(path)}: ${TYPE_FILE_WRITE_REFUSAL}`,
             {
-              title,
+              title: title_2,
               publishContext,
               unattendedChainPublish,
             },
@@ -12329,7 +12419,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       (editsOnly || isFrameMultiFileEnabled()) &&
       getArtifactPublishStubDir() === null
     ) {
-      let artifactBootWithProbe = await fetchArtifactBootWithProbe(
+      let boot = await fetchBoot(
         {
           slug: targetSlug,
           env: claudeAiEnvironment(),
@@ -12340,35 +12430,31 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           credentials: context.credentials,
         },
       );
-      if (artifactBootWithProbe.err === null) {
+      if (boot.err === null) {
         logFeatureOk("artifact_update_base_read");
-        baseVer =
-          shimBoundCopy || (liveShim && forceFlag)
-            ? artifactBootWithProbe.ver
-            : (baseVersion ?? artifactBootWithProbe.ver);
+        baseVer = shimBoundCopy || (liveShim && forceFlag) ? boot.ver : (baseVersion ?? boot.ver);
         if (liveShim)
           bootState = {
-            title: artifactBootWithProbe.data.title,
-            favicon: artifactBootWithProbe.data.favicon,
-            ver: artifactBootWithProbe.ver,
+            title: boot.data.title,
+            favicon: boot.data.favicon,
+            ver: boot.ver,
           };
-        if (editsOnly && artifactBootWithProbe.ver === baseVer) {
-          fileManifest = artifactFileManifest(artifactBootWithProbe.data);
+        if (editsOnly && boot.ver === baseVer) {
+          fileManifest = artifactFileManifest(boot.data);
           if ([...(fileManifest?.values() ?? [])].some((manifestEntry) => manifestEntry.live))
             liveAllowed = true;
         }
-      } else if (isGone(artifactBootWithProbe))
-        throwPublishTargetGone(targetSlug, context, artifactBootWithProbe.err, !isTemplateFile);
-      else if (isOtherOrg(artifactBootWithProbe)) throwPublishTargetOtherOrg(targetSlug);
-      else if (isNeverPublished(artifactBootWithProbe)) liveAllowed &&= liveRequested;
+      } else if (isArtifactGone(boot)) throwPublishTargetGone(targetSlug, context, boot.err, !isTemplateFile);
+      else if (isArtifactInOtherOrg(boot)) throwPublishTargetOtherOrg(targetSlug);
+      else if (isArtifactNeverPublished(boot)) liveAllowed &&= liveRequested;
       else if (baseVer !== undefined)
         logForDebugging(
-          `[artifact] base listing read failed (${artifactBootWithProbe.err}); publishing without it slug=${targetSlug}`,
+          `[artifact] base listing read failed (${boot.err}); publishing without it slug=${targetSlug}`,
         );
       else
         throw new ArtifactInputError(
           prePublishReadFailedMessage(
-            artifactBootWithProbe,
+            boot,
             ", or publish a fresh artifact instead (omit `url` and use a new `file_path`)",
           ),
           "update_base_read_failed",
@@ -12836,7 +12922,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
             absolutePath,
             publishOutcome.err,
             {
-              title,
+              title: title_2,
               publishContext,
               unattendedChainPublish,
             },
@@ -13040,7 +13126,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
     )
       stampArtifactOutsideOrgConsent(
         context,
-        uniq(copied.map((copySlug) => copySlug.from.slug)).filter(
+        normalizeCaseForComparison_2(copied.map((copySlug) => copySlug.from.slug)).filter(
           (slugValue) => otherOrgCopySource(getShareEntry(slugValue)) && otherOrgSlugs.has(slugValue),
         ),
       );
@@ -13204,7 +13290,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       publishOutcome.stored?.capabilities === undefined;
     let warnings =
       roomContext !== undefined && !existingTarget
-        ? findUnservedMcpServers(roomContext, connectorNames, hasSuccessfulToolCall_3(context.messages))
+        ? findUnservedMcpServers(roomContext, connectorNames, createToolResultStopMessage(context.messages))
         : [];
     if (warnings.length > 0)
       logEvent("tengu_artifact_unobserved_connector_warning", {
@@ -13331,7 +13417,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
         verify.reads.delete(publishOutcome.slug);
         if (verifyRead !== undefined && verifyRead.agentId === (context.agentContext?.agentId ?? null))
           logEvent("tengu_artifact_verify_republish", {
-            same_turn: verifyRead.humanTurns === count(context.messages, isNonAbortHumanTurn),
+            same_turn: verifyRead.humanTurns === countWhere(context.messages, isNonAbortHumanTurn),
             ms_since_read: Date.now() - verifyRead.at,
           });
       } else if (coordinatorEditor) unregisterCoordinatorEditor(publishOutcome.slug);
@@ -13349,7 +13435,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
       slug: publishOutcome.slug,
       url: publishOutcome.url,
       version: publishOutcome.version,
-      title,
+      title: title_2,
       publishContext,
       unattendedChainPublish,
       adoptable,
@@ -13477,7 +13563,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
           .maybeJoinArtifactRoom({
             slug: publishOutcome.slug,
             url: publishOutcome.url,
-            title,
+            title: title_2,
             publishContext,
             context,
             consentGone: artifactRoomsModule.makeConsentGoneReader(context.getAppState),
@@ -13792,7 +13878,7 @@ Not previewed this session: ${pickByToolset('action "preview"', () => `the \`${A
     });
   },
 };
-//@ chunk-8wvtd8sr.js:605185-605331 placement
+//@ chunk-xzmy9dn4.js:608362-608508 placement
 async function pinPublishedArtifact(input, slug, toolUseContext) {
   if (input.pin !== true || !hasPinAction() || getArtifactPublishStubDir() !== null) return;
   return setArtifactPinned(slug, true, toolUseContext.credentials, {
@@ -13800,7 +13886,7 @@ async function pinPublishedArtifact(input, slug, toolUseContext) {
     signal: toolUseContext.abortController.signal,
   });
 }
-//@ chunk-8wvtd8sr.js:605331-605564 placement
+//@ chunk-xzmy9dn4.js:608508-608741 placement
 function pinResultNote(pinned) {
   return pinned === true
     ? `
@@ -13812,7 +13898,7 @@ Pinned to the user's sidebar on claude.ai (it shows there the next time the side
 ${NOT_PINNED_PREFIX} the pin did not go through (the warning above says why); the publish itself succeeded.`
       : "";
 }
-//@ chunk-8wvtd8sr.js:605564-606621 placement
+//@ chunk-xzmy9dn4.js:608741-609798 placement
 /**
  * 发布后决定是否为该 slug 预备持久订阅（durable）：交互/SDK/print 或前台子代理发布且未停止时注册或预备；
  * 否则按 relay 不支持、订阅被拒等记录原因。返回订阅状态字符串。
@@ -13888,7 +13974,7 @@ function armDurablePublishSubscription({
     }
   return status;
 }
-//@ chunk-8wvtd8sr.js:606621-607710 placement
+//@ chunk-xzmy9dn4.js:609798-610887 placement
 /**
  * 发布完成后建立 Frame live 订阅：判断跳过原因、子代理发布的接管、预备 durable 订阅，再异步调用 maybeSubscribeFrameLive。
  * 返回 {liveSubscription, armingTranscript}。
@@ -13998,7 +14084,7 @@ function armLiveSubscriptionAfterPublish({
     armingTranscript,
   };
 }
-//@ chunk-8wvtd8sr.js:607710-607826 placement
+//@ chunk-xzmy9dn4.js:610887-611003 placement
 function setArmingTranscriptResult(armingTranscript, result) {
   if (armingTranscript === undefined) return;
   armingTranscript.result = {
@@ -14006,7 +14092,7 @@ function setArmingTranscriptResult(armingTranscript, result) {
     data: result,
   };
 }
-//@ chunk-8wvtd8sr.js:607826-608010 placement
+//@ chunk-xzmy9dn4.js:611003-611187 placement
 function armLiveSubscriptionUnlessAborted(target, details, input, context) {
   if (context.abortController.signal.aborted)
     return {
@@ -14022,7 +14108,7 @@ function armLiveSubscriptionUnlessAborted(target, details, input, context) {
     context,
   });
 }
-//@ chunk-8wvtd8sr.js:608010-608180 placement
+//@ chunk-xzmy9dn4.js:611187-611357 placement
 function noteCrashedPublishCheck(context) {
   if (context.toolUseId === undefined) return;
   let { crashedPublishChecks } = getLiveState();
@@ -14032,7 +14118,7 @@ function noteCrashedPublishCheck(context) {
   }
   crashedPublishChecks.add(context.toolUseId);
 }
-//@ chunk-8wvtd8sr.js:608180-610046 placement
+//@ chunk-xzmy9dn4.js:611357-613258 placement
 /**
  * ArtifactTool 的组装：wk 包装 checkPermissions（非中断异常时记 crashedPublishChecks），_k 包装 call 与结果映射，
  * 二者合并到 ArtifactToolDefinition 的属性描述符上，再经过校验/询问卡片描述（vk）、旧版适配，最终 buildTool 得到 ArtifactTool。
@@ -14051,6 +14137,7 @@ var ARTIFACT_CALL_WRAPPER = {
   async call(input, toolUseContext, canUseTool, parentMessage, options) {
     let watch = heldVersionForCall(input, toolUseContext, parentMessage?.message.id);
     let result = await ArtifactToolDefinition.call(input, toolUseContext, canUseTool, parentMessage, options);
+    markReadIfOurs(input, result.data, toolUseContext.toolUseId);
     if (!attachVersionWatch(result.data, watch, toolUseContext)) return result;
     return {
       ...result,
@@ -14063,7 +14150,11 @@ var ARTIFACT_CALL_WRAPPER = {
   mapToolResultToToolResultBlockParam(data, toolUseId) {
     return prependNewerVersionNote(
       data,
-      ArtifactToolDefinition.mapToolResultToToolResultBlockParam(data, toolUseId),
+      stripMarkOnResult(
+        data,
+        toolUseId,
+        ArtifactToolDefinition.mapToolResultToToolResultBlockParam(data, toolUseId),
+      ),
     );
   },
 };
@@ -14141,7 +14232,7 @@ var ArtifactTool = buildTool(
   ),
 );
 var artifactLegacyHost = artifactToolCore;
-//@ chunk-8wvtd8sr.js:610046-610322 placement
+//@ chunk-xzmy9dn4.js:613258-613534 placement
 function artifactRuleTargetInput(input, toolUseContext) {
   let withShimUrl = publishShimModule?.fillShimUrl(input) ?? input;
   let record = withShimUrl;
@@ -14164,13 +14255,13 @@ function artifactRuleTargetInput(input, toolUseContext) {
     return withShimUrl;
   }
 }
-//@ chunk-8wvtd8sr.js:610322-610353 placement
+//@ chunk-xzmy9dn4.js:613534-613565 placement
 var ARTIFACT_TOOL_SINGLETON = {
   get tool() {
     return ArtifactTool;
   },
 };
-//@ chunk-8wvtd8sr.js:610353-610572 placement
+//@ chunk-xzmy9dn4.js:613565-613785 placement
 function unsupportedPublishTypeMessage(ext, typeUrl) {
   let baseMessage = unsupportedFileTypeMessage(ext, "files" in inputSchema().shape);
   if (typeUrl === undefined || getLiveState().frozenArtifactTypes?.typesOn !== false) return baseMessage;
@@ -14179,11 +14270,11 @@ function unsupportedPublishTypeMessage(ext, typeUrl) {
   if (filesFromType(shareEntry)) return TYPE_INSTANCE_FILES_UNAVAILABLE;
   return shareEntry?.typeLock === null ? baseMessage : `${baseMessage} ${TYPE_INSTANCE_POSSIBLE_TAIL}`;
 }
-//@ chunk-8wvtd8sr.js:610572-610851 placement
+//@ chunk-xzmy9dn4.js:613785-614064 placement
 function nonHtmlPublishHint() {
   return `an Artifact's page must be .html \u2014 other files publish only to an Artifact created from an Artifact type: pass that Artifact's \`url\` (you must be able to edit it)${getLiveState().frozenArtifactTypes?.typeCreateOn === true ? ", or `type_url` to create a new one" : ""}`;
 }
-//@ chunk-8wvtd8sr.js:610851-611736 placement
+//@ chunk-xzmy9dn4.js:614064-614949 placement
 /**
  * 发布目标 Artifact 已被删除（或他组织撤销邀请）时：清除本会话与该 slug 的关联并抛出 publish_target_gone 错误。
  */
@@ -14199,7 +14290,7 @@ function throwPublishTargetGone(slug, context, message, fromType) {
           SLUG_GONE_MSG,
           `${SLUG_GONE_MSG} \u2014 shared with you from another organization: its owner may have withdrawn your invitation or your edit access`,
         )
-      : stripInviteHints(message)
+      : withoutAccessHints(message)
   ).replace(/\.+$/, "");
   let remedy = fromType
     ? `To publish this file again it needs another Artifact created from an Artifact type: ${getLiveState().frozenArtifactTypes?.typeCreateOn === true ? "pass `type_url` to create one from its type" : "pass that Artifact's `url`"}`
@@ -14209,14 +14300,14 @@ function throwPublishTargetGone(slug, context, message, fromType) {
     "publish_target_gone",
   );
 }
-//@ chunk-8wvtd8sr.js:611736-611850 placement
+//@ chunk-xzmy9dn4.js:614949-615063 placement
 function throwPublishTargetOtherOrg(slug) {
   throw new ArtifactInputError(
     `${artifactViewerUrl(slug)}: ${OTHER_ORG_DENY}. Nothing was published; tell the user.`,
     "publish_target_other_org",
   );
 }
-//@ chunk-8wvtd8sr.js:611850-612826 placement
+//@ chunk-xzmy9dn4.js:615063-616039 placement
 /**
  * 发布前读取目标 Artifact 的 typeLock（是否由类型创建）：同一 toolUseId 已读则复用；404 时按需探测是否已删除/他组织；读失败按 s 决定抛错或返回 null。
  */
@@ -14236,7 +14327,7 @@ async function readTypeLockForPublish(slug, context, strict, probeMissing) {
     : frameDecl;
   if (decl === null) {
     if (probeMissing) {
-      let artifactBootWithProbe = await fetchArtifactBootWithProbe(
+      let boot = await fetchBoot(
         {
           slug,
           env: claudeAiEnvironment(),
@@ -14247,13 +14338,12 @@ async function readTypeLockForPublish(slug, context, strict, probeMissing) {
           credentials,
         },
       );
-      if (artifactBootWithProbe.err !== null && isGone(artifactBootWithProbe))
+      if (boot.err !== null && isArtifactGone(boot))
         throwPublishTargetGone(slug, context, SLUG_GONE_MSG, probeMissing);
-      if (artifactBootWithProbe.err !== null && isOtherOrg(artifactBootWithProbe))
-        throwPublishTargetOtherOrg(slug);
-      if (artifactBootWithProbe.err !== null)
+      if (boot.err !== null && isArtifactInOtherOrg(boot)) throwPublishTargetOtherOrg(slug);
+      if (boot.err !== null)
         throw new ArtifactInputError(
-          `couldn't check whether ${artifactViewerUrl(slug)} was created from an Artifact type (its settings read answered 404; ${artifactBootWithProbe.err}) \u2014 retry`,
+          `couldn't check whether ${artifactViewerUrl(slug)} was created from an Artifact type (its settings read answered 404; ${boot.err}) \u2014 retry`,
           "type_check_failed",
         );
       logFeatureOk("artifact_instance_publish_read");
@@ -14264,7 +14354,7 @@ async function readTypeLockForPublish(slug, context, strict, probeMissing) {
     if (signal.aborted) throw new AbortError();
     if (strict) {
       if (decl.status === 403) {
-        let accessProbe = await probeArtifactAccess(
+        let accessProbe = await getFrameShareStatus(
           {
             slug,
             env: claudeAiEnvironment(),
@@ -14284,11 +14374,11 @@ async function readTypeLockForPublish(slug, context, strict, probeMissing) {
   }
   return decl.typeLock ?? null;
 }
-//@ chunk-8wvtd8sr.js:612826-612866 placement
+//@ chunk-xzmy9dn4.js:616039-616079 placement
 var MAX_SCRATCH_NAMES_TRIED = 3;
 var SCRATCH_SUFFIX_CHARS = 8;
 var replaced = SCRATCH_FOLDER_PHRASE.replace(/^in /, "");
-//@ chunk-8wvtd8sr.js:612866-613033 placement
+//@ chunk-xzmy9dn4.js:616079-616246 placement
 function relativeRootLabel(root, cwd) {
   if (cwd === undefined) return;
   if (root === cwd) return "";
@@ -14296,18 +14386,18 @@ function relativeRootLabel(root, cwd) {
   let joined = relative(cwd, root).split(sep).join("/");
   return `"${maskScratchFolder(sweptPagePath(joined) || "(unprintable path)")}/"`;
 }
-//@ chunk-8wvtd8sr.js:613033-613088 placement
+//@ chunk-xzmy9dn4.js:616246-616301 placement
 /**
  * 其他组织名下且允许组织外读取文件。
  */
 function admittedOutsideOrgRead(ruling, context, slug) {
   return wasOtherOrgNamed(context, slug) && outsideOrgReadAdmitted(ruling, context, slug, "files");
 }
-//@ chunk-8wvtd8sr.js:613088-613387 placement
+//@ chunk-xzmy9dn4.js:616301-616600 placement
 function copyIntoOtherOrgMessage(path) {
   return `files: the destination artifact belongs to another organization, and files copied from another artifact (${jsonStringify(path)}) can only go into artifacts in your own organization, so nothing was published. Publish these files to one of your own artifacts instead, or drop the copied files`;
 }
-//@ chunk-8wvtd8sr.js:613387-613778 placement
+//@ chunk-xzmy9dn4.js:616600-616992 placement
 /**
  * 根据分享记录的归属给出一句描述（自己的 / 共写 / 来自类型 / 外组织公开 / 被邀请 / 他人的 / 未确认）。
  */
@@ -14326,14 +14416,14 @@ function ownershipClause(shareEntry) {
           ? ", someone else's artifact"
           : ", whose owner couldn't be confirmed";
 }
-//@ chunk-8wvtd8sr.js:613778-613867 placement
+//@ chunk-xzmy9dn4.js:616992-617081 placement
 /**
  * 用逗号连接并在最后一项前加 and。
  */
 function joinWithAnd(parts) {
   return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
-//@ chunk-8wvtd8sr.js:613867-614203 placement
+//@ chunk-xzmy9dn4.js:617081-617418 placement
 /**
  * 同 ownershipClause，但是括号形式，自己的且无特殊情况时返回空串。
  */
@@ -14352,7 +14442,7 @@ function ownershipSuffixParen(shareEntry) {
         ? " (yours; its files come from an Artifact type its publisher wrote)"
         : "";
 }
-//@ chunk-8wvtd8sr.js:614203-614911 placement
+//@ chunk-xzmy9dn4.js:617418-618126 placement
 /**
  * 描述 files 来源相对于 root/scratchpad/工作目录的分布（多少来自 root 下、scratchpad 别处、绝对路径），用于发布询问文案。
  */
@@ -14395,7 +14485,7 @@ function describeFilesSourceRoots({
     ...elsewhereParts,
   ].join(", ");
 }
-//@ chunk-8wvtd8sr.js:614911-615218 placement
+//@ chunk-xzmy9dn4.js:618126-618433 placement
 /**
  * 把类型发布信息（latest、blocked 原因与冲突数）转成结果 JSON 字段。
  */
@@ -14421,7 +14511,7 @@ function typeReleaseResult(release) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:615218-616169 placement
+//@ chunk-xzmy9dn4.js:618433-619384 placement
 /**
  * 从 Artifact 类型新建实例：调用 createArtifactFromType，失败抛 create_* 错误；成功后记录读版本、contract 目标、typeLock、分享状态、
  * 类型实例文件，并在本会话 epoch 未变时登记为自己创建的 slug。
@@ -14489,7 +14579,7 @@ async function createArtifactFromTypeForPublish(
   if (hasRoomArmHistory(liveState)) liveState.roomStoppedByUser.add(created.slug);
   return created;
 }
-//@ chunk-8wvtd8sr.js:616169-616638 placement
+//@ chunk-xzmy9dn4.js:619384-619853 placement
 /**
  * 每个 toolUseId 的发布批准只能用一次：清理相关的临时批准状态，已用过则抛 create_replayed，并把它加入 consumedPublishApprovals（有上限）。
  */
@@ -14511,7 +14601,7 @@ function consumePublishApproval(context) {
   }
   consumedPublishApprovals.add(context.toolUseId);
 }
-//@ chunk-8wvtd8sr.js:616638-617741 placement
+//@ chunk-xzmy9dn4.js:619853-620957 placement
 /**
  * 发布后按房间能力与同意情况加入 Artifact 房间（Zt.maybeJoinArtifactRoom），返回房间状态（joining/not_declared/room_cap/no_consent 等）。
  */
@@ -14565,7 +14655,7 @@ async function joinArtifactRoomAfterPublish(published, typeUrl, input, context) 
       .maybeJoinArtifactRoom({
         slug: published.slug,
         url: published.url,
-        title: sanitizeArtifactTitle(published.title ?? "") ?? undefined,
+        title: sanitizeArtifactTitle(input.title ?? "") ?? undefined,
         publishContext,
         context,
         consentGone: artifactRoomsModule.makeConsentGoneReader(context.getAppState),
@@ -14585,7 +14675,7 @@ async function joinArtifactRoomAfterPublish(published, typeUrl, input, context) 
     return;
   }
 }
-//@ chunk-8wvtd8sr.js:617741-617821 placement
+//@ chunk-xzmy9dn4.js:620957-621037 placement
 /**
  * 分享状态的显示模式（空串为 empty、未分享为 undefined）。
  */
@@ -14593,7 +14683,7 @@ function shareStatusMode(read, shared) {
   if (read === "") return "empty";
   return read === undefined ? undefined : deriveShareStatus(read, shared).mode;
 }
-//@ chunk-8wvtd8sr.js:617821-618061 placement
+//@ chunk-xzmy9dn4.js:621037-621277 placement
 function recordRoutineTypeInstance(created, epochs) {
   let mode = shareStatusMode(created.read, created.shared);
   recordUnaskedRoutineFirstPublish(created.slug, mode, {
@@ -14608,7 +14698,7 @@ function recordRoutineTypeInstance(created, epochs) {
   )
     liveState.routineTypeInstances.set(created.slug, created.typeLock.current);
 }
-//@ chunk-8wvtd8sr.js:618061-618201 placement
+//@ chunk-xzmy9dn4.js:621277-621417 placement
 function recordTypeCreateFailure(error) {
   recordUnaskedRoutineFirstPublish(
     undefined,
@@ -14620,7 +14710,7 @@ function recordTypeCreateFailure(error) {
     },
   );
 }
-//@ chunk-8wvtd8sr.js:618201-618426 placement
+//@ chunk-xzmy9dn4.js:621417-621642 placement
 function recordFrameUrlForPath(toolUseContext, path, published, title) {
   let favicon = vetForeignFavicon(published.favicon);
   toolUseContext.setAppState((state) => {
@@ -14643,7 +14733,7 @@ function recordFrameUrlForPath(toolUseContext, path, published, title) {
   });
   linkPathToSlug(path, published.slug);
 }
-//@ chunk-8wvtd8sr.js:618426-618749 placement
+//@ chunk-xzmy9dn4.js:621642-621948 placement
 /**
  * 把新建的 Artifact 记入 AppState.frameUrls（键 CREATED+slug），附带清理后的标题与外站图标，返回标题。
  */
@@ -14673,16 +14763,15 @@ function recordCreatedFrameUrl(toolUseContext, created, title) {
     };
   });
   persistBridgeArtifactFrames(toolUseContext.getAppState().frameUrls);
-  return titleText ?? undefined;
 }
-//@ chunk-8wvtd8sr.js:618749-618807 placement
+//@ chunk-xzmy9dn4.js:621948-622006 placement
 /**
  * 代理作用域或无账号代理会话时不做自动打开。
  */
 function isScopedSessionNoAutoOpen(mode) {
   return mode === "agent_scoped" || accountlessAgentSession() ? undefined : true;
 }
-//@ chunk-8wvtd8sr.js:618807-619433 placement
+//@ chunk-xzmy9dn4.js:622006-622632 placement
 /**
  * 组装"从类型创建"的结果 JSON：url、version、归属、类型文件、provisioned 存储信息、auto_open、警告与 files_error。
  */
@@ -14728,26 +14817,26 @@ function typeCreateResult(created, path, autoOpen, warnings, filesError) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:619433-619522 placement
+//@ chunk-xzmy9dn4.js:622632-622721 placement
 /**
  * 未禁用新鲜读取且存储为 pages 时使用新鲜读取。
  */
 function isFreshReadPagesStore(decl) {
   return env.CLAUDE_CODE_ARTIFACT_FRESH_READ !== false && decl.provisioned?.store === PAGES;
 }
-//@ chunk-8wvtd8sr.js:619522-619678 placement
+//@ chunk-xzmy9dn4.js:622721-622877 placement
 function pagesProvisionFor(decl, url) {
   if (env.CLAUDE_CODE_ARTIFACT_FRESH_READ === false) return;
   let slug = parseArtifactUrl(url)?.slug;
   let provision = slug === undefined ? undefined : parseStoreTarget(decl.provisioned, slug);
   return provision?.store === PAGES ? provision : undefined;
 }
-//@ chunk-8wvtd8sr.js:619678-619688 placement
+//@ chunk-xzmy9dn4.js:622877-622887 placement
 /**
  * 列类型时最多展示的条数。
  */
 var MAX_TYPES_LISTED = 50;
-//@ chunk-8wvtd8sr.js:619688-622404 placement
+//@ chunk-xzmy9dn4.js:622887-625603 placement
 function describeTypeListResult(result) {
   let typeCreateOn = getLiveState().frozenArtifactTypes?.typeCreateOn === true;
   let queryNote =
@@ -14797,7 +14886,7 @@ function describeTypeListResult(result) {
 ${startHint}`,
   );
 }
-//@ chunk-8wvtd8sr.js:622404-624890 placement
+//@ chunk-xzmy9dn4.js:625603-628089 placement
 /**
  * 把 Artifact 类型的详情（标题、描述、文件、说明文件、能力、是否可创建）渲染成给模型的文本；带 type_file / type_files_read 时改为渲染文件内容。
  */
@@ -14876,7 +14965,7 @@ function renderTypeDetail(result) {
         )
     : item + entry;
 }
-//@ chunk-8wvtd8sr.js:624890-625333 placement
+//@ chunk-xzmy9dn4.js:628089-628532 placement
 /**
  * 渲染一次 type_file 读取：未读时说明原因，否则拼接说明文件内容与字数。
  */
@@ -14919,7 +15008,7 @@ function renderTypeFileRead(row, typeTitle, files, filesOmitted, creatingFromTyp
           ARTIFACT_INSTRUCTIONS_BELOW_RELEASED,
         );
 }
-//@ chunk-8wvtd8sr.js:625333-626038 placement
+//@ chunk-xzmy9dn4.js:628532-629237 placement
 /**
  * 本会话已跑过 quickstart 时，在结果后附注"已列出设计系统 / 已附 README，跳过对应步骤"。
  */
@@ -14948,9 +15037,9 @@ function afterQuickstartNote(result) {
   }
   return note;
 }
-//@ chunk-8wvtd8sr.js:626038-626048 placement
+//@ chunk-xzmy9dn4.js:629237-629247 placement
 var EMPTY_RESULT_FIELDS = {};
-//@ chunk-8wvtd8sr.js:626048-627280 placement
+//@ chunk-xzmy9dn4.js:629247-630479 placement
 /**
  * 从类型创建后补充说明文件与 quickstart 信息：读取类型说明，必要时列出设计系统、读取页面，记录 quickstartRan，返回合并后的结果字段。
  */
@@ -14958,7 +15047,7 @@ async function typeCreateQuickstart(created, context, allowQuickstart) {
   let instructions = await readTypeInstructionsBounded(created, context);
   if (getLiveState().frozenArtifactTypes?.quickstartOn !== true) return instructions;
   let previousRun = getLiveState().quickstartRan.get(created.typeLock.slug);
-  let alreadyRan = previousRun !== undefined && countToolCallsSince(previousRun.toolUseId, context);
+  let alreadyRan = previousRun !== undefined && isDelegatedObservation(previousRun.toolUseId, context);
   let savedPages = alreadyRan ? previousRun.savedPages : undefined;
   let typeKey =
     instructions.instructions === undefined ? undefined : instructionsTypeKey(instructions.instructions);
@@ -15040,7 +15129,7 @@ async function typeCreateQuickstart(created, context, allowQuickstart) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:627280-627866 placement
+//@ chunk-xzmy9dn4.js:630479-631065 placement
 /**
  * 在 TYPE_INSTRUCTIONS_READ_MS 超时内读取类型说明文件，中断/超时/异常分别记为 unavailable，再转成结果字段。
  */
@@ -15088,7 +15177,7 @@ async function readTypeInstructionsBounded(created, context) {
   }
   return instructionsResultFields(result);
 }
-//@ chunk-8wvtd8sr.js:627866-628080 placement
+//@ chunk-xzmy9dn4.js:631065-631279 placement
 function instructionsResultFields(instructions) {
   switch (instructions.kind) {
     case "none":
@@ -15107,7 +15196,7 @@ function instructionsResultFields(instructions) {
       };
   }
 }
-//@ chunk-8wvtd8sr.js:628080-628506 placement
+//@ chunk-xzmy9dn4.js:631279-631705 placement
 /**
  * 从结果 JSON（instructions / instructions_unavailable 字段）反解出说明对象 {kind, text, chars, clipped}。
  */
@@ -15136,7 +15225,7 @@ function instructionsFromResult(result) {
     kind: "none",
   };
 }
-//@ chunk-8wvtd8sr.js:628506-628842 placement
+//@ chunk-xzmy9dn4.js:631705-632041 placement
 /**
  * 从类型创建成功但发布文件失败时：自动打开、尝试加入房间、建立 live 订阅，返回带 files_error 的结果。
  */
@@ -15179,7 +15268,7 @@ async function typeCreateFilesFailedResult(
     data,
   };
 }
-//@ chunk-8wvtd8sr.js:628842-629899 placement
+//@ chunk-xzmy9dn4.js:632041-633098 placement
 /**
  * "已创建但发布文件失败"的结果文案：说明 Artifact 已存在、该如何带 url 重新发布（不要再传 type_url）。
  */
@@ -15206,7 +15295,7 @@ ${roomLine}`
       : "";
   return `${result.already_created === true ? `An earlier attempt of this call already created the Artifact at ${artifactTarget} (version ${versionShapeOrPlaceholder(result.version)}) from the Artifact type ${typeTarget}, so nothing new was created` : `Created a new Artifact at ${artifactTarget} (version ${versionShapeOrPlaceholder(result.version)}) from the Artifact type ${typeTarget}`}, but publishing the files to it failed: ${sweepResultLineText(error, ARTIFACT_MAX_RESULT_SIZE_CHARS / 2)}. The Artifact exists \u2014 ${retryHint}, WITHOUT \`type_url\` (passing it again would create another Artifact).${typeFilesNote}${liveSubscriptionLine(result)}${roomNote}`;
 }
-//@ chunk-8wvtd8sr.js:629899-630703 placement
+//@ chunk-xzmy9dn4.js:633098-633902 placement
 function armCommentWakeAfterMcpPublish(toolUseContext, published) {
   if (!isBuiltInArtifactHiddenForMcp()) return false;
   let { slug } = published;
@@ -15264,9 +15353,9 @@ function armCommentWakeAfterMcpPublish(toolUseContext, published) {
     ? "local"
     : false;
 }
-//@ chunk-8wvtd8sr.js:630703-630712 placement
+//@ chunk-xzmy9dn4.js:633902-633911 placement
 registerWritersArm(armCommentWakeAfterMcpPublish);
-//@ chunk-8wvtd8sr.js:630712-630974 placement
+//@ chunk-xzmy9dn4.js:633911-634173 placement
 function armCommentWakeAfterDocsCreate(toolUseContext, slug) {
   runCommentMonitorWithIntent({
     storageV5: toolUseContext.storageV5,
@@ -15288,11 +15377,11 @@ function armCommentWakeAfterDocsCreate(toolUseContext, slug) {
   if (!armStatus) noteClaudeDocWakeMissing(slug, url, status ?? "not_armed");
   return armStatus;
 }
-//@ chunk-8wvtd8sr.js:630974-630986 placement
+//@ chunk-xzmy9dn4.js:634173-634185 placement
 docsCreateCommentWakeSlot.arm = armCommentWakeAfterDocsCreate;
-//@ chunk-8wvtd8sr.js:630986-631003 placement
+//@ chunk-xzmy9dn4.js:634185-634202 placement
 hiddenBuiltInArtifactToolSlot.register(ArtifactTool);
-//@ chunk-8wvtd8sr.js:631003-631037 placement
+//@ chunk-xzmy9dn4.js:634202-634236 placement
 /**
  * 把值包成带空格的引号形式。
  */
@@ -15300,10 +15389,10 @@ function quotedWithSpacing(text) {
   return `"${spacedFromClosingQuote(text)}"`;
 }
 export {
-  ARTIFACT_TOOL_HEAD,
   dbBatchPayloadsForConsent,
   dbBatchFileSpellings,
   publishInputJoinsRoom,
+  ARTIFACT_TOOL_HEAD,
   ArtifactTool,
   armCommentWakeAfterDocsCreate,
   armCommentWakeAfterMcpPublish,

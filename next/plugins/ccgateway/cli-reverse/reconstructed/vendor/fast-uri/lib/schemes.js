@@ -1,14 +1,14 @@
 /**
  * fast-uri/lib/schemes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fast-uri@3.1.2
- * pieces: chunk-s82q9s4x.js (1)
+ * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
-//@ chunk-s82q9s4x.js:61437-63889 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:61437-63889 cjs-fingerprint
 var require_schemes = __commonJS(function (cjsExports, cjsModule) {
   var { isUUID } = require_utils();
   var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;

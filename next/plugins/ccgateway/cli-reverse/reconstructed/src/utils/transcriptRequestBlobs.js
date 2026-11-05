@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：转录请求体块
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1fgvxqz2.js (2), chunk-e6aww6q8.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (24), chunk-q3c0tzex.js (2)
  * attribution: placement 26
  */
 import { createHash, randomUUID } from "crypto";
@@ -21,13 +21,13 @@ import { getRootSession, getSessionId } from "../bootstrap/state.js";
 import { logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "./debug.js";
 import { isBillingHeaderBlock } from "../services/api/promptCacheBreakDetection.js";
-import { BUILD_INFO, MAX_SECRET_REDACT_CHARS } from "../constants/buildInfo.js";
+import { BUILD_INFO, SMALL_RESULT_BYTES } from "../constants/buildInfo.js";
 import { logError } from "./log.js";
 import { jsonParseRaw, jsonStringify } from "./slowOperations.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1fgvxqz2.js:269-410 placement
+//@ chunk-q3c0tzex.js:269-410 placement
 /**
  * 把请求体按规范顺序写入哈希器（可忽略 cache_control），返回其中是否出现过 cache_control。
  */
@@ -42,7 +42,7 @@ function hashRequestValue(hashes, value, { omitCacheControl = false } = {}) {
     hasCacheControl: options.cacheControl,
   };
 }
-//@ chunk-1fgvxqz2.js:700-915 placement
+//@ chunk-q3c0tzex.js:700-915 placement
 /**
  * 递归删除对象中的 cache_control 键和值为 undefined 的键，用于比对或重放请求。
  */
@@ -56,12 +56,12 @@ function stripCacheControl(value) {
     );
   return value;
 }
-//@ chunk-e6aww6q8.js:196638-196713 placement
+//@ chunk-5xgkngpb.js:195497-195572 placement
 var UNHASHED_REQUEST_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:196638", () => {
+deferInit("chunk-5xgkngpb.js:195497", () => {
   UNHASHED_REQUEST_KEYS = new Set(["metadata", "stream", "thread", "diagnostics", "safeguards"]);
 });
-//@ chunk-e6aww6q8.js:196713-196812 placement
+//@ chunk-5xgkngpb.js:195572-195671 placement
 function normalizeContentBlocks(message) {
   return typeof message.content === "string"
     ? {
@@ -75,11 +75,11 @@ function normalizeContentBlocks(message) {
       }
     : message;
 }
-//@ chunk-e6aww6q8.js:196812-196847 placement
+//@ chunk-5xgkngpb.js:195671-195706 placement
 function requestBodyHash(body) {
   return hashRequestBody(body).hash;
 }
-//@ chunk-e6aww6q8.js:196847-196987 placement
+//@ chunk-5xgkngpb.js:195706-195846 placement
 function hashRequestBody(body) {
   let hash = createHash("sha256");
   let { hasCacheControl } = hashRequestValue([hash], normalizeContentBlocks(body), {
@@ -90,7 +90,7 @@ function hashRequestBody(body) {
     hasCacheControl,
   };
 }
-//@ chunk-e6aww6q8.js:196987-197084 placement
+//@ chunk-5xgkngpb.js:195846-195943 placement
 function toolResultDigest(content) {
   let hash = createHash("sha256");
   hashRequestValue([hash], content ?? null, {
@@ -98,7 +98,7 @@ function toolResultDigest(content) {
   });
   return hash.digest("hex");
 }
-//@ chunk-e6aww6q8.js:197084-197306 placement
+//@ chunk-5xgkngpb.js:195943-196165 placement
 /**
  * 取出用户消息中各工具结果的 tool_use_id 与内容摘要。
  */
@@ -113,7 +113,7 @@ function getToolResultDigests(message) {
         : [],
     );
 }
-//@ chunk-e6aww6q8.js:197306-198902 placement
+//@ chunk-5xgkngpb.js:196165-197766 placement
 /**
  * 计算请求体摘要（逐条消息 sha256），用于转录中的请求重放。
  */
@@ -214,7 +214,7 @@ function digestRequestBody(messages, memo) {
   }
   return hash.digest("hex");
 }
-//@ chunk-e6aww6q8.js:198902-200547 placement
+//@ chunk-5xgkngpb.js:197766-199411 placement
 /**
  * 转录中请求体块的存储（fork 上下文引用、请求形状、请求块）。
  */
@@ -318,17 +318,17 @@ class RequestBlobStore {
     );
   }
 }
-//@ chunk-e6aww6q8.js:200547-200628 placement
+//@ chunk-5xgkngpb.js:199411-199492 placement (2.1.88 match: getToolUseInfo, 0.702)
 function continuesBlob(block, role, id) {
   return block.role === role && (role === "user" || (id !== undefined && block.messageId === id));
 }
-//@ chunk-e6aww6q8.js:200628-200741 placement
+//@ chunk-5xgkngpb.js:199492-199605 placement
 function normalizeDeep(value) {
   if (Array.isArray(value)) return value.map(normalizeDeep);
   if (value === null || typeof value !== "object") return value;
   return import_mapValues(value, normalizeDeep);
 }
-//@ chunk-e6aww6q8.js:201798-201907 placement
+//@ chunk-5xgkngpb.js:200662-200771 placement
 /**
  * 判断请求正文旁存功能是否开启（环境变量优先，否则按会话固定开关）。
  */
@@ -337,27 +337,27 @@ function isRequestBlobStoreEnabled() {
   if (CLAUDE_CODE_ELEGANT_MEADOW !== undefined) return CLAUDE_CODE_ELEGANT_MEADOW;
   return getFeatureValue_SESSION_PINNED("tengu_elegant_meadow", true);
 }
-//@ chunk-e6aww6q8.js:201907-201932 placement
+//@ chunk-5xgkngpb.js:200771-200796 placement
 /**
  * 重放请求体错位的错误类型。
  */
 class ReplayMisalignmentError extends Error {}
-//@ chunk-e6aww6q8.js:201932-201940 placement
+//@ chunk-5xgkngpb.js:200796-200804 placement
 var markerSnapshotCapturer;
-//@ chunk-e6aww6q8.js:201940-201962 placement
+//@ chunk-5xgkngpb.js:200804-200826 placement
 /**
  * 设置快照捕获函数。
  */
 function setMarkerSnapshotCapturer(withoutLaptopMemoryText) {
   markerSnapshotCapturer = withoutLaptopMemoryText;
 }
-//@ chunk-e6aww6q8.js:201962-201969 placement
+//@ chunk-5xgkngpb.js:200826-200833 placement
 var markerTextWriter;
-//@ chunk-e6aww6q8.js:201969-201990 placement
+//@ chunk-5xgkngpb.js:200833-200854 placement
 function setMarkerTextWriter(writer) {
   markerTextWriter = writer;
 }
-//@ chunk-e6aww6q8.js:201990-202066 placement
+//@ chunk-5xgkngpb.js:200854-200930 placement
 /**
  * 清掉某任务的请求重放链。
  */
@@ -366,13 +366,13 @@ function clearReplayChain(agentIdForCleanup) {
   requestReplay.chains.delete(agentIdForCleanup);
   requestReplay.chainClears++;
 }
-//@ chunk-e6aww6q8.js:202066-202138 placement
+//@ chunk-5xgkngpb.js:200930-201002 placement
 function clearAllReplayChains() {
   let requestReplay = streamFallbackWarning().requestReplay;
   requestReplay.chains.clear();
   requestReplay.chainClears++;
 }
-//@ chunk-e6aww6q8.js:202138-202516 placement
+//@ chunk-5xgkngpb.js:201002-201380 placement
 /**
  * 构造按 tool_use_id 查找工具结果内容的函数：首次调用时建立索引；只有唯一结果且摘要与预期一致时返回内容，结果带缓存。
  */
@@ -405,7 +405,7 @@ function makeToolResultLookup(conversation, digestForToolUse) {
     return cache.get(toolUseId);
   };
 }
-//@ chunk-e6aww6q8.js:202516-205756 placement
+//@ chunk-5xgkngpb.js:201380-204806 placement
 /**
  * 从转录重放请求（主线程或子代理），记录无法重放的原因。
  */
@@ -431,7 +431,7 @@ function replayTranscriptRequest(a) {
       agentId: a.agentId,
       storageV5: a.storageV5,
     };
-    let cutResult;
+    let captured;
     if (accountMemoryRecallAttachment.length > 0) {
       if (markerSnapshotCapturer === undefined) {
         logFeatureSad("transcript_request_replay", "laptop_memory_cutter_unregistered");
@@ -439,7 +439,7 @@ function replayTranscriptRequest(a) {
       }
       try {
         let recordWriter = markerTextWriter;
-        cutResult = markerSnapshotCapturer(
+        captured = markerSnapshotCapturer(
           accountMemoryRecallAttachment,
           a.params.messages,
           makeToolResultLookup(a.conversation, (toolUseId) =>
@@ -455,7 +455,7 @@ function replayTranscriptRequest(a) {
         return;
       }
     }
-    let messages = cutResult?.messages ?? a.params.messages;
+    let messages = captured?.messages ?? a.params.messages;
     let requestReplay = streamFallbackWarning().requestReplay;
     let systemBlocks = Array.isArray(a.params.system)
       ? a.params.system.filter((systemBlock) => !isBillingHeaderBlock(systemBlock))
@@ -547,6 +547,23 @@ function replayTranscriptRequest(a) {
       while (commonPrefix < min && sameSessionChain.lastHashes[commonPrefix] === mapped[commonPrefix])
         commonPrefix++;
     }
+    let cuts = a.markAddresses?.cuts ?? 0;
+    let cut =
+      captured !== undefined
+        ? {
+            ...captured.cut,
+            ...(cuts > 0 && {
+              markAddresses: cuts,
+            }),
+          }
+        : cuts > 0
+          ? {
+              kind: "tool-mark-address",
+              cuts,
+              placeholders: cuts,
+              messages: a.markAddresses?.messages ?? [],
+            }
+          : undefined;
     let requestId = randomUUID();
     let request = {
       type: "api-request",
@@ -570,12 +587,12 @@ function replayTranscriptRequest(a) {
       keep: commonPrefix,
       tail: mapped.slice(commonPrefix),
       cacheControl: cacheControls,
-      ...(cutResult === undefined
+      ...(cut === undefined
         ? {
             requestDigest: digest,
           }
         : {
-            cut: cutResult.cut,
+            cut,
             cutRequestDigest: digest,
           }),
     };
@@ -600,7 +617,7 @@ function replayTranscriptRequest(a) {
               lastHashes: mapped,
               sessionId: recordTarget.sessionId,
             });
-            if (requestReplay.chains.size > MAX_SECRET_REDACT_CHARS)
+            if (requestReplay.chains.size > SMALL_RESULT_BYTES)
               requestReplay.chains.delete(requestReplay.chains.keys().next().value);
           }
           return;
@@ -620,7 +637,7 @@ function replayTranscriptRequest(a) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:205756-205981 placement (2.1.88 match: stripCacheControl, 0.795)
+//@ chunk-5xgkngpb.js:204806-205031 placement (2.1.88 match: stripCacheControl, 0.794)
 function stripCacheControl_2(a, pathSegments, entries) {
   if (Array.isArray(a)) {
     a.forEach((child, childIndex) => stripCacheControl_2(child, [...pathSegments, childIndex], entries));
@@ -635,10 +652,10 @@ function stripCacheControl_2(a, pathSegments, entries) {
       });
     else stripCacheControl_2(value, [...pathSegments, key], entries);
 }
-//@ chunk-e6aww6q8.js:227298-227341 placement
+//@ chunk-5xgkngpb.js:228067-228110 placement
 var API_REQUEST = "api-request";
 var API_REQUEST_MARKER = `"type":"${API_REQUEST}`;
-//@ chunk-e6aww6q8.js:227341-227449 placement
+//@ chunk-5xgkngpb.js:228110-228218 placement
 /**
  * 逐行处理转录文本，丢弃 API 请求记录并替换不可识别的行。
  */
@@ -652,7 +669,7 @@ function redactTranscriptLines(text) {
   return lines.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:227449-227793 placement
+//@ chunk-5xgkngpb.js:228218-228562 placement
 /**
  * 处理转录文件中的一行：去掉开头的 NUL/BOM；空行原样保留；API 请求类记录直接丢弃；无法识别类型或含敏感标记的行替换为只记字节数的 line-withheld 占位。
  */
@@ -667,7 +684,7 @@ function redactTranscriptLine(line) {
   } catch {
     parsed = undefined;
   }
-  let lineType = isPlainObject_5(parsed) ? parsed.type : undefined;
+  let lineType = isPlainObject_6(parsed) ? parsed.type : undefined;
   if (typeof lineType === "string" && lineType.startsWith(API_REQUEST)) return;
   if (typeof lineType !== "string" || line.includes(API_REQUEST_MARKER))
     return jsonStringify({
@@ -677,15 +694,15 @@ function redactTranscriptLine(line) {
   return line;
 }
 export {
-  clearReplayChain,
+  replayTranscriptRequest,
   RequestBlobStore,
   clearAllReplayChains,
   isRequestBlobStoreEnabled,
   stripCacheControl,
   getToolResultDigests,
   setMarkerTextWriter,
+  redactTranscriptLines,
+  clearReplayChain,
   setMarkerSnapshotCapturer,
   ReplayMisalignmentError,
-  replayTranscriptRequest,
-  redactTranscriptLines,
 };

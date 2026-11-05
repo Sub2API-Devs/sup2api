@@ -1,11 +1,11 @@
 /**
  * tools/SuggestConnectorsTool/UI.tsx
  *
- * 2.1.316 新增：SuggestConnectors 工具结果界面。
+ * SuggestConnectors 工具的结果渲染：与 ListConnectors 同形的连接器数量/opt-in 文案（2.1.318 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xw402a7j.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-srde02wt.js (1)
  * attribution: placement 1
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -13,17 +13,17 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-xw402a7j.js:4532-4677 placement
+//@ chunk-srde02wt.js:4868-5013 placement
 /**
- * 连接器建议结果。
+ * SuggestConnectors 工具的结果渲染：与 ListConnectors 同形。
  */
-function renderSuggestConnectorsResult(result) {
+function connectorsNotice(props) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default(Text, {
-      children: result.opt_in_required
-        ? result.message
-        : `${result.connectors.length} ${plural(result.connectors.length, "connector")}`,
+      children: props.opt_in_required
+        ? props.message
+        : `${props.connectors.length} ${plural(props.connectors.length, "connector")}`,
     }),
   });
 }
-export { renderSuggestConnectorsResult };
+export { connectorsNotice };

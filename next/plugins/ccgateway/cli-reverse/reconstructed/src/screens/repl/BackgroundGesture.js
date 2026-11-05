@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。REPL 控制器：转入后台的手势处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (16)
  * attribution: placement 16
  */
 import { writeSync } from "fs";
@@ -15,14 +15,14 @@ import { randomUUID } from "crypto";
 import { disposeLiveState, resetNoticeBudgets } from "../../services/liveReplica/liveReplica.js";
 import { teardownFrameLiveForProcessHandoff } from "../../services/artifacts/frameLive.js";
 import {
-  removeQueuedByFilter,
-  isPassiveMainAgentCommand,
-  commandsDiscardedSignal,
-  isRefillableInput,
-  inputDisplayText,
+  removeByFilter,
+  isPassiveMainThreadCommand,
+  commandsDiscarded,
+  isQueuedCommandEditable,
+  restoreTextForPop,
   isCheckinNotification,
-  processQueuedCommands as processQueuedCommands_3,
-  isSlashCommand_2,
+  processQueuedCommands as processQueuedCommands_4,
+  isSlashCommand as isSlashCommand_2,
 } from "../../utils/messageQueueManager.js";
 import {
   listJobs,
@@ -81,6 +81,9 @@ import {
 } from "../../utils/background/spawnBackgroundFork.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnumArr, fromEnum } from "../../services/analytics/safeMetadata.js";
+import { isAccepted } from "../../utils/codeMode/accepted.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeBackgroundNotice } from "../../utils/foresightStatus.js";
 import {
   isLeftArrowCarriesQueuedOn,
   collectCarriablePrompts,
@@ -121,7 +124,7 @@ import {
   withRelaunchHint,
   withResumeFlag,
 } from "../../utils/processRelaunch.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getReplBridgeHandle } from "../../bridge/replBridgeHandle.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { recordSubmittedPrompts } from "../../history.js";
@@ -167,7 +170,7 @@ import {
 } from "../../utils/backgroundHandoff.js";
 import { getAttachStampMs } from "../../utils/attachStamp.js";
 import { parseSwitchTarget } from "../../daemon/attach/attachJob.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { withTaskSuffix } from "../../tasks/endedByModel.js";
 import { createSystemMessage, regExp_4 as regExp_4_2 } from "../../utils/messages.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
@@ -188,7 +191,7 @@ import { startBackgroundSession } from "../../tasks/LocalMainSessionTask.js";
 import { getQuerySourceForREPL } from "../../utils/promptCategory.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:82387-82574 placement
+//@ chunk-czq1j3j2.js:83077-83264 placement
 function preloadBackgroundChunks() {
   return Promise.all([
     import("../../ink/components/Ansi.lazy.js"),
@@ -198,11 +201,11 @@ function preloadBackgroundChunks() {
     import("../../components/fleet/useAttachFleetOwners.js"),
   ]);
 }
-//@ chunk-18hwfzwa.js:82574-83646 placement
+//@ chunk-czq1j3j2.js:83264-84336 placement
 async function detachToBackground(jobId, preloadBackgroundChunks_2, host) {
   disposeLiveState();
   teardownFrameLiveForProcessHandoff();
-  removeQueuedByFilter(isPassiveMainAgentCommand);
+  removeByFilter(isPassiveMainThreadCommand);
   resetNoticeBudgets();
   let jobsPromise = listJobs(undefined, host?.storageV5).catch(() => []);
   await withTimeout(flushSessionStorage(), 2000, "flush timeout").catch(() => {});
@@ -250,7 +253,7 @@ Your conversation was backgrounded \u2014 resume it with: claude --resume ${orig
   });
   process.exit(0);
 }
-//@ chunk-18hwfzwa.js:83646-83778 placement
+//@ chunk-czq1j3j2.js:84336-84468 placement
 function demoteInheritedPermissionMode(permissionMode) {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_agentview_inherit_mode_demote", true)
     ? {
@@ -261,7 +264,7 @@ function demoteInheritedPermissionMode(permissionMode) {
         permissionMode,
       };
 }
-//@ chunk-18hwfzwa.js:83778-84339 placement
+//@ chunk-czq1j3j2.js:84468-85029 placement
 async function carryTaskListToFork(forkSessionId, signal, storageV5) {
   let sessionId = getSessionId();
   if (env.CLAUDE_CODE_TASK_LIST_ID || getTaskListId() !== sessionId) return;
@@ -298,9 +301,9 @@ async function carryTaskListToFork(forkSessionId, signal, storageV5) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:84339-84349 placement
+//@ chunk-czq1j3j2.js:85029-85039 placement
 var MAX_PARALLEL_EXPIRY_WRITES = 8;
-//@ chunk-18hwfzwa.js:84349-85537 placement
+//@ chunk-czq1j3j2.js:85039-86227 placement
 async function copyTaskListEntries(storage, sessionId, forkSessionId, signal) {
   let sourceListId = sanitizePathComponent(sessionId);
   let targetListId = sanitizePathComponent(forkSessionId);
@@ -385,7 +388,7 @@ async function copyTaskListEntries(storage, sessionId, forkSessionId, signal) {
       level: "warn",
     });
 }
-//@ chunk-18hwfzwa.js:85537-85699 placement
+//@ chunk-czq1j3j2.js:86227-86389 placement
 async function removeJobScope(dir, jobId, scopeStore) {
   if (scopeStore && dir === getJobDir(jobId)) {
     await scopeStore
@@ -401,18 +404,18 @@ async function removeJobScope(dir, jobId, scopeStore) {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-18hwfzwa.js:85699-85744 placement
+//@ chunk-czq1j3j2.js:86389-86434 placement
 function markExpired(path) {
   return rename(path, `${path}.expired`);
 }
-//@ chunk-18hwfzwa.js:85744-85807 placement
+//@ chunk-czq1j3j2.js:86434-86497 placement
 function removeExpired(path) {
   return unlink(`${path}.expired`).then(
     () => {},
     () => {},
   );
 }
-//@ chunk-18hwfzwa.js:85807-86103 placement
+//@ chunk-czq1j3j2.js:86497-86793 placement
 async function pingDaemon() {
   let response = await controlRequest(
     {
@@ -432,7 +435,7 @@ async function pingDaemon() {
   if (response.op !== "ping" || typeof response.carriedPromptsFormat !== "number") return "silent";
   return response.carriedPromptsFormat >= MAX_CARRIED_PROMPTS_VARIANT ? "reads" : "lower-format";
 }
-//@ chunk-18hwfzwa.js:86103-94334 placement
+//@ chunk-czq1j3j2.js:86793-95190 placement
 /**
  * 输入框为空时按 ← 的处理：检查会话持久化/--project 等前提，统计在途读取与排队提示，决定是否需要后台化确认，然后 fork 当前会话并切到 agents 视图；被阻止时给出原因。
  */
@@ -463,6 +466,14 @@ async function openAgentsViaLeftArrow(
         });
         return "Cannot open agents \u2014 session persistence is disabled, so this conversation cannot be backgrounded.";
       }
+      if (seed !== null && isAccepted() && isCodeModeEnabled()) {
+        logEvent("tengu_left_arrow_blocked", {
+          reason: lit_2("repl-mode"),
+          inflight_count: dispatchInfo?.inflightCount ?? 0,
+          inflight_kinds: fromEnumArr(dispatchInfo?.inflightKinds ?? []),
+        });
+        return codeModeBackgroundNotice();
+      }
       let carriesQueued = isLeftArrowCarriesQueuedOn();
       let collectPrompts = (queue) =>
         carriesQueued
@@ -485,7 +496,7 @@ async function openAgentsViaLeftArrow(
       collectDiscarded();
       let unsubscribe =
         carriedCommands.size > 0
-          ? commandsDiscardedSignal.subscribe((discardedCommands) => {
+          ? commandsDiscarded.subscribe((discardedCommands) => {
               for (let command of discardedCommands)
                 if (carriedCommands.delete(command)) takenBackCommands.push(command);
             })
@@ -601,7 +612,10 @@ async function openAgentsViaLeftArrow(
       let undisclosedFrameCount =
         frameLiveSlugs === undefined
           ? 0
-          : count(adoptable?.payload.frameLive ?? [], (frameEntry) => !frameLiveSlugs.has(frameEntry.slug));
+          : countWhere(
+              adoptable?.payload.frameLive ?? [],
+              (frameEntry) => !frameLiveSlugs.has(frameEntry.slug),
+            );
       let replBridgeHandle = getReplBridgeHandle();
       let maxPrefillChars = 16384;
       let partialText = dispatchInfo?.partialText?.trimEnd() ?? "";
@@ -711,12 +725,12 @@ async function openAgentsViaLeftArrow(
       let recordPrompts = (prompts) =>
         recordSubmittedPrompts(
           prompts.map((prompt) =>
-            prompt.historyEntry || !isRefillableInput(prompt)
+            prompt.historyEntry || !isQueuedCommandEditable(prompt)
               ? prompt
               : {
                   ...prompt,
                   historyEntry: {
-                    display: inputDisplayText(prompt),
+                    display: restoreTextForPop(prompt),
                     pastedContents: prompt.pastedContents ?? {},
                   },
                 },
@@ -973,10 +987,10 @@ async function openAgentsViaLeftArrow(
     return withRelaunchHint("Couldn't background this session (an internal error was logged)", didRelaunch);
   }
 }
-//@ chunk-18hwfzwa.js:94334-94356 placement
+//@ chunk-czq1j3j2.js:95190-95212 placement
 var BACKGROUND_GESTURE_HOLD_MS = 1000;
 var BACKGROUND_GESTURE_DOUBLE_MS = 1000;
-//@ chunk-18hwfzwa.js:94356-106953 placement
+//@ chunk-czq1j3j2.js:95212-107954 placement
 /**
  * 后台手势控制器（←/后台化）：处理“按 ← 打开 agents / 移到后台”的两段式手势、上限计时、对已停止回合的取消，以及各种不能后台化的原因提示。
  */
@@ -985,14 +999,14 @@ class BackgroundGesture {
   #t = null;
   #o = null;
   #n = null;
-  #s = null;
-  #r = false;
-  #c = createStore(false);
+  #r = null;
+  #s = false;
+  #l = createStore(false);
   #i = undefined;
   #a = false;
-  #l = undefined;
+  #c = undefined;
   #d = undefined;
-  #m = 0;
+  #u = 0;
   constructor(options) {
     this.#e = options;
   }
@@ -1040,30 +1054,30 @@ class BackgroundGesture {
     return this.#n !== null;
   }
   markForkInFlight() {
-    this.#r = true;
+    this.#s = true;
   }
   markIdleForkMidTurn() {
     let snapshot = this.#e.transcript.getSnapshot();
     let last = snapshot.at(-1);
-    this.#s = last
+    this.#r = last
       ? {
           length: snapshot.length,
           uuid: last.uuid,
         }
       : null;
   }
-  isParkInFlight = () => this.#r || this.#n !== null || this.#o !== null;
-  handOverInFlight = this.#c;
+  isParkInFlight = () => this.#s || this.#n !== null || this.#o !== null;
+  handOverInFlight = this.#l;
   onBgDetach = () => {
     if (alwaysFalseBackgroundConfirm()) return;
-    this.#u();
+    this.#m();
   };
-  #u(input) {
+  #m(input) {
     let message = noopBackgroundConfirm(input);
     if (input !== undefined && message === undefined) return false;
     let nowMs = this.#e.now();
-    if (nowMs - this.#m < BACKGROUND_GESTURE_DOUBLE_MS && getAttachStampMs() <= this.#m) return false;
-    this.#m = nowMs;
+    if (nowMs - this.#u < BACKGROUND_GESTURE_DOUBLE_MS && getAttachStampMs() <= this.#u) return false;
+    this.#u = nowMs;
     sendDetachRequest({
       message,
     });
@@ -1076,13 +1090,13 @@ class BackgroundGesture {
     return CLOUD_SESSION_ID_RE.test(sessionId) && this.#f(sessionId);
   }
   #f(target) {
-    if (alwaysFalseBackgroundConfirm()) return this.#u(parseSwitchTarget(target));
-    if (this.#l !== undefined || isBgSession() || this.#S()) return false;
-    this.#l = target;
+    if (alwaysFalseBackgroundConfirm()) return this.#m(parseSwitchTarget(target));
+    if (this.#c !== undefined || isBgSession() || this.#S()) return false;
+    this.#c = target;
     let flushAttach = () => {
       queueMicrotask(() => {
-        let heldTarget = this.#l;
-        this.#l = undefined;
+        let heldTarget = this.#c;
+        this.#c = undefined;
         if (heldTarget !== undefined) this.onAttachRequest(heldTarget);
       });
     };
@@ -1111,7 +1125,7 @@ class BackgroundGesture {
     if (this.#d === undefined) return;
     this.#d.release();
     this.#d = undefined;
-    this.#l = undefined;
+    this.#c = undefined;
   }
   #S() {
     if (getBgTakeover() !== null) return true;
@@ -1156,6 +1170,15 @@ class BackgroundGesture {
       this.#y(
         "Can't move this session to the background. It was started with --project-config-root. A background copy would not get that flag, so it would run the hooks and settings in the working folder. Keep working in this session.",
       );
+      return true;
+    }
+    if (isAccepted() && isCodeModeEnabled()) {
+      logEvent("tengu_left_arrow_blocked", {
+        reason: lit_2("repl-mode"),
+        inflight_count: workSummary.count,
+        inflight_kinds: fromEnumArr(workSummary.kinds),
+      });
+      this.#y(codeModeBackgroundNotice());
       return true;
     }
     if (store.getState().endedByModel) {
@@ -1206,7 +1229,7 @@ class BackgroundGesture {
     });
   };
   get isAttachPending() {
-    return this.#l !== undefined;
+    return this.#c !== undefined;
   }
   onAttachRequest(tabId) {
     if (isBgSession()) return;
@@ -1273,7 +1296,7 @@ class BackgroundGesture {
       titles,
     } = this.#e;
     let { agentTitle, haikuTitle } = titles.getSnapshot();
-    this.#r = true;
+    this.#s = true;
     let context = store.getState();
     let { sessionEffort, toolPermissionContext } = context;
     let autoOpenJobId = this.#i;
@@ -1329,9 +1352,9 @@ class BackgroundGesture {
       credentials,
     );
     if (isLeftArrowCarriesQueuedOn()) {
-      let clearHandingOver = () => this.#c.setState(() => false);
+      let clearHandingOver = () => this.#l.setState(() => false);
       agentsViaLeftArrow.then(clearHandingOver, clearHandingOver);
-      this.#c.setState(() => true);
+      this.#l.setState(() => true);
     }
     return agentsViaLeftArrow;
   }
@@ -1342,7 +1365,7 @@ class BackgroundGesture {
     if (this.#a) this.#a = false;
     else this.#i = undefined;
     {
-      if (this.#r || this.#o !== null) return;
+      if (this.#s || this.#o !== null) return;
       let { tasks } = store.getState();
       let workSummary = summarizeBackgroundWork(tasks);
       let adoptability = computeAdoptability(tasks);
@@ -1352,7 +1375,7 @@ class BackgroundGesture {
       let withholdMessage = (message) =>
         this.#b(message, "Couldn't open the agents view (detail withheld on this connection).");
       let onHandoffDone = (result) => {
-        this.#r = false;
+        this.#s = false;
         showNotice(withholdMessage(result));
       };
       if (this.#n) {
@@ -1479,7 +1502,7 @@ class BackgroundGesture {
             let pendingAtFire = this.#n;
             if (!pendingAtFire || pendingAtFire.armedAtMs !== armedAtMs) return;
             let tasks = store.getState().tasks;
-            let queuedCount = count(
+            let queuedCount = countWhere(
               messageQueue.getCommandQueue(),
               (command) => !isCheckinNotification(command),
             );
@@ -1553,7 +1576,7 @@ class BackgroundGesture {
                 replyOnResume: true,
                 deferWaitMs: now() - armedAtMs,
               }).then((result) => {
-                this.#r = false;
+                this.#s = false;
                 return withholdMessage(result);
               }),
           };
@@ -1572,7 +1595,7 @@ class BackgroundGesture {
         }
         this.#g({
           ...request,
-          replyOnResume: isAtResumePoint(this.#s, transcript.getSnapshot()),
+          replyOnResume: isAtResumePoint(this.#r, transcript.getSnapshot()),
         }).then(onHandoffDone);
       };
       if (leftArrowNeedsInterstitial(tasks, adoptability)) {
@@ -1628,7 +1651,7 @@ class BackgroundGesture {
     let { toolPermissionContext } = store.getState();
     turn.abortController?.abort(userAbortReason("background"));
     let pendingCommands = messageQueue.removeByFilter(
-      (queuedCommands) => processQueuedCommands_3(queuedCommands) && !isSlashCommand_2(queuedCommands),
+      (queuedCommands) => processQueuedCommands_4(queuedCommands) && !isSlashCommand_2(queuedCommands),
     );
     (async () => {
       let toolUseContext = turn.buildToolUseContext(
@@ -1700,10 +1723,10 @@ class BackgroundGesture {
   dispose() {
     this.clearPending();
     this.cancelHeldAttach();
-    this.#l = undefined;
+    this.#c = undefined;
   }
 }
-//@ chunk-18hwfzwa.js:106953-107461 placement
+//@ chunk-czq1j3j2.js:107954-108462 placement
 function leftArrowHintText(
   gesture,
   { onDetachToCaller, isLoading, isExternalLoading, betweenCalls, leftArrowOpensAgents, tabsStandIn },
@@ -1740,14 +1763,14 @@ function leftArrowHintText(
   }
   return;
 }
-//@ chunk-18hwfzwa.js:107461-107465 placement
+//@ chunk-czq1j3j2.js:108462-108466 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:107461", () => {
+deferInit("chunk-czq1j3j2.js:108462", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:107465-107469 placement
+//@ chunk-czq1j3j2.js:108466-108470 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:107465", () => {
+deferInit("chunk-czq1j3j2.js:108466", () => {
   init_react_production();
 });
 export { BackgroundGesture, leftArrowHintText };

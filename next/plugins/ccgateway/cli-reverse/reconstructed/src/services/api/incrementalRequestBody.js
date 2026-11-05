@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：增量序列化请求体并在发送前校验字节一致
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
- * attribution: placement 17
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
+ * attribution: placement 17, layout 1
  */
 import { createHash } from "crypto";
 import {
@@ -14,6 +14,7 @@ import {
   getGzipRequestBodyBlocksMode,
   hasFinalAnswerRoute,
   scheduleIdleDrop,
+  findKeptBody,
 } from "./gzipRequestBody.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { TENGU_PLAID_KETTLE } from "./withRetry.js";
@@ -24,6 +25,7 @@ import { systemClock } from "../../utils/sleep.js";
 import { env } from "../../utils/env.js";
 import { streamFallbackWarning } from "./streamFallbackWarning.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
+import { classifyQuerySource } from "./requestHeaders.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logError } from "../../utils/log.js";
@@ -32,12 +34,12 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2574793-2574841 placement
+//@ chunk-5xgkngpb.js:2627101-2627149 placement
 var TAKES_REQUEST_BODY_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2574793", () => {
+deferInit("chunk-5xgkngpb.js:2627101", () => {
   TAKES_REQUEST_BODY_BYTES = Symbol("takes a request body as bytes");
 });
-//@ chunk-e6aww6q8.js:2574841-2574897 placement
+//@ chunk-5xgkngpb.js:2627149-2627205 placement
 /**
  * 导出函数 `markTakesRequestBodyBytes`：参数 e。
  */
@@ -46,7 +48,7 @@ function markTakesRequestBodyBytes(target) {
     value: true,
   });
 }
-//@ chunk-e6aww6q8.js:2574897-2574950 placement
+//@ chunk-5xgkngpb.js:2627205-2627258 placement
 /**
  * 导出函数 `takesRequestBodyBytes`：参数 e，返回 e === void 0 || e === fetchWithRequestBodyCompression || ycn in e。
  */
@@ -55,11 +57,14 @@ function takesRequestBodyBytes(target) {
     target === undefined || target === fetchWithRequestBodyCompression || TAKES_REQUEST_BODY_BYTES in target
   );
 }
-//@ chunk-e6aww6q8.js:2574988-2575032 placement
+//@ chunk-5xgkngpb.js:2627296-2627382 placement
 var TENGU_SOFT_KURZWEIL = "tengu_soft_kurzweil";
-var MAX_REUSE_MISMATCH_REPORTS = 3;
+var TENGU_VAST_FROST = "tengu_vast_frost";
+var MAX_KEPT_SUBAGENT_BODIES = 8;
+var MAX_KEPT_SUBAGENT_BYTES = 16777216;
+var BYTES_PER_TOKEN_ESTIMATE_2 = 3;
 var REUSE_MISMATCH_SAMPLE = 0.1;
-//@ chunk-e6aww6q8.js:2575032-2575107 placement
+//@ chunk-5xgkngpb.js:2627382-2627457 placement
 function reuseCheckSampleRate() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PLAID_KETTLE, 1);
   return typeof featureValue_CACHED_MAY_BE_STALE === "number" &&
@@ -68,28 +73,28 @@ function reuseCheckSampleRate() {
     ? featureValue_CACHED_MAY_BE_STALE
     : 1;
 }
-//@ chunk-e6aww6q8.js:2575107-2575136 placement
+//@ chunk-5xgkngpb.js:2627457-2627486 placement
 var NOT_COPIED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2575107", () => {
+deferInit("chunk-5xgkngpb.js:2627457", () => {
   NOT_COPIED = Symbol("not copied");
 });
-//@ chunk-e6aww6q8.js:2575136-2575203 placement
+//@ chunk-5xgkngpb.js:2627486-2627553 placement
 function isPlainObjectWithProto(value) {
   return Object.getPrototypeOf(value) === Object.prototype;
 }
-//@ chunk-e6aww6q8.js:2575203-2575362 placement
+//@ chunk-5xgkngpb.js:2627553-2627712 placement
 function jsonShape(value) {
   if (typeof value !== "object" || value === null) return value;
   if ("toJSON" in value) return NOT_COPIED;
   if (Array.isArray(value)) return value.map(jsonShape);
   return isPlainObjectWithProto(value) ? import_mapValues(value, (value) => jsonShape(value)) : NOT_COPIED;
 }
-//@ chunk-e6aww6q8.js:2575362-2575460 placement
+//@ chunk-5xgkngpb.js:2627712-2627810 placement
 function hasNotCopiedMarker(value) {
   if (typeof value !== "object" || value === null) return value === NOT_COPIED;
   return Object.values(value).some(hasNotCopiedMarker);
 }
-//@ chunk-e6aww6q8.js:2575460-2575907 placement
+//@ chunk-5xgkngpb.js:2627810-2628257 placement
 /**
  * 比较两个 JSON 值的结构与键顺序是否完全一致（右侧含 toJSON 视为不同）。
  */
@@ -112,7 +117,7 @@ function sameJsonShape(shapes, messages) {
     if (value !== keys_2[key] || !sameJsonShape(shapes[value], messages[value])) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2575907-2576014 placement
+//@ chunk-5xgkngpb.js:2628257-2628364 placement
 function serializeKeys(source, keys) {
   return keys
     .flatMap((key) => {
@@ -121,7 +126,7 @@ function serializeKeys(source, keys) {
     })
     .join(",");
 }
-//@ chunk-e6aww6q8.js:2576014-2577540 placement
+//@ chunk-5xgkngpb.js:2628364-2629895 placement
 /**
  * 增量序列化请求体：复用上次已序列化的消息前缀，只追加新消息。
  */
@@ -214,11 +219,11 @@ function serializeRequestBodyIncrementally(body, keptBodyState) {
     keptChars,
   };
 }
-//@ chunk-e6aww6q8.js:2577540-2578848 placement
+//@ chunk-5xgkngpb.js:2629895-2632073 placement
 /**
  * 发送前校验增量请求体与完整序列化结果字节一致，不一致时回退并记录。
  */
-function checkIncrementalRequestBody(streamRequestBody, useKeptBody, clock = systemClock) {
+function checkIncrementalRequestBody(streamRequestBody, options, clock = systemClock) {
   let CLAUDE_CODE_INCREMENTAL_REQUEST_BODY = env.CLAUDE_CODE_INCREMENTAL_REQUEST_BODY ?? 0;
   let mode =
     CLAUDE_CODE_INCREMENTAL_REQUEST_BODY !== 0 &&
@@ -227,9 +232,17 @@ function checkIncrementalRequestBody(streamRequestBody, useKeptBody, clock = sys
       : 0;
   let gzipState = streamFallbackWarning();
   let gzipRequestBody = gzipState.gzipRequestBody;
-  let blocksModeOn = mode === 2 && getGzipRequestBodyBlocksMode() !== 0 && !gzipRequestBody.blocksSwitchedOff;
-  if (!blocksModeOn && gzipRequestBody.blockStore.keptBody?.inUse === false)
-    gzipRequestBody.blockStore.keptBody = undefined;
+  let blockStore = gzipRequestBody.blockStore;
+  let blocksActive = mode === 2 && getGzipRequestBodyBlocksMode() !== 0 && !gzipRequestBody.blocksSwitchedOff;
+  if (!blocksActive && blockStore.keptBody?.inUse === false) blockStore.keptBody = undefined;
+  let subagentBudgetSetting = blocksActive ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VAST_FROST, 0) : 0;
+  let subagentBodyLimit =
+    typeof subagentBudgetSetting === "number" &&
+    Number.isInteger(subagentBudgetSetting) &&
+    subagentBudgetSetting > 0
+      ? Math.min(subagentBudgetSetting, MAX_KEPT_SUBAGENT_BODIES)
+      : 0;
+  if (subagentBodyLimit === 0) blockStore.keptSubagentBodies.clear();
   if (mode === 0) return;
   if (
     gzipRequestBody.bodyBytesSwitchedOff ||
@@ -238,37 +251,71 @@ function checkIncrementalRequestBody(streamRequestBody, useKeptBody, clock = sys
     streamRequestBody.output_format !== undefined
   )
     return;
+  let querySource = classifyQuerySource(options.querySource);
+  let agentId =
+    subagentBodyLimit > 0 && querySource === "subagent" && options.querySource !== "hook_agent"
+      ? options.agentId
+      : undefined;
+  let keepsSubagentBody = agentId !== undefined;
   try {
-    let {
-      betas,
-      user_profile_id: userProfileId,
-      workspace_id: workspaceId,
-      ...bodyForSerialization
-    } = streamRequestBody;
-    let keepBodyState = blocksModeOn && useKeptBody;
-    let serialised = serializeRequestBodyIncrementally(
-      bodyForSerialization,
-      keepBodyState ? gzipRequestBody.blockStore : undefined,
-    );
+    let { betas, user_profile_id: userProfileId, workspace_id: workspaceId, ...body } = streamRequestBody;
+    let subagentState =
+      agentId === undefined
+        ? undefined
+        : (blockStore.keptSubagentBodies.get(agentId) ?? {
+            keptBody: undefined,
+            reusingBodiesChecked: 0,
+          });
+    let keptBodyState =
+      subagentState ??
+      (blocksActive && querySource === "main" && options.agentId === undefined ? blockStore : undefined);
+    let serialised = serializeRequestBodyIncrementally(body, keptBodyState);
     if (serialised === undefined) return;
-    if (keepBodyState && gzipRequestBody.blockStore.cancelIdleDrop === undefined)
-      scheduleIdleDrop(gzipRequestBody.blockStore, clock);
+    if (subagentState !== undefined && agentId !== undefined) {
+      blockStore.keptSubagentBodies.delete(agentId);
+      if ((subagentState.keptBody?.memory.length ?? 0) <= MAX_KEPT_SUBAGENT_BYTES)
+        blockStore.keptSubagentBodies.set(agentId, subagentState);
+      let totalSubagentBytes = 0;
+      for (let { keptBody } of blockStore.keptSubagentBodies.values())
+        totalSubagentBytes += keptBody?.memory.length ?? 0;
+      for (let [subagentId, { keptBody: subagentBody }] of blockStore.keptSubagentBodies) {
+        if (
+          blockStore.keptSubagentBodies.size <= subagentBodyLimit &&
+          totalSubagentBytes <= MAX_KEPT_SUBAGENT_BYTES
+        )
+          break;
+        blockStore.keptSubagentBodies.delete(subagentId);
+        totalSubagentBytes -= subagentBody?.memory.length ?? 0;
+      }
+    }
+    if (keptBodyState !== undefined && blockStore.cancelIdleDrop === undefined)
+      scheduleIdleDrop(blockStore, clock);
     let forceCheck = false;
-    let reusedBuffer = gzipRequestBody.blockStore.keptBody?.memory.buffer === serialised.bytes.buffer;
+    let reusedBuffer = blockStore.keptBody?.memory.buffer === serialised.bytes.buffer;
     let sampleRate = forceCheck || !reusedBuffer ? 1 : reuseCheckSampleRate();
-    let checkReuse =
+    let reuseTelemetry = subagentState ?? gzipRequestBody;
+    let drawsReuseCheck =
       serialised.keptChars > 0 &&
-      (gzipRequestBody.firstReusingBodiesDraw ??= randomSample()) < sampleRate &&
-      gzipRequestBody.reusingBodiesChecked < MAX_REUSE_MISMATCH_REPORTS;
-    let checkBytes = forceCheck || checkReuse || Math.random() < REUSE_MISMATCH_SAMPLE * sampleRate;
-    if (checkReuse) gzipRequestBody.reusingBodiesChecked++;
-    if (checkBytes && !bufferEqualsJson(serialised.bytes, bodyForSerialization)) {
+      (subagentState !== undefined ||
+        (gzipRequestBody.firstReusingBodiesDraw ??= randomSample()) < sampleRate) &&
+      reuseTelemetry.reusingBodiesChecked < BYTES_PER_TOKEN_ESTIMATE_2;
+    let checkBytes =
+      forceCheck ||
+      drawsReuseCheck ||
+      (serialised.keptChars > 0 && findKeptBody(blockStore, serialised.bytes) === undefined) ||
+      Math.random() < REUSE_MISMATCH_SAMPLE * sampleRate;
+    if (drawsReuseCheck) reuseTelemetry.reusingBodiesChecked++;
+    if (checkBytes && !bufferEqualsJson(serialised.bytes, body)) {
       switchOffBodyBytes();
       logFeatureBad("api_incremental_request_body", "wrong_bytes_caught_before_send", {
         mode,
+        ...(keepsSubagentBody && {
+          keptForSubagent: keepsSubagentBody,
+        }),
       });
       logForDiagnosticsNoPII("error", "api_incremental_request_body_wrong_bytes_caught_before_send", {
         mode,
+        kept_for_subagent: keepsSubagentBody,
       });
       return;
     }
@@ -287,37 +334,44 @@ function checkIncrementalRequestBody(streamRequestBody, useKeptBody, clock = sys
     switchOffBodyBytes();
     logFeatureSad("api_incremental_request_body", "serialising_threw", {
       mode,
+      ...(keepsSubagentBody && {
+        keptForSubagent: keepsSubagentBody,
+      }),
     });
     logForDiagnosticsNoPII("warn", "api_incremental_request_body_serialising_threw", {
       mode,
+      kept_for_subagent: keepsSubagentBody,
     });
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2578848-2578964 placement
+//@ chunk-5xgkngpb.js:2632073-2632150 layout
+function clearKeptSubagentBodies(agentId) {
+  streamFallbackWarning().gzipRequestBody.blockStore.keptSubagentBodies.delete(agentId);
+}
+//@ chunk-5xgkngpb.js:2632150-2632266 placement
 function randomSample() {
   return (
     createHash("sha256").update(`${getSessionId()} ${process.hrtime.bigint()}`).digest().readUInt32BE(0) /
     4294967296
   );
 }
-//@ chunk-e6aww6q8.js:2578964-2579030 placement (2.1.88 match: resolveMotion, 0.719)
+//@ chunk-5xgkngpb.js:2632266-2632332 placement (2.1.88 match: resolveMotion, 0.719)
 function bufferEqualsJson(buffer, other) {
   return buffer.equals(Buffer.from(JSON.stringify(other)));
 }
-//@ chunk-e6aww6q8.js:2579030-2579127 placement
+//@ chunk-5xgkngpb.js:2632332-2632469 placement
 function switchOffBodyBytes() {
   let gzipRequestBody = streamFallbackWarning().gzipRequestBody;
   gzipRequestBody.bodyBytesSwitchedOff = true;
   gzipRequestBody.blockStore.keptBody = undefined;
+  gzipRequestBody.blockStore.keptSubagentBodies.clear();
 }
-//@ chunk-e6aww6q8.js:2579127-2579785 placement
-async function reportIncrementalBodyMismatch(plan, streamRequestBody, send) {
+//@ chunk-5xgkngpb.js:2632469-2633249 placement
+async function reportIncrementalBodyMismatch(incrementalBody, streamRequestBody, send) {
   let blockStore = streamFallbackWarning().gzipRequestBody.blockStore;
-  let keptBody =
-    plan !== undefined && plan.buffer === blockStore.keptBody?.memory.buffer
-      ? blockStore.keptBody
-      : undefined;
+  let keptBody = incrementalBody === undefined ? undefined : findKeptBody(blockStore, incrementalBody);
+  let keptForSubagent = keptBody !== undefined && keptBody !== blockStore.keptBody;
   try {
     return await send();
   } catch (error) {
@@ -332,8 +386,10 @@ async function reportIncrementalBodyMismatch(plan, streamRequestBody, send) {
     )
       try {
         if (blockStore.keptBody === keptBody) blockStore.keptBody = undefined;
-        let openingLength = Buffer.byteLength(keptBody.opening) - 1;
-        let buffer = keptBody.memory.subarray(openingLength, (keptBody.ends.at(-1) ?? openingLength + 1) + 1);
+        for (let [agentId, { keptBody: subagentBody }] of blockStore.keptSubagentBodies)
+          if (subagentBody === keptBody) blockStore.keptSubagentBodies.delete(agentId);
+        let openingEnd = Buffer.byteLength(keptBody.opening) - 1;
+        let buffer = keptBody.memory.subarray(openingEnd, (keptBody.ends.at(-1) ?? openingEnd + 1) + 1);
         if (
           sameJsonShape(keptBody.shapes, streamRequestBody.messages) &&
           !bufferEqualsJson(buffer, streamRequestBody.messages)
@@ -341,9 +397,13 @@ async function reportIncrementalBodyMismatch(plan, streamRequestBody, send) {
           switchOffBodyBytes();
           logFeatureBad("api_incremental_request_body", "wrong_bytes_sent", {
             status: error.status,
+            ...(keptForSubagent && {
+              keptForSubagent,
+            }),
           });
           logForDiagnosticsNoPII("error", "api_incremental_request_body_wrong_bytes_sent", {
             status: error.status,
+            kept_for_subagent: keptForSubagent,
           });
         }
       } catch (error) {
@@ -359,4 +419,5 @@ export {
   checkIncrementalRequestBody,
   reportIncrementalBodyMismatch,
   markTakesRequestBodyBytes,
+  clearKeptSubagentBodies,
 };

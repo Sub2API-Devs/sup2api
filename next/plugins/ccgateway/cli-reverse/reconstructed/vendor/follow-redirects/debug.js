@@ -1,14 +1,14 @@
 /**
  * follow-redirects/debug.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: follow-redirects@1.16.0
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../debug/src/index.js";
 
-//@ chunk-h6b7mazd.js:37343-37518 cjs-fingerprint
+//@ chunk-ww9agm6g.js:37343-37518 cjs-fingerprint
 var require_debug = __commonJS(function (cjsExports, cjsModule) {
   var debug;
   cjsModule.exports = function () {

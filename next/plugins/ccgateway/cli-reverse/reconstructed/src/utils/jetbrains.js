@@ -3,9 +3,9 @@
  *
  * JetBrains IDE 配置/插件目录定位与 claude-code-jetbrains-plugin 安装检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/jetbrains.ts
- * pieces: chunk-7kpfrhzn.js (1), chunk-e6aww6q8.js (4)
+ * pieces: chunk-033d1naw.js (1), chunk-5xgkngpb.js (4)
  * attribution: fingerprint 4, affinity 1
  */
 import { homedir, platform } from "os";
@@ -13,7 +13,7 @@ import { join } from "path";
 import { env } from "./env.js";
 import { getFsImplementation } from "./fsOperations.js";
 
-//@ chunk-e6aww6q8.js:3233857-3234221 fingerprint (2.1.88 match: ideNameToDirMap, 0.978)
+//@ chunk-5xgkngpb.js:3318496-3318860 fingerprint (2.1.88 match: ideNameToDirMap, 0.978)
 /**
  * JetBrains 插件 ID 及各 IDE 产品目录名映射。
  */
@@ -35,7 +35,7 @@ var JETBRAINS_PRODUCT_DIRS = {
   fleet: ["Fleet"],
   androidstudio: ["AndroidStudio"],
 };
-//@ chunk-e6aww6q8.js:3234221-3234943 fingerprint (2.1.88 match: buildCommonPluginDirectoryPaths, 1)
+//@ chunk-5xgkngpb.js:3318860-3319582 fingerprint (2.1.88 match: buildCommonPluginDirectoryPaths, 1)
 function buildCommonPluginDirectoryPaths(ideName) {
   let homeDir = homedir();
   let directories = [];
@@ -66,7 +66,7 @@ function buildCommonPluginDirectoryPaths(ideName) {
   }
   return directories;
 }
-//@ chunk-e6aww6q8.js:3234943-3235392 fingerprint (2.1.88 match: detectPluginDirectories, 1)
+//@ chunk-5xgkngpb.js:3319582-3320034 fingerprint (2.1.88 match: detectPluginDirectories, 1)
 /**
  * 按平台列出 JetBrains 各 IDE 的插件目录候选。
  */
@@ -100,7 +100,7 @@ async function detectPluginDirectories(ideName) {
     }
   return foundDirectories.filter((dir, index) => foundDirectories.indexOf(dir) === index);
 }
-//@ chunk-e6aww6q8.js:3235392-3235515 affinity
+//@ chunk-5xgkngpb.js:3320034-3320157 affinity
 /**
  * JetBrains 插件目录中是否存在 claude-code-jetbrains-plugin。
  */
@@ -115,7 +115,7 @@ async function isJetBrainsPluginInstalled(ideName) {
   }
   return false;
 }
-//@ chunk-7kpfrhzn.js:19240-19309 fingerprint (2.1.88 match: isJetBrainsPluginInstalled, 0.642)
+//@ chunk-033d1naw.js:17474-17543 fingerprint (2.1.88 match: isJetBrainsPluginInstalled, 0.644)
 async function isJetBrainsPluginInstalled_2(ideType) {
   return Number(
     (

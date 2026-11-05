@@ -3,9 +3,9 @@
  *
  * 工作区信任对话框：首次进入目录时列出该项目的 hooks/MCP/bash 权限/apiKeyHelper/技能等风险来源，信任或退出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TrustDialog/TrustDialog.tsx
- * pieces: chunk-8rmevhsy.js (7)
+ * pieces: chunk-wabs2mr4.js (7)
  * attribution: placement 1, file-local 2, fingerprint 4
  */
 import { init_react_production, useEffect, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -39,7 +39,7 @@ import {
 } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -63,13 +63,13 @@ import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 
-//@ chunk-8rmevhsy.js:14038-14042 placement
+//@ chunk-wabs2mr4.js:15187-15191 placement
 init_react_production();
-//@ chunk-8rmevhsy.js:14042-14096 file-local
+//@ chunk-wabs2mr4.js:15191-15245 file-local
 function isNotebookEditTool(tool) {
   return tool === BASH_TOOL_NAME || tool.startsWith(BASH_TOOL_NAME + "(");
 }
-//@ chunk-8rmevhsy.js:14096-14260 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-wabs2mr4.js:15245-15409 fingerprint (2.1.88 match: _temp2, 1)
 function isLegacyProjectCommandWithBashAllow(command) {
   return (
     command.type === "prompt" &&
@@ -78,11 +78,11 @@ function isLegacyProjectCommandWithBashAllow(command) {
     command.allowedTools?.some(isNotebookEditTool)
   );
 }
-//@ chunk-8rmevhsy.js:14260-14314 file-local
+//@ chunk-wabs2mr4.js:15409-15463 file-local
 function isFileEditTool(tool) {
   return tool === BASH_TOOL_NAME || tool.startsWith(BASH_TOOL_NAME + "(");
 }
-//@ chunk-8rmevhsy.js:14314-14513 fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-wabs2mr4.js:15463-15662 fingerprint (2.1.88 match: _temp4, 1)
 function isProjectSkillWithBashAllow(command) {
   return (
     command.type === "prompt" &&
@@ -93,14 +93,14 @@ function isProjectSkillWithBashAllow(command) {
     command.allowedTools?.some(isFileEditTool)
   );
 }
-//@ chunk-8rmevhsy.js:14513-14569 fingerprint (2.1.88 match: _temp5, 1)
+//@ chunk-wabs2mr4.js:15662-15718 fingerprint (2.1.88 match: _temp5, 1)
 function withTrustAccepted(current) {
   return {
     ...current,
     hasTrustDialogAccepted: true,
   };
 }
-//@ chunk-8rmevhsy.js:14569-20723 fingerprint (2.1.88 match: TrustDialog, 0.487)
+//@ chunk-wabs2mr4.js:15718-21875 fingerprint (2.1.88 match: TrustDialog, 0.487)
 /**
  * 工作区信任对话框：列出项目中会自动执行或放权的配置（hooks、MCP 服务器、bash 权限、apiKeyHelper、OTEL headers helper、AWS/GCP 命令、危险 env、技能/插件），用户选择信任后写入项目配置；拒绝则退出。
  */
@@ -262,18 +262,18 @@ function TrustDialog(props) {
   }
   useEffect(logShown, logShownDeps);
   let hasAnsweredRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let isInputRefused;
-  if ($[20] !== inputRefusalWindow || $[21] !== noteRefused || $[22] !== refusedWithin) {
+  if ($[20] !== isRecentInput || $[21] !== noteRefused || $[22] !== refusedWithin) {
     isInputRefused = function isInputRefused_() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[20] = inputRefusalWindow;
+    $[20] = isRecentInput;
     $[21] = noteRefused;
     $[22] = refusedWithin;
     $[23] = isInputRefused;
@@ -285,7 +285,7 @@ function TrustDialog(props) {
   if (
     $[24] !== hasBashExecution ||
     $[25] !== hasAcceptedTrust_ ||
-    $[26] !== inputRefusalWindow ||
+    $[26] !== isRecentInput ||
     $[27] !== noteRefused ||
     $[28] !== onDone ||
     $[29] !== refusedWithin ||
@@ -295,7 +295,7 @@ function TrustDialog(props) {
       if (hasAnsweredRef.current || isShuttingDown()) {
         return;
       }
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -337,7 +337,7 @@ function TrustDialog(props) {
     };
     $[24] = hasBashExecution;
     $[25] = hasAcceptedTrust_;
-    $[26] = inputRefusalWindow;
+    $[26] = isRecentInput;
     $[27] = noteRefused;
     $[28] = onDone;
     $[29] = refusedWithin;
@@ -357,7 +357,7 @@ function TrustDialog(props) {
   let handleCancel;
   if (
     $[33] !== hasAcceptedTrust_ ||
-    $[34] !== inputRefusalWindow ||
+    $[34] !== isRecentInput ||
     $[35] !== noteRefused ||
     $[36] !== handleChange_ ||
     $[37] !== refusedWithin
@@ -371,7 +371,7 @@ function TrustDialog(props) {
         handleChange_("exit");
         return;
       }
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -382,7 +382,7 @@ function TrustDialog(props) {
       gracefulShutdownSync(0);
     };
     $[33] = hasAcceptedTrust_;
-    $[34] = inputRefusalWindow;
+    $[34] = isRecentInput;
     $[35] = noteRefused;
     $[36] = handleChange_;
     $[37] = refusedWithin;

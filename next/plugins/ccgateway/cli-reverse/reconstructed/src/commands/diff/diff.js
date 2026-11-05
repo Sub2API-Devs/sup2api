@@ -3,16 +3,16 @@
  *
  * /diff 实现：全屏模式切换 diff 面板，否则打开未提交改动对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/diff/diff.tsx
- * pieces: chunk-19av2vh6.js (3)
+ * pieces: chunk-cp4hp99k.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { DIFF_UNAVAILABLE_TEXT } from "../../hooks/useWorkspaceDiff.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { resolveRenderMode } from "../../utils/fullscreen.js";
 
-//@ chunk-19av2vh6.js:3996-4091 placement
+//@ chunk-cp4hp99k.js:6292-6387 placement
 /**
  * toggleDiffPanel：全屏模式切换 diff 面板。
  */
@@ -22,7 +22,7 @@ var toggleDiffPanel = async (onDone, context) => {
   });
   return null;
 };
-//@ chunk-19av2vh6.js:4091-4208 fingerprint (2.1.88 match: call, 0.615)
+//@ chunk-cp4hp99k.js:6387-6504 fingerprint (2.1.88 match: call, 0.615)
 var openDiffDialog = async (onDone, context) => {
   let { DiffDialog } = await import("../../components/diff/DiffDialog.js");
   return jsxProd_default(DiffDialog, {
@@ -30,7 +30,7 @@ var openDiffDialog = async (onDone, context) => {
     onDone,
   });
 };
-//@ chunk-19av2vh6.js:4208-4306 placement
+//@ chunk-cp4hp99k.js:6504-6602 placement
 /**
  * /diff 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

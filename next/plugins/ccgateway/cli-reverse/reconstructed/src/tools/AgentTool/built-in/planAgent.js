@@ -3,28 +3,28 @@
  *
  * Plan 内建代理：只读架构规划专员及其系统提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/planAgent.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 2
  */
 import { isBashAvailable } from "../../../utils/shell/shellToolUtils.js";
 import { BASH_TOOL_NAME } from "../../BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../PowerShellTool/toolName.js";
 import { hasEmbeddedSearchTools } from "../../../utils/embeddedTools.js";
-import { FILE_READ_TOOL_NAME } from "../../FileReadTool/constants.js";
+import { READ } from "../../FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../GrepTool/prompt.js";
 import { AGENT } from "../constants.js";
 import { ARTIFACT_FAMILY_TOOL_NAMES } from "../../ArtifactTool/constants.js";
 import { EXITPLANMODE } from "../../ExitPlanModeTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../FileEditTool/constants.js";
+import { EDIT } from "../../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 import { EXPLORE_AGENT } from "./exploreAgent.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:183463-186045 fingerprint (2.1.88 match: getPlanV2SystemPrompt, 0.49)
+//@ chunk-5xgkngpb.js:183573-186155 fingerprint (2.1.88 match: getPlanV2SystemPrompt, 0.489)
 function getPlanV2SystemPrompt() {
   let bashAvailable = isBashAvailable();
   let searchToolsHint = bashAvailable ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
@@ -51,7 +51,7 @@ You will be provided with a set of requirements and optionally a perspective on 
 
 2. **Explore Thoroughly**:
    - Read any files provided to you in the initial prompt
-   - Find existing patterns and conventions using ${useEmbeddedSearch ? `\`find\`, \`grep\`, and ${FILE_READ_TOOL_NAME}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${FILE_READ_TOOL_NAME}`}
+   - Find existing patterns and conventions using ${useEmbeddedSearch ? `\`find\`, \`grep\`, and ${READ}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${READ}`}
    - Understand the current architecture
    - Identify similar features as reference
    - Trace through relevant code paths
@@ -80,12 +80,12 @@ List 3-5 files most critical for implementing this plan:
 
 REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or modify any files. You do NOT have access to file editing tools.`;
 }
-//@ chunk-e6aww6q8.js:186045-186460 fingerprint (2.1.88 match: PLAN_AGENT, 1)
+//@ chunk-5xgkngpb.js:186155-186570 fingerprint (2.1.88 match: PLAN_AGENT, 1)
 /**
  * Plan 内建代理：只读规划，禁用 Agent/ExitPlanMode/Edit/Write/NotebookEdit 等写工具，model inherit，omitClaudeMd。
  */
 var PLAN_AGENT; // deferred: uses AGENT (../constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:186045", () => {
+deferInit("chunk-5xgkngpb.js:186155", () => {
   PLAN_AGENT = {
     agentType: "Plan",
     whenToUse:
@@ -94,7 +94,7 @@ deferInit("chunk-e6aww6q8.js:186045", () => {
       AGENT,
       ...ARTIFACT_FAMILY_TOOL_NAMES,
       EXITPLANMODE,
-      FILE_EDIT_TOOL_NAME,
+      EDIT,
       FILE_WRITE_TOOL_NAME,
       NOTEBOOK_EDIT_TOOL_NAME,
     ],

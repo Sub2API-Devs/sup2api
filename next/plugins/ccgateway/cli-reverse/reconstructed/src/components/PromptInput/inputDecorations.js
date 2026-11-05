@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：输入框内联装饰（@ 提及、斜杠命令、插件标记等高亮）的计算
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (24)
  * attribution: placement 24
  */
 import { EMPTY_SPANS } from "../../plugins/functionHooks/prompt/decorationSpans.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { validThemeName, resolvePaneColor } from "../../plugins/functionHooks/panes.js";
 import { TEXT_STYLE_PROPS } from "../../plugins/functionHooks/ui/styleProps.js";
@@ -18,10 +18,12 @@ import { clampPositive } from "../../plugins/functionHooks/coreHandlers.js";
 import { reduceAnsiCodes } from "../../../vendor/@alcalzone/ansi-tokenize/build/reduce.js";
 import { reduceCodes } from "../../utils/textHighlighting.js";
 
-//@ chunk-e6aww6q8.js:60352-60668 placement (2.1.88 match: setCwdState, 0.84)
+//@ chunk-5xgkngpb.js:62880-63196 placement (2.1.88 match: setCwdState, 0.84)
 function mapRangesToNfcOffsets(ranges, text, mode) {
   if (ranges.length === 0) return EMPTY_SPANS;
-  let boundaries = uniq(ranges.flatMap((range) => [range.start, range.end])).toSorted((a, b) => a - b);
+  let boundaries = normalizeCaseForComparison_2(ranges.flatMap((range) => [range.start, range.end])).toSorted(
+    (a, b) => a - b,
+  );
   let offsets = new Map();
   let prevBoundary = 0;
   let nextBoundary = 0;
@@ -39,9 +41,9 @@ function mapRangesToNfcOffsets(ranges, text, mode) {
     end: offsets.get(range.end) ?? 0,
   }));
 }
-//@ chunk-e6aww6q8.js:60668-60715 placement
+//@ chunk-5xgkngpb.js:63196-63243 placement
 var spanAt = (span, offset) => (span !== undefined && span.start <= offset ? span : undefined);
-//@ chunk-e6aww6q8.js:60715-60995 placement
+//@ chunk-5xgkngpb.js:63243-63523 placement
 function splitSpanAroundCursor(span, run, cursorRange) {
   if (
     cursorRange === undefined ||
@@ -81,18 +83,18 @@ function splitSpanAroundCursor(span, run, cursorRange) {
       : []),
   ];
 }
-//@ chunk-e6aww6q8.js:60995-61105 placement
+//@ chunk-5xgkngpb.js:63523-63633 placement
 function advancePastOffset({ spans, edge, startIndex, offset }) {
   let spanIndex = startIndex;
   while (spanIndex < spans.length && (spans[spanIndex]?.[edge] ?? offset) <= offset) spanIndex += 1;
   return spanIndex;
 }
-//@ chunk-e6aww6q8.js:61105-61173 placement
+//@ chunk-5xgkngpb.js:63633-63701 placement
 var graphemeBoundaries = (text) => [
   ...Array.from(getGraphemeSegmenter().segment(text), (segment) => segment.index),
   text.length,
 ];
-//@ chunk-e6aww6q8.js:61173-61643 placement
+//@ chunk-5xgkngpb.js:63701-64171 placement
 /**
  * 合并输入框装饰的样式：在基础片段上叠加装饰的颜色、背景、粗体、斜体、下划线、删除线等。
  */
@@ -137,11 +139,11 @@ function mergeSpanStyle(base, override, span) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:61643-61686 placement
+//@ chunk-5xgkngpb.js:64171-64214 placement
 var sameTextStyle = (a, b) => TEXT_STYLE_PROPS.every((prop) => a[prop] === b[prop]);
-//@ chunk-e6aww6q8.js:61686-61727 placement
+//@ chunk-5xgkngpb.js:64214-64255 placement
 var isAsciiOnly = (text) => !/[^\t\n\x20-\x7e]/.test(text);
-//@ chunk-e6aww6q8.js:61727-62095 placement (2.1.88 match: hasAnyTextProps, 0.833)
+//@ chunk-5xgkngpb.js:64255-64623 placement (2.1.88 match: hasAnyTextProps, 0.832)
 var mergeTextStyleOverrides = (baseStyle, overrides) => ({
   ...baseStyle,
   ...(overrides.color !== undefined && {
@@ -166,7 +168,7 @@ var mergeTextStyleOverrides = (baseStyle, overrides) => ({
     strikethrough: overrides.strikethrough,
   }),
 });
-//@ chunk-e6aww6q8.js:62095-62241 placement
+//@ chunk-5xgkngpb.js:64623-64769 placement
 function snapToBoundary(boundaries, offset) {
   if (boundaries === undefined) return offset;
   let nearest = 0;
@@ -179,7 +181,7 @@ function snapToBoundary(boundaries, offset) {
   }
   return boundaries[nearest - 1] ?? 0;
 }
-//@ chunk-e6aww6q8.js:62241-62480 placement
+//@ chunk-5xgkngpb.js:64769-65008 placement
 var virtualTextSpans = (decorations, style, boundaries) =>
   decorations.flatMap((decoration) => {
     let normalized = sanitizeAnsiText(decoration.virtualText ?? "")
@@ -203,7 +205,7 @@ var virtualTextSpans = (decorations, style, boundaries) =>
         ]
       : [];
   });
-//@ chunk-e6aww6q8.js:62480-63402 placement
+//@ chunk-5xgkngpb.js:65008-65934 placement
 /**
  * 把输入框装饰（颜色、下划线、虚拟文本等）规整成不重叠、按起点排序的区间：坐标吸附到字素边界，重叠部分按声明顺序合并样式，相邻同样式区间合并，虚拟文本单独成零宽区间。
  */
@@ -225,7 +227,7 @@ function normalizeInputDecorations(decorations, text) {
       : [];
   });
   let sorted = flattened.toSorted((left, right) => left.start - right.start);
-  let edges = uniq(flattened.flatMap((span) => [span.start, span.end])).toSorted(
+  let edges = normalizeCaseForComparison_2(flattened.flatMap((span) => [span.start, span.end])).toSorted(
     (left, right) => left - right,
   );
   let active = [];
@@ -275,7 +277,7 @@ function normalizeInputDecorations(decorations, text) {
   );
   return result.length === 0 ? EMPTY_SPANS : result;
 }
-//@ chunk-e6aww6q8.js:63402-63481 placement
+//@ chunk-5xgkngpb.js:65934-66014 placement
 /**
  * 函数 mergeDecorationMaps（把多组装饰合并进已有列表）。
  */
@@ -284,7 +286,7 @@ function mergeDecorationMaps(existing, incoming, options) {
     ? existing
     : normalizeInputDecorations([...existing, ...[...incoming.values()].flat()], options);
 }
-//@ chunk-e6aww6q8.js:63481-63648 placement
+//@ chunk-5xgkngpb.js:66014-66181 placement
 function shiftOffsetForEdit(offset, edit, side) {
   let isStart = side === "start";
   let isAfterEnd = isStart ? offset >= edit.end : offset > edit.end;
@@ -295,7 +297,7 @@ function shiftOffsetForEdit(offset, edit, side) {
       ? offset
       : edit.start + (isStart ? edit.inputText.length : 0);
 }
-//@ chunk-e6aww6q8.js:63648-63860 placement
+//@ chunk-5xgkngpb.js:66181-66393 placement
 /**
  * 文本编辑后平移装饰区间：按编辑位置调整起止点，被删除的区间丢弃。
  */
@@ -318,7 +320,7 @@ function shiftDecorationsForEdit(decorations, edit) {
   });
   return flattened.length === 0 ? EMPTY_SPANS : flattened;
 }
-//@ chunk-e6aww6q8.js:63860-63936 placement
+//@ chunk-5xgkngpb.js:66393-66469 placement
 /**
  * 函数 nonEmptySpans（去掉空区间，为空时返回冻结空数组）。
  */
@@ -326,7 +328,7 @@ function nonEmptySpans(spans) {
   let filtered = spans.filter((span) => span.end > span.start);
   return filtered.length === 0 ? EMPTY_SPANS : filtered;
 }
-//@ chunk-e6aww6q8.js:63936-64202 placement
+//@ chunk-5xgkngpb.js:66469-66735 placement
 /**
  * 把基于原始文本的装饰区间映射到渲染后的行内偏移，去掉空区间。
  */
@@ -356,7 +358,7 @@ function mapDecorationsToRendered(decorations, renderedValue, renderedRowStartOf
     }))
     .filter((state) => state.end > state.start);
 }
-//@ chunk-e6aww6q8.js:64202-64385 placement
+//@ chunk-5xgkngpb.js:66735-66918 placement
 function textToRenderedOffset(text, offset, isEnd) {
   let rendered = 0;
   let remaining = text.length;
@@ -369,11 +371,11 @@ function textToRenderedOffset(text, offset, isEnd) {
   let row = text[rendered - 1];
   return row ? row.renderedStart + Math.min(offset - row.textStart, row.length) : 0;
 }
-//@ chunk-e6aww6q8.js:65856-65918 placement (2.1.88 match: hasVisibleSpaceEffect, 1)
+//@ chunk-5xgkngpb.js:68393-68455 placement (2.1.88 match: hasVisibleSpaceEffect, 1)
 function activeAnsiCodes(styles) {
   return reduceAnsiCodes(styles).filter((style) => style.code !== style.endCode);
 }
-//@ chunk-e6aww6q8.js:65918-66424 placement
+//@ chunk-5xgkngpb.js:68455-68965 placement
 /**
  * 把插件装饰叠加到输入框的样式片段上：按所有边界切分，逐段合并原样式与装饰样式（光标所在的高亮片段除外）。
  */
@@ -387,9 +389,9 @@ function overlayDecorations(spans, text, cursorRange) {
           (span) => span.dimColor === true || cursorRange.start < span.start || cursorRange.start >= span.end,
         ),
   );
-  let boundaries = uniq([...baseSpans, ...overlay].flatMap((range) => [range.start, range.end])).toSorted(
-    (a, b) => a - b,
-  );
+  let boundaries = normalizeCaseForComparison_2(
+    [...baseSpans, ...overlay].flatMap((range) => [range.start, range.end]),
+  ).toSorted((a, b) => a - b);
   let nextStart = 0;
   let nextEnd = 0;
   return boundaries.flatMap((cursor, index) => {
@@ -418,7 +420,7 @@ function overlayDecorations(spans, text, cursorRange) {
     return isEmptyPart ? [] : decoratedSpan;
   });
 }
-//@ chunk-e6aww6q8.js:66686-66781 placement
+//@ chunk-5xgkngpb.js:69227-69322 placement
 /**
  * 导出值：domSpansToDecorations（DOM 行区间转为装饰）。
  */
@@ -433,7 +435,7 @@ var domSpansToDecorations = (text, cursorOffset) =>
       cursorOffset,
     ),
   );
-//@ chunk-e6aww6q8.js:66781-66859 placement
+//@ chunk-5xgkngpb.js:69322-69400 placement
 /**
  * 函数 emptySpans（只保留空区间（用于光标位置））。
  */
@@ -441,9 +443,9 @@ function emptySpans(decorations) {
   let filtered = decorations.filter((decoration) => decoration.end === decoration.start);
   return filtered.length === 0 ? EMPTY_SPANS : filtered;
 }
-//@ chunk-e6aww6q8.js:66859-66892 placement
+//@ chunk-5xgkngpb.js:69400-69433 placement
 var NEWLINE_LIKE_CHARS = "\r\v\f\x85\u2028\u2029";
-//@ chunk-e6aww6q8.js:66892-67200 placement
+//@ chunk-5xgkngpb.js:69433-69741 placement
 /**
  * 计算原始字符串各位置到规范化后字符串偏移的映射表（换行替换与代理对替换字符视为对齐）。
  */
@@ -469,15 +471,15 @@ function mapNormalizedOffsets(offsets, edit) {
   return uint32Array;
 }
 export {
-  emptySpans,
-  overlayDecorations,
+  nonEmptySpans,
   normalizeInputDecorations,
-  mergeDecorationMaps,
-  shiftDecorationsForEdit,
-  mapRangesToNfcOffsets,
   domSpansToDecorations,
   mapDecorationsToRendered,
   activeAnsiCodes,
   mapNormalizedOffsets,
-  nonEmptySpans,
+  emptySpans,
+  overlayDecorations,
+  mergeDecorationMaps,
+  shiftDecorationsForEdit,
+  mapRangesToNfcOffsets,
 };

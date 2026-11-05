@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：各模型族对应的默认模型环境变量；有上限的编辑距离等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (14)
  * attribution: placement 14
  */
 import { hasPathAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -16,35 +16,35 @@ import { isEnvTruthy } from "../envUtils.js";
 import { getPlatform } from "../platform.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:414034-414077 placement
+//@ chunk-z20c443b.js:412496-412539 placement
 function matchesManagedKey(a, b) {
   return a == null ? true : hasPathAlias(a, b);
 }
-//@ chunk-dcmhvw5a.js:414077-414087 placement
+//@ chunk-z20c443b.js:412539-412549 placement
 /**
  * matchesManagedKey_2：上者的别名。
  */
 var matchesManagedKey_2 = matchesManagedKey;
-//@ chunk-dcmhvw5a.js:414199-414233 placement
+//@ chunk-z20c443b.js:412661-412695 placement
 var loadedManagedKeyGroups; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:414199", () => {
+deferInit("chunk-z20c443b.js:412661", () => {
   loadedManagedKeyGroups = identity_2(new Set(), (groups) => groups.clear());
 });
-//@ chunk-dcmhvw5a.js:414233-414259 placement
+//@ chunk-z20c443b.js:412695-412721 placement
 /**
  * markManagedKeyGroup：记录托管键分组已加载。
  */
 function markManagedKeyGroup(group) {
   loadedManagedKeyGroups.add(group);
 }
-//@ chunk-dcmhvw5a.js:414259-414319 placement
+//@ chunk-z20c443b.js:412721-412781 placement
 /**
  * loadedManagedKeyGroupsList：已加载的托管键分组列表。
  */
 function loadedManagedKeyGroupsList() {
   return ["keys", "hook"].filter((group) => loadedManagedKeyGroups.has(group));
 }
-//@ chunk-dcmhvw5a.js:414319-415380 placement
+//@ chunk-z20c443b.js:412781-413842 placement
 /**
  * 各模型族对应的默认模型环境变量。
  */
@@ -54,7 +54,7 @@ var PROVIDER_BASE_URL_ENV_KEYS;
 var BEDROCK_REGION_ENV_KEYS;
 var AWS_ENDPOINT_ENV_KEYS;
 var PROVIDER_REGION_ENV_KEYS;
-deferInit("chunk-dcmhvw5a.js:414319", () => {
+deferInit("chunk-z20c443b.js:412781", () => {
   MODEL_ENV_KEYS_2 = {
     opus: "ANTHROPIC_DEFAULT_OPUS_MODEL",
     sonnet: "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -111,13 +111,13 @@ deferInit("chunk-dcmhvw5a.js:414319", () => {
     "ANTHROPIC_CUSTOM_HEADERS",
   ];
 });
-//@ chunk-dcmhvw5a.js:415380-415775 placement
+//@ chunk-z20c443b.js:413842-414237 placement
 /**
  * 各提供商 base URL 环境变量。
  */
 var PROVIDER_BASE_URL_KEYS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROVIDER_BASE_URL_KEYS;
-deferInit("chunk-dcmhvw5a.js:415380", () => {
+deferInit("chunk-z20c443b.js:413842", () => {
   PROVIDER_BASE_URL_KEYS_2 = [
     "ANTHROPIC_BEDROCK_BASE_URL",
     "ANTHROPIC_BEDROCK_MANTLE_BASE_URL",
@@ -136,7 +136,7 @@ deferInit("chunk-dcmhvw5a.js:415380", () => {
     "AWS_ENDPOINT_URL",
   ]);
 });
-//@ chunk-dcmhvw5a.js:415775-416049 placement
+//@ chunk-z20c443b.js:414237-414511 placement
 function setsProviderEnv(env, env_2) {
   let flags = new Set([...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY"]);
   let urlKeys = new Set([...PROVIDER_BASE_URL_KEYS_2, "ANTHROPIC_BASE_URL"]);
@@ -149,12 +149,12 @@ function setsProviderEnv(env, env_2) {
     );
   });
 }
-//@ chunk-dcmhvw5a.js:416049-416110 placement
+//@ chunk-z20c443b.js:414511-414572 placement
 var RETRYABLE_UNAVAILABLE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:416049", () => {
+deferInit("chunk-z20c443b.js:414511", () => {
   RETRYABLE_UNAVAILABLE_ERRNOS = new Set(["EBUSY", "EMFILE", "ENFILE", "EAGAIN", "EINTR"]);
 });
-//@ chunk-dcmhvw5a.js:416110-416195 placement
+//@ chunk-z20c443b.js:414572-414657 placement
 /**
  * 错误码是否表示不可用。
  */
@@ -164,7 +164,7 @@ function isUnavailableErrorCode(errnoCode) {
     RETRYABLE_UNAVAILABLE_ERRNOS.has(errnoCode) || (errnoCode === "EPERM" && getPlatform() === "windows")
   );
 }
-//@ chunk-dcmhvw5a.js:416195-416283 placement
+//@ chunk-z20c443b.js:414657-414745 placement
 /**
  * 错误是否表示不可用。
  */
@@ -173,7 +173,7 @@ function isUnavailableError(error) {
     error.code === "Unavailable" || ("telemetryCode" in error && isUnavailableErrorCode(error.telemetryCode))
   );
 }
-//@ chunk-dcmhvw5a.js:416283-416534 placement
+//@ chunk-z20c443b.js:414745-414997 placement
 /**
  * 找出拼写相近的名字。
  */
@@ -196,7 +196,7 @@ function similarNames(name, names, limit) {
     .slice(0, limit)
     .map((result) => result.name);
 }
-//@ chunk-dcmhvw5a.js:416534-416732 placement
+//@ chunk-z20c443b.js:414997-415195 placement
 /**
  * 按编辑距离建议最接近的名字。
  */
@@ -214,7 +214,7 @@ function suggestClosestName(name, candidates, { maxEditDistance = 1 } = {}) {
   }
   return best;
 }
-//@ chunk-dcmhvw5a.js:416732-417298 placement
+//@ chunk-z20c443b.js:415195-415761 placement
 /**
  * 有上限的编辑距离。
  */
@@ -254,9 +254,9 @@ function boundedEditDistance(source, target, limit) {
 export {
   isUnavailableErrorCode,
   isUnavailableError,
-  similarNames,
-  suggestClosestName,
   boundedEditDistance,
+  suggestClosestName,
+  similarNames,
   loadedManagedKeyGroupsList,
   markManagedKeyGroup,
   matchesManagedKey_2,

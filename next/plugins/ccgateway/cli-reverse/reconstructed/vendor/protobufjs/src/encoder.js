@@ -1,8 +1,8 @@
 /**
  * protobufjs/src/encoder.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_enum } from "./enum.js";
 import { require_types } from "./types.js";
 import { require_util_2 } from "./util.js";
 
-//@ chunk-pwh5dx3n.js:128334-129796 cjs-fingerprint
+//@ chunk-3k21nfa0.js:128334-129796 cjs-fingerprint
 var require_encoder = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = encoder;
   var Enum = require_enum();

@@ -1,17 +1,17 @@
 {
- "modules": 6946,
- "decls": 81667,
- "bytes": 38921647,
+ "modules": 7139,
+ "decls": 84503,
+ "bytes": 40210028,
  "byKind": {
   "vendor": {
-   "modules": 2004,
-   "decls": 6504,
-   "bytes": 7235528
+   "modules": 2006,
+   "decls": 6509,
+   "bytes": 7243683
   },
   "first-party": {
-   "modules": 4941,
-   "decls": 75152,
-   "bytes": 31685087
+   "modules": 5132,
+   "decls": 77983,
+   "bytes": 32965313
   },
   "runtime": {
    "modules": 1,
@@ -20,29 +20,29 @@
   }
  },
  "byMethod": {
-  "placement": 58421,
-  "affinity": 554,
-  "fingerprint": 5097,
-  "callgraph-witnessed": 233,
-  "layout": 6479,
-  "callgraph-fingerprint": 345,
-  "sole-consumer": 1197,
-  "file-local": 437,
-  "esm-fingerprint": 3373,
-  "esm-layout": 1183,
-  "facade-exports": 1120,
-  "file-last-pair": 30,
-  "shared-adjacent": 14,
-  "facade-majority": 1696,
+  "placement": 60523,
+  "affinity": 607,
+  "fingerprint": 4968,
+  "callgraph-witnessed": 238,
+  "layout": 7275,
+  "callgraph-fingerprint": 332,
+  "sole-consumer": 1191,
+  "facade-majority": 1780,
+  "file-local": 421,
+  "file-last-pair": 24,
+  "esm-layout": 1187,
+  "esm-fingerprint": 3376,
+  "facade-exports": 1077,
+  "shared-adjacent": 16,
   "cjs-fingerprint": 1236,
-  "cjs-require-graph": 132,
+  "cjs-layout": 6,
+  "cjs-require-graph": 133,
   "cjs-unmatched+string-clue": 66,
   "cjs-fingerprint+context": 13,
-  "cjs-unmatched": 12,
-  "cjs-layout": 6,
+  "cjs-unmatched": 11,
   "native-addon": 2,
   "resource-wrapper": 9,
-  "embedded-runtime": 1,
-  "helper:bun-runtime": 11
+  "helper:bun-runtime": 11,
+  "embedded-runtime": 1
  }
 }

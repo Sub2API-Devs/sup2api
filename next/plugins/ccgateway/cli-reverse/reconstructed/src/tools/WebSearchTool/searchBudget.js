@@ -3,16 +3,17 @@
  *
  * 2.1.316 新增：会话级 WebSearch 次数预算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (5)
  * attribution: placement 5
  */
 import { env } from "../../utils/env.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { createSemaphore } from "../../utils/concurrencyLimit.js";
 
-//@ chunk-6vnxsn99.js:62322-62375 placement
+//@ chunk-01kgd7xg.js:63470-63523 placement
 /**
  * 每会话 WebSearch 次数的默认上限（200）。
  */
@@ -20,11 +21,11 @@ var DEFAULT_MAX_WEB_SEARCHES = 200;
 var DEFAULT_HOURLY_REFILLS = 100;
 var TENGU_MEMOIZED_TURTLE = "tengu_memoized_turtle";
 var MAX_HOURLY_REFILLS = 3600;
-//@ chunk-6vnxsn99.js:62375-62444 placement
+//@ chunk-01kgd7xg.js:63523-63592 placement
 function maxWebSearchesPerSession() {
   return env.CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION ?? DEFAULT_MAX_WEB_SEARCHES;
 }
-//@ chunk-6vnxsn99.js:62444-62917 placement
+//@ chunk-01kgd7xg.js:63592-64065 placement
 function webSearchRefillsPerHour({ refillsByDefault }) {
   let CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR = env.CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR;
   if (CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR !== undefined) return CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR;
@@ -55,12 +56,13 @@ function webSearchRefillsPerHour({ refillsByDefault }) {
   );
   return DEFAULT_HOURLY_REFILLS;
 }
-//@ chunk-6vnxsn99.js:62917-62932 placement
+//@ chunk-01kgd7xg.js:64065-64085 placement
 /**
  * 回填周期（1 小时）。
  */
+var DIRECT_SEARCH_SLOTS = 4;
 var REFILL_PERIOD_MS = 3600000;
-//@ chunk-6vnxsn99.js:62932-63428 placement
+//@ chunk-01kgd7xg.js:64085-64621 placement
 /**
  * 会话级 WebSearch 次数预算（令牌桶）：上限 CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION，每小时按配置回填。
  */
@@ -112,6 +114,7 @@ function createWebSearchBudget({ refillsByDefault, now = () => Date.now() }) {
     refillsPerHour() {
       return refillsPerHourValue;
     },
+    acquireDirectSearchSlot: createSemaphore(DIRECT_SEARCH_SLOTS).acquire,
   };
 }
 export { createWebSearchBudget, maxWebSearchesPerSession };

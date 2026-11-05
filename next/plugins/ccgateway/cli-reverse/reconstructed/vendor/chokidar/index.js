@@ -1,8 +1,8 @@
 /**
  * chokidar/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chokidar@6.0.0
- * pieces: chunk-3gvas51j.js (14)
+ * pieces: chunk-k7sq4jmf.js (14)
  * attribution: placement 14
  */
 import "path";
@@ -13,7 +13,7 @@ import { stat } from "fs";
 import { noop, isIBMi, EV, NodeFsHandler, setPollingInterval, isWindows, CLOSE, END } from "./runtime.js";
 import { readdirp } from "../readdirp/esm/index.js";
 
-//@ chunk-3gvas51j.js:13133-13249 placement
+//@ chunk-k7sq4jmf.js:13133-13249 placement
 var SLASH = "/";
 var SLASH_SLASH = "//";
 var DOT = ".";
@@ -23,13 +23,13 @@ var BACKSLASH_GLOBAL_RE = /\\/g;
 var DOUBLE_SLASH_RE = /\/\//;
 var DOT_RE = /\..*\.(sw[px])$|~$|\.subl.*\.tmp/;
 var DOT_PATH_RE = /^\.[/\\]/;
-//@ chunk-3gvas51j.js:13249-13293 placement
+//@ chunk-k7sq4jmf.js:13249-13293 placement
 function arrify(item) {
   return Array.isArray(item) ? item : [item];
 }
-//@ chunk-3gvas51j.js:13293-13358 placement
+//@ chunk-k7sq4jmf.js:13293-13358 placement
 var isPlainObject = (value) => typeof value === "object" && value !== null && !(value instanceof RegExp);
-//@ chunk-3gvas51j.js:13358-13684 placement
+//@ chunk-k7sq4jmf.js:13358-13684 placement
 /**
  * anymatch 匹配器
  */
@@ -49,7 +49,7 @@ function createMatcher(matcher) {
     };
   return () => false;
 }
-//@ chunk-3gvas51j.js:13684-13900 placement
+//@ chunk-k7sq4jmf.js:13684-13900 placement
 /**
  * 规范化路径
  */
@@ -64,7 +64,7 @@ function normalizePath(path) {
   if (unc) path = "/" + path;
   return path;
 }
-//@ chunk-3gvas51j.js:13900-13998 placement
+//@ chunk-k7sq4jmf.js:13900-13998 placement
 function matchesAny(matchers, inputPath, stats) {
   let normalized = normalizePath(inputPath);
   for (let idx = 0; idx < matchers.length; idx++) {
@@ -73,7 +73,7 @@ function matchesAny(matchers, inputPath, stats) {
   }
   return false;
 }
-//@ chunk-3gvas51j.js:13998-14154 placement
+//@ chunk-k7sq4jmf.js:13998-14154 placement
 /**
  * anymatch
  */
@@ -83,7 +83,7 @@ function anymatch(matchers, testString) {
   if (testString == null) return (path, stats) => matchesAny(matchers_2, path, stats);
   return matchesAny(matchers_2, testString);
 }
-//@ chunk-3gvas51j.js:14154-14624 placement
+//@ chunk-k7sq4jmf.js:14154-14624 placement
 /**
  * 规范化监视路径
  */
@@ -114,7 +114,7 @@ var getAbsolutePath = (path, cwd) => {
   return pathModule_2.join(cwd, path);
 };
 var EMPTY_SET = Object.freeze(new Set());
-//@ chunk-3gvas51j.js:14624-15181 placement
+//@ chunk-k7sq4jmf.js:14624-15181 placement
 /**
  * chokidar DirEntry
  */
@@ -159,10 +159,10 @@ class DirEntry {
     Object.freeze(this);
   }
 }
-//@ chunk-3gvas51j.js:15181-15206 placement
+//@ chunk-k7sq4jmf.js:15181-15206 placement
 var STAT = "stat";
 var LSTAT = "lstat";
-//@ chunk-3gvas51j.js:15206-15767 placement
+//@ chunk-k7sq4jmf.js:15206-15767 placement
 /**
  * chokidar WatchHelper
  */
@@ -193,7 +193,7 @@ class WatchHelper {
     return this.fsw._isntIgnored(this.entryPath(entry), entry.stats);
   }
 }
-//@ chunk-3gvas51j.js:15767-23630 placement
+//@ chunk-k7sq4jmf.js:15767-23630 placement
 /**
  * chokidar FSWatcher
  */
@@ -655,13 +655,13 @@ class FSWatcher extends EventEmitter {
     return stream;
   }
 }
-//@ chunk-3gvas51j.js:23630-23683 placement
+//@ chunk-k7sq4jmf.js:23630-23683 placement
 function watch(paths, options = {}) {
   let watcher = new FSWatcher(options);
   watcher.add(paths);
   return watcher;
 }
-//@ chunk-3gvas51j.js:23683-23713 placement
+//@ chunk-k7sq4jmf.js:23683-23713 placement
 var chokidar_default = {
   watch,
   FSWatcher,

@@ -1,11 +1,11 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sso/endpoint/ruleset.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-kejz1rpb.js (1)
+ * pieces: chunk-tvcdn76c.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-kejz1rpb.js:5071-7442 esm-fingerprint
+//@ chunk-tvcdn76c.js:5071-7442 esm-fingerprint
 var stringParamSchema = {
   ["required"]: false,
   type: "string",

@@ -3,9 +3,9 @@
  *
  * 流式钩子链与站点总表绑定（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (22)
  * attribution: placement 22
  */
 import { HooksError, isPlainDataError, PlainDataError } from "../hooksErrors.js";
@@ -58,10 +58,10 @@ import { createValueSlot } from "../../../utils/valueSlot.js";
 import { sleep } from "../../../utils/sleep.js";
 import { matcherLog } from "../../../utils/hooks/functionHookMatchers.js";
 import { reportPluginHookWithoutNext } from "./slowHookReports.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:218073-218472 placement
+//@ chunk-j8f885h1.js:199258-199657 placement
 /**
  * 可暂停的钩子预算计时器：到期以 HooksError 拒绝 expired，支持 pause/resume/rearm、剩余毫秒查询。
  */
@@ -107,7 +107,7 @@ function createPausableBudget(budgetMs, reason) {
     },
   };
 }
-//@ chunk-4121qate.js:218472-218512 placement
+//@ chunk-j8f885h1.js:199657-199697 placement
 /**
  * 吞掉 rejection
  */
@@ -115,7 +115,7 @@ function swallowRejection(promise) {
   promise.catch(() => {});
   return promise;
 }
-//@ chunk-4121qate.js:218512-219398 placement
+//@ chunk-j8f885h1.js:199697-200583 placement
 function describeStreamHookOverrun(budgetMs, signal, cutAt) {
   let remainingToCut = () =>
     cutAt === undefined ? Number.POSITIVE_INFINITY : Math.max(0, cutAt - Date.now());
@@ -185,20 +185,20 @@ function describeStreamHookOverrun(budgetMs, signal, cutAt) {
     },
   };
 }
-//@ chunk-4121qate.js:219398-219410 placement
+//@ chunk-j8f885h1.js:200583-200595 placement
 /**
  * 钩子调用与分发的默认超时 10 秒：单次调用等待应答、分发预算、环境存活期都取这个默认值。
  */
 var DEFAULT_HOOK_TIMEOUT_MS = 1e4;
-//@ chunk-4121qate.js:219410-219445 placement
+//@ chunk-j8f885h1.js:200595-200630 placement
 /**
  * 流式链槽
  */
 var streamChainSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:219410", () => {
+deferInit("chunk-j8f885h1.js:200595", () => {
   streamChainSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-4121qate.js:219445-219640 placement (2.1.88 match: returnValue, 0.765)
+//@ chunk-j8f885h1.js:200630-200825 placement (2.1.88 match: returnValue, 0.765)
 async function* forwardGenerator(as) {
   let done = false;
   try {
@@ -220,7 +220,7 @@ async function* forwardGenerator(as) {
       });
   }
 }
-//@ chunk-4121qate.js:219640-220000 placement
+//@ chunk-j8f885h1.js:200825-201185 placement
 /**
  * 包装异步生成器：照常 yield，同时把生成器的 return 值放进一个 promise；生成器在完成前被关闭时 promise 以“stream was closed before its result”reject。
  */
@@ -248,7 +248,7 @@ function teeGeneratorResult(source) {
     enumerable: true,
   });
 }
-//@ chunk-4121qate.js:220000-220190 placement
+//@ chunk-j8f885h1.js:201185-201375 placement
 function getStreamResultPromise(stream) {
   let result = Reflect.get(stream, "result");
   return typeof result === "object" &&
@@ -258,10 +258,10 @@ function getStreamResultPromise(stream) {
     ? result
     : Promise.reject(new HooksError("the stream carries no result of its own"));
 }
-//@ chunk-4121qate.js:220190-220279 placement
+//@ chunk-j8f885h1.js:201375-201464 placement
 var streamClosedBeforeNextError = (stream) =>
   new HooksError(`${stream.name}: the stream was closed before next() returned its result`);
-//@ chunk-4121qate.js:220279-221286 placement
+//@ chunk-j8f885h1.js:201464-202471 placement
 function createStreamOperators(options) {
   let { run, catch: catchHook, hop, ...rest } = options;
   let makeOp = (handler) =>
@@ -365,7 +365,7 @@ function createStreamOperators(options) {
     }),
   };
 }
-//@ chunk-4121qate.js:221286-221489 placement
+//@ chunk-j8f885h1.js:202471-202674 placement
 /**
  * 静默关闭生成器：调用 return() 并吞掉其错误。
  */
@@ -392,7 +392,7 @@ async function closeGeneratorQuietly(generator) {
     abortController.abort();
   }
 }
-//@ chunk-4121qate.js:221489-221728 placement (2.1.88 match: returnValue, 0.765)
+//@ chunk-j8f885h1.js:202674-202913 placement (2.1.88 match: returnValue, 0.765)
 async function* forwardGeneratorWithErrorHook(source, onValue = () => {}) {
   let done = false;
   async function next() {
@@ -417,7 +417,7 @@ async function* forwardGeneratorWithErrorHook(source, onValue = () => {}) {
     if (!done) await source.return?.(undefined);
   }
 }
-//@ chunk-4121qate.js:221728-221857 placement
+//@ chunk-j8f885h1.js:202913-203042 placement
 function describeStreamFailure(isTimeout, thrown, error) {
   let hasMessage = !isTimeout || error !== undefined;
   let message = errorTextOf(isTimeout ? error : thrown);
@@ -429,7 +429,7 @@ function describeStreamFailure(isTimeout, thrown, error) {
     budget: VALUE_NODE_SLACK,
   });
 }
-//@ chunk-4121qate.js:221857-221928 placement
+//@ chunk-j8f885h1.js:203042-203113 placement
 /**
  * 流式链的初始状态
  */
@@ -440,7 +440,7 @@ var newStreamState = () => ({
   revoked: false,
   threw: undefined,
 });
-//@ chunk-4121qate.js:221928-222655 placement
+//@ chunk-j8f885h1.js:203113-203840 placement
 /**
  * 流式钩子链的读取器：拉取下一块（可被中止）、统计块数与字节、逐块回调。
  */
@@ -508,7 +508,7 @@ function createStreamReader({ source, name, away, carry, onChunk }) {
     readOn,
   };
 }
-//@ chunk-4121qate.js:222655-222988 placement
+//@ chunk-j8f885h1.js:203840-204173 placement
 /**
  * 预算计时的所有权计数：有持有者时计时运行，全部释放时暂停并累计耗时。
  */
@@ -550,7 +550,7 @@ function createBudgetOwnership(budget) {
     ms: () => (pendingCount > 0 ? pausedMs + (performance.now() - resumedAt) : pausedMs),
   };
 }
-//@ chunk-4121qate.js:222988-228754 placement
+//@ chunk-j8f885h1.js:204173-209947 placement
 /**
  * 流式钩子链：拉取 next() 流、处理下层拒绝与提前关闭
  */
@@ -983,7 +983,7 @@ var runHookStreamChain =
           });
       }
     });
-//@ chunk-4121qate.js:228754-228860 placement
+//@ chunk-j8f885h1.js:209947-210053 placement
 /**
  * 包装生成器的 return()：调用时先执行回调。
  */
@@ -996,11 +996,11 @@ function onGeneratorReturn(iterator, onReturn) {
     },
   });
 }
-//@ chunk-4121qate.js:228860-229095 placement
+//@ chunk-j8f885h1.js:210053-210288 placement
 var createStreamHopHandler = (hop, members) => ({
   name: members.map((handler) => handler.name).join("+"),
   tier: members[0]?.tier,
-  tiers: uniq(members.map(handlerTier)),
+  tiers: normalizeCaseForComparison_2(members.map(handlerTier)),
   plugins: members.map((handler) => handler.name),
   budgetMs: 0,
   isHop: true,
@@ -1014,7 +1014,7 @@ var createStreamHopHandler = (hop, members) => ({
       floors,
     }),
 });
-//@ chunk-4121qate.js:229095-229332 placement
+//@ chunk-j8f885h1.js:210288-210525 placement
 function groupStreamHops(handlers) {
   let hops = [];
   let members = [];
@@ -1035,7 +1035,7 @@ function groupStreamHops(handlers) {
   flush();
   return hops;
 }
-//@ chunk-4121qate.js:229332-229617 placement
+//@ chunk-j8f885h1.js:210525-210810 placement
 var createStreamBottomStep =
   (fallbackBottom, index, event) =>
   (e, ctx, { run, floors }) =>
@@ -1064,7 +1064,7 @@ var createStreamBottomStep =
         });
       }
     });
-//@ chunk-4121qate.js:229617-230197 placement
+//@ chunk-j8f885h1.js:210810-211390 placement
 function reportStreamChainFailure(options) {
   let { e, site, bottom } = options;
   let hops = groupStreamHops(options.handlers);
@@ -1111,15 +1111,15 @@ function reportStreamChainFailure(options) {
 }
 export {
   teeGeneratorResult,
+  reportStreamChainFailure,
+  closeGeneratorQuietly,
+  forwardGeneratorWithErrorHook,
   DEFAULT_HOOK_TIMEOUT_MS,
+  createPausableBudget,
   forwardGenerator,
   onGeneratorReturn,
   createStreamOperators,
-  reportStreamChainFailure,
   streamChainSlot,
   describeStreamHookOverrun,
   getStreamResultPromise,
-  closeGeneratorQuietly,
-  forwardGeneratorWithErrorHook,
-  createPausableBudget,
 };

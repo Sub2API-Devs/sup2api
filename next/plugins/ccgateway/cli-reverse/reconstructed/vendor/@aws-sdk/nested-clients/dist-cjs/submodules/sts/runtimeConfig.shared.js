@@ -3,10 +3,10 @@
  *
  * AWS STS 共享运行时配置（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1), chunk-heg39xxp.js (2)
- * attribution: cjs-require-graph 1, placement 1, esm-fingerprint 1
+ * pieces: chunk-539esr4f.js (2), chunk-brqnbz3r.js (1)
+ * attribution: placement 1, esm-fingerprint 1, cjs-require-graph 1
  */
 import { __toESM, __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../../../core/dist-cjs/index.js";
@@ -29,7 +29,7 @@ beginDeferredInits("vendor/@aws-sdk/nested-clients/dist-cjs/submodules/sts/STSCl
 // This module is the first evaluated of an import cycle of 5 modules closed by ./STSClient.js (in the hooks worker thread);
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("worker:vendor/@aws-sdk/nested-clients/dist-cjs/submodules/sts/STSClient.js");
-//@ chunk-heg39xxp.js:5304-5391 placement
+//@ chunk-539esr4f.js:5304-5391 placement
 var import_core_5 = __toESM(require_core_2());
 var import_protocols = __toESM(require_protocols());
 var import_core_6 = __toESM(require_core());
@@ -37,7 +37,7 @@ var import_client_2 = __toESM(require_client());
 var import_url_parser = __toESM(require_url_parser());
 var import_credential_provider_web_identity = __toESM(base64Module());
 var import_util_utf8 = __toESM(require_util_utf8());
-//@ chunk-heg39xxp.js:10286-11221 esm-fingerprint
+//@ chunk-539esr4f.js:10286-11221 esm-fingerprint
 var getRuntimeConfig = (config) => ({
   apiVersion: "2011-06-15",
   base64Decoder: config?.base64Decoder ?? import_credential_provider_web_identity.fromBase64,
@@ -71,9 +71,9 @@ var getRuntimeConfig = (config) => ({
   utf8Decoder: config?.utf8Decoder ?? import_util_utf8.fromUtf8,
   utf8Encoder: config?.utf8Encoder ?? import_util_utf8.toUtf8,
 });
-//@ chunk-a8ee6x44.js:6653-7841 cjs-require-graph
+//@ chunk-brqnbz3r.js:6653-7841 cjs-require-graph
 var require_runtimeConfig_shared; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-a8ee6x44.js:6653", () => {
+deferInit("chunk-brqnbz3r.js:6653", () => {
   require_runtimeConfig_shared = __commonJS(function (cjsExports) {
     Object.defineProperty(cjsExports, "__esModule", {
       value: true,

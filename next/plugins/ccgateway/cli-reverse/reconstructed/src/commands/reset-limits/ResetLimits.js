@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/reset-limits：用周额度立即重置 5 小时额度的界面
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8p98373.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d3vk8nw.js (6)
  * attribution: placement 6
  */
 import {
@@ -34,9 +34,9 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { LIMIT_CATEGORIES } from "../../components/rateLimit/quotaAutoResume.js";
 
-//@ chunk-q8p98373.js:13956-13960 placement
+//@ chunk-6d3vk8nw.js:15105-15109 placement
 init_react_production();
-//@ chunk-q8p98373.js:13960-15829 placement
+//@ chunk-6d3vk8nw.js:15109-16980 placement
 function ResetLimitsView(props) {
   let $ = useMemoCache(26);
   let { onDone, credentials, kind } = props;
@@ -216,23 +216,23 @@ function ResetLimitsView(props) {
   } else confirmView = $[25];
   return confirmView;
 }
-//@ chunk-q8p98373.js:15829-15869 placement
+//@ chunk-6d3vk8nw.js:16980-17020 placement
 function finishWithSystemMessage(onDone, text) {
   onDone(text, {
     display: "system",
   });
 }
-//@ chunk-q8p98373.js:15869-16022 placement
+//@ chunk-6d3vk8nw.js:17020-17173 placement
 function parseResetName(name) {
   let lower = name.trim().toLowerCase();
   if (lower === "") return;
   if (lower === "5-hour" || lower === "5h" || lower === "five-hour") return "session";
   return LIMIT_CATEGORIES.find((category) => category === lower) ?? null;
 }
-//@ chunk-q8p98373.js:16022-16222 placement
+//@ chunk-6d3vk8nw.js:17173-17373 placement
 var RESET_LIMITS_USAGE_HINT = `or run just /${LIMIT_RESET} to reset your 5-hour limit now (uses your weekly limit)`;
 var INVALID_RESET_NAME_MESSAGE = `That isn't a reset name \xB7 try /${LIMIT_RESET} fable, full, 5-hour or weekly, or just /${LIMIT_RESET} to see the resets you have`;
-//@ chunk-q8p98373.js:16222-16424 placement
+//@ chunk-6d3vk8nw.js:17373-17575 placement (2.1.88 match: extractBashToolsFromMessages, 0.779)
 /**
  * /reset-limits：用周额度立即重置 5 小时额度等。
  */
@@ -242,15 +242,15 @@ async function runResetLimitsCommand(onDone, context, args = "") {
     finishWithSystemMessage(onDone, creditsResult.text);
     return null;
   }
-  let resetName = parseResetName(args);
-  if (resetName === null) {
+  let cmd = parseResetName(args);
+  if (cmd === null) {
     finishWithSystemMessage(onDone, INVALID_RESET_NAME_MESSAGE);
     return null;
   }
   return jsxProd_default(ResetLimitsView, {
     onDone,
     credentials: context.credentials,
-    kind: resetName,
+    kind: cmd,
   });
 }
 export { runResetLimitsCommand };

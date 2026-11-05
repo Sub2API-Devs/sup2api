@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{RIe,d5o,c5o,u5o}from"./chunk-51jy8ztq.js";import{KBo}from"./chunk-pse52p6n.js";import{rqo}from"./chunk-6tcnxw6y.js";import{Pti}from"./chunk-tz3jw2na.js";function l9n(t){let e=(o)=>t((r)=>{let i=typeof o==="function"?o(r.toolPermissionContext):o;return r.toolPermissionContext===i?r:{...r,toolPermissionContext:i}});return{setToolPermissionContext:e,setSessionToolPermissionContext:e}}function vzr(t){t((e)=>e.ultrareviewOverageConfirmed?e:{...e,ultrareviewOverageConfirmed:!0})}function s(t){return(e)=>t((o)=>({...o,pendingMemoryUpdates:[...o.pendingMemoryUpdates,e]}))}function n(t){t((e)=>e.prResolvedThisSession?e:{...e,prResolvedThisSession:!0})}function vvt(t,e){return{markPrResolvedThisSession:()=>n(e),isUltrareviewOverageConfirmed:()=>t().ultrareviewOverageConfirmed,markUltrareviewOverageConfirmed:()=>vzr(e),getAdvisorSetting:()=>t().advisorModel,getMcp:()=>t().mcp,getProactivityLevel:()=>t().proactivityLevel,getWebBrowser:()=>t().webBrowser,...l9n(e),setWebBrowserSlice:rqo(e),setArtifactReadVersion:d5o(e),getArtifactReadObservation:RIe(t),artifactRegistries:KBo(t,e),setArtifactContractTarget:c5o(e),getArtifactContractTarget:u5o(t),enqueuePendingMemoryUpdate:s(e),agentLifecycle:Pti(t,e)}}
+export{vzr,l9n,vvt};

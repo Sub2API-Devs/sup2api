@@ -3,9 +3,9 @@
  *
  * 沙箱拦截记录的展开视图（"⧈ Sandbox blocked N operations"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SandboxViolationExpandedView.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: fingerprint 2, placement 2
  */
 import {
@@ -21,7 +21,7 @@ import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:107469-107652 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:108470-108653 fingerprint (2.1.88 match: _temp, 1)
 function renderViolationLine(v, i) {
   return jsxProd_default(
     Box,
@@ -35,7 +35,7 @@ function renderViolationLine(v, i) {
     `${v.timestamp.getTime()}-${i}`,
   );
 }
-//@ chunk-18hwfzwa.js:107833-108843 fingerprint (2.1.88 match: SandboxViolationExpandedView, 0.667)
+//@ chunk-czq1j3j2.js:108834-109844 fingerprint (2.1.88 match: SandboxViolationExpandedView, 0.667)
 function SandboxViolationExpandedView() {
   let $ = useMemoCache(15);
   let t0;
@@ -117,14 +117,14 @@ function SandboxViolationExpandedView() {
   } else t8 = $[14];
   return t8;
 }
-//@ chunk-18hwfzwa.js:108843-108847 placement
+//@ chunk-czq1j3j2.js:109844-109848 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:108843", () => {
+deferInit("chunk-czq1j3j2.js:109844", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:108847-108851 placement
+//@ chunk-czq1j3j2.js:109848-109852 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:108847", () => {
+deferInit("chunk-czq1j3j2.js:109848", () => {
   init_react_production();
 });
 export { SandboxViolationExpandedView };

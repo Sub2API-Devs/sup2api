@@ -3,9 +3,9 @@
  *
  * MCP 工具调用与交给模型的列表比对（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zdgk9dc6.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nkjcc801.js (12)
  * attribution: placement 12
  */
 import {
@@ -22,16 +22,16 @@ import { normalizeMcpServerName } from "../api/deferredToolsState.js";
 import { redactMcpErrorDetail } from "./mcpServerOrigin.js";
 import { describeConnectError } from "./auth.js";
 
-//@ chunk-zdgk9dc6.js:1381-1404 placement
+//@ chunk-nkjcc801.js:1413-1436 placement
 /**
  * 交接清单检查中途放弃时抛的错误。
  */
 class ListingCheckAbortError extends Error {}
-//@ chunk-zdgk9dc6.js:1404-1562 placement
+//@ chunk-nkjcc801.js:1436-1594 placement
 var CALL_AGAIN_HINT =
   "Call the tool again: it is checked again each time, and Claude Code replaces it with the server's own tool once that is loaded.";
 var SAFE_TOOL_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
-//@ chunk-zdgk9dc6.js:1562-1658 placement
+//@ chunk-nkjcc801.js:1594-1690 placement
 /**
  * 判断工具清单是否可交付（名字合法且唯一）。
  */
@@ -41,7 +41,7 @@ function isDeliverableToolsList(tools) {
     new Set(tools.map((tool) => tool.name)).size === tools.length
   );
 }
-//@ chunk-zdgk9dc6.js:1658-1825 placement
+//@ chunk-nkjcc801.js:1690-1857 placement
 function wrapHandedListingChecks(row, tools, tools_2, dialer, isHandshakeHanded) {
   let ctx = {
     row,
@@ -53,7 +53,7 @@ function wrapHandedListingChecks(row, tools, tools_2, dialer, isHandshakeHanded)
   };
   for (let tool of tools) wrapToolWithListingCheck(ctx, tool);
 }
-//@ chunk-zdgk9dc6.js:1825-2513 placement
+//@ chunk-nkjcc801.js:1857-2545 placement
 /**
  * 给一个 MCP 工具的 call、validateInput、checkPermissions、askInputPreparer 加上"与交给模型的工具列表比对"检查，不一致时分别抛错、返回校验失败、拒绝或让准备阶段报错。
  */
@@ -108,7 +108,7 @@ function wrapToolWithListingCheck(ctx, tool) {
           };
     };
 }
-//@ chunk-zdgk9dc6.js:2513-3986 placement
+//@ chunk-nkjcc801.js:2545-4018 placement
 /**
  * 把 MCP 工具调用与交给模型的工具列表比对，不一致时拒绝
  */
@@ -192,7 +192,7 @@ async function checkHandedListing(ctx, tool, toolName, context) {
   passed.add(toolName);
   return;
 }
-//@ chunk-zdgk9dc6.js:3986-4105 placement
+//@ chunk-nkjcc801.js:4018-4137 placement
 function startListingCheck(ctx, toolUseId) {
   let ask = {
     answer: logHandedListingCheck(ctx, toolUseId),
@@ -205,7 +205,7 @@ function startListingCheck(ctx, toolUseId) {
     .catch(() => {});
   return ask;
 }
-//@ chunk-zdgk9dc6.js:4105-4755 placement
+//@ chunk-nkjcc801.js:4137-4787 placement
 async function logHandedListingCheck({ row, dialer, isHandshakeHanded }, toolUseId) {
   let freshConnection = await dialer.ensureConnectedClient(row, {
     context: "MCP tool call",
@@ -234,25 +234,25 @@ async function logHandedListingCheck({ row, dialer, isHandshakeHanded }, toolUse
     hasOtherHandshake: instructionsDiffer || handshakeDiffers,
   };
 }
-//@ chunk-zdgk9dc6.js:4755-4797 placement
+//@ chunk-nkjcc801.js:4787-4829 placement
 /**
  * 若 ask 标记正是给定值就清掉。
  */
 function clearPendingAsk(ctx, ask) {
   if (ctx.ask === ask) ctx.ask = undefined;
 }
-//@ chunk-zdgk9dc6.js:4797-4901 placement
+//@ chunk-nkjcc801.js:4829-4933 placement
 function refuseByListingCheck(ctx, ask, reason, message) {
   clearPendingAsk(ctx, ask);
   if (reason !== "handshake") logFeatureSad("mcp_handed_listing_check", reason);
   logMCPDebug(ctx.row.name, message);
   return message;
 }
-//@ chunk-zdgk9dc6.js:4901-5040 placement
+//@ chunk-nkjcc801.js:4933-5072 placement
 function listingCheckFailedMessage(row, toolName, reason) {
   return `The tool "${toolName}" could not be checked against what MCP server "${row.name}" lists (${reason}), so the call was not made.`;
 }
-//@ chunk-zdgk9dc6.js:5040-5102 placement
+//@ chunk-nkjcc801.js:5072-5134 placement
 /**
  * 生成清单检查失败的描述文本（脱敏）。
  */

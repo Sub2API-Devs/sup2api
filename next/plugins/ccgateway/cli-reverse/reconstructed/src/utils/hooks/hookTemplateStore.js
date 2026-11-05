@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：钩子模板存储
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vmp3d2t.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p8pkw07j.js (1)
  * attribution: placement 1
  */
 import { createHash } from "crypto";
 import { getHookTemplate } from "./hookTemplates.js";
 import { BASE64_BODY_RE } from "../../entrypoints/sdk/controlSchemas.js";
 
-//@ chunk-6vmp3d2t.js:385-1294 placement
+//@ chunk-p8pkw07j.js:385-1294 placement
 function createHookTemplateStore(
   deps = {
     byId: getHookTemplate,

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：Ink reconciler 补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/reconciler.ts
- * pieces: chunk-bzr73sfg.js (11), chunk-cg2r2hy6.js (1)
+ * pieces: chunk-2avr6cej.js (11), chunk-66b9fbd5.js (1)
  * attribution: placement 4, fingerprint 6, layout 2
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
@@ -31,12 +31,12 @@ import { withTelemetryMessage } from "../utils/errors.js";
 import { getFocusManager, getRootNode } from "./focus.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:175309-175327 placement
+//@ chunk-2avr6cej.js:175058-175076 placement
 var ReactReconcilerModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:175309", () => {
+deferInit("chunk-2avr6cej.js:175058", () => {
   ReactReconcilerModule = __toESM(require_react_reconciler_production(), 1);
 });
-//@ chunk-bzr73sfg.js:195131-195212 fingerprint (2.1.88 match: cleanupYogaNode, 1)
+//@ chunk-2avr6cej.js:194777-194858 fingerprint (2.1.88 match: cleanupYogaNode, 1)
 /**
  * 释放节点的 yoga 子树：解除测量函数、清 yogaNode 引用、freeRecursive。
  */
@@ -48,7 +48,7 @@ var cleanupYogaNode = (node) => {
     yogaNode.freeRecursive();
   }
 };
-//@ chunk-bzr73sfg.js:195212-195294 fingerprint (2.1.88 match: setEventHandler, 1)
+//@ chunk-2avr6cej.js:194858-194940 fingerprint (2.1.88 match: setEventHandler, 1)
 /**
  * 把事件处理器存进节点的 _eventHandlers（不放 attributes，避免改处理器触发重绘）。
  */
@@ -56,7 +56,7 @@ function setEventHandler(node, key, value) {
   if (!node._eventHandlers) node._eventHandlers = {};
   node._eventHandlers[key] = value;
 }
-//@ chunk-bzr73sfg.js:195294-195395 layout (2.1.88 match: setEventHandler, 1)
+//@ chunk-2avr6cej.js:194940-195041 layout (2.1.88 match: setEventHandler, 1)
 /**
  * 节点是否挂了键盘/粘贴/滚轮处理器（需要 stdin 原始模式）。
  */
@@ -66,7 +66,7 @@ function hasRawModeHandler(node) {
   for (let propName of RAW_MODE_HANDLER_PROPS) if (_eventHandlers[propName] != null) return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:195395-195504 placement
+//@ chunk-2avr6cej.js:195041-195150 placement
 /**
  * 根节点原始模式引用计数加减：已接上 setRawMode 时直接调用，否则先累计到 _pendingRawModeDelta。
  */
@@ -74,7 +74,7 @@ function adjustRawModeRef(root, delta) {
   if (root.setRawMode) root.setRawMode(delta > 0);
   else root._pendingRawModeDelta = (root._pendingRawModeDelta ?? 0) + delta;
 }
-//@ chunk-bzr73sfg.js:195504-195602 placement
+//@ chunk-2avr6cej.js:195150-195248 placement
 /**
  * 节点挂/卸原始模式处理器时同步引用：首次需要时 +1，不再需要时 -1。316 新增：只有真的有键盘/粘贴/滚轮处理器时才打开 stdin 原始模式。
  */
@@ -84,7 +84,7 @@ function syncRawModeRef(node, root) {
   node._holdsRawModeRef = needsRaw;
   adjustRawModeRef(root, needsRaw ? 1 : -1);
 }
-//@ chunk-bzr73sfg.js:195602-195730 placement (2.1.88 match: dropSubtreeCache, 0.851)
+//@ chunk-2avr6cej.js:195248-195376 placement (2.1.88 match: dropSubtreeCache, 0.851)
 /**
  * 删除子树时归还其中持有的原始模式引用。
  */
@@ -95,7 +95,7 @@ function releaseRawModeRefs(node, root) {
   }
   for (let child of node.childNodes) if (child.nodeName !== "#text") releaseRawModeRefs(child, root);
 }
-//@ chunk-bzr73sfg.js:195906-196104 fingerprint (2.1.88 match: applyProp, 0.823)
+//@ chunk-2avr6cej.js:195552-195750 fingerprint (2.1.88 match: applyProp, 0.823)
 /**
  * 把一个 React 属性写到 DOM 节点：style→setStyleAndApplyLayout，textStyles 直接赋值，accessibility，事件处理器进 _eventHandlers，其余进 attributes。
  */
@@ -119,7 +119,7 @@ function applyProp(node, key, value) {
   }
   setAttribute(node, key, value);
 }
-//@ chunk-bzr73sfg.js:196104-196375 fingerprint (2.1.88 match: getOwnerChain, 1)
+//@ chunk-2avr6cej.js:195750-196021 fingerprint (2.1.88 match: getOwnerChain, 1)
 /**
  * 沿 fiber 的 _debugOwner/return 链收集组件名（最多 50 层，去重相邻），用于错误信息和调试重绘。
  */
@@ -142,7 +142,7 @@ function getOwnerChain(fiber) {
   }
   return chain;
 }
-//@ chunk-bzr73sfg.js:196375-196478 layout
+//@ chunk-2avr6cej.js:196021-196124 layout
 /**
  * 把所有者链格式化成 " (owner chain: A > B)" 附在报错信息后。
  */
@@ -154,14 +154,14 @@ function formatOwnerChain(fiber) {
     return "";
   }
 }
-//@ chunk-bzr73sfg.js:196478-199445 fingerprint (2.1.88 match: reconciler, 0.867)
+//@ chunk-2avr6cej.js:196124-199097 fingerprint (2.1.88 match: reconciler, 0.867)
 /**
  * Ink 的 React reconciler（react-reconciler 宿主配置，mutation 模式、主渲染器）与事件分发器。要点：createInstance 时 <Box> 不能嵌在 <Text> 里、ink-text 嵌套变 ink-virtual-text；文字必须在 <Text> 内（报错信息带组件所有者链）；commitUpdate 只把变化的属性写回 DOM（样式差量写进 yoga）；hide/unhideInstance 用 display:none；resetAfterCommit 记录提交耗时并触发 onComputeLayout + onRender；更新优先级由 dispatcher 按当前事件类型决定；autoFocus 在 commitMount 时聚焦；挂上键盘/粘贴/滚轮处理器时同步 stdin 原始模式引用。
  */
 var dispatcher; // deferred: uses Dispatcher (./events/dispatcher.js) of its import cycle while loading; runs once the cycle is complete
 var reconciler;
 var reconcilerAlias;
-deferInit("chunk-bzr73sfg.js:196478", () => {
+deferInit("chunk-2avr6cej.js:196124", () => {
   dispatcher = new Dispatcher((fn, a, b, c, d) => reconciler.discreteUpdates(fn, a, b, c, d));
   reconciler = ReactReconcilerModule.default({
     getRootHostContext: () => ({
@@ -320,7 +320,7 @@ deferInit("chunk-bzr73sfg.js:196478", () => {
   });
   reconcilerAlias = reconciler;
 });
-//@ chunk-cg2r2hy6.js:48603-48738 fingerprint
+//@ chunk-66b9fbd5.js:49872-50007 fingerprint
 /**
  * 包装桥句柄的 teardown，使其同时拆掉标题同步/在线状态等辅助对象；句柄为空时直接拆辅助对象。
  */
@@ -336,4 +336,4 @@ function wrapTeardownWithPresence(handle, getPresence) {
   };
   return handle;
 }
-export { dispatcher, cleanupYogaNode, releaseRawModeRefs, reconcilerAlias, wrapTeardownWithPresence };
+export { cleanupYogaNode, releaseRawModeRefs, reconcilerAlias, dispatcher, wrapTeardownWithPresence };

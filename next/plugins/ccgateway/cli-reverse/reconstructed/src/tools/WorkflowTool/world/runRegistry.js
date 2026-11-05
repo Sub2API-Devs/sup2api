@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流运行登记与 world 操作描述
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y1shfdfm.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kgbsr4tm.js (13)
  * attribution: placement 13
  */
 import { isFoundingScriptRow, WorkflowScriptRun, STOP_REASONS } from "./scriptRunner.js";
@@ -27,23 +27,23 @@ import {
 import { factSchema, HOST_SCOPE, ROW_STATUSES } from "./worldStore.js";
 import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-y1shfdfm.js:48333-48395 placement
+//@ chunk-kgbsr4tm.js:49956-50018 placement
 function isAgentEvalRow(row) {
   return row.kind === "eval" && row.fact.topic === "agent";
 }
-//@ chunk-y1shfdfm.js:48395-48484 placement
+//@ chunk-kgbsr4tm.js:50018-50107 placement
 function hasErrorField(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && value.error !== undefined;
 }
-//@ chunk-y1shfdfm.js:48484-48550 placement
+//@ chunk-kgbsr4tm.js:50107-50173 placement
 function finiteOrZero(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
-//@ chunk-y1shfdfm.js:48550-48572 placement
+//@ chunk-kgbsr4tm.js:50173-50195 placement
 class RunIndex {
   byId = new Map();
 }
-//@ chunk-y1shfdfm.js:48572-48912 placement
+//@ chunk-kgbsr4tm.js:50195-50535 placement
 function collectRunStatuses(world, runIndex) {
   let rowsByRun = new Map();
   for (let row of world.rows) {
@@ -69,19 +69,19 @@ function collectRunStatuses(world, runIndex) {
   }
   return lostCount;
 }
-//@ chunk-y1shfdfm.js:48912-48926 placement
+//@ chunk-kgbsr4tm.js:50535-50549 placement
 /**
  * 运行索引记录的有效期（10 分钟）。
  */
 var RUN_INDEX_TTL_MS = 600000;
-//@ chunk-y1shfdfm.js:48926-48950 placement
+//@ chunk-kgbsr4tm.js:50549-50573 placement
 /**
  * 按名字记录运行 id 与时间的小索引。
  */
 class RunIndex_2 {
   byName = new Map();
 }
-//@ chunk-y1shfdfm.js:48950-49321 placement
+//@ chunk-kgbsr4tm.js:50573-50944 placement
 function resolveWorkflowRun({ toolState, taskRegistry, name, runId, now = Date.now() }) {
   if (name === undefined) return;
   let byName = toolState.get(RunIndex_2).byName;
@@ -99,7 +99,7 @@ function resolveWorkflowRun({ toolState, taskRegistry, name, runId, now = Date.n
     prev_was_steered: run?.wasSteered ?? false,
   });
 }
-//@ chunk-y1shfdfm.js:49321-49595 placement
+//@ chunk-kgbsr4tm.js:50944-51218 placement
 function workflowTaskStatus(taskRegistry, runId) {
   for (let task of Object.values(taskRegistry.all())) {
     if (task.type !== "local_workflow" || task.workflowRunId !== runId) continue;
@@ -117,7 +117,7 @@ function workflowTaskStatus(taskRegistry, runId) {
   }
   return "unknown";
 }
-//@ chunk-y1shfdfm.js:49595-49920 placement
+//@ chunk-kgbsr4tm.js:51218-51543 placement
 function describeWorldOp(input) {
   if (typeof input.runId !== "string") return;
   let hasOp = input.put !== undefined || typeof input.retract === "number" || input.read !== undefined;
@@ -139,9 +139,9 @@ function describeWorldOp(input) {
       }),
   };
 }
-//@ chunk-y1shfdfm.js:49920-50288 placement
+//@ chunk-kgbsr4tm.js:51543-51952 placement
 var worldOpSchema; // deferred: uses STOP_REASONS (./scriptRunner.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y1shfdfm.js:49920", () => {
+deferInit("chunk-kgbsr4tm.js:51543", () => {
   worldOpSchema = DoctorLazy(() =>
     objectSchema({
       verb: _enum(["put", "retract", "read", "script"]),
@@ -150,6 +150,7 @@ deferInit("chunk-y1shfdfm.js:49920", () => {
       rows: array(unknown()).optional(),
       rowsTotal: numberSchema().optional(),
       foreignArtifactContent: booleanSchema().optional(),
+      remoteControlDeviceReport: booleanSchema().optional(),
       error: stringSchema().optional(),
       reopened: booleanSchema(),
       status: objectSchema({
@@ -166,7 +167,7 @@ deferInit("chunk-y1shfdfm.js:49920", () => {
     }),
   );
 });
-//@ chunk-y1shfdfm.js:50288-50488 placement
+//@ chunk-kgbsr4tm.js:51952-52152 placement
 function worldOpVerbs(worldOp) {
   let verbs = [];
   if (worldOp.put !== undefined) verbs.push("put");
@@ -175,14 +176,14 @@ function worldOpVerbs(worldOp) {
   if (worldOp.script !== undefined) verbs.push("script");
   return verbs.length === 1 ? verbs[0] : undefined;
 }
-//@ chunk-y1shfdfm.js:50615-51018 placement
+//@ chunk-kgbsr4tm.js:52279-52682 placement
 /**
  * world 日志行的 schema（地址、类型、事实、时间等）。
  */
 var worldJournalLineSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WORLD_JSONL;
 var MAX_WORLD_JOURNAL_READ_BYTES;
-deferInit("chunk-y1shfdfm.js:50615", () => {
+deferInit("chunk-kgbsr4tm.js:52279", () => {
   worldJournalLineSchema = DoctorLazy(() => {
     let addr = int().nonnegative();
     return discriminatedUnion("k", [

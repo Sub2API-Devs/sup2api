@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 的 mocks/ 目录：每个 MCP 服务器的 _server.md、_tools.json 与 <tool>.md 应答者分层加载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (16)
  * attribution: placement 16
  */
 import { lstat, readdir, stat } from "fs/promises";
@@ -43,12 +43,12 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 2 modules closed by ../caseSchema.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/services/pluginEval/caseSchema.js");
-//@ chunk-qchp9vrd.js:31046-31057 placement
+//@ chunk-af1hzzme.js:32386-32397 placement
 /**
  * 每层最多读取的目录数（256）。
  */
 var MAX_LAYERS = 256;
-//@ chunk-qchp9vrd.js:31057-31135 placement
+//@ chunk-af1hzzme.js:32397-32475 placement
 /**
  * 判断路径是否为符号链接。
  */
@@ -59,7 +59,7 @@ async function isSymlink(filePath) {
     return false;
   }
 }
-//@ chunk-qchp9vrd.js:31135-31654 placement
+//@ chunk-af1hzzme.js:32475-32994 placement
 /**
  * _tools.json 的 schema。
  */
@@ -71,7 +71,7 @@ var MOCK_NAME_RE;
 var echoValueSchema;
 var responderFrontmatterSchema;
 var toolsJsonSchema;
-deferInit("chunk-qchp9vrd.js:31135", () => {
+deferInit("chunk-af1hzzme.js:32475", () => {
   MAX_MOCK_FILE_BYTES = 1048576;
   SERVER_RESPONDER_FILE = "_server.md";
   TOOLS_JSON_FILE = "_tools.json";
@@ -105,7 +105,7 @@ deferInit("chunk-qchp9vrd.js:31135", () => {
     }),
   );
 });
-//@ chunk-qchp9vrd.js:31654-31704 placement
+//@ chunk-af1hzzme.js:32994-33044 placement
 /**
  * 空的模拟层级结构。
  */
@@ -115,7 +115,7 @@ function emptyMockLayers() {
     pins: new Map(),
   };
 }
-//@ chunk-qchp9vrd.js:31704-32587 placement
+//@ chunk-af1hzzme.js:33044-33927 placement
 /**
  * 汇总各层 mocks/<server>/ 的应答者；无应答者时提示。
  */
@@ -184,7 +184,7 @@ async function loadMockServers(plugins, layers = emptyMockLayers()) {
     notes,
   };
 }
-//@ chunk-qchp9vrd.js:32587-33503 placement
+//@ chunk-af1hzzme.js:33927-34843 placement
 async function loadMocksDir(mocksDir, notes) {
   let servers = new Map();
   let entries;
@@ -235,14 +235,14 @@ async function loadMocksDir(mocksDir, notes) {
   }
   return servers;
 }
-//@ chunk-qchp9vrd.js:33503-33575 placement
+//@ chunk-af1hzzme.js:34843-34915 placement
 /**
  * 按名字排序目录项。
  */
 function sortByName(entries) {
   return entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 }
-//@ chunk-qchp9vrd.js:33575-33707 placement
+//@ chunk-af1hzzme.js:34915-35047 placement
 async function isDanglingSymlink(path) {
   try {
     if (!(await lstat(path)).isSymbolicLink()) return false;
@@ -256,7 +256,7 @@ async function isDanglingSymlink(path) {
     return isENOENT(error);
   }
 }
-//@ chunk-qchp9vrd.js:33707-35751 placement
+//@ chunk-af1hzzme.js:35047-37091 placement
 /**
  * 读取 mocks/<server>/ 下的 _server.md、_tools.json 与各工具应答者。
  */
@@ -350,7 +350,7 @@ async function loadMockServerDir(serverDir, serverName, notes) {
     listings,
   };
 }
-//@ chunk-qchp9vrd.js:35751-37469 placement
+//@ chunk-af1hzzme.js:37091-38809 placement
 async function loadMockToolResponder(filePath, baseDir, serverName) {
   let label = `mocks/${serverName}/${path.basename(filePath)}`;
   let text;
@@ -440,7 +440,7 @@ async function loadMockToolResponder(filePath, baseDir, serverName) {
     tools,
   };
 }
-//@ chunk-qchp9vrd.js:37469-37562 placement
+//@ chunk-af1hzzme.js:38809-38902 placement
 /**
  * 取规范化内容的短哈希（16 位）。
  */
@@ -457,16 +457,16 @@ function sourceHash(text) {
     .digest("hex")
     .slice(0, 16);
 }
-//@ chunk-qchp9vrd.js:37562-37632 placement
+//@ chunk-af1hzzme.js:38902-38972 placement
 var MOCK_TOOL_TEMPLATE = "TODO: replace with the canned result this tool should return";
-//@ chunk-qchp9vrd.js:37632-37669 placement
+//@ chunk-af1hzzme.js:38972-39009 placement
 /**
  * 判断文本里是否还留着工具模板占位。
  */
 function hasToolTemplate(text) {
   return text.includes(MOCK_TOOL_TEMPLATE);
 }
-//@ chunk-qchp9vrd.js:37669-38303 placement
+//@ chunk-af1hzzme.js:39009-39643 placement
 /**
  * 解析 _tools.json（工具名、描述、输入模式）。
  */
@@ -504,7 +504,7 @@ async function loadMockToolsJson(filePath, serverName) {
     });
   return tools;
 }
-//@ chunk-qchp9vrd.js:38303-39231 placement
+//@ chunk-af1hzzme.js:39643-40571 placement
 function describeUncoveredAbortWhen(serverSegment, layers, notes) {
   let tools = new Map();
   let serverAgent = layers.map((layer) => layer.serverAgent).findLast((layer) => layer !== null) ?? null;
@@ -535,7 +535,7 @@ function describeUncoveredAbortWhen(serverSegment, layers, notes) {
     recordings: {},
   };
 }
-//@ chunk-qchp9vrd.js:39231-39417 placement
+//@ chunk-af1hzzme.js:40571-40757 placement
 function rebaseErrorPrefix(error, filePath, label) {
   let base = path.basename(filePath);
   if (

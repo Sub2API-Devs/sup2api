@@ -3,9 +3,9 @@
  *
  * KeybindingContext 与 Provider：解析按键、取显示文字、注册动作处理器、活动上下文登记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/KeybindingContext.tsx
- * pieces: chunk-8pssrarc.js (5)
+ * pieces: chunk-7wgjt81y.js (5)
  * attribution: affinity 1, fingerprint 2, layout 2
  */
 import { createContext, useContext, useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
@@ -18,22 +18,21 @@ import { withTelemetryMessage, toError } from "../utils/errors.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-8pssrarc.js:1788-1803 affinity
+//@ chunk-7wgjt81y.js:1788-1803 affinity
 var KeybindingContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8pssrarc.js:1788", () => {
+deferInit("chunk-7wgjt81y.js:1788", () => {
   KeybindingContext = createContext(null);
 });
-//@ chunk-8pssrarc.js:1803-3569 fingerprint (2.1.88 match: KeybindingProvider, 0.611)
+//@ chunk-7wgjt81y.js:1803-3504 fingerprint (2.1.88 match: KeybindingProvider, 0.563)
 /**
  * KeybindingContext 的 Provider：对外提供 resolve（按当前待定和弦解析）、getDisplayText、registerHandler（按动作登记处理器并发 handlersChanged）、hasHandler/runAction（只算非回退处理器）、registerPreDispatch、singleKeyEvent、活动上下文登记等。
  */
 function KeybindingProvider(props) {
-  let $ = useMemoCache(33);
+  let $ = useMemoCache(32);
   let {
     bindings,
     pendingChordRef,
     pendingChord,
-    setPendingChord,
     activeContexts,
     registerActiveContext,
     unregisterActiveContext,
@@ -109,12 +108,12 @@ function KeybindingProvider(props) {
     $[11] = preDispatchRef;
     $[12] = registerPreDispatch;
   } else registerPreDispatch = $[12];
-  let getSingleKeyEvent;
+  let singleKeyEvent;
   if ($[13] !== singleKeyEventRef) {
-    getSingleKeyEvent = () => singleKeyEventRef.current;
+    singleKeyEvent = () => singleKeyEventRef.current;
     $[13] = singleKeyEventRef;
-    $[14] = getSingleKeyEvent;
-  } else getSingleKeyEvent = $[14];
+    $[14] = singleKeyEvent;
+  } else singleKeyEvent = $[14];
   let contextValue;
   if (
     $[15] !== activeContexts ||
@@ -122,19 +121,17 @@ function KeybindingProvider(props) {
     $[17] !== keyHandlerRegistry ||
     $[18] !== pendingChord ||
     $[19] !== registerActiveContext ||
-    $[20] !== setPendingChord ||
-    $[21] !== resolve ||
-    $[22] !== getDisplayText ||
-    $[23] !== registerHandler ||
-    $[24] !== hasHandler ||
-    $[25] !== runAction ||
-    $[26] !== registerPreDispatch ||
-    $[27] !== getSingleKeyEvent ||
-    $[28] !== unregisterActiveContext
+    $[20] !== resolve ||
+    $[21] !== getDisplayText ||
+    $[22] !== registerHandler ||
+    $[23] !== hasHandler ||
+    $[24] !== runAction ||
+    $[25] !== registerPreDispatch ||
+    $[26] !== singleKeyEvent ||
+    $[27] !== unregisterActiveContext
   ) {
     contextValue = {
       resolve,
-      setPendingChord,
       getDisplayText,
       bindings,
       pendingChord,
@@ -145,7 +142,7 @@ function KeybindingProvider(props) {
       hasHandler,
       runAction,
       registerPreDispatch,
-      singleKeyEvent: getSingleKeyEvent,
+      singleKeyEvent,
       keyHandlerRegistry,
     };
     $[15] = activeContexts;
@@ -153,39 +150,38 @@ function KeybindingProvider(props) {
     $[17] = keyHandlerRegistry;
     $[18] = pendingChord;
     $[19] = registerActiveContext;
-    $[20] = setPendingChord;
-    $[21] = resolve;
-    $[22] = getDisplayText;
-    $[23] = registerHandler;
-    $[24] = hasHandler;
-    $[25] = runAction;
-    $[26] = registerPreDispatch;
-    $[27] = getSingleKeyEvent;
-    $[28] = unregisterActiveContext;
-    $[29] = contextValue;
-  } else contextValue = $[29];
+    $[20] = resolve;
+    $[21] = getDisplayText;
+    $[22] = registerHandler;
+    $[23] = hasHandler;
+    $[24] = runAction;
+    $[25] = registerPreDispatch;
+    $[26] = singleKeyEvent;
+    $[27] = unregisterActiveContext;
+    $[28] = contextValue;
+  } else contextValue = $[28];
   let value = contextValue;
   let t6;
-  if ($[30] !== children || $[31] !== value) {
+  if ($[29] !== children || $[30] !== value) {
     t6 = jsxProd_default(KeybindingContext.Provider, {
       value,
       children,
     });
-    $[30] = children;
-    $[31] = value;
-    $[32] = t6;
-  } else t6 = $[32];
+    $[29] = children;
+    $[30] = value;
+    $[31] = t6;
+  } else t6 = $[31];
   return t6;
 }
-//@ chunk-8pssrarc.js:3569-3634 layout
+//@ chunk-7wgjt81y.js:3504-3569 layout
 function getPrimaryHandlers(registry, action) {
   return [...(registry.get(action) ?? [])].filter((registration) => !registration.fallback);
 }
-//@ chunk-8pssrarc.js:3634-3661 layout
+//@ chunk-7wgjt81y.js:3569-3596 layout
 function useKeybindingContext() {
   return useContext(KeybindingContext);
 }
-//@ chunk-8pssrarc.js:3661-3917 fingerprint (2.1.88 match: useRegisterKeybindingContext, 1)
+//@ chunk-7wgjt81y.js:3596-3852 fingerprint (2.1.88 match: useRegisterKeybindingContext, 1)
 /**
  * 组件挂载且 isActive 时把上下文加入活动集合，卸载时移除（layout effect，保证首个按键前生效）。
  */
@@ -217,4 +213,4 @@ function useRegisterKeybindingContext(context, t0) {
   }
   useLayoutEffect(t1, t2);
 }
-export { useKeybindingContext, useRegisterKeybindingContext, KeybindingProvider };
+export { useKeybindingContext, KeybindingProvider, useRegisterKeybindingContext };

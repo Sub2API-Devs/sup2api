@@ -3,13 +3,13 @@
  *
  * ESC 序列解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/esc.ts
- * pieces: chunk-x6v6jz2y.js (1)
+ * pieces: chunk-emhzq435.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-x6v6jz2y.js:7918-8409 fingerprint (2.1.88 match: parseEsc, 0.683)
+//@ chunk-emhzq435.js:7856-8347 fingerprint (2.1.88 match: parseEsc, 0.67)
 /**
  * 解析 ESC 单字符序列（RIS、DECSC/DECRC、IND、RI、NEL）为语义动作；其余返回 unknown。
  */

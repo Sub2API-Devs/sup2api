@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：估算命令/技能占用的 token
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a1q31s85.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sse8vfzn.js (1)
  * attribution: placement 1
  */
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
@@ -19,7 +19,7 @@ import { isUserInvocableSkill } from "../../utils/commandPredicates.js";
 import { getCommandName } from "../../commands.js";
 import { estimateSkillListingTokens } from "../../skills/loadSkillsDir.js";
 
-//@ chunk-a1q31s85.js:11861-12533 placement
+//@ chunk-sse8vfzn.js:13009-13681 placement
 function estimateCommandTokens({ commands, bytesPerToken }) {
   invalidateCommandNames();
   let sorted = sortSkillsForListing(commands);

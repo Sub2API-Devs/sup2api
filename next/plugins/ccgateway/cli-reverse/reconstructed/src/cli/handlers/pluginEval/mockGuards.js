@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。claude plugin eval 的 mock 守卫：expect 正则/类型检查、仓库路径校验、代理输入替换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vzw8h259.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3nd3dera.js (26)
  * attribution: placement 26
  */
 import path from "path";
@@ -44,22 +44,22 @@ import {
   unknown,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-vzw8h259.js:754-764 placement
+//@ chunk-3nd3dera.js:787-797 placement
 var MAX_GUARD_VALUE_CHARS = 120;
-//@ chunk-vzw8h259.js:764-814 placement
+//@ chunk-3nd3dera.js:797-846 placement
 function truncateGuardValue(value) {
   return value.length > MAX_GUARD_VALUE_CHARS
     ? `${truncateToLength(value, MAX_GUARD_VALUE_CHARS)}...`
     : value;
 }
-//@ chunk-vzw8h259.js:814-849 placement
+//@ chunk-3nd3dera.js:846-881 placement
 /**
  * 把守卫值转成可展示文本：先按 120 字符截断，再 JSON 序列化并转义不可打印字符。
  */
 function formatGuardValueJson(value) {
   return escapeNonPrintable(jsonStringify(truncateGuardValue(value)));
 }
-//@ chunk-vzw8h259.js:849-962 placement
+//@ chunk-3nd3dera.js:881-994 placement
 /**
  * 把清单校验中的值格式化为可显示文本（过长时截断并转义）。
  */
@@ -70,7 +70,7 @@ function formatGuardValue(value) {
     ? escapeNonPrintable(json)
     : escapeNonPrintable(jsonStringify(truncateGuardValue(json)));
 }
-//@ chunk-vzw8h259.js:962-2507 placement
+//@ chunk-3nd3dera.js:994-2539 placement
 async function checkRepoAuthoredPath(root, repoPath, label, extraAnchors = []) {
   let resolved = path.resolve(root, repoPath);
   let displayPath = formatGuardValueJson(repoPath);
@@ -118,11 +118,11 @@ async function checkRepoAuthoredPath(root, repoPath, label, extraAnchors = []) {
       "plugin eval: a repo-authored path lands on an automounter map directory \u2014 refusing it",
     );
 }
-//@ chunk-vzw8h259.js:2527-2562 placement
+//@ chunk-3nd3dera.js:2559-2595 placement
 var MAX_REGEX_EXPECT_LENGTH = 8192;
 var MAX_EXPECT_REPEAT_BUDGET = 50000000;
 var EXPECT_REGEX_FLAGS_PATTERN = /^[is]*$/;
-//@ chunk-vzw8h259.js:2562-5316 placement
+//@ chunk-3nd3dera.js:2595-5350 placement
 function compileExpectRegex(source) {
   let singleCount = 0;
   let repeatCount = 1;
@@ -269,9 +269,9 @@ function compileExpectRegex(source) {
     problem: null,
   };
 }
-//@ chunk-vzw8h259.js:5316-5386 placement
+//@ chunk-3nd3dera.js:5350-5420 placement
 var GUARD_SCALAR_TYPES = new Set(["string", "number", "bool", "boolean", "object", "array"]);
-//@ chunk-vzw8h259.js:5386-5591 placement
+//@ chunk-3nd3dera.js:5420-5625 placement
 function getByDottedPath(root, path) {
   let cursor = root;
   for (let segment of path.split(".")) {
@@ -285,7 +285,7 @@ function getByDottedPath(root, path) {
   }
   return cursor;
 }
-//@ chunk-vzw8h259.js:5591-5726 placement
+//@ chunk-3nd3dera.js:5625-5760 placement
 /**
  * 按 expect 表逐个键（点分路径）检查输入：取出值后交给 checkExpectType，返回第一个违反描述，全部通过返回 null。
  */
@@ -298,7 +298,7 @@ function checkExpectGuards(input, expect, prefix = "") {
   }
   return null;
 }
-//@ chunk-vzw8h259.js:5726-6442 placement
+//@ chunk-3nd3dera.js:5760-6476 placement
 function checkExpectType(value, expected, path, root) {
   if (Array.isArray(expected))
     return expected.some((allowed) => scalarEquals(value, allowed))
@@ -331,34 +331,34 @@ function checkExpectType(value, expected, path, root) {
   }
   return scalarEquals(value, expected) ? null : `${path} = ${describeGuardValue(value)} is not "${expected}"`;
 }
-//@ chunk-vzw8h259.js:6442-6569 placement
+//@ chunk-3nd3dera.js:6476-6603 placement
 function scalarEquals(value, expected) {
   if (typeof value === "string") return value === expected;
   if (typeof value === "number" || typeof value === "boolean") return String(value) === expected;
   return false;
 }
-//@ chunk-vzw8h259.js:6569-6674 placement
+//@ chunk-3nd3dera.js:6603-6708 placement
 function parseRegexLiteral(text) {
   let match = /^\/(.+)\/([a-z]*)$/s.exec(text);
   if (!match) return null;
   return new RegExp(match[1] ?? "", match[2] ?? "");
 }
-//@ chunk-vzw8h259.js:6674-6816 placement
+//@ chunk-3nd3dera.js:6708-6850 placement
 function guardTypeOf(value) {
   if (Array.isArray(value)) return "array";
   if (value === null || value === undefined) return "missing";
   if (typeof value === "boolean") return "bool";
   return typeof value;
 }
-//@ chunk-vzw8h259.js:6816-6911 placement
+//@ chunk-3nd3dera.js:6850-6944 placement
 function describeGuardValue(value) {
   if (value === undefined) return "(missing)";
   let text = jsonStringify(value);
   return text.length > 80 ? `${truncateToLength(text, 77)}...` : text;
 }
-//@ chunk-vzw8h259.js:6911-6920 placement
+//@ chunk-3nd3dera.js:6944-6953 placement
 var MAX_GUARDS_OR_LEAVES = 32;
-//@ chunk-vzw8h259.js:6920-7921 placement
+//@ chunk-3nd3dera.js:6953-7954 placement
 function compileExpectGuards(expect, prefix = "") {
   let problems = [];
   if (prefix === "") {
@@ -401,9 +401,9 @@ function compileExpectGuards(expect, prefix = "") {
   }
   return problems;
 }
-//@ chunk-vzw8h259.js:7921-7960 placement
+//@ chunk-3nd3dera.js:7954-7993 placement
 var SAFE_FILE_NAME_SEGMENT_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/;
-//@ chunk-vzw8h259.js:7960-8956 placement
+//@ chunk-3nd3dera.js:7993-8988 placement
 async function substituteAgentInput(
   template,
   root,
@@ -470,12 +470,12 @@ async function substituteAgentInput(
     text: results.join(""),
   };
 }
-//@ chunk-vzw8h259.js:8956-9048 placement
+//@ chunk-3nd3dera.js:8988-9080 placement (2.1.88 match: normalizeGitPaths, 0.68)
 function isPathInside(parent, child) {
   let relativePath = path.relative(parent, child);
   return relativePath !== "" && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
 }
-//@ chunk-vzw8h259.js:9048-9181 placement
+//@ chunk-3nd3dera.js:9080-9213 placement
 function countLeafValues(node) {
   let total = 0;
   for (let value of Object.values(node)) {
@@ -485,13 +485,13 @@ function countLeafValues(node) {
   }
   return total;
 }
-//@ chunk-vzw8h259.js:9221-9286 placement
+//@ chunk-3nd3dera.js:9253-9318 placement
 /**
  * 插件评测的两条固定文案："eval aborted by mock" 与 "mock agent responder failed"（后者附 harness_unreachable 提示）。
  */
 var EVAL_ABORTED_BY_MOCK = "eval aborted by mock";
 var MOCK_RESPONDER_FAILED_TEXT = "mock agent responder failed";
-//@ chunk-vzw8h259.js:9286-9400 placement
+//@ chunk-3nd3dera.js:9318-9432 placement
 var RELAY_RESPONSE_SCHEMA = DoctorLazy(() =>
   objectSchema({
     verdict: _enum(["ok", "tool_error", "abort"]),
@@ -500,7 +500,7 @@ var RELAY_RESPONSE_SCHEMA = DoctorLazy(() =>
   }),
 );
 var MAX_RELAY_RESPONSE_BYTES = 4194304;
-//@ chunk-vzw8h259.js:9400-9688 placement
+//@ chunk-3nd3dera.js:9432-9720 placement
 /**
  * 把 agent 型 mock 调用通过 unix socket 交给评测宿主代理处理并解析回应；失败时写 stderr 并返回 abort（harness_unreachable）。
  */
@@ -525,7 +525,7 @@ async function relayAgentMockCall(agent, payload, signal) {
     };
   }
 }
-//@ chunk-vzw8h259.js:9688-10297 placement
+//@ chunk-3nd3dera.js:9720-10329 placement
 /**
  * 连接 unix socket，写一行请求，读到第一个换行为止返回字符串；支持中止、响应超过 MAX_RELAY_RESPONSE_BYTES 时报错、对端关闭未回应时报错。
  */
@@ -566,7 +566,7 @@ function requestOverSocketLine(socketPath, line, signal) {
     connection.once("close", () => settle(Error("harness closed the relay without answering")));
   });
 }
-//@ chunk-vzw8h259.js:10297-10847 placement
+//@ chunk-3nd3dera.js:10329-10879 placement
 /**
  * 插件评测模拟服务器的配置结构：工具列表与响应器（固定响应或代理），以及读取上限。
  */
@@ -621,15 +621,15 @@ var MOCK_SPEC_SCHEMA = DoctorLazy(() => {
 });
 var MAX_FIXTURE_BYTES = 1048576;
 export {
-  MOCK_RESPONDER_FAILED_TEXT,
+  EVAL_ABORTED_BY_MOCK,
+  checkExpectGuards,
+  relayAgentMockCall,
+  substituteAgentInput,
   checkRepoAuthoredPath,
+  MAX_FIXTURE_BYTES,
+  MOCK_SPEC_SCHEMA,
+  MOCK_RESPONDER_FAILED_TEXT,
   formatGuardValueJson,
   compileExpectGuards,
   formatGuardValue,
-  EVAL_ABORTED_BY_MOCK,
-  checkExpectGuards,
-  substituteAgentInput,
-  relayAgentMockCall,
-  MAX_FIXTURE_BYTES,
-  MOCK_SPEC_SCHEMA,
 };

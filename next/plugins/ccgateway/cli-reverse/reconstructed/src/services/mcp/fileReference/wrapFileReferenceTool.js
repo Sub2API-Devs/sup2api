@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增（门面模块 wrapFileReferenceTool）。包装 MCP 工具以支持文件引用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kc2qkj8w.js (42)
- * attribution: placement 42
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xggcs0yq.js (49)
+ * attribution: placement 42, layout 7
  */
 import { isPlainObject } from "../../../utils/objectUtils.js";
 import { ARTIFACTS_MCP_PATH, ARTIFACTS_SERVER_ID, CCR_ARTIFACTS_MCP_PATH } from "../firstPartyServerIds.js";
@@ -30,7 +30,10 @@ import {
   headerValues,
   X_CCR_OWNER_SLACK_USER_ID,
   X_MCP_SERVER_ORIGIN,
+  X_CCR_GMAIL_ATTACHMENTS,
   recordFirstReferenceApproved,
+  addressLines,
+  fileLines,
   isFirstReferenceApproved,
 } from "./fileReferencePolicy.js";
 import { isPolicyVerdictAbsent } from "../../policyLimits/policyVerdicts.js";
@@ -39,9 +42,9 @@ import { connectorServerId, requiresConnectorGrant_2 } from "../claudeai.js";
 import { isPluginServerConfig } from "../types.js";
 import {
   CCR_SESSION_BASE_PATHS,
+  ccrSessionIdFromMcpUrl,
   isCcrSessionScopedMcpUrl,
   CCR_MCP_QUERY_PARAMS,
-  ccrSessionIdFromMcpUrl,
 } from "../ccrMcpUrls.js";
 import { logError } from "../../../utils/log.js";
 import {
@@ -57,7 +60,10 @@ import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../analytics/feat
 import { getToolPermissionContext } from "../../../utils/permissions/toolPermissionContext.js";
 import { getToolNameForPermissionCheck } from "../mcpStringUtils.js";
 import { isHostSessionEntrypoint, isHostEntrypoint } from "../../../utils/entrypointKinds.js";
+import { getHookCaller } from "../../../utils/agentContext.js";
 import { dialogSourceFor } from "../../../components/permissions/hooks.js";
+import { matchesToolName } from "../../../Tool.js";
+import { REPL_TOOL_NAME } from "../../../tools/REPLTool/constants.js";
 import { isBypassAllowedInMode, isAutoAllowedInMode } from "../../../utils/permissions/browserToolNames.js";
 import { McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, McpAuthError } from "../client.js";
 import { logEvent } from "../../analytics/index.js";
@@ -65,7 +71,7 @@ import { fromEnum } from "../../analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../../utils/startupMarks.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-kc2qkj8w.js:5767-6006 placement
+//@ chunk-xggcs0yq.js:4845-5084 placement
 /**
  * 取出工具参数中文件引用字段的值（单值，或数组中每个对象的指定键）。
  */
@@ -89,7 +95,7 @@ function fileReferenceValues(input, toolSpec) {
       });
   return values;
 }
-//@ chunk-kc2qkj8w.js:6006-6277 placement
+//@ chunk-xggcs0yq.js:5084-5356 placement
 function withFilledReferences(input, toolSpec, filled) {
   let { entryKey } = toolSpec;
   if (entryKey === undefined) {
@@ -121,7 +127,7 @@ function withFilledReferences(input, toolSpec, filled) {
     }),
   };
 }
-//@ chunk-kc2qkj8w.js:6277-6422 placement
+//@ chunk-xggcs0yq.js:5356-5501 placement
 function cloneReferenceArgument(input, toolSpec) {
   let argValue = input[toolSpec.argument];
   if (toolSpec.entryKey === undefined || !Array.isArray(argValue))
@@ -139,21 +145,28 @@ function cloneReferenceArgument(input, toolSpec) {
     ),
   };
 }
-//@ chunk-kc2qkj8w.js:6422-6490 placement
+//@ chunk-xggcs0yq.js:5501-5569 placement
 /**
  * 判断值是否为 sha256: 形式。
  */
 function isSha256Value(value) {
   return typeof value === "string" && value.startsWith("sha256:");
 }
-//@ chunk-kc2qkj8w.js:6490-7055 placement
+//@ chunk-xggcs0yq.js:5569-7969 placement
 /**
  * 文件引用相关的服务器表：一方 Artifacts 上传服务器（路径、服务器 id、策略键、上传路径前缀），以及 Google Drive create_file 的文件引用行配置（连接器地址、参数名、开关、策略、大小上限）。
  */
 var FIRST_PARTY_UPLOAD_SERVERS; // deferred: uses MEMORY_SERVER_ID_2 (../firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
 var GOOGLE_DRIVE_REFERENCE_ROW;
+var GMAIL_REFERENCE_ROW;
+var FILE_REFERENCES_HINT;
+var CREATE_DRAFT_ROW;
+var UPDATE_DRAFT_ROW;
+var REPLY_ROW;
+var FORWARD_ROW;
+var SEND_MESSAGE_ROW;
 var FILE_REFERENCE_ROWS;
-deferInit("chunk-kc2qkj8w.js:6490", () => {
+deferInit("chunk-xggcs0yq.js:5569", () => {
   FIRST_PARTY_UPLOAD_SERVERS = [
     {
       path: ARTIFACTS_MCP_PATH,
@@ -176,49 +189,110 @@ deferInit("chunk-kc2qkj8w.js:6490", () => {
     flag: "tengu_clever_bonbon",
     policy: "allow_drive_file_references",
     serviceName: "Google Drive",
+    descriptionHint:
+      "FILE REFERENCES: to upload a file you can read here, don't type its base64; set base64Content to a file reference, sha256:<64 lowercase hex>:<its absolute path, with / between folders>. The app fills in the file's content once the user approves the call.",
+    uploadEvent: "tengu_mcp_drive_file_reference_upload",
+    featureName: "mcp_drive_file_reference",
     maxFileBytes: 10485760,
     maxFileText: "10 MB",
   };
-  FILE_REFERENCE_ROWS = [GOOGLE_DRIVE_REFERENCE_ROW];
+  GMAIL_REFERENCE_ROW = {
+    connectorOrigin: "https://gmailmcp.googleapis.com",
+    connectorPath: "/mcp/v1",
+    argument: "attachments",
+    entryKey: "content",
+    wrongArguments: [],
+    flag: "tengu_snug_pine",
+    serviceName: "Gmail",
+    policy: "allow_gmail_file_references",
+    asksEveryReference: true,
+    firstReferenceQuestion:
+      "Claude wants to attach a file to a Gmail email or draft. This attachment needs your approval, even if you already allowed this tool.",
+    uploadEvent: "tengu_mcp_gmail_file_reference_upload",
+    featureName: "mcp_gmail_file_reference",
+    maxFileBytes: 10485760,
+    maxFileText: "10 MB",
+    maxTotalBytes: 24117248,
+    maxTotalText: "23 MB",
+    maxAttachments: 10,
+    proxyFills: {
+      toolName: "send_message",
+      descriptionIncludes: "ATTACHMENTS: to attach a file from this session",
+    },
+  };
+  FILE_REFERENCES_HINT =
+    "FILE REFERENCES: to attach a file you can read here, don't type its base64; set the attachment's content to a file reference, sha256:<64 lowercase hex>:<its absolute path, with / between folders>, and set filename to the file's name. The app fills in the file's content once the user approves the call. An update_draft call removes a draft's files, so to change a draft that has files, make a new draft with the same files.";
+  CREATE_DRAFT_ROW = {
+    ...GMAIL_REFERENCE_ROW,
+    toolName: "create_draft",
+    descriptionHint: FILE_REFERENCES_HINT,
+    recipientCheck: "draft",
+  };
+  UPDATE_DRAFT_ROW = {
+    ...GMAIL_REFERENCE_ROW,
+    toolName: "update_draft",
+    recipientCheck: "never",
+  };
+  REPLY_ROW = {
+    ...GMAIL_REFERENCE_ROW,
+    toolName: "reply",
+    recipientCheck: "other_tool",
+  };
+  FORWARD_ROW = {
+    ...GMAIL_REFERENCE_ROW,
+    toolName: "forward",
+    recipientCheck: "other_tool",
+  };
+  SEND_MESSAGE_ROW = {
+    ...GMAIL_REFERENCE_ROW,
+    toolName: "send_message",
+    descriptionHint: FILE_REFERENCES_HINT,
+    recipientCheck: "send",
+  };
+  FILE_REFERENCE_ROWS = [
+    GOOGLE_DRIVE_REFERENCE_ROW,
+    CREATE_DRAFT_ROW,
+    UPDATE_DRAFT_ROW,
+    SEND_MESSAGE_ROW,
+    REPLY_ROW,
+    FORWARD_ROW,
+  ];
 });
-//@ chunk-kc2qkj8w.js:7055-7319 placement
-var FILE_REFERENCE_HINT =
-  "FILE REFERENCES: to upload a file you can read here, don't type its base64; set base64Content to a file reference, sha256:<64 lowercase hex>:<its absolute path, with / between folders>. The app fills in the file's content once the user approves the call.";
-//@ chunk-kc2qkj8w.js:7319-7885 placement
+//@ chunk-xggcs0yq.js:7969-8594 placement
 /**
  * 判断是否向模型提供某个文件引用行：有本地覆盖时直接用；否则看特性开关是否由服务端下发且开启、策略是否已加载并允许，记录 offered/latched_off/undecided 状态。
  */
 function isFileReferenceOffered(row) {
-  let override = fileReferenceHintLatch();
+  let override = fileReferenceHintLatch(row.flag);
   if (override !== null) return override && isRowFlagOn(row);
   let flag = getFeatureValueWithSource_CACHED_MAY_BE_STALE(row.flag, false);
-  let tracker = getFileReferenceOffer();
+  let tracker = row.recipientCheck === undefined ? getFileReferenceOffer() : undefined;
   if (!flag.value) {
     if (isServedFeatureSource(flag.source)) {
-      replaceFileReferenceHintLatch(false);
-      tracker.note(row, {
+      replaceFileReferenceHintLatch(row.flag, false);
+      tracker?.note(row, {
         state: "latched_off",
         reason: "flag_off_served",
       });
-    } else tracker.holdUndecidedReason("flag_not_served");
+    } else tracker?.holdUndecidedReason("flag_not_served");
     return false;
   }
   let blockReason = fileReferenceUnavailableReason(row);
   if (!isServedFeatureSource(flag.source)) {
-    tracker.holdUndecidedReason("flag_not_served");
+    tracker?.holdUndecidedReason("flag_not_served");
     return false;
   }
   if (blockReason === "policy_not_loaded" || blockReason === "policy_not_asked") {
-    tracker.holdUndecidedReason(blockReason);
+    tracker?.holdUndecidedReason(blockReason);
     return false;
   }
   if (isPolicyVerdictAbsent()) {
-    tracker.holdUndecidedReason("policy_verdict_absent");
+    tracker?.holdUndecidedReason("policy_verdict_absent");
     return false;
   }
-  let offered = blockReason === undefined;
-  replaceFileReferenceHintLatch(offered);
-  tracker.note(
+  let sendFlag = blockReason === undefined;
+  replaceFileReferenceHintLatch(row.flag, sendFlag);
+  tracker?.note(
     row,
     blockReason === undefined
       ? {
@@ -229,9 +303,9 @@ function isFileReferenceOffered(row) {
           reason: blockReason,
         },
   );
-  return offered;
+  return sendFlag;
 }
-//@ chunk-kc2qkj8w.js:7885-8112 placement
+//@ chunk-xggcs0yq.js:8594-8838 placement
 function fileReferenceHintKeyBit(tool) {
   tryIgnore(() => getFileReferenceOffer().flush());
   let row =
@@ -239,9 +313,9 @@ function fileReferenceHintKeyBit(tool) {
     (!env.CLAUDE_CODE_REMOTE || tool.mcpInfo.remoteFileReferenceFill === true)
       ? FILE_REFERENCE_ROWS.find((row) => row.toolName === tool.mcpInfo?.toolName)
       : undefined;
-  return row !== undefined && isFileReferenceOffered(row) ? "FR1:" : "";
+  return row?.descriptionHint !== undefined && isFileReferenceOffered(row) ? "FR1:" : "";
 }
-//@ chunk-kc2qkj8w.js:8112-8519 placement
+//@ chunk-xggcs0yq.js:8838-9249 placement
 /**
  * 找到该 MCP 工具对应的文件引用配置行：SDK 服务器按连接器 id 与填充方式，其他按连接器地址匹配。
  */
@@ -269,7 +343,7 @@ function fileReferenceRowFor(client, toolName) {
     return row.toolName === toolName && (url === expectedUrl || url === `${expectedUrl}/`);
   });
 }
-//@ chunk-kc2qkj8w.js:8519-9646 placement
+//@ chunk-xggcs0yq.js:9249-10379 placement
 function fileReferenceToolForRecords(client, toolName) {
   if (!FILE_REFERENCE_ROWS.some((row) => row.toolName === toolName)) return;
   try {
@@ -313,8 +387,24 @@ function fileReferenceToolForRecords(client, toolName) {
     return FILE_REFERENCE_ROWS.find((row) => row.toolName === toolName);
   }
 }
-//@ chunk-kc2qkj8w.js:9646-11342 placement
-function fileReferenceToolToFill(client, toolName) {
+//@ chunk-xggcs0yq.js:10379-10508 placement
+/**
+ * 只保留框架里会填补的（toolName 匹配）文件引用工具项。
+ */
+function proxyFillsListing(tools) {
+  return tools.flatMap(({ name, description }) =>
+    FILE_REFERENCE_ROWS.some((proxy) => proxy.proxyFills?.toolName === name)
+      ? [
+          {
+            name,
+            description,
+          },
+        ]
+      : [],
+  );
+}
+//@ chunk-xggcs0yq.js:10508-13003 placement
+function fileReferenceToolToFill(client, toolName, filledToolName = []) {
   if (!FILE_REFERENCE_ROWS.some((row) => row.toolName === toolName)) return;
   if (!env.CLAUDE_CODE_REMOTE) {
     let declared = fileReferenceRowFor(client, toolName);
@@ -328,8 +418,14 @@ function fileReferenceToolToFill(client, toolName) {
               hostFills: true,
             }
           : declared;
-      return Object.hasOwn(capability, declared.desktopAsksFirstMark) &&
-        Reflect.get(capability, declared.desktopAsksFirstMark) === true
+      return (
+        Object.hasOwn(capability, "connectorUrl")
+          ? markIsTrue(capability, "hostAsksFirstReference") &&
+            (declared.desktopAsksFirstMark === undefined ||
+              !Object.hasOwn(capability, declared.desktopAsksFirstMark) ||
+              markIsTrue(capability, declared.desktopAsksFirstMark))
+          : markIsTrue(capability, declared.desktopAsksFirstMark)
+      )
         ? {
             ...fillRow,
             hostAsksFirstReference: true,
@@ -337,8 +433,32 @@ function fileReferenceToolToFill(client, toolName) {
         : fillRow;
     }
     let found = FILE_REFERENCE_ROWS.find((row) => row.toolName === toolName);
-    if (found === undefined || capability === undefined)
-      return noteNotWrapped(client, toolName, "not_claudeai_connector");
+    let mark =
+      capability !== undefined && Object.hasOwn(capability, "connectorUrl")
+        ? Reflect.get(capability, "connectorUrl")
+        : undefined;
+    let connectorUrl = found === undefined ? undefined : `${found.connectorOrigin}${found.connectorPath}`;
+    if (
+      found === undefined ||
+      capability === undefined ||
+      (mark !== undefined && mark !== connectorUrl && mark !== `${connectorUrl}/`)
+    ) {
+      let { config } = client;
+      let url = "url" in config ? config.url : undefined;
+      return noteNotWrapped(
+        client,
+        toolName,
+        "not_claudeai_connector",
+        found?.recipientCheck !== undefined &&
+          capability === undefined &&
+          (url === connectorUrl || url === `${connectorUrl}/`)
+          ? {
+              ...found,
+              refusesReferences: "not_filled_here",
+            }
+          : undefined,
+      );
+    }
     let refusalKind = desktopFillMode(capability, found) === "conflicting" ? "conflicting" : "undeclared";
     if (refusalKind === "conflicting") noteNotWrapped(client, toolName, "desktop_conflicting");
     return {
@@ -346,9 +466,29 @@ function fileReferenceToolToFill(client, toolName) {
       refusesReferences: refusalKind,
     };
   }
+  let verdict;
   try {
     let { config } = client;
     let isCcs = isCcsTenant();
+    let upstreamUrl =
+      "url" in config && typeof config.url === "string"
+        ? ccrSessionIdFromMcpUrl(config.url)?.upstreamUrl
+        : undefined;
+    let capability = FILE_REFERENCE_ROWS.find((upstream) => {
+      let connector = `${upstream.connectorOrigin}${upstream.connectorPath}`;
+      return (
+        upstream.toolName === toolName &&
+        upstream.recipientCheck !== undefined &&
+        (upstreamUrl === connector || upstreamUrl === `${connector}/`)
+      );
+    });
+    verdict =
+      capability === undefined || proxyFillsReferences(capability, config, filledToolName)
+        ? undefined
+        : {
+            ...capability,
+            refusesReferences: "not_filled_here",
+          };
     if (!(isRemoteOrFalse() || isCcs)) {
       let CLAUDE_CODE_ENVIRONMENT_KIND = env.CLAUDE_CODE_ENVIRONMENT_KIND;
       return noteNotWrapped(
@@ -359,50 +499,63 @@ function fileReferenceToolToFill(client, toolName) {
           : CLAUDE_CODE_ENVIRONMENT_KIND === "bridge"
             ? "environment_bridge"
             : "environment_other",
+        verdict,
       );
     }
     if (config.type !== "http" || config.scope !== "dynamic" || isPluginServerConfig(config))
-      return noteNotWrapped(client, toolName, "entry_shape");
-    if (startupCcrEnv.bridgeCarrier !== undefined) return noteNotWrapped(client, toolName, "bridge_carrier");
-    if (!isCcrSessionScopedMcpUrl(config.url)) return noteNotWrapped(client, toolName, "not_own_route");
+      return noteNotWrapped(client, toolName, "entry_shape", verdict);
+    if (startupCcrEnv.bridgeCarrier !== undefined)
+      return noteNotWrapped(client, toolName, "bridge_carrier", verdict);
+    if (!isCcrSessionScopedMcpUrl(config.url))
+      return noteNotWrapped(client, toolName, "not_own_route", verdict);
     if (!hasUniqueQueryParams(config.url, CCR_MCP_QUERY_PARAMS))
-      return noteNotWrapped(client, toolName, "route_query_ambiguous");
+      return noteNotWrapped(client, toolName, "route_query_ambiguous", verdict);
     let capabilityCache = serverCapabilityCache.peek(getRootSession());
     let startupHeaders = capabilityCache?.read?.(client.name, config.url);
-    if (startupHeaders === undefined) return noteNotWrapped(client, toolName, "no_startup_headers");
+    if (startupHeaders === undefined) return noteNotWrapped(client, toolName, "no_startup_headers", verdict);
     if (headerValues(startupHeaders, X_CCR_OWNER_SLACK_USER_ID).length > 0)
-      return noteNotWrapped(client, toolName, "owner_header");
+      return noteNotWrapped(client, toolName, "owner_header", verdict);
     let origins = headerValues(startupHeaders, X_MCP_SERVER_ORIGIN);
     if (origins.length !== 1)
-      return noteNotWrapped(client, toolName, origins.length === 0 ? "origin_missing" : "origin_multiple");
+      return noteNotWrapped(
+        client,
+        toolName,
+        origins.length === 0 ? "origin_missing" : "origin_multiple",
+        verdict,
+      );
     if (origins[0] !== "directory" && origins[0] !== "custom")
-      return noteNotWrapped(client, toolName, "origin_other");
-    let upstreamUrl = ccrSessionIdFromMcpUrl(config.url)?.upstreamUrl;
-    let found = FILE_REFERENCE_ROWS.find((row) => {
+      return noteNotWrapped(client, toolName, "origin_other", verdict);
+    let capability_2 = FILE_REFERENCE_ROWS.find((row) => {
       let expectedUrl = `${row.connectorOrigin}${row.connectorPath}`;
       return row.toolName === toolName && (upstreamUrl === expectedUrl || upstreamUrl === `${expectedUrl}/`);
     });
-    if (found === undefined)
+    if (capability_2 === undefined)
       return noteNotWrapped(
         client,
         toolName,
         upstreamUrl === undefined ? "upstream_unread" : "upstream_not_drive",
       );
+    if (
+      capability_2.proxyFills !== undefined &&
+      (headerValues(startupHeaders, X_CCR_GMAIL_ATTACHMENTS).length > 0 ||
+        proxyFillsReferences(capability_2, config, filledToolName))
+    )
+      return;
     if (!isCcs && capabilityCache?.isStartupEntry?.(client.name, config) !== true)
-      return noteNotWrapped(client, toolName, "not_startup_entry");
+      return noteNotWrapped(client, toolName, "not_startup_entry", verdict);
     let { name: serverName } = client;
     let { url } = config;
     return {
-      ...found,
+      ...capability_2,
       approvalSeesContent: true,
       stillHeld: () => serverCapabilityCache.peek(getRootSession())?.read?.(serverName, url) !== undefined,
     };
   } catch {
-    return;
+    return verdict;
   }
 }
-//@ chunk-kc2qkj8w.js:11342-11595 placement
-function noteNotWrapped(client, toolName, reason) {
+//@ chunk-xggcs0yq.js:13003-13287 placement
+function noteNotWrapped(client, toolName, reason, heldToolName) {
   tryIgnore(() => {
     let { config } = client;
     let url = "url" in config ? config.url : undefined;
@@ -412,18 +565,32 @@ function noteNotWrapped(client, toolName, reason) {
         let expectedUrl = `${row.connectorOrigin}${row.connectorPath}`;
         return row.toolName === toolName && (url === expectedUrl || url === `${expectedUrl}/`);
       });
-    if (row !== undefined)
+    if (row !== undefined && row.recipientCheck === undefined)
       getFileReferenceOffer().note(row, {
         state: "not_wrapped",
         reason,
       });
   });
-  return;
+  return heldToolName;
 }
-//@ chunk-kc2qkj8w.js:11595-11676 placement
+//@ chunk-xggcs0yq.js:13287-13511 layout
+function proxyFillsReferences(capability, config, row) {
+  let { proxyFills } = capability;
+  if (proxyFills === undefined) return false;
+  return (
+    ("headers" in config && headerValues(config.headers, X_CCR_GMAIL_ATTACHMENTS).length > 0) ||
+    row.some(
+      (tools) =>
+        tools.name === proxyFills.toolName &&
+        typeof tools.description === "string" &&
+        tools.description.includes(proxyFills.descriptionIncludes),
+    )
+  );
+}
+//@ chunk-xggcs0yq.js:13511-13592 placement
 var ANTHROPIC_FILLEDFROMFILEREFERENCE = "anthropic/filledFromFileReference";
 var ANTHROPIC_HOSTFILLSFILEREFERENCE = "anthropic/hostFillsFileReference";
-//@ chunk-kc2qkj8w.js:11676-11742 placement
+//@ chunk-xggcs0yq.js:13592-13658 placement
 function filledCallRequestMeta(client) {
   return client.config.type === "sdk"
     ? {
@@ -431,15 +598,15 @@ function filledCallRequestMeta(client) {
       }
     : undefined;
 }
-//@ chunk-kc2qkj8w.js:11742-11794 placement
+//@ chunk-xggcs0yq.js:13658-13710 placement
 function withholdsFileReferenceArguments(row, toolUseId) {
   return row !== undefined && (isFileReferenceCall(toolUseId) || isRowFlagOn(row));
 }
-//@ chunk-kc2qkj8w.js:11794-11864 placement
+//@ chunk-xggcs0yq.js:13710-13780 placement
 function withholdsFileReferenceErrorText(row, toolUseId) {
   return row !== undefined && (env.CLAUDE_CODE_REMOTE || withholdsFileReferenceArguments(row, toolUseId));
 }
-//@ chunk-kc2qkj8w.js:11864-11974 placement
+//@ chunk-xggcs0yq.js:13780-13890 placement
 function withholdsFileReferenceErrors(tool, toolUseID) {
   return (
     tool.mcpInfo?.fileReference === true &&
@@ -449,18 +616,18 @@ function withholdsFileReferenceErrors(tool, toolUseID) {
     )
   );
 }
-//@ chunk-kc2qkj8w.js:11974-12256 placement
+//@ chunk-xggcs0yq.js:13890-14172 placement
 function withheldFileReferenceErrorForLog(toolInfo, messageText, name = "McpToolCallError") {
   return `${name}; its message (${messageText.length} characters) is not logged because errors from ${toolInfo.serviceName}'s ${toolInfo.toolName} tool can contain the file being uploaded. The tool result in this session's transcript shows the message, shortened if long.`;
 }
-//@ chunk-kc2qkj8w.js:12256-12340 placement
+//@ chunk-xggcs0yq.js:14172-14256 placement
 /**
  * 保留尺寸条目的最小数（16）。
  */
 var BASE64_BLOB_RE = /^[\r\n]*[A-Za-z0-9+/_-][A-Za-z0-9+/_\r\n-]*(?:=[\r\n]*){0,2}$/;
 var MAX_TRACKED_SIZE_ENTRIES = 100;
 var MIN_SIZE_ENTRIES = 16;
-//@ chunk-kc2qkj8w.js:12340-12575 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-xggcs0yq.js:14256-14491 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(base64, reference) {
   if (typeof base64 !== "string") return;
   let buffer = Buffer.from(base64, "base64");
@@ -468,31 +635,33 @@ function base64URLEncode(base64, reference) {
   let normalize = (text) => text.replace(/[\s=]/g, "").replace(/-/g, "+").replace(/_/g, "/");
   return normalize(base64) === normalize(buffer.toString("base64")) ? buffer.length : undefined;
 }
-//@ chunk-kc2qkj8w.js:12575-21496 placement
+//@ chunk-xggcs0yq.js:14491-25683 placement
 /**
  * 包装 MCP 工具以支持文件引用（桌面 Drive 填充）：在 validateInput/call 前检查服务器是否声明支持文件引用，解析引用、上传文件并在不可用时以 not_available 拒绝。
  */
 function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mcpCallMeta) {
-  let loadModule = () => import("../checkCall.lazy.js");
+  let loadModule = () => import("../../../components/LogoV2/callBinding.lazy.js");
   if (refToolName.refusesReferences) {
-    let _ = {
+    let data = {
       validateInput: tool.validateInput,
       call: tool.call,
     };
     let detail =
       refToolName.refusesReferences === "conflicting"
         ? "desktop_drive_fill_declaration_conflict"
-        : "desktop_drive_fill_not_declared";
+        : refToolName.refusesReferences === "not_filled_here"
+          ? "gmail_entry_not_filled_here"
+          : "desktop_drive_fill_not_declared";
     tool.validateInput = async (input, context) => {
       let refRow = matchingReferenceRow(refToolName, input, false);
       if (refRow === undefined)
         return (
-          (await _.validateInput?.(input, context)) ?? {
+          (await data.validateInput?.(input, context)) ?? {
             result: true,
           }
         );
-      logFeatureSad("mcp_drive_file_reference", "not_available");
-      logFileReferenceUpload({
+      logFeatureSad(refToolName.featureName, "not_available");
+      logFileReferenceUpload(refToolName, {
         stage: "plan",
         outcome: "refused",
         reason: "not_available",
@@ -513,9 +682,9 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
         input,
         context.toolUseId !== undefined && isFileReferenceCall(context.toolUseId),
       );
-      if (refRow === undefined) return _.call(input, context, ...rest);
-      logFeatureSad("mcp_drive_file_reference", "not_available");
-      logFileReferenceUpload({
+      if (refRow === undefined) return data.call(input, context, ...rest);
+      logFeatureSad(refToolName.featureName, "not_available");
+      logFileReferenceUpload(refToolName, {
         stage: "fill",
         outcome: "refused",
         reason: "not_available",
@@ -531,10 +700,16 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     return;
   }
   let prompt = tool.prompt;
-  tool.prompt = async (_) => {
-    let basePrompt = await prompt(_);
-    if (!isFileReferenceOffered(refToolName)) return basePrompt;
-    return basePrompt === "" ? FILE_REFERENCE_HINT : `${FILE_REFERENCE_HINT} ${basePrompt}`;
+  tool.prompt = async (input) => {
+    let basePrompt = await prompt(input);
+    let descriptionHint = refToolName.descriptionHint;
+    if (
+      descriptionHint === undefined ||
+      !isFileReferenceOffered(refToolName) ||
+      (refToolName.recipientCheck !== undefined && listHasNonMcpBuiltin(input.tools))
+    )
+      return basePrompt;
+    return basePrompt === "" ? descriptionHint : `${descriptionHint} ${basePrompt}`;
   };
   let checkedByToolUse = new Map();
   let droppedFills = new Set();
@@ -545,73 +720,98 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     call: tool.call,
     askInputPreparer: tool.askInputPreparer,
   };
-  let implFor = (_) => (_ !== undefined && isFileReferenceCall(_) ? rowImpl : baseImpl);
-  tool.validateInput = async (_, context) => {
+  let implFor = (input) => (input !== undefined && isFileReferenceCall(input) ? rowImpl : baseImpl);
+  tool.validateInput = async (context, context_2) => {
     pendingFill = undefined;
-    let refValues = shownFills.size > 0 ? fileReferenceValues(_, refToolName) : [];
+    let refValues = shownFills.size > 0 ? fileReferenceValues(context, refToolName) : [];
     for (let { value } of refValues) {
       if (typeof value !== "string") continue;
       let contentHash = computeContentHash(Buffer.from(value, "base64"));
       let shown = shownFills.get(contentHash);
       if (
         shown !== undefined &&
-        !shown.toolUses.has(context.toolUseId ?? "") &&
+        !shown.toolUses.has(context_2.toolUseId ?? "") &&
         base64URLEncode(value, shown.reference) !== undefined
       )
         shownFills.delete(contentHash);
     }
-    let tracked = context.toolUseId === undefined ? undefined : checkedByToolUse.get(context.toolUseId);
+    let tracked = context_2.toolUseId === undefined ? undefined : checkedByToolUse.get(context_2.toolUseId);
     if (
-      context.toolUseId !== undefined &&
+      context_2.toolUseId !== undefined &&
       tracked !== undefined &&
-      !(refToolName.approvalSeesContent && filledBytesTotal(_, refToolName, tracked.references) !== undefined)
+      !(
+        refToolName.approvalSeesContent &&
+        filledBytesTotal(context, refToolName, tracked.references) !== undefined
+      )
     )
-      checkedByToolUse.delete(context.toolUseId);
+      checkedByToolUse.delete(context_2.toolUseId);
     if (!isRowFlagServed(refToolName)) {
-      if (isRowFlagOn(refToolName) && hasSha256Args(_, refToolName))
+      if (needsAskForRow(refToolName, context))
         return {
           result: false,
           message: await refuseUnavailableReference(refToolName, "plan", {
-            toolUseId: context.toolUseId,
+            toolUseId: context_2.toolUseId,
           }),
           errorCode: 2,
           notAnError: true,
         };
       return (
-        (await implFor(context.toolUseId).validateInput?.(_, context)) ?? {
+        (await implFor(context_2.toolUseId).validateInput?.(context, context_2)) ?? {
           result: true,
         }
       );
     }
-    let validation = (await rowImpl.validateInput?.(_, context)) ?? {
+    let validation = (await rowImpl.validateInput?.(context, context_2)) ?? {
       result: true,
     };
     if (!validation.result) return validation;
-    noteFileReferenceCall(context.toolUseId);
-    let cloned = cloneReferenceArgument(_, refToolName);
+    noteFileReferenceCall(context_2.toolUseId);
+    let cloned = cloneReferenceArgument(
+      refToolName.recipientCheck === undefined ? context : cloneToolInput(context),
+      refToolName,
+    );
     if (!hasSha256Args(cloned, refToolName)) return validation;
-    let { readReferencedFile } = await loadModule();
+    if (refToolName.recipientCheck !== undefined && listHasNonMcpBuiltin(context_2.options.tools)) {
+      logFileReferenceUpload(refToolName, {
+        stage: "plan",
+        outcome: "refused",
+        reason: "not_available",
+        detail: "code_mode",
+        toolUseId: context_2.toolUseId,
+      });
+      logFeatureSad(refToolName.featureName, "not_available");
+      let { refusalText } = await loadModule();
+      return {
+        result: false,
+        message: refusalText(refToolName, "not_available", {
+          case: "code_mode",
+        }),
+        errorCode: 2,
+        notAnError: true,
+      };
+    }
+    let { readReferencedFile, callBinding } = await loadModule();
     let now = Date.now();
     let referencedFile = await readReferencedFile(
       cloned,
-      getToolPermissionContext(context),
+      getToolPermissionContext(context_2),
       "check",
       refToolName,
       {
-        session: context.session,
-        signal: context.abortController.signal,
+        session: context_2.session,
+        signal: context_2.abortController.signal,
       },
     );
     let checkReadMs = Date.now() - now;
     if ("refusal" in referencedFile) {
-      logFileReferenceUpload({
+      logFileReferenceUpload(refToolName, {
         stage: referencedFile.beforeRead ? "plan" : "check",
         outcome: "refused",
         reason: referencedFile.refusal,
         detail: referencedFile.detail,
         fileRefPathKind: referencedFile.fileRefPathKind,
         checkReadMs,
-        toolUseId: context.toolUseId,
+        toolUseId: context_2.toolUseId,
       });
       return {
         result: false,
@@ -623,20 +823,21 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       };
     }
     logFileReferenceUpload(
+      refToolName,
       "files" in referencedFile
         ? {
             stage: "check",
             outcome: "passed",
             sizeBytes: referencedFile.files.reduce((acc, file) => acc + file.buf.length, 0),
             checkReadMs,
-            toolUseId: context.toolUseId,
+            toolUseId: context_2.toolUseId,
           }
         : {
             stage: "plan",
             outcome: "passed",
             detail: "host_fills",
             checkReadMs,
-            toolUseId: context.toolUseId,
+            toolUseId: context_2.toolUseId,
           },
     );
     let references =
@@ -646,7 +847,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
             reference,
           }))
         : referencedFile.references;
-    if (context.toolUseId !== undefined && references.length > 0) {
+    if (context_2.toolUseId !== undefined && references.length > 0) {
       if (checkedByToolUse.size >= MAX_TRACKED_SIZE_ENTRIES) {
         let oldestKey = checkedByToolUse.keys().next().value;
         if (oldestKey !== undefined) {
@@ -659,10 +860,13 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
           }
         }
       }
-      droppedFills.delete(context.toolUseId);
-      checkedByToolUse.set(context.toolUseId, {
+      droppedFills.delete(context_2.toolUseId);
+      checkedByToolUse.set(context_2.toolUseId, {
         references,
         checkReadMs,
+        ...(refToolName.recipientCheck !== undefined && {
+          binding: callBinding(cloned, refToolName, references),
+        }),
       });
       if (refToolName.approvalSeesContent && "files" in referencedFile)
         pendingFill = {
@@ -671,7 +875,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
             reference,
             base64: buf.toString("base64"),
           })),
-          toolUseId: context.toolUseId,
+          toolUseId: context_2.toolUseId,
         };
     }
     return validation;
@@ -686,57 +890,59 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     asked: new WeakSet(),
   };
   let checkPermissions = tool.checkPermissions;
-  tool.checkPermissions = async (_, context) => {
+  tool.checkPermissions = async (input, context) => {
+    let toolContext = context.toolUseId === undefined ? undefined : checkedByToolUse.get(context.toolUseId);
+    if (toolContext?.binding !== undefined)
+      toolContext.binding = (await loadModule()).callBinding(input, refToolName, toolContext.references);
     let decision;
     try {
-      decision = await checkPermissions.call(tool, _, context);
+      decision = await checkPermissions.call(tool, input, context);
     } catch (error) {
-      if (!needsUploadApproval(state, _, context)) throw error;
+      if (!needsUploadApproval(state, input, context)) throw error;
       logPreUploadCheckFailure(error);
-      return uploadApprovalAsk(state);
+      return uploadApprovalAsk(state, input, toolContext?.references);
     }
-    return decision.behavior !== "deny" && needsUploadApproval(state, _, context)
-      ? uploadApprovalAsk(state)
+    return decision.behavior !== "deny" && needsUploadApproval(state, input, context)
+      ? uploadApprovalAsk(state, input, toolContext?.references, alwaysFalse(state, context))
       : decision;
   };
   let permissionCheckFailureDecision = tool.permissionCheckFailureDecision;
-  tool.permissionCheckFailureDecision = (_, context) =>
-    needsUploadApproval(
-      state,
-      typeof _ === "object" && _ !== null
+  tool.permissionCheckFailureDecision = (decision, context) => {
+    let patched =
+      typeof decision === "object" && decision !== null
         ? {
-            ..._,
+            ...decision,
           }
-        : undefined,
-      context,
-    )
-      ? uploadApprovalAsk(state)
-      : permissionCheckFailureDecision?.call(tool, _, context);
-  tool.owesPersonOnlyAsk = (_, context, toolUseId) =>
-    needsUploadApproval(state, _, {
+        : undefined;
+    return needsUploadApproval(state, patched, context)
+      ? uploadApprovalAsk(state, patched)
+      : permissionCheckFailureDecision?.call(tool, decision, context);
+  };
+  tool.owesPersonOnlyAsk = (input, context, toolUseId) =>
+    needsUploadApproval(state, input, {
       ...context,
       toolUseId: toolUseId ?? context.toolUseId,
     });
-  tool.settleUnaskedQuestion = async (_, toolUseId, context, approved, dontAsk) => {
+  tool.settleUnaskedQuestion = async (decision, toolUseId, context, approved, toolContext2) => {
     let hostEntry = isHostSessionEntrypoint() || isHostEntrypoint();
-    let settled = false;
+    let settled = context.replScriptCall === true;
     if (
-      _.decisionReason === undefined ||
-      !state.asked.has(_.decisionReason) ||
+      decision.decisionReason === undefined ||
+      !state.asked.has(decision.decisionReason) ||
       ((!approved || tool.requiresUserInteraction?.() || requiresConnectorGrant_2(tool) || hostEntry) &&
-        (_.matchedAskRule !== undefined || tool.mcpInfo?.effectiveMaxPermission === "ask")) ||
-      (hostEntry && dontAsk)
+        (decision.matchedAskRule !== undefined || tool.mcpInfo?.effectiveMaxPermission === "ask")) ||
+      (hostEntry && (settled || toolContext2))
     )
       return;
     let { refusalText } = await loadModule();
     checkedByToolUse.delete(toolUseId);
     if (context.abortController.signal.aborted) return;
-    logFeatureSad("mcp_drive_file_reference", "not_available");
-    logFileReferenceUpload({
+    logFeatureSad(refToolName.featureName, "not_available");
+    logFileReferenceUpload(refToolName, {
       stage: "fill",
       outcome: "refused",
       reason: "not_available",
-      detail: dontAsk ? "dont_ask_mode" : "nobody_to_ask",
+      detail: toolContext2 ? "dont_ask_mode" : "nobody_to_ask",
       toolUseId,
     });
     return refusalText(refToolName, "not_available", {});
@@ -804,7 +1010,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       ) &&
       !isRowFlagServed(refToolName)
     ) {
-      if (isRowFlagOn(refToolName) && hasSha256Args(input, refToolName))
+      if (needsAskForRow(refToolName, input))
         return {
           data: await refuseUnavailableReference(refToolName, "fill", {
             toolUseId,
@@ -814,10 +1020,35 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       return baseImpl.call(input, context, ...rest);
     }
     noteFileReferenceCall(toolUseId ?? (rest[1] === undefined ? undefined : toolUseIdFromMeta(rest[1])));
-    let cloned = cloneReferenceArgument(input, refToolName);
+    let cloned = cloneReferenceArgument(
+      refToolName.recipientCheck === undefined ? input : cloneToolInput(input),
+      refToolName,
+    );
     let tracked = toolUseId === undefined ? undefined : checkedByToolUse.get(toolUseId);
     let hasSha = hasSha256Args(cloned, refToolName);
-    let filledBytes =
+    if (
+      refToolName.recipientCheck !== undefined &&
+      (context.innerCall === true || getHookCaller(context) !== undefined) &&
+      (hasSha || tracked !== undefined)
+    ) {
+      let { refusalText } = await loadModule();
+      logFeatureSad(refToolName.featureName, "not_available");
+      logFileReferenceUpload(refToolName, {
+        toolUseId,
+        requestId: rest[1]?.requestId,
+        stage: "fill",
+        outcome: "refused",
+        reason: "not_available",
+        detail: "not_a_direct_call",
+      });
+      throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        refusalText(refToolName, "not_available", {
+          case: "not_a_direct_call",
+        }),
+        "file reference refused",
+      );
+    }
+    let references =
       tracked !== undefined && refToolName.approvalSeesContent && !hasSha
         ? filledBytesTotal(cloned, refToolName, tracked.references)
         : undefined;
@@ -828,15 +1059,47 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       droppedFills.has(toolUseId) &&
       (!isRowFlagServed(refToolName) ||
         fileReferenceUnavailableReason(refToolName) !== undefined ||
-        refToolName.stillHeld?.() === false);
-    if (filledBytes === undefined && !hasSha && !droppedRefusal) {
-      let latch = fileReferenceHintLatch();
+        refToolName.stillHeld?.() === false ||
+        refToolName.recipientCheck !== undefined);
+    let known =
+      refToolName.recipientCheck === undefined || tracked === undefined || hasSha
+        ? undefined
+        : new Map(
+            fileReferenceValues(cloned, refToolName).map(({ entry, value: refEntry }) => [entry, refEntry]),
+          );
+    if (
+      known !== undefined &&
+      tracked !== undefined &&
+      (references === undefined ||
+        tracked.references.some(
+          ({ entry, reference }) => base64URLEncode(known.get(entry), reference) === undefined,
+        ))
+    ) {
+      let { refusalText } = await loadModule();
+      logFeatureSad(refToolName.featureName, "not_available");
+      logFileReferenceUpload(refToolName, {
+        toolUseId,
+        requestId: rest[1]?.requestId,
+        checkReadMs: tracked.checkReadMs,
+        stage: "fill",
+        outcome: "refused",
+        reason: "not_available",
+        detail: "call_changed",
+      });
+      return {
+        data: refusalText(refToolName, "not_available", {
+          case: "call_changed",
+        }),
+      };
+    }
+    if (references === undefined && !hasSha && !droppedRefusal) {
+      let latch = fileReferenceHintLatch(refToolName.flag);
       let mayLog = false;
       try {
         mayLog = latch === true && getFileReferenceOffer().mayLogTypedRow(refToolName);
       } catch {}
       if (!mayLog || !isRowFlagOn(refToolName)) {
-        if (latch === null && isRowFlagOn(refToolName))
+        if (latch === null && refToolName.recipientCheck === undefined && isRowFlagOn(refToolName))
           tryIgnore(() => {
             let fileReferenceOffer = getFileReferenceOffer();
             fileReferenceOffer.note(refToolName, {
@@ -853,7 +1116,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
         .map((wrongArgument) => cloned[wrongArgument])
         .find((value) => typeof value === "string" && BASE64_BLOB_RE.test(value));
       let blobs = flattened.length > 0 ? flattened : typeof found === "string" ? [found] : [];
-      let textValue = cloned[refToolName.textArgument];
+      let textValue = refToolName.textArgument === undefined ? undefined : cloned[refToolName.textArgument];
       let logBase;
       if (blobs.length > 0) {
         let sizeBytes = 0;
@@ -886,7 +1149,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       } catch (error) {
         let callMs = Date.now() - now;
         tryIgnore(() =>
-          logFileReferenceUpload({
+          logFileReferenceUpload(refToolName, {
             ...logBase,
             result: uploadFailureOutcome(error, context.abortController.signal),
             callMs,
@@ -896,7 +1159,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       }
       let callMs = Date.now() - now;
       tryIgnore(() =>
-        logFileReferenceUpload({
+        logFileReferenceUpload(refToolName, {
           ...logBase,
           result: uploadSuccessOutcome(result, context.taskRegistry, toolUseId),
           callMs,
@@ -909,9 +1172,10 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       requestId: rest[1]?.requestId,
       checkReadMs: tracked?.checkReadMs,
     };
-    let { readReferencedFile, refusalText } = await loadModule();
+    let { readReferencedFile, callBinding, gmailShapeRefusal, recipientsNotShown, refusalText } =
+      await loadModule();
     let logRefusal = (reason, detail, fileRefPathKind) =>
-      logFileReferenceUpload({
+      logFileReferenceUpload(refToolName, {
         ...logFields,
         stage: "fill",
         outcome: "refused",
@@ -920,29 +1184,67 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
         fileRefPathKind,
       });
     if (!isRowFlagServed(refToolName)) {
-      logFeatureSad("mcp_drive_file_reference", "not_available");
+      logFeatureSad(refToolName.featureName, "not_available");
       logRefusal("not_available", notAvailableReason(refToolName));
       return {
         data: refusalText(refToolName, "not_available", {}),
       };
     }
     let unavailableReason =
-      filledBytes === undefined && !droppedRefusal
+      references === undefined && !droppedRefusal
         ? undefined
         : (fileReferenceUnavailableReason(refToolName) ??
           (refToolName.stillHeld?.() === false ? "entry_not_held" : undefined));
     if (unavailableReason !== undefined) {
-      logFeatureSad("mcp_drive_file_reference", "not_available");
+      logFeatureSad(refToolName.featureName, "not_available");
       logRefusal("not_available", unavailableReason);
       return {
         data: refusalText(refToolName, "not_available", {}),
       };
     }
+    if (
+      tracked?.binding !== undefined &&
+      callBinding(cloned, refToolName, tracked.references) !== tracked.binding
+    ) {
+      logFeatureSad(refToolName.featureName, "not_available");
+      logRefusal("not_available", "call_changed");
+      return {
+        data: refusalText(refToolName, "not_available", {
+          case: "call_changed",
+        }),
+      };
+    }
+    if (droppedRefusal && refToolName.recipientCheck !== undefined) {
+      logFeatureSad(refToolName.featureName, "not_available");
+      logRefusal("not_available", "record_dropped");
+      return {
+        data: refusalText(refToolName, "not_available", {
+          case: "record_dropped",
+        }),
+      };
+    }
+    let parsed =
+      references === undefined ? undefined : recipientsNotShown(cloned, refToolName.recipientCheck);
+    let refusal =
+      references === undefined || parsed !== undefined || refToolName.recipientCheck === undefined
+        ? undefined
+        : gmailShapeRefusal(cloned, refToolName);
+    if (parsed !== undefined || refusal !== undefined) {
+      let refusal_2 = refusal ?? {
+        error: "not_available",
+        case: parsed,
+      };
+      logFeatureSad(refToolName.featureName, refusal_2.error);
+      logRefusal(refusal_2.error, refusal_2.case);
+      return {
+        data: refusalText(refToolName, refusal_2.error, refusal_2),
+      };
+    }
     let filledInput = cloned;
     let fillMs;
-    let sizeBytes = filledBytes;
+    let sizeBytes = references;
     let hostFills = false;
-    if (filledBytes === undefined) {
+    if (references === undefined) {
       let now = Date.now();
       let referencedFile = await readReferencedFile(
         cloned,
@@ -975,7 +1277,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
         );
         sizeBytes = referencedFile.files.reduce((acc, { buf }) => acc + buf.length, 0);
       } else if (!isRowFlagServed(refToolName)) {
-        logFeatureSad("mcp_drive_file_reference", "not_available");
+        logFeatureSad(refToolName.featureName, "not_available");
         logRefusal("not_available", notAvailableReason(refToolName));
         return {
           data: refusalText(refToolName, "not_available", {}),
@@ -986,7 +1288,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       }
     }
     if (refToolName.stillHeld?.() === false) {
-      logFeatureSad("mcp_drive_file_reference", "not_available");
+      logFeatureSad(refToolName.featureName, "not_available");
       logRefusal("not_available", "entry_not_held");
       return {
         data: refusalText(refToolName, "not_available", {}),
@@ -994,6 +1296,7 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     }
     let permissionResult = context.permissionPhase?.pipeline?.result;
     if (
+      !refToolName.asksEveryReference &&
       permissionResult?.behavior === "ask" &&
       permissionResult.decisionReason !== undefined &&
       state.asked.has(permissionResult.decisionReason)
@@ -1040,13 +1343,13 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
       let callMs = Date.now() - now;
       tryIgnore(() => {
         if (fillLog === undefined) return;
-        let outcome = uploadFailureOutcome(error, context.abortController.signal);
-        if (outcome === "aborted" || outcome === "auth_failed")
-          logFeatureSad("mcp_drive_file_reference", outcome);
-        else logFeatureBad("mcp_drive_file_reference", outcome);
-        logFileReferenceUpload({
+        let elapsed = uploadFailureOutcome(error, context.abortController.signal);
+        if (elapsed === "aborted" || elapsed === "auth_failed")
+          logFeatureSad(refToolName.featureName, elapsed);
+        else logFeatureBad(refToolName.featureName, elapsed);
+        logFileReferenceUpload(refToolName, {
           ...fillLog,
-          result: outcome,
+          result: elapsed,
           callMs,
         });
       });
@@ -1056,9 +1359,9 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     tryIgnore(() => {
       if (fillLog === undefined) return;
       let outcome = uploadSuccessOutcome(result, context.taskRegistry, toolUseId);
-      if (outcome === "auth_failed") logFeatureSad("mcp_drive_file_reference", outcome);
-      else if (outcome === "uploaded") logFeatureOk("mcp_drive_file_reference");
-      logFileReferenceUpload({
+      if (outcome === "auth_failed") logFeatureSad(refToolName.featureName, outcome);
+      else if (outcome === "uploaded") logFeatureOk(refToolName.featureName);
+      logFileReferenceUpload(refToolName, {
         ...fillLog,
         result: outcome,
         callMs,
@@ -1067,13 +1370,28 @@ function wrapFileReferenceTool(tool, refToolName, rowImpl, toolUseIdFromMeta, mc
     return result;
   };
   if (baseImpl.askInputPreparer !== rowImpl.askInputPreparer)
-    tool.askInputPreparer = async (_, input, context) => {
-      if (!isRowFlagServed(refToolName)) return implFor(context).askInputPreparer?.(_, input, context);
+    tool.askInputPreparer = async (input, input_2, context) => {
+      if (!isRowFlagServed(refToolName)) return implFor(context).askInputPreparer?.(input, input_2, context);
       noteFileReferenceCall(context);
-      return rowImpl.askInputPreparer?.(_, input, context);
+      return rowImpl.askInputPreparer?.(input, input_2, context);
     };
 }
-//@ chunk-kc2qkj8w.js:21496-21729 placement
+//@ chunk-xggcs0yq.js:25683-25747 layout
+function listHasNonMcpBuiltin(tools) {
+  return tools?.some((tools) => tools.isMcp !== true && matchesToolName(tools, REPL_TOOL_NAME)) === true;
+}
+//@ chunk-xggcs0yq.js:25747-25856 layout
+function cloneToolInput(input) {
+  let copy = {
+    ...input,
+  };
+  for (let key of Object.keys(copy)) {
+    let fieldName = copy[key];
+    if (Array.isArray(fieldName)) copy[key] = [...fieldName];
+  }
+  return copy;
+}
+//@ chunk-xggcs0yq.js:25856-26089 placement
 function referencesForShownFills(input, row, shownFills) {
   let referencesByEntry = new Map();
   if (shownFills.size === 0) return referencesByEntry;
@@ -1087,7 +1405,7 @@ function referencesForShownFills(input, row, shownFills) {
   }
   return referencesByEntry;
 }
-//@ chunk-kc2qkj8w.js:21729-21972 placement
+//@ chunk-xggcs0yq.js:26089-26332 placement
 function filledBytesTotal(input, row, references) {
   let byHash = new Map(references.map(({ reference }) => [reference.split(":")[1] ?? "", reference]));
   let total;
@@ -1099,28 +1417,51 @@ function filledBytesTotal(input, row, references) {
   }
   return total;
 }
-//@ chunk-kc2qkj8w.js:21972-22314 placement
+//@ chunk-xggcs0yq.js:26332-26808 placement
 /**
  * 生成上传文件需要用户批准的询问（只能由人批准、不提供"始终允许"）。
  */
-function uploadApprovalAsk(context) {
-  let message = `Claude wants to upload a file to ${context.row.serviceName}. This upload needs your approval even if you already allowed this tool.`;
-  let reason = {
+function uploadApprovalAsk(context, state, uploadRow, entry = false) {
+  let question =
+    context.row.firstReferenceQuestion ??
+    `Claude wants to upload a file to ${context.row.serviceName}. This upload needs your approval even if you already allowed this tool.`;
+  let reason =
+    context.row.recipientCheck === undefined
+      ? question
+      : [question, ...askedReferences(state, context.row, uploadRow)].join(" ");
+  let decision = {
     type: "safetyCheck",
-    reason: message,
+    reason,
     classifierApprovable: false,
   };
-  context.asked.add(reason);
+  context.asked.add(decision);
   return {
     behavior: "ask",
-    message,
-    decisionReason: reason,
+    message: reason,
+    decisionReason: decision,
     personOnly: true,
     suppressAlwaysAllowRule: true,
     askRequiresUserInteraction: true,
+    ...(entry && {
+      classifierMayAllow: true,
+    }),
   };
 }
-//@ chunk-kc2qkj8w.js:22314-22733 placement
+//@ chunk-xggcs0yq.js:26808-26834 layout
+function alwaysFalse(state, context) {
+  return false;
+}
+//@ chunk-xggcs0yq.js:26834-27043 layout
+function askedReferences(state, row, uploadRow) {
+  let files = fileReferenceValues(state, row).flatMap(({ entry, value: refEntry }) => {
+    let value = isSha256Value(refEntry)
+      ? refEntry
+      : uploadRow?.find((known) => known.entry === entry)?.reference;
+    return typeof value === "string" ? [value.replace(/^sha256:[^:]*:/, "")] : [];
+  });
+  return [...addressLines(state), ...fileLines(files)];
+}
+//@ chunk-xggcs0yq.js:27043-27486 placement
 /**
  * 判断这次通过文件引用的上传是否需要用户批准：宿主已先询问、无引用、已批准过或工具可自动放行时不需要，检查出错时需要。
  */
@@ -1136,7 +1477,7 @@ function needsUploadApproval(offer, input, toolContext) {
           : offer.checkedByToolUse.has(toolUseId) || offer.droppedFills.has(toolUseId)) ||
         (isRowFlagServed(row) && hasSha256Args(input, row))
       ) ||
-      isFirstReferenceApproved(toolContext.session, offer.permissionName)
+      (!row.asksEveryReference && isFirstReferenceApproved(toolContext.session, offer.permissionName))
     )
       return false;
     let toolPermissionContext = getToolPermissionContext(toolContext);
@@ -1153,7 +1494,7 @@ function needsUploadApproval(offer, input, toolContext) {
     return true;
   }
 }
-//@ chunk-kc2qkj8w.js:22733-23072 placement
+//@ chunk-xggcs0yq.js:27486-27825 placement
 /**
  * 记录上传前检查失败的错误，并说明该调用按需要人工批准处理。
  */
@@ -1165,7 +1506,7 @@ function logPreUploadCheckFailure(error) {
     ),
   );
 }
-//@ chunk-kc2qkj8w.js:23072-23102 placement
+//@ chunk-xggcs0yq.js:27825-27855 placement
 /**
  * 执行函数并忽略异常。
  */
@@ -1174,7 +1515,7 @@ function tryIgnore(fn) {
     fn();
   } catch {}
 }
-//@ chunk-kc2qkj8w.js:23102-23229 placement
+//@ chunk-xggcs0yq.js:27855-27982 placement
 function uploadFailureOutcome(error, signal) {
   if (signal.aborted) return "aborted";
   if (isAuthFailureError(error)) return "auth_failed";
@@ -1182,12 +1523,12 @@ function uploadFailureOutcome(error, signal) {
     ? "error_result"
     : "call_failed";
 }
-//@ chunk-kc2qkj8w.js:23229-23346 placement
+//@ chunk-xggcs0yq.js:27982-28099 placement
 function uploadSuccessOutcome(result, taskRegistry, toolUseId) {
   if (result.urlElicitationDeclined !== undefined) return "auth_failed";
   return isBackgroundedCall(taskRegistry, toolUseId) ? "backgrounded" : "uploaded";
 }
-//@ chunk-kc2qkj8w.js:23346-23567 placement
+//@ chunk-xggcs0yq.js:28099-28320 placement
 function isAuthFailureError(error) {
   if (error instanceof McpAuthError) return true;
   if (!(error instanceof Error)) return false;
@@ -1197,19 +1538,19 @@ function isAuthFailureError(error) {
     /^(McpError|ProtocolError) -32042$/.test(error.telemetryMessage)
   );
 }
-//@ chunk-kc2qkj8w.js:23567-23674 placement
+//@ chunk-xggcs0yq.js:28320-28427 placement
 function isBackgroundedCall(taskRegistry, toolUseId) {
   return (
     toolUseId !== undefined &&
     Object.values(taskRegistry.all()).some((task) => task.type === "mcp_task" && task.toolUseId === toolUseId)
   );
 }
-//@ chunk-kc2qkj8w.js:23674-24236 placement
+//@ chunk-xggcs0yq.js:28427-28965 placement
 /**
  * 上报文件引用上传事件：阶段、结果、原因、路径类型、读取/填充/调用耗时与大小。
  */
-function logFileReferenceUpload(event) {
-  logEvent("tengu_mcp_drive_file_reference_upload", {
+function logFileReferenceUpload(toolUseId, event) {
+  logEvent(toolUseId.uploadEvent, {
     stage: fromEnum(event.stage),
     ...(event.outcome !== undefined && {
       outcome: fromEnum(event.outcome),
@@ -1242,7 +1583,7 @@ function logFileReferenceUpload(event) {
     requestId: sanitizeMarkName(event.requestId),
   });
 }
-//@ chunk-kc2qkj8w.js:24236-24333 placement
+//@ chunk-xggcs0yq.js:28965-29063 placement
 /**
  * 调用参数里是否有 sha256 形式的引用。
  */
@@ -1252,55 +1593,104 @@ function hasSha256Args(input, row) {
     row.wrongArguments.some((wrongArgument) => isSha256Value(input?.[wrongArgument]))
   );
 }
-//@ chunk-kc2qkj8w.js:24333-24380 placement
+//@ chunk-xggcs0yq.js:29063-29110 placement
 /**
  * 匹配 sha256:<hash>:/path 形式的正则。
  */
 var SHA256_PATH_RE = /^sha256:[0-9a-f]{64}:(?:[A-Za-z]:)?\//;
-//@ chunk-kc2qkj8w.js:24380-24580 placement
+//@ chunk-xggcs0yq.js:29110-29403 placement
 function matchingReferenceRow(response, input, requireFlag) {
   return FILE_REFERENCE_ROWS.find(
     (row) =>
       row.toolName === response.toolName &&
       (requireFlag
         ? hasSha256Args(input, row)
-        : (fileReferenceValues(input, row).some((candidate) => isSha256Value(candidate.value)) ||
+        : (row.recipientCheck !== undefined &&
+            fileReferenceValues(input, row).some(
+              (candidate) => typeof candidate.value === "string" && SHA256_PATH_RE.test(candidate.value),
+            )) ||
+          ((fileReferenceValues(input, row).some((capability) => isSha256Value(capability.value)) ||
             row.wrongArguments.some((wrongArgument) => {
               let value = input?.[wrongArgument];
               return typeof value === "string" && SHA256_PATH_RE.test(value);
             })) &&
-          isRowFlagOn(row)),
+            isRowFlagOn(row))),
   );
 }
-//@ chunk-kc2qkj8w.js:24580-24770 placement
+//@ chunk-xggcs0yq.js:29403-30135 placement
 function desktopFillMode(capability, row) {
-  let fills = Reflect.get(capability, row.desktopMark) === true;
-  let hostFills = Reflect.get(capability, row.desktopHostFillMark);
-  if (fills && hostFills !== undefined && hostFills !== false) return "conflicting";
-  if (fills) return "fill";
-  return hostFills === true ? "hostFill" : undefined;
+  let marked = row.desktopMark !== undefined && Reflect.get(capability, row.desktopMark) === true;
+  let hostFills =
+    row.desktopHostFillMark === undefined ? undefined : Reflect.get(capability, row.desktopHostFillMark);
+  let mode =
+    marked && hostFills !== undefined && hostFills !== false
+      ? "conflicting"
+      : marked
+        ? "fill"
+        : hostFills === true
+          ? "hostFill"
+          : undefined;
+  if (!Object.hasOwn(capability, "connectorUrl")) return mode;
+  let capabilityUrl = Reflect.get(capability, "connectorUrl");
+  let connectorUrl = `${row.connectorOrigin}${row.connectorPath}`;
+  if (capabilityUrl !== connectorUrl && capabilityUrl !== `${connectorUrl}/`) return;
+  let fillsReference = markIsTrue(capability, "fileReferenceFill");
+  let hostFillsReference = Object.hasOwn(capability, "fileReferenceHostFill")
+    ? Reflect.get(capability, "fileReferenceHostFill")
+    : undefined;
+  let verdict =
+    fillsReference && hostFillsReference !== undefined && hostFillsReference !== false
+      ? "conflicting"
+      : fillsReference
+        ? "fill"
+        : hostFillsReference === true
+          ? "hostFill"
+          : undefined;
+  return [
+    [row.desktopMark, "fill"],
+    [row.desktopHostFillMark, "hostFill"],
+  ].some(
+    ([mark, kind]) =>
+      mark !== undefined &&
+      Object.hasOwn(capability, mark) &&
+      Reflect.get(capability, mark) !== (verdict === kind),
+  )
+    ? "conflicting"
+    : verdict;
 }
-//@ chunk-kc2qkj8w.js:24770-25011 placement
+//@ chunk-xggcs0yq.js:30135-30213 layout
+function markIsTrue(capability, desktopAsksFirstMark) {
+  return (
+    desktopAsksFirstMark !== undefined &&
+    Object.hasOwn(capability, desktopAsksFirstMark) &&
+    Reflect.get(capability, desktopAsksFirstMark) === true
+  );
+}
+//@ chunk-xggcs0yq.js:30213-30279 layout
+function needsAskForRow(row, input) {
+  return (row.recipientCheck !== undefined || isRowFlagOn(row)) && hasSha256Args(input, row);
+}
+//@ chunk-xggcs0yq.js:30279-30497 placement
 async function refuseUnavailableReference(input, stage, fields) {
-  logFeatureSad("mcp_drive_file_reference", "not_available");
-  logFileReferenceUpload({
+  logFeatureSad(input.featureName, "not_available");
+  logFileReferenceUpload(input, {
     stage,
     outcome: "refused",
     reason: "not_available",
-    detail: "flag_not_served",
+    detail: notAvailableReason(input),
     ...fields,
   });
-  let { refusalText } = await import("../checkCall.lazy.js");
+  let { refusalText } = await import("../../../components/LogoV2/callBinding.lazy.js");
   return refusalText(input, "not_available", {});
 }
-//@ chunk-kc2qkj8w.js:25011-25045 placement
+//@ chunk-xggcs0yq.js:30497-30531 placement
 /**
  * 判断某行的特性开关是否打开。
  */
 function isRowFlagOn(row) {
   return getFeatureValue_CACHED_MAY_BE_STALE(row.flag, false);
 }
-//@ chunk-kc2qkj8w.js:25045-25108 placement
+//@ chunk-xggcs0yq.js:30531-30594 placement
 /**
  * 判断特性开关是否打开且来源为已服务。
  */
@@ -1308,21 +1698,21 @@ function isRowFlagServed(row) {
   let flagState = getFeatureValueWithSource_CACHED_MAY_BE_STALE(row.flag, false);
   return flagState.value && isServedFeatureSource(flagState.source);
 }
-//@ chunk-kc2qkj8w.js:25108-25172 placement
+//@ chunk-xggcs0yq.js:30594-30658 placement
 /**
  * 特性不可用原因（开关未服务 / 填充时关闭）。
  */
 function notAvailableReason(row) {
   return isRowFlagOn(row) ? "flag_not_served" : "flag_off_at_fill";
 }
-//@ chunk-kc2qkj8w.js:25172-25203 placement
+//@ chunk-xggcs0yq.js:30658-30689 placement
 /**
  * 请求超时的上限（300000 毫秒）。
  */
 var LARGE_BODY_CHARS = 1048576;
 var TIMEOUT_PER_CHARS = 40;
 var MAX_BODY_TIMEOUT_MS = 300000;
-//@ chunk-kc2qkj8w.js:25203-25335 placement
+//@ chunk-xggcs0yq.js:30689-30821 placement
 function requestTimeoutForBody(mcpRequestTimeoutMs, body) {
   if (typeof body !== "string" || body.length <= LARGE_BODY_CHARS || !FILE_REFERENCE_ROWS.some(isRowFlagOn))
     return mcpRequestTimeoutMs;
@@ -1332,9 +1722,8 @@ function requestTimeoutForBody(mcpRequestTimeoutMs, body) {
   );
 }
 export {
-  isSha256Value,
-  fileReferenceValues,
   requestTimeoutForBody,
+  proxyFillsListing,
   fileReferenceToolToFill,
   wrapFileReferenceTool,
   filledCallRequestMeta,
@@ -1342,8 +1731,12 @@ export {
   withholdsFileReferenceArguments,
   withholdsFileReferenceErrorText,
   withheldFileReferenceErrorForLog,
-  FIRST_PARTY_UPLOAD_SERVERS,
   withholdsFileReferenceErrors,
+  FIRST_PARTY_UPLOAD_SERVERS,
   FILE_REFERENCE_ROWS,
+  withFilledReferences,
+  isSha256Value,
+  fileReferenceValues,
+  CREATE_DRAFT_ROW,
   fileReferenceHintKeyBit,
 };

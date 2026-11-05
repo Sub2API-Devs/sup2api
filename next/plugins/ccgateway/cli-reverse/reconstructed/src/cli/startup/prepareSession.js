@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话准备主流程（托管设置日志、回合输入预取、启动遥测、空闲启动工作）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ptrwbb7.js (1), chunk-3wek6r2k.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cckh1dq3.js (1), chunk-hjswk319.js (20)
  * attribution: placement 21
  */
 import { resolve } from "path";
@@ -36,8 +36,8 @@ import {
   getMcpPolicyCompositionForLogging,
   getShadowedPolicyHelperSources,
   logManagedDocumentLinks,
-  getInitialSettings_2,
-  getSettingsWithErrors_2,
+  getInitialSettings,
+  getSettingsWithErrors,
   getSettingsAfterPluginLoad,
   hasSkipDangerousModePermissionPrompt,
 } from "../../utils/settings/settings.js";
@@ -99,6 +99,7 @@ import {
   setChromeFlagOverride,
   setStrictMcpConfig,
   setCliSessionConfigCarried,
+  setCliConfigBeyondSessionState,
   setForkRestrictedLaunchConfig,
   setForkReplayLaunchConfig,
   setPermissionPromptToolName,
@@ -140,6 +141,7 @@ import {
   prefetchGcpCredentialsIfSafe,
   isClaudeAISubscriber,
   validateForceLoginOrg,
+  isAnthropicAuthEnabled,
 } from "../../utils/auth.js";
 import { primeModelCapabilities } from "../../utils/model/modelCapabilities.js";
 import { primeGatewayModels, discoverGatewayModels } from "../../services/gateway/gatewayDiscovery.js";
@@ -152,7 +154,13 @@ import {
 } from "../../utils/model/servedModelCatalog.js";
 import { noteReloadReason } from "../../plugins/functionHooks/pluginLifecycle.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
-import { isBareMode, isSafeMode, getMaxTurnsFromEnv, parseIntLoose } from "../../utils/envUtils.js";
+import {
+  isBareMode,
+  isEnvTruthy,
+  isSafeMode,
+  getMaxTurnsFromEnv,
+  parseIntLoose,
+} from "../../utils/envUtils.js";
 import { sharedSkillChangeDetector } from "../../utils/skills/skillChangeDetector.js";
 import {
   withTelemetryMessage,
@@ -180,7 +188,6 @@ import {
   clearPluginCache,
   refillPluginLoadCacheOnly,
   shouldFillPluginLoadWithStore,
-  shouldSyncPluginInstall,
 } from "../../utils/plugins/pluginLoader.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import {
@@ -221,7 +228,7 @@ import {
 } from "../../utils/startupFlagWait.js";
 import { is1PEventLoggingEnabled } from "../../services/analytics/firstPartyEventLogger.js";
 import { cliWarn, cliError, cliErrorAfterAnalyticsFlush, printCliError } from "../exit.js";
-import { isPlainNonInteractive } from "../../utils/sessionShape.js";
+import { isPlainNonInteractive, getSessionEntrypoint } from "../../utils/sessionShape.js";
 import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { isStandaloneExecutable, jsonParse } from "../../utils/slowOperations.js";
@@ -252,6 +259,9 @@ import {
   isMcpServerAllowedByPolicy,
 } from "../../services/mcp/config.js";
 import { registerHistoryExitFlush } from "../../history.js";
+import { codeModeAccepted, setIsOn } from "../../utils/codeMode/accepted.js";
+import { primeReplEngineCheck } from "../../utils/codeMode.js";
+import { codeModeEnv } from "../../utils/env/codeModeEnv.js";
 import { sanitizeDeepLinkQuery, validateDeepLinkCwd } from "../../utils/deepLink/parseDeepLink.js";
 import { chdirAndSetCwd } from "../../utils/Shell.js";
 import {
@@ -272,10 +282,12 @@ import { updateHooksConfigSnapshot } from "../../utils/hooks/hooksConfigSnapshot
 import { getPlansDirectory, primePlanSlugCollisions } from "../../utils/plans.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 import { isFirstPartyTelemetryBlocked } from "../../utils/hostEnvironment.js";
+import { setResumeHintLaunchFlags, gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
+import { takeResumeHintFlags, resumeHintFlags } from "../../utils/relaunchHintFlags.js";
 import { seedEarlyInput } from "../../utils/earlyInput.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
 import { looksLikeAgentsJson, AGENTS_FLAG_FILE_REQUIRES_PRINT, readAgentsFlagFile } from "../agentsArg.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   validateAgentsJson,
   getBuiltInAgents,
@@ -294,6 +306,7 @@ import {
   setAllHookEventsEnabled,
   consumeUserPromptSubmitEventsEnv,
 } from "../../utils/hooks/hookOutputParsing.js";
+import { isValidCloudSessionId, isCloudBackendForced } from "../cloudSessionArgs.js";
 import {
   resolveCloudLaunchOptions,
   validateSessionIdFlag,
@@ -303,7 +316,6 @@ import {
 } from "../cloudSession/validateCloudFlags.js";
 import { sensitivePathGateEnabled } from "../../utils/permissions/sensitivePaths.js";
 import { isViolinWoodEnabled } from "../../services/analytics/violinGates.js";
-import { isCloudBackendForced } from "../cloudSessionArgs.js";
 import {
   awaitPolicyLimitsColdStart,
   waitForPolicyLimitsToLoad,
@@ -334,6 +346,7 @@ import { readAppendPromptHead } from "./appendPromptHead.js";
 import {
   readAppendSubagentPrompt,
   enableAppendSubagentPrompt,
+  shouldSyncPluginInstall,
   loadAgentsForSession,
   findSelectedAgent,
 } from "./agentsFlag.js";
@@ -350,6 +363,14 @@ import {
   withCliArgAllowRules,
 } from "../../utils/permissions/permissionSetup.js";
 import { isRemoteSessionLaunch } from "../eagerFlags.js";
+import {
+  setForesee,
+  settleForesight,
+  getForesightState,
+  refusalNotice,
+  isCodeModeAllowed,
+} from "../../utils/foresightStatus.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import {
   noteFlagFetchWait,
   recordPhase,
@@ -381,6 +402,7 @@ import {
   sideloadFlagsBlockedMessage,
 } from "../../utils/plugins/marketplacePolicy.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { recordLaunchMcpUrl } from "../../services/api/toolProvenance.js";
 import { isCliOwnedConfig, registerCliOwnedConfig } from "../../services/mcp/cliOwnedClients.js";
 import { isLockedOutByOrgMcpPolicy } from "../../services/mcp/orgMcpPolicyLockout.js";
 import {
@@ -403,7 +425,11 @@ import {
   prefetchEligibilityIfNeeded,
 } from "../../utils/nativeInstaller/installer.js";
 import { getProviderState } from "../../utils/model/providerCaches.js";
-import { cliCarriesSessionConfig, cliCarriesForkRestrictedConfig } from "../../utils/sessionConfigFlags.js";
+import {
+  cliCarriesSessionConfig,
+  cliCarriesConfigBeyondSessionState,
+  cliCarriesForkRestrictedConfig,
+} from "../../utils/sessionConfigFlags.js";
 import {
   isNoPromptHost,
   NONE,
@@ -418,7 +444,9 @@ import {
   enableTranscriptLocalGc,
   setToolResultCopyMode,
   cloudUnavailableReason,
+  shouldSkipHooksForPluginInstall,
   shouldPrefetchUserContext,
+  scanCommandsAfterMcpConfig,
 } from "./sessionLaunchOptions.js";
 import { filterUnseenSecurityWarnings } from "../../utils/permissions/securityWarnings.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
@@ -435,6 +463,7 @@ import { logOrgPolicyDeniedAsync } from "../../services/policyLimits/orgPolicyDe
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "../../bridge/remoteControlPolicy.js";
 import { setRemoteSdkUrlEnv } from "../../services/ccrAgentProxy/agentProxy.js";
 import { isScrubEnabled } from "../../utils/subprocessEnv.js";
+import { decideWrapUpOfferedAtLaunch } from "./wrapUpPrompt.js";
 import { stdinOverrideCache } from "../../utils/renderOptions.js";
 import { exitWithoutInteractiveInput } from "./interactiveInputCheck.js";
 import {
@@ -485,6 +514,7 @@ import { syncClaudeAiMarketplaces } from "../../utils/plugins/claudeAiMarketplac
 import { isXtermJs } from "../../ink/terminal.js";
 import { clampLevelForAttacher } from "../../ink/colorize.js";
 import { CLAUDE_AGENT } from "../../tools/AgentTool/built-in/claudeAgent.js";
+import { countWhere } from "../../utils/collections.js";
 import { findAgentExcludingWebFetch } from "../../tools/WebFetchTool/harnessNotes.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
 import { withAgentDisallowedTools } from "../../tools/AgentTool/agentToolUtils.js";
@@ -524,6 +554,7 @@ import { probeQuotaStatusAtStart } from "../../services/claudeAiLimits.js";
 import { fetchBootstrapData, bootstrapFetchCanConvergeSlot } from "../../services/api/bootstrap.js";
 import { prefetchFastModeStatus, initFastModeOrgStatusGuess } from "../../utils/fastMode.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
+import { isProgramUseCaseChoiceEnabled } from "../../utils/programUseCase.js";
 import { shouldWireHostedDesktopComputerUse } from "../../utils/computerUse/hostedDesktop.js";
 import { getHostedDesktopComputerUseConfig } from "../../services/mcp/client.js";
 import { isFirstPartyUploadScope } from "../../services/mcp/fileReference/fileReferencePolicy.js";
@@ -548,17 +579,16 @@ import { logShellAllowRulesAtInit } from "../../utils/permissions/shellAllowRule
 import { noopAsync_3 } from "../../services/compact/compact.js";
 import { createManagedSettingsReporter } from "../../services/remoteManagedSettings/managedSettingsTelemetry.js";
 import { reclaimSessionNameOnResume, claimSessionNameAtStartup } from "../../utils/sessionNameUniqueness.js";
-import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ptrwbb7.js:335-362 placement
+//@ chunk-cckh1dq3.js:335-362 placement
 /**
  * 判断当前是否为交互会话（非后台会话）。
  */
 function isInteractiveSession() {
   return !isBgSession();
 }
-//@ chunk-3wek6r2k.js:95105-95186 placement
+//@ chunk-hjswk319.js:94504-94585 placement
 function summarizeFlagSettingsForLogging(context, config) {
   let allKeys = getClientSurface_2(context, config);
   return {
@@ -566,7 +596,7 @@ function summarizeFlagSettingsForLogging(context, config) {
     flags: fromSanitizer_SANITIZER_OUTPUT_ONLY(allKeys.join(",")),
   };
 }
-//@ chunk-3wek6r2k.js:95186-95378 placement
+//@ chunk-hjswk319.js:94585-94777 placement
 function prefetchAllMcpResourcesSafe(session, config, context) {
   try {
     let { prefetchAllMcpResources } =
@@ -581,7 +611,7 @@ function prefetchAllMcpResourcesSafe(session, config, context) {
     });
   }
 }
-//@ chunk-3wek6r2k.js:95378-95608 placement
+//@ chunk-hjswk319.js:94777-95007 placement
 /**
  * main.tsx 的懒加载模块句柄：teammate 工具、teammate 提示补充、teammate 模式快照、协调者模式、制品启动等。
  */
@@ -592,21 +622,21 @@ var coordinatorModeModule;
 var routineStartupModule;
 var artifactStartupModule;
 var ccrArtifactsEntryModule;
-deferInit("chunk-3wek6r2k.js:95378", () => {
+deferInit("chunk-hjswk319.js:94777", () => {
   getTeammateUtils = () => require("../../utils/teammate.js");
   teammatePromptAddendumModule = () => require("../../utils/swarm/teammatePromptAddendum.js");
   teammateModeSnapshotModule = () => require("../../utils/swarm/backends/teammateModeSnapshot.js");
   coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
   routineStartupModule = null;
   artifactStartupModule = require("../../services/artifacts/artifactToolGates.js");
-  ccrArtifactsEntryModule = require("../../services/mcp/artifactMcpFilter.js");
+  ccrArtifactsEntryModule = require("../../services/mcp/CCR_ARTIFACTS_WITHHELD.lazy.js");
 });
-//@ chunk-3wek6r2k.js:95608-95646 placement
+//@ chunk-hjswk319.js:95007-95045 placement
 var artifactsMcpLaptopModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-3wek6r2k.js:95608", () => {
+deferInit("chunk-hjswk319.js:95007", () => {
   artifactsMcpLaptopModule = require("../../services/artifacts/artifactsMcpLaptop.js");
 });
-//@ chunk-3wek6r2k.js:95646-96816 placement
+//@ chunk-hjswk319.js:95045-96215 placement
 /**
  * 托管设置（policySettings）存在时上报 tengu_managed_settings_loaded，并对未生效的 MCP 策略键、被忽略的 policyHelper 打警告。
  */
@@ -669,7 +699,7 @@ function logManagedSettingsLoaded() {
     logManagedDocumentLinks();
   } catch {}
 }
-//@ chunk-3wek6r2k.js:99424-99642 placement (2.1.88 match: maybeActivateBrief, 0.909)
+//@ chunk-hjswk319.js:98840-99058 placement (2.1.88 match: maybeActivateBrief, 0.909)
 /**
  * --brief 或 CLAUDE_CODE_BRIEF：有权限时启用 SendUserMessage（brief 模式），上报 tengu_brief_mode_enabled。
  */
@@ -686,14 +716,14 @@ function maybeActivateBrief(options) {
     source: fromEnum(briefEnv ? "env" : "flag"),
   });
 }
-//@ chunk-3wek6r2k.js:101033-101113 placement
+//@ chunk-hjswk319.js:100449-100529 placement
 function startDeferredPrefetches(host, storageV5, credentials, { userContext = true } = {}) {
   startTurnInputPrefetches(host, storageV5, credentials, {
     userContext,
   });
   startIdleStartupWork(host, storageV5, credentials);
 }
-//@ chunk-3wek6r2k.js:101178-101818 placement (2.1.88 match: startDeferredPrefetches, 0.413)
+//@ chunk-hjswk319.js:100594-101234 placement (2.1.88 match: startDeferredPrefetches, 0.414)
 /**
  * 首屏渲染后的延迟预取：用户上下文、系统上下文、Bedrock/Vertex/Mantle 等云凭证、模型能力、文件变更检测器等。
  */
@@ -729,7 +759,7 @@ function startTurnInputPrefetches(host, config, credentials, { userContext = tru
   if (!isBareMode() && !getIsRemoteMode() && !getDisableSlashCommands())
     sharedSkillChangeDetector.initialize(blocker, config);
 }
-//@ chunk-3wek6r2k.js:101818-102267 placement
+//@ chunk-hjswk319.js:101234-101683 placement
 function startIdleStartupWork(host, storageV5, credentials) {
   if (useAfterFirstRender()) return;
   if (!getIsNonInteractiveSession())
@@ -757,7 +787,7 @@ function startIdleStartupWork(host, storageV5, credentials) {
     );
   if (hasEmbeddedSearchTools_2()) installMemoryExitSummary(getMemoryPeaks);
 }
-//@ chunk-3wek6r2k.js:102267-102733 placement (2.1.88 match: extractLspServersFromPlugins, 0.269)
+//@ chunk-hjswk319.js:101683-102149 placement (2.1.88 match: extractLspServersFromPlugins, 0.269)
 /**
  * 会话启动时的插件遥测：cacheOnly 加载插件，预取 MCP/LSP 配置，记录启用插件与错误。名字配错，见 lead 建议。
  */
@@ -799,17 +829,17 @@ function logSessionTelemetry(host, storageV5, ready) {
       await readiness;
     });
 }
-//@ chunk-3wek6r2k.js:102733-102792 placement
+//@ chunk-hjswk319.js:102149-102208 placement
 function branchModeForTelemetry(poolOnBranch, poolRef) {
   return fromEnum(poolOnBranch ? "on_branch" : poolRef ? "ref" : "default");
 }
-//@ chunk-3wek6r2k.js:102792-102852 placement
+//@ chunk-hjswk319.js:102208-102268 placement
 function pendingSettingsEnvBlocksEarlyGb(config) {
   if (computeRemoteSettingsEligibility() && !isRemoteManagedSettingsVerified() && !hasManagedSettings())
     return true;
   return hasRepoSettingsEnv(config);
 }
-//@ chunk-3wek6r2k.js:102852-103020 placement
+//@ chunk-hjswk319.js:102268-102436 placement
 function shouldHoldEarlyGrowthBook(env_2) {
   let lastLoadStatus = getLastLoadStatus();
   return env.CLAUDE_CODE_CCR_EARLY_SYNC_AFTER_SETTINGS_REFUSAL &&
@@ -820,7 +850,7 @@ function shouldHoldEarlyGrowthBook(env_2) {
     ? hasRepoSettingsEnv(env_2)
     : pendingSettingsEnvBlocksEarlyGb(env_2);
 }
-//@ chunk-3wek6r2k.js:103020-103126 placement
+//@ chunk-hjswk319.js:102436-102542 placement
 function judgeGrowthBookKick(relaunches) {
   return startupFlagWaitBudget({
     eventLoggingEnabled: is1PEventLoggingEnabled(),
@@ -829,11 +859,11 @@ function judgeGrowthBookKick(relaunches) {
     relaunches,
   });
 }
-//@ chunk-3wek6r2k.js:103126-103179 placement
+//@ chunk-hjswk319.js:102542-102595 placement
 function shouldKickGrowthBookOnWarmCache(remote) {
   return remote && getFeatureValue_CACHED_MAY_BE_STALE("tengu_sleepy_rabbit", false);
 }
-//@ chunk-3wek6r2k.js:103179-103441 placement
+//@ chunk-hjswk319.js:102595-102857 placement
 function judgeStartupGrowthBookKick(site, config) {
   let isNonInteractiveSession = getIsNonInteractiveSession();
   let remote = isNonInteractiveSession && isRemoteNonInteractiveSession();
@@ -852,7 +882,7 @@ function judgeStartupGrowthBookKick(site, config) {
     warmCacheKick: warmKick,
   });
 }
-//@ chunk-3wek6r2k.js:103441-103747 placement
+//@ chunk-hjswk319.js:102857-103163 placement
 function reportStartupModelNotice(message, { key, outputFormat, debugLine = message, onStderrToo = false }) {
   if (
     !getIsNonInteractiveSession() ||
@@ -875,17 +905,17 @@ function reportStartupModelNotice(message, { key, outputFormat, debugLine = mess
       color: "warning",
     });
 }
-//@ chunk-3wek6r2k.js:103747-104371 placement
+//@ chunk-hjswk319.js:103163-103787 placement
 function logStartupStarted() {
   logForDiagnosticsNoPII("info", "started", {
     version: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -893,7 +923,7 @@ function logStartupStarted() {
     incremental_request_body_env: env.CLAUDE_CODE_INCREMENTAL_REQUEST_BODY ?? 0,
   });
 }
-//@ chunk-3wek6r2k.js:104371-148438 placement
+//@ chunk-hjswk319.js:103787-149866 placement
 /**
  * 根命令的 action 主体（prepareSession）：处理深链、--bare/--safe-mode、单词提示、权限与工具参数、读 stdin 提示（getInputPrompt），调用 setup()，加载命令/工具/MCP/插件与 SessionStart 钩子，返回 prepared-headless（-p）或 prepared-interactive。
  */
@@ -911,6 +941,11 @@ async function prepareSession(
   profileCheckpoint("action_handler_start");
   consumeBridgeMcpCarrierMarker();
   registerHistoryExitFlush(storageV5);
+  if (codeModeAccepted()) primeReplEngineCheck();
+  if (isEnvTruthy(codeModeEnv.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE)) {
+    let { engineCheckResult } = require("../../utils/bunEngineProbe.js");
+    engineCheckResult();
+  }
   if (!getIsNonInteractiveSession()) {
     let previewBrowserModule = require("../../services/artifactPreview/browserDiscovery.js");
     previewBrowserModule.startPreviewBrowserDiscovery();
@@ -961,7 +996,7 @@ async function prepareSession(
   if (isSafeMode()) {
     process.env.CLAUDE_CODE_SAFE_MODE = "1";
     process.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS = "1";
-    logFeatureOk("startup_safe_mode");
+    if (!env.CLAUDE_CODE_CONFIG_PROBE) logFeatureOk("startup_safe_mode");
   }
   let resolvedMaxTurns;
   try {
@@ -995,6 +1030,11 @@ async function prepareSession(
       "tengu_cli_flags",
       summarizeFlagSettingsForLogging(options, (flagName) => program.getOptionValueSource(flagName)),
     );
+  setResumeHintLaunchFlags(
+    pendingSSH?.host !== undefined || pendingConnect?.url !== undefined
+      ? ""
+      : (takeResumeHintFlags(program.options) ?? resumeHintFlags(program.options, process.argv.slice(2))),
+  );
   let {
     debug = false,
     dangerouslySkipPermissions,
@@ -1034,7 +1074,7 @@ async function prepareSession(
     if (!agentsFlagFile.ok) return cliError(agentsFlagFile.error);
     options.agents = agentsFlagFile.json;
     agentsFlagPath = agentsFlagFile.filePath;
-    setFlagAgentsFilePaths(uniq([agentsFlagFile.filePath, agentsFlagFile.realPath]));
+    setFlagAgentsFilePaths(normalizeCaseForComparison_2([agentsFlagFile.filePath, agentsFlagFile.realPath]));
   }
   let agents = options.agents;
   if (agentsFromFlag && (freshSession || agentsFlagPath !== undefined) && typeof agents === "string") {
@@ -1051,7 +1091,7 @@ ${invalidAgents}${
   let agent = options.agent;
   if (agent) process.env.CLAUDE_CODE_AGENT = agent;
   let { outputFormat, inputFormat } = options;
-  let viewMode = getInitialSettings_2().viewMode;
+  let viewMode = getInitialSettings().viewMode;
   let focusMode = isFocusModeEnabled();
   let verbose =
     options.verbose ??
@@ -1122,7 +1162,24 @@ ${getTmuxInstallInstructions()}`);
   let usedSettingSource = false;
   let cloudSessionsByDefault = false;
   let sandboxVmByDefault = false;
-  let cloudLaunchOptions = await resolveCloudLaunchOptions(options, {
+  let parsed = options;
+  let cloudOrRemote = parsed.cloud ?? parsed.remote;
+  let any = [cloudOrRemote, parsed.resume].some(
+    (isMoveCandidate) => typeof isMoveCandidate === "string" && isValidCloudSessionId(isMoveCandidate),
+  );
+  let moveCandidate =
+    cloudOrRemote !== undefined && any
+      ? require("../../utils/cloudSession/localSessionMoveCandidate.js").localSessionMoveCandidate({
+          options: parsed,
+          prompt: typeof typedName === "string" ? typedName : undefined,
+          nonInteractive: getIsNonInteractiveSession(),
+          hasOtherBackend: Boolean(pendingConnect?.url) || Boolean(pendingSSH?.host),
+          stdinIsTTY: Boolean(process.stdin.isTTY),
+        })
+      : undefined;
+  if (moveCandidate !== undefined) options.resume = undefined;
+  let cloudLaunchOptions = await resolveCloudLaunchOptions(parsed, {
+    localSessionMove: moveCandidate,
     prompt: typeof typedName === "string" ? typedName : undefined,
     sessionId,
     outputFormat,
@@ -1329,7 +1386,7 @@ ${getTmuxInstallInstructions()}`);
         appendSystemPrompt,
       },
       env: process.env,
-      settings: getInitialSettings_2(),
+      settings: getInitialSettings(),
     },
   );
   if (
@@ -1359,6 +1416,54 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
     pendingSSHHost: pendingSSH?.host,
   });
   let resumed = false;
+  {
+    let loadRelayModule = () => require("../../utils/codeModeOptIn.js");
+    let launchContext = (cliModel) => ({
+      cliModel,
+      thinClient: isRemoteLaunch,
+      teammate: teammateSetup?.agentId !== undefined,
+      remoteControl: remoteControlOpt !== undefined,
+      toolsLeaveReplOut: loadRelayModule().doToolOptionsLeaveReplOut({
+        restricted,
+        disallowedTools,
+        baseTools: tools,
+      }),
+      lastCheck: async () => {
+        let {
+          installedModChecksToolCallsAtStartup,
+        } = require("../../utils/codeMode/installedModChecksToolCallsAtStartup.lazy.js");
+        return (await installedModChecksToolCallsAtStartup({
+          mayJoinSessionsScan: shouldRefillPluginCache() || resumed,
+          addDir,
+          storageV5,
+          credentials: extraOptions,
+        }))
+          ? "mods"
+          : undefined;
+      },
+    });
+    setForesee(() => loadRelayModule().refusalForeseen(launchContext(undefined)));
+    if (
+      codeModeEnv.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE === undefined &&
+      codeModeEnv.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE_RESTART === undefined
+    )
+      settleForesight({
+        state: "not_asked",
+      });
+    else {
+      setIsOn(isCodeModeEnabled);
+      await loadRelayModule().settleCodeModeOptInAtStartup(launchContext(options.model));
+      let codeModeState = getForesightState();
+      if (
+        isNonInteractiveSession &&
+        codeModeState.state === "refused" &&
+        outputFormat !== "json" &&
+        outputFormat !== "stream-json"
+      )
+        process.stderr.write(`Warning: ${refusalNotice(codeModeState.why)}
+`);
+    }
+  }
   let remoteNonInteractive = isRemoteNonInteractiveSession();
   let initResult;
   let initializeSession = async (session, options, budgetMs) => {
@@ -1578,7 +1683,7 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
         }
       } else warnings.push(...entryWarnings);
     }
-    setFlagMcpConfigFilePaths(uniq(parsedConfigs));
+    setFlagMcpConfigFilePaths(normalizeCaseForComparison_2(parsedConfigs));
     if (warnings.length > 0) {
       let joined = warnings.map((warning) => `${warning.path ? warning.path + ": " : ""}${warning.message}`)
         .join(`
@@ -1624,7 +1729,10 @@ ${joined}`);
           ...config,
           scope: "dynamic",
         };
-        if (env.CLAUDE_CODE_REMOTE) getServerUrl(name, config);
+        if (env.CLAUDE_CODE_REMOTE) {
+          getServerUrl(name, config);
+          recordLaunchMcpUrl(name, config);
+        }
         return isCliOwnedConfig(config)
           ? registerCliOwnedConfig(dynamicConfig)
           : markCcrInjectedConfig(name, dynamicConfig, isLockedOutByOrgMcpPolicy);
@@ -1807,6 +1915,7 @@ ${joined}`);
   let includeUnsupported = options.includeUnsupportedModels === true;
   getProviderState().includeUnsupportedModels = includeUnsupported;
   setCliSessionConfigCarried(cliCarriesSessionConfig(options));
+  setCliConfigBeyondSessionState(cliCarriesConfigBeyondSessionState(options));
   setForkRestrictedLaunchConfig(cliCarriesForkRestrictedConfig(options));
   setForkReplayLaunchConfig({
     ...(typeof options.appendSystemPrompt === "string" &&
@@ -2074,7 +2183,7 @@ ${joined}`);
         await logOrgPolicyDeniedAsync("allow_remote_control", "startup");
         return cliErrorAfterAnalyticsFlush(remoteControlDenied);
       }
-      if (getSettingsWithErrors_2().settings.disableRemoteControl === true)
+      if (getSettingsWithErrors().settings.disableRemoteControl === true)
         return cliError(`Error: ${REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE}`);
     }
     setRemoteSdkUrlEnv(sdkUrl);
@@ -2133,6 +2242,10 @@ ${joined}`);
     return cliError(
       "Error: --prompt-suggestions requires --print and --output-format=stream-json (prompt_suggestion messages are only surfaced in stream-json output).",
     );
+  decideWrapUpOfferedAtLaunch({
+    promptSuggestions: options.promptSuggestions,
+    cloudOrigin: env.CLAUDE_CODE_REMOTE ? getSessionEntrypoint() : undefined,
+  });
   if (partialMessages) {
     if (!isNonInteractiveSession || outputFormat !== "stream-json") {
       if (includePartialMessages)
@@ -2310,7 +2423,9 @@ ${joined}`);
   );
   if (shouldFillPluginLoadWithStore(extraOptions) && !worktreeRequested && !isBareMode() && !isSafeMode())
     loadAllPluginsCacheOnly(storageV5, extraOptions).catch(() => {});
-  if (!worktreeRequested) warmCommandSourceCaches(cwd, storageV5);
+  let skipHooks =
+    !worktreeRequested && shouldSkipHooksForPluginInstall(shouldSyncPluginInstall(isNonInteractiveSession));
+  if (!worktreeRequested && !skipHooks) warmCommandSourceCaches(cwd, storageV5);
   let agentDefs = worktreeRequested ? null : getAgentDefinitionsWithOverrides(cwd, storageV5);
   agentDefs?.catch(() => {});
   let startTime_3 = performance.now();
@@ -2440,7 +2555,11 @@ ${joined}`);
       credentials: extraOptions,
       storageV5,
     });
-  let commands = worktreeRequested ? null : getCommands(sessionCwd, storageV5);
+  let commands = worktreeRequested
+    ? null
+    : skipHooks
+      ? scanCommandsAfterMcpConfig(mcpConfigsPromise, () => getCommands(sessionCwd, storageV5))
+      : getCommands(sessionCwd, storageV5);
   commands?.catch(() => {});
   if (isXtermJs() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_thicket", true))
     clampLevelForAttacher(true);
@@ -2479,12 +2598,12 @@ ${joined}`);
   }
   addStartupContext({
     tool_count: tools_2.length,
-    skill_count: count(commands_2, isSkillToolCommand),
+    skill_count: countWhere(commands_2, isSkillToolCommand),
   });
   deferredCommandsPromise?.then(
     (agent) =>
       addStartupContext({
-        skill_count: count(agent, isSkillToolCommand),
+        skill_count: countWhere(agent, isSkillToolCommand),
       }),
     () => {},
   );
@@ -2684,7 +2803,7 @@ ${inputPrompt}`
       fallbackModel: baseTools,
     },
     env: process.env,
-    settings: getInitialSettings_2(),
+    settings: getInitialSettings(),
   });
   setSessionFallbacks(fallbackModels ?? []);
   setRemoteFallbackLatch(baseTools !== undefined ? splitCommaList(baseTools) : undefined);
@@ -2786,7 +2905,7 @@ ${inputPrompt}`
         }),
     });
   maybeActivateBrief(options);
-  if (!getIsNonInteractiveSession() && !getUserMsgOptIn() && getInitialSettings_2().defaultView === "chat") {
+  if (!getIsNonInteractiveSession() && !getUserMsgOptIn() && getInitialSettings().defaultView === "chat") {
     let { isBriefEntitled } = require("../../tools/BriefTool/BriefTool.js");
     if (isBriefEntitled()) setUserMsgOptIn(true);
   }
@@ -2828,6 +2947,20 @@ ${inputPrompt}`
         storageV5,
         credentials: extraOptions,
       })) ?? cliError("Interactive session requires the runOnboarding capability");
+    if (isCodeModeAllowed()) {
+      let { closeCodeModeOptInAfterSetup } = require("../../utils/codeModeOptIn.js");
+      if (
+        process.exitCode === undefined &&
+        (await closeCodeModeOptInAfterSetup()) === "restart_without_mode"
+      ) {
+        printHost.root.unmount();
+        return await import("../../utils/relaunch.js").then((exitCode) =>
+          exitCode.execRelaunch({
+            pinToCurrentBinary: true,
+          }),
+        );
+      }
+    }
     releaseGrowthBookHold(rootSession.host);
     let kickDecision = hasHeldGrowthBook(rootSession.host)
       ? judgeGrowthBookKick(remoteNonInteractive)
@@ -2874,7 +3007,7 @@ ${inputPrompt}`
     maybeStartLazyLoad(rootSession, storageV5, extraOptions);
   initializeLspServerManager(rootSession, storageV5, extraOptions);
   if (mcpApprovalState) {
-    let { errors } = getSettingsWithErrors_2();
+    let { errors } = getSettingsWithErrors();
     let reportable = isReportableDiagnostic(errors);
     if (reportable.length > 0 && (!isInteractiveSession() || !args.handleInvalidSettings))
       logSkippedInvalidSetting(reportable);
@@ -2927,7 +3060,7 @@ ${inputPrompt}`
       !isBareMode() &&
       getAPIProvider() === "firstParty" &&
       bootstrapFetchCanConvergeSlot() &&
-      !hasClientDataCacheSlot()
+      (!hasClientDataCacheSlot() || (isProgramUseCaseChoiceEnabled() && isAnthropicAuthEnabled()))
     )
       trackClientDataFetch(fetchBootstrapData(storageV5, extraOptions));
     initFastModeOrgStatusGuess();
@@ -2940,7 +3073,10 @@ ${inputPrompt}`
       }),
     ),
   );
+  let startTime_6 = performance.now();
   let { servers } = await mcpConfigsPromise;
+  recordPhase("mcp_config_wait_ms", performance.now() - startTime_6, startTime_6);
+  if (prefetchTiming.value !== undefined) recordPhase("mcp_config_load_ms", prefetchTiming.value);
   logForDebugging(
     `[STARTUP] MCP configs resolved in ${prefetchTiming.value}ms (awaited at +${Date.now() - now}ms)`,
   );
@@ -3218,7 +3354,7 @@ ${inputPrompt}`
     mcpListSizing: mcpAnalytics,
     mcpConfigs: getIsRemoteMode() ? null : Object.values(allConfigs),
     worktreeEnabled: worktreeRequested,
-    skipWebFetchPreflight: getInitialSettings_2().skipWebFetchPreflight,
+    skipWebFetchPreflight: getInitialSettings().skipWebFetchPreflight,
     githubActionInputs: env.GITHUB_ACTION_INPUTS,
     dangerouslySkipPermissionsPassed: dangerouslySkipPermissions ?? false,
     permissionMode: initialMode,
@@ -3409,6 +3545,7 @@ ${inputPrompt}`
     regularMcpConfigs: byName,
     relaunchFlagFetchSettled: shouldKick && initResult !== undefined && !initResult.result.timedOut,
     remote,
+    localSessionMove: moveCandidate,
     remoteControl,
     remoteControlName,
     resumeInCloud,
@@ -3456,7 +3593,7 @@ ${inputPrompt}`
     terminalInput: stdinOverrideCache.get(),
   };
 }
-//@ chunk-3wek6r2k.js:148438-148567 placement
+//@ chunk-hjswk319.js:149866-149995 placement
 function readSizingReport(report) {
   try {
     return report();
@@ -3468,6 +3605,8 @@ function readSizingReport(report) {
   }
 }
 export {
+  reportStartupModelNotice,
+  startDeferredPrefetches,
   coordinatorModeModule,
   branchModeForTelemetry,
   startTurnInputPrefetches,
@@ -3477,7 +3616,5 @@ export {
   prepareSession,
   getTeammateUtils,
   maybeActivateBrief,
-  reportStartupModelNotice,
-  startDeferredPrefetches,
   pendingSettingsEnvBlocksEarlyGb,
 };

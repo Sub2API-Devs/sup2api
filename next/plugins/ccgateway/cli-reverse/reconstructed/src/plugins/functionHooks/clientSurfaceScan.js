@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验 Client 组件的 props 必须是对象字面量并解析 module；描述 AST 参数节点类型（用于报错）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bfnfj4kx.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6sf70a86.js (17)
  * attribution: placement 17
  */
 import { resolve, dirname, relative as relative_2, sep, isAbsolute } from "path";
@@ -14,9 +14,9 @@ import { isDotRelativePath, isScriptFile, acornParser } from "./moduleLoader.js"
 import { SCRIPT_EXTENSIONS_TEXT } from "../../utils/plugins/pluginSourceUrl.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-bfnfj4kx.js:35000-35016 placement
+//@ chunk-6sf70a86.js:35041-35057 placement
 var CLIENT = "Client";
-//@ chunk-bfnfj4kx.js:35016-35301 placement
+//@ chunk-6sf70a86.js:35057-35342 placement
 function findModuleProperty(objectNode) {
   let found;
   for (let property of objectNode.properties) {
@@ -41,7 +41,7 @@ function findModuleProperty(objectNode) {
   }
   return found;
 }
-//@ chunk-bfnfj4kx.js:35301-35812 placement
+//@ chunk-6sf70a86.js:35342-35854 placement
 /**
  * 描述 AST 参数节点类型（用于报错）。
  */
@@ -68,7 +68,7 @@ function describeArgument(argument) {
       return `a ${argument.type}`;
   }
 }
-//@ chunk-bfnfj4kx.js:35812-36028 placement
+//@ chunk-6sf70a86.js:35854-36070 placement
 /**
  * 读取字面量或无插值模板字符串的值，否则 undefined。被扫描代码多处使用。
  */
@@ -78,7 +78,7 @@ function readStaticString(node) {
   let cooked = node.quasis[0]?.value.cooked;
   return cooked === undefined || cooked === null ? undefined : cooked;
 }
-//@ chunk-bfnfj4kx.js:36028-36726 placement
+//@ chunk-6sf70a86.js:36070-36770 placement
 /**
  * 校验 Client 组件的 props 必须是对象字面量并解析 module。
  */
@@ -111,7 +111,7 @@ function scanClientProps(node, objectNode) {
     spelled: staticString,
   };
 }
-//@ chunk-bfnfj4kx.js:36726-36903 placement
+//@ chunk-6sf70a86.js:36770-36947 placement
 var isClientReference = (node) =>
   (node.type === "Identifier" && node.name === CLIENT) ||
   (node.type === "Literal" && node.value === CLIENT) ||
@@ -119,12 +119,12 @@ var isClientReference = (node) =>
     !node.computed &&
     node.property.type === "Identifier" &&
     node.property.name === CLIENT);
-//@ chunk-bfnfj4kx.js:36903-36914 placement
+//@ chunk-6sf70a86.js:36947-36958 placement
 /**
  * "h"
  */
 var REACT_FACTORY_NAME = "h";
-//@ chunk-bfnfj4kx.js:36914-37132 placement
+//@ chunk-6sf70a86.js:36958-37176 placement
 function matchClientCall(node) {
   let { callee } = node;
   if (callee.type !== "Super" && isClientReference(callee))
@@ -142,7 +142,7 @@ function matchClientCall(node) {
       }
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:37132-37302 placement
+//@ chunk-6sf70a86.js:37176-37346 placement
 function scanClientCalls(program) {
   let problems = [];
   walkAst(program, ({ node }) => {
@@ -152,9 +152,9 @@ function scanClientCalls(program) {
   });
   return problems.toSorted((a, b) => b.at.start - a.at.start);
 }
-//@ chunk-bfnfj4kx.js:37302-37319 placement
+//@ chunk-6sf70a86.js:37346-37363 placement
 var DEFAULT = "default";
-//@ chunk-bfnfj4kx.js:37319-37829 placement
+//@ chunk-6sf70a86.js:37363-37873 placement
 /**
  * 列出模块的导出名。
  */
@@ -175,12 +175,12 @@ function listModuleExports(program) {
     }
   return names;
 }
-//@ chunk-bfnfj4kx.js:37829-37888 placement
+//@ chunk-6sf70a86.js:37873-37932 placement
 /**
  * 大写开头的组件名
  */
 var isComponentExportName = (name) => /^[A-Z][A-Za-z0-9]*$/.test(name) && /[a-z]/.test(name);
-//@ chunk-bfnfj4kx.js:37888-38200 placement
+//@ chunk-6sf70a86.js:37932-38244 placement
 /**
  * 在 surface 模块中找到组件导出（default 或唯一大写导出）。
  */
@@ -200,7 +200,7 @@ function findSurfaceComponent(program) {
     problem: `exports ${filtered.length === 0 ? "no component" : filtered.join(", ")}: give it a default export or a single capitalized one (export function Board(props, surface) { ... })`,
   };
 }
-//@ chunk-bfnfj4kx.js:38288-38723 placement
+//@ chunk-6sf70a86.js:38332-38767 placement
 /**
  * 校验 Client 模块路径（相对路径、代码扩展名、在插件目录内）。
  */
@@ -225,7 +225,7 @@ function checkClientModulePath(request) {
         module: relative.split(sep).join("/"),
       };
 }
-//@ chunk-bfnfj4kx.js:38723-38821 placement
+//@ chunk-6sf70a86.js:38767-38865 placement
 /**
  * 解析模块 AST
  */
@@ -239,7 +239,7 @@ function parseModuleAst(source) {
     return;
   }
 }
-//@ chunk-bfnfj4kx.js:38821-39062 placement
+//@ chunk-6sf70a86.js:38865-39106 placement
 /**
  * 链接 hooks 模块时，把源码里 Client 组件的 module 路径替换为解析后的模块路径。
  */
@@ -262,7 +262,7 @@ function rewriteClientModulePaths(source, file, root) {
   }
   return rewritten;
 }
-//@ chunk-bfnfj4kx.js:39062-39347 placement
+//@ chunk-6sf70a86.js:39106-39391 placement
 /**
  * 扫描 hooks 模块全部文件里的 Client 组件，校验 module 路径并返回排序去重的模块列表；有问题时抛扫描拒绝。
  */
@@ -282,9 +282,9 @@ function collectClientModules(submission) {
   return [...modules].sort();
 }
 export {
-  rewriteClientModulePaths,
+  findSurfaceComponent,
   readStaticString,
   describeArgument,
   collectClientModules,
-  findSurfaceComponent,
+  rewriteClientModulePaths,
 };

@@ -1,8 +1,8 @@
 /**
  * @bufbuild/cel/dist/cjs/ext/strings.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/cel@0.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_uint } from "../uint.js";
 import { require_reflect_2 } from "../../../../protobuf/dist/commonjs/reflect/index.js";
 import { require_func } from "../func.js";
 
-//@ chunk-fq0cr76a.js:631450-638468 cjs-fingerprint
+//@ chunk-qg41pqt6.js:632028-639046 cjs-fingerprint
 var require_strings = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

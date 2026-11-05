@@ -1,15 +1,15 @@
 /**
  * readdirp/esm/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: readdirp@4.1.0..4.1.2
- * pieces: chunk-3gvas51j.js (5)
+ * pieces: chunk-k7sq4jmf.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
 import { Readable } from "stream";
 import { lstat, stat as stat_2, readdir, realpath } from "fs/promises";
 import { resolve, join, relative, sep } from "path";
 
-//@ chunk-3gvas51j.js:508-745 esm-fingerprint
+//@ chunk-k7sq4jmf.js:508-745 esm-fingerprint
 var EntryTypes = {
   FILE_TYPE: "files",
   DIR_TYPE: "directories",
@@ -26,9 +26,9 @@ var defaultOptions = {
   alwaysStat: false,
   highWaterMark: 4096,
 };
-//@ chunk-3gvas51j.js:745-762 esm-layout
+//@ chunk-k7sq4jmf.js:745-762 esm-layout
 Object.freeze(defaultOptions);
-//@ chunk-3gvas51j.js:762-1291 esm-fingerprint
+//@ chunk-k7sq4jmf.js:762-1291 esm-fingerprint
 var RECURSIVE_ERROR_CODE = "READDIRP_RECURSIVE_ERROR";
 var NORMAL_FLOW_ERRORS = new Set(["ENOENT", "EPERM", "EACCES", "ELOOP", RECURSIVE_ERROR_CODE]);
 var ALL_TYPES = [
@@ -55,7 +55,7 @@ var normalizeFilter = (filter) => {
   }
   return emptyFn;
 };
-//@ chunk-3gvas51j.js:1291-3702 esm-fingerprint
+//@ chunk-k7sq4jmf.js:1291-3702 esm-fingerprint
 class ReaddirpStream extends Readable {
   constructor(options = {}) {
     super({
@@ -202,7 +202,7 @@ class ReaddirpStream extends Readable {
     return stats && this._wantsEverything && !stats.isDirectory();
   }
 }
-//@ chunk-3gvas51j.js:3702-4126 esm-fingerprint
+//@ chunk-k7sq4jmf.js:3702-4126 esm-fingerprint
 function readdirp(root, options = {}) {
   let type = options.entryType || options.type;
   if (type === "both") type = EntryTypes.FILE_DIR_TYPE;

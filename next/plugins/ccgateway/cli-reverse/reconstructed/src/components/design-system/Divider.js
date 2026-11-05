@@ -3,9 +3,9 @@
  *
  * 水平分隔线（可带居中/起始标题）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Divider.tsx
- * pieces: chunk-paas88x7.js (1)
+ * pieces: chunk-wkjeb8yp.js (1)
  * attribution: callgraph-witnessed 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -20,7 +20,7 @@ import { Ansi } from "../../ink/components/AnsiText.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { Decorative } from "../../ink/components/ErrorBoundary.js";
 
-//@ chunk-paas88x7.js:412-1609 callgraph-witnessed (2.1.88 match: Divider, 0.56)
+//@ chunk-wkjeb8yp.js:412-1609 callgraph-witnessed (2.1.88 match: Divider, 0.562)
 function Divider(props) {
   let $ = useMemoCache(27);
   let { width, color, char, padding, title, titleAlign } = props;

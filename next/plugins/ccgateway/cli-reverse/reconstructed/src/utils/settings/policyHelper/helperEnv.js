@@ -3,9 +3,9 @@
  *
  * policyHelper 子进程环境清理（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (56)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (56)
  * attribution: placement 56
  */
 import {
@@ -28,7 +28,7 @@ import {
 } from "../../sensitiveEnvVars.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:33103-33913 placement
+//@ chunk-5fn9rb8r.js:33362-34172 placement
 /**
  * 机密变量名的词表与正则：连接串 glob、TOKEN/SECRET/PASSWORD/KEY 等词、只作后缀的 PWD/PASS/JWT、复数形式，以及 GIT_CONFIG_KEY_n 例外。
  */
@@ -40,7 +40,7 @@ var SECRET_NAME_PLURAL_WORDS;
 var SECRET_ENV_NAME_REGEX;
 var CONNECTION_STRING_ENV_GLOBS;
 var GIT_CONFIG_KEY_ENV_REGEX;
-deferInit("chunk-q8cqcff6.js:33103", () => {
+deferInit("chunk-5fn9rb8r.js:33362", () => {
   CONNECTION_STRING_ENV_GLOBS_2 = ["CONN", "CONNECT", "CONNECTION"].flatMap((head) =>
     ["", "_"].flatMap((sep) =>
       ["STR", "STRING", "STRS", "STRINGS"].flatMap((tail) => {
@@ -88,21 +88,21 @@ deferInit("chunk-q8cqcff6.js:33103", () => {
   CONNECTION_STRING_ENV_GLOBS = ["CLOUDSDK_PROXY_PASSWORD", "GIT_CONFIG_KEY_[0-9]*"];
   GIT_CONFIG_KEY_ENV_REGEX = /^GIT_CONFIG_KEY_[0-9][A-Za-z0-9_]*$/;
 });
-//@ chunk-q8cqcff6.js:33913-33999 placement
+//@ chunk-5fn9rb8r.js:34172-34258 placement
 function isGitConfigEnvName(name) {
   return /^GIT_CONFIG_(?:COUNT|PARAMETERS|(?:KEY|VALUE)_[0-9]+)$/.test(name);
 }
-//@ chunk-q8cqcff6.js:33999-34040 placement
+//@ chunk-5fn9rb8r.js:34258-34299 placement
 /**
  * 是否 GIT_CONFIG_* 或代理类环境变量（http_proxy、npm_config_proxy 等）。
  */
 function isGitConfigOrProxyEnvName(name) {
   return isGitConfigEnvName(name) || PROXY_ENV_NAME_REGEX.test(name);
 }
-//@ chunk-q8cqcff6.js:34040-34249 placement
+//@ chunk-5fn9rb8r.js:34299-34508 placement
 var PROXY_ENV_NAME_REGEX =
   /^(?:(?:https?|ftp|all|no)_proxy|npm_config_(?:https?_)?proxy|npm_config_noproxy|yarn_proxy|(?:yarn|global_agent|docker|claude_code)_(?:https?|no)_proxy|cloudsdk_proxy_[a-z]+|electron_get_use_proxy)$/i;
-//@ chunk-q8cqcff6.js:34249-34312 placement
+//@ chunk-5fn9rb8r.js:34508-34571 placement
 /**
  * 判断环境变量值是否需要脱敏：JVM 选项类看 gIn 是否改动，其他看值本身是否像机密。
  */
@@ -110,7 +110,7 @@ function isSecretEnvValue(name, value) {
   let redacted = redactJvmOptionsEnvValue(name, value);
   return redacted === undefined ? containsCredential(value) : redacted !== value;
 }
-//@ chunk-q8cqcff6.js:34312-35463 placement
+//@ chunk-5fn9rb8r.js:34571-35722 placement
 /**
  * 对 GOFLAGS 与 JVM 选项类环境变量（JAVA_TOOL_OPTIONS、MAVEN_OPTS…）的值逐词识别含机密的参数（-D 机密属性、口令参数、Bearer 后的值）并删除；返回脱敏值，不能安全处理时返回空串；非此类变量返回 undefined。
  */
@@ -184,7 +184,7 @@ function redactJvmOptionsEnvValue(name, value) {
     : SAFE_ARG_CHARS_REGEX;
   return filtered.every((token) => safe.test(token.raw)) ? filtered.map((token) => token.raw).join(" ") : "";
 }
-//@ chunk-q8cqcff6.js:35463-35642 placement
+//@ chunk-5fn9rb8r.js:35722-35901 placement
 /**
  * JVM 选项脱敏后允许保留的安全字符集（Eo 额外允许 |），Tt 匹配 Bearer/Basic/token/authorization 等凭证前缀。
  */
@@ -192,7 +192,7 @@ var SAFE_ARG_CHARS_REGEX = /^[A-Za-z0-9_.,:=\/@+~*?-]+$/;
 var SAFE_ARG_CHARS_WITH_PIPE_REGEX = /^[A-Za-z0-9_.,:=\/@+~|*?-]+$/;
 var AUTH_VALUE_PREFIX_REGEX =
   /(?:\b(?:Bearer|Basic|token)|authorization\s*[:=]\s*["']?(?:[a-z][a-z0-9_-]*)?|-token\s*[:=])\s*["']?$/i;
-//@ chunk-q8cqcff6.js:35642-35713 placement
+//@ chunk-5fn9rb8r.js:35901-35972 placement
 function isValueTakingFlag(token) {
   return (
     parseMavenSettingsFlag(token) === "" ||
@@ -201,7 +201,7 @@ function isValueTakingFlag(token) {
     CLASSPATH_FLAG_REGEX.test(token)
   );
 }
-//@ chunk-q8cqcff6.js:35713-36098 placement
+//@ chunk-5fn9rb8r.js:35972-36357 placement
 /**
  * Maven 带值参数、加密密码参数的正则。
  */
@@ -209,7 +209,7 @@ var MAVEN_VALUE_FLAG_PATTERN =
   /^(?:-D|--define|-f|--file|-pl|--projects|-rf|--resume-from|-l|--log-file|-t|--toolchains|-gt|--global-toolchains|-itr|--install-toolchains|-P|--activate-profiles|-b|--builder|-T|--threads|-emp|--encrypt-master-password|-ep|--encrypt-password)$/;
 var ENCRYPT_PASSWORD_FLAG_REGEX = /^(?:-emp|--encrypt-master-password|-ep|--encrypt-password)$/;
 var ENCRYPT_PASSWORD_INLINE_REGEX = /^(?:-emp|--encrypt-master-password|-ep|--encrypt-password)=./s;
-//@ chunk-q8cqcff6.js:36098-36359 placement
+//@ chunk-5fn9rb8r.js:36357-36618 placement
 function isJvmOptionToken(token) {
   return (
     /^-D[A-Za-z_][\w.-]*=.+$/s.test(token) ||
@@ -221,10 +221,10 @@ function isJvmOptionToken(token) {
     /^(?:@|-[A-Za-z]{1,4}\d{0,2}$)/.test(token)
   );
 }
-//@ chunk-q8cqcff6.js:36359-37036 placement
+//@ chunk-5fn9rb8r.js:36618-37295 placement
 var JVM_X_OPTION_REGEX =
   /^-(?:X(?:mx|ms|ss|mn|rs|int|comp|mixed|batch|diag|debug|future|prof|noclassgc|internalversion|check:jni|share:(?:on|off|auto|dump)|verify(?::[a-z]+)?|log(?::.*)?|loggc:.+|bootclasspath(?:\/[ap])?:.+|runjdwp:.+|dock:.+|startOnFirstThread|showSettings(?::[a-z]+)?)[0-9kKmMgGtT]*$|XX:[+-]?[A-Za-z]\w*(?:=.*)?$|(?:javaagent|agentlib|agentpath):.|verbose(?::[a-z]+)?$|[ed](?:s?a)(?::[a-z][\w$]*(?:\.[\w$]+)*(?:\.\.\.)?)?$|(?:server|client|d64|showversion)$|-(?:add-opens|add-exports|add-reads|add-modules|limit-modules|patch-module|module-path|upgrade-module-path|class-path|enable-native-access|illegal-access|enable-preview|source|release)(?:=.*)?$|(?:cp|classpath|p)$)/s;
-//@ chunk-q8cqcff6.js:37036-37143 placement
+//@ chunk-5fn9rb8r.js:37295-37402 placement
 /**
  * 一组参数拼接后是否含机密（-D 选项只取值部分参与判断）。
  */
@@ -237,7 +237,7 @@ function tokensContainSecret(tokens) {
       .join(" "),
   );
 }
-//@ chunk-q8cqcff6.js:37143-37377 placement
+//@ chunk-5fn9rb8r.js:37402-37636 placement
 function isSecretJvmToken(word, previous) {
   let subTokens = jvmOptionTokens(word);
   if (subTokens === null) return isSecretArgToken(word, previous);
@@ -256,11 +256,11 @@ function isSecretJvmToken(word, previous) {
     )
   );
 }
-//@ chunk-q8cqcff6.js:37377-37420 placement
+//@ chunk-5fn9rb8r.js:37636-37679 placement
 function javaOptionTokens(token) {
   return jvmOptionTokens(token.word) ?? [token.word];
 }
-//@ chunk-q8cqcff6.js:37420-37551 placement
+//@ chunk-5fn9rb8r.js:37679-37810 placement
 function jvmOptionTokens(word) {
   let match = /^-D[^=]+=\s*(-.*)$/s.exec(word);
   if (match === null) return null;
@@ -268,12 +268,12 @@ function jvmOptionTokens(word) {
     .map(stripJavaLauncherPrefix)
     .filter((token) => !JAVA_OPTIONS_ENV_NAMES.test(token));
 }
-//@ chunk-q8cqcff6.js:37551-37636 placement
+//@ chunk-5fn9rb8r.js:37810-37895 placement
 function isUnquotedJavaProperty(word) {
   let match = /^-D[^=]+=\s*(-.*)$/s.exec(word);
   return match !== null && splitQuotedWords(match[1]) === null;
 }
-//@ chunk-q8cqcff6.js:37636-38009 placement
+//@ chunk-5fn9rb8r.js:37895-38268 placement
 function isSecretArgToken(token, previous) {
   if (ENCRYPT_PASSWORD_INLINE_REGEX.test(token)) return true;
   let match = /^-D([^=]+)=(.+)$/s.exec(token);
@@ -303,11 +303,11 @@ function isSecretArgToken(token, previous) {
     );
   return false;
 }
-//@ chunk-q8cqcff6.js:38009-38052 placement
+//@ chunk-5fn9rb8r.js:38268-38311 placement
 function looksLikePathValue(token) {
   return /[\\/]|^[@~]/.test(token);
 }
-//@ chunk-q8cqcff6.js:38052-39241 placement
+//@ chunk-5fn9rb8r.js:38311-39500 placement
 /**
  * JVM 非机密选项、classpath 类选项、路径型系统属性的正则，以及 JVM 选项类环境变量名单。
  */
@@ -337,7 +337,7 @@ var JVM_OPTIONS_ENV_NAMES = [
   "SONAR_SCANNER_OPTS",
   "SONAR_SCANNER_JAVA_OPTS",
 ];
-//@ chunk-q8cqcff6.js:39241-39320 placement
+//@ chunk-5fn9rb8r.js:39500-39579 placement
 /**
  * 规范化环境变量名用于匹配：大写、去 INPUT_ 前缀（GitHub Actions 输入）、- 换 _。
  */
@@ -347,14 +347,14 @@ function normalizeEnvNameForMatch(name) {
     .replace(/^INPUT_/, "")
     .replace(/-/g, "_");
 }
-//@ chunk-q8cqcff6.js:39320-39619 placement
+//@ chunk-5fn9rb8r.js:39579-39878 placement
 /**
  * Java 启动器选项类变量集合、JVM 选项变量集合，以及可视为无害的默认凭证 -D 选项正则。
  */
 var JAVA_OPTIONS_ENV_NAMES_2; // deferred: uses JAVA_OPTIONS_ENV_VARS of its import cycle while loading; runs once the cycle is complete
 var JVM_OPTIONS_ENV_NAME_SET;
 var JAVA_OPTIONS_ENV_NAMES;
-deferInit("chunk-q8cqcff6.js:39320", () => {
+deferInit("chunk-5fn9rb8r.js:39579", () => {
   JAVA_OPTIONS_ENV_NAMES_2 = new Set([
     "JAVA_TOOL_OPTIONS",
     "JDK_JAVA_OPTIONS",
@@ -366,7 +366,7 @@ deferInit("chunk-q8cqcff6.js:39320", () => {
   JAVA_OPTIONS_ENV_NAMES =
     /^-D(?:(?:(?:https?|ftp)\.proxy(?:User|Password)|socksProxy(?:User|Password)|java\.net\.socks\.(?:username|password))=\S*$|[\w.-]*trust-?store-?password=changeit$)/i;
 });
-//@ chunk-q8cqcff6.js:39619-39908 placement
+//@ chunk-5fn9rb8r.js:39878-40167 placement
 /**
  * 简易分词：按空白切分，处理单双引号；引号未闭合返回 null。
  */
@@ -408,17 +408,17 @@ function splitQuotedWords(text) {
   if (hasWord) words.push(current);
   return words;
 }
-//@ chunk-q8cqcff6.js:39908-40010 placement (2.1.88 match: normalize, 1)
+//@ chunk-5fn9rb8r.js:40167-40269 placement (2.1.88 match: normalize, 1)
 function camelToSnake(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/([A-Z])([A-Z][a-z])/g, "$1_$2");
 }
-//@ chunk-q8cqcff6.js:40010-40281 placement
+//@ chunk-5fn9rb8r.js:40269-40540 placement
 /**
  * 指向构建工具设置文件/凭证文件的系统属性名正则（maven/gradle/sbt 等）。
  */
 var BUILD_TOOL_SETTINGS_PROPERTY_PATTERN =
   /^(?:maven\.(?:user\.settings|global\.settings|installation\.settings|project\.settings|settings\.security|repo\.local|home)|settings\.security|gradle\.user\.home|sbt\.(?:boot\.credentials|repository\.config|global\.base|ivy\.home|boot\.directory)|user\.home)$/i;
-//@ chunk-q8cqcff6.js:40281-40531 placement
+//@ chunk-5fn9rb8r.js:40540-40790 placement
 /**
  * 解析 Maven settings 类参数（-s/--settings 等），返回值或空串，不匹配为 null。
  */
@@ -430,7 +430,7 @@ function parseMavenSettingsFlag(token) {
     ) ?? /^-g?s=?(.+)$/.exec(token);
   return match === null ? null : (match[1] ?? "");
 }
-//@ chunk-q8cqcff6.js:40531-40636 placement
+//@ chunk-5fn9rb8r.js:40790-40895 placement
 /**
  * 解析 sbt 的 -ivy/-sbt-dir/-sbt-boot 参数值。
  */
@@ -438,18 +438,18 @@ function parseSbtDirFlag(token) {
   let match = /^-{1,2}(?:ivy|sbt-dir|sbt-boot)(?:=(.+))?$/.exec(token);
   return match === null ? null : (match[1] ?? "");
 }
-//@ chunk-q8cqcff6.js:40636-40684 placement
+//@ chunk-5fn9rb8r.js:40895-40943 placement
 /**
  * 去掉 Java 启动器转发前缀 -J。
  */
 function stripJavaLauncherPrefix(token) {
   return token.replace(/^-J(?=-)/, "");
 }
-//@ chunk-q8cqcff6.js:40684-40735 placement
+//@ chunk-5fn9rb8r.js:40943-40994 placement
 function normalizeDefineFlag(token) {
   return token.replace(/^--define=/, "-D");
 }
-//@ chunk-q8cqcff6.js:40735-40897 placement
+//@ chunk-5fn9rb8r.js:40994-41156 placement
 /**
  * 规范化参数列表：把 "-D x" 合成 "-Dx"，--define= 转 -D。
  */
@@ -464,11 +464,11 @@ function normalizeDefineArgs(args) {
   }
   return out;
 }
-//@ chunk-q8cqcff6.js:40897-40972 placement
+//@ chunk-5fn9rb8r.js:41156-41231 placement
 function isSecretJavaProperty(key, value) {
   return isSecretProperty(key, value) && !/^(?:[\\/~]|[a-z]:[\\/]|file:)/i.test(value);
 }
-//@ chunk-q8cqcff6.js:40972-41151 placement
+//@ chunk-5fn9rb8r.js:41231-41410 placement
 /**
  * 系统属性名是否像凭证（且值不是纯数字/布尔等非机密标量）。
  */
@@ -481,18 +481,18 @@ function isSecretProperty(key, value) {
     !isScalarPropertyValue(key, value)
   );
 }
-//@ chunk-q8cqcff6.js:41151-41360 placement
+//@ chunk-5fn9rb8r.js:41410-41619 placement
 var SECRET_ID_SUFFIX_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SONAR_SECRET_PROPERTIES;
 var SONAR_KEY_NAME_REGEX;
 var SONAR_NON_SECRET_PROPERTIES;
-deferInit("chunk-q8cqcff6.js:41151", () => {
+deferInit("chunk-5fn9rb8r.js:41410", () => {
   SECRET_ID_SUFFIX_PATTERN = /(?:PASSWORD|PASSWD|SECRET)S?[._-]ID$/i;
   SONAR_SECRET_PROPERTIES = new Set(["sonar.login", "sonar.token", "sonar.password"]);
   SONAR_KEY_NAME_REGEX = /^(?:projectKey|moduleKey|componentKey|ruleKey|resourceKey)$/;
   SONAR_NON_SECRET_PROPERTIES = new Set(["sonar.pullrequest.key"]);
 });
-//@ chunk-q8cqcff6.js:41360-41491 placement
+//@ chunk-5fn9rb8r.js:41619-41750 placement
 /**
  * 属性值是否是数字或布尔等非机密标量（属性名本身不是机密名时）。
  */
@@ -504,7 +504,7 @@ function isScalarPropertyValue(key, value) {
     !hasSecretSegment(key)
   );
 }
-//@ chunk-q8cqcff6.js:41491-41934 placement
+//@ chunk-5fn9rb8r.js:41750-42193 placement
 /**
  * 系统属性名是否表示凭证：sonar 特例、机密词结尾、USERNAME/USER 结尾等。
  */
@@ -534,7 +534,7 @@ function isCredentialPropertyName(key) {
     return true;
   return last === "USERNAME" || (last === "USER" && filtered.length > 1);
 }
-//@ chunk-q8cqcff6.js:41934-42157 placement
+//@ chunk-5fn9rb8r.js:42193-42416 placement
 function hasSecretSegment(key) {
   let filtered = camelToSnake(key)
     .toUpperCase()
@@ -548,14 +548,14 @@ function hasSecretSegment(key) {
       (/^IDS?$/.test(last) && /^(?:PASSWORDS?|PASSWD|SECRETS?)$/.test(secondLast)))
   );
 }
-//@ chunk-q8cqcff6.js:42157-42819 placement
+//@ chunk-5fn9rb8r.js:42416-43078 placement
 /**
  * SECRET_SEGMENT_REGEX：形似机密的段名。
  */
 var SECRET_SEGMENT_REGEX_2 = /^(?:PASSWORDS?|PASSWD|PASSPHRASE|SECRETS?|TOKENS?|KEYS?|APIKEY|CREDENTIALS?)$/;
 var SECRET_SEGMENT_REGEX =
   /^(?:USER(?:NAME)?|ID|IDS|STORE|FILE|FILES|PATH|PATHS|DIR|DIRECTORY|LOCATION|URL|URI|HOST|PORT|ALIAS|TYPE|PREFERENCE|SCHEMES?|ENABLED?|DISABLED?|MODE|CLASS|PROVIDER|ALGORITHM|FORMAT|LENGTH|SIZE|BITS|TIMEOUT|TTL|HEADER|NAME|NAMES|PREFIX|SUFFIX|VERSION|ENCODING|POLICY|COUNT|CACHE|SERVICE|ENDPOINT|REGION|SCOPE|SCOPES|AUDIENCE|ISSUER|EXPIRY|EXPIRATION|ROTATION|REQUIRED|OPTIONAL|SECONDS?|SECS?|MS|MILLIS(?:ECONDS)?|MINUTES?|MINS?|HOURS?|DAYS?|AGE|CAPACITY|RATE|INTERVAL|DELAY|PERIOD|DURATION|VALIDITY|LIFETIME|WINDOW|MAX|MIN|LIMIT|THRESHOLD|BUDGET|RETRY|RETRIES|ATTEMPTS)$/;
-//@ chunk-q8cqcff6.js:42819-42945 placement
+//@ chunk-5fn9rb8r.js:43078-43204 placement
 /**
  * 判断环境变量名是否像机密（TOKEN/SECRET/PASSWORD/KEY 等词、连接串、Bundler 凭证变量），GIT_CONFIG_KEY_n 例外。
  */
@@ -569,7 +569,7 @@ function isSecretEnvName(name) {
     !GIT_CONFIG_KEY_ENV_REGEX.test(name)
   );
 }
-//@ chunk-q8cqcff6.js:42945-43802 placement
+//@ chunk-5fn9rb8r.js:43204-44061 placement
 /**
  * AUTH0_ 前缀与 Bundler（BUNDLE_<HOST>__）凭证变量的正则和 glob，以及 Claude Code 自身名字含 KEY/TOKEN 但非机密的变量白名单。
  */
@@ -582,7 +582,7 @@ var SECRET_ENV_NAME_PATTERN_SOURCE;
 var joined;
 var CLAUDE_CODE_NON_SECRET_ENV_NAMES;
 var CLAUDE_CODE_SKIP_AUTH_ENV_REGEX;
-deferInit("chunk-q8cqcff6.js:42945", () => {
+deferInit("chunk-5fn9rb8r.js:43204", () => {
   AUTH0_PREFIX_REGEX_2 = /^AUTH0_/i;
   AUTH0_PREFIX_REGEX = "[Aa][Uu][Tt][Hh]0_*";
   AUTH0_ENV_PATTERN = [
@@ -621,14 +621,14 @@ deferInit("chunk-q8cqcff6.js:42945", () => {
   ]);
   CLAUDE_CODE_SKIP_AUTH_ENV_REGEX = /^CLAUDE_CODE_SKIP_[A-Z0-9_]+_AUTH$/;
 });
-//@ chunk-q8cqcff6.js:43802-43847 placement
+//@ chunk-5fn9rb8r.js:44061-44106 placement
 /**
  * Claude Code 自身的非机密环境变量（名字含 KEY/TOKEN 但不是凭证）白名单判断。
  */
 function isNonSecretClaudeCodeEnvName(name) {
   return CLAUDE_CODE_NON_SECRET_ENV_NAMES.has(name) || CLAUDE_CODE_SKIP_AUTH_ENV_REGEX.test(name);
 }
-//@ chunk-q8cqcff6.js:43847-44225 placement
+//@ chunk-5fn9rb8r.js:44106-44484 placement
 /**
  * GITHUB_TOKEN_ENV_NAMES：GitHub 令牌环境变量；SECRET_ENV_NAME_PREFIXES：机密环境变量的前缀（同一声明共 2 个绑定）。
  */
@@ -637,7 +637,7 @@ var GITHUB_TOKEN_ENV_NAMES;
 var SECRET_ENV_NAME_PREFIXES;
 var regExp;
 var regExp_2;
-deferInit("chunk-q8cqcff6.js:43847", () => {
+deferInit("chunk-5fn9rb8r.js:44106", () => {
   CREDENTIAL_ENV_VARS = new Set([
     "GITHUB_TOKEN",
     "GH_TOKEN",
@@ -657,7 +657,7 @@ deferInit("chunk-q8cqcff6.js:43847", () => {
   regExp = new RegExp(`^(?:${GITHUB_TOKEN_ENV_NAMES.join("|")})`, "i");
   regExp_2 = new RegExp(`^(?:INPUT_)?(?:${SECRET_ENV_NAME_PREFIXES.join("|")})`, "i");
 });
-//@ chunk-q8cqcff6.js:44225-44344 placement
+//@ chunk-5fn9rb8r.js:44484-44603 placement
 /**
  * 判断环境变量名是否为凭证相关的用户名类变量。
  */
@@ -668,13 +668,13 @@ function isCredentialUserEnv(name) {
     (regExp_2.test(replaced) || /USER(?:_?NAME)?_?[0-9]*$/i.test(replaced) || isSecretEnvName(replaced))
   );
 }
-//@ chunk-q8cqcff6.js:44344-44708 placement
+//@ chunk-5fn9rb8r.js:44603-44967 placement
 /**
  * secretEnvGlobs：机密环境变量的 glob 列表。
  */
 var joined_2; // deferred: uses CREDENTIAL_ENV_VARS of its import cycle while loading; runs once the cycle is complete
 var secretEnvGlobs;
-deferInit("chunk-q8cqcff6.js:44344", () => {
+deferInit("chunk-5fn9rb8r.js:44603", () => {
   joined_2 = SECRET_ENV_NAME_PREFIXES.flatMap((prefix) => [
     `${foldCasePattern(prefix)}*`,
     `${foldCasePattern(`INPUT_${prefix}`)}*`,
@@ -692,7 +692,7 @@ deferInit("chunk-q8cqcff6.js:44344", () => {
     .join("|");
   secretEnvGlobs = "__CLAUDE_CC_KEEP_";
 });
-//@ chunk-q8cqcff6.js:44708-45067 placement
+//@ chunk-5fn9rb8r.js:44967-45326 placement
 /**
  * 挑出值需要清洗的环境变量（包索引 URL 类或含 JVM 选项的），排除拒绝与屏蔽名单后加前缀转交。
  */
@@ -713,7 +713,7 @@ function prefixedSanitizableEnv(env, options = {}) {
   }
   return out;
 }
-//@ chunk-q8cqcff6.js:45067-51453 placement
+//@ chunk-5fn9rb8r.js:45326-51713 placement
 /**
  * 生成 shell 脚本：在 policyHelper 子进程环境中逐一 unset 敏感变量
  */
@@ -772,7 +772,7 @@ function buildEnvScrubScript({ sandboxMasked = [] } = {}) {
   let visitFn = `__cc_visit() { ${`__cc_name=$1; case "$__cc_name" in ''|[0-9]*|*[!A-Za-z0-9_]*) return 0;; esac; ! ${maskCase} || return 0; \\builtin eval "__cc_k=\\\${${secretEnvGlobs}$__cc_name+x}; __cc_r=\\\${${secretEnvGlobs}$__cc_name-}; __cc_val=\\\${$__cc_name-}; __cc_has=\\\${$__cc_name+x}"; if \\builtin test -n "$__cc_k"; then \\builtin test "$__cc_has$__cc_val" = "x$__cc_r" || { (\\builtin unset -v "$__cc_name") && \\builtin eval "$__cc_name=\\$__cc_r; \\builtin export $__cc_name"; }; else \\builtin test -n "$__cc_val" || return 0; case " ${joined_8} " in *" $__cc_name "*) { (\\builtin unset -v "$__cc_name") && \\builtin unset -v "$__cc_name"; };; *) __cc_r=${quotedInvalid}; { (\\builtin unset -v "$__cc_name") && \\builtin eval "$__cc_name=\\$__cc_r; \\builtin export $__cc_name"; };; esac; fi; return 0`}; }; for __cc_n in ${joined_7} ${joined_8}; do __cc_visit "$__cc_n"; done; ${visitIndex}; ${joined_9}; ${unsetKept}; \\builtin unset -f __cc_visit`;
   return `{ __cc_ncm=; \\builtin shopt -q nocasematch && __cc_ncm=1; \\builtin shopt -u nocasematch || \\builtin true; __cc_uc=; ( LC_ALL=C \\builtin eval ': "\${__cc_uc^^}"' ) 2>/dev/null && __cc_uc=b; \\builtin test -n "$__cc_uc" || { ( LC_ALL=C \\builtin eval ': "\${(U)__cc_uc}"' ) 2>/dev/null && __cc_uc=z; } || \\builtin true; while \\builtin read -r __cc_line; do __cc_name="\${__cc_line%%=*}"; case "$__cc_name" in ''|[0-9]*|*[!A-Za-z0-9_]*) \\builtin continue;; esac; __cc_upper="$__cc_name"; case "$__cc_uc" in b) LC_ALL=C \\builtin eval '__cc_upper="\${__cc_name^^}"';; z) LC_ALL=C \\builtin eval '__cc_upper="\${(U)__cc_name}"';; esac; case " ${joined_5} " in *" $__cc_upper "*) ${unsetStmt}; \\builtin continue;; esac; case "$__cc_name" in ${joined_2}) ${unsetStmt}; \\builtin continue;; esac; case "$__cc_name" in ${CONNECTION_STRING_ENV_GLOBS.join("|")}) ;; ${AUTH0_PREFIX_REGEX}) __cc_rest="\${__cc_name#*_}"; case "$__cc_rest" in ${joined_3}) ${unsetStmt};; *[[:lower:][:digit:]][[:upper:]]*|*[[:upper:]][[:upper:]][[:lower:]]*) ${foldStmt("__cc_rest")};; esac;; ${joined_3}) ${unsetStmt};; ${joined}) __cc_rest="\${__cc_name#*__}"; __cc_rest="\${__cc_rest//___/-}"; case "$__cc_rest" in *__*[A-Za-z][A-Za-z]) ${unsetStmt};; *) case "$__cc_name" in *[[:lower:][:digit:]][[:upper:]]*|*[[:upper:]][[:upper:]][[:lower:]]*) ${foldName};; esac;; esac;; ${SECRET_ENV_NAME_PATTERN_SOURCE}) ${unsetStmt};; *[[:lower:][:digit:]][[:upper:]]*|*[[:upper:]][[:upper:]][[:lower:]]*) ${foldName};; esac; done < <({ \\builtin compgen -v || \\builtin set; }); for __cc_name in ${joined_4}; do \\builtin eval "__cc_set=\\\${$__cc_name+x}"; \\builtin test -n "$__cc_set" && ${unsetStmt}; done; ${visitFn}; \\builtin test -z "$__cc_ncm" || \\builtin shopt -s nocasematch || \\builtin true; \\builtin unset -v __cc_line __cc_name __cc_rest __cc_set __cc_val __cc_r __cc_v __cc_k __cc_has __cc_n __cc_split __cc_fold __cc_prev __cc_i __cc_c __cc_ncm __cc_uc __cc_upper; \\builtin true; } 2>/dev/null`;
 }
-//@ chunk-q8cqcff6.js:51453-51665 placement
+//@ chunk-5fn9rb8r.js:51713-51925 placement
 /**
  * 列出合并环境中应视为机密的变量名：已知凭证名与用户名类变量，加上值看起来含凭证的变量（排除 git 配置/代理、包索引与 JVM 选项变量）。
  */
@@ -793,7 +793,7 @@ function listSecretEnvNames(extra = {}) {
       names.add(key);
   return [...names];
 }
-//@ chunk-q8cqcff6.js:51665-51808 placement
+//@ chunk-5fn9rb8r.js:51925-52068 placement
 /**
  * 汇总可能是机密的环境变量名：已知列表、清理列表、GitHub 令牌与名字像机密的变量。
  */
@@ -802,13 +802,13 @@ function secretEnvNameCandidates(env) {
   for (let key of Object.keys(env)) if (isSecretEnvName(key) || isCredentialUserEnv(key)) names.add(key);
   return [...names];
 }
-//@ chunk-q8cqcff6.js:51808-51904 placement
+//@ chunk-5fn9rb8r.js:52068-52164 placement
 function foldCasePattern(text) {
   return [...text]
     .map((char) => (char.toLowerCase() === char ? char : `[${char}${char.toLowerCase()}]`))
     .join("");
 }
-//@ chunk-q8cqcff6.js:51904-53023 placement
+//@ chunk-5fn9rb8r.js:52164-53283 placement
 /**
  * 判断文本是否含凭证：URL 中的 user:pass@ 或令牌型用户信息、私钥头、Slack/Discord/Office 等 webhook、password=/token= 赋值、sonar.login、Authorization/Bearer/Basic/Token 后的令牌等；排除 host:port 路径、制品坐标等误报。
  */
@@ -853,16 +853,16 @@ function containsCredential(text) {
     )
   );
 }
-//@ chunk-q8cqcff6.js:53023-53035 placement
+//@ chunk-5fn9rb8r.js:53283-53295 placement
 var MAX_SECRET_SCAN_LENGTH = 8192;
-//@ chunk-q8cqcff6.js:53035-53190 placement
+//@ chunk-5fn9rb8r.js:53295-53450 placement
 function looksLikeToken(token) {
   return (
     /^(?:gh[opusr]_|github_pat_|glpat-|xox[abpr]-|sk-|pk-|AKIA|eyJ|ya29\.|npm_)/.test(token) ||
     (token.length >= 20 && /[0-9]/.test(token) && /[a-z]/i.test(token))
   );
 }
-//@ chunk-q8cqcff6.js:53190-53428 placement
+//@ chunk-5fn9rb8r.js:53450-53688 placement
 function isHostPortPath(head, tail) {
   let match = /^([a-z0-9_-]+(?:\.[a-z0-9_-]+)*):\d+([/?#].*)$/is.exec(head);
   if (!match) return false;
@@ -872,7 +872,7 @@ function isHostPortPath(head, tail) {
   if (/^(?:v?\d|sha\d*:)/i.test(tail)) return true;
   return !HOSTNAME_PATTERN.test(tail);
 }
-//@ chunk-q8cqcff6.js:53428-54532 placement
+//@ chunk-5fn9rb8r.js:53688-54792 placement
 /**
  * 凭证检测用的正则：制品坐标（镜像摘要、npm、Maven）、主机样式、私钥头、webhook URL、机密赋值。
  */
@@ -887,7 +887,7 @@ var WEBHOOK_URL_PATTERN =
   /https:\/\/(?:hooks\.slack\.com\/(?:services|workflows|triggers)\/|(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/|[\w.-]+\.webhook\.office\.com\/webhookb2\/)[\w\/@.~-]{16,}/i;
 var SECRET_ASSIGNMENT_PATTERN =
   /(?:(?:^|[;&?#,{]|\/:)\s*|\s)["']?(?!-*jobserver-auth\s*[=:])(?:[a-z0-9_.-]{0,64}(?:password|passwd|pwd|secret|token|(?:account|access|api|private|subscription)[-_]?key|signature|sig|credential)|[a-z0-9_.-]{0,63}[_.-]auth)["']?\s*[=:]\s*["']?(?!(?:true|false|none|null|yes|no|on|off|enabled|disabled|required|optional)(?:$|[;&,\s"']))[^;&,\s"']+/i;
-//@ chunk-q8cqcff6.js:54532-55845 placement
+//@ chunk-5fn9rb8r.js:54792-56105 placement
 /**
  * 从 JVM/构建工具选项字符串中删除含凭证的参数：逐个判断 -D/-X 属性名与值，再检查连续 2–4 个参数拼起来是否含凭证，-X 与其后参数同去留，引号括起的整组同去留；无删除时原样返回。
  */
@@ -972,7 +972,7 @@ function redactJvmOptions(text) {
     )
     .join(" ");
 }
-//@ chunk-q8cqcff6.js:55845-57038 placement
+//@ chunk-5fn9rb8r.js:56105-57298 placement
 /**
  * UNSAFE_ENV_PREFIXES：需要去除的危险环境变量前缀（同一声明共 8 个绑定）。
  */
@@ -985,7 +985,7 @@ var UNSAFE_ENV_PREFIXES_5;
 var UNSAFE_ENV_PREFIXES_6;
 var UNSAFE_ENV_PREFIXES_7;
 var UNSAFE_ENV_PREFIXES_8;
-deferInit("chunk-q8cqcff6.js:55845", () => {
+deferInit("chunk-5fn9rb8r.js:56105", () => {
   UNSAFE_ENV_PREFIXES_9 = [
     "LD_",
     "DYLD_",
@@ -1059,12 +1059,12 @@ deferInit("chunk-q8cqcff6.js:55845", () => {
   UNSAFE_ENV_PREFIXES_7 = "/var/empty/claude-code-policy-helper";
   UNSAFE_ENV_PREFIXES_8 = "C:\\Windows\\claude-code-policy-helper";
 });
-//@ chunk-q8cqcff6.js:57038-57123 placement
+//@ chunk-5fn9rb8r.js:57298-57383 placement
 function isUnsafeHelperEnvVar(name) {
   let upper = name.toUpperCase();
   return UNSAFE_ENV_PREFIXES.has(upper) || UNSAFE_ENV_PREFIXES_9.some((prefix) => upper.startsWith(prefix));
 }
-//@ chunk-q8cqcff6.js:57123-57614 placement
+//@ chunk-5fn9rb8r.js:57383-57874 placement
 /**
  * 构造 policyHelper 子进程环境：删除机密与危险变量、清洗凭证值，固定 PYTHONNOUSERSITE、GIT_CONFIG_NOSYSTEM，并按平台把 PATH、COMSPEC、PSModulePath、git 全局配置等设为安全值。
  */
@@ -1097,19 +1097,19 @@ function helperProcessEnv(env, platform) {
   return out;
 }
 export {
-  isSecretEnvName,
-  containsCredential,
-  helperProcessEnv,
   listSecretEnvNames,
   isGitConfigOrProxyEnvName,
+  isSecretEnvName,
   CREDENTIAL_ENV_VARS,
   isNonSecretClaudeCodeEnvName,
   BUNDLE_CREDENTIAL_ENV_REGEX,
   isCredentialUserEnv,
   redactJvmOptionsEnvValue,
+  containsCredential,
+  prefixedSanitizableEnv,
+  helperProcessEnv,
   isSecretEnvValue,
   buildEnvScrubScript,
-  prefixedSanitizableEnv,
   PRIVATE_KEY_PATTERN,
   secretEnvNameCandidates,
   splitQuotedWords,

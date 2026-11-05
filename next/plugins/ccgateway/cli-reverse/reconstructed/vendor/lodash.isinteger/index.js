@@ -1,13 +1,13 @@
 /**
  * lodash.isinteger/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash.isinteger@4.0.4
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-mrx6y2r5.js:13495-14678 cjs-fingerprint
+//@ chunk-b5df2wx1.js:13495-14678 cjs-fingerprint
 var require_lodash_isinteger = __commonJS(function (cjsExports, cjsModule) {
   var INFINITY = 1 / 0;
   var MAX_INTEGER = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;

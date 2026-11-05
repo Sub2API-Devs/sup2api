@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主下发的 sessions bearer 管理：恢复、确保、可发送判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (17)
  * attribution: placement 17
  */
 import { HostScoped } from "./hostScoped.js";
@@ -14,13 +14,13 @@ import { installSessionsBearerHooks } from "../services/oauth/sessionsBearerHook
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:163476-163532 placement
+//@ chunk-7kayq7nc.js:162725-162781 placement
 var HOST_BEARER_RETRY_MS_2 = 60000;
 var HOST_BEARER_RETRY_MS = 3;
 var REFUSAL_BACKOFF_MS = 600000;
 var BEARER_FORMAT_RE = /^[\w.~+/-]+=*$/;
 var MAX_GIVEN_BEARERS = 4096;
-//@ chunk-bwbq4xvm.js:163532-163717 placement
+//@ chunk-7kayq7nc.js:162781-162966 placement
 /**
  * 宿主下发的 sessions bearer 状态：当前令牌、已见令牌代际、被拒集合、在途请求、拒绝退避计数。
  */
@@ -37,17 +37,17 @@ class HostSessionsBearerState {
   previousSignIn = null;
   source = null;
 }
-//@ chunk-bwbq4xvm.js:163717-163742 placement
+//@ chunk-7kayq7nc.js:162966-162991 placement
 var hostSessionsBearerStates; // deferred: uses HostSessionsBearerState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwbq4xvm.js:163717", () => {
+deferInit("chunk-7kayq7nc.js:162966", () => {
   hostSessionsBearerStates = new HostScoped(() => new HostSessionsBearerState());
 });
-//@ chunk-bwbq4xvm.js:163742-163811 placement
+//@ chunk-7kayq7nc.js:162991-163060 placement
 function isHostHandedSessionsBearer(fallbackToken) {
   let hostBearerState = getHostBearerState();
   return hostBearerState.given.size > 0 && hostBearerState.given.has(computeContentHash(fallbackToken));
 }
-//@ chunk-bwbq4xvm.js:163811-164131 placement
+//@ chunk-7kayq7nc.js:163060-163380 placement
 function sendableHostSessionsBearer(bearer) {
   let held = null;
   try {
@@ -72,25 +72,25 @@ function sendableHostSessionsBearer(bearer) {
     return null;
   }
 }
-//@ chunk-bwbq4xvm.js:164131-164190 placement
+//@ chunk-7kayq7nc.js:163380-163439 placement
 function heldHostSessionsBearer() {
   let hostBearerState = getHostBearerState();
   return hostBearerSourceWithSignIn(hostBearerState) === null ? null : hostBearerState.token;
 }
-//@ chunk-bwbq4xvm.js:164190-164282 placement
+//@ chunk-7kayq7nc.js:163439-163531 placement
 function readHostSessionsBearer() {
   let hostBearerState = getHostBearerState();
   if (hostBearerSourceWithSignIn(hostBearerState) === null) return null;
   if (hostBearerState.token === null) ensureHostSessionsBearer();
   return hostBearerState.token;
 }
-//@ chunk-bwbq4xvm.js:164282-164347 placement
+//@ chunk-7kayq7nc.js:163531-163596 placement
 function setHostSessionsBearerSource(source) {
   getHostBearerState().source = source;
   if (source === null) forgetHeldHostSessionsBearer();
   else installSessionsBearerHooks(recoverHostSessionsBearer, sendableHostSessionsBearer);
 }
-//@ chunk-bwbq4xvm.js:164347-164559 placement
+//@ chunk-7kayq7nc.js:163596-163808 placement
 function forgetHeldHostSessionsBearer(previousSignIn) {
   let hostBearerState = getHostBearerState();
   hostBearerState.token = null;
@@ -103,7 +103,7 @@ function forgetHeldHostSessionsBearer(previousSignIn) {
   hostBearerState.refusedOutAt = null;
   hostBearerState.inFlight = null;
 }
-//@ chunk-bwbq4xvm.js:164559-164659 placement
+//@ chunk-7kayq7nc.js:163808-163908 placement
 function acceptPushedHostSessionsBearer(token) {
   let hostBearerState = getHostBearerState();
   if (!isAcceptablePushedBearer(hostBearerState, token)) return false;
@@ -112,7 +112,7 @@ function acceptPushedHostSessionsBearer(token) {
   hostBearerState.lastUnansweredAt = null;
   return true;
 }
-//@ chunk-bwbq4xvm.js:164659-165326 placement
+//@ chunk-7kayq7nc.js:163908-164575 placement
 /**
  * 确保拿到宿主 sessions bearer：已有则直接返回，否则发起（去重的）向宿主索取请求。
  */
@@ -155,7 +155,7 @@ function ensureHostSessionsBearer() {
     });
   return hostBearerState.inFlight;
 }
-//@ chunk-bwbq4xvm.js:165326-166393 placement
+//@ chunk-7kayq7nc.js:164575-165642 placement
 /**
  * 会话令牌被拒后向宿主（SDK host）恢复 sessions bearer：返回 refused/not_held/withheld/recovered/stale/unrecovered 等结果。
  */
@@ -221,7 +221,7 @@ async function recoverHostSessionsBearer(token, kind = "refused") {
   } else if (hostBearerState.token !== null) return "recovered";
   return (await ensureHostSessionsBearer()) !== null ? "recovered" : "unrecovered";
 }
-//@ chunk-bwbq4xvm.js:166393-166541 placement
+//@ chunk-7kayq7nc.js:165642-165790 placement
 function rememberGivenBearer(hostBearerState, token) {
   let contentHash = computeContentHash(token);
   hostBearerState.given.delete(contentHash);
@@ -232,17 +232,17 @@ function rememberGivenBearer(hostBearerState, token) {
       break;
     }
 }
-//@ chunk-bwbq4xvm.js:166541-166578 placement
+//@ chunk-7kayq7nc.js:165790-165827 placement
 function getHostBearerState() {
   return hostSessionsBearerStates.of(getRootSession().host);
 }
-//@ chunk-bwbq4xvm.js:166578-166652 placement
+//@ chunk-7kayq7nc.js:165827-165901 placement
 function hostBearerSourceWithSignIn(hostBearerState) {
   return hostBearerState.source !== null && hostBearerState.source.hasSignIn()
     ? hostBearerState.source
     : null;
 }
-//@ chunk-bwbq4xvm.js:166652-166812 placement
+//@ chunk-7kayq7nc.js:165901-166061 placement
 function isBearerRefusalBackoff(hostBearerState) {
   if (hostBearerState.refusedOutAt === null) return false;
   if (Date.now() - hostBearerState.refusedOutAt < REFUSAL_BACKOFF_MS) return true;
@@ -251,7 +251,7 @@ function isBearerRefusalBackoff(hostBearerState) {
   hostBearerState.refusedOutAt = null;
   return false;
 }
-//@ chunk-bwbq4xvm.js:166812-166982 placement
+//@ chunk-7kayq7nc.js:166061-166231 placement
 function isAcceptablePushedBearer(hostBearerState, token) {
   let source = hostBearerSourceWithSignIn(hostBearerState);
   if (
@@ -269,13 +269,13 @@ function isAcceptablePushedBearer(hostBearerState, token) {
   );
 }
 export {
-  recoverHostSessionsBearer,
-  sendableHostSessionsBearer,
   ensureHostSessionsBearer,
   heldHostSessionsBearer,
   readHostSessionsBearer,
   isHostHandedSessionsBearer,
-  forgetHeldHostSessionsBearer,
+  recoverHostSessionsBearer,
   setHostSessionsBearerSource,
+  forgetHeldHostSessionsBearer,
   acceptPushedHostSessionsBearer,
+  sendableHostSessionsBearer,
 };

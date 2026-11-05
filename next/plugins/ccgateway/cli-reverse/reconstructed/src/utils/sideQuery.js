@@ -3,9 +3,9 @@
  *
  * 旁路查询：在主对话之外发一次独立的小模型请求完成辅助任务
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sideQuery.ts
- * pieces: chunk-e6aww6q8.js (9)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 8, fingerprint 1
  */
 import { randomUUID } from "crypto";
@@ -43,6 +43,7 @@ import {
   fetchWithRequestBodyCompression,
   takeGzipTelemetry,
   isRoutedFinalAnswerError,
+  findRouteTurnError,
   gzipTelemetryFields,
 } from "../services/api/gzipRequestBody.js";
 import { markRetryAfterTooLong, retryAfterTooLongMs } from "../services/api/retryAfter.js";
@@ -61,6 +62,7 @@ import {
   betasRequestParam,
   hitsAnthropicBackend,
   BETA_EFFORT,
+  BETA_PROGRAM_USE_CASE_IDS,
   BETA_LONG_CONTEXT,
   rejectContextBetaForModel,
 } from "./betas.js";
@@ -70,16 +72,17 @@ import {
   classifyModelAccess,
 } from "./model/modelAccessCheck.js";
 import { modelRejectsDisabledThinking } from "./thinking.js";
-import {
-  resolveEffortValue,
-  isAboveHighEffort,
-  modelCapsEffortWhenThinkingDisabled,
-  THINKING_DISABLED_EFFORT_CAP,
-} from "./effort.js";
+import { resolveEffortValue, isAboveHighEffort, modelCapsEffortWhenThinkingDisabled } from "./effort.js";
 import { logForDebugging } from "./debug.js";
-import { count } from "./collections.js";
+import { THINKING_DISABLED_EFFORT_CAP } from "../components/ModelPicker.js";
+import { countWhere } from "./collections.js";
 import { stripAnyVersatileSuffix } from "./model/modelIds.js";
 import { toProviderWireModelId } from "./model/model.js";
+import {
+  programUseCaseBody,
+  isProgramUseCaseTurnScoped,
+  forgetRefusedProgramUseCase,
+} from "./programUseCase.js";
 import { containsMalformedStringDeep, repairMalformedStringsDeep } from "./stringUtils.js";
 import { clone } from "./slowOperations.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -103,6 +106,8 @@ import {
 } from "../services/api/foundryCapabilities.js";
 import {
   isEffortUnsupportedError,
+  isProgramUseCaseBetaRejected,
+  isProgramUseCaseNotHeldError,
   isStructuredOutputsUnsupported,
   isContext1mBetaRejected,
   isInvalidBetaFlagError,
@@ -113,16 +118,19 @@ import {
 } from "../services/api/errors.js";
 import {
   markEffortUnsupported,
+  markBetaHeaderRefused,
   getLastApiCompletionTimestamp,
   setLastApiCompletionTimestamp,
   addSideQueryCostUSD,
 } from "../bootstrap/state.js";
 import { telemetrySafeModelName } from "./model/telemetryModelName.js";
+import { isNotFoundApiError, isOAuthTokenRevokedError } from "../services/api/withRetry.js";
+import { dropProgramUseCaseId } from "../services/mcp/ccrTurnId.js";
+import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { alwaysFalseD, emptyString } from "../services/api/responseDiagnostics.js";
 import { APIError, APIConnectionError } from "../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { sanitizeMarkName } from "./startupMarks.js";
 import { sleep } from "./sleep.js";
-import { isOAuthTokenRevokedError } from "../services/api/withRetry.js";
 import {
   apiErrorFields,
   apiErrorText,
@@ -132,9 +140,9 @@ import {
 import { calculateCostWithPricingSource } from "./modelCost.js";
 import { emitPrefetchChanged } from "../services/policyLimits/prefetchToggle.js";
 
-//@ chunk-e6aww6q8.js:2808592-2808644 placement
+//@ chunk-5xgkngpb.js:2876590-2876642 placement
 var logSideQueryError = (error) => logError(withTelemetryMessage(toError(error), "side query record failed"));
-//@ chunk-e6aww6q8.js:2808644-2808778 placement
+//@ chunk-5xgkngpb.js:2876642-2876776 placement
 /**
  * 发送旁路查询的 OTel 事件（出错只记录）。
  */
@@ -153,7 +161,7 @@ function emitSideQueryOtelEvent({ record, event, attributes, agentContext }) {
     logSideQueryError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2808778-2808844 placement
+//@ chunk-5xgkngpb.js:2876776-2876842 placement
 /**
  * 带并发计数的旁路查询，供插件/分类器调用模型。
  */
@@ -165,9 +173,9 @@ async function sideQueryWithCounter(opts) {
     activeSideQueryCount--;
   }
 }
-//@ chunk-e6aww6q8.js:2808844-2808854 placement
+//@ chunk-5xgkngpb.js:2876842-2876852 placement
 var activeSideQueryCount = 0;
-//@ chunk-e6aww6q8.js:2808854-2817687 fingerprint (2.1.88 match: sideQuery, 0.349)
+//@ chunk-5xgkngpb.js:2876852-2886551 fingerprint (2.1.88 match: sideQuery, 0.321)
 /**
  * 旁路查询：用独立的小请求（不进主对话）调用模型完成分类/摘要等辅助任务，支持结构化输出与超时。
  */
@@ -310,12 +318,12 @@ async function sideQuery(opts) {
       )
     : messages;
   let droppedCacheMarks = dropCaching
-    ? count(
+    ? countWhere(
         [
           ...sideQuerySystem,
           ...messages.flatMap((message) => (typeof message.content === "string" ? [] : message.content)),
         ],
-        stripCacheControl,
+        stripCacheControl_3,
       )
     : 0;
   if (droppedCacheMarks > 0)
@@ -323,7 +331,7 @@ async function sideQuery(opts) {
       `sideQuery (${opts.querySource}): ${droppedCacheMarks} cache mark(s) dropped, prompt caching is off for ${messageText}`,
     );
   let system_2 = cacheTtl
-    ? systemWithCache.map((block) => stripCacheControl_3(block, cacheTtl))
+    ? systemWithCache.map((block) => stripCacheControl_4(block, cacheTtl))
     : systemWithCache;
   let messages_2 = cacheTtl
     ? messagesWithCache.map((message) =>
@@ -331,7 +339,7 @@ async function sideQuery(opts) {
           ? message
           : {
               ...message,
-              content: message.content.map((block) => stripCacheControl_3(block, cacheTtl)),
+              content: message.content.map((block) => stripCacheControl_4(block, cacheTtl)),
             },
       )
     : messagesWithCache;
@@ -362,6 +370,7 @@ async function sideQuery(opts) {
       thinking: thinkingConfig,
     }),
     ...betasRequestParam(systemBlocks),
+    ...programUseCaseBody(systemBlocks, messageText),
     metadata: getAPIMetadata({
       servedSessionMode,
     }),
@@ -463,6 +472,58 @@ async function sideQuery(opts) {
           };
           return sendAttempt(clientArg);
         }
+        if ("program_use_case_id" in requestBody) {
+          let retryKind = isProgramUseCaseBetaRejected(error)
+            ? "header_rejected"
+            : isProgramUseCaseNotHeldError(error)
+              ? "not_held"
+              : isProgramUseCaseTurnScoped() && isNotFoundApiError(error)
+                ? "not_found"
+                : null;
+          if (retryKind !== null) {
+            if (retryKind === "header_rejected") {
+              markBetaHeaderRefused(BETA_PROGRAM_USE_CASE_IDS);
+              logForDebugging(
+                "[program-use-case] server rejected the program-use-case-ids beta header (side query); the use case is not named again in this process",
+                {
+                  level: "warn",
+                },
+              );
+            } else if (retryKind === "not_found") {
+              dropProgramUseCaseId(messageText);
+              logForDebugging(
+                "[program-use-case] a side query naming the turn's use case got a 404; this turn names nothing on that model",
+                {
+                  level: "warn",
+                },
+              );
+            } else {
+              forgetRefusedProgramUseCase(
+                {
+                  credentials,
+                },
+                requestBody.program_use_case_id,
+              );
+              logForDebugging(
+                "[program-use-case] server refused the use case this process holds (side query); dropped it",
+                {
+                  level: "warn",
+                },
+              );
+            }
+            logFeatureSad("api_program_use_case", retryKind);
+            let { program_use_case_id: programUseCaseId, betas, ...bodyWithoutUseCase } = requestBody;
+            let filtered = betas?.filter((beta) => beta !== BETA_PROGRAM_USE_CASE_IDS.header);
+            requestBody = {
+              ...bodyWithoutUseCase,
+              ...(filtered !== undefined &&
+                filtered.length > 0 && {
+                  betas: filtered,
+                }),
+            };
+            return sendAttempt(clientArg);
+          }
+        }
         if (
           supportsStructuredOutput &&
           !(extraBodyParams !== undefined && "output_config" in extraBodyParams) &&
@@ -540,7 +601,13 @@ async function sideQuery(opts) {
       return await sendAttempt(clientArg);
     } catch (error) {
       let failedDispatchId = sentDispatchId;
-      if (dispatchFellBack || signal?.aborted) throw error;
+      if (
+        dispatchFellBack ||
+        signal?.aborted ||
+        isRoutedFinalAnswerError(error) ||
+        (findRouteTurnError(error) !== undefined && clientRetries === 0)
+      )
+        throw error;
       let status = error instanceof APIError ? error.status : undefined;
       let is5xx = status !== undefined && status >= 500;
       let isConnectionError = error instanceof APIConnectionError;
@@ -724,7 +791,7 @@ async function sideQuery(opts) {
   emitPrefetchChanged();
   return response;
 }
-//@ chunk-e6aww6q8.js:2817687-2817781 placement
+//@ chunk-5xgkngpb.js:2886551-2886646 placement
 function describeApiErrorForPlugin(error, userSpecifiedModel) {
   let assistantMessageFromApiError = getAssistantMessageFromApiError(error, userSpecifiedModel);
   return {
@@ -732,21 +799,21 @@ function describeApiErrorForPlugin(error, userSpecifiedModel) {
     kind: assistantMessageFromApiError.error ?? "unknown",
   };
 }
-//@ chunk-e6aww6q8.js:2817781-2817849 placement (2.1.88 match: stripCacheControl, 1)
-function stripCacheControl(items) {
+//@ chunk-5xgkngpb.js:2886646-2886714 placement (2.1.88 match: stripCacheControl, 1)
+function stripCacheControl_3(items) {
   return "cache_control" in items && Boolean(items.cache_control);
 }
-//@ chunk-e6aww6q8.js:2817849-2817909 placement
+//@ chunk-5xgkngpb.js:2886714-2886774 placement
 function withoutCacheControl(block) {
-  return stripCacheControl(block)
+  return stripCacheControl_3(block)
     ? {
         ...block,
         cache_control: undefined,
       }
     : block;
 }
-//@ chunk-e6aww6q8.js:2817909-2818055 placement (2.1.88 match: stripCacheControl, 0.857)
-function stripCacheControl_3(block, ttl) {
+//@ chunk-5xgkngpb.js:2886774-2886920 placement (2.1.88 match: stripCacheControl, 0.857)
+function stripCacheControl_4(block, ttl) {
   if (!("cache_control" in block) || !block.cache_control || block.cache_control.ttl) return block;
   return {
     ...block,

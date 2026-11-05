@@ -1,8 +1,8 @@
 /**
  * @azure/msal-node/lib/msal-node.cjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (55)
+ * pieces: chunk-b5df2wx1.js (55)
  * attribution: esm-fingerprint 52, esm-layout 3
  */
 import http from "http";
@@ -113,7 +113,7 @@ import { ImdsRetryPolicy } from "../dist/retry/ImdsRetryPolicy.mjs";
 import { AzureArc } from "../dist/client/ManagedIdentitySources/AzureArc.mjs";
 import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:209425-211734 esm-fingerprint
+//@ chunk-b5df2wx1.js:209425-211734 esm-fingerprint
 class Deserializer {
   static deserializeJSONBlob(blob) {
     return !blob ? {} : JSON.parse(blob);
@@ -234,7 +234,7 @@ class Deserializer {
     };
   }
 }
-//@ chunk-mrx6y2r5.js:211816-213842 esm-fingerprint
+//@ chunk-b5df2wx1.js:211816-213842 esm-fingerprint
 var DEFAULT_MANAGED_IDENTITY_ID = "system_assigned_managed_identity";
 var MANAGED_IDENTITY_DEFAULT_TENANT = "managed_identity";
 var DEFAULT_AUTHORITY_FOR_MANAGED_IDENTITY = `https://login.microsoftonline.com/${MANAGED_IDENTITY_DEFAULT_TENANT}/`;
@@ -329,7 +329,7 @@ var LOOPBACK_SERVER_CONSTANTS = {
   TIMEOUT_MS: 5000,
 };
 var AZURE_ARC_SECRET_FILE_MAX_SIZE_BYTES = 4096;
-//@ chunk-mrx6y2r5.js:213883-214346 esm-fingerprint
+//@ chunk-b5df2wx1.js:213883-214346 esm-fingerprint
 class NetworkUtils {
   static getNetworkResponse(headers, body, statusCode) {
     return {
@@ -354,7 +354,7 @@ class NetworkUtils {
     return options;
   }
 }
-//@ chunk-mrx6y2r5.js:214430-214830 esm-fingerprint
+//@ chunk-b5df2wx1.js:214430-214830 esm-fingerprint
 class HttpClient {
   constructor(proxyUrl, customAgentOptions) {
     this.proxyUrl = proxyUrl || "";
@@ -378,7 +378,7 @@ class HttpClient {
     else return networkRequestViaHttps(url, HttpMethod.POST, options, this.customAgentOptions);
   }
 }
-//@ chunk-mrx6y2r5.js:214830-217629 esm-fingerprint
+//@ chunk-b5df2wx1.js:214830-217629 esm-fingerprint
 var networkRequestViaProxy = (
   destinationUrlString,
   proxyUrlString,
@@ -575,7 +575,7 @@ Headers: ${JSON.stringify(headers)}`,
   }
   return parsedBody;
 };
-//@ chunk-mrx6y2r5.js:217670-218358 esm-fingerprint
+//@ chunk-b5df2wx1.js:217670-218358 esm-fingerprint
 var invalidFileExtension; // deferred: uses DEFAULT_MANAGED_IDENTITY_ID of its import cycle while loading; runs once the cycle is complete
 var invalidFilePath;
 var invalidManagedIdentityIdType;
@@ -591,7 +591,7 @@ var userAssignedNotAvailableAtRuntime;
 var wwwAuthenticateHeaderMissing;
 var wwwAuthenticateHeaderUnsupportedFormat;
 var MsiEnvironmentVariableUrlMalformedErrorCodes;
-deferInit("chunk-mrx6y2r5.js:217670", () => {
+deferInit("chunk-b5df2wx1.js:217670", () => {
   invalidFileExtension = "invalid_file_extension";
   invalidFilePath = "invalid_file_path";
   invalidManagedIdentityIdType = "invalid_managed_identity_id_type";
@@ -614,9 +614,9 @@ deferInit("chunk-mrx6y2r5.js:217670", () => {
     [ManagedIdentityEnvironmentVariableNames.MSI_ENDPOINT]: "msi_endpoint_url_malformed",
   };
 });
-//@ chunk-mrx6y2r5.js:218399-220037 esm-fingerprint
+//@ chunk-b5df2wx1.js:218399-220037 esm-fingerprint
 var ManagedIdentityErrorMessages; // deferred: uses invalidFileExtension of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:218399", () => {
+deferInit("chunk-b5df2wx1.js:218399", () => {
   ManagedIdentityErrorMessages = {
     [invalidFileExtension]: "The file path in the WWW-Authenticate header does not contain a .key file.",
     [invalidFilePath]:
@@ -645,9 +645,9 @@ deferInit("chunk-mrx6y2r5.js:218399", () => {
       "A 401 response was received form the Azure Arc Managed Identity, but the www-authenticate header is in an unsupported format.",
   };
 });
-//@ chunk-mrx6y2r5.js:220037-220161 esm-fingerprint
+//@ chunk-b5df2wx1.js:220037-220161 esm-fingerprint
 let ManagedIdentityError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:220037", () => {
+deferInit("chunk-b5df2wx1.js:220037", () => {
   ManagedIdentityError = class ManagedIdentityError extends AuthError {
     constructor(errorCode) {
       super(errorCode, ManagedIdentityErrorMessages[errorCode]);
@@ -656,11 +656,11 @@ deferInit("chunk-mrx6y2r5.js:220037", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:220161-220193 esm-layout
+//@ chunk-b5df2wx1.js:220161-220193 esm-layout
 function createManagedIdentityError(errorCode) {
   return new ManagedIdentityError(errorCode);
 }
-//@ chunk-mrx6y2r5.js:220234-220738 esm-fingerprint
+//@ chunk-b5df2wx1.js:220234-220738 esm-fingerprint
 class ManagedIdentityId {
   get id() {
     return this._id;
@@ -699,7 +699,7 @@ class ManagedIdentityId {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:220779-222006 esm-fingerprint
+//@ chunk-b5df2wx1.js:220779-222006 esm-fingerprint
 var NodeAuthErrorMessage = {
   invalidLoopbackAddressType: {
     code: "invalid_loopback_server_address_type",
@@ -738,9 +738,9 @@ var NodeAuthErrorMessage = {
     desc: "RedirectUri is not supported in this scenario. Please remove redirectUri from the request.",
   },
 };
-//@ chunk-mrx6y2r5.js:222006-223182 esm-fingerprint
+//@ chunk-b5df2wx1.js:222006-223182 esm-fingerprint
 let NodeAuthError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:222006", () => {
+deferInit("chunk-b5df2wx1.js:222006", () => {
   NodeAuthError = class NodeAuthError extends AuthError {
     constructor(errorCode, errorMessage) {
       super(errorCode, errorMessage);
@@ -802,7 +802,7 @@ deferInit("chunk-mrx6y2r5.js:222006", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:225925-226319 esm-fingerprint
+//@ chunk-b5df2wx1.js:225925-226319 esm-fingerprint
 class EncodingUtils {
   static base64Encode(str, encoding) {
     return Buffer.from(str, encoding).toString(EncodingTypes.BASE64);
@@ -822,13 +822,13 @@ class EncodingUtils {
     return EncodingUtils.base64Decode(str);
   }
 }
-//@ chunk-mrx6y2r5.js:226383-226454 esm-fingerprint
+//@ chunk-b5df2wx1.js:226383-226454 esm-fingerprint
 class HashUtils {
   sha256(buffer) {
     return hy.createHash(Hash.SHA256).update(buffer).digest();
   }
 }
-//@ chunk-mrx6y2r5.js:226518-227057 esm-fingerprint
+//@ chunk-b5df2wx1.js:226518-227057 esm-fingerprint
 class PkceGenerator {
   constructor() {
     this.hashUtils = new HashUtils();
@@ -860,7 +860,7 @@ class PkceGenerator {
     );
   }
 }
-//@ chunk-mrx6y2r5.js:227098-227844 esm-fingerprint
+//@ chunk-b5df2wx1.js:227098-227844 esm-fingerprint
 class CryptoProvider {
   constructor() {
     this.pkceGenerator = new PkceGenerator();
@@ -904,7 +904,7 @@ class CryptoProvider {
     );
   }
 }
-//@ chunk-mrx6y2r5.js:227930-228252 esm-fingerprint
+//@ chunk-b5df2wx1.js:227930-228252 esm-fingerprint
 function generateCredentialKey(credential) {
   let familyId =
     (credential.credentialType === CredentialType.REFRESH_TOKEN && credential.familyId) ||
@@ -926,16 +926,16 @@ function generateCredentialKey(credential) {
     .join(CACHE.KEY_SEPARATOR)
     .toLowerCase();
 }
-//@ chunk-mrx6y2r5.js:228252-228396 esm-fingerprint
+//@ chunk-b5df2wx1.js:228252-228396 esm-fingerprint
 function generateAccountKey(account) {
   let homeTenantId = account.homeAccountId.split(".")[1];
   return [account.homeAccountId, account.environment, homeTenantId || account.tenantId || ""]
     .join(CACHE.KEY_SEPARATOR)
     .toLowerCase();
 }
-//@ chunk-mrx6y2r5.js:228437-232340 esm-fingerprint
+//@ chunk-b5df2wx1.js:228437-232340 esm-fingerprint
 let NodeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:228437", () => {
+deferInit("chunk-b5df2wx1.js:228437", () => {
   NodeStorage = class NodeStorage extends CacheManager {
     constructor(logger, clientId, cryptoImpl, staticAuthorityOptions) {
       super(clientId, cryptoImpl, logger, new StubPerformanceClient(), staticAuthorityOptions);
@@ -1156,7 +1156,7 @@ deferInit("chunk-mrx6y2r5.js:228437", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:232381-232458 esm-fingerprint
+//@ chunk-b5df2wx1.js:232381-232458 esm-fingerprint
 var defaultSerializedCache = {
   Account: {},
   IdToken: {},
@@ -1164,7 +1164,7 @@ var defaultSerializedCache = {
   RefreshToken: {},
   AppMetadata: {},
 };
-//@ chunk-mrx6y2r5.js:232458-236220 esm-fingerprint
+//@ chunk-b5df2wx1.js:232458-236220 esm-fingerprint
 class TokenCache {
   constructor(storage, logger, cachePlugin) {
     this.cacheHasChanged = false;
@@ -1341,12 +1341,12 @@ class TokenCache {
     };
   }
 }
-//@ chunk-mrx6y2r5.js:236220-236238 esm-layout
+//@ chunk-b5df2wx1.js:236220-236238 esm-layout
 var jwt; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:236220", () => {
+deferInit("chunk-b5df2wx1.js:236220", () => {
   jwt = __toESM(require_jsonwebtoken(), 1);
 });
-//@ chunk-mrx6y2r5.js:236279-237661 esm-fingerprint
+//@ chunk-b5df2wx1.js:236279-237661 esm-fingerprint
 class ClientAssertion {
   static fromAssertion(assertion) {
     let clientAssertion = new ClientAssertion();
@@ -1419,12 +1419,12 @@ class ClientAssertion {
     return certs;
   }
 }
-//@ chunk-mrx6y2r5.js:237702-237739 esm-fingerprint
+//@ chunk-b5df2wx1.js:237702-237739 esm-fingerprint
 var name = "@azure/msal-node";
 var version = "3.8.1";
-//@ chunk-mrx6y2r5.js:237780-239733 esm-fingerprint
+//@ chunk-b5df2wx1.js:237780-239733 esm-fingerprint
 let UsernamePasswordClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:237780", () => {
+deferInit("chunk-b5df2wx1.js:237780", () => {
   UsernamePasswordClient = class UsernamePasswordClient extends BaseClient {
     constructor(configuration) {
       super(configuration);
@@ -1511,7 +1511,7 @@ deferInit("chunk-mrx6y2r5.js:237780", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:239774-240183 esm-fingerprint
+//@ chunk-b5df2wx1.js:239774-240183 esm-fingerprint
 function getAuthCodeRequestUrl(config, authority, request, logger) {
   let parameters = getStandardAuthorizeRequestParameters(
     {
@@ -1541,7 +1541,7 @@ function getAuthCodeRequestUrl(config, authority, request, logger) {
     request.extraQueryParameters,
   );
 }
-//@ chunk-mrx6y2r5.js:240224-247170 esm-fingerprint
+//@ chunk-b5df2wx1.js:240224-247170 esm-fingerprint
 class ClientApplication {
   constructor(configuration) {
     this.config = buildAppConfiguration(configuration);
@@ -1873,7 +1873,7 @@ class ClientApplication {
     this.storage.clear();
   }
 }
-//@ chunk-mrx6y2r5.js:247232-248318 esm-fingerprint
+//@ chunk-b5df2wx1.js:247232-248318 esm-fingerprint
 class LoopbackClient {
   async listenForAuthCode(successTemplate, errorTemplate) {
     if (this.server) throw NodeAuthError.createLoopbackServerAlreadyExistsError();
@@ -1922,9 +1922,9 @@ class LoopbackClient {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:248359-252180 esm-fingerprint
+//@ chunk-b5df2wx1.js:248359-252180 esm-fingerprint
 let DeviceCodeClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:248359", () => {
+deferInit("chunk-b5df2wx1.js:248359", () => {
   DeviceCodeClient = class DeviceCodeClient extends BaseClient {
     constructor(configuration) {
       super(configuration);
@@ -2110,9 +2110,9 @@ deferInit("chunk-mrx6y2r5.js:248359", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:252221-256263 esm-fingerprint
+//@ chunk-b5df2wx1.js:252221-256263 esm-fingerprint
 let PublicClientApplication; // deferred: uses ClientApplication of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:252221", () => {
+deferInit("chunk-b5df2wx1.js:252221", () => {
   PublicClientApplication = class PublicClientApplication extends ClientApplication {
     constructor(configuration) {
       super(configuration);
@@ -2305,9 +2305,9 @@ deferInit("chunk-mrx6y2r5.js:252221", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:256304-260286 esm-fingerprint
+//@ chunk-b5df2wx1.js:256304-260286 esm-fingerprint
 let ClientCredentialClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:256304", () => {
+deferInit("chunk-b5df2wx1.js:256304", () => {
   ClientCredentialClient = class ClientCredentialClient extends BaseClient {
     constructor(configuration, appTokenProvider) {
       super(configuration);
@@ -2504,9 +2504,9 @@ deferInit("chunk-mrx6y2r5.js:256304", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:260327-264439 esm-fingerprint
+//@ chunk-b5df2wx1.js:260327-264439 esm-fingerprint
 let OnBehalfOfClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:260327", () => {
+deferInit("chunk-b5df2wx1.js:260327", () => {
   OnBehalfOfClient = class OnBehalfOfClient extends BaseClient {
     constructor(configuration) {
       super(configuration);
@@ -2687,9 +2687,9 @@ deferInit("chunk-mrx6y2r5.js:260327", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:264480-267166 esm-fingerprint
+//@ chunk-b5df2wx1.js:264480-267166 esm-fingerprint
 let ConfidentialClientApplication; // deferred: uses ClientApplication of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:264480", () => {
+deferInit("chunk-b5df2wx1.js:264480", () => {
   ConfidentialClientApplication = class ConfidentialClientApplication extends ClientApplication {
     constructor(configuration) {
       super(configuration);
@@ -2821,13 +2821,13 @@ deferInit("chunk-mrx6y2r5.js:264480", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:267207-267319 esm-fingerprint
+//@ chunk-b5df2wx1.js:267207-267319 esm-fingerprint
 function isIso8601(dateString) {
   if (typeof dateString !== "string") return false;
   let date = new Date(dateString);
   return !isNaN(date.getTime()) && date.toISOString() === dateString;
 }
-//@ chunk-mrx6y2r5.js:267360-268107 esm-fingerprint
+//@ chunk-b5df2wx1.js:267360-268107 esm-fingerprint
 class HttpClientWithRetries {
   constructor(httpClientNoRetries, retryPolicy, logger) {
     this.httpClientNoRetries = httpClientNoRetries;
@@ -2862,7 +2862,7 @@ class HttpClientWithRetries {
     return this.sendNetworkRequestAsync(HttpMethod.POST, url, options);
   }
 }
-//@ chunk-mrx6y2r5.js:268148-268375 esm-fingerprint
+//@ chunk-b5df2wx1.js:268148-268375 esm-fingerprint
 var ManagedIdentityUserAssignedIdQueryParameterNames = {
   MANAGED_IDENTITY_CLIENT_ID_2017: "clientid",
   MANAGED_IDENTITY_CLIENT_ID: "client_id",
@@ -2870,7 +2870,7 @@ var ManagedIdentityUserAssignedIdQueryParameterNames = {
   MANAGED_IDENTITY_RESOURCE_ID_IMDS: "msi_res_id",
   MANAGED_IDENTITY_RESOURCE_ID_NON_IMDS: "mi_res_id",
 };
-//@ chunk-mrx6y2r5.js:268375-271062 esm-fingerprint
+//@ chunk-b5df2wx1.js:268375-271062 esm-fingerprint
 class BaseManagedIdentitySource {
   constructor(logger, nodeStorage, networkClient, cryptoProvider, disableInternalRetries) {
     this.logger = logger;
@@ -3002,9 +3002,9 @@ class BaseManagedIdentitySource {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:271062-271287 esm-fingerprint
+//@ chunk-b5df2wx1.js:271062-271287 esm-fingerprint
 // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:271062", () => {
+deferInit("chunk-b5df2wx1.js:271062", () => {
   BaseManagedIdentitySource.getValidatedEnvVariableUrlString = (
     envVariableStringName,
     envVariable,
@@ -3021,7 +3021,7 @@ deferInit("chunk-mrx6y2r5.js:271062", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:271328-271488 esm-fingerprint
+//@ chunk-b5df2wx1.js:271328-271488 esm-fingerprint
 class LinearRetryStrategy {
   calculateDelay(retryHeader, minimumDelay) {
     if (!retryHeader) return minimumDelay;
@@ -3030,11 +3030,11 @@ class LinearRetryStrategy {
     return Math.max(minimumDelay, millisToSleep);
   }
 }
-//@ chunk-mrx6y2r5.js:271529-271656 esm-layout
+//@ chunk-b5df2wx1.js:271529-271656 esm-layout
 var DEFAULT_MANAGED_IDENTITY_MAX_RETRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_MANAGED_IDENTITY_RETRY_DELAY_MS;
 var DEFAULT_MANAGED_IDENTITY_HTTP_STATUS_CODES_TO_RETRY_ON;
-deferInit("chunk-mrx6y2r5.js:271529", () => {
+deferInit("chunk-b5df2wx1.js:271529", () => {
   DEFAULT_MANAGED_IDENTITY_MAX_RETRIES = 3;
   DEFAULT_MANAGED_IDENTITY_RETRY_DELAY_MS = 1000;
   DEFAULT_MANAGED_IDENTITY_HTTP_STATUS_CODES_TO_RETRY_ON = [
@@ -3046,7 +3046,7 @@ deferInit("chunk-mrx6y2r5.js:271529", () => {
     HttpStatus.GATEWAY_TIMEOUT,
   ];
 });
-//@ chunk-mrx6y2r5.js:271656-272044 esm-fingerprint
+//@ chunk-b5df2wx1.js:271656-272044 esm-fingerprint
 class DefaultManagedIdentityRetryPolicy {
   constructor() {
     this.linearRetryStrategy = new LinearRetryStrategy();
@@ -3070,7 +3070,7 @@ class DefaultManagedIdentityRetryPolicy {
     return false;
   }
 }
-//@ chunk-mrx6y2r5.js:272085-272488 esm-fingerprint
+//@ chunk-b5df2wx1.js:272085-272488 esm-fingerprint
 class ManagedIdentityRequestParameters {
   constructor(httpMethod, endpoint, retryPolicy) {
     this.httpMethod = httpMethod;
@@ -3092,11 +3092,11 @@ class ManagedIdentityRequestParameters {
     return mapToQueryString(parameters);
   }
 }
-//@ chunk-mrx6y2r5.js:272529-272549 esm-fingerprint
+//@ chunk-b5df2wx1.js:272529-272549 esm-fingerprint
 var APP_SERVICE_MSI_API_VERSION = "2019-08-01";
-//@ chunk-mrx6y2r5.js:272549-273670 esm-fingerprint
+//@ chunk-b5df2wx1.js:272549-273670 esm-fingerprint
 let AppService; // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:272549", () => {
+deferInit("chunk-b5df2wx1.js:272549", () => {
   AppService = class AppService extends BaseManagedIdentitySource {
     constructor(
       logger,
@@ -3156,9 +3156,9 @@ deferInit("chunk-mrx6y2r5.js:272549", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:276429-277268 esm-fingerprint
+//@ chunk-b5df2wx1.js:276429-277268 esm-fingerprint
 let CloudShell; // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:276429", () => {
+deferInit("chunk-b5df2wx1.js:276429", () => {
   CloudShell = class CloudShell extends BaseManagedIdentitySource {
     constructor(errorCode, nodeStorage, networkClient, cryptoProvider, disableInternalRetries, msiEndpoint) {
       super(errorCode, nodeStorage, networkClient, cryptoProvider, disableInternalRetries);
@@ -3210,7 +3210,7 @@ deferInit("chunk-mrx6y2r5.js:276429", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:277309-277577 esm-fingerprint
+//@ chunk-b5df2wx1.js:277309-277577 esm-fingerprint
 class ExponentialRetryStrategy {
   constructor(minExponentialBackoff, maxExponentialBackoff, exponentialDeltaBackoff) {
     this.minExponentialBackoff = minExponentialBackoff;
@@ -3222,13 +3222,13 @@ class ExponentialRetryStrategy {
     return Math.min(Math.pow(2, currentRetry - 1) * this.exponentialDeltaBackoff, this.maxExponentialBackoff);
   }
 }
-//@ chunk-mrx6y2r5.js:278614-278704 esm-fingerprint
+//@ chunk-b5df2wx1.js:278614-278704 esm-fingerprint
 var IMDS_TOKEN_PATH = "/metadata/identity/oauth2/token";
 var DEFAULT_IMDS_ENDPOINT = `http://169.254.169.254${IMDS_TOKEN_PATH}`;
 var IMDS_API_VERSION = "2018-02-01";
-//@ chunk-mrx6y2r5.js:278704-279706 esm-fingerprint
+//@ chunk-b5df2wx1.js:278704-279706 esm-fingerprint
 let Imds; // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:278704", () => {
+deferInit("chunk-b5df2wx1.js:278704", () => {
   Imds = class Imds extends BaseManagedIdentitySource {
     constructor(
       logger,
@@ -3282,11 +3282,11 @@ deferInit("chunk-mrx6y2r5.js:278704", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:279747-279775 esm-fingerprint
+//@ chunk-b5df2wx1.js:279747-279775 esm-fingerprint
 var SERVICE_FABRIC_MSI_API_VERSION = "2019-07-01-preview";
-//@ chunk-mrx6y2r5.js:279775-281290 esm-fingerprint
+//@ chunk-b5df2wx1.js:279775-281290 esm-fingerprint
 let ServiceFabric; // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:279775", () => {
+deferInit("chunk-b5df2wx1.js:279775", () => {
   ServiceFabric = class ServiceFabric extends BaseManagedIdentitySource {
     constructor(
       logger,
@@ -3360,16 +3360,16 @@ deferInit("chunk-mrx6y2r5.js:279775", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:281331-281445 esm-fingerprint
+//@ chunk-b5df2wx1.js:281331-281445 esm-fingerprint
 var MACHINE_LEARNING_MSI_API_VERSION; // deferred: uses DEFAULT_MANAGED_IDENTITY_ID of its import cycle while loading; runs once the cycle is complete
 var MANAGED_IDENTITY_MACHINE_LEARNING_UNSUPPORTED_ID_TYPE_ERROR;
-deferInit("chunk-mrx6y2r5.js:281331", () => {
+deferInit("chunk-b5df2wx1.js:281331", () => {
   MACHINE_LEARNING_MSI_API_VERSION = "2017-09-01";
   MANAGED_IDENTITY_MACHINE_LEARNING_UNSUPPORTED_ID_TYPE_ERROR = `Only client id is supported for user-assigned managed identity in ${ManagedIdentitySourceNames.MACHINE_LEARNING}.`;
 });
-//@ chunk-mrx6y2r5.js:281445-282744 esm-fingerprint
+//@ chunk-b5df2wx1.js:281445-282744 esm-fingerprint
 let MachineLearning; // deferred: uses BaseManagedIdentitySource of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:281445", () => {
+deferInit("chunk-b5df2wx1.js:281445", () => {
   MachineLearning = class MachineLearning extends BaseManagedIdentitySource {
     constructor(
       logger,
@@ -3435,7 +3435,7 @@ deferInit("chunk-mrx6y2r5.js:281445", () => {
     }
   };
 });
-//@ chunk-mrx6y2r5.js:282785-284024 esm-fingerprint
+//@ chunk-b5df2wx1.js:282785-284024 esm-fingerprint
 class ManagedIdentityClient {
   constructor(logger, nodeStorage, networkClient, cryptoProvider, disableInternalRetries) {
     this.logger = logger;
@@ -3527,12 +3527,12 @@ class ManagedIdentityClient {
     return source;
   }
 }
-//@ chunk-mrx6y2r5.js:284065-284091 esm-fingerprint
+//@ chunk-b5df2wx1.js:284065-284091 esm-fingerprint
 var SOURCES_THAT_SUPPORT_TOKEN_REVOCATION; // deferred: uses DEFAULT_MANAGED_IDENTITY_ID of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:284065", () => {
+deferInit("chunk-b5df2wx1.js:284065", () => {
   SOURCES_THAT_SUPPORT_TOKEN_REVOCATION = [ManagedIdentitySourceNames.SERVICE_FABRIC];
 });
-//@ chunk-mrx6y2r5.js:284091-286452 esm-fingerprint
+//@ chunk-b5df2wx1.js:284091-286452 esm-fingerprint
 class ManagedIdentityApplication {
   constructor(configuration) {
     this.config = buildManagedIdentityConfiguration(configuration || {});

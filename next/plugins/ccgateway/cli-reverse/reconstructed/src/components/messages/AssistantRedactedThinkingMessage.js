@@ -3,9 +3,9 @@
  *
  * 被加密（redacted）的思考块：显示 "✻ Thinking…"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AssistantRedactedThinkingMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -16,7 +16,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:43247-43543 fingerprint (2.1.88 match: AssistantRedactedThinkingMessage, 0.369)
+//@ chunk-wjygkcr4.js:43856-44152 fingerprint (2.1.88 match: AssistantRedactedThinkingMessage, 0.368)
 function AssistantRedactedThinkingMessage(props) {
   let $ = useMemoCache(3);
   let { addMargin } = props;

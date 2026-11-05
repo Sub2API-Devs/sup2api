@@ -3,9 +3,9 @@
  *
  * 提示建议（预测用户下一句）：开关判定、抑制原因（模式、限额、缓存冷）、fork 生成、结果过滤与遥测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/PromptSuggestion/promptSuggestion.ts
- * pieces: chunk-3sjj4q4c.js (19)
+ * pieces: chunk-rypxzpmd.js (19)
  * attribution: placement 6, fingerprint 8, layout 5
  */
 import { env } from "../../utils/env.js";
@@ -15,10 +15,10 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 import { isTeammate } from "../../utils/teammate.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { getCurrentLimits } from "../claudeAiLimits.js";
 import { hasKnownPlanTier } from "../../utils/planTiers.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getLastAssistantMessage, createUserMessage } from "../../utils/messages.js";
 import { isSuggestionBackOffActive, BACK_OFF_TURN_INTERVAL, isSuggestionOwnedByPlugin } from "./backOff.js";
 import { generatePipelinedSuggestion } from "./speculation.js";
@@ -41,18 +41,18 @@ import { toError } from "../../utils/errors.js";
 import { redactSecrets } from "../teamMemorySync/secretScanner.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 
-//@ chunk-3sjj4q4c.js:956-1142 placement
+//@ chunk-rypxzpmd.js:956-1142 placement
 var HAN_RE = /\p{Script=Han}/u;
 var PHONETIC_SCRIPT_RE =
   /[\p{Script=Hiragana}\p{Script=Katakana}\u30fc\uff70\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 var HANGUL_RE = /\p{Script=Hangul}/u;
 var LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
-//@ chunk-3sjj4q4c.js:1142-1205 placement
+//@ chunk-rypxzpmd.js:1142-1205 placement
 function countCjkChars(text) {
   let { han, phonetic, hangul } = countScriptChars(text);
   return han + phonetic + hangul;
 }
-//@ chunk-3sjj4q4c.js:1205-1392 placement
+//@ chunk-rypxzpmd.js:1205-1392 placement
 function countWordsMultilingual(suggestion) {
   let trimmed = suggestion.trim();
   if (trimmed === "") return 0;
@@ -63,7 +63,7 @@ function countWordsMultilingual(suggestion) {
   }
   return Math.ceil(wordCount);
 }
-//@ chunk-3sjj4q4c.js:1392-1566 placement
+//@ chunk-rypxzpmd.js:1392-1566 placement
 function countScriptChars(text) {
   let hanCount = 0;
   let phoneticCount = 0;
@@ -81,21 +81,21 @@ function countScriptChars(text) {
     other: otherCount,
   };
 }
-//@ chunk-3sjj4q4c.js:1566-1631 placement
+//@ chunk-rypxzpmd.js:1566-1631 placement
 /**
  * 提示建议状态是否为已展示（shown）或已接受（accepted）。
  */
 function isShownOrAcceptedSuggestion(promptSuggestion) {
   return promptSuggestion.status === "shown" || promptSuggestion.status === "accepted";
 }
-//@ chunk-3sjj4q4c.js:1631-1685 placement
+//@ chunk-rypxzpmd.js:1631-1685 placement
 /**
  * 提示建议的展示文本：状态为 empty 时返回 null，否则返回 text。
  */
 function suggestionTextOrNull(suggestion) {
   return suggestion.status === "empty" ? null : suggestion.text;
 }
-//@ chunk-3sjj4q4c.js:1685-2333 fingerprint (2.1.88 match: shouldEnablePromptSuggestion, 1)
+//@ chunk-rypxzpmd.js:1685-2333 fingerprint (2.1.88 match: shouldEnablePromptSuggestion, 1)
 /**
  * 是否启用提示建议：CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION 优先；否则需 tengu_chomp_inflection、交互会话、非 swarm 队员、设置 promptSuggestionEnabled 不为 false。记 tengu_prompt_suggestion_init。
  */
@@ -136,23 +136,23 @@ function shouldEnablePromptSuggestion() {
     });
     return false;
   }
-  let enabled = getInitialSettings_2()?.promptSuggestionEnabled !== false;
+  let enabled = getInitialSettings()?.promptSuggestionEnabled !== false;
   logEvent("tengu_prompt_suggestion_init", {
     enabled,
     source: lit("setting"),
   });
   return enabled;
 }
-//@ chunk-3sjj4q4c.js:2333-2458 layout
+//@ chunk-rypxzpmd.js:2333-2458 layout
 /**
  * 只看 env 与设置的启用判断（不记遥测）。
  */
 function isPromptSuggestionSettingEnabled() {
   let CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION;
   if (CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION !== undefined) return CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION;
-  return getInitialSettings_2()?.promptSuggestionEnabled !== false;
+  return getInitialSettings()?.promptSuggestionEnabled !== false;
 }
-//@ chunk-3sjj4q4c.js:2458-2985 fingerprint (2.1.88 match: getSuggestionSuppressReason, 0.675)
+//@ chunk-rypxzpmd.js:2458-2985 fingerprint (2.1.88 match: getSuggestionSuppressReason, 0.674)
 /**
  * 应用状态层面的抑制原因：disabled、pending_permission、elicitation_active、plan_mode、rate_limit、usage_credits。
  */
@@ -174,7 +174,7 @@ function getSuggestionSuppressReason(appState, billedToUsageCredits) {
   }
   return null;
 }
-//@ chunk-3sjj4q4c.js:2985-3673 fingerprint (2.1.88 match: tryGenerateSuggestion, 0.653)
+//@ chunk-rypxzpmd.js:2985-3673 fingerprint (2.1.88 match: tryGenerateSuggestion, 0.653)
 /**
  * 生成前的各项检查（中止、对话太短、上次回答出错、抑制原因、缓存冷、未采用连击节流），通过后生成并过滤建议。
  */
@@ -190,7 +190,7 @@ async function tryGenerateSuggestion(
     logSuggestionSuppressed("aborted", promptId);
     return null;
   }
-  if (count(messages, (m) => m.type === "assistant") < 2) {
+  if (countWhere(messages, (m) => m.type === "assistant") < 2) {
     logSuggestionSuppressed("early_conversation", promptId);
     return null;
   }
@@ -241,7 +241,7 @@ async function tryGenerateSuggestion(
     generationRequestId,
   };
 }
-//@ chunk-3sjj4q4c.js:3673-4710 fingerprint (2.1.88 match: executePromptSuggestion, 0.473)
+//@ chunk-rypxzpmd.js:3673-4710 fingerprint (2.1.88 match: executePromptSuggestion, 0.478)
 /**
  * 主线程 REPL 每轮结束后触发：检查焦点，生成建议并放到输入框占位；被阻塞任务时写入 suggestedReply。
  */
@@ -308,7 +308,7 @@ async function executePromptSuggestion(context, lastResult) {
     if (promptSuggestion.abortController === abortController) promptSuggestion.abortController = null;
   }
 }
-//@ chunk-3sjj4q4c.js:4710-4899 layout
+//@ chunk-rypxzpmd.js:4710-4899 layout
 /**
  * 被阻塞的后台任务状态里记录建议回复。
  */
@@ -327,12 +327,12 @@ async function persistSuggestedReply(prev, needs, storageV5) {
     storageV5,
   );
 }
-//@ chunk-3sjj4q4c.js:4899-4909 layout
+//@ chunk-rypxzpmd.js:4899-4909 layout
 /**
  * 1e4
  */
 var CACHE_COLD_TOKEN_THRESHOLD = 1e4;
-//@ chunk-3sjj4q4c.js:4909-5142 layout
+//@ chunk-rypxzpmd.js:4909-5142 layout
 /**
  * 上次请求非缓存 token >1 万返回 uncached；加缓存写入超过时返回 cache_write（tengu_chomp_thaw 可放行）。
  */
@@ -345,7 +345,7 @@ function getCacheColdReason(lastAssistantMessage) {
   if (inputTokens + cacheCreationInputTokens <= CACHE_COLD_TOKEN_THRESHOLD) return null;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_chomp_thaw", false) ? null : "cache_write";
 }
-//@ chunk-3sjj4q4c.js:5142-6549 layout
+//@ chunk-rypxzpmd.js:5142-6549 layout
 /**
  * 提示建议的指令：预测用户接下来会输入什么（2–12 词），不确定就沉默。
  */
@@ -381,7 +381,7 @@ Stay silent if a suggestion could be unsafe or inappropriate \u2014 including an
 Format: 2-12 words, match the user's style. Or nothing.
 
 Reply with ONLY the suggestion, no quotes or explanation.`;
-//@ chunk-3sjj4q4c.js:6549-7215 fingerprint (2.1.88 match: generateSuggestion, 0.932)
+//@ chunk-rypxzpmd.js:6549-7215 fingerprint (2.1.88 match: generateSuggestion, 0.927)
 /**
  * fork 一次（prompt_suggestion，拒绝工具）收集 assistant 文本候选与请求 id。
  */
@@ -424,7 +424,7 @@ async function generateSuggestion(abortController, promptId, cacheSafeParams) {
     generationRequestId,
   };
 }
-//@ chunk-3sjj4q4c.js:8009-10528 fingerprint (2.1.88 match: shouldFilterSuggestion, 1)
+//@ chunk-rypxzpmd.js:8009-10528 fingerprint (2.1.88 match: shouldFilterSuggestion, 1)
 /**
  * 过滤不合格建议：done、元文本、括号包裹、错误消息、前缀标签、词数过少/过多、过长、多句、格式化、评价语、Claude 口吻。
  */
@@ -531,7 +531,7 @@ function shouldFilterSuggestion(suggestion, promptId) {
     }
   return false;
 }
-//@ chunk-3sjj4q4c.js:10528-10868 fingerprint (2.1.88 match: logSuggestionOutcome, 0.808)
+//@ chunk-rypxzpmd.js:10528-10868 fingerprint (2.1.88 match: logSuggestionOutcome, 0.807)
 /**
  * 记录建议被采纳/忽略及相似度、耗时。
  */
@@ -555,7 +555,7 @@ function logSuggestionOutcome(suggestion, userInput, emittedAt, generationReques
     similarity,
   });
 }
-//@ chunk-3sjj4q4c.js:10868-11051 fingerprint (2.1.88 match: logSuggestionSuppressed, 0.589)
+//@ chunk-rypxzpmd.js:10868-11051 fingerprint (2.1.88 match: logSuggestionSuppressed, 0.589)
 /**
  * 记录建议被抑制及原因。
  */
@@ -574,13 +574,13 @@ function logSuggestionSuppressed(reason, source, details) {
 }
 export {
   isPromptSuggestionSettingEnabled,
-  shouldEnablePromptSuggestion,
-  suggestionTextOrNull,
-  isShownOrAcceptedSuggestion,
+  logSuggestionOutcome,
   logSuggestionSuppressed,
+  tryGenerateSuggestion,
+  shouldEnablePromptSuggestion,
   generateSuggestion,
   SUGGESTION_PROMPT,
+  suggestionTextOrNull,
+  isShownOrAcceptedSuggestion,
   executePromptSuggestion,
-  logSuggestionOutcome,
-  tryGenerateSuggestion,
 };

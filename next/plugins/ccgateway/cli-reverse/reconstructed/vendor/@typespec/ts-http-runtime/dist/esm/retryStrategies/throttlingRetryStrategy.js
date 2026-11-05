@@ -1,16 +1,16 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/retryStrategies/throttlingRetryStrategy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (4)
+ * pieces: chunk-b5df2wx1.js (4)
  * attribution: esm-fingerprint 4
  */
 import { parseHeaderValueAsNumber } from "../util/helpers.js";
 
-//@ chunk-mrx6y2r5.js:43991-44059 esm-fingerprint
+//@ chunk-b5df2wx1.js:43991-44059 esm-fingerprint
 var RetryAfterHeader = "Retry-After";
 var AllRetryAfterHeaders = ["retry-after-ms", "x-ms-retry-after-ms", RetryAfterHeader];
-//@ chunk-mrx6y2r5.js:44059-44323 esm-fingerprint
+//@ chunk-b5df2wx1.js:44059-44323 esm-fingerprint
 function getRetryAfterInMs(response) {
   if (!(response && [429, 503].includes(response.status))) return;
   try {
@@ -27,11 +27,11 @@ function getRetryAfterInMs(response) {
     return;
   }
 }
-//@ chunk-mrx6y2r5.js:44323-44368 esm-fingerprint
+//@ chunk-b5df2wx1.js:44323-44368 esm-fingerprint
 function isThrottlingRetryResponse(response) {
   return Number.isFinite(getRetryAfterInMs(response));
 }
-//@ chunk-mrx6y2r5.js:44368-44526 esm-fingerprint
+//@ chunk-b5df2wx1.js:44368-44526 esm-fingerprint
 function throttlingRetryStrategy() {
   return {
     name: "throttlingRetryStrategy",

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。在 Windows 上查找可执行文件（where.exe，限定扩展名，排除当前目录）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hvmek2df.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tbtcw3yn.js (9)
  * attribution: placement 9
  */
 import { lstatSync } from "fs";
@@ -17,11 +17,11 @@ import { getTrimmedEnvValue } from "./envUtils.js";
 import { classifyProtectedDir } from "./permissions/protectedDirs.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hvmek2df.js:439-461 placement
+//@ chunk-tbtcw3yn.js:439-461 placement
 function alwaysFalse() {
   return false;
 }
-//@ chunk-hvmek2df.js:461-596 placement
+//@ chunk-tbtcw3yn.js:461-596 placement
 class ExecutableResolutionCache {
   resolved = new Map();
   lookup(command) {
@@ -34,14 +34,14 @@ class ExecutableResolutionCache {
     this.resolved.delete(command);
   }
 }
-//@ chunk-hvmek2df.js:596-626 placement
+//@ chunk-tbtcw3yn.js:596-626 placement
 var executableResolutionCache; // deferred: uses ExecutableResolutionCache of its import cycle while loading; runs once the cycle is complete
 var RESOLVE_TIMEOUT_MS;
-deferInit("chunk-hvmek2df.js:596", () => {
+deferInit("chunk-tbtcw3yn.js:596", () => {
   executableResolutionCache = new HostScoped(() => new ExecutableResolutionCache());
   RESOLVE_TIMEOUT_MS = 5000;
 });
-//@ chunk-hvmek2df.js:626-701 placement
+//@ chunk-tbtcw3yn.js:626-701 placement
 function isPathMissing(filePath) {
   try {
     return (
@@ -53,12 +53,12 @@ function isPathMissing(filePath) {
     return false;
   }
 }
-//@ chunk-hvmek2df.js:701-746 placement
+//@ chunk-tbtcw3yn.js:701-746 placement
 var WINDOWS_EXECUTABLE_EXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hvmek2df.js:701", () => {
+deferInit("chunk-tbtcw3yn.js:701", () => {
   WINDOWS_EXECUTABLE_EXTS = new Set([".com", ".exe", ".bat", ".cmd"]);
 });
-//@ chunk-hvmek2df.js:746-876 placement
+//@ chunk-tbtcw3yn.js:746-876 placement
 function hasWindowsExecutableExt(candidatePath) {
   let replaced = candidatePath
     .toLowerCase()
@@ -67,7 +67,7 @@ function hasWindowsExecutableExt(candidatePath) {
   let index = replaced.lastIndexOf(".");
   return index > 0 && WINDOWS_EXECUTABLE_EXTS.has(replaced.slice(index));
 }
-//@ chunk-hvmek2df.js:876-1441 placement (2.1.88 match: findExecutable, 0.461)
+//@ chunk-tbtcw3yn.js:876-1441 placement (2.1.88 match: findExecutable, 0.461)
 /**
  * 在 PATH 中查找可执行文件（Windows 处理 PATHEXT 扩展名），结果缓存。
  */
@@ -114,7 +114,7 @@ function findExecutableWindows(command, forceRefresh = false) {
     return null;
   }
 }
-//@ chunk-hvmek2df.js:1441-1611 placement
+//@ chunk-tbtcw3yn.js:1441-1611 placement
 function isNotFoundExitError(error) {
   if (error === null || typeof error !== "object") return false;
   let status = "status" in error ? error.status : undefined;
@@ -122,10 +122,10 @@ function isNotFoundExitError(error) {
   let code = "code" in error ? error.code : undefined;
   return status === 1 && !signal && !code;
 }
-//@ chunk-hvmek2df.js:1611-1710 placement
+//@ chunk-tbtcw3yn.js:1611-1710 placement
 function resolveExecutableSafely(command, forceRefresh = false) {
   if (!alwaysFalse()) return command;
   if (command.includes("/") || command.includes("\\")) return command;
   return findExecutableWindows(command, forceRefresh);
 }
-export { resolveExecutableSafely, findExecutableWindows };
+export { findExecutableWindows, resolveExecutableSafely };

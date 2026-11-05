@@ -3,39 +3,39 @@
  *
  * 2.1.316 新增：通过 WebFetch 读取 artifact 页面
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (9)
  * attribution: placement 9
  */
 import { validateReadPath } from "./publishPaths.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import {
   encodeFilePath,
-  describeGatewayTransient,
-  getViaFrameContent,
+  mountUnavailableWords,
+  getFromFrameContent,
   MAX_MOUNT_READ_BYTES,
-  MAX_MOUNT_FILE_BYTES,
-  contentTypeOfHeaders,
+  FILE_READ_BYTE_CAP,
+  passthroughContentType,
   readViaGateway,
-  canReadViaFrame,
+  frameContentRoute,
   GATEWAY_DECLINED_RESULT,
 } from "./gatewayRead.js";
-import { fetchArtifactBootWithProbe } from "./boot.js";
+import { fetchBoot } from "./boot.js";
 import { PUBLIC_READ_UNASKED_REASON } from "./frameFlags.js";
 import {
-  canReadAssets,
-  buildFrameFilePath,
-  classifyArtifactOwnership,
+  bootReadsSource,
+  storedSourcePath,
+  bootOrgRelation,
   ownerVisibleRole,
   AUDIENCE_SCOPES,
   getCurrentStoredDecl,
   getDocumentCount,
   SAFE_AUDIENCE_KEY_RE,
-  isReaderRole,
-  isForeignOwnership,
-  isWriterRole,
-  AUDIENCE_QUERY_TIMEOUT_MS,
+  isReaderClassRole,
+  isOffOrgRamp,
+  isPublishingRole,
+  SERVED_CONTENT_TIMEOUT_MS,
 } from "./audience.js";
 import { LIVE_DOC, isMeaningfulFlag, INDEX_HTML } from "./textSanitize.js";
 import {
@@ -51,13 +51,13 @@ import {
   isForbiddenProxy,
 } from "./shareEntries.js";
 import { parseProvenance } from "./publishSchema.js";
-import { splitManifestTypeFiles } from "./publishedFiles.js";
+import { bootManifestPaths } from "./publishedFiles.js";
 import { firstLineOf, urlPatternToRegex } from "../../utils/stringUtils.js";
 import { stripFrameCommentsScript } from "./frameComments.js";
 import { SAFE_ERROR_CODE_RE } from "./frameApi.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { describeFrameAllowlistHint, getFrameHostPattern } from "./frameHost.js";
+import { contentHostAllowlistRemedy, getFrameHostPattern } from "./frameHost.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { isCancel, isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { AbortError } from "../../utils/errors.js";
@@ -76,11 +76,11 @@ import { ARTIFACT_MOUNT } from "./artifactMount.js";
 import { findProxyError, describeHttpStatus } from "../../utils/proxy.js";
 import { scrubArtifactEnvelopeTags } from "../../tools/ArtifactTool/artifactUrls.js";
 
-//@ chunk-jv307fw4.js:42867-42966 placement
+//@ chunk-m0ks5273.js:43196-43295 placement
 /**
  * 导出函数 `webfetchReadFile`：参数 e, n, r, s = "artifact_webfetch_read", a = "probe"…，返回 readArtifactViaWebFetch(e, n, s, e.file, r, a, l, d, h)。
  */
-function webfetchReadFile(
+function readArtifactContent(
   artifact,
   signal,
   credentials,
@@ -102,11 +102,11 @@ function webfetchReadFile(
     readBack,
   );
 }
-//@ chunk-jv307fw4.js:42966-43162 placement
+//@ chunk-m0ks5273.js:43295-43491 placement
 /**
  * 通过 WebFetch 路径读取 artifact 的某个文件：先校验路径，非法时打点并返回错误。
  */
-async function readArtifactFileViaWebFetch(
+async function readArtifactFile(
   artifact,
   path,
   signal,
@@ -132,11 +132,11 @@ async function readArtifactFileViaWebFetch(
     probeToolUseId,
   );
 }
-//@ chunk-jv307fw4.js:43162-43239 placement
+//@ chunk-m0ks5273.js:43491-43568 placement
 /**
  * 导出函数 `webfetchProbe`：参数 e, n, r, s, a，返回 readArtifactViaWebFetch(e, r, a, void 0, s, "probe", void 0, void 0, !1, n)。
  */
-function webfetchProbe(target, pastVer, signal, credentials, targetArg) {
+function readArtifactPastVersion(target, pastVer, signal, credentials, targetArg) {
   return readArtifactViaWebFetch(
     target,
     signal,
@@ -150,7 +150,7 @@ function webfetchProbe(target, pastVer, signal, credentials, targetArg) {
     pastVer,
   );
 }
-//@ chunk-jv307fw4.js:43239-53256 placement
+//@ chunk-m0ks5273.js:43568-53582 placement
 /**
  * 经 WebFetch 通道读取 artifact 文件：校验相对路径、取 boot、按受众框定内容并记录遥测。
  */
@@ -173,15 +173,15 @@ async function readArtifactViaWebFetch(
       err: "artifact file path is not a clean relative path",
     };
   }
-  let artifactBootWithProbe = await fetchArtifactBootWithProbe(target, feature, signal, {
+  let boot = await fetchBoot(target, feature, signal, {
     kind,
     readBack,
     pastVer,
     credentials,
     probeToolUseId,
   });
-  if (artifactBootWithProbe.err !== null) return artifactBootWithProbe;
-  let { ver, assetToken } = artifactBootWithProbe;
+  if (boot.err !== null) return boot;
+  let { ver, assetToken } = boot;
   if (filePath !== undefined && assetToken === undefined) {
     logFeatureBad(feature, "public_file");
     return {
@@ -199,9 +199,9 @@ async function readArtifactViaWebFetch(
     };
   }
   let servedPath = `/_f/${ver}/${encodedPath}`;
-  let source = canReadAssets(artifactBootWithProbe)
+  let source = bootReadsSource(boot)
     ? {
-        path: buildFrameFilePath(ver, encodedPath),
+        path: storedSourcePath(ver, encodedPath),
       }
     : undefined;
   let telemetryExtra = (fromSource) => {
@@ -213,18 +213,17 @@ async function readArtifactViaWebFetch(
         source?.fellBack !== undefined && {
           source_fallback_status: source.fellBack,
         }),
-      ...(artifactBootWithProbe.reused && {
+      ...(boot.reused && {
         boot_reused: true,
       }),
     };
     return Object.keys(extra).length > 0 ? extra : undefined;
   };
-  let { title, favicon, perm, cowritten } = artifactBootWithProbe.data;
+  let { title, favicon, perm, cowritten } = boot.data;
   let isLiveDoc =
-    artifactBootWithProbe.data.artifactKind === LIVE_DOC ||
-    getShareEntry(target.slug)?.artifactKind === LIVE_DOC;
+    boot.data.artifactKind === LIVE_DOC || getShareEntry(target.slug)?.artifactKind === LIVE_DOC;
   let mode = assetToken === undefined ? "public" : perm?.mode;
-  let ownership = classifyArtifactOwnership(artifactBootWithProbe);
+  let ownership = bootOrgRelation(boot);
   let role = perm?.role === "owner" ? "owner" : perm?.role === "writer" ? "writer" : "reader";
   let owned = ownedVerdict({
     role: deriveShareRole(ownerVisibleRole(perm?.role, assetToken === undefined)),
@@ -249,14 +248,13 @@ async function readArtifactViaWebFetch(
           }),
         }
       : undefined;
-  let provenance = parseProvenance(artifactBootWithProbe.data.origin_metadata);
-  let currentStoredDecl = getCurrentStoredDecl(artifactBootWithProbe.data);
-  let manifestPaths = splitManifestTypeFiles(artifactBootWithProbe.data.files);
-  let documentCount = getDocumentCount(artifactBootWithProbe.data.dbUsage);
+  let provenance = parseProvenance(boot.data.origin_metadata);
+  let currentStoredDecl = getCurrentStoredDecl(boot.data);
+  let manifestPaths = bootManifestPaths(boot.data.files);
+  let documentCount = getDocumentCount(boot.data.dbUsage);
   let contentStore =
-    typeof artifactBootWithProbe.data.contentStore === "string" &&
-    SAFE_AUDIENCE_KEY_RE.test(artifactBootWithProbe.data.contentStore)
-      ? artifactBootWithProbe.data.contentStore
+    typeof boot.data.contentStore === "string" && SAFE_AUDIENCE_KEY_RE.test(boot.data.contentStore)
+      ? boot.data.contentStore
       : undefined;
   let readResult = (
     buffer,
@@ -273,7 +271,7 @@ async function readArtifactViaWebFetch(
           : "";
     let html = buffer.toString("utf-8");
     let html_2 = contentType === "text/html" ? stripFrameCommentsScript(html) : html;
-    let outsideWriter = triState(artifactBootWithProbe.data.outsideWriter);
+    let outsideWriter = triState(boot.data.outsideWriter);
     let outsideWriterEffective = orTriState(outsideWriter, getShareEntry(target.slug)?.outsideWriter);
     return {
       err: null,
@@ -286,7 +284,7 @@ async function readArtifactViaWebFetch(
       }),
       cowritten: cowritten === true || isLiveDoc || getShareEntry(target.slug)?.cowritten === true,
       publicRead: assetToken === undefined,
-      ...(isReaderRole(perm?.role) && {
+      ...(isReaderClassRole(perm?.role) && {
         servedAudienceVersion: true,
       }),
       ...(owned !== undefined && {
@@ -296,15 +294,14 @@ async function readArtifactViaWebFetch(
       ...(ownership === "external" && {
         external: true,
       }),
-      ...(isForeignOwnership(ownership) && {
+      ...(isOffOrgRamp(ownership) && {
         offOrgRamp: true,
       }),
-      typeLocked: typeLockedFor(target.slug, artifactBootWithProbe.data.type),
-      ...((artifactBootWithProbe.data.authoredByOthers === true ||
-        getShareEntry(target.slug)?.authoredByOthers === true) && {
+      typeLocked: typeLockedFor(target.slug, boot.data.type),
+      ...((boot.data.authoredByOthers === true || getShareEntry(target.slug)?.authoredByOthers === true) && {
         authoredByOthers: true,
       }),
-      ...((isMeaningfulFlag(artifactBootWithProbe.data.outsidersMayHaveWritten) ||
+      ...((isMeaningfulFlag(boot.data.outsidersMayHaveWritten) ||
         getShareEntry(target.slug)?.outsidersMayHaveWritten === true) && {
         outsidersMayHaveWritten: true,
       }),
@@ -323,9 +320,9 @@ async function readArtifactViaWebFetch(
       }),
       ...(mode !== undefined &&
         (() => {
-          let shareStatus = deriveShareStatus(mode, artifactBootWithProbe.data.shared);
-          let isWriter = isWriterRole(perm?.role);
-          let { live, shared } = artifactBootWithProbe.data;
+          let shareStatus = deriveShareStatus(mode, boot.data.shared);
+          let isWriter = isPublishingRole(perm?.role);
+          let { live, shared } = boot.data;
           let liveIsCode = typeof live === "string" && SAFE_ERROR_CODE_RE.test(live);
           let pinnedCode = typeof shared === "string" && SAFE_ERROR_CODE_RE.test(shared) ? shared : undefined;
           let pinnedBehind =
@@ -350,10 +347,10 @@ async function readArtifactViaWebFetch(
         favicon,
       }),
       ver,
-      ...(typeof artifactBootWithProbe.data.fileCount === "number" &&
-        Number.isSafeInteger(artifactBootWithProbe.data.fileCount) &&
-        artifactBootWithProbe.data.fileCount > 0 && {
-          fileCount: artifactBootWithProbe.data.fileCount,
+      ...(typeof boot.data.fileCount === "number" &&
+        Number.isSafeInteger(boot.data.fileCount) &&
+        boot.data.fileCount > 0 && {
+          fileCount: boot.data.fileCount,
         }),
       ...(manifestPaths !== undefined && {
         manifestPaths,
@@ -376,7 +373,7 @@ async function readArtifactViaWebFetch(
     let replica = await getLiveState().liveReplicas.renderLevel?.(
       target.slug,
       INDEX_HTML,
-      artifactBootWithProbe.data.headSeq,
+      boot.data.headSeq,
       signal,
     );
     if (replica !== undefined) {
@@ -395,14 +392,14 @@ async function readArtifactViaWebFetch(
     }
   }
   let frameHost = `${target.slug}.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
-  let allowlistHint = describeFrameAllowlistHint(target.env);
+  let allowlistHint = contentHostAllowlistRemedy(target.env);
   let egressFailure = (relay, deterministic) => {
     if (relay.code === "unavailable" && relay.status !== undefined) {
       logFeatureBad(feature, "asset_relay_unavailable", {
         relay_status: relay.status,
       });
       return {
-        err: `${describeGatewayTransient(relay.status)}. Your access to the artifact itself is fine (the permission check passed); this environment cannot reach ${frameHost} directly, so its reads go through the gateway.`,
+        err: `${mountUnavailableWords(relay.status)}. Your access to the artifact itself is fine (the permission check passed); this environment cannot reach ${frameHost} directly, so its reads go through the gateway.`,
         status: relay.status,
       };
     }
@@ -425,10 +422,10 @@ async function readArtifactViaWebFetch(
   };
   let readViaFrameContent = async (assetToken) => {
     let fetchPath = (path) =>
-      getViaFrameContent(target.slug, path, {
+      getFromFrameContent(target.slug, path, {
         token: assetToken,
-        timeout: AUDIENCE_QUERY_TIMEOUT_MS,
-        maxContentLength: filePath === undefined ? MAX_MOUNT_READ_BYTES : MAX_MOUNT_FILE_BYTES,
+        timeout: SERVED_CONTENT_TIMEOUT_MS,
+        maxContentLength: filePath === undefined ? MAX_MOUNT_READ_BYTES : FILE_READ_BYTE_CAP,
         signal,
         credentials,
       });
@@ -447,7 +444,7 @@ async function readArtifactViaWebFetch(
         if (sourceAnswer.kind === "answer" && sourceAnswer.status === 200)
           return readResult(
             Buffer.from(sourceAnswer.data ?? new ArrayBuffer(0)),
-            contentTypeOfHeaders(sourceAnswer.headers),
+            passthroughContentType(sourceAnswer.headers),
             true,
             () =>
               logFeatureOk(feature, {
@@ -480,7 +477,7 @@ async function readArtifactViaWebFetch(
     if (answer.status >= 200 && answer.status < 300)
       return readResult(
         Buffer.from(answer.data ?? new ArrayBuffer(0)),
-        contentTypeOfHeaders(answer.headers),
+        passthroughContentType(answer.headers),
         false,
         () =>
           logFeatureOk(feature, {
@@ -488,7 +485,7 @@ async function readArtifactViaWebFetch(
             frame_content: true,
           }),
       );
-    let denial = proxyDenialResult(answer.headers, answer.data, (text) => redactFrameToken(text, assetToken));
+    let denial = proxyDenialResult(answer.headers, answer.data, (text) => redactAssetToken(text, assetToken));
     if (answer.status === 404 && encodedPath !== "" && isNotFoundProxy(answer.headers, denial)) {
       logFeatureSad(feature, "file_not_in_manifest");
       return {
@@ -524,7 +521,7 @@ async function readArtifactViaWebFetch(
           logFeatureSad(feature, failReason, telemetryExtra(fromSource)),
         ),
     );
-  if (assetToken !== undefined && canReadViaFrame(artifactBootWithProbe.data)) {
+  if (assetToken !== undefined && frameContentRoute(boot.data)) {
     let frameContent = await readViaFrameContent(assetToken);
     if (frameContent !== undefined) return frameContent;
   }
@@ -573,10 +570,10 @@ async function readArtifactViaWebFetch(
   let httpGet = (url) =>
     externalHttp.get(url, {
       signal,
-      timeout: AUDIENCE_QUERY_TIMEOUT_MS,
+      timeout: SERVED_CONTENT_TIMEOUT_MS,
       responseType: "arraybuffer",
       maxRedirects: 0,
-      maxContentLength: filePath === undefined ? MAX_MOUNT_READ_BYTES : MAX_MOUNT_FILE_BYTES,
+      maxContentLength: filePath === undefined ? MAX_MOUNT_READ_BYTES : FILE_READ_BYTE_CAP,
       validateStatus: () => true,
       ...(baseOverride && {
         headers: {
@@ -684,7 +681,7 @@ async function readArtifactViaWebFetch(
   getLiveState().contentHostEgressDenied.delete(target.env);
   if (response.status < 200 || response.status >= 300) {
     let denial = proxyDenialResult(response.headers, response.data, (text) =>
-      redactFrameToken(text, assetToken),
+      redactAssetToken(text, assetToken),
     );
     if (response.status === 403 && assetToken === undefined && isForbiddenProxy(response.headers, denial)) {
       logFeatureBad(feature, "public_asset_forbidden");
@@ -720,7 +717,7 @@ async function readArtifactViaWebFetch(
   }
   return readResult(Buffer.from(response.data), response.headers?.["content-type"], false);
 }
-//@ chunk-jv307fw4.js:53256-53662 placement
+//@ chunk-m0ks5273.js:53582-53988 placement
 /**
  * 描述 artifact 内容获取失败：HTTP 状态，再附响应体原因、出口代理报告或 x-proxy-error 头（清洗后），以及 x-request-id。
  */
@@ -737,20 +734,20 @@ function describeFetchFailure(status, headers, httpStatus) {
   if (httpStatus.requestId !== undefined) parts.push(`x-request-id: ${httpStatus.requestId}`);
   return parts.join("; ");
 }
-//@ chunk-jv307fw4.js:53662-53775 placement
+//@ chunk-m0ks5273.js:53988-54101 placement
 /**
  * 取出读取失败的显示文本：有响应时用安全错误消息或 HTTP 状态，否则用原始错误。
  */
-function getFetchErrorText(error) {
+function modelFacingReadErr(error) {
   return error.respondent
     ? (error.safeErr ?? `artifact content fetch failed (HTTP ${error.status ?? "error"})`)
     : error.err;
 }
-//@ chunk-jv307fw4.js:53775-54009 placement
+//@ chunk-m0ks5273.js:54101-54335 placement
 /**
  * 在文本里遮盖 __frame_t 访问令牌参数（含各种 URL 编码形式），以及给定令牌的原文与 URL 编码形式。
  */
-function redactFrameToken(token, token_2) {
+function redactAssetToken(token, token_2) {
   let text = token.replace(
     /(?:_|%(?:25)*5f){2}frame(?:_|%(?:25)*5f)t(?:=|%(?:25)*3d)["']?[^\s&"'<>]*/gi,
     "__frame_t=[redacted]",
@@ -762,10 +759,10 @@ function redactFrameToken(token, token_2) {
   }
   return text;
 }
-//@ chunk-jv307fw4.js:54009-54041 placement
+//@ chunk-m0ks5273.js:54335-54367 placement
 var TOKEN_FRAGMENT_LEN = 16;
 var TOKEN_CHAR_RE = /[A-Za-z0-9._~%-]/;
-//@ chunk-jv307fw4.js:54041-54405 placement
+//@ chunk-m0ks5273.js:54367-54731 placement
 /**
  * 在文本中遮蔽令牌：短令牌直接替换；长令牌按固定长度的所有片段生成正则，连同相邻的令牌字符一起替换为 [redacted]。
  */
@@ -785,4 +782,10 @@ function redactTokenFragments(text, token, flags) {
   }
   return out + text.slice(cursor);
 }
-export { webfetchReadFile, getFetchErrorText, redactFrameToken, readArtifactFileViaWebFetch, webfetchProbe };
+export {
+  readArtifactContent,
+  readArtifactFile,
+  modelFacingReadErr,
+  redactAssetToken,
+  readArtifactPastVersion,
+};

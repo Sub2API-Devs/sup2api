@@ -3,13 +3,13 @@
  *
  * PowerShell 提供者：追加退出码与 cwd 记录片段、沙箱下用 -EncodedCommand、补齐子进程环境。（本段混入了 sandbox-runtime 的 Windows 常量与按 BOM 判编码的函数）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/powershellProvider.ts
- * pieces: chunk-e6aww6q8.js (8)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 2, layout 6
  */
 import { join } from "path";
-import { join as join_39 } from "path/posix";
+import { join as join_38 } from "path/posix";
 import { mkdir } from "fs/promises";
 import { env } from "../env.js";
 import { toUtf16LeBase64 } from "../powershell/parser.js";
@@ -20,20 +20,20 @@ import { noPromptEnvDefaults } from "../gitSafeExec.js";
 import { withholdsDaemonForceColor } from "../subprocessEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:858490-858642 fingerprint (2.1.88 match: buildPowerShellArgs, 0.503)
+//@ chunk-5xgkngpb.js:865970-866122 fingerprint (2.1.88 match: buildPowerShellArgs, 0.503)
 function buildPowerShellArgs() {
   let args = ["-NoProfile", "-NonInteractive"];
   if (!env.CLAUDE_CODE_POWERSHELL_RESPECT_EXECUTION_POLICY) args.push("-ExecutionPolicy", "Bypass");
   return args;
 }
-//@ chunk-e6aww6q8.js:858642-858687 layout
+//@ chunk-5xgkngpb.js:866122-866167 layout
 /**
  * 把脚本拼成 `-Command` 形式的 PowerShell 参数列表。
  */
 function buildPowerShellCommandArgs(cmd) {
   return [...buildPowerShellArgs(), "-Command", cmd];
 }
-//@ chunk-e6aww6q8.js:858687-858778 layout
+//@ chunk-5xgkngpb.js:866167-866258 layout
 function buildEncodedPowerShellInvocation(exe, text) {
   return {
     binShell: {
@@ -43,7 +43,7 @@ function buildEncodedPowerShellInvocation(exe, text) {
     command: toUtf16LeBase64(text),
   };
 }
-//@ chunk-e6aww6q8.js:858778-859252 layout
+//@ chunk-5xgkngpb.js:866258-866732 layout
 /**
  * PowerShell 命令前缀与脚本块关键字：把输出编码设为 UTF-8、关闭 PSStyle 着色的前置片段，以及 begin/process/end 等脚本块关键字及其匹配正则。
  */
@@ -51,7 +51,7 @@ var POWERSHELL_UTF8_PRELUDE; // deferred: has load-time effects after a deferred
 var SCRIPT_BLOCK_KEYWORDS;
 var SCRIPT_BLOCK_START_RE;
 var SCRIPT_BLOCK_KEYWORD_RE;
-deferInit("chunk-e6aww6q8.js:858778", () => {
+deferInit("chunk-5xgkngpb.js:866258", () => {
   POWERSHELL_UTF8_PRELUDE =
     "try { $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8' } catch {}; if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { try { $OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {}; if ($null -ne $PSStyle) { try { $PSStyle.OutputRendering = 'PlainText' } catch {} } }; ";
   SCRIPT_BLOCK_KEYWORDS = "begin|process|end|clean|dynamicparam";
@@ -61,7 +61,7 @@ deferInit("chunk-e6aww6q8.js:858778", () => {
     "i",
   );
 });
-//@ chunk-e6aww6q8.js:859252-859623 layout
+//@ chunk-5xgkngpb.js:866732-867103 layout
 /**
  * 跳过前导空白、分号与注释后，判断 PowerShell 文本是否以只能出现在脚本开头的结构开始（using、param(、begin/process 等块、属性 [..]），这类文本不能直接拼接前缀执行。
  */
@@ -94,16 +94,16 @@ function requiresScriptFile(command) {
     (/^\[\w/.test(sliced) && !/^\[[\w.]+\]::/.test(sliced))
   );
 }
-//@ chunk-e6aww6q8.js:859623-859666 layout
+//@ chunk-5xgkngpb.js:867103-867146 layout
 function requiresPowerShellScriptFile(command) {
   return requiresScriptFile(command) && SCRIPT_BLOCK_KEYWORD_RE.test(command);
 }
-//@ chunk-e6aww6q8.js:859666-859730 layout
+//@ chunk-5xgkngpb.js:867146-867210 layout
 var PS_DEFAULT_CHILD_ENV = {
   PYTHONIOENCODING: "utf-8:surrogateescape",
   NO_COLOR: "1",
 };
-//@ chunk-e6aww6q8.js:859730-860963 fingerprint (2.1.88 match: createPowerShellProvider, 0.685)
+//@ chunk-5xgkngpb.js:867210-868443 fingerprint (2.1.88 match: createPowerShellProvider, 0.684)
 /**
  * 创建 PowerShell 提供者：命令后追加记录 $LASTEXITCODE 与 (Get-Location) 到 claude-pwd-ps-<id> 文件的片段；POSIX 沙箱下改用 -EncodedCommand（UTF-16LE base64）；环境补 PYTHONIOENCODING、NO_COLOR，沙箱时设 TMPDIR。
  */
@@ -118,7 +118,7 @@ function createPowerShellProvider(shellPath) {
       sandboxTmpDir = execOpts.useSandbox ? execOpts.sandboxTmpDir : undefined;
       let cwdFilePath;
       if (execOpts.useSandbox && execOpts.sandboxTmpDir)
-        cwdFilePath = (getPlatform() === "windows" ? join : join_39)(
+        cwdFilePath = (getPlatform() === "windows" ? join : join_38)(
           execOpts.sandboxTmpDir,
           `claude-pwd-ps-${execOpts.id}`,
         );
@@ -173,10 +173,10 @@ function createPowerShellProvider(shellPath) {
   };
 }
 export {
-  buildPowerShellCommandArgs,
-  requiresPowerShellScriptFile,
-  requiresScriptFile,
   createPowerShellProvider,
   buildEncodedPowerShellInvocation,
+  requiresPowerShellScriptFile,
+  requiresScriptFile,
+  buildPowerShellCommandArgs,
   buildPowerShellArgs,
 };

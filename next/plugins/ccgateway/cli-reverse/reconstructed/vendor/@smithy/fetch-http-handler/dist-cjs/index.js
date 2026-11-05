@@ -1,8 +1,8 @@
 /**
  * @smithy/fetch-http-handler/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/fetch-http-handler@5.4.0..5.5.2
- * pieces: chunk-wr8v03d0.js (1)
+ * pieces: chunk-2v4fe6xx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_querystring_builder } from "../../querystring-builder/dist-cjs/index.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
-//@ chunk-wr8v03d0.js:2765-5955 cjs-fingerprint
+//@ chunk-2v4fe6xx.js:2765-5955 cjs-fingerprint
 var require_fetch_http_handler = __commonJS(function (cjsExports) {
   var HttpResponse = require_protocol_http();
   var querystringBuilder = require_querystring_builder();

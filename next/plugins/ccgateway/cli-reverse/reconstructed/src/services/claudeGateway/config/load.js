@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关配置加载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (3)
  * attribution: placement 3
  */
 import { isAbsolute } from "path";
@@ -14,7 +14,7 @@ import { parseYaml } from "../../../utils/yaml.js";
 import { GatewayConfigSchema } from "./schema.js";
 import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1413048-1413532 placement
+//@ chunk-1hnjmk23.js:1414928-1415412 placement
 /**
  * 递归展开配置：${file:绝对路径} 读文件内容，${VAR} 替换环境变量（未定义时报错）。
  */
@@ -40,7 +40,7 @@ async function expandConfigValues(value) {
   }
   return value;
 }
-//@ chunk-1ny7cxrt.js:1413532-1413844 placement
+//@ chunk-1hnjmk23.js:1415412-1415724 placement
 /**
  * 读取 YAML 网关配置、展开变量并按 schema 解析；拒绝已移除的 dev: 段。
  */
@@ -55,7 +55,7 @@ async function loadGatewayConfig(configPath) {
     );
   return GatewayConfigSchema().parse(expanded);
 }
-//@ chunk-1ny7cxrt.js:1413844-1413940 placement
+//@ chunk-1hnjmk23.js:1415724-1415820 placement
 /**
  * 取配置里的字符串数组字段：不是数组或含非字符串项时返回 undefined。
  */

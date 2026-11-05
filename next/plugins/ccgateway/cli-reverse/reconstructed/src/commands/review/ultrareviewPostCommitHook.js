@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ultrareview 提交后钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e9cc3yq9.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-216kqgfj.js (2)
  * attribution: placement 2
  */
 import { getIsNonInteractiveSession, registerHookCallbacks } from "../../bootstrap/state.js";
@@ -14,7 +14,7 @@ import { ultrareviewPostCommitTip } from "../../services/api/ultrareviewQuota.js
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 
-//@ chunk-e9cc3yq9.js:3651-4028 placement
+//@ chunk-216kqgfj.js:3992-4369 placement
 /**
  * 提交后钩子：git commit 成功后提示 ultrareview。
  */
@@ -34,7 +34,7 @@ async function ultrareviewPostCommitHook(hookInput, toolUseId, hookOptions, hook
       }
     : {};
 }
-//@ chunk-e9cc3yq9.js:4028-4152 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
+//@ chunk-216kqgfj.js:4369-4493 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   let hook = {
     type: "callback",

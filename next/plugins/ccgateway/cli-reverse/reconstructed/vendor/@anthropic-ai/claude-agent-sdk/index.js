@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/claude-agent-sdk/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/claude-agent-sdk/index.js
- * pieces: chunk-y805ph4h.js (29)
+ * pieces: chunk-tp1gh0pb.js (29)
  * attribution: placement 29
  */
 import { join, resolve, relative, sep, isAbsolute, dirname, posix, win32 } from "path";
@@ -12,10 +12,10 @@ import { realpathSync } from "fs";
 import { randomUUID as randomUUID_2 } from "crypto";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import { TOOL_HOOK_EXECUTION_TIMEOUT_MS } from "../../../src/utils/hooks/hookEvents.js";
 import { jsonParse, jsonStringify, alwaysTrue } from "../../../src/utils/slowOperations.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_api } from "../../@opentelemetry/api/build/src/index.js";
-import { TOOL_HOOK_EXECUTION_TIMEOUT_MS } from "../../../src/utils/hooks/hookEvents.js";
 import {
   getErrnoCode,
   isENOENT,
@@ -50,7 +50,11 @@ import {
   DEFAULT_MAX_PENDING_BYTES,
 } from "./transcriptMirror.js";
 
-//@ chunk-y805ph4h.js:63137-63633 placement
+//@ chunk-tp1gh0pb.js:25519-25547 placement
+var DEFAULT_SESSION_LOAD_TIMEOUT_MS = 60000;
+var CREDENTIALS_RESUME_TTL_MS = TOOL_HOOK_EXECUTION_TIMEOUT_MS;
+var RESUME_TIMEOUT_MS = DEFAULT_SESSION_LOAD_TIMEOUT_MS + CREDENTIALS_RESUME_TTL_MS;
+//@ chunk-tp1gh0pb.js:65549-66045 placement
 function extractSessionIdFromIngressToken(workSecret) {
   try {
     let payload = jsonParse(Buffer.from(workSecret, "base64url").toString("utf8"));
@@ -78,20 +82,16 @@ function extractSessionIdFromIngressToken(workSecret) {
     return;
   }
 }
-//@ chunk-y805ph4h.js:63633-63651 placement
+//@ chunk-tp1gh0pb.js:66045-66063 placement
 var import_api = __toESM(require_api(), 1);
-//@ chunk-y805ph4h.js:63651-63679 placement
-var DEFAULT_SESSION_LOAD_TIMEOUT_MS = 60000;
-var CREDENTIALS_RESUME_TTL_MS = TOOL_HOOK_EXECUTION_TIMEOUT_MS;
-var RESUME_TIMEOUT_MS = DEFAULT_SESSION_LOAD_TIMEOUT_MS + CREDENTIALS_RESUME_TTL_MS;
-//@ chunk-y805ph4h.js:63818-63936 placement
+//@ chunk-tp1gh0pb.js:66202-66320 placement
 function configPathsForDir(trimmedEnvValue) {
   return {
     globalConfig: join(trimmedEnvValue || homedir(), ".claude.json"),
     userSettings: join(trimmedEnvValue || join(homedir(), ".claude"), "settings.json"),
   };
 }
-//@ chunk-y805ph4h.js:63936-64007 placement
+//@ chunk-tp1gh0pb.js:66320-66391 placement
 function pickSessionStoreTarget(backend, expectedKind, actualKind, key) {
   return backend !== undefined && expectedKind === actualKind
     ? {
@@ -100,7 +100,7 @@ function pickSessionStoreTarget(backend, expectedKind, actualKind, key) {
       }
     : undefined;
 }
-//@ chunk-y805ph4h.js:64007-64255 placement
+//@ chunk-tp1gh0pb.js:66391-66639 placement
 async function restoreFileFromStore(sourcePath, targetPath, transform, v5Target) {
   if (v5Target) return restoreFileFromV5Store(v5Target, sourcePath, targetPath, transform);
   try {
@@ -119,7 +119,7 @@ async function restoreFileFromStore(sourcePath, targetPath, transform, v5Target)
     }
   }
 }
-//@ chunk-y805ph4h.js:64255-64868 placement
+//@ chunk-tp1gh0pb.js:66639-67252 placement
 async function restoreFileFromV5Store({ backend, key }, targetPath, sourcePath, transform) {
   let readResult = await backend.read([key]);
   if (!readResult.ok) {
@@ -148,7 +148,7 @@ async function restoreFileFromV5Store({ backend, key }, targetPath, sourcePath, 
     }
   }
 }
-//@ chunk-y805ph4h.js:64868-65572 placement
+//@ chunk-tp1gh0pb.js:67252-67956 placement
 function canUseToolShadowWarning(permissionMode, allowedTools) {
   if (permissionMode === "bypassPermissions")
     return "canUseTool will not be invoked: permissionMode 'bypassPermissions' auto-approves every tool call (except explicit deny rules) before the callback is consulted. To gate every tool call, use a PreToolUse hook instead.";
@@ -156,7 +156,7 @@ function canUseToolShadowWarning(permissionMode, allowedTools) {
   if (filtered.length === 0) return;
   return `canUseTool will not be invoked for: ${filtered.join(", ")}. Bare allowedTools entries auto-approve the whole tool before the callback is consulted. To gate every tool call, use a PreToolUse hook; or remove the bare names from allowedTools so they fall through to canUseTool. Allow rules from settings files can also shadow the callback but are not visible here.`;
 }
-//@ chunk-y805ph4h.js:65572-65704 placement
+//@ chunk-tp1gh0pb.js:67956-68088 placement
 function warnIfCanUseToolShadowed(canUseTool, permissionMode, allowedTools) {
   if (!canUseTool) return;
   let warning = canUseToolShadowWarning(permissionMode, allowedTools);
@@ -165,7 +165,7 @@ function warnIfCanUseToolShadowed(canUseTool, permissionMode, allowedTools) {
     code: "CLAUDE_SDK_CAN_USE_TOOL_SHADOWED",
   });
 }
-//@ chunk-y805ph4h.js:65813-65882 placement
+//@ chunk-tp1gh0pb.js:68197-68266 placement
 function canonicalProjectDir(cwd) {
   let resolved = resolve(cwd ?? ".");
   let realPath;
@@ -176,7 +176,7 @@ function canonicalProjectDir(cwd) {
   }
   return identity(realPath);
 }
-//@ chunk-y805ph4h.js:65882-66016 placement
+//@ chunk-tp1gh0pb.js:68266-68400 placement
 function projectKeyForCwd(cwd, env) {
   let dir = canonicalProjectDir(cwd);
   if (env === undefined) return getProjectKey(dir);
@@ -185,11 +185,11 @@ function projectKeyForCwd(cwd, env) {
     sanitizePath(dir)
   );
 }
-//@ chunk-y805ph4h.js:66016-66107 placement
+//@ chunk-tp1gh0pb.js:68400-68491 placement
 function isAgentMetadataFrame(frame) {
   return typeof frame === "object" && frame !== null && "type" in frame && frame.type === "agent_metadata";
 }
-//@ chunk-y805ph4h.js:66107-66473 placement
+//@ chunk-tp1gh0pb.js:68491-68857 placement
 function parseMirrorPath(filePath, projectsRoot) {
   let relative_2 = relative(projectsRoot, filePath);
   let parts = relative_2.split(sep);
@@ -214,11 +214,11 @@ function parseMirrorPath(filePath, projectsRoot) {
   }
   return null;
 }
-//@ chunk-y805ph4h.js:66473-66524 placement
+//@ chunk-tp1gh0pb.js:68857-68908 placement
 process.env.NoDefaultCurrentDirectoryInExePath = "1";
-//@ chunk-y805ph4h.js:66524-66600 placement
+//@ chunk-tp1gh0pb.js:68908-68984 placement
 var STRIPPED_SETTINGS_KEYS = ["enabledPlugins", "extraKnownMarketplaces", "additionalMarketplaces"];
-//@ chunk-y805ph4h.js:66600-66859 placement
+//@ chunk-tp1gh0pb.js:68984-69243 placement
 function stripSettingsBeforeMirror(buffer) {
   let parsed;
   try {
@@ -240,11 +240,11 @@ function stripSettingsBeforeMirror(buffer) {
   }
   return changed ? jsonStringify(parsed) : buffer;
 }
-//@ chunk-y805ph4h.js:66859-66930 placement
+//@ chunk-tp1gh0pb.js:69243-69314 placement
 function isPlainRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-y805ph4h.js:66930-67099 placement
+//@ chunk-tp1gh0pb.js:69314-69483 placement
 async function stripOAuthRefreshToken(content, targetPath) {
   if (!content) return;
   let sanitized = content;
@@ -259,11 +259,11 @@ async function stripOAuthRefreshToken(content, targetPath) {
     mode: 384,
   });
 }
-//@ chunk-y805ph4h.js:67099-67144 placement
+//@ chunk-tp1gh0pb.js:69483-69528 placement
 function emptyCredentialsProvider() {
   return Promise.resolve(undefined);
 }
-//@ chunk-y805ph4h.js:67144-68342 placement
+//@ chunk-tp1gh0pb.js:69528-70726 placement
 async function restoreSessionFromStore(store, resume, env, env_2, timeoutMs = 60000, transformCredentials) {
   if (!validateUuid(resume)) return;
   let projectKey = projectKeyForCwd(env, env_2);
@@ -354,7 +354,7 @@ async function restoreSessionFromStore(store, resume, env, env_2, timeoutMs = 60
     throw error;
   }
 }
-//@ chunk-y805ph4h.js:68342-69181 placement
+//@ chunk-tp1gh0pb.js:70726-71565 placement
 async function restoreSessionSubkeys(store, target, projectsRoot, timeoutMs) {
   let subkeys = await withTimeout(
     store.listSubkeys({
@@ -411,7 +411,7 @@ async function restoreSessionSubkeys(store, target, projectsRoot, timeoutMs) {
     }
   }
 }
-//@ chunk-y805ph4h.js:69181-69476 placement
+//@ chunk-tp1gh0pb.js:71565-71860 placement
 function sanitizeWorkspaceTrust(workspaceTrust) {
   let sanitized =
     workspaceTrust?.accepted === true &&
@@ -428,7 +428,7 @@ function sanitizeWorkspaceTrust(workspaceTrust) {
     );
   return sanitized;
 }
-//@ chunk-y805ph4h.js:69476-76596 placement
+//@ chunk-tp1gh0pb.js:71860-78980 placement
 /**
  * Agent SDK 的 query() 入口：解析选项、创建 ProcessTransport 与 Query，返回可异步迭代的消息流。
  */
@@ -769,11 +769,11 @@ function query(options, options_2) {
     verbatimPrompts,
   };
 }
-//@ chunk-y805ph4h.js:76596-76871 placement
+//@ chunk-tp1gh0pb.js:78980-79246 placement
 function writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts) {
   if (typeof prompt === "string")
     queryInstance
-      .writeAfterInitialize(
+      .writePrompt(
         jsonStringify({
           type: "user",
           session_id: "",
@@ -797,9 +797,9 @@ function writeInitialPrompt(queryInstance, prompt, abortController, verbatimProm
       .catch((error) => abortController.abort(error));
   else queryInstance.streamInput(prompt).catch((error) => abortController.abort(error));
 }
-//@ chunk-y805ph4h.js:76871-76935 placement
+//@ chunk-tp1gh0pb.js:79246-79310 placement
 var RETRYABLE_RM_ERRORS = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM"]);
-//@ chunk-y805ph4h.js:76935-77083 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-tp1gh0pb.js:79310-79458 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 带重试的递归删除（EBUSY/EPERM 等最多 5 次）。名字配错。
  */
@@ -815,14 +815,14 @@ async function removeRecursiveWithRetry(dirPath) {
       await sleep((i + 1) * 100);
     }
 }
-//@ chunk-y805ph4h.js:77083-77149 placement
+//@ chunk-tp1gh0pb.js:79458-79524 placement
 function cleanupTempDirAfterExit(transport, tempDir) {
   transport
     .waitForExit()
     .catch(() => {})
     .finally(() => removeRecursiveWithRetry(tempDir));
 }
-//@ chunk-y805ph4h.js:77149-77366 placement
+//@ chunk-tp1gh0pb.js:79524-79741 placement
 function startQuery({ prompt, options }) {
   if ((options?.resume || options?.continue) && options?.sessionStore)
     return startResumedQuery(prompt, options);
@@ -832,7 +832,7 @@ function startQuery({ prompt, options }) {
   writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts);
   return queryInstance;
 }
-//@ chunk-y805ph4h.js:77366-78058 placement
+//@ chunk-tp1gh0pb.js:79741-80433 placement
 function startResumedQuery(prompt, options) {
   let { queryInstance, transport, abortController, processEnv, verbatimPrompts } = query(
     {
@@ -881,4 +881,4 @@ function startResumedQuery(prompt, options) {
   writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts);
   return queryInstance;
 }
-export { extractSessionIdFromIngressToken, startQuery };
+export { RESUME_TIMEOUT_MS, extractSessionIdFromIngressToken, startQuery };

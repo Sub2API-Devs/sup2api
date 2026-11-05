@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：编辑钩子子命令处理器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-shkzs7rp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nhaxap13.js (1)
  * attribution: placement 1
  */
 import { logFeatureBadAsync, logFeatureOkAsync } from "../../services/analytics/featureTelemetry.js";
@@ -13,7 +13,7 @@ import { cliErrorAfterAnalyticsFlush, cliOkAfterAnalyticsFlush } from "../exit.j
 import { safeParseJSON } from "../../utils/json.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-shkzs7rp.js:22472-23454 placement
+//@ chunk-nhaxap13.js:23953-24935 placement
 /**
  * 注册隐藏子命令 edit-hook：从 stdin 读一条 JSON 钩子编辑（VS Code 扩展使用），TTY 或会话内调用时拒绝。
  */

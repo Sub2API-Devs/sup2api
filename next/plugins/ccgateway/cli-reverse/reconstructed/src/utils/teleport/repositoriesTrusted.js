@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：可信仓库
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { isTrustedRepositoriesHeaderEnabled } from "./cloudEnvironments.js";
@@ -15,7 +15,7 @@ import { securityTierErrorSchema } from "./securityTier.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-e6aww6q8.js:1881143-1881515 placement
+//@ chunk-5xgkngpb.js:1959968-1960340 placement
 /**
  * 决定是否发送可信仓库头：需开关开启、启动检出已信任且有令牌。
  */
@@ -46,9 +46,9 @@ async function planTrustedRepositoriesHeader(attaches) {
         why: "no_token",
       };
 }
-//@ chunk-e6aww6q8.js:1881515-1881546 placement
+//@ chunk-5xgkngpb.js:1960340-1960371 placement
 var REPOSITORIES_TRUSTED = "repositories_trusted";
-//@ chunk-e6aww6q8.js:1881546-1882084 placement
+//@ chunk-5xgkngpb.js:1960371-1960909 placement
 function requestRepositoriesTrusted(body) {
   let parsed = securityTierErrorSchema().safeParse(body);
   if (!parsed.success) return "unnamed";
@@ -70,7 +70,7 @@ function requestRepositoriesTrusted(body) {
     ? "other"
     : "unnamed";
 }
-//@ chunk-e6aww6q8.js:1882084-1882419 placement
+//@ chunk-5xgkngpb.js:1960909-1961244 placement
 /**
  * 上报可信仓库头的发送结果（已发送、被拒后重试等）。
  */
@@ -97,11 +97,11 @@ function logTrustedRepositoriesOutcome(outcome) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1882513-1882524 placement
+//@ chunk-5xgkngpb.js:1961338-1961349 placement
 var CHANGED_FILE_SCAN_CONCURRENCY = 64;
 export {
+  CHANGED_FILE_SCAN_CONCURRENCY,
   planTrustedRepositoriesHeader,
   requestRepositoriesTrusted,
   logTrustedRepositoriesOutcome,
-  CHANGED_FILE_SCAN_CONCURRENCY,
 };

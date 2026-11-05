@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。搜索插件目录，受组织策略 allow_plugin_directory_search 控制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-snyt4d6y.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c2rsewka.js (11)
  * attribution: placement 11
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -36,7 +36,7 @@ import { logForDebugging } from "../debug.js";
 import { isPlainObject } from "../isPlainObject.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-snyt4d6y.js:759-1347 placement
+//@ chunk-c2rsewka.js:758-1346 placement
 /**
  * 插件目录搜索的上限与 schema
  */
@@ -89,11 +89,11 @@ var directoryPageSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-snyt4d6y.js:1347-1395 placement
+//@ chunk-c2rsewka.js:1346-1394 placement
 function parseDirectoryListing(listing) {
   return directoryPageSchema().safeParse(stripNullFields(listing)).data;
 }
-//@ chunk-snyt4d6y.js:1395-1575 placement
+//@ chunk-c2rsewka.js:1394-1574 placement
 /**
  * 插件目录仓库地址是否允许
  */
@@ -108,7 +108,7 @@ function isAllowedDirectoryRepoUrl(url) {
   }
   return !isGithubDotCom(parsed.hostname) && !isHost(parsed.hostname, "ssh.github.com");
 }
-//@ chunk-snyt4d6y.js:1575-1782 placement
+//@ chunk-c2rsewka.js:1574-1781 placement
 function isDirectoryListingReviewerMarked(listing) {
   let { state, by } = listing.checks.review;
   if (state !== "done") return false;
@@ -121,18 +121,18 @@ function isDirectoryListingReviewerMarked(listing) {
       return false;
   }
 }
-//@ chunk-snyt4d6y.js:1782-1847 placement
+//@ chunk-c2rsewka.js:1781-1846 placement
 var directoryPageWrapperSchema = DoctorLazy(() =>
   objectSchema({
     data: array(unknown()).nullish(),
     next_page: stringSchema().nullish(),
   }),
 );
-//@ chunk-snyt4d6y.js:1847-1918 placement
+//@ chunk-c2rsewka.js:1846-1917 placement
 function isPluginDirectoryAccessAllowed() {
   return isPolicyAllowed("allow_plugin_directory_search") && pluginDirectoryPolicyBlock() === null;
 }
-//@ chunk-snyt4d6y.js:1918-2149 placement
+//@ chunk-c2rsewka.js:1917-2148 placement
 function pluginDirectoryPolicyRefusalReason() {
   let kind = policyDenyKind("allow_plugin_directory_search");
   return (
@@ -142,12 +142,12 @@ function pluginDirectoryPolicyRefusalReason() {
     "your organization's policy could not be checked yet; try again in a moment"
   );
 }
-//@ chunk-snyt4d6y.js:2149-2223 placement
+//@ chunk-c2rsewka.js:2148-2222 placement
 function pluginDirectoryUnavailableCause() {
   if (isPluginDirectoryAccessAllowed() || pluginDirectoryPolicyBlock() !== null) return null;
   return "policy-not-known";
 }
-//@ chunk-snyt4d6y.js:2223-5454 placement
+//@ chunk-c2rsewka.js:2222-5452 placement
 /**
  * 搜索插件目录，受组织策略 allow_plugin_directory_search 控制。
  */
@@ -342,7 +342,7 @@ async function searchPluginDirectory({
     };
   }
 }
-//@ chunk-snyt4d6y.js:5454-5595 placement
+//@ chunk-c2rsewka.js:5452-5593 placement
 function stripNullFields(value) {
   if (Array.isArray(value)) return value.map(stripNullFields);
   if (isPlainObject(value)) {
@@ -353,7 +353,7 @@ function stripNullFields(value) {
   }
   return value;
 }
-//@ chunk-snyt4d6y.js:5595-5749 placement
+//@ chunk-c2rsewka.js:5593-5747 placement
 /**
  * 记录插件目录搜索遥测
  */

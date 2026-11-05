@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Artifact 调用（publish、upload_asset）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tmx5d02z.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pjmrd77p.js (23)
  * attribution: placement 23
  */
 import { relative, sep, join, resolve, isAbsolute } from "path";
@@ -48,6 +48,7 @@ import { normalizeArtifactInput } from "../../services/artifacts/artifactInputNo
 import { isArtifactDbEnabled, isArtifactDbStrReplaceEnabled } from "../../services/artifacts/artifactDb.js";
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import {
   runPreToolUseHooks,
   resolvePermissionDecisionForCall,
@@ -69,9 +70,9 @@ import { normalizeForDisplay, sanitizeDisplayText } from "../../utils/resultErro
 import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { maybeResizeAndDownsampleImageBlock } from "../../utils/imageResizer.js";
 import { MODEL_COPY_IMAGE_BYTES } from "../../utils/mediaLimits.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 
-//@ chunk-tmx5d02z.js:12695-12971 placement
+//@ chunk-pjmrd77p.js:13854-14130 placement
 function parseArtifactId(value) {
   let lower = value.trim().toLowerCase();
   if (ARTIFACT_SLUG_RE.test(lower))
@@ -87,7 +88,7 @@ function parseArtifactId(value) {
     error: "artifact must be an artifact URL (https://claude.ai/code/artifact/<id>) or a bare artifact id",
   };
 }
-//@ chunk-tmx5d02z.js:12971-13076 placement
+//@ chunk-pjmrd77p.js:14130-14235 placement
 /**
  * 解析 artifact_call 参数中的 Artifact id（为空则无 id，格式错误返回 error）。
  */
@@ -104,10 +105,10 @@ function readArtifactIdArg(artifact) {
     id: undefined,
   };
 }
-//@ chunk-tmx5d02z.js:13076-13130 placement
+//@ chunk-pjmrd77p.js:14235-14289 placement
 var APPIFACT_ARTIFACT = "APPIFACT_ARTIFACT";
 var APPIFACT_ARTIFACT_URL = "APPIFACT_ARTIFACT_URL";
-//@ chunk-tmx5d02z.js:13480-13868 placement
+//@ chunk-pjmrd77p.js:14639-15027 placement
 /**
  * artifact_call 页面调用的协议常量：动词集合（数据库读写、读文件、资源、publish/open）、调用 id 格式、结果大小上限与严格 schema。
  */
@@ -144,7 +145,7 @@ var artifactCallSchema = DoctorLazy(() =>
   }),
 );
 var CALL_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-//@ chunk-tmx5d02z.js:13868-13963 placement
+//@ chunk-pjmrd77p.js:15027-15122 placement
 /**
  * 校验 artifact_call 的参数：成功返回 frame，失败返回格式化的校验错误。
  */
@@ -158,7 +159,7 @@ function parseArtifactCallArgs(args) {
         invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
 }
-//@ chunk-tmx5d02z.js:13963-14340 placement
+//@ chunk-pjmrd77p.js:15122-15499 placement
 /**
  * artifact_call 数据库动作的参数 schema：url、collection、doc_id、data、query、if_version，以及最多 100 条的 writes 批量写。
  */
@@ -183,7 +184,7 @@ var dbCallArgsSchema = DoctorLazy(() =>
       .optional(),
   }),
 );
-//@ chunk-tmx5d02z.js:14340-14448 placement
+//@ chunk-pjmrd77p.js:15499-15607 placement
 function stripIfVersion({ if_version: ifVersion, writes, ...rest }) {
   return writes === undefined
     ? rest
@@ -192,7 +193,7 @@ function stripIfVersion({ if_version: ifVersion, writes, ...rest }) {
         writes: writes.map(({ if_version: ifVersion, ...write }) => write),
       };
 }
-//@ chunk-tmx5d02z.js:14448-15408 placement
+//@ chunk-pjmrd77p.js:15607-16567 placement
 /**
  * artifact_call 各组参数 schema（asset 路径/批量、file_path、asset_id 与发布输入）。
  */
@@ -259,7 +260,7 @@ var publishInputSchema = DoctorLazy(() =>
     description: stringSchema().max(1000).optional(),
   }),
 );
-//@ chunk-tmx5d02z.js:15408-15504 placement
+//@ chunk-pjmrd77p.js:16567-16663 placement
 /**
  * 生成失败结果对象（错误码、消息与可选原因码）。
  */
@@ -279,7 +280,7 @@ function errorResult(code, message, reason) {
           },
   };
 }
-//@ chunk-tmx5d02z.js:15504-15716 placement
+//@ chunk-pjmrd77p.js:16663-16875 placement
 var PUBLISH_INCOMPLETE = {
   ok: false,
   error: {
@@ -296,14 +297,14 @@ var UPLOAD_INCOMPLETE = {
 };
 var APPIFACT_PUBLISH_DIR_RE = /^\.appifact-publish-[A-Za-z0-9]{6}$/;
 var INDEX_HTML = "index.html";
-//@ chunk-tmx5d02z.js:15716-15818 placement
+//@ chunk-pjmrd77p.js:16875-16977 placement
 function publishStagingDir(path, cwd) {
   let [firstSegment, ...restSegments] = relative(cwd, path).split(sep);
   return firstSegment !== undefined && restSegments.length > 0 && APPIFACT_PUBLISH_DIR_RE.test(firstSegment)
     ? join(cwd, firstSegment)
     : null;
 }
-//@ chunk-tmx5d02z.js:15818-15968 placement
+//@ chunk-pjmrd77p.js:16977-17127 placement
 async function readStagedPage(path, cwd, allowRoot = false) {
   try {
     let realCwd = await realpath(cwd);
@@ -315,7 +316,7 @@ async function readStagedPage(path, cwd, allowRoot = false) {
     return null;
   }
 }
-//@ chunk-tmx5d02z.js:15968-16344 placement
+//@ chunk-pjmrd77p.js:17127-17503 placement
 /**
  * 以 O_NOFOLLOW 打开文件，要求普通单链接且不超过 Artifact 大小上限，经 /proc/self/fd 取真实路径并通过 n 校验后读出全部字节，返回 {path, sha256, size}；任何异常返回 null。
  */
@@ -344,7 +345,7 @@ async function readSingleLinkFile(filePath, acceptPath) {
     return null;
   }
 }
-//@ chunk-tmx5d02z.js:16344-16802 placement
+//@ chunk-pjmrd77p.js:17503-17962 placement
 /**
  * 校验发布暂存目录中的 files 来源：必须在同一暂存目录内、不含绝对路径或 ..，逐个安全读取并累计大小不超过请求预算，返回 {dir, admitted}。
  */
@@ -376,7 +377,7 @@ async function admitStagedFiles(path, totalBytes, root, files, cwd) {
     return null;
   }
 }
-//@ chunk-tmx5d02z.js:16802-18604 placement
+//@ chunk-pjmrd77p.js:17962-19764 placement
 function runArtifactCall(tools, call) {
   if (call.verb === "open") {
     let parsed = ARTIFACT_CALL_SCHEMAS().safeParse(call.args);
@@ -500,7 +501,7 @@ function runArtifactCall(tools, call) {
     },
   };
 }
-//@ chunk-tmx5d02z.js:18604-19149 placement
+//@ chunk-pjmrd77p.js:19764-20309 placement
 /**
  * read_files 动作：对 paths 中每个路径依次执行 read_file 发布调用，汇总保存位置，返回 {files_read}；任一失败返回该路径的错误。
  */
@@ -547,7 +548,7 @@ async function readFilesCall(call, context, isStillWanted) {
     },
   };
 }
-//@ chunk-tmx5d02z.js:19149-22956 placement
+//@ chunk-pjmrd77p.js:20309-24187 placement
 /**
  * Artifact 发布调用：读取文件、上传资源并发布。
  */
@@ -604,7 +605,10 @@ async function runArtifactPublish(call, context, isStillWanted, cleanups) {
     toolUseId,
     permissionPhase: undefined,
     autoModeClassified: undefined,
-    ...false,
+    ...(codeModeAccepted() && {
+      autoModeDenialLimitRun: undefined,
+      autoModeScriptCheckDeferred: undefined,
+    }),
     ...(context.abortController && {
       abortController: context.abortController,
     }),
@@ -775,7 +779,7 @@ async function runArtifactPublish(call, context, isStillWanted, cleanups) {
     clearToolUsePermissionState(toolUseContext.session, toolUseId);
   }
 }
-//@ chunk-tmx5d02z.js:22956-23459 placement
+//@ chunk-pjmrd77p.js:24187-24692 placement
 /**
  * see 语句的常量：类型名、数量与大小上限、拒绝说明文案，以及 see 行/图片的 schema 与判定函数。
  */
@@ -817,7 +821,7 @@ var refusedResult = (message) => ({
 });
 var seeEntryKind = (value) =>
   typeof value === "object" && value !== null && "type" in value ? value.type : undefined;
-//@ chunk-tmx5d02z.js:23459-23508 placement
+//@ chunk-pjmrd77p.js:24692-24741 placement
 /**
  * 判断条目是否是 see 或 image 类型。
  */
@@ -825,7 +829,7 @@ function isSeeEntry(value) {
   let kind = seeEntryKind(value);
   return kind === SEE_KIND || kind === IMAGE;
 }
-//@ chunk-tmx5d02z.js:23508-23616 placement
+//@ chunk-pjmrd77p.js:24741-24848 placement
 function truncateDisplayText(text) {
   let kept = truncateToLength(text, MAX_SEE_TEXT_CHARS);
   return {
@@ -843,7 +847,7 @@ function truncateDisplayText(text) {
     dropped: text.length - kept.length,
   };
 }
-//@ chunk-tmx5d02z.js:23616-24012 placement
+//@ chunk-pjmrd77p.js:24848-25244 placement
 /**
  * 解析页面发来的一行图片：校验 id、大小上限与声明/实际媒体类型（只接受支持的图片格式），返回清洗后的标签、类型与字节；否则返回 refused 原因。
  */
@@ -877,7 +881,7 @@ function parseImageLine(line, idPattern) {
     bytes: buffer,
   };
 }
-//@ chunk-tmx5d02z.js:24012-24504 placement (2.1.88 match: buildImageContentBlocks, 0.455)
+//@ chunk-pjmrd77p.js:25244-25736 placement (2.1.88 match: buildImageContentBlocks, 0.454)
 /**
  * 图片压缩为 PNG/JPEG base64，失败或过大返回 {refused}。归属存疑（某工具的图片收集）。
  */
@@ -924,7 +928,7 @@ async function encodeImageForAttachment(data, mediaType, limits) {
     size: buffer.length,
   };
 }
-//@ chunk-tmx5d02z.js:24504-25985 placement
+//@ chunk-pjmrd77p.js:25736-27220 placement
 /**
  * 收集文本与图片（最多 4 张），attach 时转成内容块。归属存疑。
  */
@@ -975,8 +979,8 @@ function createImageCollector(idPattern) {
           };
     },
     kept: () => ({
-      texts: count(groups, (group) => group.text !== ""),
-      images: count(images, (image) => "bytes" in image),
+      texts: countWhere(groups, (group) => group.text !== ""),
+      images: countWhere(images, (image) => "bytes" in image),
     }),
     textChars: () => groups.reduce((acc, group) => acc + group.text.length, 0),
     async attach(limits) {

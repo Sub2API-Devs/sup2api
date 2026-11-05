@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 所有权同意与打开 frame
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (15)
  * attribution: placement 15
  */
 import {
@@ -26,7 +26,7 @@ import { persistBridgeArtifactFrames } from "../../../utils/sessionTagRefresh.js
 import { forgetDeletedArtifact } from "../actions/delete.js";
 import { filesCowritten, ownTypeInstance, filesFromType, consentAskReachedUser } from "./consentStamps.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import {
   getToolPermissionContext,
   consentAskCanReachUser,
@@ -38,7 +38,7 @@ import { artifactFilesConsentHeld, coworkConsentMustDeny } from "./readConsent.j
 import { logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 import { PUBLIC_READ_UNASKED_REASON } from "../../../services/artifacts/frameFlags.js";
 
-//@ chunk-qxvqcab6.js:3404-3509 placement
+//@ chunk-nfkwcnxd.js:3376-3481 placement
 function consentDecisionReason(personOnly, reason) {
   return personOnly
     ? {
@@ -51,7 +51,7 @@ function consentDecisionReason(personOnly, reason) {
         reason,
       };
 }
-//@ chunk-qxvqcab6.js:3509-3672 placement
+//@ chunk-nfkwcnxd.js:3481-3644 placement
 function artifactCardTitleFor(target, context) {
   let title = artifactCardTitle(
     getShareEntry(target.slug)?.title ||
@@ -66,7 +66,7 @@ function artifactCardTitleFor(target, context) {
     }),
   };
 }
-//@ chunk-qxvqcab6.js:3672-4553 placement
+//@ chunk-nfkwcnxd.js:3644-4525 placement
 /**
  * 在界面中打开（或记录待打开）已发布 artifact 的 frame 行，更新 AppState 中的 frameUrls。
  */
@@ -137,14 +137,14 @@ function openArtifactFrame(toolUseContext, target, title, { mcpPublished: option
     lastOpenFailed,
   };
 }
-//@ chunk-qxvqcab6.js:4553-4617 placement
+//@ chunk-nfkwcnxd.js:4525-4589 placement
 function updateFrameState(toolUseContext, slug) {
   forgetDeletedArtifact(slug, {
     updateAppState: toolUseContext.setAppState,
     context: toolUseContext,
   });
 }
-//@ chunk-qxvqcab6.js:4617-4827 placement
+//@ chunk-nfkwcnxd.js:4589-4799 placement
 function markFrameOpenOutcome(toolUseContext, rowKey, succeeded) {
   toolUseContext.setAppState((state) => {
     if (succeeded)
@@ -162,7 +162,7 @@ function markFrameOpenOutcome(toolUseContext, rowKey, succeeded) {
     };
   });
 }
-//@ chunk-qxvqcab6.js:4827-5023 placement
+//@ chunk-nfkwcnxd.js:4799-4996 placement
 function ownershipSuffix(shareEntry, context) {
   return ownedByUser(shareEntry) && filesCowritten(shareEntry) && !ownTypeInstance(shareEntry)
     ? " (yours; a co-writer has also published to it)"
@@ -170,7 +170,7 @@ function ownershipSuffix(shareEntry, context) {
       ? " (yours; its files come from an Artifact type its publisher wrote)"
       : ownershipTag(shareEntry);
 }
-//@ chunk-qxvqcab6.js:5023-5190 placement
+//@ chunk-nfkwcnxd.js:4996-5164 placement
 function ownershipClassifierTag(shareEntry, surface) {
   return ownedByUser(shareEntry) && filesCowritten(shareEntry) && !ownTypeInstance(shareEntry)
     ? " [ownership: yours, co-written: a non-owner has also published to it]"
@@ -178,23 +178,23 @@ function ownershipClassifierTag(shareEntry, surface) {
       ? OWN_TYPE_INSTANCE_CLASSIFIER_MARK
       : `${ownershipClassifierMark(shareEntry)}${otherOrgClassifierMark(shareEntry)}`;
 }
-//@ chunk-qxvqcab6.js:5190-5262 placement
+//@ chunk-nfkwcnxd.js:5164-5236 placement
 /**
  * 生成单个同意条目的唯一键。
  */
 function consentEntryKey(entry) {
   return jsonStringify([entry.path, entry.from.slug, entry.from.path, entry.from.ver ?? ""]);
 }
-//@ chunk-qxvqcab6.js:5262-5314 placement
+//@ chunk-nfkwcnxd.js:5236-5288 placement
 function consentSlugsKey(entries) {
-  return uniq(entries.map(consentEntryKey)).sort().join(`
+  return normalizeCaseForComparison_2(entries.map(consentEntryKey)).sort().join(`
 `);
 }
-//@ chunk-qxvqcab6.js:5314-5355 placement
+//@ chunk-nfkwcnxd.js:5288-5329 placement
 function isSameConsentSlugs(storedSlugsKey, entries) {
   return (storedSlugsKey ?? "") === consentSlugsKey(entries);
 }
-//@ chunk-qxvqcab6.js:5355-5560 placement
+//@ chunk-nfkwcnxd.js:5329-5534 placement
 function needsHumanAssetConsent(toolUseContext, slug) {
   let { mode, modeBeforeRewrite } = getToolPermissionContext(toolUseContext);
   if (mode === "auto" || modeBeforeRewrite === "auto") return false;
@@ -204,7 +204,7 @@ function needsHumanAssetConsent(toolUseContext, slug) {
     slug,
   );
 }
-//@ chunk-qxvqcab6.js:5560-6313 placement
+//@ chunk-nfkwcnxd.js:5534-6288 placement
 /**
  * 对共同写入或来自类型的 artifact，在上传/复制资源前要求人工确认（artifactAssetUploadConsentSlugs）。
  */
@@ -232,7 +232,7 @@ function cowrittenConsentAsk(input, context, target, cowrittenByOther, checkCowr
     );
   }
 }
-//@ chunk-qxvqcab6.js:6313-6499 placement
+//@ chunk-nfkwcnxd.js:6288-6474 placement
 function outsideOrgConsentRefusal(ruling, kind, retryUrl) {
   logFeatureBad("artifact_outside_org_consent", "refused_unasked", {
     assets: kind === "asset_copy",
@@ -250,11 +250,11 @@ function outsideOrgConsentRefusal(ruling, kind, retryUrl) {
     `${kind}_outside_org_unasked`,
   );
 }
-//@ chunk-qxvqcab6.js:6499-6537 placement
+//@ chunk-nfkwcnxd.js:6474-6512 placement
 function clearPublicReadUnasked(reason, ruling, kind) {
   if (reason === PUBLIC_READ_UNASKED_REASON) refuseOutsideOrgUnasked(ruling, kind);
 }
-//@ chunk-qxvqcab6.js:6537-6699 placement
+//@ chunk-nfkwcnxd.js:6512-6674 placement
 function refuseOutsideOrgUnasked(ruling, kind) {
   logFeatureBad("artifact_outside_org_consent", "refused_unasked", {
     assets: kind !== "files",
@@ -266,16 +266,16 @@ function refuseOutsideOrgUnasked(ruling, kind) {
 }
 export {
   artifactCardTitleFor,
-  needsHumanAssetConsent,
-  consentDecisionReason,
-  outsideOrgConsentRefusal,
-  ownershipClassifierTag,
   ownershipSuffix,
-  openArtifactFrame,
-  markFrameOpenOutcome,
+  ownershipClassifierTag,
+  consentDecisionReason,
+  needsHumanAssetConsent,
   consentSlugsKey,
   cowrittenConsentAsk,
   clearPublicReadUnasked,
+  markFrameOpenOutcome,
   isSameConsentSlugs,
+  outsideOrgConsentRefusal,
+  openArtifactFrame,
   updateFrameState,
 };

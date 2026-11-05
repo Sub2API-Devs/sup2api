@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/resources/beta/sessions/resources.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
@@ -10,7 +10,7 @@ import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
-//@ chunk-hwmsct5x.js:130754-132169 esm-fingerprint
+//@ chunk-vn3g7zt8.js:131134-132549 esm-fingerprint
 class Resources extends APIResource {
   retrieve(resourceID, params, options) {
     let { session_id, betas, workspace_id } = params;

@@ -3,9 +3,9 @@
  *
  * /security-review：已迁到插件的提示词命令（允许工具与提示词正文）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/security-review.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { createMovedToPluginCommand } from "./createMovedToPluginCommand.js";
@@ -15,17 +15,20 @@ import { isInGitRepo } from "../utils/background/remote/preconditions.js";
 import { parseFrontmatter } from "../utils/frontmatterParser.js";
 import { parseSlashCommandToolsFromFrontmatter } from "../utils/markdownConfigLoader.js";
 import { executeShellCommandsInPrompt, withCommandAllowRules } from "../utils/promptShellExecution.js";
+import { isUserDrivenHere } from "../utils/turnOrigin.js";
+import { hostScopedEmptyObject } from "../services/tips/tipRegistry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1750738-1762601 fingerprint (2.1.88 match: default, 0.56)
+//@ chunk-5xgkngpb.js:1827452-1839672 fingerprint (2.1.88 match: default, 0.481)
 /**
  * SECURITY_REVIEW_PROMPT：带 frontmatter 的安全审查提示词。
  */
 var SECURITY_REVIEW_GIT_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SECURITY_REVIEW_ALLOWED_TOOLS;
-var SECURITY_REVIEW_PROMPT;
-var securityReviewCommand;
-deferInit("chunk-e6aww6q8.js:1750738", () => {
+var SECURITY_REVIEW_SKILL_BODY;
+var FINAL_REPORT_INSTRUCTION;
+var scrollSpeedCommand;
+deferInit("chunk-5xgkngpb.js:1827452", () => {
   SECURITY_REVIEW_GIT_COMMANDS = [
     "git diff *",
     "git status *",
@@ -37,7 +40,7 @@ deferInit("chunk-e6aww6q8.js:1750738", () => {
     `Bash(${gitCommand})`,
     `PowerShell(${gitCommand})`,
   ]).join(", ");
-  SECURITY_REVIEW_PROMPT = `---
+  SECURITY_REVIEW_SKILL_BODY = `---
 allowed-tools: ${SECURITY_REVIEW_ALLOWED_TOOLS}, Read, Glob, Grep, LS, Task
 description: Complete a security review of the pending changes on the current branch
 ---
@@ -227,14 +230,15 @@ Begin your analysis now. Do this in 3 steps:
 2. Then for each vulnerability identified by the above sub-task, create a new sub-task to filter out false-positives. Launch these sub-tasks as parallel sub-tasks. In the prompt for these sub-tasks, include everything in the "FALSE POSITIVE FILTERING" instructions.
 3. Filter out any vulnerabilities where the sub-task reported a confidence less than 8.
 
-Your final reply must contain the markdown report and nothing else.`;
-  securityReviewCommand = createMovedToPluginCommand({
+`;
+  FINAL_REPORT_INSTRUCTION = "Your final reply must contain the markdown report and nothing else.";
+  scrollSpeedCommand = createMovedToPluginCommand({
     name: SECURITY_REVIEW,
     description: "Complete a security review of the pending changes on the current branch",
     progressMessage: "analyzing code changes for security risks",
     pluginName: "security-review",
     pluginCommand: "security-review",
-    async getPromptWhileMarketplaceIsPrivate(_args, context) {
+    async getPromptWhileMarketplaceIsPrivate(gitCommand, _index) {
       let cwd = getCwd();
       if (!(await isInGitRepo(cwd)))
         return [
@@ -247,24 +251,39 @@ If the repository is in a subdirectory, \`cd\` into it first and then re-run /se
 If this is a self-hosted runner session created without a \`git_repository\` source, either add one at session creation so the runner clones it and sets the working directory, or \`cd\` into the cloned repo before running the review.`,
           },
         ];
-      let frontmatter = parseFrontmatter(SECURITY_REVIEW_PROMPT);
+      let frontmatter = parseFrontmatter(SECURITY_REVIEW_SKILL_BODY);
       let slashCommandToolsFromFrontmatter = parseSlashCommandToolsFromFrontmatter(
         frontmatter.frontmatter["allowed-tools"],
       );
+      let prompt = await executeShellCommandsInPrompt(
+        frontmatter.content,
+        {
+          ..._index,
+          getAppState: withCommandAllowRules(_index, slashCommandToolsFromFrontmatter),
+        },
+        "security-review",
+      );
+      let fromSubagent =
+        _index.agentId !== undefined ||
+        _index.options.isSkillPreload ||
+        _index.options.readOnlySkillLoad ||
+        _index.options.modelScheduledOrigin ||
+        (_index.toolUseId !== undefined && !isUserDrivenHere(_index.messages))
+          ? null
+          : ((await hostScopedEmptyObject.of(_index.session.host).closingTip?.(_index)) ?? null);
       return [
         {
           type: "text",
-          text: await executeShellCommandsInPrompt(
-            frontmatter.content,
-            {
-              ...context,
-              getAppState: withCommandAllowRules(context, slashCommandToolsFromFrontmatter),
-            },
-            "security-review",
-          ),
+          text:
+            prompt +
+            (fromSubagent === null
+              ? FINAL_REPORT_INSTRUCTION
+              : `Your final reply must contain the markdown report, then these two lines exactly as written, and nothing else:
+${fromSubagent.join(`
+`)}`),
         },
       ];
     },
   });
 });
-export { securityReviewCommand };
+export { scrollSpeedCommand };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 保留运行目录时对被测插件写入的 home/、tmp/ 加封（mode 000）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (3)
  * attribution: placement 3
  */
 import path from "path";
@@ -15,14 +15,14 @@ import { getPlatform } from "../../utils/platform.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 
-//@ chunk-qchp9vrd.js:115707-115754 placement
+//@ chunk-af1hzzme.js:117060-117107 placement
 /**
  * 保留沙箱里 sealed 目录的路径。
  */
 function sealedDir(tempDir) {
   return path.join(tempDir.root, "sealed");
 }
-//@ chunk-qchp9vrd.js:115754-117767 placement
+//@ chunk-af1hzzme.js:117107-119120 placement
 /**
  * 保留运行目录时把被测插件写过的 home/ 与 tmp/ 设为 000 并使目录只读（Windows 与 root 下不可用）。
  */
@@ -137,7 +137,7 @@ async function sealKeptSandbox(tempDir) {
   }
   return sealedPath;
 }
-//@ chunk-qchp9vrd.js:117767-118119 placement
+//@ chunk-af1hzzme.js:119120-119472 placement
 function formatSealedKeptNotice(evalTempDir, sealed) {
   return `home/ and tmp/ in it were written by the plugin under test and are sealed in ${shellQuoteArgs([sealed])} (mode 000; the kept directory is read-only) \u2014 open them with \`chmod 700 ${shellQuoteArgs([evalTempDir.root])} ${shellQuoteArgs([sealed])}\` to inspect, and do not run git (or anything that loads configuration from its working directory) anywhere inside the kept directory`;
 }

@@ -1,14 +1,14 @@
 /**
  * _unknown/anthropic-google-cloud-client.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: _unknown/anthropic-google-cloud-client.js
- * pieces: chunk-e7naa6k8.js (1)
+ * pieces: chunk-mgs2qfsy.js (1)
  * attribution: placement 2
  */
 import { Anthropic } from "../@anthropic-ai/sdk/client.mjs";
 import { VERSION } from "../@anthropic-ai/bedrock-sdk/version.mjs";
 import { AnthropicError } from "../@anthropic-ai/sdk/core/error.mjs";
-import { readEnv } from "../@anthropic-ai/bedrock-sdk/internal/utils/env.mjs";
+import { readEnv_4 } from "../@anthropic-ai/bedrock-sdk/internal/utils/env.mjs";
 import {
   CREDENTIAL_OPTIONS,
   GLOBAL,
@@ -33,10 +33,10 @@ import {
   _AnthropicGoogleCloud_getBearerToken,
 } from "../@anthropic-ai/bedrock-sdk/internal/decoders/line.mjs";
 import { isAbsoluteURL } from "../@anthropic-ai/bedrock-sdk/internal/utils/values.mjs";
-import { buildHeaders } from "../@anthropic-ai/bedrock-sdk/internal/headers.mjs";
+import { buildHeaders_2 } from "../@anthropic-ai/bedrock-sdk/internal/headers.mjs";
 import { VERSION as VERSION_2 } from "../@anthropic-ai/sdk/version.mjs";
 
-//@ chunk-e7naa6k8.js:2859-6243 placement
+//@ chunk-mgs2qfsy.js:2859-6243 placement
 class AnthropicGoogleCloud extends Anthropic {
   _instrumentationScope() {
     return {
@@ -51,10 +51,10 @@ class AnthropicGoogleCloud extends Anthropic {
   }
   set completions(value) {}
   constructor({
-    baseURL = readEnv("ANTHROPIC_GOOGLE_CLOUD_BASE_URL"),
-    project = readEnv("ANTHROPIC_GOOGLE_CLOUD_PROJECT") ?? readEnv("GOOGLE_CLOUD_PROJECT"),
-    location = readEnv("ANTHROPIC_GOOGLE_CLOUD_LOCATION"),
-    workspaceId = readEnv("ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID"),
+    baseURL = readEnv_4("ANTHROPIC_GOOGLE_CLOUD_BASE_URL"),
+    project = readEnv_4("ANTHROPIC_GOOGLE_CLOUD_PROJECT") ?? readEnv_4("GOOGLE_CLOUD_PROJECT"),
+    location = readEnv_4("ANTHROPIC_GOOGLE_CLOUD_LOCATION"),
+    workspaceId = readEnv_4("ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID"),
     bearerTokenProvider,
     googleAuth,
     authClient,
@@ -258,7 +258,7 @@ class AnthropicGoogleCloud extends Anthropic {
   }
   async authHeaders(opts) {
     if (this.skipAuth) return;
-    let headers = buildHeaders([this._options.defaultHeaders, opts.headers]);
+    let headers = buildHeaders_2([this._options.defaultHeaders, opts.headers]);
     if (headers.values.get("authorization") || headers.nulls.has("authorization")) return;
     let token = await __classPrivateFieldGet(
       this,
@@ -266,7 +266,7 @@ class AnthropicGoogleCloud extends Anthropic {
       "m",
       _AnthropicGoogleCloud_getBearerToken,
     ).call(this);
-    return buildHeaders([
+    return buildHeaders_2([
       {
         Authorization: `Bearer ${token}`,
       },

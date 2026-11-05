@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/pbkdf2.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_hmac } from "./hmac.js";
 import { require_md } from "./md.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:79887-81621 cjs-fingerprint
+//@ chunk-qg41pqt6.js:79783-81527 cjs-fingerprint
 var require_pbkdf2 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_hmac();

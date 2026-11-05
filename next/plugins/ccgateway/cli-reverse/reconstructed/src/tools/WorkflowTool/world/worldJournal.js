@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流 world 日志的写入、读取与重放
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y1shfdfm.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kgbsr4tm.js (12)
  * attribution: placement 11, sole-consumer 1
  */
 import { join, dirname, basename } from "path";
@@ -25,7 +25,7 @@ import { SessionRootSlot } from "../../../bootstrap/sessionSlices.js";
 import { WorldStore } from "./worldStore.js";
 import { call } from "../../../commands/extra-usage/extra-usage-noninteractive.js";
 
-//@ chunk-y1shfdfm.js:51018-51063 placement
+//@ chunk-kgbsr4tm.js:52682-52727 placement
 /**
  * 当前会话的 world 日志文件路径。
  */
@@ -33,7 +33,7 @@ function worldJournalPath() {
   let sessionProjectDir = resolveSessionProjectDir();
   return join(sessionProjectDir, getSessionId(), WORLD_JSONL);
 }
-//@ chunk-y1shfdfm.js:51063-51207 placement
+//@ chunk-kgbsr4tm.js:52727-52871 placement
 function worldJournalStorageKey(filePath) {
   let journalDir = dirname(filePath);
   let projectKeyIfRepresentable = getProjectKeyIfRepresentable(dirname(journalDir));
@@ -41,7 +41,7 @@ function worldJournalStorageKey(filePath) {
   let storageKey = STORAGE_SPACES.sessionJournal(projectKeyIfRepresentable, basename(journalDir), "world");
   return validateStorageKey(storageKey) === undefined ? storageKey : undefined;
 }
-//@ chunk-y1shfdfm.js:51207-52217 placement
+//@ chunk-kgbsr4tm.js:52871-53881 placement
 /**
  * 把 world 行变更顺序追加写入会话日志（远程会话走记录存储）。
  */
@@ -139,7 +139,7 @@ function createWorldJournalWriter(world, filePath, storageV5) {
     return resolved;
   };
 }
-//@ chunk-y1shfdfm.js:52217-52805 placement
+//@ chunk-kgbsr4tm.js:53881-54469 placement
 async function readWorldJournal(filePath, storageV5) {
   let storageKey = worldJournalStorageKey(filePath);
   if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== undefined) {
@@ -192,7 +192,7 @@ async function readWorldJournal(filePath, storageV5) {
       }
     : journalLines;
 }
-//@ chunk-y1shfdfm.js:52805-53164 placement
+//@ chunk-kgbsr4tm.js:54469-54828 placement
 function parseJournalLines(lines) {
   let parsed = [];
   let seenAddrs = new Set();
@@ -229,7 +229,7 @@ function parseJournalLines(lines) {
     skipped,
   };
 }
-//@ chunk-y1shfdfm.js:53164-53235 placement
+//@ chunk-kgbsr4tm.js:54828-54899 placement
 /**
  * 由现有行计算下一个可用地址（最大地址 + 1）。
  */
@@ -238,7 +238,7 @@ function nextRowAddr(lines) {
   for (let line of lines) if (line.addr >= nextAddr) nextAddr = line.addr + 1;
   return nextAddr;
 }
-//@ chunk-y1shfdfm.js:53235-53774 placement
+//@ chunk-kgbsr4tm.js:54899-55438 placement
 async function readRemoteJournalRecords(storageV5, storageKey) {
   let textDecoder = new TextDecoder("utf-8", {
     ignoreBOM: true,
@@ -277,7 +277,7 @@ async function readRemoteJournalRecords(storageV5, storageKey) {
     fromSeq = nextSeq;
   }
 }
-//@ chunk-y1shfdfm.js:53774-54473 placement
+//@ chunk-kgbsr4tm.js:55438-56137 placement
 /**
  * 把日志行重放到空 world，重建行、规则与状态。
  */
@@ -328,22 +328,22 @@ function replayWorldJournal(world, lines) {
   world.restore(rows);
   return rows.length;
 }
-//@ chunk-y1shfdfm.js:54473-54499 placement
+//@ chunk-kgbsr4tm.js:56137-56163 placement
 /**
  * 按会话根保存的世界存储实例。
  */
 var worldStoreByRoot = new SessionRootSlot(() => new WorldStore());
-//@ chunk-y1shfdfm.js:54499-54530 placement
+//@ chunk-kgbsr4tm.js:56163-56194 placement
 function worldStateOf(root) {
   return worldStoreByRoot.of(root);
 }
-//@ chunk-y1shfdfm.js:54558-54607 sole-consumer
+//@ chunk-kgbsr4tm.js:56222-56271 sole-consumer
 /**
  * 按会话根保存的 world 日志句柄。
  */
 var journalByRoot = new SessionRootSlot(() => new call());
 var journalSubscribersByRoot = new SessionRootSlot(() => new Map());
-//@ chunk-y1shfdfm.js:54607-55713 placement
+//@ chunk-kgbsr4tm.js:56271-57377 placement
 function openWorldJournal(root, options) {
   let state = journalByRoot.of(root);
   if (state.opened) return state.opened;

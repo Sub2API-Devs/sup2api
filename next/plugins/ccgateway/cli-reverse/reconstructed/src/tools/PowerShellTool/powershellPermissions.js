@@ -3,27 +3,49 @@
  *
  * PowerShell 权限主流程：规则匹配（大小写不敏感、别名规范化）、安全检查、git/归档/.git 写入攻击检测、路径约束、只读与 acceptEdits、逐子命令汇总
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/powershellPermissions.ts
- * pieces: chunk-dcmhvw5a.js (2), chunk-e6aww6q8.js (1), chunk-v0yfsee9.js (19)
- * attribution: fingerprint 7, placement 1, callgraph-fingerprint 1, layout 11, file-local 2
+ * pieces: chunk-5xgkngpb.js (3), chunk-6zpsr8vx.js (19), chunk-z20c443b.js (2)
+ * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 7, layout 11, file-local 2, shared-adjacent 1, placement 1
  */
 import { resolve } from "path";
 import {
   permissionRuleExtractPrefix,
   hasWildcards,
+  makeTextRuleMatcher,
   matchWildcardPattern,
 } from "../../utils/permissions/shellRuleMatching.js";
 import {
+  checkEarlyExitDeny,
+  isBashTextRuleSearchOn,
+  canParseEscapedSpaceCommand,
+  matchingRulesForInput_3,
+  findDangerousVariableRemoval,
+  checkDangerousRemovals,
+  askForDangerousRmOnParseError,
+  matchesCommandRule,
+  powershellToolCheckExactMatchPermission,
+} from "../BashTool/bashPermissions.js";
+import {
+  context,
+  getDenyRuleForAgent,
+  getContentRulesMapForTool,
   createPermissionRequestMessage,
-  parseToolInputForPermission,
-  describePermissionCheckFault,
-  isSettledPermissionResult,
-  PERMISSION_CHECK_CRASHED_REASON,
   getContentRulesMapForToolName,
   carriesAskRuleIntent,
 } from "../../utils/permissions/permissions.js";
-import { recordCheckedResult } from "../../utils/permissions/permissionRecord.js";
+import { BashTool } from "../BashTool/BashTool.js";
+import { PARSE_ABORTED } from "../../utils/bash/parser.js";
+import {
+  treeSpansAreIncomplete,
+  splitCommand,
+  nestedCommandSpansFromAst,
+} from "../../utils/bash/commands.js";
+import { logEventUnlessSuppressed, checkDangerousRemoval } from "../BashTool/dangerousRemoval.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { getCwd } from "../../utils/cwd.js";
+import { getDangerousRmTimeoutConfig } from "../BashTool/bashPermissionFlags.js";
+import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import {
   parsePowerShellCommand,
   getAllCommandNames,
@@ -58,7 +80,6 @@ import {
   skipLeadingWhitespaceAndComments,
 } from "./powershellParsing.js";
 import { POWERSHELL_TOOL_NAME } from "./toolName.js";
-import { powershellToolCheckExactMatchPermission_2 } from "../BashTool/bashPermissions.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import {
   BASH_COMMAND_CLAMP_DENY_REASON,
@@ -81,11 +102,9 @@ import {
   copyMoveMayReachGitInternals,
   isDotGitPathPS,
 } from "./gitSafety.js";
-import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { getCwd } from "../../utils/cwd.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:214175-214322 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 1)
+//@ chunk-z20c443b.js:209643-209790 shared-adjacent (2.1.88 match: filterRulesByContentsMatchingInput, 1)
 /**
  * 把规则内容解析成 {type:prefix,prefix} / {type:wildcard,pattern} / {type:exact,command}。
  */
@@ -106,7 +125,7 @@ function parseShellPermissionRule(pattern) {
     command: pattern,
   };
 }
-//@ chunk-dcmhvw5a.js:214322-214446 placement (2.1.88 match: buildSuggestions, 1)
+//@ chunk-z20c443b.js:209790-209914 placement (2.1.88 match: buildSuggestions, 1)
 /**
  * 通用权限建议：localSettings 里为 toolName(ruleContent) 加 allow 规则。PowerShell/Bash 权限请求复用。
  */
@@ -125,54 +144,166 @@ function buildToolAllowSuggestion(toolName, ruleContent) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3017371-3017889 callgraph-fingerprint (2.1.88 match: powershellToolCheckExactMatchPermission, 0.276)
+//@ chunk-5xgkngpb.js:1194799-1194828 affinity
+var TENGU_TENDER_QUILL = "tengu_tender_quill";
+//@ chunk-5xgkngpb.js:1194828-1196436 callgraph-fingerprint (2.1.88 match: powershellToolCheckExactMatchPermission, 0.453)
 /**
- * 命中 ask 规则时仍运行工具自己的 checkPermissions：deny 优先，ask 时带上 matchedAskRule；检查崩溃时按 crashIsObjection 决定是否以"检查崩溃"询问。
+ * AST 过于复杂（too-complex）时的拒绝路径：整命令/各片段的 deny 规则、读封锁、空变量删除、AST 上的危险删除检查；只有精确 allow 规则覆盖整条命令时才返回 allow。
  */
-async function powershellToolCheckExactMatchPermission(tool, input, callOptions, askRuleForTool, settings) {
-  let defaultAsk = {
-    behavior: "ask",
-    decisionReason: {
-      type: "rule",
-      rule: askRuleForTool,
-    },
-    message: createPermissionRequestMessage(tool.name),
-  };
-  try {
-    let { parsedInput } = parseToolInputForPermission(tool, input, callOptions);
-    let result = await tool.checkPermissions(parsedInput, callOptions);
-    recordCheckedResult(callOptions, parsedInput, result, tool.name);
-    if (result?.behavior === "deny") return result;
-    if (result?.behavior === "ask") {
-      let { suggestions, ...resultWithoutSuggestions } = result;
-      return {
-        ...resultWithoutSuggestions,
-        matchedAskRule: askRuleForTool,
-      };
-    }
-  } catch (error) {
-    let faultDecision = describePermissionCheckFault(error, tool, input, callOptions);
-    if (faultDecision !== undefined && faultDecision.behavior === "deny") return faultDecision;
-    if (!isSettledPermissionResult(faultDecision) && settings?.crashIsObjection === true) {
-      let decisionReason = {
-        type: "other",
-        reason: PERMISSION_CHECK_CRASHED_REASON,
-      };
-      return {
-        behavior: "ask",
-        message: createPermissionRequestMessage(tool.name, decisionReason),
-        decisionReason,
-      };
+async function checkTooComplexCommandDeny(
+  input,
+  context_2,
+  parsedRoot,
+  nodeType,
+  isEvalOrSource,
+  originalCommand,
+  isEvalOrSource_2,
+  bareAssignmentNames,
+  toolUseContext,
+) {
+  let earlyDeny = checkEarlyExitDeny(input, context_2);
+  if (earlyDeny?.behavior === "deny") return earlyDeny;
+  let denyRules = context(context_2, BashTool, "deny");
+  let askRules = context(context_2, BashTool, "ask");
+  let commandSpans =
+    (denyRules.length > 0 || askRules.length > 0) &&
+    isBashTextRuleSearchOn() &&
+    (!parsedRoot ||
+      parsedRoot === PARSE_ABORTED ||
+      !canParseEscapedSpaceCommand(input.command, parsedRoot, nodeType) ||
+      treeSpansAreIncomplete(parsedRoot))
+      ? makeTextRuleMatcher(input.command)
+      : undefined;
+  let denyRule = commandSpans && getDenyRuleForAgent(commandSpans, denyRules);
+  if (denyRule !== undefined) {
+    logEventUnlessSuppressed("tengu_bash_rule_found_in_text", {
+      behavior: fromEnum("deny"),
+    });
+    return {
+      behavior: "deny",
+      message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
+      decisionReason: {
+        type: "rule",
+        rule: denyRule,
+      },
+    };
+  }
+  if (getContentRulesMapForTool(context_2, BashTool, "deny").size > 0) {
+    let candidateCommands = new Set([
+      ...splitCommand(input.command),
+      ...(parsedRoot && parsedRoot !== PARSE_ABORTED ? nestedCommandSpansFromAst(parsedRoot) : []),
+    ]);
+    for (let command of candidateCommands) {
+      let denyRule = matchingRulesForInput_3(
+        {
+          ...input,
+          command,
+        },
+        context_2,
+        "prefix",
+      ).matchingDenyRules[0];
+      if (denyRule !== undefined)
+        return {
+          behavior: "deny",
+          message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
+          decisionReason: {
+            type: "rule",
+            rule: denyRule,
+          },
+        };
     }
   }
-  return defaultAsk;
+  let denyResult = isEvalOrSource?.();
+  if (denyResult) return denyResult;
+  let dangerousVariableRemoval = findDangerousVariableRemoval(
+    input.command,
+    false,
+    originalCommand,
+    isEvalOrSource_2,
+    toolUseContext,
+  );
+  if (dangerousVariableRemoval !== null) {
+    logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
+      kind: fromEnum("emptyVariable"),
+    });
+    return checkDangerousRemoval(dangerousVariableRemoval, false);
+  }
+  if (parsedRoot && parsedRoot !== PARSE_ABORTED) {
+    let removalResult = await checkDangerousRemovals(
+      parsedRoot,
+      getCwd(),
+      context_2,
+      originalCommand,
+      isEvalOrSource_2,
+      bareAssignmentNames,
+      toolUseContext,
+    );
+    if (removalResult !== null) {
+      logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
+        kind: fromEnum(removalResult.kind),
+      });
+      return removalResult.result;
+    }
+  }
+  let textRule =
+    commandSpans && earlyDeny?.behavior !== "ask" ? getDenyRuleForAgent(commandSpans, askRules) : undefined;
+  if (textRule !== undefined) {
+    logEventUnlessSuppressed("tengu_bash_rule_found_in_text", {
+      behavior: fromEnum("ask"),
+    });
+    let rule = askForDangerousRmOnParseError(parsedRoot, originalCommand);
+    if (rule?.behavior === "ask")
+      return getDangerousRmTimeoutConfig().enabled
+        ? rule
+        : {
+            ...rule,
+            matchedAskRule: textRule,
+          };
+    return {
+      behavior: "ask",
+      message: createPermissionRequestMessage(BashTool.name),
+      decisionReason: {
+        type: "rule",
+        rule: textRule,
+      },
+    };
+  }
+  if (earlyDeny === null || earlyDeny.behavior !== "allow") return earlyDeny;
+  if (
+    (earlyDeny.decisionReason?.type === "rule"
+      ? earlyDeny.decisionReason.rule.ruleValue.ruleContent
+      : undefined) !== input.command.trim()
+  )
+    return null;
+  if (
+    !readFlagWithOverride(TENGU_TENDER_QUILL, {
+      safe: true,
+    })
+  )
+    return earlyDeny;
+  if (parsedRoot === PARSE_ABORTED) return null;
+  return askForDangerousRmOnParseError(parsedRoot, originalCommand) ?? earlyDeny;
 }
-//@ chunk-v0yfsee9.js:50839-50968 fingerprint (2.1.88 match: GIT_SAFETY_WRITE_CMDLETS, 0.583)
+//@ chunk-5xgkngpb.js:1265844-1266010 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 1)
+/**
+ * 单条已解析规则（prefix/exact/wildcard）是否匹配命令文本。
+ */
+function matchesShellRule(rule, command) {
+  switch (rule.type) {
+    case "prefix":
+      return command === rule.prefix || command.startsWith(rule.prefix + " ");
+    case "exact":
+      return command === rule.command;
+    case "wildcard":
+      return matchesCommandRule(rule.pattern, command);
+  }
+}
+//@ chunk-6zpsr8vx.js:52069-52198 fingerprint (2.1.88 match: GIT_SAFETY_WRITE_CMDLETS, 0.583)
 /**
  * 在读封锁下也视为需检查读路径的写类 cmdlet（Copy-Item、Move-Item、Compress/Expand-Archive、Invoke-WebRequest/RestMethod、New-Item）。
  */
 var GIT_SAFETY_WRITE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:50839", () => {
+deferInit("chunk-6zpsr8vx.js:52069", () => {
   GIT_SAFETY_WRITE_CMDLETS = new Set([
     "copy-item",
     "move-item",
@@ -183,14 +314,14 @@ deferInit("chunk-v0yfsee9.js:50839", () => {
     "new-item",
   ]);
 });
-//@ chunk-v0yfsee9.js:71945-72369 fingerprint (2.1.88 match: GIT_SAFETY_ARCHIVE_EXTRACTORS, 0.646)
+//@ chunk-6zpsr8vx.js:73176-73600 fingerprint (2.1.88 match: GIT_SAFETY_ARCHIVE_EXTRACTORS, 0.646)
 /**
  * 会写文件的 cmdlet 集合、归档解压程序集合（tar/unzip/7z/gzip/Expand-Archive）、原生复制程序集合（xcopy/robocopy），用于 git 内部路径与归档攻击检查。
  */
 var GIT_SAFETY_WRITE_CMDLETS_ALL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_SAFETY_ARCHIVE_EXTRACTORS;
 var NATIVE_FILE_COPIERS;
-deferInit("chunk-v0yfsee9.js:71945", () => {
+deferInit("chunk-6zpsr8vx.js:73176", () => {
   GIT_SAFETY_WRITE_CMDLETS_ALL = new Set([
     "new-item",
     "set-content",
@@ -225,24 +356,24 @@ deferInit("chunk-v0yfsee9.js:71945", () => {
   ]);
   NATIVE_FILE_COPIERS = new Set(["xcopy", "xcopy.exe", "robocopy", "robocopy.exe"]);
 });
-//@ chunk-v0yfsee9.js:72369-72490 layout
+//@ chunk-6zpsr8vx.js:73600-73721 layout
 function isNativeFileCopier(element) {
   let lower = element.name.toLowerCase();
   let sliced = lower.slice(Math.max(lower.lastIndexOf("\\"), lower.lastIndexOf("/")) + 1);
   return NATIVE_FILE_COPIERS.has(sliced);
 }
-//@ chunk-v0yfsee9.js:72490-72581 file-local
+//@ chunk-6zpsr8vx.js:73721-73812 file-local
 async function extractCommandName(command) {
   let trimmed = command.trim();
   if (!trimmed) return "";
   let parsed = await parsePowerShellCommand(trimmed);
   return getAllCommandNames(parsed)[0] ?? "";
 }
-//@ chunk-v0yfsee9.js:72581-72610 layout
+//@ chunk-6zpsr8vx.js:73812-73841 layout
 function parsePowerShellPermissionRule(ruleContent) {
   return parseShellPermissionRule(ruleContent);
 }
-//@ chunk-v0yfsee9.js:72610-72828 layout
+//@ chunk-6zpsr8vx.js:73841-74059 layout
 function firstCommandTokenLower(command) {
   let hazyPeach = isHazyPeachFlagOn();
   let trimmed = hazyPeach ? command.replace(regExp_4, "") : command.trimStart();
@@ -254,7 +385,7 @@ function firstCommandTokenLower(command) {
   }
   return (trimmed.split(hazyPeach ? PS_LEADING_WHITESPACE_RE : /\s+/)[0] ?? "").toLowerCase();
 }
-//@ chunk-v0yfsee9.js:72828-72914 layout
+//@ chunk-6zpsr8vx.js:74059-74145 layout
 /**
  * 返回字符串去掉尾部空白（含 U+0085、U+180E）后的长度。
  */
@@ -263,14 +394,14 @@ function trimPsTrailingWhitespaceEnd(text) {
   while (endIndex > 0 && /[\s\u0085\u180e]/.test(text[endIndex - 1])) endIndex--;
   return endIndex;
 }
-//@ chunk-v0yfsee9.js:72914-72986 layout
+//@ chunk-6zpsr8vx.js:74145-74217 layout
 /**
  * 去掉首尾空白（含 U+0085、U+180E）。PowerShell 规则匹配与 Bash 共用的规范化。
  */
 function trimPsWhitespace(command) {
   return command.slice(0, trimPsTrailingWhitespaceEnd(command)).replace(/^[\s\u0085\u180e]+/, "");
 }
-//@ chunk-v0yfsee9.js:72986-73187 layout
+//@ chunk-6zpsr8vx.js:74217-74418 layout
 function trimExoticWhitespaceEdges(ruleContent) {
   let text = ruleContent;
   let match = text.match(/^[\s\u0085\u180e]+/);
@@ -279,7 +410,7 @@ function trimExoticWhitespaceEdges(ruleContent) {
   if (/[\u0085\u180e]/.test(sliced)) text = text.slice(0, text.length - sliced.length);
   return text;
 }
-//@ chunk-v0yfsee9.js:73187-73455 layout
+//@ chunk-6zpsr8vx.js:74418-74686 layout
 function stripExoticWhitespaceAtEdges(text) {
   let stripped = text;
   let match = stripped.match(/^[\s\u0085\u180e]+/);
@@ -290,7 +421,7 @@ function stripExoticWhitespaceAtEdges(text) {
     stripped = stripped.slice(0, stripped.length - sliced.length) + sliced.replace(/[\u0085\u180e]/g, "");
   return stripped;
 }
-//@ chunk-v0yfsee9.js:73455-73536 file-local
+//@ chunk-6zpsr8vx.js:74686-74767 file-local
 /**
  * 为精确命令生成 PowerShell 允许规则建议（多行或含 * 时不建议）。
  */
@@ -303,7 +434,7 @@ function suggestionForExactCommand_2(command) {
     return [];
   return buildToolAllowSuggestion(POWERSHELL_TOOL_NAME, trimPsWhitespace(command));
 }
-//@ chunk-v0yfsee9.js:73536-74944 layout (2.1.88 match: filterRulesByContentsMatchingInput, 1)
+//@ chunk-6zpsr8vx.js:74767-76175 layout (2.1.88 match: filterRulesByContentsMatchingInput, 1)
 /**
  * PowerShell 规则匹配：大小写不敏感；命令名去模块前缀并解析别名为规范 cmdlet；支持 exact/prefix/wildcard，prefix 不匹配复合命令。
  */
@@ -399,7 +530,7 @@ function filterRulesByContentsMatchingInput(input, rules, matchMode, behavior) {
     })
     .map(([, rule]) => rule);
 }
-//@ chunk-v0yfsee9.js:74944-75146 fingerprint (2.1.88 match: matchingRulesForInput, 1)
+//@ chunk-6zpsr8vx.js:76175-76377 fingerprint (2.1.88 match: matchingRulesForInput, 1)
 /**
  * PowerShell 版：分别求匹配的 deny/ask/allow 规则。
  */
@@ -420,7 +551,7 @@ function matchingRulesForInput_2(input, toolPermissionContext, matchMode) {
     matchingAllowRules,
   };
 }
-//@ chunk-v0yfsee9.js:75763-76479 fingerprint (2.1.88 match: powershellToolCheckPermission, 1)
+//@ chunk-6zpsr8vx.js:76994-77710 fingerprint (2.1.88 match: powershellToolCheckPermission, 1)
 /**
  * 单个 PowerShell 子命令的规则检查：精确规则 → 前缀 deny/ask → allow 规则，否则 passthrough 并附建议。
  */
@@ -430,7 +561,7 @@ function powershellToolCheckPermission(input, toolPermissionContext) {
     ...input,
     command,
   };
-  let exactMatchResult = powershellToolCheckExactMatchPermission_2(input, toolPermissionContext);
+  let exactMatchResult = powershellToolCheckExactMatchPermission(input, toolPermissionContext);
   if (exactMatchResult.behavior === "deny" || exactMatchResult.behavior === "ask") return exactMatchResult;
   let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput_2(
     trimmedInput,
@@ -476,9 +607,9 @@ function powershellToolCheckPermission(input, toolPermissionContext) {
     suggestions: suggestionForExactCommand_2(command),
   };
 }
-//@ chunk-v0yfsee9.js:76479-76508 layout
+//@ chunk-6zpsr8vx.js:77710-77739 layout
 var TENGU_PLUMB_KESTREL = "tengu_plumb_kestrel";
-//@ chunk-v0yfsee9.js:76508-77218 fingerprint (2.1.88 match: getSubCommandsForPermissionCheck, 1)
+//@ chunk-6zpsr8vx.js:77739-78449 fingerprint (2.1.88 match: getSubCommandsForPermissionCheck, 1)
 /**
  * 把解析结果展开为需逐个检查权限的子命令（含嵌套命令），标记无参数的安全输出命令；解析失败时整体作为一条。
  */
@@ -536,7 +667,7 @@ async function getSubCommandsForPermissionCheck(parsed, originalCommand) {
     },
   ];
 }
-//@ chunk-v0yfsee9.js:77218-77656 layout
+//@ chunk-6zpsr8vx.js:78449-78887 layout
 /**
  * PowerShell checkPermissions 入口：代理带 bashCommandClamp 时直接拒绝，否则走 powershellToolHasPermission。
  */
@@ -559,7 +690,7 @@ async function checkPowerShellPermissions(input, context) {
     };
   return powershellToolHasPermission(input, context, toolPermissionContext);
 }
-//@ chunk-v0yfsee9.js:77656-77953 layout
+//@ chunk-6zpsr8vx.js:78887-79184 layout
 /**
  * 权限检查崩溃且带 bashCommandClamp 时拒绝。
  */
@@ -577,7 +708,7 @@ function denyCrashedCheckUnderCommandClamp(shellPermission) {
     };
   return;
 }
-//@ chunk-v0yfsee9.js:77953-89450 fingerprint (2.1.88 match: powershellToolHasPermission, 0.777)
+//@ chunk-6zpsr8vx.js:79184-90684 fingerprint (2.1.88 match: powershellToolHasPermission, 0.776)
 /**
  * PowerShell 权限主流程：空命令允许；精确/前缀 deny、ask 规则；UNC 路径；解析失败要求确认；安全检查（powershellCommandIsSafe）；using/#Requires/后台 & 要确认；非文件系统提供程序与 UNC 参数；cd+git、裸仓库迹象、写 git 内部路径/.git、xcopy/robocopy+git、Windows 5.1 cwd 优先解析的命令遮蔽、解压归档后接命令；路径约束；只读命令允许；文件重定向；acceptEdits 模式；最后逐个子命令判定并汇总。
  */
@@ -597,7 +728,7 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       },
     };
   let parsed = await parsePowerShellCommand(command);
-  let exactMatchResult = powershellToolCheckExactMatchPermission_2(input, toolPermissionContext);
+  let exactMatchResult = powershellToolCheckExactMatchPermission(input, toolPermissionContext);
   if (exactMatchResult.behavior === "deny") return exactMatchResult;
   let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_2(
     trimmedInput,
@@ -1255,13 +1386,14 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
   };
 }
 export {
-  powershellToolCheckExactMatchPermission,
-  denyCrashedCheckUnderCommandClamp,
-  checkPowerShellPermissions,
-  parseShellPermissionRule,
   buildToolAllowSuggestion,
+  parseShellPermissionRule,
+  checkTooComplexCommandDeny,
   trimPsWhitespace,
   matchingRulesForInput_2,
   suggestionForExactCommand_2,
+  matchesShellRule,
   GIT_SAFETY_WRITE_CMDLETS,
+  denyCrashedCheckUnderCommandClamp,
+  checkPowerShellPermissions,
 };

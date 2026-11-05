@@ -3,7 +3,7 @@
  *
  * 并入已有模块：CLI 主入口的分派默认值、cwd 可读检查、--desktop 判定等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/cli.tsx
  * pieces: cli.js (10)
  * attribution: placement 7, fingerprint 2, layout 1
@@ -132,7 +132,7 @@ function extractDispatchDefaults(args) {
     rest,
   };
 }
-//@ cli.js:2101-24195 placement
+//@ cli.js:2101-24407 placement
 /**
  * CLI 进程入口（模块顶层直接调用）。按顺序处理：fd 令牌保护 → --gh-standin → --runner-declares → --handle-uri 校验 → --version 快速返回 → cwd 检查 → 各种专用子进程模式（--eval-mock-server、--claude-in-chrome-mcp、--chrome-native-host、--daemon-worker、--bg-pty-host、--bg-spare、--preload、remote-control、daemon、self-hosted-runner、plugin test）→ 后台会话动词与 --bg → agents 视图 → --tmux --worktree → 最后预读 MDM/钥匙串并动态导入主模块调用 main()。
  */
@@ -175,10 +175,10 @@ async function cliMain() {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -190,10 +190,10 @@ async function cliMain() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.GIT_SHA
@@ -204,10 +204,10 @@ async function cliMain() {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.GIT_SHA
@@ -787,12 +787,13 @@ async function cliMain() {
           { resolve },
           {
             getRootSession,
+            setCliConfigBeyondSessionState: setRestrictedSession,
             setCliSessionConfigCarried,
             setIsInteractive,
-            setRestrictedSession,
+            setRestrictedSession: setRestrictedSession_2,
             setSessionStartType,
           },
-          { cliCarriesSessionConfig },
+          { cliCarriesConfigBeyondSessionState, cliCarriesSessionConfig },
           { pinStorageV5 },
           { appliedSettingSourcesFlagValue },
         ] = await Promise.all([
@@ -840,7 +841,13 @@ async function cliMain() {
             ...dispatchDefaults,
           }),
         );
-        setRestrictedSession(agentsArgs.config.restricted);
+        setRestrictedSession(
+          cliCarriesConfigBeyondSessionState({
+            ...sessionConfig,
+            ...dispatchDefaults,
+          }),
+        );
+        setRestrictedSession_2(agentsArgs.config.restricted);
         setSessionStartType("agents_view");
         let onUnhandledRejection = () => {};
         process.on("unhandledRejection", onUnhandledRejection);
@@ -1040,6 +1047,12 @@ async function cliMain() {
       await selfHostedRunnerCodeSignMain(args.slice(2));
       return;
     }
+    if (runnerVerb === "work-look") {
+      let { selfHostedRunnerWorkLookMain } =
+        await import("../services/selfHostedRunner/selfHostedRunnerWorkLookMain.lazy.js");
+      await selfHostedRunnerWorkLookMain(args.slice(2));
+      return;
+    }
     if (runnerVerb === "decode-token") {
       let { selfHostedRunnerDecodeTokenMain } =
         await import("../selfHostedRunner/selfHostedRunnerDecodeTokenMain.lazy.js");
@@ -1148,5 +1161,5 @@ async function cliMain() {
   await main(storageV5EnvPin);
   profileCheckpoint("cli_after_main_complete");
 }
-//@ cli.js:24195-24200 placement
+//@ cli.js:24407-24412 placement
 cliMain();

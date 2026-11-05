@@ -3,9 +3,9 @@
  *
  * 插件归档下载（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-21ppfwx8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5hddsdew.js (6)
  * attribution: placement 6
  */
 import { createHash } from "crypto";
@@ -26,7 +26,7 @@ import { findTelemetrySafeCause, urlHostname } from "./headersHelper.js";
 import { urlFromRequestOptions, sameOrigin, isPrivateHost } from "../network/privateHostCheck.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 
-//@ chunk-21ppfwx8.js:19578-20569 placement (2.1.88 match: downloadAndVerifyBinary, 0.301)
+//@ chunk-5hddsdew.js:19612-20603 placement (2.1.88 match: downloadAndVerifyBinary, 0.301)
 /**
  * 下载插件归档（URL 策略检查、User-Agent、arraybuffer）并校验（切分可疑：属于插件下载）。
  */
@@ -83,14 +83,14 @@ async function downloadAndVerifyBinary(url, options = {}) {
     contentSha256: actualChecksum,
   };
 }
-//@ chunk-21ppfwx8.js:20569-20655 placement
+//@ chunk-5hddsdew.js:20603-20689 placement
 /**
  * headerNamesExceptUserAgent：去掉 user-agent 的 header 名。
  */
 function headerNamesExceptUserAgent(headers) {
   return Object.keys(headers ?? {}).filter((key) => key.toLowerCase() !== "user-agent");
 }
-//@ chunk-21ppfwx8.js:20655-21006 placement
+//@ chunk-5hddsdew.js:20689-21041 placement
 /**
  * 返回一个重定向钩子：目标 URL 与原始 URL 不同源时，删除请求里属于市场声明的 header（大小写不敏感），并记调试日志。
  */
@@ -112,7 +112,7 @@ function createCrossOriginHeaderStripper(originUrl, headerNames, label = "plugin
       );
   };
 }
-//@ chunk-21ppfwx8.js:21006-21341 placement
+//@ chunk-5hddsdew.js:21041-21376 placement
 /**
  * 返回归档下载的重定向钩子：每一跳都必须满足归档 URL 策略，否则抛 TelemetrySafeError；通过后再调用跨源 header 剥离器。
  */
@@ -130,7 +130,7 @@ function createArchiveRedirectGuard(originUrl, headerNames) {
     crossOriginHeaderStripper(requestOptions);
   };
 }
-//@ chunk-21ppfwx8.js:21341-21874 placement
+//@ chunk-5hddsdew.js:21376-21910 placement
 function checkCatalogRedirect(originUrl, headerNames) {
   let crossOriginHeaderStripper = createCrossOriginHeaderStripper(
     originUrl,
@@ -153,7 +153,7 @@ function checkCatalogRedirect(originUrl, headerNames) {
     crossOriginHeaderStripper(requestOptions);
   };
 }
-//@ chunk-21ppfwx8.js:21874-22724 placement
+//@ chunk-5hddsdew.js:21910-22760 placement
 function describeArchiveFetchError(error, rawUrl, redactedUrl) {
   let redactMessage = (message) => message.replaceAll(rawUrl, () => redactedUrl);
   if (isAxiosError(error)) {

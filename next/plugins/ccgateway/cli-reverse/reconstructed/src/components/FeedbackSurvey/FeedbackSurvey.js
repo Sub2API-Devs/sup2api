@@ -3,19 +3,19 @@
  *
  * 会话质量调查（1-3 数字评分）及感谢/后续分享记录提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/FeedbackSurvey.tsx
- * pieces: chunk-18hwfzwa.js (8)
- * attribution: sole-consumer 1, fingerprint 2, layout 3, placement 2
+ * pieces: chunk-czq1j3j2.js (8)
+ * attribution: placement 2, sole-consumer 1, fingerprint 2, layout 3
  */
-import { isFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
-import { DEFAULT_SURVEY_FOLLOWUP_CONFIG } from "./useFeedbackSurvey.js";
 import {
+  init_react_production,
   useRef,
   useEffect,
   useState,
-  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
+import { isFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
+import { DEFAULT_SURVEY_FOLLOWUP_CONFIG } from "./useFeedbackSurvey.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -44,11 +44,16 @@ import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:999590-999617 sole-consumer
+//@ chunk-czq1j3j2.js:1015199-1015203 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1015199", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1033625-1033652 sole-consumer
 function getIsFeedbackDisabled() {
   return !isFeedbackAllowed();
 }
-//@ chunk-18hwfzwa.js:999617-1001694 fingerprint (2.1.88 match: FeedbackSurvey, 0.451)
+//@ chunk-czq1j3j2.js:1033652-1035729 fingerprint (2.1.88 match: FeedbackSurvey, 0.451)
 function FeedbackSurvey({
   state,
   lastResponse,
@@ -193,14 +198,14 @@ function FeedbackSurvey({
     showNotSure,
   });
 }
-//@ chunk-18hwfzwa.js:1001694-1001756 layout
+//@ chunk-czq1j3j2.js:1035729-1035791 layout
 var RESPONSE_LABELS = {
   bad: "Bad",
   fine: "Fine",
   good: "Good",
   not_sure: "Unsure",
 };
-//@ chunk-18hwfzwa.js:1001756-1002399 layout
+//@ chunk-czq1j3j2.js:1035791-1036435 layout
 /**
  * 显示已选的反馈结果（Bad/Fine/Good/Unsure），可撤销时显示 Esc undo 并响应 Esc。
  */
@@ -269,7 +274,7 @@ function FeedbackResponseLine(props) {
   } else line = $[10];
   return line;
 }
-//@ chunk-18hwfzwa.js:1002399-1002626 layout
+//@ chunk-czq1j3j2.js:1036435-1036662 layout
 var isShareKey = (key) => key === "1";
 var FOLLOWUP_HINTS = {
   good: "tell us what went well",
@@ -283,7 +288,7 @@ var FOLLOWUP_TITLES = {
   fine: "Tell us more",
   not_sure: "Tell us more",
 };
-//@ chunk-18hwfzwa.js:1002626-1004284 fingerprint (2.1.88 match: FeedbackSurveyThanks, 0.626)
+//@ chunk-czq1j3j2.js:1036662-1038320 fingerprint (2.1.88 match: FeedbackSurveyThanks, 0.626)
 function FeedbackSurveyThanks(props) {
   let $ = useMemoCache(24);
   let {
@@ -428,13 +433,8 @@ function FeedbackSurveyThanks(props) {
   } else thanksElement = $[23];
   return thanksElement;
 }
-//@ chunk-18hwfzwa.js:1004284-1004288 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1004284", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1004288-1004326 placement
+//@ chunk-czq1j3j2.js:1038324-1038362 placement
 function hasSingleItem(items) {
   return items.length === 1;
 }
-export { hasSingleItem, FeedbackSurvey };
+export { FeedbackSurvey, hasSingleItem };

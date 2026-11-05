@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增："本周功能"提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (9)
  * attribution: placement 9
  */
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
   parsePromoCampaign,
   promoCreditAmount,
@@ -25,21 +26,25 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { sanitizedMachineReasonForTelemetry } from "../../utils/errors.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { formatCurrency } from "../../services/api/referral.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:80712-80762 placement
+//@ chunk-hnxhr3bs.js:80192-80196 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:80192", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:80196-80246 placement
 function fotwState() {
   return {
     campaign: parsePromoCampaign(),
     cached: promoCreditAmount(),
   };
 }
-//@ chunk-ag5x7vhf.js:80762-80827 placement
+//@ chunk-hnxhr3bs.js:80246-80311 placement
 function renderAnnouncementLine(line, key) {
   return jsxProd_default(
     HighlightedCommandText,
@@ -50,9 +55,9 @@ function renderAnnouncementLine(line, key) {
     key,
   );
 }
-//@ chunk-ag5x7vhf.js:80827-80884 placement
+//@ chunk-hnxhr3bs.js:80311-80368 placement
 var PROMOTION_TERMS_URL = "https://www.anthropic.com/legal/promotion-terms";
-//@ chunk-ag5x7vhf.js:80884-81411 placement
+//@ chunk-hnxhr3bs.js:80368-80895 placement
 /**
  * 渲染一段提示文字，把其中识别出的 /命令（去掉尾部标点）加粗并用 permission 色；整体可选 bold 或 dim 样式。
  */
@@ -108,13 +113,13 @@ function HighlightedCommandText(props) {
   } else textNode = $[8];
   return textNode;
 }
-//@ chunk-ag5x7vhf.js:81411-81495 placement
+//@ chunk-hnxhr3bs.js:80895-80979 placement
 function shouldShowFotw() {
   if (!parsePromoCampaign()?.command) return false;
   if (canClaimPromoCredit()) return promoCreditAmount() !== null;
   return shouldShowPromoUpsell();
 }
-//@ chunk-ag5x7vhf.js:81495-81711 placement
+//@ chunk-hnxhr3bs.js:80979-81195 placement
 function getFeatureOfTheWeekContent(noticeImpressionEnabled) {
   let state = announcementState();
   if (state.fotwContent !== null) return state.fotwContent;
@@ -129,7 +134,7 @@ function getFeatureOfTheWeekContent(noticeImpressionEnabled) {
   if (noticeImpressionEnabled) state.fotwContent = content;
   return content;
 }
-//@ chunk-ag5x7vhf.js:81711-81921 placement
+//@ chunk-hnxhr3bs.js:81195-81405 placement
 function FeatureOfTheWeekNotice() {
   let $ = useMemoCache(4);
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
@@ -153,7 +158,7 @@ function FeatureOfTheWeekNotice() {
   } else nudge = $[3];
   return nudge;
 }
-//@ chunk-ag5x7vhf.js:81921-83765 placement
+//@ chunk-hnxhr3bs.js:81405-83250 placement
 function FeatureOfTheWeekNudge(props) {
   let $ = useMemoCache(24);
   let { variant } = props;
@@ -291,9 +296,4 @@ function FeatureOfTheWeekNudge(props) {
   } else creditBox = $[23];
   return creditBox;
 }
-//@ chunk-ag5x7vhf.js:83765-83769 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:83765", () => {
-  init_react_production();
-});
 export { shouldShowFotw, FeatureOfTheWeekNotice };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析系统消息（informational、模型回退、定时任务触发等）为显示结构；识别系统通知文本的类别与语气。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (5)
  * attribution: placement 5
  */
 import {
@@ -19,7 +19,12 @@ import {
 } from "../../services/compact/compactErrors.js";
 import { COMPACTION_BLOCKED_BY_HOOK } from "../../services/compact/compact.js";
 import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../constants/figures.js";
-import { FOREIGN_ORG_THINKING_NOTICE, FOREIGN_ORG_THINKING_HINT } from "../../constants/messages.js";
+import {
+  FOREIGN_ORG_THINKING_NOTICE,
+  FOREIGN_ORG_THINKING_HINT,
+  permissionRetryText,
+  autoModeRetrySuffix,
+} from "../../utils/messages.js";
 import { renderTruncatedContent } from "../../utils/terminal.js";
 import { splitNoticeDetail, buildSystemNoticeLine } from "./CompactBoundaryMessage.js";
 import {
@@ -27,15 +32,13 @@ import {
   getValidHookLabel,
   normalizeHookSummary,
 } from "../../utils/collapseHookSummaries.js";
-import { permissionRetryText, autoModeRetrySuffix } from "../../utils/messages.js";
 import { teamMemSavedPart, getMemorySavedVerb } from "./teamMemSaved.js";
 import { ISOLATION_CHECK_INTERVAL } from "../../services/tools/webToolIsolation.js";
 import { formatSecondsShort } from "../../utils/format.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:48594-48611 placement
+//@ chunk-wjygkcr4.js:49210-49227 placement
 var ERROR_PREFIX = "Error: ";
-//@ chunk-ah34pb7m.js:48611-48976 placement
+//@ chunk-wjygkcr4.js:49227-49592 placement
 /**
  * 识别系统通知文本的类别与语气。
  */
@@ -66,7 +69,7 @@ function classifySystemNoticeText(rawText) {
   }
   return null;
 }
-//@ chunk-ah34pb7m.js:48976-49036 placement
+//@ chunk-wjygkcr4.js:49592-49652 placement
 function couldNotCompactRow(detail) {
   return {
     tone: "red",
@@ -74,20 +77,13 @@ function couldNotCompactRow(detail) {
     detail: detail || undefined,
   };
 }
-//@ chunk-ah34pb7m.js:49036-49091 placement
-var memorySavedVerbApi; // deferred: uses DIAMOND_GLYPH (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
-var HOOK_FEEDBACK_MAX_WIDTH;
-var HOOK_FEEDBACK_MAX_LINES;
-var SCHEDULED_TEXT_MAX_LENGTH;
-var SYSTEM_NOTICE_PREFIXES;
-deferInit("chunk-ah34pb7m.js:49036", () => {
-  memorySavedVerbApi = null;
-  HOOK_FEEDBACK_MAX_WIDTH = 200;
-  HOOK_FEEDBACK_MAX_LINES = 5;
-  SCHEDULED_TEXT_MAX_LENGTH = 1000;
-  SYSTEM_NOTICE_PREFIXES = [`${DIAMOND_GLYPH} `, `${FILLED_DIAMOND_GLYPH} `];
-});
-//@ chunk-ah34pb7m.js:49091-51889 placement
+//@ chunk-wjygkcr4.js:49652-49707 placement
+var memorySavedVerbApi = null;
+var HOOK_FEEDBACK_MAX_WIDTH = 200;
+var HOOK_FEEDBACK_MAX_LINES = 5;
+var SCHEDULED_TEXT_MAX_LENGTH = 1000;
+var SYSTEM_NOTICE_PREFIXES = [`${DIAMOND_GLYPH} `, `${FILLED_DIAMOND_GLYPH} `];
+//@ chunk-wjygkcr4.js:49707-52505 placement
 /**
  * 解析系统消息（informational、模型回退、定时任务触发等）为显示结构。
  */
@@ -326,10 +322,10 @@ function parseSystemMessage(message) {
   }
 }
 export {
+  parseSystemMessage,
+  HOOK_FEEDBACK_MAX_WIDTH,
+  HOOK_FEEDBACK_MAX_LINES,
   SYSTEM_NOTICE_PREFIXES,
   SCHEDULED_TEXT_MAX_LENGTH,
   classifySystemNoticeText,
-  HOOK_FEEDBACK_MAX_LINES,
-  HOOK_FEEDBACK_MAX_WIDTH,
-  parseSystemMessage,
 };

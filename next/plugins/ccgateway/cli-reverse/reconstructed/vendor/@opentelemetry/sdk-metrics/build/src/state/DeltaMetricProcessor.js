@@ -1,15 +1,15 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/state/DeltaMetricProcessor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_utils } from "../utils.js";
 import { require_HashMap } from "./HashMap.js";
 
-//@ chunk-wrv5s6k4.js:38037-39651 cjs-fingerprint
+//@ chunk-q87n5wsq.js:38037-39651 cjs-fingerprint
 var require_DeltaMetricProcessor = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

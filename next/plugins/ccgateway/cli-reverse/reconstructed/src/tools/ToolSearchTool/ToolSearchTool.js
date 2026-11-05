@@ -3,18 +3,29 @@
  *
  * ToolSearch 工具：select:<名字> 精确加载或关键词打分搜索延迟工具，必要时等待/重连 MCP 服务器，结果以 tool_reference 块返回
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ToolSearchTool/ToolSearchTool.ts
- * pieces: chunk-e6aww6q8.js (5), chunk-s61vbvea.js (8)
- * attribution: fingerprint 4, layout 3, facade-majority 4, file-local 2
+ * pieces: chunk-5xgkngpb.js (19), chunk-7jxyna5q.js (8)
+ * attribution: placement 10, fingerprint 4, layout 7, file-local 2, facade-majority 4
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { findToolByName } from "../../Tool.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { MAX_CALL_MARK_CHARS, REOPEN_REFETCH_BASE_MS } from "../../services/mcp/mcpCallConstants.js";
 import { truncateToLength, urlPatternToRegex, countCharInString } from "../../utils/stringUtils.js";
-import { toInternalToolName, internalName, internalKey } from "../../services/mcp/serverIdentity.js";
+import {
+  toInternalToolName,
+  wireName,
+  internalName,
+  isServerIdentityActive,
+  internalKey,
+} from "../../services/mcp/serverIdentity.js";
 import { createYieldingRunner } from "../../services/memorySync/exportStream.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { toolToAPISchema, shouldForwardRemoteTools } from "../../utils/api.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { totalTokensOf } from "../../utils/messages/usageAndStopReason.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, numberSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { createUserMessage, wrapInSystemReminder } from "../../utils/messages.js";
@@ -33,7 +44,12 @@ import {
   isReservedAddressReason,
   formatNamedError,
 } from "../../services/mcp/redactMcpErrors.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
+import {
+  willHideCodeModeOnlyTools,
+  hideCodeModeOnlyTools,
+} from "../RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { isHiddenByCodeModeOnly } from "../../utils/codeMode.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   isToolSearchEnabledOptimistic,
@@ -45,25 +61,25 @@ import {
   stickyBetasForRequest,
   asDeclaredToolSet,
   canInlineToolAdditions,
+  canDeclareToolChange,
 } from "../../services/api/declaredToolSet.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { stripToolReferencesBeforeCompaction } from "../../services/api/deferredToolsState.js";
 import { findLatestDeferredToolsDelta } from "../../services/api/toolDefinitionShape.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
-import {
-  alwaysFalseFeed,
-  identityValue as identityValue_2,
-} from "../RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getCliOwnedState } from "../../services/mcp/cliOwnedClients.js";
-import { count, uniq } from "../../utils/collections.js";
-import { sleep } from "../../utils/sleep.js";
+import { getSurfacedToolNames } from "../../bootstrap/stateSlices.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { fromEnumArr, fromEnum } from "../../services/analytics/safeMetadata.js";
+import { countWhere } from "../../utils/collections.js";
+import { sleep } from "../../utils/sleep.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isHiddenReplyServer, appToolServerUnavailableText } from "../../services/mcp/appToolServerErrors.js";
+import { isRemoteDeviceToolName as isRemoteDeviceToolName_2 } from "../../services/mcp/firstPartyServerIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:456337-456926 facade-majority (2.1.88 match: getToolDescriptionMemoized, 0.686)
+//@ chunk-7jxyna5q.js:375006-375649 facade-majority (2.1.88 match: getToolDescriptionMemoized, 0.57)
 /**
  * 按工具名缓存工具 prompt 文本（描述）；延迟工具集合变化时整体失效。
  */
@@ -74,8 +90,9 @@ class ToolSearchDescriptionCache {
     this.#e.clear();
     this.#t = null;
   }
-  describe(toolName, tools) {
-    let cached = this.#e.get(toolName);
+  describe(toolName, tools, loadedThroughToolSearch = false) {
+    let cacheKey = loadedThroughToolSearch ? `loaded\x00${toolName}` : toolName;
+    let cached = this.#e.get(cacheKey);
     if (cached) return cached;
     let toolByName = findToolByName(tools, toolName);
     let description = toolByName
@@ -91,9 +108,10 @@ class ToolSearchDescriptionCache {
           }),
           tools,
           agents: [],
+          loadedThroughToolSearch,
         })
       : Promise.resolve("");
-    this.#e.set(toolName, description);
+    this.#e.set(cacheKey, description);
     return description;
   }
   maybeInvalidate(deferredTools) {
@@ -108,7 +126,7 @@ class ToolSearchDescriptionCache {
     }
   }
 }
-//@ chunk-s61vbvea.js:456926-457348 fingerprint (2.1.88 match: parseToolName, 0.71)
+//@ chunk-7jxyna5q.js:375649-376071 fingerprint (2.1.88 match: parseToolName, 0.708)
 /**
  * 把工具名拆成搜索用的词：MCP 工具按服务器名与工具名切分，内建工具按驼峰和下划线切分。
  */
@@ -140,17 +158,19 @@ function parseToolName(name) {
     isMcp: false,
   };
 }
-//@ chunk-s61vbvea.js:457348-457407 facade-majority
+//@ chunk-7jxyna5q.js:376071-376130 facade-majority
 var MAX_QUERY_CHARS = 16384;
 var MAX_KEYWORD_TERMS = 32;
 var MAX_SELECT_NAMES = 64;
 var SEARCH_YIELD_BUDGET_MS = 20;
 var SEARCH_HINT_MAX_CHARS = MAX_CALL_MARK_CHARS;
 var SELECT_QUERY = /^select:(.+)$/i;
-//@ chunk-s61vbvea.js:457407-457588 facade-majority
+//@ chunk-7jxyna5q.js:376130-376310 facade-majority
 function boundToolSearchQuery(query) {
-  let deferredTools = truncateToLength(query, MAX_QUERY_CHARS);
-  let boundedQuery = SELECT_QUERY.test(deferredTools) ? deferredTools : truncateKeywordQuery(deferredTools);
+  let truncatedQuery = truncateToLength(query, MAX_QUERY_CHARS);
+  let boundedQuery = SELECT_QUERY.test(truncatedQuery)
+    ? truncatedQuery
+    : truncateKeywordQuery(truncatedQuery);
   let selectList = SELECT_QUERY.exec(boundedQuery)?.[1];
   if (selectList === undefined) return boundedQuery;
   let parts = selectList.split(",");
@@ -158,13 +178,13 @@ function boundToolSearchQuery(query) {
     ? boundedQuery
     : boundedQuery.slice(0, -selectList.length) + parts.slice(0, MAX_SELECT_NAMES).join(",");
 }
-//@ chunk-s61vbvea.js:457588-457688 file-local
-function truncateKeywordQuery(deferredTools) {
-  let query = truncateToLength(deferredTools, MAX_QUERY_CHARS);
-  let parts = query.trim().split(/\s+/);
-  return parts.length <= MAX_KEYWORD_TERMS ? query : parts.slice(0, MAX_KEYWORD_TERMS).join(" ");
+//@ chunk-7jxyna5q.js:376310-376409 layout
+function truncateKeywordQuery(query) {
+  let query_2 = truncateToLength(query, MAX_QUERY_CHARS);
+  let parts = query_2.trim().split(/\s+/);
+  return parts.length <= MAX_KEYWORD_TERMS ? query_2 : parts.slice(0, MAX_KEYWORD_TERMS).join(" ");
 }
-//@ chunk-s61vbvea.js:457688-457786 layout
+//@ chunk-7jxyna5q.js:376409-376507 layout
 async function mapWithYield(items, yieldingRunner, fn) {
   let results = [];
   for (let item of items) {
@@ -173,14 +193,14 @@ async function mapWithYield(items, yieldingRunner, fn) {
   }
   return results;
 }
-//@ chunk-s61vbvea.js:457786-457890 file-local
+//@ chunk-7jxyna5q.js:376507-376611 file-local
 function compileTermPatterns(terms) {
   let patterns = new Map();
   for (let term of terms)
     if (!patterns.has(term)) patterns.set(term, new RegExp(`\\b${urlPatternToRegex(term)}\\b`));
   return patterns;
 }
-//@ chunk-s61vbvea.js:457890-459408 facade-majority (2.1.88 match: searchToolsWithKeywords, 0.786)
+//@ chunk-7jxyna5q.js:376611-378154 facade-majority (2.1.88 match: searchToolsWithKeywords, 0.783)
 /**
  * 关键词搜索延迟工具：完全同名直接返回；mcp__ 前缀按前缀匹配；"+词"为必选词；按工具名分词（驼峰/下划线，MCP 按 server/tool）、searchHint、描述文本打分（MCP 名命中略高），取前 max_results。
  */
@@ -264,11 +284,160 @@ async function searchToolsWithKeywords(
     .slice(0, maxResults)
     .map((item) => item.name);
 }
-//@ chunk-e6aww6q8.js:1641577-1642024 fingerprint (2.1.88 match: inputSchema, 0.662)
+//@ chunk-5xgkngpb.js:1710898-1710910 placement
+var MAX_TOOL_SIGNATURE_LENGTH = 300;
+//@ chunk-5xgkngpb.js:1710910-1710982 placement
+/**
+ * REPL 模式下的工具 schema 规整入口（远程工具转发），非 REPL 返回 undefined。
+ */
+function buildToolApiSchemaOrUndefined(tool, remoteToolForwarding) {
+  if (codeModeAccepted())
+    return toolToAPISchema(tool, {
+      remoteToolForwarding,
+    });
+  return;
+}
+//@ chunk-5xgkngpb.js:1710982-1711681 placement
+/**
+ * 把工具 schema 压成一行紧凑签名（必填项优先、超 300 字符截断），用于提示词里的工具清单。
+ */
+function formatToolInputSignature(tool, remoteToolForwarding) {
+  if (codeModeAccepted()) {
+    let apiSchema;
+    try {
+      apiSchema = buildToolApiSchemaOrUndefined(tool, remoteToolForwarding);
+    } catch {
+      return "{}";
+    }
+    if (!isPlainObject_3(apiSchema) || !isPlainObject_3(apiSchema.properties)) return "{}";
+    let requiredFields = new Set(Array.isArray(apiSchema.required) ? apiSchema.required : []);
+    let mapped = Object.entries(apiSchema.properties).map(([key, value]) => ({
+      isRequired: requiredFields.has(key),
+      text: `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : quoteJson(key)}${requiredFields.has(key) ? "" : "?"}: ${describeSchemaType(value)}`,
+    }));
+    let fullSignature = `{${mapped.map((propertyEntry) => propertyEntry.text).join(", ")}}`;
+    if (fullSignature.length <= MAX_TOOL_SIGNATURE_LENGTH) return fullSignature;
+    let keptFields = [];
+    let omittedRequiredCount = 0;
+    let lengthSoFar = 2;
+    for (let { text, isRequired } of mapped.toSorted(
+      (left, right) => Number(right.isRequired) - Number(left.isRequired),
+    ))
+      if (lengthSoFar + text.length + 2 <= MAX_TOOL_SIGNATURE_LENGTH) {
+        keptFields.push(text);
+        lengthSoFar += text.length + 2;
+      } else if (isRequired) omittedRequiredCount++;
+    let truncatedSignature = `{${[...keptFields, `\u2026plus ${mapped.length - keptFields.length} not shown${omittedRequiredCount > 0 ? `, ${omittedRequiredCount} of them required` : ""}`].join(", ")}}`;
+    return truncatedSignature.length < fullSignature.length ? truncatedSignature : fullSignature;
+  }
+  return "{}";
+}
+//@ chunk-5xgkngpb.js:1711681-1711958 placement
+function describeSchemaType(schema) {
+  if (!isPlainObject_3(schema)) return "unknown";
+  if (Array.isArray(schema.enum)) return schema.enum.map(quoteJson).join(" | ");
+  switch (schema.type) {
+    case "string":
+    case "boolean":
+    case "object":
+      return schema.type;
+    case "number":
+    case "integer":
+      return "number";
+    case "array":
+      return `${describeSchemaType(schema.items)}[]`;
+    default:
+      return "unknown";
+  }
+}
+//@ chunk-5xgkngpb.js:1711958-1711999 placement
+function quoteJson(value) {
+  return JSON.stringify(value);
+}
+//@ chunk-5xgkngpb.js:1711999-1712071 placement
+function isPlainObject_3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+//@ chunk-5xgkngpb.js:1712071-1712165 placement
+/**
+ * 把非标识符的工具名写成 tools["…"] 形式。
+ */
+function toolIndexAccess(name) {
+  if (!/^[A-Za-z_$][\w$]*$/.test(name)) return `tools[${JSON.stringify(name)}]`;
+  return name;
+}
+//@ chunk-5xgkngpb.js:1712165-1712204 placement
+var TENGU_MEASURED_SHELF = "tengu_measured_shelf";
+var BYTES_PER_TOKEN_ESTIMATE = 2.5;
+//@ chunk-5xgkngpb.js:1712204-1713016 placement
+/**
+ * 按 tengu_measured_shelf 比例从剩余 token 预算里挑选可预加载的延迟工具，超预算的标为 tooLarge/overRoom。
+ */
+async function partitionToolsByRoom(matches, room) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MEASURED_SHELF, 0);
+  let { room: room_2 } = room;
+  if (
+    room_2 === undefined ||
+    !(
+      typeof featureValue_CACHED_MAY_BE_STALE === "number" &&
+      featureValue_CACHED_MAY_BE_STALE > 0 &&
+      featureValue_CACHED_MAY_BE_STALE <= 1
+    )
+  )
+    return;
+  let { apiLimit } = room_2;
+  if (apiLimit === undefined) return;
+  let results = await Promise.all(
+    matches.map(async (toolName) => {
+      if (room.isLoaded(toolName)) return;
+      let deferredTool = room.deferredTool(toolName);
+      return deferredTool?.inputJSONSchema === undefined
+        ? 0
+        : estimateToolTokens(deferredTool.inputJSONSchema, await room.description(toolName));
+    }),
+  );
+  let usage = room.parentMessage?.message.usage;
+  let max = Math.max(usage ? totalTokensOf(usage) : 0, room_2.held());
+  let max_2 = Math.max(0, apiLimit - max - room_2.claimed());
+  let min = Math.min(Math.floor(apiLimit * featureValue_CACHED_MAY_BE_STALE), max_2);
+  let result = {
+    kept: [],
+    alreadyLoaded: [],
+    tooLarge: [],
+    overRoom: [],
+    keptTokens: 0,
+    leftOutTokens: 0,
+    roomTokens: min,
+  };
+  for (let [index, toolName] of matches.entries()) {
+    let cost = results[index];
+    if (cost === undefined) {
+      result.alreadyLoaded.push(toolName);
+      continue;
+    }
+    if (cost === 0 || cost <= (result.keptTokens === 0 ? max_2 : min - result.keptTokens)) {
+      result.kept.push(toolName);
+      result.keptTokens += cost;
+      room_2.claim(cost);
+      continue;
+    }
+    result.leftOutTokens += cost;
+    (cost > apiLimit ? result.tooLarge : result.overRoom).push(toolName);
+  }
+  return result;
+}
+//@ chunk-5xgkngpb.js:1713016-1713117 placement
+function estimateToolTokens(inputJSONSchema, description) {
+  return Math.ceil(
+    (Buffer.byteLength(jsonStringify(inputJSONSchema), "utf8") + Buffer.byteLength(description, "utf8")) /
+      BYTES_PER_TOKEN_ESTIMATE,
+  );
+}
+//@ chunk-5xgkngpb.js:1713117-1713564 fingerprint (2.1.88 match: inputSchema, 0.662)
 var toolSearchInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var toolSearchOutputSchema;
 var MCP_PENDING_WAIT_MS;
-deferInit("chunk-e6aww6q8.js:1641577", () => {
+deferInit("chunk-5xgkngpb.js:1713117", () => {
   toolSearchInputSchema = DoctorLazy(() =>
     objectSchema({
       query: stringSchema().describe(
@@ -297,7 +466,7 @@ deferInit("chunk-e6aww6q8.js:1641577", () => {
   );
   MCP_PENDING_WAIT_MS = 5000;
 });
-//@ chunk-e6aww6q8.js:1642024-1642696 fingerprint (2.1.88 match: buildSearchResult, 0.333)
+//@ chunk-5xgkngpb.js:1713564-1714236 fingerprint (2.1.88 match: buildSearchResult, 0.334)
 /**
  * 组装 ToolSearch 结果：matches、query、total_deferred_tools、pending/failed MCP 服务器；会自动重试的失败服务器改成一条 isMeta 提示消息。
  */
@@ -339,14 +508,18 @@ function buildSearchResult(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1642696-1642784 layout
+//@ chunk-5xgkngpb.js:1714236-1714341 layout (2.1.88 match: formatDirectoryList, 1)
+function formatDirectoryList(directories) {
+  return `${directories.slice(0, UNCLASSIFIED).map(wireName).join(", ")}${directories.length > UNCLASSIFIED ? `, and ${directories.length - UNCLASSIFIED} more` : ""}`;
+}
+//@ chunk-5xgkngpb.js:1714341-1714429 layout
 function getReportableFailedMcpServers(mcpClients, redialPolicy) {
   if (!isSurfaceFailedServersEnabled()) return [];
   return collectFailedMcpServers(mcpClients, redialAllowsServer(redialPolicy)).filter(
     (server) => server.willRetry !== true,
   );
 }
-//@ chunk-e6aww6q8.js:1642784-1642958 layout
+//@ chunk-5xgkngpb.js:1714429-1714604 layout
 /**
  * 按名字找工具：先全名（延迟集合与全部工具），再按 MCP 原始工具名或规范化名匹配。
  */
@@ -357,16 +530,48 @@ function findToolsByNameOrMcpToolName(deferredTools, allTools, name) {
   if (directMatch) return [directMatch];
   return allTools.filter((tool) =>
     tool.mcpInfo
-      ? tool.mcpInfo.toolName === name || normalizeNameForMCP(tool.mcpInfo.toolName) === name
+      ? tool.mcpInfo.toolName === name || CLAUDEAI_SERVER_PREFIX(tool.mcpInfo.toolName) === name
       : mcpInfoFromString(tool.name)?.toolName === name,
   );
 }
-//@ chunk-e6aww6q8.js:1642958-1652913 fingerprint (2.1.88 match: ToolSearchTool, 0.438)
+//@ chunk-5xgkngpb.js:1714604-1714645 layout
+function wireToolReference(toolName) {
+  return isServerIdentityActive() ? toolIndexAccess(wireName(toolName)) : toolName;
+}
+//@ chunk-5xgkngpb.js:1714645-1715347 layout
+async function addCodeModeOnlyMatches(searchResult, searchQuery, tool, maxResults, maxMatchCount) {
+  if (!willHideCodeModeOnlyTools(tool)) return searchResult;
+  let filtered = tool.filter((tool_2) => isHiddenByCodeModeOnly(tool_2, tool));
+  if (filtered.length === 0) return searchResult;
+  let selectList = SELECT_QUERY.exec(searchQuery)?.[1];
+  let toolNames =
+    selectList !== undefined
+      ? selectList.split(",").map((rawName) => internalName(rawName.trim()))
+      : await searchToolsWithKeywords(searchQuery, filtered, tool, filtered, maxResults, maxMatchCount);
+  let forwarded = await shouldForwardRemoteTools(filtered.filter((tool) => toolNames.includes(tool.name)));
+  let flattened = toolNames.flatMap((toolName) => {
+    let tool = filtered.find((candidate) => candidate.name === toolName);
+    return tool ? [`${wireName(toolName)}(${formatToolInputSignature(tool, forwarded)})`] : [];
+  });
+  if (flattened.length === 0) return searchResult;
+  let content = `ToolSearch loads only tools that run at the top level. These tools also match "${searchQuery}", and only a REPL script can call them: ${flattened.join(", ")}. Call one from the REPL tool, e.g. \`await ${wireToolReference(toolNames.find((toolName) => filtered.some((tool) => tool.name === toolName)) ?? "")}({...})\`.`;
+  return {
+    ...searchResult,
+    newMessages: [
+      ...(searchResult.newMessages ?? []),
+      createUserMessage({
+        content,
+        isMeta: true,
+      }),
+    ],
+  };
+}
+//@ chunk-5xgkngpb.js:1715347-1727100 fingerprint (2.1.88 match: ToolSearchTool, 0.372)
 /**
  * ToolSearch 工具。输入 {query, max_results=5}；select:a,b 按名字精确取（支持 MCP 原始工具名），否则关键词打分搜索；查不到时可重拨失败的 MCP 服务器、等待连接中的服务器（最多 5 秒）后再查；已内联的工具会提示"直接调用"。结果是 tool_reference 块，下一次请求才把对应工具定义放进 tools。
  */
 var ToolSearchTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1642958", () => {
+deferInit("chunk-5xgkngpb.js:1715347", () => {
   ToolSearchTool = buildTool({
     isEnabled() {
       return isToolSearchEnabledOptimistic();
@@ -397,7 +602,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
     },
     create(toolContext) {
       return {
-        async call(input, { signal, timing }) {
+        async call(input, { signal, timing, parentMessage }) {
           let {
             tools,
             refreshTools,
@@ -408,6 +613,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             agentId,
             mainLoopModel,
             messages,
+            contextRoom,
           } = toolContext;
           let { max_results: maxResults = 5 } = input;
           let searchQuery = boundToolSearchQuery(input.query);
@@ -442,7 +648,8 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             } catch (error) {
               logError(toError(error));
             }
-          let feedIsReal = (messageList) => byValueState !== undefined && !alwaysFalseFeed(messageList);
+          let feedIsReal = (messageList) =>
+            byValueState !== undefined && !willHideCodeModeOnlyTools(messageList);
           let isByValueTool = (tool, feedIsReal) =>
             definedByValue?.has(tool.name) === true ||
             (feedIsReal && byValueState !== undefined && byValueRoute(tool, byValueState) !== undefined);
@@ -461,14 +668,15 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
               }),
             );
           };
-          let normalizeToolList = (toolList) => removeByValueTools(identityValue_2(toolList));
+          let normalizeToolList = (toolList) => removeByValueTools(hideCodeModeOnlyTools(toolList));
           let currentMcpClients = () => refreshMcpClients?.() ?? turnMcpClients;
-          let searchRedial = refreshTools && !alwaysFalseFeed(tools) ? getCliOwnedState().searchRedial : null;
+          let searchRedial =
+            refreshTools && !willHideCodeModeOnlyTools(tools) ? getCliOwnedState().searchRedial : null;
           await searchRedial?.redial(
             currentMcpClients().filter(
               (client) =>
                 client.type === "failed" &&
-                [client.name, normalizeNameForMCP(client.name)].some((serverName) =>
+                [client.name, CLAUDEAI_SERVER_PREFIX(client.name)].some((serverName) =>
                   new RegExp(
                     `(?<=^|[^a-z0-9_-]|__)${urlPatternToRegex(serverName)}(?=$|[^a-z0-9_-]|__)`,
                     "i",
@@ -481,11 +689,74 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
           let toolPool = refreshTools?.() ?? tools;
           let deferredTools = selectDeferredTools(toolPool);
           function pendingServers() {
-            return alwaysFalseFeed(toolPool) ? [] : getPendingServerNames();
+            return willHideCodeModeOnlyTools(toolPool) ? [] : getPendingServerNames();
           }
           let descriptionCache = toolState.get(ToolSearchDescriptionCache);
           descriptionCache.maybeInvalidate(deferredTools);
-          let settleSearchResult = (searchResult) => Promise.resolve(searchResult);
+          let settleSearchResult = async (searchResult) => {
+            let contextSnapshot;
+            let getContextSnapshot = () => {
+              if (contextSnapshot === undefined)
+                contextSnapshot = {
+                  loaded: new Set([
+                    ...stripToolReferencesBeforeCompaction(messages()),
+                    ...(requestBetas !== undefined && canDeclareToolChange(requestBetas, mainLoopModel())
+                      ? getSurfacedToolNames(requestBetas)
+                      : []),
+                  ]),
+                  deferred: selectDeferredTools(refreshTools?.() ?? toolPool),
+                };
+              return contextSnapshot;
+            };
+            let selection = await partitionToolsByRoom(searchResult.data.matches, {
+              isLoaded: (toolName) => getContextSnapshot().loaded.has(toolName),
+              deferredTool: (toolName) => findToolByName(getContextSnapshot().deferred, toolName),
+              description: (toolName) =>
+                descriptionCache.describe(toolName, getContextSnapshot().deferred, true),
+              room: contextRoom(),
+              parentMessage,
+            });
+            let currentResult = searchResult;
+            if (selection !== undefined && selection.kept.length !== searchResult.data.matches.length) {
+              let { kept, alreadyLoaded, tooLarge, overRoom } = selection;
+              logEvent("tengu_tool_search_definitions_left_out", {
+                keptCount: kept.length,
+                leftOutCount: alreadyLoaded.length + tooLarge.length + overRoom.length,
+                leftOutReasons: fromEnumArr([
+                  ...(alreadyLoaded.length > 0 ? ["already_loaded"] : []),
+                  ...(tooLarge.length > 0 ? ["too_large"] : []),
+                  ...(overRoom.length > 0 ? ["over_room"] : []),
+                ]),
+                keptTokens: selection.keptTokens,
+                leftOutTokens: selection.leftOutTokens,
+                roomTokens: selection.roomTokens,
+              });
+              let filtered = [
+                alreadyLoaded.length > 0 &&
+                  `Already available in this conversation: ${formatDirectoryList(alreadyLoaded)}. Call ${alreadyLoaded.length === 1 ? "it" : "them"} directly; no search is needed.`,
+                tooLarge.length > 0 &&
+                  `These tools match, but ${TOOL_SEARCH_TOOL_NAME} did not load them, because each definition is too large for the context window by itself: ${formatDirectoryList(tooLarge)}. They cannot be called here, and another search will not load them. If the task needs one, tell the user that its definition is too large to load.`,
+                overRoom.length > 0 &&
+                  `These tools match, but ${TOOL_SEARCH_TOOL_NAME} did not load them, because their definitions do not fit in this result: ${formatDirectoryList(overRoom)}. They cannot be called until a search loads them. Search for fewer of them at a time. If that loads none, tell the user that the conversation has no room left for them.`,
+              ].filter((line) => line !== false);
+              currentResult = {
+                data: {
+                  ...searchResult.data,
+                  matches: kept,
+                },
+                newMessages: [
+                  ...(searchResult.newMessages ?? []),
+                  createUserMessage({
+                    content: wrapInSystemReminder(filtered.join(" ")),
+                    isMeta: true,
+                  }),
+                ],
+              };
+            }
+            return codeModeAccepted()
+              ? addCodeModeOnlyMatches(currentResult, searchQuery, toolPool, maxResults, descriptionCache)
+              : currentResult;
+          };
           function getPendingServerNames() {
             return currentMcpClients()
               .filter((client) => client.type === "pending")
@@ -508,7 +779,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
           function collectFreshTools() {
             let freshTools = refreshTools?.() ?? toolPool;
             let existingNames = new Set(toolPool.map((tool) => tool.name));
-            let newCount = count(freshTools, (tool) => !existingNames.has(tool.name));
+            let newCount = countWhere(freshTools, (tool) => !existingNames.has(tool.name));
             let freshDeferred = selectDeferredTools(freshTools);
             descriptionCache.maybeInvalidate(freshDeferred);
             return {
@@ -528,7 +799,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
                 !filtered.some(
                   (client) =>
                     targetServers.includes(client.name) ||
-                    targetServers.includes(normalizeNameForMCP(client.name)),
+                    targetServers.includes(CLAUDEAI_SERVER_PREFIX(client.name)),
                 )
               )
                 break;
@@ -548,7 +819,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
               targetServers,
               currentMcpClients().map((client) => client.name),
             );
-            let mapped = pendingAtStart.map(normalizeNameForMCP);
+            let mapped = pendingAtStart.map(CLAUDEAI_SERVER_PREFIX);
             let targetsPending =
               targetedServers.length === 0 ||
               targetedServers.some(
@@ -585,8 +856,8 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
                 .map((requestedName) => toInternalToolName(requestedName).split("__")[1])
                 .filter(Boolean),
             );
-            let targetedPendingServers = count(pendingServers, (serverName) =>
-              serverKeys.has(normalizeNameForMCP(serverName)),
+            let targetedPendingServers = countWhere(pendingServers, (serverName) =>
+              serverKeys.has(CLAUDEAI_SERVER_PREFIX(serverName)),
             );
             logEvent("tengu_sdk_mcp_false_unavailable", {
               queryType: fromEnum(queryType),
@@ -607,17 +878,17 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
               maxResults,
               hasMatches: matches.length > 0,
               mcpServersConfigured: clients.length,
-              mcpServersConnected: count(clients, (client) => client.type === "connected"),
-              mcpServersCached: count(clients, (client) => client.type === "cached"),
-              mcpServersPending: count(clients, (client) => client.type === "pending"),
-              mcpToolsInPool: count(freshTools, (tool) => !!tool.mcpInfo),
+              mcpServersConnected: countWhere(clients, (client) => client.type === "connected"),
+              mcpServersCached: countWhere(clients, (client) => client.type === "cached"),
+              mcpServersPending: countWhere(clients, (client) => client.type === "pending"),
+              mcpToolsInPool: countWhere(freshTools, (tool) => !!tool.mcpInfo),
             });
           }
           let loadedNames = (toolName, messageList = toolPool) => {
             if (byValueInactive) return [];
             let toolsByNameOrMcpToolName = findToolsByNameOrMcpToolName(
               [],
-              identityValue_2(messageList),
+              hideCodeModeOnlyTools(messageList),
               toolName,
             );
             let feedIsRealForName = feedIsReal(messageList);
@@ -663,7 +934,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
               .map((rawName) => rawName.trim())
               .filter(Boolean)
               .map((rawName) => [rawName, loadedNames(rawName)]);
-            let alreadyLoaded = uniq(mapped.flatMap(([, names]) => names));
+            let alreadyLoaded = normalizeCaseForComparison_2(mapped.flatMap(([, names]) => names));
             let flattened = mapped.flatMap(([rawName, names]) => (names.length === 0 ? [rawName] : []));
             let announceStep = makeAnnounceStep(alreadyLoaded);
             if (alreadyLoaded.length > 0 && flattened.length === 0) {
@@ -703,7 +974,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
               if (searchResult) {
                 refreshResult = searchResult;
                 announceStep = makeAnnounceStep(
-                  uniq([
+                  normalizeCaseForComparison_2([
                     ...alreadyLoaded,
                     ...missingNames.flatMap((rawName) => loadedNames(rawName, searchResult.freshTools)),
                   ]),
@@ -725,7 +996,12 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
                   logOutcome(selectedNames, "select", searchResult);
                   return announceStep(
                     await settleSearchResult(
-                      buildSearchResult(selectedNames, searchQuery, searchResult.freshDeferred.length, []),
+                      buildSearchResult(
+                        getDeferredToolsCacheKey(selectedNames, searchResult.freshDeferred, messages()),
+                        searchQuery,
+                        searchResult.freshDeferred.length,
+                        [],
+                      ),
                     ),
                   );
                 }
@@ -761,7 +1037,11 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             return announceStep(
               await settleSearchResult(
                 buildSearchResult(
-                  foundNames,
+                  getDeferredToolsCacheKey(
+                    foundNames,
+                    refreshResult?.freshDeferred ?? deferredTools,
+                    messages(),
+                  ),
                   searchQuery,
                   refreshResult?.freshDeferred.length ?? deferredTools.length,
                   [],
@@ -770,7 +1050,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             );
           }
           let trimmed = searchQuery.trim();
-          let exactToolName = identityValue_2(toolPool).find(
+          let exactToolName = hideCodeModeOnlyTools(toolPool).find(
             (tool) => tool.name.toLowerCase() === trimmed.toLowerCase(),
           )?.name;
           let keywordLoadedNames = exactToolName === undefined ? [] : loadedNames(exactToolName);
@@ -787,7 +1067,7 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             if (exactToolName !== undefined || byValueInactive) return makeAnnounceStep([]);
             let feedIsRealForKeyword = feedIsReal(messageList);
             return makeAnnounceStep(
-              findToolsByNameOrMcpToolName([], identityValue_2(messageList), trimmed)
+              findToolsByNameOrMcpToolName([], hideCodeModeOnlyTools(messageList), trimmed)
                 .filter((tool) => isByValueTool(tool, feedIsRealForKeyword))
                 .map((tool) => tool.name),
             );
@@ -806,12 +1086,12 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
           let refreshResult;
           if (matches.length === 0) {
             let searchResult = await searchAfterRefresh(
-              (deferredTools, allTools) =>
+              (freshDeferred, freshTools) =>
                 searchToolsWithKeywords(
                   searchQuery,
-                  deferredTools,
-                  allTools,
-                  normalizeToolList(allTools),
+                  freshDeferred,
+                  freshTools,
+                  normalizeToolList(freshTools),
                   maxResults,
                   descriptionCache,
                 ),
@@ -828,7 +1108,12 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
                 logOutcome(matches, "keyword", searchResult);
                 return makeAnnounce(searchResult.freshTools)(
                   await settleSearchResult(
-                    buildSearchResult(matches, searchQuery, searchResult.freshDeferred.length, []),
+                    buildSearchResult(
+                      getDeferredToolsCacheKey(matches, searchResult.freshDeferred, messages()),
+                      searchQuery,
+                      searchResult.freshDeferred.length,
+                      [],
+                    ),
                   ),
                 );
               }
@@ -856,7 +1141,14 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
             );
           }
           return makeAnnounce(refreshResult?.freshTools ?? toolPool)(
-            await settleSearchResult(buildSearchResult(matches, searchQuery, deferredCount, [])),
+            await settleSearchResult(
+              buildSearchResult(
+                getDeferredToolsCacheKey(matches, refreshResult?.freshDeferred ?? deferredTools, messages()),
+                searchQuery,
+                deferredCount,
+                [],
+              ),
+            ),
           );
         },
       };
@@ -930,10 +1222,24 @@ deferInit("chunk-e6aww6q8.js:1642958", () => {
     },
   });
 });
+//@ chunk-5xgkngpb.js:1727100-1727228 file-local
+function getDeferredToolsCacheKey(toolNames, freshDeferred, messages) {
+  if (!toolNames.some(isRemoteDeviceToolName_2)) return toolNames;
+  let carriedNames = stripToolReferencesBeforeCompaction(messages);
+  return normalizeCaseForComparison_2([
+    ...toolNames,
+    ...freshDeferred
+      .map((tool) => tool.name)
+      .filter((toolName) => isRemoteDeviceToolName_2(toolName) && !carriedNames.has(toolName)),
+  ]);
+}
 export {
   ToolSearchTool,
-  SELECT_QUERY,
   ToolSearchDescriptionCache,
-  boundToolSearchQuery,
   searchToolsWithKeywords,
+  buildToolApiSchemaOrUndefined,
+  formatToolInputSignature,
+  toolIndexAccess,
+  SELECT_QUERY,
+  boundToolSearchQuery,
 };

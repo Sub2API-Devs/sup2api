@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地配对握手与加密通道
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xf186d.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-290tacpj.js (41)
  * attribution: placement 41
  */
 import { PairingClock, PairingError, malformedError, normalizePairingErrorCode } from "./pairingErrors.js";
@@ -40,13 +40,13 @@ import {
 } from "./jwksAndAssertions.js";
 import { withTimeout_2 } from "../../sleep.js";
 
-//@ chunk-p7xf186d.js:15660-15675 placement
+//@ chunk-290tacpj.js:15660-15675 placement
 /**
  * 配对断言失败后的默认冷却秒数（5）。
  */
 var DEFAULT_FAILURE_FLOOR_S = 5;
 var LONG_FAILURE_FLOOR_S = 60;
-//@ chunk-p7xf186d.js:15675-17989 placement
+//@ chunk-290tacpj.js:15675-17989 placement
 /**
  * 获取并缓存本地配对断言（含签发中的去重、失败记录、过期时间）。
  */
@@ -191,7 +191,7 @@ class PairingAssertionSource {
     };
   }
 }
-//@ chunk-p7xf186d.js:17989-18070 placement
+//@ chunk-290tacpj.js:17989-18070 placement
 /**
  * 计算 hello 阶段（含 offer 与去掉 mac 的 hello）的 MAC。
  */
@@ -205,7 +205,7 @@ async function computeHelloMac(offer, hello) {
     ),
   );
 }
-//@ chunk-p7xf186d.js:18070-18188 placement
+//@ chunk-290tacpj.js:18070-18188 placement
 async function deriveEcdhSecret(privateKey, peerPublicKey) {
   return new Uint8Array(
     await globalThis.crypto.subtle.deriveBits(
@@ -218,7 +218,7 @@ async function deriveEcdhSecret(privateKey, peerPublicKey) {
     ),
   );
 }
-//@ chunk-p7xf186d.js:18188-18348 placement
+//@ chunk-290tacpj.js:18188-18348 placement
 async function hkdfDerive_2(secret, salt, info, length) {
   return new Uint8Array(
     await globalThis.crypto.subtle.deriveBits(
@@ -233,7 +233,7 @@ async function hkdfDerive_2(secret, salt, info, length) {
     ),
   );
 }
-//@ chunk-p7xf186d.js:18348-18635 placement
+//@ chunk-290tacpj.js:18348-18635 placement
 async function hkdfDerive(ecdhSecret, helloMac) {
   let baseKey = await globalThis.crypto.subtle.importKey("raw", toArrayBuffer(ecdhSecret), "HKDF", false, [
     "deriveBits",
@@ -254,7 +254,7 @@ async function hkdfDerive(ecdhSecret, helloMac) {
     sid: keyIds,
   };
 }
-//@ chunk-p7xf186d.js:18635-18831 placement
+//@ chunk-290tacpj.js:18635-18831 placement
 async function hmacSha256(key, data) {
   let cryptoKey = await globalThis.crypto.subtle.importKey(
     "raw",
@@ -268,28 +268,28 @@ async function hmacSha256(key, data) {
   );
   return new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", cryptoKey, toArrayBuffer(data)));
 }
-//@ chunk-p7xf186d.js:18831-18867 placement
+//@ chunk-290tacpj.js:18831-18867 placement
 /**
  * 用加密密钥计算密钥确认 MAC。
  */
 function encryptKeyConfirmMac(mac) {
   return hmacSha256(mac.kcE, mac.th);
 }
-//@ chunk-p7xf186d.js:18867-18903 placement
+//@ chunk-290tacpj.js:18867-18903 placement
 /**
  * 用解密密钥计算密钥确认 MAC。
  */
 function decryptKeyConfirmMac(mac) {
   return hmacSha256(mac.kcD, mac.th);
 }
-//@ chunk-p7xf186d.js:18903-18952 placement
+//@ chunk-290tacpj.js:18903-18952 placement
 /**
  * 计算 pair_done 阶段的 MAC。
  */
 function computePairDoneMac(secrets) {
   return hmacSha256(secrets.kcE, concatBytesArgs(secrets.th, utf8Encode("done")));
 }
-//@ chunk-p7xf186d.js:18952-19183 placement
+//@ chunk-290tacpj.js:18952-19183 placement
 var SEALED_MESSAGE_TYPES = [
   "execute_tool",
   "tool_response",
@@ -303,21 +303,21 @@ var MAX_SEALED_BYTES = 33554432;
 var MAX_CLOCK_SKEW_S = 60;
 var SURROGATE_RE = /\p{Surrogate}/u;
 var SEALED_MESSAGE_TYPE_SET = new Set(SEALED_MESSAGE_TYPES);
-//@ chunk-p7xf186d.js:19183-19236 placement
+//@ chunk-290tacpj.js:19183-19236 placement
 /**
  * 判断字符串是否为合法的封装帧类型。
  */
 function isSealedFrameKind(kind) {
   return typeof kind === "string" && SEALED_MESSAGE_TYPE_SET.has(kind);
 }
-//@ chunk-p7xf186d.js:19236-19311 placement
+//@ chunk-290tacpj.js:19236-19311 placement
 /**
  * 判断 toolUseId 合法（未给、或非空且无孤立代理项）。
  */
 function isValidToolUseIdOrUndefined(value) {
   return value === undefined || (typeof value === "string" && value !== "" && !SURROGATE_RE.test(value));
 }
-//@ chunk-p7xf186d.js:19311-19421 placement
+//@ chunk-290tacpj.js:19311-19421 placement
 function isValidChunkInfo(chunk) {
   if (chunk === undefined) return true;
   let frame = chunk;
@@ -330,7 +330,7 @@ function isValidChunkInfo(chunk) {
     frame.i < frame.n
   );
 }
-//@ chunk-p7xf186d.js:19421-19617 placement
+//@ chunk-290tacpj.js:19421-19617 placement
 /**
  * 生成配对通道 AES-GCM 参数：IV 为 4 字节 0 + 64 位序号，附加数据依次绑定协议名、双方标识、序号、消息类型、可选会话、时间戳与分片信息。
  */
@@ -354,7 +354,7 @@ function aesGcmParams(key, iv, counter, keyId, direction, frameKind, aad) {
     tagLength: 128,
   };
 }
-//@ chunk-p7xf186d.js:19617-19708 placement
+//@ chunk-290tacpj.js:19617-19708 placement
 /**
  * 取安全整数形式的当前时间，失败返回 NaN。
  */
@@ -366,7 +366,7 @@ function safeFloorNow(wall) {
     return Number.NaN;
   }
 }
-//@ chunk-p7xf186d.js:19708-19809 placement
+//@ chunk-290tacpj.js:19708-19809 placement
 async function importAesKey(rawKey, usage) {
   return globalThis.crypto.subtle.importKey(
     "raw",
@@ -378,14 +378,14 @@ async function importAesKey(rawKey, usage) {
     [usage],
   );
 }
-//@ chunk-p7xf186d.js:19809-19829 placement
+//@ chunk-290tacpj.js:19809-19829 placement
 /**
  * 什么都不做的回调（用于清理 promise 队列）。
  */
 var noopCallback = () => {
   return;
 };
-//@ chunk-p7xf186d.js:19829-19925 placement
+//@ chunk-290tacpj.js:19829-19925 placement
 /**
  * 解析封装消息里的 JSON，失败返回 malformed。
  */
@@ -402,7 +402,7 @@ function parseSealedJson(text) {
     };
   }
 }
-//@ chunk-p7xf186d.js:19925-23584 placement
+//@ chunk-290tacpj.js:19925-23584 placement
 /**
  * 配对后的加密通道：派生收发密钥、计数器防重放、标签失败计数，负责加解密消息。
  */
@@ -661,7 +661,7 @@ class PairingChannel {
     this.partial = undefined;
   }
 }
-//@ chunk-p7xf186d.js:23584-23649 placement
+//@ chunk-290tacpj.js:23584-23649 placement
 /**
  * 配对协议版本号（1）。
  */
@@ -672,14 +672,14 @@ var ROLE_FIELD_NAMES = {
   accept: "instance",
 };
 var NONCE_BYTES = 32;
-//@ chunk-p7xf186d.js:23649-23706 placement
+//@ chunk-290tacpj.js:23649-23706 placement
 /**
  * 比较两个组织名（忽略大小写）。
  */
 function sameOrgCaseInsensitive(left, right) {
   return left.toLowerCase() === right.toLowerCase();
 }
-//@ chunk-p7xf186d.js:23706-24222 placement
+//@ chunk-290tacpj.js:23706-24222 placement
 function verifyPeerAccount(claims, claims_2, policy) {
   if (claims_2.sub !== claims.sub) throw new PairingError("account_mismatch");
   if (policy.requiredOrg !== undefined) {
@@ -706,7 +706,7 @@ function verifyPeerAccount(claims, claims_2, policy) {
         : {},
     );
 }
-//@ chunk-p7xf186d.js:24222-24412 placement
+//@ chunk-290tacpj.js:24222-24412 placement
 function decodeB64Field(value, fieldName, expectedLength) {
   if (typeof value !== "string") throw malformedError(`${fieldName} missing`);
   let bytes;
@@ -719,7 +719,7 @@ function decodeB64Field(value, fieldName, expectedLength) {
     throw malformedError(`${fieldName} must be ${expectedLength} bytes`);
   return bytes;
 }
-//@ chunk-p7xf186d.js:24412-24608 placement
+//@ chunk-290tacpj.js:24412-24608 placement
 function checkPairMessage(message, role) {
   let body = message;
   if (!body || typeof body !== "object" || body.msg !== role) throw malformedError(`pair_${role} malformed`);
@@ -729,14 +729,14 @@ function checkPairMessage(message, role) {
   }
   return body;
 }
-//@ chunk-p7xf186d.js:24608-24757 placement
+//@ chunk-290tacpj.js:24608-24757 placement
 function smallObjectField(value, fieldName) {
   if (value === undefined) return;
   if (!value || typeof value !== "object" || Array.isArray(value) || canonicalJson(value).length > 1024)
     throw malformedError(`${fieldName} must be a small object`);
   return value;
 }
-//@ chunk-p7xf186d.js:24757-24920 placement
+//@ chunk-290tacpj.js:24757-24920 placement
 function parsePairHello(message, role) {
   let instanceField = ROLE_FIELD_NAMES[role];
   let body = checkPairMessage(message, role);
@@ -752,7 +752,7 @@ function parsePairHello(message, role) {
     instance,
   };
 }
-//@ chunk-p7xf186d.js:24920-25047 placement
+//@ chunk-290tacpj.js:24920-25047 placement
 function buildPairHello(message, offer, instanceHint) {
   let hello = {
     msg: message,
@@ -764,7 +764,7 @@ function buildPairHello(message, offer, instanceHint) {
   if (instanceHint) hello[ROLE_FIELD_NAMES[message]] = instanceHint;
   return hello;
 }
-//@ chunk-p7xf186d.js:25047-25185 placement
+//@ chunk-290tacpj.js:25047-25185 placement
 function parsePairMac(message, role) {
   let body = checkPairMessage(message, role);
   if (typeof body.sid !== "string") throw malformedError(`pair_${role} sid missing`);
@@ -773,7 +773,7 @@ function parsePairMac(message, role) {
     mac: decodeB64Field(body.mac, `pair_${role} mac`),
   };
 }
-//@ chunk-p7xf186d.js:25185-25342 placement
+//@ chunk-290tacpj.js:25185-25342 placement
 function cloneSmallObject(instanceHint, fieldName) {
   if (instanceHint === undefined) return;
   try {
@@ -784,19 +784,19 @@ function cloneSmallObject(instanceHint, fieldName) {
     });
   }
 }
-//@ chunk-p7xf186d.js:25342-25447 placement
+//@ chunk-290tacpj.js:25342-25447 placement
 function assertIdentityUnchanged(source, ownIdentity) {
   if (!source.isCurrent(ownIdentity))
     throw new PairingError("not_signed_in", "identity changed during the handshake");
 }
-//@ chunk-p7xf186d.js:25447-25516 placement
+//@ chunk-290tacpj.js:25447-25516 placement
 /**
  * 用常数时间比较 MAC，不符时抛 bad_key_confirmation。
  */
 function assertMacEqual(actual, expected, label) {
   if (!constantTimeEqual(actual, expected)) throw new PairingError("bad_key_confirmation", label);
 }
-//@ chunk-p7xf186d.js:25516-25596 placement
+//@ chunk-290tacpj.js:25516-25596 placement
 /**
  * 超过步骤超时则抛出配对过期错误。
  */
@@ -804,7 +804,7 @@ function assertNotExpired(clock, startedAt, label) {
   if (clock.since(startedAt) > PAIRING_STEP_TIMEOUT_S)
     throw new PairingError("expired", `${label} took too long`);
 }
-//@ chunk-p7xf186d.js:25596-25794 placement
+//@ chunk-290tacpj.js:25596-25794 placement
 async function establishPairingChannel(role, source, clock, state) {
   let channel = await PairingChannel.create(role, state.secrets, {
     clock,
@@ -819,7 +819,7 @@ async function establishPairingChannel(role, source, clock, state) {
     establishedAt: clock.wall(),
   };
 }
-//@ chunk-p7xf186d.js:25794-27468 placement
+//@ chunk-290tacpj.js:25794-27468 placement
 /**
  * 本地配对握手状态机：交换 ECDH 公钥与断言、校验对端，建立加密通道。
  */
@@ -930,19 +930,19 @@ class LocalPairingHandshake {
     });
   }
 }
-//@ chunk-p7xf186d.js:27468-27561 placement
+//@ chunk-290tacpj.js:27468-27561 placement
 function parseRefusal(localPairing) {
   let pairing = localPairing;
   if (!pairing || typeof pairing !== "object" || pairing.msg !== "refuse") return;
   return normalizePairingErrorCode(pairing.code);
 }
-//@ chunk-p7xf186d.js:27561-27580 placement
+//@ chunk-290tacpj.js:27561-27580 placement
 var weakMap = new WeakMap();
-//@ chunk-p7xf186d.js:27580-27612 placement
+//@ chunk-290tacpj.js:27580-27612 placement
 function getPairingContext(session) {
   return weakMap.get(session);
 }
-//@ chunk-p7xf186d.js:27612-27704 placement
+//@ chunk-290tacpj.js:27612-27704 placement
 function ensurePairingContext(session) {
   let context = weakMap.get(session);
   if (!context) {
@@ -954,11 +954,11 @@ function ensurePairingContext(session) {
   }
   return context;
 }
-//@ chunk-p7xf186d.js:27704-27792 placement
+//@ chunk-290tacpj.js:27704-27792 placement
 function normalizeCategory(category) {
   return typeof category === "string" && /^category[0-9a-z_]{1,32}$/.test(category) ? category : undefined;
 }
-//@ chunk-p7xf186d.js:27792-27900 placement
+//@ chunk-290tacpj.js:27792-27900 placement
 function stripPrivateOptions(actionData) {
   let { _perActionOnly, _privateHostReadAlwaysOffer, _privateHostReadAlways, ...state } = actionData;
   return state;

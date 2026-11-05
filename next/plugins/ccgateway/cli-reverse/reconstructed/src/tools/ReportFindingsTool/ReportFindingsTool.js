@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：报告代码审查发现的工具 schema；报告发现工具的输出 schema。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -22,13 +22,13 @@ import { REPORTFINDINGS, REPORTFINDINGS_DESCRIPTION } from "./constants.js";
 import { plural } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:49449-50547 placement
+//@ chunk-fmnbrxwy.js:64163-65261 placement
 /**
  * ReportFindings 的输入 schema（文件、行号、摘要、类别等）。
  */
 var ReportFindingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var reportFindingsInputSchema;
-deferInit("chunk-kxyd0g16.js:49449", () => {
+deferInit("chunk-fmnbrxwy.js:64163", () => {
   ReportFindingsSchema = DoctorLazy(() =>
     objectSchema({
       file: stringSchema().describe("Repo-relative path of the file the finding is in"),
@@ -66,13 +66,13 @@ deferInit("chunk-kxyd0g16.js:49449", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:50547-51559 placement
+//@ chunk-fmnbrxwy.js:65261-66273 placement
 /**
  * ReportFindings 工具配置对象。
  */
 var ReportFindingsOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ReportFindingsTool;
-deferInit("chunk-kxyd0g16.js:50547", () => {
+deferInit("chunk-fmnbrxwy.js:65261", () => {
   ReportFindingsOutputSchema = DoctorLazy(() =>
     objectSchema({
       count: numberSchema().describe("Number of findings reported"),

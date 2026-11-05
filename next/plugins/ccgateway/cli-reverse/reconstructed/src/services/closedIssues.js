@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。已关闭问题提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
  * attribution: placement 11
  */
 import { join } from "path";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, numberSchema, stringSchema, array } from "../../vendor/zod/v4/classic/schemas.js";
 import { createJsonStore } from "../utils/jsonStore.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
@@ -28,16 +28,16 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:778738-778841 placement
+//@ chunk-czq1j3j2.js:811357-811460 placement
 var CLOSED_ISSUE_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CLOSED_ISSUES_SCHEMA;
 var CLOSED_ISSUES_TIMEOUT_MS;
 var CLOSED_ISSUES_CACHE_TTL_MS;
 var CLOSED_ISSUES_LOOKBACK_DAYS;
-deferInit("chunk-18hwfzwa.js:778738", () => {
+deferInit("chunk-czq1j3j2.js:811357", () => {
   CLOSED_ISSUE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       number: numberSchema(),
@@ -50,28 +50,28 @@ deferInit("chunk-18hwfzwa.js:778738", () => {
   CLOSED_ISSUES_CACHE_TTL_MS = 86400000;
   CLOSED_ISSUES_LOOKBACK_DAYS = 30;
 });
-//@ chunk-18hwfzwa.js:778841-778949 placement
+//@ chunk-czq1j3j2.js:811460-811568 placement
 function closedIssuesCachePath() {
   return createJsonStore(join(getClaudeConfigDir(), "cache", "my-closed-issues.json"), CLOSED_ISSUES_SCHEMA, {
     defaultValue: () => [],
     ensureDir: true,
   });
 }
-//@ chunk-18hwfzwa.js:778949-779024 placement
+//@ chunk-czq1j3j2.js:811568-811643 placement
 /**
  * 已关闭 issue 缓存的存储位置（my-closed-issues.json）。
  */
 function closedIssuesCacheFile() {
   return STORAGE_SPACES.cache("my-closed-issues", "my-closed-issues.json");
 }
-//@ chunk-18hwfzwa.js:779024-779103 placement
+//@ chunk-czq1j3j2.js:811643-811722 placement
 /**
  * 按回看天数（CLOSED_ISSUES_LOOKBACK_DAYS）算出查询用的起始日期（YYYY-MM-DD）。
  */
 function closedSinceDate(ts) {
   return new Date(ts - CLOSED_ISSUES_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
-//@ chunk-18hwfzwa.js:779103-780382 placement
+//@ chunk-czq1j3j2.js:811722-813001 placement
 async function fetchMyClosedIssues(storageV5) {
   if (getIsNonInteractiveSession()) return null;
   if (isEssentialTrafficOnly()) return null;
@@ -162,7 +162,7 @@ async function fetchMyClosedIssues(storageV5) {
   );
   return elapsedMs;
 }
-//@ chunk-18hwfzwa.js:780382-781217 placement
+//@ chunk-czq1j3j2.js:813001-813836 placement
 async function readClosedIssuesCache(storageV5) {
   if (storageV5) {
     let readResult;
@@ -214,16 +214,16 @@ async function readClosedIssuesCache(storageV5) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:781217-781320 placement
-function unacknowledgedClosedIssues(closedIssuesCache) {
+//@ chunk-czq1j3j2.js:813836-813939 placement (2.1.88 match: semanticNumber, 0.4)
+function unacknowledgedClosedIssues(inner) {
   let acknowledged = new Set(getGlobalConfig().closedIssuesAcknowledged ?? []);
-  return closedIssuesCache.filter((issue) => !acknowledged.has(issue.number));
+  return inner.filter((issue) => !acknowledged.has(issue.number));
 }
-//@ chunk-18hwfzwa.js:781320-781497 placement
+//@ chunk-czq1j3j2.js:813939-814116 placement
 function acknowledgeClosedIssues(numbers, storageV5) {
   if (numbers.length === 0) return;
   let closedIssuesAcknowledged = getGlobalConfig().closedIssuesAcknowledged ?? [];
-  let next = uniq([...closedIssuesAcknowledged, ...numbers]);
+  let next = normalizeCaseForComparison_2([...closedIssuesAcknowledged, ...numbers]);
   if (next.length === closedIssuesAcknowledged.length) return;
   saveGlobalConfig(
     (config) => ({
@@ -233,18 +233,18 @@ function acknowledgeClosedIssues(numbers, storageV5) {
     storageV5,
   );
 }
-//@ chunk-18hwfzwa.js:781497-781531 placement
+//@ chunk-czq1j3j2.js:814116-814150 placement
 function selectNumber(item) {
   return item.number;
 }
-//@ chunk-18hwfzwa.js:781531-781561 placement
+//@ chunk-czq1j3j2.js:814150-814180 placement
 /**
  * 恒等函数（返回第二个参数），疑为占位或选择器包装。
  */
 function identity_2(value, other) {
   return other;
 }
-//@ chunk-18hwfzwa.js:781561-781595 placement
+//@ chunk-czq1j3j2.js:814180-814214 placement
 function selectNumber2(item) {
   return item.number;
 }

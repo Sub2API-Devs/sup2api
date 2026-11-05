@@ -3,9 +3,9 @@
  *
  * 并入已有模块：检查已有 secret 步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/CheckExistingSecretStep.tsx
- * pieces: chunk-4v9zy7gn.js (2)
+ * pieces: chunk-2xbvbqx2.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -23,9 +23,9 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { color } from "../../components/design-system/color.js";
 import { TextInput } from "../../components/TextInput.js";
 
-//@ chunk-4v9zy7gn.js:25463-25467 placement
+//@ chunk-2xbvbqx2.js:26505-26509 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:25467-27429 fingerprint (2.1.88 match: CheckExistingSecretStep, 0.705)
+//@ chunk-2xbvbqx2.js:26509-28479 fingerprint (2.1.88 match: CheckExistingSecretStep, 0.705)
 function CheckExistingSecretStep(props) {
   let $ = useMemoCache(38);
   let { useExistingSecret, secretName, onToggleUseExistingSecret, onSecretNameChange, onSubmit } = props;

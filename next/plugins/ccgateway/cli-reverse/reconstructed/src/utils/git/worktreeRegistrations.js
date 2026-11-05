@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：worktree 注册记录的查找与注销
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2xm1rxms.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b2dh3swb.js (25)
  * attribution: placement 25
  */
 import { join } from "path";
@@ -35,7 +35,7 @@ import { logForDebugging } from "../debug.js";
 import { isSentinelInode } from "../slowOperations.js";
 import { O_NOFOLLOW_FLAG, READ_LIMITS } from "../fsBoundRead.js";
 
-//@ chunk-2xm1rxms.js:15174-15279 placement
+//@ chunk-b2dh3swb.js:15174-15279 placement
 function openFailureText(errnoCode) {
   return errnoCode === "ELOOP"
     ? "is a link"
@@ -43,11 +43,11 @@ function openFailureText(errnoCode) {
       ? "is not a regular file"
       : "could not be opened";
 }
-//@ chunk-2xm1rxms.js:15279-15331 placement
+//@ chunk-b2dh3swb.js:15279-15331 placement
 function isOnlyLineEndings(text) {
   return text.replace(/[\r\n]+$/, "") === "";
 }
-//@ chunk-2xm1rxms.js:15331-16168 placement
+//@ chunk-b2dh3swb.js:15331-16168 placement
 function summarizeUncheckedRegistrations(repoRoot, ancestorResolution, progress) {
   let worktreesDir = join(repoRoot, "worktrees");
   let { unchecked, kinds } = progress;
@@ -78,20 +78,20 @@ function summarizeUncheckedRegistrations(repoRoot, ancestorResolution, progress)
         unmatched: reasons.join("; "),
       };
 }
-//@ chunk-2xm1rxms.js:16168-16236 placement
+//@ chunk-b2dh3swb.js:16168-16236 placement
 function isContainedInGitdirs(registeredGitdir, worktreePaths) {
   return (
     worktreePaths === null ||
     containsSamePath(normalizeDriveCase(registeredGitdir), [...worktreePaths.gitdirs].map(normalizeDriveCase))
   );
 }
-//@ chunk-2xm1rxms.js:16236-16322 placement
+//@ chunk-b2dh3swb.js:16236-16322 placement
 function normalizeDriveCase(path) {
   return getPlatform() === "windows"
     ? path.replace(/^[a-z](?=:)/, (driveLetter) => driveLetter.toUpperCase())
     : path;
 }
-//@ chunk-2xm1rxms.js:16322-17385 placement
+//@ chunk-b2dh3swb.js:16322-17385 placement
 async function findWorktreeRegistrations(fsOps, repoRoot, options, worktreePaths) {
   let progress = {
     guessed: false,
@@ -153,13 +153,13 @@ async function findWorktreeRegistrations(fsOps, repoRoot, options, worktreePaths
   }
   return progress;
 }
-//@ chunk-2xm1rxms.js:17385-17456 placement
+//@ chunk-b2dh3swb.js:17385-17456 placement
 async function safeListRegistrations(repoRoot, dir) {
   return listRegistrations(repoRoot, dir).catch((error) => ({
     unavailable: errorMessage(error),
   }));
 }
-//@ chunk-2xm1rxms.js:17456-17857 placement
+//@ chunk-b2dh3swb.js:17456-17857 placement
 async function listRegistrations(repoRoot, options) {
   let repoLayout = await loadRepoLayout(repoRoot, options.repoSpelled);
   if ("refused" in repoLayout)
@@ -190,13 +190,13 @@ async function listRegistrations(repoRoot, options) {
     await repoLayout.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:17857-17922 placement
+//@ chunk-b2dh3swb.js:17857-17922 placement
 async function deregisterWorktree(repoRoot, options, lockOptions) {
   return deregisterWorktreeUnsafe(repoRoot, options, lockOptions).catch((error) =>
     keepRegistration(repoRoot, errorMessage(error)),
   );
 }
-//@ chunk-2xm1rxms.js:17922-19771 placement
+//@ chunk-b2dh3swb.js:17922-19771 placement
 /**
  * 从仓库 .git/worktrees 中注销 worktree 记录，逐项校验文件类型与路径安全。
  */
@@ -282,7 +282,7 @@ async function deregisterWorktreeUnsafe(repoRoot, options, lockOptions) {
     await repoLayout.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:19771-19994 placement
+//@ chunk-b2dh3swb.js:19771-19994 placement
 async function pruneWorktreeRegistration(
   repoRoot,
   worktreePath,
@@ -305,7 +305,7 @@ async function pruneWorktreeRegistration(
         lockOptions,
       );
 }
-//@ chunk-2xm1rxms.js:19994-20119 placement
+//@ chunk-b2dh3swb.js:19994-20119 placement
 function keepRegistration(repoRoot, reason) {
   logForDebugging(`Left a git worktree registration in ${repoRoot} in place: ${reason}`, {
     level: "warn",
@@ -315,7 +315,7 @@ function keepRegistration(repoRoot, reason) {
     reason,
   };
 }
-//@ chunk-2xm1rxms.js:20119-20650 placement
+//@ chunk-b2dh3swb.js:20119-20650 placement
 /**
  * worktree 管理目录中需要清理/检查的文件清单（HEAD、索引、MERGE_*\/BISECT_* 等）与子目录清单。
  */
@@ -353,7 +353,7 @@ var WORKTREE_ADMIN_FILES_2 = [
   "CLAUDE_BASE",
 ];
 var WORKTREE_ADMIN_FILES = ["refs/bisect", "refs/worktree", "refs/rewritten", "refs", "logs", "info"];
-//@ chunk-2xm1rxms.js:20650-20746 placement
+//@ chunk-b2dh3swb.js:20650-20746 placement
 function looksLikeGitDirIn(repoLayout, relDir) {
   return looksLikeGitDir((entryName) =>
     repoLayout.lstat(`${relDir}/${entryName}`).catch((error) => {
@@ -362,11 +362,11 @@ function looksLikeGitDirIn(repoLayout, relDir) {
     }),
   );
 }
-//@ chunk-2xm1rxms.js:20746-20907 placement
+//@ chunk-b2dh3swb.js:20746-20907 placement
 function adminDirHasGitFilesMessage(entryId) {
   return `worktrees/${entryId} has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them`;
 }
-//@ chunk-2xm1rxms.js:20907-21068 placement
+//@ chunk-b2dh3swb.js:20907-21068 placement
 async function dropRegistrationDir(repoLayout, relDir, identity) {
   await removeAdminFiles(repoLayout, relDir, identity);
   return repoLayout.rmdir(relDir).then(
@@ -379,7 +379,7 @@ async function dropRegistrationDir(repoLayout, relDir, identity) {
     },
   );
 }
-//@ chunk-2xm1rxms.js:21068-21162 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-b2dh3swb.js:21068-21162 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity(stats, identity) {
   return (
     stats.isDirectory() &&
@@ -389,20 +389,20 @@ function getFileIdentity(stats, identity) {
     stats.ino === identity.ino
   );
 }
-//@ chunk-2xm1rxms.js:21162-21318 placement
+//@ chunk-b2dh3swb.js:21162-21318 placement
 async function removeAdminFiles(repoLayout, relDir, identity) {
   for (let fileName of WORKTREE_ADMIN_FILES_2)
     await repoLayout.unlink(`${relDir}/${fileName}`).catch(() => {});
   await removeAdminDir(repoLayout, relDir, identity);
   for (let dirName of WORKTREE_ADMIN_FILES) await repoLayout.rmdir(`${relDir}/${dirName}`).catch(() => {});
 }
-//@ chunk-2xm1rxms.js:21318-21492 placement
+//@ chunk-b2dh3swb.js:21318-21492 placement
 var REFTABLE_FILE_RE =
   /^(?:tables\.list(?:\.lock)?|0x[0-9a-f]{12,16}-0x[0-9a-f]{12,16}-[0-9a-f]{8}\.(?:(?:ref|log)(?:\.lock)?|temp\.[A-Za-z0-9]{6}))$/;
 var MAX_ADMIN_ENTRIES = 1024;
 var REFS_HEADS = "refs/heads";
 var REFTABLE = "reftable";
-//@ chunk-2xm1rxms.js:21492-22262 placement
+//@ chunk-b2dh3swb.js:21492-22262 placement
 async function removeAdminDir(repoLayout, relDir, identity) {
   let adminAnchor = await Promise.resolve()
     .then(() => repoLayout.anchorBeneath(relDir))
@@ -445,7 +445,7 @@ async function removeAdminDir(repoLayout, relDir, identity) {
     await adminAnchor.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:22262-22491 placement
+//@ chunk-b2dh3swb.js:22262-22491 placement
 async function maybeUnlockRegistration(fsOps, relDir, locked) {
   if (locked === "drop") return true;
   if (locked === "keep") return false;
@@ -459,7 +459,7 @@ async function maybeUnlockRegistration(fsOps, relDir, locked) {
   await fsOps.unlink(`${relDir}/locked`);
   return true;
 }
-//@ chunk-2xm1rxms.js:22491-24522 placement
+//@ chunk-b2dh3swb.js:22491-24522 placement
 async function removeAdminDirNoFollow(repoRoot, options, lockOptions, noFollowAnyEnforced) {
   if (!noFollowAnyEnforced)
     return keepRegistration(
@@ -570,14 +570,14 @@ async function removeAdminDirNoFollow(repoRoot, options, lockOptions, noFollowAn
   let summary = summarizeUncheckedRegistrations(repoRoot, worktreePaths, progress);
   return "unmatched" in summary ? keepRegistration(repoRoot, summary.unmatched) : summary;
 }
-//@ chunk-2xm1rxms.js:24800-24826 placement
+//@ chunk-b2dh3swb.js:24800-24826 placement
 /**
  * worktree 读写的字节上限、重试次数与延迟辅助的惰性状态。
  */
 var WORKTREE_IO_LIMITS_2 = 65536;
 var WORKTREE_IO_LIMITS = 3;
 var nativeFsHelpersPromise = null;
-//@ chunk-2xm1rxms.js:24826-25013 placement
+//@ chunk-b2dh3swb.js:24826-25013 placement
 function loadNativeFsHelpers() {
   return (nativeFsHelpersPromise ??= Promise.all([
     import("../fsAnchor/treeAnchor.js"),
@@ -592,19 +592,19 @@ function loadNativeFsHelpers() {
       throw error;
     }));
 }
-//@ chunk-2xm1rxms.js:25013-25085 placement
+//@ chunk-b2dh3swb.js:25013-25085 placement
 function readOnlyOpenFlags() {
   return getPlatform() === "windows" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NONBLOCK;
 }
 export {
+  deregisterWorktree,
+  pruneWorktreeRegistration,
   openFailureText,
   safeListRegistrations,
-  deregisterWorktree,
   loadNativeFsHelpers,
   getFileIdentity,
   removeAdminFiles,
   readOnlyOpenFlags,
   WORKTREE_IO_LIMITS_2,
   WORKTREE_IO_LIMITS,
-  pruneWorktreeRegistration,
 };

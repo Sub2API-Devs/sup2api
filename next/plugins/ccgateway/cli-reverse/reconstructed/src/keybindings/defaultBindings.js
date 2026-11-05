@@ -3,9 +3,9 @@
  *
  * 默认快捷键表（按上下文分块，含平台差异）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/defaultBindings.ts
- * pieces: chunk-6qssfmzs.js (1)
+ * pieces: chunk-q6fxvjg8.js (1)
  * attribution: fingerprint 1
  */
 import { getPlatform } from "../utils/platform.js";
@@ -13,7 +13,7 @@ import { alwaysTrue } from "../utils/slowOperations.js";
 import { satisfies } from "../utils/semver.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6qssfmzs.js:420-7531 fingerprint (2.1.88 match: DEFAULT_BINDINGS, 0.661)
+//@ chunk-q6fxvjg8.js:420-7537 fingerprint (2.1.88 match: DEFAULT_BINDINGS, 0.661)
 /**
  * 默认绑定表（按上下文分块）。平台差异：Windows/WSL 图片粘贴用 alt+v（WSL 额外保留 ctrl+v），其余 ctrl+v；Windows 上运行时（Bun≥1.2.23 或 Node 22.17+/24.2+）支持 shift+tab 才用它切换模式，否则用 meta+m。完整表见手册。
  */
@@ -23,7 +23,7 @@ var IMAGE_PASTE_KEY;
 var supportsShiftTab;
 var CYCLE_MODE_KEY;
 var DEFAULT_BINDINGS;
-deferInit("chunk-6qssfmzs.js:420", () => {
+deferInit("chunk-q6fxvjg8.js:420", () => {
   platform = getPlatform();
   isWindowsLike = platform === "windows" || platform === "wsl";
   IMAGE_PASTE_KEY = isWindowsLike ? "alt+v" : "ctrl+v";
@@ -69,6 +69,7 @@ deferInit("chunk-6qssfmzs.js:420", () => {
         "ctrl+x 3": "feedbackSurvey:good",
       },
     },
+    ...[],
     {
       context: "Chat",
       bindings: {

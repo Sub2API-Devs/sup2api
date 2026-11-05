@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。受监管桥接子进程绑定 PR 订阅并拉取收件箱消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x4rjx7qa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nzcffb6d.js (9)
  * attribution: placement 9
  */
 import { getLatchedPreSettingsEnvSnapshot } from "../utils/managedEnvApply.js";
@@ -23,7 +23,7 @@ import { resolveBridgeOwnerPin } from "./ownerPin.js";
 import { isBridgeOwnerPinnedEndEnabled } from "./bridgeGates.js";
 import { fetchSessionInboxMessage } from "./sessionInbox.js";
 
-//@ chunk-x4rjx7qa.js:670-802 placement
+//@ chunk-nzcffb6d.js:670-802 placement
 var BRIDGE_URL_ENV_VARS = [
   "CLAUDE_BRIDGE_BASE_URL",
   "USE_LOCAL_OAUTH",
@@ -31,7 +31,7 @@ var BRIDGE_URL_ENV_VARS = [
   "CLAUDE_LOCAL_OAUTH_API_BASE",
   "CLAUDE_CODE_CUSTOM_OAUTH_URL",
 ];
-//@ chunk-x4rjx7qa.js:802-913 placement
+//@ chunk-nzcffb6d.js:802-913 placement
 function stableBridgeBaseUrl() {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   if (
@@ -45,7 +45,7 @@ function stableBridgeBaseUrl() {
     return;
   }
 }
-//@ chunk-x4rjx7qa.js:913-981 placement
+//@ chunk-nzcffb6d.js:913-981 placement
 function inboxFetchFailure(stop, eventName = "bridge_inbox_fetch") {
   logFeatureBad(eventName, stop);
   return {
@@ -53,7 +53,7 @@ function inboxFetchFailure(stop, eventName = "bridge_inbox_fetch") {
     reason: stop,
   };
 }
-//@ chunk-x4rjx7qa.js:981-1659 placement
+//@ chunk-nzcffb6d.js:981-1659 placement
 /**
  * 检查受监管桥接会话、流量、令牌与 base URL
  */
@@ -119,11 +119,11 @@ async function resolveSupervisedInboxContext(options) {
     },
   };
 }
-//@ chunk-x4rjx7qa.js:1659-1717 placement
+//@ chunk-nzcffb6d.js:1659-1717 placement
 function isSupervisedBridgeChild() {
   return bridgeHostState().supervisedBridgeSession !== null;
 }
-//@ chunk-x4rjx7qa.js:1717-1984 placement
+//@ chunk-nzcffb6d.js:1717-1984 placement
 /**
  * 受监管桥接子进程绑定 PR 订阅并拉取收件箱消息。
  */
@@ -141,7 +141,7 @@ async function bindSupervisedPR(subscription, repo, prNumber, options) {
     getTrustedDeviceToken: () => Promise.resolve(deviceToken),
   });
 }
-//@ chunk-x4rjx7qa.js:1984-2322 placement
+//@ chunk-nzcffb6d.js:1984-2322 placement
 /**
  * 为受监管会话缓存收件箱所有者 pin 的铸造
  */
@@ -166,7 +166,7 @@ function getInboxOwnerPin(session, { credentials, storageV5 }, accessToken) {
   );
   return pin;
 }
-//@ chunk-x4rjx7qa.js:2322-3141 placement
+//@ chunk-nzcffb6d.js:2322-3141 placement
 /**
  * 核对收件箱所有者 pin 是否一致
  */
@@ -210,7 +210,7 @@ async function verifyInboxOwner(session, options, accessToken, confirmOptions) {
   if (confirmOptions?.fresh && !mintResult.pin.ownerVerified()) return "owner_unverified";
   return inboxOwnerPin.changed ? "owner_changed" : undefined;
 }
-//@ chunk-x4rjx7qa.js:3141-3386 placement
+//@ chunk-nzcffb6d.js:3141-3386 placement
 async function fetchSupervisedInboxMessage(fileId, options) {
   let supervisedInboxContext = await resolveSupervisedInboxContext(options);
   if ("stop" in supervisedInboxContext) return inboxFetchFailure(supervisedInboxContext.stop);

@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/otlp-exporter-base/build/src/transport/http-transport-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/otlp-exporter-base@0.208.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_is_export_retryable } from "../is-export-retryable.js";
 import { require_types } from "../types.js";
 import { require_version } from "../version.js";
 
-//@ chunk-798ashq9.js:258631-259927 cjs-fingerprint
+//@ chunk-vxhm2nqe.js:258631-259927 cjs-fingerprint
 var require_http_transport_utils = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

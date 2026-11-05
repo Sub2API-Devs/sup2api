@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/HTMLParser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-ktx79ksk.js (1), chunk-vwj6ccer.js (1)
+ * pieces: chunk-nzh56fv5.js (1), chunk-w04z664w.js (1)
  * attribution: esm-fingerprint 1, cjs-fingerprint 1
  */
 import { TokenizerMode } from "../../../parse5/dist/tokenizer/index.js";
@@ -13,7 +13,7 @@ import { require_Node } from "./Node.js";
 import { require_utils } from "./utils.js";
 import { require_htmlelts } from "./htmlelts.js";
 
-//@ chunk-ktx79ksk.js:231-2221 esm-fingerprint
+//@ chunk-nzh56fv5.js:231-2221 esm-fingerprint
 var MAX_TREE_DEPTH = 4096;
 var MAX_TOTAL_OPENS = 200000;
 var MAX_FORMAT_ESTIMATE = 50000000;
@@ -247,7 +247,7 @@ var scopeBreakElements = new Set([
   "tr",
   "title",
 ]);
-//@ chunk-vwj6ccer.js:120707-233747 cjs-fingerprint
+//@ chunk-w04z664w.js:120707-233747 cjs-fingerprint
 var require_HTMLParser = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = HTMLParser;
   var Document = require_Document();

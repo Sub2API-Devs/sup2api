@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。低优先级模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-77a3xzkb.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gxp74sjc.js (11)
  * attribution: placement 11
  */
 import { HostScoped } from "../utils/hostScoped.js";
@@ -41,12 +41,12 @@ import { statusLineShouldDisplay } from "../components/StatusLine.js";
 import { onSessionSwitch } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-77a3xzkb.js:584-704 placement
+//@ chunk-gxp74sjc.js:584-704 placement
 /**
  * 低优先级模式的进程状态（已记录/已显示/已扣留的重置点）。
  */
 var LOW_PRIORITY_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-77a3xzkb.js:584", () => {
+deferInit("chunk-gxp74sjc.js:584", () => {
   LOW_PRIORITY_STATE = new HostScoped(() => ({
     notedWallResetsAt: null,
     shownWallResetsAt: null,
@@ -54,7 +54,7 @@ deferInit("chunk-77a3xzkb.js:584", () => {
     sessionSwitchSubscribed: false,
   }));
 });
-//@ chunk-77a3xzkb.js:739-896 placement
+//@ chunk-gxp74sjc.js:739-896 placement
 /**
  * 是否可提供低优先级等待（实验组、有重置时间、未冷却、客户端开启）。
  */
@@ -70,7 +70,7 @@ function canOfferLowPriority(limits, nowMs = Date.now()) {
     isLowPriorityEnabled()
   );
 }
-//@ chunk-77a3xzkb.js:896-1024 placement (2.1.88 match: extractQuotaStatusFromError, 1)
+//@ chunk-gxp74sjc.js:896-1024 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 是否可提供低优先级等待（未被拒、存在重置点且未处于其他等待状态）。旧版名错配；疑似归错文件。
  */
@@ -86,7 +86,7 @@ function shouldOfferLowPriorityResume(currentLimits, nowMs = Date.now()) {
     isLowPriorityEnabled()
   );
 }
-//@ chunk-77a3xzkb.js:1024-1149 placement
+//@ chunk-gxp74sjc.js:1024-1149 placement
 /**
  * 低优先级等待 arm 状态是否已与当前重置点不符（stale）。
  */
@@ -101,7 +101,7 @@ function isLowPriorityArmStale(headersToUse) {
       return true;
   }
 }
-//@ chunk-77a3xzkb.js:1149-1712 placement
+//@ chunk-gxp74sjc.js:1149-1712 placement
 /**
  * 记录低优先级提议可用或被扣留（每个重置点一次）。
  */
@@ -135,7 +135,7 @@ function logLowPriorityCapability(quotaLimits) {
     });
   }
 }
-//@ chunk-77a3xzkb.js:1712-1926 placement
+//@ chunk-gxp74sjc.js:1712-1926 placement
 /**
  * 记录低优先级提议已显示。
  */
@@ -150,7 +150,7 @@ function logLowPriorityShown(limits, surface) {
     config_version: getLowPriorityConfigVersion(),
   });
 }
-//@ chunk-77a3xzkb.js:1926-2339 placement
+//@ chunk-gxp74sjc.js:1926-2339 placement
 /**
  * 开启低优先级模式或恢复已排队的模式，返回 accepted/resumed/unavailable。
  */
@@ -182,7 +182,7 @@ function enableLowPriorityMode(entry) {
   }
   return "unavailable";
 }
-//@ chunk-77a3xzkb.js:2339-2697 placement
+//@ chunk-gxp74sjc.js:2339-2697 placement
 /**
  * 低优先级模式开启的提示文本。
  */
@@ -195,7 +195,7 @@ function lowPriorityOnMessage(verb) {
   let untilPhrase = resetLabel ? `until your limit resets at ${resetLabel}` : "until your limit resets";
   return `${verb === "resumed" ? `Lower-priority mode is back on ${untilPhrase}` : `Continuing now at lower priority ${untilPhrase}`}. Your weekly limit still applies, and responses may pause while waiting for spare capacity. Run /${LOW_PRIORITY} to stop.`;
 }
-//@ chunk-77a3xzkb.js:2697-3077 placement
+//@ chunk-gxp74sjc.js:2697-3077 placement
 /**
  * 低优先级不可用的原因文本。
  */
@@ -207,7 +207,7 @@ function lowPriorityUnavailableMessage(nowMs = Date.now()) {
     return `Lower-priority mode is taking a break until ${formatResetTimeWithLocale(Math.ceil(cooloffUntil / 1000)) ?? "later"}, after waiting too long for spare capacity. Try /${LOW_PRIORITY} again then.`;
   return "Lower-priority mode isn't available right now.";
 }
-//@ chunk-77a3xzkb.js:3077-3247 placement
+//@ chunk-gxp74sjc.js:3077-3247 placement
 /**
  * 低优先级模式关闭的提示文本。
  */
@@ -215,7 +215,7 @@ function lowPriorityOffMessage() {
   let currentLimits = getCurrentLimits();
   return `Lower-priority mode is off. New messages wait for your usage limit as usual${canOfferLowPriority(currentLimits) || shouldOfferLowPriorityResume(currentLimits) ? `; run /${LOW_PRIORITY} again to turn it back on` : ""}.`;
 }
-//@ chunk-77a3xzkb.js:3247-3383 placement
+//@ chunk-gxp74sjc.js:3247-3383 placement
 /**
  * 订阅会话切换以在对话重置时结束低优先级模式（只订阅一次）。
  */
@@ -228,12 +228,12 @@ function subscribeLowPriorityReset() {
   });
 }
 export {
-  logLowPriorityCapability,
   canOfferLowPriority,
   logLowPriorityShown,
-  LOW_PRIORITY_STATE,
   enableLowPriorityMode,
   lowPriorityUnavailableMessage,
   lowPriorityOnMessage,
+  logLowPriorityCapability,
   lowPriorityOffMessage,
+  LOW_PRIORITY_STATE,
 };

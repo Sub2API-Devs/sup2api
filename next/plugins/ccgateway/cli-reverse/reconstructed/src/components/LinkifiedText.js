@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动识别链接的文本组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f1cesmvz.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6gzd5qs6.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -13,7 +13,7 @@ import { URL_IN_TEXT_RE, trimTrailingPunctuation } from "../services/oauth/oauth
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Link, Text } from "../ink/components/Text.js";
 
-//@ chunk-f1cesmvz.js:340-881 placement
+//@ chunk-6gzd5qs6.js:340-881 placement
 function LinkifiedText(props) {
   let $ = useMemoCache(10);
   let { children, color, bold, linkHref } = props;

@@ -3,9 +3,9 @@
  *
  * 把 "command:<名字>" 形式的 keybinding 动作绑定为提交对应斜杠命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useCommandKeybindings.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: fingerprint 2
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -16,7 +16,7 @@ import { LOCAL_JSX_DIALOG } from "../commands/rate-limit-options/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "../components/messageActions.js";
 
-//@ chunk-18hwfzwa.js:177498-177569 fingerprint (2.1.88 match: NOOP_HELPERS, 1)
+//@ chunk-czq1j3j2.js:150324-150395 fingerprint (2.1.88 match: NOOP_HELPERS, 1)
 /**
  * 提交命令时使用的空 helpers（setCursorOffset/clearBuffer/resetHistory 都是 no-op）。
  */
@@ -25,7 +25,7 @@ var NOOP_HELPERS = {
   clearBuffer: () => {},
   resetHistory: () => {},
 };
-//@ chunk-18hwfzwa.js:177569-178226 fingerprint (2.1.88 match: CommandKeybindingHandlers, 0.727)
+//@ chunk-czq1j3j2.js:150395-151052 fingerprint (2.1.88 match: CommandKeybindingHandlers, 0.728)
 /**
  * 读取 keybinding 配置中 "command:<name>" 动作并绑定为提交 "/<name>"。
  */
@@ -36,7 +36,7 @@ function CommandKeybindingHandlers(props) {
   let isModalOverlayActive = useThirdOverlayKeys();
   let dialogOfKind = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
   let t2;
-  He: {
+  je: {
     if (!keybindingContext) {
       let t3;
       if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -44,7 +44,7 @@ function CommandKeybindingHandlers(props) {
         $[0] = t3;
       } else t3 = $[0];
       t2 = t3;
-      break He;
+      break je;
     }
     let actions;
     if ($[1] !== keybindingContext.bindings) {

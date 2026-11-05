@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：统计各插件可被模型调用的技能占用的描述预算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vqq8wr5t.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q2mszmpy.js (2)
  * attribution: placement 2
  */
 import {
@@ -15,13 +15,13 @@ import {
   getCharBudget,
 } from "../../tools/SkillTool/prompt.js";
 
-//@ chunk-vqq8wr5t.js:240-327 placement
+//@ chunk-q2mszmpy.js:240-327 placement
 function skillDescriptionBudget(commandName, label) {
   let commandDescription = getCommandDescription(commandName);
   let min = Math.min(commandDescription.length, getSkillDescMaxChars());
   return 2 + getSkillListingLabel(commandName, label).length + 2 + min + 1;
 }
-//@ chunk-vqq8wr5t.js:327-965 placement
+//@ chunk-q2mszmpy.js:327-965 placement
 /**
  * 统计各插件可被模型调用的技能占用的描述预算。
  */

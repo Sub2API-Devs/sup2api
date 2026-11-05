@@ -1,19 +1,19 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/domain-pattern.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-078pp0rm.js (13)
+ * pieces: chunk-70ac3q96.js (13)
  * attribution: esm-fingerprint 13
  */
 import { isIP } from "net";
 import { canonicalizeHost, stripBrackets } from "./parent-proxy.js";
 
-//@ chunk-078pp0rm.js:7450-7514 esm-fingerprint
+//@ chunk-70ac3q96.js:7450-7514 esm-fingerprint
 function dropZone(host) {
   let pct = host.indexOf("%");
   return pct === -1 ? host : host.slice(0, pct);
 }
-//@ chunk-078pp0rm.js:7514-8073 esm-fingerprint
+//@ chunk-70ac3q96.js:7514-8073 esm-fingerprint
 function splitDomainPatternPort(pattern) {
   if (pattern.startsWith("[")) {
     let close = pattern.indexOf("]");
@@ -65,13 +65,13 @@ function splitDomainPatternPort(pattern) {
     port,
   };
 }
-//@ chunk-078pp0rm.js:8073-8166 esm-fingerprint
+//@ chunk-70ac3q96.js:8073-8166 esm-fingerprint
 function parsePortSuffix(suffix) {
   if (!/^[1-9][0-9]{0,4}$/.test(suffix)) return;
   let port = Number(suffix);
   return port > 65535 ? undefined : port;
 }
-//@ chunk-078pp0rm.js:8166-8553 esm-fingerprint
+//@ chunk-70ac3q96.js:8166-8553 esm-fingerprint
 /**
  * 主机串是否可作为网络白名单域名（localhost、IPv6、合法域名）。与插件无关，见 lead 建议。
  */
@@ -88,22 +88,22 @@ function isValidDomainPattern(val) {
   if (val.includes("*")) return false;
   return val.includes(".") && !val.startsWith(".") && !val.endsWith(".");
 }
-//@ chunk-078pp0rm.js:8553-8815 esm-fingerprint
+//@ chunk-70ac3q96.js:8553-8815 esm-fingerprint
 var DOMAIN_PATTERN_MESSAGE =
   'Invalid domain pattern. Must be a valid domain (e.g., "example.com"), a wildcard (e.g., "*.example.com"), or a bracketed IPv6 literal (e.g., "[::1]", "[2001:db8::1]:443"). Overly broad patterns like "*.com" or "*" are not allowed for security reasons.';
-//@ chunk-078pp0rm.js:8815-8912 esm-fingerprint
+//@ chunk-70ac3q96.js:8815-8912 esm-fingerprint
 function hasValidIpv6Bracketing(val) {
   let first = val.indexOf(":");
   return !(first !== -1 && val.indexOf(":", first + 1) !== -1) || val.startsWith("[");
 }
-//@ chunk-078pp0rm.js:8912-8967 esm-fingerprint
+//@ chunk-70ac3q96.js:8912-8967 esm-fingerprint
 function isValidAllowedDomainEntry(val) {
   return hasValidIpv6Bracketing(val) && isValidDomainPattern(splitDomainPatternPort(val).hostPattern);
 }
-//@ chunk-078pp0rm.js:8967-9053 esm-fingerprint
+//@ chunk-70ac3q96.js:8967-9053 esm-fingerprint
 var ALLOWED_DOMAIN_ENTRY_MESSAGE =
   DOMAIN_PATTERN_MESSAGE + ' An optional ":port" suffix (1-65535) restricts the entry to that port.';
-//@ chunk-078pp0rm.js:9053-9161 esm-fingerprint
+//@ chunk-70ac3q96.js:9053-9161 esm-fingerprint
 function ipLiteralRules(entries) {
   return entries.flatMap((entry) => {
     let { hostPattern, port } = splitDomainPatternPort(entry);
@@ -117,11 +117,11 @@ function ipLiteralRules(entries) {
       : [];
   });
 }
-//@ chunk-078pp0rm.js:9161-9203 esm-fingerprint
+//@ chunk-70ac3q96.js:9161-9203 esm-fingerprint
 function stripDomainPatternPort(pattern) {
   return splitDomainPatternPort(pattern).hostPattern;
 }
-//@ chunk-078pp0rm.js:9203-9395 esm-fingerprint
+//@ chunk-70ac3q96.js:9203-9395 esm-fingerprint
 function matchesDomainPattern(hostname, pattern) {
   let h = hostname.toLowerCase();
   if (pattern === "*") return true;
@@ -132,13 +132,13 @@ function matchesDomainPattern(hostname, pattern) {
   }
   return h === pattern.toLowerCase();
 }
-//@ chunk-078pp0rm.js:9395-9494 esm-fingerprint
+//@ chunk-70ac3q96.js:9395-9494 esm-fingerprint
 function matchesDomainPatternWithPort(hostname, port, pattern) {
   let { hostPattern, port: patternPort } = splitDomainPatternPort(pattern);
   if (patternPort !== undefined && patternPort !== port) return false;
   return matchesDomainPattern(hostname, hostPattern);
 }
-//@ chunk-078pp0rm.js:9494-9729 esm-fingerprint
+//@ chunk-70ac3q96.js:9494-9729 esm-fingerprint
 function isInjectHostCoveredByAllowedDomains(injectHost, allowedDomains) {
   let allowedHosts = allowedDomains.map(stripDomainPatternPort);
   if (!injectHost.startsWith("*.")) return allowedHosts.some((p) => matchesDomainPattern(injectHost, p));
@@ -150,15 +150,15 @@ function isInjectHostCoveredByAllowedDomains(injectHost, allowedDomains) {
   });
 }
 export {
-  splitDomainPatternPort,
-  isInjectHostCoveredByAllowedDomains,
-  ipLiteralRules,
-  isValidAllowedDomainEntry,
-  ALLOWED_DOMAIN_ENTRY_MESSAGE,
-  matchesDomainPatternWithPort,
-  matchesDomainPattern,
-  stripDomainPatternPort,
   isValidDomainPattern,
   DOMAIN_PATTERN_MESSAGE,
+  isValidAllowedDomainEntry,
+  ALLOWED_DOMAIN_ENTRY_MESSAGE,
   hasValidIpv6Bracketing,
+  splitDomainPatternPort,
+  stripDomainPatternPort,
+  isInjectHostCoveredByAllowedDomains,
+  ipLiteralRules,
+  matchesDomainPatternWithPort,
+  matchesDomainPattern,
 };

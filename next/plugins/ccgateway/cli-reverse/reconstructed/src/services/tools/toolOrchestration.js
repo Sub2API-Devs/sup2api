@@ -3,10 +3,10 @@
  *
  * 非流式工具编排 runTools：按连续并发安全调用分批，安全批并发（默认上限 10，CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY）、其余串行，并按顺序应用上下文修改
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/toolOrchestration.ts
- * pieces: chunk-0h4e7gnq.js (6)
- * attribution: placement 1, fingerprint 4, callgraph-witnessed 1
+ * pieces: chunk-frs14hy1.js (6)
+ * attribution: placement 1, fingerprint 3, callgraph-fingerprint 1, sole-consumer 1
  */
 import { env } from "../../utils/env.js";
 import { hasTypeField, runToolUse } from "./toolExecution.js";
@@ -14,19 +14,19 @@ import { applyContextLayers } from "../../utils/permissions/toolPermissionContex
 import { findToolByName } from "../../Tool.js";
 import { all } from "../../utils/generators.js";
 
-//@ chunk-0h4e7gnq.js:30007-30092 placement
+//@ chunk-frs14hy1.js:34533-34618 placement
 function concurrencyBucket(concurrentCount) {
   if (concurrentCount <= 2) return concurrentCount === 0 ? "0" : concurrentCount === 1 ? "1" : "2";
   return concurrentCount < 10 ? "3_to_9" : "10_plus";
 }
-//@ chunk-0h4e7gnq.js:30092-30156 fingerprint (2.1.88 match: getMaxToolUseConcurrency, 1)
+//@ chunk-frs14hy1.js:34618-34682 fingerprint (2.1.88 match: getMaxToolUseConcurrency, 1)
 /**
  * 最大并发工具数：CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY，默认 10。
  */
 function getMaxToolUseConcurrency() {
   return env.CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY ?? 10;
 }
-//@ chunk-0h4e7gnq.js:30156-30706 fingerprint (2.1.88 match: runTools, 0.709)
+//@ chunk-frs14hy1.js:34682-35232 fingerprint (2.1.88 match: runTools, 0.712)
 /**
  * runTools：非流式路径的工具编排。按 partitionToolCalls 分批，并发安全批次用 runToolsConcurrently（上下文修改层按 tool_use 顺序在批次结束后统一应用），其余批次串行；产出消息、newContext 与 set_in_progress_tool_use_ids 事件。
  */
@@ -39,7 +39,7 @@ async function* runTools(toolUseMessages, assistantMessages, canUseTool, toolUse
   ))
     if (isConcurrencySafe) {
       let queuedContextModifiers = {};
-      for await (let update of runToolsConcurrently(blocks, assistantMessages, canUseTool, currentContext)) {
+      for await (let update of runToolUsesInParallel(blocks, assistantMessages, canUseTool, currentContext)) {
         if (hasTypeField(update)) {
           yield update;
           continue;
@@ -75,7 +75,7 @@ async function* runTools(toolUseMessages, assistantMessages, canUseTool, toolUse
         };
       }
 }
-//@ chunk-0h4e7gnq.js:30706-31015 fingerprint (2.1.88 match: partitionToolCalls, 1)
+//@ chunk-frs14hy1.js:35232-35541 fingerprint (2.1.88 match: partitionToolCalls, 1)
 /**
  * 把一条回答里的 tool_use 按"连续的并发安全调用"分批：输入解析成功且 isConcurrencySafe(input) 为真才算安全，异常视为不安全。
  */
@@ -101,7 +101,7 @@ function partitionToolCalls(toolUseMessages, tools, toolAliases) {
     return acc;
   }, []);
 }
-//@ chunk-0h4e7gnq.js:31015-31392 fingerprint (2.1.88 match: runToolsSerially, 0.349)
+//@ chunk-frs14hy1.js:35541-35918 callgraph-fingerprint (2.1.88 match: runToolsSerially, 0.214)
 /**
  * 串行执行一批 tool_use，每个调用产生的 contextLayers 立即应用到后续调用的上下文。
  */
@@ -139,27 +139,29 @@ async function* runToolsSerially(toolUseMessages, assistantMessages, canUseTool,
     };
   }
 }
-//@ chunk-0h4e7gnq.js:31392-31657 callgraph-witnessed (2.1.88 match: runToolsConcurrently, 0.258)
+//@ chunk-frs14hy1.js:35918-36183 sole-consumer
 /**
  * 并发执行一批 tool_use，上限 getMaxToolUseConcurrency()，各调用结束时发出移除进行中 id 的事件。
  */
-async function* runToolsConcurrently(toolUseMessages, assistantMessages, canUseTool, toolUseContext) {
+async function* runToolUsesInParallel(blocks, assistantMessages, canUseTool, currentContext) {
   yield* all(
-    toolUseMessages.map(async function* (toolUse) {
+    blocks.map(async function* (toolUseBlock) {
       yield* runToolUse(
-        toolUse,
-        assistantMessages.find((prev) =>
-          prev.message.content.some((block) => block.type === "tool_use" && block.id === toolUse.id),
+        toolUseBlock,
+        assistantMessages.find((assistantMessage) =>
+          assistantMessage.message.content.some(
+            (block) => block.type === "tool_use" && block.id === toolUseBlock.id,
+          ),
         ),
         canUseTool,
-        toolUseContext,
+        currentContext,
         () => new Date().toISOString(),
       );
       yield {
         type: "set_in_progress_tool_use_ids",
         op: {
           action: "remove",
-          ids: [toolUse.id],
+          ids: [toolUseBlock.id],
         },
       };
     }),

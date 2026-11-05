@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：主机是否为本地/内网/元数据地址；解析 IPv6 地址等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (10)
  * attribution: placement 10
  */
 import { isIPv6, isIPv4 } from "net";
 
-//@ chunk-dcmhvw5a.js:24123-24435 placement
+//@ chunk-z20c443b.js:24132-24444 placement
 /**
  * 云元数据等内部主机名。
  */
@@ -29,11 +29,11 @@ var METADATA_HOSTNAMES = new Set([
   "localhost6.localdomain6",
 ]);
 var METADATA_IPS = new Set(["100.100.100.200", "168.63.129.16", "192.0.0.192"]);
-//@ chunk-dcmhvw5a.js:24435-24496 placement
+//@ chunk-z20c443b.js:24444-24505 placement
 function isLoopbackOrLinkLocalV4(firstOctet, secondOctet, thirdOctet, fourthOctet) {
   return firstOctet === 127 || (firstOctet === 169 && secondOctet === 254) || firstOctet === 0;
 }
-//@ chunk-dcmhvw5a.js:24496-25156 placement
+//@ chunk-z20c443b.js:24505-25165 placement
 /**
  * 解析 IPv6 地址。
  */
@@ -69,15 +69,15 @@ function parseIpv6Address(input) {
   if (byteCount > 16 || (parts.length === 1 && byteCount !== 16)) return;
   return [...headBytes, ...Array(16 - byteCount).fill(0), ...tailBytes, ...trailingBytes];
 }
-//@ chunk-dcmhvw5a.js:25156-25204 placement
+//@ chunk-z20c443b.js:25165-25213 placement
 function isIpv4MappedLoopback(bytes) {
   return isNat64Prefix(bytes) && bytes[4] === 0 && bytes[5] === 1;
 }
-//@ chunk-dcmhvw5a.js:25204-25271 placement
+//@ chunk-z20c443b.js:25213-25280 placement
 function isNat64Prefix(bytes) {
   return bytes[0] === 0 && bytes[1] === 100 && bytes[2] === 255 && bytes[3] === 155;
 }
-//@ chunk-dcmhvw5a.js:25271-25465 placement
+//@ chunk-z20c443b.js:25280-25474 placement
 function isIpv4MappedOrTranslatedIpv6(address) {
   if (!isIPv6(address)) return false;
   let bytes = parseIpv6Address(address);
@@ -86,7 +86,7 @@ function isIpv4MappedOrTranslatedIpv6(address) {
   let isNat64V4 = isNat64Prefix(bytes) && bytes.slice(4, 12).every((byte) => byte === 0);
   return isMappedV4 || isNat64V4 || isIpv4MappedLoopback(bytes);
 }
-//@ chunk-dcmhvw5a.js:25465-25772 placement
+//@ chunk-z20c443b.js:25474-25781 placement
 /**
  * 提取 IPv6 中内嵌的 IPv4。
  */
@@ -101,7 +101,7 @@ function embeddedIpv4(bytes) {
   if (isMappedV4 || isCompatibleV4 || isNat64V4 || is6to4) candidates.push(bytes.slice(12, 16));
   return candidates;
 }
-//@ chunk-dcmhvw5a.js:25772-26470 placement
+//@ chunk-z20c443b.js:25781-26479 placement
 /**
  * 主机是否为本地/内网/元数据地址。
  */
@@ -132,7 +132,7 @@ function isPrivateHost(host) {
     );
   });
 }
-//@ chunk-dcmhvw5a.js:26470-26694 placement
+//@ chunk-z20c443b.js:26479-26703 placement
 /**
  * 从请求选项还原 URL。
  */
@@ -146,7 +146,7 @@ function urlFromRequestOptions(options) {
         : options.hostname) + (options.port ? `:${options.port}` : ""));
   return options.protocol && authority ? `${options.protocol}//${authority}` : "";
 }
-//@ chunk-dcmhvw5a.js:26694-26800 placement
+//@ chunk-z20c443b.js:26703-26810 placement
 /**
  * 两个 URL 是否同源。
  */
@@ -159,4 +159,4 @@ function sameOrigin(leftUrl, rightUrl) {
     return false;
   }
 }
-export { sameOrigin, urlFromRequestOptions, isPrivateHost, isIpv4MappedOrTranslatedIpv6 };
+export { sameOrigin, isPrivateHost, urlFromRequestOptions, isIpv4MappedOrTranslatedIpv6 };

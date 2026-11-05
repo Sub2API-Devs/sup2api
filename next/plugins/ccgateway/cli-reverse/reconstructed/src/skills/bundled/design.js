@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置 design 技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (10)
  * attribution: placement 10
  */
 import { CLAUDE_DESIGN_TOOL_NAME, LIST } from "../../tools/ClaudeDesignTool/constants.js";
@@ -21,11 +21,11 @@ import {
 import { isDesignSyncEnabled } from "../../services/designSync/gates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:105673-105723 placement
+//@ chunk-ne2890fx.js:105854-105904 placement
 function designToolCall(operation) {
   return `${CLAUDE_DESIGN_TOOL_NAME}({operation: "${operation}"})`;
 }
-//@ chunk-hantmvxa.js:105723-106363 placement
+//@ chunk-ne2890fx.js:105904-106544 placement
 var DESIGN_SUBCOMMANDS = [
   {
     value: "sync",
@@ -60,7 +60,7 @@ var DESIGN_SUBCOMMANDS = [
     isFinal: true,
   },
 ];
-//@ chunk-hantmvxa.js:106363-108585 placement
+//@ chunk-ne2890fx.js:106544-108766 placement
 /**
  * /design 的分派提示词：先调用 Claude Design 工具 list，再按第一个参数调用对应操作。
  */
@@ -115,13 +115,13 @@ function buildDesignPrompt(args) {
   ].join(`
 `);
 }
-//@ chunk-hantmvxa.js:108585-108757 placement
+//@ chunk-ne2890fx.js:108766-108938 placement
 /**
  * /design 命令接受的参数动作名集合。
  */
 var DESIGN_SUBCOMMAND_BY_NAME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DESIGN_COMMAND_NAMES;
-deferInit("chunk-hantmvxa.js:108585", () => {
+deferInit("chunk-ne2890fx.js:108766", () => {
   DESIGN_SUBCOMMAND_BY_NAME = Object.freeze({
     sync: "design-sync",
     login: "design-login",
@@ -130,7 +130,7 @@ deferInit("chunk-hantmvxa.js:108585", () => {
   });
   DESIGN_COMMAND_NAMES = new Set([...Object.keys(DESIGN_SUBCOMMAND_BY_NAME), "import", "export", "status"]);
 });
-//@ chunk-hantmvxa.js:108757-108933 placement
+//@ chunk-ne2890fx.js:108938-109114 placement
 function resolveDesignCommandMode(session) {
   if (isBundledSkillGatedOff(DESIGN)) return isDesignSyncAllowed() ? "consent" : null;
   if (isArtifactTypeAliasEnabled()) {
@@ -140,11 +140,11 @@ function resolveDesignCommandMode(session) {
   if (session.hubMode && isDesignSyncEnabled()) return "hub";
   return isDesignSyncAllowed() ? "consent" : null;
 }
-//@ chunk-hantmvxa.js:108933-109093 placement
+//@ chunk-ne2890fx.js:109114-109274 placement
 var DESIGN_HUB_MENU_DESCRIPTION =
   "Work with Claude Design (claude.ai/design) \u2014 create, import, export, sync, login";
 var DESIGN_CONSENT_DESCRIPTION = "Grant or revoke Claude agent access to your Design projects";
-//@ chunk-hantmvxa.js:109093-109420 placement
+//@ chunk-ne2890fx.js:109274-109601 placement
 /**
  * Claude Design 技能的描述文本：sync/login 走专用命令，其余映射到原生工具。
  */
@@ -157,9 +157,9 @@ function designHubDescription() {
     "` rather than shipping a vendored copy."
   );
 }
-//@ chunk-hantmvxa.js:109420-109679 placement
+//@ chunk-ne2890fx.js:109601-109860 placement
 var DESIGN_COMMAND_VARIANTS; // deferred: uses DESIGN_TYPE_ALIAS (./artifactTypeAlias.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:109420", () => {
+deferInit("chunk-ne2890fx.js:109601", () => {
   DESIGN_COMMAND_VARIANTS = {
     types: {
       description: () => DESIGN_TYPE_ALIAS.description,
@@ -178,7 +178,7 @@ deferInit("chunk-hantmvxa.js:109420", () => {
     },
   };
 });
-//@ chunk-hantmvxa.js:109679-109753 placement
+//@ chunk-ne2890fx.js:109860-109934 placement
 /**
  * 拼出「/design 被调用」的文本块。
  */
@@ -190,7 +190,7 @@ function designInvokedText(notice) {
     },
   ];
 }
-//@ chunk-hantmvxa.js:109753-111106 placement
+//@ chunk-ne2890fx.js:109934-111287 placement
 /**
  * /design 的 getPromptForCommand：按参数选 consent/types/hub 等模式拼提示词。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动编辑的写权限判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eavynfj6.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0df0kb9z.js (10)
  * attribution: placement 11
  */
 import {
@@ -26,7 +26,7 @@ import {
 import { foldConfusableCharacters } from "../../../utils/confusables.js";
 import {
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   toolAlwaysAllowedRule,
 } from "../../../utils/permissions/permissions.js";
 import { FileEditTool } from "../../../tools/FileEditTool/FileEditTool.js";
@@ -40,7 +40,7 @@ import { ARTIFACT_TOOL_NAME } from "../../../tools/ArtifactTool/constants.js";
 import { FileReadTool } from "../../../tools/FileReadTool/FileReadTool.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 
-//@ chunk-eavynfj6.js:26912-27226 placement
+//@ chunk-0df0kb9z.js:28070-28384 placement
 function applyFindReplaceEdits(text, edits) {
   let current = text;
   let applied = [];
@@ -72,7 +72,7 @@ function applyFindReplaceEdits(text, edits) {
   }
   return applied.length === 0 || current === text ? undefined : applied;
 }
-//@ chunk-eavynfj6.js:27226-27435 placement
+//@ chunk-0df0kb9z.js:28384-28593 placement
 /**
  * 把自动编辑读到的文件内容写进文件读取状态（标记不在模型上下文中）；已有同内容且更新的记录时不覆盖。
  */
@@ -94,13 +94,13 @@ function recordAutoEditRead(readFileState, path, content, mtimeMs) {
     contentNotInModelContext: true,
   });
 }
-//@ chunk-eavynfj6.js:27726-27822 placement
+//@ chunk-0df0kb9z.js:28884-28980 placement
 function decodeMusicalSymbols(text) {
   return text.replace(MUSICAL_SYMBOL_RE, (symbol) =>
     String.fromCodePoint((symbol.codePointAt(0) ?? 917536) - 917504),
   );
 }
-//@ chunk-eavynfj6.js:27822-28641 placement
+//@ chunk-0df0kb9z.js:28980-29799 placement
 function decodeHtmlEscapes(text) {
   if (!text.includes("&") && !text.includes("\\") && !text.includes("%")) return text;
   return text.replace(HTML_ESCAPE_RE, (full, named, dec, hex, name1, name2, ...namedGroups) => {
@@ -140,18 +140,18 @@ function decodeHtmlEscapes(text) {
     return codePointToString(out);
   });
 }
-//@ chunk-eavynfj6.js:28641-28789 placement
+//@ chunk-0df0kb9z.js:29799-29947 placement
 function isConfusableHexDigit(text, index, codePoint) {
   let codePoint_2 = text.codePointAt(index);
   if (codePoint_2 === undefined || codePoint_2 < 128) return false;
   let folded = foldConfusableCharacters(String.fromCodePoint(codePoint_2));
   return (codePoint ? /^[0-9]$/ : /^[0-9a-f]$/i).test(folded);
 }
-//@ chunk-eavynfj6.js:28789-28869 placement
+//@ chunk-0df0kb9z.js:29947-30027 placement
 function codePointToString(cp) {
   return cp <= 1114111 && (cp < 55296 || cp > 57343) ? String.fromCodePoint(cp) : INVALID_CODE_POINT;
 }
-//@ chunk-eavynfj6.js:28869-29006 placement
+//@ chunk-0df0kb9z.js:30027-30164 placement
 function safeDecodeURIComponent(text) {
   try {
     return decodeURIComponent(text);
@@ -159,7 +159,7 @@ function safeDecodeURIComponent(text) {
     return text.replace(/%([0-9a-fA-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
   }
 }
-//@ chunk-eavynfj6.js:29006-29238 placement
+//@ chunk-0df0kb9z.js:30164-30396 placement
 function matchesTagPattern(text, pattern, opener) {
   let unescaped = text.includes("\\") ? text.replaceAll("\\", " ") : text;
   let replaced = unescaped.replace(LEFT_ANGLE_VARIANTS_RE, "<").replace(RIGHT_ANGLE_VARIANTS_RE, ">");
@@ -169,10 +169,13 @@ function matchesTagPattern(text, pattern, opener) {
   if (replaced_2 !== replaced) candidates.push(replaced_2);
   return candidates.some((line) => line.search(pattern) !== -1 || opener.openerOffsets(line).length > 0);
 }
-//@ chunk-eavynfj6.js:29238-29721 placement
+//@ chunk-0df0kb9z.js:30396-30879 placement
 function getEditPermissionVerdict(path, context) {
   if (context.mode === "plan") return "would_ask";
-  if (getDenyRuleForTool(context, FileEditTool) !== null || getAskRuleForTool(context, FileEditTool) !== null)
+  if (
+    getDenyRuleForTool(context, FileEditTool) !== null ||
+    findAskRuleForTool(context, FileEditTool) !== null
+  )
     return "would_ask";
   let input = {
     file_path: path,
@@ -191,15 +194,18 @@ function getEditPermissionVerdict(path, context) {
     ? "allowed"
     : "would_ask";
 }
-//@ chunk-eavynfj6.js:29721-30239 placement
+//@ chunk-0df0kb9z.js:30879-31397 placement
 function canWriteWithoutPrompt(path, slug, context) {
   if (context.mode === "plan") return false;
   let toolRef = {
     name: ARTIFACT_TOOL_NAME,
   };
-  if (getDenyRuleForTool(context, toolRef) !== null || getAskRuleForTool(context, toolRef) !== null)
+  if (getDenyRuleForTool(context, toolRef) !== null || findAskRuleForTool(context, toolRef) !== null)
     return false;
-  if (getDenyRuleForTool(context, FileReadTool) !== null || getAskRuleForTool(context, FileReadTool) !== null)
+  if (
+    getDenyRuleForTool(context, FileReadTool) !== null ||
+    findAskRuleForTool(context, FileReadTool) !== null
+  )
     return false;
   let verdict = checkReadPermissionForTool(
     FileReadTool,

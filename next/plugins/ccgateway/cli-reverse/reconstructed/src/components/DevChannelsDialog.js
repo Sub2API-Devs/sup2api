@@ -3,10 +3,10 @@
  *
  * 使用 --dangerously-load-development-channels 时的风险确认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DevChannelsDialog.tsx
- * pieces: chunk-jmdd9gvn.js (3)
- * attribution: file-last-pair 1, layout 1, fingerprint 1
+ * pieces: chunk-1rnky8em.js (3)
+ * attribution: file-last-pair 1, fingerprint 2
  */
 import { gracefulShutdownSync } from "../utils/gracefulShutdown.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -19,15 +19,15 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-jmdd9gvn.js:13631-13650 file-last-pair
+//@ chunk-1rnky8em.js:14779-14798 file-last-pair
 function exitZeroNow() {
   gracefulShutdownSync(0);
 }
-//@ chunk-jmdd9gvn.js:13650-13744 layout (2.1.88 match: _temp2, 1)
+//@ chunk-1rnky8em.js:14798-14892 fingerprint (2.1.88 match: _temp2, 1)
 function exitZeroToo(c) {
   return c.kind === "plugin" ? `plugin:${c.name}@${c.marketplace}` : `server:${c.name}`;
 }
-//@ chunk-jmdd9gvn.js:13744-14784 fingerprint (2.1.88 match: DevChannelsDialog, 0.658)
+//@ chunk-1rnky8em.js:14892-15932 fingerprint (2.1.88 match: DevChannelsDialog, 0.658)
 function DevChannelsDialog(props) {
   let $ = useMemoCache(13);
   let { channels, onAccept } = props;

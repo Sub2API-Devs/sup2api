@@ -1,9 +1,9 @@
 /**
  * jose/dist/webapi/lib/jwt_claims_set.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2), chunk-5h78gfwc.js (6)
- * attribution: esm-layout 1, esm-fingerprint 7
+ * pieces: chunk-0f6azspv.js (6), chunk-pd6th42n.js (2)
+ * attribution: esm-fingerprint 7, esm-layout 1
  */
 import { textDecoder, textEncoder } from "./buffer_utils.js";
 import { isObject } from "./type_checks.js";
@@ -11,7 +11,7 @@ import { JWTInvalid, JWTClaimValidationFailed, JWTExpired } from "../../node/esm
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_sign_2 } from "../../node/esm/jws/compact/sign.js";
 
-//@ chunk-5h78gfwc.js:40204-40424 esm-fingerprint
+//@ chunk-0f6azspv.js:40204-40424 esm-fingerprint
 var epoch = (date) => Math.floor(date.getTime() / 1000);
 var minute = 60;
 var hour = minute * 60;
@@ -20,7 +20,7 @@ var week = day * 7;
 var year = day * 365.25;
 var REGEX =
   /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
-//@ chunk-5h78gfwc.js:40424-40999 esm-fingerprint
+//@ chunk-0f6azspv.js:40424-40999 esm-fingerprint
 function secs(str) {
   let matched = REGEX.exec(str);
   if (!matched || (matched[4] && matched[1])) throw TypeError("Invalid time period format");
@@ -66,12 +66,12 @@ function secs(str) {
   if (matched[1] === "-" || matched[4] === "ago") return -numericDate;
   return numericDate;
 }
-//@ chunk-5h78gfwc.js:40999-41085 esm-fingerprint
+//@ chunk-0f6azspv.js:40999-41085 esm-fingerprint
 function validateInput(label, input) {
   if (!Number.isFinite(input)) throw TypeError(`Invalid ${label} input`);
   return input;
 }
-//@ chunk-5h78gfwc.js:41085-41315 esm-fingerprint
+//@ chunk-0f6azspv.js:41085-41315 esm-fingerprint
 var normalizeTyp = (value) => {
   if (value.includes("/")) return value.toLowerCase();
   return `application/${value.toLowerCase()}`;
@@ -81,7 +81,7 @@ var checkAudiencePresence = (audPayload, audOption) => {
   if (Array.isArray(audPayload)) return audOption.some(Set.prototype.has.bind(new Set(audPayload)));
   return false;
 };
-//@ chunk-5h78gfwc.js:41315-43218 esm-fingerprint
+//@ chunk-0f6azspv.js:41315-43218 esm-fingerprint
 function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
   let payload;
   try {
@@ -164,7 +164,7 @@ function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
   }
   return payload;
 }
-//@ chunk-5h78gfwc.js:43218-44123 esm-fingerprint
+//@ chunk-0f6azspv.js:43218-44123 esm-fingerprint
 class JWTClaimsSetVerifier {
   #e;
   constructor(payload) {
@@ -213,10 +213,10 @@ class JWTClaimsSetVerifier {
     else this.#e.iat = validateInput("setIssuedAt", value);
   }
 }
-//@ chunk-2tyrgda4.js:38804-38826 esm-layout
+//@ chunk-pd6th42n.js:38804-38826 esm-layout
 var init_jwt_claims_set = __esm(() => {
   init_sign_2();
 });
-//@ chunk-2tyrgda4.js:38826-38867 esm-fingerprint
+//@ chunk-pd6th42n.js:38826-38867 esm-fingerprint
 var epoch_2 = (date) => Math.floor(date.getTime() / 1000);
-export { epoch_2, init_jwt_claims_set, validateClaimsSet, JWTClaimsSetVerifier };
+export { validateClaimsSet, JWTClaimsSetVerifier, epoch_2, init_jwt_claims_set };

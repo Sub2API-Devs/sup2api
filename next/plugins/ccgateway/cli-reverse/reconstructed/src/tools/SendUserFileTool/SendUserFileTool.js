@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SendUserFile 工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gy7w3kfr.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c3g53x04.js (11)
  * attribution: placement 11
  */
 import { basename, extname } from "path";
@@ -56,17 +56,20 @@ import { isClaudeAiChatCowork } from "../../utils/entrypointKinds.js";
 import { expandPath } from "../../utils/path.js";
 import { walkPermissionCheckPaths, getPathsForPermissionCheck } from "../../utils/fsOperations.js";
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
-import { getDenyRuleForTool, getAskRuleForTool } from "../../utils/permissions/permissions.js";
-import { READ_PATH_PROBE, checkReadPermissionForTool } from "../../utils/permissions/filesystem.js";
+import { getDenyRuleForTool, findAskRuleForTool } from "../../utils/permissions/permissions.js";
+import {
+  READ_PATH_PROBE,
+  checkReadPermissionForTool,
+  normalizeCaseForComparison_2,
+} from "../../utils/permissions/filesystem.js";
 import { lastExistingIdentity } from "../../utils/fsSafety/pathRevalidation.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isTopHostSession } from "../../utils/sessionShape.js";
 import { isTopLevelBridgeSession } from "../../utils/remoteEnvironment.js";
-import { uniq } from "../../utils/collections.js";
 import { PERMISSION_STASH_EVICTED_SYMBOL } from "../../bootstrap/sessionSlices.js";
 
-//@ chunk-gy7w3kfr.js:5890-6901 placement
+//@ chunk-c3g53x04.js:6180-7191 placement
 /**
  * SendUserFile 工具输入 schema：files（单个字符串也转为数组）、可选 caption、status（normal/proactive）、可选 display（render 内联预览 / attach 只给下载卡片）。
  */
@@ -89,14 +92,14 @@ var sendUserFileInputSchema = DoctorLazy(() =>
       ),
   }),
 );
-//@ chunk-gy7w3kfr.js:6901-6976 placement
+//@ chunk-c3g53x04.js:7191-7266 placement
 /**
  * 判断是否 1 到 100 万之间的正整数（缩放尺寸）。
  */
 function isPositiveIntegerUpTo1e6(value) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 1e6;
 }
-//@ chunk-gy7w3kfr.js:6976-7501 placement
+//@ chunk-c3g53x04.js:7266-7791 placement
 /**
  * SendUserFile 工具输出 schema：caption、display、每个附件的路径、大小、是否图片、上传结果（uuid、媒体类型、错误与疑似限额）、缩放尺寸与项目路径，以及是否本地渲染。
  */
@@ -128,14 +131,14 @@ var sendUserFileOutputSchema = DoctorLazy(() =>
     rendered_locally: booleanSchema().optional(),
   }),
 );
-//@ chunk-gy7w3kfr.js:7501-7563 placement
+//@ chunk-c3g53x04.js:7791-7853 placement
 /**
  * 返回图片副本的格式标签（JPEG 或 PNG）。
  */
 function imageCopyFormatLabel(image) {
   return image.media_type === "image/jpeg" ? "JPEG" : "PNG";
 }
-//@ chunk-gy7w3kfr.js:7563-7647 placement
+//@ chunk-c3g53x04.js:7853-7937 placement
 /**
  * 附件走路径通道时，SendUserFile 是否推迟上传。
  */
@@ -144,7 +147,7 @@ function isSendUserFileDeferred() {
   sessionFeatureValues.sendUserFileDeferred ??= !attachmentsByPathAvailable();
   return sessionFeatureValues.sendUserFileDeferred;
 }
-//@ chunk-gy7w3kfr.js:7647-14209 placement
+//@ chunk-c3g53x04.js:7937-14499 placement
 var SendUserFileTool = buildTool({
   name: SEND_USER_FILE_TOOL_NAME,
   searchHint: "deliver files (screenshots, reports, artifacts) to the user",
@@ -403,7 +406,7 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
             result.decisionReason?.type === "rule" &&
             result.decisionReason.rule.ruleBehavior === "ask",
         );
-        let askRuleForTool = getAskRuleForTool(permissionState, READ_PATH_PROBE);
+        let fileAllowRule = findAskRuleForTool(permissionState, READ_PATH_PROBE);
         let decision;
         let hasDoor = projectFilesDoor != null;
         if (denyRuleForTool)
@@ -419,13 +422,13 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
         else if (found_2) {
           decision = found_2;
           hasDoor &&= permissionState.mode !== "plan";
-        } else if (askRuleForTool) {
+        } else if (fileAllowRule) {
           decision = {
             behavior: "ask",
             message: `Send ${input.files.length} ${plural(input.files.length, "file")} to the user? SendUserFile reads file contents.`,
             decisionReason: {
               type: "rule",
-              rule: askRuleForTool,
+              rule: fileAllowRule,
             },
           };
           hasDoor &&= permissionState.mode !== "plan";
@@ -503,7 +506,7 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
     };
   },
 });
-//@ chunk-gy7w3kfr.js:14209-14336 placement
+//@ chunk-c3g53x04.js:14499-14626 placement
 function attachmentsByPathAvailable() {
   return (
     !!env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE ||
@@ -513,7 +516,7 @@ function attachmentsByPathAvailable() {
     isBridgeChildFileUploadEnabled()
   );
 }
-//@ chunk-gy7w3kfr.js:14336-14402 placement
+//@ chunk-c3g53x04.js:14626-14692 placement
 /**
  * 桥接子会话是否允许上传文件（开关控制）。
  */
@@ -522,27 +525,27 @@ function isBridgeChildFileUploadEnabled() {
     isTopLevelBridgeSession() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_child_file_upload", true)
   );
 }
-//@ chunk-gy7w3kfr.js:14402-14445 placement
+//@ chunk-c3g53x04.js:14692-14735 placement
 /**
  * 去重排序后拼成一行的键（暂存权限的匹配键）。
  */
 function sortedUniqueKey(paths) {
-  return uniq(paths).sort().join(`
+  return normalizeCaseForComparison_2(paths).sort().join(`
 `);
 }
-//@ chunk-gy7w3kfr.js:14445-14477 placement
+//@ chunk-c3g53x04.js:14735-14767 placement
 /**
  * 写权限暂存里“项目文件门户通道”的标记前缀。
  */
 var PROJECT_FILES_DOOR_PREFIX = "\x00project-files-door:";
-//@ chunk-gy7w3kfr.js:14477-14933 placement
+//@ chunk-c3g53x04.js:14767-15223 placement
 /**
  * 取出本次调用在写权限暂存中登记的已批准读取路径与文件身份：拒绝标记时返回空；未登记时退回为每个路径的权限检查拼写；并分离出"门户通道"标记。
  */
 function consumeReadApproval(session, toolUseId, paths) {
   let writePermissionStash = session.writePermissionStash;
   let identitiesByPath = new Map(
-    uniq(paths.map((path) => expandPath(path))).map((fullPath) => [
+    normalizeCaseForComparison_2(paths.map((path) => expandPath(path))).map((fullPath) => [
       fullPath,
       writePermissionStash.takeIdentity(toolUseId, fullPath),
     ]),

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。服务回答大小限制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-51ajpv6p.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9p5qwbh1.js (5)
  * attribution: placement 5
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -13,7 +13,7 @@ import { readCallResult } from "../../remote/tools/toolDescriptors.js";
 import { buildRemoteToolCallResult } from "../../remote/tools/callResults.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../../remote/tools/protocolConstants.js";
 
-//@ chunk-51ajpv6p.js:268-333 placement
+//@ chunk-9p5qwbh1.js:268-333 placement
 /**
  * 服务回答大小的常量与开关：默认上限、允许区间、预留字符，以及读取开关的函数。
  */
@@ -22,7 +22,7 @@ var DEFAULT_SERVED_ANSWER_MAX_BYTES = 5242880;
 var MIN_SERVED_ANSWER_MAX_BYTES = 65536;
 var MAX_SERVED_ANSWER_SETTING_BYTES = 33554432;
 var _ = 65536;
-//@ chunk-51ajpv6p.js:333-427 placement
+//@ chunk-9p5qwbh1.js:333-427 placement
 function servedAnswerMaxBytes() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_SYNTHETIC_FOG,
@@ -35,14 +35,14 @@ function servedAnswerMaxBytes() {
     ? featureValue_CACHED_MAY_BE_STALE
     : DEFAULT_SERVED_ANSWER_MAX_BYTES;
 }
-//@ chunk-51ajpv6p.js:427-455 placement
+//@ chunk-9p5qwbh1.js:427-455 placement
 /**
  * 计算可返回答案的字节上限。
  */
 function servedAnswerLimitBytes() {
   return servedAnswerMaxBytes() - _;
 }
-//@ chunk-51ajpv6p.js:455-1528 placement
+//@ chunk-9p5qwbh1.js:455-1528 placement
 function servedAnswerTooLargeText({ answer, bytes, status, tooLarge }) {
   let whyText = tooLarge
     ? `is too large for the session service to carry back (${bytes} bytes)`
@@ -89,7 +89,7 @@ function servedAnswerTooLargeText({ answer, bytes, status, tooLarge }) {
     ],
   });
 }
-//@ chunk-51ajpv6p.js:1528-1665 placement
+//@ chunk-9p5qwbh1.js:1528-1665 placement
 /**
  * 若结果是重放的，返回 replayed 标记与服务时间字段。
  */

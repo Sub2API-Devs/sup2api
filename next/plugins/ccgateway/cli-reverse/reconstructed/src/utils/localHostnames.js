@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：本地/回环主机名判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p2v66jnt.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0eqfe9j.js (11)
+ * attribution: placement 10, layout 1
  */
 import { domainToASCII } from "url";
 import { firstLineOf, countCharInString } from "./stringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p2v66jnt.js:266-1928 placement
+//@ chunk-c0eqfe9j.js:266-2068 placement
 /**
  * 本地/回环/元数据/Docker 内部主机名与本地域后缀集合。
  */
@@ -23,7 +23,8 @@ var LOCAL_DOMAIN_SUFFIXES;
 var LOCAL_TLD_SUFFIXES;
 var PRIVATE_SUFFIXES;
 var BROADLY_LOCAL_SUFFIXES;
-deferInit("chunk-p2v66jnt.js:266", () => {
+var OTHER_LOCAL_SUFFIXES;
+deferInit("chunk-c0eqfe9j.js:266", () => {
   LOCAL_HOSTNAMES = new Set([
     "localhost",
     "localhost.localdomain",
@@ -128,8 +129,35 @@ deferInit("chunk-p2v66jnt.js:266", () => {
     ".svc.cluster.local",
     ".cluster.local",
   ];
+  OTHER_LOCAL_SUFFIXES = [
+    ".arpa",
+    ".consul",
+    ".corp",
+    ".default",
+    ".docker",
+    ".example",
+    ".i2p",
+    ".intranet",
+    ".invalid",
+    ".onion",
+    ".private",
+    ".test",
+    ".ts.net",
+    ".xip.io",
+  ];
 });
-//@ chunk-p2v66jnt.js:1928-2059 placement
+//@ chunk-c0eqfe9j.js:2068-2206 layout
+function hostnameIsLocal(host) {
+  let dotted = `.${stripIPv6Brackets(host.trim().toLowerCase()).replace(/\.+$/, "")}`;
+  return (
+    isLocalAddress(host) ||
+    isLoopbackHost(host) ||
+    [...LOCAL_DOMAIN_SUFFIXES, ...PRIVATE_SUFFIXES, ...OTHER_LOCAL_SUFFIXES].some((suffix) =>
+      dotted.endsWith(suffix),
+    )
+  );
+}
+//@ chunk-c0eqfe9j.js:2206-2337 placement
 function isLocalHostname(hostname) {
   let replaced = stripIPv6Brackets(hostname.toLowerCase()).replace(/\.+$/, "");
   return (
@@ -139,12 +167,12 @@ function isLocalHostname(hostname) {
     BROADLY_LOCAL_SUFFIXES.some((suffix) => replaced.endsWith(suffix))
   );
 }
-//@ chunk-p2v66jnt.js:2059-2158 placement
+//@ chunk-c0eqfe9j.js:2337-2436 placement
 function isLocalhostName(hostname) {
   let replaced = hostname.toLowerCase().replace(/\.+$/, "");
   return LOCAL_HOSTNAMES.has(replaced) || replaced.endsWith(".localhost");
 }
-//@ chunk-p2v66jnt.js:2158-2288 placement
+//@ chunk-c0eqfe9j.js:2436-2566 placement
 function isPrivateNetworkName(hostname) {
   let replaced = hostname.toLowerCase().replace(/\.+$/, "");
   return (
@@ -154,7 +182,7 @@ function isPrivateNetworkName(hostname) {
     )
   );
 }
-//@ chunk-p2v66jnt.js:2288-2500 placement
+//@ chunk-c0eqfe9j.js:2566-2778 placement
 function isLoopbackHost(host) {
   let host_2 = stripIPv6Brackets(host.trim().toLowerCase()).replace(/\.+$/, "");
   return (
@@ -169,7 +197,7 @@ function isLoopbackHost(host) {
     isNumericIpLike(host_2)
   );
 }
-//@ chunk-p2v66jnt.js:2500-2902 placement
+//@ chunk-c0eqfe9j.js:2778-3180 placement
 function matchesHostPattern(hostname, pattern) {
   let replaced = pattern.trim().toLowerCase().replace(/\.+$/, "");
   let normalizedPattern = !/[^\x00-\x7f]/.test(replaced)
@@ -193,17 +221,17 @@ function matchesHostPattern(hostname, pattern) {
         (sliced.endsWith(".ts.net") && countCharInString(sliced, ".") >= 3)))
   );
 }
-//@ chunk-p2v66jnt.js:2902-2973 placement
+//@ chunk-c0eqfe9j.js:3180-3251 placement
 function slugifyHost(host) {
   return host.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
-//@ chunk-p2v66jnt.js:2973-3104 placement
+//@ chunk-c0eqfe9j.js:3251-3382 placement
 function isLocalAddress(address, mode = "address") {
   let replaced = stripIPv6Brackets(address.trim().toLowerCase()).replace(/\.+$/, "");
   if (mode === "address" ? isLocalHostname(replaced) : isLocalhostName(replaced)) return true;
   return isNumericIpLike(replaced);
 }
-//@ chunk-p2v66jnt.js:3104-3382 placement
+//@ chunk-c0eqfe9j.js:3382-3660 placement
 function isNumericIpLike(host) {
   return (
     /^(?:(?:\d+|0x[0-9a-f]+)\.){1,3}(?:\d+|0x[0-9a-f]+)$/i.test(host) ||
@@ -216,15 +244,16 @@ function isNumericIpLike(host) {
       (host.includes("::") || countCharInString(host, ":") >= 2))
   );
 }
-//@ chunk-p2v66jnt.js:3382-3454 placement
+//@ chunk-c0eqfe9j.js:3660-3732 placement
 function stripIPv6Brackets(lowerCase) {
   return lowerCase.startsWith("[") && lowerCase.endsWith("]") ? lowerCase.slice(1, -1) : lowerCase;
 }
 export {
+  hostnameIsLocal,
   isLocalHostname,
-  isLocalhostName,
-  isPrivateNetworkName,
-  isLocalAddress,
   matchesHostPattern,
   isLoopbackHost,
+  isLocalAddress,
+  isLocalhostName,
+  isPrivateNetworkName,
 };

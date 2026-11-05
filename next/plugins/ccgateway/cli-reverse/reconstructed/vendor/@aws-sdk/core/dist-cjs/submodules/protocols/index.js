@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/core/dist-cjs/submodules/protocols/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/core@3.936.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { base64Module } from "../../../../credential-provider-web-identity/dist-
 import { require_util_utf8 } from "../../../../../@smithy/util-utf8/dist-cjs/index.js";
 import { require_xml_builder } from "../../../../xml-builder/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:136783-166742 cjs-fingerprint
+//@ chunk-3p78mpxm.js:136783-166742 cjs-fingerprint
 var require_protocols = __commonJS(function (cjsExports) {
   var cbor = require_cbor();
   var schema = require_schema();

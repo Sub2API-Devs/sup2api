@@ -3,9 +3,9 @@
  *
  * 进入 Bypass Permissions 模式前的风险确认对话框，接受后写入 userSettings 并记录事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/BypassPermissionsModeDialog.tsx
- * pieces: chunk-styvqsd2.js (3)
+ * pieces: chunk-grena0zy.js (3)
  * attribution: placement 1, fingerprint 2
  */
 import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -23,13 +23,13 @@ import { Newline } from "../ink/components/Input.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 
-//@ chunk-styvqsd2.js:13694-13698 placement
+//@ chunk-grena0zy.js:14842-14846 placement
 init_react_production();
-//@ chunk-styvqsd2.js:13698-13762 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-grena0zy.js:14846-14910 fingerprint (2.1.88 match: _temp, 1)
 function logBypassDialogShown() {
   logEvent("tengu_bypass_permissions_mode_dialog_shown", {});
 }
-//@ chunk-styvqsd2.js:13762-15105 fingerprint (2.1.88 match: BypassPermissionsModeDialog, 0.672)
+//@ chunk-grena0zy.js:14910-16253 fingerprint (2.1.88 match: BypassPermissionsModeDialog, 0.672)
 /**
  * Bypass Permissions 模式确认：说明不会再请求许可的风险，接受写入 userSettings，拒绝退出。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Test 运行目录的读写（fix.json、截图、live.html、made-here 标记、提议的规格）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (36)
  * attribution: placement 36
  */
 import { isAbsolute, resolve, basename, join, dirname } from "path";
@@ -18,6 +18,7 @@ import { WIDE_CHAR_FACTOR, WRAP_FRACTION, MAX_NAME_CHARS } from "./panelView.js"
 import { parseRunProgress, specStems } from "./progress.js";
 import {
   SPECS_DIR,
+  capitalize,
   compareRunIds,
   createRunFacts,
   RUNS_DIR,
@@ -37,7 +38,6 @@ import {
   stripHtmlComments,
   resolveCodeReadingFlags,
 } from "./runState.js";
-import { capitalize_2 } from "../../../utils/stringUtils.js";
 import { getPlatform } from "../../../utils/platform.js";
 import { retryTransient } from "../../../utils/atomicPublishWrite.js";
 import { saveStatsCache } from "../../../utils/statsCache.js";
@@ -45,7 +45,7 @@ import { READ_LIMITS } from "../../../utils/fsBoundRead.js";
 import { getErrnoCode } from "../../../utils/errors.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:46641-46894 placement (2.1.88 match: nextCronRunMs, 0.698)
+//@ chunk-mhn0amzz.js:47879-48132 placement
 /**
  * 从 YYYY-MM-DDTHH-MM-SS 形式的名字里解析本地时间戳。与 cron 无关。
  */
@@ -58,7 +58,7 @@ function parseTimestampFromName(name) {
   let time = new Date(year, month - 1, day, hour, minute, second).getTime();
   return Number.isFinite(time) ? time : null;
 }
-//@ chunk-ae5g0zb5.js:66716-67006 placement
+//@ chunk-mhn0amzz.js:67954-68244 placement
 /**
  * 按终端列数与可用行数计算截图显示尺寸与左边距；太小时返回 null。
  */
@@ -80,7 +80,7 @@ function fitScreenshotSize(columns, maxRows = Number.POSITIVE_INFINITY) {
     left: Math.floor((min - min_2) / 2),
   };
 }
-//@ chunk-ae5g0zb5.js:67006-67247 placement
+//@ chunk-mhn0amzz.js:68244-68485 placement
 /**
  * Claude Test 运行目录的各类文件上限（运行文件 2 MiB、截图 256 KiB、live.html 2 MiB 等）与助手运行时的可变状态。
  */
@@ -103,7 +103,7 @@ var helperRuntimeState = {
   rememberedStart: null,
   moreDeclined: null,
 };
-//@ chunk-ae5g0zb5.js:67247-67465 placement
+//@ chunk-mhn0amzz.js:68485-68703 placement
 /**
  * stat 运行目录中的路径：必须不是链接、类型相符、真实路径与预期一致且不超过大小上限。
  */
@@ -124,14 +124,14 @@ async function statInsideRun(ctx, filePath, realRunDir, kind, maxSize = Number.P
     ? fileStat
     : undefined;
 }
-//@ chunk-ae5g0zb5.js:67465-67489 placement
+//@ chunk-mhn0amzz.js:68703-68727 placement
 /**
  * 原样返回
  */
 function identity(value) {
   return value;
 }
-//@ chunk-ae5g0zb5.js:67489-67610 placement
+//@ chunk-mhn0amzz.js:68727-68848 placement
 /**
  * 列出目录中的普通文件名（不含链接）。
  */
@@ -140,7 +140,7 @@ async function listRegularFiles(ctx, dir) {
     .filter((entry) => entry.kind === "file" && !entry.isLink)
     .map((entry) => entry.name);
 }
-//@ chunk-ae5g0zb5.js:67610-67648 placement
+//@ chunk-mhn0amzz.js:68848-68886 placement
 /**
  * 控制台文本缓存
  */
@@ -148,13 +148,13 @@ var consoleTextCache; // deferred: has load-time effects after a deferred statem
 var MAX_CONSOLE_ENTRIES;
 var MAX_CONSOLE_BYTES;
 var consoleBytes;
-deferInit("chunk-ae5g0zb5.js:67610", () => {
+deferInit("chunk-mhn0amzz.js:68848", () => {
   consoleTextCache = new Map();
   MAX_CONSOLE_ENTRIES = 160;
   MAX_CONSOLE_BYTES = 8388608;
   consoleBytes = 0;
 });
-//@ chunk-ae5g0zb5.js:67648-68165 placement
+//@ chunk-mhn0amzz.js:68886-69403 placement
 async function readRunFile(ctx, runDir, realRunDir, fileName, maxBytes = MAX_RUN_FILE_BYTES) {
   let relFilePath = `${runDir}/${fileName}`;
   let cacheKey = `${realRunDir}/${fileName}`;
@@ -187,7 +187,7 @@ async function readRunFile(ctx, runDir, realRunDir, fileName, maxBytes = MAX_RUN
   }
   return text;
 }
-//@ chunk-ae5g0zb5.js:68165-68474 placement
+//@ chunk-mhn0amzz.js:69403-69712 placement
 async function RUN_PROGRESS_FILES(ctx, runDir, realRunDir, files) {
   return parseRunProgress({
     progress: await readRunFile(ctx, runDir, realRunDir, "progress.ndjson"),
@@ -200,7 +200,7 @@ async function RUN_PROGRESS_FILES(ctx, runDir, realRunDir, files) {
       : undefined,
   });
 }
-//@ chunk-ae5g0zb5.js:68474-68612 placement
+//@ chunk-mhn0amzz.js:69712-69850 placement
 /**
  * 读取已结束运行的进度，未结束返回 null。
  */
@@ -209,13 +209,13 @@ async function readFinishedRun(ctx, runDir, realRunDir) {
   let progress = await RUN_PROGRESS_FILES(ctx, runDir, realRunDir, await listRegularFiles(ctx, runDir));
   return progress?.finished === true ? progress : null;
 }
-//@ chunk-ae5g0zb5.js:68612-68630 placement
+//@ chunk-mhn0amzz.js:69850-69868 placement
 /**
  * 50
  */
 var MAX_LISTED_RUN_FILES = 50;
 var laterRunCache = null;
-//@ chunk-ae5g0zb5.js:68630-69002 placement
+//@ chunk-mhn0amzz.js:69868-70240 placement
 /**
  * 运行目录里是否有早于运行开始时间的文件（结果缓存）。
  */
@@ -250,7 +250,7 @@ ${name}`;
   };
   return isLater;
 }
-//@ chunk-ae5g0zb5.js:69002-69258 placement
+//@ chunk-mhn0amzz.js:70240-70496 placement
 /**
  * 运行子目录中是否有文件。
  */
@@ -269,14 +269,14 @@ async function hasRunSubfiles(ctx, runDir, realRunDir) {
       return true;
   return false;
 }
-//@ chunk-ae5g0zb5.js:69258-69339 placement
+//@ chunk-mhn0amzz.js:70496-70577 placement
 /**
  * 正在准备/读代码/写测试
  */
 function isRunPreparing(facts) {
   return facts.isPreparing === true || facts.isReadingCode || facts.isWritingTests === true;
 }
-//@ chunk-ae5g0zb5.js:69339-69745 placement
+//@ chunk-mhn0amzz.js:70577-70983 placement
 async function findAppPackageJson(ctx, dir) {
   try {
     let realPath = (
@@ -300,7 +300,7 @@ async function findAppPackageJson(ctx, dir) {
             return;
           });
     let packageJson = text !== undefined && Buffer.byteLength(text) === fileStat?.size ? text : undefined;
-    return capitalize_2(
+    return capitalize(
       packageJson,
       realPath
         .replace(/[\\/]+$/, "")
@@ -311,7 +311,7 @@ async function findAppPackageJson(ctx, dir) {
     return null;
   }
 }
-//@ chunk-ae5g0zb5.js:69745-70052 placement
+//@ chunk-mhn0amzz.js:70983-71290 placement
 /**
  * 根据参数确定被测应用目录（项目根或其下合法子目录）。
  */
@@ -341,7 +341,7 @@ async function resolveAppDir(ctx, rootDir, text) {
     return defaultResult;
   }
 }
-//@ chunk-ae5g0zb5.js:70052-70221 placement
+//@ chunk-mhn0amzz.js:71290-71459 placement
 /**
  * 为运行事实补上 isLaterRun（按目录与打开时间缓存）。
  */
@@ -363,14 +363,14 @@ ${runFacts.openedAt}`;
     isLaterRun: hasRunSubfilesCache.has,
   };
 }
-//@ chunk-ae5g0zb5.js:70221-70247 placement
+//@ chunk-mhn0amzz.js:71459-71485 placement
 /**
  * 最近运行目录缓存（5 秒）
  */
 var latestRunCache = null;
 var latestRunCacheMs = 5000;
 var MAX_RECENT_RUN_DIRS = 12;
-//@ chunk-ae5g0zb5.js:70247-70447 placement
+//@ chunk-mhn0amzz.js:71485-71685 placement
 /**
  * 找出本机创建的最近若干个运行目录。
  */
@@ -383,12 +383,12 @@ async function findMadeHereRuns(realRunsDir, runIds) {
   );
   return sliced.filter((runId, index) => results[index]);
 }
-//@ chunk-ae5g0zb5.js:70447-70459 placement
+//@ chunk-mhn0amzz.js:71685-71697 placement
 /**
  * 子文件存在性缓存
  */
 var hasRunSubfilesCache = null;
-//@ chunk-ae5g0zb5.js:70459-70489 placement
+//@ chunk-mhn0amzz.js:71697-71727 placement
 /**
  * 清空运行目录相关缓存
  */
@@ -396,7 +396,7 @@ function resetRunDirCaches() {
   hasRunSubfilesCache = null;
   latestRunCache = null;
 }
-//@ chunk-ae5g0zb5.js:70489-73010 placement
+//@ chunk-mhn0amzz.js:71727-74248 placement
 /**
  * 读取运行目录（pane.json、proposed/）得到面板需要的事实与截图名。
  */
@@ -594,7 +594,7 @@ async function readRunFolderFacts(ctx, runDir, openedAt, now, phase, hasFixFlag 
     return emptyResult;
   }
 }
-//@ chunk-ae5g0zb5.js:73010-73157 placement
+//@ chunk-mhn0amzz.js:74248-74395 placement
 /**
  * 选要展示的规格：第一个失败的、最后完成的或 look-1。
  */
@@ -605,7 +605,7 @@ function pickFocusStem(run, files) {
     (files.includes("look-1.png") ? "look-1" : null)
   );
 }
-//@ chunk-ae5g0zb5.js:73157-73495 placement
+//@ chunk-mhn0amzz.js:74395-74733 placement
 async function readScreenshot(ctx, runRel, runReal, pictureStem) {
   let fileName = `${pictureStem}.png`;
   if (fileName.includes("/") || fileName.startsWith(".")) return;
@@ -626,12 +626,12 @@ async function readScreenshot(ctx, runRel, runReal, pictureStem) {
     ? bytes.base64
     : undefined;
 }
-//@ chunk-ae5g0zb5.js:73495-73507 placement
+//@ chunk-mhn0amzz.js:74733-74745 placement
 /**
  * 4096
  */
 var MAX_PNG_DIMENSION = 4096;
-//@ chunk-ae5g0zb5.js:73507-73756 placement
+//@ chunk-mhn0amzz.js:74745-74994 placement
 /**
  * 检查 base64 PNG 的 IHDR 头与宽高上限。
  */
@@ -656,7 +656,7 @@ function isValidPngHeader(base64) {
     readUint32(20) <= MAX_PNG_DIMENSION
   );
 }
-//@ chunk-ae5g0zb5.js:73756-74043 placement
+//@ chunk-mhn0amzz.js:74994-75281 placement
 async function writeLiveReport(dataDir, dir, runId) {
   if (!RUN_ID_RE.test(runId) || !isAbsolute(dir)) return;
   let realDir = resolve(await realpath(dir).catch(() => dir));
@@ -675,19 +675,19 @@ async function writeLiveReport(dataDir, dir, runId) {
     ? pathToFileURL(reportPath).href
     : undefined;
 }
-//@ chunk-ae5g0zb5.js:74043-74055 placement
+//@ chunk-mhn0amzz.js:75281-75293 placement
 /**
  * 1024
  */
 var INSTALL_PROGRESS_BYTES = 1024;
-//@ chunk-ae5g0zb5.js:74055-74120 placement
+//@ chunk-mhn0amzz.js:75293-75358 placement
 /**
  * 写入 install-progress.json
  */
 async function writeInstallProgress(dataDir) {
   return writeFileAtomic(join(dataDir, "install-progress.json"), INSTALL_PROGRESS_BYTES);
 }
-//@ chunk-ae5g0zb5.js:74120-74788 placement
+//@ chunk-mhn0amzz.js:75358-76026 placement
 /**
  * 校验 made-here 硬链接标记（同 inode、nlink=2），确认运行目录由本机生成。
  */
@@ -730,7 +730,7 @@ async function isMadeHereMarker(dataDir, runDir) {
     return false;
   }
 }
-//@ chunk-ae5g0zb5.js:74788-75012 placement
+//@ chunk-mhn0amzz.js:76026-76250 placement
 async function writeMadeHereKey(dataDir) {
   let keyPath = join(dataDir, "made-here.key");
   let tempPath = `${keyPath}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
@@ -747,13 +747,13 @@ async function writeMadeHereKey(dataDir) {
     });
   }
 }
-//@ chunk-ae5g0zb5.js:75012-75029 placement
+//@ chunk-mhn0amzz.js:76250-76267 placement
 /**
  * 256
  */
 var MADE_HERE_BYTES = 256;
 var MADE_HERE_KEY_BYTES = 64;
-//@ chunk-ae5g0zb5.js:75029-75434 placement
+//@ chunk-mhn0amzz.js:76267-76672 placement
 async function writeFileAtomic(filePath, maxBytes, requireOwnerOnly = false) {
   let file = await open(
     filePath,
@@ -783,7 +783,7 @@ async function writeFileAtomic(filePath, maxBytes, requireOwnerOnly = false) {
     });
   }
 }
-//@ chunk-ae5g0zb5.js:75604-75760 placement
+//@ chunk-mhn0amzz.js:76842-76998 placement
 /**
  * 逐个比较/写入安装文件，返回第一个内容不同的文件名。
  */
@@ -799,7 +799,7 @@ async function findDifferingInstalledFile(rootDir, files) {
   }
   return;
 }
-//@ chunk-ae5g0zb5.js:75760-75958 placement
+//@ chunk-mhn0amzz.js:76998-77196 placement
 /**
  * 文件已存在则比较内容；不存在则创建（目录 0700），并发写入时容忍相同内容。
  */
@@ -818,7 +818,7 @@ async function writeFileIfAbsent(filePath, content) {
   }
   return false;
 }
-//@ chunk-ae5g0zb5.js:75958-76247 placement
+//@ chunk-mhn0amzz.js:77196-77485 placement
 async function readFileNoFollow(filePath, expectedSize) {
   try {
     let file = await open(

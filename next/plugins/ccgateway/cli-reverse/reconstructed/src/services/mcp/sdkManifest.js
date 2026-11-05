@@ -3,26 +3,26 @@
  *
  * 2.1.316 新增。SDK 宿主清单校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z1n5m6nf.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h44h5gdv.js (4)
  * attribution: placement 4
  */
 import {
   InitializeResultSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
   ListToolsResultSchema,
-  JSONRPCMessageSchema as JSONRPCMessageSchema_2,
+  JSONRPCMessageSchema,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { logMCPDebug } from "../../utils/log.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-z1n5m6nf.js:155462-155558 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-h44h5gdv.js:158180-158276 placement
 function getFirstToolUseId_2(message) {
   if (message.message.content[0]?.type !== "tool_use") return;
   return message.message.content[0].id;
 }
-//@ chunk-z1n5m6nf.js:155558-156534 placement
+//@ chunk-h44h5gdv.js:158276-159252 placement
 function validateHostManifest_2(serverName, manifest) {
   if (manifest === undefined) return;
   let parseResult = InitializeResultSchema.safeParse(manifest.initializeResult);
@@ -62,18 +62,18 @@ function validateHostManifest_2(serverName, manifest) {
   }
   return manifest;
 }
-//@ chunk-z1n5m6nf.js:156534-156608 placement
+//@ chunk-h44h5gdv.js:159252-159326 placement
 /**
  * 校验对象是否为合法 JSON-RPC 结果（v1 副本）。
  */
 function isValidJsonRpcResult(result) {
-  return JSONRPCMessageSchema_2.safeParse({
+  return JSONRPCMessageSchema.safeParse({
     jsonrpc: "2.0",
     id: 0,
     result,
   }).success;
 }
-//@ chunk-z1n5m6nf.js:156608-156945 placement
+//@ chunk-h44h5gdv.js:159326-159663 placement
 /**
  * 记录 SDK 宿主 MCP 清单的结果（v1 副本）。
  */

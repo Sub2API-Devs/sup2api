@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：组织记忆项目选择、切换与系统提示段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c55mbvfz.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dzt5bmy4.js (24)
  * attribution: placement 24
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -48,42 +48,42 @@ import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
 import { loadStorePromptIndex } from "../../services/orgMemory/promptIndex.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { wrapInSystemReminder } from "../../utils/messages.js";
 import { describeMemoryStoreIndex, wrapFetchedMemoryIndex } from "../../memdir/memdir.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-c55mbvfz.js:21749-21753 placement
+//@ chunk-dzt5bmy4.js:22941-22945 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-c55mbvfz.js:21749", () => {
+deferInit("chunk-dzt5bmy4.js:22941", () => {
   init_react_production();
 });
-//@ chunk-c55mbvfz.js:21819-21926 placement
+//@ chunk-dzt5bmy4.js:23011-23118 placement
 var MEMORY_TOOL_NAMES; // deferred: uses BRACKET_CONFUSABLES_2 (../../utils/sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_PROJECT_NAME_CHARS;
 var BRACKET_CONFUSABLES_REGEX;
 var MEMORY_INDEX_FETCH_TIMEOUT_MS;
 var MEMORY_SWITCH_TIMEOUT_MS;
-deferInit("chunk-c55mbvfz.js:21819", () => {
+deferInit("chunk-dzt5bmy4.js:23011", () => {
   MEMORY_TOOL_NAMES = `${MEMORY_LIST_TOOL_NAME} / ${MEMORY_READ} / ${MEMORY_WRITE}`;
   MAX_PROJECT_NAME_CHARS = 80;
   BRACKET_CONFUSABLES_REGEX = new RegExp(`[${[...BRACKET_CONFUSABLES_2.keys()].join("")}]`, "gu");
   MEMORY_INDEX_FETCH_TIMEOUT_MS = 20000;
   MEMORY_SWITCH_TIMEOUT_MS = 120000;
 });
-//@ chunk-c55mbvfz.js:21926-21973 placement
+//@ chunk-dzt5bmy4.js:23118-23165 placement
 class RequestEpoch {
   latest = 0;
   begin() {
     return ++this.latest;
   }
 }
-//@ chunk-c55mbvfz.js:21973-21999 placement
+//@ chunk-dzt5bmy4.js:23165-23191 placement
 var requestEpochSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c55mbvfz.js:21973", () => {
+deferInit("chunk-dzt5bmy4.js:23165", () => {
   requestEpochSlot = new SessionRootSlot(() => new RequestEpoch());
 });
-//@ chunk-c55mbvfz.js:21999-23215 placement
+//@ chunk-dzt5bmy4.js:23191-24407 placement
 /**
  * 切换/断开当前目录使用的组织记忆项目，等待决定落定并返回结果状态。
  */
@@ -168,7 +168,7 @@ async function switchOrgMemoryProject(session, targetKind) {
     };
   }
 }
-//@ chunk-c55mbvfz.js:23215-23481 placement
+//@ chunk-dzt5bmy4.js:24407-24673 placement
 function applyMemoryWritableState(outcome, before, after) {
   switch (outcome) {
     case "switched":
@@ -186,11 +186,11 @@ function applyMemoryWritableState(outcome, before, after) {
       return;
   }
 }
-//@ chunk-c55mbvfz.js:23481-23538 placement
+//@ chunk-dzt5bmy4.js:24673-24730 placement
 function hasOrgMemoryContent(snapshot) {
   return snapshot.servedEarlier || snapshot.stores.length > 0;
 }
-//@ chunk-c55mbvfz.js:23538-23715 placement
+//@ chunk-dzt5bmy4.js:24730-24907 placement
 function snapshotOrgMemoryStores() {
   return {
     project: describeMemoryProjectSelection(getOrgMemoryDecision()),
@@ -204,7 +204,7 @@ function snapshotOrgMemoryStores() {
     })),
   };
 }
-//@ chunk-c55mbvfz.js:23715-24020 placement
+//@ chunk-dzt5bmy4.js:24907-25212 placement
 function describeMemoryProjectSelection(orgMemoryDecision) {
   if (orgMemoryDecision.state !== "on")
     return {
@@ -226,7 +226,7 @@ function describeMemoryProjectSelection(orgMemoryDecision) {
     name: found === undefined ? null : sanitizeProjectName(found.name),
   };
 }
-//@ chunk-c55mbvfz.js:24020-24221 placement
+//@ chunk-dzt5bmy4.js:25212-25413 placement
 function sanitizeProjectName(name) {
   let trimmed = isNetworkPath(name)
     .replaceAll('"', "'")
@@ -239,7 +239,7 @@ function sanitizeProjectName(name) {
     ? trimmed
     : `${truncateCodePoints(trimmed, MAX_PROJECT_NAME_CHARS - 1)}\u2026`;
 }
-//@ chunk-c55mbvfz.js:24221-24439 placement
+//@ chunk-dzt5bmy4.js:25413-25631 placement
 function sameMemoryStores(left, right) {
   return (
     left.stores.length === right.stores.length &&
@@ -255,7 +255,7 @@ function sameMemoryStores(left, right) {
     })
   );
 }
-//@ chunk-c55mbvfz.js:24439-24634 placement
+//@ chunk-dzt5bmy4.js:25631-25826 placement
 function memorySwitchOutcome(mode, previousSnapshot, currentSnapshot) {
   if (currentSnapshot.stores.length === 0) {
     if (mode === "off") return hasOrgMemoryContent(previousSnapshot) ? "disconnected" : "unchanged";
@@ -264,7 +264,7 @@ function memorySwitchOutcome(mode, previousSnapshot, currentSnapshot) {
   if (previousSnapshot.stores.length === 0) return "connected";
   return sameMemoryStores(previousSnapshot, currentSnapshot) ? "unchanged" : "switched";
 }
-//@ chunk-c55mbvfz.js:24634-24841 placement
+//@ chunk-dzt5bmy4.js:25826-26033 placement
 function memoryUnavailableReason(decision) {
   switch (decision.state) {
     case "off":
@@ -279,7 +279,7 @@ function memoryUnavailableReason(decision) {
       return "no_stores";
   }
 }
-//@ chunk-c55mbvfz.js:24841-25164 placement
+//@ chunk-dzt5bmy4.js:26033-26356 placement
 async function loadMemoryStoresContent(stores) {
   let filtered = stores.filter((entry) => entry.promptIndex !== undefined);
   let results = await Promise.all(filtered.map((entry) => loadStorePromptIndex(entry.store)));
@@ -304,19 +304,19 @@ async function loadMemoryStoresContent(stores) {
         };
   });
 }
-//@ chunk-c55mbvfz.js:25164-25456 placement
+//@ chunk-dzt5bmy4.js:26356-26648 placement
 function logMemoryProjectSwitch(outcome, before, after, storeContents, pickDropped = false) {
   logEvent("tengu_org_memory_project_switch", {
     outcome: fromEnum(outcome),
     pick_dropped: pickDropped,
     stores_before: before.stores.length,
     stores_after: after.stores.length,
-    indexes_loaded: count(storeContents, (entry) => entry.state === "loaded"),
-    indexes_empty: count(storeContents, (entry) => entry.state === "empty"),
-    indexes_unavailable: count(storeContents, (entry) => entry.state === "unavailable"),
+    indexes_loaded: countWhere(storeContents, (entry) => entry.state === "loaded"),
+    indexes_empty: countWhere(storeContents, (entry) => entry.state === "empty"),
+    indexes_unavailable: countWhere(storeContents, (entry) => entry.state === "unavailable"),
   });
 }
-//@ chunk-c55mbvfz.js:25456-26267 placement
+//@ chunk-dzt5bmy4.js:26648-27459 placement
 function describeMemorySwitchOutcome(outcome, mode, previousSnapshot, currentSnapshot, isPickDropped) {
   if (isPickDropped) return describeStaleMemoryPick(outcome, currentSnapshot);
   switch (outcome) {
@@ -339,13 +339,13 @@ function describeMemorySwitchOutcome(outcome, mode, previousSnapshot, currentSna
         : "saved for this directory \u2014 already connected, nothing changed";
   }
 }
-//@ chunk-c55mbvfz.js:26267-26503 placement
+//@ chunk-dzt5bmy4.js:27459-27695 placement
 function memoryNotConnectedText(mode) {
   return mode === "off"
     ? "off for this directory \u2014 the disconnect may not have finished this session; it holds from next session"
     : "couldn't connect \u2014 the pick is kept for this directory; Enter on it in /memory retries";
 }
-//@ chunk-c55mbvfz.js:26503-26775 placement
+//@ chunk-dzt5bmy4.js:27695-27967 placement
 function memoryConnectedText(snapshot) {
   let any = snapshot.stores.some((store) => store.writable);
   let connectionSummary = `connected to ${memoryProjectLabel(snapshot.project)}${any ? "" : " (read-only)"}`;
@@ -354,7 +354,7 @@ function memoryConnectedText(snapshot) {
     ? `${connectionSummary} \u2014 saved for this directory; ${usageNote}`
     : `${connectionSummary} \u2014 ${usageNote}`;
 }
-//@ chunk-c55mbvfz.js:26775-27054 placement
+//@ chunk-dzt5bmy4.js:27967-28246 placement
 function memoryDeferredText(reason) {
   switch (reason) {
     case "account_boundary":
@@ -363,7 +363,7 @@ function memoryDeferredText(reason) {
       return "saved for this directory \u2014 this workspace is not trusted yet, so it connects next session";
   }
 }
-//@ chunk-c55mbvfz.js:27054-27496 placement
+//@ chunk-dzt5bmy4.js:28246-28688 placement
 function describeStaleMemoryPick(outcome, snapshot) {
   switch (outcome) {
     case "switched":
@@ -377,7 +377,7 @@ function describeStaleMemoryPick(outcome, snapshot) {
       return `${"that project is no longer available \u2014 the pick was cleared"}; project memory is off until another pick in /memory`;
   }
 }
-//@ chunk-c55mbvfz.js:27496-27659 placement
+//@ chunk-dzt5bmy4.js:28688-28851 placement
 function memoryProjectLabel(project) {
   switch (project.kind) {
     case "none":
@@ -388,7 +388,7 @@ function memoryProjectLabel(project) {
       return project.name ?? "the picked project";
   }
 }
-//@ chunk-c55mbvfz.js:27659-27912 placement
+//@ chunk-dzt5bmy4.js:28851-29104 placement
 function memoryProjectPromptLabel(project) {
   switch (project.kind) {
     case "none":
@@ -401,7 +401,7 @@ function memoryProjectPromptLabel(project) {
         : `project "${escapeXmlText(project.name).replace(BRACKET_CONFUSABLES_REGEX, (_) => `&#${_.codePointAt(0)};`)}"`;
   }
 }
-//@ chunk-c55mbvfz.js:27912-31441 placement
+//@ chunk-dzt5bmy4.js:29104-32633 placement
 /**
  * 生成组织记忆项目的系统提示段（最近项目、已连接存储列表、读写说明）。
  */
@@ -468,7 +468,7 @@ function buildOrgMemoryPrompt(
     }
   }
 }
-//@ chunk-c55mbvfz.js:31441-31716 placement
+//@ chunk-dzt5bmy4.js:32633-32908 placement
 function memoryIndexPromptSection(storeContent) {
   let promptPath = `/${storeContent.store.promptIndex}`;
   let indexLabel = describeMemoryStoreIndex(storeContent.store.id, promptPath);

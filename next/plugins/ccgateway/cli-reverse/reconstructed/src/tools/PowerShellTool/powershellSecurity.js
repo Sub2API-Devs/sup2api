@@ -3,9 +3,9 @@
  *
  * PowerShell AST 安全检查器集合（Invoke-Expression、编码命令、下载执行、Add-Type、COM、脚本块、子表达式、splatting、计划任务、WMI 等 24 项）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/powershellSecurity.ts
- * pieces: chunk-v0yfsee9.js (38)
+ * pieces: chunk-6zpsr8vx.js (38)
  * attribution: fingerprint 33, callgraph-witnessed 1, layout 2, file-local 2
  */
 import {
@@ -30,15 +30,15 @@ import {
 } from "../../utils/powershell/dangerousCmdlets.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:61629-61695 fingerprint (2.1.88 match: POWERSHELL_EXECUTABLES, 1)
+//@ chunk-6zpsr8vx.js:62860-62926 fingerprint (2.1.88 match: POWERSHELL_EXECUTABLES, 1)
 /**
  * PowerShell 可执行文件名集合（pwsh/powershell 及 .exe）。
  */
 var POWERSHELL_EXECUTABLES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:61629", () => {
+deferInit("chunk-6zpsr8vx.js:62860", () => {
   POWERSHELL_EXECUTABLES = new Set(["pwsh", "pwsh.exe", "powershell", "powershell.exe"]);
 });
-//@ chunk-v0yfsee9.js:61695-61854 callgraph-witnessed (2.1.88 match: isPowerShellExecutable, 1)
+//@ chunk-6zpsr8vx.js:62926-63085 callgraph-witnessed (2.1.88 match: isPowerShellExecutable, 1)
 /**
  * 名字（可带路径）是否是 pwsh/powershell 可执行文件。
  */
@@ -49,12 +49,12 @@ function isPowerShellExecutable(name) {
   if (lastSep >= 0) return POWERSHELL_EXECUTABLES.has(lower.slice(lastSep + 1));
   return false;
 }
-//@ chunk-v0yfsee9.js:61854-61903 layout
+//@ chunk-6zpsr8vx.js:63085-63134 layout
 var PS_PARAM_PREFIX_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:61854", () => {
+deferInit("chunk-6zpsr8vx.js:63085", () => {
   PS_PARAM_PREFIX_CHARS = new Set(["/", "\u2013", "\u2014", "\u2015"]);
 });
-//@ chunk-v0yfsee9.js:61903-62040 file-local
+//@ chunk-6zpsr8vx.js:63134-63271 file-local
 /**
  * pwsh.exe 参数是否包含某参数的缩写（也接受 / 和各种破折号作前缀）。
  */
@@ -68,7 +68,7 @@ function psExeHasParamAbbreviation(cmd, fullParam, minPrefix) {
   };
   return commandHasArgAbbreviation(normalized, fullParam, minPrefix);
 }
-//@ chunk-v0yfsee9.js:62040-62213 fingerprint (2.1.88 match: checkInvokeExpression, 1)
+//@ chunk-6zpsr8vx.js:63271-63444 fingerprint (2.1.88 match: checkInvokeExpression, 1)
 /**
  * 使用 Invoke-Expression 时要求确认。
  */
@@ -82,7 +82,7 @@ function checkInvokeExpression(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:62213-62489 fingerprint (2.1.88 match: checkDynamicCommandName, 1)
+//@ chunk-6zpsr8vx.js:63444-63720 fingerprint (2.1.88 match: checkDynamicCommandName, 1)
 /**
  * 命令名是动态表达式（无法静态确定）时要求确认。
  */
@@ -100,7 +100,7 @@ function checkDynamicCommandName(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:62489-62687 fingerprint (2.1.88 match: checkEncodedCommand, 1)
+//@ chunk-6zpsr8vx.js:63720-63918 fingerprint (2.1.88 match: checkEncodedCommand, 1)
 /**
  * pwsh -EncodedCommand 等编码参数要求确认。
  */
@@ -117,7 +117,7 @@ function checkEncodedCommand(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:62687-62868 fingerprint (2.1.88 match: checkPwshCommandOrFile, 1)
+//@ chunk-6zpsr8vx.js:63918-64099 fingerprint (2.1.88 match: checkPwshCommandOrFile, 1)
 /**
  * 嵌套启动 pwsh/powershell（-Command/-File）要求确认。
  */
@@ -132,9 +132,9 @@ function checkPwshCommandOrFile(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:62868-62972 fingerprint (2.1.88 match: DOWNLOADER_NAMES, 1)
+//@ chunk-6zpsr8vx.js:64099-64203 fingerprint (2.1.88 match: DOWNLOADER_NAMES, 1)
 var DOWNLOADER_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:62868", () => {
+deferInit("chunk-6zpsr8vx.js:64099", () => {
   DOWNLOADER_NAMES = new Set([
     "invoke-webrequest",
     "iwr",
@@ -144,16 +144,16 @@ deferInit("chunk-v0yfsee9.js:62868", () => {
     "start-bitstransfer",
   ]);
 });
-//@ chunk-v0yfsee9.js:62972-63018 file-local
+//@ chunk-6zpsr8vx.js:64203-64249 file-local
 function isDownloader(name) {
   return DOWNLOADER_NAMES.has(name.toLowerCase());
 }
-//@ chunk-v0yfsee9.js:63018-63097 fingerprint (2.1.88 match: isIex, 1)
+//@ chunk-6zpsr8vx.js:64249-64328 fingerprint (2.1.88 match: isIex, 1)
 function isIex(name) {
   let lower = name.toLowerCase();
   return lower === "invoke-expression" || lower === "iex";
 }
-//@ chunk-v0yfsee9.js:63097-63490 fingerprint (2.1.88 match: checkDownloadCradles, 1)
+//@ chunk-6zpsr8vx.js:64328-64721 fingerprint (2.1.88 match: checkDownloadCradles, 1)
 /**
  * 下载并执行（Invoke-WebRequest/irm/iwr/curl/wget 管道到 iex）要求确认；us 为下载器名单。
  */
@@ -179,7 +179,7 @@ function checkDownloadCradles(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:63490-64056 fingerprint (2.1.88 match: checkDownloadUtilities, 1)
+//@ chunk-6zpsr8vx.js:64721-65287 fingerprint (2.1.88 match: checkDownloadUtilities, 1)
 /**
  * BITS 传输（Start-BitsTransfer）与 certutil -urlcache 下载要求确认。
  */
@@ -215,7 +215,7 @@ function checkDownloadUtilities(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:64056-64193 fingerprint (2.1.88 match: checkAddType, 1)
+//@ chunk-6zpsr8vx.js:65287-65424 fingerprint (2.1.88 match: checkAddType, 1)
 /**
  * Add-Type 编译加载 .NET 代码要求确认。
  */
@@ -229,9 +229,9 @@ function checkAddType(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:64193-64223 layout
+//@ chunk-6zpsr8vx.js:65424-65454 layout
 var TENGU_PRANCY_LANTERN = "tengu_prancy_lantern";
-//@ chunk-v0yfsee9.js:64223-65464 fingerprint (2.1.88 match: checkComObject, 0.9)
+//@ chunk-6zpsr8vx.js:65454-66695 fingerprint (2.1.88 match: checkComObject, 0.901)
 /**
  * New-Object -ComObject 或类型不在 CLM 白名单内要求确认；开关 tengu_prancy_lantern 下冒号后为空的参数也要求确认。
  */
@@ -306,7 +306,7 @@ function checkComObject(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:65464-65990 fingerprint (2.1.88 match: checkDangerousFilePathExecution, 1)
+//@ chunk-6zpsr8vx.js:66695-67221 fingerprint (2.1.88 match: checkDangerousFilePathExecution, 1)
 /**
  * 带 -FilePath（或位置字符串参数绑定到 -FilePath）执行脚本文件的 cmdlet 要求确认。
  */
@@ -337,7 +337,7 @@ function checkDangerousFilePathExecution(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:65990-66536 fingerprint (2.1.88 match: checkForEachMemberName, 1)
+//@ chunk-6zpsr8vx.js:67221-67767 fingerprint (2.1.88 match: checkForEachMemberName, 1)
 /**
  * ForEach-Object -MemberName 按名字调用方法要求确认。
  */
@@ -365,7 +365,7 @@ function checkForEachMemberName(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:66536-67546 fingerprint (2.1.88 match: checkStartProcess, 1)
+//@ chunk-6zpsr8vx.js:67767-68777 fingerprint (2.1.88 match: checkStartProcess, 1)
 /**
  * Start-Process 请求提权（-Verb RunAs）或启动嵌套 PowerShell 要求确认。
  */
@@ -421,9 +421,9 @@ function checkStartProcess(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:67546-67683 fingerprint (2.1.88 match: SAFE_SCRIPT_BLOCK_CMDLETS, 1)
+//@ chunk-6zpsr8vx.js:68777-68914 fingerprint (2.1.88 match: SAFE_SCRIPT_BLOCK_CMDLETS, 1)
 var SAFE_SCRIPT_BLOCK_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:67546", () => {
+deferInit("chunk-6zpsr8vx.js:68777", () => {
   SAFE_SCRIPT_BLOCK_CMDLETS = new Set([
     "where-object",
     "sort-object",
@@ -435,7 +435,7 @@ deferInit("chunk-v0yfsee9.js:67546", () => {
     "format-custom",
   ]);
 });
-//@ chunk-v0yfsee9.js:67683-68193 fingerprint (2.1.88 match: checkScriptBlockInjection, 1)
+//@ chunk-6zpsr8vx.js:68914-69424 fingerprint (2.1.88 match: checkScriptBlockInjection, 1)
 /**
  * 脚本块中含危险 cmdlet（不在 SAFE_SCRIPT_BLOCK_CMDLETS 中，如 Where-Object/ForEach-Object 以外）要求确认。
  */
@@ -469,7 +469,7 @@ function checkScriptBlockInjection(parsed) {
     message: "Command contains script block that may execute arbitrary code",
   };
 }
-//@ chunk-v0yfsee9.js:68193-68336 fingerprint (2.1.88 match: checkSubExpressions, 1)
+//@ chunk-6zpsr8vx.js:69424-69567 fingerprint (2.1.88 match: checkSubExpressions, 1)
 /**
  * 含 $() 子表达式要求确认。
  */
@@ -483,7 +483,7 @@ function checkSubExpressions(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:68336-68508 fingerprint (2.1.88 match: checkExpandableStrings, 1)
+//@ chunk-6zpsr8vx.js:69567-69739 fingerprint (2.1.88 match: checkExpandableStrings, 1)
 /**
  * 含嵌入表达式的可展开字符串要求确认。
  */
@@ -497,7 +497,7 @@ function checkExpandableStrings(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:68508-68645 fingerprint (2.1.88 match: checkSplatting, 1)
+//@ chunk-6zpsr8vx.js:69739-69876 fingerprint (2.1.88 match: checkSplatting, 1)
 /**
  * splatting（@var）要求确认。
  */
@@ -511,7 +511,7 @@ function checkSplatting(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:68645-68787 fingerprint (2.1.88 match: checkStopParsing, 1)
+//@ chunk-6zpsr8vx.js:69876-70018 fingerprint (2.1.88 match: checkStopParsing, 1)
 /**
  * 停止解析标记 --% 要求确认。
  */
@@ -525,7 +525,7 @@ function checkStopParsing(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:68787-68926 fingerprint (2.1.88 match: checkMemberInvocations, 1)
+//@ chunk-6zpsr8vx.js:70018-70157 fingerprint (2.1.88 match: checkMemberInvocations, 1)
 /**
  * 调用 .NET 方法（成员调用）要求确认。
  */
@@ -539,7 +539,7 @@ function checkMemberInvocations(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:68926-69119 fingerprint (2.1.88 match: checkTypeLiterals, 1)
+//@ chunk-6zpsr8vx.js:70157-70350 fingerprint (2.1.88 match: checkTypeLiterals, 1)
 /**
  * 使用不在 CLM 白名单内的 .NET 类型字面量 [Type] 要求确认。
  */
@@ -554,7 +554,7 @@ function checkTypeLiterals(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:69119-69387 fingerprint (2.1.88 match: checkInvokeItem, 1)
+//@ chunk-6zpsr8vx.js:70350-70618 fingerprint (2.1.88 match: checkInvokeItem, 1)
 /**
  * Invoke-Item（按关联程序打开文件，相当于执行）要求确认。
  */
@@ -572,9 +572,9 @@ function checkInvokeItem(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:69387-69496 fingerprint (2.1.88 match: SCHEDULED_TASK_CMDLETS, 1)
+//@ chunk-6zpsr8vx.js:70618-70727 fingerprint (2.1.88 match: SCHEDULED_TASK_CMDLETS, 1)
 var SCHEDULED_TASK_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:69387", () => {
+deferInit("chunk-6zpsr8vx.js:70618", () => {
   SCHEDULED_TASK_CMDLETS = new Set([
     "register-scheduledtask",
     "new-scheduledtask",
@@ -582,7 +582,7 @@ deferInit("chunk-v0yfsee9.js:69387", () => {
     "set-scheduledtask",
   ]);
 });
-//@ chunk-v0yfsee9.js:69496-69967 fingerprint (2.1.88 match: checkScheduledTask, 1)
+//@ chunk-6zpsr8vx.js:70727-71198 fingerprint (2.1.88 match: checkScheduledTask, 1)
 /**
  * 创建/修改计划任务（Register-ScheduledTask 等、schtasks /create|/change）要求确认（持久化手段）。
  */
@@ -611,9 +611,9 @@ function checkScheduledTask(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:69967-70120 fingerprint (2.1.88 match: ENV_WRITE_CMDLETS, 1)
+//@ chunk-6zpsr8vx.js:71198-71351 fingerprint (2.1.88 match: ENV_WRITE_CMDLETS, 1)
 var ENV_WRITE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:69967", () => {
+deferInit("chunk-6zpsr8vx.js:71198", () => {
   ENV_WRITE_CMDLETS = new Set([
     "set-item",
     "si",
@@ -633,7 +633,7 @@ deferInit("chunk-v0yfsee9.js:69967", () => {
     "ac",
   ]);
 });
-//@ chunk-v0yfsee9.js:70120-70464 fingerprint (2.1.88 match: checkEnvVarManipulation, 1)
+//@ chunk-6zpsr8vx.js:71351-71695 fingerprint (2.1.88 match: checkEnvVarManipulation, 1)
 /**
  * 修改环境变量（Set-Item env:、[Environment]::SetEnvironmentVariable 等）要求确认。
  */
@@ -658,7 +658,7 @@ function checkEnvVarManipulation(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:70464-70706 fingerprint (2.1.88 match: checkModuleLoading, 1)
+//@ chunk-6zpsr8vx.js:71695-71937 fingerprint (2.1.88 match: checkModuleLoading, 1)
 /**
  * Import-Module / using module 等加载模块要求确认。
  */
@@ -676,9 +676,9 @@ function checkModuleLoading(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:70706-70800 fingerprint (2.1.88 match: RUNTIME_STATE_CMDLETS, 1)
+//@ chunk-6zpsr8vx.js:71937-72031 fingerprint (2.1.88 match: RUNTIME_STATE_CMDLETS, 1)
 var RUNTIME_STATE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:70706", () => {
+deferInit("chunk-6zpsr8vx.js:71937", () => {
   RUNTIME_STATE_CMDLETS = new Set([
     "set-alias",
     "sal",
@@ -690,7 +690,7 @@ deferInit("chunk-v0yfsee9.js:70706", () => {
     "nv",
   ]);
 });
-//@ chunk-v0yfsee9.js:70800-71082 fingerprint (2.1.88 match: checkRuntimeStateManipulation, 1)
+//@ chunk-6zpsr8vx.js:72031-72313 fingerprint (2.1.88 match: checkRuntimeStateManipulation, 1)
 /**
  * Set-Alias/New-Variable 等改变后续命令解析的操作要求确认。
  */
@@ -708,12 +708,12 @@ function checkRuntimeStateManipulation(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:71082-71152 fingerprint (2.1.88 match: WMI_SPAWN_CMDLETS, 0.857)
+//@ chunk-6zpsr8vx.js:72313-72383 fingerprint (2.1.88 match: WMI_SPAWN_CMDLETS, 0.857)
 var WMI_SPAWN_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:71082", () => {
+deferInit("chunk-6zpsr8vx.js:72313", () => {
   WMI_SPAWN_CMDLETS = new Set(["invoke-wmimethod", "iwmi", "invoke-cimmethod", "icim"]);
 });
-//@ chunk-v0yfsee9.js:71152-71668 fingerprint (2.1.88 match: checkWmiProcessSpawn, 0.506)
+//@ chunk-6zpsr8vx.js:72383-72899 fingerprint (2.1.88 match: checkWmiProcessSpawn, 0.505)
 /**
  * Invoke-WmiMethod/Invoke-CimMethod（可 Win32_Process Create 起进程）要求确认。
  */
@@ -738,7 +738,7 @@ function checkWmiProcessSpawn(parsed) {
     behavior: "passthrough",
   };
 }
-//@ chunk-v0yfsee9.js:71668-71945 fingerprint (2.1.88 match: powershellCommandIsSafe, 1)
+//@ chunk-6zpsr8vx.js:72899-73176 fingerprint (2.1.88 match: powershellCommandIsSafe, 1)
 /**
  * PowerShell 安全检查聚合：解析失败要求确认；依次运行 24 个检查器（Invoke-Expression、动态命令名、编码命令、嵌套 pwsh、下载执行、BITS/certutil、Add-Type、COM、-FilePath 执行、Invoke-Item、计划任务、ForEach -MemberName、Start-Process、脚本块、子表达式、可展开字符串、splatting、--%、成员调用、类型字面量、环境变量、模块加载、运行时状态、WMI），首个 ask 即返回。
  */

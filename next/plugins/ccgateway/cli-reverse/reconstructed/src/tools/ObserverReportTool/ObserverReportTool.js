@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ObserverReport 工具：观察者代理把报告送回被观察的代理，长报告落盘。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0m7em5b4.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yz2nt7xx.js (15)
  * attribution: placement 15
  */
 import { randomUUID } from "crypto";
@@ -46,6 +46,7 @@ import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { clipTeammateText } from "../../utils/swarm/teammateIds.js";
 import { identityAgentId2 } from "../../utils/agentId.js";
 import { sanitizeSubagentOutput } from "../../utils/subagentOutputScan.js";
+import { withUntrustedPreamble } from "../../utils/messages/untrustedArtifactContent.js";
 import { normalizeAgentMessageBody, agentMessageTag } from "../../utils/sessionPeers.js";
 import { shouldNotifyTeammateLifecycle, queueAgentMessage } from "../../tasks/LocalAgentTask/childWork.js";
 import { toolsUsedForSummary } from "../../utils/agentListing.js";
@@ -70,7 +71,7 @@ import {
 import { findArmedPairingByObserver } from "../../services/agentObserver/agentObserver.js";
 import { keepaliveReasons } from "../../tasks/taskKinds.js";
 import { FLAG_IDLE_WINDOW } from "../../tasks/LocalAgentTask/keepalive.js";
-import { enqueueCommand } from "../../utils/messageQueueManager.js";
+import { enqueue } from "../../utils/messageQueueManager.js";
 import { WORKFLOW_TOOL_NAME } from "../WorkflowTool/constants.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../ScheduleWakeupTool/prompt.js";
 import { MONITOR } from "../MonitorTool/constants.js";
@@ -78,17 +79,17 @@ import { CRON_CREATE_TOOL_NAME } from "../ScheduleCronTool/prompt.js";
 import { POLL } from "../PollTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0m7em5b4.js:3368-3392 placement
+//@ chunk-yz2nt7xx.js:3435-3459 placement
 var launchAgentsWithHooks = (request) => runAgentSpawnHooks(request, eventCallersFor);
-//@ chunk-0m7em5b4.js:3392-3475 placement
+//@ chunk-yz2nt7xx.js:3459-3542 placement
 var NO_OWN_WORKDIR_MESSAGE = "a working directory of its own is unavailable in a session without a disk";
-//@ chunk-0m7em5b4.js:3475-3624 placement
+//@ chunk-yz2nt7xx.js:3542-3691 placement
 function parseAgentIdArg(cwdArg) {
   if (cwdArg === undefined || cwdArg === null) return;
   if (typeof cwdArg !== "string" || cwdArg.trim() === "") return "cwd must be a string holding a path";
   return isDiskless() ? NO_OWN_WORKDIR_MESSAGE : undefined;
 }
-//@ chunk-0m7em5b4.js:3820-4006 placement
+//@ chunk-yz2nt7xx.js:3887-4073 placement
 function reportSenderIdentity(agentId, agentName, task) {
   if (agentName !== undefined)
     return {
@@ -105,10 +106,10 @@ function reportSenderIdentity(agentId, agentName, task) {
     displayName: isLocalAgent(task) ? task.agentType : agentId,
   };
 }
-//@ chunk-0m7em5b4.js:4006-4121 placement
+//@ chunk-yz2nt7xx.js:4073-4188 placement
 var observerReportInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var observerReportOutputSchema;
-deferInit("chunk-0m7em5b4.js:4006", () => {
+deferInit("chunk-yz2nt7xx.js:4073", () => {
   observerReportInputSchema = DoctorLazy(() =>
     objectSchema({
       message: stringSchema().describe("Your full report for your caller"),
@@ -121,7 +122,7 @@ deferInit("chunk-0m7em5b4.js:4006", () => {
     }),
   );
 });
-//@ chunk-0m7em5b4.js:4121-4576 placement
+//@ chunk-yz2nt7xx.js:4188-4643 placement
 /**
  * 为观察者报告工具构建调用上下文：以 getter 代理会话、存储、代理 id、任务注册表、生命周期、消息队列与消息等字段。
  */
@@ -162,12 +163,12 @@ function createReportContext(baseContext, callOptions) {
     },
   };
 }
-//@ chunk-0m7em5b4.js:4576-7501 placement
+//@ chunk-yz2nt7xx.js:4643-7689 placement
 /**
  * ObserverReport 工具（2.1.316 新增）：观察者代理把最终报告送回其报告目标（被观察的代理），超长报告先落盘再给路径。
  */
 var ObserverReportTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:4576", () => {
+deferInit("chunk-yz2nt7xx.js:4643", () => {
   ObserverReportTool = buildTool({
     name: SUBAGENTHANDBACK,
     searchHint: "deliver your final report to the agent that spawned you",
@@ -219,8 +220,8 @@ deferInit("chunk-0m7em5b4.js:4576", () => {
           let classifierBlock = takeClassifierBlock(reportContext.toolUseId);
           let isFlagged = classifierBlock !== undefined && classifierBlock.kind !== "unavailable";
           if (isFlagged && agentId !== undefined) flagAgentContract(agentId);
-          let handbackTarget = getHandbackTarget(reportContext);
-          if (agentId === undefined || handbackTarget === undefined)
+          let toolContext_2 = getHandbackTarget(reportContext);
+          if (agentId === undefined || toolContext_2 === undefined)
             return {
               data: {
                 success: false,
@@ -233,7 +234,7 @@ deferInit("chunk-0m7em5b4.js:4576", () => {
               message: `Nothing was sent: your report was already delivered (${SUBAGENTHANDBACK} delivers one report). ${isSendMessageUnavailable() ? "Stop now." : `Use ${SENDMESSAGE} for anything further, then stop.`}`,
             },
           };
-          if (handbackForRecipient(agentId, handbackTarget.recipient) !== undefined) return refusedResult;
+          if (handbackForRecipient(agentId, toolContext_2.recipient) !== undefined) return refusedResult;
           let senderName = agentDisplayName(reportContext, agentId);
           let shortSenderName = clipTeammateText(
             reportSenderIdentity(
@@ -242,17 +243,26 @@ deferInit("chunk-0m7em5b4.js:4576", () => {
               reportContext.taskRegistry.get(agentId),
             ).displayName,
           );
-          let sanitized = sanitizeSubagentOutput(input.message).sanitized;
-          let reportBody = handbackReportText(await spillLongReport(sanitized, reportContext));
-          let warningText = classifierBlock === undefined ? undefined : describeReportBlock(classifierBlock);
-          let reportWithWarning =
-            warningText === undefined
+          let displayName = sanitizeSubagentOutput(input.message).sanitized;
+          let reportBody = handbackReportText(await spillLongReport(displayName, reportContext));
+          let report = classifierBlock === undefined ? undefined : describeReportBlock(classifierBlock);
+          let cleaned = reportContext.taskRegistry.get(agentId);
+          let task = [
+            withUntrustedPreamble(
+              reportContext.messages(),
+              isLocalAgent(cleaned) ? cleaned.priorCarriedMarkers : undefined,
+            ).trimEnd(),
+            report ?? "",
+          ].filter((intro) => intro !== "").join(`
+`);
+          let bodyText =
+            task === ""
               ? reportBody
-              : `${indentLines(warningText)}
+              : `${indentLines(task)}
 ${reportBody}`;
-          let normalizedBody = normalizeAgentMessageBody(reportWithWarning);
-          let handbackReport = parseHandbackReport(normalizedBody);
-          let origin = {
+          let normalizedBody = normalizeAgentMessageBody(bodyText);
+          let reportObj = parseHandbackReport(normalizedBody);
+          let peer = {
             kind: "peer",
             from: senderName,
             senderTaskId: agentId,
@@ -268,27 +278,27 @@ ${reportBody}`;
             ...(isFlagged && {
               flagged: true,
             }),
-            ...(handbackReport?.note !== undefined && {
-              handbackNote: handbackReport.note,
+            ...(reportObj?.note !== undefined && {
+              handbackNote: reportObj.note,
             }),
-            ...(handbackReport !== undefined && {
-              handbackReportText: handbackReport.report,
+            ...(reportObj !== undefined && {
+              handbackReportText: reportObj.report,
             }),
           };
           let senderTask = reportContext.taskRegistry.get(agentId);
           let recipient =
             isLocalAgent(senderTask) &&
             senderTask.isBackgrounded &&
-            !shouldNotifyTeammateLifecycle(handbackTarget.recipient, reportContext.taskRegistry)
+            !shouldNotifyTeammateLifecycle(toolContext_2.recipient, reportContext.taskRegistry)
               ? mainAgentId()
-              : handbackTarget.recipient;
-          if (recipient !== handbackTarget.recipient)
+              : toolContext_2.recipient;
+          if (recipient !== toolContext_2.recipient)
             reportContext.taskRegistry.update(agentId, (task) => ({
               ...task,
               handbackRecipient: recipient,
             }));
           if (handbackForRecipient(agentId, recipient) !== undefined) return refusedResult;
-          let taggedMessage = agentMessageTag(senderName, reportWithWarning);
+          let taggedMessage = agentMessageTag(senderName, bodyText);
           let toolsUsed = toolsUsedForSummary(reportContext.messages());
           let toolsUsedMeta =
             toolsUsed.length > 0
@@ -303,7 +313,7 @@ ${reportBody}`;
                 agentId: mainAgentId(),
                 value: taggedMessage,
                 priority: "next",
-                origin,
+                origin: peer,
                 skipSlashCommands: true,
                 isMeta: true,
                 skipAttachments: true,
@@ -331,15 +341,15 @@ ${reportBody}`;
                 },
               };
           } else {
-            if (!useTeammateLifecycleNotification(reportContext.taskRegistry.get(handbackTarget.recipient)))
+            if (!useTeammateLifecycleNotification(reportContext.taskRegistry.get(toolContext_2.recipient)))
               return {
                 data: {
                   success: false,
                   message: "Nothing was sent: the agent that spawned you is no longer running.",
                 },
               };
-            sendMessageToAgent(handbackTarget.recipient, taggedMessage, reportContext.taskRegistry, {
-              origin,
+            sendMessageToAgent(toolContext_2.recipient, taggedMessage, reportContext.taskRegistry, {
+              origin: peer,
               isMeta: true,
               ...toolsUsedMeta,
             });
@@ -352,8 +362,8 @@ ${reportBody}`;
                   prependMarker: false,
                 }).sanitized,
               ),
-              ...(warningText !== undefined && {
-                warning: normalizeAgentMessageBody(warningText),
+              ...(report !== undefined && {
+                warning: normalizeAgentMessageBody(report),
               }),
             },
           }));
@@ -369,9 +379,9 @@ ${reportBody}`;
         },
       };
     },
-    mapToolResultToToolResultBlockParam(result, toolUseId) {
+    mapToolResultToToolResultBlockParam(result, input) {
       return {
-        tool_use_id: toolUseId,
+        tool_use_id: input,
         type: "tool_result",
         content: [
           {
@@ -386,7 +396,7 @@ ${reportBody}`;
     },
   });
 });
-//@ chunk-0m7em5b4.js:7501-7683 placement
+//@ chunk-yz2nt7xx.js:7689-7871 placement
 function describeReportBlock(block) {
   switch (block.kind) {
     case "blocked":
@@ -397,7 +407,7 @@ function describeReportBlock(block) {
       return buildSubagentClassifierUnavailableNote(block.model, block.httpStatus, block.errorKind);
   }
 }
-//@ chunk-0m7em5b4.js:7683-7909 placement
+//@ chunk-yz2nt7xx.js:7871-8096 placement
 async function spillLongReport(content, reportContext) {
   let maxChars = getPersistenceThreshold(AGENT, MAX_AGENT_OUTPUT_TOKENS);
   if (content.length <= maxChars) return content;
@@ -414,7 +424,7 @@ async function spillLongReport(content, reportContext) {
   }
   return buildPersistedOutputMessage(persisted);
 }
-//@ chunk-0m7em5b4.js:7909-8099 placement
+//@ chunk-yz2nt7xx.js:8096-8286 placement
 function getHandbackTarget(reportContext) {
   if (reportContext.agentId === undefined) return;
   let task = reportContext.taskRegistry.get(reportContext.agentId);
@@ -423,16 +433,16 @@ function getHandbackTarget(reportContext) {
     recipient: task.handbackRecipient,
   };
 }
-//@ chunk-0m7em5b4.js:8099-8157 placement
+//@ chunk-yz2nt7xx.js:8286-8344 placement
 /**
  * 取 agent 的展示名：agent 生命周期登记的名字优先，取不到时用 id。
  */
 function agentDisplayName(reportContext, agentId) {
   return reportContext.agentLifecycle.nameOf(identityAgentId2(agentId)) ?? agentId;
 }
-//@ chunk-0m7em5b4.js:8188-8212 placement
+//@ chunk-yz2nt7xx.js:8375-8399 placement
 var OBSERVERREPORT = "ObserverReport";
-//@ chunk-0m7em5b4.js:8212-9170 placement
+//@ chunk-yz2nt7xx.js:8399-9357 placement
 /**
  * ObserverReport 工具的提示词文本。
  */
@@ -440,13 +450,13 @@ var OBSERVER_REPORT_DESCRIPTION =
   "Send a report to your report target \u2014 the agent you observe, or the coordinating agent that spawned the worker you observe. The target is resolved from your observer pairing \u2014 there is no recipient to name. Use this only when you have something genuinely useful: a mistake about to compound, a missed constraint, prior art the observed agent should see. The expected steady state is silence \u2014 if nothing warrants action, end your turn without calling this.";
 var OBSERVER_REPORT_PROMPT =
   "Send a report to your report target \u2014 the agent you observe, or the coordinating agent that spawned the worker you observe. The target is resolved from your observer pairing \u2014 there is no recipient to name. Use this only when you have something genuinely useful: a mistake about to compound, a missed constraint, prior art the observed agent should see. The expected steady state is silence \u2014 if nothing warrants action, end your turn without calling this.";
-//@ chunk-0m7em5b4.js:9170-10922 placement
+//@ chunk-yz2nt7xx.js:9357-11111 placement
 /**
  * ObserverReport 工具配置对象（report 入参、提示与结果大小上限）。
  */
 var ObserverReportInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var observerReportTool;
-deferInit("chunk-0m7em5b4.js:9170", () => {
+deferInit("chunk-yz2nt7xx.js:9357", () => {
   ObserverReportInputSchema = DoctorLazy(() =>
     zodStrictObject({
       report: stringSchema()
@@ -537,7 +547,7 @@ ${input.report}`,
           };
           armedPairingByObserver.reportOrigins.add(origin);
           if (reportTargetTaskId === undefined)
-            enqueueCommand({
+            enqueue({
               mode: "prompt",
               agentId: mainAgentId(),
               value: text,
@@ -574,9 +584,9 @@ ${input.report}`,
     },
   });
 });
-//@ chunk-0m7em5b4.js:10922-10958 placement
+//@ chunk-yz2nt7xx.js:11111-11147 placement
 var OBSERVER_EXCLUDED_TOOLS; // deferred: uses SENDMESSAGE (../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0m7em5b4.js:10922", () => {
+deferInit("chunk-yz2nt7xx.js:11111", () => {
   OBSERVER_EXCLUDED_TOOLS = [
     SENDMESSAGE,
     SUBAGENTHANDBACK,
@@ -590,11 +600,11 @@ deferInit("chunk-0m7em5b4.js:10922", () => {
   ];
 });
 export {
-  parseAgentIdArg,
+  reportSenderIdentity,
   OBSERVER_EXCLUDED_TOOLS,
   observerReportTool,
   launchAgentsWithHooks,
-  NO_OWN_WORKDIR_MESSAGE,
   ObserverReportTool,
-  reportSenderIdentity,
+  parseAgentIdArg,
+  NO_OWN_WORKDIR_MESSAGE,
 };

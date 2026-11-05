@@ -3,33 +3,33 @@
  *
  * 2.1.316 新增：computer use 截图缩放计算
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hrs3dad1.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p57a7983.js (6)
  * attribution: placement 6
  */
 
-//@ chunk-hrs3dad1.js:4874-4934 placement
+//@ chunk-p57a7983.js:5098-5158 placement
 var IMAGE_SCALING_DEFAULTS = {
   pxPerToken: 28,
   maxTargetPx: 1568,
   maxTargetTokens: 1568,
 };
-//@ chunk-hrs3dad1.js:4934-4979 placement
+//@ chunk-p57a7983.js:5158-5203 placement
 /**
  * 向上取整的除法（计算每边分块数）。
  */
 function ceilDiv(numerator, denominator) {
   return Math.floor((numerator - 1) / denominator) + 1;
 }
-//@ chunk-hrs3dad1.js:4979-5018 placement
+//@ chunk-p57a7983.js:5203-5242 placement
 /**
  * 按每 token 像素数计算图片的 token 数。
  */
 function tokenCountForImage(width, height, denominator) {
   return ceilDiv(width, denominator) * ceilDiv(height, denominator);
 }
-//@ chunk-hrs3dad1.js:5018-5331 placement
+//@ chunk-p57a7983.js:5242-5555 placement
 /**
  * 按每 token 像素与最大边长/最大 token 计算截图缩放后的尺寸。
  */
@@ -57,12 +57,12 @@ function scaledImageSize(width, height, limits) {
     else high = floored;
   }
 }
-//@ chunk-hrs3dad1.js:5331-5345 placement
+//@ chunk-p57a7983.js:5555-5569 placement
 /**
  * 图片缩放因子的下限（0.1）。
  */
 var MIN_IMAGE_SCALE = 0.1;
 var MAX_IMAGE_SCALE = 1;
-//@ chunk-hrs3dad1.js:5345-5672 placement
+//@ chunk-p57a7983.js:5569-5896 placement
 var SCALE_PARAM_DESCRIPTION = `Scale factor in [${MIN_IMAGE_SCALE}, ${MAX_IMAGE_SCALE}] for the returned image; 1 (default) uses the full image token budget, 0.5 returns an image at half the width and height (~quarter of the tokens). Coordinates are ALWAYS in the full-resolution coordinate frame (reported with every scaled screenshot), never in the scaled image's own pixels.`;
 export { scaledImageSize, IMAGE_SCALING_DEFAULTS };

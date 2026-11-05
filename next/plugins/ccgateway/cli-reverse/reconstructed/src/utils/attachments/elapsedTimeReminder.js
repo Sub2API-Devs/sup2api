@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：经过时间提醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -18,18 +18,18 @@ import { isPeerOrObserver } from "../messageProvenance.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3292891-3292953 placement
+//@ chunk-5xgkngpb.js:3377949-3378011 placement
 /**
  * 按会话根保存的经过时间提醒起点与已报告会话 id。
  */
 var elapsedTimeStateByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3292891", () => {
+deferInit("chunk-5xgkngpb.js:3377949", () => {
   elapsedTimeStateByRoot = new SessionRootSlot(() => ({
     start: undefined,
     reportedSessionId: undefined,
   }));
 });
-//@ chunk-e6aww6q8.js:3292953-3293100 placement
+//@ chunk-5xgkngpb.js:3378011-3378158 placement
 /**
  * 判断当前模型是否启用经过时间提醒（出错视为关闭）。
  */
@@ -41,19 +41,19 @@ function isElapsedTimeReminderEnabled(mainLoopModel) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3293100-3293257 placement
+//@ chunk-5xgkngpb.js:3378158-3378315 placement
 function formatElapsedTime(elapsedMs) {
   let elapsedSeconds = Number.isFinite(elapsedMs) ? Math.max(0, Math.floor(elapsedMs / 1000)) : 0;
   return `Elapsed time so far: ${Math.floor(elapsedSeconds / 60)}m ${String(elapsedSeconds % 60).padStart(2, "0")}s`;
 }
-//@ chunk-e6aww6q8.js:3293257-3293294 placement
+//@ chunk-5xgkngpb.js:3378315-3378351 placement
 /**
  * 判断该消息来源不应重置经过时间提醒（子代理或特定来源）。
  */
 function isNonRestartingOrigin(origin) {
   return isSessionTaskNotificationOrigin(origin) || isPeerOrObserver(origin);
 }
-//@ chunk-e6aww6q8.js:3293294-3293672 placement
+//@ chunk-5xgkngpb.js:3378351-3378729 placement
 /**
  * 在主会话收到新的用户输入时重置经过时间提醒的起点；子代理、特定来源或空轮询投递不重置，功能关闭时清除起点；失败只记录日志。
  */
@@ -79,7 +79,7 @@ function restartElapsedTimeClock({ session, agentId, options }, queuedCommand) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:3293672-3293958 placement
+//@ chunk-5xgkngpb.js:3378729-3379015 placement
 /**
  * 生成经过时间提醒附件（会话首次时设定起点并上报）。
  */
@@ -106,4 +106,4 @@ function getElapsedTimeReminderAttachments({ session }) {
     },
   ];
 }
-export { restartElapsedTimeClock, isElapsedTimeReminderEnabled, getElapsedTimeReminderAttachments };
+export { isElapsedTimeReminderEnabled, getElapsedTimeReminderAttachments, restartElapsedTimeClock };

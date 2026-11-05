@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：code-review 技能的正确性审查角度（逐行扫描等）提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (7)
  * attribution: placement 7
  */
 import { urlPatternToRegex, escapeControlChars, plural } from "../../utils/stringUtils.js";
 import { getAgentDepth } from "../../utils/agentContext.js";
 import { getMaxSubagentSpawnDepth } from "../../tools/AgentTool/spawnDepth.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -25,7 +25,7 @@ import { getPrintOutputFormat } from "../../bootstrap/state.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:49051-49274 placement
+//@ chunk-ne2890fx.js:49226-49449 placement
 function extractFlags(input, flagNames) {
   let trimmed = input.trim();
   let rawFirstToken = trimmed.split(/\s+/, 1)[0] ?? "";
@@ -44,14 +44,14 @@ function extractFlags(input, flagNames) {
     rest,
   };
 }
-//@ chunk-hantmvxa.js:49274-49409 placement
+//@ chunk-ne2890fx.js:49449-49584 placement
 function canSpawnReviewAgents(context) {
   if (context.agentContext && getAgentDepth(context.agentContext) >= getMaxSubagentSpawnDepth()) return false;
   let tools = context.options?.tools;
   if (!tools) return true;
-  return tools.some((tool) => toolMatchesName(tool, AGENT));
+  return tools.some((tool) => matchesToolName(tool, AGENT));
 }
-//@ chunk-hantmvxa.js:49409-51848 placement
+//@ chunk-ne2890fx.js:49584-52023 placement
 /**
  * 代码评审的五个清理类角度文本（别重复实现、简化、约定、效率、测试），提示词里逐个引用。
  */
@@ -98,10 +98,10 @@ infrastructure are a sign the fix isn't deep enough \u2014 prefer the simpler, m
 general change to the underlying mechanism over adding special cases, and name
 that change.
 `;
-//@ chunk-hantmvxa.js:51848-52000 placement
+//@ chunk-ne2890fx.js:52023-52175 placement
 var ReviewFindingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var JSON_FENCE_RE;
-deferInit("chunk-hantmvxa.js:51848", () => {
+deferInit("chunk-ne2890fx.js:52023", () => {
   ReviewFindingsSchema = DoctorLazy(() =>
     array(
       objectSchema({
@@ -114,7 +114,7 @@ deferInit("chunk-hantmvxa.js:51848", () => {
   );
   JSON_FENCE_RE = /^```json[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gim;
 });
-//@ chunk-hantmvxa.js:52000-52144 placement
+//@ chunk-ne2890fx.js:52175-52318 placement
 function formatReviewOutput(text) {
   let printOutputFormat = getPrintOutputFormat();
   if (printOutputFormat === "text" || printOutputFormat === "json") return text;
@@ -123,7 +123,7 @@ function formatReviewOutput(text) {
     text.replace(JSON_FENCE_RE, (wholeMatch, fenceBody) => formatReviewFindings(fenceBody) ?? wholeMatch)
   );
 }
-//@ chunk-hantmvxa.js:52144-52613 placement
+//@ chunk-ne2890fx.js:52318-52787 placement
 function formatReviewFindings(text) {
   let parsed = ReviewFindingsSchema().safeParse(safeParseJSON(text.trim(), false));
   if (!parsed.success) return;
@@ -150,7 +150,7 @@ ${mapped.join(`
 
 `)}`;
 }
-//@ chunk-hantmvxa.js:52613-57940 placement
+//@ chunk-ne2890fx.js:52787-58114 placement
 /**
  * 代码评审的 bug 类角度文本：逐行扫描、删除行为审计、跨文件追踪、语言陷阱、包装/代理正确性，以及 verify 阶段与 gap sweep 的提示词。
  */
@@ -170,7 +170,7 @@ var REVIEW_PHASE2_VERIFY_THREE_STATE;
 var REVIEW_PHASE2_VERIFY_RECALL_BIASED;
 var REVIEW_ANGLE_DROPPED_GUARD_HINT;
 var REVIEW_PHASE3_GAP_SWEEP;
-deferInit("chunk-hantmvxa.js:52613", () => {
+deferInit("chunk-ne2890fx.js:52787", () => {
   REVIEW_ANGLE_LINE_SCAN = `### Angle A \u2014 line-by-line diff scan
 
 Read every hunk in the diff, line by line. Then Read the enclosing function for

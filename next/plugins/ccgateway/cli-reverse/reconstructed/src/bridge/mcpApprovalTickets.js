@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：为主会话里某次 MCP 工具调用记下审批票据（按 toolUseId），用于远端审批回传时核对；按 toolUseId 取出审批票据并核对服务器名与中继来源，不符时上报原因并拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gv8haye8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rz26abj6.js (8)
  * attribution: placement 8
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
@@ -19,15 +19,15 @@ import {
 } from "./bridgePermissionCallbacks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-gv8haye8.js:979-1040 placement
+//@ chunk-rz26abj6.js:979-1040 placement
 var MCP_APPROVAL_TICKETS_SLOT; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-gv8haye8.js:979", () => {
+deferInit("chunk-rz26abj6.js:979", () => {
   MCP_APPROVAL_TICKETS_SLOT = new SessionRootSlot(() => ({
     byToolUse: new Map(),
     ofLateAllows: new Map(),
   }));
 });
-//@ chunk-gv8haye8.js:1040-1172 placement
+//@ chunk-rz26abj6.js:1040-1172 placement
 function recordMcpApprovalTicket(session, toolUseId, serverName, ticket) {
   if (toolUseId === "") return;
   MCP_APPROVAL_TICKETS_SLOT.of(session).byToolUse.set(toolUseId, {
@@ -38,7 +38,7 @@ function recordMcpApprovalTicket(session, toolUseId, serverName, ticket) {
     MCP_APPROVAL_TICKETS_SLOT.peek(session)?.byToolUse.delete(toolUseId);
   });
 }
-//@ chunk-gv8haye8.js:1172-1493 placement
+//@ chunk-rz26abj6.js:1172-1493 placement
 /**
  * 为主会话里某次 MCP 工具调用记下审批票据（按 toolUseId），用于远端审批回传时核对。
  */
@@ -55,7 +55,7 @@ function recordMcpApprovalTicket_2(ticket, input, toolUseId, context) {
   }
   recordMcpApprovalTicket(context.session, toolUseId, serverName, ticket);
 }
-//@ chunk-gv8haye8.js:1493-1620 placement
+//@ chunk-rz26abj6.js:1493-1620 placement
 /**
  * 记下（或在值为 undefined 时清除）某会话里某键对应的"迟到放行"结果；会话为 undefined 时忽略。
  */
@@ -67,7 +67,7 @@ function setLateAllowDecision(session, toolUseId, decision) {
   }
   MCP_APPROVAL_TICKETS_SLOT.of(session).ofLateAllows.set(toolUseId, decision);
 }
-//@ chunk-gv8haye8.js:1620-1720 placement
+//@ chunk-rz26abj6.js:1620-1720 placement
 /**
  * 取出并删除某会话里某键的"迟到放行"结果（一次性读取）。
  */
@@ -78,7 +78,7 @@ function takeLateAllowDecision(session, toolUseId) {
   ofLateAllows?.delete(toolUseId);
   return decision;
 }
-//@ chunk-gv8haye8.js:1720-2021 placement
+//@ chunk-rz26abj6.js:1720-2021 placement
 /**
  * 按 toolUseId 取出审批票据并核对服务器名与中继来源，不符时上报原因并拒绝。
  */
@@ -101,7 +101,7 @@ function consumeMcpApprovalTicket(session, toolUseId, name, server) {
     [ANTHROPIC_APPROVALTICKET]: record.ticket,
   };
 }
-//@ chunk-gv8haye8.js:2021-2087 placement
+//@ chunk-rz26abj6.js:2021-2087 placement
 /**
  * 桥接权限输入处理：删掉输入里的 anthropic/approvalTicket 字段，并把消费审批票据的结果合并进输入。
  */
@@ -109,7 +109,7 @@ function consumeTicketIntoInput(meta, session, toolUseId, name, config) {
   delete meta[ANTHROPIC_APPROVALTICKET];
   Object.assign(meta, consumeMcpApprovalTicket(session, toolUseId, name, config));
 }
-//@ chunk-gv8haye8.js:2087-2283 placement (2.1.88 match: getRiskColor, 0.785)
+//@ chunk-rz26abj6.js:2087-2283 placement (2.1.88 match: getRiskColor, 0.786)
 function getRiskColor(riskLevel) {
   let { response } = riskLevel;
   if (response.subtype !== "success") return riskLevel;
@@ -126,10 +126,10 @@ function getRiskColor(riskLevel) {
   };
 }
 export {
-  takeLateAllowDecision,
-  recordMcpApprovalTicket_2,
   consumeMcpApprovalTicket,
   consumeTicketIntoInput,
+  recordMcpApprovalTicket_2,
   getRiskColor,
   setLateAllowDecision,
+  takeLateAllowDecision,
 };

@@ -1,10 +1,11 @@
 /**
  * @modelcontextprotocol/client/dist/src-D_zzAWoS.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/client@2.0.0
- * pieces: chunk-r1g76qsy.js (156)
- * attribution: esm-fingerprint 114, esm-layout 36, layout 6
+ * pieces: chunk-qq5knpkd.js (157)
+ * attribution: esm-fingerprint 114, esm-layout 37, layout 6
  */
+import { deferredSchemaHandlers } from "../../../@babel/runtime/helpers/esm/importDeferProxy.js";
 import {
   lazy,
   union,
@@ -36,6 +37,11 @@ import {
   CLIENT_CAPABILITIES_META_KEY,
   LOG_LEVEL_META_KEY,
   SERVER_INFO_META_KEY,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from "../../core/dist/schemas-lGLjBX8n.cjs";
+import { TASK_STATUSES, IO_MODELCONTEXTPROTOCOL_TASKS } from "../../core/dist/schemas-DscsoNZN.mjs";
+import { toESModule } from "../../core/(bundler runtime of a pre-bundled dist file).js";
+import {
   AnnotationsSchema,
   AudioContentSchema,
   BaseMetadataSchema,
@@ -138,7 +144,7 @@ import {
   PromptMessageSchema,
   PromptReferenceSchema,
   PromptSchema,
-  ReadResourceRequestParamsSchema,
+  ResourceRequestParamsSchema_default,
   ReadResourceRequestSchema,
   ReadResourceResultSchema,
   RelatedTaskMetadataSchema,
@@ -214,21 +220,18 @@ import {
   OAuthTokensSchema,
   OpenIdProviderDiscoveryMetadataSchema,
   OpenIdProviderMetadataSchema,
-  SUPPORTED_PROTOCOL_VERSIONS,
 } from "../../core/dist/auth-CUe6YdwF.mjs";
-import { TASK_STATUSES, IO_MODELCONTEXTPROTOCOL_TASKS } from "../../core/dist/schemas-DscsoNZN.mjs";
-import { toESModule } from "../../core/(bundler runtime of a pre-bundled dist file).js";
 import { safeParse } from "../../../zod/v4/locales/fr.js";
 import { toJSONSchema } from "../../../zod/v4/core/json-schema-processors.js";
 import { import_content_type } from "../../../content-type/index.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-r1g76qsy.js:17821-17862 esm-fingerprint
+//@ chunk-qq5knpkd.js:19636-19677 esm-fingerprint
 var BRANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r1g76qsy.js:17821", () => {
+deferInit("chunk-qq5knpkd.js:19636", () => {
   BRANDS = Symbol.for("mcp.sdk.errorBrands");
 });
-//@ chunk-r1g76qsy.js:17862-18143 esm-fingerprint
+//@ chunk-qq5knpkd.js:19677-19958 esm-fingerprint
 function stampErrorBrands(instance, ctor) {
   let brands = new Set();
   let current = ctor;
@@ -245,7 +248,7 @@ function stampErrorBrands(instance, ctor) {
     configurable: true,
   });
 }
-//@ chunk-r1g76qsy.js:18143-18460 esm-fingerprint
+//@ chunk-qq5knpkd.js:19958-20275 esm-fingerprint
 function brandedHasInstance(cls, value) {
   try {
     if (
@@ -261,13 +264,13 @@ function brandedHasInstance(cls, value) {
   } catch {}
   return Function.prototype[Symbol.hasInstance].call(cls, value);
 }
-//@ chunk-r1g76qsy.js:18460-21533 esm-fingerprint
+//@ chunk-qq5knpkd.js:20275-23348 esm-fingerprint
 var OAuthErrorCode; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OAuthError;
 var SdkErrorCode;
 var SdkError;
 var SdkHttpError;
-deferInit("chunk-r1g76qsy.js:18460", () => {
+deferInit("chunk-qq5knpkd.js:20275", () => {
   OAuthErrorCode = (function (OAuthErrorCode$1) {
     OAuthErrorCode$1.InvalidRequest = "invalid_request";
     OAuthErrorCode$1.InvalidClient = "invalid_client";
@@ -388,13 +391,13 @@ deferInit("chunk-r1g76qsy.js:18460", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:21533-21620 esm-fingerprint
+//@ chunk-qq5knpkd.js:23348-23435 esm-fingerprint
 function resourceUrlFromServerUrl(url) {
   let resourceURL = typeof url === "string" ? new URL(url) : new URL(url.href);
   resourceURL.hash = "";
   return resourceURL;
 }
-//@ chunk-r1g76qsy.js:21620-21991 esm-fingerprint
+//@ chunk-qq5knpkd.js:23435-23806 esm-fingerprint
 function checkResourceAllowed({ requestedResource, configuredResource }) {
   let requested =
     typeof requestedResource === "string" ? new URL(requestedResource) : new URL(requestedResource.href);
@@ -406,22 +409,22 @@ function checkResourceAllowed({ requestedResource, configuredResource }) {
   let configuredPath = configured.pathname.endsWith("/") ? configured.pathname : configured.pathname + "/";
   return requestedPath.startsWith(configuredPath);
 }
-//@ chunk-r1g76qsy.js:21991-22019 esm-fingerprint
+//@ chunk-qq5knpkd.js:23806-23834 esm-fingerprint
 var FIRST_MODERN_PROTOCOL_VERSION = "2026-07-28";
 var defaultModernVersions = [FIRST_MODERN_PROTOCOL_VERSION];
-//@ chunk-r1g76qsy.js:22019-22047 esm-layout
+//@ chunk-qq5knpkd.js:23834-23862 esm-layout
 function isModernProtocolVersion(version) {
   return version >= FIRST_MODERN_PROTOCOL_VERSION;
 }
-//@ chunk-r1g76qsy.js:22047-22091 esm-layout
+//@ chunk-qq5knpkd.js:23862-23906 esm-layout
 function legacyProtocolVersions(versions) {
   return versions.filter((version) => !isModernProtocolVersion(version));
 }
-//@ chunk-r1g76qsy.js:22091-22134 esm-layout
+//@ chunk-qq5knpkd.js:23906-23949 esm-layout
 function modernProtocolVersions(versions) {
   return versions.filter((version) => isModernProtocolVersion(version));
 }
-//@ chunk-r1g76qsy.js:22134-22392 esm-fingerprint
+//@ chunk-qq5knpkd.js:23949-24207 esm-fingerprint
 function appendTextFallbackForNonObject(result) {
   let sc = result.structuredContent;
   if (sc === undefined) return result;
@@ -438,9 +441,9 @@ function appendTextFallbackForNonObject(result) {
     ],
   };
 }
-//@ chunk-r1g76qsy.js:22392-22439 esm-fingerprint
+//@ chunk-qq5knpkd.js:24207-24254 esm-fingerprint
 var TOOL_RESULT_FOREIGN_FAMILY_KEYS = ["task", "inputRequests", "requestState"];
-//@ chunk-r1g76qsy.js:22439-22582 esm-fingerprint
+//@ chunk-qq5knpkd.js:24254-24397 esm-fingerprint
 function normalizeContentlessToolResult(value) {
   if (
     value === null ||
@@ -455,86 +458,128 @@ function normalizeContentlessToolResult(value) {
     content: [],
   };
 }
-//@ chunk-r1g76qsy.js:22582-37310 esm-fingerprint
+//@ chunk-qq5knpkd.js:24921-24980 esm-layout
+function lazySchema(build) {
+  return new Proxy(
+    {
+      build,
+      schema: undefined,
+    },
+    deferredSchemaHandlers,
+  );
+}
+//@ chunk-qq5knpkd.js:24980-40722 esm-fingerprint
 function build$1() {
-  let JSONValueSchema$1 = lazy(() =>
+  let JSONValueSchemaClient = lazy(() =>
     union([
       stringSchema(),
       numberSchema(),
       booleanSchema(),
       nullSchema(),
-      record(stringSchema(), JSONValueSchema$1),
-      array(JSONValueSchema$1),
+      record(stringSchema(), JSONValueSchemaClient),
+      array(JSONValueSchemaClient),
     ]),
   );
-  let JSONObjectSchema$1 = record(stringSchema(), JSONValueSchema$1);
-  let ProgressTokenSchema$1 = union([stringSchema(), numberSchema().int()]);
-  let CursorSchema$1 = stringSchema();
-  let TaskMetadataSchema$1 = objectSchema({
-    ttl: numberSchema().optional(),
-  });
-  let RelatedTaskMetadataSchema$1 = objectSchema({
-    taskId: stringSchema(),
-  });
-  let RequestMetaSchema$1 = looseObject({
-    progressToken: ProgressTokenSchema$1.optional(),
-    "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
-  });
-  let BaseRequestParamsSchema$1 = objectSchema({
-    _meta: RequestMetaSchema$1.optional(),
-  });
-  let TaskAugmentedRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    task: TaskMetadataSchema$1.optional(),
-  });
-  let RequestSchema$1 = objectSchema({
-    method: stringSchema(),
-    params: BaseRequestParamsSchema$1.loose().optional(),
-  });
-  let NotificationsParamsSchema$1 = objectSchema({
-    _meta: RequestMetaSchema$1.optional(),
-  });
-  let NotificationSchema$1 = objectSchema({
-    method: stringSchema(),
-    params: NotificationsParamsSchema$1.loose().optional(),
-  });
-  let ResultSchema$1 = looseObject({
-    _meta: RequestMetaSchema$1.optional(),
-  });
-  let RequestIdSchema$1 = union([stringSchema(), numberSchema().int()]);
-  let EmptyResultSchema$1 = ResultSchema$1.strict();
-  let CancelledNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    requestId: RequestIdSchema$1.optional(),
-    reason: stringSchema().optional(),
-  });
-  let CancelledNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/cancelled"),
-    params: CancelledNotificationParamsSchema$1,
-  });
-  let IconSchema$1 = objectSchema({
-    src: stringSchema(),
-    mimeType: stringSchema().optional(),
-    sizes: array(stringSchema()).optional(),
-    theme: _enum(["light", "dark"]).optional(),
-  });
-  let IconsSchema$1 = objectSchema({
-    icons: array(IconSchema$1).optional(),
-  });
-  let BaseMetadataSchema$1 = objectSchema({
-    name: stringSchema(),
-    title: stringSchema().optional(),
-  });
-  let ImplementationSchema$1 = BaseMetadataSchema$1.extend({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    version: stringSchema(),
-    websiteUrl: stringSchema().optional(),
-    description: stringSchema().optional(),
-  });
-  let FormElicitationCapabilitySchema = intersection(
+  let JSONObjectSchema$1 = lazySchema(() => record(stringSchema(), JSONValueSchemaClient));
+  let ProgressTokenSchema$1 = lazySchema(() => union([stringSchema(), numberSchema().int()]));
+  let CursorSchema$1 = lazySchema(() => stringSchema());
+  let TaskMetadataSchema$1 = lazySchema(() =>
     objectSchema({
-      applyDefaults: booleanSchema().optional(),
+      ttl: numberSchema().optional(),
     }),
-    JSONObjectSchema$1,
+  );
+  let RelatedTaskMetadataSchema$1 = lazySchema(() =>
+    objectSchema({
+      taskId: stringSchema(),
+    }),
+  );
+  let RequestMetaSchema$1 = lazySchema(() =>
+    looseObject({
+      progressToken: ProgressTokenSchema$1.optional(),
+      "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
+    }),
+  );
+  let BaseRequestParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      _meta: RequestMetaSchema$1.optional(),
+    }),
+  );
+  let TaskAugmentedRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      task: TaskMetadataSchema$1.optional(),
+    }),
+  );
+  let RequestSchemaClient = lazySchema(() =>
+    objectSchema({
+      method: stringSchema(),
+      params: BaseRequestParamsSchema$1.loose().optional(),
+    }),
+  );
+  let NotificationsParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      _meta: RequestMetaSchema$1.optional(),
+    }),
+  );
+  let NotificationSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: stringSchema(),
+      params: NotificationsParamsSchema$1.loose().optional(),
+    }),
+  );
+  let ResultSchema$1 = lazySchema(() =>
+    looseObject({
+      _meta: RequestMetaSchema$1.optional(),
+    }),
+  );
+  let RequestIdSchema$1 = lazySchema(() => union([stringSchema(), numberSchema().int()]));
+  let EmptyResultSchema$1 = lazySchema(() => ResultSchema$1.strict());
+  let CancelledNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      requestId: RequestIdSchema$1.optional(),
+      reason: stringSchema().optional(),
+    }),
+  );
+  let CancelledNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/cancelled"),
+      params: CancelledNotificationParamsSchema$1,
+    }),
+  );
+  let IconSchema$1 = lazySchema(() =>
+    objectSchema({
+      src: stringSchema(),
+      mimeType: stringSchema().optional(),
+      sizes: array(stringSchema()).optional(),
+      theme: _enum(["light", "dark"]).optional(),
+    }),
+  );
+  let IconsSchema$1 = lazySchema(() =>
+    objectSchema({
+      icons: array(IconSchema$1).optional(),
+    }),
+  );
+  let BaseMetadataSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema(),
+      title: stringSchema().optional(),
+    }),
+  );
+  let ImplementationSchema$1 = lazySchema(() =>
+    BaseMetadataSchema$1.extend({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      version: stringSchema(),
+      websiteUrl: stringSchema().optional(),
+      description: stringSchema().optional(),
+    }),
+  );
+  let FormElicitationCapabilitySchema = lazySchema(() =>
+    intersection(
+      objectSchema({
+        applyDefaults: booleanSchema().optional(),
+      }),
+      JSONObjectSchema$1,
+    ),
   );
   let ElicitationCapabilitySchema = preprocess(
     (value) => {
@@ -552,111 +597,145 @@ function build$1() {
       JSONObjectSchema$1.optional(),
     ),
   );
-  let ClientTasksCapabilitySchema$1 = looseObject({
-    list: JSONObjectSchema$1.optional(),
-    cancel: JSONObjectSchema$1.optional(),
-    requests: looseObject({
-      sampling: looseObject({
-        createMessage: JSONObjectSchema$1.optional(),
+  let ClientTasksCapabilitySchema$1 = lazySchema(() =>
+    looseObject({
+      list: JSONObjectSchema$1.optional(),
+      cancel: JSONObjectSchema$1.optional(),
+      requests: looseObject({
+        sampling: looseObject({
+          createMessage: JSONObjectSchema$1.optional(),
+        }).optional(),
+        elicitation: looseObject({
+          create: JSONObjectSchema$1.optional(),
+        }).optional(),
       }).optional(),
-      elicitation: looseObject({
-        create: JSONObjectSchema$1.optional(),
+    }),
+  );
+  let ServerTasksCapabilitySchema$1 = lazySchema(() =>
+    looseObject({
+      list: JSONObjectSchema$1.optional(),
+      cancel: JSONObjectSchema$1.optional(),
+      requests: looseObject({
+        tools: looseObject({
+          call: JSONObjectSchema$1.optional(),
+        }).optional(),
       }).optional(),
-    }).optional(),
-  });
-  let ServerTasksCapabilitySchema$1 = looseObject({
-    list: JSONObjectSchema$1.optional(),
-    cancel: JSONObjectSchema$1.optional(),
-    requests: looseObject({
-      tools: looseObject({
-        call: JSONObjectSchema$1.optional(),
+    }),
+  );
+  let ClientCapabilitiesSchema$1 = lazySchema(() =>
+    objectSchema({
+      experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+      sampling: objectSchema({
+        context: JSONObjectSchema$1.optional(),
+        tools: JSONObjectSchema$1.optional(),
       }).optional(),
-    }).optional(),
-  });
-  let ClientCapabilitiesSchema$1 = objectSchema({
-    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
-    sampling: objectSchema({
-      context: JSONObjectSchema$1.optional(),
-      tools: JSONObjectSchema$1.optional(),
-    }).optional(),
-    elicitation: ElicitationCapabilitySchema.optional(),
-    roots: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tasks: ClientTasksCapabilitySchema$1.optional(),
-    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
-  });
-  let InitializeRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    protocolVersion: stringSchema(),
-    capabilities: ClientCapabilitiesSchema$1,
-    clientInfo: ImplementationSchema$1,
-  });
-  let InitializeRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("initialize"),
-    params: InitializeRequestParamsSchema$1,
-  });
-  let ServerCapabilitiesSchema$1 = objectSchema({
-    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
-    logging: JSONObjectSchema$1.optional(),
-    completions: JSONObjectSchema$1.optional(),
-    prompts: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    resources: objectSchema({
-      subscribe: booleanSchema().optional(),
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tools: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tasks: ServerTasksCapabilitySchema$1.optional(),
-    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
-  });
-  let InitializeResultSchema$1 = ResultSchema$1.extend({
-    protocolVersion: stringSchema(),
-    capabilities: ServerCapabilitiesSchema$1,
-    serverInfo: ImplementationSchema$1,
-    instructions: stringSchema().optional(),
-  });
-  let InitializedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/initialized"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let PingRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("ping"),
-    params: BaseRequestParamsSchema$1.optional(),
-  });
-  let ProgressSchema$1 = objectSchema({
-    progress: numberSchema(),
-    total: optional(numberSchema()),
-    message: optional(stringSchema()),
-  });
-  let ProgressNotificationParamsSchema$1 = objectSchema({
-    ...NotificationsParamsSchema$1.shape,
-    ...ProgressSchema$1.shape,
-    progressToken: ProgressTokenSchema$1,
-  });
-  let ProgressNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/progress"),
-    params: ProgressNotificationParamsSchema$1,
-  });
-  let PaginatedRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    cursor: CursorSchema$1.optional(),
-  });
-  let PaginatedRequestSchema$1 = RequestSchema$1.extend({
-    params: PaginatedRequestParamsSchema$1.optional(),
-  });
-  let PaginatedResultSchema$1 = ResultSchema$1.extend({
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let ResourceContentsSchema$1 = objectSchema({
-    uri: stringSchema(),
-    mimeType: optional(stringSchema()),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let TextResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    text: stringSchema(),
-  });
+      elicitation: ElicitationCapabilitySchema.optional(),
+      roots: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tasks: ClientTasksCapabilitySchema$1.optional(),
+      extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
+    }),
+  );
+  let InitializeRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      protocolVersion: stringSchema(),
+      capabilities: ClientCapabilitiesSchema$1,
+      clientInfo: ImplementationSchema$1,
+    }),
+  );
+  let InitializeRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("initialize"),
+      params: InitializeRequestParamsSchema$1,
+    }),
+  );
+  let ServerCapabilitiesSchema$1 = lazySchema(() =>
+    objectSchema({
+      experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+      logging: JSONObjectSchema$1.optional(),
+      completions: JSONObjectSchema$1.optional(),
+      prompts: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      resources: objectSchema({
+        subscribe: booleanSchema().optional(),
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tools: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tasks: ServerTasksCapabilitySchema$1.optional(),
+      extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
+    }),
+  );
+  let InitializeResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      protocolVersion: stringSchema(),
+      capabilities: ServerCapabilitiesSchema$1,
+      serverInfo: ImplementationSchema$1,
+      instructions: stringSchema().optional(),
+    }),
+  );
+  let InitializedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/initialized"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let PingRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("ping"),
+      params: BaseRequestParamsSchema$1.optional(),
+    }),
+  );
+  let ProgressSchema$1 = lazySchema(() =>
+    objectSchema({
+      progress: numberSchema(),
+      total: optional(numberSchema()),
+      message: optional(stringSchema()),
+    }),
+  );
+  let ProgressNotificationParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...NotificationsParamsSchema$1.shape,
+      ...ProgressSchema$1.shape,
+      progressToken: ProgressTokenSchema$1,
+    }),
+  );
+  let ProgressNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/progress"),
+      params: ProgressNotificationParamsSchema$1,
+    }),
+  );
+  let PaginatedRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      cursor: CursorSchema$1.optional(),
+    }),
+  );
+  let PaginatedRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      params: PaginatedRequestParamsSchema$1.optional(),
+    }),
+  );
+  let PaginatedResultSchemaClient = lazySchema(() =>
+    ResultSchema$1.extend({
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let ResourceContentsSchema$1 = lazySchema(() =>
+    objectSchema({
+      uri: stringSchema(),
+      mimeType: optional(stringSchema()),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let TextResourceContentsSchema$1 = lazySchema(() =>
+    ResourceContentsSchema$1.extend({
+      text: stringSchema(),
+    }),
+  );
   let Base64Schema = stringSchema().refine(
     (val) => {
       try {
@@ -670,540 +749,704 @@ function build$1() {
       message: "Invalid Base64 string",
     },
   );
-  let BlobResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    blob: Base64Schema,
-  });
-  let RoleSchema$1 = _enum(["user", "assistant"]);
-  let AnnotationsSchema$1 = objectSchema({
-    audience: array(RoleSchema$1).optional(),
-    priority: numberSchema().min(0).max(1).optional(),
-    lastModified: union([
-      parseToolOutputSchema({
-        offset: true,
-      }),
-      parseToolOutputSchema({
-        offset: true,
-        precision: -1,
-      }),
-    ]).optional(),
-  });
-  let ResourceSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    uri: stringSchema(),
-    description: optional(stringSchema()),
-    mimeType: optional(stringSchema()),
-    size: optional(numberSchema()),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: optional(looseObject({})),
-  });
-  let ResourceTemplateSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    uriTemplate: stringSchema(),
-    description: optional(stringSchema()),
-    mimeType: optional(stringSchema()),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: optional(looseObject({})),
-  });
-  let ListResourcesRequestSchema$1 = PaginatedRequestSchema$1.extend({
-    method: literal("resources/list"),
-  });
-  let ListResourcesResultSchema$1 = PaginatedResultSchema$1.extend({
-    resources: array(ResourceSchema$1),
-  });
-  let ListResourceTemplatesRequestSchema$1 = PaginatedRequestSchema$1.extend({
-    method: literal("resources/templates/list"),
-  });
-  let ListResourceTemplatesResultSchema$1 = PaginatedResultSchema$1.extend({
-    resourceTemplates: array(ResourceTemplateSchema$1),
-  });
-  let ResourceRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    uri: stringSchema(),
-  });
-  let ReadResourceRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
-  let ReadResourceRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("resources/read"),
-    params: ReadResourceRequestParamsSchema$1,
-  });
-  let ReadResourceResultSchema$1 = ResultSchema$1.extend({
-    contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
-  });
-  let ResourceListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/resources/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let SubscribeRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
-  let SubscribeRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("resources/subscribe"),
-    params: SubscribeRequestParamsSchema$1,
-  });
-  let UnsubscribeRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
-  let UnsubscribeRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("resources/unsubscribe"),
-    params: UnsubscribeRequestParamsSchema$1,
-  });
-  let ResourceUpdatedNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    uri: stringSchema(),
-  });
-  let ResourceUpdatedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/resources/updated"),
-    params: ResourceUpdatedNotificationParamsSchema$1,
-  });
-  let PromptArgumentSchema$1 = objectSchema({
-    name: stringSchema(),
-    description: optional(stringSchema()),
-    required: optional(booleanSchema()),
-  });
-  let PromptSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    description: optional(stringSchema()),
-    arguments: optional(array(PromptArgumentSchema$1)),
-    _meta: optional(looseObject({})),
-  });
-  let ListPromptsRequestSchema$1 = PaginatedRequestSchema$1.extend({
-    method: literal("prompts/list"),
-  });
-  let ListPromptsResultSchema$1 = PaginatedResultSchema$1.extend({
-    prompts: array(PromptSchema$1),
-  });
-  let GetPromptRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    name: stringSchema(),
-    arguments: record(stringSchema(), stringSchema()).optional(),
-  });
-  let GetPromptRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("prompts/get"),
-    params: GetPromptRequestParamsSchema$1,
-  });
-  let TextContentSchema$1 = objectSchema({
-    type: literal("text"),
-    text: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ImageContentSchema$1 = objectSchema({
-    type: literal("image"),
-    data: Base64Schema,
-    mimeType: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let AudioContentSchema$1 = objectSchema({
-    type: literal("audio"),
-    data: Base64Schema,
-    mimeType: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ToolUseContentSchema$1 = objectSchema({
-    type: literal("tool_use"),
-    name: stringSchema(),
-    id: stringSchema(),
-    input: record(stringSchema(), unknown()),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let EmbeddedResourceSchema$1 = objectSchema({
-    type: literal("resource"),
-    resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ResourceLinkSchema$1 = ResourceSchema$1.extend({
-    type: literal("resource_link"),
-  });
-  let ContentBlockSchema$1 = union([
-    TextContentSchema$1,
-    ImageContentSchema$1,
-    AudioContentSchema$1,
-    ResourceLinkSchema$1,
-    EmbeddedResourceSchema$1,
-  ]);
-  let PromptMessageSchema$1 = objectSchema({
-    role: RoleSchema$1,
-    content: ContentBlockSchema$1,
-  });
-  let GetPromptResultSchema$1 = ResultSchema$1.extend({
-    description: stringSchema().optional(),
-    messages: array(PromptMessageSchema$1),
-  });
-  let PromptListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/prompts/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let ToolAnnotationsSchema$1 = objectSchema({
-    title: stringSchema().optional(),
-    readOnlyHint: booleanSchema().optional(),
-    destructiveHint: booleanSchema().optional(),
-    idempotentHint: booleanSchema().optional(),
-    openWorldHint: booleanSchema().optional(),
-  });
-  let ToolExecutionSchema$1 = objectSchema({
-    taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
-  });
-  let ToolSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    description: stringSchema().optional(),
-    inputSchema: objectSchema({
-      type: literal("object"),
-      properties: record(stringSchema(), JSONValueSchema$1).optional(),
-      required: array(stringSchema()).optional(),
-    }).catchall(unknown()),
-    outputSchema: objectSchema({
-      type: literal("object"),
-      properties: record(stringSchema(), JSONValueSchema$1).optional(),
-      required: array(stringSchema()).optional(),
-    })
-      .catchall(unknown())
-      .optional(),
-    annotations: ToolAnnotationsSchema$1.optional(),
-    execution: ToolExecutionSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ListToolsRequestSchema$1 = PaginatedRequestSchema$1.extend({
-    method: literal("tools/list"),
-  });
-  let ListToolsResultSchema$1 = PaginatedResultSchema$1.extend({
-    tools: array(ToolSchema$1),
-  });
-  let CallToolResultSchema$1 = ResultSchema$1.extend({
-    content: array(ContentBlockSchema$1),
-    structuredContent: record(stringSchema(), unknown()).optional(),
-    isError: booleanSchema().optional(),
-  });
-  let CallToolRequestParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    name: stringSchema(),
-    arguments: record(stringSchema(), unknown()).optional(),
-  });
-  let CallToolRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("tools/call"),
-    params: CallToolRequestParamsSchema$1,
-  });
-  let ToolListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/tools/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let LoggingLevelSchema$1 = _enum([
-    "debug",
-    "info",
-    "notice",
-    "warning",
-    "error",
-    "critical",
-    "alert",
-    "emergency",
-  ]);
-  let SetLevelRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    level: LoggingLevelSchema$1,
-  });
-  let SetLevelRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("logging/setLevel"),
-    params: SetLevelRequestParamsSchema$1,
-  });
-  let LoggingMessageNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    level: LoggingLevelSchema$1,
-    logger: stringSchema().optional(),
-    data: unknown(),
-  });
-  let LoggingMessageNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/message"),
-    params: LoggingMessageNotificationParamsSchema$1,
-  });
-  let ModelHintSchema$1 = objectSchema({
-    name: stringSchema().optional(),
-  });
-  let ModelPreferencesSchema$1 = objectSchema({
-    hints: array(ModelHintSchema$1).optional(),
-    costPriority: numberSchema().min(0).max(1).optional(),
-    speedPriority: numberSchema().min(0).max(1).optional(),
-    intelligencePriority: numberSchema().min(0).max(1).optional(),
-  });
-  let ToolChoiceSchema$1 = objectSchema({
-    mode: _enum(["auto", "required", "none"]).optional(),
-  });
-  let ToolResultContentSchema$1 = objectSchema({
-    type: literal("tool_result"),
-    toolUseId: stringSchema().describe("The unique identifier for the corresponding tool call."),
-    content: array(ContentBlockSchema$1),
-    structuredContent: objectSchema({}).loose().optional(),
-    isError: booleanSchema().optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let SamplingContentSchema$1 = discriminatedUnion("type", [
-    TextContentSchema$1,
-    ImageContentSchema$1,
-    AudioContentSchema$1,
-  ]);
-  let SamplingMessageContentBlockSchema$1 = discriminatedUnion("type", [
-    TextContentSchema$1,
-    ImageContentSchema$1,
-    AudioContentSchema$1,
-    ToolUseContentSchema$1,
-    ToolResultContentSchema$1,
-  ]);
-  let SamplingMessageSchema$1 = objectSchema({
-    role: RoleSchema$1,
-    content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let CreateMessageRequestParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    messages: array(SamplingMessageSchema$1),
-    modelPreferences: ModelPreferencesSchema$1.optional(),
-    systemPrompt: stringSchema().optional(),
-    includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-    temperature: numberSchema().optional(),
-    maxTokens: numberSchema().int(),
-    stopSequences: array(stringSchema()).optional(),
-    metadata: JSONObjectSchema$1.optional(),
-    tools: array(ToolSchema$1).optional(),
-    toolChoice: ToolChoiceSchema$1.optional(),
-  });
-  let CreateMessageRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("sampling/createMessage"),
-    params: CreateMessageRequestParamsSchema$1,
-  });
-  let CreateMessageResultSchema$1 = ResultSchema$1.extend({
-    model: stringSchema(),
-    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(stringSchema())),
-    role: RoleSchema$1,
-    content: SamplingContentSchema$1,
-  });
-  let CreateMessageResultWithToolsSchema$1 = ResultSchema$1.extend({
-    model: stringSchema(),
-    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(stringSchema())),
-    role: RoleSchema$1,
-    content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
-  });
-  let BooleanSchemaSchema$1 = objectSchema({
-    type: literal("boolean"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    default: booleanSchema().optional(),
-  });
-  let StringSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minLength: numberSchema().optional(),
-    maxLength: numberSchema().optional(),
-    format: _enum(["email", "uri", "date", "date-time"]).optional(),
-    default: stringSchema().optional(),
-  });
-  let NumberSchemaSchema$1 = objectSchema({
-    type: _enum(["number", "integer"]),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minimum: numberSchema().optional(),
-    maximum: numberSchema().optional(),
-    default: numberSchema().optional(),
-  });
-  let UntitledSingleSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    enum: array(stringSchema()),
-    default: stringSchema().optional(),
-  });
-  let TitledSingleSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    oneOf: array(
-      objectSchema({
-        const: stringSchema(),
-        title: stringSchema(),
-      }),
-    ),
-    default: stringSchema().optional(),
-  });
-  let LegacyTitledEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    enum: array(stringSchema()),
-    enumNames: array(stringSchema()).optional(),
-    default: stringSchema().optional(),
-  });
-  let SingleSelectEnumSchemaSchema$1 = union([
-    UntitledSingleSelectEnumSchemaSchema$1,
-    TitledSingleSelectEnumSchemaSchema$1,
-  ]);
-  let UntitledMultiSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("array"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minItems: numberSchema().optional(),
-    maxItems: numberSchema().optional(),
-    items: objectSchema({
-      type: literal("string"),
-      enum: array(stringSchema()),
+  let BlobResourceContentsSchema$1 = lazySchema(() =>
+    ResourceContentsSchema$1.extend({
+      blob: Base64Schema,
     }),
-    default: array(stringSchema()).optional(),
-  });
-  let TitledMultiSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("array"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minItems: numberSchema().optional(),
-    maxItems: numberSchema().optional(),
-    items: objectSchema({
-      anyOf: array(
+  );
+  let RoleSchema$1 = lazySchema(() => _enum(["user", "assistant"]));
+  let AnnotationsSchema$1 = lazySchema(() =>
+    objectSchema({
+      audience: array(RoleSchema$1).optional(),
+      priority: numberSchema().min(0).max(1).optional(),
+      lastModified: union([
+        parseToolOutputSchema({
+          offset: true,
+        }),
+        parseToolOutputSchema({
+          offset: true,
+          precision: -1,
+        }),
+      ]).optional(),
+    }),
+  );
+  let ResourceSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      uri: stringSchema(),
+      description: optional(stringSchema()),
+      mimeType: optional(stringSchema()),
+      size: optional(numberSchema()),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let ResourceTemplateSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      uriTemplate: stringSchema(),
+      description: optional(stringSchema()),
+      mimeType: optional(stringSchema()),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let ListResourcesRequestSchema$1 = lazySchema(() =>
+    PaginatedRequestSchema$1.extend({
+      method: literal("resources/list"),
+    }),
+  );
+  let ListResourcesResultSchema$1 = lazySchema(() =>
+    PaginatedResultSchemaClient.extend({
+      resources: array(ResourceSchema$1),
+    }),
+  );
+  let ListResourceTemplatesRequestSchema$1 = lazySchema(() =>
+    PaginatedRequestSchema$1.extend({
+      method: literal("resources/templates/list"),
+    }),
+  );
+  let ListResourceTemplatesResultSchema$1 = lazySchema(() =>
+    PaginatedResultSchemaClient.extend({
+      resourceTemplates: array(ResourceTemplateSchema$1),
+    }),
+  );
+  let ResourceRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      uri: stringSchema(),
+    }),
+  );
+  let ReadResourceRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
+  let ReadResourceRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("resources/read"),
+      params: ReadResourceRequestParamsSchema$1,
+    }),
+  );
+  let ReadResourceResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
+    }),
+  );
+  let ResourceListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/resources/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let SubscribeRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
+  let SubscribeRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("resources/subscribe"),
+      params: SubscribeRequestParamsSchema$1,
+    }),
+  );
+  let UnsubscribeRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
+  let UnsubscribeRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("resources/unsubscribe"),
+      params: UnsubscribeRequestParamsSchema$1,
+    }),
+  );
+  let ResourceUpdatedNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      uri: stringSchema(),
+    }),
+  );
+  let ResourceUpdatedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/resources/updated"),
+      params: ResourceUpdatedNotificationParamsSchema$1,
+    }),
+  );
+  let PromptArgumentSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema(),
+      description: optional(stringSchema()),
+      required: optional(booleanSchema()),
+    }),
+  );
+  let PromptSchemaClient = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      description: optional(stringSchema()),
+      arguments: optional(array(PromptArgumentSchema$1)),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let ListPromptsRequestSchema$1 = lazySchema(() =>
+    PaginatedRequestSchema$1.extend({
+      method: literal("prompts/list"),
+    }),
+  );
+  let ListPromptsResultSchema$1 = lazySchema(() =>
+    PaginatedResultSchemaClient.extend({
+      prompts: array(PromptSchemaClient),
+    }),
+  );
+  let GetPromptRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      name: stringSchema(),
+      arguments: record(stringSchema(), stringSchema()).optional(),
+    }),
+  );
+  let GetPromptRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("prompts/get"),
+      params: GetPromptRequestParamsSchema$1,
+    }),
+  );
+  let TextContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("text"),
+      text: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ImageContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("image"),
+      data: Base64Schema,
+      mimeType: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let AudioContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("audio"),
+      data: Base64Schema,
+      mimeType: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ToolUseContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("tool_use"),
+      name: stringSchema(),
+      id: stringSchema(),
+      input: record(stringSchema(), unknown()),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let EmbeddedResourceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("resource"),
+      resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ResourceLinkSchema$1 = lazySchema(() =>
+    ResourceSchema$1.extend({
+      type: literal("resource_link"),
+    }),
+  );
+  let ContentBlockSchema$1 = lazySchema(() =>
+    union([
+      TextContentSchema$1,
+      ImageContentSchema$1,
+      AudioContentSchema$1,
+      ResourceLinkSchema$1,
+      EmbeddedResourceSchema$1,
+    ]),
+  );
+  let PromptMessageSchema$1 = lazySchema(() =>
+    objectSchema({
+      role: RoleSchema$1,
+      content: ContentBlockSchema$1,
+    }),
+  );
+  let GetPromptResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      description: stringSchema().optional(),
+      messages: array(PromptMessageSchema$1),
+    }),
+  );
+  let PromptListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/prompts/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let ToolAnnotationsSchema$1 = lazySchema(() =>
+    objectSchema({
+      title: stringSchema().optional(),
+      readOnlyHint: booleanSchema().optional(),
+      destructiveHint: booleanSchema().optional(),
+      idempotentHint: booleanSchema().optional(),
+      openWorldHint: booleanSchema().optional(),
+    }),
+  );
+  let ToolExecutionSchema$1 = lazySchema(() =>
+    objectSchema({
+      taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
+    }),
+  );
+  let ToolSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      description: stringSchema().optional(),
+      inputSchema: objectSchema({
+        type: literal("object"),
+        properties: record(stringSchema(), JSONValueSchemaClient).optional(),
+        required: array(stringSchema()).optional(),
+      }).catchall(unknown()),
+      outputSchema: objectSchema({
+        type: literal("object"),
+        properties: record(stringSchema(), JSONValueSchemaClient).optional(),
+        required: array(stringSchema()).optional(),
+      })
+        .catchall(unknown())
+        .optional(),
+      annotations: ToolAnnotationsSchema$1.optional(),
+      execution: ToolExecutionSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ListToolsRequestSchema$1 = lazySchema(() =>
+    PaginatedRequestSchema$1.extend({
+      method: literal("tools/list"),
+    }),
+  );
+  let ListToolsResultSchema$1 = lazySchema(() =>
+    PaginatedResultSchemaClient.extend({
+      tools: array(ToolSchema$1),
+    }),
+  );
+  let CallToolResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      content: array(ContentBlockSchema$1),
+      structuredContent: record(stringSchema(), unknown()).optional(),
+      isError: booleanSchema().optional(),
+    }),
+  );
+  let CallToolRequestParamsSchema$1 = lazySchema(() =>
+    TaskAugmentedRequestParamsSchema$1.extend({
+      name: stringSchema(),
+      arguments: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let CallToolRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("tools/call"),
+      params: CallToolRequestParamsSchema$1,
+    }),
+  );
+  let ToolListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/tools/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let LoggingLevelSchema$1 = lazySchema(() =>
+    _enum(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]),
+  );
+  let SetLevelRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      level: LoggingLevelSchema$1,
+    }),
+  );
+  let SetLevelRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("logging/setLevel"),
+      params: SetLevelRequestParamsSchema$1,
+    }),
+  );
+  let LoggingMessageNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      level: LoggingLevelSchema$1,
+      logger: stringSchema().optional(),
+      data: unknown(),
+    }),
+  );
+  let LoggingMessageNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/message"),
+      params: LoggingMessageNotificationParamsSchema$1,
+    }),
+  );
+  let ModelHintSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema().optional(),
+    }),
+  );
+  let ModelPreferencesSchema$1 = lazySchema(() =>
+    objectSchema({
+      hints: array(ModelHintSchema$1).optional(),
+      costPriority: numberSchema().min(0).max(1).optional(),
+      speedPriority: numberSchema().min(0).max(1).optional(),
+      intelligencePriority: numberSchema().min(0).max(1).optional(),
+    }),
+  );
+  let ToolChoiceSchema$1 = lazySchema(() =>
+    objectSchema({
+      mode: _enum(["auto", "required", "none"]).optional(),
+    }),
+  );
+  let ToolResultContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("tool_result"),
+      toolUseId: stringSchema().describe("The unique identifier for the corresponding tool call."),
+      content: array(ContentBlockSchema$1),
+      structuredContent: objectSchema({}).loose().optional(),
+      isError: booleanSchema().optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let SamplingContentSchema$1 = lazySchema(() =>
+    discriminatedUnion("type", [TextContentSchema$1, ImageContentSchema$1, AudioContentSchema$1]),
+  );
+  let SamplingMessageContentBlockSchema$1 = lazySchema(() =>
+    discriminatedUnion("type", [
+      TextContentSchema$1,
+      ImageContentSchema$1,
+      AudioContentSchema$1,
+      ToolUseContentSchema$1,
+      ToolResultContentSchema$1,
+    ]),
+  );
+  let SamplingMessageSchema$1 = lazySchema(() =>
+    objectSchema({
+      role: RoleSchema$1,
+      content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let CreateMessageRequestParamsSchema$1 = lazySchema(() =>
+    TaskAugmentedRequestParamsSchema$1.extend({
+      messages: array(SamplingMessageSchema$1),
+      modelPreferences: ModelPreferencesSchema$1.optional(),
+      systemPrompt: stringSchema().optional(),
+      includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
+      temperature: numberSchema().optional(),
+      maxTokens: numberSchema().int(),
+      stopSequences: array(stringSchema()).optional(),
+      metadata: JSONObjectSchema$1.optional(),
+      tools: array(ToolSchema$1).optional(),
+      toolChoice: ToolChoiceSchema$1.optional(),
+    }),
+  );
+  let CreateMessageRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("sampling/createMessage"),
+      params: CreateMessageRequestParamsSchema$1,
+    }),
+  );
+  let CreateMessageResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      model: stringSchema(),
+      stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(stringSchema())),
+      role: RoleSchema$1,
+      content: SamplingContentSchema$1,
+    }),
+  );
+  let CreateMessageResultWithToolsSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      model: stringSchema(),
+      stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(stringSchema())),
+      role: RoleSchema$1,
+      content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
+    }),
+  );
+  let BooleanSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("boolean"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      default: booleanSchema().optional(),
+    }),
+  );
+  let StringSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minLength: numberSchema().optional(),
+      maxLength: numberSchema().optional(),
+      format: _enum(["email", "uri", "date", "date-time"]).optional(),
+      default: stringSchema().optional(),
+    }),
+  );
+  let NumberSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: _enum(["number", "integer"]),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minimum: numberSchema().optional(),
+      maximum: numberSchema().optional(),
+      default: numberSchema().optional(),
+    }),
+  );
+  let UntitledSingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      enum: array(stringSchema()),
+      default: stringSchema().optional(),
+    }),
+  );
+  let TitledSingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      oneOf: array(
         objectSchema({
           const: stringSchema(),
           title: stringSchema(),
         }),
       ),
+      default: stringSchema().optional(),
     }),
-    default: array(stringSchema()).optional(),
-  });
-  let MultiSelectEnumSchemaSchema$1 = union([
-    UntitledMultiSelectEnumSchemaSchema$1,
-    TitledMultiSelectEnumSchemaSchema$1,
-  ]);
-  let EnumSchemaSchema$1 = union([
-    LegacyTitledEnumSchemaSchema$1,
-    SingleSelectEnumSchemaSchema$1,
-    MultiSelectEnumSchemaSchema$1,
-  ]);
-  let PrimitiveSchemaDefinitionSchema$1 = union([
-    EnumSchemaSchema$1,
-    BooleanSchemaSchema$1,
-    StringSchemaSchema$1,
-    NumberSchemaSchema$1,
-  ]);
-  let ElicitRequestFormParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    mode: literal("form").optional(),
-    message: stringSchema(),
-    requestedSchema: objectSchema({
-      type: literal("object"),
-      properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
-      required: array(stringSchema()).optional(),
-    }).catchall(unknown()),
-  });
-  let ElicitRequestURLParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    mode: literal("url"),
-    message: stringSchema(),
-    elicitationId: stringSchema(),
-    url: stringSchema().url(),
-  });
-  let ElicitRequestParamsSchema$1 = union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]);
-  let ElicitRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("elicitation/create"),
-    params: ElicitRequestParamsSchema$1,
-  });
-  let ElicitationCompleteNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    elicitationId: stringSchema(),
-  });
-  let ElicitationCompleteNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/elicitation/complete"),
-    params: ElicitationCompleteNotificationParamsSchema$1,
-  });
-  let ElicitResultSchema$1 = ResultSchema$1.extend({
-    action: _enum(["accept", "decline", "cancel"]),
-    content: preprocess(
-      (val) => (val === null ? undefined : val),
-      record(
-        stringSchema(),
-        union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
-      ).optional(),
-    ),
-  });
-  let ResourceTemplateReferenceSchema$1 = objectSchema({
-    type: literal("ref/resource"),
-    uri: stringSchema(),
-  });
-  let PromptReferenceSchema$1 = objectSchema({
-    type: literal("ref/prompt"),
-    name: stringSchema(),
-  });
-  let CompleteRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    ref: union([PromptReferenceSchema$1, ResourceTemplateReferenceSchema$1]),
-    argument: objectSchema({
+  );
+  let LegacyTitledEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      enum: array(stringSchema()),
+      enumNames: array(stringSchema()).optional(),
+      default: stringSchema().optional(),
+    }),
+  );
+  let SingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    union([UntitledSingleSelectEnumSchemaSchema$1, TitledSingleSelectEnumSchemaSchema$1]),
+  );
+  let UntitledMultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("array"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minItems: numberSchema().optional(),
+      maxItems: numberSchema().optional(),
+      items: objectSchema({
+        type: literal("string"),
+        enum: array(stringSchema()),
+      }),
+      default: array(stringSchema()).optional(),
+    }),
+  );
+  let TitledMultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("array"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minItems: numberSchema().optional(),
+      maxItems: numberSchema().optional(),
+      items: objectSchema({
+        anyOf: array(
+          objectSchema({
+            const: stringSchema(),
+            title: stringSchema(),
+          }),
+        ),
+      }),
+      default: array(stringSchema()).optional(),
+    }),
+  );
+  let MultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    union([UntitledMultiSelectEnumSchemaSchema$1, TitledMultiSelectEnumSchemaSchema$1]),
+  );
+  let EnumSchemaSchema$1 = lazySchema(() =>
+    union([LegacyTitledEnumSchemaSchema$1, SingleSelectEnumSchemaSchema$1, MultiSelectEnumSchemaSchema$1]),
+  );
+  let PrimitiveSchemaDefinitionSchema$1 = lazySchema(() =>
+    union([EnumSchemaSchema$1, BooleanSchemaSchema$1, StringSchemaSchema$1, NumberSchemaSchema$1]),
+  );
+  let ElicitRequestFormParamsSchema$1 = lazySchema(() =>
+    TaskAugmentedRequestParamsSchema$1.extend({
+      mode: literal("form").optional(),
+      message: stringSchema(),
+      requestedSchema: objectSchema({
+        type: literal("object"),
+        properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
+        required: array(stringSchema()).optional(),
+      }).catchall(unknown()),
+    }),
+  );
+  let ElicitRequestURLParamsSchema$1 = lazySchema(() =>
+    TaskAugmentedRequestParamsSchema$1.extend({
+      mode: literal("url"),
+      message: stringSchema(),
+      elicitationId: stringSchema(),
+      url: stringSchema().url(),
+    }),
+  );
+  let ElicitRequestParamsSchema$1 = lazySchema(() =>
+    union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]),
+  );
+  let ElicitRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("elicitation/create"),
+      params: ElicitRequestParamsSchema$1,
+    }),
+  );
+  let ElicitationCompleteNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      elicitationId: stringSchema(),
+    }),
+  );
+  let ElicitationCompleteNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/elicitation/complete"),
+      params: ElicitationCompleteNotificationParamsSchema$1,
+    }),
+  );
+  let ElicitResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      action: _enum(["accept", "decline", "cancel"]),
+      content: preprocess(
+        (val) => (val === null ? undefined : val),
+        record(
+          stringSchema(),
+          union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
+        ).optional(),
+      ),
+    }),
+  );
+  let ResourceTemplateReferenceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("ref/resource"),
+      uri: stringSchema(),
+    }),
+  );
+  let PromptReferenceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("ref/prompt"),
       name: stringSchema(),
-      value: stringSchema(),
     }),
-    context: objectSchema({
-      arguments: record(stringSchema(), stringSchema()).optional(),
-    }).optional(),
-  });
-  let CompleteRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("completion/complete"),
-    params: CompleteRequestParamsSchema$1,
-  });
-  let CompleteResultSchema$1 = ResultSchema$1.extend({
-    completion: looseObject({
-      values: array(stringSchema()).max(100),
-      total: optional(numberSchema().int()),
-      hasMore: optional(booleanSchema()),
+  );
+  let CompleteRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      ref: union([PromptReferenceSchema$1, ResourceTemplateReferenceSchema$1]),
+      argument: objectSchema({
+        name: stringSchema(),
+        value: stringSchema(),
+      }),
+      context: objectSchema({
+        arguments: record(stringSchema(), stringSchema()).optional(),
+      }).optional(),
     }),
-  });
-  let RootSchema$1 = objectSchema({
-    uri: stringSchema().startsWith("file://"),
-    name: stringSchema().optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ListRootsRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("roots/list"),
-    params: BaseRequestParamsSchema$1.optional(),
-  });
-  let ListRootsResultSchema$1 = ResultSchema$1.extend({
-    roots: array(RootSchema$1),
-  });
-  let RootsListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/roots/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let TaskCreationParamsSchema$1 = looseObject({
-    ttl: numberSchema().optional(),
-    pollInterval: numberSchema().optional(),
-  });
-  let TaskStatusSchema$1 = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
-  let TaskSchema$1 = objectSchema({
-    taskId: stringSchema(),
-    status: TaskStatusSchema$1,
-    ttl: union([numberSchema(), nullSchema()]),
-    createdAt: stringSchema(),
-    lastUpdatedAt: stringSchema(),
-    pollInterval: optional(numberSchema()),
-    statusMessage: optional(stringSchema()),
-  });
-  let CreateTaskResultSchema$1 = ResultSchema$1.extend({
-    task: TaskSchema$1,
-  });
-  let TaskStatusNotificationParamsSchema$1 = NotificationsParamsSchema$1.merge(TaskSchema$1);
-  let TaskStatusNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/tasks/status"),
-    params: TaskStatusNotificationParamsSchema$1,
-  });
-  let GetTaskRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("tasks/get"),
-    params: BaseRequestParamsSchema$1.extend({
+  );
+  let CompleteRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("completion/complete"),
+      params: CompleteRequestParamsSchema$1,
+    }),
+  );
+  let CompleteResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      completion: looseObject({
+        values: array(stringSchema()).max(100),
+        total: optional(numberSchema().int()),
+        hasMore: optional(booleanSchema()),
+      }),
+    }),
+  );
+  let RootSchemaClient = lazySchema(() =>
+    objectSchema({
+      uri: stringSchema().startsWith("file://"),
+      name: stringSchema().optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ListRootsRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("roots/list"),
+      params: BaseRequestParamsSchema$1.optional(),
+    }),
+  );
+  let ListRootsResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      roots: array(RootSchemaClient),
+    }),
+  );
+  let RootsListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/roots/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let TaskCreationParamsSchema$1 = lazySchema(() =>
+    looseObject({
+      ttl: numberSchema().optional(),
+      pollInterval: numberSchema().optional(),
+    }),
+  );
+  let TaskStatusSchema$1 = lazySchema(() =>
+    _enum(["working", "input_required", "completed", "failed", "cancelled"]),
+  );
+  let TaskSchema$1 = lazySchema(() =>
+    objectSchema({
       taskId: stringSchema(),
+      status: TaskStatusSchema$1,
+      ttl: union([numberSchema(), nullSchema()]),
+      createdAt: stringSchema(),
+      lastUpdatedAt: stringSchema(),
+      pollInterval: optional(numberSchema()),
+      statusMessage: optional(stringSchema()),
     }),
-  });
-  let GetTaskResultSchema$1 = ResultSchema$1.merge(TaskSchema$1);
-  let GetTaskPayloadRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("tasks/result"),
-    params: BaseRequestParamsSchema$1.extend({
-      taskId: stringSchema(),
+  );
+  let CreateTaskResultSchema$1 = lazySchema(() =>
+    ResultSchema$1.extend({
+      task: TaskSchema$1,
     }),
-  });
-  let GetTaskPayloadResultSchema$1 = ResultSchema$1.loose();
-  let ListTasksRequestSchema$1 = PaginatedRequestSchema$1.extend({
-    method: literal("tasks/list"),
-  });
-  let ListTasksResultSchema$1 = PaginatedResultSchema$1.extend({
-    tasks: array(TaskSchema$1),
-  });
-  let CancelTaskRequestSchema$1 = RequestSchema$1.extend({
-    method: literal("tasks/cancel"),
-    params: BaseRequestParamsSchema$1.extend({
-      taskId: stringSchema(),
+  );
+  let TaskStatusNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.merge(TaskSchema$1),
+  );
+  let TaskStatusNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/tasks/status"),
+      params: TaskStatusNotificationParamsSchema$1,
     }),
-  });
+  );
+  let GetTaskRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("tasks/get"),
+      params: BaseRequestParamsSchema$1.extend({
+        taskId: stringSchema(),
+      }),
+    }),
+  );
+  let GetTaskResultSchema$1 = lazySchema(() => ResultSchema$1.merge(TaskSchema$1));
+  let GetTaskPayloadRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("tasks/result"),
+      params: BaseRequestParamsSchema$1.extend({
+        taskId: stringSchema(),
+      }),
+    }),
+  );
+  let GetTaskPayloadResultSchema$1 = lazySchema(() => ResultSchema$1.loose());
+  let ListTasksRequestSchema$1 = lazySchema(() =>
+    PaginatedRequestSchema$1.extend({
+      method: literal("tasks/list"),
+    }),
+  );
+  let ListTasksResultSchema$1 = lazySchema(() =>
+    PaginatedResultSchemaClient.extend({
+      tasks: array(TaskSchema$1),
+    }),
+  );
+  let CancelTaskRequestSchema$1 = lazySchema(() =>
+    RequestSchemaClient.extend({
+      method: literal("tasks/cancel"),
+      params: BaseRequestParamsSchema$1.extend({
+        taskId: stringSchema(),
+      }),
+    }),
+  );
   return {
-    JSONValueSchema: JSONValueSchema$1,
+    JSONValueSchema: JSONValueSchemaClient,
     JSONObjectSchema: JSONObjectSchema$1,
     ProgressTokenSchema: ProgressTokenSchema$1,
     CursorSchema: CursorSchema$1,
@@ -1212,7 +1455,7 @@ function build$1() {
     RequestMetaSchema: RequestMetaSchema$1,
     BaseRequestParamsSchema: BaseRequestParamsSchema$1,
     TaskAugmentedRequestParamsSchema: TaskAugmentedRequestParamsSchema$1,
-    RequestSchema: RequestSchema$1,
+    RequestSchema: RequestSchemaClient,
     NotificationsParamsSchema: NotificationsParamsSchema$1,
     NotificationSchema: NotificationSchema$1,
     ResultSchema: ResultSchema$1,
@@ -1238,7 +1481,7 @@ function build$1() {
     ProgressNotificationSchema: ProgressNotificationSchema$1,
     PaginatedRequestParamsSchema: PaginatedRequestParamsSchema$1,
     PaginatedRequestSchema: PaginatedRequestSchema$1,
-    PaginatedResultSchema: PaginatedResultSchema$1,
+    PaginatedResultSchema: PaginatedResultSchemaClient,
     ResourceContentsSchema: ResourceContentsSchema$1,
     TextResourceContentsSchema: TextResourceContentsSchema$1,
     BlobResourceContentsSchema: BlobResourceContentsSchema$1,
@@ -1262,7 +1505,7 @@ function build$1() {
     ResourceUpdatedNotificationParamsSchema: ResourceUpdatedNotificationParamsSchema$1,
     ResourceUpdatedNotificationSchema: ResourceUpdatedNotificationSchema$1,
     PromptArgumentSchema: PromptArgumentSchema$1,
-    PromptSchema: PromptSchema$1,
+    PromptSchema: PromptSchemaClient,
     ListPromptsRequestSchema: ListPromptsRequestSchema$1,
     ListPromptsResultSchema: ListPromptsResultSchema$1,
     GetPromptRequestParamsSchema: GetPromptRequestParamsSchema$1,
@@ -1326,7 +1569,7 @@ function build$1() {
     CompleteRequestParamsSchema: CompleteRequestParamsSchema$1,
     CompleteRequestSchema: CompleteRequestSchema$1,
     CompleteResultSchema: CompleteResultSchema$1,
-    RootSchema: RootSchema$1,
+    RootSchema: RootSchemaClient,
     ListRootsRequestSchema: ListRootsRequestSchema$1,
     ListRootsResultSchema: ListRootsResultSchema$1,
     RootsListChangedNotificationSchema: RootsListChangedNotificationSchema$1,
@@ -1343,79 +1586,91 @@ function build$1() {
     ListTasksRequestSchema: ListTasksRequestSchema$1,
     ListTasksResultSchema: ListTasksResultSchema$1,
     CancelTaskRequestSchema: CancelTaskRequestSchema$1,
-    CancelTaskResultSchema: ResultSchema$1.merge(TaskSchema$1),
-    ClientRequestSchema: union([
-      PingRequestSchema$1,
-      InitializeRequestSchema$1,
-      CompleteRequestSchema$1,
-      SetLevelRequestSchema$1,
-      GetPromptRequestSchema$1,
-      ListPromptsRequestSchema$1,
-      ListResourcesRequestSchema$1,
-      ListResourceTemplatesRequestSchema$1,
-      ReadResourceRequestSchema$1,
-      SubscribeRequestSchema$1,
-      UnsubscribeRequestSchema$1,
-      CallToolRequestSchema$1,
-      ListToolsRequestSchema$1,
-      GetTaskRequestSchema$1,
-      GetTaskPayloadRequestSchema$1,
-      ListTasksRequestSchema$1,
-      CancelTaskRequestSchema$1,
-    ]),
-    ClientNotificationSchema: union([
-      CancelledNotificationSchema$1,
-      ProgressNotificationSchema$1,
-      InitializedNotificationSchema$1,
-      RootsListChangedNotificationSchema$1,
-      TaskStatusNotificationSchema$1,
-    ]),
-    ClientResultSchema: union([
-      EmptyResultSchema$1,
-      CreateMessageResultSchema$1,
-      CreateMessageResultWithToolsSchema$1,
-      ElicitResultSchema$1,
-      ListRootsResultSchema$1,
-      GetTaskResultSchema$1,
-      ListTasksResultSchema$1,
-      CreateTaskResultSchema$1,
-    ]),
-    ServerRequestSchema: union([
-      PingRequestSchema$1,
-      CreateMessageRequestSchema$1,
-      ElicitRequestSchema$1,
-      ListRootsRequestSchema$1,
-      GetTaskRequestSchema$1,
-      GetTaskPayloadRequestSchema$1,
-      ListTasksRequestSchema$1,
-      CancelTaskRequestSchema$1,
-    ]),
-    ServerNotificationSchema: union([
-      CancelledNotificationSchema$1,
-      ProgressNotificationSchema$1,
-      LoggingMessageNotificationSchema$1,
-      ResourceUpdatedNotificationSchema$1,
-      ResourceListChangedNotificationSchema$1,
-      ToolListChangedNotificationSchema$1,
-      PromptListChangedNotificationSchema$1,
-      TaskStatusNotificationSchema$1,
-      ElicitationCompleteNotificationSchema$1,
-    ]),
-    ServerResultSchema: union([
-      EmptyResultSchema$1,
-      InitializeResultSchema$1,
-      CompleteResultSchema$1,
-      GetPromptResultSchema$1,
-      ListPromptsResultSchema$1,
-      ListResourcesResultSchema$1,
-      ListResourceTemplatesResultSchema$1,
-      ReadResourceResultSchema$1,
-      CallToolResultSchema$1,
-      ListToolsResultSchema$1,
-      GetTaskResultSchema$1,
-      ListTasksResultSchema$1,
-      CreateTaskResultSchema$1,
-    ]),
+    CancelTaskResultSchema: lazySchema(() => ResultSchema$1.merge(TaskSchema$1)),
+    ClientRequestSchema: lazySchema(() =>
+      union([
+        PingRequestSchema$1,
+        InitializeRequestSchema$1,
+        CompleteRequestSchema$1,
+        SetLevelRequestSchema$1,
+        GetPromptRequestSchema$1,
+        ListPromptsRequestSchema$1,
+        ListResourcesRequestSchema$1,
+        ListResourceTemplatesRequestSchema$1,
+        ReadResourceRequestSchema$1,
+        SubscribeRequestSchema$1,
+        UnsubscribeRequestSchema$1,
+        CallToolRequestSchema$1,
+        ListToolsRequestSchema$1,
+        GetTaskRequestSchema$1,
+        GetTaskPayloadRequestSchema$1,
+        ListTasksRequestSchema$1,
+        CancelTaskRequestSchema$1,
+      ]),
+    ),
+    ClientNotificationSchema: lazySchema(() =>
+      union([
+        CancelledNotificationSchema$1,
+        ProgressNotificationSchema$1,
+        InitializedNotificationSchema$1,
+        RootsListChangedNotificationSchema$1,
+        TaskStatusNotificationSchema$1,
+      ]),
+    ),
+    ClientResultSchema: lazySchema(() =>
+      union([
+        EmptyResultSchema$1,
+        CreateMessageResultSchema$1,
+        CreateMessageResultWithToolsSchema$1,
+        ElicitResultSchema$1,
+        ListRootsResultSchema$1,
+        GetTaskResultSchema$1,
+        ListTasksResultSchema$1,
+        CreateTaskResultSchema$1,
+      ]),
+    ),
+    ServerRequestSchema: lazySchema(() =>
+      union([
+        PingRequestSchema$1,
+        CreateMessageRequestSchema$1,
+        ElicitRequestSchema$1,
+        ListRootsRequestSchema$1,
+        GetTaskRequestSchema$1,
+        GetTaskPayloadRequestSchema$1,
+        ListTasksRequestSchema$1,
+        CancelTaskRequestSchema$1,
+      ]),
+    ),
+    ServerNotificationSchema: lazySchema(() =>
+      union([
+        CancelledNotificationSchema$1,
+        ProgressNotificationSchema$1,
+        LoggingMessageNotificationSchema$1,
+        ResourceUpdatedNotificationSchema$1,
+        ResourceListChangedNotificationSchema$1,
+        ToolListChangedNotificationSchema$1,
+        PromptListChangedNotificationSchema$1,
+        TaskStatusNotificationSchema$1,
+        ElicitationCompleteNotificationSchema$1,
+      ]),
+    ),
+    ServerResultSchema: lazySchema(() =>
+      union([
+        EmptyResultSchema$1,
+        InitializeResultSchema$1,
+        CompleteResultSchema$1,
+        GetPromptResultSchema$1,
+        ListPromptsResultSchema$1,
+        ListResourcesResultSchema$1,
+        ListResourceTemplatesResultSchema$1,
+        ReadResourceResultSchema$1,
+        CallToolResultSchema$1,
+        ListToolsResultSchema$1,
+        GetTaskResultSchema$1,
+        ListTasksResultSchema$1,
+        CreateTaskResultSchema$1,
+      ]),
+    ),
     CallToolResultWireSchema: unknown()
       .superRefine((value, ctx) => {
         if (
@@ -1438,20 +1693,20 @@ function build$1() {
       .pipe(CallToolResultSchema$1),
   };
 }
-//@ chunk-r1g76qsy.js:37310-37317 esm-layout
+//@ chunk-qq5knpkd.js:40722-40729 esm-layout
 var memo$1;
-//@ chunk-r1g76qsy.js:37317-37348 esm-layout
+//@ chunk-qq5knpkd.js:40729-40760 esm-layout
 function buildSchemas2025() {
   return (memo$1 ??= build$1());
 }
-//@ chunk-r1g76qsy.js:37348-37388 esm-layout
+//@ chunk-qq5knpkd.js:40760-40800 esm-layout
 function isNonObjectJsonSchemaRoot(json) {
   return json.type !== "object";
 }
-//@ chunk-r1g76qsy.js:37388-37530 esm-fingerprint
+//@ chunk-qq5knpkd.js:40800-40942 esm-fingerprint
 var REF_REWRITE_DATA_POSITION_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REF_REWRITE_NAME_MAP_KEYS;
-deferInit("chunk-r1g76qsy.js:37388", () => {
+deferInit("chunk-qq5knpkd.js:40800", () => {
   REF_REWRITE_DATA_POSITION_KEYS = new Set(["const", "enum", "default", "examples"]);
   REF_REWRITE_NAME_MAP_KEYS = new Set([
     "properties",
@@ -1461,7 +1716,7 @@ deferInit("chunk-r1g76qsy.js:37388", () => {
     "dependentSchemas",
   ]);
 });
-//@ chunk-r1g76qsy.js:37530-38232 esm-fingerprint
+//@ chunk-qq5knpkd.js:40942-41644 esm-fingerprint
 function wrapOutputSchemaForLegacy(natural) {
   let $schema = typeof natural.$schema === "string" ? natural.$schema : undefined;
   if (natural.$id !== undefined)
@@ -1501,7 +1756,7 @@ function wrapOutputSchemaForLegacy(natural) {
     required: ["result"],
   };
 }
-//@ chunk-r1g76qsy.js:38232-39449 esm-fingerprint
+//@ chunk-qq5knpkd.js:41644-42861 esm-fingerprint
 var requestMethodKeys$1 = {
   ping: null,
   initialize: null,
@@ -1556,7 +1811,7 @@ var resultMethodKeys = {
   "roots/list": null,
 };
 var maps$1;
-//@ chunk-r1g76qsy.js:39449-41827 esm-fingerprint
+//@ chunk-qq5knpkd.js:42861-45239 esm-fingerprint
 function registryMaps() {
   if (maps$1) return maps$1;
   let s = buildSchemas2025();
@@ -1617,42 +1872,42 @@ function registryMaps() {
   };
   return maps$1;
 }
-//@ chunk-r1g76qsy.js:41827-41892 esm-fingerprint
+//@ chunk-qq5knpkd.js:45239-45304 esm-fingerprint
 function hasRequestMethod2025(method) {
   return Object.prototype.hasOwnProperty.call(requestMethodKeys$1, method);
 }
-//@ chunk-r1g76qsy.js:41892-41957 esm-fingerprint
+//@ chunk-qq5knpkd.js:45304-45369 esm-fingerprint
 function hasNotificationMethod2025(method) {
   return Object.prototype.hasOwnProperty.call(notificationMethodKeys$1, method);
 }
-//@ chunk-r1g76qsy.js:41957-42022 esm-fingerprint
+//@ chunk-qq5knpkd.js:45369-45434 esm-fingerprint
 function hasResultMethod(method) {
   return Object.prototype.hasOwnProperty.call(resultMethodKeys, method);
 }
-//@ chunk-r1g76qsy.js:42022-42079 esm-fingerprint
+//@ chunk-qq5knpkd.js:45434-45491 esm-fingerprint
 function getResultSchema(method) {
   return hasResultMethod(method) ? registryMaps().resultSchemas[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:42079-42137 esm-fingerprint
+//@ chunk-qq5knpkd.js:45491-45549 esm-fingerprint
 function getRequestSchema(method) {
   return hasRequestMethod2025(method) ? registryMaps().requestSchemas[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:42137-42200 esm-fingerprint
+//@ chunk-qq5knpkd.js:45549-45612 esm-fingerprint
 function getNotificationSchema(method) {
   return hasNotificationMethod2025(method) ? registryMaps().notificationSchemas[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:42200-42242 esm-layout
+//@ chunk-qq5knpkd.js:45612-45654 esm-layout
 var keys; // deferred: uses requestMethodKeys$1 of its import cycle while loading; runs once the cycle is complete
 var keys_2;
-deferInit("chunk-r1g76qsy.js:42200", () => {
+deferInit("chunk-qq5knpkd.js:45612", () => {
   keys = Object.keys(requestMethodKeys$1);
   keys_2 = Object.keys(notificationMethodKeys$1);
 });
-//@ chunk-r1g76qsy.js:42242-42313 esm-fingerprint
+//@ chunk-qq5knpkd.js:45654-45725 esm-fingerprint
 function isPlainObject$4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:42313-42486 esm-fingerprint
+//@ chunk-qq5knpkd.js:45725-45898 esm-fingerprint
 function triState$1(schema, raw) {
   if (schema === undefined)
     return {
@@ -1671,20 +1926,20 @@ function triState$1(schema, raw) {
         message: String(parsed.error),
       };
 }
-//@ chunk-r1g76qsy.js:42486-42521 esm-fingerprint
+//@ chunk-qq5knpkd.js:45898-45933 esm-fingerprint
 var NOT_IN_ERA$1 = {
   ok: false,
   reason: "not-in-era",
 };
-//@ chunk-r1g76qsy.js:42521-42589 esm-layout
+//@ chunk-qq5knpkd.js:45933-46001 esm-layout
 function toolNeedsLegacyWrap(t) {
   return isPlainObject$4(t) && isPlainObject$4(t.outputSchema) && isNonObjectJsonSchemaRoot(t.outputSchema);
 }
-//@ chunk-r1g76qsy.js:42589-42613 esm-layout
+//@ chunk-qq5knpkd.js:46001-46025 esm-layout
 function toNeutralResult(value) {
   return value;
 }
-//@ chunk-r1g76qsy.js:42613-43703 esm-fingerprint
+//@ chunk-qq5knpkd.js:46025-47115 esm-fingerprint
 var rev2025Codec = {
   era: "2025-11-25",
   hasRequestMethod: hasRequestMethod2025,
@@ -1755,7 +2010,7 @@ var rev2025Codec = {
     return;
   },
 };
-//@ chunk-r1g76qsy.js:43703-59401 esm-fingerprint
+//@ chunk-qq5knpkd.js:47115-63883 esm-fingerprint
 function build() {
   let JSONValueSchema$1 = lazy(() =>
     union([
@@ -1767,21 +2022,14 @@ function build() {
       array(JSONValueSchema$1),
     ]),
   );
-  let JSONObjectSchema$1 = record(stringSchema(), JSONValueSchema$1);
-  let ProgressTokenSchema$1 = union([stringSchema(), numberSchema().int()]);
-  let CursorSchema$1 = stringSchema();
-  let RequestIdSchema$1 = union([stringSchema(), numberSchema().int()]);
-  let RoleSchema$1 = _enum(["user", "assistant"]);
-  let LoggingLevelSchema$1 = _enum([
-    "debug",
-    "info",
-    "notice",
-    "warning",
-    "error",
-    "critical",
-    "alert",
-    "emergency",
-  ]);
+  let JSONObjectSchema$1 = lazySchema(() => record(stringSchema(), JSONValueSchema$1));
+  let ProgressTokenSchema$1 = lazySchema(() => union([stringSchema(), numberSchema().int()]));
+  let CursorSchema$1 = lazySchema(() => stringSchema());
+  let RequestIdSchema$1 = lazySchema(() => union([stringSchema(), numberSchema().int()]));
+  let RoleSchema$1 = lazySchema(() => _enum(["user", "assistant"]));
+  let LoggingLevelSchema$1 = lazySchema(() =>
+    _enum(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]),
+  );
   let Base64Schema = stringSchema().refine(
     (val) => {
       try {
@@ -1795,54 +2043,78 @@ function build() {
       message: "Invalid Base64 string",
     },
   );
-  let TaskMetadataSchema$1 = objectSchema({
-    ttl: numberSchema().optional(),
-  });
-  let RelatedTaskMetadataSchema$1 = objectSchema({
-    taskId: stringSchema(),
-  });
-  let RequestMetaSchema$1 = looseObject({
-    progressToken: ProgressTokenSchema$1.optional(),
-    "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
-  });
-  let BaseRequestParamsSchema$1 = objectSchema({
-    _meta: RequestMetaSchema$1.optional(),
-  });
-  let TaskAugmentedRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    task: TaskMetadataSchema$1.optional(),
-  });
-  let NotificationsParamsSchema$1 = objectSchema({
-    _meta: RequestMetaSchema$1.optional(),
-  });
-  let NotificationSchema$1 = objectSchema({
-    method: stringSchema(),
-    params: NotificationsParamsSchema$1.loose().optional(),
-  });
-  let IconSchema$1 = objectSchema({
-    src: stringSchema(),
-    mimeType: stringSchema().optional(),
-    sizes: array(stringSchema()).optional(),
-    theme: _enum(["light", "dark"]).optional(),
-  });
-  let IconsSchema$1 = objectSchema({
-    icons: array(IconSchema$1).optional(),
-  });
-  let BaseMetadataSchema$1 = objectSchema({
-    name: stringSchema(),
-    title: stringSchema().optional(),
-  });
-  let ImplementationSchema$1 = BaseMetadataSchema$1.extend({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    version: stringSchema(),
-    websiteUrl: stringSchema().optional(),
-    description: stringSchema().optional(),
-  });
-  let FormElicitationCapabilitySchema = intersection(
+  let TaskMetadataSchema$1 = lazySchema(() =>
     objectSchema({
-      applyDefaults: booleanSchema().optional(),
+      ttl: numberSchema().optional(),
     }),
-    JSONObjectSchema$1,
+  );
+  let RelatedTaskMetadataSchema$1 = lazySchema(() =>
+    objectSchema({
+      taskId: stringSchema(),
+    }),
+  );
+  let RequestMetaSchema$1 = lazySchema(() =>
+    looseObject({
+      progressToken: ProgressTokenSchema$1.optional(),
+      "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
+    }),
+  );
+  let BaseRequestParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      _meta: RequestMetaSchema$1.optional(),
+    }),
+  );
+  let TaskAugmentedRequestParamsSchema$1 = lazySchema(() =>
+    BaseRequestParamsSchema$1.extend({
+      task: TaskMetadataSchema$1.optional(),
+    }),
+  );
+  let NotificationsParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      _meta: RequestMetaSchema$1.optional(),
+    }),
+  );
+  let NotificationSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: stringSchema(),
+      params: NotificationsParamsSchema$1.loose().optional(),
+    }),
+  );
+  let IconSchema$1 = lazySchema(() =>
+    objectSchema({
+      src: stringSchema(),
+      mimeType: stringSchema().optional(),
+      sizes: array(stringSchema()).optional(),
+      theme: _enum(["light", "dark"]).optional(),
+    }),
+  );
+  let IconsSchema$1 = lazySchema(() =>
+    objectSchema({
+      icons: array(IconSchema$1).optional(),
+    }),
+  );
+  let BaseMetadataSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema(),
+      title: stringSchema().optional(),
+    }),
+  );
+  let ImplementationSchema$1 = lazySchema(() =>
+    BaseMetadataSchema$1.extend({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      version: stringSchema(),
+      websiteUrl: stringSchema().optional(),
+      description: stringSchema().optional(),
+    }),
+  );
+  let FormElicitationCapabilitySchema = lazySchema(() =>
+    intersection(
+      objectSchema({
+        applyDefaults: booleanSchema().optional(),
+      }),
+      JSONObjectSchema$1,
+    ),
   );
   let ElicitationCapabilitySchema = preprocess(
     (value) => {
@@ -1860,402 +2132,503 @@ function build() {
       JSONObjectSchema$1.optional(),
     ),
   );
-  let ClientTasksCapabilitySchema$1 = looseObject({
-    list: JSONObjectSchema$1.optional(),
-    cancel: JSONObjectSchema$1.optional(),
-    requests: looseObject({
-      sampling: looseObject({
-        createMessage: JSONObjectSchema$1.optional(),
+  let ClientTasksCapabilitySchema$1 = lazySchema(() =>
+    looseObject({
+      list: JSONObjectSchema$1.optional(),
+      cancel: JSONObjectSchema$1.optional(),
+      requests: looseObject({
+        sampling: looseObject({
+          createMessage: JSONObjectSchema$1.optional(),
+        }).optional(),
+        elicitation: looseObject({
+          create: JSONObjectSchema$1.optional(),
+        }).optional(),
       }).optional(),
-      elicitation: looseObject({
-        create: JSONObjectSchema$1.optional(),
-      }).optional(),
-    }).optional(),
-  });
-  let ServerTasksCapabilitySchema$1 = looseObject({
-    list: JSONObjectSchema$1.optional(),
-    cancel: JSONObjectSchema$1.optional(),
-    requests: looseObject({
-      tools: looseObject({
-        call: JSONObjectSchema$1.optional(),
-      }).optional(),
-    }).optional(),
-  });
-  let ClientCapabilitiesSchema$1 = objectSchema({
-    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
-    sampling: objectSchema({
-      context: JSONObjectSchema$1.optional(),
-      tools: JSONObjectSchema$1.optional(),
-    }).optional(),
-    elicitation: ElicitationCapabilitySchema.optional(),
-    roots: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tasks: ClientTasksCapabilitySchema$1.optional(),
-    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
-  });
-  let ServerCapabilitiesSchema$1 = objectSchema({
-    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
-    logging: JSONObjectSchema$1.optional(),
-    completions: JSONObjectSchema$1.optional(),
-    prompts: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    resources: objectSchema({
-      subscribe: booleanSchema().optional(),
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tools: objectSchema({
-      listChanged: booleanSchema().optional(),
-    }).optional(),
-    tasks: ServerTasksCapabilitySchema$1.optional(),
-    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
-  });
-  let ProgressSchema$1 = objectSchema({
-    progress: numberSchema(),
-    total: optional(numberSchema()),
-    message: optional(stringSchema()),
-  });
-  let ProgressNotificationParamsSchema$1 = objectSchema({
-    ...NotificationsParamsSchema$1.shape,
-    ...ProgressSchema$1.shape,
-    progressToken: ProgressTokenSchema$1,
-  });
-  let ProgressNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/progress"),
-    params: ProgressNotificationParamsSchema$1,
-  });
-  let LoggingMessageNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    level: LoggingLevelSchema$1,
-    logger: stringSchema().optional(),
-    data: unknown(),
-  });
-  let LoggingMessageNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/message"),
-    params: LoggingMessageNotificationParamsSchema$1,
-  });
-  let ResourceContentsSchema$1 = objectSchema({
-    uri: stringSchema(),
-    mimeType: optional(stringSchema()),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let TextResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    text: stringSchema(),
-  });
-  let BlobResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    blob: Base64Schema,
-  });
-  let AnnotationsSchema$1 = objectSchema({
-    audience: array(RoleSchema$1).optional(),
-    priority: numberSchema().min(0).max(1).optional(),
-    lastModified: union([
-      parseToolOutputSchema({
-        offset: true,
-      }),
-      parseToolOutputSchema({
-        offset: true,
-        precision: -1,
-      }),
-    ]).optional(),
-  });
-  let ResourceSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    uri: stringSchema(),
-    description: optional(stringSchema()),
-    mimeType: optional(stringSchema()),
-    size: optional(numberSchema()),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: optional(looseObject({})),
-  });
-  let ResourceTemplateSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    uriTemplate: stringSchema(),
-    description: optional(stringSchema()),
-    mimeType: optional(stringSchema()),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: optional(looseObject({})),
-  });
-  let ResourceListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/resources/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let ResourceUpdatedNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    uri: stringSchema(),
-  });
-  let ResourceUpdatedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/resources/updated"),
-    params: ResourceUpdatedNotificationParamsSchema$1,
-  });
-  let PromptArgumentSchema$1 = objectSchema({
-    name: stringSchema(),
-    description: optional(stringSchema()),
-    required: optional(booleanSchema()),
-  });
-  let PromptSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    description: optional(stringSchema()),
-    arguments: optional(array(PromptArgumentSchema$1)),
-    _meta: optional(looseObject({})),
-  });
-  let PromptListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/prompts/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let TextContentSchema$1 = objectSchema({
-    type: literal("text"),
-    text: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ImageContentSchema$1 = objectSchema({
-    type: literal("image"),
-    data: Base64Schema,
-    mimeType: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let AudioContentSchema$1 = objectSchema({
-    type: literal("audio"),
-    data: Base64Schema,
-    mimeType: stringSchema(),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ToolUseContentSchema$1 = objectSchema({
-    type: literal("tool_use"),
-    name: stringSchema(),
-    id: stringSchema(),
-    input: record(stringSchema(), unknown()),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let EmbeddedResourceSchema$1 = objectSchema({
-    type: literal("resource"),
-    resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
-    annotations: AnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ResourceLinkSchema$1 = ResourceSchema$1.extend({
-    type: literal("resource_link"),
-  });
-  let ContentBlockSchema$1 = union([
-    TextContentSchema$1,
-    ImageContentSchema$1,
-    AudioContentSchema$1,
-    ResourceLinkSchema$1,
-    EmbeddedResourceSchema$1,
-  ]);
-  let PromptMessageSchema$1 = objectSchema({
-    role: RoleSchema$1,
-    content: ContentBlockSchema$1,
-  });
-  let ToolAnnotationsSchema$1 = objectSchema({
-    title: stringSchema().optional(),
-    readOnlyHint: booleanSchema().optional(),
-    destructiveHint: booleanSchema().optional(),
-    idempotentHint: booleanSchema().optional(),
-    openWorldHint: booleanSchema().optional(),
-  });
-  let ToolListChangedNotificationSchema$1 = NotificationSchema$1.extend({
-    method: literal("notifications/tools/list_changed"),
-    params: NotificationsParamsSchema$1.optional(),
-  });
-  let ModelHintSchema$1 = objectSchema({
-    name: stringSchema().optional(),
-  });
-  let ModelPreferencesSchema$1 = objectSchema({
-    hints: array(ModelHintSchema$1).optional(),
-    costPriority: numberSchema().min(0).max(1).optional(),
-    speedPriority: numberSchema().min(0).max(1).optional(),
-    intelligencePriority: numberSchema().min(0).max(1).optional(),
-  });
-  let ToolChoiceSchema$1 = objectSchema({
-    mode: _enum(["auto", "required", "none"]).optional(),
-  });
-  let BooleanSchemaSchema$1 = objectSchema({
-    type: literal("boolean"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    default: booleanSchema().optional(),
-  });
-  let StringSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minLength: numberSchema().optional(),
-    maxLength: numberSchema().optional(),
-    format: _enum(["email", "uri", "date", "date-time"]).optional(),
-    default: stringSchema().optional(),
-  });
-  let NumberSchemaSchema$1 = objectSchema({
-    type: _enum(["number", "integer"]),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minimum: numberSchema().optional(),
-    maximum: numberSchema().optional(),
-    default: numberSchema().optional(),
-  });
-  let UntitledSingleSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    enum: array(stringSchema()),
-    default: stringSchema().optional(),
-  });
-  let TitledSingleSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    oneOf: array(
-      objectSchema({
-        const: stringSchema(),
-        title: stringSchema(),
-      }),
-    ),
-    default: stringSchema().optional(),
-  });
-  let LegacyTitledEnumSchemaSchema$1 = objectSchema({
-    type: literal("string"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    enum: array(stringSchema()),
-    enumNames: array(stringSchema()).optional(),
-    default: stringSchema().optional(),
-  });
-  let SingleSelectEnumSchemaSchema$1 = union([
-    UntitledSingleSelectEnumSchemaSchema$1,
-    TitledSingleSelectEnumSchemaSchema$1,
-  ]);
-  let UntitledMultiSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("array"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minItems: numberSchema().optional(),
-    maxItems: numberSchema().optional(),
-    items: objectSchema({
-      type: literal("string"),
-      enum: array(stringSchema()),
     }),
-    default: array(stringSchema()).optional(),
-  });
-  let TitledMultiSelectEnumSchemaSchema$1 = objectSchema({
-    type: literal("array"),
-    title: stringSchema().optional(),
-    description: stringSchema().optional(),
-    minItems: numberSchema().optional(),
-    maxItems: numberSchema().optional(),
-    items: objectSchema({
-      anyOf: array(
+  );
+  let ServerTasksCapabilitySchema$1 = lazySchema(() =>
+    looseObject({
+      list: JSONObjectSchema$1.optional(),
+      cancel: JSONObjectSchema$1.optional(),
+      requests: looseObject({
+        tools: looseObject({
+          call: JSONObjectSchema$1.optional(),
+        }).optional(),
+      }).optional(),
+    }),
+  );
+  let ClientCapabilitiesSchema$1 = lazySchema(() =>
+    objectSchema({
+      experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+      sampling: objectSchema({
+        context: JSONObjectSchema$1.optional(),
+        tools: JSONObjectSchema$1.optional(),
+      }).optional(),
+      elicitation: ElicitationCapabilitySchema.optional(),
+      roots: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tasks: ClientTasksCapabilitySchema$1.optional(),
+      extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
+    }),
+  );
+  let ServerCapabilitiesSchema$1 = lazySchema(() =>
+    objectSchema({
+      experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+      logging: JSONObjectSchema$1.optional(),
+      completions: JSONObjectSchema$1.optional(),
+      prompts: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      resources: objectSchema({
+        subscribe: booleanSchema().optional(),
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tools: objectSchema({
+        listChanged: booleanSchema().optional(),
+      }).optional(),
+      tasks: ServerTasksCapabilitySchema$1.optional(),
+      extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
+    }),
+  );
+  let ProgressSchema$1 = lazySchema(() =>
+    objectSchema({
+      progress: numberSchema(),
+      total: optional(numberSchema()),
+      message: optional(stringSchema()),
+    }),
+  );
+  let ProgressNotificationParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...NotificationsParamsSchema$1.shape,
+      ...ProgressSchema$1.shape,
+      progressToken: ProgressTokenSchema$1,
+    }),
+  );
+  let ProgressNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/progress"),
+      params: ProgressNotificationParamsSchema$1,
+    }),
+  );
+  let LoggingMessageNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      level: LoggingLevelSchema$1,
+      logger: stringSchema().optional(),
+      data: unknown(),
+    }),
+  );
+  let LoggingMessageNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/message"),
+      params: LoggingMessageNotificationParamsSchema$1,
+    }),
+  );
+  let ResourceContentsSchema$1 = lazySchema(() =>
+    objectSchema({
+      uri: stringSchema(),
+      mimeType: optional(stringSchema()),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let TextResourceContentsSchema$1 = lazySchema(() =>
+    ResourceContentsSchema$1.extend({
+      text: stringSchema(),
+    }),
+  );
+  let BlobResourceContentsSchema$1 = lazySchema(() =>
+    ResourceContentsSchema$1.extend({
+      blob: Base64Schema,
+    }),
+  );
+  let AnnotationsSchema$1 = lazySchema(() =>
+    objectSchema({
+      audience: array(RoleSchema$1).optional(),
+      priority: numberSchema().min(0).max(1).optional(),
+      lastModified: union([
+        parseToolOutputSchema({
+          offset: true,
+        }),
+        parseToolOutputSchema({
+          offset: true,
+          precision: -1,
+        }),
+      ]).optional(),
+    }),
+  );
+  let ResourceSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      uri: stringSchema(),
+      description: optional(stringSchema()),
+      mimeType: optional(stringSchema()),
+      size: optional(numberSchema()),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let ResourceTemplateSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      uriTemplate: stringSchema(),
+      description: optional(stringSchema()),
+      mimeType: optional(stringSchema()),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let ResourceListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/resources/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let ResourceUpdatedNotificationParamsSchema$1 = lazySchema(() =>
+    NotificationsParamsSchema$1.extend({
+      uri: stringSchema(),
+    }),
+  );
+  let ResourceUpdatedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/resources/updated"),
+      params: ResourceUpdatedNotificationParamsSchema$1,
+    }),
+  );
+  let PromptArgumentSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema(),
+      description: optional(stringSchema()),
+      required: optional(booleanSchema()),
+    }),
+  );
+  let PromptSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      description: optional(stringSchema()),
+      arguments: optional(array(PromptArgumentSchema$1)),
+      _meta: optional(looseObject({})),
+    }),
+  );
+  let PromptListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/prompts/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let TextContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("text"),
+      text: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ImageContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("image"),
+      data: Base64Schema,
+      mimeType: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let AudioContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("audio"),
+      data: Base64Schema,
+      mimeType: stringSchema(),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ToolUseContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("tool_use"),
+      name: stringSchema(),
+      id: stringSchema(),
+      input: record(stringSchema(), unknown()),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let EmbeddedResourceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("resource"),
+      resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
+      annotations: AnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ResourceLinkSchema$1 = lazySchema(() =>
+    ResourceSchema$1.extend({
+      type: literal("resource_link"),
+    }),
+  );
+  let ContentBlockSchema$1 = lazySchema(() =>
+    union([
+      TextContentSchema$1,
+      ImageContentSchema$1,
+      AudioContentSchema$1,
+      ResourceLinkSchema$1,
+      EmbeddedResourceSchema$1,
+    ]),
+  );
+  let PromptMessageSchema$1 = lazySchema(() =>
+    objectSchema({
+      role: RoleSchema$1,
+      content: ContentBlockSchema$1,
+    }),
+  );
+  let ToolAnnotationsSchema$1 = lazySchema(() =>
+    objectSchema({
+      title: stringSchema().optional(),
+      readOnlyHint: booleanSchema().optional(),
+      destructiveHint: booleanSchema().optional(),
+      idempotentHint: booleanSchema().optional(),
+      openWorldHint: booleanSchema().optional(),
+    }),
+  );
+  let ToolListChangedNotificationSchema$1 = lazySchema(() =>
+    NotificationSchema$1.extend({
+      method: literal("notifications/tools/list_changed"),
+      params: NotificationsParamsSchema$1.optional(),
+    }),
+  );
+  let ModelHintSchema$1 = lazySchema(() =>
+    objectSchema({
+      name: stringSchema().optional(),
+    }),
+  );
+  let ModelPreferencesSchema$1 = lazySchema(() =>
+    objectSchema({
+      hints: array(ModelHintSchema$1).optional(),
+      costPriority: numberSchema().min(0).max(1).optional(),
+      speedPriority: numberSchema().min(0).max(1).optional(),
+      intelligencePriority: numberSchema().min(0).max(1).optional(),
+    }),
+  );
+  let ToolChoiceSchema$1 = lazySchema(() =>
+    objectSchema({
+      mode: _enum(["auto", "required", "none"]).optional(),
+    }),
+  );
+  let BooleanSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("boolean"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      default: booleanSchema().optional(),
+    }),
+  );
+  let StringSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minLength: numberSchema().optional(),
+      maxLength: numberSchema().optional(),
+      format: _enum(["email", "uri", "date", "date-time"]).optional(),
+      default: stringSchema().optional(),
+    }),
+  );
+  let NumberSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: _enum(["number", "integer"]),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minimum: numberSchema().optional(),
+      maximum: numberSchema().optional(),
+      default: numberSchema().optional(),
+    }),
+  );
+  let UntitledSingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      enum: array(stringSchema()),
+      default: stringSchema().optional(),
+    }),
+  );
+  let TitledSingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      oneOf: array(
         objectSchema({
           const: stringSchema(),
           title: stringSchema(),
         }),
       ),
+      default: stringSchema().optional(),
     }),
-    default: array(stringSchema()).optional(),
-  });
-  let MultiSelectEnumSchemaSchema$1 = union([
-    UntitledMultiSelectEnumSchemaSchema$1,
-    TitledMultiSelectEnumSchemaSchema$1,
-  ]);
-  let EnumSchemaSchema$1 = union([
-    LegacyTitledEnumSchemaSchema$1,
-    SingleSelectEnumSchemaSchema$1,
-    MultiSelectEnumSchemaSchema$1,
-  ]);
-  let PrimitiveSchemaDefinitionSchema$1 = union([
-    EnumSchemaSchema$1,
-    BooleanSchemaSchema$1,
-    StringSchemaSchema$1,
-    NumberSchemaSchema$1,
-  ]);
-  let ElicitRequestFormParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    mode: literal("form").optional(),
-    message: stringSchema(),
-    requestedSchema: objectSchema({
-      type: literal("object"),
-      properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
-      required: array(stringSchema()).optional(),
-    }).catchall(unknown()),
-  });
-  let ResourceTemplateReferenceSchema$1 = objectSchema({
-    type: literal("ref/resource"),
-    uri: stringSchema(),
-  });
-  let PromptReferenceSchema$1 = objectSchema({
-    type: literal("ref/prompt"),
-    name: stringSchema(),
-  });
-  let RootSchema$1 = objectSchema({
-    uri: stringSchema().startsWith("file://"),
-    name: stringSchema().optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
+  );
+  let LegacyTitledEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("string"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      enum: array(stringSchema()),
+      enumNames: array(stringSchema()).optional(),
+      default: stringSchema().optional(),
+    }),
+  );
+  let SingleSelectEnumSchemaSchema$1 = lazySchema(() =>
+    union([UntitledSingleSelectEnumSchemaSchema$1, TitledSingleSelectEnumSchemaSchema$1]),
+  );
+  let UntitledMultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("array"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minItems: numberSchema().optional(),
+      maxItems: numberSchema().optional(),
+      items: objectSchema({
+        type: literal("string"),
+        enum: array(stringSchema()),
+      }),
+      default: array(stringSchema()).optional(),
+    }),
+  );
+  let TitledMultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("array"),
+      title: stringSchema().optional(),
+      description: stringSchema().optional(),
+      minItems: numberSchema().optional(),
+      maxItems: numberSchema().optional(),
+      items: objectSchema({
+        anyOf: array(
+          objectSchema({
+            const: stringSchema(),
+            title: stringSchema(),
+          }),
+        ),
+      }),
+      default: array(stringSchema()).optional(),
+    }),
+  );
+  let MultiSelectEnumSchemaSchema$1 = lazySchema(() =>
+    union([UntitledMultiSelectEnumSchemaSchema$1, TitledMultiSelectEnumSchemaSchema$1]),
+  );
+  let EnumSchemaSchema$1 = lazySchema(() =>
+    union([LegacyTitledEnumSchemaSchema$1, SingleSelectEnumSchemaSchema$1, MultiSelectEnumSchemaSchema$1]),
+  );
+  let PrimitiveSchemaDefinitionSchema$1 = lazySchema(() =>
+    union([EnumSchemaSchema$1, BooleanSchemaSchema$1, StringSchemaSchema$1, NumberSchemaSchema$1]),
+  );
+  let ElicitRequestFormParamsSchema$1 = lazySchema(() =>
+    TaskAugmentedRequestParamsSchema$1.extend({
+      mode: literal("form").optional(),
+      message: stringSchema(),
+      requestedSchema: objectSchema({
+        type: literal("object"),
+        properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
+        required: array(stringSchema()).optional(),
+      }).catchall(unknown()),
+    }),
+  );
+  let ResourceTemplateReferenceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("ref/resource"),
+      uri: stringSchema(),
+    }),
+  );
+  let PromptReferenceSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("ref/prompt"),
+      name: stringSchema(),
+    }),
+  );
+  let RootSchemaClient2026 = lazySchema(() =>
+    objectSchema({
+      uri: stringSchema().startsWith("file://"),
+      name: stringSchema().optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
   let sharedClientCapabilityShape = ClientCapabilitiesSchema$1.shape;
-  let ClientCapabilities2026Schema = objectSchema({
-    experimental: sharedClientCapabilityShape.experimental,
-    sampling: sharedClientCapabilityShape.sampling,
-    elicitation: sharedClientCapabilityShape.elicitation,
-    roots: sharedClientCapabilityShape.roots,
-    extensions: sharedClientCapabilityShape.extensions,
-  });
-  let sharedServerCapabilityShape = ServerCapabilitiesSchema$1.shape;
-  let ServerCapabilities2026Schema = objectSchema({
-    experimental: sharedServerCapabilityShape.experimental,
-    logging: sharedServerCapabilityShape.logging,
-    completions: sharedServerCapabilityShape.completions,
-    prompts: sharedServerCapabilityShape.prompts,
-    resources: sharedServerCapabilityShape.resources,
-    tools: sharedServerCapabilityShape.tools,
-    extensions: sharedServerCapabilityShape.extensions,
-  });
-  let RequestMetaEnvelopeSchema = looseObject({
-    progressToken: ProgressTokenSchema$1.optional(),
-    [PROTOCOL_VERSION_META_KEY]: stringSchema(),
-    [CLIENT_INFO_META_KEY]: ImplementationSchema$1.optional(),
-    [CLIENT_CAPABILITIES_META_KEY]: ClientCapabilities2026Schema,
-    [LOG_LEVEL_META_KEY]: LoggingLevelSchema$1.optional(),
-  });
-  let ToolSchema$1 = objectSchema({
-    ...BaseMetadataSchema$1.shape,
-    ...IconsSchema$1.shape,
-    description: stringSchema().optional(),
-    inputSchema: looseObject({
-      $schema: stringSchema().optional(),
-      type: literal("object"),
+  let ClientCapabilities2026Schema = lazySchema(() =>
+    objectSchema({
+      experimental: sharedClientCapabilityShape.experimental,
+      sampling: sharedClientCapabilityShape.sampling,
+      elicitation: sharedClientCapabilityShape.elicitation,
+      roots: sharedClientCapabilityShape.roots,
+      extensions: sharedClientCapabilityShape.extensions,
     }),
-    outputSchema: looseObject({
-      $schema: stringSchema().optional(),
-    }).optional(),
-    annotations: ToolAnnotationsSchema$1.optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ToolResultContentSchema$1 = objectSchema({
-    type: literal("tool_result"),
-    toolUseId: stringSchema(),
-    content: array(ContentBlockSchema$1),
-    structuredContent: unknown().optional(),
-    isError: booleanSchema().optional(),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let SamplingMessageContentBlockSchema$1 = union([
-    TextContentSchema$1,
-    ImageContentSchema$1,
-    AudioContentSchema$1,
-    ToolUseContentSchema$1,
-    ToolResultContentSchema$1,
-  ]);
-  let SamplingMessageSchema$1 = objectSchema({
-    role: RoleSchema$1,
-    content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
-    _meta: record(stringSchema(), unknown()).optional(),
-  });
-  let ResultTypeSchema = stringSchema();
-  let ResultMetaSchema = looseObject({
-    [SERVER_INFO_META_KEY]: ImplementationSchema$1.optional().catch(undefined),
-  });
+  );
+  let sharedServerCapabilityShape = ServerCapabilitiesSchema$1.shape;
+  let ServerCapabilities2026Schema = lazySchema(() =>
+    objectSchema({
+      experimental: sharedServerCapabilityShape.experimental,
+      logging: sharedServerCapabilityShape.logging,
+      completions: sharedServerCapabilityShape.completions,
+      prompts: sharedServerCapabilityShape.prompts,
+      resources: sharedServerCapabilityShape.resources,
+      tools: sharedServerCapabilityShape.tools,
+      extensions: sharedServerCapabilityShape.extensions,
+    }),
+  );
+  let RequestMetaEnvelopeSchema = lazySchema(() =>
+    looseObject({
+      progressToken: ProgressTokenSchema$1.optional(),
+      [PROTOCOL_VERSION_META_KEY]: stringSchema(),
+      [CLIENT_INFO_META_KEY]: ImplementationSchema$1.optional(),
+      [CLIENT_CAPABILITIES_META_KEY]: ClientCapabilities2026Schema,
+      [LOG_LEVEL_META_KEY]: LoggingLevelSchema$1.optional(),
+    }),
+  );
+  let ToolSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...BaseMetadataSchema$1.shape,
+      ...IconsSchema$1.shape,
+      description: stringSchema().optional(),
+      inputSchema: looseObject({
+        $schema: stringSchema().optional(),
+        type: literal("object"),
+      }),
+      outputSchema: looseObject({
+        $schema: stringSchema().optional(),
+      }).optional(),
+      annotations: ToolAnnotationsSchema$1.optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ToolResultContentSchema$1 = lazySchema(() =>
+    objectSchema({
+      type: literal("tool_result"),
+      toolUseId: stringSchema(),
+      content: array(ContentBlockSchema$1),
+      structuredContent: unknown().optional(),
+      isError: booleanSchema().optional(),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let SamplingMessageContentBlockSchema$1 = lazySchema(() =>
+    union([
+      TextContentSchema$1,
+      ImageContentSchema$1,
+      AudioContentSchema$1,
+      ToolUseContentSchema$1,
+      ToolResultContentSchema$1,
+    ]),
+  );
+  let SamplingMessageSchema$1 = lazySchema(() =>
+    objectSchema({
+      role: RoleSchema$1,
+      content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
+      _meta: record(stringSchema(), unknown()).optional(),
+    }),
+  );
+  let ResultTypeSchema = lazySchema(() => stringSchema());
+  let ResultMetaSchema = lazySchema(() =>
+    looseObject({
+      [SERVER_INFO_META_KEY]: ImplementationSchema$1.optional().catch(undefined),
+    }),
+  );
   let wireMeta = ResultMetaSchema.optional();
   function wireResult(shape) {
     return looseObject({
@@ -2264,140 +2637,182 @@ function build() {
       ...shape,
     });
   }
-  let ResultSchema$1 = wireResult({});
-  let PaginatedResultSchema$1 = wireResult({
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let CallToolResultSchema$1 = wireResult({
-    content: array(ContentBlockSchema$1),
-    structuredContent: unknown().optional(),
-    isError: booleanSchema().optional(),
-  });
-  let ListToolsResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-    tools: array(ToolSchema$1),
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let ListPromptsResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-    prompts: array(PromptSchema$1),
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let GetPromptResultSchema$1 = wireResult({
-    description: stringSchema().optional(),
-    messages: array(PromptMessageSchema$1),
-  });
-  let ListResourcesResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-    resources: array(ResourceSchema$1),
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let ListResourceTemplatesResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-    resourceTemplates: array(ResourceTemplateSchema$1),
-    nextCursor: CursorSchema$1.optional(),
-  });
-  let ReadResourceResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-    contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
-  });
-  let CompleteResultSchema$1 = wireResult({
-    completion: objectSchema({
-      values: array(stringSchema()).max(100),
-      total: numberSchema().int().optional(),
-      hasMore: booleanSchema().optional(),
-    }).loose(),
-  });
-  let CacheableResultSchema = wireResult({
-    ttlMs: numberSchema().int().min(0),
-    cacheScope: _enum(["public", "private"]),
-  });
-  let DiscoverResultSchema$1 = wireResult({
-    ttlMs: numberSchema().int().min(0).catch(0),
-    cacheScope: _enum(["public", "private"]).catch("private"),
-    supportedVersions: array(stringSchema()),
-    capabilities: ServerCapabilities2026Schema,
-    instructions: stringSchema().optional(),
-  });
-  let CreateMessageRequestParamsSchema$1 = objectSchema({
-    messages: array(SamplingMessageSchema$1),
-    modelPreferences: ModelPreferencesSchema$1.optional(),
-    systemPrompt: stringSchema().optional(),
-    includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-    temperature: numberSchema().optional(),
-    maxTokens: numberSchema().int(),
-    stopSequences: array(stringSchema()).optional(),
-    metadata: JSONObjectSchema$1.optional(),
-    tools: array(ToolSchema$1).optional(),
-    toolChoice: ToolChoiceSchema$1.optional(),
-  });
-  let CreateMessageRequestSchema$1 = objectSchema({
-    method: literal("sampling/createMessage"),
-    params: CreateMessageRequestParamsSchema$1,
-  });
-  let ListRootsRequestSchema$1 = objectSchema({
-    method: literal("roots/list"),
-    params: objectSchema({
-      _meta: record(stringSchema(), unknown()).optional(),
-    }).optional(),
-  });
-  let CreateMessageResultSchema$1 = objectSchema({
-    ...SamplingMessageSchema$1.shape,
-    model: stringSchema(),
-    stopReason: stringSchema().optional(),
-  });
-  let ListRootsResultSchema$1 = objectSchema({
-    roots: array(RootSchema$1),
-  });
-  let ElicitResultSchema$1 = objectSchema({
-    action: _enum(["accept", "decline", "cancel"]),
-    content: record(
-      stringSchema(),
-      union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
-    ).optional(),
-  });
-  let ElicitRequestURLParamsSchema$1 = objectSchema({
-    mode: literal("url"),
-    message: stringSchema(),
-    url: stringSchema().url(),
-  });
-  let ElicitRequestParamsSchema$1 = union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]);
-  let ElicitRequestSchema$1 = objectSchema({
-    method: literal("elicitation/create"),
-    params: ElicitRequestParamsSchema$1,
-  });
-  let InputRequestSchema = union([
-    CreateMessageRequestSchema$1,
-    ListRootsRequestSchema$1,
-    ElicitRequestSchema$1,
-  ]);
-  let InputResponseSchema = union([
-    CreateMessageResultSchema$1,
-    ListRootsResultSchema$1,
-    ElicitResultSchema$1,
-  ]);
-  let InputRequestsSchema = record(stringSchema(), InputRequestSchema);
-  let InputResponsesSchema = record(stringSchema(), InputResponseSchema);
-  let InputRequiredResultSchema = wireResult({
-    inputRequests: InputRequestsSchema.optional(),
-    requestState: stringSchema().optional(),
-  });
+  let ResultSchema$1 = lazySchema(() => wireResult({}));
+  let PaginatedResultSchema$1 = lazySchema(() =>
+    wireResult({
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let CallToolResultSchema$1 = lazySchema(() =>
+    wireResult({
+      content: array(ContentBlockSchema$1),
+      structuredContent: unknown().optional(),
+      isError: booleanSchema().optional(),
+    }),
+  );
+  let ListToolsResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+      tools: array(ToolSchema$1),
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let ListPromptsResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+      prompts: array(PromptSchema$1),
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let GetPromptResultSchema$1 = lazySchema(() =>
+    wireResult({
+      description: stringSchema().optional(),
+      messages: array(PromptMessageSchema$1),
+    }),
+  );
+  let ListResourcesResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+      resources: array(ResourceSchema$1),
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let ListResourceTemplatesResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+      resourceTemplates: array(ResourceTemplateSchema$1),
+      nextCursor: CursorSchema$1.optional(),
+    }),
+  );
+  let ReadResourceResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+      contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
+    }),
+  );
+  let CompleteResultSchema$1 = lazySchema(() =>
+    wireResult({
+      completion: objectSchema({
+        values: array(stringSchema()).max(100),
+        total: numberSchema().int().optional(),
+        hasMore: booleanSchema().optional(),
+      }).loose(),
+    }),
+  );
+  let CacheableResultSchema = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0),
+      cacheScope: _enum(["public", "private"]),
+    }),
+  );
+  let DiscoverResultSchema$1 = lazySchema(() =>
+    wireResult({
+      ttlMs: numberSchema().int().min(0).catch(0),
+      cacheScope: _enum(["public", "private"]).catch("private"),
+      supportedVersions: array(stringSchema()),
+      capabilities: ServerCapabilities2026Schema,
+      instructions: stringSchema().optional(),
+    }),
+  );
+  let CreateMessageRequestParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      messages: array(SamplingMessageSchema$1),
+      modelPreferences: ModelPreferencesSchema$1.optional(),
+      systemPrompt: stringSchema().optional(),
+      includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
+      temperature: numberSchema().optional(),
+      maxTokens: numberSchema().int(),
+      stopSequences: array(stringSchema()).optional(),
+      metadata: JSONObjectSchema$1.optional(),
+      tools: array(ToolSchema$1).optional(),
+      toolChoice: ToolChoiceSchema$1.optional(),
+    }),
+  );
+  let CreateMessageRequestSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: literal("sampling/createMessage"),
+      params: CreateMessageRequestParamsSchema$1,
+    }),
+  );
+  let ListRootsRequestSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: literal("roots/list"),
+      params: objectSchema({
+        _meta: record(stringSchema(), unknown()).optional(),
+      }).optional(),
+    }),
+  );
+  let CreateMessageResultSchema$1 = lazySchema(() =>
+    objectSchema({
+      ...SamplingMessageSchema$1.shape,
+      model: stringSchema(),
+      stopReason: stringSchema().optional(),
+    }),
+  );
+  let ListRootsResultSchema$1 = lazySchema(() =>
+    objectSchema({
+      roots: array(RootSchemaClient2026),
+    }),
+  );
+  let ElicitResultSchema$1 = lazySchema(() =>
+    objectSchema({
+      action: _enum(["accept", "decline", "cancel"]),
+      content: record(
+        stringSchema(),
+        union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
+      ).optional(),
+    }),
+  );
+  let ElicitRequestURLParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      mode: literal("url"),
+      message: stringSchema(),
+      url: stringSchema().url(),
+    }),
+  );
+  let ElicitRequestParamsSchema$1 = lazySchema(() =>
+    union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]),
+  );
+  let ElicitRequestSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: literal("elicitation/create"),
+      params: ElicitRequestParamsSchema$1,
+    }),
+  );
+  let InputRequestSchema = lazySchema(() =>
+    union([CreateMessageRequestSchema$1, ListRootsRequestSchema$1, ElicitRequestSchema$1]),
+  );
+  let InputResponseSchema = lazySchema(() =>
+    union([CreateMessageResultSchema$1, ListRootsResultSchema$1, ElicitResultSchema$1]),
+  );
+  let InputRequestsSchema = lazySchema(() => record(stringSchema(), InputRequestSchema));
+  let InputResponsesSchema = lazySchema(() => record(stringSchema(), InputResponseSchema));
+  let InputRequiredResultSchema = lazySchema(() =>
+    wireResult({
+      inputRequests: InputRequestsSchema.optional(),
+      requestState: stringSchema().optional(),
+    }),
+  );
   let retryParamsShape = {
     inputResponses: InputResponsesSchema.optional(),
     requestState: stringSchema().optional(),
   };
-  let InputResponseRequestParamsSchema = objectSchema({
-    _meta: RequestMetaEnvelopeSchema,
-    ...retryParamsShape,
-  });
-  let DispatchRequestMetaSchema = looseObject({
-    progressToken: ProgressTokenSchema$1.optional(),
-  });
+  let InputResponseRequestParamsSchema = lazySchema(() =>
+    objectSchema({
+      _meta: RequestMetaEnvelopeSchema,
+      ...retryParamsShape,
+    }),
+  );
+  let DispatchRequestMetaSchema = lazySchema(() =>
+    looseObject({
+      progressToken: ProgressTokenSchema$1.optional(),
+    }),
+  );
   function wireRequest(method, paramsShape) {
     return objectSchema({
       method: literal(method),
@@ -2424,20 +2839,26 @@ function build() {
   let paginatedParamsShape = {
     cursor: CursorSchema$1.optional(),
   };
-  let CallToolRequestSchema$1 = wireRequest("tools/call", callToolParamsShape);
-  let ListToolsRequestSchema$1 = wireRequest("tools/list", paginatedParamsShape);
-  let ListPromptsRequestSchema$1 = wireRequest("prompts/list", paginatedParamsShape);
-  let GetPromptRequestSchema$1 = wireRequest("prompts/get", {
-    name: stringSchema(),
-    arguments: record(stringSchema(), stringSchema()).optional(),
-    ...retryParamsShape,
-  });
-  let ListResourcesRequestSchema$1 = wireRequest("resources/list", paginatedParamsShape);
-  let ListResourceTemplatesRequestSchema$1 = wireRequest("resources/templates/list", paginatedParamsShape);
-  let ReadResourceRequestSchema$1 = wireRequest("resources/read", {
-    uri: stringSchema(),
-    ...retryParamsShape,
-  });
+  let CallToolRequestSchema$1 = lazySchema(() => wireRequest("tools/call", callToolParamsShape));
+  let ListToolsRequestSchema$1 = lazySchema(() => wireRequest("tools/list", paginatedParamsShape));
+  let ListPromptsRequestSchema$1 = lazySchema(() => wireRequest("prompts/list", paginatedParamsShape));
+  let GetPromptRequestSchema$1 = lazySchema(() =>
+    wireRequest("prompts/get", {
+      name: stringSchema(),
+      arguments: record(stringSchema(), stringSchema()).optional(),
+      ...retryParamsShape,
+    }),
+  );
+  let ListResourcesRequestSchema$1 = lazySchema(() => wireRequest("resources/list", paginatedParamsShape));
+  let ListResourceTemplatesRequestSchema$1 = lazySchema(() =>
+    wireRequest("resources/templates/list", paginatedParamsShape),
+  );
+  let ReadResourceRequestSchema$1 = lazySchema(() =>
+    wireRequest("resources/read", {
+      uri: stringSchema(),
+      ...retryParamsShape,
+    }),
+  );
   let completeParamsShape = {
     ref: union([PromptReferenceSchema$1, ResourceTemplateReferenceSchema$1]),
     argument: objectSchema({
@@ -2448,44 +2869,57 @@ function build() {
       arguments: record(stringSchema(), stringSchema()).optional(),
     }).optional(),
   };
-  let CompleteRequestSchema$1 = wireRequest("completion/complete", completeParamsShape);
-  let DiscoverRequestSchema$1 = wireRequest("server/discover", {});
-  let SubscriptionFilterSchema$1 = objectSchema({
-    toolsListChanged: booleanSchema().optional(),
-    promptsListChanged: booleanSchema().optional(),
-    resourcesListChanged: booleanSchema().optional(),
-    resourceSubscriptions: array(stringSchema()).optional(),
-  });
+  let CompleteRequestSchema$1 = lazySchema(() => wireRequest("completion/complete", completeParamsShape));
+  let DiscoverRequestSchema$1 = lazySchema(() => wireRequest("server/discover", {}));
+  let SubscriptionFilterSchema$1 = lazySchema(() =>
+    objectSchema({
+      toolsListChanged: booleanSchema().optional(),
+      promptsListChanged: booleanSchema().optional(),
+      resourcesListChanged: booleanSchema().optional(),
+      resourceSubscriptions: array(stringSchema()).optional(),
+    }),
+  );
   let subscriptionsListenParamsShape = {
     notifications: SubscriptionFilterSchema$1,
   };
-  let SubscriptionsListenRequestSchema$1 = wireRequest(
-    "subscriptions/listen",
-    subscriptionsListenParamsShape,
+  let SubscriptionsListenRequestSchema$1 = lazySchema(() =>
+    wireRequest("subscriptions/listen", subscriptionsListenParamsShape),
   );
-  let SubscriptionsListenResultMetaSchema$1 = ResultMetaSchema.extend({
-    "io.modelcontextprotocol/subscriptionId": RequestIdSchema$1,
-  });
-  let SubscriptionsListenResultSchema$1 = looseObject({
-    _meta: SubscriptionsListenResultMetaSchema$1,
-    resultType: ResultTypeSchema.default("complete"),
-  });
+  let SubscriptionsListenResultMetaSchema$1 = lazySchema(() =>
+    ResultMetaSchema.extend({
+      "io.modelcontextprotocol/subscriptionId": RequestIdSchema$1,
+    }),
+  );
+  let SubscriptionsListenResultSchema$1 = lazySchema(() =>
+    looseObject({
+      _meta: SubscriptionsListenResultMetaSchema$1,
+      resultType: ResultTypeSchema.default("complete"),
+    }),
+  );
   let dispatchRequestSchemas = {
-    "tools/call": dispatchRequest("tools/call", callToolParamsShape),
-    "tools/list": dispatchRequest("tools/list", paginatedParamsShape),
-    "prompts/get": dispatchRequest("prompts/get", {
-      name: stringSchema(),
-      arguments: record(stringSchema(), stringSchema()).optional(),
-    }),
-    "prompts/list": dispatchRequest("prompts/list", paginatedParamsShape),
-    "resources/list": dispatchRequest("resources/list", paginatedParamsShape),
-    "resources/templates/list": dispatchRequest("resources/templates/list", paginatedParamsShape),
-    "resources/read": dispatchRequest("resources/read", {
-      uri: stringSchema(),
-    }),
-    "completion/complete": dispatchRequest("completion/complete", completeParamsShape),
-    "server/discover": dispatchRequest("server/discover", {}),
-    "subscriptions/listen": dispatchRequest("subscriptions/listen", subscriptionsListenParamsShape),
+    "tools/call": lazySchema(() => dispatchRequest("tools/call", callToolParamsShape)),
+    "tools/list": lazySchema(() => dispatchRequest("tools/list", paginatedParamsShape)),
+    "prompts/get": lazySchema(() =>
+      dispatchRequest("prompts/get", {
+        name: stringSchema(),
+        arguments: record(stringSchema(), stringSchema()).optional(),
+      }),
+    ),
+    "prompts/list": lazySchema(() => dispatchRequest("prompts/list", paginatedParamsShape)),
+    "resources/list": lazySchema(() => dispatchRequest("resources/list", paginatedParamsShape)),
+    "resources/templates/list": lazySchema(() =>
+      dispatchRequest("resources/templates/list", paginatedParamsShape),
+    ),
+    "resources/read": lazySchema(() =>
+      dispatchRequest("resources/read", {
+        uri: stringSchema(),
+      }),
+    ),
+    "completion/complete": lazySchema(() => dispatchRequest("completion/complete", completeParamsShape)),
+    "server/discover": lazySchema(() => dispatchRequest("server/discover", {})),
+    "subscriptions/listen": lazySchema(() =>
+      dispatchRequest("subscriptions/listen", subscriptionsListenParamsShape),
+    ),
   };
   function liftedResult(shape) {
     return looseObject({
@@ -2494,79 +2928,105 @@ function build() {
     });
   }
   let dispatchResultSchemas = {
-    "tools/call": liftedResult({
-      content: array(ContentBlockSchema$1),
-      structuredContent: unknown().optional(),
-      isError: booleanSchema().optional(),
-    }),
-    "tools/list": liftedResult({
-      ttlMs: numberSchema().int().min(0),
-      cacheScope: _enum(["public", "private"]),
-      tools: array(ToolSchema$1),
-      nextCursor: CursorSchema$1.optional(),
-    }),
-    "prompts/get": liftedResult({
-      description: stringSchema().optional(),
-      messages: array(PromptMessageSchema$1),
-    }),
-    "prompts/list": liftedResult({
-      ttlMs: numberSchema().int().min(0),
-      cacheScope: _enum(["public", "private"]),
-      prompts: array(PromptSchema$1),
-      nextCursor: CursorSchema$1.optional(),
-    }),
-    "resources/list": liftedResult({
-      ttlMs: numberSchema().int().min(0),
-      cacheScope: _enum(["public", "private"]),
-      resources: array(ResourceSchema$1),
-      nextCursor: CursorSchema$1.optional(),
-    }),
-    "resources/templates/list": liftedResult({
-      ttlMs: numberSchema().int().min(0),
-      cacheScope: _enum(["public", "private"]),
-      resourceTemplates: array(ResourceTemplateSchema$1),
-      nextCursor: CursorSchema$1.optional(),
-    }),
-    "resources/read": liftedResult({
-      ttlMs: numberSchema().int().min(0),
-      cacheScope: _enum(["public", "private"]),
-      contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
-    }),
-    "completion/complete": liftedResult({
-      completion: objectSchema({
-        values: array(stringSchema()).max(100),
-        total: numberSchema().int().optional(),
-        hasMore: booleanSchema().optional(),
-      }).loose(),
-    }),
-    "server/discover": liftedResult({
-      ttlMs: numberSchema().int().min(0).catch(0),
-      cacheScope: _enum(["public", "private"]).catch("private"),
-      supportedVersions: array(stringSchema()),
-      capabilities: ServerCapabilities2026Schema,
-      instructions: stringSchema().optional(),
-    }),
-    "subscriptions/listen": liftedResult({}),
+    "tools/call": lazySchema(() =>
+      liftedResult({
+        content: array(ContentBlockSchema$1),
+        structuredContent: unknown().optional(),
+        isError: booleanSchema().optional(),
+      }),
+    ),
+    "tools/list": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0),
+        cacheScope: _enum(["public", "private"]),
+        tools: array(ToolSchema$1),
+        nextCursor: CursorSchema$1.optional(),
+      }),
+    ),
+    "prompts/get": lazySchema(() =>
+      liftedResult({
+        description: stringSchema().optional(),
+        messages: array(PromptMessageSchema$1),
+      }),
+    ),
+    "prompts/list": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0),
+        cacheScope: _enum(["public", "private"]),
+        prompts: array(PromptSchema$1),
+        nextCursor: CursorSchema$1.optional(),
+      }),
+    ),
+    "resources/list": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0),
+        cacheScope: _enum(["public", "private"]),
+        resources: array(ResourceSchema$1),
+        nextCursor: CursorSchema$1.optional(),
+      }),
+    ),
+    "resources/templates/list": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0),
+        cacheScope: _enum(["public", "private"]),
+        resourceTemplates: array(ResourceTemplateSchema$1),
+        nextCursor: CursorSchema$1.optional(),
+      }),
+    ),
+    "resources/read": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0),
+        cacheScope: _enum(["public", "private"]),
+        contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
+      }),
+    ),
+    "completion/complete": lazySchema(() =>
+      liftedResult({
+        completion: objectSchema({
+          values: array(stringSchema()).max(100),
+          total: numberSchema().int().optional(),
+          hasMore: booleanSchema().optional(),
+        }).loose(),
+      }),
+    ),
+    "server/discover": lazySchema(() =>
+      liftedResult({
+        ttlMs: numberSchema().int().min(0).catch(0),
+        cacheScope: _enum(["public", "private"]).catch("private"),
+        supportedVersions: array(stringSchema()),
+        capabilities: ServerCapabilities2026Schema,
+        instructions: stringSchema().optional(),
+      }),
+    ),
+    "subscriptions/listen": lazySchema(() => liftedResult({})),
   };
-  let NotificationMetaSchema = looseObject({
-    "io.modelcontextprotocol/subscriptionId": RequestIdSchema$1.optional(),
-  });
-  let SubscriptionsAcknowledgedNotificationSchema$1 = objectSchema({
-    method: literal("notifications/subscriptions/acknowledged"),
-    params: objectSchema({
-      _meta: NotificationMetaSchema.optional(),
-      notifications: SubscriptionFilterSchema$1,
+  let NotificationMetaSchema = lazySchema(() =>
+    looseObject({
+      "io.modelcontextprotocol/subscriptionId": RequestIdSchema$1.optional(),
     }),
-  });
-  let CancelledNotificationParamsSchema$1 = objectSchema({
-    _meta: NotificationMetaSchema.optional(),
-    requestId: RequestIdSchema$1,
-    reason: stringSchema().optional(),
-  });
-  let CancelledNotificationSchema$1 = objectSchema({
-    method: literal("notifications/cancelled"),
-    params: CancelledNotificationParamsSchema$1,
-  });
+  );
+  let SubscriptionsAcknowledgedNotificationSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: literal("notifications/subscriptions/acknowledged"),
+      params: objectSchema({
+        _meta: NotificationMetaSchema.optional(),
+        notifications: SubscriptionFilterSchema$1,
+      }),
+    }),
+  );
+  let CancelledNotificationParamsSchema$1 = lazySchema(() =>
+    objectSchema({
+      _meta: NotificationMetaSchema.optional(),
+      requestId: RequestIdSchema$1,
+      reason: stringSchema().optional(),
+    }),
+  );
+  let CancelledNotificationSchema$1 = lazySchema(() =>
+    objectSchema({
+      method: literal("notifications/cancelled"),
+      params: CancelledNotificationParamsSchema$1,
+    }),
+  );
   let notificationSchemas2026 = {
     "notifications/cancelled": CancelledNotificationSchema$1,
     "notifications/progress": ProgressNotificationSchema$1,
@@ -2651,7 +3111,7 @@ function build() {
     ElicitRequestFormParamsSchema: ElicitRequestFormParamsSchema$1,
     ResourceTemplateReferenceSchema: ResourceTemplateReferenceSchema$1,
     PromptReferenceSchema: PromptReferenceSchema$1,
-    RootSchema: RootSchema$1,
+    RootSchema: RootSchemaClient2026,
     ClientCapabilities2026Schema,
     ServerCapabilities2026Schema,
     RequestMetaEnvelopeSchema,
@@ -2708,31 +3168,33 @@ function build() {
     CancelledNotificationParamsSchema: CancelledNotificationParamsSchema$1,
     CancelledNotificationSchema: CancelledNotificationSchema$1,
     notificationSchemas2026,
-    JSONRPCResultResponseSchema: wireResultResponse(ResultSchema$1),
-    CallToolResultResponseSchema: wireResultResponse(
-      union([CallToolResultSchema$1, InputRequiredResultSchema]),
+    JSONRPCResultResponseSchema: lazySchema(() => wireResultResponse(ResultSchema$1)),
+    CallToolResultResponseSchema: lazySchema(() =>
+      wireResultResponse(union([CallToolResultSchema$1, InputRequiredResultSchema])),
     ),
-    ListToolsResultResponseSchema: wireResultResponse(ListToolsResultSchema$1),
-    ListPromptsResultResponseSchema: wireResultResponse(ListPromptsResultSchema$1),
-    GetPromptResultResponseSchema: wireResultResponse(
-      union([GetPromptResultSchema$1, InputRequiredResultSchema]),
+    ListToolsResultResponseSchema: lazySchema(() => wireResultResponse(ListToolsResultSchema$1)),
+    ListPromptsResultResponseSchema: lazySchema(() => wireResultResponse(ListPromptsResultSchema$1)),
+    GetPromptResultResponseSchema: lazySchema(() =>
+      wireResultResponse(union([GetPromptResultSchema$1, InputRequiredResultSchema])),
     ),
-    ListResourcesResultResponseSchema: wireResultResponse(ListResourcesResultSchema$1),
-    ListResourceTemplatesResultResponseSchema: wireResultResponse(ListResourceTemplatesResultSchema$1),
-    ReadResourceResultResponseSchema: wireResultResponse(
-      union([ReadResourceResultSchema$1, InputRequiredResultSchema]),
+    ListResourcesResultResponseSchema: lazySchema(() => wireResultResponse(ListResourcesResultSchema$1)),
+    ListResourceTemplatesResultResponseSchema: lazySchema(() =>
+      wireResultResponse(ListResourceTemplatesResultSchema$1),
     ),
-    CompleteResultResponseSchema: wireResultResponse(CompleteResultSchema$1),
-    DiscoverResultResponseSchema: wireResultResponse(DiscoverResultSchema$1),
+    ReadResourceResultResponseSchema: lazySchema(() =>
+      wireResultResponse(union([ReadResourceResultSchema$1, InputRequiredResultSchema])),
+    ),
+    CompleteResultResponseSchema: lazySchema(() => wireResultResponse(CompleteResultSchema$1)),
+    DiscoverResultResponseSchema: lazySchema(() => wireResultResponse(DiscoverResultSchema$1)),
   };
 }
-//@ chunk-r1g76qsy.js:59401-59408 esm-layout
+//@ chunk-qq5knpkd.js:63883-63890 esm-layout
 var memo;
-//@ chunk-r1g76qsy.js:59408-59439 esm-layout
+//@ chunk-qq5knpkd.js:63890-63921 esm-layout
 function buildSchemas2026() {
   return (memo ??= build());
 }
-//@ chunk-r1g76qsy.js:59439-59555 esm-fingerprint
+//@ chunk-qq5knpkd.js:63921-64037 esm-fingerprint
 var CACHEABLE_RESULT_METHODS = [
   "tools/list",
   "prompts/list",
@@ -2741,28 +3203,28 @@ var CACHEABLE_RESULT_METHODS = [
   "resources/read",
   "server/discover",
 ];
-//@ chunk-r1g76qsy.js:59555-59592 esm-layout
+//@ chunk-qq5knpkd.js:64037-64074 esm-layout
 function isCacheableResultMethod(method) {
   return CACHEABLE_RESULT_METHODS.includes(method);
 }
-//@ chunk-r1g76qsy.js:59592-59654 esm-fingerprint
+//@ chunk-qq5knpkd.js:64074-64136 esm-fingerprint
 var RESULT_CACHE_HINT_FALLBACK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r1g76qsy.js:59592", () => {
+deferInit("chunk-qq5knpkd.js:64074", () => {
   RESULT_CACHE_HINT_FALLBACK = Symbol("modelcontextprotocol.resultCacheHintFallback");
 });
-//@ chunk-r1g76qsy.js:59654-59682 esm-layout
+//@ chunk-qq5knpkd.js:64136-64164 esm-layout
 function cacheHintFallbackOf(result) {
   return result[RESULT_CACHE_HINT_FALLBACK];
 }
-//@ chunk-r1g76qsy.js:59682-59755 esm-fingerprint
+//@ chunk-qq5knpkd.js:64164-64237 esm-fingerprint
 function isValidCacheTtlMs(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
-//@ chunk-r1g76qsy.js:59755-59805 esm-fingerprint
+//@ chunk-qq5knpkd.js:64237-64287 esm-fingerprint
 function isValidCacheScope(value) {
   return value === "public" || value === "private";
 }
-//@ chunk-r1g76qsy.js:59805-62666 esm-fingerprint
+//@ chunk-qq5knpkd.js:64287-67148 esm-fingerprint
 var ProtocolErrorCode; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ProtocolError;
 var ResourceNotFoundError;
@@ -2772,7 +3234,7 @@ var MissingRequiredClientCapabilityError;
 var DEFAULT_CACHE_TTL_MS;
 var DEFAULT_CACHE_SCOPE;
 var EXTENDED_RESULT_TYPE_METHODS;
-deferInit("chunk-r1g76qsy.js:59805", () => {
+deferInit("chunk-qq5knpkd.js:64287", () => {
   ProtocolErrorCode = (function (ProtocolErrorCode$1) {
     ProtocolErrorCode$1[(ProtocolErrorCode$1.ParseError = -32700)] = "ParseError";
     ProtocolErrorCode$1[(ProtocolErrorCode$1.InvalidRequest = -32600)] = "InvalidRequest";
@@ -2917,7 +3379,7 @@ deferInit("chunk-r1g76qsy.js:59805", () => {
   DEFAULT_CACHE_SCOPE = "private";
   EXTENDED_RESULT_TYPE_METHODS = ["tools/call", "prompts/get", "resources/read"];
 });
-//@ chunk-r1g76qsy.js:62666-62967 esm-fingerprint
+//@ chunk-qq5knpkd.js:67148-67449 esm-fingerprint
 function stampResultType(method, result) {
   let provided = result.resultType;
   if (provided === undefined)
@@ -2932,7 +3394,7 @@ function stampResultType(method, result) {
     `Handler for ${method} returned resultType '${String(provided)}', but results of ${method} only support 'complete' on protocol revision 2026-07-28`,
   );
 }
-//@ chunk-r1g76qsy.js:62967-63185 esm-fingerprint
+//@ chunk-qq5knpkd.js:67449-67667 esm-fingerprint
 function fillCacheFields(method, result) {
   let fallback = cacheHintFallbackOf(result);
   if (result.resultType !== "complete" || !isCacheableResultMethod(method))
@@ -2948,11 +3410,11 @@ function fillCacheFields(method, result) {
   delete filled[RESULT_CACHE_HINT_FALLBACK];
   return filled;
 }
-//@ chunk-r1g76qsy.js:63185-63256 esm-fingerprint
+//@ chunk-qq5knpkd.js:67667-67738 esm-fingerprint
 function isPlainObject$3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:63256-63431 esm-layout
+//@ chunk-qq5knpkd.js:67738-67913 esm-layout
 function stampServerInfoMeta(result, serverInfo) {
   if (serverInfo === undefined) return result;
   let meta = result._meta;
@@ -2973,17 +3435,17 @@ function stampServerInfoMeta(result, serverInfo) {
     },
   };
 }
-//@ chunk-r1g76qsy.js:63431-63488 esm-fingerprint
+//@ chunk-qq5knpkd.js:67913-67970 esm-fingerprint
 function resolveTtlMs(fallback) {
   return fallback !== undefined && isValidCacheTtlMs(fallback.ttlMs) ? fallback.ttlMs : DEFAULT_CACHE_TTL_MS;
 }
-//@ chunk-r1g76qsy.js:63488-63555 esm-fingerprint
+//@ chunk-qq5knpkd.js:67970-68037 esm-fingerprint
 function resolveCacheScope(fallback) {
   return fallback !== undefined && isValidCacheScope(fallback.cacheScope)
     ? fallback.cacheScope
     : DEFAULT_CACHE_SCOPE;
 }
-//@ chunk-r1g76qsy.js:63555-63605 esm-layout
+//@ chunk-qq5knpkd.js:68037-68087 esm-layout
 function stripCacheHintFallback(result) {
   let copy = {
     ...result,
@@ -2991,10 +3453,10 @@ function stripCacheHintFallback(result) {
   delete copy[RESULT_CACHE_HINT_FALLBACK];
   return copy;
 }
-//@ chunk-r1g76qsy.js:63605-63676 esm-fingerprint
+//@ chunk-qq5knpkd.js:68087-68158 esm-fingerprint
 var INPUT_REQUEST_METHODS_2026 = ["elicitation/create", "sampling/createMessage", "roots/list"];
 var maps;
-//@ chunk-r1g76qsy.js:63676-64150 esm-fingerprint
+//@ chunk-qq5knpkd.js:68158-68632 esm-fingerprint
 function inputSchemaMaps() {
   if (maps) return maps;
   let s = buildSchemas2026();
@@ -3021,19 +3483,19 @@ function inputSchemaMaps() {
   };
   return maps;
 }
-//@ chunk-r1g76qsy.js:64150-64187 esm-layout
+//@ chunk-qq5knpkd.js:68632-68669 esm-layout
 function isInputRequestMethod2026(method) {
   return INPUT_REQUEST_METHODS_2026.includes(method);
 }
-//@ chunk-r1g76qsy.js:64187-64238 esm-fingerprint
+//@ chunk-qq5knpkd.js:68669-68720 esm-fingerprint
 function getInputRequestSchema2026(method) {
   return isInputRequestMethod2026(method) ? inputSchemaMaps().request[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:64238-64290 esm-fingerprint
+//@ chunk-qq5knpkd.js:68720-68772 esm-fingerprint
 function getInputResponseSchema2026(method) {
   return isInputRequestMethod2026(method) ? inputSchemaMaps().response[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:64290-64836 esm-fingerprint
+//@ chunk-qq5knpkd.js:68772-69318 esm-fingerprint
 var requestMethodKeys = {
   "tools/call": null,
   "tools/list": null,
@@ -3056,42 +3518,42 @@ var notificationMethodKeys = {
   "notifications/prompts/list_changed": null,
   "notifications/subscriptions/acknowledged": null,
 };
-//@ chunk-r1g76qsy.js:64836-64901 esm-fingerprint
+//@ chunk-qq5knpkd.js:69318-69383 esm-fingerprint
 function hasRequestMethod2026(method) {
   return Object.prototype.hasOwnProperty.call(requestMethodKeys, method);
 }
-//@ chunk-r1g76qsy.js:64901-64966 esm-fingerprint
+//@ chunk-qq5knpkd.js:69383-69448 esm-fingerprint
 function hasNotificationMethod2026(method) {
   return Object.prototype.hasOwnProperty.call(notificationMethodKeys, method);
 }
-//@ chunk-r1g76qsy.js:64966-65031 esm-fingerprint
+//@ chunk-qq5knpkd.js:69448-69513 esm-fingerprint
 function hasResultMethod2026(method) {
   return Object.prototype.hasOwnProperty.call(requestMethodKeys, method);
 }
-//@ chunk-r1g76qsy.js:65031-65097 esm-fingerprint
+//@ chunk-qq5knpkd.js:69513-69579 esm-fingerprint
 function getRequestSchema2026(method) {
   return hasRequestMethod2026(method) ? buildSchemas2026().dispatchRequestSchemas[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:65097-65162 esm-fingerprint
+//@ chunk-qq5knpkd.js:69579-69644 esm-fingerprint
 function getResultSchema2026(method) {
   return hasResultMethod2026(method) ? buildSchemas2026().dispatchResultSchemas[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:65162-65229 esm-fingerprint
+//@ chunk-qq5knpkd.js:69644-69711 esm-fingerprint
 function getNotificationSchema2026(method) {
   return hasNotificationMethod2026(method) ? buildSchemas2026().notificationSchemas2026[method] : undefined;
 }
-//@ chunk-r1g76qsy.js:65229-65271 esm-layout
+//@ chunk-qq5knpkd.js:69711-69753 esm-layout
 var keys_3; // deferred: uses requestMethodKeys of its import cycle while loading; runs once the cycle is complete
 var keys_4;
-deferInit("chunk-r1g76qsy.js:65229", () => {
+deferInit("chunk-qq5knpkd.js:69711", () => {
   keys_3 = Object.keys(requestMethodKeys);
   keys_4 = Object.keys(notificationMethodKeys);
 });
-//@ chunk-r1g76qsy.js:65271-65342 esm-fingerprint
+//@ chunk-qq5knpkd.js:69753-69824 esm-fingerprint
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:65342-65515 esm-fingerprint
+//@ chunk-qq5knpkd.js:69824-69997 esm-fingerprint
 function triState(schema, raw) {
   if (schema === undefined)
     return {
@@ -3110,13 +3572,13 @@ function triState(schema, raw) {
         message: String(parsed.error),
       };
 }
-//@ chunk-r1g76qsy.js:65515-65562 esm-fingerprint
+//@ chunk-qq5knpkd.js:69997-70044 esm-fingerprint
 var NOT_IN_ERA = {
   ok: false,
   reason: "not-in-era",
 };
 var REQUIRED_ENVELOPE_KEYS = [PROTOCOL_VERSION_META_KEY, CLIENT_CAPABILITIES_META_KEY];
-//@ chunk-r1g76qsy.js:65562-65920 esm-fingerprint
+//@ chunk-qq5knpkd.js:70044-70402 esm-fingerprint
 function enforceDeletedFields(method, result) {
   let next = result;
   let copied = false;
@@ -3153,20 +3615,12 @@ function enforceDeletedFields(method, result) {
   }
   return next;
 }
-//@ chunk-r1g76qsy.js:66033-66355 esm-layout
+//@ chunk-qq5knpkd.js:70515-70661 esm-layout
 function isTaskResult(result) {
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
-  return (
-    typeof result.taskId === "string" &&
-    result.taskId.length > 0 &&
-    TASK_STATUSES.has(result.status) &&
-    typeof result.createdAt === "string" &&
-    typeof result.lastUpdatedAt === "string" &&
-    (result.ttlMs === null || typeof result.ttlMs === "number") &&
-    (result.pollIntervalMs === undefined || typeof result.pollIntervalMs === "number")
-  );
+  return typeof result.taskId === "string" && result.taskId.length > 0 && TASK_STATUSES.has(result.status);
 }
-//@ chunk-r1g76qsy.js:66355-69307 esm-fingerprint
+//@ chunk-qq5knpkd.js:70661-73613 esm-fingerprint
 var rev2026Codec = {
   era: "2026-07-28",
   hasRequestMethod: hasRequestMethod2026,
@@ -3326,7 +3780,7 @@ var rev2026Codec = {
   },
 };
 var wireResultSchemasMemo;
-//@ chunk-r1g76qsy.js:69307-69753 esm-fingerprint
+//@ chunk-qq5knpkd.js:73613-74059 esm-fingerprint
 function getWireResultSchemas() {
   if (wireResultSchemasMemo) return wireResultSchemasMemo;
   let s = buildSchemas2026();
@@ -3343,29 +3797,29 @@ function getWireResultSchemas() {
   };
   return wireResultSchemasMemo;
 }
-//@ chunk-r1g76qsy.js:69753-69773 esm-fingerprint
+//@ chunk-qq5knpkd.js:74059-74079 esm-fingerprint
 var MODERN_WIRE_REVISION = "2026-07-28";
-//@ chunk-r1g76qsy.js:69773-69819 esm-layout
+//@ chunk-qq5knpkd.js:74079-74125 esm-layout
 function codecForVersion(version) {
   return version !== undefined && isModernProtocolVersion(version) ? rev2026Codec : rev2025Codec;
 }
-//@ chunk-r1g76qsy.js:69819-69921 esm-fingerprint
+//@ chunk-qq5knpkd.js:74125-74227 esm-fingerprint
 function classifiedWireEra(classification) {
   if (classification.revision !== undefined) return codecForVersion(classification.revision).era;
   return classification.era === "modern" ? rev2026Codec.era : rev2025Codec.era;
 }
-//@ chunk-r1g76qsy.js:69921-69979 esm-fingerprint
+//@ chunk-qq5knpkd.js:74227-74285 esm-fingerprint
 function isSpecRequestMethod(method) {
   return ALL_CODECS.some((codec) => codec.hasRequestMethod(method));
 }
-//@ chunk-r1g76qsy.js:69979-70042 esm-fingerprint
+//@ chunk-qq5knpkd.js:74285-74348 esm-fingerprint
 function isSpecNotificationMethod(method) {
   return ALL_CODECS.some((codec) => codec.hasNotificationMethod(method));
 }
-//@ chunk-r1g76qsy.js:70042-75375 esm-layout
+//@ chunk-qq5knpkd.js:74348-79681 esm-layout
 var ALL_CODECS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var schemas_exports;
-deferInit("chunk-r1g76qsy.js:70042", () => {
+deferInit("chunk-qq5knpkd.js:74348", () => {
   ALL_CODECS = [rev2025Codec, rev2026Codec];
   schemas_exports = toESModule({
     AnnotationsSchema: () => AnnotationsSchema,
@@ -3470,7 +3924,7 @@ deferInit("chunk-r1g76qsy.js:70042", () => {
     PromptMessageSchema: () => PromptMessageSchema,
     PromptReferenceSchema: () => PromptReferenceSchema,
     PromptSchema: () => PromptSchema,
-    ReadResourceRequestParamsSchema: () => ReadResourceRequestParamsSchema,
+    ReadResourceRequestParamsSchema: () => ResourceRequestParamsSchema_default,
     ReadResourceRequestSchema: () => ReadResourceRequestSchema,
     ReadResourceResultSchema: () => ReadResourceResultSchema,
     RelatedTaskMetadataSchema: () => RelatedTaskMetadataSchema,
@@ -3537,26 +3991,26 @@ deferInit("chunk-r1g76qsy.js:70042", () => {
     UntitledSingleSelectEnumSchemaSchema: () => UntitledSingleSelectEnumSchemaSchema,
   });
 });
-//@ chunk-r1g76qsy.js:75375-75459 layout
+//@ chunk-qq5knpkd.js:79681-79765 layout
 function parseJsonRpcMessage(message) {
   if (message?.method === undefined && isJSONRPCResultResponse(message))
     return JSONRPCResultResponseSchema.parse(message);
   return JSONRPCMessageSchema.parse(message);
 }
-//@ chunk-r1g76qsy.js:75459-75530 layout
+//@ chunk-qq5knpkd.js:79765-79836 layout
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:75530-75597 layout
+//@ chunk-qq5knpkd.js:79836-79903 layout
 function isRequestId(id) {
   return typeof id === "string" || Number.isSafeInteger(id);
 }
-//@ chunk-r1g76qsy.js:75597-75683 layout
+//@ chunk-qq5knpkd.js:79903-79989 layout
 function hasOnlyKeys(object, key1, key2, key3, key4) {
   for (let key in object) if (key !== key1 && key !== key2 && key !== key3 && key !== key4) return false;
   return true;
 }
-//@ chunk-r1g76qsy.js:75683-75956 layout
+//@ chunk-qq5knpkd.js:79989-80262 layout
 function isValidParams(params) {
   if (params === undefined) return true;
   if (!isPlainObject(params)) return false;
@@ -3567,7 +4021,7 @@ function isValidParams(params) {
   let relatedTask = _meta["io.modelcontextprotocol/related-task"];
   return relatedTask === undefined || (isPlainObject(relatedTask) && typeof relatedTask.taskId === "string");
 }
-//@ chunk-r1g76qsy.js:75956-76507 layout
+//@ chunk-qq5knpkd.js:80262-80814 layout
 var isJSONRPCRequest = (message) =>
   isPlainObject(message) &&
   message.jsonrpc === "2.0" &&
@@ -3596,13 +4050,13 @@ var isJSONRPCErrorResponse = (message) =>
   Number.isSafeInteger(message.error.code) &&
   typeof message.error.message === "string" &&
   hasOnlyKeys(message, "jsonrpc", "id", "error");
-//@ chunk-r1g76qsy.js:76507-76601 esm-fingerprint
+//@ chunk-qq5knpkd.js:80814-80908 esm-fingerprint
 var isInputRequiredResult = (value) =>
   typeof value === "object" &&
   value !== null &&
   !Array.isArray(value) &&
   value.resultType === "input_required";
-//@ chunk-r1g76qsy.js:76601-76750 esm-layout
+//@ chunk-qq5knpkd.js:80908-81057 esm-layout
 var isInitializeMessage = (message) =>
   isPlainObject(message) &&
   message.method === "initialize" &&
@@ -3611,18 +4065,18 @@ var isInitializedNotification = (message) =>
   isPlainObject(message) &&
   message.method === "notifications/initialized" &&
   InitializedNotificationSchema.safeParse(message).success;
-//@ chunk-r1g76qsy.js:76750-76876 esm-fingerprint
+//@ chunk-qq5knpkd.js:81057-81183 esm-fingerprint
 var MCP_PARAM_HEADER_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var X_MCP_HEADER_KEY;
 var RFC9110_TOKEN;
 var PERMITTED_X_MCP_HEADER_TYPES;
-deferInit("chunk-r1g76qsy.js:76750", () => {
+deferInit("chunk-qq5knpkd.js:81057", () => {
   MCP_PARAM_HEADER_PREFIX = "Mcp-Param-";
   X_MCP_HEADER_KEY = "x-mcp-header";
   RFC9110_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
   PERMITTED_X_MCP_HEADER_TYPES = new Set(["string", "integer", "boolean", "number"]);
 });
-//@ chunk-r1g76qsy.js:76876-78243 esm-fingerprint
+//@ chunk-qq5knpkd.js:81183-82550 esm-fingerprint
 function scanXMcpHeaderDeclarations(inputSchema) {
   let declarations = [];
   let seenLower = new Map();
@@ -3682,10 +4136,10 @@ function scanXMcpHeaderDeclarations(inputSchema) {
         reason: fault,
       };
 }
-//@ chunk-r1g76qsy.js:78243-78552 esm-fingerprint
+//@ chunk-qq5knpkd.js:82550-82859 esm-fingerprint
 var NON_REACHABLE_SUBSCHEMA_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OBJECT_VALUED_SUBSCHEMA_KEYWORDS;
-deferInit("chunk-r1g76qsy.js:78243", () => {
+deferInit("chunk-qq5knpkd.js:82550", () => {
   NON_REACHABLE_SUBSCHEMA_KEYWORDS = [
     "items",
     "prefixItems",
@@ -3713,14 +4167,14 @@ deferInit("chunk-r1g76qsy.js:78243", () => {
     "definitions",
   ]);
 });
-//@ chunk-r1g76qsy.js:78552-78608 esm-fingerprint
+//@ chunk-qq5knpkd.js:82859-82915 esm-fingerprint
 function pathName(path) {
   return path.length === 0 ? "<root>" : path.join(".");
 }
-//@ chunk-r1g76qsy.js:78608-78635 esm-fingerprint
+//@ chunk-qq5knpkd.js:82915-82942 esm-fingerprint
 var BASE64_SENTINEL_PREFIX = "=?base64?";
 var BASE64_SENTINEL_SUFFIX = "?=";
-//@ chunk-r1g76qsy.js:78635-78858 esm-fingerprint
+//@ chunk-qq5knpkd.js:82942-83165 esm-fingerprint
 function mcpParamPrimitiveToString(value) {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
@@ -3730,7 +4184,7 @@ function mcpParamPrimitiveToString(value) {
     return String(value);
   }
 }
-//@ chunk-r1g76qsy.js:78858-79070 esm-fingerprint
+//@ chunk-qq5knpkd.js:83165-83377 esm-fingerprint
 function needsBase64(s) {
   if (s.length === 0) return true;
   if (s.startsWith(BASE64_SENTINEL_PREFIX) && s.endsWith(BASE64_SENTINEL_SUFFIX)) return true;
@@ -3742,20 +4196,20 @@ function needsBase64(s) {
   }
   return false;
 }
-//@ chunk-r1g76qsy.js:79070-79181 esm-fingerprint
+//@ chunk-qq5knpkd.js:83377-83488 esm-fingerprint
 function utf8ToBase64(s) {
   let bytes = new TextEncoder().encode(s);
   let bin = "";
   for (let b of bytes) bin += String.fromCodePoint(b);
   return btoa(bin);
 }
-//@ chunk-r1g76qsy.js:79181-79232 esm-layout
+//@ chunk-qq5knpkd.js:83488-83539 esm-layout
 function encodeMcpParamValue(value) {
   return needsBase64(value)
     ? `${BASE64_SENTINEL_PREFIX}${utf8ToBase64(value)}${BASE64_SENTINEL_SUFFIX}`
     : value;
 }
-//@ chunk-r1g76qsy.js:79232-79329 esm-layout
+//@ chunk-qq5knpkd.js:83539-83636 esm-layout
 function valueAtPath(root, path) {
   let node = root;
   for (let key of path) {
@@ -3764,7 +4218,7 @@ function valueAtPath(root, path) {
   }
   return node;
 }
-//@ chunk-r1g76qsy.js:79329-79499 esm-fingerprint
+//@ chunk-qq5knpkd.js:83636-83806 esm-fingerprint
 function buildMcpParamHeaders(declarations, args) {
   let out = {};
   for (let decl of declarations) {
@@ -3776,11 +4230,11 @@ function buildMcpParamHeaders(declarations, args) {
   }
   return out;
 }
-//@ chunk-r1g76qsy.js:79499-84495 esm-fingerprint
+//@ chunk-qq5knpkd.js:83806-88802 esm-fingerprint
 var HEADER_MISMATCH_ERROR_CODE; // deferred: uses ProtocolErrorCode of its import cycle while loading; runs once the cycle is complete
 var INBOUND_VALIDATION_LADDER;
 var LADDER_ERROR_HTTP_STATUS;
-deferInit("chunk-r1g76qsy.js:79499", () => {
+deferInit("chunk-qq5knpkd.js:83806", () => {
   HEADER_MISMATCH_ERROR_CODE = -32020;
   INBOUND_VALIDATION_LADDER = [
     {
@@ -3874,15 +4328,15 @@ deferInit("chunk-r1g76qsy.js:79499", () => {
     [HEADER_MISMATCH_ERROR_CODE]: 400,
   };
 });
-//@ chunk-r1g76qsy.js:84495-84528 esm-layout
+//@ chunk-qq5knpkd.js:88802-88835 esm-layout
 function parseSchema(schema, data) {
   return safeParse(schema, data);
 }
-//@ chunk-r1g76qsy.js:84528-84596 esm-fingerprint
+//@ chunk-qq5knpkd.js:88835-88903 esm-fingerprint
 function shapeKeys(schemas) {
   return new Set(schemas.flatMap((schema) => Object.keys(schema.shape)));
 }
-//@ chunk-r1g76qsy.js:84596-84770 esm-fingerprint
+//@ chunk-qq5knpkd.js:88903-89077 esm-fingerprint
 function isStandardSchema(schema) {
   if (schema == null) return false;
   let schemaType = typeof schema;
@@ -3890,10 +4344,10 @@ function isStandardSchema(schema) {
   if (!("~standard" in schema)) return false;
   return typeof schema["~standard"]?.validate === "function";
 }
-//@ chunk-r1g76qsy.js:84770-84799 esm-layout
+//@ chunk-qq5knpkd.js:89077-89106 esm-layout
 var warnedZodFallback = false;
 var JSON_SCHEMA_CONVERSION_TARGET = "draft-2020-12";
-//@ chunk-r1g76qsy.js:84799-85828 esm-fingerprint
+//@ chunk-qq5knpkd.js:89106-90135 esm-fingerprint
 function standardSchemaToJsonSchema(schema, io = "input") {
   let std = schema["~standard"];
   let result;
@@ -3938,7 +4392,7 @@ function standardSchemaToJsonSchema(schema, io = "input") {
     ...result,
   };
 }
-//@ chunk-r1g76qsy.js:85828-86111 esm-fingerprint
+//@ chunk-qq5knpkd.js:90135-90418 esm-fingerprint
 function isProvablyObjectShapedRoot(schema) {
   if (
     "properties" in schema ||
@@ -3956,12 +4410,12 @@ function isProvablyObjectShapedRoot(schema) {
   }
   return false;
 }
-//@ chunk-r1g76qsy.js:86111-86250 esm-fingerprint
+//@ chunk-qq5knpkd.js:90418-90557 esm-fingerprint
 function formatIssue(issue) {
   if (!issue.path?.length) return issue.message;
   return `${issue.path.map((p) => String(typeof p === "object" ? p.key : p)).join(".")}: ${issue.message}`;
 }
-//@ chunk-r1g76qsy.js:86250-86436 esm-fingerprint
+//@ chunk-qq5knpkd.js:90557-90743 esm-fingerprint
 async function validateStandardSchema(schema, data) {
   let result = await schema["~standard"].validate(data);
   if (result.issues && result.issues.length > 0)
@@ -3974,7 +4428,7 @@ async function validateStandardSchema(schema, data) {
     data: result.value,
   };
 }
-//@ chunk-r1g76qsy.js:86436-86539 esm-fingerprint
+//@ chunk-qq5knpkd.js:90743-90846 esm-fingerprint
 function zodEmittedPattern(schema) {
   let jsonSchema = toJSONSchema(schema, {
     target: JSON_SCHEMA_CONVERSION_TARGET,
@@ -3982,9 +4436,9 @@ function zodEmittedPattern(schema) {
   });
   return typeof jsonSchema.pattern === "string" ? jsonSchema.pattern : undefined;
 }
-//@ chunk-r1g76qsy.js:86539-86565 esm-fingerprint
+//@ chunk-qq5knpkd.js:90846-90872 esm-fingerprint
 var DATETIME_FRACTION_DIGITS = /\\\.\\d\{(\d+)\}/;
-//@ chunk-r1g76qsy.js:86565-86736 esm-fingerprint
+//@ chunk-qq5knpkd.js:90872-91043 esm-fingerprint
 function datetimeReferenceSchemas(pattern) {
   let fractionDigits = DATETIME_FRACTION_DIGITS.exec(pattern);
   let precisions = [undefined, -1, 0];
@@ -4001,7 +4455,7 @@ function datetimeReferenceSchemas(pattern) {
     ),
   );
 }
-//@ chunk-r1g76qsy.js:86736-86938 esm-fingerprint
+//@ chunk-qq5knpkd.js:91043-91245 esm-fingerprint
 function referencePatternsForFormat(format, pattern) {
   let referenceSchemas;
   switch (format) {
@@ -4022,16 +4476,16 @@ function referencePatternsForFormat(format, pattern) {
     referenceSchemas.map((schema) => zodEmittedPattern(schema)).filter((emitted) => emitted !== undefined),
   );
 }
-//@ chunk-r1g76qsy.js:86938-87001 esm-fingerprint
+//@ chunk-qq5knpkd.js:91245-91308 esm-fingerprint
 function isLibraryFormatPattern(format, pattern, vendor) {
   if (vendor !== "zod") return true;
   return referencePatternsForFormat(format, pattern).has(pattern);
 }
-//@ chunk-r1g76qsy.js:87001-87072 esm-fingerprint
+//@ chunk-qq5knpkd.js:91308-91379 esm-fingerprint
 function isJsonObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:87072-87289 esm-fingerprint
+//@ chunk-qq5knpkd.js:91379-91596 esm-fingerprint
 function convertStandardElicitationSchema(schema) {
   try {
     return standardSchemaToJsonSchema(schema, "input");
@@ -4043,9 +4497,9 @@ function convertStandardElicitationSchema(schema) {
     );
   }
 }
-//@ chunk-r1g76qsy.js:87289-87387 esm-fingerprint
+//@ chunk-qq5knpkd.js:91596-91694 esm-fingerprint
 var ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r1g76qsy.js:87289", () => {
+deferInit("chunk-qq5knpkd.js:91596", () => {
   ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS = new Set([
     "$comment",
     "deprecated",
@@ -4056,15 +4510,15 @@ deferInit("chunk-r1g76qsy.js:87289", () => {
     "writeOnly",
   ]);
 });
-//@ chunk-r1g76qsy.js:87387-87439 esm-fingerprint
+//@ chunk-qq5knpkd.js:91694-91746 esm-fingerprint
 function isAnnotationOnlyJsonSchemaKeyword(key) {
   return ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS.has(key) || key.startsWith("x-");
 }
-//@ chunk-r1g76qsy.js:87439-87657 esm-fingerprint
+//@ chunk-qq5knpkd.js:91746-91964 esm-fingerprint
 var ROOT_KEYS; // deferred: uses JSONValueSchema (../../core/dist/auth-CUe6YdwF.mjs) of its import cycle while loading; runs once the cycle is complete
 var PROPERTY_KEYS_BY_TYPE;
 var SUPPORTED_STRING_FORMATS;
-deferInit("chunk-r1g76qsy.js:87439", () => {
+deferInit("chunk-qq5knpkd.js:91746", () => {
   ROOT_KEYS = new Set(["$schema", ...Object.keys(ElicitRequestFormParamsSchema.shape.requestedSchema.shape)]);
   PROPERTY_KEYS_BY_TYPE = {
     string: shapeKeys([
@@ -4080,7 +4534,7 @@ deferInit("chunk-r1g76qsy.js:87439", () => {
   };
   SUPPORTED_STRING_FORMATS = new Set(StringSchemaSchema.shape.format.unwrap().options);
 });
-//@ chunk-r1g76qsy.js:87657-88062 esm-fingerprint
+//@ chunk-qq5knpkd.js:91964-92369 esm-fingerprint
 function walkProperty(node, path, vendor, unsupported) {
   if (!isJsonObject(node)) return node;
   let allowedKeys =
@@ -4098,7 +4552,7 @@ function walkProperty(node, path, vendor, unsupported) {
     } else unsupported.push(`${path}.${key}`);
   return pruned;
 }
-//@ chunk-r1g76qsy.js:88062-88473 esm-fingerprint
+//@ chunk-qq5knpkd.js:92369-92780 esm-fingerprint
 function walkRequestedSchema(converted, vendor) {
   let pruned = {};
   let unsupported = [];
@@ -4119,7 +4573,7 @@ function walkRequestedSchema(converted, vendor) {
     );
   return pruned;
 }
-//@ chunk-r1g76qsy.js:88473-88652 esm-fingerprint
+//@ chunk-qq5knpkd.js:92780-92959 esm-fingerprint
 function describeUnsupportedProperties(pruned, fallback) {
   if (!isJsonObject(pruned.properties)) return fallback;
   let offenders = Object.entries(pruned.properties)
@@ -4127,7 +4581,7 @@ function describeUnsupportedProperties(pruned, fallback) {
     .map(([name]) => `properties.${name}`);
   return offenders.length > 0 ? offenders.join(", ") : fallback;
 }
-//@ chunk-r1g76qsy.js:88652-88941 esm-fingerprint
+//@ chunk-qq5knpkd.js:92959-93248 esm-fingerprint
 function findDroppedConstraintPaths(original, parsed, path = "") {
   if (Array.isArray(original) && Array.isArray(parsed))
     return original.flatMap((item, index) =>
@@ -4141,7 +4595,7 @@ function findDroppedConstraintPaths(original, parsed, path = "") {
     return findDroppedConstraintPaths(value, parsed[key], childPath);
   });
 }
-//@ chunk-r1g76qsy.js:88941-89834 esm-fingerprint
+//@ chunk-qq5knpkd.js:93248-94141 esm-fingerprint
 function normalizeElicitInputParams(input) {
   if (!isStandardSchema(input.requestedSchema))
     return {
@@ -4177,7 +4631,7 @@ function normalizeElicitInputParams(input) {
     requestedSchema: parsed.data,
   };
 }
-//@ chunk-r1g76qsy.js:89834-90306 esm-fingerprint
+//@ chunk-qq5knpkd.js:94141-94613 esm-fingerprint
 function buildInputRequired(spec) {
   let hasInputRequests = spec.inputRequests !== undefined && Object.keys(spec.inputRequests).length > 0;
   let hasRequestState = typeof spec.requestState === "string";
@@ -4195,9 +4649,9 @@ function buildInputRequired(spec) {
     }),
   };
 }
-//@ chunk-r1g76qsy.js:90306-90645 esm-fingerprint
+//@ chunk-qq5knpkd.js:94613-94952 esm-fingerprint
 var inputRequired; // deferred: uses buildInputRequired of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r1g76qsy.js:90306", () => {
+deferInit("chunk-qq5knpkd.js:94613", () => {
   inputRequired = Object.assign(buildInputRequired, {
     elicit(params) {
       try {
@@ -4235,18 +4689,18 @@ deferInit("chunk-r1g76qsy.js:90306", () => {
     },
   });
 });
-//@ chunk-r1g76qsy.js:90645-90668 esm-layout
+//@ chunk-qq5knpkd.js:94952-94975 esm-layout
 var DEFAULT_INPUT_REQUIRED_AUTO_FULFILL = true;
 var DEFAULT_INPUT_REQUIRED_MAX_ROUNDS = 10;
 var REQUEST_STATE_ONLY_LEG_PACING_MS = 250;
-//@ chunk-r1g76qsy.js:90668-90749 esm-fingerprint
+//@ chunk-qq5knpkd.js:94975-95056 esm-fingerprint
 function resolveInputRequiredDriverConfig(options) {
   return {
     autoFulfill: options?.autoFulfill ?? DEFAULT_INPUT_REQUIRED_AUTO_FULFILL,
     maxRounds: options?.maxRounds ?? DEFAULT_INPUT_REQUIRED_MAX_ROUNDS,
   };
 }
-//@ chunk-r1g76qsy.js:90749-90907 esm-fingerprint
+//@ chunk-qq5knpkd.js:95056-95214 esm-fingerprint
 function buildInputRequiredRetryParams(originalParams, responses, requestState) {
   let hasResponses = responses !== undefined && Object.keys(responses).length > 0;
   if (!hasResponses && requestState === undefined) return originalParams;
@@ -4260,11 +4714,11 @@ function buildInputRequiredRetryParams(originalParams, responses, requestState) 
     }),
   };
 }
-//@ chunk-r1g76qsy.js:90907-91029 esm-fingerprint
+//@ chunk-qq5knpkd.js:95214-95336 esm-fingerprint
 function inputRequiredRoundsExceededMessage(method, maxRounds) {
   return `Multi-round-trip request '${method}' still required input after ${maxRounds} rounds (inputRequired.maxRounds)`;
 }
-//@ chunk-r1g76qsy.js:91029-91384 esm-fingerprint
+//@ chunk-qq5knpkd.js:95336-95691 esm-fingerprint
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -4292,7 +4746,7 @@ function sleep(ms, signal) {
     });
   });
 }
-//@ chunk-r1g76qsy.js:91384-91615 esm-fingerprint
+//@ chunk-qq5knpkd.js:95691-95922 esm-fingerprint
 function linkedRoundAbort(outer) {
   let controller = new AbortController();
   let onOuterAbort = () => controller.abort(outer?.reason);
@@ -4306,7 +4760,7 @@ function linkedRoundAbort(outer) {
     dispose: () => outer?.removeEventListener("abort", onOuterAbort),
   };
 }
-//@ chunk-r1g76qsy.js:91615-92780 esm-fingerprint
+//@ chunk-qq5knpkd.js:95922-97087 esm-fingerprint
 async function runInputRequiredDriver(args) {
   let { config, method, originalParams, requestOptions, hooks, signal } = args;
   let startedAt = args.flowStartedAt ?? Date.now();
@@ -4383,12 +4837,12 @@ async function runInputRequiredDriver(args) {
     return result;
   }
 }
-//@ chunk-r1g76qsy.js:92780-97520 esm-fingerprint
+//@ chunk-qq5knpkd.js:97087-101827 esm-fingerprint
 var SPEC_SCHEMA_KEYS; // deferred: uses JSONValueSchema (../../core/dist/auth-CUe6YdwF.mjs) of its import cycle while loading; runs once the cycle is complete
 var authSchemas;
 var _specTypeSchemas;
 var _isSpecType;
-deferInit("chunk-r1g76qsy.js:92780", () => {
+deferInit("chunk-qq5knpkd.js:97087", () => {
   SPEC_SCHEMA_KEYS = [
     "AnnotationsSchema",
     "AudioContentSchema",
@@ -4569,30 +5023,30 @@ deferInit("chunk-r1g76qsy.js:92780", () => {
   _specTypeSchemas = {};
   _isSpecType = {};
 });
-//@ chunk-r1g76qsy.js:97520-97599 esm-fingerprint
+//@ chunk-qq5knpkd.js:101827-101906 esm-fingerprint
 function register(key, schema) {
   let name = key.slice(0, -6);
   _specTypeSchemas[name] = schema;
   _isSpecType[name] = (v) => schema.safeParse(v).success;
 }
-//@ chunk-r1g76qsy.js:97599-97627 esm-layout
+//@ chunk-qq5knpkd.js:101906-101934 esm-layout
 // deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r1g76qsy.js:97599", () => {
+deferInit("chunk-qq5knpkd.js:101906", () => {
   for (let key of SPEC_SCHEMA_KEYS) register(key, schemas_exports[key]);
 });
-//@ chunk-r1g76qsy.js:97627-97669 esm-layout
+//@ chunk-qq5knpkd.js:101934-101976 esm-layout
 // deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r1g76qsy.js:97627", () => {
+deferInit("chunk-qq5knpkd.js:101934", () => {
   for (let [key, schema] of Object.entries(authSchemas)) register(key, schema);
 });
-//@ chunk-r1g76qsy.js:97669-97715 esm-layout
+//@ chunk-qq5knpkd.js:101976-102022 esm-layout
 var specTypeSchemas; // deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
 var isSpecType;
-deferInit("chunk-r1g76qsy.js:97669", () => {
+deferInit("chunk-qq5knpkd.js:101976", () => {
   specTypeSchemas = Object.freeze(_specTypeSchemas);
   isSpecType = Object.freeze(_isSpecType);
 });
-//@ chunk-r1g76qsy.js:97715-97859 esm-fingerprint
+//@ chunk-qq5knpkd.js:102022-102166 esm-fingerprint
 function bootstrapOutboundCodec(method) {
   switch (method) {
     case "initialize":
@@ -4604,7 +5058,7 @@ function bootstrapOutboundCodec(method) {
       return;
   }
 }
-//@ chunk-r1g76qsy.js:97859-97927 esm-fingerprint
+//@ chunk-qq5knpkd.js:102166-102234 esm-fingerprint
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 60000;
 var RESERVED_ENVELOPE_META_KEYS = [
   PROTOCOL_VERSION_META_KEY,
@@ -4613,7 +5067,7 @@ var RESERVED_ENVELOPE_META_KEYS = [
   LOG_LEVEL_META_KEY,
 ];
 var RETRY_PARAMS_KEYS = ["inputResponses", "requestState"];
-//@ chunk-r1g76qsy.js:97927-98471 esm-fingerprint
+//@ chunk-qq5knpkd.js:102234-102778 esm-fingerprint
 function liftWireOnlyMaterial(message, kind) {
   let params = message.params;
   if (!isPlainObject$1(params))
@@ -4659,7 +5113,7 @@ function liftWireOnlyMaterial(message, kind) {
     lifted,
   };
 }
-//@ chunk-r1g76qsy.js:98471-98766 esm-fingerprint
+//@ chunk-qq5knpkd.js:102778-103073 esm-fingerprint
 function codecResultValidator(codec, method) {
   let probe = codec.validateResult(method, undefined);
   if (!probe.ok && probe.reason === "not-in-era") return;
@@ -4684,15 +5138,15 @@ function codecResultValidator(codec, method) {
     },
   };
 }
-//@ chunk-r1g76qsy.js:98766-98793 esm-layout
+//@ chunk-qq5knpkd.js:103073-103100 esm-layout
 function requestStateAccessor(value) {
   return () => value;
 }
-//@ chunk-r1g76qsy.js:98793-112999 esm-layout
+//@ chunk-qq5knpkd.js:103100-117307 esm-layout
 var NO_REQUEST_STATE; // deferred: uses requestStateAccessor of its import cycle while loading; runs once the cycle is complete
 var writeNegotiatedProtocolVersion;
 var Protocol;
-deferInit("chunk-r1g76qsy.js:98793", () => {
+deferInit("chunk-qq5knpkd.js:103100", () => {
   NO_REQUEST_STATE = requestStateAccessor(undefined);
   Protocol = class {
     _transport;
@@ -5422,11 +5876,11 @@ deferInit("chunk-r1g76qsy.js:98793", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:112999-113070 esm-fingerprint
+//@ chunk-qq5knpkd.js:117307-117378 esm-fingerprint
 function isPlainObject$1(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:113070-113206 esm-layout
+//@ chunk-qq5knpkd.js:117378-117514 esm-layout
 function mergeCapabilities(base, additional) {
   let result = {
     ...base,
@@ -5446,11 +5900,11 @@ function mergeCapabilities(base, additional) {
   }
   return result;
 }
-//@ chunk-r1g76qsy.js:113206-113277 esm-fingerprint
+//@ chunk-qq5knpkd.js:117514-117585 esm-fingerprint
 function isPlainObject_2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-r1g76qsy.js:113277-113481 esm-fingerprint
+//@ chunk-qq5knpkd.js:117585-117789 esm-fingerprint
 function partitionInputResponses(inputResponses) {
   let accepted = {};
   let droppedKeys = [];
@@ -5471,14 +5925,14 @@ function partitionInputResponses(inputResponses) {
     droppedKeys,
   };
 }
-//@ chunk-r1g76qsy.js:113481-113668 esm-fingerprint
+//@ chunk-qq5knpkd.js:117789-117976 esm-fingerprint
 function relatedMessagingUnavailable(member) {
   throw new SdkError(
     SdkErrorCode.SendFailed,
     `ctx.mcpReq.${member} is not available while fulfilling an embedded input request: the request is fulfilled locally and has no related peer request`,
   );
 }
-//@ chunk-r1g76qsy.js:113668-113826 esm-fingerprint
+//@ chunk-qq5knpkd.js:117976-118134 esm-fingerprint
 function synthesizeInputRequestContext(key, method, params, signal, sessionId) {
   return {
     sessionId,
@@ -5493,7 +5947,7 @@ function synthesizeInputRequestContext(key, method, params, signal, sessionId) {
     },
   };
 }
-//@ chunk-r1g76qsy.js:113826-114738 esm-fingerprint
+//@ chunk-qq5knpkd.js:118134-119046 esm-fingerprint
 async function dispatchInputRequest(host, codec, key, entry, signal) {
   if (!isPlainObject_2(entry) || typeof entry.method !== "string")
     throw new SdkError(
@@ -5536,7 +5990,7 @@ async function dispatchInputRequest(host, codec, key, entry, signal) {
     host.buildContext(synthesizeInputRequestContext(key, method, params, signal, host.sessionId)),
   );
 }
-//@ chunk-r1g76qsy.js:114738-115159 esm-fingerprint
+//@ chunk-qq5knpkd.js:119046-119467 esm-fingerprint
 function buildRetryLegRequestOptions(options, legOptions) {
   return {
     ...(options?.signal !== undefined && {
@@ -5563,7 +6017,7 @@ function buildRetryLegRequestOptions(options, legOptions) {
     allowInputRequired: true,
   };
 }
-//@ chunk-r1g76qsy.js:115159-115703 esm-fingerprint
+//@ chunk-qq5knpkd.js:119467-120011 esm-fingerprint
 function runInputRequiredFlow(host, config, decoded, flow) {
   let { codec, request, options, flowStartedAt } = flow;
   let firstPayload = {
@@ -5597,7 +6051,7 @@ function runInputRequiredFlow(host, config, decoded, flow) {
     hooks,
   });
 }
-//@ chunk-r1g76qsy.js:115703-115842 esm-fingerprint
+//@ chunk-qq5knpkd.js:120011-120150 esm-fingerprint
 function manualInputRequiredValue(decoded) {
   return {
     resultType: "input_required",
@@ -5607,7 +6061,7 @@ function manualInputRequiredValue(decoded) {
     }),
   };
 }
-//@ chunk-r1g76qsy.js:117199-117372 esm-fingerprint
+//@ chunk-qq5knpkd.js:121507-121680 esm-fingerprint
 function parseContentType(contentType) {
   if (!contentType) return;
   try {
@@ -5618,7 +6072,7 @@ function parseContentType(contentType) {
     return essence;
   }
 }
-//@ chunk-r1g76qsy.js:117372-117999 esm-layout
+//@ chunk-qq5knpkd.js:121680-122307 esm-layout
 var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10485760;
 var ReadBuffer = class {
   _buffer;
@@ -5653,11 +6107,11 @@ var ReadBuffer = class {
     this._buffer = undefined;
   }
 };
-//@ chunk-r1g76qsy.js:117999-118040 esm-layout
+//@ chunk-qq5knpkd.js:122307-122348 esm-layout
 function deserializeMessage(line) {
   return parseJsonRpcMessage(JSON.parse(line));
 }
-//@ chunk-r1g76qsy.js:118040-118085 esm-layout
+//@ chunk-qq5knpkd.js:122348-122393 esm-layout
 function serializeMessage(message) {
   return (
     JSON.stringify(message) +
@@ -5665,7 +6119,7 @@ function serializeMessage(message) {
 `
   );
 }
-//@ chunk-r1g76qsy.js:118085-118240 esm-fingerprint
+//@ chunk-qq5knpkd.js:122393-122548 esm-fingerprint
 function normalizeHeaders(headers) {
   if (!headers) return {};
   if (headers instanceof Headers) return Object.fromEntries(headers.entries());
@@ -5674,7 +6128,7 @@ function normalizeHeaders(headers) {
     ...headers,
   };
 }
-//@ chunk-r1g76qsy.js:118240-118380 esm-layout
+//@ chunk-qq5knpkd.js:122548-122688 esm-layout
 function createFetchWithInit(baseFetch = fetch, baseInit) {
   if (!baseInit) return baseFetch;
   return async (url, init) =>

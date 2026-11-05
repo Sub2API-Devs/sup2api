@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增："enable__mcp__…"占位工具：能力（Chrome、远程浏览器/电脑）未加载时提示模型先启用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tkqbtg0j.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m532fdcg.js (10)
  * attribution: placement 10
  */
 import { TOOL_SEARCH_TOOL_NAME } from "../ToolSearchTool/prompt.js";
@@ -30,7 +30,7 @@ import { isClaudeInChromeAllowed } from "../../utils/claudeInChrome/setup.js";
 import { isChromeServerPolicyDenied } from "../../utils/claudeInChrome/serverPolicy.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-tkqbtg0j.js:12104-26294 placement
+//@ chunk-m532fdcg.js:13252-27442 placement
 /**
  * “启用 Browser”占位工具的名。
  */
@@ -87,7 +87,7 @@ var SWITCHED_OFF_TEXT = `Claude in Chrome is switched off for this chat, and no 
 var SWITCHED_OFF_NOT_LINKED_TEXT = `Claude in Chrome is switched off for this chat, and this chat isn't linked to a computer right now. No tool here can change either, including ${REQUEST_COMPUTER} and the tools whose names start with enable__. Both are normal states, not an outage or a connection problem. While you have none of Claude in Chrome's tools (their names contain ${CLAUDE_IN_CHROME_MCP_SERVER_NAME}__ or Claude_in_Chrome__) there is no point looking or waiting for them. Either state can change during the conversation: if such tools are later in your tool list or announced to you, use them, whatever this result says. Tell the user both in three or four plain sentences, in their language and without tool names, then do the task another way with the tools you have here if you can. For example: "I can't use Chrome from here: Claude in Chrome is switched off for this chat, and the chat isn't linked to a computer right now. You can switch Claude in Chrome on under Connectors in this chat, on the web or in the Claude desktop app, if your organization allows Claude in Chrome. If you have the desktop app on a computer, opening this chat there and sending a message can link it. If I still can't use your computer after that, adding a folder from that computer to this chat, in the desktop app, can." Say nothing about what you could do after that or when that might be, and suggest no other steps or settings for either, with one exception: if the user says the switch already shows on, ask them to switch it off and on again there. If the user says they can't switch it on there, say only that you can't tell why from here, and that an organization can block Claude in Chrome for its members: no other cause, and no step. If the user says they did any of these and you still have none of Claude in Chrome's tools, say that you still can't use it here, with no cause, and name again only the steps they have not said they tried. If they say they tried all of them and you still have none, say only that you still can't use it here: no cause, and no step such as refreshing or waiting.`;
 var ORG_REFUSAL_TEXT =
   "This call enables nothing, and no tool here can add Claude in Chrome: this chat has none of its tools right now. Tell the user in one plain sentence, in their language and without tool names, that you can't use Claude in Chrome in this chat right now. Then, if you have tools whose names contain Claude_Browser, offer to use the browser built into the Claude desktop app instead; otherwise do the task another way with the tools you have here if you can. You don't know the cause: don't say that Chrome or its extension isn't connected, and suggest no steps or settings for Claude in Chrome. If you later have its tools (their names contain claude-in-chrome or Claude_in_Chrome), use them.";
-//@ chunk-tkqbtg0j.js:26294-26362 placement
+//@ chunk-m532fdcg.js:27442-27510 placement
 /**
  * 启用类占位工具的输入 schema（带可选 task）。
  */
@@ -101,7 +101,7 @@ var enableMessageOutputSchema = DoctorLazy(() =>
     message: stringSchema(),
   }),
 );
-//@ chunk-tkqbtg0j.js:26362-26554 placement
+//@ chunk-m532fdcg.js:27510-27702 placement
 /**
  * teleport 中继共享时使用共享描述并在结果后附加说明。
  */
@@ -120,7 +120,7 @@ function withSharedDescription({ description, sharedDescription, result }) {
     result: `${result} ${SWITCHED_OFF_NOTE}`,
   };
 }
-//@ chunk-tkqbtg0j.js:26554-27808 placement
+//@ chunk-m532fdcg.js:27702-28956 placement
 function createEnableStubTool({
   name,
   label,
@@ -223,7 +223,7 @@ function createEnableStubTool({
     },
   });
 }
-//@ chunk-tkqbtg0j.js:27808-28374 placement
+//@ chunk-m532fdcg.js:28956-29522 placement
 /**
  * 各能力的启用占位工具（Chrome、浏览器、电脑使用、请求电脑）与列表。
  */
@@ -276,21 +276,21 @@ var ENABLE_STUB_TOOLS = [
   REQUEST_COMPUTER_STUB,
 ];
 var REMOTE_DEVICES_PREFIX = getMcpPrefix(REMOTE_DEVICES);
-//@ chunk-tkqbtg0j.js:28374-28419 placement
+//@ chunk-m532fdcg.js:29522-29567 placement
 /**
  * 判断工具名是否属于 remote-devices 前缀或 Chrome 工具。
  */
 function isBrowserOrChromeToolName(toolName) {
   return toolName.startsWith(REMOTE_DEVICES_PREFIX) || isChromeToolName(toolName);
 }
-//@ chunk-tkqbtg0j.js:28419-28455 placement
+//@ chunk-m532fdcg.js:29567-29603 placement
 /**
  * 是 Chrome 工具名且不是 remote-devices 前缀。
  */
 function isPlainChromeToolName(toolName) {
   return isChromeToolName(toolName) && !isBrowserPreviewToolName(toolName);
 }
-//@ chunk-tkqbtg0j.js:28455-28620 placement
+//@ chunk-m532fdcg.js:29603-29768 placement
 /**
  * Chrome 占位工具按原因选择的结果文本。
  */
@@ -305,7 +305,7 @@ var CHROME_STUB_RESULTS = {
   server_failed: ORG_REFUSAL_TEXT,
   no_cause: ORG_REFUSAL_TEXT,
 };
-//@ chunk-tkqbtg0j.js:28620-29183 placement
+//@ chunk-m532fdcg.js:29768-30331 placement
 /**
  * 判断 Chrome 工具不可用的原因（已有工具、组织禁止、关闭、未连接、服务器挂起/失败等）。
  */
@@ -333,7 +333,7 @@ function chromeStubCase({ tools, clients, mayBeLinked }) {
   if (clientStates.has("failed")) return "server_failed";
   return "no_cause";
 }
-//@ chunk-tkqbtg0j.js:29183-29237 placement
+//@ chunk-m532fdcg.js:30331-30385 placement
 /**
  * 执行回调，抛错时记日志并返回 false。
  */

@@ -3,11 +3,12 @@
  *
  * 查询主循环：query() 入口与 queryLoop 每轮的请求→流式→工具执行→恢复/压缩→下一轮状态机，以及中止、缺失 tool_result 补齐、模型回退提示、轮首队列折叠等辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/query.ts
- * pieces: chunk-32qjrk8h.js (1), chunk-4163ksv9.js (6), chunk-ha3km179.js (27)
- * attribution: placement 7, sole-consumer 11, fingerprint 2, layout 13, callgraph-witnessed 1
+ * pieces: chunk-ppbxvak2.js (6), chunk-shzdmqn1.js (1), chunk-w3ch4xq2.js (29)
+ * attribution: placement 7, sole-consumer 12, fingerprint 2, layout 14, callgraph-witnessed 1
  */
+import { codeModeAccepted } from "./utils/codeMode/accepted.js";
 import { SessionRootSlot, isVirtualConversationMessage } from "./bootstrap/sessionSlices.js";
 import { isAborted } from "./utils/abortSignalUtils.js";
 import { HostScoped } from "./utils/hostScoped.js";
@@ -110,7 +111,7 @@ import {
   isRetryableApiErrorMessage,
   resumeTruncatedThinking,
 } from "./services/api/thinkingResumption.js";
-import { totalTokensOf, getTokenCountFromUsage } from "./utils/messages/usageAndStopReason.js";
+import { totalTokensOf, getTokenCountFromUsage_2 } from "./utils/messages/usageAndStopReason.js";
 import { endProfilePhase, startProfilePhase, queryCheckpoint, noteRedrive } from "./utils/queryProfiler.js";
 import {
   observeRunningTurn,
@@ -123,6 +124,24 @@ import {
 } from "./query/presenceCheck.js";
 import { awaitArtifactRosterSafe } from "./services/artifacts/rosterWait.js";
 import { isObserverAgentsEnabled, ensureMainObserver } from "./services/agentObserver/agentObserver.js";
+import {
+  forgetTurnStart,
+  createDisposableGuard,
+  awaitMcpSettle,
+  awaitBgConsentGate,
+  compactCheckFacts,
+  shouldBypassPtlPreempt,
+  isCompactNotNeededAtLimit,
+  endIfTurnEnded,
+  drainToolResults,
+  noteToolUseId,
+  endsWithReminder,
+  shouldRunMcpStopHooks,
+  runStopHooksSafely,
+  canDrainTools,
+  drainReplToolResults,
+  shouldPreemptPromptTooLong,
+} from "./query/toolDrain.js";
 import {
   discardPrecompute,
   manuallyExtractSessionMemory,
@@ -160,12 +179,15 @@ import { logFeatureBad, logFeatureOk, logFeatureSad } from "./services/analytics
 import {
   reportTurnEnd,
   INITIAL_LOOP_RECOVERY_STATE,
+  drainIfStopsAtToolGap,
   announceOutputLimitRecovery,
   fallbackWindowNotice,
   resetStreamingToolExecutor,
   IMAGE_ERROR_TOOL_CANCEL_TEXT,
   turnErrorToolCancelText,
   completedToolUseIds,
+  fixStopSequence,
+  fixOutgoingStopReason,
   newFallbackRecord,
   chainFallbackRecord,
   describeFallbackWindow,
@@ -194,9 +216,13 @@ import {
   checkProjectDocReadAllowed,
   anyDocReadHookBlocks,
   reportContextAnnouncements,
+  refusalMessageOf,
+  resendEmptyCompletion,
   createContextRoomTracker,
   applyReminders,
   placeBatchingReminder,
+  emptyCompletionResendMessage,
+  recoveryMessage,
   safeMapOrUndefined,
 } from "./utils/claudemd/contextRouting.js";
 import { withTurnStepHooks, canResumeThinkingOnModel } from "./query/turnHooks.js";
@@ -230,11 +256,11 @@ import {
   getAttachmentMessages,
 } from "./utils/attachments.js";
 import {
-  filterQueuedCommandsForThread,
-  isPassiveMainAgentCommand,
-  isPromptModeQueuedCommand,
-  createQueueFilterForThread,
-  getValueFromInput as getValueFromInput_2,
+  filterMidTurnDrainCommands,
+  isPassiveMainThreadCommand,
+  isQueuedUserPrompt,
+  midTurnFoldableFor,
+  unnameTurnPersonJoined,
 } from "./utils/messageQueueManager.js";
 import { imageLimitsForModel } from "./utils/attachmentMedia.js";
 import {
@@ -255,22 +281,8 @@ import { createStickyBetaLatches, forkStickyBetaLatches, markBetaRejected } from
 import { runTurnEndReactions, runStopHooks, waitForTurnEndSummary } from "./query/postTurnSummary.js";
 import { headlessProfilerCheckpoint } from "./utils/headlessProfiler.js";
 import { sanitizeMarkName } from "./utils/startupMarks.js";
+import { letGoOfUnsentMedia } from "./services/api/toolSchemaWire.js";
 import { isActingAsBgJob, isUnattendedInteractiveSession, isBgSession } from "./utils/concurrentSessions.js";
-import {
-  createDisposableGuard,
-  awaitMcpSettle,
-  awaitBgConsentGate,
-  compactCheckFacts,
-  shouldBypassPtlPreempt,
-  isCompactNotNeededAtLimit,
-  drainToolResults,
-  endsWithReminder,
-  shouldRunMcpStopHooks,
-  runStopHooksSafely,
-  canDrainTools,
-  noopAsyncDrain,
-  shouldPreemptPromptTooLong,
-} from "./query/toolDrain.js";
 import { isLocalCommandMarkup } from "./utils/messages/localCommandTags.js";
 import {
   applyToolResultBudget,
@@ -297,9 +309,25 @@ import {
 import { getModelContextInfo } from "./utils/model/modelContextInfo.js";
 import {
   clearMicroCompactFlag,
-  hasMemoryFileRead as hasMemoryFileRead_2,
+  readPathsOfToolUses,
   replaceToolResultContent,
 } from "./services/compact/microCompact.js";
+import {
+  canResumeThinking,
+  shouldRetryRefusal,
+  shouldRetryRefusalNow,
+  shouldAskRefusalFallbackPreference,
+  EMPTY_ANNOUNCEMENT,
+  decideReminderDelivery,
+  askRefusalFallbackPreference,
+  allAnsweredWithoutRequest,
+  shouldCompactAfterLongContextRefusal,
+  isRefusalErrorMessage,
+  reportRefusalRetry,
+  synthesizeRefusedToolResults,
+  promptTooLongFacts,
+  recoverFromRefusal,
+} from "./query/refusalRecovery.js";
 import { releasingAsyncIterator } from "./utils/generators.js";
 import { getEffortLevelIfSupported, carriedEffortForModel } from "./utils/effort.js";
 import { rollOverTotalTokensContext } from "./utils/attachments/totalTokensReminder.js";
@@ -329,24 +357,17 @@ import { usageLimitNotices } from "./services/rateLimitMessages.js";
 import { resolveAdvisorState } from "./utils/advisor/advisorState.js";
 import { canDeclareToolChangeAhead } from "./services/api/declaredToolSet.js";
 import { latestPromptSnapshot, recordedDeferredTools } from "./utils/contextAttachments/promptSnapshot.js";
+import {
+  needsOverageConsentForModel,
+  needsOverageConsentOnMainThread,
+  FABLE_OVERAGE_CONSENT_DIALOG,
+  recordCreditsOnlyConsent,
+  switchDefaultFromCreditsOnlyModel,
+} from "./services/api/overageConsent.js";
 import { noopLedger } from "./services/api/promptPrefixLedger.js";
 import { expectPromptCacheDrop, MAIN } from "./services/api/promptCacheBreakDetection.js";
 import { asSystemPrompt } from "./utils/systemPromptType.js";
 import { appendSystemContextToPrompt, prependUserContextReminder } from "./utils/api.js";
-import {
-  shouldRetryRefusal,
-  shouldAskRefusalFallbackPreference,
-  EMPTY_ANNOUNCEMENT,
-  decideReminderDelivery,
-  askRefusalFallbackPreference,
-  allAnsweredWithoutRequest,
-  shouldCompactAfterLongContextRefusal,
-  isRefusalErrorMessage,
-  reportRefusalRetry,
-  synthesizeRefusedToolResults,
-  recoverFromRefusal,
-  promptTooLongFacts,
-} from "./query/refusalRecovery.js";
 import {
   createStreamingState,
   adoptFallbackResponse,
@@ -381,13 +402,6 @@ import {
   isFallbackServedRequest,
   buildFallbackGeneratedNotice,
 } from "./services/api/safeguardMessages.js";
-import {
-  needsOverageConsentForModel,
-  needsOverageConsentOnMainThread,
-  FABLE_OVERAGE_CONSENT_DIALOG,
-  recordCreditsOnlyConsent,
-  switchDefaultFromCreditsOnlyModel,
-} from "./services/api/overageConsent.js";
 import { hasExtraUsageProvisioned, isUsageCreditsModelBilled } from "./utils/planTiers.js";
 import { renderUsageCreditsOnlyModelName, renderModelName } from "./utils/model/modelDisplay.js";
 import { isFastModeEnabled, isFastModeActive, reportFastModeToggle } from "./utils/fastMode.js";
@@ -409,6 +423,7 @@ import {
 import {
   PROMPT_TOO_LONG_ERROR_MESSAGE,
   getRefusalMessage,
+  isLongContextCreditsRequiredMessage,
   isPromptTooLongMessage_2,
   parsePromptTooLongTokenCounts,
   rebuildApiErrorMessage,
@@ -433,11 +448,13 @@ import {
 } from "./services/api/modelFallback.js";
 import { canUseNoTransientReminders, reminderDeliveryMode } from "./services/api/tether.js";
 import { isTerminalShutdown, heldUntilExit } from "./utils/terminalShutdown.js";
+import { env } from "./utils/env.js";
 import { isBetaTracingEnabled } from "./utils/telemetry/betaSessionTracing.js";
 import { guardGoalCheck, notifyAutoReactHumanTurn, resetGoalIdleCheckinCount } from "./query/goalCheckIn.js";
 import { expandPathOrNull } from "./utils/path.js";
 import { isEntitlementOverlayUnavailable, isModelAllowed } from "./utils/model/modelAllowlist.js";
 import { shortHash } from "./utils/shortHash.js";
+import { cyberVerificationForRefusal, cyberVerificationOf } from "./utils/telemetry/otelRawBodies.js";
 import {
   isModelAllowedUnderActiveEnforcement,
   isExemptDefaultResolvingPick,
@@ -450,6 +467,7 @@ import {
 } from "./services/api/partialResponse.js";
 import { streamFallbackWarning } from "./services/api/streamFallbackWarning.js";
 import { withCitationsDropped } from "./services/orgMemory/promptIndex.js";
+import { hasPdfReads } from "./utils/attachments/pdf.js";
 import { shouldRecordHarnessText, recordTextBlocks } from "./utils/harnessTagGate.js";
 import { recordServerToolsUsed } from "./services/compact/keptTools.js";
 import { swapShrinksContextWindow } from "./utils/model/smallFastModel.js";
@@ -461,13 +479,12 @@ import {
   reportFabricatedTurns,
   canRecoverAgain,
   endsWithFabricatedTurn,
-  recentMalformedRetries,
   shouldTryRecovery,
 } from "./query/malformedToolCallRecovery.js";
 import { STRUCTUREDOUTPUT } from "./tools/SyntheticOutputTool/SyntheticOutputTool.js";
+import { getMediaKindsFromError } from "./services/api/mediaErrors.js";
 import { roughTokenCountEstimationForMessages } from "./services/tokenEstimation.js";
-import { hasSuccessfulToolCall_2 } from "./utils/transcript/deserialize.js";
-import { env } from "./utils/env.js";
+import { endedOnAnsweredNoReplyTool } from "./utils/transcript/deserialize.js";
 import { isStorageV5Enabled } from "./utils/hoverRest.js";
 import { hasActiveAgentTasks } from "./tasks/taskStatus.js";
 import { generateToolUseSummary } from "./services/toolUseSummary/toolUseSummaryGenerator.js";
@@ -476,7 +493,7 @@ import { needsFableMitigations } from "./utils/model/fableMitigations.js";
 import { getCanonicalName } from "./utils/model/canonicalModelName.js";
 import { registerAgent } from "./utils/telemetry/perfettoTracing.js";
 import { anyTrustedMemoryToolSafe } from "./utils/hooks/hookEventHelpers.js";
-import { count } from "./utils/collections.js";
+import { countWhere } from "./utils/collections.js";
 import {
   createScreensReader,
   createHookContextAttachment,
@@ -491,34 +508,43 @@ import { applyHookSessionTitle } from "./utils/sessionTitle.js";
 import { capAdditionalContext } from "./services/tools/toolHooks.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-32qjrk8h.js:191-216 placement
+//@ chunk-shzdmqn1.js:227-377 placement
 /**
  * 恒返回空数组
  */
-function emptyToolResults(events) {
+function emptyToolResults(toolResults) {
+  if (codeModeAccepted()) {
+    let timestamp = new Date().toISOString();
+    return toolResults.flatMap((result) =>
+      (result.pollEvent?.displayRows ?? []).map((row) => ({
+        ...row,
+        timestamp,
+      })),
+    );
+  }
   return [];
 }
-//@ chunk-4163ksv9.js:263-281 placement
+//@ chunk-ppbxvak2.js:263-281 placement
 /**
  * ["take_in"]
  */
 var TAKE_IN_KINDS = ["take_in"];
-//@ chunk-4163ksv9.js:281-306 placement
+//@ chunk-ppbxvak2.js:281-306 placement
 /**
  * 访问者登记表
  */
 class VisitorRegistry {
   visitors = new Map();
 }
-//@ chunk-4163ksv9.js:306-330 placement
+//@ chunk-ppbxvak2.js:306-330 placement
 /**
  * 访问者登记槽
  */
 var visitorRegistrySlot; // deferred: uses SessionRootSlot (./bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4163ksv9.js:306", () => {
+deferInit("chunk-ppbxvak2.js:306", () => {
   visitorRegistrySlot = new SessionRootSlot(() => new VisitorRegistry());
 });
-//@ chunk-4163ksv9.js:330-388 placement
+//@ chunk-ppbxvak2.js:330-388 placement
 /**
  * 是否仍在等待
  */
@@ -529,7 +555,7 @@ function isPending(visitor) {
     return false;
   }
 }
-//@ chunk-4163ksv9.js:388-473 placement
+//@ chunk-ppbxvak2.js:388-473 placement
 /**
  * 是否有未完成的回合访问者
  */
@@ -537,7 +563,7 @@ function hasPendingVisitors(session) {
   let visitors = visitorRegistrySlot.peek(session)?.visitors;
   return visitors !== undefined && [...visitors.values()].some(isPending);
 }
-//@ chunk-4163ksv9.js:473-827 placement
+//@ chunk-ppbxvak2.js:473-827 placement
 /**
  * 运行注册的回合访问者，可被中止
  */
@@ -567,24 +593,24 @@ async function runTurnVisitors(session, signal) {
     signal.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-ha3km179.js:153194-153282 sole-consumer
+//@ chunk-w3ch4xq2.js:162389-162477 sole-consumer
 /**
  * 构建时裁掉的可选拒绝跟踪模块（恒为 null）；requireTurnClassifier/requireClassifierSurfaces 惰性加载活动分类器与其输出面（chunk-wd9kxbpn、chunk-e321p3vc）。
  */
 var toolDenialTracker = null;
 var requireTurnClassifier = () => require("./services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
 var requireClassifierSurfaces = () => require("./services/classifierSummary.js");
-//@ chunk-ha3km179.js:153282-153317 sole-consumer
+//@ chunk-w3ch4xq2.js:162477-162512 sole-consumer
 /**
  * 按 session.host 存放分类器任务状态的懒槽。
  */
 var classifierJobStateSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ha3km179.js:153282", () => {
+deferInit("chunk-w3ch4xq2.js:162477", () => {
   classifierJobStateSlot = new HostScoped(() => ({
     state: undefined,
   }));
 });
-//@ chunk-ha3km179.js:153317-153444 sole-consumer
+//@ chunk-w3ch4xq2.js:162512-162639 sole-consumer
 /**
  * 取当前会话的分类器任务状态，首次调用时用 createClassifierJobState 创建；分类器模块不存在时为 null。
  */
@@ -594,13 +620,13 @@ function getClassifierJobState(toolUseContext) {
     hostState.state = requireTurnClassifier?.().createClassifierJobState(toolUseContext) ?? null;
   return hostState.state;
 }
-//@ chunk-ha3km179.js:153444-153652 sole-consumer
+//@ chunk-w3ch4xq2.js:162639-162847 sole-consumer
 /**
  * teleportFetchModule（composeTeleportFetchOverride，给远程/传送会话改写 fetch）与拒答回退级联解析器 refusalCascadeResolver。
  */
 var teleportFetchModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var refusalCascadeResolver;
-deferInit("chunk-ha3km179.js:153444", () => {
+deferInit("chunk-w3ch4xq2.js:162639", () => {
   teleportFetchModule = require("./services/api/composeTeleportFetchOverride.lazy.js");
   refusalCascadeResolver = {
     resolveStage: (mappedTarget, refusingModel, triedModels) =>
@@ -615,7 +641,7 @@ deferInit("chunk-ha3km179.js:153444", () => {
     logSkippedStages: logSkippedChainStages,
   };
 });
-//@ chunk-ha3km179.js:153652-153944 fingerprint (2.1.88 match: yieldMissingToolResultBlocks, 0.871)
+//@ chunk-w3ch4xq2.js:162847-163139 fingerprint (2.1.88 match: yieldMissingToolResultBlocks, 0.82)
 /**
  * 为每个尚无结果的 tool_use 生成 is_error 的 tool_result 用户消息（中止、出错时保证 tool_use/tool_result 配对）。已回答的 id 通过第 4 参跳过。
  */
@@ -641,7 +667,7 @@ function* yieldMissingToolResultBlocks(assistantMessages, errorMessage, deps, an
     }
   }
 }
-//@ chunk-ha3km179.js:153944-154066 layout
+//@ chunk-w3ch4xq2.js:163139-163261 layout
 /**
  * 仅主线程 REPL（querySource 以 repl_main_thread 开头、非代理）时通知分类器本轮中止。
  */
@@ -656,7 +682,7 @@ function markClassifierTurnAborted(toolUseContext, querySource) {
     return;
   requireTurnClassifier().markTurnAborted(classifierJobState, getOwnJobShortId());
 }
-//@ chunk-ha3km179.js:154066-154213 layout
+//@ chunk-w3ch4xq2.js:163261-163408 layout
 /**
  * 中止原因为 user-cancel 或 remote-cancel 时返回被打断的消息 id（来自 bootstrap 状态），代理内恒为 undefined。
  */
@@ -666,7 +692,7 @@ function getInterruptedMessageId(toolUseContext) {
   if (abortReason !== "user-cancel" && abortReason !== "remote-cancel") return;
   return getLastCancelledAPIMessageId() ?? undefined;
 }
-//@ chunk-ha3km179.js:154213-154323 layout
+//@ chunk-w3ch4xq2.js:163408-163518 layout
 /**
  * 取最后一条 assistant 之后最后一条真实用户消息的 uuid，作为拒答通知里的 refusedUserMessageUuid。
  */
@@ -674,7 +700,7 @@ function getRefusedUserMessageUuid(messages) {
   let lastIndex = messages.findLastIndex((message) => message.type === "assistant");
   return messages.slice(lastIndex + 1).findLast(isRealUserPromptMessage)?.uuid ?? null;
 }
-//@ chunk-ha3km179.js:154323-155748 layout
+//@ chunk-w3ch4xq2.js:163518-164953 layout
 /**
  * 工具结果或 MCP _meta 要求结束本轮时调用：记 tengu_mcp_tool_result_ended_turn，跑 PostToolBatch 钩子（阻断被丢弃只记日志），中止时补中断消息，最后跑 Stop 钩子；不再调用模型。
  */
@@ -765,7 +791,7 @@ async function* endTurnFromToolResult({
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:155748-155930 layout
+//@ chunk-w3ch4xq2.js:164953-165135 layout
 /**
  * 仅主线程 REPL 时把 API 错误（error、详情、apiError）报告给分类器，失败忽略。
  */
@@ -788,14 +814,14 @@ function markClassifierApiFailure(toolUseContext, querySource, failureReason) {
     )
     .catch(() => {});
 }
-//@ chunk-ha3km179.js:155930-156008 fingerprint (2.1.88 match: isWithheldMaxOutputTokens, 1)
+//@ chunk-w3ch4xq2.js:165135-165213 fingerprint (2.1.88 match: isWithheldMaxOutputTokens, 1)
 /**
  * assistant 消息 apiError 为 max_output_tokens（被扣住、等待恢复）时为真。
  */
 function isWithheldMaxOutputTokens(msg) {
   return msg?.type === "assistant" && msg.apiError === "max_output_tokens";
 }
-//@ chunk-ha3km179.js:156008-156227 layout
+//@ chunk-w3ch4xq2.js:165213-165432 layout
 /**
  * 回答在输出过程中被截断（truncatedAfterOutput 的 API 错误），且是子代理或非交互主线程，且 tengu_truncated_response_recovery 开（默认开）时可发提示续写。
  */
@@ -809,7 +835,7 @@ function isRecoverableTruncatedResponse(event, toolUseContext, querySource) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_truncated_response_recovery", true)
   );
 }
-//@ chunk-ha3km179.js:156227-156537 layout
+//@ chunk-w3ch4xq2.js:165432-165742 layout
 /**
  * 判断能否“续写未完成的思考”：去掉错误后只有一条回答、只有一个 thinking 块、stop_reason=max_tokens、未超窗口且模型/用量允许续写。
  */
@@ -829,7 +855,7 @@ function shouldResumeIncompleteThinking(assistantMessages, model) {
     shouldResumeThinking(model, candidate.message.resumable, totalTokensOf(candidate.message.usage))
   );
 }
-//@ chunk-ha3km179.js:156537-156678 layout
+//@ chunk-w3ch4xq2.js:165742-165883 layout
 /**
  * 把 customSystemPrompt（字符串或数组）和 appendSystemPrompt 用空行拼接，供 userSystemPrompt 选项使用。
  */
@@ -850,7 +876,7 @@ function joinCustomAndAppendSystemPrompt(customSystemPrompt, appendSystemPrompt)
 `)
     : undefined;
 }
-//@ chunk-ha3km179.js:156678-157667 layout
+//@ chunk-w3ch4xq2.js:165883-166952 layout
 /**
  * query() 入口（旧版同名）：确保工具初始化后运行 queryLoop（主线程挂观察者时走 queryWithObserverTap），结束后为本轮吸收的命令发 command_lifecycle（completed/cancelled），记录 turn 成败与轮次统计，返回终止结果 {reason,...}。
  */
@@ -878,6 +904,10 @@ async function* query(params) {
         )
       : transcriptTap.through(queryLoop(params, startedCommandUuids, deliveredPollEventUuids, transcriptTap));
   } finally {
+    if (codeModeAccepted()) {
+      let queryKind = classifyQuerySource(params.querySource);
+      if (queryKind === "main" || queryKind === undefined) forgetTurnStart(params.toolUseContext);
+    }
     let agentId = params.toolUseContext.agentId;
     if (agentId)
       discardPrecompute(
@@ -923,7 +953,7 @@ async function* query(params) {
   });
   return terminal;
 }
-//@ chunk-ha3km179.js:157667-158558 layout
+//@ chunk-w3ch4xq2.js:166952-167843 layout
 /**
  * queryWithObserverTap：主线程先挂代理观察者（非交互会话等待其就绪），把 queryLoop 的每个事件交给观察者 capture（stream_request_start 时 flushSegment），并原样转发。
  */
@@ -981,7 +1011,7 @@ async function* queryWithObserverTap(params, startedCommandUuids, deliveredPollE
   if (terminal === undefined) throw Error("queryWithObserverTap: missing terminal after completion");
   return terminal;
 }
-//@ chunk-ha3km179.js:158558-159009 layout
+//@ chunk-w3ch4xq2.js:167843-168294 layout
 /**
  * 把轮首/轮中 poll 事件从消息队列消费掉（absorbed_mid_turn），记录 uuid 并产出 command_lifecycle started，返回事件转换出的消息；中止或折叠暂停时保留在队列。
  */
@@ -1014,7 +1044,7 @@ function* absorbQueuedPollEvents({ events, queue, signal, phase, deliveredPollEv
     return [];
   }
 }
-//@ chunk-ha3km179.js:159009-159178 layout
+//@ chunk-w3ch4xq2.js:168294-168463 layout
 /**
  * poll_events 生成为 0 时记 poll_event_delivery left_queued 并打警告。
  */
@@ -1027,12 +1057,14 @@ function logPollEventsLeftQueued(turnPhase, eventCount) {
     },
   );
 }
-//@ chunk-ha3km179.js:159178-159198 layout
+//@ chunk-w3ch4xq2.js:168463-168483 layout
 /**
  * 循环迭代返回此哨兵表示进入下一轮（替代旧版的递归调用）。
  */
 var NEXT_ROUND = "next_round";
-//@ chunk-ha3km179.js:159198-234645 callgraph-witnessed (2.1.88 match: queryLoop, 0.294)
+//@ chunk-w3ch4xq2.js:168483-168504 layout
+async function* emptyCallModel() {}
+//@ chunk-w3ch4xq2.js:168504-247763 callgraph-witnessed (2.1.88 match: queryLoop, 0.284)
 /**
  * 查询主循环（旧版 queryLoop）。每轮：轮首记忆召回/队列命令折叠 → 消息预处理（工具结果预算、snip）→ 模型选择与实时切换 → 自动压缩 → 阻断上限检查 → 各类请求前公告（附件、advisor、延迟工具） → 渲染 system 提示词 → while 调用 deps.callModel 流式消费（服务器拒答回退、流式回退、模型 fallback、工具边流边执行）→ 错误恢复（反应式压缩、max_output_tokens 续写、截断续写、畸形 tool_use 重试、仅思考回答提示）→ Stop 钩子 → 执行剩余工具、附件 → 返回 NEXT_ROUND 进入下一轮或返回终止原因。
  */
@@ -1050,7 +1082,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     skipMessageCacheMarkers,
     relayFork,
     compactionRequestKind,
-    toolChoice,
+    noServerToolCalls,
     apiAttemptsLeft,
     evictCacheOnComplete,
     agentCacheTtlOverride,
@@ -1072,6 +1104,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     return abortedRows.terminal;
   }
   let nobodysTurn = endsWithMachineTurn(params.messages);
+  let openerUuid = params.messages.at(-1)?.uuid;
   let contextRouting = await buildContextRouting(userContext, systemContext, params.toolUseContext, {
     messages: params.messages,
     querySource,
@@ -1103,6 +1136,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     guards: {
       ...INITIAL_LOOP_RECOVERY_STATE,
       refusalRetrySpent: false,
+      firstRefusalCyberVerification: undefined,
       mcpEndTurnOverrideSpent: false,
       stopHookActive: params.stopHookActive ?? false,
       turnCount: 1,
@@ -1192,9 +1226,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
   {
     let agentContext = state.toolUseContext.agentContext;
     let turnStartPollCommands =
-      !isMainThreadQuery || state.toolUseContext.messageQueue.isMidTurnFoldSuspended()
+      !(
+        isMainThreadQuery ||
+        (codeModeAccepted() &&
+          agentContext?.agentType === "subagent" &&
+          agentContext.agentId === state.toolUseContext.agentId)
+      ) || state.toolUseContext.messageQueue.isMidTurnFoldSuspended()
         ? []
-        : filterQueuedCommandsForThread(
+        : filterMidTurnDrainCommands(
             state.toolUseContext.messageQueue.getTurnStartFoldCommands(
               state.toolUseContext.abortController.signal.aborted,
             ),
@@ -1232,6 +1271,19 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             messages: [...state.messages, ...mapped],
           };
           for (let attachmentMessage of mapped) yield attachmentMessage;
+          if (codeModeAccepted()) {
+            let {
+              deliverTurnStartFollowing,
+              foldAddedHookStop,
+            } = require("./utils/pollEvents/clearPollEventFollowing.lazy.js");
+            let messageCountBefore = state.messages.length;
+            let nextMessages = yield* deliverTurnStartFollowing(turnStartPollCommands, state.messages);
+            hookErrored = foldAddedHookStop(nextMessages, messageCountBefore);
+            state = {
+              ...state,
+              messages: nextMessages,
+            };
+          }
           pendingPollEventRows = yield* absorbQueuedPollEvents({
             events: turnStartPollCommands,
             queue: messageQueue,
@@ -1250,7 +1302,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     try {
       let passiveCommands = messageQueue.isMidTurnFoldSuspended()
         ? []
-        : messageQueue.getCommandQueue().filter(isPassiveMainAgentCommand);
+        : messageQueue.getCommandQueue().filter(isPassiveMainThreadCommand);
       if (passiveCommands.length > 0) {
         let queuedCommandAttachments = await getQueuedCommandAttachments(
           passiveCommands,
@@ -1319,6 +1371,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         : forkStickyBetaLatches(getStickyBetas()));
   let isMainLoop = querySourceKind === "main" || querySourceKind === undefined;
   let sentReminderTexts = new Map();
+  let pdfReadSent = undefined;
   async function* runIteration() {
     if (hookErrored) {
       yield* pendingPollEventRows;
@@ -1336,6 +1389,22 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         reason: "background_requested",
       };
     }
+    if (
+      isMainLoop &&
+      state.transition?.reason === "next_turn" &&
+      state.toolUseContext.stopsAtToolGap !== undefined &&
+      (await drainIfStopsAtToolGap(state.toolUseContext.stopsAtToolGap))
+    ) {
+      let abortedRows = abortedTurnRows("aborted", {
+        signal: state.toolUseContext.abortController.signal,
+        interruptedMessageId: () => getInterruptedMessageId(state.toolUseContext),
+        now: deps.now,
+        uuid: deps.uuid,
+      });
+      yield* abortedRows.rows;
+      markClassifierTurnAborted(state.toolUseContext, querySource);
+      return abortedRows.terminal;
+    }
     if (isTopLevelMainThread) {
       endProfilePhase("loop_entry");
       startProfilePhase("message_prep");
@@ -1350,8 +1419,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       hasAttemptedReactiveCompact,
       reactiveCompactDeeperPass,
       thinkingOnlyNudged,
+      emptyCompletionResent,
       malformedToolUseRetryCount,
       refusalRetrySpent,
+      firstRefusalCyberVerification,
       mcpEndTurnOverrideSpent,
       stopHookActive,
       stopHookBlockingCount,
@@ -1383,9 +1454,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       ...toolUseContext,
       queryTracking,
     };
-    let messagesForQuery = [...messagesSinceCompactBoundary(messages)];
-    messagesForQuery = transcriptTap.withArrivedRows(messagesForQuery);
-    let canResumeThinking = (model) => canResumeThinkingOnModel(messagesForQuery, model);
+    let messages_2 = letGoOfUnsentMedia([...messagesSinceCompactBoundary(messages)], toolUseContext.agentId);
+    messages_2 = transcriptTap.withArrivedRows(messages_2);
+    let canResumeThinking_2 = (model) => canResumeThinkingOnModel(messages_2, model);
     let tracking = compactTracking;
     let preFirstCompactFork =
       toolUseContext.precomputeSourceKey !== undefined &&
@@ -1399,7 +1470,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         ? createDisposableGuard(() => markClassifierTurnAborted(toolUseContext, querySource))
         : undefined;
     if (requireTurnClassifier && classifierAbortGuard) {
-      let last = messagesForQuery.findLast(
+      let last = messages_2.findLast(
         (records) =>
           records.type === "user" && !records.isMeta && typeof records.message.content === "string",
       );
@@ -1415,8 +1486,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let recordsContentReplacement =
       querySource.startsWith("agent:") || querySource.startsWith("repl_main_thread");
-    messagesForQuery = await applyToolResultBudget(
-      messagesForQuery,
+    messages_2 = await applyToolResultBudget(
+      messages_2,
       toolUseContext.contentReplacementState,
       toolResultsDirFor_2(toolUseContext.session),
       recordsContentReplacement
@@ -1514,7 +1585,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     };
     if (isTopLevelMainThread) endProfilePhase("message_prep");
     let [attemptModel, attemptModelFacts] = await resolveModelAndFacts(
-      messagesForQuery,
+      messages_2,
       getToolPermissionContext(toolUseContext).mode,
     );
     if (isTopLevelMainThread) startProfilePhase("message_prep");
@@ -1532,7 +1603,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let compactionCheckFacts = attemptModelFacts;
     let compactionIterator = deps.autocompact(
-      messagesForQuery,
+      messages_2,
       toolUseContext,
       attemptModelFacts,
       {
@@ -1540,7 +1611,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         userContext,
         systemContext,
         toolUseContext,
-        forkContextMessages: messagesForQuery,
+        forkContextMessages: messages_2,
         advisorModel: toolUseContext.getAppState().advisorModel,
         stickyBetas,
         agentCacheTtlOverride,
@@ -1549,6 +1620,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       tracking,
       snipTokensFreed,
       applyPrecomputedCompact,
+      undefined,
+      () =>
+        resumeActive === true &&
+        canResumeThinking(messages_2, attemptModelFacts, toolUseContext.options.autoCompactWindow),
     );
     let autocompactOutcome = yield* releasingAsyncIterator(compactionIterator);
     queryCheckpoint("query_autocompact_end");
@@ -1601,6 +1676,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         ...(autocompactOutcome.afterIdle && {
           armTrigger: lit("idle"),
         }),
+        onThinkingResumeRound: resumeActive === true,
         originalMessageCount: messages.length,
         compactedMessageCount:
           compactionResult.summaryMessages.length +
@@ -1626,21 +1702,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         queryDepth: queryTracking.depth,
       });
       if (params.taskBudget) {
-        let preCompactContext = finalContextTokensFromLastResponse(messagesForQuery);
+        let preCompactContext = finalContextTokensFromLastResponse(messages_2);
         taskBudgetRemaining = Math.max(
           0,
           (taskBudgetRemaining ?? params.taskBudget.total) - preCompactContext,
         );
       }
-      rollOverTotalTokensContext(
-        toolUseContext.agentId ?? "main",
-        tokenCountFromLastAPIResponse(messagesForQuery),
-      );
+      rollOverTotalTokensContext(toolUseContext.agentId ?? "main", tokenCountFromLastAPIResponse(messages_2));
       tracking = createCompactTracking(deps.uuid(), autocompactOutcome.consecutiveRapidRefills);
-      compactionResult.summaryMessages = stampSummaryTurnFields(
-        compactionResult.summaryMessages,
-        messagesForQuery,
-      );
+      compactionResult.summaryMessages = stampSummaryTurnFields(compactionResult.summaryMessages, messages_2);
       contextRouting = await rebuildRoutingAfterCompaction(
         contextRouting,
         userContext,
@@ -1659,22 +1729,22 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         foreground: isMainThreadQuery && isMainAgent(toolUseContext.agentContext),
         stamp: deps,
       });
-      messagesForQuery = insertAfterCompactBoundary(
+      messages_2 = insertAfterCompactBoundary(
         buildPostCompactMessages(compactionResult),
         reannouncedAfterCompact,
       );
       if (messages !== params.messages) {
         turnSnapshot = snapshotMessagesAndStart(messages);
-        if (turnSnapshot !== undefined) messages = messagesForQuery;
+        if (turnSnapshot !== undefined) messages = messages_2;
       }
-      toolUseContext = withTurnMessages(toolUseContext, messagesForQuery, isHumanTurn);
+      toolUseContext = withTurnMessages(toolUseContext, messages_2, isHumanTurn);
       state = {
         ...state,
         messages,
         toolUseContext,
       };
       maybeStartPrecomputeAfterTurn({
-        messages: messagesForQuery,
+        messages: messages_2,
         systemPrompt,
         userContext,
         systemContext,
@@ -1717,8 +1787,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         isPreFirstCompactFork: preFirstCompactFork,
         querySource,
         contextTokens:
-          estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) - snipTokensFreed,
-        messagesCounted: messagesForQuery,
+          estimateTokensWithAnchor(messages_2, attemptModelFacts.bytesPerToken) - snipTokensFreed,
+        messagesCounted: messages_2,
         facts: attemptModelFacts,
         autoCompactWindow: toolUseContext.options.autoCompactWindow,
       })
@@ -1733,20 +1803,20 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       else
         armPrecomputedCompact({
           querySource,
-          messages: messagesForQuery,
+          messages: messages_2,
           facts: attemptModelFacts,
           cacheSafeParams: {
             systemPrompt,
             userContext,
             systemContext,
             toolUseContext,
-            forkContextMessages: messagesForQuery,
+            forkContextMessages: messages_2,
             advisorModel: toolUseContext.getAppState().advisorModel,
             stickyBetas,
             agentCacheTtlOverride,
           },
           ...(querySource === "sdk" && {
-            promptScan: countUserPromptsAndRewrite(messagesForQuery),
+            promptScan: countUserPromptsAndRewrite(messages_2),
           }),
         });
     if (
@@ -1773,14 +1843,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           deps,
         );
         yield attachmentMessage;
-        messagesForQuery = [...messagesForQuery, attachmentMessage];
+        messages_2 = [...messages_2, attachmentMessage];
       }
     if (classifyQuerySource(querySource) === "main" && !toolUseContext.agentId && !resumeActive)
       try {
         for (let copiedText of await copyTextOf(toolUseContext.session)) {
           for (let message of copiedText.messages) {
             yield message;
-            messagesForQuery = [...messagesForQuery, message];
+            messages_2 = [...messages_2, message];
           }
           if (copiedText.contexts.length > 0) {
             let attachmentMessage = createAttachmentMessage_2(
@@ -1794,17 +1864,18 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               deps,
             );
             yield attachmentMessage;
-            messagesForQuery = [...messagesForQuery, attachmentMessage];
+            messages_2 = [...messages_2, attachmentMessage];
           }
         }
       } catch (error) {
         logError(toError(error));
       }
-    messagesForQuery = yield* usageLimitNotices(messagesForQuery, {
+    messages_2 = yield* usageLimitNotices(messages_2, {
       resumeActive,
       isMainLoop,
       querySource,
       depth: queryTracking.depth,
+      continuesInterruptedWork: params.continuesInterruptedWork,
       model: attemptModel,
       toolUseContext,
       now: deps.now,
@@ -1813,11 +1884,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let isForegroundMain = isMainThreadQuery && isMainAgent(toolUseContext.agentContext);
     let routedContext = resumeActive
       ? contextRouting
-      : await refreshRoutedGitStatus(messagesForQuery, contextRouting, toolUseContext, isForegroundMain);
+      : await refreshRoutedGitStatus(messages_2, contextRouting, toolUseContext, isForegroundMain);
     let contextWithDocText =
       !resumeActive &&
       shouldSendProjectDocText(
-        messagesForQuery,
+        messages_2,
         routedContext,
         toolUseContext,
         isForegroundMain,
@@ -1828,26 +1899,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             toolUseContext,
             () => createToolUseContextView(toolUseContext),
             {
-              messages: messagesForQuery,
+              messages: messages_2,
               systemPrompt,
               modelFacts: attemptModelFacts,
             },
             (docPath, docContents) => anyDocReadHookBlocks(docPath, toolUseContext, docContents),
           )
         : routedContext;
-    for (let announcement of reportContextAnnouncements(messagesForQuery, contextWithDocText, {
+    for (let announcement of reportContextAnnouncements(messages_2, contextWithDocText, {
       querySource,
       resumeActive,
       stamp: deps,
       announcementWalk: toolUseContext.options.announcementWalk,
     })) {
       yield announcement;
-      messagesForQuery = [...messagesForQuery, announcement];
+      messages_2 = [...messages_2, announcement];
     }
     let mode = getToolPermissionContext(toolUseContext).mode;
-    let exceeds200kInPlanMode = mode === "plan" && doesMostRecentAssistantMessageExceed200k(messagesForQuery);
+    let exceeds200kInPlanMode = mode === "plan" && doesMostRecentAssistantMessageExceed200k(messages_2);
     if (isTopLevelMainThread) endProfilePhase("request_announcements");
-    [attemptModel, attemptModelFacts] = await resolveModelAndFacts(messagesForQuery, mode);
+    [attemptModel, attemptModelFacts] = await resolveModelAndFacts(messages_2, mode);
     if (isTopLevelMainThread) startProfilePhase("request_announcements");
     let configuredRuntimeModel = getRuntimeMainLoopModel({
       permissionMode: mode,
@@ -1859,16 +1930,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       mainLoopModel: toolUseContext.options.mainLoopModel,
       exceeds200kTokens: exceeds200kInPlanMode,
     });
-    for (let thinkingAttachment of crossOrgThinkingAttachments(messagesForQuery, {
+    for (let thinkingAttachment of crossOrgThinkingAttachments(messages_2, {
       querySource,
       mainThread: isMainThreadQuery && isMainAgent(toolUseContext.agentContext),
       model: runtimeOptionsModel,
       stamp: deps,
     })) {
       yield thinkingAttachment;
-      messagesForQuery = [...messagesForQuery, thinkingAttachment];
+      messages_2 = [...messages_2, thinkingAttachment];
     }
-    for (let autoModeAttachment of await autoModeTurnAttachments(messagesForQuery, toolUseContext, {
+    for (let autoModeAttachment of await autoModeTurnAttachments(messages_2, toolUseContext, {
       querySource,
       resumeActive,
       model: getRuntimeMainLoopModel({
@@ -1879,9 +1950,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       stamp: deps,
     })) {
       yield autoModeAttachment;
-      messagesForQuery = [...messagesForQuery, autoModeAttachment];
+      messages_2 = [...messages_2, autoModeAttachment];
     }
-    let advisorResolution = resolveAdvisorState(messagesForQuery, toolUseContext, {
+    let advisorResolution = resolveAdvisorState(messages_2, toolUseContext, {
       querySource,
       resumeActive,
       configuredRuntimeModel,
@@ -1892,14 +1963,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     if (advisorResolution.announcement !== undefined) {
       let attachmentMessage = createAttachmentMessage_2(advisorResolution.announcement, deps);
       yield attachmentMessage;
-      messagesForQuery = [...messagesForQuery, attachmentMessage];
+      messages_2 = [...messages_2, attachmentMessage];
     }
     yield* pendingPollEventRows;
     pendingPollEventRows = [];
     let { advisorModel, advisorDeferred, advisorActive } = advisorResolution;
     let previousPromptSnapshot = () =>
       turnSnapshot ? turnSnapshot.recorded : latestPromptSnapshot(messages);
-    let promptRender = recordPromptSnapshot(messagesForQuery, systemPrompt, {
+    let promptRender = recordPromptSnapshot(messages_2, systemPrompt, {
       options: toolUseContext.options,
       querySource,
       resumeActive,
@@ -1913,9 +1984,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     });
     if (promptRender.record) {
       yield promptRender.record;
-      messagesForQuery = [...messagesForQuery, promptRender.record];
+      messages_2 = [...messages_2, promptRender.record];
     }
-    let reminderFold = resolveReminderFold_2(messagesForQuery);
+    if (pdfReadSent !== undefined && refusalMessageOf(messages_2) === undefined) pdfReadSent = undefined;
+    if (state.transition === undefined && !resumeActive && isForegroundMain && !toolUseContext.agentId) {
+      let resendResult = resendEmptyCompletion(messages_2, {
+        session: toolUseContext.session,
+        model: attemptModel,
+        modelMayBeSwapped: () => needsOverageConsentForModel(attemptModel, toolUseContext.requestDialog),
+        modelFacts: attemptModelFacts,
+        tools: toolUseContext.options.tools,
+        systemPrompt,
+        autoCompactWindow: toolUseContext.options.autoCompactWindow,
+        stamp: deps,
+      });
+      pdfReadSent = resendResult.sent;
+      if (resendResult.row !== undefined) {
+        yield resendResult.row;
+        messages_2 = [...messages_2, resendResult.row];
+      }
+    }
+    let reminderFold = resolveReminderFold_2(messages_2);
     if (promptRender.atRenderPoint)
       try {
         noopLedger(
@@ -1934,23 +2023,23 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let deferredToolsSent;
     let toolInputCopiesSent;
     let appendDeferredToolsRecord = () => {
-      let deferredToolsRecord = recordDeferredTools(messagesForQuery, deferredToolsSent, {
+      let deferredToolsRecord = recordDeferredTools(messages_2, deferredToolsSent, {
         options: toolUseContext.options,
         querySource,
         stamp: deps,
         toolInputCopies: toolInputCopiesSent,
       });
-      if (deferredToolsRecord) messagesForQuery = [...messagesForQuery, deferredToolsRecord];
+      if (deferredToolsRecord) messages_2 = [...messages_2, deferredToolsRecord];
       return deferredToolsRecord;
     };
     toolUseContext = {
       ...toolUseContext,
-      messages: messagesForQuery,
-      turnStartIndex: isHumanTurn(messagesForQuery),
+      messages: messages_2,
+      turnStartIndex: isHumanTurn(messages_2),
       contextRoom: createContextRoomTracker(
         () => attemptModelFacts,
         toolUseContext.options.autoCompactWindow,
-        () => messagesForQuery,
+        () => messages_2,
       ),
     };
     let markVirtualInResume = (message) => {
@@ -1963,6 +2052,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let lastWithheldAssistant;
     let refusalNoFallbackEvent;
     let retryRefusal = shouldRetryRefusal(querySource, refusalRetrySpent);
+    let retryRefusalNow = shouldRetryRefusalNow(querySource, retryRefusal);
     queryCheckpoint("query_setup_start");
     if (isTopLevelMainThread) {
       endProfilePhase("request_announcements");
@@ -2021,6 +2111,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         if (update.message) {
           if (!includeImages && hasImageBlock(update.message)) continue;
           yield markVirtualInResume(update.message);
+          if (codeModeAccepted()) markVirtual(update.message);
           noteToolMessageFlags(update.message);
           recordToolResult(update.message, toolUseContext);
         }
@@ -2051,6 +2142,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             if (hasImageBlock(finishedResult)) continue;
             try {
               yield markVirtualInResume(finishedResult);
+              if (codeModeAccepted()) markVirtual(finishedResult);
               noteToolMessageFlags(finishedResult);
               recordToolResult(finishedResult, toolUseContext);
             } catch (error) {
@@ -2176,10 +2268,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             : () => {};
         let commandId = (command) => command.uuid ?? command;
         let knownCommandIds = new Set(
-          toolUseContext.messageQueue
-            .getCommandQueueSnapshot()
-            .filter(isPromptModeQueuedCommand)
-            .map(commandId),
+          toolUseContext.messageQueue.getCommandQueueSnapshot().filter(isQueuedUserPrompt).map(commandId),
         );
         let onQueueChangeCheck = () => {
           flushInteractionTime();
@@ -2187,9 +2276,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             !userInteracted &&
             toolUseContext.messageQueue
               .getCommandQueueSnapshot()
-              .some(
-                (command) => isPromptModeQueuedCommand(command) && !knownCommandIds.has(commandId(command)),
-              )
+              .some((command) => isQueuedUserPrompt(command) && !knownCommandIds.has(commandId(command)))
           ) {
             dialogQueuedAtPark = true;
             abortController.abort();
@@ -2384,7 +2471,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let isMainAgentThread = classifyQuerySource(querySource) === "main" && !toolUseContext.agentId;
     if (teleportFetchModule && (isMainAgentThread || relayFork))
       try {
-        let messagesForUuids = isMainAgentThread ? messages : messagesForQuery;
+        let messagesForUuids = isMainAgentThread ? messages : messages_2;
         let uuids = isMainAgentThread ? turnSnapshot?.uuids : undefined;
         fetchOverride = teleportFetchModule.composeTeleportFetchOverride(
           dumpPromptsFetch,
@@ -2407,7 +2494,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       !toolUseContext.abortController.signal.aborted
     ) {
       let contextTokens =
-        estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) - snipTokensFreed;
+        estimateTokensWithAnchor(messages_2, attemptModelFacts.bytesPerToken) - snipTokensFreed;
       if (
         calculateTokenWarningState(contextTokens, attemptModelFacts, toolUseContext.options.autoCompactWindow)
           .level === "blocked"
@@ -2494,6 +2581,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         requestId: notice.requestId,
         apiRefusalCategory: notice.apiRefusalCategory,
         apiRefusalExplanation: null,
+        ...(notice.apiRefusalCyberVerification !== undefined && {
+          apiRefusalCyberVerification: notice.apiRefusalCyberVerification,
+        }),
         retractedMessageUuids: [...notice.retractedMessageUuids],
         refusedUserMessageUuid: notice.refusedUserMessageUuid,
         ...(notice.sawCyberRefusal && {
@@ -2515,7 +2605,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     try {
       while (needsAttempt) {
         needsAttempt = false;
-        if (resumeActive && (salvageUserMessage !== undefined || !canResumeThinking(attemptModel)))
+        if (resumeActive && (salvageUserMessage !== undefined || !canResumeThinking_2(attemptModel)))
           resumeActive = false;
         let advisorForAttempt =
           advisorModel !== undefined &&
@@ -2594,13 +2684,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           let cascadeStage = nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeResolver);
           refusalCascadeState = cascadeStage.state;
           let latchedFallbackModel =
-            !retryRefusal && cascadeStage.armTarget === undefined
+            !retryRefusalNow && cascadeStage.armTarget === undefined
               ? resolveLatchedFallbackModel(attemptModel)
               : undefined;
           let modelBeforeFallback = attemptModel;
           let silentRearmState = {};
           let refusalFallbackSilentRearm =
-            !retryRefusal && !silentArmSpent && !refusalFallbackDeclined
+            !retryRefusalNow && !silentArmSpent && !refusalFallbackDeclined
               ? (visibleRouteDeclined, apiRefusalCategory, responseSwapped) => {
                   if (silentArmSpent || refusalFallbackDeclined) return;
                   let latchedFallbackModel = resolveLatchedFallbackModel(modelBeforeFallback, {
@@ -2638,7 +2728,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             toolUseContext,
             isMainThread,
           });
-          let refusalFallback = !retryRefusal
+          let refusalFallback = !retryRefusalNow
             ? resolveRefusalFallback({
                 currentModel: attemptModel,
                 compiledTablesOnly: isAutoModeQuerySource(querySource),
@@ -2650,6 +2740,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 suppressionAlreadyLogged,
                 requestDialog: toolUseContext.requestDialog,
                 isMainThread,
+                isAgentThread: querySource.startsWith("agent:"),
                 consumerLacksDialogCapability,
                 preferenceQuestionPending: currentModel,
                 serverDefaultFallbacksEnabled: () =>
@@ -2667,8 +2758,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           if (refusalFallback.shouldLogSuppression) {
             suppressionAlreadyLogged = true;
             logEvent("tengu_refusal_fallback_suppressed", {
-              reason:
-                toolUseContext.requestDialog === undefined
+              reason: !isMainThread
+                ? lit("subagent_setting_off")
+                : toolUseContext.requestDialog === undefined
                   ? lit("no_dialog_host_setting_off")
                   : hasRefusalDialog
                     ? lit("no_consumer_capability_setting_off")
@@ -2705,7 +2797,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           queryCheckpoint("query_api_streaming_start");
           let reminderModel = creditModel ?? attemptModel;
           let baselineDelivery = {
-            messages: messagesForQuery,
+            messages: messages_2,
             text: null,
             secondaryText: null,
             afterUuid: null,
@@ -2718,7 +2810,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   agentId: toolUseContext.agentId,
                   model: attemptModel,
                   reminderModel,
-                  messages: messagesForQuery,
+                  messages: messages_2,
                   session: toolUseContext.session,
                   stamp: deps,
                   decide: reminderDeliveryMode,
@@ -2732,20 +2824,19 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           if (salvageUserMessage !== undefined)
             reminderDelivery = {
               ...baselineDelivery,
-              messages: [...messagesForQuery, salvageUserMessage],
+              messages: [...messages_2, salvageUserMessage],
             };
           else if (deliveryDecision.delivery === "kept") {
             for (let record of deliveryDecision.records) {
               yield record;
-              messagesForQuery = [...messagesForQuery, record];
+              messages_2 = [...messages_2, record];
             }
             reminderDelivery = {
               ...baselineDelivery,
-              messages: messagesForQuery,
+              messages: messages_2,
             };
           } else if (deliveryDecision.delivery === "none") reminderDelivery = baselineDelivery;
-          else
-            reminderDelivery = placeBatchingReminder(messagesForQuery, toolUseContext.session, reminderModel);
+          else reminderDelivery = placeBatchingReminder(messages_2, toolUseContext.session, reminderModel);
           for (let [reminderKind, reminderText] of [
             ["batching_reminder_sent", reminderDelivery.text],
             ["secondary_reminder_sent", reminderDelivery.secondaryText],
@@ -2773,7 +2864,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               deps,
             );
             yield attachmentMessage;
-            messagesForQuery = [...messagesForQuery, attachmentMessage];
+            messages_2 = [...messages_2, attachmentMessage];
           }
           let showAutoModeWait = isTopLevelMainThread && autoModeContextPromise !== undefined;
           if (showAutoModeWait) startProfilePhase("auto_mode_context_wait");
@@ -2783,6 +2874,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           toolInputCopiesSent = undefined;
           let deferredRecordAppended = false;
           let callModel = deps.callModel;
+          if (codeModeAccepted() && isMainLoop) {
+            forgetTurnStart(toolUseContext);
+            if (endIfTurnEnded(toolUseContext)) callModel = emptyCallModel;
+          }
           let callModelParams = {
             systemPrompt,
             userContext,
@@ -2793,10 +2888,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           if (callModel === deps.callModel) {
             call({
               ...callModelParams,
-              messages: messagesForQuery,
+              messages: messages_2,
             });
             applyToolExclusionEdit(
-              messagesForQuery,
+              messages_2,
               querySource,
               attemptModel,
               toolUseContext.agentId,
@@ -2804,9 +2899,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               toolUseContext.readFileState,
             );
           }
-          let callModelFn = callModel;
+          let baseCallModel = callModel;
+          let onByteWritten;
+          let takeAtSource =
+            env.CLAUDE_CODE_PLAIN_DELTA_TAKE_AT_SOURCE === true && takePlainDelta !== undefined;
+          let wrappedCallModel = takeAtSource
+            ? (params) => baseCallModel(params, (chunk, meta) => onByteWritten?.(chunk, meta) === true)
+            : baseCallModel;
           for await (let event of drainToolResults(
-            callModelFn({
+            wrappedCallModel({
               messages: contextRouting.bare
                 ? prependUserContextReminder(reminderDelivery.messages, contextRouting.userContext)
                 : reminderDelivery.messages,
@@ -2834,7 +2935,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 onPromptHeadSent: (promptHeadValue) => {
                   promptHeadSent = promptHeadValue;
                 },
-                recordedDeferredTools: () => recordedDeferredTools(messagesForQuery),
+                onWrittenPdfReadSent: pdfReadSent,
+                recordedDeferredTools: () => recordedDeferredTools(messages_2),
                 onDeferredToolsSent: (sentDeferredTools) => {
                   deferredToolsSent = sentDeferredTools;
                 },
@@ -2855,7 +2957,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   chainStepModel: chainIndex > 0 ? modelChain[chainIndex] : undefined,
                   userModel: sessionModel,
                 }),
-                toolChoice,
+                modelIsFallbackForThisTurn: refusalOverride !== undefined || chainIndex > 0,
+                noServerToolCalls,
                 isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
                 withoutToolDescribeHooks: toolUseContext.options.settingsHooksOff,
                 fallbackModel: modelChain[chainIndex + 1],
@@ -2913,9 +3016,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 toolPoolRefreshes: toolUseContext.options.refreshTools !== undefined,
                 mcpClients: toolUseContext.options.mcpClients,
                 queryTracking,
+                continuesInterruptedWork: params.continuesInterruptedWork,
                 effortValue: getEffortValue(toolUseContext),
                 effortSetAsideByHold: getEffortSetAsideByHold(toolUseContext),
-                turnEffort: getEffortLayerOverride(toolUseContext.permissionLayers),
+                turnEffort: getEffortLayerOverride(toolUseContext.permissionLayers) ?? params.turnEffortCap,
+                hookEffortValue: params.pinnedEffort,
+                isEffortPinned: params.pinnedEffort !== undefined,
                 refusalFallbackEffort: carriedEffortForModel(refusalOverride, loopEffort),
                 advisorModel: advisorForAttempt,
                 advisorDeferred,
@@ -2955,6 +3061,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             takePlainDelta === undefined
               ? undefined
               : guardGoalCheck("query", () => earlyAttachments.length === 0, takePlainDelta),
+            takeAtSource
+              ? (writer) => {
+                  onByteWritten = writer;
+                }
+              : undefined,
           )) {
             if (event.type === "tool_drain_tick") {
               yield* drainCompletedToolResults();
@@ -2973,16 +3084,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             }
             if (event.type === "attachment") {
               yield event;
-              messagesForQuery = [...messagesForQuery, event];
+              messages_2 = [...messages_2, event];
               call({
                 ...callModelParams,
-                messages: messagesForQuery,
+                messages: messages_2,
               });
               continue;
             }
             if (event.type === "hint_clears") {
               let clearedIds = new Set(event.ids);
-              for (let message of hasMemoryFileRead_2(messagesForQuery, clearedIds)) {
+              for (let message of readPathsOfToolUses(messages_2, clearedIds)) {
                 let expandedPath = expandPathOrNull(message);
                 if (expandedPath === null) {
                   logForDebugging(
@@ -2992,14 +3103,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 }
                 toolUseContext.readFileState.delete(expandedPath);
               }
-              messagesForQuery = replaceToolResultContent(
-                messagesForQuery,
+              messages_2 = replaceToolResultContent(
+                messages_2,
                 clearedIds,
                 new Map(Object.entries(event.contentById)),
               );
               call({
                 ...callModelParams,
-                messages: messagesForQuery,
+                messages: messages_2,
               });
               yield event;
               continue;
@@ -3031,6 +3142,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               if (serverFallback.userVisible) {
                 logFeatureOk("refusal_fallback");
                 let fromModel = attemptModel;
+                let pendingEvent = cyberVerificationForRefusal({
+                  scope: serverFallback.bannerScope,
+                  category: event.apiRefusalCategory,
+                  refusingModel: attemptModel,
+                  firstRefusal: firstRefusalCyberVerification,
+                });
                 let fallbackTarget = preferSameModel(serverLane?.model, event.toModel);
                 let sameAsAttempt = attemptModel === fallbackTarget;
                 if (!(
@@ -3136,7 +3253,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 refusalOverride = fallbackTarget;
                 loopEffort = refusalFallbackEffort.loopEffort;
                 setAttemptModel(fallbackTarget);
-                if (resumeActive && !canResumeThinking(fallbackTarget)) resumeActive = false;
+                if (resumeActive && !canResumeThinking_2(fallbackTarget)) resumeActive = false;
                 if (serverFallback.swapSession) {
                   if (event.reason === "refusal" && event.apiRefusalCategory === "cyber")
                     markRefusalFallbackHeaderArmed(event.requestId ?? undefined);
@@ -3264,6 +3381,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       uuid: deps.uuid(),
                     },
                     serverFallback.bannerScope,
+                    pendingEvent,
                   );
               }
               continue;
@@ -3382,7 +3500,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     signal: toolUseContext.abortController.signal,
                     bridgeDialog,
                     hasQueuedPrompts: () =>
-                      toolUseContext.messageQueue.peek(isPromptModeQueuedCommand) !== undefined,
+                      toolUseContext.messageQueue.peek(isQueuedUserPrompt) !== undefined,
                     payload: {
                       originalModel: event.originalModel,
                       fallbackModel: event.fallbackModel,
@@ -3618,6 +3736,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     retractedMessageUuids: flattened,
                     refusedUserMessageUuid: refusedUserMessageUuid ?? undefined,
                     apiRefusalCategory: event.apiRefusalCategory ?? null,
+                    apiRefusalCyberVerification: event.apiRefusalCyberVerification,
                     requestId: event.requestId ?? null,
                   });
                 else if (!silentRetry && (isMainThread || emitsLocalScope))
@@ -3644,6 +3763,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     requestId: event.requestId,
                     apiRefusalCategory: event.apiRefusalCategory,
                     apiRefusalExplanation: event.apiRefusalExplanation,
+                    ...(isMainThread &&
+                      event.apiRefusalCyberVerification !== undefined && {
+                        apiRefusalCyberVerification: event.apiRefusalCyberVerification,
+                      }),
                     retractedMessageUuids: flattened,
                     refusedUserMessageUuid,
                     isMeta: false,
@@ -3842,6 +3965,17 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               isWithheld = true;
               withheldPromptTooLong = event;
             }
+            if (
+              !attemptState.needsFollowUp &&
+              event.type === "assistant" &&
+              isLongContextCreditsRequiredMessage(event) &&
+              isForegroundMain &&
+              !toolUseContext.agentId &&
+              hasPdfReads(refusalMessageOf(messages_2)?.attachment)
+            ) {
+              isWithheld = true;
+              withheldPromptTooLong = event;
+            }
             if (isMediaSizeErrorReply(event)) {
               isWithheld = true;
               earlyAttachments.push(event);
@@ -3866,6 +4000,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             if (isWithheld && event.type === "assistant") lastWithheldAssistant = event;
             if (!isWithheld) {
               if (earlyAttachments.length > 0) {
+                for (let earlyAttachment of earlyAttachments) fixStopSequence(earlyAttachment);
                 yield* earlyAttachments;
                 earlyAttachments.length = 0;
               }
@@ -3901,6 +4036,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 rebuiltResponse === undefined
               )
                 transcriptTap.answeredAs(outgoingEvent, event);
+              if (outgoingEvent.type === "assistant") fixOutgoingStopReason(outgoingEvent, attemptState);
               yield outgoingEvent;
             }
             if (event.type === "assistant") {
@@ -3911,7 +4047,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               )
                 recordTextBlocks(event.message.content);
               let pushedMessage = rebuiltResponse ?? event;
-              if (!stitchedRowPushed) assistantMessages.push(pushedMessage);
+              if (!stitchedRowPushed) {
+                assistantMessages.push(pushedMessage);
+                if (codeModeAccepted() && isMainLoop) noteToolUseId(toolUseContext, pushedMessage.message.id);
+              }
               let msgToolUseBlocks = pushedMessage.message.content.filter(
                 (content) => content.type === "tool_use",
               );
@@ -3992,24 +4131,23 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     agentTypeForTelemetry(querySource),
                   );
                 else {
-                  let tokenCountFromUsage = getTokenCountFromUsage(usage);
+                  let tokenCountFromUsage = getTokenCountFromUsage_2(usage);
                   let usageContextTokens =
                     tokenCountFromUsage.input_tokens +
                     tokenCountFromUsage.cache_creation_input_tokens +
                     tokenCountFromUsage.cache_read_input_tokens;
                   let estimatedContextTokens =
-                    estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) -
-                    snipTokensFreed;
+                    estimateTokensWithAnchor(messages_2, attemptModelFacts.bytesPerToken) - snipTokensFreed;
                   armPrecomputedCompact({
                     querySource,
-                    messages: [...messagesForQuery, ...assistantMessages],
+                    messages: [...messages_2, ...assistantMessages],
                     facts: attemptModelFacts,
                     cacheSafeParams: {
                       systemPrompt,
                       userContext,
                       systemContext,
                       toolUseContext,
-                      forkContextMessages: messagesForQuery,
+                      forkContextMessages: messages_2,
                       advisorModel: toolUseContext.getAppState().advisorModel,
                       stickyBetas,
                       agentCacheTtlOverride,
@@ -4017,7 +4155,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     armTrigger: "api_response",
                     estimateGapTokens: usageContextTokens - estimatedContextTokens,
                     ...(querySource === "sdk" && {
-                      promptScan: countUserPromptsAndRewrite([...messagesForQuery, ...assistantMessages]),
+                      promptScan: countUserPromptsAndRewrite([...messages_2, ...assistantMessages]),
                     }),
                   });
                 }
@@ -4225,7 +4363,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       });
     if (assistantMessages.length > 0)
       executePostSamplingHooks(
-        [...messagesForQuery, ...assistantMessages],
+        [...messages_2, ...assistantMessages],
         systemPrompt,
         userContext,
         systemContext,
@@ -4238,7 +4376,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           yield update;
           continue;
         }
-        if (update.message) yield markVirtualInResume(update.message);
+        if (update.message) {
+          yield markVirtualInResume(update.message);
+          if (codeModeAccepted()) markVirtual(update.message);
+        }
       }
       if (isRefusalErrorMessage(lastWithheldAssistant)) yield* yieldWithRefusalNotice(lastWithheldAssistant);
       if (!toolUseContext.agentId)
@@ -4273,7 +4414,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let lastResponseOk = !assistantMessages.at(-1)?.isApiErrorMessage;
     if (lastResponseOk && !attemptState.needsFollowUp) {
-      let toolDescriptionRecord = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
+      let toolDescriptionRecord = recordToolDescriptions(messages_2, inlineToolsDeclared, {
         options: toolUseContext.options,
         querySource,
         head: promptHeadSent,
@@ -4282,7 +4423,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       });
       if (toolDescriptionRecord) {
         yield toolDescriptionRecord;
-        messagesForQuery = [...messagesForQuery, toolDescriptionRecord];
+        messages_2 = [...messages_2, toolDescriptionRecord];
       }
       let deferredToolsRecordLate = appendDeferredToolsRecord();
       if (deferredToolsRecordLate) yield deferredToolsRecordLate;
@@ -4329,7 +4470,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     reportOutputLimitRecovery({
       transition: state.transition,
       resumed: resumeIncompleteThinking === true,
-      request: messagesForQuery,
+      request: messages_2,
       responses: assistantMessages,
       withheld: lastWithheldAssistant,
     });
@@ -4410,12 +4551,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           guards: {
             ...guards,
             refusalRetrySpent: true,
+            firstRefusalCyberVerification: {
+              refusingModel: attemptModel,
+              cyberVerification: cyberVerificationOf(message_2.message.stop_details),
+            },
             ...(toolUseBlocks.length > 0 && {
               stopHookBlockingCount: 0,
             }),
           },
           messages: [
-            ...messagesForQuery,
+            ...messages_2,
             ...refusalRetryPlan.kept,
             ...toolResults,
             ...refusalRetryPlan.notRun,
@@ -4436,9 +4581,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     if (isRefusalErrorMessage(message_2) && message_2 === lastWithheldAssistant)
       yield* yieldWithRefusalNotice(message_2);
     if (!attemptState.needsFollowUp) {
-      let hasStructuredOutputCall = function (messagesForQuery) {
-        for (let idx = messagesForQuery.length - 1; idx >= 0; idx--) {
-          let message = messagesForQuery[idx];
+      let hasStructuredOutputCall = function (messages) {
+        for (let idx = messages.length - 1; idx >= 0; idx--) {
+          let message = messages[idx];
           if (message.type === "user") {
             if (message.isMeta || isToolResultMessage(message)) continue;
             return false;
@@ -4470,10 +4615,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               ...toolUseContext,
               abortController: createRecoveryAbortController(
                 toolUseContext.abortController,
-                recoveryTimeoutForMessages(
-                  messagesForQuery,
-                  isPromptTooLong ? last?.errorDetails : undefined,
-                ),
+                recoveryTimeoutForMessages(messages_2, isPromptTooLong ? last?.errorDetails : undefined),
                 toolUseContext.session.host.clock,
               ),
               onRetryStatus: guardedStreamCallback(
@@ -4483,6 +4625,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             }
           : toolUseContext;
       e: if (isPromptTooLong || isImageError) {
+        if (
+          isForegroundMain &&
+          !toolUseContext.agentId &&
+          !toolUseContext.abortController.signal.aborted &&
+          (!isImageError || getMediaKindsFromError(last?.errorDetails ?? "")?.has("document") === true) &&
+          hasPdfReads(refusalMessageOf(messages_2)?.attachment)
+        ) {
+          let completionMessage = emptyCompletionResendMessage(deps);
+          yield completionMessage;
+          state = {
+            guards,
+            messages: [...messages_2, completionMessage],
+            toolUseContext,
+            compactTracking: tracking,
+            transition: {
+              reason: "message_pdf_withdrawn",
+            },
+          };
+          return NEXT_ROUND;
+        }
         let deeperPassSpent =
           isPromptTooLong &&
           hasAttemptedReactiveCompact &&
@@ -4535,13 +4697,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             querySource,
             aborted: toolUseContext.abortController.signal.aborted,
           }) &&
-          hasTooFewMessagesToCompact(messagesForQuery)
+          hasTooFewMessagesToCompact(messages_2)
         ) {
           if (isWithheldPromptTooLong) {
             logFeatureBad("compact_after_long_context_refusal", "too_few_groups");
             break e;
           }
-          let nonProgressGroups = countNonProgressMessages(messagesForQuery);
+          let nonProgressGroups = countNonProgressMessages(messages_2);
           let totalGroups = nonProgressGroups.length;
           let ptlReason = isImageError ? "image_error" : "prompt_too_long";
           let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(last.errorDetails ?? "");
@@ -4558,6 +4720,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             compactionImpossible: true,
             totalGroups,
             overheadTokensEstimate,
+            ...(ptlReason === "prompt_too_long" &&
+              promptTooLongFacts({
+                errorDetails: last.errorDetails,
+                messages: messages_2,
+                systemPrompt: apiSystemPrompt,
+                inlineTools: inlineToolsDeclared,
+              })),
           });
           let rebuiltPtlReply =
             ptlReason === "prompt_too_long"
@@ -4584,7 +4753,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           (toolUseContext_2, onNotification, onResponseLength) =>
             applyPrecomputedCompact({
               toolUseContext: toolUseContext_2,
-              messages: messagesForQuery,
+              messages: messages_2,
               trigger: "ptl",
               isWithheld413: isPromptTooLong,
               hasAttemptedReactiveCompact,
@@ -4602,13 +4771,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               hasAttempted: reactiveCompactAttempted,
               querySource,
               aborted: recoveryToolUseContext.abortController.signal.aborted,
-              messages: messagesForQuery,
+              messages: messages_2,
               cacheSafeParams: {
                 systemPrompt,
                 userContext,
                 systemContext,
                 toolUseContext: toolUseContext_2,
-                forkContextMessages: messagesForQuery,
+                forkContextMessages: messages_2,
                 advisorModel: toolUseContext.getAppState().advisorModel,
                 stickyBetas,
                 agentCacheTtlOverride,
@@ -4631,7 +4800,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 hasAttempted: hasAttemptedReactiveCompact,
                 loopTopOutcome: autocompactOutcome.kind,
                 offPickedModel: attemptModel !== sessionModel,
-                messages: messagesForQuery,
+                messages: messages_2,
                 toolUseContext: recoveryToolUseContext,
                 facts: attemptModelFacts,
                 cacheSafeParams: {
@@ -4639,7 +4808,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   userContext,
                   systemContext,
                   toolUseContext: recoveryToolUseContext,
-                  forkContextMessages: messagesForQuery,
+                  forkContextMessages: messages_2,
                   advisorModel: toolUseContext.getAppState().advisorModel,
                   stickyBetas,
                   agentCacheTtlOverride,
@@ -4654,7 +4823,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         if (recoveredResult) {
           if (isWithheldPromptTooLong) logFeatureOk("compact_after_long_context_refusal");
           if (params.taskBudget) {
-            let compactOutputTokens = finalContextTokensFromLastResponse(messagesForQuery);
+            let compactOutputTokens = finalContextTokensFromLastResponse(messages_2);
             taskBudgetRemaining = Math.max(
               0,
               (taskBudgetRemaining ?? params.taskBudget.total) - compactOutputTokens,
@@ -4662,11 +4831,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           }
           rollOverTotalTokensContext(
             toolUseContext.agentId ?? "main",
-            tokenCountFromLastAPIResponse(messagesForQuery),
+            tokenCountFromLastAPIResponse(messages_2),
           );
           recoveredResult.summaryMessages = stampSummaryTurnFields(
             recoveredResult.summaryMessages,
-            messagesForQuery,
+            messages_2,
           );
           contextRouting = await rebuildRoutingAfterCompaction(
             contextRouting,
@@ -4771,7 +4940,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             ...(ptlFailureReason === "prompt_too_long" &&
               promptTooLongFacts({
                 errorDetails: last?.errorDetails,
-                messages: messagesForQuery,
+                messages: messages_2,
                 systemPrompt: apiSystemPrompt,
                 inlineTools: inlineToolsDeclared,
               })),
@@ -4794,7 +4963,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       if (isWithheldPromptTooLong) yield last;
       reportFabricatedTurns(assistantMessages, attemptModel);
       let exhaustedNotice;
-      if (last !== undefined && (isWithheldMaxOutputTokens(last) || resumeRecovered)) {
+      if (
+        last !== undefined &&
+        (isWithheldMaxOutputTokens(last) || resumeRecovered) &&
+        querySource !== "resume_cache_warm"
+      ) {
         let attempt = resumeRecovered ? maxOutputTokensRecoveryCount : maxOutputTokensRecoveryCount + 1;
         if (attempt <= MAX_CONTINUE_ATTEMPTS) {
           let resumeThinkingFound =
@@ -4803,7 +4976,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               assistantMessages,
               resolveRuntimeModel(
                 [
-                  ...messagesForQuery,
+                  ...messages_2,
                   ...assistantMessages.filter((assistantMessage) => !assistantMessage.isApiErrorMessage),
                 ],
                 mode,
@@ -4836,10 +5009,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             messages:
               outputLimitNudge === undefined
                 ? [
-                    ...messagesForQuery,
+                    ...messages_2,
                     ...assistantMessages.filter((assistantMessage) => !assistantMessage.isApiErrorMessage),
                   ]
-                : [...messagesForQuery, ...assistantMessages, outputLimitNudge],
+                : [...messages_2, ...assistantMessages, outputLimitNudge],
             resumeIncompleteThinking: resumeThinkingFound || undefined,
             toolUseContext,
             compactTracking: tracking,
@@ -4867,20 +5040,20 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             attempt: maxOutputTokensRecoveryCount + 1,
             cause: fromEnum(streamCutCause),
           });
-          let userMessage = createUserMessage({
+          let preCompactContext = createUserMessage({
             content: classifyQuerySource(querySource) === "subagent" ? STREAM_CUT_REWRITE : STREAM_CUT_RESUME,
             isMeta: true,
             turnCompanion: true,
             now: deps.now,
             uuidFn: deps.uuid,
           });
-          yield userMessage;
+          yield preCompactContext;
           state = {
             guards: {
               ...guards,
               maxOutputTokensRecoveryCount: maxOutputTokensRecoveryCount + 1,
             },
-            messages: [...messagesForQuery, ...assistantMessages, userMessage],
+            messages: [...messages_2, ...assistantMessages, preCompactContext],
             toolUseContext,
             compactTracking: tracking,
             transition: {
@@ -4901,37 +5074,37 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         toolUseBlocks.length === 0 &&
         !last?.isApiErrorMessage
       ) {
-        let preCompactContext = canRecoverAgain(malformedToolUseRetryCount);
+        let postCompactMessages = canRecoverAgain(malformedToolUseRetryCount);
         logEvent("tengu_malformed_tool_use_response", {
-          will_retry: preCompactContext,
+          will_retry: postCompactMessages,
           retry_count: malformedToolUseRetryCount,
           model: telemetrySafeModelName(attemptModel),
           text_has_leaked_invoke: endsWithFabricatedTurn(assistantMessages),
         });
-        if (preCompactContext) {
-          for (let message of assistantMessages)
+        if (postCompactMessages) {
+          for (let msg of assistantMessages)
             yield {
               type: "tombstone",
-              message,
+              message: msg,
             };
-          let postCompactMessages = createUserMessage({
+          let userMessage = createUserMessage({
             content: MALFORMED_TOOL_CALL_RETRY,
             isMeta: true,
             turnCompanion: true,
             now: deps.now,
             uuidFn: deps.uuid,
           });
-          postCompactMessages.retractedMessageUuids = assistantMessages.map(
+          userMessage.retractedMessageUuids = assistantMessages.map(
             (assistantMessage) => assistantMessage.uuid,
           );
-          yield postCompactMessages;
+          yield userMessage;
           state = {
             guards: {
               ...guards,
               ...INITIAL_RECOVERY_STATE,
               malformedToolUseRetryCount: malformedToolUseRetryCount + 1,
             },
-            messages: [...messagesForQuery, postCompactMessages],
+            messages: [...messages_2, userMessage],
             toolUseContext,
             compactTracking: tracking,
             transition: {
@@ -4940,21 +5113,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           };
           return NEXT_ROUND;
         }
-        let retractedMessages = [
-          ...recentMalformedRetries(messagesForQuery, malformedToolUseRetryCount),
-          ...assistantMessages,
-        ];
-        for (let msg of retractedMessages)
-          yield {
-            type: "tombstone",
-            message: msg,
-          };
         let apiErrorMessage = createApiErrorMessage({
           content: "The model's tool call could not be parsed (retry also failed).",
+          apiError: "malformed_tool_use_exhausted",
           now: deps.now,
           uuid: deps.uuid,
         });
-        apiErrorMessage.retractedMessageUuids = retractedMessages.map((message) => message.uuid);
+        apiErrorMessage.retractedMessageUuids = [];
         yield apiErrorMessage;
         executeStopFailureHooks(apiErrorMessage, toolUseContext);
         markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage);
@@ -4968,14 +5133,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         !last?.isApiErrorMessage &&
         querySource !== "compact" &&
         !isCompactQuerySource(querySource) &&
-        !hasSuccessfulToolCall_2(messagesForQuery) &&
+        !endedOnAnsweredNoReplyTool(messages_2) &&
         !assistantMessages.some((assistantMessage) =>
           assistantMessage.message.content.some(
             (content) => content.type === "text" && content.text.trim().length > 0,
           ),
         ) &&
-        !hasStructuredOutputCall(messagesForQuery) &&
-        !endsWithReminder(messagesForQuery)
+        !hasStructuredOutputCall(messages_2) &&
+        !endsWithReminder(messages_2)
       ) {
         if (!thinkingOnlyNudged) {
           logFeatureSad("query_thinking_only_response", "nudged");
@@ -4992,7 +5157,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               ...guards,
               thinkingOnlyNudged: true,
             },
-            messages: [...messagesForQuery, userMessage],
+            messages: [...messages_2, userMessage],
+            toolUseContext,
+            compactTracking: tracking,
+            transition: {
+              reason: "thinking_only_retry",
+            },
+          };
+          return NEXT_ROUND;
+        }
+        let someRow =
+          (assistantMessages.length === 0 || emptyCompletionResent) &&
+          !toolUseContext.agentId &&
+          shouldTryRecovery(messages_2);
+        if (someRow && !emptyCompletionResent) {
+          logFeatureSad("query_thinking_only_response", "empty_resent");
+          state = {
+            guards: {
+              ...guards,
+              emptyCompletionResent: true,
+            },
+            messages: messages_2,
             toolUseContext,
             compactTracking: tracking,
             transition: {
@@ -5002,20 +5187,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           return NEXT_ROUND;
         }
         logFeatureBad("query_thinking_only_response", "nudge_exhausted");
-        if (
-          assistantMessages.length === 0 &&
-          !toolUseContext.agentId &&
-          shouldTryRecovery(messagesForQuery)
-        ) {
-          let recoveryMessage = createApiErrorMessage({
+        if (someRow) {
+          let apiErrorMessage = createApiErrorMessage({
             content: "The model returned an empty response (retry also failed).",
             apiError: "empty_completion",
             now: deps.now,
             uuid: deps.uuid,
           });
-          yield recoveryMessage;
-          executeStopFailureHooks(recoveryMessage, toolUseContext);
-          markClassifierApiFailure(toolUseContext, querySource, recoveryMessage);
+          yield apiErrorMessage;
+          executeStopFailureHooks(apiErrorMessage, toolUseContext);
+          markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage);
           return {
             reason: "api_error",
             isTransient: false,
@@ -5048,13 +5229,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           oauthRefreshDiskFull: last.oauthRefreshDiskFull,
         };
       }
-      return yield* runStopHooksAndFinish(toolUseContext);
+      let nextRound = yield* runStopHooksAndFinish(toolUseContext);
+      let recoveryMessage_2 = recoveryMessage({
+        endedBecause: nextRound === NEXT_ROUND ? undefined : nextRound.reason,
+        aborted: toolUseContext.abortController.signal.aborted,
+        mainThread: isMainThreadQuery && !toolUseContext.agentId,
+        response: assistantMessages,
+        stopReason,
+        openerUuid,
+        rows: messages_2,
+        now: deps.now,
+        uuid: deps.uuid,
+      });
+      if (recoveryMessage_2) yield recoveryMessage_2;
+      return nextRound;
     }
     async function* runStopHooksAndFinish(context, finishExtras) {
       let toolResults = finishExtras?.toolResults ?? [];
       let goalActive = !context.agentId && context.getAppState().activeGoal !== undefined;
       let stopHookResult = yield* runStopHooks(
-        messagesForQuery,
+        messages_2,
         assistantMessages,
         systemPrompt,
         userContext,
@@ -5106,7 +5300,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             },
             deps,
           );
-          yield* runTurnEndReactions(context, [...messagesForQuery, ...assistantMessages, ...toolResults], {
+          yield* runTurnEndReactions(context, [...messages_2, ...assistantMessages, ...toolResults], {
             stopHookActive,
           });
           return {
@@ -5132,7 +5326,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             !isNonMainSessionSubagent(context.agentContext)
           )
             notifyStopHookCap(text);
-          yield* runTurnEndReactions(context, [...messagesForQuery, ...assistantMessages, ...toolResults], {
+          yield* runTurnEndReactions(context, [...messages_2, ...assistantMessages, ...toolResults], {
             stopHookActive,
           });
           return {
@@ -5149,12 +5343,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             stopHookBlockingCount: blockCount,
             turnCount: nextTurnCount,
           },
-          messages: [
-            ...messagesForQuery,
-            ...assistantMessages,
-            ...toolResults,
-            ...stopHookResult.blockingErrors,
-          ],
+          messages: [...messages_2, ...assistantMessages, ...toolResults, ...stopHookResult.blockingErrors],
           toolUseContext: context,
           compactTracking: tracking,
           transition: {
@@ -5239,9 +5428,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             (activeAgent) => activeAgent.agentType === mainThreadAgentType,
           )
         : undefined;
-      let found = messagesForQuery.find(
-        (message) => message.type === "user" && message.turnCompanion !== true,
-      );
+      let found = messages_2.find((message) => message.type === "user" && message.turnCompanion !== true);
       if (found?.type === "user") {
         let content = found.message.content;
         requireTurnClassifier().captureIntent(
@@ -5251,13 +5438,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             : (content.find((block) => block.type === "text")?.text ?? ""),
         );
       }
-      let latestRealUserAsk = requireTurnClassifier().findLatestRealUserAsk(messagesForQuery);
+      let latestRealUserAsk = requireTurnClassifier().findLatestRealUserAsk(messages_2);
       if (latestRealUserAsk) requireTurnClassifier().captureLatestAsk(classifierJobState, latestRealUserAsk);
       requireTurnClassifier().classifyAndPushDebounced(
         classifierJobState,
         getOwnJobShortId(),
         mainThreadAgent,
-        [...messagesForQuery, ...assistantMessages].filter((message) => message.type === "assistant"),
+        [...messages_2, ...assistantMessages].filter((message) => message.type === "assistant"),
         hasActiveAgentTasks(toolUseContext.taskRegistry.all()),
         classifierEngine,
         surfaces,
@@ -5272,6 +5459,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }
         if (update.message) {
           yield markVirtualInResume(update.message);
+          if (codeModeAccepted()) markVirtual(update.message);
           noteToolMessageFlags(update.message);
           recordToolResult(update.message, updatedToolUseContext);
         }
@@ -5292,7 +5480,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     queryCheckpoint("query_tool_execution_end");
     if (lastResponseOk) {
-      let toolDescriptionRecordLate = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
+      let toolDescriptionRecordLate = recordToolDescriptions(messages_2, inlineToolsDeclared, {
         options: toolUseContext.options,
         querySource,
         head: promptHeadSent,
@@ -5301,7 +5489,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       });
       if (toolDescriptionRecordLate) {
         yield toolDescriptionRecordLate;
-        messagesForQuery = [...messagesForQuery, toolDescriptionRecordLate];
+        messages_2 = [...messages_2, toolDescriptionRecordLate];
       }
       let deferredToolsRecordAfterTools = appendDeferredToolsRecord();
       if (deferredToolsRecordAfterTools) yield deferredToolsRecordAfterTools;
@@ -5346,7 +5534,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       });
       pendingToolUseSummary_2 = generateToolUseSummary({
         tools: toolInfoForSummary,
-        messages: [...messagesForQuery, ...assistantMessages],
+        messages: [...messages_2, ...assistantMessages],
         signal: toolUseContext.abortController.signal,
         isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
         lastAssistantText,
@@ -5387,6 +5575,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         reason: "aborted_tools",
       };
     };
+    if (codeModeAccepted() && isMainLoop) endIfTurnEnded(toolUseContext);
     if (toolUseContext.abortController.signal.aborted) return yield* finishAbortedTools();
     if (attemptState.toolWasDeferred) {
       markClassifierTurnAborted(toolUseContext, querySource);
@@ -5396,13 +5585,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     if (attemptState.shouldPreventContinuation) {
       markClassifierTurnAborted(toolUseContext, querySource);
-      yield* runTurnEndReactions(
-        toolUseContext,
-        [...messagesForQuery, ...assistantMessages, ...toolResults],
-        {
-          stopHookActive,
-        },
-      );
+      yield* runTurnEndReactions(toolUseContext, [...messages_2, ...assistantMessages, ...toolResults], {
+        stopHookActive,
+      });
       return {
         reason: "hook_stopped",
       };
@@ -5426,7 +5611,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     if (attemptState.toolRequestedEndTurn && !endTurnOverrideMessage && !shouldRunStopHooks) {
       yield* endTurnFromToolResult({
         endTurnSource: attemptState.toolRequestedEndTurn === "tool" ? "tool" : "mcp_meta",
-        messagesForQuery,
+        messagesForQuery: messages_2,
         assistantMessages,
         toolResults,
         toolUseBlocks,
@@ -5462,7 +5647,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         });
         markClassifierTurnAborted(toolUseContext, querySource);
         yield* handleStopHooks(
-          messagesForQuery,
+          messages_2,
           assistantMessages,
           toolResults,
           systemPrompt,
@@ -5489,7 +5674,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       });
     }
     logEvent("tengu_query_before_attachments", {
-      messagesForQueryCount: messagesForQuery.length,
+      messagesForQueryCount: messages_2.length,
       assistantMessagesCount: assistantMessages.length,
       toolResultsCount: toolResults.length,
       queryChainId: queryChainIdForAnalytics,
@@ -5597,7 +5782,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         markClassifierTurnAborted(updatedToolUseContext, querySource);
         yield* runTurnEndReactions(
           updatedToolUseContext,
-          [...messagesForQuery, ...assistantMessages, ...toolResults],
+          [...messages_2, ...assistantMessages, ...toolResults],
           {
             stopHookActive,
           },
@@ -5623,8 +5808,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     if (updatedToolUseContext.options.refreshTools) {
       let refreshedTools = updatedToolUseContext.options.refreshTools();
       if (refreshedTools !== updatedToolUseContext.options.tools) {
-        let oldMcpCount = count(updatedToolUseContext.options.tools, (tool) => !!tool.mcpInfo);
-        let newMcpCount = count(refreshedTools, (tool) => !!tool.mcpInfo);
+        let oldMcpCount = countWhere(updatedToolUseContext.options.tools, (tool) => !!tool.mcpInfo);
+        let newMcpCount = countWhere(refreshedTools, (tool) => !!tool.mcpInfo);
         if (oldMcpCount !== newMcpCount)
           logEvent("tengu_mcp_tools_refreshed_mid_turn", {
             oldMcpCount,
@@ -5652,7 +5837,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let ccrTurnId = getCurrentCallId();
     let pendingFoldCommands = () =>
-      filterQueuedCommandsForThread(
+      filterMidTurnDrainCommands(
         toolUseContext.messageQueue.getCommandsByMaxPriority("next").concat(
           toolUseContext.queuedNotificationsRegistry.heldNudge({
             agentId: toolUseContext.agentId,
@@ -5679,21 +5864,30 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         lastIteration: Boolean(maxTurns && turnCount + 1 > maxTurns),
       })
     )
-      await noopAsyncDrain(
+      await drainReplToolResults(
         toolUseContext,
-        createQueueFilterForThread({
+        midTurnFoldableFor({
           isMainThread: isMainThreadQuery,
           agentId: toolUseContext.agentId,
         }),
         pendingFoldCommands,
       );
+    if (codeModeAccepted() && isMainLoop) {
+      if (endIfTurnEnded(toolUseContext)) return yield* finishAbortedTools();
+      forgetTurnStart(toolUseContext);
+    }
     let isMainThreadFold = isMainThreadQuery;
     let nextTurn = turnCount + 1;
     let maxTurnsCap = maxTurns && nextTurn > maxTurns ? maxTurns : undefined;
     let foldableCommands =
       toolUseContext.messageQueue.isMidTurnFoldSuspended() || maxTurnsCap !== undefined
         ? []
-        : pendingFoldCommands();
+        : codeModeAccepted()
+          ? require("./utils/pollEvents/clearPollEventFollowing.lazy.js").withoutInputAHookStopWouldStrand(
+              pendingFoldCommands(),
+              queryTracking.chainId,
+            )
+          : pendingFoldCommands();
     nobodysTurn &&= !foldableCommands.some(isPersonQueuedInput);
     let routedSubmissions = isMainThreadFold
       ? await routeSubmissions(foldableCommands, updatedToolUseContext)
@@ -5749,7 +5943,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         null,
         deliverable,
         deps,
-        [...messagesForQuery, ...assistantMessages, ...toolResults],
+        [...messages_2, ...assistantMessages, ...toolResults],
         querySource,
         {
           conversationLatches: stickyBetas,
@@ -5785,7 +5979,29 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             toolResults.push(message);
           }
         }
-        if (attachment.attachment.type === "poll_events") deliveredPollEventCount++;
+        if (attachment.attachment.type === "poll_events") {
+          deliveredPollEventCount++;
+          if (codeModeAccepted()) {
+            let {
+              deliverMidTurnFollowing,
+              foldAddedHookStop,
+            } = require("./utils/pollEvents/clearPollEventFollowing.lazy.js");
+            let toolResultCount = toolResults.length;
+            content = yield* deliverMidTurnFollowing(
+              deliverable.filter(isPollEventMode),
+              () => {
+                let appState = updatedToolUseContext.getAppState();
+                return {
+                  chainId: queryTracking.chainId,
+                  mode: appState.toolPermissionContext.mode,
+                  fastMode: appState.fastMode ?? false,
+                };
+              },
+              toolResults,
+            );
+            hookErrored ||= foldAddedHookStop(toolResults, toolResultCount);
+          }
+        }
       }
       let filtered = commands.filter((command) => !absorbedCommands.has(command));
       if (filtered.length > 0 && deliveredPromptCount === 0)
@@ -5819,7 +6035,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             reportQueuedSubmissions(filtered, "mid_turn");
             markMessagesRead(filtered);
             recordContextKeyFromMessages(filtered);
-            getValueFromInput_2(filtered, isMainThreadQuery);
+            unnameTurnPersonJoined(filtered, isMainThreadQuery);
             recordSubmittedPrompts(filtered, toolUseContext.storageV5, {
               armUndo: false,
               placed: withExpandedPastes,
@@ -5863,6 +6079,19 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       if (consumedCommands.length > 0)
         if (deliveredPollEventCount === 0) logPollEventsLeftQueued("mid-turn", consumedCommands.length);
         else {
+          if (codeModeAccepted() && content !== undefined) {
+            let { followingSettingsToApply } = require("./utils/pollEvents/clearPollEventFollowing.lazy.js");
+            updatedToolUseContext = applyContextLayers(
+              updatedToolUseContext,
+              followingSettingsToApply(consumedCommands, content, () => {
+                let appState = updatedToolUseContext.getAppState();
+                return {
+                  mode: appState.toolPermissionContext.mode,
+                  fastMode: appState.fastMode ?? false,
+                };
+              }),
+            );
+          }
           let pollEventRows = yield* absorbQueuedPollEvents({
             events: consumedCommands,
             queue: toolUseContext.messageQueue,
@@ -5882,7 +6111,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     ) {
       let lateMemoryAttachments = filterDuplicateMemoryAttachments(
         memoryRecallPrefetch.screen(await memoryRecallPrefetch.promise, [
-          ...messagesForQuery,
+          ...messages_2,
           ...assistantMessages,
           ...toolResults,
         ]),
@@ -5897,7 +6126,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       }
       memoryRecallPrefetch.consumedOnIteration = turnCount - 1;
     }
-    let fileChangeAttachmentCount = count(
+    let fileChangeAttachmentCount = countWhere(
       toolResults,
       (tr) => tr.type === "attachment" && tr.attachment.type === "edited_text_file",
     );
@@ -5923,7 +6152,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       markClassifierTurnAborted(toolUseContext, querySource);
       yield* runTurnEndReactions(
         updatedToolUseContext,
-        [...messagesForQuery, ...assistantMessages, ...toolResults],
+        [...messages_2, ...assistantMessages, ...toolResults],
         {
           stopHookActive,
         },
@@ -5945,7 +6174,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         mcpEndTurnOverrideSpent: mcpEndTurnOverrideSpent || endTurnOverrideMessage !== undefined,
         turnCount: nextTurn,
       },
-      messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
+      messages: [...messages_2, ...assistantMessages, ...toolResults],
       toolUseContext: toolUseContextWithQueryTracking,
       compactTracking: tracking,
       pendingToolUseSummary: pendingToolUseSummary_2,
@@ -5973,7 +6202,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     if (iterationOutcome !== NEXT_ROUND) return iterationOutcome;
   }
 }
-//@ chunk-ha3km179.js:234645-235046 sole-consumer
+//@ chunk-w3ch4xq2.js:247763-248164 sole-consumer
 /**
  * 模型回退的系统提示文案：overloaded/server_error → "due to high demand"；model_not_found/permission_denied/model_blocked → "is not available"（附错误摘要）；last_resort → 不可重试错误。
  */
@@ -5993,7 +6222,7 @@ function formatModelFallbackMessage(reason, originalModel, fallbackModel, error)
       return `Switched to ${fallbackModel} because ${originalModel} returned an error that could not be retried${formatFallbackErrorDetail(error)}`;
   }
 }
-//@ chunk-ha3km179.js:235046-235155 sole-consumer
+//@ chunk-w3ch4xq2.js:248164-248272 sole-consumer
 /**
  * 把原始错误转成最多 300 字符的 " (…)" 后缀。
  */
@@ -6003,7 +6232,7 @@ function formatFallbackErrorDetail(error) {
   let detail = truncated.length < fullMessage.length ? `${truncated}\u2026` : fullMessage;
   return detail ? ` (${detail})` : "";
 }
-//@ chunk-ha3km179.js:235155-235573 sole-consumer
+//@ chunk-w3ch4xq2.js:248272-248690 sole-consumer
 /**
  * 处理折叠进本轮的 prompt.submit：应用会话标题，保留 attachment/user 消息，并把 UserPromptSubmit 钩子附加上下文（截断后）作为 hook_additional_context 附件追加。
  */
@@ -6035,7 +6264,7 @@ async function applyFoldedPromptSubmit(promptSubmitted, updatedToolUseContext) {
     ? [...filtered, createHookContextAttachment(contextItems, "prompt.submit")]
     : filtered;
 }
-//@ chunk-ha3km179.js:235573-235717 sole-consumer (2.1.88 match: isHumanTurn, 0.779)
+//@ chunk-w3ch4xq2.js:248690-248834 sole-consumer (2.1.88 match: isHumanTurn, 0.778)
 /**
  * 返回最后一条真实人类消息（非 meta、非工具结果、非压缩摘要）的下标，没有时返回 0；queryLoop 用它设置 turnStartIndex。旧版名 isHumanTurn 名不符实（返回下标）。
  */
@@ -6047,7 +6276,7 @@ function isHumanTurn(m) {
   }
   return 0;
 }
-//@ chunk-ha3km179.js:235717-235814 sole-consumer
+//@ chunk-w3ch4xq2.js:248834-248931 sole-consumer
 /**
  * 主线程/子代理时清空 options.activeMcpServer/activeMcpTool（每轮 API 循环开始与 attempt 重置时调用）。
  */
@@ -6060,7 +6289,7 @@ function clearActiveMcpContext(options, isMainOrSubagent) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:235814-235920 sole-consumer (2.1.88 match: getValueFromInput, 1)
+//@ chunk-w3ch4xq2.js:248931-249037 sole-consumer (2.1.88 match: getValueFromInput, 1)
 /**
  * 生成队列命令过滤器：可折叠命令放行；遇到第一条不可折叠的 prompt 命令后，其后的 prompt 命令都不再折叠进本轮。
  */
@@ -6073,7 +6302,7 @@ function createFoldCommandFilter(input) {
     return false;
   };
 }
-//@ chunk-ha3km179.js:235920-236090 sole-consumer
+//@ chunk-w3ch4xq2.js:249037-249207 sole-consumer
 /**
  * 命令能否折叠进当前轮：drainOnly/screeningPending 恒可；没有 promptSubmitted 不可；否则要求提交时的钩子/插件快照与当前一致（AKn 比较）。
  */
@@ -6083,4 +6312,8 @@ function isCommandFoldable(command, readScreens) {
   let screens = readScreens();
   return screens === undefined || screensChanged(command.promptSubmitted.under, screens);
 }
-export { query };
+//@ chunk-w3ch4xq2.js:249207-249290 sole-consumer
+function markVirtual(message) {
+  if (codeModeAccepted()) require("./utils/codeMode/scriptCallStream.js").releaseScriptCallProgress(message);
+}
+export { query, emptyToolResults };

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：自托管 runner 变更面板不显示仓库的原因文本；变更面板设置问题的匹配模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9fcadreh.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qetshd2k.js (4)
  * attribution: placement 4
  */
 import { urlPatternToRegex } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9fcadreh.js:227-2198 placement
+//@ chunk-qetshd2k.js:227-2198 placement
 /**
  * 自托管 runner 变更面板不显示仓库的原因文本。
  */
@@ -27,7 +27,7 @@ var GIT_COMMON_SUBDIRS;
 var GIT_ROOT_FILES;
 var GIT_REFS_SUBDIRS;
 var joined;
-deferInit("chunk-9fcadreh.js:227", () => {
+deferInit("chunk-qetshd2k.js:227", () => {
   CHANGES_PANE_PREFIX = "[changes pane] repository not shown:";
   HINT_DIFF_FINDS_NESTED =
     'See the runner option --diff-finds-nested-repository in "claude self-hosted-runner --help" and in the operator guide.';
@@ -57,20 +57,20 @@ deferInit("chunk-9fcadreh.js:227", () => {
     String.raw`unreadable, linked or oversized entry under \.git/(?:${GIT_REFS_SUBDIRS})`,
   ].join("|");
 });
-//@ chunk-9fcadreh.js:2198-2254 placement
+//@ chunk-qetshd2k.js:2198-2254 placement
 /**
  * 判断一条消息是否是变更面板设置问题描述。
  */
 function matchesJoinedGitIgnorePattern(filePath) {
   return new RegExp(`^(?:${joined})$`).test(filePath);
 }
-//@ chunk-9fcadreh.js:2254-2907 placement
+//@ chunk-qetshd2k.js:2254-2907 placement
 /**
  * 变更面板设置问题的匹配模式。
  */
 var CHANGES_PANE_SETTING_PATTERNS; // deferred: uses CHANGES_PANE_PREFIX of its import cycle while loading; runs once the cycle is complete
 var regExp;
-deferInit("chunk-9fcadreh.js:2254", () => {
+deferInit("chunk-qetshd2k.js:2254", () => {
   CHANGES_PANE_SETTING_PATTERNS = [
     `${GIT_SETTINGS_SUBJECT} have a setting whose name is not shown: it is too long, or not plain letters, digits and dashes\\.`,
     `${GIT_SETTINGS_SUBJECT} have the setting ${GIT_SETTING_NAME_SHAPE}, which is not one Claude Code accepts there\\.`,
@@ -88,7 +88,7 @@ deferInit("chunk-9fcadreh.js:2254", () => {
     `^${urlPatternToRegex(CHANGES_PANE_PREFIX)} (?:${CHANGES_PANE_SETTING_PATTERNS.join("|")}) ${urlPatternToRegex(HINT_DIFF_FINDS_NESTED)}$`,
   );
 });
-//@ chunk-9fcadreh.js:2907-2958 placement
+//@ chunk-qetshd2k.js:2907-2958 placement
 /**
  * 判断一条消息是否属于变更面板的问题提示。
  */

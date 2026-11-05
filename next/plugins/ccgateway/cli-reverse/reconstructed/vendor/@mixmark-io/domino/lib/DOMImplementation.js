@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/DOMImplementation.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_HTMLParser } from "./HTMLParser.js";
 import { require_utils } from "./utils.js";
 import { require_xmlnames } from "./xmlnames.js";
 
-//@ chunk-vwj6ccer.js:233747-234995 cjs-fingerprint
+//@ chunk-w04z664w.js:233747-234995 cjs-fingerprint
 var require_DOMImplementation = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = DOMImplementation;
   var Document = require_Document();

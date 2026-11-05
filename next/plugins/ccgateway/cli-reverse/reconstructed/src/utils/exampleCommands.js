@@ -3,10 +3,10 @@
  *
  * 欢迎屏示例命令：用 git log 找常改文件，生成“fix lint errors in <file>”之类的示例并缓存一周
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/exampleCommands.ts
- * pieces: chunk-3wek6r2k.js (7), chunk-awy329vy.js (1)
- * attribution: affinity 1, file-local 1, callgraph-fingerprint 1, fingerprint 4, layout 1
+ * pieces: chunk-9knfmvrf.js (1), chunk-hjswk319.js (7)
+ * attribution: fingerprint 4, affinity 1, file-local 1, callgraph-fingerprint 1, layout 1
  */
 import { env } from "./env.js";
 import { getIsGit, gitExe } from "./git.js";
@@ -17,7 +17,7 @@ import { logForDebugging } from "./debug.js";
 import { hashString31 } from "./pastedContent.js";
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from "./config.js";
 
-//@ chunk-3wek6r2k.js:69063-69784 affinity
+//@ chunk-hjswk319.js:68462-69183 affinity
 var NON_CORE_FILE_PATTERNS = [
   /(?:^|\/)(?:package-lock\.json|yarn\.lock|bun\.lock|bun\.lockb|pnpm-lock\.yaml|Pipfile\.lock|poetry\.lock|Cargo\.lock|Gemfile\.lock|go\.sum|composer\.lock|uv\.lock)$/,
   /\.generated\./,
@@ -29,11 +29,11 @@ var NON_CORE_FILE_PATTERNS = [
   /(?:^|\/)\.(?:github|vscode|idea|claude)\//,
   /(?:^|\/)(?:CHANGELOG|LICENSE|CONTRIBUTING|CODEOWNERS|README)(?:\.[a-z]+)?$/i,
 ];
-//@ chunk-3wek6r2k.js:69784-69830 file-local
+//@ chunk-hjswk319.js:69183-69229 file-local
 function isCoreFile(path) {
   return !NON_CORE_FILE_PATTERNS.some((pattern) => pattern.test(path));
 }
-//@ chunk-3wek6r2k.js:69830-70192 callgraph-fingerprint (2.1.88 match: pickDiverseCoreFiles, 1)
+//@ chunk-hjswk319.js:69229-69591 callgraph-fingerprint (2.1.88 match: pickDiverseCoreFiles, 1)
 function pickDiverseCoreFiles(sortedPaths, want) {
   let picked = [];
   let seenBasenames = new Set();
@@ -53,7 +53,7 @@ function pickDiverseCoreFiles(sortedPaths, want) {
     }
   return picked.length >= want ? picked : [];
 }
-//@ chunk-3wek6r2k.js:70192-70782 fingerprint (2.1.88 match: getFrequentlyModifiedFiles, 0.864)
+//@ chunk-hjswk319.js:69591-70181 fingerprint (2.1.88 match: getFrequentlyModifiedFiles, 0.863)
 /**
  * 用 git log 找近期经常修改的文件，供欢迎屏生成示例命令。
  */
@@ -94,9 +94,9 @@ async function getFrequentlyModifiedFiles() {
     return [];
   }
 }
-//@ chunk-3wek6r2k.js:70782-70799 layout
+//@ chunk-hjswk319.js:70181-70198 layout
 var ONE_WEEK_MS = 604800000;
-//@ chunk-3wek6r2k.js:70799-71114 fingerprint (2.1.88 match: getExampleCommandFromCache, 0.987)
+//@ chunk-hjswk319.js:70198-70513 fingerprint (2.1.88 match: getExampleCommandFromCache, 0.987)
 /**
  * 从缓存的常改文件中挑一个，生成示例命令文本（如“fix lint errors in <file>”）。
  */
@@ -116,7 +116,7 @@ function getExampleCommandFromCache(sessionId) {
   ];
   return `Try "${commands[(hash >>> 8) % commands.length]}"`;
 }
-//@ chunk-3wek6r2k.js:71114-71354 fingerprint (2.1.88 match: refreshExampleCommands, 1)
+//@ chunk-hjswk319.js:70513-70753 fingerprint (2.1.88 match: refreshExampleCommands, 1)
 async function refreshExampleCommands(frequentFiles) {
   let projectConfig = getCurrentProjectConfig();
   let lastGenerated = projectConfig.exampleFilesGeneratedAt ?? 0;
@@ -133,8 +133,8 @@ async function refreshExampleCommands(frequentFiles) {
       );
     });
 }
-//@ chunk-awy329vy.js:4723-4790 fingerprint (2.1.88 match: countAndSortItems, 0.712)
+//@ chunk-9knfmvrf.js:4732-4799 fingerprint (2.1.88 match: countAndSortItems, 0.712)
 function countAndSortItems(items) {
   return items.toString(16).toUpperCase().padStart(4, "0");
 }
-export { refreshExampleCommands, getExampleCommandFromCache, countAndSortItems };
+export { refreshExampleCommands, countAndSortItems, getExampleCommandFromCache };

@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增。分页遍历 /v1/code/sessions 云会话列表，过滤已归档、桥接与内部占位会话，超出页数预算时标注截断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2ny09dd0.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pzf4a1kg.js (4)
  * attribution: placement 4
  */
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-2ny09dd0.js:262-317 placement
+//@ chunk-pzf4a1kg.js:262-317 placement
 /**
  * 会话列表最多翻多少页（10），超出标记截断。
  */
 var MAX_LIST_PAGES = 10;
 var CCR_LIST_TARGET_VISIBLE = 50;
 var CCR_SESSION_ID_RE = /^(?:session|cse)_[A-Za-z0-9_-]+$/;
-//@ chunk-2ny09dd0.js:317-381 placement
+//@ chunk-pzf4a1kg.js:317-381 placement
 /**
  * 判断会话标题是否可展示（非空且不是内部占位标题）。
  */
@@ -26,18 +26,18 @@ function hasDisplayTitle(session) {
   let title = (session.title ?? "").trim();
   return title !== "" && !isInternalHuskTitle(title);
 }
-//@ chunk-2ny09dd0.js:381-476 placement
+//@ chunk-pzf4a1kg.js:381-476 placement
 function isInternalHuskTitle(title) {
   return title.includes("__CBU_POOLED__") || title === "__warming__" || title.startsWith("ditto:");
 }
-//@ chunk-2ny09dd0.js:476-2254 placement
+//@ chunk-pzf4a1kg.js:476-2254 placement
 /**
  * 分页遍历 /v1/code/sessions 云会话列表，过滤已归档、桥接与内部占位会话，超出页数预算时标注截断。
  */
 async function walkCcrSessionList(options) {
   if (getAPIProvider() !== "firstParty") return [];
   try {
-    await import("./chunk-eg58qykf.lazy.js");
+    await import("./chunk-p4cn1jqa.lazy.js");
     let { axiosGetWithRetry, prepareApiRequest, getOAuthRequestHeaders } =
       await import("../../utils/teleport/api.js");
     let { getOauthConfig } = await import("../../constants/oauth.js");

@@ -3,9 +3,9 @@
  *
  * 工具宿主登记（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (3)
  * attribution: placement 3
  */
 import { isDeepStrictEqual } from "util";
@@ -17,14 +17,14 @@ import {
 } from "../../bridge/deviceRegistration.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-s61vbvea.js:451474-451551 placement
+//@ chunk-7jxyna5q.js:370143-370220 placement
 var HOST_SOURCE_ORDER = ["session", "bridge", "loopback"];
 var OFFLINE_WHEN_MISSING = {
   session: false,
   bridge: true,
   loopback: true,
 };
-//@ chunk-s61vbvea.js:451551-453085 placement
+//@ chunk-7jxyna5q.js:370220-371754 placement
 /**
  * 工具宿主登记：local/host/remote 等来源
  */
@@ -128,7 +128,7 @@ class ToolHostRegistry {
     ];
   }
 }
-//@ chunk-s61vbvea.js:453085-453549 placement
+//@ chunk-7jxyna5q.js:371754-372218 placement
 /**
  * 生成工具宿主列表快照：来源、名称、状态和执行策略。
  */

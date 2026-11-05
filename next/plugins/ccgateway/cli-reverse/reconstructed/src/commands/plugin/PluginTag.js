@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/plugin tag：为插件创建 {name}--v{version} git 标签（可推送、试运行）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (3)
  * attribution: placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -18,14 +18,14 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box, Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:212810-213105 placement
+//@ chunk-wb51jffc.js:212858-213153 placement
 var PLUGIN_TAG_USAGE = `Usage: /plugin tag [path] [--push] [--dry-run] [-f|--force]
 
 Create a {name}--v{version} git tag for the plugin at <path> (default: .).
 Validates plugin.json and any enclosing marketplace entry agree on the version.
 
 For -m/--message and --remote, use the CLI: claude plugin tag --help`;
-//@ chunk-vrb44rx7.js:213105-214690 placement
+//@ chunk-wb51jffc.js:213153-214738 placement
 /**
  * 校验插件并创建/推送版本标签。
  */
@@ -140,9 +140,9 @@ ${PLUGIN_TAG_USAGE}`,
   } else footer = $[8];
   return footer;
 }
-//@ chunk-vrb44rx7.js:214690-214694 placement
+//@ chunk-wb51jffc.js:214738-214742 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:214690", () => {
+deferInit("chunk-wb51jffc.js:214738", () => {
   init_react_production();
 });
 export { PluginTagFlow };

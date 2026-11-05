@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/credential-mask-files.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (4)
+ * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
  */
 import "fs";
@@ -19,7 +19,7 @@ import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { normalizePathForSandbox } from "./sandbox-utils.js";
 import { JWT_DEFAULT_EXTRACT_PATTERN, verifyJwt, maskJwtClaims, mintFakeJwt } from "./credential-decode.js";
 
-//@ chunk-fq0cr76a.js:707455-708365 esm-fingerprint
+//@ chunk-qg41pqt6.js:709112-710022 esm-fingerprint
 function extractAndSubstitute(content, pattern, sentinelFor, options = {}) {
   let re = new RegExp(pattern, "gd");
   let indexByCapture = new Map();
@@ -74,9 +74,9 @@ function extractAndSubstitute(content, pattern, sentinelFor, options = {}) {
     captures: [...indexByCapture.keys()],
   };
 }
-//@ chunk-fq0cr76a.js:709266-709281 esm-fingerprint
+//@ chunk-qg41pqt6.js:710923-710938 esm-fingerprint
 var FILE_URL_PREFIX = "file:";
-//@ chunk-fq0cr76a.js:709281-709783 esm-fingerprint
+//@ chunk-qg41pqt6.js:710938-711440 esm-fingerprint
 class MaskedFileStore {
   constructor() {
     this.byKey = new Map();
@@ -115,7 +115,7 @@ class MaskedFileStore {
     return this.dir;
   }
 }
-//@ chunk-fq0cr76a.js:709783-712340 esm-fingerprint
+//@ chunk-qg41pqt6.js:711440-714015 esm-fingerprint
 function buildMaskedFileBinds(files, allowedDomains, registry, store) {
   let binds = [];
   let degradeToDenyPaths = [];

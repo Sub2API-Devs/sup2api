@@ -3,10 +3,10 @@
  *
  * 回退（Rewind）消息选择器：列出可选用户消息，提供"恢复代码和对话/仅对话/仅代码/从此处总结"等选项及 diff 统计。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageSelector.tsx
- * pieces: chunk-18hwfzwa.js (15), chunk-wyqg6m3h.js (1)
- * attribution: affinity 1, fingerprint 8, layout 3, file-local 1, placement 3
+ * pieces: chunk-c7hntn0y.js (1), chunk-czq1j3j2.js (15)
+ * attribution: fingerprint 8, affinity 1, layout 3, file-local 1, placement 3
  */
 import { randomUUID } from "crypto";
 import * as pathModule from "path";
@@ -33,6 +33,8 @@ import { useIsFullscreen } from "../ink/renderModeContext.js";
 import {
   createUserMessage,
   isRealUserPromptMessage,
+  REWIND_UNSAFE_PATH_REASON,
+  RESTORE_FILES_CAVEAT,
   getUserMessageText,
   isEmptyMessageText,
   isSyntheticMessage,
@@ -45,7 +47,6 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { CompactionError } from "../services/compact/compact.js";
 import { logError } from "../utils/log.js";
 import { logForDebugging } from "../utils/debug.js";
-import { REWIND_UNSAFE_PATH_REASON, RESTORE_FILES_CAVEAT } from "../constants/messages.js";
 import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { useRegisterKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { stableEmptyObject } from "../utils/stableEmptyObject.js";
@@ -85,7 +86,7 @@ import { mainAgentId, getParentSessionId } from "../bootstrap/state.js";
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { getLastSessionLog } from "../utils/conversationRecovery.js";
 
-//@ chunk-wyqg6m3h.js:36692-36855 fingerprint (2.1.88 match: DiffStatsText, 0.64)
+//@ chunk-c7hntn0y.js:37056-37219 fingerprint (2.1.88 match: DiffStatsText, 0.641)
 function diffStat(theme, added, removed) {
   let { Text } = theme.ui;
   let hasBoth = added > 0 && removed > 0;
@@ -113,16 +114,16 @@ function diffStat(theme, added, removed) {
       : "",
   );
 }
-//@ chunk-18hwfzwa.js:415610-415635 affinity
+//@ chunk-czq1j3j2.js:323071-323096 affinity
 class ConversationRestoreError extends Error {}
-//@ chunk-18hwfzwa.js:415635-415696 fingerprint (2.1.88 match: isSummarizeOption, 1)
+//@ chunk-czq1j3j2.js:323096-323157 fingerprint (2.1.88 match: isSummarizeOption, 1)
 function isSummarizeOption(option) {
   return option === "summarize" || option === "summarize_up_to";
 }
-//@ chunk-18hwfzwa.js:415696-415729 layout
+//@ chunk-czq1j3j2.js:323157-323190 layout
 var REWIND = "Rewind";
 var CURRENT_ITEM_LABEL = "(current)";
-//@ chunk-18hwfzwa.js:415729-422268 fingerprint (2.1.88 match: MessageSelector, 0.642)
+//@ chunk-czq1j3j2.js:323190-329812 fingerprint (2.1.88 match: MessageSelector, 0.642)
 function MessageSelector({
   messages,
   onPreRestore,
@@ -174,6 +175,9 @@ function MessageSelector({
   let hasMultiple = allMessages.length > 1;
   let [focusedIndex, setFocusedIndex] = useState(undefined);
   let [selectedMessage, setSelectedMessage] = useState(preselectedMessage);
+  let [confirmText, setConfirmText] = useState(() =>
+    preselectedMessage === undefined ? undefined : confirmDescription?.(preselectedMessage),
+  );
   let [now, setNow] = useState(() => new Date());
   let [diffStatsForRestore, setDiffStatsForRestore] = useState(undefined);
   useEffect(() => {
@@ -283,11 +287,13 @@ ${errorMessage(error)}`);
         return;
       }
       setNow(new Date());
+      setConfirmText(confirmDescription(message));
       setSelectedMessage(message);
       return;
     }
     let diffStats = await fileHistoryGetDiffStats(fileHistory, message.uuid);
     setNow(new Date());
+    setConfirmText(confirmDescription?.(message));
     setSelectedMessage(message);
     setDiffStatsForRestore(diffStats);
   }
@@ -459,13 +465,13 @@ ${errorMessage(conversationError)}`
   let isOneParagraph = false;
   let hintFormat = stableEmptyObject(isOneParagraph);
   let description =
-    confirmDescription !== undefined && !isSummarizeOption(selectedRestoreOption)
+    confirmDescription !== undefined &&
+    selectedMessage !== undefined &&
+    !isSummarizeOption(selectedRestoreOption)
       ? jsxProd_default(Text, {
           dimColor: true,
           children:
-            selectedRestoreOption === "nevermind"
-              ? "The conversation will be unchanged."
-              : confirmDescription,
+            selectedRestoreOption === "nevermind" ? "The conversation will be unchanged." : confirmText,
         })
       : jsxProd_default(RestoreOptionDescription, {
           selectedRestoreOption,
@@ -661,7 +667,7 @@ ${errorMessage(conversationError)}`
     ],
   });
 }
-//@ chunk-18hwfzwa.js:422268-422399 layout
+//@ chunk-czq1j3j2.js:329812-329943 layout
 function logConversationRestoreError(error) {
   if (error instanceof ConversationRestoreError) {
     logForDebugging(`MessageSelector: conversation restore not done: ${error.message}`, {
@@ -671,7 +677,7 @@ function logConversationRestoreError(error) {
   }
   logError(error);
 }
-//@ chunk-18hwfzwa.js:422399-422832 fingerprint (2.1.88 match: getRestoreOptionConversationText, 0.939)
+//@ chunk-czq1j3j2.js:329943-330376 fingerprint (2.1.88 match: getRestoreOptionConversationText, 0.939)
 function getRestoreOptionConversationText(option) {
   switch (option) {
     case "summarize":
@@ -686,7 +692,7 @@ function getRestoreOptionConversationText(option) {
       return "The conversation will be unchanged.";
   }
 }
-//@ chunk-18hwfzwa.js:422832-423703 fingerprint (2.1.88 match: RestoreOptionDescription, 0.785)
+//@ chunk-czq1j3j2.js:330376-331247 fingerprint (2.1.88 match: RestoreOptionDescription, 0.784)
 function RestoreOptionDescription(props) {
   let $ = useMemoCache(17);
   let { selectedRestoreOption, canRestoreCode, diffStatsForRestore, isOneParagraph } = props;
@@ -761,7 +767,7 @@ function RestoreOptionDescription(props) {
   } else stackedSummary = $[16];
   return stackedSummary;
 }
-//@ chunk-18hwfzwa.js:423703-424837 fingerprint (2.1.88 match: RestoreCodeConfirmation, 0.498)
+//@ chunk-czq1j3j2.js:331247-332382 fingerprint (2.1.88 match: RestoreCodeConfirmation, 0.498)
 function RestoreCodeConfirmation(props) {
   let $ = useMemoCache(15);
   let { diffStatsForRestore } = props;
@@ -842,7 +848,7 @@ function RestoreCodeConfirmation(props) {
   } else t2 = $[14];
   return t2;
 }
-//@ chunk-18hwfzwa.js:424837-426117 file-local
+//@ chunk-czq1j3j2.js:332382-333664 file-local
 function computeDiffStatsBetweenMessages(props) {
   let $ = useMemoCache(16);
   let { message, isCurrent, isPreClear, parentSessionId, metadataLoaded, metadata, isRedesign } = props;
@@ -943,7 +949,7 @@ function computeDiffStatsBetweenMessages(props) {
   } else rowElement = $[15];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:426117-429323 fingerprint (2.1.88 match: UserMessageOption, 0.462)
+//@ chunk-czq1j3j2.js:333664-336869 fingerprint (2.1.88 match: UserMessageOption, 0.463)
 function UserMessageOption(props) {
   let $ = useMemoCache(62);
   let { userMessage, color, dimColor, isCurrent, isRedesign, paddingRight, age } = props;
@@ -1140,7 +1146,7 @@ function UserMessageOption(props) {
     $[47] !== paddingRight
   ) {
     earlyReturn = EARLY_RETURN_SENTINEL;
-    po: {
+    no: {
       truncated = paddingRight
         ? truncate(text_2, columns - paddingRight, true)
         : truncateToLength(text_2, 500)
@@ -1181,7 +1187,7 @@ function UserMessageOption(props) {
           $[54] = stackedBox;
         } else stackedBox = $[54];
         earlyReturn = stackedBox;
-        break po;
+        break no;
       }
     }
     $[42] = age;
@@ -1224,7 +1230,7 @@ function UserMessageOption(props) {
   } else plainBox = $[61];
   return plainBox;
 }
-//@ chunk-18hwfzwa.js:429323-429467 layout
+//@ chunk-czq1j3j2.js:336869-337013 layout
 function MessageAgeSuffix(props) {
   let $ = useMemoCache(2);
   let { age } = props;
@@ -1242,7 +1248,7 @@ function MessageAgeSuffix(props) {
   } else ageSuffix = $[1];
   return ageSuffix;
 }
-//@ chunk-18hwfzwa.js:429467-429960 fingerprint (2.1.88 match: messagesAfterAreOnlySynthetic, 0.891)
+//@ chunk-czq1j3j2.js:337013-337506 fingerprint (2.1.88 match: messagesAfterAreOnlySynthetic, 0.856)
 function messagesAfterAreOnlySynthetic(messages, fromIndex) {
   for (let i = fromIndex + 1; i < messages.length; i++) {
     let msg = messages[i];
@@ -1268,7 +1274,7 @@ function messagesAfterAreOnlySynthetic(messages, fromIndex) {
   }
   return true;
 }
-//@ chunk-18hwfzwa.js:429960-430532 placement
+//@ chunk-czq1j3j2.js:454793-455365 placement
 /**
  * 把消息列表中以 queued_command 附件形式存在的人类 prompt 还原为普通用户消息（跳过 meta、已存在 uuid、cron 触发和非对象内容），让 Rewind 选择器能选中它们；无变化时返回原数组。
  */
@@ -1306,7 +1312,7 @@ function expandQueuedPromptAttachments(messages) {
   });
   return didExpand ? mapped : messages;
 }
-//@ chunk-18hwfzwa.js:430532-430773 placement
+//@ chunk-czq1j3j2.js:455365-455606 placement
 function openRewindSelector({ localJsx, turn, sessionController }) {
   if (localJsx.size > 0) return null;
   let localJsxOptions = {
@@ -1325,7 +1331,7 @@ function openRewindSelector({ localJsx, turn, sessionController }) {
   );
   return rewindDialog;
 }
-//@ chunk-18hwfzwa.js:430773-431571 placement
+//@ chunk-czq1j3j2.js:455606-456403 placement
 function RewindMessageSelector({ turn, sessionController, onClose }) {
   let { storageV5 } = useTheme_2();
   let appStoreDirect = useAppStoreDirect();
@@ -1379,4 +1385,4 @@ function RewindMessageSelector({ turn, sessionController, onClose }) {
         : undefined,
   });
 }
-export { openRewindSelector, messagesAfterAreOnlySynthetic, diffStat };
+export { diffStat, openRewindSelector, messagesAfterAreOnlySynthetic };

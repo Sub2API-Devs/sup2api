@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-logs/build/src/LoggerProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: esm-fingerprint 1
  */
 import { import_core, import_resources } from "./LogRecordImpl.js";
@@ -12,7 +12,7 @@ import { growthbookSdkModule, noopEmitter } from "../../../../../src/services/an
 import { DEFAULT_LOGGER_NAME } from "../esm/LoggerProvider.js";
 import { Logger } from "../esm/Logger.js";
 
-//@ chunk-aepeg2w5.js:655083-656233 esm-fingerprint
+//@ chunk-exfmq47h.js:667689-668839 esm-fingerprint
 class LoggerProvider {
   _shutdownOnce;
   _sharedState;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Markdown 页面渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (32)
  * attribution: placement 32
  */
 import { escapeXmlAttr } from "../../utils/xml.js";
@@ -16,7 +16,7 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-8wvtd8sr.js:10423-12867 placement
+//@ chunk-xzmy9dn4.js:10734-13178 placement
 /**
  * Markdown 页面的样式：深色/浅色 CSS 变量与整段 <style>（跟随系统或 data-theme、打印用浅色、正文版式）。
  */
@@ -34,13 +34,13 @@ var MARKDOWN_STYLESHEET =
   '}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;' +
   MD_LIGHT_VARS +
   "}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>\n";
-//@ chunk-8wvtd8sr.js:12867-13005 placement
+//@ chunk-xzmy9dn4.js:13178-13316 placement
 function renderMermaidBlock(text, lang) {
   if (((lang ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "") !== "mermaid") return false;
   return `<pre class="mermaid">${escapeXmlAttr(text)}</pre>
 `;
 }
-//@ chunk-8wvtd8sr.js:13005-13164 placement
+//@ chunk-xzmy9dn4.js:13316-13475 placement
 function getPlainMarkedRenderer() {
   let marked = getLiveState().marked;
   if (marked.plain) return marked.plain;
@@ -57,14 +57,14 @@ function getPlainMarkedRenderer() {
   marked.plain = renderer;
   return renderer;
 }
-//@ chunk-8wvtd8sr.js:13164-13201 placement
+//@ chunk-xzmy9dn4.js:13475-13512 placement
 /**
  * 用内置样式表把 Markdown 渲染成 HTML。
  */
 async function renderMarkdownWithStylesheet(markdown) {
   return MARKDOWN_STYLESHEET + renderMarkdownToHtml(markdown);
 }
-//@ chunk-8wvtd8sr.js:13201-13248 placement
+//@ chunk-xzmy9dn4.js:13512-13559 placement
 /**
  * 用 marked 渲染器把 Markdown 解析成 HTML。
  */
@@ -73,20 +73,20 @@ function renderMarkdownToHtml(markdown) {
     async: false,
   });
 }
-//@ chunk-8wvtd8sr.js:13248-13284 placement (2.1.88 match: applyMarkdown, 1)
+//@ chunk-xzmy9dn4.js:13559-13595 placement (2.1.88 match: applyMarkdown, 1)
 function applyMarkdown(markdown) {
   return getPlainMarkedRenderer().lexer(markdown);
 }
-//@ chunk-8wvtd8sr.js:13284-13324 placement
+//@ chunk-xzmy9dn4.js:13595-13635 placement
 var ATX_HEADING_REGEX = /^ {0,3}#{1,6}(?:[ \t]+(.*))?$/m;
-//@ chunk-8wvtd8sr.js:13324-13358 placement
+//@ chunk-xzmy9dn4.js:13635-13669 placement
 /**
  * 判断字符是否属于空白。
  */
 function hasWhitespace(char) {
   return /\s/.test(char);
 }
-//@ chunk-8wvtd8sr.js:13358-13544 placement
+//@ chunk-xzmy9dn4.js:13669-13855 placement
 function stripClosingHashes(text) {
   let end = text.length;
   while (end > 0 && hasWhitespace(text[end - 1])) end--;
@@ -96,11 +96,11 @@ function stripClosingHashes(text) {
   while (end > 0 && hasWhitespace(text[end - 1])) end--;
   return text.slice(0, end);
 }
-//@ chunk-8wvtd8sr.js:13544-13599 placement
+//@ chunk-xzmy9dn4.js:13855-13910 placement
 var FRONT_MATTER_OPEN_REGEX = /^---[ \t]*\n/;
 var FRONT_MATTER_CLOSE_REGEX = /^---[ \t]*$/m;
 var BLANK_LINE_REGEX = /^[ \t]*$/m;
-//@ chunk-8wvtd8sr.js:13599-13790 placement
+//@ chunk-xzmy9dn4.js:13910-14101 placement
 function stripFrontMatter(markdown) {
   let match = markdown.match(FRONT_MATTER_OPEN_REGEX);
   if (!match) return markdown;
@@ -111,7 +111,7 @@ function stripFrontMatter(markdown) {
   if (match_3 && match_3.index < match_2.index) return markdown;
   return sliced.slice(match_2.index + match_2[0].length + 1);
 }
-//@ chunk-8wvtd8sr.js:13790-14004 placement
+//@ chunk-xzmy9dn4.js:14101-14315 placement
 function firstHeadingText(markdown) {
   let body = stripFrontMatter(markdown);
   if (body.length <= MAX_TITLE_CHARS) {
@@ -127,10 +127,10 @@ function firstHeadingText(markdown) {
   let headingText = body.match(ATX_HEADING_REGEX)?.[1];
   return headingText === undefined ? undefined : stripClosingHashes(headingText).slice(0, MAX_TITLE_CHARS);
 }
-//@ chunk-8wvtd8sr.js:14004-14031 placement
+//@ chunk-xzmy9dn4.js:14315-14342 placement
 var MAX_TITLE_CHARS = 65536;
 var CRLF_REGEX = /\r\n|\r/g;
-//@ chunk-8wvtd8sr.js:14031-14093 placement
+//@ chunk-xzmy9dn4.js:14342-14404 placement
 /**
  * 去掉 BOM 并统一换行符。
  */
@@ -141,11 +141,11 @@ function normalizeMarkdownLineEndings(markdown) {
 `,
   );
 }
-//@ chunk-8wvtd8sr.js:14561-14597 placement
+//@ chunk-xzmy9dn4.js:14872-14908 placement
 var LEADING_COMMENT_REGEX = /^\uFEFF?<!--[\s\S]*?-->\s*/;
-//@ chunk-8wvtd8sr.js:14597-14658 placement
+//@ chunk-xzmy9dn4.js:14908-14969 placement
 var FRONT_MATTER_LINE_REGEX = /^(?:[ \t]*$|[ \t]+\S|- |[\w"'.-][^:#]*:(?:[ \t]|$))/;
-//@ chunk-8wvtd8sr.js:14658-15018 placement
+//@ chunk-xzmy9dn4.js:14969-15329 placement
 /**
  * 找出 Markdown 开头的标题：跳过 front matter，若其中只有空行/注释则把首个 token 作为标题（含链接引用定义），否则取 front matter 里的打包标题或首个非空行。
  */
@@ -181,7 +181,7 @@ function findLeadingHeading(source) {
     packedHeading,
   };
 }
-//@ chunk-8wvtd8sr.js:15018-15448 placement
+//@ chunk-xzmy9dn4.js:15329-15759 placement
 /**
  * 决定页面标题：有前导标题 token 时渲染成 HTML 并取纯文本；否则用首个标题或打包标题；都没有用 fallbackTitle。返回 {titleHtml, title}。
  */
@@ -212,9 +212,9 @@ function resolvePageTitle(markdown, options) {
         title: firstLineOrFallback(text, options.fallbackTitle),
       };
 }
-//@ chunk-8wvtd8sr.js:15448-15497 placement
+//@ chunk-xzmy9dn4.js:15759-15808 placement
 var MARKDOWN_LINK_REGEX = /!?\[([^\]]{0,400})\]\([^\s)]{0,1500}\)/g;
-//@ chunk-8wvtd8sr.js:15497-15587 placement
+//@ chunk-xzmy9dn4.js:15808-15898 placement
 /**
  * 未被转义的 Markdown 链接才做替换。
  */
@@ -223,9 +223,9 @@ function replaceLinkUnlessEscaped(text, label, offset, source) {
   if (label.endsWith("\\")) return text;
   return label;
 }
-//@ chunk-8wvtd8sr.js:15587-15600 placement
+//@ chunk-xzmy9dn4.js:15898-15911 placement
 var CODE_SPAN_REGEX = /`+/g;
-//@ chunk-8wvtd8sr.js:15600-15787 placement
+//@ chunk-xzmy9dn4.js:15911-16098 placement
 function stripInlineMarks(text) {
   for (let j = 0; j < 3; j++) {
     let replaced = text.replace(MARKDOWN_LINK_REGEX, replaceLinkUnlessEscaped);
@@ -236,7 +236,7 @@ function stripInlineMarks(text) {
     .replace(/[*`]|~~/g, "")
     .replace(/(?<![\p{L}\p{N}])(?<!_)_+(?!_)|(?<!_)_+(?!_)(?![\p{L}\p{N}])/gu, "");
 }
-//@ chunk-8wvtd8sr.js:15787-16123 placement
+//@ chunk-xzmy9dn4.js:16098-16434 placement
 /**
  * 去掉代码片段以外的强调标记：按反引号串配对找出行内代码，代码内保留原文，代码外的文本经转义处理。
  */
@@ -268,7 +268,7 @@ function stripMarksOutsideCode(text) {
   out += stripInlineMarks(text.slice(cursor));
   return out;
 }
-//@ chunk-8wvtd8sr.js:16123-16187 placement
+//@ chunk-xzmy9dn4.js:16434-16498 placement
 /**
  * 取首行文本（去 Markdown 标记）作为标题，空则用兜底标题。
  */
@@ -279,14 +279,14 @@ function firstLineOrFallback(text, fallbackTitle) {
       .trim() || fallbackTitle
   );
 }
-//@ chunk-8wvtd8sr.js:16187-16249 placement
+//@ chunk-xzmy9dn4.js:16498-16560 placement
 /**
  * 截取前 120 个字符作为标题，空则用兜底标题。
  */
 function clippedLineOrFallback(title, fallbackTitle) {
   return [...title].slice(0, 120).join("").trim() || fallbackTitle;
 }
-//@ chunk-8wvtd8sr.js:16249-17206 placement
+//@ chunk-xzmy9dn4.js:16560-17517 placement
 /**
  * 把 .md 文件渲染成 Artifact 页面：提取标题，优先套用内置计划模板（PLAN_TEMPLATE，替换 TITLE/TAB_TITLE/EYEBROW/SUMMARY 和正文段）；模板加载失败或结构不符时退回 Markdown 样式表渲染。
  * 返回 {html, title, templated}，并记 artifact_publish 埋点。
@@ -356,9 +356,9 @@ async function renderMarkdownArtifact(markdown, fallbackTitle) {
     templated: true,
   };
 }
-//@ chunk-8wvtd8sr.js:17206-17244 placement
+//@ chunk-xzmy9dn4.js:17517-17555 placement
 var SECTION_BLOCK_REGEX = /<section\b[\s\S]*<\/section>/;
-//@ chunk-8wvtd8sr.js:17244-17532 placement
+//@ chunk-xzmy9dn4.js:17555-17843 placement
 function fillPlanTemplate(template, values) {
   let replaced = template.replace(LEADING_COMMENT_REGEX, "");
   if (!SECTION_BLOCK_REGEX.test(replaced)) return null;
@@ -372,9 +372,9 @@ function fillPlanTemplate(template, values) {
     .replace(/\{\{(TITLE|TAB_TITLE|EYEBROW|SUMMARY)\}\}/g, (key, section) => parts[section] ?? "")
     .replace(SECTION_BLOCK_REGEX, () => `<section>${values.body}</section>`);
 }
-//@ chunk-8wvtd8sr.js:17532-17583 placement
+//@ chunk-xzmy9dn4.js:17843-17894 placement
 var HEADING_TAG_REGEX = /^\s*<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>\s*$/;
-//@ chunk-8wvtd8sr.js:17583-17904 placement
+//@ chunk-xzmy9dn4.js:17894-18215 placement
 /**
  * 把链接定义表还原成 Markdown 引用式链接定义行（[name]: href "title"），href 含空白或括号时用尖括号，标题按引号情况选择包裹符。
  */
@@ -399,7 +399,7 @@ function linkDefinitionsMarkdown(links) {
     })
     .join("");
 }
-//@ chunk-8wvtd8sr.js:17904-18105 placement
+//@ chunk-xzmy9dn4.js:18215-18416 placement
 function renderHeadingHtml(token, links, renderBody) {
   let source =
     token.raw.replace(
@@ -413,7 +413,7 @@ function renderHeadingHtml(token, links, renderBody) {
     return escapeXmlAttr(token.text.replace(/\s+/g, " ").trim());
   return trimmed.replace(/\s+/g, " ");
 }
-//@ chunk-8wvtd8sr.js:18105-18594 placement
+//@ chunk-xzmy9dn4.js:18416-18905 placement
 /**
  * 把标题 HTML 转成纯文本：img 换成 alt，去标签，解码常见实体与数字实体（拒绝代理区与越界码点），折叠空白。
  */
@@ -439,4 +439,4 @@ function htmlToPlainText(html) {
     .replace(/\s+/g, " ")
     .trim();
 }
-export { applyMarkdown, renderMarkdownArtifact };
+export { renderMarkdownArtifact, applyMarkdown };

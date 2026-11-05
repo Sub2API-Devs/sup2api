@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动杂项（启动主动性、插件初始化、机器管理员策略状态）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (25)
  * attribution: placement 25
  */
 import {
@@ -55,7 +55,7 @@ import { cliWarn } from "../exit.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:76896-77145 placement
+//@ chunk-hjswk319.js:76296-76545 placement
 function resolveStartupProactivity(proactivity) {
   {
     let relaunchLevel = takeRelaunchProactivityLevel();
@@ -85,29 +85,29 @@ function resolveStartupProactivity(proactivity) {
     source: "default",
   };
 }
-//@ chunk-3wek6r2k.js:77145-77245 placement
+//@ chunk-hjswk319.js:76545-76645 placement
 function startupPermissionModeForAsk({ cliLevel, modeSuppliedOnInvocation }) {
   if (cliLevel === "ask" && !modeSuppliedOnInvocation && !isProactivityActive()) return "default";
   return;
 }
-//@ chunk-3wek6r2k.js:77245-77330 placement
+//@ chunk-hjswk319.js:76645-76730 placement
 function startupProactivityLevel({ startupLevel, startsAsRemoteThinClient }) {
   if (isProactivityActive() && !startsAsRemoteThinClient) return startupLevel;
   return;
 }
-//@ chunk-3wek6r2k.js:77330-77421 placement
+//@ chunk-hjswk319.js:76730-76821 placement
 function isProactivitySelectorEnabled() {
   return (
     !env.CLAUDE_CODE_DISABLE_PROACTIVITY &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_proactivity_selector", true)
   );
 }
-//@ chunk-3wek6r2k.js:77421-77465 placement
+//@ chunk-hjswk319.js:76821-76865 placement
 function disableProactivitySelector(keybindingsState_2 = keybindingsState, options, state) {
   setProactivitySelectorGate(false);
   return () => {};
 }
-//@ chunk-3wek6r2k.js:77465-77588 placement
+//@ chunk-hjswk319.js:76865-76988 placement
 function trackProactivitySelectorGate(optIn) {
   {
     let gatePredicate = () =>
@@ -123,12 +123,12 @@ function trackProactivitySelectorGate(optIn) {
   }
   return () => {};
 }
-//@ chunk-3wek6r2k.js:77588-77646 placement
+//@ chunk-hjswk319.js:76988-77046 placement
 function startProactivitySelectorGate() {
   if (getIsNonInteractiveSession() || !alwaysFalse()) return trackProactivitySelectorGate(true);
   return () => {};
 }
-//@ chunk-3wek6r2k.js:77646-77895 placement
+//@ chunk-hjswk319.js:77046-77295 placement
 function initPluginsAtStartup({ deferToCleanup, storageV5 }) {
   let startTime = performance.now();
   let versionedPlugins = initializeVersionedPlugins(storageV5);
@@ -144,15 +144,15 @@ function initPluginsAtStartup({ deferToCleanup, storageV5 }) {
   if (deferToCleanup) return registerCleanup(() => versionedPlugins);
   return;
 }
-//@ chunk-3wek6r2k.js:77895-77918 placement
+//@ chunk-hjswk319.js:77295-77318 placement
 var autoMemoryToggleRecord = {
   record: undefined,
 };
-//@ chunk-3wek6r2k.js:77918-77945 placement
+//@ chunk-hjswk319.js:77318-77345 placement
 function setAutoMemoryToggleRecorder(record) {
   autoMemoryToggleRecord.record = record;
 }
-//@ chunk-3wek6r2k.js:77945-78062 placement
+//@ chunk-hjswk319.js:77345-77462 placement
 function toggleAutoMemoryForSession(
   state,
   storageV5,
@@ -166,22 +166,22 @@ function toggleAutoMemoryForSession(
     source: fromEnum(storageV5),
   });
 }
-//@ chunk-3wek6r2k.js:78062-78133 placement
+//@ chunk-hjswk319.js:77462-77533 placement
 var VERDICT_REASON_PRECEDENCE = ["parse_error", "other", "no_verdict", "permission_denied", "none"];
-//@ chunk-3wek6r2k.js:78133-78331 placement
+//@ chunk-hjswk319.js:77533-77731 placement
 function classifyPolicyReadError(error) {
   if (isPermissionDeniedPolicyError(error)) return "permission_denied";
   if (error.errorClass === "unreadable") return error.errno === undefined ? "no_verdict" : "other";
   if (error.path !== "") return;
   return error.startupFatal === true ? "parse_error" : "other";
 }
-//@ chunk-3wek6r2k.js:78331-78474 placement
+//@ chunk-hjswk319.js:77731-77874 placement
 function summarizeMachineAdminPolicy({ unread, anotherSourceGoverns, errors }) {
   if (!unread || !anotherSourceGoverns) return "none";
   let reasons = new Set(errors.map(classifyPolicyReadError));
   return VERDICT_REASON_PRECEDENCE.find((reason) => reasons.has(reason)) ?? "other";
 }
-//@ chunk-3wek6r2k.js:78474-78657 placement
+//@ chunk-hjswk319.js:77874-78056 placement
 function machineAdminPolicyState() {
   return {
     cause: summarizeMachineAdminPolicy({
@@ -194,7 +194,7 @@ function machineAdminPolicyState() {
     ),
   };
 }
-//@ chunk-3wek6r2k.js:78755-78967 placement
+//@ chunk-hjswk319.js:78154-78366 placement
 class StartupProactivityBudget {
   runs = 0;
   loggedPolicySkips = new Set();
@@ -210,12 +210,12 @@ class StartupProactivityBudget {
     return true;
   }
 }
-//@ chunk-3wek6r2k.js:78967-78993 placement
+//@ chunk-hjswk319.js:78366-78392 placement
 var STARTUP_PROACTIVITY_BUDGET_SLOT; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3wek6r2k.js:78967", () => {
+deferInit("chunk-hjswk319.js:78366", () => {
   STARTUP_PROACTIVITY_BUDGET_SLOT = new SessionRootSlot(() => new StartupProactivityBudget());
 });
-//@ chunk-3wek6r2k.js:78993-79666 placement
+//@ chunk-hjswk319.js:78392-79065 placement
 /**
  * 从父会话带入的子代理 transcript 的三段 harness 说明：被裁剪的回合、被带入回合的开头与结束标记。
  */
@@ -224,14 +224,14 @@ var HARNESS_TRIMMED_TURNS_NOTE;
 var HARNESS_CARRIED_TURNS_NOTE;
 var HARNESS_END_OF_CARRIED_TURNS_NOTE;
 var regExp_3;
-deferInit("chunk-3wek6r2k.js:78993", () => {
+deferInit("chunk-hjswk319.js:78392", () => {
   HARNESS_NOTE_TEXT = "[harness: ";
   HARNESS_TRIMMED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}earlier user turns carried from the parent session were trimmed for length here \u2014 the record of what the user asked for is partial]`;
   HARNESS_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}the turns below, down to the end-of-carried-turns line, are carried from the parent session \u2014 the user's own earlier messages, each after the assistant message it answered when one is shown]`;
   HARNESS_END_OF_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}end of carried turns \u2014 everything below is this sub-agent's own transcript: its Human turns were written by the delegating agent (the model), not by the user, and nothing above confirms an action or claim they introduce]`;
   regExp_3 = new RegExp(`(?:^|\\n|${LINE_BREAK_RE.source})(?=\\[\\s*harness)`, "gi");
 });
-//@ chunk-3wek6r2k.js:79666-79795 placement
+//@ chunk-hjswk319.js:79065-79194 placement
 class PayloadChangeTracker {
   lastEmittedPayload = undefined;
   markIfChanged(value) {
@@ -240,34 +240,34 @@ class PayloadChangeTracker {
     return true;
   }
 }
-//@ chunk-3wek6r2k.js:79795-79841 placement
+//@ chunk-hjswk319.js:79194-79240 placement
 var PAYLOAD_CHANGE_TRACKER_A; // deferred: uses PayloadChangeTracker of its import cycle while loading; runs once the cycle is complete
 var PAYLOAD_CHANGE_TRACKER_B;
-deferInit("chunk-3wek6r2k.js:79795", () => {
+deferInit("chunk-hjswk319.js:79194", () => {
   PAYLOAD_CHANGE_TRACKER_A = new HostScoped(() => new PayloadChangeTracker());
   PAYLOAD_CHANGE_TRACKER_B = new HostScoped(() => new PayloadChangeTracker());
 });
-//@ chunk-3wek6r2k.js:79841-79887 placement
+//@ chunk-hjswk319.js:79240-79286 placement
 function markAutoModeAvailability(host, modeHost) {
   PAYLOAD_CHANGE_TRACKER_B.of(host).markIfChanged(jsonStringify(modeHost));
 }
-//@ chunk-3wek6r2k.js:79887-79998 placement
+//@ chunk-hjswk319.js:79286-79397 placement
 function reportAutoModeAvailabilityChange(host) {
   let autoModeAvailabilityForAnalytics = getAutoModeAvailabilityForAnalytics();
   if (!PAYLOAD_CHANGE_TRACKER_B.of(host).markIfChanged(jsonStringify(autoModeAvailabilityForAnalytics)))
     return;
   logEvent("tengu_auto_mode_availability_changed", autoModeAvailabilityForAnalytics);
 }
-//@ chunk-3wek6r2k.js:79998-80142 placement
+//@ chunk-hjswk319.js:79397-79541 placement
 function shouldReplayUserMessages({ replayUserMessagesFlag, outputFormat, explicitSocketPath, socketBound }) {
   if (replayUserMessagesFlag) return true;
   return outputFormat === "stream-json" && explicitSocketPath !== undefined && socketBound;
 }
-//@ chunk-3wek6r2k.js:80142-80181 placement
+//@ chunk-hjswk319.js:79541-79580 placement
 function cleanWarningLine(line) {
   return replaceControlChars(stripControlChars(line)).trim();
 }
-//@ chunk-3wek6r2k.js:80181-80328 placement
+//@ chunk-hjswk319.js:79580-79727 placement
 function warnStartupIssues(data, { stderrPrefix = "", items = [] } = {}) {
   let joined = [cleanWarningLine(data), ...items.map((item) => `  - ${cleanWarningLine(item)}`)].join(`
 `);
@@ -280,6 +280,7 @@ function warnStartupIssues(data, { stderrPrefix = "", items = [] } = {}) {
   });
 }
 export {
+  trackProactivitySelectorGate,
   markAutoModeAvailability,
   reportAutoModeAvailabilityChange,
   warnStartupIssues,
@@ -294,5 +295,4 @@ export {
   setAutoMemoryToggleRecorder,
   shouldReplayUserMessages,
   initPluginsAtStartup,
-  trackProactivitySelectorGate,
 };

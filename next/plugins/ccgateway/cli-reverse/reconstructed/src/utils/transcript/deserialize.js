@@ -3,19 +3,21 @@
  *
  * 2.1.316 新增：转录反序列化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (82)
- * attribution: placement 82
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (84), chunk-pzvrh90y.js (3)
+ * attribution: placement 81, layout 6
  */
 import { randomUUID } from "crypto";
+import { env } from "../env.js";
+import { NO_REPLY_SUFFIX } from "../../bridge/projectsReplyEvaluation.js";
 import { isFirstPartyApiBackend } from "../model/providers.js";
 import { logForDebugging } from "../debug.js";
 import { plural } from "../stringUtils.js";
 import { logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
+import { fromEnum, fromEnumOpt, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { MAX_WIRE_TOOL_NAME_CHARS, isOverlongToolName, clippedToolName } from "../taggedId.js";
-import { errorMessage } from "../errors.js";
+import { errorMessage, withTelemetryMessage, toError } from "../errors.js";
 import {
   isServerToolType,
   UNSUPPORTED_TOOL_CONTENT_TEXT,
@@ -46,7 +48,7 @@ import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js
 import { PUBLISH_PLUGIN_TOOL_NAME } from "../../tools/PublishPluginTool/prompt.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import { SKILL, SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
-import { REPL_TOOL_NAME, REPL_TOOL_NAME_ALIAS } from "../../tools/REPLTool/constants.js";
+import { REPL_TOOL_NAME, EVAL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { WORKFLOW_TOOL_NAME } from "../../tools/WorkflowTool/constants.js";
 import {
   TOOL_CALL_SESSION_ENDED,
@@ -57,17 +59,19 @@ import {
   isTurnCompanion,
   isToolUseResultMessage,
   isInterruptionOnlyMessage,
+  isToolUseRequestMessage,
+  SYNTHETIC_MODEL,
   isContextAppendMessage,
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
   isValidTurnPosition,
   regroupSplitResponsesOnResume,
   normalizeMessagesForResume,
   filterThinkingOnlyUntilStable,
-  isNullRenderingAttachment_2,
   normalizeMessages,
   createUserMessage,
   createAssistantMessage,
+  NO_RESPONSE_REQUESTED,
   isContinuationPrompt,
   INTERRUPT_MESSAGE,
   TOOL_CALL_ENDED_FOR_DELIVERY,
@@ -75,58 +79,102 @@ import {
   withRenderedAttachment,
   UUID_PREFIX_LENGTH,
 } from "../messages.js";
-import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_3 } from "../shell/shellToolUtils.js";
-import { isPlainObject as isPlainObject_4 } from "../objectUtils.js";
+import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_2 } from "../shell/shellToolUtils.js";
+import { isPlainObject as isPlainObject_5 } from "../objectUtils.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { getMcpPrefix as getMcpPrefix_2 } from "../../services/mcp/mcpStringUtils.js";
+import { getMcpPrefix as getMcpPrefix_4 } from "../../services/mcp/mcpStringUtils.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { INSTRUCTION_WITHHELD_REASONS } from "../instructionFileAccess.js";
 import { isBareTaskNotificationOrigin } from "../backgroundSessionResume.js";
 import { filterUuidList } from "../../cli/queuedCommands.js";
-import { env } from "../env.js";
+import { logEvent } from "../../services/analytics/index.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { CONNECTGITHUB } from "../../components/ConnectGitHub/constants.js";
 import { EXITPLANMODE } from "../../tools/ExitPlanModeTool/constants.js";
-import { OFFER_CHROME_SETUP_TOOL_NAME } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
+import { OFFERCHROMESETUP } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { SHOWONBOARDINGROLEPICKER } from "../../tools/ShowOnboardingRolePickerTool/ShowOnboardingRolePickerTool.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../../services/projects/threadRows.js";
-import { SYNTHETIC_MODEL, NO_RESPONSE_REQUESTED } from "../../constants/messages.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { TENGU_MIGHTY_FLASK } from "../../services/api/withRetry.js";
-import { filterStopHookSummariesOnResume } from "./transcriptRepair.js";
-import { extractPluginPrompt } from "../messages/nonUserMessages.js";
-import { countToolCallsSince_2, restoreWireInputStamps } from "../wireToolInputEcho.js";
-import { PERMISSION_MODES } from "../../types/permissions.js";
-import { PROMPT_ORIGIN_KINDS } from "../promptSource.js";
-import { isRemoteToolsForwardEnabled } from "../../bridge/deviceRegistration.js";
+import {
+  isVirtualConversationMessage,
+  isSyntheticModelApiErrorMessage,
+  isSystemLocalCommandMessage,
+} from "../../bootstrap/sessionSlices.js";
 import {
   isUnattendedStartUnconfirmed,
   apiErrorKind,
   isApiErrorWithoutRefusal,
   refusalKind,
 } from "./turnClassification.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { TENGU_MIGHTY_FLASK, TENGU_PLUMB_MARTEN } from "../../services/api/withRetry.js";
+import { filterStopHookSummariesOnResume } from "./transcriptRepair.js";
+import { extractPluginPrompt } from "../messages/nonUserMessages.js";
+import { wireToolInputsForContent, restoreWireInputStamps } from "../wireToolInputEcho.js";
+import { PERMISSION_MODES } from "../../types/permissions.js";
+import { PROMPT_ORIGIN_KINDS } from "../promptSource.js";
+import { isRemoteToolsForwardEnabled } from "../../bridge/deviceRegistration.js";
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { count } from "../collections.js";
+import { isRemoteSessionChangeAttachment } from "../contextAttachments/remoteSession.js";
+import { countWhere } from "../collections.js";
 import { CCS_NO_REQUEST_TOKEN } from "../../services/api/errors.js";
 import { logError } from "../log.js";
-import {
-  isVirtualConversationMessage,
-  isSyntheticModelApiErrorMessage,
-  isSystemLocalCommandMessage,
-} from "../../bootstrap/sessionSlices.js";
+import { isCcsTenant, addInvokedSkill } from "../../bootstrap/state.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
 import { bashCommandTagKindOf, localCommandTagKindOf } from "../messages/localCommandTags.js";
 import { looksLikeSlashInput } from "../../commands.js";
 import { TASK_NOTIFICATION } from "../../constants/xml.js";
 import { getToolEndsTurnKind } from "../../services/tools/mcpResultMeta.js";
 import { isBriefEnabled } from "../../tools/BriefTool/BriefTool.js";
-import { addInvokedSkill } from "../../bootstrap/state.js";
 import { isSoftSparkEnabled } from "../../services/compact/compactSettings.js";
-import { PERSISTED_OUTPUT_TAG } from "../toolResultStorage.js";
+import { PERSISTED_OUTPUT_TAG as PERSISTED_OUTPUT_TAG_2 } from "../toolResultStorage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1817232-1818138 placement
+//@ chunk-pzvrh90y.js:254-370 placement
+/**
+ * CLAUDE_CODE_TERMINAL_MCP_TOOLS 列出的会结束回合的 MCP 工具。
+ */
+function getTerminalMcpTools() {
+  return new Set(
+    (env.CLAUDE_CODE_TERMINAL_MCP_TOOLS || "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+}
+//@ chunk-pzvrh90y.js:370-434 layout
+function hasNoReplyTerminalTool() {
+  return getTerminalMcpTools()
+    .values()
+    .some((toolName) => toolName.endsWith(NO_REPLY_SUFFIX));
+}
+//@ chunk-pzvrh90y.js:434-874 placement
+function endedOnAnsweredNoReplyTool(messages) {
+  let terminalMcpTools = getTerminalMcpTools();
+  if (terminalMcpTools.size === 0) return false;
+  let answeredIds = new Set();
+  for (let j = messages.length - 1; j >= 0; j--) {
+    let message = messages[j];
+    if (message.type === "user") {
+      if (message.isMeta) continue;
+      let content = message.message.content;
+      if (!Array.isArray(content)) return false;
+      let sawToolResult = false;
+      for (let block of content)
+        if (block.type === "tool_result") {
+          sawToolResult = true;
+          if (!block.is_error) answeredIds.add(block.tool_use_id);
+        }
+      if (!sawToolResult) return false;
+    } else if (message.type === "assistant") {
+      for (let block of message.message.content)
+        if (block.type === "tool_use" && answeredIds.has(block.id) && terminalMcpTools.has(block.name))
+          return true;
+    }
+  }
+  return false;
+}
+//@ chunk-5xgkngpb.js:1894143-1895049 placement
 /**
  * 移除 Anthropic API 不接受的助手内容块。
  */
@@ -176,7 +224,7 @@ function dropApiInvalidAssistantBlocks(messages, { site }) {
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:1818138-1818531 placement
+//@ chunk-5xgkngpb.js:1895049-1895442 placement
 /**
  * 是否有外来服务端工具块或过长工具名。
  */
@@ -213,7 +261,7 @@ function scanForeignBlocks(messages) {
     overlongToolNames: sawLocal,
   };
 }
-//@ chunk-e6aww6q8.js:1818725-1819330 placement
+//@ chunk-5xgkngpb.js:1895636-1896241 placement
 /**
  * 按回合收集工具结果出现在助手侧还是用户侧。
  */
@@ -250,7 +298,7 @@ ${block.tool_use_id}`);
     byUserSideResult: messageIds,
   };
 }
-//@ chunk-e6aww6q8.js:1819330-1819730 placement
+//@ chunk-5xgkngpb.js:1896241-1896641 placement
 /**
  * 助手内容块是否为应剥离的外来工具块。
  */
@@ -271,7 +319,7 @@ ${block.id}`
     (block.type === "server_tool_use" && !isServerToolType(block.name))
   );
 }
-//@ chunk-e6aww6q8.js:1819730-1820482 placement
+//@ chunk-5xgkngpb.js:1896641-1897398 placement
 /**
  * 遍历助手消息内容：移除外来服务端工具调用/结果块（被删后紧跟思考块时插入占位文本以保持思考块合法）， 并把过长或旧的工具名改为规范名；返回结果与移除/插入/改名计数。
  */
@@ -347,55 +395,48 @@ function stripForeignToolBlocks(messages, stripForeign) {
     truncated,
   };
 }
-//@ chunk-e6aww6q8.js:1820482-1820534 placement
+//@ chunk-5xgkngpb.js:1897398-1897450 placement
 function isPlainObjectMessage(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-e6aww6q8.js:1820534-1820635 placement
-function hasToolResultBlock_3(message) {
+//@ chunk-5xgkngpb.js:1897450-1897551 placement
+function hasToolResultBlock_2(message) {
   return (
     message.type === "user" &&
     Array.isArray(message.message.content) &&
     message.message.content.some(isToolResultBlock)
   );
 }
-//@ chunk-e6aww6q8.js:1820635-1820687 placement
+//@ chunk-5xgkngpb.js:1897551-1897603 placement
 function isToolResultBlock(block) {
   return isPlainObjectMessage(block) && block.type === "tool_result";
 }
-//@ chunk-e6aww6q8.js:1820687-1820781 placement
+//@ chunk-5xgkngpb.js:1897603-1897697 placement
 function isToolUseLikeBlock(block) {
   let type = block.type;
   return type === "tool_use" || type === "server_tool_use" || type === "mcp_tool_use";
 }
-//@ chunk-e6aww6q8.js:1820781-1820863 placement (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-5xgkngpb.js:1897697-1897779 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockObject(m) {
   return isPlainObjectMessage(m) && (m.type === "thinking" || m.type === "redacted_thinking");
 }
-//@ chunk-e6aww6q8.js:1820863-1820957 placement
+//@ chunk-5xgkngpb.js:1897779-1897872 placement
 var BRIEF_TOOL_NAMES; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var PUBLISH_PLUGIN_TOOL_NAMES;
 var RESUMABLE_TOOL_NAMES;
-deferInit("chunk-e6aww6q8.js:1820863", () => {
+deferInit("chunk-5xgkngpb.js:1897779", () => {
   BRIEF_TOOL_NAMES = new Set([BRIEF_TOOL_NAME_2, LEGACY_BRIEF_TOOL_NAME_2, SEND_USER_FILE_TOOL_NAME]);
   PUBLISH_PLUGIN_TOOL_NAMES = new Set([PUBLISH_PLUGIN_TOOL_NAME, ...[], ...[]]);
-  RESUMABLE_TOOL_NAMES = new Set([
-    AGENT,
-    TASK,
-    SKILL,
-    REPL_TOOL_NAME,
-    REPL_TOOL_NAME_ALIAS,
-    WORKFLOW_TOOL_NAME,
-  ]);
+  RESUMABLE_TOOL_NAMES = new Set([AGENT, TASK, SKILL, REPL_TOOL_NAME, EVAL_TOOL_NAME, WORKFLOW_TOOL_NAME]);
 });
-//@ chunk-e6aww6q8.js:1820957-1820995 placement
+//@ chunk-5xgkngpb.js:1897872-1897910 placement
 /**
  * 是否是 Agent/Task 工具（可恢复）。
  */
 function isAgentOrTaskTool(toolName) {
   return toolName === AGENT || toolName === TASK;
 }
-//@ chunk-e6aww6q8.js:1820995-1821127 placement
+//@ chunk-5xgkngpb.js:1897910-1898042 placement
 function isResumableToolName(name, excluded, extra = false) {
   return (
     typeof name === "string" &&
@@ -406,7 +447,7 @@ function isResumableToolName(name, excluded, extra = false) {
     !name.startsWith(SKILL_2)
   );
 }
-//@ chunk-e6aww6q8.js:1821127-1821366 placement
+//@ chunk-5xgkngpb.js:1898042-1898281 placement
 /**
  * 中断产生的 tool_result 行（会话结束/未复制/进程停止）。
  */
@@ -425,17 +466,17 @@ function isStopInterruptionRow(row) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1821366-1821516 placement
+//@ chunk-5xgkngpb.js:1898281-1898431 placement
 function toolResultIds(row) {
   return row.type === "user" && Array.isArray(row.message.content)
     ? row.message.content.flatMap((block) => (block.type === "tool_result" ? [block.tool_use_id] : []))
     : [];
 }
-//@ chunk-e6aww6q8.js:1821516-1821563 placement
+//@ chunk-5xgkngpb.js:1898431-1898478 placement
 function isShutdownInterruptedUserRow(row) {
   return row.type === "user" && isShutdownInterrupted(row);
 }
-//@ chunk-e6aww6q8.js:1821563-1821742 placement
+//@ chunk-5xgkngpb.js:1898478-1898657 placement
 function dropRedundantShutdownRows(rows) {
   if (!rows.some(isShutdownInterruptedUserRow)) return rows;
   let keptResultIds = new Set(
@@ -450,7 +491,7 @@ function dropRedundantShutdownRows(rows) {
   );
   return filtered.length === rows.length ? rows : filtered;
 }
-//@ chunk-e6aww6q8.js:1821742-1822379 placement
+//@ chunk-5xgkngpb.js:1898657-1899294 placement
 /**
  * 统计本回合被中断的工具步数及是否与上回合重复。
  */
@@ -468,8 +509,8 @@ function summarizeInterruptedSteps(messages, options) {
             stepsById.set(block.id, {
               name: block.name,
               step:
-                SHELL_TOOL_NAMES_3.includes(block.name) &&
-                isPlainObject_4(block.input) &&
+                SHELL_TOOL_NAMES_2.includes(block.name) &&
+                isPlainObject_5(block.input) &&
                 typeof block.input.command === "string"
                   ? block.input.command
                   : block.input,
@@ -497,7 +538,7 @@ function summarizeInterruptedSteps(messages, options) {
       ),
   };
 }
-//@ chunk-e6aww6q8.js:1822379-1822668 placement
+//@ chunk-5xgkngpb.js:1899294-1899583 placement
 function collectResumableToolUseIds(messages, options, extraToolNames, ownedToolNames) {
   let ids = new Set();
   for (let row of messages) {
@@ -510,12 +551,12 @@ function collectResumableToolUseIds(messages, options, extraToolNames, ownedTool
   }
   return ids;
 }
-//@ chunk-e6aww6q8.js:1822668-1822683 placement
+//@ chunk-5xgkngpb.js:1899583-1899598 placement
 var REMOTE_DEVICE_MCP_PREFIX; // deferred: uses getMcpPrefix (../../services/mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1822668", () => {
-  REMOTE_DEVICE_MCP_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+deferInit("chunk-5xgkngpb.js:1899583", () => {
+  REMOTE_DEVICE_MCP_PREFIX = getMcpPrefix_4(REMOTE_DEVICES);
 });
-//@ chunk-e6aww6q8.js:1822683-1822771 placement
+//@ chunk-5xgkngpb.js:1899598-1899686 placement
 function fullySettledToolUseIds(groups, options) {
   return new Set(
     groups
@@ -524,7 +565,7 @@ function fullySettledToolUseIds(groups, options) {
       .flat(),
   );
 }
-//@ chunk-e6aww6q8.js:1822771-1823453 placement
+//@ chunk-5xgkngpb.js:1899686-1900368 placement
 /**
  * 把关机中断的工具结果改写为指定的中断内容。
  */
@@ -561,11 +602,11 @@ function rewriteShutdownInterrupts(messages, options, rewrittenIds, resolvedIds)
     };
   });
 }
-//@ chunk-e6aww6q8.js:1823453-1823515 placement
+//@ chunk-5xgkngpb.js:1900368-1900430 placement
 function isRemoteDeviceToolName(name) {
   return typeof name === "string" && name.startsWith(REMOTE_DEVICE_MCP_PREFIX);
 }
-//@ chunk-e6aww6q8.js:1823515-1823727 placement
+//@ chunk-5xgkngpb.js:1900430-1900642 placement
 function unresolvedToolUseIds(row) {
   if (row.type !== "assistant" || row.handedOff === true || !Array.isArray(row.message.content)) return [];
   let filtered = row.message.content.filter((block) => block.type === "tool_use");
@@ -573,7 +614,7 @@ function unresolvedToolUseIds(row) {
     ? filtered.map((block) => block.id)
     : [];
 }
-//@ chunk-e6aww6q8.js:1823727-1824796 placement
+//@ chunk-5xgkngpb.js:1900642-1901711 placement
 /**
  * 按类型校验附件负载（技能、钩子、文件、提醒等）。
  */
@@ -615,11 +656,11 @@ function isValidAttachmentPayload(attachment) {
       return (
         "content" in attachment &&
         Array.isArray(attachment.content) &&
-        attachment.content.every(isPlainObject_5)
+        attachment.content.every(isPlainObject_6)
       );
     case "file":
     case "already_read_file":
-      return "content" in attachment && isPlainObject_5(attachment.content);
+      return "content" in attachment && isPlainObject_6(attachment.content);
     case "withheld_memory":
       return (
         "by" in attachment &&
@@ -629,7 +670,7 @@ function isValidAttachmentPayload(attachment) {
         Array.isArray(attachment.entries) &&
         attachment.entries.every(
           (entry) =>
-            isPlainObject_5(entry) &&
+            isPlainObject_6(entry) &&
             "path" in entry &&
             typeof entry.path === "string" &&
             "why" in entry &&
@@ -643,10 +684,10 @@ function isValidAttachmentPayload(attachment) {
       return true;
   }
 }
-//@ chunk-e6aww6q8.js:1824796-1824817 placement
+//@ chunk-5xgkngpb.js:1901711-1901732 placement
 var MAX_ATTACHMENT_NAMES = 4096;
 var MAX_ATTACHMENT_NAME_CHARS = 512;
-//@ chunk-e6aww6q8.js:1824817-1825136 placement
+//@ chunk-5xgkngpb.js:1901732-1902051 placement
 /**
  * 过滤 type 为 attachment 但负载校验失败的条目，有丢弃时记录“转录部分损坏”的错误日志；无丢弃时原样返回。
  */
@@ -668,7 +709,7 @@ function dropMalformedAttachments(messages) {
   );
   return filtered;
 }
-//@ chunk-e6aww6q8.js:1825136-1825469 placement
+//@ chunk-5xgkngpb.js:1902051-1902384 placement
 /**
  * 提示来源不是人、自动续写或未分类（含排队命令）。
  */
@@ -690,77 +731,44 @@ function isMachineOriginPrompt(row) {
     !("senderTaskId" in resolvedOrigin && resolvedOrigin.senderTaskId !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:1825469-1825544 placement
+//@ chunk-5xgkngpb.js:1902384-1902459 placement
 /**
  * 取 user 行的压缩摘要提示 uuid 列表。
  */
 function summarizedPromptUuids(row) {
   return row.type === "user" ? filterUuidList(row.summarizedTurnPromptUuids) : [];
 }
-//@ chunk-e6aww6q8.js:1825544-1825660 placement
-/**
- * CLAUDE_CODE_TERMINAL_MCP_TOOLS 列出的会结束回合的 MCP 工具。
- */
-function getTerminalMcpTools() {
-  return new Set(
-    (env.CLAUDE_CODE_TERMINAL_MCP_TOOLS || "")
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean),
-  );
-}
-//@ chunk-e6aww6q8.js:1825660-1826100 placement (2.1.88 match: hasSuccessfulToolCall, 0.85)
-function hasSuccessfulToolCall_2(messages) {
-  let terminalMcpTools = getTerminalMcpTools();
-  if (terminalMcpTools.size === 0) return false;
-  let answeredIds = new Set();
-  for (let i = messages.length - 1; i >= 0; i--) {
-    let msg = messages[i];
-    if (msg.type === "user") {
-      if (msg.isMeta) continue;
-      let content = msg.message.content;
-      if (!Array.isArray(content)) return false;
-      let sawToolResult = false;
-      for (let block of content)
-        if (block.type === "tool_result") {
-          sawToolResult = true;
-          if (!block.is_error) answeredIds.add(block.tool_use_id);
-        }
-      if (!sawToolResult) return false;
-    } else if (msg.type === "assistant") {
-      for (let block of msg.message.content)
-        if (block.type === "tool_use" && answeredIds.has(block.id) && terminalMcpTools.has(block.name))
-          return true;
-    }
-  }
-  return false;
-}
-//@ chunk-e6aww6q8.js:1826100-1826179 placement
+//@ chunk-5xgkngpb.js:1902459-1902538 placement
 class ResumeRefusedError extends Error {
   constructor(message) {
     super(message);
     this.name = "ResumeRefusedError";
   }
 }
-//@ chunk-e6aww6q8.js:1826179-1826241 placement
+//@ chunk-5xgkngpb.js:1902538-1902659 placement
 /**
  * 恢复被拒时抛出 ResumeRefusedError。
  */
 function assertResumeNotRefused(result) {
-  if (result.refused !== undefined) throw new ResumeRefusedError(result.refused);
+  if (result.refused !== undefined) {
+    logEvent("tengu_repl_mode_resume_refused", {
+      why: fromEnumOpt(result.refusedWhy),
+    });
+    throw new ResumeRefusedError(result.refused);
+  }
 }
-//@ chunk-e6aww6q8.js:1826241-1826542 placement
+//@ chunk-5xgkngpb.js:1902659-1902960 placement
 /**
  * 交互类工具名与已废弃附件类型。
  */
 var INTERACTIVE_TOOL_NAMES; // deferred: loads other modules while loading; runs once its import cycle is complete
 var OBSOLETE_ATTACHMENT_TYPES;
-deferInit("chunk-e6aww6q8.js:1826241", () => {
+deferInit("chunk-5xgkngpb.js:1902659", () => {
   INTERACTIVE_TOOL_NAMES = new Set([
     ASKUSERQUESTION,
     CONNECTGITHUB,
     EXITPLANMODE,
-    OFFER_CHROME_SETUP_TOOL_NAME,
+    OFFERCHROMESETUP,
     SHOWONBOARDINGROLEPICKER,
     require("../../services/projects/contextFile.js").CONTINUE_IN_PROJECTS_TOOL_NAME,
   ]);
@@ -778,7 +786,7 @@ deferInit("chunk-e6aww6q8.js:1826241", () => {
     "new_directory",
   ]);
 });
-//@ chunk-e6aww6q8.js:1831380-1831491 placement
+//@ chunk-5xgkngpb.js:1907947-1908058 placement
 /**
  * meta 用户行内容是中断标记。
  */
@@ -787,7 +795,7 @@ function isInterruptMarkerRow(row) {
   let text = singleTextContent(row.message.content);
   return isInterruptMarkerText_2(text) || text === WORKER_RESTARTED_PROMPT_2;
 }
-//@ chunk-e6aww6q8.js:1831491-1831598 placement
+//@ chunk-5xgkngpb.js:1908058-1908165 placement
 function isInterruptMarkerText_2(value) {
   if (value === undefined) return false;
   let override = resumePromptOverride();
@@ -797,7 +805,7 @@ function isInterruptMarkerText_2(value) {
     (WORKER_RESTARTED_PROMPT.includes(override) && WORKER_RESTARTED_PROMPT.includes(value))
   );
 }
-//@ chunk-e6aww6q8.js:1831598-1831675 placement
+//@ chunk-5xgkngpb.js:1908165-1908242 placement
 /**
  * 是否是无需当作真实提示的 user 行（伴随行、摘要、工具结果、中断）。
  */
@@ -810,7 +818,7 @@ function isNonPromptUserRow(row) {
     isInterruptMarkerRow(row)
   );
 }
-//@ chunk-e6aww6q8.js:1831675-1831946 placement
+//@ chunk-5xgkngpb.js:1908242-1908513 placement
 /**
  * 最后一条真实用户提示的 uuid（可用压缩摘要中的提示）。
  */
@@ -830,13 +838,13 @@ function findLastUserPromptUuid(messages, { orSummarizedPrompt: options = false 
       }
       continue;
     }
-    return localCommandKind(row) !== undefined || row.isMeta || processQueuedCommands_2(row)
+    return localCommandKind(row) !== undefined || row.isMeta || processQueuedCommands(row)
       ? undefined
       : row.uuid;
   }
   return uuid;
 }
-//@ chunk-e6aww6q8.js:1831946-1832045 placement
+//@ chunk-5xgkngpb.js:1908513-1908613 placement
 /**
  * 指定位置的 user 行是否是真实提示。
  */
@@ -845,11 +853,28 @@ function isRealPromptAt(messages, index) {
   if (row?.type !== "user" || isNonPromptUserRow(row)) return false;
   return localCommandKind(row) === undefined || !isLocalCommandRecordTail(messages, index);
 }
-//@ chunk-e6aww6q8.js:1832045-1832115 placement
+//@ chunk-5xgkngpb.js:1908613-1908932 layout
+function endedMidToolUse(baseMessages) {
+  for (let idx = baseMessages.length - 1; idx >= 0; idx--) {
+    let message = baseMessages[idx];
+    if (isVirtualConversationMessage(message) || isQueueTranscriptOnlyUserMessage(message)) continue;
+    if (
+      isCompactBoundaryMessage_3(message) ||
+      isRealPromptAt(baseMessages, idx) ||
+      (message.type === "attachment" && message.attachment.type === "hook_deferred_tool")
+    )
+      return false;
+    if (message.type !== "assistant" || isUnattendedStartUnconfirmed(message)) continue;
+    if (isToolUseRequestMessage(message)) return true;
+    if (message.isApiErrorMessage === true || message.message.stop_reason === "end_turn") return false;
+  }
+  return false;
+}
+//@ chunk-5xgkngpb.js:1908932-1909002 placement
 function hasTurnOriginFields(row) {
   return row.turnOrigin !== undefined || row.promptSource !== undefined;
 }
-//@ chunk-e6aww6q8.js:1832115-1832347 placement
+//@ chunk-5xgkngpb.js:1909002-1909234 placement
 function isPromptKeptAfter(messages, index) {
   for (let idx = index + 1; idx < messages.length; idx++) {
     let row = messages[idx];
@@ -859,7 +884,7 @@ function isPromptKeptAfter(messages, index) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1832347-1832633 placement
+//@ chunk-5xgkngpb.js:1909234-1909520 placement
 function hasOwnTurnInSession(messages, ownSessionId) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let row = messages[idx];
@@ -878,7 +903,7 @@ function hasOwnTurnInSession(messages, ownSessionId) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1832633-1833053 placement
+//@ chunk-5xgkngpb.js:1909520-1909940 placement
 /**
  * 开启 CLAUDE_CODE_RESUME_TOLERATES_CONTEXT_APPENDS 时去掉夹在用户行后的合成 API 错误。
  */
@@ -890,7 +915,7 @@ function dropContextAppendErrors(messages, options) {
     let previousRow = messages[idx - 1];
     if (
       previousRow?.type === "user" &&
-      isSyntheticApiErrorMessage(row) &&
+      isNoResponseRequestedMessage(row) &&
       row.uuid !== options &&
       !(
         Array.isArray(previousRow.message.content) &&
@@ -912,7 +937,7 @@ function dropContextAppendErrors(messages, options) {
   }
   return kept ?? messages;
 }
-//@ chunk-e6aww6q8.js:1833053-1833172 placement
+//@ chunk-5xgkngpb.js:1909940-1910059 placement
 /**
  * 无 promptSource 的 meta 中断标记行。
  */
@@ -920,7 +945,7 @@ function isPlainInterruptMarker(message) {
   if (message.type !== "user" || message.isMeta !== true || message.promptSource !== undefined) return false;
   return isInterruptMarkerText_2(singleTextContent(message.message.content));
 }
-//@ chunk-e6aww6q8.js:1833172-1833267 placement
+//@ chunk-5xgkngpb.js:1910059-1910154 placement
 function isLegacyInterruptMarker(row) {
   return (
     isPlainInterruptMarker(row) &&
@@ -929,14 +954,14 @@ function isLegacyInterruptMarker(row) {
       getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MIGHTY_FLASK, false) === true)
   );
 }
-//@ chunk-e6aww6q8.js:1833267-1833338 placement
+//@ chunk-5xgkngpb.js:1910154-1910225 placement
 /**
  * 反序列化远程会话日志为消息数组。
  */
 function deserializeToMessages(entries, options) {
   return deserializeMessagesImpl(entries, undefined, undefined, undefined, undefined, options).messages;
 }
-//@ chunk-e6aww6q8.js:1833338-1833444 placement
+//@ chunk-5xgkngpb.js:1910225-1910331 placement
 var FILE_ATTACHMENT_TYPES = [
   "file",
   "directory",
@@ -945,7 +970,7 @@ var FILE_ATTACHMENT_TYPES = [
   "already_read_file",
   "nested_memory",
 ];
-//@ chunk-e6aww6q8.js:1833444-1842520 placement
+//@ chunk-5xgkngpb.js:1910418-1919817 placement
 /**
  * 反序列化会话转录为消息列表，并为缺 id 的消息补上 id。
  */
@@ -1037,7 +1062,7 @@ function deserializeMessagesImpl(
     });
     for (let message of sanitized) {
       if (message.type === "assistant" && message.wireToolInputs !== undefined) {
-        let recountedInputs = countToolCallsSince_2(
+        let recountedInputs = wireToolInputsForContent(
           message.wireToolInputs,
           message.message?.content,
           message.batchToolUses,
@@ -1116,7 +1141,7 @@ function deserializeMessagesImpl(
     let unresolvedToolNames = new Map();
     let unresolvedCallsByResponse = new Map();
     let trailingUnresolvedIds = new Set();
-    let tailIsMessage = isTailMessage(sanitized, resumeOptions);
+    let isTail = isTailMessage(sanitized, resumeOptions);
     let ownSessionId = turnContext?.ownSessionId;
     let hasOwnTurn =
       resumeInterrupted_2 === true &&
@@ -1126,12 +1151,13 @@ function deserializeMessagesImpl(
     let maxAgeMs = resumePolicy?.maxAgeMs ?? 0;
     let tooOld = isResumeTooOld(sanitized, maxAgeMs);
     let noRequestedAnchors = resumeInterrupted_2 && !requestedToolUseIds?.size && !fromOtherSession;
-    let canDropSiblings = noRequestedAnchors && !tooOld;
-    let canShowCutOffCalls = canDropSiblings && restoredCardToolUseId === undefined && showsCutOffCalls();
+    let dropSiblings = noRequestedAnchors && !tooOld;
+    let hasCutOffCalls = noRequestedAnchors && restoredCardToolUseId === undefined && showsCutOffCalls();
+    let shouldDetailCutOffCalls = hasCutOffCalls && !tooOld;
     let normalizedMessages = normalizeMessagesForResume(
       baseMessages,
       requestedToolUseIds,
-      canDropSiblings
+      dropSiblings
         ? {
             dropSiblingBlocks: true,
             outTrailingUnresolvedToolUseIds: unresolvedCallIds,
@@ -1160,7 +1186,7 @@ function deserializeMessagesImpl(
     let withToolResults =
       cutOffCallIds.size === 0
         ? normalizedMessages
-        : appendInterruptedToolResults(
+        : applyResumeNormalization(
             baseMessages,
             requestedToolUseIds,
             cutOffCallIds,
@@ -1201,7 +1227,7 @@ function deserializeMessagesImpl(
               message.attachment.type === "hook_blocking_error") &&
             message.attachment.hookEvent === "Stop",
         ) &&
-      hasSuccessfulToolCall_2(withToolResults.slice(0, withToolResults.lastIndexOf(last)));
+      endedOnAnsweredNoReplyTool(withToolResults.slice(0, withToolResults.lastIndexOf(last)));
     let turnKinds =
       restoredCardToolUseId !== undefined &&
       isFoamySpringEnabled() &&
@@ -1225,7 +1251,7 @@ function deserializeMessagesImpl(
           : classifyTurnState(messages_2, unresolvedCallIds.size > 0, turnKinds, endsWithVisibleText, last);
     let tailAfterTurn =
       hasOwnTurn ||
-      tailIsMessage ||
+      isTail ||
       isTailMessage(messages_2, resumeOptions) ||
       (withoutCutOff !== undefined && isTailMessage(withoutCutOff, resumeOptions));
     let noReplyNote = false;
@@ -1248,25 +1274,25 @@ function deserializeMessagesImpl(
       let sawFileAttachment = false;
       let anchorIndex = -1;
       for (let idx = cleanedMessages.length - 1; idx >= 0 && anchorIndex < 0; idx--) {
-        let msg = cleanedMessages[idx];
+        let attachment = cleanedMessages[idx];
         if (
-          msg.type === "system" ||
-          msg.type === "progress" ||
-          (msg.type === "attachment" &&
-            "hookEvent" in msg.attachment &&
-            (msg.attachment.hookEvent === "SessionStart" ||
-              (msg.attachment.hookEvent === "Stop" &&
+          attachment.type === "system" ||
+          attachment.type === "progress" ||
+          (attachment.type === "attachment" &&
+            "hookEvent" in attachment.attachment &&
+            (attachment.attachment.hookEvent === "SessionStart" ||
+              (attachment.attachment.hookEvent === "Stop" &&
                 sawQueuedNotice &&
-                (msg.attachment.type === "hook_success" ||
-                  msg.attachment.type === "hook_non_blocking_error"))))
+                (attachment.attachment.type === "hook_success" ||
+                  attachment.attachment.type === "hook_non_blocking_error"))))
         )
           continue;
-        if (
-          msg.type === "attachment" &&
-          (isNullRenderingAttachment_2(msg) || FILE_ATTACHMENT_TYPES.includes(msg.attachment.type))
-        )
-          sawFileAttachment = true;
-        else if (msg.type === "user" && msg.isMeta === true && msg.queueTranscriptOnly === true) {
+        if (isRemoteSessionChangeAttachment(attachment)) sawFileAttachment = true;
+        else if (
+          attachment.type === "user" &&
+          attachment.isMeta === true &&
+          attachment.queueTranscriptOnly === true
+        ) {
           sawQueuedNotice = true;
           sawFileAttachment = false;
         } else anchorIndex = idx;
@@ -1286,7 +1312,8 @@ function deserializeMessagesImpl(
             anchorProcessed.message.stop_reason === "end_turn") ||
           (anchorProcessed?.type === "user" &&
             isToolUseResultMessage(anchorProcessed) &&
-            findToolOnlyResponseId(messages_2, anchorPosition, anchorProcessed) !== undefined));
+            findToolOnlyResponseId(messages_2, anchorPosition, anchorProcessed) !== undefined) ||
+          isToolOnlyResponse(messages_2, anchorPosition));
     }
     let resolvedState =
       silentReplyAfterTool &&
@@ -1381,7 +1408,7 @@ function deserializeMessagesImpl(
       shutdownStamped: last_2?.type === "user" && last_2.interruptedByShutdown === true,
     };
     let reportableCutOffIds =
-      canShowCutOffCalls &&
+      shouldDetailCutOffCalls &&
       unresolvedCallIds.size > 0 &&
       !tailAfterTurn &&
       ![...unresolvedCallIds].some((id) => hostAnswerableIds?.has(id))
@@ -1399,7 +1426,7 @@ function deserializeMessagesImpl(
             true,
           )
         : new Set();
-    let agentCallCount = count([...reportableCutOffIds], (id) =>
+    let agentCallCount = countWhere([...reportableCutOffIds], (id) =>
       isAgentOrTaskTool(unresolvedToolNames.get(id)),
     );
     let interruption;
@@ -1407,7 +1434,7 @@ function deserializeMessagesImpl(
     let deferPrompt = false;
     if (reportableCutOffIds.size > 0) {
       allCutOffIds = new Set([...cutOffCallIds, ...reportableCutOffIds]);
-      messages_2 = appendInterruptedToolResults(
+      messages_2 = applyResumeNormalization(
         baseMessages,
         requestedToolUseIds,
         allCutOffIds,
@@ -1430,7 +1457,7 @@ function deserializeMessagesImpl(
       (state.kind === "interrupted_prompt" && reportableCutOffIds.size > 0)
     ) {
       if (trailingUnresolvedIds.size > 0) {
-        messages_2 = appendInterruptedToolResults(
+        messages_2 = applyResumeNormalization(
           baseMessages,
           requestedToolUseIds,
           trailingUnresolvedIds,
@@ -1458,22 +1485,34 @@ function deserializeMessagesImpl(
             ? apiErrorBeforePrompt.error
             : (apiErrorBeforePrompt?.apiErrorStatus ?? 0) >= 500
               ? "server_error"
-              : undefined;
+              : apiErrorBeforePrompt?.failedResponseHadNoToolCall
+                ? "other"
+                : undefined;
       let lastUserPromptUuid = findLastUserPromptUuid(baseMessages, {
         orSummarizedPrompt:
           apiErrorKindForPrompt === "rate_limit" || apiErrorKindForPrompt === "no_request_token",
       });
+      let cutOffMidWork;
+      if (resumeInterrupted_2 && !showsCutOffCallsArg)
+        try {
+          cutOffMidWork = apiErrorRow === undefined && endedMidToolUse(baseMessages);
+        } catch (error) {
+          logError(withTelemetryMessage(toError(error), "wasPastItsFirstRequest failed"));
+        }
       interruption = {
         kind: "interrupted_prompt",
         message: resumePromptMessage,
         ...(lastUserPromptUuid !== undefined && {
           interruptedTurnUserMessageUuid: lastUserPromptUuid,
         }),
+        ...(cutOffMidWork !== undefined && {
+          cutOffMidWork,
+        }),
         tail: {
           kind: state.kind === "interrupted_turn" ? state.tail : "cut_off_call_after_prompt",
           ...tailFacts,
           ...ageFacts,
-          ...(canShowCutOffCalls && {
+          ...(shouldDetailCutOffCalls && {
             cutOffCalls: {
               shown: reportableCutOffIds.size,
               ...(agentCallCount > 0 && {
@@ -1540,25 +1579,39 @@ function deserializeMessagesImpl(
         force,
       );
     let any = [...trailingUnresolvedIds].some((id) => hostAnswerableIds?.has(id) ?? false);
+    let resumeCutOffOlderTurn =
+      hasCutOffCalls && tooOld && !isRemote && !hostAnswerableIds?.size && interruption.kind === "none";
+    let options = new Set();
+    if (resumeCutOffOlderTurn)
+      normalizeMessagesForResume(baseMessages, requestedToolUseIds, {
+        outTrailingUnresolvedToolUseIds: options,
+        shutdownUnwindResultsDoNotResolve: true,
+      });
+    let cutOffCallIdsToResume = resumeCutOffOlderTurn
+      ? collectResumableToolUseIds(baseMessages, options, INTERACTIVE_TOOL_NAMES, false)
+      : trailingUnresolvedIds;
     let hostCutOffIds =
       cutOffPreview &&
-      !resumeInterrupted_2 &&
+      (!resumeInterrupted_2 || resumeCutOffOlderTurn) &&
       allCutOffIds.size === 0 &&
-      trailingUnresolvedIds.size > 0 &&
+      cutOffCallIdsToResume.size > 0 &&
       !requestedToolUseIds?.size &&
       !fromOtherSession &&
       !any &&
-      !tailIsMessage &&
-      !isTailMessage(messages_2, resumeOptions)
-        ? findUnresolvedToolUses_2(baseMessages, trailingUnresolvedIds, true)
+      !tailAfterTurn
+        ? findUnresolvedToolUses_2(baseMessages, cutOffCallIdsToResume, true)
         : new Set();
     if (hostCutOffIds.size > 0) {
-      messages_2 = appendInterruptedToolResults(
-        baseMessages,
-        requestedToolUseIds,
-        hostCutOffIds,
-        hostCutOffIds,
-        interruptMessage,
+      messages_2 = dropRedundantShutdownRows(
+        applyResumeNormalization(
+          baseMessages,
+          requestedToolUseIds,
+          hostCutOffIds,
+          hostCutOffIds,
+          interruptMessage,
+          undefined,
+          resumeCutOffOlderTurn,
+        ),
       );
       allCutOffIds = hostCutOffIds;
     }
@@ -1598,7 +1651,7 @@ function deserializeMessagesImpl(
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:1842520-1842770 placement
+//@ chunk-5xgkngpb.js:1919817-1920067 placement
 function classifyTrailingToolUse(messages) {
   let unresolvedIds = new Set();
   let normalizedMessages = normalizeMessagesForResume(messages, undefined, {
@@ -1616,19 +1669,19 @@ function classifyTrailingToolUse(messages) {
     };
   return classifyTurnState(filterThinkingOnlyUntilStable(normalizedMessages), true, NO_INTERACTIVE_TOOLS);
 }
-//@ chunk-e6aww6q8.js:1842770-1842928 placement (2.1.88 match: countToolCallsSince, 1)
-function messageHasToolUse(messages, sinceUuid) {
-  return messages.type === "assistant" && Array.isArray(messages.message.content)
-    ? messages.message.content.flatMap((block) =>
-        block.type === "tool_use" && sinceUuid.has(block.id) ? [block.id] : [],
+//@ chunk-5xgkngpb.js:1920067-1920225 placement
+function messageHasToolUse(message, wantedIds) {
+  return message.type === "assistant" && Array.isArray(message.message.content)
+    ? message.message.content.flatMap((block) =>
+        block.type === "tool_use" && wantedIds.has(block.id) ? [block.id] : [],
       )
     : [];
 }
-//@ chunk-e6aww6q8.js:1842928-1843667 placement
+//@ chunk-5xgkngpb.js:1920225-1920985 placement
 /**
  * 找出最后一组助手消息中未得到结果的工具调用。
  */
-function findUnresolvedToolUses_2(messages, sinceUuid, isResumingTurn) {
+function findUnresolvedToolUses_2(messages, wantedIds, isResumingTurn) {
   let stableMessages = filterThinkingOnlyUntilStable(messages);
   let isSkippableAssistant = (row) =>
     isVirtualConversationMessage(row) || (!isResumingTurn && isSyntheticModelApiErrorMessage(row));
@@ -1657,12 +1710,12 @@ function findUnresolvedToolUses_2(messages, sinceUuid, isResumingTurn) {
       }
       if (seenIds.has(message.message.id)) {
         if (message.message.id === lastId)
-          for (let id of messageHasToolUse(message, sinceUuid)) unresolvedIds.add(id);
+          for (let id of messageHasToolUse(message, wantedIds)) unresolvedIds.add(id);
         continue;
       }
       seenIds.add(message.message.id);
       lastId = message.message.id;
-      unresolvedIds = new Set(messageHasToolUse(message, sinceUuid));
+      unresolvedIds = new Set(messageHasToolUse(message, wantedIds));
       turnSoFar = undefined;
       continue;
     }
@@ -1684,57 +1737,57 @@ function findUnresolvedToolUses_2(messages, sinceUuid, isResumingTurn) {
   }
   return unresolvedIds;
 }
-//@ chunk-e6aww6q8.js:1843667-1844160 placement
-/**
- * 为未完成的工具调用补上中断的 tool_result。
- */
-function appendInterruptedToolResults(
-  messages,
+//@ chunk-5xgkngpb.js:1920985-1921515 layout
+function applyResumeNormalization(
+  baseMessages,
   requestedToolUseIds,
-  trailingUnresolvedIds,
-  cutOffIds,
-  resultText,
+  cutOffCallIds,
+  idsToClose,
+  interruptMessage,
   resumeOptions,
   endsTurn = false,
-  agentResultText = resultText,
+  agentInterruptMessage = interruptMessage,
 ) {
   let sliced = filterThinkingOnlyUntilStable(
     normalizeMessagesForResume(
-      messages,
-      new Set([...(requestedToolUseIds ?? []), ...trailingUnresolvedIds]),
+      baseMessages,
+      new Set([...(requestedToolUseIds ?? []), ...cutOffCallIds]),
       resumeOptions,
     ),
   ).slice();
-  let results = [];
+  let usesSourceUuid = isCcsTenant() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PLUMB_MARTEN, false);
+  let closingRows = [];
   for (let message of sliced) {
     if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
     for (let block of message.message.content) {
-      if (block.type !== "tool_use" || !cutOffIds.has(block.id)) continue;
-      let resultText_2 = isAgentOrTaskTool(block.name) ? agentResultText : resultText;
-      results.push(
+      if (block.type !== "tool_use" || !idsToClose.has(block.id)) continue;
+      let closeContent = isAgentOrTaskTool(block.name) ? agentInterruptMessage : interruptMessage;
+      closingRows.push(
         createUserMessage({
           content: [
             {
               type: "tool_result",
-              content: resultText_2,
+              content: closeContent,
               is_error: true,
               tool_use_id: block.id,
             },
           ],
-          toolUseResult: resultText_2,
+          toolUseResult: closeContent,
           toolDenialKind: "interrupted",
           ...(endsTurn && {
             toolDenialEndsTurn: true,
           }),
-          sourceToolAssistantUUID: message.uuid,
+          ...(!usesSourceUuid && {
+            sourceToolAssistantUUID: message.uuid,
+          }),
         }),
       );
     }
   }
-  sliced.push(...results);
+  sliced.push(...closingRows);
   return sliced;
 }
-//@ chunk-e6aww6q8.js:1844160-1844372 placement
+//@ chunk-5xgkngpb.js:1921515-1921727 placement
 function classifyTurnState(
   messages,
   isResumingTurn,
@@ -1766,7 +1819,7 @@ function classifyTurnState(
         skippedApiErrorRow,
       };
 }
-//@ chunk-e6aww6q8.js:1844372-1847225 placement
+//@ chunk-5xgkngpb.js:1921727-1924984 placement
 /**
  * 分类转录中的拒绝回合（无回合行、已完成等）。
  */
@@ -1828,6 +1881,23 @@ function classifyRefusalTurn(
         kind: "interrupted_turn",
         tail: "end_turn_overridden_nudge",
       };
+    let toolResultIndex = findLastToolResultIndex(messages, lastIndex);
+    if (
+      toolResultIndex !== -1 &&
+      !isResumingTurn &&
+      !isContinuationPrompt(lastMessage) &&
+      lastMessage === retryMaxAge &&
+      !isOlderThan(lastMessage, refusalRetryMaxAge().maxAgeMs) &&
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_candid_heron", true)
+    )
+      return classifyRefusalTurn(
+        messages.slice(0, toolResultIndex + 1),
+        isResumingTurn,
+        interactiveToolNames,
+        skippedApiErrorRows,
+        shutdownUnwindResultsDoNotResolve,
+        retryMaxAge,
+      );
     if (lastMessage.isMeta || lastMessage.isCompactSummary)
       return interruptedTail(isResumingTurn, lastMessage.isCompactSummary ? "compact_summary" : "hidden_row");
     if (isInterruptMarkerText(lastMessage)) return stopMarkerState(lastMessage);
@@ -1855,15 +1925,22 @@ function classifyRefusalTurn(
           kind: "none",
           because: "deliberate_stop_result",
         };
+      if (codeModeAccepted() && isAsyncDispatchedKeptResult(lastMessage))
+        return {
+          kind: "none",
+          because: "deliberate_stop_result",
+        };
       let toolOnlyResponseId = findToolOnlyResponseId(messages, lastIndex, retryMaxAge);
       if (toolOnlyResponseId !== undefined)
         return terminalToolResultState(toolOnlyResponseId, interactiveToolNames, isResumingTurn);
+      if (isToolOnlyResponse(messages, lastIndex))
+        return interruptedTail(isResumingTurn, "deliberate_stop_result");
       return {
         kind: "interrupted_turn",
         tail: toolResultTailKind(toolEnding),
       };
     }
-    if (processQueuedCommands_2(lastMessage))
+    if (processQueuedCommands(lastMessage))
       return {
         kind: "interrupted_turn",
         tail: "task_notification",
@@ -1880,6 +1957,11 @@ function classifyRefusalTurn(
       return {
         kind: "interrupted_turn",
         tail: "note_after_prompt",
+      };
+    if (skippedApiErrorRows.length > 0)
+      return {
+        kind: "interrupted_turn",
+        tail: "context_rows",
       };
     return {
       kind: "interrupted_prompt",
@@ -1944,7 +2026,8 @@ function classifyRefusalTurn(
         if (
           isEndedForDeliveryRow(message) ||
           isBackgroundedByAbort(message) ||
-          hasTurnEndingDenial(messages, index)
+          hasTurnEndingDenial(messages, index) ||
+          (codeModeAccepted() && isAsyncDispatchedKeptResult(message))
         )
           return {
             kind: "none",
@@ -1958,6 +2041,8 @@ function classifyRefusalTurn(
         return {
           kind: "ended_at_max_turns",
         };
+      if (isToolOnlyResponse(messages, lastIndex))
+        return interruptedTail(isResumingTurn, "deliberate_stop_result");
       return {
         kind: "interrupted_turn",
         tail: maxTurnsRow ? "unresolved_call" : tailKind,
@@ -1975,7 +2060,7 @@ function classifyRefusalTurn(
     because: "other",
   };
 }
-//@ chunk-e6aww6q8.js:1847225-1847617 placement
+//@ chunk-5xgkngpb.js:1924984-1925377 placement
 /**
  * 末尾是否本地命令记录（带 caveat）。
  */
@@ -1997,7 +2082,7 @@ function isLocalCommandRecordTail(messages, startIndex) {
   }
   return allMeta;
 }
-//@ chunk-e6aww6q8.js:1847617-1847829 placement
+//@ chunk-5xgkngpb.js:1925377-1925589 placement
 function isAfterCaveatInput(messages, startIndex) {
   let sawInput = false;
   for (let idx = startIndex - 1; idx >= 0; idx--) {
@@ -2011,11 +2096,11 @@ function isAfterCaveatInput(messages, startIndex) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1847829-1847907 placement
+//@ chunk-5xgkngpb.js:1925589-1925667 placement
 function userPromptSourceKind(row) {
   return row.type === "user" && row.promptSource === undefined ? bashCommandTagKindOf(row) : undefined;
 }
-//@ chunk-e6aww6q8.js:1847907-1848104 placement (2.1.88 match: isSyntheticMessage, 1)
+//@ chunk-5xgkngpb.js:1925667-1925865 placement (2.1.88 match: isSyntheticMessage, 1)
 function isSyntheticMessage_2(messages, startIndex) {
   if (!isContextAppendMessage(messages[startIndex])) return false;
   for (let idx = startIndex - 1; idx >= 0; idx--) {
@@ -2031,13 +2116,13 @@ function isSyntheticMessage_2(messages, startIndex) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1848104-1848228 placement
+//@ chunk-5xgkngpb.js:1925865-1925989 placement
 function localCommandKind(message) {
   if (message.type !== "user" || message.promptSource !== undefined) return;
   let tagKind = localCommandTagKindOf(message);
   return tagKind === "caveat" && message.isMeta !== true ? undefined : tagKind;
 }
-//@ chunk-e6aww6q8.js:1848228-1848360 placement
+//@ chunk-5xgkngpb.js:1925989-1926121 placement
 function localCommandOrSlashKind(row) {
   return (
     localCommandKind(row) ??
@@ -2049,7 +2134,7 @@ function localCommandOrSlashKind(row) {
       : undefined)
   );
 }
-//@ chunk-e6aww6q8.js:1848360-1848459 placement
+//@ chunk-5xgkngpb.js:1926121-1926220 placement
 function interruptedTail(flag, because) {
   return flag
     ? {
@@ -2061,7 +2146,7 @@ function interruptedTail(flag, because) {
         because,
       };
 }
-//@ chunk-e6aww6q8.js:1848459-1848602 placement
+//@ chunk-5xgkngpb.js:1926220-1926363 placement
 function terminalToolResultState(responseId, resolvedIds, isResumingTurn) {
   return resolvedIds === "restored_card" || (responseId !== undefined && resolvedIds.has(responseId))
     ? interruptedTail(isResumingTurn, "terminal_tool_result")
@@ -2070,7 +2155,7 @@ function terminalToolResultState(responseId, resolvedIds, isResumingTurn) {
         because: "terminal_tool_result",
       };
 }
-//@ chunk-e6aww6q8.js:1848602-1848691 placement
+//@ chunk-5xgkngpb.js:1926363-1926452 placement
 function refusalTailState(restoredCardState, isResumingTurn) {
   return restoredCardState === "restored_card"
     ? interruptedTail(isResumingTurn, "reply")
@@ -2079,12 +2164,12 @@ function refusalTailState(restoredCardState, isResumingTurn) {
         because: "reply",
       };
 }
-//@ chunk-e6aww6q8.js:1848691-1848707 placement
+//@ chunk-5xgkngpb.js:1926452-1926468 placement
 var NO_INTERACTIVE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1848691", () => {
+deferInit("chunk-5xgkngpb.js:1926452", () => {
   NO_INTERACTIVE_TOOLS = new Set();
 });
-//@ chunk-e6aww6q8.js:1848707-1848856 placement
+//@ chunk-5xgkngpb.js:1926468-1926617 placement
 function turnsWithInteractiveTools(callsByResponse, toolNamesById, hostAnswerableIds) {
   let turns = new Set();
   for (let [responseId, toolUseIds] of callsByResponse)
@@ -2101,7 +2186,7 @@ function turnsWithInteractiveTools(callsByResponse, toolNamesById, hostAnswerabl
       turns.add(responseId);
   return turns;
 }
-//@ chunk-e6aww6q8.js:1848856-1848988 placement
+//@ chunk-5xgkngpb.js:1926617-1926749 placement
 function stopMarkerState(row) {
   return row.interruptedByShutdown
     ? {
@@ -2113,28 +2198,28 @@ function stopMarkerState(row) {
         because: "stop_marker",
       };
 }
-//@ chunk-e6aww6q8.js:1848988-1849055 placement
+//@ chunk-5xgkngpb.js:1926749-1926816 placement
 function isInterruptMarkerText(message) {
   let text = singleTextContent(message.message.content);
   return text === INTERRUPT_MESSAGE || text === INTERRUPT_MESSAGE_FOR_TOOL_USE;
 }
-//@ chunk-e6aww6q8.js:1849055-1849177 placement (2.1.88 match: processQueuedCommands, 1)
-function processQueuedCommands_2(queuedCommands) {
+//@ chunk-5xgkngpb.js:1926816-1926938 placement (2.1.88 match: processQueuedCommands, 1)
+function processQueuedCommands(queuedCommands) {
   if (queuedCommands.origin?.kind !== "task-notification") return false;
   return singleTextContent(queuedCommands.message.content)?.startsWith(`<${TASK_NOTIFICATION}>`) ?? false;
 }
-//@ chunk-e6aww6q8.js:1849177-1849353 placement
+//@ chunk-5xgkngpb.js:1926938-1927114 placement
 function isQueueTranscriptOnlyUserMessage(message) {
   return (
     message.type === "user" &&
     message.queueTranscriptOnly === true &&
-    (processQueuedCommands_2(message) ||
+    (processQueuedCommands(message) ||
       (env.CLAUDE_CODE_RESUME_TOLERATES_CONTEXT_SEEDS &&
         message.origin?.kind === "task-notification" &&
         message.isMeta !== true))
   );
 }
-//@ chunk-e6aww6q8.js:1849353-1849483 placement
+//@ chunk-5xgkngpb.js:1927114-1927244 placement
 function isEndedForDeliveryRow(message) {
   let content = message.message.content;
   return (
@@ -2143,7 +2228,7 @@ function isEndedForDeliveryRow(message) {
     content.every((block) => block.type === "tool_result" && block.content === TOOL_CALL_ENDED_FOR_DELIVERY)
   );
 }
-//@ chunk-e6aww6q8.js:1849483-1849736 placement
+//@ chunk-5xgkngpb.js:1927244-1927497 placement
 function findToolOnlyResponseId(messages, startIndex, lastMessage) {
   let assistantId;
   let sawToolResult = false;
@@ -2162,7 +2247,23 @@ function findToolOnlyResponseId(messages, startIndex, lastMessage) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1849736-1849798 placement
+//@ chunk-5xgkngpb.js:1927497-1927790 layout
+function findLastToolResultIndex(messages, lastIndex) {
+  for (let index = lastIndex; index >= 0; index--) {
+    let message = messages[index];
+    if (message.type === "user" && isToolUseResultMessage(message)) return index < lastIndex ? index : -1;
+    if (
+      message.type === "assistant" ||
+      (message.type === "user" && !(message.isMeta === true && isTurnCompanion(message))) ||
+      (message.type === "attachment" &&
+        (message.attachment.type === "hook_stopped_continuation" ||
+          message.attachment.type === "max_turns_reached"))
+    )
+      return -1;
+  }
+  return -1;
+}
+//@ chunk-5xgkngpb.js:1927790-1927852 placement
 function isEndTurnNudgeRow(message, lastMessage) {
   return (
     message === lastMessage &&
@@ -2170,7 +2271,7 @@ function isEndTurnNudgeRow(message, lastMessage) {
     !isOlderThan(message, refusalRetryMaxAge().maxAgeMs)
   );
 }
-//@ chunk-e6aww6q8.js:1849798-1849953 placement
+//@ chunk-5xgkngpb.js:1927852-1928007 placement
 function hasTurnEndingDenial(messages, lastIndex) {
   for (let index = lastIndex; index >= 0; index--) {
     let message = messages[index];
@@ -2180,7 +2281,33 @@ function hasTurnEndingDenial(messages, lastIndex) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1849953-1850091 placement
+//@ chunk-5xgkngpb.js:1928007-1928436 layout
+function isToolOnlyResponse(messages, lastIndex) {
+  let sawHookStop = false;
+  for (let index = lastIndex; index >= 0; index--) {
+    let message = messages[index];
+    if (message.type === "user" && isToolUseResultMessage(message)) {
+      if (sawHookStop) {
+        logEvent("tengu_resume_hook_stopped_batch", {});
+        return true;
+      }
+    } else if (
+      message.type === "assistant" ||
+      (message.type === "user" && !isTurnCompanion(message)) ||
+      (!sawHookStop &&
+        (isContextAppendMessage(message) ||
+          (message.type === "attachment" &&
+            (message.attachment.type === "queued_command" || message.attachment.type === "poll_events"))))
+    )
+      return false;
+    sawHookStop ||=
+      message.type === "attachment" &&
+      message.attachment.type === "hook_stopped_continuation" &&
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_blanket", false);
+  }
+  return false;
+}
+//@ chunk-5xgkngpb.js:1928436-1928574 placement
 function isBackgroundedByAbort(message) {
   let toolUseResult = message.toolUseResult;
   return (
@@ -2190,11 +2317,24 @@ function isBackgroundedByAbort(message) {
     toolUseResult.backgroundedByTurnAbort === true
   );
 }
-//@ chunk-e6aww6q8.js:1850091-1850180 placement
+//@ chunk-5xgkngpb.js:1928574-1928749 layout
+function isAsyncDispatchedKeptResult(message) {
+  let toolUseResult = message.toolUseResult;
+  return (
+    codeModeAccepted() &&
+    typeof toolUseResult === "object" &&
+    toolUseResult !== null &&
+    "asyncDispatched" in toolUseResult &&
+    toolUseResult.asyncDispatched === true &&
+    "keptByTurnAbort" in toolUseResult &&
+    toolUseResult.keptByTurnAbort === true
+  );
+}
+//@ chunk-5xgkngpb.js:1928749-1928838 placement
 function toolResultTailKind(toolEnding) {
   return toolEnding?.endsTurn === false && toolEnding.toUser ? "message_to_user_result" : "tool_result";
 }
-//@ chunk-e6aww6q8.js:1850180-1850695 placement
+//@ chunk-5xgkngpb.js:1928838-1929356 placement
 /**
  * tool_result 是否结束回合（brief 类、终止 MCP 工具）。
  */
@@ -2229,7 +2369,7 @@ function classifyToolResultEnding(message, messages, messageIndex, isSidechain) 
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1850695-1850963 placement
+//@ chunk-5xgkngpb.js:1929356-1929624 placement
 function restoreInvokedSkills(messages) {
   for (let message of messages) {
     if (message.type !== "attachment") continue;
@@ -2247,7 +2387,7 @@ function restoreInvokedSkills(messages) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1850963-1851479 placement
+//@ chunk-5xgkngpb.js:1929624-1930140 placement
 /**
  * 比较已有消息中的 SessionStart 钩子输出（规范化持久化路径），过滤新行中重复的；hook_additional_context 逐条过滤； 没有新内容时返回空数组。
  */
@@ -2286,7 +2426,7 @@ function dedupeSessionStartRows(messages, rows) {
   if (!dropped) return [];
   return kept;
 }
-//@ chunk-e6aww6q8.js:1851479-1851592 placement
+//@ chunk-5xgkngpb.js:1930140-1930253 placement
 /**
  * 等待 SessionStart 钩子并追加去重后的行。
  */
@@ -2296,7 +2436,7 @@ async function appendSessionStartRows(ctx) {
   ctx.messages.push(...deduped);
   return deduped;
 }
-//@ chunk-e6aww6q8.js:1851592-1851958 placement
+//@ chunk-5xgkngpb.js:1930253-1930619 placement
 /**
  * SessionStart 钩子附件的比较键。
  */
@@ -2312,12 +2452,12 @@ function sessionStartRowKeys(message) {
     return [`${attachment.command ?? ""}\x00${attachment.exitCode}\x00${attachment.stderr}`];
   return [];
 }
-//@ chunk-e6aww6q8.js:1851958-1852058 placement
+//@ chunk-5xgkngpb.js:1930619-1930719 placement
 function normalizePersistedOutputPath(content) {
-  if (!content.startsWith(PERSISTED_OUTPUT_TAG)) return content;
+  if (!content.startsWith(PERSISTED_OUTPUT_TAG_2)) return content;
   return content.replace(/(saved to: ).*$/m, "$1<persisted>");
 }
-//@ chunk-e6aww6q8.js:1852058-1852560 placement
+//@ chunk-5xgkngpb.js:1930719-1931221 placement
 /**
  * 去掉被 retractedMessageUuids 撤回的消息并记遥测。
  */
@@ -2349,30 +2489,32 @@ function dropRetractedMessages_2(messages) {
   return filtered;
 }
 export {
-  OBSOLETE_ATTACHMENT_TYPES,
+  hasToolResultBlock_2,
+  isPlainInterruptMarker,
+  isLegacyInterruptMarker,
+  isInterruptMarkerRow,
+  findLastUserPromptUuid,
+  appendSessionStartRows,
+  ResumeRefusedError,
+  dedupeSessionStartRows,
+  isAgentOrTaskTool,
+  isNonPromptUserRow,
+  isRealPromptAt,
+  isStopInterruptionRow,
   isQueueTranscriptOnlyUserMessage,
+  OBSOLETE_ATTACHMENT_TYPES,
   dropRetractedMessages_2,
   dropMalformedAttachments,
   restoreInvokedSkills,
   deserializeMessagesImpl,
-  findLastUserPromptUuid,
-  ResumeRefusedError,
-  isInterruptMarkerRow,
-  assertResumeNotRefused,
-  dropApiInvalidAssistantBlocks,
+  hasNoReplyTerminalTool,
   getTerminalMcpTools,
-  summarizedPromptUuids,
-  isNonPromptUserRow,
-  processQueuedCommands_2,
-  isMachineOriginPrompt,
+  assertResumeNotRefused,
+  FILE_ATTACHMENT_TYPES,
+  dropApiInvalidAssistantBlocks,
   deserializeToMessages,
-  dedupeSessionStartRows,
-  hasToolResultBlock_3,
-  isPlainInterruptMarker,
-  isLegacyInterruptMarker,
-  appendSessionStartRows,
-  isStopInterruptionRow,
-  hasSuccessfulToolCall_2,
-  isRealPromptAt,
-  isAgentOrTaskTool,
+  summarizedPromptUuids,
+  isMachineOriginPrompt,
+  processQueuedCommands,
+  endedOnAnsweredNoReplyTool,
 };

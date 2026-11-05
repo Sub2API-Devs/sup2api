@@ -3,9 +3,9 @@
  *
  * CronDelete 工具：按 id 取消定时任务
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/CronDeleteTool.ts
- * pieces: chunk-e1hwptaj.js (1)
+ * pieces: chunk-8hwad9m5.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -13,15 +13,15 @@ import { zodStrictObject, stringSchema, objectSchema } from "../../../vendor/zod
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   CRON_DELETE_TOOL_NAME,
-  isKairosCronEnabled,
+  isCronManagementEnabled,
   CRON_DELETE_DESCRIPTION,
   buildCronDeletePrompt,
   isDurableCronEnabled,
 } from "./prompt.js";
 import { getCronFilePath, listAllCronTasks, removeCronTasks } from "../../utils/cronTasks.js";
-import { getTeammateContext } from "../../utils/teammate.js";
+import { getTeammateContext } from "../../utils/teammateContext.js";
 
-//@ chunk-e1hwptaj.js:4662-5616 fingerprint (2.1.88 match: CronDeleteTool, 0.868)
+//@ chunk-8hwad9m5.js:4752-5707 fingerprint (2.1.88 match: CronDeleteTool, 0.868)
 /**
  * CronDelete 工具：按 id 取消任务；不存在或属于其他代理时拒绝。
  */
@@ -48,7 +48,7 @@ var CronDeleteTool = buildTool({
     return cronDeleteOutputSchema();
   },
   isEnabled() {
-    return isKairosCronEnabled();
+    return isCronManagementEnabled();
   },
   toAutoClassifierInput(input) {
     return input.id;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示缓存保活：调用 /v1/messages/cache_touch 并在恢复时续期
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (76)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (76)
  * attribution: placement 76
  */
 import {
@@ -79,11 +79,11 @@ import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { gracefulShutdown_2 } from "../../utils/gracefulShutdown.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:227793-228288 placement
+//@ chunk-5xgkngpb.js:228562-229057 placement
 /**
  * 缓存保活（cache keepalive）的常量与开关 schema：touch 端点、10 s 超时、3 次失败上限、5 分钟 TTL 与提前续期余量、拒用窗口 1 小时、客户端最大复用 4 分钟、活动事件名，以及配置字段。
  */
-var TENGU_SEQUENTIAL_CLOUD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TENGU_SEQUENTIAL_CLOUD; // deferred: uses CACHE_TTL_5M_MS (./promptCacheBreakDetection.js) of its import cycle while loading; runs once the cycle is complete
 var ANTHROPIC_CACHE_KEEPALIVE;
 var CACHE_TOUCH_PATH;
 var TOUCH_TIMEOUT_MS;
@@ -96,7 +96,7 @@ var REFUSAL_WINDOW_MS;
 var MAX_CLIENT_AGE_MS;
 var ACTIVITY_EVENT_NAMES;
 var keepaliveConfigSchema;
-deferInit("chunk-e6aww6q8.js:227793", () => {
+deferInit("chunk-5xgkngpb.js:228562", () => {
   TENGU_SEQUENTIAL_CLOUD = "tengu_sequential_cloud";
   ANTHROPIC_CACHE_KEEPALIVE = "anthropic-cache-keepalive";
   CACHE_TOUCH_PATH = "/v1/messages/cache_touch";
@@ -126,7 +126,7 @@ deferInit("chunk-e6aww6q8.js:227793", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:228288-228477 placement
+//@ chunk-5xgkngpb.js:229057-229246 placement
 class CacheKeepaliveState {
   armed = undefined;
   next = undefined;
@@ -140,16 +140,16 @@ class CacheKeepaliveState {
   run = null;
   lastEventAt = {};
 }
-//@ chunk-e6aww6q8.js:228477-228504 placement
+//@ chunk-5xgkngpb.js:229246-229273 placement
 var cacheKeepaliveStateSlot; // deferred: uses CacheKeepaliveState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:228477", () => {
+deferInit("chunk-5xgkngpb.js:229246", () => {
   cacheKeepaliveStateSlot = new HostScoped(() => new CacheKeepaliveState());
 });
-//@ chunk-e6aww6q8.js:228504-228542 placement
+//@ chunk-5xgkngpb.js:229273-229311 placement
 function keepaliveState() {
   return cacheKeepaliveStateSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:228542-228797 placement
+//@ chunk-5xgkngpb.js:229311-229566 placement
 function getKeepaliveRoute(state) {
   let limitsAccountEpoch = getLimitsAccountEpoch();
   if (
@@ -166,14 +166,14 @@ function getKeepaliveRoute(state) {
     };
   return state.route;
 }
-//@ chunk-e6aww6q8.js:228797-228878 placement
+//@ chunk-5xgkngpb.js:229566-229647 placement
 function hadActivityWithin(lastEventAt, now, withinMs) {
   return ACTIVITY_EVENT_NAMES.some((eventName) => {
     let at = lastEventAt[eventName];
     return at !== undefined && now - at <= withinMs;
   });
 }
-//@ chunk-e6aww6q8.js:228878-229025 placement
+//@ chunk-5xgkngpb.js:229647-229794 placement
 function isWorkRunning(run) {
   if (run === null || run.kind !== "work") return false;
   switch (run.work) {
@@ -184,7 +184,7 @@ function isWorkRunning(run) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:229025-229181 placement
+//@ chunk-5xgkngpb.js:229794-229950 placement
 /**
  * 缓存保活是否可用：未被拒绝、交互会话、第一方 Anthropic 地址与 beta、claude.ai 订阅、未禁用非必要流量，且策略允许 allow_cache_keepalive。
  */
@@ -202,11 +202,11 @@ function isCacheKeepaliveAllowed() {
     isPolicyAllowed_3("allow_cache_keepalive")
   );
 }
-//@ chunk-e6aww6q8.js:229181-229234 placement
+//@ chunk-5xgkngpb.js:229950-230003 placement
 function isRouteMissingRecords(state) {
   return getKeepaliveRoute(state).missingRecordCount >= MAX_MISSING_RECORDS;
 }
-//@ chunk-e6aww6q8.js:229234-229345 placement
+//@ chunk-5xgkngpb.js:230003-230114 placement
 function isSubscriberHourCache(cacheTtl, isNewChain) {
   return (
     cacheTtl?.ttl === "1h" &&
@@ -215,7 +215,7 @@ function isSubscriberHourCache(cacheTtl, isNewChain) {
     !(isNewChain && (isUsageBasedBilling() || getCurrentLimits().isUsingOverage === true))
   );
 }
-//@ chunk-e6aww6q8.js:229345-229479 placement
+//@ chunk-5xgkngpb.js:230114-230248 placement
 function getKeepaliveConfig() {
   {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SEQUENTIAL_CLOUD, false);
@@ -226,14 +226,14 @@ function getKeepaliveConfig() {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:229479-229521 placement
+//@ chunk-5xgkngpb.js:230248-230290 placement
 /**
  * 导出函数 `isKeepaliveArmed`：返回 Fw().armed !== void 0。
  */
 function isKeepaliveArmed() {
   return keepaliveState().armed !== undefined;
 }
-//@ chunk-e6aww6q8.js:229521-230419 placement
+//@ chunk-5xgkngpb.js:230290-231194 placement
 function releaseKeepaliveChain(conversation, { isMainLoopRequest, continuesPrefix, cacheTtl }) {
   {
     let isMainChain = isMainLoopRequest || continuesPrefix;
@@ -297,7 +297,7 @@ function releaseKeepaliveChain(conversation, { isMainLoopRequest, continuesPrefi
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:230419-230453 placement
+//@ chunk-5xgkngpb.js:231194-231228 placement
 /**
  * 导出函数 `withKeepaliveReset`：参数 e，返回 (Xg(e, DO), e)。
  */
@@ -305,7 +305,7 @@ function withKeepaliveReset(conversation) {
   markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
   return conversation;
 }
-//@ chunk-e6aww6q8.js:230453-230581 placement
+//@ chunk-5xgkngpb.js:231228-231356 placement
 function onKeepaliveHeaderRejected(conversation, accountEpoch, isFirstPartyRequest) {
   markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
   try {
@@ -315,7 +315,7 @@ function onKeepaliveHeaderRejected(conversation, accountEpoch, isFirstPartyReque
     logKeepaliveFailure("header_rejection_failed", error);
   }
 }
-//@ chunk-e6aww6q8.js:230581-231750 placement
+//@ chunk-5xgkngpb.js:231356-232527 placement
 /**
  * 根据响应头判断提示缓存保活是否生效，以及是否继续保活。
  */
@@ -405,7 +405,7 @@ function evaluateCacheKeepalive({
     logKeepaliveFailure("sender_start_failed", error);
   }
 }
-//@ chunk-e6aww6q8.js:231750-232114 placement
+//@ chunk-5xgkngpb.js:232527-232891 placement
 /**
  * 主请求响应结束时更新缓存保活状态：记录时间，待接管的请求按完成或中断转为已武装，已武装的则更新流状态与续期时间。
  */
@@ -431,7 +431,7 @@ function onMainResponseEnd(requestId, complete, now) {
     logKeepaliveFailure("response_end_failed", error);
   }
 }
-//@ chunk-e6aww6q8.js:232114-232458 placement
+//@ chunk-5xgkngpb.js:232891-233234 placement
 /**
  * 恢复会话时登记上次回复的缓存保活：记录 reply 并在会话切换时取消，再尝试立即启动续期。
  */
@@ -464,7 +464,7 @@ function stageResumeKeepalive(getReply) {
     logKeepaliveFailure("resume_failed", error, true);
   }
 }
-//@ chunk-e6aww6q8.js:232458-232813 placement
+//@ chunk-5xgkngpb.js:233234-233589 placement
 /**
  * 模型切换时更新缓存保活状态：累计切换次数，仍是同一模型的保留并同步计数，否则丢弃待接管请求或解除武装。
  */
@@ -486,7 +486,7 @@ function onKeepaliveModelSwitch(host, prevModel, nextModel) {
     logKeepaliveFailure("model_switch_failed", error);
   }
 }
-//@ chunk-e6aww6q8.js:232813-232913 placement
+//@ chunk-5xgkngpb.js:233589-233689 placement
 function getModelSwitchCount() {
   try {
     return keepaliveState().modelSwitchCount;
@@ -495,11 +495,11 @@ function getModelSwitchCount() {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:232913-232953 placement
+//@ chunk-5xgkngpb.js:233689-233729 placement
 function recordActivityEvent(eventName, at) {
   keepaliveState().lastEventAt[eventName] = at;
 }
-//@ chunk-e6aww6q8.js:232953-233179 placement
+//@ chunk-5xgkngpb.js:233729-233955 placement
 function recordRunState(nextRun, now) {
   {
     let state = keepaliveState();
@@ -511,14 +511,14 @@ function recordRunState(nextRun, now) {
     state.run = nextRun;
   }
 }
-//@ chunk-e6aww6q8.js:233179-233338 placement
+//@ chunk-5xgkngpb.js:233955-234114 placement
 function sameRunState(previousRun, nextRun) {
   if (previousRun === null || nextRun === null) return previousRun === nextRun;
   return previousRun.kind === "work"
     ? nextRun.kind === "work" && previousRun.work === nextRun.work
     : nextRun.kind === "awaiting_user" && previousRun.awaiting === nextRun.awaiting;
 }
-//@ chunk-e6aww6q8.js:233338-233662 placement
+//@ chunk-5xgkngpb.js:234114-234438 placement
 /**
  * 武装缓存保活发送器：停掉旧的、按 touchIntervalMs 定时发送 cache_touch，记录流状态与续期时间。
  */
@@ -541,15 +541,15 @@ function armKeepalive(state, entry, stream, now) {
   };
   if (!hadArmed) logKeepalive("sender started");
 }
-//@ chunk-e6aww6q8.js:233662-233715 placement
+//@ chunk-5xgkngpb.js:234438-234491 placement
 function isKeepaliveUsable(entry) {
   return keepaliveInvalidReason(entry) === undefined && getKeepaliveConfig() !== undefined;
 }
-//@ chunk-e6aww6q8.js:233715-233799 placement
+//@ chunk-5xgkngpb.js:234491-234575 placement
 function isArmedForModel(entry, model) {
   return entry.clientOptions.model === model && entry.lastTouch !== "touch_not_found";
 }
-//@ chunk-e6aww6q8.js:233799-233902 placement
+//@ chunk-5xgkngpb.js:234575-234678 placement
 function armPendingKeepalive(state, now) {
   let { next: pending } = state;
   if (state.armed === undefined && pending !== undefined && isKeepaliveUsable(pending)) {
@@ -557,7 +557,7 @@ function armPendingKeepalive(state, now) {
     armKeepalive(state, pending, "open", now);
   }
 }
-//@ chunk-e6aww6q8.js:233902-234161 placement
+//@ chunk-5xgkngpb.js:234678-234937 placement
 function disarmKeepalive(state, reason) {
   let { armed } = state;
   if (reason !== "next_response") state.run = null;
@@ -570,7 +570,7 @@ function disarmKeepalive(state, reason) {
   if (reason !== "next_response") logKeepalive(`sender stopped: ${reason}`);
   return armed;
 }
-//@ chunk-e6aww6q8.js:234161-234747 placement
+//@ chunk-5xgkngpb.js:234937-235523 placement
 /**
  * 停止保活并按最后一次 touch 结果记遥测；连续失败达到上限时整体关闭一段时间。
  */
@@ -604,7 +604,7 @@ function stopKeepalive(state, reason) {
   }
   logKeepaliveFeature("sad", entry.lastTouch);
 }
-//@ chunk-e6aww6q8.js:234747-235071 placement
+//@ chunk-5xgkngpb.js:235523-235847 placement
 /**
  * 拒绝缓存保活：解除当前武装、清除头部发送标记，并按时长（或本次登录）记录拒绝与遥测。
  */
@@ -622,7 +622,7 @@ function refuseKeepalive(state, reason, durationMs) {
   logKeepalive(`off for ${durationMs === undefined ? "this login" : "a while"}: ${reason}`, "warn");
   logKeepaliveFeature("bad", reason);
 }
-//@ chunk-e6aww6q8.js:235071-235146 placement
+//@ chunk-5xgkngpb.js:235847-235922 placement
 function logKeepalive(message, level = "debug") {
   try {
     logForDebugging(`[cache-keepalive] ${message}`, {
@@ -630,13 +630,13 @@ function logKeepalive(message, level = "debug") {
     });
   } catch {}
 }
-//@ chunk-e6aww6q8.js:235146-235233 placement
+//@ chunk-5xgkngpb.js:235922-236009 placement
 function logKeepaliveOk(isResume = false) {
   try {
     logFeatureOk(isResume ? "api_cache_keepalive_resume" : "api_cache_keepalive");
   } catch {}
 }
-//@ chunk-e6aww6q8.js:235233-235401 placement
+//@ chunk-5xgkngpb.js:236009-236177 placement
 function logKeepaliveFeature(severity, reason, isResume = false) {
   try {
     if (severity === "sad")
@@ -644,26 +644,26 @@ function logKeepaliveFeature(severity, reason, isResume = false) {
     else logFeatureBad(isResume ? "api_cache_keepalive_resume" : "api_cache_keepalive", reason);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:235401-235433 placement
+//@ chunk-5xgkngpb.js:236177-236209 placement
 function logSwallowedError(error) {
   try {
     logError(error);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:235433-235475 placement
+//@ chunk-5xgkngpb.js:236209-236251 placement
 function logKeepaliveFailure(reason, error, isResume = false) {
   logSwallowedError(error);
   logKeepaliveFeature("bad", reason, isResume);
 }
-//@ chunk-e6aww6q8.js:235475-235519 placement
+//@ chunk-5xgkngpb.js:236251-236295 placement
 function resumeTouchLoop(state) {
   touchCacheOnResume(state, Date.now()).catch(logSwallowedError);
 }
-//@ chunk-e6aww6q8.js:235519-235552 placement
+//@ chunk-5xgkngpb.js:236295-236328 placement
 function abortWithTouchTimeout(abortController) {
   abortController.abort(new CacheTouchTimeoutError());
 }
-//@ chunk-e6aww6q8.js:235552-235940 placement
+//@ chunk-5xgkngpb.js:236328-236716 placement
 /**
  * 把缓存续期（touch）请求的错误归类为超时、网络、404、未授权、限流、服务器或客户端错误等。
  */
@@ -676,14 +676,14 @@ function classifyTouchError(error) {
   if (error.status === 429) return "touch_rate_limited";
   return error.status >= 500 ? "touch_server_error" : "touch_client_error";
 }
-//@ chunk-e6aww6q8.js:235940-236182 placement
+//@ chunk-5xgkngpb.js:236716-236958 placement
 function keepaliveInvalidReason({ chainReleaseCount, accountEpoch, modelSwitchCount, isResumed }) {
   if (chainReleaseCount !== getMainChainReleaseCount()) return "chain_released";
   if (!isResumed && modelSwitchCount !== keepaliveState().modelSwitchCount) return "model_changed";
   if (accountEpoch !== getLimitsAccountEpoch()) return "account_changed";
   return isCacheKeepaliveAllowed() ? undefined : "not_allowed";
 }
-//@ chunk-e6aww6q8.js:236182-236741 placement
+//@ chunk-5xgkngpb.js:236958-237517 placement
 /**
  * 发送 cache_touch 请求，续期提示缓存。
  */
@@ -723,7 +723,7 @@ async function sendCacheTouch(entry, signal, deadline) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:236741-237101 placement
+//@ chunk-5xgkngpb.js:237517-237877 placement
 /**
  * 带超时发送一次缓存续期请求，期间把控制器挂到状态上，结束后清理。
  */
@@ -761,7 +761,7 @@ async function sendTouchWithTimeout(entry, deadline) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:237101-237426 placement
+//@ chunk-5xgkngpb.js:237877-238202 placement
 /**
  * 缓存续期成功后更新记录（续期时间、清零失败计数），满足条件时安排下一次续期。
  */
@@ -783,11 +783,11 @@ function onTouchOk(state, armed, now) {
     renewMainCacheLife(undefined, now);
   logKeepalive(`touch ok ${armed.requestId}`);
 }
-//@ chunk-e6aww6q8.js:237426-237456 placement
+//@ chunk-5xgkngpb.js:238202-238232 placement
 function renewMainCacheLifeNow(ttlMs) {
   renewMainCacheLife(ttlMs, undefined);
 }
-//@ chunk-e6aww6q8.js:237456-237588 placement
+//@ chunk-5xgkngpb.js:238232-238364 placement
 function renewMainCacheLife(ttlMs, renewAt) {
   try {
     if (getLastMainThreadRequestAt() === null) return;
@@ -800,7 +800,7 @@ function renewMainCacheLife(ttlMs, renewAt) {
     logKeepaliveFailure("cache_life_failed", error);
   }
 }
-//@ chunk-e6aww6q8.js:237588-237799 placement
+//@ chunk-5xgkngpb.js:238364-238575 placement
 function backoffAfterTouchError(state, error, reason, touchIntervalMs, now) {
   if (error instanceof APIError && (reason === "touch_rate_limited" || reason === "touch_server_error")) {
     let retryAfterMs = error.headers && parseRetryAfterMs(error.headers, now);
@@ -814,7 +814,7 @@ function backoffAfterTouchError(state, error, reason, touchIntervalMs, now) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:237799-238120 placement
+//@ chunk-5xgkngpb.js:238575-238896 placement
 /**
  * 恢复会话后先续期一次再武装保活；失败时按错误分类处理，成功后转为已武装并更新记录。
  */
@@ -835,19 +835,19 @@ async function touchThenArm(state, entry, now) {
   armKeepalive(state, entry, "open", now);
   if (state.armed !== undefined) onTouchOk(state, state.armed, now);
 }
-//@ chunk-e6aww6q8.js:238120-238190 placement
+//@ chunk-5xgkngpb.js:238896-238966 placement
 function stopResumeStaged(state) {
   state.resumeStaged?.stopListening();
   state.resumeStaged = undefined;
 }
-//@ chunk-e6aww6q8.js:238190-238300 placement
+//@ chunk-5xgkngpb.js:238966-239076 placement
 function resumeKeepaliveConfig(state, reply) {
   let config = isSubscriberHourCache(reply.cacheTtlOf(getMainLoopModel()), true)
     ? getKeepaliveConfig()
     : undefined;
   return config?.resumeTouches === true && !isRouteMissingRecords(state) ? config : undefined;
 }
-//@ chunk-e6aww6q8.js:238300-238801 placement
+//@ chunk-5xgkngpb.js:239076-239577 placement
 /**
  * 恢复会话时，若暂存的回复属于当前会话且是最近一次主线程请求，按其参数开始保活等待。
  */
@@ -881,17 +881,17 @@ function tryStartResumeKeepalive(state) {
     logKeepaliveFailure("resume_failed", error, true);
   }
 }
-//@ chunk-e6aww6q8.js:238801-238897 placement
+//@ chunk-5xgkngpb.js:239577-239673 placement
 function scheduleResumeTouch(state, reply, entry) {
   state.resumeTimer = setTimeout(resumeTouchTimerFired, entry.touchIntervalMs, state, reply, entry);
   state.resumeTimer.unref();
 }
-//@ chunk-e6aww6q8.js:238897-238970 placement
+//@ chunk-5xgkngpb.js:239673-239746 placement
 function resumeTouchTimerFired(state, reply, entry) {
   state.resumeTimer = undefined;
   touchResumedReply(state, reply, entry, Date.now()).catch(logSwallowedError);
 }
-//@ chunk-e6aww6q8.js:238970-239256 placement
+//@ chunk-5xgkngpb.js:239746-240032 placement
 function canTakeUpResumedReply(state, reply, entry) {
   return getLastMainThreadRequestAt() === reply.repliedAt &&
     state.header?.chainReleaseCount !== entry.chainReleaseCount &&
@@ -904,7 +904,7 @@ function canTakeUpResumedReply(state, reply, entry) {
     ? resumeKeepaliveConfig(state, reply)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:239256-239331 placement
+//@ chunk-5xgkngpb.js:240032-240107 placement
 function isSameModelIdentityKeepalive(model, otherModel) {
   return (
     getCanonicalName(stripAnyVersatileSuffix(model), {
@@ -915,7 +915,7 @@ function isSameModelIdentityKeepalive(model, otherModel) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:239331-240097 placement
+//@ chunk-5xgkngpb.js:240107-240873 placement
 /**
  * 对恢复的回复做一次 cache_touch：仍符合条件且在活动窗口内才发；失败记录原因并退避；成功则武装保活。
  */
@@ -969,7 +969,7 @@ async function touchResumedReply(state, reply, entry, now) {
     logKeepaliveFailure("resume_failed", error, true);
   }
 }
-//@ chunk-e6aww6q8.js:240097-241559 placement
+//@ chunk-5xgkngpb.js:240873-242335 placement
 /**
  * 会话恢复时续期提示缓存，按开关、记录过期、账号变化等条件决定是否发送 cache_touch。
  */
@@ -1055,11 +1055,11 @@ async function touchCacheOnResume(state, now) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:241559-241584 placement
+//@ chunk-5xgkngpb.js:242335-242360 placement
 class KeepaliveAbortError extends Error {}
-//@ chunk-e6aww6q8.js:241584-241609 placement
+//@ chunk-5xgkngpb.js:242360-242385 placement
 class CacheTouchTimeoutError extends Error {}
-//@ chunk-e6aww6q8.js:241609-241732 placement
+//@ chunk-5xgkngpb.js:242385-242508 placement
 function keepaliveRequestIds(model) {
   {
     let { next: pending, armed } = keepaliveState();
@@ -1071,9 +1071,9 @@ function keepaliveRequestIds(model) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:241732-241744 placement
+//@ chunk-5xgkngpb.js:242508-242520 placement
 var USER_INPUT_HEARTBEAT_DEBOUNCE_MS = 1e4;
-//@ chunk-e6aww6q8.js:241744-242017 placement
+//@ chunk-5xgkngpb.js:242520-242793 placement
 function runStateFromSpinner({ working, spinnerMode, isCompacting, delegatedWorkRunning, waitingFor }) {
   if (isCompacting)
     return {
@@ -1092,7 +1092,7 @@ function runStateFromSpinner({ working, spinnerMode, isCompacting, delegatedWork
         awaiting: waitingFor,
       };
 }
-//@ chunk-e6aww6q8.js:242017-242134 placement
+//@ chunk-5xgkngpb.js:242793-242910 placement
 class HeartbeatShadowState {
   lastMainRequestAt = 0;
   lastEventAt = 0;
@@ -1101,23 +1101,23 @@ class HeartbeatShadowState {
   interactive = false;
   interactiveLogged = false;
 }
-//@ chunk-e6aww6q8.js:242134-242161 placement
+//@ chunk-5xgkngpb.js:242910-242937 placement
 var heartbeatShadowSlot; // deferred: uses HeartbeatShadowState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:242134", () => {
+deferInit("chunk-5xgkngpb.js:242910", () => {
   heartbeatShadowSlot = new HostScoped(() => new HeartbeatShadowState());
 });
-//@ chunk-e6aww6q8.js:242161-242199 placement
+//@ chunk-5xgkngpb.js:242937-242975 placement
 function heartbeatShadow() {
   return heartbeatShadowSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:242199-242247 placement
+//@ chunk-5xgkngpb.js:242975-243023 placement
 /**
  * 导出函数 `isDapperDawnEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE("tengu_dapper_dawn", !1)。
  */
 function isDapperDawnEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_dapper_dawn", false);
 }
-//@ chunk-e6aww6q8.js:242247-242365 placement
+//@ chunk-5xgkngpb.js:243023-243141 placement
 function resetHeartbeatShadow(shadow) {
   shadow.lastMainRequestAt = 0;
   shadow.lastEventAt = 0;
@@ -1125,7 +1125,7 @@ function resetHeartbeatShadow(shadow) {
   shadow.run = null;
   shadow.interactiveLogged = false;
 }
-//@ chunk-e6aww6q8.js:242365-242912 placement
+//@ chunk-5xgkngpb.js:243141-243688 placement
 /**
  * 记录 tengu_cache_heartbeat_shadow 影子事件（运行状态、距上次事件/主请求的时间、是否交互），用于评估缓存心跳策略。
  */
@@ -1152,7 +1152,7 @@ function logHeartbeatShadow(kind, { now, run, mainRequestAt }) {
   shadow.lastEventAt = now;
   return true;
 }
-//@ chunk-e6aww6q8.js:242912-243031 placement
+//@ chunk-5xgkngpb.js:243688-243807 placement
 var RUN_EVENT_NAMES = {
   work: {
     start: "work_start",
@@ -1163,14 +1163,14 @@ var RUN_EVENT_NAMES = {
     end: "awaiting_user_end",
   },
 };
-//@ chunk-e6aww6q8.js:243031-243085 placement
+//@ chunk-5xgkngpb.js:243807-243861 placement
 function logRunStateChange(run, phase, now) {
   logHeartbeatShadow(RUN_EVENT_NAMES[run.kind][phase], {
     now,
     run,
   });
 }
-//@ chunk-e6aww6q8.js:243085-243270 placement
+//@ chunk-5xgkngpb.js:243861-244046 placement
 /**
  * 切换交互状态：离开交互时结束当前运行计时并记录。
  */
@@ -1188,7 +1188,7 @@ function setInteractive(isInteractive, options) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:243270-243513 placement
+//@ chunk-5xgkngpb.js:244046-244289 placement
 function onMainRequestLogged({ isMainLoop, now }) {
   try {
     if (!isMainLoop || !isDapperDawnEnabled()) return;
@@ -1209,7 +1209,7 @@ function onMainRequestLogged({ isMainLoop, now }) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:243513-243794 placement
+//@ chunk-5xgkngpb.js:244289-244570 placement
 /**
  * 记录用户输入事件（限频），用于空闲与活跃统计。
  */
@@ -1234,7 +1234,7 @@ function onUserInput(options) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:243794-244022 placement
+//@ chunk-5xgkngpb.js:244570-244798 placement
 /**
  * 加载动画状态变化时切换运行计时：结束旧的运行、开始新的运行。
  */
@@ -1254,7 +1254,7 @@ function onSpinnerStateChange(spinnerState, options) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:244022-244110 placement
+//@ chunk-5xgkngpb.js:244798-244886 placement
 function endHeartbeatShadow(kind, options) {
   try {
     if (isDapperDawnEnabled())
@@ -1266,14 +1266,14 @@ function endHeartbeatShadow(kind, options) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:244207-244245 placement
+//@ chunk-5xgkngpb.js:244983-245021 placement
 /**
  * 导出函数 `endMaintenanceAtSubagentEnd`：参数 e。
  */
 function endMaintenanceAtSubagentEnd(lastRequestId) {
   gracefulShutdown_2("subagent_end", lastRequestId);
 }
-//@ chunk-e6aww6q8.js:244245-244286 placement
+//@ chunk-5xgkngpb.js:245021-245062 placement
 /**
  * 导出函数 `endMaintenanceAndForget`：参数 e。
  */
@@ -1282,7 +1282,7 @@ function endMaintenanceAndForget(reason) {
   endHeartbeatShadow(reason);
   forgetLastMainRequestId();
 }
-//@ chunk-e6aww6q8.js:244286-244366 placement
+//@ chunk-5xgkngpb.js:245062-245142 placement
 function onLastMainRequestReplaced(requestId) {
   if (getLastMainRequestId() !== requestId) return;
   if (requestId === undefined) {
@@ -1292,22 +1292,22 @@ function onLastMainRequestReplaced(requestId) {
   endMaintenanceAndForget("compaction");
 }
 export {
-  endMaintenanceAtSubagentEnd,
-  withKeepaliveReset,
-  onUserInput,
-  isDapperDawnEnabled,
-  isKeepaliveArmed,
-  onSpinnerStateChange,
-  setInteractive,
   keepaliveRequestIds,
   releaseKeepaliveChain,
   getModelSwitchCount,
   evaluateCacheKeepalive,
   onKeepaliveHeaderRejected,
   onMainResponseEnd,
-  endMaintenanceAndForget,
   onKeepaliveModelSwitch,
-  onLastMainRequestReplaced,
+  endMaintenanceAtSubagentEnd,
+  endMaintenanceAndForget,
   onMainRequestLogged,
+  onLastMainRequestReplaced,
   stageResumeKeepalive,
+  withKeepaliveReset,
+  onUserInput,
+  isDapperDawnEnabled,
+  isKeepaliveArmed,
+  onSpinnerStateChange,
+  setInteractive,
 };

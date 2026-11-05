@@ -1,15 +1,15 @@
 /**
  * @azure/msal-node/dist/retry/ImdsRetryPolicy.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-fingerprint 2
  */
 import { HttpStatus } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
 import { ExponentialRetryStrategy } from "../../lib/msal-node.cjs";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:277618-277725 esm-fingerprint
+//@ chunk-b5df2wx1.js:277618-277725 esm-fingerprint
 var HTTP_STATUS_400_CODES_FOR_EXPONENTIAL_STRATEGY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXPONENTIAL_STRATEGY_NUM_RETRIES;
 var LINEAR_STRATEGY_NUM_RETRIES;
@@ -17,7 +17,7 @@ var MIN_EXPONENTIAL_BACKOFF_MS;
 var MAX_EXPONENTIAL_BACKOFF_MS;
 var EXPONENTIAL_DELTA_BACKOFF_MS;
 var HTTP_STATUS_GONE_RETRY_AFTER_MS;
-deferInit("chunk-mrx6y2r5.js:277618", () => {
+deferInit("chunk-b5df2wx1.js:277618", () => {
   HTTP_STATUS_400_CODES_FOR_EXPONENTIAL_STRATEGY = [
     HttpStatus.NOT_FOUND,
     HttpStatus.REQUEST_TIMEOUT,
@@ -31,7 +31,7 @@ deferInit("chunk-mrx6y2r5.js:277618", () => {
   EXPONENTIAL_DELTA_BACKOFF_MS = 2000;
   HTTP_STATUS_GONE_RETRY_AFTER_MS = 1e4;
 });
-//@ chunk-mrx6y2r5.js:277725-278573 esm-fingerprint
+//@ chunk-b5df2wx1.js:277725-278573 esm-fingerprint
 class ImdsRetryPolicy {
   constructor() {
     this.exponentialRetryStrategy = new ExponentialRetryStrategy(

@@ -3,9 +3,9 @@
  *
  * 启动性能打点：profileCheckpoint、启动上下文字段、tengu_startup_perf 上报与报告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/startupProfiler.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-eweqvj83.js (17)
+ * pieces: chunk-5xgkngpb.js (1), chunk-eehtd1bk.js (17)
  * attribution: fingerprint 6, sole-consumer 3, affinity 2, callgraph-fingerprint 1, layout 2, facade-exports 4
  */
 import { dirname, join } from "path";
@@ -19,22 +19,22 @@ import { getFsImplementation } from "./fsOperations.js";
 import { writeFileSync_DEPRECATED } from "./slowOperations.js";
 import { getTurn0Marks } from "./headlessProfiler.js";
 import { logForDebugging } from "./debug.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-eweqvj83.js:5658-5729 sole-consumer (2.1.88 match: DETAILED_PROFILING, 0.771)
+//@ chunk-eehtd1bk.js:929-998 sole-consumer (2.1.88 match: DETAILED_PROFILING, 0.771)
 var PROFILE_STARTUP_ENV; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var PROFILE_STARTUP_SAMPLE_RATE;
 var profileStartupSampled;
 var profileStartupEnabled;
-deferInit("chunk-eweqvj83.js:5658", () => {
+deferInit("chunk-eehtd1bk.js:929", () => {
   PROFILE_STARTUP_ENV = env.CLAUDE_CODE_PROFILE_STARTUP;
   PROFILE_STARTUP_SAMPLE_RATE = 0.005;
   profileStartupSampled = Math.random() < PROFILE_STARTUP_SAMPLE_RATE;
   profileStartupEnabled = PROFILE_STARTUP_ENV || profileStartupSampled;
 });
-//@ chunk-eweqvj83.js:5729-5866 sole-consumer
+//@ chunk-eehtd1bk.js:998-1135 sole-consumer
 class StartupProfilerState {
   memorySnapshots = [];
   startupContext = {};
@@ -44,22 +44,22 @@ class StartupProfilerState {
   lateReported = false;
   firstEmitPhases = new Set();
 }
-//@ chunk-eweqvj83.js:5866-5890 sole-consumer
+//@ chunk-eehtd1bk.js:1135-1158 sole-consumer
 var startupProfilerSlot; // deferred: uses StartupProfilerState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-eweqvj83.js:5866", () => {
+deferInit("chunk-eehtd1bk.js:1135", () => {
   startupProfilerSlot = new HostScoped(() => new StartupProfilerState());
 });
-//@ chunk-eweqvj83.js:5890-5917 affinity
+//@ chunk-eehtd1bk.js:1158-1184 affinity
 function getProfilerState() {
   return onProcessRootHost(startupProfilerSlot);
 }
-//@ chunk-eweqvj83.js:5917-8171 callgraph-fingerprint (2.1.88 match: PHASE_DEFINITIONS, 0.213)
+//@ chunk-eehtd1bk.js:1184-3436 callgraph-fingerprint (2.1.88 match: PHASE_DEFINITIONS, 0.213)
 /**
  * 启动阶段定义：每个阶段由两个打点名界定（import_time、init_time、settings、mcp…），用于 tengu_startup_perf。
  */
 var PHASE_DEFINITIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FIRST_EMIT_PHASES;
-deferInit("chunk-eweqvj83.js:5917", () => {
+deferInit("chunk-eehtd1bk.js:1184", () => {
   PHASE_DEFINITIONS = {
     import_time: ["cli_entry", "main_tsx_imports_loaded"],
     main_imports: ["cli_before_main_import", "main_tsx_entry"],
@@ -112,19 +112,19 @@ deferInit("chunk-eweqvj83.js:5917", () => {
     "setup_uds_publish",
   ]);
 });
-//@ chunk-eweqvj83.js:8171-8203 fingerprint
+//@ chunk-eehtd1bk.js:3436-3468 fingerprint
 // deferred: uses PROFILE_STARTUP_ENV of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-eweqvj83.js:8171", () => {
+deferInit("chunk-eehtd1bk.js:3436", () => {
   if (profileStartupEnabled) profileCheckpoint("profiler_initialized");
 });
-//@ chunk-eweqvj83.js:8203-8274 layout
+//@ chunk-eehtd1bk.js:3468-3539 layout
 var profilerStartWallMs; // deferred: uses PROFILE_STARTUP_ENV of its import cycle while loading; runs once the cycle is complete
 var profilerStartUptimeMs;
-deferInit("chunk-eweqvj83.js:8203", () => {
+deferInit("chunk-eehtd1bk.js:3468", () => {
   profilerStartWallMs = profileStartupEnabled ? Date.now() : undefined;
   profilerStartUptimeMs = profileStartupEnabled ? Math.round(process.uptime() * 1000) : undefined;
 });
-//@ chunk-eweqvj83.js:8274-8338 facade-exports
+//@ chunk-eehtd1bk.js:3539-3603 facade-exports
 /**
  * 附加启动上下文字段（随 tengu_startup_perf 上报）。
  */
@@ -132,14 +132,14 @@ function addStartupContext(context) {
   if (!profileStartupEnabled) return;
   Object.assign(getProfilerState().startupContext, context);
 }
-//@ chunk-eweqvj83.js:8338-8379 facade-exports
+//@ chunk-eehtd1bk.js:3603-3644 facade-exports
 /**
  * 启动入口标识（默认 cli）。
  */
 function getBootstrapEntry() {
   return getProfilerState().bootstrapEntry;
 }
-//@ chunk-eweqvj83.js:8379-8565 facade-exports
+//@ chunk-eehtd1bk.js:3644-3830 facade-exports
 /**
  * profileCheckpoint(name)：启动性能打点（performance.mark），启用详细分析时记录内存。
  */
@@ -155,7 +155,7 @@ function profileCheckpoint(mark, { once = false } = {}) {
   if (PROFILE_STARTUP_ENV) memorySnapshots.push(process.memoryUsage());
   return true;
 }
-//@ chunk-eweqvj83.js:8565-9065 fingerprint (2.1.88 match: getReport, 0.962)
+//@ chunk-eehtd1bk.js:3830-4330 fingerprint (2.1.88 match: getReport, 0.962)
 function getReport({ memorySnapshots }) {
   if (!PROFILE_STARTUP_ENV) return "Startup profiling not enabled";
   let marks = getPerformance().getEntriesByType("mark");
@@ -179,7 +179,7 @@ function getReport({ memorySnapshots }) {
   return lines.join(`
 `);
 }
-//@ chunk-eweqvj83.js:9065-9199 facade-exports
+//@ chunk-eehtd1bk.js:4330-4464 facade-exports
 /**
  * 输出启动性能报告（首次与延迟各一次）。
  */
@@ -201,7 +201,7 @@ function profileReport() {
   });
   profileReport_2(profilerState);
 }
-//@ chunk-eweqvj83.js:9199-9585 fingerprint (2.1.88 match: profileReport, 0.458)
+//@ chunk-eehtd1bk.js:4464-4849 fingerprint (2.1.88 match: profileReport, 0.459)
 /**
  * profileReport：CLAUDE_CODE_PROFILE_STARTUP 时把报告写到 ~/.claude/startup-perf/<session>.txt/.json。
  */
@@ -242,15 +242,15 @@ function profileReport_2(profilerState) {
   logForDebugging("Startup profiling report:");
   logForDebugging(getReport(profilerState));
 }
-//@ chunk-eweqvj83.js:9585-9642 fingerprint (2.1.88 match: getStartupPerfLogPath, 1)
+//@ chunk-eehtd1bk.js:4849-4905 fingerprint (2.1.88 match: getStartupPerfLogPath, 1)
 function getStartupPerfLogPath() {
   return join(getClaudeConfigDir(), "startup-perf", `${getSessionId()}.txt`);
 }
-//@ chunk-eweqvj83.js:9642-9700 layout
+//@ chunk-eehtd1bk.js:4905-4962 layout
 function getStartupPerfJsonPath() {
   return join(getClaudeConfigDir(), "startup-perf", `${getSessionId()}.json`);
 }
-//@ chunk-eweqvj83.js:9700-10605 fingerprint (2.1.88 match: logStartupPerf, 0.415)
+//@ chunk-eehtd1bk.js:4962-5865 fingerprint (2.1.88 match: logStartupPerf, 0.416)
 /**
  * logStartupPerf：按阶段计算耗时并上报。
  */
@@ -295,7 +295,7 @@ function logStartupPerf({ firstEmitPhases, startupContext }, { late }) {
   Object.assign(metadata, startupContext);
   return metadata;
 }
-//@ chunk-eweqvj83.js:10605-10722 affinity
+//@ chunk-eehtd1bk.js:5865-5982 affinity
 /**
  * 记录 tengu_startup_perf。
  */
@@ -311,8 +311,8 @@ function reportStartupPerf(
   if (fields === null) return;
   logEvent("tengu_startup_perf", fields);
 }
-//@ chunk-e6aww6q8.js:3788261-3788305 fingerprint (2.1.88 match: profileCheckpoint, 0.723)
+//@ chunk-5xgkngpb.js:3884818-3884862 fingerprint (2.1.88 match: profileCheckpoint, 0.725)
 function profileCheckpoint_2() {
   return process.memoryUsage();
 }
-export { profileCheckpoint, getBootstrapEntry, profileReport, addStartupContext, profileCheckpoint_2 };
+export { profileCheckpoint, addStartupContext, getBootstrapEntry, profileReport, profileCheckpoint_2 };

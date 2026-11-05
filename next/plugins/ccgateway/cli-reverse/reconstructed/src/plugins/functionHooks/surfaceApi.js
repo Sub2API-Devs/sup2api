@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件界面面板（surface）接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { attachedSurfaces } from "./surfaceBinding.js";
@@ -16,7 +16,7 @@ import { toldRefusals } from "./ui/renderNotices.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3695549-3695623 placement
+//@ chunk-5xgkngpb.js:3791194-3791268 placement
 /**
  * 是否有可用界面
  */
@@ -24,12 +24,12 @@ var hasSurface = () =>
   attachedSurfaces().length > 0 ||
   paneHostSlot.get() !== undefined ||
   paneRegistry().getState().placements > 0;
-//@ chunk-e6aww6q8.js:3695623-3695699 placement
+//@ chunk-5xgkngpb.js:3791268-3791344 placement
 /**
  * 无界面原因
  */
 var NO_SURFACE_REASON = "no-surface: no surface is attached ($.session.surfaces() is empty)";
-//@ chunk-e6aww6q8.js:3695699-3695772 placement
+//@ chunk-5xgkngpb.js:3791344-3791417 placement
 /**
  * 无界面时补原因
  */
@@ -40,7 +40,7 @@ function withSurfaceReason(answer) {
         deny: `${NO_SURFACE_REASON}; ${answer.deny}`,
       };
 }
-//@ chunk-e6aww6q8.js:3695772-3695910 placement
+//@ chunk-5xgkngpb.js:3791417-3791555 placement
 /**
  * 若终端界面不可用，返回 ui.open 无法放置行的原因。
  */
@@ -49,16 +49,16 @@ function placedRowsRefusal() {
   let reason = hasSurface() ? "no attached surface draws placed rows yet" : NO_SURFACE_REASON;
   return hasTerminal ? undefined : reason;
 }
-//@ chunk-e6aww6q8.js:3695910-3695971 placement
+//@ chunk-5xgkngpb.js:3791555-3791616 placement
 var UNPLACED_SURFACE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3695910", () => {
+deferInit("chunk-5xgkngpb.js:3791555", () => {
   UNPLACED_SURFACE_FLAGS = Object.freeze({
     isShown: false,
     isFocused: false,
     isPlaced: false,
   });
 });
-//@ chunk-e6aww6q8.js:3695971-3696047 placement
+//@ chunk-5xgkngpb.js:3791616-3791692 placement
 /**
  * 无界面则未放置
  */
@@ -73,7 +73,7 @@ var unplacedWhenNoSurface = (panes) =>
           }),
         ),
       );
-//@ chunk-e6aww6q8.js:3696047-3696242 placement
+//@ chunk-5xgkngpb.js:3791692-3791887 placement
 /**
  * 没有任何界面可放置时，把 ui.open 结果改为未放置并报告一次问题。
  */
@@ -90,7 +90,7 @@ function refuseUnplacedOpen(result, plugin) {
     reason: NO_SURFACE_REASON,
   };
 }
-//@ chunk-e6aww6q8.js:3696242-3696367 placement
+//@ chunk-5xgkngpb.js:3791887-3792012 placement
 /**
  * $.session.surface：返回首个绘制中的界面，没有时为 null。
  */
@@ -99,7 +99,7 @@ async function sessionSurfaceOp(plugin) {
   if (surface === null) logForDebugging(`$.session.surface (${plugin}): no drawing session bound; null`);
   return surface;
 }
-//@ chunk-e6aww6q8.js:3696367-3696484 placement
+//@ chunk-5xgkngpb.js:3792012-3792129 placement
 /**
  * $.session.surfaces：返回所有正在绘制的界面列表。
  */

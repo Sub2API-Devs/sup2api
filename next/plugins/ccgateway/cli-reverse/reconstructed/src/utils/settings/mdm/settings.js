@@ -3,10 +3,10 @@
  *
  * MDM 设置加载器：解析 plist/注册表内容为托管设置，WSL 继承 Windows 策略，记录 tengu_managed_settings_os_read。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/settings.ts
- * pieces: chunk-dcmhvw5a.js (1), chunk-q8cqcff6.js (21), chunk-yhvmbyx2.js (1)
- * attribution: callgraph-fingerprint 1, fingerprint 4, placement 7, layout 10, sole-consumer 1
+ * pieces: chunk-5fn9rb8r.js (21), chunk-gme60te5.js (1), chunk-z20c443b.js (1)
+ * attribution: fingerprint 4, placement 7, layout 10, sole-consumer 1, callgraph-fingerprint 1
  */
 import { dirname, join } from "path";
 import { lstat } from "fs/promises";
@@ -58,7 +58,7 @@ import { isENOENT } from "../../errors.js";
 import { getFsImplementation } from "../../fsOperations.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:470165-470468 callgraph-fingerprint (2.1.88 match: parseCommandOutputAsSettings, 0.209)
+//@ chunk-z20c443b.js:468789-469092 callgraph-fingerprint (2.1.88 match: parseCommandOutputAsSettings, 0.209)
 function parseCommandOutputAsSettings(stdout) {
   let data = clone(stdout);
   let issues = [
@@ -81,10 +81,10 @@ function parseCommandOutputAsSettings(stdout) {
     errors: issues,
   };
 }
-//@ chunk-q8cqcff6.js:9000-9107 fingerprint (2.1.88 match: EMPTY_RESULT, 0.729)
+//@ chunk-5fn9rb8r.js:9243-9350 fingerprint (2.1.88 match: EMPTY_RESULT, 0.73)
 var EMPTY_MDM_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_MDM_SETTINGS;
-deferInit("chunk-q8cqcff6.js:9000", () => {
+deferInit("chunk-5fn9rb8r.js:9243", () => {
   EMPTY_MDM_RESULT = Object.freeze({
     settings: {},
     errors: [],
@@ -95,7 +95,7 @@ deferInit("chunk-q8cqcff6.js:9000", () => {
     errors: [],
   });
 });
-//@ chunk-q8cqcff6.js:9107-9983 fingerprint (2.1.88 match: startMdmSettingsLoad, 0.742)
+//@ chunk-5fn9rb8r.js:9350-10226 fingerprint (2.1.88 match: startMdmSettingsLoad, 0.742)
 /**
  * MDM 设置加载器：启动时异步读取 macOS plist 或 Windows 注册表 HKLM/HKCU\SOFTWARE\Policies\ClaudeCode\Settings（WSL 下可继承 Windows），完成后打 tengu_managed_settings_os_read。
  */
@@ -147,21 +147,21 @@ class MdmSettingsLoader {
     this.loadPromise = null;
   }
 }
-//@ chunk-q8cqcff6.js:10676-10720 placement
+//@ chunk-5fn9rb8r.js:10919-10963 placement
 /**
  * wslInheritsSettings：WSL 是否继承 Windows 设置。
  */
 function wslInheritsSettings() {
   return withAskedWhere(mdmLoader()).wslInherits;
 }
-//@ chunk-q8cqcff6.js:10720-10764 placement
+//@ chunk-5fn9rb8r.js:10963-11007 placement
 /**
  * replaceMdmSetting：替换 MDM 设置。
  */
 function replaceMdmSetting(mdm, hkcu, wslInherits, whereAsked) {
   mdmLoader().replace(mdm, hkcu, wslInherits, whereAsked);
 }
-//@ chunk-q8cqcff6.js:10764-10885 placement
+//@ chunk-5fn9rb8r.js:11007-11128 placement
 /**
  * 读取当前 MDM、HKCU 与 WSL 继承设置的快照（缺省时用空结果）。
  */
@@ -174,7 +174,7 @@ function mdmReadSnapshot() {
     whereAsked,
   };
 }
-//@ chunk-q8cqcff6.js:10885-10974 placement
+//@ chunk-5fn9rb8r.js:11128-11217 placement
 /**
  * readMdmSnapshot：读取 MDM 设置快照。
  */
@@ -185,7 +185,7 @@ async function readMdmSnapshot(options) {
     readOutcomes: raw.outcomes,
   };
 }
-//@ chunk-q8cqcff6.js:10974-12545 placement
+//@ chunk-5fn9rb8r.js:11217-12790 placement
 function checkManagedOnlySettings(text, label, { userWritable = false } = {}) {
   let parsed = safeParseJSON(text, false);
   if (!isPlainObject(parsed))
@@ -292,11 +292,11 @@ function checkManagedOnlySettings(text, label, { userWritable = false } = {}) {
     }),
   };
 }
-//@ chunk-q8cqcff6.js:12545-12614 placement
+//@ chunk-5fn9rb8r.js:12790-12859 placement
 function omitStartupFlags({ startupFatal, loadedWithoutGuardHook, ...rest }) {
   return rest;
 }
-//@ chunk-q8cqcff6.js:12614-12878 layout
+//@ chunk-5fn9rb8r.js:12859-13123 layout
 function managedDocumentUnreadableError(label, reason, userWritable, unreadErrno) {
   return {
     file: label,
@@ -313,7 +313,7 @@ function managedDocumentUnreadableError(label, reason, userWritable, unreadErrno
     }),
   };
 }
-//@ chunk-q8cqcff6.js:12878-13074 fingerprint (2.1.88 match: parseRegQueryStdout, 0.627)
+//@ chunk-5fn9rb8r.js:13123-13319 fingerprint (2.1.88 match: parseRegQueryStdout, 0.627)
 /**
  * 从 reg query 输出中提取 REG_SZ/REG_EXPAND_SZ 值（默认值名 Settings）。
  */
@@ -323,13 +323,13 @@ function parseRegQueryStdout(stdout, valueName = "Settings") {
   let match = stdout.match(regExp)?.[1]?.trimEnd();
   return match ? match : null;
 }
-//@ chunk-q8cqcff6.js:13074-13446 layout
+//@ chunk-5fn9rb8r.js:13319-13691 layout
 /**
  * MDM 读取遥测中允许上报的 errno 与信号名映射。
  */
 var ERRNO_TELEMETRY_VALUES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SIGNAL_TELEMETRY_VALUES;
-deferInit("chunk-q8cqcff6.js:13074", () => {
+deferInit("chunk-5fn9rb8r.js:13319", () => {
   ERRNO_TELEMETRY_VALUES = new Map([
     ["ENOENT", lit("ENOENT")],
     ["EACCES", lit("EACCES")],
@@ -347,17 +347,17 @@ deferInit("chunk-q8cqcff6.js:13074", () => {
     ["SIGINT", lit("SIGINT")],
   ]);
 });
-//@ chunk-q8cqcff6.js:13446-13503 layout
+//@ chunk-5fn9rb8r.js:13691-13748 layout
 function errnoTelemetryValue(errno) {
   if (!errno) return;
   return ERRNO_TELEMETRY_VALUES.get(errno) ?? lit("other");
 }
-//@ chunk-q8cqcff6.js:13503-13560 layout
+//@ chunk-5fn9rb8r.js:13748-13805 layout
 function signalTelemetryValue(signal) {
   if (!signal) return;
   return SIGNAL_TELEMETRY_VALUES.get(signal) ?? lit("other");
 }
-//@ chunk-q8cqcff6.js:13560-13756 layout
+//@ chunk-5fn9rb8r.js:13805-14001 layout
 function mdmReadFields(prefix, outcome) {
   if (!outcome) return {};
   return {
@@ -368,7 +368,7 @@ function mdmReadFields(prefix, outcome) {
     [`${prefix}_duration_ms`]: outcome.durationMs,
   };
 }
-//@ chunk-q8cqcff6.js:13756-13865 layout
+//@ chunk-5fn9rb8r.js:14001-14110 layout
 function buildMdmReadTelemetry(raw, awaitMs) {
   return {
     is_wsl: isWsl(),
@@ -377,7 +377,7 @@ function buildMdmReadTelemetry(raw, awaitMs) {
     ...mdmReadFields("hkcu", raw.outcomes.hkcu),
   };
 }
-//@ chunk-q8cqcff6.js:13865-16864 layout
+//@ chunk-5fn9rb8r.js:14110-17119 layout
 async function resolveMdmReadResult(raw, store, nested = false) {
   let errors = [];
   let adminSeen = false;
@@ -625,18 +625,18 @@ async function resolveMdmReadResult(raw, store, nested = false) {
     wslInherits: armed,
   };
 }
-//@ chunk-q8cqcff6.js:16864-16953 layout
+//@ chunk-5fn9rb8r.js:17119-17208 layout
 async function readManagedDocumentText(path, store) {
   if (isStorageV5Enabled() && store !== undefined)
     return (await readFileChecked(path, MAX_SETTINGS_JSON_BYTES)).content;
   return readFileSync(path, MAX_SETTINGS_JSON_BYTES);
 }
-//@ chunk-q8cqcff6.js:16953-17024 layout
+//@ chunk-5fn9rb8r.js:17208-17279 layout
 async function hasWslManagedSettings(armed, store) {
   if (armed && (await hasManagedSettingsDocument(WSL_MANAGED_SETTINGS_DIR, store))) return true;
   return hasManagedSettingsDocument(getManagedFilePath(), store);
 }
-//@ chunk-q8cqcff6.js:17024-17167 layout
+//@ chunk-5fn9rb8r.js:17279-17422 layout
 async function managedFileHasContent(path, store) {
   let content;
   try {
@@ -654,7 +654,7 @@ async function managedFileHasContent(path, store) {
     return true;
   }
 }
-//@ chunk-q8cqcff6.js:17167-17659 fingerprint (2.1.88 match: hasManagedSettingsFile, 0.617)
+//@ chunk-5fn9rb8r.js:17422-17914 fingerprint (2.1.88 match: hasManagedSettingsFile, 0.618)
 async function hasManagedSettingsFile(store) {
   if (!isWsl() || !mdmLoader().wslInherits) return "";
   let parts = [];
@@ -686,11 +686,11 @@ async function hasManagedSettingsFile(store) {
   }
   return parts.join("\x01");
 }
-//@ chunk-q8cqcff6.js:17659-17707 sole-consumer
+//@ chunk-5fn9rb8r.js:17914-17962 sole-consumer
 function unreadableMarker(error) {
   return isNotFoundErrno_5(error) ? "" : "\x00unreadable";
 }
-//@ chunk-yhvmbyx2.js:273-590 placement
+//@ chunk-gme60te5.js:272-588 placement
 function describeMdmSettingsState() {
   if (!hasMdmResult()) throw Error("the MDM settings have not been read yet");
   if (isMachineAdminDocumentUnreadable()) throw Error("an admin-owned settings document could not be read");
@@ -700,16 +700,16 @@ function describeMdmSettingsState() {
   return typeof forceLoginOrgUUID === "string" ? [forceLoginOrgUUID] : forceLoginOrgUUID;
 }
 export {
-  wslInheritsSettings,
+  describeMdmSettingsState,
   readMdmSnapshot,
   replaceMdmSetting,
-  mdmReadSnapshot,
-  describeMdmSettingsState,
-  EMPTY_MDM_SETTINGS,
-  hasManagedSettingsFile,
-  parseCommandOutputAsSettings,
+  wslInheritsSettings,
   MdmSettingsLoader,
   EMPTY_MDM_RESULT,
+  EMPTY_MDM_SETTINGS,
+  hasManagedSettingsFile,
   readManagedDocumentText,
   managedFileHasContent,
+  mdmReadSnapshot,
+  parseCommandOutputAsSettings,
 };

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/credentials/credential-chain.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (5)
+ * pieces: chunk-gjbr82c9.js (5)
  * attribution: esm-fingerprint 5
  */
 import {
@@ -22,7 +22,7 @@ import { identityTokenFromFile, identityTokenFromValue } from "./identity-token.
 import { readEnv } from "../../internal/utils/env.mjs";
 import { nowSeconds } from "./token-cache.mjs";
 
-//@ chunk-3wydcdvj.js:11752-12040 esm-fingerprint
+//@ chunk-gjbr82c9.js:11752-12040 esm-fingerprint
 function resolveCredentialsFromConfig(config, options) {
   let credentialsPath = config.authentication.credentials_path ?? null;
   let effectiveBaseURL = (config.base_url || options.baseURL).replace(/\/+$/, "");
@@ -36,7 +36,7 @@ function resolveCredentialsFromConfig(config, options) {
     baseURL: config.base_url || undefined,
   };
 }
-//@ chunk-3wydcdvj.js:12040-12266 esm-fingerprint
+//@ chunk-gjbr82c9.js:12040-12266 esm-fingerprint
 async function defaultCredentials(options, profile) {
   let loaded = await loadConfigWithSource(profile);
   if (!loaded) return null;
@@ -53,7 +53,7 @@ async function defaultCredentials(options, profile) {
         };
   return resolveCredentialsFromConfig(withPath, options);
 }
-//@ chunk-3wydcdvj.js:12266-13631 esm-fingerprint
+//@ chunk-gjbr82c9.js:12266-13631 esm-fingerprint
 function buildProvider(config, credentialsPath, baseURL, options) {
   switch (config.authentication.type) {
     case "oidc_federation": {
@@ -110,7 +110,7 @@ function buildProvider(config, credentialsPath, baseURL, options) {
     }
   }
 }
-//@ chunk-3wydcdvj.js:13631-14061 esm-fingerprint
+//@ chunk-gjbr82c9.js:13631-14061 esm-fingerprint
 function resolveIdentityTokenProvider(auth) {
   if (auth.identity_token) {
     let source = auth.identity_token.source;
@@ -128,7 +128,7 @@ function resolveIdentityTokenProvider(auth) {
   if (tokenValue) return identityTokenFromValue(tokenValue);
   return null;
 }
-//@ chunk-3wydcdvj.js:14061-14566 esm-fingerprint
+//@ chunk-gjbr82c9.js:14061-14566 esm-fingerprint
 function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, onSafetyWarning) {
   return async (opts) => {
     let { fs } = await import("../../../../../src/child_process.lazy.js");

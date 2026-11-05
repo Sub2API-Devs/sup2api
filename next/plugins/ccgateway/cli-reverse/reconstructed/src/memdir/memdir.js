@@ -3,12 +3,12 @@
  *
  * 自动记忆系统提示的构建：MEMORY.md 读取与 200 行/25000 字节截断、记忆目录创建、使用说明与只读处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memdir.ts
- * pieces: chunk-82kqcve8.js (16), chunk-xfwvhp77.js (12)
- * attribution: fingerprint 8, layout 10, callgraph-witnessed 1, placement 9
+ * pieces: chunk-7jeh0w0e.js (12), chunk-a2q0x549.js (16)
+ * attribution: fingerprint 8, layout 10, placement 9, callgraph-witnessed 1
  */
-import { join } from "path";
+import { join as join_2 } from "path";
 import { countCharInString, truncateAtWord } from "../utils/stringUtils.js";
 import { stripVariationSelectors } from "../utils/truncateGraphemes.js";
 import { stripCombiningRepeated } from "../utils/sanitization.js";
@@ -70,10 +70,10 @@ import { MEMORY_WRITE } from "../tools/MemoryTool/memoryToolNames.js";
 import { leanPromptFor, leanRewriteFor } from "../utils/model/promptBundles.js";
 import { canUseTeamMemory, getMemoryDirNfc } from "./teamMemPaths.js";
 import { buildExtractCombinedPrompt } from "../services/extractMemories/prompts.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-xfwvhp77.js:336-397 fingerprint (2.1.88 match: ENTRYPOINT_NAME, 1)
+//@ chunk-7jeh0w0e.js:336-397 fingerprint (2.1.88 match: ENTRYPOINT_NAME, 1)
 /**
  * 自动记忆入口文件名 MEMORY.md 及截断上限：200 行、25000 字节；单个记忆文件建议 ≤4096 字节。
  */
@@ -83,7 +83,7 @@ var MAX_ENTRYPOINT_BYTES = 25000;
 var MAX_ENTRYPOINT_READ_BYTES = 4 * MAX_ENTRYPOINT_BYTES;
 var MAX_ENTRYPOINT_TAIL_LINES = 200;
 var MEMORY_FILE_RECALL_BYTES = 4096;
-//@ chunk-xfwvhp77.js:397-487 layout
+//@ chunk-7jeh0w0e.js:397-487 layout
 /**
  * 对 MEMORY.md 内容去空白后统计行数与字节数。
  */
@@ -100,11 +100,11 @@ function measureEntrypoint(text) {
     byteCount: trimmed.length,
   };
 }
-//@ chunk-xfwvhp77.js:487-542 layout (2.1.88 match: setCwdState, 1)
+//@ chunk-7jeh0w0e.js:487-542 layout (2.1.88 match: setCwdState, 1)
 function nfcLower(cwd) {
   return cwd.normalize("NFC").toLowerCase();
 }
-//@ chunk-xfwvhp77.js:542-679 layout
+//@ chunk-7jeh0w0e.js:542-679 layout
 /**
  * 取记忆索引文件所在目录前缀（含隐藏目录时为空）。
  */
@@ -114,12 +114,12 @@ function memoryIndexDirPrefix(promptIndex) {
   let sliced = promptIndex.slice(0, lastSlashIndex + 1);
   return sliced.split("/").some((segment) => segment.startsWith(".")) ? "" : sliced;
 }
-//@ chunk-xfwvhp77.js:679-950 fingerprint (2.1.88 match: DIR_EXISTS_GUIDANCE, 0.667)
+//@ chunk-7jeh0w0e.js:679-950 fingerprint (2.1.88 match: DIR_EXISTS_GUIDANCE, 0.667)
 var DIR_EXISTS_GUIDANCE =
   "This directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence).";
 var DIRS_EXIST_GUIDANCE =
   "Both directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence).";
-//@ chunk-xfwvhp77.js:950-1124 layout
+//@ chunk-7jeh0w0e.js:950-1124 layout
 function normalizeMemoryText(content) {
   let result = "";
   for (let char of stripVariationSelectors(
@@ -138,38 +138,38 @@ function normalizeMemoryText(content) {
   }
   return result;
 }
-//@ chunk-xfwvhp77.js:1124-1156 placement
+//@ chunk-7jeh0w0e.js:1124-1156 placement
 /**
  * 清除记忆文本里不允许出现的字符（控制字符、不可见字符）。
  */
 function sanitizeMemoryText(content) {
   return neutralizeInboundTags(stripDisallowedMemoryChars(content));
 }
-//@ chunk-xfwvhp77.js:1156-1219 placement
+//@ chunk-7jeh0w0e.js:1156-1219 placement
 /**
  * 判断单个字符是否属于记忆里不允许的字符。
  */
 function isDisallowedChar(char) {
   return isDisallowedMemoryChar(char) || /[\p{Cc}\u2028\u2029]/u.test(char);
 }
-//@ chunk-xfwvhp77.js:1219-1285 placement
+//@ chunk-7jeh0w0e.js:1219-1285 placement
 /**
  * 把记忆文本里的换行与制表符删掉并净化，用于单行展示。
  */
 function singleLineMemoryText(text) {
   return sanitizeMemoryText(text.replace(/[\t\n\r\u2028\u2029]/g, ""));
 }
-//@ chunk-xfwvhp77.js:1285-1366 placement
+//@ chunk-7jeh0w0e.js:1285-1366 placement
 /**
  * 记忆键里要拒绝的不可见码点集合与字符类别正则（格式符、私用区、未分配、代理项、默认忽略）。
  */
 var INVISIBLE_MEMORY_CODE_POINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DISALLOWED_CATEGORY_RE;
-deferInit("chunk-xfwvhp77.js:1285", () => {
+deferInit("chunk-7jeh0w0e.js:1285", () => {
   INVISIBLE_MEMORY_CODE_POINTS = new Set([8204, 8205, 65038, 65039]);
   DISALLOWED_CATEGORY_RE = /^[\p{Cf}\p{Co}\p{Cn}\p{Cs}\p{DI}]$/u;
 });
-//@ chunk-xfwvhp77.js:1366-1490 placement
+//@ chunk-7jeh0w0e.js:1366-1490 placement
 /**
  * 判断字符是否不允许出现在记忆键中（控制字符、特定不可见字符等）。
  */
@@ -179,7 +179,7 @@ function isDisallowedMemoryChar(char) {
     return false;
   return DISALLOWED_CATEGORY_RE.test(char) || codePoint < 32 || (codePoint >= 127 && codePoint <= 159);
 }
-//@ chunk-xfwvhp77.js:1490-1599 placement
+//@ chunk-7jeh0w0e.js:1490-1599 placement
 function stripDisallowedMemoryChars(text) {
   let result = "";
   for (let char of text.replace(
@@ -192,18 +192,18 @@ function stripDisallowedMemoryChars(text) {
   }
   return result;
 }
-//@ chunk-82kqcve8.js:141711-141732 fingerprint (2.1.88 match: AUTO_MEM_DISPLAY_NAME, 1)
+//@ chunk-a2q0x549.js:139782-139803 fingerprint (2.1.88 match: AUTO_MEM_DISPLAY_NAME, 1)
 var AUTO_MEM_DISPLAY_NAME = "auto memory";
-//@ chunk-82kqcve8.js:141732-141755 layout
+//@ chunk-a2q0x549.js:139803-139826 layout
 function getExtraMemoryDirs() {
   return [];
 }
-//@ chunk-82kqcve8.js:141755-141766 layout
+//@ chunk-a2q0x549.js:139826-139837 layout
 /**
  * 首次存储拉取的等待上限
  */
 var FIRST_STORE_PULL_WAIT_DEADLINE_MS_2 = FIRST_STORE_PULL_WAIT_DEADLINE_MS;
-//@ chunk-82kqcve8.js:141766-142679 fingerprint (2.1.88 match: truncateEntrypointContent, 0.719)
+//@ chunk-a2q0x549.js:139837-140753 fingerprint (2.1.88 match: truncateEntrypointContent, 0.719)
 /**
  * 截断 MEMORY.md 入口：超过 200 行或 25000 字节时截断并追加说明哪些行被删掉。
  */
@@ -276,11 +276,11 @@ function truncateEntrypointContent(raw) {
     wasByteTruncated,
   };
 }
-//@ chunk-82kqcve8.js:142679-142760 layout
+//@ chunk-a2q0x549.js:140753-140834 layout
 function describeMemoryStoreIndex(storeName, indexPath) {
   return `the memory index \`${indexPath}\` in the \`${storeName}\` memory store`;
 }
-//@ chunk-82kqcve8.js:142760-143019 layout
+//@ chunk-a2q0x549.js:140834-141093 layout
 /**
  * 把从 memory-service 拉取的记忆索引包装为 <memory path=…> 参考数据（截断、转义 <），声明不得覆盖之前的指令。
  */
@@ -293,7 +293,7 @@ function wrapFetchedMemoryIndex(storeDescription, indexPath, content) {
   ].join(`
 `);
 }
-//@ chunk-82kqcve8.js:143019-143236 fingerprint (2.1.88 match: ensureMemoryDirExists, 0.709)
+//@ chunk-a2q0x549.js:141093-141310 fingerprint (2.1.88 match: ensureMemoryDirExists, 0.709)
 /**
  * 创建记忆目录（storage 或 mkdir -p），失败只记 debug。
  */
@@ -313,7 +313,7 @@ async function ensureMemoryDirExists(memoryDir, teamDir) {
     });
   }
 }
-//@ chunk-82kqcve8.js:143236-143634 fingerprint (2.1.88 match: logMemoryDirCounts, 0.896)
+//@ chunk-a2q0x549.js:141310-141708 fingerprint (2.1.88 match: logMemoryDirCounts, 0.896)
 /**
  * 统计记忆目录文件数等并打 tengu_memdir_loaded。
  */
@@ -361,7 +361,7 @@ function logMemoryDirCounts(memoryDir, baseProperties, teamDir) {
       },
     );
 }
-//@ chunk-82kqcve8.js:143634-143985 layout
+//@ chunk-a2q0x549.js:141708-142059 layout
 async function countMemoryDirEntries(storeClient, projectKey) {
   let fileCount = 0;
   let subdirCount = 0;
@@ -393,7 +393,7 @@ async function countMemoryDirEntries(storeClient, projectKey) {
     total_subdir_count: subdirCount,
   };
 }
-//@ chunk-82kqcve8.js:143985-146145 fingerprint (2.1.88 match: buildMemoryLines, 0.424)
+//@ chunk-a2q0x549.js:142059-144219 fingerprint (2.1.88 match: buildMemoryLines, 0.424)
 /**
  * 记忆系统使用说明（文件型记忆、类型、frontmatter、什么不该存、只读时提示）。
  */
@@ -447,7 +447,7 @@ function buildMemoryLines(title, memoryDir, options) {
     "",
   ];
 }
-//@ chunk-82kqcve8.js:146145-146373 layout
+//@ chunk-a2q0x549.js:144219-144447 layout
 function isRegularMemoryEntrypoint(fs, entrypoint) {
   let entrypointStat = fs.lstatSync(entrypoint);
   if (entrypointStat.isFile()) return true;
@@ -457,7 +457,7 @@ function isRegularMemoryEntrypoint(fs, entrypoint) {
   logForDebugging(`agent memory: ${entrypoint} is not a regular file; not read`);
   return false;
 }
-//@ chunk-82kqcve8.js:146373-147499 fingerprint (2.1.88 match: buildMemoryPrompt, 0.75)
+//@ chunk-a2q0x549.js:144447-145573 fingerprint (2.1.88 match: buildMemoryPrompt, 0.75)
 /**
  * 生成单个记忆目录的提示：读取 <dir>/MEMORY.md（可要求普通文件），拼接 buildMemoryLines 的说明与索引内容。
  */
@@ -528,7 +528,7 @@ function buildMemoryPrompt(options, primedContent) {
   return lines.join(`
 `);
 }
-//@ chunk-82kqcve8.js:147499-151627 callgraph-witnessed (2.1.88 match: loadMemoryPrompt, 0.281)
+//@ chunk-a2q0x549.js:145573-149710 callgraph-witnessed (2.1.88 match: loadMemoryPrompt, 0.281)
 /**
  * 构建系统提示里的 auto memory 段：cowork 指南覆盖、团队/个人组合提示、只读判断等，确保目录存在并打 tengu_memdir_loaded。
  */
@@ -667,7 +667,7 @@ ${CLAUDE_COWORK_MEMORY_GUIDELINES}`;
         : [];
     for (let teamMount of teamMounts)
       await ensureMemoryDirExists(
-        join(
+        join_2(
           teamDir ?? autoMemPath,
           teamMount.mount,
           teamMount.mode === "rw" ? memoryIndexDirPrefix(teamMount.promptIndex) : "",
@@ -717,10 +717,10 @@ ${CLAUDE_COWORK_MEMORY_GUIDELINES}`;
       let filtered = memoryStores.filter((store) => store.scope === "team" && store.mode === "rw");
       let filtered_2 = memoryStores.filter((store) => store.scope === "team" && store.mode === "ro");
       for (let teamMount of [...filtered, ...filtered_2])
-        await ensureMemoryDirExists(join(memoryDirNfc, teamMount.mount));
+        await ensureMemoryDirExists(join_2(memoryDirNfc, teamMount.mount));
       for (let teamMount of filtered) {
         let indexDir = memoryIndexDirPrefix(teamMount.promptIndex);
-        if (indexDir) await ensureMemoryDirExists(join(memoryDirNfc, teamMount.mount, indexDir));
+        if (indexDir) await ensureMemoryDirExists(join_2(memoryDirNfc, teamMount.mount, indexDir));
       }
       logMemoryDirCounts(autoMemPath, {
         memory_type: lit("auto"),
@@ -772,14 +772,13 @@ ${CLAUDE_COWORK_MEMORY_GUIDELINES}`;
   let CLAUDE_CODE_DISABLE_AUTO_MEMORY = env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
   logEvent("tengu_memdir_disabled", {
     disabled_by_env_var: CLAUDE_CODE_DISABLE_AUTO_MEMORY,
-    disabled_by_setting:
-      !CLAUDE_CODE_DISABLE_AUTO_MEMORY && getInitialSettings_2().autoMemoryEnabled === false,
+    disabled_by_setting: !CLAUDE_CODE_DISABLE_AUTO_MEMORY && getInitialSettings().autoMemoryEnabled === false,
     read_block_fenced: isAutoMemReadFenced(),
   });
   if (process.env.CLAUDE_MEMORY_STORES?.trim()) logEvent("tengu_team_memdir_disabled", {});
   return null;
 }
-//@ chunk-82kqcve8.js:151627-151728 placement
+//@ chunk-a2q0x549.js:149710-149811 placement
 function isAutoMemoryWritable(promptModel) {
   if (!isAutoMemoryEnabled() || isAutoMemReadFenced()) return false;
   if (canUseTeamMemory()) return false;
@@ -787,7 +786,7 @@ function isAutoMemoryWritable(promptModel) {
   if (leanPromptFor(promptModel)) return false;
   return true;
 }
-//@ chunk-82kqcve8.js:151728-151815 placement
+//@ chunk-a2q0x549.js:149811-149898 placement
 /**
  * 生成自动记忆段的提示文本（不可写时返回 null）。
  */
@@ -799,7 +798,7 @@ function autoMemorySection(promptModel) {
   }).join(`
 `);
 }
-//@ chunk-82kqcve8.js:151815-152284 placement
+//@ chunk-a2q0x549.js:149898-150367 placement
 async function buildMemoryDirectoryLine(promptModel, options = {}, teamMemoryDir) {
   let { analysisOnly = false } = options;
   memoryToolsShapeStrict();
@@ -833,26 +832,26 @@ export {
   loadMemoryPrompt,
   autoMemorySection,
   buildMemoryDirectoryLine,
-  isDisallowedChar,
-  sanitizeMemoryText,
-  truncateEntrypointContent,
   MEMORY_INDEX_FILENAME,
+  singleLineMemoryText,
+  sanitizeMemoryText,
   MEMORY_FILE_RECALL_BYTES,
+  MAX_ENTRYPOINT_TAIL_LINES,
+  truncateEntrypointContent,
+  MAX_ENTRYPOINT_LINES,
+  MAX_ENTRYPOINT_BYTES,
+  isDisallowedMemoryChar,
+  nfcLower,
+  isDisallowedChar,
+  MAX_ENTRYPOINT_READ_BYTES,
+  measureEntrypoint,
+  normalizeMemoryText,
   memoryIndexDirPrefix,
   DIR_EXISTS_GUIDANCE,
-  MAX_ENTRYPOINT_LINES,
   DIRS_EXIST_GUIDANCE,
-  nfcLower,
   ensureMemoryDirExists,
   buildMemoryPrompt,
-  isDisallowedMemoryChar,
   INVISIBLE_MEMORY_CODE_POINTS,
-  normalizeMemoryText,
-  singleLineMemoryText,
-  MAX_ENTRYPOINT_TAIL_LINES,
   describeMemoryStoreIndex,
   wrapFetchedMemoryIndex,
-  measureEntrypoint,
-  MAX_ENTRYPOINT_BYTES,
-  MAX_ENTRYPOINT_READ_BYTES,
 };

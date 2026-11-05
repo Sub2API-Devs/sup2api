@@ -1,19 +1,19 @@
 /**
  * parse5/lib/common/html.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (9)
+ * pieces: chunk-p9ac6cnb.js (9)
  * attribution: esm-layout 5, esm-fingerprint 4
  */
 import { getDecoder } from "../../../entities/lib/esm/decode.js";
 import { uint16Array, uint16Array_2 } from "../../../entities/lib/esm/generated/decode-data-xml.js";
 
-//@ chunk-6ja29j2n.js:62667-62690 esm-layout
+//@ chunk-p9ac6cnb.js:62667-62690 esm-layout
 var htmlDecodeTree = getDecoder(uint16Array);
 var htmlDecodeTreeSecond = getDecoder(uint16Array_2);
-//@ chunk-6ja29j2n.js:62690-62696 esm-layout
+//@ chunk-p9ac6cnb.js:62690-62696 esm-layout
 var NAMESPACES;
-//@ chunk-6ja29j2n.js:62696-62965 esm-fingerprint
+//@ chunk-p9ac6cnb.js:62696-62965 esm-fingerprint
 (function (NAMESPACES) {
   NAMESPACES.HTML = "http://www.w3.org/1999/xhtml";
   NAMESPACES.MATHML = "http://www.w3.org/1998/Math/MathML";
@@ -22,9 +22,9 @@ var NAMESPACES;
   NAMESPACES.XML = "http://www.w3.org/XML/1998/namespace";
   NAMESPACES.XMLNS = "http://www.w3.org/2000/xmlns/";
 })(NAMESPACES || (NAMESPACES = {}));
-//@ chunk-6ja29j2n.js:62965-62971 esm-layout
+//@ chunk-p9ac6cnb.js:62965-62971 esm-layout
 var ATTRS;
-//@ chunk-6ja29j2n.js:62971-63127 esm-fingerprint
+//@ chunk-p9ac6cnb.js:62971-63127 esm-fingerprint
 (function (ATTRS) {
   ATTRS.TYPE = "type";
   ATTRS.ACTION = "action";
@@ -35,17 +35,17 @@ var ATTRS;
   ATTRS.FACE = "face";
   ATTRS.SIZE = "size";
 })(ATTRS || (ATTRS = {}));
-//@ chunk-6ja29j2n.js:63127-63133 esm-layout
+//@ chunk-p9ac6cnb.js:63127-63133 esm-layout
 var DOCUMENT_MODE;
-//@ chunk-6ja29j2n.js:63133-63235 esm-fingerprint
+//@ chunk-p9ac6cnb.js:63133-63235 esm-fingerprint
 (function (DOCUMENT_MODE) {
   DOCUMENT_MODE.NO_QUIRKS = "no-quirks";
   DOCUMENT_MODE.QUIRKS = "quirks";
   DOCUMENT_MODE.LIMITED_QUIRKS = "limited-quirks";
 })(DOCUMENT_MODE || (DOCUMENT_MODE = {}));
-//@ chunk-6ja29j2n.js:63235-63241 esm-layout
+//@ chunk-p9ac6cnb.js:63235-63241 esm-layout
 var TAG_NAMES;
-//@ chunk-6ja29j2n.js:63241-65146 esm-fingerprint
+//@ chunk-p9ac6cnb.js:63241-65146 esm-fingerprint
 (function (TAG_NAMES) {
   TAG_NAMES.A = "a";
   TAG_NAMES.ADDRESS = "address";

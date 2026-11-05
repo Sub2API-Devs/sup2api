@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：定期检查父进程是否存活，父进程消失时退出 worker。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e3de30et.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-szf9hn8s.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -32,13 +32,13 @@ import { FOLDER_ALREADY_SERVED_ERROR_TYPE } from "../bridge/types.js";
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e3de30et.js:14268-14480 placement
+//@ chunk-szf9hn8s.js:14268-14480 placement
 /**
  * 心跳 worker 的配置 schema（intervalSeconds，默认 30）。
  */
 var heartbeatConfigSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var WORKER_KINDS;
-deferInit("chunk-e3de30et.js:14268", () => {
+deferInit("chunk-szf9hn8s.js:14268", () => {
   heartbeatConfigSchema = DoctorLazy(() =>
     objectSchema({
       intervalSeconds: numberSchema().positive().default(30),
@@ -62,7 +62,7 @@ deferInit("chunk-e3de30et.js:14268", () => {
     },
   };
 });
-//@ chunk-e3de30et.js:14480-14554 placement
+//@ chunk-szf9hn8s.js:14480-14554 placement
 function isWorkerKindAdmitted(kind) {
   return (
     kind === "heartbeat" ||
@@ -70,7 +70,7 @@ function isWorkerKindAdmitted(kind) {
     (kind === "remoteControl" && radiantHeronFlag())
   );
 }
-//@ chunk-e3de30et.js:14554-14729 placement
+//@ chunk-szf9hn8s.js:14554-14729 placement
 async function runHeartbeatWorker(config, signal, log, authClient) {
   let { intervalSeconds } = heartbeatConfigSchema().parse(config);
   log(`heartbeat worker started (interval=${intervalSeconds}s)`);
@@ -79,7 +79,7 @@ async function runHeartbeatWorker(config, signal, log, authClient) {
     if (!signal.aborted) log("heartbeat");
   }
 }
-//@ chunk-e3de30et.js:14729-14843 placement
+//@ chunk-szf9hn8s.js:14729-14843 placement
 function bindWorkerAbortSignals(proc, abortController) {
   let onSignal = () => abortController.abort();
   proc.on("SIGTERM", onSignal);
@@ -88,7 +88,7 @@ function bindWorkerAbortSignals(proc, abortController) {
     if (isShutdownResult(message)) abortController.abort();
   });
 }
-//@ chunk-e3de30et.js:14843-16114 placement
+//@ chunk-szf9hn8s.js:14843-16114 placement
 async function runDaemonWorker(kind, storageV5) {
   if (!kind || !(kind in WORKER_KINDS)) {
     process.stderr.write(`unknown worker kind: ${kind}
@@ -175,7 +175,7 @@ async function runDaemonWorker(kind, storageV5) {
     throw error;
   }
 }
-//@ chunk-e3de30et.js:16114-16216 placement
+//@ chunk-szf9hn8s.js:16114-16216 placement
 function isFolderAlreadyServedError(error) {
   let current = error;
   for (let i = 0; current != null && i < 8; i++) {
@@ -184,7 +184,7 @@ function isFolderAlreadyServedError(error) {
   }
   return false;
 }
-//@ chunk-e3de30et.js:16216-16390 placement
+//@ chunk-szf9hn8s.js:16216-16390 placement
 function getErrorHttpStatus(error) {
   let current = error;
   for (let i = 0; current != null && i < 8; i++) {
@@ -196,9 +196,9 @@ function getErrorHttpStatus(error) {
   }
   return;
 }
-//@ chunk-e3de30et.js:16390-16403 placement
+//@ chunk-szf9hn8s.js:16390-16403 placement
 var WORKER_STOP_TIMEOUT_MS = 30000;
-//@ chunk-e3de30et.js:16403-16466 placement
+//@ chunk-szf9hn8s.js:16403-16466 placement
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -207,7 +207,7 @@ function isProcessAlive(pid) {
     return false;
   }
 }
-//@ chunk-e3de30et.js:16466-16904 placement
+//@ chunk-szf9hn8s.js:16466-16904 placement
 /**
  * 定期检查父进程是否存活，父进程消失时退出 worker。
  */

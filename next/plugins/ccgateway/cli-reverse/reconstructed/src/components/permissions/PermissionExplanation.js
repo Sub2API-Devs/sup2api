@@ -3,12 +3,18 @@
  *
  * 权限请求的风险解释（ctrl+e 解释器）：异步生成说明、风险颜色、加载微光；混入 issue 关闭提示等无关代码。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionExplanation.tsx
- * pieces: chunk-0eepcc6r.js (1), chunk-18hwfzwa.js (2), chunk-g54kbxqw.js (1), chunk-s5p7fp0c.js (1)
- * attribution: fingerprint 3, affinity 1, callgraph-fingerprint 1
+ * pieces: chunk-1nx5c9rq.js (1), chunk-mx6cbnn0.js (1), chunk-xgksxb70.js (2)
+ * attribution: fingerprint 2, callgraph-fingerprint 1, sole-consumer 1
  */
-import { REMOTE_TOOL_CALL_META, parseRemoteToolRequest } from "../../remote/tools/protocolSchemas.js";
+import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
+import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
+import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
+import { MONITOR } from "../../tools/MonitorTool/constants.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { truncateToWidth } from "../../utils/format.js";
+import { displayableScriptDescription } from "../../utils/codeMode/displayableScriptDescription.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
@@ -22,16 +28,30 @@ import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { SpinnerGlyph } from "../Spinner/SpinnerGlyph.js";
 import { GlimmerMessage } from "../Spinner/GlimmerMessage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:24571-24641 fingerprint (2.1.88 match: createExplanationPromise, 0.742)
+//@ chunk-xgksxb70.js:700-728 sole-consumer
+var SCRIPT_DESCRIPTION_TOOLS; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_DESCRIPTION_WIDTH;
+deferInit("chunk-xgksxb70.js:700", () => {
+  SCRIPT_DESCRIPTION_TOOLS = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME, AGENT, TASK, MONITOR];
+  MAX_DESCRIPTION_WIDTH = 80;
+});
+//@ chunk-xgksxb70.js:728-880 fingerprint (2.1.88 match: createExplanationPromise, 1)
 function createExplanationPromise(props) {
-  let { [REMOTE_TOOL_CALL_META]: remoteMeta, ...rest } = props;
-  return {
-    request: parseRemoteToolRequest(remoteMeta),
-    toolInput: rest,
-  };
+  if (!SCRIPT_DESCRIPTION_TOOLS.includes(props.toolName)) return {};
+  let description = isPlainObject(props.toolInput) ? props.toolInput.description : undefined;
+  let truncatedDescription = truncateToWidth(
+    displayableScriptDescription(description, MAX_DESCRIPTION_WIDTH),
+    MAX_DESCRIPTION_WIDTH,
+  );
+  return truncatedDescription === ""
+    ? {}
+    : {
+        description: truncatedDescription,
+      };
 }
-//@ chunk-s5p7fp0c.js:12107-12637 callgraph-fingerprint (2.1.88 match: usePermissionExplainerUI, 0.189)
+//@ chunk-mx6cbnn0.js:12188-12718 callgraph-fingerprint (2.1.88 match: usePermissionExplainerUI, 0.189)
 function usePermissionExplainerUI(props) {
   let $ = useMemoCache(9);
   let { message, detail, onCancel } = props;
@@ -84,19 +104,7 @@ function usePermissionExplainerUI(props) {
   } else t3 = $[8];
   return t3;
 }
-//@ chunk-18hwfzwa.js:781595-781672 affinity
-var MAX_EXPLANATION_CHARS = 4000;
-var EXPLANATION_NOTICE_TIMEOUT_MS = 1e4;
-var ISSUE_URL_PREFIX = "https://github.com/anthropics/claude-code/issues/";
-//@ chunk-18hwfzwa.js:781672-781742 fingerprint (2.1.88 match: getRiskColor, 1)
-function getRiskColor(riskLevel) {
-  return {
-    text: `#${riskLevel}`,
-    color: "success",
-    url: `${ISSUE_URL_PREFIX}${riskLevel}`,
-  };
-}
-//@ chunk-0eepcc6r.js:19212-19899 fingerprint (2.1.88 match: ShimmerLoadingText, 0.544)
+//@ chunk-1nx5c9rq.js:20388-21075 fingerprint (2.1.88 match: ShimmerLoadingText, 0.545)
 function ShimmerLoadingText() {
   let $ = useMemoCache(12);
   let settingsState = useSettingsState();
@@ -151,11 +159,4 @@ function ShimmerLoadingText() {
   } else boxElement = $[11];
   return boxElement;
 }
-export {
-  ShimmerLoadingText,
-  getRiskColor,
-  EXPLANATION_NOTICE_TIMEOUT_MS,
-  MAX_EXPLANATION_CHARS,
-  createExplanationPromise,
-  usePermissionExplainerUI,
-};
+export { ShimmerLoadingText, usePermissionExplainerUI, createExplanationPromise };

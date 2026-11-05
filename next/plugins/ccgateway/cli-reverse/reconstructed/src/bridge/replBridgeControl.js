@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。REPL 侧 Remote Control 控制请求处理（设置模型、权限模式、中断等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (17), chunk-vr5v4gzz.js (1)
+ * attribution: placement 16, layout 2
  */
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { WireSafeControlError, errorMessage } from "../utils/errors.js";
@@ -39,33 +39,38 @@ import { promptProactivityLevel } from "../utils/proactivityLevel.js";
 import { buildBridgeReattachEnv } from "../services/daemon/jobState.js";
 import { logForDebugging } from "../utils/debug.js";
 import { sanitizeSessionTitle, truncateToLength } from "../utils/stringUtils.js";
+import { forkTitleFor } from "../utils/messages/ultrathinkPaste.js";
 import { deriveTitleFromHumanTurn } from "./bridgeMessaging.js";
 import { prepareApiRequest } from "../utils/teleport/api.js";
 import { snapshotGitEvidenceForBridge } from "../utils/git.js";
-import { noopAsync, noop as noop_8, noopTwoArgs } from "./remoteBridgeSettle.js";
+import { noopAsync, noop as noop_7, noopTwoArgs } from "./remoteBridgeSettle.js";
 import { createCodeSession, isCreateSessionFailure, isCredentialsRejection } from "./codeSessionApi.js";
 import { getBridgeBaseUrl } from "./bridgeConfig.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { getMcpConfigByName } from "../services/mcp/config.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1566504-1566521 placement
-function noopHandler(unused) {}
-//@ chunk-18hwfzwa.js:1566521-1566548 placement
+//@ chunk-vr5v4gzz.js:15386-15413 placement
 /**
  * REPL 侧桥接控制上下文的占位：恒返回 null（本构建不提供对话框）。
  */
 function noBridgeControlContext() {
   return null;
 }
-//@ chunk-18hwfzwa.js:1566548-1566581 placement
+//@ chunk-czq1j3j2.js:1610405-1610422 placement
+function noopHandler(unused) {}
+//@ chunk-czq1j3j2.js:1610422-1610455 placement
 /**
  * 同上但为 async 版本，恒返回 null。
  */
 async function noBridgeControlContextAsync() {
   return null;
 }
-//@ chunk-18hwfzwa.js:1566581-1566655 placement
+//@ chunk-czq1j3j2.js:1610455-1610488 layout
+async function createControlStub() {
+  return null;
+}
+//@ chunk-czq1j3j2.js:1610488-1610562 placement
 /**
  * REPL 侧拒绝弹对话框：返回 {token: Symbol, handle: null}，表示不在本地开对话框。
  */
@@ -75,30 +80,37 @@ function refusedBridgeDialogToken(unused) {
     handle: null,
   };
 }
-//@ chunk-18hwfzwa.js:1566655-1566674 placement
+//@ chunk-czq1j3j2.js:1610562-1610581 placement
 /**
  * 空的桥接对话框回调占位（两参数，无操作）。
  */
 function noopBridgeDialogCallback(unused, unusedOther) {}
-//@ chunk-18hwfzwa.js:1566674-1566763 placement
+//@ chunk-czq1j3j2.js:1610581-1610652 layout
+function refusedShare(share, ctx) {
+  return refusedShareOutcome(share, ctx.handle, {
+    kind: "dialog",
+    token: ctx.token,
+  });
+}
+//@ chunk-czq1j3j2.js:1610652-1610750 placement
 /**
  * 返回固定的拒绝分享结果：{outcome: {is:'refused', why:'threw'}, line: 说明文字}。
  */
-async function refusedShareOutcome(share, unused) {
+async function refusedShareOutcome(share, unused, opts) {
   let outcome = {
     is: "refused",
     why: "threw",
   };
   return {
     outcome,
-    line: describeShareOutcome(share, outcome),
+    line: describeShareOutcome(share, outcome, opts.kind),
   };
 }
-//@ chunk-18hwfzwa.js:1566763-1567204 placement
+//@ chunk-czq1j3j2.js:1610750-1611218 placement
 /**
  * 按分享结果（is/why）返回说明文字；当前构建中该分支被常量 false 关掉，总是返回空串。
  */
-function describeShareOutcome(share, outcome) {
+function describeShareOutcome(share, outcome, kind) {
   if (false)
     switch (outcome.is) {
       case "shared":
@@ -107,6 +119,7 @@ function describeShareOutcome(share, outcome) {
         switch (outcome.why) {
           case "no_connection":
           case "dialog_closed":
+          case "question_withdrawn":
           case "not_listed":
           case "not_connected":
           case "could_not_check":
@@ -126,7 +139,7 @@ function describeShareOutcome(share, outcome) {
     }
   return "";
 }
-//@ chunk-18hwfzwa.js:1567204-1567384 placement
+//@ chunk-czq1j3j2.js:1611218-1611398 placement
 /**
  * 撤回由桥接（Remote Control）送进队列的某条消息：正在折叠中则失败；否则按 uuid 移除桥接来源的条目，或撤回尚未入列的入站消息，成功返回 true。
  */
@@ -138,7 +151,7 @@ function withdrawBridgeInboundMessage(queue, uuid) {
     }).length > 0 || queue.withdrawInboundIngest(uuid)
   );
 }
-//@ chunk-18hwfzwa.js:1567384-1567811 placement
+//@ chunk-czq1j3j2.js:1611398-1611825 placement
 /**
  * 远程控制分叉会话的常量：答复截止时间、上限、拒绝原因映射与失败结果。
  */
@@ -164,7 +177,7 @@ var FORK_FAILED_RESULT = {
   error: "fork failed",
   reason: "fork_failed",
 };
-//@ chunk-18hwfzwa.js:1567811-1568175 placement
+//@ chunk-czq1j3j2.js:1611825-1612189 placement
 /**
  * 包装请求处理函数：同一 requestId 的并发请求共享同一个 Promise，已完成的结果按 requestId 缓存（最多 FORK_RESULT_CACHE_MAX 条，先进先出淘汰）。
  */
@@ -192,7 +205,7 @@ function dedupeByRequestId(handler) {
     return promise;
   };
 }
-//@ chunk-18hwfzwa.js:1568175-1571993 placement
+//@ chunk-czq1j3j2.js:1612189-1616008 placement
 /**
  * 处理 Remote Control 发来的会话分叉请求（rc fork conversation）。
  */
@@ -396,7 +409,7 @@ async function handleRcForkConversation(request, state, host) {
   outcomeState = "failed";
   return fail("deadline");
 }
-//@ chunk-18hwfzwa.js:1571993-1572260 placement
+//@ chunk-czq1j3j2.js:1616008-1616256 placement
 /**
  * 生成分叉会话标题：优先用请求给的标题；其次当前会话标题加 " (fork)"；再次从人类消息推导（截到 FORK_TITLE_MAX_LENGTH）；都没有则 "Forked session"。
  */
@@ -404,8 +417,7 @@ function deriveForkTitle(requestedTitle, messages) {
   let normalizeTitle = (raw) => sanitizeSessionTitle(raw).replace(/\s+/g, " ").trim();
   let requested = requestedTitle !== undefined ? normalizeTitle(requestedTitle) : "";
   if (requested) return requested;
-  let currentSessionDisplayTitle = getCurrentSessionDisplayTitle(getSessionId());
-  let fromCurrent = currentSessionDisplayTitle ? normalizeTitle(`${currentSessionDisplayTitle} (fork)`) : "";
+  let fromCurrent = forkTitleFor(getCurrentSessionDisplayTitle(getSessionId()) ?? "");
   if (fromCurrent) return fromCurrent;
   for (let message of messages) {
     let raw = deriveTitleFromHumanTurn(message);
@@ -415,13 +427,13 @@ function deriveForkTitle(requestedTitle, messages) {
   }
   return "Forked session";
 }
-//@ chunk-18hwfzwa.js:1572260-1572396 placement
+//@ chunk-czq1j3j2.js:1616256-1616392 placement
 async function checkForkHistorySuppressed(sessionId, transcriptPath) {
   let historySuppressionFromDisk = await readHistorySuppressionFromDisk(transcriptPath);
   if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return "history_suppressed";
   return historySuppressionFromDisk !== "clean" ? "history_suppressed_on_disk" : null;
 }
-//@ chunk-18hwfzwa.js:1572396-1572980 placement
+//@ chunk-czq1j3j2.js:1616392-1616976 placement
 /**
  * 为分叉创建远端 code session：取 OAuth 令牌和 git 证据（无仓库地址时退回另一来源），按分组 id 创建；分组被拒时不带分组重试一次。成功返回 {sessionId, sessionGroupingId}，否则 null。
  */
@@ -458,7 +470,7 @@ async function createForkCodeSession({ title, tags, sessionGroupingId, credentia
     groupingId = undefined;
     result = await createSession(undefined);
   }
-  if (repoSource && typeof result === "string") noop_8("fork");
+  if (repoSource && typeof result === "string") noop_7("fork");
   if (repoSource && typeof result !== "string" && !isCredentialsRejection(result))
     noopTwoArgs("fork", result);
   return typeof result === "string"
@@ -468,9 +480,9 @@ async function createForkCodeSession({ title, tags, sessionGroupingId, credentia
       }
     : null;
 }
-//@ chunk-18hwfzwa.js:1572980-1573075 placement
+//@ chunk-czq1j3j2.js:1616976-1617071 placement
 var READ_ONLY_CONTROL_COMMAND_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1572980", () => {
+deferInit("chunk-czq1j3j2.js:1616976", () => {
   READ_ONLY_CONTROL_COMMAND_NAMES = new Set([
     "get_usage",
     "mcp_status",
@@ -479,7 +491,7 @@ deferInit("chunk-18hwfzwa.js:1572980", () => {
     "background_tasks",
   ]);
 });
-//@ chunk-18hwfzwa.js:1573075-1573966 placement
+//@ chunk-czq1j3j2.js:1617071-1617962 placement
 function makeBridgeControlContext({
   session,
   engineStore,
@@ -541,4 +553,5 @@ export {
   dedupeByRequestId,
   handleRcForkConversation,
   noopHandler,
+  noBridgeControlContext,
 };

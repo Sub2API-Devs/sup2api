@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提交派发输入：解析模板/技能/仓库/模型，创建后台会话或执行命令；向会话发送回复（支持 /stop）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (6)
  * attribution: placement 6
  */
 import { basename } from "path";
@@ -49,7 +49,7 @@ import {
   applyDispatchOverrides,
   takeNotificationLatency,
 } from "./dispatchDefaults.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { isFastModeEnabled, getFastModeUnavailableMessage } from "../../utils/fastMode.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { sanitizeSkillNameForTelemetry } from "../../utils/telemetry/skillLoadedEvent.js";
@@ -97,7 +97,7 @@ import { getModeFromInput } from "../PromptInput/inputModes.js";
 import { queuePromptForJob } from "../../services/daemon/spawnLauncher.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-93kwxas0.js:61752-69788 placement
+//@ chunk-avy0g5d4.js:61806-69842 placement
 /**
  * 提交派发输入：解析模板/技能/仓库/模型，创建后台会话或执行命令。
  */
@@ -275,7 +275,7 @@ function submitDispatch(services, event) {
                       window: dispatchDefaultsFromJob(editor.getSnapshot()),
                     }).ultracode
                     ? "New sessions from this window don't start in ultracode"
-                    : getInitialSettings_2().ultracode === true
+                    : getInitialSettings().ultracode === true
                       ? "New sessions start in ultracode because ultracode is on in your settings"
                       : "Ultracode is on from --effort ultracode; /effort <level> turns it off"
                   : parseEffortKeyword(effortWord) !== undefined
@@ -628,7 +628,7 @@ function submitDispatch(services, event) {
     else openOrRespawn(focused);
   }
 }
-//@ chunk-93kwxas0.js:69788-70256 placement
+//@ chunk-avy0g5d4.js:69842-70310 placement
 /**
  * 处理粘贴到派发输入框的内容。
  */
@@ -659,7 +659,7 @@ function handlePasteIntoDispatch(context, pasteText) {
   }
   insertAtCursor(replaced);
 }
-//@ chunk-93kwxas0.js:70256-72623 placement
+//@ chunk-avy0g5d4.js:70310-72677 placement
 /**
  * 向会话发送回复（支持 /stop）。
  */
@@ -806,11 +806,11 @@ async function replyToJob(context, focused, replyText) {
   roster.reload();
   return errorText;
 }
-//@ chunk-93kwxas0.js:72623-72627 placement
+//@ chunk-avy0g5d4.js:72677-72681 placement
 init_react_production();
-//@ chunk-93kwxas0.js:72627-72631 placement
+//@ chunk-avy0g5d4.js:72681-72685 placement
 init_react_production();
-//@ chunk-93kwxas0.js:72631-72647 placement
+//@ chunk-avy0g5d4.js:72685-72701 placement
 var MAX_DISPATCH_RETRIES = 3;
 var DISPATCH_TIMEOUT_MS = 1e4;
 export { submitDispatch, DISPATCH_TIMEOUT_MS, handlePasteIntoDispatch, MAX_DISPATCH_RETRIES, replyToJob };

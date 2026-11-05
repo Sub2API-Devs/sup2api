@@ -3,13 +3,14 @@
  *
  * 团队辅助：发送到终端窗格的命令中禁止控制字符
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/teamHelpers.ts
- * pieces: chunk-cne5hsvz.js (1), chunk-fw249fsw.js (37)
- * attribution: callgraph-fingerprint 1, placement 4, layout 13, facade-exports 18, file-local 1, fingerprint 1
+ * pieces: chunk-qrtkkn9z.js (39)
+ * attribution: placement 4, layout 14, facade-exports 19, file-local 1, fingerprint 1
  */
 import { join } from "path";
-import { readFile, mkdir, writeFile, rm } from "fs/promises";
+import { readFile, open, writeFile, mkdir, rename, rm, stat } from "fs/promises";
+import { randomUUID } from "crypto";
 import { getTeamsDir } from "../envUtils.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import {
@@ -34,23 +35,23 @@ import { isTeammate, getTeamName, getAgentName } from "../teammate.js";
 import { getSessionCreatedTeams, getSessionSpawnedTeammatePanes } from "../../bootstrap/state.js";
 import { TEAM_LEAD } from "./constants.js";
 
-//@ chunk-fw249fsw.js:719-794 placement
+//@ chunk-qrtkkn9z.js:787-862 placement
 class SwarmPaneError extends Error {
   constructor(message) {
     super(message);
     this.name = "SwarmPaneError";
   }
 }
-//@ chunk-fw249fsw.js:794-810 placement
+//@ chunk-qrtkkn9z.js:862-878 placement
 var CONTROL_CHAR_RE = /\p{Cc}/u;
-//@ chunk-fw249fsw.js:810-843 placement
+//@ chunk-qrtkkn9z.js:878-911 placement
 /**
  * 文本是否含控制字符。
  */
 function hasControlChars(text) {
   return CONTROL_CHAR_RE.test(text);
 }
-//@ chunk-fw249fsw.js:843-1045 placement
+//@ chunk-qrtkkn9z.js:911-1113 placement
 function assertNoControlChars(text) {
   let match = CONTROL_CHAR_RE.exec(text);
   if (match) {
@@ -60,58 +61,58 @@ function assertNoControlChars(text) {
     );
   }
 }
-//@ chunk-fw249fsw.js:1045-1093 layout (2.1.88 match: getBackendByType, 1)
+//@ chunk-qrtkkn9z.js:1113-1161 layout (2.1.88 match: getBackendByType, 1)
 /**
  * 类型是否是 pane 后端（tmux 或 iterm2）。
  */
 function isPaneBackendType(type) {
   return type === "tmux" || type === "iterm2";
 }
-//@ chunk-fw249fsw.js:1093-1161 facade-exports
+//@ chunk-qrtkkn9z.js:1161-1229 facade-exports
 function sanitizeName(name) {
   return name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
 }
-//@ chunk-fw249fsw.js:1161-1206 facade-exports
+//@ chunk-qrtkkn9z.js:1229-1274 facade-exports
 function sanitizeAgentName(name) {
   return name.replaceAll("@", "-");
 }
-//@ chunk-fw249fsw.js:1206-1245 facade-exports
+//@ chunk-qrtkkn9z.js:1274-1313 facade-exports
 /**
  * 团队目录：<teams 目录>/<规范化团队名>。
  */
 function getTeamDir(teamName) {
   return join(getTeamsDir(), sanitizeName(teamName));
 }
-//@ chunk-fw249fsw.js:1245-1292 facade-exports (2.1.88 match: getTeamFilePath, 1)
+//@ chunk-qrtkkn9z.js:1313-1360 facade-exports (2.1.88 match: getTeamFilePath, 1)
 /**
  * 团队文件路径：<团队目录>/config.json。
  */
 function getTeamFilePath(teamName) {
   return join(getTeamDir(teamName), "config.json");
 }
-//@ chunk-fw249fsw.js:1292-1329 layout
+//@ chunk-qrtkkn9z.js:1360-1397 layout
 /**
  * 团队文件在存储 v5 中的键。
  */
 function teamStoreKey(teamName) {
   return STORAGE_SPACES.team(sanitizeName(teamName));
 }
-//@ chunk-fw249fsw.js:1329-1493 layout
+//@ chunk-qrtkkn9z.js:1397-1561 layout
 function formatStoreError(error) {
   let failureClassSuffix = "failureClass" in error ? `/${error.failureClass}` : "";
   let telemetrySuffix =
     "telemetryCode" in error && error.telemetryCode !== undefined ? ` [${error.telemetryCode}]` : "";
   return `${error.code}${failureClassSuffix}${telemetrySuffix}`;
 }
-//@ chunk-fw249fsw.js:1493-1570 layout
+//@ chunk-qrtkkn9z.js:1561-1638 layout
 function isLockSuspectError(error) {
   return error.code === "Unavailable" && error.telemetryCode === "LockSuspect";
 }
-//@ chunk-fw249fsw.js:1570-1649 layout
+//@ chunk-qrtkkn9z.js:1638-1717 layout
 function isLockContendedError(error) {
   return error.code === "Unavailable" && error.telemetryCode === "LockContended";
 }
-//@ chunk-fw249fsw.js:1649-1868 layout
+//@ chunk-qrtkkn9z.js:1717-1936 layout
 function isBenignStoreError(error) {
   return (
     error.code === "Unavailable" ||
@@ -123,7 +124,7 @@ function isBenignStoreError(error) {
         (error.failureClass === "unknown" && isSyscallError(error.cause))))
   );
 }
-//@ chunk-fw249fsw.js:1868-2156 layout
+//@ chunk-qrtkkn9z.js:1936-2224 layout
 /**
  * 规范化团队文件：剔除格式不对的成员与 leadProcess。
  */
@@ -142,7 +143,7 @@ function sanitizeTeamFile(teamFile) {
         leadProcess,
       };
 }
-//@ chunk-fw249fsw.js:2156-2393 layout
+//@ chunk-qrtkkn9z.js:2224-2461 layout
 function isValidLeadProcess(leadProcess) {
   return (
     typeof leadProcess === "object" &&
@@ -156,7 +157,7 @@ function isValidLeadProcess(leadProcess) {
     (!("procStart" in leadProcess) || typeof leadProcess.procStart === "string")
   );
 }
-//@ chunk-fw249fsw.js:2393-2526 layout
+//@ chunk-qrtkkn9z.js:2461-2594 layout
 function isValidMember(member) {
   return (
     typeof member === "object" &&
@@ -167,7 +168,7 @@ function isValidMember(member) {
     typeof member.name === "string"
   );
 }
-//@ chunk-fw249fsw.js:2526-3028 facade-exports (2.1.88 match: readTeamFile, 0.837)
+//@ chunk-qrtkkn9z.js:2594-3096 facade-exports (2.1.88 match: readTeamFile, 0.837)
 /**
  * 读团队文件：有存储 v5 时从存储读，否则读 config.json；不存在返回 null。
  */
@@ -196,7 +197,7 @@ async function readTeamFileAsync(teamName, storage) {
     return null;
   }
 }
-//@ chunk-fw249fsw.js:3028-3248 facade-exports
+//@ chunk-qrtkkn9z.js:3096-3316 facade-exports
 function logTeamFileWriteFailure(teamName, error) {
   if (isSyscallError(error))
     logForDebugging(
@@ -211,14 +212,14 @@ function logTeamFileWriteFailure(teamName, error) {
     });
   else logError(error);
 }
-//@ chunk-fw249fsw.js:3248-3414 layout
+//@ chunk-qrtkkn9z.js:3316-3482 layout
 function isBenignStoreErrorCause(error) {
   if (!(error instanceof Error) || error.cause === undefined || error.cause === null) return false;
   let cause = error.cause;
   if (typeof cause !== "object" || typeof cause.code !== "string") return false;
   return isBenignStoreError(cause);
 }
-//@ chunk-fw249fsw.js:3414-3504 layout (2.1.88 match: LOCK_OPTIONS, 0.776)
+//@ chunk-qrtkkn9z.js:3482-3572 layout (2.1.88 match: LOCK_OPTIONS, 0.776)
 /**
  * 团队文件锁选项（10 次重试）。
  */
@@ -231,14 +232,14 @@ var TEAM_FILE_LOCK_OPTIONS = {
   },
   onCompromised: () => {},
 };
-//@ chunk-fw249fsw.js:3504-3691 layout
+//@ chunk-qrtkkn9z.js:3572-3759 layout
 function teamFileMissingError(teamName) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Internal error: team file for "${teamName}" not found. The session team should have been initialized at startup.`,
     "Team file missing (session team not initialized)",
   );
 }
-//@ chunk-fw249fsw.js:3691-4156 facade-exports (2.1.88 match: writeTeamFile, 0)
+//@ chunk-qrtkkn9z.js:3759-4347 facade-exports (2.1.88 match: writeTeamFile, 0)
 /**
  * 加锁读-改-写团队文件：回调返回 false 时不写；bestEffortWrite 时写失败只记录。存储 v5 走 updateTeamFileInStore。
  */
@@ -261,9 +262,17 @@ async function updateTeamFile(teamName, mutate, options, storage) {
     let result = mutate(teamFile);
     if (result === false) return;
     try {
-      await writeTeamFileAsync(teamName, teamFile);
+      let text = jsonStringify(teamFile, null, 2);
+      let fileHandle = await open(teamDir, "r+");
+      try {
+        await writeFile(fileHandle, text);
+        await fileHandle.truncate(Buffer.byteLength(text));
+      } finally {
+        await fileHandle.close();
+      }
     } catch (error) {
-      if (!options?.bestEffortWrite) throw error;
+      if (!options?.bestEffortWrite)
+        throw getErrnoCode(error) === "ENOENT" ? teamFileMissingError(teamName) : error;
       logTeamFileWriteFailure(teamName, error);
     }
     return result;
@@ -275,7 +284,7 @@ async function updateTeamFile(teamName, mutate, options, storage) {
     }
   }
 }
-//@ chunk-fw249fsw.js:4156-4371 facade-exports (2.1.88 match: removeMemberFromTeam, 0.359)
+//@ chunk-qrtkkn9z.js:4347-4562 facade-exports (2.1.88 match: removeMemberFromTeam, 0.358)
 /**
  * 按 agentId 从团队文件删除成员（失败只记日志）。
  */
@@ -295,7 +304,7 @@ async function removeTeamMember(teamName, agentId, storage) {
     logForDebugging(`[TeammateTool] removeTeamMember(${agentId}) failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-fw249fsw.js:4371-5944 file-local
+//@ chunk-qrtkkn9z.js:4562-6135 file-local
 /**
  * 在存储 v5 上原子更新团队文件：锁可疑/文件不可读时最多重试 5 次，其余错误按 bestEffortWrite 决定抛出或记录。
  */
@@ -421,7 +430,7 @@ async function updateTeamFileInStore(teamName, mutate, options, storage) {
   }
   return lastResult;
 }
-//@ chunk-fw249fsw.js:5944-6252 facade-exports (2.1.88 match: writeTeamFileAsync, 0.14)
+//@ chunk-qrtkkn9z.js:6135-6443 facade-exports (2.1.88 match: writeTeamFileAsync, 0.14)
 /**
  * 写团队文件（存储 v5 或 config.json）。
  */
@@ -448,7 +457,7 @@ async function writeTeamFileAsync(teamName, teamFile, storage) {
   });
   await writeFile(getTeamFilePath(teamName), jsonStringify(teamFile, null, 2));
 }
-//@ chunk-fw249fsw.js:6252-6890 facade-exports (2.1.88 match: removeTeammateFromTeamFile, 0.879)
+//@ chunk-qrtkkn9z.js:6443-7081 facade-exports (2.1.88 match: removeTeammateFromTeamFile, 0.879)
 /**
  * 按 agentId 或名字从团队文件删除成员（尽力写入）。
  */
@@ -491,7 +500,19 @@ async function removeTeammateFromTeamFile(teamName, identifier, storageV5) {
     return false;
   }
 }
-//@ chunk-fw249fsw.js:6890-7467 facade-exports (2.1.88 match: removeMemberByAgentId, 0.516)
+//@ chunk-qrtkkn9z.js:7081-7332 facade-exports (2.1.88 match: setMultipleMemberModes, 0.184)
+async function isShutdownFrameStale(teamName, agentId, timestamp, storage) {
+  let found = (await readTeamFileAsync(teamName, storage).catch(() => null))?.members.find(
+    (member) => member.agentId === agentId,
+  );
+  let stale = found !== undefined && found.joinedAt >= Date.parse(timestamp);
+  if (stale)
+    logForDebugging(
+      `[TeammateTool] Ignoring a shutdown approval for ${agentId}: it was sent before this member joined`,
+    );
+  return stale;
+}
+//@ chunk-qrtkkn9z.js:7332-7909 facade-exports (2.1.88 match: removeMemberByAgentId, 0.516)
 /**
  * 按 agentId 删除成员；onlyIfJoinedBefore 防止删掉删除发起后又重新加入的同 ID 成员。
  */
@@ -534,7 +555,7 @@ async function removeMemberByAgentId(teamName, agentId, options, storageV5) {
     return false;
   }
 }
-//@ chunk-fw249fsw.js:7467-7904 facade-exports (2.1.88 match: setMemberMode, 0.819)
+//@ chunk-qrtkkn9z.js:7909-8346 facade-exports (2.1.88 match: setMemberMode, 0.819)
 /**
  * 设置成员的权限模式（mode），返回状态 absent/unchanged/set 只用于日志。
  */
@@ -569,7 +590,7 @@ async function setMemberMode(teamName, memberName, mode, storage) {
     logForDebugging(`[TeammateTool] Cannot set member mode: ${errorMessage(error)}`);
   }
 }
-//@ chunk-fw249fsw.js:7904-7994 facade-exports
+//@ chunk-qrtkkn9z.js:8346-8436 facade-exports
 /**
  * 当前是 teammate 时，把自己在团队文件里的 mode 更新为给定值。
  */
@@ -579,7 +600,7 @@ async function syncTeammateMode(mode, teamName, storage) {
   let agentName = getAgentName();
   if (teamName_2 && agentName) await setMemberMode(teamName_2, agentName, mode, storage);
 }
-//@ chunk-fw249fsw.js:7994-8453 facade-exports (2.1.88 match: setMemberActive, 0.789)
+//@ chunk-qrtkkn9z.js:8436-8895 facade-exports (2.1.88 match: setMemberActive, 0.789)
 /**
  * 设置成员 isActive（空闲/活动）。
  */
@@ -616,14 +637,14 @@ async function setMemberActive(teamName, memberName, isActive, storage) {
     logForDebugging(`[TeammateTool] Cannot set member active: ${errorMessage(error)}`);
   }
 }
-//@ chunk-fw249fsw.js:8453-8482 facade-exports
+//@ chunk-qrtkkn9z.js:8895-8924 facade-exports
 /**
  * 登记本会话创建的团队，会话结束时清理。
  */
 function registerTeamForSessionCleanup(teamName) {
   getSessionCreatedTeams().add(teamName);
 }
-//@ chunk-fw249fsw.js:8482-8861 facade-exports (2.1.88 match: cleanupSessionTeams, 0.749)
+//@ chunk-qrtkkn9z.js:8924-9303 facade-exports (2.1.88 match: cleanupSessionTeams, 0.749)
 /**
  * 会话结束时清理本会话创建的团队：先杀孤儿 pane，再删团队目录。
  */
@@ -639,11 +660,11 @@ async function cleanupSessionTeams(storageV5) {
     for (let result of settled) if (result.status === "rejected") throw result.reason;
   }).catch(() => {});
 }
-//@ chunk-fw249fsw.js:8861-8895 layout
+//@ chunk-qrtkkn9z.js:9303-9337 layout
 function paneKey(backendType, paneId) {
   return `${backendType}:${paneId}`;
 }
-//@ chunk-fw249fsw.js:8895-8944 facade-exports
+//@ chunk-qrtkkn9z.js:9337-9386 facade-exports
 /**
  * 记录本会话创建的 pane（后端类型:paneId），供会话结束时清理。
  */
@@ -651,7 +672,7 @@ function recordSpawnedTeammatePane(backendType, paneId) {
   if (isPaneBackendType(backendType) && paneId)
     getSessionSpawnedTeammatePanes().add(paneKey(backendType, paneId));
 }
-//@ chunk-fw249fsw.js:8944-9588 fingerprint (2.1.88 match: killOrphanedTeammatePanes, 0.847)
+//@ chunk-qrtkkn9z.js:9386-10030 fingerprint (2.1.88 match: killOrphanedTeammatePanes, 0.846)
 /**
  * 杀掉团队文件中、由本会话创建的 tmux/iTerm2 pane。
  */
@@ -684,7 +705,9 @@ async function killOrphanedTeammatePanes(teamName, storageV5) {
     }),
   );
 }
-//@ chunk-fw249fsw.js:9588-9863 facade-exports (2.1.88 match: cleanupTeamDirectories, 0.753)
+//@ chunk-qrtkkn9z.js:10030-10038 layout
+var MAX_TEAM_DIR_DELETE_ATTEMPTS = 3;
+//@ chunk-qrtkkn9z.js:10038-10587 facade-exports (2.1.88 match: cleanupTeamDirectories, 0.433)
 /**
  * 删除团队目录（记 swarm_team_cleanup）。
  */
@@ -694,10 +717,28 @@ async function cleanupTeamDirectories(teamName) {
     async () => {
       let sanitizedName = getTeamDir(teamName);
       try {
-        await rm(sanitizedName, {
-          recursive: true,
-          force: true,
-        });
+        let trashPath = `${sanitizedName}.deleted-${randomUUID()}`;
+        let targetPath = await rename(sanitizedName, trashPath).then(
+          () => trashPath,
+          () => sanitizedName,
+        );
+        for (let idx = 1; ; idx++) {
+          await rm(targetPath, {
+            recursive: true,
+            force: true,
+          });
+          if (
+            await stat(targetPath).then(
+              () => false,
+              (error) => getErrnoCode(error) === "ENOENT",
+            )
+          )
+            break;
+          if (idx === MAX_TEAM_DIR_DELETE_ATTEMPTS) {
+            logForDebugging(`[TeammateTool] ${targetPath} still exists after ${idx} delete attempts`);
+            throw Error("team folder still exists after every delete attempt");
+          }
+        }
         logForDebugging(`[TeammateTool] Cleaned up team directory: ${sanitizedName}`);
       } catch (error) {
         logForDebugging(
@@ -709,46 +750,28 @@ async function cleanupTeamDirectories(teamName) {
     (error) => sanitizeErrnoForTelemetry(error) ?? "error",
   );
 }
-//@ chunk-cne5hsvz.js:22255-22452 callgraph-fingerprint (2.1.88 match: setMultipleMemberModes, 0.329)
-/**
- * 把成员的 pane 信息（tmuxPaneId、backendType）写入团队文件，并记录为本会话创建的 pane。
- */
-async function setMemberPaneInfo(teamName, agentId, paneInfo, storage) {
-  recordSpawnedTeammatePane(paneInfo.backendType, paneInfo.tmuxPaneId);
-  await updateTeamFile(
-    teamName,
-    (teamFile) => {
-      let found = teamFile.members.find((member) => member.agentId === agentId);
-      if (!found) return false;
-      found.tmuxPaneId = paneInfo.tmuxPaneId;
-      found.backendType = paneInfo.backendType;
-    },
-    undefined,
-    storage,
-  );
-}
 export {
-  syncTeammateMode,
   readTeamFileAsync,
-  setMemberActive,
-  updateTeamFile,
+  isShutdownFrameStale,
   removeTeammateFromTeamFile,
-  SwarmPaneError,
-  assertNoControlChars,
-  getTeamFilePath,
   removeMemberByAgentId,
   getTeamDir,
   cleanupTeamDirectories,
+  updateTeamFile,
+  getTeamFilePath,
   logTeamFileWriteFailure,
   writeTeamFileAsync,
   registerTeamForSessionCleanup,
+  SwarmPaneError,
   hasControlChars,
   removeTeamMember,
+  recordSpawnedTeammatePane,
   sanitizeAgentName,
-  setMemberPaneInfo,
   sanitizeName,
+  assertNoControlChars,
   isPaneBackendType,
+  syncTeammateMode,
+  setMemberActive,
   setMemberMode,
   cleanupSessionTeams,
-  recordSpawnedTeammatePane,
 };

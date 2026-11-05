@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地命令标签解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (9)
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -23,9 +23,9 @@ import {
 } from "../../constants/xml.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:172888-172949 placement
+//@ chunk-7kayq7nc.js:191103-191164 placement
 var ForwardedIntentSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwbq4xvm.js:172888", () => {
+deferInit("chunk-7kayq7nc.js:191103", () => {
   ForwardedIntentSchema = DoctorLazy(() =>
     objectSchema({
       lineage: stringSchema().min(1),
@@ -33,7 +33,7 @@ deferInit("chunk-bwbq4xvm.js:172888", () => {
     }),
   );
 });
-//@ chunk-bwbq4xvm.js:172949-173121 placement
+//@ chunk-7kayq7nc.js:191164-191336 placement
 /**
  * 解析 queued_command 上的 forwardedIntent：{lineage, source}，source 只认 typed/relay/owner，其余记为 unattributed。
  */
@@ -46,13 +46,13 @@ function parseForwardedIntent(forwardedIntent) {
     source: source === "typed" || source === "relay" || source === "owner" ? source : "unattributed",
   };
 }
-//@ chunk-bwbq4xvm.js:173121-173203 placement
+//@ chunk-7kayq7nc.js:191336-191418 placement
 function isForwardedQueuedCommand(attachment) {
   return (
     attachment.type === "queued_command" && parseForwardedIntent(attachment.forwardedIntent) !== undefined
   );
 }
-//@ chunk-bwbq4xvm.js:173203-173382 placement
+//@ chunk-7kayq7nc.js:191418-191597 placement
 /**
  * 文本是否以本地命令产生的标签开头（命令输出、stdout/stderr、caveat、bash 输入等系统包装标签）。
  */
@@ -67,18 +67,21 @@ function isLocalCommandMarkup(content) {
     content.startsWith(`<${TASK_NOTIFICATION}>`)
   );
 }
-//@ chunk-bwbq4xvm.js:173382-173453 placement
+//@ chunk-7kayq7nc.js:191597-191668 placement
 function isLocalCommandRecordTag(text) {
   return text.startsWith(`<${COMMAND_MESSAGE}>`) || text.startsWith(`<${COMMAND_NAME}>`);
 }
-//@ chunk-bwbq4xvm.js:173453-173546 placement
-var LOCAL_COMMAND_TAG_KINDS = [
-  [`<${COMMAND_NAME}>`, "record"],
-  [`<${LOCAL_COMMAND_STDOUT}>`, "output"],
-  [`<${LOCAL_COMMAND_STDERR}>`, "output"],
-  [`<${LOCAL_COMMAND_CAVEAT}>`, "caveat"],
-];
-//@ chunk-bwbq4xvm.js:173546-173749 placement
+//@ chunk-7kayq7nc.js:191668-191761 placement
+var LOCAL_COMMAND_TAG_KINDS; // deferred: uses COMMAND_NAME (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7kayq7nc.js:191668", () => {
+  LOCAL_COMMAND_TAG_KINDS = [
+    [`<${COMMAND_NAME}>`, "record"],
+    [`<${LOCAL_COMMAND_STDOUT}>`, "output"],
+    [`<${LOCAL_COMMAND_STDERR}>`, "output"],
+    [`<${LOCAL_COMMAND_CAVEAT}>`, "caveat"],
+  ];
+});
+//@ chunk-7kayq7nc.js:191761-191964 placement
 /**
  * 取消息最后一段文本，按开头标签判断它是 record/output/caveat 哪类本地命令包装。
  */
@@ -92,11 +95,11 @@ function localCommandTagKindOf(message) {
   if (typeof text !== "string") return;
   return LOCAL_COMMAND_TAG_KINDS.find(([prefix]) => text.startsWith(prefix))?.[1];
 }
-//@ chunk-bwbq4xvm.js:173749-173788 placement
+//@ chunk-7kayq7nc.js:191964-192003 placement
 function isLocalCommandMessage(message) {
   return localCommandTagKindOf(message) !== undefined;
 }
-//@ chunk-bwbq4xvm.js:173788-174061 placement
+//@ chunk-7kayq7nc.js:192003-192276 placement
 function bashCommandTagKindOf(message) {
   let content = message.message?.content;
   let text = Array.isArray(content)
@@ -111,8 +114,8 @@ function bashCommandTagKindOf(message) {
 export {
   isForwardedQueuedCommand,
   isLocalCommandMarkup,
-  bashCommandTagKindOf,
   localCommandTagKindOf,
+  bashCommandTagKindOf,
   isLocalCommandMessage,
   parseForwardedIntent,
 };

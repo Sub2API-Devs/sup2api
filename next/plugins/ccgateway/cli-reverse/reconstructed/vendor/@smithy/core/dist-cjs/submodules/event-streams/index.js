@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/event-streams/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-3cddmtk7.js (9), chunk-w1q1hkg4.js (4)
+ * pieces: chunk-1b4mcch6.js (4), chunk-ayc8mk37.js (9)
  * attribution: esm-fingerprint 7, esm-layout 6
  */
 import { Readable } from "stream";
@@ -21,7 +21,7 @@ import { EventStreamPayloadHandler } from "../../../../../@aws-sdk/eventstream-h
 import { require_util_user_agent_node } from "../../../../../@aws-sdk/util-user-agent-node/dist-cjs/index.js";
 import { require_util_utf8 } from "../../../../util-utf8/dist-cjs/index.js";
 
-//@ chunk-3cddmtk7.js:11622-12369 esm-fingerprint
+//@ chunk-ayc8mk37.js:11622-12369 esm-fingerprint
 function getChunkedStream(body) {
   let currentMessageTotalLength = 0;
   let currentMessagePendingLength = 0;
@@ -85,7 +85,7 @@ function getChunkedStream(body) {
     [Symbol.asyncIterator]: iterator,
   };
 }
-//@ chunk-3cddmtk7.js:12369-12920 esm-fingerprint
+//@ chunk-ayc8mk37.js:12369-12920 esm-fingerprint
 function getMessageUnmarshaller(deserializer, utfEncoder) {
   return async function (message) {
     let { value: messageType } = message.headers[":message-type"];
@@ -115,7 +115,7 @@ function getMessageUnmarshaller(deserializer, utfEncoder) {
     } else throw Error(`Unrecognizable event type: ${message.headers[":event-type"].value}`);
   };
 }
-//@ chunk-3cddmtk7.js:12920-13329 esm-fingerprint
+//@ chunk-ayc8mk37.js:12920-13329 esm-fingerprint
 class EventStreamMarshaller$1 {
   eventStreamCodec;
   utfEncoder;
@@ -144,22 +144,22 @@ class EventStreamMarshaller$1 {
     });
   }
 }
-//@ chunk-3cddmtk7.js:13329-13368 esm-layout
+//@ chunk-ayc8mk37.js:13329-13368 esm-layout
 var import_index_native = __toESM(require_index_native());
 var import_core_3 = __toESM(require_core());
 var import_schema = __toESM(require_schema());
-//@ chunk-3cddmtk7.js:13368-13451 esm-fingerprint
+//@ chunk-ayc8mk37.js:13368-13451 esm-fingerprint
 var withEventStreamSerdeProvider = (input) =>
   Object.assign(input, {
     eventStreamMarshaller: input.eventStreamSerdeProvider(input),
   });
-//@ chunk-3cddmtk7.js:19948-19970 esm-layout
+//@ chunk-ayc8mk37.js:19948-19970 esm-layout
 var createEventStreamPayloadHandler = (options) => new EventStreamPayloadHandler(options);
-//@ chunk-3cddmtk7.js:19970-20009 esm-layout
+//@ chunk-ayc8mk37.js:19970-20009 esm-layout
 var import_util_user_agent_node = __toESM(require_util_user_agent_node());
 var import_index_native_2 = __toESM(require_index_native());
 var import_core_7 = __toESM(require_core());
-//@ chunk-3cddmtk7.js:20044-20285 esm-fingerprint
+//@ chunk-ayc8mk37.js:20044-20285 esm-fingerprint
 async function* toAsyncIterable(readStream) {
   let streamEnded = false;
   let generationEnded = false;
@@ -180,7 +180,7 @@ async function* toAsyncIterable(readStream) {
     generationEnded = streamEnded && records.length === 0;
   }
 }
-//@ chunk-3cddmtk7.js:20285-20617 esm-fingerprint
+//@ chunk-ayc8mk37.js:20285-20617 esm-fingerprint
 class EventStreamMarshaller {
   universalMarshaller;
   constructor({ utf8Encoder, utf8Decoder }) {
@@ -198,7 +198,7 @@ class EventStreamMarshaller {
     return Readable.from(this.universalMarshaller.serialize(input, context));
   }
 }
-//@ chunk-w1q1hkg4.js:263-3851 esm-fingerprint
+//@ chunk-1b4mcch6.js:263-3851 esm-fingerprint
 class EventStreamSerde {
   marshaller;
   serializer;
@@ -409,15 +409,15 @@ class EventStreamSerde {
     };
   }
 }
-//@ chunk-w1q1hkg4.js:3851-3859 esm-layout
+//@ chunk-1b4mcch6.js:3851-3859 esm-layout
 var utilUtf8;
 var EventStreamSerdeExport;
-//@ chunk-w1q1hkg4.js:3859-3886 esm-layout
+//@ chunk-1b4mcch6.js:3859-3886 esm-layout
 var init_event_streams = __esm(() => {
   utilUtf8 = require_util_utf8();
   EventStreamSerdeExport = EventStreamSerde;
 });
-//@ chunk-w1q1hkg4.js:3886-3890 esm-layout
+//@ chunk-1b4mcch6.js:3886-3890 esm-layout
 init_event_streams();
 export {
   import_index_native,

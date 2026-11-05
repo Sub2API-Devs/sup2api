@@ -3,16 +3,16 @@
  *
  * 第三方提供商用 ANTHROPIC_DEFAULT_<族>_MODEL_SUPPORTED_CAPABILITIES 声明自定义模型能力。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/modelSupportOverrides.ts
- * pieces: chunk-aepeg2w5.js (3)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: fingerprint 2, layout 1
  */
 import { getProviderState } from "./providerCaches.js";
 import { usesFirstPartyModelIds } from "./providers.js";
 import { sameModelSpelling } from "./modelIds.js";
 
-//@ chunk-aepeg2w5.js:475473-476082 fingerprint (2.1.88 match: TIERS, 0.771)
+//@ chunk-exfmq47h.js:486871-487480 fingerprint (2.1.88 match: TIERS, 0.771)
 /**
  * 档位环境变量对：ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL 与对应 _SUPPORTED_CAPABILITIES。
  */
@@ -38,7 +38,7 @@ var TIERS = [
     capabilitiesEnvVar: "ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES",
   },
 ];
-//@ chunk-aepeg2w5.js:476082-476239 layout
+//@ chunk-exfmq47h.js:487480-487637 layout
 /**
  * 按 模型:能力 缓存 get3PModelCapabilityOverride 结果。
  */
@@ -51,7 +51,7 @@ function getCapabilityOverrideCached(model, capability) {
   capabilityOverrides.set(cacheKey, override);
   return override;
 }
-//@ chunk-aepeg2w5.js:476239-476485 fingerprint (2.1.88 match: get3PModelCapabilityOverride, 0.794)
+//@ chunk-exfmq47h.js:487637-487883 fingerprint (2.1.88 match: get3PModelCapabilityOverride, 0.795)
 /**
  * 非第一方类提供商时：模型等于某档 ANTHROPIC_DEFAULT_*_MODEL 且设了能力列表，则返回该能力是否在列表中；否则 undefined。
  */

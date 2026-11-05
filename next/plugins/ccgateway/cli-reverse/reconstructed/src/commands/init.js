@@ -3,15 +3,15 @@
  *
  * /init 提示词命令：旧版与新版（CLAUDE_CODE_NEW_INIT 或实验）两套 CLAUDE.md 初始化提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/init.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { isImportEnabled, IMPORT_OFFER_INSTRUCTIONS, useNewInitPrompt } from "./import/index.js";
 import { env } from "../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1698787-1722860 fingerprint (2.1.88 match: command, 0.671)
+//@ chunk-5xgkngpb.js:1774157-1798230 fingerprint (2.1.88 match: command, 0.671)
 /**
  * getOldInitPrompt：同旧版 OLD_INIT_PROMPT。
  */

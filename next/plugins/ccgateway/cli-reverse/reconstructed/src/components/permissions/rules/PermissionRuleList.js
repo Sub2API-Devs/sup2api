@@ -3,10 +3,10 @@
  *
  * /permissions 主界面：Recent/Allow/Ask/Deny/Workspace 标签页，规则列表、详情、删除与添加。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/PermissionRuleList.tsx
- * pieces: chunk-p2qwpk2k.js (37)
- * attribution: sole-consumer 13, file-local 2, layout 15, fingerprint 7
+ * pieces: chunk-h5wy8vq5.js (37)
+ * attribution: sole-consumer 13, file-local 2, layout 15, fingerprint 6, callgraph-witnessed 1
  */
 import { randomBytes } from "crypto";
 import { mkdirSync, openSync, constants, writeSync, closeSync } from "fs";
@@ -43,15 +43,17 @@ import {
   deleteAutoModeRule,
   ruleKey,
 } from "./autoModeRuleEdits.js";
-import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { useKeybinding, useGlobalExitKeybindings } from "../../../keybindings/useKeybinding.js";
-import { AgentNavigationFooter } from "../../agents/AgentNavigationFooter.js";
-import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
-import { UltrareviewOverageDialog, openRulesInEditor, toBulletLine } from "./openRulesInEditor.js";
-import { ShutdownRequestDisplay } from "../../messages/ShutdownMessage.js";
 import { isAutoModeSetupNotOverridden } from "../../../commands/auto-mode-setup/index.js";
+import {
+  UltrareviewOverageDialog,
+  RuleDetailsDialog,
+  openRulesInEditor,
+  toBulletLine,
+} from "./openRulesInEditor.js";
+import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { useIsFullscreen } from "../../../ink/renderModeContext.js";
+import { useKeybinding, useGlobalExitKeybindings } from "../../../keybindings/useKeybinding.js";
 import {
   getDefaultExternalAutoModeRules,
   sessionSidecarFilePath,
@@ -59,7 +61,7 @@ import {
 import { truncateToLength } from "../../../utils/stringUtils.js";
 import { getShortEditorName, resolveEditorCommand } from "../../../utils/editor.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
-import { Byline } from "../../design-system/Byline.js";
+import { Dialog } from "../../design-system/Dialog.js";
 import {
   init_react_production,
   useState,
@@ -69,9 +71,10 @@ import {
 } from "../../../../vendor/react/cjs/react.production.js";
 import { AUTO_MODE_ENV_EDIT } from "../../../utils/teleport/autoModeDumps.js";
 import { editFileInEditor } from "../../../utils/promptEditor.js";
-import { Dialog } from "../../design-system/Dialog.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
+import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { supportsShiftEnter } from "../../../commands/terminalSetup/terminalSetup.js";
+import { Byline } from "../../design-system/Byline.js";
 import { Newline } from "../../../ink/components/Input.js";
 import { TextInput } from "../../TextInput.js";
 import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -79,16 +82,17 @@ import { jsonStringify } from "../../../utils/slowOperations.js";
 import { consentRowLabel } from "../consentRows.js";
 import {
   permissionRuleSourceDisplayString,
+  isReadOnlyPermissionRuleSource,
   getAllowRules,
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
   deletePermissionRule,
 } from "../../../utils/permissions/permissions.js";
 import { quotedReason, RecentDenialsTab } from "./RecentDenialsTab.js";
 import { truncateToWidth } from "../../../utils/format.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { PermissionRuleDescription } from "./PermissionRuleDescription.js";
-import { useTabsWidth, useTabHeaderFocus, Tab, Tabs } from "../../design-system/Tabs.js";
+import { useTabHeaderFocus, Tab, Tabs } from "../../design-system/Tabs.js";
 import { useFocusOnMount } from "../../../hooks/useFocusOnMount.js";
 import { SearchBox } from "../../SearchBox.js";
 import { useTheme_2, useTheme } from "../../design-system/ThemeProvider.js";
@@ -104,7 +108,7 @@ import { announce } from "../../../utils/accessibility/screenReader.js";
 import { logError } from "../../../utils/log.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { alwaysTrueFlag } from "../../../utils/permissions/serverClassifier/arbiter.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { PermissionRuleInput } from "./PermissionRuleInput.js";
 import { AddPermissionRules } from "./AddPermissionRules.js";
 import {
@@ -118,7 +122,7 @@ import { AgentsMenu } from "../../agents/AgentsMenu.js";
 import { WorkspaceTab } from "./WorkspaceTab.js";
 import { Pane } from "../../design-system/Pane.js";
 
-//@ chunk-p2qwpk2k.js:51445-52517 sole-consumer
+//@ chunk-h5wy8vq5.js:52917-53989 sole-consumer
 /**
  * auto 模式规则详情头：规则文本（引用块）+ 分类标签（按分类着色）+ "rule/section header for auto mode · From 来源"。
  */
@@ -213,268 +217,115 @@ function AutoModeRuleSummary(props) {
   } else boxElement = $[24];
   return boxElement;
 }
-//@ chunk-p2qwpk2k.js:52517-57241 sole-consumer
+//@ chunk-h5wy8vq5.js:53989-57295 sole-consumer
 /**
  * auto 模式规则详情页：旧版 autoMode.deny、环境分节标题、托管设置、--settings 来源等只读情况给出说明，用户规则提供编辑/删除。
  */
 function AutoModeRuleDetails(props) {
-  let $ = useMemoCache(78);
+  let $ = useMemoCache(50);
   let { entry, onEdit, onDelete, onCancel } = props;
-  let keyOptions;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    keyOptions = {
-      context: "Confirmation",
-    };
-    $[0] = keyOptions;
-  } else keyOptions = $[0];
-  useKeybinding("confirm:no", onCancel, keyOptions);
-  let escHintBox;
-  if ($[1] === MEMO_CACHE_SENTINEL) {
-    escHintBox = jsxProd_default(Box, {
-      marginLeft: 3,
-      children: jsxProd_default(AgentNavigationFooter, {
-        children: jsxProd_default(KeyboardShortcutHint, {
-          chord: "escape",
-          action: "cancel",
-        }),
-      }),
-    });
-    $[1] = escHintBox;
-  } else escHintBox = $[1];
-  let escHint = escHintBox;
-  if (entry.legacy) {
-    let summary;
-    if ($[2] !== entry) {
-      summary = jsxProd_default(AutoModeRuleSummary, {
+  let summaryText;
+  if ($[0] !== entry.legacy || $[1] !== entry.source || $[2] !== entry.structure) {
+    summaryText = entry.legacy
+      ? jsxProd_default_2(Text, {
+          italic: true,
+          children: [
+            "",
+            "This rule comes from the legacy autoMode.deny key, which auto mode still enforces as a soft deny.",
+            " ",
+            entry.source === "userSettings"
+              ? "This editor writes only the modern keys \u2014 move the rule to autoMode.soft_deny in your settings file to manage it here."
+              : "It is delivered by " + describeRuleSource(entry.source) + " and cannot be modified here.",
+          ],
+        })
+      : entry.structure
+        ? jsxProd_default_2(Text, {
+            italic: true,
+            children: [
+              "A section header that organizes the environment entries below it; auto mode reads it as written.",
+              " ",
+              entry.source !== "userSettings"
+                ? `It is delivered by ${describeRuleSource(entry.source)} and cannot be modified here.`
+                : isAutoModeSetupNotOverridden()
+                  ? "Re-run /auto-mode-setup to restructure, or edit your settings file directly."
+                  : "Edit your settings file directly to restructure.",
+            ],
+          })
+        : entry.source === "policySettings"
+          ? jsxProd_default_2(Text, {
+              italic: true,
+              children: [
+                "This rule is configured by managed settings and cannot be modified.",
+                `
+`,
+                "Contact your system administrator for more information.",
+              ],
+            })
+          : entry.source === "flagSettings"
+            ? jsxProd_default(Text, {
+                italic: true,
+                children:
+                  "This rule comes from a read-only source (the --settings flag) and cannot be modified here.",
+              })
+            : null;
+    $[0] = entry.legacy;
+    $[1] = entry.source;
+    $[2] = entry.structure;
+    $[3] = summaryText;
+  } else summaryText = $[3];
+  let reasonText = summaryText;
+  if (reasonText !== null) {
+    let actions;
+    if ($[4] !== entry) {
+      actions = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      $[2] = entry;
-      $[3] = summary;
-    } else summary = $[3];
-    const reason =
-      entry.source === "userSettings"
-        ? "This editor writes only the modern keys \u2014 move the rule to autoMode.soft_deny in your settings file to manage it here."
-        : "It is delivered by " + describeRuleSource(entry.source) + " and cannot be modified here.";
-    let reasonText;
-    if ($[4] !== reason) {
-      reasonText = jsxProd_default_2(Text, {
-        italic: true,
-        children: [
-          "",
-          "This rule comes from the legacy autoMode.deny key, which auto mode still enforces as a soft deny.",
-          " ",
-          reason,
-        ],
-      });
-      $[4] = reason;
-      $[5] = reasonText;
-    } else reasonText = $[5];
-    let actions;
+      $[4] = entry;
+      $[5] = actions;
+    } else actions = $[5];
+    let content;
     if ($[6] !== entry || $[7] !== onCancel) {
-      actions = jsxProd_default(UltrareviewOverageDialog, {
+      content = jsxProd_default(UltrareviewOverageDialog, {
         entry,
         onCancel,
       });
       $[6] = entry;
       $[7] = onCancel;
-      $[8] = actions;
-    } else actions = $[8];
-    let content;
-    if ($[9] !== summary || $[10] !== reasonText || $[11] !== actions) {
-      content = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [summary, reasonText, actions],
-          }),
-          escHint,
-        ],
+      $[8] = content;
+    } else content = $[8];
+    let content_2;
+    if ($[9] !== onCancel || $[10] !== reasonText || $[11] !== actions || $[12] !== content) {
+      content_2 = jsxProd_default_2(RuleDetailsDialog, {
+        onCancel,
+        children: [actions, reasonText, content],
       });
-      $[9] = summary;
+      $[9] = onCancel;
       $[10] = reasonText;
       $[11] = actions;
       $[12] = content;
-    } else content = $[12];
-    return content;
-  }
-  if (entry.structure) {
-    let summary;
-    if ($[13] !== entry) {
-      summary = jsxProd_default(AutoModeRuleSummary, {
-        entry,
-      });
-      $[13] = entry;
-      $[14] = summary;
-    } else summary = $[14];
-    let reason;
-    if ($[15] !== entry.source) {
-      reason =
-        entry.source !== "userSettings"
-          ? `It is delivered by ${describeRuleSource(entry.source)} and cannot be modified here.`
-          : isAutoModeSetupNotOverridden()
-            ? "Re-run /auto-mode-setup to restructure, or edit your settings file directly."
-            : "Edit your settings file directly to restructure.";
-      $[15] = entry.source;
-      $[16] = reason;
-    } else reason = $[16];
-    let reasonText;
-    if ($[17] !== reason) {
-      reasonText = jsxProd_default_2(Text, {
-        italic: true,
-        children: [
-          "A section header that organizes the environment entries below it; auto mode reads it as written.",
-          " ",
-          reason,
-        ],
-      });
-      $[17] = reason;
-      $[18] = reasonText;
-    } else reasonText = $[18];
-    let actions;
-    if ($[19] !== entry || $[20] !== onCancel) {
-      actions = jsxProd_default(UltrareviewOverageDialog, {
-        entry,
-        onCancel,
-      });
-      $[19] = entry;
-      $[20] = onCancel;
-      $[21] = actions;
-    } else actions = $[21];
-    let content;
-    if ($[22] !== summary || $[23] !== reasonText || $[24] !== actions) {
-      content = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [summary, reasonText, actions],
-          }),
-          escHint,
-        ],
-      });
-      $[22] = summary;
-      $[23] = reasonText;
-      $[24] = actions;
-      $[25] = content;
-    } else content = $[25];
-    return content;
-  }
-  if (entry.source === "policySettings") {
-    let summary;
-    if ($[26] !== entry) {
-      summary = jsxProd_default(AutoModeRuleSummary, {
-        entry,
-      });
-      $[26] = entry;
-      $[27] = summary;
-    } else summary = $[27];
-    let reasonText;
-    if ($[28] === MEMO_CACHE_SENTINEL) {
-      reasonText = jsxProd_default_2(Text, {
-        italic: true,
-        children: [
-          "This rule is configured by managed settings and cannot be modified.",
-          `
-`,
-          "Contact your system administrator for more information.",
-        ],
-      });
-      $[28] = reasonText;
-    } else reasonText = $[28];
-    let actions;
-    if ($[29] !== entry || $[30] !== onCancel) {
-      actions = jsxProd_default(UltrareviewOverageDialog, {
-        entry,
-        onCancel,
-      });
-      $[29] = entry;
-      $[30] = onCancel;
-      $[31] = actions;
-    } else actions = $[31];
-    let content;
-    if ($[32] !== summary || $[33] !== actions) {
-      content = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [summary, reasonText, actions],
-          }),
-          escHint,
-        ],
-      });
-      $[32] = summary;
-      $[33] = actions;
-      $[34] = content;
-    } else content = $[34];
-    return content;
-  }
-  if (entry.source === "flagSettings") {
-    let summary;
-    if ($[35] !== entry) {
-      summary = jsxProd_default(AutoModeRuleSummary, {
-        entry,
-      });
-      $[35] = entry;
-      $[36] = summary;
-    } else summary = $[36];
-    let reasonText;
-    if ($[37] === MEMO_CACHE_SENTINEL) {
-      reasonText = jsxProd_default(Text, {
-        italic: true,
-        children:
-          "This rule comes from a read-only source (the --settings flag) and cannot be modified here.",
-      });
-      $[37] = reasonText;
-    } else reasonText = $[37];
-    let actions;
-    if ($[38] !== entry || $[39] !== onCancel) {
-      actions = jsxProd_default(UltrareviewOverageDialog, {
-        entry,
-        onCancel,
-      });
-      $[38] = entry;
-      $[39] = onCancel;
-      $[40] = actions;
-    } else actions = $[40];
-    let content;
-    if ($[41] !== summary || $[42] !== actions) {
-      content = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [summary, reasonText, actions],
-          }),
-          escHint,
-        ],
-      });
-      $[41] = summary;
-      $[42] = actions;
-      $[43] = content;
-    } else content = $[43];
-    return content;
+      $[13] = content_2;
+    } else content_2 = $[13];
+    return content_2;
   }
   let validationError;
-  if ($[44] !== entry.section || $[45] !== entry.text) {
+  if ($[14] !== entry.section || $[15] !== entry.text) {
     validationError = validateRuleText(entry.section, entry.text);
-    $[44] = entry.section;
-    $[45] = entry.text;
-    $[46] = validationError;
-  } else validationError = $[46];
+    $[14] = entry.section;
+    $[15] = entry.text;
+    $[16] = validationError;
+  } else validationError = $[16];
   let validationError_2 = validationError;
   if (validationError_2 !== null) {
     let summary;
-    if ($[47] !== entry) {
+    if ($[17] !== entry) {
       summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      $[47] = entry;
-      $[48] = summary;
-    } else summary = $[48];
+      $[17] = entry;
+      $[18] = summary;
+    } else summary = $[18];
     let reasonText;
-    if ($[49] !== validationError_2) {
+    if ($[19] !== validationError_2) {
       reasonText = jsxProd_default_2(Text, {
         italic: true,
         children: [
@@ -485,11 +336,11 @@ function AutoModeRuleDetails(props) {
           "Edit it in your settings file, or delete it here.",
         ],
       });
-      $[49] = validationError_2;
-      $[50] = reasonText;
-    } else reasonText = $[50];
+      $[19] = validationError_2;
+      $[20] = reasonText;
+    } else reasonText = $[20];
     let options;
-    if ($[51] === MEMO_CACHE_SENTINEL) {
+    if ($[21] === MEMO_CACHE_SENTINEL) {
       options = [
         {
           label: "Delete",
@@ -500,58 +351,53 @@ function AutoModeRuleDetails(props) {
           value: "cancel",
         },
       ];
-      $[51] = options;
-    } else options = $[51];
+      $[21] = options;
+    } else options = $[21];
     let onChange;
-    if ($[52] !== onCancel || $[53] !== onDelete) {
+    if ($[22] !== onCancel || $[23] !== onDelete) {
       onChange = (value) => {
         if (value === "delete") onDelete();
         else onCancel();
       };
-      $[52] = onCancel;
-      $[53] = onDelete;
-      $[54] = onChange;
-    } else onChange = $[54];
+      $[22] = onCancel;
+      $[23] = onDelete;
+      $[24] = onChange;
+    } else onChange = $[24];
     let selector;
-    if ($[55] !== onCancel || $[56] !== onChange) {
+    if ($[25] !== onCancel || $[26] !== onChange) {
       selector = jsxProd_default(ModelSelector, {
         options,
         onChange,
         onCancel,
       });
-      $[55] = onCancel;
-      $[56] = onChange;
-      $[57] = selector;
-    } else selector = $[57];
+      $[25] = onCancel;
+      $[26] = onChange;
+      $[27] = selector;
+    } else selector = $[27];
     let content;
-    if ($[58] !== summary || $[59] !== reasonText || $[60] !== selector) {
-      content = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [summary, reasonText, selector],
-          }),
-          escHint,
-        ],
+    if ($[28] !== onCancel || $[29] !== summary || $[30] !== reasonText || $[31] !== selector) {
+      content = jsxProd_default_2(RuleDetailsDialog, {
+        onCancel,
+        children: [summary, reasonText, selector],
       });
-      $[58] = summary;
-      $[59] = reasonText;
-      $[60] = selector;
-      $[61] = content;
-    } else content = $[61];
+      $[28] = onCancel;
+      $[29] = summary;
+      $[30] = reasonText;
+      $[31] = selector;
+      $[32] = content;
+    } else content = $[32];
     return content;
   }
   let summary;
-  if ($[62] !== entry) {
+  if ($[33] !== entry) {
     summary = jsxProd_default(AutoModeRuleSummary, {
       entry,
     });
-    $[62] = entry;
-    $[63] = summary;
-  } else summary = $[63];
+    $[33] = entry;
+    $[34] = summary;
+  } else summary = $[34];
   let environmentNote;
-  if ($[64] !== entry.section) {
+  if ($[35] !== entry.section) {
     environmentNote =
       entry.section === "environment" &&
       jsxProd_default_2(Text, {
@@ -561,11 +407,11 @@ function AutoModeRuleDetails(props) {
           isAutoModeSetupNotOverridden() ? " Re-run /auto-mode-setup to rebuild them from scratch." : "",
         ],
       });
-    $[64] = entry.section;
-    $[65] = environmentNote;
-  } else environmentNote = $[65];
+    $[35] = entry.section;
+    $[36] = environmentNote;
+  } else environmentNote = $[36];
   let options;
-  if ($[66] === MEMO_CACHE_SENTINEL) {
+  if ($[37] === MEMO_CACHE_SENTINEL) {
     options = [
       {
         label: "Edit",
@@ -580,62 +426,57 @@ function AutoModeRuleDetails(props) {
         value: "cancel",
       },
     ];
-    $[66] = options;
-  } else options = $[66];
+    $[37] = options;
+  } else options = $[37];
   let onChange;
-  if ($[67] !== onCancel || $[68] !== onDelete || $[69] !== onEdit) {
+  if ($[38] !== onCancel || $[39] !== onDelete || $[40] !== onEdit) {
     onChange = (value) => {
       if (value === "edit") onEdit();
       else if (value === "delete") onDelete();
       else onCancel();
     };
-    $[67] = onCancel;
-    $[68] = onDelete;
-    $[69] = onEdit;
-    $[70] = onChange;
-  } else onChange = $[70];
+    $[38] = onCancel;
+    $[39] = onDelete;
+    $[40] = onEdit;
+    $[41] = onChange;
+  } else onChange = $[41];
   let selector;
-  if ($[71] !== onCancel || $[72] !== onChange) {
+  if ($[42] !== onCancel || $[43] !== onChange) {
     selector = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
     });
-    $[71] = onCancel;
-    $[72] = onChange;
-    $[73] = selector;
-  } else selector = $[73];
+    $[42] = onCancel;
+    $[43] = onChange;
+    $[44] = selector;
+  } else selector = $[44];
   let content;
-  if ($[74] !== summary || $[75] !== environmentNote || $[76] !== selector) {
-    content = jsxProd_default_2(Fragment, {
-      children: [
-        jsxProd_default_2(ShutdownRequestDisplay, {
-          color: "permission",
-          title: "Rule details",
-          children: [summary, environmentNote, selector],
-        }),
-        escHint,
-      ],
+  if ($[45] !== onCancel || $[46] !== summary || $[47] !== environmentNote || $[48] !== selector) {
+    content = jsxProd_default_2(RuleDetailsDialog, {
+      onCancel,
+      children: [summary, environmentNote, selector],
     });
-    $[74] = summary;
-    $[75] = environmentNote;
-    $[76] = selector;
-    $[77] = content;
-  } else content = $[77];
+    $[45] = onCancel;
+    $[46] = summary;
+    $[47] = environmentNote;
+    $[48] = selector;
+    $[49] = content;
+  } else content = $[49];
   return content;
 }
-//@ chunk-p2qwpk2k.js:57241-57253 sole-consumer
+//@ chunk-h5wy8vq5.js:57295-57307 sole-consumer
 var DEFAULT_LIST_HEIGHT = 3200;
-//@ chunk-p2qwpk2k.js:57253-57305 sole-consumer
+//@ chunk-h5wy8vq5.js:57307-57359 sole-consumer
 function listHeight(isFullscreen) {
   return isFullscreen ? Number.POSITIVE_INFINITY : DEFAULT_LIST_HEIGHT;
 }
-//@ chunk-p2qwpk2k.js:57305-61446 sole-consumer
+//@ chunk-h5wy8vq5.js:57359-61285 sole-consumer
 /**
  * 显示某分类的内置 auto 模式规则（按终端高度截取，单条超长截断）、是否生效、是否可切换，以及在编辑器中查看全文。
  */
 function BuiltinRulesSection(props) {
-  let $ = useMemoCache(83);
+  let $ = useMemoCache(79);
   let { section, state, onToggle, onCancel } = props;
   let isFullscreen = useIsFullscreen();
   let keyOptions;
@@ -650,73 +491,67 @@ function BuiltinRulesSection(props) {
   let BoxComponent;
   let DialogComponent;
   let isUserControlled;
-  let footerHint;
   let defaultRules;
   let shownRules;
   let flexDirection;
   let marginX;
   let marginY;
   let gap;
-  let color;
   let title;
+  let onCancel_2;
   let titleText;
-  if ($[1] !== isFullscreen || $[2] !== section || $[3] !== state.control || $[4] !== state.enabled) {
+  if (
+    $[1] !== isFullscreen ||
+    $[2] !== onCancel ||
+    $[3] !== section ||
+    $[4] !== state.control ||
+    $[5] !== state.enabled
+  ) {
     defaultRules = getDefaultExternalAutoModeRules()[section] ?? [];
-    let escHint;
-    if ($[18] === MEMO_CACHE_SENTINEL) {
-      escHint = jsxProd_default(AgentNavigationFooter, {
-        children: jsxProd_default(KeyboardShortcutHint, {
-          chord: "esc",
-          action: "cancel",
-        }),
-      });
-      $[18] = escHint;
-    } else escHint = $[18];
-    footerHint = escHint;
     isUserControlled = state.control === "user";
-    DialogComponent = ShutdownRequestDisplay;
-    color = "permission";
+    DialogComponent = RuleDetailsDialog;
     title = "Built-in rules";
-    let color_2;
-    if ($[19] !== section) {
-      color_2 = getAutoModeSectionColor(section);
-      $[19] = section;
-      $[20] = color_2;
-    } else color_2 = $[20];
+    onCancel_2 = onCancel;
+    let color;
+    if ($[18] !== section) {
+      color = getAutoModeSectionColor(section);
+      $[18] = section;
+      $[19] = color;
+    } else color = $[19];
     let children;
-    if ($[21] !== section) {
+    if ($[20] !== section) {
       children = getAutoModeRuleCategoryLabel(section);
-      $[21] = section;
-      $[22] = children;
-    } else children = $[22];
+      $[20] = section;
+      $[21] = children;
+    } else children = $[21];
     let labelText;
-    if ($[23] !== color_2 || $[24] !== children) {
+    if ($[22] !== children || $[23] !== color) {
       labelText = jsxProd_default(Text, {
-        color: color_2,
+        color,
         children,
       });
-      $[23] = color_2;
-      $[24] = children;
-      $[25] = labelText;
-    } else labelText = $[25];
+      $[22] = children;
+      $[23] = color;
+      $[24] = labelText;
+    } else labelText = $[24];
     const summaryText = `${defaultRules.length} built-in ${defaultRules.length === 1 ? "rule" : "rules"} \xB7 ${state.enabled ? "in effect" : "switched off"}`;
     let summarySuffix;
-    if ($[26] !== summaryText) {
+    if ($[25] !== summaryText) {
       summarySuffix = jsxProd_default_2(Text, {
         dimColor: true,
         children: [" ", "\xB7", " ", summaryText],
       });
-      $[26] = summaryText;
-      $[27] = summarySuffix;
-    } else summarySuffix = $[27];
-    if ($[28] !== labelText || $[29] !== summarySuffix) {
+      $[25] = summaryText;
+      $[26] = summarySuffix;
+    } else summarySuffix = $[26];
+    if ($[27] !== labelText || $[28] !== summarySuffix) {
       titleText = jsxProd_default_2(Text, {
         children: [labelText, summarySuffix],
       });
-      $[28] = labelText;
-      $[29] = summarySuffix;
-      $[30] = titleText;
-    } else titleText = $[30];
+      $[27] = labelText;
+      $[28] = summarySuffix;
+      $[29] = titleText;
+    } else titleText = $[29];
     BoxComponent = Box;
     flexDirection = "column";
     marginX = 2;
@@ -737,40 +572,39 @@ function BuiltinRulesSection(props) {
       shownRules[0] = `${truncateToLength(shownRules[0], maxChars)}\u2026 +${excessChars} more characters \u2014 View in editor for the full text.`;
     }
     $[1] = isFullscreen;
-    $[2] = section;
-    $[3] = state.control;
-    $[4] = state.enabled;
-    $[5] = BoxComponent;
-    $[6] = DialogComponent;
-    $[7] = isUserControlled;
-    $[8] = footerHint;
+    $[2] = onCancel;
+    $[3] = section;
+    $[4] = state.control;
+    $[5] = state.enabled;
+    $[6] = BoxComponent;
+    $[7] = DialogComponent;
+    $[8] = isUserControlled;
     $[9] = defaultRules;
     $[10] = shownRules;
     $[11] = flexDirection;
     $[12] = marginX;
     $[13] = marginY;
     $[14] = gap;
-    $[15] = color;
-    $[16] = title;
+    $[15] = title;
+    $[16] = onCancel_2;
     $[17] = titleText;
   } else {
-    BoxComponent = $[5];
-    DialogComponent = $[6];
-    isUserControlled = $[7];
-    footerHint = $[8];
+    BoxComponent = $[6];
+    DialogComponent = $[7];
+    isUserControlled = $[8];
     defaultRules = $[9];
     shownRules = $[10];
     flexDirection = $[11];
     marginX = $[12];
     marginY = $[13];
     gap = $[14];
-    color = $[15];
-    title = $[16];
+    title = $[15];
+    onCancel_2 = $[16];
     titleText = $[17];
   }
   let hiddenRuleCount = defaultRules.length - shownRules.length;
   let ruleElements;
-  if ($[31] !== shownRules || $[32] !== state.enabled) {
+  if ($[30] !== shownRules || $[31] !== state.enabled) {
     ruleElements = shownRules.map((ruleText, index) =>
       jsxProd_default_2(
         Text,
@@ -783,12 +617,12 @@ function BuiltinRulesSection(props) {
         index,
       ),
     );
-    $[31] = shownRules;
-    $[32] = state.enabled;
-    $[33] = ruleElements;
-  } else ruleElements = $[33];
+    $[30] = shownRules;
+    $[31] = state.enabled;
+    $[32] = ruleElements;
+  } else ruleElements = $[32];
   let moreRules;
-  if ($[34] !== hiddenRuleCount) {
+  if ($[33] !== hiddenRuleCount) {
     moreRules =
       hiddenRuleCount > 0 &&
       jsxProd_default_2(Text, {
@@ -802,27 +636,27 @@ function BuiltinRulesSection(props) {
           " \u2014 run `claude auto-mode defaults` to print the full set.",
         ],
       });
-    $[34] = hiddenRuleCount;
-    $[35] = moreRules;
-  } else moreRules = $[35];
+    $[33] = hiddenRuleCount;
+    $[34] = moreRules;
+  } else moreRules = $[34];
   let ruleLines;
-  if ($[36] !== moreRules || $[37] !== ruleElements) {
+  if ($[35] !== moreRules || $[36] !== ruleElements) {
     ruleLines = jsxProd_default_2(Fragment, {
       children: [ruleElements, moreRules],
     });
-    $[36] = moreRules;
-    $[37] = ruleElements;
-    $[38] = ruleLines;
-  } else ruleLines = $[38];
+    $[35] = moreRules;
+    $[36] = ruleElements;
+    $[37] = ruleLines;
+  } else ruleLines = $[37];
   const children = ruleLines;
   let rulesBox;
   if (
-    $[39] !== BoxComponent ||
-    $[40] !== children ||
-    $[41] !== flexDirection ||
-    $[42] !== marginX ||
-    $[43] !== marginY ||
-    $[44] !== gap
+    $[38] !== BoxComponent ||
+    $[39] !== children ||
+    $[40] !== flexDirection ||
+    $[41] !== marginX ||
+    $[42] !== marginY ||
+    $[43] !== gap
   ) {
     rulesBox = jsxProd_default(BoxComponent, {
       flexDirection,
@@ -831,27 +665,27 @@ function BuiltinRulesSection(props) {
       gap,
       children,
     });
-    $[39] = BoxComponent;
-    $[40] = children;
-    $[41] = flexDirection;
-    $[42] = marginX;
-    $[43] = marginY;
-    $[44] = gap;
-    $[45] = rulesBox;
-  } else rulesBox = $[45];
+    $[38] = BoxComponent;
+    $[39] = children;
+    $[40] = flexDirection;
+    $[41] = marginX;
+    $[42] = marginY;
+    $[43] = gap;
+    $[44] = rulesBox;
+  } else rulesBox = $[44];
   let emptyNote;
-  if ($[46] !== state.control) {
+  if ($[45] !== state.control) {
     emptyNote =
       state.control === "empty" &&
       jsxProd_default(Text, {
         italic: true,
         children: "This section has no configured rules, so the built-ins apply. Add a rule to customize it.",
       });
-    $[46] = state.control;
-    $[47] = emptyNote;
-  } else emptyNote = $[47];
+    $[45] = state.control;
+    $[46] = emptyNote;
+  } else emptyNote = $[46];
   let otherSourceNote;
-  if ($[48] !== state.control || $[49] !== state.enabled || $[50] !== state.source) {
+  if ($[47] !== state.control || $[48] !== state.enabled || $[49] !== state.source) {
     otherSourceNote =
       state.control === "otherSource" &&
       jsxProd_default(Text, {
@@ -860,13 +694,13 @@ function BuiltinRulesSection(props) {
           ? `Kept on by ${describeRuleSource(state.source ?? "policySettings")} \u2014 it cannot be switched off here.`
           : `Replaced by rules from ${describeRuleSource(state.source ?? "policySettings")}. This control follows that configuration; add your own rules to customize the section.`,
       });
-    $[48] = state.control;
-    $[49] = state.enabled;
-    $[50] = state.source;
-    $[51] = otherSourceNote;
-  } else otherSourceNote = $[51];
+    $[47] = state.control;
+    $[48] = state.enabled;
+    $[49] = state.source;
+    $[50] = otherSourceNote;
+  } else otherSourceNote = $[50];
   let toggleOptions;
-  if ($[52] !== isUserControlled || $[53] !== state.enabled) {
+  if ($[51] !== isUserControlled || $[52] !== state.enabled) {
     toggleOptions = isUserControlled
       ? [
           {
@@ -877,13 +711,13 @@ function BuiltinRulesSection(props) {
           },
         ]
       : [];
-    $[52] = isUserControlled;
-    $[53] = state.enabled;
-    $[54] = toggleOptions;
-  } else toggleOptions = $[54];
+    $[51] = isUserControlled;
+    $[52] = state.enabled;
+    $[53] = toggleOptions;
+  } else toggleOptions = $[53];
   let editorOption;
   let cancelOption;
-  if ($[55] === MEMO_CACHE_SENTINEL) {
+  if ($[54] === MEMO_CACHE_SENTINEL) {
     editorOption = {
       label: `View in editor${getShortEditorName() ? ` (${getShortEditorName()})` : ""}`,
       value: "editor",
@@ -892,20 +726,20 @@ function BuiltinRulesSection(props) {
       label: "Cancel",
       value: "cancel",
     };
-    $[55] = editorOption;
-    $[56] = cancelOption;
+    $[54] = editorOption;
+    $[55] = cancelOption;
   } else {
-    editorOption = $[55];
-    cancelOption = $[56];
+    editorOption = $[54];
+    cancelOption = $[55];
   }
   let options;
-  if ($[57] !== toggleOptions) {
+  if ($[56] !== toggleOptions) {
     options = [...toggleOptions, editorOption, cancelOption];
-    $[57] = toggleOptions;
-    $[58] = options;
-  } else options = $[58];
+    $[56] = toggleOptions;
+    $[57] = options;
+  } else options = $[57];
   let onChange;
-  if ($[59] !== openInEditor || $[60] !== onCancel || $[61] !== onToggle || $[62] !== defaultRules) {
+  if ($[58] !== openInEditor || $[59] !== onCancel || $[60] !== onToggle || $[61] !== defaultRules) {
     onChange = (value) => {
       if (value === "toggle") onToggle();
       else if (value === "editor")
@@ -916,26 +750,26 @@ function BuiltinRulesSection(props) {
         );
       else onCancel();
     };
-    $[59] = openInEditor;
-    $[60] = onCancel;
-    $[61] = onToggle;
-    $[62] = defaultRules;
-    $[63] = onChange;
-  } else onChange = $[63];
+    $[58] = openInEditor;
+    $[59] = onCancel;
+    $[60] = onToggle;
+    $[61] = defaultRules;
+    $[62] = onChange;
+  } else onChange = $[62];
   let selector;
-  if ($[64] !== onCancel || $[65] !== options || $[66] !== onChange) {
+  if ($[63] !== onCancel || $[64] !== options || $[65] !== onChange) {
     selector = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
     });
-    $[64] = onCancel;
-    $[65] = options;
-    $[66] = onChange;
-    $[67] = selector;
-  } else selector = $[67];
+    $[63] = onCancel;
+    $[64] = options;
+    $[65] = onChange;
+    $[66] = selector;
+  } else selector = $[66];
   let editorError;
-  if ($[68] !== editorNotice) {
+  if ($[67] !== editorNotice) {
     editorError =
       editorNotice !== null &&
       jsxProd_default(Text, {
@@ -943,162 +777,110 @@ function BuiltinRulesSection(props) {
         wrap: "wrap-trim",
         children: editorNotice,
       });
-    $[68] = editorNotice;
-    $[69] = editorError;
-  } else editorError = $[69];
+    $[67] = editorNotice;
+    $[68] = editorError;
+  } else editorError = $[68];
   let dialog;
   if (
-    $[70] !== DialogComponent ||
-    $[71] !== rulesBox ||
-    $[72] !== emptyNote ||
-    $[73] !== otherSourceNote ||
-    $[74] !== selector ||
-    $[75] !== editorError ||
-    $[76] !== color ||
-    $[77] !== title ||
-    $[78] !== titleText
+    $[69] !== DialogComponent ||
+    $[70] !== rulesBox ||
+    $[71] !== emptyNote ||
+    $[72] !== otherSourceNote ||
+    $[73] !== selector ||
+    $[74] !== editorError ||
+    $[75] !== title ||
+    $[76] !== onCancel_2 ||
+    $[77] !== titleText
   ) {
     dialog = jsxProd_default_2(DialogComponent, {
-      color,
       title,
+      onCancel: onCancel_2,
       children: [titleText, rulesBox, emptyNote, otherSourceNote, selector, editorError],
     });
-    $[70] = DialogComponent;
-    $[71] = rulesBox;
-    $[72] = emptyNote;
-    $[73] = otherSourceNote;
-    $[74] = selector;
-    $[75] = editorError;
-    $[76] = color;
-    $[77] = title;
-    $[78] = titleText;
-    $[79] = dialog;
-  } else dialog = $[79];
-  let content;
-  if ($[80] !== footerHint || $[81] !== dialog) {
-    content = jsxProd_default_2(Fragment, {
-      children: [dialog, footerHint],
-    });
-    $[80] = footerHint;
-    $[81] = dialog;
-    $[82] = content;
-  } else content = $[82];
-  return content;
+    $[69] = DialogComponent;
+    $[70] = rulesBox;
+    $[71] = emptyNote;
+    $[72] = otherSourceNote;
+    $[73] = selector;
+    $[74] = editorError;
+    $[75] = title;
+    $[76] = onCancel_2;
+    $[77] = titleText;
+    $[78] = dialog;
+  } else dialog = $[78];
+  return dialog;
 }
-//@ chunk-p2qwpk2k.js:61446-62726 sole-consumer
+//@ chunk-h5wy8vq5.js:61285-62095 sole-consumer
 /**
  * 删除 auto 模式规则的确认框；删除的是该分类最后一条用户规则时提示将只剩内置规则。
  */
 function DeleteAutoModeRuleConfirm(props) {
-  let $ = useMemoCache(19);
+  let $ = useMemoCache(15);
   let { entry, isLastInSection, onConfirm, onCancel } = props;
-  let keybindingOptions;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    keybindingOptions = {
-      context: "Confirmation",
-    };
-    $[0] = keybindingOptions;
-  } else keybindingOptions = $[0];
-  useKeybinding("confirm:no", onCancel, keybindingOptions);
-  let titleText;
-  if ($[1] === MEMO_CACHE_SENTINEL) {
-    titleText = jsxProd_default(Text, {
-      bold: true,
-      color: "error",
-      children: "Delete auto mode rule?",
-    });
-    $[1] = titleText;
-  } else titleText = $[1];
   let autoModeRuleSummaryElement;
-  if ($[2] !== entry) {
+  if ($[0] !== entry) {
     autoModeRuleSummaryElement = jsxProd_default(AutoModeRuleSummary, {
       entry,
     });
-    $[2] = entry;
-    $[3] = autoModeRuleSummaryElement;
-  } else autoModeRuleSummaryElement = $[3];
+    $[0] = entry;
+    $[1] = autoModeRuleSummaryElement;
+  } else autoModeRuleSummaryElement = $[1];
   let lastSectionNote;
-  if ($[4] !== entry || $[5] !== isLastInSection) {
+  if ($[2] !== entry || $[3] !== isLastInSection) {
     lastSectionNote =
       isLastInSection &&
       ` This is your last ${getAutoModeRuleCategoryLabel(entry.section).toLowerCase()} rule \u2014 without it, only the built-in rules apply for this section.`;
-    $[4] = entry;
-    $[5] = isLastInSection;
-    $[6] = lastSectionNote;
-  } else lastSectionNote = $[6];
+    $[2] = entry;
+    $[3] = isLastInSection;
+    $[4] = lastSectionNote;
+  } else lastSectionNote = $[4];
   let questionText;
-  if ($[7] !== lastSectionNote) {
+  if ($[5] !== lastSectionNote) {
     questionText = jsxProd_default_2(Text, {
       children: [
         "Are you sure you want to delete this rule? Auto mode stops applying it on your next request.",
         lastSectionNote,
       ],
     });
-    $[7] = lastSectionNote;
-    $[8] = questionText;
-  } else questionText = $[8];
+    $[5] = lastSectionNote;
+    $[6] = questionText;
+  } else questionText = $[6];
   let confirmSelectElement;
-  if ($[9] !== onCancel || $[10] !== onConfirm) {
+  if ($[7] !== onCancel || $[8] !== onConfirm) {
     confirmSelectElement = jsxProd_default(ConfirmSelect, {
       focus: "cancel",
       hideIndexes: true,
       onConfirm,
       onCancel,
     });
-    $[9] = onCancel;
-    $[10] = onConfirm;
-    $[11] = confirmSelectElement;
-  } else confirmSelectElement = $[11];
-  let confirmBox;
-  if ($[12] !== autoModeRuleSummaryElement || $[13] !== questionText || $[14] !== confirmSelectElement) {
-    confirmBox = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      gap: 1,
-      borderStyle: "round",
-      paddingLeft: 1,
-      paddingRight: 1,
-      borderColor: "error",
-      children: [titleText, autoModeRuleSummaryElement, questionText, confirmSelectElement],
-    });
-    $[12] = autoModeRuleSummaryElement;
-    $[13] = questionText;
-    $[14] = confirmSelectElement;
-    $[15] = confirmBox;
-  } else confirmBox = $[15];
-  let footerBoxElement;
-  if ($[16] === MEMO_CACHE_SENTINEL) {
-    footerBoxElement = jsxProd_default(Box, {
-      marginLeft: 3,
-      children: jsxProd_default(AgentNavigationFooter, {
-        children: jsxProd_default_2(Byline, {
-          children: [
-            jsxProd_default(KeyboardShortcutHint, {
-              chord: "enter",
-              action: "confirm",
-            }),
-            jsxProd_default(KeyboardShortcutHint, {
-              chord: "escape",
-              action: "cancel",
-            }),
-          ],
-        }),
-      }),
-    });
-    $[16] = footerBoxElement;
-  } else footerBoxElement = $[16];
+    $[7] = onCancel;
+    $[8] = onConfirm;
+    $[9] = confirmSelectElement;
+  } else confirmSelectElement = $[9];
   let fragmentElement;
-  if ($[17] !== confirmBox) {
-    fragmentElement = jsxProd_default_2(Fragment, {
-      children: [confirmBox, footerBoxElement],
+  if (
+    $[10] !== onCancel ||
+    $[11] !== autoModeRuleSummaryElement ||
+    $[12] !== questionText ||
+    $[13] !== confirmSelectElement
+  ) {
+    fragmentElement = jsxProd_default_2(Dialog, {
+      title: "Delete auto mode rule?",
+      onCancel,
+      color: "error",
+      children: [autoModeRuleSummaryElement, questionText, confirmSelectElement],
     });
-    $[17] = confirmBox;
-    $[18] = fragmentElement;
-  } else fragmentElement = $[18];
+    $[10] = onCancel;
+    $[11] = autoModeRuleSummaryElement;
+    $[12] = questionText;
+    $[13] = confirmSelectElement;
+    $[14] = fragmentElement;
+  } else fragmentElement = $[14];
   return fragmentElement;
 }
-//@ chunk-p2qwpk2k.js:62726-62730 sole-consumer
+//@ chunk-h5wy8vq5.js:62095-62099 sole-consumer
 init_react_production();
-//@ chunk-p2qwpk2k.js:62895-62974 sole-consumer
+//@ chunk-h5wy8vq5.js:62264-62343 sole-consumer
 function toRuleListOption(section) {
   return {
     label: getAutoModeRuleCategoryLabel(section),
@@ -1107,7 +889,7 @@ function toRuleListOption(section) {
     dimDescription: true,
   };
 }
-//@ chunk-p2qwpk2k.js:62974-63040 sole-consumer
+//@ chunk-h5wy8vq5.js:62343-62409 sole-consumer
 function normalizeCrlf(text) {
   return text
     .replace(
@@ -1121,7 +903,7 @@ function normalizeCrlf(text) {
 `,
     );
 }
-//@ chunk-p2qwpk2k.js:63040-63433 sole-consumer
+//@ chunk-h5wy8vq5.js:62409-62802 sole-consumer
 /**
  * 返回 auto 模式规则分类（allow/soft_deny/hard_deny/environment）的说明文字。
  */
@@ -1137,7 +919,7 @@ function getAutoModeSectionDescription(section) {
       return "Facts about this machine or project auto mode should take into account";
   }
 }
-//@ chunk-p2qwpk2k.js:63433-64080 sole-consumer
+//@ chunk-h5wy8vq5.js:62802-63449 sole-consumer
 /**
  * 把环境条目写入临时文件（O_EXCL|O_NOFOLLOW，0600）并用编辑器打开，返回编辑后的内容（统一换行）或问题描述。
  */
@@ -1204,7 +986,7 @@ function editEnvironmentInEditor(env) {
     problem: null,
   };
 }
-//@ chunk-p2qwpk2k.js:64080-64569 sole-consumer
+//@ chunk-h5wy8vq5.js:63449-63938 sole-consumer
 /**
  * "这是哪类规则？"选择对话框：列出规则分区选项，选择后回调 onPick，取消时回调 onCancel。
  */
@@ -1252,7 +1034,7 @@ function PickRuleSectionDialog(props) {
   } else dialogElement = $[7];
   return dialogElement;
 }
-//@ chunk-p2qwpk2k.js:64569-66742 sole-consumer
+//@ chunk-h5wy8vq5.js:63938-66111 sole-consumer
 /**
  * 添加/编辑 auto 模式规则的输入对话框：多行输入、校验失败显示错误、提示保存到用户设置。
  */
@@ -1434,55 +1216,55 @@ function AutoModeRuleInput(props) {
   } else dialog = $[27];
   return dialog;
 }
-//@ chunk-p2qwpk2k.js:66742-66790 file-local
+//@ chunk-h5wy8vq5.js:66111-66159 file-local
 function selectToolPermissionContext(s) {
   return s.toolPermissionContext;
 }
-//@ chunk-p2qwpk2k.js:66790-66816 layout
+//@ chunk-h5wy8vq5.js:66159-66185 layout
 function selectMode() {
   return classifyAutoModeRuleSource();
 }
-//@ chunk-p2qwpk2k.js:66816-66842 layout
+//@ chunk-h5wy8vq5.js:66185-66211 layout
 function selectWorkspaceDirs() {
   return collectAutoModeRuleEntries();
 }
-//@ chunk-p2qwpk2k.js:66842-66875 layout
+//@ chunk-h5wy8vq5.js:66211-66244 layout
 function ruleStringPair(rule) {
   return [jsonStringify(rule), rule];
 }
-//@ chunk-p2qwpk2k.js:66875-66918 layout
+//@ chunk-h5wy8vq5.js:66244-66287 layout
 function rulesBySourceMap(rules) {
   return new Map(rules.map(ruleStringPair));
 }
-//@ chunk-p2qwpk2k.js:66918-66955 layout
+//@ chunk-h5wy8vq5.js:66287-66324 layout
 function ruleStringOf(rule) {
   return rule.ruleString;
 }
-//@ chunk-p2qwpk2k.js:66955-66985 layout
+//@ chunk-h5wy8vq5.js:66324-66354 layout
 function describeRule(rule) {
   return consentRowLabel(rule);
 }
-//@ chunk-p2qwpk2k.js:66985-67020 layout
+//@ chunk-h5wy8vq5.js:66354-66389 layout
 function isDefined(value) {
   return value !== undefined;
 }
-//@ chunk-p2qwpk2k.js:67020-67069 fingerprint (2.1.88 match: _temp5, 1)
+//@ chunk-h5wy8vq5.js:66389-66438 fingerprint (2.1.88 match: _temp5, 1)
 function isNotAddNewRule(opt) {
   return opt.value !== "add-new-rule";
 }
-//@ chunk-p2qwpk2k.js:67069-67101 file-local
+//@ chunk-h5wy8vq5.js:66438-66470 file-local
 function optionValue(opt) {
   return opt.value;
 }
-//@ chunk-p2qwpk2k.js:67101-67146 layout
+//@ chunk-h5wy8vq5.js:66470-66515 layout
 function trimTrailingNewlines(text) {
   return text.replace(/\n+$/, "");
 }
-//@ chunk-p2qwpk2k.js:67146-67196 layout
+//@ chunk-h5wy8vq5.js:66515-66565 layout
 function isNotEnvSection(rule) {
   return rule.section !== "environment";
 }
-//@ chunk-p2qwpk2k.js:67196-67408 fingerprint (2.1.88 match: RuleSourceText, 1)
+//@ chunk-h5wy8vq5.js:66565-66777 fingerprint (2.1.88 match: RuleSourceText, 1)
 function RuleSourceText(props) {
   let $ = useMemoCache(4);
   let { rule } = props;
@@ -1504,9 +1286,9 @@ function RuleSourceText(props) {
   } else t3 = $[3];
   return t3;
 }
-//@ chunk-p2qwpk2k.js:67408-67469 layout
+//@ chunk-h5wy8vq5.js:66777-66838 layout
 var INVISIBLE_CHAR_RE = /(?! )[\p{C}\p{Z}\p{Default_Ignorable_Code_Point}]/gu;
-//@ chunk-p2qwpk2k.js:67469-67590 layout
+//@ chunk-h5wy8vq5.js:66838-66959 layout
 function escapeAsUnicode(text) {
   return Array.from(
     {
@@ -1515,7 +1297,7 @@ function escapeAsUnicode(text) {
     (unused, index) => `\\u${text.charCodeAt(index).toString(16).padStart(4, "0")}`,
   ).join("");
 }
-//@ chunk-p2qwpk2k.js:67590-68151 layout
+//@ chunk-h5wy8vq5.js:66959-67520 layout
 /**
  * 生成"只批准这些精确命令/调用"的消息，列出 JSON 字符串化的命令，并说明不覆盖其他调用或附加选项（关沙箱、网络、后台）。
  */
@@ -1531,9 +1313,9 @@ function buildExactRetryGrantMessage(rows, index) {
   let targetPhrase = label ? `this exact ${targetWord}` : `these exact ${targetWord}s`;
   return `Permission granted for ${targetPhrase} only, ${label ? "as one whole string" : "each as one whole string"}: ${mapped.join(", ")}. This does not approve any other ${targetWord}, any part of ${label ? "this one" : "these"}, or running ${label ? "it" : "them"} with added options such as turning off the sandbox, extra network access, or running in the background. You may now retry ${targetPhrase} if you would like.`;
 }
-//@ chunk-p2qwpk2k.js:68151-68162 layout
+//@ chunk-h5wy8vq5.js:67520-67531 layout
 var MAX_COMMAND_TEXT = 200;
-//@ chunk-p2qwpk2k.js:68162-68257 layout
+//@ chunk-h5wy8vq5.js:67531-67626 layout
 function ruleCommandTexts(rows, source) {
   return rows.map((row) =>
     truncateToWidth(
@@ -1542,11 +1324,11 @@ function ruleCommandTexts(rows, source) {
     ),
   );
 }
-//@ chunk-p2qwpk2k.js:68257-68321 layout
+//@ chunk-h5wy8vq5.js:67626-67690 layout
 function quoteRuleIfBracketed(ruleText) {
   return /[[\]]/.test(ruleText) && !ruleText.startsWith('"') ? jsonStringify(ruleText) : ruleText;
 }
-//@ chunk-p2qwpk2k.js:68321-68423 fingerprint (2.1.88 match: getRuleBehaviorLabel, 1)
+//@ chunk-h5wy8vq5.js:67690-67792 fingerprint (2.1.88 match: getRuleBehaviorLabel, 1)
 function getRuleBehaviorLabel(ruleBehavior) {
   switch (ruleBehavior) {
     case "allow":
@@ -1557,225 +1339,137 @@ function getRuleBehaviorLabel(ruleBehavior) {
       return "ask";
   }
 }
-//@ chunk-p2qwpk2k.js:68423-70911 fingerprint (2.1.88 match: RuleDetails, 0.466)
+//@ chunk-h5wy8vq5.js:67792-69425 callgraph-witnessed (2.1.88 match: RuleDetails, 0.254)
 function RuleDetails(props) {
-  let $ = useMemoCache(37);
+  let $ = useMemoCache(29);
   let { rule, onDelete, onCancel } = props;
-  let keybindingOptions;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    keybindingOptions = {
-      context: "Confirmation",
-    };
-    $[0] = keybindingOptions;
-  } else keybindingOptions = $[0];
-  useKeybinding("confirm:no", onCancel, keybindingOptions);
   let children;
-  if ($[1] !== rule.ruleValue) {
-    children = consentRowLabel(formatPermissionRule(rule.ruleValue));
-    $[1] = rule.ruleValue;
-    $[2] = children;
-  } else children = $[2];
-  let t3;
-  if ($[3] !== children) {
-    t3 = jsxProd_default(Text, {
+  if ($[0] !== rule.ruleValue) {
+    children = consentRowLabel(permissionRuleValueFromString(rule.ruleValue));
+    $[0] = rule.ruleValue;
+    $[1] = children;
+  } else children = $[1];
+  let ruleName;
+  if ($[2] !== children) {
+    ruleName = jsxProd_default(Text, {
       bold: true,
       children,
     });
-    $[3] = children;
-    $[4] = t3;
-  } else t3 = $[4];
-  let t4;
-  if ($[5] !== rule.ruleValue) {
-    t4 = jsxProd_default(PermissionRuleDescription, {
+    $[2] = children;
+    $[3] = ruleName;
+  } else ruleName = $[3];
+  let ruleDescription;
+  if ($[4] !== rule.ruleValue) {
+    ruleDescription = jsxProd_default(PermissionRuleDescription, {
       ruleValue: rule.ruleValue,
     });
-    $[5] = rule.ruleValue;
-    $[6] = t4;
-  } else t4 = $[6];
-  let t5;
-  if ($[7] !== rule) {
-    t5 = jsxProd_default(RuleSourceText, {
+    $[4] = rule.ruleValue;
+    $[5] = ruleDescription;
+  } else ruleDescription = $[5];
+  let ruleSourceText;
+  if ($[6] !== rule) {
+    ruleSourceText = jsxProd_default(RuleSourceText, {
       rule,
     });
-    $[7] = rule;
-    $[8] = t5;
-  } else t5 = $[8];
-  let t6;
-  if ($[9] !== t3 || $[10] !== t4 || $[11] !== t5) {
-    t6 = jsxProd_default_2(Box, {
+    $[6] = rule;
+    $[7] = ruleSourceText;
+  } else ruleSourceText = $[7];
+  let ruleSummaryBox;
+  if ($[8] !== ruleName || $[9] !== ruleDescription || $[10] !== ruleSourceText) {
+    ruleSummaryBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginX: 2,
-      children: [t3, t4, t5],
+      children: [ruleName, ruleDescription, ruleSourceText],
     });
-    $[9] = t3;
-    $[10] = t4;
-    $[11] = t5;
-    $[12] = t6;
-  } else t6 = $[12];
-  let ruleTextElement = t6;
-  let infoBox;
-  if ($[13] === MEMO_CACHE_SENTINEL) {
-    infoBox = jsxProd_default(Box, {
-      marginLeft: 3,
-      children: jsxProd_default(AgentNavigationFooter, {
-        children: jsxProd_default(KeyboardShortcutHint, {
-          chord: "escape",
-          action: "cancel",
-        }),
-      }),
-    });
-    $[13] = infoBox;
-  } else infoBox = $[13];
-  let infoBoxValue = infoBox;
-  if (rule.source === "policySettings") {
-    let policyNote;
-    if ($[14] === MEMO_CACHE_SENTINEL) {
-      policyNote = jsxProd_default_2(Text, {
-        italic: true,
-        children: [
-          "This rule is configured by managed settings and cannot be modified.",
-          `
-`,
-          "Contact your system administrator for more information.",
-        ],
-      });
-      $[14] = policyNote;
-    } else policyNote = $[14];
-    let policyView;
-    if ($[15] !== ruleTextElement) {
-      policyView = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [ruleTextElement, policyNote],
-          }),
-          infoBoxValue,
-        ],
-      });
-      $[15] = ruleTextElement;
-      $[16] = policyView;
-    } else policyView = $[16];
-    return policyView;
-  }
-  if (rule.source === "flagSettings" || rule.source === "command") {
-    const readOnlySource = rule.source === "flagSettings" ? "the --settings flag" : "a slash command";
+    $[8] = ruleName;
+    $[9] = ruleDescription;
+    $[10] = ruleSourceText;
+    $[11] = ruleSummaryBox;
+  } else ruleSummaryBox = $[11];
+  let ruleTextElement = ruleSummaryBox;
+  if (isReadOnlyPermissionRuleSource(rule.source)) {
     let readOnlyNote;
-    if ($[17] !== readOnlySource) {
-      readOnlyNote = jsxProd_default_2(Text, {
-        italic: true,
-        children: [
-          "This rule comes from a read-only source (",
-          readOnlySource,
-          ") and cannot be modified here.",
-        ],
+    if ($[12] !== rule.source) {
+      readOnlyNote =
+        rule.source === "policySettings"
+          ? jsxProd_default_2(Text, {
+              italic: true,
+              children: [
+                "This rule is configured by managed settings and cannot be modified.",
+                `
+`,
+                "Contact your system administrator for more information.",
+              ],
+            })
+          : jsxProd_default_2(Text, {
+              italic: true,
+              children: [
+                "This rule comes from a read-only source (",
+                rule.source === "flagSettings" ? "the --settings flag" : "a slash command",
+                ") and cannot be modified here.",
+              ],
+            });
+      $[12] = rule.source;
+      $[13] = readOnlyNote;
+    } else readOnlyNote = $[13];
+    let readOnlyDialog;
+    if ($[14] !== onCancel || $[15] !== ruleTextElement || $[16] !== readOnlyNote) {
+      readOnlyDialog = jsxProd_default_2(RuleDetailsDialog, {
+        onCancel,
+        children: [ruleTextElement, readOnlyNote],
       });
-      $[17] = readOnlySource;
-      $[18] = readOnlyNote;
-    } else readOnlyNote = $[18];
-    let t11;
-    if ($[19] !== ruleTextElement || $[20] !== readOnlyNote) {
-      t11 = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default_2(ShutdownRequestDisplay, {
-            color: "permission",
-            title: "Rule details",
-            children: [ruleTextElement, readOnlyNote],
-          }),
-          infoBoxValue,
-        ],
-      });
-      $[19] = ruleTextElement;
-      $[20] = readOnlyNote;
-      $[21] = t11;
-    } else t11 = $[21];
-    return t11;
+      $[14] = onCancel;
+      $[15] = ruleTextElement;
+      $[16] = readOnlyNote;
+      $[17] = readOnlyDialog;
+    } else readOnlyDialog = $[17];
+    return readOnlyDialog;
   }
-  let t8;
-  if ($[22] !== rule.ruleBehavior) {
-    t8 = getRuleBehaviorLabel(rule.ruleBehavior);
-    $[22] = rule.ruleBehavior;
-    $[23] = t8;
-  } else t8 = $[23];
-  let t9;
-  if ($[24] !== t8) {
-    t9 = jsxProd_default_2(Text, {
-      bold: true,
-      color: "error",
-      children: ["Delete ", t8, " tool?"],
-    });
-    $[24] = t8;
-    $[25] = t9;
-  } else t9 = $[25];
-  let t10;
-  if ($[26] === MEMO_CACHE_SENTINEL) {
-    t10 = jsxProd_default(Text, {
+  let readOnlySource;
+  if ($[18] !== rule.ruleBehavior) {
+    readOnlySource = getRuleBehaviorLabel(rule.ruleBehavior);
+    $[18] = rule.ruleBehavior;
+    $[19] = readOnlySource;
+  } else readOnlySource = $[19];
+  const title = `Delete ${readOnlySource} tool?`;
+  let deletePrompt;
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    deletePrompt = jsxProd_default(Text, {
       children: "Are you sure you want to delete this permission rule?",
     });
-    $[26] = t10;
-  } else t10 = $[26];
+    $[20] = deletePrompt;
+  } else deletePrompt = $[20];
   let confirmSelectElement;
-  if ($[27] !== onCancel || $[28] !== onDelete) {
+  if ($[21] !== onCancel || $[22] !== onDelete) {
     confirmSelectElement = jsxProd_default(ConfirmSelect, {
       focus: "cancel",
       hideIndexes: true,
       onConfirm: onDelete,
       onCancel,
     });
-    $[27] = onCancel;
-    $[28] = onDelete;
-    $[29] = confirmSelectElement;
-  } else confirmSelectElement = $[29];
-  let deleteBox;
-  if ($[30] !== ruleTextElement || $[31] !== confirmSelectElement || $[32] !== t9) {
-    deleteBox = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      gap: 1,
-      borderStyle: "round",
-      paddingLeft: 1,
-      paddingRight: 1,
-      borderColor: "error",
-      children: [t9, ruleTextElement, t10, confirmSelectElement],
-    });
-    $[30] = ruleTextElement;
-    $[31] = confirmSelectElement;
-    $[32] = t9;
-    $[33] = deleteBox;
-  } else deleteBox = $[33];
-  let marginBox;
-  if ($[34] === MEMO_CACHE_SENTINEL) {
-    marginBox = jsxProd_default(Box, {
-      marginLeft: 3,
-      children: jsxProd_default(AgentNavigationFooter, {
-        children: jsxProd_default_2(Byline, {
-          children: [
-            jsxProd_default(KeyboardShortcutHint, {
-              chord: "enter",
-              action: "confirm",
-            }),
-            jsxProd_default(KeyboardShortcutHint, {
-              chord: "escape",
-              action: "cancel",
-            }),
-          ],
-        }),
-      }),
-    });
-    $[34] = marginBox;
-  } else marginBox = $[34];
+    $[21] = onCancel;
+    $[22] = onDelete;
+    $[23] = confirmSelectElement;
+  } else confirmSelectElement = $[23];
   let result;
-  if ($[35] !== deleteBox) {
-    result = jsxProd_default_2(Fragment, {
-      children: [deleteBox, marginBox],
+  if ($[24] !== onCancel || $[25] !== ruleTextElement || $[26] !== title || $[27] !== confirmSelectElement) {
+    result = jsxProd_default_2(Dialog, {
+      title,
+      onCancel,
+      color: "error",
+      children: [ruleTextElement, deletePrompt, confirmSelectElement],
     });
-    $[35] = deleteBox;
-    $[36] = result;
-  } else result = $[36];
+    $[24] = onCancel;
+    $[25] = ruleTextElement;
+    $[26] = title;
+    $[27] = confirmSelectElement;
+    $[28] = result;
+  } else result = $[28];
   return result;
 }
-//@ chunk-p2qwpk2k.js:70911-72535 fingerprint (2.1.88 match: RulesTabContent, 0.883)
+//@ chunk-h5wy8vq5.js:69425-71006 fingerprint (2.1.88 match: RulesTabContent, 0.883)
 function RulesTabContent(props) {
-  let $ = useMemoCache(37);
+  let $ = useMemoCache(36);
   let {
     options,
     searchQuery,
@@ -1787,7 +1481,6 @@ function RulesTabContent(props) {
     cursorOffset,
     onHeaderFocusChange,
   } = props;
-  let tabWidth = useTabsWidth();
   let { headerFocused, focusHeader, blurHeader } = useTabHeaderFocus();
   let headerRef = useRef(null);
   let t0;
@@ -1835,13 +1528,7 @@ function RulesTabContent(props) {
   } else onFocus = $[11];
   const isFocused_2 = isSearchMode && !headerFocused;
   let boxElement;
-  if (
-    $[12] !== cursorOffset ||
-    $[13] !== isFocused ||
-    $[14] !== searchQuery ||
-    $[15] !== isFocused_2 ||
-    $[16] !== tabWidth
-  ) {
+  if ($[12] !== cursorOffset || $[13] !== isFocused || $[14] !== searchQuery || $[15] !== isFocused_2) {
     boxElement = jsxProd_default(Box, {
       marginBottom: 1,
       flexDirection: "column",
@@ -1849,7 +1536,6 @@ function RulesTabContent(props) {
         query: searchQuery,
         isFocused: isFocused_2,
         isTerminalFocused: isFocused,
-        width: tabWidth,
         cursorOffset,
       }),
     });
@@ -1857,15 +1543,14 @@ function RulesTabContent(props) {
     $[13] = isFocused;
     $[14] = searchQuery;
     $[15] = isFocused_2;
-    $[16] = tabWidth;
-    $[17] = boxElement;
-  } else boxElement = $[17];
+    $[16] = boxElement;
+  } else boxElement = $[16];
   let onChange;
   if (
-    $[18] !== blurHeader ||
-    $[19] !== headerFocused ||
-    $[20] !== onHeaderFocusChange ||
-    $[21] !== onSelect
+    $[17] !== blurHeader ||
+    $[18] !== headerFocused ||
+    $[19] !== onHeaderFocusChange ||
+    $[20] !== onSelect
   ) {
     onChange = (listElement) => {
       if (headerFocused) {
@@ -1874,25 +1559,25 @@ function RulesTabContent(props) {
       }
       onSelect(listElement);
     };
-    $[18] = blurHeader;
-    $[19] = headerFocused;
-    $[20] = onHeaderFocusChange;
-    $[21] = onSelect;
-    $[22] = onChange;
-  } else onChange = $[22];
+    $[17] = blurHeader;
+    $[18] = headerFocused;
+    $[19] = onHeaderFocusChange;
+    $[20] = onSelect;
+    $[21] = onChange;
+  } else onChange = $[21];
   const visibleOptionCount = Math.min(10, options.length);
   const isDisabled = isSearchMode || headerFocused;
   const pointerWhileDisabled = !isSearchMode;
   let modelSelectorElement;
   if (
-    $[23] !== focusHeader ||
-    $[24] !== lastFocusedRuleKey ||
-    $[25] !== onCancel ||
-    $[26] !== options ||
-    $[27] !== isDisabled ||
-    $[28] !== pointerWhileDisabled ||
-    $[29] !== onChange ||
-    $[30] !== visibleOptionCount
+    $[22] !== focusHeader ||
+    $[23] !== lastFocusedRuleKey ||
+    $[24] !== onCancel ||
+    $[25] !== options ||
+    $[26] !== isDisabled ||
+    $[27] !== pointerWhileDisabled ||
+    $[28] !== onChange ||
+    $[29] !== visibleOptionCount
   ) {
     modelSelectorElement = jsxProd_default(ModelSelector, {
       options,
@@ -1905,18 +1590,18 @@ function RulesTabContent(props) {
       defaultFocusValue: lastFocusedRuleKey,
       onUpFromFirstItem: focusHeader,
     });
-    $[23] = focusHeader;
-    $[24] = lastFocusedRuleKey;
-    $[25] = onCancel;
-    $[26] = options;
-    $[27] = isDisabled;
-    $[28] = pointerWhileDisabled;
-    $[29] = onChange;
-    $[30] = visibleOptionCount;
-    $[31] = modelSelectorElement;
-  } else modelSelectorElement = $[31];
+    $[22] = focusHeader;
+    $[23] = lastFocusedRuleKey;
+    $[24] = onCancel;
+    $[25] = options;
+    $[26] = isDisabled;
+    $[27] = pointerWhileDisabled;
+    $[28] = onChange;
+    $[29] = visibleOptionCount;
+    $[30] = modelSelectorElement;
+  } else modelSelectorElement = $[30];
   let t9;
-  if ($[32] !== modelSelectorElement || $[33] !== tabIndex || $[34] !== onFocus || $[35] !== boxElement) {
+  if ($[31] !== modelSelectorElement || $[32] !== tabIndex || $[33] !== onFocus || $[34] !== boxElement) {
     t9 = jsxProd_default_2(Box, {
       ref: headerRef,
       flexDirection: "column",
@@ -1924,15 +1609,15 @@ function RulesTabContent(props) {
       onFocus,
       children: [boxElement, modelSelectorElement],
     });
-    $[32] = modelSelectorElement;
-    $[33] = tabIndex;
-    $[34] = onFocus;
-    $[35] = boxElement;
-    $[36] = t9;
-  } else t9 = $[36];
+    $[31] = modelSelectorElement;
+    $[32] = tabIndex;
+    $[33] = onFocus;
+    $[34] = boxElement;
+    $[35] = t9;
+  } else t9 = $[35];
   return t9;
 }
-//@ chunk-p2qwpk2k.js:72535-73563 fingerprint (2.1.88 match: PermissionRulesTab, 0.911)
+//@ chunk-h5wy8vq5.js:71006-72034 fingerprint (2.1.88 match: PermissionRulesTab, 0.911)
 function PermissionRulesTab(t0) {
   let $ = useMemoCache(23);
   let header;
@@ -2012,7 +1697,7 @@ function PermissionRulesTab(t0) {
   } else t7 = $[22];
   return t7;
 }
-//@ chunk-p2qwpk2k.js:73563-93185 fingerprint (2.1.88 match: PermissionRuleList, 0.52)
+//@ chunk-h5wy8vq5.js:72034-91660 fingerprint (2.1.88 match: PermissionRuleList, 0.52)
 /**
  * /permissions 界面：Recent（auto 模式拦截）/Allow/Ask/Deny/Workspace 标签，规则按来源显示，可查看详情、删除（policySettings 不可删）、新增规则与目录。
  */
@@ -2143,13 +1828,13 @@ function PermissionRuleList(props) {
   } else allow = $[16];
   let deny;
   if ($[17] !== toolPermissionContext) {
-    deny = groupRules(getDenyRules(toolPermissionContext));
+    deny = groupRules(deniedBashRules(toolPermissionContext));
     $[17] = toolPermissionContext;
     $[18] = deny;
   } else deny = $[18];
   let ask;
   if ($[19] !== toolPermissionContext) {
-    ask = groupRules(getAskRules(toolPermissionContext));
+    ask = groupRules(askedBashRules(toolPermissionContext));
     $[19] = toolPermissionContext;
     $[20] = ask;
   } else ask = $[20];
@@ -2181,8 +1866,8 @@ function PermissionRuleList(props) {
         let ruleA = rulesByKey.get(keyA);
         let ruleB = rulesByKey.get(keyB);
         if (ruleA && ruleB) {
-          let ruleAString = formatPermissionRule(ruleA.ruleValue).toLowerCase();
-          let ruleBString = formatPermissionRule(ruleB.ruleValue).toLowerCase();
+          let ruleAString = permissionRuleValueFromString(ruleA.ruleValue).toLowerCase();
+          let ruleBString = permissionRuleValueFromString(ruleB.ruleValue).toLowerCase();
           return ruleAString.localeCompare(ruleBString);
         }
         return 0;
@@ -2192,7 +1877,7 @@ function PermissionRuleList(props) {
       for (const ruleKey of sortedRuleKeys) {
         let rule = rulesByKey.get(ruleKey);
         if (rule) {
-          let ruleString = formatPermissionRule(rule.ruleValue);
+          let ruleString = permissionRuleValueFromString(rule.ruleValue);
           if (query && !ruleString.toLowerCase().includes(lowerQuery)) {
             continue;
           }
@@ -2340,7 +2025,7 @@ function PermissionRuleList(props) {
       for (const rule of rules)
         pushMessage((prev) => [
           ...prev,
-          `Added ${rule.ruleBehavior} rule ${sequential.bold(consentRowLabel(formatPermissionRule(rule.ruleValue)))}`,
+          `Added ${rule.ruleBehavior} rule ${sequential.bold(consentRowLabel(permissionRuleValueFromString(rule.ruleValue)))}`,
         ]);
       for (const shadow of unreachable) {
         let severity = shadow.shadowType === "deny" ? "blocked" : "shadowed";
@@ -2350,7 +2035,7 @@ function PermissionRuleList(props) {
             "warning",
             themeColor,
           )(
-            `${figures_default.warning} Warning: ${consentRowLabel(formatPermissionRule(shadow.rule.ruleValue))} is ${severity}`,
+            `${figures_default.warning} Warning: ${consentRowLabel(permissionRuleValueFromString(shadow.rule.ruleValue))} is ${severity}`,
           ),
           sequential.dim(`  ${shadow.reason}`),
           sequential.dim(`  Fix: ${shadow.fix}`),
@@ -2496,7 +2181,7 @@ function PermissionRuleList(props) {
         else if (currentIndex > 0) nextFocusKey = ruleKeys[currentIndex - 1];
       }
       setLastFocusedRuleKey(nextFocusKey);
-      let ruleLabel = consentRowLabel(formatPermissionRule(selectedRule.ruleValue));
+      let ruleLabel = consentRowLabel(permissionRuleValueFromString(selectedRule.ruleValue));
       let ruleBehavior = selectedRule.ruleBehavior;
       let quotedLabel = quoteRuleIfBracketed(ruleLabel);
       deletePermissionRule({
@@ -3011,7 +2696,7 @@ function PermissionRuleList(props) {
     } else isInSection = $[127];
     let sectionCount;
     if ($[128] !== autoModeEntries || $[129] !== isInSection) {
-      sectionCount = count(autoModeEntries, isInSection);
+      sectionCount = countWhere(autoModeEntries, isInSection);
       $[128] = autoModeEntries;
       $[129] = isInSection;
       $[130] = sectionCount;

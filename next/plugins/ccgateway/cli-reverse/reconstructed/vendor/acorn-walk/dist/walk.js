@@ -1,13 +1,13 @@
 /**
  * acorn-walk/dist/walk.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: acorn-walk@8.3.5
- * pieces: chunk-41w44bgm.js (1)
+ * pieces: chunk-dvek96j5.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-41w44bgm.js:4112-12186 cjs-fingerprint
+//@ chunk-dvek96j5.js:366-8300 cjs-fingerprint
 var require_walk = __commonJS(function (cjsExports, cjsModule) {
   (function (root, factory) {
     if (typeof cjsExports === "object" && typeof cjsModule !== "undefined") factory(cjsExports);
@@ -19,28 +19,28 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
   })(cjsExports, function (walkExports) {
     function simple(node, visitors, baseVisitor, state, override) {
       if (!baseVisitor) baseVisitor = base;
-      (function c(node, st, override) {
+      (function c_2(node, st, override) {
         var type = override || node.type;
-        visitNode(baseVisitor, type, node, st, c);
+        visitNode(baseVisitor, type, node, st, c_2);
         if (visitors[type]) visitors[type](node, st);
       })(node, state, override);
     }
     function ancestor(node, visitors, baseVisitor, state, override) {
       var ancestors = [];
       if (!baseVisitor) baseVisitor = base;
-      (function c(node, st, override) {
+      (function c_2(node, st, override) {
         var type = override || node.type;
         var isNew = node !== ancestors[ancestors.length - 1];
         if (isNew) ancestors.push(node);
-        visitNode(baseVisitor, type, node, st, c);
+        visitNode(baseVisitor, type, node, st, c_2);
         if (visitors[type]) visitors[type](node, st || ancestors, ancestors);
         if (isNew) ancestors.pop();
       })(node, state, override);
     }
     function recursive(node, state, funcs, baseVisitor, override) {
       var visitor = funcs ? make(funcs, baseVisitor || undefined) : baseVisitor;
-      (function c(node, st, override) {
-        visitor[override || node.type](node, st, c);
+      (function c_2(node, st, override) {
+        visitor[override || node.type](node, st, c_2);
       })(node, state, override);
     }
     function makeTest(test) {
@@ -61,9 +61,9 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
     function full(node, callback, baseVisitor, state, override) {
       if (!baseVisitor) baseVisitor = base;
       var last;
-      (function c(node, st, override) {
+      (function c_2(node, st, override) {
         var type = override || node.type;
-        visitNode(baseVisitor, type, node, st, c);
+        visitNode(baseVisitor, type, node, st, c_2);
         if (last !== node) {
           callback(node, st, type);
           last = node;
@@ -74,11 +74,11 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
       if (!baseVisitor) baseVisitor = base;
       var ancestors = [];
       var last;
-      (function c(node, st, override) {
+      (function c_2(node, st, override) {
         var type = override || node.type;
         var isNew = node !== ancestors[ancestors.length - 1];
         if (isNew) ancestors.push(node);
-        visitNode(baseVisitor, type, node, st, c);
+        visitNode(baseVisitor, type, node, st, c_2);
         if (last !== node) {
           callback(node, st || ancestors, ancestors, type);
           last = node;
@@ -90,10 +90,10 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
       if (!baseVisitor) baseVisitor = base;
       test = makeTest(test);
       try {
-        (function c(node, st, override) {
+        (function c_2(node, st, override) {
           var type = override || node.type;
           if ((start == null || node.start <= start) && (end == null || node.end >= end))
-            visitNode(baseVisitor, type, node, st, c);
+            visitNode(baseVisitor, type, node, st, c_2);
           if (
             (start == null || node.start === start) &&
             (end == null || node.end === end) &&
@@ -110,10 +110,10 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
       test = makeTest(test);
       if (!baseVisitor) baseVisitor = base;
       try {
-        (function c(node, st, override) {
+        (function c_2(node, st, override) {
           var type = override || node.type;
           if (node.start > pos || node.end < pos) return;
-          visitNode(baseVisitor, type, node, st, c);
+          visitNode(baseVisitor, type, node, st, c_2);
           if (test(type, node)) throw new Found(node, st);
         })(node, state);
       } catch (e) {
@@ -125,11 +125,11 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
       test = makeTest(test);
       if (!baseVisitor) baseVisitor = base;
       try {
-        (function c(node, st, override) {
+        (function c_2(node, st, override) {
           if (node.end < pos) return;
           var type = override || node.type;
           if (node.start >= pos && test(type, node)) throw new Found(node, st);
-          visitNode(baseVisitor, type, node, st, c);
+          visitNode(baseVisitor, type, node, st, c_2);
         })(node, state);
       } catch (e) {
         if (e instanceof Found) return e;
@@ -140,12 +140,12 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
       test = makeTest(test);
       if (!baseVisitor) baseVisitor = base;
       var max;
-      (function c(node, st, override) {
+      (function c_2(node, st, override) {
         if (node.start > pos) return;
         var type = override || node.type;
         if (node.end <= pos && (!max || max.node.end < node.end) && test(type, node))
           max = new Found(node, st);
-        visitNode(baseVisitor, type, node, st, c);
+        visitNode(baseVisitor, type, node, st, c_2);
       })(node, state);
       return max;
     }
@@ -312,14 +312,14 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
         c(expr, st, "Expression");
       }
     };
-    base.TemplateLiteral = function (node, st, c) {
+    base.TemplateLiteral = function (node, st, c_2) {
       for (var i = 0, list = node.quasis; i < list.length; i += 1) {
         var quasi = list[i];
-        c(quasi, st);
+        c_2(quasi, st);
       }
       for (var i$1 = 0, list$1 = node.expressions; i$1 < list$1.length; i$1 += 1) {
         var expr = list$1[i$1];
-        c(expr, st, "Expression");
+        c_2(expr, st, "Expression");
       }
     };
     base.TemplateElement = ignore;
@@ -377,16 +377,16 @@ var require_walk = __commonJS(function (cjsExports, cjsModule) {
     base.ImportAttribute = function (node, st, c) {
       c(node.value, st, "Expression");
     };
-    base.ImportDeclaration = function (node, st, c) {
+    base.ImportDeclaration = function (node, st, c_2) {
       for (var i = 0, list = node.specifiers; i < list.length; i += 1) {
         var spec = list[i];
-        c(spec, st);
+        c_2(spec, st);
       }
-      c(node.source, st, "Expression");
+      c_2(node.source, st, "Expression");
       if (node.attributes)
         for (var i$1 = 0, list$1 = node.attributes; i$1 < list$1.length; i$1 += 1) {
           var attr = list$1[i$1];
-          c(attr, st);
+          c_2(attr, st);
         }
     };
     base.ImportExpression = function (node, st, c) {

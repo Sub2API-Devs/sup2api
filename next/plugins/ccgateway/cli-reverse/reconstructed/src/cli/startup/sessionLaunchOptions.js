@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：应用会话启动选项（后台会话权限规则、记录本地回收、工具结果复制模式）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (11)
+ * attribution: placement 9, layout 2
  */
 import { resolve } from "path";
 import { env } from "../../utils/env.js";
@@ -36,10 +36,12 @@ import { identity } from "../../utils/pathClassification.js";
 import { publishAnnouncedDirs } from "../../utils/announcedDirectories.js";
 import { isRemoteCoworkSession } from "../../utils/startupFlagWait.js";
 import { getOrBuildUserContext } from "../../context.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { withFeatureTelemetry } from "../../services/analytics/featureTelemetry.js";
 import { setTranscriptLocalGcEnabled, setToolResultCopiesOnDisk } from "../../utils/sessionStorage.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 
-//@ chunk-3wek6r2k.js:10937-11292 placement
+//@ chunk-hjswk319.js:11370-11725 placement
 function readBgSessionPermissionRules() {
   let CLAUDE_BG_SESSION_PERMISSION_RULES = env.CLAUDE_BG_SESSION_PERMISSION_RULES;
   if (!CLAUDE_BG_SESSION_PERMISSION_RULES || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
@@ -61,7 +63,7 @@ function readBgSessionPermissionRules() {
     return;
   }
 }
-//@ chunk-3wek6r2k.js:11292-11538 placement
+//@ chunk-hjswk319.js:11725-11971 placement
 /**
  * 读取并清掉 CLAUDE_RELAUNCH_SESSION_ADD_DIRS：解析为字符串数组返回（为空或格式不对返回 undefined）。
  */
@@ -78,7 +80,7 @@ function takeRelaunchAddDirs() {
     return;
   }
 }
-//@ chunk-3wek6r2k.js:11538-12913 placement
+//@ chunk-hjswk319.js:11971-13346 placement
 /**
  * 应用后台会话（bg）、基础工具、转录 GC、工具结果落盘等启动选项。
  */
@@ -153,16 +155,26 @@ async function applySessionLaunchOptions(options) {
     }),
   };
 }
-//@ chunk-3wek6r2k.js:12913-12945 placement
+//@ chunk-hjswk319.js:13346-13378 placement
 function shouldPrefetchUserContext(options) {
   return options && isRemoteCoworkSession();
 }
-//@ chunk-3wek6r2k.js:12945-13001 placement
+//@ chunk-hjswk319.js:13378-13434 placement
 function prefetchUserContext(options, storageV5, storageV5_2, credentials) {
   if (shouldPrefetchUserContext(storageV5))
     getOrBuildUserContext(options, storageV5_2, credentials).catch(() => {});
 }
-//@ chunk-3wek6r2k.js:13001-13131 placement
+//@ chunk-hjswk319.js:13434-13486 layout
+function shouldSkipHooksForPluginInstall(flag) {
+  return flag && getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_sluice", false);
+}
+//@ chunk-hjswk319.js:13486-13582 layout
+function scanCommandsAfterMcpConfig(mcpConfigsPromise, scan) {
+  return mcpConfigsPromise
+    .catch(() => {})
+    .then(() => withFeatureTelemetry("startup_command_scan_after_mcp_config", scan));
+}
+//@ chunk-hjswk319.js:13582-13712 placement
 function enableTranscriptLocalGc({ sdkUrl, isNonInteractiveSession }) {
   if (
     isNonInteractiveSession &&
@@ -172,25 +184,27 @@ function enableTranscriptLocalGc({ sdkUrl, isNonInteractiveSession }) {
   )
     setTranscriptLocalGcEnabled(true);
 }
-//@ chunk-3wek6r2k.js:13131-13260 placement
+//@ chunk-hjswk319.js:13712-13841 placement
 function setToolResultCopyMode({ sdkUrl, isNonInteractiveSession }) {
   if (isNonInteractiveSession && sdkUrl && isRemoteManagedEnvironment())
     setToolResultCopiesOnDisk(env.CLAUDE_CODE_TRANSCRIPT_SLIM_TOOL_RESULTS ? "slim" : "counted");
 }
-//@ chunk-3wek6r2k.js:13288-13368 placement
+//@ chunk-hjswk319.js:13869-13949 placement
 function unavailableReason(reason) {
   return reason.kind === "unavailable" && reason.reason !== "mcp" ? reason.reason : undefined;
 }
-//@ chunk-3wek6r2k.js:13368-13428 placement
+//@ chunk-hjswk319.js:13949-14009 placement
 function cloudUnavailableReason(caps, options) {
   return options.explicitCloudLaunch ? undefined : unavailableReason(caps);
 }
 export {
+  prefetchUserContext,
   shouldPrefetchUserContext,
   unavailableReason,
-  prefetchUserContext,
   applySessionLaunchOptions,
   enableTranscriptLocalGc,
   setToolResultCopyMode,
   cloudUnavailableReason,
+  shouldSkipHooksForPluginInstall,
+  scanCommandsAfterMcpConfig,
 };

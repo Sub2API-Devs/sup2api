@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内部消息转换为 SDK 消息流与重放
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (14)
  * attribution: placement 14
  */
 import { randomUUID } from "crypto";
@@ -33,7 +33,7 @@ import { unwrapAbortReason } from "../../utils/abortController.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isAbortError } from "../../utils/errors.js";
 
-//@ chunk-tyg7f3ek.js:244088-244160 placement
+//@ chunk-0yw3taqg.js:271697-271769 placement
 function apiMessageIdField(messageId) {
   return typeof messageId === "string" && messageId !== ""
     ? {
@@ -41,7 +41,7 @@ function apiMessageIdField(messageId) {
       }
     : {};
 }
-//@ chunk-tyg7f3ek.js:244305-244556 placement
+//@ chunk-0yw3taqg.js:271914-272165 placement
 function streamMessageDelta(messageId, stopReason, stopSequence, usage, fromBlockIndex) {
   return [
     {
@@ -65,7 +65,7 @@ function streamMessageDelta(messageId, stopReason, stopSequence, usage, fromBloc
     streamMessageStop(messageId, fromBlockIndex),
   ];
 }
-//@ chunk-tyg7f3ek.js:244556-244834 placement
+//@ chunk-0yw3taqg.js:272165-272443 placement
 function streamMessageStop(messageId, fromBlockIndex) {
   let idField = apiMessageIdField(messageId);
   return {
@@ -87,7 +87,7 @@ function streamMessageStop(messageId, fromBlockIndex) {
       }),
   };
 }
-//@ chunk-tyg7f3ek.js:244834-245203 placement
+//@ chunk-0yw3taqg.js:272443-272812 placement
 function usageForStream(usage) {
   return {
     output_tokens_details: usage.output_tokens_details ?? null,
@@ -100,7 +100,7 @@ function usageForStream(usage) {
     fallback_credit: usage.fallback_credit ?? null,
   };
 }
-//@ chunk-tyg7f3ek.js:245203-245327 placement
+//@ chunk-0yw3taqg.js:272812-272936 placement
 function passModelFallback(message) {
   if (
     message.type === "system" &&
@@ -109,7 +109,7 @@ function passModelFallback(message) {
     return message;
   return message;
 }
-//@ chunk-tyg7f3ek.js:245327-247564 placement
+//@ chunk-0yw3taqg.js:272936-275173 placement
 /**
  * 把内部消息（assistant/user/system/attachment/progress 等）转换为 SDK stream-json 消息序列。
  */
@@ -263,7 +263,7 @@ function* toSdkMessages(message, session, options) {
     default:
   }
 }
-//@ chunk-tyg7f3ek.js:247564-247942 placement
+//@ chunk-0yw3taqg.js:275173-275551 placement
 function systemMessageToSdk(message) {
   if (
     message.type === "user" &&
@@ -291,7 +291,7 @@ function systemMessageToSdk(message) {
     );
   return;
 }
-//@ chunk-tyg7f3ek.js:247942-248029 placement
+//@ chunk-0yw3taqg.js:275551-275638 placement
 function* systemMessagesToSdk(messages) {
   for (let message of messages) {
     if (message.type !== "system") continue;
@@ -299,7 +299,7 @@ function* systemMessagesToSdk(messages) {
     if (sdkMessage) yield sdkMessage;
   }
 }
-//@ chunk-tyg7f3ek.js:248029-248508 placement
+//@ chunk-0yw3taqg.js:275638-276117 placement
 function* replayMessagesToSdk(messages) {
   for (let message of messages) {
     let sdkMessage = systemMessageToSdk(message);
@@ -324,7 +324,7 @@ function* replayMessagesToSdk(messages) {
       yield informationalSystemMessage(message);
   }
 }
-//@ chunk-tyg7f3ek.js:248508-249078 placement
+//@ chunk-0yw3taqg.js:276117-276687 placement
 function informationalSystemMessage(message) {
   return {
     type: "system",
@@ -354,7 +354,7 @@ function informationalSystemMessage(message) {
     session_id: getSessionId(),
   };
 }
-//@ chunk-tyg7f3ek.js:249078-249371 placement
+//@ chunk-0yw3taqg.js:276687-276980 placement
 function preservedAttachmentRows(messages, sessionId) {
   try {
     let preservedMessages = messages.find(isCompactBoundaryMessage)?.compactMetadata?.preservedMessages;
@@ -377,7 +377,7 @@ function preservedAttachmentRows(messages, sessionId) {
     return [];
   }
 }
-//@ chunk-tyg7f3ek.js:249371-249445 placement
+//@ chunk-0yw3taqg.js:276980-277054 placement
 function* normalizeMessageWithSessionId(message, sessionId) {
   for (let normalized of normalizeMessage(message, sessionId))
     yield {
@@ -385,7 +385,7 @@ function* normalizeMessageWithSessionId(message, sessionId) {
       session_id: message.session_id,
     };
 }
-//@ chunk-tyg7f3ek.js:249445-249804 placement
+//@ chunk-0yw3taqg.js:277054-277413 placement
 function isOrphanedPermissionTurn(command, conversation) {
   let orphanedPermission = command.orphanedPermission;
   let toolUseID = orphanedPermission?.permissionResult?.toolUseID;
@@ -404,7 +404,7 @@ function isOrphanedPermissionTurn(command, conversation) {
       ),
   );
 }
-//@ chunk-tyg7f3ek.js:249804-250538 placement
+//@ chunk-0yw3taqg.js:277413-278147 placement
 function countUnsentBatchMessages({ batch, turnSignal, isStopped, isSentNow, conversation, messageQueue }) {
   let requeuedUuids = new Set();
   let requeuedCount = 0;
@@ -455,15 +455,15 @@ function countUnsentBatchMessages({ batch, turnSignal, isStopped, isSentNow, con
   };
 }
 export {
-  apiMessageIdField,
   informationalSystemMessage,
+  apiMessageIdField,
   preservedAttachmentRows,
   replayMessagesToSdk,
   systemMessagesToSdk,
   toSdkMessages,
-  passModelFallback,
-  countUnsentBatchMessages,
   streamMessageDelta,
   usageForStream,
   streamMessageStop,
+  passModelFallback,
+  countUnsentBatchMessages,
 };

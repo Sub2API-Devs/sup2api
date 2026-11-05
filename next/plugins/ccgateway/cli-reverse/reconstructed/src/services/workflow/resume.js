@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (9)
  * attribution: placement 9
  */
 import { resolve, dirname, basename, join } from "path";
@@ -32,7 +32,7 @@ import { indexJournalEntries } from "./journalEntries.js";
 import { writeNewFile } from "../../utils/atomicPublishWrite.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-41w44bgm.js:98035-98084 placement
+//@ chunk-kd2wbncj.js:90676-90725 placement
 /**
  * 保存脚本探测与镜像记录的状态类。
  */
@@ -40,7 +40,7 @@ class WorkflowResumeState {
   probes = new Map();
   mirroredScripts = new Map();
 }
-//@ chunk-41w44bgm.js:98084-98154 placement
+//@ chunk-kd2wbncj.js:90725-90795 placement
 /**
  * 路径是否位于本会话的镜像脚本目录下。
  */
@@ -50,7 +50,7 @@ function isMirroredScriptPath(course, runId) {
     samePath(dirname(resolved), workflowScriptsDir()) && isWorkflowScriptFileFor(basename(resolved), runId)
   );
 }
-//@ chunk-41w44bgm.js:98154-98479 placement
+//@ chunk-kd2wbncj.js:90795-91120 placement
 /**
  * 把工作流脚本镜像到远程存储：按文件名+内容的 sha256 去重，已镜像过相同内容则跳过；上传失败时清除记录以便重试。
  */
@@ -79,7 +79,7 @@ function mirrorWorkflowScript(runId, scriptPath, script, state) {
       logJournalMirrorFailure(error);
     });
 }
-//@ chunk-41w44bgm.js:98479-98647 placement
+//@ chunk-kd2wbncj.js:91120-91288 placement
 /**
  * 探测工作流运行是否可恢复（按运行 id 缓存探测结果，非 restore 结果用完即删）。
  */
@@ -93,7 +93,7 @@ function probeWorkflowResume(runId, scriptPath, storageRoot, agentCtx, state) {
   state.probes.set(runId, probe);
   return probe;
 }
-//@ chunk-41w44bgm.js:98647-99964 placement
+//@ chunk-kd2wbncj.js:91288-92594 placement
 /**
  * 判断工作流运行能否恢复：本地 journal 完整且脚本在则 ready；否则从会话存储读取远程副本，解析 journal 条目与脚本，返回 restore / refused（无 journal、取不到等）。
  */
@@ -171,7 +171,7 @@ async function probeResumeState(runId, scriptPath, storageRoot, agentCtx) {
     return refuse(`Could not read the journal for workflow run ${runId}: ${errorMessage(error)}`);
   }
 }
-//@ chunk-41w44bgm.js:99964-100298 placement
+//@ chunk-kd2wbncj.js:92594-92928 placement
 /**
  * 恢复工作流时加载日志：优先用远程恢复的条目（被拒时返回拒绝原因），否则读本地文件日志；读取失败返回 refusal。
  */
@@ -196,7 +196,7 @@ async function loadResumeJournal(runId, scriptPath, storageV5, signal, state) {
     };
   }
 }
-//@ chunk-41w44bgm.js:100298-100445 placement
+//@ chunk-kd2wbncj.js:92928-93075 placement
 /**
  * 若恢复结果附带脚本且给定路径正是恢复脚本的写回位置，返回该脚本内容。
  */
@@ -207,7 +207,7 @@ function restoredScriptFor(restoreResult, scriptPath) {
     ? restoreResult.script.script
     : undefined;
 }
-//@ chunk-41w44bgm.js:100445-100644 placement
+//@ chunk-kd2wbncj.js:93075-93274 placement
 /**
  * 确保恢复所需的脚本与日志已写回：拒绝时返回原因，已就绪返回 null，否则只写一次并返回写入结果。
  */
@@ -220,7 +220,7 @@ async function ensureResumeRestored(runId, scriptPath, storageRoot, signal, resu
   );
   return probeResult.written;
 }
-//@ chunk-41w44bgm.js:100644-101091 placement
+//@ chunk-kd2wbncj.js:93274-93721 placement
 /**
  * 把恢复得到的工作流脚本写回本地脚本目录（已存在则忽略），并在本地日志未完整时写入恢复的条目；失败返回错误文字，成功返回 null。
  */

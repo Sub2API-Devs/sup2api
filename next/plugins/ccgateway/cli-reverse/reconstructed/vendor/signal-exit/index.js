@@ -1,14 +1,14 @@
 /**
  * signal-exit/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: signal-exit@4.1.0
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_signals } from "./signals.js";
 
-//@ chunk-bmbhxpfm.js:15044-17126 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:15044-17126 cjs-fingerprint
 var require_signal_exit = __commonJS(function (cjsExports, cjsModule) {
   var processRef = global.process;
   var processOk = function (processRef) {

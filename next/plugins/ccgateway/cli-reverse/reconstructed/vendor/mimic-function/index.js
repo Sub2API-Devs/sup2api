@@ -1,11 +1,11 @@
 /**
  * mimic-function/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: mimic-function@5.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-fingerprint 2
  */
-//@ chunk-m4p5zn6n.js:8136-8992 esm-fingerprint
+//@ chunk-t889g22j.js:8135-8991 esm-fingerprint
 var copyProperty = (to, from, property, ignoreNonConfigurable) => {
   if (property === "length" || property === "prototype") return;
   if (property === "arguments" || property === "caller") return;
@@ -42,7 +42,7 @@ var changeToString = (to, from, name) => {
     value: newToString,
   });
 };
-//@ chunk-m4p5zn6n.js:8992-9126 esm-fingerprint
+//@ chunk-t889g22j.js:8991-9125 esm-fingerprint
 function mimicFunction(to, from, { ignoreNonConfigurable = false } = {}) {
   let { name } = to;
   for (let property of Reflect.ownKeys(from)) copyProperty(to, from, property, ignoreNonConfigurable);

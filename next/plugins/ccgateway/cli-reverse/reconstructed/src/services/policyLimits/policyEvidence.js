@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：是否需要重新读取策略证据（bearer 变化）；策略主体身份键（wif、helper、令牌）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-55ht3bcx.js (79)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0nvx3515.js (79)
  * attribution: placement 79
  */
 import { resolve } from "path";
@@ -88,7 +88,7 @@ import { CLAUDE_AI_INFERENCE_SCOPE } from "../../constants/oauth.js";
 import { isBareMode } from "../../utils/envUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-55ht3bcx.js:22780-23028 placement
+//@ chunk-0nvx3515.js:22816-23064 placement
 function markSessionVerdictUnattributed() {
   let policyLimitsState = getPolicyLimitsState();
   let notDisowned = !policyLimitsState.sessionVerdictDisowned;
@@ -102,35 +102,35 @@ function markSessionVerdictUnattributed() {
     policyLimitsState.emitVerdictChanged();
   }
 }
-//@ chunk-55ht3bcx.js:23028-23082 placement
+//@ chunk-0nvx3515.js:23064-23118 placement
 function getPolicyPrincipalIdentity() {
   let policyPrincipal = getPolicyPrincipal();
   return policyPrincipal === null ? null : identityDigestOfDescriptor(policyPrincipal);
 }
-//@ chunk-55ht3bcx.js:23082-23155 placement
+//@ chunk-0nvx3515.js:23118-23191 placement
 function getPolicyStoredCopyTrust() {
   let storedCopyTrust = getPolicyLimitsState().storedCopyTrust;
   return storedCopyTrust === "not_asked" ? storedCopyTrust : cacheTrustLabel(storedCopyTrust);
 }
-//@ chunk-55ht3bcx.js:23155-23202 placement
+//@ chunk-0nvx3515.js:23191-23238 placement
 function getPolicyStoredCopyTrustedPrincipal() {
   return trustedPrincipal(getPolicyLimitsState().storedCopyTrust);
 }
-//@ chunk-55ht3bcx.js:23202-23245 placement
+//@ chunk-0nvx3515.js:23238-23281 placement
 function getLastPolicyCacheStampVerdict() {
   return getPolicyLimitsState().lastStampVerdict;
 }
-//@ chunk-55ht3bcx.js:23245-23296 placement
+//@ chunk-0nvx3515.js:23281-23332 placement
 function getLastPolicyCacheStampMatchedIdentity() {
   return getPolicyLimitsState().lastStampMatchedIdentity;
 }
-//@ chunk-55ht3bcx.js:23296-23378 placement
+//@ chunk-0nvx3515.js:23332-23414 placement
 function getHipaaEvidence() {
   let policyLimitsState = getPolicyLimitsState();
   if (!policyLimitsState.hipaaEvidenceLoaded) applyStampReadToState(currentPolicyStampOrMemoryFallback());
   return policyLimitsState.hipaaEvidence;
 }
-//@ chunk-55ht3bcx.js:23378-23540 placement
+//@ chunk-0nvx3515.js:23414-23576 placement
 function applyStampReadToState(readResult) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.hipaaEvidenceLoaded = !isIoUnusableStamp(readResult);
@@ -138,18 +138,18 @@ function applyStampReadToState(readResult) {
   else if (readResult.kind === "unusable" && !isIoUnusableStamp(readResult))
     policyLimitsState.hipaaSeenUnreadable = true;
 }
-//@ chunk-55ht3bcx.js:23540-23578 placement
+//@ chunk-0nvx3515.js:23576-23614 placement
 /**
  * 内存模式下用内存戳，否则同步读取磁盘缓存戳。
  */
 function currentPolicyStampOrMemoryFallback() {
   return isPolicyCacheMemoryOnly() ? ABSENT_STAMP : readPolicyStampSync(getCachePath());
 }
-//@ chunk-55ht3bcx.js:23578-23618 placement
+//@ chunk-0nvx3515.js:23614-23654 placement
 function getHeldHipaaEvidence() {
   return getPolicyLimitsState().hipaaEvidence;
 }
-//@ chunk-55ht3bcx.js:23618-24246 placement
+//@ chunk-0nvx3515.js:23654-24282 placement
 function hasHipaaEvidenceForPrincipal() {
   let principal;
   try {
@@ -191,14 +191,14 @@ function hasHipaaEvidenceForPrincipal() {
     (hipaaEvidence.incomplete && !hipaaEvidence.ruledOut.includes(digest))
   );
 }
-//@ chunk-55ht3bcx.js:24246-24314 placement
+//@ chunk-0nvx3515.js:24282-24350 placement
 /**
  * 判断策略主体是否无法归属（未分类或存储登录无组织）。
  */
 function isUnattributablePrincipal(principal) {
   return principal.unclassified === true || principal.storedLoginOrgless === true;
 }
-//@ chunk-55ht3bcx.js:24314-24453 placement
+//@ chunk-0nvx3515.js:24350-24489 placement
 function recordPersistedPolicyCache(diskBodyChecksum, hipaaEvidence, diskConfirmedAtMs) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.diskBodyChecksum = diskBodyChecksum;
@@ -207,7 +207,7 @@ function recordPersistedPolicyCache(diskBodyChecksum, hipaaEvidence, diskConfirm
   policyLimitsState.hipaaEvidenceLoaded = true;
   policyLimitsState.diskRefusedAtMs = null;
 }
-//@ chunk-55ht3bcx.js:24453-24620 placement
+//@ chunk-0nvx3515.js:24489-24656 placement
 function takeUpHipaaEvidenceLeftOnDisk(policyStamp) {
   let policyLimitsState = getPolicyLimitsState();
   let { hipaaEvidence, hipaaSeenUnreadable } = policyLimitsState;
@@ -220,7 +220,7 @@ function takeUpHipaaEvidenceLeftOnDisk(policyStamp) {
     policyLimitsState.emitVerdictChanged();
   }
 }
-//@ chunk-55ht3bcx.js:24620-24822 placement
+//@ chunk-0nvx3515.js:24656-24858 placement
 function sameHipaaEvidence(hipaaEvidence, hipaaEvidence_2) {
   return (
     hipaaEvidence.incomplete === hipaaEvidence_2.incomplete &&
@@ -230,15 +230,15 @@ function sameHipaaEvidence(hipaaEvidence, hipaaEvidence_2) {
     hipaaEvidence.ruledOut.every((digest, index) => digest === hipaaEvidence_2.ruledOut[index])
   );
 }
-//@ chunk-55ht3bcx.js:24822-24865 placement
+//@ chunk-0nvx3515.js:24858-24901 placement
 function getPersistedPolicyCacheChecksum() {
   return getPolicyLimitsState().diskBodyChecksum;
 }
-//@ chunk-55ht3bcx.js:24865-24909 placement
+//@ chunk-0nvx3515.js:24901-24945 placement
 function getPersistedPolicyCacheConfirmedAt() {
   return getPolicyLimitsState().diskConfirmedAtMs;
 }
-//@ chunk-55ht3bcx.js:24909-25140 placement
+//@ chunk-0nvx3515.js:24945-25176 placement
 function forgetPersistedPolicyCache() {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.diskBodyChecksum = null;
@@ -250,34 +250,34 @@ function forgetPersistedPolicyCache() {
   policyLimitsState.storedCopyTrust = "not_asked";
   policyLimitsState.dropHintedTaints();
 }
-//@ chunk-55ht3bcx.js:25140-25205 placement
+//@ chunk-0nvx3515.js:25176-25241 placement
 function parseCachedResponse(text) {
   let projected = projectPolicyLimitsBody(safeParseJSON(text, false));
   return projected.success ? projected.data : null;
 }
-//@ chunk-55ht3bcx.js:25205-25224 placement
+//@ chunk-0nvx3515.js:25241-25260 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-55ht3bcx.js:25205", () => {
+deferInit("chunk-0nvx3515.js:25241", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-55ht3bcx.js:25224-25303 placement
+//@ chunk-0nvx3515.js:25260-25339 placement
 function projectPolicyLimitsBody(body) {
   let parsed = PolicyLimitsResponseSchema().safeParse(body);
   if (parsed.success) weakMap.set(parsed.data, body);
   return parsed;
 }
-//@ chunk-55ht3bcx.js:25303-25339 placement
+//@ chunk-0nvx3515.js:25339-25375 placement
 function serverBodyOf(body) {
   return weakMap.get(body) ?? body;
 }
-//@ chunk-55ht3bcx.js:25339-25450 placement
+//@ chunk-0nvx3515.js:25375-25486 placement
 function seedSessionCacheFromPrime(storageV5, prime) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.storageV5 = storageV5;
   if (prime !== null && policyLimitsState.sessionCache === null && !policyLimitsState.diskAdoptionSuppressed)
     installDiskDerivedVerdict(prime);
 }
-//@ chunk-55ht3bcx.js:25450-30842 placement
+//@ chunk-0nvx3515.js:25486-31237 placement
 var CLIENT_POLICY_KEYS = {
   allow_product_feedback: {
     deniedUnder: ["hipaa", "zdr"],
@@ -402,6 +402,22 @@ var CLIENT_POLICY_KEYS = {
     label: "File references for connectors",
     verb: "are",
     requirementId: "HIPAA-R87",
+  },
+  allow_connector_file_uploads: {
+    deniedUnder: ["hipaa", "zdr"],
+    onCacheMiss: "deny",
+    onFailOpenVerdict: "deny",
+    label: "Sending files to claude.ai connectors",
+    verb: "is",
+    requirementId: "HIPAA-R103",
+  },
+  allow_gmail_file_references: {
+    deniedUnder: ["hipaa"],
+    onCacheMiss: "deny",
+    onFailOpenVerdict: "deny",
+    label: "File references for connectors",
+    verb: "are",
+    requirementId: "HIPAA-R106",
   },
   allow_heap_dump: {
     deniedUnder: ["hipaa", "zdr"],
@@ -566,35 +582,35 @@ var CLIENT_POLICY_KEYS = {
     requirementId: "HIPAA-R65",
   },
 };
-//@ chunk-55ht3bcx.js:30842-30886 placement
+//@ chunk-0nvx3515.js:31237-31281 placement
 function isClientDerivedPolicyKey(policyKey) {
   return Object.hasOwn(CLIENT_POLICY_KEYS, policyKey);
 }
-//@ chunk-55ht3bcx.js:30886-30930 placement
+//@ chunk-0nvx3515.js:31281-31325 placement
 function clientPolicyKeySpec(policyKey) {
   return isClientDerivedPolicyKey(policyKey) ? CLIENT_POLICY_KEYS[policyKey] : undefined;
 }
-//@ chunk-55ht3bcx.js:30930-30956 placement
+//@ chunk-0nvx3515.js:31325-31351 placement
 var HIPAA_TAINTS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-55ht3bcx.js:30930", () => {
+deferInit("chunk-0nvx3515.js:31325", () => {
   HIPAA_TAINTS_2 = new Set(["hipaa"]);
 });
-//@ chunk-55ht3bcx.js:30956-31016 placement
+//@ chunk-0nvx3515.js:31351-31411 placement
 function isServerPopulatedPolicyKey(policyKey) {
   return clientPolicyKeySpec(policyKey)?.serverPopulated === true && !isValidatedCloverOn();
 }
-//@ chunk-55ht3bcx.js:31016-31075 placement
+//@ chunk-0nvx3515.js:31411-31470 placement
 function isUnblockedTranscriptScanKey(policyKey) {
   return clientPolicyKeySpec(policyKey)?.transcriptScan === true && !isHashedLarkOn();
 }
-//@ chunk-55ht3bcx.js:31075-31124 placement
+//@ chunk-0nvx3515.js:31470-31519 placement
 /**
  * 取所有客户端派生且需要处理的策略键。
  */
 function clientPolicyKeys() {
   return Object.keys(CLIENT_POLICY_KEYS).filter(isClientDerivedPolicyKey);
 }
-//@ chunk-55ht3bcx.js:31124-31205 placement
+//@ chunk-0nvx3515.js:31519-31600 placement
 function policyKeyLabel(policyKey) {
   let spec = clientPolicyKeySpec(policyKey);
   return {
@@ -602,7 +618,7 @@ function policyKeyLabel(policyKey) {
     verb: spec?.verb ?? "is",
   };
 }
-//@ chunk-55ht3bcx.js:31205-31638 placement
+//@ chunk-0nvx3515.js:31600-32033 placement
 /**
  * 策略证据计算中豁免与需要专门处理的字段集合。
  */
@@ -613,7 +629,7 @@ var RELEASED_ON_SETTLED_MISS;
 var DENIED_ON_FAIL_OPEN_VERDICT;
 var FEEDBACK_TAINT_EXEMPT_KEYS;
 var WEB_FETCH_AND_DESIGN_KEYS;
-deferInit("chunk-55ht3bcx.js:31205", () => {
+deferInit("chunk-0nvx3515.js:31600", () => {
   TAINT_DISABLED_POLICIES = clientPolicyKeys().flatMap((policyKey) =>
     (clientPolicyKeySpec(policyKey)?.deniedUnder ?? []).map((taintName) => [taintName, policyKey]),
   );
@@ -632,12 +648,12 @@ deferInit("chunk-55ht3bcx.js:31205", () => {
   FEEDBACK_TAINT_EXEMPT_KEYS = new Set(["allow_product_feedback"]);
   WEB_FETCH_AND_DESIGN_KEYS = new Set(["allow_web_fetch", "allow_design_sync", "allow_channels", ...[]]);
 });
-//@ chunk-55ht3bcx.js:31638-31683 placement
+//@ chunk-0nvx3515.js:32033-32078 placement
 function isClientOnlyEgressKeyWithheld(policyKey) {
   let reread = shouldRereadEvidence(policyKey);
   return isWithheldFromUnverifiedClaudeAiLogin(policyKey) || reread;
 }
-//@ chunk-55ht3bcx.js:31683-31993 placement
+//@ chunk-0nvx3515.js:32078-32388 placement
 function isWithheldFromUnverifiedClaudeAiLogin(policyKey) {
   if (!WEB_FETCH_AND_DESIGN_KEYS.has(policyKey) || isSteadySunbeamOn() || !isPolicyLimitsEligible())
     return false;
@@ -659,7 +675,7 @@ function isWithheldFromUnverifiedClaudeAiLogin(policyKey) {
   if (rung === "none" && effectiveAuthTokenEnv() !== undefined && isGateAOn()) return false;
   return rung === "oauth" || rung === "tunnel" || rung === "none";
 }
-//@ chunk-55ht3bcx.js:31993-32326 placement
+//@ chunk-0nvx3515.js:32388-32721 placement
 /**
  * 是否需要重新读取策略证据（bearer 变化）。
  */
@@ -680,7 +696,7 @@ function shouldRereadEvidence(policyKey) {
   }
   return hasHipaaEvidenceForPrincipal();
 }
-//@ chunk-55ht3bcx.js:32326-32393 placement
+//@ chunk-0nvx3515.js:32721-32788 placement
 /**
  * 当前策略主体是否无法归属（异常时保守为真）。
  */
@@ -692,7 +708,7 @@ function isCurrentPrincipalUnattributable() {
     return true;
   }
 }
-//@ chunk-55ht3bcx.js:32393-33022 placement
+//@ chunk-0nvx3515.js:32788-33417 placement
 function isPolicyAllowed(policyKey) {
   let responseFromCache = getResponseFromCache();
   if (isUnblockedTranscriptScanKey(policyKey)) {
@@ -744,7 +760,7 @@ function isPolicyAllowed(policyKey) {
   if (isClientOnlyEgressKeyWithheld(policyKey)) return false;
   return !isPolicyDeniedForKey(policyKey, responseFromCache);
 }
-//@ chunk-55ht3bcx.js:33022-33295 placement
+//@ chunk-0nvx3515.js:33417-33690 placement
 function isPolicyDeniedForKey(policyKey, responseFromCache) {
   let policyLimitsState = getPolicyLimitsState();
   if (
@@ -766,7 +782,7 @@ function isPolicyDeniedForKey(policyKey, responseFromCache) {
     ],
   );
 }
-//@ chunk-55ht3bcx.js:33295-33594 placement (2.1.88 match: PolicyLimitsResponseSchema, 0.452)
+//@ chunk-0nvx3515.js:33690-33989 placement (2.1.88 match: PolicyLimitsResponseSchema, 0.452)
 function isPolicyAllowedInResponse(response, policyKey, extraTaints = []) {
   let complianceTaints = response.compliance_taints;
   if (
@@ -790,7 +806,7 @@ function isPolicyAllowedInResponse(response, policyKey, extraTaints = []) {
     : [...extraTaints, ...complianceTaints];
   return !isDisabledByTaint(policyKey, taints);
 }
-//@ chunk-55ht3bcx.js:33594-33942 placement
+//@ chunk-0nvx3515.js:33989-34337 placement
 function isUnrestrictiveBody(body) {
   if (
     body.compliance_taints.some((complianceTaint) =>
@@ -808,23 +824,23 @@ function isUnrestrictiveBody(body) {
     isEnforcedPolicyKey(key) ? value?.allowed !== true : value?.allowed !== false,
   );
 }
-//@ chunk-55ht3bcx.js:33942-34014 placement
+//@ chunk-0nvx3515.js:34337-34409 placement
 /**
  * 策略键是否属于强制/要求类（enforce_ / require_ 前缀）。
  */
 function isEnforcedPolicyKey(policyKey) {
   return policyKey.startsWith("enforce_") || policyKey.startsWith("require_");
 }
-//@ chunk-55ht3bcx.js:34014-34116 placement
+//@ chunk-0nvx3515.js:34409-34511 placement
 function isDisabledByTaint(policyKey, taints) {
   if (taints.length === 0) return false;
   for (let [taintName, pairPolicyKey] of TAINT_DISABLED_POLICIES)
     if (pairPolicyKey === policyKey && taints.includes(taintName)) return true;
   return false;
 }
-//@ chunk-55ht3bcx.js:34116-34566 placement
+//@ chunk-0nvx3515.js:34511-34961 placement
 // deferred: uses registerPolicyVerdict (./policyVerdicts.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-55ht3bcx.js:34116", () => {
+deferInit("chunk-0nvx3515.js:34511", () => {
   registerPolicyVerdict({
     isPolicyAllowed: (policyKey) => isPolicyAllowed(policyKey),
     commandPolicyGateAllows: (policyKey) => commandPolicyGateAllows(policyKey),
@@ -842,14 +858,14 @@ deferInit("chunk-55ht3bcx.js:34116", () => {
     rememberedCoreSkills: () => getRememberedCoreSkills(),
   });
 });
-//@ chunk-55ht3bcx.js:34566-34683 placement
+//@ chunk-0nvx3515.js:34961-35078 placement
 function autoDefaultVerdictState() {
   if (!isPolicyVerdictAbsent()) return "loaded";
   if (isPolicyVerdictUnobtainable())
     return isPrincipalHipaaSeen() ? "unobtainable_seen_hipaa" : "unobtainable";
   return "pending";
 }
-//@ chunk-55ht3bcx.js:34683-34791 placement
+//@ chunk-0nvx3515.js:35078-35186 placement
 function isPrincipalHipaaSeen() {
   let principal;
   try {
@@ -860,7 +876,7 @@ function isPrincipalHipaaSeen() {
   if (principal === null || isUnattributablePrincipal(principal)) return false;
   return getHipaaEvidence().seen.includes(identityDigestOfDescriptor(principal));
 }
-//@ chunk-55ht3bcx.js:34791-34922 placement
+//@ chunk-0nvx3515.js:35186-35317 placement
 function commandPolicyGateAllows(policyKey) {
   if (!isClientDerivedPolicyKey(policyKey)) {
     logForDebugging(`[policy] policyGate names unknown policy key "${policyKey}"; denying`, {
@@ -870,16 +886,16 @@ function commandPolicyGateAllows(policyKey) {
   }
   return isPolicyAllowed(policyKey);
 }
-//@ chunk-55ht3bcx.js:34922-34994 placement
+//@ chunk-0nvx3515.js:35317-35389 placement
 function isPolicyVerdictAbsent() {
   if (!isPolicyLimitsEligible()) return false;
   return getResponseFromCache() === null || getPolicyLimitsState().failOpenVerdict;
 }
-//@ chunk-55ht3bcx.js:34994-35055 placement
+//@ chunk-0nvx3515.js:35389-35450 placement
 function isSessionVerdictFromServerFetch() {
   return getResponseFromCache() !== null && getPolicyLimitsState().sessionFromServerFetch;
 }
-//@ chunk-55ht3bcx.js:35055-35462 placement
+//@ chunk-0nvx3515.js:35450-35857 placement
 function isSessionVerdictUnattributed() {
   if (!isPolicyLimitsEligible()) return false;
   let policyLimitsState = getPolicyLimitsState();
@@ -905,7 +921,7 @@ function isSessionVerdictUnattributed() {
     return true;
   }
 }
-//@ chunk-55ht3bcx.js:35462-35601 placement
+//@ chunk-0nvx3515.js:35857-35996 placement
 function principalEvidenceKey() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.principalRung === "tunnel")
@@ -913,7 +929,7 @@ function principalEvidenceKey() {
   let identity = principalIdentityKey() || getCredentialIndependentIneligibleReason();
   return identity ? saltedTokenDigest(identity) : UNREADABLE_PRINCIPAL;
 }
-//@ chunk-55ht3bcx.js:35601-35909 placement
+//@ chunk-0nvx3515.js:35996-36304 placement
 /**
  * 策略主体身份键（wif、helper、令牌）。
  */
@@ -942,30 +958,30 @@ function principalIdentityKey() {
       ? envToken
       : claudeAIOAuthTokens?.accessToken;
 }
-//@ chunk-55ht3bcx.js:35909-35972 placement
+//@ chunk-0nvx3515.js:36304-36367 placement
 /**
  * 用未命名戳盐值对令牌做双重摘要。
  */
 function saltedTokenDigest(token) {
   return tokenDigest(`${getPolicyLimitsState().unnamedStampSalt}:${tokenDigest(token)}`);
 }
-//@ chunk-55ht3bcx.js:35972-36006 placement
+//@ chunk-0nvx3515.js:36367-36401 placement
 function rowPrincipalStamp() {
   return getPolicyPrincipalIdentity() ?? principalEvidenceKey();
 }
-//@ chunk-55ht3bcx.js:36006-36048 placement
+//@ chunk-0nvx3515.js:36401-36443 placement
 function isRowOfAnotherPrincipal(stamp) {
   return stamp === UNREADABLE_PRINCIPAL || rowPrincipalStamp() !== stamp;
 }
-//@ chunk-55ht3bcx.js:36048-36087 placement
+//@ chunk-0nvx3515.js:36443-36482 placement
 function noteTunnelEpochHeard(tunnelEpochHeard) {
   getPolicyLimitsState().tunnelEpochHeard = tunnelEpochHeard;
 }
-//@ chunk-55ht3bcx.js:36087-36136 placement
+//@ chunk-0nvx3515.js:36482-36531 placement
 function isSessionVerdictDisowned() {
   return getPolicyLimitsState().sessionVerdictDisowned;
 }
-//@ chunk-55ht3bcx.js:36136-36302 placement
+//@ chunk-0nvx3515.js:36531-36697 placement
 function isPolicyVerdictUnobtainable() {
   if (!isPolicyVerdictAbsent()) return false;
   let policyLimitsState = getPolicyLimitsState();
@@ -978,7 +994,7 @@ function isPolicyVerdictUnobtainable() {
   }
   return policyLimitsState.settledWithoutVerdictFor === (identity ?? "");
 }
-//@ chunk-55ht3bcx.js:36302-36512 placement
+//@ chunk-0nvx3515.js:36697-36907 placement
 function isPrincipalSeenUnderHipaa() {
   let principal;
   try {
@@ -992,12 +1008,12 @@ function isPrincipalSeenUnderHipaa() {
   let hasEvidence = hasHipaaEvidenceForPrincipal();
   return policyLimitsState.hipaaSeenUnreadable || !policyLimitsState.hipaaEvidenceLoaded || hasEvidence;
 }
-//@ chunk-55ht3bcx.js:36512-36576 placement
+//@ chunk-0nvx3515.js:36907-36971 placement
 function isPolicyRouteMissing() {
   if (!isPolicyLimitsEligible() || getResponseFromCache() !== null || isAnthropicHosted()) return false;
   return isPolicyRouteMissingByLastFetch();
 }
-//@ chunk-55ht3bcx.js:36576-36664 placement
+//@ chunk-0nvx3515.js:36971-37059 placement
 /**
  * 最近一次拉取失败且状态码为 404（策略路由缺失）。
  */
@@ -1005,7 +1021,7 @@ function isPolicyRouteMissingByLastFetch() {
   let lastFetchOutcome = getPolicyLimitsState().lastFetchOutcome;
   return lastFetchOutcome !== null && !lastFetchOutcome.success && lastFetchOutcome.httpStatus === 404;
 }
-//@ chunk-55ht3bcx.js:36664-36890 placement
+//@ chunk-0nvx3515.js:37059-37285 placement
 function policyDeniedReason(policyKey, featureLabel, verb, taints) {
   if (isPolicyAllowed(policyKey)) return null;
   if (isPolicyRouteMissing()) return policy404Message(featureLabel);
@@ -1021,11 +1037,11 @@ function policyDeniedReason(policyKey, featureLabel, verb, taints) {
       return formatPolicyDisabledMessage(featureLabel, verb, getCurrentTaints(), taints);
   }
 }
-//@ chunk-55ht3bcx.js:36890-36931 placement
+//@ chunk-0nvx3515.js:37285-37326 placement
 function hasNameableComplianceTaint() {
   return hipaaTaintsOnly(getComplianceTaints()).length > 0;
 }
-//@ chunk-55ht3bcx.js:36931-37221 placement
+//@ chunk-0nvx3515.js:37326-37616 placement
 function policyDenyKind(policyKey) {
   if (isPolicyAllowed(policyKey)) return null;
   if (isDeniedOnlyByLatch(policyKey)) return "latched";
@@ -1043,14 +1059,14 @@ function policyDenyKind(policyKey) {
   }
   return isPolicyRouteMissing() ? "route_missing" : "cache_miss";
 }
-//@ chunk-55ht3bcx.js:37221-37327 placement
+//@ chunk-0nvx3515.js:37616-37722 placement
 function isDeniedOnlyByLatch(policyKey) {
   if (!isDisabledByTaint(policyKey, getLatchedTaints()) || isDisabledByTaint(policyKey, getCurrentTaints()))
     return false;
   if (getResponseFromCache() === null) return true;
   return cachedRestrictions()?.[policyKey]?.allowed !== false;
 }
-//@ chunk-55ht3bcx.js:37327-37537 placement
+//@ chunk-0nvx3515.js:37722-37932 placement
 function policyDeniedHint(policyKey) {
   let denyKind = policyDenyKind(policyKey);
   if (denyKind === null) return null;
@@ -1066,7 +1082,7 @@ function policyDeniedHint(policyKey) {
       return policyDisabledMessageFor(getCurrentTaints());
   }
 }
-//@ chunk-55ht3bcx.js:37537-38016 placement
+//@ chunk-0nvx3515.js:37932-38411 placement
 function areComplianceTaintsSettled() {
   let verdict = envBearerVerdictOnWire();
   if (verdict !== null && verdict !== "same") return false;
@@ -1099,7 +1115,7 @@ function areComplianceTaintsSettled() {
     !shouldUseWIFAuth()
   );
 }
-//@ chunk-55ht3bcx.js:38016-38161 placement
+//@ chunk-0nvx3515.js:38411-38556 placement
 function isPolicyDeniedByRefusedCacheHint(policy) {
   if (!isPolicyLimitsEligible()) return false;
   let policyLimitsState = getPolicyLimitsState();
@@ -1115,11 +1131,11 @@ function isPolicyDeniedByRefusedCacheHint(policy) {
     )
   );
 }
-//@ chunk-55ht3bcx.js:38161-38207 placement
+//@ chunk-0nvx3515.js:38556-38602 placement
 function isPolicyEnforced(policyKey) {
   return cachedRestrictions()?.[policyKey]?.allowed === true;
 }
-//@ chunk-55ht3bcx.js:38207-38373 placement
+//@ chunk-0nvx3515.js:38602-38768 placement
 function isPolicyEnforcedOrHintedByRefusedCache(policyKey) {
   let restrictions = cachedRestrictions();
   if (restrictions?.[policyKey]?.allowed === true) return true;
@@ -1131,31 +1147,31 @@ function isPolicyEnforcedOrHintedByRefusedCache(policyKey) {
     isPolicyLimitsEligible()
   );
 }
-//@ chunk-55ht3bcx.js:38373-38450 placement
+//@ chunk-0nvx3515.js:38768-38845 placement
 function getPolicyDefault(policyKey) {
   let value = getResponseFromCache()?.defaults[policyKey];
   return typeof value === "boolean" ? value : undefined;
 }
-//@ chunk-55ht3bcx.js:38450-38494 placement
+//@ chunk-0nvx3515.js:38845-38889 placement
 function getCoreSkillsFromCache() {
   return getResponseFromCache()?.core_skills ?? [];
 }
-//@ chunk-55ht3bcx.js:38494-38576 placement
+//@ chunk-0nvx3515.js:38889-38971 placement
 function getArtifactCreateNotice() {
   return (
     (getResponseFromCache() ?? getPolicyLimitsState().sessionCache)?.artifact_create_notice?.text ?? null
   );
 }
-//@ chunk-55ht3bcx.js:38576-38660 placement
+//@ chunk-0nvx3515.js:38971-39055 placement
 function getRememberedCoreSkills() {
   if (!isPolicyLimitsEligible()) return [];
   return getResponseFromCache()?.core_skills ?? getPolicyLimitsState().lastServedCoreSkills;
 }
-//@ chunk-55ht3bcx.js:38660-38705 placement
+//@ chunk-0nvx3515.js:39055-39100 placement
 function _resetRememberedCoreSkillsForTesting() {
   getPolicyLimitsState().lastServedCoreSkills = null;
 }
-//@ chunk-55ht3bcx.js:38705-38875 placement
+//@ chunk-0nvx3515.js:39100-39270 placement
 function getResponseFromCache() {
   if (!isPolicyLimitsEligible()) return null;
   let policyLimitsState = getPolicyLimitsState();
@@ -1168,19 +1184,19 @@ function getResponseFromCache() {
   }
   return null;
 }
-//@ chunk-55ht3bcx.js:38875-38927 placement
+//@ chunk-0nvx3515.js:39270-39322 placement
 function isPolicyLimitsCacheLoaded() {
   if (!isPolicyLimitsEligible()) return true;
   return getResponseFromCache() !== null;
 }
-//@ chunk-55ht3bcx.js:38927-38972 placement
+//@ chunk-0nvx3515.js:39322-39367 placement (2.1.88 match: loadCachedRestrictions, 0.61)
 /**
  * 取缓存响应里的限制表，无则 null。
  */
 function cachedRestrictions() {
   return getResponseFromCache()?.restrictions ?? null;
 }
-//@ chunk-55ht3bcx.js:38972-39106 placement
+//@ chunk-0nvx3515.js:39367-39501 placement
 function federationProfileKey(wifPrecedenceSource) {
   if (wifPrecedenceSource === "env-quad") return env.ANTHROPIC_FEDERATION_RULE_ID?.trim() ?? "";
   let dir = resolveConfigDir();
@@ -1188,7 +1204,7 @@ function federationProfileKey(wifPrecedenceSource) {
     ? ""
     : principalPathKey(dir, resolveLiveProfileName(dir));
 }
-//@ chunk-55ht3bcx.js:39106-39160 placement
+//@ chunk-0nvx3515.js:39501-39555 placement
 /**
  * 拼出「规范化路径 + NUL + 主体」的键。
  */
@@ -1196,19 +1212,14 @@ function principalPathKey(dir, rung) {
   return dir === null ? "" : `${resolve(dir)}\x00${rung}`;
 }
 export {
-  policyDenyKind,
-  isPolicyDeniedByRefusedCacheHint,
-  getResponseFromCache,
-  isPolicyRouteMissing,
   isPolicyAllowed,
+  policyDenyKind,
   policyDeniedReason,
   isPolicyLimitsCacheLoaded,
-  rowPrincipalStamp,
-  projectPolicyLimitsBody,
-  isSessionVerdictFromServerFetch,
-  policyKeyLabel,
-  isSessionVerdictDisowned,
+  getResponseFromCache,
   isClientOnlyEgressKeyWithheld,
+  isPolicyDeniedByRefusedCacheHint,
+  isPolicyRouteMissing,
   TAINT_DISABLED_POLICIES,
   isEnforcedPolicyKey,
   getPolicyPrincipalIdentity,
@@ -1218,10 +1229,20 @@ export {
   federationProfileKey,
   principalPathKey,
   principalEvidenceKey,
-  isDeniedOnlyByLatch,
-  hasNameableComplianceTaint,
+  getArtifactCreateNotice,
+  isSessionVerdictFromServerFetch,
+  isSessionVerdictDisowned,
   isPolicyEnforcedOrHintedByRefusedCache,
   isPolicyVerdictAbsent,
+  policyKeyLabel,
+  policyDeniedHint,
+  isPolicyVerdictUnobtainable,
+  isPrincipalSeenUnderHipaa,
+  rowPrincipalStamp,
+  projectPolicyLimitsBody,
+  isPolicyAllowedInResponse,
+  isDeniedOnlyByLatch,
+  hasNameableComplianceTaint,
   getPolicyDefault,
   getPersistedPolicyCacheConfirmedAt,
   seedSessionCacheFromPrime,
@@ -1238,11 +1259,6 @@ export {
   markSessionVerdictUnattributed,
   noteTunnelEpochHeard,
   _resetRememberedCoreSkillsForTesting,
-  getArtifactCreateNotice,
-  isPolicyVerdictUnobtainable,
-  isPrincipalSeenUnderHipaa,
-  policyDeniedHint,
-  isPolicyAllowedInResponse,
   areComplianceTaintsSettled,
   CLIENT_POLICY_KEYS,
   DENIED_ON_FAIL_OPEN_VERDICT,

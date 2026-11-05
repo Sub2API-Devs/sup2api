@@ -3,19 +3,29 @@
  *
  * 离屏冻结：内容滚出视口后停止重渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/OffscreenFreeze.tsx
- * pieces: chunk-gwvwj681.js (3)
- * attribution: placement 2, fingerprint 1
+ * pieces: chunk-dkh1nd34.js (4)
+ * attribution: placement 3, layout 1
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { stringSchema, array, zodStrictObject } from "../../vendor/zod/v4/classic/schemas.js";
 import { ANTHROPIC_FILEINPUTS } from "../services/mcpServe/fileInputs.js";
 
-//@ chunk-gwvwj681.js:6507-6530 placement
+//@ chunk-dkh1nd34.js:339-364 placement
 var offscreenFreezeSlot = new SessionRootSlot(() => ({}));
-//@ chunk-gwvwj681.js:6530-6678 placement
+//@ chunk-dkh1nd34.js:364-522 layout
+function heldServer(host, client) {
+  let serverEntry = host?.servers.get(client.name);
+  return serverEntry !== undefined &&
+    client.config.type === "http" &&
+    client.config.url === serverEntry.url &&
+    host?.heldSinceBoot(client.name) === true
+    ? serverEntry.server
+    : undefined;
+}
+//@ chunk-dkh1nd34.js:522-670 placement
 var identifierNameSchema = DoctorLazy(() =>
   stringSchema()
     .regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/)
@@ -30,11 +40,11 @@ var bindingSpecSchema = DoctorLazy(() =>
     }),
   ).length(1),
 );
-//@ chunk-gwvwj681.js:6678-6801 fingerprint (2.1.88 match: OffscreenFreeze, 0.408)
-function OffscreenFreeze(meta) {
+//@ chunk-dkh1nd34.js:670-795 placement
+function bindingSpecOf(meta) {
   let parsed = bindingSpecSchema().safeParse(meta?.[ANTHROPIC_FILEINPUTS]);
   if (!parsed.success) return;
   let [binding] = parsed.data;
   return binding !== undefined && binding.local !== binding.ref ? binding : undefined;
 }
-export { OffscreenFreeze, offscreenFreezeSlot };
+export { offscreenFreezeSlot, heldServer, bindingSpecOf };

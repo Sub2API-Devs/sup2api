@@ -3,10 +3,10 @@
  *
  * /status 标签页：版本、会话名、cwd、账号/组织、认证方式、模型、MCP/插件/IDE 状态、设置来源。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Status.tsx
- * pieces: chunk-6p6y0k3t.js (11), chunk-9h8dr0qb.js (1), chunk-ja34p3ys.js (1)
- * attribution: placement 1, fingerprint 7, layout 4, callgraph-witnessed 1
+ * pieces: chunk-j6tt9nsa.js (1), chunk-za745zwj.js (1), chunk-zpfg1kae.js (11)
+ * attribution: fingerprint 7, placement 1, layout 4, callgraph-witnessed 1
  */
 import {
   jsxProd_default_2,
@@ -32,6 +32,7 @@ import { getUdsInboxUnavailableReason } from "../../utils/udsMessaging.js";
 import { isRemoteSdkOrRemoteMode } from "../../utils/fullscreen.js";
 import {
   buildAccountProperties,
+  claudeAiProjectStatusItem,
   buildAPIProviderProperties,
   modelStatusLabel,
   modelStatusRows,
@@ -78,7 +79,7 @@ import { useTheme } from "../design-system/ThemeProvider.js";
 import { useSession } from "../../context/session.js";
 import { useCwdDerived } from "../../utils/cwd.js";
 
-//@ chunk-6p6y0k3t.js:2135-2384 placement (2.1.88 match: isRow, 0.477)
+//@ chunk-zpfg1kae.js:2140-2392 placement (2.1.88 match: isRow, 0.477)
 function renderPropertyRows(rows, gap) {
   return [
     gap > 0 &&
@@ -115,7 +116,7 @@ function renderPropertyRows(rows, gap) {
     }),
   ];
 }
-//@ chunk-6p6y0k3t.js:2384-2542 fingerprint (2.1.88 match: _temp5, 0.929)
+//@ chunk-zpfg1kae.js:2392-2550 fingerprint (2.1.88 match: _temp5, 0.929)
 function renderDiagnosticRow(diagnostic, i) {
   return jsxProd_default_2(
     Box,
@@ -138,12 +139,12 @@ function renderDiagnosticRow(diagnostic, i) {
     i,
   );
 }
-//@ chunk-6p6y0k3t.js:2542-2582 layout
+//@ chunk-zpfg1kae.js:2550-2590 layout
 /**
  * 导出值：DEBUG_DETAILS_SUFFIX（" (details in the --debug log)"）；位于「/status 标签页：版本、会话名、cwd、账号/组织、认证方式、模型、MCP/插件/IDE 状态、设置来源」模块。
  */
 var DEBUG_DETAILS_SUFFIX = " (details in the --debug log)";
-//@ chunk-6p6y0k3t.js:2582-4511 callgraph-witnessed (2.1.88 match: buildPrimarySection, 0.197)
+//@ chunk-zpfg1kae.js:2590-4528 callgraph-witnessed (2.1.88 match: buildPrimarySection, 0.197)
 function buildPrimarySection({
   sessionId,
   remoteSessionName,
@@ -193,10 +194,10 @@ function buildPrimarySection({
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -277,12 +278,13 @@ function buildPrimarySection({
       value: cwd,
     },
     ...buildAccountProperties(accountStatus),
+    ...claudeAiProjectStatusItem(),
     ...getCloudSessionsStatusRows(webSetupStatus),
     ...getComplianceRows(),
     ...buildAPIProviderProperties(),
   ];
 }
-//@ chunk-6p6y0k3t.js:4511-4713 layout
+//@ chunk-zpfg1kae.js:4528-4730 layout
 function getComplianceRows() {
   let complianceTaints = getComplianceTaints();
   if (complianceTaints.length === 0) return [];
@@ -305,7 +307,7 @@ function getComplianceRows() {
       : []),
   ];
 }
-//@ chunk-6p6y0k3t.js:4713-4947 fingerprint (2.1.88 match: buildSecondarySection, 0.947)
+//@ chunk-zpfg1kae.js:4730-4964 fingerprint (2.1.88 match: buildSecondarySection, 0.947)
 function buildSecondarySection({ mainLoopModel, mcp, theme, ideInstallationStatus, permissionMode }) {
   return [
     {
@@ -326,7 +328,7 @@ function buildSecondarySection({ mainLoopModel, mcp, theme, ideInstallationStatu
     ...extraStatusRows(),
   ];
 }
-//@ chunk-6p6y0k3t.js:4947-5048 layout
+//@ chunk-zpfg1kae.js:4964-5065 layout
 /**
  * 并行收集 /status 页的诊断：安装诊断、设置状态提示、进程包装器提示，以及（非远程视图时）记忆文件诊断，合并成一个列表。
  */
@@ -340,7 +342,7 @@ async function collectStatusDiagnostics(mcpClients, storageV5, context) {
     ])
   ).flat();
 }
-//@ chunk-6p6y0k3t.js:5048-5492 fingerprint (2.1.88 match: PropertyValue, 1)
+//@ chunk-zpfg1kae.js:5065-5509 fingerprint (2.1.88 match: PropertyValue, 1)
 function PropertyValue(props) {
   let $ = useMemoCache(8);
   let { value } = props;
@@ -390,7 +392,7 @@ function PropertyValue(props) {
   }
   return value;
 }
-//@ chunk-6p6y0k3t.js:5492-6838 fingerprint (2.1.88 match: Status, 0.588)
+//@ chunk-zpfg1kae.js:5509-6855 fingerprint (2.1.88 match: Status, 0.588)
 /**
  * /status：构造主区（版本、会话名、cwd、账号、认证、API 提供商）与次区（模型、MCP、插件、IDE、内存文件、设置来源），以属性列表显示。
  */
@@ -523,7 +525,7 @@ function Status(props) {
   } else t8 = $[25];
   return t8;
 }
-//@ chunk-6p6y0k3t.js:6838-7975 layout
+//@ chunk-zpfg1kae.js:6855-7992 layout
 /**
  * /status 页的属性表：会话 id/名字、cwd、账号与机器状态、云会话设置、模型、MCP、主题、IDE、权限模式；远程/云会话下注明哪些行来自远端。
  */
@@ -636,7 +638,7 @@ function StatusProperties(props) {
   } else boxElement = $[17];
   return boxElement;
 }
-//@ chunk-6p6y0k3t.js:7975-8307 fingerprint (2.1.88 match: Diagnostics, 0.464)
+//@ chunk-zpfg1kae.js:7992-8324 fingerprint (2.1.88 match: Diagnostics, 0.463)
 function Diagnostics(props) {
   let $ = useMemoCache(5);
   let { promise } = props;
@@ -670,7 +672,7 @@ function Diagnostics(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-ja34p3ys.js:340-785 fingerprint (2.1.88 match: _temp3, 0.656)
+//@ chunk-za745zwj.js:340-785 fingerprint (2.1.88 match: _temp3, 0.656)
 function StatusRow(props) {
   let $ = useMemoCache(9);
   let { status, children } = props;
@@ -716,15 +718,15 @@ function StatusRow(props) {
   } else rowBox = $[8];
   return rowBox;
 }
-//@ chunk-9h8dr0qb.js:42639-42676 fingerprint (2.1.88 match: _temp2, 0.693)
+//@ chunk-j6tt9nsa.js:42582-42619 fingerprint (2.1.88 match: _temp2, 0.693)
 function selectMcpCommands(s_0) {
   return s_0.mcp.commands;
 }
 export {
+  StatusRow,
   buildPrimarySection,
   buildSecondarySection,
   DEBUG_DETAILS_SUFFIX,
-  StatusRow,
   selectMcpCommands,
   collectStatusDiagnostics,
   Status,

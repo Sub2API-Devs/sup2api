@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 打包
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwpc82tt.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t58ha4ac.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -48,7 +48,7 @@ import { extractRestrictivePermissions } from "../../utils/permissions/permissio
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwpc82tt.js:1363-2614 placement
+//@ chunk-t58ha4ac.js:1462-2713 placement
 /**
  * home seed 包的版本、大小与结构上限，可移植设置键白名单，以及包（文件、设置、摘要）的 zod schema。
  */
@@ -73,7 +73,7 @@ var packGenerationSchema;
 var packSummarySchema;
 var packFileSchema;
 var homePackSchema;
-deferInit("chunk-bwpc82tt.js:1363", () => {
+deferInit("chunk-t58ha4ac.js:1462", () => {
   HOME_PACK_VERSION = 1;
   MAX_PACK_GENERATION = 2147483648;
   MAX_PACK_BYTES = 8388608;
@@ -161,7 +161,7 @@ deferInit("chunk-bwpc82tt.js:1363", () => {
     }),
   );
 });
-//@ chunk-bwpc82tt.js:2614-2795 placement
+//@ chunk-t58ha4ac.js:2713-2894 placement
 function arePathsDisjoint(paths) {
   let mapped = paths.map(normalizedPath);
   let ancestors = new Set(
@@ -174,7 +174,7 @@ function arePathsDisjoint(paths) {
   );
   return new Set(mapped).size === mapped.length && mapped.every((path) => !ancestors.has(path));
 }
-//@ chunk-bwpc82tt.js:2795-2851 placement
+//@ chunk-t58ha4ac.js:2894-2950 placement
 /**
  * 构造打包文件条目（路径、内容、内容哈希）。
  */
@@ -185,7 +185,7 @@ function packFileEntry(path, content) {
     sha256: computeContentHash(content),
   };
 }
-//@ chunk-bwpc82tt.js:2851-2937 placement
+//@ chunk-t58ha4ac.js:2950-3036 placement
 /**
  * 检查文件大小列表是否在条数、单文件与总字节上限内。
  */
@@ -196,14 +196,14 @@ function withinPackCaps(lengths) {
     lengths.reduce((acc, limit) => acc + limit, 0) <= MAX_WORKING_FILE_TOTAL_BYTES
   );
 }
-//@ chunk-bwpc82tt.js:2937-2991 placement
+//@ chunk-t58ha4ac.js:3036-3090 placement
 /**
  * 检查文件条目是否都在上限内。
  */
 function filesWithinPackCaps(files) {
   return withinPackCaps(files.map((file) => file.content.length));
 }
-//@ chunk-bwpc82tt.js:2991-3290 placement
+//@ chunk-t58ha4ac.js:3090-3389 placement
 /**
  * 按条数、单文件大小与总字节上限依次保留清点条目，其余记为超限丢弃。
  */
@@ -231,7 +231,7 @@ function capInventoryEntries(sorted) {
     droppedOverCap,
   };
 }
-//@ chunk-bwpc82tt.js:3290-4610 placement
+//@ chunk-t58ha4ac.js:3389-4709 placement
 /**
  * 校验并编码 home seed 包：检查文件数/大小、路径不重叠、摘要新鲜、路径为合法目的地、设置深度与可移植性，按 schema 序列化（内容 base64），超过行大小上限时抛错。
  */
@@ -274,7 +274,7 @@ function encodeHomePack(pack) {
   if (buffer.length > MAX_PACK_BYTES) throw Error("home pack exceeds the row byte cap");
   return buffer;
 }
-//@ chunk-bwpc82tt.js:4610-5606 placement
+//@ chunk-t58ha4ac.js:4709-5705 placement
 /**
  * 解码 home seed 包：检查大小、嵌套深度、版本与 schema，过滤非目的地与超限文件、校验内容摘要；设置不可移植时只保留限制性权限。返回 pack 与被拒计数。
  */
@@ -358,7 +358,7 @@ function decodeHomePack(bytes) {
     },
   };
 }
-//@ chunk-bwpc82tt.js:5606-5764 placement
+//@ chunk-t58ha4ac.js:5705-5863 placement
 /**
  * 只读取包的 generation 字段（超大或嵌套过深返回 null）。
  */
@@ -369,7 +369,7 @@ function readHomePackGeneration(bytes) {
   let generation = packGenerationSchema().safeParse(tryJsonParse(text));
   return generation.success ? generation.data.generation : null;
 }
-//@ chunk-bwpc82tt.js:5764-6091 placement
+//@ chunk-t58ha4ac.js:5863-6190 placement
 /**
  * 检查设置是否只含可移植键（以及 attribution/permissions 子键）且数量与长度在上限内，返回 none/over_bounds/not_portable_key。
  */
@@ -389,16 +389,16 @@ function checkPortableSettings(settings) {
     : "not_portable_key";
 }
 export {
-  capInventoryEntries,
+  decodeHomePack,
+  MAX_PACK_BYTES,
   encodeHomePack,
-  packFileEntry,
+  readHomePackGeneration,
+  MAX_PACK_GENERATION,
   FORBIDDEN_KEYS,
   MAX_JSON_NESTING,
   MAX_PACK_FILES,
   MAX_SETTINGS_DEPTH,
   MAX_SETTINGS_VALUES,
-  decodeHomePack,
-  readHomePackGeneration,
-  MAX_PACK_GENERATION,
-  MAX_PACK_BYTES,
+  capInventoryEntries,
+  packFileEntry,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备桥远程工具目标的列举、采纳与同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-25sm7c4g.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sjeyntvz.js (29)
  * attribution: placement 29
  */
 import {
@@ -16,7 +16,7 @@ import {
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { detectTerminal } from "./protocolConstants.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   isRemoteToolForwardingEnabled,
   isSessionChannelDisabled,
@@ -50,10 +50,9 @@ import { env } from "../../utils/env.js";
 import { ReannounceRequester } from "./reannounceRequest.js";
 import { waitForAnnounce } from "../../utils/remoteTools/folderTargets.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
-import { isSameOriginAsCcr } from "../../services/mcp/ccrMcpUrls.js";
-import { isKnownProxyEndpointUrl } from "../../tools/WebFetchTool/utils.js";
+import { isSameOriginAsCcr, isKnownProxyEndpointUrl } from "../../services/mcp/ccrMcpUrls.js";
 
-//@ chunk-25sm7c4g.js:25274-25894 placement
+//@ chunk-sjeyntvz.js:25418-26038 placement
 /**
  * 同步远程工具可用机器：从会话通道与设备桥列出机器，更新主机表并上报 tengu_remote_tool_targets。
  */
@@ -74,10 +73,10 @@ function syncRemoteToolTargets(context, hosts, trigger) {
     passthrough_tool_count: after.reduce((acc, host) => acc + (host.passthroughTools?.size ?? 0), 0),
     target_kind: fromEnumOpt(after[0]?.description?.kind),
     target_platform: fromEnumOpt(detectTerminal(after[0]?.description?.platform)),
-    incompatible_count: count(after, (host) => host.protocol.kind === "incompatible"),
+    incompatible_count: countWhere(after, (host) => host.protocol.kind === "incompatible"),
   });
 }
-//@ chunk-25sm7c4g.js:25894-26064 placement
+//@ chunk-sjeyntvz.js:26038-26209 placement
 async function refreshDeviceBridgeTargets(context, state, trigger) {
   if (!(await isRemoteToolForwardingEnabled())) return;
   let toolState = context.toolState.get(RemoteToolTargetsState);
@@ -90,7 +89,7 @@ async function refreshDeviceBridgeTargets(context, state, trigger) {
     });
   return toolState.inFlight;
 }
-//@ chunk-25sm7c4g.js:26064-26275 placement
+//@ chunk-sjeyntvz.js:26209-26420 placement
 function remoteToolsListingState(context) {
   let state = context.toolState.get(RemoteToolTargetsState);
   let connectionState = remoteToolsConnectionState(context);
@@ -104,11 +103,11 @@ function remoteToolsListingState(context) {
   if (state.synced && !state.lastListingFailed) return "listed";
   return hasConnectedMcpServers(context) ? "unlisted" : "absent";
 }
-//@ chunk-25sm7c4g.js:26275-26337 placement
+//@ chunk-sjeyntvz.js:26420-26482 placement
 function hasDeviceBridgeConnection(context) {
   return context.toolState.get(RemoteToolTargetsState).connection !== undefined;
 }
-//@ chunk-25sm7c4g.js:26337-26485 placement
+//@ chunk-sjeyntvz.js:26482-26630 placement
 function isListingFailedWithoutHosts(context, registry) {
   return (
     context.toolState.get(RemoteToolTargetsState).lastListingFailed &&
@@ -117,7 +116,7 @@ function isListingFailedWithoutHosts(context, registry) {
       .some((host) => host.kind === "remote" && (host.source === "bridge" || host.source === "session"))
   );
 }
-//@ chunk-25sm7c4g.js:26485-29763 placement
+//@ chunk-sjeyntvz.js:26630-29908 placement
 /**
  * 调用设备桥 tools/list，按机器分组并采纳/拒绝，失败时保留上次已知机器。
  */
@@ -244,7 +243,7 @@ async function listDeviceBridgeTargets(context, state, registry, trigger) {
       tool_count: listResult.value.tools.length,
       truncated: listResult.value.truncated,
       has_served_name: listResult.value.tools.some((tool) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name)),
-      marker_count: count(
+      marker_count: countWhere(
         listResult.value.tools,
         (tool) => tool._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined,
       ),
@@ -293,7 +292,7 @@ async function listDeviceBridgeTargets(context, state, registry, trigger) {
     `[remote-tools] device bridge matched: ${connection.name} (${listResult.value.tools.length} tools over ${listResult.value.pages} page(s))`,
   );
 }
-//@ chunk-25sm7c4g.js:29763-29911 placement
+//@ chunk-sjeyntvz.js:29908-30056 placement
 async function listTargetTools(client, timeout) {
   let result = await listMcpTools(client, {
     timeout,
@@ -305,22 +304,22 @@ async function listTargetTools(client, timeout) {
     stub: officeBridgeListingState(result) === "stub",
   };
 }
-//@ chunk-25sm7c4g.js:29911-29989 placement
+//@ chunk-sjeyntvz.js:30056-30134 placement
 function isNamedToolEntry(tool) {
   return typeof tool === "object" && tool !== null && typeof tool.name === "string";
 }
-//@ chunk-25sm7c4g.js:29989-30083 placement
+//@ chunk-sjeyntvz.js:30134-30228 placement
 function isTimeoutError(error) {
   let lower = errorMessage(error).toLowerCase();
   return lower.includes("timed out") || lower.includes("timeout");
 }
-//@ chunk-25sm7c4g.js:30083-30179 placement
+//@ chunk-sjeyntvz.js:30228-30324 placement
 function hasConnectedMcpServers(context) {
   return context
     .mcpClients()
     .some((client) => getServerUrl(client) && client.type !== "disabled" && client.type !== "needs-auth");
 }
-//@ chunk-25sm7c4g.js:30179-30463 placement
+//@ chunk-sjeyntvz.js:30324-30608 placement
 function remoteToolsConnectionState(context) {
   let bridgeState = deviceBridgeState(context);
   let state =
@@ -332,7 +331,7 @@ function remoteToolsConnectionState(context) {
   if (commands.hasAnnouncedThisLife()) return commands.entries().length === 0 ? "serves_nothing" : state;
   return (env.CLAUDE_CODE_WORKER_EPOCH ?? 1) > 1 ? "not_reannounced" : state;
 }
-//@ chunk-25sm7c4g.js:30463-30664 placement
+//@ chunk-sjeyntvz.js:30608-30809 placement
 function sessionChannelOffer(context) {
   if (isSessionChannelDisabled()) return "none";
   let { offer } = context.toolState.get(RemoteToolTargetsState);
@@ -343,15 +342,15 @@ function sessionChannelOffer(context) {
     ? "none"
     : "unread";
 }
-//@ chunk-25sm7c4g.js:30664-30677 placement
+//@ chunk-sjeyntvz.js:30809-30822 placement
 var MIN_TRANSPORT_DEADLINE_MS = 15000;
-//@ chunk-25sm7c4g.js:30677-30740 placement
+//@ chunk-sjeyntvz.js:30822-30885 placement
 function targetsDeadlineMs(longLived) {
   return longLived
     ? Math.max(MIN_TRANSPORT_DEADLINE_MS, SESSION_TRANSPORT_LIMITS.defaultDeadlineMs)
     : MIN_TRANSPORT_DEADLINE_MS;
 }
-//@ chunk-25sm7c4g.js:30740-30925 placement
+//@ chunk-sjeyntvz.js:30885-31070 placement
 function shouldReannounce(context) {
   let commands = context.toolState.get(RemoteBackgroundCommands);
   return (
@@ -363,7 +362,7 @@ function shouldReannounce(context) {
     isBridgePlumbingEnabled()
   );
 }
-//@ chunk-25sm7c4g.js:30925-31012 placement
+//@ chunk-sjeyntvz.js:31070-31157 placement
 function canReannounceMachine(context, machines, machine) {
   return (
     machines.has(machine) &&
@@ -371,7 +370,7 @@ function canReannounceMachine(context, machines, machine) {
     shouldReannounce(context)
   );
 }
-//@ chunk-25sm7c4g.js:31012-31979 placement
+//@ chunk-sjeyntvz.js:31157-32124 placement
 async function requestReannounce(
   context,
   signal,
@@ -438,7 +437,7 @@ async function requestReannounce(
     waitedMs,
   };
 }
-//@ chunk-25sm7c4g.js:31979-32267 placement
+//@ chunk-sjeyntvz.js:32124-32412 placement
 function deviceBridgeState(context) {
   let state = context.toolState.get(RemoteToolTargetsState);
   if (state.connection === undefined)
@@ -451,14 +450,14 @@ function deviceBridgeState(context) {
   if (Date.now() - state.provisional.since < PROVISIONAL_FRESH_MS) return "connecting";
   return state.provisional.stub ? "not_connected" : undefined;
 }
-//@ chunk-25sm7c4g.js:32267-32373 placement
+//@ chunk-sjeyntvz.js:32412-32518 placement
 function isProvisionalListingStale(provisional) {
   if (provisional === undefined) return false;
   let now = Date.now();
   if (!provisional.stub && now - provisional.since >= PROVISIONAL_FRESH_MS) return false;
   return now - provisional.at >= MIN_RELIST_INTERVAL_MS;
 }
-//@ chunk-25sm7c4g.js:32373-32897 placement
+//@ chunk-sjeyntvz.js:32518-33042 placement
 function reportUnmatchedBridgeEntries(clients, state, trigger) {
   let filtered = clients.filter((client) => client.name === REMOTE_DEVICES_SERVER_NAME);
   if (filtered.length === 0 || state.reportedUnmatched) return;
@@ -479,7 +478,7 @@ function reportUnmatchedBridgeEntries(clients, state, trigger) {
     ingress_base_unset: startupCcrEnv.atStartup === undefined,
   });
 }
-//@ chunk-25sm7c4g.js:32897-33293 placement
+//@ chunk-sjeyntvz.js:33042-33438 placement
 function classifyBridgeEntry(client) {
   if (isScopedMcpServerConfig(client)) return "scoped_entry";
   if (!("url" in client.config) || typeof client.config.url !== "string") return "no_url";
@@ -497,11 +496,11 @@ function classifyBridgeEntry(client) {
       return "connecting";
   }
 }
-//@ chunk-25sm7c4g.js:33293-33355 placement (2.1.88 match: findChromeClient, 1)
+//@ chunk-sjeyntvz.js:33438-33500 placement (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   return clients.find((client) => client.type === "connected" && getServerUrl(client));
 }
-//@ chunk-25sm7c4g.js:33355-33483 placement (2.1.88 match: getServerUrl, 1)
+//@ chunk-sjeyntvz.js:33500-33628 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(config) {
   return (
     config.name === REMOTE_DEVICES_SERVER_NAME &&
@@ -512,7 +511,7 @@ function getServerUrl(config) {
     parseCcrMcpUrl(config.config.url)
   );
 }
-//@ chunk-25sm7c4g.js:33483-33620 placement
+//@ chunk-sjeyntvz.js:33628-33765 placement
 function isScopedMcpServerConfig(client) {
   let { scope, pluginSource, agentSource } = client.config;
   return (
@@ -523,7 +522,7 @@ function isScopedMcpServerConfig(client) {
     agentSource !== undefined
   );
 }
-//@ chunk-25sm7c4g.js:33620-33902 placement
+//@ chunk-sjeyntvz.js:33765-34047 placement
 function parseCcrMcpUrl(url) {
   try {
     let parsed = new URL(url);
@@ -541,11 +540,11 @@ function parseCcrMcpUrl(url) {
     return false;
   }
 }
-//@ chunk-25sm7c4g.js:33902-33933 placement
+//@ chunk-sjeyntvz.js:34047-34078 placement
 function derivedServerIdForTool(sessionId) {
   return derivedServerId(sessionId, REMOTE_DEVICES_SERVER_NAME);
 }
-//@ chunk-25sm7c4g.js:33933-34994 placement
+//@ chunk-sjeyntvz.js:34078-35139 placement
 function adoptBridgeMachines(registry, hosts, { invalid, unreadable, unreadableMarkers, trigger }) {
   let before = registry.sourceHosts("bridge");
   let { dropped } = registry.replaceRemoteHosts("bridge", hosts);
@@ -574,7 +573,7 @@ function adoptBridgeMachines(registry, hosts, { invalid, unreadable, unreadableM
       passthrough_tool_count: after.reduce((acc, host) => acc + (host.passthroughTools?.size ?? 0), 0),
       target_kind: fromEnumOpt(after[0]?.description?.kind),
       target_platform: fromEnumOpt(detectTerminal(after[0]?.description?.platform)),
-      incompatible_count: count(after, (host) => host.protocol.kind === "incompatible"),
+      incompatible_count: countWhere(after, (host) => host.protocol.kind === "incompatible"),
       protocol_version: after[0]?.protocol.kind === "compatible" ? after[0].protocol.version : undefined,
     });
   if (unreadable > 0 || unreadableMarkers > 0)
@@ -585,7 +584,7 @@ function adoptBridgeMachines(registry, hosts, { invalid, unreadable, unreadableM
       unreadable_marker_count: unreadableMarkers,
     });
 }
-//@ chunk-25sm7c4g.js:34994-35130 placement
+//@ chunk-sjeyntvz.js:35139-35275 placement
 function toolHostsFingerprint(hosts) {
   return hosts
     .map(
@@ -595,7 +594,7 @@ function toolHostsFingerprint(hosts) {
     .sort().join(`
 `);
 }
-//@ chunk-25sm7c4g.js:35130-35355 placement
+//@ chunk-sjeyntvz.js:35275-35500 placement
 function classifyToolHostsChange(before, after) {
   let any = before.some((host) => host.status === "online");
   let any_2 = after.some((host) => host.status === "online");
@@ -605,8 +604,6 @@ function classifyToolHostsChange(before, after) {
   return "changed";
 }
 export {
-  syncRemoteToolTargets,
-  refreshDeviceBridgeTargets,
   isListingFailedWithoutHosts,
   remoteToolsConnectionState,
   requestReannounce,
@@ -614,6 +611,8 @@ export {
   targetsDeadlineMs,
   hasDeviceBridgeConnection,
   sessionChannelOffer,
+  syncRemoteToolTargets,
   remoteToolsListingState,
   shouldReannounce,
+  refreshDeviceBridgeTargets,
 };

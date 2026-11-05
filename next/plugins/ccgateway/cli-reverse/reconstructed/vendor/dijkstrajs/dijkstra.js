@@ -1,13 +1,13 @@
 /**
  * dijkstrajs/dijkstra.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: dijkstrajs@1.0.3
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-spjgqa4y.js:13686-14833 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:13686-14833 cjs-fingerprint
 var require_dijkstra = __commonJS(function (cjsExports, cjsModule) {
   var dijkstra = {
     single_source_shortest_paths: function (graph, s_2, d) {

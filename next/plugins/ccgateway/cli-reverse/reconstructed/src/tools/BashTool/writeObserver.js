@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：监视 Bash 命令写入的文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (37)
  * attribution: placement 36
  */
 import { rmSync, watch } from "fs";
@@ -14,7 +14,12 @@ import { writeFile, unlink, mkdir, readdir, lstat, readFile } from "fs/promises"
 import { randomBytes } from "crypto";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { getPlatform } from "../../utils/platform.js";
-import { listIgnoredFiles, resolveThroughRoot, isDirectoryIgnored } from "./bashEditDiff/snapshot.js";
+import {
+  listIgnoredFiles,
+  resolveThroughRoot,
+  bumpCounter,
+  isDirectoryIgnored,
+} from "./bashEditDiff/snapshot.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { sleep } from "../../utils/sleep.js";
@@ -24,7 +29,7 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { recordObservedWrites } from "./bashEditRecorder.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4793271-4793443 placement (moved: shares a binding it assigns)
+//@ chunk-5xgkngpb.js:4925796-4925968 placement (moved: shares a binding it assigns)
 /**
  * 写入观察器常量与模块状态：路径/仓库/忽略检查/外部写入/并发查找/保留文件/监视器数量上限，节流与等待时间，以及监视器表、仓库表、共享 inotify 监视器等。
  */
@@ -44,7 +49,7 @@ var observedRepos;
 var sharedWatcher;
 var sharedWatcherReady;
 var exitHookInstalled;
-deferInit("chunk-e6aww6q8.js:4793271", () => {
+deferInit("chunk-5xgkngpb.js:4925796", () => {
   MAX_OBSERVED_PATHS = 5000;
   MAX_OBSERVED_REPOS = 64;
   IGNORE_CHECKS_PER_REPO = 256;
@@ -67,11 +72,11 @@ deferInit("chunk-e6aww6q8.js:4793271", () => {
   sharedWatcherReady = null;
   exitHookInstalled = false;
 });
-//@ chunk-e6aww6q8.js:4793443-4793479 placement (2.1.88 match: chordToDisplayString, 1)
+//@ chunk-5xgkngpb.js:4925968-4926004 placement (2.1.88 match: chordToDisplayString, 1)
 function isLinux() {
   return getPlatform() === "linux";
 }
-//@ chunk-e6aww6q8.js:4793479-4794029 placement
+//@ chunk-5xgkngpb.js:4926004-4926554 placement
 /**
  * 启动写入观察器，监视命令写入的文件。
  */
@@ -110,7 +115,7 @@ function startWriteObserver(root) {
     });
   return "starting";
 }
-//@ chunk-e6aww6q8.js:4794029-4794182 placement
+//@ chunk-5xgkngpb.js:4926554-4926707 placement
 function failObserver(observer, reason) {
   if (!observer.failed && reason) logFeatureBad("bash_edit_diff", reason);
   observer.failed = true;
@@ -119,14 +124,14 @@ function failObserver(observer, reason) {
   observer.watchers.clear();
   for (let watcher of watchers) watcher.close();
 }
-//@ chunk-e6aww6q8.js:4794182-4794241 placement
+//@ chunk-5xgkngpb.js:4926707-4926766 placement
 /**
  * 是否还有未失败的根目录写入观察器（用于决定是否跳过 edit diff）。
  */
 function hasLiveRootObserver() {
   return [...observersByRoot.values()].some((observer) => !observer.failed);
 }
-//@ chunk-e6aww6q8.js:4794241-4794315 placement
+//@ chunk-5xgkngpb.js:4926766-4926840 placement
 /**
  * 停掉所有写入观察器并清空记录、关闭共享监视器。
  */
@@ -136,7 +141,7 @@ function stopAllWriteObservers() {
   observedRepos.clear();
   closeSentinelWatcher();
 }
-//@ chunk-e6aww6q8.js:4794315-4794432 placement
+//@ chunk-5xgkngpb.js:4926840-4926957 placement
 function closeSentinelWatcher() {
   if (!sharedWatcher) return;
   sharedWatcher.watcher.close();
@@ -149,7 +154,7 @@ function closeSentinelWatcher() {
   sharedWatcher = null;
   sharedWatcherReady = null;
 }
-//@ chunk-e6aww6q8.js:4794432-4794608 placement
+//@ chunk-5xgkngpb.js:4926957-4927133 placement
 /**
  * 取出并清空某根目录的外部写入记录（未就绪返回 null）。
  */
@@ -164,7 +169,7 @@ function takeOutsideWrites(root) {
   observer.outsideOverflow = false;
   return writeSet;
 }
-//@ chunk-e6aww6q8.js:4794608-4794832 placement
+//@ chunk-5xgkngpb.js:4927133-4927357 placement
 /**
  * 开始观察某命令在根目录下的写入（有上限，满时逐出最旧的观察）。
  */
@@ -184,14 +189,14 @@ function beginCommandObservation(toolUseId, root) {
     lastEventAt: 0,
   });
 }
-//@ chunk-e6aww6q8.js:4794832-4794861 placement
+//@ chunk-5xgkngpb.js:4927357-4927386 placement
 /**
  * 结束对某命令的写入观察：从 observedRepos 删除该命令的记录。
  */
 function forgetObservedRepo(toolUseId) {
   observedRepos.delete(toolUseId);
 }
-//@ chunk-e6aww6q8.js:4794861-4795529 placement
+//@ chunk-5xgkngpb.js:4927386-4928054 placement
 /**
  * 结束对某命令的写入观察：等待事件落定（Linux 用哨兵文件同步，其他平台等安静期），合并忽略检查中暂存的路径，返回 {paths, overflow, shared, watchEnds}；.gitignore 变化时停止该仓库的观察器。
  */
@@ -235,7 +240,7 @@ async function endCommandObservation(toolUseId) {
     watchEnds: observer.ignoresChanged,
   };
 }
-//@ chunk-e6aww6q8.js:4795529-4795710 placement
+//@ chunk-5xgkngpb.js:4928054-4928235 placement
 async function waitForPendingWatches(observer) {
   let deadline = performance.now() + SETTLE_WAIT_MS;
   while (observer.pending.size > 0) {
@@ -245,7 +250,7 @@ async function waitForPendingWatches(observer) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4795710-4795915 placement
+//@ chunk-5xgkngpb.js:4928235-4928440 placement
 async function waitForQuiet(entry) {
   let startTime = performance.now();
   for (;;) {
@@ -259,7 +264,7 @@ async function waitForQuiet(entry) {
     await sleep(Math.min(max, startTime + MAX_SETTLE_MS) - startTime_2);
   }
 }
-//@ chunk-e6aww6q8.js:4795915-4796280 placement
+//@ chunk-5xgkngpb.js:4928440-4928805 placement
 /**
  * 在哨兵目录写入一个临时文件并等待其 inotify 事件，确保此前的文件事件都已送达；超时则关闭哨兵监视器。
  */
@@ -291,7 +296,7 @@ async function syncWithSentinel() {
   if (!winner) closeSentinelWatcher();
   return winner;
 }
-//@ chunk-e6aww6q8.js:4796280-4796790 placement
+//@ chunk-5xgkngpb.js:4928805-4929315 placement
 /**
  * 确保哨兵目录监视器已创建：在私有临时目录下建会话专属哨兵目录并监视，事件到达时唤醒等待者；进程退出时关闭。
  */
@@ -343,7 +348,7 @@ function ensureSentinelWatcher() {
     });
   return sharedWatcherReady;
 }
-//@ chunk-e6aww6q8.js:4796790-4797099 placement
+//@ chunk-5xgkngpb.js:4929315-4929624 placement
 /**
  * 用递归 fs.watch 监视根目录（macOS/Windows），把事件路径转为相对路径交给事件处理；出错时标记观察失败。
  */
@@ -376,7 +381,7 @@ async function watchRecursively(observer) {
   observer.watchers.set(observer.root, watcher);
   return true;
 }
-//@ chunk-e6aww6q8.js:4797099-4797442 placement
+//@ chunk-5xgkngpb.js:4929624-4929967 placement (2.1.88 match: executeCloudPersistence, 0.582)
 /**
  * 在 Linux 上逐目录添加监视（数量不超过 inotify 上限）：先监视已有目录，再扫描一次补上期间新出现的目录，最后等待挂起的监视完成。
  */
@@ -399,7 +404,7 @@ async function watchTreeLinux(observer) {
   await waitForPendingWatches(observer);
   return !observer.failed;
 }
-//@ chunk-e6aww6q8.js:4797442-4797835 placement
+//@ chunk-5xgkngpb.js:4929967-4930388 placement
 /**
  * 为单个目录添加 fs.watch；出错时移除并重新处理该目录；目录不存在或无权限视为成功，其他失败记录后返回 false。
  */
@@ -420,6 +425,7 @@ function watchDirectory(observer, dir) {
       watcher.close();
     });
     observer.watchers.set(dir, watcher);
+    bumpCounter("edit_diff_watch_dirs");
     return true;
   } catch (error) {
     let code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
@@ -428,7 +434,7 @@ function watchDirectory(observer, dir) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4797835-4798158 placement
+//@ chunk-5xgkngpb.js:4930388-4930711 placement
 /**
  * 广度优先列出根目录下可监视的目录（跳过 .git 与已忽略目录、包含指向目录的链接），超过上限返回 null。
  */
@@ -460,24 +466,25 @@ async function listWatchableDirs(observer, maxDirs) {
   }
   return dirs;
 }
-//@ chunk-e6aww6q8.js:4798158-4798332 placement
+//@ chunk-5xgkngpb.js:4930711-4930885 placement
 async function isDirectoryEntry(entry, dir) {
   if (entry.isDirectory()) return true;
   if (entry.isFile() || entry.isSymbolicLink()) return false;
   let stat = await lstat(join(dir, entry.name)).catch(() => null);
   return stat !== null && stat.isDirectory();
 }
-//@ chunk-e6aww6q8.js:4798332-4798508 placement
+//@ chunk-5xgkngpb.js:4930885-4931061 placement
 async function readMaxUserWatches() {
   let text = await readFile("/proc/sys/fs/inotify/max_user_watches", "utf8").catch(() => "");
   let limit = Number.parseInt(text, 10);
   return Number.isFinite(limit) ? limit : Number.POSITIVE_INFINITY;
 }
-//@ chunk-e6aww6q8.js:4798508-4799439 placement
+//@ chunk-5xgkngpb.js:4931061-4932022 placement
 /**
  * 处理文件监视事件：忽略 .git 与已忽略路径，记录 .gitignore 变化，目录被删除时停止监视，新目录递归加监视，并把写入路径计入正在观察的命令（无法定位时标记溢出）。
  */
 function handleWatchEvent(observer, dir, eventType, filename) {
+  bumpCounter("edit_diff_watch_events");
   let eventFilename = typeof filename === "string" ? filename : null;
   if (eventFilename !== null && eventFilename.split(/[\\/]/).includes(".git")) return;
   let fullPath =
@@ -527,7 +534,7 @@ function handleWatchEvent(observer, dir, eventType, filename) {
     if (!isObservedRepo) observer.outsideOverflow = true;
   } else recordWrite(observer, fullPath);
 }
-//@ chunk-e6aww6q8.js:4799439-4799536 placement
+//@ chunk-5xgkngpb.js:4932022-4932119 placement
 /**
  * 路径存在且不是目录时，记为命令的写入。
  */
@@ -535,7 +542,7 @@ async function recordChangedFileIfAny(observer, fullPath) {
   let stat = await lstat(fullPath).catch(() => null);
   if (stat !== null && !stat.isDirectory()) recordWrite(observer, fullPath);
 }
-//@ chunk-e6aww6q8.js:4799536-4799633 placement
+//@ chunk-5xgkngpb.js:4932119-4932216 placement
 /**
  * 与 ICs 同类：路径存在且不是目录时记为写入（另一事件源）。
  */
@@ -543,13 +550,13 @@ async function recordChangedDirIfAny(observer, fullPath) {
   let stat = await lstat(fullPath).catch(() => null);
   if (stat !== null && !stat.isDirectory()) recordWrite(observer, fullPath);
 }
-//@ chunk-e6aww6q8.js:4799633-4799738 placement
+//@ chunk-5xgkngpb.js:4932216-4932321 placement
 function isUnderIgnoredDir(observer, path) {
   for (let parent = dirname(path); parent.length > observer.root.length; parent = dirname(parent))
     if (observer.ignored.has(parent)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4799738-4799835 placement
+//@ chunk-5xgkngpb.js:4932321-4932418 placement
 /**
  * 把异步任务记入待完成集合，完成后自动移除（结束观察时据此等待落定）。
  */
@@ -563,7 +570,7 @@ function trackPending(observer, promise) {
     });
   observer.pending.add(tracked);
 }
-//@ chunk-e6aww6q8.js:4799835-4799952 placement
+//@ chunk-5xgkngpb.js:4932418-4932535 placement
 async function checkRootReadable(observer) {
   try {
     await readdir(observer.root);
@@ -574,7 +581,7 @@ async function checkRootReadable(observer) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4799952-4800726 placement
+//@ chunk-5xgkngpb.js:4932535-4933309 placement
 /**
  * 为新出现的目录添加监视（数量有上限），首次出现时异步检查是否被 git 忽略，并把其中已有文件计为写入、子目录递归监视。
  */
@@ -632,7 +639,7 @@ async function watchNewDirectory(observer, dir) {
     } else recordWrite(observer, childPath);
   }
 }
-//@ chunk-e6aww6q8.js:4800726-4801032 placement
+//@ chunk-5xgkngpb.js:4933309-4933615 placement
 /**
  * 完成目录的忽略检查：被忽略则标记忽略；否则把检查期间暂存的写入计入，暂存溢出时标记相关命令溢出。
  */
@@ -657,7 +664,7 @@ function settleIgnoreCheck(observer, dir, isIgnored) {
     if (!matchedRepo) observer.outsideOverflow = true;
   }
 }
-//@ chunk-e6aww6q8.js:4801032-4801124 placement
+//@ chunk-5xgkngpb.js:4933615-4933707 placement
 /**
  * 找到路径所属、正处于“忽略检查中”的目录项。
  */
@@ -665,7 +672,7 @@ function findAskingEntry(observer, path) {
   for (let [askDir, ask] of observer.asking) if (path === askDir || path.startsWith(askDir + sep)) return ask;
   return null;
 }
-//@ chunk-e6aww6q8.js:4801124-4801542 placement
+//@ chunk-5xgkngpb.js:4933707-4934125 placement
 /**
  * 把目录标记为被 git 忽略：清除其下的待检查项、监视器、已记录的命令写入与外部写入。
  */
@@ -687,7 +694,7 @@ function markDirIgnored(observer, dir) {
   for (let outsideWrite of observer.outsideWrites)
     if (isUnderDir(outsideWrite)) observer.outsideWrites.delete(outsideWrite);
 }
-//@ chunk-e6aww6q8.js:4801542-4801882 placement
+//@ chunk-5xgkngpb.js:4934125-4934465 placement
 /**
  * 并发受限地检查目录是否被 git 忽略（排队等待名额）；观察已失败或已知忽略时直接返回 null。
  */
@@ -708,7 +715,7 @@ async function checkDirIgnored(observer, dir) {
     observer.ignoreLookupsWaiting.shift()?.();
   }
 }
-//@ chunk-e6aww6q8.js:4801882-4802239 placement
+//@ chunk-5xgkngpb.js:4934465-4934822 placement
 /**
  * 记录一次文件写入：目录尚在忽略检查中则暂存；否则计入所有正在观察同一根目录的命令（多个时标记共享），无命令时计为外部写入，超上限标记溢出。
  */
@@ -731,7 +738,7 @@ function recordWrite(observer, path) {
     else entry.paths.add(path);
   }
 }
-//@ chunk-e6aww6q8.js:4802239-4802389 placement
+//@ chunk-5xgkngpb.js:4934822-4934972 placement
 /**
  * 编辑记录器常量与状态：单文件/总量/缓存字节上限、目录展开上限、基线列表缓冲、git 超时、输出上限、串行链与每仓库记录器表。
  */
@@ -746,7 +753,7 @@ var MAX_GIT_OUTPUT_BYTES;
 var RECORDER_POLL_MS;
 var recorderChains;
 var recordersByCwd;
-deferInit("chunk-e6aww6q8.js:4802239", () => {
+deferInit("chunk-5xgkngpb.js:4934822", () => {
   MAX_RECORDED_FILE_BYTES = 2000000;
   MAX_TOTAL_RECORD_BYTES = 536870912;
   MAX_RECORD_BATCH_BYTES = 64000000;
@@ -759,21 +766,21 @@ deferInit("chunk-e6aww6q8.js:4802239", () => {
   recorderChains = new Map();
   recordersByCwd = new Map();
 });
-//@ chunk-e6aww6q8.js:4802389-4802417 placement
+//@ chunk-5xgkngpb.js:4934972-4935000 placement
 /**
  * 移除工作目录对应的编辑记录器（记录结束或失败时）。
  */
 function forgetRecorder(cwd) {
   recordersByCwd.delete(cwd);
 }
-//@ chunk-e6aww6q8.js:4802417-4802458 placement
+//@ chunk-5xgkngpb.js:4935000-4935041 placement
 /**
  * 按仓库串行地取出并记录观察到的外部写入。
  */
 function flushObservedWrites(cwd) {
   return runSerialForRecorder(cwd, () => recordObservedWrites(cwd));
 }
-//@ chunk-e6aww6q8.js:4802458-4802566 placement
+//@ chunk-5xgkngpb.js:4935041-4935149 placement
 /**
  * 按键把异步操作串行化执行（同一记录器的操作依次运行）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：管理请求帧（限额请求配置、回退占位、CCR 历史加载失败上报）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (22)
  * attribution: placement 22
  */
 import { randomUUID } from "crypto";
@@ -37,7 +37,7 @@ import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:177301-177446 placement
+//@ chunk-0yw3taqg.js:210753-210898 placement
 /**
  * 返回在一批用户消息结束时写入"回退替身"系统行的回调；记录 cli_rewind_stand_in 结果遥测。
  */
@@ -54,7 +54,7 @@ function makeRewindStandInWriter(messageUuid, priorMessages) {
     }
   };
 }
-//@ chunk-tyg7f3ek.js:177446-177614 placement
+//@ chunk-0yw3taqg.js:210898-211066 placement
 function reportRewindStandInOutcome(outcome) {
   logForDiagnosticsNoPII("info", "cli_rewind_stand_in", {
     outcome,
@@ -63,7 +63,7 @@ function reportRewindStandInOutcome(outcome) {
   else if (outcome === "failed") logFeatureBad("rewind_stand_in", outcome);
   else logFeatureSad("rewind_stand_in", outcome);
 }
-//@ chunk-tyg7f3ek.js:177614-178196 placement
+//@ chunk-0yw3taqg.js:211066-211648 placement
 /**
  * 在转录末尾追加 rewind_stand_in 系统行（若没有可回退目标），等待期间对话变化则放弃。
  */
@@ -97,14 +97,14 @@ async function writeRewindStandIn(messageUuid, conversationStore, excludedUuids)
   );
   return "stored";
 }
-//@ chunk-tyg7f3ek.js:178196-178253 placement
+//@ chunk-0yw3taqg.js:211648-211705 placement
 function hasRewindTarget(conversation, messageUuid) {
   return (
     findRewindTarget(conversation, messageUuid) !== null ||
     findStandInTarget(conversation, messageUuid) !== null
   );
 }
-//@ chunk-tyg7f3ek.js:178253-178620 placement
+//@ chunk-0yw3taqg.js:211705-212072 placement
 async function checkRewindStandInPreconditions(messageUuid, { conversation, storageV5 }, excludedUuids) {
   let rows = conversation();
   if (hasRewindTarget(rows, messageUuid)) return "target_exists";
@@ -118,14 +118,14 @@ async function checkRewindStandInPreconditions(messageUuid, { conversation, stor
     if (!(await doesMessageExistInSession(sessionId, message.uuid, storageV5))) return "unstored_rows";
   return;
 }
-//@ chunk-tyg7f3ek.js:178620-178860 placement
+//@ chunk-0yw3taqg.js:212072-212312 placement
 var HISTORY_READ_FAILED_SENTENCE =
   "the session's conversation history could not be read from CCR; not starting without it";
 var HISTORY_RESTORE_FAILED_SENTENCE =
   "the session's conversation history could not be restored to the local transcript; not starting without it";
 var TENGU_STREAMED_YETI = "tengu_streamed_yeti";
 var HISTORY_FAILURE_EXIT_DELAY_MS = 2000;
-//@ chunk-tyg7f3ek.js:178860-179532 placement
+//@ chunk-0yw3taqg.js:212312-212984 placement
 /**
  * CCR 会话历史读取/恢复失败时，按原因输出拒绝启动的说明并结束。
  */
@@ -168,35 +168,35 @@ async function reportCcrHistoryLoadFailure(loadResult) {
     HISTORY_FAILURE_EXIT_DELAY_MS,
   );
   if (isShuttingDown()) return "stopping";
-  let flagWithOverride = readFlagWithOverride(TENGU_STREAMED_YETI, {
+  let bootFails = readFlagWithOverride(TENGU_STREAMED_YETI, {
     safe: false,
   });
-  logForDiagnosticsNoPII(flagWithOverride ? "error" : "warn", "resume_history_not_loaded", {
+  logForDiagnosticsNoPII(bootFails ? "error" : "warn", "resume_history_not_loaded", {
     reason: report.reason,
-    boot_fails: flagWithOverride,
+    boot_fails: bootFails,
     first_worker: isFirstWorker,
     flag_fetch_settled: flagFetchSettled === true,
     flag_payload_in_hand: hasFreshGrowthBookFeatures(),
   });
-  return flagWithOverride ? report : undefined;
+  return bootFails ? report : undefined;
 }
-//@ chunk-tyg7f3ek.js:179532-179693 placement
+//@ chunk-0yw3taqg.js:212984-213145 placement
 var ADMIN_LIMIT_REQUEST_FLAG = "tengu_tallow_quoit";
 var TENGU_TALLOW_QUOIT_GATE = "tengu_tallow_quoit_gate";
 var ADMIN_REQUEST_BUTTON_LABEL = "Request more";
 var ADMIN_REQUEST_DONE_LABEL = "Request sent to your admin \u2713";
 var ADMIN_REQUEST_CONFIRM_PROMPT = "This notifies your organization's admins.";
-//@ chunk-tyg7f3ek.js:179693-179763 placement
+//@ chunk-0yw3taqg.js:213145-213215 placement
 function isValidAdminRequestLabel(label) {
   return label.length >= 1 && label.length <= 80 && /^\P{Cc}*$/u.test(label);
 }
-//@ chunk-tyg7f3ek.js:179763-179824 placement
+//@ chunk-0yw3taqg.js:213215-213276 placement
 function adminRequestLabelSchema() {
   return stringSchema().refine(isValidAdminRequestLabel).optional().catch(undefined);
 }
-//@ chunk-tyg7f3ek.js:179824-179948 placement
+//@ chunk-0yw3taqg.js:213276-213400 placement
 var adminLimitRequestConfigSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:179824", () => {
+deferInit("chunk-0yw3taqg.js:213276", () => {
   adminLimitRequestConfigSchema = DoctorLazy(() =>
     objectSchema({
       vscode: objectSchema({
@@ -208,11 +208,11 @@ deferInit("chunk-tyg7f3ek.js:179824", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:179948-179978 placement
+//@ chunk-0yw3taqg.js:213400-213430 placement
 function isAdminLimitRequestGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TALLOW_QUOIT_GATE, false);
 }
-//@ chunk-tyg7f3ek.js:179978-180309 placement
+//@ chunk-0yw3taqg.js:213430-213761 placement
 /**
  * 读取 tengu_tallow_quoit 开关里的 IDE"向管理员申请额度"按钮配置（zod 校验）。
  */
@@ -234,7 +234,7 @@ function readAdminLimitRequestConfig() {
     confirmPrompt: vscode.confirmPrompt ?? ADMIN_REQUEST_CONFIRM_PROMPT,
   };
 }
-//@ chunk-tyg7f3ek.js:180309-180378 placement
+//@ chunk-0yw3taqg.js:213761-213830 placement
 function createAdminRequestState() {
   return {
     state: {
@@ -244,35 +244,35 @@ function createAdminRequestState() {
     changed: createSignal(),
   };
 }
-//@ chunk-tyg7f3ek.js:180378-180395 placement
+//@ chunk-0yw3taqg.js:213830-213847 placement
 var ADMIN_REQUEST_STATE; // deferred: uses createAdminRequestState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:180378", () => {
+deferInit("chunk-0yw3taqg.js:213830", () => {
   ADMIN_REQUEST_STATE = new HostScoped(createAdminRequestState);
 });
-//@ chunk-tyg7f3ek.js:180395-180432 placement
+//@ chunk-0yw3taqg.js:213847-213884 placement
 function getAdminRequestState() {
   return ADMIN_REQUEST_STATE.of(getRootSession().host);
 }
-//@ chunk-tyg7f3ek.js:180432-180464 placement
+//@ chunk-0yw3taqg.js:213884-213916 placement
 function getAdminRequestPhase() {
   return getAdminRequestState().state;
 }
-//@ chunk-tyg7f3ek.js:180464-180517 placement
+//@ chunk-0yw3taqg.js:213916-213969 placement
 function setAdminRequestPhase(state) {
   let adminRequestState = getAdminRequestState();
   adminRequestState.state = state;
   adminRequestState.changed.emit();
 }
-//@ chunk-tyg7f3ek.js:180517-180565 placement
+//@ chunk-0yw3taqg.js:213969-214017 placement
 function subscribeAdminRequestPhase(listener) {
   return getAdminRequestState().changed.subscribe(listener);
 }
-//@ chunk-tyg7f3ek.js:180565-180796 placement
+//@ chunk-0yw3taqg.js:214017-214248 placement
 var ADMIN_REQUESTABLE_OVERAGE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXTRA_USAGE_CHECK_TIMEOUT_MS;
 var ADMIN_REQUEST_FILING_TIMEOUT_MS;
 var ADMIN_REQUEST_SETTLED_COOLDOWN_MS;
-deferInit("chunk-tyg7f3ek.js:180565", () => {
+deferInit("chunk-0yw3taqg.js:214017", () => {
   ADMIN_REQUESTABLE_OVERAGE_REASONS = new Set([
     "org_spend_cap_reached",
     "org_level_disabled_until",
@@ -286,7 +286,7 @@ deferInit("chunk-tyg7f3ek.js:180565", () => {
   ADMIN_REQUEST_FILING_TIMEOUT_MS = 20000;
   ADMIN_REQUEST_SETTLED_COOLDOWN_MS = 600000;
 });
-//@ chunk-tyg7f3ek.js:180796-181039 placement
+//@ chunk-0yw3taqg.js:214248-214491 placement
 /**
  * 对被拒绝且原因属于组织/席位额度上限的限流事件，生成可向管理员申请的键。
  */
@@ -301,7 +301,7 @@ function adminRequestKeyForRateLimit(limitState) {
     return null;
   return `${limitState.overageDisabledReason}:${limitState.overageResetsAt ?? limitState.resetsAt ?? ""}`;
 }
-//@ chunk-tyg7f3ek.js:181039-181110 placement
+//@ chunk-0yw3taqg.js:214491-214562 placement
 function isSameAdminRequestKey(wall, other) {
   return wall.key === other.key && wall.accountEpoch === other.accountEpoch;
 }

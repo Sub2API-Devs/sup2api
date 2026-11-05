@@ -1,13 +1,13 @@
 /**
  * cli-boxes/boxes.json
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: cli-boxes@4.0.1
- * pieces: chunk-zxbmtfmw.js (1)
+ * pieces: chunk-sz26a4x2.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-zxbmtfmw.js:264-1413 cjs-fingerprint
+//@ chunk-sz26a4x2.js:264-1413 cjs-fingerprint
 var cliBoxesData = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     single: {

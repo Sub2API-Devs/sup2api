@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：时间与时长格式化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hzbq5ybv.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6s14nyc9.js (23)
  * attribution: placement 23
  */
 import { firstLineOf, truncateToLength, stripFormatChars, printableText } from "./stringUtils.js";
@@ -14,9 +14,9 @@ import { AUTO_CONNECT_LABELS } from "./config.js";
 import { resolveSetting } from "./settings/userIntentSettings.js";
 import { getLocale } from "./formatBriefTimestamp.js";
 
-//@ chunk-hzbq5ybv.js:510-519 placement
+//@ chunk-6s14nyc9.js:509-518 placement
 var MAX_LOCALE_TAG_CHARS = 64;
-//@ chunk-hzbq5ybv.js:519-699 placement
+//@ chunk-6s14nyc9.js:518-698 placement
 function normalizeLocaleTag(raw) {
   if (!raw || raw === "C" || raw === "POSIX" || raw.length > MAX_LOCALE_TAG_CHARS) return;
   let line = firstLineOf(firstLineOf(raw, "."), "@");
@@ -29,7 +29,7 @@ function normalizeLocaleTag(raw) {
     return;
   }
 }
-//@ chunk-hzbq5ybv.js:699-988 placement
+//@ chunk-6s14nyc9.js:698-987 placement
 var STRFTIME_PART_OPTIONS = {
   year: "numeric",
   month: "2-digit",
@@ -56,7 +56,7 @@ var LONG_MONTH_OPTIONS = {
   month: "long",
   calendar: "gregory",
 };
-//@ chunk-hzbq5ybv.js:988-2275 placement
+//@ chunk-6s14nyc9.js:987-2274 placement
 /**
  * 在指定时区按 strftime 模式格式化日期，支持 %Y/%m/%d/%H/%M/%S/%p/%a/%b/%z/%F/%T 等及 %- 不补零。
  */
@@ -140,27 +140,27 @@ function strftimeFormat(pattern, date, { locale, timeZone }) {
     }
   });
 }
-//@ chunk-hzbq5ybv.js:2275-2336 placement
+//@ chunk-6s14nyc9.js:2274-2335 placement
 function padTwo(value, noPad) {
   return noPad ? String(value) : String(value).padStart(2, "0");
 }
-//@ chunk-hzbq5ybv.js:2336-2397 placement
+//@ chunk-6s14nyc9.js:2335-2396 placement
 function padThree(isoString, noPad) {
   return noPad ? String(isoString) : String(isoString).padStart(3, "0");
 }
-//@ chunk-hzbq5ybv.js:2397-2458 placement
+//@ chunk-6s14nyc9.js:2396-2457 placement
 function padTwoSpace(value, noPad) {
   return noPad ? String(value) : String(value).padStart(2, " ");
 }
-//@ chunk-hzbq5ybv.js:2458-2529 placement (2.1.88 match: parseISOString, 1)
+//@ chunk-6s14nyc9.js:2457-2528 placement (2.1.88 match: parseISOString, 1)
 function parseISOString(year, month, day) {
   return (Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 1)) / 86400000 + 1;
 }
-//@ chunk-hzbq5ybv.js:2529-2581 placement
+//@ chunk-6s14nyc9.js:2528-2580 placement
 function formatWithDateTimeFormat(date, locale, timeZone, pattern) {
   return getDateTimeFormat(locale, withTimeZone(pattern, timeZone)).format(date);
 }
-//@ chunk-hzbq5ybv.js:2581-2842 placement
+//@ chunk-6s14nyc9.js:2580-2841 placement
 function formatUtcOffset(date, year, month, day, hour, fields) {
   let timestamp = Date.UTC(year, month - 1, day, hour, Number(fields.minute), Number(fields.second));
   let dateSeconds = Math.floor(date.getTime() / 1000) * 1000;
@@ -169,16 +169,16 @@ function formatUtcOffset(date, year, month, day, hour, fields) {
   let offsetMinutes = Math.abs(rounded);
   return `${sign}${String(Math.floor(offsetMinutes / 60)).padStart(2, "0")}${String(offsetMinutes % 60).padStart(2, "0")}`;
 }
-//@ chunk-hzbq5ybv.js:2842-2852 placement
+//@ chunk-6s14nyc9.js:2841-2851 placement
 var MAX_TIME_FORMAT_CHARS = 100;
-//@ chunk-hzbq5ybv.js:2852-2891 placement
+//@ chunk-6s14nyc9.js:2851-2889 placement
 /**
  * 清洗时间格式串并截断到 100 字符。
  */
 function sanitizeTimeFormat(format) {
   return truncateToLength(stripFormatChars(printableText(format)), MAX_TIME_FORMAT_CHARS);
 }
-//@ chunk-hzbq5ybv.js:2891-3174 placement
+//@ chunk-6s14nyc9.js:2889-3172 placement
 function resolveTimeFormat(format, preset) {
   let found = AUTO_CONNECT_LABELS.find((label) => label === format);
   if (found === "24-hour-utc")
@@ -207,7 +207,7 @@ function resolveTimeFormat(format, preset) {
         timeZone,
       };
 }
-//@ chunk-hzbq5ybv.js:3174-3253 placement
+//@ chunk-6s14nyc9.js:3172-3251 placement
 function validTimeZone(timeZone) {
   if (!timeZone) return;
   try {
@@ -219,7 +219,7 @@ function validTimeZone(timeZone) {
     return;
   }
 }
-//@ chunk-hzbq5ybv.js:3253-3429 placement
+//@ chunk-6s14nyc9.js:3251-3427 placement
 function presetFormatOptions(pattern, preset, timeZone) {
   switch (preset) {
     case "auto":
@@ -243,7 +243,7 @@ function presetFormatOptions(pattern, preset, timeZone) {
       );
   }
 }
-//@ chunk-hzbq5ybv.js:3429-3679 placement
+//@ chunk-6s14nyc9.js:3427-3677 placement
 /**
  * 按时间格式预设格式化日期；24 小时 UTC 预设在最后的分/秒后加 Z。
  */
@@ -256,7 +256,7 @@ function formatWithPreset(date, preset, locale, timeZone) {
     .map((part, index) => (index === lastIndex ? `${part.value}Z` : part.value))
     .join("");
 }
-//@ chunk-hzbq5ybv.js:3679-3741 placement
+//@ chunk-6s14nyc9.js:3677-3738 placement
 function formatCustomPattern(pattern, timeZone, date, locale) {
   return truncateToLength(
     strftimeFormat(pattern, date, {
@@ -266,7 +266,7 @@ function formatCustomPattern(pattern, timeZone, date, locale) {
     MAX_TIME_FORMAT_CHARS,
   );
 }
-//@ chunk-hzbq5ybv.js:3741-3867 placement
+//@ chunk-6s14nyc9.js:3738-3864 placement
 var CLOCK_TIME_OPTIONS = {
   "2-digit": {
     hour: "2-digit",
@@ -279,7 +279,7 @@ var CLOCK_TIME_OPTIONS = {
     hourCycle: "h12",
   },
 };
-//@ chunk-hzbq5ybv.js:3867-3975 placement
+//@ chunk-6s14nyc9.js:3864-3972 placement
 /**
  * 格式化时刻：自定义模式走 strftime，否则按预设输出时:分。
  */
@@ -288,7 +288,7 @@ function formatClockTime(format, timeZone, locale, timeZone_2 = "2-digit") {
     ? formatCustomPattern(format.pattern, format.timeZone, timeZone, locale)
     : formatWithPreset(format, CLOCK_TIME_OPTIONS[timeZone_2], "en-US", timeZone);
 }
-//@ chunk-hzbq5ybv.js:3975-4114 placement
+//@ chunk-6s14nyc9.js:3972-4111 placement
 var FULL_TIMESTAMP_OPTIONS = {
   year: "numeric",
   month: "2-digit",
@@ -299,7 +299,7 @@ var FULL_TIMESTAMP_OPTIONS = {
   hourCycle: "h23",
   timeZoneName: "short",
 };
-//@ chunk-hzbq5ybv.js:4114-4501 placement
+//@ chunk-6s14nyc9.js:4111-4498 placement
 /**
  * 格式化完整时间戳 YYYY-MM-DD HH:MM:SS，附上午/下午与时区名（UTC 预设加 Z）；自定义模式走 strftime。
  */
@@ -316,14 +316,14 @@ function formatFullTimestamp(format, date, locale, timeZone) {
   else if (byType.timeZoneName) zoneSuffix = ` ${byType.timeZoneName}`;
   return `${byType.year}-${byType.month}-${byType.day} ${byType.hour}:${byType.minute}:${byType.second}${dayPeriodSuffix}${zoneSuffix}`;
 }
-//@ chunk-hzbq5ybv.js:4501-4580 placement
+//@ chunk-6s14nyc9.js:4498-4577 placement
 /**
  * 按设置解析出当前生效的时间格式与格式串。
  */
 function resolvedTimeFormat() {
   return resolveTimeFormat(resolveSetting("timeFormat", "auto").value, resolveSetting("timeZone", "").value);
 }
-//@ chunk-hzbq5ybv.js:4580-4622 placement
+//@ chunk-6s14nyc9.js:4577-4619 placement
 /**
  * 用当前 locale 按自定义模式格式化。
  */

@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/azureCliCredential.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-fingerprint 2
  */
 import child_process from "child_process";
@@ -17,7 +17,7 @@ import { checkSubscription } from "../util/subscriptionUtils.js";
 import { tracingClient } from "../util/tracing.js";
 import { ensureValidScopeForDevTimeCreds, getScopeResource } from "../util/scopeUtils.js";
 
-//@ chunk-mrx6y2r5.js:312006-312416 esm-fingerprint
+//@ chunk-b5df2wx1.js:312006-312416 esm-fingerprint
 var logger_7 = credentialLogger("AzureCliCredential");
 var cliCredentialInternals = {
   getSafeWorkingDir() {
@@ -61,7 +61,7 @@ var cliCredentialInternals = {
     });
   },
 };
-//@ chunk-mrx6y2r5.js:312416-314736 esm-fingerprint
+//@ chunk-b5df2wx1.js:312416-314736 esm-fingerprint
 class AzureCliCredential {
   constructor(options) {
     if (options === null || options === undefined ? undefined : options.tenantId) {

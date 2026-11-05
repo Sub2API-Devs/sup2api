@@ -3,10 +3,10 @@
  *
  * Teleport（云端会话）：创建远程会话、设备绑定、git 状态打包上传、把云会话拉回本地（检出分支、校验仓库）、错误分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-e6aww6q8.js (66)
- * attribution: fingerprint 7, affinity 1, layout 40, facade-exports 19
+ * pieces: chunk-5xgkngpb.js (67), chunk-czq1j3j2.js (1)
+ * attribution: affinity 1, fingerprint 7, layout 41, facade-exports 19
  */
 import { stripVTControlCharacters } from "util";
 import { randomUUID } from "crypto";
@@ -119,8 +119,11 @@ import { isPersistentRemoteSessionEnabled, isCcrV2SendEventsEnabled } from "../b
 import { checkAdminRequestEligibility } from "../services/api/adminRequests.js";
 import { getSessionLogsViaOAuth } from "../services/api/sessionIngress.js";
 import { isTranscriptMessage } from "./sessionStorage.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { stripToolUseIdBookkeeping } from "./transcript/entryTypes.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { logError } from "./log.js";
+import { recordServerListedTool } from "../services/compact/keptTools.js";
 import {
   MCP_ELICITATION_DIALOG_TOOL,
   setModeControlEvent,
@@ -236,34 +239,35 @@ import {
 import { githubNotConnectedMessage } from "../services/cloudSessions/webSetup.js";
 import { getMainLoopModel } from "./model/model.js";
 import { getModelPickerEffortDefault } from "./effort.js";
+import { prefetchSenderAddressFor } from "../services/api/requestHeaders.js";
 import { isAnthropicRepo } from "./github/anthropicRepos.js";
 import { toCompatSessionId } from "../bridge/sessionIdCompat.js";
 import { INTERRUPT_REMOTE_EVENT } from "./telemetry/memorySummary.js";
 import { getTrustedDeviceToken } from "../bridge/trustedDevice.js";
 import { subscribeGithubPullRequest } from "../bridge/githubPrSubscription.js";
 
-//@ chunk-e6aww6q8.js:1941496-1941556 affinity
+//@ chunk-5xgkngpb.js:1996669-1996729 affinity
 var ENV_SETUP_ONBOARDING_URL = "https://claude.ai/code/onboarding?magic=env-setup";
-//@ chunk-e6aww6q8.js:1941556-1941737 fingerprint (2.1.88 match: createTeleportResumeSystemMessage, 1)
+//@ chunk-5xgkngpb.js:1996729-1996910 fingerprint (2.1.88 match: createTeleportResumeSystemMessage, 1)
 function createTeleportResumeSystemMessage(branchError) {
   if (branchError === null) return createSystemMessage("Session resumed", "suggestion");
   let formattedError =
     branchError instanceof TeleportOperationError ? branchError.formattedMessage : branchError.message;
   return createSystemMessage(`Session resumed without branch: ${formattedError}`, "warning");
 }
-//@ chunk-e6aww6q8.js:1941737-1941916 fingerprint (2.1.88 match: createTeleportResumeUserMessage, 1)
+//@ chunk-5xgkngpb.js:1996910-1997089 fingerprint (2.1.88 match: createTeleportResumeUserMessage, 1)
 function createTeleportResumeUserMessage() {
   return createUserMessage({
     content: `This session is being continued from another machine. Application state may have changed. The updated working directory is ${getOriginalCwd()}`,
     isMeta: true,
   });
 }
-//@ chunk-e6aww6q8.js:1941916-1941972 layout
+//@ chunk-5xgkngpb.js:1997089-1997145 layout
 var DEFAULT_BACKGROUND_TASK_TITLE = {
   title: BACKGROUND_TASK_TITLE,
   branchName: "claude/background-task",
 };
-//@ chunk-e6aww6q8.js:1941972-1942300 facade-exports (2.1.88 match: validateGitState, 0.852)
+//@ chunk-5xgkngpb.js:1997145-1997473 facade-exports (2.1.88 match: validateGitState, 0.852)
 /**
  * teleport 前要求工作区干净（tengu_teleport_error_git_not_clean）。
  */
@@ -281,7 +285,7 @@ async function validateGitState() {
     );
   }
 }
-//@ chunk-e6aww6q8.js:1942300-1942776 fingerprint (2.1.88 match: fetchFromOrigin, 1)
+//@ chunk-5xgkngpb.js:1997473-1997947 fingerprint (2.1.88 match: fetchFromOrigin, 1)
 async function fetchFromOrigin(branch) {
   let fetchArgs = branch
     ? [...GIT_SAFE_GLOBAL_ARGS, "fetch", SAFE_UPLOAD_PACK_ARG_2, "origin", `${branch}:${branch}`]
@@ -313,7 +317,7 @@ async function fetchFromOrigin(branch) {
         level: "error",
       });
 }
-//@ chunk-e6aww6q8.js:1942776-1943374 fingerprint (2.1.88 match: ensureUpstreamIsSet, 1)
+//@ chunk-5xgkngpb.js:1997947-1998545 fingerprint (2.1.88 match: ensureUpstreamIsSet, 1)
 async function ensureUpstreamIsSet(branchName) {
   let repoRootOrCwd = getRepoRootOrCwd();
   let execOptions = {
@@ -346,11 +350,11 @@ async function ensureUpstreamIsSet(branchName) {
     else logForDebugging(`Successfully set upstream for '${branchName}'`);
   } else logForDebugging(`Remote branch 'origin/${branchName}' does not exist, skipping upstream setup`);
 }
-//@ chunk-e6aww6q8.js:1943374-1943411 layout
+//@ chunk-5xgkngpb.js:1998545-1998582 layout
 function getRepoRootOrCwd() {
   return findGitRoot(getCwd()) ?? getCwd();
 }
-//@ chunk-e6aww6q8.js:1943411-1943712 facade-exports
+//@ chunk-5xgkngpb.js:1998582-1998883 facade-exports
 function userCheckoutSpawnTerms() {
   let repoRootOrCwd = getRepoRootOrCwd();
   let gitDirs = resolveGitDirs(repoRootOrCwd);
@@ -367,7 +371,7 @@ function userCheckoutSpawnTerms() {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1943712-1945237 facade-exports (2.1.88 match: stashToCleanState, 0.369)
+//@ chunk-5xgkngpb.js:1998883-2000408 facade-exports (2.1.88 match: stashToCleanState, 0.368)
 /**
  * teleport 前把工作区 stash 到干净状态：先检查被 assume-unchanged/被文件夹替换的已跟踪路径（存在则拒绝，避免 stash 丢数据），再 add 未跟踪文件并 git stash push。
  */
@@ -437,7 +441,7 @@ async function stashToCleanState(options, { cwd, env }) {
   );
   return code === 0;
 }
-//@ chunk-e6aww6q8.js:1945237-1945804 fingerprint (2.1.88 match: checkoutBranch, 1)
+//@ chunk-5xgkngpb.js:2000408-2000975 fingerprint (2.1.88 match: checkoutBranch, 1)
 async function checkoutBranch(branchName, execOptions) {
   let result = await execFileNoThrowWithCwd(
     gitExe(),
@@ -470,7 +474,7 @@ async function checkoutBranch(branchName, execOptions) {
   }
   await ensureUpstreamIsSet(branchName);
 }
-//@ chunk-e6aww6q8.js:1945804-1945931 fingerprint (2.1.88 match: getCurrentBranch, 1)
+//@ chunk-5xgkngpb.js:2000975-2001102 fingerprint (2.1.88 match: getCurrentBranch, 1)
 async function getCurrentBranch() {
   let repoRootOrCwd = getRepoRootOrCwd();
   let { stdout: currentBranch } = await execFileNoThrowWithCwd(
@@ -483,11 +487,11 @@ async function getCurrentBranch() {
   );
   return currentBranch.trim();
 }
-//@ chunk-e6aww6q8.js:1945931-1945969 facade-exports
+//@ chunk-5xgkngpb.js:2001102-2001140 facade-exports
 function deserializeRemoteSessionLog(log) {
   return markRemoteSourced(deserializeToMessages(log, true));
 }
-//@ chunk-e6aww6q8.js:1945969-1946379 facade-exports (2.1.88 match: processMessagesForTeleportResume, 0)
+//@ chunk-5xgkngpb.js:2001140-2001550 facade-exports (2.1.88 match: processMessagesForTeleportResume, 0)
 function processMessagesForTeleportResume(log, branchError, environmentKind) {
   let messagesWithTeleportNotice = [
     ...deserializeRemoteSessionLog(log),
@@ -507,7 +511,7 @@ function processMessagesForTeleportResume(log, branchError, environmentKind) {
     );
   return messagesWithTeleportNotice;
 }
-//@ chunk-e6aww6q8.js:1946379-1946895 facade-exports (2.1.88 match: checkOutTeleportedSessionBranch, 0.832)
+//@ chunk-5xgkngpb.js:2001550-2002066 facade-exports (2.1.88 match: checkOutTeleportedSessionBranch, 0.832)
 /**
  * fetch 并检出云会话所在分支，设置 upstream。
  */
@@ -542,7 +546,7 @@ async function checkOutTeleportedSessionBranch(branch) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1946895-1948437 facade-exports (2.1.88 match: validateSessionRepository, 0.94)
+//@ chunk-5xgkngpb.js:2002066-2003612 facade-exports (2.1.88 match: validateSessionRepository, 0.94)
 /**
  * 检查云会话关联的 git 仓库与当前目录是否一致（含 host），不一致返回 mismatch。
  */
@@ -645,7 +649,7 @@ async function validateSessionRepository(sessionData) {
     currentHost: currentParsed?.host,
   };
 }
-//@ chunk-e6aww6q8.js:1948437-1948699 facade-exports
+//@ chunk-5xgkngpb.js:2003612-2003874 facade-exports
 function formatRepoMismatchDisplay(mismatch) {
   let hostsDiffer =
     mismatch.sessionHost &&
@@ -656,7 +660,7 @@ function formatRepoMismatchDisplay(mismatch) {
     currentDisplay: hostsDiffer ? `${mismatch.currentHost}/${mismatch.currentRepo}` : mismatch.currentRepo,
   };
 }
-//@ chunk-e6aww6q8.js:1948699-1950938 facade-exports (2.1.88 match: teleportResumeCodeSession, 0.74)
+//@ chunk-5xgkngpb.js:2003874-2006113 facade-exports (2.1.88 match: teleportResumeCodeSession, 0.74)
 /**
  * 把云端会话拉回本地继续：校验仓库匹配、拉取会话日志、检出对应分支，返回消息与分支。
  */
@@ -766,7 +770,7 @@ This repo is ${sequential.bold(currentDisplay)}.
     );
   }
 }
-//@ chunk-e6aww6q8.js:1950938-1951179 facade-exports (2.1.88 match: handleTeleportPrerequisites, 0.836)
+//@ chunk-5xgkngpb.js:2006113-2006354 facade-exports (2.1.88 match: handleTeleportPrerequisites, 0.836)
 async function handleTeleportPrerequisites(root, showErrors, options) {
   let teleportErrors = await getTeleportErrors(undefined, showErrors);
   if (teleportErrors.size > 0) {
@@ -781,7 +785,7 @@ async function handleTeleportPrerequisites(root, showErrors, options) {
   }
   return teleportErrors.size > 0;
 }
-//@ chunk-e6aww6q8.js:1951179-1951567 layout
+//@ chunk-5xgkngpb.js:2006354-2006742 layout
 function logCloudSessionLink(id, source, createInfo, options, storageV5) {
   logEvent("tengu_ccr_session_link", {
     ccr_session_id: sanitizeMarkName(id),
@@ -813,7 +817,7 @@ function logCloudSessionLink(id, source, createInfo, options, storageV5) {
       storageV5,
     );
 }
-//@ chunk-e6aww6q8.js:1951567-1952235 facade-exports
+//@ chunk-5xgkngpb.js:2006742-2007410 facade-exports
 var CREATE_SESSION_FAILURES = {
   no_session_id: {
     reason: "malformed_response",
@@ -831,7 +835,7 @@ var CREATE_SESSION_FAILURES = {
 };
 var RESTRICTED_SESSION_CLOUD_REFUSAL =
   "Cloud sessions cannot be created from a --restricted session: they would not enforce it.";
-//@ chunk-e6aww6q8.js:1952235-1952392 facade-exports
+//@ chunk-5xgkngpb.js:2007410-2007567 facade-exports
 function cloudCreateRefusal() {
   if (isRestrictedSession())
     return {
@@ -845,7 +849,7 @@ function cloudCreateRefusal() {
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:1952392-1952694 layout
+//@ chunk-5xgkngpb.js:2007567-2007869 layout
 function normalizeApiErrorType(errorType) {
   if (typeof errorType !== "string" || errorType === "") return;
   switch (errorType) {
@@ -863,7 +867,13 @@ function normalizeApiErrorType(errorType) {
       return "other";
   }
 }
-//@ chunk-e6aww6q8.js:1952694-1953275 layout
+//@ chunk-5xgkngpb.js:2007869-2007960 layout
+function createSessionErrorReason(error) {
+  return normalizeCreateSessionError(
+    error?.resource === "github_repo_access_denied" ? error.resource : error?.reason,
+  );
+}
+//@ chunk-5xgkngpb.js:2007960-2008541 layout
 function normalizeCreateSessionError(request) {
   if (typeof request !== "string" || request === "") return;
   let override = noEnvironmentOverride(request);
@@ -888,17 +898,17 @@ function normalizeCreateSessionError(request) {
       return "other";
   }
 }
-//@ chunk-e6aww6q8.js:1953275-1953318 layout
+//@ chunk-5xgkngpb.js:2008541-2008584 layout
 function environmentLabelOrKind(label, fallback) {
   return singleTokenText(label, "") || safeTokenText(fallback);
 }
-//@ chunk-e6aww6q8.js:1953318-1953681 layout
+//@ chunk-5xgkngpb.js:2008584-2008947 layout
 function formatEnvironmentRepoMismatch(needsSetup, environmentName, extra) {
   return needsSetup
     ? `This repository needs the environment set up for it, but "${environmentName}" was selected. Select that environment instead, or run from a different repository.`
     : `The selected environment "${environmentName}" only accepts the repository it is set up for, but the source was ${extra}. Run this from a checkout of that repository, or select a different environment.`;
 }
-//@ chunk-e6aww6q8.js:1953681-1955574 facade-exports
+//@ chunk-5xgkngpb.js:2008947-2010891 facade-exports
 async function teleportToRemoteWithErrorHandling(root, options) {
   let prereq = await handleTeleportPrerequisites(
     root,
@@ -936,10 +946,12 @@ async function teleportToRemoteWithErrorHandling(root, options) {
     persistentVolume: options.persistentVolume,
     persistentVolumeFromSessionId: options.persistentVolumeFromSessionId,
     monorepo: options.monorepo,
+    monorepoNotice: options.monorepoNotice,
     noMonorepo: options.noMonorepo,
     noMonorepoAsksTheService: options.noMonorepoAsksTheService,
     personal: options.personal,
     sessionGroupingId: options.sessionGroupingId,
+    isMove: options.isMove,
     deviceBinding: options.deviceBinding,
     connectedSession: options.connectedSession,
     ...{},
@@ -1000,7 +1012,7 @@ ${failureText}
     failDetail,
   };
 }
-//@ chunk-e6aww6q8.js:1955574-1956933 facade-exports (2.1.88 match: teleportFromSessionsAPI, 0.864)
+//@ chunk-5xgkngpb.js:2010891-2012286 facade-exports (2.1.88 match: teleportFromSessionsAPI, 0.864)
 /**
  * 从 Sessions API 拉取远程会话的事件日志并转换为本地消息。
  */
@@ -1025,6 +1037,7 @@ async function teleportFromSessionsAPI(sessionId, orgUUID, accessToken, options,
     if (logs_2 === null) throw Error("Failed to fetch session logs");
     let filterStartTime = Date.now();
     let messages = logs_2.filter((entry) => isTranscriptMessage(entry) && !entry.isSidechain);
+    if (codeModeAccepted()) for (let message of messages) stripToolUseIdBookkeeping(message);
     logForDebugging(
       `[teleport] Filtered ${logs_2.length} entries to ${messages.length} messages in ${Date.now() - filterStartTime}ms`,
     );
@@ -1055,7 +1068,7 @@ ${sequential.dim("Run /status in Claude Code to check your account.")}`,
     throw Error(`Failed to fetch session from Sessions API: ${err.message}`);
   }
 }
-//@ chunk-e6aww6q8.js:1956933-1959369 facade-exports
+//@ chunk-5xgkngpb.js:2012286-2014733 facade-exports
 async function awaitRemoteSessionResult(options, signal, credentials) {
   if (!isFirstPartyProvider())
     throw Error("Cloud sessions are only available on the first-party Anthropic API provider.");
@@ -1083,8 +1096,10 @@ async function awaitRemoteSessionResult(options, signal, credentials) {
     for (let newEvent of pollResult.newEvents)
       if (newEvent.type === "assistant") {
         lastAssistantEvent = newEvent;
-        for (let contentBlock of newEvent.message.content)
+        for (let contentBlock of newEvent.message.content) {
+          recordServerListedTool(contentBlock);
           if (contentBlock.type === "tool_use") toolCallCount++;
+        }
       } else if (newEvent.type === "result") resultEvent = newEvent;
     if (pollResult.sessionStatus === "archived") {
       isArchived = true;
@@ -1160,7 +1175,7 @@ async function awaitRemoteSessionResult(options, signal, credentials) {
     toolCalls: toolCallCount,
   };
 }
-//@ chunk-e6aww6q8.js:1959369-1960745 layout
+//@ chunk-5xgkngpb.js:2014733-2016109 layout
 function buildInitialControlEvents(options) {
   let events = [];
   if (
@@ -1257,7 +1272,7 @@ function buildInitialControlEvents(options) {
     });
   return events;
 }
-//@ chunk-e6aww6q8.js:1960745-1961200 layout
+//@ chunk-5xgkngpb.js:2016109-2016564 layout
 /**
  * 把本地选项映射为远程会话配置（custom_system_prompt、max_turns、max_budget_usd、allowed_tools、disallowed_tools、builtin_tools…）。
  */
@@ -1287,7 +1302,7 @@ function buildRemoteSessionConfig(options) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:1961200-1961357 layout
+//@ chunk-5xgkngpb.js:2016564-2016721 layout
 function deferredFirstPrompt(initialControlEvents, initialMessage) {
   let uuid = initialControlEvents.find((event) => event.data.type === "user")?.data.uuid;
   return initialMessage !== null && typeof uuid === "string"
@@ -1298,7 +1313,7 @@ function deferredFirstPrompt(initialControlEvents, initialMessage) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1961357-1961522 layout
+//@ chunk-5xgkngpb.js:2016721-2016886 layout
 function builtinToolsFirstPrompt(options, initialMessage) {
   let hasMessage =
     typeof initialMessage === "string"
@@ -1311,7 +1326,7 @@ function builtinToolsFirstPrompt(options, initialMessage) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1961522-1962589 layout
+//@ chunk-5xgkngpb.js:2016886-2017957 layout
 async function createRemoteSession(request) {
   let { options, sessionId, held, createEndpoint, signal, bound, pool } = request;
   if ((options.builtinTools ?? []).length === 0)
@@ -1396,7 +1411,7 @@ async function createRemoteSession(request) {
     withheld: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1962589-1962818 layout
+//@ chunk-5xgkngpb.js:2017957-2018186 layout
 /**
  * 远程会话带内置工具时检查设备绑定前提（cnn）：不满足则记录结果、调用 onCreateFail 并返回 true（终止创建）。
  */
@@ -1410,7 +1425,7 @@ function refuseBuiltinToolsCreate(options, environmentKind) {
   options.onCreateFail?.(outcome.message, `builtin_tools_${outcome.outcome}`);
   return true;
 }
-//@ chunk-e6aww6q8.js:1962818-1962944 layout
+//@ chunk-5xgkngpb.js:2018186-2018312 layout
 function buildRenameSessionRequest(title) {
   return {
     type: "control_request",
@@ -1421,7 +1436,7 @@ function buildRenameSessionRequest(title) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1962944-1963280 layout
+//@ chunk-5xgkngpb.js:2018312-2018648 layout
 /**
  * 绑定设备的远程会话创建后，用设备事件签名器发送 rename_session 控制请求固定标题，记 tengu_device_bind_title_latched。
  */
@@ -1444,7 +1459,7 @@ async function latchBoundSessionTitle(sessionId, title, deviceUUID, credentials,
   });
   if (!result.ok) logForDebugging(`[deviceBind] rename_session after bound create failed: ${result.reason}`);
 }
-//@ chunk-e6aww6q8.js:1963280-1963434 layout
+//@ chunk-5xgkngpb.js:2018648-2018802 layout
 function extractTextContent(initialMessage) {
   if (typeof initialMessage === "string") return initialMessage;
   if (!initialMessage) return "";
@@ -1453,7 +1468,7 @@ function extractTextContent(initialMessage) {
     .map((textBlock) => textBlock.text)
     .join(" ");
 }
-//@ chunk-e6aww6q8.js:1963434-1963685 layout
+//@ chunk-5xgkngpb.js:2018802-2019053 layout
 async function isDriftingTwilightEnabled() {
   try {
     if (!DEVICE_BINDING_CREATE_ENABLED) return await checkGate_CACHED_OR_BLOCKING(TENGU_DRIFTING_TWILIGHT);
@@ -1467,11 +1482,11 @@ async function isDriftingTwilightEnabled() {
     return DEVICE_BINDING_CREATE_ENABLED;
   }
 }
-//@ chunk-e6aww6q8.js:1963685-1963707 facade-exports
+//@ chunk-5xgkngpb.js:2019053-2019075 facade-exports
 function launchReadsOnlyTags() {
   return;
 }
-//@ chunk-e6aww6q8.js:1963707-1964119 layout
+//@ chunk-5xgkngpb.js:2019075-2019491 layout
 async function prepareDeviceBinding(
   deviceBinding,
   endpoint,
@@ -1497,14 +1512,14 @@ async function prepareDeviceBinding(
     isEnabled: () => gateValue,
   });
 }
-//@ chunk-e6aww6q8.js:1964119-1964192 layout
+//@ chunk-5xgkngpb.js:2019491-2019565 layout
 function skipDeviceBinding(reason) {
   logEvent("tengu_device_bind_skipped", {
     reason: fromEnum(reason),
   });
   return err_2(reason);
 }
-//@ chunk-e6aww6q8.js:1964192-1964431 layout
+//@ chunk-5xgkngpb.js:2019565-2019804 layout
 function reportDeviceBindOutcome(deviceBinding, result, id, storageV5) {
   if (!deviceBinding || !result) return;
   if (result.ok) deviceBinding.onBound?.(result.value);
@@ -1520,11 +1535,11 @@ function reportDeviceBindOutcome(deviceBinding, result, id, storageV5) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:1964431-1964480 layout
+//@ chunk-5xgkngpb.js:2019804-2019853 layout
 function isBindableStatus(status) {
   return status === 400 || status === 403 || status === 404;
 }
-//@ chunk-e6aww6q8.js:1964480-1964655 layout
+//@ chunk-5xgkngpb.js:2019853-2020028 layout
 var DEVICE_BIND_REFUSAL_REASONS_2 = [
   "bind_attestation_stale",
   "bound_session_unattested_write",
@@ -1533,11 +1548,11 @@ var DEVICE_BIND_REFUSAL_REASONS_2 = [
   "target_device_requires_account",
   "invalid_target_device_id",
 ];
-//@ chunk-e6aww6q8.js:1964655-1964694 layout
+//@ chunk-5xgkngpb.js:2020028-2020067 layout
 function isDeviceBindRefusalReason(reason) {
   return DEVICE_BIND_REFUSAL_REASONS_2.includes(reason);
 }
-//@ chunk-e6aww6q8.js:1964694-1964847 layout
+//@ chunk-5xgkngpb.js:2020067-2020220 layout
 function getDeviceBindRefusal(response) {
   let error = response?.error;
   let filtered = [error?.resource, error?.reason].filter(
@@ -1546,17 +1561,17 @@ function getDeviceBindRefusal(response) {
   if (filtered.length === 0) return;
   return filtered.find(isDeviceBindRefusalReason) ?? "other";
 }
-//@ chunk-e6aww6q8.js:1964847-1964950 layout
+//@ chunk-5xgkngpb.js:2020220-2020323 layout
 function deviceBindFailureKind(status, deviceBindRefusal) {
   if (deviceBindRefusal !== undefined && deviceBindRefusal !== "other") return deviceBindRefusal;
   return status === 404 ? "device_unknown" : "create_refused";
 }
-//@ chunk-e6aww6q8.js:1964950-1965052 layout
+//@ chunk-5xgkngpb.js:2020323-2020425 layout
 function getBoundDeviceUuid(response) {
   let boundDeviceUuid = response?.session?.bound_device_uuid;
   return typeof boundDeviceUuid === "string" ? boundDeviceUuid.toLowerCase() : undefined;
 }
-//@ chunk-e6aww6q8.js:1965052-1965967 layout
+//@ chunk-5xgkngpb.js:2020425-2021344 layout
 /**
  * 带设备绑定创建远程会话：未准备好或签名失败时按普通方式 POST；否则记丢弃的环境变量/事件、决定是否提升安全级别与推迟首条提示、
  * 准备 repositories_trusted，再交给 postBoundCreate 发送。返回 {response, bind, attested, firstPromptDeferred}。
@@ -1604,7 +1619,7 @@ async function createWithDeviceBinding(request) {
     binder,
   });
 }
-//@ chunk-e6aww6q8.js:1965967-1966377 layout
+//@ chunk-5xgkngpb.js:2021344-2021754 layout
 /**
  * 发送带 repositories_trusted 的创建请求；4xx（非可重试）时记录拒绝原因并去掉该字段重发。
  */
@@ -1624,7 +1639,7 @@ async function postWithRepoTrustRetry(post, buildBody, proofHeaders, trust, refu
   );
   return post(buildBody(), proofHeaders);
 }
-//@ chunk-e6aww6q8.js:1966377-1968820 layout
+//@ chunk-5xgkngpb.js:2021754-2024219 layout
 /**
  * 发送设备绑定的创建请求：可选种子签封（TENGU_BUZZING_RIVER），请求提升安全级别被 4xx 拒绝时去掉 ask 重发；成功后记安全级别与仓库信任结果，
  * 并核对返回的绑定设备 uuid 是否与签名设备一致（不一致或失败时尝试重新注册）。
@@ -1783,7 +1798,7 @@ async function postBoundCreate({ buildBody, post }, bindState) {
     firstPromptDeferred: false,
   };
 }
-//@ chunk-e6aww6q8.js:1968820-1969140 layout
+//@ chunk-5xgkngpb.js:2024219-2024539 layout
 /**
  * 设备绑定被拒后重新注册设备：得到同一设备行时放弃；否则签名生成证明，返回证明与持有状态。
  */
@@ -1804,7 +1819,7 @@ async function reregisterDevice(binder) {
         held: result.value.held,
       });
 }
-//@ chunk-e6aww6q8.js:1969140-1969577 layout
+//@ chunk-5xgkngpb.js:2024539-2024976 layout
 /**
  * 创建远程会话时动态加载并运行主目录种子（runHomeSeed，trigger=create），规划失败时视为 none；出错记录日志并返回 undefined。
  */
@@ -1846,15 +1861,15 @@ async function runCreateHomeSeed({
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1969577-1969671 layout
+//@ chunk-5xgkngpb.js:2024976-2025070 layout
 function describedTarget({ branch, commit }, name) {
   return branch !== null ? `${name}/${printableText(branch)}` : `commit ${commit.slice(0, 12)}`;
 }
-//@ chunk-e6aww6q8.js:1969671-1969698 layout
+//@ chunk-5xgkngpb.js:2025070-2025097 layout
 function emptyRequestOptions(options, extra) {
   return {};
 }
-//@ chunk-e6aww6q8.js:1969698-1970617 layout
+//@ chunk-5xgkngpb.js:2025097-2026016 layout
 /**
  * 打包上传前解析 Read 规则与沙箱设置，得出哪些文件内容需要扣留（withholdFor）、哪些永不读取（neverReadFor）；规则不可读时提示并只上传已提交内容。
  */
@@ -1902,7 +1917,7 @@ function resolveBundleReadRules(withholding, warn, countFromOutsideRoot) {
     }).neverReadFor,
   };
 }
-//@ chunk-e6aww6q8.js:1970617-1970795 layout
+//@ chunk-5xgkngpb.js:2026016-2026194 layout
 function launchRuleSensitivity(withholding) {
   try {
     return classifySyncedFileSensitivity(collectLaunchRules(), {
@@ -1919,14 +1934,14 @@ function launchRuleSensitivity(withholding) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1970795-1970855 layout
+//@ chunk-5xgkngpb.js:2026194-2026254 layout
 function noBundleReadRefusal(withholding, countFromOutsideRoot) {
   return {
     refusal: null,
     notRuledOutBy: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1970855-1973070 layout
+//@ chunk-5xgkngpb.js:2026254-2028478 layout
 async function uploadGitBundleForSession(
   options,
   capability,
@@ -2040,7 +2055,7 @@ async function uploadGitBundleForSession(
       }
     : legacyResult;
 }
-//@ chunk-e6aww6q8.js:1973070-1973156 layout
+//@ chunk-5xgkngpb.js:2028478-2028564 layout
 async function getCloudSessionAccessToken(credentials, storageV5) {
   await checkAndRefreshOAuthTokenIfNeeded({
     credentials,
@@ -2048,19 +2063,19 @@ async function getCloudSessionAccessToken(credentials, storageV5) {
   });
   return (await ensureHostSessionsBearer()) ?? getAccessTokenWithCcrFallback();
 }
-//@ chunk-e6aww6q8.js:1973156-1973235 layout
+//@ chunk-5xgkngpb.js:2028564-2028643 layout
 async function hasRecoveredBearer(heldToken, withheld) {
   return (await recoverHostSessionsBearer(heldToken, withheld ? "withheld" : "refused")) !== "not_held";
 }
-//@ chunk-e6aww6q8.js:1973235-2009090 facade-exports (2.1.88 match: teleportToRemote, 0.247)
+//@ chunk-5xgkngpb.js:2028643-2064883 facade-exports (2.1.88 match: teleportToRemote, 0.245)
 /**
  * 创建云端会话（Claude Code on the web）：检查第一方与策略 allow_remote_sessions、选择环境、打包/上传 git 状态、绑定设备，POST /v1/code/sessions 并发送初始消息与控制事件。
  */
 async function teleportToRemote(options) {
   let { initialMessage, signal } = options;
   let cwdPath = options.cwd ?? getCwd();
-  let h = false;
-  let y = false;
+  let unusedFlagH = false;
+  let tracesEnabled = false;
   let extraTags = [];
   let tags = extraTags.length === 0 ? options.tags : [...(options.tags ?? []), ...extraTags];
   let connectedSessionPromise =
@@ -2071,7 +2086,7 @@ async function teleportToRemote(options) {
     (bindablePromise ??= gatePromise().then((gateValue) => isProjectSessionBindable(gateValue, undefined)));
   let seenValue;
   let alwaysFalse = () => (seenValue ??= false);
-  let we;
+  let unusedSlotA;
   let unreachable = () => {
     throw Error("unreachable");
   };
@@ -2112,8 +2127,8 @@ async function teleportToRemote(options) {
   let { deletedHereNotice, leftOutNotice, probeRepoBundleSize, repositorySetBundleSwitches } =
     await import("./teleport/gitBundle.js");
   let uploadedBundle = null;
-  let gt = null;
-  let At = [];
+  let unusedBundleHolder = null;
+  let unusedList = [];
   let bundleKept = false;
   let seedBundle = null;
   let created = false;
@@ -2125,6 +2140,8 @@ async function teleportToRemote(options) {
       }),
     });
     let noGit = false;
+    let noGitWhenSelected = false;
+    let allowBundle = options.allowBundle === true;
     let poolId = options.poolId ?? options.chosenEnvironment?.environment_id;
     let selection =
       poolId !== undefined
@@ -2133,7 +2150,7 @@ async function teleportToRemote(options) {
             source: undefined,
             ignoredUntrustedPool: undefined,
           }
-        : noGit
+        : noGit || false || noGitWhenSelected
           ? {
               id: undefined,
               source: undefined,
@@ -2141,10 +2158,12 @@ async function teleportToRemote(options) {
             }
           : getEnvironmentSelectionInfo();
     let unusedNull = null;
-    let hn = null;
+    let unusedSlotB = null;
     let isPool = isCcpoolId(options.environmentId ? options.environmentId : selection.id);
+    let noEnvVars = Object.keys(options.environmentVariables ?? {}).length === 0;
     let endpoint =
-      (Object.keys(options.environmentVariables ?? {}).length === 0 && (await gatePromise())) ||
+      options.isMove === true ||
+      (noEnvVars && (await gatePromise())) ||
       ((options.source === "ultrareview" || options.source === "ultraplan") &&
         (await checkGate_CACHED_OR_BLOCKING(TENGU_WOVEN_HARBOR))) ||
       (isPool && (await isDriftingTwilightEnabled()))
@@ -2473,7 +2492,7 @@ async function teleportToRemote(options) {
           {
             status: response.status,
             serverType: normalizeApiErrorType(errorData?.error?.type),
-            serverReason: normalizeCreateSessionError(errorData?.error?.reason),
+            serverReason: createSessionErrorReason(errorData?.error),
             endpoint,
             messageHidden: errorText.messageHidden,
           },
@@ -2540,17 +2559,17 @@ async function teleportToRemote(options) {
           level: "warn",
         },
       );
-    let id = selection.id;
-    let isPoolEnv = isCcpoolId(id);
+    let id_2 = selection.id;
+    let isPoolEnv = isCcpoolId(id_2);
     if (isPoolEnv && options.poolId === undefined)
       fetchSelfHostedPools(sessionToken, options.credentials).then(
         (selfHostedPools) => {
           if (
             selfHostedPools.length > 0 &&
-            !selfHostedPools.some((selfHostedPool) => selfHostedPool.pool_id === id)
+            !selfHostedPools.some((selfHostedPool) => selfHostedPool.pool_id === id_2)
           )
             logForDebugging(
-              `Configured default environment ${id} is not in the org's environment list \u2014 sending it anyway; server validates at CreateSession`,
+              `Configured default environment ${id_2} is not in the org's environment list \u2014 sending it anyway; server validates at CreateSession`,
               {
                 level: "warn",
               },
@@ -2562,7 +2581,7 @@ async function teleportToRemote(options) {
           }),
       );
     let promptText = options.description || extractTextContent(initialMessage);
-    let needsTitlePolicy = !promptText && (await gatePromise());
+    let needsTitlePolicy = !promptText && (options.isMove === true || (await gatePromise()));
     let titlePromise;
     let resolveTitle = () =>
       (titlePromise ??=
@@ -2604,7 +2623,7 @@ async function teleportToRemote(options) {
     logForDebugging(
       `Available environments: ${environments.map((environment) => `${environment.environment_id} (${environment.name}, ${environment.kind})`).join(", ")}`,
     );
-    let defaultEnvId = id;
+    let defaultEnvId = id_2;
     let defaultEnvironment = defaultEnvId
       ? environments.find((environment) => environment.environment_id === defaultEnvId)
       : undefined;
@@ -2712,15 +2731,16 @@ async function teleportToRemote(options) {
         environment_kind: selectedEnvironment?.kind,
       }) !== null;
     let refFlag = options.reuseOutcomeBranch ? "--on-branch" : "--ref";
-    let CCR_FORCE_BUNDLE = options.allowBundle && !byocEnv && !options.agentId && env.CCR_FORCE_BUNDLE;
-    let bundleEnabled =
-      options.allowBundle &&
+    let CCR_FORCE_BUNDLE =
+      allowBundle && !noGitWhenSelected && !byocEnv && !options.agentId && env.CCR_FORCE_BUNDLE;
+    let seedGateOn =
+      allowBundle &&
       !byocEnv &&
       !options.agentId &&
       gitRoot !== null &&
       (env.CCR_ENABLE_BUNDLE || (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bundle_seed_enabled")));
     let repoBundleSwitches =
-      options.allowBundle && !byocEnv && !options.agentId && gitRoot !== null
+      allowBundle && !noGitWhenSelected && !byocEnv && !options.agentId && gitRoot !== null
         ? repositorySetBundleSwitches()
         : [];
     if (repoBundleSwitches.length > 0)
@@ -2741,6 +2761,7 @@ async function teleportToRemote(options) {
       noteForClaude: null,
     };
     let { folderRoot, optedIn } = folderPlan;
+    let bundleSeedAllowed = seedGateOn && (!noGitWhenSelected || optedIn);
     let forwardHomeSettings =
       options.staysAttached === true &&
       (await gatePromise()) &&
@@ -2774,19 +2795,24 @@ async function teleportToRemote(options) {
       gitRoot !== null && (await isViolinWood())
         ? await readLaunchGitLayout(gitRoot, signal, await alwaysTrueAsync())
         : undefined;
+    let selfHostedStart = false;
     if (signal.aborted) throw new AbortError_2();
-    let Hi = undefined;
+    let unusedRepoHolder = undefined;
     let pinnedAppCheck = null;
     let now = Date.now();
     let appCheckPromise =
-      repo && !CCR_FORCE_BUNDLE && !isSelfHosted && isGithubDotCom(repo.host)
-        ? (pinnedAppCheck ?? checkGithubAppInstalled(repo.owner, repo.name, signal))
+      repo && !CCR_FORCE_BUNDLE && (!isSelfHosted || selfHostedStart) && isGithubDotCom(repo.host)
+        ? (pinnedAppCheck ??
+          checkGithubAppInstalled(repo.owner, repo.name, signal, {
+            resyncUndetermined: !selfHostedStart,
+          }))
         : null;
     let shouldAskGithub = (branch) => appCheckPromise !== null && !optedIn && branch !== "HEAD";
     let askGithubBranch = async (branch) => {
       if (!repo || appCheckPromise === null) return null;
       let appCheck = await appCheckPromise;
-      if (!appCheck.appInstalled || branch === appCheck.defaultBranch) return null;
+      if (!appCheck.appInstalled && !selfHostedStart) return null;
+      if (branch === appCheck.defaultBranch) return selfHostedStart ? "yes" : null;
       let min = Math.min(GITHUB_APP_CHECK_TIMEOUT_MS, GITHUB_APP_CHECK_TIMEOUT_MS - (Date.now() - now));
       if (min < MIN_RESYNC_BUDGET_MS) {
         logForDebugging(
@@ -2804,14 +2830,15 @@ async function teleportToRemote(options) {
           credentials: options.credentials,
         })
       )(branch);
-      if (lookUpBranch === "no")
-        logForDebugging(
-          `[teleportToRemote] GitHub has no branch ${branch}: the start is looked up again without its remote-tracking ref, unless the search for a pushed commit had already failed`,
-        );
+      if (lookUpBranch === "no") logForDebugging(`[teleportToRemote] GitHub has no branch ${branch}`);
       return lookUpBranch;
     };
     let remoteLookup =
-      gitRoot !== null && repo && !isSelfHosted && !CCR_FORCE_BUNDLE && (optedIn || fromHeadBranch)
+      gitRoot !== null &&
+      repo &&
+      (!isSelfHosted || selfHostedStart) &&
+      !CCR_FORCE_BUNDLE &&
+      (optedIn || fromHeadBranch)
         ? await resolveRemote(
             gitRoot,
             launchLayout === undefined
@@ -2851,6 +2878,7 @@ async function teleportToRemote(options) {
                 });
               },
               ask: shouldAskGithub(branch) ? () => askGithubBranch(branch) : null,
+              alwaysAsk: selfHostedStart,
             })
         : null;
     let isOwnStartGood = (start) =>
@@ -2884,7 +2912,7 @@ async function teleportToRemote(options) {
       remoteLookup === null &&
       launchLayout !== undefined &&
       !!repo &&
-      !isSelfHosted &&
+      (!isSelfHosted || selfHostedStart) &&
       !CCR_FORCE_BUNDLE;
     if (remoteUnresolved)
       logForDebugging(
@@ -2901,6 +2929,8 @@ async function teleportToRemote(options) {
       if (isSelfHosted) {
         githubAvailable = true;
         sourceReason = "byoc_env_skip_preflight";
+        if (start_2?.kind === "not_on_remote" || start_2?.kind === "none")
+          gitSource_2 = (await appCheckPromise)?.defaultBranch ?? null;
       } else if (isGithubDotCom(repo.host)) {
         let appCheck = await (appCheckPromise ?? checkGithubAppInstalled(repo.owner, repo.name, signal));
         githubAvailable = appCheck.appInstalled;
@@ -2974,7 +3004,7 @@ async function teleportToRemote(options) {
             }
           : null;
     let noSeedPlan = async () => null;
-    if (!githubAvailable && !bundleEnabled && repo) githubAvailable = true;
+    if (!githubAvailable && !bundleSeedAllowed && repo) githubAvailable = true;
     let xxKl = null;
     let revisionText = null;
     let detachedInfo = null;
@@ -2994,15 +3024,16 @@ async function teleportToRemote(options) {
     let xxGae = false;
     let xxGW = false;
     let xxIW = undefined;
-    let advisesPush = true;
-    let seedAllowed = bundleEnabled && (optedIn || !xxGae);
+    let mayStartFromGithub = true;
+    let advisesPush = mayStartFromGithub && options.isMove !== true;
+    let seedAllowed = bundleSeedAllowed && (optedIn || !xxGae);
     let branchText = null;
     let shortStartText = null;
     if (
       start_2?.kind === "none" &&
       githubAvailable &&
       repo &&
-      (seedAllowed || (bundleEnabled && (forgeName !== null || false))) &&
+      (seedAllowed || (bundleSeedAllowed && (forgeName !== null || false))) &&
       xxYh === null &&
       settingsPlan === null
     ) {
@@ -3077,7 +3108,7 @@ async function teleportToRemote(options) {
           branch: defaultBranchName === "HEAD" ? null : printableText(defaultBranchName),
           remote: remoteLookup === null ? null : printableText(remoteLookup.name),
         };
-        xxKl = `${defaultBranchName === "HEAD" ? "This detached HEAD" : `Branch ${printableText(defaultBranchName)}`} shares no history with ${remoteLookup?.name ?? "the remote"} as last fetched here, so the cloud session starts from ${fallbackRevisionText} instead; commits and changes that exist only on this machine are not in it.`;
+        xxKl = `${defaultBranchName === "HEAD" ? "This detached HEAD" : `Branch ${printableText(defaultBranchName)}`} shares no history with ${remoteLookup?.name ?? "the remote"} as last fetched here, so the cloud session starts from ${targetRevision === defaultBranchName ? `${remoteLookup?.name ?? "the remote"}'s ${fallbackRevisionText}` : fallbackRevisionText} instead; commits and changes that exist only on this machine are not in it.`;
       } else if (
         start_2?.kind === "on_remote" &&
         start_2.aheadCount !== undefined &&
@@ -3219,12 +3250,13 @@ async function teleportToRemote(options) {
     let firstUpload = options.firstUpload;
     let firstUploadDone = false;
     let bundleCwd = options.cwd === undefined ? gitRoot : null;
-    let shouldBundle = !repoSource && bundleEnabled;
+    let shouldBundle = !repoSource && bundleSeedAllowed;
     let xxPLe = null;
     let xxFE = null;
     let warningText = null;
-    let warningText2 = null;
-    let xxSae = false;
+    let bundleWarningText = null;
+    let xxSae = null;
+    let unusedFlag = false;
     let bundleNotice2 = null;
     let xxR5 = null;
     if (shouldBundle) {
@@ -3238,7 +3270,7 @@ async function teleportToRemote(options) {
         rerouted: false,
       });
       gitSource = Date.now();
-      let environments = await isViolinWood();
+      let withholding = await isViolinWood();
       let bundleConfig2 = {
         oauthToken: bundleToken,
         isStoredLogin,
@@ -3252,15 +3284,15 @@ async function teleportToRemote(options) {
           ...(bundleCwd !== null && {
             cwd: bundleCwd,
           }),
-          currentBranchOnly: environments,
-          ...(environments && {
+          currentBranchOnly: withholding,
+          ...(withholding && {
             hardenForDeviceSessions: true,
             startsInProject: await alwaysTrueAsync(),
           }),
           ...resolveBundleReadRules(
-            environments,
+            withholding,
             options.onBundleNotice,
-            environments && (await alwaysFalseAsync()),
+            withholding && (await alwaysFalseAsync()),
           ),
           onBundled: (onBundled) =>
             options.onProgress?.({
@@ -3303,7 +3335,7 @@ async function teleportToRemote(options) {
           let bundleErrorText = !detectedRepo
             ? ""
             : sourceReason === "branch_not_on_remote"
-              ? `. This branch shares no history with the remote as last fetched here${advisesPush ? "; push it to start from GitHub instead" : ""}`
+              ? `. This branch shares no history with the remote as last fetched here${mayStartFromGithub ? "; push it to start from GitHub instead" : ""}`
               : notConnected
                 ? `. ${githubNotConnectedMessage()}`
                 : transient
@@ -3351,7 +3383,7 @@ async function teleportToRemote(options) {
         if (bundleUpload.leftOut?.length)
           options.onBundleNotice?.(
             leftOutNotice(bundleUpload.leftOut, {
-              readRules: environments,
+              readRules: withholding,
               ofThisUploadOnly: false,
             }),
           );
@@ -3361,7 +3393,7 @@ async function teleportToRemote(options) {
           size_bytes: bundleUpload.bundleSizeBytes,
           scope: fromEnum(bundleUpload.scope),
           has_wip: bundleUpload.hasWip,
-          current_branch_only: environments,
+          current_branch_only: withholding,
           ...{},
           reason: fromEnum(sourceReason),
         });
@@ -3381,7 +3413,7 @@ async function teleportToRemote(options) {
     let appendedPrompt =
       homeNote === null
         ? options.appendSystemPrompt
-        : [options.appendSystemPrompt, homeNote].filter((env) => env !== undefined).join(`
+        : [options.appendSystemPrompt, homeNote].filter((part) => part !== undefined).join(`
 
 `);
     let verdict = (layoutPromise === null ? null : await layoutPromise)?.verdict;
@@ -3513,7 +3545,8 @@ async function teleportToRemote(options) {
           xxWae = false;
           options.onBundleNotice?.(
             warningText ??
-              warningText2 ??
+              bundleWarningText ??
+              xxSae ??
               (xxFE !== null && !repoDetectionGuards().blocked()
                 ? xxFE
                 : describeNoRepositoryReason(
@@ -3529,10 +3562,10 @@ async function teleportToRemote(options) {
       }
     }
     logForDebugging("[teleport] phase: title-await");
-    let retried = await resolveTitle();
+    let environments_2 = await resolveTitle();
     if (signal.aborted) throw new AbortError_2();
-    let title = options.title || retried.title;
-    let outcomeBranch = options.reuseOutcomeBranch || retried.branchName;
+    let title = options.title || environments_2.title;
+    let outcomeBranch = options.reuseOutcomeBranch || environments_2.branchName;
     let outcomeReference =
       repoSlug === null
         ? null
@@ -3554,7 +3587,7 @@ async function teleportToRemote(options) {
     );
     let xxL5 = false;
     if (xxKl !== null && repoSource !== null && true)
-      options.onBundleNotice?.(xxKl, xxNP ? "warning" : undefined);
+      options.onBundleNotice?.(xxKl, xxNP || selfHostedStart ? "warning" : undefined);
     let outcomeIsSeed = xxL5 && endpoint === "v1alpha2";
     let xxSLe = false;
     let titledText = options.ultraplan ? `ultraplan: ${title}` : title;
@@ -3585,6 +3618,7 @@ async function teleportToRemote(options) {
       isSelfHostedEnv && options.isEffortFromSettings === true ? undefined : options.effort,
     );
     let modelPickerEffortDefault_2 = getModelPickerEffortDefault(model, options.effort);
+    let settings = prefetchSenderAddressFor();
     options.onProgress?.({
       kind: "creating",
     });
@@ -3601,6 +3635,7 @@ async function teleportToRemote(options) {
             gatePromise(),
             usesConsoleProfileCredentials,
           );
+    let unusedBindFlag = false;
     let persistentVolumeFromSessionId = options.persistentVolumeFromSessionId;
     let buildBody = (deviceBinding, requestElevatedTier, deferFirstPrompt, repositoriesTrusted) => {
       let isFreshBind = options.deviceBinding !== undefined && deviceBinding === undefined;
@@ -3614,6 +3649,7 @@ async function teleportToRemote(options) {
               outcomes: outcomeReference ? [outcomeReference] : [],
               model,
               effortLevel: modelPickerEffortDefault,
+              programUseCaseId: settings,
               seedBundleFileId: bundleFileId ?? undefined,
               reuseOutcomeBranches: Boolean(options.reuseOutcomeBranch),
               environmentVariables: envVars,
@@ -3750,8 +3786,8 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
             ? singleTokenOrPlaceholder(repoSource.url)
             : "no source";
       let isAnthropicRepo_2 = gitParsed !== null && isAnthropicRepo(gitParsed);
-      let normalizedReason = normalizeCreateSessionError(reason);
-      let Ah = false;
+      let normalizedReason = createSessionErrorReason(errorData2?.error);
+      let unusedMismatchFlag = false;
       let repoMismatch =
         (typeof message === "string" &&
           message.includes("source repository configuration is not permitted for this environment")) ||
@@ -3768,7 +3804,7 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
           /^the request was invalid\.?$/i.test(message));
       if (
         [401, 403, 429].includes(response.status) ||
-        reason === "github_repo_access_denied" ||
+        normalizedReason === "github_repo_access_denied" ||
         isCloudLaunchError(errorData2) ||
         repoMismatch ||
         false ||
@@ -3778,7 +3814,7 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
           level: "error",
         });
       else {
-        let token = (env) => (env && /^[a-z][a-z0-9_]*$/.test(env) ? env : undefined);
+        let token = (rawToken) => (rawToken && /^[a-z][a-z0-9_]*$/.test(rawToken) ? rawToken : undefined);
         let xxZh = "";
         logError(
           Error(`[type=${token(errorType)},reason=${token(reason)},isByocEnv=${isSelfHosted}] ${statusText}`),
@@ -3837,8 +3873,8 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
     let homeSeedAttested = xxSLe && attested;
     let postSeed = async (withHomeSeed, env = null) => {};
     let seedWithAbort = (env) =>
-      raceWithAbortSignal(postSeed(false, env), signal, () => new AbortError_2()).catch((error) => {
-        if (!isAbortError(error)) logError(error);
+      raceWithAbortSignal(postSeed(false, env), signal, () => new AbortError_2()).catch((env) => {
+        if (!isAbortError(env)) logError(env);
       });
     let remoteSession = await createRemoteSession({
       options,
@@ -3869,7 +3905,7 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
             uploadedBundle === null &&
             xxFE === null &&
             warningText === null &&
-            warningText2 === null,
+            bundleWarningText === null,
         },
         {
           endpoint,
@@ -3884,8 +3920,8 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
     if (false)
       switch (xxYI.kind) {
         case "seed":
-          if (Rh !== null && Af !== null)
-            switch (Jh.kind) {
+          if (Nm !== null && np !== null)
+            switch (__.kind) {
               case "cancelled":
               case "unfilled":
               case "armed":
@@ -3999,6 +4035,15 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
       ...(xxF1 !== null && {
         chosenEnvironmentMoved: true,
       }),
+      ...(options.isMove === true && {
+        mayBeOnARunner: envKind !== null || isSelfHostedEnv || !session.environment_kind,
+      }),
+      ...(selfHostedStart &&
+        xxKl !== null &&
+        repoSource !== null && {
+          selfHostedStartNotice: xxKl,
+        }),
+      ...false,
       ...false,
       ...false,
       ...{},
@@ -4043,11 +4088,11 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
     if (seedBundle !== null && !created) await discardUploadedSeedBundle(seedBundle);
   }
 }
-//@ chunk-e6aww6q8.js:2009090-2009127 layout
+//@ chunk-5xgkngpb.js:2064883-2064920 layout
 function isSuccessStatus(status) {
   return status >= 200 && status < 300;
 }
-//@ chunk-e6aww6q8.js:2009127-2009992 facade-exports (2.1.88 match: sendEventToRemoteSession, 0.362)
+//@ chunk-5xgkngpb.js:2064920-2065790 facade-exports (2.1.88 match: sendEventToRemoteSession, 0.363)
 /**
  * 向远程会话发送 interrupt 控制请求（中断当前回合）。
  */
@@ -4115,7 +4160,7 @@ async function interruptRemoteSession(sessionId, timeout = 1e4) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2009992-2010166 facade-exports
+//@ chunk-5xgkngpb.js:2065790-2065964 facade-exports
 function subscribeRemoteSessionToPR(sessionId, repo, prNumber) {
   return subscribeGithubPullRequest("subscribe", {
     sessionId,
@@ -4127,12 +4172,11 @@ function subscribeRemoteSessionToPR(sessionId, repo, prNumber) {
     onUnauthorized: recoverHostSessionsBearer,
   });
 }
-//@ chunk-18hwfzwa.js:1459225-1459274 fingerprint (2.1.88 match: teleportToRemoteWithErrorHandling, 0.308)
+//@ chunk-czq1j3j2.js:1500437-1500486 fingerprint (2.1.88 match: teleportToRemoteWithErrorHandling, 0.306)
 function teleportToRemoteWithErrorHandling_2(options) {
   return options.initialMessage !== null;
 }
 export {
-  teleportResumeCodeSession,
   teleportToRemote,
   cloudCreateRefusal,
   teleportToRemoteWithErrorHandling,
@@ -4141,13 +4185,14 @@ export {
   validateSessionRepository,
   formatRepoMismatchDisplay,
   handleTeleportPrerequisites,
-  teleportToRemoteWithErrorHandling_2,
-  awaitRemoteSessionResult,
-  launchReadsOnlyTags,
-  subscribeRemoteSessionToPR,
-  RESTRICTED_SESSION_CLOUD_REFUSAL,
+  teleportResumeCodeSession,
   userCheckoutSpawnTerms,
   stashToCleanState,
+  launchReadsOnlyTags,
+  RESTRICTED_SESSION_CLOUD_REFUSAL,
+  teleportToRemoteWithErrorHandling_2,
+  subscribeRemoteSessionToPR,
+  awaitRemoteSessionResult,
   deserializeRemoteSessionLog,
   interruptRemoteSession,
   teleportFromSessionsAPI,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：规范化云服务错误消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (8)
  * attribution: placement 8
  */
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../sanitization.js";
@@ -14,60 +14,60 @@ import { printableName, quotedPrintable } from "../printableName.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:781349-781527 placement
-var NOT_SHOWN_PLACEHOLDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-exfmq47h.js:802145-802323 placement
+var NOT_SHOWN_PLACEHOLDER; // deferred: uses INVISIBLE_CHAR_CLASSES (../sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var MESSAGE_NOT_SHOWN_NOTE;
 var SUSPICIOUS_TEXT_RE;
-deferInit("chunk-aepeg2w5.js:781349", () => {
+deferInit("chunk-exfmq47h.js:802145", () => {
   NOT_SHOWN_PLACEHOLDER = "[not shown]";
   MESSAGE_NOT_SHOWN_NOTE =
     "is not shown because it is too long or has unusual characters or spacing. Run again with --debug to see it.";
   SUSPICIOUS_TEXT_RE = new RegExp(`^\\s*$|\\s{2}|[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
 });
-//@ chunk-aepeg2w5.js:781527-781621 placement
+//@ chunk-exfmq47h.js:802323-802417 placement
 function printableField(keep, option, normalize = (value) => value) {
   return (text, fallback = NOT_SHOWN_PLACEHOLDER) =>
     typeof text === "string" && !SUSPICIOUS_TEXT_RE.test(text) && keep(text, option) === normalize(text)
       ? text
       : fallback;
 }
-//@ chunk-aepeg2w5.js:781621-781686 placement
+//@ chunk-exfmq47h.js:802417-802482 placement
 var regExp_32; // deferred: uses INVISIBLE_CHAR_CLASSES (../confusables.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:781621", () => {
+deferInit("chunk-exfmq47h.js:802417", () => {
   regExp_32 = new RegExp(`[${TAG_BRACKET_CLASSES.open}${TAG_BRACKET_CLASSES.close}]|&#?\\w+;|\\]\\(`, "u");
 });
-//@ chunk-aepeg2w5.js:781686-781758 placement
+//@ chunk-exfmq47h.js:802482-802554 placement
 function suspiciousTextGuarded(render) {
   return (text, fallback = NOT_SHOWN_PLACEHOLDER) =>
     typeof text === "string" && regExp_32.test(text) ? fallback : render(text, fallback);
 }
-//@ chunk-aepeg2w5.js:781758-781843 placement
+//@ chunk-exfmq47h.js:802554-802639 placement
 /**
  * 状态文本的可打印形式（带可疑字符防护）。
  */
 var printableStatusText; // deferred: uses suspiciousTextGuarded of its import cycle while loading; runs once the cycle is complete
 var singleTokenText;
 var printableMultiline;
-deferInit("chunk-aepeg2w5.js:781758", () => {
+deferInit("chunk-exfmq47h.js:802554", () => {
   printableStatusText = suspiciousTextGuarded(printableField(printableName, 200));
   singleTokenText = suspiciousTextGuarded(printableField(quotedPrintable, 200));
   printableMultiline = printableField(printableName, 1000, (text) => text.replaceAll("`", "'"));
 });
-//@ chunk-aepeg2w5.js:781843-781912 placement
+//@ chunk-exfmq47h.js:802639-802708 placement
 /**
  * 单 token 文本或占位符。
  */
 function singleTokenOrPlaceholder(url) {
   return typeof url === "string" && !/\s/u.test(url) ? singleTokenText(url) : NOT_SHOWN_PLACEHOLDER;
 }
-//@ chunk-aepeg2w5.js:781912-781986 placement
+//@ chunk-exfmq47h.js:802708-802782 placement
 /**
  * 合法的单 token 文本或占位符。
  */
 function safeTokenText(token) {
   return typeof token === "string" && /^[\w-]{1,200}$/.test(token) ? token : NOT_SHOWN_PLACEHOLDER;
 }
-//@ chunk-aepeg2w5.js:781986-782331 placement
+//@ chunk-exfmq47h.js:802782-803127 placement
 /**
  * 规范化云服务错误消息。
  */

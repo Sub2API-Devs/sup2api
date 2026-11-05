@@ -1,15 +1,15 @@
 /**
  * @mixmark-io/domino/lib/ChildNode.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_LinkedList } from "./LinkedList.js";
 
-//@ chunk-vwj6ccer.js:42755-44212 cjs-fingerprint
+//@ chunk-w04z664w.js:42755-44212 cjs-fingerprint
 var require_ChildNode = __commonJS(function (cjsExports, cjsModule) {
   var Node = require_Node();
   var LinkedList = require_LinkedList();

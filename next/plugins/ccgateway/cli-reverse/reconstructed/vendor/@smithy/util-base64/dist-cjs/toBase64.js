@@ -1,15 +1,15 @@
 /**
  * @smithy/util-base64/dist-cjs/toBase64.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/util-base64@2.3.0
- * pieces: chunk-wr8v03d0.js (1)
+ * pieces: chunk-2v4fe6xx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 
-//@ chunk-wr8v03d0.js:1939-2388 cjs-fingerprint
+//@ chunk-2v4fe6xx.js:1939-2388 cjs-fingerprint
 var require_toBase64 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

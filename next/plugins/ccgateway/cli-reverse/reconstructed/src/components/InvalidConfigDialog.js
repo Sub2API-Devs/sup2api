@@ -3,9 +3,9 @@
  *
  * 配置文件 JSON 无效时的对话框（退出修复 / 重置）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/InvalidConfigDialog.tsx
- * pieces: chunk-zenpc8qn.js (3)
+ * pieces: chunk-ej15czdh.js (3)
  * attribution: fingerprint 3
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,7 +22,7 @@ import { render } from "../ink/hooks/useTerminalHooks.js";
 import { AppRoot } from "./AppRoot.js";
 import { writeFileSync_DEPRECATED, jsonStringify } from "../utils/slowOperations.js";
 
-//@ chunk-zenpc8qn.js:15109-16165 fingerprint (2.1.88 match: InvalidConfigDialog, 0.687)
+//@ chunk-ej15czdh.js:16285-17341 fingerprint (2.1.88 match: InvalidConfigDialog, 0.687)
 function InvalidConfigDialog(props) {
   let $ = useMemoCache(19);
   let { filePath, errorDescription, onExit, onReset } = props;
@@ -125,9 +125,9 @@ function InvalidConfigDialog(props) {
   } else t8 = $[18];
   return t8;
 }
-//@ chunk-zenpc8qn.js:16165-16178 fingerprint (2.1.88 match: SAFE_ERROR_THEME_NAME, 1)
+//@ chunk-ej15czdh.js:17341-17354 fingerprint (2.1.88 match: SAFE_ERROR_THEME_NAME, 1)
 var SAFE_ERROR_THEME_NAME = "dark";
-//@ chunk-zenpc8qn.js:16178-16505 fingerprint (2.1.88 match: showInvalidConfigDialog, 1)
+//@ chunk-ej15czdh.js:17354-17681 fingerprint (2.1.88 match: showInvalidConfigDialog, 1)
 async function showInvalidConfigDialog({ error }) {
   let renderOptions = {
     ...getBaseRenderOptions(false),

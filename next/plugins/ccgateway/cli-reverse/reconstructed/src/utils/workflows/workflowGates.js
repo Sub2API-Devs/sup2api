@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Workflow 功能开关与规模指南（unrestricted/small/medium/large，托管/组织禁用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hgfr0vx8.js (24)
- * attribution: placement 24
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sm7j62wg.js (25)
+ * attribution: placement 24, layout 1
  */
 import { mergedCommandNames } from "../settings/commandSyncNames.js";
 import { env } from "../env.js";
@@ -19,27 +19,27 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hgfr0vx8.js:478-549 placement
+//@ chunk-sm7j62wg.js:478-549 placement
 /**
  * workflow 规模名列表。
  */
 var WORKFLOW_SIZE_NAMES = ["unrestricted", "small", "medium", "large"];
 var MEDIUM = "medium";
 var SMALL = "small";
-//@ chunk-hgfr0vx8.js:549-593 placement
+//@ chunk-sm7j62wg.js:549-593 placement
 /**
  * 规范化 workflow 规模名。
  */
 function workflowSizeName(size) {
   return WORKFLOW_SIZE_NAMES.find((name) => name === size);
 }
-//@ chunk-hgfr0vx8.js:593-628 placement
+//@ chunk-sm7j62wg.js:593-628 placement
 var WORKFLOW_SIZE_AGENT_HINTS = {
   small: 5,
   medium: 10,
   large: 50,
 };
-//@ chunk-hgfr0vx8.js:628-749 placement
+//@ chunk-sm7j62wg.js:628-749 placement
 /**
  * 规模名附上建议的 agent 数量。
  */
@@ -48,14 +48,14 @@ function sizeWithAgentHint(size) {
     size === "small" || size === "medium" || size === "large" ? WORKFLOW_SIZE_AGENT_HINTS[size] : undefined;
   return isLarge === undefined ? size : `${size} (aim for <${isLarge} agents)`;
 }
-//@ chunk-hgfr0vx8.js:749-818 placement
+//@ chunk-sm7j62wg.js:749-818 placement
 /**
  * 规模说明（默认规模标注 default）。
  */
 function workflowSizeDisplay(size, isDefault) {
   return isDefault && size !== "unrestricted" ? `${size} (default)` : sizeWithAgentHint(size);
 }
-//@ chunk-hgfr0vx8.js:818-892 placement
+//@ chunk-sm7j62wg.js:818-892 placement
 /**
  * 规模对应的建议 agent 数。
  */
@@ -64,19 +64,19 @@ function workflowAgentHint(size) {
     ? WORKFLOW_SIZE_AGENT_HINTS[size]
     : undefined;
 }
-//@ chunk-hgfr0vx8.js:892-984 placement
+//@ chunk-sm7j62wg.js:892-984 placement
 function workflowSizeGuideline(size) {
   if (!(size in WORKFLOW_SIZE_AGENT_HINTS)) return size;
   return `${size} \u2014 keep workflows under ${WORKFLOW_SIZE_AGENT_HINTS[size]} agents`;
 }
-//@ chunk-hgfr0vx8.js:984-1114 placement
+//@ chunk-sm7j62wg.js:984-1114 placement
 /**
  * “这是指南不是硬限制”说明。
  */
 function guidelineNotLimitText() {
   return "This is a guideline, not a hard limit \u2014 follow it unless the user's prompt calls for a different scale.";
 }
-//@ chunk-hgfr0vx8.js:1114-1372 placement
+//@ chunk-sm7j62wg.js:1114-1372 placement
 /**
  * 本会话 workflow 规模指南说明。
  */
@@ -89,7 +89,7 @@ function workflowSizeIntro(size, isDefault) {
     : "";
   return `${intro} ${workflowSizeGuideline(size)}. ${guidelineNotLimitText()}${configHint}`;
 }
-//@ chunk-hgfr0vx8.js:1372-1564 placement
+//@ chunk-sm7j62wg.js:1372-1564 placement
 /**
  * workflow 规模指南变更说明。
  */
@@ -97,21 +97,21 @@ function workflowSizeChangedText(size) {
   if (size === "unrestricted") return "Workflow size is now unrestricted \u2014 no size guideline applies.";
   return `The workflow size guideline for this session changed: ${workflowSizeGuideline(size)}. ${guidelineNotLimitText()}`;
 }
-//@ chunk-hgfr0vx8.js:1564-1630 placement
+//@ chunk-sm7j62wg.js:1564-1630 placement
 /**
  * workflow 是否被设置或环境变量关闭。
  */
 function isWorkflowsConfiguredOff() {
   return isWorkflowsEnvDisabled() || mergedCommandNames()?.settings.disableWorkflows === true;
 }
-//@ chunk-hgfr0vx8.js:1630-1684 placement
+//@ chunk-sm7j62wg.js:1630-1684 placement
 /**
  * 环境变量是否禁用 workflow。
  */
 function isWorkflowsEnvDisabled() {
   return env.CLAUDE_CODE_DISABLE_WORKFLOWS;
 }
-//@ chunk-hgfr0vx8.js:1684-1795 placement
+//@ chunk-sm7j62wg.js:1684-1795 placement
 /**
  * 缓存 workflow 可用性判断。
  */
@@ -123,16 +123,16 @@ class WorkflowAvailabilityCache {
     return this.cached;
   }
 }
-//@ chunk-hgfr0vx8.js:1795-1818 placement
+//@ chunk-sm7j62wg.js:1795-1818 placement
 var workflowAvailabilityByHost; // deferred: uses WorkflowAvailabilityCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hgfr0vx8.js:1795", () => {
+deferInit("chunk-sm7j62wg.js:1795", () => {
   workflowAvailabilityByHost = new HostScoped(() => new WorkflowAvailabilityCache());
 });
-//@ chunk-hgfr0vx8.js:1818-1854 placement
+//@ chunk-sm7j62wg.js:1818-1854 placement
 function isWorkflowsAvailable() {
   return getWorkflowsUnavailableReason() === undefined;
 }
-//@ chunk-hgfr0vx8.js:1854-2313 placement
+//@ chunk-sm7j62wg.js:1854-2313 placement
 function getWorkflowsUnavailableReason() {
   if (!alwaysTrue()) return "unsupported_runtime";
   let unavailable = isWorkflowsConfiguredOff();
@@ -150,32 +150,36 @@ function getWorkflowsUnavailableReason() {
   }
   return setByUserSettings ? "user_setting" : undefined;
 }
-//@ chunk-hgfr0vx8.js:2313-2349 placement
+//@ chunk-sm7j62wg.js:2313-2349 placement
 /**
  * workflow 默认是否开启。
  */
 function workflowsDefaultOn() {
   return workflowAvailability().defaultOn;
 }
-//@ chunk-hgfr0vx8.js:2349-2388 placement (2.1.88 match: isProSubscriber, 1)
+//@ chunk-sm7j62wg.js:2349-2388 placement (2.1.88 match: isProSubscriber, 1)
 function isProSubscriber() {
   return getSubscriptionType() === "pro" ? SMALL : MEDIUM;
 }
-//@ chunk-hgfr0vx8.js:2465-2536 placement
+//@ chunk-sm7j62wg.js:2388-2465 layout
+function workflowsUsableNow() {
+  return isWorkflowsPolicyAllowed() && !env.CLAUDE_CODE_DISABLE_WORKFLOWS && workflowAvailability().available;
+}
+//@ chunk-sm7j62wg.js:2465-2536 placement
 /**
  * 关键词触发 workflow 是否开启（默认开）。
  */
 function isWorkflowKeywordTriggerEnabled() {
   return mergedCommandNames()?.settings.workflowKeywordTriggerEnabled ?? true;
 }
-//@ chunk-hgfr0vx8.js:2536-2580 placement
+//@ chunk-sm7j62wg.js:2536-2580 placement
 /**
  * 组织策略是否允许 workflow。
  */
 function isWorkflowsPolicyAllowed() {
   return isPolicyAllowed("allow_workflows");
 }
-//@ chunk-hgfr0vx8.js:2580-2746 placement
+//@ chunk-sm7j62wg.js:2580-2746 placement
 /**
  * workflow 是否被关闭（设置、环境变量或开关）。
  */
@@ -187,11 +191,11 @@ function isWorkflowsDisabled() {
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_workflows_enabled", true)
   );
 }
-//@ chunk-hgfr0vx8.js:2746-2791 placement
+//@ chunk-sm7j62wg.js:2746-2791 placement
 function workflowAvailability() {
   return workflowAvailabilityByHost.of(getRootSession().host).resolve();
 }
-//@ chunk-hgfr0vx8.js:2791-3130 placement
+//@ chunk-sm7j62wg.js:2791-3130 placement
 /**
  * workflow 是否可用与默认开启（pro 默认关）。
  */
@@ -226,7 +230,7 @@ function resolveWorkflowAvailability() {
     defaultOn: getSubscriptionType() !== "pro",
   };
 }
-//@ chunk-hgfr0vx8.js:3130-3179 placement
+//@ chunk-sm7j62wg.js:3130-3179 placement
 /**
  * workflow 工具 GrowthBook 开关（默认开）。
  */
@@ -236,19 +240,19 @@ function isWorkflowToolEnabled() {
 export {
   workflowSizeChangedText,
   isWorkflowsAvailable,
+  isProSubscriber,
   isWorkflowKeywordTriggerEnabled,
-  workflowAgentHint,
-  workflowSizeDisplay,
-  workflowSizeName,
-  workflowSizeIntro,
   isWorkflowsEnvDisabled,
   isWorkflowsConfiguredOff,
   isWorkflowsPolicyAllowed,
-  isProSubscriber,
-  workflowAvailability,
+  workflowAgentHint,
   isWorkflowsDisabled,
-  workflowsDefaultOn,
-  WORKFLOW_SIZE_NAMES,
+  workflowSizeName,
+  workflowSizeIntro,
+  workflowsUsableNow,
+  workflowSizeDisplay,
   isWorkflowToolEnabled,
   getWorkflowsUnavailableReason,
+  workflowsDefaultOn,
+  WORKFLOW_SIZE_NAMES,
 };

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Builds the reading tree into a runnable Claude Code CLI with Bun 1.4.4, the Bun version the
-// official 2.1.316 build was made with (the official ELF embeds Bun 1.4.4).
+// official 2.1.318 build was made with (the official ELF embeds Bun 1.4.4, revision 424a542a9;
+// 2.1.316 also used 1.4.4). On a version upgrade, set BUN_VERSION to original/reconstruction.json's bunVersion.
 //
 //   node build.mjs [--outdir dist] [--bun <path>] [--any-bun] [--minify] [--sourcemap]
 //   node build.mjs run [--outdir dist] [--bun <path>] -- <claude arguments…>   runs the build with Bun

@@ -3,9 +3,9 @@
  *
  * decode-token 子命令：解码与校验 runner JWT（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xwsbadxw.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rtzgrkpc.js (11)
  * attribution: placement 11
  */
 import { createPublicKey, verify } from "crypto";
@@ -15,7 +15,7 @@ import { getTLSFetchOptions } from "../utils/mtls.js";
 import { withBoundedTimeout } from "../utils/boundedTimeout.js";
 import { runnerApiBaseUrl } from "../services/selfHostedRunner/runnerApi.js";
 
-//@ chunk-xwsbadxw.js:3950-4551 placement
+//@ chunk-rtzgrkpc.js:4314-4915 placement
 function parseDecodeTokenArgs(argv) {
   let options = {
     header: false,
@@ -56,7 +56,7 @@ function parseDecodeTokenArgs(argv) {
   }
   return options;
 }
-//@ chunk-xwsbadxw.js:4551-4866 placement
+//@ chunk-rtzgrkpc.js:4915-5230 placement
 /**
  * 去掉 sk-ant- 前缀后按点拆成 JWT 三段，不是三段时抛错。
  */
@@ -76,7 +76,7 @@ function splitJwt(decodeToken) {
     signatureB64: parts[2],
   };
 }
-//@ chunk-xwsbadxw.js:4866-5240 placement
+//@ chunk-rtzgrkpc.js:5230-5604 placement
 /**
  * 解码 base64url 段并解析为 JSON 对象，字符非法、JSON 无效或不是对象时抛错。
  */
@@ -94,12 +94,12 @@ function decodeJwtJson(segment, label) {
     throw Error(`decode-token: ${label} is not a JSON object`);
   return parsed;
 }
-//@ chunk-xwsbadxw.js:5240-5271 placement
+//@ chunk-rtzgrkpc.js:5604-5635 placement
 var ALG_TO_KEY_TYPE = {
   ES256: "EC",
   RS256: "RSA",
 };
-//@ chunk-xwsbadxw.js:5271-5654 placement
+//@ chunk-rtzgrkpc.js:5635-6018 placement
 /**
  * 校验 JWT 的 exp/nbf（含容差），过期或未生效时抛错。
  */
@@ -113,7 +113,7 @@ function assertTokenTimeValid(payload, nowSec = Math.floor(Date.now() / 1000), s
   if (typeof nbf === "number" && nowSec + skewSec < nbf)
     throw Error(`decode-token: token not valid until ${new Date(nbf * 1000).toISOString()}`);
 }
-//@ chunk-xwsbadxw.js:5654-6897 placement
+//@ chunk-rtzgrkpc.js:6018-7261 placement
 /**
  * decode-token：解析 JWT 头（只支持 ES256/RS256）并可校验签名
  */
@@ -172,10 +172,10 @@ async function decodeRunnerToken(options) {
     kid,
   };
 }
-//@ chunk-xwsbadxw.js:6897-6916 placement
+//@ chunk-rtzgrkpc.js:7261-7280 placement
 var MAX_STDIN_TOKEN_BYTES = 16384;
 var STDIN_TOKEN_TIMEOUT_MS = 5000;
-//@ chunk-xwsbadxw.js:6916-7258 placement
+//@ chunk-rtzgrkpc.js:7280-7622 placement
 /**
  * 从非 TTY 的标准输入读取令牌，超过大小上限时抛错。
  */
@@ -194,7 +194,7 @@ async function readTokenFromStdin(stdin = process.stdin) {
   }
   return Buffer.concat(chunks).toString("utf8");
 }
-//@ chunk-xwsbadxw.js:7258-7611 placement
+//@ chunk-rtzgrkpc.js:7622-7975 placement
 /**
  * 按优先级取令牌：命令行参数、CLAUDE_CODE_SESSION_ACCESS_TOKEN、标准输入（带超时），都没有时抛错。
  */
@@ -210,7 +210,7 @@ async function resolveDecodeToken(token, env, stdin = process.stdin, timeoutMs =
     "decode-token: no token supplied. Pass it as an argument, pipe it on stdin, or set $CLAUDE_CODE_SESSION_ACCESS_TOKEN.",
   );
 }
-//@ chunk-xwsbadxw.js:7611-9832 placement
+//@ chunk-rtzgrkpc.js:7975-10196 placement
 /**
  * self-hosted-runner decode-token 子命令的帮助文本。
  */
@@ -259,7 +259,7 @@ Examples:
   echo "$SOME_TOKEN" | env -u CLAUDE_CODE_SESSION_ACCESS_TOKEN \\
     claude self-hosted-runner decode-token --no-verify
 `;
-//@ chunk-xwsbadxw.js:9832-10602 placement
+//@ chunk-rtzgrkpc.js:10196-10966 placement
 async function verifyRunnerToken(argv) {
   let options;
   try {

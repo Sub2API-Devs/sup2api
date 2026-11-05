@@ -3,9 +3,9 @@
  *
  * 工具调用左侧的状态圆点（进行中闪烁、成功绿、错误红）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ToolUseLoader.tsx
- * pieces: chunk-ah34pb7m.js (4)
+ * pieces: chunk-6gyvmn2t.js (4)
  * attribution: sole-consumer 3, fingerprint 1
  */
 import { init_react_production, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -20,14 +20,14 @@ import { Box, Text } from "../ink/components/Text.js";
 import { BLACK_CIRCLE } from "../constants/figures.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:39964-39968 sole-consumer
+//@ chunk-6gyvmn2t.js:711-715 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:39964", () => {
+deferInit("chunk-6gyvmn2t.js:711", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:39968-39979 sole-consumer
+//@ chunk-6gyvmn2t.js:715-725 sole-consumer
 var BLINK_INTERVAL_MS = 600;
-//@ chunk-ah34pb7m.js:39979-40095 sole-consumer
+//@ chunk-6gyvmn2t.js:725-839 sole-consumer
 function useBlinkingDot(enabled, intervalMs = BLINK_INTERVAL_MS) {
   let terminalFocus = useTerminalFocus();
   let [ref, time] = useAnimationFrame(enabled && terminalFocus ? intervalMs : null);
@@ -35,7 +35,7 @@ function useBlinkingDot(enabled, intervalMs = BLINK_INTERVAL_MS) {
   let isVisible = Math.floor(time / intervalMs) % 2 === 0;
   return [ref, isVisible];
 }
-//@ chunk-ah34pb7m.js:40095-40534 fingerprint (2.1.88 match: ToolUseLoader, 0.573)
+//@ chunk-6gyvmn2t.js:839-1276 fingerprint (2.1.88 match: ToolUseLoader, 0.572)
 function ToolUseLoader({ isError, isNeutral = false, isUnresolved, shouldAnimate }) {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let prefersReducedMotion = usePrefersReducedMotion();

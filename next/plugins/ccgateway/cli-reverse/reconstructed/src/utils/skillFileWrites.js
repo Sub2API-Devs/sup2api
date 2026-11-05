@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能文件写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { basename } from "path";
@@ -19,13 +19,13 @@ import { PROPOSE_SKILLS } from "../tools/ProposeSkillsTool/ProposeSkillsTool.js"
 import { SEND_USER_FILE_TOOL_NAME } from "../tools/SendUserFileTool/prompt.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1367951-1368778 placement
+//@ chunk-5xgkngpb.js:1367457-1368284 placement
 /**
  * 账号技能同步目录的写入提示文本表（保存/提议/发文件/无工具/未保存）。
  */
 var describeSyncedSkillWrite; // deferred: uses SAVE_SKILL_PROMPTS (../skills/saveSkillPrompt.js) of its import cycle while loading; runs once the cycle is complete
 var SYNCED_SKILL_SAVE_HINTS;
-deferInit("chunk-e6aww6q8.js:1367951", () => {
+deferInit("chunk-5xgkngpb.js:1367457", () => {
   describeSyncedSkillWrite =
     " Note: this file is inside the folder that holds synced copies of the user's account skills. A change or new file here is not saved to their account, so do not report it as saved, and the next sync from their account can overwrite or remove it.";
   SYNCED_SKILL_SAVE_HINTS = {
@@ -37,7 +37,7 @@ deferInit("chunk-e6aww6q8.js:1367951", () => {
     report_unsaved: " Say in your reply that this change is not saved to the user's account.",
   };
 });
-//@ chunk-e6aww6q8.js:1368778-1369008 placement
+//@ chunk-5xgkngpb.js:1368284-1368514 placement
 function skillSaveMode(writeContext, filePaths, hasSkillFile) {
   if (!hasSkillFile) return;
   if (
@@ -49,7 +49,7 @@ function skillSaveMode(writeContext, filePaths, hasSkillFile) {
   let mode = skillSaveMode_2(writeContext.tools);
   return mode === "send_file" && skillSavePromptFor(writeContext.tools) === null ? "no_save_tool" : mode;
 }
-//@ chunk-e6aww6q8.js:1369008-1369078 placement
+//@ chunk-5xgkngpb.js:1368514-1368584 placement
 function syncedSkillSaveHint(syncedSkillNext) {
   return syncedSkillNext !== undefined && Object.hasOwn(SYNCED_SKILL_SAVE_HINTS, syncedSkillNext)
     ? describeSyncedSkillWrite + SYNCED_SKILL_SAVE_HINTS[syncedSkillNext]

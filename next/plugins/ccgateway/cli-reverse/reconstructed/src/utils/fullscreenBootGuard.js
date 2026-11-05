@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：全屏模式启动守卫：检测启动失败并回退。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q5g0890f.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8w7gqfr6.js (19)
  * attribution: placement 19
  */
 import { hostname } from "os";
@@ -32,12 +32,12 @@ import { profileCheckpoint } from "./startupProfiler.js";
 import { logError } from "./log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q5g0890f.js:745-781 placement
+//@ chunk-8w7gqfr6.js:745-781 placement
 var DEFAULT_STICKY_STRIKES = 2;
 var DEFAULT_HEALTHY_AFTER_MS = 1e4;
 var BOOT_RECORD_MAX_AGE_MS = 600000;
 var BOOT_RECORD_MAX_AGE_LONG_MS = 2592000000;
-//@ chunk-q5g0890f.js:781-832 placement
+//@ chunk-8w7gqfr6.js:781-832 placement
 function safeHostname() {
   try {
     return hostname();
@@ -45,7 +45,7 @@ function safeHostname() {
     return "unknown";
   }
 }
-//@ chunk-q5g0890f.js:832-1406 placement
+//@ chunk-8w7gqfr6.js:832-1406 placement
 /**
  * 构造启动守卫上下文（时间、版本、主机、平台、本进程 pid）。
  */
@@ -56,10 +56,10 @@ function bootGuardContext(now) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -69,7 +69,7 @@ function bootGuardContext(now) {
     isGone: isProcessProvablyGone,
   };
 }
-//@ chunk-q5g0890f.js:1406-2500 placement
+//@ chunk-8w7gqfr6.js:1406-2500 placement
 /**
  * 根据全局配置中的全屏启动记录判断：清理过期记录、统计本版本未正常启动的次数，决定 none/pending_alive/strike/tripped/disabled。
  */
@@ -155,7 +155,7 @@ function evaluateBootRecords(config, context) {
     decision,
   };
 }
-//@ chunk-q5g0890f.js:2500-2880 placement
+//@ chunk-8w7gqfr6.js:2500-2880 placement
 /**
  * 判断启动记录是否变化（需要保存）。
  */
@@ -172,7 +172,7 @@ function bootRecordsChanged(previous, next) {
     previous.fullscreenAutoDisabled?.at !== next.fullscreenAutoDisabled?.at
   );
 }
-//@ chunk-q5g0890f.js:2880-3992 placement
+//@ chunk-8w7gqfr6.js:2880-3992 placement
 /**
  * 本版本是否因启动失败而自动关闭了全屏，或有启动失败记录。
  */
@@ -184,10 +184,10 @@ function hasFullscreenBootFailures() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION ||
@@ -196,17 +196,17 @@ function hasFullscreenBootFailures() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION &&
       globalConfig.fullscreenBootStrikes.count > 0)
   );
 }
-//@ chunk-q5g0890f.js:3992-4405 placement
+//@ chunk-8w7gqfr6.js:3992-4405 placement
 /**
  * 全屏渲染器启动失败后回退经典渲染器的提示文字（一次与持续两种）。
  */
@@ -214,7 +214,7 @@ var FULLSCREEN_SKIPPED_ONCE_TEXT = `Claude Code's fullscreen renderer didn't fin
 `;
 var FULLSCREEN_SKIPPED_FOREVER_TEXT = `Claude Code's fullscreen renderer has repeatedly failed to start on this machine, so it has been turned off here. Run /tui fullscreen to try it again (this also resets after an update).
 `;
-//@ chunk-q5g0890f.js:4405-5297 placement
+//@ chunk-8w7gqfr6.js:4405-5297 placement
 /**
  * 启动时检查全屏渲染器的启动失败记录：必要时关闭本次全屏并提示（连续失败会持续关闭直到更新或 /tui fullscreen）。
  */
@@ -265,7 +265,7 @@ function checkFullscreenBootGuard(options) {
   } else if (decision.kind !== "none") logForDebugging(`fullscreen boot canary: ${decision.kind}`);
   return decision;
 }
-//@ chunk-q5g0890f.js:5297-5467 placement
+//@ chunk-8w7gqfr6.js:5297-5467 placement
 /**
  * 清除全屏自动关闭与失败计数（/tui fullscreen 使用）。
  */
@@ -282,9 +282,9 @@ function resetFullscreenAutoDisable(storageV5) {
     storageV5,
   );
 }
-//@ chunk-q5g0890f.js:5467-5571 placement
+//@ chunk-8w7gqfr6.js:5467-5571 placement
 var CANARY_DECISIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q5g0890f.js:5467", () => {
+deferInit("chunk-8w7gqfr6.js:5467", () => {
   CANARY_DECISIONS = new Set([
     "settings_on",
     "upsell_trial_on",
@@ -294,7 +294,7 @@ deferInit("chunk-q5g0890f.js:5467", () => {
     "gb_on",
   ]);
 });
-//@ chunk-q5g0890f.js:5571-5909 placement
+//@ chunk-8w7gqfr6.js:5571-5909 placement
 /**
  * 启动金丝雀状态：canary、待写盘记录与退出钩子。
  */
@@ -319,16 +319,16 @@ class BootCanaryState {
     }
   }
 }
-//@ chunk-q5g0890f.js:5909-5932 placement
+//@ chunk-8w7gqfr6.js:5909-5932 placement
 var bootCanaryRegistry; // deferred: uses BootCanaryState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q5g0890f.js:5909", () => {
+deferInit("chunk-8w7gqfr6.js:5909", () => {
   bootCanaryRegistry = new HostScoped(() => new BootCanaryState());
 });
-//@ chunk-q5g0890f.js:5932-5967 placement
+//@ chunk-8w7gqfr6.js:5932-5967 placement
 function currentBootCanaryState() {
   return bootCanaryRegistry.of(getRootSession().host);
 }
-//@ chunk-q5g0890f.js:5967-6275 placement
+//@ chunk-8w7gqfr6.js:5967-6275 placement
 /**
  * 从配置中清除某进程的启动记录（健康时一并清零失败计数）。
  */
@@ -346,7 +346,7 @@ function clearBootRecord(config, pid, clearStrikes) {
     fullscreenBootStrikes: clearStrikes ? undefined : config.fullscreenBootStrikes,
   };
 }
-//@ chunk-q5g0890f.js:6275-6452 placement
+//@ chunk-8w7gqfr6.js:6275-6452 placement
 function installCanaryExitHook(canaryState) {
   if (canaryState.exitHook !== undefined) return;
   canaryState.exitHook = () => {
@@ -357,7 +357,7 @@ function installCanaryExitHook(canaryState) {
   };
   process.on("exit", canaryState.exitHook);
 }
-//@ chunk-q5g0890f.js:6452-8041 placement
+//@ chunk-8w7gqfr6.js:6452-8041 placement
 /**
  * 进入全屏前布下启动金丝雀：在全局配置中记录本进程的待定启动，退出时根据是否健康清理或保留。
  */
@@ -385,10 +385,10 @@ async function armFullscreenBootCanary(options) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -437,7 +437,7 @@ async function armFullscreenBootCanary(options) {
   }
   return canaryState.canary.status === "armed";
 }
-//@ chunk-q5g0890f.js:8041-8279 placement
+//@ chunk-8w7gqfr6.js:8041-8279 placement
 /**
  * 记录全屏首帧时间，并在健康期后把金丝雀标为健康。
  */
@@ -454,7 +454,7 @@ function noteFirstFullscreenFrame(firstFrameAt = Date.now()) {
   );
   canaryState.canary.timer.unref?.();
 }
-//@ chunk-q5g0890f.js:8279-8636 placement
+//@ chunk-8w7gqfr6.js:8279-8636 placement
 /**
  * 结算金丝雀：清理、写回配置，健康时调用回调。
  */
@@ -476,7 +476,7 @@ async function settleBootCanary(canaryState, outcome) {
       logError(error);
     }
 }
-//@ chunk-q5g0890f.js:8636-9146 placement
+//@ chunk-8w7gqfr6.js:8636-9146 placement
 /**
  * 全屏渲染出错时结束金丝雀，并把本进程的启动记录标为 render_error。
  */
@@ -510,10 +510,10 @@ async function recordFullscreenRenderFailure() {
   return recorded;
 }
 export {
+  recordFullscreenRenderFailure,
   checkFullscreenBootGuard,
   hasFullscreenBootFailures,
   resetFullscreenAutoDisable,
   noteFirstFullscreenFrame,
   armFullscreenBootCanary,
-  recordFullscreenRenderFailure,
 };

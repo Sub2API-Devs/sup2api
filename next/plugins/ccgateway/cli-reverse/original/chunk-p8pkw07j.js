@@ -1,0 +1,6 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import"./chunk-k6qypy1d.js";import{VAs}from"./chunk-7kayq7nc.js";import"./chunk-jjgqpk90.js";import"./chunk-tpdzrq49.js";import{ISt}from"./chunk-vt3ahd2r.js";import{createHash as n}from"crypto";function f(d={byId:ISt}){let t=new Map;return{accept({template:r,digest:e,contentBase64:s}){let o=d.byId(r);if(o===void 0)return{ok:!1,kind:"refused",error:"template_refused: unknown_template"};if(!o.digests.some((i)=>i.sha256===e))return{ok:!1,kind:"refused",error:"template_refused: version_mismatch"};if(!VAs.test(s)||s.length%4===1)return{ok:!1,kind:"invalid",error:"invalid_upload: bad_base64"};let a=Buffer.from(s,"base64");if(a.length>o.maxBytes)return{ok:!1,kind:"refused",error:"template_refused: too_large"};if(n("sha256").update(a).digest("hex")!==e)return{ok:!1,kind:"refused",error:"template_refused: digest_mismatch"};if(t.has(e))return{ok:!0,status:"already_stored",template:o,bytes:a.length};return t.set(e,a),{ok:!0,status:"stored",template:o,bytes:a.length}},bytesFor:(r)=>{let e=t.get(r);return e===void 0?void 0:Buffer.from(e)},template:(r)=>d.byId(r),size:()=>t.size,clear:()=>t.clear()}}export{f as createDeviceHookTemplateStore};

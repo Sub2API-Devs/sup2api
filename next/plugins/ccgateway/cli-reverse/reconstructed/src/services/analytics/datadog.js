@@ -3,10 +3,10 @@
  *
  * Datadog 日志上报：端点 us5 http-intake、公开客户端 token、243 个白名单事件、按事件字段白名单、批量 15 秒刷新。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/datadog.ts
- * pieces: chunk-12wyw8h8.js (1), chunk-9cjx5pnm.js (1), chunk-w6mc5gr3.js (26)
- * attribution: fingerprint 4, placement 2, facade-exports 4, layout 15, file-local 1, affinity 1, sole-consumer 1
+ * pieces: chunk-77qzxtqv.js (1), chunk-nw1tz3f4.js (26)
+ * attribution: fingerprint 3, placement 2, facade-exports 4, layout 15, file-local 1, affinity 1, sole-consumer 1
  */
 import { gzipSync } from "zlib";
 import { promises, ADDRCONFIG } from "dns";
@@ -42,7 +42,7 @@ import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/
 import { sanitizeCommonFields } from "./eventSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w6mc5gr3.js:1072-1500 placement
+//@ chunk-nw1tz3f4.js:1072-1500 placement
 function scheduleFlush({ maxBatchSize, getFlushIntervalMs, post }) {
   let queue = [];
   let timer = null;
@@ -89,7 +89,7 @@ function scheduleFlush({ maxBatchSize, getFlushIntervalMs, post }) {
     },
   };
 }
-//@ chunk-w6mc5gr3.js:1500-10735 facade-exports (2.1.88 match: DATADOG_ALLOWED_EVENTS, 0.243)
+//@ chunk-nw1tz3f4.js:1500-12034 facade-exports (2.1.88 match: DATADOG_ALLOWED_EVENTS, 0.215)
 /**
  * Datadog 常量：端点 https://http-intake.logs.us5.datadoghq.com/api/v2/logs、客户端 token pubea5604404508cdd34afb69e6f42a05bc、白名单事件集合与按事件的字段白名单。
  */
@@ -101,7 +101,7 @@ var REQUEST_TIMEOUT_MS;
 var MAX_SHUTDOWN_WAIT_MS;
 var DATADOG_ALLOWED_EVENTS;
 var DATADOG_EVENT_FIELD_ALLOWLIST;
-deferInit("chunk-w6mc5gr3.js:1500", () => {
+deferInit("chunk-nw1tz3f4.js:1500", () => {
   DATADOG_LOGS_ENDPOINT = "https://http-intake.logs.us5.datadoghq.com/api/v2/logs";
   DATADOG_CLIENT_TOKEN = "pubea5604404508cdd34afb69e6f42a05bc";
   DEFAULT_FLUSH_INTERVAL_MS = 15000;
@@ -171,6 +171,18 @@ deferInit("chunk-w6mc5gr3.js:1500", () => {
     "tengu_mcp_degraded",
     "tengu_mcp_drive_file_reference_upload",
     "tengu_mcp_drive_file_reference_availability",
+    "tengu_mcp_gmail_attachment_delivered",
+    "tengu_mcp_gmail_attachment_not_saved",
+    "tengu_mcp_gmail_get_message_not_read",
+    "tengu_mcp_gmail_attachment_not_read",
+    "tengu_mcp_gmail_file_reference_upload",
+    "tengu_mcp_drive_download_kept_in_conversation",
+    "tengu_mcp_drive_download_saved_as_text",
+    "tengu_mcp_drive_download_cut_not_saved",
+    "tengu_mcp_drive_download_save_failed",
+    "tengu_mcp_drive_download_not_read_over_cap",
+    "tengu_mcp_drive_download_not_read_malformed",
+    "tengu_mcp_drive_download_retyped_likely",
     "tengu_mcp_first_tools_list",
     "tengu_mcp_list_changed",
     "tengu_mcp_listen_reopen",
@@ -383,6 +395,31 @@ deferInit("chunk-w6mc5gr3.js:1500", () => {
         "command_cgroup_shared",
         "command_cgroup_shared_left_running_only",
         "left_process_running",
+        "bash_command_kinds",
+        "bash_programs",
+        "bash_test_scope",
+        "bash_test_outcome",
+        "triggered_note_rule",
+        "triggered_note_shown",
+        "tail_input_kept",
+        "tail_input_kept_bytes",
+        "tail_input_given_up",
+        "repeat",
+        "compared_statements",
+        "unchanged_repeats",
+        "changed_since_that_call",
+        "other_agent_repeat",
+        "other_agent_direction",
+        "other_agent_call_running_at_start",
+        "other_agent_same_text_as_earlier_call",
+        "other_agent_seconds_since_that_call",
+        "other_agent_lines_changed_since_that_call",
+        "other_agent_possible_writes_since_that_call",
+        "other_agent_possible_writes_by_running_commands",
+        "other_agent_tests_and_lints_since_that_call",
+        "other_agent_changed_since_that_call",
+        "other_agent_earlier_call_outcome",
+        "other_agent_earlier_result_in_context",
       ]),
     ],
     [
@@ -413,6 +450,11 @@ deferInit("chunk-w6mc5gr3.js:1500", () => {
         "failure_code",
         "disposition",
         "second_leg",
+        "session_interface",
+        "interface_fit",
+        "request_form",
+        "shared_request_refusal",
+        "part",
       ]),
     ],
     ["tengu_remote_tool_restart_adoption", new Set(["journaled", "adoptable", "adopted", "park_adopted"])],
@@ -420,13 +462,13 @@ deferInit("chunk-w6mc5gr3.js:1500", () => {
     ["tengu_remote_tool_restart_adoption_unroutable", new Set(["where", "route_code", "parked_at_restart"])],
   ]);
 });
-//@ chunk-w6mc5gr3.js:10735-10837 layout
+//@ chunk-nw1tz3f4.js:12034-12136 layout
 function filterDatadogEventFields(eventName, fields) {
   let allowlist = DATADOG_EVENT_FIELD_ALLOWLIST.get(eventName);
   if (allowlist === undefined) return fields;
   return pickByHelper(fields, (value, key) => key === "sample_rate" || allowlist.has(key));
 }
-//@ chunk-w6mc5gr3.js:10837-11351 fingerprint (2.1.88 match: TAG_FIELDS, 0.532)
+//@ chunk-nw1tz3f4.js:12136-12650 fingerprint (2.1.88 match: TAG_FIELDS, 0.531)
 var TAG_FIELDS = [
   "arch",
   "attach_cold",
@@ -468,18 +510,18 @@ var TAG_FIELDS = [
   "versionBase",
   ...[],
 ];
-//@ chunk-w6mc5gr3.js:11351-11419 file-local
+//@ chunk-nw1tz3f4.js:12650-12718 file-local
 function camelToSnakeCase(str) {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
-//@ chunk-w6mc5gr3.js:11419-12190 layout
+//@ chunk-nw1tz3f4.js:12718-13529 layout
 /**
  * Datadog 允许的哈希/名称字段（及其 snake_case 集合）。
  */
 var HASHED_FIELD_NAMES; // deferred: uses camelToSnakeCase of its import cycle while loading; runs once the cycle is complete
 var HASHED_FIELD_NAMES_SNAKE;
 var DROPPED_FIELD_NAMES;
-deferInit("chunk-w6mc5gr3.js:11419", () => {
+deferInit("chunk-nw1tz3f4.js:12718", () => {
   HASHED_FIELD_NAMES = [
     "mcpServerName",
     "mcpServerBaseUrl",
@@ -517,19 +559,19 @@ deferInit("chunk-w6mc5gr3.js:11419", () => {
     "item_name_hash",
     "pluginHookCountsByHash",
     "attachmentTypesSeen",
-    ...[],
+    "replMode",
   ];
   HASHED_FIELD_NAMES_SNAKE = new Set(HASHED_FIELD_NAMES.map(camelToSnakeCase));
-  DROPPED_FIELD_NAMES = new Set([]);
+  DROPPED_FIELD_NAMES = new Set(["is_repl_mode", "repl_mode_decision"]);
 });
-//@ chunk-w6mc5gr3.js:12190-12281 layout
+//@ chunk-nw1tz3f4.js:13529-13620 layout
 function dropHashedFields(allData, toSnakeCase) {
   for (let key of Object.keys(allData)) {
     let snakeKey = toSnakeCase(key);
     if (HASHED_FIELD_NAMES_SNAKE.has(snakeKey) || DROPPED_FIELD_NAMES.has(snakeKey)) delete allData[key];
   }
 }
-//@ chunk-w6mc5gr3.js:12281-12370 placement (2.1.88 match: sanitizeToolName, 1)
+//@ chunk-nw1tz3f4.js:13620-13709 placement (2.1.88 match: sanitizeToolName, 1)
 /**
  * 遥测用工具名：MCP 工具一律 mcp。旧版名 sanitizeToolName 尚可，但归属应在 services/analytics。
  */
@@ -538,7 +580,7 @@ function toolNameForAnalytics(name, knownNames) {
   if (knownNames && !isMcpFamilyToolName(name)) return "mcp";
   return name;
 }
-//@ chunk-w6mc5gr3.js:12370-12592 layout
+//@ chunk-nw1tz3f4.js:13709-13931 layout
 /**
  * 需要按服务器限速转发的 MCP 事件。
  */
@@ -551,18 +593,18 @@ var MCP_RATE_LIMITED_EVENTS = [
   "tengu_mcp_listen_reopen",
   "tengu_mcp_message_stream_outcome",
 ];
-//@ chunk-w6mc5gr3.js:12592-12629 layout
+//@ chunk-nw1tz3f4.js:13931-13968 layout
 function isMcpRateLimitedEvent(eventName) {
   return MCP_RATE_LIMITED_EVENTS.includes(eventName);
 }
-//@ chunk-w6mc5gr3.js:12629-12655 layout
+//@ chunk-nw1tz3f4.js:13968-13994 layout
 /**
  * 按（事件, 服务器）的限速窗口：60 s 内最多放行 10 条，最多记 200 个窗口。
  */
 var RATE_LIMIT_PER_WINDOW = 10;
 var RATE_LIMIT_WINDOW_MS = 60000;
 var MAX_RATE_WINDOWS = 200;
-//@ chunk-w6mc5gr3.js:12655-13156 layout
+//@ chunk-nw1tz3f4.js:13994-14495 layout
 /**
  * 按（事件, 服务器）滑动窗口限速，返回是否放行与上次放行后丢弃数。
  */
@@ -600,7 +642,7 @@ function admitRateLimited(peerRateWindows, eventName, serverKey, nowMs) {
     droppedSinceLastForward,
   };
 }
-//@ chunk-w6mc5gr3.js:13156-14504 layout
+//@ chunk-nw1tz3f4.js:14495-15843 layout
 /**
  * 发送 Datadog 日志（可 gzip）；代理拒绝或 DNS 无解析时暂停一段时间，gzip 被拒时改为不压缩重发。
  */
@@ -668,10 +710,10 @@ async function postDatadogLogs(logs, options) {
   }
   return true;
 }
-//@ chunk-w6mc5gr3.js:14504-14522 layout
+//@ chunk-nw1tz3f4.js:15843-15861 layout
 var USER_BUCKET_COUNT = 30;
 var MAX_SNAKE_CASE_CACHE = 2048;
-//@ chunk-w6mc5gr3.js:14522-16346 layout
+//@ chunk-nw1tz3f4.js:15861-17685 layout
 /**
  * Datadog 发送状态：批量发送器、出口拒绝暂停、gzip 协商、用户分桶、键名缓存等。
  */
@@ -780,29 +822,29 @@ class DatadogState {
     return cached;
   };
 }
-//@ chunk-w6mc5gr3.js:16346-16369 layout
+//@ chunk-nw1tz3f4.js:17685-17708 layout
 var datadogStateSlot; // deferred: uses DatadogState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-w6mc5gr3.js:16346", () => {
+deferInit("chunk-nw1tz3f4.js:17685", () => {
   datadogStateSlot = new HostScoped(() => new DatadogState());
 });
-//@ chunk-w6mc5gr3.js:16369-16468 facade-exports
+//@ chunk-nw1tz3f4.js:17708-17807 facade-exports
 function resetDatadogInit() {
   let state = datadogStateSlot.of(getRootSession().host);
   state.initializeDatadog.cache?.clear?.();
   state.datadogInitialized = null;
 }
-//@ chunk-w6mc5gr3.js:16468-16528 facade-exports
+//@ chunk-nw1tz3f4.js:17807-17867 facade-exports
 async function shutdownDatadog() {
   await datadogStateSlot.of(getRootSession().host).sender.shutdown();
 }
-//@ chunk-w6mc5gr3.js:16528-16632 layout
+//@ chunk-nw1tz3f4.js:17867-17971 layout
 /**
  * 去掉开发版本号中的 .t/sha 构建后缀。
  */
 function stripBuildSuffix(version) {
   return version.replace(/^(\d+\.\d+\.\d+-(?:dev|engine|aot)\.\d{8})\.t\d+\.sha[a-f0-9]+$/, "$1");
 }
-//@ chunk-w6mc5gr3.js:16632-16860 layout
+//@ chunk-nw1tz3f4.js:17971-18199 layout
 /**
  * 模型名脱敏：非 Claude 模型为 null，已知模型取规范名，其余为 other。
  */
@@ -816,7 +858,7 @@ function sanitizeModelName(model, { isTrustedAnt, onAnthropicHost }) {
   });
   return canonicalName in MODEL_COSTS ? canonicalName : "other";
 }
-//@ chunk-w6mc5gr3.js:16860-17167 layout
+//@ chunk-nw1tz3f4.js:18199-18506 layout
 /**
  * 按 tengu_agile_glade 为 tengu_feature_ok 事件抽样（可能丢弃）。
  */
@@ -838,7 +880,7 @@ function applyFeatureSampling(eventName, properties) {
     sample_rate: rateTable,
   };
 }
-//@ chunk-w6mc5gr3.js:17167-18699 facade-exports (2.1.88 match: trackDatadogEvent, 0.503)
+//@ chunk-nw1tz3f4.js:18506-20038 facade-exports (2.1.88 match: trackDatadogEvent, 0.503)
 /**
  * 发送 Datadog 日志：仅第一方 API、事件在 243 个白名单内、未被出口拒绝暂停；合并事件元数据与 envContext，字段转 snake_case、工具名和模型名脱敏，ddtags 取 TAG_FIELDS，service=claude-code env=external，进入批量发送器（默认 15 秒刷新）。
  */
@@ -929,18 +971,18 @@ async function trackDatadogEvent(eventName, properties) {
     logError(error);
   }
 }
-//@ chunk-w6mc5gr3.js:18699-18728 layout
+//@ chunk-nw1tz3f4.js:20038-20067 layout
 function getDatadogShutdownTimeoutMs() {
   return getFlushIntervalMs() + 5000;
 }
-//@ chunk-w6mc5gr3.js:18728-18791 fingerprint (2.1.88 match: getFlushIntervalMs, 1)
+//@ chunk-nw1tz3f4.js:20067-20130 fingerprint (2.1.88 match: getFlushIntervalMs, 1)
 /**
  * Datadog 批量刷新间隔：CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS 或 15000。
  */
 function getFlushIntervalMs() {
   return env.CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS || DEFAULT_FLUSH_INTERVAL_MS;
 }
-//@ chunk-w6mc5gr3.js:18791-18926 affinity
+//@ chunk-nw1tz3f4.js:20130-20265 affinity
 /**
  * 二次解析 Datadog 主机名，ENOTFOUND 时为 true。
  */
@@ -955,27 +997,22 @@ async function isLogsHostUnresolvable() {
     return getErrnoCode(error) === "ENOTFOUND";
   }
 }
-//@ chunk-w6mc5gr3.js:18926-18967 sole-consumer
+//@ chunk-nw1tz3f4.js:20265-20306 sole-consumer
 function canReachDatadog() {
   return getUsableProxyUrl() === undefined || shouldBypassProxy(DATADOG_LOGS_ENDPOINT);
 }
-//@ chunk-9cjx5pnm.js:19928-19986 fingerprint (2.1.88 match: flushLogs, 0.586)
+//@ chunk-77qzxtqv.js:19996-20054 fingerprint (2.1.88 match: flushLogs, 0.586)
 var flushLogs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9cjx5pnm.js:19928", () => {
+deferInit("chunk-77qzxtqv.js:19996", () => {
   flushLogs = Object.freeze({
     "Content-Type": "application/json",
   });
 });
-//@ chunk-12wyw8h8.js:8193-8261 fingerprint (2.1.88 match: getUserBucket, 1)
-function getUserBucket(userId) {
-  return createHash("sha256").update(jsonStringify(userId), "utf8").digest("hex");
-}
 export {
-  getUserBucket,
-  flushLogs,
-  shutdownDatadog,
   DATADOG_CLIENT_TOKEN,
   scheduleFlush,
+  shutdownDatadog,
+  flushLogs,
   trackDatadogEvent,
   resetDatadogInit,
 };

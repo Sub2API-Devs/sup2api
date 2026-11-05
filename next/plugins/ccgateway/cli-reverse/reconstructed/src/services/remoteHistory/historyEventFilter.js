@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程会话历史事件过滤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pmgfyvx7.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bwxq9hmx.js (15)
  * attribution: placement 15
  */
 import {
@@ -58,7 +58,7 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { createSystemMessage } from "../../utils/messages.js";
 import { getRemoteSessionUrl } from "../../constants/product.js";
 
-//@ chunk-pmgfyvx7.js:16650-17009 placement
+//@ chunk-bwxq9hmx.js:17826-18185 placement
 function parseHistoryLine(body) {
   let parsed;
   try {
@@ -86,7 +86,7 @@ function parseHistoryLine(body) {
     hasMore: nextCursor !== null,
   };
 }
-//@ chunk-pmgfyvx7.js:17009-19143 placement
+//@ chunk-bwxq9hmx.js:18185-20319 placement
 /**
  * 过滤远程会话历史事件：去掉控制帧与重复、配对工具结果、识别初始化帧。
  */
@@ -233,7 +233,7 @@ function filterHistoryEvents(historyLine) {
     ...toolEvents,
   };
 }
-//@ chunk-pmgfyvx7.js:19143-20129 placement
+//@ chunk-bwxq9hmx.js:20319-21305 placement
 function indexControlEvents(events) {
   let pending = new Map();
   for (let idx = 0; idx < events.length; idx++) {
@@ -292,7 +292,7 @@ function indexControlEvents(events) {
   for (let { at } of pending.values()) cutIndex = Math.min(cutIndex, at);
   return events.slice(0, cutIndex);
 }
-//@ chunk-pmgfyvx7.js:20129-20224 placement
+//@ chunk-bwxq9hmx.js:21305-21400 placement
 var historyControlMessageSchema = DoctorLazy(() =>
   discriminatedUnion("type", [
     SDKControlCancelRequestMessageSchema(),
@@ -304,7 +304,7 @@ var historyControlMessageSchema = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-pmgfyvx7.js:20224-20873 placement
+//@ chunk-bwxq9hmx.js:21400-22049 placement
 function indexToolEvents(events) {
   let openRequests = new Map();
   let answeredIds = new Set();
@@ -341,7 +341,7 @@ function indexToolEvents(events) {
     askersPastATurn: [...askersPastATurn],
   };
 }
-//@ chunk-pmgfyvx7.js:20873-21055 placement
+//@ chunk-bwxq9hmx.js:22049-22231 placement
 function readWorkerPermissionRequest(event) {
   let payload = event.payload;
   if (event.source !== "worker" || payload.type !== "control_request") return;
@@ -353,7 +353,7 @@ function readWorkerPermissionRequest(event) {
     return;
   }
 }
-//@ chunk-pmgfyvx7.js:21055-21224 placement
+//@ chunk-bwxq9hmx.js:22231-22400 placement
 function collectReplyChannelToolUseIds(payload, ids) {
   let prefetchState = PREFETCH_STATE;
   if (prefetchState === null || payload.type !== "assistant") return;
@@ -361,7 +361,7 @@ function collectReplyChannelToolUseIds(payload, ids) {
     if (block.type === "tool_use" && prefetchState.replyChannelBlockKind(block) !== undefined)
       ids.add(block.id);
 }
-//@ chunk-pmgfyvx7.js:21224-21511 placement
+//@ chunk-bwxq9hmx.js:22400-22687 placement
 function isInitForCurrentSession(frame) {
   let prefetchState = PREFETCH_STATE;
   if (prefetchState === null) return false;
@@ -378,7 +378,7 @@ function isInitForCurrentSession(frame) {
     frame.message.content.some((block) => prefetchState.replyChannelBlockKind(block) !== undefined)
   );
 }
-//@ chunk-pmgfyvx7.js:21511-21686 placement
+//@ chunk-bwxq9hmx.js:22687-22862 placement
 function isConversationResetEvent(event) {
   if (
     event.payload.type !== "conversation_reset" ||
@@ -388,11 +388,11 @@ function isConversationResetEvent(event) {
   let newConversationId = event.payload.new_conversation_id;
   return typeof newConversationId === "string" && newConversationId !== "";
 }
-//@ chunk-pmgfyvx7.js:21686-21717 placement
+//@ chunk-bwxq9hmx.js:22862-22893 placement
 function hasBackgroundEvents(events) {
   return events.some(isConversationResetEvent);
 }
-//@ chunk-pmgfyvx7.js:21717-21866 placement
+//@ chunk-bwxq9hmx.js:22893-23042 placement
 function isWorkerBackgroundEvent(event) {
   return (
     event.source === "worker" &&
@@ -401,7 +401,7 @@ function isWorkerBackgroundEvent(event) {
     Array.isArray(event.payload.tasks)
   );
 }
-//@ chunk-pmgfyvx7.js:21866-22071 placement
+//@ chunk-bwxq9hmx.js:23042-23247 placement
 function isDisplayableHistoryEvent(event, checkProjectPerson) {
   if (event.source === undefined || event.source === "worker") return true;
   if (event.payload.type === "user")
@@ -413,7 +413,7 @@ function isDisplayableHistoryEvent(event, checkProjectPerson) {
     );
   return FORWARDED_MESSAGE_TYPES.has(event.payload.type);
 }
-//@ chunk-pmgfyvx7.js:22071-22385 placement
+//@ chunk-bwxq9hmx.js:23247-23561 placement
 function logPrefetchResult(result) {
   if (result === null) logFeatureSad("remote_history_prefetch", "miss");
   else if (result.maxSequenceNum === 0) logFeatureSad("remote_history_prefetch", "no_seq");
@@ -422,13 +422,13 @@ function logPrefetchResult(result) {
   else if (!result.complete) logFeatureSad("remote_history_prefetch", "incomplete");
   else logFeatureOk("remote_history_prefetch");
 }
-//@ chunk-pmgfyvx7.js:22385-22505 placement
+//@ chunk-bwxq9hmx.js:23561-23681 placement
 function nonEmptyHistoryPage(result) {
   if (result === null || result.maxSequenceNum === 0) return null;
   if (!result.complete && result.messages.length === 0) return null;
   return result;
 }
-//@ chunk-pmgfyvx7.js:22505-22622 placement
+//@ chunk-bwxq9hmx.js:23681-23798 placement
 function recentMessagesNotice(session) {
   return createSystemMessage(
     `Showing recent messages \xB7 full history at ${getRemoteSessionUrl(session, undefined, {

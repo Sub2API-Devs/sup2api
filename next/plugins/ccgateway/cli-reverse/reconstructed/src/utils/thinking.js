@@ -3,12 +3,12 @@
  *
  * 扩展思考配置：模型是否支持 thinking/adaptive thinking/拒绝关闭思考，请求里 thinking 的形态（adaptive 或 enabled+budget_tokens、display），ultrathink 关键字与彩虹配色。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/thinking.ts
- * pieces: chunk-aepeg2w5.js (21)
+ * pieces: chunk-exfmq47h.js (21)
  * attribution: placement 6, fingerprint 3, file-local 4, layout 8
  */
-import { getInitialSettings_2, getSettingsWithErrors_2 } from "./settings/settings.js";
+import { getInitialSettings, getSettingsWithErrors } from "./settings/settings.js";
 import { env } from "./env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { getCapabilityOverrideCached } from "./model/modelSupportOverrides.js";
@@ -20,14 +20,14 @@ import { renderModelName } from "./model/modelDisplay.js";
 import { withCatalogSuppressed } from "./model/modelCatalog/servedCatalog.js";
 import { parseIntLoose } from "./envUtils.js";
 
-//@ chunk-aepeg2w5.js:476786-476839 placement
+//@ chunk-exfmq47h.js:488184-488237 placement
 /**
  * 是否默认显示思考摘要。
  */
 function showThinkingSummaries() {
-  return getInitialSettings_2().showThinkingSummaries ?? false;
+  return getInitialSettings().showThinkingSummaries ?? false;
 }
-//@ chunk-aepeg2w5.js:476839-477013 placement
+//@ chunk-exfmq47h.js:488237-488411 placement
 /**
  * 取思考显示方式的覆盖值：命令行参数优先，其次 showThinkingSummaries 设置。
  */
@@ -37,14 +37,14 @@ function getThinkingDisplayOverride(flag) {
       display: flag,
       source: "flag",
     };
-  let showThinkingSummaries = getInitialSettings_2().showThinkingSummaries;
+  let showThinkingSummaries = getInitialSettings().showThinkingSummaries;
   if (showThinkingSummaries === undefined) return;
   return {
     display: showThinkingSummaries ? "summarized" : "omitted",
     source: "setting",
   };
 }
-//@ chunk-aepeg2w5.js:477013-477221 placement
+//@ chunk-exfmq47h.js:488411-488619 placement
 /**
  * 决定思考内容的显示方式：显式设置优先；交互模式按开关显示摘要；非交互且输出格式满足条件时省略。
  */
@@ -61,14 +61,14 @@ function resolveThinkingDisplay({ explicitDisplay, isNonInteractive, outputForma
     return "omitted";
   return;
 }
-//@ chunk-aepeg2w5.js:477221-477320 placement
+//@ chunk-exfmq47h.js:488619-488718 placement
 /**
  * 非交互且输出为 text/非 verbose json 时抑制思考显示。
  */
 function suppressesThinkingDisplay({ isNonInteractive, outputFormat, verbose }) {
   return isNonInteractive && (outputFormat === "text" || (outputFormat === "json" && !verbose));
 }
-//@ chunk-aepeg2w5.js:477320-477651 placement
+//@ chunk-exfmq47h.js:488718-489049 placement
 /**
  * 解析思考配置（禁用、自适应）。
  */
@@ -109,7 +109,7 @@ function resolveThinkingConfig(
     displayExplicit: true,
   };
 }
-//@ chunk-aepeg2w5.js:477651-477934 placement
+//@ chunk-exfmq47h.js:489049-489332 placement
 /**
  * 非交互会话中，除非使用精确工具、转发子代理文本或异步（非 Cowork 聊天）情况，把子代理的思考显示改为 omitted（远程 worker 时即使显式设置也覆盖）。
  */
@@ -140,7 +140,7 @@ function applySubagentThinkingDisplay(
     displayExplicit: false,
   };
 }
-//@ chunk-aepeg2w5.js:477934-478018 fingerprint (2.1.88 match: isUltrathinkEnabled, 0.795)
+//@ chunk-exfmq47h.js:489332-489416 fingerprint (2.1.88 match: isUltrathinkEnabled, 0.795)
 /**
  * ultrathink 关键字是否生效：未设 CLAUDE_CODE_DISABLE_ULTRATHINK 且 tengu_turtle_carbon（默认开）。
  */
@@ -149,14 +149,14 @@ function isUltrathinkEnabled() {
     !env.CLAUDE_CODE_DISABLE_ULTRATHINK && getFeatureValue_CACHED_MAY_BE_STALE("tengu_turtle_carbon", true)
   );
 }
-//@ chunk-aepeg2w5.js:478018-478066 file-local
+//@ chunk-exfmq47h.js:489416-489464 file-local
 /**
  * 文本是否含单词 ultrathink（不区分大小写）。
  */
 function hasUltrathinkKeyword(text) {
   return /\bultrathink\b/i.test(text);
 }
-//@ chunk-aepeg2w5.js:478066-478362 fingerprint (2.1.88 match: RAINBOW_COLORS, 0.667)
+//@ chunk-exfmq47h.js:489464-489760 fingerprint (2.1.88 match: RAINBOW_COLORS, 0.667)
 /**
  * ultrathink 高亮用的七色主题键；同句 i$ 为对应 shimmer 版本。
  */
@@ -178,7 +178,7 @@ var RAINBOW_SHIMMER_COLORS = [
   "rainbow_indigo_shimmer",
   "rainbow_violet_shimmer",
 ];
-//@ chunk-aepeg2w5.js:478362-478417 file-local
+//@ chunk-exfmq47h.js:489760-489815 file-local
 /**
  * 按下标循环取彩虹色（可选 shimmer）。
  */
@@ -186,7 +186,7 @@ function getRainbowColor(charIndex, shimmer = false) {
   let colors = shimmer ? RAINBOW_SHIMMER_COLORS : RAINBOW_COLORS;
   return colors[charIndex % colors.length];
 }
-//@ chunk-aepeg2w5.js:478417-478515 file-local
+//@ chunk-exfmq47h.js:489815-489913 file-local
 /**
  * 模型是否支持 thinking：3P 能力覆盖优先，否则非 claude-3- 即支持。
  */
@@ -195,7 +195,7 @@ function modelSupportsThinking(model) {
   if (supported3P !== undefined) return supported3P;
   return !getCanonicalName(model).includes("claude-3-");
 }
-//@ chunk-aepeg2w5.js:478515-478942 layout
+//@ chunk-exfmq47h.js:489913-490340 layout
 /**
  * 模型是否拒绝 thinking.type=disabled：已知旧模型为 false，否则看 catalog 能力 rejects_disabled_thinking，再否则第一方类提供商为真。
  */
@@ -221,7 +221,7 @@ function modelRejectsDisabledThinking(model) {
   if (canonicalName_2 !== undefined) return canonicalName_2;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-aepeg2w5.js:478942-479018 layout
+//@ chunk-exfmq47h.js:490340-490416 layout
 /**
  * 能力 rejects_disabled_thinking 明确为真且模型拒绝关闭思考。
  */
@@ -231,7 +231,7 @@ function isThinkingAlwaysOn(model) {
     modelRejectsDisabledThinking(model)
   );
 }
-//@ chunk-aepeg2w5.js:479018-479124 layout
+//@ chunk-exfmq47h.js:490416-490522 layout
 /**
  * "Thinking can't be turned off for <模型>"（总是开思考的模型）。
  */
@@ -245,7 +245,7 @@ function getThinkingCannotBeDisabledMessage(model) {
     ),
   )}`;
 }
-//@ chunk-aepeg2w5.js:479124-479302 layout
+//@ chunk-exfmq47h.js:490522-490700 layout
 /**
  * 模型思考常开时，把非机械关闭的 disabled 配置改成 adaptive（display 沿用或按 showThinkingSummaries 设为 summarized）。
  */
@@ -258,14 +258,14 @@ function upgradeDisabledThinkingForModel(thinkingConfig, thinkingAlwaysOn) {
     displayExplicit: thinkingConfig.displayExplicit,
   };
 }
-//@ chunk-aepeg2w5.js:479302-479342 layout
+//@ chunk-exfmq47h.js:490700-490740 layout
 /**
  * 设置未显式关闭或模型思考常开。
  */
 function isThinkingEffectivelyEnabled(model, thinkingEnabled) {
   return thinkingEnabled !== false || isThinkingAlwaysOn(model);
 }
-//@ chunk-aepeg2w5.js:479342-479400 layout
+//@ chunk-exfmq47h.js:490740-490798 layout
 /**
  * 辅助查询的思考设置：模型拒绝关闭思考时 [undefined, 2048]，否则 [false, 0]。
  */
@@ -273,14 +273,14 @@ function getSideQueryThinkingSettings(model) {
   if (modelRejectsDisabledThinking(model)) return [undefined, 2048];
   return [false, 0];
 }
-//@ chunk-aepeg2w5.js:479400-479437 layout
+//@ chunk-exfmq47h.js:490798-490835 layout
 /**
  * 同上，但暂停服务端目录查询（JN）。
  */
 function getSideQueryThinkingSettingsOffline(model) {
   return withCatalogSuppressed(() => getSideQueryThinkingSettings(model));
 }
-//@ chunk-aepeg2w5.js:479437-479664 file-local
+//@ chunk-exfmq47h.js:490835-491062 file-local
 /**
  * thinking 类型：运行时覆盖优先；模型支持 adaptive（且未用 CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING 关掉 4.6）为 adaptive，否则 enabled（带 budget_tokens）。
  */
@@ -291,7 +291,7 @@ function modelSupportsAdaptiveThinking({ runtimeOverride, resolvedModel, canonic
     (canonicalModel.includes("opus-4-6") || canonicalModel.includes("sonnet-4-6"));
   return modelSupportsAdaptiveThinkingByCatalog(resolvedModel) && !opts ? "adaptive" : "enabled";
 }
-//@ chunk-aepeg2w5.js:479664-480035 layout
+//@ chunk-exfmq47h.js:491062-491433 layout
 /**
  * 能力覆盖 → 旧模型黑名单 → catalog 能力 adaptive_thinking → mythos-5 → 第一方类提供商默认。
  */
@@ -314,35 +314,35 @@ function modelSupportsAdaptiveThinkingByCatalog(model) {
   if (canonicalName === "claude-mythos-5") return true;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-aepeg2w5.js:480035-480243 fingerprint (2.1.88 match: shouldEnableThinkingByDefault, 0.592)
+//@ chunk-exfmq47h.js:491433-491641 fingerprint (2.1.88 match: shouldEnableThinkingByDefault, 0.592)
 /**
  * 默认关闭思考的原因：MAX_THINKING_TOKENS<=0 或 settings.alwaysThinkingEnabled=false；否则 null（默认开）。
  */
 function shouldEnableThinkingByDefault() {
   if (process.env.MAX_THINKING_TOKENS)
     return parseIntLoose(process.env.MAX_THINKING_TOKENS) > 0 ? null : "MAX_THINKING_TOKENS";
-  let { settings } = getSettingsWithErrors_2();
+  let { settings } = getSettingsWithErrors();
   return settings.alwaysThinkingEnabled === false ? "alwaysThinkingEnabled" : null;
 }
 export {
-  modelSupportsAdaptiveThinkingByCatalog,
-  isThinkingAlwaysOn,
-  applySubagentThinkingDisplay,
-  getThinkingCannotBeDisabledMessage,
-  getRainbowColor,
-  isUltrathinkEnabled,
-  isThinkingEffectivelyEnabled,
-  resolveThinkingConfig,
-  getThinkingDisplayOverride,
-  getSideQueryThinkingSettings,
   showThinkingSummaries,
   upgradeDisabledThinkingForModel,
+  isThinkingAlwaysOn,
   modelRejectsDisabledThinking,
   modelSupportsAdaptiveThinking,
+  modelSupportsAdaptiveThinkingByCatalog,
+  modelSupportsThinking,
+  isUltrathinkEnabled,
+  hasUltrathinkKeyword,
+  shouldEnableThinkingByDefault,
+  getSideQueryThinkingSettingsOffline,
+  getSideQueryThinkingSettings,
+  isThinkingEffectivelyEnabled,
+  getRainbowColor,
+  getThinkingDisplayOverride,
   resolveThinkingDisplay,
   suppressesThinkingDisplay,
-  getSideQueryThinkingSettingsOffline,
-  shouldEnableThinkingByDefault,
-  hasUltrathinkKeyword,
-  modelSupportsThinking,
+  getThinkingCannotBeDisabledMessage,
+  resolveThinkingConfig,
+  applySubagentThinkingDisplay,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：不适合在沙箱中运行的命令与参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (63)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (63)
  * attribution: placement 61, affinity 2
  */
 import {
@@ -47,7 +47,7 @@ import {
 } from "../../utils/git.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1244293-1244648 placement
+//@ chunk-5xgkngpb.js:1242095-1242450 placement
 /**
  * 沙箱排除判断用常量：shell 元字符、Unicode 空白、需拒绝的字符、@变量名、空白分隔与前导词正则、可信的 env 路径。
  */
@@ -59,7 +59,7 @@ var AT_VARIABLE_RE;
 var BLANK_RE;
 var LEADING_WORD_RE;
 var TRUSTED_ENV_PATHS;
-deferInit("chunk-e6aww6q8.js:1244293", () => {
+deferInit("chunk-5xgkngpb.js:1242095", () => {
   SHELL_META_RE = /[;|&`$(){}<>#\n\r]/;
   UNICODE_SPACE_RE_2 = new RegExp(`\x85|${UNICODE_WHITESPACE_RE.source}`);
   UNSAFE_ARG_CHARS_RE = new RegExp(
@@ -73,7 +73,7 @@ deferInit("chunk-e6aww6q8.js:1244293", () => {
   LEADING_WORD_RE = /^([^ \t]*)[ \t]+/;
   TRUSTED_ENV_PATHS = new Set(["env", "/bin/env", "/usr/bin/env"]);
 });
-//@ chunk-e6aww6q8.js:1244648-1244836 placement
+//@ chunk-5xgkngpb.js:1242450-1242638 placement
 function normalizeEnvPath(path) {
   if (path.startsWith("//")) return path;
   let isAbsolutePath = path.startsWith("/");
@@ -84,7 +84,7 @@ function normalizeEnvPath(path) {
   if (isAbsolutePath) return replaced;
   return path.includes("/") ? path : replaced;
 }
-//@ chunk-e6aww6q8.js:1244836-1245040 placement
+//@ chunk-5xgkngpb.js:1242638-1242842 placement
 /**
  * 分类 env 包装命令：不是 env、可信路径下的 env 或不可信的 env。
  */
@@ -95,7 +95,7 @@ function classifyEnvWrapper(wrapperText) {
   if (UNTRUSTED_ENV_ALIASES.has(lower.replace(/[. ]+$/, ""))) return "untrusted";
   return TRUSTED_ENV_PATHS.has(normalizeEnvPath(firstWord)) ? "trusted" : "untrusted";
 }
-//@ chunk-e6aww6q8.js:1245040-1246251 placement
+//@ chunk-5xgkngpb.js:1242842-1244053 placement
 /**
  * 各程序“会取走下一个词作为值”的选项表（kubectl/docker/aws/git/shell/python 等）。
  */
@@ -157,17 +157,17 @@ var PROGRAM_VALUE_OPTIONS = {
     "--experimental-loader",
   ],
 };
-//@ chunk-e6aww6q8.js:1246251-1246331 placement
+//@ chunk-5xgkngpb.js:1244053-1244133 placement
 /**
  * 取命令文本的第一个词（去首尾空白后按空白切开）。
  */
 function firstToken(text) {
   return text.replace(/^[ \t]+|[ \t]+$/g, "").split(/[ \t]+/, 1)[0] ?? "";
 }
-//@ chunk-e6aww6q8.js:1246331-1246615 placement
+//@ chunk-5xgkngpb.js:1244133-1244417 placement
 var PROGRAM_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var UNTRUSTED_ENV_ALIASES;
-deferInit("chunk-e6aww6q8.js:1246331", () => {
+deferInit("chunk-5xgkngpb.js:1244133", () => {
   PROGRAM_ALIASES = {
     nodejs: "node",
     genv: "env",
@@ -188,7 +188,7 @@ deferInit("chunk-e6aww6q8.js:1246331", () => {
   };
   UNTRUSTED_ENV_ALIASES = new Set(["genv"]);
 });
-//@ chunk-e6aww6q8.js:1246615-1246677 placement
+//@ chunk-5xgkngpb.js:1244417-1244479 placement
 /**
  * 去掉匹配的后缀；结果为空时返回原串，避免把名字清空。
  */
@@ -196,7 +196,7 @@ function stripSuffixIfNonEmpty(text, suffixRe) {
   let replaced = text.replace(suffixRe, "");
   return replaced.length > 0 ? replaced : text;
 }
-//@ chunk-e6aww6q8.js:1246677-1246921 placement
+//@ chunk-5xgkngpb.js:1244479-1244723 placement
 /**
  * 规范化程序名：取基本名、小写、去掉扩展名与版本后缀，并应用别名表。
  */
@@ -214,7 +214,7 @@ function canonicalProgramName(word) {
   }
   return getOwn(PROGRAM_ALIASES, current) ?? current;
 }
-//@ chunk-e6aww6q8.js:1246921-1247534 placement
+//@ chunk-5xgkngpb.js:1244723-1245336 placement
 /**
  * 沙箱排除判断用的解释器表：各解释器带值的短选项、带子命令的程序、Windows shell，以及执行代码字符串的选项（如 -c、-e）。
  */
@@ -222,7 +222,7 @@ var INTERPRETER_VALUE_FLAGS; // deferred: has load-time effects after a deferred
 var SUBCOMMAND_PROGRAMS_2;
 var WINDOWS_SHELLS;
 var INTERPRETER_CODE_FLAGS;
-deferInit("chunk-e6aww6q8.js:1246921", () => {
+deferInit("chunk-5xgkngpb.js:1244723", () => {
   INTERPRETER_VALUE_FLAGS = {
     sh: [],
     bash: [],
@@ -262,18 +262,18 @@ deferInit("chunk-e6aww6q8.js:1246921", () => {
     kubectl: ["-s"],
   };
 });
-//@ chunk-e6aww6q8.js:1247534-1247630 placement
+//@ chunk-5xgkngpb.js:1245336-1245432 placement
 /**
  * git 参数里是否出现 ext:: 或 fd:: 传输协议（会执行外部命令）。
  */
 function hasExtProtocolArg(args) {
   return args.slice(1).some((arg) => /(?:^|=)(?:ext|fd)::/i.test(arg.replace(/^['"]/, "")));
 }
-//@ chunk-e6aww6q8.js:1247630-1247911 placement
+//@ chunk-5xgkngpb.js:1245432-1245713 placement
 var STDIN_INTERPRETERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STDIN_SCRIPT_TOOLS;
 var STDIN_DEVICE_PATHS;
-deferInit("chunk-e6aww6q8.js:1247630", () => {
+deferInit("chunk-5xgkngpb.js:1245432", () => {
   STDIN_INTERPRETERS = new Set([
     "sh",
     "bash",
@@ -300,7 +300,7 @@ deferInit("chunk-e6aww6q8.js:1247630", () => {
   STDIN_SCRIPT_TOOLS = new Set(["make", "at", "batch", "sqlite", "ed", "crontab"]);
   STDIN_DEVICE_PATHS = new Set(["/dev/stdin", "/dev/fd/0", "/proc/self/fd/0"]);
 });
-//@ chunk-e6aww6q8.js:1247911-1248081 placement
+//@ chunk-5xgkngpb.js:1245713-1245883 placement
 function normalizeDotSegments(path) {
   let segments = [];
   for (let [idx, segment] of path.split("/").entries())
@@ -310,7 +310,7 @@ function normalizeDotSegments(path) {
     else segments.push(segment);
   return segments.join("/");
 }
-//@ chunk-e6aww6q8.js:1248081-1248258 placement
+//@ chunk-5xgkngpb.js:1245883-1246060 placement
 function isStdinDevicePath(path) {
   if (!path.startsWith("/") && !path.split("/").includes("..")) return false;
   let normalized = normalizeDotSegments(`/${path}`);
@@ -320,7 +320,7 @@ function isStdinDevicePath(path) {
     STDIN_DEVICE_PATHS.has(normalized)
   );
 }
-//@ chunk-e6aww6q8.js:1248258-1249036 placement
+//@ chunk-5xgkngpb.js:1246060-1246841 placement
 /**
  * 判断解释器或 shell 调用是否会从标准输入读取脚本：无脚本参数、-s/-、-i（交互）、-o shinstdin，或参数为 /dev/stdin 等；make/at 等工具在非管道输入时也算。
  */
@@ -355,9 +355,9 @@ function readsScriptFromStdin(program, argv, stdinFed) {
     sliced.some((arg) => isStdinDevicePath(arg))
   );
 }
-//@ chunk-e6aww6q8.js:1249036-1249161 placement
+//@ chunk-5xgkngpb.js:1246841-1246966 placement
 var SCRIPT_INTERPRETERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1249036", () => {
+deferInit("chunk-5xgkngpb.js:1246841", () => {
   SCRIPT_INTERPRETERS = new Set([
     "sh",
     "bash",
@@ -377,7 +377,7 @@ deferInit("chunk-e6aww6q8.js:1249036", () => {
     "lua",
   ]);
 });
-//@ chunk-e6aww6q8.js:1249161-1249356 placement
+//@ chunk-5xgkngpb.js:1246966-1247161 placement
 function collectLeadingOptions(argv, isOption = (arg) => arg.startsWith("-") || arg.startsWith("+")) {
   let options = [];
   let sliced = argv.slice(1);
@@ -390,15 +390,15 @@ function collectLeadingOptions(argv, isOption = (arg) => arg.startsWith("-") || 
   }
   return options;
 }
-//@ chunk-e6aww6q8.js:1249356-1249430 placement
+//@ chunk-5xgkngpb.js:1247161-1247235 placement
 /**
  * shell 中会把下一个词当参数或初始化文件的选项（-o、-O、--rcfile、--init-file 等）。
  */
 var SHELL_OPTION_ARG_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1249356", () => {
+deferInit("chunk-5xgkngpb.js:1247161", () => {
   SHELL_OPTION_ARG_FLAGS = new Set(["-o", "+o", "-O", "+O", "-W", "-X", "--rcfile", "--init-file"]);
 });
-//@ chunk-e6aww6q8.js:1249430-1249634 placement
+//@ chunk-5xgkngpb.js:1247235-1247439 placement
 function collectOptionsWithValues(argv) {
   let options = [];
   let sliced = argv.slice(1);
@@ -416,7 +416,7 @@ function collectOptionsWithValues(argv) {
   }
   return options;
 }
-//@ chunk-e6aww6q8.js:1249634-1249869 placement
+//@ chunk-5xgkngpb.js:1247439-1247674 placement
 function splitAnsiQuotedWords(text) {
   let result = "";
   let inSingleQuote = false;
@@ -444,7 +444,7 @@ function splitAnsiQuotedWords(text) {
   }
   return result.split(/[ \t]+/);
 }
-//@ chunk-e6aww6q8.js:1249869-1250157 placement
+//@ chunk-5xgkngpb.js:1247674-1247962 placement
 function splitMarkingQuotedGlobs(text) {
   if (/\$['"]/.test(text)) return splitAnsiQuotedWords(text);
   let result = "";
@@ -468,7 +468,7 @@ function splitMarkingQuotedGlobs(text) {
   }
   return result.split(/[ \t]+/);
 }
-//@ chunk-e6aww6q8.js:1250157-1251258 placement (2.1.88 match: isDockerSafe, 0.772)
+//@ chunk-5xgkngpb.js:1247962-1249064 placement (2.1.88 match: isDockerSafe, 0.772)
 /**
  * （旧版名配错，切分错误）判断命令参数能否执行任意代码：解释器 -e/--eval、git config 中可执行的键、docker -H、bun/deno 运行脚本、通配参数等；被输入模式与沙箱排除检查使用。
  */
@@ -563,7 +563,7 @@ function isDockerSafe(command, argv, stdinFed = false) {
       ),
   );
 }
-//@ chunk-e6aww6q8.js:1251258-1251785 placement
+//@ chunk-5xgkngpb.js:1249100-1249627 placement
 /**
  * 判断一个参数是否匹配排除规则中的选项（精确、=值、带冒号前缀、绝对路径包含、长选项缩写、短选项组合），可选大小写与 Unicode 破折号归一。
  */
@@ -583,7 +583,7 @@ function optionMatchesRule(option, rule, isWindowsShell, isCodeFlag, valueFlags,
   if (!isCodeFlag) return false;
   return shortClusterHasFlag(normalized, rule[1], valueFlags);
 }
-//@ chunk-e6aww6q8.js:1251785-1251919 placement
+//@ chunk-5xgkngpb.js:1249627-1249761 placement
 function shortClusterHasFlag(cluster, flag, valueFlags) {
   let letters = /^[-+]([A-Za-z0-9]*)/.exec(cluster)?.[1] ?? "";
   for (let letter of letters) {
@@ -592,14 +592,14 @@ function shortClusterHasFlag(cluster, flag, valueFlags) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1251919-1252007 placement
+//@ chunk-5xgkngpb.js:1249761-1249849 placement
 /**
  * 命令里是否含 shell 元字符（$、反引号、引号、通配符等）；PowerShell 额外把反斜杠排除。
  */
 function hasShellMetaChar(command, shell = "bash") {
   return (shell === "powershell" ? /[$`'"*?[]/ : /[$`\\'"*?[]/).test(firstToken(command));
 }
-//@ chunk-e6aww6q8.js:1252007-1252483 placement
+//@ chunk-5xgkngpb.js:1249849-1250325 placement
 /**
  * 去掉命令开头可信的 env 包装与远程集群参数等前缀，返回实际执行的命令文本（遇到 bash 可执行的包装时从该处截取）。
  */
@@ -645,7 +645,7 @@ function stripTrustedWrappers(command) {
   }
   return trimmed;
 }
-//@ chunk-e6aww6q8.js:1252483-1252541 placement
+//@ chunk-5xgkngpb.js:1250325-1250383 placement
 /**
  * 剥掉不安全环境赋值与安全包装后，返回被去掉的包装前缀。
  */
@@ -654,7 +654,7 @@ function strippedCommandPrefix(command) {
   let command_2 = resolveTransparentWrapperAlias(withoutEnvVars);
   return getRemovedPrefix(withoutEnvVars, stripSafeWrappersFromCommand(command_2));
 }
-//@ chunk-e6aww6q8.js:1252541-1252633 placement
+//@ chunk-5xgkngpb.js:1250383-1250475 placement
 /**
  * 若命令是透明包装命令的别名（program alias），替换成实际命令名。
  */
@@ -665,7 +665,7 @@ function resolveTransparentWrapperAlias(command) {
     ? alias + command.slice(firstWord.length)
     : command;
 }
-//@ chunk-e6aww6q8.js:1252633-1252799 placement
+//@ chunk-5xgkngpb.js:1250475-1250641 placement
 function getRemovedPrefix(original, stripped) {
   if (stripped === original) return "";
   let words = [...original.matchAll(/[^ \t]+/g)];
@@ -674,14 +674,14 @@ function getRemovedPrefix(original, stripped) {
   if (index <= 0) return "";
   return original.slice(0, words[index]?.index);
 }
-//@ chunk-e6aww6q8.js:1252799-1252839 placement
+//@ chunk-5xgkngpb.js:1250641-1250681 placement
 /**
  * 去引号后文本是否含 Unicode 空白（这类命令不认为能在沙箱外安全运行）。
  */
 function hasUnicodeWhitespace(command) {
   return UNICODE_WHITESPACE_RE.test(stripQuotedRegions(command));
 }
-//@ chunk-e6aww6q8.js:1252839-1253000 placement
+//@ chunk-5xgkngpb.js:1250681-1250842 placement
 /**
  * 判断程序是否无法在沙箱外安全运行（eval 类、awk、执行包装、改变状态的内建等）。
  */
@@ -699,7 +699,7 @@ function isUnsandboxableProgram(word, shell) {
     (shell === "powershell" && POWERSHELL_INVOKE_COMMANDS.has(program))
   );
 }
-//@ chunk-e6aww6q8.js:1253000-1253309 placement (2.1.88 match: prependModeCharacterToInput, 0.779)
+//@ chunk-5xgkngpb.js:1250842-1251149 placement (2.1.88 match: prependModeCharacterToInput, 0.778)
 function prependModeCharacterToInput(
   command,
   expandedCommand = command,
@@ -724,14 +724,14 @@ function prependModeCharacterToInput(
     (expandedCommand === command || !isDockerSafe(expandedCommand, undefined, stdinFed))
   );
 }
-//@ chunk-e6aww6q8.js:1253309-1253442 placement
+//@ chunk-5xgkngpb.js:1251149-1251282 placement
 var SIMPLE_ASSIGNMENT_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LOCALE_VARS;
-deferInit("chunk-e6aww6q8.js:1253309", () => {
+deferInit("chunk-5xgkngpb.js:1251149", () => {
   SIMPLE_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)=(?![-+/])([A-Za-z0-9_.:@,+=/-]*)$/;
   LOCALE_VARS = new Set(["LC_ALL", "LC_CTYPE", "LANG", "LANGUAGE", "CHARSET"]);
 });
-//@ chunk-e6aww6q8.js:1253442-1253553 placement
+//@ chunk-5xgkngpb.js:1251282-1251393 placement
 /**
  * 判断前导赋值是否安全（变量名安全、值不像路径、不是 locale 变量）。
  */
@@ -744,14 +744,14 @@ function isSafeLeadingAssignment(text) {
     !LOCALE_VARS.has(match[1].toUpperCase())
   );
 }
-//@ chunk-e6aww6q8.js:1253553-1253833 placement
+//@ chunk-5xgkngpb.js:1251393-1251673 placement
 var IFS_EXPANSION_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LAST_ARG_VAR_RE;
 var VARIABLE_REF_PATTERN;
 var VAR_LEADING_OPTION_RE;
 var VAR_SLASH_DOLLAR_RE;
 var OPTION_WITH_VAR_RE;
-deferInit("chunk-e6aww6q8.js:1253553", () => {
+deferInit("chunk-5xgkngpb.js:1251393", () => {
   IFS_EXPANSION_RE = /\$\{?IFS\b/;
   LAST_ARG_VAR_RE = /(?:^|[ \t"'])\$\{?_\}?(?=$|[ \t"'])/;
   VARIABLE_REF_PATTERN = String.raw`(?:\$\{[^}]*\}|\$[=^~]*(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*#?$!-]))`;
@@ -759,7 +759,7 @@ deferInit("chunk-e6aww6q8.js:1253553", () => {
   VAR_SLASH_DOLLAR_RE = new RegExp(`${VARIABLE_REF_PATTERN}/\\$`);
   OPTION_WITH_VAR_RE = new RegExp(`^[-+]{1,2}[^=]*${VARIABLE_REF_PATTERN}`);
 });
-//@ chunk-e6aww6q8.js:1253833-1254334 placement
+//@ chunk-5xgkngpb.js:1251673-1252174 placement
 /**
  * 判断命令中的 ${...} 展开是否有风险：间接展开、特殊/位置参数、默认值中含变量、选项形状或通配字符。
  */
@@ -790,12 +790,12 @@ function hasRiskyBracedExpansion(command, isWindowsShell) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1254334-1254391 placement
+//@ chunk-5xgkngpb.js:1252174-1252231 placement
 /**
  * 匹配 $0–$9 形式的数字位置参数引用。
  */
 var MULTI_DIGIT_POSITIONAL_RE = /(?:^|[ \t"'])\$[=^~]*\{?[0-9]+\}?(?=$|[ \t"'])/;
-//@ chunk-e6aww6q8.js:1254391-1254515 placement
+//@ chunk-5xgkngpb.js:1252231-1252355 placement
 function isGlobbedOption(word) {
   if (!/^[-+]/.test(word)) return false;
   let globIdx = word.search(/[[?*]/);
@@ -803,23 +803,23 @@ function isGlobbedOption(word) {
   let assignOrSlashIdx = word.search(/[=/]/);
   return assignOrSlashIdx < 0 || globIdx < assignOrSlashIdx;
 }
-//@ chunk-e6aww6q8.js:1254515-1254653 placement
+//@ chunk-5xgkngpb.js:1252355-1252493 placement
 var SHORT_GLOB_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CONTROL_FLOW_BUILTINS;
 var READ_BUILTINS;
-deferInit("chunk-e6aww6q8.js:1254515", () => {
+deferInit("chunk-5xgkngpb.js:1252355", () => {
   SHORT_GLOB_RE = /^\[[^\]]*\]|^\?[^ \t]{0,3}$|^\*[A-Za-z]$/;
   CONTROL_FLOW_BUILTINS = new Set(["exit", "return", "break", "continue", "bye", "logout"]);
   READ_BUILTINS = new Set(["read"]);
 });
-//@ chunk-e6aww6q8.js:1254653-1254757 placement
+//@ chunk-5xgkngpb.js:1252493-1252597 placement
 function isStateChangingBuiltin(name) {
   if (READ_BUILTINS.has(name)) return true;
   if (!DECLARATION_LIKE_BUILTINS.has(name)) return false;
   if (ZSH_DANGEROUS_BUILTINS.has(name)) return true;
   return !CONTROL_FLOW_BUILTINS.has(name);
 }
-//@ chunk-e6aww6q8.js:1254757-1255778 placement
+//@ chunk-5xgkngpb.js:1252597-1253618 placement
 /**
  * 需要按子命令判断是否排除沙箱的程序（git/deno/bun）。
  */
@@ -828,7 +828,7 @@ var SUBCOMMAND_PROGRAMS;
 var GIT_SUBCOMMAND_EXCLUSIONS;
 var PYTHON_SUBCOMMAND_EXCLUSIONS;
 var TENGU_MOSSY_CRAYON;
-deferInit("chunk-e6aww6q8.js:1254757", () => {
+deferInit("chunk-5xgkngpb.js:1252597", () => {
   SANDBOX_EXCLUDED_SUBCOMMANDS = [
     ["bisect", "run"],
     ["submodule", "foreach"],
@@ -873,7 +873,7 @@ deferInit("chunk-e6aww6q8.js:1254757", () => {
   PYTHON_SUBCOMMAND_EXCLUSIONS = ["-u", ["clone"]];
   TENGU_MOSSY_CRAYON = "tengu_mossy_crayon";
 });
-//@ chunk-e6aww6q8.js:1255778-1255818 placement
+//@ chunk-5xgkngpb.js:1253618-1253658 placement
 /**
  * 读取 tengu_mossy_crayon 开关：是否按子命令排除沙箱。
  */
@@ -882,7 +882,7 @@ function isSubcommandExclusionEnabled() {
     safe: true,
   });
 }
-//@ chunk-e6aww6q8.js:1255818-1256566 placement
+//@ chunk-5xgkngpb.js:1253658-1254406 placement
 /**
  * 会执行外部程序或读取任意文件的 git 配置键前缀（alias.、core.sshcommand、include. 等）。
  */
@@ -935,7 +935,7 @@ var GIT_UNSAFE_CONFIG_PREFIXES = [
 ];
 var GIT_UNSAFE_CONFIG_PATTERNS = [/^remote\..+\.(?:uploadpack|receivepack|vcs)$/, /^submodule\..+\.update$/];
 var TENGU_PEPPY_NAUTILUS = "tengu_peppy_nautilus";
-//@ chunk-e6aww6q8.js:1256566-1256606 placement
+//@ chunk-5xgkngpb.js:1254406-1254446 placement
 /**
  * 读取 tengu_peppy_nautilus 开关：是否检查 git clone/init/worktree 等建仓路径的风险。
  */
@@ -944,7 +944,7 @@ function isGitCreatePathCheckEnabled() {
     safe: true,
   });
 }
-//@ chunk-e6aww6q8.js:1256606-1257030 placement
+//@ chunk-5xgkngpb.js:1254446-1254870 placement
 /**
  * 判断 git 子命令（clone/init/worktree add|move/bundle create 等）是否会在有风险的路径创建仓库或文件。
  */
@@ -979,21 +979,21 @@ function gitCreatesRepoAtRiskyPath(argv) {
     return pathCandidates.some(looksLikeEscapingPath);
   });
 }
-//@ chunk-e6aww6q8.js:1257030-1257126 placement
+//@ chunk-5xgkngpb.js:1254870-1254966 placement
 /**
  * 路径是绝对路径、带盘符或含 “..” 段时返回 true。
  */
 function looksLikeEscapingPath(path) {
   return /^[/\\~$]/.test(path) || /^[A-Za-z]:/.test(path) || path.split(/[/\\]/).includes("..");
 }
-//@ chunk-e6aww6q8.js:1257126-1257182 affinity
+//@ chunk-5xgkngpb.js:1254966-1255022 affinity
 /**
  * 把配置键规整为 NFKC 小写，便于比较。
  */
 function normalizeConfigKey(key) {
   return key.normalize("NFKC").toLowerCase();
 }
-//@ chunk-e6aww6q8.js:1257695-1257890 affinity
+//@ chunk-5xgkngpb.js:1255541-1255736 affinity
 function setsRiskyGitConfig(argv) {
   if (!argv.some((word) => normalizeConfigKey(word) === "config")) return false;
   return argv.some((word, idx) => {
@@ -1005,7 +1005,7 @@ function setsRiskyGitConfig(argv) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:1257890-1258112 placement
+//@ chunk-5xgkngpb.js:1255736-1255958 placement
 function expandDefaultValues(command) {
   let replaced = command.replace(
     /\$\{(?:[A-Za-z_][A-Za-z0-9_]*|[@*]):?[-+=]([^}]*)\}/g,
@@ -1019,7 +1019,7 @@ function expandDefaultValues(command) {
   }
   return args;
 }
-//@ chunk-e6aww6q8.js:1258112-1258331 placement
+//@ chunk-5xgkngpb.js:1255958-1256177 placement
 /**
  * 汇总判断命令是否应排除在沙箱外：子命令规则、bun/deno 非安全子命令、docker、git 的各类危险全局选项/config/clone 路径/通配等。
  */
@@ -1039,13 +1039,13 @@ function isExcludedFromSandbox(program, argv, hasGlob, stdinFed) {
     (program === "git" && hasGlob && hasGitGlobArgument(argv))
   );
 }
-//@ chunk-e6aww6q8.js:1258331-1258673 placement
+//@ chunk-5xgkngpb.js:1256177-1256519 placement
 /**
  * bun 与 deno 中可在沙箱外安全运行的子命令集合。
  */
 var SAFE_BUN_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_DENO_SUBCOMMANDS;
-deferInit("chunk-e6aww6q8.js:1258331", () => {
+deferInit("chunk-5xgkngpb.js:1256177", () => {
   SAFE_BUN_SUBCOMMANDS = new Set([
     "install",
     "i",
@@ -1089,7 +1089,7 @@ deferInit("chunk-e6aww6q8.js:1258331", () => {
     "bundle",
   ]);
 });
-//@ chunk-e6aww6q8.js:1258673-1258909 placement
+//@ chunk-5xgkngpb.js:1256519-1256755 placement
 function isUnsafeDenoCommand(program, argv) {
   if (program !== "deno") return false;
   let sliced = argv.slice(1);
@@ -1104,7 +1104,7 @@ function isUnsafeDenoCommand(program, argv) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1258909-1259031 placement
+//@ chunk-5xgkngpb.js:1256755-1256877 placement
 function isUnsafeBunCommand(program, argv) {
   if (program !== "bun") return false;
   for (let word of argv.slice(1)) {
@@ -1113,14 +1113,14 @@ function isUnsafeBunCommand(program, argv) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1259031-1259665 placement
+//@ chunk-5xgkngpb.js:1256877-1257511 placement
 /**
  * docker 子命令集合、带值的短选项与安全的全局选项，用于判断 docker 命令是否排除在沙箱外。
  */
 var DOCKER_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DOCKER_VALUE_SHORT_FLAGS;
 var DOCKER_SAFE_GLOBAL_FLAGS;
-deferInit("chunk-e6aww6q8.js:1259031", () => {
+deferInit("chunk-5xgkngpb.js:1256877", () => {
   DOCKER_SUBCOMMANDS = new Set([
     "run",
     "ps",
@@ -1188,7 +1188,7 @@ deferInit("chunk-e6aww6q8.js:1259031", () => {
   DOCKER_VALUE_SHORT_FLAGS = ["c", "H", "l"];
   DOCKER_SAFE_GLOBAL_FLAGS = new Set(["-D", "--debug", "--tls", "--tlsverify", "-v", "--version", "--help"]);
 });
-//@ chunk-e6aww6q8.js:1259665-1259967 placement (2.1.88 match: isDockerSafe, 0.772)
+//@ chunk-5xgkngpb.js:1257511-1257813 placement (2.1.88 match: isDockerSafe, 0.772)
 function isDockerSafe_2(program, argv) {
   if (program !== "docker") return false;
   let sliced = argv.slice(1);
@@ -1212,7 +1212,7 @@ function isDockerSafe_2(program, argv) {
         ["c", "H"].some((letter) => shortClusterHasFlag(flag, letter, DOCKER_VALUE_SHORT_FLAGS)),
     );
 }
-//@ chunk-e6aww6q8.js:1259967-1260169 placement
+//@ chunk-5xgkngpb.js:1257813-1258015 placement
 function matchesExcludedSubcommand(argv, hasGlob) {
   return SANDBOX_EXCLUDED_SUBCOMMANDS.some(([program, subcommand]) =>
     argv.some((word, idx) => {
@@ -1226,12 +1226,12 @@ function matchesExcludedSubcommand(argv, hasGlob) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:1260169-1260185 placement
+//@ chunk-5xgkngpb.js:1258015-1258031 placement
 /**
  * 通配字符正则 [[*?]。
  */
 var GLOB_CHAR_RE = /[[*?]/;
-//@ chunk-e6aww6q8.js:1260185-1260386 placement
+//@ chunk-5xgkngpb.js:1258031-1258232 placement
 function hasGitGlobArgument(argv) {
   return argv.some((word, idx) => {
     let key = normalizeConfigKey(word);
@@ -1242,20 +1242,20 @@ function hasGitGlobArgument(argv) {
       .some((word) => (scansAllArgs || !word.startsWith("-")) && GLOB_CHAR_RE.test(word));
   });
 }
-//@ chunk-e6aww6q8.js:1260386-1260426 placement
+//@ chunk-5xgkngpb.js:1258232-1258272 placement
 /**
  * 去引号后的文本是否含通配符。
  */
 function hasUnquotedGlob(command) {
   return GLOB_CHAR_RE.test(stripQuotedRegions(command));
 }
-//@ chunk-e6aww6q8.js:1260426-1260478 placement (2.1.88 match: DANGEROUS_GIT_GLOBAL_FLAGS, 0.549)
+//@ chunk-5xgkngpb.js:1258272-1258324 placement (2.1.88 match: DANGEROUS_GIT_GLOBAL_FLAGS, 0.549)
 /**
  * 危险 git 全局选项：-c、-C、--git-dir、--work-tree。被 utils/git.ts 等使用。
  */
 var GIT_SHORT_GLOBAL_OPTIONS = ["-c", "-C"];
 var GIT_LONG_GLOBAL_OPTIONS = ["--git-dir", "--work-tree"];
-//@ chunk-e6aww6q8.js:1260971-1261054 placement
+//@ chunk-5xgkngpb.js:1258817-1258900 placement
 /**
  * git 子命令前是否出现 -c/-C 全局选项。
  */
@@ -1264,7 +1264,7 @@ function hasGitShortGlobalOption(argv) {
     .slice(1, findGitSubcommandIndex(argv))
     .some((word) => GIT_SHORT_GLOBAL_OPTIONS.some((option) => word.startsWith(option)));
 }
-//@ chunk-e6aww6q8.js:1261054-1261133 placement
+//@ chunk-5xgkngpb.js:1258900-1258979 placement
 /**
  * git 子命令本身或其路径参数是否含通配符。
  */
@@ -1273,7 +1273,7 @@ function hasGlobAroundGitSubcommand(argv) {
     (word) => word !== undefined && GLOB_CHAR_RE.test(word),
   );
 }
-//@ chunk-e6aww6q8.js:1261133-1261268 placement
+//@ chunk-5xgkngpb.js:1258979-1259114 placement
 /**
  * 在 git argv 中跳过全局选项，返回子命令下标。
  */
@@ -1286,7 +1286,7 @@ function findGitSubcommandIndex(argv) {
   }
   return argv.length;
 }
-//@ chunk-e6aww6q8.js:1262797-1262870 placement
+//@ chunk-5xgkngpb.js:1260643-1260716 placement
 /**
  * 去掉数组中的空串与纯空白项（当前无引用，保留为辅助函数）。
  */
@@ -1294,15 +1294,7 @@ function compactNonBlank(values) {
   return values.filter((value) => typeof value === "string" && value.trim() !== "");
 }
 export {
-  GIT_SUBCOMMAND_EXCLUSIONS,
-  isSubcommandExclusionEnabled,
-  PYTHON_SUBCOMMAND_EXCLUSIONS,
-  normalizeConfigKey,
-  SUBCOMMAND_PROGRAMS_2,
-  GIT_UNSAFE_CONFIG_KEYS,
-  optionMatchesRule,
-  findGitSubcommandIndex,
-  GIT_LONG_GLOBAL_OPTIONS,
+  isDockerSafe,
   stripTrustedWrappers,
   firstToken,
   isSafeLeadingAssignment,
@@ -1316,7 +1308,15 @@ export {
   AT_VARIABLE_RE,
   hasShellMetaChar,
   isUnsandboxableProgram,
-  isDockerSafe,
   SHELL_META_RE,
   UNSAFE_PATH_CHARS_RE_2,
+  GIT_SUBCOMMAND_EXCLUSIONS,
+  isSubcommandExclusionEnabled,
+  PYTHON_SUBCOMMAND_EXCLUSIONS,
+  normalizeConfigKey,
+  SUBCOMMAND_PROGRAMS_2,
+  GIT_UNSAFE_CONFIG_KEYS,
+  optionMatchesRule,
+  findGitSubcommandIndex,
+  GIT_LONG_GLOBAL_OPTIONS,
 };

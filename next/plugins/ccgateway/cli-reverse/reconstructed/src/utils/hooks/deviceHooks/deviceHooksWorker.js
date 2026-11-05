@@ -3,9 +3,9 @@
  *
  * 设备钩子 worker（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5ac1fnqf.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-eczpvz69.js (6)
  * attribution: placement 6
  */
 import { isMatcherEvent, MATCHER_NAME_RE } from "../hookEventSets.js";
@@ -20,20 +20,20 @@ import { sanitizeDisplayText, MAX_TITLE_LENGTH } from "../../resultError.js";
 import { parseDeviceHookId } from "../deviceHookId.js";
 import { isPreToolUseTemplate, alwaysTrue } from "../hookTemplates.js";
 import { logForDebugging } from "../../debug.js";
-import { count } from "../../collections.js";
+import { countWhere } from "../../collections.js";
 import { isDiskless } from "../../../bootstrap/state.js";
 
-//@ chunk-5ac1fnqf.js:1009-1053 placement
+//@ chunk-eczpvz69.js:1126-1170 placement
 var MAX_REGISTRATION_BODY_CHARS = 65536;
 var DEFAULT_LEASE_S = 600;
 var ERROR_TEXT_MAX_CHARS = 200;
 var TEMPLATE_PREPARE_TIMEOUT_MS = 5000;
 var SWEEP_INTERVAL_MS = 300000;
-//@ chunk-5ac1fnqf.js:1053-1119 placement
+//@ chunk-eczpvz69.js:1170-1236 placement
 function clampTemplateTimeoutS(timeoutS) {
   return Math.min(600, Math.max(5, Math.round(timeoutS ?? 60)));
 }
-//@ chunk-5ac1fnqf.js:1119-1331 placement
+//@ chunk-eczpvz69.js:1236-1448 placement
 function classifyTemplateRegistration(template, registration) {
   if (template === undefined) return "unknown_template";
   if (!template.digests.some((digest) => digest.sha256 === registration.digest)) return "version_mismatch";
@@ -41,7 +41,7 @@ function classifyTemplateRegistration(template, registration) {
     return "event_not_allowed";
   return "awaiting_upload";
 }
-//@ chunk-5ac1fnqf.js:1331-9485 placement
+//@ chunk-eczpvz69.js:1448-9602 placement
 /**
  * 设备钩子 worker 主体：策略禁用、等待、转发钩子到云会话
  */
@@ -465,8 +465,8 @@ function runDeviceHooksWorker(deps) {
     let installed = shownTemplates.get(inventory.instanceId) ?? new Set();
     for (let status of statuses.values()) if (status.status === "installed") installed.add(status.template);
     shownTemplates.set(inventory.instanceId, installed);
-    let awaitingUpload = count(statusList, (status) => status.status === "awaiting_upload");
-    let installedCount = count(statusList, (status) => status.status === "installed");
+    let awaitingUpload = countWhere(statusList, (status) => status.status === "awaiting_upload");
+    let installedCount = countWhere(statusList, (status) => status.status === "installed");
     deps.telemetry.register({
       outcome: "accepted",
       accepted: entries.length,
@@ -580,11 +580,11 @@ function runDeviceHooksWorker(deps) {
     },
   };
 }
-//@ chunk-5ac1fnqf.js:9485-9549 placement
+//@ chunk-eczpvz69.js:9602-9666 placement
 function positiveEpoch(workerEpoch) {
   return workerEpoch !== undefined && Number.isInteger(workerEpoch) && workerEpoch >= 1 ? workerEpoch : 1;
 }
-//@ chunk-5ac1fnqf.js:9549-12689 placement
+//@ chunk-eczpvz69.js:9666-12806 placement
 /**
  * 云会话 worker 侧的设备钩子主体：按需加载依赖，建立钩子注册表与转发器（记录 tengu_device_hook_forwarded），根据策略（仅插件、自定义禁用、仅托管、全部禁用）与账户开关决定是否启用，并处理模板注册。
  */

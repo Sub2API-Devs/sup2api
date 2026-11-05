@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：统一的 Anthropic API 请求：选主机与认证、OAuth 刷新、重试、上传超时、frame 隧道；刷新官方 MCP 服务器 URL 集合（tengu_mcp_directory_bff）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (45)
- * attribution: placement 45
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (47)
+ * attribution: placement 45, layout 2
  */
 import { Agent as Agent_3 } from "http";
 import { Readable } from "stream";
@@ -31,7 +31,7 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   errorMessage,
 } from "../../utils/errors.js";
-import { getTransportForUrl } from "../../cli/transports/transportUtils.js";
+import { httpUrlFromWs } from "../../cli/transports/transportUtils.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import {
   getClaudeAIOAuthTokens,
@@ -48,6 +48,7 @@ import {
   isZodVersionCompatible,
   uploadBufferWithProgress,
   maxAllowedStallMs,
+  uploadStreamWithProgress,
   UploadStalledError,
   sessionHostKind,
 } from "../../utils/telemetry/memorySummary.js";
@@ -75,17 +76,17 @@ import { logEvent } from "../analytics/index.js";
 import { isSameOriginAsCcr } from "../mcp/ccrMcpUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:802953-803044 placement
+//@ chunk-exfmq47h.js:824064-824155 placement
 /**
  * 校验请求路径只含安全字符且不含 .. 或 //。
  */
 function isSafeRelativePath(relativePath) {
   return /^[A-Za-z0-9_\-/.:]+$/.test(relativePath) && !/(?:^|\/)\.\.?(?:\/|$)|\/\//.test(relativePath);
 }
-//@ chunk-aepeg2w5.js:803044-803260 placement
+//@ chunk-exfmq47h.js:824155-824371 placement
 var CONSOLE_PROFILE_UNSUPPORTED_MESSAGE =
   "This request can't be made with a Console-profile sign-in, and the part of Claude Code that reads that sign-in isn't loaded in this process (a bug in Claude Code; please report it, with the command you ran)";
-//@ chunk-aepeg2w5.js:803260-803629 placement
+//@ chunk-exfmq47h.js:824371-824740 placement
 /**
  * 判断请求路径对应的 routine/session 操作。
  */
@@ -106,7 +107,7 @@ function classifyRoutineRequest(method, requestPath, body) {
     ? "routine_pause"
     : null;
 }
-//@ chunk-aepeg2w5.js:803629-803745 placement
+//@ chunk-exfmq47h.js:824740-824856 placement
 function isSessionsApiPath(method, requestPath, body) {
   let index = requestPath.indexOf("?");
   let pathWithoutQuery = index < 0 ? requestPath : requestPath.slice(0, index);
@@ -115,17 +116,25 @@ function isSessionsApiPath(method, requestPath, body) {
     SESSIONS_PATH_RE.test(pathWithoutQuery) || classifyRoutineRequest(method, requestPath, body) !== null
   );
 }
-//@ chunk-aepeg2w5.js:803745-803968 placement
+//@ chunk-exfmq47h.js:824856-824910 placement
 /**
  * sessions 路径正则、上传超时、敏感头与官方源。
  */
-var SESSIONS_PATH_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var UPLOAD_TIMEOUT_MS;
-var SENSITIVE_HEADERS;
+var SESSIONS_PATH_RE = /^\/v1\/(?:code\/)?sessions(?:\/|$)/;
+var UPLOAD_TIMEOUT_MS = 15000;
+//@ chunk-exfmq47h.js:824910-824987 layout
+class SlicedBody {
+  slices;
+  byteLength;
+  constructor(slices, byteLength) {
+    this.slices = slices;
+    this.byteLength = byteLength;
+  }
+}
+//@ chunk-exfmq47h.js:824987-825160 layout
+var SENSITIVE_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OFFICIAL_API_ORIGINS;
-deferInit("chunk-aepeg2w5.js:803745", () => {
-  SESSIONS_PATH_RE = /^\/v1\/(?:code\/)?sessions(?:\/|$)/;
-  UPLOAD_TIMEOUT_MS = 15000;
+deferInit("chunk-exfmq47h.js:824987", () => {
   SENSITIVE_HEADERS = new Set([
     "authorization",
     "proxy-authorization",
@@ -135,7 +144,7 @@ deferInit("chunk-aepeg2w5.js:803745", () => {
   ]);
   OFFICIAL_API_ORIGINS = new Set(["https://api.anthropic.com", "https://api-staging.anthropic.com"]);
 });
-//@ chunk-aepeg2w5.js:803968-804136 placement
+//@ chunk-exfmq47h.js:825160-825328 placement
 function isOfficialApiOrigin(url) {
   let baseOrigin;
   try {
@@ -147,7 +156,7 @@ function isOfficialApiOrigin(url) {
   if (env.CLAUDE_CODE_CUSTOM_OAUTH_URL) return false;
   return OFFICIAL_API_ORIGINS.has(url.origin);
 }
-//@ chunk-aepeg2w5.js:804136-804192 placement
+//@ chunk-exfmq47h.js:825328-825384 placement
 /**
  * 校验为合法 https 地址时返回其 origin。
  */
@@ -155,7 +164,7 @@ function httpsOrigin(url) {
   let validation = validateHttpsUrl(url);
   return validation.ok ? validation.origin : undefined;
 }
-//@ chunk-aepeg2w5.js:804192-804524 placement
+//@ chunk-exfmq47h.js:825384-825716 placement
 /**
  * 校验 URL 为不带凭据和端口的 https。
  */
@@ -194,7 +203,7 @@ function validateHttpsUrl(rawUrl) {
     origin: url.origin,
   };
 }
-//@ chunk-aepeg2w5.js:804524-804580 placement
+//@ chunk-exfmq47h.js:825716-825772 placement
 /**
  * 非法 https 地址时返回原因。
  */
@@ -202,27 +211,27 @@ function invalidHttpsUrlReason(rawUrl) {
   let validation = validateHttpsUrl(rawUrl);
   return validation.ok ? undefined : validation.reason;
 }
-//@ chunk-aepeg2w5.js:804580-804680 placement
+//@ chunk-exfmq47h.js:825772-825872 placement
 function baseUrlForRequest(defaultBaseUrl, options) {
   return options.auth === "none" && options.host !== "frame" && options.host !== "memory" && options.baseUrl
     ? options.baseUrl
     : defaultBaseUrl;
 }
-//@ chunk-aepeg2w5.js:804680-804702 placement
+//@ chunk-exfmq47h.js:825872-825894 placement
 /**
  * frame 主机覆盖（外部构建无）。
  */
 function getFrameHostOverride() {
   return;
 }
-//@ chunk-aepeg2w5.js:804702-804736 placement
+//@ chunk-exfmq47h.js:825894-825928 placement
 /**
  * 返回 frame 主机类别的基础 URL。
  */
 function frameBaseUrl() {
   return apiHostUrl("frame");
 }
-//@ chunk-aepeg2w5.js:804736-805061 placement
+//@ chunk-exfmq47h.js:825928-826253 placement
 /**
  * 按主机类别（api、claude-ai、mcp-proxy、frame、memory…）取基础 URL。
  */
@@ -245,7 +254,7 @@ function apiHostUrl(hostKind) {
       return ccrHostUrl(hostKind).origin;
   }
 }
-//@ chunk-aepeg2w5.js:805061-805529 placement
+//@ chunk-exfmq47h.js:826253-826721 placement
 /**
  * ccr-session/ccr-gateway 主机 URL（需要 --sdk-url）。
  */
@@ -267,17 +276,17 @@ function ccrHostUrl(hostKind) {
             "ccr-gateway --sdk-url rejected by allowlist",
           );
     case "ok":
-      return getTransportForUrl(new URL(sdkUrl.url));
+      return httpUrlFromWs(new URL(sdkUrl.url));
   }
 }
-//@ chunk-aepeg2w5.js:805529-805558 placement
+//@ chunk-exfmq47h.js:826721-826750 placement
 /**
  * 凭据摘要。
  */
 function hashCredential(credential) {
   return computeContentHash(credential);
 }
-//@ chunk-aepeg2w5.js:805558-805654 placement
+//@ chunk-exfmq47h.js:826750-826846 placement
 /**
  * 当前 claude.ai 登录可用时返回 bearer 摘要，否则 null。
  */
@@ -287,7 +296,7 @@ function claudeAiBearerDigest() {
   if (!isUsableClaudeAILoginRecord(claudeAIOAuthTokens) || !accessToken) return null;
   return hashCredential(`Bearer ${accessToken}`);
 }
-//@ chunk-aepeg2w5.js:805654-805805 placement
+//@ chunk-exfmq47h.js:826846-826997 placement
 /**
  * 刷新后取可用的 claude.ai 访问令牌。
  */
@@ -301,7 +310,7 @@ async function getClaudeAiAccessToken() {
   if (!isUsableClaudeAILoginRecord(claudeAIOAuthTokens) || !accessToken) return null;
   return accessToken;
 }
-//@ chunk-aepeg2w5.js:805805-806194 placement
+//@ chunk-exfmq47h.js:826997-827386 placement
 /**
  * 公开插件目录请求的快捷判断。
  */
@@ -323,17 +332,17 @@ function publicCatalogShortcut(options, request) {
   if (getAPIProvider() !== "firstParty") return "data-residency";
   return;
 }
-//@ chunk-aepeg2w5.js:806194-806239 placement
+//@ chunk-exfmq47h.js:827386-827431 placement
 /**
  * 是否可发起 API 请求。
  */
 function hasApiClient() {
   return publicCatalogShortcut({}, undefined) === undefined;
 }
-//@ chunk-aepeg2w5.js:806239-806342 placement
+//@ chunk-exfmq47h.js:827431-827534 placement
 var REFRESH_TOKEN_INVALID_MESSAGE = "OAuth refresh token is no longer valid; run /login to re-authenticate";
 var NO_CLAUDE_AI_LOGIN = "no claude.ai login";
-//@ chunk-aepeg2w5.js:806342-811894 placement
+//@ chunk-exfmq47h.js:827534-834260 placement
 /**
  * 统一的 Anthropic API 请求：选主机与认证、OAuth 刷新、重试、上传超时、frame 隧道。
  */
@@ -530,6 +539,11 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
   let sentBody = requestBody;
   let timeout = options.timeout ?? UPLOAD_TIMEOUT_MS;
   let uploadProgress;
+  let sliced = options.streamUpload?.sliced;
+  if (requestBody instanceof SlicedBody || (sliced !== undefined && requestBody !== undefined))
+    throw TypeError(
+      "StreamedUploadBody must be passed as streamUpload.sliced with no body argument; it was passed as the body, or together with one",
+    );
   if (options.streamUpload !== undefined && requestBody !== undefined) {
     let buffer = toBuffer(requestBody);
     let bodyIsPlainObject = typeof requestBody !== "string" && !isPlainJsonBody(requestBody);
@@ -554,10 +568,34 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
       headers["Content-Type"] = typeof requestBody === "string" ? "text/plain" : "application/json";
     headers["Content-Length"] = String(buffer.length);
   }
+  if (options.streamUpload !== undefined && sliced !== undefined) {
+    if (options.maxBodyLength !== undefined && sliced.byteLength > options.maxBodyLength)
+      throw new AxiosError("Request body larger than maxBodyLength limit", AxiosError.ERR_BAD_REQUEST);
+    let stallMs = options.streamUpload.stallMs ?? DEFAULT_STALL_MS;
+    let tailFloorMs = options.streamUpload.tailFloorMs?.(sliced.byteLength);
+    if (isZodVersionCompatible()) {
+      uploadProgress = uploadStreamWithProgress(sliced.slices(), sliced.byteLength, {
+        stallMs,
+        ...(tailFloorMs !== undefined && {
+          tailFloorMs,
+        }),
+        signal: options.signal,
+      });
+      sentBody = uploadProgress.body;
+    } else {
+      let chunks = [];
+      for await (let chunk of sliced.slices()) chunks.push(chunk);
+      sentBody = Buffer.concat(chunks);
+      timeout = Math.max(maxAllowedStallMs(sliced.byteLength, stallMs), tailFloorMs ?? 0);
+    }
+    headers["Content-Length"] = String(sliced.byteLength);
+  }
   let wireTransport =
     options.streamUpload !== undefined && requestBody !== undefined && maxRedirects === 0
       ? createUploadWireTransport()
       : undefined;
+  let slicedUploadTransport =
+    sliced !== undefined && maxRedirects === 0 ? createUploadWireTransport() : undefined;
   let baseUrl = options.frameTunnel
     ? `https://${options.frameTunnel.host}`
     : baseUrlForRequest(apiHostUrl(options.host ?? "api"), options);
@@ -588,6 +626,9 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
         ...(wireTransport && {
           transport: wireTransport.transport,
         }),
+        ...(slicedUploadTransport && {
+          transport: slicedUploadTransport.transport,
+        }),
         ...(earlyAnswerAdapter && {
           adapter: earlyAnswerAdapter,
         }),
@@ -612,9 +653,11 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
     } finally {
       if (uploadProgress) {
         uploadProgress.dispose();
+        if (sliced !== undefined) uploadProgress.body.destroy();
         options.streamUpload?.onSettled?.({
           ...uploadProgress.seen(),
           ...wireTransport?.seen(true),
+          ...slicedUploadTransport?.seen(true),
         });
       } else if (options.streamUpload && Buffer.isBuffer(sentBody))
         options.streamUpload.onSettled?.({
@@ -622,6 +665,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
           bytes_handed: sentBody.length,
           stalled: false,
           ...wireTransport?.seen(false),
+          ...slicedUploadTransport?.seen(false),
         });
     }
   } catch (error) {
@@ -631,6 +675,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
       refreshableAccessToken !== null &&
       axios_default.isAxiosError(error) &&
       error.response?.status === 401 &&
+      !options.isRouteOwned401Answer?.(error.response.data, error.response.headers) &&
       !options.isRouteOwned401?.(error.response.data)
     )
       recoverHostSessionsBearer(
@@ -643,6 +688,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
       !options.isBackground &&
       axios_default.isAxiosError(error) &&
       error.response?.status === 401 &&
+      !options.isRouteOwned401Answer?.(error.response.data, error.response.headers) &&
       !options.isRouteOwned401?.(error.response.data)
     ) {
       let bearerHeader = bearerHeaderOrFallback(refreshableAccessToken, error.config, isSessionsApi);
@@ -670,6 +716,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
     isSessionsApi &&
     refreshableAccessToken !== null &&
     response.status === 401 &&
+    !options.isRouteOwned401Answer?.(response.data, response.headers) &&
     !options.isRouteOwned401?.(response.data)
   )
     recoverHostSessionsBearer(
@@ -681,6 +728,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
     response.status === 401 &&
     !isRetry &&
     !options.isBackground &&
+    !options.isRouteOwned401Answer?.(response.data, response.headers) &&
     !options.isRouteOwned401?.(response.data)
   ) {
     let bearerHeader = bearerHeaderOrFallback(refreshableAccessToken, response.config, isSessionsApi);
@@ -711,7 +759,7 @@ async function apiRequest(method, requestPath, body, options = {}, isRetry = fal
     }),
   };
 }
-//@ chunk-aepeg2w5.js:811894-812121 placement
+//@ chunk-exfmq47h.js:834260-834487 placement
 async function refreshOAuthIfRequested(options) {
   if (!options.refreshOAuth) return;
   try {
@@ -725,7 +773,7 @@ async function refreshOAuthIfRequested(options) {
     );
   }
 }
-//@ chunk-aepeg2w5.js:812121-812459 placement
+//@ chunk-exfmq47h.js:834487-834825 placement
 /**
  * 上传停滞时转换错误信息。
  */
@@ -742,7 +790,7 @@ function uploadStallError(error, progress) {
     AxiosError.ECONNABORTED,
   );
 }
-//@ chunk-aepeg2w5.js:812459-812761 placement
+//@ chunk-exfmq47h.js:834825-835127 placement
 /**
  * 把各种数据转为 Buffer。
  */
@@ -754,14 +802,14 @@ function toBuffer(body) {
   if (isPlainJsonBody(body)) return Buffer.from(jsonStringify(body));
   throw TypeError("streamUpload: unsupported request body type");
 }
-//@ chunk-aepeg2w5.js:812761-812916 placement
+//@ chunk-exfmq47h.js:835127-835282 placement
 function isPlainJsonBody(value) {
   if (Array.isArray(value)) return true;
   if (typeof value !== "object" || value === null) return false;
   let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
-//@ chunk-aepeg2w5.js:812916-813008 placement
+//@ chunk-exfmq47h.js:835282-835374 placement
 /**
  * 大小写不敏感地判断对象是否已有某个头。
  */
@@ -769,21 +817,21 @@ function hasHeaderIgnoringCase(headers, headerName) {
   let lower = headerName.toLowerCase();
   return Object.keys(headers).some((key) => key.toLowerCase() === lower);
 }
-//@ chunk-aepeg2w5.js:813008-813052 placement
+//@ chunk-exfmq47h.js:835374-835418 placement
 /**
  * 判断值是否为 ArrayBuffer 视图（TypedArray/DataView）。
  */
 function isArrayBufferView(value) {
   return ArrayBuffer.isView(value);
 }
-//@ chunk-aepeg2w5.js:813052-813098 placement
+//@ chunk-exfmq47h.js:835418-835464 placement
 /**
  * 若响应数据是流则销毁，避免连接泄漏。
  */
 function destroyIfStream(body) {
   if (body instanceof Readable) body.destroy();
 }
-//@ chunk-aepeg2w5.js:813098-813182 placement
+//@ chunk-exfmq47h.js:835464-835548 placement
 /**
  * 重试时若新请求带了 Authorization 头，用它替换原来的 bearer。
  */
@@ -791,7 +839,7 @@ function bearerHeaderOrFallback(fallback, config, isSessionsApi) {
   if (!isSessionsApi) return fallback;
   return bearerOf(config?.headers?.get?.("Authorization")) ?? fallback;
 }
-//@ chunk-aepeg2w5.js:813182-813347 placement
+//@ chunk-exfmq47h.js:835548-835713 placement
 async function recoverConsoleProfileAuth(bearerHeader) {
   switch (await recoverConsoleProfileBearerOutcome(bearerHeader)) {
     case "recovered":
@@ -806,7 +854,7 @@ async function recoverConsoleProfileAuth(bearerHeader) {
       return null;
   }
 }
-//@ chunk-aepeg2w5.js:813347-813735 placement
+//@ chunk-exfmq47h.js:835713-836101 placement
 /**
  * 认证失败后尝试恢复（刷新令牌）并决定是否重试。
  */
@@ -836,7 +884,7 @@ async function recoverAuthFailure(bearerHeader, options, isSessionsApi, headerWi
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:813735-813934 placement
+//@ chunk-exfmq47h.js:836101-836300 placement
 /**
  * API 客户端（get/post/put/patch/delete）。
  */
@@ -857,7 +905,7 @@ var apiClient = {
     return apiRequest("DELETE", path, body, options);
   },
 };
-//@ chunk-aepeg2w5.js:813934-814114 placement
+//@ chunk-exfmq47h.js:836300-836480 placement
 var URL_CONTROL_CHARS_RE = /[\u0000-\u0020\u007f]/;
 var STRICT_URL_RE = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/\\?#]+)([^?#]*)(\?[^#]*)?(?:#[\s\S]*)?$/;
 var DEFAULT_PORTS = {
@@ -867,7 +915,7 @@ var DEFAULT_PORTS = {
   "ws:": "80",
   "wss:": "443",
 };
-//@ chunk-aepeg2w5.js:814114-814687 placement
+//@ chunk-exfmq47h.js:836480-837053 placement
 /**
  * 严格解析 URL（拒绝控制字符与不一致的协议）。
  */
@@ -902,7 +950,7 @@ function parseStrictUrl(rawUrl) {
   if (parsedUrl.search !== (queryPart === "?" ? "" : queryPart)) return null;
   return parsedUrl;
 }
-//@ chunk-aepeg2w5.js:814687-814852 placement
+//@ chunk-exfmq47h.js:837053-837219 placement
 function normalizeServerUrl(serverUrl) {
   let strictUrl = parseStrictUrl(serverUrl);
   if (!strictUrl) return serverUrl.replace(/\/$/, "");
@@ -911,7 +959,7 @@ function normalizeServerUrl(serverUrl) {
   strictUrl.pathname = strictUrl.pathname.replace(/\/$/, "") || "/";
   return strictUrl.toString().replace(/\/$/, "");
 }
-//@ chunk-aepeg2w5.js:814852-815068 placement
+//@ chunk-exfmq47h.js:837219-837435 placement
 /**
  * 去片段与尾斜杠（保留查询）。
  */
@@ -924,13 +972,13 @@ function normalizeMcpServerUrl(serverUrl) {
   let str = strictUrl.toString();
   return strictUrl.search ? str : str.replace(/\/$/, "");
 }
-//@ chunk-aepeg2w5.js:815068-815127 placement
+//@ chunk-exfmq47h.js:837435-837494 placement
 /**
  * MCP 目录可见组织类型的默认值（commercial/gsuite/enterprise/health）与翻页上限。
  */
 var DEFAULT_MCP_DIRECTORY_KINDS = ["commercial", "gsuite", "enterprise", "health"];
 var MAX_MCP_DIRECTORY_PAGES = 20;
-//@ chunk-aepeg2w5.js:815127-815229 placement (2.1.88 match: validateURL, 0.823)
+//@ chunk-exfmq47h.js:837494-837597 placement (2.1.88 match: validateURL, 0.823)
 /**
  * 去掉 URL 的用户名/密码后交给 dO 处理。
  */
@@ -944,7 +992,7 @@ function stripUrlCredentials(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:815229-815376 placement
+//@ chunk-exfmq47h.js:837597-837745 placement
 function mcpDirectoryVisibility() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_mcp_directory_visibility",
@@ -955,7 +1003,7 @@ function mcpDirectoryVisibility() {
     ? featureValue_CACHED_MAY_BE_STALE.filter((kind) => kind.length > 0)
     : DEFAULT_MCP_DIRECTORY_KINDS;
 }
-//@ chunk-aepeg2w5.js:815376-815786 placement
+//@ chunk-exfmq47h.js:837745-838155 placement
 /**
  * 分页获取 MCP 注册表服务器 URL。
  */
@@ -985,7 +1033,7 @@ async function fetchRegistryServerUrls(visibilityKinds) {
   }
   return serverUrls;
 }
-//@ chunk-aepeg2w5.js:815786-816202 placement
+//@ chunk-exfmq47h.js:838155-838571 placement
 /**
  * 分页获取目录服务器 URL（BFF）。
  */
@@ -1016,7 +1064,7 @@ async function fetchDirectoryServerUrls(visibilityKinds) {
   }
   return serverUrls;
 }
-//@ chunk-aepeg2w5.js:816202-816376 placement
+//@ chunk-exfmq47h.js:838571-838745 placement
 /**
  * 启动时按需预取官方 MCP URL。
  */
@@ -1032,7 +1080,7 @@ async function prefetchOfficialMcpUrls() {
   }
   await fetchOfficialMcpUrlsOnce();
 }
-//@ chunk-aepeg2w5.js:816376-816542 placement
+//@ chunk-exfmq47h.js:838745-838911 placement
 /**
  * 共享一次官方 MCP URL 刷新。
  */
@@ -1046,7 +1094,7 @@ function fetchOfficialMcpUrlsOnce() {
     });
   return cliOwnedState.officialUrlsFetch;
 }
-//@ chunk-aepeg2w5.js:816542-817296 placement
+//@ chunk-exfmq47h.js:838911-839666 placement
 /**
  * 刷新官方 MCP 服务器 URL 集合（tengu_mcp_directory_bff）。
  */
@@ -1100,7 +1148,7 @@ async function refreshOfficialMcpUrls() {
     });
   }
 }
-//@ chunk-aepeg2w5.js:817296-817603 placement
+//@ chunk-exfmq47h.js:839666-839973 placement
 /**
  * URL 是否为官方 MCP 服务器。
  */
@@ -1115,18 +1163,20 @@ function isOfficialMcpUrl(url) {
   return false;
 }
 export {
-  apiClient,
-  httpsOrigin,
-  normalizeMcpServerUrl,
-  hashCredential,
-  hasApiClient,
   isOfficialMcpUrl,
+  apiClient,
+  normalizeMcpServerUrl,
+  httpsOrigin,
+  invalidHttpsUrlReason,
+  hasApiClient,
   claudeAiBearerDigest,
+  hashCredential,
   prefetchOfficialMcpUrls,
-  fetchOfficialMcpUrlsOnce,
   getFrameHostOverride,
+  UPLOAD_TIMEOUT_MS,
   frameBaseUrl,
   getClaudeAiAccessToken,
-  invalidHttpsUrlReason,
-  UPLOAD_TIMEOUT_MS,
+  fetchOfficialMcpUrlsOnce,
+  mcpDirectoryVisibility,
+  normalizeServerUrl,
 };

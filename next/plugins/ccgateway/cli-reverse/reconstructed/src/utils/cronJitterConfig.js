@@ -3,9 +3,9 @@
  *
  * 定时任务抖动配置（GrowthBook tengu_kairos_cron_config）的 schema 与读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronJitterConfig.ts
- * pieces: chunk-castqjps.js (2)
+ * pieces: chunk-823fv89k.js (2)
  * attribution: fingerprint 1, facade-exports 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -14,7 +14,7 @@ import { DEFAULT_CRON_JITTER_CONFIG } from "./cronTasks.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-castqjps.js:335-755 fingerprint (2.1.88 match: cronJitterConfigSchema, 0.86)
+//@ chunk-823fv89k.js:335-755 fingerprint (2.1.88 match: cronJitterConfigSchema, 0.86)
 /**
  * 抖动配置 schema：recurringFrac、recurringCapMs、oneShotMaxMs、oneShotFloorMs、oneShotMinuteMod、recurringMaxAgeMs、cacheLeadMs；refresh 间隔 60s。
  */
@@ -22,7 +22,7 @@ var CONFIG_REFRESH_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of
 var MAX_JITTER_MS;
 var MAX_RECURRING_AGE_MS;
 var cronJitterConfigSchema;
-deferInit("chunk-castqjps.js:335", () => {
+deferInit("chunk-823fv89k.js:335", () => {
   CONFIG_REFRESH_MS = 60000;
   MAX_JITTER_MS = 1800000;
   MAX_RECURRING_AGE_MS = 2592000000;
@@ -42,7 +42,7 @@ deferInit("chunk-castqjps.js:335", () => {
     }).refine((config) => config.oneShotFloorMs <= config.oneShotMaxMs),
   );
 });
-//@ chunk-castqjps.js:755-857 facade-exports (2.1.88 match: getCronJitterConfig, 1)
+//@ chunk-823fv89k.js:755-857 facade-exports (2.1.88 match: getCronJitterConfig, 1)
 /**
  * 读 tengu_kairos_cron_config，校验失败用默认值。
  */

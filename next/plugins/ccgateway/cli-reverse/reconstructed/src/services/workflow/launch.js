@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流启动
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (10)
  * attribution: placement 10
  */
 import {
@@ -22,7 +22,7 @@ import {
   updateWorkflowProgressBatch,
   isWorkflowLogRow,
   redactAgentProgress,
-  redactWorkflowProgress,
+  visibleWorkflowProgress,
   setWorkflowRateLimitWait,
   failWorkflowTask,
   completeWorkflowTask,
@@ -53,14 +53,14 @@ import { writeWorkflowSnapshot } from "./snapshots.js";
 import { removeKeepaliveReason } from "../../utils/task/framework.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-41w44bgm.js:101091-101115 placement
+//@ chunk-kd2wbncj.js:93721-93745 placement
 /**
  * 进度批量发送的三个时间常量（缓冲间隔、最小间隔、缓冲上限）。
  */
 var PROGRESS_BATCH_INTERVAL_MS = 16;
 var PROGRESS_BATCH_MIN_GAP_MS = 250;
 var PROGRESS_BATCH_MAX_BUFFER = 1e4;
-//@ chunk-41w44bgm.js:101115-101489 placement
+//@ chunk-kd2wbncj.js:93745-94119 placement
 /**
  * 工作流进度批量发送器：进度先缓冲、定时冲刷；REPL 桥接活跃时限制发送频率；每批回调 onBatch，非交互或桥接会话再经 onSdkEmit 发出；支持立即冲刷和取消。
  */
@@ -103,7 +103,7 @@ function createProgressBatcher(sink) {
     },
   };
 }
-//@ chunk-41w44bgm.js:101489-101543 placement
+//@ chunk-kd2wbncj.js:94119-94173 placement
 /**
  * 非内置时代理来源记为 custom（内置且允许时按原值）。
  */
@@ -111,13 +111,13 @@ function agentSourceKindForTelemetry(name, scriptIsVerbatimBuiltIn) {
   if (scriptIsVerbatimBuiltIn) return name;
   return isToolDetailsLoggingEnabled() ? name : "custom";
 }
-//@ chunk-41w44bgm.js:101543-101586 placement (2.1.88 match: _temp1, 1)
+//@ chunk-kd2wbncj.js:94173-94216 placement (2.1.88 match: _temp1, 1)
 function isBuiltInWithFlag(a_9, hasFlag) {
   return a_9 === "built-in" && hasFlag;
 }
-//@ chunk-41w44bgm.js:101586-101597 placement
+//@ chunk-kd2wbncj.js:94216-94227 placement
 var MAX_TELEMETRY_LABEL_CHARS = 200;
-//@ chunk-41w44bgm.js:101597-101664 placement
+//@ chunk-kd2wbncj.js:94227-94294 placement
 /**
  * 内置代理名按原值上报，否则记为 custom。
  */
@@ -126,7 +126,7 @@ function agentNameForTelemetry(agentName, source, isBuiltIn) {
     return fromSanitizer_SANITIZER_OUTPUT_ONLY(agentName);
   return lit("custom");
 }
-//@ chunk-41w44bgm.js:101664-101740 placement
+//@ chunk-kd2wbncj.js:94294-94370 placement
 /**
  * 内置代理标签截断后上报，否则空串。
  */
@@ -135,7 +135,7 @@ function agentLabelForTelemetry(description, source, isBuiltIn) {
     return fromSanitizer_SANITIZER_OUTPUT_ONLY((description ?? "").slice(0, MAX_TELEMETRY_LABEL_CHARS));
   return lit("");
 }
-//@ chunk-41w44bgm.js:101740-101803 placement
+//@ chunk-kd2wbncj.js:94370-94433 placement
 /**
  * 内置时按原值上报代理类型，否则记为 custom。
  */
@@ -143,7 +143,7 @@ function agentTypeForTelemetry(title, source, scriptIsVerbatimBuiltIn) {
   if (isBuiltInWithFlag(source, scriptIsVerbatimBuiltIn)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(title);
   return lit("custom");
 }
-//@ chunk-41w44bgm.js:101803-101844 placement
+//@ chunk-kd2wbncj.js:94433-94474 placement
 /**
  * 脚本记录失败时用统一的隐藏错误文案。
  */
@@ -152,7 +152,7 @@ function hideFailedScriptRecord(withholdScriptFromSdkEvents, failedText) {
     ? WITHHELD_ERROR_TEXT
     : failedText;
 }
-//@ chunk-41w44bgm.js:101844-109680 placement
+//@ chunk-kd2wbncj.js:94474-102462 placement
 /**
  * 启动工作流运行：校验 v2 选项、准备脚本与日志、注册任务并开始执行。
  */
@@ -247,7 +247,6 @@ function launchWorkflowRun(options) {
         let now = Date.now();
         let shouldEmit = !all || now - lastProgressEmitAt >= PROGRESS_BATCH_MAX_BUFFER;
         if (shouldEmit) lastProgressEmitAt = now;
-        let progressSnapshot = shouldEmit ? task.workflowProgress.filter(isWorkflowLogRow) : undefined;
         emitTaskProgress({
           taskId,
           toolUseId,
@@ -261,13 +260,20 @@ function launchWorkflowRun(options) {
           toolUses: task.totalToolCalls,
           lastToolName: latestAgent?.label,
           summary: description,
-          workflowProgress:
-            options.withholdScriptFromSdkEvents && progressSnapshot
-              ? redactWorkflowProgress(progressSnapshot)
-              : progressSnapshot,
+          workflowProgress: shouldEmit
+            ? visibleWorkflowProgress(task.workflowProgress, options.withholdScriptFromSdkEvents)
+            : undefined,
         });
       },
     });
+    toolUseContext.taskRegistry.update(taskId, (entry) =>
+      entry.status === "running"
+        ? {
+            ...entry,
+            flushHeldProgress: progressBatcher.flushNow,
+          }
+        : entry,
+    );
     let onProgress = (progressEvent) => {
       if (progressEvent.type !== "progress") return;
       progressBatcher.onProgress(progressEvent.data);
@@ -524,6 +530,8 @@ function launchWorkflowRun(options) {
           ? runResult.failures.map(() => WITHHELD_ERROR_TEXT)
           : runResult.failures,
         foreignArtifactContent: runResult.foreignArtifactContent,
+        pluginSteered: isResume || runResult.pluginSteered,
+        remoteControlDeviceReport: runResult.remoteControlDeviceReport,
         toolsUsed: runResult.toolsUsed,
         usageLimitDenial: runResult.usageLimitDenial,
         agentCount: runResult.agentCount,
@@ -574,6 +582,7 @@ function launchWorkflowRun(options) {
           summary: description,
           status: "failed",
           error: error_2,
+          pluginSteered: true,
           agentCount,
           totalTokens: task?.totalTokens ?? 0,
           totalToolCalls: task?.totalToolCalls ?? 0,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：组织配置门控的执行、等待与日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c18v4hz4.js (54)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c33twnyh.js (54)
  * attribution: placement 54
  */
 import { classifyAuthDenial } from "../analytics/authOutcomeTelemetry.js";
@@ -68,7 +68,7 @@ import { currentFetchHold } from "../../utils/plugins/hooksModulesRollout.js";
 import { EVENT_LOGGING_FLAG_WAIT_MS } from "../../utils/startupFlagWait.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-c18v4hz4.js:5344-5407 placement
+//@ chunk-c33twnyh.js:5378-5441 placement
 /**
  * 状态为 dead 且认证拒绝与组织无关时视为凭据拒绝。
  */
@@ -77,7 +77,7 @@ function isCredentialRefusalNotOrg(credentialState, serverErrorCode, serverAuthD
     credentialState === "dead" && classifyAuthDenial(serverErrorCode, serverAuthDenial) !== "organization"
   );
 }
-//@ chunk-c18v4hz4.js:5407-5723 placement
+//@ chunk-c33twnyh.js:5441-5757 placement
 function refusalForOrgSubscription(status, serverErrorType, serverErrorCode, serverAuthDenial) {
   if (knownOrUndefined(serverErrorType) === undefined) return;
   let denial = classifyAuthDenial(serverErrorCode, serverAuthDenial);
@@ -89,7 +89,7 @@ function refusalForOrgSubscription(status, serverErrorType, serverErrorCode, ser
   if (isRetryableHttpStatus(status) || status >= 500) return;
   return "unavailable_server";
 }
-//@ chunk-c18v4hz4.js:5723-6656 placement
+//@ chunk-c33twnyh.js:5757-6690 placement
 function policyRefusalReason(
   credentialState,
   serverErrorCode,
@@ -134,13 +134,13 @@ function policyRefusalReason(
       return "client_error";
   }
 }
-//@ chunk-c18v4hz4.js:6656-6704 placement
+//@ chunk-c33twnyh.js:6690-6738 placement
 /**
  * 读取同步时间的默认实现，与保存它的插槽。
  */
 var syncAgeReader; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var syncAgeReaderSlot;
-deferInit("chunk-c18v4hz4.js:6656", () => {
+deferInit("chunk-c33twnyh.js:6690", () => {
   syncAgeReader = () => remoteSettingsAgeMs();
   syncAgeReaderSlot = identity(
     {
@@ -151,7 +151,7 @@ deferInit("chunk-c18v4hz4.js:6656", () => {
     },
   );
 });
-//@ chunk-c18v4hz4.js:6704-6827 placement
+//@ chunk-c33twnyh.js:6738-6861 placement
 function storedSettingsState() {
   let present = false;
   try {
@@ -170,15 +170,15 @@ function storedSettingsState() {
     ageMs,
   };
 }
-//@ chunk-c18v4hz4.js:6827-6907 placement
+//@ chunk-c33twnyh.js:6861-6941 placement
 /**
  * 视为「无需组织配置」的排除原因集合。
  */
 var NOT_REQUIRED_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-c18v4hz4.js:6827", () => {
+deferInit("chunk-c33twnyh.js:6861", () => {
   NOT_REQUIRED_REASONS = new Set(["sandboxed_entrypoint", "claude_tag", "hermetic_remote_session"]);
 });
-//@ chunk-c18v4hz4.js:6907-7842 placement
+//@ chunk-c33twnyh.js:6941-7876 placement
 function settingsOutcome(
   policy,
   lastLoad,
@@ -246,7 +246,7 @@ function settingsOutcome(
     reason: "unavailable_pending",
   };
 }
-//@ chunk-c18v4hz4.js:7842-8839 placement
+//@ chunk-c33twnyh.js:7876-8873 placement
 function settingsRefusalReason(
   errorKind,
   httpStatus,
@@ -300,14 +300,14 @@ function settingsRefusalReason(
       return "client_error";
   }
 }
-//@ chunk-c18v4hz4.js:8839-8892 placement
+//@ chunk-c33twnyh.js:8873-8926 placement
 /**
  * 门控触发面：非交互会话或启动阶段。
  */
 function gateSurface() {
   return getIsNonInteractiveSession() ? "noninteractive" : "startup";
 }
-//@ chunk-c18v4hz4.js:8892-9886 placement
+//@ chunk-c33twnyh.js:8926-9920 placement
 /**
  * 计算组织配置门控的完整判定：候选资格、策略与远程设置的加载结果、缓存年龄。
  */
@@ -375,7 +375,7 @@ function evaluateOrgConfigGate(
     ...storedCopyFields(armedInput, readFacts),
   };
 }
-//@ chunk-c18v4hz4.js:9886-10285 placement
+//@ chunk-c33twnyh.js:9920-10319 placement
 function storedCopyFields(armedInput, readFacts) {
   if (readFacts === undefined) return {};
   try {
@@ -397,7 +397,7 @@ function storedCopyFields(armedInput, readFacts) {
     return {};
   }
 }
-//@ chunk-c18v4hz4.js:10285-10355 placement (2.1.88 match: orgStatus, 1)
+//@ chunk-c33twnyh.js:10319-10389 placement
 /**
  * 分别按“信任缓存/不信任缓存”两种假设求 verdict，相同则返回，否则 pending。旧版名 orgStatus 为错配，与 fast mode 无关（远程桥接门控）。
  */
@@ -406,7 +406,7 @@ function resolveCacheTrustVerdict(armedInput, signatureFacts) {
   let lenientVerdict = evaluateVerdictWithCacheTrust(armedInput, signatureFacts, false);
   return strictVerdict === lenientVerdict ? strictVerdict : "pending";
 }
-//@ chunk-c18v4hz4.js:10355-10466 placement
+//@ chunk-c33twnyh.js:10389-10500 placement
 /**
  * 按是否信任存储副本调整 policy/settings 后调用 eQe 求 verdict。
  */
@@ -417,7 +417,7 @@ function evaluateVerdictWithCacheTrust(armedInput, signatureFacts, trustAnyway) 
     settings: maskUntrustedAdmittedCache(armedInput.settings, signatureFacts.settings, trustAnyway),
   }).verdict;
 }
-//@ chunk-c18v4hz4.js:10466-10607 placement
+//@ chunk-c33twnyh.js:10500-10641 placement
 /**
  * 存储副本不可信时去掉 hasAdmittedCache/admittedCacheAgeMs。
  */
@@ -430,7 +430,7 @@ function maskUntrustedAdmittedCache(outcome, { storedCopy }, trustPending) {
         admittedCacheAgeMs: undefined,
       };
 }
-//@ chunk-c18v4hz4.js:10607-10766 placement
+//@ chunk-c33twnyh.js:10641-10801 placement
 function registerOrgConfigGate(options) {
   setOrgGateShadow(
     (signatureFacts) => {
@@ -450,9 +450,9 @@ function registerOrgConfigGate(options) {
     options.settle === undefined ? undefined : withTimeout(options.settle, GATE_SETTLE_TIMEOUT_MS),
   );
 }
-//@ chunk-c18v4hz4.js:10766-10779 placement
+//@ chunk-c33twnyh.js:10801-10814 placement
 var GATE_SETTLE_TIMEOUT_MS = 35000;
-//@ chunk-c18v4hz4.js:10779-10863 placement (2.1.88 match: withTimeout, 0.805)
+//@ chunk-c33twnyh.js:10814-10898 placement (2.1.88 match: withTimeout, 0.805)
 function withTimeout(settle, timeoutMs) {
   return () =>
     Promise.race([
@@ -462,15 +462,15 @@ function withTimeout(settle, timeoutMs) {
       }),
     ]);
 }
-//@ chunk-c18v4hz4.js:16457-16524 placement
+//@ chunk-c33twnyh.js:16493-16561 placement
 function isGateBlocking(decision) {
   return decision.verdict === "blocked" || decision.verdict === "refused";
 }
-//@ chunk-c18v4hz4.js:16524-16624 placement
+//@ chunk-c33twnyh.js:16561-16661 placement
 function gateBlockReasonCode(decision) {
   return decision.verdict === "refused" ? "org_config_refused" : "org_config_required_unavailable";
 }
-//@ chunk-c18v4hz4.js:16624-16778 placement
+//@ chunk-c33twnyh.js:16661-16815 placement
 function isGateRefusalFinal(decision) {
   return (
     decision.verdict === "refused" ||
@@ -479,7 +479,7 @@ function isGateRefusalFinal(decision) {
     decision.reason === "unavailable_credential_refresh"
   );
 }
-//@ chunk-c18v4hz4.js:16778-16873 placement
+//@ chunk-c33twnyh.js:16815-16910 placement
 /**
  * 等待下一次设置加载结果的观察器（promise + dispose）。
  */
@@ -495,7 +495,7 @@ function nextSettingsOutcomeWatcher() {
     dispose: unsubscribe,
   };
 }
-//@ chunk-c18v4hz4.js:16873-17067 placement
+//@ chunk-c33twnyh.js:16910-17104 placement
 var DEFAULT_GATE_DEPS = {
   kickPolicy: ensurePolicyLimitsLoadRequested,
   kickSettings: kickSettingsLoad,
@@ -506,7 +506,7 @@ var DEFAULT_GATE_DEPS = {
   nextSettingsOutcome: nextSettingsOutcomeWatcher,
   now: () => performance.now(),
 };
-//@ chunk-c18v4hz4.js:17067-17737 placement
+//@ chunk-c33twnyh.js:17104-17774 placement
 /**
  * 执行组织配置门控：拉取策略与设置，等待结果并记录事件，必要时阻止会话。
  */
@@ -555,15 +555,15 @@ async function runOrgConfigGate(options, deps = DEFAULT_GATE_DEPS) {
   }
   return Math.max(0, Math.round(deps.now() - startedAt));
 }
-//@ chunk-c18v4hz4.js:17737-17792 placement
+//@ chunk-c33twnyh.js:17774-17829 placement
 /**
  * 视为凭据门槛未通过的排除原因集合。
  */
 var CREDENTIAL_GATE_MISS_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-c18v4hz4.js:17737", () => {
+deferInit("chunk-c33twnyh.js:17774", () => {
   CREDENTIAL_GATE_MISS_REASONS = new Set(["no_auth", "unsupported_subscription"]);
 });
-//@ chunk-c18v4hz4.js:17792-18085 placement
+//@ chunk-c33twnyh.js:17829-18122 placement
 function isStoredLoginRefusal(reason, inputs) {
   if (inputs.storedLoginOrigin !== true) return false;
   if (inputs.credentialShape !== "stored_login" && inputs.credentialShape !== "untiered_login") return false;
@@ -578,10 +578,10 @@ function isStoredLoginRefusal(reason, inputs) {
       return false;
   }
 }
-//@ chunk-c18v4hz4.js:18085-18232 placement
+//@ chunk-c33twnyh.js:18122-18270 placement
 var ELIGIBILITY_DEPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var seenGateKeys;
-deferInit("chunk-c18v4hz4.js:18085", () => {
+deferInit("chunk-c33twnyh.js:18122", () => {
   ELIGIBILITY_DEPS = {
     memoizedReason: getIneligibleReason,
     inputs: () => ({
@@ -600,7 +600,7 @@ deferInit("chunk-c18v4hz4.js:18085", () => {
     },
   );
 });
-//@ chunk-c18v4hz4.js:18232-18533 placement
+//@ chunk-c33twnyh.js:18270-18571 placement
 function shouldRecheckStoredLogin(deps = ELIGIBILITY_DEPS) {
   let reason = deps.memoizedReason();
   if (!CREDENTIAL_GATE_MISS_REASONS.has(reason ?? "")) return false;
@@ -615,7 +615,7 @@ function shouldRecheckStoredLogin(deps = ELIGIBILITY_DEPS) {
   );
   return true;
 }
-//@ chunk-c18v4hz4.js:18533-18701 placement
+//@ chunk-c33twnyh.js:18571-18739 placement
 function kickSettingsLoad(deps = ELIGIBILITY_DEPS, load = () => loadRemoteManagedSettings()) {
   if (!shouldRecheckStoredLogin(deps)) return;
   load().catch((error) =>
@@ -627,7 +627,7 @@ function kickSettingsLoad(deps = ELIGIBILITY_DEPS, load = () => loadRemoteManage
     ),
   );
 }
-//@ chunk-c18v4hz4.js:18701-18817 placement
+//@ chunk-c33twnyh.js:18739-18855 placement
 function readGateFlag(options) {
   if (options.readFlag !== undefined)
     return {
@@ -636,7 +636,7 @@ function readGateFlag(options) {
     };
   return readOrgConfigRequiredFlagWithSource();
 }
-//@ chunk-c18v4hz4.js:18817-19011 placement
+//@ chunk-c33twnyh.js:18855-19049 placement
 function passDecision(flag, flagSource, candidacy, surface) {
   return {
     decision: {
@@ -655,7 +655,7 @@ function passDecision(flag, flagSource, candidacy, surface) {
     outcomes: undefined,
   };
 }
-//@ chunk-c18v4hz4.js:19011-19053 placement
+//@ chunk-c33twnyh.js:19049-19091 placement
 /**
  * 默认门控判定：非候选且开关未开。
  */
@@ -663,11 +663,11 @@ var DEFAULT_GATE_DECISION = {
   candidate: false,
   exclusion: "flag_off",
 };
-//@ chunk-c18v4hz4.js:19053-19106 placement
+//@ chunk-c33twnyh.js:19091-19144 placement
 function isFallbackFlagUsable(source, isFetchHeld, isCacheEmpty) {
   return source !== "fallback" || !isCacheEmpty() || isFetchHeld();
 }
-//@ chunk-c18v4hz4.js:19106-19442 placement
+//@ chunk-c33twnyh.js:19144-19480 placement
 function orgConfigGateQuick(options) {
   let { flag, source } = readGateFlag(options);
   if (
@@ -691,7 +691,7 @@ function orgConfigGateQuick(options) {
     decidedWithoutWaiting: true,
   });
 }
-//@ chunk-c18v4hz4.js:19442-20214 placement
+//@ chunk-c33twnyh.js:19480-20253 placement
 async function awaitOrgConfigGate(options) {
   let isFlagFetchHeld = options.isFlagFetchHeld ?? isFlagFetchHeld_2;
   let isFlagCacheEmpty = options.isFlagCacheEmpty ?? isGrowthBookCacheEmpty;
@@ -734,7 +734,7 @@ async function awaitOrgConfigGate(options) {
     decidedWithoutWaiting: false,
   });
 }
-//@ chunk-c18v4hz4.js:20214-20340 placement
+//@ chunk-c33twnyh.js:20253-20380 placement
 async function retryGateAfterOutcomes(decision, reevaluate, primeSettingsCacheAge = awaitSyncAge) {
   if (
     !decision.armed ||
@@ -746,14 +746,14 @@ async function retryGateAfterOutcomes(decision, reevaluate, primeSettingsCacheAg
   await primeSettingsCacheAge();
   return reevaluate();
 }
-//@ chunk-c18v4hz4.js:20340-20430 placement
+//@ chunk-c33twnyh.js:20380-20470 placement
 /**
  * 有已接纳缓存但缓存年龄未知。
  */
 function hasAdmittedCacheWithoutAge(outcomes) {
   return outcomes.settings.hasAdmittedCache && outcomes.settings.admittedCacheAgeMs === undefined;
 }
-//@ chunk-c18v4hz4.js:20430-20494 placement
+//@ chunk-c33twnyh.js:20470-20534 placement
 /**
  * 等待同步时间读取完成（吞掉错误）。
  */
@@ -767,7 +767,7 @@ async function awaitSyncAge() {
     },
   );
 }
-//@ chunk-c18v4hz4.js:20494-20770 placement
+//@ chunk-c33twnyh.js:20534-20810 placement
 function orgConfigGateSync(options, blockedMs, attempt = 1) {
   let { flag, source } = readGateFlag(options);
   if (!flag.enabled) return passDecision(flag, source, DEFAULT_GATE_DECISION, options.surface);
@@ -783,7 +783,7 @@ function orgConfigGateSync(options, blockedMs, attempt = 1) {
     decidedWithoutWaiting: false,
   });
 }
-//@ chunk-c18v4hz4.js:20770-21145 placement
+//@ chunk-c33twnyh.js:20810-21185 placement
 function gateDecisionFromOutcomes(options, flag, flagSource, candidacy, blockedMs, attempt, flags) {
   let outcomes = (options.readOutcomes ?? currentGateOutcomes)();
   let decision = orgConfigGateDecision({
@@ -810,7 +810,7 @@ function gateDecisionFromOutcomes(options, flag, flagSource, candidacy, blockedM
   if (flags.report) (options.report ?? logOrgConfigGate)(evaluation, outcomes);
   return evaluation;
 }
-//@ chunk-c18v4hz4.js:21145-22408 placement
+//@ chunk-c33twnyh.js:21185-22449 placement
 function logOrgConfigGate(gateAttempt, outcomes, outcome) {
   let { decision, flag, candidacy } = gateAttempt;
   let decisionLog = logEventAsync("tengu_org_config_gate", {
@@ -857,13 +857,13 @@ function logOrgConfigGate(gateAttempt, outcomes, outcome) {
   );
   return pending;
 }
-//@ chunk-c18v4hz4.js:22408-22486 placement
+//@ chunk-c33twnyh.js:22449-22527 placement
 /**
  * 本次门控判定是否已记录（可重置）。
  */
 var gateDecisionLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var pendingGateLogs;
-deferInit("chunk-c18v4hz4.js:22408", () => {
+deferInit("chunk-c33twnyh.js:22449", () => {
   gateDecisionLogged = identity(
     {
       done: false,
@@ -881,11 +881,11 @@ deferInit("chunk-c18v4hz4.js:22408", () => {
     },
   );
 });
-//@ chunk-c18v4hz4.js:22486-22544 placement
+//@ chunk-c33twnyh.js:22527-22585 placement
 async function settlePendingGateWork() {
   await Promise.allSettled([...pendingGateLogs.set]);
 }
-//@ chunk-c18v4hz4.js:22544-23165 placement
+//@ chunk-c33twnyh.js:22585-23206 placement
 async function reevaluateSettingsGate(recheck = shouldRecheckStoredLogin) {
   try {
     recheck();
@@ -932,12 +932,12 @@ async function reevaluateSettingsGate(recheck = shouldRecheckStoredLogin) {
     ),
   ]);
 }
-//@ chunk-c18v4hz4.js:23165-23177 placement
+//@ chunk-c33twnyh.js:23206-23218 placement
 /**
  * 刷新 GrowthBook 开关的超时。
  */
 var FLAG_REFRESH_TIMEOUT_MS = 3000;
-//@ chunk-c18v4hz4.js:23177-23262 placement
+//@ chunk-c33twnyh.js:23218-23303 placement
 function isFlagSourceUntrusted(
   flagSource,
   isFlagFetchHeld = isFlagFetchHeld_2,
@@ -946,7 +946,7 @@ function isFlagSourceUntrusted(
   if (flagSource === "disk") return !isFlagFetchHeld();
   return flagSource === "fallback" && isFlagCacheEmpty() && !isFlagFetchHeld();
 }
-//@ chunk-c18v4hz4.js:23262-23402 placement
+//@ chunk-c33twnyh.js:23303-23443 placement
 function isUnarmedFallback(
   state,
   isFlagFetchHeld = isFlagFetchHeld_2,
@@ -961,15 +961,15 @@ function isUnarmedFallback(
     !isFlagFetchHeld()
   );
 }
-//@ chunk-c18v4hz4.js:23402-23443 placement
+//@ chunk-c33twnyh.js:23443-23484 placement
 function isFlagFetchHeld_2() {
   return isPendingNotOver(currentFetchHold()) || !hasWorkspaceTrust();
 }
-//@ chunk-c18v4hz4.js:23443-23476 placement
+//@ chunk-c33twnyh.js:23484-23517 placement
 function isFlagFetchHeldNoTrust() {
   return isPendingNotOver(currentFetchHold());
 }
-//@ chunk-c18v4hz4.js:23476-23551 placement
+//@ chunk-c33twnyh.js:23517-23592 placement
 async function initGrowthBookWithDeadline(budgetMs, fetchFlag = initializeGrowthBook) {
   await withDeadline(
     fetchFlag().then(
@@ -983,19 +983,19 @@ async function initGrowthBookWithDeadline(budgetMs, fetchFlag = initializeGrowth
     budgetMs,
   );
 }
-//@ chunk-c18v4hz4.js:23551-23691 placement
+//@ chunk-c33twnyh.js:23592-23732 placement
 async function refreshFlagIfStale(options) {
   let { source } = readGateFlag(options);
   if (source !== "disk" && source !== "fallback") return;
   if ((options.isFlagFetchHeld ?? isFlagFetchHeld_2)()) return;
   await initGrowthBookWithDeadline(EVENT_LOGGING_FLAG_WAIT_MS, options.fetchFlag);
 }
-//@ chunk-c18v4hz4.js:23691-23756 placement
+//@ chunk-c33twnyh.js:23732-23797 placement
 /**
  * 按 fetcher 缓存 GrowthBook 初始化 Promise。
  */
 var growthBookReadyByFetcher; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-c18v4hz4.js:23691", () => {
+deferInit("chunk-c33twnyh.js:23732", () => {
   growthBookReadyByFetcher = identity(
     {
       byFetcher: new WeakMap(),
@@ -1005,7 +1005,7 @@ deferInit("chunk-c18v4hz4.js:23691", () => {
     },
   );
 });
-//@ chunk-c18v4hz4.js:23756-23856 placement
+//@ chunk-c33twnyh.js:23797-23897 placement
 function growthBookReady(fetchFlag = initializeGrowthBook) {
   let ready = growthBookReadyByFetcher.byFetcher.get(fetchFlag);
   if (ready === undefined) {
@@ -1014,13 +1014,13 @@ function growthBookReady(fetchFlag = initializeGrowthBook) {
   }
   return ready;
 }
-//@ chunk-c18v4hz4.js:23856-23910 placement
+//@ chunk-c33twnyh.js:23897-23951 placement
 /**
  * 门控重试的延迟序列与抖动比例。
  */
 var GATE_RETRY_DELAYS_MS = [15000, 15000, 30000, 60000, 180000, 600000];
 var GATE_RETRY_JITTER_RATIO = 0.3;
-//@ chunk-c18v4hz4.js:23910-24034 placement
+//@ chunk-c33twnyh.js:23951-24075 placement
 function jitteredRetryMs(rung, random = Math.random) {
   let baseMs = GATE_RETRY_DELAYS_MS[rung];
   if (baseMs === undefined) return;
@@ -1028,27 +1028,27 @@ function jitteredRetryMs(rung, random = Math.random) {
   return Math.max(1000, Math.round(baseMs * (1 + jitter)));
 }
 export {
+  gateBlockReasonCode,
   registerOrgConfigGate,
-  isGateBlocking,
-  jitteredRetryMs,
-  isGateRefusalFinal,
   settlePendingGateWork,
   policyRefusalReason,
   settingsOutcome,
   storedSettingsState,
-  gateBlockReasonCode,
-  orgConfigGateQuick,
-  isFlagFetchHeld_2,
-  isFlagSourceUntrusted,
-  initGrowthBookWithDeadline,
-  logOrgConfigGate,
-  awaitOrgConfigGate,
-  reevaluateSettingsGate,
-  isUnarmedFallback,
-  growthBookReady,
-  retryGateAfterOutcomes,
-  orgConfigGateSync,
   refusalForOrgSubscription,
   isFlagFetchHeldNoTrust,
   isFallbackFlagUsable,
+  isUnarmedFallback,
+  isFlagSourceUntrusted,
+  logOrgConfigGate,
+  isGateBlocking,
+  orgConfigGateQuick,
+  isFlagFetchHeld_2,
+  initGrowthBookWithDeadline,
+  awaitOrgConfigGate,
+  reevaluateSettingsGate,
+  growthBookReady,
+  retryGateAfterOutcomes,
+  orgConfigGateSync,
+  jitteredRetryMs,
+  isGateRefusalFinal,
 };

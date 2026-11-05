@@ -3,43 +3,43 @@
  *
  * 2.1.316 新增：会话标志合并与权限模式同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (13)
  * attribution: placement 13
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:254646-254668 placement
+//@ chunk-vn3g7zt8.js:259740-259762 placement
 /**
  * 按宿主保存的会话标志读取器集合与会话标志持有者（合并、清空）。
  */
 class SessionFlagsReaders {
   readers = null;
 }
-//@ chunk-hwmsct5x.js:254668-254693 placement
+//@ chunk-vn3g7zt8.js:259762-259787 placement
 var sessionFlagReadersSlot; // deferred: uses SessionFlagsReaders of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:254668", () => {
+deferInit("chunk-vn3g7zt8.js:259762", () => {
   sessionFlagReadersSlot = new HostScoped(() => new SessionFlagsReaders());
 });
-//@ chunk-hwmsct5x.js:254693-254730 placement
+//@ chunk-vn3g7zt8.js:259787-259824 placement
 function sessionFlagReaders() {
   return sessionFlagReadersSlot.of(getRootSession().host);
 }
-//@ chunk-hwmsct5x.js:254730-254764 placement
+//@ chunk-vn3g7zt8.js:259824-259858 placement
 function getSessionFlagReaders() {
   return sessionFlagReaders().readers;
 }
-//@ chunk-hwmsct5x.js:254764-254795 placement
+//@ chunk-vn3g7zt8.js:259858-259889 placement
 /**
  * 导出函数 `setSessionFlagReaders`：参数 e。
  */
 function setSessionFlagReaders(readers) {
   sessionFlagReaders().readers = readers;
 }
-//@ chunk-hwmsct5x.js:254795-254915 placement
+//@ chunk-vn3g7zt8.js:259889-260009 placement
 class SessionFlagsHolder {
   context = null;
   get() {
@@ -55,16 +55,16 @@ class SessionFlagsHolder {
     this.context = null;
   }
 }
-//@ chunk-hwmsct5x.js:254915-254940 placement
+//@ chunk-vn3g7zt8.js:260009-260034 placement
 var sessionFlagsSlot; // deferred: uses SessionFlagsHolder of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:254915", () => {
+deferInit("chunk-vn3g7zt8.js:260009", () => {
   sessionFlagsSlot = new HostScoped(() => new SessionFlagsHolder());
 });
-//@ chunk-hwmsct5x.js:254940-254977 placement
+//@ chunk-vn3g7zt8.js:260034-260071 placement
 function sessionFlags() {
   return sessionFlagsSlot.of(getRootSession().host);
 }
-//@ chunk-hwmsct5x.js:254977-255040 placement
+//@ chunk-vn3g7zt8.js:260071-260134 placement
 function mergeSessionFlags(source) {
   if (source === null) {
     sessionFlags().clear();
@@ -72,23 +72,23 @@ function mergeSessionFlags(source) {
   }
   sessionFlags().merge(source);
 }
-//@ chunk-hwmsct5x.js:255040-255073 placement
+//@ chunk-vn3g7zt8.js:260134-260167 placement
 function getSessionFlags() {
   return sessionFlags().get();
 }
-//@ chunk-hwmsct5x.js:255073-255095 placement
+//@ chunk-vn3g7zt8.js:260167-260189 placement
 /**
  * 导出函数 `noopSyncPermissionMode`。
  */
 function noopSyncPermissionMode() {
   return;
 }
-//@ chunk-hwmsct5x.js:255095-255112 placement
+//@ chunk-vn3g7zt8.js:260189-260206 placement
 /**
  * 导出函数 `noopMergeSessionFlags`：参数 e。
  */
 function noopMergeSessionFlags(target) {}
-//@ chunk-hwmsct5x.js:255112-255197 placement
+//@ chunk-vn3g7zt8.js:260206-260291 placement
 function syncSessionPermissionMode(currentPermissionMode) {
   if (!sessionFlags().get()?.permissionMode) return;
   mergeSessionFlags({
@@ -97,10 +97,10 @@ function syncSessionPermissionMode(currentPermissionMode) {
 }
 export {
   syncSessionPermissionMode,
-  noopSyncPermissionMode,
-  noopMergeSessionFlags,
+  getSessionFlags,
   mergeSessionFlags,
   setSessionFlagReaders,
-  getSessionFlags,
+  noopSyncPermissionMode,
+  noopMergeSessionFlags,
   getSessionFlagReaders,
 };

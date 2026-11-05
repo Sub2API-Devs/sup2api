@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/bedrock-sdk/internal/utils/log.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (6), chunk-qhhcfyds.js (6)
+ * pieces: chunk-b8zxeazh.js (6), chunk-f7kbssbx.js (6)
  * attribution: esm-fingerprint 8, esm-layout 4
  */
 
-//@ chunk-h87x8cg3.js:10486-10538 esm-fingerprint
+//@ chunk-b8zxeazh.js:10486-10538 esm-fingerprint
 var levelNumbers = {
   off: 0,
   error: 200,
@@ -14,14 +14,14 @@ var levelNumbers = {
   info: 400,
   debug: 500,
 };
-//@ chunk-h87x8cg3.js:10538-10552 esm-layout
+//@ chunk-b8zxeazh.js:10538-10552 esm-layout
 function noopLog() {}
-//@ chunk-h87x8cg3.js:10552-10621 esm-layout
+//@ chunk-b8zxeazh.js:10552-10621 esm-layout
 function makeLogFn(fnLevel, logger, logLevel) {
   if (!logger || levelNumbers[fnLevel] > levelNumbers[logLevel]) return noopLog;
   else return logger[fnLevel].bind(logger);
 }
-//@ chunk-h87x8cg3.js:10621-10674 esm-fingerprint
+//@ chunk-b8zxeazh.js:10621-10674 esm-fingerprint
 var noopLogger = {
   error: noopLog,
   warn: noopLog,
@@ -29,7 +29,7 @@ var noopLogger = {
   debug: noopLog,
 };
 var cachedLoggers = new WeakMap();
-//@ chunk-h87x8cg3.js:10674-10845 esm-fingerprint
+//@ chunk-b8zxeazh.js:10674-10845 esm-fingerprint
 function filterLogger(logger, logLevel) {
   let cachedLogger = cachedLoggers.get(logger);
   if (cachedLogger && cachedLogger[0] === logLevel) return cachedLogger[1];
@@ -42,14 +42,14 @@ function filterLogger(logger, logLevel) {
   cachedLoggers.set(logger, [logLevel, levelLogger]);
   return levelLogger;
 }
-//@ chunk-h87x8cg3.js:10845-10925 esm-fingerprint
+//@ chunk-b8zxeazh.js:10845-10925 esm-fingerprint
 function loggerFor(client) {
   let logger = client.logger;
   let logLevel = client.logLevel ?? "off";
   if (!logger) return noopLogger;
   return filterLogger(logger, logLevel);
 }
-//@ chunk-qhhcfyds.js:1975-2027 esm-fingerprint
+//@ chunk-f7kbssbx.js:1975-2027 esm-fingerprint
 var levelNumbers_2 = {
   off: 0,
   error: 200,
@@ -57,14 +57,14 @@ var levelNumbers_2 = {
   info: 400,
   debug: 500,
 };
-//@ chunk-qhhcfyds.js:2027-2041 esm-layout
+//@ chunk-f7kbssbx.js:2027-2041 esm-layout
 function noopLog_2() {}
-//@ chunk-qhhcfyds.js:2041-2110 esm-layout
+//@ chunk-f7kbssbx.js:2041-2110 esm-layout
 function getLevelWriter(fnLevel, logger, logLevel) {
   if (!logger || levelNumbers_2[fnLevel] > levelNumbers_2[logLevel]) return noopLog_2;
   else return logger[fnLevel].bind(logger);
 }
-//@ chunk-qhhcfyds.js:2110-2162 esm-fingerprint
+//@ chunk-f7kbssbx.js:2110-2162 esm-fingerprint
 var noopLogger_2 = {
   error: noopLog_2,
   warn: noopLog_2,
@@ -72,7 +72,7 @@ var noopLogger_2 = {
   debug: noopLog_2,
 };
 var cachedLoggers_2 = new WeakMap();
-//@ chunk-qhhcfyds.js:2162-2332 esm-fingerprint
+//@ chunk-f7kbssbx.js:2162-2332 esm-fingerprint
 function filterLogger_2(logger, logLevel) {
   let cachedLogger = cachedLoggers_2.get(logger);
   if (cachedLogger && cachedLogger[0] === logLevel) return cachedLogger[1];
@@ -85,7 +85,7 @@ function filterLogger_2(logger, logLevel) {
   cachedLoggers_2.set(logger, [logLevel, levelLogger]);
   return levelLogger;
 }
-//@ chunk-qhhcfyds.js:2332-2410 esm-fingerprint
+//@ chunk-f7kbssbx.js:2332-2410 esm-fingerprint
 function loggerFor_2(client) {
   let logger = client.logger;
   let logLevel = client.logLevel ?? "off";

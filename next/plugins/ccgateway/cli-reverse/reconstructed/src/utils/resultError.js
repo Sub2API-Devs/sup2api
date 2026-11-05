@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析并描述 URL 协议；取文本尾部完整行等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cgr0tezp.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2jb250pa.js (21), chunk-6hadbefe.js (7)
  * attribution: placement 28
  */
 import { regExp_9, regExp_2, MAX_SHORT_TEXT } from "./sanitization.js";
@@ -14,28 +14,28 @@ import { stripAnsi } from "./stripAnsi.js";
 import { errnoShapedCode, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 
-//@ chunk-cgr0tezp.js:10653-10726 placement
+//@ chunk-2jb250pa.js:5499-5572 placement
 /**
  * 非 ASCII 字符转义为 \u。
  */
 function escapeNonAscii(text) {
   return escapeNonPrintable(text.replace(/\\(?=u[0-9a-fA-F]{4})/g, "\\u005c"));
 }
-//@ chunk-cgr0tezp.js:10726-10779 placement
+//@ chunk-2jb250pa.js:5572-5625 placement
 /**
  * 非打印字符转义。
  */
 function escapeNonPrintable(text) {
   return text.replace(/[^\x20-\x7e]/g, toUnicodeEscapes);
 }
-//@ chunk-cgr0tezp.js:10779-10848 placement
+//@ chunk-2jb250pa.js:5625-5694 placement
 /**
  * 控制字符替换为空格。
  */
 function replaceControlChars(text) {
   return text.replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ");
 }
-//@ chunk-cgr0tezp.js:10848-10988 placement
+//@ chunk-2jb250pa.js:5694-5834 placement
 /**
  * 控制字符转义为 \u。
  */
@@ -49,14 +49,14 @@ function escapeControlChars(text) {
     ).join(""),
   );
 }
-//@ chunk-cgr0tezp.js:10988-11037 placement
+//@ chunk-2jb250pa.js:5834-5883 placement
 /**
  * 显示前归一化。
  */
 function normalizeForDisplay(text) {
   return toWellFormedString(stripAnsi(text)).replace(regExp_2, " ");
 }
-//@ chunk-cgr0tezp.js:11037-11199 placement
+//@ chunk-2jb250pa.js:5883-6044 placement
 /**
  * 清洗显示文本（去指定字符、压缩空白、截断）。
  */
@@ -67,7 +67,7 @@ function sanitizeDisplayText(text, options) {
   if (options?.maxCodeUnits !== undefined) cleaned = truncateToLength(cleaned, options.maxCodeUnits).trim();
   return cleaned;
 }
-//@ chunk-cgr0tezp.js:11199-11418 placement
+//@ chunk-2jb250pa.js:6044-6262 placement
 /**
  * 截取显示文本：统一换行、限制行数与字符数、规范化每行，返回文本与是否被截断。
  */
@@ -85,16 +85,16 @@ function clipDisplayText(text, { maxCodeUnits, maxLines }) {
     truncated: lines.length > maxLines || joined.length > maxCodeUnits,
   };
 }
-//@ chunk-cgr0tezp.js:11418-11451 placement
+//@ chunk-2jb250pa.js:6262-6295 placement
 /**
  * isAlreadySanitized：文本已是清洗后的形式。
  */
 function isAlreadySanitized(text) {
   return sanitizeDisplayText(text) === text;
 }
-//@ chunk-cgr0tezp.js:11451-11463 placement
+//@ chunk-2jb250pa.js:6295-6306 placement
 var MAX_TAIL_LINES_BYTES = 8192;
-//@ chunk-cgr0tezp.js:11463-11877 placement
+//@ chunk-2jb250pa.js:6306-6715 placement
 /**
  * 取文本尾部完整行。
  */
@@ -119,10 +119,10 @@ function tailLines(text, maxLines) {
   }
   let lines = tail.split(/\r?\n/);
   let result = [];
-  for (let j = lines.length - 1; j >= 0 && result.length < maxLines; j--) {
-    let parts = lines[j].split("\r");
-    for (let j = parts.length - 1; j >= 0; j--) {
-      let line = sanitizeDisplayText(parts[j], {
+  for (let index = lines.length - 1; index >= 0 && result.length < maxLines; index--) {
+    let parts = lines[index].split("\r");
+    for (let idx = parts.length - 1; idx >= 0; idx--) {
+      let line = sanitizeDisplayText(parts[idx], {
         maxCodeUnits: 512,
       });
       if (line !== "") {
@@ -133,26 +133,26 @@ function tailLines(text, maxLines) {
   }
   return result.reverse();
 }
-//@ chunk-cgr0tezp.js:11877-11888 placement
+//@ chunk-2jb250pa.js:6715-6726 placement
 /**
  * 标题最大长度。
  */
 var MAX_TITLE_LENGTH = 255;
-//@ chunk-cgr0tezp.js:11888-11919 placement
+//@ chunk-2jb250pa.js:6726-6757 placement
 /**
  * 清洗标题。
  */
 function sanitizeTitle(text) {
   return sanitizeMarkdownInline(text, MAX_TITLE_LENGTH);
 }
-//@ chunk-cgr0tezp.js:11919-11951 placement
+//@ chunk-2jb250pa.js:6757-6790 placement
 /**
  * 清洗短文本。
  */
 function sanitizeShortText(text) {
   return sanitizeMarkdownInline(text, MAX_SHORT_TEXT);
 }
-//@ chunk-cgr0tezp.js:11951-12108 placement
+//@ chunk-2jb250pa.js:6790-6946 placement
 function sanitizeMarkdownInline(text, maxLength) {
   let replaced = sanitizeDisplayText(text, {
     drop: /[`<>]/g,
@@ -163,13 +163,13 @@ function sanitizeMarkdownInline(text, maxLength) {
     .replace(/\]:/g, "] :");
   return truncateToLength(replaced, maxLength).trim();
 }
-//@ chunk-cgr0tezp.js:12108-12138 placement
+//@ chunk-2jb250pa.js:6946-6976 placement
 /**
  * markdown 安全文本长度与字符。
  */
 var MAX_MARKDOWN_SAFE_LENGTH = 2048;
 var MARKDOWN_BREAK_RE = /[`\[\]<>]/g;
-//@ chunk-cgr0tezp.js:12138-12326 placement
+//@ chunk-2jb250pa.js:6976-7163 placement
 /**
  * 打断 markdown 链接/HTML 的安全文本。
  */
@@ -184,14 +184,14 @@ function markdownSafeText(description) {
     .trim();
   return truncateToLength(trimmed, MAX_MARKDOWN_SAFE_LENGTH).trim();
 }
-//@ chunk-cgr0tezp.js:12326-12401 placement
+//@ chunk-2jb250pa.js:7163-7238 placement
 /**
  * 不可见字符转义。
  */
 function escapeInvisibleChars(text) {
   return text.replace(/[\u007F-\u009F\u2028\u2029\p{Cf}]/gu, toUnicodeEscapes);
 }
-//@ chunk-cgr0tezp.js:12401-12505 placement
+//@ chunk-2jb250pa.js:7238-7342 placement
 /**
  * 字符转为 \u 转义序列。
  */
@@ -201,7 +201,7 @@ function toUnicodeEscapes(chars) {
     .map((char) => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"))
     .join("");
 }
-//@ chunk-cgr0tezp.js:12505-13075 placement
+//@ chunk-2jb250pa.js:7342-7910 placement
 /**
  * 解析并描述 URL 协议。
  */
@@ -229,7 +229,7 @@ function describeUrlScheme(input) {
   let hostnameLength = ipv6Match !== null && !!tryParseUrl(`ssh://${ipv6Match[1]}/`)?.hostname;
   return /[[\]]/.test(decodedRest.slice(hostnameLength ? ipv6Match[0].length : 0));
 }
-//@ chunk-cgr0tezp.js:13075-13132 placement
+//@ chunk-2jb250pa.js:7910-7967 placement
 /**
  * 尝试解析 URL。
  */
@@ -240,7 +240,7 @@ function tryParseUrl(url) {
     return null;
   }
 }
-//@ chunk-cgr0tezp.js:13132-13254 placement
+//@ chunk-2jb250pa.js:7967-8088 placement
 /**
  * 解码 URL 中的 %XX 转义（保留 %00）。
  */
@@ -250,7 +250,7 @@ function decodePercentEscapes(text) {
     return codePoint === 0 ? match : String.fromCharCode(codePoint);
   });
 }
-//@ chunk-cgr0tezp.js:13433-13470 placement
+//@ chunk-6hadbefe.js:970-1007 placement
 /**
  * 构造成功结果。
  */
@@ -260,7 +260,7 @@ function ok(value) {
     value,
   };
 }
-//@ chunk-cgr0tezp.js:13470-13507 placement
+//@ chunk-6hadbefe.js:1007-1044 placement
 /**
  * 构造失败结果。
  */
@@ -270,7 +270,7 @@ function err(error) {
     error,
   };
 }
-//@ chunk-cgr0tezp.js:13507-13672 placement
+//@ chunk-6hadbefe.js:1044-1209 placement
 class ResultError extends Error {
   constructor(value) {
     super("Result was an error (see .error)");
@@ -281,7 +281,7 @@ class ResultError extends Error {
     });
   }
 }
-//@ chunk-cgr0tezp.js:13672-13733 placement
+//@ chunk-6hadbefe.js:1209-1270 placement
 /**
  * unwrapResult：取出结果或抛错。
  */
@@ -289,7 +289,7 @@ function unwrapResult(result) {
   if (result.ok) return result.value;
   throw new ResultError(result.error);
 }
-//@ chunk-cgr0tezp.js:13733-13902 placement
+//@ chunk-6hadbefe.js:1270-1439 placement
 /**
  * 路径空间构造（home、workspace、system 等）。
  */
@@ -311,7 +311,7 @@ var PathSpace = {
     path,
   }),
 };
-//@ chunk-cgr0tezp.js:13902-14108 placement
+//@ chunk-6hadbefe.js:1439-1645 placement
 /**
  * 判断错误是否为宿主拒绝的文件操作错误（code 为 Failed 且 telemetryCode 为 errno 或 ERR_ 形式）。
  */
@@ -325,7 +325,7 @@ function isHostFileError(value) {
     (errnoShapedCode(telemetryCode) !== undefined || /^ERR_[A-Z0-9_]+$/.test(telemetryCode))
   );
 }
-//@ chunk-cgr0tezp.js:14108-14410 placement
+//@ chunk-6hadbefe.js:1645-1947 placement
 /**
  * 解包宿主拒绝的文件操作错误。
  */
@@ -354,30 +354,30 @@ function unwrapHostFileError(error) {
   );
 }
 export {
-  sanitizeDisplayText,
-  MAX_TITLE_LENGTH,
+  PathSpace,
   toUnicodeEscapes,
-  unwrapResult,
-  replaceControlChars,
-  sanitizeTitle,
+  sanitizeDisplayText,
   MARKDOWN_BREAK_RE,
   MAX_MARKDOWN_SAFE_LENGTH,
   tailLines,
-  ok,
-  err,
-  PathSpace,
-  describeUrlScheme,
-  escapeControlChars,
-  markdownSafeText,
-  normalizeForDisplay,
-  escapeInvisibleChars,
+  MAX_TITLE_LENGTH,
   clipDisplayText,
+  normalizeForDisplay,
+  replaceControlChars,
   tryParseUrl,
-  sanitizeShortText,
   decodePercentEscapes,
+  unwrapResult,
+  escapeNonPrintable,
+  sanitizeTitle,
+  markdownSafeText,
   isHostFileError,
   unwrapHostFileError,
+  describeUrlScheme,
+  err,
+  ok,
+  escapeInvisibleChars,
+  escapeControlChars,
   escapeNonAscii,
-  escapeNonPrintable,
+  sanitizeShortText,
   isAlreadySanitized,
 };

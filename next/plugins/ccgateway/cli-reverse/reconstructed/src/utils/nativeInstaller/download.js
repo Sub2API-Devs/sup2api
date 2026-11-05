@@ -3,10 +3,10 @@
  *
  * 原生安装器的下载：版本清单、签名校验（RSASSA-PKCS1-v1_5-SHA512）、校验和与重试
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/download.ts
- * pieces: chunk-zw17mz74.js (40)
- * attribution: placement 15, layout 19, fingerprint 5, callgraph-witnessed 1
+ * pieces: chunk-e5z7dpjd.js (40), chunk-p3km1ynr.js (1)
+ * attribution: placement 15, layout 20, fingerprint 5, callgraph-witnessed 1
  */
 import { createPublicKey, createHash, verify } from "crypto";
 import { Transform, Readable } from "stream";
@@ -15,6 +15,7 @@ import { pipeline } from "stream/promises";
 import { createZstdDecompress } from "zlib";
 import { chmod, rm } from "fs/promises";
 import { join } from "path";
+import { isEnvDefinedFalsy } from "../envUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   objectSchema,
@@ -49,18 +50,24 @@ import {
   TRANSIENT_SOCKET_CODES,
   UNREACHABLE_ERROR_CODES,
 } from "../../services/api/errorUtils.js";
-import { sleep } from "../sleep.js";
+import { sleep, backoffDelayMs } from "../sleep.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   initializeGrowthBook,
 } from "../../services/analytics/growthbook.js";
 import { getBinaryName, getPlatform } from "./installer.js";
 import { getFsImplementation } from "../fsOperations.js";
-import { lt_2 } from "../semver.js";
-import { isEnvDefinedFalsy } from "../envUtils.js";
+import { lt as lt_2 } from "../semver.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-zw17mz74.js:2482-3305 placement
+//@ chunk-p3km1ynr.js:553-586 placement
+/**
+ * 判断自动更新是否启用。
+ */
+function isAutoUpdateEnabled() {
+  return !isEnvDefinedFalsy(undefined);
+}
+//@ chunk-e5z7dpjd.js:2591-3414 placement
 function verifyReleaseManifest() {
   return `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAp28rSV5I8HmK8CK9GixB
@@ -78,21 +85,21 @@ IgmI+CePUPB1pDf+lhPkU1MCAwEAAQ==
 -----END PUBLIC KEY-----
 `;
 }
-//@ chunk-zw17mz74.js:3305-3378 placement
+//@ chunk-e5z7dpjd.js:3414-3487 placement
 var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FLAG_ENFORCEMENT;
 var FLAG;
-deferInit("chunk-zw17mz74.js:3305", () => {
+deferInit("chunk-e5z7dpjd.js:3414", () => {
   buffer = Buffer.from("claude-code-manifest-v1\x00");
   FLAG_ENFORCEMENT = "2.1.207";
   FLAG = "flag";
 });
-//@ chunk-zw17mz74.js:3378-3677 placement
+//@ chunk-e5z7dpjd.js:3487-3786 placement
 var MANIFEST_SIGNATURE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RSASSA_PKCS1_V1_5_SHA512;
 var manifestSignatureSchema;
 var releaseManifestSchema;
-deferInit("chunk-zw17mz74.js:3378", () => {
+deferInit("chunk-e5z7dpjd.js:3487", () => {
   MANIFEST_SIGNATURE_VERSION = 1;
   RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
   manifestSignatureSchema = DoctorLazy(() =>
@@ -118,16 +125,18 @@ deferInit("chunk-zw17mz74.js:3378", () => {
     }),
   );
 });
-//@ chunk-zw17mz74.js:3677-3917 placement
+//@ chunk-e5z7dpjd.js:3786-4133 placement
 let ManifestSignatureError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zw17mz74.js:3677", () => {
+deferInit("chunk-e5z7dpjd.js:3786", () => {
   ManifestSignatureError = class ManifestSignatureError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
     reason;
-    constructor(version, reason) {
+    constructor(version, reason, platform = "update") {
       super(
-        `Release verification failed for Claude Code ${version} (${reason}). The update was not installed.`,
+        platform === "update"
+          ? `Release verification failed for Claude Code ${version} (${reason}). The update was not installed.`
+          : `Release verification failed for the macOS app bundle of Claude Code ${version} (${reason}).`,
         "Release manifest signature verification failed",
         reason,
       );
@@ -136,7 +145,7 @@ deferInit("chunk-zw17mz74.js:3677", () => {
     }
   };
 });
-//@ chunk-zw17mz74.js:3917-4656 placement
+//@ chunk-e5z7dpjd.js:4133-4872 placement
 /**
  * 校验发布清单的签名附件（格式、密钥不符、签名无效、版本不符）。
  */
@@ -184,27 +193,37 @@ function verifyManifestSidecar({ manifestBytes, sidecar, expectedVersion, public
     throw new ManifestSignatureError(expectedVersion, "version_mismatch");
   return manifest;
 }
-//@ chunk-zw17mz74.js:4656-4728 placement
+//@ chunk-e5z7dpjd.js:4872-4954 layout
+var checksumEntrySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e5z7dpjd.js:4872", () => {
+  checksumEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      checksum: stringSchema().regex(/^[a-f0-9]{64}$/),
+      size: numberSchema().int().positive(),
+    }),
+  );
+});
+//@ chunk-e5z7dpjd.js:4954-5026 placement
 var DOWNLOAD_BASE_URL = "https://downloads.claude.ai/claude-code-releases";
 var VERSION_CHECK_TIMEOUT_MS = 30000;
 var VERSION_CHECK_ATTEMPTS = 3;
-//@ chunk-zw17mz74.js:4728-4749 placement
+//@ chunk-e5z7dpjd.js:5026-5047 placement
 /**
  * 版本清单错误（可安全上报遥测的文案）。
  */
 let ReleaseManifestError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zw17mz74.js:4728", () => {
+deferInit("chunk-e5z7dpjd.js:5026", () => {
   ReleaseManifestError = class ReleaseManifestError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-zw17mz74.js:4749-4803 layout
+//@ chunk-e5z7dpjd.js:5047-5101 layout
 function httpGet(url, options) {
   return isAnthropicOwnedHost(url)
     ? publicCdnGuardedClient.get(url, options)
     : externalHttp.get(url, options);
 }
-//@ chunk-zw17mz74.js:4803-5961 fingerprint (2.1.88 match: getLatestVersionFromBinaryRepo, 0.413)
+//@ chunk-e5z7dpjd.js:5101-6259 fingerprint (2.1.88 match: getLatestVersionFromBinaryRepo, 0.413)
 /**
  * 从二进制仓库读 stable/latest 通道的版本号（带重试）。
  */
@@ -276,7 +295,7 @@ async function getLatestVersionFromBinaryRepo(channel = "latest", baseUrl, authC
   else logFeatureOk("update_check");
   return trimmed;
 }
-//@ chunk-zw17mz74.js:5961-6486 fingerprint (2.1.88 match: getLatestVersion, 0.716)
+//@ chunk-e5z7dpjd.js:6259-6784 fingerprint (2.1.88 match: getLatestVersion, 0.716)
 /**
  * 把 stable/latest/具体版本解析为要安装的版本号（拒绝 99.99.* 测试版本）。
  */
@@ -303,9 +322,9 @@ async function getLatestVersion(channelOrVersion) {
     );
   return getLatestVersionFromBinaryRepo(channel, DOWNLOAD_BASE_URL);
 }
-//@ chunk-zw17mz74.js:6486-6566 layout
+//@ chunk-e5z7dpjd.js:6784-6864 layout
 var npmManifestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zw17mz74.js:6486", () => {
+deferInit("chunk-e5z7dpjd.js:6784", () => {
   npmManifestSchema = DoctorLazy(() =>
     objectSchema({
       dist: objectSchema({
@@ -315,23 +334,24 @@ deferInit("chunk-zw17mz74.js:6486", () => {
     }),
   );
 });
-//@ chunk-zw17mz74.js:6566-6632 layout
+//@ chunk-e5z7dpjd.js:6864-6930 layout
 var DEFAULT_STALL_TIMEOUT_MS = 120000;
 var MAX_DOWNLOAD_RETRIES = 3;
 var DOWNLOAD_DEADLINE_MS = 600000;
 var VERSION_CHECK_TIMEOUT_MS_2 = 1e4;
 var RETRY_BASE_DELAY_MS = 1000;
-var VERSION_CHECK_BUDGET_MS = MAX_DOWNLOAD_RETRIES * (VERSION_CHECK_TIMEOUT_MS_2 + RETRY_BASE_DELAY_MS);
+var SIDECAR_FETCH_MAX_ATTEMPTS = 5;
+var VERSION_CHECK_BUDGET_MS = 33000;
 var VERSION_CHECK_TOTAL_MS = 2 * VERSION_CHECK_BUDGET_MS;
-//@ chunk-zw17mz74.js:6632-6708 fingerprint (2.1.88 match: getStallTimeoutMs, 1)
+//@ chunk-e5z7dpjd.js:6930-7006 fingerprint (2.1.88 match: getStallTimeoutMs, 1)
 function getStallTimeoutMs() {
   return Number(env.CLAUDE_CODE_STALL_TIMEOUT_MS_FOR_TESTING) || DEFAULT_STALL_TIMEOUT_MS;
 }
-//@ chunk-zw17mz74.js:6708-6788 layout
+//@ chunk-e5z7dpjd.js:7006-7086 layout
 function getDownloadDeadlineMs() {
   return Number(env.CLAUDE_CODE_DOWNLOAD_DEADLINE_MS_FOR_TESTING) || DOWNLOAD_DEADLINE_MS;
 }
-//@ chunk-zw17mz74.js:6788-6917 fingerprint (2.1.88 match: StallTimeoutError, 0.667)
+//@ chunk-e5z7dpjd.js:7086-7215 fingerprint (2.1.88 match: StallTimeoutError, 0.667)
 /**
  * 下载 120 秒无数据时抛出的错误。
  */
@@ -341,7 +361,7 @@ class StallTimeoutError extends Error {
     this.name = "StallTimeoutError";
   }
 }
-//@ chunk-zw17mz74.js:6917-7098 layout
+//@ chunk-e5z7dpjd.js:7215-7396 layout
 function isRetriableConnectionDrop(error) {
   if (isAxiosError(error) && error.response) return false;
   let code = extractConnectionErrorDetails(error)?.code;
@@ -350,7 +370,7 @@ function isRetriableConnectionDrop(error) {
     return true;
   return hasExactErrorMessage(error, "aborted");
 }
-//@ chunk-zw17mz74.js:7098-9731 layout
+//@ chunk-e5z7dpjd.js:7396-10029 layout
 /**
  * 下载更新二进制（可选 zstd 解压并限制解压后大小）：边下载边算 SHA-256，带停滞超时与总截止时间；校验和不符、停滞或连接中断时有限次重试，失败时删除半成品，成功后设为可执行。
  */
@@ -549,30 +569,30 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
   }
   throw lastError ?? Error("Download failed after all retries");
 }
-//@ chunk-zw17mz74.js:9731-9784 layout
+//@ chunk-e5z7dpjd.js:10029-10082 layout
 function signatureEnforcementFlag() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_elegant_pancake", null);
 }
-//@ chunk-zw17mz74.js:9784-9840 layout (2.1.88 match: formatRelativeTimeAgo, 0.75)
+//@ chunk-e5z7dpjd.js:10082-10138 layout (2.1.88 match: formatRelativeTimeAgo, 0.75)
 function formatRelativeTimeAgo(date, options = signatureEnforcementFlag()) {
   return date === "always" ? options !== false : options === true;
 }
-//@ chunk-zw17mz74.js:9840-9864 layout
+//@ chunk-e5z7dpjd.js:10138-10162 layout
 function flagEnforcementMode() {
   return FLAG;
 }
-//@ chunk-zw17mz74.js:9864-9894 layout
+//@ chunk-e5z7dpjd.js:10162-10192 layout
 function enforcementFlagTime() {
   return formatRelativeTimeAgo(flagEnforcementMode());
 }
-//@ chunk-zw17mz74.js:9894-9957 layout
+//@ chunk-e5z7dpjd.js:10192-10255 layout
 function isSignatureEnforced(manifestSignatureEnforcement, options) {
   return (
     manifestSignatureEnforcement === "always" ||
     (manifestSignatureEnforcement === "flag" && formatRelativeTimeAgo("flag", options))
   );
 }
-//@ chunk-zw17mz74.js:9957-12952 layout
+//@ chunk-e5z7dpjd.js:10255-13387 layout
 /**
  * 获取版本的 manifest.json 并按策略校验签名旁文件（RSASSA-PKCS1-v1_5-SHA512）：缺签名时可按旧版放行，核对二进制名与强制签名的发布时间；失败按是否强制决定抛错或告警继续，返回 manifest 与认证状态。
  */
@@ -623,22 +643,37 @@ async function fetchReleaseManifest(
     let sidecarUrl = `${baseUrl}/${version}/manifest.json.raw-sig.json`;
     let now = Date.now();
     let sidecarStatus;
+    let attempt = 1;
     let enforcement;
     try {
       let sidecar;
       let isUnsigned = false;
       try {
-        let sidecarResponse = await fetchWithDropRetry(sidecarUrl, {
-          timeout: VERSION_CHECK_TIMEOUT_MS_2,
-          ...authConfig,
-          responseType: "json",
-          maxContentLength: 65536,
-          signal: AbortSignal.timeout(VERSION_CHECK_BUDGET_MS),
-        });
+        let sidecarResponse = await fetchWithDropRetry(
+          sidecarUrl,
+          {
+            timeout: VERSION_CHECK_TIMEOUT_MS_2,
+            ...authConfig,
+            responseType: "json",
+            maxContentLength: 65536,
+          },
+          {
+            maxAttempts: SIDECAR_FETCH_MAX_ATTEMPTS,
+            alsoRetry: (error) => {
+              let statusCode = httpStatusOf(error);
+              return statusCode === undefined
+                ? isTimeoutError(error)
+                : statusCode === 429 || statusCode >= 500;
+            },
+            deadline: AbortSignal.timeout(VERSION_CHECK_BUDGET_MS),
+          },
+        );
+        attempt = sidecarResponse.attempt;
         dropRetried ||= sidecarResponse.dropRetried;
         sidecar = sidecarResponse.data;
       } catch (error) {
         sidecarStatus = httpStatusOf(error);
+        attempt = getAttemptNumber(error) ?? 1;
         if (sidecarStatus !== 404)
           throw new ManifestSignatureError(
             version,
@@ -684,7 +719,9 @@ async function fetchReleaseManifest(
             throw new ManifestSignatureError(version, "release_predates_enforcement");
         }
         signatureVerified = true;
-        logFeatureOk("update_manifest_signature");
+        logFeatureOk("update_manifest_signature", {
+          attempt,
+        });
       }
     } catch (error) {
       if (!(error instanceof ManifestSignatureError)) throw error;
@@ -696,6 +733,7 @@ async function fetchReleaseManifest(
       logEvent("tengu_binary_manifest_signature_failed", {
         reason: fromEnum(error.reason),
         http_status: sidecarStatus,
+        attempt,
         enforced: enforcedMode,
         platform: platformOrOther(platform),
         latency_ms: latencyMs,
@@ -742,7 +780,7 @@ async function fetchReleaseManifest(
     metadataDropRetried: dropRetried,
   };
 }
-//@ chunk-zw17mz74.js:12952-15273 fingerprint (2.1.88 match: downloadVersionFromBinaryRepo, 0.425)
+//@ chunk-e5z7dpjd.js:13387-15708 fingerprint (2.1.88 match: downloadVersionFromBinaryRepo, 0.425)
 /**
  * 从 downloads.claude.ai/claude-code-releases 下载指定版本：读 manifest.zst.json、按平台取二进制并校验 sha256 与签名。
  */
@@ -865,7 +903,7 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
     throw error;
   }
 }
-//@ chunk-zw17mz74.js:15273-15426 layout
+//@ chunk-e5z7dpjd.js:15708-15861 layout
 function signaturePolicyFor(version, { explicitVersionRequested, requireEnforcingRelease }) {
   return requireEnforcingRelease
     ? "require-enforcing-release"
@@ -873,7 +911,7 @@ function signaturePolicyFor(version, { explicitVersionRequested, requireEnforcin
       ? "allow-unsigned-legacy"
       : "require";
 }
-//@ chunk-zw17mz74.js:15426-16020 layout
+//@ chunk-e5z7dpjd.js:15861-16455 layout
 async function reverifyRetainedVersion(version, filePath, options) {
   let platform = getPlatform();
   let { manifest, manifestAuthenticated, signatureVerified } = await fetchReleaseManifest(
@@ -909,19 +947,19 @@ async function reverifyRetainedVersion(version, filePath, options) {
     expectedChecksum: checksum,
   };
 }
-//@ chunk-zw17mz74.js:16020-16132 layout
+//@ chunk-e5z7dpjd.js:16455-16567 layout
 function isRetryableNetworkError(error) {
   if (!isAxiosError(error) || error.response) return false;
   let code = extractConnectionErrorDetails(error)?.code;
   return code !== undefined && (UNREACHABLE_ERROR_CODES.has(code) || code === "ETIMEDOUT");
 }
-//@ chunk-zw17mz74.js:16132-16213 layout
+//@ chunk-e5z7dpjd.js:16567-16648 layout
 async function sha256File(filePath) {
   let hash = createHash("sha256");
   await pipeline(createReadStream(filePath), hash);
   return hash.digest("hex");
 }
-//@ chunk-zw17mz74.js:16213-16353 layout
+//@ chunk-e5z7dpjd.js:16648-16788 layout
 async function fileMatchesChecksum(filePath, expectedHash) {
   try {
     return (await sha256File(filePath)) === expectedHash;
@@ -932,7 +970,7 @@ async function fileMatchesChecksum(filePath, expectedHash) {
     return false;
   }
 }
-//@ chunk-zw17mz74.js:16353-16640 callgraph-witnessed (2.1.88 match: downloadVersion, 0.166)
+//@ chunk-e5z7dpjd.js:16788-17075 callgraph-witnessed (2.1.88 match: downloadVersion, 0.166)
 async function downloadVersion(version, stagingPath, { explicitVersionRequested, requireEnforcingRelease }) {
   let { signatureVerified, expectedChecksum } = await downloadVersionFromBinaryRepo(
     version,
@@ -951,12 +989,12 @@ async function downloadVersion(version, stagingPath, { explicitVersionRequested,
     expectedChecksum,
   };
 }
-//@ chunk-zw17mz74.js:16640-16708 layout
+//@ chunk-e5z7dpjd.js:17075-17143 layout
 function httpStatusOf(error) {
   if (isAxiosError(error) && error.response) return error.response.status;
   return;
 }
-//@ chunk-zw17mz74.js:16708-17028 layout
+//@ chunk-e5z7dpjd.js:17143-17463 layout
 function isTimeoutError(error) {
   if (error instanceof StallTimeoutError) return true;
   if (isCancel(error)) return true;
@@ -966,16 +1004,16 @@ function isTimeoutError(error) {
   let lower = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return lower.includes("timeout") || lower.includes("timed out");
 }
-//@ chunk-zw17mz74.js:17028-17087 placement
+//@ chunk-e5z7dpjd.js:17463-17522 placement
 function isZstdError(error) {
   return getErrnoCode(error)?.startsWith("ZSTD_error_") === true;
 }
-//@ chunk-zw17mz74.js:17087-17227 placement
+//@ chunk-e5z7dpjd.js:17522-17662 placement
 function isChecksumFailure(error) {
   let message = error instanceof Error ? error.message : String(error);
   return message.includes("Checksum mismatch") || message.includes("exceeds the manifest size");
 }
-//@ chunk-zw17mz74.js:17227-17322 placement
+//@ chunk-e5z7dpjd.js:17662-17757 placement
 function isDeterministicError(normalizedError) {
   return (
     normalizedError !== null &&
@@ -984,19 +1022,19 @@ function isDeterministicError(normalizedError) {
     normalizedError.deterministic === true
   );
 }
-//@ chunk-zw17mz74.js:17322-17419 placement
+//@ chunk-e5z7dpjd.js:17757-17854 placement
 function isConnectionDropError(error) {
   return (
     error !== null && typeof error === "object" && "connectionDrop" in error && error.connectionDrop === true
   );
 }
-//@ chunk-zw17mz74.js:17419-17535 placement
+//@ chunk-e5z7dpjd.js:17854-17970 placement
 function getAttemptNumber(error) {
   if (error !== null && typeof error === "object" && "attempt" in error && typeof error.attempt === "number")
     return error.attempt;
   return;
 }
-//@ chunk-zw17mz74.js:17535-17587 placement
+//@ chunk-e5z7dpjd.js:17970-18022 placement
 function safePlatform() {
   try {
     return getPlatform();
@@ -1004,40 +1042,60 @@ function safePlatform() {
     return "unknown";
   }
 }
-//@ chunk-zw17mz74.js:17587-17813 placement
-async function fetchWithDropRetry(url, requestOptions) {
+//@ chunk-e5z7dpjd.js:18022-18506 placement
+async function fetchWithDropRetry(
+  url,
+  requestOptions,
+  { maxAttempts = MAX_DOWNLOAD_RETRIES, alsoRetry, deadline } = {},
+) {
   let dropRetried = false;
+  let lastError;
   for (let j = 1; ; j++)
     try {
       return {
-        data: (await httpGet(url, requestOptions)).data,
+        data: (
+          await httpGet(url, {
+            ...requestOptions,
+            signal: deadline,
+          })
+        ).data,
+        attempt: j,
         dropRetried,
       };
     } catch (error) {
-      if (j >= MAX_DOWNLOAD_RETRIES || !isRetriableConnectionDrop(error)) throw error;
-      dropRetried = true;
-      logForDebugging(
-        `Fetch of ${url} connection dropped on attempt ${j}/${MAX_DOWNLOAD_RETRIES}, retrying...`,
+      let merged = Object.assign((deadline?.aborted && isCancel(error) && lastError) || toError(error), {
+        attempt: j,
+      });
+      let isDrop = isRetriableConnectionDrop(merged);
+      if (j >= maxAttempts || deadline?.aborted || !(isDrop || alsoRetry?.(merged))) throw merged;
+      lastError = merged;
+      dropRetried ||= isDrop;
+      await sleep(
+        backoffDelayMs({
+          attempt: j,
+          baseMs: RETRY_BASE_DELAY_MS,
+          jitter: {
+            kind: "symmetric",
+            ratio: 0.25,
+          },
+        }),
+        deadline,
       );
-      await sleep(RETRY_BASE_DELAY_MS);
+      if (deadline?.aborted) throw merged;
+      logForDebugging(
+        `Fetch of ${url} failed on attempt ${j}/${maxAttempts} (${httpStatusOf(merged) ?? "no response"}), retrying...`,
+      );
     }
 }
-//@ chunk-zw17mz74.js:17908-17940 placement
-/**
- * 判断自动更新是否启用。
- */
-function isAutoUpdateEnabled() {
-  return !isEnvDefinedFalsy(undefined);
-}
 export {
+  ManifestSignatureError,
+  StallTimeoutError,
+  ReleaseManifestError,
   isAutoUpdateEnabled,
   sha256File,
   reverifyRetainedVersion,
-  ManifestSignatureError,
   isRetryableNetworkError,
   fileMatchesChecksum,
   downloadVersion,
   getLatestVersion,
-  StallTimeoutError,
-  ReleaseManifestError,
 };

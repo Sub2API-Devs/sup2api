@@ -3,12 +3,12 @@
  *
  * 团队 + 个人组合记忆的系统提示文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/teamMemPrompts.ts
- * pieces: chunk-82kqcve8.js (7)
+ * pieces: chunk-a2q0x549.js (7)
  * attribution: placement 6, fingerprint 1
  */
-import { sep, join } from "path";
+import { sep as sep_2, join as join_2 } from "path";
 import { readdir } from "fs/promises";
 import { isValidKeySegment, STORAGE_SPACES, storageNameSpellings } from "../utils/storage/storageSpaces.js";
 import { validateStorageKey } from "../utils/storage/storageKeys.js";
@@ -52,7 +52,7 @@ import { canUseTeamMemory, isTeamMemPath, getMemoryDirNfc } from "./teamMemPaths
 import { getAutoMemPath } from "./paths.js";
 import { HOW_TO_SAVE_MEMORIES_SECTION } from "./memoryStoresPrompt.js";
 
-//@ chunk-82kqcve8.js:125262-125363 placement
+//@ chunk-a2q0x549.js:123328-123429 placement (2.1.88 match: AUTO_MEM_DIRNAME, 1)
 /**
  * 从记忆目录路径取出项目键（<project>/memory 形式）。
  */
@@ -62,27 +62,27 @@ function projectKeyFromMemoryDir(memoryDir) {
   let projectKey = parts[0];
   return isValidKeySegment(projectKey) ? projectKey : undefined;
 }
-//@ chunk-82kqcve8.js:125573-125790 placement
+//@ chunk-a2q0x549.js:123639-123856 placement
 /**
  * 把挂载目录下的文件路径换成 memory 存储键（逐段校验合法、整体再校验），不在挂载目录下或不合法时返回 undefined。
  */
 function storageKeyForMountPath(mount, mountDir, filePath) {
-  let mountDirWithSep = mountDir.endsWith(sep) ? mountDir : mountDir + sep;
+  let mountDirWithSep = mountDir.endsWith(sep_2) ? mountDir : mountDir + sep_2;
   if (!filePath.startsWith(mountDirWithSep)) return;
-  let parts = filePath.slice(mountDirWithSep.length).split(sep);
+  let parts = filePath.slice(mountDirWithSep.length).split(sep_2);
   if (!parts.every(isValidKeySegment)) return;
   let storageKey = STORAGE_SPACES.memory(mount.projectKey, [...mount.baseRelPath, ...parts]);
   return validateStorageKey(storageKey) === undefined ? storageKey : undefined;
 }
-//@ chunk-82kqcve8.js:125913-126057 placement
+//@ chunk-a2q0x549.js:123979-124123 placement
 function projectsRelativeParts(path) {
-  let projectsPrefix = getProjectsDir() + sep;
+  let projectsPrefix = getProjectsDir() + sep_2;
   if (!path.startsWith(projectsPrefix)) return;
   let sliced = path.slice(projectsPrefix.length);
-  while (sliced.endsWith(sep)) sliced = sliced.slice(0, -sep.length);
-  return sliced.split(sep);
+  while (sliced.endsWith(sep_2)) sliced = sliced.slice(0, -sep_2.length);
+  return sliced.split(sep_2);
 }
-//@ chunk-82kqcve8.js:126214-126359 placement
+//@ chunk-a2q0x549.js:124280-124425 placement
 /**
  * 判断目录中没有团队记忆子目录（配置了记忆库时为 false）。
  */
@@ -98,7 +98,7 @@ async function isTeamMemoryDirAbsent(autoMemPath) {
     return isENOENT(error);
   }
 }
-//@ chunk-82kqcve8.js:126388-129315 placement
+//@ chunk-a2q0x549.js:124454-127384 placement
 /**
  * 生成团队记忆目录提示段（team/ 只读或可写）
  */
@@ -118,8 +118,8 @@ function buildTeamMemoryDirsPrompt(options) {
     teamDir && teamMounts
       ? teamMounts.map((teamMount) =>
           teamMount.mode === "ro"
-            ? `\`${join(teamDir, teamMount.mount)}\` (read-only \u2014 do not write there)`
-            : `\`${join(teamDir, teamMount.mount, memoryIndexDirPrefix(teamMount.promptIndex)).replace(/[/\\]+$/, "")}\``,
+            ? `\`${join_2(teamDir, teamMount.mount)}\` (read-only \u2014 do not write there)`
+            : `\`${join_2(teamDir, teamMount.mount, memoryIndexDirPrefix(teamMount.promptIndex)).replace(/[/\\]+$/, "")}\``,
         )
       : teamDir
         ? [`\`${teamDir}\``]
@@ -196,14 +196,14 @@ ${MEMORY_LINKING_GUIDANCE}`
   return lines.join(`
 `);
 }
-//@ chunk-82kqcve8.js:132114-132149 placement
+//@ chunk-a2q0x549.js:130183-130218 placement
 /**
  * 判断某路径是否属于团队记忆 store（且团队记忆可用）。
  */
 function isTeamMemoryPath(filePath) {
   return canUseTeamMemory() && isTeamMemPath(filePath);
 }
-//@ chunk-82kqcve8.js:132188-135953 fingerprint (2.1.88 match: buildCombinedMemoryPrompt, 0.748)
+//@ chunk-a2q0x549.js:130257-134022 fingerprint (2.1.88 match: buildCombinedMemoryPrompt, 0.748)
 /**
  * 团队+个人记忆组合提示（team/ 子目录说明、作用域选择）。
  */
@@ -270,11 +270,11 @@ function buildCombinedMemoryPrompt(extraGuidelines, skipIndex = false) {
 `);
 }
 export {
+  isTeamMemoryPath,
   projectKeyFromMemoryDir,
   isTeamMemoryDirAbsent,
-  projectsRelativeParts,
   buildTeamMemoryDirsPrompt,
   buildCombinedMemoryPrompt,
-  isTeamMemoryPath,
   storageKeyForMountPath,
+  projectsRelativeParts,
 };

@@ -3,9 +3,9 @@
  *
  * PowerShell 参数是否指向 git 内部路径或 .git（含 cwd 重入、8.3 短名、符号链接）；混入多个错配为 resolveCwdReentry 的小函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/gitSafety.ts
- * pieces: chunk-v0yfsee9.js (16)
+ * pieces: chunk-6zpsr8vx.js (16)
  * attribution: placement 9, layout 4, fingerprint 3
  */
 import { basename, posix, resolve, sep, relative, isAbsolute, dirname } from "path";
@@ -29,7 +29,7 @@ import { isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:13224-13404 placement (2.1.88 match: resolveCwdReentry, 1)
+//@ chunk-6zpsr8vx.js:14449-14629 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * 把以 ../<cwd 名>/ 开头的相对路径折回 cwd 内的相对路径（防 ../repo/.git 绕过）。
  */
@@ -43,14 +43,14 @@ function resolveCwdReentry(normalized) {
   if (remaining === "../" + cwdBase) return ".";
   return remaining;
 }
-//@ chunk-v0yfsee9.js:13404-13435 placement
+//@ chunk-6zpsr8vx.js:14629-14660 placement
 /**
  * 用基础规则规范化 PowerShell 路径参数。
  */
 function normalizePsPathBasic(pathArg) {
   return normalizePowerShellPathArg(pathArg, stripPsParameterPrefix);
 }
-//@ chunk-v0yfsee9.js:13435-13526 placement
+//@ chunk-6zpsr8vx.js:14660-14752 placement
 /**
  * 返回同一路径参数的多种等价形式（原样、基础、去提供程序前缀、完整规范化），用于 git 内部路径判定。
  */
@@ -63,7 +63,7 @@ function normalizedPsPathVariants(pathArg) {
   ]);
   return Array.from(variants);
 }
-//@ chunk-v0yfsee9.js:13526-14052 placement
+//@ chunk-6zpsr8vx.js:14752-15278 placement
 /**
  * 规范化 PowerShell 路径参数用于 git 内部路径判定：去掉 -Param: 前缀与引号、展开变量、去掉 FileSystem:: 提供程序前缀、反斜杠转正斜杠、展开 ~、去 8.3 短名与尾部点空格，再 posix 规范化。
  */
@@ -94,7 +94,7 @@ function normalizePowerShellPathArg(pathArg, expandArg) {
   if (path.startsWith("./")) path = path.slice(2);
   return path;
 }
-//@ chunk-v0yfsee9.js:14052-14183 layout (2.1.88 match: setCwdState, 1)
+//@ chunk-6zpsr8vx.js:15278-15409 layout (2.1.88 match: setCwdState, 1)
 function foldCaseForMatch(cwd) {
   return cwd
     .toLowerCase()
@@ -103,9 +103,9 @@ function foldCaseForMatch(cwd) {
     .normalize("NFC")
     .replaceAll("\u03C2", "\u03C3");
 }
-//@ chunk-v0yfsee9.js:14183-14224 fingerprint (2.1.88 match: GIT_INTERNAL_PREFIXES, 1)
+//@ chunk-6zpsr8vx.js:15409-15450 fingerprint (2.1.88 match: GIT_INTERNAL_PREFIXES, 1)
 var GIT_INTERNAL_PREFIXES = ["head", "objects", "refs", "hooks"];
-//@ chunk-v0yfsee9.js:14224-14448 layout
+//@ chunk-6zpsr8vx.js:15450-15674 layout
 function resolveCwdRelativePath(pathArg) {
   let fsImplementation = getFsImplementation();
   let cwd = getCwd();
@@ -120,7 +120,7 @@ function resolveCwdRelativePath(pathArg) {
   if (!absLower.startsWith(cwdPrefixLower)) return null;
   return absLower.slice(cwdPrefixLower.length).replaceAll("\\", "/");
 }
-//@ chunk-v0yfsee9.js:14448-14646 fingerprint (2.1.88 match: matchesGitInternalPrefix, 1)
+//@ chunk-6zpsr8vx.js:15674-15872 fingerprint (2.1.88 match: matchesGitInternalPrefix, 1)
 /**
  * 规范化路径是否指向 git 内部（.git、HEAD、objects/、refs/、hooks/、git~N 短名）。
  */
@@ -133,7 +133,7 @@ function matchesGitInternalPrefix(n_2) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:14646-14764 layout
+//@ chunk-6zpsr8vx.js:15872-15990 layout
 /**
  * PowerShell 参数中是否有路径（含 cwd 重入与符号链接解析后的相对路径）指向 git 内部结构；用于拦截"写入 git 内部再运行 git"。
  */
@@ -146,7 +146,7 @@ function isGitInternalPathPS(pathArg) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:14764-14882 layout
+//@ chunk-6zpsr8vx.js:15990-16108 layout
 /**
  * PowerShell 参数中是否有路径指向 .git 目录（或 git~N 8.3 短名）。
  */
@@ -159,7 +159,7 @@ function isDotGitPathPS(target) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:14882-14974 fingerprint (2.1.88 match: matchesDotGitPrefix, 1)
+//@ chunk-6zpsr8vx.js:16108-16200 fingerprint (2.1.88 match: matchesDotGitPrefix, 1)
 /**
  * 规范化路径是否为 .git、.git/... 或 git~N 短名。
  */
@@ -167,7 +167,7 @@ function matchesDotGitPrefix(n) {
   if (n === ".git" || n.startsWith(".git/")) return true;
   return /^git~\d+($|\/)/.test(n);
 }
-//@ chunk-v0yfsee9.js:14974-15045 placement
+//@ chunk-6zpsr8vx.js:16200-16271 placement
 /**
  * 参数含逗号时拆成多个候选（原值 + 拆分项）。
  */
@@ -175,7 +175,7 @@ function splitCommaWords(value) {
   if (!value.includes(",")) return [value];
   return [value, ...value.split(",")];
 }
-//@ chunk-v0yfsee9.js:15045-15555 placement
+//@ chunk-6zpsr8vx.js:16271-16781 placement
 /**
  * PowerShell 参数解析用表：路径参数名与别名、开关参数别名、通用参数别名、开关类参数与带值的通用参数。
  */
@@ -185,7 +185,7 @@ var SWITCH_ALIASES;
 var COMMON_PARAM_ALIASES;
 var SWITCH_PARAMS;
 var VALUED_COMMON_PARAMS;
-deferInit("chunk-v0yfsee9.js:15045", () => {
+deferInit("chunk-6zpsr8vx.js:16271", () => {
   PATH_PARAMS = ["path", "literalpath"];
   LITERAL_PATH_ALIASES = new Set(["pspath", "lp"]);
   SWITCH_ALIASES = new Set(["cf", "wi", "vb", "db", "usetx"]);
@@ -220,14 +220,14 @@ deferInit("chunk-v0yfsee9.js:15045", () => {
     "pipelinevariable",
   ];
 });
-//@ chunk-v0yfsee9.js:15555-15595 placement
+//@ chunk-6zpsr8vx.js:16781-16821 placement
 /**
  * 参数含通配符（* ? [ ]）或 $ 变量时返回 true。
  */
 function hasWildcardOrVariable(text) {
   return /[*?[\]$]/.test(text);
 }
-//@ chunk-v0yfsee9.js:15595-15891 placement
+//@ chunk-6zpsr8vx.js:16821-17117 placement
 function isCwdOrAncestor(pathArg) {
   let fsImplementation = getFsImplementation();
   let cwd = getCwd();
@@ -254,7 +254,7 @@ function isCwdOrAncestor(pathArg) {
     candidate = dirname(candidate);
   }
 }
-//@ chunk-v0yfsee9.js:15891-17169 placement
+//@ chunk-6zpsr8vx.js:17117-18396 placement
 /**
  * git 安全检查：Copy-Item/Move-Item 的参数解析（-Path/-LiteralPath/-Destination 与通用参数，缩写须唯一）后，若目标是 cwd 或其祖先、含通配或变量、末段为 . / .. 或 git 内部路径名，或参数无法确定，则视为可能写入 .git 内部而返回 true。
  */

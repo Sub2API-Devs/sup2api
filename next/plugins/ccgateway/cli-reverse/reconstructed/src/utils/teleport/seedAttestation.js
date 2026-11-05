@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：teleport 种子证明封装。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-j2e9tjav.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qhcf4xzy.js (5)
  * attribution: placement 5
  */
 import { createHash, randomUUID } from "crypto";
@@ -18,10 +18,10 @@ import { jsonStringify } from "../slowOperations.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-j2e9tjav.js:5710-5795 placement
+//@ chunk-qhcf4xzy.js:5990-6075 placement
 var buffer = Buffer.from("anthropic.ccr.create_session_event.v1", "utf8");
 var buffer_2 = Buffer.from([0]);
-//@ chunk-j2e9tjav.js:5795-6424 placement
+//@ chunk-qhcf4xzy.js:6075-6704 placement
 /**
  * 为种子事件生成证明：按 uuid 与类型拼接事件并计算摘要，含 NUL 时抛错。
  */
@@ -62,7 +62,7 @@ function createSeedAttestation(signedOver, events, signIndex) {
       .digest(),
   ]);
 }
-//@ chunk-j2e9tjav.js:6424-7358 placement
+//@ chunk-qhcf4xzy.js:6704-7638 placement
 async function createSeedSealer({ attestation, key, sample }) {
   try {
     let events = sample.events;
@@ -131,11 +131,11 @@ async function createSeedSealer({ attestation, key, sample }) {
     return identitySealer;
   }
 }
-//@ chunk-j2e9tjav.js:7358-7381 placement
+//@ chunk-qhcf4xzy.js:7638-7661 placement
 function identitySealer(input) {
   return input;
 }
-//@ chunk-j2e9tjav.js:7381-7487 placement
+//@ chunk-qhcf4xzy.js:7661-7767 placement
 function isSetPermissionModeRequest(payload) {
   return (
     payload.type === "control_request" &&

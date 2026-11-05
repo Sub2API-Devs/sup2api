@@ -3,9 +3,9 @@
  *
  * 从 SettingsSchema 生成 JSON Schema（供编辑 settings.json 时提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/schemaOutput.ts
- * pieces: chunk-dcmhvw5a.js (10)
+ * pieces: chunk-z20c443b.js (10)
  * attribution: placement 9, fingerprint 1
  */
 import { toJSONSchema } from "../../../vendor/zod/v4/core/json-schema-processors.js";
@@ -18,9 +18,9 @@ import { collectValidationTips } from "./validationTips.js";
 import { jsonStringify } from "../slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:429843-429943 placement
+//@ chunk-z20c443b.js:428305-428405 placement
 var UNREPRESENTABLE_ZOD_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:429843", () => {
+deferInit("chunk-z20c443b.js:428305", () => {
   UNREPRESENTABLE_ZOD_TYPES = new Set([
     "bigint",
     "symbol",
@@ -34,7 +34,7 @@ deferInit("chunk-dcmhvw5a.js:429843", () => {
     "function",
   ]);
 });
-//@ chunk-dcmhvw5a.js:429943-430734 placement
+//@ chunk-z20c443b.js:428405-429196 placement
 /**
  * 生成设置的 JSON Schema。
  */
@@ -74,21 +74,21 @@ function settingsJsonSchema(schema, options) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:430734-430769 placement
+//@ chunk-z20c443b.js:429196-429231 placement
 var X_CLAUDE_CODE_KEEP_BRANCH = "x-claude-code-keep-branch";
-//@ chunk-dcmhvw5a.js:430769-430866 placement
+//@ chunk-z20c443b.js:429231-429328 placement
 function stripKeepBranchMarkers(parts) {
   if (!Array.isArray(parts)) return;
   for (let part of parts) if (part && typeof part === "object") part[X_CLAUDE_CODE_KEEP_BRANCH] = undefined;
 }
-//@ chunk-dcmhvw5a.js:430866-430972 placement
+//@ chunk-z20c443b.js:429328-429434 placement
 function zodChecksOf(check) {
   return [
     ...(check instanceof $ZodCheck ? [check._zod.def] : []),
     ...(check._zod.def.checks ?? []).map((check) => check._zod.def),
   ];
 }
-//@ chunk-dcmhvw5a.js:430972-431253 placement
+//@ chunk-z20c443b.js:429434-429715 placement
 function fixArrayLengthKeywords(jsonSchema, check) {
   let checks = zodChecksOf(check);
   if (jsonSchema.items === false) delete jsonSchema.items;
@@ -98,7 +98,7 @@ function fixArrayLengthKeywords(jsonSchema, check) {
   if (!checks.some((check) => check.check === "max_length" || check.check === "length_equals"))
     delete jsonSchema.maxItems;
 }
-//@ chunk-dcmhvw5a.js:431646-431907 placement
+//@ chunk-z20c443b.js:430108-430369 placement
 function applyCatchDefault(jsonSchema, def, io) {
   let value;
   try {
@@ -114,7 +114,7 @@ function applyCatchDefault(jsonSchema, def, io) {
   jsonSchema.default = value;
   Object.assign(jsonSchema, copy);
 }
-//@ chunk-dcmhvw5a.js:431907-432404 placement
+//@ chunk-z20c443b.js:430369-430866 placement
 /**
  * schema 是否可选。
  */
@@ -141,7 +141,7 @@ function isSchemaOptional(innerType, io) {
       return io === "input" ? innerType._zod.optin !== undefined : innerType._zod.optout === "optional";
   }
 }
-//@ chunk-dcmhvw5a.js:432404-432542 placement
+//@ chunk-z20c443b.js:430866-431004 placement
 function orderSchemaKeys(jsonSchema, zodSchema) {
   let meta = globalRegistry.get(zodSchema);
   if (!meta) return;
@@ -152,7 +152,7 @@ function orderSchemaKeys(jsonSchema, zodSchema) {
     jsonSchema[key] = value;
   }
 }
-//@ chunk-dcmhvw5a.js:432542-432640 fingerprint (2.1.88 match: generateSettingsJSONSchema, 1)
+//@ chunk-z20c443b.js:431004-431102 fingerprint (2.1.88 match: generateSettingsJSONSchema, 1)
 function generateSettingsJSONSchema(flavor) {
   let schema = flavor ? buildWholeSettingsSchema(flavor) : wholeSettingsSchema();
   let jsonSchema = settingsJsonSchema(schema, {
@@ -161,4 +161,4 @@ function generateSettingsJSONSchema(flavor) {
   collectValidationTips(jsonSchema, false);
   return jsonStringify(jsonSchema, null, 2);
 }
-export { zodChecksOf, generateSettingsJSONSchema, settingsJsonSchema };
+export { settingsJsonSchema, generateSettingsJSONSchema, zodChecksOf };

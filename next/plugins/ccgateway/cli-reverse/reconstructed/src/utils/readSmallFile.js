@@ -3,9 +3,9 @@
  *
  * 小文件安全读取（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qg0af0yq.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gb7aq6sf.js (9)
  * attribution: placement 9
  */
 import { lstat, readFile } from "fs/promises";
@@ -16,7 +16,7 @@ import { hasBackslash } from "./pathClassification.js";
 import { isSentinelInode } from "./slowOperations.js";
 import { getDevicePathRefusal } from "../tools/FileReadTool/FileReadTool.js";
 
-//@ chunk-qg0af0yq.js:9673-9827 placement
+//@ chunk-gb7aq6sf.js:9702-9856 placement
 async function readSmallFileOrNull(filePath, maxBytes, onUnreadable) {
   try {
     let stats = await lstat(filePath);
@@ -30,7 +30,7 @@ async function readSmallFileOrNull(filePath, maxBytes, onUnreadable) {
     return null;
   }
 }
-//@ chunk-qg0af0yq.js:9827-9937 placement
+//@ chunk-gb7aq6sf.js:9856-9966 placement
 function readSmallFileOrNullSync(filePath, maxBytes) {
   try {
     let stats = lstatSync(filePath);
@@ -40,7 +40,7 @@ function readSmallFileOrNullSync(filePath, maxBytes) {
     return null;
   }
 }
-//@ chunk-qg0af0yq.js:9937-10119 placement
+//@ chunk-gb7aq6sf.js:9966-10148 placement
 async function readSmallFileChecked(fsImplementation, filePath, maxBytes, onSkip) {
   let { verdict, st } = await checkSmallFileReadable(fsImplementation, filePath, maxBytes);
   switch (verdict) {
@@ -55,7 +55,7 @@ async function readSmallFileChecked(fsImplementation, filePath, maxBytes, onSkip
       });
   }
 }
-//@ chunk-qg0af0yq.js:10119-10265 placement
+//@ chunk-gb7aq6sf.js:10148-10294 placement
 function readSmallFileCheckedSync(fs, filePath, maxBytes) {
   switch (checkSmallFileReadableSync(fs, filePath, maxBytes).verdict) {
     case "skip":
@@ -68,7 +68,7 @@ function readSmallFileCheckedSync(fs, filePath, maxBytes) {
       });
   }
 }
-//@ chunk-qg0af0yq.js:10265-10556 placement
+//@ chunk-gb7aq6sf.js:10294-10585 placement
 async function checkSmallFileReadable(fsImplementation, filePath, maxBytes) {
   let info = {
     leaf: await fsImplementation.lstat(filePath),
@@ -93,7 +93,7 @@ async function checkSmallFileReadable(fsImplementation, filePath, maxBytes) {
     }
   }
 }
-//@ chunk-qg0af0yq.js:10556-10833 placement
+//@ chunk-gb7aq6sf.js:10585-10862 placement
 function checkSmallFileReadableSync(fs, filePath, maxBytes) {
   let info = {
     leaf: fs.lstatSync(filePath),
@@ -118,11 +118,11 @@ function checkSmallFileReadableSync(fs, filePath, maxBytes) {
     }
   }
 }
-//@ chunk-qg0af0yq.js:10833-10931 placement
+//@ chunk-gb7aq6sf.js:10862-10960 placement
 var FD_PATH_RE = /^\/(?:dev|proc\/[^/]+)\/fd\/\d+$/;
 var DELETED_SUFFIX_RE = / \(deleted\)$/;
 var PROC_OR_SYS_PATH_RE = /^\/(?:proc\/(?!version$)|sys\/)/;
-//@ chunk-qg0af0yq.js:10931-11815 placement
+//@ chunk-gb7aq6sf.js:10960-11844 placement
 function readSmallFileChecked_2(filePath, maxBytes, info) {
   let isLink = info.leaf.isSymbolicLink();
   if (isLink && info.target === undefined)
@@ -191,7 +191,7 @@ function readSmallFileChecked_2(filePath, maxBytes, info) {
     st: stats,
   };
 }
-//@ chunk-qg0af0yq.js:11815-11972 placement
+//@ chunk-gb7aq6sf.js:11844-12001 placement
 function recordStatFailure(info, ask, error) {
   if (ask === "target" || (info.leaf.isSymbolicLink() && !isFsInaccessible(error))) throw error;
   if (ask === "resolved") {
@@ -200,10 +200,10 @@ function recordStatFailure(info, ask, error) {
   } else info.named = null;
 }
 export {
-  readSmallFileChecked,
-  readSmallFileCheckedSync,
-  readSmallFileOrNull,
   readSmallFileOrNullSync,
+  readSmallFileOrNull,
+  readSmallFileChecked,
   checkSmallFileReadable,
+  readSmallFileCheckedSync,
   checkSmallFileReadableSync,
 };

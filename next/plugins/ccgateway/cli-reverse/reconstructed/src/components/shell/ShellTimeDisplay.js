@@ -3,9 +3,9 @@
  *
  * Shell 运行时长与超时显示（"(timeout Ns)"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/shell/ShellTimeDisplay.tsx
- * pieces: chunk-dnj0hze9.js (1)
+ * pieces: chunk-egjtffvk.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -13,7 +13,7 @@ import { formatDuration } from "../../utils/format.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-dnj0hze9.js:809-1425 fingerprint (2.1.88 match: ShellTimeDisplay, 1)
+//@ chunk-egjtffvk.js:332-948 fingerprint (2.1.88 match: ShellTimeDisplay, 1)
 function ShellTimeDisplay(props) {
   let $ = useMemoCache(10);
   let { elapsedTimeSeconds, timeoutMs } = props;

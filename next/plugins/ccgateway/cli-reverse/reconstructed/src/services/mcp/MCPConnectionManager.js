@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：MCP 连接管理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/MCPConnectionManager.tsx
- * pieces: chunk-18hwfzwa.js (9), chunk-26sy0x4v.js (2)
+ * pieces: chunk-44e3b0zs.js (2), chunk-czq1j3j2.js (9)
  * attribution: placement 7, layout 1, fingerprint 3
  */
 import { isUnhiddenFailedServer } from "../../hooks/notifs/useMcpConnectivityStatus.js";
@@ -39,7 +39,7 @@ import { isMcpServerDisabled, mcpDialBlockCause } from "./config.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-26sy0x4v.js:232-316 placement
+//@ chunk-44e3b0zs.js:232-316 placement
 /**
  * 选出需要重连的失败服务器并附上禁用服务器说明。
  */
@@ -49,7 +49,7 @@ function reconnectTargets(clients, context) {
     outOfBandNote: describeDisabledServers(clients, true, context),
   };
 }
-//@ chunk-26sy0x4v.js:316-508 placement
+//@ chunk-44e3b0zs.js:316-508 placement
 /**
  * 并行重连给定的 MCP 服务器，返回各自结果与成功连接的数量。
  */
@@ -63,7 +63,7 @@ async function reconnectAllServers(targets, reconnect) {
     connected: connectedCount,
   };
 }
-//@ chunk-18hwfzwa.js:1738247-1738407 placement
+//@ chunk-czq1j3j2.js:1784625-1784785 placement
 /**
  * React hook：订阅组织限制 allow_claude_browser_extension 的变化（微任务里重读），返回当前是否允许 Claude in Chrome 浏览器扩展。
  */
@@ -84,7 +84,7 @@ function useBrowserExtensionAllowed() {
   }, []);
   return allowed;
 }
-//@ chunk-18hwfzwa.js:1738407-1738464 placement
+//@ chunk-czq1j3j2.js:1784785-1784842 placement
 /**
  * hook 初始值：先读组织限制，读不到时用缓存判定，异常时默认允许。
  */
@@ -95,7 +95,7 @@ function getInitialBrowserExtensionAllowed() {
     return true;
   }
 }
-//@ chunk-18hwfzwa.js:1738464-1738727 placement
+//@ chunk-czq1j3j2.js:1784842-1785105 placement
 /**
  * 读组织限制 allow_claude_browser_extension：未设置→允许或待定；cache_miss/route_missing→null；latched/org_denied→按 restrictions.allowed 决定；返回 true/false/null。
  */
@@ -122,7 +122,7 @@ function readBrowserExtensionRestriction() {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:1738727-1738783 placement
+//@ chunk-czq1j3j2.js:1785105-1785161 placement
 /**
  * 当前入口（entrypoint）属于一组豁免入口时为真，此时浏览器扩展限制按允许处理。
  */
@@ -132,17 +132,17 @@ function isEntrypointExemptFromBrowserRestriction() {
     policyLimitsIneligibleReason !== undefined && PRINCIPALS_NEVER_SERVED.has(policyLimitsIneligibleReason)
   );
 }
-//@ chunk-18hwfzwa.js:1738783-1738827 placement
+//@ chunk-czq1j3j2.js:1785161-1785205 placement
 function teardownMcpGlobalHandles() {
   clearReconnectHandles();
   getCliOwnedState().searchRedial = null;
 }
-//@ chunk-18hwfzwa.js:1738827-1738843 layout
+//@ chunk-czq1j3j2.js:1785205-1785221 layout
 var MCPConnectionContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1738827", () => {
+deferInit("chunk-czq1j3j2.js:1785205", () => {
   MCPConnectionContext = createContext(null);
 });
-//@ chunk-18hwfzwa.js:1738843-1738978 fingerprint (2.1.88 match: useMcpReconnect, 1)
+//@ chunk-czq1j3j2.js:1785221-1785356 fingerprint (2.1.88 match: useMcpReconnect, 1)
 /**
  * useMcpReconnect：从 MCPConnectionContext 取 reconnectMcpServer，不在 Provider 内抛错。
  */
@@ -153,7 +153,7 @@ function useMcpReconnect() {
   }
   return context.reconnectMcpServer;
 }
-//@ chunk-18hwfzwa.js:1738978-1739114 fingerprint (2.1.88 match: useMcpToggleEnabled, 1)
+//@ chunk-czq1j3j2.js:1785356-1785492 fingerprint (2.1.88 match: useMcpToggleEnabled, 1)
 /**
  * useMcpToggleEnabled：从 MCPConnectionContext 取 toggleMcpServer，不在 Provider 内抛错。
  */
@@ -164,7 +164,7 @@ function useMcpToggleEnabled() {
   }
   return context.toggleMcpServer;
 }
-//@ chunk-18hwfzwa.js:1739114-1739793 fingerprint (2.1.88 match: MCPConnectionManager, 0.7)
+//@ chunk-czq1j3j2.js:1785492-1786171 fingerprint (2.1.88 match: MCPConnectionManager, 0.7)
 /**
  * MCPConnectionManager React 组件：调用 useManageMCPConnections 管理全部连接，通过 MCPConnectionContext 向子树提供 reconnectMcpServer/toggleMcpServer，并注册全局 searchRedial。
  */
@@ -227,8 +227,8 @@ function MCPConnectionManager(props) {
   return t2;
 }
 export {
-  MCPConnectionManager,
   useBrowserExtensionAllowed,
+  MCPConnectionManager,
   reconnectTargets,
   reconnectAllServers,
   useMcpReconnect,

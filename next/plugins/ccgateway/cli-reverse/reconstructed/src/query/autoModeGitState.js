@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：收集工作目录的 git 状态（根、分支、默认分支、状态、远程可见性）；读取 git 远程配置（url、pushurl、pushdefault、分支远程）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (15)
  * attribution: placement 15
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -40,16 +40,16 @@ import { identity } from "../utils/identity.js";
 import { listProvidedTabs } from "../utils/claudeInChrome/tabsProvider.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:115869-116368 placement
+//@ chunk-w3ch4xq2.js:124501-125000 placement
 /**
  * 从 auto mode 规则文本中读取"Scheduled-Task Fires"行（缓存）。
  */
 var getScheduledTaskFiresRule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-ha3km179.js:115869", () => {
+deferInit("chunk-w3ch4xq2.js:124501", () => {
   getScheduledTaskFiresRule = DoctorLazy(() => {
     let caughtError;
     try {
-      let sliced = loadBundledText(() => require("../skills/bundled/default.lazy.js"))
+      let sliced = loadBundledText(() => require("../skills/bundled/default_5.lazy.js"))
         .replace(/<user_allow_rules_to_replace>[\s\S]*?<\/user_allow_rules_to_replace>/, "")
         .split(/\r?\n/)
         .find((line) => line.startsWith("- Scheduled-Task Fires:"))
@@ -72,21 +72,21 @@ deferInit("chunk-ha3km179.js:115869", () => {
     };
   });
 });
-//@ chunk-ha3km179.js:116368-116399 placement
+//@ chunk-w3ch4xq2.js:125000-125031 placement
 /**
  * 定时任务触发规则
  */
 function scheduledTaskRule() {
   return getScheduledTaskFiresRule().rule;
 }
-//@ chunk-ha3km179.js:116399-116434 placement
+//@ chunk-w3ch4xq2.js:125031-125066 placement
 /**
  * 取仓库 slug
  */
 function repoSlugOrNull(slug) {
   return sanitizeCacheKey(slug) || null;
 }
-//@ chunk-ha3km179.js:116434-116655 placement
+//@ chunk-w3ch4xq2.js:125066-125287 placement
 async function readGitStatusPair(cwd, includeUntrackedAll, abortSignal) {
   let readStatus = (untrackedMode) =>
     runGitReadOnly(
@@ -106,7 +106,7 @@ async function readGitStatusPair(cwd, includeUntrackedAll, abortSignal) {
     all: allResult,
   };
 }
-//@ chunk-ha3km179.js:116655-117349 placement
+//@ chunk-w3ch4xq2.js:125287-125981 placement
 /**
  * 读取 git 远程配置（url、pushurl、pushdefault、分支远程）。
  */
@@ -155,7 +155,7 @@ async function readGitRemoteConfig(cwd, abortSignal) {
   }
   return remoteConfig;
 }
-//@ chunk-ha3km179.js:117349-117450 placement
+//@ chunk-w3ch4xq2.js:125981-126082 placement
 function pushRemoteForBranch(remoteConfig, branch) {
   return (
     (branch !== null && branch !== "HEAD" ? remoteConfig.branchRemotes.get(branch) : undefined) ??
@@ -163,7 +163,7 @@ function pushRemoteForBranch(remoteConfig, branch) {
     "origin"
   );
 }
-//@ chunk-ha3km179.js:117450-117514 placement
+//@ chunk-w3ch4xq2.js:126082-126146 placement
 /**
  * unverified 记 unknown
  */
@@ -171,14 +171,14 @@ function visibilityOrUnknown(visibilityEntry) {
   let visibility = effectiveVisibility(visibilityEntry);
   return visibility === "unverified" ? "unknown" : visibility;
 }
-//@ chunk-ha3km179.js:117514-117562 placement
+//@ chunk-w3ch4xq2.js:126146-126194 placement
 /**
  * 非空字符串或 null
  */
 function nonEmptyStringOrNull(value) {
   return sanitizeCacheKey(value) === value && value !== "" ? value : null;
 }
-//@ chunk-ha3km179.js:117562-118044 placement
+//@ chunk-w3ch4xq2.js:126194-126676 placement
 /**
  * 把远程 URL 解析为 owner/name 列表（去重）。
  */
@@ -210,7 +210,7 @@ function listRemoteRepos(remoteConfig) {
   repos.sort((left, right) => left.name.localeCompare(right.name) || left.remote.localeCompare(right.remote));
   return repos;
 }
-//@ chunk-ha3km179.js:118044-118168 placement
+//@ chunk-w3ch4xq2.js:126676-126800 placement
 function knownRemoteVisibilities() {
   return repoVisibilityStore
     .entries()
@@ -221,7 +221,7 @@ function knownRemoteVisibilities() {
     }))
     .filter((repo) => repo.remote !== "");
 }
-//@ chunk-ha3km179.js:118168-119751 placement
+//@ chunk-w3ch4xq2.js:126800-128385 placement
 /**
  * 收集工作目录的 git 状态（根、分支、默认分支、状态、远程可见性）。
  */
@@ -355,7 +355,7 @@ async function collectGitState(cwdOrNull, abortSignal, visibilityCache) {
     return emptyState("error");
   }
 }
-//@ chunk-ha3km179.js:119751-119823 placement
+//@ chunk-w3ch4xq2.js:128385-128457 placement
 /**
  * 标签页列举开关名
  */
@@ -366,7 +366,7 @@ var MAX_TAB_NAME_CHARS = 32;
 var MAX_TAB_LIST_WAIT_MS = 300;
 var MAX_GIT_FACTS_BYTES = 2000;
 var TAB_WAIT_MS = 1024;
-//@ chunk-ha3km179.js:119823-119971 placement
+//@ chunk-w3ch4xq2.js:128457-128605 placement
 function withTimeoutDefault(promise, timeoutMs, timeoutValue) {
   return new Promise((resolve, reject) => {
     let timer = setTimeout((resolveWith, value) => resolveWith(value), timeoutMs, resolve, timeoutValue);
@@ -382,18 +382,18 @@ function withTimeoutDefault(promise, timeoutMs, timeoutValue) {
     );
   });
 }
-//@ chunk-ha3km179.js:119971-120028 placement
+//@ chunk-w3ch4xq2.js:128605-128662 placement
 /**
  * git 环境缓存
  */
 var gitEnvCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ha3km179.js:119971", () => {
+deferInit("chunk-w3ch4xq2.js:128605", () => {
   gitEnvCache = identity({}, (envCache) => {
     delete envCache.whole;
     delete envCache.rulesUnread;
   });
 });
-//@ chunk-ha3km179.js:120028-120069 placement
+//@ chunk-w3ch4xq2.js:128662-128703 placement
 /**
  * 带超时列标签页
  */

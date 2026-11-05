@@ -3,10 +3,10 @@
  *
  * 并入已有模块：SDK 核心消息与数据结构的 zod schema（system/assistant/result/限额事件、权限显示、模型用量、钩子输入等），316 增加了 away summary 等新消息类型。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/sdk/coreSchemas.ts
- * pieces: chunk-0h4e7gnq.js (1), chunk-0sfjpx19.js (2), chunk-18hwfzwa.js (1), chunk-54xbtc53.js (3), chunk-55ht3bcx.js (2), chunk-583vs41k.js (1), chunk-61a1pjwa.js (1), chunk-ah34pb7m.js (1), chunk-bfnfj4kx.js (1), chunk-bwbq4xvm.js (44), chunk-bzb0qnrm.js (15), chunk-dcmhvw5a.js (1), chunk-e5gvqyfh.js (1), chunk-e6aww6q8.js (13), chunk-hwmsct5x.js (1), chunk-hyjyj8hj.js (4), chunk-jy3v56kg.js (1), chunk-spwda8nt.js (1), chunk-tyg7f3ek.js (2), chunk-w5ndchqs.js (1)
- * attribution: fingerprint 32, sole-consumer 3, placement 45, layout 13, file-local 2, affinity 2
+ * pieces: chunk-0h9p4sxp.js (3), chunk-0nvx3515.js (2), chunk-0yw3taqg.js (2), chunk-5xgkngpb.js (13), chunk-6sf70a86.js (1), chunk-7kayq7nc.js (45), chunk-7pwjpdkw.js (1), chunk-cm73gsrm.js (1), chunk-czq1j3j2.js (1), chunk-frs14hy1.js (1), chunk-h71rb544.js (1), chunk-kh7eenke.js (1), chunk-m2gb6h8m.js (15), chunk-nh1pvp1m.js (2), chunk-tdcrpxkn.js (4), chunk-vn3g7zt8.js (1), chunk-wjygkcr4.js (1), chunk-xgksxb70.js (1), chunk-z20c443b.js (1)
+ * attribution: fingerprint 32, sole-consumer 3, placement 48, affinity 1, layout 12, file-local 1
  */
 import { randomUUID } from "crypto";
 import { isAbsolute, sep } from "path";
@@ -81,14 +81,10 @@ import {
   INDIVIDUAL_USAGE_LIMIT_TEXT,
 } from "../../services/api/usage.js";
 import { HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE, USAGE_SETTINGS_URL } from "../../services/claudeAiLimits.js";
-import {
-  SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE,
-  VERIFICATION_REQUIRED_NEEDS,
-} from "../../services/sessionStatus/sessionStateClassifier.js";
 import { omitUndefined } from "../../plugins/functionHooks/classicHookBridge.js";
 import { shouldEmitHookEvent } from "../../utils/hooks/hookEvents.js";
 import { getHookEventEmitState } from "../../utils/hooks/hookEventHelpers.js";
-import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../utils/task/taskNotifications.js";
+import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { MAX_OUTPUT_TOKENS_CAP } from "../../services/compact/autoCompactWindow.js";
@@ -109,7 +105,9 @@ import {
 } from "../../bootstrap/state.js";
 import { notifyProactivityChanged } from "../../cli/print/proactivityControl.js";
 import { apiMessageIdField } from "../../cli/print/sdkMessageStream.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
+import { logError } from "../../utils/log.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { isBlockingHookOutput } from "../../utils/hooks/hookSpecificOutput.js";
 import { ownValue, hasAnswer } from "../../components/FeedbackSurvey/OrgSurveyDialog.js";
 import { writeToStdout } from "../../utils/process.js";
@@ -163,7 +161,6 @@ import {
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { invalidateSessionEnvCache } from "../../utils/sessionEnvironment.js";
 import { isHookPolicyUnanswered } from "../../commands/goal/goal.js";
-import { logError } from "../../utils/log.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { waitForOrganizationHookPolicy, DENY } from "../../utils/hooks/hookPolicyHold.js";
 import {
@@ -181,7 +178,7 @@ import { isPluginsSyncVetoed, isSyncPaused } from "../../services/plugins/accoun
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:11101-11729 fingerprint (2.1.88 match: HOOK_EVENTS, 0.829)
+//@ chunk-z20c443b.js:10978-11606 fingerprint (2.1.88 match: HOOK_EVENTS, 0.829)
 /**
  * 全部钩子事件名（33 个，含 316 新增的 PostToolBatch、UserPromptExpansion、StopFailure、PreModelSwitch/PostModelSwitch、DirectoryAdded、MessageDisplay 等）、SessionEnd 原因、系统提示词动态边界标记。
  */
@@ -222,7 +219,7 @@ var HOOK_EVENTS = [
 ];
 var SESSION_END_REASONS_2 = ["clear", "resume", "logout", "prompt_input_exit", "other"];
 var SYSTEM_PROMPT_DYNAMIC_BOUNDARY = "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__";
-//@ chunk-bwbq4xvm.js:176170-176794 placement
+//@ chunk-7kayq7nc.js:192276-192900 placement
 /**
  * SDK 错误码清单：模型不可用、权限模式、Remote Control、worker epoch、MCP 客户端注册、读取拒绝等错误子类，pA 汇总为全集。
  */
@@ -262,7 +259,7 @@ var REMOTE_CONTROL_ERROR_CODES = [
   "remote_control_ended_elsewhere",
   "remote_control_policy_disabled",
 ];
-//@ chunk-bwbq4xvm.js:176794-176989 placement
+//@ chunk-7kayq7nc.js:192900-193095 placement
 function remoteControlErrorCode(info) {
   switch (info) {
     case "auth":
@@ -275,16 +272,16 @@ function remoteControlErrorCode(info) {
       return;
   }
 }
-//@ chunk-bwbq4xvm.js:176989-177182 placement
+//@ chunk-7kayq7nc.js:193095-193316 placement
 var WORKSPACE_ERROR_CODES; // deferred: uses MODEL_UNAVAILABLE_REASONS of its import cycle while loading; runs once the cycle is complete
 var WORKER_EPOCH_ERROR_CODES;
 var MCP_REGISTRATION_ERROR_CODES;
 var READ_ERROR_CODES;
 var SDK_ERROR_CODES;
-deferInit("chunk-bwbq4xvm.js:176989", () => {
+deferInit("chunk-7kayq7nc.js:193095", () => {
   WORKSPACE_ERROR_CODES = ["workspace_diff_pending"];
   WORKER_EPOCH_ERROR_CODES = ["stale_worker_epoch", "invalid_worker_epoch"];
-  MCP_REGISTRATION_ERROR_CODES = ["mcp_client_registration_unavailable"];
+  MCP_REGISTRATION_ERROR_CODES = ["mcp_client_registration_unavailable", "mcp_redirect_uri_unusable"];
   READ_ERROR_CODES = ["read_denied"];
   SDK_ERROR_CODES = [
     ...MODEL_UNAVAILABLE_REASONS,
@@ -296,16 +293,16 @@ deferInit("chunk-bwbq4xvm.js:176989", () => {
     ...READ_ERROR_CODES,
   ];
 });
-//@ chunk-bwbq4xvm.js:177182-177228 placement
+//@ chunk-7kayq7nc.js:193316-193362 placement
 var THINKING_DISPLAY_MODES = ["summarized", "omitted", "highlights"];
-//@ chunk-bwbq4xvm.js:177228-177267 placement
+//@ chunk-7kayq7nc.js:193362-193401 placement
 function isThinkingDisplayMode(thinkingDisplay) {
   return THINKING_DISPLAY_MODES.includes(thinkingDisplay);
 }
-//@ chunk-bwbq4xvm.js:177304-177444 placement
+//@ chunk-7kayq7nc.js:193438-193578 placement
 var MESSAGE_DELIVERY_MODES = ["durable_post", "ephemeral_post", "retry_backoff", "hold", "none"];
 var DEFERRED_KINDS = ["orphaned_permission", "turn_handoff", "deferred_tool_use", "none"];
-//@ chunk-bwbq4xvm.js:177444-177913 placement
+//@ chunk-7kayq7nc.js:193578-194047 placement
 /**
  * 给 result 消息补充 subagent_stats 等附加统计字段（非 result 消息原样返回）。
  */
@@ -341,7 +338,7 @@ function withResultExtras(message, extras) {
     ...withExtras,
   };
 }
-//@ chunk-bwbq4xvm.js:177913-178053 placement
+//@ chunk-7kayq7nc.js:194047-194187 placement (2.1.88 match: inputSchema, 0.392)
 function normalizeCustomSubtype(localCommand) {
   let replaced = localCommand
     .toLowerCase()
@@ -351,7 +348,7 @@ function normalizeCustomSubtype(localCommand) {
     .replace(/_+$/, "");
   return replaced === "" ? "custom" : replaced;
 }
-//@ chunk-bwbq4xvm.js:178053-178211 placement
+//@ chunk-7kayq7nc.js:194187-194345 placement
 /**
  * 按开始时间、公共字段和变体构造 SDK result 消息（duration_ms 等计时字段）。
  */
@@ -367,7 +364,7 @@ function buildResultMessage({ startedAt, common, variant }) {
     ...message,
   };
 }
-//@ chunk-bwbq4xvm.js:178211-178610 placement
+//@ chunk-7kayq7nc.js:194345-194744 placement
 /**
  * 查询循环终止原因：错误类（blocking_limit、prompt_too_long、model_error、api_error…）与其他类（budget_exhausted、结构化输出重试耗尽…），_A 为全集。
  */
@@ -395,11 +392,11 @@ var TERMINAL_OTHER_REASONS = [
   "turn_setup_failed",
 ];
 var TERMINAL_REASONS = [...TERMINAL_ERROR_REASONS, ...TERMINAL_OTHER_REASONS];
-//@ chunk-bwbq4xvm.js:178610-178677 placement
+//@ chunk-7kayq7nc.js:194744-194811 placement
 function isAbortedTerminalReason(terminalReason) {
   return terminalReason === "aborted_streaming" || terminalReason === "aborted_tools";
 }
-//@ chunk-bwbq4xvm.js:178677-179206 placement
+//@ chunk-7kayq7nc.js:194811-195340 placement
 function isErrorTerminalReason(reason) {
   if (reason === undefined) return false;
   switch (reason) {
@@ -428,20 +425,20 @@ function isErrorTerminalReason(reason) {
       return false;
   }
 }
-//@ chunk-bwbq4xvm.js:179206-179299 placement
+//@ chunk-7kayq7nc.js:195340-195433 placement
 function terminalReasonTag(reason) {
   return reason.reason === "api_error" ? `api_error_${reason.errorKind ?? "unknown"}` : reason.reason;
 }
-//@ chunk-bwbq4xvm.js:179299-179336 placement
+//@ chunk-7kayq7nc.js:195433-195470 placement
 function isAbnormalTerminalReason(reason) {
   return isAbortedTerminalReason(reason) || isErrorTerminalReason(reason);
 }
-//@ chunk-bwbq4xvm.js:179336-179406 placement
+//@ chunk-7kayq7nc.js:195470-195540 placement
 /**
  * 某状态 kind 枚举（unavailable_headless/unknown/failed/restart_required）（归属疑似错误）。
  */
 var UNAVAILABLE_KINDS = ["unavailable_headless", "unknown", "failed", "restart_required"];
-//@ chunk-bwbq4xvm.js:179406-179497 placement (2.1.88 match: extractMarkupText, 1)
+//@ chunk-7kayq7nc.js:195540-195631 placement (2.1.88 match: extractMarkupText, 1)
 /**
  * 对象的 kind 是否属于上述枚举（误配名 extractMarkupText）。
  */
@@ -453,7 +450,7 @@ function isKnownMessageKind(contents) {
     UNAVAILABLE_KINDS.some((item) => item === contents.kind)
   );
 }
-//@ chunk-bwbq4xvm.js:179497-179844 placement
+//@ chunk-7kayq7nc.js:195631-195978 placement
 var PROMPT_HOOK_ENDINGS = [
   "blocked_by_hook",
   "stopped_by_hook",
@@ -475,7 +472,7 @@ var PROMPT_NO_VERDICT_KINDS = [
   "personal_config_refused",
   "rewrite_unplaceable",
 ];
-//@ chunk-bwbq4xvm.js:179844-179991 placement
+//@ chunk-7kayq7nc.js:195978-196125 placement
 /**
  * UserPromptSubmit 钩子结果转成 promptEnding 字段（noVerdict 或阻断原因），其他事件返回 {}。
  */
@@ -493,10 +490,10 @@ function promptEndingFields(hookEvent, hookEvent_2) {
       }
     : {};
 }
-//@ chunk-bwbq4xvm.js:179991-180429 placement
+//@ chunk-7kayq7nc.js:196125-196563 placement
 var SUBAGENT_REPORT_DISPOSITIONS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var HandbackReportSchema;
-deferInit("chunk-bwbq4xvm.js:179991", () => {
+deferInit("chunk-7kayq7nc.js:196125", () => {
   SUBAGENT_REPORT_DISPOSITIONS = ["send", "flagged", "withheld"];
   HandbackReportSchema = DoctorLazy(() =>
     objectSchema({
@@ -511,7 +508,7 @@ deferInit("chunk-bwbq4xvm.js:179991", () => {
     }),
   );
 });
-//@ chunk-bwbq4xvm.js:180429-180637 placement
+//@ chunk-7kayq7nc.js:196563-196771 placement
 var MOBILE_APP_KINDS = ["ios_app", "android_app"];
 var MOBILE_DEV_SIGNALS = [
   "swift_edit",
@@ -526,15 +523,15 @@ var MOBILE_DEV_SIGNALS = [
   "android_command",
   "project_scan",
 ];
-//@ chunk-bwbq4xvm.js:180637-180698 placement
+//@ chunk-7kayq7nc.js:196771-196832 placement
 function trueOrUndefined(textNotTyped) {
   return textNotTyped === undefined || textNotTyped === null || textNotTyped === false ? undefined : true;
 }
-//@ chunk-bwbq4xvm.js:180698-180768 placement
+//@ chunk-7kayq7nc.js:196832-196902 placement
 function isTextNotTyped(input) {
   return "text_not_typed" in input && trueOrUndefined(input.text_not_typed) === true;
 }
-//@ chunk-bwbq4xvm.js:180768-181101 placement
+//@ chunk-7kayq7nc.js:196902-197235 placement
 var SERVER_TOOL_BLOCK_TYPES = [
   "server_tool_use",
   "web_search_tool_result",
@@ -551,13 +548,13 @@ var SERVER_TOOL_BLOCK_TYPES = [
   "fallback",
 ];
 var NON_USER_BLOCK_TYPES = [...SERVER_TOOL_BLOCK_TYPES, "mid_conv_system"];
-//@ chunk-bwbq4xvm.js:181101-181139 placement
+//@ chunk-7kayq7nc.js:197235-197273 placement
 function literalTypeSchema(literal_2) {
   return looseObject({
     type: literal(literal_2),
   });
 }
-//@ chunk-bwbq4xvm.js:181139-186487 placement
+//@ chunk-7kayq7nc.js:197273-202621 placement
 var EphemeralBlockSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var cacheControlField;
 var Base64BlockSchema;
@@ -596,7 +593,7 @@ var ServerToolUseUsageSchema;
 var ThinkingUsageSchema;
 var UsageSchema;
 var MessageBlockSchema;
-deferInit("chunk-bwbq4xvm.js:181139", () => {
+deferInit("chunk-7kayq7nc.js:197273", () => {
   EphemeralBlockSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("ephemeral"),
@@ -892,14 +889,14 @@ deferInit("chunk-bwbq4xvm.js:181139", () => {
     ),
   );
 });
-//@ chunk-bwbq4xvm.js:186487-186605 placement
+//@ chunk-7kayq7nc.js:202621-202739 placement
 var MCP_AUTH_ERROR_CODES = [
   "CLAUDEAI_BEARER_REJECTED",
   "FIRST_PARTY_AUTH_REJECTED",
   "APPROVAL_REQUIRED",
   "CLIENT_REGISTRATION_UNAVAILABLE",
 ];
-//@ chunk-bwbq4xvm.js:186605-186785 placement
+//@ chunk-7kayq7nc.js:202739-202919 placement
 function mcpAuthErrorCode(error) {
   if (error.type !== "failed" && error.type !== "needs-auth") return;
   return (
@@ -907,9 +904,14 @@ function mcpAuthErrorCode(error) {
     (error.clientRegistrationUnavailable ? "CLIENT_REGISTRATION_UNAVAILABLE" : undefined)
   );
 }
-//@ chunk-bwbq4xvm.js:186785-186824 placement
-var ELICITATION_ACTIONS = ["accept", "reject", "cancelled"];
-//@ chunk-bwbq4xvm.js:186824-187015 placement
+//@ chunk-7kayq7nc.js:202919-202993 placement
+var ELICITATION_ACTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var askedMcpSkillVersions;
+deferInit("chunk-7kayq7nc.js:202919", () => {
+  ELICITATION_ACTIONS = ["accept", "reject", "cancelled"];
+  askedMcpSkillVersions = Symbol("askedMcpSkillVersions");
+});
+//@ chunk-7kayq7nc.js:202993-203184 placement
 /**
  * 导出值：同一声明里的多个绑定：USER_REJECTED_KIND（仅 user-rejected 的旧取值）；NON_EXECUTION_KINDS（tool_result_meta.non_execution_kind 取值）；位于「并入已有模块：SDK 核心消息与数据结构的 zod schema（system/assistant/result/限额事件、权限显示、模型用量、钩子输入等），316 增加了 away summary 等新消息类型」模块。
  */
@@ -924,9 +926,9 @@ var NON_EXECUTION_KINDS = [
   "interrupted",
   "cancelled",
 ];
-//@ chunk-bwbq4xvm.js:187015-187227 placement
-function toolRejectionKind(toolDenialKind) {
-  switch (toolDenialKind) {
+//@ chunk-7kayq7nc.js:203184-203396 placement
+function toolRejectionKind(kind) {
+  switch (kind) {
     case "automode-blocked":
     case "automode-unavailable":
     case "automode-parsing-error":
@@ -939,7 +941,7 @@ function toolRejectionKind(toolDenialKind) {
       return false;
   }
 }
-//@ chunk-bwbq4xvm.js:187227-197743 placement
+//@ chunk-7kayq7nc.js:203396-214426 placement
 /**
  * SDK 模型用量 schema（inputTokens/outputTokens/thinkingTokens/缓存读写 5m/1h…）及同一声明里的统计、权限更新、MCP 配置等子 schema。
  */
@@ -959,12 +961,13 @@ var CoordinatorRoleSchema;
 var MCP_TOOL_TIMEOUT_DESCRIPTION;
 var McpToolTimeoutSchema;
 var McpRequestTimeoutSchema;
+var displayNameField;
 var SDKStdioMessageSchema;
 var McpToolPolicySchema;
 var SDKSseMessageSchema;
 var SDKHttpMessageSchema;
 var SDKSdkMessageSchema;
-deferInit("chunk-bwbq4xvm.js:187227", () => {
+deferInit("chunk-7kayq7nc.js:203396", () => {
   ModelUsageSchema = DoctorLazy(() =>
     objectSchema({
       inputTokens: numberSchema().int(),
@@ -1087,6 +1090,14 @@ deferInit("chunk-bwbq4xvm.js:187227", () => {
         "Per-server HTTP request timeout in milliseconds, set by the host on the mcp_set_servers control event. Raises the per-request fetch first-byte budget and the tool-call watchdog for this server. Capped at 5 minutes. Ignored when `timeout` is also set.\n@internal",
       ),
   );
+  displayNameField = DoctorLazy(() =>
+    stringSchema()
+      .optional()
+      .catch(undefined)
+      .describe(
+        `@internal A readable name for this server, for when its key in mcpServers is not readable (for example "Google Drive" for "Google_Drive-1a2b3c4d"). Used only to label the server's tools. The name is shortened to one line without escape sequences, control or invisible characters, at most 128 UTF-16 code units. Changing only this field does not reconnect the server, so the new name shows from the next time the server connects.`,
+      ),
+  );
   SDKStdioMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("stdio").optional(),
@@ -1123,6 +1134,7 @@ deferInit("chunk-bwbq4xvm.js:187227", () => {
       tools: array(McpToolPolicySchema()).optional(),
       timeout: McpToolTimeoutSchema(),
       request_timeout_ms: McpRequestTimeoutSchema(),
+      displayName: displayNameField(),
       alwaysLoad: booleanSchema()
         .optional()
         .describe(
@@ -1139,6 +1151,7 @@ deferInit("chunk-bwbq4xvm.js:187227", () => {
       tools: array(McpToolPolicySchema()).optional(),
       timeout: McpToolTimeoutSchema(),
       request_timeout_ms: McpRequestTimeoutSchema(),
+      displayName: displayNameField(),
       alwaysLoad: booleanSchema()
         .optional()
         .describe(
@@ -1178,7 +1191,7 @@ deferInit("chunk-bwbq4xvm.js:187227", () => {
     }),
   );
 });
-//@ chunk-bwbq4xvm.js:197743-197858 placement
+//@ chunk-7kayq7nc.js:214426-214541 placement
 function normalizePolicyEntries(entries) {
   if (!Array.isArray(entries)) return entries;
   return entries.flatMap((entry) => {
@@ -1186,7 +1199,7 @@ function normalizePolicyEntries(entries) {
     return toolPolicyEntry === undefined ? [] : [toolPolicyEntry.policy];
   });
 }
-//@ chunk-bwbq4xvm.js:197858-205704 placement
+//@ chunk-7kayq7nc.js:214541-223165 placement
 /**
  * MCP 服务器配置与状态 schema（stdio/sse/http/sdk/claudeai-proxy、status、serverInfo、错误码）。
  */
@@ -1205,7 +1218,7 @@ var CanUseToolResultSchema;
 var PermissionModeSchema;
 var HOOK_EVENT_NAMES;
 var HookEventNameSchema;
-deferInit("chunk-bwbq4xvm.js:197858", () => {
+deferInit("chunk-7kayq7nc.js:214541", () => {
   McpServerConfigSchema = DoctorLazy(() =>
     union([SDKStdioMessageSchema(), SDKSseMessageSchema(), SDKHttpMessageSchema(), SDKSdkMessageSchema()]),
   );
@@ -1236,7 +1249,7 @@ deferInit("chunk-bwbq4xvm.js:197858", () => {
       error_code: _enum(MCP_AUTH_ERROR_CODES)
         .optional()
         .describe(
-          "@internal Why a row is not connected, where a host can act on it. On a 'failed' row: CLAUDEAI_BEARER_REJECTED (a claude.ai connector rejected the claude.ai login \u2014 sign in again), FIRST_PARTY_AUTH_REJECTED (a first-party Anthropic server rejected its credential \u2014 the claude.ai login, or for the Claude Design server its /design-login authorization; the row's error names which sign-in fixes it), APPROVAL_REQUIRED (a project-scoped server awaiting the user's approval). On a 'failed' or a 'needs-auth' row: CLIENT_REGISTRATION_UNAVAILABLE (the last look at the server's authorization server, under 30 days ago, found no way to register a client, so mcp_authenticate is expected to fail; the row keeps this value until the server is dialed again, for example by mcp_reconnect or a completed sign-in, so keep sign-in and reconnect available). Absent in every other case; new values are additive.",
+          "@internal Why a row is not connected, where a host can act on it. On a 'failed' row: CLAUDEAI_BEARER_REJECTED (a claude.ai connector rejected the claude.ai login \u2014 sign in again), FIRST_PARTY_AUTH_REJECTED (a first-party Anthropic server rejected its credential \u2014 the claude.ai login, or for the Claude Design server its /design-login authorization; the row's error names which sign-in fixes it, except over a transport that stores its frames, where it reads 'Connection failed'), APPROVAL_REQUIRED (a project-scoped server awaiting the user's approval). On a 'failed' or a 'needs-auth' row: CLIENT_REGISTRATION_UNAVAILABLE (the last look at the server's authorization server, under 30 days ago, found no way to register a client, so mcp_authenticate is expected to fail; the row keeps this value until the server is dialed again, for example by mcp_reconnect or a completed sign-in, so keep sign-in and reconnect available). Absent in every other case; new values are additive.",
         ),
       config: McpServerConfigUnionSchema()
         .optional()
@@ -1259,7 +1272,7 @@ deferInit("chunk-bwbq4xvm.js:197858", () => {
       urlHost: stringSchema()
         .optional()
         .describe(
-          "@internal Host and port of an http or sse server's URL as its settings file wrote it, for display where `config` is withheld. Absent for other transports, for a server with no settings file (dynamic, plugin, sdk, agent, claudeai), for a server the session proxies (its host would be the session's own), when the file's host holds an environment-variable placeholder or the file can't be re-read, and on CLIs that predate the field.",
+          "@internal Host and port of an http or sse server's URL as its settings file wrote it, for display where `config` is withheld. Absent for other transports, for a server with no settings file (dynamic, plugin, sdk, agent, claudeai), for a server the session proxies (its host would be the session's own), outside a worker known to be Anthropic-hosted, where `config` is withheld (on a self-hosted runner, for one, it can name a machine in the customer's own network), when the file's host holds an environment-variable placeholder or the file can't be re-read, and on CLIs that predate the field.",
         ),
       scope: stringSchema()
         .optional()
@@ -1287,12 +1300,17 @@ deferInit("chunk-bwbq4xvm.js:197858", () => {
       )
         .optional()
         .describe("Tools provided by this server (available when connected)"),
+      toolCount: numberSchema()
+        .optional()
+        .describe(
+          "@internal How many tools the server has, sent in place of `tools` on each row that would carry them when a live `mcp_status` reply (`liveReply`) with every server's tools would be too large to send. Such a reply leaves out every row's `serverInfo` and `capabilities` too; read their absence there as unknown, not as none. Absent whenever `tools` is sent, and on CLIs that predate the field.",
+        ),
       capabilities: objectSchema({
         experimental: record(stringSchema(), unknown()).optional(),
       })
         .optional()
         .describe(
-          "@internal Server capabilities (available when connected). experimental['claude/channel'] is only present if the server's plugin is on the approved channels allowlist \u2014 use its presence to decide whether to show an Enable-channel prompt.",
+          "@internal Server capabilities (available when connected). experimental['claude/channel'] is only present if the server's plugin is on the approved channels allowlist \u2014 use its presence to decide whether to show an Enable-channel prompt. Left out of a live reply too large to send in full (see `toolCount`); there its absence means unknown.",
         ),
     }).describe("Status information for an MCP server connection."),
   );
@@ -1421,7 +1439,7 @@ deferInit("chunk-bwbq4xvm.js:197858", () => {
   ];
   HookEventNameSchema = DoctorLazy(() => _enum(HOOK_EVENT_NAMES));
 });
-//@ chunk-bwbq4xvm.js:205704-215408 placement
+//@ chunk-7kayq7nc.js:223165-232869 placement
 /**
  * 工具来源与钩子公共输入 schema（MCP 工具所属服务器、session_id、transcript_path、cwd 等基础字段 C）。
  */
@@ -1448,7 +1466,7 @@ var SubagentStopHookInputSchema;
 var PreCompactHookInputSchema;
 var PostCompactHookInputSchema;
 var ModelSwitchSourceDescriptions;
-deferInit("chunk-bwbq4xvm.js:205704", () => {
+deferInit("chunk-7kayq7nc.js:223165", () => {
   McpToolSourceSchema = DoctorLazy(() =>
     objectSchema({
       name: stringSchema(),
@@ -1786,7 +1804,7 @@ deferInit("chunk-bwbq4xvm.js:205704", () => {
     resume: "resume: model restored while resuming a session",
   };
 });
-//@ chunk-bwbq4xvm.js:215408-216584 placement
+//@ chunk-7kayq7nc.js:232869-234045 placement
 /**
  * Pre/PostModelSwitch 钩子输入的公共字段：from_model、to_model、requested、重发 token 数等。
  */
@@ -1815,7 +1833,7 @@ function modelSwitchFields(sources) {
     ),
   });
 }
-//@ chunk-bwbq4xvm.js:216584-220911 placement
+//@ chunk-7kayq7nc.js:234045-238372 placement
 /**
  * 模型切换钩子（PreModelSwitch/PostModelSwitch）及其他钩子事件输入 schema 定义。
  */
@@ -1842,7 +1860,7 @@ var SessionEndReasonSchema;
 var SessionEndHookInputSchema;
 var HookInputUnionSchema;
 var AsyncHookInputSchema;
-deferInit("chunk-bwbq4xvm.js:216584", () => {
+deferInit("chunk-7kayq7nc.js:234045", () => {
   PreModelSwitchHookInputSchema = DoctorLazy(() =>
     HookBaseInputSchema()
       .and(
@@ -2092,14 +2110,14 @@ deferInit("chunk-bwbq4xvm.js:216584", () => {
     }),
   );
 });
-//@ chunk-bwbq4xvm.js:220911-220963 placement
+//@ chunk-7kayq7nc.js:238372-238424 placement
 function isSingleLineNonBlank(text) {
   return (
     !text.includes(`
 `) && /\S/.test(text)
   );
 }
-//@ chunk-bwbq4xvm.js:220963-309065 placement
+//@ chunk-7kayq7nc.js:238424-329908 placement
 /**
  * 钩子输出 schema 总表：PreToolUse permissionDisplay、各事件的 hookSpecificOutput、同步/异步钩子 JSON 输出等。
  */
@@ -2142,7 +2160,7 @@ var SDKUserMessageSchema;
 var AssistantContentSchema;
 var SDKAssistantMessageSchema;
 var StreamEventSchema;
-var _;
+var uuidSchema;
 var MainLoopUsageSchema;
 var ApiErrorCodeSchema;
 var CompactStatusSchema;
@@ -2162,7 +2180,7 @@ var CONTEXT_CATEGORY_ORDER;
 var ContextUsageCategorySchema;
 var ContextUsageSchema;
 var SDKAssistantMessageSchema_2;
-deferInit("chunk-bwbq4xvm.js:220963", () => {
+deferInit("chunk-7kayq7nc.js:238424", () => {
   PermissionDisplaySchema = DoctorLazy(() =>
     objectSchema({
       title: stringSchema().max(200).refine(isSingleLineNonBlank),
@@ -2631,7 +2649,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
       "One Anthropic Messages API streaming event (message_start, content_block_start, content_block_delta, content_block_stop, message_delta, message_stop) as defined for the streaming Messages API.",
     ),
   );
-  _ = DoctorLazy(() => stringSchema());
+  uuidSchema = DoctorLazy(() => stringSchema());
   MainLoopUsageSchema = DoctorLazy(() =>
     UsageSchema().describe(
       "MAIN AGENT LOOP ONLY \u2014 excludes Task subagent, sidechain, and auxiliary model calls, and is per-turn in streaming-input sessions. Prefer modelUsage for token/cost accounting.",
@@ -2746,7 +2764,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         body: stringSchema()
           .optional()
           .describe(
-            "Decoded message body with the peer envelope stripped \u2014 byte-exact with what the model sees. Present only when the turn is exactly one harness-formed envelope (or an in-process agent message); render this instead of re-parsing the message text.",
+            "Decoded message body with the peer envelope stripped \u2014 byte-exact with what the model sees. Present only when the turn is exactly one harness-formed envelope (or an in-process agent message), or when Claude Desktop declares it and the message text holds those exact bytes; render this instead of re-parsing the message text.",
           ),
         verifiedPeerPid: numberSchema()
           .optional()
@@ -2907,7 +2925,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
       initiator: stringSchema()
         .optional()
         .describe(
-          "@internal The host's own label for what started this turn (e.g. the desktop app's `scheduled-task`, `sleep-auto-resume`); `user` or absent means a person sent it. Usage attribution only; it does not change how the turn runs.",
+          "@internal The host's own label for what started this turn (e.g. the desktop app's `scheduled-task`, `sleep-auto-resume`); `user`, an empty string or absent means a person sent it. For usage attribution; any other label also keeps a message with no origin, sent while a turn is running, from going out as the user's words.",
         ),
       is_visible_in_transcript_only: literal(true)
         .optional()
@@ -2955,11 +2973,12 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
           })
             .optional()
             .catch(undefined),
+          built_in_tool: stringSchema().optional(),
         }),
       )
         .optional()
         .describe(
-          "@internal Display metadata for this message's tool_result blocks, keyed by tool_use_id. non_execution_kind is the harness-stamped reason an is_error:true result did not carry the tool's own execution output (user-rejected / permission-rule / automode-* / interrupted / cancelled); absent means the tool ran to completion. remedy is the fix a host can offer for what the result reports (see SDKToolResultRemedy). An entry may carry a remedy alone, on a result that did run (a staged write, a sandbox violation on exit 0), so whether a call ran is read from non_execution_kind, never from an entry's presence. On a subagent's messages (parent_tool_use_id set), entries carry only permission_decision, so those messages do not say whether a call ran. permission_decision is how the call's permission check ended, as Claude Code's claude_code.tool.blocked_on_user trace span reports it. decision is accept, reject or cancelled. source names what decided: config, classifier, hook, user_temporary, user_permanent, user_reject, user_abort, or invalid_input, permission_updated_input_invalid or server_fallback_tombstone when bad input or the server ended the wait. Which label a rule gets depends on the session: in SDK sessions a rule for this session or in the user's own settings reports user_temporary, user_permanent or user_reject and other rules report config, while interactive sessions report every rule as config. reason_type is the kind of reason the check gave when it decided by itself, such as 'rule' whenever a rule decided, or 'classifier' for an auto-mode allow, which reports source config. reason_type is absent when a person or the SDK host answered the question, when the check's outcome was still a question, and for user_abort and the last three sources above. permission_decision is absent when the call ended before its permission check, and on some results built apart from the call's own run, such as a plugin hook's refusal, a hook's rewrite of a denied result, or the result the tool executor writes for a queued call that a stop cancelled. user_feedback is the deny comment a human typed at a permission prompt (the local dialog or a bridge client's deny UI), before the CLI's reject-message framing \u2014 absent when the deny was resolved by a coordinator, channel relay, or hook rather than a human. A deny answered through the SDK control protocol (can_use_tool / --permission-prompt-tool) currently reports as 'permission-rule' with no user_feedback, because that wire carries no human-provenance signal. Wrapper-level sibling \u2014 never inside `message.content` \u2014 so it is not replayed to the model. Clients read this instead of string-matching the result prose.",
+          "@internal Display metadata for this message's tool_result blocks, keyed by tool_use_id. non_execution_kind is the harness-stamped reason an is_error:true result did not carry the tool's own execution output (user-rejected / permission-rule / automode-* / interrupted / cancelled); absent means the tool ran to completion. remedy is the fix a host can offer for what the result reports (see SDKToolResultRemedy). An entry may carry a remedy alone, on a result that did run (a staged write, a sandbox violation on exit 0), so whether a call ran is read from non_execution_kind, never from an entry's presence. built_in_tool is the name of the Claude Code built-in tool whose own completed run, in the process that wrote this message, made the result, stamped for the few built-ins a host acts on; it is absent once a hook rewrote the result, on a message that the process read from a session file or took from another frame (a resumed session), on the result of a call that a client wrote (a handed-over turn), and on a subagent's messages. History that the same process sends again (historical: true) still carries it. On a subagent's messages (parent_tool_use_id set), entries carry only permission_decision, so those messages do not say whether a call ran. permission_decision is how the call's permission check ended, as Claude Code's claude_code.tool.blocked_on_user trace span reports it. decision is accept, reject or cancelled. source names what decided: config, classifier, hook, user_temporary, user_permanent, user_reject, user_abort, or invalid_input, permission_updated_input_invalid or server_fallback_tombstone when bad input or the server ended the wait. Which label a rule gets depends on the session: in SDK sessions a rule for this session or in the user's own settings reports user_temporary, user_permanent or user_reject and other rules report config, while interactive sessions report every rule as config. reason_type is the kind of reason the check gave when it decided by itself, such as 'rule' whenever a rule decided, or 'classifier' for an auto-mode allow, which reports source config. reason_type is absent when a person or the SDK host answered the question, when the check's outcome was still a question, and for user_abort and the last three sources above. permission_decision is absent when the call ended before its permission check, and on some results built apart from the call's own run, such as a plugin hook's refusal, a hook's rewrite of a denied result, or the result the tool executor writes for a queued call that a stop cancelled. user_feedback is the deny comment a human typed at a permission prompt (the local dialog or a bridge client's deny UI), before the CLI's reject-message framing \u2014 absent when the deny was resolved by a coordinator, channel relay, or hook rather than a human. A deny answered through the SDK control protocol (can_use_tool / --permission-prompt-tool) currently reports as 'permission-rule' with no user_feedback, because that wire carries no human-provenance signal. Wrapper-level sibling \u2014 never inside `message.content` \u2014 so it is not replayed to the model. Clients read this instead of string-matching the result prose.",
         ),
       source_tool_use_id: stringSchema()
         .optional()
@@ -2994,12 +3013,20 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         .describe(
           "@internal Only on the synthetic message that re-asks the same model after a refusal: the API msg_* id of the refused response. Absent when the CLI has no well-formed id for it.",
         ),
+      plugin_prompt: objectSchema({
+        name: stringSchema(),
+        text: stringSchema(),
+      })
+        .optional()
+        .describe(
+          "@internal Output only, and to be read only on a message the CLI wrote, never on one another client of the session posted: on a session event, only where its `source` is `worker`. On a message a plugin sent, what a host can show under the plugin's name in place of `message`. `name` is that name as the wrapper the model reads prints it, on one line and scrubbed; `origin.name` holds it raw. `text` is the prompt as hooks left it, with prompts merged into one turn joined by newlines, when `message` is exactly the wrapper the model reads around that prompt. Or it is the command the plugin ran as a person would type it, such as `/review 12`, when `message` is only that command's tags and `text` holds all their words; arguments can make it more than one line, so show all of it. Absent on any other message, and on a prompt sent as the person's own words; there, show `message`.",
+        ),
     }),
   );
   SDKUserMessageBaseSchema = DoctorLazy(() =>
     SDKUserMessageSchema_2()
       .extend({
-        uuid: _().optional(),
+        uuid: uuidSchema().optional(),
         pasted_content: array(AssistantContentSchema())
           .optional()
           .describe(
@@ -3009,6 +3036,11 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
           .optional()
           .describe(
             "Text the user pasted that is still in `message.content` where they put it: each entry one paste. The prompt is not changed by the host; the CLI may wrap each entry in `<pasted_content>` tags where it still stands in the last text block. It looks for the first 100 entries that are not blank. For a paste the host took out of `message`, use `pasted_content` instead.",
+          ),
+        ultrathink_typed: booleanSchema()
+          .optional()
+          .describe(
+            "@internal The sender's statement that the person typed `ultrathink` in this prompt and was shown the word colored before sending, and that nothing in the prompt arrived whole as far as the sender saw: no paste, no share, no prompt it suggested. Send it only as `true`, and only while the session's newest system/init carried `ultrathink_typed_raises: true`; leave it out otherwise. The turn then runs at xhigh effort if the CLI also finds the word in the text, the text holds no paste block, the frame lists no paste in `inline_pastes` or `pasted_content`, its `client_platform`, when present, is a person's keyboard or a thin client's, it bears no other mark of untyped text, and the session takes the sender for a person. It is the sender's claim, not proof.",
           ),
         session_id: stringSchema().optional(),
         agent_id: stringSchema()
@@ -3023,7 +3055,12 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         file_attachments: array(unknown())
           .optional()
           .describe(
-            "@internal Files a remote client attached to this prompt (each {file_uuid, file_name, is_image?, sha256?, file_size?}; src/bridge/inboundAttachmentSchema.ts reads them). Typed like SDKUserMessageReplay.file_attachments so the two message types stay assignable.",
+            "@internal Files a remote client attached to this prompt (each {file_uuid, file_name, is_image?, sha256?, file_size?, project_folder_name?}; src/bridge/inboundAttachmentSchema.ts reads them). Typed like SDKUserMessageReplay.file_attachments so the two message types stay assignable.",
+          ),
+        tool_states: array(unknown())
+          .optional()
+          .describe(
+            "@internal The MCP App views' states a remote client sent with this prompt, replacing the set the worker holds ([] clears it); src/services/widgetContext/widgetContextWire.ts reads them.",
           ),
       })
       .describe(
@@ -3032,7 +3069,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
   );
   SDKReplayMessageSchema = DoctorLazy(() =>
     SDKUserMessageSchema_2().extend({
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       isReplay: literal(true),
       file_attachments: array(unknown()).optional(),
@@ -3049,7 +3086,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         .describe(
           "Working directory for the command. Falls back to the session cwd when omitted. With tengu_cloud_session_shell on, the command runs in the session's current directory and one naming any other directory is refused.",
         ),
-      uuid: _().optional(),
+      uuid: uuidSchema().optional(),
       session_id: stringSchema().optional(),
     }).describe(
       "@internal A user-initiated shell command. Input-only \u2014 sent by CCR clients that surface a dedicated terminal UI; never emitted on stdout. Acknowledged on arrival and, unless blank, too long or a duplicate, echoed at once as a `<bash-input>` replay row; then answered with exactly one more row: its output (a replay frame when run beside the conversation; a plain user message after its own turn when it joins the conversation, possibly followed by the model replying) or a `<bash-stderr>Not run: \u2026</bash-stderr>` replay row saying why it was refused or dropped. A blank or too-long command gets only its Not run row; a duplicate gets nothing. Other rows can come between the echo and that row.",
@@ -3341,7 +3378,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
       message: SDKAssistantMessageSchema(),
       parent_tool_use_id: stringSchema().nullable(),
       error: ApiErrorCodeSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       historical: booleanSchema()
         .optional()
         .describe(
@@ -3374,7 +3411,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         .describe(
           "This turn continued the preceding truncated assistant turn inside its trailing signed thinking block (max-output-tokens recovery). Its thinking signatures are cumulative over that preceding thinking-only turn, so a history replayed through the bridge must carry this flag back for the normalizer to keep the run's prefix on the wire. Wrapper-level sibling \u2014 never inside `message.content` \u2014 so it is not replayed to the model.",
         ),
-      supersedes: array(_())
+      supersedes: array(uuidSchema())
         .optional()
         .describe(
           "Wire uuids of previously-delivered messages that this message replaces (refusal-fallback supersede). The list can include tombstoned tool_result frames from the refused leg, not only assistant frames. Evict the named messages on arrival and treat this frame as their canonical replacement. Idempotent with the end-of-turn model_refusal_fallback notice, whose retracted_message_uuids remains the complete audit record for the turn.",
@@ -3406,7 +3443,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
       )
         .optional()
         .describe(
-          "@internal Display metadata for this message's tool_use blocks, keyed by block id. display_name is the MCP server's `tool.annotations.title` when provided, otherwise a readable transform of the wire name; server_display_name is the MCP server's own display name; icon_url is the MCP server's directory icon URL (claude.ai connectors only); server_id is the mcpsrv_ connector id of a server provisioned by claude.ai, set by the CLI from claude.ai's own connector listing, so a client may show the call as that connector's. server_id_stamp is the X-MCP-Server-ID header value, lower-cased, of an http entry in the dynamic scope (passed in at launch or by a later mcp_set_servers push). Claude Code Remote writes the connector's uuid there when the session has one, otherwise an id it generates; the CLI checks only its shape (at most 128 characters of letters, digits, '.', '_', ':' and '-'; anything else yields no stamp), not whose it is, since a --mcp-config or SDK-host entry can write anything. A client may look it up in its own server list, treat a miss as a server it does not know (never as an error), and show a hit as the entry's claim to be that server, not as proof. They are separate fields: a server provisioned by claude.ai carries server_id, a dynamic-scope http entry server_id_stamp. Both absent for a plugin's, a repo's, a settings or an agent entry. Neither is a permission grant. tool_name is the tool's name as its server lists it, without the mcp__<server>__ prefix. Omitted for blocks whose display label equals the wire name (built-in tools). Wrapper-level sibling \u2014 never inside `message.content` \u2014 so it is not replayed to the model.",
+          "@internal Display metadata for this message's tool_use blocks, keyed by block id. display_name is the MCP server's `tool.annotations.title` when provided, otherwise a readable transform of the wire name; server_display_name is the MCP server's display name (claude.ai's name for a connector, else the name its config gives, else the name the server reports, else its key); icon_url is the MCP server's directory icon URL (claude.ai connectors only); server_id is the mcpsrv_ connector id of a server provisioned by claude.ai, set by the CLI from claude.ai's own connector listing, so a client may show the call as that connector's. server_id_stamp is the X-MCP-Server-ID header value, lower-cased, of an http entry in the dynamic scope (passed in at launch or by a later mcp_set_servers push). Claude Code Remote writes the connector's uuid there when the session has one, otherwise an id it generates; the CLI checks only its shape (at most 128 characters of letters, digits, '.', '_', ':' and '-'; anything else yields no stamp), not whose it is, since a --mcp-config or SDK-host entry can write anything. A client may look it up in its own server list, treat a miss as a server it does not know (never as an error), and show a hit as the entry's claim to be that server, not as proof. They are separate fields: a server provisioned by claude.ai carries server_id, a dynamic-scope http entry server_id_stamp. Both absent for a plugin's, a repo's, a settings or an agent entry. Neither is a permission grant. tool_name is the tool's name as its server lists it, without the mcp__<server>__ prefix. Omitted for blocks whose display label equals the wire name (built-in tools). Wrapper-level sibling \u2014 never inside `message.content` \u2014 so it is not replayed to the model.",
         ),
       narration_block_indexes: array(numberSchema().int().nonnegative())
         .optional()
@@ -3540,13 +3577,15 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
         "field_not_granted",
         "usage_limit_reached",
         "empty_completion",
+        "malformed_tool_use_exhausted",
         "unattended_start_limit",
         "unattended_start_unconfirmed",
+        "network_edge_blocked",
       ])
         .optional()
         .catch(undefined)
         .describe(
-          "@internal Typed kind of the API error when is_api_error_message is true, for consumers that key on the cause instead of the message text (the text stays the fallback and may change). Absent when the error has no typed kind; new values are added over time, so treat an unknown value as absent. dlp_request_denied: the request was refused by the organization's data-loss-prevention policy \u2014 terminal for that request body; a consumer replaying history must not re-send it. claude_code_version_too_old: the API refused the request because this Claude Code build is below a required minimum version \u2014 the selected model's minimum, or an organization-policy floor; only the message text says which and names the versions, and the remedy is updating Claude Code. safety_monitor_blocked: a server-side safety monitor blocked the model's response for this turn; terminal for the turn, so a consumer replaying history must not re-send the prompt that led to it. effort_requires_thinking: the model refuses the requested effort level while thinking is off; api_error_params.effort names the level. advisor_incompatible: the configured advisor model cannot be paired with this request's model. tool_history_mismatch: the API rejected the conversation's tool_use/tool_result pairing (a tool_use without its result, an orphaned tool_result, a duplicate tool_use id); re-sending the same history fails the same way, and rewinding the conversation is the remedy. autocompact_thrashing: the context refilled to the limit right after each automatic compaction, repeatedly, so the turn stopped; something in context is too large for the window. pdf_too_large: a PDF is over the API's page or size limit. pdf_password_protected: a PDF is encrypted. stored_login_refused: the stored claude.ai login was about to go out while the API key helper set by the machine's administrator or the organization's settings isn't in effect, or its settings couldn't be confirmed; no request was sent, and the message text says who can clear it. media_removed: the API refused an image or a document in the conversation, so Claude Code leaves it out of the requests that follow. The frame comes either before the answer of a retry that already left it out, or as the error that ended the turn (the result then repeats this value). api_error_params.media_reason says why, and api_error_params.media which kind of block. Other kinds (pdf_too_large, pdf_password_protected) and some untyped errors also leave the block out, so the absence of this value does not mean that nothing was left out. no_response: no response arrived before the first-byte deadline on any attempt, usually a proxy or gateway that holds responses until they complete. tls_untrusted_ca: the API's TLS certificate comes from an authority this process does not trust, usually a TLS-inspecting proxy or a gateway signed by a private CA. gateway_content_type: a proxy between Claude Code and Amazon Bedrock rewrote Bedrock's event-stream response. connection_failed: Claude Code could not reach the API host (DNS, a refused connection, no route, a proxy that refused the tunnel) or lost the connection (an open connection was cut, or the response body ended early). An error with a TLS error code never carries it: the untrusted-authority codes are tls_untrusted_ca, and the other certificate and handshake codes (for example an expired, revoked or wrong-host certificate) have no typed kind. A connection that is cut during the TLS handshake arrives with a socket code such as ECONNRESET and carries it. The client's own request timeout and a connection error whose cause Claude Code cannot tell have no typed kind either. stream_idle_timeout: Claude Code's own idle timer gave up waiting for more of the response on an open stream. It says that the timer fired, not that the server stalled: a long gap in a slow answer, a proxy that holds the response back, or a sleep that the timer cannot tell from a stall (a short one, for example) fires it too. computer_slept: a Claude Code timer found that the machine slept through its wait for the response. A claude-code-server session never sends it, because its process is not the person's computer; there the same failure has no typed kind. provider_credentials: a third-party cloud provider (api_error_params.provider) refused the request's credentials or access; api_error_params.remedy says what fixes it. gateway_signin_required: the Cloud gateway provider is configured and nobody is signed in to it; no request was sent. gateway_session_expired: the Cloud gateway session expired; no request was sent; api_error_params.remedy is gateway_token when the token came from the environment, which signing in does not replace. api_key_auth_disabled: the organization turned off API key authentication and the active credential is an API key. org_disabled_credential: the ANTHROPIC_API_KEY environment variable belongs to a disabled organization and overrides the account sign-in. invalid_credential_header: a credential or header value (from the environment, a helper, or the saved sign-in) cannot be sent as an HTTP header; caught before the request was sent. model_requires_usage_credits: the model runs on usage credits for this account, and credits are off or the included allowance is used up. long_context_credits_required: a request over the 200K-token context boundary needs usage credits. consent_unanswered: the model now uses usage credits and the prompt to confirm went unanswered; nothing was sent. no_allowed_fallback: switching off the model was needed (the usage-credits prompt was declined) and the model policy allows no other model. model_substitution_disabled: switching off the model was needed and CLAUDE_CODE_NO_MODEL_FALLBACK forbids it. field_not_granted: the organization is not allowed to send a field in the request, and the message text says what to do. usage_limit_reached: the request was refused by the account's own usage limit, a plan limit (session, weekly or per-model) or a spend cap on usage credits; api_error_params.rate_limit_info says which and when it resets. The other refusals that share error rate_limit never carry it: an organization policy that turned the service off (no limit was reached, and no reset clears it), a temporary server throttle, a capacity switch-off, an entitlement refusal shown in the server's own words, or a 429 on an API key or a third-party cloud provider. empty_completion: the model ended its turn with no visible text, and its one retry had no content block, on a person's own prompt with no reply and no tool result after it; the turn ends as an error so that a host shows a failure and not a blank reply. unattended_start_limit: a cloud session's process that starts where an earlier one died carries on what that one left unfinished; by the session's record, as many processes as are allowed (a number that is configured; with none there is no limit) had already done so within 24 hours with no message from a person in between, and this one did not; no request was sent; terminal for the turn, so a consumer replaying history must not re-send the prompt that led to it; anything new sent to the session runs as usual; a person's message allows it again, and so does time, as earlier starts pass out of the 24 hours. unattended_start_unconfirmed: a cloud session's process did not carry on what an earlier one left unfinished, because it could not check whether it was allowed to: the session's record of such starts could not be read or written, or the check failed; no request was sent; not terminal: a later process may carry the turn on.",
+          "@internal Typed kind of the API error when is_api_error_message is true, for consumers that key on the cause instead of the message text (the text stays the fallback and may change). Absent when the error has no typed kind; new values are added over time, so treat an unknown value as absent. dlp_request_denied: the request was refused by the organization's data-loss-prevention policy \u2014 terminal for that request body; a consumer replaying history must not re-send it. claude_code_version_too_old: the API refused the request because this Claude Code build is below a required minimum version \u2014 the selected model's minimum, or an organization-policy floor; only the message text says which and names the versions, and the remedy is updating Claude Code. safety_monitor_blocked: a server-side safety monitor blocked the model's response for this turn; terminal for the turn, so a consumer replaying history must not re-send the prompt that led to it. effort_requires_thinking: the model refuses the requested effort level while thinking is off; api_error_params.effort names the level. advisor_incompatible: the configured advisor model cannot be paired with this request's model. tool_history_mismatch: the API rejected the conversation's tool_use/tool_result pairing (a tool_use without its result, an orphaned tool_result, a duplicate tool_use id); re-sending the same history fails the same way, and rewinding the conversation is the remedy. autocompact_thrashing: the context refilled to the limit right after each automatic compaction, repeatedly, so the turn stopped; something in context is too large for the window. pdf_too_large: a PDF is over the API's page or size limit. pdf_password_protected: a PDF is encrypted. stored_login_refused: the stored claude.ai login was about to go out while the API key helper set by the machine's administrator or the organization's settings isn't in effect, or its settings couldn't be confirmed; no request was sent, and the message text says who can clear it. media_removed: the API refused an image or a document in the conversation, so Claude Code leaves it out of the requests that follow. The frame comes either before the answer of a retry that already left it out, or as the error that ended the turn (the result then repeats this value). api_error_params.media_reason says why, and api_error_params.media which kind of block. Other kinds (pdf_too_large, pdf_password_protected) and some untyped errors also leave the block out, so the absence of this value does not mean that nothing was left out. no_response: no response arrived before the first-byte deadline on any attempt, usually a proxy or gateway that holds responses until they complete. tls_untrusted_ca: the API's TLS certificate comes from an authority this process does not trust, usually a TLS-inspecting proxy or a gateway signed by a private CA. gateway_content_type: a proxy between Claude Code and Amazon Bedrock rewrote Bedrock's event-stream response. connection_failed: Claude Code could not reach the API host (DNS, a refused connection, no route, a proxy that refused the tunnel) or lost the connection (an open connection was cut, or the response body ended early). An error with a TLS error code never carries it: the untrusted-authority codes are tls_untrusted_ca, and the other certificate and handshake codes (for example an expired, revoked or wrong-host certificate) have no typed kind. A connection that is cut during the TLS handshake arrives with a socket code such as ECONNRESET and carries it. The client's own request timeout and a connection error whose cause Claude Code cannot tell have no typed kind either. stream_idle_timeout: Claude Code's own idle timer gave up waiting for more of the response on an open stream. It says that the timer fired, not that the server stalled: a long gap in a slow answer, a proxy that holds the response back, or a sleep that the timer cannot tell from a stall (a short one, for example) fires it too. computer_slept: a Claude Code timer found that the machine slept through its wait for the response. A claude-code-server session never sends it, because its process is not the person's computer; there the same failure has no typed kind. provider_credentials: a third-party cloud provider (api_error_params.provider) refused the request's credentials or access; api_error_params.remedy says what fixes it. gateway_signin_required: the Cloud gateway provider is configured and nobody is signed in to it; no request was sent. gateway_session_expired: the Cloud gateway session expired; no request was sent; api_error_params.remedy is gateway_token when the token came from the environment, which signing in does not replace. api_key_auth_disabled: the organization turned off API key authentication and the active credential is an API key. org_disabled_credential: the ANTHROPIC_API_KEY environment variable belongs to a disabled organization and overrides the account sign-in. invalid_credential_header: a credential or header value (from the environment, a helper, or the saved sign-in) cannot be sent as an HTTP header; caught before the request was sent. model_requires_usage_credits: the model runs on usage credits for this account, and credits are off or the included allowance is used up. long_context_credits_required: a request over the 200K-token context boundary needs usage credits. consent_unanswered: the model now uses usage credits and the prompt to confirm went unanswered; nothing was sent. no_allowed_fallback: switching off the model was needed (the usage-credits prompt was declined) and the model policy allows no other model. model_substitution_disabled: switching off the model was needed and CLAUDE_CODE_NO_MODEL_FALLBACK forbids it. field_not_granted: the organization is not allowed to send a field in the request, and the message text says what to do. usage_limit_reached: the request was refused by the account's own usage limit, a plan limit (session, weekly or per-model) or a spend cap on usage credits; api_error_params.rate_limit_info says which and when it resets. The other refusals that share error rate_limit never carry it: an organization policy that turned the service off (no limit was reached, and no reset clears it), a temporary server throttle, a capacity switch-off, an entitlement refusal shown in the server's own words, or a 429 on an API key or a third-party cloud provider. empty_completion: the model ended its turn with no visible text, its one retry had no content block, and a repeat of that retry had no visible text, on a person's own prompt with no reply and no tool result after it; the turn ends as an error so that a host shows a failure and not a blank reply. malformed_tool_use_exhausted: the model's reply stopped for a tool call and held none, and the loop's retries ran out; terminal for the turn, so a consumer replaying history must not re-send the prompt by itself. unattended_start_limit: a cloud session's process that starts where an earlier one died carries on what that one left unfinished; by the session's record, as many processes as are allowed (a number that is configured; with none there is no limit) had already done so within 24 hours with no message from a person in between, and this one did not; no request was sent; terminal for the turn, so a consumer replaying history must not re-send the prompt that led to it; anything new sent to the session runs as usual; a person's message allows it again, and so does time, as earlier starts pass out of the 24 hours. unattended_start_unconfirmed: a cloud session's process did not carry on what an earlier one left unfinished, because it could not check whether it was allowed to: the session's record of such starts could not be read or written, or the check failed; no request was sent; not terminal: a later process may carry the turn on. network_edge_blocked: the firewall in front of Anthropic's API refused the request for its network location (an unsupported region, or a VPN, proxy or network routing through one) before it reached the API; no sign-in or credential changes this.",
         ),
       api_error_params: objectSchema({
         effort: stringSchema().optional(),
@@ -3614,7 +3653,7 @@ deferInit("chunk-bwbq4xvm.js:220963", () => {
     ),
   );
 });
-//@ chunk-bwbq4xvm.js:309065-323128 placement
+//@ chunk-7kayq7nc.js:329908-345399 placement
 /**
  * SDK rate_limit_event 消息与结果统计（终止原因、子代理统计）等 schema。
  */
@@ -3630,15 +3669,16 @@ var SAFETY_STOPS_DESCRIPTION;
 var QUEUED_TURN_COUNT_DESCRIPTION;
 var TOTAL_COST_DESCRIPTION;
 var RESULT_INDEX_DESCRIPTION;
+var CLAUDEAI_CREDENTIAL_END_DESCRIPTION;
 var INTERRUPTED_BY_SHUTDOWN_DESCRIPTION;
 var RunnerExitSchema;
 var StartupFailureReasonSchema;
-deferInit("chunk-bwbq4xvm.js:309065", () => {
+deferInit("chunk-7kayq7nc.js:329908", () => {
   SDKRateLimitEventMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("rate_limit_event"),
       rate_limit_info: RateLimitInfoSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe("Rate limit event emitted when rate limit info changes."),
   );
@@ -3721,6 +3761,8 @@ deferInit("chunk-bwbq4xvm.js:309065", () => {
     "Cumulative estimated cost in USD for this query() call, covering the same query-pipeline calls as modelUsage and sharing its lifecycle: cumulative across turns in streaming-input sessions \u2014 each result carries the running total so far, so read the latest result rather than summing across results. Crash/startup-error results may carry zeroed values, a resumed or forked session continues from the total its transcript saved, when it has one (so the first result already carries the earlier turns; maxBudgetUsd counts only the spend since this query() call started or last /clear), and a mid-session /clear resets the running total. An estimate, not a billing statement.";
   RESULT_INDEX_DESCRIPTION =
     "Delivery sequence of this result within the run: how many results the run numbered before this one, starting at 0, in the order the process writes them. A result held back while background work finishes is numbered when it is finally written, not when its text was produced; a result whose write fails still consumes its number, so a gap in a stream-json sequence means a result was lost. Distinct from num_turns, which counts model round-trips within one turn. Numbered by the process that hosts the run (`claude -p`, stream-json): a local client relaying a cloud session passes the cloud session's numbering through and its own locally built error results carry none; the in-process engine surface does not number yet. Absent from older producers.";
+  CLAUDEAI_CREDENTIAL_END_DESCRIPTION =
+    "When the claude.ai credential this process's requests send ends for good, as an ISO 8601 instant, read as the result is written. For a stored claude.ai login it is the end of the login's refresh chain as stored at sign-in, which renewing the access token does not move. That date is the server's when it sent one and otherwise a 30-day estimate, and the real end can be up to 3 days earlier. The server is not asked, so a login revoked early still shows its date, and a date in the past means the login has probably ended, not that it has. Absent when no date is known, for every other credential (an API key, a token from the environment, another provider), on results this process did not number, and from older producers.";
   INTERRUPTED_BY_SHUTDOWN_DESCRIPTION =
     "@internal The host of a multi-tenant worker shut the worker down while this turn ran. The shutdown was the first thing to abort the turn, and the turn is left for the session's next worker. The other frames of the ending, and terminal_reason, are the same as for a Stop from a client. Read this member to tell the two apart. A success result can have it, when the shutdown falls in a Stop hook. A result without it can also be the result of a shutdown. A shutdown that makes the turn write no interrupt marker does not set it, and older producers never set it.";
   RunnerExitSchema = DoctorLazy(() =>
@@ -3756,12 +3798,14 @@ deferInit("chunk-bwbq4xvm.js:309065", () => {
       "org_config_required_unavailable",
       "org_config_refused",
       "sandbox_required_unavailable",
+      "initialize_not_first",
+      "config_file_invalid",
     ]).describe(
-      "Why Claude Code refused to start, so a host can offer the fix instead of a retry. org_pin_api_key_conflict: managed settings pin a first-party or Cloud gateway sign-in, and an Anthropic API key or auth token is configured instead. provider_not_allowed: managed settings list the API providers this machine may use (allowedProviders), and the session is set up for one that is not listed. org_verify_failed: the sign-in's organization could not be verified against the pin (network, or a revoked token). org_pin_mismatch: the sign-in belongs to an organization the pin does not allow. managed_settings_invalid: managed policy settings could not be read, the pin names no organization, or managed model settings (deniedModels, or an availableModels list matched exactly) block the default model and leave no allowed model to use instead. remote_settings_required_unavailable: managed settings the organization requires could not be loaded. gateway_signin_required: the Cloud gateway ended this sign-in. gateway_access_denied: the Cloud gateway refused managed settings for this account. proxy_invalid: a proxy setting is not a complete URL. temp_dir_unusable: the per-user temp directory is unsafe or could not be created. cwd_unavailable: the working directory was deleted, moved or cannot be read. shell_tool_missing: Windows has no shell tool: Git Bash is missing, and PowerShell is missing or turned off by CLAUDE_CODE_USE_POWERSHELL_TOOL. session_held_by_background: the conversation to resume or continue is running as a background session. worktree_resume_refused: the resume was refused because the session's worktree failed its safety checks or the resume was launched from inside it; errors says whether a re-run continues without the worktree. worktree_unverified: the session's worktree could not be verified right now; retrying may succeed. cli_version_too_old: this Claude Code version is below the minimum Anthropic requires. bypass_root: bypass permissions mode was requested while running as root. org_config_required_unavailable: the organization requires its policy limits and managed settings before a session starts, and they could not be loaded (network, proxy, or an Anthropic error); retrying may succeed. org_config_refused: the organization requires its policy limits and managed settings, and Anthropic refused them for this sign-in (expired or revoked session, or the organization does not allow Claude Code for this account); signing in again or an admin's change is the fix, not a retry. sandbox_required_unavailable: a working sandbox is required and it cannot run in this session, for example because bubblewrap is missing or the platform is not supported; make the sandbox available or have the requirement changed.",
+      "Why Claude Code refused to start, so a host can offer the fix instead of a retry. org_pin_api_key_conflict: managed settings pin a first-party or Cloud gateway sign-in, and an Anthropic API key or auth token is configured instead. provider_not_allowed: managed settings list the API providers this machine may use (allowedProviders), and the session is set up for one that is not listed. org_verify_failed: the sign-in's organization could not be verified against the pin (network, or a revoked token). org_pin_mismatch: the sign-in belongs to an organization the pin does not allow. managed_settings_invalid: managed policy settings could not be read, the pin names no organization, or managed model settings (deniedModels, or an availableModels list matched exactly) block the default model and leave no allowed model to use instead. remote_settings_required_unavailable: managed settings the organization requires could not be loaded. gateway_signin_required: the Cloud gateway ended this sign-in. gateway_access_denied: the Cloud gateway refused managed settings for this account. proxy_invalid: a proxy setting is not a complete URL. temp_dir_unusable: the per-user temp directory is unsafe or could not be created. cwd_unavailable: the working directory was deleted, moved or cannot be read. shell_tool_missing: Windows has no shell tool: Git Bash is missing, and PowerShell is missing or turned off by CLAUDE_CODE_USE_POWERSHELL_TOOL. session_held_by_background: the conversation to resume or continue is running as a background session. worktree_resume_refused: the resume was refused because the session's worktree failed its safety checks or the resume was launched from inside it; errors says whether a re-run continues without the worktree. worktree_unverified: the session's worktree could not be verified right now; retrying may succeed. cli_version_too_old: this Claude Code version is below the minimum Anthropic requires. bypass_root: bypass permissions mode was requested while running as root. org_config_required_unavailable: the organization requires its policy limits and managed settings before a session starts, and they could not be loaded (network, proxy, or an Anthropic error); retrying may succeed. org_config_refused: the organization requires its policy limits and managed settings, and Anthropic refused them for this sign-in (expired or revoked session, or the organization does not allow Claude Code for this account); signing in again or an admin's change is the fix, not a retry. sandbox_required_unavailable: a working sandbox is required and it cannot run in this session, for example because bubblewrap is missing or the platform is not supported; make the sandbox available or have the requirement changed. initialize_not_first: Claude Code was started with --await-initialize, and its first stdin line was not the initialize control request (another message, or not valid JSON). Either the host wrote something else first, or a wrapper script between the host and Claude Code read or changed that line; the fix is in the host or the wrapper script, not a retry. config_file_invalid: a configuration file read at start-up is not valid JSON; errors names the file and, for the global configuration file, how to restore or repair it. The file is left unchanged, and every start without a terminal is refused until it is repaired, so a retry alone does not help.",
     ),
   );
 });
-//@ chunk-bwbq4xvm.js:323128-323297 placement
+//@ chunk-7kayq7nc.js:345399-345568 placement
 function gcStatsSchema() {
   let stats = objectSchema({
     eden: numberSchema().int(),
@@ -3774,7 +3818,7 @@ function gcStatsSchema() {
     to_first_result: stats,
   });
 }
-//@ chunk-bwbq4xvm.js:323297-371479 placement
+//@ chunk-7kayq7nc.js:345568-406289 placement
 /**
  * SDK result 消息 schema（success/error 变体，含 ttft、time_to_request 分阶段、usage、cost 等内部遥测字段）。
  */
@@ -3783,7 +3827,7 @@ var SDKResultMessageSchema;
 var ResultMessageSchema;
 var SettingsValidationErrorSchema;
 var PLUGIN_VERSION_DESCRIPTION;
-deferInit("chunk-bwbq4xvm.js:323297", () => {
+deferInit("chunk-7kayq7nc.js:345568", () => {
   SDKResultSuccessMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("result"),
@@ -3934,6 +3978,52 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
         .describe(
           "@internal In how many chunks the runtime's fetch handed over the bodies of those streams. It is not the number of socket reads, several of which can make one chunk. Against main_stream_event_count it shows how the API's events arrive grouped, though the two do not divide evenly: a chunk can end inside an event, keepalive comments and pings are chunks that bring no event, and a stream that failed or was aborted can count one chunk whose events were never read. Absent, never 0, when a stream's chunks were not counted, as on Bedrock, Vertex, Foundry and Mantle, with the byte watchdog off, or for a stream still open when this result is built.",
         ),
+      process_turn_states: objectSchema({
+        main_stream: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        side_stream: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        tool: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        agent_tool: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        first_event_wait: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        before_first_request: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        between_requests: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+        after_last_request: objectSchema({
+          cpu_ms: numberSchema().int(),
+          wall_ms: numberSchema().int(),
+          entries: numberSchema().int(),
+        }).optional(),
+      })
+        .optional()
+        .describe(
+          "@internal process_cpu_ms_turn and process_wall_ms_turn split among states that exclude each other: the states' cpu_ms add up to the first exactly and their wall_ms to the second, and the field is sent only where they do. CPU time is counted as in process_cpu_ms_between_turns, so child processes are left out (the Bash and Monitor shells' commands are counted in shell_cpu_ms_turn, where it is sent). A state says what was open, not what the time was spent on: everything that the process did meanwhile, on every thread, counts in it, such as timers, uploads, telemetry, garbage collection, compilation, a background subagent's work outside its own streams and tool calls, and anything that was opened before this turn began. Five states are things that can be open; where several were, the first of these names the state. main_stream: a response stream of a main-conversation request, from its first event until the CLI stopped reading it; its cpu_ms and wall_ms equal process_cpu_ms_streaming and process_wall_ms_streaming, except for a stream still open when this result is built. A tool call that runs while such a stream is open is in main_stream until the stream ends. side_stream: the same for any other model request that streams, such as a subagent's or a compaction's. tool: a call of any tool but Agent, a subagent's included, from before its permission check and its dispatch (which can send it to another tool host) until the call is over, so a person's wait at a permission prompt is in its wall_ms; the waits ahead of that, for the message's files or for an MCP server still connecting, are not in it. Where such a tool starts a subagent, as Workflow or a forked skill does, it holds what agent_tool holds for Agent. agent_tool: a call of the Agent tool; for a subagent run in the foreground it holds the subagent's waits for the model and its work between its own streams and tool calls. first_event_wait: a main-conversation request was sent and no stream of it was open: up to its first event, waits before a retry included; after a stream that failed, unless a person's stop ended it, up to the next one's first event or, where none follows, to the end of the model call; and the whole of a reply sent again without streaming. The wait of any other request opens nothing. With nothing open, the state is named after the turn's main-conversation model calls: before_first_request, none had been sent yet; between_requests, one had been sent and another followed, so it holds the work after a reply or a tool call and the building of the next request; after_last_request, none followed, so it holds what follows the last reply, up to just before this result is built. A send again inside one model call (a retry, a re-send after a failed stream, the non-streaming fallback) is not another; a new call with a fallback model or after a compaction is. entries is how many separate times the turn entered the state, however briefly. A state entered for 0 ms is still sent; one never entered is left out. Present where process_cpu_ms_turn is, unless the process could not be read at some change of state or read lower than before.",
+        ),
       input_attachments_detail: objectSchema({
         slowest_producer: stringSchema().optional(),
         slowest_producer_ms: numberSchema().int().optional(),
@@ -3988,6 +4078,52 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
         .optional()
         .describe(
           "@internal How the resume_store_confirm phase of time_to_request_phases_ms was spent. Present where that phase is, in a session whose transcript goes to a hosted store: on the result of a handed-off turn whose lines were confirmed and that went on to a model request. A wait that ends its turn (the lines not stored, or the turn stopped meanwhile) is therefore not in the measure. The four _ms values sum to that phase exactly. write_ms: the transcript write, until the carried lines are in the queue of the lane that uploads transcript rows (POST /worker/internal-events, one POST out at a time); a POST that is out during the write is counted in posts and rows, but that part of its time is in write_ms only. The other three split the wait for that lane to empty. ahead_ms: a POST was out that held only rows queued before the hand-off's write began, one already out at that moment included. post_ms: any other POST was out, timed by the client from before the body is encoded to the response, each retry included. other_ms: no POST was out (a backoff between retries, picking and sizing the next batch, a busy event loop), plus rounding, any POST still out when the wait was cut short, and the time of POSTs after the 64th. posts: POST attempts that ended between the start of the write and the end of the wait; failed_posts: those that did not go through. rows_ahead: rows the lane had accepted and the store had not yet confirmed when the write began, queued or in a POST already out; rows written earlier but kept back for a compaction's summary count from when they are queued. rows: rows queued since then that a POST delivered, the carried lines among them.",
+        ),
+      tool_schema_build_detail: objectSchema({
+        betas_ms: numberSchema().int(),
+        waits_ms: numberSchema().int(),
+        placement_ms: numberSchema().int(),
+        render_ms: numberSchema().int(),
+        after_ms: numberSchema().int(),
+        other_ms: numberSchema().int(),
+        tools: numberSchema().int().optional(),
+        new_schemas: numberSchema().int().optional(),
+      })
+        .optional()
+        .describe(
+          "@internal How the tool_schema_build phase of time_to_request_phases_ms was spent, in whole ms, in the order the code runs, over the main-conversation requests built before the turn's first dispatch (normally one). The six _ms values add up to that phase exactly. Each is rounded so that a fraction of a ms carries into the next, so each can read up to 1 ms more or less than its own time. betas_ms: choosing the beta headers, reading what the model supports and the thinking configuration. waits_ms: waiting for the account's Artifact capabilities, which the Artifact tool's schema lists; building early the schema of each tool that a plugin's tool.describe hook may move in or out of the tool list; and deciding whether tool search is on, which can measure the MCP tools' descriptions; on a later turn each usually returns at once. placement_ms: deciding which tools the request declares in full, which deferred and which by reference, with the waits that takes, such as the permission context and, on the conversation's first request in the process, the recorded tools of MCP servers still connecting. render_ms: making the API schema of every declared tool; a tool whose schema is cached, or that is sent as the conversation recorded it, skips the build. after_ms: the rest of the phase, such as building the schemas of tools the conversation defines inside its messages, kept for a retry that must list them with the other tools instead, and applying the plan for deferred tools. other_ms: time that no part covers plus what rounding leaves: 0 or 1 unless some stretch of the phase has no mark. Where an error stopped a build part-way and the request was built again before the first dispatch, the phase leaves out the unfinished stretch but the parts keep it, so the last parts are cut to fit. tools is how many tools the render made schemas for. new_schemas is how much the tool-schema cache grew over the phase (one cache per process, shared with the session's subagents and side queries; on claude-code-server one per tenant). That is about how many schemas were built from scratch in any part of the phase: 0 on most later turns, near tools on a process's first turn, and near 0 where the tools are sent as a resumed conversation recorded them. Entries the cache dropped meanwhile are taken off, and entries that another request added meanwhile are counted. Where the request was built more than once before the dispatch, tools and new_schemas are the last build's. Present where time_to_request_phases_ms has tool_schema_build.",
+        ),
+      message_normalization_detail: objectSchema({
+        before_ms: numberSchema().int(),
+        normalize_ms: numberSchema().int(),
+        images_ms: numberSchema().int(),
+        post_process_ms: numberSchema().int(),
+        after_ms: numberSchema().int(),
+        other_ms: numberSchema().int(),
+        messages: numberSchema().int().optional(),
+        wire_messages: numberSchema().int().optional(),
+      })
+        .optional()
+        .describe(
+          "@internal How the message_normalization phase of time_to_request_phases_ms was spent: building, from the conversation, the messages the API takes. Read it as tool_schema_build_detail: six _ms values in the order the code runs, which add up to the phase exactly. before_ms: the passes ahead of the main one, such as dropping thinking that other models signed and deciding whether earlier tool calls are sent as the API produced them, and the main pass's options. normalize_ms: the main pass alone (normalizeMessagesForAPI), which reorders and renders attachments, merges user messages, normalizes tool inputs and leaves out what is not sent. images_ms: checking every image against the model's size limit. post_process_ms: the passes over the normalized list, such as dropping tool-search fields where this request does not use tool search, pairing tool calls with their results, and dropping advisor blocks, refused web-search content and excess media; then removing a trailing empty text block that the server would refuse. after_ms: the rest: adding the per-turn notes that tell the model its effort level and the time, preparing the simpler message lists a retry would send if the API refused this one (built only if used), and noting which account-memory content was left out. other_ms: as in tool_schema_build_detail. messages is how many messages the request was built from (the conversation since its last compaction, after any trimming), and wire_messages how many API messages this build made of them; what is finally sent can differ by a few, as where a notice is added later. Like tool_schema_build_detail's counts, they are the last build's. Present where time_to_request_phases_ms has message_normalization.",
+        ),
+      request_build_detail: objectSchema({
+        records_ms: numberSchema().int(),
+        system_ms: numberSchema().int(),
+        headers_ms: numberSchema().int(),
+        cache_break_record_ms: numberSchema().int(),
+        plans_ms: numberSchema().int(),
+        retry_setup_ms: numberSchema().int(),
+        sent_build_ms: numberSchema().int(),
+        record_attempt_ms: numberSchema().int(),
+        other_ms: numberSchema().int(),
+        sent_build_safety_context_ms: numberSchema().int().optional(),
+        sent_build_cache_breakpoints_ms: numberSchema().int().optional(),
+        sent_build_surrogate_scan_ms: numberSchema().int().optional(),
+      })
+        .optional()
+        .describe(
+          "@internal How the request_build phase of time_to_request_phases_ms was spent: assembling the request from the normalized messages up to its dispatch. Read it as tool_schema_build_detail: the nine values from records_ms to other_ms, in the order the code runs, add up to the phase exactly. The phase pauses while the first attempt's client is made (client_creation), and that pause is in no part. records_ms: from the phase's start to the check for fallback blocks: recording for the conversation what this request sends (copies of tool inputs, tools surfaced or deferred) and setting up what the retry handlers share. system_ms: that check, a short hash of the first user message and the attribution header that carries it, the cache lifetime and the system prompt's blocks. headers_ms: comparing the tools and the system prompt with what was first sent and, where they changed and the model is told, passing that notice on and building the messages a second time with it; then effort, fast mode, up to two waits for the permission context, the beta headers that stay on for the conversation, and setting up the handling of the API's context hints, whose code can load here on a process's first request. cache_break_record_ms: recording the prompt's state (recordPromptState) so that a later prompt-cache break can be explained: a digest of every message and hashes of the system prompt and the tool list; where the session keeps that state on disk, a process's first request also reads the file and every request queues its write (in a cloud runner's session it is queued after the response instead, outside this phase, unless the model is one that cache-break detection skips). plans_ms: from there to the end of the request builder's definition, such as defining the first retry handlers, planning which tool results to clear and opening the request's tracing span. retry_setup_ms: from there to the making of the first attempt's client, such as defining the rest of the retry and fallback handlers. sent_build_ms: building the parameters that are sent, for every attempt before the first dispatch (normally one). record_attempt_ms: from there to the moment the request is recorded as sent: reading the values for the analytics event that logs the request (the event itself is sent after the dispatch and is timed nowhere), the debug log's detail, and the attempt's record, such as the check of the sent prefix and the request's capture. other_ms: as in tool_schema_build_detail. Three more members each measure one stretch inside the sent build; they lie within sent_build_ms, need not add up to it, and are not part of the sum. sent_build_safety_context_ms: assembling the context for the server-side safety check; near 0 where the session does not ask the server to check tool calls. sent_build_cache_breakpoints_ms: the last clean-up of the messages before sending, placing the prompt-cache breakpoints, which makes a new copy of every message, and the scans for cache markers that follow. sent_build_surrogate_scan_ms: reading every string of the body for lone UTF-16 surrogates, and the scrub where one is found. Nothing after the turn's first dispatch is timed (a retry, a later request), and nothing of a subagent's request or a side query. Present where time_to_request_phases_ms has request_build.",
         ),
       user_message_uuid: stringSchema().optional(),
       user_message_uuids: array(stringSchema()).optional(),
@@ -4123,10 +4259,11 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
       terminal_reason: TerminalReasonSchema().optional(),
       interrupted_by_shutdown: literal(true).optional().describe(INTERRUPTED_BY_SHUTDOWN_DESCRIPTION),
       result_index: numberSchema().int().nonnegative().optional().describe(RESULT_INDEX_DESCRIPTION),
+      credential_expires_at: stringSchema().optional().describe(CLAUDEAI_CREDENTIAL_END_DESCRIPTION),
       fast_mode_state: FastModeStateSchema().optional(),
       fast_mode_disabled_reason: FastModeBlockedReasonSchema().optional(),
       origin: MessageOriginSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -4163,7 +4300,7 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
       startup_failure_reason: StartupFailureReasonSchema()
         .optional()
         .describe(
-          "Set on the zeroed error_during_execution result a stream-json run writes before exiting on a known startup failure; errors carries the failure message. Failures that otherwise end with stderr alone write that result only when the host sets CLAUDE_CODE_STARTUP_FAILURE_RESULTS. Absent on every other result, on startup failures without a known cause, and from older producers.",
+          "Set on the zeroed error_during_execution result a stream-json run writes before exiting on a known startup failure; errors carries the failure message. Failures that otherwise end with stderr alone write that result only when the host sets CLAUDE_CODE_STARTUP_FAILURE_RESULTS, except org_config_required_unavailable, org_config_refused and config_file_invalid, which every stream-json run writes. Absent on every other result, on startup failures without a known cause, and from older producers.",
         ),
       user_message_uuid: stringSchema()
         .optional()
@@ -4194,10 +4331,11 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
       terminal_reason: TerminalReasonSchema().optional(),
       interrupted_by_shutdown: literal(true).optional().describe(INTERRUPTED_BY_SHUTDOWN_DESCRIPTION),
       result_index: numberSchema().int().nonnegative().optional().describe(RESULT_INDEX_DESCRIPTION),
+      credential_expires_at: stringSchema().optional().describe(CLAUDEAI_CREDENTIAL_END_DESCRIPTION),
       fast_mode_state: FastModeStateSchema().optional(),
       fast_mode_disabled_reason: FastModeBlockedReasonSchema().optional(),
       origin: MessageOriginSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -4220,7 +4358,7 @@ deferInit("chunk-bwbq4xvm.js:323297", () => {
   PLUGIN_VERSION_DESCRIPTION =
     "The plugin's version as declared in its plugin.json manifest, emitted verbatim (plugin-author-controlled \u2014 validate before trusting). Omitted when the manifest declares no version.";
 });
-//@ chunk-bwbq4xvm.js:371479-372962 placement
+//@ chunk-7kayq7nc.js:406289-407772 placement
 function attachedDeviceSchema() {
   return objectSchema({
     id: stringSchema(),
@@ -4302,24 +4440,13 @@ function attachedDeviceSchema() {
       .catch(undefined),
   });
 }
-//@ chunk-bwbq4xvm.js:372962-412402 placement
+//@ chunk-7kayq7nc.js:407772-437143 placement
 /**
  * SDK system/init 消息 schema（agents、apiKeySource、betas、cwd、tools、mcp_servers、slash_commands、startup_timing…）。
  */
 var SDKSystemInitMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SDKStreamEventMessageSchema;
-var SDKSystemCompactBoundaryMessageSchema;
-var SDKSystemStatusMessageSchema;
-var SDKSystemPostTurnSummaryMessageSchema;
-var SDKSystemTaskSummaryMessageSchema;
-var SDKSystemSessionMetadataMessageSchema;
-var SDKSystemInformationalMessageSchema;
-var SDKSystemPermissionRetryMessageSchema;
-var SDKSystemStopHookSummaryMessageSchema;
-var SDKSystemMemorySavedMessageSchema;
-var SDKSystemAgentsKilledMessageSchema;
-var SDKSystemInstructionSizeWarningMessageSchema;
-deferInit("chunk-bwbq4xvm.js:372962", () => {
+deferInit("chunk-7kayq7nc.js:407772", () => {
   SDKSystemInitMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("system"),
@@ -4429,6 +4556,11 @@ deferInit("chunk-bwbq4xvm.js:372962", () => {
         .describe(
           "@internal True when typing `ultrathink` runs the turn at xhigh effort on this frame's `model`, and when the session is already at xhigh or max, where the turn stays as it is. The terminal colors the word by this rule, and a host colors it only while this is true. After system/per_turn_effort_changed, treat this as false until the next init. Absent means unknown: a host with no answer yet colors nothing. The same answer as get_settings' applied.ultrathinkAvailable. Sent by the stream-json (Agent SDK) host.",
         ),
+      ultrathink_typed_raises: booleanSchema()
+        .optional()
+        .describe(
+          "@internal True when a user message that carries `ultrathink_typed: true` and passes the checks listed on that field runs its turn at xhigh effort on this frame's `model`, and when the session is already at xhigh or max, where the turn stays as it is. A client colors the word and sends the statement only while this is true. After system/per_turn_effort_changed, treat this as false until the next init; a terminal session under Remote Control does not forward that event, so this can stay true after the raise has stopped. Absent means unknown: color nothing and send no statement. Sent by the stream-json (Agent SDK) host and on Remote Control bridge init frames.",
+        ),
       view_mode: _enum(["focus", "default"])
         .optional()
         .describe(
@@ -4472,12 +4604,17 @@ deferInit("chunk-bwbq4xvm.js:372962", () => {
         .describe(
           "@internal Absolute paths of the folders added to the session (--add-dir, the SDK additionalDirectories option, settings, a grant or a host's request made mid-session), in no particular order; an empty array when there are none. Re-read for every init message. Left out: a folder that only a settings file the repository delivers adds (.claude/settings.json, and .claude/settings.local.json unless git is known not to track it), so that a branch cannot widen what a client fetches; and an entry not stored as an absolute path. Entries are not all symlink-resolved, and one can be the symlinked spelling of the start folder. It grants nothing: the CLI's own check decides every read. Absent means not told, not none: omitted on the lanes that redact system/init's local paths and for an organization that is under HIPAA or whose policy the session fetches but does not hold, like original_cwd, and by a host that has not wired it. A session that has no directory still sends it.",
         ),
+      synced_skills_path: stringSchema()
+        .optional()
+        .describe(
+          "@internal Absolute path of the one folder of synced skills whose files read_file serves in this session, for clients that read files from the session: a client may admit paths below it as it admits paths below scratchpad_path. Read only; a symbolic link, a dot-named part or a file at its top is refused. Sent by a self-hosted runner's session alone. Omitted where the session serves no such folder, and wherever original_cwd is withheld.",
+        ),
       worker_epoch: numberSchema()
         .int()
         .min(1)
         .optional()
         .describe(
-          "@internal This cloud worker's life (CLAUDE_CODE_WORKER_EPOCH): a new number each time the session's worker is started. A claude --cloud client that latched an acknowledged epoch (remote_tools_announce) re-registers only when this differs. Emitted on workers where the account's remote-tools gate (tengu_violin_wood) is on, and by every claude-code-server worker whatever that gate reads; absent outside cloud workers and on CLIs that predate the field.",
+          "@internal This cloud worker's life (CLAUDE_CODE_WORKER_EPOCH): a new number each time the session's worker is started. A claude --cloud client that latched an acknowledged epoch (remote_tools_announce) re-registers only when this differs. Emitted on workers where the account's remote-tools gate (tengu_violin_wood) is on or MCP App widget context (tengu_amber_trellis) is on, and by every claude-code-server worker regardless of those gates; absent outside cloud workers and on CLIs that predate the field.",
         ),
       powershell_path: stringSchema()
         .nullable()
@@ -4485,12 +4622,25 @@ deferInit("chunk-bwbq4xvm.js:372962", () => {
         .describe(
           "@internal Windows only: the absolute path of the PowerShell binary this session runs PowerShell commands with (PowerShell 7 when installed, including Microsoft Store installs, else Windows PowerShell 5.1), or null when none was found. Lets a desktop host open its own terminal with the same shell instead of re-implementing the detection. Present on stream-json (Agent SDK) init frames; absent on other platforms, wherever the init ambient is redacted (the Remote Control bridge), and on CLIs that predate the field.",
         ),
+      client_thinking: objectSchema({
+        max_thinking_tokens: numberSchema().int().nullable(),
+        thinking_display: _enum(THINKING_DISPLAY_MODES).nullable(),
+      })
+        .optional()
+        .describe(
+          "@internal Only on a Cowork cloud worker's init: the thinking this turn runs with. `max_thinking_tokens`: 0 with thinking off, the fixed budget, or null with no fixed budget. `thinking_display`: null with none, with thinking off, and for a 'highlights' this session cannot send. Absent when a request changed the session's thinking after the turn's start, or the session has no thinking setting of its own: send the request.",
+        ),
+      flag_restate_noop: literal(true)
+        .optional()
+        .describe(
+          "@internal Only on a Cowork cloud worker's init: an apply_flag_settings of exactly {switchModelsOnFlag: true} would add nothing now. The session holds the value, and no fast mode resync or auto mode check is due. Absent: send the request.",
+        ),
       cloud_session: attachedDeviceSchema()
         .optional()
         .describe(
-          "@internal Only on init frames written by the headless stream-json client of a cloud-hosted session (agent loop in the cloud container; this machine may be bound to it as a device): a snapshot per frame, absent in every other mode; no user, assistant or result frame precedes the first such init (informational system frames may; so may a worker's result that no init preceded, after all that was held ahead of it; on a re-attach so may frames of a turn already in progress, other clients' prompts, and the echo of this host's own prompt when the session already had it or it joins a turn in progress). `id` is the cloud session id, always in its `session_\u2026` spelling (the producer normalizes the service's `cse_\u2026` spelling of the same session); hosts store it and pass it back verbatim to re-attach. The frame-level `session_id` is instead the cloud worker's id, a uuidv5 of the session id in its `cse_` form: the same for the life of the cloud session across worker restarts and re-attaches until a /clear in the session, and passed through by the client unchanged. When `device.status` is `unbound`, `reason` is one of the client's unbound-reason keys and `message` its phrase: one line, at most 200 characters, no ANSI or trailing newline, worded to follow `Laptop tools unavailable: `. `directory_sync`: see docs/cloud-session-block.md. `not_applied`, when present, lists what the host passed that this session does not apply \u2014 `name` is a flag as `--flag`, a key inside --settings / --managed-settings as `settings.<key>` / `managed-settings.<key>`, or a field of the opening initialize as `initialize.<field>` (at most 40, lost first, each one line of about 64 characters at most); `kind` says what it costs: `lost` (the session does without something this invocation asked for \u2014 the informational warning names these), `kept` (an attach: the existing session keeps what it was created with) or `preference` (a display or host preference nobody would miss \u2014 the informational notice names these two), so a host may show them itself once or never; absent when nothing was left unapplied. `host`, when present, is what this machine announces as to the session: `handle` is the name the model addresses it by (and a client shows), `working_dir` the absolute directory served calls run in (that machine's separators), `platform` its platform word, `cli_version` its Claude Code version; each one line of at most 200 characters; present once this machine has built an announce for the session (bound, with something or an explicit nothing to serve), absent otherwise and on clients that predate it. `serving`, when present, says whether this machine serves its tools (Bash, Read, Write, Edit) to the session over the session's channel: `state` is `pending` while bound and about to announce, `on` once the session holds this machine's tools, `off` when it serves nothing, `revoked` when it stopped mid-session; `reason` (present when `state` is not `on` and the cause is known) is one of the client's serving-off keys \u2014 `not_bound` (see `device.reason`), `external_build`, `windows`, `muted` (Anthropic's emergency switch turned serving off; it comes back when the switch does), `switch_off`, `launched_from_home`, `channel_off`, `egress`, `policy_org` (the organization does not allow remote sessions), `flag_off`, `flag_stale`, `announce_refused`, `announce_unverified`, `superseded` \u2014 an open set: render an unrecognized value as a generic not-serving state; `policy` is the serving policy in effect (`parity`, or the stricter `interim` fallback); `channel` is `session`, or `bridge_only` when the session channel is switched off on this machine and served calls (if any) ride only the legacy device bridge, whose state this block does not describe. Absent on clients that predate it: feature-detect the key. `connection`, when present, is this client's stream to the session: `connecting` before it first connects, `live` while it is up, `reconnecting` while it is lost and being re-dialled (this machine is offline to the session meanwhile). `calls`, when present (once this machine has served a call this attach), is what it serves right now and how its last calls ended, by id and tool name only \u2014 never a call's input or output: `live` lists, oldest first, each call admitted here and not yet ended, `state` `running` while this machine executes it or `asked` while it waits on the session's approval (`ask_id` names the question; `since` is when it entered that state and `lapses_at` about when the session gives an unanswered question up, both epoch milliseconds on this machine's clock \u2014 the session's own timer decides); `recent` lists, newest last, at most 20 calls that ended here, `ended` being `completed`, `denied` (the session said no), `withdrawn` (the session took the question back unanswered \u2014 its patience ran out or the turn moved on), `refused` or `failed`, with `code` the result's disposition, refusal or failure word when it has one, and `at` when. `notices`, when present, is what this machine's serving has told the person during this attach that a host should show, at most 8: `key` is the notice's stable name (an open set \u2014 `device-mcp-consent`: this machine has MCP servers a cloud session could use and none are offered until the person allows it; `device-mcp-reconsent`: a server it offers changed the tools it lists and is withheld until re-approved, or this machine's record of what its servers list could not be read and none are offered \u2014 `text` says which; `device-mcp-policy`: a deny list in this machine's Claude Code settings lists remote-devices, so none of its MCP servers are offered; `device-mcp-dropped`; `served-hooks-not-run`; `served-hook-errors`; `served-bash-launched-from-home`; `served-tools-muted` / `served-tools-unmuted`; `announce_unverified`) and `text` its one line (at most 200 characters, no ANSI or newline) \u2014 this machine's own words with names from its own configuration, to be shown as plain text; written only by a serve-only helper (`--attach-serve`) and absent when nothing was said. `calls`, `connection` and `notices` are pushed between inits on `cloud_session_delta` frames. `client_version` rises only on a breaking change to this block \u2014 warn and continue on a higher value, never refuse; `not_applied[].kind`, `serving.state`, `connection`, `calls[].state` / `ended` and reason keys may gain values without it changing, so treat unrecognized values neutrally (an unrecognized `serving.state` as not serving \u2014 this schema itself parses an unrecognized `serving.state` as `off`, `policy` as `interim`, `channel` as `bridge_only`).",
+          "@internal Only on init frames written by the headless stream-json client of a cloud-hosted session (agent loop in the cloud container; this machine may be bound to it as a device): a snapshot per frame, absent in every other mode; no user, assistant or result frame precedes the first such init (informational system frames may; so may a worker's result that no init preceded, after all that was held ahead of it; on a re-attach so may frames of a turn already in progress, other clients' prompts, and the echo of this host's own prompt when the session already had it or it joins a turn in progress). `id` is the cloud session id, always in its `session_\u2026` spelling (the producer normalizes the service's `cse_\u2026` spelling of the same session); hosts store it and pass it back verbatim to re-attach. The frame-level `session_id` is instead the cloud worker's id, a uuidv5 of the session id in its `cse_` form: the same for the life of the cloud session across worker restarts and re-attaches until a /clear in the session, and passed through by the client unchanged. When `device.status` is `unbound`, `reason` is one of the client's unbound-reason keys and `message` its phrase: one line, at most 200 characters, no ANSI or trailing newline, worded to follow `Laptop tools unavailable: `. `directory_sync`: see docs/cloud-session-block.md. `not_applied`, when present, lists what the host passed that this session does not apply \u2014 `name` is a flag as `--flag`, a key inside --settings / --managed-settings as `settings.<key>` / `managed-settings.<key>`, or a field of the opening initialize as `initialize.<field>` (at most 40, lost first, each one line of about 64 characters at most); `kind` says what it costs: `lost` (the session does without something this invocation asked for \u2014 the informational warning names these), `kept` (an attach: the existing session keeps what it was created with) or `preference` (a display or host preference nobody would miss \u2014 the informational notice names these two), so a host may show them itself once or never; absent when nothing was left unapplied. `host`, when present, is what this machine announces as to the session: `handle` is the name the model addresses it by (and a client shows), `working_dir` the absolute directory served calls run in (that machine's separators), `platform` its platform word, `cli_version` its Claude Code version; each one line of at most 200 characters; present once this machine has built an announce for the session (bound, with something or an explicit nothing to serve), absent otherwise and on clients that predate it. `serving`, when present, says whether this machine serves its tools (Bash, Read, Write, Edit) to the session over the session's channel: `state` is `pending` while bound and about to announce, `on` once the session holds this machine's tools, `off` when it serves nothing, `revoked` when it stopped mid-session; `reason` (present when `state` is not `on` and the cause is known) is one of the client's serving-off keys \u2014 `not_bound` (see `device.reason`), `external_build`, `windows`, `muted` (Anthropic's emergency switch turned serving off; it comes back when the switch does), `switch_off`, `launched_from_home`, `channel_off`, `egress`, `policy_org` (the organization does not allow remote sessions), `flag_off`, `flag_stale`, `announce_refused`, `announce_unverified`, `computer_too_old` (Claude Code on this machine is too old for the session), `session_too_old` (the session's Claude Code is too old for this machine), `superseded` \u2014 an open set: render an unrecognized value as a generic not-serving state; `policy` is the serving policy in effect (`parity`, or the stricter `interim` fallback); `channel` is `session`, or `bridge_only` when the session channel is switched off on this machine and served calls (if any) ride only the legacy device bridge, whose state this block does not describe. Absent on clients that predate it: feature-detect the key. `connection`, when present, is this client's stream to the session: `connecting` before it first connects, `live` while it is up, `reconnecting` while it is lost and being re-dialled (this machine is offline to the session meanwhile). `calls`, when present (once this machine has served a call this attach), is what it serves right now and how its last calls ended, by id and tool name only \u2014 never a call's input or output: `live` lists, oldest first, each call admitted here and not yet ended, `state` `running` while this machine executes it or `asked` while it waits on the session's approval (`ask_id` names the question; `since` is when it entered that state and `lapses_at` about when the session gives an unanswered question up, both epoch milliseconds on this machine's clock \u2014 the session's own timer decides); `recent` lists, newest last, at most 20 calls that ended here, `ended` being `completed`, `denied` (the session said no), `withdrawn` (the session took the question back unanswered \u2014 its patience ran out or the turn moved on), `refused` or `failed`, with `code` the result's disposition, refusal or failure word when it has one, and `at` when. `notices`, when present, is what this machine's serving has told the person during this attach that a host should show, at most 8: `key` is the notice's stable name (an open set \u2014 `device-mcp-consent`: this machine has MCP servers a cloud session could use and none are offered until the person allows it; `device-mcp-reconsent`: a server it offers changed the tools it lists and is withheld until re-approved, or this machine's record of what its servers list could not be read and none are offered \u2014 `text` says which; `device-mcp-policy`: a deny list in this machine's Claude Code settings lists remote-devices, so none of its MCP servers are offered; `device-mcp-dropped`; `served-hooks-not-run`; `served-hook-errors`; `served-bash-launched-from-home`; `served-tools-muted` / `served-tools-unmuted`; `announce_unverified`; `computer_too_old` / `session_too_old`) and `text` its one line (at most 200 characters, no ANSI or newline) \u2014 this machine's own words with names from its own configuration, to be shown as plain text; written only by a serve-only helper (`--attach-serve`) and absent when nothing was said. `calls`, `connection` and `notices` are pushed between inits on `cloud_session_delta` frames. `client_version` rises only on a breaking change to this block \u2014 warn and continue on a higher value, never refuse; `not_applied[].kind`, `serving.state`, `connection`, `calls[].state` / `ended` and reason keys may gain values without it changing, so treat unrecognized values neutrally (an unrecognized `serving.state` as not serving \u2014 this schema itself parses an unrecognized `serving.state` as `off`, `policy` as `interim`, `channel` as `bridge_only`).",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Session metadata the CLI emits at the start of each turn, normally ahead of every other message of that turn: session_id, model, working directory, tools, MCP servers, slash commands, permission mode, and the capabilities list for feature detection.",
@@ -4501,7 +4651,7 @@ deferInit("chunk-bwbq4xvm.js:372962", () => {
       type: literal("stream_event"),
       event: StreamEventSchema(),
       parent_tool_use_id: stringSchema().nullable(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       ttft_ms: numberSchema().int().optional(),
       thinking_display: stringSchema()
@@ -4553,295 +4703,23 @@ deferInit("chunk-bwbq4xvm.js:372962", () => {
       "An incremental streaming event for the assistant message being generated, emitted only when partial messages are requested (--include-partial-messages). The complete assistant message still follows as its own message.",
     ),
   );
-  SDKSystemCompactBoundaryMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("compact_boundary"),
-      compact_metadata: objectSchema({
-        trigger: _enum(["manual", "auto"]),
-        pre_tokens: numberSchema().int(),
-        post_tokens: numberSchema().int().optional(),
-        cumulative_dropped_tokens: numberSchema()
-          .int()
-          .optional()
-          .describe(
-            "@internal Running total of context tokens compaction has removed so far, across this and every earlier compaction. " +
-              "Each contribution is approximately pre_tokens \u2212 post_tokens.",
-          ),
-        duration_ms: numberSchema().int().optional(),
-        user_context: stringSchema()
-          .optional()
-          .describe('@internal User-provided focus text for manual "summarize from here".'),
-        messages_summarized: numberSchema()
-          .int()
-          .optional()
-          .describe("@internal Count of messages the compaction summarized."),
-        precomputed: booleanSchema()
-          .optional()
-          .describe(
-            "@internal The summary was generated in the background at the autocompact threshold and swapped in when prompt-too-long fired; duration_ms measures user-wait from that point.",
-          ),
-        pre_compact_discovered_tools: array(stringSchema())
-          .optional()
-          .describe(
-            "@internal Deferred-tool names discovered before this compaction. extractDiscoveredToolNames reads this back on the next turn so the tool-schema filter keeps including them after the tool_reference-carrying messages were summarized away.",
-          ),
-        pre_compact_artifact_read_versions: array(
-          objectSchema({
-            slug: stringSchema(),
-            ver: stringSchema(),
-          }),
-        )
-          .optional()
-          .describe(
-            "@internal The artifact versions the conversation held before this compaction (slug is the artifact id, ver the version read or published), most recently changed first; empty when it held none. A resumed session replays these so it can update those artifacts without reading them again.",
-          ),
-        preserved_segment: objectSchema({
-          head_uuid: _(),
-          anchor_uuid: _(),
-          tail_uuid: _(),
-        })
-          .optional()
-          .describe(
-            "Relink info for messagesToKeep. Loaders splice the preserved segment at anchor_uuid (summary for suffix-preserving, boundary for prefix-preserving partial compact) so resume includes preserved content. Unset when compaction summarizes everything (no messagesToKeep).",
-          ),
-        preserved_messages: objectSchema({
-          anchor_uuid: _(),
-          uuids: array(_()),
-          all_uuids: array(_())
-            .optional()
-            .describe(
-              "@internal Unfiltered messagesToKeep UUIDs. uuids is the on-disk subset (messages recordTranscript writes); all_uuids is the in-memory superset including non-loggable messages an in-process surface still holds for the next turn's API input. Absent from older producers.",
-            ),
-        })
-          .optional()
-          .describe(
-            "Ordered messagesToKeep UUIDs. Supersedes preserved_segment \u2014 " +
-              "readers look up each UUID directly and relink uuids[i] to uuids[i-1] (uuids[0] to anchor_uuid) instead of walking the parentUuid chain. Unset when compaction summarizes everything.",
-          ),
-      }),
-      logical_parent_uuid: _()
-        .nullable()
-        .optional()
-        .describe(
-          "@internal uuid of the last pre-compact message \u2014 the backpointer " +
-            "forkSession follows across the compaction break. Distinct from the session-file chain parent (which is the post-compact summary). Absent from older producers.",
-        ),
-      uuid: _(),
-      session_id: stringSchema(),
-      historical: booleanSchema()
-        .optional()
-        .describe(
-          "@internal Replayed history rather than a live message (stamped by the Remote Control bridge when it flushes history to the session server).",
-        ),
-    }),
-  );
-  SDKSystemStatusMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("status"),
-      status: CompactStatusSchema(),
-      permissionMode: PermissionModeSchema().optional(),
-      compact_result: _enum(["success", "failed"]).optional(),
-      compact_error: stringSchema().optional(),
-      compact_output_chars: numberSchema()
-        .int()
-        .optional()
-        .describe(
-          "@internal On the 'compacting' statuses of an automatic compaction (absent on a typed /compact): characters of the summary streamed so far (text and tool-input deltas, not thinking). Returns to 0 at each new attempt at the summary (a request retried inside an attempt adds to what the dropped try streamed), and stays 0 while waiting for a summary written in the background. A rising count shows that the summary is being written; a still one proves nothing, and it is not a share of the final length, which is not known in advance.",
-        ),
-      uuid: _(),
-      session_id: stringSchema(),
-    }),
-  );
-  SDKSystemPostTurnSummaryMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("post_turn_summary"),
-      summarizes_uuid: stringSchema(),
-      status_category: stringSchema(),
-      status_detail: stringSchema(),
-      needs_action: stringSchema(),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Background post-turn summary emitted after each assistant turn. summarizes_uuid points to the assistant message this summarizes.",
-    ),
-  );
-  SDKSystemTaskSummaryMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("task_summary"),
-      detail: stringSchema().nullable(),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Mid-turn progress line from the debounced classifier. Mirrors external_metadata.task_summary so non-CCR consumers (desktop LocalSessionManager) see the same live phrase. detail is null on the idle clear.",
-    ),
-  );
-  SDKSystemSessionMetadataMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("session_metadata"),
-      metadata: objectSchema({
-        artifacts: array(
-          objectSchema({
-            url: stringSchema(),
-            title: stringSchema().optional(),
-            favicon: stringSchema().optional(),
-            kind: literal("frame"),
-            updated_at: stringSchema(),
-          }),
-        )
-          .nullable()
-          .optional(),
-      }),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal The same external_metadata patch a cloud worker sends the session server, for the keys a local host needs: today `artifacts` (the session's published-artifact list, whole list on each change, null once empty). Lets an SDK host keep the per-session summary a cloud session gets, without reading transcript rows.",
-    ),
-  );
-  SDKSystemInformationalMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("informational"),
-      content: stringSchema(),
-      level: _enum(["info", "notice", "suggestion", "warning"]).describe(
-        "Render level. 'info' shows only in transcript mode; 'notice' renders in inactive gray; 'suggestion' and 'warning' are more prominent.",
-      ),
-      tool_use_id: stringSchema().optional().describe("Dedupes progress messages for the same tool use."),
-      prevent_continuation: booleanSchema()
-        .optional()
-        .describe("When true, execution stops after this message (e.g. a Stop hook denied continuation)."),
-      tag: stringSchema()
-        .optional()
-        .describe(
-          "Opaque feature tag on a line a host may treat specially; absent on ordinary lines. Hosts ignore values they do not know.",
-        ),
-      prompt_submit_outcome: objectSchema({
-        kind: _enum(PROMPT_HOOK_ENDINGS).optional().catch(undefined),
-        no_verdict_kind: _enum(PROMPT_NO_VERDICT_KINDS)
-          .optional()
-          .catch(undefined)
-          .describe(
-            "Sent with kind 'no_verdict', and says why: 'remote_run_failed' (the hook runs on another machine, and the run failed or gave no usable answer), 'remote_run_timed_out' (the wait for that run timed out; the hook may never have been sent), 'interrupted' (the turn was aborted during that wait), 'remote_runner_refused' (Claude Code does not send this hook to that machine; a retry does not help), 'unsupported_in_cloud_session' (a cloud session cannot run this type of hook), 'output_distrusted' (Claude Code could not prove that it read all of the hook's output), 'callback_timed_out' (a callback hook did not answer in time), 'hook_failed' and 'hook_timed_out' (for this hook a failure blocks), 'hooks_never_ran' (an internal fault: the hooks did not run over the submitted text), 'personal_config_refused' (the session restricts personal config, and part of the person's own settings did not load or is off), 'rewrite_unplaceable' (a plugin's code module changed the prompt's text, and Claude Code has no place to put the change).",
-          ),
-        prompt_kept: booleanSchema(),
-        reason: stringSchema().optional(),
-      })
-        .optional()
-        .catch(undefined)
-        .describe(
-          "@internal Present on the line that ends a submitted prompt before a model call. It says how the prompt ended, so a host can write its own message or count endings and does not match `content`. kind: 'blocked_by_hook' (a hook answered with a block), 'stopped_by_hook' (a hook answered continue:false), 'dropped_by_hook' (a plugin's code module dropped the prompt), 'not_passed_on' (a plugin's code module answered and did not pass the prompt on), 'no_verdict' (no hook gave a verdict, and Claude Code ended the prompt itself). prompt_kept: true when the prompt stays in the conversation, where the model reads it on the next turn. Do not infer it from kind. reason: the hook's text as Claude Code got it, with nothing added here; a model writes it for a prompt or agent hook. It is never sent with no_verdict. It is absent when Claude Code got no text, and for a plugin's code module that blocks on the UserPromptSubmit hook event. ANSI codes are removed, control and invisible characters are replaced, line feeds stay, and long text is cut. It is untrusted and can quote the prompt, so render it as plain text. A cloud session can run the hook on another machine: its tool container, where any program can write reason, or the person's own machine. reason is then what that machine sent, for a block and for a stop. The person's own machine puts a label before the stderr of an exit 2, or before 'No stderr output' when there is none. Either machine makes the block itself when it could not read all of the hook's output, and the person's own machine can do so when its timeout fires. Each reads 'blocked_by_hook', with that machine's sentence as reason. Claude Code's own block for an SDK host that reconnected before its hook answered reads the same way, with Claude Code's sentence as reason. New values can appear: treat an unknown value as absent, and ignore reason beside an unknown kind. A slash command that runs as a fork does not send this key when a hook ends it. A follow-up that a hook blocks while a turn runs carries this key too, so read it as the end of a turn only when the next result has num_turns 0.",
-        ),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "Generic text banner emitted by the loop \u2014 non-error status lines, hook feedback (e.g. a UserPromptSubmit hook's block reason), slash-command output. Hosts render `content` as plaintext at the given level.",
-    ),
-  );
-  SDKSystemPermissionRetryMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("permission_retry"),
-      content: stringSchema(),
-      commands: array(stringSchema()).describe("Display names of the commands that were allowed."),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Emitted when tool execution retries after a permission-mode change allowed previously-denied commands. REPL renders a 'retrying with <commands>' banner. From internal SystemMessage 'permission_retry'.",
-    ),
-  );
-  SDKSystemStopHookSummaryMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("stop_hook_summary"),
-      hook_count: numberSchema().int(),
-      hook_infos: array(
-        objectSchema({
-          command: stringSchema(),
-          prompt_text: stringSchema().optional(),
-          duration_ms: numberSchema().int().optional(),
-        }),
-      ),
-      hook_errors: array(stringSchema()),
-      hook_additional_context: array(stringSchema())
-        .optional()
-        .describe(
-          "Non-error feedback from hookSpecificOutput.additionalContext \u2014 kept separate from hook_errors so the sanctioned feedback channel is not labeled an error. Absent in sessions persisted before this field existed.",
-        ),
-      prevented_continuation: booleanSchema(),
-      stop_reason: stringSchema().optional(),
-      has_output: booleanSchema(),
-      level: _enum(["info", "notice", "suggestion", "warning"]),
-      tool_use_id: stringSchema().optional(),
-      hook_label: stringSchema().optional(),
-      total_duration_ms: numberSchema().int().optional(),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Summary of Stop/SubagentStop hook execution at turn end \u2014 which hooks ran, their output, and whether any prevented continuation. From internal SystemMessage 'stop_hook_summary'.",
-    ),
-  );
-  SDKSystemMemorySavedMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("memory_saved"),
-      written_paths: array(stringSchema()),
-      team_count: numberSchema().int().optional(),
-      verb: stringSchema().optional().describe('Renders as "<verb> N memories". Defaults to "Saved".'),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Confirmation that the memory subsystem wrote to the listed paths. REPL renders a '<verb> N memories' banner. From internal SystemMessage 'memory_saved'.",
-    ),
-  );
-  SDKSystemAgentsKilledMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("agents_killed"),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal Emitted when background agents are terminated (e.g. on interrupt). REPL renders an 'agents killed' banner. From internal SystemMessage 'agents_killed'.",
-    ),
-  );
-  SDKSystemInstructionSizeWarningMessageSchema = DoctorLazy(() =>
-    objectSchema({
-      type: literal("system"),
-      subtype: literal("instruction_size_warning"),
-      total_chars: numberSchema()
-        .int()
-        .describe(
-          "Combined length, in characters, of the instruction files in the session prompt: CLAUDE.md files, rules files and the files they import. Always over total_limit_chars.",
-        ),
-      total_limit_chars: numberSchema()
-        .int()
-        .describe("The recommended limit for total_chars on the turn's model, in characters."),
-      file_count: numberSchema()
-        .int()
-        .describe(
-          "Number of files counted in total_chars. When it is 1, word the warning for a single file rather than a total.",
-        ),
-      largest_chars: numberSchema()
-        .int()
-        .optional()
-        .describe(
-          "Length of the largest file, in characters. Present only when the warning should mention it: there are several files and this one by itself is over total_limit_chars.",
-        ),
-      uuid: _(),
-      session_id: stringSchema(),
-    }).describe(
-      "@internal The session's instruction files add up to more than the recommended limit. Numbers only: the host words the warning in the person's language. Sent to Claude Desktop's Code tab alone, at most once per process, on a conversation's first turn after system/init; never stored in the transcript. Safe to ignore: a host that does not recognize this subtype shows nothing.",
-    ),
-  );
 });
-//@ chunk-bwbq4xvm.js:412402-501647 placement
+//@ chunk-7kayq7nc.js:437143-536916 placement
 /**
  * SDK 系统消息全集 schema（away_summary、thinking、compact_boundary、status、hook_*、task_*、ui_* 等数十种 subtype）与 SDKMessage 联合。
  */
-var SDKSystemAwaySummaryMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKSystemCompactBoundaryMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKSystemStatusMessageSchema;
+var SDKSystemPostTurnSummaryMessageSchema;
+var SDKSystemTaskSummaryMessageSchema;
+var SDKSystemSessionMetadataMessageSchema;
+var SDKSystemInformationalMessageSchema;
+var SDKSystemPermissionRetryMessageSchema;
+var SDKSystemStopHookSummaryMessageSchema;
+var SDKSystemMemorySavedMessageSchema;
+var SDKSystemAgentsKilledMessageSchema;
+var SDKSystemInstructionSizeWarningMessageSchema;
+var SDKSystemAwaySummaryMessageSchema;
 var SDKSystemThinkingMessageSchema;
 var SDKTranscriptMirrorMessageSchema;
 var SDKSystemMirrorErrorMessageSchema;
@@ -4913,29 +4791,311 @@ var SDKSystemDevIntentMessageSchema;
 var SDKSystemTurnPreemptedMessageSchema;
 var SDKSystemPerTurnEffortChangedMessageSchema;
 var SDKSystemFileAttachmentsMissingMessageSchema;
+var tailUuidSchema;
 var SDKSystemCloudSessionDeltaMessageSchema;
 var SDKSetExpandedViewMessageSchema;
 var SDKActiveGoalMessageSchema;
 var SDKAutocompactStateMessageSchema;
-var SDKSetInProgressToolUseIdsMessageSchema;
-var SDKHintClearsMessageSchema;
-var SDKOpenMessageSelectorMessageSchema;
-var SDKCompactProgressMessageSchema;
-var SDKStreamModeMessageSchema;
-var SDKResponseLengthMessageSchema;
-var SDKRefusalContinuationMessageSchema;
-var SDKSessionInfoSchema;
-var SDKMessageSchema;
-var FastModeStateSchema;
-var FastModeBlockedReasonSchema;
-var FooterIndicatorSchema;
-deferInit("chunk-bwbq4xvm.js:412402", () => {
+deferInit("chunk-7kayq7nc.js:437143", () => {
+  SDKSystemCompactBoundaryMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("compact_boundary"),
+      compact_metadata: objectSchema({
+        trigger: _enum(["manual", "auto"]),
+        pre_tokens: numberSchema().int(),
+        post_tokens: numberSchema().int().optional(),
+        cumulative_dropped_tokens: numberSchema()
+          .int()
+          .optional()
+          .describe(
+            "@internal Running total of context tokens compaction has removed so far, across this and every earlier compaction. " +
+              "Each contribution is approximately pre_tokens \u2212 post_tokens.",
+          ),
+        duration_ms: numberSchema().int().optional(),
+        user_context: stringSchema()
+          .optional()
+          .describe('@internal User-provided focus text for manual "summarize from here".'),
+        messages_summarized: numberSchema()
+          .int()
+          .optional()
+          .describe("@internal Count of messages the compaction summarized."),
+        precomputed: booleanSchema()
+          .optional()
+          .describe(
+            "@internal The summary was generated in the background at the autocompact threshold and swapped in when prompt-too-long fired; duration_ms measures user-wait from that point.",
+          ),
+        pre_compact_discovered_tools: array(stringSchema())
+          .optional()
+          .describe(
+            "@internal Deferred-tool names discovered before this compaction. extractDiscoveredToolNames reads this back on the next turn so the tool-schema filter keeps including them after the tool_reference-carrying messages were summarized away.",
+          ),
+        pre_compact_artifact_read_versions: array(
+          objectSchema({
+            slug: stringSchema(),
+            ver: stringSchema(),
+          }),
+        )
+          .optional()
+          .describe(
+            "@internal The artifact versions the conversation held before this compaction (slug is the artifact id, ver the version read or published), most recently changed first; empty when it held none. A resumed session replays these so it can update those artifacts without reading them again.",
+          ),
+        preserved_segment: objectSchema({
+          head_uuid: uuidSchema(),
+          anchor_uuid: uuidSchema(),
+          tail_uuid: uuidSchema(),
+        })
+          .optional()
+          .describe(
+            "Relink info for messagesToKeep. Loaders splice the preserved segment at anchor_uuid (summary for suffix-preserving, boundary for prefix-preserving partial compact) so resume includes preserved content. Unset when compaction summarizes everything (no messagesToKeep).",
+          ),
+        preserved_messages: objectSchema({
+          anchor_uuid: uuidSchema(),
+          uuids: array(uuidSchema()),
+          all_uuids: array(uuidSchema())
+            .optional()
+            .describe(
+              "@internal Unfiltered messagesToKeep UUIDs. uuids is the on-disk subset (messages recordTranscript writes); all_uuids is the in-memory superset including non-loggable messages an in-process surface still holds for the next turn's API input. Absent from older producers.",
+            ),
+        })
+          .optional()
+          .describe(
+            "Ordered messagesToKeep UUIDs. Supersedes preserved_segment \u2014 " +
+              "readers look up each UUID directly and relink uuids[i] to uuids[i-1] (uuids[0] to anchor_uuid) instead of walking the parentUuid chain. Unset when compaction summarizes everything.",
+          ),
+      }),
+      logical_parent_uuid: uuidSchema()
+        .nullable()
+        .optional()
+        .describe(
+          "@internal uuid of the last pre-compact message \u2014 the backpointer " +
+            "forkSession follows across the compaction break. Distinct from the session-file chain parent (which is the post-compact summary). Absent from older producers.",
+        ),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+      historical: booleanSchema()
+        .optional()
+        .describe(
+          "@internal Replayed history rather than a live message (stamped by the Remote Control bridge when it flushes history to the session server).",
+        ),
+    }),
+  );
+  SDKSystemStatusMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("status"),
+      status: CompactStatusSchema(),
+      permissionMode: PermissionModeSchema().optional(),
+      compact_result: _enum(["success", "failed"]).optional(),
+      compact_error: stringSchema().optional(),
+      compact_output_chars: numberSchema()
+        .int()
+        .optional()
+        .describe(
+          "@internal On the 'compacting' statuses of an automatic compaction (absent on a typed /compact): characters of the summary streamed so far (text and tool-input deltas, not thinking). Returns to 0 at each new attempt at the summary (a request retried inside an attempt adds to what the dropped try streamed), and stays 0 while waiting for a summary written in the background. A rising count shows that the summary is being written; a still one proves nothing, and it is not a share of the final length, which is not known in advance.",
+        ),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }),
+  );
+  SDKSystemPostTurnSummaryMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("post_turn_summary"),
+      summarizes_uuid: stringSchema(),
+      status_category: stringSchema(),
+      status_detail: stringSchema(),
+      needs_action: stringSchema(),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Background post-turn summary emitted after each assistant turn. summarizes_uuid points to the assistant message this summarizes.",
+    ),
+  );
+  SDKSystemTaskSummaryMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("task_summary"),
+      detail: stringSchema().nullable(),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Mid-turn progress line from the debounced classifier. Mirrors external_metadata.task_summary so non-CCR consumers (desktop LocalSessionManager) see the same live phrase. detail is null on the idle clear.",
+    ),
+  );
+  SDKSystemSessionMetadataMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("session_metadata"),
+      metadata: objectSchema({
+        artifacts: array(
+          objectSchema({
+            url: stringSchema(),
+            title: stringSchema().optional(),
+            favicon: stringSchema().optional(),
+            kind: literal("frame"),
+            updated_at: stringSchema(),
+          }),
+        )
+          .nullable()
+          .optional(),
+      }),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal The same external_metadata patch a cloud worker sends the session server, for the keys a local host needs: today `artifacts` (the session's published-artifact list, whole list on each change, null once empty). Lets an SDK host keep the per-session summary a cloud session gets, without reading transcript rows.",
+    ),
+  );
+  SDKSystemInformationalMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("informational"),
+      content: stringSchema(),
+      level: _enum(["info", "notice", "suggestion", "warning"]).describe(
+        "Render level. 'info' shows only in transcript mode; 'notice' renders in inactive gray; 'suggestion' and 'warning' are more prominent.",
+      ),
+      tool_use_id: stringSchema().optional().describe("Dedupes progress messages for the same tool use."),
+      prevent_continuation: booleanSchema()
+        .optional()
+        .describe("When true, execution stops after this message (e.g. a Stop hook denied continuation)."),
+      tag: stringSchema()
+        .optional()
+        .describe(
+          "Opaque feature tag on a line a host may treat specially; absent on ordinary lines. Hosts ignore values they do not know.",
+        ),
+      prompt_submit_outcome: objectSchema({
+        kind: _enum(PROMPT_HOOK_ENDINGS).optional().catch(undefined),
+        no_verdict_kind: _enum(PROMPT_NO_VERDICT_KINDS)
+          .optional()
+          .catch(undefined)
+          .describe(
+            "Sent with kind 'no_verdict', and says why: 'remote_run_failed' (the hook runs on another machine, and the run failed or gave no usable answer), 'remote_run_timed_out' (the wait for that run timed out; the hook may never have been sent), 'interrupted' (the turn was aborted during that wait), 'remote_runner_refused' (Claude Code does not send this hook to that machine; a retry does not help), 'unsupported_in_cloud_session' (a cloud session cannot run this type of hook), 'output_distrusted' (Claude Code could not prove that it read all of the hook's output), 'callback_timed_out' (a callback hook did not answer in time), 'hook_failed' and 'hook_timed_out' (for this hook a failure blocks), 'hooks_never_ran' (an internal fault: the hooks did not run over the submitted text), 'personal_config_refused' (the session restricts personal config, and part of the person's own settings did not load or is off), 'rewrite_unplaceable' (a plugin's code module changed the prompt's text, and Claude Code has no place to put the change).",
+          ),
+        prompt_kept: booleanSchema(),
+        reason: stringSchema().optional(),
+      })
+        .optional()
+        .catch(undefined)
+        .describe(
+          "@internal Present on the line that ends a submitted prompt before a model call. It says how the prompt ended, so a host can write its own message or count endings and does not match `content`. kind: 'blocked_by_hook' (a hook answered with a block), 'stopped_by_hook' (a hook answered continue:false), 'dropped_by_hook' (a plugin's code module dropped the prompt), 'not_passed_on' (a plugin's code module answered and did not pass the prompt on), 'no_verdict' (no hook gave a verdict, and Claude Code ended the prompt itself). prompt_kept: true when the prompt stays in the conversation, where the model reads it on the next turn. Do not infer it from kind. reason: the hook's text as Claude Code got it, with nothing added here; a model writes it for a prompt or agent hook. It is never sent with no_verdict. It is absent when Claude Code got no text, and for a plugin's code module that blocks on the UserPromptSubmit hook event. ANSI codes are removed, control and invisible characters are replaced, line feeds stay, and long text is cut. It is untrusted and can quote the prompt, so render it as plain text. A cloud session can run the hook on another machine: its tool container, where any program can write reason, or the person's own machine. reason is then what that machine sent, for a block and for a stop. The person's own machine puts a label before the stderr of an exit 2, or before 'No stderr output' when there is none. Either machine makes the block itself when it could not read all of the hook's output, and the person's own machine can do so when its timeout fires. Each reads 'blocked_by_hook', with that machine's sentence as reason. Claude Code's own block for an SDK host that reconnected before its hook answered reads the same way, with Claude Code's sentence as reason. New values can appear: treat an unknown value as absent, and ignore reason beside an unknown kind. A slash command that runs as a fork does not send this key when a hook ends it. A follow-up that a hook blocks while a turn runs carries this key too, so read it as the end of a turn only when the next result has num_turns 0.",
+        ),
+      model_restriction: objectSchema({
+        requested_model: stringSchema(),
+        effective_model: stringSchema(),
+        at: _enum(["start", "switch", "resume"]).optional().catch(undefined),
+      })
+        .optional()
+        .catch(undefined)
+        .describe(
+          "@internal Present on the warning that says a requested model was refused and the session uses another, so a host can word the notice itself instead of reading `content`. Both names are cleaned as they are in `content`: model-id characters only, cut to 128 with a trailing \u2026, or '(unrecognized model name)' when none are left. They are still untrusted text: render them as plain text. requested_model: the refused model as it was asked for, or the id that a refused Default pick stood for. effective_model: the model in use when the line was built; a later switch can outdate it. at: 'start' for the model the process chose when it started (from --model, the environment, settings or --agent's frontmatter), 'switch' for anything later: a pick, an agent seated by initialize or when a pre-warmed process is claimed, a model kept at a turn's end. 'resume' is never on the wire: it marks a saved row alone, the notice that a resumed session's model could not be restored. An unknown value reads as absent.",
+        ),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "Generic text banner emitted by the loop \u2014 non-error status lines, hook feedback (e.g. a UserPromptSubmit hook's block reason), slash-command output. Hosts render `content` as plaintext at the given level.",
+    ),
+  );
+  SDKSystemPermissionRetryMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("permission_retry"),
+      content: stringSchema(),
+      commands: array(stringSchema()).describe("Display names of the commands that were allowed."),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Emitted when tool execution retries after a permission-mode change allowed previously-denied commands. REPL renders a 'retrying with <commands>' banner. From internal SystemMessage 'permission_retry'.",
+    ),
+  );
+  SDKSystemStopHookSummaryMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("stop_hook_summary"),
+      hook_count: numberSchema().int(),
+      hook_infos: array(
+        objectSchema({
+          command: stringSchema(),
+          prompt_text: stringSchema().optional(),
+          duration_ms: numberSchema().int().optional(),
+        }),
+      ),
+      hook_errors: array(stringSchema()),
+      hook_additional_context: array(stringSchema())
+        .optional()
+        .describe(
+          "Non-error feedback from hookSpecificOutput.additionalContext \u2014 kept separate from hook_errors so the sanctioned feedback channel is not labeled an error. Absent in sessions persisted before this field existed.",
+        ),
+      prevented_continuation: booleanSchema(),
+      stop_reason: stringSchema().optional(),
+      has_output: booleanSchema(),
+      level: _enum(["info", "notice", "suggestion", "warning"]),
+      tool_use_id: stringSchema().optional(),
+      hook_label: stringSchema().optional(),
+      total_duration_ms: numberSchema().int().optional(),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Summary of Stop/SubagentStop hook execution at turn end \u2014 which hooks ran, their output, and whether any prevented continuation. From internal SystemMessage 'stop_hook_summary'.",
+    ),
+  );
+  SDKSystemMemorySavedMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("memory_saved"),
+      written_paths: array(stringSchema()),
+      team_count: numberSchema().int().optional(),
+      verb: stringSchema().optional().describe('Renders as "<verb> N memories". Defaults to "Saved".'),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Confirmation that the memory subsystem wrote to the listed paths. REPL renders a '<verb> N memories' banner. From internal SystemMessage 'memory_saved'.",
+    ),
+  );
+  SDKSystemAgentsKilledMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("agents_killed"),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal Emitted when background agents are terminated (e.g. on interrupt). REPL renders an 'agents killed' banner. From internal SystemMessage 'agents_killed'.",
+    ),
+  );
+  SDKSystemInstructionSizeWarningMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("instruction_size_warning"),
+      total_chars: numberSchema()
+        .int()
+        .describe(
+          "Combined length, in characters, of the instruction files in the session prompt: CLAUDE.md files, rules files and the files they import. Always over total_limit_chars.",
+        ),
+      total_limit_chars: numberSchema()
+        .int()
+        .describe("The recommended limit for total_chars on the turn's model, in characters."),
+      file_count: numberSchema()
+        .int()
+        .describe(
+          "Number of files counted in total_chars. When it is 1, word the warning for a single file rather than a total.",
+        ),
+      largest_chars: numberSchema()
+        .int()
+        .optional()
+        .describe(
+          "Length of the largest file, in characters. Present only when the warning should mention it: there are several files and this one by itself is over total_limit_chars.",
+        ),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "@internal The session's instruction files add up to more than the recommended limit. Numbers only: the host words the warning in the person's language. Sent to Claude Desktop's Code tab alone, at most once per process, on a conversation's first turn after system/init; never stored in the transcript. Safe to ignore: a host that does not recognize this subtype shows nothing.",
+    ),
+  );
   SDKSystemAwaySummaryMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("system"),
       subtype: literal("away_summary"),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Summary of what happened while the user was away (background tasks completed, notifications accumulated). From internal SystemMessage 'away_summary'.",
@@ -4946,7 +5106,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("system"),
       subtype: literal("thinking"),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Rendered thinking content (the text itself, not the running token estimate \u2014 that is SDKThinkingTokensMessage). From internal SystemMessage 'thinking'.",
@@ -4971,7 +5131,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         sessionId: stringSchema(),
         subpath: stringSchema().optional(),
       }),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Emitted when SessionStore.append() rejects or times out for a transcript-mirror batch after bounded retry (3 attempts with short backoff; timeouts are not retried). The batch is then dropped; this surfaces the failure so consumers are not silent on data loss.",
@@ -4994,7 +5154,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "Present only when the API sent no response headers within the first-byte window (CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS): waited_ms is how long the failed attempt waited for headers, retry_wait_ms how long the retry will wait for them. For this cause max_retries is its own cap (normally one retry), not the session budget.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Emitted when an API request fails with a retryable error and will be retried after a delay. error_status is null for connection errors (e.g. timeouts) that had no HTTP response.",
@@ -5012,7 +5172,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       max_retries: numberSchema().int().optional(),
       retry_delay_ms: numberSchema().int().optional(),
       error_status: numberSchema().int().nullable().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Progress for a long-running client-originated control_request (currently only side_question), correlated by request_id. status 'started' means the worker accepted the request and launched the work; 'api_retry' carries the same retry counters as SDKAPIRetryMessage and is present only for that status.",
@@ -5049,6 +5209,15 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "stop_details.explanation from the refused API response (client lane only \u2014 the server-lane trigger carries no explanation). Unstable human prose \u2014 display only, never parse. null/absent when the response carried none, and always null on server-lane banners.",
         ),
+      api_refusal_cyber_verification: objectSchema({
+        type: stringSchema(),
+        tier: stringSchema().optional(),
+        reason: stringSchema().optional(),
+      })
+        .optional()
+        .describe(
+          "@internal Cyber Verification Program status of the account that made the request, as the API gave it for original_model: type, tier and reason of stop_details.cyber_verification. From the refusal that caused the switch (the first one, if the switch went through several models) or, when the API made the switch itself, from the turn's first refusal if the same model made it, so it may not belong to request_id. On a server-lane switch without streaming, one message can stand for several hops, and the status is then the first model's. Only on session-scope notices whose api_refusal_category is 'cyber'. Absent, or {type:'inactive'} with no reason, means unknown, not 'no access'. Map known values to your own text; never display them.",
+        ),
       retracted_message_uuids: array(stringSchema())
         .optional()
         .describe(
@@ -5061,7 +5230,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           "UUID of the user message the refused request was for \u2014 the rewind target and composer prefill for edit-and-retry. This is the message's own uuid as delivered on the replay ack (not a per-block normalized uuid). null when the refused turn was not human-authored (e.g. a background task notification or auto-continuation \u2014 nothing to edit-and-retry) or otherwise cannot be identified; absent from older CLIs.",
         ),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       'Emitted when the primary model ends the stream with stop_reason "refusal" and the turn is retried once on a fallback model (direction: "retry"). When `scope` is "session" (or absent \u2014 older CLIs), the swap is made persistent for the session; when `scope` is "local", only that subagent/side-question response came from the fallback model and the session model is unchanged. "revert" and "sticky" are retained in the enum for SDK-consumer compat and are no longer emitted.',
@@ -5077,7 +5246,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       api_refusal_explanation: stringSchema().nullable().optional(),
       refused_user_message_uuid: stringSchema().nullable().optional(),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       'Emitted when the model ends the stream with stop_reason "refusal" and no retry runs: no fallback model is configured, or per-category routing declined the retry (the mapped fallback target is unresolvable, or CLAUDE_CODE_REFUSAL_FALLBACK_CATCH_ALL is explicitly disabled and the refusal category has no fallback map entry). The structured counterpart to detecting stop_reason "refusal" on the assistant error frame. Not emitted when the retry ran or the user declined the retry dialog (model_refusal_fallback covers the retry case). Absent from older CLIs.',
@@ -5098,7 +5267,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       original_model: stringSchema(),
       fallback_model: stringSchema(),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       '@internal Emitted when the current turn is switched to the configured fallback model because the primary model failed (trigger "model_not_found": model retired/unknown; "permission_denied": org lacks access; "overloaded": repeated 529s; "server_error": retryable 5xx pivot; "last_resort": non-retryable error on the primary; "model_blocked": primary disabled by the per-model kill switch). Turn-scoped \u2014 the primary is re-tried on the next user turn. Not yet in the public SDKMessage union.',
@@ -5122,7 +5291,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         "True when the decline also rewrote the saved default model (explicit switch_default with the consent-gated model as the saved default).",
       ),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when a pre-send model consent gate swaps the session off the requested model (consent declined, dismissed, or given without the required entitlement ending up provisioned). Currently emitted by the Fable 5 usage-credit gate (`fable_overage_consent_prompt`). Session-scoped \u2014 the swap persists for the session, and additionally as the saved default when persisted_as_default is true. Absence of this message after the consent dialog resolves means the session stayed on the requested model. Not yet in the public SDKMessage union.",
@@ -5140,7 +5309,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           content: stringSchema(),
         }),
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Snapshot of session files (plan, todo) captured for rewind. From internal SystemMessage 'file_snapshot'.",
@@ -5151,7 +5320,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("system"),
       subtype: literal("scheduled_task_fire"),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when a scheduled task (cron) fires. content is the render text. From internal SystemMessage 'scheduled_task_fire'.",
@@ -5199,7 +5368,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "state 'dropped' only: 'expired' \u2014 no one approved it before the approval deadline (a headless host has no approval surface, so every parity hold ends this way unless the mode changes first); 'refused' \u2014 the policy turned to refuse while it waited; 'dropped' \u2014 released or approved but the ingress guard (rate limit, duplicate, queue cap) discarded it; 'discarded' \u2014 the session ended with it still parked.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal A cross-session (peer) message this session's receive-side policy HELD rather than queued, and how that hold resolved. Lets a host show the human that a message arrived but has not reached the model (and may never) instead of nothing at all; the sending session is told separately over its own transport where one exists. Informational only \u2014 there is no host-side approval through this frame. Emitted on the stdout stream in -p/SDK sessions.",
@@ -5230,7 +5399,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .int()
         .optional()
         .describe("Workflow-tool runs still in flight when the turn finished."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Per-turn wall-clock duration plus budget and pending-background-work counts. REPL renders the 'Done in Ns' / 'Waiting for N agents' line. From internal SystemMessage 'turn_duration'.",
@@ -5263,7 +5432,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       retry_in_ms: numberSchema().int(),
       retry_attempt: numberSchema().int(),
       max_retries: numberSchema().int(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Retryable-API-error frame carrying the plain-data error snapshot and retry counters. REPL renders the retry banner from this. Wire twin is SDKAPIRetryMessage ('api_retry'). From internal SystemMessage 'api_error'.",
@@ -5274,7 +5443,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("system"),
       subtype: literal("local_command_output"),
       content: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Output from a local slash command (e.g. /voice, /usage). Displayed as assistant-style text in the transcript.",
@@ -5287,7 +5456,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       hook_id: stringSchema(),
       hook_name: stringSchema(),
       hook_event: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5301,7 +5470,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       stdout: stringSchema(),
       stderr: stringSchema(),
       output: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5317,7 +5486,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       stderr: stringSchema(),
       exit_code: numberSchema().int().optional(),
       outcome: _enum(["success", "error", "cancelled"]),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5328,7 +5497,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       status: _enum(["started", "installed", "failed", "completed"]),
       name: stringSchema().optional(),
       error: stringSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Headless plugin installation progress (CLAUDE_CODE_SYNC_PLUGIN_INSTALL). started/completed bracket the whole install; installed/failed carry a per-marketplace name.",
@@ -5342,7 +5511,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       parent_tool_use_id: stringSchema().nullable(),
       elapsed_time_seconds: numberSchema().int(),
       task_id: stringSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       heartbeat: booleanSchema().optional(),
       subagent_type: stringSchema().optional(),
@@ -5362,7 +5531,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       isAuthenticating: booleanSchema(),
       output: array(stringSchema()),
       error: stringSchema().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5383,7 +5552,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         }),
       ),
       processed_at: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5432,7 +5601,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         ),
       skip_transcript: booleanSchema().optional(),
       ambient: booleanSchema().optional().describe(AMBIENT_TASK_DESCRIPTION),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5471,7 +5640,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           "Ambient/housekeeping task. Consumers should hide this from the inline transcript; it may still appear in a tasks panel.",
         ),
       ambient: booleanSchema().optional().describe(AMBIENT_TASK_DESCRIPTION),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5491,7 +5660,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       }).describe(
         "Wire-safe subset of TaskState fields that changed. Excludes abortController, messages, result. Clients merge into their local task map.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5517,7 +5686,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       ).describe(
         "Every live background task after the change. REPLACE semantics: swap your set for this payload.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "The full set of live background tasks, emitted whenever membership changes (start, completion, kill, a foreground agent being backgrounded) or an entry's `ambient` flag or `parent_task_id` changes. A level signal, unlike the task_started/task_notification edge bookends: consumers that only need 'is background work running' should replace their set with each payload rather than pairing edges, so a missed bookend cannot wedge a stale running indicator. Ordering relative to the bookends for the same transition is unspecified (in practice a task that starts in the background joins the level before its task_started, and a finishing task leaves it after its task_updated and task_notification), so do not correlate it with the edge stream. The level is per-process: nothing is emitted at startup, so consumers must reset to the empty set whenever the session's CLI process (re)starts and let the next membership change repopulate it. A host that re-initializes an already-running process (a repeated `initialize` control request, e.g. after reconnecting) is sent a snapshot of the current set right behind the success response to that request, even when it is empty, so it need not wait for a change; CLIs that predate this send nothing there.",
@@ -5535,7 +5704,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       details_preview: stringSchema().describe(
         "First ~200 chars of the sanitized details, for the host UI's three-line card preview. The full draft stays on disk and is read when the user opens the review form.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted by the SendFeedback tool after it writes a local draft to ~/.claude/feedback/drafts/, so a connected host UI can surface a review card without polling the filesystem. Carries only the card's display fields; nothing is sent anywhere without the user's explicit action on the review form.",
@@ -5546,7 +5715,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("system"),
       subtype: literal("session_state_changed"),
       state: _enum(["idle", "running", "requires_action"]),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Mirrors notifySessionStateChanged. 'idle' fires after heldBackResult flushes and the bg-agent do-while exits \u2014 authoritative turn-over signal.",
@@ -5559,7 +5728,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       title: stringSchema().describe(
         "The session's current name. Control, bidirectional and zero-width characters are replaced with single spaces, the ends are trimmed, and the name is at most 200 Unicode code points. When another session already has the name, a suffix can make it unique.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal The session's name, for a host that shows it, such as an IDE editor tab. A headless (print mode) session sends it at startup when the session already has a name, and again after each change to the name (not an AI-generated title), including a rename the host itself sent with `rename_session`. A name that another process writes to the transcript arrives when this process next reads the end of its transcript: after about 32 KB of its own transcript writes, or at a compaction. A cleared name is not sent. The same name can arrive more than once, for example when it is set again, so a host should treat a repeated name as no change. The frame can arrive before the system/init message that first names its session_id, for example at startup or after /clear. A host that learns the session id from system/init can hold the name until then.",
@@ -5572,7 +5741,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       reason: stringSchema().describe(
         "Short snake_case reason set by the host CLI (not user input), e.g. 'host_exit', 'remote_control_disabled'.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Emitted by the bridge on opt-in graceful worker teardown (only when the teardown caller supplied a reason), before the heartbeat stops, so remote clients can show why the worker went away instead of waiting for heartbeat timeout. Absence is NOT a dead-host signal: handoffs (/update, /teleport, respawn), auto-disable, mode transitions, and internal fatal-error paths emit nothing by design. A dead host (battery, OOM, kill -9) never reaches teardown and never sends this either. NOTE: this event lands in the durable per-session event stream \u2014 a session that is later resumed may carry historical instances mid-stream. Clients MUST treat it as a live-tail signal only (honored when no further activity follows), not a one-shot session-lifetime fact.",
@@ -5585,7 +5754,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       kept_request_ids: array(stringSchema()).describe(
         "The request ids of the earlier worker's asks that this worker keeps answerable.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal A cloud worker's report, before its first turn, of which asks it inherited and keeps. Any ask stored before this event that it does not name is over.",
@@ -5598,7 +5767,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       v: literal(1),
       tools: array(stringSchema()),
       worker_epoch: numberSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       staged_files: literal(true)
         .optional()
@@ -5672,12 +5841,12 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       )
         .optional()
         .describe(
-          "@internal Present when a plugin wrote state (`$.state.set`) that these instances read while they were drawn, or a `Client` drawn in them failed and its plugin heard it (`ui.fault`), and nothing else moved: only they are stale, and the surface may re-ask them alone. Absent, every mounted instance may be stale, as before. A surface that ignores the field re-asks everything and stays correct.",
+          "@internal Present when a plugin wrote state (`$.state.set`) that these instances read while they were drawn, or a `Client` drawn in them failed and its plugin heard it (`ui.fault`), or the backdrop of the session was set or cleared, or a client of a surface that draws it joined where one ever stood (`$.ui.backdrop`: its one instance on each such surface, a `Backdrop` whose `instance_id` is `backdrop`), and nothing else moved: only they are stale, and the surface may re-ask them alone. Absent, every mounted instance may be stale, as before. A surface that ignores the field re-asks everything and stays correct.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
-      '@internal Fire-and-forget push from the hooks engine when a plugin called `$.ui.invalidate("ui.render")` or a plugin loaded or reloaded: every tree a remote surface drew through ui_render may be stale. The surface re-asks each mounted instance; the engine dedups the evaluations. Bumps from one plugin fold to at most one per 100 ms. With `instances`, a state write or a `Client` that failed made only those stale.',
+      '@internal Fire-and-forget push from the hooks engine when a plugin called `$.ui.invalidate("ui.render")`, a plugin loaded or reloaded, or a mobile client already known to the session named a field in `draws` it had not named before: every tree a remote surface drew through ui_render may be stale. The surface re-asks each mounted instance; the engine dedups the evaluations. Bumps from one plugin fold to at most one per 100 ms. With `instances`, a state write or a `Client` that failed made only those stale.',
     ),
   );
   SDKSystemUiLogMessageSchema = DoctorLazy(() =>
@@ -5690,7 +5859,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       text: stringSchema().describe(
         "@internal The line the plugin gave: be ready for up to 10000 characters of it and then an ellipsis. Plain text: draw it as a text node, never as markup.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push from a headless session for one `$.ui.log(text)` line: what the REPL appends to its transcript as a dim notice under the plugin's name. Not sent to the model. Lines are not counted across the session: a plugin's lines are the plugin's to write, however long the session runs; ones logged before the stream opened are delivered first, in order.",
@@ -5711,7 +5880,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "@internal How long the REPL would keep it on the notification bar: the plugin's `timeoutMs`, or the engine's default (4000).",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push from a headless session for one `$.ui.toast(text)`: what the REPL shows on the notification bar under the prompt for a few seconds, under the plugin's name. Be ready for a plugin's toasts at no fixed rate; nothing counts how many a plugin has shown.",
@@ -5729,7 +5898,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "@internal The plugin's pinned line, replacing its previous one; null removes it. Be ready for up to 10000 characters of it and then an ellipsis. Plain text: draw it as a text node, never as markup.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push from a headless session for one `$.ui.status(text)`: the line the REPL pins under the prompt beside the engine's own notices until the plugin's next call replaces or clears it.",
@@ -5825,7 +5994,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
             ),
         }),
       ).describe("@internal The main conversation's placed rows, in order."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push from a headless session when a plugin places a row with `$.ui.place`, and to a client as it joins: a surface inserts each row after `after_uuid` and asks `ui_render` for it. Display only: no message carries these rows. A surface drops the rows it holds with the conversation it resets, and a row whose `after_uuid` it no longer holds. A compaction ends the rows before it, and no push says so. A surface that does not know the subtype drops it, and the rows are not drawn there.",
@@ -5836,7 +6005,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       .extend({
         type: literal("system"),
         subtype: literal("ui_panes"),
-        uuid: _(),
+        uuid: uuidSchema(),
         session_id: stringSchema(),
       })
       .describe(
@@ -5860,7 +6029,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "@internal True: keep the window on the tree's last rows through the draws to come, until the person or a plugin next moves it.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push when a plugin's `$.ui.scroll` (through the `ui.scroll` chain) moved the window of a site a remote surface draws: the surface scrolls the site's body there. The person's own scrolls (ui_scroll requests) are never pushed back.",
@@ -5875,7 +6044,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       instance_id: stringSchema().describe("@internal The pane's id, or `above-prompt` for the band."),
       plugin: stringSchema().describe("@internal Whose element takes the ring: its `press.plugin`."),
       key: stringSchema().describe("@internal The element's `props.key`, as ui.press names it."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fire-and-forget push when a plugin's `$.ui.focus` (through the `ui.focus` chain) moved the focus ring of a site a remote surface draws onto one of its Buttons, Inputs or Selects: the surface focuses that element if it still draws it. The person's own moves (ui_focus requests) are never pushed back.",
@@ -5886,7 +6055,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("system"),
       subtype: literal("commands_changed"),
       commands: array(SkillCommandSchema()),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Fire-and-forget push of the full slash-command list after a mid-session change (e.g. skills discovered dynamically as the agent works in a subdirectory). Clients should REPLACE their cached command list with this payload; supportedCommands() tracks the latest push, so a re-fetch returns the same fresh list.",
@@ -5901,7 +6070,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       priority: _enum(["low", "medium", "high", "immediate"]),
       color: stringSchema().optional(),
       timeout_ms: numberSchema().int().optional(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Loop-side text notification. Mirrors the interactive REPL notification queue (key/priority/timeout). JSX notifications are not emitted on this channel.",
@@ -5927,7 +6096,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "A one-line status for the task's row. For a local_agent task it is the model-generated progress summary (only when the agentProgressSummaries option is on); for a backgrounded mcp_task it is the MCP server's own bounded status message, emitted once per change without any option. Render it when present regardless of task type.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }),
   );
@@ -5942,7 +6111,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "Client uuid of the user message that triggered this turn (submitMessage options.uuid), stamped on every thinking_tokens frame of a headless (stream-json / Agent SDK) turn so a consumer can attribute thinking progress to the send it answers before any reply frame arrives. On a synthetic/scheduled (meta) turn it names the last user message folded into the turn so far once one has been, else the turn's own uuid when the host vouches it is the client event's own (delivered content such as a Slack owner ping). Absent on turns that neither had a client uuid nor folded a user message in, on Remote Control (interactive terminal) sessions, and from older producers.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Live thinking-token estimate, digested from thinking_delta.estimated_tokens during the redacted-thinking phase (where the API otherwise streams only pings). estimated_tokens is the running total for the current thinking block; estimated_tokens_delta is the increment carried by this frame. Approximate progress for spinners/pills, not the authoritative billed output_tokens.",
@@ -5953,7 +6122,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("tool_use_summary"),
       summary: stringSchema(),
       preceding_tool_use_ids: array(stringSchema()),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       timestamp: stringSchema()
         .optional()
@@ -5982,7 +6151,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
             ),
         }),
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       'Emitted when the memory recall supervisor surfaces relevant memories into the turn. Mirrors the CLI relevant_memories attachment so SDK renderers can show "Recalled from memory" inline.',
@@ -5994,7 +6163,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       subtype: literal("elicitation_complete"),
       mcp_server_name: stringSchema(),
       elicitation_id: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe("Emitted when an MCP server confirms that a URL-mode elicitation is complete."),
   );
@@ -6023,7 +6192,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .optional()
         .describe("Human-readable reason from the deciding component, when available."),
       message: stringSchema().describe("The rejection message returned to the model in the tool_result."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Emitted when a tool call is auto-denied without an interactive permission prompt (e.g. auto-mode classifier, dontAsk mode, headless-agent auto-deny, or a deny rule). With a permission prompt surface (stdio/SDK canUseTool), the 'ask' path surfaces via a can_use_tool control_request and this event covers the 'deny' short-circuit. Without one (bare -p / SDK query() with no canUseTool), 'ask' decisions are terminal, so this event also covers those implicit denials. Best-effort advisory: in rare races a denial can book without a frame or a frame can lack a booking twin \u2014 result.permission_denials is the authoritative record. Denials that resolve before canUseTool runs \u2014 PreToolUse hook denies, deny-rule overrides of hook allow/ask decisions, and file-tool calls (Read, Edit, Write) refused by a path-scoped deny rule \u2014 are not covered here, and neither is the MCP --permission-prompt-tool surface (the prompt tool is the host there).",
@@ -6040,7 +6209,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       status: _enum(["checking", "done"]).describe(
         "'checking': the call has waited about four seconds on its check and is still waiting. 'done': that wait is over.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal A tool call has been waiting on its automatic permission check (the auto-mode classifier) for longer than usual. It lets a host say that the step is being checked, where it would otherwise show a silent pause that looks like a running tool. Most checks answer within about four seconds and send nothing. The wait can include the rest of the model's streaming reply, or a dialog the host is showing about the check: prefer those indicators. Every 'checking' is followed by a 'done' for the same tool_use_id. 'done' does not say whether the call was allowed: the tool's result, permission_denied or a can_use_tool request does. One call can send more than one pair. Display-only and best-effort: a frame can be lost, so also stop showing it at any other frame for this tool_use_id or at the end of the turn. Emitted on the output stream of -p/SDK sessions.",
@@ -6050,7 +6219,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
     objectSchema({
       type: literal("prompt_suggestion"),
       suggestion: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe("Predicted next user prompt, emitted after each turn when promptSuggestions is enabled."),
   );
@@ -6061,7 +6230,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         "Internal Attachment discriminated union (at-mentioned files, IDE selections, pasted images, structured output, deferred tool-use). Wire shape pending a dedicated SDKAttachment schema.",
       ),
       timestamp: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when the engine yields an AttachmentMessage into the turn stream. Carries user-attached content (at-mentioned files, IDE selections, pasted media) and loop-attached data (structured output, deferred tool-use payloads). SDKResultMessage.structured_output and .deferred_tool_use are derived from these frames. From internal QueryEvent 'attachment'.",
@@ -6073,7 +6242,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       message: unknown().describe(
         "The internal Message being tombstoned. Wire shape pending a dedicated schema.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when a previously-yielded message is superseded or removed from the transcript (e.g., streaming\u2192non-streaming fallback removes a partial orphan). Consumers that render or persist the stream should remove the referenced message. From internal QueryEvent 'tombstone'.",
@@ -6082,8 +6251,8 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
   SDKConversationResetMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("conversation_reset"),
-      new_conversation_id: _(),
-      uuid: _(),
+      new_conversation_id: uuidSchema(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
       trigger: _enum(["clear", "plan_mode_exit", "fresh_session", "onboarding"])
         .optional()
@@ -6136,7 +6305,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       ]).describe(
         "Per-API-call OTPS/TTFT lifecycle event. Optional id correlates parallel subagent start/end; serial callers omit it.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when a subagent's API call reports TTFT or output_tokens for OTPS (output-tokens-per-second) metering. From internal QueryEvent 'api_metrics' (ApiMetricsLifecycleEvent).",
@@ -6147,7 +6316,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("os_notification"),
       message: stringSchema(),
       notification_type: stringSchema(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when a tool (PushNotificationTool, the Computer Use wrapper) or turn-end cleanup requests a native OS notification. The surface dispatches to its platform notification channel (iTerm2/Kitty/Ghostty/bell in the terminal; native IPC for desktop/IDE). From internal QueryEvent 'os_notification'.",
@@ -6159,7 +6328,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       settings: record(stringSchema(), unknown()).describe(
         "Shallow-merge flag-settings patch \u2014 same shape as SDKControlApplyFlagSettingsRequest.settings.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Output-direction counterpart to SDKControlApplyFlagSettingsRequest. Emitted when slash commands that toggle flag settings request a batched write that the surface applies to its AppState. From internal QueryEvent 'apply_flag_settings'.",
@@ -6187,7 +6356,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "@internal Only on a repeated 'queued' frame, written only to the VS Code panel: the plugin hooks of this `immediate` command, typed during a turn, have run and answered ahead of its turn. The command is still queued, and its own turn prints the answer.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Fate of a queued command (slash command or queued user prompt). 'queued' when the inbound message enters the command queue; 'started' when it drains into a turn; then exactly one terminal state: 'completed' \u2014 the turn that consumed it ended cleanly; 'cancelled' \u2014 removed by cancel_async_message (the host's own, or \u2014 with Remote Control enabled (remote_control) \u2014 a remote client withdrawing a prompt that a remote client queued: such a uuid was never sent by the host, so there is nothing to resend and the frame is informational), swept by an interrupt with cancel_queued:true, caught by a pending cancel just before dispatch, or consumed into a turn that was aborted (interrupt) or died on a hard failure (model_error, prompt_too_long, ...) \u2014 cancelled-over-completed is deliberate dup-over-loss for exactly-once resenders, so a fold answered earlier in a failed turn may be re-sent (a per-fold ledger refinement is tracked separately) \u2014 but resenders must not blindly resend on 'cancelled': user-requested removals arrive as the same state, so correlate against your own cancel_async_message responses AND against any interrupt receipt's `cancelled` list (interrupt_cancel_queued_v1) and resend only cancels neither source accounts for; 'discarded' \u2014 the session ended (end_session) with the command still queued, or with a peer message still held by the receive-side policy (not preceded by 'queued' then); 'refused' \u2014 declined by the session's receive-side policy before entering the queue (outright, or after being held): not preceded by 'queued', and it will not run in this session. Known gap: folds consumed by turns ending via max_turns / hook_stopped / tool_deferred / background_requested report 'completed' even though their content may only be answered on continuation/resume. A prompt sent with requeue_if_interrupted_within_ms that an interrupt puts back reports 'queued' again (after its 'started', if that was reported), then goes on as any queued prompt does. 'completed' means the consuming turn ended, not that the result frame was delivered. Ordering relative to the result frame is per-path: a command that starts a fresh turn emits 'completed' AFTER that turn's result frame (later still when the result is held back for background tasks); a command folded into an already-in-flight turn emits 'completed' BEFORE that turn's result frame. Not a strict pairing: a terminal state may arrive for a command_uuid that never emitted 'started' (control-request ACKs, duplicate deliveries); internally-enqueued commands (cron triggers, teammate shutdown prompts, deferred-turn resume) mint a fresh uuid at enqueue and emit started/terminal without 'queued'; a turn that fails by throwing can leave 'started' without a terminal state; and a peer message the queue's own admission guard drops after acceptance (rate limit, duplicate collapse, loop guard, queued-peer cap) currently leaves 'queued' without a terminal state \u2014 on process exit a wrapper should synthesize 'discarded' for uuids it has not seen reach a terminal state. The exactly-one-terminal guarantee is per worker process, not per uuid lifetime: after CCR redelivery a 'discarded' uuid legitimately re-emits queued\u2192\u2026\u2192terminal on the next worker. Emitted on the stdout stream in -p/SDK sessions; remote transports (mobile/desktop bridge) receive the equivalent signal via delivery ACKs instead. A host driving a cloud-hosted session through the headless `--cloud` client also receives 'cancelled' (and only that state) after its interrupt with cancel_queued:true, synthesized from the session's receipt: for a uuid the host sent and did not cancel itself it means the cloud session dropped that command \u2014 it will not run; do not resend it; the frames follow the interrupt's success response, are not ordered against the interrupted turn's result, and unknown uuids (another client's prompt) may appear. From internal QueryEvent 'command_lifecycle'.",
@@ -6233,7 +6402,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "The session's working branch when it produced the change. Sent for providers whose changes have no head branch of their own ('gerrit'), so a host can place the change on that checkout, and with 'created' on any provider: the branch the create was opened from (its --head / --source-branch flag, else the working branch), so a host can show the new change before its own forge lookup answers. Absent otherwise.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal A code change from this session went out for review (a pull/merge request, or another provider's change in internal builds). Fires when the harness sees the change published or links the session to a PR \u2014 on creation, and also when the session contributes to an existing one (gh pr edit/close/ready, gh pr checkout, a push to a branch that has an open PR) \u2014 so bind on every event, not just the first; re-emission for the same URL is possible and idempotent. Provenance: values are scraped from the command's captured output (the last PR-shaped URL printed) or a gh pr view lookup. Captured output is not only the forge CLI's own text \u2014 hook output or files printed by the same command can contribute \u2014 so treat the fields as a binding hint: display them, but verify against the forge with your own credential-scoped lookup before routing authenticated requests or trusting the host. Best-effort, not exhaustive: a crash before the link, gh printing no URL to a piped capture (gh pr merge), or an unrecognized forge means no event \u2014 keep your provider-API lookup as the source of truth and treat this as the trigger.",
@@ -6254,7 +6423,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "The branch a commit landed on (from the commit summary line git prints per commit) or a push updated (from the ref-update line git prints per pushed ref, e.g. `HEAD -> other`). Commit and push events carry it; a command that pushed several branches emits one push event per branch. A best-effort hint: absent whenever attribution is uncertain (a push whose output was redirected still emits, with no branch; a push that also updated a ref whose name could not be carried emits a nameless event beside the named ones), and never a required key.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal A harness-observed shell command mutated repository state (git commit/cherry-pick, push, merge, rebase \u2014 dry runs excluded). A cache-invalidation signal with a deliberately minimal payload: beyond classification it carries the branch acted on and the directory the shell finished in, both hints about where to look, so consumers still re-read state (head, PR status) from the repository instead of decoding the event. Derived from the same detection as the tool result's structured gitOperation data, so the two agree on what happened; only a push's `branch` is attributed more strictly here (from the push's own output section) than in that data. A compound command can emit more than one kind (a merge and a rebase in one command collapse to the latter), and a push of several branches emits one push event per branch; coalesce freely. Best-effort, not exhaustive: only foreground mutations run through the Bash/PowerShell tools are observed \u2014 a backgrounded command whose confirming output had not printed at capture time emits nothing. A foreground push whose ref lines were redirected or silenced still emits, on the invoking command's zero exit code alone (so a compound that swallows a failed push's code also emits; the event is a prompt to look, never a claim).",
@@ -6272,7 +6441,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         .describe(
           "The evidence the detection fired on, for a host's own analytics. From the conversation, it is the first platform-specific evidence seen, whichever order it and a file edit the rule required arrived in; an 'ios_app' detection with no Swift edit names the first evidence that is enough alone. 'ios_app': 'uikit_import' (import UIKit or .iOS( in text Claude wrote), 'xcode_project' (iOS build settings written, or seen in a tool result such as a pbxproj or xcconfig read), 'ios_command' (an iOS SDK, an iOS destination or target, or the Simulator's tools, in a command Claude ran). 'android_app': 'android_import' (import android. in text Claude wrote), 'android_manifest' (a manifest path or body written, or seen in a tool result), 'gradle_plugin' (the Android Gradle plugin written, or seen in a tool result), 'android_command' (adb, the emulator, sdkmanager, avdmanager, react-native run-android or a Gradle variant task). The edit values 'swift_edit', 'kotlin_edit' and 'java_edit' are reserved for rules that need no other evidence; no rule sends them yet. 'project_scan', for any kind: a scan of the session's git repository. The CLI scans when the process starts and sends the result. After each conversation_reset, it sends the latest scan's result again. A conversation whose scan did not find every kind scans again, uncached, when its first message arrives, so a kind that scan missed can come after that message. A client that needs to tell project evidence from conversation evidence checks for 'project_scan'. More values will be added; ignore one you do not recognize. Absent from CLI versions that predate the field, which send only conversation evidence.",
         ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal The conversation, or the git repository it runs in, shows a known kind of development work, for hosts that key tooling on it (Claude Code Desktop opens its iOS Simulator entry point on ios_app). Sent with trigger as its only other payload. Per conversation per process, each kind is sent at most once from conversation evidence and at most once from the project scan. Conversation evidence is sent when it first completes, or at startup when a resumed conversation already has it. Project evidence comes from a CLI process in print mode (-p), which is how the Agent SDK and Claude Code Desktop start it. It is sent at startup, after each conversation_reset, and at the first message of a conversation whose earlier scan did not find every kind. Either can arrive before system/init. A rewind or compaction never retracts it and only a conversation_reset starts over. Treat each kind as a sticky fact about the conversation: a client that needs only the kind can ignore repeats, and one that needs to know what set it off reads trigger.",
@@ -6291,7 +6460,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       preempted_message_uuids: array(stringSchema()).describe(
         "The client-supplied uuids of the user messages the stopped turn was running (uuid-less members omitted; may be empty).",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal The CLI itself stopped the running turn so a user's rapid follow-up message is answered at once, exactly as a priority 'now' message would have (running shell commands are backgrounded, not killed). Sent at the moment of the stop, so it precedes the stopped turn's result frame (terminal_reason aborted_streaming or aborted_tools) and its members' 'cancelled' command_lifecycle frames (it can also precede the follow-up's own 'queued' command_lifecycle frame): a host renders that turn as superseded by the follow-up rather than as interrupted, does not resend its messages, and treats only preempted_by_uuid as picked up. At most one per burst: the turn the follow-up starts is never preempted this way. Emitted on the stdout stream in -p/SDK sessions only, and only to a consumer that declared rapidFollowupPreempt on its initialize request, while the feature's rollout flag is on: without both, the turn is not stopped at all. Explicit 'now' and 'later' priorities never produce it.",
@@ -6304,7 +6473,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       per_turn_effort_active: booleanSchema().describe(
         "Always false: a change to true is reported only by system/init.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       `@internal The conversation stopped sending effort per turn, because the server refused its per-turn effort message or a role:"system" message. From the retried request on, an effort change rewrites the cached prefix, for every model, until a later system/init says otherwise. Sent once, when the conversation first turns per-turn effort off, before the retried request's output, on the output stream of -p/SDK sessions; sent again only if the server refuses again after the conversation's refusals are cleared (for example by /clear or a compaction). It can repeat a false the host already holds. Pairs with system/init's per_turn_effort_active.`,
@@ -6328,10 +6497,31 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           ),
         }),
       ).describe("The files Claude was told did not arrive, each once. Never empty."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Some files a user message sent by reference (file_attachments) did not arrive where Claude can read them, and Claude was told so in that message's text or in a later note; the turn runs on without them. A host can use it to tell the person who sent them; a session with Remote Control on also sends it to its Remote Control clients itself. Sent once the message is queued, or later when a download or a save that runs beside its turn fails, or both; only for a message that reached the session through Claude Code Remote or over Remote Control, never for input a local host writes; whenever Claude is told, and for the same files. Queued counts as told: a message that a Stop then clears from the queue, or that a UserPromptSubmit hook then blocks, still sends it, though Claude never reads that message. Nothing is sent when every file arrives, when the message is refused or has no uuid (over Remote Control, one not in UUID form counts as none), for another session's message that was first held for approval, when the only files lost are those over the count limit of a message in which an entry carries a sha256 digest, or for a picture that reached Claude inside the message and whose saved copy alone was lost; on claude-code-server the same holds for a text file whose copy was to be written late, at a use of the tool container. A file whose entry carries a sha256 (another session's transfer) is reported to Claude by name instead, and is listed here only under 'not_finished'. Each event states the whole list for its message: a save lost after the message was queued, or a delivery to a new worker, states it again, so keep the last one per message_uuid. If its files all arrive that time nothing is sent, and the earlier event stands. One exception: a worker that takes over a turn already begun, or is sent again a message that its transcript already holds, may fetch and save the message's files again, except pictures and files with a sha256. Its event lists only those it could not fetch or save, so it can leave out a picture an earlier event listed, and can list a file the earlier worker did save.",
+    ),
+  );
+  tailUuidSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("system"),
+      subtype: literal("session_writes_lost"),
+      error_code: _enum(["ENOSPC", "EDQUOT"]).describe(
+        "Why the writes failed. 'ENOSPC': the disk was full. 'EDQUOT': the disk quota was used up. When both kinds of write were lost for different reasons, the transcript's. More codes may be added.",
+      ),
+      lost: array(_enum(["transcript", "global_config"])).describe(
+        "What was not saved. 'transcript': lines of a session transcript, so resuming a session in transcript_session_ids may miss part of its conversation. 'global_config': changes this run made to ~/.claude.json. Never empty. More values may be added.",
+      ),
+      transcript_session_ids: array(stringSchema())
+        .optional()
+        .describe(
+          "The sessions whose transcripts lost lines, in the order each first lost one. Present only when 'transcript' is listed; never empty. Usually session_id alone. A CLI that started a new session after the loss, as /clear does, lists the earlier session, and lists session_id only if that session lost lines too.",
+        ),
+      uuid: uuidSchema(),
+      session_id: stringSchema(),
+    }).describe(
+      "The CLI could not save lines of a session transcript, changes to ~/.claude.json, or both, because the disk was full or its quota was used up. Sent at most once, as the CLI exits, after the last result if there was one. The results already received stand, and this message does not change the exit status. As on every message, session_id is the session the CLI is in; transcript_session_ids says whose transcript lost lines. Sent only with stream-json output on stdout, never under --sdk-url or a Claude Desktop entrypoint. Safe to ignore.",
     ),
   );
   SDKSystemCloudSessionDeltaMessageSchema = DoctorLazy(() =>
@@ -6350,7 +6540,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       cloud_session: attachedDeviceSchema().describe(
         "The whole block exactly as the next init would carry it (see SDKSystemMessage.cloud_session): replace the held copy, do not merge.",
       ),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Written by the headless stream-json client of a cloud-hosted session (the same client that puts `cloud_session` on its init frames), and by nothing else: the session's status changed between two inits \u2014 for instance this machine's serving word or its reason, its stream to the session (`connection`), a call it serves starting, waiting on the session's approval or ending (`calls`), a serving notice said (`notices`). Only after the first init \u2014 except from a serve-only helper (`--attach-serve`), whose stream to the session carries no init: it writes these from the start, its first (`seq` 1) listing every key of the block in `changed`, so a host that has read no init takes that frame's block as its first snapshot. At most a few per second (changes within a quarter second are written as one frame carrying the latest block); none when nothing differs. An init is always a complete snapshot, so a host that (re)attaches resynchronises from the first init it reads and applies these on top. Display-only; ignore it if you do not draw session status.",
@@ -6360,7 +6550,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
     objectSchema({
       type: literal("set_expanded_view"),
       expanded_view: _enum(["none", "tasks", "teammates"]),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Hint to expand a side panel. Enum is a superset of AppState.expandedView for back-compat; do not narrow.",
@@ -6376,7 +6566,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         tokens_at_start: numberSchema().int(),
         last_reason: stringSchema().optional(),
       }).nullable(),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "Emitted when the user's /goal Stop hook reports met (clears) or not-yet-met (bumps iterations + last_reason). Any surface with a goal indicator re-renders from this. value is null when the goal is cleared. From internal QueryEvent 'active_goal'.",
@@ -6412,12 +6602,27 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           "auto",
         ]).describe("Which input decided the window (resolveAutoCompactWindow precedence order)."),
       }),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       `@internal Worker-resolved auto-compact state, emitted by CCR workers at boot, whenever the resolved state changes (/autocompact, model switch, settings change), re-checked at each turn start, and re-emitted after a conversation reset. Thin clients adopt it so the "% until auto-compact" indicator counts down to the worker's real compaction trigger instead of re-resolving against client-local state. Turn-scoped divergence is accepted: a turn running under a skill/command frontmatter model override compacts against that model's window while the frame keeps the resting model's (the local indicator shares this limitation). From sessionState.onAutocompactInputsChanged.`,
     ),
   );
+});
+//@ chunk-7kayq7nc.js:536916-542616 fingerprint (2.1.88 match: SDKSessionInfoSchema, 0.347)
+var SDKSetInProgressToolUseIdsMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKHintClearsMessageSchema;
+var SDKOpenMessageSelectorMessageSchema;
+var SDKCompactProgressMessageSchema;
+var SDKStreamModeMessageSchema;
+var SDKResponseLengthMessageSchema;
+var SDKRefusalContinuationMessageSchema;
+var SDKSessionInfoSchema;
+var SDKMessageSchema;
+var FastModeStateSchema;
+var FastModeBlockedReasonSchema;
+var FooterIndicatorSchema;
+deferInit("chunk-7kayq7nc.js:536916", () => {
   SDKSetInProgressToolUseIdsMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("set_in_progress_tool_use_ids"),
@@ -6425,7 +6630,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         action: _enum(["add", "remove"]),
         ids: array(stringSchema()),
       }),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when tool execution adds/removes tool_use ids from the mid-execution set (after permission grant, before result). Surfaces use this to show which tools are running. From internal QueryEvent 'set_in_progress_tool_use_ids'.",
@@ -6436,7 +6641,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       type: literal("hint_clears"),
       ids: array(stringSchema()),
       content_by_id: record(stringSchema(), stringSchema()),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when the server-side context-hint reject path reports cleared tool_use ids after a retry/fallback. The surface re-runs clearToolResultsById on its message list so subsequent turns match the API's view. From internal QueryEvent 'hint_clears'.",
@@ -6445,7 +6650,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
   SDKOpenMessageSelectorMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("open_message_selector"),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted by /rewind to open the message-selector overlay. Fire-and-forget \u2014 the user's selection returns through a separate channel. From internal QueryEvent 'open_message_selector'.",
@@ -6467,7 +6672,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
           type: literal("compact_end"),
         }),
       ]).describe("In-progress compaction lifecycle event."),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted while compaction is running (hook phase, compact start, compact end). Distinct from system/compact_boundary, which reports the post-compaction transcript boundary after completion. From internal QueryEvent 'compact_progress' (CompactEvent Delta-track arm).",
@@ -6477,7 +6682,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
     objectSchema({
       type: literal("stream_mode"),
       mode: _enum(["tool-input", "tool-use", "requesting", "responding", "thinking"]),
-      uuid: _(),
+      uuid: uuidSchema(),
       session_id: stringSchema(),
     }).describe(
       "@internal Emitted when the engine's spinner phase changes during compaction. From internal QueryEvent 'stream_mode' (CompactEvent Delta-track arm).",
@@ -6489,13 +6694,13 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         type: literal("response_length"),
         op: literal("add"),
         delta: numberSchema().int(),
-        uuid: _(),
+        uuid: uuidSchema(),
         session_id: stringSchema(),
       }),
       objectSchema({
         type: literal("response_length"),
         op: literal("reset"),
-        uuid: _(),
+        uuid: uuidSchema(),
         session_id: stringSchema(),
       }),
     ]).describe(
@@ -6508,13 +6713,13 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
         type: literal("refusal_continuation"),
         phase: literal("begin"),
         salvage_text: stringSchema(),
-        uuid: _(),
+        uuid: uuidSchema(),
         session_id: stringSchema(),
       }),
       objectSchema({
         type: literal("refusal_continuation"),
         phase: literal("end"),
-        uuid: _(),
+        uuid: uuidSchema(),
         session_id: stringSchema(),
       }),
     ]).describe(
@@ -6609,6 +6814,7 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
       SDKSystemUiFocusMessageSchema(),
       SDKSystemInstructionSizeWarningMessageSchema(),
       SDKSystemFileAttachmentsMissingMessageSchema(),
+      tailUuidSchema(),
     ]).describe(
       "Every conversational and informational message the CLI emits on its output stream, discriminated by type (and subtype for system/result messages). Consumers should ignore types and subtypes they do not recognize: the set grows over time.",
     ),
@@ -6644,12 +6850,12 @@ deferInit("chunk-bwbq4xvm.js:412402", () => {
     ),
   );
 });
-//@ chunk-55ht3bcx.js:22629-22687 placement
+//@ chunk-0nvx3515.js:22665-22723 placement
 function currentAccessTokenHash() {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   return accessToken ? tokenDigest(accessToken) : null;
 }
-//@ chunk-55ht3bcx.js:22687-22780 fingerprint (2.1.88 match: ApiKeySourceSchema, 0.32)
+//@ chunk-0nvx3515.js:22723-22816 fingerprint (2.1.88 match: ApiKeySourceSchema, 0.321)
 function ApiKeySourceSchema_2() {
   let policyLimitsState = getPolicyLimitsState();
   try {
@@ -6659,7 +6865,7 @@ function ApiKeySourceSchema_2() {
   }
   return policyLimitsState.principalRung === "oauth" ? currentAccessTokenHash() : null;
 }
-//@ chunk-hwmsct5x.js:221838-222410 fingerprint (2.1.88 match: ModelInfoSchema, 0.311)
+//@ chunk-vn3g7zt8.js:222246-222818 fingerprint (2.1.88 match: ModelInfoSchema, 0.311)
 /**
  * 把模型选项列表转成 SDK 的模型信息（value、resolvedModel、displayName、支持的 effort 等级、adaptive thinking、fast mode、auto mode 等）。
  */
@@ -6703,13 +6909,13 @@ function toSdkModelInfos(options) {
     };
   });
 }
-//@ chunk-bfnfj4kx.js:51583-51666 fingerprint (2.1.88 match: BaseOutputFormatSchema, 0.369)
+//@ chunk-6sf70a86.js:51628-51711 fingerprint (2.1.88 match: BaseOutputFormatSchema, 0.37)
 var BaseOutputFormatSchema = (outputFormat, options) =>
   outputFormat?.type === "MemberExpression" &&
   outputFormat.object === options &&
   !outputFormat.computed &&
   !outputFormat.optional;
-//@ chunk-w5ndchqs.js:21455-24419 fingerprint (2.1.88 match: SDKRateLimitInfoSchema, 0.358)
+//@ chunk-7pwjpdkw.js:21609-24576 fingerprint (2.1.88 match: SDKRateLimitInfoSchema, 0.359)
 /**
  * 生成额度/速率限制提示文本（5 小时/7 天/超额/组织限额等分支）。
  */
@@ -6853,93 +7059,7 @@ function formatRateLimitMessage(limits, model) {
     progressSavedSuffix: resetSuffix !== "" && isVellumAnchorEnabled(),
   });
 }
-//@ chunk-spwda8nt.js:2561-4008 fingerprint (2.1.88 match: SDKAssistantMessageErrorSchema, 0.314)
-/**
- * API 错误类型 → 轮后摘要的 {state: blocked/failed, needs: 提示}（登录、组织禁用 OAuth、限额、过载、请求过大等）。
- */
-function classifyApiErrorForSummary(error, message = "", reason) {
-  if (reason === "dlp_request_denied" || reason === "safety_monitor_blocked")
-    return {
-      state: "failed",
-      needs: "API error",
-    };
-  switch (error) {
-    case "authentication_failed":
-      return {
-        state: "blocked",
-        needs: "login required \u2014 run /login",
-      };
-    case "oauth_org_not_allowed":
-      return message === SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE
-        ? {
-            state: "blocked",
-            needs: "can't use subscription \u2014 pay or renew, or use API key",
-          }
-        : {
-            state: "blocked",
-            needs: "org disabled OAuth \u2014 use API key or ask admin",
-          };
-    case "account_on_hold":
-      return {
-        state: "blocked",
-        needs: "account on hold \u2014 see detail",
-      };
-    case "cloud_credential_error":
-      return {
-        state: "blocked",
-        needs: "cloud credentials unavailable \u2014 check or refresh them",
-      };
-    case "verification_required":
-      return {
-        state: "blocked",
-        needs: VERIFICATION_REQUIRED_NEEDS,
-      };
-    case "billing_error":
-      return {
-        state: "blocked",
-        needs: "usage limit reached \u2014 check plan",
-      };
-    case "rate_limit":
-      return {
-        state: "blocked",
-        needs: "rate limited \u2014 wait and retry",
-      };
-    case "overloaded":
-      return {
-        state: "blocked",
-        needs: "API overloaded \u2014 wait and retry",
-      };
-    case "server_error":
-      return {
-        state: "blocked",
-        needs: "API unavailable \u2014 retry",
-      };
-    case "invalid_request":
-      return /\b(too long|too large|exceeds|token limit|prompt is too long)\b/i.test(message)
-        ? {
-            state: "blocked",
-            needs: "request too large \u2014 /compact or trim",
-          }
-        : {
-            state: "blocked",
-            needs: "invalid API request \u2014 see detail",
-          };
-    case "max_output_tokens":
-      return null;
-    case undefined:
-      return {
-        state: "blocked",
-        needs: "API error \u2014 see detail",
-      };
-    case "unknown":
-    default:
-      return {
-        state: "failed",
-        needs: "API error",
-      };
-  }
-}
-//@ chunk-e6aww6q8.js:38175-38502 affinity
+//@ chunk-5xgkngpb.js:40763-41090 affinity
 /**
  * 合并两个钩子的权限决定（deny>ask>allow），原因跟随胜者。
  */
@@ -6960,7 +7080,7 @@ function mergePermissionDecisions(left, right) {
       winner.permissionDecisionReason ?? (isSameDecision ? loser.permissionDecisionReason : undefined),
   };
 }
-//@ chunk-e6aww6q8.js:38502-38761 fingerprint (2.1.88 match: SessionStartHookSpecificOutputSchema, 0.343)
+//@ chunk-5xgkngpb.js:41090-41349 fingerprint (2.1.88 match: SessionStartHookSpecificOutputSchema, 0.344)
 /**
  * 合并两个钩子聚合结果（additionalContext、watchPaths 拼接，权限决定取更严格者）。
  */
@@ -6976,20 +7096,20 @@ function mergeHookAggregates_2(left, right) {
     watchPaths: mergedWatchPaths.length > 0 ? mergedWatchPaths : undefined,
   });
 }
-//@ chunk-e6aww6q8.js:935924-936020 sole-consumer
+//@ chunk-5xgkngpb.js:947117-947213 sole-consumer
 function shouldEmitHookLifecycle(hookEvent) {
   return (
     shouldEmitHookEvent(hookEvent) ||
     (hookEvent === "UserPromptSubmit" && getHookEventEmitState().userPromptSubmitStartAndEndEnabled)
   );
 }
-//@ chunk-e6aww6q8.js:936020-936136 fingerprint (2.1.88 match: SDKHookStartedMessageSchema, 0.775)
+//@ chunk-5xgkngpb.js:947213-947329 fingerprint (2.1.88 match: SDKHookStartedMessageSchema, 0.775)
 /**
  * 发出 system/hook_started SDK 消息（受开关控制）。
  */
 function emitHookStarted(hookId, hookName, hookEvent) {
   if (!shouldEmitHookLifecycle(hookEvent)) return;
-  enqueueTaskNotification_2({
+  enqueueTaskNotification({
     type: "system",
     subtype: "hook_started",
     hook_id: hookId,
@@ -6997,13 +7117,13 @@ function emitHookStarted(hookId, hookName, hookEvent) {
     hook_event: hookEvent,
   });
 }
-//@ chunk-e6aww6q8.js:936136-936333 fingerprint (2.1.88 match: SDKHookProgressMessageSchema, 0.665)
+//@ chunk-5xgkngpb.js:947329-947526 fingerprint (2.1.88 match: SDKHookProgressMessageSchema, 0.666)
 /**
  * 发出 system/hook_progress SDK 消息。
  */
 function emitHookProgress(progress) {
   if (!shouldEmitHookEvent(progress.hookEvent)) return;
-  enqueueTaskNotification_2({
+  enqueueTaskNotification({
     type: "system",
     subtype: "hook_progress",
     hook_id: progress.hookId,
@@ -7014,7 +7134,7 @@ function emitHookProgress(progress) {
     output: progress.output,
   });
 }
-//@ chunk-e6aww6q8.js:936636-937271 fingerprint (2.1.88 match: SDKHookResponseMessageSchema, 0.436)
+//@ chunk-5xgkngpb.js:947829-948464 fingerprint (2.1.88 match: SDKHookResponseMessageSchema, 0.44)
 /**
  * 记录钩子结果日志，并发出 system/hook_response SDK 消息（含 exit_code、outcome）。
  */
@@ -7049,7 +7169,7 @@ ${displayOutput}`
     );
   }
   if (!shouldEmitHookLifecycle(result.hookEvent)) return;
-  enqueueTaskNotification_2({
+  enqueueTaskNotification({
     type: "system",
     subtype: "hook_response",
     hook_id: result.hookId,
@@ -7064,11 +7184,11 @@ ${displayOutput}`
     outcome: result.outcome,
   });
 }
-//@ chunk-e6aww6q8.js:1349223-1349300 fingerprint (2.1.88 match: INSTRUCTIONS_MEMORY_TYPES, 1)
+//@ chunk-5xgkngpb.js:1348392-1348469 fingerprint (2.1.88 match: INSTRUCTIONS_MEMORY_TYPES, 1)
 function isInstructionsMemoryType(type) {
   return type === "User" || type === "Project" || type === "Local" || type === "Managed";
 }
-//@ chunk-e6aww6q8.js:1468907-1469041 fingerprint (2.1.88 match: PostToolUseHookSpecificOutputSchema, 0.486)
+//@ chunk-5xgkngpb.js:1469544-1469678 fingerprint (2.1.88 match: PostToolUseHookSpecificOutputSchema, 0.486)
 function buildPostToolUseContextOutput(eventName, contextOutput, extraFields) {
   logEvent(eventName, {
     over_cap: contextOutput.overCap,
@@ -7081,7 +7201,7 @@ function buildPostToolUseContextOutput(eventName, contextOutput, extraFields) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1551908-1551987 fingerprint (2.1.88 match: ModelUsageSchema, 0.357)
+//@ chunk-5xgkngpb.js:1617428-1617507 fingerprint (2.1.88 match: ModelUsageSchema, 0.356)
 /**
  * 有效上下文窗口：contextWindow 减去（maxOutputTokens 与上限的较小值）。
  */
@@ -7089,7 +7209,7 @@ function getEffectiveContextWindow(limits) {
   let min = Math.min(limits.maxOutputTokens, MAX_OUTPUT_TOKENS_CAP);
   return limits.contextWindow - min;
 }
-//@ chunk-e6aww6q8.js:2085394-2085461 fingerprint (2.1.88 match: SDKStatusSchema, 0.44)
+//@ chunk-5xgkngpb.js:2141993-2142060 fingerprint (2.1.88 match: SDKStatusSchema, 0.438)
 function emitCompactingStatus(onStatus) {
   sendKeepaliveNow();
   onStatus?.({
@@ -7097,17 +7217,17 @@ function emitCompactingStatus(onStatus) {
     status: "compacting",
   });
 }
-//@ chunk-e6aww6q8.js:3446035-3446085 fingerprint (2.1.88 match: WorktreeRemoveHookInputSchema, 0.419)
+//@ chunk-5xgkngpb.js:3535029-3535079 fingerprint (2.1.88 match: WorktreeRemoveHookInputSchema, 0.42)
 function hasWorktreeRemoveHook() {
   return hasWorktreeRemoveHook_2() || hasClassicHookSite("WorktreeRemove");
 }
-//@ chunk-e6aww6q8.js:3516372-3516433 fingerprint (2.1.88 match: SessionEndHookInputSchema, 0.513)
+//@ chunk-5xgkngpb.js:3608838-3608899 fingerprint (2.1.88 match: SessionEndHookInputSchema, 0.513)
 function shouldRunSessionEndHook(hookEvent, signal) {
   return hookEvent !== "SessionEnd" && isTerminalShutdown() && !signal?.aborted;
 }
-//@ chunk-e6aww6q8.js:4648972-4649110 fingerprint (2.1.88 match: SDKUserMessageSchema, 0.313)
+//@ chunk-5xgkngpb.js:4757557-4757695 fingerprint (2.1.88 match: SDKUserMessageSchema, 0.312)
 var SDKUserMessageSchema_3; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4648972", () => {
+deferInit("chunk-5xgkngpb.js:4757557", () => {
   SDKUserMessageSchema_3 = DoctorLazy(() =>
     fileEditOutputSchema().extend({
       staleRecovered: booleanSchema().optional().catch(undefined),
@@ -7116,7 +7236,7 @@ deferInit("chunk-e6aww6q8.js:4648972", () => {
     }),
   );
 });
-//@ chunk-0h4e7gnq.js:46946-47070 fingerprint (2.1.88 match: SDKRateLimitEventSchema, 0.573)
+//@ chunk-frs14hy1.js:52919-53043 fingerprint (2.1.88 match: SDKRateLimitEventSchema, 0.573)
 /**
  * 构造 rate_limit_event SDK 消息（无可报告信息时返回 undefined）。
  */
@@ -7130,7 +7250,7 @@ function createRateLimitEvent(limits, sessionId, options = {}) {
     session_id: sessionId,
   };
 }
-//@ chunk-0sfjpx19.js:15811-15971 fingerprint (2.1.88 match: SDKUserMessageContentSchema, 0.377)
+//@ chunk-nh1pvp1m.js:43477-43637 fingerprint (2.1.88 match: SDKUserMessageContentSchema, 0.378)
 /**
  * 决定新输入的投递优先级：now / next / later（tengu_pencil_farmer 控制默认 next）。
  */
@@ -7141,13 +7261,13 @@ function resolveQueuePriority(priority, content, forceLater) {
   if (priority !== undefined) return priority;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_pencil_farmer", false) ? "next" : "later";
 }
-//@ chunk-0sfjpx19.js:126752-126790 fingerprint (2.1.88 match: EXIT_REASONS, 0.599)
+//@ chunk-nh1pvp1m.js:121758-121796 fingerprint (2.1.88 match: EXIT_REASONS, 0.598)
 var isNonResetExitReason = (reason) => reason !== "clear" && reason !== "resume";
-//@ chunk-ah34pb7m.js:51889-51952 fingerprint (2.1.88 match: PreCompactHookInputSchema, 0.315)
+//@ chunk-wjygkcr4.js:52505-52568 fingerprint (2.1.88 match: PreCompactHookInputSchema, 0.315)
 function PreCompactHookInputSchema_2(compactMetadata, compactMetadata_2) {
   return compactMetadata !== undefined && !(compactMetadata_2 && compactMetadata.trigger === "manual");
 }
-//@ chunk-tyg7f3ek.js:89024-89213 fingerprint (2.1.88 match: SDKStatusMessageSchema, 0.454)
+//@ chunk-0yw3taqg.js:119224-119413 fingerprint (2.1.88 match: SDKStatusMessageSchema, 0.453)
 /**
  * 往出站队列推一条 system/status 消息（status=null，带 permissionMode），返回其 uuid。
  */
@@ -7165,7 +7285,7 @@ function emitStatusMessage({ io, getAppState }, permissionMode) {
   notifyProactivityChanged(io.sessionState, getAppState());
   return messageUuid;
 }
-//@ chunk-tyg7f3ek.js:244160-244305 fingerprint (2.1.88 match: SDKPartialAssistantMessageSchema, 0.558)
+//@ chunk-0yw3taqg.js:271769-271914 fingerprint (2.1.88 match: SDKPartialAssistantMessageSchema, 0.558)
 /**
  * 构造一个 content_block_stop 的 stream_event SDK 消息。
  */
@@ -7182,32 +7302,46 @@ function createContentBlockStopEvent(apiMessageId, index) {
     ...apiMessageIdField(apiMessageId),
   };
 }
-//@ chunk-jy3v56kg.js:33118-33238 fingerprint (2.1.88 match: PreToolUseHookInputSchema, 0.566)
+//@ chunk-xgksxb70.js:1901-2273 fingerprint (2.1.88 match: SDKToolProgressMessageSchema, 0.46)
+function SDKToolProgressMessageSchema_2(toolUseId, messages, detachedToolUseIds, settleLost = false) {
+  try {
+    enqueueTaskNotification({
+      type: "tool_progress",
+      tool_use_id: toolUseId,
+      tool_name: REPL_TOOL_NAME,
+      parent_tool_use_id: null,
+      elapsed_time_seconds: 0,
+      script_ended: true,
+      ...(settleLost && {
+        settle_lost: true,
+      }),
+      final_tool_use_ids: (messages ?? []).flatMap((message) =>
+        message.type === "assistant" && Array.isArray(message.message.content)
+          ? message.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
+          : [],
+      ),
+      detached_tool_use_ids: [...detachedToolUseIds],
+    });
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-cm73gsrm.js:34184-34304 fingerprint (2.1.88 match: PreToolUseHookInputSchema, 0.565)
 var PreToolUseHookInputSchema_2 = {
   session_id: "",
   transcript_path: "",
   cwd: "",
   hook_event_name: "PreToolUse",
-  tool_name: FILE_READ_TOOL_NAME,
+  tool_name: READ,
   tool_input: {},
   tool_use_id: "",
 };
-//@ chunk-e5gvqyfh.js:10272-10395 fingerprint (2.1.88 match: PreToolUseHookSpecificOutputSchema, 0.569)
-function PreToolUseHookSpecificOutputSchema_2(permissionDecisionReason) {
-  return {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason,
-    },
-  };
-}
-//@ chunk-hyjyj8hj.js:7042-7185 file-local
+//@ chunk-tdcrpxkn.js:7042-7185 placement
 var MAX_PAUSE_ANNOUNCEMENTS = 3;
 var MAX_SUBAGENT_ANNOUNCEMENTS = 64;
 var CONTEXT_HOOK_EVENTS = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"];
 var TURN_HOOK_EVENTS = [...CONTEXT_HOOK_EVENTS, "PostToolBatch", "UserPromptExpansion", "Stop"];
-//@ chunk-hyjyj8hj.js:7185-8381 layout
+//@ chunk-tdcrpxkn.js:7185-8381 placement
 /**
  * 远程机器钩子暂停/恢复时向模型与用户发提示的状态机（skipped/answered）。
  */
@@ -7292,7 +7426,7 @@ function createRemoteHookPauseNotifier() {
     },
   };
 }
-//@ chunk-hyjyj8hj.js:8381-8472 fingerprint (2.1.88 match: UserPromptSubmitHookSpecificOutputSchema, 0.481)
+//@ chunk-tdcrpxkn.js:8381-8472 fingerprint (2.1.88 match: UserPromptSubmitHookSpecificOutputSchema, 0.479)
 function buildHookContextOutput(event, additionalContext) {
   let found = CONTEXT_HOOK_EVENTS.find((name) => name === event);
   return (
@@ -7302,14 +7436,14 @@ function buildHookContextOutput(event, additionalContext) {
     }
   );
 }
-//@ chunk-hyjyj8hj.js:8472-8521 affinity
+//@ chunk-tdcrpxkn.js:8472-8521 placement
 function joinLines(existing, added) {
   return existing === undefined
     ? added
     : `${existing}
 ${added}`;
 }
-//@ chunk-18hwfzwa.js:1069699-1070020 fingerprint (2.1.88 match: PromptResponseSchema, 0.356)
+//@ chunk-czq1j3j2.js:1103728-1104049 fingerprint (2.1.88 match: PromptResponseSchema, 0.356)
 function collectQuestionAnswers(questions, answers) {
   let collected = [];
   for (let question of questions) {
@@ -7332,7 +7466,7 @@ function collectQuestionAnswers(questions, answers) {
   }
   return collected;
 }
-//@ chunk-61a1pjwa.js:31942-32072 fingerprint (2.1.88 match: CONFIG_CHANGE_SOURCES, 0.599)
+//@ chunk-kh7eenke.js:33174-33304 fingerprint (2.1.88 match: CONFIG_CHANGE_SOURCES, 0.6)
 var CONFIG_CHANGE_SOURCES_2 = {
   own: "user_settings",
   own_cowork: "user_settings",
@@ -7340,7 +7474,7 @@ var CONFIG_CHANGE_SOURCES_2 = {
   local: "local_settings",
   legacy: "local_settings",
 };
-//@ chunk-583vs41k.js:23544-23844 fingerprint (2.1.88 match: SDKAPIRetryMessageSchema, 0.503)
+//@ chunk-h71rb544.js:24697-24997 fingerprint (2.1.88 match: SDKAPIRetryMessageSchema, 0.504)
 /**
  * 从 api_retry 状态帧提取 {retryAttempt, maxRetries, retryInMs, status, retryAt}。
  */
@@ -7360,13 +7494,10 @@ function parseApiRetryStatus(message) {
     retryAt: Date.now() + message.retry_delay_ms,
   };
 }
-//@ chunk-54xbtc53.js:27985-28637 fingerprint (2.1.88 match: SDKResultErrorSchema, 0.34)
-/**
- * -p 模式输出最终结果：json 格式直接写 JSON，否则 success 写结果文本，各类错误写对应提示。
- */
-function writePrintResult(resultMessage, outputFormat, write = writeToStdout) {
+//@ chunk-0h9p4sxp.js:30268-30920 fingerprint (2.1.88 match: SDKResultErrorSchema, 0.34)
+function SDKResultErrorSchema(resultMessage, outputFormat, stdout = writeToStdout) {
   if (outputFormat === "json") {
-    write(
+    stdout(
       escapeC1Chars(jsonStringify(resultMessage)) +
         `
 `,
@@ -7375,54 +7506,52 @@ function writePrintResult(resultMessage, outputFormat, write = writeToStdout) {
   }
   switch (resultMessage.subtype) {
     case "success": {
-      let resultText = stripControlChars(
-        typeof resultMessage.result === "string" ? resultMessage.result : "",
-      );
-      write(
-        resultText.endsWith(`
+      let message = stripControlChars(typeof resultMessage.result === "string" ? resultMessage.result : "");
+      stdout(
+        message.endsWith(`
 `)
-          ? resultText
-          : resultText +
+          ? message
+          : message +
               `
 `,
       );
       return;
     }
     case "error_during_execution":
-      write("Execution error");
+      stdout("Execution error");
       return;
     case "error_max_turns": {
       let maxTurnsMatch = /^Reached maximum number of turns \((\d+)\)$/.exec(
         firstErrorText(resultMessage) ?? "",
       )?.[1];
-      write(`Error: Reached max turns${maxTurnsMatch === undefined ? "" : ` (${maxTurnsMatch})`}`);
+      stdout(`Error: Reached max turns${maxTurnsMatch === undefined ? "" : ` (${maxTurnsMatch})`}`);
       return;
     }
     case "error_max_budget_usd":
-      write("Error: Exceeded USD budget");
+      stdout("Error: Exceeded USD budget");
       return;
     case "error_max_structured_output_retries":
-      write(
+      stdout(
         `Error: ${firstErrorText(resultMessage) ?? "Failed to provide valid structured output after maximum retries"}`,
       );
       return;
     default: {
-      let message = resultMessage;
-      write(`Error: ${firstErrorText(resultMessage) ?? sanitizeCloudText(String(message.subtype))}`);
+      let resultMessage_2 = resultMessage;
+      stdout(`Error: ${firstErrorText(resultMessage) ?? sanitizeCloudText(String(resultMessage_2.subtype))}`);
     }
   }
 }
-//@ chunk-54xbtc53.js:28637-28757 sole-consumer
+//@ chunk-0h9p4sxp.js:30920-31040 sole-consumer
 function stripControlChars(text) {
   return stripAnsi(text)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
     .replace(/\r(?!\n)/g, "");
 }
-//@ chunk-54xbtc53.js:28757-28866 sole-consumer
+//@ chunk-0h9p4sxp.js:31040-31149 sole-consumer
 function escapeC1Chars(text) {
   return text.replace(/[\u007F-\u009F]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
-//@ chunk-bzb0qnrm.js:6622-6980 fingerprint (2.1.88 match: SDKPermissionDenialSchema, 0.352)
+//@ chunk-m2gb6h8m.js:19418-19778 fingerprint (2.1.88 match: SDKPermissionDenialSchema, 0.354)
 /**
  * 解析远程发来的钩子 stdin JSON：补本地 cwd、清理敏感路径字段、修复工具输入，返回 {envContext, cwd, stdin, repairedInput}。
  */
@@ -7454,7 +7583,7 @@ function parseRemoteHookInput(jsonInput) {
     repairedInput,
   };
 }
-//@ chunk-bzb0qnrm.js:6980-7374 layout
+//@ chunk-m2gb6h8m.js:19778-20172 layout
 /**
  * 清空钩子输入里不应外泄的路径类字段（transcript_path 等），按事件类型保留允许的项目内路径。
  */
@@ -7485,7 +7614,7 @@ function redactHookInputPaths(
   if (!redacted.file_path) redacted.globs = undefined;
   return redacted;
 }
-//@ chunk-bzb0qnrm.js:7374-7661 layout
+//@ chunk-m2gb6h8m.js:20172-20459 layout
 /**
  * 计算钩子的 if 条件：用工具定义校验钩子输入后求值，无法求值时抛错。
  */
@@ -7504,7 +7633,7 @@ async function evaluateHookCondition(condition, { stdin, cwd }) {
   if (matched === null) throw new PluginHookServedCallError(HOOK_CONDITION_UNKNOWN_TEXT);
   return matched;
 }
-//@ chunk-bzb0qnrm.js:7661-8243 layout
+//@ chunk-m2gb6h8m.js:20459-21046 layout
 /**
  * 带超时运行一个命令钩子并整理输出（SessionStart/Setup/CwdChanged/FileChanged 后清会话 env 缓存）。
  */
@@ -7547,7 +7676,7 @@ async function runCommandHookWithTimeout(
     storageV5,
     credentials,
   }).finally(combinedAbortSignal.cleanup);
-  if (SetupHookSpecificOutputSchema_2.has(hookEvent)) invalidateSessionEnvCache();
+  if (CwdChangedHookSpecificOutputSchema_2.has(hookEvent)) invalidateSessionEnvCache();
   return {
     summary: `exit ${result.status}`,
     output: fitHookResult(
@@ -7559,7 +7688,7 @@ async function runCommandHookWithTimeout(
     ),
   };
 }
-//@ chunk-bzb0qnrm.js:8243-9140 layout
+//@ chunk-m2gb6h8m.js:21046-21943 layout
 /**
  * 组织托管设置尚未读取时对远程钩子的处理：PreToolUse/SessionStart/Setup 等先等待设置；仍未读到时 PreToolUse 返回 ask/deny 决定，其余事件报错。
  */
@@ -7622,21 +7751,21 @@ async function holdHookUntilManagedSettings(hookEvent, stdin, timeoutSeconds, si
     },
   };
 }
-//@ chunk-bzb0qnrm.js:9140-9178 layout
+//@ chunk-m2gb6h8m.js:21943-21982 layout
 /**
  * 钩子被全局禁用时抛错。
  */
 function assertHooksNotDisabled() {
   if (policySettingsUnreadable()) throw new RemotePluginHookError(POLICY_UNREADABLE_TEXT);
 }
-//@ chunk-bzb0qnrm.js:9178-9236 layout
+//@ chunk-m2gb6h8m.js:21982-22042 layout
 function assertPluginHooksAllowed(hookScope) {
   assertHooksNotDisabled();
   assertHooksPolicyReady();
   if (!isHookSourceAllowed(hookScope) || shouldSkipHookDueToTrust())
     throw new PluginHookServedCallError(HOOKS_DISABLED_TEXT);
 }
-//@ chunk-bzb0qnrm.js:9236-9283 layout
+//@ chunk-m2gb6h8m.js:22042-22090 layout
 /**
  * 钩子策略尚未就绪（托管设置未读）时抛错。
  */
@@ -7646,7 +7775,7 @@ function assertHooksPolicyReady() {
       policySettingsUnreadable() ? POLICY_UNREADABLE_TEXT : POLICY_BLOCKS_START_TEXT,
     );
 }
-//@ chunk-bzb0qnrm.js:9283-9504 layout
+//@ chunk-m2gb6h8m.js:22090-22311 layout
 /**
  * 插件找不到时，若插件同步尚未完成或该插件同步出错，则抛"稍后再试"错误。
  */
@@ -7666,7 +7795,7 @@ function assertPluginSyncSettled(folderId, hasPending, session) {
   )
     throw new RemotePluginHookError(PLUGINS_NOT_SETTLED_TEXT);
 }
-//@ chunk-bzb0qnrm.js:9504-9642 layout
+//@ chunk-m2gb6h8m.js:22311-22450 layout
 /**
  * 同步插件且本机设置暂时持有账户插件时拒绝运行其钩子。
  */
@@ -7676,12 +7805,12 @@ function assertSyncedPluginUsable(plugin) {
     throw Error("this machine's settings hold account plugins for now");
   }
 }
-//@ chunk-bzb0qnrm.js:9642-9710 file-local
-var SetupHookSpecificOutputSchema_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzb0qnrm.js:9642", () => {
-  SetupHookSpecificOutputSchema_2 = new Set(["SessionStart", "Setup", "CwdChanged", "FileChanged"]);
+//@ chunk-m2gb6h8m.js:22450-22518 file-local
+var CwdChangedHookSpecificOutputSchema_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m2gb6h8m.js:22450", () => {
+  CwdChangedHookSpecificOutputSchema_2 = new Set(["SessionStart", "Setup", "CwdChanged", "FileChanged"]);
 });
-//@ chunk-bzb0qnrm.js:9710-9887 layout
+//@ chunk-m2gb6h8m.js:22518-22695 layout
 /**
  * 按插件 ID 找已启用插件（同步插件按路径哈希匹配），附带加载警告。
  */
@@ -7699,14 +7828,14 @@ async function findEnabledPlugin(pluginSource, storageV5, credentials) {
     warnings,
   };
 }
-//@ chunk-bzb0qnrm.js:9887-9940 layout
+//@ chunk-m2gb6h8m.js:22695-22750 layout
 function truncateHookField(stdout) {
   return stdout.length <= HOOK_OUTPUT_MAX_CHARS
     ? stdout
     : `${truncateToLength(stdout, HOOK_OUTPUT_MAX_CHARS)}
 ${HOOK_OUTPUT_CUT_TEXT}`;
 }
-//@ chunk-bzb0qnrm.js:9940-10173 layout
+//@ chunk-m2gb6h8m.js:22750-22987 layout
 function truncateHookOutput(output) {
   let filtered = Object.entries(output).filter(
     ([key, value]) => !HOOK_DROPPED_FIELDS.has(key) || jsonStringify(value).length <= HOOK_OUTPUT_MAX_CHARS,
@@ -7718,7 +7847,7 @@ function truncateHookOutput(output) {
       : value;
   });
 }
-//@ chunk-bzb0qnrm.js:10173-10468 fingerprint (2.1.88 match: SyncHookJSONOutputSchema, 0.405)
+//@ chunk-m2gb6h8m.js:22987-23284 fingerprint (2.1.88 match: SyncHookJSONOutputSchema, 0.404)
 function SyncHookJSONOutputSchema(output) {
   let hookSpecificOutput = output.hookSpecificOutput;
   if (!isPlainObject(hookSpecificOutput)) return output;
@@ -7736,6 +7865,10 @@ function SyncHookJSONOutputSchema(output) {
 }
 export {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+  emitStatusMessage,
+  toSdkModelInfos,
+  resolveQueuePriority,
+  remoteControlErrorCode,
   HookEventNameSchema,
   SDKSdkMessageSchema,
   SubagentDefinitionSchema,
@@ -7774,52 +7907,51 @@ export {
   SDKActiveGoalMessageSchema,
   SDKAutocompactStateMessageSchema,
   SDKBashCommandMessageSchema,
+  SDKResultErrorSchema,
+  ApiKeySourceSchema_2,
+  currentAccessTokenHash,
+  RateLimitInfoSchema,
+  buildResultMessage,
+  NON_EXECUTION_KINDS,
+  normalizeCustomSubtype,
+  isAbortedTerminalReason,
+  withResultExtras,
+  isTextNotTyped,
+  createContentBlockStopEvent,
+  isThinkingDisplayMode,
+  getEffectiveContextWindow,
   HOOK_EVENTS,
+  isErrorTerminalReason,
+  emitHookResponse,
+  mergeHookAggregates_2,
   SUBAGENT_REPORT_DISPOSITIONS,
   HandbackReportSchema,
-  mcpAuthErrorCode,
-  NON_EXECUTION_KINDS,
-  isKnownMessageKind,
-  isTextNotTyped,
-  createRateLimitEvent,
-  isAbortedTerminalReason,
-  isNonResetExitReason,
-  toSdkModelInfos,
-  emitStatusMessage,
-  resolveQueuePriority,
-  remoteControlErrorCode,
-  collectQuestionAnswers,
-  emitHookResponse,
-  isErrorTerminalReason,
-  buildResultMessage,
-  normalizeCustomSubtype,
-  isThinkingDisplayMode,
-  MODEL_UNAVAILABLE_REASONS,
-  isAbnormalTerminalReason,
-  terminalReasonTag,
-  RateLimitInfoSchema,
-  SESSION_END_REASONS_2,
-  isInstructionsMemoryType,
   hasWorktreeRemoveHook,
   promptEndingFields,
   emitHookStarted,
   shouldRunSessionEndHook,
-  writePrintResult,
-  ApiKeySourceSchema_2,
-  currentAccessTokenHash,
-  parseApiRetryStatus,
-  CONFIG_CHANGE_SOURCES_2,
   emitHookProgress,
-  formatRateLimitMessage,
-  UsageReportSchema,
-  getEffectiveContextWindow,
+  mcpAuthErrorCode,
+  isInstructionsMemoryType,
+  buildPostToolUseContextOutput,
   emitCompactingStatus,
-  PreCompactHookInputSchema_2,
+  PermissionDisplaySchema,
+  SDKUserMessageSchema_3,
+  BaseOutputFormatSchema,
+  formatRateLimitMessage,
   USER_REJECTED_KIND,
   INTERRUPTED_TOOL_STATUSES,
-  toolRejectionKind,
-  BaseOutputFormatSchema,
   PaneIdSchema,
+  isKnownMessageKind,
+  MOBILE_APP_KINDS,
+  isAbnormalTerminalReason,
+  MODEL_UNAVAILABLE_REASONS,
+  PreToolUseHookInputSchema_2,
+  collectQuestionAnswers,
+  SESSION_END_REASONS_2,
+  SDKHttpMessageSchema,
+  parseApiRetryStatus,
+  CONFIG_CHANGE_SOURCES_2,
   truncateHookOutput,
   SyncHookJSONOutputSchema,
   truncateHookField,
@@ -7831,20 +7963,16 @@ export {
   evaluateHookCondition,
   holdHookUntilManagedSettings,
   runCommandHookWithTimeout,
-  SDKHttpMessageSchema,
-  PreToolUseHookSpecificOutputSchema_2,
-  mergeHookAggregates_2,
-  buildPostToolUseContextOutput,
-  PermissionDisplaySchema,
-  SDKUserMessageSchema_3,
+  toolRejectionKind,
+  createRateLimitEvent,
+  isNonResetExitReason,
+  terminalReasonTag,
   createRemoteHookPauseNotifier,
-  PreToolUseHookInputSchema_2,
-  withResultExtras,
-  createContentBlockStopEvent,
-  classifyApiErrorForSummary,
+  PreCompactHookInputSchema_2,
+  SDKToolProgressMessageSchema_2,
   assertHooksPolicyReady,
   assertHooksNotDisabled,
   SDKSystemCodeChangePublishedMessageSchema,
   SDKSystemVcsStateChangedMessageSchema,
-  MOBILE_APP_KINDS,
+  UsageReportSchema,
 };

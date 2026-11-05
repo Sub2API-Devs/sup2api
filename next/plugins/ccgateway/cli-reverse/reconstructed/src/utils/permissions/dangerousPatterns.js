@@ -3,16 +3,16 @@
  *
  * 危险命令与规则前缀词表（解释器、shell、网络/云 CLI 及其危险子命令）和危险命令模式判定（下载管道执行、凭证路径、强推、破坏性云命令）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/dangerousPatterns.ts
- * pieces: chunk-2a8yx6fc.js (13), chunk-sfy7bm1n.js (1)
+ * pieces: chunk-fta1hp2w.js (13), chunk-gg17c06d.js (1)
  * attribution: sole-consumer 7, affinity 1, fingerprint 2, layout 1, placement 3
  */
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 
-//@ chunk-sfy7bm1n.js:7290-7807 fingerprint (2.1.88 match: CROSS_PLATFORM_CODE_EXEC, 0.569)
+//@ chunk-gg17c06d.js:9302-9819 fingerprint (2.1.88 match: CROSS_PLATFORM_CODE_EXEC, 0.569)
 /**
  * 进入 auto 模式时会被剥离的“等价于任意代码执行”的 allow 规则前缀：解释器/包运行器（python、node、deno、npx、bun run…）、shell、ssh、eval/exec/env/xargs/sudo；网络/云 CLI（curl、wget、kubectl、aws、gcloud、gsutil）只在子命令落入 DANGEROUS_SUBCOMMANDS 或参数含 $/` 时算危险。
  */
@@ -76,20 +76,20 @@ var DANGEROUS_SUBCOMMANDS = {
   ...false,
 };
 var DANGEROUS_BASH_RULE_PREFIXES = [...DANGEROUS_BASH_PATTERNS, ...[]];
-//@ chunk-2a8yx6fc.js:7934-7972 sole-consumer
+//@ chunk-fta1hp2w.js:8000-8038 sole-consumer
 function hasWildcard(text) {
   return text.includes("*");
 }
-//@ chunk-2a8yx6fc.js:7972-8019 sole-consumer
+//@ chunk-fta1hp2w.js:8038-8085 sole-consumer
 /**
  * 去掉规则串末尾的空白、冒号和星号。
  */
 function stripTrailingWildcard(text) {
   return text.replace(/[\s:*]+$/, "");
 }
-//@ chunk-2a8yx6fc.js:8019-8077 sole-consumer
+//@ chunk-fta1hp2w.js:8085-8143 sole-consumer
 var SUDO_FLAGS_WITH_VALUE = new Set(["-u", "-g", "-c", "-d", "-h", "-p", "-r", "-t"]);
-//@ chunk-2a8yx6fc.js:8077-8393 sole-consumer
+//@ chunk-fta1hp2w.js:8143-8459 sole-consumer
 /**
  * 分词并跳过开头的 sudo/doas（及其带值选项）或 env（及 VAR=、-u 选项），返回剩余词。
  */
@@ -111,7 +111,7 @@ function stripPrivilegePrefix(command) {
   }
   return tokens.slice(index);
 }
-//@ chunk-2a8yx6fc.js:8393-8895 sole-consumer
+//@ chunk-fta1hp2w.js:8459-8961 sole-consumer
 /**
  * 危险规则判定用的词表：凭证文件路径（.ssh、.aws/credentials、.netrc、.npmrc、gh/glab 配置…）、可写权限 chmod、解释器、iex、下载命令。
  */
@@ -122,18 +122,18 @@ var WORLD_WRITABLE_CHMOD_PATTERN =
 var SHELL_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish", "node", "perl", "ruby"]);
 var INVOKE_EXPRESSION_COMMANDS = new Set(["iex", "invoke-expression"]);
 var DOWNLOAD_COMMANDS = new Set(["curl", "wget", "iwr", "invoke-webrequest"]);
-//@ chunk-2a8yx6fc.js:8895-8942 sole-consumer
+//@ chunk-fta1hp2w.js:8961-9008 sole-consumer
 function isPythonCommand(word) {
   return /^python[0-9.]*$/.test(word);
 }
-//@ chunk-2a8yx6fc.js:8942-9057 sole-consumer
+//@ chunk-fta1hp2w.js:9008-9123 sole-consumer
 function getFirstCommandWord(segment) {
   let filtered = segment.trim().split(/\s+/).filter(Boolean);
   let wordIndex = 0;
   if (filtered[wordIndex] === "sudo" || filtered[wordIndex] === "doas") wordIndex++;
   return filtered[wordIndex] ?? "";
 }
-//@ chunk-2a8yx6fc.js:9057-9604 affinity
+//@ chunk-fta1hp2w.js:9123-9670 affinity
 /**
  * 识别“下载后交给解释器执行”：`sh <(curl …)`、`iex (iwr …)`、或管道前段是 curl/wget 且后段是 bash/sh/python 等（后段无参数）或规则带通配。
  */
@@ -164,7 +164,7 @@ function isDownloadPipedToShell(command) {
   }
   return false;
 }
-//@ chunk-2a8yx6fc.js:9604-9993 fingerprint (2.1.88 match: DANGEROUS_BASH_PATTERNS, 0.327)
+//@ chunk-fta1hp2w.js:9670-10059 fingerprint (2.1.88 match: DANGEROUS_BASH_PATTERNS, 0.327)
 /**
  * 云/集群 CLI 的破坏性子命令：kubectl/gcloud/az delete、aws s3 rm|rb 或 delete-*\/terminate-*、gsutil rm、terraform destroy、helm uninstall/delete。
  */
@@ -191,7 +191,7 @@ function isDestructiveCloudCommand(tokens) {
       return false;
   }
 }
-//@ chunk-2a8yx6fc.js:9993-10529 layout
+//@ chunk-fta1hp2w.js:10059-10595 layout
 /**
  * 判断一条 Bash 规则/命令模式是否危险：下载管道执行、触及凭证路径、带通配的 rm/chmod/chown/强推 git push/dd/mkfs/关机等，以及带通配的云端破坏命令。
  */
@@ -224,9 +224,9 @@ function isDangerousCommandPattern(pattern) {
   if (hasStar && isDestructiveCloudCommand(tokens)) return true;
   return false;
 }
-//@ chunk-2a8yx6fc.js:10529-10598 placement
+//@ chunk-fta1hp2w.js:10595-10664 placement
 var POWERSHELL_DESTRUCTIVE_VERBS = new Set(["remove-item", "ri", "rm", "del", "erase", "rd", "rmdir"]);
-//@ chunk-2a8yx6fc.js:10598-10921 placement
+//@ chunk-fta1hp2w.js:10664-10987 placement
 /**
  * PowerShell 规则内容是否危险：下载管道执行、凭证路径、解释器加通配、格式化/清盘/关机重启类命令。
  */
@@ -247,16 +247,15 @@ function isDangerousPowerShellPattern(command) {
     return true;
   return false;
 }
-//@ chunk-2a8yx6fc.js:10921-11052 placement
+//@ chunk-fta1hp2w.js:10987-11118 placement
 function isDangerousRuleContent(toolName, pattern) {
   if (pattern === undefined || pattern === "") return false;
   if (toolName === BASH_TOOL_NAME) return isDangerousCommandPattern(pattern);
   if (toolName === POWERSHELL_TOOL_NAME) return isDangerousPowerShellPattern(pattern);
-  if (toolName === FILE_READ_TOOL_NAME) return SENSITIVE_CREDENTIAL_PATH_PATTERN.test(pattern);
+  if (toolName === READ) return SENSITIVE_CREDENTIAL_PATH_PATTERN.test(pattern);
   return false;
 }
 export {
-  isDangerousRuleContent,
   DANGEROUS_BASH_RULE_PREFIXES,
   SUBCOMMAND_CHECKED_COMMANDS,
   DANGEROUS_SUBCOMMANDS,
@@ -264,4 +263,5 @@ export {
   DANGEROUS_BASH_PATTERNS,
   NETWORK_COMMAND_PREFIXES,
   CLUSTER_COMMAND_PREFIXES,
+  isDangerousRuleContent,
 };

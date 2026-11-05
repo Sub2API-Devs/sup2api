@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：在 WSL 中读取 Windows 注册表的托管设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zw3bhs13.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4cd7tk6d.js (4)
  * attribution: placement 4
  */
 import { identity } from "../../identity.js";
@@ -14,7 +14,7 @@ import { importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { looksLikeWslVersion } from "../../platform.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-zw3bhs13.js:442-658 placement
+//@ chunk-4cd7tk6d.js:442-658 placement
 /**
  * WSL 读取 Windows 注册表与托管设置的常量：超时、输出上限、reg.exe 路径、键不存在消息、托管目录与云会话缓存。
  */
@@ -24,7 +24,7 @@ var WSL_REG_EXE_PATH;
 var REG_KEY_NOT_FOUND_TEXT;
 var WSL_MANAGED_SETTINGS_DIR;
 var coworkCloudCache;
-deferInit("chunk-zw3bhs13.js:442", () => {
+deferInit("chunk-4cd7tk6d.js:442", () => {
   REG_QUERY_TIMEOUT_MS = 5000;
   REG_QUERY_MAX_BUFFER = 2097152;
   WSL_REG_EXE_PATH = "/mnt/c/Windows/System32/reg.exe";
@@ -39,7 +39,7 @@ deferInit("chunk-zw3bhs13.js:442", () => {
     },
   );
 });
-//@ chunk-zw3bhs13.js:658-803 placement
+//@ chunk-4cd7tk6d.js:658-803 placement
 /**
  * 判断当前入口是否为云端协作会话（结果缓存）。
  */
@@ -52,7 +52,7 @@ function isCoworkCloudEntrypoint() {
   }
   return coworkCloudCache.isCoworkCloud;
 }
-//@ chunk-zw3bhs13.js:803-847 placement
+//@ chunk-4cd7tk6d.js:803-847 placement
 /**
  * resetCoworkCloudCache：重置 cowork 云缓存。
  */
@@ -60,7 +60,7 @@ function resetCoworkCloudCache() {
   coworkCloudCache.isCoworkCloud = undefined;
   isCoworkCloudEntrypoint();
 }
-//@ chunk-zw3bhs13.js:847-1018 placement
+//@ chunk-4cd7tk6d.js:847-1018 placement
 /**
  * 判断是否运行在 WSL 中（环境变量或 /proc/version）。
  */
@@ -76,9 +76,9 @@ function isWsl() {
 }
 export {
   WSL_MANAGED_SETTINGS_DIR,
-  WSL_REG_EXE_PATH,
   isWsl,
   isCoworkCloudEntrypoint,
+  WSL_REG_EXE_PATH,
   REG_QUERY_TIMEOUT_MS,
   REG_KEY_NOT_FOUND_TEXT,
   REG_QUERY_MAX_BUFFER,

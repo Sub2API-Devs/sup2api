@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具服务策略（本地一致性、询问等待、执行模式）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (13)
  * attribution: placement 13
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
@@ -57,7 +57,7 @@ import { useSecurityParser } from "../../../tools/BashTool/readOnlyShellCheck.js
 import { runInRemoteCallFrameMain } from "../../remoteMode.js";
 import { expandPath } from "../../../utils/path.js";
 
-//@ chunk-ad2e1aj6.js:9982-10423 placement
+//@ chunk-nvm0wye1.js:10309-10751 placement
 function servedAskWaitMs() {
   let reason;
   try {
@@ -86,7 +86,7 @@ function servedAskWaitMs() {
   );
   return;
 }
-//@ chunk-ad2e1aj6.js:10423-11011 placement
+//@ chunk-nvm0wye1.js:10751-11339 placement
 /**
  * 远程服务的默认策略：58 s 截止、4 并发、沙箱/后台/凭证擦除等默认值，以及给用户看的策略说明文案。
  */
@@ -114,7 +114,7 @@ var MACHINE_RULES_NOTE =
   "This machine's rules, hooks and sandbox settings apply (a hook can block or rewrite a call, never pre-approve it). Approvals are asked in this session.";
 var NO_BACKGROUND_NOTE = "No background commands.";
 var BACKGROUND_ALLOWED_NOTE = `Up to ${SERVED_BACKGROUND_LIMITS} background Bash commands, stopped when this machine detaches.`;
-//@ chunk-ad2e1aj6.js:11011-12063 placement
+//@ chunk-nvm0wye1.js:11339-12391 placement
 /**
  * "local_parity" 服务策略：个人机器、需要信封、设备绑定准入、沙箱/后台/凭证擦除等约束。
  */
@@ -189,7 +189,7 @@ function localParityPolicy(options = {}) {
       ].join(" "),
   };
 }
-//@ chunk-ad2e1aj6.js:12063-12149 placement
+//@ chunk-nvm0wye1.js:12391-12477 placement
 function resolveServingPolicy(policyName = remoteToolServingPolicyName()) {
   return policyName === "parity"
     ? localParityPolicy({
@@ -197,7 +197,7 @@ function resolveServingPolicy(policyName = remoteToolServingPolicyName()) {
       })
     : sandboxDefaultPolicy();
 }
-//@ chunk-ad2e1aj6.js:12186-12559 placement
+//@ chunk-nvm0wye1.js:12532-12905 placement
 function deviceFrame(capture, instanceId, sequence) {
   let running = capture.kind !== "not_running";
   return toWireSyncAnswer({
@@ -224,7 +224,7 @@ function deviceFrame(capture, instanceId, sequence) {
           },
   });
 }
-//@ chunk-ad2e1aj6.js:12559-12675 placement
+//@ chunk-nvm0wye1.js:12905-13021 placement
 function parseExecutionMode(execution) {
   let parsed = executionModeSchema().safeParse(execution);
   return parsed.success
@@ -236,7 +236,7 @@ function parseExecutionMode(execution) {
         }),
       };
 }
-//@ chunk-ad2e1aj6.js:12675-13083 placement
+//@ chunk-nvm0wye1.js:13021-13429 placement
 /**
  * 执行模式 schema：in_process 与 vm（含 availability、executor、copy 说明）两种模式的定义。
  */
@@ -273,7 +273,7 @@ var servedExecutionModeSchema = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-ad2e1aj6.js:13083-13206 placement
+//@ chunk-nvm0wye1.js:13429-13552 placement
 function arrivesOverSession(transport) {
   switch (transport) {
     case "session":
@@ -288,7 +288,7 @@ function arrivesOverSession(transport) {
     }
   }
 }
-//@ chunk-ad2e1aj6.js:13206-13372 placement
+//@ chunk-nvm0wye1.js:13552-13718 placement
 function acceptsArrival(raisedOver, arrivedOver) {
   switch (raisedOver) {
     case "session":
@@ -304,7 +304,7 @@ function acceptsArrival(raisedOver, arrivedOver) {
     }
   }
 }
-//@ chunk-ad2e1aj6.js:13372-13583 placement
+//@ chunk-nvm0wye1.js:13718-13929 placement
 function callerKindForArrival(arrivedOver, transport, facts, trust = DEFAULT_SERVING_POLICY) {
   switch (arrivedOver) {
     case "session":
@@ -320,13 +320,13 @@ function callerKindForArrival(arrivedOver, transport, facts, trust = DEFAULT_SER
     }
   }
 }
-//@ chunk-ad2e1aj6.js:13583-13623 placement
+//@ chunk-nvm0wye1.js:13929-13969 placement
 var PIPE_BUFFER_BYTES_BY_PLATFORM = {
   macos: 1024,
   linux: 4096,
   wsl: 4096,
 };
-//@ chunk-ad2e1aj6.js:13623-13877 placement
+//@ chunk-nvm0wye1.js:13969-14223 placement
 function platformPathGuard(tool, input, cwd) {
   let limitBytes = PIPE_BUFFER_BYTES_BY_PLATFORM[getPlatform()];
   if (limitBytes === undefined || tool.isMcp === true || tool.getPath === undefined || !useSecurityParser())
@@ -341,7 +341,7 @@ function platformPathGuard(tool, input, cwd) {
     return;
   }
 }
-//@ chunk-ad2e1aj6.js:13877-13890 placement
+//@ chunk-nvm0wye1.js:14223-14236 placement
 var RESULT_RETENTION_MS = 15000;
 export {
   platformPathGuard,

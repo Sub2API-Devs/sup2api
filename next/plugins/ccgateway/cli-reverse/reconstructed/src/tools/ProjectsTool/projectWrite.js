@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Projects 工具写入（本地路径读取、本地上传写入、保存失败分类、容量检查）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (17)
+ * attribution: placement 16, layout 1
  */
 import { isAbsolute, resolve, sep } from "path";
 import { realpath, open, stat } from "fs/promises";
@@ -19,6 +19,7 @@ import { getErrnoCode } from "../../utils/errors.js";
 import { ProjectsPreconditionError } from "./projectsAuth.js";
 import { isDiskless, getOriginalCwd } from "../../bootstrap/state.js";
 import { hasProjectHost } from "./inputSchema.js";
+import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import {
   MAX_SENSITIVE_PATH_LENGTH,
   isUnderSandboxPath,
@@ -26,6 +27,7 @@ import {
   isCredentialPath,
 } from "../../utils/permissions/sensitivePaths.js";
 import { isNotebookPath } from "../../utils/path.js";
+import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import {
   hasFullFileContent,
   matchesContentDigest,
@@ -38,7 +40,7 @@ import { env } from "../../utils/env.js";
 import { getChatFileRoots } from "../../utils/stageFileRoots.js";
 import { layeredReadVerdictForPaths } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-eg496hkq.js:26949-27106 placement
+//@ chunk-y2k9w57g.js:28171-28328 placement
 function unicodeNameMatcher(input, callOptions, toolContext) {
   return (foundName, form) => {
     let permissionKind = projectsPermissionContext(input, form, callOptions, toolContext);
@@ -50,7 +52,7 @@ function unicodeNameMatcher(input, callOptions, toolContext) {
     return permissionKind === undefined;
   };
 }
-//@ chunk-eg496hkq.js:27106-29123 placement
+//@ chunk-y2k9w57g.js:28328-30345 placement
 /**
  * 写入会让项目超出大小上限时的拒绝说明。
  */
@@ -65,7 +67,7 @@ var PROJECT_UNCERTAIN_WRITE_TEXT =
   "Write refused; nothing in the project was changed. A doc is already at this path, and this tool cannot find its current text in your context: the doc as shown to you in this conversation, a project_read of it, or your own earlier write of that text. Call project_read on this path, make your change in the text that it returns, and write again. Do not delete the doc to write it afresh: a delete cannot be undone here, and the new doc would hold only what you remember of the old one. If project_read cannot return the doc's whole text inline, do not repeat this write: follow what that result tells you, or tell the user that this doc could not be rewritten from here.";
 var PROJECT_DELETE_REFUSED_TEXT =
   "This tool cannot undo a delete. To change a doc, do not delete it first: project_write to its path replaces the content in place.";
-//@ chunk-eg496hkq.js:29123-29226 placement
+//@ chunk-y2k9w57g.js:30345-30448 placement
 class ProjectSaveError extends Error {
   cause;
   at;
@@ -75,7 +77,7 @@ class ProjectSaveError extends Error {
     this.at = at;
   }
 }
-//@ chunk-eg496hkq.js:29226-29651 placement
+//@ chunk-y2k9w57g.js:30448-30873 placement
 /**
  * 可重试的网络 errno 集合。
  */
@@ -90,7 +92,7 @@ var RETRYABLE_ERRNO_CODES = new Set([
 ]);
 var PROJECT_WRITE_RECOVERY_TEXT =
   "Call project_read on this path before any other write or delete: if it returns the new content, stop and tell the user that an earlier copy may need removing from the project in claude.ai; if not, you may retry the write once, and only once in total unless the user asks you to try again.";
-//@ chunk-eg496hkq.js:29651-31539 placement
+//@ chunk-y2k9w57g.js:30873-32761 placement
 /**
  * 把项目保存失败归类为可能已成功/确定失败等，并生成给模型的说明。
  */
@@ -133,23 +135,27 @@ function classifySaveFailure({ cause, at }) {
     ? ` ${staleDocNote} ${noDeleteNote} Try the same project_write again, up to two retries in total. If it still fails, tell the user that the new content was not saved, and offer it to them another way.`
     : ` ${staleDocNote} ${noDeleteNote} ${maybeSavedNote}`;
 }
-//@ chunk-eg496hkq.js:31539-31711 placement
+//@ chunk-y2k9w57g.js:32761-32933 placement
 function assertKnowledgeCapacity(knowledgeStats, byteSize) {
   if (knowledgeStats.max_knowledge_size <= 0) return;
   let writeTokens = Math.ceil(byteSize / BYTES_PER_KNOWLEDGE_TOKEN);
   if (knowledgeStats.knowledge_size + writeTokens > knowledgeStats.max_knowledge_size)
     throw new ProjectsPreconditionError(PROJECT_SIZE_LIMIT_TEXT, "write_would_exceed_project_size_limit");
 }
-//@ chunk-eg496hkq.js:31711-31829 placement
+//@ chunk-y2k9w57g.js:32933-33051 placement
 var MAX_LOCAL_UPLOAD_BYTES = 26214400;
 var LOCAL_PATH_UNAVAILABLE_TEXT =
   "project_write: local_path is not available in this session; pass the text as content.";
 var LOCAL_READ_CHUNK_BYTES = 1048576;
-//@ chunk-eg496hkq.js:31829-31885 placement
+//@ chunk-y2k9w57g.js:33051-33107 placement
 function localPathAvailability() {
   return !isDiskless() ? "here" : hasProjectHost() ? "elsewhere" : "none";
 }
-//@ chunk-eg496hkq.js:31885-32468 placement
+//@ chunk-y2k9w57g.js:33107-33157 layout
+function isSessionPinnedFeaturesOn() {
+  return getFeatureValue_SESSION_PINNED("tengu_mellow_anchor", false);
+}
+//@ chunk-y2k9w57g.js:33157-33740 placement
 var LOCAL_PATH_REASONS = [
   "local_path_not_available",
   "local_path_not_absolute",
@@ -172,11 +178,11 @@ var LOCAL_PATH_REASONS = [
   "write_would_exceed_project_size_limit",
   "project_knowledge_full",
 ];
-//@ chunk-eg496hkq.js:32468-32502 placement
+//@ chunk-y2k9w57g.js:33740-33774 placement
 function preconditionError(message, reasonCode) {
   return new ProjectsPreconditionError(message, reasonCode);
 }
-//@ chunk-eg496hkq.js:32502-32758 placement
+//@ chunk-y2k9w57g.js:33774-34030 placement
 function logWriteByLocalPath(outcome, host, details = {}) {
   logEvent("tengu_projects_write_by_local_path", {
     outcome: fromEnum(outcome),
@@ -188,7 +194,7 @@ function logWriteByLocalPath(outcome, host, details = {}) {
     via_ccr_bridge: isSessionJwtAuth(),
   });
 }
-//@ chunk-eg496hkq.js:32758-33095 placement
+//@ chunk-y2k9w57g.js:34030-34367 placement
 function logWriteFailure(error, signal, host) {
   let cause = error instanceof ProjectSaveError ? error.cause : error;
   if (signal.aborted) logWriteByLocalPath("cancelled", host);
@@ -205,7 +211,7 @@ function logWriteFailure(error, signal, host) {
       failedStep: error instanceof ProjectSaveError ? "save" : "other",
     });
 }
-//@ chunk-eg496hkq.js:33095-35369 placement
+//@ chunk-y2k9w57g.js:34367-36755 placement
 /**
  * 校验并读取 project_write 的 local_path（绝对路径、长度、在 cwd 内、大小限制等）。
  */
@@ -227,7 +233,7 @@ async function readLocalPathForWrite(localPath, host, toolContext, signal) {
   switch (readResult.ok ? "over_the_cap" : readResult.code) {
     case "read_it_first":
       throw preconditionError(
-        "project_write: Read the whole file at local_path first (again, if you read, wrote or edited it earlier in this chat), or pass its text as content.",
+        `project_write: Read the whole file at local_path first (again, if you read, wrote or edited it earlier in this chat), or pass its text as content.${isSessionPinnedFeaturesOn() ? ` If it is an unchanged copy of a file that you wrote with ${FILE_WRITE_TOOL_NAME}, pass the path at which you wrote it.` : ""}`,
         "local_path_file_not_read_yet",
       );
     case "not_as_read":
@@ -263,7 +269,7 @@ async function readLocalPathForWrite(localPath, host, toolContext, signal) {
       );
   }
 }
-//@ chunk-eg496hkq.js:35369-35433 placement
+//@ chunk-y2k9w57g.js:36755-36819 placement
 /**
  * 本地路径是否受保护（配置文件或敏感目录），受保护则拒绝上传。
  */
@@ -272,7 +278,7 @@ async function isProtectedLocalPath(localPath, resolvedPath, fromChatRoot) {
     ? isUnderSandboxPath(resolvedPath) || (await isInClaudeConfigDir(resolvedPath))
     : isCredentialPath(localPath, resolvedPath);
 }
-//@ chunk-eg496hkq.js:35433-35579 placement
+//@ chunk-y2k9w57g.js:36819-36965 placement
 function anyTrackedReadMatches(paths, readFileState, currentText) {
   return paths.some((path) => {
     let readState = readFileState.get(path);
@@ -285,7 +291,7 @@ function anyTrackedReadMatches(paths, readFileState, currentText) {
     );
   });
 }
-//@ chunk-eg496hkq.js:35579-39443 placement
+//@ chunk-y2k9w57g.js:36965-40829 placement
 async function writeFromLocalUploads(localPath, permissions, readFileState) {
   if (isDiskless()) throw preconditionError(LOCAL_PATH_UNAVAILABLE_TEXT, "local_path_not_available");
   let withSep = (path) => (path.endsWith(sep) ? path : path + sep);
@@ -433,6 +439,7 @@ async function writeFromLocalUploads(localPath, permissions, readFileState) {
 }
 export {
   localPathAvailability,
+  isSessionPinnedFeaturesOn,
   unicodeNameMatcher,
   logWriteFailure,
   ProjectSaveError,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话级批准的保留与需要批准/已确认信封
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5ghnps9r.js (1), chunk-ad2e1aj6.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-azq8n2fy.js (1), chunk-nvm0wye1.js (9)
  * attribution: placement 10
  */
 import { singlePrefixRuleFor } from "../../../tools/PowerShellTool/PowerShellTool.js";
@@ -32,7 +32,7 @@ import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import { objectSchema, numberSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-5ghnps9r.js:1078-1209 placement
+//@ chunk-azq8n2fy.js:1111-1242 placement
 /**
  * （切分错误，权限 UI）规则是否就是当前提供的常驻规则。
  */
@@ -45,7 +45,7 @@ function matchesOfferedWindowsSandboxRule(rule, offer) {
     rule.ruleContent === offeredRule.ruleContent
   );
 }
-//@ chunk-ad2e1aj6.js:6505-6593 placement
+//@ chunk-nvm0wye1.js:6777-6865 placement
 function matchesApprovedCall(approved, toolName, input) {
   return (
     toolName === approved.toolName &&
@@ -53,7 +53,7 @@ function matchesApprovedCall(approved, toolName, input) {
       stableHashWithSalt(toolName, approved.evaluatedInput)
   );
 }
-//@ chunk-ad2e1aj6.js:6593-6809 placement
+//@ chunk-nvm0wye1.js:6865-7081 placement
 function sessionDeclineDenial(feedback) {
   return {
     behavior: "deny",
@@ -68,7 +68,7 @@ function sessionDeclineDenial(feedback) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-ad2e1aj6.js:6809-8223 placement
+//@ chunk-nvm0wye1.js:7081-8495 placement
 async function keepStandingApprovals(session, permissionUpdates, facts, options) {
   if (permissionUpdates === undefined || permissionUpdates.length === 0 || !shouldShowAlwaysAllowOptions())
     return;
@@ -155,7 +155,7 @@ async function keepStandingApprovals(session, permissionUpdates, facts, options)
       downgraded: facts.destinationDowngraded,
     });
 }
-//@ chunk-ad2e1aj6.js:8223-8394 placement
+//@ chunk-nvm0wye1.js:8495-8666 placement
 function isExactCommandRule(rule, options) {
   let command = options.input.command;
   return (
@@ -166,7 +166,7 @@ function isExactCommandRule(rule, options) {
     !rule.ruleContent.includes("*")
   );
 }
-//@ chunk-ad2e1aj6.js:8394-8552 placement
+//@ chunk-nvm0wye1.js:8666-8824 placement
 function autoModeRulesField(hostRules) {
   if (hostRules === "none") return;
   let config = asIs(getAutoModeConfig());
@@ -184,11 +184,11 @@ function autoModeRulesField(hostRules) {
         auto_mode: wireRules,
       };
 }
-//@ chunk-ad2e1aj6.js:8552-8576 placement
+//@ chunk-nvm0wye1.js:8824-8848 placement
 function asIs(autoModeConfig) {
   return autoModeConfig;
 }
-//@ chunk-ad2e1aj6.js:8576-9732 placement
+//@ chunk-nvm0wye1.js:8848-10059 placement
 function needsApprovalEnvelope(params) {
   let message = clipText(params.ask.message);
   return {
@@ -211,6 +211,9 @@ function needsApprovalEnvelope(params) {
       }),
       classifier_eligible: params.ask.classifierEligible,
       prior_answer_ok: params.ask.priorAnswerOk,
+      ...(params.ask.unreadableLineOnly && {
+        unreadable_line_only: true,
+      }),
       ...(params.notes.length > 0 && {
         notes: [...params.notes],
       }),
@@ -254,7 +257,7 @@ function needsApprovalEnvelope(params) {
     ],
   };
 }
-//@ chunk-ad2e1aj6.js:9732-9949 placement
+//@ chunk-nvm0wye1.js:10059-10276 placement
 function acknowledgedEnvelope(target, facts, askId) {
   return {
     envelope: {
@@ -274,7 +277,7 @@ function acknowledgedEnvelope(target, facts, askId) {
     ],
   };
 }
-//@ chunk-ad2e1aj6.js:9949-9982 placement
+//@ chunk-nvm0wye1.js:10276-10309 placement
 var ASK_WAIT_SCHEMA = DoctorLazy(() =>
   objectSchema({
     askWaitMs: numberSchema(),

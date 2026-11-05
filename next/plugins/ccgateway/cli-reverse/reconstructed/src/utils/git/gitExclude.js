@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。.git/info/exclude 追加。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hnzqng4j.js (3), chunk-kxdxf2f6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2g3amcsc.js (3), chunk-75adsf9v.js (3)
  * attribution: placement 5, sole-consumer 1
  */
 import { join, dirname, basename } from "path";
@@ -25,17 +25,17 @@ import { findGitRoot } from "../git.js";
 import { resolveGitDirs } from "./gitDirResolution.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-kxdxf2f6.js:663-704 placement
+//@ chunk-2g3amcsc.js:663-704 placement
 var TENGU_MOONLIT_LOCKET_2 = "tengu_moonlit_locket";
 var TENGU_MOONLIT_LOCKET = 1048576;
-//@ chunk-kxdxf2f6.js:704-4708 placement
+//@ chunk-2g3amcsc.js:704-4708 placement
 /**
  * 向 .git/info/exclude 追加条目（避免把 Claude 产生的文件纳入版本控制）。
  */
 async function appendGitExclude(commonDir, appendBlock) {
   let infoDir = join(commonDir, "info");
   let excludePath = join(infoDir, "exclude");
-  let flagWithOverride = readFlagWithOverride(TENGU_MOONLIT_LOCKET_2, {
+  let posixAtEnabled = readFlagWithOverride(TENGU_MOONLIT_LOCKET_2, {
     safe: true,
   });
   let isWindows = getPlatform() === "windows";
@@ -45,7 +45,7 @@ async function appendGitExclude(commonDir, appendBlock) {
   let excludeFd;
   try {
     let appendFlags = constants.O_RDWR | constants.O_APPEND | platformNoFollowFlags() | READ_LIMITS;
-    let posixFsAt = isWindows || !flagWithOverride ? undefined : globalThis.Bun?.ant?.posixFsAt;
+    let posixFsAt = isWindows || !posixAtEnabled ? undefined : globalThis.Bun?.ant?.posixFsAt;
     let posixFsAt_2 =
       typeof posixFsAt?.openat === "function" &&
       typeof posixFsAt.mkdirat === "function" &&
@@ -85,7 +85,7 @@ async function appendGitExclude(commonDir, appendBlock) {
       }
     } else {
       let realCommonDir = null;
-      if (flagWithOverride && isWindows) {
+      if (posixAtEnabled && isWindows) {
         let [realCommonDirPath, realParentDir] = await Promise.all([
           realpathNativeAsync(commonDir),
           realpathNativeAsync(dirname(commonDir)),
@@ -115,7 +115,7 @@ async function appendGitExclude(commonDir, appendBlock) {
           kind: "skipped",
           reason: "its parent folder is a link or not a folder",
         };
-      if (flagWithOverride && isSentinelInode(infoStats.ino))
+      if (posixAtEnabled && isSentinelInode(infoStats.ino))
         return {
           kind: "skipped",
           reason:
@@ -221,13 +221,13 @@ async function appendGitExclude(commonDir, appendBlock) {
         kind: "skipped",
         reason: "it is not a regular file",
       };
-    if (flagWithOverride && isSentinelInode(fdStats.ino))
+    if (posixAtEnabled && isSentinelInode(fdStats.ino))
       return {
         kind: "skipped",
         reason:
           "this drive gives files no id, so Claude Code cannot confirm it is writing to the file it checked",
       };
-    if ((flagWithOverride || isWindows) && (pathStats.dev !== fdStats.dev || pathStats.ino !== fdStats.ino))
+    if ((posixAtEnabled || isWindows) && (pathStats.dev !== fdStats.dev || pathStats.ino !== fdStats.ino))
       return {
         kind: "skipped",
         reason: "it was replaced or removed while Claude Code was opening it",
@@ -242,7 +242,7 @@ async function appendGitExclude(commonDir, appendBlock) {
         kind: "skipped",
         reason: "it is larger than 1 MiB",
       };
-    if (flagWithOverride && infoStats !== undefined) {
+    if (posixAtEnabled && infoStats !== undefined) {
       let infoStatsAfter = await lstat(infoDir, {
         bigint: true,
       });
@@ -299,11 +299,11 @@ async function appendGitExclude(commonDir, appendBlock) {
     ]).catch(() => {});
   }
 }
-//@ chunk-kxdxf2f6.js:4708-4747 placement
+//@ chunk-2g3amcsc.js:4708-4747 placement
 function samePrintablePath(actualPath, expectedPath) {
   return actualPath !== null && actualPath === expectedPath;
 }
-//@ chunk-hnzqng4j.js:1370-1732 placement
+//@ chunk-75adsf9v.js:1371-1733 placement
 /**
  * Claude Code 在 .claude/ 下写入的运行时文件的 git 忽略规则、标记行与完整规则块。
  */
@@ -322,7 +322,7 @@ var RUNTIME_EXCLUDE_PATTERNS = [
 var RUNTIME_EXCLUDE_MARKER = "# claude-code-runtime";
 var RUNTIME_EXCLUDE_BLOCK = [RUNTIME_EXCLUDE_MARKER, ...RUNTIME_EXCLUDE_PATTERNS, ""].join(`
 `);
-//@ chunk-hnzqng4j.js:1732-2869 placement
+//@ chunk-75adsf9v.js:1733-2870 placement
 /**
  * 确保 Claude Code 在 .claude/ 下写的运行时文件被 git 忽略：每个目录只做一次，向公共 git 目录的 info/exclude 追加带标记的规则块（已有标记则跳过）；新路径会先确认 .git 归属与 HEAD/objects 存在，否则记录警告。
  */
@@ -387,7 +387,7 @@ async function ensureClaudeRuntimeFilesExcluded(cwd) {
     logForDebugging(`ensureClaudeRuntimeFilesExcluded: ${error}`);
   }
 }
-//@ chunk-hnzqng4j.js:2869-3042 sole-consumer
+//@ chunk-75adsf9v.js:2870-3043 sole-consumer
 function warnExcludeSkipped(excludePath, reason) {
   logForDebugging(
     `Not adding ignore rules for the files Claude Code writes under .claude/ to ${excludePath}: ${reason}. Those files may show as untracked in git status.`,
@@ -396,4 +396,4 @@ function warnExcludeSkipped(excludePath, reason) {
     },
   );
 }
-export { appendGitExclude, ensureClaudeRuntimeFilesExcluded };
+export { ensureClaudeRuntimeFilesExcluded, appendGitExclude };

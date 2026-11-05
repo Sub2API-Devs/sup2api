@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：可聚焦的纵向容器组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1yvyqkfy.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9mrp5per.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
 
-//@ chunk-1yvyqkfy.js:296-701 placement
+//@ chunk-9mrp5per.js:296-701 placement
 function FocusColumn(props) {
   let $ = useMemoCache(8);
   let { onKeyDown, onPaste, flexDirection, gap, tabIndex, autoFocus, children } = props;

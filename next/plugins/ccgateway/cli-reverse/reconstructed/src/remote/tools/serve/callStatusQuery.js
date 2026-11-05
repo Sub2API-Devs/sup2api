@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：调用状态查询的说明文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (11)
  * attribution: placement 11
  */
 import { clipText, ANTHROPIC_REMOTETOOLEXECUTION } from "../protocolSchemas.js";
@@ -19,7 +19,7 @@ import {
 } from "../servedCallLog.js";
 import { withdrawnRequestMessage } from "../../../services/remoteTools/hostRefusals.js";
 
-//@ chunk-tr0s0d0k.js:6396-6588 placement
+//@ chunk-6d2p9h2d.js:6642-6834 placement
 function withdrawnEnvelope({ target, callId, reason, message }) {
   let clippedMessage = clipText(message);
   return {
@@ -40,7 +40,7 @@ function withdrawnEnvelope({ target, callId, reason, message }) {
     ],
   };
 }
-//@ chunk-tr0s0d0k.js:6588-6836 placement
+//@ chunk-6d2p9h2d.js:6834-7083 placement
 function failedEnvelope(target, facts, code, message, options = {}) {
   let clippedMessage = clipText(message);
   return {
@@ -67,11 +67,11 @@ function failedEnvelope(target, facts, code, message, options = {}) {
     ],
   };
 }
-//@ chunk-tr0s0d0k.js:6836-6908 placement
+//@ chunk-6d2p9h2d.js:7083-7155 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-tr0s0d0k.js:6908-7485 placement
+//@ chunk-6d2p9h2d.js:7155-7732 placement
 function isSessionDenial(record) {
   if (record?.envelope.outcome === "completed") {
     let { disposition } = record.envelope;
@@ -105,7 +105,7 @@ function isSessionDenial(record) {
       }),
   };
 }
-//@ chunk-tr0s0d0k.js:7485-7986 placement
+//@ chunk-6d2p9h2d.js:7732-8233 placement
 function describeLateArrival(name, summary) {
   if (summary.state === "failed" && summary.code === DISOWNED) {
     let sliced = new Date(summary.servedAt).toISOString().slice(11, 19);
@@ -117,7 +117,7 @@ function describeLateArrival(name, summary) {
     ? `This request was already answered on ${name}: nothing was run for it (${describeCallState(summary)}).`
     : `This call was already delivered to ${name} (${describeCallState(summary)}) \u2014 it was not run again.`;
 }
-//@ chunk-tr0s0d0k.js:7986-9018 placement
+//@ chunk-6d2p9h2d.js:8233-9265 placement
 function describeCallState(summary) {
   let sliced = new Date(summary.servedAt).toISOString().slice(11, 19);
   switch (summary.state) {
@@ -147,7 +147,7 @@ function describeCallState(summary) {
       }
   }
 }
-//@ chunk-tr0s0d0k.js:9018-9305 placement
+//@ chunk-6d2p9h2d.js:9265-9552 placement
 function rebindEnvelopeCallId(record, callId) {
   let { envelope } = record;
   if (envelope.call_id === callId) return record;
@@ -177,7 +177,7 @@ function rebindEnvelopeCallId(record, callId) {
     },
   };
 }
-//@ chunk-tr0s0d0k.js:9305-9473 placement
+//@ chunk-6d2p9h2d.js:9552-9720 placement
 function markReplayed(record, servedAt) {
   let { envelope } = record;
   switch (envelope.outcome) {
@@ -196,7 +196,7 @@ function markReplayed(record, servedAt) {
       return record;
   }
 }
-//@ chunk-tr0s0d0k.js:9473-10107 placement
+//@ chunk-6d2p9h2d.js:9720-10354 placement
 function callStillRunningText({ target, callId, state, sinceMs, hostEpoch, outputTail }) {
   let max = Math.max(0, Math.round(sinceMs / 1000));
   let text =
@@ -226,7 +226,7 @@ function callStillRunningText({ target, callId, state, sinceMs, hostEpoch, outpu
     ],
   };
 }
-//@ chunk-tr0s0d0k.js:10107-10604 placement
+//@ chunk-6d2p9h2d.js:10354-10851 placement
 function noCallRecordText({ target, callId, hostEpoch }) {
   let message =
     hostEpoch === undefined
@@ -252,7 +252,7 @@ function noCallRecordText({ target, callId, hostEpoch }) {
     ],
   };
 }
-//@ chunk-tr0s0d0k.js:10604-10966 placement
+//@ chunk-6d2p9h2d.js:10851-11213 placement
 function envelopeFromRecord(target, callId, summary) {
   if (summary.state === "failed" && summary.code === "withdrawn" && summary.endedAs !== undefined)
     return withdrawnEnvelope({
@@ -287,6 +287,7 @@ function envelopeFromRecord(target, callId, summary) {
 }
 export {
   isSessionDenial,
+  withdrawnEnvelope,
   failedEnvelope,
   rebindEnvelopeCallId,
   envelopeFromRecord,
@@ -294,5 +295,4 @@ export {
   callStillRunningText,
   markReplayed,
   isPlainObject,
-  withdrawnEnvelope,
 };

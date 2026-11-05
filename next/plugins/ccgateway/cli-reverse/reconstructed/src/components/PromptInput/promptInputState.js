@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。输入框状态管理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (14)
- * attribution: placement 14
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (15)
+ * attribution: placement 14, layout 1
  */
 import {
   init_react_production,
@@ -32,6 +32,7 @@ import { useResetReached } from "../rateLimit/quotaAutoResume.js";
 import { useKillRing, topOfKillRing } from "../../utils/killRing.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useInputClock } from "../../ink/components/Input.js";
+import { sessionStore } from "../../screens/repl/storeHooks.js";
 import { useFooterAwareMessageActions } from "../CoordinatorAgentStatus.js";
 import { endDrawnOffer, takeDrawnOffer } from "../../utils/newerModelOffer.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
@@ -54,12 +55,27 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { getTotalOutputTokens } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:922318-922322 placement
+//@ chunk-czq1j3j2.js:492725-492812 placement
+var noopUnsubscribeFactory = () => () => {};
+var LOOP_WAKEUP_CANCELLED = "loop-wakeup-cancelled";
+var LOOP_WAKEUP_CANCELLED_TEXT = "Pending wakeup cancelled";
+var SAVED_MODEL_SUCCESSOR_DRAW_MS = 1000;
+//@ chunk-czq1j3j2.js:898196-898200 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:922318", () => {
+deferInit("chunk-czq1j3j2.js:898196", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:922322-922709 placement
+//@ chunk-czq1j3j2.js:908798-908802 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:908798", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:953761-953765 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:953761", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:955227-955614 placement
 function useLeftArrowGesture({ gesture, turn, transcript, onDetachToCaller }) {
   let isLoading = useStoreSelector(turn, (state) => state.isLoading);
   let isExternalLoading = useStoreSelector(turn, (state) => state.isExternalLoading);
@@ -92,7 +108,7 @@ function useLeftArrowGesture({ gesture, turn, transcript, onDetachToCaller }) {
     ],
   );
 }
-//@ chunk-18hwfzwa.js:922709-922827 placement
+//@ chunk-czq1j3j2.js:955614-955732 placement
 function touchPlanModeUse(state, nowMs) {
   if (state.lastPlanModeUse !== undefined && nowMs - state.lastPlanModeUse < 86400000) return state;
   return {
@@ -100,12 +116,7 @@ function touchPlanModeUse(state, nowMs) {
     lastPlanModeUse: nowMs,
   };
 }
-//@ chunk-18hwfzwa.js:922827-922831 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:922827", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:922831-923004 placement
+//@ chunk-czq1j3j2.js:955736-955909 placement
 function useFastModeCooldownActive() {
   let [resetAt, setResetAt] = useState(getFastModeCooldownResetAt);
   useEffect(() => {
@@ -122,31 +133,33 @@ function useFastModeCooldownActive() {
   }, [resetReached]);
   return isFastModeEnabled() && getFastModeCooldownResetAt() !== null && !resetReached;
 }
-//@ chunk-18hwfzwa.js:923004-923085 placement
+//@ chunk-czq1j3j2.js:955909-955990 placement
 function getFastModeCooldownResetAt() {
   let runtimeState = fastModeState.runtimeState;
   return runtimeState.status === "cooldown" ? runtimeState.resetAt : null;
 }
-//@ chunk-18hwfzwa.js:923085-923098 placement
-var SAVED_MODEL_SUCCESSOR_DRAW_MS = 1000;
-//@ chunk-18hwfzwa.js:923098-923488 placement
+//@ chunk-czq1j3j2.js:955990-956003 layout
+var SAVED_MODEL_OFFER_MS = 1000;
+//@ chunk-czq1j3j2.js:956003-956438 placement
 function useSavedModelSuccessorKey(deps) {
   let killRing = useKillRing();
   let { storageV5 } = useTheme_2();
   let inputClock = useInputClock();
+  let sessionStoreRef = sessionStore();
   useFooterAwareMessageActions(
     {
       "chat:defaultToNewerModel": () => {
+        if (sessionStoreRef.getState().value !== "") return false;
         if (topOfKillRing(killRing.state) !== "") {
           endDrawnOffer();
           return false;
         }
-        if (takeDrawnOffer(inputClock, SAVED_MODEL_SUCCESSOR_DRAW_MS)) return;
+        if (takeDrawnOffer(inputClock, SAVED_MODEL_OFFER_MS)) return;
         let savedModelSuccessorDrawnAt = announcementState().savedModelSuccessorDrawnAt;
         let successor =
           isModelSuccessorNoticeActive() &&
           savedModelSuccessorDrawnAt !== null &&
-          !isWithinRecentInput(inputClock, savedModelSuccessorDrawnAt, SAVED_MODEL_SUCCESSOR_DRAW_MS)
+          !isWithinRecentInput(inputClock, savedModelSuccessorDrawnAt, SAVED_MODEL_OFFER_MS)
             ? savedModelSuccessor()
             : undefined;
         if (!successor) return false;
@@ -163,12 +176,7 @@ function useSavedModelSuccessorKey(deps) {
     deps,
   );
 }
-//@ chunk-18hwfzwa.js:923488-923492 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:923488", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:923492-923761 placement
+//@ chunk-czq1j3j2.js:956442-956711 placement
 /**
  * 判断切换 effort 时是否需要显示提示：分别对当前模型与运行时实际模型检查是否满足提示条件。
  */
@@ -190,16 +198,16 @@ function shouldShowEffortNotice(notice) {
     ),
   );
 }
-//@ chunk-18hwfzwa.js:923761-923804 placement
-var MAX_DEFAULT_TRUNCATE_LINES; // deferred: uses PANE_PADDING (../design-system/Pane.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-czq1j3j2.js:956711-956754 placement
+var MAX_DEFAULT_TRUNCATE_LINES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var max;
 var MIN_TRUNCATE_WIDTH;
-deferInit("chunk-18hwfzwa.js:923761", () => {
+deferInit("chunk-czq1j3j2.js:956711", () => {
   MAX_DEFAULT_TRUNCATE_LINES = 3;
   max = Math.max(2 * PANE_PADDING, 2 * (PANE_WIDTH_RESERVE + PANE_PADDING_X));
   MIN_TRUNCATE_WIDTH = 20;
 });
-//@ chunk-18hwfzwa.js:923804-924103 placement
+//@ chunk-czq1j3j2.js:956754-957053 placement
 function truncateLines(text, columns, maxLines = MAX_DEFAULT_TRUNCATE_LINES + 1) {
   let max_2 = Math.max(MIN_TRUNCATE_WIDTH, columns - max);
   let mapped = text
@@ -225,25 +233,29 @@ function truncateLines(text, columns, maxLines = MAX_DEFAULT_TRUNCATE_LINES + 1)
 \u2026 (+${mapped.length - keepCount} more lines)`
   );
 }
-//@ chunk-18hwfzwa.js:924103-924168 placement
+//@ chunk-czq1j3j2.js:957053-957118 placement
 function markCacheMissAcked(state) {
   return {
     ...state,
     cacheMissAckedAtOutputTokens: getTotalOutputTokens(),
   };
 }
-//@ chunk-18hwfzwa.js:924168-924178 placement
+//@ chunk-czq1j3j2.js:957118-957128 placement
 var MODEL_EFFORT_REASON_MAX_LINES = 6;
 export {
+  MAX_DEFAULT_TRUNCATE_LINES,
+  truncateLines,
+  MIN_TRUNCATE_WIDTH,
   max,
   useLeftArrowGesture,
   touchPlanModeUse,
   useSavedModelSuccessorKey,
   useFastModeCooldownActive,
+  noopUnsubscribeFactory,
+  LOOP_WAKEUP_CANCELLED,
+  LOOP_WAKEUP_CANCELLED_TEXT,
+  SAVED_MODEL_SUCCESSOR_DRAW_MS,
   markCacheMissAcked,
-  truncateLines,
   MODEL_EFFORT_REASON_MAX_LINES,
   shouldShowEffortNotice,
-  MAX_DEFAULT_TRUNCATE_LINES,
-  MIN_TRUNCATE_WIDTH,
 };

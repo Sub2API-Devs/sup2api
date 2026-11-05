@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：切换模型前后的 Pre/PostModelSwitch 钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (23)
  * attribution: placement 23
  */
 import { randomUUID } from "crypto";
@@ -41,16 +41,17 @@ import { HOOK_STARTED_GRACE_MS } from "../hooks/hookEvents.js";
 import { logForDebugging } from "../debug.js";
 import { StreamClosedAbortError } from "../errors.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { logFeatureSad, hookFeature } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3423115-3423158 placement
+//@ chunk-5xgkngpb.js:3511705-3511748 placement
 /**
  * 取允许在 runs_turns 场景选择的模型。
  */
 function allowedPickModel(model) {
   return resolveAllowedModelPick(model, "runs_turns");
 }
-//@ chunk-e6aww6q8.js:3423158-3423370 placement
+//@ chunk-5xgkngpb.js:3511748-3511960 placement
 function resolveAllowedModelPick(model, mode) {
   if (model == null) return null;
   if (isUnservedFamilySpelling(model)) return null;
@@ -63,7 +64,7 @@ function resolveAllowedModelPick(model, mode) {
   if (allowed === null && mode === "runs_turns" && keepsHonoredModelOnCachedDeny(model)) return model;
   return stepDownRestrictedFamilyAliasPick(model);
 }
-//@ chunk-e6aww6q8.js:3423370-3423628 placement
+//@ chunk-5xgkngpb.js:3511960-3512218 placement
 /**
  * 计算模型切换的目标：与当前相同或解析后相同时返回 null。
  */
@@ -76,11 +77,11 @@ function getModelSwitchTarget(mainLoopModelForSession, model) {
   let baseModel = setting === null ? getDefaultMainLoopModel() : parseUserSpecifiedModel(setting);
   return parseUserSpecifiedModel(sessionPick).toLowerCase() === baseModel.toLowerCase() ? null : sessionPick;
 }
-//@ chunk-e6aww6q8.js:3423628-3423715 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-5xgkngpb.js:3512218-3512305 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel(state) {
   return getModelSwitchTarget(state.mainLoopModelForSession, state.mainLoopModel) ?? state.mainLoopModel;
 }
-//@ chunk-e6aww6q8.js:3423715-3423815 placement
+//@ chunk-5xgkngpb.js:3512305-3512405 placement
 /**
  * 解析实际生效的模型（计划模式下取计划模式的组成模型）。
  */
@@ -92,22 +93,22 @@ function resolveEffectiveModel(modelSetting, mode) {
   }
   return parseUserSpecifiedModel(setting);
 }
-//@ chunk-e6aww6q8.js:3423815-3423897 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-5xgkngpb.js:3512405-3512487 placement (2.1.88 match: useMainLoopModel, 1)
 function useMainLoopModel_2(state) {
   return allowedPickModel(state.mainLoopModelForSession) ?? allowedPickModel(state.mainLoopModel) ?? null;
 }
-//@ chunk-e6aww6q8.js:3423897-3423960 placement
+//@ chunk-5xgkngpb.js:3512487-3512550 placement
 /**
  * 按当前权限模式计算实际生效的主循环模型。
  */
 function effectiveModelForContext(state) {
   return resolveEffectiveModel(useMainLoopModel_2(state), state.toolPermissionContext.mode);
 }
-//@ chunk-e6aww6q8.js:3423960-3424024 placement
+//@ chunk-5xgkngpb.js:3512550-3512614 placement
 function isModeDependentSetting(setting) {
   return setting !== null && isModeDependentModelSetting(strip1mSuffix(setting.trim().toLowerCase()));
 }
-//@ chunk-e6aww6q8.js:3424024-3424109 placement
+//@ chunk-5xgkngpb.js:3512614-3512701 placement
 /**
  * 判断是否有 PreModelSwitch 钩子需要运行（插件钩子可能未注册时按有处理）。
  */
@@ -115,7 +116,7 @@ function hasPreModelSwitchHook(session) {
   if (pluginHooksMayBeUnregistered()) return true;
   return hasHookForEvent("PreModelSwitch", sessionHooksRegistrySlot.of(session).registry, session.id);
 }
-//@ chunk-e6aww6q8.js:3424109-3425659 placement
+//@ chunk-5xgkngpb.js:3512701-3514266 placement
 /**
  * 切换模型前运行 PreModelSwitch 钩子，钩子可阻止切换。
  */
@@ -203,23 +204,23 @@ async function runPreModelSwitchHooks(session, change, options = {}) {
     messages,
   };
 }
-//@ chunk-e6aww6q8.js:3425659-3425681 placement
+//@ chunk-5xgkngpb.js:3514266-3514288 placement
 class PendingSwitchSource {
   next = undefined;
 }
-//@ chunk-e6aww6q8.js:3425681-3425709 placement
+//@ chunk-5xgkngpb.js:3514288-3514316 placement
 var pendingSwitchSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3425681", () => {
+deferInit("chunk-5xgkngpb.js:3514288", () => {
   pendingSwitchSlot = new SessionRootSlot(() => new PendingSwitchSource());
 });
-//@ chunk-e6aww6q8.js:3425709-3425772 placement
+//@ chunk-5xgkngpb.js:3514316-3514379 placement
 function markPendingSwitch(session, source, requestedModel) {
   pendingSwitchSlot.of(session).next = {
     source,
     requestedModel,
   };
 }
-//@ chunk-e6aww6q8.js:3425772-3425851 placement
+//@ chunk-5xgkngpb.js:3514379-3514458 placement
 /**
  * 若生效模型会变化，记录本次切换的来源与目标。
  */
@@ -230,7 +231,7 @@ function recordSwitchIfChanged(session, state, requestedModel, source) {
   )
     markPendingSwitch(session, source, requestedModel);
 }
-//@ chunk-e6aww6q8.js:3425851-3425952 placement
+//@ chunk-5xgkngpb.js:3514458-3514559 placement
 /**
  * 取出并清除下一次模型切换的来源（默认 auto）。
  */
@@ -243,32 +244,33 @@ function takePendingSwitchSource(session) {
   slot.next = undefined;
   return next;
 }
-//@ chunk-e6aww6q8.js:3425952-3426004 placement
+//@ chunk-5xgkngpb.js:3514559-3514627 placement
 class PostSwitchState {
   pending = [];
   landedOn = null;
   inFlight = new Set();
+  mayStart = undefined;
 }
-//@ chunk-e6aww6q8.js:3426004-3426032 placement
+//@ chunk-5xgkngpb.js:3514627-3514655 placement
 /**
  * 会话级的"等待运行 PostModelSwitch"槽。
  */
 var postSwitchSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3426004", () => {
+deferInit("chunk-5xgkngpb.js:3514627", () => {
   postSwitchSlot = new SessionRootSlot(() => new PostSwitchState());
 });
-//@ chunk-e6aww6q8.js:3426032-3427430 placement
+//@ chunk-5xgkngpb.js:3514655-3516252 placement
 /**
  * 切换模型后运行 PostModelSwitch 钩子。
  */
 function runPostModelSwitchHooks(session, change, options = {}) {
   let slot = postSwitchSlot.of(session);
-  let sessionId = session.id;
+  let id = session.id;
   slot.landedOn = {
-    sessionId,
+    sessionId: id,
     toModel: change.toModel,
   };
-  let run = (async () => {
+  let runHooksOnce = async () => {
     await pendingPluginHookRegistration();
     let unknownCause = (await pluginHooksUnknownCause(false)) ?? (await failedPluginHookRegistration());
     if (unknownCause !== undefined)
@@ -325,24 +327,36 @@ function runPostModelSwitchHooks(session, change, options = {}) {
     }
     if (contexts.length > 0 || messages.length > 0)
       slot.pending.push({
-        sessionId,
+        sessionId: id,
         toModel: change.toModel,
         contexts,
         messages,
       });
-  })()
-    .catch((error) => {
-      logForDebugging(`PostModelSwitch hooks failed: ${String(error)}`, {
-        level: "error",
+  };
+  let startHooksRun = () => {
+    let run = runHooksOnce()
+      .catch((error) => {
+        logForDebugging(`PostModelSwitch hooks failed: ${String(error)}`, {
+          level: "error",
+        });
+      })
+      .finally(() => {
+        slot.inFlight.delete(run);
       });
-    })
-    .finally(() => {
-      slot.inFlight.delete(run);
-    });
-  slot.inFlight.add(run);
-  return run;
+    slot.inFlight.add(run);
+    return run;
+  };
+  if (slot.mayStart === undefined) return startHooksRun();
+  return slot.mayStart().then((holdReleased) => {
+    if (holdReleased && session.id === id) return startHooksRun();
+    logFeatureSad(
+      hookFeature("PostModelSwitch"),
+      holdReleased ? "held_conversation_left" : "held_never_started",
+    );
+    return;
+  });
 }
-//@ chunk-e6aww6q8.js:3427980-3428236 placement
+//@ chunk-5xgkngpb.js:3516802-3517058 placement
 function collectPreSwitchHookMessages(message, messages) {
   if (message?.type !== "attachment") return;
   let attachment = message.attachment;
@@ -352,20 +366,20 @@ function collectPreSwitchHookMessages(message, messages) {
     messages.push(`PreModelSwitch hook ${attachment.hookName} failed${trimmed ? `: ${trimmed}` : ""}`);
   }
 }
-//@ chunk-e6aww6q8.js:3428236-3428279 placement
+//@ chunk-5xgkngpb.js:3517058-3517101 placement
 class SwitchSerializer {
   tail = Promise.resolve();
   pending = 0;
 }
-//@ chunk-e6aww6q8.js:3428279-3428306 placement
+//@ chunk-5xgkngpb.js:3517101-3517128 placement
 /**
  * 会话级的模型切换串行化状态。
  */
 var switchSerializerSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3428279", () => {
+deferInit("chunk-5xgkngpb.js:3517101", () => {
   switchSerializerSlot = new SessionRootSlot(() => new SwitchSerializer());
 });
-//@ chunk-e6aww6q8.js:3428306-3428433 placement
+//@ chunk-5xgkngpb.js:3517128-3517255 placement
 /**
  * 把模型切换操作串行化执行，并维护待处理计数。
  */
@@ -383,30 +397,30 @@ function serializeModelSwitch(session, fn) {
   );
   return settled;
 }
-//@ chunk-e6aww6q8.js:3428433-3428473 placement
+//@ chunk-5xgkngpb.js:3517255-3517295 placement
 /**
  * 会话级的钩子注册表槽（默认空）。
  */
 var sessionHooksRegistrySlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3428433", () => {
+deferInit("chunk-5xgkngpb.js:3517255", () => {
   sessionHooksRegistrySlot = new SessionRootSlot(() => ({
     registry: undefined,
   }));
 });
 export {
-  postSwitchSlot,
-  serializeModelSwitch,
-  recordSwitchIfChanged,
-  effectiveModelForContext,
-  useMainLoopModel,
-  useMainLoopModel_2,
-  hasPreModelSwitchHook,
-  getModelSwitchTarget,
   sessionHooksRegistrySlot,
+  recordSwitchIfChanged,
   switchSerializerSlot,
+  hasPreModelSwitchHook,
+  serializeModelSwitch,
+  useMainLoopModel_2,
+  postSwitchSlot,
   takePendingSwitchSource,
+  effectiveModelForContext,
   runPostModelSwitchHooks,
+  getModelSwitchTarget,
+  useMainLoopModel,
+  allowedPickModel,
   runPreModelSwitchHooks,
   resolveEffectiveModel,
-  allowedPickModel,
 };

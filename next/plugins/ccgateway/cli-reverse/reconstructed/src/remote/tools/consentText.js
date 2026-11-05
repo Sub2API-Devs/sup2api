@@ -3,13 +3,13 @@
  *
  * 远程工具（云会话在本机运行命令）同意文案（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-s61vbvea.js:537057-549986 placement
+//@ chunk-7jxyna5q.js:454163-467328 placement
 /**
  * 让云会话在本机运行命令的同意文案表（无人值守、自动模式等）
  */
@@ -100,9 +100,9 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
   "repository_trust.prompt.unbound":
     "This terminal is not the computer this cloud session is bound to, so an answer given here cannot prove which device it came from. Answer on a device that can: claude.ai on the web, the desktop app or the mobile app.",
   "repository_trust.prompt.not_shown_here":
-    "This cloud session is asking whether you trust what is attached to it, but the question cannot be shown in full here. Answer it in claude.ai on the web, the desktop app or the mobile app; the session waits until you do (esc stops its turn).",
+    "Open claude.ai or the desktop or mobile app and say whether you trust what's attached to this session. The question can't be shown in full here. The session waits; esc stops this turn.",
   "repository_trust.prompt.answer_elsewhere"(askUrl) {
-    return `This cloud session is asking whether you trust what is attached to it. A yes given here would not count, because an answer sent from here cannot prove which device it came from. Answer on a trusted device, at ${askUrl} or in the desktop or mobile app; the session waits until you do (esc stops its turn).`;
+    return `Open ${askUrl} or the desktop or mobile app and say whether you trust what's attached to this session. A yes here doesn't count. The session waits for your answer.`;
   },
   "repository_trust.folder_waits.required":
     "Before this session can use a folder on your computer, it needs you to confirm you trust what is attached to it. It asks next.",
@@ -123,6 +123,8 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
   "forwarding_off.reason.disabled_switch_off":
     "running tools there is not turned on for this session's cloud environment",
   "forwarding_off.reason.disabled_flag_off": "running tools there is not enabled for this account",
+  "forwarding_off.reason.disabled_device_policy":
+    "this session cannot confirm that it is limited to trusted devices",
   "forwarding_off.reason.not_ready":
     "it has not been able to check whether running tools there is enabled for this account",
   "forwarding_off.retracted":
@@ -133,6 +135,10 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
   forwarding_off_for_now(reasonText) {
     return `The user's computer has connected to this cloud session, but this session cannot run tools on it yet, because ${reasonText}. If that changes, the computer's tools are listed for you. Until then, do the work in this session's own cloud environment and do not describe this environment as their computer. When the user asks for something on their computer, tell them plainly that this session cannot reach it yet and why, that there is nothing to change on their computer, and that a new session may help if it stays this way.`;
   },
+  "serving_off.computer_too_old":
+    "Local tools are off: Claude on this computer is too old for this cloud session. Update the Claude app or Claude Code, then open this session again.",
+  "serving_off.session_too_old":
+    "Local tools are off: this cloud session's Claude Code is too old for this computer. Start a new session.",
   announce_unverified(detailText) {
     return `The cloud session did not accept the device proof on this machine's requests, so commands meant for this machine are not routed here and the session uses its own environment instead \u2014 ${detailText}.`;
   },

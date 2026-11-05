@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。ShareOnboardingGuide 工具名与提示词（上传 ONBOARDING.md 并返回分享链接）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3h9nvmn3.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3a9s57ey.js (1)
  * attribution: placement 1
  */
-//@ chunk-3h9nvmn3.js:1238-1727 placement
+//@ chunk-3a9s57ey.js:1237-1726 placement
 var SHAREONBOARDINGGUIDE = "ShareOnboardingGuide";
 var SHARE_ONBOARDING_GUIDE_PROMPT = `Upload the ONBOARDING.md in the current directory and return a share link teammates can open in Claude Code. Call this after the user has confirmed the final content.
 

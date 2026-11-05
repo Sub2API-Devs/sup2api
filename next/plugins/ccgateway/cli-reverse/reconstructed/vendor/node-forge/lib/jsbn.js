@@ -1,14 +1,14 @@
 /**
  * node-forge/lib/jsbn.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 
-//@ chunk-fq0cr76a.js:92952-112817 cjs-fingerprint
+//@ chunk-qg41pqt6.js:92904-112783 cjs-fingerprint
 var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   cjsModule.exports = forge.jsbn = forge.jsbn || {};
@@ -114,16 +114,16 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     r.fromInt(i);
     return r;
   }
-  function bnpFromString(s_2, b_2) {
+  function bnpFromString(s_2, b) {
     var k;
-    if (b_2 == 16) k = 4;
-    else if (b_2 == 8) k = 3;
-    else if (b_2 == 256) k = 8;
-    else if (b_2 == 2) k = 1;
-    else if (b_2 == 32) k = 5;
-    else if (b_2 == 4) k = 2;
+    if (b == 16) k = 4;
+    else if (b == 8) k = 3;
+    else if (b == 256) k = 8;
+    else if (b == 2) k = 1;
+    else if (b == 32) k = 5;
+    else if (b == 4) k = 2;
     else {
-      this.fromRadix(s_2, b_2);
+      this.fromRadix(s_2, b);
       return;
     }
     this.t = 0;
@@ -157,15 +157,15 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     var c = this.s & this.DM;
     while (this.t > 0 && this.data[this.t - 1] == c) --this.t;
   }
-  function bnToString(b_2) {
-    if (this.s < 0) return "-" + this.negate().toString(b_2);
+  function bnToString(b) {
+    if (this.s < 0) return "-" + this.negate().toString(b);
     var k;
-    if (b_2 == 16) k = 4;
-    else if (b_2 == 8) k = 3;
-    else if (b_2 == 2) k = 1;
-    else if (b_2 == 32) k = 5;
-    else if (b_2 == 4) k = 2;
-    else return this.toRadix(b_2);
+    if (b == 16) k = 4;
+    else if (b == 8) k = 3;
+    else if (b == 2) k = 1;
+    else if (b == 32) k = 5;
+    else if (b == 4) k = 2;
+    else return this.toRadix(b);
     var km = (1 << k) - 1;
     var d;
     var m = false;
@@ -346,12 +346,12 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     r_2.s = 0;
     r_2.clamp();
   }
-  function bnpDivRemTo(m, q_2, remainder) {
+  function bnpDivRemTo(m, q, remainder) {
     var pm = m.abs();
     if (pm.t <= 0) return;
     var pt = this.abs();
     if (pt.t < pm.t) {
-      if (q_2 != null) q_2.fromInt(0);
+      if (q != null) q.fromInt(0);
       if (remainder != null) this.copyTo(remainder);
       return;
     }
@@ -376,7 +376,7 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     var e = 1 << this.F2;
     var i = remainder.t;
     var j = i - ys;
-    var t = q_2 == null ? nbi() : q_2;
+    var t = q == null ? nbi() : q;
     shiftedModulus.dlShiftTo(j, t);
     if (remainder.compareTo(t) >= 0) {
       remainder.data[remainder.t++] = 1;
@@ -396,9 +396,9 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
         while (remainder.data[i] < --qd) remainder.subTo(t, remainder);
       }
     }
-    if (q_2 != null) {
-      remainder.drShiftTo(ys, q_2);
-      if (ts != ms) BigInteger.ZERO.subTo(q_2, q_2);
+    if (q != null) {
+      remainder.drShiftTo(ys, q);
+      if (ts != ms) BigInteger.ZERO.subTo(q, q);
     }
     remainder.t = ys;
     remainder.clamp();
@@ -576,27 +576,27 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     else if (this.t <= 0 || (this.t == 1 && this.data[0] <= 0)) return 0;
     else return 1;
   }
-  function bnpToRadix(b_2) {
-    if (b_2 == null) b_2 = 10;
-    if (this.signum() == 0 || b_2 < 2 || b_2 > 36) return "0";
-    var cs = this.chunkSize(b_2);
-    var a = Math.pow(b_2, cs);
+  function bnpToRadix(b) {
+    if (b == null) b = 10;
+    if (this.signum() == 0 || b < 2 || b > 36) return "0";
+    var cs = this.chunkSize(b);
+    var a = Math.pow(b, cs);
     var d = nbv(a);
     var y_2 = nbi();
     var z = nbi();
     var r = "";
     this.divRemTo(d, y_2, z);
     while (y_2.signum() > 0) {
-      r = (a + z.intValue()).toString(b_2).substr(1) + r;
+      r = (a + z.intValue()).toString(b).substr(1) + r;
       y_2.divRemTo(d, y_2, z);
     }
-    return z.intValue().toString(b_2) + r;
+    return z.intValue().toString(b) + r;
   }
-  function bnpFromRadix(s_2, b_2) {
+  function bnpFromRadix(s_2, b) {
     this.fromInt(0);
-    if (b_2 == null) b_2 = 10;
-    var cs = this.chunkSize(b_2);
-    var d = Math.pow(b_2, cs);
+    if (b == null) b = 10;
+    var cs = this.chunkSize(b);
+    var d = Math.pow(b, cs);
     var mi = false;
     var j = 0;
     var w_2 = 0;
@@ -606,7 +606,7 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
         if (s_2.charAt(i) == "-" && this.signum() == 0) mi = true;
         continue;
       }
-      w_2 = b_2 * w_2 + x;
+      w_2 = b * w_2 + x;
       if (++j >= cs) {
         this.dMultiply(d);
         this.dAddOffset(w_2, 0);
@@ -615,7 +615,7 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
       }
     }
     if (j > 0) {
-      this.dMultiply(Math.pow(b_2, j));
+      this.dMultiply(Math.pow(b, j));
       this.dAddOffset(w_2, 0);
     }
     if (mi) BigInteger.ZERO.subTo(this, this);
@@ -984,41 +984,41 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     var i = exponent.bitLength();
     var k;
     var r = nbv(1);
-    var z;
+    var z_2;
     if (i <= 0) return r;
     else if (i < 18) k = 1;
     else if (i < 48) k = 3;
     else if (i < 144) k = 4;
     else if (i < 768) k = 5;
     else k = 6;
-    if (i < 8) z = new Classic(m);
-    else if (m.isEven()) z = new Barrett(m);
-    else z = new Montgomery(m);
+    if (i < 8) z_2 = new Classic(m);
+    else if (m.isEven()) z_2 = new Barrett(m);
+    else z_2 = new Montgomery(m);
     var g = [];
     var n = 3;
     var k1 = k - 1;
     var km = (1 << k) - 1;
-    g[1] = z.convert(this);
+    g[1] = z_2.convert(this);
     if (k > 1) {
       var g2 = nbi();
-      z.sqrTo(g[1], g2);
+      z_2.sqrTo(g[1], g2);
       while (n <= km) {
         g[n] = nbi();
-        z.mulTo(g2, g[n - 2], g[n]);
+        z_2.mulTo(g2, g[n - 2], g[n]);
         n += 2;
       }
     }
-    var j = exponent.t - 1;
+    var j_2 = exponent.t - 1;
     var w;
     var is1 = true;
     var r2 = nbi();
     var t;
-    i = nbits(exponent.data[j]) - 1;
-    while (j >= 0) {
-      if (i >= k1) w = (exponent.data[j] >> (i - k1)) & km;
+    i = nbits(exponent.data[j_2]) - 1;
+    while (j_2 >= 0) {
+      if (i >= k1) w = (exponent.data[j_2] >> (i - k1)) & km;
       else {
-        w = (exponent.data[j] & ((1 << (i + 1)) - 1)) << (k1 - i);
-        if (j > 0) w |= exponent.data[j - 1] >> (this.DB + i - k1);
+        w = (exponent.data[j_2] & ((1 << (i + 1)) - 1)) << (k1 - i);
+        if (j_2 > 0) w |= exponent.data[j_2 - 1] >> (this.DB + i - k1);
       }
       n = k;
       while ((w & 1) == 0) {
@@ -1027,37 +1027,37 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
       }
       if ((i -= n) < 0) {
         i += this.DB;
-        --j;
+        --j_2;
       }
       if (is1) {
         g[w].copyTo(r);
         is1 = false;
       } else {
         while (n > 1) {
-          z.sqrTo(r, r2);
-          z.sqrTo(r2, r);
+          z_2.sqrTo(r, r2);
+          z_2.sqrTo(r2, r);
           n -= 2;
         }
-        if (n > 0) z.sqrTo(r, r2);
+        if (n > 0) z_2.sqrTo(r, r2);
         else {
           t = r;
           r = r2;
           r2 = t;
         }
-        z.mulTo(r2, g[w], r);
+        z_2.mulTo(r2, g[w], r);
       }
-      while (j >= 0 && (exponent.data[j] & (1 << i)) == 0) {
-        z.sqrTo(r, r2);
+      while (j_2 >= 0 && (exponent.data[j_2] & (1 << i)) == 0) {
+        z_2.sqrTo(r, r2);
         t = r;
         r = r2;
         r2 = t;
         if (--i < 0) {
           i = this.DB - 1;
-          --j;
+          --j_2;
         }
       }
     }
-    return z.revert(r);
+    return z_2.revert(r);
   }
   function bnGCD(a) {
     var x = this.s < 0 ? this.negate() : this.clone();
@@ -1105,20 +1105,20 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
     var u = m.clone();
     var v = this.clone();
     var a = nbv(1);
-    var b_2 = nbv(0);
+    var b = nbv(0);
     var c = nbv(0);
     var d = nbv(1);
     while (u.signum() != 0) {
       while (u.isEven()) {
         u.rShiftTo(1, u);
         if (ac) {
-          if (!a.isEven() || !b_2.isEven()) {
+          if (!a.isEven() || !b.isEven()) {
             a.addTo(this, a);
-            b_2.subTo(m, b_2);
+            b.subTo(m, b);
           }
           a.rShiftTo(1, a);
-        } else if (!b_2.isEven()) b_2.subTo(m, b_2);
-        b_2.rShiftTo(1, b_2);
+        } else if (!b.isEven()) b.subTo(m, b);
+        b.rShiftTo(1, b);
       }
       while (v.isEven()) {
         v.rShiftTo(1, v);
@@ -1134,11 +1134,11 @@ var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
       if (u.compareTo(v) >= 0) {
         u.subTo(v, u);
         if (ac) a.subTo(c, a);
-        b_2.subTo(d, b_2);
+        b.subTo(d, b);
       } else {
         v.subTo(u, v);
         if (ac) c.subTo(a, c);
-        d.subTo(b_2, d);
+        d.subTo(b, d);
       }
     }
     if (v.compareTo(BigInteger.ONE) != 0) return BigInteger.ZERO;

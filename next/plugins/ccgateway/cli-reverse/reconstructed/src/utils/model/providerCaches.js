@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：与提供商绑定的模型缓存（按会话的提供商状态、权益否决的过期、模型 beta 缓存）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v9tcvh08.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5m8x0kb6.js (9)
  * attribution: placement 9
  */
 import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
@@ -14,7 +14,7 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v9tcvh08.js:28064-28227 placement
+//@ chunk-5m8x0kb6.js:28099-28262 placement
 /**
  * 按任一提供商的模型 id 查找内置模型配置。
  */
@@ -25,19 +25,19 @@ function findModelConfigById(modelId) {
       if (typeof value === "string" && value.toLowerCase() === lower) return entry;
   return null;
 }
-//@ chunk-v9tcvh08.js:28227-28242 placement
+//@ chunk-5m8x0kb6.js:28262-28277 placement
 /**
  * 被推翻的权益拒绝记录的保留时长（10 分钟）。
  */
 var OVERTURNED_DENY_TTL_MS = 600000;
-//@ chunk-v9tcvh08.js:28242-28364 placement
+//@ chunk-5m8x0kb6.js:28277-28399 placement
 function pruneOverturnedEntitlementDenies() {
   let overturnedEntitlementDenies = getProviderState().providerCache.overturnedEntitlementDenies;
   let now = Date.now();
   for (let [key, at] of overturnedEntitlementDenies)
     if (now - at >= OVERTURNED_DENY_TTL_MS) overturnedEntitlementDenies.delete(key);
 }
-//@ chunk-v9tcvh08.js:28364-28706 placement
+//@ chunk-5m8x0kb6.js:28399-28741 placement
 function createProviderCache() {
   return {
     validatedModels: new Set(),
@@ -53,7 +53,7 @@ function createProviderCache() {
     preconnectFired: false,
   };
 }
-//@ chunk-v9tcvh08.js:28706-28836 placement
+//@ chunk-5m8x0kb6.js:28741-28871 placement
 function createModelBetaCaches() {
   return {
     allModelBetas: new Map(),
@@ -62,7 +62,7 @@ function createModelBetaCaches() {
     midConversationSystem: new Map(),
   };
 }
-//@ chunk-v9tcvh08.js:28836-28990 placement
+//@ chunk-5m8x0kb6.js:28871-29025 placement
 /**
  * 删除提供商缓存中满足条件的模型 beta 记录。
  */
@@ -71,7 +71,7 @@ function clearModelBetas(predicate) {
   for (let map of [...Object.values(betas), ...Object.values(betasCompiledOnly)])
     for (let key of [...map.keys()]) if (predicate(key)) map.delete(key);
 }
-//@ chunk-v9tcvh08.js:28990-30559 placement
+//@ chunk-5m8x0kb6.js:29025-30594 placement
 function createProviderState() {
   return {
     providerCache: createProviderCache(),
@@ -136,21 +136,21 @@ function createProviderState() {
     catalogDecision: undefined,
   };
 }
-//@ chunk-v9tcvh08.js:30559-30581 placement
+//@ chunk-5m8x0kb6.js:30594-30616 placement
 var providerStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-v9tcvh08.js:30559", () => {
+deferInit("chunk-5m8x0kb6.js:30594", () => {
   providerStateSlot = new SessionRootSlot(() => createProviderState());
 });
-//@ chunk-v9tcvh08.js:30581-30612 placement
+//@ chunk-5m8x0kb6.js:30616-30647 placement
 function getProviderState() {
   return providerStateSlot.of(getRootSession());
 }
 export {
-  getProviderState,
   findModelConfigById,
-  pruneOverturnedEntitlementDenies,
-  clearModelBetas,
-  OVERTURNED_DENY_TTL_MS,
+  getProviderState,
   createModelBetaCaches,
+  pruneOverturnedEntitlementDenies,
+  OVERTURNED_DENY_TTL_MS,
+  clearModelBetas,
   createProviderCache,
 };

@@ -3,10 +3,10 @@
  *
  * 加载插件钩子；判断函数钩子注册是否仍欠缺
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/loadPluginHooks.ts
- * pieces: chunk-czx62zen.js (1), chunk-e6aww6q8.js (44), chunk-pd0t5xas.js (5)
- * attribution: fingerprint 2, placement 16, facade-majority 15, layout 17
+ * pieces: chunk-5xgkngpb.js (44), chunk-r7hswen6.js (1), chunk-tt36reb3.js (5)
+ * attribution: placement 16, facade-majority 15, layout 17, fingerprint 2
  */
 import {
   getVouchedAdminPolicyTier,
@@ -59,7 +59,7 @@ import {
   rereadPluginsCacheOnly,
   clearPluginCache,
 } from "./pluginLoader.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { logForDebugging } from "../debug.js";
 import {
   reportPluginProblem,
@@ -96,6 +96,7 @@ import {
   holdForRolloutFlagAtStartup,
   loadLateWhenFlagTurnsOn,
   flagValueSourceLabel,
+  isHooksModulesGateDisabled,
   markWakeBoundPassed,
   isAutoModeGateOpen,
   updateWakeBound,
@@ -106,7 +107,6 @@ import {
   hooksModulesRefusalReason,
 } from "../../services/analytics/growthbookCredentials.js";
 import { PLUGIN_HOOKS_MODULES_GATE } from "../../services/analytics/growthbook.js";
-import { AUTO_MODE_ENABLED_DEFAULT } from "../permissions/permissionSetup.js";
 import { isSafeMode } from "../envUtils.js";
 import {
   hooksModulesGateFromPayload,
@@ -132,7 +132,7 @@ import {
 } from "../../plugins/functionHooks/devModsWatch.js";
 import { getPluginNameFromError as getPluginNameFromError_2 } from "../../commands/plugin/PluginSettings.js";
 import { pluginErrorText } from "../../types/plugin.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { fromNumber } from "../../services/analytics/safeMetadata.js";
 import { marketplaceSource } from "./pluginOptionsStorage.js";
@@ -142,7 +142,7 @@ import { subscribe_2 as subscribe_2_2 } from "../../components/permissions/AskUs
 import { NOT_RECORDED, pluginErrorSummary } from "./marketplaceNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-czx62zen.js:13462-14027 fingerprint (2.1.88 match: getPluginAffectingSettingsSnapshot, 0.609)
+//@ chunk-r7hswen6.js:13465-14030 fingerprint (2.1.88 match: getPluginAffectingSettingsSnapshot, 0.609)
 /**
  * 计算影响插件加载的设置指纹（enabledPlugins、extraKnownMarketplaces、策略等），用于判断缓存的插件加载结果是否过期。
  */
@@ -184,7 +184,7 @@ function getPluginAffectingSettingsSnapshot() {
       : adminAuthoredPolicySettings,
   };
 }
-//@ chunk-pd0t5xas.js:809-868 placement
+//@ chunk-tt36reb3.js:849-908 placement
 function policySettingsUnreadableSafe() {
   try {
     return policySettingsUnreadable();
@@ -193,7 +193,7 @@ function policySettingsUnreadableSafe() {
     return true;
   }
 }
-//@ chunk-pd0t5xas.js:868-1057 placement
+//@ chunk-tt36reb3.js:908-1097 placement
 /**
  * 内置插件只能由受信设置启用时返回其规范 id。
  */
@@ -205,12 +205,12 @@ function trustedOnlyBuiltinPluginId(pluginId) {
       return entry.enabledFromTrustedSettingsOnly === true ? `${name}@${BUILTIN}` : undefined;
   return;
 }
-//@ chunk-pd0t5xas.js:1057-1085 placement
+//@ chunk-tt36reb3.js:1097-1125 placement
 /**
  * hasTrustedOnlyBuiltinPlugin：该插件是否只能由受信设置启用。
  */
 var hasTrustedOnlyBuiltinPlugin = (pluginId) => trustedOnlyBuiltinPluginId(pluginId) !== undefined;
-//@ chunk-pd0t5xas.js:3923-4164 placement
+//@ chunk-tt36reb3.js:4261-4502 placement
 /**
  * 是否存在任何非内置插件（启用、带钩子、已加载模块、托管、内联、同步）。
  */
@@ -233,7 +233,7 @@ function hasNonBuiltinPluginSurface() {
     return true;
   }
 }
-//@ chunk-pd0t5xas.js:4164-4368 placement
+//@ chunk-tt36reb3.js:4502-4706 placement
 /**
  * 函数钩子注册是否还没完成：欠缺、进行中、原因未知、盲跑或托管设置不可读，且开关允许并存在非内置插件；出错保守返回 true。
  */
@@ -254,35 +254,35 @@ function isHookRegistrationPending() {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:607082-607217 placement
+//@ chunk-5xgkngpb.js:617166-617301 placement
 var HOOKS_JSON_TOP_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOOK_MATCHER_KEYS;
 var reportedHookKeyWarnings;
-deferInit("chunk-e6aww6q8.js:607082", () => {
+deferInit("chunk-5xgkngpb.js:617166", () => {
   HOOKS_JSON_TOP_KEYS = new Set(["$schema", "description", "hooks", "modules", "surface"]);
   HOOK_MATCHER_KEYS = new Set(["matcher", "hooks"]);
   reportedHookKeyWarnings = identity_2(new Set(), (set) => set.clear());
 });
-//@ chunk-e6aww6q8.js:607217-607352 placement
+//@ chunk-5xgkngpb.js:617301-617436 placement
 function unknownMatcherKeys(eventName, matcher, index) {
   let path = `hooks.${truncateListItem(eventName)}[${index}]`;
-  return (isPlainObject_5(matcher) ? Object.keys(matcher) : [])
+  return (isPlainObject_6(matcher) ? Object.keys(matcher) : [])
     .filter((key) => !HOOK_MATCHER_KEYS.has(key))
     .map((key) => `${quotedListItem(key)} in ${path}`);
 }
-//@ chunk-e6aww6q8.js:607352-607462 placement
+//@ chunk-5xgkngpb.js:617436-617546 placement
 var unknownHookEntryKeys = (hooks) =>
-  (isPlainObject_5(hooks) ? Object.entries(hooks) : []).flatMap(([eventName, matchers]) =>
+  (isPlainObject_6(hooks) ? Object.entries(hooks) : []).flatMap(([eventName, matchers]) =>
     (Array.isArray(matchers) ? matchers : []).flatMap((matcher, index) =>
       unknownMatcherKeys(eventName, matcher, index),
     ),
   );
-//@ chunk-e6aww6q8.js:607462-607773 placement
+//@ chunk-5xgkngpb.js:617546-617857 placement
 /**
  * 检查 hooks.json 顶层和各 matcher 条目的未知键；存在时按（插件, 路径, 消息）去重后记 warn 日志并调用 reportPluginProblem。
  */
 function warnUnknownHooksJsonKeys(pluginName, hooksFilePath, hooksJson) {
-  if (!isPlainObject_5(hooksJson)) return;
+  if (!isPlainObject_6(hooksJson)) return;
   let problems = [
     ...Object.keys(hooksJson)
       .filter((key) => !HOOKS_JSON_TOP_KEYS.has(key))
@@ -299,7 +299,7 @@ function warnUnknownHooksJsonKeys(pluginName, hooksFilePath, hooksJson) {
   });
   reportPluginProblem(pluginName, message);
 }
-//@ chunk-e6aww6q8.js:4162230-4162375 placement
+//@ chunk-5xgkngpb.js:4268571-4268716 placement
 /**
  * 排队一次“带 hooks 的设置合并”广播，未在广播中时串到队列尾。
  */
@@ -312,13 +312,13 @@ function queueHookedSettingsMerge(pluginId) {
   }
   return hookedMerge.pass;
 }
-//@ chunk-e6aww6q8.js:4162375-4162487 placement
+//@ chunk-5xgkngpb.js:4268716-4268828 placement
 function queueHookedMergeOnSettingsChange() {
   let hookedMerge = commandSyncNameState().hookedMerge;
   if (!hookedMerge.isAnnouncing) hookedMerge.unsettled = new Set();
   return queueHookedSettingsMerge("the settings changed");
 }
-//@ chunk-e6aww6q8.js:4162487-4163338 facade-majority (2.1.88 match: convertPluginHooksToMatchers, 0.9)
+//@ chunk-5xgkngpb.js:4268828-4269679 facade-majority (2.1.88 match: convertPluginHooksToMatchers, 0.9)
 /**
  * 把一个插件的 hooksConfig 转成 按事件名分组的 matcher 列表（每个 matcher 附带 pluginRoot、pluginId 等来源信息）。
  */
@@ -378,7 +378,7 @@ function convertPluginHooksToMatchers(plugin) {
   }
   return pluginMatchers;
 }
-//@ chunk-e6aww6q8.js:4163338-4163493 layout
+//@ chunk-5xgkngpb.js:4269679-4269834 layout
 function orderPluginsManagedFirst(plugins, managedIds) {
   let isManaged = (plugin) => managedIds?.has(plugin.source) === true;
   let isTrustedBuiltin = (plugin) => hasTrustedOnlyBuiltinPlugin(plugin.source);
@@ -388,7 +388,7 @@ function orderPluginsManagedFirst(plugins, managedIds) {
     ...plugins.filter((plugin) => !isManaged(plugin) && !isTrustedBuiltin(plugin)),
   ];
 }
-//@ chunk-e6aww6q8.js:4163493-4163666 layout
+//@ chunk-5xgkngpb.js:4269834-4270007 layout
 function orderPluginsForHookLoad(plugins, managedIds, isVouched) {
   let preferred = new Set(
     plugins.filter(
@@ -402,7 +402,7 @@ function orderPluginsForHookLoad(plugins, managedIds, isVouched) {
     ...filtered.filter((plugin) => !isVouched(plugin)),
   ];
 }
-//@ chunk-e6aww6q8.js:4163666-4163751 layout
+//@ chunk-5xgkngpb.js:4270007-4270092 layout
 function orderedPluginIdsMemoizer() {
   let memo = new Map();
   return (pluginId) => {
@@ -411,7 +411,7 @@ function orderedPluginIdsMemoizer() {
     return vouched;
   };
 }
-//@ chunk-e6aww6q8.js:4163751-4165246 facade-majority
+//@ chunk-5xgkngpb.js:4270092-4271587 facade-majority
 /**
  * 按托管策略 prependPlugins/appendPlugins 调整插件 hooks 的顺序，并记录被遮蔽的插件。
  */
@@ -482,12 +482,12 @@ function chainOrder(modules, managedIds, plan) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:4165246-4165326 layout
+//@ chunk-5xgkngpb.js:4271587-4271667 layout
 function firstMappedValue(map, keys) {
   let found = keys.find((key) => map.has(key));
   return found === undefined ? undefined : map.get(found);
 }
-//@ chunk-e6aww6q8.js:4165326-4166248 layout
+//@ chunk-5xgkngpb.js:4271667-4272591 layout
 function describeHooksModuleSkip(
   modules,
   { isManaged, hooksDisabled, managedOnly, allDisabled, organization, builtinsOnly, personsHeld },
@@ -540,10 +540,10 @@ function describeHooksModuleSkip(
     leftOut,
   };
 }
-//@ chunk-e6aww6q8.js:4166248-4166297 layout
+//@ chunk-5xgkngpb.js:4272591-4272640 layout
 var isNonBuiltinHooksModule = (loadedPlugin) =>
   loadedPlugin.modulePath !== undefined && !isBuiltinPluginId(loadedPlugin.source);
-//@ chunk-e6aww6q8.js:4166297-4166455 layout
+//@ chunk-5xgkngpb.js:4272640-4272798 layout
 function hasHooksModulesAwaitingFlag(modules, policy) {
   let allowedSet = filterManagedHookSources(getPolicyAllowedSet(), modules);
   return modules.some(
@@ -557,7 +557,7 @@ function hasHooksModulesAwaitingFlag(modules, policy) {
       }) === undefined,
   );
 }
-//@ chunk-e6aww6q8.js:4166455-4166570 layout
+//@ chunk-5xgkngpb.js:4272798-4272913 layout
 var hasLoadableOrgHooksModule = (modules, allowedSet) =>
   modules.some(
     (loadedPlugin) =>
@@ -569,14 +569,14 @@ var hasLoadableOrgHooksModule = (modules, allowedSet) =>
         personsHeld: false,
       }) === undefined,
   );
-//@ chunk-e6aww6q8.js:4166570-4166628 layout
+//@ chunk-5xgkngpb.js:4272913-4272971 layout
 async function loadLateHooksWhenFlagTurnsOn(modules, onLoad) {
   if (hasHooksModulesAwaitingFlag(modules, hookPolicySummaryState())) {
     await holdForRolloutFlagAtStartup();
     loadLateWhenFlagTurnsOn(onLoad);
   }
 }
-//@ chunk-e6aww6q8.js:4166628-4166953 layout
+//@ chunk-5xgkngpb.js:4272971-4273296 layout
 function areInstalledHooksModulesHeld(modules) {
   if (!areBuiltinOnlyHooksModules(modules)) return false;
   if (areHooksModulesAllowed()) {
@@ -592,12 +592,12 @@ function areInstalledHooksModulesHeld(modules) {
   );
   return true;
 }
-//@ chunk-e6aww6q8.js:4166953-4167518 layout
+//@ chunk-5xgkngpb.js:4273296-4273864 layout
 /**
  * 计算已安装 hooks 模块是否被挡住，并在注册表 hooksModulesSwitchRead 中记录：开关是否开、询问时间、是否欠载、 组织模块是否待加载、个人模块是否被排除。没有待处理项时清空该记录。
  */
 function recordHooksModulesSwitchRead(modules, modules_2, allowedSet) {
-  if (AUTO_MODE_ENABLED_DEFAULT()) markWakeBoundPassed();
+  if (isHooksModulesGateDisabled()) markWakeBoundPassed();
   let held = areInstalledHooksModulesHeld(modules);
   let awaitingFlag = hasHooksModulesAwaitingFlag(modules_2, hookPolicySummaryState());
   let gateOpen = isAutoModeGateOpen();
@@ -613,7 +613,7 @@ function recordHooksModulesSwitchRead(modules, modules_2, allowedSet) {
     modules.hooksModulesWakeBound !== "ahead" &&
     gateOpen &&
     areHooksModulesAllowed() &&
-    AUTO_MODE_ENABLED_DEFAULT() &&
+    isHooksModulesGateDisabled() &&
     getHookPolicyAnswerState() === "failed";
   let policyAllowedSet = filterManagedHookSources(getPolicyAllowedSet(), modules_2);
   let any = modules_2.some(
@@ -639,7 +639,7 @@ function recordHooksModulesSwitchRead(modules, modules_2, allowedSet) {
       : undefined;
   return held;
 }
-//@ chunk-e6aww6q8.js:4167518-4167619 layout
+//@ chunk-5xgkngpb.js:4273864-4273965 layout
 function markHooksModulesSwitchOff(pluginRegistry) {
   let hooksModulesSwitchRead = pluginRegistry.hooksModulesSwitchRead;
   if (hooksModulesSwitchRead !== undefined)
@@ -648,7 +648,7 @@ function markHooksModulesSwitchOff(pluginRegistry) {
       isOn: false,
     };
 }
-//@ chunk-e6aww6q8.js:4167619-4168043 layout
+//@ chunk-5xgkngpb.js:4273965-4274389 layout
 function hooksModulesLeftOutByName(modules, enabledModules, managedIds, leftOut) {
   if (!(
     !isSafeMode() &&
@@ -684,20 +684,20 @@ function hooksModulesLeftOutByName(modules, enabledModules, managedIds, leftOut)
       );
     });
 }
-//@ chunk-e6aww6q8.js:4168043-4168123 layout
+//@ chunk-5xgkngpb.js:4274389-4274469 layout
 function isHooksModulesFlagSettled() {
   let hookPolicyAnswerState = getHookPolicyAnswerState();
-  let overridden = hooksModulesGateFromPayload() || AUTO_MODE_ENABLED_DEFAULT();
+  let overridden = hooksModulesGateFromPayload() || isHooksModulesGateDisabled();
   return hookPolicyAnswerState === "answered" || (hookPolicyAnswerState === "failed" && overridden);
 }
-//@ chunk-e6aww6q8.js:4168123-4168169 facade-majority
+//@ chunk-5xgkngpb.js:4274469-4274515 facade-majority
 /**
  * 判断组织策略是否已经超出等待期仍未读到（策略读取开启且状态不是 pending），用于决定插件钩子是否先按无策略处理。
  */
 function isPolicyUnreadPastItsBounds() {
   return policySettingsUnreadable() && remoteSettingsAnswerState() !== "pending";
 }
-//@ chunk-e6aww6q8.js:4168169-4168276 layout
+//@ chunk-5xgkngpb.js:4274515-4274622 layout
 function markHooksModulesLoadOwed(pluginRegistry) {
   let hooksModulesSwitchRead = pluginRegistry.hooksModulesSwitchRead;
   if (hooksModulesSwitchRead !== undefined)
@@ -706,7 +706,7 @@ function markHooksModulesLoadOwed(pluginRegistry) {
       isLoadOwed: true,
     };
 }
-//@ chunk-e6aww6q8.js:4168276-4168497 layout
+//@ chunk-5xgkngpb.js:4274622-4274843 layout
 function isPersonModulesHeldWithLog(registry) {
   let held = shouldHoldPersonalModuleHooks(registry);
   if (held)
@@ -715,7 +715,7 @@ function isPersonModulesHeldWithLog(registry) {
     );
   return held;
 }
-//@ chunk-e6aww6q8.js:4168497-4168694 layout
+//@ chunk-5xgkngpb.js:4274843-4275040 layout
 function filterPluginsForSafeMode(enabled) {
   if (!isSafeMode()) return [...enabled];
   logForDebugging(
@@ -723,7 +723,7 @@ function filterPluginsForSafeMode(enabled) {
   );
   return enabled.filter((plugin) => isBuiltinPluginId(plugin.source));
 }
-//@ chunk-e6aww6q8.js:4168694-4169945 fingerprint (2.1.88 match: loadPluginHooks, 0.708)
+//@ chunk-5xgkngpb.js:4275040-4276299 fingerprint (2.1.88 match: loadPluginHooks, 0.708)
 /**
  * 汇总所有启用插件的 hooks：按事件把 matcher 合并（托管插件 prependPlugins/appendPlugins 排序），同一插件重复注册跳过，返回 {matchers, hooksLeftOut, loadedWithHooks}。
  */
@@ -803,7 +803,7 @@ function loadPluginHooks_2(plugins, managedIds) {
     loadedWithHooks,
   };
 }
-//@ chunk-e6aww6q8.js:4169945-4170370 facade-majority
+//@ chunk-5xgkngpb.js:4276299-4276724 facade-majority
 /**
  * 在创建 worktree 前预先注册插件的 WorktreeCreate/WorktreeRemove 钩子（只读缓存加载插件、安全模式过滤），若期间钩子状态已变化或已换过一轮则放弃；正式注册轮会替换它们。
  */
@@ -823,7 +823,7 @@ async function registerPluginWorktreeHooks(storageV5, credentials) {
     `Plugin hooks: registered ${matchers.WorktreeCreate.length} WorktreeCreate and ${matchers.WorktreeRemove.length} WorktreeRemove matcher(s) ahead of the worktree; the registration pass replaces them`,
   );
 }
-//@ chunk-e6aww6q8.js:4170370-4176991 facade-majority
+//@ chunk-5xgkngpb.js:4276724-4283358 facade-majority
 /**
  * 注册插件 hooks 的主入口：cacheOnly 加载启用插件（安全模式只留内置），loadPluginHooks 汇总 matcher 写入会话的已注册 hooks，加载 hooks 模块（需工作区信任与 tengu_plugin_hooks_modules 开关），收集 hook-load-failed/path 错误。结果 Promise 缓存在全局 hookRegistration。
  */
@@ -1087,13 +1087,13 @@ async function loadPluginHooks(storageV5, credentials) {
       let filtered_6 = filtered_5.filter(isBenignLoadError);
       let filtered_7 = filtered_5.filter((error) => !isBenignLoadError(error));
       if (filtered_6.length > 0) {
-        let joined = uniq(filtered_6.map((error) => error.type)).join(", ");
+        let joined = normalizeCaseForComparison_2(filtered_6.map((error) => error.type)).join(", ");
         logForDebugging(
           `Plugin hooks: ${filtered_6.length} managed plugin(s) not materialized on this machine (${joined}: the marketplace is not registered here, its catalog is not loaded, or the plugin was never fetched) \u2014 any hooks those plugins deliver are absent this session`,
         );
       }
       if (filtered_7.length > 0) {
-        let joined = uniq(filtered_7.map((error) => error.type)).join(", ");
+        let joined = normalizeCaseForComparison_2(filtered_7.map((error) => error.type)).join(", ");
         logForDebugging(
           `Plugin hooks: ${filtered_7.length} managed plugin load error(s) (${joined}) \u2014 any hooks those plugins deliver are absent this session`,
           {
@@ -1190,7 +1190,7 @@ async function loadPluginHooks(storageV5, credentials) {
   }
   await pluginRegistry.hookRegistration;
 }
-//@ chunk-e6aww6q8.js:4176991-4177124 facade-majority
+//@ chunk-5xgkngpb.js:4283358-4283491 facade-majority
 /**
  * 若有被推迟（owed）的插件钩子注册，执行一次 loadPluginHooks，失败只记日志。
  */
@@ -1200,7 +1200,7 @@ async function startOwedPluginHookRegistration(storageV5, credentials) {
     logForDebugging(`owed plugin hook registration: ${errorMessage(error)}`);
   });
 }
-//@ chunk-e6aww6q8.js:4177124-4177477 facade-majority
+//@ chunk-5xgkngpb.js:4283491-4283844 facade-majority
 /**
  * hooks 注册结果不确定时重试（可清插件缓存后重新注册）。
  */
@@ -1217,14 +1217,14 @@ async function pluginHooksUnknownCause(retry) {
   }
   return pluginRegistry.hooksUnknownCause;
 }
-//@ chunk-e6aww6q8.js:4177477-4177544 facade-majority
+//@ chunk-5xgkngpb.js:4283844-4283911 facade-majority
 /**
  * 等待进行中的 hooks 注册完成（忽略错误）。
  */
 function pendingPluginHookRegistration() {
   return getPluginRegistry().hookRegistrationInFlight?.catch(() => {});
 }
-//@ chunk-e6aww6q8.js:4177544-4177624 facade-majority
+//@ chunk-5xgkngpb.js:4283911-4283991 facade-majority
 /**
  * 返回 hooks 注册的错误信息（成功为 undefined）。
  */
@@ -1236,7 +1236,7 @@ async function failedPluginHookRegistration() {
     (error) => errorMessage(error),
   );
 }
-//@ chunk-e6aww6q8.js:4177624-4177732 facade-majority
+//@ chunk-5xgkngpb.js:4283991-4284099 facade-majority
 /**
  * hooks 注册是否仍在进行或结果未知。
  */
@@ -1247,14 +1247,14 @@ function pluginHooksMayBeUnregistered() {
     (pluginRegistry.hookRegistrationInFlight !== undefined || pluginRegistry.hooksUnknownCause !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:4177732-4177776 facade-majority
+//@ chunk-5xgkngpb.js:4284099-4284143 facade-majority
 /**
  * 清除缓存的 hooks 注册 Promise，下次调用会重新注册。
  */
 function clearPluginHookCache() {
   getPluginRegistry().hookRegistration = undefined;
 }
-//@ chunk-e6aww6q8.js:4177776-4177901 facade-majority
+//@ chunk-5xgkngpb.js:4284143-4284268 facade-majority
 /**
  * 工作区信任确认后，若有等待信任的钩子模块，重新加载插件钩子。
  */
@@ -1264,7 +1264,7 @@ function loadHooksModulesHeldForTrust(storageV5, credentials) {
       logForDebugging(`plugin hooks after workspace trust: ${errorMessage(error)}`);
     });
 }
-//@ chunk-e6aww6q8.js:4177901-4178267 facade-majority (2.1.88 match: pruneRemovedPluginHooks, 0.868)
+//@ chunk-5xgkngpb.js:4284268-4284634 facade-majority (2.1.88 match: pruneRemovedPluginHooks, 0.868)
 /**
  * 插件被移除/禁用后，从已注册 hooks 与已加载 hooks 模块中删掉它们的条目。
  */
@@ -1285,7 +1285,7 @@ async function pruneRemovedPluginHooks(storageV5, credentials) {
   }
   replaceRegisteredPluginHooks(survivors);
 }
-//@ chunk-e6aww6q8.js:4178267-4178430 facade-majority
+//@ chunk-5xgkngpb.js:4284634-4284797 facade-majority
 /**
  * 清理不再需要的插件钩子模块（hooks worker 模块）：保留已启用/已禁用插件及当前已加载模块对应的存储 id，其余 prune。
  */
@@ -1300,7 +1300,7 @@ async function standDownInstalledHooksModules() {
     ]),
   );
 }
-//@ chunk-e6aww6q8.js:4178430-4179640 facade-majority (2.1.88 match: setupPluginHookHotReload, 0.537)
+//@ chunk-5xgkngpb.js:4284797-4286010 facade-majority (2.1.88 match: setupPluginHookHotReload, 0.537)
 /**
  * 订阅设置变化：插件相关设置或 hooks 模块开关变化时重置并重新 registerPluginHooks（热加载），仅注册一次。
  */
@@ -1370,7 +1370,7 @@ function setupPluginHookHotReload(storageV5, credentials) {
     reloadWithNotice();
   }
 }
-//@ chunk-e6aww6q8.js:4179640-4179834 placement
+//@ chunk-5xgkngpb.js:4286010-4286204 placement
 function describePluginLoadFailure(error) {
   let message = `plugins could not be loaded (${errorMessage(error)})`;
   try {
@@ -1383,11 +1383,11 @@ function describePluginLoadFailure(error) {
     return message;
   }
 }
-//@ chunk-e6aww6q8.js:4179834-4179959 placement
+//@ chunk-5xgkngpb.js:4286204-4286329 placement
 function formatManagedPluginMissingMessage(pluginId) {
   return `managed plugin ${pluginId} registered hooks earlier this session and is missing from the latest plugin load`;
 }
-//@ chunk-e6aww6q8.js:4179959-4180181 placement (2.1.88 match: getPluginNameFromError, 0.841)
+//@ chunk-5xgkngpb.js:4286329-4286551 placement (2.1.88 match: getPluginNameFromError, 0.842)
 function getPluginNameFromError(error) {
   let names = [];
   if ("pluginId" in error && error.pluginId) names.push(nfcLower(error.pluginId));
@@ -1399,7 +1399,7 @@ function getPluginNameFromError(error) {
   }
   return names;
 }
-//@ chunk-e6aww6q8.js:4180181-4180565 placement
+//@ chunk-5xgkngpb.js:4286551-4286935 placement
 /**
  * 判断插件加载错误是否属于“预期内、无需提示”的类型：市场未找到（非注册表读失败）、被策略阻止、市场加载失败（非目录读失败）、未记录安装路径的缓存未命中。
  */
@@ -1421,7 +1421,7 @@ function isBenignLoadError(error) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:4180565-4180809 placement
+//@ chunk-5xgkngpb.js:4286935-4287179 placement
 function isMarketplaceLevelLoadError(error) {
   return (
     pluginErrorSummary(error) ||
@@ -1435,22 +1435,22 @@ function isMarketplaceLevelLoadError(error) {
 export {
   isHookRegistrationPending,
   hasNonBuiltinPluginSurface,
-  loadPluginHooks,
-  hasTrustedOnlyBuiltinPlugin,
-  trustedOnlyBuiltinPluginId,
-  chainOrder,
-  queueHookedSettingsMerge,
-  warnUnknownHooksJsonKeys,
   pruneRemovedPluginHooks,
-  getPluginAffectingSettingsSnapshot,
-  convertPluginHooksToMatchers,
-  pluginHooksMayBeUnregistered,
+  loadPluginHooks,
+  isPolicyUnreadPastItsBounds,
+  warnUnknownHooksJsonKeys,
   pendingPluginHookRegistration,
   pluginHooksUnknownCause,
   failedPluginHookRegistration,
+  queueHookedSettingsMerge,
   clearPluginHookCache,
+  hasTrustedOnlyBuiltinPlugin,
+  pluginHooksMayBeUnregistered,
+  getPluginAffectingSettingsSnapshot,
+  trustedOnlyBuiltinPluginId,
   setupPluginHookHotReload,
-  isPolicyUnreadPastItsBounds,
+  chainOrder,
+  convertPluginHooksToMatchers,
   loadHooksModulesHeldForTrust,
   registerPluginWorktreeHooks,
   standDownInstalledHooksModules,

@@ -3,37 +3,46 @@
  *
  * 2.1.316 新增：建立到 CCR TunnelService 的预览隧道（gRPC 流），管理重连、请求表与日志前缀 [bridge:preview-tunnel]；经预览隧道转发一次 HTTP 请求：只允许 POST/GET/DELETE，拒绝 CONNECT，剥离逐跳头等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e1rh8jg7.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-47vtqec3.js (38)
+ * attribution: placement 24, layout 14
  */
 import { request } from "http";
 import net from "net";
-import { decodeJwtPayload } from "./jwtUtils.js";
+import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
+import {
+  walkProtobufFields,
+  decodeBytes,
+  repeatedBytesField,
+  stringField,
+  varintField,
+  bytesField,
+  nestedTextField,
+} from "../services/api/narrationClassifier.js";
 import { logForDebugging } from "../utils/debug.js";
-import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
 import { errorMessage } from "../utils/errors.js";
 import { logEvent } from "../services/analytics/index.js";
+import { getJwtSessionId } from "./jwtUtils.js";
 import { getWebSocketProxyUrl } from "../utils/proxy.js";
 import { getWebSocketTLSOptions } from "../utils/mtls.js";
 
-//@ chunk-e1rh8jg7.js:428-494 placement
+//@ chunk-47vtqec3.js:490-556 placement
 var NO_BODY_HTTP_STATUSES = new Set([204, 205, 304]);
 var ALLOWED_TUNNEL_METHODS = new Set(["POST", "GET", "DELETE"]);
-//@ chunk-e1rh8jg7.js:494-542 placement
+//@ chunk-47vtqec3.js:556-604 placement
 function relayPreviewRequestNoRetry(port, path, request) {
   return relayPreviewRequestToHost("127.0.0.1", port, path, request);
 }
-//@ chunk-e1rh8jg7.js:542-593 placement
+//@ chunk-47vtqec3.js:604-655 placement
 function relayPreviewRequestWithRetry(port, path, request) {
   return relayPreviewRequest("127.0.0.1", port, path, request, true);
 }
-//@ chunk-e1rh8jg7.js:593-636 placement
+//@ chunk-47vtqec3.js:655-698 placement
 function relayPreviewRequestToHost(host, port, path, request) {
   return relayPreviewRequest(host, port, path, request, false);
 }
-//@ chunk-e1rh8jg7.js:636-1282 placement
+//@ chunk-47vtqec3.js:698-1344 placement
 /**
  * 经预览隧道转发一次 HTTP 请求：只允许 POST/GET/DELETE，拒绝 CONNECT，剥离逐跳头。
  */
@@ -70,7 +79,7 @@ function relayPreviewRequest(host, port, path, { method, headers, body, signal }
     tunnelRequest.end(requestBody);
   });
 }
-//@ chunk-e1rh8jg7.js:1282-1617 placement
+//@ chunk-47vtqec3.js:1344-1679 placement
 /**
  * 把隧道返回的原始响应（状态码、rawHeaders、body 流）组装成 fetch Response。
  */
@@ -88,7 +97,7 @@ function responseFromTunnelReply(reply) {
   if (bodyless) reply.resume();
   return response;
 }
-//@ chunk-e1rh8jg7.js:1617-1808 placement
+//@ chunk-47vtqec3.js:1679-1870 placement
 function asyncIterableToStream(iterable) {
   let iterator = iterable[Symbol.asyncIterator]();
   return new ReadableStream({
@@ -102,22 +111,303 @@ function asyncIterableToStream(iterable) {
     },
   });
 }
-//@ chunk-e1rh8jg7.js:1808-1950 placement
+//@ chunk-47vtqec3.js:1870-2090 layout
+function decodeJsonFrame(raw) {
+  let frame = jsonParse(raw);
+  if (typeof frame !== "object" || frame === null) return;
+  return {
+    ...frame,
+    httpRequest: frame.httpRequest && {
+      ...frame.httpRequest,
+      body: base64ToBuffer(frame.httpRequest.body),
+    },
+    wsMessage: frame.wsMessage && {
+      ...frame.wsMessage,
+      data: base64ToBuffer(frame.wsMessage.data),
+    },
+  };
+}
+//@ chunk-47vtqec3.js:2090-2359 layout
+function encodeJsonFrame(frame) {
+  if ("httpChunk" in frame) {
+    let data = Buffer.from(frame.httpChunk.data).toString("base64");
+    return jsonStringify({
+      httpChunk: {
+        ...frame.httpChunk,
+        data,
+      },
+    });
+  }
+  if ("wsMessage" in frame) {
+    let data = Buffer.from(frame.wsMessage.data).toString("base64");
+    return jsonStringify({
+      wsMessage: {
+        ...frame.wsMessage,
+        data,
+      },
+    });
+  }
+  return jsonStringify(frame);
+}
+//@ chunk-47vtqec3.js:2359-2524 layout
+function decodeProtoFrame(raw) {
+  let sessionId;
+  let payload = {};
+  return walkProtobufFields(raw, {
+    onBytes(field, bytes) {
+      if (field === 1) {
+        sessionId = decodeBytes(bytes);
+        return;
+      }
+      let decoder = FRAME_DECODERS[field];
+      if (decoder !== undefined && payload !== undefined) payload = decoder(bytes);
+    },
+  }) && payload !== undefined
+    ? {
+        sessionId,
+        ...payload,
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:2524-3513 layout
+function encodeProtoFrame(frame) {
+  if ("httpHeaders" in frame) {
+    let httpHeaders = frame.httpHeaders;
+    return Buffer.concat(
+      repeatedBytesField(1, [
+        ...stringField(1, httpHeaders.requestId),
+        ...varintField(2, httpHeaders.statusCode),
+        ...stringField(3, httpHeaders.statusText),
+        ...httpHeaders.headers.flatMap((header) =>
+          repeatedBytesField(4, [
+            ...stringField(1, header.name ?? ""),
+            ...stringField(2, header.value ?? ""),
+          ]),
+        ),
+        ...varintField(5, httpHeaders.sequenceNumber),
+      ]),
+    );
+  }
+  if ("httpChunk" in frame) {
+    let httpChunk = frame.httpChunk;
+    return Buffer.concat(
+      repeatedBytesField(2, [
+        ...stringField(1, httpChunk.requestId),
+        ...bytesField(2, httpChunk.data),
+        ...varintField(3, httpChunk.isFinal ? 1 : 0),
+        ...varintField(4, httpChunk.sequenceNumber),
+      ]),
+    );
+  }
+  if ("wsMessage" in frame) {
+    let wsMessage = frame.wsMessage;
+    return Buffer.concat(
+      repeatedBytesField(5, [
+        ...stringField(1, wsMessage.tunnelId),
+        ...bytesField(2, wsMessage.data),
+        ...varintField(3, wsMessage.isBinary ? 1 : 0),
+        ...varintField(4, wsMessage.sequenceNumber),
+      ]),
+    );
+  }
+  if ("wsClose" in frame) {
+    let wsClose = frame.wsClose;
+    return Buffer.concat(
+      repeatedBytesField(6, [
+        ...stringField(1, wsClose.tunnelId),
+        ...varintField(2, wsClose.code),
+        ...stringField(3, wsClose.reason),
+      ]),
+    );
+  }
+  if ("httpError" in frame) {
+    let { requestId, errorMessage } = frame.httpError;
+    return encodeIdMessage(3, requestId, errorMessage);
+  }
+  if ("wsOpened" in frame) {
+    let { tunnelId, protocol } = frame.wsOpened;
+    return encodeIdMessage(4, tunnelId, protocol);
+  }
+  if ("wsError" in frame) {
+    let { tunnelId, errorMessage } = frame.wsError;
+    return encodeIdMessage(7, tunnelId, errorMessage);
+  }
+  let { tunnelId, errorMessage } = frame.ptyError;
+  return encodeIdMessage(11, tunnelId, errorMessage);
+}
+//@ chunk-47vtqec3.js:3513-3552 layout
+var FRAME_DECODERS = {
+  2: decodeHttpRequest,
+  3: decodeHttpCancel,
+  4: decodeWsOpen,
+  5: decodeWsMessage,
+  6: decodeWsClose,
+  7: decodePtyOpen,
+};
+//@ chunk-47vtqec3.js:3552-3851 layout
+function decodeHttpRequest(buf) {
+  let headerBuffers = [];
+  let frame = {};
+  let ok = walkProtobufFields(buf, {
+    onVarint(field, port) {
+      if (field === 2) frame.port = port;
+    },
+    onBytes(field, bytes) {
+      switch (field) {
+        case 1:
+          frame.requestId = decodeBytes(bytes);
+          break;
+        case 3:
+          frame.method = decodeBytes(bytes);
+          break;
+        case 4:
+          frame.path = decodeBytes(bytes);
+          break;
+        case 5:
+          headerBuffers.push(bytes);
+          break;
+        case 6:
+          frame.body = bytes;
+          break;
+      }
+    },
+  });
+  frame.headers = decodeHeaderList(headerBuffers);
+  return ok && frame.headers !== undefined
+    ? {
+        httpRequest: frame,
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:3851-3924 layout
+function decodeHttpCancel(buf) {
+  return walkProtobufFields(buf, {})
+    ? {
+        httpCancel: {
+          requestId: nestedTextField(buf, 1),
+        },
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:3924-4210 layout
+function decodeWsOpen(buf) {
+  let headerBuffers = [];
+  let protocols = [];
+  let frame = {
+    protocols,
+  };
+  let ok = walkProtobufFields(buf, {
+    onVarint(field, port) {
+      if (field === 2) frame.port = port;
+    },
+    onBytes(field, bytes) {
+      switch (field) {
+        case 1:
+          frame.tunnelId = decodeBytes(bytes);
+          break;
+        case 3:
+          frame.path = decodeBytes(bytes);
+          break;
+        case 4:
+          headerBuffers.push(bytes);
+          break;
+        case 5:
+          protocols.push(decodeBytes(bytes));
+          break;
+      }
+    },
+  });
+  frame.headers = decodeHeaderList(headerBuffers);
+  return ok && frame.headers !== undefined
+    ? {
+        wsOpen: frame,
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:4210-4409 layout
+function decodeWsMessage(buf) {
+  let frame = {};
+  return walkProtobufFields(buf, {
+    onVarint(field, value) {
+      if (field === 3) frame.isBinary = value !== 0;
+      else if (field === 4) frame.sequenceNumber = value;
+    },
+    onBytes(field, bytes) {
+      if (field === 1) frame.tunnelId = decodeBytes(bytes);
+      else if (field === 2) frame.data = bytes;
+    },
+  })
+    ? {
+        wsMessage: frame,
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:4409-4572 layout
+function decodeWsClose(buf) {
+  let frame = {};
+  return walkProtobufFields(buf, {
+    onVarint(field, code) {
+      if (field === 2) frame.code = code;
+    },
+    onBytes(field, bytes) {
+      if (field === 1) frame.tunnelId = decodeBytes(bytes);
+      else if (field === 3) frame.reason = decodeBytes(bytes);
+    },
+  })
+    ? {
+        wsClose: frame,
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:4572-4641 layout
+function decodePtyOpen(buf) {
+  return walkProtobufFields(buf, {})
+    ? {
+        ptyOpen: {
+          tunnelId: nestedTextField(buf, 1),
+        },
+      }
+    : undefined;
+}
+//@ chunk-47vtqec3.js:4641-4739 layout
+function decodeHeaderList(buffers) {
+  return buffers.every((entry) => walkProtobufFields(entry, {}))
+    ? buffers.map((entry) => ({
+        name: nestedTextField(entry, 1),
+        value: nestedTextField(entry, 2),
+      }))
+    : undefined;
+}
+//@ chunk-47vtqec3.js:4739-4812 layout
+function encodeIdMessage(field, tunnelId, errorMessage) {
+  return Buffer.concat(
+    repeatedBytesField(field, [...stringField(1, tunnelId), ...stringField(2, errorMessage)]),
+  );
+}
+//@ chunk-47vtqec3.js:4812-4969 layout
+function base64ToBuffer(value) {
+  if (value !== undefined && typeof value !== "string")
+    throw TypeError("its body or data field is not a string");
+  return value === undefined ? undefined : Buffer.from(value, "base64");
+}
+//@ chunk-47vtqec3.js:4969-5154 placement
 var TUNNEL_PROXY_METHOD = "/anthropic.ccr.api.v1alpha2.tunnel.TunnelService/TunnelProxy";
 var RECONNECT_BASE_DELAY_MS = 1000;
 var RECONNECT_MAX_DELAY_MS = 30000;
 var MAX_RECONNECT_ATTEMPTS = 10;
 var CONNECT_TIMEOUT_MS = 5000;
+var MAX_BINARY_FAILURES = 2;
+var BINARY_CONTENT_TYPE = "application/proto; fallback=json";
 var REQUEST_TIMEOUT_MS = 1e4;
 var STREAM_WINDOW_MS = 30000;
 var IDLE_TIMEOUT_MS = 75000;
 var WINDOW_BYTE_BUDGET = 7168 * (STREAM_WINDOW_MS / 1000);
-//@ chunk-e1rh8jg7.js:1950-2072 placement
+//@ chunk-47vtqec3.js:5154-5276 placement
 function parseDecimalBytes(bytes) {
   let text = bytes instanceof Uint8Array ? Buffer.from(bytes).toString("latin1") : "";
   return /^\d{1,15}$/.test(text) ? Number(text) : -1;
 }
-//@ chunk-e1rh8jg7.js:2072-2288 placement
+//@ chunk-47vtqec3.js:5276-5492 placement
 var PREVIEW_TUNNEL_LIVENESS_WOULD_HAVE_FIRED = "preview_tunnel_liveness_would_have_fired";
 var TUNNEL_READ_CHUNK_BYTES = 32768;
 var TUNNEL_MAX_BUFFERED_BYTES = 4194304;
@@ -130,28 +420,15 @@ var SENSITIVE_HEADER_NAMES = new Set(["cookie", "authorization", "proxy-authoriz
 var TUNNEL_REQUEST_TIMEOUT_MS = 1e4;
 var MAX_TUNNEL_RECONNECT_ATTEMPTS = 8;
 var MAX_TUNNEL_HEADER_BYTES = 64;
-//@ chunk-e1rh8jg7.js:2288-2356 placement
+//@ chunk-47vtqec3.js:5492-5560 placement
 function tunnelProxyUrl(apiBaseUrl) {
   return apiBaseUrl.replace(/^http/, "ws").replace(/\/+$/, "") + TUNNEL_PROXY_METHOD;
 }
-//@ chunk-e1rh8jg7.js:2356-2520 placement
-function getTokenSessionId(accessToken, sessionId) {
-  let payload = decodeJwtPayload(accessToken);
-  if (
-    payload !== null &&
-    typeof payload === "object" &&
-    "session_id" in payload &&
-    typeof payload.session_id === "string" &&
-    payload.session_id.length > 0
-  )
-    return payload.session_id;
-  return sessionId;
-}
-//@ chunk-e1rh8jg7.js:2520-2656 placement
+//@ chunk-47vtqec3.js:5560-5696 placement
 var WRONG_SESSION_MESSAGE = "tunnel request does not name this session";
 var TOKEN_SESSION_MISMATCH_MESSAGE =
   "the newest token names another session than the one this tunnel was started for";
-//@ chunk-e1rh8jg7.js:2656-2832 placement
+//@ chunk-47vtqec3.js:5696-5872 placement
 function hasLoopbackHostHeader(headers, port) {
   if (!Array.isArray(headers)) return false;
   let filtered = headers.filter(
@@ -159,12 +436,12 @@ function hasLoopbackHostHeader(headers, port) {
   );
   return filtered.length === 1 && filtered[0].value === `127.0.0.1:${port}`;
 }
-//@ chunk-e1rh8jg7.js:2832-2920 placement
+//@ chunk-47vtqec3.js:5872-5960 placement
 function sameSessionTail(tokenSessionId, id) {
   let tailOf = (id) => id.slice(id.lastIndexOf("_") + 1);
   return tailOf(tokenSessionId) !== "" && tailOf(tokenSessionId) === tailOf(id);
 }
-//@ chunk-e1rh8jg7.js:2920-3187 placement
+//@ chunk-47vtqec3.js:5960-6227 placement
 function validateTunnelTarget(port, path, allowedPorts) {
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1024 || port > 65535)
     return `invalid port: ${port}`;
@@ -172,37 +449,37 @@ function validateTunnelTarget(port, path, allowedPorts) {
   if (typeof path !== "string" || !path.startsWith("/")) return "invalid path: must start with /";
   return null;
 }
-//@ chunk-e1rh8jg7.js:3187-3225 placement
+//@ chunk-47vtqec3.js:6227-6265 placement
 var RESERVED_WS_CLOSE_CODES = new Set([1004, 1005, 1006, 1015]);
-//@ chunk-e1rh8jg7.js:3225-3264 placement
+//@ chunk-47vtqec3.js:6265-6304 placement
 function cleanCloseReason(reason) {
   return replaceControlChars(reason ?? "").trim();
 }
-//@ chunk-e1rh8jg7.js:3264-3351 placement
+//@ chunk-47vtqec3.js:6304-6391 placement
 function isNoLivePreviewMessage(message) {
   return message.includes("does not have live preview enabled") || message.includes(TUNNEL_PREVIEW);
 }
-//@ chunk-e1rh8jg7.js:3351-3375 placement
+//@ chunk-47vtqec3.js:6391-6415 placement
 var TUNNEL_PREVIEW = "tunnel:preview";
-//@ chunk-e1rh8jg7.js:3375-3495 placement
+//@ chunk-47vtqec3.js:6415-6535 placement
 function replaceControlChars(text) {
   return text.replace(
     /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g,
     " ",
   );
 }
-//@ chunk-e1rh8jg7.js:3495-3581 placement
+//@ chunk-47vtqec3.js:6535-6621 placement
 function usableCloseCode(code) {
   if (typeof code !== "number" || code < 1000 || code > 4999 || RESERVED_WS_CLOSE_CODES.has(code))
     return 1000;
   return code;
 }
-//@ chunk-e1rh8jg7.js:3581-3656 placement
+//@ chunk-47vtqec3.js:6621-6696 placement
 function closeReasonWithinLimit(reason) {
   if (!reason) return "";
   return Buffer.byteLength(reason, "utf8") <= 123 ? reason : "";
 }
-//@ chunk-e1rh8jg7.js:3656-3898 placement
+//@ chunk-47vtqec3.js:6696-6938 placement
 function probeLocalPort(port) {
   return new Promise((resolve) => {
     let settled = false;
@@ -222,7 +499,7 @@ function probeLocalPort(port) {
     connection.once("timeout", () => finish(false));
   });
 }
-//@ chunk-e1rh8jg7.js:3898-15570 placement
+//@ chunk-47vtqec3.js:6938-19155 placement
 /**
  * 建立到 CCR TunnelService 的预览隧道（gRPC 流），管理重连、请求表与日志前缀 [bridge:preview-tunnel]。
  */
@@ -246,6 +523,7 @@ function createPreviewTunnel(options) {
   let wouldHaveFiredLogged = false;
   let consecutiveFailures = 0;
   let peerActive = false;
+  let text = false;
   let policyStopLogged = false;
   let inflightHttp = new Map();
   let wsTunnels = new Map();
@@ -255,9 +533,9 @@ function createPreviewTunnel(options) {
     });
   function sendFrame(frame) {
     let activeSocket = socket;
-    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) return;
+    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN || text === undefined) return;
     try {
-      let json = jsonStringify(frame);
+      let json = text ? encodeProtoFrame(frame) : encodeJsonFrame(frame);
       activeSocket.send(json);
       bytesSent += json.length;
     } catch (error) {
@@ -299,8 +577,8 @@ function createPreviewTunnel(options) {
     let port = 0;
     try {
       let rawBody =
-        httpRequest.body !== undefined && httpRequest.body !== ""
-          ? Buffer.from(httpRequest.body, "base64").toString("utf8")
+        httpRequest.body !== undefined && httpRequest.body.length > 0
+          ? Buffer.from(httpRequest.body).toString("utf8")
           : "{}";
       let parsed = jsonParse(rawBody);
       if (parsed !== null && typeof parsed.port === "number") port = parsed.port;
@@ -338,7 +616,7 @@ function createPreviewTunnel(options) {
     sendFrame({
       httpChunk: {
         requestId,
-        data: Buffer.from(resultLine, "utf8").toString("base64"),
+        data: Buffer.from(resultLine, "utf8"),
         isFinal: true,
         sequenceNumber: 1,
       },
@@ -386,10 +664,7 @@ function createPreviewTunnel(options) {
       headers.set("Host", `127.0.0.1:${port}`);
       if (port === options.toolServer?.port)
         headers.set("Authorization", `Bearer ${options.toolServer.authToken}`);
-      let body =
-        httpRequest.body !== undefined && httpRequest.body !== ""
-          ? Buffer.from(httpRequest.body, "base64")
-          : undefined;
+      let body = httpRequest.body !== undefined && httpRequest.body.length > 0 ? httpRequest.body : undefined;
       if (port === options.toolServer?.port)
         response = await relayPreviewRequestNoRetry(port, path, {
           method,
@@ -443,11 +718,10 @@ function createPreviewTunnel(options) {
           let read = await reader.read();
           if (read.value && read.value.length > 0)
             for (let offset = 0; offset < read.value.length; offset += TUNNEL_READ_CHUNK_BYTES) {
-              let chunk = read.value.subarray(offset, offset + TUNNEL_READ_CHUNK_BYTES);
               sendFrame({
                 httpChunk: {
                   requestId,
-                  data: Buffer.from(chunk).toString("base64"),
+                  data: read.value.subarray(offset, offset + TUNNEL_READ_CHUNK_BYTES),
                   isFinal: false,
                   sequenceNumber,
                 },
@@ -464,7 +738,7 @@ function createPreviewTunnel(options) {
       sendFrame({
         httpChunk: {
           requestId,
-          data: "",
+          data: new Uint8Array(0),
           isFinal: true,
           sequenceNumber,
         },
@@ -624,10 +898,10 @@ function createPreviewTunnel(options) {
       let dataB64;
       let isBinary;
       if (typeof event.data === "string") {
-        dataB64 = Buffer.from(event.data, "utf8").toString("base64");
+        dataB64 = Buffer.from(event.data, "utf8");
         isBinary = false;
       } else if (event.data instanceof ArrayBuffer) {
-        dataB64 = Buffer.from(event.data).toString("base64");
+        dataB64 = new Uint8Array(event.data);
         isBinary = true;
       } else {
         log(`ws tunnel ${tunnelId}: dropping unsupported message type`, "error");
@@ -678,7 +952,7 @@ function createPreviewTunnel(options) {
     let tunnel = wsTunnels.get(tunnelId);
     if (!tunnel || tunnel.sock.readyState !== WebSocket.OPEN) return;
     try {
-      let buffer = Buffer.from(wsMessage.data ?? "", "base64");
+      let buffer = Buffer.from(wsMessage.data ?? new Uint8Array(0));
       if (wsMessage.isBinary) tunnel.sock.send(buffer);
       else tunnel.sock.send(buffer.toString("utf8"));
     } catch (error) {
@@ -714,13 +988,18 @@ function createPreviewTunnel(options) {
   function handleRequest(raw) {
     let request;
     try {
-      request = jsonParse(raw);
+      request = typeof raw === "string" ? decodeJsonFrame(raw) : decodeProtoFrame(raw);
     } catch (error) {
       log(`failed to parse tunnel request: ${errorMessage(error)}`, "error");
       return;
     }
-    if (typeof request !== "object" || request === null) {
-      log("tunnel request is not an object", "error");
+    if (request === undefined) {
+      log(
+        typeof raw === "string"
+          ? "tunnel request is not an object"
+          : "dropped a tunnel request: its protobuf is malformed",
+        "error",
+      );
       return;
     }
     let enforceSession = options.toolServer !== undefined || options.refusesOtherSessions === true;
@@ -827,17 +1106,24 @@ function createPreviewTunnel(options) {
   function connect() {
     if (stopped) return;
     reconnectTimer = null;
-    let tokenSessionId = getTokenSessionId(accessToken, options.sessionId);
+    let tokenSessionId = getJwtSessionId(accessToken) ?? "";
     if (options.refusesOtherSessions === true && !sameSessionTail(tokenSessionId, options.sessionId)) {
       failPermanently(TOKEN_SESSION_MISMATCH_MESSAGE, "policy");
       return;
     }
-    sessionId = tokenSessionId;
+    sessionId = tokenSessionId || options.sessionId;
+    let binaryFrames =
+      options.toolServer?.asksForBinaryFrames === true && consecutiveFailures < MAX_BINARY_FAILURES;
+    if (options.toolServer?.asksForBinaryFrames === true && !binaryFrames)
+      log(`not asking for binary frames on this dial, after ${consecutiveFailures} failed dials in a row`);
     let headers = {
       Authorization: `Bearer ${accessToken}`,
       "x-session-id": sessionId,
       ...(options.toolServer && {
         "x-tunnel-peer": "tool-server",
+      }),
+      ...(binaryFrames && {
+        "Content-Type": BINARY_CONTENT_TYPE,
       }),
     };
     let newSocket;
@@ -860,6 +1146,7 @@ function createPreviewTunnel(options) {
       return;
     }
     socket = newSocket;
+    text = binaryFrames ? undefined : false;
     openTimer = setTimeout(
       (timedOutSocket) => {
         log("open timeout; retrying", "error");
@@ -964,8 +1251,18 @@ function createPreviewTunnel(options) {
     newSocket.onmessage = (event) => {
       lastPeerActivityAt = Date.now();
       peerActive = true;
-      let text = typeof event.data === "string" ? event.data : Buffer.from(event.data).toString("utf8");
-      handleRequest(text);
+      if (text === undefined) {
+        text = typeof event.data !== "string";
+        log(
+          text
+            ? "the relay is using binary frames, as asked"
+            : "the relay answered in JSON, so this connection speaks JSON: it did not grant binary frames, or a proxy dropped the Content-Type header",
+        );
+      }
+      if (typeof event.data === "string") handleRequest(event.data);
+      else if (text)
+        handleRequest(event.data instanceof Uint8Array ? event.data : new Uint8Array(event.data));
+      else handleRequest(Buffer.from(event.data).toString("utf8"));
     };
     newSocket.onerror = (event) => {
       log(

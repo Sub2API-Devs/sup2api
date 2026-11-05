@@ -3,9 +3,9 @@
  *
  * 从 Claude Desktop 导入 MCP 服务器配置的多选对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MCPServerDesktopImportDialog.tsx
- * pieces: chunk-h2rjy0z4.js (5)
+ * pieces: chunk-pvz3y4bf.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -34,29 +34,29 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { Byline } from "./design-system/Byline.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-h2rjy0z4.js:16185-16189 sole-consumer
+//@ chunk-pvz3y4bf.js:17428-17432 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h2rjy0z4.js:16185", () => {
+deferInit("chunk-pvz3y4bf.js:17428", () => {
   init_react_production();
 });
-//@ chunk-h2rjy0z4.js:16189-16193 sole-consumer
+//@ chunk-pvz3y4bf.js:17432-17436 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h2rjy0z4.js:16189", () => {
+deferInit("chunk-pvz3y4bf.js:17432", () => {
   init_react_production();
 });
-//@ chunk-h2rjy0z4.js:16193-16295 sole-consumer
+//@ chunk-pvz3y4bf.js:17436-17538 sole-consumer
 function logImportReadFailure(error) {
   logForDebugging(`Failed to read existing MCP configs for Desktop import: ${errorMessage(error)}`, {
     level: "error",
   });
 }
-//@ chunk-h2rjy0z4.js:16295-16328 affinity
+//@ chunk-pvz3y4bf.js:17538-17571 affinity
 function isNotNull_2(value) {
   return value !== null;
 }
-//@ chunk-h2rjy0z4.js:16328-20032 fingerprint (2.1.88 match: MCPServerDesktopImportDialog, 0.523)
+//@ chunk-pvz3y4bf.js:17571-21331 fingerprint (2.1.88 match: MCPServerDesktopImportDialog, 0.518)
 function MCPServerDesktopImportDialog(props) {
-  let $ = useMemoCache(39);
+  let $ = useMemoCache(40);
   let { servers, scope, onDone } = props;
   let keys = Object.keys(servers);
   let initialConfigs;
@@ -176,7 +176,7 @@ function MCPServerDesktopImportDialog(props) {
 ${color("error", theme)(errorMessage(error))}
 `);
       onDone();
-      gracefulShutdown();
+      gracefulShutdown(1);
     });
   };
   let finishImport = (result) => {
@@ -195,7 +195,7 @@ ${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
 `);
     });
     onDone();
-    gracefulShutdown();
+    gracefulShutdown(failures.length > 0 ? 1 : 0);
   };
   let onCancel = () => {
     finishImport({
@@ -214,21 +214,22 @@ ${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
   } else serverWord = $[13];
   const subtitle = `Found ${t8} MCP ${serverWord} in Claude Desktop.`;
   const color_2 = "success";
+  const isCancelActive = !isImporting;
   const hideInputGuide = true;
-  const collisionWarning =
+  const serversNoun =
     filtered.length > 0 &&
     jsxProd_default(Text, {
       color: "warning",
       children:
         "Note: Some servers already exist with the same name. If selected, they will be imported with a numbered suffix.",
     });
-  let introText;
+  let promptText;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    introText = jsxProd_default(Text, {
+    promptText = jsxProd_default(Text, {
       children: "Please select the servers you want to import:",
     });
-    $[14] = introText;
-  } else introText = $[14];
+    $[14] = promptText;
+  } else promptText = $[14];
   const ListComponent = OrderedListWithItem;
   const onSelect = (index) => {
     if (isImporting) {
@@ -276,9 +277,9 @@ ${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
     );
     $[15] = importItem;
   } else importItem = $[15];
-  let listElement;
+  let importRow;
   if ($[16] !== ListComponent || $[17] !== onSelect || $[18] !== onRowKeyDown || $[19] !== mapped) {
-    listElement = jsxProd_default_2(ListComponent, {
+    importRow = jsxProd_default_2(ListComponent, {
       onSelect,
       onRowKeyDown,
       children: [mapped, importItem],
@@ -287,67 +288,70 @@ ${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
     $[17] = onSelect;
     $[18] = onRowKeyDown;
     $[19] = mapped;
-    $[20] = listElement;
-  } else listElement = $[20];
+    $[20] = importRow;
+  } else importRow = $[20];
   let dialogElement;
   if (
     $[21] !== DialogComponent ||
     $[22] !== onCancel ||
     $[23] !== subtitle ||
-    $[24] !== collisionWarning ||
-    $[25] !== introText ||
-    $[26] !== listElement
+    $[24] !== isCancelActive ||
+    $[25] !== serversNoun ||
+    $[26] !== promptText ||
+    $[27] !== importRow
   ) {
     dialogElement = jsxProd_default_2(DialogComponent, {
       title,
       subtitle,
       color: color_2,
       onCancel,
+      isCancelActive,
       hideInputGuide,
-      children: [collisionWarning, introText, listElement],
+      children: [serversNoun, promptText, importRow],
     });
     $[21] = DialogComponent;
     $[22] = onCancel;
     $[23] = subtitle;
-    $[24] = collisionWarning;
-    $[25] = introText;
-    $[26] = listElement;
-    $[27] = dialogElement;
-  } else dialogElement = $[27];
+    $[24] = isCancelActive;
+    $[25] = serversNoun;
+    $[26] = promptText;
+    $[27] = importRow;
+    $[28] = dialogElement;
+  } else dialogElement = $[28];
   let spaceHint;
-  if ($[28] !== isScreenReaderEnabled) {
+  if ($[29] !== isScreenReaderEnabled) {
     spaceHint =
       !isScreenReaderEnabled &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "space",
         action: "toggle",
       });
-    $[28] = isScreenReaderEnabled;
-    $[29] = spaceHint;
-  } else spaceHint = $[29];
+    $[29] = isScreenReaderEnabled;
+    $[30] = spaceHint;
+  } else spaceHint = $[30];
   let enterHint;
-  if ($[30] !== isScreenReaderEnabled) {
+  if ($[31] !== isScreenReaderEnabled) {
     enterHint =
       !isScreenReaderEnabled &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "enter",
         action: "select",
       });
-    $[30] = isScreenReaderEnabled;
-    $[31] = enterHint;
-  } else enterHint = $[31];
+    $[31] = isScreenReaderEnabled;
+    $[32] = enterHint;
+  } else enterHint = $[32];
   let cancelHint;
-  if ($[32] === MEMO_CACHE_SENTINEL) {
+  if ($[33] === MEMO_CACHE_SENTINEL) {
     cancelHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Confirmation",
       fallback: "Esc",
       description: "cancel",
     });
-    $[32] = cancelHint;
-  } else cancelHint = $[32];
+    $[33] = cancelHint;
+  } else cancelHint = $[33];
   let hintBar;
-  if ($[33] !== spaceHint || $[34] !== enterHint) {
+  if ($[34] !== spaceHint || $[35] !== enterHint) {
     hintBar = jsxProd_default(Box, {
       paddingX: 1,
       children: jsxProd_default(Text, {
@@ -358,19 +362,19 @@ ${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
         }),
       }),
     });
-    $[33] = spaceHint;
-    $[34] = enterHint;
-    $[35] = hintBar;
-  } else hintBar = $[35];
+    $[34] = spaceHint;
+    $[35] = enterHint;
+    $[36] = hintBar;
+  } else hintBar = $[36];
   let content;
-  if ($[36] !== dialogElement || $[37] !== hintBar) {
+  if ($[37] !== dialogElement || $[38] !== hintBar) {
     content = jsxProd_default_2(Fragment, {
       children: [dialogElement, hintBar],
     });
-    $[36] = dialogElement;
-    $[37] = hintBar;
-    $[38] = content;
-  } else content = $[38];
+    $[37] = dialogElement;
+    $[38] = hintBar;
+    $[39] = content;
+  } else content = $[39];
   return content;
 }
 export { MCPServerDesktopImportDialog };

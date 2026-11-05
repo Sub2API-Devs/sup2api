@@ -3,10 +3,10 @@
  *
  * 普通（非 vim）文本输入：useTextInput + BaseTextInput，支持语音录音电平条。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TextInput.tsx
- * pieces: chunk-7p2hc4jn.js (1), chunk-81qqq1aq.js (4)
- * attribution: fingerprint 2, sole-consumer 2, affinity 1
+ * pieces: chunk-3t80v0fz.js (4), chunk-42wa4pww.js (1)
+ * attribution: sole-consumer 2, affinity 1, fingerprint 2
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme } from "./design-system/ThemeProvider.js";
@@ -25,29 +25,29 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { BaseTextInput } from "./BaseTextInput.js";
 import { Box } from "../ink/components/Text.js";
 
-//@ chunk-7p2hc4jn.js:50977-51058 fingerprint (2.1.88 match: BARS, 1)
+//@ chunk-42wa4pww.js:50977-51058 fingerprint (2.1.88 match: BARS, 1)
 var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
 var CURSOR_BLINK_ON_RATIO = 0.7;
 var CURSOR_BLINK_PERIOD = 1.8;
 var CURSOR_FADE_RATIO = 0.15;
-//@ chunk-81qqq1aq.js:7027-7064 sole-consumer
+//@ chunk-3t80v0fz.js:7030-7067 sole-consumer
 function selectVoiceState(appState) {
   return appState.voiceState;
 }
-//@ chunk-81qqq1aq.js:7064-7090 sole-consumer
+//@ chunk-3t80v0fz.js:7067-7093 sole-consumer
 function identity(value) {
   return value;
 }
-//@ chunk-81qqq1aq.js:7090-7116 affinity
+//@ chunk-3t80v0fz.js:7093-7119 affinity
 function identity_2(value) {
   return value;
 }
-//@ chunk-81qqq1aq.js:7116-10954 fingerprint (2.1.88 match: TextInput, 0.667)
+//@ chunk-3t80v0fz.js:7119-10845 fingerprint (2.1.88 match: TextInput, 0.658)
 /**
  * 普通输入框：调用 useTextInput，渲染 BaseTextInput；语音录音时显示电平条。
  */
 function TextInput(props) {
-  let $ = useMemoCache(59);
+  let $ = useMemoCache(58);
   let [theme] = useTheme();
   let isTerminalFocused = useTerminalFocus();
   let nativeCursorEnabled;
@@ -107,7 +107,6 @@ function TextInput(props) {
     disableCtrlCClear,
   } = props;
   const cursorChar = props.showCursor && !settings ? " " : "";
-  const highlightPastedText = props.highlightPastedText;
   let themeText;
   if ($[7] !== theme) {
     themeText = color("text", theme);
@@ -131,31 +130,30 @@ function TextInput(props) {
     $[20] !== props.focus ||
     $[21] !== props.getInputMode ||
     $[22] !== props.getPastedContents ||
-    $[23] !== props.highlightPastedText ||
-    $[24] !== props.historyOnClear ||
-    $[25] !== props.inlineGhostText ||
-    $[26] !== props.inputFilter ||
-    $[27] !== props.leadingPill ||
-    $[28] !== props.leftArrowConfirmHint ||
-    $[29] !== props.mask ||
-    $[30] !== props.maskWhole ||
-    $[31] !== props.maxVisibleLines ||
-    $[32] !== props.multiline ||
-    $[33] !== props.onChange ||
-    $[34] !== props.onChangeCursorOffset ||
-    $[35] !== props.onEscapeMessage ||
-    $[36] !== props.onExit ||
-    $[37] !== props.onExitMessage ||
-    $[38] !== props.onHistoryDown ||
-    $[39] !== props.onHistoryReset ||
-    $[40] !== props.onHistoryUp ||
-    $[41] !== props.onImagePaste ||
-    $[42] !== props.onLeftArrowOnEmpty ||
-    $[43] !== props.onSubmit ||
-    $[44] !== props.value ||
-    $[45] !== cursorChar ||
-    $[46] !== themeText ||
-    $[47] !== virtualTexts
+    $[23] !== props.historyOnClear ||
+    $[24] !== props.inlineGhostText ||
+    $[25] !== props.inputFilter ||
+    $[26] !== props.leadingPill ||
+    $[27] !== props.leftArrowConfirmHint ||
+    $[28] !== props.mask ||
+    $[29] !== props.maskWhole ||
+    $[30] !== props.maxVisibleLines ||
+    $[31] !== props.multiline ||
+    $[32] !== props.onChange ||
+    $[33] !== props.onChangeCursorOffset ||
+    $[34] !== props.onEscapeMessage ||
+    $[35] !== props.onExit ||
+    $[36] !== props.onExitMessage ||
+    $[37] !== props.onHistoryDown ||
+    $[38] !== props.onHistoryReset ||
+    $[39] !== props.onHistoryUp ||
+    $[40] !== props.onImagePaste ||
+    $[41] !== props.onLeftArrowOnEmpty ||
+    $[42] !== props.onSubmit ||
+    $[43] !== props.value ||
+    $[44] !== cursorChar ||
+    $[45] !== themeText ||
+    $[46] !== virtualTexts
   ) {
     inputOptions = {
       value,
@@ -179,7 +177,6 @@ function TextInput(props) {
       disableCtrlCClear,
       cursorChar,
       preserveTrailingWhitespace: settings,
-      highlightPastedText,
       invert: invert_2,
       themeText,
       columns: props.columns,
@@ -213,43 +210,42 @@ function TextInput(props) {
     $[20] = props.focus;
     $[21] = props.getInputMode;
     $[22] = props.getPastedContents;
-    $[23] = props.highlightPastedText;
-    $[24] = props.historyOnClear;
-    $[25] = props.inlineGhostText;
-    $[26] = props.inputFilter;
-    $[27] = props.leadingPill;
-    $[28] = props.leftArrowConfirmHint;
-    $[29] = props.mask;
-    $[30] = props.maskWhole;
-    $[31] = props.maxVisibleLines;
-    $[32] = props.multiline;
-    $[33] = props.onChange;
-    $[34] = props.onChangeCursorOffset;
-    $[35] = props.onEscapeMessage;
-    $[36] = props.onExit;
-    $[37] = props.onExitMessage;
-    $[38] = props.onHistoryDown;
-    $[39] = props.onHistoryReset;
-    $[40] = props.onHistoryUp;
-    $[41] = props.onImagePaste;
-    $[42] = props.onLeftArrowOnEmpty;
-    $[43] = props.onSubmit;
-    $[44] = props.value;
-    $[45] = cursorChar;
-    $[46] = themeText;
-    $[47] = virtualTexts;
-    $[48] = inputOptions;
-  } else inputOptions = $[48];
+    $[23] = props.historyOnClear;
+    $[24] = props.inlineGhostText;
+    $[25] = props.inputFilter;
+    $[26] = props.leadingPill;
+    $[27] = props.leftArrowConfirmHint;
+    $[28] = props.mask;
+    $[29] = props.maskWhole;
+    $[30] = props.maxVisibleLines;
+    $[31] = props.multiline;
+    $[32] = props.onChange;
+    $[33] = props.onChangeCursorOffset;
+    $[34] = props.onEscapeMessage;
+    $[35] = props.onExit;
+    $[36] = props.onExitMessage;
+    $[37] = props.onHistoryDown;
+    $[38] = props.onHistoryReset;
+    $[39] = props.onHistoryUp;
+    $[40] = props.onImagePaste;
+    $[41] = props.onLeftArrowOnEmpty;
+    $[42] = props.onSubmit;
+    $[43] = props.value;
+    $[44] = cursorChar;
+    $[45] = themeText;
+    $[46] = virtualTexts;
+    $[47] = inputOptions;
+  } else inputOptions = $[47];
   let inputState = useTextInput(inputOptions);
   const cursorCellPainted = voiceLevelCell != null;
   let children;
   if (
-    $[49] !== invert_2 ||
-    $[50] !== isTerminalFocused ||
-    $[51] !== hidePlaceholderText ||
-    $[52] !== props ||
-    $[53] !== cursorCellPainted ||
-    $[54] !== inputState
+    $[48] !== invert_2 ||
+    $[49] !== isTerminalFocused ||
+    $[50] !== hidePlaceholderText ||
+    $[51] !== props ||
+    $[52] !== cursorCellPainted ||
+    $[53] !== inputState
   ) {
     children = jsxProd_default(BaseTextInput, {
       inputState,
@@ -260,24 +256,24 @@ function TextInput(props) {
       cursorCellPainted,
       ...props,
     });
-    $[49] = invert_2;
-    $[50] = isTerminalFocused;
-    $[51] = hidePlaceholderText;
-    $[52] = props;
-    $[53] = cursorCellPainted;
-    $[54] = inputState;
-    $[55] = children;
-  } else children = $[55];
+    $[48] = invert_2;
+    $[49] = isTerminalFocused;
+    $[50] = hidePlaceholderText;
+    $[51] = props;
+    $[52] = cursorCellPainted;
+    $[53] = inputState;
+    $[54] = children;
+  } else children = $[54];
   let boxElement;
-  if ($[56] !== containerRef || $[57] !== children) {
+  if ($[55] !== containerRef || $[56] !== children) {
     boxElement = jsxProd_default(Box, {
       ref: containerRef,
       children,
     });
-    $[56] = containerRef;
-    $[57] = children;
-    $[58] = boxElement;
-  } else boxElement = $[58];
+    $[55] = containerRef;
+    $[56] = children;
+    $[57] = boxElement;
+  } else boxElement = $[57];
   return boxElement;
 }
 export { TextInput, CURSOR_BLINK_PERIOD, CURSOR_BLINK_ON_RATIO, VOICE_LEVEL_BARS, CURSOR_FADE_RATIO };

@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：用量与额度相关的通知：限流状态、额度重置奖励、周重置、低优先级模式与工作流限流恢复的提示行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
- * attribution: placement 13, layout 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (16)
+ * attribution: placement 16
  */
-import { EMPTY_LIMIT_NOTICES } from "../../utils/messageQueueManager.js";
 import {
   init_react_production,
   useSyncExternalStore,
   useCallback,
   useEffect,
 } from "../../../vendor/react/cjs/react.production.js";
+import { EMPTY_LIMIT_NOTICES } from "../../utils/messageQueueManager.js";
 import {
   useRateLimitState,
   formatResetCountsSummary,
@@ -65,7 +65,31 @@ import { useHost } from "../../context/session.js";
 import { UsageLimitGraceNotice } from "../../components/UsageLimitGraceNotice.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1655107-1655593 placement
+//@ chunk-czq1j3j2.js:1690170-1690174 placement
+/**
+ * 惰性模块初始化调用 j()（Bun 打包的 init 包装），无业务逻辑。
+ */
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1690170", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1698577-1698581 placement
+/**
+ * 惰性模块初始化调用 j()。
+ */
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1698577", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1698581-1698585 placement
+/**
+ * 惰性模块初始化调用 j()。
+ */
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1698581", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1700831-1701317 placement
 /**
  * 从各类限额状态挑出 reset 提示（grant/weekly 及已用完）、低优先级、额度、套餐升级文案。
  */
@@ -101,7 +125,7 @@ function pickLimitNoticeParts(limits) {
     planUpsell: wait === null ? limits.wrapUp?.upsell || null : null,
   };
 }
-//@ chunk-18hwfzwa.js:1655593-1656543 placement
+//@ chunk-czq1j3j2.js:1701317-1702267 placement
 /**
  * 组装用量限额状态行与下一步提示行。
  */
@@ -200,7 +224,7 @@ function buildLimitStatusNotices(limits) {
       nextSegments.length === 0 ? null : createEventNotice("limit-next", joinSegmentsWithDots(nextSegments)),
   };
 }
-//@ chunk-18hwfzwa.js:1656543-1656640 placement
+//@ chunk-czq1j3j2.js:1702267-1702364 placement
 /**
  * {kind:"event",priority:"high",wrap:true} 通知对象。旧版名 getCommandsByMaxPriority 为错配。
  */
@@ -214,7 +238,7 @@ function createEventNotice(key, segments, color = "text") {
     segments,
   };
 }
-//@ chunk-18hwfzwa.js:1656640-1656719 placement
+//@ chunk-czq1j3j2.js:1702364-1702443 placement
 /**
  * 用 " · " 连接多段文本片段。
  */
@@ -231,15 +255,7 @@ function joinSegmentsWithDots(segments) {
         ],
   );
 }
-//@ chunk-18hwfzwa.js:1656719-1656723 layout
-/**
- * 惰性模块初始化调用 j()（Bun 打包的 init 包装），无业务逻辑。
- */
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1656719", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1656723-1657417 placement
+//@ chunk-czq1j3j2.js:1702447-1703141 placement
 /**
  * React hook：限额重置赠送的提示与已用完提示。
  */
@@ -296,15 +312,7 @@ ${line}`;
     claimUnsettled,
   };
 }
-//@ chunk-18hwfzwa.js:1657417-1657421 layout
-/**
- * 惰性模块初始化调用 j()。
- */
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1657417", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1657421-1657638 placement
+//@ chunk-czq1j3j2.js:1703145-1703363 placement
 /**
  * React hook：周限额重置提示。
  */
@@ -331,22 +339,14 @@ function useWeeklyResetOffer() {
     spent: offerLine === null ? spentLine : null,
   };
 }
-//@ chunk-18hwfzwa.js:1657638-1657642 layout
-/**
- * 惰性模块初始化调用 j()。
- */
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1657638", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1657642-1657680 placement
+//@ chunk-czq1j3j2.js:1703367-1703405 placement
 /**
  * React hook：低优先级模式状态。
  */
 function useLowPriorityState() {
   return useSyncExternalStore(onLowPriorityChanged, getLowPriorityStateValue, getLowPriorityStateValue);
 }
-//@ chunk-18hwfzwa.js:1657680-1657986 placement
+//@ chunk-czq1j3j2.js:1703405-1703711 placement
 /**
  * 低优先级模式状态行（重置时间、额度百分比、停止命令）。
  */
@@ -363,7 +363,7 @@ function formatLowPriorityStatusLine(resumeState, allowancePercent) {
       : ` \xB7 ${statusLine.allowanceNote.replace("{percent}", `${allowancePercent}%`)}`;
   return `${line}${allowanceSuffix} \xB7 /${LOW_PRIORITY} to stop`;
 }
-//@ chunk-18hwfzwa.js:1657986-1658823 placement
+//@ chunk-czq1j3j2.js:1703711-1704548 placement
 /**
  * 低优先级模式结束原因 → 提示文本（weekly/budget/off/extra_usage/max_wait）。
  */
@@ -391,7 +391,7 @@ function getLowPriorityEndedMessage(reason, cooloffUntil = getCooloffUntil()) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1658823-1660153 placement
+//@ chunk-czq1j3j2.js:1704548-1705878 placement
 /**
  * React hook：低优先级模式开始/结束的转录通知。
  */
@@ -510,7 +510,7 @@ function useLowPriorityNotices(props) {
   } else result = $[26];
   return result;
 }
-//@ chunk-18hwfzwa.js:1660153-1660335 placement
+//@ chunk-czq1j3j2.js:1705878-1706060 placement
 /**
  * 运行中工作流任务里最晚的 rateLimitWait.resetsAt。
  */
@@ -523,7 +523,7 @@ function getEarliestWorkflowRateLimitReset(appState) {
     null,
   );
 }
-//@ chunk-18hwfzwa.js:1660335-1660494 placement
+//@ chunk-czq1j3j2.js:1706060-1706219 placement
 /**
  * React hook：因限额暂停的工作流提示（tengu_lantern_snuffer）。
  */
@@ -538,7 +538,7 @@ function usePausedWorkflowNotice() {
     ? usageLimitStatusText(resetsAtSeconds)
     : null;
 }
-//@ chunk-18hwfzwa.js:1660494-1661153 placement
+//@ chunk-czq1j3j2.js:1706219-1706878 placement
 /**
  * REPL 用的用量限额通知汇总 hook。
  */

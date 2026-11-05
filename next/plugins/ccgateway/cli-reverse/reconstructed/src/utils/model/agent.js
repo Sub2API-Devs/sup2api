@@ -3,10 +3,10 @@
  *
  * 子代理模型解析（frontmatter model、Agent 工具参数、CLAUDE_CODE_SUBAGENT_MODEL、inherit），以及第三方提供商固定旧版本档位默认值的检测；另混入了 /model 选项构建的若干函数（chunk-hwmsct5x）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/agent.ts
- * pieces: chunk-4r745zza.js (1), chunk-e6aww6q8.js (10)
- * attribution: fingerprint 2, placement 6, callgraph-witnessed 1, layout 1, file-local 1
+ * pieces: chunk-5xgkngpb.js (11)
+ * attribution: placement 6, callgraph-witnessed 1, fingerprint 1, layout 2, file-local 1
  */
 import { EXPLORE_AGENT } from "../../tools/AgentTool/built-in/exploreAgent.js";
 import { modelIdsAreOpaque, getProviderForModel, modelFamilyOf } from "./providers.js";
@@ -17,7 +17,7 @@ import {
   isBaseModelKey,
   isModelKeyAlias,
 } from "./modelIds.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getModelCatalog_2 } from "./modelCatalog.js";
 import { includesAnyIgnoreCase } from "../toolErrors.js";
 import { getRuntimeMainLoopModel, stepDownRestrictedFamilyAliasPick } from "./planModeModel.js";
@@ -33,10 +33,8 @@ import { logForDebugging } from "../debug.js";
 import { has1mSuffix_2 } from "./contextWindow1m.js";
 import { isDefaultOpusModelAdminSteered } from "./smallFastModel.js";
 import { isOpusAliasCandidate } from "./model.js";
-import { catalogDefaultKeyForFamily } from "./classifierModel.js";
-import { tierConfig } from "./stalePins.js";
 
-//@ chunk-e6aww6q8.js:183116-183329 placement
+//@ chunk-5xgkngpb.js:183226-183439 placement
 /**
  * 决定 Explore 代理的模型：内置 Explore 默认继承，存在比 Opus 更新的族时继承上限为 Opus。
  */
@@ -50,17 +48,17 @@ function getExploreAgentModel(agent, requestedModel) {
       }
     : "inherit";
 }
-//@ chunk-e6aww6q8.js:183329-183344 placement
+//@ chunk-5xgkngpb.js:183439-183454 placement
 var OPUS = "opus";
-//@ chunk-e6aww6q8.js:183344-183463 placement
+//@ chunk-5xgkngpb.js:183454-183573 placement
 function hasNewerFamilyThanOpus(modelList) {
   let opusFamily = modelFamilyOf_2(OPUS) ?? 1 / 0;
-  let needles = uniq(getModelCatalog_2().models.map((model) => model.family)).filter(
+  let filtered = normalizeCaseForComparison_2(getModelCatalog_2().models.map((model) => model.family)).filter(
     (family) => (modelFamilyOf_2(family) ?? -1 / 0) > opusFamily,
   );
-  return includesAnyIgnoreCase(modelList, needles);
+  return includesAnyIgnoreCase(modelList, filtered);
 }
-//@ chunk-e6aww6q8.js:1426182-1426268 callgraph-witnessed (2.1.88 match: getDefaultSubagentModel, 0.711)
+//@ chunk-5xgkngpb.js:1425655-1425741 callgraph-witnessed (2.1.88 match: getDefaultSubagentModel, 0.711)
 /**
  * CLAUDE_CODE_SUBAGENT_MODEL（未设或 inherit 时为 "inherit"）。
  */
@@ -70,7 +68,7 @@ function getDefaultSubagentModel() {
     ? CLAUDE_CODE_SUBAGENT_MODEL
     : "inherit";
 }
-//@ chunk-e6aww6q8.js:1426268-1427225 fingerprint (2.1.88 match: getAgentModel, 0.609)
+//@ chunk-5xgkngpb.js:1425741-1426701 fingerprint (2.1.88 match: getAgentModel, 0.609)
 /**
  * 子代理模型：工作流环境模型优先；Agent 工具参数 model，其次 frontmatter model，再次 CLAUDE_CODE_SUBAGENT_MODEL，否则继承主模型（plan 模式按 opusplan 规则）；别名与父模型同族时直接用父模型；Bedrock 继承父模型区域前缀；不被允许时降档或回落继承并回调原因。
  */
@@ -157,7 +155,7 @@ function getAgentModel(
   if (!isModelAllowed(resolvedDefaultModel)) return stepDownOrInherit(agentModelWithExp, false);
   return resolvedDefaultModel;
 }
-//@ chunk-e6aww6q8.js:1427225-1428132 layout
+//@ chunk-5xgkngpb.js:1426701-1427611 layout
 /**
  * 带来源统计的 getAgentModel：记录 subagent_model_resolve（来源、优先级、请求/解析族、降档或丢弃）。
  */
@@ -219,7 +217,7 @@ function getAgentModelWithTelemetry(
   } else logFeatureOk("subagent_model_resolve", eventFields);
   return agentModel;
 }
-//@ chunk-e6aww6q8.js:1428132-1428315 file-local
+//@ chunk-5xgkngpb.js:1427611-1427794 file-local
 /**
  * CLAUDE_CODE_SUBAGENT_MODEL_FORCE 时只保留 inherit 上限与 inherit 参数，忽略 frontmatter/工具参数。auto 名 getAgentModelDisplay 不准确。
  */
@@ -232,7 +230,13 @@ function resolveAgentModelInputs(agentSpec, toolSpec) {
     toolSpec === "inherit" ? "inherit" : undefined,
   ];
 }
-//@ chunk-e6aww6q8.js:1428315-1428506 placement
+//@ chunk-5xgkngpb.js:1427794-1427885 layout (2.1.88 match: resolveAgentModelDisplay, 1)
+function resolveAgentModelDisplay(agent, toolSpec) {
+  let [model, explicitModel] = resolveAgentModelInputs(agent, toolSpec);
+  if (explicitModel) return explicitModel === "inherit";
+  return (model ?? getDefaultSubagentModel()) === "inherit";
+}
+//@ chunk-5xgkngpb.js:1427885-1428076 placement
 function warnSubagentModelNotAllowed(spec, steppedDown) {
   logForDebugging(
     `Subagent model "${spec}" is not in the availableModels allowlist; ${steppedDown ? "using the newest allowed model in its family" : "inheriting the parent model"} instead`,
@@ -241,7 +245,7 @@ function warnSubagentModelNotAllowed(spec, steppedDown) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:1428506-1428591 placement (2.1.88 match: isOpus1mUnavailable, 1)
+//@ chunk-5xgkngpb.js:1428076-1428161 placement (2.1.88 match: isOpus1mUnavailable, 1)
 function isOpus1mUnavailable(model) {
   if (
     modelFamilyOf(model, getCanonicalName(model)) === "opus" &&
@@ -251,7 +255,7 @@ function isOpus1mUnavailable(model) {
     return identityModelId(model + "[1m]");
   return model;
 }
-//@ chunk-e6aww6q8.js:1428591-1428769 placement
+//@ chunk-5xgkngpb.js:1428161-1428339 placement
 /**
  * 判断模型是否匹配族别名（如 opus），包括模型 id 不透明时的 Opus 别名候选。
  */
@@ -269,23 +273,11 @@ function modelMatchesFamilyAlias(spec, model) {
     isOpusAliasCandidate(model, canonicalName)
   );
 }
-//@ chunk-4r745zza.js:639-768 fingerprint (2.1.88 match: aliasMatchesParentTier, 1)
-/**
- * 用当前提供商 catalog 别名的 sonnet/opus/haiku 键构造档位默认表（srt），任一缺失返回 undefined。
- */
-function buildProviderTierDefaults(family) {
-  let sonnetKey = catalogDefaultKeyForFamily("sonnet", family);
-  let opusKey = catalogDefaultKeyForFamily("opus", family);
-  let haikuKey = catalogDefaultKeyForFamily("haiku", family);
-  return sonnetKey === undefined || opusKey === undefined || haikuKey === undefined
-    ? undefined
-    : tierConfig(opusKey, sonnetKey, haikuKey);
-}
 export {
-  getAgentModel,
-  getAgentModelWithTelemetry,
-  getExploreAgentModel,
-  getDefaultSubagentModel,
-  buildProviderTierDefaults,
   modelMatchesFamilyAlias,
+  getDefaultSubagentModel,
+  getAgentModel,
+  getExploreAgentModel,
+  getAgentModelWithTelemetry,
+  resolveAgentModelDisplay,
 };

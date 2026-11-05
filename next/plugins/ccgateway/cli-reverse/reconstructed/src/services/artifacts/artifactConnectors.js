@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 页面可声明的运行时能力（connectors）：claude.ai MCP 连接器、SDK 服务器的分组
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9xyz2gbc.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0hjter80.js (9)
  * attribution: placement 9
  */
 import { antEnv, env } from "../../utils/env.js";
@@ -20,14 +20,14 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { getServerUrl } from "./durableWatch.js";
 import { CLAUDE_CODE_REMOTE_DISPLAY_NAME } from "../mcp/ccrMetaMcp.js";
 
-//@ chunk-9xyz2gbc.js:596-650 placement
+//@ chunk-0hjter80.js:596-650 placement
 /**
  * Artifact 发布输入 connectors 字段的开关与服务端能力声明处理（BCR/CCR 托管、SDK 服务器分组）。
  */
 function artifactMcpEnabled() {
   return antEnv.CLAUDE_CODE_ARTIFACT_MCP ?? true;
 }
-//@ chunk-9xyz2gbc.js:650-1102 placement
+//@ chunk-0hjter80.js:650-1102 placement
 /**
  * Artifact 发布输入里 connectors 字段的 schema：{名字: 配置} 形式的运行时能力声明，名字与配置形状以控制面为准，空对象清除之前的声明。
  */
@@ -38,7 +38,7 @@ function connectorsInputSchema() {
       `Runtime capabilities this page declares, as {name: config}. The control plane is the authority on valid names and config shapes. An empty object clears any previously stored declaration; omit the field on a redeploy to carry the stored declaration forward unchanged. Before declaring any capability, load the \`${ARTIFACT_CAPABILITIES}\` skill for the current contract and per-capability guidance.`,
     );
 }
-//@ chunk-9xyz2gbc.js:1102-1459 placement
+//@ chunk-0hjter80.js:1102-1459 placement
 /**
  * （归属疑误：权限/系统提示）按 claude.ai 连接器汇总 {server, toolPrefix, toolNames}。
  */
@@ -66,7 +66,7 @@ function groupClaudeAiConnectors(connectors) {
   }
   return [...groups.values()];
 }
-//@ chunk-9xyz2gbc.js:1459-1643 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-0hjter80.js:1459-1643 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * （归属疑误：权限/系统提示）从 mcp__<ls>__<sub>__* 工具名中取子服务器名集合。
  */
@@ -81,14 +81,14 @@ function getMcpPrefix(serverName) {
   }
   return [...seen];
 }
-//@ chunk-9xyz2gbc.js:1643-1670 placement
+//@ chunk-0hjter80.js:1643-1670 placement
 /**
  * 导出函数 `isHostEntrypointSession`：返回 isHostEntrypoint()。
  */
 function isHostEntrypointSession() {
   return isHostEntrypoint();
 }
-//@ chunk-9xyz2gbc.js:1670-2245 placement
+//@ chunk-0hjter80.js:1670-2245 placement
 /**
  * 把 SDK 类型 MCP 服务器的工具按服务器分组：有可用 serverInfoName 的进 named，名字缺失或像 UUID 的记 unnamedIds，名字不能作为前缀声明的进 undeclarable。
  */
@@ -127,11 +127,11 @@ function groupSdkHostedServers(tools) {
     undeclarable: rows.filter((row) => row.declarable === false),
   };
 }
-//@ chunk-9xyz2gbc.js:2245-2297 placement
+//@ chunk-0hjter80.js:2245-2297 placement
 function isCobaltPlinthYewEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_yew", false);
 }
-//@ chunk-9xyz2gbc.js:2297-2600 placement
+//@ chunk-0hjter80.js:2297-2600 placement
 /**
  * 汇总 Artifact 页面可声明的连接器上下文：是否 CCR 托管、元连接器（会话服务器 URL 对应的工具前缀）、SDK 托管服务器分组。
  */
@@ -161,7 +161,7 @@ function getArtifactConnectorContext(tools, context) {
     hosted,
   };
 }
-//@ chunk-9xyz2gbc.js:2600-2737 placement
+//@ chunk-0hjter80.js:2600-2737 placement
 function listArtifactConnectors(tools, context) {
   let { metaConnector, hosted } = getArtifactConnectorContext(tools, context);
   let listed = [
@@ -173,9 +173,9 @@ function listArtifactConnectors(tools, context) {
 export {
   listArtifactConnectors,
   getMcpPrefix,
+  isHostEntrypointSession,
   artifactMcpEnabled,
   connectorsInputSchema,
   groupClaudeAiConnectors,
   getArtifactConnectorContext,
-  isHostEntrypointSession,
 };

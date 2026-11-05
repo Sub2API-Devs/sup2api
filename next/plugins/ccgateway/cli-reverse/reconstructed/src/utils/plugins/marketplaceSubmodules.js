@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。marketplace 克隆只拉取插件路径涉及的子模块。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
  */
 import { relative, resolve as resolve_2, dirname, join, posix, win32 } from "path";
@@ -23,7 +23,7 @@ import {
   PLUGIN_ROOT_REF_RE,
   MAX_SCANNED_BYTES,
 } from "./marketplaceGitCheckout.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { MARKETPLACE_MANIFEST_PATH, MAX_PLUGIN_ARCHIVE_BYTES } from "./commandSource.js";
 import { applyMarketplacePluginRoot, ONE_MIB } from "./schemas.js";
 import { safeParseJSON } from "../json.js";
@@ -36,7 +36,7 @@ import { gitExe } from "../git.js";
 import { stripIgnorables } from "../sanitization.js";
 import { printablePluginName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 
-//@ chunk-e6aww6q8.js:4193818-4194396 placement
+//@ chunk-5xgkngpb.js:4300207-4300785 placement
 /**
  * 决定 marketplace 克隆需要取的子模块
  */
@@ -79,12 +79,15 @@ async function pickSubmodulesToFetch({
     ? []
     : "all";
 }
-//@ chunk-e6aww6q8.js:4194396-4195459 placement
+//@ chunk-5xgkngpb.js:4300785-4301857 placement
 /**
  * 读取 marketplace 清单中的插件路径
  */
 async function readPluginSourcePaths(checkoutDir, manifestPath) {
-  let manifestPaths = uniq([manifestPath || MARKETPLACE_MANIFEST_PATH, MARKETPLACE_MANIFEST_PATH]);
+  let manifestPaths = normalizeCaseForComparison_2([
+    manifestPath || MARKETPLACE_MANIFEST_PATH,
+    MARKETPLACE_MANIFEST_PATH,
+  ]);
   let results = await Promise.all(
     manifestPaths.map((manifestPath) =>
       readCheckoutFile(checkoutDir, manifestPath, MAX_PLUGIN_ARCHIVE_BYTES),
@@ -135,7 +138,7 @@ async function readPluginSourcePaths(checkoutDir, manifestPath) {
   if (paths.size > MAX_SCANNED_FILES) return;
   return {
     paths: [...paths],
-    rootPluginFiles: uniq(
+    rootPluginFiles: normalizeCaseForComparison_2(
       [
         ...[...manifestPaths, ...manifestCandidates].map((path) =>
           resolveCwdReentry(relative(checkoutDir, resolve_2(checkoutDir, path))),
@@ -145,7 +148,7 @@ async function readPluginSourcePaths(checkoutDir, manifestPath) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:4195459-4195735 placement
+//@ chunk-5xgkngpb.js:4301857-4302133 placement
 /**
  * 在克隆中安全读取文件
  */
@@ -174,7 +177,7 @@ async function readCheckoutFile(checkoutDir, relPath, maxBytes) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:4195735-4196111 placement
+//@ chunk-5xgkngpb.js:4302133-4302509 placement
 /**
  * 从清单值中收集相对路径
  */
@@ -199,14 +202,14 @@ function collectManifestPaths(collectedPaths, manifest, isRootFile) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4196111-4196665 placement
+//@ chunk-5xgkngpb.js:4302509-4303063 placement
 /**
  * 检查克隆中被跟踪的链接
  */
 async function vetTrackedLinks(cwd, options) {
   let links = await listSymlinkEntries(cwd, options);
   if (!Array.isArray(links)) return;
-  let dirs = uniq(links.map((link) => dirname(join(cwd, link))));
+  let dirs = normalizeCaseForComparison_2(links.map((link) => dirname(join(cwd, link))));
   if ((await Promise.all(dirs.map((dir) => readPluginFileSafe(cwd, dir)))).some((check) => check !== "ok")) {
     logForDebugging(
       "A tracked link in the marketplace clone is not under real directories, fetching every submodule",
@@ -233,12 +236,12 @@ async function vetTrackedLinks(cwd, options) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4196665-4197260 placement
+//@ chunk-5xgkngpb.js:4303063-4303658 placement
 /**
  * git grep --cached 查找路径引用
  */
 async function grepCachedPaths({ checkoutDir, inCheckoutArgs, env, timeout, paths, files }) {
-  let needles = uniq(
+  let needles = normalizeCaseForComparison_2(
     paths.flatMap((path) => [path, path.replaceAll("/", "\\"), path.replaceAll("/", "\\\\")]),
   );
   if ([...needles, ...files].join(" ").length > MAX_SCANNED_BYTES) return;
@@ -273,7 +276,7 @@ async function grepCachedPaths({ checkoutDir, inCheckoutArgs, env, timeout, path
   if (result.code === 0) return true;
   return result.exitCode === 1 && result.error === undefined && !result.timedOut ? false : undefined;
 }
-//@ chunk-e6aww6q8.js:4197260-4197419 placement
+//@ chunk-5xgkngpb.js:4303658-4303817 placement
 /**
  * 过滤位于给定前缀下的路径
  */
@@ -284,7 +287,7 @@ function filterPathsUnder(submodules, paths) {
     return mapped.some((prefix) => lowered.startsWith(prefix) || prefix.startsWith(lowered));
   });
 }
-//@ chunk-e6aww6q8.js:4197419-4197592 placement (2.1.88 match: resolveCwdReentry, 0.844)
+//@ chunk-5xgkngpb.js:4303817-4303990 placement (2.1.88 match: resolveCwdReentry, 0.844)
 /**
  * （旧版名配错）规范化相对路径为小写键，. 为空串，跳出上级目录返回 undefined。
  */
@@ -296,14 +299,14 @@ function resolveCwdReentry(normalized) {
   if (cwdBase === "." || cwdBase === "") return "";
   return cwdBase === ".." || cwdBase.startsWith("../") ? undefined : cwdBase;
 }
-//@ chunk-e6aww6q8.js:4197592-4197659 placement
+//@ chunk-5xgkngpb.js:4303990-4304057 placement
 function msUntilDeadline(deadline) {
   return Math.max(1, Math.round(deadline - performance.now()));
 }
-//@ chunk-e6aww6q8.js:4197659-4197756 placement
+//@ chunk-5xgkngpb.js:4304057-4304154 placement
 var SUBMODULE_FETCH_MIN_MS = 1000;
 var SEE_DETAILS_HINT = "Installing a plugin from its details (Enter) in /plugin shows its full error.";
-//@ chunk-e6aww6q8.js:4197756-4197793 placement
+//@ chunk-5xgkngpb.js:4304154-4304191 placement
 /**
  * 把错误文本截短到 200 字符再做清洗与空白折叠，得到单行可显示的失败原因（插件安装失败详情用）。
  */

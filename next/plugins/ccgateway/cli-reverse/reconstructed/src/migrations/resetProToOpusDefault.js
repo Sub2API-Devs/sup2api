@@ -3,9 +3,9 @@
  *
  * 迁移：Pro 订阅一方用户的默认模型重置为 Opus（只记标记）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/resetProToOpusDefault.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
@@ -15,7 +15,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-cjydagjy.js:13529-14073 fingerprint (2.1.88 match: resetProToOpusDefault, 0.873)
+//@ chunk-h61dq9nz.js:13706-14250 fingerprint (2.1.88 match: resetProToOpusDefault, 0.873)
 /**
  * 迁移：Pro 用户未显式选模型时记录切到 Opus 默认（只做一次，opusProMigrationComplete）。
  */

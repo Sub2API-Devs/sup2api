@@ -3,28 +3,28 @@
  *
  * 输入流分词器：把 stdin 字节切成按键/转义序列/鼠标/粘贴等 token，处理跨块的不完整序列
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/tokenize.ts
- * pieces: chunk-tw8fk0yz.js (4), chunk-wz6vk74d.js (1)
- * attribution: affinity 1, fingerprint 2, layout 1, placement 1
+ * pieces: chunk-3zb8bxyj.js (1), chunk-8n1fbght.js (4)
+ * attribution: placement 1, affinity 1, fingerprint 2, layout 1
  */
 import { C0, ESC_TYPE } from "./ansi.js";
 import { isCompleteEscapeSequence } from "../wrapAnsi.js";
 import { isCSIIntermediate, isCSIFinal, isCSIParam } from "./csi.js";
 
-//@ chunk-wz6vk74d.js:507-544 placement
+//@ chunk-3zb8bxyj.js:508-545 placement
 /**
  * 判断码点是否在可打印 ASCII 区间（48–126）。
  */
 function isPrintableAscii(code) {
   return code >= 48 && code <= 126;
 }
-//@ chunk-tw8fk0yz.js:441-605 affinity
+//@ chunk-8n1fbght.js:442-606 affinity
 var X10_MOUSE_PREFIX_RE = /^\[M[\x60-\x7f][\x20-\uffff]?$/;
 var OSC8_PREFIX_RE = /^\x1b\]8(?:;|\r?$)/;
 var OSC8_CLOSE = "\x1B]8;;\x1B\\";
 var ESC_PREFIXED_KEY_RE = /^(?:\[(?:\d{1,2}(?:;\d{1,2})?[~^$@]|(?:1;\d{1,2})?[A-DFHa-d])|O[A-DFHa-d])/;
-//@ chunk-tw8fk0yz.js:605-986 fingerprint (2.1.88 match: createTokenizer, 0.8)
+//@ chunk-8n1fbght.js:606-987 fingerprint (2.1.88 match: createTokenizer, 0.8)
 /**
  * 创建流式转义序列分词器：feed() 返回文本/序列 token，未结束的序列留在内部缓冲；flush() 把缓冲按当前状态吐出；选项：x10Mouse（输入时识别 ESC[M 三字节鼠标）、escPrefixedKeyIsAlt（rxvt 风格 ESC+键）、stringsEndAtLineFeed（输出解析时 OSC 遇换行结束）、intermediatesRunToFinal。
  */
@@ -75,14 +75,14 @@ function createTokenizer(options) {
     },
   };
 }
-//@ chunk-tw8fk0yz.js:986-1056 layout
+//@ chunk-8n1fbght.js:987-1057 layout
 function tokenizeAll(text) {
   let tokenizer = createTokenizer();
   let tokens = tokenizer.feed(text);
   tokens.push(...tokenizer.flush());
   return tokens;
 }
-//@ chunk-tw8fk0yz.js:1056-3673 fingerprint (2.1.88 match: tokenize, 0.834)
+//@ chunk-8n1fbght.js:1057-3685 fingerprint (2.1.88 match: tokenize, 0.834)
 /**
  * 分词状态机（ground / escape / escapeIntermediate / csi / ss3 / osc / dcs / apc / pm / sos）：识别 CSI、OSC/DCS/APC（BEL 或 ST 结束，CAN/SUB 中止）、SS3、单字符 ESC 序列；输入模式下还处理 X10 鼠标、ESC+空白/回车当 Alt、单独的 DEL 与控制字符成为独立文本 token。返回 tokens 与新状态。
  */

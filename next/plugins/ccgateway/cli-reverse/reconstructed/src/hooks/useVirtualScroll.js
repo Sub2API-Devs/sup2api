@@ -3,9 +3,9 @@
  *
  * 虚拟滚动核心 hook：测量项高度、计算可见区间与滚动偏移。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVirtualScroll.ts
- * pieces: chunk-ag5x7vhf.js (6)
+ * pieces: chunk-hnxhr3bs.js (6)
  * attribution: sole-consumer 2, affinity 3, fingerprint 1
  */
 import {
@@ -22,21 +22,21 @@ import {
 import { notePinnedState } from "../utils/scrollTelemetry.js";
 import { SpinnerPaceContext } from "../components/Spinner/paceContext.js";
 
-//@ chunk-ag5x7vhf.js:151715-151758 sole-consumer
+//@ chunk-hnxhr3bs.js:156015-156058 sole-consumer
 var DEFAULT_ITEM_HEIGHT = 3;
 var OVERSCAN_BUCKET = 40;
 var MAX_RENDERED_ROWS = 80;
 var rounded = Math.round(OVERSCAN_BUCKET * 1.5);
-//@ chunk-ag5x7vhf.js:151758-151824 sole-consumer
+//@ chunk-hnxhr3bs.js:156058-156124 sole-consumer
 function renderedRowCount(viewportHeight) {
   return Math.max(rounded, Math.min(Math.round(viewportHeight * 1.5), MAX_RENDERED_ROWS));
 }
-//@ chunk-ag5x7vhf.js:151824-151852 affinity
+//@ chunk-hnxhr3bs.js:156124-156152 affinity
 var TAIL_RENDER_ROWS = 30;
 var DEFAULT_ROW_HEIGHT_ESTIMATE = 1;
 var MAX_ROWS_PER_BATCH = 300;
 var MIN_ROWS_PER_BATCH = 25;
-//@ chunk-ag5x7vhf.js:151852-158046 fingerprint (2.1.88 match: useVirtualScroll, 0.791)
+//@ chunk-hnxhr3bs.js:156152-162346 fingerprint (2.1.88 match: useVirtualScroll, 0.799)
 function useVirtualScroll(scrollRef, itemKeys, columns) {
   let heightCache = useRef(new Map());
   let offsetVersionRef = useRef(0);
@@ -455,13 +455,13 @@ function useVirtualScroll(scrollRef, itemKeys, columns) {
     scrollToIndex,
   };
 }
-//@ chunk-ag5x7vhf.js:158046-158178 affinity (2.1.88 match: dropSubtreeCache, 0.775)
+//@ chunk-hnxhr3bs.js:162346-162478 affinity (2.1.88 match: dropSubtreeCache, 0.776)
 function hasDrawPending(node) {
   if (node.attributes.drawPending === true) return true;
   for (let child of node.childNodes) if (child.nodeName !== "#text" && hasDrawPending(child)) return true;
   return false;
 }
-//@ chunk-ag5x7vhf.js:158178-158357 affinity
+//@ chunk-hnxhr3bs.js:162478-162657 affinity
 function raiseScrollHeight(handle) {
   let domElement = handle.getDomElement();
   if (!domElement) return;

@@ -3,10 +3,10 @@
  *
  * WebFetch 权限请求：URL、安全检查，"允许并不再询问该域名"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/WebFetchPermissionRequest/WebFetchPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (5), chunk-e6aww6q8.js (1)
- * attribution: placement 3, layout 1, fingerprint 2
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (5)
+ * attribution: fingerprint 2, placement 3, layout 1
  */
 import { WebFetchTool } from "../../../tools/WebFetchTool/WebFetchTool.js";
 import { isConsentRow, parseConsentSuggestions } from "../consentRows.js";
@@ -33,7 +33,7 @@ import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2182965-2183156 fingerprint (2.1.88 match: inputToPermissionRuleContent, 1)
+//@ chunk-5xgkngpb.js:2236797-2236988 fingerprint (2.1.88 match: inputToPermissionRuleContent, 1)
 function inputToPermissionRuleContent(input) {
   try {
     let parsedInput = WebFetchTool.inputSchema.safeParse(input);
@@ -44,7 +44,7 @@ function inputToPermissionRuleContent(input) {
     return `input:${input.toString()}`;
   }
 }
-//@ chunk-18hwfzwa.js:1412972-1413264 placement
+//@ chunk-czq1j3j2.js:1452048-1452340 placement
 function webFetchChoiceToResult(choice, payload, selectedRow) {
   switch (choice) {
     case "yes":
@@ -69,7 +69,7 @@ function webFetchChoiceToResult(choice, payload, selectedRow) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1413264-1413780 placement
+//@ chunk-czq1j3j2.js:1452340-1452856 placement
 /**
  * 生成 "不再询问该域名" 的 localSettings 规则建议行（domain:主机名）。
  */
@@ -115,12 +115,12 @@ function buildWebFetchDomainRule(payload) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:1413780-1413810 placement
+//@ chunk-czq1j3j2.js:1452856-1452886 placement
 var WEBFETCH_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1413780", () => {
+deferInit("chunk-czq1j3j2.js:1452856", () => {
   WEBFETCH_RULE_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-18hwfzwa.js:1413810-1414011 layout
+//@ chunk-czq1j3j2.js:1452886-1453087 layout
 function shouldOfferWebFetchDomainAllow(payload) {
   let decisionReason = payload.permissionResult.decisionReason;
   let isUnapprovableCheck = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
@@ -132,7 +132,7 @@ function shouldOfferWebFetchDomainAllow(payload) {
     !payload.hostname.includes("*")
   );
 }
-//@ chunk-18hwfzwa.js:1414011-1417159 fingerprint (2.1.88 match: WebFetchPermissionRequest, 0.355)
+//@ chunk-czq1j3j2.js:1453087-1456235 fingerprint (2.1.88 match: WebFetchPermissionRequest, 0.355)
 /**
  * WebFetch 权限：显示 URL 与安全检查结果，选项允许一次 / 不再询问该域名（domain: 规则）/ 拒绝并反馈。
  */
@@ -385,4 +385,4 @@ function WebFetchPermissionRequest(props) {
   } else dialog = $[56];
   return dialog;
 }
-export { WebFetchPermissionRequest, inputToPermissionRuleContent };
+export { inputToPermissionRuleContent, WebFetchPermissionRequest };

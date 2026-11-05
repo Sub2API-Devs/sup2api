@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。auto 模式环境引导对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 10
  */
 import {
@@ -40,21 +40,21 @@ import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:149072-149150 placement
+//@ chunk-czq1j3j2.js:153167-153245 placement
 function logAutoModeEnvOnboardingShown() {
   if (!getAutoModeEnvOnboardingShownLogged()) {
     setAutoModeEnvOnboardingShownLogged(true);
     logEvent("tengu_auto_mode_env_onboarding_shown", {});
   }
 }
-//@ chunk-18hwfzwa.js:149150-149205 placement
+//@ chunk-czq1j3j2.js:153245-153300 placement
 function clearAutoModeEnvPrompt(state) {
   return {
     ...state,
     autoModeEnvSetup: undefined,
   };
 }
-//@ chunk-18hwfzwa.js:149205-149301 placement
+//@ chunk-czq1j3j2.js:153300-153396 placement
 function dismissAutoModeEnvPrompt(state) {
   return {
     ...state,
@@ -64,7 +64,7 @@ function dismissAutoModeEnvPrompt(state) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:149301-149387 placement
+//@ chunk-czq1j3j2.js:153396-153482 placement
 function markAutoModeEnvPromptDismissed(state) {
   return {
     ...state,
@@ -74,11 +74,11 @@ function markAutoModeEnvPromptDismissed(state) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:149387-149417 placement
+//@ chunk-czq1j3j2.js:153482-153512 placement
 var AUTO_MODE_ENV_DISMISS_TTL_MS = 604800000;
 var MIN_STARTUPS_TO_PROMPT = 5;
 var MIN_DENIALS_TO_PROMPT = 5;
-//@ chunk-18hwfzwa.js:149417-149719 placement
+//@ chunk-czq1j3j2.js:153512-153814 placement
 function shouldOfferAutoModeEnvOnboarding() {
   if (!isAutoModeSetupNotOverridden()) return false;
   if ((getAutoModeConfig()?.environment?.length ?? 0) > 0) return false;
@@ -95,7 +95,7 @@ function shouldOfferAutoModeEnvOnboarding() {
     return false;
   return true;
 }
-//@ chunk-18hwfzwa.js:149719-149784 placement (2.1.88 match: INTERNAL_PERMISSION_MODES, 1)
+//@ chunk-czq1j3j2.js:153814-153879 placement (2.1.88 match: parseDimension, 1)
 /**
  * 启动时是否提供 auto 模式选项：来自回退时看 atn("auto") 或 nAr，否则看 qgo（UI 层逻辑，误归入 types/permissions）。
  */
@@ -104,7 +104,7 @@ function getStartupAutoModeOffer() {
     return shouldShowAutoDefaultNotice("auto") || hasNoticeImpression(AUTO_MODE_DEFAULT);
   return shouldShowAutoModeEntryWarning();
 }
-//@ chunk-18hwfzwa.js:149784-149935 placement
+//@ chunk-czq1j3j2.js:153879-154030 placement
 /**
  * 判断是否该显示 auto 模式环境引导：符合资格、当前权限模式是 auto、不在查看子代理、不是后台任务/远程模式/桥接重连会话，且服务端建议显示。
  */
@@ -119,9 +119,9 @@ function shouldShowAutoModeEnvOnboarding(state) {
     shouldOfferAutoModeEnvOnboarding()
   );
 }
-//@ chunk-18hwfzwa.js:149935-149947 placement
+//@ chunk-czq1j3j2.js:154030-154042 placement
 var AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS = 500;
-//@ chunk-18hwfzwa.js:149947-151490 placement
+//@ chunk-czq1j3j2.js:154042-155585 placement
 function AutoModeEnvOnboardingDialog(props) {
   let $ = useMemoCache(21);
   let { onAccept, onLater, onDismiss } = props;
@@ -149,18 +149,18 @@ function AutoModeEnvOnboardingDialog(props) {
       if (previousShownAt - lastShownAt < AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS) {
         return;
       }
-      At: switch (now) {
+      Rt: switch (now) {
         case "accept": {
           logEvent("tengu_auto_mode_env_onboarding_accept", {});
           if (getGlobalConfig().autoModeEnvSetup) saveGlobalConfig(clearAutoModeEnvPrompt, storageV5);
           onAccept();
-          break At;
+          break Rt;
         }
         case "later": {
           logEvent("tengu_auto_mode_env_onboarding_later", {});
           saveGlobalConfig(dismissAutoModeEnvPrompt, storageV5);
           onLater();
-          break At;
+          break Rt;
         }
         case "dismiss": {
           logEvent("tengu_auto_mode_env_onboarding_dismiss", {});
@@ -245,6 +245,6 @@ function AutoModeEnvOnboardingDialog(props) {
 export {
   shouldOfferAutoModeEnvOnboarding,
   AutoModeEnvOnboardingDialog,
-  shouldShowAutoModeEnvOnboarding,
   MIN_DENIALS_TO_PROMPT,
+  shouldShowAutoModeEnvOnboarding,
 };

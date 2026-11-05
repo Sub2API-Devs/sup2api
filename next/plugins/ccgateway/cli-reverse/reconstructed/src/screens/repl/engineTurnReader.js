@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。读取引擎回合事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (12)
  * attribution: placement 12
  */
 import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
@@ -27,11 +27,11 @@ import { emitStatusChange, forwardStreamEventToBridge } from "../../state/onChan
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1496841-1496892 placement
+//@ chunk-czq1j3j2.js:1538336-1538387 placement
 function isBusyOrPending(guard, pendingCheck) {
   return (command) => guard.isRunning || (pendingCheck() && command());
 }
-//@ chunk-18hwfzwa.js:1496892-1497059 placement
+//@ chunk-czq1j3j2.js:1538387-1538554 placement
 /**
  * 是否有等待结果的任务或待处理的任务通知。
  */
@@ -48,7 +48,7 @@ function hasPendingTaskResults(registry, commandQueue) {
     )
   );
 }
-//@ chunk-18hwfzwa.js:1497059-1497308 placement
+//@ chunk-czq1j3j2.js:1538554-1538803 placement
 /**
  * 等待中的任务都停止时调用回调，返回取消订阅函数。
  */
@@ -68,9 +68,9 @@ function onAwaitedTasksStopped(registry, onStopped) {
   });
   return unsubscribe;
 }
-//@ chunk-18hwfzwa.js:1497308-1497318 placement
+//@ chunk-czq1j3j2.js:1538803-1538813 placement
 var SLOW_TURN_READ_LOG_MS = 5;
-//@ chunk-18hwfzwa.js:1497318-1501087 placement
+//@ chunk-czq1j3j2.js:1538813-1542582 placement
 /**
  * 读取引擎回合：消费查询引擎事件流，转成 REPL 消息、进度与结果。
  */
@@ -244,7 +244,7 @@ async function readEngineTurn({
   }
   return resultMessage;
 }
-//@ chunk-18hwfzwa.js:1501087-1501338 placement
+//@ chunk-czq1j3j2.js:1542582-1542833 placement
 /**
  * 更新工具提示表（clear 删除、其他覆盖）。
  */
@@ -261,7 +261,7 @@ function applyToolHint(hints, hint) {
   nextHints.set(hint.toolUseId, hint);
   return nextHints;
 }
-//@ chunk-18hwfzwa.js:1501338-1501474 placement
+//@ chunk-czq1j3j2.js:1542833-1542969 placement
 /**
  * 删除已完成工具的提示。
  */
@@ -275,7 +275,7 @@ function dropToolHints(toolProgress, ids) {
     }
   return copy ?? toolProgress;
 }
-//@ chunk-18hwfzwa.js:1501474-1502268 placement
+//@ chunk-czq1j3j2.js:1542969-1543763 placement
 class FlushBatcher {
   pending = null;
   cancelScheduledFlush = null;
@@ -324,7 +324,7 @@ class FlushBatcher {
     this.onFlush(this.pending);
   }
 }
-//@ chunk-18hwfzwa.js:1502268-1502398 placement
+//@ chunk-czq1j3j2.js:1543763-1543893 placement
 /**
  * 创建批量刷新器（默认 100ms）。
  */
@@ -335,32 +335,32 @@ function createFlushBatcher({ scheduleTimeout, onFlush, flushIntervalMs = 100 })
     flushIntervalMs,
   });
 }
-//@ chunk-18hwfzwa.js:1502398-1502489 placement
+//@ chunk-czq1j3j2.js:1543893-1543984 placement
 var TURN_RESULT_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DRAIN_POLL_MS;
 var inFlightByShell;
 var drainedShells;
-var pendingShellLines;
 var completedShellLines;
+var DRAINED_SHELL_MARK;
 var DRAINED_SHELL_LINE;
 var MIN_SHELL_WIDTH_SLACK;
-deferInit("chunk-18hwfzwa.js:1502398", () => {
+deferInit("chunk-czq1j3j2.js:1543893", () => {
   TURN_RESULT_TIMEOUT_MS = 30000;
   DRAIN_POLL_MS = 500;
   inFlightByShell = new Map();
   drainedShells = new Set();
-  pendingShellLines = [];
   completedShellLines = [];
+  DRAINED_SHELL_MARK = [];
   DRAINED_SHELL_LINE = "drained-shell-line";
   MIN_SHELL_WIDTH_SLACK = 2;
 });
-//@ chunk-18hwfzwa.js:1502489-1502569 placement
+//@ chunk-czq1j3j2.js:1543984-1544064 placement
 function endsBeforeLastLine(text) {
   let index = text.lastIndexOf(`
 `);
   return index !== -1 && /\S/.test(text.slice(0, index));
 }
-//@ chunk-18hwfzwa.js:1502569-1502683 placement
+//@ chunk-czq1j3j2.js:1544064-1544178 placement
 /**
  * 末行接近终端宽度。
  */
@@ -372,10 +372,13 @@ function isLineNearlyFull(text, columns) {
   return /\S/.test(sliced) && bunStringWidth(sliced) >= columns - MIN_SHELL_WIDTH_SLACK;
 }
 export {
-  pendingShellLines,
+  onAwaitedTasksStopped,
+  hasPendingTaskResults,
+  readEngineTurn,
+  completedShellLines,
   inFlightByShell,
   drainedShells,
-  completedShellLines,
+  DRAINED_SHELL_MARK,
   createFlushBatcher,
   isLineNearlyFull,
   endsBeforeLastLine,
@@ -384,8 +387,5 @@ export {
   DRAINED_SHELL_LINE,
   dropToolHints,
   DRAIN_POLL_MS,
-  onAwaitedTasksStopped,
-  hasPendingTaskResults,
-  readEngineTurn,
   isBusyOrPending,
 };

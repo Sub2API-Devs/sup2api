@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：桌面宿主会话的遥测代理与反馈问卷显示判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (13)
  * attribution: placement 13
  */
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
@@ -45,11 +45,11 @@ import { importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:532948-532998 placement (2.1.88 match: preferThirdPartyAuthentication, 0.76)
+//@ chunk-0yw3taqg.js:573122-573172 placement (2.1.88 match: preferThirdPartyAuthentication, 0.761)
 function notifyVscodeHost(event, config) {
   if (shouldShowFeedbackSurvey(event, "claude-vscode")) recordSurveyShown(event, config);
 }
-//@ chunk-tyg7f3ek.js:532998-534092 placement
+//@ chunk-0yw3taqg.js:573172-574266 placement
 function shouldShowFeedbackSurvey(event, serverName) {
   if (!isPolicyAllowed("allow_product_feedback")) return false;
   if (shouldSkipFeedbackSurvey() || env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return false;
@@ -97,9 +97,9 @@ function shouldShowFeedbackSurvey(event, serverName) {
     .catch(() => {});
   return true;
 }
-//@ chunk-tyg7f3ek.js:534092-534105 placement
+//@ chunk-0yw3taqg.js:574266-574279 placement
 var SURVEY_MIN_INTERVAL_MS = 60000;
-//@ chunk-tyg7f3ek.js:534105-534309 placement
+//@ chunk-0yw3taqg.js:574279-574483 placement
 function recordSurveyShown(event, config) {
   if (event.event_type !== "appeared") return;
   let lastShownTime = getGlobalConfig().feedbackSurveyState?.lastShownTime;
@@ -114,13 +114,13 @@ function recordSurveyShown(event, config) {
     config,
   );
 }
-//@ chunk-tyg7f3ek.js:534309-534339 placement
+//@ chunk-0yw3taqg.js:574483-574513 placement
 var MATH_RENDERING_DRAWN = "math_rendering_drawn";
-//@ chunk-tyg7f3ek.js:534339-534418 placement
+//@ chunk-0yw3taqg.js:574513-574592 placement
 function isMathRenderingEvent(eventName) {
   return eventName === "math_rendering_drawn" || eventName === "math_rendering_refused";
 }
-//@ chunk-tyg7f3ek.js:534418-534673 placement
+//@ chunk-0yw3taqg.js:574592-574847 placement
 var MATH_RENDERING_FIELDS = [
   "formula_tex_length",
   "formula_nodes",
@@ -138,18 +138,18 @@ var MATH_RENDERING_FIELDS = [
   "parse_error",
   "threw",
 ];
-//@ chunk-tyg7f3ek.js:534673-534715 placement
+//@ chunk-0yw3taqg.js:574847-574889 placement
 function findMathRenderingField(reason) {
   return MATH_RENDERING_FIELDS.find((field) => field === reason);
 }
-//@ chunk-tyg7f3ek.js:534715-534738 placement
+//@ chunk-0yw3taqg.js:574889-574912 placement
 function alwaysFalse() {
   return false;
 }
-//@ chunk-tyg7f3ek.js:538953-539088 placement
+//@ chunk-0yw3taqg.js:579271-579406 placement
 var PROXIED_OTEL_EVENTS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var OTEL_EVENT_NOTIFICATION_SCHEMA;
-deferInit("chunk-tyg7f3ek.js:538953", () => {
+deferInit("chunk-0yw3taqg.js:579271", () => {
   PROXIED_OTEL_EVENTS = new Set(["tengu_message_rated", "tengu_feedback_survey_event"]);
   OTEL_EVENT_NOTIFICATION_SCHEMA = DoctorLazy(() =>
     objectSchema({
@@ -158,7 +158,7 @@ deferInit("chunk-tyg7f3ek.js:538953", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:539088-539662 placement
+//@ chunk-0yw3taqg.js:579406-579980 placement
 /**
  * 连接到桌面版 ccd_session MCP 时，转发其 log_otel_event 通知为本地遥测事件。
  */
@@ -190,7 +190,7 @@ function installCcdSessionTelemetryProxy(clients) {
   });
   hookClientNotificationErrors(identityId2(found.client), "notification_channel_error", "ccd_session");
 }
-//@ chunk-tyg7f3ek.js:539699-540014 placement
+//@ chunk-0yw3taqg.js:580017-580332 placement
 function bytecodeOrderStats() {
   if (!alwaysTrue()) return {};
   let { bytecodeOrderStats } = importMetaRequire("bun:jsc");
@@ -205,7 +205,7 @@ function bytecodeOrderStats() {
     bytecode_cold_kib: Math.round(stats.coldBytes / 1024),
   };
 }
-//@ chunk-tyg7f3ek.js:540051-540125 placement
+//@ chunk-0yw3taqg.js:580369-580443 placement
 function bridgeMessageUuid(uuid, origin) {
   if (uuid === undefined) return;
   return origin === "bridge" ? (normalizeUuidOrNull(uuid) ?? undefined) : uuid;

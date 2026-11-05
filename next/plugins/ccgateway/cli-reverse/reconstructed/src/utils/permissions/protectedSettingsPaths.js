@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：受保护的主目录根（HOME、USERPROFILE 等）；受保护的设置文件列表（各层级）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7wdbg1ct.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-91xvghb6.js (14), chunk-rvq35mve.js (4)
  * attribution: placement 18
  */
 import { join, basename } from "path";
@@ -40,7 +40,7 @@ import {
 } from "../managedEnvApply.js";
 import { getEnvCaseInsensitive, hostOwnedEnvNames } from "../plugins/securityDefaultPlugin.js";
 import { claudeTempDir, MAX_SAFE_TMPDIR_BYTES } from "../tempDir.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "./filesystem.js";
 import { getPlatform } from "../platform.js";
 import { logForDebugging } from "../debug.js";
 import { identity } from "../identity.js";
@@ -49,7 +49,7 @@ import { spellingIn, settingsEnvKeptForChildren } from "../subprocessEnv.js";
 import { isSecretEnvValue } from "../settings/policyHelper/helperEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7wdbg1ct.js:11743-11818 placement (2.1.88 match: _temp9, 1)
+//@ chunk-91xvghb6.js:11690-11765 placement (2.1.88 match: _temp9, 1)
 /**
  * protectedSettingSourcesWithFlag：受保护设置源（含 flagSettings）。
  */
@@ -58,7 +58,7 @@ function protectedSettingSourcesWithFlag() {
     ? [...PROJECT_SETTING_SOURCES, "flagSettings"]
     : PROJECT_SETTING_SOURCES;
 }
-//@ chunk-7wdbg1ct.js:11818-11889 placement
+//@ chunk-91xvghb6.js:11765-11836 placement
 function unprotectedEnabledSettingSources() {
   let protectedSources = protectedSettingSourcesWithFlag();
   return SETTING_SOURCES.filter(
@@ -66,7 +66,7 @@ function unprotectedEnabledSettingSources() {
       !protectedSources.includes(candidateSource) && isSettingSourceEnabled(candidateSource),
   );
 }
-//@ chunk-7wdbg1ct.js:11889-12466 placement
+//@ chunk-91xvghb6.js:11836-12413 placement (2.1.88 match: getSettingsRootPathForSource, 0.324)
 /**
  * 受保护的设置文件列表（各层级）。
  */
@@ -113,7 +113,7 @@ function protectedSettingsFiles(location, sourceLabel = "unknown") {
       .map(({ names }) => names),
   ].flatMap((names) => names ?? []);
 }
-//@ chunk-7wdbg1ct.js:12466-12701 placement
+//@ chunk-91xvghb6.js:12413-12648 placement
 function readSettingsEnvKeys(settingsPath, cache, label = "unknown") {
   let { settings, errors, textRead } =
     cache === undefined
@@ -127,7 +127,7 @@ function readSettingsEnvKeys(settingsPath, cache, label = "unknown") {
     ? null
     : Object.keys(settings.env ?? {});
 }
-//@ chunk-7wdbg1ct.js:12701-12846 placement
+//@ chunk-91xvghb6.js:12648-12793 placement
 function collectSettingsEnv(sources) {
   let env = {};
   for (let source of sources)
@@ -140,7 +140,7 @@ function collectSettingsEnv(sources) {
     } catch {}
   return env;
 }
-//@ chunk-7wdbg1ct.js:12846-12964 placement
+//@ chunk-91xvghb6.js:12793-12910 placement
 /**
  * 设置生效后的环境：全局配置 env 加上各设置来源的 env（仅在主目录变量未被改动时）。
  */
@@ -158,7 +158,7 @@ function getSettingsAppliedEnv() {
     ...(homeUnchanged ? collectSettingsEnv(unprotectedEnabledSettingSources()) : {}),
   };
 }
-//@ chunk-7wdbg1ct.js:12964-13125 placement
+//@ chunk-91xvghb6.js:12910-13071 placement
 /**
  * 在给定变量名里找出被设置改动过的那个（与设置加载前快照比较，主目录变量或非设置值的变化）。
  */
@@ -175,7 +175,7 @@ function findEnvChangedBySettings(names) {
     );
   });
 }
-//@ chunk-7wdbg1ct.js:13125-13475 placement
+//@ chunk-91xvghb6.js:13071-13421 placement (2.1.88 match: cacheToObject, 0.68)
 /**
  * 去掉受保护环境变量。
  */
@@ -207,7 +207,7 @@ function withoutProtectedEnv(env) {
     ),
   };
 }
-//@ chunk-7wdbg1ct.js:13475-13655 placement
+//@ chunk-91xvghb6.js:13421-13601 placement
 /**
  * 受保护临时目录，加上按设置加载前环境推导出的 Claude 临时目录（超长时换短根）。
  */
@@ -223,9 +223,9 @@ function getProtectedTempDirsWithPreSettings() {
     Buffer.byteLength(candidate) <= MAX_SAFE_TMPDIR_BYTES
       ? candidate
       : join(getTmpDirFromEnv(env) ?? tmpRoot, baseName);
-  return uniq([...protectedTempDirs, candidate, fallback]);
+  return normalizeCaseForComparison_2([...protectedTempDirs, candidate, fallback]);
 }
-//@ chunk-7wdbg1ct.js:13655-14380 placement
+//@ chunk-91xvghb6.js:13601-14326 placement
 /**
  * 受保护的主目录根（HOME、USERPROFILE 等）。
  */
@@ -265,7 +265,7 @@ function protectedHomeRoots() {
       try {
         let real = realpathSync(verdict.spelling);
         return {
-          roots: uniq([candidate, verdict.spelling, real]),
+          roots: normalizeCaseForComparison_2([candidate, verdict.spelling, real]),
           transient: false,
         };
       } catch {
@@ -275,16 +275,16 @@ function protectedHomeRoots() {
         };
       }
     });
-  let roots = uniq(mapped.flatMap(({ roots }) => roots));
+  let roots = normalizeCaseForComparison_2(mapped.flatMap(({ roots }) => roots));
   if (latchedPreSettingsEnvSnapshot !== undefined && !mapped.some(({ transient }) => transient)) {
     protectedRootsState.snapshot = latchedPreSettingsEnvSnapshot;
     protectedRootsState.roots = roots;
   }
   return roots;
 }
-//@ chunk-7wdbg1ct.js:14380-14453 placement
+//@ chunk-91xvghb6.js:14326-14399 placement
 var protectedRootsState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7wdbg1ct.js:14380", () => {
+deferInit("chunk-91xvghb6.js:14326", () => {
   protectedRootsState = identity(
     {
       snapshot: undefined,
@@ -296,30 +296,30 @@ deferInit("chunk-7wdbg1ct.js:14380", () => {
     },
   );
 });
-//@ chunk-7wdbg1ct.js:14453-14521 placement
+//@ chunk-91xvghb6.js:14399-14467 placement
 function tmpDirFromEnv(env) {
   return (
     stripTrailingSep(getEnvCaseInsensitive(env, "CLAUDE_CODE_TMPDIR") || undefined) ?? getTmpDirFromEnv(env)
   );
 }
-//@ chunk-7wdbg1ct.js:14521-14624 placement
+//@ chunk-91xvghb6.js:14467-14570 placement
 function getTmpDirFromEnv(env) {
   let readVar = (name) => getEnvCaseInsensitive(env, name) || undefined;
   let fallbackDir = "/tmp";
   return stripTrailingSep(readVar("TMPDIR") ?? readVar("TMP") ?? readVar("TEMP") ?? "/tmp");
 }
-//@ chunk-7wdbg1ct.js:14624-14695 placement
+//@ chunk-91xvghb6.js:14570-14641 placement
 function stripTrailingSep(value) {
   return value !== undefined && value.length > 1 ? value.replace(/[\\/]+$/, "") : value;
 }
-//@ chunk-7wdbg1ct.js:14695-14737 placement
+//@ chunk-rvq35mve.js:456-498 placement
 /**
  * isNpmPluginSourcePath：是否为 npm 插件来源。
  */
 function isNpmPluginSourcePath(pluginRef) {
   return pluginRef !== undefined && isNpmPluginSource(pluginRef);
 }
-//@ chunk-7wdbg1ct.js:14737-15124 placement
+//@ chunk-rvq35mve.js:498-885 placement
 /**
  * 计算插件所需的 BUN_OPTIONS 保护值。
  */
@@ -346,7 +346,7 @@ function bunOptionsGuard(pluginSourcePath, env) {
   }
   return;
 }
-//@ chunk-7wdbg1ct.js:15124-15233 placement
+//@ chunk-rvq35mve.js:885-994 placement
 /**
  * 删除环境对象里任意大小写的 BUN_OPTIONS 键后写入新值。
  */
@@ -354,7 +354,7 @@ function setBunOptions(env, value) {
   for (let key of Object.keys(env)) if (key.toUpperCase() === "BUN_OPTIONS") delete env[key];
   env.BUN_OPTIONS = value;
 }
-//@ chunk-7wdbg1ct.js:15233-15558 placement
+//@ chunk-rvq35mve.js:994-1319 placement
 /**
  * 检查插件是否改动 BUN_OPTIONS。
  */
@@ -370,15 +370,15 @@ function checkPluginBunOptions(pluginSourcePath, childEnv, env) {
   }
 }
 export {
-  bunOptionsGuard,
   checkPluginBunOptions,
-  isNpmPluginSourcePath,
+  protectedHomeRoots,
   setBunOptions,
+  withoutProtectedEnv,
+  isNpmPluginSourcePath,
+  bunOptionsGuard,
+  getSettingsAppliedEnv,
+  getProtectedTempDirsWithPreSettings,
+  findEnvChangedBySettings,
   protectedSettingsFiles,
   protectedSettingSourcesWithFlag,
-  findEnvChangedBySettings,
-  withoutProtectedEnv,
-  protectedHomeRoots,
-  getProtectedTempDirsWithPreSettings,
-  getSettingsAppliedEnv,
 };

@@ -3,10 +3,10 @@
  *
  * 向导底部导航（enter 继续/esc 返回/关闭）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/wizard/WizardNavigationFooter.tsx
- * pieces: chunk-18hwfzwa.js (1)
- * attribution: callgraph-fingerprint 1
+ * pieces: chunk-czq1j3j2.js (1)
+ * attribution: callgraph-witnessed 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
@@ -32,7 +32,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:653476-654611 callgraph-fingerprint (2.1.88 match: WizardNavigationFooter, 0.258)
+//@ chunk-czq1j3j2.js:674180-675315 callgraph-witnessed (2.1.88 match: WizardNavigationFooter, 0.257)
 function WizardNavigationFooter(props) {
   let $ = useMemoCache(22);
   let { onDone, cloudRowCheck } = props;

@@ -3,10 +3,10 @@
  *
  * work secret 解码与校验、会话 URL 构造、registerWorker（取 worker_epoch）、会话 ID 后缀比较、网关 URL 规范化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/workSecret.ts
- * pieces: chunk-aepeg2w5.js (2), chunk-ptaf548f.js (6)
- * attribution: fingerprint 4, layout 4
+ * pieces: chunk-exfmq47h.js (1), chunk-nkxt28ky.js (6)
+ * attribution: fingerprint 3, layout 4
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
@@ -25,24 +25,16 @@ import { claudeCodeUserAgent } from "../utils/http.js";
 import { plainServiceText } from "./debugUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:238316-238366 fingerprint (2.1.88 match: buildSdkUrl, 0.538)
-/**
- * 允许使用 http:// 的本地主机名集合。
- */
-var LOCALHOST_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:238316", () => {
-  LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
-});
-//@ chunk-aepeg2w5.js:802859-802953 fingerprint (2.1.88 match: buildCCRv2SdkUrl, 1)
+//@ chunk-exfmq47h.js:823970-824064 fingerprint (2.1.88 match: buildCCRv2SdkUrl, 1)
 var CODE_SESSIONS_PATH = "/v1/code/sessions/";
 var CODE_TRIGGERS_PATH_PATTERN = /^\/v1\/code\/triggers(?:\?|$)|^\/v1\/code\/triggers\/[\w-]+$/;
-//@ chunk-ptaf548f.js:2436-3027 fingerprint (2.1.88 match: decodeWorkSecret, 0.429)
+//@ chunk-nkxt28ky.js:2437-3028 fingerprint (2.1.88 match: decodeWorkSecret, 0.43)
 /**
  * work secret schema（version=1、session_ingress_token、api_base_url，可选 claude_code_args、mcp_config、auto_mode_environment、worktree）与错误文案表。
  */
 var workSecretSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var WORK_SECRET_ERRORS;
-deferInit("chunk-ptaf548f.js:2436", () => {
+deferInit("chunk-nkxt28ky.js:2437", () => {
   workSecretSchema = DoctorLazy(() =>
     looseObject({
       version: literal(1),
@@ -67,7 +59,7 @@ deferInit("chunk-ptaf548f.js:2436", () => {
     missing_api_base_url: "Invalid work secret: missing api_base_url",
   };
 });
-//@ chunk-ptaf548f.js:3027-3135 layout
+//@ chunk-nkxt28ky.js:3028-3136 layout
 /**
  * work secret 形状不合法的错误，verdict 为具体原因码。
  */
@@ -79,7 +71,7 @@ class WorkSecretShapeError extends Error {
     this.name = "WorkSecretShapeError";
   }
 }
-//@ chunk-ptaf548f.js:3135-3548 layout
+//@ chunk-nkxt28ky.js:3136-3549 layout
 /**
  * 解码 base64url JSON 的 work secret 并校验；按缺失字段抛 WorkSecretShapeError（secret_did_not_decode / unsupported_version / missing_*）。
  */
@@ -99,7 +91,7 @@ function decodeWorkSecret(secret) {
     throw new WorkSecretShapeError("missing_session_ingress_token");
   throw new WorkSecretShapeError("missing_api_base_url");
 }
-//@ chunk-ptaf548f.js:3548-3678 layout
+//@ chunk-nkxt28ky.js:3549-3679 layout
 /**
  * 两个会话 ID 是否相同：完全相等，或去掉前缀后的末段相同（长度≥4，兼容 cse_/session_）。
  */
@@ -109,7 +101,7 @@ function sameSessionId(a, b) {
   let bBody = b.slice(b.lastIndexOf("_") + 1);
   return aBody.length >= 4 && aBody === bBody;
 }
-//@ chunk-ptaf548f.js:3678-3769 layout
+//@ chunk-nkxt28ky.js:3679-3770 layout
 /**
  * 拼 v2 会话 URL：{base}/v1/code/sessions/{sessionId}（校验 ID 安全）。
  */
@@ -117,7 +109,7 @@ function buildCCRv2SdkUrl(apiBaseUrl, sessionId) {
   validateBridgeId(sessionId, "sessionId");
   return `${apiBaseUrl.replace(/\/+$/, "")}/v1/code/sessions/${sessionId}`;
 }
-//@ chunk-ptaf548f.js:3769-4326 fingerprint (2.1.88 match: registerWorker, 0.762)
+//@ chunk-nkxt28ky.js:3770-4327 fingerprint (2.1.88 match: registerWorker, 0.754)
 /**
  * POST {sessionUrl}/worker/register 注册 worker，返回 worker_epoch（字符串转数字，非安全整数报错）。
  */
@@ -150,8 +142,7 @@ export {
   buildCCRv2SdkUrl,
   registerWorker,
   sameSessionId,
-  LOCALHOST_NAMES,
+  WorkSecretShapeError,
   CODE_SESSIONS_PATH,
   CODE_TRIGGERS_PATH_PATTERN,
-  WorkSecretShapeError,
 };

@@ -3,12 +3,12 @@
  *
  * C0 控制字符常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/ansi.ts
- * pieces: chunk-wz6vk74d.js (1)
+ * pieces: chunk-3zb8bxyj.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-wz6vk74d.js:191-507 fingerprint (2.1.88 match: C0, 0.887)
+//@ chunk-3zb8bxyj.js:191-508 fingerprint (2.1.88 match: C0, 0.886)
 /**
  * C0 控制字符码表（NUL…US 与 DEL）以及 ESC/BEL/分隔符、字符集复位与各转义引导符（CSI/OSC/DCS/APC/PM/SOS/ST）的字符码。
  */
@@ -60,4 +60,4 @@ var ESC_TYPE = {
   SOS: 88,
   ST: 92,
 };
-export { BEL, ESC, SEP, ESC_TYPE, RESET_CHARSET, C0 };
+export { ESC, SEP, BEL, ESC_TYPE, RESET_CHARSET, C0 };

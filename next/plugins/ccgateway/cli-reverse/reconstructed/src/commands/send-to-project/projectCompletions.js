@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/send-to-project 的 Project 名补全。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ghbe0g3f.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kmftmb8g.js (9)
  * attribution: placement 9
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -32,21 +32,21 @@ import { lastActiveLabel } from "../../components/projects/continueInProjectsTar
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-ghbe0g3f.js:3704-3747 placement
+//@ chunk-kmftmb8g.js:4040-4083 placement
 var PROJECT_LIST_TTL_MS = 30000;
 var PROJECT_LIST_MAX_STALE_MS = 300000;
 var PROJECT_LIST_FAILED_COOLDOWN_MS = 15000;
 var PROJECT_LIST_REFUSED_COOLDOWN_MS = 60000;
 var PROJECT_LIST_TIMEOUT_MS = 1e4;
-//@ chunk-ghbe0g3f.js:3747-3794 placement
+//@ chunk-kmftmb8g.js:4083-4130 placement
 class ProjectListCache {
   listing = null;
   inflight = null;
   failed = null;
 }
-//@ chunk-ghbe0g3f.js:3794-3817 placement
+//@ chunk-kmftmb8g.js:4130-4153 placement
 var _ = new HostScoped(() => new ProjectListCache());
-//@ chunk-ghbe0g3f.js:3817-4060 placement
+//@ chunk-kmftmb8g.js:4153-4396 placement
 async function getProjectNameCompletions(args, token, fetchProjects = listPersonalProjects) {
   if (!(canOfferSendToProject() && !alwaysFalseRemoteGate()) && !alwaysFalseGate()) return [];
   let projectCompletionPrefix = parseProjectCompletionPrefix(args, token);
@@ -62,7 +62,7 @@ async function getProjectNameCompletions(args, token, fetchProjects = listPerson
     ? []
     : matchProjectCompletions(cachedProjectListing.offered, projectCompletionPrefix, new Date());
 }
-//@ chunk-ghbe0g3f.js:4060-4403 placement
+//@ chunk-kmftmb8g.js:4396-4739 placement
 /**
  * 从已输入的参数判断是否在补全项目名：未开引号时只有单个普通词才补全；开了引号时返回已输入的词与正在输入的部分。名字里含引号时不补全。
  */
@@ -86,7 +86,7 @@ function parseProjectCompletionPrefix(args, token) {
         opened: args.length > 0,
       };
 }
-//@ chunk-ghbe0g3f.js:4403-4913 placement
+//@ chunk-kmftmb8g.js:4739-5249 placement
 /**
  * 用已输入词与部分词匹配项目名（逐词规范化比较），按完全相等、前缀、包含三档排序，生成带引号的补全值与"最后活跃"说明。
  */
@@ -116,7 +116,7 @@ function matchProjectCompletions(offered, { before, partial, opened }, now) {
   }
   return exactMatches.length > 0 ? exactMatches : [...prefixMatches, ...containsMatches];
 }
-//@ chunk-ghbe0g3f.js:4913-5200 placement
+//@ chunk-kmftmb8g.js:5249-5536 placement
 function toCompletableProjects(projects, byName) {
   return projects.flatMap((project) => {
     let filtered = project.name.split(/\s+/).filter(Boolean);
@@ -139,7 +139,7 @@ function toCompletableProjects(projects, byName) {
       : [];
   });
 }
-//@ chunk-ghbe0g3f.js:5200-5703 placement
+//@ chunk-kmftmb8g.js:5536-6039 placement
 /**
  * 按登录身份缓存项目列表：过期且没有在途请求、最近也没失败时发起刷新；缓存够新返回缓存，否则等在途请求；身份不符返回 null。
  */
@@ -174,7 +174,7 @@ async function getCachedProjectListing(cache, login, now, fetchProjects) {
   if (inflight === null || inflight.login !== login) return null;
   return inflight.promise;
 }
-//@ chunk-ghbe0g3f.js:5703-6008 placement
+//@ chunk-kmftmb8g.js:6039-6344 placement
 /**
  * 带超时拉取个人项目列表并转成补全候选；失败记调试日志，返回 listing=null 与是否被服务端拒绝。
  */

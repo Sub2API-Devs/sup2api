@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：同步文件通道客户端
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mxpjbr4y.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s1cmamfh.js (8)
+ * attribution: placement 6, layout 2
  */
 import { validateBridgeId, toInfraSessionId } from "../../bridge/sessionIdCompat.js";
 import {
@@ -26,11 +26,11 @@ import {
   MAX_LANE_FILE_BYTES,
   laneEscapeError,
   base64Length,
+  UNAVAILABLE_LANE,
   laneOutcomeOf,
   isHttpSuccess,
   syncedFileContentSchema,
   withFailedStatus,
-  UNAVAILABLE_LANE,
   syncedFileDigestSchema,
   syncedFileErrorSchema,
   SYNCED_FILE_LIMIT_EXCEEDED,
@@ -53,7 +53,7 @@ import {
   isLaunchConsentBlocked,
 } from "../../utils/teleport/homeSettingsMode.js";
 
-//@ chunk-mxpjbr4y.js:6624-9545 placement
+//@ chunk-s1cmamfh.js:6626-9271 placement
 /**
  * 创建同步文件通道客户端：带设备签名的上传开始/提交、读取与状态查询。
  */
@@ -247,7 +247,7 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
       },
     );
   }
-  async function getRow(filePath, signal, knownSize = 0, maxBytes = MAX_WORKING_FILE_BYTES) {
+  async function getRow(filePath, signal, knownSize = 0, sizeCapBytes = MAX_WORKING_FILE_BYTES) {
     if (laneEscapeError(filePath))
       return {
         kind: "failed",
@@ -256,48 +256,30 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
       path: lanePath(filePath),
     });
     let timeoutMs = uploadTimeoutForSize(base64PaddedLength(knownSize));
-    let result = await withRetry(
-      (headers) =>
-        apiClient.get(`/v1/code/sessions/${infraSessionId}/file?${uRLSearchParams.toString()}`, {
-          auth: "teleport-org",
-          credentials,
-          headers,
-          timeout: timeoutMs,
-          validateStatus: () => true,
-          signal,
-          maxContentLength: base64Length(maxBytes),
-        }),
+    let query = false;
+    let tag = await withRetry(
+      async (headers) => {
+        let sawTruncation = await apiClient.get(
+          `/v1/code/sessions/${infraSessionId}/file?${uRLSearchParams.toString()}`,
+          {
+            auth: "teleport-org",
+            credentials,
+            headers,
+            timeout: timeoutMs,
+            validateStatus: () => true,
+            signal,
+            maxContentLength: base64Length(sizeCapBytes),
+          },
+        );
+        query ||= sawTruncation.ok && sawTruncation.status === 429;
+        return sawTruncation;
+      },
       signal,
       {
         attempts: timeoutMs > SYNCED_FILE_CONSTANTS ? 1 : MAX_LANE_RETRIES,
       },
     );
-    if (typeof result === "string") return laneOutcomeOf(result);
-    if (isHttpSuccess(result.status)) {
-      let parsed = syncedFileContentSchema().safeParse(result.data);
-      if (!parsed.success)
-        return {
-          kind: "failed",
-          status: result.status,
-        };
-      let buffer = Buffer.from(parsed.data.content, "base64");
-      return buffer.length > maxBytes
-        ? {
-            kind: "failed",
-            status: result.status,
-            tooLarge: true,
-          }
-        : {
-            kind: "ok",
-            content: buffer,
-            etag: parsed.data.content_sha256,
-          };
-    }
-    if (result.status === 404)
-      return {
-        kind: "not_found",
-      };
-    return withFailedStatus(laneOutcomeOf(result), result.status);
+    return markHad429(laneOutcomeFromResponse(tag, sizeCapBytes), query);
   }
   return {
     putStoreRow: putRow,
@@ -305,7 +287,45 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
     ...UNAVAILABLE_LANE,
   };
 }
-//@ chunk-mxpjbr4y.js:9545-10001 placement
+//@ chunk-s1cmamfh.js:9271-9643 layout
+function laneOutcomeFromResponse(response, maxBytes) {
+  if (typeof response === "string") return laneOutcomeOf(response);
+  if (isHttpSuccess(response.status)) {
+    let parsed = syncedFileContentSchema().safeParse(response.data);
+    if (!parsed.success)
+      return {
+        kind: "failed",
+        status: response.status,
+      };
+    let buffer = Buffer.from(parsed.data.content, "base64");
+    return buffer.length > maxBytes
+      ? {
+          kind: "failed",
+          status: response.status,
+          tooLarge: true,
+        }
+      : {
+          kind: "ok",
+          content: buffer,
+          etag: parsed.data.content_sha256,
+        };
+  }
+  if (response.status === 404)
+    return {
+      kind: "not_found",
+    };
+  return withFailedStatus(laneOutcomeOf(response), response.status);
+}
+//@ chunk-s1cmamfh.js:9643-9724 layout
+function markHad429(outcome, saw429) {
+  return saw429 && outcome.kind === "failed" && outcome.status !== 429
+    ? {
+        ...outcome,
+        hadA429: true,
+      }
+    : outcome;
+}
+//@ chunk-s1cmamfh.js:9724-10180 placement
 function parseLaneResponse(response) {
   if (typeof response === "string") return laneOutcomeOf(response);
   if (isHttpSuccess(response.status)) {
@@ -340,23 +360,23 @@ function parseLaneResponse(response) {
   }
   return withFailedStatus(laneOutcomeOf(response), response.status);
 }
-//@ chunk-mxpjbr4y.js:10001-10040 placement
+//@ chunk-s1cmamfh.js:10180-10219 placement
 /**
  * 把字节数换算成 base64 长度（4 字节对齐）。
  */
 function base64PaddedLength(length) {
   return Math.ceil(length / 3) * 4;
 }
-//@ chunk-mxpjbr4y.js:10040-10092 placement
+//@ chunk-s1cmamfh.js:10219-10271 placement
 /**
  * 按退避指数算重试等待（带抖动）。
  */
 function retryDelayMs(attempt) {
   return DEFAULT_UPLOAD_TIMEOUT_MS * 2 ** attempt * (0.5 + Math.random() / 2);
 }
-//@ chunk-mxpjbr4y.js:10092-10103 placement
+//@ chunk-s1cmamfh.js:10271-10282 placement
 var LANE_REQUEST_TIMEOUT_MS = 1e4;
-//@ chunk-mxpjbr4y.js:10103-10234 placement
+//@ chunk-s1cmamfh.js:10282-10413 placement
 async function canUseSyncedFileLane(launchConsent, isProjectStillSynced) {
   return (
     canForwardHomeSettings(homeSettingsForwardingFeature(launchConsent).enabledNow()) &&

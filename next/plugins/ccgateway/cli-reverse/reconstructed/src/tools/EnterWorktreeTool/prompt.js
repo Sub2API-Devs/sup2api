@@ -3,15 +3,15 @@
  *
  * 旧版已有同名文件，2.1.316 有扩充：EnterWorktree 工具提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (2)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: placement 2
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:117315-120631 placement
+//@ chunk-fmnbrxwy.js:132039-135355 placement
 /**
  * EnterWorktree 工具提示词。
  */
@@ -53,12 +53,12 @@ ${""}
 - \`path\` (optional): Path to an existing worktree to enter instead of creating one \u2014 of the current repository, or (on first entry from the launch directory) of a repository nested inside it. Mutually exclusive with \`name\`.
 `;
 }
-//@ chunk-kxyd0g16.js:120631-120658 placement
+//@ chunk-fmnbrxwy.js:135355-135382 placement
 /**
  * 按会话根记录已展示过的 worktree 提示集合（当前无引用）。
  */
 var worktreePromptsShownByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:120631", () => {
+deferInit("chunk-fmnbrxwy.js:135355", () => {
   worktreePromptsShownByRoot = new SessionRootSlot(() => new Set());
 });
 export { enterWorktreePrompt };

@@ -3,9 +3,9 @@
  *
  * 启动时向 Anthropic API 发一个 HEAD /api/hello 预热 TCP/TLS 连接（仅第一方直连、无代理/客户端证书时）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/apiPreconnect.ts
- * pieces: chunk-vbtpanx5.js (1)
+ * pieces: chunk-fxk1e28j.js (1)
  * attribution: fingerprint 1
  */
 import { getProviderState } from "./model/providerCaches.js";
@@ -16,7 +16,7 @@ import { env } from "./env.js";
 import { getOauthConfig } from "../constants/oauth.js";
 import { fetchWithRequestBodyCompression } from "../services/api/gzipRequestBody.js";
 
-//@ chunk-vbtpanx5.js:4813-5265 fingerprint (2.1.88 match: preconnectAnthropicApi, 0.678)
+//@ chunk-fxk1e28j.js:4825-5277 fingerprint (2.1.88 match: preconnectAnthropicApi, 0.678)
 /**
  * 预连接：每进程一次；只在第一方、非网关、无 HTTP(S)_PROXY/ANTHROPIC_UNIX_SOCKET/客户端证书时，对 ANTHROPIC_BASE_URL 或默认 API 发 HEAD /api/hello（10s 超时，忽略失败）。
  */

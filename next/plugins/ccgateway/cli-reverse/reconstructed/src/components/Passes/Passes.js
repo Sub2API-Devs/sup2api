@@ -3,9 +3,9 @@
  *
  * /passes 访客通行证卡片 ASCII 图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Passes/Passes.tsx
- * pieces: chunk-aa3cndeh.js (1)
+ * pieces: chunk-b38vrjgc.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 
-//@ chunk-aa3cndeh.js:9694-10490 fingerprint (2.1.88 match: Passes, 0.499)
+//@ chunk-b38vrjgc.js:10032-10828 fingerprint (2.1.88 match: Passes, 0.498)
 function Passes(props) {
   let $ = useMemoCache(3);
   let { pass } = props;

@@ -1,8 +1,8 @@
 /**
  * @smithy/signature-v4/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/signature-v4@5.4.0..5.6.4
- * pieces: chunk-kyj1a8d5.js (1)
+ * pieces: chunk-s8d82zme.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
 import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
-//@ chunk-kyj1a8d5.js:379-10813 cjs-fingerprint
+//@ chunk-s8d82zme.js:379-10813 cjs-fingerprint
 var require_signature_v4 = __commonJS(function (cjsExports) {
   var toHex = require_util_hex_encoding();
   var utf8Module = require_util_utf8();

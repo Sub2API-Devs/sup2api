@@ -3,9 +3,9 @@
  *
  * resume 后处理：采用/分叉 sessionId、恢复元数据、worktree、代理、权限模式、todos、文件历史。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionRestore.ts
- * pieces: chunk-08s5p3av.js (46), chunk-cqkdzt01.js (4)
+ * pieces: chunk-2snqx25v.js (46), chunk-xpe0pbqz.js (4)
  * attribution: placement 49, fingerprint 1
  */
 import { resolve, win32, dirname } from "path";
@@ -88,7 +88,7 @@ import { fromEnum, fromEnumOpt, lit } from "../services/analytics/safeMetadata.j
 import { stripAnyVersatileSuffix, strip1mSuffix, sameModelSpelling } from "./model/modelIds.js";
 import { FIRST_PARTY_MODEL_IDS } from "./model/configs.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
+import { SYNTHETIC_MODEL, createSystemMessage } from "./messages.js";
 import { findServedModel } from "./model/modelCatalog/servedCatalog.js";
 import {
   activeCatalogRowKnown,
@@ -111,7 +111,6 @@ import {
   compareSameContainment,
   worktreeLocationOf,
 } from "./worktreeIsolation.js";
-import { createSystemMessage } from "./messages.js";
 import { getCurrentWorktreeSession, restoreWorktreeSession } from "./worktree.js";
 import { getCwd } from "./cwd.js";
 import { setCwd } from "./Shell.js";
@@ -128,7 +127,7 @@ import { getPlansDirectory, primePlanSlugCollisions } from "./plans.js";
 import { reanchorGitFileWatcher } from "./git/gitFilesystem.js";
 import { clearIsGitMemo } from "./git.js";
 import { getReplBridgeHandle } from "../bridge/replBridgeHandle.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { switchSessionModelPin, noopModelPinReset } from "./sessionModelPin.js";
 import { resolveResumeSessionAdoption } from "./background/adopt.js";
 import { renameRecordingForSession } from "./asciicast.js";
@@ -145,35 +144,35 @@ import { removeInterruptedMessage } from "../cli/print.js";
 import { createSessionHooksRegistry } from "../services/plugins/accountSync/syncedPluginHooks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cqkdzt01.js:226-279 placement
+//@ chunk-xpe0pbqz.js:226-279 placement
 class SessionRestoredFlag {
   restored = false;
   markRestored() {
     this.restored = true;
   }
 }
-//@ chunk-cqkdzt01.js:279-302 placement
+//@ chunk-xpe0pbqz.js:279-302 placement
 var sessionRestoredSlot; // deferred: uses SessionRestoredFlag of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cqkdzt01.js:279", () => {
+deferInit("chunk-xpe0pbqz.js:279", () => {
   sessionRestoredSlot = new HostScoped(() => new SessionRestoredFlag());
 });
-//@ chunk-cqkdzt01.js:302-341 placement
+//@ chunk-xpe0pbqz.js:302-341 placement
 /**
  * markSessionRestored：标记会话已恢复。
  */
 function markSessionRestored(host) {
   sessionRestoredSlot.of(host).markRestored();
 }
-//@ chunk-cqkdzt01.js:341-380 placement
+//@ chunk-xpe0pbqz.js:341-380 placement
 /**
  * isSessionRestored：会话是否已恢复。
  */
 function isSessionRestored(host) {
   return sessionRestoredSlot.of(host).restored;
 }
-//@ chunk-08s5p3av.js:6314-6364 placement
+//@ chunk-2snqx25v.js:6381-6431 placement
 var restoreSourceState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-08s5p3av.js:6314", () => {
+deferInit("chunk-2snqx25v.js:6381", () => {
   restoreSourceState = identity(
     {
       recorded: null,
@@ -183,7 +182,7 @@ deferInit("chunk-08s5p3av.js:6314", () => {
     },
   );
 });
-//@ chunk-08s5p3av.js:6364-6518 placement
+//@ chunk-2snqx25v.js:6431-6585 placement
 /**
  * 记录恢复来源会话与 transcript 路径。
  */
@@ -200,7 +199,7 @@ function recordResumeSource({ sourceSessionId, transcriptPath }) {
           },
         };
 }
-//@ chunk-08s5p3av.js:6518-6605 placement
+//@ chunk-2snqx25v.js:6585-6672 placement
 /**
  * currentRestoreSource：当前来源会话的恢复来源。
  */
@@ -208,7 +207,7 @@ function currentRestoreSource() {
   let { recorded } = restoreSourceState;
   return recorded !== null && recorded.liveSessionId === getSessionId() ? recorded.source : null;
 }
-//@ chunk-08s5p3av.js:6605-6923 fingerprint (2.1.88 match: extractTodosFromTranscript, 1)
+//@ chunk-2snqx25v.js:6672-6990 fingerprint (2.1.88 match: extractTodosFromTranscript, 1)
 /**
  * 从转录中最后一次 TodoWrite 工具调用恢复 todo 列表。
  */
@@ -227,7 +226,7 @@ function extractTodosFromTranscript(messages) {
   }
   return [];
 }
-//@ chunk-08s5p3av.js:6923-7076 placement
+//@ chunk-2snqx25v.js:6990-7143 placement
 function maybeSwitchSessionForResume(options) {
   if (typeof options.resume !== "string" || options.forkSession || options.hasSessionIdFlag) return false;
   let resumeId = normalizeUuidOrNull(options.resume);
@@ -235,7 +234,7 @@ function maybeSwitchSessionForResume(options) {
   switchSession(identityAgentId(resumeId), "resume");
   return true;
 }
-//@ chunk-08s5p3av.js:7076-7492 placement (2.1.88 match: restoreSessionStateFromLog, 0.519)
+//@ chunk-2snqx25v.js:7143-7559 placement (2.1.88 match: restoreSessionStateFromLog, 0.519)
 /**
  * 从日志恢复文件历史、署名快照、todos 等运行时状态。
  */
@@ -272,11 +271,11 @@ function restoreSessionStateFromLog(result, setAppState, storageV5, context) {
     }
   }
 }
-//@ chunk-08s5p3av.js:7492-7514 placement
+//@ chunk-2snqx25v.js:7559-7581 placement
 function noopRestore(result) {
   return;
 }
-//@ chunk-08s5p3av.js:7514-7597 placement
+//@ chunk-2snqx25v.js:7581-7664 placement
 function computeStandaloneAgentContext(agentName, agentColor) {
   if (!agentName && !agentColor) return;
   return {
@@ -284,7 +283,7 @@ function computeStandaloneAgentContext(agentName, agentColor) {
     color: agentColor === "default" ? undefined : agentColor,
   };
 }
-//@ chunk-08s5p3av.js:7597-8894 placement (2.1.88 match: restoreAgentFromSession, 0.393)
+//@ chunk-2snqx25v.js:7664-8961 placement (2.1.88 match: restoreAgentFromSession, 0.393)
 /**
  * 按会话记录的 agent-setting 恢复主线程代理定义，找不到时警告。
  */
@@ -359,7 +358,7 @@ function restoreAgentFromSession(agentSetting, currentAgentDefinition, agentDefi
     agentType: definition.agentType,
   };
 }
-//@ chunk-08s5p3av.js:8894-9344 placement
+//@ chunk-2snqx25v.js:8961-9411 placement
 async function loadAgentDefinitionsForSessionCwd(path, storageV5) {
   if (!path || path === getOriginalCwd()) return;
   let resolvedPath = resolve(path);
@@ -392,7 +391,7 @@ async function loadAgentDefinitionsForSessionCwd(path, storageV5) {
     return;
   }
 }
-//@ chunk-08s5p3av.js:9344-9537 placement
+//@ chunk-2snqx25v.js:9411-9604 placement
 function shouldAttemptAgentRestoreInPrint(state) {
   if (!state.resumedAgentSetting || state.mainThreadAgentType || isCoworkAny())
     return {
@@ -409,7 +408,7 @@ function shouldAttemptAgentRestoreInPrint(state) {
     loud: true,
   };
 }
-//@ chunk-08s5p3av.js:9537-10014 placement
+//@ chunk-2snqx25v.js:9604-10081 placement
 /**
  * 恢复会话时可沿用的权限模式（plan/bypass 不沿用，auto 受合规限制）。
  */
@@ -433,7 +432,7 @@ async function resumedPermissionMode(permissionMode, hasExplicitMode) {
   }
   return permissionMode_2;
 }
-//@ chunk-08s5p3av.js:10014-10434 placement
+//@ chunk-2snqx25v.js:10081-10501 placement
 async function preparePlanModeRestoreOnInteractiveResume({
   storedPermissionMode,
   messages,
@@ -465,13 +464,13 @@ async function preparePlanModeRestoreOnInteractiveResume({
     }
   };
 }
-//@ chunk-08s5p3av.js:10434-10588 placement
+//@ chunk-2snqx25v.js:10501-10655 placement
 var MODEL_UNAVAILABLE_REASONS = {
   unknown_family: "not a model this version of Claude Code recognizes",
   not_allowed: "not allowed by this account's model settings",
   retired: "retired",
 };
-//@ chunk-08s5p3av.js:10588-10798 placement
+//@ chunk-2snqx25v.js:10655-10865 placement
 function startupModelWinsOverSessionRestore() {
   return Boolean(
     getMainLoopModelOverride() !== undefined ||
@@ -484,7 +483,7 @@ function startupModelWinsOverSessionRestore() {
     !usesFirstPartyModelIds(),
   );
 }
-//@ chunk-08s5p3av.js:10798-11528 placement
+//@ chunk-2snqx25v.js:10865-11603 placement
 async function restoreModelFromSession(
   messages,
   mainLoopModel,
@@ -520,17 +519,18 @@ async function restoreModelFromSession(
     let fallbackName = (mainLoopModel && stripAnyVersatileSuffix(mainLoopModel)) || "the default model";
     warn?.(
       `Session model ${decision.model} could not be restored (${MODEL_UNAVAILABLE_REASONS[decision.reason]}) \u2014 using ${fallbackName} instead.`,
+      decision.model,
     );
     return;
   }
   return decision.model;
 }
-//@ chunk-08s5p3av.js:11528-11595 placement
+//@ chunk-2snqx25v.js:11603-11670 placement
 function lastTranscriptModel(messages, mainLoopModel) {
   let decision = describeSessionModelRestore(messages, mainLoopModel);
   return decision.kind === "ok" ? decision.model : undefined;
 }
-//@ chunk-08s5p3av.js:11595-11751 placement (2.1.88 match: aliasMatchesParentTier, 0.83)
+//@ chunk-2snqx25v.js:11670-11826 placement (2.1.88 match: aliasMatchesParentTier, 0.83)
 /**
  * opusplan 覆盖 opus/sonnet，haiku 覆盖 haiku/sonnet（判断别名是否与父模型同档）。
  */
@@ -539,7 +539,7 @@ function aliasCoversModelFamily(alias, parentModel) {
   if (alias === "haiku") return parentModel.includes("haiku") || parentModel.includes("sonnet");
   return false;
 }
-//@ chunk-08s5p3av.js:11751-12755 placement
+//@ chunk-2snqx25v.js:11826-12830 placement
 function describeSessionModelRestore(messages, mainLoopModel) {
   let firstPartyIds = new Set(FIRST_PARTY_MODEL_IDS.map((modelId) => getCanonicalName(modelId)));
   let parsedModel = mainLoopModel ? parseUserSpecifiedModel(mainLoopModel) : undefined;
@@ -631,7 +631,7 @@ function describeSessionModelRestore(messages, mainLoopModel) {
     kind: "none",
   };
 }
-//@ chunk-08s5p3av.js:12755-12888 placement
+//@ chunk-2snqx25v.js:12830-12963 placement
 function lastRefusalFallback(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
@@ -639,7 +639,7 @@ function lastRefusalFallback(messages) {
   }
   return;
 }
-//@ chunk-08s5p3av.js:12888-12994 placement
+//@ chunk-2snqx25v.js:12963-13069 placement
 function isRefusalFallbackModel(messages, model) {
   let fallback = lastRefusalFallback(messages);
   if (!fallback) return false;
@@ -647,7 +647,7 @@ function isRefusalFallbackModel(messages, model) {
   let modelBase = stripAnyVersatileSuffix(model);
   return fallbackBase === modelBase || getCanonicalName(fallbackBase) === getCanonicalName(modelBase);
 }
-//@ chunk-08s5p3av.js:12994-13184 placement
+//@ chunk-2snqx25v.js:13069-13259 placement
 function neutralizeForkFallbackBanners(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
@@ -656,7 +656,7 @@ function neutralizeForkFallbackBanners(messages) {
     if (message?.type === "user") delete message.turnAttributionKey;
   }
 }
-//@ chunk-08s5p3av.js:13184-13283 placement
+//@ chunk-2snqx25v.js:13259-13358 placement
 function carriedFallbackModelForResume(messages) {
   let fallback = lastRefusalFallback(messages);
   return fallback?.neutralizedByFork === true
@@ -665,13 +665,13 @@ function carriedFallbackModelForResume(messages) {
       }
     : undefined;
 }
-//@ chunk-08s5p3av.js:13283-13344 placement
+//@ chunk-2snqx25v.js:13358-13419 placement
 function logResumeModelRestore(outcome) {
   logEvent("tengu_resume_model_restore", {
     outcome: fromEnum(outcome),
   });
 }
-//@ chunk-08s5p3av.js:13344-13433 placement
+//@ chunk-2snqx25v.js:13419-13508 placement
 function prefetchBootstrapForResume(storageV5, credentials) {
   trackClientDataFetch(
     import("../services/api/bootstrap.js").then((bootstrap) =>
@@ -679,7 +679,7 @@ function prefetchBootstrapForResume(storageV5, credentials) {
     ),
   );
 }
-//@ chunk-08s5p3av.js:13433-13998 placement
+//@ chunk-2snqx25v.js:13508-14073 placement
 function installRestoredModel(messages, model, isFork, storageV5, credentials) {
   if (!isRefusalFallbackModel(messages, model)) {
     setMainLoopModelOverride(model);
@@ -716,7 +716,7 @@ function installRestoredModel(messages, model, isFork, storageV5, credentials) {
   });
   return model;
 }
-//@ chunk-08s5p3av.js:13998-14369 placement
+//@ chunk-2snqx25v.js:14073-14444 placement
 function rearmRefusalFallbackHeaderFromTranscript(messages, isFork) {
   if (isFork) return;
   let flattened = messages.flatMap((message) =>
@@ -737,7 +737,7 @@ function rearmRefusalFallbackHeaderFromTranscript(messages, isFork) {
     });
   }
 }
-//@ chunk-08s5p3av.js:14369-14431 placement
+//@ chunk-2snqx25v.js:14444-14506 placement
 async function reloadAgentsForModeSwitch(
   modeSwitchEnabled,
   currentCwd,
@@ -748,13 +748,13 @@ async function reloadAgentsForModeSwitch(
   if (!modeSwitchEnabled) return agentDefinitions;
   return reloadAgentDefinitionsForModeSwitch(currentCwd, cliAgents, storageV5);
 }
-//@ chunk-08s5p3av.js:14431-14543 placement
+//@ chunk-2snqx25v.js:14506-14618 placement
 async function reloadAgentDefinitionsForModeSwitch(cwd, cliAgents, storageV5) {
   getHostState().agentDefinitions.clear();
   let freshAgentDefs = await getAgentDefinitionsWithOverrides(cwd, storageV5);
   return rebuildAgentDefinitions(freshAgentDefs, [...freshAgentDefs.allAgents, ...cliAgents]);
 }
-//@ chunk-08s5p3av.js:14543-14591 placement
+//@ chunk-2snqx25v.js:14618-14666 placement
 function realpathOrSelf(path) {
   try {
     return realpathSync(path);
@@ -762,7 +762,7 @@ function realpathOrSelf(path) {
     return path;
   }
 }
-//@ chunk-08s5p3av.js:14591-14732 placement
+//@ chunk-2snqx25v.js:14666-14807 placement
 function directoryState(path) {
   try {
     return statSync(path).isDirectory() ? "present" : "gone";
@@ -771,10 +771,10 @@ function directoryState(path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "gone" : "inaccessible";
   }
 }
-//@ chunk-08s5p3av.js:14732-14815 placement
+//@ chunk-2snqx25v.js:14807-14890 placement
 var WORKTREE_UNBOUND_SAVE_OFF_MESSAGE =
   "The worktree binding could not be cleared because transcript saving is off";
-//@ chunk-08s5p3av.js:14815-15660 placement
+//@ chunk-2snqx25v.js:14890-15735 placement
 function worktreeResumeRefusalError(refusal, options) {
   if (refusal.reason === "pin-is-own-launch-tree")
     return `Error: ${stripControlCharsForMessage(refusal.message)} The worktree binding is kept.
@@ -791,7 +791,7 @@ function worktreeResumeRefusalError(refusal, options) {
   return `Error: cannot resume into worktree ${stripControlCharsForMessage(refusal.worktreePath)}: ${stripControlCharsForMessage(refusal.message)} This session was not started.${bindingNote}
 `;
 }
-//@ chunk-08s5p3av.js:15660-15952 placement
+//@ chunk-2snqx25v.js:15735-16027 placement
 function worktreeGoneHeadlessNotice(refusal, options) {
   let bindingNote = options.bindingCleared
     ? "The worktree binding has been cleared."
@@ -799,7 +799,7 @@ function worktreeGoneHeadlessNotice(refusal, options) {
   return `Notice: the worktree ${stripControlCharsForMessage(refusal.worktreePath)} for this session no longer exists; continuing in the current directory without worktree isolation. ${bindingNote}
 `;
 }
-//@ chunk-08s5p3av.js:15952-16984 placement
+//@ chunk-2snqx25v.js:16027-17059 placement
 function worktreeResumeNotice(notice) {
   let saveOffNote = `${WORKTREE_UNBOUND_SAVE_OFF_MESSAGE}; a later --resume will re-check it.`;
   if (notice.reason === "worktree-gone")
@@ -814,19 +814,19 @@ function worktreeResumeNotice(notice) {
   }
   return `Could not verify your worktree ${stripControlCharsForMessage(notice.worktreePath)} this time, so this session is working in the current directory without worktree isolation. The worktree binding is kept and a later --resume will retry it. If this keeps happening, the worktree's git metadata may need repair.`;
 }
-//@ chunk-08s5p3av.js:16984-17021 placement
+//@ chunk-2snqx25v.js:17059-17096 placement
 var MEMORY_STILL_PAUSED_MESSAGE = "Memory is still paused from";
-//@ chunk-08s5p3av.js:17021-17043 placement
+//@ chunk-2snqx25v.js:17096-17118 placement
 function restoredMemoryPauseNotice() {
   return;
 }
-//@ chunk-08s5p3av.js:17043-17094 placement
+//@ chunk-2snqx25v.js:17118-17169 placement
 var AUTO_MEMORY_OFF_MESSAGE = "Auto-memory is still off for this session";
-//@ chunk-08s5p3av.js:17094-17116 placement
+//@ chunk-2snqx25v.js:17169-17191 placement
 function restoredAutoMemorySessionNotice() {
   return;
 }
-//@ chunk-08s5p3av.js:17116-17428 placement
+//@ chunk-2snqx25v.js:17191-17503 placement
 function pushRestoredMemoryPauseNotice(messages) {
   for (let [notice, marker] of [
     [restoredMemoryPauseNotice(), MEMORY_STILL_PAUSED_MESSAGE],
@@ -850,7 +850,7 @@ function pushRestoredMemoryPauseNotice(messages) {
     messages.push(createSystemMessage(notice, "notice"));
   }
 }
-//@ chunk-08s5p3av.js:17428-17603 placement
+//@ chunk-2snqx25v.js:17503-17678 placement
 function isNetworkTranscriptPath(path) {
   if (isNonWslUncPath(path) || isDevicePrefixPath(path) || isDevicePrefixPath(win32.normalize(path))) {
     logForDebugging("[sessionRestore] transcript path is a network/NT-namespace path \u2014 not chdir-ing", {
@@ -860,13 +860,13 @@ function isNetworkTranscriptPath(path) {
   }
   return false;
 }
-//@ chunk-08s5p3av.js:17603-17662 placement
+//@ chunk-2snqx25v.js:17678-17737 placement
 function restoreWorktreeForResume(registry, worktreeSession, storageV5, options) {
   let worktreeForResume = resolveWorktreeForResume(worktreeSession, storageV5, options);
   registry.record(worktreeForResume);
   return worktreeForResume;
 }
-//@ chunk-08s5p3av.js:17662-21117 placement
+//@ chunk-2snqx25v.js:17737-21195 placement
 /**
  * 续接会话时恢复 worktree 绑定：校验记录路径（网络路径、不可验证祖先、无效 linked worktree 等拒绝），worktree 已不存在则清除绑定并回到当前目录，返回 poisoned/cleared 状态供提示。
  */
@@ -966,7 +966,7 @@ function resolveWorktreeForResume(record, projectPath, options) {
   let check = checkWorktreeIsolationSync(
     record.worktreePath,
     gitRootsForPath(record.originalCwd),
-    uniq([
+    normalizeCaseForComparison_2([
       realpathOrSelf(liveLaunchDir),
       ...gitRootsForPath(liveLaunchDir),
       realpathOrSelf(STARTUP_CWD_REALPATH),
@@ -1075,7 +1075,7 @@ function resolveWorktreeForResume(record, projectPath, options) {
   getReplBridgeHandle()?.refreshGitBranch?.();
   return null;
 }
-//@ chunk-08s5p3av.js:21117-21728 placement (2.1.88 match: exitRestoredWorktree, 0.202)
+//@ chunk-2snqx25v.js:21195-21807 placement (2.1.88 match: exitRestoredWorktree, 0.202)
 /**
  * 恢复的会话记录了 worktree 但不再适用时，切回原始 cwd。
  */
@@ -1119,7 +1119,7 @@ function exitRestoredWorktree(previousWorktreePath, storageV5) {
   reanchorGitFileWatcher();
   getReplBridgeHandle()?.refreshGitBranch?.();
 }
-//@ chunk-08s5p3av.js:21728-26335 placement (2.1.88 match: processResumedConversation, 0.411)
+//@ chunk-2snqx25v.js:21807-26414 placement (2.1.88 match: processResumedConversation, 0.411)
 /**
  * 恢复会话的后处理：采用或分叉 sessionId（--fork-session 时复制内容替换记录），恢复元数据、费用、worktree、代理定义与权限模式，返回启动 REPL 所需的消息与状态。
  */
@@ -1390,35 +1390,35 @@ async function processResumedConversation(result, opts, context) {
     sessionHooks: sessionHooksRegistry,
   };
 }
-//@ chunk-08s5p3av.js:26335-26354 placement
+//@ chunk-2snqx25v.js:26414-26433 placement
 function appendSlackTagResumeRecords(messages, options) {}
 export {
-  startupModelWinsOverSessionRestore,
-  processResumedConversation,
-  isSessionRestored,
-  currentRestoreSource,
-  markSessionRestored,
-  reloadAgentDefinitionsForModeSwitch,
+  shouldAttemptAgentRestoreInPrint,
   loadAgentDefinitionsForSessionCwd,
   restoreAgentFromSession,
-  restoreModelFromSession,
-  appendSlackTagResumeRecords,
-  computeStandaloneAgentContext,
-  installRestoredModel,
-  rearmRefusalFallbackHeaderFromTranscript,
-  preparePlanModeRestoreOnInteractiveResume,
-  restoreSessionStateFromLog,
-  pushRestoredMemoryPauseNotice,
-  exitRestoredWorktree,
-  restoreWorktreeForResume,
-  worktreeResumeNotice,
-  lastTranscriptModel,
-  recordResumeSource,
   neutralizeForkFallbackBanners,
-  shouldAttemptAgentRestoreInPrint,
+  rearmRefusalFallbackHeaderFromTranscript,
+  restoreModelFromSession,
+  installRestoredModel,
+  restoreWorktreeForResume,
   worktreeResumeRefusalError,
   worktreeGoneHeadlessNotice,
   restoredMemoryPauseNotice,
   restoredAutoMemorySessionNotice,
+  reloadAgentDefinitionsForModeSwitch,
+  restoreSessionStateFromLog,
+  startupModelWinsOverSessionRestore,
+  processResumedConversation,
+  recordResumeSource,
+  appendSlackTagResumeRecords,
+  preparePlanModeRestoreOnInteractiveResume,
+  computeStandaloneAgentContext,
+  pushRestoredMemoryPauseNotice,
+  markSessionRestored,
+  worktreeResumeNotice,
   maybeSwitchSessionForResume,
+  isSessionRestored,
+  currentRestoreSource,
+  exitRestoredWorktree,
+  lastTranscriptModel,
 };

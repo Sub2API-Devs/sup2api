@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。设置改动审阅（暂存、接受）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6zvepy0r.js (37)
- * attribution: placement 36, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n0hwmqka.js (38)
+ * attribution: placement 36, layout 1, affinity 1
  */
 import { join, dirname, basename } from "path";
 import { homedir } from "os";
@@ -23,6 +23,7 @@ import {
   record,
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
+import { EDITABLE_SETTING_SOURCES } from "./constants.js";
 import {
   normalizeCaseForComparison,
   isClaudeSettingsPath,
@@ -30,7 +31,6 @@ import {
   isManagedSettingsDropInPath,
   managedDropInDirSpellingsAsync,
 } from "../permissions/filesystem.js";
-import { SETTING_SOURCES_BY_PRIORITY } from "./constants.js";
 import {
   getSettingsFilePathForSource,
   resolveSettingsWritePath,
@@ -54,7 +54,7 @@ import {
 } from "../fsSafety/atomicWriteStaging.js";
 import { ATOMIC_WRITE_DIRNAME, ATOMIC_WRITE_ERRNOS, shouldWriteInPlace } from "../plugins/safeCopy.js";
 import { computeContentHash } from "../commitAttribution.js";
-import { detectLineEndingsForString, writeFileAtomic } from "../file.js";
+import { detectLineEndingsForString, readJsonFile_2 } from "../file.js";
 import { writeNewFile, retryFsOp } from "../atomicPublishWrite.js";
 import { markInternalWrite } from "../../cli/headlessCloud/attachServe.js";
 import { logForDebugging } from "../debug.js";
@@ -77,7 +77,7 @@ import { scanForContext } from "../readEditContext.js";
 import { isNonWslUncPath, isNetworkOrSpecialPath } from "../networkPaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6zvepy0r.js:6076-6157 placement
+//@ chunk-n0hwmqka.js:6075-6156 placement
 /**
  * stripBomAndCarriageReturns：去掉 BOM 与裸回车。
  */
@@ -89,7 +89,7 @@ function stripBomAndCarriageReturns(text) {
 `,
   );
 }
-//@ chunk-6zvepy0r.js:6157-6663 placement
+//@ chunk-n0hwmqka.js:6156-6662 placement
 /**
  * 设置审阅暂存的常量与结构：存储版本、条目上限、提议内容大小上限、临时提议文件名、过期时间、来源遥测名，以及条目与存储的 schema。
  */
@@ -102,7 +102,7 @@ var STALE_PROPOSAL_MS;
 var SOURCE_TELEMETRY_NAMES;
 var REVIEW_ENTRY_SCHEMA;
 var REVIEW_STORE_SCHEMA;
-deferInit("chunk-6zvepy0r.js:6157", () => {
+deferInit("chunk-n0hwmqka.js:6156", () => {
   REVIEW_STORE_VERSION = 1;
   MAX_REVIEW_ENTRIES = 64;
   MAX_PROPOSED_BYTES = 1048576;
@@ -139,11 +139,16 @@ deferInit("chunk-6zvepy0r.js:6157", () => {
     }),
   );
 });
-//@ chunk-6zvepy0r.js:6663-6733 placement
+//@ chunk-n0hwmqka.js:6662-6732 placement
 function settingsReviewStorePath() {
   return join(homedir(), ".claude", "state", "settings-review.json");
 }
-//@ chunk-6zvepy0r.js:6780-6870 placement
+//@ chunk-n0hwmqka.js:6732-6779 layout
+var SETTING_SOURCES_BY_PRIORITY; // deferred: uses EDITABLE_SETTING_SOURCES (./constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n0hwmqka.js:6732", () => {
+  SETTING_SOURCES_BY_PRIORITY = ["policySettings", "flagSettings", ...EDITABLE_SETTING_SOURCES];
+});
+//@ chunk-n0hwmqka.js:6779-6869 placement
 /**
  * settingsSourceForPathByPriority：按优先级找路径对应的设置源。
  */
@@ -157,7 +162,7 @@ function settingsSourceForPathByPriority(settingsPath) {
     );
   });
 }
-//@ chunk-6zvepy0r.js:6870-6947 placement
+//@ chunk-n0hwmqka.js:6869-6946 placement
 async function resolveSettingsSourceForPath(settingsPath) {
   let writeTarget;
   try {
@@ -167,7 +172,7 @@ async function resolveSettingsSourceForPath(settingsPath) {
   }
   return settingsSourceForPath(settingsPath, writeTarget);
 }
-//@ chunk-6zvepy0r.js:6947-7118 placement
+//@ chunk-n0hwmqka.js:6946-7117 placement
 async function settingsSourceForPath(settingsPath, writeTarget) {
   let byPriority = settingsSourceForPathByPriority(settingsPath);
   if (byPriority !== undefined) return byPriority;
@@ -185,7 +190,7 @@ async function settingsSourceForPath(settingsPath, writeTarget) {
   }
   return;
 }
-//@ chunk-6zvepy0r.js:7118-7266 placement
+//@ chunk-n0hwmqka.js:7117-7265 placement
 function decodedFileText(decoded) {
   let hasBom = decoded.content.startsWith("\uFEFF");
   return {
@@ -195,7 +200,7 @@ function decodedFileText(decoded) {
     lineEndings: decoded.lineEndings,
   };
 }
-//@ chunk-6zvepy0r.js:7266-9588 placement
+//@ chunk-n0hwmqka.js:7265-9587 placement
 function settingsReviewStore(options) {
   return {
     readStore: async () => {
@@ -291,7 +296,7 @@ function settingsReviewStore(options) {
           stagedWritten = false;
         } catch (error) {
           if (!ATOMIC_WRITE_ERRNOS.has(getErrnoCode(error) ?? "")) throw error;
-          await writeFileAtomic(target.ioPath, textToWrite, {
+          await readJsonFile_2(target.ioPath, textToWrite, {
             encoding,
             stagingDir,
             refuseHardLinkedInPlace: true,
@@ -339,7 +344,7 @@ function settingsReviewStore(options) {
     now: () => new Date(),
   };
 }
-//@ chunk-6zvepy0r.js:9588-9974 placement
+//@ chunk-n0hwmqka.js:9587-9973 placement
 /**
  * 校验暂存的提议文件：不是链接、普通文件且只有一个硬链接、内容哈希与提议一致、与目标路径是同一 inode，通过时返回 dev/ino。
  */
@@ -367,7 +372,7 @@ async function verifyStagedFile(stagedPath, targetPath, expectedContent) {
     return null;
   }
 }
-//@ chunk-6zvepy0r.js:9974-10205 placement
+//@ chunk-n0hwmqka.js:9973-10204 placement
 async function cleanupStaleProposals(dir, baseName) {
   let names;
   try {
@@ -384,11 +389,11 @@ async function cleanupStaleProposals(dir, baseName) {
     } catch {}
   }
 }
-//@ chunk-6zvepy0r.js:10335-10378 affinity
+//@ chunk-n0hwmqka.js:10334-10377 affinity
 async function resolveSettingsWriteTarget(key) {
   return realpathAllowMissing(await resolveSettingsWritePath(key));
 }
-//@ chunk-6zvepy0r.js:10378-10490 placement
+//@ chunk-n0hwmqka.js:10377-10489 placement
 async function realpathAllowMissing(path) {
   try {
     return await realpath(path);
@@ -397,11 +402,11 @@ async function realpathAllowMissing(path) {
     return join(await realpathAllowMissing(dirname(path)), basename(path));
   }
 }
-//@ chunk-6zvepy0r.js:10490-10525 placement
+//@ chunk-n0hwmqka.js:10489-10524 placement
 async function managedDropInSpellings() {
   return managedDropInDirSpellingsAsync(realpathAllowMissing);
 }
-//@ chunk-6zvepy0r.js:10525-10700 placement
+//@ chunk-n0hwmqka.js:10524-10699 placement
 async function readReviewEntries(deps) {
   let raw = await deps.readStore();
   if (raw === undefined) return [];
@@ -415,17 +420,17 @@ async function readReviewEntries(deps) {
   if (!result.success) throw new ReviewStoreMalformedError();
   return result.data.entries;
 }
-//@ chunk-6zvepy0r.js:10700-10805 placement
+//@ chunk-n0hwmqka.js:10699-10804 placement
 class ReviewStoreMalformedError extends Error {
   constructor() {
     super("settings review store: malformed or of an unknown version");
   }
 }
-//@ chunk-6zvepy0r.js:10805-10906 placement
+//@ chunk-n0hwmqka.js:10804-10905 placement
 async function isSettingsEntry(entry, deps) {
   return (await deps.isSettingsFile(entry.path)) || (await deps.isSettingsFile(entry.resolvedPath));
 }
-//@ chunk-6zvepy0r.js:10906-11033 placement
+//@ chunk-n0hwmqka.js:10905-11032 placement
 async function writeReviewEntries(entries, deps) {
   if (entries.length === 0) {
     await deps.deleteStore();
@@ -444,7 +449,7 @@ async function writeReviewEntries(entries, deps) {
 `,
   );
 }
-//@ chunk-6zvepy0r.js:11033-11734 placement
+//@ chunk-n0hwmqka.js:11032-11733 placement
 async function stageSettingsProposal(change, deps = settingsReviewStore()) {
   let reviewEntries = await readReviewEntries(deps);
   let target = await deps.readTarget(change.path);
@@ -485,7 +490,7 @@ async function stageSettingsProposal(change, deps = settingsReviewStore()) {
   await writeReviewEntries(nextEntries, deps);
   return entry;
 }
-//@ chunk-6zvepy0r.js:11734-12739 placement
+//@ chunk-n0hwmqka.js:11733-12738 placement
 async function acceptSettingsProposal(change, deps = settingsReviewStore()) {
   let entry = (await readReviewEntries(deps)).find((entry) => entry.id === change.id);
   if (entry === undefined || !(await isSettingsEntry(entry, deps))) return "gone";
@@ -541,7 +546,7 @@ async function acceptSettingsProposal(change, deps = settingsReviewStore()) {
   }
   return "applied";
 }
-//@ chunk-6zvepy0r.js:12739-12867 placement
+//@ chunk-n0hwmqka.js:12738-12866 placement
 /**
  * 从审阅存储中删除一条暂存的设置提议，返回是否删除。
  */
@@ -552,7 +557,7 @@ async function discardSettingsProposal(id, deps = settingsReviewStore()) {
   await writeReviewEntries(filtered, deps);
   return true;
 }
-//@ chunk-6zvepy0r.js:12867-13105 placement
+//@ chunk-n0hwmqka.js:12866-13104 placement
 /**
  * 只保留在给定时间之后暂存的设置提议，返回删除的条数。
  */
@@ -567,7 +572,7 @@ async function pruneReviewEntriesBefore(cutoffDate, deps = settingsReviewStore()
     await writeReviewEntries(filtered, deps);
   return reviewEntries.length - filtered.length;
 }
-//@ chunk-6zvepy0r.js:13105-13564 placement
+//@ chunk-n0hwmqka.js:13104-13563 placement
 /**
  * 比较设置文件新旧内容的顶层键，列出新增、删除、修改的键；新内容非 JSON 或替换了非 JSON 文件时给出相应说明。
  */
@@ -595,11 +600,11 @@ function describeSettingsChange(currentContent, content) {
       changes.push(`changes ${key}`);
   return changes;
 }
-//@ chunk-6zvepy0r.js:13564-13622 placement
+//@ chunk-n0hwmqka.js:13563-13621 placement
 function shouldStageSettingsWrite({ session, served }) {
   return !served && isDesktopTopSession() && hasHostAttestedDialog(session);
 }
-//@ chunk-6zvepy0r.js:13622-13768 placement
+//@ chunk-n0hwmqka.js:13621-13767 placement
 /**
  * 决定未获批准的设置写入走哪条路：卡片确认、云端不适用或稍后审阅。
  */
@@ -614,7 +619,7 @@ function settingsWriteRoute({ session, served, cause }) {
     return "card";
   return !served && isHeadlessHostSession() ? "cloud" : "review";
 }
-//@ chunk-6zvepy0r.js:13768-15740 placement
+//@ chunk-n0hwmqka.js:13767-15739 placement
 function settingsNotAppliedMessage(filePath, cause) {
   switch (cause) {
     case "card":
@@ -629,12 +634,12 @@ function settingsNotAppliedMessage(filePath, cause) {
       return `Staged for review: ${filePath} was NOT modified. Changes to Claude Code settings files made without the owner of this computer approving them in person are held for their review; the owner applies or discards them with /settings-review, and the change takes effect only if they accept it. Do not retry the edit or try to make the same change another way.`;
   }
 }
-//@ chunk-6zvepy0r.js:15740-16161 placement
+//@ chunk-n0hwmqka.js:15739-16160 placement
 /**
  * 托管设置目录无法解析时拒绝写设置文件的错误，提示模型不要重试或换方式修改。
  */
 let ManagedDirUnresolvedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6zvepy0r.js:15740", () => {
+deferInit("chunk-n0hwmqka.js:15739", () => {
   ManagedDirUnresolvedError = class ManagedDirUnresolvedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -646,19 +651,19 @@ deferInit("chunk-6zvepy0r.js:15740", () => {
     }
   };
 });
-//@ chunk-6zvepy0r.js:16161-16392 placement
+//@ chunk-n0hwmqka.js:16160-16391 placement
 var STAGED_FOR_REVIEW_TEXT =
   "Staged for your review \xB7 not applied until you accept it in /settings-review";
 var CLOUD_NOT_APPLIED_TEXT =
   "Not applied \xB7 a cloud session can't apply Claude's edits to settings files \xB7 if you want this change, make it outside this session";
-//@ chunk-6zvepy0r.js:16392-16433 placement
+//@ chunk-n0hwmqka.js:16391-16432 placement
 /**
  * settingsWriteGateText：云端未应用或已暂存的说明。
  */
 function settingsWriteGateText(stagedWording) {
   return stagedWording === "cloud" ? CLOUD_NOT_APPLIED_TEXT : STAGED_FOR_REVIEW_TEXT;
 }
-//@ chunk-6zvepy0r.js:16433-17009 placement
+//@ chunk-n0hwmqka.js:16432-17008 placement
 /**
  * 写文件前检查是否落在设置文件上：远程调用或未获批准时返回需审阅的路径与原因；托管目录不可解析时抛错；已覆盖的返回 undefined。
  */
@@ -706,7 +711,7 @@ async function checkSettingsWrite(context, spellings, file) {
         cause: coverage,
       };
 }
-//@ chunk-6zvepy0r.js:17009-17204 placement
+//@ chunk-n0hwmqka.js:17008-17203 placement
 async function classifySettingsPaths(spellings) {
   let dropIns = spellings.some(isJsonSpelling) ? await managedDropInSpellings() : undefined;
   return {
@@ -719,7 +724,7 @@ async function classifySettingsPaths(spellings) {
     dropIns,
   };
 }
-//@ chunk-6zvepy0r.js:17204-17483 placement
+//@ chunk-n0hwmqka.js:17203-17482 placement
 async function settingsWriteCoverage(absolutePath, spellings, settingsSpellings, dropIns) {
   if (!settingsSpellings.includes(absolutePath)) return "linked";
   let filtered = spellings.filter((spelling) => spelling !== absolutePath);
@@ -731,7 +736,7 @@ async function settingsWriteCoverage(absolutePath, spellings, settingsSpellings,
     if ((await resolveSettingsSourceForPath(spelling)) !== primarySource) return "linked";
   return "covered";
 }
-//@ chunk-6zvepy0r.js:17483-17762 placement
+//@ chunk-n0hwmqka.js:17482-17761 placement
 async function touchesManagedSettings(spellings, dropIns) {
   if (!dropIns.allResolved || !dropIns.allLocated) return true;
   let managedPaths = new Set();
@@ -760,7 +765,7 @@ async function touchesManagedSettings(spellings, dropIns) {
   }
   return false;
 }
-//@ chunk-6zvepy0r.js:17762-17884 placement
+//@ chunk-n0hwmqka.js:17761-17883 placement
 function managedSettingsFiles() {
   let settingsFilePathForSource = getSettingsFilePathForSource("flagSettings");
   return [
@@ -770,7 +775,7 @@ function managedSettingsFiles() {
     ...(settingsFilePathForSource === undefined ? [] : [settingsFilePathForSource]),
   ];
 }
-//@ chunk-6zvepy0r.js:17884-18536 placement
+//@ chunk-n0hwmqka.js:17883-18535 placement
 async function stageSettingsWrite(request) {
   let origin = request.writeCtx.remoteCall === undefined ? "local" : "served";
   let entry;
@@ -800,7 +805,7 @@ async function stageSettingsWrite(request) {
   logFeatureOk("settings_quarantine");
   return entry;
 }
-//@ chunk-6zvepy0r.js:18572-18609 placement
+//@ chunk-n0hwmqka.js:18571-18608 placement
 /**
  * MAX_DIFF_CONTEXT_BYTES：diff 上下文读取字节上限；MAX_SETTINGS_FILE_BYTES：设置文件体积上限；DIFF_CONTEXT_LINES_BEFORE：diff 上下文前几行（同一声明共 4 个绑定）。
  */
@@ -808,7 +813,7 @@ var MAX_DIFF_CONTEXT_BYTES = 8192;
 var MAX_SETTINGS_FILE_BYTES = 10485760;
 var DIFF_CONTEXT_LINES_BEFORE = 10;
 var DIFF_CONTEXT_LINES_AFTER = 13;
-//@ chunk-6zvepy0r.js:18609-18733 placement
+//@ chunk-n0hwmqka.js:18608-18732 placement
 /**
  * 打开文件并读取指定行附近的上下文，用于拒绝时显示 diff。
  */
@@ -821,7 +826,7 @@ async function readRejectionContext(path, needle, contextLines = 3) {
     await handle.close();
   }
 }
-//@ chunk-6zvepy0r.js:18733-18882 placement
+//@ chunk-n0hwmqka.js:18732-18881 placement
 /**
  * 为显示 diff 打开文件（跳过特殊路径与含空字节的路径，不存在返回 null）。
  */
@@ -836,23 +841,23 @@ async function openForDiff(path) {
   }
 }
 export {
-  openForDiff,
+  settingsWriteGateText,
+  readRejectionContext,
   pruneReviewEntriesBefore,
+  openForDiff,
   settingsSourceForPathByPriority,
+  settingsNotAppliedMessage,
+  checkSettingsWrite,
+  stageSettingsWrite,
+  MAX_SETTINGS_FILE_BYTES,
+  stripBomAndCarriageReturns,
+  settingsWriteRoute,
   PROPOSED_FILE_INFIX,
   describeSettingsChange,
   discardSettingsProposal,
   acceptSettingsProposal,
-  stripBomAndCarriageReturns,
   REVIEW_STORE_VERSION,
   DIFF_CONTEXT_LINES_BEFORE,
   MAX_DIFF_CONTEXT_BYTES,
-  MAX_SETTINGS_FILE_BYTES,
   DIFF_CONTEXT_LINES_AFTER,
-  settingsWriteGateText,
-  readRejectionContext,
-  settingsNotAppliedMessage,
-  checkSettingsWrite,
-  stageSettingsWrite,
-  settingsWriteRoute,
 };

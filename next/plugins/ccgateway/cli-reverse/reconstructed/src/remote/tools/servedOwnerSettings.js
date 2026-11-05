@@ -3,9 +3,9 @@
  *
  * 提供工具时读取与持有本机用户设置/规则（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (35), chunk-e3y61d7t.js (3), chunk-fepf8jp6.js (2)
  * attribution: placement 40
  */
 import { readdirSync } from "fs";
@@ -40,12 +40,50 @@ import {
 } from "../../utils/settings/settings.js";
 import { getFeatureValueWithSource_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { settingsJsonToRules } from "../../utils/permissions/permissionsLoader.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { CREDENTIAL_HELPER_SETTINGS_KEYS } from "../../utils/settings/policyTiers.js";
 import { BETA_FILES_API, BETA_OAUTH_AUTH } from "../../utils/betas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:476551-477028 placement
+//@ chunk-e3y61d7t.js:689-841 placement
+function parseGitVersion(versionText) {
+  let match = /^git version (\d+)\.(\d+)\.(\d+)/.exec(versionText.trim());
+  return match === null
+    ? null
+    : {
+        major: Number(match[1]),
+        minor: Number(match[2]),
+        patch: Number(match[3]),
+      };
+}
+//@ chunk-e3y61d7t.js:841-912 placement
+/**
+ * 导出函数 `isVersionAtLeast2_32`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。
+ */
+function isVersionAtLeast2_32(version) {
+  return version !== null && (version.major > 2 || (version.major === 2 && version.minor >= 32));
+}
+//@ chunk-e3y61d7t.js:912-983 placement
+/**
+ * 导出函数 `isVersionAtLeast2_32b`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。
+ */
+function isVersionAtLeast2_32b(gitVersion) {
+  return gitVersion !== null && (gitVersion.major > 2 || (gitVersion.major === 2 && gitVersion.minor >= 32));
+}
+//@ chunk-fepf8jp6.js:94193-94245 placement
+/**
+ * 导出常量或表 `GIT_SHA_RE`：值为 /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, BF = /^0+$/。
+ */
+var GIT_SHA_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
+var ALL_ZERO_RE = /^0+$/;
+//@ chunk-fepf8jp6.js:94245-94279 placement
+/**
+ * 导出函数 `hasNonZeroHash`：参数 e，返回 !BF.test(e)。
+ */
+function hasNonZeroHash(hash) {
+  return !ALL_ZERO_RE.test(hash);
+}
+//@ chunk-7jxyna5q.js:394029-394506 placement
 /**
  * 仓库设置层级和需要冻结的限制性设置路径（deny/ask 规则、沙箱读写限制、禁止域名）。
  */
@@ -67,12 +105,12 @@ var PERMISSIVE_LIST_PATHS = [
   ["sandbox", "excludedCommands"],
 ];
 var SANDBOX_ENABLED_PATH = ["sandbox", "enabled"];
-//@ chunk-s61vbvea.js:477028-477088 placement
+//@ chunk-7jxyna5q.js:394506-394566 placement
 function getArrayAtPath(settings, path) {
   let atPath = getAtPath(settings, path);
   return Array.isArray(atPath) ? atPath : [];
 }
-//@ chunk-s61vbvea.js:477088-477550 placement
+//@ chunk-7jxyna5q.js:394566-395028 placement
 /**
  * 用新设置收紧旧设置：deny/ask 等限制性列表取并集，allow/allowRead 等放宽性列表只保留双方都有的项，托管限制键取更严格的值；用于提供远程工具时只接受变严、不接受变宽。
  */
@@ -98,16 +136,16 @@ function tightenSettingsWith(base, tighter, allowSandbox = false) {
   }
   return base === null && Object.keys(clone).length === 0 ? null : clone;
 }
-//@ chunk-s61vbvea.js:477550-477611 placement
+//@ chunk-7jxyna5q.js:395028-395089 placement
 function sandboxRestrictionKeys() {
   return MANAGED_RESTRICTION_KEYS().filter((key) => key.path[0] === "sandbox");
 }
-//@ chunk-s61vbvea.js:477611-477705 placement
+//@ chunk-7jxyna5q.js:395089-395183 placement
 function restrictionRank(key, value) {
   let index = asArray(key.restrictive).indexOf(value);
   return index === -1 ? Number.POSITIVE_INFINITY : index;
 }
-//@ chunk-s61vbvea.js:477705-477914 placement
+//@ chunk-7jxyna5q.js:395183-395392 placement
 function pickRestrictionFields(settings) {
   let picked = {};
   for (let path of [...RESTRICTIVE_LIST_PATHS, ...PERMISSIVE_LIST_PATHS]) {
@@ -122,11 +160,11 @@ function pickRestrictionFields(settings) {
   }
   return picked;
 }
-//@ chunk-s61vbvea.js:477914-477958 placement
+//@ chunk-7jxyna5q.js:395392-395436 placement
 function isSameSettingsText(text, other) {
   return text === other || (isEmptySettingsText(text) && isEmptySettingsText(other));
 }
-//@ chunk-s61vbvea.js:477958-478107 placement
+//@ chunk-7jxyna5q.js:395436-395585 placement
 function isEmptySettingsText(text) {
   if (text === null || text.trim() === "") return true;
   let parsed = safeParseJSON(text, false);
@@ -137,7 +175,7 @@ function isEmptySettingsText(text) {
     Object.keys(parsed).length === 0
   );
 }
-//@ chunk-s61vbvea.js:478107-478403 placement
+//@ chunk-7jxyna5q.js:395585-395881 placement
 function unreadableAcceptedSettings(file) {
   return {
     settings: null,
@@ -153,7 +191,7 @@ function unreadableAcceptedSettings(file) {
     loadState: "didNotLoad",
   };
 }
-//@ chunk-s61vbvea.js:478403-480084 placement
+//@ chunk-7jxyna5q.js:395881-397567 placement
 function readServedOwnerSettings(
   store,
   slots,
@@ -269,7 +307,7 @@ function readServedOwnerSettings(
   }
   return result;
 }
-//@ chunk-s61vbvea.js:480084-480197 placement
+//@ chunk-7jxyna5q.js:397567-397680 placement
 function hasServedCallLogs(dir = servedCallsDir()) {
   try {
     return readdirSync(dir).some((name) => name.endsWith(".jsonl") || name.endsWith(".seen"));
@@ -277,14 +315,14 @@ function hasServedCallLogs(dir = servedCallsDir()) {
     return !isENOENT(error);
   }
 }
-//@ chunk-s61vbvea.js:480197-480695 placement
+//@ chunk-7jxyna5q.js:397680-398178 placement
 /**
  * 属主设置冻结的开关与受管限制字段表：read_block、write_block、auto_mode_off、plan_asks_a_person、unattended_serving_off 各自的设置路径。
  */
 var TENGU_QUIET_LOCKET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var UNBOUND_MANAGED_HOLD;
 var MANAGED_RESTRICTION_FIELDS;
-deferInit("chunk-s61vbvea.js:480197", () => {
+deferInit("chunk-7jxyna5q.js:397680", () => {
   TENGU_QUIET_LOCKET = "tengu_quiet_locket";
   UNBOUND_MANAGED_HOLD = Object.freeze({
     held: true,
@@ -314,7 +352,7 @@ deferInit("chunk-s61vbvea.js:480197", () => {
     },
   ];
 });
-//@ chunk-s61vbvea.js:480695-480982 placement
+//@ chunk-7jxyna5q.js:398178-398465 placement
 class HeldOwnerSettings {
   #e;
   #t = new Set();
@@ -338,15 +376,15 @@ class HeldOwnerSettings {
     this.#e = clone(settings);
   }
 }
-//@ chunk-s61vbvea.js:480982-481007 placement
+//@ chunk-7jxyna5q.js:398465-398490 placement
 /**
  * 按宿主保存的“持有中”属主设置槽：会话启动时冻结的设置快照与当前用户设置的合并。
  */
 var heldOwnerSettingsSlot; // deferred: uses HeldOwnerSettings of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:480982", () => {
+deferInit("chunk-7jxyna5q.js:398465", () => {
   heldOwnerSettingsSlot = new HostScoped(() => new HeldOwnerSettings());
 });
-//@ chunk-s61vbvea.js:481007-481343 placement
+//@ chunk-7jxyna5q.js:398490-398826 placement
 /**
  * 取得冻结中的属主设置：合并会话启动时冻结的设置与当前用户设置。
  */
@@ -381,7 +419,7 @@ function getHeldServedOwnerSettings() {
     };
   }
 }
-//@ chunk-s61vbvea.js:481343-481721 placement
+//@ chunk-7jxyna5q.js:398826-399204 placement
 function recordServedUserRulesAtAttach(store) {
   let outcome = holdServedUserSettings(store);
   try {
@@ -408,7 +446,7 @@ function recordServedUserRulesAtAttach(store) {
   }
   return outcome;
 }
-//@ chunk-s61vbvea.js:481721-482642 placement
+//@ chunk-7jxyna5q.js:399204-400125 placement
 function holdServedUserSettings(store) {
   try {
     if (
@@ -464,9 +502,9 @@ function holdServedUserSettings(store) {
     return "failed";
   }
 }
-//@ chunk-s61vbvea.js:482642-482680 placement
+//@ chunk-7jxyna5q.js:400125-400163 placement
 var SERVED_OWN_SETTINGS_WAITING = "served-own-settings-waiting";
-//@ chunk-s61vbvea.js:482680-483010 placement
+//@ chunk-7jxyna5q.js:400163-400493 placement
 /**
  * 判断用户设置文件在接入后是否发生变化（受开关控制）。
  */
@@ -498,16 +536,16 @@ function hasUserSettingsChangedSinceAttach(acceptedSettingsStore) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:483010-483097 placement
+//@ chunk-7jxyna5q.js:400493-400580 placement
 function snapshotSettingsText(text, parseOptions) {
   let settings = text === null ? {} : parseSettingsContent(text, parseOptions).settings;
   return settings === null ? undefined : settingsToJsonText(servedRestrictionSnapshot(settings));
 }
-//@ chunk-s61vbvea.js:483097-483148 placement
+//@ chunk-7jxyna5q.js:400580-400631 placement
 function ownerSettingsMetPath() {
   return join(servedCallsDir(), "owner-settings-met");
 }
-//@ chunk-s61vbvea.js:483148-483448 placement
+//@ chunk-7jxyna5q.js:400631-400931 placement
 /**
  * 从设置中提取受管理的限制性字段快照，只保留取严格值的项。
  */
@@ -531,7 +569,7 @@ function servedRestrictionSnapshot(settings) {
     );
   return picked;
 }
-//@ chunk-s61vbvea.js:483448-483488 placement
+//@ chunk-7jxyna5q.js:400931-400971 placement
 /**
  * 导出函数 `settingsToJsonText`：参数 e，返回 `${jsonStringify(e, null, 2)} `。
  */
@@ -539,7 +577,7 @@ function settingsToJsonText(settings) {
   return `${jsonStringify(settings, null, 2)}
 `;
 }
-//@ chunk-s61vbvea.js:483488-483578 placement
+//@ chunk-7jxyna5q.js:400971-401061 placement
 /**
  * 导出函数 `keepEmptyOwnerSettings`。
  */
@@ -551,7 +589,7 @@ function keepEmptyOwnerSettings() {
     logError(toError(error));
   }
 }
-//@ chunk-s61vbvea.js:483578-483678 placement
+//@ chunk-7jxyna5q.js:401061-401161 placement
 function isServedSettingRefused(fieldName) {
   try {
     return (
@@ -564,7 +602,7 @@ function isServedSettingRefused(fieldName) {
     return true;
   }
 }
-//@ chunk-s61vbvea.js:483678-483778 placement
+//@ chunk-7jxyna5q.js:401161-401261 placement
 function getKeptServedOwnerSettings() {
   try {
     return readFlagWithOverride(TENGU_QUIET_LOCKET, {
@@ -577,7 +615,7 @@ function getKeptServedOwnerSettings() {
     return {};
   }
 }
-//@ chunk-s61vbvea.js:483778-484093 placement
+//@ chunk-7jxyna5q.js:401261-401576 placement
 /**
  * 把另一份设置中的凭据文件补进当前设置的拒绝列表（去重）。
  */
@@ -606,7 +644,7 @@ function mergeCredentialDenyFiles(settings, settings_2) {
         },
       };
 }
-//@ chunk-s61vbvea.js:484093-484747 placement
+//@ chunk-7jxyna5q.js:401576-402230 placement
 function servedSettingsUnavailableReason() {
   if (
     !readFlagWithOverride(TENGU_QUIET_LOCKET, {
@@ -667,12 +705,12 @@ function servedSettingsUnavailableReason() {
     took,
   };
 }
-//@ chunk-s61vbvea.js:484747-484823 placement
+//@ chunk-7jxyna5q.js:402230-402306 placement
 function tightenOrStripCredentialHelpers(settings, heldInfo) {
   let tightened = heldInfo.held ? tightenSettingsWith(heldInfo.settings, settings) : settings;
   return tightened === null ? null : stripCredentialHelperSettings(tightened);
 }
-//@ chunk-s61vbvea.js:484823-485330 placement
+//@ chunk-7jxyna5q.js:402306-402813 placement
 /**
  * 远程提供工具时重算 userSettings 的权限规则：保留持有快照中仍存在的 allow，当前 deny/ask 全部保留，再补上快照中有但当前缺失的 deny/ask；返回规则与被搁置的 allow 数、保留的拒绝数。
  */
@@ -722,7 +760,7 @@ function reconcileUserSettingsRules(rules, heldInfo, diskSettings) {
     refusalsKept,
   };
 }
-//@ chunk-s61vbvea.js:485330-485715 placement
+//@ chunk-7jxyna5q.js:402813-403198 placement
 /**
  * 在冻结设置时合并用户规则：冻结中返回附加 deny 规则，失败时记录错误并返回原规则。
  */
@@ -752,17 +790,17 @@ function applyHeldUserRules(rules, heldInfo, refusalsOnly) {
     }
   }
 }
-//@ chunk-s61vbvea.js:485715-485826 placement
+//@ chunk-7jxyna5q.js:403198-403309 placement
 function userRefusalRules(settings, behaviors) {
   return settingsJsonToRules(settings, "userSettings").filter(
     (rule) => rule.ruleBehavior !== "allow" && behaviors.includes(rule.ruleBehavior),
   );
 }
-//@ chunk-s61vbvea.js:485826-485889 placement (2.1.88 match: hasBashPermission, 1)
+//@ chunk-7jxyna5q.js:403309-403372 placement (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules) {
-  return `${rules.ruleBehavior}\x00${formatPermissionRule(rules.ruleValue)}`;
+  return `${rules.ruleBehavior}\x00${permissionRuleValueFromString(rules.ruleValue)}`;
 }
-//@ chunk-s61vbvea.js:485889-485992 placement
+//@ chunk-7jxyna5q.js:403372-403475 placement
 function stripCredentialHelperSettings(settings) {
   if (!CREDENTIAL_HELPER_SETTINGS_KEYS.some((key) => key in settings)) return settings;
   let copy = {
@@ -771,55 +809,29 @@ function stripCredentialHelperSettings(settings) {
   for (let key of CREDENTIAL_HELPER_SETTINGS_KEYS) delete copy[key];
   return copy;
 }
-//@ chunk-s61vbvea.js:485992-486144 placement
-function parseGitVersion(versionText) {
-  let match = /^git version (\d+)\.(\d+)\.(\d+)/.exec(versionText.trim());
-  return match === null
-    ? null
-    : {
-        major: Number(match[1]),
-        minor: Number(match[2]),
-        patch: Number(match[3]),
-      };
-}
-//@ chunk-s61vbvea.js:486144-486215 placement
-/**
- * 导出函数 `isVersionAtLeast2_32`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。
- */
-function isVersionAtLeast2_32(version) {
-  return version !== null && (version.major > 2 || (version.major === 2 && version.minor >= 32));
-}
-//@ chunk-s61vbvea.js:486215-486286 placement
-/**
- * 导出函数 `isVersionAtLeast2_32b`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。
- */
-function isVersionAtLeast2_32b(gitVersion) {
-  return gitVersion !== null && (gitVersion.major > 2 || (gitVersion.major === 2 && gitVersion.minor >= 32));
-}
-//@ chunk-s61vbvea.js:486286-486338 placement
-/**
- * 导出常量或表 `GIT_SHA_RE`：值为 /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, BF = /^0+$/。
- */
-var GIT_SHA_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
-var ALL_ZERO_RE = /^0+$/;
-//@ chunk-s61vbvea.js:486338-486372 placement
-/**
- * 导出函数 `hasNonZeroHash`：参数 e，返回 !BF.test(e)。
- */
-function hasNonZeroHash(hash) {
-  return !ALL_ZERO_RE.test(hash);
-}
-//@ chunk-s61vbvea.js:486464-486519 placement (2.1.88 match: ANTHROPIC_VERSION, 0.816)
+//@ chunk-7jxyna5q.js:403567-403622 placement (2.1.88 match: ANTHROPIC_VERSION, 0.817)
 /**
  * 组合的 beta 头值与 anthropic-version "2023-06-01"。
  */
 var COMBINED_BETA_HEADER; // deferred: uses BETA_CLAUDE_CODE (../../utils/betas.js) of its import cycle while loading; runs once the cycle is complete
 var ANTHROPIC_VERSION_2;
-deferInit("chunk-s61vbvea.js:486464", () => {
+deferInit("chunk-7jxyna5q.js:403567", () => {
   COMBINED_BETA_HEADER = `${BETA_FILES_API.header},${BETA_OAUTH_AUTH.header}`;
   ANTHROPIC_VERSION_2 = "2023-06-01";
 });
 export {
+  parseGitVersion,
+  getKeptServedOwnerSettings,
+  GIT_SHA_RE,
+  isServedSettingRefused,
+  applyHeldUserRules,
+  isVersionAtLeast2_32b,
+  ANTHROPIC_VERSION_2,
+  COMBINED_BETA_HEADER,
+  hasNonZeroHash,
+  isVersionAtLeast2_32,
+  readServedOwnerSettings,
+  hasServedCallLogs,
   settingsToJsonText,
   servedRestrictionSnapshot,
   UNBOUND_MANAGED_HOLD,
@@ -828,16 +840,4 @@ export {
   keepEmptyOwnerSettings,
   hasUserSettingsChangedSinceAttach,
   SERVED_OWN_SETTINGS_WAITING,
-  ANTHROPIC_VERSION_2,
-  COMBINED_BETA_HEADER,
-  GIT_SHA_RE,
-  hasNonZeroHash,
-  getKeptServedOwnerSettings,
-  isVersionAtLeast2_32,
-  parseGitVersion,
-  readServedOwnerSettings,
-  hasServedCallLogs,
-  isVersionAtLeast2_32b,
-  isServedSettingRefused,
-  applyHeldUserRules,
 };

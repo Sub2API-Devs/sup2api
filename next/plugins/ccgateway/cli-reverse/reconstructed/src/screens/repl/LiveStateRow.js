@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增。REPL 实时状态行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (22)
  * attribution: placement 22
  */
-import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useRetryStatus } from "../../components/Spinner/spinnerStatus.js";
-import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
-  useReducer,
   init_react_production,
+  useReducer,
   useMemo,
   useContext,
 } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useRetryStatus } from "../../components/Spinner/spinnerStatus.js";
+import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useInterval } from "../../ink/components/Input.js";
 import {
   jsxProd_default,
@@ -26,7 +26,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { RetryStatusRow } from "../../components/Spinner/SpinnerAnimationRow.js";
 import { useAppStoreDirect, useAppState } from "../../state/AppState.js";
-import { alwaysFalseRefresh } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { isAsyncLaneMode } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { mainAgentId } from "../../bootstrap/state.js";
@@ -37,15 +37,26 @@ import { runningHooksStoreOf } from "../../utils/hooks/hookMessages.js";
 import { RemoteBootstrapProgress } from "../../components/RemoteBootstrapProgress.js";
 import { SpinnerWithVerb, BriefIdleStatus } from "../../components/Spinner.js";
 import { WAITING_MESSAGE_TEXTS } from "../../cli/headlessCloud/syncStatus.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { POLL } from "../../tools/PollTool/prompt.js";
 import { plural } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1453978-1454007 placement
+//@ chunk-czq1j3j2.js:1486075-1486079 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1486075", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1495064-1495068 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1495064", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1495072-1495101 placement
 function increment(count) {
   return count + 1;
 }
-//@ chunk-18hwfzwa.js:1454007-1454307 placement
+//@ chunk-czq1j3j2.js:1495101-1495401 placement
 /**
  * 子代理实时状态行（每秒刷新）。
  */
@@ -76,12 +87,7 @@ function AgentLiveStatus(props) {
   } else retryRow = $[2];
   return retryRow;
 }
-//@ chunk-18hwfzwa.js:1454307-1454311 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1454307", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1454311-1454708 placement
+//@ chunk-czq1j3j2.js:1495405-1495802 placement
 /**
  * 子代理旋转指示所需的开始时间、响应长度、暂停时间引用。
  */
@@ -106,7 +112,7 @@ function useAgentSpinnerRefs(agentId) {
     };
   }, [appStoreDirect, agentId]);
 }
-//@ chunk-18hwfzwa.js:1454708-1454784 placement
+//@ chunk-czq1j3j2.js:1495802-1495878 placement
 /**
  * 惰性取值封装：current 每次读取时调用构造时传入的函数，用于加载计时等派生状态。
  */
@@ -119,29 +125,29 @@ class LazyValue {
     return this.read();
   }
 }
-//@ chunk-18hwfzwa.js:1454784-1454819 placement
+//@ chunk-czq1j3j2.js:1495878-1495913 placement
 function selectVerbose3(state) {
   return state.verbose;
 }
-//@ chunk-18hwfzwa.js:1454819-1454858 placement
+//@ chunk-czq1j3j2.js:1495913-1495952 placement
 function selectIsBriefOnly3(state) {
   return state.isBriefOnly;
 }
-//@ chunk-18hwfzwa.js:1454858-1454895 placement
+//@ chunk-czq1j3j2.js:1495952-1495989 placement
 function selectIsLoading5(state) {
   return state.isLoading;
 }
-//@ chunk-18hwfzwa.js:1454895-1454944 placement
+//@ chunk-czq1j3j2.js:1495989-1496038 placement
 function selectUserInputOnProcessing(state) {
   return state.userInputOnProcessing;
 }
-//@ chunk-18hwfzwa.js:1454944-1455003 placement
+//@ chunk-czq1j3j2.js:1496038-1496096 placement
 function selectPermissionMode(state) {
-  return alwaysFalseRefresh(state.toolPermissionContext.mode);
+  return isAsyncLaneMode(state.toolPermissionContext.mode);
 }
-//@ chunk-18hwfzwa.js:1455003-1455016 placement
+//@ chunk-czq1j3j2.js:1496096-1496109 placement
 var REPLY_CHANNEL_STATUS_PANEL = null;
-//@ chunk-18hwfzwa.js:1455016-1458175 placement
+//@ chunk-czq1j3j2.js:1496109-1499269 placement
 /**
  * LiveStateRow：REPL 实时状态行（加载动画、任务、计时）。
  */
@@ -380,29 +386,33 @@ function LiveStateRow(props) {
   } else rowGroup = $[58];
   return rowGroup;
 }
-//@ chunk-18hwfzwa.js:1458175-1458203 placement
+//@ chunk-czq1j3j2.js:1499269-1499359 placement
 function nullText(state) {
-  return null;
+  return codeModeAccepted()
+    ? require("../../utils/codeMode/runningScripts.js").describeRunningScripts(state)
+    : null;
 }
-//@ chunk-18hwfzwa.js:1458203-1458235 placement
+//@ chunk-czq1j3j2.js:1499359-1499391 placement
 function remoteStatusSource(messages, appState, appState_2) {
   return null;
 }
-//@ chunk-18hwfzwa.js:1458235-1458260 placement
+//@ chunk-czq1j3j2.js:1499391-1499472 placement
 function alwaysFalseLiveRow(state) {
-  return false;
+  return codeModeAccepted()
+    ? require("../../utils/codeMode/runningScripts.js").isScriptRunning(state)
+    : false;
 }
-//@ chunk-18hwfzwa.js:1458260-1458324 placement
+//@ chunk-czq1j3j2.js:1499472-1499536 placement
 function latestHookProgressText(progress) {
   return hookProgressText(progress.findLast((entry) => entry.agentId === undefined));
 }
-//@ chunk-18hwfzwa.js:1458324-1458405 placement
+//@ chunk-czq1j3j2.js:1499536-1499617 placement
 function latestNonPollHookProgressText(progressList) {
   return hookProgressText(
     progressList.findLast((entry) => entry.agentId === undefined && entry.toolName !== POLL),
   );
 }
-//@ chunk-18hwfzwa.js:1458405-1458687 placement
+//@ chunk-czq1j3j2.js:1499617-1499899 placement
 /**
  * 钩子运行进度文本（状态消息或 “running X hooks”）。
  */
@@ -416,14 +426,9 @@ function hookProgressText(last) {
   let hookNoun = pendingPrefix ? "hook" : plural(hookCount, "hook");
   return `running ${last.hookEvent} ${hookNoun}${pendingPrefix}${settledSuffix}`;
 }
-//@ chunk-18hwfzwa.js:1458687-1458691 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1458687", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1458691-1458704 placement
+//@ chunk-czq1j3j2.js:1499903-1499916 placement
 var REMOTE_STARTUP_STATUS = null;
-//@ chunk-18hwfzwa.js:1458704-1459124 placement
+//@ chunk-czq1j3j2.js:1499916-1500336 placement
 /**
  * 远程启动步骤与回复通道状态是否在显示。
  */
@@ -455,7 +460,7 @@ function useLiveStatusFlags({ focused, isRemoteSession }) {
     replyChannelStatusLive,
   };
 }
-//@ chunk-18hwfzwa.js:1459124-1459225 placement
+//@ chunk-czq1j3j2.js:1500336-1500437 placement
 /**
  * 处理中的用户输入存在且不是斜杠命令。
  */

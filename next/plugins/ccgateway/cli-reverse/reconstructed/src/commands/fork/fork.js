@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/fork 命令：从当前会话分叉新会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cc2xzzcg.js (1), chunk-d62reftv.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aejqrk0z.js (7), chunk-mxre7sw0.js (1)
  * attribution: placement 8
  */
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
@@ -18,6 +18,9 @@ import {
   deriveBackgroundSeed,
   spawnBackgroundFork,
 } from "../../utils/background/spawnBackgroundFork.js";
+import { isAccepted } from "../../utils/codeMode/accepted.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeBackgroundNotice } from "../../utils/foresightStatus.js";
 import { isTranscriptPersistenceDisabled } from "../../utils/sessionStorage.js";
 import { isSafeMode, isBareMode } from "../../utils/envUtils.js";
 import { getForkRestrictedLaunchConfig } from "../../bootstrap/state.js";
@@ -47,7 +50,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-cc2xzzcg.js:12628-13025 placement
+//@ chunk-mxre7sw0.js:13776-14173 placement
 /**
  * /fork <directive> 命令：按指令派生分叉子代理；无参数时提示用法，协调者模式或首轮之前不可用，成功后报告分叉名与 agentId 末四位。
  */
@@ -80,31 +83,37 @@ var callFork = async (onDone, context, args) => {
   });
   return null;
 };
-//@ chunk-d62reftv.js:15768-15772 placement
+//@ chunk-aejqrk0z.js:17026-17030 placement
 init_react_production();
-//@ chunk-d62reftv.js:15772-15812 placement
+//@ chunk-aejqrk0z.js:17030-17070 placement
 function selectSessionEffort(state) {
   return state.sessionEffort;
 }
-//@ chunk-d62reftv.js:15812-15889 placement
+//@ chunk-aejqrk0z.js:17070-17147 placement
 function selectToolPermissionContextAdditionalWorkingDirectories(state) {
   return state.toolPermissionContext.additionalWorkingDirectories;
 }
-//@ chunk-d62reftv.js:15889-15954 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
+//@ chunk-aejqrk0z.js:17147-17212 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
 function getAlwaysAllowRules(appState) {
   return appState.toolPermissionContext.alwaysAllowRules;
 }
-//@ chunk-d62reftv.js:15954-16018 placement
+//@ chunk-aejqrk0z.js:17212-17276 placement
 function selectToolPermissionContextAlwaysDenyRules(state) {
   return state.toolPermissionContext.alwaysDenyRules;
 }
-//@ chunk-d62reftv.js:16018-16747 placement
+//@ chunk-aejqrk0z.js:17276-18059 placement
 /**
  * /fork 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 var forkCommandCall = async (onDone, context, args) => {
   if (isCoordinatorMode_2()) {
     onDone(COORDINATOR_FORK_REFUSAL, {
+      display: "system",
+    });
+    return null;
+  }
+  if (isAccepted() && isCodeModeEnabled()) {
+    onDone(codeModeBackgroundNotice(), {
       display: "system",
     });
     return null;
@@ -134,7 +143,7 @@ var forkCommandCall = async (onDone, context, args) => {
     messages: context.messages,
   });
 };
-//@ chunk-d62reftv.js:16747-18564 placement
+//@ chunk-aejqrk0z.js:18059-19877 placement
 function ForkSessionFlow(props) {
   let $ = useMemoCache(14);
   let { onDone, prompt, seed, messages } = props;
@@ -277,4 +286,4 @@ function ForkSessionFlow(props) {
   } else footer = $[13];
   return footer;
 }
-export { forkCommandCall, callFork };
+export { callFork, forkCommandCall };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：页面运行时注入（图表、mermaid、代码高亮）与打包安全检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (54)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (54)
  * attribution: placement 54
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -22,7 +22,7 @@ import {
 } from "../../tools/ArtifactTool/artifactUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:4627-4838 placement
+//@ chunk-51jy8ztq.js:4628-4839 placement
 /**
  * 页面里注入的运行时区块标记（mermaid、highlight.js、图表运行时的开始/结束注释）。
  */
@@ -32,16 +32,16 @@ var HLJS_RUNTIME_BEGIN = "<!--claude-hljs-runtime-begin:";
 var HLJS_RUNTIME_END = "<!--claude-hljs-runtime-end-->";
 var CHART_RUNTIME_BEGIN = "<!-- chart-runtime -->";
 var CHART_RUNTIME_END = "<!-- /chart-runtime -->";
-//@ chunk-06y4szbn.js:4838-4934 placement
+//@ chunk-51jy8ztq.js:4839-4935 placement
 /**
  * 导出常量或表 `MERMAID_RUNTIME_PATH`：值为 "/_runtime/mermaid-11.16.1.min.js", _i = '<script src="/_runtime/mermaid-11.16.1.min.js">'。
  */
 var MERMAID_RUNTIME_PATH = "/_runtime/mermaid-11.16.1.min.js";
 var MERMAID_RUNTIME_SCRIPT_TAG = '<script src="/_runtime/mermaid-11.16.1.min.js">';
-//@ chunk-06y4szbn.js:4934-4995 placement
+//@ chunk-51jy8ztq.js:4935-4996 placement
 var FRAME_RUNTIME_SENTINELS = "<!-- frame-runtime -->";
 var FRAME_RUNTIME_END_MARKER = "<!-- /frame-runtime -->";
-//@ chunk-06y4szbn.js:4995-5283 placement
+//@ chunk-51jy8ztq.js:4996-5284 placement
 function hasRuntimeSentinels(body) {
   return (
     body.includes("<!--claude-mermaid-runtime-begin:") ||
@@ -52,7 +52,7 @@ function hasRuntimeSentinels(body) {
     body.includes("<!-- /chart-runtime -->")
   );
 }
-//@ chunk-06y4szbn.js:5283-6203 placement
+//@ chunk-51jy8ztq.js:5284-6204 placement
 function unsafeBundleReason(bundle) {
   if (/<\/script/i.test(bundle)) return "bundle contains </script";
   if (hasCommentAndScript(bundle)) return "bundle contains <!-- together with <script (double-escaped state)";
@@ -72,9 +72,9 @@ function unsafeBundleReason(bundle) {
     return "bundle contains a frame-runtime serve sentinel";
   return null;
 }
-//@ chunk-06y4szbn.js:6203-6252 placement
+//@ chunk-51jy8ztq.js:6204-6253 placement
 var TAG_BOUNDARY_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-06y4szbn.js:6203", () => {
+deferInit("chunk-51jy8ztq.js:6204", () => {
   TAG_BOUNDARY_CHARS = new Set([
     " ",
     "\t",
@@ -86,7 +86,7 @@ deferInit("chunk-06y4szbn.js:6203", () => {
     ">",
   ]);
 });
-//@ chunk-06y4szbn.js:6252-6400 placement
+//@ chunk-51jy8ztq.js:6253-6401 placement
 function trimHtmlWhitespace(text) {
   let start = 0;
   let end = text.length;
@@ -94,11 +94,11 @@ function trimHtmlWhitespace(text) {
   while (end > start && isAsciiWhitespaceCode(text.charCodeAt(end - 1))) end--;
   return start === 0 && end === text.length ? text : text.slice(start, end);
 }
-//@ chunk-06y4szbn.js:6400-6460 placement
+//@ chunk-51jy8ztq.js:6401-6461 placement
 function isAsciiWhitespaceCode(code) {
   return code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
 }
-//@ chunk-06y4szbn.js:6460-6569 placement
+//@ chunk-51jy8ztq.js:6461-6570 placement
 function removeRanges(text, ranges) {
   if (!ranges.length) return text;
   let out = "";
@@ -109,14 +109,14 @@ function removeRanges(text, ranges) {
   }
   return out + text.slice(cursor);
 }
-//@ chunk-06y4szbn.js:6569-6630 placement
+//@ chunk-51jy8ztq.js:6570-6631 placement
 function hasCommentAndScript(html) {
   return html.includes("<!--") && /<script/i.test(html);
 }
-//@ chunk-06y4szbn.js:6630-6699 placement
+//@ chunk-51jy8ztq.js:6631-6700 placement
 var SCRIPT_CLOSE_TAG_RE = /<\/script(?=[\t\n\f\r />])/i;
 var STYLE_CLOSE_TAG_RE = /<\/style(?=[\t\n\f\r />])/i;
-//@ chunk-06y4szbn.js:6699-6877 placement
+//@ chunk-51jy8ztq.js:6700-6878 placement
 function findMarkerTag(html, tag) {
   let match = html.match(tag);
   if (!match) return null;
@@ -129,17 +129,17 @@ function findMarkerTag(html, tag) {
     after: index_2 + 1,
   };
 }
-//@ chunk-06y4szbn.js:6877-6960 placement
+//@ chunk-51jy8ztq.js:6878-6961 placement
 function scriptBlockEnd(text) {
   let markerTag = findMarkerTag(text, SCRIPT_CLOSE_TAG_RE);
   if (!markerTag || hasCommentAndScript(text.slice(0, markerTag.data))) return -1;
   return markerTag.after;
 }
-//@ chunk-06y4szbn.js:6960-6991 placement
+//@ chunk-51jy8ztq.js:6961-6992 placement
 function styleMarkerTag(tag) {
   return findMarkerTag(tag, STYLE_CLOSE_TAG_RE);
 }
-//@ chunk-06y4szbn.js:6991-7115 placement
+//@ chunk-51jy8ztq.js:6992-7116 placement
 /**
  * 页面 data-id 属性的长度 16 与对应正则（chart/mermaid 运行时标记识别用）。
  */
@@ -149,7 +149,7 @@ var DATA_ID_ATTR_LENGTH;
 var DATA_ID_VALUE_PATTERN;
 var DATA_ID_VALUE_RE;
 var DATA_ID_ATTR_PATTERN;
-deferInit("chunk-06y4szbn.js:6991", () => {
+deferInit("chunk-51jy8ztq.js:6992", () => {
   DATA_ID_LENGTH = 16;
   DATA_ID_ATTR_PREFIX = ' data-id="';
   DATA_ID_ATTR_LENGTH = DATA_ID_ATTR_PREFIX.length + DATA_ID_LENGTH + 1;
@@ -157,7 +157,7 @@ deferInit("chunk-06y4szbn.js:6991", () => {
   DATA_ID_VALUE_RE = new RegExp(`^${DATA_ID_VALUE_PATTERN}$`);
   DATA_ID_ATTR_PATTERN = `${DATA_ID_ATTR_PREFIX}${DATA_ID_VALUE_PATTERN}"`;
 });
-//@ chunk-06y4szbn.js:7115-7246 placement
+//@ chunk-51jy8ztq.js:7116-7247 placement
 function dataIdAttributeLength(html, tagStart) {
   if (!html.startsWith(DATA_ID_ATTR_PREFIX, tagStart)) return 0;
   let prefixEnd = tagStart + DATA_ID_ATTR_PREFIX.length;
@@ -166,7 +166,7 @@ function dataIdAttributeLength(html, tagStart) {
     ? DATA_ID_ATTR_LENGTH
     : 0;
 }
-//@ chunk-06y4szbn.js:7246-7421 placement
+//@ chunk-51jy8ztq.js:7247-7422 placement
 function matchClosingTag(html, tagStart, tagName) {
   if (html.startsWith(tagName, tagStart)) return tagName.length;
   let nameEnd = tagName.length - 1;
@@ -174,20 +174,20 @@ function matchClosingTag(html, tagStart, tagName) {
   let attrLength = dataIdAttributeLength(html, tagStart + nameEnd);
   return attrLength && html.charCodeAt(tagStart + nameEnd + attrLength) === 62 ? nameEnd + attrLength + 1 : 0;
 }
-//@ chunk-06y4szbn.js:7421-7464 placement
+//@ chunk-51jy8ztq.js:7422-7465 placement
 function findScriptOpen(html, from) {
   return matchClosingTag(html, from, "<script>");
 }
-//@ chunk-06y4szbn.js:7464-7506 placement
+//@ chunk-51jy8ztq.js:7465-7507 placement
 function styleClosingTag(html, tagStart) {
   return matchClosingTag(html, tagStart, "<style>");
 }
-//@ chunk-06y4szbn.js:7506-7611 placement
+//@ chunk-51jy8ztq.js:7507-7612 placement
 var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-06y4szbn.js:7506", () => {
+deferInit("chunk-51jy8ztq.js:7507", () => {
   regExp = new RegExp('<script src="/_runtime/mermaid-[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.min\\.js"', "y");
 });
-//@ chunk-06y4szbn.js:7611-7839 placement
+//@ chunk-51jy8ztq.js:7612-7840 placement
 function matchScriptOpenTag(html, from) {
   regExp.lastIndex = from;
   let match = regExp.exec(html);
@@ -206,7 +206,7 @@ function matchScriptOpenTag(html, from) {
       }
     : null;
 }
-//@ chunk-06y4szbn.js:7839-8017 placement
+//@ chunk-51jy8ztq.js:7840-8018 placement
 function countExternalScripts(html) {
   let trimmed = trimHtmlWhitespace(html);
   if (!trimmed.length) return -1;
@@ -221,7 +221,7 @@ function countExternalScripts(html) {
   }
   return count;
 }
-//@ chunk-06y4szbn.js:8017-8387 placement
+//@ chunk-51jy8ztq.js:8018-8388 placement
 function skipQuotedAttribute(text, from) {
   let extra = 0;
   let index = from;
@@ -253,25 +253,25 @@ function skipQuotedAttribute(text, from) {
   }
   return -1;
 }
-//@ chunk-06y4szbn.js:8387-8437 placement
+//@ chunk-51jy8ztq.js:8388-8438 placement
 function isChartRuntimeEnabled() {
   return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_pewter_canteen", false);
 }
-//@ chunk-06y4szbn.js:8437-8465 placement
+//@ chunk-51jy8ztq.js:8438-8466 placement
 var DATA_CHART_RUNTIME = "data-chart-runtime";
-//@ chunk-06y4szbn.js:8465-8502 placement
+//@ chunk-51jy8ztq.js:8466-8503 placement
 function hasChartRuntime(html) {
   return html.includes(DATA_CHART_RUNTIME);
 }
-//@ chunk-06y4szbn.js:8502-8530 placement
+//@ chunk-51jy8ztq.js:8503-8531 placement
 function unsafeBundleReasonOf(bundle) {
   return unsafeBundleReason(bundle);
 }
-//@ chunk-06y4szbn.js:8530-8561 placement
+//@ chunk-51jy8ztq.js:8531-8562 placement
 function hasExternalScripts(html) {
   return countExternalScripts(html) >= 0;
 }
-//@ chunk-06y4szbn.js:8561-8772 placement
+//@ chunk-51jy8ztq.js:8562-8773 placement
 function stripMermaidRuntime(text) {
   let ranges = [];
   let index = text.indexOf(CHART_RUNTIME_BEGIN);
@@ -289,7 +289,7 @@ function stripMermaidRuntime(text) {
   }
   return removeRanges(text, ranges);
 }
-//@ chunk-06y4szbn.js:8772-14299 placement
+//@ chunk-51jy8ztq.js:8773-14300 placement
 var CHART_INIT_SCRIPT = `(function () {
   if (typeof Chart === 'undefined') return;
   var specEl = document.querySelector('script[type="application/json"][data-chart-runtime]');
@@ -413,7 +413,7 @@ var CHART_INIT_SCRIPT = `(function () {
     new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 })();`;
-//@ chunk-06y4szbn.js:14299-14754 placement
+//@ chunk-51jy8ztq.js:14300-14755 placement
 /**
  * 加载 Chart.js 运行时（内置资源）用于 artifact 页面注入，校验 bundle 安全性。
  */
@@ -449,19 +449,19 @@ async function loadChartRuntime() {
   }
   return CHART_RUNTIME_BEGIN + result + CHART_RUNTIME_END;
 }
-//@ chunk-06y4szbn.js:14754-14782 placement
+//@ chunk-51jy8ztq.js:14755-14783 placement
 function unsafeScriptBundleReason(bundle) {
   return unsafeBundleReason(bundle);
 }
-//@ chunk-06y4szbn.js:14782-14791 placement
+//@ chunk-51jy8ztq.js:14783-14792 placement
 var MAX_LENGTH_DIGITS = 8;
-//@ chunk-06y4szbn.js:14791-14827 placement
+//@ chunk-51jy8ztq.js:14792-14828 placement
 function chartRuntimeFooter(html) {
   return `${HLJS_RUNTIME_BEGIN}${html}-->`;
 }
-//@ chunk-06y4szbn.js:14827-14842 placement
+//@ chunk-51jy8ztq.js:14828-14843 placement
 var MAX_CHART_RUNTIME_SPAN = 4194304;
-//@ chunk-06y4szbn.js:14842-14944 placement
+//@ chunk-51jy8ztq.js:14843-14945 placement
 function isPureScriptBlock(text, from = 0) {
   return (
     text[0] ===
@@ -474,7 +474,7 @@ function isPureScriptBlock(text, from = 0) {
     countExternalScripts(text) === from
   );
 }
-//@ chunk-06y4szbn.js:14944-15058 placement
+//@ chunk-51jy8ztq.js:14945-15059 placement
 /**
  * 图表（高亮）运行时标记识别的规格：起始前缀、结束标记、最多 8 位长度数字、最大跨度 4 MB 与校验函数。
  */
@@ -490,7 +490,7 @@ var CHART_SENTINEL_LIMITS = {
 var MAX_INLINE_SCRIPT_CHARS = 50000;
 var MAX_SCRIPT_BUDGET = 250000;
 var MAX_SCRIPT_ATTR_CHARS = 4096;
-//@ chunk-06y4szbn.js:15058-15480 placement
+//@ chunk-51jy8ztq.js:15059-15481 placement
 function hasHighlightableCode(html) {
   let lower = html.toLowerCase();
   let index = 0;
@@ -522,7 +522,7 @@ function hasHighlightableCode(html) {
     index = limit;
   }
 }
-//@ chunk-06y4szbn.js:15480-16191 placement
+//@ chunk-51jy8ztq.js:15481-16192 placement
 function highlightInitScript() {
   return `(function(){
 if(typeof hljs==='undefined')return;
@@ -546,7 +546,7 @@ el.classList.add('hljs');
 }
 })();`;
 }
-//@ chunk-06y4szbn.js:16191-16875 placement
+//@ chunk-51jy8ztq.js:16192-16876 placement
 async function loadHighlightRuntime() {
   let script;
   try {
@@ -597,7 +597,7 @@ async function loadHighlightRuntime() {
 `
   );
 }
-//@ chunk-06y4szbn.js:16875-17186 placement
+//@ chunk-51jy8ztq.js:16876-17187 placement
 /**
  * Mermaid 图的浅色/深色配色与图表样式。
  */
@@ -619,7 +619,7 @@ var MERMAID_PALETTES = {
 };
 var MERMAID_DIAGRAM_STYLE =
   "<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>";
-//@ chunk-06y4szbn.js:17186-20295 placement
+//@ chunk-51jy8ztq.js:17187-20296 placement
 function mermaidInitScript() {
   return (
     `(function(){
@@ -700,15 +700,15 @@ if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(ro
 })();`
   );
 }
-//@ chunk-06y4szbn.js:20295-20304 placement
+//@ chunk-51jy8ztq.js:20296-20305 placement
 var MAX_MERMAID_LENGTH_DIGITS = 8;
-//@ chunk-06y4szbn.js:20304-20340 placement
+//@ chunk-51jy8ztq.js:20305-20341 placement
 function mermaidRuntimeFooter(html) {
   return `${MERMAID_RUNTIME_BEGIN}${html}-->`;
 }
-//@ chunk-06y4szbn.js:20340-20355 placement
+//@ chunk-51jy8ztq.js:20341-20356 placement
 var MAX_MERMAID_RUNTIME_SPAN = 8388608;
-//@ chunk-06y4szbn.js:20355-20714 placement
+//@ chunk-51jy8ztq.js:20356-20715 placement
 function isMermaidRuntimeBlock(html, from = 0) {
   let markerOffset =
     html[0] ===
@@ -737,7 +737,7 @@ function isMermaidRuntimeBlock(html, from = 0) {
   let externalCount = countExternalScripts(rest);
   return externalCount >= 0 && externalCount + moduleOffsetFlag === from;
 }
-//@ chunk-06y4szbn.js:20714-20809 placement
+//@ chunk-51jy8ztq.js:20715-20810 placement
 /**
  * Mermaid 运行时标记识别的规格：起始/结束标记、最多 8 位长度、最大跨度 8 MB 与校验函数。
  */
@@ -751,7 +751,7 @@ var MERMAID_SENTINEL_LIMITS = {
   validate: isMermaidRuntimeBlock,
 };
 var MAX_MERMAID_ATTR_CHARS = 4096;
-//@ chunk-06y4szbn.js:20809-21094 placement
+//@ chunk-51jy8ztq.js:20810-21095 placement
 function hasMermaidBlocks(html) {
   let lower = html.toLowerCase();
   let index = 0;
@@ -777,7 +777,7 @@ function hasMermaidBlocks(html) {
     index = found ? limit + 1 : limit;
   }
 }
-//@ chunk-06y4szbn.js:21094-21592 placement
+//@ chunk-51jy8ztq.js:21095-21593 placement
 function hasChartClass(html) {
   let length = html.length;
   let index = 0;
@@ -821,7 +821,7 @@ function hasChartClass(html) {
   }
   return false;
 }
-//@ chunk-06y4szbn.js:21592-21918 placement
+//@ chunk-51jy8ztq.js:21593-21919 placement
 function mermaidRuntimeBlock() {
   let initScript = mermaidInitScript();
   if (unsafeBundleReason(initScript) !== null) {
@@ -856,7 +856,7 @@ function mermaidRuntimeBlock() {
 `
   );
 }
-//@ chunk-06y4szbn.js:21918-21983 placement
+//@ chunk-51jy8ztq.js:21919-21984 placement
 function detectPageRuntimes(html) {
   return {
     chart: hasChartRuntime(html),
@@ -864,7 +864,7 @@ function detectPageRuntimes(html) {
     highlight: hasHighlightableCode(html),
   };
 }
-//@ chunk-06y4szbn.js:21983-22216 placement
+//@ chunk-51jy8ztq.js:21984-22216 placement
 function escapeForJsString(text, maxChars) {
   let bounded = text.length > maxChars ? truncateToLength(text, maxChars) : text;
   return {
@@ -886,13 +886,13 @@ function escapeForJsString(text, maxChars) {
     elided: text.length - bounded.length,
   };
 }
-//@ chunk-06y4szbn.js:22216-22335 placement
+//@ chunk-51jy8ztq.js:22216-22335 placement
 function quotedExcerpt(text, maxChars) {
   let { escaped, elided } = escapeForJsString(text, maxChars);
   let quoted = `"${normalizeQuotes(sweepResultLineText(escaped, escaped.length))}"`;
   return elided > 0 ? `${quoted} \u2026(+${elided} chars)` : quoted;
 }
-//@ chunk-06y4szbn.js:22335-22392 placement
+//@ chunk-51jy8ztq.js:22335-22392 placement
 function normalizeQuotes(text) {
   return text.replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'");
 }
@@ -916,8 +916,8 @@ export {
   MERMAID_SENTINEL_LIMITS,
   CHART_SENTINEL_LIMITS,
   DATA_ID_ATTR_LENGTH,
-  MERMAID_RUNTIME_PATH,
-  dataIdAttributeLength,
-  quotedExcerpt,
   normalizeQuotes,
+  quotedExcerpt,
+  dataIdAttributeLength,
+  MERMAID_RUNTIME_PATH,
 };

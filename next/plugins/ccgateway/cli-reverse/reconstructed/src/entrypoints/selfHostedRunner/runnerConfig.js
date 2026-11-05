@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：runner 参数解析、工作单声明与 spawn 钩子解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (8)
  * attribution: placement 8
  */
 import { resolve, join } from "path";
@@ -29,7 +29,7 @@ import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 import { errorMessage } from "../../utils/errors.js";
 import { decodeJwtPayload } from "../../bridge/jwtUtils.js";
 
-//@ chunk-2cbdmxy9.js:20087-23784 placement
+//@ chunk-h7hgs1mf.js:20917-24614 placement
 /**
  * 解析 self-hosted runner 的命令行与 SELF_HOSTED_RUNNER_* 环境变量（API 地址、钩子目录、健康端口、并发、排空时间等）。
  */
@@ -227,7 +227,7 @@ function parseRunnerArgs(argv) {
     );
   return config;
 }
-//@ chunk-2cbdmxy9.js:23784-23954 placement
+//@ chunk-h7hgs1mf.js:24614-24784 placement
 function parsePortArg(raw, fallback, envName) {
   if (raw === undefined || raw === "") return fallback;
   let intLoose = parseIntLoose(raw);
@@ -235,7 +235,7 @@ function parsePortArg(raw, fallback, envName) {
     throw Error(`${envName} must be an integer in [0, 65535], got: "${raw}"`);
   return intLoose;
 }
-//@ chunk-2cbdmxy9.js:23954-24160 placement
+//@ chunk-h7hgs1mf.js:24784-24990 placement
 function parseShutdownDrainSec(raw) {
   let seconds = parseInt(raw, 10);
   if (
@@ -249,7 +249,7 @@ function parseShutdownDrainSec(raw) {
     );
   return seconds;
 }
-//@ chunk-2cbdmxy9.js:24160-24720 placement
+//@ chunk-h7hgs1mf.js:24990-25550 placement
 async function resolveSpawnRunnerHook(hooksDir) {
   if (!hooksDir)
     throw Error(
@@ -272,7 +272,7 @@ async function resolveSpawnRunnerHook(hooksDir) {
   }
   return hookPath;
 }
-//@ chunk-2cbdmxy9.js:24720-25007 placement
+//@ chunk-h7hgs1mf.js:25550-25837 placement
 function poolIdFromSecret(secret) {
   let replaced = secret.replace(/^sk-ant-[a-z]+-/, "");
   let payload = decodeJwtPayload(replaced);
@@ -283,14 +283,14 @@ function poolIdFromSecret(secret) {
     );
   return poolId;
 }
-//@ chunk-2cbdmxy9.js:25007-25175 placement
+//@ chunk-h7hgs1mf.js:25837-26005 placement
 function workOrderNumberOf(attempt) {
   if (attempt === undefined || attempt === null) return 0;
   if (typeof attempt === "number") return attempt;
   if (typeof attempt === "string") return /^(0|[1-9]\d{0,14})$/.test(attempt) ? Number(attempt) : attempt;
   return String(attempt);
 }
-//@ chunk-2cbdmxy9.js:25175-25959 placement
+//@ chunk-h7hgs1mf.js:26005-26853 placement
 function workOrderClaims(workOrder, serverTime) {
   let payload = decodeJwtPayload(workOrder.work_order_jwt);
   let claims = payload !== null && typeof payload === "object" ? payload : {};
@@ -310,6 +310,7 @@ function workOrderClaims(workOrder, serverTime) {
     jti: workOrder.jti || textClaim("jti"),
     session_id: workOrder.session_uuid ?? "",
     attempt: workOrderNumberOf(workOrder.attempt),
+    spawn_reason: typeof workOrder.spawn_reason === "string" ? workOrder.spawn_reason : "",
     pool_id: poolId,
     account_id: textClaim("ccr:spawn_account_id") || textClaim("account_id"),
     account_email: textClaim("ccr:spawn_account_email") || textClaim("account_email"),
@@ -321,7 +322,7 @@ function workOrderClaims(workOrder, serverTime) {
     client_platform: typeof workOrder.client_platform === "string" ? workOrder.client_platform : "",
   };
 }
-//@ chunk-2cbdmxy9.js:25959-26067 placement
+//@ chunk-h7hgs1mf.js:26853-26961 placement
 function ageMs(timestamp, now = Date.now()) {
   if (!timestamp) return null;
   let timestamp_2 = Date.parse(timestamp);

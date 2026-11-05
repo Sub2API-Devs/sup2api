@@ -3,15 +3,15 @@
  *
  * SGR 参数解析为文本样式
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/sgr.ts
- * pieces: chunk-m1vyn8g1.js (4)
+ * pieces: chunk-kx37bqfp.js (4)
  * attribution: fingerprint 4
  */
 import { csi } from "./csi.js";
 import { defaultStyle } from "./types.js";
 
-//@ chunk-m1vyn8g1.js:510-937 fingerprint (2.1.88 match: NAMED_COLORS, 0.876)
+//@ chunk-kx37bqfp.js:510-937 fingerprint (2.1.88 match: NAMED_COLORS, 0.876)
 var SGR_RESET = csi(0, "m");
 var SGR_BOLD = csi(1, "m");
 var SGR_DIM = csi(2, "m");
@@ -44,7 +44,7 @@ var NAMED_COLORS = [
   "brightWhite",
 ];
 var UNDERLINE_STYLES = ["none", "single", "double", "curly", "dotted", "dashed"];
-//@ chunk-m1vyn8g1.js:937-1425 fingerprint (2.1.88 match: parseParams, 1)
+//@ chunk-kx37bqfp.js:937-1425 fingerprint (2.1.88 match: parseParams, 1)
 /**
  * 解析 SGR 参数串（; 分隔参数、: 分隔子参数）。
  */
@@ -92,7 +92,7 @@ function parseParams(str) {
   }
   return result;
 }
-//@ chunk-m1vyn8g1.js:1425-2010 fingerprint (2.1.88 match: parseExtendedColor, 1)
+//@ chunk-kx37bqfp.js:1425-2010 fingerprint (2.1.88 match: parseExtendedColor, 1)
 /**
  * 解析 38/48/58 扩展颜色：冒号形式（5:n / 2:[cs:]r:g:b）或分号形式（;5;n / ;2;r;g;b）。
  */
@@ -139,7 +139,7 @@ function parseExtendedColor(params, idx) {
   }
   return null;
 }
-//@ chunk-m1vyn8g1.js:2010-3511 fingerprint (2.1.88 match: applySGR, 1)
+//@ chunk-kx37bqfp.js:2010-3511 fingerprint (2.1.88 match: applySGR, 1)
 /**
  * 把一条 SGR 应用到 termio 文本样式：重置、粗/暗/斜/下划线（含 4:x 样式与 21 双下划线）/闪烁/反显/隐藏/删除线/上划线及其关闭码、16 色前景背景（含亮色）、256 色与真彩色、下划线颜色。
  */

@@ -3,9 +3,9 @@
  *
  * 云会话/管理相关请求：取 OAuth 令牌与组织 id、远程会话 teleport 事件、GitHub App 状态重新同步与错误提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/adminRequests.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-s61vbvea.js (2), chunk-vbks4x4e.js (9)
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (2), chunk-ph8hmbrf.js (9)
  * attribution: fingerprint 2, affinity 1, placement 9
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -29,7 +29,7 @@ import { sleep } from "../../utils/sleep.js";
 import { isQuotaAutoResumeArmed } from "../quotaAutoResume/quotaAutoResume.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:467594-468180 affinity
+//@ chunk-7jxyna5q.js:385072-385658 affinity
 /**
  * GitHub App 访问失败原因 → 用户提示（IP 白名单、SSO、条件访问等）。
  */
@@ -41,7 +41,7 @@ var GITHUB_APP_ERROR_MESSAGES = {
   idp_conditional_access:
     "Your GitHub organization's identity provider (Microsoft Entra ID) has a Conditional Access policy that is blocking Claude. Ask your GitHub Enterprise or Entra ID admin to allow Claude in that policy.",
 };
-//@ chunk-s61vbvea.js:468180-469320 fingerprint (2.1.88 match: createAdminRequest, 0.308)
+//@ chunk-7jxyna5q.js:385658-386798 fingerprint (2.1.88 match: createAdminRequest, 0.308)
 /**
  * GitHub App 状态未定时请求服务端重新同步。旧版名 createAdminRequest 为错配。
  */
@@ -111,7 +111,7 @@ async function createAdminRequest({ orgUUID, accessToken, owner, repo, timeoutMs
     };
   }
 }
-//@ chunk-e6aww6q8.js:208643-208838 fingerprint (2.1.88 match: checkAdminRequestEligibility, 0.407)
+//@ chunk-5xgkngpb.js:207696-207891 fingerprint (2.1.88 match: checkAdminRequestEligibility, 0.407)
 /**
  * 拉取远程会话 /v1/code/sessions/<id>/teleport-events（带组织头与可信设备令牌）。旧版名错配。
  */
@@ -130,7 +130,7 @@ async function checkAdminRequestEligibility(
   if (trustedDeviceToken) headers["X-Trusted-Device-Token"] = trustedDeviceToken;
   return getTeleportEvents(sessionId, teleportEventsUrl, headers, options, true);
 }
-//@ chunk-vbks4x4e.js:772-1097 placement
+//@ chunk-ph8hmbrf.js:772-1097 placement
 /**
  * 向组织 admin_requests 接口提交管理员请求，返回请求数据、是否新建与状态码。
  */
@@ -149,7 +149,7 @@ async function postAdminRequest(body, credentials) {
     };
   });
 }
-//@ chunk-vbks4x4e.js:1097-1464 placement
+//@ chunk-ph8hmbrf.js:1097-1464 placement
 /**
  * 按请求类型和状态列出当前用户提交给组织管理员的请求。
  */
@@ -171,7 +171,7 @@ async function listMyAdminRequests(requestType, statuses, credentials) {
     return response.data;
   });
 }
-//@ chunk-vbks4x4e.js:1464-1785 placement
+//@ chunk-ph8hmbrf.js:1464-1785 placement
 /**
  * 查询当前用户能否就某类请求向管理员申请。
  */
@@ -191,7 +191,7 @@ async function getAdminRequestEligibility(requestType, credentials) {
     return response.data;
   });
 }
-//@ chunk-vbks4x4e.js:1785-1974 placement
+//@ chunk-ph8hmbrf.js:1785-1974 placement
 /**
  * 本地把限额状态改为"正在使用超额且已允许"并广播，用于管理员批准后立刻放行。
  */
@@ -205,7 +205,7 @@ function markOverageAllowed() {
   if (limits.overageStatus === "rejected") limits.overageStatus = "allowed";
   emitLimitsStatusChange(limits);
 }
-//@ chunk-vbks4x4e.js:1974-2359 placement
+//@ chunk-ph8hmbrf.js:1974-2359 placement
 /**
  * 从 4xx axios 错误响应体中提取可读的错误消息（error.message、message 或 detail）。
  */
@@ -227,14 +227,14 @@ function adminRequestErrorMessage(error) {
   }
   return null;
 }
-//@ chunk-vbks4x4e.js:2359-2648 placement
+//@ chunk-ph8hmbrf.js:2359-2648 placement
 /**
  * 用量额度申请相关常量：非交互会话的提示文字、超时，以及表示组织额度为零或已达上限的错误码。
  */
 var USAGE_CREDITS_NONINTERACTIVE_HINT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ADMIN_REQUEST_TIMEOUT_MS;
 var ZERO_CREDIT_REASONS;
-deferInit("chunk-vbks4x4e.js:2359", () => {
+deferInit("chunk-ph8hmbrf.js:2359", () => {
   USAGE_CREDITS_NONINTERACTIVE_HINT =
     "Requesting usage credits notifies your organization admins. To review and send the request, run /usage-credits in an interactive Claude Code session.";
   ADMIN_REQUEST_TIMEOUT_MS = 2000;
@@ -245,7 +245,7 @@ deferInit("chunk-vbks4x4e.js:2359", () => {
     "seat_tier_zero_credit_limit",
   ]);
 });
-//@ chunk-vbks4x4e.js:2648-3430 placement
+//@ chunk-ph8hmbrf.js:2648-3430 placement
 function parseAdminRequest(request) {
   if (request == null || typeof request !== "object" || request.request_type !== "limit_increase")
     return null;
@@ -284,7 +284,7 @@ function parseAdminRequest(request) {
     hasExpiry: expiresText !== undefined,
   };
 }
-//@ chunk-vbks4x4e.js:3430-4758 placement
+//@ chunk-ph8hmbrf.js:3430-4758 placement
 async function fileAdminLimitRequest(limitsState, credentials, onProgress) {
   let createResult;
   try {
@@ -377,7 +377,7 @@ async function fileAdminLimitRequest(limitsState, credentials, onProgress) {
     value: isResumeArmed ? `${grant.line}.` : `${grant.line} \xB7 send a message to continue`,
   };
 }
-//@ chunk-vbks4x4e.js:6713-6901 placement
+//@ chunk-ph8hmbrf.js:6713-6901 placement
 function classifyAdminRequestStatus(status) {
   if (status === 201) return "filed";
   if (status === 200) return "already_filed";
@@ -387,11 +387,11 @@ function classifyAdminRequestStatus(status) {
 }
 export {
   fileAdminLimitRequest,
-  USAGE_CREDITS_NONINTERACTIVE_HINT,
-  ADMIN_REQUEST_TIMEOUT_MS,
-  checkAdminRequestEligibility,
   markOverageAllowed,
+  USAGE_CREDITS_NONINTERACTIVE_HINT,
+  checkAdminRequestEligibility,
   createAdminRequest,
+  ADMIN_REQUEST_TIMEOUT_MS,
   getAdminRequestEligibility,
   listMyAdminRequests,
 };

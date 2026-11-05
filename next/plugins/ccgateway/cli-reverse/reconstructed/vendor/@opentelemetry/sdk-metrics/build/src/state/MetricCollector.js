@@ -1,14 +1,14 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/state/MetricCollector.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_core } from "../../../../core/build/src/index.js";
 
-//@ chunk-wrv5s6k4.js:53746-54699 cjs-fingerprint
+//@ chunk-q87n5wsq.js:53746-54699 cjs-fingerprint
 var require_MetricCollector = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

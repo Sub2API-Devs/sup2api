@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动公告提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (2)
  * attribution: placement 2
  */
 import { pickStartupAnnouncement as pickStartupAnnouncement_2 } from "../../services/startupAnnouncements.js";
@@ -24,11 +24,11 @@ import {
 import { Text, BaseText, Box } from "../../ink/components/Text.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
-//@ chunk-ag5x7vhf.js:95169-95198 placement
+//@ chunk-hnxhr3bs.js:98750-98779 placement
 function pickStartupAnnouncement() {
   return pickStartupAnnouncement_2(false);
 }
-//@ chunk-ag5x7vhf.js:95198-96305 placement
+//@ chunk-hnxhr3bs.js:98779-99886 placement
 function StartupAnnouncementNotice() {
   let $ = useMemoCache(19);
   let { storageV5 } = useTheme_2();

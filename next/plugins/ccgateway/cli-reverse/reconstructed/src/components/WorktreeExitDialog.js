@@ -3,9 +3,9 @@
  *
  * 退出 worktree 会话时的对话框：保留/删除 worktree、处理未提交改动、tmux 会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/WorktreeExitDialog.tsx
- * pieces: chunk-18hwfzwa.js (12)
+ * pieces: chunk-czq1j3j2.js (12)
  * attribution: placement 9, layout 2, fingerprint 1
  */
 import { homedir } from "os";
@@ -60,28 +60,28 @@ import { Spinner } from "./Spinner.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:1693042-1693072 placement
+//@ chunk-czq1j3j2.js:1739346-1739376 placement
 function selectId5(session) {
   return session.id;
 }
-//@ chunk-18hwfzwa.js:1693072-1693097 placement
+//@ chunk-czq1j3j2.js:1739376-1739401 placement
 function placeholderChar() {
   return "?";
 }
-//@ chunk-18hwfzwa.js:1693097-1693136 placement
+//@ chunk-czq1j3j2.js:1739401-1739440 placement
 function isNonEmptyLine(line) {
   return line.trim() !== "";
 }
-//@ chunk-18hwfzwa.js:1693136-1693156 placement
+//@ chunk-czq1j3j2.js:1739440-1739460 placement
 var SUBMODULE_CHECK_TIMEOUT_MS = 5000;
 var EMPTY_DIALOG_TITLE = "";
-//@ chunk-18hwfzwa.js:1693156-1693168 placement
+//@ chunk-czq1j3j2.js:1739460-1739472 placement
 var WORKTREE_STATUS_TIMEOUT_MS = 5000;
-//@ chunk-18hwfzwa.js:1693168-1693220 placement
+//@ chunk-czq1j3j2.js:1739472-1739524 placement
 function worktreeRelocationModule() {
   return require("../utils/sessionStorage.lazy.js");
 }
-//@ chunk-18hwfzwa.js:1693220-1693917 placement
+//@ chunk-czq1j3j2.js:1739524-1740221 placement
 /**
  * 退出 worktree 后回到原工作目录（目录已不存在时逐级向上找存在的父目录），必要时恢复 originalCwd、搬移会话转录，清空 worktree 状态与计划目录缓存。
  */
@@ -130,7 +130,7 @@ async function restoreCwdAfterWorktreeExit(worktreeSession, storageV5) {
   getPlansDirectory.cache.clear?.();
   primePlanSlugCollisions(storageV5);
 }
-//@ chunk-18hwfzwa.js:1693917-1694107 placement
+//@ chunk-czq1j3j2.js:1740221-1740411 placement
 function worktreeExitTelemetry(atStake, worktreesInside) {
   return {
     commits: atStake.commits ?? -1,
@@ -145,7 +145,7 @@ function worktreeExitTelemetry(atStake, worktreesInside) {
     }),
   };
 }
-//@ chunk-18hwfzwa.js:1694107-1694906 placement
+//@ chunk-czq1j3j2.js:1740411-1741210 placement
 function removeWorktreeOnExit(
   session,
   env_2,
@@ -186,15 +186,15 @@ function removeWorktreeOnExit(
         env.CLAUDE_CODE_TMUX_SESSION === session.tmuxSessionName),
   };
 }
-//@ chunk-18hwfzwa.js:1694906-1695073 layout
+//@ chunk-czq1j3j2.js:1741210-1741377 layout
 function worktreeChangedMessage(worktreePath, tmuxEnded) {
   return `The exit didn't remove the worktree at ${worktreePath}: this session's worktree changed after Claude Code checked it.${tmuxEnded ? " Tmux session terminated." : ""}`;
 }
-//@ chunk-18hwfzwa.js:1695073-1695109 layout
+//@ chunk-czq1j3j2.js:1741377-1741413 layout
 async function inspectWorktreeChanges(worktreePath, worktreesInside) {
   return null;
 }
-//@ chunk-18hwfzwa.js:1695109-1706346 fingerprint (2.1.88 match: WorktreeExitDialog, 0.483)
+//@ chunk-czq1j3j2.js:1741413-1752645 fingerprint (2.1.88 match: WorktreeExitDialog, 0.483)
 /**
  * 退出 worktree 会话：检查未提交改动与 worktree 状态，选择保留或删除 worktree（必要时先确认丢弃改动），结束 tmux 会话并返回原目录。
  */
@@ -369,16 +369,16 @@ function WorktreeExitDialog(props) {
               deadlineMs: SUBMODULE_CHECK_TIMEOUT_MS,
             }),
           );
-          $n: switch (submoduleInfo?.kind) {
+          or: switch (submoduleInfo?.kind) {
             case "changes": {
               changeLines = [...changeLines, ...submoduleInfo.paths];
               setSubmoduleNote(describeSubmoduleChanges(submoduleInfo));
-              break $n;
+              break or;
             }
             case "unverifiable": {
               changesUnverifiable_ = true;
               setSubmoduleError(describeSubmoduleChanges(submoduleInfo));
-              break $n;
+              break or;
             }
             case undefined:
           }
@@ -448,7 +448,6 @@ function WorktreeExitDialog(props) {
               } else setResultMessage(`Worktree could not be removed \u2014 kept at ${session.worktreePath}`);
               setPhase("done");
             });
-            return;
           } else setPhase("asking");
         }
       };

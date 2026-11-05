@@ -3,12 +3,12 @@
  *
  * 组织记忆库发现（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (36)
  * attribution: placement 36
  */
-import { join } from "path";
+import { join as join_2 } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   objectSchema,
@@ -29,7 +29,7 @@ import {
   getEffectiveSelection,
   isOrgMemoryDiscoveryEnabled,
 } from "./selection.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import {
   isDisklessWithoutState,
@@ -74,7 +74,7 @@ import {
 } from "./orgMemoryDecision.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { sleep } from "../../utils/sleep.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { memoizeWithTTL } from "../../utils/memoize.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import {
@@ -91,7 +91,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:46971-47411 placement
+//@ chunk-a2q0x549.js:48137-48577 placement
 /**
  * 单个发现到的记忆库的 schema。
  */
@@ -100,7 +100,7 @@ var ORG_MEMORY_DISCOVERY_JSON;
 var DISCOVERY_TTL_MS;
 var discoveryResponseSchema;
 var discoveredStoreSchema;
-deferInit("chunk-82kqcve8.js:46971", () => {
+deferInit("chunk-a2q0x549.js:48137", () => {
   ORG_MEMORY_MOUNTS_PATH = "/v1/code/local/memory/mounts";
   ORG_MEMORY_DISCOVERY_JSON = "org-memory-discovery.json";
   DISCOVERY_TTL_MS = 86400000;
@@ -128,7 +128,7 @@ deferInit("chunk-82kqcve8.js:46971", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:47411-47832 placement
+//@ chunk-a2q0x549.js:48577-48998 placement
 /**
  * 解析发现接口返回的候选记忆库：只保留合法的 workspace_silo（cagt_ 前缀）与 project，按 ID 去重。
  */
@@ -155,10 +155,10 @@ function parseStoreCandidates(candidates) {
   }
   return stores;
 }
-//@ chunk-82kqcve8.js:47832-48002 placement
+//@ chunk-a2q0x549.js:48998-49168 placement
 var discoveryCacheEntrySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var discoveryCacheFileSchema;
-deferInit("chunk-82kqcve8.js:47832", () => {
+deferInit("chunk-a2q0x549.js:48998", () => {
   discoveryCacheEntrySchema = DoctorLazy(() =>
     objectSchema({
       fetchedAt: numberSchema(),
@@ -174,19 +174,19 @@ deferInit("chunk-82kqcve8.js:47832", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:48002-48043 placement (2.1.88 match: getCacheDir, 1)
+//@ chunk-a2q0x549.js:49168-49209 placement (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache/org-memory-discovery.json。旧版名 getCacheDir_2 为错配（记忆发现模块）。
  */
 function getOrgMemoryDiscoveryCachePath() {
-  return join(getClaudeConfigDir(), "cache", ORG_MEMORY_DISCOVERY_JSON);
+  return join_2(getClaudeConfigDir(), "cache", ORG_MEMORY_DISCOVERY_JSON);
 }
-//@ chunk-82kqcve8.js:48043-48086 placement
+//@ chunk-a2q0x549.js:49209-49252 placement
 var DISCOVERY_CACHE_FILE; // deferred: uses ORG_MEMORY_MOUNTS_PATH of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:48043", () => {
+deferInit("chunk-a2q0x549.js:49209", () => {
   DISCOVERY_CACHE_FILE = STORAGE_SPACES.cache("org-memory-discovery", ORG_MEMORY_DISCOVERY_JSON);
 });
-//@ chunk-82kqcve8.js:48086-48518 placement
+//@ chunk-a2q0x549.js:49252-49683 placement
 async function readDiscoveryCache(storageV5) {
   if (isDisklessWithoutState(storageV5)) return {};
   try {
@@ -210,7 +210,7 @@ async function readDiscoveryCache(storageV5) {
   }
   return {};
 }
-//@ chunk-82kqcve8.js:48518-48650 placement
+//@ chunk-a2q0x549.js:49683-49815 placement
 async function readDiscoveryCacheEntries(storageV5) {
   let entries = {};
   for (let [key, value] of Object.entries(await readDiscoveryCache(storageV5))) {
@@ -219,7 +219,7 @@ async function readDiscoveryCacheEntries(storageV5) {
   }
   return entries;
 }
-//@ chunk-82kqcve8.js:48650-48711 placement
+//@ chunk-a2q0x549.js:49815-49876 placement
 /**
  * 判断发现条目是否新鲜（含账号匹配）。
  */
@@ -227,7 +227,7 @@ function isDiscoveryEntryFresh(entry) {
   if (entry === undefined) return false;
   return isFreshTimestamp(entry.fetchedAt);
 }
-//@ chunk-82kqcve8.js:48711-48763 placement
+//@ chunk-a2q0x549.js:49876-49928 placement
 /**
  * 判断时间戳是否在有效期内。
  */
@@ -235,7 +235,7 @@ function isFreshTimestamp(fetchedAt) {
   let ageMs = Date.now() - fetchedAt;
   return ageMs >= 0 && ageMs < DISCOVERY_TTL_MS;
 }
-//@ chunk-82kqcve8.js:48763-49244 placement
+//@ chunk-a2q0x549.js:49928-50408 placement
 async function writeDiscoveryCache(key, value, storageV5) {
   try {
     let discoveryCache = await readDiscoveryCache(storageV5);
@@ -260,7 +260,7 @@ async function writeDiscoveryCache(key, value, storageV5) {
     }
     if (isDisklessWithoutState(storageV5)) return;
     let fileReader = getFileReader();
-    await fileReader.mkdir(join(getClaudeConfigDir(), "cache"));
+    await fileReader.mkdir(join_2(getClaudeConfigDir(), "cache"));
     await fileReader.atomicWrite(
       getOrgMemoryDiscoveryCachePath(),
       jsonStringify({
@@ -271,7 +271,7 @@ async function writeDiscoveryCache(key, value, storageV5) {
     logForDebugging(`org-memory-discovery: cache write failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-82kqcve8.js:49244-49454 placement
+//@ chunk-a2q0x549.js:50408-50618 placement
 function isMemoryApiPath(path) {
   try {
     let parsedUrl = new URL(path, "https://sentinel.invalid");
@@ -285,14 +285,14 @@ function isMemoryApiPath(path) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:49454-49491 placement
+//@ chunk-a2q0x549.js:50618-50655 placement
 /**
  * 计算发现缓存使用的账号键（有 API 覆盖时为 null）。
  */
 function accountKeyForDiscovery() {
   return hasMemoryApiOverride() ? null : getOrgMemoryAccountKey();
 }
-//@ chunk-82kqcve8.js:49491-50121 placement
+//@ chunk-a2q0x549.js:50655-51285 placement
 async function fetchOrgMemoryDiscovery(credentials) {
   try {
     let response = await apiClient.get(ORG_MEMORY_MOUNTS_PATH, {
@@ -337,7 +337,7 @@ async function fetchOrgMemoryDiscovery(credentials) {
     };
   }
 }
-//@ chunk-82kqcve8.js:50121-50732 placement
+//@ chunk-a2q0x549.js:51285-51896 placement
 function parseDiscoveryStores(raw) {
   let validatedStores;
   try {
@@ -386,16 +386,16 @@ function parseDiscoveryStores(raw) {
     ),
   };
 }
-//@ chunk-82kqcve8.js:50732-50772 placement
+//@ chunk-a2q0x549.js:51896-51936 placement
 var MEMORY_MD = "MEMORY.md";
 var PUBLIC_PROJECTS_2 = "public_projects";
-//@ chunk-82kqcve8.js:50772-50879 placement
+//@ chunk-a2q0x549.js:51936-52043 placement
 function getSelectionLayer(groupingName) {
   if (isPublicProjects(groupingName)) return "root";
   if (isSiloId(groupingName)) return "silo";
   return isGroupingId(groupingName) && findGroupingStore(groupingName) === undefined ? "root" : "grouping";
 }
-//@ chunk-82kqcve8.js:50879-51146 placement
+//@ chunk-a2q0x549.js:52043-52310 placement
 function renameSquattingMount(configs, mountName, path) {
   let isSquatting = (config) =>
     config.mount === mountName && stripTrailingSlashes(config.path) !== stripTrailingSlashes(path);
@@ -415,20 +415,20 @@ function renameSquattingMount(configs, mountName, path) {
       : config,
   );
 }
-//@ chunk-82kqcve8.js:51146-51163 placement
+//@ chunk-a2q0x549.js:52310-52327 placement
 /**
  * 每轮等待时间（1500 毫秒）。
  */
 var MAX_IDENTITY_WAIT_ROUNDS = 3;
 var IDENTITY_WAIT_MS = 1500;
-//@ chunk-82kqcve8.js:51163-51190 placement
+//@ chunk-a2q0x549.js:52327-52354 placement
 /**
  * 等待身份就绪。
  */
 function waitForIdentity() {
   return sleep(IDENTITY_WAIT_MS);
 }
-//@ chunk-82kqcve8.js:51190-51393 placement
+//@ chunk-a2q0x549.js:52354-52557 placement
 async function writeDiscoveryCacheEntry(key, account, orgMemoryDiscovery, storageV5) {
   await writeDiscoveryCache(
     key,
@@ -446,27 +446,27 @@ async function writeDiscoveryCacheEntry(key, account, orgMemoryDiscovery, storag
     storageV5,
   );
 }
-//@ chunk-82kqcve8.js:51393-51592 placement
+//@ chunk-a2q0x549.js:52557-52756 placement
 function getCandidateTelemetry(candidates) {
   return {
     candidates: candidates.length,
-    candidate_count_public: count(
+    candidate_count_public: countWhere(
       candidates,
       (candidate) => candidate.kind === "project" && candidate.visibility === "public",
     ),
-    candidate_count_private: count(
+    candidate_count_private: countWhere(
       candidates,
       (candidate) => candidate.kind === "project" && candidate.visibility === "private",
     ),
   };
 }
-//@ chunk-82kqcve8.js:51592-51616 placement
+//@ chunk-a2q0x549.js:52756-52780 placement
 /**
  * 等待组织记忆决定完成的超时（15 秒）。
  */
 var DISCOVERY_CACHE_TTL_MS = 3600000;
 var DECISION_SETTLE_TIMEOUT_MS = 15000;
-//@ chunk-82kqcve8.js:51616-62965 placement
+//@ chunk-a2q0x549.js:52780-64129 placement
 /**
  * 组织记忆库发现：读写缓存、选择器、授权缺失处理
  */
@@ -1148,61 +1148,61 @@ class OrgMemoryDiscovery {
     };
   }
 }
-//@ chunk-82kqcve8.js:62965-62990 placement
+//@ chunk-a2q0x549.js:64129-64154 placement
 /**
  * 按宿主保存的发现状态。
  */
 var orgMemoryDiscoveryState; // deferred: uses OrgMemoryDiscovery of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:62965", () => {
+deferInit("chunk-a2q0x549.js:64129", () => {
   orgMemoryDiscoveryState = new HostScoped(() => new OrgMemoryDiscovery());
 });
-//@ chunk-82kqcve8.js:62990-63027 placement
+//@ chunk-a2q0x549.js:64154-64191 placement
 /**
  * 取当前宿主的发现状态。
  */
 function getOrgMemoryDiscovery() {
   return orgMemoryDiscoveryState.of(getRootSession().host);
 }
-//@ chunk-82kqcve8.js:63027-63061 placement
+//@ chunk-a2q0x549.js:64191-64225 placement
 function clearOrgMemoryDiscoveryCaches() {
   getOrgMemoryDiscovery().clearCaches();
 }
-//@ chunk-82kqcve8.js:63061-63101 placement
+//@ chunk-a2q0x549.js:64225-64265 placement
 function clearOrgMemoryDiscoveryAccountState() {
   getOrgMemoryDiscovery().clearAccountState();
 }
-//@ chunk-82kqcve8.js:63101-63153 placement
+//@ chunk-a2q0x549.js:64265-64317 placement
 function getOrgMemoryPickerData() {
   return isOrgMemoryDiscoveryEnabled() ? getOrgMemoryDiscovery().lastPickerData : null;
 }
-//@ chunk-82kqcve8.js:63153-63203 placement
+//@ chunk-a2q0x549.js:64317-64367 placement
 function hasOrgMemoryDecisionRunStarted() {
   return getOrgMemoryDiscovery().decisionRunEverStarted;
 }
-//@ chunk-82kqcve8.js:63203-63257 placement
+//@ chunk-a2q0x549.js:64367-64421 placement
 function rebuildMemoryPromptOnLateSettle() {
   getOrgMemoryDiscovery().rebuildMemoryPromptOnLateSettle();
 }
-//@ chunk-82kqcve8.js:63257-63312 placement
+//@ chunk-a2q0x549.js:64421-64476 placement
 function discoverOrgMemoryStoresForDecision(storageV5, credentials) {
   return getOrgMemoryDiscovery().discoverForDecision(storageV5, credentials);
 }
-//@ chunk-82kqcve8.js:63312-63356 placement (2.1.88 match: _pendingAssistantChat, 1)
+//@ chunk-a2q0x549.js:64476-64520 placement (2.1.88 match: _pendingAssistantChat, 1)
 /**
  * 发现组织级记忆存储（切分可疑）。
  */
 function discoverOrgMemoryStores(storageV5, signal) {
   return getOrgMemoryDiscovery().discover(storageV5, signal);
 }
-//@ chunk-82kqcve8.js:63356-63397 placement
+//@ chunk-a2q0x549.js:64520-64561 placement
 function reconnectOrgMemory(beforeReconnect) {
   return getOrgMemoryDiscovery().reconnect(beforeReconnect);
 }
-//@ chunk-82kqcve8.js:63397-63439 placement
+//@ chunk-a2q0x549.js:64561-64603 placement
 function disconnectOrgMemory(beforeDisconnect) {
   return getOrgMemoryDiscovery().disconnect(beforeDisconnect);
 }
-//@ chunk-82kqcve8.js:63439-63690 placement
+//@ chunk-a2q0x549.js:64603-64854 placement
 function getPreferredStore() {
   let orgMemoryDecision = getOrgMemoryDecision();
   if (orgMemoryDecision.state !== "on" || orgMemoryDecision.selectionSource !== "preference") return;
@@ -1219,7 +1219,7 @@ function getPreferredStore() {
   if (isSiloId(selection) && !isStoreBasename(store.path, selection)) return;
   return store;
 }
-//@ chunk-82kqcve8.js:63690-63773 placement
+//@ chunk-a2q0x549.js:64854-64937 placement
 function isSelectionMounted(selection) {
   let preferredStore = getPreferredStore();
   return (
@@ -1232,10 +1232,10 @@ export {
   getOrgMemoryPickerData,
   hasOrgMemoryDecisionRunStarted,
   rebuildMemoryPromptOnLateSettle,
-  disconnectOrgMemory,
-  reconnectOrgMemory,
   discoverOrgMemoryStoresForDecision,
   isSelectionMounted,
+  disconnectOrgMemory,
+  reconnectOrgMemory,
   clearOrgMemoryDiscoveryCaches,
   clearOrgMemoryDiscoveryAccountState,
 };

@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：git ssh 配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { resolve as resolve_2, delimiter, join } from "path";
-import { mkdtemp, rm as rm_2 } from "fs/promises";
+import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "../tempDir.js";
 import { logForDebugging } from "../debug.js";
 import { readGitConfigScoped } from "../git/gitConfigFilters.js";
@@ -31,7 +31,7 @@ import { execFileNoThrow } from "../execFileNoThrow.js";
 import { gitExe } from "../git.js";
 import { whichAsync } from "../which.js";
 
-//@ chunk-e6aww6q8.js:728195-729513 placement
+//@ chunk-5xgkngpb.js:738718-740039 placement
 /**
  * 读取用户的 git ssh 设置，为插件与市场克隆生成临时 ssh 配置。
  */
@@ -98,13 +98,13 @@ async function resolveGitSshConfig(remoteUrl) {
       }),
     };
   } finally {
-    await rm_2(tempDir, {
+    await rm(tempDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:729513-729785 placement
+//@ chunk-5xgkngpb.js:740039-740311 placement
 /**
  * 探测 ssh 命令是否可用：sh -c '<cmd> -G -o SendEnv=GIT_PROTOCOL example.invalid'，超时按进程组 SIGKILL，返回退出码是否为 0。
  */
@@ -130,13 +130,13 @@ async function probeSshCommand(sshCommand, env, cwd) {
   clearTimeout(timer);
   return exitCode === 0;
 }
-//@ chunk-e6aww6q8.js:729785-729854 placement (2.1.88 match: killCaffeinate, 1)
+//@ chunk-5xgkngpb.js:740311-740380 placement (2.1.88 match: killCaffeinate, 1)
 function killProcessGroup(pid) {
   try {
     if (pid !== undefined) process.kill(-pid, "SIGKILL");
   } catch {}
 }
-//@ chunk-e6aww6q8.js:729854-729916 placement
+//@ chunk-5xgkngpb.js:740380-740442 placement
 /**
  * sshCloneFallback：SSH 探测与降级提示。
  */
@@ -147,21 +147,21 @@ function sshCloneFallback(notify) {
     probeSsh: () => (probeResult ??= isGitHubSshLikelyConfigured()),
   };
 }
-//@ chunk-e6aww6q8.js:729916-729984 placement
+//@ chunk-5xgkngpb.js:740442-740510 placement
 /**
  * sshNotConfiguredMessage：SSH 未配置改走 HTTPS 的说明。
  */
 function sshNotConfiguredMessage(url) {
   return `SSH not configured, cloning via HTTPS: ${url}`;
 }
-//@ chunk-e6aww6q8.js:729984-730052 placement
+//@ chunk-5xgkngpb.js:740510-740578 placement
 /**
  * httpsFailedRetrySshMessage：HTTPS 失败改走 SSH 的说明。
  */
 function httpsFailedRetrySshMessage(url) {
   return `HTTPS clone failed, retrying with SSH: ${url}`;
 }
-//@ chunk-e6aww6q8.js:730052-731019 placement
+//@ chunk-5xgkngpb.js:740578-741548 placement
 async function readGitSshCommand(fallback, remoteUrl, gitContext, isWindows) {
   let onWindows = getPlatform() === "windows";
   if (onWindows !== isWindows) return false;
@@ -208,7 +208,7 @@ async function readGitSshCommand(fallback, remoteUrl, gitContext, isWindows) {
   );
   return false;
 }
-//@ chunk-e6aww6q8.js:731019-731184 placement
+//@ chunk-5xgkngpb.js:741548-741713 placement
 function hasDirectGitHubSshHost(output) {
   let mapped = output
     .split(
@@ -221,15 +221,15 @@ function hasDirectGitHubSshHost(output) {
     !mapped.some((line) => /^proxy(command|jump)(?! none$)/.test(line))
   );
 }
-//@ chunk-e6aww6q8.js:731184-731294 placement
+//@ chunk-5xgkngpb.js:741713-741823 placement
 function isSshAuthFailureOutput(stderr) {
   return stderr.includes("Permission denied (publickey") || stderr.includes("Host key verification failed");
 }
 export {
-  sshCloneFallback,
   resolveGitSshConfig,
   readGitSshCommand,
   isSshAuthFailureOutput,
   sshNotConfiguredMessage,
   httpsFailedRetrySshMessage,
+  sshCloneFallback,
 };

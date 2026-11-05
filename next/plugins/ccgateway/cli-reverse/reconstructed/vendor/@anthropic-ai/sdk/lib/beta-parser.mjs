@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/sdk/lib/beta-parser.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (5)
+ * pieces: chunk-vn3g7zt8.js (5)
  * attribution: esm-fingerprint 5
  */
 import { AnthropicError } from "../core/error.mjs";
 
-//@ chunk-hwmsct5x.js:90862-90927 esm-fingerprint
+//@ chunk-vn3g7zt8.js:91242-91307 esm-fingerprint
 function getOutputFormat_2(params) {
   return params?.output_format ?? params?.output_config?.format;
 }
-//@ chunk-hwmsct5x.js:90927-91355 esm-fingerprint
+//@ chunk-vn3g7zt8.js:91307-91735 esm-fingerprint
 function attachParsedOutput(message, params, opts) {
   let outputFormat = getOutputFormat_2(params);
   if (!params || !("parse" in (outputFormat ?? {})))
@@ -45,7 +45,7 @@ function attachParsedOutput(message, params, opts) {
     };
   return parseMessageContent(message, params, opts);
 }
-//@ chunk-hwmsct5x.js:91355-91768 esm-fingerprint
+//@ chunk-vn3g7zt8.js:91735-92148 esm-fingerprint
 function parseMessageContent(message, params, opts) {
   let firstParsedOutput = null;
   let content = message.content.map((block) => {
@@ -80,7 +80,7 @@ function parseMessageContent(message, params, opts) {
     parsed_output: firstParsedOutput,
   };
 }
-//@ chunk-hwmsct5x.js:91768-91960 esm-fingerprint
+//@ chunk-vn3g7zt8.js:92148-92340 esm-fingerprint
 /**
  * 按 output_format=json_schema 解析文本块为结构化输出（Anthropic SDK 代码）。
  */
@@ -94,7 +94,7 @@ function parseStructuredOutput(params, content) {
     throw new AnthropicError(`Failed to parse structured output: ${error}`);
   }
 }
-//@ chunk-hwmsct5x.js:118856-119155 esm-fingerprint
+//@ chunk-vn3g7zt8.js:119236-119535 esm-fingerprint
 function getOutputFormat(params) {
   if (!params.output_format) return params;
   if (params.output_config?.format)

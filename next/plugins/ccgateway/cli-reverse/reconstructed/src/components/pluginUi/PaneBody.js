@@ -3,13 +3,14 @@
  *
  * 2.1.316 新增。插件面板内容区。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (21)
+ * attribution: placement 19, layout 2
  */
 import {
   init_react_production,
+  useContext,
   useReducer,
   useRef,
   useCallback,
@@ -17,6 +18,9 @@ import {
   useEffect,
   useMemo,
 } from "../../../vendor/react/cjs/react.production.js";
+import { rootSessionSlot } from "../../context/replRootContext.js";
+import { getIsRemoteMode } from "../../bootstrap/state.js";
+import { isBgSession } from "../../utils/concurrentSessions.js";
 import { topWithin } from "../../ink/hooks/useTerminalHooks.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
@@ -27,23 +31,47 @@ import { logRejection } from "../../plugins/functionHooks/uiApi.js";
 import { dispatchUiScroll, siteKey, scrollSites } from "../../plugins/functionHooks/uiHooks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:475900-475910 placement
+//@ chunk-czq1j3j2.js:488872-488876 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:488872", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:500106-500110 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:500106", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:500110-500114 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:500110", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:500114-500178 layout
+function canShowCloseSessionConfirm(statusLineSuppressed) {
+  let hasRootSession = useContext(rootSessionSlot) !== null;
+  return statusLineSuppressed && !getIsRemoteMode() && (hasRootSession || isBgSession());
+}
+//@ chunk-czq1j3j2.js:500178-500235 layout
+function hasPaneContext(activeContexts) {
+  return activeContexts.has("Pane") || activeContexts.has("PaneField");
+}
+//@ chunk-czq1j3j2.js:500235-500239 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:500235", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:502376-502386 placement
 var BORDER_COLUMNS = 4;
-//@ chunk-18hwfzwa.js:475910-475944 placement
+//@ chunk-czq1j3j2.js:502386-502420 placement
 var chromeRows = (hasHeader, hasFooter) => (hasHeader || !hasFooter ? 1 : 0) + (hasFooter ? 2 : 0);
-//@ chunk-18hwfzwa.js:475944-475953 placement
+//@ chunk-czq1j3j2.js:502420-502429 placement
 var BORDER_MARK_INSET = 2;
-//@ chunk-18hwfzwa.js:475953-475957 placement
+//@ chunk-czq1j3j2.js:502429-502433 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:475953", () => {
+deferInit("chunk-czq1j3j2.js:502429", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:475957-475961 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:475957", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:477875-478015 placement
+//@ chunk-czq1j3j2.js:504351-504491 placement
 var toLocalPoint = (elementRef) => (point) => {
   let cachedLayout = elementRef.current?.cachedLayout;
   return point.col !== undefined && point.row !== undefined && cachedLayout !== undefined
@@ -53,7 +81,7 @@ var toLocalPoint = (elementRef) => (point) => {
       }
     : undefined;
 };
-//@ chunk-18hwfzwa.js:478015-478222 placement
+//@ chunk-czq1j3j2.js:504491-504698 placement
 function heldRowOffset(heldState, edge) {
   let { held, index, content } = heldState;
   if (held === null || index === null || held.index !== index || content === null) return -1;
@@ -61,7 +89,7 @@ function heldRowOffset(heldState, edge) {
   let heldHeight = held.node.yogaNode?.getComputedHeight() ?? 0;
   return heldTop < 0 ? -1 : heldTop + (edge === "bottom" ? heldHeight : 0);
 }
-//@ chunk-18hwfzwa.js:478222-478594 placement
+//@ chunk-czq1j3j2.js:504698-505070 placement
 /**
  * 在节点树中按 elementKey/插件查找元素上下边界。
  */
@@ -90,7 +118,7 @@ function findElementBounds(root, elementKey, plugin) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:478594-478807 placement
+//@ chunk-czq1j3j2.js:505070-505283 placement
 function paneScrollHandlers(scroll) {
   let { bodyRows, contentRows, scrollBy } = scroll;
   return {
@@ -102,14 +130,14 @@ function paneScrollHandlers(scroll) {
     "pane:bottom": () => scrollBy(contentRows),
   };
 }
-//@ chunk-18hwfzwa.js:478807-478919 placement
+//@ chunk-czq1j3j2.js:505283-505395 placement
 var wheelScrollHandler = (scrollState, deltaForDirection, resolvePoint) => (event) => {
   let direction = event.deltaY < 0 ? -1 : 1;
   scrollState.scrollBy(direction * deltaForDirection(direction), resolvePoint(event));
   event.preventDefault();
   event.stopPropagation();
 };
-//@ chunk-18hwfzwa.js:478919-479120 placement
+//@ chunk-czq1j3j2.js:505395-505596 placement
 var PaneContent = (props) =>
   jsxProd_default(Box, {
     ref: props.content,
@@ -125,7 +153,7 @@ var PaneContent = (props) =>
       }),
     }),
   });
-//@ chunk-18hwfzwa.js:479120-479199 placement
+//@ chunk-czq1j3j2.js:505596-505675 placement
 function wheelScrollRows(scrollState, resolvePoint) {
   let wheelScrollStep = useWheelScrollStep();
   return wheelScrollHandler(
@@ -134,19 +162,14 @@ function wheelScrollRows(scrollState, resolvePoint) {
     resolvePoint,
   );
 }
-//@ chunk-18hwfzwa.js:479199-479228 placement
+//@ chunk-czq1j3j2.js:505675-505704 placement
 var mergeShallow = (a, b) => ({
   ...a,
   ...b,
 });
-//@ chunk-18hwfzwa.js:479228-479232 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:479228", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:479232-479270 placement
+//@ chunk-czq1j3j2.js:505708-505746 placement
 var floorClampZero = (value) => Math.max(0, Math.floor(value));
-//@ chunk-18hwfzwa.js:479270-481263 placement
+//@ chunk-czq1j3j2.js:505746-507739 placement
 function PaneBody(props) {
   let { component, requestId, owner, content } = props;
   let { bodyRows, contentRows, maxOffset } = props;
@@ -325,12 +348,7 @@ function PaneBody(props) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:481263-481267 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:481263", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:481267-481394 placement
+//@ chunk-czq1j3j2.js:507743-507870 placement
 function withScrollOffset(renderInput, scroll) {
   let { offset, raised } = scroll;
   return useMemo(
@@ -347,11 +365,6 @@ function withScrollOffset(renderInput, scroll) {
     [renderInput, raised],
   );
 }
-//@ chunk-18hwfzwa.js:481394-481398 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:481394", () => {
-  init_react_production();
-});
 export {
   BORDER_COLUMNS,
   BORDER_MARK_INSET,
@@ -363,4 +376,6 @@ export {
   withScrollOffset,
   heldRowOffset,
   PaneContent,
+  canShowCloseSessionConfirm,
+  hasPaneContext,
 };

@@ -3,10 +3,10 @@
  *
  * 格式化工具：时长、相对时间、重置时间、文件大小、数字（compact）、日志元数据。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/format.ts
- * pieces: chunk-2a8yx6fc.js (1), chunk-4qtr4g5p.js (1), chunk-tw8fk0yz.js (30), chunk-xkeryp4t.js (2)
- * attribution: fingerprint 2, placement 2, facade-exports 25, layout 5
+ * pieces: chunk-8h0sw7zg.js (1), chunk-8n1fbght.js (30), chunk-fta1hp2w.js (1), chunk-j78f68ax.js (2)
+ * attribution: placement 2, facade-exports 25, layout 5, fingerprint 2
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import {
@@ -22,7 +22,7 @@ import { plural } from "./stringUtils.js";
 import { effectiveSessionTimeZone } from "./sessionTimeZone.js";
 import { SHELL_HISTORY_SOURCES, getPathModuleForPlatform } from "../services/autoModeSetup/pregather.js";
 
-//@ chunk-xkeryp4t.js:191-420 facade-exports (2.1.88 match: formatFileSize, 1)
+//@ chunk-j78f68ax.js:191-420 facade-exports (2.1.88 match: formatFileSize, 1)
 /**
  * 格式化文件大小：bytes/KB/MB/GB。被 70+ 处使用。
  */
@@ -34,7 +34,7 @@ function formatFileSize(sizeInBytes) {
   if (mb < 1024) return `${mb.toFixed(1).replace(/\.0$/, "")}MB`;
   return `${(mb / 1024).toFixed(1).replace(/\.0$/, "")}GB`;
 }
-//@ chunk-xkeryp4t.js:420-558 placement
+//@ chunk-j78f68ax.js:420-558 placement
 /**
  * 以十进制单位格式化字节数（B/kB/MB）。
  */
@@ -43,7 +43,7 @@ function formatBytesDecimal(bytes) {
   if (bytes < 999500) return `${Math.round(bytes / 1000)} kB`;
   return `${(bytes / 1e6).toFixed(1).replace(/\.0$/, "")} MB`;
 }
-//@ chunk-tw8fk0yz.js:12766-13017 facade-exports
+//@ chunk-8n1fbght.js:12780-13031 facade-exports
 function truncatePathMiddle(text, maxWidth) {
   if (bunStringWidth(text) <= maxWidth) return text;
   if (maxWidth <= 0) return "\u2026";
@@ -57,7 +57,7 @@ function truncatePathMiddle(text, maxWidth) {
   let headWidth = maxWidth - 1 - tailWidth;
   return truncateToWidthNoEllipsis(head, headWidth) + "\u2026" + tail;
 }
-//@ chunk-tw8fk0yz.js:13017-13186 facade-exports
+//@ chunk-8n1fbght.js:13031-13200 facade-exports
 function truncateToWidth(text, maxWidth) {
   if (bunStringWidth(text) <= maxWidth) return text;
   if (maxWidth <= 1) return "\u2026";
@@ -71,7 +71,7 @@ function truncateToWidth(text, maxWidth) {
   }
   return result + "\u2026";
 }
-//@ chunk-tw8fk0yz.js:13186-13430 facade-exports
+//@ chunk-8n1fbght.js:13200-13444 facade-exports
 function truncateStartToWidth(text, maxWidth) {
   if (bunStringWidth(text) <= maxWidth) return text;
   if (maxWidth <= 1) return "\u2026";
@@ -90,7 +90,7 @@ function truncateStartToWidth(text, maxWidth) {
     .map((segmentEntry) => segmentEntry.segment)
     .join("")}`;
 }
-//@ chunk-tw8fk0yz.js:13430-13582 facade-exports
+//@ chunk-8n1fbght.js:13444-13596 facade-exports
 function truncateToWidthNoEllipsis(text, maxWidth) {
   if (bunStringWidth(text) <= maxWidth) return text;
   if (maxWidth <= 0) return "";
@@ -104,17 +104,17 @@ function truncateToWidthNoEllipsis(text, maxWidth) {
   }
   return result;
 }
-//@ chunk-tw8fk0yz.js:13582-13597 layout
+//@ chunk-8n1fbght.js:13596-13611 layout
 var ROW_CHROME_COLUMNS = 8;
 var MIN_WRAPPED_COLUMNS = 40;
-//@ chunk-tw8fk0yz.js:13597-13646 layout
+//@ chunk-8n1fbght.js:13611-13660 layout
 /**
  * 按剩余可用宽度截断文本（总宽减去行首装饰宽度）。
  */
 function truncateToRemainingWidth(text, maxWidth) {
   return truncateToWidth(text, Math.max(MIN_WRAPPED_COLUMNS, maxWidth - ROW_CHROME_COLUMNS));
 }
-//@ chunk-tw8fk0yz.js:13646-13828 facade-exports
+//@ chunk-8n1fbght.js:13660-13842 facade-exports
 function truncate(text, maxWidth, singleLine = false) {
   let candidate = text;
   if (singleLine) {
@@ -129,7 +129,7 @@ function truncate(text, maxWidth, singleLine = false) {
   if (bunStringWidth(candidate) <= maxWidth) return candidate;
   return truncateToWidth(candidate, maxWidth);
 }
-//@ chunk-tw8fk0yz.js:13828-13987 layout
+//@ chunk-8n1fbght.js:13842-14001 layout
 /**
  * 按显示宽度把字符串切成若干段（按字素，不拆字符）。
  */
@@ -151,7 +151,7 @@ function splitByDisplayWidth(text, maxWidth) {
   if (current) chunks.push(current);
   return chunks;
 }
-//@ chunk-tw8fk0yz.js:13987-14180 layout
+//@ chunk-8n1fbght.js:14001-14194 layout
 /**
  * 按宽度硬换行，超过最大行数时截断并在末行加省略号。
  */
@@ -170,11 +170,11 @@ function wrapToMaxLines(text, width, maxLines) {
   return sliced.join(`
 `);
 }
-//@ chunk-tw8fk0yz.js:14180-14228 facade-exports
+//@ chunk-8n1fbght.js:14194-14242 facade-exports
 function formatSecondsShort(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
-//@ chunk-tw8fk0yz.js:14228-14928 facade-exports (2.1.88 match: formatDuration, 1)
+//@ chunk-8n1fbght.js:14242-14942 facade-exports (2.1.88 match: formatDuration, 1)
 /**
  * 格式化时长（ms）：如 "1h 2m 3s"、"45s"，可选隐藏 0 单位或最大单位数。被 60+ 处使用。
  */
@@ -223,14 +223,14 @@ function formatDuration(ms, options) {
   }
   return `${seconds}s`;
 }
-//@ chunk-tw8fk0yz.js:14928-15022 facade-exports
+//@ chunk-8n1fbght.js:14942-15036 facade-exports
 function formatDurationCoarse(ms) {
   let roundedMs = ms >= 60000 ? Math.round(ms / 60000) * 60000 : ms;
   return formatDuration(roundedMs, {
     hideTrailingZeros: true,
   });
 }
-//@ chunk-tw8fk0yz.js:15022-15312 facade-exports
+//@ chunk-8n1fbght.js:15036-15326 facade-exports
 function formatBarElapsed(elapsedMs) {
   let max = Math.max(0, Math.floor(elapsedMs / 1000));
   if (max < 60) return `${max}s`;
@@ -240,7 +240,7 @@ function formatBarElapsed(elapsedMs) {
   if (floored_2 < 24) return `${floored_2}h${String(floored % 60).padStart(2, "0")}m`;
   return `${Math.floor(floored_2 / 24)}d${String(floored_2 % 24).padStart(2, "0")}h`;
 }
-//@ chunk-tw8fk0yz.js:15312-15460 fingerprint (2.1.88 match: getNumberFormatter, 0.786)
+//@ chunk-8n1fbght.js:15326-15474 fingerprint (2.1.88 match: getNumberFormatter, 0.787)
 var COMPACT_ONE_DECIMAL = {
   notation: "compact",
   maximumFractionDigits: 1,
@@ -251,7 +251,7 @@ var COMPACT_MAX_ONE_DECIMAL = {
   maximumFractionDigits: 1,
   minimumFractionDigits: 0,
 };
-//@ chunk-tw8fk0yz.js:15460-15576 facade-exports (2.1.88 match: getBudgetContinuationMessage, 0.676)
+//@ chunk-8n1fbght.js:15474-15590 facade-exports (2.1.88 match: getBudgetContinuationMessage, 0.673)
 function formatNumber(value) {
   let number = typeof value === "number" ? value : Number.NaN;
   let useOneDecimal = number >= 1000;
@@ -259,30 +259,30 @@ function formatNumber(value) {
     .format(number)
     .toLowerCase();
 }
-//@ chunk-tw8fk0yz.js:15576-15621 facade-exports
+//@ chunk-8n1fbght.js:15590-15635 facade-exports
 function formatTokens(count) {
   return formatNumber(count).replace(".0", "");
 }
-//@ chunk-tw8fk0yz.js:15621-15693 facade-exports (2.1.88 match: formatCost, 1)
+//@ chunk-8n1fbght.js:15635-15707 facade-exports (2.1.88 match: formatCost, 1)
 function formatCost(cost, maxDecimalPlaces = 4) {
   return `$${cost > 0.5 ? round(cost, 100).toFixed(2) : cost.toFixed(maxDecimalPlaces)}`;
 }
-//@ chunk-tw8fk0yz.js:15735-15846 facade-exports
+//@ chunk-8n1fbght.js:15749-15860 facade-exports
 var UNKNOWN_MODEL_COST_NOTE = "costs may be inaccurate due to usage of unknown models";
 var ORG_MODEL_PRICING_NOTE = "at your organization's configured rates";
-//@ chunk-tw8fk0yz.js:15846-16085 facade-exports (2.1.88 match: formatModelUsage, 0.794)
+//@ chunk-8n1fbght.js:15860-16099 facade-exports (2.1.88 match: formatModelUsage, 0.795)
 function formatModelTokenCounts(usage) {
   return (
     `${formatNumber(usage.inputTokens)} input, ${formatNumber(usage.outputTokens)} output, ${formatNumber(usage.cacheReadInputTokens)} cache read, ${formatNumber(usage.cacheCreationInputTokens)} cache write` +
     (usage.webSearchRequests > 0 ? `, ${formatNumber(usage.webSearchRequests)} web search` : "")
   );
 }
-//@ chunk-tw8fk0yz.js:16085-16157 facade-exports
+//@ chunk-8n1fbght.js:16099-16171 facade-exports
 function formatTokenEstimate(tokens) {
   if (tokens < 20) return "< 20";
   return `~${formatTokens(Math.round(tokens / 10) * 10)}`;
 }
-//@ chunk-tw8fk0yz.js:16157-16898 facade-exports (2.1.88 match: formatRelativeTime, 0.965)
+//@ chunk-8n1fbght.js:16171-16912 facade-exports (2.1.88 match: formatRelativeTime, 0.965)
 /**
  * 相对时间（Intl.RelativeTimeFormat，narrow/long），如 "3h ago"/"in 2d"。
  */
@@ -338,7 +338,7 @@ function formatRelativeTime(date, options = {}) {
   if (style === "narrow") return diffInSeconds <= 0 ? "0s ago" : "in 0s";
   return getRelativeTimeFormat(style, "auto").format(0, "second");
 }
-//@ chunk-tw8fk0yz.js:16898-17021 facade-exports (2.1.88 match: formatRelativeTimeAgo, 1)
+//@ chunk-8n1fbght.js:16912-17035 facade-exports (2.1.88 match: formatRelativeTimeAgo, 1)
 function formatRelativeTimeAgo(date, options = {}) {
   let { now = new Date(), ...restOptions } = options;
   if (date > now)
@@ -352,7 +352,7 @@ function formatRelativeTimeAgo(date, options = {}) {
     now,
   });
 }
-//@ chunk-tw8fk0yz.js:17021-17398 facade-exports (2.1.88 match: formatLogMetadata, 0.962)
+//@ chunk-8n1fbght.js:17035-17412 facade-exports (2.1.88 match: formatLogMetadata, 0.962)
 function formatLogMetadata(log) {
   let sizeOrCount =
     log.fileSize !== undefined ? formatFileSize(log.fileSize) : `${log.messageCount} messages`;
@@ -369,7 +369,7 @@ function formatLogMetadata(log) {
   if (log.prNumber) parts.push(log.prRepository ? `${log.prRepository}#${log.prNumber}` : `#${log.prNumber}`);
   return parts.join(" \xB7 ");
 }
-//@ chunk-tw8fk0yz.js:17398-17664 layout
+//@ chunk-8n1fbght.js:17412-17678 layout
 function getMinutesAndYear(date, timeZone) {
   if (timeZone === undefined)
     return {
@@ -390,7 +390,7 @@ function getMinutesAndYear(date, timeZone) {
     year: Number(partsByName.get("year")),
   };
 }
-//@ chunk-tw8fk0yz.js:17664-18263 facade-exports (2.1.88 match: formatResetTime, 0.882)
+//@ chunk-8n1fbght.js:17678-18277 facade-exports (2.1.88 match: formatResetTime, 0.883)
 /**
  * 重置时间显示：今天只显示时刻，否则带月日，可附时区。
  */
@@ -434,36 +434,36 @@ function formatResetTime(
       .replace(/[ \u202f]([AP]M)/i, (_match, ampm) => ampm.toLowerCase()) + zoneSuffix
   );
 }
-//@ chunk-tw8fk0yz.js:18263-18362 facade-exports (2.1.88 match: formatResetText, 1)
+//@ chunk-8n1fbght.js:18277-18376 facade-exports (2.1.88 match: formatResetText, 1)
 function formatResetText(resetsAt, includeTimeZone = false, showTime = true, forceDate = false) {
   let dt = new Date(resetsAt);
   return `${formatResetTime(Math.floor(dt.getTime() / 1000), includeTimeZone, showTime, forceDate)}`;
 }
-//@ chunk-tw8fk0yz.js:18362-18407 facade-exports
+//@ chunk-8n1fbght.js:18376-18421 facade-exports
 function utilizationPercent(utilization) {
   return Math.round(utilization * 1000) / 10;
 }
-//@ chunk-tw8fk0yz.js:18407-18451 facade-exports
+//@ chunk-8n1fbght.js:18421-18465 facade-exports
 function planWindowPercent(utilization) {
   return Math.min(utilizationPercent(utilization), 100);
 }
-//@ chunk-tw8fk0yz.js:18451-18523 facade-exports
+//@ chunk-8n1fbght.js:18465-18537 facade-exports
 function formatOverflowHint(count, noun = "line") {
   if (count <= 0) return "";
   return `\u2026 +${count} ${plural(count, noun)}`;
 }
-//@ chunk-tw8fk0yz.js:18523-18577 facade-exports
+//@ chunk-8n1fbght.js:18537-18591 facade-exports
 function formatKb(hiddenChars) {
   return Math.max(1, Math.round(hiddenChars / 1000));
 }
-//@ chunk-4qtr4g5p.js:264-319 placement
+//@ chunk-8h0sw7zg.js:264-319 placement
 /**
  * 用本地化格式渲染重置时间。
  */
 function formatResetTimeWithLocale(resetsAt, includeTimeZone = false, showTime = true, forceDate = false) {
   return formatResetTime(resetsAt, includeTimeZone, showTime, forceDate, effectiveSessionTimeZone());
 }
-//@ chunk-2a8yx6fc.js:19013-19287 fingerprint (2.1.88 match: formatNumber, 0.645)
+//@ chunk-fta1hp2w.js:19079-19353 fingerprint (2.1.88 match: formatNumber, 0.645)
 function formatNumber_2(number) {
   let seenPaths = new Set();
   let results = [];
@@ -483,36 +483,36 @@ function formatNumber_2(number) {
   return results;
 }
 export {
-  formatTokenEstimate,
-  formatNumber,
   formatFileSize,
-  formatRelativeTime,
   truncateToWidth,
-  truncateToWidthNoEllipsis,
-  truncateStartToWidth,
-  wrapToMaxLines,
-  formatResetTimeWithLocale,
   formatDurationCoarse,
-  formatDuration,
-  truncatePathMiddle,
-  formatBytesDecimal,
-  formatTokens,
-  formatRelativeTimeAgo,
-  formatBarElapsed,
-  truncateToRemainingWidth,
   truncate,
+  formatResetTimeWithLocale,
+  formatDuration,
+  formatNumber,
+  formatTokens,
+  formatRelativeTime,
+  truncatePathMiddle,
   formatResetTime,
+  formatTokenEstimate,
   formatLogMetadata,
-  planWindowPercent,
   utilizationPercent,
-  formatOverflowHint,
-  formatNumber_2,
-  formatKb,
-  formatResetText,
-  splitByDisplayWidth,
-  formatSecondsShort,
+  planWindowPercent,
   formatModelTokenCounts,
   formatCost,
   UNKNOWN_MODEL_COST_NOTE,
   ORG_MODEL_PRICING_NOTE,
+  formatRelativeTimeAgo,
+  formatBarElapsed,
+  formatOverflowHint,
+  formatKb,
+  truncateToWidthNoEllipsis,
+  truncateStartToWidth,
+  wrapToMaxLines,
+  truncateToRemainingWidth,
+  formatNumber_2,
+  formatResetText,
+  formatBytesDecimal,
+  splitByDisplayWidth,
+  formatSecondsShort,
 };

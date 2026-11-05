@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：凭据文件规则 schema；沙箱相关设置的说明文本等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (28)
  * attribution: placement 28
  */
 import { isAbsolute } from "path";
@@ -29,14 +29,14 @@ import { env } from "../env.js";
 import { identity as identity_2 } from "../identity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:142544-142574 placement
+//@ chunk-z20c443b.js:142690-142720 placement
 /**
  * 设置来源名。
  */
 function settingsSourceName(source) {
   return SETTING_SOURCE_TO_SCOPE[source];
 }
-//@ chunk-dcmhvw5a.js:144056-151967 placement
+//@ chunk-z20c443b.js:144205-152116 placement
 /**
  * 沙箱相关设置的说明文本。
  */
@@ -53,7 +53,7 @@ var SANDBOX_DESCRIPTION_READ_REOPEN;
 var SANDBOX_DESCRIPTION_DENY_WRITE;
 var SANDBOX_DESCRIPTION_FILESYSTEM;
 var SANDBOX_DESCRIPTION_CREDENTIALS;
-deferInit("chunk-dcmhvw5a.js:144056", () => {
+deferInit("chunk-z20c443b.js:144205", () => {
   SANDBOX_SETTING_DESCRIPTIONS =
     "When managed settings or a --settings file set allowUnsandboxedCommands: false, or managed settings set network.allowManagedDomainsOnly: true";
   SANDBOX_DESCRIPTION_PORTAL =
@@ -199,7 +199,7 @@ deferInit("chunk-dcmhvw5a.js:144056", () => {
     }).optional(),
   );
 });
-//@ chunk-dcmhvw5a.js:151967-152388 placement
+//@ chunk-z20c443b.js:152116-152537 placement
 /**
  * 校验 maskClaims。
  */
@@ -219,7 +219,7 @@ function validateMaskClaims(maskClaims, decode, context) {
         "maskClaims requires decode \u2014 without a decode format there is no token to read claims from. Set decode, or omit maskClaims.",
     });
 }
-//@ chunk-dcmhvw5a.js:152388-152785 placement
+//@ chunk-z20c443b.js:152537-152934 placement
 /**
  * 校验 extract 正则。
  */
@@ -244,7 +244,7 @@ function validateExtractPattern(extract, context) {
         'group 1 is the credential value to mask (e.g. "token:\\s*(\\S+)").',
     });
 }
-//@ chunk-dcmhvw5a.js:152785-153478 placement
+//@ chunk-z20c443b.js:152934-153627 placement
 /**
  * 规范化凭据规则（deny 模式）。
  */
@@ -284,7 +284,7 @@ function normalizeCredentialRule(rule) {
     delete normalized.injectHosts;
   return normalized;
 }
-//@ chunk-dcmhvw5a.js:153478-171644 placement
+//@ chunk-z20c443b.js:153627-171793 placement
 /**
  * 凭据文件规则 schema。
  */
@@ -302,7 +302,7 @@ var credentialEnvRuleSchema;
 var envVarNameSchema;
 var sandboxNetworkSettingsSchema;
 var sandboxFilesystemSettingsSchema;
-deferInit("chunk-dcmhvw5a.js:153478", () => {
+deferInit("chunk-z20c443b.js:153627", () => {
   CredentialRuleSchema = DoctorLazy(() =>
     preprocess(
       normalizeCredentialRule,
@@ -664,14 +664,14 @@ deferInit("chunk-dcmhvw5a.js:153478", () => {
     }).passthrough(),
   );
 });
-//@ chunk-dcmhvw5a.js:171673-171745 placement
+//@ chunk-z20c443b.js:171822-171894 placement
 /**
  * isInteractiveSettingsHost：可交互且非后台托管会话。
  */
 function isInteractiveSettingsHost() {
   return getIsInteractive() && !(isHostManagedProviderSession() && env.CLAUDE_CODE_SESSION_KIND === "bg");
 }
-//@ chunk-dcmhvw5a.js:171745-172086 placement
+//@ chunk-z20c443b.js:171894-172235 placement
 /**
  * 设置相关开关名。
  */
@@ -688,7 +688,7 @@ var TENGU_SNUG_PLATYPUS = "tengu_snug_platypus";
 var TENGU_ASYNC_SNOWGLOBE = "tengu_async_snowglobe";
 var TENGU_HUMBLE_FLURRY = "tengu_humble_flurry";
 var TENGU_FIZZY_WIDGET = "tengu_fizzy_widget";
-//@ chunk-dcmhvw5a.js:172086-172248 placement
+//@ chunk-z20c443b.js:172235-172397 placement
 class ServedSettingsReader {
   reader = null;
   register(reader) {
@@ -706,10 +706,10 @@ class ServedSettingsReader {
     }
   }
 }
-//@ chunk-dcmhvw5a.js:172248-172372 placement
+//@ chunk-z20c443b.js:172397-172521 placement
 var servedSettingsReader; // deferred: uses ServedSettingsReader of its import cycle while loading; runs once the cycle is complete
 var settingsGateState;
-deferInit("chunk-dcmhvw5a.js:172248", () => {
+deferInit("chunk-z20c443b.js:172397", () => {
   servedSettingsReader = new ServedSettingsReader();
   settingsGateState = identity_2(
     {
@@ -724,14 +724,14 @@ deferInit("chunk-dcmhvw5a.js:172248", () => {
     },
   );
 });
-//@ chunk-dcmhvw5a.js:172372-172410 placement
+//@ chunk-z20c443b.js:172521-172559 placement
 /**
  * registerServedSettingsReader：登记服务端设置读取器。
  */
 function registerServedSettingsReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   return servedSettingsReader.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-dcmhvw5a.js:172410-172562 placement
+//@ chunk-z20c443b.js:172559-172711 placement
 /**
  * 设置开关的结算值。
  */
@@ -743,105 +743,105 @@ function isSettingsGateSettled() {
   settingsGateState.answeredOn ||= isServed;
   return isServed;
 }
-//@ chunk-dcmhvw5a.js:172562-172605 placement
+//@ chunk-z20c443b.js:172711-172754 placement
 /**
  * isSettingsGateAnswered：设置闸门已结算或已答复。
  */
 function isSettingsGateAnswered() {
   return isSettingsGateSettled() || settingsGateState.answeredOn;
 }
-//@ chunk-dcmhvw5a.js:172605-172639 placement
+//@ chunk-z20c443b.js:172754-172788 placement
 /**
  * latchSettingsGateSettled：记录设置闸门已结算。
  */
 function latchSettingsGateSettled() {
   settingsGateState.settled ??= isSettingsGateSettled();
 }
-//@ chunk-dcmhvw5a.js:172639-172679 placement
+//@ chunk-z20c443b.js:172788-172828 placement
 /**
  * tengu_twinkling_globe 开关。
  */
 function isTwinklingGlobeOn() {
   return servedSettingsReader.servedTrue(SETTINGS_GATE_NAMES);
 }
-//@ chunk-dcmhvw5a.js:172679-172718 placement
+//@ chunk-z20c443b.js:172828-172868 placement
 /**
  * tengu_lovely_umbrella 开关。
  */
 function isLovelyUmbrellaOn() {
   return servedSettingsReader.servedTrue(TENGU_LOVELY_UMBRELLA);
 }
-//@ chunk-dcmhvw5a.js:172718-172759 placement
+//@ chunk-z20c443b.js:172868-172909 placement
 /**
  * isSteadyMarshmallowOn：开关 tengu_steady_marshmallow。
  */
 function isSteadyMarshmallowOn() {
   return servedSettingsReader.servedTrue(TENGU_STEADY_MARSHMALLOW);
 }
-//@ chunk-dcmhvw5a.js:172759-172799 placement
+//@ chunk-z20c443b.js:172909-172949 placement
 /**
  * isValidatedCloverOn：开关 tengu_validated_clover。
  */
 function isValidatedCloverOn() {
   return servedSettingsReader.servedTrue(TENGU_VALIDATED_CLOVER);
 }
-//@ chunk-dcmhvw5a.js:172799-172839 placement
+//@ chunk-z20c443b.js:172949-172989 placement
 /**
  * isTranquilCrescentOn：开关 tengu_tranquil_crescent。
  */
 function isTranquilCrescentOn() {
   return servedSettingsReader.servedTrue(TENGU_TRANQUIL_CRESCENT);
 }
-//@ chunk-dcmhvw5a.js:172839-172879 placement
+//@ chunk-z20c443b.js:172989-173029 placement
 /**
  * isSteadySunbeamOn：开关 tengu_steady_sunbeam。
  */
 function isSteadySunbeamOn() {
   return servedSettingsReader.servedTrue(TENGU_STEADY_SUNBEAM);
 }
-//@ chunk-dcmhvw5a.js:172879-172919 placement
+//@ chunk-z20c443b.js:173029-173069 placement
 /**
  * 服务端开关读取。
  */
 function isGateAOn() {
   return servedSettingsReader.servedTrue(TENGU_COPPER_KITE);
 }
-//@ chunk-dcmhvw5a.js:172919-172959 placement
+//@ chunk-z20c443b.js:173069-173109 placement
 /**
  * isHashedLarkOn：开关 tengu_hashed_lark。
  */
 function isHashedLarkOn() {
   return servedSettingsReader.servedTrue(TENGU_HASHED_LARK);
 }
-//@ chunk-dcmhvw5a.js:172959-172999 placement
+//@ chunk-z20c443b.js:173109-173149 placement
 /**
  * isCalmEagleOn：开关 tengu_calm_eagle。
  */
 function isCalmEagleOn() {
   return servedSettingsReader.servedTrue(TENGU_CALM_EAGLE);
 }
-//@ chunk-dcmhvw5a.js:172999-173039 placement
+//@ chunk-z20c443b.js:173149-173189 placement
 /**
  * 服务端开关读取。
  */
 function isGateOOn() {
   return servedSettingsReader.servedTrue(TENGU_SNUG_PLATYPUS);
 }
-//@ chunk-dcmhvw5a.js:173039-173079 placement
+//@ chunk-z20c443b.js:173189-173229 placement
 /**
  * isAsyncSnowglobeOn：开关 tengu_async_snowglobe。
  */
 function isAsyncSnowglobeOn() {
   return servedSettingsReader.servedTrue(TENGU_ASYNC_SNOWGLOBE);
 }
-//@ chunk-dcmhvw5a.js:173079-173119 placement
+//@ chunk-z20c443b.js:173229-173269 placement
 /**
  * isHumbleFlurryOn：开关 tengu_humble_flurry。
  */
 function isHumbleFlurryOn() {
   return servedSettingsReader.servedTrue(TENGU_HUMBLE_FLURRY);
 }
-//@ chunk-dcmhvw5a.js:173156-173318 placement
+//@ chunk-z20c443b.js:173306-173468 placement
 /**
  * 递归按键排序。
  */
@@ -854,7 +854,7 @@ function sortKeysDeep(value) {
   }
   return value;
 }
-//@ chunk-dcmhvw5a.js:173318-173545 placement
+//@ chunk-z20c443b.js:173468-173695 placement
 /**
  * 检查 JSON 值中是否含非有限数、-0 或 __proto__ 键。
  */
@@ -865,36 +865,36 @@ function hasUnsafeJsonValue(value) {
   return Object.hasOwn(value, "__proto__") || Object.values(value).some(hasUnsafeJsonValue);
 }
 export {
-  isGateOOn,
-  isLovelyUmbrellaOn,
   sortKeysDeep,
-  isGateAOn,
-  hasUnsafeJsonValue,
-  sandboxFilesystemSettingsSchema,
+  isLovelyUmbrellaOn,
   isSettingsGateSettled,
   isTwinklingGlobeOn,
+  isGateAOn,
   isValidatedCloverOn,
   isHashedLarkOn,
   isSteadySunbeamOn,
   isTranquilCrescentOn,
+  sandboxFilesystemSettingsSchema,
+  settingsSourceName,
+  isHumbleFlurryOn,
+  isGateOOn,
   AWS_CREDENTIAL_ENV_NAMES,
-  credentialRulePathSchema,
-  INVALID_PAIR_SENTINEL,
-  credentialEnvRuleSchema,
-  CredentialRuleSchema,
-  credentialRuleModeSchema,
-  isSettingsGateAnswered,
-  isSteadyMarshmallowOn,
-  TENGU_STEADY_MARSHMALLOW,
-  latchSettingsGateSettled,
-  registerServedSettingsReader,
-  isInteractiveSettingsHost,
   credentialRuleRefine,
   MERGE_PAIR_SUPPRESSOR_SENTINEL,
   SLOT_COLLISION_SENTINEL,
-  settingsSourceName,
-  PARENT_PAIR_SUPPRESSOR_SENTINEL,
-  isHumbleFlurryOn,
+  INVALID_PAIR_SENTINEL,
   isCalmEagleOn,
+  hasUnsafeJsonValue,
+  registerServedSettingsReader,
+  latchSettingsGateSettled,
   isAsyncSnowglobeOn,
+  isSettingsGateAnswered,
+  isSteadyMarshmallowOn,
+  TENGU_STEADY_MARSHMALLOW,
+  isInteractiveSettingsHost,
+  credentialRulePathSchema,
+  credentialEnvRuleSchema,
+  CredentialRuleSchema,
+  credentialRuleModeSchema,
+  PARENT_PAIR_SUPPRESSOR_SENTINEL,
 };

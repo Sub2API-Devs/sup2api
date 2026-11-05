@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子工作流
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (5)
  * attribution: placement 5
  */
 import "vm";
@@ -45,7 +45,7 @@ import {
 import { SMALL_TRIANGLE_RIGHT } from "../../constants/figures.js";
 import { summarizeError, truncateMiddle } from "../../memdir/memoryTool.js";
 
-//@ chunk-41w44bgm.js:24305-25367 placement
+//@ chunk-kd2wbncj.js:16566-17628 placement
 /**
  * 解析 workflow() 的参数：名称则查找已注册的工作流并解析脚本，{scriptPath} 则加载脚本文件（CLAUDE_WORKFLOW_NAME_ONLY 时禁止）；返回 {childName, scriptBody, scriptPath?}。
  */
@@ -90,7 +90,7 @@ async function resolveChildWorkflow(runtime, target) {
   }
   throw TypeError("workflow() expects a workflow name (string) or {scriptPath: string}");
 }
-//@ chunk-41w44bgm.js:25367-26530 placement
+//@ chunk-kd2wbncj.js:17628-18819 placement
 /**
  * 为子工作流建立独立 VM 上下文：带名称前缀的 log/console、共享预算与定时器、字符串桥与克隆/调用辅助；agent 调用会缓存并恢复 schema 对象。
  */
@@ -169,7 +169,7 @@ function createChildVmContext(parent, childName, phase, timers = parent.timers) 
     agent,
   };
 }
-//@ chunk-41w44bgm.js:26530-26727 placement
+//@ chunk-kd2wbncj.js:18819-19016 placement
 /**
  * 子工作流中再调用 workflow() 时返回的拒绝（嵌套只允许一层）。
  */
@@ -180,7 +180,7 @@ function rejectNestedWorkflow() {
     ),
   );
 }
-//@ chunk-41w44bgm.js:26727-26840 placement
+//@ chunk-kd2wbncj.js:19016-19129 placement
 /**
  * 生成子工作流阶段名：同名阶段第二次起加 #序号。
  */
@@ -192,7 +192,7 @@ function makeChildPhaseNamer() {
     return `${SMALL_TRIANGLE_RIGHT} ${childName}${count > 1 ? ` #${count}` : ""}`;
   };
 }
-//@ chunk-41w44bgm.js:26840-28059 placement
+//@ chunk-kd2wbncj.js:19129-20334 placement
 /**
  * 构造脚本中的 workflow() 函数：解析并编译子工作流，在子 VM 中运行（只允许一层嵌套），记录阶段与日志，失败时记 failure 并抛出摘要错误。
  */

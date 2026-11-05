@@ -3,11 +3,12 @@
  *
  * 云会话进度行（review 阶段计数彩虹条）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/RemoteSessionProgress.tsx
- * pieces: chunk-18hwfzwa.js (10), chunk-fm6h4dv7.js (1)
- * attribution: placement 4, layout 2, fingerprint 5
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (10), chunk-sp3m4m72.js (1)
+ * attribution: fingerprint 5, placement 5, affinity 1, layout 1
  */
+import { keepaliveReasons } from "../../tasks/taskKinds.js";
 import { currentUsageCreditState } from "../../services/usageCreditOffers.js";
 import { isSameWallReset } from "../rateLimit/quotaAutoResume.js";
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -26,25 +27,29 @@ import { useAnimationFrame } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../../constants/figures.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { toInkColor } from "../../utils/ink.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
 import { describeTeammateActivity } from "./taskStatusUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fm6h4dv7.js:10887-10953 fingerprint (2.1.88 match: RainbowText, 0.607)
+//@ chunk-5xgkngpb.js:4826818-4826877 fingerprint (2.1.88 match: _temp, 1)
+function hasCompletedWithFindings(task) {
+  return task.status === "completed" && keepaliveReasons(task).size > 0;
+}
+//@ chunk-sp3m4m72.js:10889-10955 fingerprint (2.1.88 match: RainbowText, 0.601)
 function RainbowText(t0) {
   let wall = currentUsageCreditState();
   return wall.phase === "failed" && isSameWallReset(wall.wall, t0);
 }
-//@ chunk-18hwfzwa.js:692158-692162 placement
+//@ chunk-czq1j3j2.js:699105-699109 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:692158", () => {
+deferInit("chunk-czq1j3j2.js:699105", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:692162-692172 layout
+//@ chunk-czq1j3j2.js:712896-712906 affinity
 var PROGRESS_TICK_MS = 80;
-//@ chunk-18hwfzwa.js:692172-692509 fingerprint (2.1.88 match: formatReviewStageCounts, 1)
+//@ chunk-czq1j3j2.js:712906-713243 fingerprint (2.1.88 match: formatReviewStageCounts, 1)
 function formatReviewStageCounts(stage, found, verified, refuted) {
   if (!stage) return `${found} found \xB7 ${verified} verified`;
   if (stage === "synthesizing") {
@@ -60,7 +65,7 @@ function formatReviewStageCounts(stage, found, verified, refuted) {
   }
   return found > 0 ? `${found} found` : "finding";
 }
-//@ chunk-18hwfzwa.js:692509-692784 layout
+//@ chunk-czq1j3j2.js:713243-713519 layout
 function RainbowChars(props) {
   let $ = useMemoCache(5);
   let { text, phase } = props;
@@ -91,7 +96,7 @@ function RainbowChars(props) {
   } else element = $[4];
   return element;
 }
-//@ chunk-18hwfzwa.js:692784-693241 placement (2.1.88 match: _temp2, 0.728)
+//@ chunk-czq1j3j2.js:713519-713976 placement
 /**
  * 让显示计数每个 tick 最多增加 1（追赶目标值），减少或强制时直接跳到目标。
  */
@@ -140,7 +145,7 @@ function useSteppedCount(target, tick, immediate) {
   if (nextState !== steppedState) setSteppedState(nextState);
   return nextState.count;
 }
-//@ chunk-18hwfzwa.js:693241-694845 fingerprint (2.1.88 match: ReviewRainbowLine, 0.769)
+//@ chunk-czq1j3j2.js:713976-715583 fingerprint (2.1.88 match: ReviewRainbowLine, 0.769)
 function ReviewRainbowLine(props) {
   let $ = useMemoCache(20);
   let { session } = props;
@@ -279,7 +284,7 @@ function ReviewRainbowLine(props) {
   } else t6 = $[19];
   return t6;
 }
-//@ chunk-18hwfzwa.js:694845-695386 fingerprint (2.1.88 match: RemoteSessionProgress, 0.595)
+//@ chunk-czq1j3j2.js:715583-716124 fingerprint (2.1.88 match: RemoteSessionProgress, 0.595)
 function RemoteSessionProgress(props) {
   let $ = useMemoCache(8);
   let { session } = props;
@@ -337,12 +342,12 @@ function RemoteSessionProgress(props) {
   } else labelElement = $[7];
   return labelElement;
 }
-//@ chunk-18hwfzwa.js:695386-695523 placement
+//@ chunk-czq1j3j2.js:716124-716261 placement
 function remoteSessionProgressLabel(session) {
   if (!session.todoList.length) return `${session.status}\u2026`;
-  return `${count(session.todoList, (todo) => todo.status === "completed")}/${session.todoList.length}`;
+  return `${countWhere(session.todoList, (todo) => todo.status === "completed")}/${session.todoList.length}`;
 }
-//@ chunk-18hwfzwa.js:697663-698417 placement
+//@ chunk-czq1j3j2.js:718401-719155 placement
 function RemoteAgentTaskLabel(props) {
   let $ = useMemoCache(16);
   let { task } = props;
@@ -408,18 +413,21 @@ function RemoteAgentTaskLabel(props) {
   } else labelElement = $[15];
   return labelElement;
 }
-//@ chunk-18hwfzwa.js:1429198-1429302 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1469387-1469491 placement (2.1.88 match: _temp, 1)
 /**
  * 已完成项占比（百分比），空列表返回 undefined。
  */
 function completedPercent(taskListSnapshot) {
   if (taskListSnapshot === undefined || taskListSnapshot.length === 0) return;
-  return (100 * count(taskListSnapshot, (task) => task.status === "completed")) / taskListSnapshot.length;
+  return (
+    (100 * countWhere(taskListSnapshot, (task) => task.status === "completed")) / taskListSnapshot.length
+  );
 }
 export {
-  remoteSessionProgressLabel,
+  hasCompletedWithFindings,
   formatReviewStageCounts,
   RemoteSessionProgress,
+  remoteSessionProgressLabel,
   RemoteAgentTaskLabel,
   completedPercent,
   RainbowText,

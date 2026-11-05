@@ -3,9 +3,9 @@
  *
  * 并入已有模块：读取 ZIP 中央目录（含 ZIP64）；解压文件默认权限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/dxt/zip.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-vr8smdd9.js (13)
+ * pieces: chunk-5xgkngpb.js (1), chunk-pzdhtgn4.js (13)
  * attribution: fingerprint 5, layout 1, placement 8
  */
 import { normalize, isAbsolute } from "path";
@@ -17,14 +17,14 @@ import { logForDebugging } from "../debug.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { extractZipToDirectory } from "../plugins/zipCache.js";
 
-//@ chunk-vr8smdd9.js:6319-6421 fingerprint (2.1.88 match: LIMITS, 1)
+//@ chunk-pzdhtgn4.js:6386-6488 fingerprint (2.1.88 match: LIMITS, 1)
 var LIMITS = {
   MAX_FILE_SIZE: 536870912,
   MAX_TOTAL_SIZE: 1073741824,
   MAX_FILE_COUNT: 1e5,
   MAX_COMPRESSION_RATIO: 50,
 };
-//@ chunk-vr8smdd9.js:6421-6559 layout
+//@ chunk-pzdhtgn4.js:6488-6626 layout
 /**
  * zip 条目路径是否安全（无穿越、非绝对路径）。
  */
@@ -35,7 +35,7 @@ function isSafeZipPath(filePath) {
   if (isAbsolute(normalized)) return false;
   return true;
 }
-//@ chunk-vr8smdd9.js:6559-7438 fingerprint (2.1.88 match: validateZipFile, 1)
+//@ chunk-pzdhtgn4.js:6626-7505 fingerprint (2.1.88 match: validateZipFile, 1)
 /**
  * 逐条校验 zip 条目：文件数、单文件与总解压大小、压缩比上限（LIMITS），路径必须安全。
  */
@@ -65,7 +65,7 @@ function validateZipFile(file, state) {
         isValid: true,
       };
 }
-//@ chunk-vr8smdd9.js:7438-7807 fingerprint (2.1.88 match: unzipFile, 0.849)
+//@ chunk-pzdhtgn4.js:7505-7874 fingerprint (2.1.88 match: unzipFile, 0.849)
 /**
  * 解压 zip 字节为 {路径: 内容}，解压过程中逐条做安全校验（防 zip 炸弹与路径穿越）。
  */
@@ -92,7 +92,7 @@ async function unzipFile(zipData) {
   );
   return result;
 }
-//@ chunk-vr8smdd9.js:7807-7889 placement
+//@ chunk-pzdhtgn4.js:7874-7956 placement
 /**
  * ZIP 中央目录结束记录（EOCD）的签名。
  */
@@ -104,7 +104,7 @@ var MAX_EOCD_SEARCH_BYTES = 65557;
 var ZIP_FLAG_UTF8 = 2048;
 var ZIP_METHOD_STORED = 0;
 var ZIP_METHOD_DEFLATE = 8;
-//@ chunk-vr8smdd9.js:7889-7998 placement
+//@ chunk-pzdhtgn4.js:7956-8065 placement
 /**
  * 无效 zip 数据错误（遥测安全）。
  */
@@ -116,7 +116,7 @@ function invalidZipError(detail) {
         "invalid zip data",
       );
 }
-//@ chunk-vr8smdd9.js:7998-8062 placement
+//@ chunk-pzdhtgn4.js:8065-8129 placement
 /**
  * 按小端读取 16 位整数（越界抛无效 zip 错误）。
  */
@@ -124,7 +124,7 @@ function readUInt16LE(bytes, offset) {
   if (offset + 2 > bytes.length) throw invalidZipError();
   return bytes[offset] | (bytes[offset + 1] << 8);
 }
-//@ chunk-vr8smdd9.js:8062-8153 placement
+//@ chunk-pzdhtgn4.js:8129-8220 placement
 /**
  * 按小端读取 32 位无符号整数（越界抛无效 zip 错误）。
  */
@@ -134,21 +134,21 @@ function readUInt32LE(bytes, offset) {
     (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0
   );
 }
-//@ chunk-vr8smdd9.js:8153-8204 placement
+//@ chunk-pzdhtgn4.js:8220-8271 placement
 /**
  * 按小端读取 64 位整数。
  */
 function readUInt64LE(bytes, offset) {
   return readUInt32LE(bytes, offset) + readUInt32LE(bytes, offset + 4) * 4294967296;
 }
-//@ chunk-vr8smdd9.js:8204-8318 placement (2.1.88 match: c, 0.707)
+//@ chunk-pzdhtgn4.js:8271-8385 placement (2.1.88 match: c, 0.707)
 function uint8ArrayToBinaryString(bytes) {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 16384)
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 16384));
   return binary;
 }
-//@ chunk-vr8smdd9.js:8318-9561 placement
+//@ chunk-pzdhtgn4.js:8385-9628 placement
 /**
  * 读取 ZIP 中央目录（含 ZIP64）。
  */
@@ -239,12 +239,12 @@ function readZipCentralDirectory(bytes, limit) {
   }
   return directory;
 }
-//@ chunk-vr8smdd9.js:9561-9573 placement
+//@ chunk-pzdhtgn4.js:9628-9640 placement
 /**
  * 解压文件默认权限。
  */
 var DEFAULT_FILE_MODE = 493;
-//@ chunk-vr8smdd9.js:9573-10116 fingerprint (2.1.88 match: parseZipModes, 1)
+//@ chunk-pzdhtgn4.js:9640-10183 fingerprint (2.1.88 match: parseZipModes, 1)
 /**
  * 从 zip 中央目录读取每个条目的 Unix 权限位（用于恢复可执行位）。
  */
@@ -277,7 +277,7 @@ function parseZipModes(data) {
   }
   return modes;
 }
-//@ chunk-e6aww6q8.js:610959-611035 fingerprint (2.1.88 match: readAndUnzipFile, 1)
+//@ chunk-5xgkngpb.js:621045-621121 fingerprint (2.1.88 match: readAndUnzipFile, 1)
 /**
  * 读文件并解压到目录。
  */
@@ -285,4 +285,4 @@ async function readAndUnzipFile(filePath, targetDir, options) {
   let zipData = await getFsImplementation().readFileBytes(filePath);
   await extractZipToDirectory(zipData, targetDir, options);
 }
-export { isSafeZipPath, DEFAULT_FILE_MODE, unzipFile, parseZipModes, readAndUnzipFile };
+export { isSafeZipPath, unzipFile, parseZipModes, DEFAULT_FILE_MODE, readAndUnzipFile };

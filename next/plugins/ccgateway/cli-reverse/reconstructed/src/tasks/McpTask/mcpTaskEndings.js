@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：MCP 任务结束处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r7bynxfq.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kjqmj0rw.js (10)
  * attribution: placement 10
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { getSessionId, getRootSession } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
+import { SYNTHETIC_MODEL } from "../../utils/messages.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { regExp } from "../../utils/xmlTags.js";
 import { safeIdentifierOrUndefined } from "../../utils/safeIdentifier.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r7bynxfq.js:377-2517 placement
+//@ chunk-kjqmj0rw.js:410-2550 placement
 /**
  * 保存 MCP 后台任务"结束"记录直到对应对话被持久化：hold 登记、look 扫描消息找到任务通知与后续工具调用位置、保存成功后删除已落盘的结束文件；回退（rewind）删除发起调用时撤销记录；保存不完整时把结束留给下次恢复。
  */
@@ -78,7 +78,7 @@ class McpTaskEndingsStore {
           firstSeenUuid.set(runId, message.uuid);
       } else if (firstSeenUuid.size === 0) continue;
       else if (message.type === "system" && message.subtype === "compact_boundary") firstSeenUuid.clear();
-      else if (countToolCallsSince(message)) {
+      else if (hasVisibleContent(message)) {
         for (let [id, uuid] of firstSeenUuid) this.#t.set(id, [uuid, message.uuid]);
         firstSeenUuid.clear();
       }
@@ -151,8 +151,8 @@ class McpTaskEndingsStore {
     }
   }
 }
-//@ chunk-r7bynxfq.js:2517-2706 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(message) {
+//@ chunk-kjqmj0rw.js:2550-2739 placement
+function hasVisibleContent(message) {
   if (message.type !== "assistant" || message.message.model === SYNTHETIC_MODEL) return false;
   let { content } = message.message;
   return (
@@ -160,22 +160,22 @@ function countToolCallsSince(message) {
     content.some((block) => block.type === "tool_use" || (block.type === "text" && block.text.trim() !== ""))
   );
 }
-//@ chunk-r7bynxfq.js:2706-2732 placement
+//@ chunk-kjqmj0rw.js:2739-2765 placement
 /**
  * 按会话保存的 MCP 任务结束记录。
  */
 var mcpTaskEndingsSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r7bynxfq.js:2706", () => {
+deferInit("chunk-kjqmj0rw.js:2739", () => {
   mcpTaskEndingsSlots = new SessionRootSlot(() => new McpTaskEndingsStore());
 });
-//@ chunk-r7bynxfq.js:2732-2793 placement
+//@ chunk-kjqmj0rw.js:2765-2826 placement
 /**
  * 会话是否已保存。
  */
 function isConversationSaved() {
   return mcpTaskEndingsSlots.peek(getRootSession())?.isConversationSaved ?? false;
 }
-//@ chunk-r7bynxfq.js:2793-2859 placement
+//@ chunk-kjqmj0rw.js:2826-2892 placement
 /**
  * 暂存 MCP 任务结束记录（异常吞掉）。
  */
@@ -186,14 +186,14 @@ function holdMcpTaskEnding(registryId, ending, deleteFile) {
     logError(error);
   }
 }
-//@ chunk-r7bynxfq.js:2859-2900 placement
+//@ chunk-kjqmj0rw.js:2892-2933 placement
 /**
  * 丢弃某 MCP 任务的结束记录。
  */
 function forgetMcpTaskEnding(registryId) {
   mcpTaskEndingsSlots.peek(getRootSession())?.forget(registryId);
 }
-//@ chunk-r7bynxfq.js:2900-3023 placement
+//@ chunk-kjqmj0rw.js:2933-3056 placement
 function lookMcpTaskEndings(messages, count, session) {
   try {
     let lookup = mcpTaskEndingsSlots.peek(session ?? getRootSession())?.look(messages, count);
@@ -212,14 +212,14 @@ function lookMcpTaskEndings(messages, count, session) {
     return;
   }
 }
-//@ chunk-r7bynxfq.js:3023-3070 placement
+//@ chunk-kjqmj0rw.js:3056-3103 placement
 /**
  * 从黏性提示文本里取运行 id。
  */
 function stickyPromptRunId(message) {
   return regExp.exec(getStickyPromptText(message) ?? "")?.[1];
 }
-//@ chunk-r7bynxfq.js:3070-3463 placement (2.1.88 match: computeStickyPromptText, 0.757)
+//@ chunk-kjqmj0rw.js:3103-3496 placement (2.1.88 match: computeStickyPromptText, 0.755)
 function getTaskNotificationRunId(msg) {
   if (msg.type === "user")
     return msg.origin?.kind === "task-notification" && msg.origin.subkind === undefined
@@ -233,7 +233,7 @@ function getTaskNotificationRunId(msg) {
     ? safeIdentifierOrUndefined(msg.attachment.runId)
     : undefined;
 }
-//@ chunk-r7bynxfq.js:3463-3833 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-kjqmj0rw.js:3496-3866 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 function getStickyPromptText(message) {
   if (getTaskNotificationRunId(message) === undefined) return;
   if (message.type === "attachment")
@@ -251,11 +251,11 @@ function getStickyPromptText(message) {
     : undefined;
 }
 export {
-  forgetMcpTaskEnding,
-  holdMcpTaskEnding,
-  stickyPromptRunId,
-  getTaskNotificationRunId,
   mcpTaskEndingsSlots,
   lookMcpTaskEndings,
+  holdMcpTaskEnding,
   isConversationSaved,
+  forgetMcpTaskEnding,
+  stickyPromptRunId,
+  getTaskNotificationRunId,
 };

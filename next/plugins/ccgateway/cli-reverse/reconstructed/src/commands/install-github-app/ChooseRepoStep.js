@@ -3,9 +3,9 @@
  *
  * GitHub App 安装向导：选择仓库步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/ChooseRepoStep.tsx
- * pieces: chunk-4v9zy7gn.js (1)
+ * pieces: chunk-2xbvbqx2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { TextInput } from "../../components/TextInput.js";
 
-//@ chunk-4v9zy7gn.js:27559-29707 fingerprint (2.1.88 match: ChooseRepoStep, 0.84)
+//@ chunk-2xbvbqx2.js:28609-30752 fingerprint (2.1.88 match: ChooseRepoStep, 0.84)
 function ChooseRepoStep(props) {
   let $ = useMemoCache(44);
   let { currentRepo, useCurrentRepo, repoUrl, onRepoUrlChange, onSubmit, onToggleUseCurrentRepo } = props;

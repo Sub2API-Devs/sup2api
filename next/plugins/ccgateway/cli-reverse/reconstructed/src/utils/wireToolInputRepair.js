@@ -3,25 +3,27 @@
  *
  * 2.1.316 新增：线上工具输入修复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 9, sole-consumer 1
  */
 import { WORKFLOW_TOOL_NAME } from "../tools/WorkflowTool/constants.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { isCodeModeEnabled, hasBuiltInEvalTool } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { stripProtoKeys } from "./objectSafety.js";
 import { logEvent } from "../services/analytics/index.js";
 import { safeParseJSON } from "./json.js";
 import { ANNOTATION_KEYWORDS } from "../../vendor/@modelcontextprotocol/client/dist/src-CeKsbNLO.mjs";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1524821-1524914 placement
+//@ chunk-5xgkngpb.js:1530246-1530339 placement
 function isRepairableSchemaType(type) {
   return (
     type === "array" || type === "object" || type === "integer" || type === "number" || type === "boolean"
   );
 }
-//@ chunk-e6aww6q8.js:1524914-1525127 placement
+//@ chunk-5xgkngpb.js:1530339-1530656 placement
 function normalizeToolInput(value, schema, { logRepairs = true } = {}) {
   let coerced = coerceToSchemaType(
     schema,
@@ -34,9 +36,19 @@ function normalizeToolInput(value, schema, { logRepairs = true } = {}) {
   });
   if (value.name === WORKFLOW_TOOL_NAME && typeof coerced.script === "string")
     repaired.script = coerced.script;
+  if (
+    codeModeAccepted() &&
+    isCodeModeEnabled() &&
+    hasBuiltInEvalTool([value]) &&
+    typeof coerced.code === "string"
+  )
+    repaired.code = repairDoubleEscapedUnicode(coerced.code, {
+      logRepairs: false,
+      javaScriptSource: true,
+    });
   return repaired;
 }
-//@ chunk-e6aww6q8.js:1525127-1525309 placement
+//@ chunk-5xgkngpb.js:1530656-1530838 placement
 function stripProtoKeysLogged(value) {
   let { stripped, count } = stripProtoKeys(value);
   if (count > 0)
@@ -48,7 +60,7 @@ function stripProtoKeysLogged(value) {
     });
   return stripped;
 }
-//@ chunk-e6aww6q8.js:1525309-1526298 placement
+//@ chunk-5xgkngpb.js:1530838-1531835 placement
 function coerceToSchemaType(value, inputSchema, inputJSONSchema, exemptKeys) {
   let result = value;
   let repairField = (key, type) => {
@@ -110,12 +122,12 @@ function coerceToSchemaType(value, inputSchema, inputJSONSchema, exemptKeys) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1526407-1526528 sole-consumer
+//@ chunk-5xgkngpb.js:1531944-1532065 sole-consumer
 function isSchemaKeywordsOnly(schema) {
   if (schema === null || typeof schema !== "object" || Array.isArray(schema)) return false;
   return Object.keys(schema).every((key) => ANNOTATION_KEYWORDS.has(key));
 }
-//@ chunk-e6aww6q8.js:1526528-1527177 placement
+//@ chunk-5xgkngpb.js:1532065-1532714 placement
 /**
  * 推断 JSON Schema 节点类型（多类型、$ref、组合）。
  */
@@ -149,7 +161,7 @@ function jsonSchemaTypeOf(a, b, seen = new Set()) {
     }
   return;
 }
-//@ chunk-e6aww6q8.js:1527177-1527414 placement
+//@ chunk-5xgkngpb.js:1532714-1532951 placement
 function unwrapZodType(schema) {
   let current = schema;
   while (current)
@@ -169,16 +181,16 @@ function unwrapZodType(schema) {
     }
   return "";
 }
-//@ chunk-e6aww6q8.js:1527414-1527612 placement
+//@ chunk-5xgkngpb.js:1532951-1533149 placement
 var ESCAPED_UNICODE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ESCAPED_UNICODE_GLOBAL_RE;
 var WINDOWS_PATH_RE;
-deferInit("chunk-e6aww6q8.js:1527414", () => {
+deferInit("chunk-5xgkngpb.js:1532951", () => {
   ESCAPED_UNICODE_RE = /\\u([dD][89aAbB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})/;
   ESCAPED_UNICODE_GLOBAL_RE = new RegExp(ESCAPED_UNICODE_RE.source, "g");
   WINDOWS_PATH_RE = /(?:^|[^A-Za-z])[A-Za-z]:[\\/]|(?:^|[\s"'=])\\\\[^\s\\/]+[\\/](?!\\)/;
 });
-//@ chunk-e6aww6q8.js:1527612-1528061 placement
+//@ chunk-5xgkngpb.js:1533149-1533597 placement
 /**
  * 修复双重转义的 \\u 序列并上报计数。
  */
@@ -207,7 +219,7 @@ function repairDoubleEscapedUnicode(text, { logRepairs = true, javaScriptSource 
     });
   return repaired;
 }
-//@ chunk-e6aww6q8.js:1528061-1528802 placement
+//@ chunk-5xgkngpb.js:1533597-1534348 placement
 /**
  * 递归修复字符串中的 \\u 转义（跳过路径、控制字符、代理项）。
  */

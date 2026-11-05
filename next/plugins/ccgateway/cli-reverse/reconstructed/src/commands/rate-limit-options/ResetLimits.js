@@ -3,15 +3,15 @@
  *
  * 重置用量限额界面（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jh6bkx5v.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5cvewgfe.js (7)
  * attribution: placement 7
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
 } from "../../components/CustomSelect/selectTypeahead.js";
@@ -37,11 +37,11 @@ import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../components/CustomSelect/select.js";
 
-//@ chunk-jh6bkx5v.js:633-637 placement
+//@ chunk-5cvewgfe.js:633-637 placement
 init_react_production();
-//@ chunk-jh6bkx5v.js:637-652 placement
+//@ chunk-5cvewgfe.js:637-652 placement
 function noop() {}
-//@ chunk-jh6bkx5v.js:652-2981 placement
+//@ chunk-5cvewgfe.js:652-2981 placement
 /**
  * 重置用量限额的界面：调用重置接口并显示进度
  */
@@ -50,7 +50,7 @@ function ResetLimits(props) {
   let { offer, entry, credentials, onDone } = props;
   let [isClaiming, setIsClaiming] = useState(false);
   let submittedRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let mountTime = useMountTime();
   let ConfirmComponent;
@@ -72,7 +72,7 @@ function ResetLimits(props) {
     $[0] !== isClaiming ||
     $[1] !== credentials ||
     $[2] !== entry ||
-    $[3] !== inputRefusalWindow ||
+    $[3] !== recentInput ||
     $[4] !== noteRefused ||
     $[5] !== offer ||
     $[6] !== onDone ||
@@ -91,15 +91,15 @@ function ResetLimits(props) {
       } else earlyUseLineRaw = $[25];
       let earlyUseText = earlyUseLineRaw;
       let shouldRefuseCached;
-      if ($[26] !== inputRefusalWindow || $[27] !== noteRefused || $[28] !== refusedWithin) {
+      if ($[26] !== recentInput || $[27] !== noteRefused || $[28] !== refusedWithin) {
         shouldRefuseCached = function shouldRefuseRecentInput() {
-          if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+          if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
             noteRefused();
             return true;
           }
           return false;
         };
-        $[26] = inputRefusalWindow;
+        $[26] = recentInput;
         $[27] = noteRefused;
         $[28] = refusedWithin;
         $[29] = shouldRefuseCached;
@@ -200,7 +200,7 @@ function ResetLimits(props) {
     $[0] = isClaiming;
     $[1] = credentials;
     $[2] = entry;
-    $[3] = inputRefusalWindow;
+    $[3] = recentInput;
     $[4] = noteRefused;
     $[5] = offer;
     $[6] = onDone;
@@ -297,16 +297,16 @@ function ResetLimits(props) {
   } else dialogElement = $[54];
   return dialogElement;
 }
-//@ chunk-jh6bkx5v.js:2981-2985 placement
+//@ chunk-5cvewgfe.js:2981-2985 placement
 init_react_production();
-//@ chunk-jh6bkx5v.js:2985-3034 placement
+//@ chunk-5cvewgfe.js:2985-3034 placement
 function resetOfferOption(offer) {
   return {
     label: resetOfferLabel(offer),
     value: offer.kind,
   };
 }
-//@ chunk-jh6bkx5v.js:3034-3095 placement
+//@ chunk-5cvewgfe.js:3034-3095 placement
 function unusableResetOption(unusable) {
   return {
     label: unusable.text,
@@ -314,7 +314,7 @@ function unusableResetOption(unusable) {
     disabled: true,
   };
 }
-//@ chunk-jh6bkx5v.js:3095-4430 placement
+//@ chunk-5cvewgfe.js:3095-4430 placement
 /**
  * 重置限额选项列表（选中后进入确认）。
  */
@@ -323,7 +323,7 @@ function ResetLimitsOffers(props) {
   let { offers, unusable, entry, credentials, onDone } = props;
   let [selectedOffer, setSelectedOffer] = useState(null);
   let submittedRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   if (selectedOffer !== null) {
     let resetLimitsElement;
@@ -343,15 +343,15 @@ function ResetLimitsOffers(props) {
     return resetLimitsElement;
   }
   let shouldRefuseCached;
-  if ($[5] !== inputRefusalWindow || $[6] !== noteRefused || $[7] !== refusedWithin) {
+  if ($[5] !== recentInput || $[6] !== noteRefused || $[7] !== refusedWithin) {
     shouldRefuseCached = function shouldRefuseRecentInput() {
-      if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+      if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[5] = inputRefusalWindow;
+    $[5] = recentInput;
     $[6] = noteRefused;
     $[7] = refusedWithin;
     $[8] = shouldRefuseCached;

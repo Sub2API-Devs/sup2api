@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：多仓库检出元数据。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (9)
  * attribution: placement 9
  */
 import { sep } from "path";
@@ -31,7 +31,7 @@ import {
 import { realpathCacheEntry } from "../permissions/protectedDirs.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
-//@ chunk-6vnxsn99.js:1838-2082 placement
+//@ chunk-01kgd7xg.js:2095-2339 placement
 function parseEnvMap(rawMap) {
   let map = new Map();
   if (!rawMap) return map;
@@ -47,7 +47,7 @@ function parseEnvMap(rawMap) {
   }
   return map;
 }
-//@ chunk-6vnxsn99.js:2082-2366 placement
+//@ chunk-01kgd7xg.js:2339-2623 placement
 /**
  * 读取会话声明的多仓库检出（CLAUDE_CODE_REPO_CHECKOUTS，JSON 名称→绝对路径），过滤非绝对路径并缓存。
  */
@@ -65,7 +65,7 @@ function getRepoCheckouts() {
   if (isByocEnvironment()) repoCheckouts.checkouts = filterAbsoluteCheckouts(repoCheckouts.checkouts);
   return repoCheckouts.checkouts;
 }
-//@ chunk-6vnxsn99.js:2366-2497 placement
+//@ chunk-01kgd7xg.js:2623-2754 placement
 function resolveCheckoutPath(rawPath) {
   if (!isByocEnvironment()) return rawPath;
   let cwdKey = initialCwdKey();
@@ -75,7 +75,7 @@ function resolveCheckoutPath(rawPath) {
     ? realPath
     : null;
 }
-//@ chunk-6vnxsn99.js:2497-2727 placement
+//@ chunk-01kgd7xg.js:2754-2984 placement
 function filterAbsoluteCheckouts(checkouts) {
   let cwdKey = initialCwdKey();
   let kept = new Map([...checkouts].filter(([, checkoutPath]) => isLocalAbsolutePath(checkoutPath, cwdKey)));
@@ -88,24 +88,24 @@ function filterAbsoluteCheckouts(checkouts) {
     );
   return kept;
 }
-//@ chunk-6vnxsn99.js:2727-2792 placement
+//@ chunk-01kgd7xg.js:2984-3049 placement
 function getDeclaredRepoCheckouts() {
   return env.CLAUDE_CODE_REPO_CHECKOUTS ? getRepoCheckouts() : new Map();
 }
-//@ chunk-6vnxsn99.js:2792-2920 placement
+//@ chunk-01kgd7xg.js:3049-3177 placement
 function getRepoBaseRefs() {
   let repoCheckouts = bridgeHostState().repoCheckouts;
   if (repoCheckouts.baseRefs) return repoCheckouts.baseRefs;
   repoCheckouts.baseRefs = parseEnvMap(env.CLAUDE_CODE_BASE_REFS);
   return repoCheckouts.baseRefs;
 }
-//@ chunk-6vnxsn99.js:2920-3002 placement
+//@ chunk-01kgd7xg.js:3177-3259 placement
 function checkoutNameForPath(path) {
   for (let [name, checkoutPath] of getRepoCheckouts())
     if (path === checkoutPath || path.startsWith(checkoutPath + sep)) return name;
   return;
 }
-//@ chunk-6vnxsn99.js:3002-3142 placement
+//@ chunk-01kgd7xg.js:3259-3399 placement
 async function watchRepoCheckouts(onMetadataChanged) {
   bridgeHostState().repoCheckouts.onMetadataChanged = onMetadataChanged;
   for (let [, rawPath] of getRepoCheckouts()) {
@@ -114,7 +114,7 @@ async function watchRepoCheckouts(onMetadataChanged) {
   }
   onRepoBranchChange(() => void refreshCheckoutMetadata());
 }
-//@ chunk-6vnxsn99.js:3142-3428 placement
+//@ chunk-01kgd7xg.js:3399-3685 placement
 async function refreshCheckoutMetadata() {
   let repoCheckouts = getRepoCheckouts();
   if (repoCheckouts.size === 0) return;
@@ -133,11 +133,11 @@ async function refreshCheckoutMetadata() {
   });
 }
 export {
-  refreshCheckoutMetadata,
-  checkoutNameForPath,
-  getDeclaredRepoCheckouts,
   getRepoCheckouts,
   resolveCheckoutPath,
+  checkoutNameForPath,
   getRepoBaseRefs,
+  refreshCheckoutMetadata,
   watchRepoCheckouts,
+  getDeclaredRepoCheckouts,
 };

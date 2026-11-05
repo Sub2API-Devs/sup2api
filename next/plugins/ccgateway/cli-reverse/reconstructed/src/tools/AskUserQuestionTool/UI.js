@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：显示用户对 AskUserQuestion 的回答（超时继续）；显示用户要求更多问题/回答的结果等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (10)
  * attribution: placement 10
  */
 import {
@@ -19,7 +19,7 @@ import { themeColorOf } from "../../utils/spellcheck.js";
 import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:21034-21127 placement
+//@ chunk-wjygkcr4.js:21317-21410 placement
 /**
  * 把 answers 的 [问题, 回答] 条目渲染成一行灰色文本 “· 问题 → 回答”；AskUserQuestionAnswers 用它显示已回答的问题。
  */
@@ -34,14 +34,14 @@ function renderAnswerSummaryLine(questionAnswerPair) {
     question,
   );
 }
-//@ chunk-ah34pb7m.js:21127-21157 placement
+//@ chunk-wjygkcr4.js:21410-21440 placement
 /**
  * 读取单个选项的 label；renderQuestionSummary 把各选项 label 用 “ / ” 连成一行摘要。
  */
 function optionLabel(option) {
   return option.label;
 }
-//@ chunk-ah34pb7m.js:21157-21283 placement
+//@ chunk-wjygkcr4.js:21440-21566 placement
 function renderQuestionSummary(question) {
   return jsxProd_default_2(
     Text,
@@ -52,7 +52,7 @@ function renderQuestionSummary(question) {
     question.question,
   );
 }
-//@ chunk-ah34pb7m.js:21283-21376 placement
+//@ chunk-wjygkcr4.js:21566-21659 placement
 /**
  * 追问视图里把 [问题, 回答] 渲染成与 AP 相同的灰色箭头行，供 AskUserQuestionFollowUp 使用。
  */
@@ -67,7 +67,7 @@ function renderFollowUpAnswerLine(questionAnswerPair) {
     question,
   );
 }
-//@ chunk-ah34pb7m.js:21376-22263 placement
+//@ chunk-wjygkcr4.js:21659-22546 placement
 /**
  * 显示用户对 AskUserQuestion 的回答（超时继续）。
  */
@@ -148,7 +148,7 @@ function AskUserQuestionAnswers(props) {
   } else element = $[14];
   return element;
 }
-//@ chunk-ah34pb7m.js:22263-23123 placement
+//@ chunk-wjygkcr4.js:22546-23406 placement
 /**
  * 显示用户要求更多问题/回答的结果。
  */
@@ -229,21 +229,21 @@ function AskUserQuestionFollowUp(props) {
   } else element = $[12];
   return element;
 }
-//@ chunk-ah34pb7m.js:23123-23149 placement
+//@ chunk-wjygkcr4.js:23406-23432 placement
 /**
  * 该工具不提供执行中进度界面，返回 null；由 SkillProposalMessage 指派为 renderToolUseProgressMessage。
  */
 function renderNoToolUseProgress() {
   return null;
 }
-//@ chunk-ah34pb7m.js:23149-23175 placement
+//@ chunk-wjygkcr4.js:23432-23458 placement
 /**
  * 该工具不提供工具使用错误界面，返回 null；指派为 renderToolUseErrorMessage。
  */
 function renderNoToolUseError() {
   return null;
 }
-//@ chunk-ah34pb7m.js:23175-23350 placement
+//@ chunk-wjygkcr4.js:23458-23633 placement
 function AskUserQuestionResult({ questions, answers, response, afkTimeoutMs, followUp }) {
   if (afkTimeoutMs)
     return jsxProd_default(AskUserQuestionAnswers, {
@@ -257,7 +257,7 @@ function AskUserQuestionResult({ questions, answers, response, afkTimeoutMs, fol
     followUp,
   });
 }
-//@ chunk-ah34pb7m.js:23350-23757 placement
+//@ chunk-wjygkcr4.js:23633-24040 placement
 /**
  * 用户拒绝回答问题。
  */

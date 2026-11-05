@@ -3,10 +3,10 @@
  *
  * 路径/目录补全：解析部分路径、带缓存地扫描子目录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/directoryCompletion.ts
- * pieces: chunk-18hwfzwa.js (10), chunk-23fm9f0d.js (1)
- * attribution: fingerprint 5, layout 3, placement 3
+ * pieces: chunk-czq1j3j2.js (9), chunk-pc3x100t.js (1)
+ * attribution: fingerprint 4, layout 3, placement 3
  */
 import { join, sep, dirname, basename } from "path";
 import { isENOENT, errorMessage, isFsInaccessible, isSyscallError, getErrnoCode } from "../errors.js";
@@ -24,7 +24,7 @@ import {
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { COMMAND_NAME_SEPARATORS } from "./commandSuggestions.js";
 
-//@ chunk-23fm9f0d.js:11309-11802 fingerprint (2.1.88 match: scanDirectoryForPaths, 0.669)
+//@ chunk-pc3x100t.js:11318-11811 fingerprint (2.1.88 match: scanDirectoryForPaths, 0.668)
 async function scanDirectoryForPaths(dir, fs, { requireCompleteWalk = false } = {}) {
   let newestMtime = -1 / 0;
   let entries = await fs.readdir(dir).catch((entry) => {
@@ -58,7 +58,7 @@ async function scanDirectoryForPaths(dir, fs, { requireCompleteWalk = false } = 
   }
   return newestMtime === -1 / 0 ? null : newestMtime;
 }
-//@ chunk-18hwfzwa.js:550848-551040 fingerprint (2.1.88 match: parsePartialPath, 1)
+//@ chunk-czq1j3j2.js:571534-571726 fingerprint (2.1.88 match: parsePartialPath, 1)
 function parsePartialPath(partialPath, basePath) {
   if (!partialPath)
     return {
@@ -78,7 +78,7 @@ function parsePartialPath(partialPath, basePath) {
     prefix,
   };
 }
-//@ chunk-18hwfzwa.js:551040-551165 layout
+//@ chunk-czq1j3j2.js:571726-571851 layout
 function tryParsePartialPath(partialPath, basePath) {
   try {
     return parsePartialPath(partialPath, basePath);
@@ -87,7 +87,7 @@ function tryParsePartialPath(partialPath, basePath) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:551165-551707 layout
+//@ chunk-czq1j3j2.js:571851-572393 layout
 async function scanDirectoryCached(session, directory) {
   let { directoryScanCache } = suggestionCacheBySessionRoot.of(session);
   let cached = directoryScanCache.get(directory);
@@ -124,7 +124,7 @@ async function scanDirectoryCached(session, directory) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:551707-552066 fingerprint (2.1.88 match: getDirectoryCompletions, 1)
+//@ chunk-czq1j3j2.js:572393-572752 fingerprint (2.1.88 match: getDirectoryCompletions, 1)
 /**
  * 目录补全：解析部分路径，列出匹配的子目录（带缓存，隐藏目录除外）。
  */
@@ -148,7 +148,7 @@ async function getDirectoryCompletions(session, input, options = {}) {
       },
     }));
 }
-//@ chunk-18hwfzwa.js:552066-552196 placement (2.1.88 match: resolveCwdReentry, 1)
+//@ chunk-czq1j3j2.js:572752-572882 placement (2.1.88 match: resolveCwdReentry, 1)
 /**
  * （旧版名配错）文本是否像路径（~/、/、./、../、~、.、..），用于输入补全。
  */
@@ -163,7 +163,7 @@ function looksLikePathToken(normalized) {
     normalized === ".."
   );
 }
-//@ chunk-18hwfzwa.js:552196-552867 layout
+//@ chunk-czq1j3j2.js:572882-573553 layout
 /**
  * 扫描目录供路径补全（隐藏文件除外、目录在前、数量上限），结果缓存；不可访问时缓存空列表。
  */
@@ -205,7 +205,7 @@ async function scanPathEntries(session, directory) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:552867-553468 fingerprint (2.1.88 match: getPathCompletions, 0.871)
+//@ chunk-czq1j3j2.js:573553-574154 fingerprint (2.1.88 match: getPathCompletions, 0.871)
 async function getPathCompletions(session, input, options = {}) {
   if (isRemoteSessionAvailable()) return [];
   let { basePath = getCwd(), maxResults = 10, keepDotPrefix = false } = options;
@@ -238,11 +238,11 @@ async function getPathCompletions(session, input, options = {}) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:553468-553514 placement
+//@ chunk-czq1j3j2.js:574154-574200 placement
 function isCacheableScanError(error) {
   return isSyscallError(error) && getErrnoCode(error) !== "EMFILE";
 }
-//@ chunk-18hwfzwa.js:553514-553737 placement
+//@ chunk-czq1j3j2.js:574200-574423 placement
 /**
  * 判断查询是否匹配命令名的某个词起始（忽略分隔符与大小写）。
  */
@@ -254,15 +254,10 @@ function matchesCommandWords(query, candidates, separators = COMMAND_NAME_SEPARA
     return filtered.some((part, index) => filtered.slice(index).join("").startsWith(joined));
   });
 }
-//@ chunk-18hwfzwa.js:930340-930395 fingerprint (2.1.88 match: scanDirectory, 0.766)
-function scanDirectory(dirPath) {
-  return dirPath.description === "directory";
-}
 export {
-  scanDirectory,
+  getDirectoryCompletions,
+  scanDirectoryForPaths,
   matchesCommandWords,
   looksLikePathToken,
   getPathCompletions,
-  getDirectoryCompletions,
-  scanDirectoryForPaths,
 };

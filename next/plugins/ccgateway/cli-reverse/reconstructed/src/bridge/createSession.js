@@ -3,10 +3,10 @@
  *
  * 并入已有模块：创建/读取桥接会话、颜色标签与拒绝标记。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/createSession.ts
- * pieces: chunk-f25sswmp.js (20), chunk-ypjxapg8.js (9)
- * attribution: placement 20, sole-consumer 7, callgraph-fingerprint 1, affinity 1
+ * pieces: chunk-mgc9twez.js (9), chunk-vr5v4gzz.js (20)
+ * attribution: sole-consumer 7, callgraph-fingerprint 1, affinity 1, placement 20
  */
 import { randomUUID } from "crypto";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -76,7 +76,7 @@ import { describeCredentialFailure } from "./remoteBridgeCore.js";
 import { stripAnsiAndControls } from "../utils/printableName.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:25881-26085 placement
+//@ chunk-vr5v4gzz.js:26592-26796 placement
 var CREATE_RESPONSE_ERRORS = {
   no_session_id: {
     debug: "No session ID in response",
@@ -87,7 +87,7 @@ var CREATE_RESPONSE_ERRORS = {
     code: "bridge_session_create_unusable_id",
   },
 };
-//@ chunk-f25sswmp.js:26085-28598 placement (2.1.88 match: createBridgeSession, 0.387)
+//@ chunk-vr5v4gzz.js:26796-29309 placement (2.1.88 match: createBridgeSession, 0.387)
 /**
  * 在 environment 下创建会话：一方提供商与 OAuth/组织检查，带 git sources/outcomes、模型、cwd、权限模式事件与 tags，按 tengu_ccr_v2_bridge_create_cli 选 v1 或 v1alpha2；返回 session_ 形式 ID 或 null。
  */
@@ -214,11 +214,11 @@ async function createBridgeSession({
   logFeatureOk("bridge_session_create", attributes);
   return toCompatSessionId(sessionResult.value.id);
 }
-//@ chunk-f25sswmp.js:28598-28653 placement
+//@ chunk-vr5v4gzz.js:29309-29364 placement
 async function getBridgeSession(bridgeSessionId, options) {
   return (await getBridgeSessionOrStatus(bridgeSessionId, options)).session;
 }
-//@ chunk-f25sswmp.js:28653-30375 placement
+//@ chunk-vr5v4gzz.js:29364-31086 placement
 async function getBridgeSessionOrStatus(sessionId, opts) {
   let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("../utils/auth.js");
   let { loginToHandOn } = await import("../utils/auth/launcherHostLogin.js");
@@ -306,7 +306,7 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
     notFound: false,
   };
 }
-//@ chunk-f25sswmp.js:30375-31903 placement
+//@ chunk-vr5v4gzz.js:31086-32614 placement
 async function archiveBridgeSession(patch, fields, sessionId, options) {
   let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("../utils/auth.js");
   let { loginToHandOn } = await import("../utils/auth/launcherHostLogin.js");
@@ -369,7 +369,7 @@ async function archiveBridgeSession(patch, fields, sessionId, options) {
     return "failed";
   }
 }
-//@ chunk-f25sswmp.js:31903-31962 placement
+//@ chunk-vr5v4gzz.js:32614-32673 placement
 async function updateBridgeSessionTitle(sessionId, title, options) {
   return archiveBridgeSession(
     sessionId,
@@ -380,7 +380,7 @@ async function updateBridgeSessionTitle(sessionId, title, options) {
     options,
   );
 }
-//@ chunk-f25sswmp.js:31962-32094 placement
+//@ chunk-vr5v4gzz.js:32673-32805 placement
 async function markBridgeSessionRefusedAtCapacity(sessionId, machineName, options) {
   return markBridgeSessionRefused(
     sessionId,
@@ -391,7 +391,7 @@ async function markBridgeSessionRefusedAtCapacity(sessionId, machineName, option
     options,
   );
 }
-//@ chunk-f25sswmp.js:32094-32230 placement
+//@ chunk-vr5v4gzz.js:32805-32941 placement
 async function markBridgeSessionRefused(sessionId, refusal, options) {
   return archiveBridgeSession(
     sessionId,
@@ -408,9 +408,9 @@ async function markBridgeSessionRefused(sessionId, refusal, options) {
     options,
   );
 }
-//@ chunk-f25sswmp.js:32230-32247 placement
+//@ chunk-vr5v4gzz.js:32941-32958 placement
 var SESSION_COLOR_TAG_PREFIX = "color:";
-//@ chunk-f25sswmp.js:32247-32409 placement
+//@ chunk-vr5v4gzz.js:32958-33120 placement
 async function updateBridgeSessionColorTag(sessionId, currentSessionAgentColor, currentTags, options) {
   let usesDefaultColor = currentSessionAgentColor === "default";
   let removeTags = currentTags
@@ -427,20 +427,20 @@ async function updateBridgeSessionColorTag(sessionId, currentSessionAgentColor, 
     options,
   );
 }
-//@ chunk-f25sswmp.js:32409-32444 placement
+//@ chunk-vr5v4gzz.js:33120-33155 placement
 async function updateBridgeSessionNameTag(sessionId, nameTag, options) {
   return false;
 }
-//@ chunk-f25sswmp.js:32444-32503 placement
+//@ chunk-vr5v4gzz.js:33155-33214 placement
 function logBridgeSessionCreateFailure(code, attributes) {
   logFeatureBad("bridge_session_create", code, attributes);
   return null;
 }
-//@ chunk-f25sswmp.js:32503-32552 placement
+//@ chunk-vr5v4gzz.js:33214-33263 placement
 function pickOrFallback(readHostSessionsBearer, fallbackToken) {
   return fallbackToken === undefined ? undefined : (readHostSessionsBearer() ?? fallbackToken);
 }
-//@ chunk-f25sswmp.js:32552-32684 placement
+//@ chunk-vr5v4gzz.js:33263-33395 placement
 function markTeleportedSession(sessionId) {
   let teleportedSessionIds = bridgeHostState().teleportedSessionIds;
   teleportedSessionIds.add(sessionIdBody(sessionId));
@@ -449,24 +449,24 @@ function markTeleportedSession(sessionId) {
     if (oldestId !== undefined) teleportedSessionIds.delete(oldestId);
   }
 }
-//@ chunk-f25sswmp.js:32684-32743 placement
+//@ chunk-vr5v4gzz.js:33395-33454 placement
 function isTeleportedSession(sessionId) {
   return bridgeHostState().teleportedSessionIds.has(sessionIdBody(sessionId));
 }
-//@ chunk-f25sswmp.js:32743-32799 placement
+//@ chunk-vr5v4gzz.js:33454-33510 placement
 function unmarkTeleportedSession(bridgeSessionId) {
   bridgeHostState().teleportedSessionIds.delete(sessionIdBody(bridgeSessionId));
 }
-//@ chunk-f25sswmp.js:32799-32824 placement
+//@ chunk-vr5v4gzz.js:33510-33535 placement
 class BridgeSessionListenerSlot {
   listener = undefined;
 }
-//@ chunk-f25sswmp.js:32824-32850 placement
+//@ chunk-vr5v4gzz.js:33535-33561 placement
 var BRIDGE_SESSION_LISTENER_SLOT; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-f25sswmp.js:32824", () => {
+deferInit("chunk-vr5v4gzz.js:33535", () => {
   BRIDGE_SESSION_LISTENER_SLOT = new SessionRootSlot(() => new BridgeSessionListenerSlot());
 });
-//@ chunk-f25sswmp.js:32850-32937 placement
+//@ chunk-vr5v4gzz.js:33561-33648 placement
 /**
  * 安全地调用当前会话的桥接事件监听器（peek，不存在时忽略，异常只记日志）。
  */
@@ -478,7 +478,7 @@ function notifyBridgeSessionListener(session, event) {
     return;
   }
 }
-//@ chunk-f25sswmp.js:32937-33032 placement
+//@ chunk-vr5v4gzz.js:33648-33743 placement
 /**
  * 给当前根会话注册桥接事件监听器，返回注销函数（仅当仍是同一监听器时清除）。
  */
@@ -489,11 +489,11 @@ function setBridgeSessionListener(listener) {
     if (slot.listener === listener) slot.listener = undefined;
   };
 }
-//@ chunk-ypjxapg8.js:5578-5601 sole-consumer
+//@ chunk-mgc9twez.js:5915-5938 sole-consumer
 var BRIDGE_SESSION_API_TIMEOUT_MS = 5000;
 var MAX_PAGE_FETCH_ATTEMPTS = 5;
 var MAX_BRIDGE_SESSION_BODY_CHARS = 32768;
-//@ chunk-ypjxapg8.js:5601-7905 sole-consumer
+//@ chunk-mgc9twez.js:5938-8242 sole-consumer
 /**
  * 分页列出本组织的其他远程会话（v1 或 v1alpha2），跳过归档与自身，处理未信任设备的注册重试，返回对端列表并记录失败与截断。
  */
@@ -631,7 +631,7 @@ async function listPeerSessions(stats, options) {
   if (stats) stats.truncated = truncated;
   return peers;
 }
-//@ chunk-ypjxapg8.js:7905-8175 sole-consumer
+//@ chunk-mgc9twez.js:8242-8512 sole-consumer
 function isRetryableConnectError(message) {
   if (!message) return false;
   if (message.startsWith("auth:")) return false;
@@ -645,7 +645,7 @@ function isRetryableConnectError(message) {
   if (/status code 5\d\d/.test(message)) return false;
   return true;
 }
-//@ chunk-ypjxapg8.js:8175-8520 sole-consumer
+//@ chunk-mgc9twez.js:8512-8857 sole-consumer
 /**
  * 把发给对端会话的错误信息归类为 bridge_auth、invalid_target、4xx/5xx、timeout 或 other。
  */
@@ -659,7 +659,7 @@ function classifyPeerSendError(message) {
   if (/timeout/i.test(message)) return "timeout";
   return "other";
 }
-//@ chunk-ypjxapg8.js:8520-10969 callgraph-fingerprint (2.1.88 match: updateBridgeSessionTitle, 0.242)
+//@ chunk-mgc9twez.js:8857-11307 callgraph-fingerprint (2.1.88 match: updateBridgeSessionTitle, 0.242)
 /**
  * 向另一个会话发一条 peer 用户消息（POST events）：带来源 origin、附件、可信设备 token、可选设备签名；403 untrusted_device 时注册设备重试；返回 {ok, msgId|error}。
  */
@@ -869,10 +869,10 @@ async function postPeerMessage(
     msgId: messageEnvelope.msg_id,
   };
 }
-//@ chunk-ypjxapg8.js:10969-11206 affinity
+//@ chunk-mgc9twez.js:11307-11544 affinity
 var CLOUD_CANNOT_MESSAGE_PEERS =
   "this cloud session cannot message other sessions yet \u2014 its credential is accepted for its own work but not for delivering to another session, so a reply from here is not possible; say so in your response instead of retrying";
-//@ chunk-ypjxapg8.js:11206-11510 sole-consumer
+//@ chunk-mgc9twez.js:11544-11848 sole-consumer
 /**
  * 云会话向对端发消息被拒（403/401）时生成说明，提示改用服务路由发送；不适用时返回 undefined。
  */
@@ -896,11 +896,11 @@ function describeCloudPeerRefusal(errorText, targetName, sessionId, getRoute) {
     ? undefined
     : `Nothing was sent to '${targetName}': the post from this cloud session was refused (HTTP ${httpCode}). ${routeSentence}`;
 }
-//@ chunk-ypjxapg8.js:11510-11557 sole-consumer
+//@ chunk-mgc9twez.js:11848-11895 sole-consumer
 function isHttpSuccessStatus(status) {
   return status === 200 || status === 201 || status === 204;
 }
-//@ chunk-ypjxapg8.js:11557-11713 sole-consumer
+//@ chunk-mgc9twez.js:11895-12051 sole-consumer
 function logPeerPostRejected(compatSessionId, response) {
   if (isHttpSuccessStatus(response.status)) return;
   let errorDetail = extractErrorDetail(response.data);
@@ -913,15 +913,15 @@ function logPeerPostRejected(compatSessionId, response) {
 }
 export {
   isTeleportedSession,
-  setBridgeSessionListener,
   getBridgeSessionOrStatus,
+  createBridgeSession,
   notifyBridgeSessionListener,
   getBridgeSession,
   updateBridgeSessionColorTag,
   unmarkTeleportedSession,
   markTeleportedSession,
   updateBridgeSessionTitle,
-  createBridgeSession,
+  setBridgeSessionListener,
   SESSION_COLOR_TAG_PREFIX,
   markBridgeSessionRefused,
   markBridgeSessionRefusedAtCapacity,

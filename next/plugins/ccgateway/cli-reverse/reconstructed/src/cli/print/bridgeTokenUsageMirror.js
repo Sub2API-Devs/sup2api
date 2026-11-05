@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把令牌用量增量镜像到 Remote Control 桥（按 worker epoch 去重）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (5)
  * attribution: placement 5
  */
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
@@ -27,9 +27,10 @@ import {
   getFastRejectedReason,
 } from "../../utils/fastMode.js";
 import { resolveEffortLevelOrNull } from "../../bridge/applyFlagSettings.js";
-import { viewTeammateOutput } from "../../components/teams/TeamsDialog.js";
+import { resolveModelAlias } from "../../services/api/claude.js";
+import { currentViewMode } from "../../utils/focusMode.js";
 
-//@ chunk-0sfjpx19.js:45722-45986 placement (2.1.88 match: combineUsage, 1)
+//@ chunk-nh1pvp1m.js:65306-65570 placement (2.1.88 match: combineUsage, 1)
 /**
  * 把 usage 乘系数后累加到总计（输入、输出、缓存读、缓存写四项）。旧版名 combineUsage 不确切，属成本统计。
  */
@@ -41,14 +42,14 @@ function addScaledUsage(total, factor, usage) {
     cacheCreationInputTokens: total.cacheCreationInputTokens + factor * usage.cacheCreationInputTokens,
   };
 }
-//@ chunk-0sfjpx19.js:45986-46088 placement (2.1.88 match: combineUsage, 1)
+//@ chunk-nh1pvp1m.js:65570-65672 placement (2.1.88 match: combineUsage, 1)
 /**
  * 把 usage 转成 [输入, 输出, 缓存读, 缓存写] 元组。属成本统计。
  */
 function usageToTuple(usage) {
   return [usage.inputTokens, usage.outputTokens, usage.cacheReadInputTokens, usage.cacheCreationInputTokens];
 }
-//@ chunk-0sfjpx19.js:46088-46936 placement
+//@ chunk-nh1pvp1m.js:65672-66520 placement
 /**
  * 计算自上次以来的令牌用量增量并经 REPL/SDK 宿主句柄发出。
  */
@@ -98,7 +99,7 @@ function mirrorTokenUsageToBridge() {
     logError(error);
   }
 }
-//@ chunk-0sfjpx19.js:46936-47440 placement
+//@ chunk-nh1pvp1m.js:66520-67083 placement
 function buildBridgeContextSnapshot({
   session,
   tools,
@@ -116,6 +117,7 @@ function buildBridgeContextSnapshot({
   return buildSystemInitMessage({
     ...buildRemoteSystemInitFields(),
     additionalDirectories: undefined,
+    syncedSkillsPath: undefined,
     tools: [],
     mcpClients: [],
     model,
@@ -131,18 +133,19 @@ function buildBridgeContextSnapshot({
     fastModeDisabledReason:
       getFastModeUnavailableReasonCode(model) ?? getFastRejectedReason(model, fastMode) ?? undefined,
     effort: resolveEffortLevelOrNull(model, effortValue),
-    viewMode: viewTeammateOutput(),
+    ultrathinkTypedRaises: resolveModelAlias(model, () => effortValue),
+    viewMode: currentViewMode(),
     capabilities: [...notificationCapabilities, ASK_USER_QUESTION_UNANSWERED_V1],
   });
 }
-//@ chunk-0sfjpx19.js:47479-47509 placement
+//@ chunk-nh1pvp1m.js:67122-67152 placement
 var CAFFEINATE_TIMEOUT_SECONDS = 300;
 var CAFFEINATE_RESTART_INTERVAL_MS = 240000;
 var SLEEP_RELEASE_DELAY_MS = 30000;
 export {
+  buildBridgeContextSnapshot,
+  mirrorTokenUsageToBridge,
   SLEEP_RELEASE_DELAY_MS,
   CAFFEINATE_TIMEOUT_SECONDS,
   CAFFEINATE_RESTART_INTERVAL_MS,
-  buildBridgeContextSnapshot,
-  mirrorTokenUsageToBridge,
 };

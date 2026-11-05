@@ -3,9 +3,9 @@
  *
  * LSP 结果格式化（定义、引用、hover、符号、调用层次）；混有插件市场等误归声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/formatters.ts
- * pieces: chunk-kxyd0g16.js (15)
+ * pieces: chunk-fmnbrxwy.js (15)
  * attribution: fingerprint 14, layout 1
  */
 import { relative } from "path";
@@ -14,7 +14,7 @@ import { stripPrefix, plural } from "../../utils/stringUtils.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isLocationLink, toLocation } from "./LSPTool.js";
 
-//@ chunk-kxyd0g16.js:93527-93998 fingerprint (2.1.88 match: formatUri, 0.932)
+//@ chunk-fmnbrxwy.js:108241-108712 fingerprint (2.1.88 match: formatUri, 0.932)
 function formatUri(uri, cwd) {
   if (!uri) {
     logForDebugging("formatUri called with undefined URI - indicates malformed LSP server response", {
@@ -38,7 +38,7 @@ function formatUri(uri, cwd) {
   }
   return filePath.replaceAll("\\", "/");
 }
-//@ chunk-kxyd0g16.js:93998-94145 fingerprint (2.1.88 match: groupByFile, 1)
+//@ chunk-fmnbrxwy.js:108712-108859 fingerprint (2.1.88 match: groupByFile, 1)
 function groupByFile(items, cwd) {
   let byFile = new Map();
   for (let item of items) {
@@ -50,14 +50,14 @@ function groupByFile(items, cwd) {
   }
   return byFile;
 }
-//@ chunk-kxyd0g16.js:94145-94254 fingerprint (2.1.88 match: formatLocation, 1)
+//@ chunk-fmnbrxwy.js:108859-108968 fingerprint (2.1.88 match: formatLocation, 1)
 function formatLocation(location, cwd) {
   let filePath = formatUri(location.uri, cwd);
   let line = location.range.start.line + 1;
   let character = location.range.start.character + 1;
   return `${filePath}:${line}:${character}`;
 }
-//@ chunk-kxyd0g16.js:94374-95169 fingerprint (2.1.88 match: formatGoToDefinitionResult, 1)
+//@ chunk-fmnbrxwy.js:109088-109883 fingerprint (2.1.88 match: formatGoToDefinitionResult, 1)
 /**
  * 格式化 goToDefinition / goToImplementation 结果。
  */
@@ -86,7 +86,7 @@ ${locationList}`;
   let location = isLocationLink(result) ? toLocation(result) : result;
   return `Defined in ${formatLocation(location, cwd)}`;
 }
-//@ chunk-kxyd0g16.js:95169-95978 fingerprint (2.1.88 match: formatFindReferencesResult, 1)
+//@ chunk-fmnbrxwy.js:109883-110692 fingerprint (2.1.88 match: formatFindReferencesResult, 1)
 /**
  * 格式化 findReferences 结果（按文件分组）。
  */
@@ -121,7 +121,7 @@ ${filePath}:`);
   return lines.join(`
 `);
 }
-//@ chunk-kxyd0g16.js:95978-96168 layout (2.1.88 match: extractMarkupText, 1)
+//@ chunk-fmnbrxwy.js:110692-110882 layout (2.1.88 match: extractMarkupText, 1)
 function flattenTextBlocks(contents) {
   if (Array.isArray(contents))
     return contents.map((item) => {
@@ -134,7 +134,7 @@ function flattenTextBlocks(contents) {
   if ("kind" in contents) return contents.value;
   return contents.value;
 }
-//@ chunk-kxyd0g16.js:96168-96469 fingerprint (2.1.88 match: formatHoverResult, 1)
+//@ chunk-fmnbrxwy.js:110882-111183 fingerprint (2.1.88 match: formatHoverResult, 1)
 /**
  * 格式化 hover 结果（MarkupContent/MarkedString）。
  */
@@ -151,7 +151,7 @@ ${content}`;
   }
   return content;
 }
-//@ chunk-kxyd0g16.js:96469-96882 fingerprint (2.1.88 match: symbolKindToString, 1)
+//@ chunk-fmnbrxwy.js:111183-111596 fingerprint (2.1.88 match: symbolKindToString, 1)
 function symbolKindToString(kind) {
   return (
     {
@@ -184,7 +184,7 @@ function symbolKindToString(kind) {
     }[kind] || "Unknown"
   );
 }
-//@ chunk-kxyd0g16.js:96882-97139 fingerprint (2.1.88 match: formatDocumentSymbolNode, 1)
+//@ chunk-fmnbrxwy.js:111596-111853 fingerprint (2.1.88 match: formatDocumentSymbolNode, 1)
 function formatDocumentSymbolNode(symbol, indent = 0) {
   let lines = [];
   let prefix = "  ".repeat(indent);
@@ -198,7 +198,7 @@ function formatDocumentSymbolNode(symbol, indent = 0) {
     for (let child of symbol.children) lines.push(...formatDocumentSymbolNode(child, indent + 1));
   return lines;
 }
-//@ chunk-kxyd0g16.js:97139-97459 fingerprint (2.1.88 match: formatDocumentSymbolResult, 1)
+//@ chunk-fmnbrxwy.js:111853-112173 fingerprint (2.1.88 match: formatDocumentSymbolResult, 1)
 /**
  * 格式化 documentSymbol 结果（层级缩进）。
  */
@@ -212,7 +212,7 @@ function formatDocumentSymbolResult(result, cwd) {
   return lines.join(`
 `);
 }
-//@ chunk-kxyd0g16.js:97459-98333 fingerprint (2.1.88 match: formatWorkspaceSymbolResult, 1)
+//@ chunk-fmnbrxwy.js:112173-113047 fingerprint (2.1.88 match: formatWorkspaceSymbolResult, 1)
 /**
  * 格式化 workspaceSymbol 结果。
  */
@@ -246,7 +246,7 @@ ${filePath}:`);
   return lines.join(`
 `);
 }
-//@ chunk-kxyd0g16.js:98333-98625 fingerprint (2.1.88 match: formatCallHierarchyItem, 1)
+//@ chunk-fmnbrxwy.js:113047-113339 fingerprint (2.1.88 match: formatCallHierarchyItem, 1)
 function formatCallHierarchyItem(item, cwd) {
   if (!item.uri) {
     logForDebugging("formatCallHierarchyItem: CallHierarchyItem has undefined URI", {
@@ -261,7 +261,7 @@ function formatCallHierarchyItem(item, cwd) {
   if (item.detail) result += ` [${item.detail}]`;
   return result;
 }
-//@ chunk-kxyd0g16.js:98625-98882 fingerprint (2.1.88 match: formatPrepareCallHierarchyResult, 1)
+//@ chunk-fmnbrxwy.js:113339-113596 fingerprint (2.1.88 match: formatPrepareCallHierarchyResult, 1)
 /**
  * 格式化 prepareCallHierarchy 结果。
  */
@@ -273,7 +273,7 @@ function formatPrepareCallHierarchyResult(result, cwd) {
   return lines.join(`
 `);
 }
-//@ chunk-kxyd0g16.js:98882-99590 fingerprint (2.1.88 match: formatIncomingCallsResult, 1)
+//@ chunk-fmnbrxwy.js:113596-114304 fingerprint (2.1.88 match: formatIncomingCallsResult, 1)
 /**
  * 格式化 incomingCalls 结果。
  */
@@ -313,7 +313,7 @@ ${filePath}:`);
   return lines.join(`
 `);
 }
-//@ chunk-kxyd0g16.js:99590-100287 fingerprint (2.1.88 match: formatOutgoingCallsResult, 1)
+//@ chunk-fmnbrxwy.js:114304-115001 fingerprint (2.1.88 match: formatOutgoingCallsResult, 1)
 /**
  * 格式化 outgoingCalls 结果。
  */

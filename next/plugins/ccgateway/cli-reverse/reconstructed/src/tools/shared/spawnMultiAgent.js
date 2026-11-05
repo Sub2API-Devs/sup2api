@@ -3,12 +3,11 @@
  *
  * 队友派生：进程内 / tmux 分屏 / 新窗口三种后端、权限模式透传参数与任务登记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/shared/spawnMultiAgent.ts
- * pieces: chunk-cne5hsvz.js (15), chunk-hntsfzas.js (1)
- * attribution: sole-consumer 4, fingerprint 9, placement 2, affinity 1
+ * pieces: chunk-5j7d17eb.js (13), chunk-5xgkngpb.js (1), chunk-pgmbxgj8.js (3)
+ * attribution: fingerprint 9, placement 4, layout 1, affinity 1, sole-consumer 2
  */
-import { isStandaloneExecutable } from "../../utils/slowOperations.js";
 import { withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import { processWrapperError } from "../../utils/processWrapper.js";
 import {
@@ -16,8 +15,8 @@ import {
   hasControlChars,
   updateTeamFile,
   removeTeamMember,
+  recordSpawnedTeammatePane,
   sanitizeAgentName,
-  setMemberPaneInfo,
   sanitizeName,
   assertNoControlChars,
   isPaneBackendType,
@@ -31,8 +30,12 @@ import {
   TEAMMATES_UNAVAILABLE_MESSAGE,
 } from "../../utils/swarm/constants.js";
 import { withProcessWrapper, getLaunchCommand } from "../../utils/deepLink/registerProtocol.js";
+import {
+  getTeammatePermissionMode,
+  clipPromptDescription,
+  spawnInProcessTeammate,
+} from "../../utils/swarm/spawnInProcess.js";
 import { cycleAllTeammateModes } from "../../components/teams/TeamsDialog.js";
-import { wasProactivityEverOn } from "../../Tool.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { getPDFPageCount } from "../../utils/pdf.js";
@@ -62,8 +65,10 @@ import { isTmuxAvailable, isInsideTmux, isInITerm2 } from "../../utils/swarm/bac
 import { IT2_SETUP_DIALOG } from "../../utils/swarm/it2SetupResult.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 import { getSessionId, isDiskless } from "../../bootstrap/state.js";
-import { buildInheritedCliFlags } from "../../utils/swarm/spawnUtils.js";
+import { buildInheritedCliFlags_2_2 } from "../../utils/swarm/spawnUtils.js";
 import { hasLeftProactivityBaseline } from "../../utils/permissions/permissions.js";
+import { dropSessionLevelIfModelDiffers } from "../../utils/effort.js";
+import { keepModelForEffort } from "../../commands/fast/fast.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import {
   clearMailbox,
@@ -73,33 +78,28 @@ import {
 } from "../../utils/teammateMailbox.js";
 import { respawnPaneWithCommand } from "../../utils/swarm/backends/TmuxBackend.js";
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
-import { clipPromptDescription, spawnInProcessTeammate } from "../../utils/swarm/spawnInProcess.js";
 import { isBuiltInAgent } from "../AgentTool/loadAgentsDir.js";
 import { startInProcessTeammate } from "../../utils/swarm/inProcessRunner.js";
 import { isRegisteredAgent } from "../../utils/plugins/pluginLoadState.js";
 import { AGENT } from "../AgentTool/constants.js";
 import { getTeammateModeFromSnapshot } from "../../utils/swarm/backends/teammateModeSnapshot.js";
 
-//@ chunk-hntsfzas.js:6798-6916 fingerprint (2.1.88 match: getTeammateCommand, 1)
-/**
- * 队友启动命令：编译版用 execPath，否则 argv[1]。
- */
-function getTeammateCommand() {
-  try {
-    if (isStandaloneExecutable()) return process.execPath || "unknown";
-    return process.argv[1] || "unknown";
-  } catch {
-    return "unknown";
-  }
+//@ chunk-5xgkngpb.js:4892318-4892449 fingerprint (2.1.88 match: generateUniqueTeammateName, 0.62)
+function generateUniqueTeammateName(takenNames, candidateName, team) {
+  return (
+    takenNames.has(String(candidateName)) ||
+    [...team.members.keys()].some((key) => takenNames.has(String(key))) ||
+    [...team.handles].some((handle) => takenNames.has(handle))
+  );
 }
-//@ chunk-cne5hsvz.js:14172-14199 sole-consumer
+//@ chunk-pgmbxgj8.js:1274-1302 placement
 /**
  * 返回队友进程的启动命令（自定义命令或当前二进制，套用宿主环境包装器）。
  */
 function teammateLaunchCommandLine() {
   return withHostOwnedEnv(teammateLaunchCommand);
 }
-//@ chunk-cne5hsvz.js:14199-14457 sole-consumer
+//@ chunk-pgmbxgj8.js:1302-1559 placement
 /**
  * 队友进程的启动命令（自定义命令或当前二进制，套用进程包装器）；包装器配置错误时抛错。
  */
@@ -121,21 +121,20 @@ function teammateLaunchCommand() {
       });
   return [cmd, ...prefixArgs];
 }
-//@ chunk-cne5hsvz.js:14457-14913 fingerprint (2.1.88 match: buildInheritedCliFlags, 0.584)
+//@ chunk-pgmbxgj8.js:1647-2079 fingerprint (2.1.88 match: buildInheritedCliFlags, 0.585)
 /**
  * 把父会话的权限模式转成队友进程的 CLI 参数（--dangerously-skip-permissions / --permission-mode …），plan_mode_required 时用 plan。
  */
-function buildInheritedCliFlags_2({
+function buildInheritedCliFlags({
   planModeRequired,
   permissionMode,
   proactivityLevel,
   autoPickedByLevel = false,
 }) {
   if (permissionMode === undefined) return [];
-  let effectiveMode = permissionMode;
-  if (planModeRequired) effectiveMode = "plan";
-  else if (proactivityLevel !== undefined)
-    effectiveMode = cycleAllTeammateModes(permissionMode, proactivityLevel, autoPickedByLevel);
+  let effectiveMode = getTeammatePermissionMode(permissionMode, planModeRequired ?? false);
+  if (!planModeRequired && proactivityLevel !== undefined)
+    effectiveMode = cycleAllTeammateModes(effectiveMode, proactivityLevel, autoPickedByLevel);
   switch (effectiveMode) {
     case "bypassPermissions":
       return ["--dangerously-skip-permissions"];
@@ -147,16 +146,14 @@ function buildInheritedCliFlags_2({
     case "plan":
     case "dontAsk":
     case "bubble":
-      return proactivityLevel !== undefined && wasProactivityEverOn()
-        ? [`--permission-mode ${toExternalPermissionMode(effectiveMode)}`]
-        : [];
+      return [`--permission-mode ${toExternalPermissionMode(effectiveMode)}`];
   }
 }
-//@ chunk-cne5hsvz.js:19108-19187 fingerprint (2.1.88 match: hasSession, 1)
+//@ chunk-5j7d17eb.js:16752-16831 fingerprint (2.1.88 match: hasSession, 1)
 async function hasSession(sessionName) {
   return (await execFileNoThrow(TMUX, ["has-session", "-t", sessionName], getPDFPageCount())).code === 0;
 }
-//@ chunk-cne5hsvz.js:19187-19463 fingerprint (2.1.88 match: ensureSession, 0.71)
+//@ chunk-5j7d17eb.js:16831-17107 fingerprint (2.1.88 match: ensureSession, 0.71)
 async function ensureSession(sessionName) {
   if (!(await hasSession(sessionName))) {
     let result = await execFileNoThrow(TMUX, ["new-session", "-d", "-s", sessionName], {
@@ -169,7 +166,7 @@ async function ensureSession(sessionName) {
     }
   }
 }
-//@ chunk-cne5hsvz.js:21257-22255 placement
+//@ chunk-5j7d17eb.js:18908-19906 placement
 /**
  * 在团队文件中预留队友身份（名字、id、颜色）后启动；启动提交前失败则清理窗格并移除成员。
  */
@@ -244,7 +241,25 @@ async function reserveTeammateAndSpawn(name, teamName, extraMemberFields, teamma
     throw error;
   }
 }
-//@ chunk-cne5hsvz.js:22452-23023 placement
+//@ chunk-5j7d17eb.js:19906-20103 layout
+/**
+ * 把成员的 pane 信息（tmuxPaneId、backendType）写入团队文件，并记录为本会话创建的 pane。
+ */
+async function setMemberPaneInfo(teamName, agentId, paneInfo, storage) {
+  recordSpawnedTeammatePane(paneInfo.backendType, paneInfo.tmuxPaneId);
+  await updateTeamFile(
+    teamName,
+    (teamFile) => {
+      let found = teamFile.members.find((member) => member.agentId === agentId);
+      if (!found) return false;
+      found.tmuxPaneId = paneInfo.tmuxPaneId;
+      found.backendType = paneInfo.backendType;
+    },
+    undefined,
+    storage,
+  );
+}
+//@ chunk-5j7d17eb.js:20103-20674 placement
 /**
  * 生成不冲突的队友名（拒绝保留名与 agent id 形状，重名加 -N）。
  */
@@ -264,7 +279,7 @@ function uniqueTeammateName(rawName, teamFile) {
   while (takenNames.has(`${sanitizedName}-${suffix}`.toLowerCase())) suffix++;
   return `${sanitizedName}-${suffix}`;
 }
-//@ chunk-cne5hsvz.js:23023-26086 fingerprint (2.1.88 match: handleSpawnSplitPane, 0.76)
+//@ chunk-5j7d17eb.js:20674-23765 fingerprint (2.1.88 match: handleSpawnSplitPane, 0.758)
 /**
  * 在 tmux/iTerm2 分屏中启动队友进程。
  */
@@ -340,12 +355,13 @@ async function handleSpawnSplitPane(input, context) {
       ]
         .filter(Boolean)
         .join(" ");
-      let inheritedFlags = buildInheritedCliFlags({
+      let inheritedFlags = buildInheritedCliFlags_2_2({
         planModeRequired: plan_mode_required,
         permissionMode: appState.toolPermissionContext.mode,
         proactivityLevel: appState.proactivityLevel,
         autoPickedByLevel: hasLeftProactivityBaseline(appState.toolPermissionContext),
-        sessionEffort: appState.sessionEffort,
+        sessionEffort: dropSessionLevelIfModelDiffers(appState, model, keepModelForEffort(context, model))
+          .sessionEffort,
         permissionRules: getToolPermissionContext(context),
         skipModel: !!model,
       });
@@ -440,7 +456,7 @@ async function handleSpawnSplitPane(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:26086-29036 fingerprint (2.1.88 match: handleSpawnSeparateWindow, 0.743)
+//@ chunk-5j7d17eb.js:23765-26743 fingerprint (2.1.88 match: handleSpawnSeparateWindow, 0.741)
 /**
  * 在新 tmux 窗口中启动队友进程。
  */
@@ -507,12 +523,16 @@ async function handleSpawnSeparateWindow(input, context) {
       ]
         .filter(Boolean)
         .join(" ");
-      let inheritedFlags = buildInheritedCliFlags({
+      let inheritedFlags = buildInheritedCliFlags_2_2({
         planModeRequired: plan_mode_required,
         permissionMode: appState.toolPermissionContext.mode,
         proactivityLevel: appState.proactivityLevel,
         autoPickedByLevel: hasLeftProactivityBaseline(appState.toolPermissionContext),
-        sessionEffort: appState.sessionEffort,
+        sessionEffort: dropSessionLevelIfModelDiffers(
+          appState,
+          modelFlags,
+          keepModelForEffort(context, modelFlags),
+        ).sessionEffort,
         permissionRules: getToolPermissionContext(context),
         skipModel: !!modelFlags,
       });
@@ -615,7 +635,7 @@ async function handleSpawnSeparateWindow(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:29036-29789 fingerprint (2.1.88 match: registerOutOfProcessTeammateTask, 0.909)
+//@ chunk-5j7d17eb.js:26743-27495 fingerprint (2.1.88 match: registerOutOfProcessTeammateTask, 0.905)
 /**
  * 为 pane 队友在任务表登记 in_process_teammate 任务（可杀死 pane）。
  */
@@ -680,7 +700,7 @@ function registerOutOfProcessTeammateTask(
       },
     );
 }
-//@ chunk-cne5hsvz.js:29789-32223 fingerprint (2.1.88 match: handleSpawnInProcess, 0.744)
+//@ chunk-5j7d17eb.js:27495-29953 fingerprint (2.1.88 match: handleSpawnInProcess, 0.735)
 /**
  * 进程内队友：准备团队成员记录、清空邮箱、spawnInProcessTeammate 并启动其循环。
  */
@@ -758,6 +778,7 @@ async function handleSpawnInProcess(input, context) {
         toolUseContext: {
           ...context,
           messages: [],
+          pickedEffortModel: keepModelForEffort(context, model),
         },
         abortController: result.abortController,
         invokingRequestId: input.invokingRequestId,
@@ -826,7 +847,7 @@ async function handleSpawnInProcess(input, context) {
     context.storageV5,
   );
 }
-//@ chunk-cne5hsvz.js:32223-33045 fingerprint (2.1.88 match: handleSpawn, 0.326)
+//@ chunk-5j7d17eb.js:29953-30773 fingerprint (2.1.88 match: handleSpawn, 0.326)
 /**
  * 派生队友：拒绝协议帧 prompt；启用进程内队友时直接进程内运行；否则探测 pane 后端（tmux/iTerm2），不可用且模式为 auto 时回退进程内，否则按 use_splitpane 开分屏或新窗口。
  */
@@ -860,14 +881,14 @@ async function handleSpawn(spawnInput, context, onProgress) {
   if (spawnInput.use_splitpane !== false) return handleSpawnSplitPane(spawnInput, context);
   return handleSpawnSeparateWindow(spawnInput, context);
 }
-//@ chunk-cne5hsvz.js:33045-33063 affinity
+//@ chunk-5j7d17eb.js:30773-30791 affinity
 /**
  * 记录“无法打开队友窗格、改用进程内运行”的提示是否已显示。
  */
 class PaneFallbackNoticeState {
   shown = false;
 }
-//@ chunk-cne5hsvz.js:33063-33494 sole-consumer
+//@ chunk-5j7d17eb.js:30791-31222 sole-consumer
 /**
  * 无法打开队友窗格时提示改为进程内运行（只提示一次）。
  */
@@ -887,7 +908,7 @@ function notifyPaneFallback(fallbackState, onProgress) {
     },
   });
 }
-//@ chunk-cne5hsvz.js:33494-33661 sole-consumer
+//@ chunk-5j7d17eb.js:31222-31389 sole-consumer
 /**
  * 无盘会话拒绝派生队友，否则执行派生。
  */
@@ -901,4 +922,4 @@ async function spawnTeammateChecked(spawnInput, context, onProgress) {
   }
   return handleSpawn(spawnInput, context, onProgress);
 }
-export { buildInheritedCliFlags_2, getTeammateCommand, spawnTeammateChecked };
+export { buildInheritedCliFlags, generateUniqueTeammateName, spawnTeammateChecked };

@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。终端视口尺寸 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import { __export } from "../../runtime/bun-runtime.js";
+import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { paneHostSlot, describePanePlaced } from "../plugins/functionHooks/panes.js";
-import { useEffect, useRef, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
   STEADY_REDRAW_INTERVAL_MS,
   invalidateViewport,
@@ -18,17 +18,22 @@ import {
 import { hasRenderHooks } from "../plugins/functionHooks/ui/renderDispatch.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:36697-36707 placement
+//@ chunk-czq1j3j2.js:38258-38268 placement
 var useTerminalViewportNamespace = {};
-//@ chunk-18hwfzwa.js:36707-36759 placement
+//@ chunk-czq1j3j2.js:38268-38320 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36707", () => {
+deferInit("chunk-czq1j3j2.js:38268", () => {
   __export(useTerminalViewportNamespace, {
     default: () => useTerminalViewportNamespace,
     useTerminalViewport: () => useTerminalViewport,
   });
 });
-//@ chunk-18hwfzwa.js:1809635-1810034 placement
+//@ chunk-czq1j3j2.js:1852899-1852903 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1852899", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1857614-1858013 placement
 function useTerminalViewport(columns, rows, chromeHeight) {
   let max = Math.max(1, columns - chromeHeight);
   let previous = paneHostSlot.get();
@@ -61,9 +66,4 @@ function useTerminalViewport(columns, rows, chromeHeight) {
     return () => clearTimeout(timer);
   }, [max]);
 }
-//@ chunk-18hwfzwa.js:1810034-1810038 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1810034", () => {
-  init_react_production();
-});
 export { useTerminalViewportNamespace };

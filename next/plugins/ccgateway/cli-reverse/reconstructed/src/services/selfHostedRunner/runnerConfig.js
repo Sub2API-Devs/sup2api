@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的命令行与 SELF_HOSTED_RUNNER_* 环境变量解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (23)
  * attribution: placement 23
  */
 import { resolve, dirname } from "path";
@@ -23,7 +23,7 @@ import { env } from "../../utils/env.js";
 import { getSpawnSessionIdFromJwt } from "./sessionLaunch.js";
 import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 
-//@ chunk-hm0ce8vc.js:218854-218976 placement
+//@ chunk-asf5gh8x.js:229924-230046 placement
 /**
  * 自托管 runner 的默认配置值：并发会话数、信任工作区等开关默认值，以及各类轮询/退避/超时的基准。
  */
@@ -39,7 +39,7 @@ var MAX_POLL_INTERVAL_MS = 30000;
 var MIN_BACKOFF_MS = 1000;
 var SHUTDOWN_LEASE_HEARTBEAT_MS = 20000;
 var RELEASE_IN_FLIGHT_WAIT_MS = 20000;
-//@ chunk-hm0ce8vc.js:218976-219147 placement
+//@ chunk-asf5gh8x.js:230046-230217 placement
 function runnerRetireAtMs() {
   let envSelfHostedRunnerRetireAt = process.env.SELF_HOSTED_RUNNER_RETIRE_AT;
   if (envSelfHostedRunnerRetireAt === undefined || envSelfHostedRunnerRetireAt === "") return 0;
@@ -48,21 +48,21 @@ function runnerRetireAtMs() {
     return 0;
   return seconds * 1000;
 }
-//@ chunk-hm0ce8vc.js:219147-219171 placement
+//@ chunk-asf5gh8x.js:230217-230241 placement
 /**
  * 读取 deadline 文件时一次读入的字节数与相关小上限。
  */
 var MAX_SECRET_FILE_READ_BYTES = 64;
 var DRAIN_MARKER_READ_TIMEOUT_MS = 2000;
-var MAX_LISTED_SESSION_IDS = 64;
-//@ chunk-hm0ce8vc.js:219171-219286 placement
+var MAX_REPORTED_BUSY_SESSIONS = 64;
+//@ chunk-asf5gh8x.js:230241-230356 placement
 function drainMarkerFile() {
   let envSelfHostedRunnerDrainMarkerFile = process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE;
   return envSelfHostedRunnerDrainMarkerFile === undefined || envSelfHostedRunnerDrainMarkerFile.trim() === ""
     ? undefined
     : resolve(envSelfHostedRunnerDrainMarkerFile);
 }
-//@ chunk-hm0ce8vc.js:219286-219329 placement
+//@ chunk-asf5gh8x.js:230356-230399 placement
 /**
  * hold-idle 文件的 mtime 新鲜窗口、残留查找超时、默认最大 hold 与重试间隔。
  */
@@ -70,21 +70,21 @@ var HOLD_IDLE_MTIME_FRESH_MS = 180000;
 var LEFTOVER_HOLD_LOOK_TIMEOUT_MS = 30000;
 var DEFAULT_MAX_HOLD_MS = 86400000;
 var RETIRE_RELEASE_RETRY_MS = 2000;
-//@ chunk-hm0ce8vc.js:219329-219441 placement
+//@ chunk-asf5gh8x.js:230399-230511 placement
 function holdIdleFile() {
   let envSelfHostedRunnerHoldIdleFile = process.env.SELF_HOSTED_RUNNER_HOLD_IDLE_FILE;
   return envSelfHostedRunnerHoldIdleFile === undefined || envSelfHostedRunnerHoldIdleFile.trim() === ""
     ? undefined
     : resolve(envSelfHostedRunnerHoldIdleFile);
 }
-//@ chunk-hm0ce8vc.js:219441-219577 placement
+//@ chunk-asf5gh8x.js:230511-230647 placement
 function getMaxHoldMs() {
   let envSelfHostedRunnerMaxHoldMs = process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS;
   return envSelfHostedRunnerMaxHoldMs === undefined || envSelfHostedRunnerMaxHoldMs.trim() === ""
     ? DEFAULT_MAX_HOLD_MS
     : envPositiveMs("SELF_HOSTED_RUNNER_MAX_HOLD_MS");
 }
-//@ chunk-hm0ce8vc.js:219577-220001 placement
+//@ chunk-asf5gh8x.js:230647-231071 placement
 async function checkPathNotOnNetworkLocation(path, nowMs) {
   let problem = await checkNetworkPath(path);
   if (problem === UNVETTABLE_LINK_MESSAGE)
@@ -101,7 +101,7 @@ async function checkPathNotOnNetworkLocation(path, nowMs) {
   });
   return stats !== undefined && stats.isFile() && Math.abs(nowMs - stats.mtimeMs) < HOLD_IDLE_MTIME_FRESH_MS;
 }
-//@ chunk-hm0ce8vc.js:220001-220804 placement
+//@ chunk-asf5gh8x.js:231071-231874 placement
 async function readRegularFileSafe(path) {
   let stats = await lstat(path).catch((error) => {
     let code = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "";
@@ -153,7 +153,7 @@ async function readRegularFileSafe(path) {
     handle?.close().catch(() => {});
   }
 }
-//@ chunk-hm0ce8vc.js:220804-220949 placement
+//@ chunk-asf5gh8x.js:231874-232029 placement
 /**
  * 健康探测、轮询、退避与租约相关的上限与默认值，以及默认工作目录、端口、时间戳合法区间。
  */
@@ -171,8 +171,9 @@ var MIN_TIMESTAMP_SECONDS = 604800;
 var MAX_TIMESTAMP_SECONDS = 1e9;
 var MIN_DURATION_MS = 100000000000;
 var ENV_SECRET_READ_TIMEOUT_MS_2 = 15000;
+var MAX_SESSION_IDLE_MS = 600000;
 var DEFAULT_POST_SESSION_ALLOWANCE_MS = 60000;
-//@ chunk-hm0ce8vc.js:220949-221157 placement
+//@ chunk-asf5gh8x.js:232029-232237 placement
 function parseHealthPort(raw, fallback) {
   if (raw === undefined || raw === "") return fallback;
   let intLoose = parseIntLoose(raw);
@@ -182,14 +183,14 @@ function parseHealthPort(raw, fallback) {
     );
   return intLoose;
 }
-//@ chunk-hm0ce8vc.js:221157-221332 placement
+//@ chunk-asf5gh8x.js:232237-232412 placement
 function parseBooleanEnv(name, value, fallback) {
   if (isEnvDefinedFalsy(value)) return false;
   if (isEnvTruthy(value)) return true;
   if (value === undefined || value.trim() === "") return fallback;
   throw Error(`${name} must be one of 1/true/yes/on or 0/false/no/off (got: ${jsonStringify(value)})`);
 }
-//@ chunk-hm0ce8vc.js:221332-221570 placement
+//@ chunk-asf5gh8x.js:232412-232650 placement
 function parseConfineRepoSettings(raw) {
   if (raw === undefined || raw.trim() === "") return "warn";
   let lower = raw.trim().toLowerCase();
@@ -198,14 +199,14 @@ function parseConfineRepoSettings(raw) {
     `SELF_HOSTED_RUNNER_CONFINE_REPO_SETTINGS must be one of enforce/warn/off (got: ${jsonStringify(raw)})`,
   );
 }
-//@ chunk-hm0ce8vc.js:221570-221936 placement
+//@ chunk-asf5gh8x.js:232650-233016 placement
 var SERVER_AUTO_MODE_LISTS_DESCRIPTIONS = {
   all: "when the server asks, sessions apply all of its auto mode lists, including allow, its exceptions to soft block rules",
   "no-allow":
     "when the server asks, sessions apply its auto mode restrictions and facts, but not allow, its exceptions to soft block rules",
   none: "sessions apply none of the server's auto mode lists, not even its soft_deny restrictions",
 };
-//@ chunk-hm0ce8vc.js:221936-222175 placement
+//@ chunk-asf5gh8x.js:233016-233255 placement
 function parseServerAutoModeLists(raw) {
   if (raw === undefined || raw.trim() === "") return NO_ALLOW;
   let lower = raw.trim().toLowerCase();
@@ -214,7 +215,7 @@ function parseServerAutoModeLists(raw) {
     `SELF_HOSTED_RUNNER_SERVER_AUTO_MODE_LISTS must be one of all/no-allow/none (got: ${jsonStringify(raw)})`,
   );
 }
-//@ chunk-hm0ce8vc.js:222175-222395 placement
+//@ chunk-asf5gh8x.js:233255-233475 placement
 function parseHostConfigSnapshotMode(raw) {
   if (raw === undefined || raw.trim() === "") return "disk";
   let lower = raw.trim().toLowerCase();
@@ -223,7 +224,7 @@ function parseHostConfigSnapshotMode(raw) {
     `SELF_HOSTED_RUNNER_HOST_CONFIG_SNAPSHOT must be one of disk/memory (got: ${jsonStringify(raw)})`,
   );
 }
-//@ chunk-hm0ce8vc.js:222395-233662 placement
+//@ chunk-asf5gh8x.js:233475-245361 placement
 /**
  * 解析 claude self-hosted-runner 的全部参数与 SELF_HOSTED_RUNNER_* 环境变量（约 11 KB）。
  */
@@ -517,10 +518,17 @@ function parseRunnerOptions(argv) {
             throw Error(
               `--release-idle-session-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${next}`,
             );
+          if (next.trim() === "")
+            console.error(
+              "[runner:warn] --release-idle-session-min has a value of only spaces, which is read as 0: idle sessions are kept, whatever limit Anthropic's control plane sends. Give the flag a number of minutes to release them.",
+            );
           process.env.SELF_HOSTED_RUNNER_SESSION_IDLE_MS = String(minutes * 60 * 1000);
           options.envSetByFlag.add("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
           j++;
-        }
+        } else if (next === undefined)
+          console.error(
+            "[runner:warn] --release-idle-session-min is the last argument and has no value after it (an unset shell variable?), so it is ignored and sets no idle limit. A runner with no idle limit set follows the one that Anthropic's control plane sends for a session, if it sends one. Give the flag a number of minutes, or 0 to keep idle sessions.",
+          );
         break;
       }
       case "--hold-idle-file": {
@@ -655,7 +663,7 @@ function parseRunnerOptions(argv) {
     );
   return options;
 }
-//@ chunk-hm0ce8vc.js:233662-234138 placement
+//@ chunk-asf5gh8x.js:245361-245837 placement
 function warnCapacityOnSessionBoundRunner(sessionToken, capacity) {
   if (capacity <= 1) return null;
   if (getSpawnSessionIdFromJwt(sessionToken) === null) return null;
@@ -665,14 +673,14 @@ function warnCapacityOnSessionBoundRunner(sessionToken, capacity) {
     'docs/self-hosted-runners-guide.md \xA7 "Get started".'
   );
 }
-//@ chunk-hm0ce8vc.js:234138-234416 placement
+//@ chunk-asf5gh8x.js:245837-246115 placement
 function requireBaseDirOnWindows(baseDirSource, platform = "linux") {
   if (platform === "win32" && baseDirSource === "default")
     throw Error(
       "--base-dir (or SELF_HOSTED_RUNNER_BASE_DIR) is required on Windows: the built-in default is a POSIX container path that does not apply there. Pass the directory that repositories should be checked out under.",
     );
 }
-//@ chunk-hm0ce8vc.js:234416-234694 placement
+//@ chunk-asf5gh8x.js:246115-246393 placement
 async function resetRunnerHome(paths) {
   await rm(paths.globalCfgPath, {
     recursive: true,
@@ -695,7 +703,7 @@ async function resetRunnerHome(paths) {
     recursive: true,
   });
 }
-//@ chunk-hm0ce8vc.js:234694-235481 placement
+//@ chunk-asf5gh8x.js:246393-247180 placement
 /**
  * 带超时读取环境密钥文件（CSI/secret 挂载）。
  */
@@ -733,7 +741,7 @@ async function readEnvironmentSecretFile(options, report = (message) => console.
     "No environment secret provided. Use --environment-secret-file or set SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET.",
   );
 }
-//@ chunk-hm0ce8vc.js:235481-235601 placement
+//@ chunk-asf5gh8x.js:247180-247300 placement
 function runnerExecPath(execPath) {
   if (execPath)
     return {
@@ -745,7 +753,7 @@ function runnerExecPath(execPath) {
     execArgs: isStandaloneExecutable() ? [] : [process.argv[1]],
   };
 }
-//@ chunk-hm0ce8vc.js:235601-236182 placement
+//@ chunk-asf5gh8x.js:247300-247881 placement
 function warnDiffFindsNestedRepository(diffFindsNestedRepository, execPath) {
   return diffFindsNestedRepository && execPath
     ? `[runner] --diff-finds-nested-repository is on and sessions start through ${execPath}. If that is a script, it must put nothing before "$@" when it starts Claude Code (options after "$@" are fine): with an option of its own first, this option is off for the session; the session still runs, and this log then has a "[changes pane] repository not shown" line. The Claude Code it starts must be this runner's release or later; an older one exits with "unknown option '--runner-declares=\u2026'". See "Pass every argument through" in the operator guide.`
@@ -788,8 +796,9 @@ export {
   HEALTH_PROBE_INTERVAL_MS,
   DEFAULT_POLL_INTERVAL_MS,
   LEASE_5XX_RETRY_DELAY_MS,
+  MAX_SESSION_IDLE_MS,
   SHUTDOWN_LEASE_HEARTBEAT_MS,
-  MAX_LISTED_SESSION_IDS,
+  MAX_REPORTED_BUSY_SESSIONS,
   MIN_POLL_INTERVAL_MS,
   MAX_POLL_INTERVAL_MS,
   MIN_BACKOFF_MS,

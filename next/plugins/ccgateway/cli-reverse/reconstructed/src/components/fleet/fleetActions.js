@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：生成会话的操作菜单（停止、删除、重启等）；附加到选中的会话（在其他终端运行时拒绝），上报 fleet_view_open等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (18)
  * attribution: placement 18
  */
 import { stat } from "fs/promises";
@@ -49,7 +49,7 @@ import { awaitPolicyColdStartWaiter } from "../../services/policyLimits/coldStar
 import { isMcpServerBlockedAtConnectTime } from "../../services/mcp/config.js";
 import { useIdeAtMentioned } from "../../hooks/useIdeAtMentioned.js";
 
-//@ chunk-93kwxas0.js:88380-89213 placement
+//@ chunk-avy0g5d4.js:88389-89222 placement
 /**
  * 重启无记录会话时的确认提示文本。
  */
@@ -68,7 +68,7 @@ var TRANSCRIPT_GONE_TEXT =
 var COMMAND_NOT_RESPONDING_TEXT =
   "This command's session isn't responding \u2014 ctrl+x stops it; a shell command is never run again for you";
 var RESTART_OFFER_TIMEOUT_MS = 5000;
-//@ chunk-93kwxas0.js:89213-89389 placement
+//@ chunk-avy0g5d4.js:89222-89398 placement
 /**
  * 清空 fork 拒绝/重启/失效纪元等提示状态，并清掉对应的错误提示。
  */
@@ -85,7 +85,7 @@ function clearFleetOfferState(state, editor) {
   )
     editor.setError(null);
 }
-//@ chunk-93kwxas0.js:89389-89500 placement
+//@ chunk-avy0g5d4.js:89398-89509 placement
 /**
  * 对某会话提示“重启”（设置 restartOfferedJobId 和对应错误文案）。
  */
@@ -95,7 +95,7 @@ function offerJobRestart(fleetLiveStatus, fleetEditor, restartOfferedJobId) {
   fleetLiveStatus.restartOfferedJobId = restartOfferedJobId;
   fleetEditor.setError(RESTART_NOT_RESPONDING_PROMPT);
 }
-//@ chunk-93kwxas0.js:89500-89692 placement
+//@ chunk-avy0g5d4.js:89509-89701 placement
 /**
  * 错误提示仍为指定文案、且没有打开预览/帮助/调试/重命名/分组编辑等浮层时返回 true。
  */
@@ -112,7 +112,7 @@ function isOfferStillShowing(editor, view, deleteConfirm, error) {
     deleteConfirm.pending === null
   );
 }
-//@ chunk-93kwxas0.js:89692-89819 placement
+//@ chunk-avy0g5d4.js:89701-89828 placement
 /**
  * 编辑器里的输入能否解析为一次派发。
  */
@@ -127,7 +127,7 @@ function hasPendingDispatchInput(surface) {
     ) !== null
   );
 }
-//@ chunk-93kwxas0.js:89819-92349 placement
+//@ chunk-avy0g5d4.js:89828-92358 placement
 /**
  * 打开更早的会话（resume 选择器）。
  */
@@ -265,7 +265,7 @@ async function openEarlierSession(surface, entry, via) {
   roster.updatePendings((previous) => [...previous, jobRow]);
   attachToJob(surface, jobRow);
 }
-//@ chunk-93kwxas0.js:92349-95209 placement
+//@ chunk-avy0g5d4.js:92358-95218 placement
 /**
  * 附加到选中的会话（在其他终端运行时拒绝），上报 fleet_view_open。
  */
@@ -433,7 +433,7 @@ function attachToJob(surface, job, source) {
     }
   });
 }
-//@ chunk-93kwxas0.js:95209-96222 placement
+//@ chunk-avy0g5d4.js:95218-96231 placement
 /**
  * 从 Agents 视图新建会话。
  */
@@ -497,7 +497,7 @@ function openNewSession(surface, spawnArg) {
     },
   );
 }
-//@ chunk-93kwxas0.js:96222-96372 placement
+//@ chunk-avy0g5d4.js:96231-96381 placement
 /**
  * 记 tengu_bg_agent_action（action、来源 fleet、会话 id、状态、tempo）。
  */
@@ -511,14 +511,14 @@ function logFleetJobAction(action, state, extra) {
     ...extra,
   });
 }
-//@ chunk-93kwxas0.js:96372-96460 placement
+//@ chunk-avy0g5d4.js:96381-96469 placement
 class FleetActionUnconfirmedError extends Error {
   constructor(message) {
     super(message);
     this.name = "FleetActionUnconfirmedError";
   }
 }
-//@ chunk-93kwxas0.js:96460-99383 placement
+//@ chunk-avy0g5d4.js:96469-99392 placement
 /**
  * 生成会话的操作菜单（停止、删除、重启等）。
  */
@@ -700,11 +700,11 @@ function buildJobActions(reload, noteKilling, optimistic, noteDeleteRefusal, del
     },
   ];
 }
-//@ chunk-93kwxas0.js:99383-99387 placement
+//@ chunk-avy0g5d4.js:99392-99396 placement
 init_react_production();
-//@ chunk-93kwxas0.js:99420-99424 placement
+//@ chunk-avy0g5d4.js:99429-99433 placement
 init_react_production();
-//@ chunk-93kwxas0.js:99424-99961 placement
+//@ chunk-avy0g5d4.js:99433-99970 placement
 /**
  * 检测 IDE 扩展并生成对应 MCP 客户端配置。
  */
@@ -740,17 +740,17 @@ function useIdeMcpClients(props) {
   }, []);
   useIdeAtMentioned(clients, props);
 }
-//@ chunk-93kwxas0.js:99961-99965 placement
+//@ chunk-avy0g5d4.js:99970-99974 placement
 init_react_production();
-//@ chunk-93kwxas0.js:99965-100002 placement
+//@ chunk-avy0g5d4.js:99974-100011 placement
 function selectSessionModel(state) {
   return state.sessionModel;
 }
-//@ chunk-93kwxas0.js:100002-100040 placement
+//@ chunk-avy0g5d4.js:100011-100049 placement
 function selectSessionEffort(state) {
   return state.sessionEffort;
 }
-//@ chunk-93kwxas0.js:100040-100082 placement
+//@ chunk-avy0g5d4.js:100049-100091 placement
 function selectSessionFastMode(state) {
   return state.sessionFastMode;
 }

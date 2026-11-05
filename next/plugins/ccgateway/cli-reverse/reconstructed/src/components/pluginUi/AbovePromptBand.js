@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。插件 UI：输入框上方的横幅带。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (47)
- * attribution: placement 45, layout 2
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (47)
+ * attribution: placement 45, layout 1, affinity 1
  */
 import { __export, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ABOVE_PROMPT, nearestScrollTop } from "../../plugins/functionHooks/uiHooks.js";
@@ -26,14 +26,12 @@ import {
 } from "../../plugins/functionHooks/panes.js";
 import { pickOrNull, uiFocusForPlugin, wrapActHandlers } from "../../plugins/functionHooks/uiApi.js";
 import { collectSurfaceHandles } from "../../plugins/functionHooks/sessionEvents.js";
-import { cachedHighlight } from "../HighlightedCode/Fallback.js";
-import { getUniqueTags } from "../LogSelector.js";
+import { openListRows } from "../HighlightedCode/Fallback.js";
+import { useRedrawnValues } from "../LogSelector.js";
 import { useClickOutside, HotkeySeat } from "./render/MarkdownBlock.js";
-import { useAppState } from "../../state/AppState.js";
-import { getViewedTeammateTask } from "../../state/selectors.js";
 import {
-  useMemo,
   init_react_production,
+  useMemo,
   useRef,
   useCallback,
   useState,
@@ -41,6 +39,8 @@ import {
   useContext,
   useLayoutEffect,
 } from "../../../vendor/react/cjs/react.production.js";
+import { useAppState } from "../../state/AppState.js";
+import { getViewedTeammateTask } from "../../state/selectors.js";
 import {
   paneScrollHandlers,
   PaneBody,
@@ -88,13 +88,13 @@ import { useDigitHotkeys } from "./digitHotkeys.js";
 import { FocusedPress, FocusedNode, InputFields, focusClick } from "./render/elements.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:34353-34363 placement
+//@ chunk-czq1j3j2.js:35914-35924 placement
 var AbovePromptBandNamespace = {};
-//@ chunk-18hwfzwa.js:34363-35469 placement
+//@ chunk-czq1j3j2.js:35924-37030 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:34363", () => {
+deferInit("chunk-czq1j3j2.js:35924", () => {
   __export(AbovePromptBandNamespace, {
-    AbovePromptSite: () => AbovePromptBandView,
+    AbovePromptSite: () => AbovePromptSite,
     BAND_REQUEST_ID: () => ABOVE_PROMPT,
     COLLAPSE_HANDLE_COLUMNS: () => COLLAPSE_HANDLE_COLUMNS,
     CollapseHandle: () => CollapseHandle,
@@ -115,13 +115,13 @@ deferInit("chunk-18hwfzwa.js:34363", () => {
     forgetSiteFields: () => bumpPaneRender,
     hotkeyPresses: () => hotkeyPresses,
     hotkeysOf: () => hotkeysOf,
-    isFieldOwnKey: () => isTextEditingKey,
-    isFieldText: () => isPlainTypedInput,
+    isFieldOwnKey: () => isFieldOwnKey,
+    isFieldText: () => isFieldText,
     isHotkeyShown: () => isHotkeyShown,
     isOtherDrawer: () => isOtherDrawer,
     isTypedText: () => isTypedText,
     nextBandFocus: () => nextBandFocus,
-    openListRows: () => cachedHighlight,
+    openListRows: () => openListRows,
     optionText: () => optionText,
     overflowCueText: () => overflowCueText,
     pickedValues: () => placementSlot,
@@ -136,17 +136,37 @@ deferInit("chunk-18hwfzwa.js:34363", () => {
     useHotkeyPresses: () => useHotkeyPresses,
     useHotkeySeats: () => useHotkeySeats,
     useInputFields: () => useInputFields,
-    useKeysAheadOfRender: () => usePaneKeyRouting,
-    useRedrawnValues: () => getUniqueTags,
+    useKeysAheadOfRender: () => useKeysAheadOfRender,
+    useRedrawnValues: () => useRedrawnValues,
     useReleaseGoneHold: () => useReleaseGoneHold,
     useReleaseOnClickElsewhere: () => useClickOutside,
     useReleaseOnEdit: () => useReleaseOnEdit,
-    useSelectFields: () => AbovePromptSelect,
+    useSelectFields: () => useSelectFields,
     useSiteFields: () => useSiteFields,
     withoutKeys: () => withoutKeys,
   });
 });
-//@ chunk-18hwfzwa.js:481499-481570 placement
+//@ chunk-czq1j3j2.js:502433-502437 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:502433", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:505704-505708 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:505704", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:507739-507743 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:507739", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:507870-507874 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:507870", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:507975-508046 placement
 function useViewedAgentIdProps() {
   let appState = useAppState(getViewedTeammateTask);
   return useMemo(
@@ -159,7 +179,7 @@ function useViewedAgentIdProps() {
     [appState],
   );
 }
-//@ chunk-18hwfzwa.js:481570-481697 placement
+//@ chunk-czq1j3j2.js:508046-508173 placement
 var bandKeys = (keys, scrollRef, hasCue) => ({
   ...keys,
   ...paneScrollHandlers(scrollRef),
@@ -168,7 +188,7 @@ var bandKeys = (keys, scrollRef, hasCue) => ({
     "pane:scrollDown": keys["abovePrompt:next"],
   }),
 });
-//@ chunk-18hwfzwa.js:481697-481891 placement
+//@ chunk-czq1j3j2.js:508173-508367 placement
 function bandWindow(layout) {
   let { budget, settledBudget, treeRows } = layout;
   let max = Math.max(0, budget);
@@ -181,12 +201,12 @@ function bandWindow(layout) {
     bodyRows: Math.max(0, settledBudget - 1),
   };
 }
-//@ chunk-18hwfzwa.js:481891-481895 placement
+//@ chunk-czq1j3j2.js:508367-508371 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:481891", () => {
+deferInit("chunk-czq1j3j2.js:508367", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:481895-482360 placement
+//@ chunk-czq1j3j2.js:508371-508836 placement
 function DimButton(props) {
   let $ = useMemoCache(7);
   let { label, onAction, isHeld } = props;
@@ -227,9 +247,9 @@ function DimButton(props) {
   } else buttonElement = $[6];
   return buttonElement;
 }
-//@ chunk-18hwfzwa.js:482360-482369 placement
+//@ chunk-czq1j3j2.js:508836-508845 placement
 var MARK_EDGE_COLUMNS = 1;
-//@ chunk-18hwfzwa.js:482369-482561 placement
+//@ chunk-czq1j3j2.js:508845-509037 placement
 var CollapseHandle = (props) => {
   let $ = useMemoCache(2);
   let handleElement;
@@ -248,9 +268,9 @@ var CollapseHandle = (props) => {
   } else handleElement = $[1];
   return handleElement;
 };
-//@ chunk-18hwfzwa.js:482561-482571 placement
+//@ chunk-czq1j3j2.js:509037-509047 placement
 var COLLAPSE_HANDLE_COLUMNS = 5;
-//@ chunk-18hwfzwa.js:482571-482974 placement
+//@ chunk-czq1j3j2.js:509047-509450 placement
 var CollapsedHint = (props) => {
   let $ = useMemoCache(5);
   let children;
@@ -280,13 +300,13 @@ var CollapsedHint = (props) => {
   } else hintButton = $[4];
   return hintButton;
 };
-//@ chunk-18hwfzwa.js:482974-483071 placement
+//@ chunk-czq1j3j2.js:509450-509547 placement
 function entryIndex(entries) {
   let isPristine = entries.length === 0;
   let index = entries.findIndex((entry) => entry.isAutoFocus);
   return isPristine ? null : Math.max(0, index);
 }
-//@ chunk-18hwfzwa.js:483071-483197 placement
+//@ chunk-czq1j3j2.js:509547-509673 placement
 function fieldContext(panelKind, fallbackContext) {
   switch (panelKind?.tag) {
     case "Input":
@@ -297,9 +317,9 @@ function fieldContext(panelKind, fallbackContext) {
       return fallbackContext;
   }
 }
-//@ chunk-18hwfzwa.js:483197-483209 placement
+//@ chunk-czq1j3j2.js:509673-509685 placement
 var HEIGHT_SETTLE_MS = 150;
-//@ chunk-18hwfzwa.js:483209-483451 placement
+//@ chunk-czq1j3j2.js:509685-509927 placement
 function hotkeysOf(node) {
   let hotkeys = new Map();
   function visit(childNode) {
@@ -314,7 +334,7 @@ function hotkeysOf(node) {
   if (node !== undefined) visit(node);
   return hotkeys;
 }
-//@ chunk-18hwfzwa.js:483451-483696 placement
+//@ chunk-czq1j3j2.js:509927-510172 placement
 function isHotkeyShown(bandState, hotkeyNodes) {
   let { hasCue, content, offset, windowRows } = bandState;
   if (!hasCue) return true;
@@ -325,12 +345,12 @@ function isHotkeyShown(bandState, hotkeyNodes) {
     return nodeHeight > 0 && nodeTop >= offset && nodeTop + nodeHeight <= offset + windowRows;
   });
 }
-//@ chunk-18hwfzwa.js:483696-483782 placement
+//@ chunk-czq1j3j2.js:510172-510258 placement
 var isOtherDrawer = (drawerIds, otherDrawers) =>
   drawerIds.length > 0 &&
   otherDrawers.length > 0 &&
   !otherDrawers.some((drawer) => drawerIds.some((currentDrawer) => currentDrawer.plugin === drawer.plugin));
-//@ chunk-18hwfzwa.js:483782-483909 placement
+//@ chunk-czq1j3j2.js:510258-510385 placement
 function nextBandFocus(state) {
   let { focus, count } = state;
   let hasFocusables = count > 0;
@@ -338,12 +358,12 @@ function nextBandFocus(state) {
   let nextIndex = isFocusIndex && focus + 1 < count ? focus + 1 : null;
   return isFocusIndex ? nextIndex : hasFocusables ? 0 : focus === null ? "band" : null;
 }
-//@ chunk-18hwfzwa.js:483958-484061 placement
+//@ chunk-czq1j3j2.js:510434-510537 placement
 var overflowCueText = (above, below) =>
   [above > 0 ? `\u2191 ${above} more` : "", below > 0 ? `\u2193 ${below} more` : ""]
     .filter((part) => part !== "")
     .join(" \xB7 ");
-//@ chunk-18hwfzwa.js:484061-484294 placement
+//@ chunk-czq1j3j2.js:510537-510770 placement
 var OverflowCue = (props) => {
   let $ = useMemoCache(5);
   let children;
@@ -365,14 +385,14 @@ var OverflowCue = (props) => {
   } else cueElement = $[4];
   return cueElement;
 };
-//@ chunk-18hwfzwa.js:484294-484344 placement
+//@ chunk-czq1j3j2.js:510770-510820 placement
 function pressShownDigit(digitHotkey, isAcceptingInput, releaseFocus) {
   if (digitHotkey !== undefined && isAcceptingInput()) {
     releaseFocus();
     pressFromTerminal(digitHotkey);
   }
 }
-//@ chunk-18hwfzwa.js:484344-484711 placement
+//@ chunk-czq1j3j2.js:510820-511187 placement
 function ringHandlers(ring) {
   let { focusables, focusIndexNow, focusByPerson, submit } = ring;
   let focusableCount = focusables.length;
@@ -392,17 +412,17 @@ function ringHandlers(ring) {
     "abovePrompt:leave": ring.leave,
   };
 }
-//@ chunk-18hwfzwa.js:484711-484746 placement
+//@ chunk-czq1j3j2.js:511187-511222 placement
 var settledBudget; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:484711", () => {
+deferInit("chunk-czq1j3j2.js:511187", () => {
   settledBudget = identity_4(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-18hwfzwa.js:484746-484750 placement
+//@ chunk-czq1j3j2.js:511222-511226 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:484746", () => {
+deferInit("chunk-czq1j3j2.js:511222", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:484750-484862 placement
+//@ chunk-czq1j3j2.js:511226-511338 placement
 var useClickedPress = (focusables, setFocusIndex) =>
   useCallback(
     (target) => {
@@ -413,7 +433,7 @@ var useClickedPress = (focusables, setFocusIndex) =>
     },
     [focusables, setFocusIndex],
   );
-//@ chunk-18hwfzwa.js:484862-484962 placement
+//@ chunk-czq1j3j2.js:511338-511438 placement (2.1.88 match: buildKeystroke, 0.659)
 var isTypedText = (input, key) =>
   !key.ctrl &&
   !key.meta &&
@@ -422,7 +442,7 @@ var isTypedText = (input, key) =>
   !key.tab &&
   !key.return &&
   /^[^\p{C}\p{Z}]+$/u.test(input);
-//@ chunk-18hwfzwa.js:484962-485124 placement
+//@ chunk-czq1j3j2.js:511438-511600 placement
 function hotkeyPresses(input, key, hotkeyMap) {
   let candidates = isTypedText(input, key)
     ? [...input.normalize("NFKC").toLowerCase()].map((char) => hotkeyMap.get(char))
@@ -430,7 +450,7 @@ function hotkeyPresses(input, key, hotkeyMap) {
   let filtered = candidates.filter((press) => press !== undefined);
   return filtered.length === candidates.length ? filtered : [];
 }
-//@ chunk-18hwfzwa.js:485124-485239 placement
+//@ chunk-czq1j3j2.js:511600-511715 placement
 var useHotkeyPresses = (hotkeyMap, isActive) =>
   usePreDispatchKeyHandler(
     (input, key, pastedText) => {
@@ -442,12 +462,12 @@ var useHotkeyPresses = (hotkeyMap, isActive) =>
       isActive,
     },
   );
-//@ chunk-18hwfzwa.js:485239-485243 placement
+//@ chunk-czq1j3j2.js:511715-511719 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:485239", () => {
+deferInit("chunk-czq1j3j2.js:511715", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:485243-485431 placement
+//@ chunk-czq1j3j2.js:511719-511907 placement
 function useHotkeySeats() {
   let seatsRef = useRef(new Map());
   return useMemo(
@@ -465,22 +485,17 @@ function useHotkeySeats() {
     [],
   );
 }
-//@ chunk-18hwfzwa.js:485431-485435 placement
+//@ chunk-czq1j3j2.js:511907-511911 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:485431", () => {
+deferInit("chunk-czq1j3j2.js:511907", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:485435-485439 placement
+//@ chunk-czq1j3j2.js:511911-511915 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:485435", () => {
+deferInit("chunk-czq1j3j2.js:511911", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:485686-485690 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:485686", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:485690-485874 placement
+//@ chunk-czq1j3j2.js:512166-512350 placement
 function useSiteFields(storeRef, paneId, siteKey) {
   let askKey = paneAskKey(paneId, siteKey);
   let [askCount] = useState(() => askCountFor(paneId, siteKey));
@@ -491,12 +506,12 @@ function useSiteFields(storeRef, paneId, siteKey) {
   }, [storeRef, paneId, siteKey, askCount, askKey, fields]);
   return fieldsState;
 }
-//@ chunk-18hwfzwa.js:485874-486820 placement
+//@ chunk-czq1j3j2.js:512350-513296 placement
 function useInputFields(focusables, component, requestId) {
   let [values, setValues] = useSiteFields(focusSlot, component, requestId);
   let localValues = useRef(new Map(values));
   let submitting = useRef(new Set());
-  getUniqueTags(focusables, "Input", (staleKeys) => {
+  useRedrawnValues(focusables, "Input", (staleKeys) => {
     for (let key of staleKeys) localValues.current.delete(key);
     setValues((values) => withoutKeys(values, staleKeys));
   });
@@ -551,8 +566,8 @@ function useInputFields(focusables, component, requestId) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:486820-487023 layout
-var isTextEditingKey = (input, key) =>
+//@ chunk-czq1j3j2.js:513296-513499 layout
+var isFieldOwnKey = (input, key) =>
   key.leftArrow ||
   key.rightArrow ||
   key.upArrow ||
@@ -564,8 +579,8 @@ var isTextEditingKey = (input, key) =>
   key.pageDown ||
   (input.length === 1 && key.ctrl && "abdefhknpuwy".includes(input)) ||
   (input.length === 1 && key.meta && "bdfy".includes(input));
-//@ chunk-18hwfzwa.js:487023-487110 placement (2.1.88 match: buildKeystroke, 0.659)
-var isPlainTypedInput = (input, key) =>
+//@ chunk-czq1j3j2.js:513499-513586 placement
+var isFieldText = (input, key) =>
   input !== "" &&
   !key.ctrl &&
   !key.meta &&
@@ -574,11 +589,11 @@ var isPlainTypedInput = (input, key) =>
   !key.return &&
   !key.escape &&
   !hasControlCharacter(input);
-//@ chunk-18hwfzwa.js:487110-487945 layout
+//@ chunk-czq1j3j2.js:513586-514421 affinity
 /**
  * 面板按键路由：按当前上下文匹配键绑定并转发。
  */
-function usePaneKeyRouting(routing) {
+function useKeysAheadOfRender(routing) {
   let keybindingContext = useKeybindingContext();
   usePreDispatchKeyHandler((input, key, pastedText) => {
     let focusContext = routing.contextNow();
@@ -603,37 +618,27 @@ function usePaneKeyRouting(routing) {
         routing.inputs.fields.edit(focused, [...fieldText].slice(0, -1).join(""));
         return true;
       }
-      if (isPlainTypedInput(text, key)) {
+      if (isFieldText(text, key)) {
         routing.inputs.fields.edit(focused, fieldText + text);
         return true;
       }
-      if (isTextEditingKey(input, key)) return true;
+      if (isFieldOwnKey(input, key)) return true;
     }
     let renderedContext = routing.contextRendered();
     if (renderedContext === null) return false;
     let resolved_2 = keybindingContext.resolve(input, key, [renderedContext]);
     let isContextMatch =
       resolved_2.type === "match" && routing.handlers[renderedContext]?.[resolved_2.action] !== undefined;
-    let isEditingText = key.backspace || isPlainTypedInput(text, key) || isTextEditingKey(input, key);
+    let isEditingText = key.backspace || isFieldText(text, key) || isFieldOwnKey(input, key);
     return isContextMatch || (routing.focusedRendered()?.tag === "Input" && isEditingText);
   });
 }
-//@ chunk-18hwfzwa.js:487945-487949 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:487945", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:487949-488004 placement
+//@ chunk-czq1j3j2.js:514425-514480 placement
 var useReleaseGoneHold = (holdStart, holdUntil, onRelease) =>
   useEffect(() => {
     if (holdStart !== null && holdStart >= holdUntil) onRelease();
   }, [holdStart, holdUntil, onRelease]);
-//@ chunk-18hwfzwa.js:488004-488008 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:488004", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:488008-488142 placement
+//@ chunk-czq1j3j2.js:514484-514618 placement
 var useReleaseOnEdit = (store, resetKey, onEdit) =>
   useEffect(() => {
     if (resetKey === null) return;
@@ -642,26 +647,21 @@ var useReleaseOnEdit = (store, resetKey, onEdit) =>
       if (store.getState().value !== initialValue) onEdit();
     });
   }, [resetKey, store, onEdit]);
-//@ chunk-18hwfzwa.js:488142-488172 placement
+//@ chunk-czq1j3j2.js:514618-514648 placement
 var optionText = (option) => option.label ?? option.value;
-//@ chunk-18hwfzwa.js:488172-488306 placement
+//@ chunk-czq1j3j2.js:514648-514782 placement
 var selectHandlers = (select) => ({
   "abovePrompt:highlightNext": () => select.move(1),
   "abovePrompt:highlightPrevious": () => select.move(-1),
   "abovePrompt:press": select.press,
 });
-//@ chunk-18hwfzwa.js:488306-488310 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:488306", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:488310-490409 placement
-function AbovePromptSelect(props) {
+//@ chunk-czq1j3j2.js:514786-516885 placement
+function useSelectFields(props) {
   let { focusables, focusIndex, focusIndexNow, setFocusIndex, working, component, requestId } = props;
   let focusedSelect = pickSelect(focusIndex);
   let [pickedValues, setPickedValues] = useSiteFields(placementSlot, component, requestId);
   let [selectState, setSelectState, getSelectState] = useLatestState(() => buildSelectState(null));
-  getUniqueTags(focusables, "Select", (staleKey) =>
+  useRedrawnValues(focusables, "Select", (staleKey) =>
     setPickedValues((pickedMap) => withoutKeys(pickedMap, staleKey)),
   );
   if (selectState.key !== fieldKeyOf(focusedSelect)) setSelectState(buildSelectState(focusedSelect));
@@ -802,11 +802,11 @@ function AbovePromptSelect(props) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:490409-496344 placement
+//@ chunk-czq1j3j2.js:516885-522821 placement
 /**
  * AbovePromptBandView：插件在输入框上方的横幅带视图。
  */
-function AbovePromptBandView({ survey, working, setInputValue, onHoldsBandChange }) {
+function AbovePromptSite({ survey, working, setInputValue, onHoldsBandChange }) {
   let { rows, columns } = useTerminalSize();
   let max = Math.max(0, columns - COLLAPSE_HANDLE_COLUMNS);
   let treeRowsReader = useContext(ContextSlotA);
@@ -969,7 +969,7 @@ function AbovePromptBandView({ survey, working, setInputValue, onHoldsBandChange
     [uiFocus, land],
   );
   let inputFields = useInputFields(focusables, "AbovePrompt", ABOVE_PROMPT);
-  let selectState = AbovePromptSelect({
+  let selectState = useSelectFields({
     focusables,
     focusIndex: focusIndexNumber,
     focusIndexNow,
@@ -980,9 +980,9 @@ function AbovePromptBandView({ survey, working, setInputValue, onHoldsBandChange
   });
   let open = selectState.fields.open;
   let optionCount = focusedHandle?.options?.length ?? 0;
-  let highlightRows = cachedHighlight(open, optionCount);
+  let highlightRows = openListRows(open, optionCount);
   useLayoutEffect(() => {
-    lastHighlight.current = cachedHighlight(open, optionCount);
+    lastHighlight.current = openListRows(open, optionCount);
   }, [open, optionCount]);
   let shortDraftValue = useShortDraftValue();
   let sessionStoreValue = sessionStore();
@@ -1168,7 +1168,7 @@ function AbovePromptBandView({ survey, working, setInputValue, onHoldsBandChange
     context: "AbovePromptSelect",
     isActive: isSelectTag,
   });
-  usePaneKeyRouting({
+  useKeysAheadOfRender({
     isAhead: () => getFocusIndex() !== focusIndex,
     contextNow,
     focusedNow: () => pickOrNull(focusables, focusIndexNow()),
@@ -1282,10 +1282,10 @@ export {
   useViewedAgentIdProps,
   hotkeysOf,
   useInputFields,
-  AbovePromptSelect,
+  useSelectFields,
   useClickedPress,
   useReleaseGoneHold,
   fieldContext,
-  usePaneKeyRouting,
+  useKeysAheadOfRender,
   useHotkeyPresses,
 };

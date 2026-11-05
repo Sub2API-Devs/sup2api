@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跟踪云会话经本机执行的工具调用：空闲监视与状态报告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (9)
  * attribution: placement 9
  */
 import { createSignal } from "../../utils/signal.js";
@@ -18,6 +18,7 @@ import {
   DEFAULT_SERVING_LIMITS,
   SAYS_STILL_HERE,
   leftStateFor,
+  misfitDirection,
 } from "../../remote/tools/protocolConstants.js";
 import { readCallResult } from "../../remote/tools/toolDescriptors.js";
 import { WITHDRAWN } from "../../remote/tools/protocolSchemas.js";
@@ -35,7 +36,7 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { CLOUD_LINE_MAX_CHARS } from "../cloudSession/headlessCloudClient.js";
 
-//@ chunk-fe6rs39h.js:6638-8904 placement
+//@ chunk-keyy05re.js:6759-9025 placement
 /**
  * 跟踪云会话经本机执行的远程工具调用：记录 call_id、工具名、结束状态、重复调用与审批等待，供报告与去重。
  */
@@ -215,18 +216,18 @@ function createServedToolsTracker(options) {
     onChanged: (listener) => signal.subscribe(listener),
   };
 }
-//@ chunk-fe6rs39h.js:8904-8957 placement
+//@ chunk-keyy05re.js:9025-9078 placement
 function isReplayedOutcome(entry) {
   return "replayed" in entry && entry.replayed === true;
 }
-//@ chunk-fe6rs39h.js:8957-9057 placement
+//@ chunk-keyy05re.js:9078-9178 placement
 function isFailedServedCall(entry) {
   return (
     (entry.outcome === "failed" || (entry.outcome === "refused" && entry.code !== "unknown_call")) &&
     !isReplayedOutcome(entry)
   );
 }
-//@ chunk-fe6rs39h.js:9057-9795 placement
+//@ chunk-keyy05re.js:9178-9916 placement
 /**
  * 空闲看门狗：按时钟周期检查忙闲状态，空闲超过 idleMs 触发 onIdle。
  */
@@ -278,11 +279,11 @@ class IdleWatcher {
     this.arm(this.idleMs - idleFor);
   }
 }
-//@ chunk-fe6rs39h.js:9795-9840 placement
+//@ chunk-keyy05re.js:9916-9961 placement
 var SERVED_TOOLS_IDLE_LOOK_MS = 30000;
 var ANNOUNCES_RETURN = "announces_return";
 var SERVED_TOOLS_IDLE_GRACE_MS = 120000;
-//@ chunk-fe6rs39h.js:9840-13270 placement
+//@ chunk-keyy05re.js:9961-13605 placement
 /**
  * 无头云会话的"本机工具服务"特性：未绑定或不可用时报告 off，否则通过会话通道宣布本机工具并处理撤回/拒绝/验证状态。
  */
@@ -310,7 +311,7 @@ function createServedToolsFeature(session) {
     let lastNotice;
     let setState = (next) => {
       state = next;
-      if (next.at !== "on") servedToolsTracker.clear();
+      if (next.at !== "on" && next.at !== "misfit") servedToolsTracker.clear();
       signal.emit();
     };
     let policy = remoteToolServingPolicyName();
@@ -323,13 +324,26 @@ function createServedToolsFeature(session) {
     let retryNext = 0;
     let inFlight = session.openChannel({
       ...toolsNoticeBacklog,
-      onAnnounceOutcome: (outcome, detail) => {
+      onAnnounceOutcome: (outcome, detail, misfit) => {
         if (!reconnectPending && outcome.kind !== "failed") asleep = false;
         if (outcome.kind === "announced") {
           announceSettled = channelOptions;
-          setState({
-            at: outcome.status === "announced" ? "on" : "withdrawn",
-          });
+          if (
+            misfit === undefined &&
+            outcome.status === "announced" &&
+            (activity?.key === "computer_too_old" || activity?.key === "session_too_old")
+          )
+            activity = undefined;
+          setState(
+            misfit !== undefined
+              ? {
+                  at: "misfit",
+                  misfit,
+                }
+              : {
+                  at: outcome.status === "announced" ? "on" : "withdrawn",
+                },
+          );
         } else if (outcome.kind === "refused")
           setState({
             at: outcome.reason === UNVERIFIED_SENDER_2 ? "unverified" : "refused",
@@ -338,7 +352,7 @@ function createServedToolsFeature(session) {
           setState({
             at: "refused",
           });
-        onAnnounceOutcome?.(outcome, detail);
+        onAnnounceOutcome?.(outcome, detail, misfit);
       },
       onRevoked: (revoke) =>
         onRevoked((reason) => {
@@ -349,7 +363,10 @@ function createServedToolsFeature(session) {
           revoke(reason);
         }),
       onNotice: (line, level) => {
-        activity = level;
+        activity = {
+          key: line,
+          text: level,
+        };
         noticeBacklog.publish(level, "warning");
         onNotice?.(line, level);
         signal_2.emit();
@@ -511,10 +528,12 @@ function createServedToolsFeature(session) {
                     ? "serving_off"
                     : state.at === "left"
                       ? leftStateFor(state.leftFor)
-                      : "not_announced",
+                      : state.at === "misfit"
+                        ? servedToolsStatusReport(state).reason
+                        : "not_announced",
               }),
           ...(activity !== undefined && {
-            message: truncateStatusMessage(activity),
+            message: truncateStatusMessage(activity.text),
           }),
           facts: {
             ...(host !== undefined && {
@@ -551,7 +570,7 @@ function createServedToolsFeature(session) {
     };
   };
 }
-//@ chunk-fe6rs39h.js:13270-13672 placement
+//@ chunk-keyy05re.js:13605-14061 placement
 function servedToolsStatusReport(state) {
   switch (state.at) {
     case "pending":
@@ -591,9 +610,14 @@ function servedToolsStatusReport(state) {
         state: "off",
         reason: leftStateFor(state.leftFor),
       };
+    case "misfit":
+      return {
+        state: "off",
+        reason: misfitDirection(state.misfit),
+      };
   }
 }
-//@ chunk-fe6rs39h.js:13672-13871 placement
+//@ chunk-keyy05re.js:14061-14258 placement
 function truncateStatusMessage(state) {
   if (truncateToLength(state, CLOUD_LINE_MAX_CHARS) === state) return state;
   let trimmed = truncateToLength(state, CLOUD_LINE_MAX_CHARS);
@@ -601,7 +625,7 @@ function truncateStatusMessage(state) {
   let cut = max > 0 ? max : trimmed.lastIndexOf(" ");
   return (cut > 0 ? trimmed.slice(0, cut) : trimmed).trimEnd();
 }
-//@ chunk-fe6rs39h.js:13871-14172 placement
+//@ chunk-keyy05re.js:14258-14559 placement
 function servedToolsOff(servedToolsUnavailable) {
   logForDebugging(
     `[servedTools] not served over the session channel: ${servedToolsUnavailable ?? "not_served"}`,

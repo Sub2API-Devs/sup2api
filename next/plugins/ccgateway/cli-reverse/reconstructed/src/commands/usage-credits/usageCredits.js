@@ -3,19 +3,11 @@
  *
  * 用量额度命令的特性开关（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hf9dmwqr.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m44frsvn.js (1)
+ * attribution: placement 1
  */
-import {
-  stringSchema,
-  discriminatedUnion,
-  objectSchema,
-  literal,
-} from "../../../vendor/zod/v4/classic/schemas.js";
-import { DoctorLazy } from "../../cli/handlers/util.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { withQuotaResumeFire } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { canPurchaseExtraUsage, runExtraUsage } from "../extra-usage/extra-usage-core.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -26,43 +18,8 @@ import { AdminRequestConfirmDialog } from "../../components/usageCredits/AdminRe
 import { getSubscriptionType, getOauthAccountInfo } from "../../utils/auth.js";
 import { getGatewayAuth } from "../../bootstrap/state.js";
 import { Login, runPostLoginHooks, loginCompletion } from "../../services/oauth/postLoginHooks.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hf9dmwqr.js:551-595 placement
-function printableTextSchema() {
-  return stringSchema().regex(/^\P{Cc}*$/u);
-}
-//@ chunk-hf9dmwqr.js:595-771 placement
-var usageCreditsFlowSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hf9dmwqr.js:595", () => {
-  usageCreditsFlowSchema = DoctorLazy(() =>
-    discriminatedUnion("mode", [
-      objectSchema({
-        mode: literal("one_step"),
-      }),
-      objectSchema({
-        mode: literal("confirm"),
-        title: printableTextSchema().optional(),
-        body: printableTextSchema().optional(),
-        note: printableTextSchema().optional(),
-        send: printableTextSchema().optional(),
-        cancel: printableTextSchema().optional(),
-      }),
-    ]),
-  );
-});
-//@ chunk-hf9dmwqr.js:771-907 placement
-/**
- * 读取 tengu_tidy_lemon 开关中的购买用量额度流程配置，校验失败或未设置时返回 null。
- */
-function getUsageCreditsFlowConfig() {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_lemon", null);
-  if (featureValue_CACHED_MAY_BE_STALE === null || featureValue_CACHED_MAY_BE_STALE === undefined)
-    return null;
-  let resultParsed = usageCreditsFlowSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-  return resultParsed.success ? resultParsed.data : null;
-}
-//@ chunk-hf9dmwqr.js:907-1827 placement
+//@ chunk-m44frsvn.js:472-1381 placement
 async function call(onDone, context) {
   let done = withQuotaResumeFire(onDone);
   if (canPurchaseExtraUsage())
@@ -86,7 +43,6 @@ async function call(onDone, context) {
     }
     return jsxProd_default(AdminRequestConfirmDialog, {
       extraUsage: result.extraUsage,
-      flag: getUsageCreditsFlowConfig(),
       wouldTakeAnswer: () => true,
       onDone: done,
     });
@@ -122,4 +78,4 @@ async function call(onDone, context) {
     },
   });
 }
-export { call, getUsageCreditsFlowConfig };
+export { call };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifact 路径固定检查与过期路径说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hag5hcx6.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kh4b4jr.js (32)
  * attribution: placement 32
  */
 import { env } from "../../utils/env.js";
@@ -21,7 +21,7 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
 import { isArtifactToolsetSplit } from "./artifactToolGates.js";
 
-//@ chunk-hag5hcx6.js:589-827 placement
+//@ chunk-7kh4b4jr.js:589-827 placement
 /**
  * 发布因文件内容与上次看到的不一致而被拒绝时的说明标题与两个列表标题。
  */
@@ -29,7 +29,7 @@ var STALE_PUBLISH_HEADLINE =
   "Nothing was published or removed: this publish touches files whose published content is not what you last saw";
 var CHANGED_SINCE_SEEN_LABEL = "Changed since you last saw them:";
 var UNSEEN_PUBLISHED_LABEL = "Already published, and not read as published or listed by you in this session:";
-//@ chunk-hag5hcx6.js:827-2422 placement
+//@ chunk-7kh4b4jr.js:827-2422 placement
 function parsePathPinRefusal(message) {
   if (
     !message.startsWith(
@@ -67,29 +67,29 @@ Already published, and not read as published or listed by you in this session:`)
     return `Not published: ${removedPaths[0]} is already on the artifact and Claude has not read it. Claude needs to read it before replacing or removing it.`;
   return `Not published: ${removedCount} files are already on the artifact and Claude has not read them. Claude needs to read them before replacing or removing them.`;
 }
-//@ chunk-hag5hcx6.js:2422-2441 placement
+//@ chunk-7kh4b4jr.js:2422-2441 placement
 /**
  * 路径钉住的限额：每个 artifact 20 条、路径 32000 字符。
  */
 var PATH_PIN_LIMITS = 20;
 var MAX_PIN_PATH_CHARS = 32000;
-//@ chunk-hag5hcx6.js:2441-2499 placement
+//@ chunk-7kh4b4jr.js:2441-2499 placement
 function isPathPinEnabled() {
   return env.CLAUDE_CODE_ARTIFACT_PATH_PIN ?? true;
 }
-//@ chunk-hag5hcx6.js:2499-2534 placement
+//@ chunk-7kh4b4jr.js:2499-2534 placement
 function isPathPinActive() {
   return isPathPinEnabled() && !isCoworkEntrypoint();
 }
-//@ chunk-hag5hcx6.js:2534-2581 placement
+//@ chunk-7kh4b4jr.js:2534-2581 placement
 function pathPinOn() {
   return getLiveState().frozenPathPin ?? isPathPinEnabled();
 }
-//@ chunk-hag5hcx6.js:2581-2630 placement
+//@ chunk-7kh4b4jr.js:2581-2630 placement
 function pathPinAckOffered() {
   return getLiveState().frozenPathPinAck ?? isPathPinActive();
 }
-//@ chunk-hag5hcx6.js:2630-2720 placement
+//@ chunk-7kh4b4jr.js:2630-2720 placement
 function pathPinsFor(slug) {
   let { pathPins } = getLiveState();
   let pins = pathPins.get(slug);
@@ -99,11 +99,11 @@ function pathPinsFor(slug) {
   }
   return pins;
 }
-//@ chunk-hag5hcx6.js:2720-2759 placement
+//@ chunk-7kh4b4jr.js:2720-2759 placement
 function nextPathPinSeq() {
   return ++getLiveState().pathPinSeq;
 }
-//@ chunk-hag5hcx6.js:2759-2846 placement
+//@ chunk-7kh4b4jr.js:2759-2846 placement
 function setPathPin(store, path, sha256, ver) {
   let slugPins = store.get(path);
   if (slugPins !== undefined && slugPins.seq > ver) return;
@@ -112,7 +112,7 @@ function setPathPin(store, path, sha256, ver) {
     seq: ver,
   });
 }
-//@ chunk-hag5hcx6.js:2846-2932 placement
+//@ chunk-7kh4b4jr.js:2846-2932 placement
 function pinPathFromRead(slug, path, sha256, ver, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   setPathPin(
@@ -126,7 +126,7 @@ function pinPathFromRead(slug, path, sha256, ver, seq = nextPathPinSeq()) {
     seq,
   );
 }
-//@ chunk-hag5hcx6.js:2932-3018 placement
+//@ chunk-7kh4b4jr.js:2932-3018 placement
 function pinPathFromList(slug, path, sha256, ver, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   setPathPin(
@@ -140,14 +140,14 @@ function pinPathFromList(slug, path, sha256, ver, seq = nextPathPinSeq()) {
     seq,
   );
 }
-//@ chunk-hag5hcx6.js:3018-3134 placement
+//@ chunk-7kh4b4jr.js:3018-3134 placement
 function unpinPath(slug, path, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   let slugPins = getLiveState().pathPins.get(slug);
   let pin = slugPins?.get(path);
   if (pin !== undefined && pin.seq < seq) slugPins.delete(path);
 }
-//@ chunk-hag5hcx6.js:3134-3335 placement
+//@ chunk-7kh4b4jr.js:3134-3335 placement
 function pinListedPaths(slug, ver, files, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   let pins = pathPinsFor(slug);
@@ -167,7 +167,7 @@ function pinListedPaths(slug, ver, files, seq = nextPathPinSeq()) {
   }
   diffPinnedPaths(pins, ver, seq, files, false);
 }
-//@ chunk-hag5hcx6.js:3335-3664 placement
+//@ chunk-7kh4b4jr.js:3335-3664 placement
 function diffPinnedPaths(pins, ver, listingVer, files, notNarrowed) {
   let liveByPath = new Map(files.map((file) => [file.path, file]));
   for (let [path, pin] of pins) {
@@ -193,7 +193,7 @@ function diffPinnedPaths(pins, ver, listingVer, files, notNarrowed) {
       });
   }
 }
-//@ chunk-hag5hcx6.js:3664-3903 placement
+//@ chunk-7kh4b4jr.js:3664-3903 placement
 function pinPublishedPaths(slug, ver, changes) {
   if (!pathPinOn()) return;
   let pins = pathPinsFor(slug);
@@ -223,7 +223,7 @@ function pinPublishedPaths(slug, ver, changes) {
       seq,
     );
 }
-//@ chunk-hag5hcx6.js:3903-4047 placement
+//@ chunk-7kh4b4jr.js:3903-4047 placement
 function hasReadPins(slug) {
   if (!pathPinOn()) return false;
   let slugPins = getLiveState().pathPins.get(slug);
@@ -231,7 +231,7 @@ function hasReadPins(slug) {
   for (let pin of slugPins.values()) if (pin.via !== "list") return true;
   return false;
 }
-//@ chunk-hag5hcx6.js:4047-4264 placement
+//@ chunk-7kh4b4jr.js:4047-4264 placement
 function publishPinFields(changes) {
   if (changes === undefined) return {};
   let flattened = changes.written.flatMap((change) =>
@@ -253,7 +253,7 @@ function publishPinFields(changes) {
     }),
   };
 }
-//@ chunk-hag5hcx6.js:4264-4368 placement
+//@ chunk-7kh4b4jr.js:4264-4368 placement
 function pinRemovedPaths(slug, ver, paths, seq) {
   if (!pathPinOn()) return;
   let pins = pathPinsFor(slug);
@@ -269,19 +269,19 @@ function pinRemovedPaths(slug, ver, paths, seq) {
       seq,
     );
 }
-//@ chunk-hag5hcx6.js:4368-4437 placement
+//@ chunk-7kh4b4jr.js:4368-4437 placement
 function reconcilePins(slug, ver, files, seq) {
   if (!pathPinOn() || files.length === 0) return;
   diffPinnedPaths(pathPinsFor(slug), ver, seq, files, false);
 }
-//@ chunk-hag5hcx6.js:4437-4571 placement
+//@ chunk-7kh4b4jr.js:4437-4571 placement
 function makeRemovedPathPinner(slug, ver, changes) {
   let paths = changes.filter((change) => change.liveSha256 === null).map((change) => change.path);
   if (paths.length === 0) return;
   let seq = nextPathPinSeq();
   return () => pinRemovedPaths(slug, ver, paths, seq);
 }
-//@ chunk-hag5hcx6.js:4571-4709 placement
+//@ chunk-7kh4b4jr.js:4571-4709 placement
 function orderChangedPaths(changes) {
   let filtered = changes.filter((change) => change.kind === "changed");
   return [
@@ -289,7 +289,7 @@ function orderChangedPaths(changes) {
     ...filtered.filter((change) => change.liveSha256 !== null),
   ];
 }
-//@ chunk-hag5hcx6.js:4709-5327 placement
+//@ chunk-7kh4b4jr.js:4709-5327 placement
 function publishPathChanges(input) {
   let changed = [];
   let unread = [
@@ -332,15 +332,15 @@ function publishPathChanges(input) {
   }
   return changed;
 }
-//@ chunk-hag5hcx6.js:5327-5369 placement
+//@ chunk-7kh4b4jr.js:5327-5369 placement
 function jsonActionForCore(path, hint) {
   return jsonStringify(path.core ? collapseArtifactAction(hint) : hint);
 }
-//@ chunk-hag5hcx6.js:5369-5450 placement
+//@ chunk-7kh4b4jr.js:5369-5450 placement
 function readActionHint(hint) {
   return hint.core ? 'action "read" with its `path`' : 'action "read_file"';
 }
-//@ chunk-hag5hcx6.js:5450-5785 placement
+//@ chunk-7kh4b4jr.js:5450-5785 placement
 function currentFileState(path, state) {
   let file = state.files.get(path);
   if (file === undefined)
@@ -352,7 +352,7 @@ function currentFileState(path, state) {
     path,
   })}`;
 }
-//@ chunk-hag5hcx6.js:5785-6233 placement
+//@ chunk-7kh4b4jr.js:5785-6233 placement
 function describePinnedState(change, ver, options) {
   let lines =
     change.readSha256 !== null
@@ -369,7 +369,7 @@ function describePinnedState(change, ver, options) {
   return `- ${jsonStringify(change.path)}: ${lines}; ${changeLine}
 ${currentFileState(change.path, options)}`;
 }
-//@ chunk-hag5hcx6.js:6233-6497 placement
+//@ chunk-7kh4b4jr.js:6233-6497 placement
 function listWithOverflow(paths, namedCount, options) {
   if (paths.length <= namedCount)
     return paths.join(`
@@ -387,7 +387,7 @@ function listWithOverflow(paths, namedCount, options) {
 ${line}`
     : line;
 }
-//@ chunk-hag5hcx6.js:6497-7620 placement
+//@ chunk-7kh4b4jr.js:6497-7620 placement
 function stalePathsMessage(changes, ver, options) {
   let ordered = orderChangedPaths(changes);
   let filtered = changes.filter((change) => change.kind === "unread");
@@ -422,7 +422,7 @@ Read each one first (${readActionHint(options)}) and build on it.${options.ackOf
 
 `);
 }
-//@ chunk-hag5hcx6.js:7620-9946 placement
+//@ chunk-7kh4b4jr.js:7620-9946 placement
 /**
  * 发布前检查路径固定（path pins）：列出 artifact 当前文件并对比本会话读到/发布过的版本，有未读更改则拒绝发布。
  */
@@ -571,7 +571,7 @@ async function checkPathPins(request) {
     ),
   };
 }
-//@ chunk-hag5hcx6.js:9946-10126 placement
+//@ chunk-7kh4b4jr.js:9946-10126 placement
 function collectPinnedHashes(liveShas, liveDocs, writes, removes) {
   let pinned = new Map();
   for (let { path } of writes) {
@@ -585,7 +585,7 @@ function collectPinnedHashes(liveShas, liveDocs, writes, removes) {
   }
   return pinned;
 }
-//@ chunk-hag5hcx6.js:10126-10689 placement
+//@ chunk-7kh4b4jr.js:10126-10689 placement
 function pathPinTelemetry(request) {
   let slugPins = getLiveState().pathPins.get(request.target.slug);
   let changes = request.paths.map((path) => {
@@ -630,7 +630,6 @@ function pathPinTelemetry(request) {
 export {
   isPathPinEnabled,
   pathPinOn,
-  hasReadPins,
   nextPathPinSeq,
   pinListedPaths,
   pinPathFromRead,
@@ -643,6 +642,7 @@ export {
   publishPinFields,
   reconcilePins,
   pinRemovedPaths,
-  isPathPinActive,
   parsePathPinRefusal,
+  isPathPinActive,
+  hasReadPins,
 };

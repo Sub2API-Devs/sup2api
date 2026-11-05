@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：watch 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (11)
  * attribution: placement 11
  */
 import {
@@ -180,19 +180,19 @@ import { isDelegatedObservationContext } from "../../../utils/agentContext.js";
 import { logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { SAFE_ARTIFACT_PATH_RE } from "../../../services/artifacts/artifactToolGates.js";
 import {
-  OTHER_ORG_PHRASE,
-  LOGIN_OTHER_ORG_REMEDY,
-  PUBLIC_OUTSIDE_ORG_NOTE,
+  ARTIFACT_OTHER_ORG_CAUSE,
+  ARTIFACT_OTHER_ORG_REMEDY,
+  PUBLIC_OUTSIDE_ORG_WATCH_CAUSE,
 } from "../../../services/artifacts/orgScope.js";
 
-//@ chunk-8wvtd8sr.js:252085-252113 placement
+//@ chunk-xzmy9dn4.js:254310-254338 placement
 /**
  * 惰性注入的监视预备状态引用（当前为 null）。
  */
 var watchLiveArmsRef = null;
 var watchDurableArmsRef = null;
 var watchStatusRef = null;
-//@ chunk-8wvtd8sr.js:252113-252894 placement
+//@ chunk-xzmy9dn4.js:254338-255119 placement
 /**
  * status 中的监视状态：列出 Frame live 预备行（arming/backing_off/failed/ended 及重试信息）与 durable wake 行。
  */
@@ -249,14 +249,14 @@ function watchArmsStatus(appState, sessionId) {
     ],
   };
 }
-//@ chunk-8wvtd8sr.js:252894-252942 placement
+//@ chunk-xzmy9dn4.js:255119-255167 placement
 /**
  * 当前是否可能通过监视收到评论（live 通道、评论开关与自动反应都开）。
  */
 function isLiveCommentsWatchPossible() {
   return sessionWatchRail() === "live" && artifactCommentsPromptGateOpen() && isAutoReactEnabled();
 }
-//@ chunk-8wvtd8sr.js:252942-256296 placement
+//@ chunk-xzmy9dn4.js:255167-258521 placement
 function describeWatchCommentsReach(autoReplies, connecting, notArmedReason) {
   if (!artifactCommentsPromptGateOpen()) return "";
   if (notArmedReason === "declined" && autoReplies !== "armed")
@@ -292,7 +292,7 @@ function describeWatchCommentsReach(autoReplies, connecting, notArmedReason) {
       return ` Comments on it do NOT reach this session through this watch (auto-replies are ${clipUnknown(autoReplies)}); read them with action "comments" when the user asks.`;
   }
 }
-//@ chunk-8wvtd8sr.js:256296-258905 placement
+//@ chunk-xzmy9dn4.js:258521-261132 placement
 function describeUnwatchedState(rows, moreWatches, singleArtifact) {
   let headline = isLiveCommentsWatchPossible()
     ? "This session does not keep track of new versions of this artifact or hear comments on it"
@@ -343,7 +343,7 @@ function describeUnwatchedState(rows, moreWatches, singleArtifact) {
 ${mapped.join(`
 `)}`;
 }
-//@ chunk-8wvtd8sr.js:258905-260320 placement
+//@ chunk-xzmy9dn4.js:261132-262547 placement
 /**
  * 把 durable wake 订阅结果（subscribed / already_watching / failed / skipped）映射为 watch 结果对象与给模型的说明。
  */
@@ -401,7 +401,7 @@ function durableWakeResult(outcome) {
       };
   }
 }
-//@ chunk-8wvtd8sr.js:260320-260707 placement
+//@ chunk-xzmy9dn4.js:262547-262934 placement
 /**
  * 刷新标记为 dirty 的 Artifact 评论计数：在截止时间内并发读取评论（共享中止信号），成功且未降级时更新计数缓存。
  */
@@ -437,7 +437,7 @@ async function refreshDirtyCommentCounts(slugs, signal, credentials) {
   );
   await withDeadline(results, APPROVED_PATH_CHECK_MS);
 }
-//@ chunk-8wvtd8sr.js:260707-261425 placement
+//@ chunk-xzmy9dn4.js:262934-263652 placement
 /**
  * 状态结果中的评论计数子句：未刷新、部分无法计数，或"N 条未读普通评论 / M 条发给 Claude 待回复"，并提示用 comments 动作查看。
  */
@@ -456,7 +456,7 @@ function commentCountsClause(entry) {
   let atLeastPrefix = partiallyCounted ? "at least " : "";
   return `; ${[unreadPlain > 0 ? `${atLeastPrefix}${unreadPlain} plain ${plural(unreadPlain, "comment")} (not sent to Claude) you have not read` : "", awaitingReply > 0 ? `${atLeastPrefix}${awaitingReply} sent to Claude still awaiting a reply` : ""].filter((part) => part !== "").join(" and ")} on this Artifact${partiallyCounted ? " (some comments could not be counted)" : ""} \u2014 action "comments" shows them`;
 }
-//@ chunk-8wvtd8sr.js:261425-261670 placement
+//@ chunk-xzmy9dn4.js:263652-263897 placement
 function commentCountFields(slug) {
   let entry = censusEntry(slug);
   if (entry === undefined) return {};
@@ -476,11 +476,11 @@ function commentCountFields(slug) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:261670-261964 placement
+//@ chunk-xzmy9dn4.js:263897-264191 placement
 function resumeWatchNote(resumed) {
   return `a --resume in an interactive terminal brings back the watch on the most recently used artifact${resumed ? ` and every watch that was replying to comments, newest first within the ${REFUSED_CAPACITY_HINT}-watch cap, plus any watches a background handoff carried` : ""}; other clients may restore less`;
 }
-//@ chunk-8wvtd8sr.js:261964-295524 placement
+//@ chunk-xzmy9dn4.js:264191-297763 placement
 /**
  * watch 动作处理器（监视评论与变更）。
  */
@@ -1506,9 +1506,9 @@ var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
             : resumeReplies.reason === "session_disarmed"
               ? "Auto-replies were NOT resumed: they are disarmed for the whole session (the user's kill-all-agents gesture). That disarm lasts for the rest of this session and cannot be reversed by a resume \u2014 a new session re-arms on publish. Do not retry."
               : resumeReplies.reason === "other_org"
-                ? `Auto-replies were NOT resumed on ${canonicalTargetOrPlaceholder(resumeReplies.url)}: ${OTHER_ORG_PHRASE}. Nothing here can re-arm them until ${LOGIN_OTHER_ORG_REMEDY}; tell the user.`
+                ? `Auto-replies were NOT resumed on ${canonicalTargetOrPlaceholder(resumeReplies.url)}: ${ARTIFACT_OTHER_ORG_CAUSE}. Nothing here can re-arm them until ${ARTIFACT_OTHER_ORG_REMEDY}; tell the user.`
                 : resumeReplies.reason === "public_outside_org"
-                  ? `Auto-replies were NOT resumed on ${canonicalTargetOrPlaceholder(resumeReplies.url)}: ${PUBLIC_OUTSIDE_ORG_NOTE}. No account signed in outside its organization can re-arm them; tell the user, and do not retry.`
+                  ? `Auto-replies were NOT resumed on ${canonicalTargetOrPlaceholder(resumeReplies.url)}: ${PUBLIC_OUTSIDE_ORG_WATCH_CAUSE}. No account signed in outside its organization can re-arm them; tell the user, and do not retry.`
                   : resumeReplies.reason === "remote_session"
                     ? 'Auto-replies were NOT resumed: this is a remote session, where comment wakes ride durable watch subscriptions \u2014 use action "watch" to re-register one.'
                     : resumeReplies.reason === "not_stopped"

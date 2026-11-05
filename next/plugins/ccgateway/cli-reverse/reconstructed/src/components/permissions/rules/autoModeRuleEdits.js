@@ -3,10 +3,10 @@
  *
  * 自动模式规则编辑：来源分类、校验、写入用户设置（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p2qwpk2k.js (43)
- * attribution: placement 43
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h5wy8vq5.js (43)
+ * attribution: placement 42, layout 1
  */
 import {
   autoModeConfigSchema,
@@ -35,13 +35,13 @@ import { getGraphemeSegmenter } from "../../../utils/intl.js";
 import { bunStringWidth } from "../../../ink/stringWidth.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-p2qwpk2k.js:35210-35277 placement
+//@ chunk-h5wy8vq5.js:36330-36397 placement
 function editOutcomeKey(op) {
   return (error) => `${op}_${error instanceof AutoModeRuleWriteError ? error.code : "error"}`;
 }
-//@ chunk-p2qwpk2k.js:35277-35332 placement
+//@ chunk-h5wy8vq5.js:36397-36452 placement
 var AUTO_MODE_RULE_SECTIONS = ["allow", "soft_deny", "hard_deny", "environment"];
-//@ chunk-p2qwpk2k.js:35332-35708 placement
+//@ chunk-h5wy8vq5.js:36452-36828 placement
 /**
  * 从可信设置来源读取 autoMode 配置，展开为 {text, section, source, index, structure} 条目列表（跳过默认占位，环境中的 ### 行标为结构）。
  */
@@ -79,7 +79,7 @@ function collectAutoModeRuleEntries() {
   }
   return entries;
 }
-//@ chunk-p2qwpk2k.js:35708-36050 placement
+//@ chunk-h5wy8vq5.js:36828-37170 placement
 /**
  * 把整份环境文档写回用户设置：加载后若条目已变化则拒绝，解析并校验新条目后写入（带 auto_mode_rule_edit 遥测）。
  */
@@ -113,7 +113,7 @@ async function saveEnvironmentDocument(section, expectedEntries, storageV5) {
     editOutcomeKey("add"),
   );
 }
-//@ chunk-p2qwpk2k.js:36050-36191 placement
+//@ chunk-h5wy8vq5.js:37170-37311 placement
 /**
  * 读取用户设置中 autoMode 的 environment 条目，格式不对时返回空数组。
  */
@@ -124,11 +124,11 @@ function readUserEnvironmentEntries() {
   if (!parsed.success) return [];
   return parsed.data.environment ?? [];
 }
-//@ chunk-p2qwpk2k.js:36191-36227 placement
+//@ chunk-h5wy8vq5.js:37311-37347 placement
 function ruleTextProblem(content) {
   return parseEnvironmentDocument(content).problem;
 }
-//@ chunk-p2qwpk2k.js:36227-36450 placement
+//@ chunk-h5wy8vq5.js:37347-37570 placement
 function parseEnvironmentDocument(content) {
   let entries = dropEmptySectionHeaders(
     content
@@ -155,7 +155,7 @@ function parseEnvironmentDocument(content) {
     problem: null,
   };
 }
-//@ chunk-p2qwpk2k.js:36450-37643 placement
+//@ chunk-h5wy8vq5.js:37570-38763 placement
 function classifyAutoModeRuleSource() {
   if (!alwaysTrueFlag()) {
     let internalTemplateSource = {
@@ -251,7 +251,7 @@ function classifyAutoModeRuleSource() {
   }
   return sectionControls;
 }
-//@ chunk-p2qwpk2k.js:37643-38242 placement
+//@ chunk-h5wy8vq5.js:38763-39362 placement
 async function AUTO_MODE_RULE_EDIT_ERRORS(section, targetSection, storageV5) {
   let isInternalTemplate = (() => false)();
   return withFeatureTelemetry(
@@ -283,7 +283,7 @@ async function AUTO_MODE_RULE_EDIT_ERRORS(section, targetSection, storageV5) {
     editOutcomeKey("toggle"),
   );
 }
-//@ chunk-p2qwpk2k.js:38242-38371 placement
+//@ chunk-h5wy8vq5.js:39362-39491 placement
 function dropEmptySectionHeaders(lines) {
   return lines.filter((line, index) => {
     if (!line.startsWith("### ")) return true;
@@ -291,7 +291,7 @@ function dropEmptySectionHeaders(lines) {
     return next !== undefined && !next.startsWith("### ");
   });
 }
-//@ chunk-p2qwpk2k.js:38371-38473 placement
+//@ chunk-h5wy8vq5.js:39491-39593 placement
 class AutoModeRuleWriteError extends Error {
   code;
   constructor(code, message) {
@@ -300,7 +300,7 @@ class AutoModeRuleWriteError extends Error {
     this.name = "AutoModeRuleWriteError";
   }
 }
-//@ chunk-p2qwpk2k.js:38473-40052 placement
+//@ chunk-h5wy8vq5.js:39593-41172 placement
 /**
  * 把自动模式规则修改写入用户设置文件
  */
@@ -387,11 +387,11 @@ async function writeAutoModeRuleEdit(section, mutate, storageV5) {
     throw new AutoModeRuleWriteError(failure.code, failure.message);
   }
 }
-//@ chunk-p2qwpk2k.js:40052-40080 placement
+//@ chunk-h5wy8vq5.js:41172-41200 placement
 function normalizeRuleText(text) {
   return stripVariationSelectors(text);
 }
-//@ chunk-p2qwpk2k.js:40080-40178 placement
+//@ chunk-h5wy8vq5.js:41200-41298 placement
 function validateRuleText(section, ruleText) {
   try {
     validateAutoModeRuleText(section, normalizeRuleText(ruleText));
@@ -400,7 +400,7 @@ function validateRuleText(section, ruleText) {
     return error instanceof AutoModeRuleWriteError ? error.message : String(error);
   }
 }
-//@ chunk-p2qwpk2k.js:40178-40692 placement
+//@ chunk-h5wy8vq5.js:41298-41812 placement
 function validateAutoModeRuleText(section, ruleText) {
   if (ruleText === DEFAULTS_PLACEHOLDER)
     throw new AutoModeRuleWriteError(
@@ -422,7 +422,7 @@ function validateAutoModeRuleText(section, ruleText) {
   let problem = checkAutoModeEntries(section, lines);
   if (problem) throw new AutoModeRuleWriteError("invalid_input", problem);
 }
-//@ chunk-p2qwpk2k.js:40692-40774 placement
+//@ chunk-h5wy8vq5.js:41812-41894 placement
 async function addAutoModeRule(section, ruleText, storageV5) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
@@ -430,7 +430,7 @@ async function addAutoModeRule(section, ruleText, storageV5) {
     editOutcomeKey("add"),
   );
 }
-//@ chunk-p2qwpk2k.js:40774-41054 placement
+//@ chunk-h5wy8vq5.js:41894-42174 placement
 /**
  * 向用户设置的某分类追加一条 auto 模式规则；分类为空时先插入默认占位以保留内置规则；环境按文档编辑时拒绝。
  */
@@ -453,7 +453,7 @@ async function addAutoModeRule_2(section, ruleText, storageV5) {
     storageV5,
   );
 }
-//@ chunk-p2qwpk2k.js:41054-41147 placement
+//@ chunk-h5wy8vq5.js:42174-42267 placement
 async function updateAutoModeRule(section, index, oldText, expectedOldText, storageV5) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
@@ -461,7 +461,7 @@ async function updateAutoModeRule(section, index, oldText, expectedOldText, stor
     editOutcomeKey("update"),
   );
 }
-//@ chunk-p2qwpk2k.js:41147-41505 placement
+//@ chunk-h5wy8vq5.js:42267-42625 placement
 /**
  * 替换指定下标的 auto 模式规则（下标处文本须与预期一致）；默认占位与环境分节标题不可编辑。
  */
@@ -488,7 +488,7 @@ async function replaceAutoModeRule(section, index, oldText, newText, storageV5) 
     storageV5,
   );
 }
-//@ chunk-p2qwpk2k.js:41505-41594 placement
+//@ chunk-h5wy8vq5.js:42625-42714 placement
 async function deleteAutoModeRule(section, index, storageV5, expectedText) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
@@ -496,7 +496,7 @@ async function deleteAutoModeRule(section, index, storageV5, expectedText) {
     editOutcomeKey("delete"),
   );
 }
-//@ chunk-p2qwpk2k.js:41594-41975 placement
+//@ chunk-h5wy8vq5.js:42714-43095 placement
 /**
  * 删除指定下标的 auto 模式规则（下标处文本须一致）；环境删除后清理空分节标题。
  */
@@ -520,66 +520,66 @@ async function deleteAutoModeRule_2(section, index, storageV5, expectedText) {
     expectedText,
   );
 }
-//@ chunk-p2qwpk2k.js:41975-41979 placement
+//@ chunk-h5wy8vq5.js:43095-43099 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p2qwpk2k.js:41975", () => {
+deferInit("chunk-h5wy8vq5.js:43095", () => {
   init_react_production();
 });
-//@ chunk-p2qwpk2k.js:41979-42029 placement
+//@ chunk-h5wy8vq5.js:43099-43149 placement
 function isNotEnvironmentSection(rule) {
   return rule.section !== "environment";
 }
-//@ chunk-p2qwpk2k.js:42029-42063 placement
+//@ chunk-h5wy8vq5.js:43149-43183 placement
 function toRuleKeyPair(displayRule) {
   return [ruleKey(displayRule), displayRule];
 }
-//@ chunk-p2qwpk2k.js:42063-42094 placement
+//@ chunk-h5wy8vq5.js:43183-43214 placement
 function ruleText(rule) {
   return rule.text;
 }
-//@ chunk-p2qwpk2k.js:42094-42133 placement
+//@ chunk-h5wy8vq5.js:43214-43253 placement
 function normalizedRuleText(rule) {
   return replaceLineBreaks(displayField(rule).text);
 }
-//@ chunk-p2qwpk2k.js:42133-42183 placement
+//@ chunk-h5wy8vq5.js:43253-43303 placement
 function isEnvironmentSection(rule) {
   return rule.section === "environment";
 }
-//@ chunk-p2qwpk2k.js:42183-42270 placement
+//@ chunk-h5wy8vq5.js:43303-43390 placement
 function toDisplayRule(rule) {
   return {
     tag: rule.legacy ? "legacy" : getRuleSourceBadge(rule.source),
     text: replaceLineBreaks(displayField(rule.text).text),
   };
 }
-//@ chunk-p2qwpk2k.js:42270-42324 placement
+//@ chunk-h5wy8vq5.js:43390-43444 placement
 function toDisplayRuleNoTag(rule) {
   return {
     tag: null,
     text: replaceLineBreaks(displayField(rule).text),
   };
 }
-//@ chunk-p2qwpk2k.js:42324-42357 placement
+//@ chunk-h5wy8vq5.js:43444-43477 placement
 function ruleSource(rule) {
   return rule.source;
 }
-//@ chunk-p2qwpk2k.js:42357-42407 placement (2.1.88 match: _temp5, 1)
+//@ chunk-h5wy8vq5.js:43477-43527 placement (2.1.88 match: _temp5, 1)
 function isUserSettingsRule(a_0) {
   return a_0.source === "userSettings";
 }
-//@ chunk-p2qwpk2k.js:42407-42457 placement (2.1.88 match: _temp5, 1)
+//@ chunk-h5wy8vq5.js:43527-43577 placement (2.1.88 match: _temp5, 1)
 function isNonUserSettingsRule(a_0) {
   return a_0.source !== "userSettings";
 }
-//@ chunk-p2qwpk2k.js:42729-42795 placement
+//@ chunk-h5wy8vq5.js:43850-43916 placement
 function padSectionLabel(label) {
   return label ? ` \xB7 ${label}`.padEnd(RULE_LABEL_WIDTH) : " ".repeat(RULE_LABEL_WIDTH);
 }
-//@ chunk-p2qwpk2k.js:42795-42828 placement
+//@ chunk-h5wy8vq5.js:43916-43949 placement
 function ruleKeyValuePair(key, value) {
   return [key, value];
 }
-//@ chunk-p2qwpk2k.js:42962-43125 placement
+//@ chunk-h5wy8vq5.js:44083-44246 placement
 function getAutoModeRuleCategoryLabel(section) {
   switch (section) {
     case "allow":
@@ -592,7 +592,7 @@ function getAutoModeRuleCategoryLabel(section) {
       return "Environment";
   }
 }
-//@ chunk-p2qwpk2k.js:43125-43266 placement
+//@ chunk-h5wy8vq5.js:44246-44387 placement
 /**
  * 返回自动模式规则分区的颜色：allow 绿、soft_deny 黄、hard_deny 红等。
  */
@@ -608,10 +608,7 @@ function getAutoModeSectionColor(section) {
       return;
   }
 }
-//@ chunk-p2qwpk2k.js:43266-43426 placement
-/**
- * 把规则来源（用户设置、--settings、托管设置）转换为显示文本。
- */
+//@ chunk-h5wy8vq5.js:44387-44547 layout
 function describeRuleSource(source) {
   switch (source) {
     case "userSettings":
@@ -622,7 +619,7 @@ function describeRuleSource(source) {
       return "managed settings";
   }
 }
-//@ chunk-p2qwpk2k.js:43426-43608 placement
+//@ chunk-h5wy8vq5.js:44547-44729 placement
 /**
  * 按分区顺序、再按来源（用户、flag、托管）顺序排列规则条目。
  */
@@ -633,11 +630,11 @@ function sortRuleEntries(entries) {
     return sourceOrder.flatMap((entry) => filtered.filter((state) => state.source === entry));
   });
 }
-//@ chunk-p2qwpk2k.js:43608-43691 placement
+//@ chunk-h5wy8vq5.js:44729-44812 placement
 function ruleKey(rule) {
   return `${rule.section}:${rule.source}:${rule.legacy ? "legacy-" : ""}${rule.index}`;
 }
-//@ chunk-p2qwpk2k.js:43691-43813 placement
+//@ chunk-h5wy8vq5.js:44812-44934 placement
 function getRuleSourceBadge(source) {
   switch (source) {
     case "userSettings":
@@ -648,9 +645,9 @@ function getRuleSourceBadge(source) {
       return "org";
   }
 }
-//@ chunk-p2qwpk2k.js:43813-43823 placement
+//@ chunk-h5wy8vq5.js:44934-44944 placement
 var RULE_LABEL_WIDTH = 20;
-//@ chunk-p2qwpk2k.js:43823-43991 placement
+//@ chunk-h5wy8vq5.js:44944-45112 placement
 function splitByWidth(text, width) {
   let lines = [];
   let current = "";
@@ -668,7 +665,7 @@ function splitByWidth(text, width) {
   if (current.length > 0) lines.push(current);
   return lines;
 }
-//@ chunk-p2qwpk2k.js:43991-44000 placement
+//@ chunk-h5wy8vq5.js:45112-45121 placement
 var MAX_RULE_ROWS = 5;
 export {
   getAutoModeRuleCategoryLabel,

@@ -3,9 +3,9 @@
  *
  * 组织记忆凭据（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,12 +30,12 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:39889-40044 placement
+//@ chunk-a2q0x549.js:41055-41210 placement
 var CREDENTIAL_ENDPOINT; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CREDENTIAL_TIMEOUT_MS;
 var CREDENTIAL_REFRESH_MARGIN_MS;
 var credentialResponseSchema;
-deferInit("chunk-82kqcve8.js:39889", () => {
+deferInit("chunk-a2q0x549.js:41055", () => {
   CREDENTIAL_ENDPOINT = "/v1/code/local/memory/credential";
   CREDENTIAL_TIMEOUT_MS = 1e4;
   CREDENTIAL_REFRESH_MARGIN_MS = 120000;
@@ -47,7 +47,7 @@ deferInit("chunk-82kqcve8.js:39889", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:40044-40204 placement
+//@ chunk-a2q0x549.js:41210-41370 placement
 async function requestCredentialWithRetry(request, credentials) {
   let result = await requestOrgMemoryCredential(request, credentials);
   if (result.ok && result.status === 401) {
@@ -58,7 +58,7 @@ async function requestCredentialWithRetry(request, credentials) {
   }
   return result;
 }
-//@ chunk-82kqcve8.js:40204-40724 placement
+//@ chunk-a2q0x549.js:41370-41890 placement
 /**
  * 向 /v1/code/local/memory/credential 申请组织记忆凭据：可请求写权限并带上选择（store、silo 或分组），silo 选择附带受信设备头。
  */
@@ -107,7 +107,7 @@ async function requestOrgMemoryCredential(request, credentials) {
     },
   );
 }
-//@ chunk-82kqcve8.js:40724-46610 placement
+//@ chunk-a2q0x549.js:41890-47776 placement
 /**
  * 组织记忆凭据：向凭据存储与存储后端交付 org memory 令牌
  */
@@ -408,26 +408,26 @@ class OrgMemoryCredential {
     clearGrant();
   }
 }
-//@ chunk-82kqcve8.js:46610-46635 placement
+//@ chunk-a2q0x549.js:47776-47801 placement
 /**
  * 按宿主保存的组织记忆凭据状态。
  */
 var orgMemoryCredentialState; // deferred: uses OrgMemoryCredential of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:46610", () => {
+deferInit("chunk-a2q0x549.js:47776", () => {
   orgMemoryCredentialState = new HostScoped(() => new OrgMemoryCredential());
 });
-//@ chunk-82kqcve8.js:46635-46672 placement
+//@ chunk-a2q0x549.js:47801-47838 placement
 /**
  * 取当前宿主的组织记忆凭据状态。
  */
 function getOrgMemoryCredentialState() {
   return orgMemoryCredentialState.of(getRootSession().host);
 }
-//@ chunk-82kqcve8.js:46672-46725 placement
+//@ chunk-a2q0x549.js:47838-47891 placement
 function wasLastMintSelectionDegraded() {
   return getOrgMemoryCredentialState().lastMintSelectionDegraded;
 }
-//@ chunk-82kqcve8.js:46725-46857 placement
+//@ chunk-a2q0x549.js:47891-48023 placement
 function negotiateOrgMemoryCredential(credentials, storageV5) {
   let orgMemoryCredentialState = getOrgMemoryCredentialState();
   orgMemoryCredentialState.adoptCredentials(credentials);
@@ -435,19 +435,19 @@ function negotiateOrgMemoryCredential(credentials, storageV5) {
   orgMemoryCredentialState.discardOnEndpointChange();
   return orgMemoryCredentialState.negotiateSingleFlight();
 }
-//@ chunk-82kqcve8.js:46857-46941 placement
+//@ chunk-a2q0x549.js:48023-48107 placement
 function getOrgMemoryAuthorization(options) {
   let orgMemoryCredentialState = getOrgMemoryCredentialState();
   orgMemoryCredentialState.discardOnEndpointChange();
   return orgMemoryCredentialState.getAuthorization(options);
 }
-//@ chunk-82kqcve8.js:46941-46971 placement
+//@ chunk-a2q0x549.js:48107-48137 placement
 function clearOrgMemoryCredential() {
   getOrgMemoryCredentialState().discard();
 }
 export {
   clearOrgMemoryCredential,
+  getOrgMemoryAuthorization,
   wasLastMintSelectionDegraded,
   negotiateOrgMemoryCredential,
-  getOrgMemoryAuthorization,
 };

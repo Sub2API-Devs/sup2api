@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。锚定目录树操作（防 TOCTOU）：/proc fd、macOS NOFOLLOW_ANY、完整路径三种后端。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p5msxby3.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g3ejat5z.js (45)
  * attribution: placement 45
  */
 import { constants, fstat, close, open, fsync, fchmod, fchown, writeFile } from "fs";
@@ -20,7 +20,7 @@ import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { logForDebugging } from "../debug.js";
 import { resolvedRoot, createDeviceTreeHost } from "./deviceTreeHost.js";
 
-//@ chunk-p5msxby3.js:731-852 placement
+//@ chunk-g3ejat5z.js:731-852 placement
 class OwnerNotGiven extends Error {
   code;
   constructor(cause) {
@@ -30,7 +30,7 @@ class OwnerNotGiven extends Error {
     this.code = getErrnoCode(cause);
   }
 }
-//@ chunk-p5msxby3.js:852-1002 placement
+//@ chunk-g3ejat5z.js:852-1002 placement
 var ANCHOR_UNAVAILABLE_REASONS = [
   "unsupported_platform",
   "no_procfs",
@@ -41,11 +41,11 @@ var ANCHOR_UNAVAILABLE_REASONS = [
   "bring_up_failed",
   "no_hard_links",
 ];
-//@ chunk-p5msxby3.js:1002-1041 placement
+//@ chunk-g3ejat5z.js:1002-1041 placement
 function isAnchorUnavailableReason(reason) {
   return ANCHOR_UNAVAILABLE_REASONS.includes(reason);
 }
-//@ chunk-p5msxby3.js:1041-2016 placement
+//@ chunk-g3ejat5z.js:1041-2016 placement
 /**
  * 锚定错误码转错误
  */
@@ -73,19 +73,19 @@ function workingErrorFor(reasonCode) {
       return Error("this backend cannot make or read a symbolic link in a held directory");
   }
 }
-//@ chunk-p5msxby3.js:2016-2131 placement
+//@ chunk-g3ejat5z.js:2016-2131 placement
 function rootNotCanonicalError() {
   let error = Error("tree anchor root is not a canonical path");
   error.code = "WORKING_ROOT_NOT_CANONICAL";
   return error;
 }
-//@ chunk-p5msxby3.js:2131-2175 placement
+//@ chunk-g3ejat5z.js:2131-2175 placement
 function workingError(reasonCode) {
   let error = workingErrorFor(reasonCode);
   error.code = reasonCode;
   return error;
 }
-//@ chunk-p5msxby3.js:2175-2410 placement
+//@ chunk-g3ejat5z.js:2175-2410 placement
 /**
  * 锚定使用的打开标志与上限
  */
@@ -100,7 +100,7 @@ var MAX_LIST_NAMES = 512;
 var MAX_RENAME_ATTEMPTS = 3;
 var REMOVE_TREE_CONCURRENCY = 16;
 var RemoveTreeError = Error("removeTree stopped after a failure");
-//@ chunk-p5msxby3.js:2410-2606 placement
+//@ chunk-g3ejat5z.js:2410-2606 placement
 /**
  * 拆分锚定相对路径
  */
@@ -113,7 +113,7 @@ function splitAnchoredPath(relPath, sep) {
     throw Error("anchored path must be relative, of plain segments");
   return parts;
 }
-//@ chunk-p5msxby3.js:2606-2682 placement
+//@ chunk-g3ejat5z.js:2606-2682 placement
 function splitLeafPath(relPath, sep) {
   let parts = splitAnchoredPath(relPath, sep);
   return {
@@ -121,27 +121,27 @@ function splitLeafPath(relPath, sep) {
     leaf: parts.at(-1) ?? "",
   };
 }
-//@ chunk-p5msxby3.js:2682-2770 placement
+//@ chunk-g3ejat5z.js:2682-2770 placement
 function assertNeverCreates(flags) {
   if ((flags & constants.O_CREAT) !== 0) throw Error("anchored open never creates");
   return flags;
 }
-//@ chunk-p5msxby3.js:2770-2865 placement
+//@ chunk-g3ejat5z.js:2770-2865 placement
 function mapParentNotDirectory(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOTDIR" || errnoCode === "ELOOP"
     ? workingError("WORKING_PARENT_NOT_DIRECTORY")
     : error;
 }
-//@ chunk-p5msxby3.js:2865-2887 placement
+//@ chunk-g3ejat5z.js:2865-2887 placement
 var SAME_IDENTITY = {
   found: "same",
 };
-//@ chunk-p5msxby3.js:2887-2952 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-g3ejat5z.js:2887-2952 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity(leftStats, rightStats) {
   return leftStats.ino !== 0n && leftStats.dev === rightStats.dev && leftStats.ino === rightStats.ino;
 }
-//@ chunk-p5msxby3.js:2952-3317 placement
+//@ chunk-g3ejat5z.js:2952-3317 placement
 /**
  * 逐段打开到持有目录
  */
@@ -166,7 +166,7 @@ async function walkToHeldDir(backend, host, heldDir, parts, passThrough) {
     ? null
     : backend.holdOpenedDir(currentDir, host.path.join(heldDir.realPath, ...parts));
 }
-//@ chunk-p5msxby3.js:3317-10817 placement
+//@ chunk-g3ejat5z.js:3317-10817 placement
 /**
  * 在锚定的目录树中执行操作（防 TOCTOU），支持 /proc fd、macOS NOFOLLOW_ANY 与完整路径后端。
  */
@@ -735,15 +735,15 @@ function anchorOver(backendName, host, rootDir, rootHandle, realRoot, ops, prefi
     [Symbol.asyncDispose]: closeOnce,
   };
 }
-//@ chunk-p5msxby3.js:10817-10864 placement
+//@ chunk-g3ejat5z.js:10817-10864 placement
 function filterPlainNames(names, sep) {
   return names.filter((name) => isPlainEntryName(name, sep));
 }
-//@ chunk-p5msxby3.js:10864-10930 placement
+//@ chunk-g3ejat5z.js:10864-10930 placement
 function filterPlainBufferNames(names, sep) {
   return names.filter((name) => isPlainEntryName(name.toString("latin1"), sep));
 }
-//@ chunk-p5msxby3.js:10930-11035 placement
+//@ chunk-g3ejat5z.js:10930-11035 placement
 function isPlainEntryName(name, sep) {
   return (
     name !== "" &&
@@ -754,7 +754,7 @@ function isPlainEntryName(name, sep) {
     !name.includes("\x00")
   );
 }
-//@ chunk-p5msxby3.js:11035-11202 placement
+//@ chunk-g3ejat5z.js:11035-11202 placement
 /**
  * 确认叶子名为普通名字
  */
@@ -770,7 +770,7 @@ function assertPlainLeaf(leaf) {
     throw Error("a held-directory leaf must be one plain name");
   return leaf;
 }
-//@ chunk-p5msxby3.js:11202-11684 placement
+//@ chunk-g3ejat5z.js:11202-11684 placement
 /**
  * 打开根目录锚
  */
@@ -813,7 +813,7 @@ async function openRootAnchor(host, rootPath) {
     close: () => dirHandle.close(),
   };
 }
-//@ chunk-p5msxby3.js:11684-11756 placement
+//@ chunk-g3ejat5z.js:11684-11756 placement
 function statsView(handle) {
   return {
     stat: () =>
@@ -823,7 +823,7 @@ function statsView(handle) {
     close: () => handle.close(),
   };
 }
-//@ chunk-p5msxby3.js:11756-12181 placement
+//@ chunk-g3ejat5z.js:11756-12181 placement
 /**
  * 写入新建文件并设所有者与权限
  */
@@ -861,9 +861,9 @@ async function writeCreatedFile(
     throw error;
   }
 }
-//@ chunk-p5msxby3.js:12181-12214 placement
+//@ chunk-g3ejat5z.js:12181-12214 placement
 var modeOrDefault = (mode, forcedMode) => (forcedMode === undefined ? mode : mode & 448);
-//@ chunk-p5msxby3.js:12214-12698 placement
+//@ chunk-g3ejat5z.js:12214-12698 placement
 async function writeCreatedUnlessMoved(
   fileHandle,
   data,
@@ -925,7 +925,7 @@ async function writeCreatedUnlessMoved(
     () => afterWrite(made),
   );
 }
-//@ chunk-p5msxby3.js:12698-12847 placement
+//@ chunk-g3ejat5z.js:12698-12847 placement
 async function isSameDirectory(host, dirHandle, realRoot) {
   let [pathStats, handleStats] = await Promise.all([
     host.fs.lstat(realRoot, {
@@ -937,7 +937,7 @@ async function isSameDirectory(host, dirHandle, realRoot) {
   ]);
   return pathStats.dev === handleStats.dev && pathStats.ino === handleStats.ino && handleStats.ino !== 0n;
 }
-//@ chunk-p5msxby3.js:12847-13103 placement
+//@ chunk-g3ejat5z.js:12847-13103 placement
 /**
  * fd 与路径是否同一目录
  */
@@ -958,7 +958,7 @@ async function isSameDirectory_2(host, dirHandle) {
     throw error;
   }
 }
-//@ chunk-p5msxby3.js:13103-14679 placement
+//@ chunk-g3ejat5z.js:13103-14679 placement
 /**
  * 基于 /proc/self/fd 的后端
  */
@@ -1052,12 +1052,12 @@ function procFdBackend(host, rootDir, { realRoot, directoryCheck }, createsInHel
   };
   return anchorOver("linux_procfd", host, statsView(rootDir), rootDir, realRoot, ops, [], directoryCheck);
 }
-//@ chunk-p5msxby3.js:14679-14774 placement
+//@ chunk-g3ejat5z.js:14679-14774 placement
 function posixFsAtApi() {
   let posixFsAt = globalThis.Bun?.ant?.posixFsAt;
   return typeof posixFsAt?.openat === "function" ? posixFsAt : null;
 }
-//@ chunk-p5msxby3.js:14774-14882 placement
+//@ chunk-g3ejat5z.js:14774-14882 placement
 function readDirNames(api, dirFd, maxNames) {
   return maxNames >= 0
     ? api.readdirat(dirFd, {
@@ -1065,7 +1065,7 @@ function readDirNames(api, dirFd, maxNames) {
       })
     : [];
 }
-//@ chunk-p5msxby3.js:14882-14949 placement
+//@ chunk-g3ejat5z.js:14882-14949 placement
 var fstatAsync = promisify(fstat);
 var closeAsync = promisify(close);
 var openAsync = promisify(open);
@@ -1073,7 +1073,7 @@ var fsyncAsync = promisify(fsync);
 var fchmodAsync = promisify(fchmod);
 var fchownAsync = promisify(fchown);
 var writeFileAsync = promisify(writeFile);
-//@ chunk-p5msxby3.js:14949-15086 placement
+//@ chunk-g3ejat5z.js:14949-15086 placement
 function anchoredFileOps(fileHandle) {
   return {
     stat: (options) => fstatAsync(fileHandle, options),
@@ -1084,14 +1084,14 @@ function anchoredFileOps(fileHandle) {
     close: () => closeAsync(fileHandle),
   };
 }
-//@ chunk-p5msxby3.js:15086-15207 placement
+//@ chunk-g3ejat5z.js:15086-15207 placement
 var posixFsAt;
 var warnNoPosixFsAtOnce = onceExport(() =>
   logForDebugging("anchor: this runtime has no Bun.ant.posixFsAt, so the macOS backend cannot come up", {
     level: "warn",
   }),
 );
-//@ chunk-p5msxby3.js:15207-16159 placement
+//@ chunk-g3ejat5z.js:15207-16159 placement
 function loadDarwinAt() {
   let api = posixFsAtApi();
   if (api === null) {
@@ -1145,11 +1145,11 @@ function loadDarwinAt() {
   };
   return posixFsAt;
 }
-//@ chunk-p5msxby3.js:16159-16212 placement
+//@ chunk-g3ejat5z.js:16159-16212 placement
 function darwinNoFollowAnyEnforced(host) {
   return (host.noFollowAnyEnforced ??= probeNoFollowAny(host));
 }
-//@ chunk-p5msxby3.js:16212-16781 placement
+//@ chunk-g3ejat5z.js:16212-16781 placement
 /**
  * 探测 O_NOFOLLOW_ANY 是否生效
  */
@@ -1185,7 +1185,7 @@ async function probeNoFollowAny(host) {
       }).catch(() => {});
   }
 }
-//@ chunk-p5msxby3.js:16781-16915 placement
+//@ chunk-g3ejat5z.js:16781-16915 placement
 async function getDarwinCreateFn(host, api) {
   let beneath = api.getBeneath?.();
   if (beneath === undefined) return "not_bound";
@@ -1194,14 +1194,14 @@ async function getDarwinCreateFn(host, api) {
     ((dirFd, name, mode) => beneath.create(dirFd, [name], mode & 511))
   );
 }
-//@ chunk-p5msxby3.js:16915-17065 placement
+//@ chunk-g3ejat5z.js:16915-17065 placement
 function probeDarwinHeldCreate(host, api) {
   return (host.heldCreateProbed ??= probeDarwinHeldCreateUnchecked(api).then((outcome) => {
     if (outcome === "probe_not_run" || outcome === "probe_create_failed") host.heldCreateProbed = undefined;
     return outcome;
   }));
 }
-//@ chunk-p5msxby3.js:17065-18042 placement
+//@ chunk-g3ejat5z.js:17065-18042 placement
 /**
  * 探测 macOS 持有目录下的创建
  */
@@ -1260,9 +1260,9 @@ async function probeDarwinHeldCreateUnchecked(api) {
       }).catch(() => {});
   }
 }
-//@ chunk-p5msxby3.js:18042-18076 placement
+//@ chunk-g3ejat5z.js:18042-18076 placement
 var O_RDONLY_SEARCH_NONBLOCK = constants.O_RDONLY | O_SEARCH | constants.O_NONBLOCK;
-//@ chunk-p5msxby3.js:18076-20629 placement
+//@ chunk-g3ejat5z.js:18076-20629 placement
 /**
  * 按完整路径的后端
  */
@@ -1446,7 +1446,7 @@ function fullPathBackend(
     directoryCheck,
   );
 }
-//@ chunk-p5msxby3.js:20629-20772 placement
+//@ chunk-g3ejat5z.js:20629-20772 placement
 function openTreeAnchorAtName(
   host,
   rootPath,
@@ -1461,7 +1461,7 @@ function openTreeAnchorAtName(
     }),
   });
 }
-//@ chunk-p5msxby3.js:20772-22054 placement
+//@ chunk-g3ejat5z.js:20772-22054 placement
 async function openTreeAnchor(host, location) {
   let { [ANCHOR_OPEN_FLAGS]: anchorOpenFlags, ...restLocation } = location;
   let anchorReason = undefined;
@@ -1558,11 +1558,11 @@ async function openTreeAnchor(host, location) {
       };
   }
 }
-//@ chunk-p5msxby3.js:22054-22114 placement
+//@ chunk-g3ejat5z.js:22054-22114 placement
 function getUnavailableReason(result) {
   return result.kind === "unavailable" ? result.reason : null;
 }
-//@ chunk-p5msxby3.js:22114-22274 placement
+//@ chunk-g3ejat5z.js:22114-22274 placement
 async function checkAnchoring(
   rootPath,
   { host = createDeviceTreeHost(), now = () => performance.now() } = {},
@@ -1575,7 +1575,7 @@ async function checkAnchoring(
     elapsedMs: Math.round(now() - startedAt),
   };
 }
-//@ chunk-p5msxby3.js:22274-22485 placement
+//@ chunk-g3ejat5z.js:22274-22485 placement
 /**
  * 检查锚定是否可用
  */

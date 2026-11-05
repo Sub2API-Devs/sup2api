@@ -3,10 +3,10 @@
  *
  * / 斜杠命令处理：解析、prompt/local/local-jsx 三类命令执行、技能加载元数据、出错记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processSlashCommand.tsx
- * pieces: chunk-3g0djq3w.js (28), chunk-bc20zedk.js (1), chunk-e6aww6q8.js (3)
- * attribution: affinity 4, facade-exports 7, layout 12, fingerprint 5, callgraph-witnessed 1, placement 3
+ * pieces: chunk-5xgkngpb.js (3), chunk-g88zyy4n.js (29), chunk-rkbsrtg1.js (1)
+ * attribution: placement 3, affinity 4, facade-exports 7, layout 13, fingerprint 5, callgraph-witnessed 1
  */
 import { randomUUID } from "crypto";
 import {
@@ -41,6 +41,7 @@ import { hookedCommands_2 } from "../../plugins/functionHooks/commandHooks.js";
 import { hostOpsRoot } from "../../plugins/functionHooks/hooksWorkerHost.js";
 import {
   getToolPermissionContext,
+  getPickedEffortModel,
   getEffortValue,
   getEffortLayerOverride,
 } from "../permissions/toolPermissionContext.js";
@@ -128,10 +129,10 @@ import { transportStateByHost, isBridgeOrTransport } from "../../cli/transportSt
 import {
   writeSubagentProgressToOutputSink,
   runAgent,
-  filterIncompleteToolCalls_2,
+  shouldForwardNestedToolCall,
 } from "../../tools/AgentTool/runAgent.js";
 import { agentModelRestrictedReporter } from "../model/agentModelRestriction.js";
-import { getAssistantMessageContentLength } from "../tokens.js";
+import { hasThinkingContent } from "../tokens.js";
 import { logError } from "../log.js";
 import { withUntrustedPreamble } from "../messages/untrustedArtifactContent.js";
 import {
@@ -155,6 +156,8 @@ import {
   commandEnabledAfterStartMessage,
   couldNotVerifyPolicyFor,
 } from "../../services/policyLimits/policyMessages.js";
+import { isRemoteControlHardDisabled } from "../../bridge/bridgeEntitlement.js";
+import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "../../bridge/remoteControlPolicy.js";
 import {
   commandSurfaceNotice,
   isQuillKillswitchOff,
@@ -171,10 +174,11 @@ import {
   notifySetupGuideLoaded,
 } from "../commandPredicates.js";
 import { normalizeServerNameShort } from "../../services/api/deferredToolsState.js";
+import { stripControlChars } from "../settings/writeQueues.js";
 import { getEffortLevelIfSupported } from "../effort.js";
 import { getOriginKindLabel } from "../messages/promptOrigin.js";
 import { promptTelemetryFields, promptOriginForHooks } from "../promptSource.js";
-import { emptyObjectFactory } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeTelemetryFields } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import {
   logSlashPromptEvent,
   cloneContent,
@@ -256,7 +260,7 @@ import { isSoftSparkEnabled } from "../../services/compact/compactSettings.js";
 import { inlineSkillModelOverride } from "../model/model.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:5048489-5048750 placement
+//@ chunk-5xgkngpb.js:5203632-5203893 placement
 /**
  * 为代理创建状态发射器：设置模式、重试状态与回合 effort。
  */
@@ -286,7 +290,7 @@ function createAgentStatusEmitter(agentId) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:5048750-5049005 placement
+//@ chunk-5xgkngpb.js:5203893-5204148 placement
 /**
  * "Running SessionStart hooks…" 提示与主线程 spinner 状态发射器。
  */
@@ -312,7 +316,7 @@ var sessionStartHooksUi = {
     });
   },
 };
-//@ chunk-e6aww6q8.js:5049005-5049623 placement
+//@ chunk-5xgkngpb.js:5204148-5204767 placement
 /**
  * 找不到命令时等待 SessionStart 钩子与插件命令注册完成后再找一次（期间显示 spinner）。
  */
@@ -342,24 +346,24 @@ async function findCommandAfterHooks(commandName, waitForHooks, signal) {
     ? findCommand(commandName, await hookedCommands_2([]))
     : undefined;
 }
-//@ chunk-bc20zedk.js:33028-33069 fingerprint (2.1.88 match: formatSkillLoadingMetadata, 0.84)
+//@ chunk-rkbsrtg1.js:33030-33071 fingerprint (2.1.88 match: formatSkillLoadingMetadata, 0.84)
 var formatSkillLoadingMetadata_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:33028", () => {
+deferInit("chunk-rkbsrtg1.js:33030", () => {
   formatSkillLoadingMetadata_2 = Object.freeze({
     status: "loading",
   });
 });
-//@ chunk-3g0djq3w.js:9865-9925 affinity
+//@ chunk-g88zyy4n.js:10083-10143 affinity
 var NON_HISTORY_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3g0djq3w.js:9865", () => {
+deferInit("chunk-g88zyy4n.js:10083", () => {
   NON_HISTORY_COMMANDS = new Set(["clear", "resume", "help", "exit", "feedback"]);
 });
-//@ chunk-3g0djq3w.js:9925-10004 facade-exports (2.1.88 match: getValueFromInput, 1)
+//@ chunk-g88zyy4n.js:10143-10222 facade-exports (2.1.88 match: getValueFromInput, 1)
 function isSlashCommandBlockedByEndedByModel(command, endedByModel) {
   if (!endedByModel) return false;
   return !(command && command.type !== "prompt" && NON_HISTORY_COMMANDS.has(command.name));
 }
-//@ chunk-3g0djq3w.js:10004-11339 layout
+//@ chunk-g88zyy4n.js:10222-11557 layout
 /**
  * fork 命令结束时运行 Stop 钩子：收集系统消息、错误与附加上下文，决定是否需要继续查询；否则运行回合结束反应。
  */
@@ -445,7 +449,7 @@ async function runForkStopHooks(context, extraMessages, hookExecutors) {
     requestQuery,
   };
 }
-//@ chunk-3g0djq3w.js:11339-16950 fingerprint (2.1.88 match: executeForkedSlashCommand, 0.467)
+//@ chunk-g88zyy4n.js:11557-17154 fingerprint (2.1.88 match: executeForkedSlashCommand, 0.469)
 /**
  * executeForkedSlashCommand：context: fork 的技能在子代理里运行。
  */
@@ -620,16 +624,15 @@ async function executeForkedSlashCommand(
           aborted: true,
           forkDispatched: true,
         };
+      let throwText = slashCommandThrowText(error, command.name, context.session);
       return {
         messages: [
           commandName,
-          createUserMessage({
-            content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, context.session))}</local-command-stderr>`,
-            localCommandOutput: "stderr",
-          }),
+          createCommandInputMessage(`<local-command-stderr>${escapeXml(throwText)}</local-command-stderr>`),
         ],
         shouldQuery: false,
         command,
+        resultText: throwText,
         threw: true,
         forkDispatched: true,
       };
@@ -739,6 +742,7 @@ async function executeForkedSlashCommand(
         agentId,
         abortController: forkedTask.abortController,
         readFileState: forkReadFileState,
+        pickedEffortModel: getPickedEffortModel(context),
       },
     })) {
       if (
@@ -750,13 +754,13 @@ async function executeForkedSlashCommand(
         continue;
       agentMessages.push(message);
       if (extractAgentIdsFromMessages_2(message)) {
-        if (streamsProgress && filterIncompleteToolCalls_2(context, message))
+        if (streamsProgress && shouldForwardNestedToolCall(context, message))
           writeSubagentProgressToOutputSink(context, message, false);
         continue;
       }
       let normalizedNew = normalizeMessages([message]);
       if (message.type === "assistant") {
-        let contentLength = getAssistantMessageContentLength(message);
+        let contentLength = hasThinkingContent(message);
         if (contentLength > 0)
           context.onQueryEvent?.({
             type: "response_length",
@@ -808,17 +812,16 @@ async function executeForkedSlashCommand(
     }
     await classifierTurnHooks?.settleTurnEnd(null);
     let stopResult = await runForkStopHooks(context, agentMessages, hookExecutors);
+    let throwText = slashCommandThrowText(error, command.name, context.session);
     return {
       messages: [
         commandName,
-        createUserMessage({
-          content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, context.session))}</local-command-stderr>`,
-          localCommandOutput: "stderr",
-        }),
+        createCommandInputMessage(`<local-command-stderr>${escapeXml(throwText)}</local-command-stderr>`),
         ...stopResult.messages,
       ],
       shouldQuery: stopResult.requestQuery,
       command,
+      resultText: throwText,
       threw: true,
       forkDispatched: true,
     };
@@ -854,13 +857,13 @@ async function executeForkedSlashCommand(
     forkDispatched: true,
   };
 }
-//@ chunk-3g0djq3w.js:16950-17085 layout
+//@ chunk-g88zyy4n.js:17154-17289 layout
 var COMMAND_POLICY_GATES = {
   "remote-control": "allow_remote_control",
   ultraplan: "allow_remote_sessions",
   "claude-in-chrome": "allow_claude_browser_extension",
 };
-//@ chunk-3g0djq3w.js:17085-17842 layout
+//@ chunk-g88zyy4n.js:17289-18145 layout
 function resolveCommandPolicyGate(commandName, commands, { interactive }) {
   let builtinCommands = getBuiltinCommands();
   let bundledDenied = isBundledSkillsPolicyDenied();
@@ -906,6 +909,13 @@ function resolveCommandPolicyGate(commandName, commands, { interactive }) {
         reason: commandEnabledAfterStartMessage(matchedCommand.name),
         kind: "stale_list",
       };
+    if (interactive && matchedCommand.name === "remote-control" && isRemoteControlHardDisabled())
+      return {
+        command: matchedCommand,
+        policy: matchedPolicy,
+        reason: REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE,
+        kind: "managed_disabled",
+      };
     return;
   }
   let denyKind = policyDenyKind(matchedPolicy);
@@ -934,14 +944,14 @@ function resolveCommandPolicyGate(commandName, commands, { interactive }) {
     kind: denyKind,
   };
 }
-//@ chunk-3g0djq3w.js:17842-17904 facade-exports
+//@ chunk-g88zyy4n.js:18145-18207 facade-exports
 /**
  * 字符串是否像命令名（字母数字开头，可含 : _ -）。
  */
 function looksLikeCommand(commandName) {
   return /^[a-zA-Z0-9_][a-zA-Z0-9:_-]*$/.test(commandName);
 }
-//@ chunk-3g0djq3w.js:17904-18263 facade-exports
+//@ chunk-g88zyy4n.js:18207-18566 facade-exports
 /**
  * 命令执行抛错时写入会话记录的文本（中断/命令错误/其他）。
  */
@@ -964,7 +974,11 @@ function commandThrowTextForTranscript(error, name, session) {
   }
   return escapeForkedSkillTag(String(error));
 }
-//@ chunk-3g0djq3w.js:18263-28569 facade-exports (2.1.88 match: processSlashCommand, 0.357)
+//@ chunk-g88zyy4n.js:18566-18611 layout
+function slashCommandThrowText(error, name, session) {
+  return escapeForkedSkillTag(stripControlChars(commandThrowTextForTranscript(error, name, session)));
+}
+//@ chunk-g88zyy4n.js:18611-28968 facade-exports (2.1.88 match: processSlashCommand, 0.352)
 /**
  * processSlashCommand：解析 /命令 参数、查找命令、策略检查，分派到本地命令、prompt 命令（技能）或 fork 子代理执行。
  */
@@ -1018,7 +1032,7 @@ async function processSlashCommand(
         hostInitiator,
         inboundOrigin,
       }),
-      ...emptyObjectFactory(),
+      ...codeModeTelemetryFields(),
     });
     let messageUuid = uuid || randomUUID();
     logSlashPromptEvent(
@@ -1209,13 +1223,21 @@ async function processSlashCommand(
       });
       if (commandPolicyGate) {
         let { command, policy, reason, kind } = commandPolicyGate;
+        let notStaleList = kind !== "stale_list" && kind !== "managed_disabled";
         logEvent("tengu_input_slash_invalid", {
           input_length: commandName.length,
           had_suggestion: false,
-          policy_denied: kind !== "stale_list",
+          policy_denied: notStaleList,
         });
-        logFeatureBad("cmd_dispatch", kind === "stale_list" ? "cmd_stale_list" : `cmd_policy_${kind}`);
-        if (kind !== "stale_list") logOrgPolicyDenied(policy, "slash_command");
+        logFeatureBad(
+          "cmd_dispatch",
+          kind === "stale_list"
+            ? "cmd_stale_list"
+            : kind === "managed_disabled"
+              ? "cmd_managed_disabled"
+              : `cmd_policy_${kind}`,
+        );
+        if (notStaleList) logOrgPolicyDenied(policy, "slash_command");
         let isOfficial = escapeForkedSkillTag(sanitizeTelemetryString(commandName));
         let redactedArgs = !parsedArgs
           ? ""
@@ -1719,11 +1741,11 @@ async function processSlashCommand(
     }),
   };
 }
-//@ chunk-3g0djq3w.js:28569-28620 layout
+//@ chunk-g88zyy4n.js:28968-29019 layout
 function hasProceedsOutcome(result) {
   return result.outcome?.proceeds !== undefined;
 }
-//@ chunk-3g0djq3w.js:28620-29342 layout
+//@ chunk-g88zyy4n.js:29019-29741 layout
 function runLocalCommand(
   text,
   context,
@@ -1800,7 +1822,7 @@ function runLocalCommand(
     }),
   };
 }
-//@ chunk-3g0djq3w.js:29342-30427 layout
+//@ chunk-g88zyy4n.js:29741-30826 layout
 function attachCommandResultText(result, { text, plugin, context }) {
   if (result.shouldQuery || result.nextInput !== undefined || result.settledInPlace) return;
   let messages = result.messages;
@@ -1882,7 +1904,7 @@ function attachCommandResultText(result, { text, plugin, context }) {
     }),
   };
 }
-//@ chunk-3g0djq3w.js:30427-30765 layout
+//@ chunk-g88zyy4n.js:30826-31164 layout
 function headlessUnavailableResult(command, args, submitUuid) {
   let message = `/${getCommandName(command)} opens an interactive panel and isn't available in this environment. Run it from the Claude Code terminal instead.`;
   return {
@@ -1901,7 +1923,7 @@ function headlessUnavailableResult(command, args, submitUuid) {
     resultText: message,
   };
 }
-//@ chunk-3g0djq3w.js:30765-42876 callgraph-witnessed (2.1.88 match: getMessagesForSlashCommand, 0.288)
+//@ chunk-g88zyy4n.js:31164-43389 callgraph-witnessed (2.1.88 match: getMessagesForSlashCommand, 0.291)
 /**
  * getMessagesForSlashCommand：执行具体斜杠命令并生成消息（local-jsx、local、prompt 三类）。
  */
@@ -2005,6 +2027,7 @@ async function getMessagesForSlashCommand(
     });
   if (command.userInvocable === false) {
     logFeatureBad(featureName, "cmd_not_user_invocable");
+    let claudeOnlyMessage = `This skill can only be invoked by Claude, not directly by users. Ask Claude to use the "${escapeForkedSkillTag(sanitizeTelemetryString(commandName))}" skill for you.`;
     return {
       messages: [
         createUserMessage({
@@ -2014,12 +2037,13 @@ async function getMessagesForSlashCommand(
           }),
           uuid,
         }),
-        createUserMessage({
-          content: `This skill can only be invoked by Claude, not directly by users. Ask Claude to use the "${sanitizeTelemetryString(commandName)}" skill for you.`,
-        }),
+        createCommandInputMessage(
+          `<local-command-stdout>${escapeXml(claudeOnlyMessage)}</local-command-stdout>`,
+        ),
       ],
       shouldQuery: false,
       command,
+      resultText: claudeOnlyMessage,
     };
   }
   if (command.type === "local-jsx" && context.options.isNonInteractiveSession) {
@@ -2738,6 +2762,7 @@ Original prompt: ${promptText}`;
             };
           }
           logFeatureBad(featureName, "cmd_prompt_threw");
+          let throwText = slashCommandThrowText(error, command.name, context.session);
           return {
             messages: [
               createUserMessage({
@@ -2747,13 +2772,19 @@ Original prompt: ${promptText}`;
                 }),
                 uuid,
               }),
-              createUserMessage({
-                content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, context.session))}</local-command-stderr>`,
-                localCommandOutput: "stderr",
-              }),
+              createCommandInputMessage(
+                `<local-command-stderr>${escapeXml(throwText)}</local-command-stderr>`,
+                {
+                  commandRun: buildCommandRunInfo(command, args),
+                  commandOutcome: {
+                    kind: "failed",
+                  },
+                },
+              ),
             ],
             shouldQuery: false,
             command,
+            resultText: throwText,
           };
         }
       }
@@ -2777,19 +2808,19 @@ Original prompt: ${promptText}`;
     throw error;
   }
 }
-//@ chunk-3g0djq3w.js:42876-42937 layout
+//@ chunk-g88zyy4n.js:43389-43450 layout
 function formatCommandInput(command, args) {
   let commandRunInfo = buildCommandRunInfo(command, args);
   return formatCommandInputTags(commandRunInfo.command, commandRunInfo.args);
 }
-//@ chunk-3g0djq3w.js:42937-42998 layout
+//@ chunk-g88zyy4n.js:43450-43511 layout
 function formatRedactedCommandInput(command, args) {
   return formatCommandInputTags(
     sanitizeTelemetryString(getCommandName(command)),
     hasSensitiveArgs(command, args) ? "***" : redactSecrets(args),
   );
 }
-//@ chunk-3g0djq3w.js:42998-43055 layout
+//@ chunk-g88zyy4n.js:43511-43568 layout
 function emptyIfHandled(handled, result) {
   return handled
     ? {
@@ -2798,9 +2829,9 @@ function emptyIfHandled(handled, result) {
       }
     : result;
 }
-//@ chunk-3g0djq3w.js:43055-43064 layout
+//@ chunk-g88zyy4n.js:43568-43577 layout
 var MAX_STACKED_COMMANDS = 5;
-//@ chunk-3g0djq3w.js:43064-43668 layout
+//@ chunk-g88zyy4n.js:43577-44181 layout
 function splitStackedCommands(text, commandArgs, commands, shouldSkip) {
   if (commandArgs === undefined && shouldSkip === undefined)
     return {
@@ -2812,10 +2843,10 @@ function splitStackedCommands(text, commandArgs, commands, shouldSkip) {
   let remaining = text;
   let remainingArgs = commandArgs;
   let capped = false;
-  for (let k = 0; ; k++) {
+  for (let j = 0; ; j++) {
     let trimmed = remaining.trimStart();
     if (!trimmed.startsWith("/")) break;
-    if (k >= MAX_STACKED_COMMANDS) {
+    if (j >= MAX_STACKED_COMMANDS) {
       capped = true;
       break;
     }
@@ -2851,7 +2882,7 @@ function splitStackedCommands(text, commandArgs, commands, shouldSkip) {
     capped,
   };
 }
-//@ chunk-3g0djq3w.js:43668-43782 facade-exports
+//@ chunk-g88zyy4n.js:44181-44295 facade-exports
 /**
  * 技能加载中的元数据标签文本（command-name/message 标签）。
  */
@@ -2863,14 +2894,14 @@ function formatSkillLoadingMetadata(skillName, _progressMessage = "loading") {
   ].join(`
 `);
 }
-//@ chunk-3g0djq3w.js:43782-43818 facade-exports
+//@ chunk-g88zyy4n.js:44295-44331 facade-exports
 /**
  * 消息是否是技能加载中的元数据。
  */
 function isSkillLoadingMetadata(metadataText, skillName) {
   return metadataText === formatSkillLoadingMetadata(skillName);
 }
-//@ chunk-3g0djq3w.js:43818-43957 fingerprint (2.1.88 match: formatSlashCommandLoadingMetadata, 1)
+//@ chunk-g88zyy4n.js:44331-44470 fingerprint (2.1.88 match: formatSlashCommandLoadingMetadata, 1)
 function formatSlashCommandLoadingMetadata(commandName, args) {
   return [
     `<${COMMAND_MESSAGE}>${commandName}</${COMMAND_MESSAGE}>`,
@@ -2879,7 +2910,7 @@ function formatSlashCommandLoadingMetadata(commandName, args) {
   ].filter(Boolean).join(`
 `);
 }
-//@ chunk-3g0djq3w.js:43957-44243 fingerprint (2.1.88 match: formatCommandLoadingMetadata, 0.703)
+//@ chunk-g88zyy4n.js:44470-44756 fingerprint (2.1.88 match: formatCommandLoadingMetadata, 0.703)
 function formatCommandLoadingMetadata(command, args) {
   if (command.userInvocable !== false) return formatSlashCommandLoadingMetadata(command.name, args);
   if (
@@ -2893,7 +2924,7 @@ function formatCommandLoadingMetadata(command, args) {
     return formatSkillLoadingMetadata(command.name, command.progressMessage);
   return formatSlashCommandLoadingMetadata(command.name, args);
 }
-//@ chunk-3g0djq3w.js:45446-45742 facade-exports (2.1.88 match: processPromptSlashCommand, 1)
+//@ chunk-g88zyy4n.js:45959-46255 facade-exports (2.1.88 match: processPromptSlashCommand, 1)
 /**
  * processPromptSlashCommand：只处理 prompt 型命令，展开为消息。
  */
@@ -2926,7 +2957,7 @@ async function processPromptSlashCommand(
     readOnly,
   );
 }
-//@ chunk-3g0djq3w.js:45742-50793 fingerprint (2.1.88 match: getMessagesForPromptSlashCommand, 0.431)
+//@ chunk-g88zyy4n.js:46255-51309 fingerprint (2.1.88 match: getMessagesForPromptSlashCommand, 0.431)
 /**
  * getMessagesForPromptSlashCommand：prompt 型命令/技能展开为消息（含 MCP prompt、禁止模型调用检查）。
  */
@@ -3244,13 +3275,13 @@ Instruct a worker to use this skill by including "Use the /${sanitizeTelemetrySt
     command,
   };
 }
-//@ chunk-3g0djq3w.js:50793-50861 affinity
+//@ chunk-g88zyy4n.js:51309-51377 affinity
 function concatIfAny(leftBlocks, rightBlocks, fallbackBlocks) {
   return leftBlocks.length > 0 || rightBlocks.length > 0
     ? [...leftBlocks, ...rightBlocks, ...fallbackBlocks]
     : fallbackBlocks;
 }
-//@ chunk-3g0djq3w.js:50861-51001 affinity
+//@ chunk-g88zyy4n.js:51377-51517 affinity
 function insertMessagesInPlace(context, userMessage, result) {
   context.applyMessageOp({
     type: "insert-after-uuid",
@@ -3263,7 +3294,7 @@ function insertMessagesInPlace(context, userMessage, result) {
     settledInPlace: true,
   };
 }
-//@ chunk-3g0djq3w.js:51001-51077 affinity
+//@ chunk-g88zyy4n.js:51517-51593 affinity
 function markTurnCompanions(messages) {
   return messages.map((message) =>
     message.type === "user"
@@ -3276,11 +3307,11 @@ function markTurnCompanions(messages) {
 }
 export {
   createAgentStatusEmitter,
+  SESSION_START_HOOKS_MESSAGE,
+  isSlashCommandBlockedByEndedByModel,
   commandThrowTextForTranscript,
   looksLikeCommand,
-  isSlashCommandBlockedByEndedByModel,
   formatSkillLoadingMetadata_2,
-  SESSION_START_HOOKS_MESSAGE,
   formatSkillLoadingMetadata,
   isSkillLoadingMetadata,
   processPromptSlashCommand,

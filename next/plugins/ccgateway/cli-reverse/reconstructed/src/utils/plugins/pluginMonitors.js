@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件监视器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 9
  */
 import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -42,23 +42,23 @@ import { getPluginRegistry } from "./pluginLoadState.js";
 import { isCustomizationDisabled } from "../settings/customizationDisabled.js";
 import { arePluginHooksHeld } from "../permissions/permissionsLoader.js";
 import { useSession } from "../../context/session.js";
-import { useAppStoreDirect, useSetAppState, useAppState } from "../../state/AppState.js";
-import { useSetVoiceState } from "../../context/voice.js";
+import { useAppStoreDirect, useAppState } from "../../state/AppState.js";
+import { useTaskFramework } from "../../context/voice.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { suggestionCacheBySessionRoot } from "../suggestions/suggestionCache.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:213490-213494 placement
+//@ chunk-czq1j3j2.js:218525-218529 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:213490", () => {
+deferInit("chunk-czq1j3j2.js:218525", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:213861-213865 placement
+//@ chunk-czq1j3j2.js:218896-218900 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:213861", () => {
+deferInit("chunk-czq1j3j2.js:218896", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:213865-214530 placement
+//@ chunk-czq1j3j2.js:218900-219565 placement
 async function resolvePluginMonitorCommand(monitor, plugin, credentials) {
   let options = plugin.manifest.userConfig
     ? await loadPluginOptions(marketplaceSource(plugin), credentials)
@@ -87,7 +87,7 @@ async function resolvePluginMonitorCommand(monitor, plugin, credentials) {
     pluginRoot: plugin.path,
   };
 }
-//@ chunk-18hwfzwa.js:214530-214879 placement
+//@ chunk-czq1j3j2.js:219565-219914 placement
 async function resolvePluginMonitors(plugins, credentials) {
   let commands = [];
   let hadFailure = false;
@@ -108,7 +108,7 @@ async function resolvePluginMonitors(plugins, credentials) {
   else logFeatureOk("plugin_load_monitors");
   return commands;
 }
-//@ chunk-18hwfzwa.js:214879-215163 placement
+//@ chunk-czq1j3j2.js:219914-220198 placement
 function rateLimitMonitorOutput(
   monitor,
   output,
@@ -137,7 +137,7 @@ function rateLimitMonitorOutput(
     onExit: flushSuppressed,
   };
 }
-//@ chunk-18hwfzwa.js:215163-215899 placement
+//@ chunk-czq1j3j2.js:220198-220949 placement
 async function startPluginMonitor(resolvedMonitor, host, context) {
   if (shouldDisableAllHooksIncludingManaged()) return;
   if (shouldSkipHookDueToTrust()) {
@@ -171,6 +171,7 @@ async function startPluginMonitor(resolvedMonitor, host, context) {
       toolUseId: undefined,
       agentId: undefined,
       kind: "monitor",
+      stopsOnExit: true,
     },
     context,
   );
@@ -189,7 +190,7 @@ async function startPluginMonitor(resolvedMonitor, host, context) {
   });
   return outputSnapshot.id;
 }
-//@ chunk-18hwfzwa.js:215899-216443 placement
+//@ chunk-czq1j3j2.js:220949-221493 placement
 /**
  * 启动插件声明的 monitor（后台命令，输出作为事件送入会话）：按 always/on-skill-invoke 触发方式，未接受工作区信任时跳过，失败记录 plugin_arm_monitor。
  */
@@ -226,23 +227,22 @@ async function armPluginMonitors(
   if (hadFailure) logFeatureSad("plugin_arm_monitor", "plugin_arm_monitor_failed");
   else logFeatureOk("plugin_arm_monitor");
 }
-//@ chunk-18hwfzwa.js:216443-216886 placement
+//@ chunk-czq1j3j2.js:221493-221924 placement
 function shouldArmPluginMonitors({ enabled }) {
   let session = useSession();
   let appStoreDirect = useAppStoreDirect();
-  let setAppState = useSetAppState();
-  let setVoiceState = useSetVoiceState();
+  let taskRegistry = useTaskFramework();
   let { storageV5, credentials } = useTheme_2();
-  let enabled_2 = useAppState((state) => state.plugins.enabled);
+  let armed = useAppState((state) => state.plugins.enabled);
   useEffect(() => {
     if (!enabled) return;
     let makeContext = () => ({
       abortController: new AbortController(),
-      taskRegistry: setVoiceState,
+      taskRegistry,
       storageV5,
       credentials,
     });
-    armPluginMonitors(enabled_2, (monitor) => monitor.when === "always", session.host, makeContext());
+    armPluginMonitors(armed, (monitor) => monitor.when === "always", session.host, makeContext());
     return suggestionCacheBySessionRoot.of(session).skillInvoked.subscribe((skillName) => {
       armPluginMonitors(
         appStoreDirect.getState().plugins.enabled,
@@ -251,11 +251,11 @@ function shouldArmPluginMonitors({ enabled }) {
         makeContext(),
       );
     });
-  }, [enabled, enabled_2, session, appStoreDirect, setAppState, setVoiceState, storageV5, credentials]);
+  }, [enabled, armed, session, appStoreDirect, taskRegistry, storageV5, credentials]);
 }
-//@ chunk-18hwfzwa.js:216886-216890 placement
+//@ chunk-czq1j3j2.js:221924-221928 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:216886", () => {
+deferInit("chunk-czq1j3j2.js:221924", () => {
   init_react_production();
 });
 export { shouldArmPluginMonitors };

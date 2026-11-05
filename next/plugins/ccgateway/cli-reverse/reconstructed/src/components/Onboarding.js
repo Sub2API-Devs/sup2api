@@ -3,9 +3,9 @@
  *
  * 首次启动引导：主题、登录/OAuth、安全说明、终端设置等可跳过步骤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Onboarding.tsx
- * pieces: chunk-1tz177x8.js (1), chunk-p8fze0jh.js (10)
+ * pieces: chunk-f284hj51.js (1), chunk-s0v4e2v6.js (10)
  * attribution: fingerprint 2, placement 6, sole-consumer 2, affinity 1
  */
 import { resetStateForTests, resetStateLogPrefix } from "../cli/handlers/pluginTest/engineShim.js";
@@ -65,7 +65,7 @@ import { deferInit, beginDeferredInits, runDeferredInits } from "../../runtime/d
 // This module is the first evaluated of an import cycle of 5 modules closed by ../cli/handlers/pluginTest/runner.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/cli/handlers/pluginTest/runner.js");
-//@ chunk-1tz177x8.js:22768-22923 fingerprint (2.1.88 match: SkippableStep, 0.48)
+//@ chunk-f284hj51.js:23921-24076 fingerprint (2.1.88 match: SkippableStep, 0.479)
 function SkippableStep(t0) {
   let { plugin, event, reason, skip } = t0;
   let isResetState = plugin === resetStateForTests && skip?.kind === "shape";
@@ -77,17 +77,17 @@ function SkippableStep(t0) {
       }
     : undefined;
 }
-//@ chunk-p8fze0jh.js:16213-16217 placement
+//@ chunk-s0v4e2v6.js:17390-17394 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:16213", () => {
+deferInit("chunk-s0v4e2v6.js:17390", () => {
   init_react_production();
 });
-//@ chunk-p8fze0jh.js:16217-16221 placement
+//@ chunk-s0v4e2v6.js:17394-17398 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:16217", () => {
+deferInit("chunk-s0v4e2v6.js:17394", () => {
   init_react_production();
 });
-//@ chunk-p8fze0jh.js:19010-19177 placement
+//@ chunk-s0v4e2v6.js:20187-20354 placement
 function PressEnterToContinue() {
   let $ = useMemoCache(1);
   let hintElement;
@@ -107,31 +107,31 @@ function PressEnterToContinue() {
   } else hintElement = $[0];
   return hintElement;
 }
-//@ chunk-p8fze0jh.js:19177-19181 placement
+//@ chunk-s0v4e2v6.js:20354-20358 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:19177", () => {
+deferInit("chunk-s0v4e2v6.js:20354", () => {
   init_react_production();
 });
-//@ chunk-p8fze0jh.js:19181-19185 placement
+//@ chunk-s0v4e2v6.js:20358-20362 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:19181", () => {
+deferInit("chunk-s0v4e2v6.js:20358", () => {
   init_react_production();
 });
-//@ chunk-p8fze0jh.js:19185-19189 placement
+//@ chunk-s0v4e2v6.js:20362-20366 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:19185", () => {
+deferInit("chunk-s0v4e2v6.js:20362", () => {
   init_react_production();
 });
-//@ chunk-p8fze0jh.js:20134-20143 sole-consumer
+//@ chunk-s0v4e2v6.js:21311-21320 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:20134", () => {
+deferInit("chunk-s0v4e2v6.js:21311", () => {
   OrderedListComponent.Item = OrderedListItem;
 });
-//@ chunk-p8fze0jh.js:20143-20151 sole-consumer
+//@ chunk-s0v4e2v6.js:21320-21328 sole-consumer
 var OnboardingInner = OrderedListComponent;
-//@ chunk-p8fze0jh.js:20151-20166 affinity
+//@ chunk-s0v4e2v6.js:21328-21343 affinity
 function noop() {}
-//@ chunk-p8fze0jh.js:20166-23783 fingerprint (2.1.88 match: Onboarding, 0.631)
+//@ chunk-s0v4e2v6.js:21343-24938 fingerprint (2.1.88 match: Onboarding, 0.626)
 /**
  * 首次引导：依次展示主题选择、登录（OAuth/网关）、安全须知、终端设置（shift+enter 等）等步骤，记录 tengu_began_setup/tengu_onboarding_step。
  */
@@ -215,7 +215,6 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
       showIntroText: true,
       helpText: "To change this later, run /theme",
       hideEscToCancel: true,
-      skipExitHandling: true,
     }),
   });
   let securityStep = jsxProd_default_2(Box, {

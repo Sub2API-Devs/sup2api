@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：open 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (1)
  * attribution: placement 1
  */
 import {
@@ -28,7 +28,7 @@ import { openArtifactFrame, markFrameOpenOutcome } from "../permissions/ownershi
 import { autoOpenArtifactPreview } from "../../../services/artifacts/autoOpen.js";
 import { derivePublishContext } from "../permissions/consentStamps.js";
 
-//@ chunk-8wvtd8sr.js:129561-132361 placement
+//@ chunk-xzmy9dn4.js:130418-133218 placement
 /**
  * open 动作：不可用提示、动作处理器与结果渲染。
  */

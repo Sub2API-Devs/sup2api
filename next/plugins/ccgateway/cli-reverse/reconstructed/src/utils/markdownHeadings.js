@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Markdown 标题解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wj577vf9.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ptrwzav4.js (31)
  * attribution: placement 25, affinity 2, layout 4
  */
 import {
@@ -33,7 +33,7 @@ import { _Lexer } from "../../vendor/marked/lib/marked.esm.js";
 import { findLastStringToken } from "./bash/shellCompletion.js";
 import { joinRawSegments } from "../ink/render-border.js";
 
-//@ chunk-wj577vf9.js:2258-2391 placement (2.1.88 match: checkAgentDescriptions, 0.305)
+//@ chunk-ptrwzav4.js:2258-2391 placement (2.1.88 match: checkAgentDescriptions, 0.305)
 /**
  * 提取表格/列表 token（doctor 的上下文警告用，切分可疑）。
  */
@@ -47,7 +47,7 @@ function checkAgentDescriptions(agentInfo) {
         ? (agentInfo.tokens ?? [])
         : [];
 }
-//@ chunk-wj577vf9.js:2391-2607 placement
+//@ chunk-ptrwzav4.js:2391-2607 placement
 function splitHeadingLines(highlight, text) {
   let tokens = [];
   let lexState = lexResult(
@@ -72,7 +72,7 @@ function splitHeadingLines(highlight, text) {
   }
   return tokens;
 }
-//@ chunk-wj577vf9.js:2607-2785 placement
+//@ chunk-ptrwzav4.js:2607-2785 placement
 function lexDecliningBlock(highlight, state) {
   let firstBlock = consumeFirstBlock(state);
   let { header = "", fromRow = state.rest } = state.declining ?? {};
@@ -84,7 +84,7 @@ function lexDecliningBlock(highlight, state) {
       ? headingTokenToBlock(highlight, state.rest)
       : lexTrimmedBlock(highlight, state, firstBlock);
 }
-//@ chunk-wj577vf9.js:2785-2931 placement
+//@ chunk-ptrwzav4.js:2785-2931 placement
 function hasMatchingTextDeep(highlight, text) {
   let tokens = hasOverlongLine(text) ? new _Lexer(highlight.defaults).blockTokens(text) : [];
   let found = false;
@@ -94,7 +94,7 @@ function hasMatchingTextDeep(highlight, text) {
   }
   return found;
 }
-//@ chunk-wj577vf9.js:2931-3069 placement
+//@ chunk-ptrwzav4.js:2931-3069 placement
 function getTokenTexts(token) {
   let hasPlainText =
     (isParagraphToken(token) || token.type === "heading" || token.type === "text") &&
@@ -102,7 +102,7 @@ function getTokenTexts(token) {
     typeof token.text === "string";
   return MarkdownBody(token) ? [token.raw] : hasPlainText ? [token.text] : [];
 }
-//@ chunk-wj577vf9.js:3069-3216 placement
+//@ chunk-ptrwzav4.js:3069-3216 placement
 function lexTrimmedBlock(highlight, state, text) {
   let tokens = highlight.lexer(text);
   let prefixTokenCount =
@@ -112,7 +112,7 @@ function lexTrimmedBlock(highlight, state, text) {
     ? lexResult(tokens.slice(0, prefixTokenCount), state.rest.slice(tokenSplitOffset), MARKDOWN_LIMITS)
     : parseHeadingBlock(highlight, state, tokens);
 }
-//@ chunk-wj577vf9.js:3216-3472 placement
+//@ chunk-ptrwzav4.js:3216-3472 placement
 function parseHeadingBlock(highlight, state, tokens) {
   let [firstToken] = tokens;
   let isSingleToken = tokens.length === 1;
@@ -132,7 +132,7 @@ function parseHeadingBlock(highlight, state, tokens) {
         ? parseSetextHeading(highlight, firstToken, state.rest)
         : resolveLeadingTokens(state, tokens);
 }
-//@ chunk-wj577vf9.js:3472-3687 placement
+//@ chunk-ptrwzav4.js:3472-3687 placement
 function resolveLeadingTokens(state, tokens) {
   let [firstToken] = tokens;
   let endsWithContent = tokens.findLastIndex(isNotSpaceToken) <= 0;
@@ -150,7 +150,7 @@ function resolveLeadingTokens(state, tokens) {
         ? lexResult(tokens, restAfterBlock(state), state.lines)
         : lexAsSingleParagraph(state.rest);
 }
-//@ chunk-wj577vf9.js:3687-3829 placement
+//@ chunk-ptrwzav4.js:3687-3829 placement
 function lexListWithoutLastItem(state, listToken) {
   let sliced = listToken.items.slice(0, -1);
   let raw = joinRawSegments(sliced);
@@ -158,7 +158,7 @@ function lexListWithoutLastItem(state, listToken) {
     ? lexResult([withRawItems(listToken, raw, sliced)], state.rest.slice(raw.length), state.lines)
     : lexAsSingleParagraph(state.rest);
 }
-//@ chunk-wj577vf9.js:3829-4008 placement
+//@ chunk-ptrwzav4.js:3829-4008 placement
 function lexParagraphToken(highlight, text) {
   let paragraphLines = collectParagraphLines(text);
   let fitsWindow =
@@ -177,14 +177,14 @@ function lexParagraphToken(highlight, text) {
     MARKDOWN_LIMITS,
   );
 }
-//@ chunk-wj577vf9.js:4008-4041 placement
+//@ chunk-ptrwzav4.js:4008-4041 placement
 var headingTokenToBlock = (highlight, text) =>
   isLheadingStart(text) ? lexAsSingleParagraph(text) : lexParagraphToken(highlight, text);
-//@ chunk-wj577vf9.js:4041-4093 placement
+//@ chunk-ptrwzav4.js:4041-4093 placement
 function isLheadingStart(text) {
   return regExp.test(text) && GFM_RULES.lheading.test(text);
 }
-//@ chunk-wj577vf9.js:4093-4285 placement
+//@ chunk-ptrwzav4.js:4093-4285 placement
 function collectParagraphLines(text) {
   let result = cachedLexer();
   let paragraphLines = readParagraphLines(text, "");
@@ -202,7 +202,7 @@ ${paragraphLines.nextLines}`;
   }
   return result;
 }
-//@ chunk-wj577vf9.js:4285-4532 placement
+//@ chunk-ptrwzav4.js:4285-4532 placement
 function readParagraphLines(text, prefix) {
   let firstLineEnd = advancePastLines(text, 0, MARKDOWN_LIMITS);
   let contentEnd =
@@ -230,7 +230,7 @@ function readParagraphLines(text, prefix) {
     isOpen,
   };
 }
-//@ chunk-wj577vf9.js:4532-4850 placement
+//@ chunk-ptrwzav4.js:4532-4850 placement
 function parseSetextHeading(lexer, paragraphToken, markdown) {
   let firstLineText = firstLine(paragraphToken.raw);
   let tableEnd = measureTableLength(firstLineText, markdown);
@@ -257,7 +257,7 @@ function parseSetextHeading(lexer, paragraphToken, markdown) {
         MARKDOWN_LIMITS,
       );
 }
-//@ chunk-wj577vf9.js:4850-5152 placement
+//@ chunk-ptrwzav4.js:4850-5152 placement
 function headingConsumesRest(lexer, headerText, blockRanges, markdown) {
   let heading = headingTokenToBlock(lexer, markdown);
   let consumedLength = headerText.length + blockRanges.join("").length;
@@ -279,7 +279,7 @@ function headingConsumesRest(lexer, headerText, blockRanges, markdown) {
       : undefined,
   };
 }
-//@ chunk-wj577vf9.js:5152-5283 placement
+//@ chunk-ptrwzav4.js:5152-5283 placement
 function measureTableLength(headerLine, text) {
   let length = headerLine.length;
   let isGrowing = length < text.length;
@@ -291,25 +291,25 @@ function measureTableLength(headerLine, text) {
   }
   return length;
 }
-//@ chunk-wj577vf9.js:5283-5422 placement
+//@ chunk-ptrwzav4.js:5283-5422 placement
 function measureTableRow(headerLine, remaining) {
   let sliced = (GFM_RULES.table.exec(headerLine + remaining)?.[0] ?? headerLine).slice(headerLine.length);
   let replaced = sliced.replace(TRAILING_NEWLINES_RE, "");
   return replaced !== "" && sliced.length > replaced.length ? replaced.length + 1 : replaced.length;
 }
-//@ chunk-wj577vf9.js:5422-5511 placement (2.1.88 match: applyMarkdown, 0.759)
+//@ chunk-ptrwzav4.js:5422-5511 placement (2.1.88 match: applyMarkdown, 0.761)
 function applyMarkdown(lexer, markdown) {
   let [token] = hasOverlongLine(markdown) ? [] : lexer.lexer(markdown);
   return MarkdownBody(token) && token.raw.length === markdown.length ? token : undefined;
 }
-//@ chunk-wj577vf9.js:5511-5608 placement
+//@ chunk-ptrwzav4.js:5511-5608 placement
 function splitBlockRanges(text, position) {
   let ranges = [];
   for (let start = 0; start < text.length; start = advancePastLines(text, start, position))
     ranges.push(text.slice(start, advancePastLines(text, start, position)));
   return ranges;
 }
-//@ chunk-wj577vf9.js:6673-6722 affinity
+//@ chunk-ptrwzav4.js:6673-6722 affinity
 function lexResult(taken, rest, lines) {
   return {
     taken,
@@ -317,11 +317,11 @@ function lexResult(taken, rest, lines) {
     lines,
   };
 }
-//@ chunk-wj577vf9.js:6722-6759 affinity
+//@ chunk-ptrwzav4.js:6722-6759 affinity
 function lexAsSingleParagraph(content) {
   return lexResult([makeParagraphToken(content)], "", MARKDOWN_LIMITS);
 }
-//@ chunk-wj577vf9.js:6759-6823 placement (2.1.88 match: cachedLexer, 0.795)
+//@ chunk-ptrwzav4.js:6759-6823 placement (2.1.88 match: cachedLexer, 0.795)
 function cachedLexer() {
   return {
     type: "paragraph",
@@ -330,7 +330,7 @@ function cachedLexer() {
     tokens: [],
   };
 }
-//@ chunk-wj577vf9.js:6823-6891 layout (2.1.88 match: cachedLexer, 0.795)
+//@ chunk-ptrwzav4.js:6823-6891 layout (2.1.88 match: cachedLexer, 0.795)
 function makeParagraphToken(content) {
   return {
     type: "paragraph",
@@ -339,7 +339,7 @@ function makeParagraphToken(content) {
     tokens: [makeTextToken(content)],
   };
 }
-//@ chunk-wj577vf9.js:6891-6950 layout
+//@ chunk-ptrwzav4.js:6891-6950 layout
 function makeTextToken(text) {
   return {
     type: "text",
@@ -348,7 +348,7 @@ function makeTextToken(text) {
     escaped: false,
   };
 }
-//@ chunk-wj577vf9.js:6950-6995 layout
+//@ chunk-ptrwzav4.js:6950-6995 layout
 function withRawRows(token, raw, rows) {
   return {
     ...token,
@@ -356,7 +356,7 @@ function withRawRows(token, raw, rows) {
     rows,
   };
 }
-//@ chunk-wj577vf9.js:6995-7041 layout
+//@ chunk-ptrwzav4.js:6995-7041 layout
 function withRawItems(token, raw, items) {
   return {
     ...token,
@@ -364,11 +364,11 @@ function withRawItems(token, raw, items) {
     items,
   };
 }
-//@ chunk-wj577vf9.js:7041-7080 placement (2.1.88 match: parseChord, 1)
+//@ chunk-ptrwzav4.js:7041-7080 placement (2.1.88 match: parseChord, 1)
 function isNotSpaceToken(input) {
   return input.type !== "space";
 }
-//@ chunk-wj577vf9.js:7080-7141 placement (2.1.88 match: parseChord, 0.829)
+//@ chunk-ptrwzav4.js:7080-7141 placement (2.1.88 match: parseChord, 0.83)
 function isBlankToken_2(input) {
   return (
     input.type === "space" ||
@@ -377,19 +377,19 @@ function isBlankToken_2(input) {
 `)
   );
 }
-//@ chunk-wj577vf9.js:7141-7185 placement
+//@ chunk-ptrwzav4.js:7141-7185 placement
 function isParagraphToken(token) {
   return token?.type === "paragraph";
 }
-//@ chunk-wj577vf9.js:7185-7224 placement (2.1.88 match: hasActualOperatorNodes, 1)
+//@ chunk-ptrwzav4.js:7185-7224 placement (2.1.88 match: hasActualOperatorNodes, 1)
 function hasActualOperatorNodes(rootNode) {
   return rootNode?.type === "list";
 }
 export {
+  lexResult,
+  splitHeadingLines,
   isBlankToken_2,
   hasActualOperatorNodes,
   isNotSpaceToken,
-  lexResult,
-  splitHeadingLines,
   checkAgentDescriptions,
 };

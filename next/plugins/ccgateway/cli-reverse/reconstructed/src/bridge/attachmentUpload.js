@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：桥接会话附件上传（校验路径、分块上传、重发与项目目录上传）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7kpfrhzn.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-033d1naw.js (11)
  * attribution: placement 11
  */
 import { basename } from "path";
@@ -26,7 +26,7 @@ import {
   isBridgeFileLoginRefused,
   multipartParts,
   UPLOAD_TIMEOUT_MS,
-  getUploadUrl,
+  uploadFile,
   NON_TEMPORARY_ERRNOS,
   MIN_RESEND_MAX_BYTES,
   RESEND_DEADLINE_LONG_MS,
@@ -62,7 +62,7 @@ import { getPlatform } from "../utils/platform.js";
 import { openWithAbort } from "../utils/fsSafety/pathRevalidation.js";
 import { safeResolvePath, getFsImplementation } from "../utils/fsOperations.js";
 
-//@ chunk-7kpfrhzn.js:12531-12625 placement
+//@ chunk-033d1naw.js:10739-10833 placement
 function logUploadFailure(code, meta, serverCode) {
   logFeatureSad(
     "bridge_attachment_upload",
@@ -75,7 +75,7 @@ function logUploadFailure(code, meta, serverCode) {
         },
   );
 }
-//@ chunk-7kpfrhzn.js:12625-13694 placement
+//@ chunk-033d1naw.js:10833-11902 placement
 /**
  * 解析上传响应：201 取 file_uuid；413 解析服务器上限（图片单独提示）；其他状态转错误，并判断是否可重发。
  */
@@ -136,7 +136,7 @@ function handleUploadResponse(response, filename, size, telemetry, reportFailure
   }
   return toError(`upload failed: server returned ${response.status}`);
 }
-//@ chunk-7kpfrhzn.js:13694-13898 placement
+//@ chunk-033d1naw.js:11902-12106 placement
 function buildUploadHeaders(token, boundary, contentLength, uploadLane) {
   return {
     "User-Agent": claudeCodeUserAgent(),
@@ -148,7 +148,7 @@ function buildUploadHeaders(token, boundary, contentLength, uploadLane) {
     }),
   };
 }
-//@ chunk-7kpfrhzn.js:13898-14933 placement
+//@ chunk-033d1naw.js:12106-13165 placement
 /**
  * 以 multipart 方式 POST 一个 buffer 到上传地址（35 秒超时），返回 file_uuid 或错误并记录失败分类。
  */
@@ -173,15 +173,15 @@ async function uploadBuffer(
       error: formatUploadLimitError(content.length, MAX_UPLOAD_BYTES),
     };
   }
-  let route = await getUploadAuth(credentials);
-  if (!route) {
+  let uploadAuth = await getUploadAuth(credentials);
+  if (!uploadAuth) {
     logUploadDebug("skip: no oauth token");
     onFailure("no_token");
     return {
       error: "upload failed: no OAuth token available",
     };
   }
-  if (isBridgeFileLoginRefused(route)) {
+  if (isBridgeFileLoginRefused(uploadAuth)) {
     onFailure("stored_login_refused");
     return {
       error: new StoredLoginHeldBackError(storedLoginRefusalReason()).message,
@@ -192,8 +192,9 @@ async function uploadBuffer(
   let abortController = new AbortController();
   let stallTimer = createStallTimer(abortController, UPLOAD_TIMEOUT_MS);
   try {
-    let response = await axios_default.post(getUploadUrl(route), buffer, {
-      headers: buildUploadHeaders(route.token, boundary, buffer.length, telemetry?.upload_lane),
+    let url = uploadFile(uploadAuth, telemetry?.session_received);
+    let response = await axios_default.post(url, buffer, {
+      headers: buildUploadHeaders(uploadAuth.token, boundary, buffer.length, telemetry?.upload_lane),
       timeout: UPLOAD_TIMEOUT_MS,
       signal:
         signal === undefined ? abortController.signal : AbortSignal.any([signal, abortController.signal]),
@@ -219,12 +220,12 @@ async function uploadBuffer(
     stallTimer.clear();
   }
 }
-//@ chunk-7kpfrhzn.js:14933-14994 placement
+//@ chunk-033d1naw.js:13165-13226 placement
 function countUploadPost(counter) {
   counter.made++;
   counter.firstAtMs ??= counter.clock.monotonicNow();
 }
-//@ chunk-7kpfrhzn.js:14994-15231 placement
+//@ chunk-033d1naw.js:13226-13463 placement
 function getResendBlocker(counter, size) {
   let { underWay, lastFailedAtMs } = bridgeHostState().uploadResends;
   let now = counter.clock.monotonicNow();
@@ -237,7 +238,7 @@ function getResendBlocker(counter, size) {
   if (lastFailedAtMs !== undefined && now - lastFailedAtMs < RESEND_COOLDOWN_MS) return "cooling_down";
   return underWay >= MAX_CONCURRENT_RESENDS ? "too_many_at_once" : undefined;
 }
-//@ chunk-7kpfrhzn.js:15231-15495 placement
+//@ chunk-033d1naw.js:13463-13727 placement
 async function waitForResendSlot(counter, size, signal) {
   let resendBlocker = getResendBlocker(counter, size);
   if (resendBlocker !== undefined) return resendBlocker;
@@ -261,7 +262,7 @@ async function waitForResendSlot(counter, size, signal) {
     uploadResends.underWay--;
   };
 }
-//@ chunk-7kpfrhzn.js:15495-16416 placement
+//@ chunk-033d1naw.js:13727-14649 placement
 /**
  * 带重发的上传循环：网络错误/断连/5xx 且未超出次数、大小、截止时间与并发限制时退避后重发。
  */
@@ -343,11 +344,11 @@ async function uploadWithResends(post, file, counter, signal, meta) {
     return result;
   }
 }
-//@ chunk-7kpfrhzn.js:16416-18448 placement
+//@ chunk-033d1naw.js:14649-16682 placement
 /**
  * 通过 door 通道把文件写入项目文件夹；重名时用带时间戳的新名再试一次。
  */
-async function uploadToProjectFolder(filePath, size, door, options) {
+async function writeAttachmentToProjectFolder(filePath, size, door, options) {
   let { telemetry } = options;
   let gated = checkUploadAllowed(telemetry);
   if (gated) {
@@ -451,7 +452,7 @@ async function uploadToProjectFolder(filePath, size, door, options) {
     error: `upload failed: a file named ${fileName} is already in the project folder`,
   };
 }
-//@ chunk-7kpfrhzn.js:18448-19227 placement
+//@ chunk-033d1naw.js:16682-17461 placement
 /**
  * 上传桥接会话的附件：路径必须经过校验，按大小分块上传。
  */
@@ -493,7 +494,7 @@ async function uploadBridgeAttachment(filePath, approvedIdentity, options) {
     throw error;
   }
 }
-//@ chunk-7kpfrhzn.js:19227-19240 placement
+//@ chunk-033d1naw.js:17461-17474 placement
 var ATTACHMENT_CHUNK_BYTES = 65536;
 export {
   uploadBuffer,
@@ -504,5 +505,5 @@ export {
   logUploadFailure,
   buildUploadHeaders,
   handleUploadResponse,
-  uploadToProjectFolder,
+  writeAttachmentToProjectFolder,
 };

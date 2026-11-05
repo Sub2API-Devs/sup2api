@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：语音音量钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7p2hc4jn.js (1), chunk-yj65zw1g.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-42wa4pww.js (1), chunk-77bb8s6j.js (1)
  * attribution: placement 2
  */
 import { useVoiceStore } from "../context/voice.js";
@@ -21,14 +21,14 @@ import {
 import { isXtermJs } from "../ink/terminal.js";
 import { snapTo360, hueToRgb } from "../components/Spinner/utils.js";
 
-//@ chunk-yj65zw1g.js:1015-1055 placement
+//@ chunk-77bb8s6j.js:1015-1055 placement
 /**
  * 音量电平平滑器。
  */
 function useVoiceLevelSmoother() {
   return useVoiceStore().levelSmoother;
 }
-//@ chunk-7p2hc4jn.js:51058-51533 placement
+//@ chunk-42wa4pww.js:51058-51533 placement
 /**
  * 录音时按最近音量计算电平条字符与颜色（随时间变色，静音时灰色）；减少动画或未录音时返回 null。
  */

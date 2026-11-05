@@ -1,14 +1,14 @@
 /**
  * lodash-es/countBy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { import_createAggregator } from "./_inlinedHelpers.js";
 import { assignValueRaw } from "../../src/utils/git/gitSafeEnv.js";
 
-//@ chunk-e6aww6q8.js:2230725-2230847 placement
+//@ chunk-5xgkngpb.js:2285734-2285856 placement
 /**
  * lodash countBy 的内联副本（第三方代码误归 toolSearch）。
  */

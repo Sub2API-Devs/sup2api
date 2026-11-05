@@ -1,572 +1,571 @@
-{"id":"chunk-bzr73sfg.js#lE","doc":"win32-input-mode 序列（CSI Vk;Sc;Uc;Kd;Cs;Rc _）的正则、控制键状态位（ALT/CTRL/SHIFT）、虚拟键码（VK_BACK/TAB/RETURN/MENU/ESCAPE/SPACE/F1–F12），以及导航键（PageUp/End/Home/方向键/Insert/Delete）到 VT 序列的映射表。2.1.88 没有。"}
-{"id":"chunk-bzr73sfg.js#Mp","doc":"把一条 win32-input-mode 按键记录还原成等价的 VT 序列数组：只处理按下事件（松开 Alt 时带字符的记录除外）；导航键/F1–F12 生成 CSI 序列并编码修饰键；Backspace/Tab/Enter/Esc 按 Ctrl/Alt 变形；AltGr（Ctrl+Alt 且有可打印字符）当普通字符；处理 UTF-16 代理对（高位代理暂存到返回的 highSurrogate）；按重复计数（最多 8）复制。返回 {sequences, highSurrogate}，不是该格式返回 null。"}
-{"id":"chunk-bzr73sfg.js#al","doc":"取 params[index] 转整数，缺失或空串返回 fallback。"}
-{"id":"chunk-bzr73sfg.js#Rp","doc":"按 xterm 规则把字符码转成 Ctrl 组合产生的控制码（@–_ 与 a–z 取低 5 位，2/空格→NUL，3–7→ESC..US，8/?→DEL，/→US）。"}
-{"id":"chunk-bzr73sfg.js#CE","doc":"按键与终端应答的正则：ESC+字母（Meta）、功能键、CSI u（kitty 键盘协议，含 :shifted:base 子参数）、modifyOtherKeys（CSI 27;mod;code ~）、DECRPM、DA1/DA2、kitty 标志查询应答、光标位置、单元格像素尺寸（CSI 6;h;w t）、主题变化通知（CSI ?997;1|2 n）、OSC 应答、XTVERSION、kitty 图形应答（APC G i=…）、SGR 鼠标及其前缀。"}
-{"id":"chunk-bzr73sfg.js#Dc","doc":"文本是否是被拆开的 SGR 鼠标序列前缀（ESC[< 数字;…，长度不超过 32）。"}
-{"id":"chunk-bzr73sfg.js#sl","doc":"输入在 flush 时剩下的半截转义序列是否还可能被后续字节补全（鼠标前缀、OSC/DCS/APC 串不超过 256 字节、CSI 参数串不超过 64 字节）；是则保留等待，否则当普通按键冲刷出去。"}
-{"id":"chunk-bzr73sfg.js#Bp","doc":"清空分词器里的半截输入，把它记成 droppedMousePrefix（后续文本若是被截断的鼠标序列尾巴会被吞掉）。"}
-{"id":"chunk-bzr73sfg.js#Tp","doc":"把终端对查询的应答解析成结构：DECRPM、DA1/DA2、kitty 键盘标志、光标位置、主题变化通知（997）、单元格像素尺寸、OSC、XTVERSION、kitty 图形应答；都不是返回 null。"}
-{"id":"chunk-bzr73sfg.js#Bc","doc":"按键解析器初始状态：NORMAL 模式，空的半截输入、粘贴缓冲、待拼 UTF-8 字节、被丢弃的鼠标前缀、flush 时冲出的 ESC 前缀、win32 高位代理。"}
-{"id":"chunk-bzr73sfg.js#KE","doc":"是否把 \\b（0x08）当成 Ctrl+Backspace：CLAUDE_CODE_BS_AS_CTRL_BACKSPACE 显式真/假优先；否则只在 win32 且 TERM_PROGRAM 不是 mintty、TERM 不是 cygwin 时为真。"}
-{"id":"chunk-bzr73sfg.js#V_o","doc":"用当前进程环境调用 isBackspaceCtrlBackspace；linux 构建里平台常量是 \"linux\"。"}
-{"id":"chunk-bzr73sfg.js#zp","doc":"终端键序列方言：优先用会话状态里记下的 keyDialect（终端探测结果），否则按 TERM 推断（如 st、rxvt）。"}
-{"id":"chunk-bzr73sfg.js#jE","doc":"AltGr 当文字的模式：CLAUDE_CODE_ALTGR_AS_TEXT 显式真→force、假→off；否则在 Windows Terminal（WT_SESSION）里 auto，其余 off。"}
-{"id":"chunk-bzr73sfg.js#wp","doc":"把 AltGr（Ctrl+Alt）组合产生的可打印字符当成普通文字键：name 为该字符，不带 ctrl/meta。"}
-{"id":"chunk-bzr73sfg.js#Np","doc":"Ctrl+Alt（无 Super）加可打印字符是否按 AltGr 文字处理：mode=off 否，force 是，auto 时字母数字仍当快捷键。"}
-{"id":"chunk-bzr73sfg.js#XE","doc":"把 stdin 数据转成字符串；单字节且高位为 1 的 Buffer 按 Meta 前缀（ESC + 低 7 位）解释。"}
-{"id":"chunk-bzr73sfg.js#Ua","doc":"输入解析主入口：用 termio 分词器把一段 stdin 文本切成序列/文本，产出 ParsedInput 数组和新状态。处理：括号粘贴（ESC[200~/201~ 之间收集到 pasteBuffer，产出 {kind:'paste'}）、终端应答（{kind:'response'}）、SGR/X10 鼠标、焦点进出（{kind:'focus'}）、win32-input-mode、CSI u 里编码的单个 UTF-8 字节（凑齐多字节字符再出）、被截断的鼠标序列尾巴（droppedMousePrefix）、flush 时冲出的 ESC 前缀。input 为 null 表示超时 flush。"}
-{"id":"chunk-bzr73sfg.js#QE","doc":"功能键序列（去掉 ESC 后的代码）→ 键名表；isShiftKey/isCtrlKey 判断 rxvt 风格的 Shift/Ctrl 变体（[a、Oa、[2$、[2^ 等）。"}
-{"id":"chunk-bzr73sfg.js#_c","doc":"xterm 修饰参数（1 + 位掩码）解码成 {shift, meta, ctrl, super}。"}
-{"id":"chunk-bzr73sfg.js#Dp","doc":"CSI u / modifyOtherKeys 里的码点 → 键名：控制键（backspace/tab/return/escape/space）、kitty 小键盘私有码 57399–57426（数字、运算符、方向、翻页、Home/End/Insert/Delete），其余可打印字符转小写字符本身。"}
-{"id":"chunk-bzr73sfg.js#_p","doc":"只有 Ctrl（无 Shift/Meta/Super）时把 Ctrl+[、Ctrl+M、Ctrl+I、Ctrl+H 还原成 escape/return/tab/backspace（kitty 协议会把这些编码成 Ctrl+字母）。"}
-{"id":"chunk-bzr73sfg.js#Op","doc":"CSI u 或 modifyOtherKeys 序列若编码的是 128–255 之间的单个字节（无修饰），返回该字节；用于在原始字节模式下拼 UTF-8。"}
-{"id":"chunk-bzr73sfg.js#$E","doc":"粘贴期间收到 CSI u / modifyOtherKeys 编码的按键时还原成字符（Ctrl+I→\\t、Ctrl+J→\\n、Ctrl+M→\\r），其它序列原样返回。"}
-{"id":"chunk-bzr73sfg.js#wc","doc":"解析 SGR 鼠标序列（ESC[<b;x;y M/m）成 {kind:'mouse', button, action, col, row}；滚轮（button 位 64）不在这里，留给 parseKeypress 变成 wheelup/wheeldown 键。"}
-{"id":"chunk-bzr73sfg.js#Rr","doc":"把一个序列解析成 ParsedKey：依次尝试 CSI u（kitty，含 AltGr 文字、Ctrl 码点修正）、modifyOtherKeys、SGR/X10 滚轮、单字节控制键（\\r/\\n/\\t/\\b/DEL/ESC/空格/Ctrl+字母）、Meta+字母、功能键表；最后对几个常见序列（Home/End/PageUp/PageDown/Ctrl+方向）做固定映射。"}
-{"id":"chunk-bzr73sfg.js#Pp","doc":"鼠标按钮码是滚轮（64/65）时生成 wheelup/wheeldown 键并带上 ctrl/meta/shift 与坐标；否则返回 null。"}
-{"id":"chunk-bzr73sfg.js#Ii","doc":"按给定键名和 ctrl 标志构造 ParsedKey（导航键、无法识别的鼠标序列等用）。"}
-{"id":"chunk-bzr73sfg.js#Ja","doc":"yoga 布局引擎实例（native-ts/yoga-layout 的 YOGA_INSTANCE）；createNode 用 Yoga.Node.create(config) 给元素建布局节点。"}
-{"id":"chunk-bzr73sfg.js#zRr","doc":"鼠标事件基类（继承 TerminalEvent 的基础 Event）：屏幕坐标 col/row 与相对目标的 localCol/localRow、目标格是否空白、所在格的 OSC 8 链接、是否为窗口激活点击、修饰键；allowDefault()/dropAsStray()/endClickChain() 供处理器影响默认行为（选区、多击链）。"}
-{"id":"chunk-bzr73sfg.js#Ey","doc":"新建 stdin 读取器状态：按键解析状态（INITIAL_STATE 的副本）、上次输入时间、UTF-8 字节串截止时间、鼠标前缀丢弃时间、被丢弃前缀的清理时间、是否有迟到读标记。"}
-{"id":"chunk-bzr73sfg.js#xy","doc":"把以 ESC 开头的一段输入拆成单独的 ESC 和其余文本分别解析（用于 ESC 后紧跟文字被合并读入的情况）。"}
-{"id":"chunk-bzr73sfg.js#ed","doc":"把一段 stdin 数据（null 表示超时冲刷）喂给按键解析器，返回 {keys, reader, wakeAt}：给迟到的按键打 readLate 标记（事件循环被阻塞超过 50ms 时读到的 ESC 前缀等）；维护 UTF-8 字节串、截断鼠标前缀的截止时间；wakeAt 是下次需要定时冲刷的时间（半截序列 50ms、粘贴中 2s）。"}
-{"id":"chunk-bzr73sfg.js#Cy","doc":"定时器到期时调用：没有待处理输入直接返回；鼠标前缀超时则丢弃；半截序列还没等够（50ms/粘贴 2s）返回新的 wakeAt；否则以 null 冲刷解析器。"}
-{"id":"chunk-bzr73sfg.js#td","doc":"事件循环延迟探测器：watch() 引用计数地启动 50ms 节拍定时器，isLate(now) 在节拍迟到 ≥50ms 时为真；用于判断 stdin 读到的 ESC 是否是被阻塞后迟到合并的。"}
-{"id":"chunk-bzr73sfg.js#Fy","doc":"按行字符串缓存显示宽度（bunStringWidth），满 4096 条清空。"}
-{"id":"chunk-bzr73sfg.js#orn","doc":"取一行文本的显示宽度（带缓存）。"}
-{"id":"chunk-bzr73sfg.js#Bx","doc":"测量文本：宽度为最宽行，高度为按 maxWidth 折行后的行数（maxWidth 非正或无穷时不折行）。"}
-{"id":"chunk-bzr73sfg.js#yo","doc":"把 ink-text 子树压平成 {text, styles, hyperlink} 段：样式沿树合并，ink-link 的 href 作为超链接下传；跨文本节点被拆开的 UTF-16 代理对会拼回前一段。"}
-{"id":"chunk-bzr73sfg.js#fd","doc":"把 ink-text 子树的纯文本拼起来（不带样式）。"}
-{"id":"chunk-bzr73sfg.js#Fx","doc":"position 样式 → yoga PositionType（absolute=2，其余 relative=1）。"}
-{"id":"chunk-bzr73sfg.js#Ux","doc":"display 样式 → yoga Display（none=1，其余 flex=0）。"}
-{"id":"chunk-bzr73sfg.js#Wx","doc":"把 position/top/bottom/left/right 样式写进 yoga 节点。"}
-{"id":"chunk-bzr73sfg.js#cs","doc":"写一个定位边：字符串按百分比、数字按点、其它清空（NaN）。"}
-{"id":"chunk-bzr73sfg.js#rrn","doc":"按显示宽度截断：放得下返回 null；start/middle/end 三种位置返回 {head, tail}（中间插省略号由调用方完成）。"}
-{"id":"chunk-bzr73sfg.js#ds","doc":"textWrap 是否是折行类（wrap、wrap-trim、wrap-stream），而不是截断类。"}
-{"id":"chunk-bzr73sfg.js#tf","doc":"按 textWrap 模式处理文本：wrap/wrap-stream 硬折行保留空白，wrap-trim 折行去首尾空白，end/middle/truncate-* 截断，其余原样。"}
-{"id":"chunk-bzr73sfg.js#go","doc":"创建 DOM 元素节点：除 ink-virtual-text/ink-link/ink-progress 外都建 yoga 节点；ink-text 和 ink-raw-ansi 挂测量函数。316 的节点比 2.1.88 多了大量滚动（scrollTop/pendingScrollDelta/stickyScroll/scrollAnchor…）、渲染缓存（cachedLayout/paintsPastRect/childrenOverlap/pendingClears）、原始模式引用与无障碍字段。"}
-{"id":"chunk-bzr73sfg.js#pd","doc":"从 node 沿父链向上标记 hasAbsoluteDescendant（遇到已标记的停止）；绝对定位子孙会影响渲染缓存的失效范围。"}
-{"id":"chunk-bzr73sfg.js#Yi","doc":"DOM 子节点增删：appendChildNode / insertBeforeNode 同步插入 yoga 子节点（yoga 下标只数有 yoga 节点的兄弟），绝对定位时标记祖先；removeChildNode 移除 yoga 子节点、收集被删节点上次绘制的区域作为待清除矩形。三者最后都 markDirty。"}
-{"id":"chunk-bzr73sfg.js#Vy","doc":"递归收集被删除子树里各节点上次绘制的矩形（cachedLayout 与 pendingClears），记到父节点的待清除列表；返回子树里是否有绝对定位节点（需要更大范围重绘）。"}
-{"id":"chunk-bzr73sfg.js#yd","doc":"节点属性写入：setAttribute（children 除外，值变了才 markDirty）、setAccessibility、setStyle（浅比较不变则跳过，新变成 absolute 时标记祖先）、setStyleAndApplyLayout（只把变化的样式键写进 yoga）、diffProps（返回变化键，删掉的键值为 undefined）、setTextStyles。"}
-{"id":"chunk-bzr73sfg.js#xl","doc":"createTextNode 建 #text 节点；measureTextNode 是 ink-text 的 yoga 测量函数：取压平文本（含 ANSI 时按段），wrap-stream 少算末尾一行；放得下直接返回自然尺寸，否则按 textWrap 折行后再量。"}
-{"id":"chunk-bzr73sfg.js#jy","doc":"按 textWrap 折行后测量；AT_MOST 模式下含非 ASCII 字符且按实际宽度重折会改变行数时，宽度取满 maxWidth，避免二次布局抖动。"}
-{"id":"chunk-bzr73sfg.js#r1","doc":"measureRawAnsiNode：ink-raw-ansi 的测量函数，直接用 rawWidth/rawHeight 属性。markDirty：沿父链置 dirty，并把最近的 ink-text/ink-raw-ansi 的 yoga 节点标脏。scheduleRenderFrom：找到根并调 onRender。scheduleLayoutFrom：同上但先置 layoutStale。"}
-{"id":"chunk-bzr73sfg.js#K_o","doc":"在根节点记下滚动提交开始时间（resetAfterCommit 据此算 lastCommitMs）。"}
-{"id":"chunk-bzr73sfg.js#ji","doc":"设置文本节点内容，变了才 markDirty。"}
-{"id":"chunk-bzr73sfg.js#Sd","doc":"递归清掉子树上的 yogaNode 引用（释放 yoga 节点前调用）。"}
-{"id":"chunk-bzr73sfg.js#Qy","doc":"调试重绘用：找出覆盖屏幕第 y 行的最深节点的 React 组件所有者链（debugOwnerChain）。"}
-{"id":"chunk-bzr73sfg.js#Zy","doc":"事件类型 → 冒泡/捕获处理器属性名；RAW_MODE_HANDLER_PROPS 是需要 stdin 原始模式的处理器（键盘、粘贴、滚轮），EVENT_HANDLER_PROPS 是 reconciler 当作事件处理器存进 _eventHandlers 的全部属性。"}
-{"id":"chunk-bzr73sfg.js#Jy","doc":"取节点上某事件类型的冒泡或捕获处理器。"}
-{"id":"chunk-bzr73sfg.js#l1","doc":"从目标沿父链收集监听器：捕获处理器放前面（unshift），冒泡处理器放后面（事件不冒泡时只取目标自身），标注阶段。"}
-{"id":"chunk-bzr73sfg.js#a1","doc":"按顺序执行监听器：立即停止传播则中断，停止传播则在换节点时中断；处理器抛错只记日志。"}
-{"id":"chunk-bzr73sfg.js#s1","doc":"事件类型 → React 更新优先级：离散事件（按键、点击、焦点、粘贴、action）为 Discrete，连续事件（resize/scroll/wheel/mousemove）为 Continuous，其余 Default。"}
-{"id":"chunk-bzr73sfg.js#Cd","doc":"Ink 的 DOM 事件分发器：dispatch 收集监听器并执行，返回是否未被 preventDefault；dispatchDiscrete 走 reconciler.discreteUpdates；dispatchContinuous 临时把优先级设为 Continuous。resolveEventPriority 供 reconciler 的 getCurrentUpdatePriority 使用。"}
-{"id":"chunk-bzr73sfg.js#JDe","doc":"终端 DOM 事件基类：type、时间戳、bubbles/cancelable、target/currentTarget/eventPhase，stopPropagation/stopImmediatePropagation/preventDefault，consume()=两者都做。"}
-{"id":"chunk-bzr73sfg.js#Vi","doc":"焦点事件（focus/blur），冒泡、不可取消，relatedTarget 为另一方元素。"}
-{"id":"chunk-bzr73sfg.js#G_o","doc":"焦点管理器（挂在根节点 focusManager）：activeElement、焦点历史栈与 autoFocus 回退栈（各最多 32）；focus 时 tabIndex=-1 的容器会解析到其内上次聚焦的子孙；节点删除时从历史栈恢复焦点；focusNext/Previous 按 Tab 顺序循环；focusDirection 按屏幕几何找某方向最近的可聚焦元素（316 新增）；handleClickFocus 点击聚焦。"}
-{"id":"chunk-bzr73sfg.js#u1","doc":"tabIndex 是非负数即可 Tab 聚焦。"}
-{"id":"chunk-bzr73sfg.js#Rd","doc":"按文档顺序收集子树里所有可 Tab 聚焦的元素。"}
-{"id":"chunk-bzr73sfg.js#c1","doc":"方向导航打分：沿方向的中心距离（不在该方向返回 Infinity），加上偏离轴的惩罚（水平 ×2、垂直 ×0.5），减去两个矩形在垂直轴上的重叠长度；分数越低越优先。"}
-{"id":"chunk-bzr73sfg.js#ng","doc":"节点的屏幕矩形：优先用上一帧缓存的 cachedLayout，否则沿父链累加 yoga 偏移直到某个有缓存的祖先。"}
-{"id":"chunk-bzr73sfg.js#UUn","doc":"沿父链找挂着 focusManager 的根节点，找不到抛错。"}
-{"id":"chunk-bzr73sfg.js#yM","doc":"取节点所在树的 FocusManager。"}
-{"id":"chunk-bzr73sfg.js#d1","doc":"释放节点的 yoga 子树：解除测量函数、清 yogaNode 引用、freeRecursive。"}
-{"id":"chunk-bzr73sfg.js#ag","doc":"把事件处理器存进节点的 _eventHandlers（不放 attributes，避免改处理器触发重绘）。"}
-{"id":"chunk-bzr73sfg.js#f1","doc":"节点是否挂了键盘/粘贴/滚轮处理器（需要 stdin 原始模式）。"}
-{"id":"chunk-bzr73sfg.js#sg","doc":"根节点原始模式引用计数加减：已接上 setRawMode 时直接调用，否则先累计到 _pendingRawModeDelta。"}
-{"id":"chunk-bzr73sfg.js#rg","doc":"节点挂/卸原始模式处理器时同步引用：首次需要时 +1，不再需要时 -1。316 新增：只有真的有键盘/粘贴/滚轮处理器时才打开 stdin 原始模式。"}
-{"id":"chunk-bzr73sfg.js#ug","doc":"删除子树时归还其中持有的原始模式引用。"}
-{"id":"chunk-bzr73sfg.js#So","doc":"reconciler 的 removeChild：从 DOM 和 yoga 中移除并释放 yoga 节点；通知焦点管理器节点已删除；归还子树持有的原始模式引用。"}
-{"id":"chunk-bzr73sfg.js#h1","doc":"把一个 React 属性写到 DOM 节点：style→setStyleAndApplyLayout，textStyles 直接赋值，accessibility，事件处理器进 _eventHandlers，其余进 attributes。"}
-{"id":"chunk-bzr73sfg.js#cg","doc":"沿 fiber 的 _debugOwner/return 链收集组件名（最多 50 层，去重相邻），用于错误信息和调试重绘。"}
-{"id":"chunk-bzr73sfg.js#og","doc":"把所有者链格式化成 \" (owner chain: A > B)\" 附在报错信息后。"}
-{"id":"chunk-bzr73sfg.js#Md","doc":"样式图集记录器：recording 时记下每个写入格的 (charIndex, styleId) 组合（最多 131072 个，满了置 saturated），并统计 StylePool 主动重置次数与原因；挂在 StylePool.atlasRecorder，屏幕写格时调用。"}
-{"id":"chunk-bzr73sfg.js#m1","doc":"粗体与暗淡共用关闭码 SGR 22：从同时有粗体/暗淡切到只保留其一时，先输出 22 再补回保留的那个；返回需要前置的序列。"}
-{"id":"chunk-bzr73sfg.js#Td","doc":"样式里已有某种颜色码（mYr 判断）时去掉暗淡码，供反显/选区背景等派生样式使用。"}
-{"id":"chunk-bzr73sfg.js#Nd","doc":"字符驻留池：字符串 → 下标；ASCII 单字符走 128 项快表；下标 0 是空格、1 是空串（宽字符的占位格）。"}
-{"id":"chunk-bzr73sfg.js#ms","doc":"OSC 8 超链接驻留池：URL → 下标，0 表示无链接。"}
-{"id":"chunk-bzr73sfg.js#Dd","doc":"样式驻留池：AnsiCode 数组 → styleId（下标 <<1，最低位表示该样式在空格上可见，如背景/反显/下划线），上限约 2^14 个，超出后新组合退化为无样式并告警。transition(from,to) 缓存两样式间切换所需的 SGR 串；派生样式：withInverse、withUnderline、withCurrentMatch（搜索当前匹配：黄字+反显+粗体+下划线）、withSelectionBg（选区背景色，未设置时退回反显）；compact() 重建池并返回旧 id→新 id 的映射函数。"}
-{"id":"chunk-bzr73sfg.js#S1","doc":"样式里是否有在空格上也看得见的效果（反显、背景、下划线、上划线、删除线等关闭码判断）。"}
-{"id":"chunk-bzr73sfg.js#Zi","doc":"屏幕格第二个 Int32 字的位布局：styleId 占高 15 位（<<17），超链接下标 15 位（<<2），宽度种类 2 位（0 窄、1 宽、2 宽字符右半占位、3 行尾宽字符占位）。"}
-{"id":"chunk-bzr73sfg.js#ps","doc":"为屏幕写入创建原生 CellSegmenter（Bun.ant.CellSegmenter）：告诉原生代码格的编码（宽度掩码 3，窄/宽/右半占位/行尾占位 = 0/1/2/3，空格与占位的字符下标 0/1，空格的 word1，制表位宽）。substitute 是需要替换显示的码点集合。"}
-{"id":"chunk-bzr73sfg.js#yg","doc":"把屏幕每格的字符下标设成占位（SPACER_CHAR_INDEX），用于强制下一帧整屏重画。"}
-{"id":"chunk-bzr73sfg.js#Od","doc":"打包软换行标记：高 16 位为上一行内容结束列，低 15 位为本行起始列；第 15 位保留给 SW_ELIDED_SEP（折行处吞掉了分隔空格）。"}
-{"id":"chunk-bzr73sfg.js#M1","doc":"把超链接 URL 驻留进屏幕的超链接池，返回下标。"}
-{"id":"chunk-bzr73sfg.js#QDe","doc":"创建屏幕缓冲：每格两个 Int32（字符下标、packWord1），同一块内存再用 BigInt64Array 视图做整格比较/清零；另有 noSelect（不可选中的格）、softWrap（每行的软换行标记）、damage（本帧改动矩形）。池子（字符/超链接/样式）在新旧两帧之间共享。"}
-{"id":"chunk-bzr73sfg.js#Hd","doc":"把屏幕重置为指定尺寸并清空（容量不够才重新分配），damage 清掉。"}
-{"id":"chunk-bzr73sfg.js#bg","doc":"池子换代（字符池/超链接池重建、样式池 compact）后，把屏幕里每格的下标迁移到新池。"}
-{"id":"chunk-bzr73sfg.js#Wt","doc":"读 (x,y) 的格（越界返回 undefined）：{char, styleId, width, hyperlink}。"}
-{"id":"chunk-bzr73sfg.js#Cce","doc":"按线性下标读格。"}
-{"id":"chunk-bzr73sfg.js#vg","doc":"diff 输出用：读格，但跳过宽字符占位格，以及与上次输出样式相同的空白格（无需重画）。"}
-{"id":"chunk-bzr73sfg.js#Xi","doc":"按 cells 数组下标（格下标×2）把格读进调用方提供的 out 对象，避免分配；diff 热路径用。"}
-{"id":"chunk-bzr73sfg.js#Sg","doc":"读 (x,y) 格的字符。"}
-{"id":"chunk-bzr73sfg.js#T1","doc":"写一个格：字符驻留后调用原生 CellSegmenter.setCell（处理宽字符右半占位、覆盖宽字符时清孤儿格等），用返回的打包值扩大 damage；图集记录开启时记下组合。"}
-{"id":"chunk-bzr73sfg.js#Eg","doc":"原生 CellSegmenter 返回值打包格式：结束列 + 改动起始列·2^20 + 改动结束列·2^36；取出改动区间并入屏幕的 damage 矩形。"}
-{"id":"chunk-bzr73sfg.js#xg","doc":"用 CellSegmenter.paint 把上一次 segment() 切出的字素/样式段写到 (x,y) 起的一行，更新 damage、图集记录，返回写完后的列。"}
-{"id":"chunk-bzr73sfg.js#Cg","doc":"后处理 damage 区域：宽字素（如 emoji 序列）实际显示宽度超出右边界时，换成占位字符并把到行尾的格清成空格，避免终端换行错位。"}
-{"id":"chunk-bzr73sfg.js#er","doc":"只改一个格的 styleId（宽字符占位格跳过），并扩大 damage；选区高亮、搜索高亮用。"}
-{"id":"chunk-bzr73sfg.js#A1","doc":"把字符驻留进屏幕字符池。"}
-{"id":"chunk-bzr73sfg.js#Pd","doc":"把上一帧屏幕的一个矩形区域整块拷进当前帧（渲染缓存命中时跳过重画子树），连同 noSelect 和 softWrap；整行时一次 set。随后修补区域左右边界被切开的宽字符（清掉孤儿半格），并把区域并入 damage。"}
-{"id":"chunk-bzr73sfg.js#ys","doc":"把 [top,bottom] 行区间整体上移（n>0）或下移 n 行并清空腾出的行（cells、noSelect、softWrap 一起），用于滚动优化（DECSTBM 滚动区域）。"}
-{"id":"chunk-bzr73sfg.js#Rg","doc":"逐格比较两帧，只在 damage 区域（两帧 damage 之并，加上尺寸缩小露出的区域）内调用 cb(x, y, prevCell, nextCell)；cb 返回真则提前结束。宽度相同走 diffSameWidth，否则 diffDifferentWidth。"}
-{"id":"chunk-bzr73sfg.js#O1","doc":"两帧宽度相同时的逐行 diff：两帧都有的行跳过相同格；只在旧帧的行报删除；只在新帧的行报新增（跳过全空格）。"}
-{"id":"chunk-bzr73sfg.js#H1","doc":"两帧宽度不同时的逐行 diff（各自步长），同样分公共列、旧帧多出的列、新帧多出的列。"}
-{"id":"chunk-bzr73sfg.js#Ag","doc":"把源屏幕一个矩形区域的 noSelect 标记拷到目标屏幕。"}
-{"id":"chunk-bzr73sfg.js#wg","doc":"把矩形区域的 noSelect 置为 value（<NoSelect> 包住的内容、行号栏等不参与选区复制）。"}
-{"id":"chunk-bzr73sfg.js#Ng","doc":"新建选区状态：锚点/焦点、是否拖动中、双击/三击时的锚定范围、滚出视口上方/下方的已选文本行（及各行是否软换行）、上次按下是否带 Alt。"}
-{"id":"chunk-bzr73sfg.js#Id","doc":"鼠标按下开始选区：记录锚点（限制在 scope 列范围内，例如只选某个面板）、清掉焦点与滚出缓存、进入拖动。"}
-{"id":"chunk-bzr73sfg.js#Dg","doc":"拖动中更新焦点（第一次移动且没离开锚点格时不设焦点，避免单击产生空选区）。"}
-{"id":"chunk-bzr73sfg.js#Mo","doc":"选区可用的列范围：有 scope 时为 [scope.x1, min(scope.x2,width)-1]，否则整行。"}
-{"id":"chunk-bzr73sfg.js#To","doc":"鼠标松开：结束拖动（选区保留）。"}
-{"id":"chunk-bzr73sfg.js#Rl","doc":"清除选区及全部虚拟坐标/滚出缓存。"}
-{"id":"chunk-bzr73sfg.js#_g","doc":"双击选词的范围：先看是否点在纯文本 URL 上（整条 URL 当一个词），否则按字符类（空白/单词字符/其它）向两侧扩展，跳过宽字符占位、遇 noSelect 停。"}
-{"id":"chunk-bzr73sfg.js#Og","doc":"双击：选中该词并设锚定范围 kind=word（后续拖动按词扩展）。"}
-{"id":"chunk-bzr73sfg.js#kd","doc":"从 col 起在一行内向两侧扩展连续的 URL 字符，返回 {lo, hi, text}。"}
-{"id":"chunk-bzr73sfg.js#zd","doc":"一行里属于软换行续接段的列范围：起点取本行软换行标记的起始列，终点取下一行标记记录的上一行结束列。"}
-{"id":"chunk-bzr73sfg.js#Lg","doc":"找 (col,row) 处的纯文本 URL（http/https/file）：沿软换行把折到多行的 URL 拼回来；以 … 截断的不算；去掉末尾标点和不配对的右括号；返回 {url, lo, hi}（本行内的列范围）。"}
-{"id":"chunk-bzr73sfg.js#Pg","doc":"三击：选中整行（受 scope 限制），锚定范围 kind=line。"}
-{"id":"chunk-bzr73sfg.js#Bg","doc":"双击/三击后拖动：按词或按行扩展选区，锚点保持在原锚定范围的另一端。"}
-{"id":"chunk-bzr73sfg.js#kg","doc":"键盘移动选区焦点（Shift+方向键），取消锚定范围。"}
-{"id":"chunk-bzr73sfg.js#zg","doc":"内容滚动 dRow 行时平移选区：超出 [minRow,maxRow] 的端点钳到边界并记下虚拟行/列（滚回来能复原），同步裁剪/交换滚出上方/下方的文本缓存。"}
-{"id":"chunk-bzr73sfg.js#Fg","doc":"拖动中内容滚动时只平移锚点（焦点跟着鼠标），超出范围记虚拟坐标。"}
-{"id":"chunk-bzr73sfg.js#Hn","doc":"是否有完整选区（锚点和焦点都在）。"}
-{"id":"chunk-bzr73sfg.js#tgt","doc":"选区两端都因滚动被钳到同一侧（虚拟行都在视口上方或都在下方），即整段选区已不在屏幕上。"}
-{"id":"chunk-bzr73sfg.js#irn","doc":"返回按位置排序的 {start, end}，没有选区返回 null。"}
-{"id":"chunk-bzr73sfg.js#Ug","doc":"取一行里 [startCol,endCol] 的选中文本：跳过 noSelect 与宽字符占位格；软换行续接行从续接起点取，折行吞掉的分隔空格补回；不是软换行时去掉行尾空白。"}
-{"id":"chunk-bzr73sfg.js#Fd","doc":"拼接选中文本行：软换行续接行接在上一行后面，否则另起一行。"}
-{"id":"chunk-bzr73sfg.js#Ig","doc":"得到选中文本：滚出上方的缓存行 + 屏幕上的行 + 滚出下方的缓存行，按软换行合并。"}
-{"id":"chunk-bzr73sfg.js#Gd","doc":"内容滚动前把即将滚出视口的已选行文本存进 scrolledOffAbove/Below（复制时还能拿到），并把锚点移到边界。"}
-{"id":"chunk-bzr73sfg.js#Gg","doc":"把选区画到屏幕上：选区内每格换成 withSelectionBg 派生样式（noSelect 格跳过）。"}
-{"id":"chunk-bzr73sfg.js#Kg","doc":"Ink 内部应用上下文：exit、focusManager、根节点、粘贴事件分发、布局/帧/点击订阅、悬停跟踪、精确指针（像素鼠标）引用、事件循环延迟观察、终端图片能力。"}
-{"id":"chunk-bzr73sfg.js#nf","doc":"<Text> 组件：把颜色/背景/faintInk/粗体/暗淡/斜体/下划线/删除线/反显组合成 textStyles，wrap 选择折行样式（默认 wrap），dir 设文字方向；支持悬停回调与 aria-* 无障碍属性；渲染为 ink-text 元素。"}
-{"id":"chunk-bzr73sfg.js#hb","doc":"堆栈帧路径是否是打包内部路径（$bunfs、~BUN、/snapshot/、node:），这些不读源码。"}
-{"id":"chunk-bzr73sfg.js#Rs","doc":"渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。"}
-{"id":"chunk-bzr73sfg.js#qRr","doc":"Ctrl+Z 挂起是否可用：后台会话（CLAUDE_CODE_SESSION_KIND=bg）不挂起。"}
-{"id":"chunk-bzr73sfg.js#vb","doc":"记下终端单元格像素尺寸（来自 CSI 16t/6t 应答），供像素鼠标与图片定位使用。"}
-{"id":"chunk-bzr73sfg.js#sC","doc":"重新查询单元格像素尺寸（终端重新获得焦点后，字体/缩放可能变了）。"}
-{"id":"chunk-bzr73sfg.js#gb","doc":"原始模式关闭后为等待终端未回的查询应答而暂留的原始模式，到时（250ms）释放。"}
-{"id":"chunk-bzr73sfg.js#bb","doc":"进入原始模式后探测终端能力（两轮，各 2s 超时，用 DA1 哨兵 flush）：第一轮 XTVERSION（VTE<0.53 不问）、kitty 键盘标志 CSI ?u、OSC 7501 程序状态；第二轮 DECRQM 2026（同步输出）、kitty 图形 + DA1、单元格像素尺寸、DECRQM 1016（像素鼠标）。tmux 下用 display-message 查 pane 透传/位置决定图片能力。结果写进能力表（answer），最后把全部能力和 DECSTBM 开关写日志。"}
-{"id":"chunk-bzr73sfg.js#As","doc":"Ink 根组件（类组件 InternalApp）：提供尺寸、AppContext、StdinContext、终端焦点、时钟等上下文；原始模式引用计数（打开时写括号粘贴/主题报告/焦点事件/扩展键模式并启动能力探测，关闭时复位）；stdin readable → 输入读取器（feedInputReader/flushInputReader）→ processKeysInBatch；鼠标点击/多击/悬停/拖动选区；Ctrl+Z 挂起与 SIGCONT 恢复；tmux pane 与单元格尺寸重探测；渲染错误时显示 ErrorOverview。"}
-{"id":"chunk-bzr73sfg.js#Vd","doc":"输入项是否算用户操作（粘贴、按键、非悬停移动的鼠标），用于空闲计时与附着后静默期过滤。"}
-{"id":"chunk-bzr73sfg.js#Xd","doc":"是粘贴或真正的按键（不是滚轮/鼠标伪键）。"}
-{"id":"chunk-bzr73sfg.js#Cb","doc":"在 discreteUpdates 里处理一批输入：JetBrains 终端滚动 bug 修正、方向键连发检测；终端应答交给 querier；鼠标交给 handleMouseEvent（滚动模式下忽略按键）；焦点事件；粘贴 → dispatchPasteEvent；Ctrl+Z 挂起；滚轮 → dispatchWheelEvent；其余 → dispatchKeyboardEvent，若处理器要求按“ESC + 键”重读则拆开重放。同批多个离散输入之间 flushSyncWork，保证逐个生效。"}
-{"id":"chunk-bzr73sfg.js#Qd","doc":"SGR 鼠标按钮码表示“无按键移动”（运动位 32 且按钮=3）。"}
-{"id":"chunk-bzr73sfg.js#dC","doc":"像素鼠标模式下把像素坐标换算成格坐标（保留 fine 精确值）。"}
-{"id":"chunk-bzr73sfg.js#pC","doc":"右键/中键松开（与按下位置相同）时：Windows/WSL/Linux 右键有选区则清除选区（复制已发生），否则粘贴系统剪贴板（xterm.js 除外）；Linux 中键粘贴 PRIMARY 选区。"}
-{"id":"chunk-bzr73sfg.js#yC","doc":"处理一个鼠标事件：悬停（onHoverAt/onPointerHover）；按下时左键开始选区或计多击（双击选词、三击选行，窗口激活点击不计）；拖动更新选区；右/中键记下待粘贴；松开时结束选区，没有选区则当点击（onClickAt），点在超链接上且带 Cmd/Ctrl 时延迟 500ms 打开（多击取消）。"}
-{"id":"chunk-bzr73sfg.js#vC","doc":"100ms 内同方向无修饰上/下方向键累计 ≥8 个时发出 arrow-burst 事件（滚轮被终端翻译成方向键的情况）。"}
-{"id":"chunk-bzr73sfg.js#Zd","doc":"命令式 DOM 子树：在某个挂载节点下直接创建/插入/删除 ink-box、ink-text、ink-virtual-text（span），改样式和文字，改动后只触发重新布局与重绘（不经 React）；校验节点归属与嵌套规则（文字里只能放 span）。rect() 读上一帧的位置。2.1.88 没有。"}
-{"id":"chunk-bzr73sfg.js#Rce","doc":"键盘事件（keydown，冒泡、可取消）：key（按键产生的字符或键名）、name、sequence、ctrl/shift/meta/superKey/fn、soloKeypress（本批只有这一个用户输入）、readLate（事件循环阻塞后读到）；readAsEscapeThenKey() 让处理器要求把 ESC+X 拆成两次按键重放。"}
-{"id":"chunk-bzr73sfg.js#SC","doc":"由 ParsedKey 推出 event.key：空格、Ctrl 组合给键名，可打印单字符给字符本身，Shift+字母给大写（CSI u 里带的 shifted 码点优先），其它给键名；裸转义与鼠标序列给空串。"}
-{"id":"chunk-bzr73sfg.js#Eye","doc":"粘贴事件（paste，冒泡、可取消）：清洗粘贴文本——去掉 C1 控制字符和 ESC+C1、把以 BEL 结尾的 DCS/SOS/PM/APC 串规范化后剥离转义序列、全角空格规范化；rawEmpty/rawEndedWithFocusTail 标记被焦点事件残尾污染的粘贴。"}
-{"id":"chunk-bzr73sfg.js#Jd","doc":"滚轮事件（wheel，冒泡、可取消）：deltaY/deltaX、修饰键、鼠标格坐标。"}
-{"id":"chunk-bzr73sfg.js#nr","doc":"空帧：0×0 屏幕、给定视口、光标在原点可见。"}
-{"id":"chunk-bzr73sfg.js#Dr","doc":"帧内容高度是否已达到/超过视口高度（主屏模式下内容会进入回滚区）。"}
-{"id":"chunk-bzr73sfg.js#_9","doc":"按上一帧的 cachedLayout 找 (col,row) 处最深的节点：后绘制的兄弟优先；越出自身矩形的绝对定位子孙也会被检查（overflow hidden/scroll 时裁掉）；深度上限 256。"}
-{"id":"chunk-bzr73sfg.js#ef","doc":"找点击处最近的 style.selectionScope 祖先，算出选区可用的列范围（去掉边框与内边距，并被更外层 overflow 裁剪），用于把拖选限制在某个面板内。"}
-{"id":"chunk-bzr73sfg.js#Tb","doc":"派发点击：命中测试找目标；不是窗口激活点击时，最近的有 tabIndex 的祖先获得焦点；然后沿父链调用 onClick（填好 localCol/localRow），立即停止传播则结束；返回是否有处理器没调 allowDefault()（即点击被消费）。"}
-{"id":"chunk-bzr73sfg.js#Ab","doc":"悬停派发：命中节点及其祖先中有 onMouseEnter/Leave 的组成新集合，与旧集合比较后分别调用 onMouseLeave/onMouseEnter（不冒泡）。"}
-{"id":"chunk-bzr73sfg.js#wb","doc":"重绘后重新判定悬停：只针对带 hoverFollowsPaint 属性的节点（内容移动到鼠标下方或移走时触发 enter/leave），返回是否有变化。"}
-{"id":"chunk-bzr73sfg.js#ws","doc":"悬停时鼠标是否落在“真正的空白”上：格为空，且不是文本节点内部两段文字之间的空隙（左右最近的非空格都属于同一文本节点则不算空白）。配合 hoverIgnoresBlankCells 使用。"}
-{"id":"chunk-bzr73sfg.js#rr","doc":"取 (col,row) 格的 OSC 8 链接；点在宽字符右半时取左半的链接。"}
-{"id":"chunk-bzr73sfg.js#Nb","doc":"悬停在超链接上时，把同一链接的连续格（沿软换行跨行）加下划线，返回涉及的行段。"}
-{"id":"chunk-bzr73sfg.js#rf","doc":"在一行内从 col 向左右扩展同一链接的格，返回 {row, from, to}。"}
-{"id":"chunk-bzr73sfg.js#of","doc":"从命中节点向上找第一个有 onPointer 的节点；先遇到 onClick 或可聚焦节点则返回 null（让普通点击处理）。"}
-{"id":"chunk-bzr73sfg.js#Nl","doc":"把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。"}
-{"id":"chunk-bzr73sfg.js#lf","doc":"增量输出：render(prev, next, altScreen, decstbmAllowed) 比较两帧屏幕，产出 Patch 列表（stdout 文字、styleStr、hyperlink、cursorMove/cursorTo、clear、clearTerminal…）。非 TTY 时整帧输出；视口变小/宽度变化/内容缩到视口以内等情况整屏重置（clearTerminal，会闪）；有 scrollHint 且允许 DECSTBM 时先用滚动区域把旧帧行上移/下移再 diff；diff 时跳过宽字符占位格，行尾空白用 EL 清除；改动落在已滚入回滚区的行上时只能整屏重置。慢于 50ms 记日志。"}
-{"id":"chunk-bzr73sfg.js#or","doc":"超链接切换：目标与当前不同时追加 hyperlink 补丁（OSC 8），返回新的当前链接。"}
-{"id":"chunk-bzr73sfg.js#_l","doc":"样式切换：追加 StylePool.transition 给出的 SGR 串，返回目标 styleId。"}
-{"id":"chunk-bzr73sfg.js#Ob","doc":"读屏幕一行的纯文本（去尾部空白），用于整屏重置的调试信息。"}
-{"id":"chunk-bzr73sfg.js#Dl","doc":"整屏重置：先发 clearTerminal（带原因 resize/offscreen/clear），再从 startY 起完整重画帧（主屏时只画最后一屏可见部分）。会闪烁，尽量避免。"}
-{"id":"chunk-bzr73sfg.js#Hb","doc":"把帧的 [startY,endY) 行完整写进虚拟屏幕：逐格移动光标、切换链接与样式、写字符（跳过空白），每行结束复位样式并换行。"}
-{"id":"chunk-bzr73sfg.js#Lb","doc":"写一个格：宽字符放不下行尾则放弃；终端可能把某些 emoji（U+1FA70–1FAFF、带 VS16 的序列）算成 1 列时，先在后一列写空格占位、写完再 cursorTo 回正确列（宽度补偿）；更新虚拟光标。"}
-{"id":"chunk-bzr73sfg.js#Ns","doc":"把虚拟光标移到 (x,y)：换行或光标在行尾时用 CR + 相对移动，同一行用 CHA（cursorTo）。"}
-{"id":"chunk-bzr73sfg.js#NC","doc":"该字符是否需要宽度补偿（终端与 Unicode 宽度表可能不一致的 emoji：Symbols and Pictographs Extended-A、带 U+FE0F 的序列）。"}
-{"id":"chunk-bzr73sfg.js#af","doc":"虚拟屏幕：记录光标位置和累计的 Patch；txn(fn) 以当前光标为输入，追加补丁并移动光标。"}
-{"id":"chunk-bzr73sfg.js#_C","doc":"终端内联图片（iTerm2 File= / kitty Unicode 占位）编码常量：图片 id 上限 2^24、行列下标上限为附加符号表长度、PNG 边长上限 10000；占位字符 U+2800（盲文空格）+ 组合附加符号编码行/列/id。316 新增。"}
-{"id":"chunk-bzr73sfg.js#LC","doc":"把 {id,row,column} 编码成一个占位字素：U+2800 + 行、列、id 高中低三位的附加符号。"}
-{"id":"chunk-bzr73sfg.js#lIs","doc":"生成 rows×columns 的占位字素网格文本（每行一串占位字符），放进 Ink 文本里占住图片的位置。"}
-{"id":"chunk-bzr73sfg.js#dIs","doc":"生成 iTerm2 内联图片序列 OSC 1337;File=inline=1;size;width;height;preserveAspectRatio=1;doNotMoveCursor=1:<base64> BEL。"}
-{"id":"chunk-bzr73sfg.js#Ub","doc":"扫描屏幕里的图片占位格，按图片 id 汇总：左上角原点、格数、最大行列、所有格下标、各格是否与同一原点一致（被裁剪/错位时不一致）。"}
-{"id":"chunk-bzr73sfg.js#Yb","doc":"把一串转义序列按 tmux 透传上限（256KB）切块，每块包成 DCS tmux 透传。"}
-{"id":"chunk-bzr73sfg.js#jb","doc":"tmux 下的 iTerm2 图片：保存光标、移到 pane 内绝对位置、输出图片、恢复光标，整体透传；超过上限时改用 MultipartFile/FilePart/FileEnd 分片。"}
-{"id":"chunk-bzr73sfg.js#hf","doc":"终端图片管理器（App 的 terminalImages）：为图片分配 id（kitty 小 id 池与 24 位宽 id、iTerm2 位置复用）、排队传输（kitty APC G）与删除、终端拒绝时记录（refused）、tmux 透传与 pane 位置修正、在帧之后按占位格位置放置 iTerm2 图片（placeIterm/keepIterm）、resendAll/redrawInline/requestDraw。"}
-{"id":"chunk-bzr73sfg.js#mf","doc":"Patch 列表窥孔优化：去掉空输出/零移动/空样式，合并相邻 cursorMove、styleStr，相邻 cursorTo 与光标显隐只留最后一个，重复超链接去掉。"}
-{"id":"chunk-bzr73sfg.js#Ll","doc":"当前终端是否需要 Ink 自己做双向文本重排（Windows Terminal、VS Code 终端），传给 CellSegmenter 的 reorder 参数。"}
-{"id":"chunk-bzr73sfg.js#pf","doc":"Output 的行切分器，包装原生 Bun.ant.CellSegmenter：segment(text, reorder) 把带 ANSI 的一行切成字素格（cells：[字素下标, 宽度|制表符位|段号<<10]）与样式/链接段（runs：[sgr 键下标, uri 下标]）；width() 算显示宽度（制表位展开）；keepColumns() 只保留裁剪区内的格；paint() 调原生 paint 把格写进屏幕，字素用 charIndices() 映射到屏幕字符池、样式段用 runWords() 映射成 packWord1（SGR 键 → AnsiCode → StylePool id，链接 → 超链接池）。原生驻留表过大或样式池/chalk 换代时重建。"}
-{"id":"chunk-bzr73sfg.js#Pl","doc":"两个裁剪矩形求交（未定义的边视为无限）。"}
-{"id":"chunk-bzr73sfg.js#ngt","doc":"渲染操作缓冲：renderNodeToOutput 往里记 write/blit/shift/clear/clip/noSelect 操作，get() 依次落到屏幕：clear 只扩大 damage（绝对定位节点的清除会阻止被其覆盖的 blit）；blit 从上一帧拷贝未变子树；write 按裁剪区截断文字（Bun.sliceAnsi）后用 LineCellSegmenter 切分并 paint，同时写软换行标记；最后应用 noSelect。writeDirected 支持 RTL 文本右对齐。写入远多于拷贝时记日志。"}
-{"id":"chunk-bzr73sfg.js#XC","doc":"把一行写进屏幕：有方向时前置 LRM/RLM，交给 LineCellSegmenter 切分（必要时双向重排），按裁剪区保留列，paint 后返回结束列。"}
-{"id":"chunk-bzr73sfg.js#Hr","doc":"保守估计显示宽度：未分配码点与 emoji 按 2、东亚歧义宽度按宽，取逐字素累加与整串宽度的较大者。"}
-{"id":"chunk-bzr73sfg.js#nv","doc":"按保守宽度把文本折成多行（不超过 maxWidth）：单个字素都放不下时用 \"[unreadable text]\" 等占位替代，优先在空格处断行。"}
-{"id":"chunk-bzr73sfg.js#eR","doc":"yoga 节点的内容宽度：计算宽度减左右内边距与边框。"}
-{"id":"chunk-bzr73sfg.js#rv","doc":"把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。"}
-{"id":"chunk-bzr73sfg.js#tR","doc":"画 ink-box 的边框：按 borderStyle 取字符集，四边可单独关闭、单独着色/变暗；borderText 可把文字嵌进上或下边框；继承的背景色也涂到边框上。"}
-{"id":"chunk-bzr73sfg.js#av","doc":"滚动调试跟踪：记录滚轮输入（方向、步长、倍率、滚轮模式、连发计数）与每帧实际应用的滚动量、剩余量、所用排水算法，以及当前滚动位置；供调试面板订阅。"}
-{"id":"chunk-bzr73sfg.js#vf","doc":"多行文本中最宽一行的显示宽度。"}
-{"id":"chunk-bzr73sfg.js#arn","doc":"一次渲染遍历的共享状态：是否有覆盖层、布局是否移动、滚动提示（DECSTBM）、待继续排水的滚动节点、跟随滚动信息、绝对定位矩形（上一帧/本帧）、片段映射与原始 ANSI 背景改写缓存。"}
-{"id":"chunk-bzr73sfg.js#xv","doc":"上一帧越出父框的绝对定位矩形本帧没再出现、却被本帧的 blit 覆盖到了（可能拷回旧图像），需要下一帧整树重画。"}
-{"id":"chunk-bzr73sfg.js#cR","doc":"自适应滚动排水：待滚量 ≤5 一次滚完，<12 每帧 2 行，否则每帧 3 行；超过 30 的积压直接跳过；单帧不超过视口高-1，剩余写回 pendingScrollDelta。"}
-{"id":"chunk-bzr73sfg.js#dR","doc":"比例滚动排水：每帧滚动待滚量的 3/4（至少 4 行，不超过视口高-1），剩余写回 pendingScrollDelta。由设置 useAdaptiveDrain 选择用哪种。"}
-{"id":"chunk-bzr73sfg.js#kl","doc":"用 OSC 8 把文本包成超链接。"}
-{"id":"chunk-bzr73sfg.js#dv","doc":"为压平的文本段建“字符下标 → 段号”表（复用 state 里的 Uint32Array），折行后据此给每个字符还原样式。"}
-{"id":"chunk-bzr73sfg.js#Mf","doc":"把折行后的纯文本重新套上样式与超链接：按“字符→段号”表在原文本中同步推进（跳过折行吞掉的空白与 \\r\\n），段号变化时切出一段套 applyTextStyles，文本内自带的 ANSI 序列原样保留。"}
-{"id":"chunk-bzr73sfg.js#mv","doc":"折行并记录每行的软换行种类（HardBreak 原有换行 / Continuation 折出来的续行 / ContinuationElidedSep 续行吞掉了行首空格），复制选中文本时据此拼回原行；wrap-stream 丢掉最后一行（流式输出的未完成行）。"}
-{"id":"chunk-bzr73sfg.js#pv","doc":"折行；若行数与 yoga 计算的高度不一致，改用测量时实际给出的宽度（getOfferedWidth）重折，保证与布局一致。"}
-{"id":"chunk-bzr73sfg.js#hR","doc":"按 ink-text 首个子节点的 yoga 偏移给文本加上顶部空行与左缩进（同时在软换行表前补 HardBreak）。"}
-{"id":"chunk-bzr73sfg.js#mR","doc":"把排好样式的文本写进 Output（有 textDirection 时走 writeDirected），并记录是否画出了自身矩形（paintsPastRect）。"}
-{"id":"chunk-bzr73sfg.js#pR","doc":"写 ink-raw-ansi：有继承背景色时先把原始 ANSI 里的背景重写（带缓存），记录 paintsPastRect。"}
-{"id":"chunk-bzr73sfg.js#ks","doc":"渲染一个 DOM 节点到 Output（每帧从根递归）：display:none 时清掉旧区域；未脏且位置尺寸背景都不变时直接从上一帧 blit（再补拷越界的绝对定位子孙）；否则清旧区域、处理 pendingClears，按类型绘制——ink-raw-ansi 原样写；ink-text 压平→按 textWrap 折行/截断→套样式与 OSC 8→写入；ink-box 处理 noSelect、overflow 裁剪、overflow:scroll（滚动锚点、粘底、排水、DECSTBM 滚动提示 + 只重画新露出的行）、背景/opaque、子节点、边框。最后记 cachedLayout 供下一帧比较与命中测试。"}
-{"id":"chunk-bzr73sfg.js#yR","doc":"计算滚动容器本帧的 scrollTop：先处理 scrollAnchor（start/center/end/nearest）；stickyScroll 或在底部时跟随内容增长；按 useAdaptiveDrain 选择排水算法消耗 pendingScrollDelta（超出 clamp 范围时放慢）；夹到合法范围；scrollTop 变化时给 state.followScroll 记下差值（选区跟随用）。"}
-{"id":"chunk-bzr73sfg.js#gR","doc":"给有 backgroundColor 或 opaque 的 box 在边框内填空格（带背景色）；opaque 还会清掉该区域的 noSelect。"}
-{"id":"chunk-bzr73sfg.js#bR","doc":"是否有绝对定位子节点隐藏或位置尺寸变了（则兄弟不能从上一帧 blit）。"}
-{"id":"chunk-bzr73sfg.js#vR","doc":"找出被后面兄弟“越界绘制”的变化区域覆盖到的前面兄弟（它们不能 blit，需要重画）。"}
-{"id":"chunk-bzr73sfg.js#gv","doc":"渲染子节点：决定每个子节点能否用上一帧 blit（前面有脏的非裁剪兄弟、绝对定位子节点移动、被越界兄弟覆盖等情况不能），统计子节点是否越出父框、互相重叠、画出自身矩形，返回是否有越界子孙。"}
-{"id":"chunk-bzr73sfg.js#SR","doc":"父节点有 pendingClears 时，找出仍可安全 blit 的子节点（不与被清区域、越界兄弟重叠的未脏子节点）。"}
-{"id":"chunk-bzr73sfg.js#MR","doc":"overflow hidden/scroll 的 box 的裁剪矩形（边框内侧），两个方向都不裁剪时返回 undefined。"}
-{"id":"chunk-bzr73sfg.js#TR","doc":"维护 {now, before, grew}：本帧与上一帧各自的累积裁剪区，grew 表示裁剪区比上一帧大（之前被裁掉的部分需要重画，不能 blit）。"}
-{"id":"chunk-bzr73sfg.js#vv","doc":"节点在 X、Y 两个方向都裁剪（overflow hidden/scroll）。"}
-{"id":"chunk-bzr73sfg.js#NR","doc":"零高度节点是否与相邻兄弟同一行（这种节点只更新缓存位置，不绘制）。"}
-{"id":"chunk-bzr73sfg.js#DR","doc":"节点整体 blit 后，再把越出它矩形的绝对定位子孙（及越界子孙）也从上一帧拷过来，并登记绝对定位矩形。"}
-{"id":"chunk-bzr73sfg.js#xf","doc":"渲染滚动容器的内容子节点：完全在 [top,bottom) 可见范围外的跳过（并丢弃其缓存）；有子节点变脏后，后续子节点不再 blit。"}
-{"id":"chunk-bzr73sfg.js#rgt","doc":"清掉子树所有节点的 cachedLayout（下一帧不能 blit、命中测试也找不到）。"}
-{"id":"chunk-bzr73sfg.js#Mv","doc":"滚动 blit 后把子树的 cachedLayout（及裁剪、scrollViewportTop）整体平移 dy 行并标记 shifted。"}
-{"id":"chunk-bzr73sfg.js#OR","doc":"零高度节点的子树不绘制，但仍按 yoga 布局写入 cachedLayout（标 unpainted），使点击命中测试与焦点几何可用。"}
-{"id":"chunk-bzr73sfg.js#LR","doc":"多段样式文本的 truncate-start/middle：截断后插入省略号，按原文本的字符→段号表给每个字符还原样式。"}
-{"id":"chunk-bzr73sfg.js#Us","doc":"屏幕阅读器输出清洗：去掉转义序列与控制字符（保留 \\t \\n），双向控制字符换成 U+FFFD。"}
-{"id":"chunk-bzr73sfg.js#zl","doc":"无障碍模式：把 DOM 树转成线性文本（aria-label 优先，role 前缀“role: ”，state 前缀“(checked, …) ”，column 方向用换行、row 方向用空格连接子节点），并记录需保留空白的范围与 blockquote 的行前缀“> ”。"}
-{"id":"chunk-bzr73sfg.js#Is","doc":"目标节点在屏幕阅读器线性文本中的起始偏移（用于把光标/焦点位置告诉读屏器），找不到返回 null。"}
-{"id":"chunk-bzr73sfg.js#Av","doc":"在屏幕上查找查询串（不区分大小写，跳过宽字符占位与 noSelect 格），返回每个匹配的 {row, col, len}（列为屏幕列）。"}
-{"id":"chunk-bzr73sfg.js#wv","doc":"把第 currentIdx 个匹配（行加 rowOffset）高亮为“当前匹配”样式。"}
-{"id":"chunk-bzr73sfg.js#Af","doc":"创建帧渲染函数：每次调用用根节点的 yoga 尺寸建/复用 Output，从根 renderNodeToOutput（上一帧被污染或布局异常时不 blit），收尾处理行尾宽字素，返回 Frame：screen、viewport（备用屏时高度 +1）、cursor（主屏放在内容末尾，备用屏放在最后一行）、scrollHint、followScroll、layoutShifted、staleAbsolutePaint、scrollDrainPending。"}
-{"id":"chunk-bzr73sfg.js#YRr","doc":"退出/崩溃时恢复终端：复位所有已设模式（鼠标、像素鼠标、焦点、括号粘贴、扩展键等）、kitty 键盘弹栈、显示光标、清掉进度条/标签状态、重置颜色。"}
-{"id":"chunk-bzr73sfg.js#Dv","doc":"把屏幕上所有匹配查询串的格反显（搜索高亮），返回是否有匹配。"}
-{"id":"chunk-bzr73sfg.js#Ws","doc":"校验终端 winsize：非正数/非数字用默认值，超过上限按策略夹到上限或用默认值，并记日志。"}
-{"id":"chunk-bzr73sfg.js#GUn","doc":"读终端尺寸，缺省 80×24，列上限 8192、行上限 2048。"}
-{"id":"chunk-bzr73sfg.js#MJe","doc":"Ink 实例（每个 stdout 一个，见 root.ts 的实例表）：持有根 DOM 节点、FocusManager、React 容器（ConcurrentRoot）、样式/字符/超链接池、前后两帧（双缓冲）、LogUpdate、帧渲染函数、终端模式管理、终端图片管理、选区与搜索高亮状态。\n渲染节奏：React 提交后 resetAfterCommit → onComputeLayout（计算 yoga 布局、通知布局监听）→ onRender（scheduleFrame 按帧间隔节流，输入优先时缩短间隔；stdout 积压时暂缓）。onRender：renderer 生成新帧 → 叠加选区/搜索高亮/链接下划线 → LogUpdate.render 与前帧 diff → optimize → 加备用屏锚点、光标声明定位、iTerm2 图片 → writeDiffToTerminal（同步输出 DEC 2026 包裹）→ 交换前后帧、按需压缩池子、发 onFrame 统计。\n另有：备用屏进出（setAltScreenActive，保存主屏内容以便返回时擦除）、窗口尺寸变化、挂起/恢复、外部清屏探测、屏幕阅读器模式（onRenderScreenReader 输出线性文本 diff）、复制选区、指针捕获、console/stderr 劫持、交接终端给子进程（handoff）、退出时恢复终端模式。"}
-{"id":"chunk-bzr73sfg.js#ogt","doc":"退出或交接前把 stdin 里残留的终端应答读干净：临时进原始模式，以非阻塞方式打开 /dev/tty 读取（最多 64 块），直到读到预期数量的 DA1 应答或超时（250ms），避免应答字节泄漏到 shell。"}
-{"id":"chunk-bzr73sfg.js#$7","doc":"Ink 的 React reconciler（react-reconciler 宿主配置，mutation 模式、主渲染器）与事件分发器。要点：createInstance 时 <Box> 不能嵌在 <Text> 里、ink-text 嵌套变 ink-virtual-text；文字必须在 <Text> 内（报错信息带组件所有者链）；commitUpdate 只把变化的属性写回 DOM（样式差量写进 yoga）；hide/unhideInstance 用 display:none；resetAfterCommit 记录提交耗时并触发 onComputeLayout + onRender；更新优先级由 dispatcher 按当前事件类型决定；autoFocus 在 commitMount 时聚焦；挂上键盘/粘贴/滚轮处理器时同步 stdin 原始模式引用。"}
-{"id":"chunk-bzr73sfg.js#qi","doc":"两个矩形的并（包围盒）。"}
-{"id":"chunk-bzr73sfg.js#Ss","doc":"各 textWrap 取值对应的 ink-text 样式对象（预先建好，避免每次渲染新建）。"}
-{"id":"chunk-bzr73sfg.js#Ud","doc":"比较两个 {row, col} 点的先后（先行后列）。"}
-{"id":"chunk-bzr73sfg.js#B1","doc":"可出现在纯文本 URL 中的字符（可打印 ASCII，不含 <>\"'` 与空格）。"}
-{"id":"chunk-x6v6jz2y.js#bt","doc":"优雅退出时调用当前 stdout 对应 Ink 实例的 drainStdin()。"}
-{"id":"chunk-x6v6jz2y.js#vt","doc":"renderSync：按 stdout 取或建 Ink 实例并渲染，返回 {rerender, unmount, waitUntilExit, cleanup}。renderAsync：等前一个独立渲染完成后再渲染，并记录首帧距进程启动的毫秒数。"}
-{"id":"chunk-x6v6jz2y.js#we","doc":"异步创建 React 根（等待挂起的独立渲染），返回 {render, unmount, waitUntilExit}。"}
-{"id":"chunk-x6v6jz2y.js#Rt","doc":"创建 Ink 实例并登记到实例表：kind=react 登记为该 stdout 的主实例，否则登记为命令式 Tree 根；首次调用时注册优雅退出钩子。"}
-{"id":"chunk-x6v6jz2y.js#Zt","doc":"<Link>：终端支持超链接时输出 ink-link（OSC 8），否则显示 fallback 或文字本身；assumeSupport 时以显式设置为准。"}
-{"id":"chunk-x6v6jz2y.js#De","doc":"解析 ESC 单字符序列（RIS、DECSC/DECRC、IND、RI、NEL）为语义动作；其余返回 unknown。"}
-{"id":"chunk-x6v6jz2y.js#Fe","doc":"把文本切成 {value, width} 字素序列：纯 ASCII 快速路径，否则用 Intl 字素切分并用 Bun.stringWidth 量宽（至少 1）。"}
-{"id":"chunk-x6v6jz2y.js#Gt","doc":"DEC 私有模式（光标显示、备用屏、括号粘贴、鼠标跟踪、焦点事件）的 SM/RM 转成语义动作。"}
-{"id":"chunk-x6v6jz2y.js#Yt","doc":"解析一个 CSI 序列为语义动作：SGR 单独返回参数串；光标移动/定位、擦除、插删行列、滚动与滚动区域、保存恢复光标、光标形状（DECSCUSR）、DEC 私有模式开关。"}
-{"id":"chunk-x6v6jz2y.js#Jt","doc":"按第二个字节判断转义序列种类：csi / osc / esc。"}
-{"id":"chunk-x6v6jz2y.js#J","doc":"终端输出语义解析器（Ansi 组件、测试与录屏用）：分词后把文本切成带当前样式的字素段、BEL 单独成动作；SGR 更新内部样式；OSC 8 维护当前链接；forOutput 模式下保留可能被后续字节续上的尾部字素（ZWJ、区域旗帜、代理对）。"}
-{"id":"chunk-x6v6jz2y.js#Es","doc":"<Ansi>：把带 ANSI 转义的字符串解析成样式片段，渲染为嵌套 <Text>（OSC 8 片段包 <Link>）；支持 dimColor/italic 统一叠加、monochrome 去色。"}
-{"id":"chunk-x6v6jz2y.js#He","doc":"用 termio Parser 把 ANSI 字符串转成 {text, props} 片段（相邻同样式合并，携带超链接）。"}
-{"id":"chunk-x6v6jz2y.js#Ge","doc":"<Button>：可聚焦的 Box；回车或空格触发 onAction 并短暂（100ms）进入 active 态；点击触发 onAction，但窗口激活点击与挂载后 mountSettleMs（默认 300ms）内的点击当误触丢弃；children 可为 (state)=>节点 拿到 focused/hovered/active。"}
-{"id":"chunk-x6v6jz2y.js#yT","doc":"声明光标位置：组件挂载点 + (line, column) 相对位置，active 时交给 Ink（每帧把真实终端光标停到那里，供 IME 与屏幕阅读器），卸载或失活时撤销。"}
-{"id":"chunk-x6v6jz2y.js#HL","doc":"<Newline>：输出 count 个换行的 ink-text。"}
-{"id":"chunk-x6v6jz2y.js#Vf","doc":"<NoSelect>：内容不参与鼠标选区复制（如行号栏、装饰符）；fromLeftEdge 时从屏幕最左列起整段不可选。"}
-{"id":"chunk-x6v6jz2y.js#YWe","doc":"<RawAnsi>：直接输出已排好的 ANSI 行（ink-raw-ansi），宽高由调用方给出，不再折行或测量。"}
-{"id":"chunk-x6v6jz2y.js#Qe","doc":"节点当前是否在终端可见区域内：累加祖先偏移并减去滚动容器的 scrollTop，按根高度与终端行数推出视口范围；滚动容器尚未渲染时返回 null。"}
-{"id":"chunk-x6v6jz2y.js#jV","doc":"跟踪组件是否在终端可见区域：返回 ref 回调、可见状态对象、读取函数与即时探测函数；每次提交后更新。动画类组件据此在不可见时停止刷新。"}
-{"id":"chunk-x6v6jz2y.js#cP","doc":"选区操作钩子：复制（并清除）/复制不清除、取选中文本、清除、是否有选区、读状态、订阅变化、键盘移动焦点、设置选区背景色。没有 Ink 实例时返回空实现。"}
-{"id":"chunk-x6v6jz2y.js#jRr","doc":"订阅式读取“是否有选区”（useSyncExternalStore）。"}
-{"id":"chunk-x6v6jz2y.js#K","doc":"标签页状态预设：idle（绿点，“Idle”）、busy（橙点，“Working…”）、waiting（蓝点，“Waiting”）。"}
-{"id":"chunk-x6v6jz2y.js#DUn","doc":"把会话状态写到终端标签页（OSC 21337 标签状态，经 tmux/screen 透传）；kind 为 null 时清除；终端不支持时不写。"}
-{"id":"chunk-x6v6jz2y.js#XDe","doc":"标题变化时用 OSC 0 设置终端窗口/标签标题（先去掉转义字符）；title 为 null 不写。"}
-{"id":"chunk-x6v6jz2y.js#zo","doc":"读元素 yoga 计算后的宽高。"}
-{"id":"chunk-x6v6jz2y.js#ot","doc":"默认渲染选项：是否使用原生光标（native cursor 开关）与样式图集记录器。"}
-{"id":"chunk-x6v6jz2y.js#qj","doc":"应用入口的 render：给根元素包上主题等 Provider 后交给 Ink 渲染；第二个参数可以是 stdout 流或选项。"}
-{"id":"chunk-24t3dkzb.js#pIs","doc":"备用屏清屏：ED2 + 清回滚 + 光标回原点。"}
-{"id":"chunk-24t3dkzb.js#igt","doc":"主屏清屏（不清回滚区）：光标回原点后逐行擦除并下移 rows 行，再回原点。"}
-{"id":"chunk-24t3dkzb.js#xce","doc":"终端是否支持同步输出（DEC 2026）：只在探测已得出结论时为真。"}
-{"id":"chunk-24t3dkzb.js#eLe","doc":"同 isSynchronizedOutputSupported，但探测未完成时按“可能支持”估计。"}
-{"id":"chunk-24t3dkzb.js#g","doc":"同步输出支持判断：后台守护进程按会话状态；非 tmux 且 CLAUDE_CODE_FORCE_SYNC_OUTPUT 时强制开；否则看能力表 synchronizedOutput（已定论用结论，未定论时 allowLikely 才用估计）。"}
-{"id":"chunk-24t3dkzb.js#JRr","doc":"是否启用 DECSTBM 滚动区域优化的前提：支持同步输出，且不在 tmux/zellij/JetBrains/xterm.js/Windows Terminal 中，也不是后台守护进程（这些终端用滚动区域会把视口拉回或出错）。"}
-{"id":"chunk-24t3dkzb.js#agt","doc":"终端是否支持 OSC 9;4 进度条：会话状态优先；ConEmu 支持；Ghostty ≥1.2.0、iTerm2 ≥3.6.6 支持；Windows Terminal 与非 TTY 不支持。"}
-{"id":"chunk-24t3dkzb.js#y","doc":"给定终端名是否在扩展键（kitty 键盘协议/modifyOtherKeys）白名单里；不给终端名时看能力探测结果。"}
-{"id":"chunk-24t3dkzb.js#urn","doc":"是否启用扩展键：tmux/screen 下不启用；能力表显示支持，且终端不在需要确认的名单里或已确认支持 kitty 键盘。"}
-{"id":"chunk-24t3dkzb.js#j0t","doc":"启用扩展键：kitty 键盘协议压栈（legacyKitty 时用旧标志位）+ modifyOtherKeys。"}
-{"id":"chunk-24t3dkzb.js#frn","doc":"是否在 Windows Terminal 中（WT_SESSION）。"}
-{"id":"chunk-24t3dkzb.js#abo","doc":"把 Patch 列表拼成一个字符串一次写到终端：默认用同步输出（DEC 2026 BSU/ESU）包裹；clearTerminal 按主屏/备用屏用不同清屏方式；相对光标移动的 dy 夹在视口内；写失败（EPIPE）静默处理。"}
-{"id":"chunk-24t3dkzb.js#sgt","doc":"最基础的事件类：只有 stopImmediatePropagation 标记（TerminalEvent、终端焦点/尺寸等内部事件的基类）。"}
-{"id":"chunk-24t3dkzb.js#drn","doc":"Ink 内部事件发射器：不限监听数；某个监听者对事件调用 stopImmediatePropagation 后后续监听者不再执行。"}
-{"id":"chunk-24t3dkzb.js#fIs","doc":"修正 JetBrains 终端的滚轮问题（设置 jediTerm 打开时）：滚轮后 75ms 内出现的无修饰上下方向键视为触控板滚动的副产物丢弃并计数；向下滚动后 250ms 内的 wheelup 在确认是该终端时翻转成 wheeldown；首次发现时回调通知。"}
-{"id":"chunk-24t3dkzb.js#V$","doc":"值不是整数时记一条警告（Box 的 margin/padding/gap 等）。"}
-{"id":"chunk-24t3dkzb.js#VUn","doc":"把 aria-* 属性收成 accessibility 对象（全空返回 undefined）。"}
-{"id":"chunk-24t3dkzb.js#de","doc":"<Box>：Ink 的 flex 容器（ink-box）。默认 flexDirection row、flexWrap nowrap、flexGrow 0、flexShrink 1、overflow visible；margin/padding/gap 非整数告警。透传焦点（tabIndex/autoFocus）、键盘/粘贴/滚轮/action 事件（含捕获阶段）、点击、悬停、onPointer、keybindingScope、textEntry、aria-* 无障碍属性。"}
-{"id":"chunk-24t3dkzb.js#R","doc":"Ink 内部 stdin 上下文：stdin 流、setRawMode、是否支持原始模式、内部事件发射器、终端查询器、JediTerm 输入状态。"}
-{"id":"chunk-24t3dkzb.js#w","doc":"终端模式 → {on, off} 序列：括号粘贴 2004、主题报告 2031、焦点事件 1004、像素鼠标 1016、扩展键（kitty 键盘 + modifyOtherKeys）、备用屏 1049（附清屏）、备用屏专用键模式。"}
-{"id":"chunk-24t3dkzb.js#lgt","doc":"终端模式管理：按设置顺序记录已开的模式（鼠标、表面颜色、括号粘贴、焦点、扩展键、备用屏…），set/reset 返回要写的序列；suspend/resume 在挂起或交出终端时成组关闭/恢复（可保留一个）；reassertKeys/reassertFrom 在终端可能丢失状态时重发；resetAll 退出时全部关闭（逆序）。"}
-{"id":"chunk-24t3dkzb.js#m","doc":"通知文本里的 C0/C1 控制字符换成空格（防止注入转义序列）。"}
-{"id":"chunk-24t3dkzb.js#U0","doc":"终端通知钩子：iTerm2（OSC 9）、kitty（OSC 99 标题+正文+聚焦）、Ghostty（OSC 777 notify）、响铃（BEL）、进度条（OSC 9;4：running/error/indeterminate/completed，终端不支持时不写）；全部经 tmux/screen 透传包装。"}
-{"id":"chunk-01xdq6fy.js#K","doc":"<ScrollBox>：overflow 为 scroll 的 ink-box（默认作为选区范围 selectionScope），内容放在一列子 Box 中。通过 ref 暴露命令式 API：scrollTo / scrollToElement（锚定到元素，start/center/end/nearest）/ scrollBy（累积到 pendingScrollDelta，由渲染时逐帧排水）/ scrollToBottom（重新开启粘底）、读 scrollTop/高度/视口、isSticky、subscribe、setClampBounds；滚动只标脏并在微任务里触发重绘，不走 React 状态。stickyScroll 让内容增长时自动跟到底，followGrowth=false 关闭位置跟随。"}
-{"id":"chunk-18hwfzwa.js#kse","doc":"搜索高亮钩子：setQuery（全屏高亮所有匹配）、scanElement（在某元素子树里扫描匹配位置）、setPositions（设置位置式高亮与当前匹配）。"}
-{"id":"chunk-18hwfzwa.js#lRe","doc":"按键是否产生文字输入：带 Ctrl/Meta/Super 或是回车、Esc、方向、Tab、翻页、Home/End、滚轮时为否。"}
-{"id":"chunk-2f336bka.js#zke","doc":"<AlternateScreen>：挂载时进入备用屏（DEC 1049）并按 mouseTracking（默认 full）开启鼠标跟踪、可选设置 surface 背景/前景色；内容高度固定为终端行数；卸载时退出备用屏、关闭鼠标、清选区并恢复扩展键与原生光标。进/出序列会尽量并入下一帧一起写（keepForNextFrame），避免闪烁。"}
-{"id":"chunk-cg10fy59.js#lbo","doc":"提供终端焦点上下文：订阅 DEC 1004 焦点事件得到的状态（focused/blurred/unknown）。"}
-{"id":"chunk-cg10fy59.js#Jc","doc":"读取终端窗口当前是否有焦点。"}
-{"id":"chunk-cg10fy59.js#dbo","doc":"动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。"}
-{"id":"chunk-dnj0hze9.js#M","doc":"动画帧钩子：返回 [ref, 当前时钟值, 可见性读取函数]；组件不在可见区域时停止跟随时钟（省 CPU）。"}
-{"id":"chunk-fpjsca9n.js#rGe","doc":"终端当前是否有焦点（未收到 blurred 就视为有焦点）。"}
-{"id":"chunk-avfhvhz8.js#h","doc":"supports-hyperlinks 之外额外认为支持 OSC 8 的终端名（TERM_PROGRAM / LC_TERMINAL）。"}
-{"id":"chunk-avfhvhz8.js#TGe","doc":"超链接支持的显式设置：会话状态里的 hyperlinks 优先，其次 FORCE_HYPERLINK（0/假值为关）；都没有返回 undefined。"}
-{"id":"chunk-avfhvhz8.js#bb","doc":"终端是否支持 OSC 8 超链接：显式设置 → supports-hyperlinks 包 → 额外终端名单 → JetBrains → Windows Terminal（不在 tmux 内）→ tmux ≥3.4 → LC_TERMINAL → TERM 含 kitty。"}
-{"id":"chunk-brd2890s.js#i_","doc":"是否运行在 xterm.js 终端（VS Code 等）：会话状态、TERM_PROGRAM=vscode，或 XTVERSION 应答以 xterm.js 开头。"}
-{"id":"chunk-cg10fy59.js#u","doc":"终端焦点上下文：isTerminalFocused 与 terminalFocusState。"}
-{"id":"chunk-dxdtyerk.js#V_","doc":"生成 OSC 序列：ESC ] 参数;… 结束符（kitty 用 ST，其它用 BEL）。"}
-{"id":"chunk-dxdtyerk.js#sH","doc":"按当前复用器包装序列：tmux 用 DCS tmux; 透传（ESC 加倍），screen 用 DCS 透传，其它原样。"}
-{"id":"chunk-dxdtyerk.js#L","doc":"Linux 剪贴板工具探测（按 host 单例）：Wayland 下 wl-copy，X11 下 xclip/xsel，都没有时用原生插件 setLinuxClipboardText；记录插件写入成败与 wl-copy 并发序号。"}
-{"id":"chunk-dxdtyerk.js#Ybe","doc":"预测复制会走哪条路径：本地 macOS/Windows/WSL 或已探测到 Linux 工具时为 native，在 tmux 里为 tmux-buffer，否则 osc52。"}
-{"id":"chunk-dxdtyerk.js#eZn","doc":"VS Code 1.123/1.124 的 OSC 52 会把非 ASCII 粘贴成乱码：命中时返回提示文字。"}
-{"id":"chunk-dxdtyerk.js#z","doc":"把文本写进 tmux 粘贴缓冲（load-buffer -w，失败再不带 -w 重试），让 tmux 同步到系统剪贴板。"}
-{"id":"chunk-dxdtyerk.js#IA","doc":"复制到剪贴板：本地（非 SSH）先用原生方式（pbcopy、wl-copy、xclip/xsel、插件、PowerShell Set-Clipboard），再写 tmux 缓冲；返回需要写到终端的 OSC 52 序列（tmux 下原样+透传各一份、screen 下分块 DCS；VTE 系终端在本地已复制时不发）。"}
-{"id":"chunk-dxdtyerk.js#Z","doc":"用平台原生工具复制文本（macOS pbcopy；Linux wl-copy / xclip / xsel 同时写 clipboard 与 primary，或原生插件；WSL/Windows PowerShell），返回是否已复制。"}
-{"id":"chunk-dxdtyerk.js#S2t","doc":"读系统剪贴板（中键/右键粘贴用）：macOS pbpaste、Windows/WSL PowerShell Get-Clipboard、Linux 依次尝试 wl-paste/xclip/xsel（clipboard 或 primary）再退到原生插件；SSH 中返回空串。"}
-{"id":"chunk-dxdtyerk.js#zm","doc":"OSC 命令号表：标题 0/1/2、颜色 4/10/11/12/104/110/111/112、工作目录 7、超链接 8、iTerm2 通知/进度 9、剪贴板 52、kitty 通知 99、语义提示 133、Ghostty 通知 777、iTerm2 私有 1337、程序状态 7501、标签状态 21337。"}
-{"id":"chunk-dxdtyerk.js#yQs","doc":"解析 OSC 内容为语义动作：标题（0/1/2）、超链接开始/结束（8，含 id 等参数）、标签状态（21337）；其余 unknown。"}
-{"id":"chunk-dxdtyerk.js#N","doc":"解析颜色字符串（#rrggbb 或 X11 rgb:h/h/h，1–4 位十六进制）为 {type:'rgb', r, g, b}。"}
-{"id":"chunk-dxdtyerk.js#te","doc":"解析标签状态 OSC 21337 的 key=value;… 字段（indicator / status / status-color，空值表示清除）。"}
-{"id":"chunk-dxdtyerk.js#re","doc":"按 ; 与 = 切分标签状态字段，支持反斜杠转义。"}
-{"id":"chunk-dxdtyerk.js#tvt","doc":"生成 OSC 8 超链接开始序列：去掉 URL 中的非法字符，附带由 URL 哈希得到的 id（相同链接跨行能被终端识别为同一个）；空 URL 返回结束序列。"}
-{"id":"chunk-dxdtyerk.js#ne","doc":"URL 的 32 位哈希（base36），作 OSC 8 的 id 参数。"}
-{"id":"chunk-dxdtyerk.js#nvt","doc":"常用 OSC 序列：OSC 8 结束、iTerm2 OSC 9 子命令（通知/徽标/进度 4）、进度状态（清除/设置/错误/不确定）、清除进度条、清除标题、清除标签状态。"}
-{"id":"chunk-dxdtyerk.js#bQs","doc":"生成标签状态序列 OSC 21337（indicator=#rrggbb;status=…;status-color=…），status 中的 \\ 和 ; 转义。"}
-{"id":"chunk-dxdtyerk.js#vQs","doc":"终端能力表的初始状态（每项 settled/likely + 来源说明），由环境变量推断，之后由 probeTerminalCapabilities 的查询结果修正：extendedKeys、synchronizedOutput、kittyKeyboard、kittyGraphics、itermImages、mousePixels、programStatus。后台会话（CLAUDE_CODE_SESSION_KIND=bg）、tmux/screen、CLAUDE_CODE_FORCE_TERMINAL_IMAGES、CLAUDE_CODE_DISABLE_TERMINAL_TITLE、旧 VTE 会影响初值。"}
-{"id":"chunk-dxdtyerk.js#sZn","doc":"按 XTVERSION 名判断是否支持 kitty 图形协议：kitty ≥0.28.0 或 Ghostty。"}
-{"id":"chunk-dxdtyerk.js#iZn","doc":"按 XTVERSION 名判断是否 iTerm2 ≥3.5（支持内联图片按格定位）。"}
-{"id":"chunk-dxdtyerk.js#Se","doc":"按环境变量猜测终端是否支持同步输出（DEC 2026）：iTerm2、WezTerm、Warp、Ghostty、Contour、VS Code、Alacritty、mintty、Rio、Tabby、kitty、foot、Zed、Windows Terminal、VTE ≥0.68；返回依据字符串或 undefined。"}
-{"id":"chunk-ebxn0psw.js#W_","doc":"DEC 私有模式号：光标可见 25、备用屏 47/1049、鼠标 1000/1002/1003/1006/1016（像素）、焦点事件 1004、括号粘贴 2004、主题通知 2031、同步输出 2026、win32-input-mode 9001。"}
-{"id":"chunk-ebxn0psw.js#mrn","doc":"预生成的 DEC 模式序列：同步输出开始/结束（BSU/ESU）、括号粘贴、焦点事件、主题通知、光标显隐、备用屏 1049、关闭 win32-input-mode、鼠标跟踪（1000+1002+1003+1006 全开，或只开点击 1000+1006）、像素鼠标 1016。"}
-{"id":"chunk-g3xfp0ds.js#yrt","doc":"把 TextStyles 用 chalk 套到文本上：反显、删除线、下划线、斜体、粗体、暗淡；faintInk 与 color 相同且为标准 ANSI 色时额外加暗淡；最后前景色、背景色。"}
-{"id":"chunk-g3xfp0ds.js#ZNe","doc":"只套前景色。"}
-{"id":"chunk-gfseh2w1.js#n","doc":"Bun.stringWidth 选项：东亚歧义宽度按窄。"}
-{"id":"chunk-gfseh2w1.js#ie","doc":"字符串显示宽度：Bun.stringWidth（歧义宽度按窄）。"}
-{"id":"chunk-ksvdmrg0.js#Sn","doc":"把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。"}
-{"id":"chunk-m1vyn8g1.js#grn","doc":"termio 文本样式的默认值（无粗体/斜体/下划线…，前景/背景/下划线色为 default）。"}
-{"id":"chunk-m1vyn8g1.js#_","doc":"解析 SGR 参数串（; 分隔参数、: 分隔子参数）。"}
-{"id":"chunk-m1vyn8g1.js#A","doc":"解析 38/48/58 扩展颜色：冒号形式（5:n / 2:[cs:]r:g:b）或分号形式（;5;n / ;2;r;g;b）。"}
-{"id":"chunk-m1vyn8g1.js#TIs","doc":"把一条 SGR 应用到 termio 文本样式：重置、粗/暗/斜/下划线（含 4:x 样式与 21 双下划线）/闪烁/反显/隐藏/删除线/上划线及其关闭码、16 色前景背景（含亮色）、256 色与真彩色、下划线颜色。"}
-{"id":"chunk-m1vyn8g1.js#cbo","doc":"DECRQM 查询某 DEC 模式（CSI ? n $ p），匹配 DECRPM 应答。"}
-{"id":"chunk-m1vyn8g1.js#PIs","doc":"kitty 键盘协议标志查询 CSI ? u。"}
-{"id":"chunk-m1vyn8g1.js#IIs","doc":"光标位置查询（DECXCPR，CSI ? 6 n）。"}
-{"id":"chunk-m1vyn8g1.js#OIs","doc":"OSC 颜色查询（OSC n ; ?），如 OSC 11 背景色。"}
-{"id":"chunk-m1vyn8g1.js#DIs","doc":"XTVERSION 查询（CSI > 0 q），应答 DCS > | 终端名 版本 ST。"}
-{"id":"chunk-m1vyn8g1.js#I","doc":"DA1 查询 CSI c，作为查询队列的哨兵：几乎所有终端都会应答，按顺序收到它说明之前的查询已无应答。"}
-{"id":"chunk-m1vyn8g1.js#fbo","doc":"终端查询器：查询排队写到 stdout（输入未接管时先缓存），应答由 App 的输入解析交给 onResponse 按 match 匹配并 resolve；flush() 发 DA1 哨兵，哨兵应答到达时把前面未应答的查询都 resolve 为 undefined；owed() 统计还欠的应答数（退出前要读干净）；resync 丢弃排队并可插入 barrier；主题变化通知（CSI ? 997）分发给订阅者。"}
-{"id":"chunk-t0gq9gyw.js#Ghs","doc":"找出文本里会被渲染成零宽的字符（不可见格式符、零宽字素等），返回其码点；没有返回 undefined。"}
-{"id":"chunk-tw8fk0yz.js#tje","doc":"创建流式转义序列分词器：feed() 返回文本/序列 token，未结束的序列留在内部缓冲；flush() 把缓冲按当前状态吐出；选项：x10Mouse（输入时识别 ESC[M 三字节鼠标）、escPrefixedKeyIsAlt（rxvt 风格 ESC+键）、stringsEndAtLineFeed（输出解析时 OSC 遇换行结束）、intermediatesRunToFinal。"}
-{"id":"chunk-tw8fk0yz.js#se","doc":"分词状态机（ground / escape / escapeIntermediate / csi / ss3 / osc / dcs / apc / pm / sos）：识别 CSI、OSC/DCS/APC（BEL 或 ST 结束，CAN/SUB 中止）、SS3、单字符 ESC 序列；输入模式下还处理 X10 鼠标、ESC+空白/回车当 Alt、单独的 DEL 与控制字符成为独立文本 token。返回 tokens 与新状态。"}
-{"id":"chunk-7p2hc4jn.js#wr","doc":"把文本里的制表符展开成空格（逐行、逐 \\r 段，用分词器保留转义序列不展开）。"}
-{"id":"chunk-wz6vk74d.js#vl","doc":"生成 CSI 序列：无参数返回前缀；一个参数直接拼；多个参数时最后一个是终止字节，前面用 ; 连接。"}
-{"id":"chunk-wz6vk74d.js#wQt","doc":"从当前行向上擦除 n 行，光标停在最上一行行首。"}
-{"id":"chunk-wz6vk74d.js#ude","doc":"常用 CSI 常量：复位滚动区域、括号粘贴开始/结束标记、焦点进/出、kitty 键盘协议压栈（>5u：消歧+报告所有键为转义码；legacy >1u）与弹栈（<u）、modifyOtherKeys 开关（>4;2m / >4m）。"}
-{"id":"chunk-zxbmtfmw.js#E","doc":"在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。"}
-{"id":"chunk-zxbmtfmw.js#Gfr","doc":"borderStyle 名或自定义字符集 → 八个方向的边框字符；不合法返回 undefined。"}
-{"id":"chunk-m4dvt8pp.js#wVr","doc":"计算从一组活动 ANSI 样式切换到另一组所需的码：先关闭不再需要的，再开启新增的（StylePool.transition 使用）。"}
-{"id":"chunk-4ymxyb4g.js#le","doc":"在 VS Code 终端（xterm.js）里，chalk 颜色等级为 256 色时提升为真彩色。"}
-{"id":"chunk-4ymxyb4g.js#ie","doc":"TERM 是已知真彩终端（alacritty、contour、foot、ghostty、rio、wezterm、xterm-kitty 等）且未设 NO_COLOR/FORCE_COLOR 时，把 chalk 等级提升到真彩色。"}
-{"id":"chunk-4ymxyb4g.js#ae","doc":"tmux 下把 chalk 等级降到 256 色（tmux 默认不透传真彩），设置 CLAUDE_CODE_TMUX_TRUECOLOR 时不降。"}
-{"id":"chunk-cgr0tezp.js#Gt","doc":"分块做 Unicode 规范化（每块 128 码元在规范化起始字符处切开），避免超长组合序列导致的性能问题。"}
-{"id":"chunk-ag5x7vhf.js#Gs","doc":"把屏幕的一行转回带样式与超链接的 ANSI 字符串（跳过占位格，去掉行尾无效空格），renderToScreen 用来把离屏渲染结果变成文本行。"}
-{"id":"chunk-ag5x7vhf.js#ah","doc":"把滚动容器里 [fromRow, toRow) 范围的内容离屏渲染成 ANSI 文本行（新建 Screen+Output，从内容节点 renderNodeToOutput，渲染后恢复其 cachedLayout 并标脏），用于把已滚出的对话写入终端回滚区等。"}
-{"id":"chunk-4121qate.js#OAn","doc":"校验声明式 UI 的样式属性值（枚举、尺寸、间距 token、定位整数、颜色、布尔），不合法返回原因文字。注意：这不是 Ink 的 styles.ts。"}
-{"id":"chunk-x1mwqya5.js#_ie","doc":"把单个按键串（如 \"ctrl+shift+k\"）解析成 Keystroke {key, ctrl, alt, shift, meta, super}。修饰键别名：control→ctrl；opt/option→alt；cmd/command/super/win→super；键名别名：esc→escape、return→enter、del→delete、space→\" \"、箭头符号→up/down/left/right；其他部分小写后当主键。"}
-{"id":"chunk-x1mwqya5.js#Pee","doc":"把和弦串（空格分隔的多次按键，如 \"ctrl+x ctrl+s\"）解析成 Keystroke 数组；单个空格字符视为 space 键。"}
-{"id":"chunk-x1mwqya5.js#kn","doc":"Keystroke 转回规范字符串（ctrl+alt+shift+meta+cmd+键名，键名经 keyToDisplayName），用于和弦比较的键与日志。"}
-{"id":"chunk-x1mwqya5.js#nn","doc":"内部键名转显示名：escape→Esc、enter→Enter、箭头→↑↓←→、pageup→PageUp 等；其余原样。"}
-{"id":"chunk-x1mwqya5.js#WF","doc":"和弦转字符串（各步 keystrokeToString 以空格连接）。"}
-{"id":"chunk-x1mwqya5.js#f5r","doc":"按平台生成给用户看的按键文字：alt/meta 在 macOS 显示 opt、其他平台 alt；super 在 macOS 显示 cmd、其他平台 super。"}
-{"id":"chunk-x1mwqya5.js#LSe","doc":"按平台生成和弦的显示文字（各步 keystrokeToDisplayString 以空格连接）。"}
-{"id":"chunk-x1mwqya5.js#HSe","doc":"把 [{context, bindings:{按键串: action|null}}] 块展开成扁平的 ParsedBinding 列表 {chord, action, context}；顺序即优先级（后者覆盖前者）。"}
-{"id":"chunk-x1mwqya5.js#wn","doc":"宽松的 zod 结构：{context: string, bindings: Record<string, string|null>}，加载用户配置时只用它判断块形状（上下文与动作是否合法由 validate 另报）。"}
-{"id":"chunk-x1mwqya5.js#P","doc":"判断 keybindings.json 的 bindings 是否为合法块数组。"}
-{"id":"chunk-x1mwqya5.js#sn","doc":"validate.ts 用的常量：合法上下文列表、修饰键名与别名（ctrl/control、alt/opt/option、shift、meta、cmd/command/super/win）、Keystroke 的修饰位字段、报错时最多列出 3 个非修饰键、引用按键串最长 80 字符。"}
-{"id":"chunk-x1mwqya5.js#xn","doc":"检查一个按键串里「+」前面的部分是不是修饰键（316 新增的细化报错）。空的部分或「+」两侧有空格导致某一步没有主键时报 parse_error；否则把不是修饰键的部分（如 \"k+j\" 的 k）列出来，说明实际会被解释成什么，能猜出修饰键别名时给 Did you mean 建议，否则提示用空格分隔连续按键。"}
-{"id":"chunk-x1mwqya5.js#vn","doc":"校验 keybindings.json 中的一个块：必须是对象、有字符串 context 且在合法上下文里、bindings 是对象；逐条校验按键串（validateKeystroke）和动作：动作只能是字符串或 null；command:* 名字只能含字母数字冒号连字符下划线且只能放在 Chat 上下文；未知动作报错并给出相近动作建议；voice:pushToTalk 绑到无修饰的单个字母会警告（预热期间会把字母打进输入框）。"}
-{"id":"chunk-x1mwqya5.js#Cn","doc":"给未知动作找建议：编辑距离≤2 的已知动作给 Did you mean；否则列出同命名空间的动作；再否则列出所有动作命名空间。"}
-{"id":"chunk-x1mwqya5.js#M","doc":"在原始 JSON 文本里用正则找同一 bindings 对象内重复出现的键（JSON.parse 会静默保留最后一个），每个重复键报一次 duplicate 警告。"}
-{"id":"chunk-x1mwqya5.js#Sn","doc":"顶层校验：bindings 必须是数组，然后逐块 validateBlock。"}
-{"id":"chunk-x1mwqya5.js#Pn","doc":"同一上下文内规范化后相同的按键串绑定了不同动作时警告（只有最后一个生效）。"}
-{"id":"chunk-x1mwqya5.js#An","doc":"用户绑定里用到保留快捷键（ctrl+c/ctrl+d/ctrl+m 等硬编码键、终端信号键、macOS 系统键）时按保留表的严重度报警。"}
-{"id":"chunk-x1mwqya5.js#En","doc":"校验用的简化展开：按单个空格拆和弦，不做 space 特判。"}
-{"id":"chunk-x1mwqya5.js#D","doc":"汇总用户配置校验：结构校验 + 块合法时查重复与保留键；按 type:key:context 去重。"}
-{"id":"chunk-x1mwqya5.js#Iee","doc":"用户自定义快捷键总开关：GrowthBook tengu_keybinding_customization_release，默认 true。"}
-{"id":"chunk-x1mwqya5.js#Fn","doc":"快捷键模块的进程级状态：当前绑定与警告、是否已从后端预热、文件监视器、每日一次的加载事件日期、已记录的回退提示、动作触发事件的节流表、变更信号 changed；支持 Symbol.dispose 关闭监视器。"}
-{"id":"chunk-x1mwqya5.js#U","doc":"每天最多发一次 tengu_custom_keybindings_loaded（带用户绑定条数）。"}
-{"id":"chunk-x1mwqya5.js#Mbn","doc":"用户快捷键文件路径：<配置目录>/keybindings.json。"}
-{"id":"chunk-x1mwqya5.js#j","doc":"展开用户块，只保留动作为 null（解绑）或合法动作/command:* 的绑定。"}
-{"id":"chunk-x1mwqya5.js#G","doc":"把每条校验警告写调试日志（[keybindings] [severity] message — suggestion）。"}
-{"id":"chunk-x1mwqya5.js#S","doc":"上报 keybinding_load_user_config 特性事件（ok 记成功、否则记失败原因）；suppressFeatureEvents 时不报。"}
-{"id":"chunk-x1mwqya5.js#V","doc":"自定义被关闭（GrowthBook 开关关掉或策略禁止 keybindings）时为 true。"}
-{"id":"chunk-x1mwqya5.js#n5o","doc":"同步取绑定（不记日志、不报警告）：默认绑定 + 合法的用户绑定；自定义被禁或特定模式下只返回默认绑定。"}
-{"id":"chunk-x1mwqya5.js#dn","doc":"异步加载：有后端存储时从后端读 keybindings 条目（读失败回退默认并报错）；否则读本地 keybindings.json。格式要求 {bindings:[...]}，结构不对时回退默认绑定并给出 parse_error；成功时默认绑定在前、用户绑定在后合并，附带重复键与校验警告。"}
-{"id":"chunk-x1mwqya5.js#jn","doc":"从 JSON 文本解析用户绑定并与默认绑定合并（后端预热路径用），规则同 loadKeybindingsAsync。"}
-{"id":"chunk-x1mwqya5.js#Xoi","doc":"交互会话启动时从后端存储预热绑定（只尝试一次；有警告则不写入状态，留给同步加载报告）。"}
-{"id":"chunk-x1mwqya5.js#gn","doc":"预热得到的绑定只用一次：若此后自定义被禁则清空状态，返回是否需要重新加载。"}
-{"id":"chunk-x1mwqya5.js#SVt","doc":"同步加载本地 keybindings.json 并写入状态（KeybindingSetup 首次渲染用）；规则同异步版，文件不存在视为成功（只有默认绑定）。"}
-{"id":"chunk-x1mwqya5.js#Joi","doc":"启动 keybindings.json 的 chokidar 监视（轮询 2 秒、写入稳定 500ms）：add/change 时异步重载并发 changed 信号，unlink 时回到默认绑定；目录不存在或自定义被禁时不监视。"}
-{"id":"chunk-x1mwqya5.js#on","doc":"文件变化：重新加载，写入状态并通知订阅者（热重载）。"}
-{"id":"chunk-x1mwqya5.js#On","doc":"文件被删除：回到默认绑定并通知订阅者。"}
-{"id":"chunk-x1mwqya5.js#WW","doc":"显示快捷键时用的平台：iTerm2/Apple Terminal 下即使不是 macOS 主机（如 ssh）也按 macOS 显示。"}
-{"id":"chunk-x1mwqya5.js#In","doc":"按键事件名到绑定键名的映射（return→enter 等，含 wheelup/wheeldown）。"}
-{"id":"chunk-x1mwqya5.js#Dbn","doc":"找某上下文里某动作当前生效的和弦（没被后面同和弦绑定覆盖的最后一条）；动作存在但全被覆盖返回 null，不存在返回 undefined。"}
-{"id":"chunk-x1mwqya5.js#Qoi","doc":"该上下文里该动作的所有和弦最终都被解绑（最后一条同和弦绑定的 action 为 null）。"}
-{"id":"chunk-x1mwqya5.js#Lnr","doc":"在动作的多个有效和弦里挑一个用来显示：用户自定义的优先（+3），无修饰的导航键次之（+2），无修饰单字符再次（+1）。"}
-{"id":"chunk-x1mwqya5.js#Zoi","doc":"找出上下文 A 的单键绑定在上下文 B 里会被解释成别的动作的那些动作（用于冲突提示）。"}
-{"id":"chunk-x1mwqya5.js#Exe","doc":"把 Ink 按键事件转成 Keystroke：enter 用换行字符；macOS 的 Option 特殊字符还原为 alt+键；事件名查表或单字符小写；大写字母隐含 shift（非字母符号的 shift 不算）；alt 与 meta 合并。"}
-{"id":"chunk-x1mwqya5.js#Oqe","doc":"两个 Keystroke 是否相同（alt 与 meta 视为同一修饰键，终端无法区分）。"}
-{"id":"chunk-x1mwqya5.js#Wrt","doc":"按键解析核心：Esc 在和弦进行中取消和弦；把当前按键追加到待定和弦，在给定上下文集合里找：有更长绑定以它为前缀且其中有非 null 动作 → chord_started；精确匹配 → match（action 为 null 则 unbound）；和弦进行中却没匹配 → chord_cancelled；否则 none。同和弦多条以列表中最后一条为准。"}
-{"id":"chunk-x1mwqya5.js#m5r","doc":"按作用域链解析：同上，但精确匹配按传入上下文顺序（焦点节点到根的 keybindingScope 链）取第一个上下文的胜者，而不是全局最后一条。"}
-{"id":"chunk-x1mwqya5.js#Hbn","doc":"动作触发时发 tengu_keybinding_fired（同一动作 1 秒内只记一次）。"}
-{"id":"chunk-x1mwqya5.js#Tkt","doc":"发 tengu_keybinding_fallback_used：显示快捷键时找不到绑定、用了组件给的回退文字。"}
-{"id":"chunk-x2j6c7xd.js#mi","doc":"组件里显示某动作快捷键的 hook：从 KeybindingContext 取显示文字；拿不到时用回退文字并记一次回退事件；动作被解绑时返回空串。"}
-{"id":"chunk-xe7zq1p4.js#Ze","doc":"快捷键系统根组件：首次渲染同步加载绑定，挂载后启动文件监视并订阅热重载；维护待定和弦（超时 Je 毫秒自动取消并弹出 \"… cancelled\" 通知）、活动上下文集合、动作处理器注册表、预分发处理器、单键事件引用；向下提供 KeybindingProvider，外面包一层 ChordInterceptor。"}
-{"id":"chunk-xe7zq1p4.js#Xe","doc":"处理器排序：非回退处理器在前；同动作已有非回退处理器时丢弃回退处理器。"}
-{"id":"chunk-xe7zq1p4.js#Wt","doc":"根 Box（keybindingScope=Global、tabIndex=-1，始终在焦点链上）的捕获阶段键盘/滚轮处理器，统一做快捷键分发。两种模式：legacy——在「有处理器的上下文 + 活动上下文 + Global」里 resolveKeyWithChordState，处理和弦开始/取消/解绑/匹配，匹配后按注册表调用单键处理器（回退处理器在保留键或无修饰键时跳过）；scopeChain——按焦点节点到根的 keybindingScope 链（以及抢先作用域 preemptiveScopes）解析，匹配后先把动作作为事件派给 DOM 节点（onAction），未处理再落回注册表；文本输入框获得焦点时无修饰单字符直接交给预分发。消费的事件 preventDefault + stopImmediatePropagation。滚轮事件转成 wheelup/wheeldown 按键参与同一套解析。"}
-{"id":"chunk-yzt83vwd.js#lt","doc":"注册一个动作处理器（默认 Global 上下文）；处理器存在引用里，换函数不用重新注册。"}
-{"id":"chunk-1kwgxcw6.js#Is","doc":"把 app:interrupt / app:exit 绑到 Ctrl+C/Ctrl+D 双击退出逻辑（Global 上下文），返回退出提示状态。"}
-{"id":"chunk-1nat7wre.js#m","doc":"从模板里去掉不可重绑的保留键（X5e）；空块整个丢弃。"}
-{"id":"chunk-1nat7wre.js#a","doc":"生成 keybindings.json 模板：$schema（schemastore）、$docs、去掉 FeedbackSurvey 等内部上下文和保留键后的默认绑定；effort 调节未开放时删掉 chat:increaseEffort/decreaseEffort。"}
-{"id":"chunk-6qssfmzs.js#c","doc":"默认绑定表（按上下文分块）。平台差异：Windows/WSL 图片粘贴用 alt+v（WSL 额外保留 ctrl+v），其余 ctrl+v；Windows 上运行时（Bun≥1.2.23 或 Node 22.17+/24.2+）支持 shift+tab 才用它切换模式，否则用 meta+m。完整表见手册。"}
-{"id":"chunk-6qssfmzs.js#X5e","doc":"保留快捷键：NON_REBINDABLE（ctrl+c/ctrl+d 硬编码、ctrl+m=Enter、ctrl+[=Esc、ctrl+i=Tab、ctrl+h=Backspace、capslock 收不到）；TERMINAL_RESERVED（ctrl+z SIGTSTP 警告、ctrl+\\ SIGQUIT）；MACOS_RESERVED（cmd+c/v/x/q/w/tab/space）。"}
-{"id":"chunk-6qssfmzs.js#J5e","doc":"把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。"}
-{"id":"chunk-6qssfmzs.js#T3t","doc":"29 个快捷键上下文：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。"}
-{"id":"chunk-6qssfmzs.js#LSi","doc":"各上下文的说明文字（给 schema 和文档用）与全部合法动作名列表。"}
-{"id":"chunk-6qssfmzs.js#Keo","doc":"合法动作名或 command:* 。"}
-{"id":"chunk-6qssfmzs.js#w","doc":"keybindings.json 的 zod schema（用于生成 JSON Schema）：块 = {context: 上下文枚举, bindings: 按键串 → 动作枚举 | command:名字 | null}；文件 = {$schema?, $docs?, bindings: 块数组}。"}
-{"id":"chunk-8pssrarc.js#L0t","doc":"KeybindingContext 的 Provider：对外提供 resolve（按当前待定和弦解析）、getDisplayText、registerHandler（按动作登记处理器并发 handlersChanged）、hasHandler/runAction（只算非回退处理器）、registerPreDispatch、singleKeyEvent、活动上下文登记等。"}
-{"id":"chunk-8pssrarc.js#yB","doc":"组件挂载且 isActive 时把上下文加入活动集合，卸载时移除（layout effect，保证首个按键前生效）。"}
-{"id":"chunk-18hwfzwa.js#uDe","doc":"把 GrowthBook tengu_startup_notice 的文字显示成 30 秒的高优先级警告通知，值变化时更新、清空时移除。"}
-{"id":"chunk-530hfzwb.js#ln","doc":"文本对象的括号/引号配对表：( ) b → ()；[ ] → []；{ } B → {}；< > → <>；\" ' ` 成对引号。"}
-{"id":"chunk-530hfzwb.js#be","doc":"操作符键到操作名：d→delete、c→change、y→yank。"}
-{"id":"chunk-530hfzwb.js#B","doc":"vim 键集合：BACKSPACE_KEY（\\b，作左移）；SIMPLE_MOTIONS（h l 空格 退格 j k w b e W B E 0 ^ $ %）；CHAR_MOTIONS（h l 空格 退格，按字符移动）；FIND_KEYS（f F t T）；TEXT_OBJ_SCOPES（i→inner、a→around）。"}
-{"id":"chunk-530hfzwb.js#$e","doc":"支持的文本对象类型（w W \" ' ` ( ) b [ ] { } B < >）；计数上限 10000。"}
-{"id":"chunk-530hfzwb.js#Ot","doc":"vim 初始状态：INSERT 模式、已插入文本为空。"}
-{"id":"chunk-530hfzwb.js#xt","doc":"跨命令持久状态：上次 f/F/t/T 查找、寄存器内容、寄存器是否整行。"}
-{"id":"chunk-530hfzwb.js#dn","doc":"执行一次基础移动：h/l 不跨行；空格/退格可跨行；j/k 按逻辑行、gj/gk 按折行后的屏幕行；w b e / W B E 单词移动；0 ^ $ 行首/首个非空/行尾；G 到最后一行；% 跳到行内下一个括号的配对括号。"}
-{"id":"chunk-530hfzwb.js#pn","doc":"% 移动：在光标到行尾之间找第一个 ()[]{}，返回其配对括号的位置。"}
-{"id":"chunk-530hfzwb.js#Q","doc":"操作符 + 移动（如 dw、c$、yj、dgj）：整行移动（j k G gg）按行处理；移动没动且不是包含式移动时只做空操作的副作用（c 进插入、y 清寄存器）；否则用 getOperatorRange 算范围（cw 特例、w 跨行截断、整行化判断）后应用操作并记录可重复的修改。"}
-{"id":"chunk-530hfzwb.js#Ce","doc":"操作符 + 查找（如 dfx、ct)）：找到目标字符后对包含式范围应用操作，并记住这次查找供 ; , 重复。"}
-{"id":"chunk-530hfzwb.js#Re","doc":"操作符 + 文本对象（如 diw、ca\"、yi(）：用 findTextObject 求范围后应用；yi( 这类内容从换行开始时光标落到下一行。"}
-{"id":"chunk-530hfzwb.js#Z","doc":"双写操作符（dd、cc、yy、S、Y）：对从当前行起的 count 行做整行操作；count>1 但光标后已没有换行时不执行。"}
-{"id":"chunk-530hfzwb.js#ve","doc":"x：删除光标处 count 个字符（不跨行），存入寄存器。"}
-{"id":"chunk-530hfzwb.js#Ie","doc":"s：删除 count 个字符并进入插入模式。"}
-{"id":"chunk-530hfzwb.js#we","doc":"r{char}：把光标起 count 个字素替换为该字符（遇到行尾则不执行）。"}
-{"id":"chunk-530hfzwb.js#Le","doc":"~：切换光标起 count 个字素的大小写（NFC 规范化），光标后移。"}
-{"id":"chunk-530hfzwb.js#Xe","doc":"J：把当前行与后面 max(count,2)-1 行合并。"}
-{"id":"chunk-530hfzwb.js#Tt","doc":"合并行：去掉后续行行首空白，必要时补一个空格（下一行以 ) 开头或上一段以空白结尾时不补），光标停在最后一个连接点。"}
-{"id":"chunk-530hfzwb.js#fe","doc":"p/P：按寄存器是否整行分两种：整行内容插到当前行下/上方并把光标放到首个非空字符；字符内容插到光标后/前，光标停在插入内容最后一个字素。"}
-{"id":"chunk-530hfzwb.js#Ve","doc":">> / <<：给当前行起 count 行加/减两个空格缩进（减时也去掉一个 tab 或最多两个空白）。"}
-{"id":"chunk-530hfzwb.js#de","doc":"o/O：在当前行下/上方插入空行并进入插入模式。"}
-{"id":"chunk-530hfzwb.js#mn","doc":"操作符 + 移动的范围计算（vim 兼容细节）：cw 当作 ce；dw/yw 不越过行尾；包含式移动（e E $ %）把终点含进去；跨行删除且前面只有空白时整行化。最后把起止点推出占位符（图片/粘贴占位）之外。"}
-{"id":"chunk-530hfzwb.js#Me","doc":"对字符范围应用操作：内容写寄存器（整行时补换行）；yank 只移动光标；delete 删除并修正光标；change 删除后进入插入模式。"}
-{"id":"chunk-530hfzwb.js#Tce","doc":"普通模式光标不能停在行尾换行符上或文本末尾之后：退回到前一个字素。"}
-{"id":"chunk-530hfzwb.js#pe","doc":"gj/gk 的屏幕行移动：按折行后的行计算目标位置并保持目标列（wantedColumn）；返回 {offset, column, rowsRunOut}。"}
-{"id":"chunk-530hfzwb.js#Ee","doc":"可视模式记录跨度：整行时为行数，否则为字素数（供 . 重复同样大小的可视操作）。"}
-{"id":"chunk-530hfzwb.js#me","doc":"用记录的跨度从当前光标重建可视范围（. 重复可视操作时用）。"}
-{"id":"chunk-530hfzwb.js#Ae","doc":"可视选区范围：字符可视为 [min, max+1)，整行可视扩到首行行首至末行换行之后。"}
-{"id":"chunk-530hfzwb.js#wt","doc":"对可视选区应用操作：整行 c 留一个空行进插入；整行 d 删除整行并把光标放到下一行首个非空；其他走 applyOperator。"}
-{"id":"chunk-530hfzwb.js#Pt","doc":"可视粘贴：用寄存器内容替换选区，原选区内容进寄存器；处理整行/字符寄存器与整行/字符选区的四种组合。"}
-{"id":"chunk-530hfzwb.js#je","doc":"操作符 + G（如 dG、d3G）：整行操作到最后一行或第 count 行。"}
-{"id":"chunk-530hfzwb.js#Ne","doc":"操作符 + gg（如 dgg）：整行操作到第一行或第 count 行。"}
-{"id":"chunk-530hfzwb.js#le","doc":"按行号范围做整行操作：整行内容写寄存器；yank 只移光标；delete 删行后光标到相应行首个非空；change 留一个空行进入插入模式。"}
-{"id":"chunk-530hfzwb.js#qe","doc":"普通模式状态机入口：按当前命令状态（idle/count/operator/operatorCount/operatorFind/operatorTextObj/find/g/operatorG/replace/indent）分派处理一个输入，返回 {next 下一状态} 或 {execute 要执行的动作}（可带 wanted 目标列）。"}
-{"id":"chunk-530hfzwb.js#xn","doc":"普通模式单键命令表：g r > < 进入子状态；~ x s S J p P D C Y ; , u i I a A o O 直接执行。"}
-{"id":"chunk-530hfzwb.js#Bt","doc":"idle/count 状态下解析一个键：操作符 d c y 进入 operator 状态；G 跳行；j k 保持目标列移动；$ 记住列为无穷；其余简单移动；f F t T 进入 find；. 重复上次修改；否则查单键命令表。"}
-{"id":"chunk-530hfzwb.js#Gt","doc":"operator 状态下的后续键：i/a 进文本对象、f/F/t/T 进查找、移动键直接执行、G 到行、g 进 operatorG。"}
-{"id":"chunk-530hfzwb.js#bn","doc":"idle：1-9 开始计数，0 回行首，其他交给 handleNormalInput。"}
-{"id":"chunk-530hfzwb.js#yn","doc":"count：继续累积数字（上限 10000），否则带计数执行。"}
-{"id":"chunk-530hfzwb.js#Tn","doc":"operator：同一操作符键（dd/cc/yy）做整行操作；1-9 开始移动计数；否则交给 handleOperatorInput。"}
-{"id":"chunk-530hfzwb.js#hn","doc":"operatorCount（如 d3w）：累积移动计数，总计数 = 操作符计数 × 移动计数。"}
-{"id":"chunk-530hfzwb.js#In","doc":"g 前缀：gj/gk 按屏幕行移动，gg/{count}gg 跳到第一行/第 count 行。"}
-{"id":"chunk-530hfzwb.js#wn","doc":"operatorG：dgj/dgk 按屏幕行，dgg 到首行。"}
-{"id":"chunk-530hfzwb.js#Sn","doc":"indent：同一方向键（>> 或 <<）执行缩进，否则回 idle。"}
-{"id":"chunk-530hfzwb.js#Pe","doc":"; 与 ,：按上次查找（, 时方向反转）再找一次。"}
-{"id":"chunk-530hfzwb.js#Ht","doc":"可视模式（316 新增）状态机入口：按 idle/count/find/g/replace/textObject 分派，返回 {next, move, wanted} 或 {exit: 结束可视模式要执行的操作}。"}
-{"id":"chunk-530hfzwb.js#Vn","doc":"可视模式单键命令：x/s/X/D/C/S/R/Y → 删除/修改/复制（大写强制整行）；r 进替换；~ u U 切换/小写/大写；p P 粘贴；> < 缩进；v V 切换字符/整行可视；o 交换选区两端；J 合并；$ g ; , 移动。"}
-{"id":"chunk-530hfzwb.js#z","doc":"重复 count 次基础移动，移动不动时提前停止（% 带计数不移动）。"}
-{"id":"chunk-530hfzwb.js#re","doc":"按类型求文本对象范围：w/W 单词，成对引号在同一行内配对，括号按嵌套深度向外找。"}
-{"id":"chunk-530hfzwb.js#On","doc":"读取 vimInsertModeRemaps 设置：只接受映射到 <Esc> 的两字符可见序列（如 jk、jj）。"}
-{"id":"chunk-cwwxybjc.js#u","doc":"真彩色 Color（a=255）。"}
-{"id":"chunk-cwwxybjc.js#x","doc":"调色板索引色（a=0，r 存索引）。"}
-{"id":"chunk-cwwxybjc.js#L","doc":"终端默认色标记（a=1，输出 39/49）。"}
-{"id":"chunk-cwwxybjc.js#Y","doc":"颜色模式：主题名含 ansi → ansi；chalk 级别≥3 → truecolor；否则 color256。"}
-{"id":"chunk-cwwxybjc.js#fe","doc":"RGB 转 xterm-256 色号：在 6×6×6 色立方与 24 级灰阶中取欧氏距离更近者（与 syntect/ansi_colours 一致）。"}
-{"id":"chunk-cwwxybjc.js#N","doc":"Color 转 SGR 转义：索引色 0-7/8-15 用 30-37/90-97（背景 40/100），其余用 38;5；默认色 39/49；真彩色 38;2 或降级到 256 色。"}
-{"id":"chunk-cwwxybjc.js#E","doc":"把 [样式, 文本] 块序列拼成带转义的一行（可只输出前景、整行变暗），以 RESET 开头结尾。"}
-{"id":"chunk-cwwxybjc.js#ge","doc":"按界面主题选语法主题名：ansi → ansi；dark → Monokai Extended；其他 → GitHub。"}
-{"id":"chunk-cwwxybjc.js#G","doc":"highlight.js 作用域到颜色的映射：Monokai Extended（深色）、GitHub（浅色）、ANSI 16 色；STORAGE_KEYWORDS（const/let/function/class/def/fn/struct 等）在 keyword 作用域里改用 _storage 颜色。"}
-{"id":"chunk-cwwxybjc.js#Q","doc":"按主题名与颜色模式组装 diff 主题：增删行背景、增删单词背景、增删标记色、前景、语法作用域表；有 dark/light × 普通/色盲友好（daltonized，新增行用蓝色）× ansi 几种组合；256 色下深色主题的增行背景改用调色板索引。"}
-{"id":"chunk-cwwxybjc.js#Z","doc":"识别文件语言：先按文件名（Dockerfile/Makefile 等），再按扩展名，再按首行 shebang（bash/python/node/ruby/perl）或 <?php、<?xml。"}
-{"id":"chunk-cwwxybjc.js#Ce","doc":"作用域取色：keyword 中的声明类关键字用 _storage 色；找不到完整作用域时退回首段（如 title.function → title）；都没有用前景色。"}
-{"id":"chunk-cwwxybjc.js#ee","doc":"递归展开 highlight.js 的 emitter 节点树，按继承的作用域给每段文本配色。"}
-{"id":"chunk-cwwxybjc.js#te","doc":"高亮一行代码：语言未知直接用默认样式；长行先换成受限语言（O2o）避免慢；累计复杂度超过阈值后不再高亮；highlight.js 抛错时关闭此文件的高亮；emitter 形状不符记一次错误。"}
-{"id":"chunk-cwwxybjc.js#Te","doc":"单词级 diff 改动占比超过 40% 时放弃单词高亮（整行变化太大）。"}
-{"id":"chunk-cwwxybjc.js#U","doc":"单词级 diff 的分词：字母数字下划线连续段、空白连续段、其他按单个码点。"}
-{"id":"chunk-cwwxybjc.js#Me","doc":"在行标记序列中找相邻的删除块与新增块，按顺序一一配对（用于单词级 diff）。"}
-{"id":"chunk-cwwxybjc.js#we","doc":"两行之间的单词级 diff：返回旧行被删范围和新行新增范围；改动占比超过 40% 时返回空。"}
-{"id":"chunk-cwwxybjc.js#le","doc":"把一行的样式块按宽度折行（纯 ASCII 快速路径，其余按字素宽度）；超长时截断并加省略号；有增删标记时用行背景色补齐到整宽。"}
-{"id":"chunk-cwwxybjc.js#ce","doc":"在每个折行前加行号栏（首行显示行号，续行空白；上下文行变暗）。"}
-{"id":"chunk-cwwxybjc.js#Ne","doc":"ansi 模式下删除行整行变暗。"}
-{"id":"chunk-cwwxybjc.js#ve","doc":"给增删行着背景：单词级改动范围用单词背景，其余用行背景（按样式块切分）。"}
-{"id":"chunk-cwwxybjc.js#O","doc":"带语法高亮与单词级 diff 的 hunk 渲染器（2.1.88 中替代原生 Rust color-diff 的 TS 实现）：buildRows 依次求颜色模式、主题（可被用户 diff 颜色覆盖）、语言、行号，配对增删行做单词 diff，逐行高亮（删除行不高亮）、着背景、折行、加标记与行号；render 输出整行，renderSplit 输出行号栏与内容两列。"}
-{"id":"chunk-cwwxybjc.js#H","doc":"整文件语法高亮渲染器（带行号，不做 diff）。"}
-{"id":"chunk-dcmhvw5a.js#$a","doc":"模糊匹配打分常量（nucleo/fzf 风格）：每字匹配 16、边界后 8、驼峰 6、连续 4、首字符 8、间隙起始 -3 与每字 -1；空查询时最多返回 100 个顶层条目；查询最多取 64 字符；异步建索引每 4ms 让出一次事件循环。"}
-{"id":"chunk-dcmhvw5a.js#NIn","doc":"文件路径模糊搜索索引（2.1.88 中替代原生 Rust 实现的 TS 版）：每个路径存小写形式、a-z 位图（快速排除不含查询字母的路径）、长度、文件名起点及文件名位图。search：位图过滤后贪心找子序列，计算连续/间隙得分，路径与文件名两种匹配取高者，加边界/驼峰加分与短路径加分，维护大小为 limit 的有序 top-k；最后按名次归一化成 0..1 分数（含 test 的路径略降权）并给出匹配位置。异步构建时分片让出事件循环，部分就绪即可查询。"}
-{"id":"chunk-dcmhvw5a.js#P_","doc":"空查询时展示的顶层条目：各路径第一段去重（最多 limit 个），按长度再字典序排序。"}
-{"id":"chunk-bzr73sfg.js#JWe","doc":"yoga 边枚举：Left/Top/Right/Bottom/Start/End/Horizontal/Vertical/All（0–8）。"}
-{"id":"chunk-bzr73sfg.js#ni","doc":"数值是否有限且绝对值不超过 2^31-1（能放进 Int32 布局存储）。"}
-{"id":"chunk-bzr73sfg.js#ja","doc":"点值 {unit:1, value: 取整后的整数}；超出 Int32 返回 undefined。"}
-{"id":"chunk-bzr73sfg.js#wn","doc":"百分比值 {unit:2, value}；超出范围返回 undefined。"}
-{"id":"chunk-bzr73sfg.js#at","doc":"把 Value 解析成具体数值：点值原样，百分比按 ownerSize 计算并取整（超范围为 NaN），其它 NaN。"}
-{"id":"chunk-bzr73sfg.js#Dn","doc":"四舍五入到整数（远离零），结果为 int32。"}
-{"id":"chunk-bzr73sfg.js#yt","doc":"NaN 转成 INT32_NAN 哨兵，用于 Int32 缓存键比较。"}
-{"id":"chunk-bzr73sfg.js#Ip","doc":"节点默认样式：方向/flexDirection column(0)、alignItems stretch、alignContent flex-start、positionType relative、flexBasis auto、宽高 auto，边距/内边距/边框/定位 9 个边全 undefined，gap 3 槽。"}
-{"id":"chunk-bzr73sfg.js#Gi","doc":"解析某个物理边的值（经 Start/End、Horizontal/Vertical、All 回退）；auto 在 allowAuto 时返回 NaN，否则 0。"}
-{"id":"chunk-bzr73sfg.js#Nn","doc":"取物理边的原始 Value：左/右先看 Start/End，再看本边、Horizontal/Vertical、All。"}
-{"id":"chunk-bzr73sfg.js#Tn","doc":"样式是否依赖父宽度（宽/最小/最大宽或边距、内边距用了百分比）：是则父宽变化时要重新布局。"}
-{"id":"chunk-bzr73sfg.js#Gc","doc":"一次解析四个物理边（左右顶底，含 Start/End、Horizontal/Vertical、All 回退）写进 out（Int32Array），百分比按父宽算并取整。"}
-{"id":"chunk-bzr73sfg.js#sy","doc":"创建布局配置：pointScaleFactor 只能 0 或 1（Int32 存储，1 时布局结果取整）、errata、useWebDefaults；另含每次 calculateLayout 的统计计数（访问节点数、测量调用、缓存命中、存活节点数）与代数 generation。"}
-{"id":"chunk-bzr73sfg.js#cl","doc":"yoga 节点（纯 TS 移植，接口兼容 yoga-layout 的 Node）：style、layout（left/top/width/height 与 Int32Array 的 border/padding/margin）、父子关系、measureFunc、脏标记。多组 Int32 缓存：_lc/_mc 单槽布局/测量结果缓存（输入键 + 宽高）、_cIn/_cOut 8 槽多结果缓存、_mfC 4 槽测量函数缓存、_fb flex basis 缓存、_sz 本次的 basis/主轴/交叉轴尺寸。setter 改样式即 markDirty 并预算 _readsOwnerWidth/Height、_has* 标志；calculateLayout 自增 generation、从根 layoutNode，最后在 pointScaleFactor≠0 时取整。aspectRatio、boxSizing、dirtiedFunc 等为空实现。"}
-{"id":"chunk-bzr73sfg.js#ox","doc":"把本次布局的输入键与结果宽高写进节点的 8 槽环形缓存（同一 generation 内复用；performLayout 时换代先清空）。"}
-{"id":"chunk-bzr73sfg.js#uy","doc":"读最近一次 calculateLayout 的统计：访问节点数、测量调用、测量缓存命中、布局缓存命中、存活节点数。"}
-{"id":"chunk-bzr73sfg.js#ax","doc":"布局缓存查找：未脏时依次查单槽布局缓存 _lc、8 槽缓存 _cIn/_cOut、单槽测量缓存 _mc，键为（可用宽高、宽高模式、依赖时的父宽高、强制宽高标志），命中则把宽高写进 out 并返回真。"}
-{"id":"chunk-bzr73sfg.js#sx","doc":"记下本次布局/测量的缓存键（performLayout 写 _lc 并清脏，否则写 _mc），返回调用前是否为脏。"}
-{"id":"chunk-bzr73sfg.js#ho","doc":"节点布局入口（递归）：先查缓存；解析内边距、边框、外边距到 layout；样式宽高确定时改为 EXACTLY 模式；按 min/max 约束；无子节点时调用测量函数（measureLeaf）或用内边距+边框；有子节点时 layoutFlexContainer；最后写缓存。"}
-{"id":"chunk-bzr73sfg.js#ux","doc":"叶子节点测量：两轴都 EXACTLY 直接用；否则以内容区宽高与模式调用 measureFunc（4 槽缓存，按 yoga 的 canUseCachedMeasurement 规则复用），结果向上取整加回内边距边框并按 min/max 约束。"}
-{"id":"chunk-bzr73sfg.js#jc","doc":"能否复用缓存的测量结果：模式与尺寸相同；或新为 EXACTLY 且尺寸等于缓存结果；或新为 AT_MOST 且缓存结果不超过新上限。"}
-{"id":"chunk-bzr73sfg.js#cx","doc":"flex 容器布局：收集流内/绝对定位子节点；算每个子节点的 flex basis（带缓存）；按 flexWrap 断行；逐行解析弹性长度并布局子节点（layoutFlexLine）、算行的主轴/交叉轴尺寸（baseline 对齐另计）；据此确定容器自身尺寸（含 overflow:scroll 时的收缩规则）；performLayout 时再做 alignContent、stretch、justify 与交叉轴对齐定位（positionLineChildren），最后布局绝对定位子节点。"}
-{"id":"chunk-bzr73sfg.js#fx","doc":"布局一行：可用主轴空间未定时按容器 min/max 推出；resolveFlexibleLengths 分配主轴尺寸；逐个子节点决定交叉轴尺寸（固定、stretch 时撑满、否则 AT_MOST）并 layoutNode；输出本行主轴总长与最大交叉轴尺寸。"}
-{"id":"chunk-bzr73sfg.js#hx","doc":"定位一行的子节点：主轴按 auto margin 或 justifyContent（center/flex-end/space-between/around/evenly）分配剩余空间；交叉轴按 alignSelf/alignItems（含 auto margin、baseline）；有测量函数的节点向下取整、其余四舍五入；带 position 偏移的相对定位节点加偏移。"}
-{"id":"chunk-bzr73sfg.js#mx","doc":"flex-wrap 断行：按 clamp 后的 basis + 外边距 + gap 累加，超出可用主轴长度就换行；记录每个子节点的 _lineIndex。"}
-{"id":"chunk-bzr73sfg.js#px","doc":"baseline 对齐时计算一行的基线（最大上伸，写入 baselines[lineIndex]）与所需行高（上伸+下伸），返回不小于原行高的值。"}
-{"id":"chunk-bzr73sfg.js#yx","doc":"alignContent：center/flex-end 设起始偏移，stretch 把剩余空间按整数均分到各行，space-between/around/evenly 设行间距（写入 alignContentLeadOffset/Between）。"}
-{"id":"chunk-bzr73sfg.js#gx","doc":"stretch 对齐：交叉轴尺寸未定且无 auto margin 的子节点重新以 EXACTLY 布局到行的交叉轴尺寸。"}
-{"id":"chunk-bzr73sfg.js#vx","doc":"布局绝对定位子节点：左右/上下都给定时由此推出宽高；以 EXACTLY/UNDEFINED 布局后，按 position 偏移或父节点的 justifyContent/alignItems（考虑反向与 wrap-reverse）定位。"}
-{"id":"chunk-bzr73sfg.js#Sx","doc":"带缓存地计算子节点 flex basis（同一代或未脏且键相同则复用 _fb）。"}
-{"id":"chunk-bzr73sfg.js#Ex","doc":"行方向 flex basis：flexBasis → width → 以内容测量（交叉轴约束按 stretch 决定 EXACTLY 或 AT_MOST，子树有测量函数时主轴给 AT_MOST）。"}
-{"id":"chunk-bzr73sfg.js#xx","doc":"列方向 flex basis：flexBasis → height → 以宽度约束测量内容高度。"}
-{"id":"chunk-bzr73sfg.js#fy","doc":"子树中是否有带测量函数的节点（决定 basis 计算时是否给主轴上限）。"}
-{"id":"chunk-bzr73sfg.js#Cx","doc":"弹性长度分配（CSS flexbox 的冻结迭代算法）：按 grow/shrink 系数分配剩余空间，被 min/max 夹住的项冻结后重新分配，直到不再变化；grow/shrink 系数和小于 1 时只分配相应比例；最后用累计取整把尺寸写进 _sz（避免舍入误差累积）。"}
-{"id":"chunk-bzr73sfg.js#pn","doc":"按 min/max 宽（或高）约束一个值（百分比按父尺寸）。"}
-{"id":"chunk-bzr73sfg.js#Tx","doc":"把节点的布局清零并标脏（display:none 子树用）。"}
-{"id":"chunk-bzr73sfg.js#yy","doc":"收集参与布局的子节点：display:none 的清零跳过；display:contents（2）的展开其子节点；绝对定位进 abs，其余进 flow。"}
-{"id":"chunk-bzr73sfg.js#gy","doc":"递归把布局结果截断为整数（|0）。"}
-{"id":"chunk-bzr73sfg.js#Gn","doc":"把样式值（undefined/auto/数字/\"50%\"/数字字符串）解析成 yoga Value。"}
-{"id":"chunk-bzr73sfg.js#Yc","doc":"Edge 枚举 → 物理边下标（Start→左、End→右）。"}
-{"id":"chunk-bzr73sfg.js#Ax","doc":"对外的 yoga 实例：Config.create、Node.create/createDefault/createWithConfig（与 yoga-layout 包接口一致，destroy 为空）。"}
-{"id":"chunk-bzr73sfg.js#hy","doc":"子节点在交叉轴上是否拉伸（alignSelf 为 auto 时看父节点 alignItems，4 = stretch）。"}
-{"id":"chunk-bzr73sfg.js#my","doc":"子节点实际交叉轴对齐：alignSelf 为 auto 时继承父节点 alignItems。"}
-{"id":"chunk-bzr73sfg.js#Qc","doc":"求节点基线：取第一行里 alignSelf=baseline 或标记为参考基线的子节点（否则第一个流内子节点）递归求基线加其 top；没有子节点时用自身高度。"}
-{"id":"chunk-bzr73sfg.js#Rx","doc":"行方向容器且 alignItems 或某个子节点 alignSelf 为 baseline 时需要基线布局。"}
-{"id":"chunk-bzr73sfg.js#Ar","doc":"子节点在某轴上的前后外边距之和（没有外边距时快速返回 0）。"}
-{"id":"chunk-bzr73sfg.js#Jp","doc":"解析 gap：指定方向未设置时退回 gap[all]，负值按 0。"}
-{"id":"chunk-bzr73sfg.js#Ap","doc":"把 CSI 参数串按分号拆成整数数组。"}
-{"id":"chunk-bzr73sfg.js#qy","doc":"浅比较两个样式/属性对象（commitUpdate 判断是否需要写回）。"}
-{"id":"chunk-bzr73sfg.js#gs","doc":"双击选词用的字符类别：空白 0、单词字符 1、其他标点 2。"}
-{"id":"chunk-x6v6jz2y.js#Qt","doc":"把解析出的 ANSI 文本样式转成 <Text> 的属性（颜色、粗体、暗、斜体、下划线、删除线、反显）。"}
-{"id":"chunk-x6v6jz2y.js#me","doc":"<Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。"}
+{"id":"chunk-2avr6cej.js#uE","doc":"win32-input-mode 序列（CSI Vk;Sc;Uc;Kd;Cs;Rc _）的正则、控制键状态位（ALT/CTRL/SHIFT）、虚拟键码（VK_BACK/TAB/RETURN/MENU/ESCAPE/SPACE/F1–F12），以及导航键（PageUp/End/Home/方向键/Insert/Delete）到 VT 序列的映射表。2.1.88 没有。"}
+{"id":"chunk-2avr6cej.js#Tp","doc":"把一条 win32-input-mode 按键记录还原成等价的 VT 序列数组：只处理按下事件（松开 Alt 时带字符的记录除外）；导航键/F1–F12 生成 CSI 序列并编码修饰键；Backspace/Tab/Enter/Esc 按 Ctrl/Alt 变形；AltGr（Ctrl+Alt 且有可打印字符）当普通字符；处理 UTF-16 代理对（高位代理暂存到返回的 highSurrogate）；按重复计数（最多 8）复制。返回 {sequences, highSurrogate}，不是该格式返回 null。"}
+{"id":"chunk-2avr6cej.js#al","doc":"取 params[index] 转整数，缺失或空串返回 fallback。"}
+{"id":"chunk-2avr6cej.js#Mp","doc":"按 xterm 规则把字符码转成 Ctrl 组合产生的控制码（@–_ 与 a–z 取低 5 位，2/空格→NUL，3–7→ESC..US，8/?→DEL，/→US）。"}
+{"id":"chunk-2avr6cej.js#AE","doc":"按键与终端应答的正则：ESC+字母（Meta）、功能键、CSI u（kitty 键盘协议，含 :shifted:base 子参数）、modifyOtherKeys（CSI 27;mod;code ~）、DECRPM、DA1/DA2、kitty 标志查询应答、光标位置、单元格像素尺寸（CSI 6;h;w t）、主题变化通知（CSI ?997;1|2 n）、OSC 应答、XTVERSION、kitty 图形应答（APC G i=…）、SGR 鼠标及其前缀。"}
+{"id":"chunk-2avr6cej.js#Nc","doc":"文本是否是被拆开的 SGR 鼠标序列前缀（ESC[< 数字;…，长度不超过 32）。"}
+{"id":"chunk-2avr6cej.js#sl","doc":"输入在 flush 时剩下的半截转义序列是否还可能被后续字节补全（鼠标前缀、OSC/DCS/APC 串不超过 256 字节、CSI 参数串不超过 64 字节）；是则保留等待，否则当普通按键冲刷出去。"}
+{"id":"chunk-2avr6cej.js#kp","doc":"清空分词器里的半截输入，把它记成 droppedMousePrefix（后续文本若是被截断的鼠标序列尾巴会被吞掉）。"}
+{"id":"chunk-2avr6cej.js#Ap","doc":"把终端对查询的应答解析成结构：DECRPM、DA1/DA2、kitty 键盘标志、光标位置、主题变化通知（997）、单元格像素尺寸、OSC、XTVERSION、kitty 图形应答；都不是返回 null。"}
+{"id":"chunk-2avr6cej.js#Lc","doc":"按键解析器初始状态：NORMAL 模式，空的半截输入、粘贴缓冲、待拼 UTF-8 字节、被丢弃的鼠标前缀、flush 时冲出的 ESC 前缀、win32 高位代理。"}
+{"id":"chunk-2avr6cej.js#jE","doc":"是否把 \\b（0x08）当成 Ctrl+Backspace：CLAUDE_CODE_BS_AS_CTRL_BACKSPACE 显式真/假优先；否则只在 win32 且 TERM_PROGRAM 不是 mintty、TERM 不是 cygwin 时为真。"}
+{"id":"chunk-2avr6cej.js#YMo","doc":"用当前进程环境调用 isBackspaceCtrlBackspace；linux 构建里平台常量是 \"linux\"。"}
+{"id":"chunk-2avr6cej.js#zp","doc":"终端键序列方言：优先用会话状态里记下的 keyDialect（终端探测结果），否则按 TERM 推断（如 st、rxvt）。"}
+{"id":"chunk-2avr6cej.js#XE","doc":"AltGr 当文字的模式：CLAUDE_CODE_ALTGR_AS_TEXT 显式真→force、假→off；否则在 Windows Terminal（WT_SESSION）里 auto，其余 off。"}
+{"id":"chunk-2avr6cej.js#Np","doc":"把 AltGr（Ctrl+Alt）组合产生的可打印字符当成普通文字键：name 为该字符，不带 ctrl/meta。"}
+{"id":"chunk-2avr6cej.js#Dp","doc":"Ctrl+Alt（无 Super）加可打印字符是否按 AltGr 文字处理：mode=off 否，force 是，auto 时字母数字仍当快捷键。"}
+{"id":"chunk-2avr6cej.js#JE","doc":"把 stdin 数据转成字符串；单字节且高位为 1 的 Buffer 按 Meta 前缀（ESC + 低 7 位）解释。"}
+{"id":"chunk-2avr6cej.js#Ka","doc":"输入解析主入口：用 termio 分词器把一段 stdin 文本切成序列/文本，产出 ParsedInput 数组和新状态。处理：括号粘贴（ESC[200~/201~ 之间收集到 pasteBuffer，产出 {kind:'paste'}）、终端应答（{kind:'response'}）、SGR/X10 鼠标、焦点进出（{kind:'focus'}）、win32-input-mode、CSI u 里编码的单个 UTF-8 字节（凑齐多字节字符再出）、被截断的鼠标序列尾巴（droppedMousePrefix）、flush 时冲出的 ESC 前缀。input 为 null 表示超时 flush。"}
+{"id":"chunk-2avr6cej.js#$E","doc":"功能键序列（去掉 ESC 后的代码）→ 键名表；isShiftKey/isCtrlKey 判断 rxvt 风格的 Shift/Ctrl 变体（[a、Oa、[2$、[2^ 等）。"}
+{"id":"chunk-2avr6cej.js#Dc","doc":"xterm 修饰参数（1 + 位掩码）解码成 {shift, meta, ctrl, super}。"}
+{"id":"chunk-2avr6cej.js#_p","doc":"CSI u / modifyOtherKeys 里的码点 → 键名：控制键（backspace/tab/return/escape/space）、kitty 小键盘私有码 57399–57426（数字、运算符、方向、翻页、Home/End/Insert/Delete），其余可打印字符转小写字符本身。"}
+{"id":"chunk-2avr6cej.js#Op","doc":"只有 Ctrl（无 Shift/Meta/Super）时把 Ctrl+[、Ctrl+M、Ctrl+I、Ctrl+H 还原成 escape/return/tab/backspace（kitty 协议会把这些编码成 Ctrl+字母）。"}
+{"id":"chunk-2avr6cej.js#Hp","doc":"CSI u 或 modifyOtherKeys 序列若编码的是 128–255 之间的单个字节（无修饰），返回该字节；用于在原始字节模式下拼 UTF-8。"}
+{"id":"chunk-2avr6cej.js#nx","doc":"粘贴期间收到 CSI u / modifyOtherKeys 编码的按键时还原成字符（Ctrl+I→\\t、Ctrl+J→\\n、Ctrl+M→\\r），其它序列原样返回。"}
+{"id":"chunk-2avr6cej.js#Ac","doc":"解析 SGR 鼠标序列（ESC[<b;x;y M/m）成 {kind:'mouse', button, action, col, row}；滚轮（button 位 64）不在这里，留给 parseKeypress 变成 wheelup/wheeldown 键。"}
+{"id":"chunk-2avr6cej.js#Rr","doc":"把一个序列解析成 ParsedKey：依次尝试 CSI u（kitty，含 AltGr 文字、Ctrl 码点修正）、modifyOtherKeys、SGR/X10 滚轮、单字节控制键（\\r/\\n/\\t/\\b/DEL/ESC/空格/Ctrl+字母）、Meta+字母、功能键表；最后对几个常见序列（Home/End/PageUp/PageDown/Ctrl+方向）做固定映射。"}
+{"id":"chunk-2avr6cej.js#Bp","doc":"鼠标按钮码是滚轮（64/65）时生成 wheelup/wheeldown 键并带上 ctrl/meta/shift 与坐标；否则返回 null。"}
+{"id":"chunk-2avr6cej.js#Gi","doc":"按给定键名和 ctrl 标志构造 ParsedKey（导航键、无法识别的鼠标序列等用）。"}
+{"id":"chunk-2avr6cej.js#$a","doc":"yoga 布局引擎实例（native-ts/yoga-layout 的 YOGA_INSTANCE）；createNode 用 Yoga.Node.create(config) 给元素建布局节点。"}
+{"id":"chunk-2avr6cej.js#YUr","doc":"鼠标事件基类（继承 TerminalEvent 的基础 Event）：屏幕坐标 col/row 与相对目标的 localCol/localRow、目标格是否空白、所在格的 OSC 8 链接、是否为窗口激活点击、修饰键；allowDefault()/dropAsStray()/endClickChain() 供处理器影响默认行为（选区、多击链）。"}
+{"id":"chunk-2avr6cej.js#Sy","doc":"新建 stdin 读取器状态：按键解析状态（INITIAL_STATE 的副本）、上次输入时间、UTF-8 字节串截止时间、鼠标前缀丢弃时间、被丢弃前缀的清理时间、是否有迟到读标记。"}
+{"id":"chunk-2avr6cej.js#Ey","doc":"把以 ESC 开头的一段输入拆成单独的 ESC 和其余文本分别解析（用于 ESC 后紧跟文字被合并读入的情况）。"}
+{"id":"chunk-2avr6cej.js#Zc","doc":"把一段 stdin 数据（null 表示超时冲刷）喂给按键解析器，返回 {keys, reader, wakeAt}：给迟到的按键打 readLate 标记（事件循环被阻塞超过 50ms 时读到的 ESC 前缀等）；维护 UTF-8 字节串、截断鼠标前缀的截止时间；wakeAt 是下次需要定时冲刷的时间（半截序列 50ms、粘贴中 2s）。"}
+{"id":"chunk-2avr6cej.js#xy","doc":"定时器到期时调用：没有待处理输入直接返回；鼠标前缀超时则丢弃；半截序列还没等够（50ms/粘贴 2s）返回新的 wakeAt；否则以 null 冲刷解析器。"}
+{"id":"chunk-2avr6cej.js#Jc","doc":"事件循环延迟探测器：watch() 引用计数地启动 50ms 节拍定时器，isLate(now) 在节拍迟到 ≥50ms 时为真；用于判断 stdin 读到的 ESC 是否是被阻塞后迟到合并的。"}
+{"id":"chunk-2avr6cej.js#zy","doc":"按行字符串缓存显示宽度（bunStringWidth），满 4096 条清空。"}
+{"id":"chunk-2avr6cej.js#Jun","doc":"取一行文本的显示宽度（带缓存）。"}
+{"id":"chunk-2avr6cej.js#Fx","doc":"测量文本：宽度为最宽行，高度为按 maxWidth 折行后的行数（maxWidth 非正或无穷时不折行）。"}
+{"id":"chunk-2avr6cej.js#go","doc":"把 ink-text 子树压平成 {text, styles, hyperlink} 段：样式沿树合并，ink-link 的 href 作为超链接下传；跨文本节点被拆开的 UTF-16 代理对会拼回前一段。"}
+{"id":"chunk-2avr6cej.js#ud","doc":"把 ink-text 子树的纯文本拼起来（不带样式）。"}
+{"id":"chunk-2avr6cej.js#Gx","doc":"position 样式 → yoga PositionType（absolute=2，其余 relative=1）。"}
+{"id":"chunk-2avr6cej.js#Kx","doc":"display 样式 → yoga Display（none=1，其余 flex=0）。"}
+{"id":"chunk-2avr6cej.js#Vx","doc":"把 position/top/bottom/left/right 样式写进 yoga 节点。"}
+{"id":"chunk-2avr6cej.js#ds","doc":"写一个定位边：字符串按百分比、数字按点、其它清空（NaN）。"}
+{"id":"chunk-2avr6cej.js#Xun","doc":"按显示宽度截断：放得下返回 null；start/middle/end 三种位置返回 {head, tail}（中间插省略号由调用方完成）。"}
+{"id":"chunk-2avr6cej.js#fs","doc":"textWrap 是否是折行类（wrap、wrap-trim、wrap-stream），而不是截断类。"}
+{"id":"chunk-2avr6cej.js#Cu","doc":"按 textWrap 模式处理文本：wrap/wrap-stream 硬折行保留空白，wrap-trim 折行去首尾空白，end/middle/truncate-* 截断，其余原样。"}
+{"id":"chunk-2avr6cej.js#bo","doc":"创建 DOM 元素节点：除 ink-virtual-text/ink-link/ink-progress 外都建 yoga 节点；ink-text 和 ink-raw-ansi 挂测量函数。316 的节点比 2.1.88 多了大量滚动（scrollTop/pendingScrollDelta/stickyScroll/scrollAnchor…）、渲染缓存（cachedLayout/paintsPastRect/childrenOverlap/pendingClears）、原始模式引用与无障碍字段。"}
+{"id":"chunk-2avr6cej.js#fd","doc":"从 node 沿父链向上标记 hasAbsoluteDescendant（遇到已标记的停止）；绝对定位子孙会影响渲染缓存的失效范围。"}
+{"id":"chunk-2avr6cej.js#ji","doc":"DOM 子节点增删：appendChildNode / insertBeforeNode 同步插入 yoga 子节点（yoga 下标只数有 yoga 节点的兄弟），绝对定位时标记祖先；removeChildNode 移除 yoga 子节点、收集被删节点上次绘制的区域作为待清除矩形。三者最后都 markDirty。"}
+{"id":"chunk-2avr6cej.js#jy","doc":"递归收集被删除子树里各节点上次绘制的矩形（cachedLayout 与 pendingClears），记到父节点的待清除列表；返回子树里是否有绝对定位节点（需要更大范围重绘）。"}
+{"id":"chunk-2avr6cej.js#hd","doc":"节点属性写入：setAttribute（children 除外，值变了才 markDirty）、setAccessibility、setStyle（浅比较不变则跳过，新变成 absolute 时标记祖先）、setStyleAndApplyLayout（只把变化的样式键写进 yoga）、diffProps（返回变化键，删掉的键值为 undefined）、setTextStyles。"}
+{"id":"chunk-2avr6cej.js#Cl","doc":"createTextNode 建 #text 节点；measureTextNode 是 ink-text 的 yoga 测量函数：取压平文本（含 ANSI 时按段），wrap-stream 少算末尾一行；放得下直接返回自然尺寸，否则按 textWrap 折行后再量。"}
+{"id":"chunk-2avr6cej.js#Yy","doc":"按 textWrap 折行后测量；AT_MOST 模式下含非 ASCII 字符且按实际宽度重折会改变行数时，宽度取满 maxWidth，避免二次布局抖动。"}
+{"id":"chunk-2avr6cej.js#a1","doc":"measureRawAnsiNode：ink-raw-ansi 的测量函数，直接用 rawWidth/rawHeight 属性。markDirty：沿父链置 dirty，并把最近的 ink-text/ink-raw-ansi 的 yoga 节点标脏。scheduleRenderFrom：找到根并调 onRender。scheduleLayoutFrom：同上但先置 layoutStale。"}
+{"id":"chunk-2avr6cej.js#qMo","doc":"在根节点记下滚动提交开始时间（resetAfterCommit 据此算 lastCommitMs）。"}
+{"id":"chunk-2avr6cej.js#Vi","doc":"设置文本节点内容，变了才 markDirty。"}
+{"id":"chunk-2avr6cej.js#gd","doc":"递归清掉子树上的 yogaNode 引用（释放 yoga 节点前调用）。"}
+{"id":"chunk-2avr6cej.js#Xy","doc":"调试重绘用：找出覆盖屏幕第 y 行的最深节点的 React 组件所有者链（debugOwnerChain）。"}
+{"id":"chunk-2avr6cej.js#Qy","doc":"事件类型 → 冒泡/捕获处理器属性名；RAW_MODE_HANDLER_PROPS 是需要 stdin 原始模式的处理器（键盘、粘贴、滚轮），EVENT_HANDLER_PROPS 是 reconciler 当作事件处理器存进 _eventHandlers 的全部属性。"}
+{"id":"chunk-2avr6cej.js#Zy","doc":"取节点上某事件类型的冒泡或捕获处理器。"}
+{"id":"chunk-2avr6cej.js#u1","doc":"从目标沿父链收集监听器：捕获处理器放前面（unshift），冒泡处理器放后面（事件不冒泡时只取目标自身），标注阶段。"}
+{"id":"chunk-2avr6cej.js#c1","doc":"按顺序执行监听器：立即停止传播则中断，停止传播则在换节点时中断；处理器抛错只记日志。"}
+{"id":"chunk-2avr6cej.js#d1","doc":"事件类型 → React 更新优先级：离散事件（按键、点击、焦点、粘贴、action）为 Discrete，连续事件（resize/scroll/wheel/mousemove）为 Continuous，其余 Default。"}
+{"id":"chunk-2avr6cej.js#Sd","doc":"Ink 的 DOM 事件分发器：dispatch 收集监听器并执行，返回是否未被 preventDefault；dispatchDiscrete 走 reconciler.discreteUpdates；dispatchContinuous 临时把优先级设为 Continuous。resolveEventPriority 供 reconciler 的 getCurrentUpdatePriority 使用。"}
+{"id":"chunk-2avr6cej.js#z$e","doc":"终端 DOM 事件基类：type、时间戳、bubbles/cancelable、target/currentTarget/eventPhase，stopPropagation/stopImmediatePropagation/preventDefault，consume()=两者都做。"}
+{"id":"chunk-2avr6cej.js#qi","doc":"焦点事件（focus/blur），冒泡、不可取消，relatedTarget 为另一方元素。"}
+{"id":"chunk-2avr6cej.js#xd","doc":"焦点管理器（挂在根节点 focusManager）：activeElement、焦点历史栈与 autoFocus 回退栈（各最多 32）；focus 时 tabIndex=-1 的容器会解析到其内上次聚焦的子孙；节点删除时从历史栈恢复焦点；focusNext/Previous 按 Tab 顺序循环；focusDirection 按屏幕几何找某方向最近的可聚焦元素（316 新增）；handleClickFocus 点击聚焦。"}
+{"id":"chunk-2avr6cej.js#f1","doc":"tabIndex 是非负数即可 Tab 聚焦。"}
+{"id":"chunk-2avr6cej.js#Ed","doc":"按文档顺序收集子树里所有可 Tab 聚焦的元素。"}
+{"id":"chunk-2avr6cej.js#h1","doc":"方向导航打分：沿方向的中心距离（不在该方向返回 Infinity），加上偏离轴的惩罚（水平 ×2、垂直 ×0.5），减去两个矩形在垂直轴上的重叠长度；分数越低越优先。"}
+{"id":"chunk-2avr6cej.js#tg","doc":"节点的屏幕矩形：优先用上一帧缓存的 cachedLayout，否则沿父链累加 yoga 偏移直到某个有缓存的祖先。"}
+{"id":"chunk-2avr6cej.js#Y4n","doc":"沿父链找挂着 focusManager 的根节点，找不到抛错。"}
+{"id":"chunk-2avr6cej.js#sL","doc":"取节点所在树的 FocusManager。"}
+{"id":"chunk-2avr6cej.js#m1","doc":"释放节点的 yoga 子树：解除测量函数、清 yogaNode 引用、freeRecursive。"}
+{"id":"chunk-2avr6cej.js#lg","doc":"把事件处理器存进节点的 _eventHandlers（不放 attributes，避免改处理器触发重绘）。"}
+{"id":"chunk-2avr6cej.js#p1","doc":"节点是否挂了键盘/粘贴/滚轮处理器（需要 stdin 原始模式）。"}
+{"id":"chunk-2avr6cej.js#ag","doc":"根节点原始模式引用计数加减：已接上 setRawMode 时直接调用，否则先累计到 _pendingRawModeDelta。"}
+{"id":"chunk-2avr6cej.js#ig","doc":"节点挂/卸原始模式处理器时同步引用：首次需要时 +1，不再需要时 -1。316 新增：只有真的有键盘/粘贴/滚轮处理器时才打开 stdin 原始模式。"}
+{"id":"chunk-2avr6cej.js#sg","doc":"删除子树时归还其中持有的原始模式引用。"}
+{"id":"chunk-2avr6cej.js#Eo","doc":"reconciler 的 removeChild：从 DOM 和 yoga 中移除并释放 yoga 节点；通知焦点管理器节点已删除；归还子树持有的原始模式引用。"}
+{"id":"chunk-2avr6cej.js#y1","doc":"把一个 React 属性写到 DOM 节点：style→setStyleAndApplyLayout，textStyles 直接赋值，accessibility，事件处理器进 _eventHandlers，其余进 attributes。"}
+{"id":"chunk-2avr6cej.js#ug","doc":"沿 fiber 的 _debugOwner/return 链收集组件名（最多 50 层，去重相邻），用于错误信息和调试重绘。"}
+{"id":"chunk-2avr6cej.js#rg","doc":"把所有者链格式化成 \" (owner chain: A > B)\" 附在报错信息后。"}
+{"id":"chunk-2avr6cej.js#Cd","doc":"样式图集记录器：recording 时记下每个写入格的 (charIndex, styleId) 组合（最多 131072 个，满了置 saturated），并统计 StylePool 主动重置次数与原因；挂在 StylePool.atlasRecorder，屏幕写格时调用。"}
+{"id":"chunk-2avr6cej.js#g1","doc":"粗体与暗淡共用关闭码 SGR 22：从同时有粗体/暗淡切到只保留其一时，先输出 22 再补回保留的那个；返回需要前置的序列。"}
+{"id":"chunk-2avr6cej.js#Rd","doc":"样式里已有某种颜色码（mYr 判断）时去掉暗淡码，供反显/选区背景等派生样式使用。"}
+{"id":"chunk-2avr6cej.js#Td","doc":"字符驻留池：字符串 → 下标；ASCII 单字符走 128 项快表；下标 0 是空格、1 是空串（宽字符的占位格）。"}
+{"id":"chunk-2avr6cej.js#ps","doc":"OSC 8 超链接驻留池：URL → 下标，0 表示无链接。"}
+{"id":"chunk-2avr6cej.js#Ad","doc":"样式驻留池：AnsiCode 数组 → styleId（下标 <<1，最低位表示该样式在空格上可见，如背景/反显/下划线），上限约 2^14 个，超出后新组合退化为无样式并告警。transition(from,to) 缓存两样式间切换所需的 SGR 串；派生样式：withInverse、withUnderline、withCurrentMatch（搜索当前匹配：黄字+反显+粗体+下划线）、withSelectionBg（选区背景色，未设置时退回反显）；compact() 重建池并返回旧 id→新 id 的映射函数。"}
+{"id":"chunk-2avr6cej.js#C1","doc":"样式里是否有在空格上也看得见的效果（反显、背景、下划线、上划线、删除线等关闭码判断）。"}
+{"id":"chunk-2avr6cej.js#Zi","doc":"屏幕格第二个 Int32 字的位布局：styleId 占高 15 位（<<17），超链接下标 15 位（<<2），宽度种类 2 位（0 窄、1 宽、2 宽字符右半占位、3 行尾宽字符占位）。"}
+{"id":"chunk-2avr6cej.js#ys","doc":"为屏幕写入创建原生 CellSegmenter（Bun.ant.CellSegmenter）：告诉原生代码格的编码（宽度掩码 3，窄/宽/右半占位/行尾占位 = 0/1/2/3，空格与占位的字符下标 0/1，空格的 word1，制表位宽）。substitute 是需要替换显示的码点集合。"}
+{"id":"chunk-2avr6cej.js#pg","doc":"把屏幕每格的字符下标设成占位（SPACER_CHAR_INDEX），用于强制下一帧整屏重画。"}
+{"id":"chunk-2avr6cej.js#Dd","doc":"打包软换行标记：高 16 位为上一行内容结束列，低 15 位为本行起始列；第 15 位保留给 SW_ELIDED_SEP（折行处吞掉了分隔空格）。"}
+{"id":"chunk-2avr6cej.js#w1","doc":"把超链接 URL 驻留进屏幕的超链接池，返回下标。"}
+{"id":"chunk-2avr6cej.js#K$e","doc":"创建屏幕缓冲：每格两个 Int32（字符下标、packWord1），同一块内存再用 BigInt64Array 视图做整格比较/清零；另有 noSelect（不可选中的格）、softWrap（每行的软换行标记）、damage（本帧改动矩形）。池子（字符/超链接/样式）在新旧两帧之间共享。"}
+{"id":"chunk-2avr6cej.js#_d","doc":"把屏幕重置为指定尺寸并清空（容量不够才重新分配），damage 清掉。"}
+{"id":"chunk-2avr6cej.js#gg","doc":"池子换代（字符池/超链接池重建、样式池 compact）后，把屏幕里每格的下标迁移到新池。"}
+{"id":"chunk-2avr6cej.js#Yt","doc":"读 (x,y) 的格（越界返回 undefined）：{char, styleId, width, hyperlink}。"}
+{"id":"chunk-2avr6cej.js#Kpe","doc":"按线性下标读格。"}
+{"id":"chunk-2avr6cej.js#bg","doc":"diff 输出用：读格，但跳过宽字符占位格，以及与上次输出样式相同的空白格（无需重画）。"}
+{"id":"chunk-2avr6cej.js#Qi","doc":"按 cells 数组下标（格下标×2）把格读进调用方提供的 out 对象，避免分配；diff 热路径用。"}
+{"id":"chunk-2avr6cej.js#vg","doc":"读 (x,y) 格的字符。"}
+{"id":"chunk-2avr6cej.js#N1","doc":"写一个格：字符驻留后调用原生 CellSegmenter.setCell（处理宽字符右半占位、覆盖宽字符时清孤儿格等），用返回的打包值扩大 damage；图集记录开启时记下组合。"}
+{"id":"chunk-2avr6cej.js#Sg","doc":"原生 CellSegmenter 返回值打包格式：结束列 + 改动起始列·2^20 + 改动结束列·2^36；取出改动区间并入屏幕的 damage 矩形。"}
+{"id":"chunk-2avr6cej.js#Eg","doc":"用 CellSegmenter.paint 把上一次 segment() 切出的字素/样式段写到 (x,y) 起的一行，更新 damage、图集记录，返回写完后的列。"}
+{"id":"chunk-2avr6cej.js#xg","doc":"后处理 damage 区域：宽字素（如 emoji 序列）实际显示宽度超出右边界时，换成占位字符并把到行尾的格清成空格，避免终端换行错位。"}
+{"id":"chunk-2avr6cej.js#er","doc":"只改一个格的 styleId（宽字符占位格跳过），并扩大 damage；选区高亮、搜索高亮用。"}
+{"id":"chunk-2avr6cej.js#D1","doc":"把字符驻留进屏幕字符池。"}
+{"id":"chunk-2avr6cej.js#Hd","doc":"把上一帧屏幕的一个矩形区域整块拷进当前帧（渲染缓存命中时跳过重画子树），连同 noSelect 和 softWrap；整行时一次 set。随后修补区域左右边界被切开的宽字符（清掉孤儿半格），并把区域并入 damage。"}
+{"id":"chunk-2avr6cej.js#gs","doc":"把 [top,bottom] 行区间整体上移（n>0）或下移 n 行并清空腾出的行（cells、noSelect、softWrap 一起），用于滚动优化（DECSTBM 滚动区域）。"}
+{"id":"chunk-2avr6cej.js#Cg","doc":"逐格比较两帧，只在 damage 区域（两帧 damage 之并，加上尺寸缩小露出的区域）内调用 cb(x, y, prevCell, nextCell)；cb 返回真则提前结束。宽度相同走 diffSameWidth，否则 diffDifferentWidth。"}
+{"id":"chunk-2avr6cej.js#B1","doc":"两帧宽度相同时的逐行 diff：两帧都有的行跳过相同格；只在旧帧的行报删除；只在新帧的行报新增（跳过全空格）。"}
+{"id":"chunk-2avr6cej.js#k1","doc":"两帧宽度不同时的逐行 diff（各自步长），同样分公共列、旧帧多出的列、新帧多出的列。"}
+{"id":"chunk-2avr6cej.js#Ag","doc":"把源屏幕一个矩形区域的 noSelect 标记拷到目标屏幕。"}
+{"id":"chunk-2avr6cej.js#wg","doc":"把矩形区域的 noSelect 置为 value（<NoSelect> 包住的内容、行号栏等不参与选区复制）。"}
+{"id":"chunk-2avr6cej.js#Ng","doc":"新建选区状态：锚点/焦点、是否拖动中、双击/三击时的锚定范围、滚出视口上方/下方的已选文本行（及各行是否软换行）、上次按下是否带 Alt。"}
+{"id":"chunk-2avr6cej.js#Fd","doc":"鼠标按下开始选区：记录锚点（限制在 scope 列范围内，例如只选某个面板）、清掉焦点与滚出缓存、进入拖动。"}
+{"id":"chunk-2avr6cej.js#Dg","doc":"拖动中更新焦点（第一次移动且没离开锚点格时不设焦点，避免单击产生空选区）。"}
+{"id":"chunk-2avr6cej.js#To","doc":"选区可用的列范围：有 scope 时为 [scope.x1, min(scope.x2,width)-1]，否则整行。"}
+{"id":"chunk-2avr6cej.js#Ao","doc":"鼠标松开：结束拖动（选区保留）。"}
+{"id":"chunk-2avr6cej.js#Ml","doc":"清除选区及全部虚拟坐标/滚出缓存。"}
+{"id":"chunk-2avr6cej.js#_g","doc":"双击选词的范围：先看是否点在纯文本 URL 上（整条 URL 当一个词），否则按字符类（空白/单词字符/其它）向两侧扩展，跳过宽字符占位、遇 noSelect 停。"}
+{"id":"chunk-2avr6cej.js#Og","doc":"双击：选中该词并设锚定范围 kind=word（后续拖动按词扩展）。"}
+{"id":"chunk-2avr6cej.js#Pd","doc":"从 col 起在一行内向两侧扩展连续的 URL 字符，返回 {lo, hi, text}。"}
+{"id":"chunk-2avr6cej.js#Bd","doc":"一行里属于软换行续接段的列范围：起点取本行软换行标记的起始列，终点取下一行标记记录的上一行结束列。"}
+{"id":"chunk-2avr6cej.js#Lg","doc":"找 (col,row) 处的纯文本 URL（http/https/file）：沿软换行把折到多行的 URL 拼回来；以 … 截断的不算；去掉末尾标点和不配对的右括号；返回 {url, lo, hi}（本行内的列范围）。"}
+{"id":"chunk-2avr6cej.js#Pg","doc":"三击：选中整行（受 scope 限制），锚定范围 kind=line。"}
+{"id":"chunk-2avr6cej.js#Bg","doc":"双击/三击后拖动：按词或按行扩展选区，锚点保持在原锚定范围的另一端。"}
+{"id":"chunk-2avr6cej.js#kg","doc":"键盘移动选区焦点（Shift+方向键），取消锚定范围。"}
+{"id":"chunk-2avr6cej.js#zg","doc":"内容滚动 dRow 行时平移选区：超出 [minRow,maxRow] 的端点钳到边界并记下虚拟行/列（滚回来能复原），同步裁剪/交换滚出上方/下方的文本缓存。"}
+{"id":"chunk-2avr6cej.js#Fg","doc":"拖动中内容滚动时只平移锚点（焦点跟着鼠标），超出范围记虚拟坐标。"}
+{"id":"chunk-2avr6cej.js#Hn","doc":"是否有完整选区（锚点和焦点都在）。"}
+{"id":"chunk-2avr6cej.js#Dwt","doc":"选区两端都因滚动被钳到同一侧（虚拟行都在视口上方或都在下方），即整段选区已不在屏幕上。"}
+{"id":"chunk-2avr6cej.js#Zun","doc":"返回按位置排序的 {start, end}，没有选区返回 null。"}
+{"id":"chunk-2avr6cej.js#Ug","doc":"取一行里 [startCol,endCol] 的选中文本：跳过 noSelect 与宽字符占位格；软换行续接行从续接起点取，折行吞掉的分隔空格补回；不是软换行时去掉行尾空白。"}
+{"id":"chunk-2avr6cej.js#kd","doc":"拼接选中文本行：软换行续接行接在上一行后面，否则另起一行。"}
+{"id":"chunk-2avr6cej.js#Ig","doc":"得到选中文本：滚出上方的缓存行 + 屏幕上的行 + 滚出下方的缓存行，按软换行合并。"}
+{"id":"chunk-2avr6cej.js#Ud","doc":"内容滚动前把即将滚出视口的已选行文本存进 scrolledOffAbove/Below（复制时还能拿到），并把锚点移到边界。"}
+{"id":"chunk-2avr6cej.js#Gg","doc":"把选区画到屏幕上：选区内每格换成 withSelectionBg 派生样式（noSelect 格跳过）。"}
+{"id":"chunk-2avr6cej.js#Kg","doc":"Ink 内部应用上下文：exit、focusManager、根节点、粘贴事件分发、布局/帧/点击订阅、悬停跟踪、精确指针（像素鼠标）引用、事件循环延迟观察、终端图片能力。"}
+{"id":"chunk-2avr6cej.js#Wf","doc":"<Text> 组件：把颜色/背景/faintInk/粗体/暗淡/斜体/下划线/删除线/反显组合成 textStyles，wrap 选择折行样式（默认 wrap），dir 设文字方向；支持悬停回调与 aria-* 无障碍属性；渲染为 ink-text 元素。"}
+{"id":"chunk-2avr6cej.js#hb","doc":"堆栈帧路径是否是打包内部路径（$bunfs、~BUN、/snapshot/、node:），这些不读源码。"}
+{"id":"chunk-2avr6cej.js#Ms","doc":"渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。"}
+{"id":"chunk-2avr6cej.js#ZUr","doc":"Ctrl+Z 挂起是否可用：后台会话（CLAUDE_CODE_SESSION_KIND=bg）不挂起。"}
+{"id":"chunk-2avr6cej.js#vb","doc":"记下终端单元格像素尺寸（来自 CSI 16t/6t 应答），供像素鼠标与图片定位使用。"}
+{"id":"chunk-2avr6cej.js#fC","doc":"重新查询单元格像素尺寸（终端重新获得焦点后，字体/缩放可能变了）。"}
+{"id":"chunk-2avr6cej.js#gb","doc":"原始模式关闭后为等待终端未回的查询应答而暂留的原始模式，到时（250ms）释放。"}
+{"id":"chunk-2avr6cej.js#bb","doc":"进入原始模式后探测终端能力（两轮，各 2s 超时，用 DA1 哨兵 flush）：第一轮 XTVERSION（VTE<0.53 不问）、kitty 键盘标志 CSI ?u、OSC 7501 程序状态；第二轮 DECRQM 2026（同步输出）、kitty 图形 + DA1、单元格像素尺寸、DECRQM 1016（像素鼠标）。tmux 下用 display-message 查 pane 透传/位置决定图片能力。结果写进能力表（answer），最后把全部能力和 DECSTBM 开关写日志。"}
+{"id":"chunk-2avr6cej.js#ws","doc":"Ink 根组件（类组件 InternalApp）：提供尺寸、AppContext、StdinContext、终端焦点、时钟等上下文；原始模式引用计数（打开时写括号粘贴/主题报告/焦点事件/扩展键模式并启动能力探测，关闭时复位）；stdin readable → 输入读取器（feedInputReader/flushInputReader）→ processKeysInBatch；鼠标点击/多击/悬停/拖动选区；Ctrl+Z 挂起与 SIGCONT 恢复；tmux pane 与单元格尺寸重探测；渲染错误时显示 ErrorOverview。"}
+{"id":"chunk-2avr6cej.js#jd","doc":"输入项是否算用户操作（粘贴、按键、非悬停移动的鼠标），用于空闲计时与附着后静默期过滤。"}
+{"id":"chunk-2avr6cej.js#qd","doc":"是粘贴或真正的按键（不是滚轮/鼠标伪键）。"}
+{"id":"chunk-2avr6cej.js#Cb","doc":"在 discreteUpdates 里处理一批输入：JetBrains 终端滚动 bug 修正、方向键连发检测；终端应答交给 querier；鼠标交给 handleMouseEvent（滚动模式下忽略按键）；焦点事件；粘贴 → dispatchPasteEvent；Ctrl+Z 挂起；滚轮 → dispatchWheelEvent；其余 → dispatchKeyboardEvent，若处理器要求按“ESC + 键”重读则拆开重放。同批多个离散输入之间 flushSyncWork，保证逐个生效。"}
+{"id":"chunk-2avr6cej.js#Xd","doc":"SGR 鼠标按钮码表示“无按键移动”（运动位 32 且按钮=3）。"}
+{"id":"chunk-2avr6cej.js#pC","doc":"像素鼠标模式下把像素坐标换算成格坐标（保留 fine 精确值）。"}
+{"id":"chunk-2avr6cej.js#gC","doc":"右键/中键松开（与按下位置相同）时：Windows/WSL/Linux 右键有选区则清除选区（复制已发生），否则粘贴系统剪贴板（xterm.js 除外）；Linux 中键粘贴 PRIMARY 选区。"}
+{"id":"chunk-2avr6cej.js#bC","doc":"处理一个鼠标事件：悬停（onHoverAt/onPointerHover）；按下时左键开始选区或计多击（双击选词、三击选行，窗口激活点击不计）；拖动更新选区；右/中键记下待粘贴；松开时结束选区，没有选区则当点击（onClickAt），点在超链接上且带 Cmd/Ctrl 时延迟 500ms 打开（多击取消）。"}
+{"id":"chunk-2avr6cej.js#EC","doc":"100ms 内同方向无修饰上/下方向键累计 ≥8 个时发出 arrow-burst 事件（滚轮被终端翻译成方向键的情况）。"}
+{"id":"chunk-2avr6cej.js#Qd","doc":"命令式 DOM 子树：在某个挂载节点下直接创建/插入/删除 ink-box、ink-text、ink-virtual-text（span），改样式和文字，改动后只触发重新布局与重绘（不经 React）；校验节点归属与嵌套规则（文字里只能放 span）。rect() 读上一帧的位置。2.1.88 没有。"}
+{"id":"chunk-2avr6cej.js#Vpe","doc":"键盘事件（keydown，冒泡、可取消）：key（按键产生的字符或键名）、name、sequence、ctrl/shift/meta/superKey/fn、soloKeypress（本批只有这一个用户输入）、readLate（事件循环阻塞后读到）；readAsEscapeThenKey() 让处理器要求把 ESC+X 拆成两次按键重放。"}
+{"id":"chunk-2avr6cej.js#xC","doc":"由 ParsedKey 推出 event.key：空格、Ctrl 组合给键名，可打印单字符给字符本身，Shift+字母给大写（CSI u 里带的 shifted 码点优先），其它给键名；裸转义与鼠标序列给空串。"}
+{"id":"chunk-2avr6cej.js#ZSe","doc":"粘贴事件（paste，冒泡、可取消）：清洗粘贴文本——去掉 C1 控制字符和 ESC+C1、把以 BEL 结尾的 DCS/SOS/PM/APC 串规范化后剥离转义序列、全角空格规范化；rawEmpty/rawEndedWithFocusTail 标记被焦点事件残尾污染的粘贴。"}
+{"id":"chunk-2avr6cej.js#Zd","doc":"滚轮事件（wheel，冒泡、可取消）：deltaY/deltaX、修饰键、鼠标格坐标。"}
+{"id":"chunk-2avr6cej.js#nr","doc":"空帧：0×0 屏幕、给定视口、光标在原点可见。"}
+{"id":"chunk-2avr6cej.js#Dr","doc":"帧内容高度是否已达到/超过视口高度（主屏模式下内容会进入回滚区）。"}
+{"id":"chunk-2avr6cej.js#JJ","doc":"按上一帧的 cachedLayout 找 (col,row) 处最深的节点：后绘制的兄弟优先；越出自身矩形的绝对定位子孙也会被检查（overflow hidden/scroll 时裁掉）；深度上限 256。"}
+{"id":"chunk-2avr6cej.js#$d","doc":"找点击处最近的 style.selectionScope 祖先，算出选区可用的列范围（去掉边框与内边距，并被更外层 overflow 裁剪），用于把拖选限制在某个面板内。"}
+{"id":"chunk-2avr6cej.js#Tb","doc":"派发点击：命中测试找目标；不是窗口激活点击时，最近的有 tabIndex 的祖先获得焦点；然后沿父链调用 onClick（填好 localCol/localRow），立即停止传播则结束；返回是否有处理器没调 allowDefault()（即点击被消费）。"}
+{"id":"chunk-2avr6cej.js#wb","doc":"悬停派发：命中节点及其祖先中有 onMouseEnter/Leave 的组成新集合，与旧集合比较后分别调用 onMouseLeave/onMouseEnter（不冒泡）。"}
+{"id":"chunk-2avr6cej.js#Nb","doc":"重绘后重新判定悬停：只针对带 hoverFollowsPaint 属性的节点（内容移动到鼠标下方或移走时触发 enter/leave），返回是否有变化。"}
+{"id":"chunk-2avr6cej.js#Ns","doc":"悬停时鼠标是否落在“真正的空白”上：格为空，且不是文本节点内部两段文字之间的空隙（左右最近的非空格都属于同一文本节点则不算空白）。配合 hoverIgnoresBlankCells 使用。"}
+{"id":"chunk-2avr6cej.js#rr","doc":"取 (col,row) 格的 OSC 8 链接；点在宽字符右半时取左半的链接。"}
+{"id":"chunk-2avr6cej.js#Db","doc":"悬停在超链接上时，把同一链接的连续格（沿软换行跨行）加下划线，返回涉及的行段。"}
+{"id":"chunk-2avr6cej.js#ef","doc":"在一行内从 col 向左右扩展同一链接的格，返回 {row, from, to}。"}
+{"id":"chunk-2avr6cej.js#tf","doc":"从命中节点向上找第一个有 onPointer 的节点；先遇到 onClick 或可聚焦节点则返回 null（让普通点击处理）。"}
+{"id":"chunk-2avr6cej.js#_l","doc":"把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。"}
+{"id":"chunk-2avr6cej.js#nf","doc":"增量输出：render(prev, next, altScreen, decstbmAllowed) 比较两帧屏幕，产出 Patch 列表（stdout 文字、styleStr、hyperlink、cursorMove/cursorTo、clear、clearTerminal…）。非 TTY 时整帧输出；视口变小/宽度变化/内容缩到视口以内等情况整屏重置（clearTerminal，会闪）；有 scrollHint 且允许 DECSTBM 时先用滚动区域把旧帧行上移/下移再 diff；diff 时跳过宽字符占位格，行尾空白用 EL 清除；改动落在已滚入回滚区的行上时只能整屏重置。慢于 50ms 记日志。"}
+{"id":"chunk-2avr6cej.js#or","doc":"超链接切换：目标与当前不同时追加 hyperlink 补丁（OSC 8），返回新的当前链接。"}
+{"id":"chunk-2avr6cej.js#Hl","doc":"样式切换：追加 StylePool.transition 给出的 SGR 串，返回目标 styleId。"}
+{"id":"chunk-2avr6cej.js#Hb","doc":"读屏幕一行的纯文本（去尾部空白），用于整屏重置的调试信息。"}
+{"id":"chunk-2avr6cej.js#Ol","doc":"整屏重置：先发 clearTerminal（带原因 resize/offscreen/clear），再从 startY 起完整重画帧（主屏时只画最后一屏可见部分）。会闪烁，尽量避免。"}
+{"id":"chunk-2avr6cej.js#Lb","doc":"把帧的 [startY,endY) 行完整写进虚拟屏幕：逐格移动光标、切换链接与样式、写字符（跳过空白），每行结束复位样式并换行。"}
+{"id":"chunk-2avr6cej.js#Pb","doc":"写一个格：宽字符放不下行尾则放弃；终端可能把某些 emoji（U+1FA70–1FAFF、带 VS16 的序列）算成 1 列时，先在后一列写空格占位、写完再 cursorTo 回正确列（宽度补偿）；更新虚拟光标。"}
+{"id":"chunk-2avr6cej.js#Ds","doc":"把虚拟光标移到 (x,y)：换行或光标在行尾时用 CR + 相对移动，同一行用 CHA（cursorTo）。"}
+{"id":"chunk-2avr6cej.js#_C","doc":"该字符是否需要宽度补偿（终端与 Unicode 宽度表可能不一致的 emoji：Symbols and Pictographs Extended-A、带 U+FE0F 的序列）。"}
+{"id":"chunk-2avr6cej.js#rf","doc":"虚拟屏幕：记录光标位置和累计的 Patch；txn(fn) 以当前光标为输入，追加补丁并移动光标。"}
+{"id":"chunk-2avr6cej.js#HC","doc":"终端内联图片（iTerm2 File= / kitty Unicode 占位）编码常量：图片 id 上限 2^24、行列下标上限为附加符号表长度、PNG 边长上限 10000；占位字符 U+2800（盲文空格）+ 组合附加符号编码行/列/id。316 新增。"}
+{"id":"chunk-2avr6cej.js#zC","doc":"把 {id,row,column} 编码成一个占位字素：U+2800 + 行、列、id 高中低三位的附加符号。"}
+{"id":"chunk-2avr6cej.js#hVs","doc":"生成 rows×columns 的占位字素网格文本（每行一串占位字符），放进 Ink 文本里占住图片的位置。"}
+{"id":"chunk-2avr6cej.js#gVs","doc":"生成 iTerm2 内联图片序列 OSC 1337;File=inline=1;size;width;height;preserveAspectRatio=1;doNotMoveCursor=1:<base64> BEL。"}
+{"id":"chunk-2avr6cej.js#Ib","doc":"扫描屏幕里的图片占位格，按图片 id 汇总：左上角原点、格数、最大行列、所有格下标、各格是否与同一原点一致（被裁剪/错位时不一致）。"}
+{"id":"chunk-2avr6cej.js#jb","doc":"把一串转义序列按 tmux 透传上限（256KB）切块，每块包成 DCS tmux 透传。"}
+{"id":"chunk-2avr6cej.js#Vb","doc":"tmux 下的 iTerm2 图片：保存光标、移到 pane 内绝对位置、输出图片、恢复光标，整体透传；超过上限时改用 MultipartFile/FilePart/FileEnd 分片。"}
+{"id":"chunk-2avr6cej.js#ff","doc":"终端图片管理器（App 的 terminalImages）：为图片分配 id（kitty 小 id 池与 24 位宽 id、iTerm2 位置复用）、排队传输（kitty APC G）与删除、终端拒绝时记录（refused）、tmux 透传与 pane 位置修正、在帧之后按占位格位置放置 iTerm2 图片（placeIterm/keepIterm）、resendAll/redrawInline/requestDraw。"}
+{"id":"chunk-2avr6cej.js#hf","doc":"Patch 列表窥孔优化：去掉空输出/零移动/空样式，合并相邻 cursorMove、styleStr，相邻 cursorTo 与光标显隐只留最后一个，重复超链接去掉。"}
+{"id":"chunk-2avr6cej.js#Bl","doc":"当前终端是否需要 Ink 自己做双向文本重排（Windows Terminal、VS Code 终端），传给 CellSegmenter 的 reorder 参数。"}
+{"id":"chunk-2avr6cej.js#mf","doc":"Output 的行切分器，包装原生 Bun.ant.CellSegmenter：segment(text, reorder) 把带 ANSI 的一行切成字素格（cells：[字素下标, 宽度|制表符位|段号<<10]）与样式/链接段（runs：[sgr 键下标, uri 下标]）；width() 算显示宽度（制表位展开）；keepColumns() 只保留裁剪区内的格；paint() 调原生 paint 把格写进屏幕，字素用 charIndices() 映射到屏幕字符池、样式段用 runWords() 映射成 packWord1（SGR 键 → AnsiCode → StylePool id，链接 → 超链接池）。原生驻留表过大或样式池/chalk 换代时重建。"}
+{"id":"chunk-2avr6cej.js#kl","doc":"两个裁剪矩形求交（未定义的边视为无限）。"}
+{"id":"chunk-2avr6cej.js#Lwt","doc":"渲染操作缓冲：renderNodeToOutput 往里记 write/blit/shift/clear/clip/noSelect 操作，get() 依次落到屏幕：clear 只扩大 damage（绝对定位节点的清除会阻止被其覆盖的 blit）；blit 从上一帧拷贝未变子树；write 按裁剪区截断文字（Bun.sliceAnsi）后用 LineCellSegmenter 切分并 paint，同时写软换行标记；最后应用 noSelect。writeDirected 支持 RTL 文本右对齐。写入远多于拷贝时记日志。"}
+{"id":"chunk-2avr6cej.js#eR","doc":"把一行写进屏幕：有方向时前置 LRM/RLM，交给 LineCellSegmenter 切分（必要时双向重排），按裁剪区保留列，paint 后返回结束列。"}
+{"id":"chunk-2avr6cej.js#Hr","doc":"保守估计显示宽度：未分配码点与 emoji 按 2、东亚歧义宽度按宽，取逐字素累加与整串宽度的较大者。"}
+{"id":"chunk-2avr6cej.js#iv","doc":"按保守宽度把文本折成多行（不超过 maxWidth）：单个字素都放不下时用 \"[unreadable text]\" 等占位替代，优先在空格处断行。"}
+{"id":"chunk-2avr6cej.js#oR","doc":"yoga 节点的内容宽度：计算宽度减左右内边距与边框。"}
+{"id":"chunk-2avr6cej.js#ov","doc":"把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。"}
+{"id":"chunk-2avr6cej.js#lR","doc":"画 ink-box 的边框：按 borderStyle 取字符集，四边可单独关闭、单独着色/变暗；borderText 可把文字嵌进上或下边框；继承的背景色也涂到边框上。"}
+{"id":"chunk-2avr6cej.js#sv","doc":"滚动调试跟踪：记录滚轮输入（方向、步长、倍率、滚轮模式、连发计数）与每帧实际应用的滚动量、剩余量、所用排水算法，以及当前滚动位置；供调试面板订阅。"}
+{"id":"chunk-2avr6cej.js#bf","doc":"多行文本中最宽一行的显示宽度。"}
+{"id":"chunk-2avr6cej.js#efn","doc":"一次渲染遍历的共享状态：是否有覆盖层、布局是否移动、滚动提示（DECSTBM）、待继续排水的滚动节点、跟随滚动信息、绝对定位矩形（上一帧/本帧）、片段映射与原始 ANSI 背景改写缓存。"}
+{"id":"chunk-2avr6cej.js#Cv","doc":"上一帧越出父框的绝对定位矩形本帧没再出现、却被本帧的 blit 覆盖到了（可能拷回旧图像），需要下一帧整树重画。"}
+{"id":"chunk-2avr6cej.js#pR","doc":"自适应滚动排水：待滚量 ≤5 一次滚完，<12 每帧 2 行，否则每帧 3 行；超过 30 的积压直接跳过；单帧不超过视口高-1，剩余写回 pendingScrollDelta。"}
+{"id":"chunk-2avr6cej.js#yR","doc":"比例滚动排水：每帧滚动待滚量的 3/4（至少 4 行，不超过视口高-1），剩余写回 pendingScrollDelta。由设置 useAdaptiveDrain 选择用哪种。"}
+{"id":"chunk-2avr6cej.js#Fl","doc":"用 OSC 8 把文本包成超链接。"}
+{"id":"chunk-2avr6cej.js#fv","doc":"为压平的文本段建“字符下标 → 段号”表（复用 state 里的 Uint32Array），折行后据此给每个字符还原样式。"}
+{"id":"chunk-2avr6cej.js#Rf","doc":"把折行后的纯文本重新套上样式与超链接：按“字符→段号”表在原文本中同步推进（跳过折行吞掉的空白与 \\r\\n），段号变化时切出一段套 applyTextStyles，文本内自带的 ANSI 序列原样保留。"}
+{"id":"chunk-2avr6cej.js#pv","doc":"折行并记录每行的软换行种类（HardBreak 原有换行 / Continuation 折出来的续行 / ContinuationElidedSep 续行吞掉了行首空格），复制选中文本时据此拼回原行；wrap-stream 丢掉最后一行（流式输出的未完成行）。"}
+{"id":"chunk-2avr6cej.js#yv","doc":"折行；若行数与 yoga 计算的高度不一致，改用测量时实际给出的宽度（getOfferedWidth）重折，保证与布局一致。"}
+{"id":"chunk-2avr6cej.js#bR","doc":"按 ink-text 首个子节点的 yoga 偏移给文本加上顶部空行与左缩进（同时在软换行表前补 HardBreak）。"}
+{"id":"chunk-2avr6cej.js#vR","doc":"把排好样式的文本写进 Output（有 textDirection 时走 writeDirected），并记录是否画出了自身矩形（paintsPastRect）。"}
+{"id":"chunk-2avr6cej.js#SR","doc":"写 ink-raw-ansi：有继承背景色时先把原始 ANSI 里的背景重写（带缓存），记录 paintsPastRect。"}
+{"id":"chunk-2avr6cej.js#zs","doc":"渲染一个 DOM 节点到 Output（每帧从根递归）：display:none 时清掉旧区域；未脏且位置尺寸背景都不变时直接从上一帧 blit（再补拷越界的绝对定位子孙）；否则清旧区域、处理 pendingClears，按类型绘制——ink-raw-ansi 原样写；ink-text 压平→按 textWrap 折行/截断→套样式与 OSC 8→写入；ink-box 处理 noSelect、overflow 裁剪、overflow:scroll（滚动锚点、粘底、排水、DECSTBM 滚动提示 + 只重画新露出的行）、背景/opaque、子节点、边框。最后记 cachedLayout 供下一帧比较与命中测试。"}
+{"id":"chunk-2avr6cej.js#ER","doc":"计算滚动容器本帧的 scrollTop：先处理 scrollAnchor（start/center/end/nearest）；stickyScroll 或在底部时跟随内容增长；按 useAdaptiveDrain 选择排水算法消耗 pendingScrollDelta（超出 clamp 范围时放慢）；夹到合法范围；scrollTop 变化时给 state.followScroll 记下差值（选区跟随用）。"}
+{"id":"chunk-2avr6cej.js#xR","doc":"给有 backgroundColor 或 opaque 的 box 在边框内填空格（带背景色）；opaque 还会清掉该区域的 noSelect。"}
+{"id":"chunk-2avr6cej.js#CR","doc":"是否有绝对定位子节点隐藏或位置尺寸变了（则兄弟不能从上一帧 blit）。"}
+{"id":"chunk-2avr6cej.js#RR","doc":"找出被后面兄弟“越界绘制”的变化区域覆盖到的前面兄弟（它们不能 blit，需要重画）。"}
+{"id":"chunk-2avr6cej.js#bv","doc":"渲染子节点：决定每个子节点能否用上一帧 blit（前面有脏的非裁剪兄弟、绝对定位子节点移动、被越界兄弟覆盖等情况不能），统计子节点是否越出父框、互相重叠、画出自身矩形，返回是否有越界子孙。"}
+{"id":"chunk-2avr6cej.js#MR","doc":"父节点有 pendingClears 时，找出仍可安全 blit 的子节点（不与被清区域、越界兄弟重叠的未脏子节点）。"}
+{"id":"chunk-2avr6cej.js#_R","doc":"overflow hidden/scroll 的 box 的裁剪矩形（边框内侧），两个方向都不裁剪时返回 undefined。"}
+{"id":"chunk-2avr6cej.js#OR","doc":"维护 {now, before, grew}：本帧与上一帧各自的累积裁剪区，grew 表示裁剪区比上一帧大（之前被裁掉的部分需要重画，不能 blit）。"}
+{"id":"chunk-2avr6cej.js#Sv","doc":"节点在 X、Y 两个方向都裁剪（overflow hidden/scroll）。"}
+{"id":"chunk-2avr6cej.js#PR","doc":"零高度节点是否与相邻兄弟同一行（这种节点只更新缓存位置，不绘制）。"}
+{"id":"chunk-2avr6cej.js#BR","doc":"节点整体 blit 后，再把越出它矩形的绝对定位子孙（及越界子孙）也从上一帧拷过来，并登记绝对定位矩形。"}
+{"id":"chunk-2avr6cej.js#Ef","doc":"渲染滚动容器的内容子节点：完全在 [top,bottom) 可见范围外的跳过（并丢弃其缓存）；有子节点变脏后，后续子节点不再 blit。"}
+{"id":"chunk-2avr6cej.js#Hwt","doc":"清掉子树所有节点的 cachedLayout（下一帧不能 blit、命中测试也找不到）。"}
+{"id":"chunk-2avr6cej.js#Tv","doc":"滚动 blit 后把子树的 cachedLayout（及裁剪、scrollViewportTop）整体平移 dy 行并标记 shifted。"}
+{"id":"chunk-2avr6cej.js#zR","doc":"零高度节点的子树不绘制，但仍按 yoga 布局写入 cachedLayout（标 unpainted），使点击命中测试与焦点几何可用。"}
+{"id":"chunk-2avr6cej.js#UR","doc":"多段样式文本的 truncate-start/middle：截断后插入省略号，按原文本的字符→段号表给每个字符还原样式。"}
+{"id":"chunk-2avr6cej.js#Is","doc":"屏幕阅读器输出清洗：去掉转义序列与控制字符（保留 \\t \\n），双向控制字符换成 U+FFFD。"}
+{"id":"chunk-2avr6cej.js#Ul","doc":"无障碍模式：把 DOM 树转成线性文本（aria-label 优先，role 前缀“role: ”，state 前缀“(checked, …) ”，column 方向用换行、row 方向用空格连接子节点），并记录需保留空白的范围与 blockquote 的行前缀“> ”。"}
+{"id":"chunk-2avr6cej.js#Gs","doc":"目标节点在屏幕阅读器线性文本中的起始偏移（用于把光标/焦点位置告诉读屏器），找不到返回 null。"}
+{"id":"chunk-2avr6cej.js#wv","doc":"在屏幕上查找查询串（不区分大小写，跳过宽字符占位与 noSelect 格），返回每个匹配的 {row, col, len}（列为屏幕列）。"}
+{"id":"chunk-2avr6cej.js#Dv","doc":"把第 currentIdx 个匹配（行加 rowOffset）高亮为“当前匹配”样式。"}
+{"id":"chunk-2avr6cej.js#Tf","doc":"创建帧渲染函数：每次调用用根节点的 yoga 尺寸建/复用 Output，从根 renderNodeToOutput（上一帧被污染或布局异常时不 blit），收尾处理行尾宽字素，返回 Frame：screen、viewport（备用屏时高度 +1）、cursor（主屏放在内容末尾，备用屏放在最后一行）、scrollHint、followScroll、layoutShifted、staleAbsolutePaint、scrollDrainPending。"}
+{"id":"chunk-2avr6cej.js#eBr","doc":"退出/崩溃时恢复终端：复位所有已设模式（鼠标、像素鼠标、焦点、括号粘贴、扩展键等）、kitty 键盘弹栈、显示光标、清掉进度条/标签状态、重置颜色。"}
+{"id":"chunk-2avr6cej.js#Ov","doc":"把屏幕上所有匹配查询串的格反显（搜索高亮），返回是否有匹配。"}
+{"id":"chunk-2avr6cej.js#Ys","doc":"校验终端 winsize：非正数/非数字用默认值，超过上限按策略夹到上限或用默认值，并记日志。"}
+{"id":"chunk-2avr6cej.js#Z4n","doc":"读终端尺寸，缺省 80×24，列上限 8192、行上限 2048。"}
+{"id":"chunk-2avr6cej.js#$nt","doc":"Ink 实例（每个 stdout 一个，见 root.ts 的实例表）：持有根 DOM 节点、FocusManager、React 容器（ConcurrentRoot）、样式/字符/超链接池、前后两帧（双缓冲）、LogUpdate、帧渲染函数、终端模式管理、终端图片管理、选区与搜索高亮状态。\n渲染节奏：React 提交后 resetAfterCommit → onComputeLayout（计算 yoga 布局、通知布局监听）→ onRender（scheduleFrame 按帧间隔节流，输入优先时缩短间隔；stdout 积压时暂缓）。onRender：renderer 生成新帧 → 叠加选区/搜索高亮/链接下划线 → LogUpdate.render 与前帧 diff → optimize → 加备用屏锚点、光标声明定位、iTerm2 图片 → writeDiffToTerminal（同步输出 DEC 2026 包裹）→ 交换前后帧、按需压缩池子、发 onFrame 统计。\n另有：备用屏进出（setAltScreenActive，保存主屏内容以便返回时擦除）、窗口尺寸变化、挂起/恢复、外部清屏探测、屏幕阅读器模式（onRenderScreenReader 输出线性文本 diff）、复制选区、指针捕获、console/stderr 劫持、交接终端给子进程（handoff）、退出时恢复终端模式。"}
+{"id":"chunk-2avr6cej.js#Nwt","doc":"退出或交接前把 stdin 里残留的终端应答读干净：临时进原始模式，以非阻塞方式打开 /dev/tty 读取（最多 64 块），直到读到预期数量的 DA1 应答或超时（250ms），避免应答字节泄漏到 shell。"}
+{"id":"chunk-2avr6cej.js#Ate","doc":"Ink 的 React reconciler（react-reconciler 宿主配置，mutation 模式、主渲染器）与事件分发器。要点：createInstance 时 <Box> 不能嵌在 <Text> 里、ink-text 嵌套变 ink-virtual-text；文字必须在 <Text> 内（报错信息带组件所有者链）；commitUpdate 只把变化的属性写回 DOM（样式差量写进 yoga）；hide/unhideInstance 用 display:none；resetAfterCommit 记录提交耗时并触发 onComputeLayout + onRender；更新优先级由 dispatcher 按当前事件类型决定；autoFocus 在 commitMount 时聚焦；挂上键盘/粘贴/滚轮处理器时同步 stdin 原始模式引用。"}
+{"id":"chunk-2avr6cej.js#Xi","doc":"两个矩形的并（包围盒）。"}
+{"id":"chunk-2avr6cej.js#Es","doc":"各 textWrap 取值对应的 ink-text 样式对象（预先建好，避免每次渲染新建）。"}
+{"id":"chunk-2avr6cej.js#zd","doc":"比较两个 {row, col} 点的先后（先行后列）。"}
+{"id":"chunk-2avr6cej.js#U1","doc":"可出现在纯文本 URL 中的字符（可打印 ASCII，不含 <>\"'` 与空格）。"}
+{"id":"chunk-emhzq435.js#ht","doc":"优雅退出时调用当前 stdout 对应 Ink 实例的 drainStdin()。"}
+{"id":"chunk-emhzq435.js#bt","doc":"renderSync：按 stdout 取或建 Ink 实例并渲染，返回 {rerender, unmount, waitUntilExit, cleanup}。renderAsync：等前一个独立渲染完成后再渲染，并记录首帧距进程启动的毫秒数。"}
+{"id":"chunk-emhzq435.js#we","doc":"异步创建 React 根（等待挂起的独立渲染），返回 {render, unmount, waitUntilExit}。"}
+{"id":"chunk-emhzq435.js#Ct","doc":"创建 Ink 实例并登记到实例表：kind=react 登记为该 stdout 的主实例，否则登记为命令式 Tree 根；首次调用时注册优雅退出钩子。"}
+{"id":"chunk-emhzq435.js#_e","doc":"解析 ESC 单字符序列（RIS、DECSC/DECRC、IND、RI、NEL）为语义动作；其余返回 unknown。"}
+{"id":"chunk-emhzq435.js#De","doc":"把文本切成 {value, width} 字素序列：纯 ASCII 快速路径，否则用 Intl 字素切分并用 Bun.stringWidth 量宽（至少 1）。"}
+{"id":"chunk-emhzq435.js#Kt","doc":"DEC 私有模式（光标显示、备用屏、括号粘贴、鼠标跟踪、焦点事件）的 SM/RM 转成语义动作。"}
+{"id":"chunk-emhzq435.js#zt","doc":"解析一个 CSI 序列为语义动作：SGR 单独返回参数串；光标移动/定位、擦除、插删行列、滚动与滚动区域、保存恢复光标、光标形状（DECSCUSR）、DEC 私有模式开关。"}
+{"id":"chunk-emhzq435.js#Gt","doc":"按第二个字节判断转义序列种类：csi / osc / esc。"}
+{"id":"chunk-emhzq435.js#Y","doc":"终端输出语义解析器（Ansi 组件、测试与录屏用）：分词后把文本切成带当前样式的字素段、BEL 单独成动作；SGR 更新内部样式；OSC 8 维护当前链接；forOutput 模式下保留可能被后续字节续上的尾部字素（ZWJ、区域旗帜、代理对）。"}
+{"id":"chunk-emhzq435.js#js","doc":"<Ansi>：把带 ANSI 转义的字符串解析成样式片段，渲染为嵌套 <Text>（OSC 8 片段包 <Link>）；支持 dimColor/italic 统一叠加、monochrome 去色。"}
+{"id":"chunk-emhzq435.js#Le","doc":"用 termio Parser 把 ANSI 字符串转成 {text, props} 片段（相邻同样式合并，携带超链接）。"}
+{"id":"chunk-emhzq435.js#ze","doc":"<Button>：可聚焦的 Box；回车或空格触发 onAction 并短暂（100ms）进入 active 态；点击触发 onAction，但窗口激活点击与挂载后 mountSettleMs（默认 300ms）内的点击当误触丢弃；children 可为 (state)=>节点 拿到 focused/hovered/active。"}
+{"id":"chunk-emhzq435.js#PA","doc":"声明光标位置：组件挂载点 + (line, column) 相对位置，active 时交给 Ink（每帧把真实终端光标停到那里，供 IME 与屏幕阅读器），卸载或失活时撤销。"}
+{"id":"chunk-emhzq435.js#a0","doc":"<Newline>：输出 count 个换行的 ink-text。"}
+{"id":"chunk-emhzq435.js#Ap","doc":"<NoSelect>：内容不参与鼠标选区复制（如行号栏、装饰符）；fromLeftEdge 时从屏幕最左列起整段不可选。"}
+{"id":"chunk-emhzq435.js#Tqe","doc":"<RawAnsi>：直接输出已排好的 ANSI 行（ink-raw-ansi），宽高由调用方给出，不再折行或测量。"}
+{"id":"chunk-emhzq435.js#Xe","doc":"节点当前是否在终端可见区域内：累加祖先偏移并减去滚动容器的 scrollTop，按根高度与终端行数推出视口范围；滚动容器尚未渲染时返回 null。"}
+{"id":"chunk-emhzq435.js#U4","doc":"跟踪组件是否在终端可见区域：返回 ref 回调、可见状态对象、读取函数与即时探测函数；每次提交后更新。动画类组件据此在不可见时停止刷新。"}
+{"id":"chunk-emhzq435.js#PI","doc":"选区操作钩子：复制（并清除）/复制不清除、取选中文本、清除、是否有选区、读状态、订阅变化、键盘移动焦点、设置选区背景色。没有 Ink 实例时返回空实现。"}
+{"id":"chunk-emhzq435.js#KUr","doc":"订阅式读取“是否有选区”（useSyncExternalStore）。"}
+{"id":"chunk-czq1j3j2.js#qF","doc":"标签页状态预设：idle（绿点，“Idle”）、busy（橙点，“Working…”）、waiting（蓝点，“Waiting”）。"}
+{"id":"chunk-czq1j3j2.js#HMe","doc":"把会话状态写到终端标签页（OSC 21337 标签状态，经 tmux/screen 透传）；kind 为 null 时清除；终端不支持时不写。"}
+{"id":"chunk-18rrbwq1.js#Mtt","doc":"标题变化时用 OSC 0 设置终端窗口/标签标题（先去掉转义字符）；title 为 null 不写。"}
+{"id":"chunk-emhzq435.js#Wo","doc":"读元素 yoga 计算后的宽高。"}
+{"id":"chunk-emhzq435.js#tt","doc":"默认渲染选项：是否使用原生光标（native cursor 开关）与样式图集记录器。"}
+{"id":"chunk-emhzq435.js#VG","doc":"应用入口的 render：给根元素包上主题等 Provider 后交给 Ink 渲染；第二个参数可以是 stdout 流或选项。"}
+{"id":"chunk-xd1cb3xs.js#SVs","doc":"备用屏清屏：ED2 + 清回滚 + 光标回原点。"}
+{"id":"chunk-xd1cb3xs.js#Fwt","doc":"主屏清屏（不清回滚区）：光标回原点后逐行擦除并下移 rows 行，再回原点。"}
+{"id":"chunk-xd1cb3xs.js#qpe","doc":"终端是否支持同步输出（DEC 2026）：只在探测已得出结论时为真。"}
+{"id":"chunk-xd1cb3xs.js#q$e","doc":"同 isSynchronizedOutputSupported，但探测未完成时按“可能支持”估计。"}
+{"id":"chunk-xd1cb3xs.js#g","doc":"同步输出支持判断：后台守护进程按会话状态；非 tmux 且 CLAUDE_CODE_FORCE_SYNC_OUTPUT 时强制开；否则看能力表 synchronizedOutput（已定论用结论，未定论时 allowLikely 才用估计）。"}
+{"id":"chunk-xd1cb3xs.js#nBr","doc":"是否启用 DECSTBM 滚动区域优化的前提：支持同步输出，且不在 tmux/zellij/JetBrains/xterm.js/Windows Terminal 中，也不是后台守护进程（这些终端用滚动区域会把视口拉回或出错）。"}
+{"id":"chunk-xd1cb3xs.js#Uwt","doc":"终端是否支持 OSC 9;4 进度条：会话状态优先；ConEmu 支持；Ghostty ≥1.2.0、iTerm2 ≥3.6.6 支持；Windows Terminal 与非 TTY 不支持。"}
+{"id":"chunk-xd1cb3xs.js#y","doc":"给定终端名是否在扩展键（kitty 键盘协议/modifyOtherKeys）白名单里；不给终端名时看能力探测结果。"}
+{"id":"chunk-xd1cb3xs.js#ofn","doc":"是否启用扩展键：tmux/screen 下不启用；能力表显示支持，且终端不在需要确认的名单里或已确认支持 kitty 键盘。"}
+{"id":"chunk-xd1cb3xs.js#_Wt","doc":"启用扩展键：kitty 键盘协议压栈（legacyKitty 时用旧标志位）+ modifyOtherKeys。"}
+{"id":"chunk-xd1cb3xs.js#sfn","doc":"是否在 Windows Terminal 中（WT_SESSION）。"}
+{"id":"chunk-xd1cb3xs.js#dDo","doc":"把 Patch 列表拼成一个字符串一次写到终端：默认用同步输出（DEC 2026 BSU/ESU）包裹；clearTerminal 按主屏/备用屏用不同清屏方式；相对光标移动的 dy 夹在视口内；写失败（EPIPE）静默处理。"}
+{"id":"chunk-xd1cb3xs.js#$wt","doc":"最基础的事件类：只有 stopImmediatePropagation 标记（TerminalEvent、终端焦点/尺寸等内部事件的基类）。"}
+{"id":"chunk-xd1cb3xs.js#nfn","doc":"Ink 内部事件发射器：不限监听数；某个监听者对事件调用 stopImmediatePropagation 后后续监听者不再执行。"}
+{"id":"chunk-xd1cb3xs.js#bVs","doc":"修正 JetBrains 终端的滚轮问题（设置 jediTerm 打开时）：滚轮后 75ms 内出现的无修饰上下方向键视为触控板滚动的副产物丢弃并计数；向下滚动后 250ms 内的 wheelup 在确认是该终端时翻转成 wheeldown；首次发现时回调通知。"}
+{"id":"chunk-xd1cb3xs.js#LU","doc":"值不是整数时记一条警告（Box 的 margin/padding/gap 等）。"}
+{"id":"chunk-xd1cb3xs.js#nYn","doc":"把 aria-* 属性收成 accessibility 对象（全空返回 undefined）。"}
+{"id":"chunk-xd1cb3xs.js#le","doc":"<Box>：Ink 的 flex 容器（ink-box）。默认 flexDirection row、flexWrap nowrap、flexGrow 0、flexShrink 1、overflow visible；margin/padding/gap 非整数告警。透传焦点（tabIndex/autoFocus）、键盘/粘贴/滚轮/action 事件（含捕获阶段）、点击、悬停、onPointer、keybindingScope、textEntry、aria-* 无障碍属性。"}
+{"id":"chunk-xd1cb3xs.js#R","doc":"Ink 内部 stdin 上下文：stdin 流、setRawMode、是否支持原始模式、内部事件发射器、终端查询器、JediTerm 输入状态。"}
+{"id":"chunk-xd1cb3xs.js#w","doc":"终端模式 → {on, off} 序列：括号粘贴 2004、主题报告 2031、焦点事件 1004、像素鼠标 1016、扩展键（kitty 键盘 + modifyOtherKeys）、备用屏 1049（附清屏）、备用屏专用键模式。"}
+{"id":"chunk-xd1cb3xs.js#Bwt","doc":"终端模式管理：按设置顺序记录已开的模式（鼠标、表面颜色、括号粘贴、焦点、扩展键、备用屏…），set/reset 返回要写的序列；suspend/resume 在挂起或交出终端时成组关闭/恢复（可保留一个）；reassertKeys/reassertFrom 在终端可能丢失状态时重发；resetAll 退出时全部关闭（逆序）。"}
+{"id":"chunk-xd1cb3xs.js#m","doc":"通知文本里的 C0/C1 控制字符换成空格（防止注入转义序列）。"}
+{"id":"chunk-xd1cb3xs.js#m$","doc":"终端通知钩子：iTerm2（OSC 9）、kitty（OSC 99 标题+正文+聚焦）、Ghostty（OSC 777 notify）、响铃（BEL）、进度条（OSC 9;4：running/error/indeterminate/completed，终端不支持时不写）；全部经 tmux/screen 透传包装。"}
+{"id":"chunk-czgrs6px.js#K","doc":"<ScrollBox>：overflow 为 scroll 的 ink-box（默认作为选区范围 selectionScope），内容放在一列子 Box 中。通过 ref 暴露命令式 API：scrollTo / scrollToElement（锚定到元素，start/center/end/nearest）/ scrollBy（累积到 pendingScrollDelta，由渲染时逐帧排水）/ scrollToBottom（重新开启粘底）、读 scrollTop/高度/视口、isSticky、subscribe、setClampBounds；滚动只标脏并在微任务里触发重绘，不走 React 状态。stickyScroll 让内容增长时自动跟到底，followGrowth=false 关闭位置跟随。"}
+{"id":"chunk-czq1j3j2.js#Yse","doc":"搜索高亮钩子：setQuery（全屏高亮所有匹配）、scanElement（在某元素子树里扫描匹配位置）、setPositions（设置位置式高亮与当前匹配）。"}
+{"id":"chunk-czq1j3j2.js#xmt","doc":"按键是否产生文字输入：带 Ctrl/Meta/Super 或是回车、Esc、方向、Tab、翻页、Home/End、滚轮时为否。"}
+{"id":"chunk-r6bx7z4z.js#txe","doc":"<AlternateScreen>：挂载时进入备用屏（DEC 1049）并按 mouseTracking（默认 full）开启鼠标跟踪、可选设置 surface 背景/前景色；内容高度固定为终端行数；卸载时退出备用屏、关闭鼠标、清选区并恢复扩展键与原生光标。进/出序列会尽量并入下一帧一起写（keepForNextFrame），避免闪烁。"}
+{"id":"chunk-w63e462p.js#cDo","doc":"提供终端焦点上下文：订阅 DEC 1004 焦点事件得到的状态（focused/blurred/unknown）。"}
+{"id":"chunk-w63e462p.js#Mu","doc":"读取终端窗口当前是否有焦点。"}
+{"id":"chunk-w63e462p.js#uDo","doc":"动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。"}
+{"id":"chunk-5e7d3nv9.js#u","doc":"动画帧钩子：返回 [ref, 当前时钟值, 可见性读取函数]；组件不在可见区域时停止跟随时钟（省 CPU）。"}
+{"id":"chunk-mjq27gpa.js#Uqe","doc":"终端当前是否有焦点（未收到 blurred 就视为有焦点）。"}
+{"id":"chunk-1jphxy9b.js#L","doc":"supports-hyperlinks 之外额外认为支持 OSC 8 的终端名（TERM_PROGRAM / LC_TERMINAL）。"}
+{"id":"chunk-1jphxy9b.js#r4e","doc":"超链接支持的显式设置：会话状态里的 hyperlinks 优先，其次 FORCE_HYPERLINK（0/假值为关）；都没有返回 undefined。"}
+{"id":"chunk-1jphxy9b.js#fS","doc":"终端是否支持 OSC 8 超链接：显式设置 → supports-hyperlinks 包 → 额外终端名单 → JetBrains → Windows Terminal（不在 tmux 内）→ tmux ≥3.4 → LC_TERMINAL → TERM 含 kitty。"}
+{"id":"chunk-8n54kmae.js#Y_","doc":"是否运行在 xterm.js 终端（VS Code 等）：会话状态、TERM_PROGRAM=vscode，或 XTVERSION 应答以 xterm.js 开头。"}
+{"id":"chunk-w63e462p.js#u","doc":"终端焦点上下文：isTerminalFocused 与 terminalFocusState。"}
+{"id":"chunk-edrpfa7j.js#Ob","doc":"生成 OSC 序列：ESC ] 参数;… 结束符（kitty 用 ST，其它用 BEL）。"}
+{"id":"chunk-edrpfa7j.js#O0","doc":"按当前复用器包装序列：tmux 用 DCS tmux; 透传（ESC 加倍），screen 用 DCS 透传，其它原样。"}
+{"id":"chunk-edrpfa7j.js#M","doc":"Linux 剪贴板工具探测（按 host 单例）：Wayland 下 wl-copy，X11 下 xclip/xsel，都没有时用原生插件 setLinuxClipboardText；记录插件写入成败与 wl-copy 并发序号。"}
+{"id":"chunk-edrpfa7j.js#Ave","doc":"预测复制会走哪条路径：本地 macOS/Windows/WSL 或已探测到 Linux 工具时为 native，在 tmux 里为 tmux-buffer，否则 osc52。"}
+{"id":"chunk-edrpfa7j.js#Bcr","doc":"VS Code 1.123/1.124 的 OSC 52 会把非 ASCII 粘贴成乱码：命中时返回提示文字。"}
+{"id":"chunk-edrpfa7j.js#j","doc":"把文本写进 tmux 粘贴缓冲（load-buffer -w，失败再不带 -w 重试），让 tmux 同步到系统剪贴板。"}
+{"id":"chunk-edrpfa7j.js#BC","doc":"复制到剪贴板：本地（非 SSH）先用原生方式（pbcopy、wl-copy、xclip/xsel、插件、PowerShell Set-Clipboard），再写 tmux 缓冲；返回需要写到终端的 OSC 52 序列（tmux 下原样+透传各一份、screen 下分块 DCS；VTE 系终端在本地已复制时不发）。"}
+{"id":"chunk-edrpfa7j.js#J","doc":"用平台原生工具复制文本（macOS pbcopy；Linux wl-copy / xclip / xsel 同时写 clipboard 与 primary，或原生插件；WSL/Windows PowerShell），返回是否已复制。"}
+{"id":"chunk-edrpfa7j.js#v3t","doc":"读系统剪贴板（中键/右键粘贴用）：macOS pbpaste、Windows/WSL PowerShell Get-Clipboard、Linux 依次尝试 wl-paste/xclip/xsel（clipboard 或 primary）再退到原生插件；SSH 中返回空串。"}
+{"id":"chunk-edrpfa7j.js#Lh","doc":"OSC 命令号表：标题 0/1/2、颜色 4/10/11/12/104/110/111/112、工作目录 7、超链接 8、iTerm2 通知/进度 9、剪贴板 52、kitty 通知 99、语义提示 133、Ghostty 通知 777、iTerm2 私有 1337、程序状态 7501、标签状态 21337。"}
+{"id":"chunk-edrpfa7j.js#k_i","doc":"解析 OSC 内容为语义动作：标题（0/1/2）、超链接开始/结束（8，含 id 等参数）、标签状态（21337）；其余 unknown。"}
+{"id":"chunk-edrpfa7j.js#k","doc":"解析颜色字符串（#rrggbb 或 X11 rgb:h/h/h，1–4 位十六进制）为 {type:'rgb', r, g, b}。"}
+{"id":"chunk-edrpfa7j.js#ee","doc":"解析标签状态 OSC 21337 的 key=value;… 字段（indicator / status / status-color，空值表示清除）。"}
+{"id":"chunk-edrpfa7j.js#te","doc":"按 ; 与 = 切分标签状态字段，支持反斜杠转义。"}
+{"id":"chunk-edrpfa7j.js#qxt","doc":"生成 OSC 8 超链接开始序列：去掉 URL 中的非法字符，附带由 URL 哈希得到的 id（相同链接跨行能被终端识别为同一个）；空 URL 返回结束序列。"}
+{"id":"chunk-edrpfa7j.js#re","doc":"URL 的 32 位哈希（base36），作 OSC 8 的 id 参数。"}
+{"id":"chunk-edrpfa7j.js#Yxt","doc":"常用 OSC 序列：OSC 8 结束、iTerm2 OSC 9 子命令（通知/徽标/进度 4）、进度状态（清除/设置/错误/不确定）、清除进度条、清除标题、清除标签状态。"}
+{"id":"chunk-edrpfa7j.js#A_i","doc":"生成标签状态序列 OSC 21337（indicator=#rrggbb;status=…;status-color=…），status 中的 \\ 和 ; 转义。"}
+{"id":"chunk-edrpfa7j.js#P_i","doc":"终端能力表的初始状态（每项 settled/likely + 来源说明），由环境变量推断，之后由 probeTerminalCapabilities 的查询结果修正：extendedKeys、synchronizedOutput、kittyKeyboard、kittyGraphics、itermImages、mousePixels、programStatus。后台会话（CLAUDE_CODE_SESSION_KIND=bg）、tmux/screen、CLAUDE_CODE_FORCE_TERMINAL_IMAGES、CLAUDE_CODE_DISABLE_TERMINAL_TITLE、旧 VTE 会影响初值。"}
+{"id":"chunk-edrpfa7j.js#Kcr","doc":"按 XTVERSION 名判断是否支持 kitty 图形协议：kitty ≥0.28.0 或 Ghostty。"}
+{"id":"chunk-edrpfa7j.js#Vcr","doc":"按 XTVERSION 名判断是否 iTerm2 ≥3.5（支持内联图片按格定位）。"}
+{"id":"chunk-edrpfa7j.js#Se","doc":"按环境变量猜测终端是否支持同步输出（DEC 2026）：iTerm2、WezTerm、Warp、Ghostty、Contour、VS Code、Alacritty、mintty、Rio、Tabby、kitty、foot、Zed、Windows Terminal、VTE ≥0.68；返回依据字符串或 undefined。"}
+{"id":"chunk-7yvrza4y.js#Ab","doc":"DEC 私有模式号：光标可见 25、备用屏 47/1049、鼠标 1000/1002/1003/1006/1016（像素）、焦点事件 1004、括号粘贴 2004、主题通知 2031、同步输出 2026、win32-input-mode 9001。"}
+{"id":"chunk-7yvrza4y.js#afn","doc":"预生成的 DEC 模式序列：同步输出开始/结束（BSU/ESU）、括号粘贴、焦点事件、主题通知、光标显隐、备用屏 1049、关闭 win32-input-mode、鼠标跟踪（1000+1002+1003+1006 全开，或只开点击 1000+1006）、像素鼠标 1016。"}
+{"id":"chunk-hhr6kfwg.js#Ndt","doc":"把 TextStyles 用 chalk 套到文本上：反显、删除线、下划线、斜体、粗体、暗淡；faintInk 与 color 相同且为标准 ANSI 色时额外加暗淡；最后前景色、背景色。"}
+{"id":"chunk-hhr6kfwg.js#sje","doc":"只套前景色。"}
+{"id":"chunk-bjt8vq6r.js#n","doc":"Bun.stringWidth 选项：东亚歧义宽度按窄。"}
+{"id":"chunk-bjt8vq6r.js#de","doc":"字符串显示宽度：Bun.stringWidth（歧义宽度按窄）。"}
+{"id":"chunk-y2nrbm62.js#Pr","doc":"把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。"}
+{"id":"chunk-kx37bqfp.js#lfn","doc":"termio 文本样式的默认值（无粗体/斜体/下划线…，前景/背景/下划线色为 default）。"}
+{"id":"chunk-kx37bqfp.js#_","doc":"解析 SGR 参数串（; 分隔参数、: 分隔子参数）。"}
+{"id":"chunk-kx37bqfp.js#A","doc":"解析 38/48/58 扩展颜色：冒号形式（5:n / 2:[cs:]r:g:b）或分号形式（;5;n / ;2;r;g;b）。"}
+{"id":"chunk-kx37bqfp.js#OVs","doc":"把一条 SGR 应用到 termio 文本样式：重置、粗/暗/斜/下划线（含 4:x 样式与 21 双下划线）/闪烁/反显/隐藏/删除线/上划线及其关闭码、16 色前景背景（含亮色）、256 色与真彩色、下划线颜色。"}
+{"id":"chunk-kx37bqfp.js#fDo","doc":"DECRQM 查询某 DEC 模式（CSI ? n $ p），匹配 DECRPM 应答。"}
+{"id":"chunk-kx37bqfp.js#NVs","doc":"kitty 键盘协议标志查询 CSI ? u。"}
+{"id":"chunk-kx37bqfp.js#$Vs","doc":"光标位置查询（DECXCPR，CSI ? 6 n）。"}
+{"id":"chunk-kx37bqfp.js#FVs","doc":"OSC 颜色查询（OSC n ; ?），如 OSC 11 背景色。"}
+{"id":"chunk-kx37bqfp.js#BVs","doc":"XTVERSION 查询（CSI > 0 q），应答 DCS > | 终端名 版本 ST。"}
+{"id":"chunk-kx37bqfp.js#I","doc":"DA1 查询 CSI c，作为查询队列的哨兵：几乎所有终端都会应答，按顺序收到它说明之前的查询已无应答。"}
+{"id":"chunk-kx37bqfp.js#mDo","doc":"终端查询器：查询排队写到 stdout（输入未接管时先缓存），应答由 App 的输入解析交给 onResponse 按 match 匹配并 resolve；flush() 发 DA1 哨兵，哨兵应答到达时把前面未应答的查询都 resolve 为 undefined；owed() 统计还欠的应答数（退出前要读干净）；resync 丢弃排队并可插入 barrier；主题变化通知（CSI ? 997）分发给订阅者。"}
+{"id":"chunk-85eyj5gy.js#SLs","doc":"找出文本里会被渲染成零宽的字符（不可见格式符、零宽字素等），返回其码点；没有返回 undefined。"}
+{"id":"chunk-8n1fbght.js#TKe","doc":"创建流式转义序列分词器：feed() 返回文本/序列 token，未结束的序列留在内部缓冲；flush() 把缓冲按当前状态吐出；选项：x10Mouse（输入时识别 ESC[M 三字节鼠标）、escPrefixedKeyIsAlt（rxvt 风格 ESC+键）、stringsEndAtLineFeed（输出解析时 OSC 遇换行结束）、intermediatesRunToFinal。"}
+{"id":"chunk-8n1fbght.js#se","doc":"分词状态机（ground / escape / escapeIntermediate / csi / ss3 / osc / dcs / apc / pm / sos）：识别 CSI、OSC/DCS/APC（BEL 或 ST 结束，CAN/SUB 中止）、SS3、单字符 ESC 序列；输入模式下还处理 X10 鼠标、ESC+空白/回车当 Alt、单独的 DEL 与控制字符成为独立文本 token。返回 tokens 与新状态。"}
+{"id":"chunk-42wa4pww.js#wr","doc":"把文本里的制表符展开成空格（逐行、逐 \\r 段，用分词器保留转义序列不展开）。"}
+{"id":"chunk-3zb8bxyj.js#Nl","doc":"生成 CSI 序列：无参数返回前缀；一个参数直接拼；多个参数时最后一个是终止字节，前面用 ; 连接。"}
+{"id":"chunk-3zb8bxyj.js#fin","doc":"从当前行向上擦除 n 行，光标停在最上一行行首。"}
+{"id":"chunk-3zb8bxyj.js#Lfe","doc":"常用 CSI 常量：复位滚动区域、括号粘贴开始/结束标记、焦点进/出、kitty 键盘协议压栈（>5u：消歧+报告所有键为转义码；legacy >1u）与弹栈（<u）、modifyOtherKeys 开关（>4;2m / >4m）。"}
+{"id":"chunk-sz26a4x2.js#E","doc":"在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。"}
+{"id":"chunk-sz26a4x2.js#wTr","doc":"borderStyle 名或自定义字符集 → 八个方向的边框字符；不合法返回 undefined。"}
+{"id":"chunk-ngeq6w7y.js#Neo","doc":"计算从一组活动 ANSI 样式切换到另一组所需的码：先关闭不再需要的，再开启新增的（StylePool.transition 使用）。"}
+{"id":"chunk-h88kgep4.js#le","doc":"在 VS Code 终端（xterm.js）里，chalk 颜色等级为 256 色时提升为真彩色。"}
+{"id":"chunk-h88kgep4.js#se","doc":"TERM 是已知真彩终端（alacritty、contour、foot、ghostty、rio、wezterm、xterm-kitty 等）且未设 NO_COLOR/FORCE_COLOR 时，把 chalk 等级提升到真彩色。"}
+{"id":"chunk-h88kgep4.js#ce","doc":"tmux 下把 chalk 等级降到 256 色（tmux 默认不透传真彩），设置 CLAUDE_CODE_TMUX_TRUECOLOR 时不降。"}
+{"id":"chunk-3gbv0jkm.js#R","doc":"分块做 Unicode 规范化（每块 128 码元在规范化起始字符处切开），避免超长组合序列导致的性能问题。"}
+{"id":"chunk-hnxhr3bs.js#ti","doc":"把屏幕的一行转回带样式与超链接的 ANSI 字符串（跳过占位格，去掉行尾无效空格），renderToScreen 用来把离屏渲染结果变成文本行。"}
+{"id":"chunk-hnxhr3bs.js#wh","doc":"把滚动容器里 [fromRow, toRow) 范围的内容离屏渲染成 ANSI 文本行（新建 Screen+Output，从内容节点 renderNodeToOutput，渲染后恢复其 cachedLayout 并标脏），用于把已滚出的对话写入终端回滚区等。"}
+{"id":"chunk-j8f885h1.js#E0n","doc":"校验声明式 UI 的样式属性值（枚举、尺寸、间距 token、定位整数、颜色、布尔），不合法返回原因文字。注意：这不是 Ink 的 styles.ts。"}
+{"id":"chunk-m2f3rb0f.js#Tde","doc":"把单个按键串（如 \"ctrl+shift+k\"）解析成 Keystroke {key, ctrl, alt, shift, meta, super}。修饰键别名：control→ctrl；opt/option→alt；cmd/command/super/win→super；键名别名：esc→escape、return→enter、del→delete、space→\" \"、箭头符号→up/down/left/right；其他部分小写后当主键。"}
+{"id":"chunk-m2f3rb0f.js#_re","doc":"把和弦串（空格分隔的多次按键，如 \"ctrl+x ctrl+s\"）解析成 Keystroke 数组；单个空格字符视为 space 键。"}
+{"id":"chunk-m2f3rb0f.js#kn","doc":"Keystroke 转回规范字符串（ctrl+alt+shift+meta+cmd+键名，键名经 keyToDisplayName），用于和弦比较的键与日志。"}
+{"id":"chunk-m2f3rb0f.js#nn","doc":"内部键名转显示名：escape→Esc、enter→Enter、箭头→↑↓←→、pageup→PageUp 等；其余原样。"}
+{"id":"chunk-m2f3rb0f.js#MB","doc":"和弦转字符串（各步 keystrokeToString 以空格连接）。"}
+{"id":"chunk-m2f3rb0f.js#wn","doc":"按平台生成给用户看的按键文字：alt/meta 在 macOS 显示 opt、其他平台 alt；super 在 macOS 显示 cmd、其他平台 super。"}
+{"id":"chunk-m2f3rb0f.js#bre","doc":"按平台生成和弦的显示文字（各步 keystrokeToDisplayString 以空格连接）。"}
+{"id":"chunk-m2f3rb0f.js#uke","doc":"把 [{context, bindings:{按键串: action|null}}] 块展开成扁平的 ParsedBinding 列表 {chord, action, context}；顺序即优先级（后者覆盖前者）。"}
+{"id":"chunk-m2f3rb0f.js#_n","doc":"宽松的 zod 结构：{context: string, bindings: Record<string, string|null>}，加载用户配置时只用它判断块形状（上下文与动作是否合法由 validate 另报）。"}
+{"id":"chunk-m2f3rb0f.js#A","doc":"判断 keybindings.json 的 bindings 是否为合法块数组。"}
+{"id":"chunk-m2f3rb0f.js#sn","doc":"validate.ts 用的常量：合法上下文列表、修饰键名与别名（ctrl/control、alt/opt/option、shift、meta、cmd/command/super/win）、Keystroke 的修饰位字段、报错时最多列出 3 个非修饰键、引用按键串最长 80 字符。"}
+{"id":"chunk-m2f3rb0f.js#vn","doc":"检查一个按键串里「+」前面的部分是不是修饰键（316 新增的细化报错）。空的部分或「+」两侧有空格导致某一步没有主键时报 parse_error；否则把不是修饰键的部分（如 \"k+j\" 的 k）列出来，说明实际会被解释成什么，能猜出修饰键别名时给 Did you mean 建议，否则提示用空格分隔连续按键。"}
+{"id":"chunk-m2f3rb0f.js#Cn","doc":"校验 keybindings.json 中的一个块：必须是对象、有字符串 context 且在合法上下文里、bindings 是对象；逐条校验按键串（validateKeystroke）和动作：动作只能是字符串或 null；command:* 名字只能含字母数字冒号连字符下划线且只能放在 Chat 上下文；未知动作报错并给出相近动作建议；voice:pushToTalk 绑到无修饰的单个字母会警告（预热期间会把字母打进输入框）。"}
+{"id":"chunk-m2f3rb0f.js#Bn","doc":"给未知动作找建议：编辑距离≤2 的已知动作给 Did you mean；否则列出同命名空间的动作；再否则列出所有动作命名空间。"}
+{"id":"chunk-m2f3rb0f.js#F","doc":"在原始 JSON 文本里用正则找同一 bindings 对象内重复出现的键（JSON.parse 会静默保留最后一个），每个重复键报一次 duplicate 警告。"}
+{"id":"chunk-m2f3rb0f.js#Pn","doc":"顶层校验：bindings 必须是数组，然后逐块 validateBlock。"}
+{"id":"chunk-m2f3rb0f.js#An","doc":"同一上下文内规范化后相同的按键串绑定了不同动作时警告（只有最后一个生效）。"}
+{"id":"chunk-m2f3rb0f.js#En","doc":"用户绑定里用到保留快捷键（ctrl+c/ctrl+d/ctrl+m 等硬编码键、终端信号键、macOS 系统键）时按保留表的严重度报警。"}
+{"id":"chunk-m2f3rb0f.js#$n","doc":"校验用的简化展开：按单个空格拆和弦，不做 space 特判。"}
+{"id":"chunk-m2f3rb0f.js#j","doc":"汇总用户配置校验：结构校验 + 块合法时查重复与保留键；按 type:key:context 去重。"}
+{"id":"chunk-m2f3rb0f.js#Sre","doc":"用户自定义快捷键总开关：GrowthBook tengu_keybinding_customization_release，默认 true。"}
+{"id":"chunk-m2f3rb0f.js#jn","doc":"快捷键模块的进程级状态：当前绑定与警告、是否已从后端预热、文件监视器、每日一次的加载事件日期、已记录的回退提示、动作触发事件的节流表、变更信号 changed；支持 Symbol.dispose 关闭监视器。"}
+{"id":"chunk-m2f3rb0f.js#U","doc":"每天最多发一次 tengu_custom_keybindings_loaded（带用户绑定条数）。"}
+{"id":"chunk-m2f3rb0f.js#Ixn","doc":"用户快捷键文件路径：<配置目录>/keybindings.json。"}
+{"id":"chunk-m2f3rb0f.js#I","doc":"展开用户块，只保留动作为 null（解绑）或合法动作/command:* 的绑定。"}
+{"id":"chunk-m2f3rb0f.js#Y","doc":"把每条校验警告写调试日志（[keybindings] [severity] message — suggestion）。"}
+{"id":"chunk-m2f3rb0f.js#S","doc":"上报 keybinding_load_user_config 特性事件（ok 记成功、否则记失败原因）；suppressFeatureEvents 时不报。"}
+{"id":"chunk-m2f3rb0f.js#H","doc":"自定义被关闭（GrowthBook 开关关掉或策略禁止 keybindings）时为 true。"}
+{"id":"chunk-m2f3rb0f.js#zis","doc":"同步取绑定（不记日志、不报警告）：默认绑定 + 合法的用户绑定；自定义被禁或特定模式下只返回默认绑定。"}
+{"id":"chunk-m2f3rb0f.js#dn","doc":"异步加载：有后端存储时从后端读 keybindings 条目（读失败回退默认并报错）；否则读本地 keybindings.json。格式要求 {bindings:[...]}，结构不对时回退默认绑定并给出 parse_error；成功时默认绑定在前、用户绑定在后合并，附带重复键与校验警告。"}
+{"id":"chunk-m2f3rb0f.js#On","doc":"从 JSON 文本解析用户绑定并与默认绑定合并（后端预热路径用），规则同 loadKeybindingsAsync。"}
+{"id":"chunk-m2f3rb0f.js#UTi","doc":"交互会话启动时从后端存储预热绑定（只尝试一次；有警告则不写入状态，留给同步加载报告）。"}
+{"id":"chunk-m2f3rb0f.js#gn","doc":"预热得到的绑定只用一次：若此后自定义被禁则清空状态，返回是否需要重新加载。"}
+{"id":"chunk-m2f3rb0f.js#b9t","doc":"同步加载本地 keybindings.json 并写入状态（KeybindingSetup 首次渲染用）；规则同异步版，文件不存在视为成功（只有默认绑定）。"}
+{"id":"chunk-m2f3rb0f.js#BTi","doc":"启动 keybindings.json 的 chokidar 监视（轮询 2 秒、写入稳定 500ms）：add/change 时异步重载并发 changed 信号，unlink 时回到默认绑定；目录不存在或自定义被禁时不监视。"}
+{"id":"chunk-m2f3rb0f.js#on","doc":"文件变化：重新加载，写入状态并通知订阅者（热重载）。"}
+{"id":"chunk-m2f3rb0f.js#In","doc":"文件被删除：回到默认绑定并通知订阅者。"}
+{"id":"chunk-m2f3rb0f.js#WY","doc":"显示快捷键时用的平台：iTerm2/Apple Terminal 下即使不是 macOS 主机（如 ssh）也按 macOS 显示。"}
+{"id":"chunk-m2f3rb0f.js#Rn","doc":"按键事件名到绑定键名的映射（return→enter 等，含 wheelup/wheeldown）。"}
+{"id":"chunk-m2f3rb0f.js#Oxn","doc":"找某上下文里某动作当前生效的和弦（没被后面同和弦绑定覆盖的最后一条）；动作存在但全被覆盖返回 null，不存在返回 undefined。"}
+{"id":"chunk-m2f3rb0f.js#jTi","doc":"该上下文里该动作的所有和弦最终都被解绑（最后一条同和弦绑定的 action 为 null）。"}
+{"id":"chunk-m2f3rb0f.js#Lmr","doc":"在动作的多个有效和弦里挑一个用来显示：用户自定义的优先（+3），无修饰的导航键次之（+2），无修饰单字符再次（+1）。"}
+{"id":"chunk-m2f3rb0f.js#WTi","doc":"找出上下文 A 的单键绑定在上下文 B 里会被解释成别的动作的那些动作（用于冲突提示）。"}
+{"id":"chunk-m2f3rb0f.js#qMe","doc":"把 Ink 按键事件转成 Keystroke：enter 用换行字符；macOS 的 Option 特殊字符还原为 alt+键；事件名查表或单字符小写；大写字母隐含 shift（非字母符号的 shift 不算）；alt 与 meta 合并。"}
+{"id":"chunk-m2f3rb0f.js#E8e","doc":"两个 Keystroke 是否相同（alt 与 meta 视为同一修饰键，终端无法区分）。"}
+{"id":"chunk-m2f3rb0f.js#dct","doc":"按键解析核心：Esc 在和弦进行中取消和弦；把当前按键追加到待定和弦，在给定上下文集合里找：有更长绑定以它为前缀且其中有非 null 动作 → chord_started；精确匹配 → match（action 为 null 则 unbound）；和弦进行中却没匹配 → chord_cancelled；否则 none。同和弦多条以列表中最后一条为准。"}
+{"id":"chunk-m2f3rb0f.js#boo","doc":"按作用域链解析：同上，但精确匹配按传入上下文顺序（焦点节点到根的 keybindingScope 链）取第一个上下文的胜者，而不是全局最后一条。"}
+{"id":"chunk-m2f3rb0f.js#Dxn","doc":"动作触发时发 tengu_keybinding_fired（同一动作 1 秒内只记一次）。"}
+{"id":"chunk-m2f3rb0f.js#AIt","doc":"发 tengu_keybinding_fallback_used：显示快捷键时找不到绑定、用了组件给的回退文字。"}
+{"id":"chunk-01qc1xy2.js#mi","doc":"组件里显示某动作快捷键的 hook：从 KeybindingContext 取显示文字；拿不到时用回退文字并记一次回退事件；动作被解绑时返回空串。"}
+{"id":"chunk-swe0kb5q.js#Ze","doc":"快捷键系统根组件：首次渲染同步加载绑定，挂载后启动文件监视并订阅热重载；维护待定和弦（超时 Je 毫秒自动取消并弹出 \"… cancelled\" 通知）、活动上下文集合、动作处理器注册表、预分发处理器、单键事件引用；向下提供 KeybindingProvider，外面包一层 ChordInterceptor。"}
+{"id":"chunk-swe0kb5q.js#Xe","doc":"处理器排序：非回退处理器在前；同动作已有非回退处理器时丢弃回退处理器。"}
+{"id":"chunk-swe0kb5q.js#Wt","doc":"根 Box（keybindingScope=Global、tabIndex=-1，始终在焦点链上）的捕获阶段键盘/滚轮处理器，统一做快捷键分发。两种模式：legacy——在「有处理器的上下文 + 活动上下文 + Global」里 resolveKeyWithChordState，处理和弦开始/取消/解绑/匹配，匹配后按注册表调用单键处理器（回退处理器在保留键或无修饰键时跳过）；scopeChain——按焦点节点到根的 keybindingScope 链（以及抢先作用域 preemptiveScopes）解析，匹配后先把动作作为事件派给 DOM 节点（onAction），未处理再落回注册表；文本输入框获得焦点时无修饰单字符直接交给预分发。消费的事件 preventDefault + stopImmediatePropagation。滚轮事件转成 wheelup/wheeldown 按键参与同一套解析。"}
+{"id":"chunk-p762h6ag.js#mt","doc":"注册一个动作处理器（默认 Global 上下文）；处理器存在引用里，换函数不用重新注册。"}
+{"id":"chunk-2nf232h2.js#Ns","doc":"把 app:interrupt / app:exit 绑到 Ctrl+C/Ctrl+D 双击退出逻辑（Global 上下文），返回退出提示状态。"}
+{"id":"chunk-k9jq5tr2.js#m","doc":"从模板里去掉不可重绑的保留键（X5e）；空块整个丢弃。"}
+{"id":"chunk-k9jq5tr2.js#a","doc":"生成 keybindings.json 模板：$schema（schemastore）、$docs、去掉 FeedbackSurvey 等内部上下文和保留键后的默认绑定；effort 调节未开放时删掉 chat:increaseEffort/decreaseEffort。"}
+{"id":"chunk-q6fxvjg8.js#c","doc":"默认绑定表（按上下文分块）。平台差异：Windows/WSL 图片粘贴用 alt+v（WSL 额外保留 ctrl+v），其余 ctrl+v；Windows 上运行时（Bun≥1.2.23 或 Node 22.17+/24.2+）支持 shift+tab 才用它切换模式，否则用 meta+m。完整表见手册。"}
+{"id":"chunk-q6fxvjg8.js#GJe","doc":"保留快捷键：NON_REBINDABLE（ctrl+c/ctrl+d 硬编码、ctrl+m=Enter、ctrl+[=Esc、ctrl+i=Tab、ctrl+h=Backspace、capslock 收不到）；TERMINAL_RESERVED（ctrl+z SIGTSTP 警告、ctrl+\\ SIGQUIT）；MACOS_RESERVED（cmd+c/v/x/q/w/tab/space）。"}
+{"id":"chunk-q6fxvjg8.js#zJe","doc":"把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。"}
+{"id":"chunk-q6fxvjg8.js#Ken","doc":"29 个快捷键上下文：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。"}
+{"id":"chunk-q6fxvjg8.js#FBi","doc":"各上下文的说明文字（给 schema 和文档用）与全部合法动作名列表。"}
+{"id":"chunk-q6fxvjg8.js#Mho","doc":"合法动作名或 command:* 。"}
+{"id":"chunk-q6fxvjg8.js#w","doc":"keybindings.json 的 zod schema（用于生成 JSON Schema）：块 = {context: 上下文枚举, bindings: 按键串 → 动作枚举 | command:名字 | null}；文件 = {$schema?, $docs?, bindings: 块数组}。"}
+{"id":"chunk-7wgjt81y.js#uWt","doc":"KeybindingContext 的 Provider：对外提供 resolve（按当前待定和弦解析）、getDisplayText、registerHandler（按动作登记处理器并发 handlersChanged）、hasHandler/runAction（只算非回退处理器）、registerPreDispatch、singleKeyEvent、活动上下文登记等。"}
+{"id":"chunk-7wgjt81y.js#lj","doc":"组件挂载且 isActive 时把上下文加入活动集合，卸载时移除（layout effect，保证首个按键前生效）。"}
+{"id":"chunk-czq1j3j2.js#fOe","doc":"把 GrowthBook tengu_startup_notice 的文字显示成 30 秒的高优先级警告通知，值变化时更新、清空时移除。"}
+{"id":"chunk-880p06ha.js#ln","doc":"文本对象的括号/引号配对表：( ) b → ()；[ ] → []；{ } B → {}；< > → <>；\" ' ` 成对引号。"}
+{"id":"chunk-880p06ha.js#be","doc":"操作符键到操作名：d→delete、c→change、y→yank。"}
+{"id":"chunk-880p06ha.js#B","doc":"vim 键集合：BACKSPACE_KEY（\\b，作左移）；SIMPLE_MOTIONS（h l 空格 退格 j k w b e W B E 0 ^ $ %）；CHAR_MOTIONS（h l 空格 退格，按字符移动）；FIND_KEYS（f F t T）；TEXT_OBJ_SCOPES（i→inner、a→around）。"}
+{"id":"chunk-880p06ha.js#$e","doc":"支持的文本对象类型（w W \" ' ` ( ) b [ ] { } B < >）；计数上限 10000。"}
+{"id":"chunk-880p06ha.js#Ot","doc":"vim 初始状态：INSERT 模式、已插入文本为空。"}
+{"id":"chunk-880p06ha.js#xt","doc":"跨命令持久状态：上次 f/F/t/T 查找、寄存器内容、寄存器是否整行。"}
+{"id":"chunk-880p06ha.js#dn","doc":"执行一次基础移动：h/l 不跨行；空格/退格可跨行；j/k 按逻辑行、gj/gk 按折行后的屏幕行；w b e / W B E 单词移动；0 ^ $ 行首/首个非空/行尾；G 到最后一行；% 跳到行内下一个括号的配对括号。"}
+{"id":"chunk-880p06ha.js#pn","doc":"% 移动：在光标到行尾之间找第一个 ()[]{}，返回其配对括号的位置。"}
+{"id":"chunk-880p06ha.js#Q","doc":"操作符 + 移动（如 dw、c$、yj、dgj）：整行移动（j k G gg）按行处理；移动没动且不是包含式移动时只做空操作的副作用（c 进插入、y 清寄存器）；否则用 getOperatorRange 算范围（cw 特例、w 跨行截断、整行化判断）后应用操作并记录可重复的修改。"}
+{"id":"chunk-880p06ha.js#Ce","doc":"操作符 + 查找（如 dfx、ct)）：找到目标字符后对包含式范围应用操作，并记住这次查找供 ; , 重复。"}
+{"id":"chunk-880p06ha.js#Re","doc":"操作符 + 文本对象（如 diw、ca\"、yi(）：用 findTextObject 求范围后应用；yi( 这类内容从换行开始时光标落到下一行。"}
+{"id":"chunk-880p06ha.js#Z","doc":"双写操作符（dd、cc、yy、S、Y）：对从当前行起的 count 行做整行操作；count>1 但光标后已没有换行时不执行。"}
+{"id":"chunk-880p06ha.js#ve","doc":"x：删除光标处 count 个字符（不跨行），存入寄存器。"}
+{"id":"chunk-880p06ha.js#Ie","doc":"s：删除 count 个字符并进入插入模式。"}
+{"id":"chunk-880p06ha.js#we","doc":"r{char}：把光标起 count 个字素替换为该字符（遇到行尾则不执行）。"}
+{"id":"chunk-880p06ha.js#Le","doc":"~：切换光标起 count 个字素的大小写（NFC 规范化），光标后移。"}
+{"id":"chunk-880p06ha.js#Xe","doc":"J：把当前行与后面 max(count,2)-1 行合并。"}
+{"id":"chunk-880p06ha.js#Tt","doc":"合并行：去掉后续行行首空白，必要时补一个空格（下一行以 ) 开头或上一段以空白结尾时不补），光标停在最后一个连接点。"}
+{"id":"chunk-880p06ha.js#fe","doc":"p/P：按寄存器是否整行分两种：整行内容插到当前行下/上方并把光标放到首个非空字符；字符内容插到光标后/前，光标停在插入内容最后一个字素。"}
+{"id":"chunk-880p06ha.js#Se","doc":">> / <<：给当前行起 count 行加/减两个空格缩进（减时也去掉一个 tab 或最多两个空白）。"}
+{"id":"chunk-880p06ha.js#ce","doc":"o/O：在当前行下/上方插入空行并进入插入模式。"}
+{"id":"chunk-880p06ha.js#mn","doc":"操作符 + 移动的范围计算（vim 兼容细节）：cw 当作 ce；dw/yw 不越过行尾；包含式移动（e E $ %）把终点含进去；跨行删除且前面只有空白时整行化。最后把起止点推出占位符（图片/粘贴占位）之外。"}
+{"id":"chunk-880p06ha.js#Ve","doc":"对字符范围应用操作：内容写寄存器（整行时补换行）；yank 只移动光标；delete 删除并修正光标；change 删除后进入插入模式。"}
+{"id":"chunk-880p06ha.js#Gpe","doc":"普通模式光标不能停在行尾换行符上或文本末尾之后：退回到前一个字素。"}
+{"id":"chunk-880p06ha.js#pe","doc":"gj/gk 的屏幕行移动：按折行后的行计算目标位置并保持目标列（wantedColumn）；返回 {offset, column, rowsRunOut}。"}
+{"id":"chunk-880p06ha.js#ke","doc":"可视模式记录跨度：整行时为行数，否则为字素数（供 . 重复同样大小的可视操作）。"}
+{"id":"chunk-880p06ha.js#me","doc":"用记录的跨度从当前光标重建可视范围（. 重复可视操作时用）。"}
+{"id":"chunk-880p06ha.js#Ae","doc":"可视选区范围：字符可视为 [min, max+1)，整行可视扩到首行行首至末行换行之后。"}
+{"id":"chunk-880p06ha.js#wt","doc":"对可视选区应用操作：整行 c 留一个空行进插入；整行 d 删除整行并把光标放到下一行首个非空；其他走 applyOperator。"}
+{"id":"chunk-880p06ha.js#_t","doc":"可视粘贴：用寄存器内容替换选区，原选区内容进寄存器；处理整行/字符寄存器与整行/字符选区的四种组合。"}
+{"id":"chunk-880p06ha.js#je","doc":"操作符 + G（如 dG、d3G）：整行操作到最后一行或第 count 行。"}
+{"id":"chunk-880p06ha.js#Ne","doc":"操作符 + gg（如 dgg）：整行操作到第一行或第 count 行。"}
+{"id":"chunk-880p06ha.js#le","doc":"按行号范围做整行操作：整行内容写寄存器；yank 只移光标；delete 删行后光标到相应行首个非空；change 留一个空行进入插入模式。"}
+{"id":"chunk-880p06ha.js#qe","doc":"普通模式状态机入口：按当前命令状态（idle/count/operator/operatorCount/operatorFind/operatorTextObj/find/g/operatorG/replace/indent）分派处理一个输入，返回 {next 下一状态} 或 {execute 要执行的动作}（可带 wanted 目标列）。"}
+{"id":"chunk-880p06ha.js#xn","doc":"普通模式单键命令表：g r > < 进入子状态；~ x s S J p P D C Y ; , u i I a A o O 直接执行。"}
+{"id":"chunk-880p06ha.js#Gt","doc":"idle/count 状态下解析一个键：操作符 d c y 进入 operator 状态；G 跳行；j k 保持目标列移动；$ 记住列为无穷；其余简单移动；f F t T 进入 find；. 重复上次修改；否则查单键命令表。"}
+{"id":"chunk-880p06ha.js#Ht","doc":"operator 状态下的后续键：i/a 进文本对象、f/F/t/T 进查找、移动键直接执行、G 到行、g 进 operatorG。"}
+{"id":"chunk-880p06ha.js#bn","doc":"idle：1-9 开始计数，0 回行首，其他交给 handleNormalInput。"}
+{"id":"chunk-880p06ha.js#yn","doc":"count：继续累积数字（上限 10000），否则带计数执行。"}
+{"id":"chunk-880p06ha.js#Tn","doc":"operator：同一操作符键（dd/cc/yy）做整行操作；1-9 开始移动计数；否则交给 handleOperatorInput。"}
+{"id":"chunk-880p06ha.js#hn","doc":"operatorCount（如 d3w）：累积移动计数，总计数 = 操作符计数 × 移动计数。"}
+{"id":"chunk-880p06ha.js#In","doc":"g 前缀：gj/gk 按屏幕行移动，gg/{count}gg 跳到第一行/第 count 行。"}
+{"id":"chunk-880p06ha.js#wn","doc":"operatorG：dgj/dgk 按屏幕行，dgg 到首行。"}
+{"id":"chunk-880p06ha.js#Sn","doc":"indent：同一方向键（>> 或 <<）执行缩进，否则回 idle。"}
+{"id":"chunk-880p06ha.js#Pe","doc":"; 与 ,：按上次查找（, 时方向反转）再找一次。"}
+{"id":"chunk-880p06ha.js#$t","doc":"可视模式（316 新增）状态机入口：按 idle/count/find/g/replace/textObject 分派，返回 {next, move, wanted} 或 {exit: 结束可视模式要执行的操作}。"}
+{"id":"chunk-880p06ha.js#Vn","doc":"可视模式单键命令：x/s/X/D/C/S/R/Y → 删除/修改/复制（大写强制整行）；r 进替换；~ u U 切换/小写/大写；p P 粘贴；> < 缩进；v V 切换字符/整行可视；o 交换选区两端；J 合并；$ g ; , 移动。"}
+{"id":"chunk-880p06ha.js#z","doc":"重复 count 次基础移动，移动不动时提前停止（% 带计数不移动）。"}
+{"id":"chunk-880p06ha.js#re","doc":"按类型求文本对象范围：w/W 单词，成对引号在同一行内配对，括号按嵌套深度向外找。"}
+{"id":"chunk-880p06ha.js#On","doc":"读取 vimInsertModeRemaps 设置：只接受映射到 <Esc> 的两字符可见序列（如 jk、jj）。"}
+{"id":"chunk-td0w5pj1.js#c","doc":"真彩色 Color（a=255）。"}
+{"id":"chunk-td0w5pj1.js#x","doc":"调色板索引色（a=0，r 存索引）。"}
+{"id":"chunk-td0w5pj1.js#L","doc":"终端默认色标记（a=1，输出 39/49）。"}
+{"id":"chunk-td0w5pj1.js#Y","doc":"颜色模式：主题名含 ansi → ansi；chalk 级别≥3 → truecolor；否则 color256。"}
+{"id":"chunk-td0w5pj1.js#fe","doc":"RGB 转 xterm-256 色号：在 6×6×6 色立方与 24 级灰阶中取欧氏距离更近者（与 syntect/ansi_colours 一致）。"}
+{"id":"chunk-td0w5pj1.js#N","doc":"Color 转 SGR 转义：索引色 0-7/8-15 用 30-37/90-97（背景 40/100），其余用 38;5；默认色 39/49；真彩色 38;2 或降级到 256 色。"}
+{"id":"chunk-td0w5pj1.js#E","doc":"把 [样式, 文本] 块序列拼成带转义的一行（可只输出前景、整行变暗），以 RESET 开头结尾。"}
+{"id":"chunk-td0w5pj1.js#ge","doc":"按界面主题选语法主题名：ansi → ansi；dark → Monokai Extended；其他 → GitHub。"}
+{"id":"chunk-td0w5pj1.js#G","doc":"highlight.js 作用域到颜色的映射：Monokai Extended（深色）、GitHub（浅色）、ANSI 16 色；STORAGE_KEYWORDS（const/let/function/class/def/fn/struct 等）在 keyword 作用域里改用 _storage 颜色。"}
+{"id":"chunk-td0w5pj1.js#Q","doc":"按主题名与颜色模式组装 diff 主题：增删行背景、增删单词背景、增删标记色、前景、语法作用域表；有 dark/light × 普通/色盲友好（daltonized，新增行用蓝色）× ansi 几种组合；256 色下深色主题的增行背景改用调色板索引。"}
+{"id":"chunk-td0w5pj1.js#ee","doc":"识别文件语言：先按文件名（Dockerfile/Makefile 等），再按扩展名，再按首行 shebang（bash/python/node/ruby/perl）或 <?php、<?xml。"}
+{"id":"chunk-td0w5pj1.js#Ce","doc":"作用域取色：keyword 中的声明类关键字用 _storage 色；找不到完整作用域时退回首段（如 title.function → title）；都没有用前景色。"}
+{"id":"chunk-td0w5pj1.js#ne","doc":"递归展开 highlight.js 的 emitter 节点树，按继承的作用域给每段文本配色。"}
+{"id":"chunk-td0w5pj1.js#te","doc":"高亮一行代码：语言未知直接用默认样式；长行先换成受限语言（O2o）避免慢；累计复杂度超过阈值后不再高亮；highlight.js 抛错时关闭此文件的高亮；emitter 形状不符记一次错误。"}
+{"id":"chunk-td0w5pj1.js#Te","doc":"单词级 diff 改动占比超过 40% 时放弃单词高亮（整行变化太大）。"}
+{"id":"chunk-td0w5pj1.js#U","doc":"单词级 diff 的分词：字母数字下划线连续段、空白连续段、其他按单个码点。"}
+{"id":"chunk-td0w5pj1.js#Me","doc":"在行标记序列中找相邻的删除块与新增块，按顺序一一配对（用于单词级 diff）。"}
+{"id":"chunk-td0w5pj1.js#we","doc":"两行之间的单词级 diff：返回旧行被删范围和新行新增范围；改动占比超过 40% 时返回空。"}
+{"id":"chunk-td0w5pj1.js#se","doc":"把一行的样式块按宽度折行（纯 ASCII 快速路径，其余按字素宽度）；超长时截断并加省略号；有增删标记时用行背景色补齐到整宽。"}
+{"id":"chunk-td0w5pj1.js#le","doc":"在每个折行前加行号栏（首行显示行号，续行空白；上下文行变暗）。"}
+{"id":"chunk-td0w5pj1.js#Ne","doc":"ansi 模式下删除行整行变暗。"}
+{"id":"chunk-td0w5pj1.js#ve","doc":"给增删行着背景：单词级改动范围用单词背景，其余用行背景（按样式块切分）。"}
+{"id":"chunk-td0w5pj1.js#O","doc":"带语法高亮与单词级 diff 的 hunk 渲染器（2.1.88 中替代原生 Rust color-diff 的 TS 实现）：buildRows 依次求颜色模式、主题（可被用户 diff 颜色覆盖）、语言、行号，配对增删行做单词 diff，逐行高亮（删除行不高亮）、着背景、折行、加标记与行号；render 输出整行，renderSplit 输出行号栏与内容两列。"}
+{"id":"chunk-td0w5pj1.js#H","doc":"整文件语法高亮渲染器（带行号，不做 diff）。"}
+{"id":"chunk-z20c443b.js#Na","doc":"模糊匹配打分常量（nucleo/fzf 风格）：每字匹配 16、边界后 8、驼峰 6、连续 4、首字符 8、间隙起始 -3 与每字 -1；空查询时最多返回 100 个顶层条目；查询最多取 64 字符；异步建索引每 4ms 让出一次事件循环。"}
+{"id":"chunk-z20c443b.js#PBn","doc":"文件路径模糊搜索索引（2.1.88 中替代原生 Rust 实现的 TS 版）：每个路径存小写形式、a-z 位图（快速排除不含查询字母的路径）、长度、文件名起点及文件名位图。search：位图过滤后贪心找子序列，计算连续/间隙得分，路径与文件名两种匹配取高者，加边界/驼峰加分与短路径加分，维护大小为 limit 的有序 top-k；最后按名次归一化成 0..1 分数（含 test 的路径略降权）并给出匹配位置。异步构建时分片让出事件循环，部分就绪即可查询。"}
+{"id":"chunk-z20c443b.js#hy","doc":"空查询时展示的顶层条目：各路径第一段去重（最多 limit 个），按长度再字典序排序。"}
+{"id":"chunk-2avr6cej.js#Cqe","doc":"yoga 边枚举：Left/Top/Right/Bottom/Start/End/Horizontal/Vertical/All（0–8）。"}
+{"id":"chunk-2avr6cej.js#ni","doc":"数值是否有限且绝对值不超过 2^31-1（能放进 Int32 布局存储）。"}
+{"id":"chunk-2avr6cej.js#Xa","doc":"点值 {unit:1, value: 取整后的整数}；超出 Int32 返回 undefined。"}
+{"id":"chunk-2avr6cej.js#wn","doc":"百分比值 {unit:2, value}；超出范围返回 undefined。"}
+{"id":"chunk-2avr6cej.js#at","doc":"把 Value 解析成具体数值：点值原样，百分比按 ownerSize 计算并取整（超范围为 NaN），其它 NaN。"}
+{"id":"chunk-2avr6cej.js#Dn","doc":"四舍五入到整数（远离零），结果为 int32。"}
+{"id":"chunk-2avr6cej.js#yt","doc":"NaN 转成 INT32_NAN 哨兵，用于 Int32 缓存键比较。"}
+{"id":"chunk-2avr6cej.js#Ip","doc":"节点默认样式：方向/flexDirection column(0)、alignItems stretch、alignContent flex-start、positionType relative、flexBasis auto、宽高 auto，边距/内边距/边框/定位 9 个边全 undefined，gap 3 槽。"}
+{"id":"chunk-2avr6cej.js#Ki","doc":"解析某个物理边的值（经 Start/End、Horizontal/Vertical、All 回退）；auto 在 allowAuto 时返回 NaN，否则 0。"}
+{"id":"chunk-2avr6cej.js#Nn","doc":"取物理边的原始 Value：左/右先看 Start/End，再看本边、Horizontal/Vertical、All。"}
+{"id":"chunk-2avr6cej.js#An","doc":"样式是否依赖父宽度（宽/最小/最大宽或边距、内边距用了百分比）：是则父宽变化时要重新布局。"}
+{"id":"chunk-2avr6cej.js#Uc","doc":"一次解析四个物理边（左右顶底，含 Start/End、Horizontal/Vertical、All 回退）写进 out（Int32Array），百分比按父宽算并取整。"}
+{"id":"chunk-2avr6cej.js#ay","doc":"创建布局配置：pointScaleFactor 只能 0 或 1（Int32 存储，1 时布局结果取整）、errata、useWebDefaults；另含每次 calculateLayout 的统计计数（访问节点数、测量调用、缓存命中、存活节点数）与代数 generation。"}
+{"id":"chunk-2avr6cej.js#cl","doc":"yoga 节点（纯 TS 移植，接口兼容 yoga-layout 的 Node）：style、layout（left/top/width/height 与 Int32Array 的 border/padding/margin）、父子关系、measureFunc、脏标记。多组 Int32 缓存：_lc/_mc 单槽布局/测量结果缓存（输入键 + 宽高）、_cIn/_cOut 8 槽多结果缓存、_mfC 4 槽测量函数缓存、_fb flex basis 缓存、_sz 本次的 basis/主轴/交叉轴尺寸。setter 改样式即 markDirty 并预算 _readsOwnerWidth/Height、_has* 标志；calculateLayout 自增 generation、从根 layoutNode，最后在 pointScaleFactor≠0 时取整。aspectRatio、boxSizing、dirtiedFunc 等为空实现。"}
+{"id":"chunk-2avr6cej.js#sx","doc":"把本次布局的输入键与结果宽高写进节点的 8 槽环形缓存（同一 generation 内复用；performLayout 时换代先清空）。"}
+{"id":"chunk-2avr6cej.js#sy","doc":"读最近一次 calculateLayout 的统计：访问节点数、测量调用、测量缓存命中、布局缓存命中、存活节点数。"}
+{"id":"chunk-2avr6cej.js#cx","doc":"布局缓存查找：未脏时依次查单槽布局缓存 _lc、8 槽缓存 _cIn/_cOut、单槽测量缓存 _mc，键为（可用宽高、宽高模式、依赖时的父宽高、强制宽高标志），命中则把宽高写进 out 并返回真。"}
+{"id":"chunk-2avr6cej.js#dx","doc":"记下本次布局/测量的缓存键（performLayout 写 _lc 并清脏，否则写 _mc），返回调用前是否为脏。"}
+{"id":"chunk-2avr6cej.js#mo","doc":"节点布局入口（递归）：先查缓存；解析内边距、边框、外边距到 layout；样式宽高确定时改为 EXACTLY 模式；按 min/max 约束；无子节点时调用测量函数（measureLeaf）或用内边距+边框；有子节点时 layoutFlexContainer；最后写缓存。"}
+{"id":"chunk-2avr6cej.js#fx","doc":"叶子节点测量：两轴都 EXACTLY 直接用；否则以内容区宽高与模式调用 measureFunc（4 槽缓存，按 yoga 的 canUseCachedMeasurement 规则复用），结果向上取整加回内边距边框并按 min/max 约束。"}
+{"id":"chunk-2avr6cej.js#Wc","doc":"能否复用缓存的测量结果：模式与尺寸相同；或新为 EXACTLY 且尺寸等于缓存结果；或新为 AT_MOST 且缓存结果不超过新上限。"}
+{"id":"chunk-2avr6cej.js#hx","doc":"flex 容器布局：收集流内/绝对定位子节点；算每个子节点的 flex basis（带缓存）；按 flexWrap 断行；逐行解析弹性长度并布局子节点（layoutFlexLine）、算行的主轴/交叉轴尺寸（baseline 对齐另计）；据此确定容器自身尺寸（含 overflow:scroll 时的收缩规则）；performLayout 时再做 alignContent、stretch、justify 与交叉轴对齐定位（positionLineChildren），最后布局绝对定位子节点。"}
+{"id":"chunk-2avr6cej.js#px","doc":"布局一行：可用主轴空间未定时按容器 min/max 推出；resolveFlexibleLengths 分配主轴尺寸；逐个子节点决定交叉轴尺寸（固定、stretch 时撑满、否则 AT_MOST）并 layoutNode；输出本行主轴总长与最大交叉轴尺寸。"}
+{"id":"chunk-2avr6cej.js#yx","doc":"定位一行的子节点：主轴按 auto margin 或 justifyContent（center/flex-end/space-between/around/evenly）分配剩余空间；交叉轴按 alignSelf/alignItems（含 auto margin、baseline）；有测量函数的节点向下取整、其余四舍五入；带 position 偏移的相对定位节点加偏移。"}
+{"id":"chunk-2avr6cej.js#gx","doc":"flex-wrap 断行：按 clamp 后的 basis + 外边距 + gap 累加，超出可用主轴长度就换行；记录每个子节点的 _lineIndex。"}
+{"id":"chunk-2avr6cej.js#bx","doc":"baseline 对齐时计算一行的基线（最大上伸，写入 baselines[lineIndex]）与所需行高（上伸+下伸），返回不小于原行高的值。"}
+{"id":"chunk-2avr6cej.js#vx","doc":"alignContent：center/flex-end 设起始偏移，stretch 把剩余空间按整数均分到各行，space-between/around/evenly 设行间距（写入 alignContentLeadOffset/Between）。"}
+{"id":"chunk-2avr6cej.js#Sx","doc":"stretch 对齐：交叉轴尺寸未定且无 auto margin 的子节点重新以 EXACTLY 布局到行的交叉轴尺寸。"}
+{"id":"chunk-2avr6cej.js#xx","doc":"布局绝对定位子节点：左右/上下都给定时由此推出宽高；以 EXACTLY/UNDEFINED 布局后，按 position 偏移或父节点的 justifyContent/alignItems（考虑反向与 wrap-reverse）定位。"}
+{"id":"chunk-2avr6cej.js#Cx","doc":"带缓存地计算子节点 flex basis（同一代或未脏且键相同则复用 _fb）。"}
+{"id":"chunk-2avr6cej.js#Rx","doc":"行方向 flex basis：flexBasis → width → 以内容测量（交叉轴约束按 stretch 决定 EXACTLY 或 AT_MOST，子树有测量函数时主轴给 AT_MOST）。"}
+{"id":"chunk-2avr6cej.js#Mx","doc":"列方向 flex basis：flexBasis → height → 以宽度约束测量内容高度。"}
+{"id":"chunk-2avr6cej.js#dy","doc":"子树中是否有带测量函数的节点（决定 basis 计算时是否给主轴上限）。"}
+{"id":"chunk-2avr6cej.js#Tx","doc":"弹性长度分配（CSS flexbox 的冻结迭代算法）：按 grow/shrink 系数分配剩余空间，被 min/max 夹住的项冻结后重新分配，直到不再变化；grow/shrink 系数和小于 1 时只分配相应比例；最后用累计取整把尺寸写进 _sz（避免舍入误差累积）。"}
+{"id":"chunk-2avr6cej.js#yn","doc":"按 min/max 宽（或高）约束一个值（百分比按父尺寸）。"}
+{"id":"chunk-2avr6cej.js#Nx","doc":"把节点的布局清零并标脏（display:none 子树用）。"}
+{"id":"chunk-2avr6cej.js#py","doc":"收集参与布局的子节点：display:none 的清零跳过；display:contents（2）的展开其子节点；绝对定位进 abs，其余进 flow。"}
+{"id":"chunk-2avr6cej.js#yy","doc":"递归把布局结果截断为整数（|0）。"}
+{"id":"chunk-2avr6cej.js#Gn","doc":"把样式值（undefined/auto/数字/\"50%\"/数字字符串）解析成 yoga Value。"}
+{"id":"chunk-2avr6cej.js#Kc","doc":"Edge 枚举 → 物理边下标（Start→左、End→右）。"}
+{"id":"chunk-2avr6cej.js#Dx","doc":"对外的 yoga 实例：Config.create、Node.create/createDefault/createWithConfig（与 yoga-layout 包接口一致，destroy 为空）。"}
+{"id":"chunk-2avr6cej.js#fy","doc":"子节点在交叉轴上是否拉伸（alignSelf 为 auto 时看父节点 alignItems，4 = stretch）。"}
+{"id":"chunk-2avr6cej.js#hy","doc":"子节点实际交叉轴对齐：alignSelf 为 auto 时继承父节点 alignItems。"}
+{"id":"chunk-2avr6cej.js#Vc","doc":"求节点基线：取第一行里 alignSelf=baseline 或标记为参考基线的子节点（否则第一个流内子节点）递归求基线加其 top；没有子节点时用自身高度。"}
+{"id":"chunk-2avr6cej.js#Ax","doc":"行方向容器且 alignItems 或某个子节点 alignSelf 为 baseline 时需要基线布局。"}
+{"id":"chunk-2avr6cej.js#Ar","doc":"子节点在某轴上的前后外边距之和（没有外边距时快速返回 0）。"}
+{"id":"chunk-2avr6cej.js#Zp","doc":"解析 gap：指定方向未设置时退回 gap[all]，负值按 0。"}
+{"id":"chunk-2avr6cej.js#wp","doc":"把 CSI 参数串按分号拆成整数数组。"}
+{"id":"chunk-2avr6cej.js#Vy","doc":"浅比较两个样式/属性对象（commitUpdate 判断是否需要写回）。"}
+{"id":"chunk-2avr6cej.js#bs","doc":"双击选词用的字符类别：空白 0、单词字符 1、其他标点 2。"}
+{"id":"chunk-emhzq435.js#$t","doc":"把解析出的 ANSI 文本样式转成 <Text> 的属性（颜色、粗体、暗、斜体、下划线、删除线、反显）。"}
+{"id":"chunk-emhzq435.js#pe","doc":"<Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。"}

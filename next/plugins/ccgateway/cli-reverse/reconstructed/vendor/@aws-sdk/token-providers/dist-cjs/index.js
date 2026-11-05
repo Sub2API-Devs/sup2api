@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/token-providers/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/token-providers@3.936.0..3.939.0
- * pieces: chunk-0rkz0exm.js (4), chunk-k63efphf.js (10)
+ * pieces: chunk-1yr4143q.js (4), chunk-t032zdr0.js (10)
  * attribution: esm-layout 7, esm-fingerprint 7
  */
 import { promises } from "fs";
@@ -12,10 +12,10 @@ import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file
 import { import_shared_ini_file_loader, import_property_provider_4 } from "../index.js";
 import { bearerTokenEnvKey, import_client } from "../../core/dist-cjs/index.js";
 
-//@ chunk-k63efphf.js:325-422 esm-fingerprint
+//@ chunk-t032zdr0.js:325-422 esm-fingerprint
 var SSO_TOKEN_TTL_MS = 300000;
 var REFRESH_MESSAGE = "To refresh this SSO session run 'aws sso login' with the corresponding profile.";
-//@ chunk-k63efphf.js:422-721 esm-fingerprint
+//@ chunk-t032zdr0.js:422-721 esm-fingerprint
 var loadSsoSessionToken = async (ssoRegion, init = {}) => {
   let { SSOOIDCClient } = await import("../../nested-clients/dist-cjs/submodules/sso-oidc/index.js").then(
     (clientModule) => __toESM(clientModule.default),
@@ -29,7 +29,7 @@ var loadSsoSessionToken = async (ssoRegion, init = {}) => {
     }),
   );
 };
-//@ chunk-k63efphf.js:721-971 esm-fingerprint
+//@ chunk-t032zdr0.js:721-971 esm-fingerprint
 var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
   let { CreateTokenCommand } =
     await import("../../nested-clients/dist-cjs/submodules/sso-oidc/index.js").then((clientModule) =>
@@ -44,16 +44,16 @@ var getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
     }),
   );
 };
-//@ chunk-k63efphf.js:971-986 esm-layout
+//@ chunk-t032zdr0.js:971-986 esm-layout
 var import_property_provider_2 = __toESM(require_property_provider());
-//@ chunk-k63efphf.js:986-1110 esm-fingerprint
+//@ chunk-t032zdr0.js:986-1110 esm-fingerprint
 var validateTokenExpiry = (token) => {
   if (token.expiration && token.expiration.getTime() < Date.now())
     throw new import_property_provider_2.TokenProviderError(`Token is expired. ${REFRESH_MESSAGE}`, false);
 };
-//@ chunk-k63efphf.js:1110-1125 esm-layout
+//@ chunk-t032zdr0.js:1110-1125 esm-layout
 var import_property_provider_3 = __toESM(require_property_provider());
-//@ chunk-k63efphf.js:1125-1272 esm-fingerprint
+//@ chunk-t032zdr0.js:1125-1272 esm-fingerprint
 var validateTokenKey = (key, value, forRefresh = false) => {
   if (typeof value === "undefined")
     throw new import_property_provider_3.TokenProviderError(
@@ -61,16 +61,16 @@ var validateTokenKey = (key, value, forRefresh = false) => {
       false,
     );
 };
-//@ chunk-k63efphf.js:1272-1287 esm-layout
+//@ chunk-t032zdr0.js:1272-1287 esm-layout
 var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
-//@ chunk-k63efphf.js:1317-1419 esm-fingerprint
+//@ chunk-t032zdr0.js:1317-1419 esm-fingerprint
 var { writeFile } = promises;
 var writeSSOTokenToFile = (ssoSessionName, ssoToken) => {
   let ssoTokenFilepath = sharedIniFileLoader.getSSOTokenFilepath(ssoSessionName);
   let tokenString = JSON.stringify(ssoToken, null, 2);
   return writeFile(ssoTokenFilepath, tokenString);
 };
-//@ chunk-k63efphf.js:1419-3078 esm-layout
+//@ chunk-t032zdr0.js:1419-3078 esm-layout
 var lastRefreshAttemptTime = new Date(0);
 var fromSso =
   (_init = {}) =>
@@ -158,9 +158,9 @@ var fromSso =
       return existingToken;
     }
   };
-//@ chunk-0rkz0exm.js:571-579 esm-layout
+//@ chunk-1yr4143q.js:571-579 esm-layout
 var tokenTtlMs = bearerTokenEnvKey;
-//@ chunk-0rkz0exm.js:579-1030 esm-layout
+//@ chunk-1yr4143q.js:579-1030 esm-layout
 var import_property_provider = __toESM(require_property_provider());
 var fromEnvSigningName =
   ({ logger, signingName } = {}) =>
@@ -187,9 +187,9 @@ var fromEnvSigningName =
     import_client.setTokenFeature(token, "BEARER_SERVICE_ENV_VARS", "3");
     return token;
   };
-//@ chunk-0rkz0exm.js:1030-1045 esm-layout
+//@ chunk-1yr4143q.js:1030-1045 esm-layout
 var propertyProvider = __toESM(require_property_provider());
-//@ chunk-0rkz0exm.js:1045-1272 esm-fingerprint
+//@ chunk-1yr4143q.js:1045-1272 esm-fingerprint
 var fromSsoClient = (init = {}) =>
   propertyProvider.memoize(
     propertyProvider.chain(fromSso(init), async () => {

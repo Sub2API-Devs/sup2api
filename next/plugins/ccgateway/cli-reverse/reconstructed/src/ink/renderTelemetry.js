@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：渲染遥测（字形图集使用、终端宿主识别、样式池记录）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (1), chunk-x6v6jz2y.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (1), chunk-emhzq435.js (5)
  * attribution: placement 6
  */
 import { getSecondRootError, isXtermJs } from "./terminal.js";
@@ -16,7 +16,7 @@ import { getTotalDuration } from "../bootstrap/state.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { env } from "../utils/env.js";
 
-//@ chunk-bzr73sfg.js:286172-287550 placement
+//@ chunk-2avr6cej.js:285753-287131 placement
 class RenderDebugHud {
   stylePool;
   snapshot = {
@@ -112,13 +112,13 @@ class RenderDebugHud {
     for (let listener of this.listeners) listener();
   }
 }
-//@ chunk-x6v6jz2y.js:4461-4541 placement
+//@ chunk-emhzq435.js:4399-4479 placement
 function recordStylePoolAtlas() {
   let inkInstance = getSecondRootError().get(process.stdout);
   if (!inkInstance) return;
   recordAtlasUsage(inkInstance.getStylePool());
 }
-//@ chunk-x6v6jz2y.js:4541-4665 placement
+//@ chunk-emhzq435.js:4479-4603 placement
 function atlasResetConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_xterm_atlas_reset", true);
   let featureValue_CACHED_MAY_BE_STALE_2 = getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_meadow", false);
@@ -127,7 +127,7 @@ function atlasResetConfig() {
     recording: featureValue_CACHED_MAY_BE_STALE || featureValue_CACHED_MAY_BE_STALE_2,
   };
 }
-//@ chunk-x6v6jz2y.js:4665-5332 placement
+//@ chunk-emhzq435.js:4603-5270 placement
 function recordAtlasUsage(stylePool) {
   let atlasRecorder = stylePool.atlasRecorder;
   if (atlasRecorder.debugTainted) return;
@@ -157,7 +157,7 @@ function recordAtlasUsage(stylePool) {
     logFeatureSad("render_stylepool", "cap_hit");
   }
 }
-//@ chunk-x6v6jz2y.js:5332-5674 placement
+//@ chunk-emhzq435.js:5270-5612 placement
 function detectTerminalHost() {
   if (env.CURSOR_TRACE_ID !== undefined) return "cursor";
   switch (env.TERM_PROGRAM) {
@@ -177,7 +177,7 @@ function detectTerminalHost() {
   if (process.env.WT_SESSION !== undefined) return "windows_terminal";
   return "other";
 }
-//@ chunk-x6v6jz2y.js:5674-5808 placement
+//@ chunk-emhzq435.js:5612-5746 placement
 function sessionAgeBucket(totalDuration) {
   let minutes = totalDuration / 60000;
   if (minutes < 5) return "lt_5m";
@@ -186,4 +186,4 @@ function sessionAgeBucket(totalDuration) {
   if (minutes < 480) return "2h_8h";
   return "gt_8h";
 }
-export { recordStylePoolAtlas, RenderDebugHud, atlasResetConfig };
+export { atlasResetConfig, RenderDebugHud, recordStylePoolAtlas };

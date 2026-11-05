@@ -3,9 +3,9 @@
  *
  * 跨会话消息（UDS/命名管道）客户端：向其他会话收件箱发送消息与控制、节流计数、列出存活会话与对等方
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-66jn0ssz.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gh96j5t0.js (36)
  * attribution: placement 36
  */
 import { lstat, readdir, unlink, stat } from "fs/promises";
@@ -50,7 +50,7 @@ import {
 } from "./peerGuard.js";
 import { logForDebugging } from "../debug.js";
 import { sanitizeTeammateLabel } from "../swarm/teammateIds.js";
-import { uniq, stringArray } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import {
   isProcessProvablyGone,
   provenSameProcessAsync,
@@ -84,16 +84,17 @@ import { ownPidDomain } from "../pidSpace.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { udsEnv } from "../env.js";
+import { stringArray } from "../collections.js";
 
-//@ chunk-66jn0ssz.js:11282-11323 placement
+//@ chunk-gh96j5t0.js:11279-11320 placement
 function creditPacerForHeldSend(a) {
   withOutboundPacer(a, (b, c) => b.credit(c));
 }
-//@ chunk-66jn0ssz.js:11323-11363 placement
+//@ chunk-gh96j5t0.js:11320-11360 placement
 function debitPacerForReleasedSend(a) {
   withOutboundPacer(a, (b, c) => b.debit(c));
 }
-//@ chunk-66jn0ssz.js:11363-11482 placement
+//@ chunk-gh96j5t0.js:11360-11479 placement
 function withOutboundPacer(messageId, handle) {
   let pacer = swarmHostState().outbound.pacer;
   if (!pacer) return;
@@ -101,7 +102,7 @@ function withOutboundPacer(messageId, handle) {
   if (scheme !== "uds") return;
   handle(pacer, canonicalSocketPath(target) ?? target);
 }
-//@ chunk-66jn0ssz.js:11482-12398 placement
+//@ chunk-gh96j5t0.js:11479-12395 placement
 async function sendToUdsSocket(
   sock,
   body,
@@ -177,9 +178,9 @@ async function sendToUdsSocket(
     msgId: messageEnvelope.msg_id,
   };
 }
-//@ chunk-66jn0ssz.js:12398-12409 placement
+//@ chunk-gh96j5t0.js:12395-12406 placement
 var MAX_OUTSTANDING_SENDS = 200;
-//@ chunk-66jn0ssz.js:12409-12544 placement
+//@ chunk-gh96j5t0.js:12406-12541 placement
 function trackOutstandingSend(msgId, to, options) {
   let outstandingSends = swarmHostState().receipts.outstandingSends;
   if (outstandingSends.length >= MAX_OUTSTANDING_SENDS) outstandingSends.shift();
@@ -189,13 +190,13 @@ function trackOutstandingSend(msgId, to, options) {
     handle: sanitizeTeammateLabel(options ?? "", 1 / 0) || undefined,
   });
 }
-//@ chunk-66jn0ssz.js:12544-12652 placement
+//@ chunk-gh96j5t0.js:12541-12649 placement
 function untrackOutstandingSend(msgId) {
   let outstandingSends = swarmHostState().receipts.outstandingSends;
   let index = outstandingSends.findIndex((outstandingSend) => outstandingSend.msgId === msgId);
   if (index !== -1) outstandingSends.splice(index, 1);
 }
-//@ chunk-66jn0ssz.js:12652-13034 placement
+//@ chunk-gh96j5t0.js:12649-13031 placement
 function admitReceiptForOutstandingSend(origMsgId, status) {
   if (typeof origMsgId !== "string") return;
   let { outstandingSends, awaitingTerminal } = swarmHostState().receipts;
@@ -224,7 +225,7 @@ function admitReceiptForOutstandingSend(origMsgId, status) {
   }
   return;
 }
-//@ chunk-66jn0ssz.js:13034-13371 placement
+//@ chunk-gh96j5t0.js:13031-13368 placement
 function admitDroppedIdsByDestination(entries) {
   let byDest = new Map();
   if (entries.length === 0) return byDest;
@@ -248,11 +249,11 @@ function admitDroppedIdsByDestination(entries) {
   }
   return byDest;
 }
-//@ chunk-66jn0ssz.js:13371-13430 placement
+//@ chunk-gh96j5t0.js:13368-13427 placement
 function sendControlToUdsSocket(a, b, options = {}) {
   return sendStampedControlToUdsSocket(a, b, createMessageEnvelope(), options).then(() => {});
 }
-//@ chunk-66jn0ssz.js:13430-13732 placement
+//@ chunk-gh96j5t0.js:13427-13729 placement
 async function sendStampedControlToUdsSocket(
   a,
   b,
@@ -282,9 +283,9 @@ async function sendStampedControlToUdsSocket(
     msgId: envelope.msg_id,
   };
 }
-//@ chunk-66jn0ssz.js:13732-13743 placement
+//@ chunk-gh96j5t0.js:13729-13740 placement
 var CONNECT_CONCURRENCY = 150;
-//@ chunk-66jn0ssz.js:13743-13980 placement
+//@ chunk-gh96j5t0.js:13740-13977 placement
 async function registeredLivePeerForSocket(sock) {
   let path = canonicalSocketPath(sock);
   if (path === undefined) return;
@@ -300,9 +301,9 @@ async function registeredLivePeerForSocket(sock) {
   }
   return;
 }
-//@ chunk-66jn0ssz.js:13980-14254 placement
+//@ chunk-gh96j5t0.js:13977-14251 placement
 async function registeredInboxesOfPids(pids) {
-  let uniquePids = uniq(pids);
+  let uniquePids = normalizeCaseForComparison_2(pids);
   let inboxByPid = new Map();
   if (uniquePids.length === 0) return inboxByPid;
   let sessionsDir = getSessionsDir();
@@ -315,27 +316,27 @@ async function registeredInboxesOfPids(pids) {
   });
   return inboxByPid;
 }
-//@ chunk-66jn0ssz.js:14254-14373 placement
+//@ chunk-gh96j5t0.js:14251-14370 placement
 async function liveStatusOfJob(jobId, expectedJobId) {
   let sessionRecord = await readSessionRecord(getSessionsDir(), `${jobId}.json`, {
     rejectTornLiveRecord: true,
   });
   return sessionRecord?.jobId === expectedJobId ? sessionRecord.status : undefined;
 }
-//@ chunk-66jn0ssz.js:14373-14490 placement
+//@ chunk-gh96j5t0.js:14370-14487 placement
 async function isSameLiveProcess(record) {
   let procStart = record.procStartFt ?? record.procStart;
   if (procStart === undefined || isProcessProvablyGone(record.pid)) return false;
   return (await provenSameProcessAsync(record.pid, procStart)) === true;
 }
-//@ chunk-66jn0ssz.js:14490-14567 placement
+//@ chunk-gh96j5t0.js:14487-14564 placement
 function serializePeerPayload(payload) {
   let json = jsonStringify(payload);
   let totalBytes = AUTH_HANDSHAKE_LENGTH + json.length + 1;
   if (totalBytes > MAX_PEER_MESSAGE_BYTES) throw describeMessageTooLarge(totalBytes, MAX_PEER_MESSAGE_BYTES);
   return json;
 }
-//@ chunk-66jn0ssz.js:14567-14810 placement
+//@ chunk-gh96j5t0.js:14564-14807 placement
 async function isSocketOwnerAlive(sock) {
   let path = canonicalSocketPath(sock);
   if (path === undefined) return false;
@@ -350,7 +351,7 @@ async function isSocketOwnerAlive(sock) {
   }
   return false;
 }
-//@ chunk-66jn0ssz.js:14810-17236 placement
+//@ chunk-gh96j5t0.js:14807-17233 placement
 /**
  * 连接对端收件箱：拒绝非本机 IPC 路径、未登记/不可审查的回复目标与符号链接（约 2.4 KB）。
  */
@@ -500,7 +501,7 @@ async function connectToInbox(
     });
   });
 }
-//@ chunk-66jn0ssz.js:17236-17437 placement
+//@ chunk-gh96j5t0.js:17233-17434 placement
 function probeSocket(sock) {
   return new Promise((resolve) => {
     if (!isValidPipeOrPath(sock)) {
@@ -519,7 +520,7 @@ function probeSocket(sock) {
     connection.setTimeout(250, () => finish(false));
   });
 }
-//@ chunk-66jn0ssz.js:17437-17582 placement
+//@ chunk-gh96j5t0.js:17434-17579 placement
 class SessionRecordsUnreadableError extends Error {
   code;
   constructor(code) {
@@ -528,7 +529,7 @@ class SessionRecordsUnreadableError extends Error {
     this.name = "SessionRecordsUnreadableError";
   }
 }
-//@ chunk-66jn0ssz.js:17582-17868 placement
+//@ chunk-gh96j5t0.js:17579-17865 placement
 async function listSessionRecords(options) {
   if (isDiskless()) return [];
   let sessionsDir = getSessionsDir();
@@ -552,7 +553,7 @@ async function listSessionRecords(options) {
     )
   ).filter((record) => record !== null);
 }
-//@ chunk-66jn0ssz.js:17868-20091 placement
+//@ chunk-gh96j5t0.js:17865-20088 placement
 /**
  * 读取并校验一个会话记录（规范路径、pid 存活、令牌），不合格时清理。
  */
@@ -659,16 +660,16 @@ async function readSessionRecord(sessionsDir, fileName, options) {
     return null;
   }
 }
-//@ chunk-66jn0ssz.js:20091-20152 placement
+//@ chunk-gh96j5t0.js:20088-20150 placement
 function isOtherPidDomain(record, pidDomain) {
   return record.pidDomain !== undefined && record.pidDomain !== pidDomain;
 }
-//@ chunk-66jn0ssz.js:20152-20237 placement
+//@ chunk-gh96j5t0.js:20150-20236 placement
 async function isHeldInAnotherPidDomain(records, sessionId) {
   let domain = await ownPidDomain();
   return records.some((record) => record.sessionId === sessionId && isOtherPidDomain(record, domain));
 }
-//@ chunk-66jn0ssz.js:20237-20321 placement
+//@ chunk-gh96j5t0.js:20236-20320 placement
 async function listRegisteredSessionRecords() {
   return (
     await listSessionRecords({
@@ -676,7 +677,7 @@ async function listRegisteredSessionRecords() {
     })
   ).map(({ file, ...record }) => record);
 }
-//@ chunk-66jn0ssz.js:20321-20531 placement
+//@ chunk-gh96j5t0.js:20320-20531 placement
 async function firstLiveSessionMatching(predicate) {
   let records = await listSessionRecords({
     rejectUnreadable: true,
@@ -693,7 +694,7 @@ async function firstLiveSessionMatching(predicate) {
       return record;
   return;
 }
-//@ chunk-66jn0ssz.js:20531-20724 placement
+//@ chunk-gh96j5t0.js:20531-20724 placement
 function removeSessionRecord(file, pid, pidDomain, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     storageV5
@@ -710,7 +711,7 @@ function removeSessionRecord(file, pid, pidDomain, storageV5) {
     .then(() => reapKeysOfReapedRecord(dirname(file), pid, pidDomain, storageV5))
     .catch(() => {});
 }
-//@ chunk-66jn0ssz.js:20724-21200 placement
+//@ chunk-gh96j5t0.js:20724-21201 placement
 async function listAllLiveSessions(rejectUnreadable, options) {
   let records = await listSessionRecords({
     rejectUnreadable: options?.rejectUnreadable === true,
@@ -741,11 +742,11 @@ async function listAllLiveSessions(rejectUnreadable, options) {
   }
   return live;
 }
-//@ chunk-66jn0ssz.js:21200-21254 placement
+//@ chunk-gh96j5t0.js:21201-21255 placement
 function ownMessagingSocket() {
   return udsEnv.CLAUDE_CODE_MESSAGING_SOCKET;
 }
-//@ chunk-66jn0ssz.js:21254-21528 placement
+//@ chunk-gh96j5t0.js:21255-21529 placement
 async function isOwnEndpointShadowed() {
   let sock = ownMessagingSocket();
   if (sock === undefined) return false;
@@ -770,7 +771,7 @@ async function isOwnEndpointShadowed() {
     )
   ).some(Boolean);
 }
-//@ chunk-66jn0ssz.js:21528-21788 placement
+//@ chunk-gh96j5t0.js:21529-21789 placement
 async function classifyRecordLiveness(record, pidDomain) {
   if (record.pidDomain !== pidDomain) return "present";
   if (isProcessProvablyGone(record.pid)) return "gone";
@@ -781,7 +782,7 @@ async function classifyRecordLiveness(record, pidDomain) {
     return "present";
   return (await provenSameProcessAsync(record.pid, procStart)) === false ? "recycled" : "present";
 }
-//@ chunk-66jn0ssz.js:21788-22256 placement
+//@ chunk-gh96j5t0.js:21789-22257 placement
 async function listLivePeerSessions(sock) {
   let ownSocket = ownMessagingSocket();
   let filtered = (
@@ -813,7 +814,7 @@ async function listLivePeerSessions(sock) {
   }
   return live;
 }
-//@ chunk-66jn0ssz.js:22256-22691 placement
+//@ chunk-gh96j5t0.js:22257-22692 placement
 async function findLivePeerBySessionId(sessionId) {
   let ownSocket = ownMessagingSocket();
   let records = await listSessionRecords();
@@ -840,34 +841,34 @@ async function findLivePeerBySessionId(sessionId) {
   }
   return null;
 }
-//@ chunk-66jn0ssz.js:22691-22750 placement
+//@ chunk-gh96j5t0.js:22692-22751 placement
 function isSpareOrParked(record) {
   return record.spare === true || record.parkedJobId !== undefined;
 }
-//@ chunk-66jn0ssz.js:22750-22831 placement
+//@ chunk-gh96j5t0.js:22751-22832 placement
 function sanitizePeerFeatures(peerFeatures) {
   return stringArray(peerFeatures)
     .filter((feature) => /^[a-z0-9_]{1,32}$/.test(feature))
     .slice(0, 16);
 }
 export {
+  listLivePeerSessions,
+  SessionRecordsUnreadableError,
+  isOwnEndpointShadowed,
+  ownMessagingSocket,
+  listRegisteredSessionRecords,
+  sendStampedControlToUdsSocket,
+  sendControlToUdsSocket,
+  listAllLiveSessions,
+  sendToUdsSocket,
+  findLivePeerBySessionId,
+  registeredLivePeerForSocket,
+  firstLiveSessionMatching,
   admitReceiptForOutstandingSend,
   admitDroppedIdsByDestination,
   debitPacerForReleasedSend,
   creditPacerForHeldSend,
-  registeredLivePeerForSocket,
-  sendControlToUdsSocket,
   registeredInboxesOfPids,
-  findLivePeerBySessionId,
-  listRegisteredSessionRecords,
-  ownMessagingSocket,
-  sendStampedControlToUdsSocket,
-  listLivePeerSessions,
-  SessionRecordsUnreadableError,
-  isOwnEndpointShadowed,
-  listAllLiveSessions,
-  sendToUdsSocket,
-  firstLiveSessionMatching,
   isHeldInAnotherPidDomain,
   liveStatusOfJob,
 };

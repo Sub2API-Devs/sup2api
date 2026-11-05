@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/flix.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (2)
+ * pieces: chunk-636gp747.js (2)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:139720-140381 cjs-fingerprint
+//@ chunk-636gp747.js:139720-140381 cjs-fingerprint
 var require_flix = __commonJS(function (cjsExports, cjsModule) {
   function flix(hljs) {
     let CHAR = {
@@ -74,7 +74,7 @@ var require_flix = __commonJS(function (cjsExports, cjsModule) {
   }
   cjsModule.exports = flix;
 });
-//@ chunk-egr0twnb.js:168007-176324 cjs-fingerprint
+//@ chunk-636gp747.js:168007-176324 cjs-fingerprint
 var require_flix_2 = __commonJS(function (cjsExports, cjsModule) {
   function glsl(hljs) {
     return {

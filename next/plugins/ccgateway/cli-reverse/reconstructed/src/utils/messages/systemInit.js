@@ -3,9 +3,9 @@
  *
  * 构造 SDK/stream-json 的 system/init 消息（cwd、session_id、tools、mcp_servers、model、permissionMode、slash_commands、agents、skills、plugins 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messages/systemInit.ts
- * pieces: chunk-gr407tas.js (20)
+ * pieces: chunk-cy40qdce.js (20)
  * attribution: placement 19, fingerprint 1
  */
 import { randomUUID } from "crypto";
@@ -22,7 +22,7 @@ import { truncateToWidth } from "../format.js";
 import { truncateToLength } from "../stringUtils.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import { isRemoteEnvironmentAny } from "../remoteEnvironment.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { getPlatform } from "../platform.js";
 import { isBackgroundTasksOff } from "../../tools/AgentTool/backgroundGates.js";
@@ -37,11 +37,12 @@ import { canUseTeamMemory, getMemoryDirNfc } from "../../memdir/teamMemPaths.js"
 import { getSessionId, getSdkBetas, getOriginalCwdOrNull, getToolsMachine } from "../../bootstrap/state.js";
 import { getCwdOrNull } from "../cwd.js";
 import { getApiKeySourceSafe } from "../auth.js";
-import { DEFAULT } from "../../constants/outputStyles.js";
+import { DEFAULT_2 } from "../../constants/outputStyles.js";
 import { isFirstPartyTelemetryBlocked } from "../hostEnvironment.js";
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { isScratchpadEnabled, getScratchpadDir } from "../permissions/filesystem.js";
 import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.js";
+import { shouldSendWidgetStates } from "../widgetContext.js";
 import { getResolvedPowerShellPath } from "../shell/powershellDetection.js";
 import { clientStatusForSnapshot } from "../../services/mcp/config.js";
 import { toExternalPermissionMode } from "../permissions/PermissionMode.js";
@@ -49,11 +50,11 @@ import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { recordPhase, logStartupTiming, consumeStartupTiming } from "../startupTiming.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gr407tas.js:1360-1407 placement
+//@ chunk-cy40qdce.js:1363-1410 placement
 var MAX_TOOL_TITLE_LINES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_TOOL_TITLE_CHARS;
 var toolEntryTextSchema;
-deferInit("chunk-gr407tas.js:1360", () => {
+deferInit("chunk-cy40qdce.js:1363", () => {
   MAX_TOOL_TITLE_LINES = 6;
   MAX_TOOL_TITLE_CHARS = 32;
   toolEntryTextSchema = DoctorLazy(() =>
@@ -62,14 +63,14 @@ deferInit("chunk-gr407tas.js:1360", () => {
     }),
   );
 });
-//@ chunk-gr407tas.js:1407-1538 placement
+//@ chunk-cy40qdce.js:1410-1541 placement
 function parseFooterIndicator(entry) {
   let parsed = toolEntryTextSchema().safeParse(entry);
   if (!parsed.success || parsed.data.text === undefined) return null;
   let title = normalizeToolTitle(parsed.data.text);
   return title.length > 0 ? title : null;
 }
-//@ chunk-gr407tas.js:1538-1676 placement
+//@ chunk-cy40qdce.js:1541-1679 placement
 /**
  * 决定 SDK 底栏指示文字：依次取环境变量、按模型配置的 footer_indicator_<模型> 开关，最后取服务端客户端数据里的设置。
  */
@@ -82,7 +83,7 @@ function resolveFooterIndicator(explicit, model, entry) {
     }
   return parseFooterIndicator(entry);
 }
-//@ chunk-gr407tas.js:1676-1793 placement
+//@ chunk-cy40qdce.js:1679-1796 placement
 /**
  * 取 SDK 底栏指示文字（解析结果为 null 时不返回）。
  */
@@ -98,21 +99,21 @@ function getFooterIndicator() {
         text: footerIndicator,
       };
 }
-//@ chunk-gr407tas.js:1793-1887 placement
+//@ chunk-cy40qdce.js:1796-1889 placement
 function normalizeToolTitle(rawTitle) {
   let trimmed = stripCombiningRepeated(stripAnsi(rawTitle))
     .replace(/[\x00-\x1f\x7f-\x9f]/g, "")
     .trim();
   return truncateToWidth(truncateToLength(trimmed, MAX_TOOL_TITLE_CHARS), MAX_TOOL_TITLE_LINES);
 }
-//@ chunk-gr407tas.js:1887-1922 placement
+//@ chunk-cy40qdce.js:1889-1924 placement
 /**
  * 把 AGENT 工具名换成 TASK 后上报。
  */
 function toolNameForInit(name) {
   return name === AGENT ? TASK : name;
 }
-//@ chunk-gr407tas.js:1922-2219 placement
+//@ chunk-cy40qdce.js:1924-2221 placement
 var INTERRUPT_RECEIPT_V1 = "interrupt_receipt_v1";
 var MSG_LIFECYCLE_V1 = "msg_lifecycle_v1";
 var REQUEST_MARKER_LISTS_V1 = "request_marker_lists_v1";
@@ -123,46 +124,50 @@ var INTERRUPT_SEND_NOW_V1 = "interrupt_send_now_v1";
 var BACKGROUND_TASKS_MOVES_BASH_V1 = "background_tasks_moves_bash_v1";
 var TASK_LIST_RESTORE_V1 = "task_list_restore_v1";
 var TASK_LIST_RESTORED_V1 = "task_list_restored_v1";
-//@ chunk-gr407tas.js:2219-2345 placement
+//@ chunk-cy40qdce.js:2221-2445 placement
 var MCP_READ_RESOURCE_V1 = "mcp_read_resource_v1";
 var READ_FILE_AS_WRITTEN_V1 = "read_file_as_written_v1";
 var MCP_TOOL_UI_META_V1 = "mcp_tool_ui_meta_v1";
+var REPLY_GATE_POLICY_V1 = "reply_gate_policy_v1";
+var REPLY_GATE_POLICY_DISABLED_V1 = "reply_gate_policy_disabled_v1";
+var REPLY_GATE_POLICY_REFUSED_V1 = "reply_gate_policy_refused_v1";
 var MCP_CALL_RESULT_NOT_FOR_MODEL_V1 = "mcp_call_result_not_for_model_v1";
-//@ chunk-gr407tas.js:2345-2414 placement
+//@ chunk-cy40qdce.js:2445-2514 placement
 /**
  * 判断该传输不会改写持久化内容（无需脱敏）。
  */
 function persistsWithoutRedaction(tool) {
   return !tool.redactsWhatItPersists && !tool.isRemoteTransport;
 }
-//@ chunk-gr407tas.js:2414-2444 placement
+//@ chunk-cy40qdce.js:2514-2544 placement
 var START_SHELL_TASK_V1 = "start_shell_task_v1";
-//@ chunk-gr407tas.js:2444-2544 placement
+//@ chunk-cy40qdce.js:2544-2644 placement
 /**
  * 判断是否提示安装 Linux 沙箱：Linux 下有 Bash 工具、沙箱未就绪且开关开启。
  */
 function shouldOfferLinuxSandboxHint(tools) {
   return (
     isRemoteEnvironmentAny() &&
-    tools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) &&
+    tools.some((tool) => matchesToolName(tool, BASH_TOOL_NAME)) &&
     getPlatform() === "linux" &&
     !isBackgroundTasksOff() &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_mossy_lathe", true)
   );
 }
-//@ chunk-gr407tas.js:2544-2651 placement
+//@ chunk-cy40qdce.js:2644-2781 placement
+var MCP_STATUS_NO_CONFIG_V1 = "mcp_status_no_config_v1";
 var UI_SURFACE_V1 = "ui_surface_v1";
 var PROMPTS_SCREENED_V1 = "prompts_screened_v1";
 var UI_HOOKED_V1 = "ui_hooked_v1";
 var ASK_USER_QUESTION_UNANSWERED_V1 = "ask_user_question_unanswered_v1";
-//@ chunk-gr407tas.js:2651-2675 placement
+//@ chunk-cy40qdce.js:2781-2805 placement
 /**
  * 返回空的中断标记列表。
  */
 function emptyMarkerList() {
   return [];
 }
-//@ chunk-gr407tas.js:2675-2707 placement
+//@ chunk-cy40qdce.js:2805-2837 placement
 /**
  * 中断类标记键名清单。
  */
@@ -175,7 +180,7 @@ var INTERRUPT_MARKER_KEYS = [
   REQUEST_MARKER_LISTS_V1,
   ASK_USER_QUESTION_UNANSWERED_V1,
 ];
-//@ chunk-gr407tas.js:2707-2819 placement
+//@ chunk-cy40qdce.js:2837-2949 placement
 /**
  * 把插件信息转为 system/init 中的插件条目（名称、路径、来源与版本）。
  */
@@ -190,7 +195,7 @@ function toPluginInitInfo(plugin) {
     }),
   };
 }
-//@ chunk-gr407tas.js:2819-2888 placement
+//@ chunk-cy40qdce.js:2949-3018 placement
 /**
  * 判断策略判定缺失或带有 hipaa 合规标记（异常时按是处理）。
  */
@@ -202,7 +207,7 @@ function isPolicyVerdictAbsentOrHipaa() {
     return true;
   }
 }
-//@ chunk-gr407tas.js:2888-3439 placement
+//@ chunk-cy40qdce.js:3018-3576 placement
 /**
  * 构造 SDK system/init 消息的会话字段：cwd、会话 id、API key 来源、beta、输出样式、遥测/反馈开关、记忆路径、scratchpad、原始 cwd、消息套接字、worker 纪元、PowerShell 路径与底栏指示。
  */
@@ -223,19 +228,20 @@ function buildSystemInitFields() {
     sessionId,
     apiKeySource: getApiKeySourceSafe(),
     betas: getSdkBetas(),
-    outputStyle: settings_DEPRECATED?.outputStyle ?? DEFAULT,
+    outputStyle: settings_DEPRECATED?.outputStyle ?? DEFAULT_2,
     analyticsDisabled: isFirstPartyTelemetryBlocked(),
     productFeedbackDisabled: !isPolicyAllowed("allow_product_feedback"),
     memoryPaths,
     scratchpadPath: isScratchpadEnabled() ? (getScratchpadDir(sessionId) ?? undefined) : undefined,
     originalCwd: isPolicyVerdictAbsentOrHipaa() ? undefined : (getOriginalCwdOrNull() ?? undefined),
     messagingSocketPath,
-    workerEpoch: isViolinWoodEnabledCached() ? env.CLAUDE_CODE_WORKER_EPOCH : undefined,
+    workerEpoch:
+      isViolinWoodEnabledCached() || shouldSendWidgetStates() ? env.CLAUDE_CODE_WORKER_EPOCH : undefined,
     powerShellPath: getPlatform() === "windows" ? getResolvedPowerShellPath() : undefined,
     footerIndicator: getFooterIndicator(),
   };
 }
-//@ chunk-gr407tas.js:3439-3839 placement
+//@ chunk-cy40qdce.js:3576-3976 placement
 /**
  * 构造远程工具机场景下的 system/init 会话字段：cwd 取工具机目录，本地专属字段（记忆路径、scratchpad、套接字等）置空。
  */
@@ -258,7 +264,7 @@ function buildRemoteSystemInitFields() {
     footerIndicator: undefined,
   };
 }
-//@ chunk-gr407tas.js:3839-6391 fingerprint (2.1.88 match: buildSystemInitMessage, 0.368)
+//@ chunk-cy40qdce.js:3976-6685 fingerprint (2.1.88 match: buildSystemInitMessage, 0.35)
 /**
  * buildSystemInitMessage：SDK 首条 system/init 消息，列出工具、MCP 服务器状态（含失败的）、可调用的终端命令、模型、权限模式、代理/技能/插件、fast mode 与能力等。
  */
@@ -295,10 +301,10 @@ function buildSystemInitMessage(inputs) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -338,6 +344,7 @@ function buildSystemInitMessage(inputs) {
   if (inputs.originalCwd !== undefined) message.original_cwd = inputs.originalCwd;
   if (inputs.additionalDirectories !== undefined)
     message.additional_directories = [...inputs.additionalDirectories];
+  if (inputs.syncedSkillsPath !== undefined) message.synced_skills_path = inputs.syncedSkillsPath;
   if (inputs.workerEpoch !== undefined && inputs.workerEpoch >= 1) message.worker_epoch = inputs.workerEpoch;
   if (inputs.messagingSocketPath !== undefined) message.messaging_socket_path = inputs.messagingSocketPath;
   message.fast_mode_state = inputs.fastModeState;
@@ -349,11 +356,13 @@ function buildSystemInitMessage(inputs) {
   if (inputs.effort !== undefined) message.effort = inputs.effort;
   if (inputs.perTurnEffortActive !== undefined) message.per_turn_effort_active = inputs.perTurnEffortActive;
   if (inputs.ultrathinkAvailable !== undefined) message.ultrathink_available = inputs.ultrathinkAvailable;
+  if (inputs.ultrathinkTypedRaises !== undefined)
+    message.ultrathink_typed_raises = inputs.ultrathinkTypedRaises;
   if (inputs.viewMode !== undefined) message.view_mode = inputs.viewMode;
   if (inputs.powerShellPath !== undefined) message.powershell_path = inputs.powerShellPath;
   return message;
 }
-//@ chunk-gr407tas.js:6391-6504 placement
+//@ chunk-cy40qdce.js:6685-6798 placement
 /**
  * 记录 system/init 发出耗时与首次初始化打点，并附上启动计时信息。
  */
@@ -364,33 +373,37 @@ function recordInitTiming(message, startTime) {
   if (timing) message.startup_timing = timing;
 }
 export {
-  BACKGROUND_TASKS_MOVES_BASH_V1,
-  INTERRUPT_SEND_NOW_V1,
-  buildSystemInitMessage,
-  buildRemoteSystemInitFields,
-  ASK_USER_QUESTION_UNANSWERED_V1,
-  resolveFooterIndicator,
   shouldOfferLinuxSandboxHint,
   toPluginInitInfo,
   persistsWithoutRedaction,
   getFooterIndicator,
   MCP_CALL_RESULT_NOT_FOR_MODEL_V1,
   START_SHELL_TASK_V1,
-  toolNameForInit,
+  resolveFooterIndicator,
   isPolicyVerdictAbsentOrHipaa,
+  toolNameForInit,
+  buildSystemInitMessage,
+  buildRemoteSystemInitFields,
   buildSystemInitFields,
   INTERRUPT_MARKER_KEYS,
   LIFECYCLE_WAKEUP_SOURCE_V1,
   TASK_LIST_RESTORE_V1,
   TASK_LIST_RESTORED_V1,
+  REPLY_GATE_POLICY_DISABLED_V1,
+  REPLY_GATE_POLICY_V1,
+  REPLY_GATE_POLICY_REFUSED_V1,
   MCP_READ_RESOURCE_V1,
   MCP_TOOL_UI_META_V1,
   READ_FILE_AS_WRITTEN_V1,
   emptyMarkerList,
+  MCP_STATUS_NO_CONFIG_V1,
   recordInitTiming,
+  BACKGROUND_TASKS_MOVES_BASH_V1,
+  INTERRUPT_SEND_NOW_V1,
+  ASK_USER_QUESTION_UNANSWERED_V1,
+  INTERRUPT_RECEIPT_V1,
+  MSG_LIFECYCLE_V1,
   UI_SURFACE_V1,
   PROMPTS_SCREENED_V1,
   UI_HOOKED_V1,
-  INTERRUPT_RECEIPT_V1,
-  MSG_LIFECYCLE_V1,
 };

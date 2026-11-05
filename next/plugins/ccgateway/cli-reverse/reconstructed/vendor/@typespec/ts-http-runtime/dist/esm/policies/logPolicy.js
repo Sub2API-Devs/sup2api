@@ -1,16 +1,16 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/policies/logPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-fingerprint 2
  */
 import { logger_2 } from "../log.js";
 import { Sanitizer } from "../util/sanitizer.js";
 
-//@ chunk-mrx6y2r5.js:49396-49415 esm-fingerprint
+//@ chunk-b5df2wx1.js:49396-49415 esm-fingerprint
 var logPolicyName = "logPolicy";
-//@ chunk-mrx6y2r5.js:49415-49828 esm-fingerprint
+//@ chunk-b5df2wx1.js:49415-49828 esm-fingerprint
 function logPolicy(options = {}) {
   var _a;
   let logger = (_a = options.logger) !== null && _a !== undefined ? _a : logger_2.info;

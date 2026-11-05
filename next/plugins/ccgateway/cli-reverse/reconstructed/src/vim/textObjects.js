@@ -3,15 +3,15 @@
  *
  * 并入旧版已有路径：vim 文本对象。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/textObjects.ts
- * pieces: chunk-530hfzwb.js (4)
- * attribution: fingerprint 1, placement 3
+ * pieces: chunk-880p06ha.js (5)
+ * attribution: fingerprint 1, placement 3, layout 1
  */
-import { truncateToWidthNoEllipsis } from "../utils/truncate.js";
-import { isWordChar, isWhitespaceChar } from "../utils/Cursor.js";
+import { isWordChar, isWhitespaceChar, isPunctuationChar } from "../utils/Cursor.js";
+import { getGraphemeSegmenter } from "../utils/intl.js";
 
-//@ chunk-530hfzwb.js:1194-1381 fingerprint (2.1.88 match: PAIRS, 1)
+//@ chunk-880p06ha.js:1195-1382 fingerprint (2.1.88 match: PAIRS, 1)
 /**
  * 文本对象的括号/引号配对表：( ) b → ()；[ ] → []；{ } B → {}；< > → <>；" ' ` 成对引号。
  */
@@ -30,13 +30,13 @@ var PAIRS = {
   "'": ["'", "'"],
   "`": ["`", "`"],
 };
-//@ chunk-530hfzwb.js:1381-1555 placement
+//@ chunk-880p06ha.js:1382-1556 placement
 /**
  * 按类型求文本对象范围：w/W 单词，成对引号在同一行内配对，括号按嵌套深度向外找。
  */
 function findTextObject(text, offset, objType, isInner) {
-  if (objType === "w") return truncateToWidthNoEllipsis(text, offset, isInner, isWordChar);
-  if (objType === "W") return truncateToWidthNoEllipsis(text, offset, isInner, (ch) => !isWhitespaceChar(ch));
+  if (objType === "w") return textObjectAt(text, offset, isInner, isWordChar);
+  if (objType === "W") return textObjectAt(text, offset, isInner, (char) => !isWhitespaceChar(char));
   let pair = PAIRS[objType];
   if (pair) {
     let [open, close] = pair;
@@ -46,7 +46,76 @@ function findTextObject(text, offset, objType, isInner) {
   }
   return null;
 }
-//@ chunk-530hfzwb.js:2385-2681 placement
+//@ chunk-880p06ha.js:1556-2386 layout
+/**
+ * 按显示宽度截断文本（不加省略号）。
+ */
+function textObjectAt(text, offset, isInner, maxWidth) {
+  let segments = [];
+  for (let { segment, index } of getGraphemeSegmenter().segment(text))
+    segments.push({
+      segment,
+      index,
+    });
+  if (segments.length === 0) return null;
+  let anchorIndex = segments.length - 1;
+  for (let k = 0; k < segments.length; k++) {
+    let entry = segments[k];
+    let nextIndex = k + 1 < segments.length ? segments[k + 1].index : text.length;
+    if (offset >= entry.index && offset < nextIndex) {
+      anchorIndex = k;
+      break;
+    }
+  }
+  let segmentAt = (index) => segments[index]?.segment ?? "";
+  let offsetAt = (index) => (index < segments.length ? segments[index].index : text.length);
+  let isInlineWhitespaceAt = (index) =>
+    segmentAt(index) !==
+      `
+` && isWhitespaceChar(segmentAt(index));
+  let segmentWidthAt = (index) => maxWidth(segmentAt(index));
+  let isPunctuationAt = (index) => isPunctuationChar(segmentAt(index));
+  let startIndex = anchorIndex;
+  let endIndex = anchorIndex;
+  if (segmentWidthAt(anchorIndex)) {
+    while (startIndex > 0 && segmentWidthAt(startIndex - 1)) startIndex--;
+    while (endIndex < segments.length && segmentWidthAt(endIndex)) endIndex++;
+  } else if (isWhitespaceChar(segmentAt(anchorIndex))) {
+    let isWhitespaceAt = (idx) => isWhitespaceChar(segmentAt(idx));
+    let offsetAtTextEnd = offset >= text.length;
+    let shouldExpand = isInner && !offsetAtTextEnd ? isInlineWhitespaceAt : isWhitespaceAt;
+    while (endIndex < segments.length && shouldExpand(endIndex)) endIndex++;
+    let atTextEnd = !isInner && endIndex === segments.length;
+    let isWhitespace = offsetAtTextEnd || atTextEnd ? isWhitespaceAt : isInlineWhitespaceAt;
+    while (startIndex > 0 && isWhitespace(startIndex - 1)) startIndex--;
+    return {
+      start: offsetAt(startIndex),
+      end: offsetAt(endIndex),
+    };
+  } else if (isPunctuationAt(anchorIndex)) {
+    while (startIndex > 0 && isPunctuationAt(startIndex - 1)) startIndex--;
+    while (endIndex < segments.length && isPunctuationAt(endIndex)) endIndex++;
+  }
+  if (!isInner)
+    if (endIndex < segments.length && isInlineWhitespaceAt(endIndex))
+      while (endIndex < segments.length && isInlineWhitespaceAt(endIndex)) endIndex++;
+    else {
+      let wordStart = startIndex;
+      while (wordStart > 0 && isInlineWhitespaceAt(wordStart - 1)) wordStart--;
+      if (
+        wordStart > 0 &&
+        segmentAt(wordStart - 1) !==
+          `
+`
+      )
+        startIndex = wordStart;
+    }
+  return {
+    start: offsetAt(startIndex),
+    end: offsetAt(endIndex),
+  };
+}
+//@ chunk-880p06ha.js:2386-2682 placement
 function findQuoteObject(text, offset, quote, isInner) {
   let lineStart =
     text.lastIndexOf(
@@ -80,7 +149,7 @@ function findQuoteObject(text, offset, quote, isInner) {
   }
   return null;
 }
-//@ chunk-530hfzwb.js:2681-2992 placement
+//@ chunk-880p06ha.js:2682-2993 placement
 function findBracketObject(text, offset, open, close, isInner) {
   let depth = 0;
   let start = -1;

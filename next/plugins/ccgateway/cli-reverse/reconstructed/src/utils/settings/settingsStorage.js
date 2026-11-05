@@ -3,9 +3,9 @@
  *
  * 无盘会话设置写入（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (12)
  * attribution: placement 12
  */
 import { dirname } from "path";
@@ -17,10 +17,10 @@ import { nativeRealpathLong } from "../windowsUncPaths.js";
 import { normalizedRealHomeDir } from "./settingsFileParsing.js";
 import { identity } from "../pathClassification.js";
 import { findCanonicalGitRoot, findCanonicalGitRootUncached, findGitRoot } from "../git.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:2705-2880 placement
+//@ chunk-5fn9rb8r.js:2843-3018 placement
 function warnDisklessSettingsWrite(writer, path) {
   logForDebugging(
     `Diskless session: skipped the ${writer} write to ${path} because no storage backend could take it`,
@@ -32,19 +32,19 @@ function warnDisklessSettingsWrite(writer, path) {
     writer: fromEnum(writer),
   });
 }
-//@ chunk-q8cqcff6.js:2912-2958 placement
+//@ chunk-5fn9rb8r.js:3050-3096 placement
 /**
  * noUncachedRoot：无缓存根（占位）。
  */
 function noUncachedRoot(root, { uncached = false } = {}) {
   return null;
 }
-//@ chunk-q8cqcff6.js:2958-2992 placement
+//@ chunk-5fn9rb8r.js:3096-3130 placement
 var homeDirRootCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:2958", () => {
+deferInit("chunk-5fn9rb8r.js:3096", () => {
   homeDirRootCache = identity_2(new Map(), (cache) => cache.clear());
 });
-//@ chunk-q8cqcff6.js:2992-3174 placement
+//@ chunk-5fn9rb8r.js:3130-3312 placement
 /**
  * 判断目录（解析真实路径后）是否就是用户主目录，结果缓存。
  */
@@ -63,16 +63,16 @@ function isHomeDirRoot(root, { uncached = false } = {}) {
   homeDirRootCache.set(root, isHome);
   return isHome;
 }
-//@ chunk-q8cqcff6.js:3174-3208 placement
+//@ chunk-5fn9rb8r.js:3312-3346 placement
 var storageRootCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:3174", () => {
+deferInit("chunk-5fn9rb8r.js:3312", () => {
   storageRootCache = identity_2(new Map(), (cache) => cache.clear());
 });
-//@ chunk-q8cqcff6.js:3208-3251 placement
+//@ chunk-5fn9rb8r.js:3346-3389 placement
 function neverRoot(root, { uncached = false } = {}) {
   return false;
 }
-//@ chunk-q8cqcff6.js:3251-3455 placement
+//@ chunk-5fn9rb8r.js:3389-3593 placement
 /**
  * 从给定路径向上查找最近的可识别存储根目录，返回根目录与是否可读。
  */
@@ -96,7 +96,7 @@ function findNearestRoot(startPath, { uncached = false } = {}) {
     current = parent;
   }
 }
-//@ chunk-q8cqcff6.js:3455-3643 placement
+//@ chunk-5fn9rb8r.js:3593-3781 placement
 function resolveStorageRoot(startPath, fallbackRoot, uncached) {
   let nearestRoot = findNearestRoot(startPath, {
     uncached,
@@ -116,21 +116,21 @@ function resolveStorageRoot(startPath, fallbackRoot, uncached) {
       return null;
   }
 }
-//@ chunk-q8cqcff6.js:3643-3684 placement
+//@ chunk-5fn9rb8r.js:3781-3822 placement
 /**
  * storageRootFor：解析路径对应的存储根。
  */
 function storageRootFor(startPath) {
   return resolveStorageRoot(startPath, () => findCanonicalGitRoot(startPath), false);
 }
-//@ chunk-q8cqcff6.js:3684-3725 placement
+//@ chunk-5fn9rb8r.js:3822-3863 placement
 /**
  * uncachedStorageRootFor：不缓存的存储根解析。
  */
 function uncachedStorageRootFor(startPath) {
   return resolveStorageRoot(startPath, () => findCanonicalGitRootUncached(startPath), true);
 }
-//@ chunk-q8cqcff6.js:3725-3801 placement
+//@ chunk-5fn9rb8r.js:3863-3939 placement
 /**
  * nearestNonHomeRoot：最近的非主目录根。
  */
@@ -140,20 +140,22 @@ function nearestNonHomeRoot(startPath) {
     ? nearestRoot.root
     : findGitRoot(startPath);
 }
-//@ chunk-q8cqcff6.js:3801-3863 placement
+//@ chunk-5fn9rb8r.js:3939-4001 placement
 /**
  * storageRootsFor：路径的所有存储根。
  */
 function storageRootsFor(startPath) {
-  return uniq([storageRootFor(startPath), findCanonicalGitRoot(startPath)].filter((root) => root !== null));
+  return normalizeCaseForComparison_2(
+    [storageRootFor(startPath), findCanonicalGitRoot(startPath)].filter((root) => root !== null),
+  );
 }
 export {
+  warnDisklessSettingsWrite,
   uncachedStorageRootFor,
+  nearestNonHomeRoot,
   storageRootFor,
   noUncachedRoot,
+  storageRootsFor,
   findNearestRoot,
   isHomeDirRoot,
-  warnDisklessSettingsWrite,
-  nearestNonHomeRoot,
-  storageRootsFor,
 };

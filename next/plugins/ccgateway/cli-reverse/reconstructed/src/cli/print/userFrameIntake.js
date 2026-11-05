@@ -3,32 +3,54 @@
  *
  * 2.1.316 新增：用户帧接收、重投解析、输入等待计时与延迟账本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (25)
+ * attribution: sole-consumer 2, placement 22, layout 1
  */
 import { randomUUID } from "crypto";
+import { tryOr, chatOriginField, createPersistenceChecker } from "./transcriptLeaves.js";
+import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { hasMalformedTextBlocks } from "../remoteIO/ingress.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { tryOr, chatOriginField, createPersistenceChecker } from "./transcriptLeaves.js";
 import { rememberMovedRow, joinTextAtSeam } from "../../utils/messages.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { extractInboundAttachments } from "../../bridge/inboundAttachments.js";
-import { isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { logError } from "../../utils/log.js";
 import { matchRequestId, elapsedMs as elapsedMs_2, flagKey } from "../structuredIOProtocol.js";
 import { toError } from "../../utils/errors.js";
 import { flushSessionStorage } from "../../utils/sessionStorage.js";
 import { turnOutcomeLabel } from "../../bridge/inboundMessageOrigin.js";
+import { normalizeMessage } from "../../utils/queryHelpers.js";
+import { buildResultMessage } from "../../entrypoints/sdk/coreSchemas.js";
+import { getSessionId, getTotalCostUSD, getModelUsage, getSafetyStops } from "../../bootstrap/state.js";
+import { EMPTY_USAGE } from "../../services/api/emptyUsage.js";
 import { mergeQueuedTraceContexts } from "../../utils/telemetry/ccrTraceContext.js";
 import { stripPeerMessageBody } from "../../utils/peerMessageHeaders.js";
 import { lastTurnAttributionKey } from "../../utils/cwd.js";
-import { commonTurnId } from "../../services/mcp/ccrTurnId.js";
-import { uniq } from "../../utils/collections.js";
+import { commonTurnId, sharedTurnId } from "../../services/mcp/ccrTurnId.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:52052-61714 placement
+//@ chunk-0yw3taqg.js:70964-71094 sole-consumer
+var CARRIED_ON_DONE_REASONS = {
+  under_way: "done_while_carried_on",
+  ended: "done_after_carried_on",
+  none: "done_though_cut_off",
+  unclear: "done_re_run_unclear",
+};
+//@ chunk-0yw3taqg.js:71094-71209 sole-consumer
+function logMessageGivenAgain(outcome, extra) {
+  tryOr(
+    () =>
+      outcome === "ok"
+        ? logFeatureOk("headless_message_given_again", extra)
+        : logFeatureSad("headless_message_given_again", outcome, extra),
+    undefined,
+  );
+}
+//@ chunk-0yw3taqg.js:71209-81576 placement
 /**
  * stdin 用户帧接收器：校验格式、去重（cli_user_message_dedup_*）、暂存/放回、首轮闸门与重投处理。
  */
@@ -57,10 +79,12 @@ class UserFrameIntake {
   cutBehindItsCompaction;
   readAgain;
   startAborted;
+  prewaitLatch;
   finishedAtStartUp;
   finishedAtStartUpLogged = false;
   noteReportedDoneUnrun;
   storeRewindStandIn;
+  cutOffTurnOpenedBy;
   constructor({
     admissionBarrier,
     firstTurnGate = () => {
@@ -88,11 +112,15 @@ class UserFrameIntake {
     cutBehindItsCompaction = () => false,
     readAgain,
     startAborted,
+    prewaitLatch,
     finishedAtStartUp = () => {
       return;
     },
     noteReportedDoneUnrun = () => {},
     storeRewindStandIn,
+    cutOffTurnOpenedBy = () => {
+      return;
+    },
   }) {
     this.admissionBarrier = admissionBarrier;
     this.firstTurnGate = firstTurnGate;
@@ -114,9 +142,29 @@ class UserFrameIntake {
     this.cutBehindItsCompaction = cutBehindItsCompaction;
     this.readAgain = readAgain;
     this.startAborted = startAborted;
+    this.prewaitLatch = prewaitLatch;
     this.finishedAtStartUp = finishedAtStartUp;
     this.noteReportedDoneUnrun = noteReportedDoneUnrun;
     this.storeRewindStandIn = storeRewindStandIn;
+    this.cutOffTurnOpenedBy = cutOffTurnOpenedBy;
+  }
+  count(uuid, outcome) {
+    let cutOffTurn = tryOr(() => this.cutOffTurnOpenedBy(uuid), undefined);
+    logMessageGivenAgain(
+      outcome !== "ok" || cutOffTurn === undefined
+        ? outcome
+        : !cutOffTurn.openerKnown
+          ? "done_beside_cut_off_turn"
+          : CARRIED_ON_DONE_REASONS[cutOffTurn.reRun],
+      {
+        ...(cutOffTurn?.tailKind !== undefined && {
+          tail_kind: cutOffTurn.tailKind,
+        }),
+        ...(cutOffTurn?.shutdownStamped !== undefined && {
+          tail_shutdown_stamped: cutOffTurn.shutdownStamped,
+        }),
+      },
+    );
   }
   dropMalformed(frame) {
     if (!hasMalformedTextBlocks(frame.message.content)) return false;
@@ -181,6 +229,7 @@ class UserFrameIntake {
       this.reRuns.add(uuid);
       if (cutBehindCompaction) rememberMovedRow(uuid);
       let startInfo = tryOr(() => this.earlierStartOf(uuid), undefined);
+      this.count(uuid, "runs_again");
       logForDiagnosticsNoPII("info", "cli_user_message_dedup_reexecuted", {
         ...(cutBehindCompaction && {
           nothing_stored_after_compaction: true,
@@ -229,6 +278,18 @@ class UserFrameIntake {
       if (!echoWithheld && !waitsBehindPrompt && !this.declinedRedeliveries.takeCancelledLine(uuid)) onSkip();
       let finishedUnrun =
         reachesTranscript && !seenAtRuntime && !turnUnansweredFinal && !heldForPark && !owedToRunningTurn;
+      if (finishedUnrun) this.count(uuid, "ok");
+      else if (!seenAtRuntime)
+        this.count(
+          uuid,
+          turnUnansweredFinal
+            ? "left_unanswered"
+            : heldForPark
+              ? "left_to_parked_turn"
+              : waitsBehindPrompt
+                ? "left_then_runs"
+                : "left_to_turn_carried_on",
+        );
       let nothingRunningOrQueued = false;
       let finishedInfo =
         finishedUnrun && !this.finishedAtStartUpLogged
@@ -247,7 +308,7 @@ class UserFrameIntake {
         this.io.onCommandLifecycle?.(uuid, "completed");
         this.declinedRedeliveries.forget(uuid);
       }
-      if (this.messageQueue.peek(isActiveMainAgentCommand) !== undefined) this.kick();
+      if (this.messageQueue.peek(isDrainableMainThreadCommand) !== undefined) this.kick();
       else if (!this.drain.running) {
         nothingRunningOrQueued = true;
         if (this.idleTeeAllowed()) this.io.sessionState.notifyStateChanged("idle");
@@ -389,6 +450,7 @@ class UserFrameIntake {
         this.heldFrames.delete(frame);
         frame.queueing?.[Symbol.dispose]();
         if (this.parked === parked) this.parked = null;
+        this.prewaitLatch.clearIfNothingPending();
       });
     this.parked = parked;
   }
@@ -426,7 +488,8 @@ class UserFrameIntake {
       awaitedAdmitMs = elapsedMs_2(startTime);
       if (!admitResult) return;
     } else if (!admitted) return;
-    if (parkedAtMs !== undefined && !pending.ownFirstTurnMessage && !this.heldFrames.delete(pending)) return;
+    let waitsForHeldFrame = parkedAtMs !== undefined && !pending.ownFirstTurnMessage;
+    if (waitsForHeldFrame && !this.heldFrames.has(pending)) return;
     let { frame, command } = pending;
     let startTime_2 = performance.now();
     let enqueuedWallMs = Date.now();
@@ -460,7 +523,14 @@ class UserFrameIntake {
     } catch (error) {
       logError(error);
     }
-    this.messageQueue.enqueue(command);
+    try {
+      this.messageQueue.enqueue(command);
+    } finally {
+      if (waitsForHeldFrame) {
+        this.prewaitLatch.heldCommandQueued(command);
+        this.heldFrames.delete(pending);
+      }
+    }
     if (frame.uuid !== undefined && this.declinedRedeliveries.takeStoppedWhileWaiting(frame.uuid))
       this.startAborted(frame.uuid);
     queueing?.queued();
@@ -491,7 +561,7 @@ class UserFrameIntake {
     this.kick();
   }
 }
-//@ chunk-tyg7f3ek.js:61714-62405 placement
+//@ chunk-0yw3taqg.js:81576-82267 placement
 class InputLatencyLedger {
   inputReadyAtMs;
   capacity;
@@ -531,15 +601,15 @@ class InputLatencyLedger {
     return frame && splitStartupWait(toMs - fromMs, frame);
   }
 }
-//@ chunk-tyg7f3ek.js:62405-62473 placement
+//@ chunk-0yw3taqg.js:82267-82335 placement
 function overlapMs(startA, endA, startB, endB) {
   return Math.max(0, Math.min(endA, endB) - Math.max(startA, startB));
 }
-//@ chunk-tyg7f3ek.js:62473-62524 placement
+//@ chunk-0yw3taqg.js:82335-82386 placement
 function nonNegativeRounded(ms) {
   return Math.max(0, Math.round(ms ?? 0));
 }
-//@ chunk-tyg7f3ek.js:62524-63097 placement
+//@ chunk-0yw3taqg.js:82386-82959 placement
 function inputLatencyFields({
   waits,
   parsedAtMs,
@@ -580,7 +650,7 @@ function inputLatencyFields({
     other: Math.max(0, rounded - totalMs),
   };
 }
-//@ chunk-tyg7f3ek.js:63097-63354 placement
+//@ chunk-0yw3taqg.js:82959-83216 placement
 function splitStartupWait(startupMs, frame) {
   let rounded = nonNegativeRounded(startupMs);
   let min = Math.min(rounded, nonNegativeRounded(frame?.startupMs));
@@ -599,7 +669,7 @@ function splitStartupWait(startupMs, frame) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:63354-63503 placement
+//@ chunk-0yw3taqg.js:83216-83365 placement
 function durationBucket_2(ms) {
   let minutes = ms / 60000;
   if (minutes < 1) return "under_1m";
@@ -608,7 +678,7 @@ function durationBucket_2(ms) {
   if (minutes < 360) return "under_6h";
   return "6h_or_more";
 }
-//@ chunk-tyg7f3ek.js:63503-63708 placement
+//@ chunk-0yw3taqg.js:83365-83572 placement
 function compactionRunFields({ terminalReason, compactions }) {
   let bucket = compactions === 1 ? "1" : compactions === 2 ? "2" : "3_or_more";
   return {
@@ -620,7 +690,7 @@ function compactionRunFields({ terminalReason, compactions }) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:63708-63949 placement
+//@ chunk-0yw3taqg.js:83572-83813 placement
 function createTurnPersistenceChecks({ storageV5, heldInMemory }) {
   return {
     flush: () => flushSessionStorage(),
@@ -638,7 +708,7 @@ function createTurnPersistenceChecks({ storageV5, heldInMemory }) {
       })().persisted(uuid),
   };
 }
-//@ chunk-tyg7f3ek.js:63949-68286 placement
+//@ chunk-0yw3taqg.js:83813-88150 placement
 /**
  * 处理 CCR 重投的用户消息：判断是否已读、已回复、需重跑或关闭，并回执。
  */
@@ -867,7 +937,7 @@ class RedeliveryResolver {
     this.io.onCommandLifecycle?.(outcome, reason);
   }
 }
-//@ chunk-tyg7f3ek.js:68286-69150 placement
+//@ chunk-0yw3taqg.js:88150-89014 placement
 class DeclinedRedeliveryBatcher {
   io;
   messageQueue;
@@ -920,13 +990,50 @@ class DeclinedRedeliveryBatcher {
     this.io.onCommandLifecycle?.(stage, entry);
   }
 }
-//@ chunk-tyg7f3ek.js:69187-69492 placement
+//@ chunk-0yw3taqg.js:89014-89594 layout
+function flushPendingRowsWithTerminal(messages, deps) {
+  for (let row of messages) for (let frame of normalizeMessage(row)) deps.write(frame);
+  let { turnUnderWay, pendingDispatchUuids, pendingDispatchKeys } = deps.drain;
+  if (
+    turnUnderWay ||
+    pendingDispatchUuids.length > 0 ||
+    pendingDispatchKeys.length > 0 ||
+    deps.messageQueue.peek(isDrainableMainThreadCommand) !== undefined
+  )
+    return;
+  let resultMessage = buildResultMessage({
+    startedAt: performance.now(),
+    common: {
+      is_error: false,
+      duration_api_ms: 0,
+      num_turns: 0,
+      stop_reason: null,
+      session_id: getSessionId(),
+      total_cost_usd: getTotalCostUSD(),
+      usage: EMPTY_USAGE,
+      modelUsage: getModelUsage(),
+      permission_denials: [],
+      fast_mode_state: undefined,
+      fast_mode_disabled_reason: undefined,
+      origin: undefined,
+      subagent_stats: undefined,
+      safety_stops: getSafetyStops(),
+    },
+    variant: {
+      subtype: "success",
+      result: "",
+    },
+  });
+  deps.pointerResults?.add(resultMessage);
+  deps.write(resultMessage);
+}
+//@ chunk-0yw3taqg.js:89631-89936 placement
 /**
  * 输入等待阶段名列表与其索引映射，供 InputWaitStopwatch 按阶段累计耗时。
  */
 var INPUT_WAIT_PHASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var INPUT_WAIT_PHASE_INDEX;
-deferInit("chunk-tyg7f3ek.js:69187", () => {
+deferInit("chunk-0yw3taqg.js:89631", () => {
   INPUT_WAIT_PHASES = [
     "idle",
     "earlier_turn",
@@ -951,7 +1058,7 @@ deferInit("chunk-tyg7f3ek.js:69187", () => {
   ];
   INPUT_WAIT_PHASE_INDEX = new Map(INPUT_WAIT_PHASES.map((phase, index) => [phase, index]));
 });
-//@ chunk-tyg7f3ek.js:69492-70578 placement
+//@ chunk-0yw3taqg.js:89936-91022 placement
 class InputWaitStopwatch {
   id = randomUUID();
   spentMs = new Float64Array(INPUT_WAIT_PHASES.length);
@@ -1004,7 +1111,7 @@ class InputWaitStopwatch {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:70578-70763 placement
+//@ chunk-0yw3taqg.js:91022-91207 placement
 function inputWaitBreakdown(spentMs, currentPhase, phaseSinceMs) {
   let breakdown = {};
   let previous = 0;
@@ -1020,7 +1127,7 @@ function inputWaitBreakdown(spentMs, currentPhase, phaseSinceMs) {
   breakdown.other = Math.max(0, Math.round(phaseSinceMs) - reported);
   return breakdown;
 }
-//@ chunk-tyg7f3ek.js:70763-70830 placement
+//@ chunk-0yw3taqg.js:91207-91274 placement
 function stringToTextBlocks(text) {
   return typeof text === "string"
     ? [
@@ -1031,24 +1138,24 @@ function stringToTextBlocks(text) {
       ]
     : text;
 }
-//@ chunk-tyg7f3ek.js:70830-70958 placement
-function mergeQueuedPrompts_2(values) {
+//@ chunk-0yw3taqg.js:91274-91402 placement
+function mergeQueuedPrompts(values) {
   if (values.length === 1) return values[0];
   if (values.every((value) => typeof value === "string"))
     return values.join(`
 `);
   return values.map(stringToTextBlocks).reduce(joinTextAtSeam);
 }
-//@ chunk-tyg7f3ek.js:70958-71819 placement
+//@ chunk-0yw3taqg.js:91402-92642 placement
 /**
  * 把同一批排队的多条 prompt 合并成一条（合并文本、mergedSendUuids、来源）。
  */
-function mergeQueuedPrompts(members) {
+function mergeQueuedPrompts_2(members) {
   let first = members[0];
   if (members.length === 1) return first;
   let traceContext = mergeQueuedTraceContexts(members);
   let lastWithUuid = members.findLast((member) => member.uuid) ?? first;
-  let mergedValue = mergeQueuedPrompts_2(members.map((member) => member.value));
+  let mergedValue = mergeQueuedPrompts(members.map((member) => member.value));
   let firstFrame =
     first.origin?.kind === "peer" ? stripPeerMessageBody(first.origin, mergedValue, first.value) : undefined;
   let flattened = members.flatMap(({ origin }) =>
@@ -1072,6 +1179,9 @@ function mergeQueuedPrompts(members) {
           : firstFrame,
     }),
     value: mergedValue,
+    hostAsked: members.every((member) => member.hostAsked) ? first.hostAsked : undefined,
+    ownWord: members.every((member) => member.ownWord) ? first.ownWord : undefined,
+    declaresNoSender: members.every((member) => member.declaresNoSender) ? first.declaresNoSender : undefined,
     uuid: lastWithUuid.uuid,
     frameTiming: lastWithUuid.frameTiming,
     turnAttributionKey: lastTurnAttributionKey(members),
@@ -1080,24 +1190,32 @@ function mergeQueuedPrompts(members) {
     attachmentSourceUuid: undefined,
     deliveryId: undefined,
     fileAttachments: members.flatMap((member) => member.fileAttachments ?? []),
+    ...(members.some((member) => member.namesWidgetViews) && {
+      namesWidgetViews: true,
+    }),
     clientPlatform: members.find((member) => member.clientPlatform)?.clientPlatform ?? first.clientPlatform,
     ccrTurnId: commonTurnId(members),
+    typedByPerson: members.every((member) => member.typedByPerson === true) || undefined,
+    ccrProgramUseCaseId: sharedTurnId(members),
     ...(members.some((member) => member.ccrTurnIdEndsWithTurn) && {
       ccrTurnIdEndsWithTurn: true,
     }),
     ...(members.some((member) => member.stampThreadState) && {
       stampThreadState: true,
     }),
+    ...(members.some((member) => member.ultrathinkTyped) && {
+      ultrathinkTyped: true,
+    }),
     ...(members.some((member) => member.toolsUsed !== undefined) && {
-      toolsUsed: uniq(members.flatMap((member) => member.toolsUsed ?? [])),
+      toolsUsed: normalizeCaseForComparison_2(members.flatMap((member) => member.toolsUsed ?? [])),
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:71819-71901 placement
+//@ chunk-0yw3taqg.js:92642-92724 placement
 function hasTurnAttribution(batch) {
   return batch.uuid !== undefined && (batch.turnAttributionKey !== undefined || !batch.isMeta);
 }
-//@ chunk-tyg7f3ek.js:71901-72046 placement
+//@ chunk-0yw3taqg.js:92724-92869 placement
 function isResumedTurnBatch(batch) {
   return (
     !isHandedOffBatch(batch) &&
@@ -1109,7 +1227,7 @@ function isResumedTurnBatch(batch) {
     )
   );
 }
-//@ chunk-tyg7f3ek.js:72046-72183 placement
+//@ chunk-0yw3taqg.js:92869-93006 placement
 function isHandedOffBatch(batch) {
   return batch.some(
     (member) =>
@@ -1117,7 +1235,7 @@ function isHandedOffBatch(batch) {
       (member.resumedTurnUserMessageUuid !== undefined && member.resumedTurnOpenerVouched !== true),
   );
 }
-//@ chunk-tyg7f3ek.js:72183-72370 placement
+//@ chunk-0yw3taqg.js:93006-93193 placement
 function batchUuids(batch) {
   return batch.flatMap((member) =>
     [
@@ -1129,7 +1247,7 @@ function batchUuids(batch) {
     ].filter((uuid) => uuid !== undefined),
   );
 }
-//@ chunk-tyg7f3ek.js:72370-72484 placement
+//@ chunk-0yw3taqg.js:93193-93307 placement
 function isDrainOnlyResume(command) {
   return (
     (command.drainOnly === true && command.resumedTurnUserMessageUuid !== undefined) ||
@@ -1141,12 +1259,13 @@ export {
   createTurnPersistenceChecks,
   DeclinedRedeliveryBatcher,
   UserFrameIntake,
+  flushPendingRowsWithTerminal,
   InputLatencyLedger,
-  hasTurnAttribution,
   isDrainOnlyResume,
   isHandedOffBatch,
   batchUuids,
   isResumedTurnBatch,
   InputWaitStopwatch,
-  mergeQueuedPrompts,
+  mergeQueuedPrompts_2,
+  hasTurnAttribution,
 };

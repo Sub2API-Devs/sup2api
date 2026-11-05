@@ -3,15 +3,15 @@
  *
  * /stats 每日活跃热力图绘制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/heatmap.ts
- * pieces: chunk-9h8dr0qb.js (6)
+ * pieces: chunk-j6tt9nsa.js (6)
  * attribution: fingerprint 5, layout 1
  */
 import { sequential } from "./sequential.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-9h8dr0qb.js:68754-68970 fingerprint (2.1.88 match: calculatePercentiles, 1)
+//@ chunk-j6tt9nsa.js:68719-68935 fingerprint (2.1.88 match: calculatePercentiles, 1)
 function calculatePercentiles(dailyActivity) {
   let counts = dailyActivity
     .map((day) => day.messageCount)
@@ -24,7 +24,7 @@ function calculatePercentiles(dailyActivity) {
     p75: counts[Math.floor(counts.length * 0.75)],
   };
 }
-//@ chunk-9h8dr0qb.js:68970-70093 fingerprint (2.1.88 match: generateHeatmap, 1)
+//@ chunk-j6tt9nsa.js:68935-70052 fingerprint (2.1.88 match: generateHeatmap, 1)
 /**
  * 按每日消息数生成 /stats 的终端热力图。
  */
@@ -98,14 +98,14 @@ function generateHeatmap(dailyActivity, options = {}) {
   return lines.join(`
 `);
 }
-//@ chunk-9h8dr0qb.js:70093-70232 layout (2.1.88 match: getLocalISODate, 0.851)
+//@ chunk-j6tt9nsa.js:70052-70191 layout (2.1.88 match: getLocalISODate, 0.851)
 function getLocalISODate(now) {
   let year = now.getFullYear();
   let month = String(now.getMonth() + 1).padStart(2, "0");
   let day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-//@ chunk-9h8dr0qb.js:70232-70343 fingerprint (2.1.88 match: getIntensity, 1)
+//@ chunk-j6tt9nsa.js:70191-70302 fingerprint (2.1.88 match: getIntensity, 1)
 function getIntensity(messageCount, percentiles) {
   if (messageCount === 0 || !percentiles) return 0;
   if (messageCount >= percentiles.p75) return 4;
@@ -113,12 +113,12 @@ function getIntensity(messageCount, percentiles) {
   if (messageCount >= percentiles.p25) return 2;
   return 1;
 }
-//@ chunk-9h8dr0qb.js:70343-70368 fingerprint (2.1.88 match: claudeOrange, 1)
+//@ chunk-j6tt9nsa.js:70302-70327 fingerprint (2.1.88 match: claudeOrange, 1)
 var claudeOrange; // deferred: uses sequential (./sequential.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9h8dr0qb.js:70343", () => {
+deferInit("chunk-j6tt9nsa.js:70302", () => {
   claudeOrange = sequential.hex("#da7756");
 });
-//@ chunk-9h8dr0qb.js:70368-70563 fingerprint (2.1.88 match: getHeatmapChar, 1)
+//@ chunk-j6tt9nsa.js:70327-70522 fingerprint (2.1.88 match: getHeatmapChar, 1)
 function getHeatmapChar(intensity) {
   switch (intensity) {
     case 0:

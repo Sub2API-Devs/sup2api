@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：协调者模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/coordinator/coordinatorMode.ts
- * pieces: chunk-09njdshr.js (14), chunk-18hwfzwa.js (2), chunk-96sthk2s.js (2), chunk-hg2zbde4.js (1)
- * attribution: placement 11, layout 2, facade-exports 4, affinity 1, fingerprint 1
+ * pieces: chunk-4qfkyrk4.js (14), chunk-6f6qbsyw.js (1), chunk-czq1j3j2.js (2), chunk-ghnsph6v.js (2)
+ * attribution: placement 11, layout 2, facade-exports 4, sole-consumer 1, fingerprint 1
  */
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { getIsInteractive, getIsRemoteMode, getDisableSlashCommands } from "../bootstrap/state.js";
@@ -27,16 +27,24 @@ import { getMaxSubagentSpawnDepth } from "../tools/AgentTool/spawnDepth.js";
 import { isBashAvailable, isPowerShellToolEnabled } from "../utils/shell/shellToolUtils.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { AGENT, FORK } from "../tools/AgentTool/constants.js";
 import { WORKFLOW_TOOL_NAME } from "../tools/WorkflowTool/constants.js";
 import { ARTIFACT_TOOL_NAME } from "../tools/ArtifactTool/constants.js";
-import { isArtifactToolRegistered } from "../services/artifacts/artifactToolGates.js";
+import {
+  isArtifactToolRegistered,
+  isArtifactToolReplacedByCcrEntry,
+} from "../services/artifacts/artifactToolGates.js";
 import { isBuiltInArtifactHiddenForMcp } from "../services/artifacts/artifactsMcpTools.js";
 import { LSP_TOOL_NAME } from "../tools/LSPTool/UI.js";
 import { POLL } from "../tools/PollTool/prompt.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { isAnyFeatureAvailable } from "../utils/featureAvailability.js";
+import { CLAUDE_ARTIFACTS } from "../services/mcp/firstPartyServerIds.js";
+import { artifactsMcpClient, isEntryRowNotServed } from "../services/mcp/client.js";
+import { isConnectedOrCached } from "../skills/bundled/scheduleRemoteAgents.js";
+import { isOwnArtifactMcpTool } from "../services/analytics/metadata.js";
 import {
   WORKER_MCP_TOOLS_PREFIX,
   SYSTEM_NOTIFICATION_MARKER,
@@ -45,13 +53,13 @@ import { isCrossSessionMessagingEnabled } from "../utils/crossSessionMessagingGa
 import { LISTAGENTS } from "../tools/SendMessageTool/listAgents.js";
 import { isWorkflowsAvailable } from "../utils/workflows/workflowGates.js";
 import { TASKSTOP } from "../tools/TaskStopTool/prompt.js";
-import { toolMatchesName } from "../Tool.js";
+import { matchesToolName } from "../Tool.js";
 import { isMcpTool } from "../services/mcp/utils.js";
 import { isSubagentHistoryEnabled } from "../components/messages/UserPromptMessage.js";
 import { isInterruptionOnlyMessage } from "../utils/messages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-96sthk2s.js:301-429 fingerprint (2.1.88 match: isCoordinatorMode, 0.779)
+//@ chunk-ghnsph6v.js:301-429 fingerprint (2.1.88 match: isCoordinatorMode, 0.781)
 /**
  * 是否处于协调者模式：CLAUDE_CODE_COORDINATOR_MODE 为真，且不是（某受限场景且非 CLAUDE_CODE_REMOTE）。
  */
@@ -60,14 +68,14 @@ function isCoordinatorMode_2() {
   if (getIsInteractive() && !getIsRemoteMode() && !env.CLAUDE_CODE_REMOTE) return false;
   return true;
 }
-//@ chunk-96sthk2s.js:429-477 placement
+//@ chunk-ghnsph6v.js:429-477 placement
 /**
  * 协调者模式下是否为主线程（无 agentId）。
  */
 function isCoordinatorMainThread(session) {
   return isCoordinatorMode_2() && session.agentId === undefined;
 }
-//@ chunk-hg2zbde4.js:13803-13957 placement
+//@ chunk-6f6qbsyw.js:12011-12165 placement
 /**
  * 协调器提示：工具列表中同时有多个 PR 活动 MCP 服务器副本时，优先调用第一个的那份。
  */
@@ -75,38 +83,38 @@ function prActivityServerPreference() {
   let [firstServer, ...restServers] = PR_ACTIVITY_MCP_SERVERS.map((server) => `\`${getMcpPrefix(server)}\``);
   return `When your tool list has both a ${firstServer} copy and a ${restServers.join(" or ")} copy, call the ${firstServer} one.`;
 }
-//@ chunk-09njdshr.js:1303-1336 placement (2.1.88 match: _temp, 1)
+//@ chunk-4qfkyrk4.js:5619-5652 placement (2.1.88 match: _temp, 1)
 /**
  * 函数 isCoordinatorEnvSet（环境变量为 "true"）；位于「并入旧版已有路径：协调者模式」模块。
  */
 function isCoordinatorEnvSet() {
   return isEnvTruthy("true");
 }
-//@ chunk-09njdshr.js:1336-1389 placement
+//@ chunk-4qfkyrk4.js:5652-5705 placement
 function isIndexedCorbatoGateOn() {
   return getFeatureValue_SESSION_PINNED("tengu_indexed_corbato", false);
 }
-//@ chunk-09njdshr.js:1389-1450 placement
+//@ chunk-4qfkyrk4.js:5705-5766 placement
 function skillGuidanceFlag() {
   return env.CLAUDE_CODE_COORDINATOR_SKILL_GUIDANCE;
 }
-//@ chunk-09njdshr.js:1450-1532 placement
-function _() {
-  let { isScratchpadEnabled } = require("../utils/permissions/filesystem.js");
+//@ chunk-4qfkyrk4.js:5766-5848 placement
+function isScratchpadEnabled() {
+  let { isScratchpadEnabled } = require("../utils/permissions/filesystem.lazy.js");
   return isScratchpadEnabled();
 }
-//@ chunk-09njdshr.js:1532-1608 placement
+//@ chunk-4qfkyrk4.js:5848-5924 placement
 var MCP_TOOLS_PREAMBLE = "Workers have access to MCP tools from these connected MCP servers: ";
-//@ chunk-09njdshr.js:1608-1643 placement
+//@ chunk-4qfkyrk4.js:5924-5959 placement
 function shortModelLabel(name) {
   return escapeXml(foldLookalikeChars(stripIgnorables(name)));
 }
-//@ chunk-09njdshr.js:1643-1666 placement
+//@ chunk-4qfkyrk4.js:5959-5982 placement
 var COORDINATOR_MODES; // deferred: uses SENDMESSAGE (../tools/SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-09njdshr.js:1643", () => {
+deferInit("chunk-4qfkyrk4.js:5959", () => {
   COORDINATOR_MODES = new Set([SENDMESSAGE, STRUCTUREDOUTPUT]);
 });
-//@ chunk-09njdshr.js:1666-1768 layout
+//@ chunk-4qfkyrk4.js:5982-6084 layout
 /**
  * 插件 Skill 工具是否对 worker 公开（懒加载判断）。
  */
@@ -117,7 +125,7 @@ function isWorkerToolAdvertised(toolName) {
   }
   return true;
 }
-//@ chunk-09njdshr.js:1768-2375 layout
+//@ chunk-4qfkyrk4.js:6084-6691 layout
 /**
  * 协调者提示词片段：通讯工具模式下"裸文本不会到达用户"的约束、启动 worker 后的告知方式、skill 使用提示。
  */
@@ -126,14 +134,14 @@ var COMMS_TOOL_ONLY_NOTE =
 var LAUNCH_ANNOUNCE_VIA_COMMS = 'post a one-line "launched X" via your comms tool';
 var USE_SKILL_PHRASE = '"Use the /<name> skill"';
 var SKILL_BRIEFING_GUIDANCE = `Before you brief a worker on work a listed skill covers, or reply about that work, load the skill with your ${SKILL} tool (read-only: its instructions load, nothing runs) so your brief and reply follow it, and put ${USE_SKILL_PHRASE} in the worker's prompt, because only workers execute skills.`;
-//@ chunk-09njdshr.js:2375-2402 facade-exports
+//@ chunk-4qfkyrk4.js:6691-6718 facade-exports
 /**
  * isCoordinatorMode 的本地别名。
  */
 function isCoordinatorMode() {
   return isCoordinatorMode_2();
 }
-//@ chunk-09njdshr.js:2402-2873 facade-exports (2.1.88 match: matchSessionMode, 0.9)
+//@ chunk-4qfkyrk4.js:6718-7189 facade-exports (2.1.88 match: matchSessionMode, 0.9)
 /**
  * 恢复会话时让协调者模式与会话记录的 mode 一致：设置/删除 CLAUDE_CODE_COORDINATOR_MODE，记 tengu_coordinator_mode_switched，返回给用户的提示文字。
  */
@@ -158,7 +166,7 @@ function matchSessionMode(sessionMode) {
     ? "Entered coordinator mode to match resumed session."
     : "Exited coordinator mode to match resumed session.";
 }
-//@ chunk-09njdshr.js:2873-4525 facade-exports (2.1.88 match: getCoordinatorUserContext, 0.549)
+//@ chunk-4qfkyrk4.js:7189-9777 facade-exports (2.1.88 match: getCoordinatorUserContext, 0.455)
 /**
  * 生成协调者的 workerToolsContext：列出 worker 可用工具（CLAUDE_CODE_SIMPLE 时只有 Bash/PowerShell/Read/Edit/Agent）、Artifact 交付提示、MCP 服务器名、scratchpad 目录、skill 指引。
  */
@@ -169,8 +177,8 @@ function getCoordinatorUserContext(mcpClients, getToolHints, scratchpadDir, coor
     ? [
         ...(isBashAvailable() ? [BASH_TOOL_NAME] : []),
         ...(isPowerShellToolEnabled() ? [POWERSHELL_TOOL_NAME] : []),
-        FILE_READ_TOOL_NAME,
-        FILE_EDIT_TOOL_NAME,
+        READ,
+        EDIT,
         ...(canNestAgents ? [AGENT] : []),
       ].sort()
     : [...(canNestAgents ? [AGENT] : []), ...Array.from(EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2)]
@@ -182,7 +190,12 @@ function getCoordinatorUserContext(mcpClients, getToolHints, scratchpadDir, coor
         )
         .filter((name) => name !== LSP_TOOL_NAME || isCoordinatorEnvSet())
         .filter((name) => isWorkerToolAdvertised(name))
-        .filter((name) => name !== POLL || false)
+        .filter(
+          (name) =>
+            name !== POLL ||
+            (codeModeAccepted() &&
+              require("../tools/RefreshMcpToolsTool/CODE_MODE_ONLY_TOOLS.lazy.js").isCodeModeExperimentEnabled()),
+        )
         .sort();
   let hintByName = new Map(getToolHints().map((hint) => [hint.name, hint.searchHint]));
   let joined = workerTools.map((workerTool) => {
@@ -198,6 +211,21 @@ ${joined}`;
 ${ARTIFACT_TOOL_NAME} pages are HTML: when you delegate a report, write-up, or other page for the user to read or share, ask the worker to author an \`.html\` page and publish it with ${ARTIFACT_TOOL_NAME} \u2014 do not name a \`.md\` file as the deliverable, even when the source material is Markdown, unless a loaded skill explicitly instructs a Markdown page.`;
     if (isAnyFeatureAvailable())
       content += ` ${ARTIFACT_TOOL_NAME} types: a slide deck, presentation, visual design, or data dashboard the user asks for \u2014 in whatever words \u2014 is not an \`.html\` page for the worker to author; name it in the worker's prompt in the user's own words and tell the worker to first list the published ${ARTIFACT_TOOL_NAME} types with ${ARTIFACT_TOOL_NAME} and start from the one that fits, writing an \`.html\` page only when none does.`;
+  } else if (
+    !env.CLAUDE_CODE_SIMPLE &&
+    mcpClients.some((mcpClient) => mcpClient.name === CLAUDE_ARTIFACTS) &&
+    ((isArtifactToolRegistered() && isBuiltInArtifactHiddenForMcp()) || isArtifactToolReplacedByCcrEntry())
+  ) {
+    let artifactClient = artifactsMcpClient();
+    if (
+      artifactClient !== undefined &&
+      (isConnectedOrCached(artifactClient) || artifactClient.type === "pending") &&
+      isOwnArtifactMcpTool(artifactClient.name, artifactClient.config) &&
+      !isEntryRowNotServed(artifactClient)
+    )
+      content += `
+
+Artifact pages are HTML: when you delegate a report, write-up, or other page for the user to read or share, ask the worker to author an \`.html\` page and publish it with the ${CLAUDE_ARTIFACTS} MCP tools \u2014 do not name a \`.md\` file as the deliverable, even when the source material is Markdown. Artifact types: a slide deck, presentation, visual design, or data dashboard the user asks for \u2014 in whatever words \u2014 is not an \`.html\` page for the worker to author; name it in the worker's prompt in the user's own words and tell the worker to first list the published artifact types with list_types, if it has that tool, and start from the one that fits, writing an \`.html\` page only when none does.`;
   }
   let indexedGateOn = isIndexedCorbatoGateOn();
   if (mcpClients.length > 0) {
@@ -210,7 +238,7 @@ ${content}`
 
 ${WORKER_MCP_TOOLS_PREFIX}${serverNames}`;
   }
-  if (scratchpadDir && _())
+  if (scratchpadDir && isScratchpadEnabled())
     content += `
 
 Scratchpad directory: ${scratchpadDir}
@@ -223,7 +251,7 @@ ${SKILL_BRIEFING_GUIDANCE}`;
     workerToolsContext: content,
   };
 }
-//@ chunk-09njdshr.js:4525-22803 facade-exports (2.1.88 match: getCoordinatorSystemPrompt, 0.418)
+//@ chunk-4qfkyrk4.js:9777-28055 facade-exports (2.1.88 match: getCoordinatorSystemPrompt, 0.419)
 /**
  * 协调者系统提示词：角色、工具（Agent/SendMessage/TaskStop/Workflow/Skill/PR 订阅/跨会话 peer）、worker 能力、模型参数规则（CLAUDE_CODE_COORDINATOR_FORCE_WORKER_INHERIT_MODEL/CLAUDE_CODE_SUBAGENT_MODEL_FORCE 时禁用）、通讯工具模式差异等。
  */
@@ -233,7 +261,7 @@ function getCoordinatorSystemPrompt(commsToolMode, coordinatorTools) {
     ...(isPowerShellToolEnabled() ? [POWERSHELL_TOOL_NAME] : []),
   ].join("/");
   let canNestAgents = getMaxSubagentSpawnDepth() > 1;
-  let simpleTools = [joined, FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME, ...(canNestAgents ? [AGENT] : [])];
+  let simpleTools = [joined, READ, EDIT, ...(canNestAgents ? [AGENT] : [])];
   let isSimpleMode = env.CLAUDE_CODE_SIMPLE
     ? `Workers have access to ${simpleTools.slice(0, -1).join(", ")}, and ${simpleTools.at(-1)} tools, plus MCP tools from configured MCP servers.${canNestAgents ? ` Workers can fan out further via ${AGENT}.` : ""}`
     : `Workers have access to standard tools, MCP tools from configured MCP servers, and project skills via the ${SKILL} tool. Delegate skill invocations that need worker tools (e.g. /commit, /verify) to workers by including ${USE_SKILL_PHRASE} in the worker prompt.`;
@@ -242,7 +270,7 @@ function getCoordinatorSystemPrompt(commsToolMode, coordinatorTools) {
       ? !env.CLAUDE_CODE_SIMPLE && !getDisableSlashCommands()
       : hasWorkerFor(coordinatorTools, SKILL)
   )
-    ? `- **${SKILL}** - Load a skill's full instructions inline (read-only: the instructions load, but no shell, hooks, permission grants, or fork run). Read skills to inform how you reply, triage, and coordinate. Execution happens in workers: hand the skill to one (${USE_SKILL_PHRASE} in its prompt) when following it needs ${joined}, ${FILE_READ_TOOL_NAME}, ${FILE_EDIT_TOOL_NAME}, or other tools you don't have \u2014 or, when the skill's recipe is orchestration, spawn workers per that recipe and synthesize their results
+    ? `- **${SKILL}** - Load a skill's full instructions inline (read-only: the instructions load, but no shell, hooks, permission grants, or fork run). Read skills to inform how you reply, triage, and coordinate. Execution happens in workers: hand the skill to one (${USE_SKILL_PHRASE} in its prompt) when following it needs ${joined}, ${READ}, ${EDIT}, or other tools you don't have \u2014 or, when the skill's recipe is orchestration, spawn workers per that recipe and synthesize their results
 `
     : "";
   let crossSessionMessaging = isCrossSessionMessagingEnabled()
@@ -508,11 +536,11 @@ User:
 You:
   Fix for the new test is in progress. Still waiting to hear back about the test suite.`;
 }
-//@ chunk-09njdshr.js:22803-22855 affinity
+//@ chunk-4qfkyrk4.js:28055-28107 sole-consumer
 function hasWorkerFor(coordinatorTools, toolName) {
-  return coordinatorTools.some((tool) => toolMatchesName(tool, toolName) && !isMcpTool(tool));
+  return coordinatorTools.some((tool) => matchesToolName(tool, toolName) && !isMcpTool(tool));
 }
-//@ chunk-18hwfzwa.js:222734-223006 placement
+//@ chunk-czq1j3j2.js:227773-228045 placement
 /**
  * 给 local_agent 任务（非 fork/main-session）中由协调者发出的纯文本 user 消息打上 origin=coordinator 标记（带缓存）。
  */
@@ -539,7 +567,7 @@ function tagCoordinatorOrigin(messages, task, cache) {
     return tagged;
   });
 }
-//@ chunk-18hwfzwa.js:223006-223340 placement (2.1.88 match: extractTitleText, 0.668)
+//@ chunk-czq1j3j2.js:228045-228379 placement (2.1.88 match: extractTitleText, 0.666)
 /**
  * 是否是不以 `<` 开头的纯文本人类输入（非 meta、非压缩摘要、非工具结果）。
  */
@@ -567,11 +595,11 @@ function isPlainHumanText(message) {
 }
 export {
   isIndexedCorbatoGateOn,
+  isCoordinatorEnvSet,
+  isCoordinatorMainThread,
   isCoordinatorMode_2,
   isCoordinatorMode,
   tagCoordinatorOrigin,
-  isCoordinatorEnvSet,
-  isCoordinatorMainThread,
   getCoordinatorSystemPrompt,
   getCoordinatorUserContext,
   matchSessionMode,

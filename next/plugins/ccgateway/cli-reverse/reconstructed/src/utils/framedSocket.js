@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。分帧 socket。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2hnnvz4r.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e8cb2esh.js (4)
  * attribution: placement 4
  */
 import { jsonStringify, jsonParse } from "./slowOperations.js";
 
-//@ chunk-2hnnvz4r.js:229-280 placement
+//@ chunk-e8cb2esh.js:229-280 placement
 /**
  * 分帧 socket 的常量组：数据帧类型、控制帧类型、控制帧上限、帧头字节数、帧上限与空闲超时。
  */
@@ -20,7 +20,7 @@ var MAX_CONTROL_FRAME_BYTES = 262144;
 var FRAME_HEADER_BYTES = 5;
 var MAX_FRAME_BYTES = 1048576;
 var SOCKET_IDLE_TIMEOUT_MS = 1e4;
-//@ chunk-2hnnvz4r.js:280-448 placement
+//@ chunk-e8cb2esh.js:280-448 placement
 /**
  * 编码数据帧：4 字节长度 + 1 字节类型（数据）+ 负载。
  */
@@ -32,7 +32,7 @@ function encodeDataFrame(payload) {
   payloadBuffer.copy(frame, FRAME_HEADER_BYTES);
   return frame;
 }
-//@ chunk-2hnnvz4r.js:448-596 placement
+//@ chunk-e8cb2esh.js:448-596 placement
 /**
  * 编码控制帧：4 字节长度 + 1 字节类型（控制）+ JSON 负载。
  */
@@ -44,7 +44,7 @@ function encodeControlFrame(controlMessage) {
   buffer.copy(frame, FRAME_HEADER_BYTES);
   return frame;
 }
-//@ chunk-2hnnvz4r.js:596-1098 placement
+//@ chunk-e8cb2esh.js:596-1098 placement
 /**
  * 创建分帧解码器：累积字节流并解析出数据帧与控制帧，帧过大、JSON 错误或未知类型时报错并停止。
  */
@@ -93,12 +93,12 @@ function createFrameDecoder(onFrame, onError) {
   };
 }
 export {
-  MAX_FRAME_BYTES,
-  DATA_FRAME_KIND,
   encodeControlFrame,
-  createFrameDecoder,
-  encodeDataFrame,
   MAX_CONTROL_FRAME_BYTES,
+  encodeDataFrame,
   SOCKET_IDLE_TIMEOUT_MS,
+  createFrameDecoder,
+  DATA_FRAME_KIND,
   CONTROL_FRAME_KIND,
+  MAX_FRAME_BYTES,
 };

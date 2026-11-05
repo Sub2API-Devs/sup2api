@@ -1,8 +1,8 @@
 /**
  * @smithy/shared-ini-file-loader/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/shared-ini-file-loader@4.4.0..4.4.3
- * pieces: chunk-a1ttyqdw.js (1)
+ * pieces: chunk-g8stk5cd.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_getSSOTokenFromFile } from "./getSSOTokenFromFile.js";
 import { require_types } from "../../types/dist-cjs/index.js";
 import { require_readFile } from "./readFile.js";
 
-//@ chunk-a1ttyqdw.js:1663-4692 cjs-fingerprint
+//@ chunk-g8stk5cd.js:1663-4692 cjs-fingerprint
 var require_shared_ini_file_loader = __commonJS(function (cjsExports) {
   var getHomeDir = require_getHomeDir();
   var getSSOTokenFilepath = require_getSSOTokenFilepath();

@@ -3,15 +3,20 @@
  *
  * 2.1.316 新增：fork_conversation 控制请求（种子校验、标题、CPU 采样）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (50)
- * attribution: sole-consumer 1, affinity 1, placement 48
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (46), chunk-5xgkngpb.js (3)
+ * attribution: sole-consumer 1, placement 48
  */
 import { createHash } from "crypto";
 import { mkdir, lstat, open, lutimes, unlink, readdir, readFile, readlink } from "fs/promises";
 import { constants } from "fs";
 import { posix } from "path";
+import { getSessionEntrypoint, isChildSession } from "../../utils/sessionShape.js";
+import { getCurrentAuthSurface } from "../../services/analytics/authOutcomeTelemetry.js";
+import { isCoworkSession, REMOTE_ENTRYPOINT_NAMES } from "../../utils/entrypointKinds.js";
+import { classifyBashCommand } from "../../tools/BashTool/commandClassification.js";
+import { TRANSCRIPT_MESSAGE_TYPES } from "../../utils/messages.js";
 import { DoctorLazy } from "../handlers/util.js";
 import {
   objectSchema,
@@ -50,6 +55,8 @@ import { hasCronToolUse } from "./rateLimitForwarding.js";
 import { getSessionId, mainAgentId } from "../../bootstrap/state.js";
 import { sanitizeSessionTitle } from "../../utils/stringUtils.js";
 import { getBridgeSessionOrStatus, createBridgeSession } from "../../bridge/createSession.js";
+import { forkTitleFor } from "../../utils/messages/ultrathinkPaste.js";
+import { serviceSessionName } from "../../utils/teleport/serviceSessionName.js";
 import { snapshotGitEvidenceForBridge } from "../../utils/git.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
 import {
@@ -60,7 +67,7 @@ import {
 import { toCompatSessionId, inSessionIdCostumeOf } from "../../bridge/sessionIdCompat.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { filterCommandsByServer, excludeCommandsByServer } from "../../services/mcp/utils.js";
 import { getToolNameForPermissionCheck } from "../../services/mcp/mcpConnectionStore.js";
 import { getOwn } from "../../utils/objectSafety.js";
@@ -75,31 +82,41 @@ import { formatDurationCoarse } from "../../utils/format.js";
 import { killTask } from "../../tasks/LocalShellTask/killShellTasks.js";
 import { sigtermThenKill } from "../../utils/processIdentity.js";
 import { sessionHostKind } from "../../utils/telemetry/memorySummary.js";
-import { isChildSession, getSessionEntrypoint } from "../../utils/sessionShape.js";
-import { getCurrentAuthSurface } from "../../services/analytics/authOutcomeTelemetry.js";
-import { isCoworkSession, REMOTE_ENTRYPOINT_NAMES } from "../../utils/entrypointKinds.js";
-import { classifyBashCommand } from "../../tools/BashTool/commandClassification.js";
 import { getTaskOutputSize } from "../../utils/task/diskOutput.js";
 import { getCpuacctDir } from "../../utils/shell/cpuReport.js";
 import { getRunningTasks } from "../../utils/task/framework.js";
 import { MAX_PROC_ENTRIES } from "../../utils/shell/processCpuTime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:588935-589005 sole-consumer
-var TRANSCRIPT_MESSAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:588935", () => {
-  TRANSCRIPT_MESSAGE_TYPES = new Set(["user", "assistant", "attachment", "system", "progress"]);
+//@ chunk-5xgkngpb.js:4853651-4853832 placement
+function sessionSurfaceKind() {
+  let sessionEntrypoint = getSessionEntrypoint();
+  if (sessionEntrypoint === "remote_projects" || getCurrentAuthSurface()) return "projects";
+  if (isCoworkSession()) return "cowork";
+  if (sessionEntrypoint === "remote_trigger") return "trigger";
+  return REMOTE_ENTRYPOINT_NAMES.some((name) => name === sessionEntrypoint) ? "code" : "other";
+}
+//@ chunk-5xgkngpb.js:4854279-4854361 placement
+var WAIT_COMMAND_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4854279", () => {
+  WAIT_COMMAND_KINDS = new Set(["wait", "shell_word", "file_read", "file_search", "text_transform"]);
 });
-//@ chunk-tyg7f3ek.js:589005-589179 affinity (2.1.88 match: isLegacyProgressEntry, 0.8)
+//@ chunk-5xgkngpb.js:4854361-4854544 placement
+function classifyBashForCpu(command) {
+  let parts = classifyBashCommand(command).bash_command_kinds.split(",");
+  if (parts.includes("serves_or_watches")) return "serve_or_watch";
+  return parts.includes("wait") && parts.every((kind) => WAIT_COMMAND_KINDS.has(kind)) ? "wait" : "other";
+}
+//@ chunk-0yw3taqg.js:630758-630932 sole-consumer (2.1.88 match: isLegacyProgressEntry, 0.802)
 function isLegacyProgressEntry(entry) {
   if (typeof entry !== "object" || entry === null) return false;
   let type = "type" in entry ? entry.type : undefined;
   let uuid = "uuid" in entry ? entry.uuid : undefined;
   return typeof type === "string" && TRANSCRIPT_MESSAGE_TYPES.has(type) && typeof uuid === "string";
 }
-//@ chunk-tyg7f3ek.js:589179-589288 placement (2.1.88 match: getParentSessionId, 0.704)
+//@ chunk-0yw3taqg.js:630932-631041 placement (2.1.88 match: getParentSessionId, 0.704)
 var getParentSessionId; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:589179", () => {
+deferInit("chunk-0yw3taqg.js:630932", () => {
   getParentSessionId = DoctorLazy(() =>
     objectSchema({
       version: literal(1),
@@ -109,7 +126,7 @@ deferInit("chunk-tyg7f3ek.js:589179", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:589288-589388 placement
+//@ chunk-0yw3taqg.js:631041-631141 placement
 class ForkSeedTooLargeError extends Error {
   bytes;
   constructor(bytes) {
@@ -117,7 +134,7 @@ class ForkSeedTooLargeError extends Error {
     this.bytes = bytes;
   }
 }
-//@ chunk-tyg7f3ek.js:589388-589535 placement
+//@ chunk-0yw3taqg.js:631141-631288 placement
 function encodeForkSeed(seed) {
   let body = jsonStringify({
     version: 1,
@@ -130,7 +147,7 @@ function encodeForkSeed(seed) {
     sha256: createHash("sha256").update(body).digest("hex"),
   };
 }
-//@ chunk-tyg7f3ek.js:589535-589683 placement
+//@ chunk-0yw3taqg.js:631288-631436 placement
 async function writeForkSeed(sessionId, body) {
   let path = forkSeedPath(sessionId);
   if (!path) throw Error("fork seed: not a server session id");
@@ -140,7 +157,7 @@ async function writeForkSeed(sessionId, body) {
   });
   await writeFileAtomic(path, body, 384);
 }
-//@ chunk-tyg7f3ek.js:589683-590804 placement
+//@ chunk-0yw3taqg.js:631436-632557 placement
 /**
  * 读取 Remote Control fork 的种子文件（大小上限、非普通文件、符号链接检查），返回 none/invalid/seed。
  */
@@ -247,7 +264,7 @@ async function readForkSeed(sessionId) {
     sha256: createHash("sha256").update(buffer).digest("hex"),
   };
 }
-//@ chunk-tyg7f3ek.js:590804-590963 placement
+//@ chunk-0yw3taqg.js:632557-632716 placement
 async function touchForkSeed(sessionId) {
   let path = forkSeedPath(sessionId);
   if (!path) return;
@@ -256,7 +273,7 @@ async function touchForkSeed(sessionId) {
     logForDebugging(`[rc-fork] Could not refresh the seed's mtime for ${sessionId}: ${errorMessage(error)}`);
   });
 }
-//@ chunk-tyg7f3ek.js:590963-591254 placement
+//@ chunk-0yw3taqg.js:632716-633007 placement
 async function deleteForkSeed(sessionId) {
   let path = forkSeedPath(sessionId);
   if (!path) return true;
@@ -279,15 +296,15 @@ async function deleteForkSeed(sessionId) {
       return false;
     }
 }
-//@ chunk-tyg7f3ek.js:591254-591293 placement
+//@ chunk-0yw3taqg.js:633007-633046 placement
 function isBridgeForkSupported(reference) {
   return Boolean(reference) && isBridgeEnvironment();
 }
-//@ chunk-tyg7f3ek.js:591293-591334 placement
+//@ chunk-0yw3taqg.js:633046-633087 placement
 function bridgeForkSessionId(reference) {
   return isBridgeForkSupported(reference) ? getSupervisedBridgeSessionId() : undefined;
 }
-//@ chunk-tyg7f3ek.js:591334-593736 placement
+//@ chunk-0yw3taqg.js:633087-635464 placement
 /**
  * 处理 rc fork_conversation 控制请求：校验目标消息、写种子、创建新云会话并返回结果。
  */
@@ -325,10 +342,6 @@ async function handleForkConversation(request, context) {
   if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return forkRefused("history suppressed");
   let sanitizedTitle = title !== undefined ? sanitizeSessionTitle(title).replace(/\s+/g, " ") : "";
   let currentSessionDisplayTitle = getCurrentSessionDisplayTitle(sessionId);
-  let forkTitle = currentSessionDisplayTitle
-    ? sanitizeSessionTitle(`${currentSessionDisplayTitle} (fork)`).replace(/\s+/g, " ")
-    : "";
-  let title_2 = sanitizedTitle || forkTitle || undefined;
   let sessionId_2 = null;
   try {
     let bridgeSessionOrStatus = await getBridgeSessionOrStatus(reference, {
@@ -343,6 +356,12 @@ async function handleForkConversation(request, context) {
             : "session_fetch_failed",
       );
     let environmentId = bridgeSessionOrStatus.session.environment_id;
+    let title =
+      sanitizedTitle ||
+      forkTitleFor(
+        serviceSessionName(bridgeSessionOrStatus.session.title) ?? currentSessionDisplayTitle ?? "",
+      ) ||
+      undefined;
     let seed = null;
     if (messages.length > 0)
       try {
@@ -370,7 +389,7 @@ async function handleForkConversation(request, context) {
     if (suppression !== null) return forkRefused("history suppressed", suppression);
     sessionId_2 = await createBridgeSession({
       environmentId,
-      title: title_2,
+      title,
       gitRepoUrl,
       branch,
       defaultBranch,
@@ -427,7 +446,7 @@ async function handleForkConversation(request, context) {
     return forkFailed("exception");
   }
 }
-//@ chunk-tyg7f3ek.js:593736-594005 placement
+//@ chunk-0yw3taqg.js:635464-635733 placement
 var FORK_REFUSAL_REASONS = {
   unsupported: "unsupported",
   "turn running": "turn_running",
@@ -437,7 +456,7 @@ var FORK_REFUSAL_REASONS = {
   "target splits a tool call": "target_splits_tool_call",
   "history suppressed": "history_suppressed",
 };
-//@ chunk-tyg7f3ek.js:594005-594147 placement
+//@ chunk-0yw3taqg.js:635733-635875 placement
 function forkRefused(error, reason = error === "unsupported" ? null : FORK_REFUSAL_REASONS[error]) {
   if (reason !== null) logFeatureSad("rc_fork_conversation", reason);
   return {
@@ -449,7 +468,7 @@ function forkRefused(error, reason = error === "unsupported" ? null : FORK_REFUS
     },
   };
 }
-//@ chunk-tyg7f3ek.js:594147-594267 placement
+//@ chunk-0yw3taqg.js:635875-635995 placement
 function forkFailed(error) {
   logFeatureBad("rc_fork_conversation", error);
   return {
@@ -461,13 +480,13 @@ function forkFailed(error) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:594267-594402 placement
+//@ chunk-0yw3taqg.js:635995-636130 placement
 async function forkHistorySuppression(sessionId, storageV5) {
   let historySuppressionFromDisk = await readHistorySuppressionFromDisk(storageV5);
   if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return "history_suppressed";
   return historySuppressionFromDisk !== "clean" ? "history_suppressed_on_disk" : null;
 }
-//@ chunk-tyg7f3ek.js:594402-594566 placement
+//@ chunk-0yw3taqg.js:636130-636294 placement
 async function tryWriteForkSeed(sessionId, body) {
   try {
     await writeForkSeed(sessionId, body);
@@ -479,19 +498,19 @@ async function tryWriteForkSeed(sessionId, body) {
     return "seed_write_failed";
   }
 }
-//@ chunk-tyg7f3ek.js:594566-594685 placement
+//@ chunk-0yw3taqg.js:636294-636413 placement
 async function discardForkSession(sessionId, credentials) {
   await deleteForkSeed(sessionId);
   let { archiveAbandonedForkSession } = await import("../../bridge/forkHistoryUpload.js");
   await archiveAbandonedForkSession(sessionId, credentials);
 }
-//@ chunk-tyg7f3ek.js:594685-594733 placement
+//@ chunk-0yw3taqg.js:636413-636461 placement
 var FORK_VERIFY_TIMINGS = 600000;
 var FORK_NOTE_WRITE_TIMEOUT_MS = 5000;
 var REVOKED = "revoked";
 var FORK_RETRY_MAX_ATTEMPTS = 3;
 var FORK_RETRY_BASE_DELAY_MS = 2000;
-//@ chunk-tyg7f3ek.js:594733-594969 placement
+//@ chunk-0yw3taqg.js:636461-636697 placement
 class ForkSeedUnverifiedError extends Error {
   code;
   retryable;
@@ -504,7 +523,7 @@ class ForkSeedUnverifiedError extends Error {
     this.name = "ForkSeedUnverifiedError";
   }
 }
-//@ chunk-tyg7f3ek.js:594969-596723 placement
+//@ chunk-0yw3taqg.js:636697-638453 placement
 /**
  * 启动时核对上一次 Remote Control fork 的种子是否已被服务器接收，未确认则保留到下次。
  */
@@ -592,7 +611,7 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
   return {
     async adoptSeed(note) {
       isFork = false;
-      for (let j = 1; ; j++)
+      for (let attempt = 1; ; attempt++)
         try {
           return await adopt(note);
         } catch (error) {
@@ -601,8 +620,8 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
             logFeatureBad("rc_fork_conversation", "seed_failed");
             throw error;
           }
-          if (error.retryable && j < FORK_RETRY_MAX_ATTEMPTS) {
-            await sleep(FORK_RETRY_BASE_DELAY_MS * j, undefined, {
+          if (error.retryable && attempt < FORK_RETRY_MAX_ATTEMPTS) {
+            await sleep(FORK_RETRY_BASE_DELAY_MS * attempt, undefined, {
               unref: true,
             });
             continue;
@@ -626,7 +645,7 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:596723-596952 placement
+//@ chunk-0yw3taqg.js:638453-638682 placement
 function mcpSyncNeeded(configs, clients) {
   for (let key of Object.keys(configs)) if (!clients.some((client) => client.name === key)) return "sync";
   let anyFailed = false;
@@ -636,7 +655,7 @@ function mcpSyncNeeded(configs, clients) {
   }
   return anyFailed ? "retry_failed" : "none";
 }
-//@ chunk-tyg7f3ek.js:596952-597195 placement
+//@ chunk-0yw3taqg.js:638682-638925 placement
 function pickReusableMcpClients(configs, clients, reuseConnected) {
   let reusedNames = new Set(
     clients
@@ -654,7 +673,7 @@ function pickReusableMcpClients(configs, clients, reuseConnected) {
   for (let [key, value] of Object.entries(configs)) if (!reusedNames.has(key)) kept[key] = value;
   return kept;
 }
-//@ chunk-tyg7f3ek.js:597195-597358 placement
+//@ chunk-0yw3taqg.js:638925-639088 placement
 function mcpServersToReconnect(clients, configs, added, reuseConnected) {
   return clients.filter(
     (client) =>
@@ -664,7 +683,7 @@ function mcpServersToReconnect(clients, configs, added, reuseConnected) {
           (client.type === "pending" || (reuseConnected && client.type === "connected")))),
   );
 }
-//@ chunk-tyg7f3ek.js:597358-597627 placement (2.1.88 match: findChromeClient, 0.791)
+//@ chunk-0yw3taqg.js:639088-639357 placement (2.1.88 match: findChromeClient, 0.791)
 function mergeMcpToolsAndCommands(clients, added, removed, previous, next) {
   let mapped = clients
     .filter(
@@ -674,7 +693,10 @@ function mergeMcpToolsAndCommands(clients, added, removed, previous, next) {
     )
     .map((client) => client.name);
   return {
-    tools: uniq([...mapped.reduce(filterCommandsByServer, [...previous.tools]), ...next.tools]),
+    tools: normalizeCaseForComparison_2([
+      ...mapped.reduce(filterCommandsByServer, [...previous.tools]),
+      ...next.tools,
+    ]),
     commands: [
       ...previous.commands.filter(
         (command) => !mapped.some((serverName) => getToolNameForPermissionCheck(command, serverName)),
@@ -683,7 +705,7 @@ function mergeMcpToolsAndCommands(clients, added, removed, previous, next) {
     ],
   };
 }
-//@ chunk-tyg7f3ek.js:597627-598552 placement
+//@ chunk-0yw3taqg.js:639357-640285 placement
 /**
  * 应用 SDK 宿主的 MCP 服务器增删：计算新增/删除/重连集合并更新客户端、工具与命令。
  */
@@ -732,7 +754,7 @@ function applySdkMcpServerChanges(state, keepClients, snapshot) {
     ),
   };
 }
-//@ chunk-tyg7f3ek.js:598606-598734 placement
+//@ chunk-0yw3taqg.js:640339-640467 placement
 var PROC_CPU_SAMPLING = "tengu_hidden_giraffe";
 var HOST_CPU_WINDOW_MS = 600000;
 var HOST_CPU_SATURATION_RATIO = 0.9;
@@ -741,7 +763,7 @@ var PROC_FS_READER = {
   names: () => readdir("/proc"),
   file: (entry) => readFile(`/proc/${entry}`, "utf8").catch(() => ""),
 };
-//@ chunk-tyg7f3ek.js:598734-598997 placement
+//@ chunk-0yw3taqg.js:640467-640730 placement
 function parseProcStatCpu(statText) {
   let mapped = /^cpu +(.+)$/m.exec(statText)?.[1]?.split(/ +/).slice(0, 8).map(Number);
   if (mapped === undefined || mapped.length < 8 || mapped.some(Number.isNaN)) return;
@@ -754,18 +776,18 @@ function parseProcStatCpu(statText) {
     cpus: statText.match(/^cpu\d+ /gm)?.length ?? 0,
   };
 }
-//@ chunk-tyg7f3ek.js:598997-599115 placement
+//@ chunk-0yw3taqg.js:640730-640848 placement
 function countFullCpuWindows(state, isFull) {
   if (isFull) state.fullWindows++;
   else if (state.lastWindowLow) state.fullWindows = 0;
   state.lastWindowLow = !isFull;
   return state.fullWindows;
 }
-//@ chunk-tyg7f3ek.js:599115-599212 placement
+//@ chunk-0yw3taqg.js:640848-640945 placement
 function isClaudeCodeAgentEnviron(environ) {
   return environ.split("\x00").some((entry) => /^AI_AGENT=claude-code[_/].+[_/]agent$/.test(entry));
 }
-//@ chunk-tyg7f3ek.js:599212-599450 placement
+//@ chunk-0yw3taqg.js:640945-641183 placement
 async function listAgentProcesses(proc) {
   let found = [];
   for (let name of await proc.names()) {
@@ -781,11 +803,11 @@ async function listAgentProcesses(proc) {
   }
   return found;
 }
-//@ chunk-tyg7f3ek.js:599450-599508 placement
+//@ chunk-0yw3taqg.js:641183-641241 placement
 function secondsToMs(seconds) {
   return typeof seconds === "number" && seconds > 0 ? seconds * 1000 : 1 / 0;
 }
-//@ chunk-tyg7f3ek.js:599508-601512 placement
+//@ chunk-0yw3taqg.js:641241-643248 placement
 /**
  * hosted worker 上每 10 分钟读 /proc/stat，CPU 持续饱和时停止 agent 子进程并上报。
  */
@@ -863,7 +885,7 @@ async function sampleHostCpuSaturation(state, proc = PROC_FS_READER) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:601512-601682 placement
+//@ chunk-0yw3taqg.js:643248-643418 placement
 function startHostCpuSampler(taskRegistry) {
   if (sessionHostKind() !== "hosted_worker" || isChildSession()) return;
   setInterval(sampleHostCpuSaturation, HOST_CPU_WINDOW_MS, {
@@ -875,26 +897,7 @@ function startHostCpuSampler(taskRegistry) {
     stops: 0,
   }).unref();
 }
-//@ chunk-tyg7f3ek.js:601792-601972 placement
-function sessionSurfaceKind() {
-  let sessionEntrypoint = getSessionEntrypoint();
-  if (sessionEntrypoint === "remote_projects" || getCurrentAuthSurface()) return "projects";
-  if (isCoworkSession()) return "cowork";
-  if (sessionEntrypoint === "remote_trigger") return "trigger";
-  return REMOTE_ENTRYPOINT_NAMES.some((name) => name === sessionEntrypoint) ? "code" : "other";
-}
-//@ chunk-tyg7f3ek.js:601972-602053 placement
-var WAIT_COMMAND_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:601972", () => {
-  WAIT_COMMAND_KINDS = new Set(["wait", "shell_word", "file_read", "file_search", "text_transform"]);
-});
-//@ chunk-tyg7f3ek.js:602053-602235 placement
-function classifyBashForCpu(command) {
-  let parts = classifyBashCommand(command).bash_command_kinds.split(",");
-  if (parts.includes("serves_or_watches")) return "serve_or_watch";
-  return parts.includes("wait") && parts.every((kind) => WAIT_COMMAND_KINDS.has(kind)) ? "wait" : "other";
-}
-//@ chunk-tyg7f3ek.js:602235-603290 placement
+//@ chunk-0yw3taqg.js:643528-644583 placement
 /**
  * 工具 CPU 采样常量：分钟刻度、时钟 tick、采样超时、各类条数上限、/proc 读取上限与噪声阈值，以及带 fd/environ/cgroup 读取的 proc 读取器实现。
  */
@@ -916,7 +919,7 @@ var CPU_NOISE_RATIO;
 var FULL_CORE_CPU_RATIO;
 var PROC_STAT_PATTERN;
 var PROC_FS_READER_WITH_LINKS;
-deferInit("chunk-tyg7f3ek.js:602235", () => {
+deferInit("chunk-0yw3taqg.js:643528", () => {
   TOOL_CPU_SAMPLING_FLAG = "tengu_starry_balloon";
   MINUTE_MS = 60000;
   CLOCK_TICKS_MS = 10;
@@ -979,7 +982,7 @@ deferInit("chunk-tyg7f3ek.js:602235", () => {
     },
   };
 });
-//@ chunk-tyg7f3ek.js:603290-603366 placement
+//@ chunk-0yw3taqg.js:644583-644659 placement
 function isValidMinuteMark(thenEveryMin) {
   return (
     typeof thenEveryMin === "number" &&
@@ -988,7 +991,7 @@ function isValidMinuteMark(thenEveryMin) {
     thenEveryMin <= MAX_MINUTE_MARK
   );
 }
-//@ chunk-tyg7f3ek.js:603366-603632 placement
+//@ chunk-0yw3taqg.js:644659-644925 placement
 function readToolCpuSamplingConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TOOL_CPU_SAMPLING_FLAG, null);
   let marks = Array.isArray(featureValue_CACHED_MAY_BE_STALE?.marks_min)
@@ -1009,19 +1012,19 @@ function readToolCpuSamplingConfig() {
         fromStart: featureValue_CACHED_MAY_BE_STALE?.from_start === true,
       };
 }
-//@ chunk-tyg7f3ek.js:603632-603708 placement
+//@ chunk-0yw3taqg.js:644925-645001 placement
 function pushToMapList(map, key, value) {
   let list = map.get(key);
   if (list === undefined) map.set(key, [value]);
   else list.push(value);
 }
-//@ chunk-tyg7f3ek.js:603708-603793 placement
+//@ chunk-0yw3taqg.js:645001-645086 placement
 function runningLocalShells(framework) {
   return getRunningTasks(framework.getState())
     .filter(isLocalShellTask)
     .filter((task) => task.elsewhere === undefined);
 }
-//@ chunk-tyg7f3ek.js:603793-604870 placement
+//@ chunk-0yw3taqg.js:645086-646164 placement
 /**
  * 采样后台 shell 进程树的 CPU 与监听端口，用于 tengu_tool_cpu_by_phase 遥测。
  */
@@ -1078,35 +1081,35 @@ async function sampleShellCpuTree(state, last, markMin) {
   for (let shell of sample.shells) state.kinds.set(shell.id, shell.kind);
   return sample;
 }
-//@ chunk-tyg7f3ek.js:604870-604977 placement
+//@ chunk-0yw3taqg.js:646164-646271 placement
 function isSameProcess(previous, current, pid) {
   let entry = previous.processes.get(pid);
   return entry !== undefined && entry.starttime === current.processes.get(pid)?.starttime;
 }
-//@ chunk-tyg7f3ek.js:604977-605026 placement
+//@ chunk-0yw3taqg.js:646271-646320 placement
 function processLeaders(sample, pid) {
   return [pid, ...(sample.ledBy.get(pid) ?? [])];
 }
-//@ chunk-tyg7f3ek.js:605026-605209 placement
-function collectProcessTree(sample, leaders, now, exclude) {
+//@ chunk-0yw3taqg.js:646320-646503 placement
+function collectProcessTree(sample, leaders, seen, exclude) {
   let tree = [];
   let pending = [...leaders];
   for (let pid = pending.pop(); pid !== undefined; pid = pending.pop())
-    if (!now.has(pid) && sample.processes.has(pid) && !exclude?.(pid)) {
-      now.add(pid);
+    if (!seen.has(pid) && sample.processes.has(pid) && !exclude?.(pid)) {
+      seen.add(pid);
       tree.push(pid);
       pending.push(...(sample.childrenOf.get(pid) ?? []));
     }
   return tree;
 }
-//@ chunk-tyg7f3ek.js:605209-605327 placement
+//@ chunk-0yw3taqg.js:646503-646621 placement
 function sumProcessTicks(sample, processTree) {
   return processTree.reduce((acc, pid) => {
     let entry = sample.processes.get(pid);
     return acc + (entry?.ownTicks ?? 0) + (entry?.childrenTicks ?? 0);
   }, 0);
 }
-//@ chunk-tyg7f3ek.js:605327-605608 placement
+//@ chunk-0yw3taqg.js:646621-646902 placement
 function diffProcessTreeCpu(previous, current, pid, sample) {
   let processTree = collectProcessTree(current, processLeaders(current, pid), sample.now);
   let currentPids = new Set(processTree);
@@ -1130,7 +1133,7 @@ function diffProcessTreeCpu(previous, current, pid, sample) {
       CLOCK_TICKS_MS,
   };
 }
-//@ chunk-tyg7f3ek.js:605608-605763 placement
+//@ chunk-0yw3taqg.js:646902-647057 placement
 async function listListeningSockets(proc) {
   let sockets = new Set();
   for (let table of ["net/tcp", "net/tcp6"])
@@ -1138,7 +1141,7 @@ async function listListeningSockets(proc) {
       sockets.add(`socket:[${match[1]}]`);
   return sockets;
 }
-//@ chunk-tyg7f3ek.js:605763-606037 placement
+//@ chunk-0yw3taqg.js:647057-647331 placement
 async function checksListeningSockets(proc, tree, state) {
   if (state.listeningSockets.size === 0) return "no";
   let result = "no";
@@ -1156,6 +1159,7 @@ async function checksListeningSockets(proc, tree, state) {
 export {
   createForkSeedVerifier,
   startHostCpuSampler,
+  PROC_FS_READER_WITH_LINKS,
   isBridgeForkSupported,
   mcpSyncNeeded,
   pickReusableMcpClients,
@@ -1184,5 +1188,5 @@ export {
   MAX_FULL_CORE_PROCESSES,
   FULL_CORE_CPU_RATIO,
   runningLocalShells,
-  PROC_FS_READER_WITH_LINKS,
+  classifyBashForCpu,
 };

@@ -1,15 +1,15 @@
 /**
  * @opentelemetry/resources/build/src/detectors/platform/node/machine-id/getMachineId-bsd.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-mbd7cz0s.js (2)
+ * pieces: chunk-1c271mc0.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_execAsync } from "./execAsync.js";
 import { require_api } from "../../../../../../../api/build/src/index.js";
 
-//@ chunk-mbd7cz0s.js:302-732 cjs-fingerprint
+//@ chunk-1c271mc0.js:302-732 cjs-fingerprint
 var require_getMachineId_bsd = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -37,5 +37,5 @@ var require_getMachineId_bsd = __commonJS(function (cjsExports) {
   }
   cjsExports.getMachineId = getMachineId;
 });
-//@ chunk-mbd7cz0s.js:732-751 affinity
+//@ chunk-1c271mc0.js:732-751 affinity
 export default require_getMachineId_bsd();

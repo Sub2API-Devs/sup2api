@@ -3,9 +3,9 @@
  *
  * 调试用：把每次 POST 的请求体追加写到 <配置目录>/dump-prompts/<会话>.jsonl（包装 fetch）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/dumpPrompts.ts
- * pieces: chunk-23fm9f0d.js (1), chunk-98z6pwp4.js (12), chunk-e6aww6q8.js (1), chunk-k7fgdyw5.js (1)
+ * pieces: chunk-5xgkngpb.js (1), chunk-p13f9wk2.js (1), chunk-pc3x100t.js (1), chunk-wd6hahbe.js (12)
  * attribution: fingerprint 3, placement 10, layout 1, callgraph-fingerprint 1
  */
 import { join, dirname } from "path";
@@ -14,7 +14,7 @@ import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { noop } from "../../utils/batchedLogWriter.js";
 import { cleanupOldFilesMatching } from "../../utils/cleanup.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { CEL_MAX_STRING_ELEMENTS } from "../../utils/sandbox/celHostFunctions.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession, getSessionId, isDiskless } from "../../bootstrap/state.js";
@@ -27,7 +27,7 @@ import { jsonParseRaw } from "../../utils/slowOperations.js";
 import { isUncachedSystemBlock } from "./promptCacheBreakDetection.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2603522-2603807 fingerprint (2.1.88 match: initFingerprint, 0.508)
+//@ chunk-5xgkngpb.js:2658915-2659200 fingerprint (2.1.88 match: initFingerprint, 0.51)
 /**
  * 判断 400 "differing field(s)" 错误是否涉及 system/tools（缓存前缀快照不一致），用于决定是否重新初始化提示词快照。
  */
@@ -39,7 +39,7 @@ function initFingerprint(error, fields) {
   let mapped = match[1].split(",").map((field) => field.trim().toLowerCase());
   return (fields.system && mapped.includes("system")) || (fields.tools && mapped.includes("tools"));
 }
-//@ chunk-k7fgdyw5.js:1618-1738 fingerprint (2.1.88 match: appendToFile, 0.853)
+//@ chunk-p13f9wk2.js:1651-1771 fingerprint (2.1.88 match: appendToFile, 0.852)
 /**
  * 追加写文件，目录不存在时先建目录再写。
  */
@@ -52,7 +52,7 @@ async function appendToFile(dirPath, filePath, text) {
     await fsImplementation.appendFile(filePath, text);
   }
 }
-//@ chunk-23fm9f0d.js:28667-28730 fingerprint (2.1.88 match: getDumpPromptsPath, 1)
+//@ chunk-pc3x100t.js:28718-28781 fingerprint (2.1.88 match: getDumpPromptsPath, 1)
 /**
  * dump-prompts 文件路径（配置目录下 dump-prompts/*.jsonl）。
  */
@@ -64,7 +64,7 @@ function getDumpPromptsPath() {
     CEL_MAX_STRING_ELEMENTS,
   );
 }
-//@ chunk-98z6pwp4.js:703-1016 placement
+//@ chunk-wd6hahbe.js:740-1165 placement
 /**
  * 请求转储用的常量：核心字段集合、带 thread 的字段集合、去除计费头动态字段与 tk 的正则、保留数量。
  */
@@ -72,8 +72,10 @@ var DUMP_CORE_KEYS; // deferred: has load-time effects after a deferred statemen
 var DUMP_THREAD_KEYS;
 var VOLATILE_ATTRIBUTION_PATTERN;
 var VOLATILE_TOKEN_PATTERN;
+var TRIGGER_VALUE_PATTERN;
+var VOLATILE_FIELD_PATTERNS;
 var DUMP_MAX_FILES;
-deferInit("chunk-98z6pwp4.js:703", () => {
+deferInit("chunk-wd6hahbe.js:740", () => {
   DUMP_CORE_KEYS = new Set([
     "model",
     "system",
@@ -88,22 +90,27 @@ deferInit("chunk-98z6pwp4.js:703", () => {
   VOLATILE_ATTRIBUTION_PATTERN =
     / cc_(?:prev_req|prompt_id|turn_origin|prompt_index|turn_index|workload|prev_msg|prev_prompt_index|prev_turn_index)=[^;"\\]*;/g;
   VOLATILE_TOKEN_PATTERN = /,\\"tk\\":\\"[0-9a-fA-F-]{36}\\"/g;
+  TRIGGER_VALUE_PATTERN = /"(?:trigger|keep)":\{"type":"tool_uses","value":\d+\}/g;
+  VOLATILE_FIELD_PATTERNS = new Map([
+    ["metadata", VOLATILE_TOKEN_PATTERN],
+    ["context_management", TRIGGER_VALUE_PATTERN],
+  ]);
   DUMP_MAX_FILES = 5;
 });
-//@ chunk-98z6pwp4.js:1016-1037 placement
+//@ chunk-wd6hahbe.js:1165-1186 placement
 class DumpRecordingState {
   recording = true;
 }
-//@ chunk-98z6pwp4.js:1037-1060 placement
+//@ chunk-wd6hahbe.js:1186-1209 placement
 var dumpRecordingSlot; // deferred: uses DumpRecordingState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-98z6pwp4.js:1037", () => {
+deferInit("chunk-wd6hahbe.js:1186", () => {
   dumpRecordingSlot = new HostScoped(() => new DumpRecordingState());
 });
-//@ chunk-98z6pwp4.js:1060-1105 placement
+//@ chunk-wd6hahbe.js:1209-1254 placement
 function isDumpRecording() {
   return dumpRecordingSlot.of(getRootSession().host).recording;
 }
-//@ chunk-98z6pwp4.js:1105-1247 placement
+//@ chunk-wd6hahbe.js:1254-1396 placement
 /**
  * 子代理结束时删除其提示转储状态，并记下它已写过的初始化数据哈希。
  */
@@ -113,7 +120,7 @@ function retireAgentDumpState(agentIdForCleanup) {
   stateByAgent.delete(agentIdForCleanup);
   if (writtenInitDataHash !== undefined) retiredInitHashes.set(agentIdForCleanup, writtenInitDataHash);
 }
-//@ chunk-98z6pwp4.js:1247-1343 placement
+//@ chunk-wd6hahbe.js:1396-1492 placement
 /**
  * 导出函数 `clearDumpPromptState`。
  */
@@ -121,15 +128,15 @@ function clearDumpPromptState() {
   streamFallbackWarning().dumpPrompts.stateByAgent.clear();
   streamFallbackWarning().dumpPrompts.retiredInitHashes.clear();
 }
-//@ chunk-98z6pwp4.js:1343-1364 placement
+//@ chunk-wd6hahbe.js:1492-1513 placement
 function noopDump(body) {
   return;
 }
-//@ chunk-98z6pwp4.js:1364-1426 placement (2.1.88 match: getDumpPromptsPath, 1)
+//@ chunk-wd6hahbe.js:1513-1575 placement (2.1.88 match: getDumpPromptsPath, 1)
 function getDumpPromptsPath_2(agentIdOrSessionId) {
   return join(getClaudeConfigDir(), "dump-prompts", `${agentIdOrSessionId ?? getSessionId()}.jsonl`);
 }
-//@ chunk-98z6pwp4.js:1426-1660 placement
+//@ chunk-wd6hahbe.js:1575-1809 placement
 function appendDumpLine(path, line, storage, onWritten) {
   streamFallbackWarning()
     .dumpPrompts.appendQueue.run(path, async () => {
@@ -163,7 +170,7 @@ function appendDumpLine(path, line, storage, onWritten) {
     })
     .catch(() => {});
 }
-//@ chunk-98z6pwp4.js:1660-1727 layout
+//@ chunk-wd6hahbe.js:1809-1876 layout
 /**
  * 写转储的回调（本构建里写入逻辑被裁空，只复位 dumpInFlight）。
  */
@@ -175,7 +182,7 @@ function writePromptDump(bodyText, timestamp, state, filePath, storageTarget) {
     state.dumpInFlight = false;
   }
 }
-//@ chunk-98z6pwp4.js:1727-2233 callgraph-fingerprint (2.1.88 match: createDumpPromptsFetch, 0.259)
+//@ chunk-wd6hahbe.js:1876-2382 callgraph-fingerprint (2.1.88 match: createDumpPromptsFetch, 0.259)
 /**
  * 开启转储时返回包装 fetch：POST 且有请求体时异步写转储（同一代理同时只有一个在写），然后照常发请求；未开启返回默认 fetch。
  */
@@ -216,7 +223,7 @@ function createDumpPromptsFetch(agentIdOrSessionId, storageV5) {
   markTakesRequestBodyBytes(wrapperFetch);
   return wrapperFetch;
 }
-//@ chunk-98z6pwp4.js:2233-2501 placement
+//@ chunk-wd6hahbe.js:2382-2650 placement
 function isThreadContinuation(headers) {
   let threadHeader = headers.get("thread");
   if (threadHeader === undefined) return false;
@@ -237,10 +244,10 @@ function isThreadContinuation(headers) {
   );
 }
 export {
-  retireAgentDumpState,
   getDumpPromptsPath,
-  createDumpPromptsFetch,
-  clearDumpPromptState,
+  retireAgentDumpState,
   initFingerprint,
+  clearDumpPromptState,
   appendToFile,
+  createDumpPromptsFetch,
 };

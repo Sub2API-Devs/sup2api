@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/core/credentials.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (7)
+ * pieces: chunk-gjbr82c9.js (7)
  * attribution: esm-fingerprint 4, esm-layout 2, affinity 1
  */
 import { readFile, mkdir, stat } from "fs/promises";
@@ -16,11 +16,11 @@ import { errorMessage } from "../../../../src/utils/errors.js";
 import { federationCacheDir } from "../../../../src/utils/subprocessEnv.js";
 import { computeContentHash } from "../../../../src/utils/commitAttribution.js";
 
-//@ chunk-3wydcdvj.js:4720-4767 esm-fingerprint
+//@ chunk-gjbr82c9.js:4720-4767 esm-fingerprint
 var CONFIG_FILE_VERSION = "1.0";
 var CREDENTIALS_FILE_VERSION = "1.0";
 var PROFILE_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
-//@ chunk-3wydcdvj.js:4767-5123 esm-fingerprint
+//@ chunk-gjbr82c9.js:4767-5123 esm-fingerprint
 function validateProfileName(name) {
   if (!name) throw Error("profile name is empty");
   if (name === "." || name === "..") throw Error(`profile name "${name}" is not allowed`);
@@ -31,7 +31,7 @@ function validateProfileName(name) {
       `profile name "${name}" contains disallowed characters (allowed: letters, digits, '_', '.', '-')`,
     );
 }
-//@ chunk-3wydcdvj.js:5123-6947 esm-layout
+//@ chunk-gjbr82c9.js:5123-6947 esm-layout
 var loadConfig = async (profile) => (await loadConfigWithSource(profile))?.config ?? null;
 var loadConfigWithSource = async (profile) => {
   var _a;
@@ -110,7 +110,7 @@ var loadConfigWithSource = async (profile) => {
     fromFile: true,
   };
 };
-//@ chunk-3wydcdvj.js:6947-8059 esm-fingerprint
+//@ chunk-gjbr82c9.js:6947-8059 esm-fingerprint
 var getRootConfigPath = async (config, profile) => {
   if (config?.authentication.credentials_path) return config.authentication.credentials_path;
   let rootConfigPath = await getRootConfigPath_2();
@@ -157,9 +157,9 @@ var getActiveProfileName = async () => {
     return "default";
   }
 };
-//@ chunk-3wydcdvj.js:21071-21113 affinity
+//@ chunk-gjbr82c9.js:21071-21113 affinity
 var readEnvVar = (name) => process.env[name]?.trim() || undefined;
-//@ chunk-3wydcdvj.js:21113-21619 esm-fingerprint
+//@ chunk-gjbr82c9.js:21113-21619 esm-fingerprint
 async function loadEnvQuadConfig() {
   if (getWIFPrecedenceSource() === "env-quad") {
     let federationRuleId = readEnvVar("ANTHROPIC_FEDERATION_RULE_ID");
@@ -189,7 +189,7 @@ async function loadEnvQuadConfig() {
   if (isDiskless()) return null;
   return loadConfig();
 }
-//@ chunk-3wydcdvj.js:21619-22799 esm-layout
+//@ chunk-gjbr82c9.js:21619-22799 esm-layout
 async function buildWifTokenCache(config, log) {
   if (config.authentication.type !== "oidc_federation") return null;
   let path = config.authentication.identity_token?.path;

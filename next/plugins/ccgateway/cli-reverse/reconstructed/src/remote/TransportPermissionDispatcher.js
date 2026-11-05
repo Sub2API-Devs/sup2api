@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程传输的权限请求分派。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: placement 1
  */
 import { logForDebugging } from "../utils/debug.js";
@@ -42,7 +42,7 @@ import { isNotAskUserQuestionCard } from "../components/permissions/permissionCa
 import { logEvent } from "../services/analytics/index.js";
 import { createPermissionQueueOps } from "../hooks/toolPermission/PermissionContext.js";
 
-//@ chunk-18hwfzwa.js:231334-238716 placement
+//@ chunk-czq1j3j2.js:236373-243755 placement
 /**
  * 远端传输上的权限分派器：接收 can_use_tool/文件夹/仓库信任等 control_request，校验 request_id 与输入形状，排队弹本地对话框，把回答作为 control_response 发回，多设备时处理被别处回答的情况。
  */

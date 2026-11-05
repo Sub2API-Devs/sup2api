@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/client/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-z1n5m6nf.js (3)
+ * pieces: chunk-h44h5gdv.js (3)
  * attribution: esm-fingerprint 3
  */
 import { Protocol } from "../shared/protocol.js";
@@ -41,7 +41,7 @@ import {
 } from "../experimental/tasks/helpers.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-z1n5m6nf.js:17770-18235 esm-fingerprint
+//@ chunk-h44h5gdv.js:19186-19651 esm-fingerprint
 function applyElicitationDefaults(schema, data) {
   if (!schema || data === null || typeof data !== "object") return;
   if (schema.type === "object" && schema.properties && typeof schema.properties === "object") {
@@ -61,7 +61,7 @@ function applyElicitationDefaults(schema, data) {
     for (let sub of schema.oneOf) if (typeof sub !== "boolean") applyElicitationDefaults(sub, data);
   }
 }
-//@ chunk-z1n5m6nf.js:18235-18395 esm-fingerprint
+//@ chunk-h44h5gdv.js:19651-19811 esm-fingerprint
 function getSupportedElicitationModes(capabilities) {
   if (!capabilities)
     return {
@@ -75,9 +75,9 @@ function getSupportedElicitationModes(capabilities) {
     supportsUrlMode: hasUrlCapability,
   };
 }
-//@ chunk-z1n5m6nf.js:18395-28313 esm-fingerprint
+//@ chunk-h44h5gdv.js:19811-29735 esm-fingerprint
 let Client; // deferred: uses Protocol (../shared/protocol.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z1n5m6nf.js:18395", () => {
+deferInit("chunk-h44h5gdv.js:19811", () => {
   Client = class Client extends Protocol {
     constructor(_clientInfo, options) {
       super(options);

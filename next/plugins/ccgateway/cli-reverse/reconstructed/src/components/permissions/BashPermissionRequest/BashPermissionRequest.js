@@ -3,11 +3,25 @@
  *
  * Bash 工具权限请求：显示命令与说明、复合命令各子命令结果、规则建议（前缀/目录），选项"允许一次/不再询问/拒绝并反馈"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/BashPermissionRequest/BashPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-pw933apk.js (1)
- * attribution: fingerprint 2
+ * pieces: chunk-czq1j3j2.js (5), chunk-pc3qckdx.js (1)
+ * attribution: sole-consumer 4, fingerprint 2
  */
+import { WORKFLOW_HINT_TEXT, useSettingsErrors } from "../../../hooks/notifs/useSettingsErrors.js";
+import { shouldShowAlwaysAllowOptions } from "../../../utils/permissions/permissionsLoader.js";
+import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
+import {
+  AUTO_MODE_ROW_LABELS,
+  ruleMatchesTool,
+  parseConsentSuggestions,
+  CONSENT_UPDATE_TYPES,
+  parseSuggestionRows,
+  isConsentRow,
+  directoryRow,
+  safeDisplayText,
+} from "../consentRows.js";
+import { stripBashRedirections } from "./bashToolUseOptions.js";
 import { figSpecRegistryByHost } from "../../../utils/Shell.js";
 import { useHost } from "../../../context/session.js";
 import {
@@ -39,18 +53,11 @@ import {
   filterAddDirectoriesUpdates,
   preferValueFirst,
 } from "../../../utils/agentContext.js";
-import {
-  parseBashConsentSuggestions,
-  powershellToolUseOptions_2,
-  bashToolUseOptions,
-} from "./bashToolUseOptions.js";
 import { sanitizeToolNameForAnalytics } from "../../../services/analytics/metadata.js";
-import { useShellPermissionFeedback } from "../useShellPermissionFeedback.js";
+import { PermissionPrompt } from "../PermissionPrompt.js";
 import { ShowInIDEPrompt } from "../../ShowInIDEPrompt.js";
 import { KillAgentsConfirm } from "../../KillAgentsConfirm.js";
 import { extractRules } from "../../../utils/permissions/PermissionUpdate.js";
-import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
-import { safeDisplayText } from "../consentRows.js";
 import {
   getSubcommandPrefix,
   getBareCommandPrefix,
@@ -64,7 +71,6 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics
 import { getDestructiveTargetWarning } from "../../../tools/BashTool/destructiveTargets.js";
 import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 import { shouldUseSandbox } from "../../../tools/BashTool/shouldUseSandbox.js";
-import { useSettingsErrors } from "../../../hooks/notifs/useSettingsErrors.js";
 import { useRefusableAnswer } from "../../../hooks/useRefusableAnswer.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import {
@@ -84,7 +90,157 @@ import { getRemoteCaps } from "../../../remote/remoteMode.js";
 import { CloudTasksDialog } from "../../tasks/CloudTasksDialog.js";
 import { BackgroundTasksDialog } from "../../tasks/BackgroundTasksDialog.js";
 
-//@ chunk-18hwfzwa.js:1327894-1333385 fingerprint (2.1.88 match: BashPermissionRequestInner, 0.378)
+//@ chunk-czq1j3j2.js:1348159-1349407 sole-consumer (2.1.88 match: powershellToolUseOptions, 0.838)
+function powershellToolUseOptions_2({
+  suggestionsRow = null,
+  decisionReason,
+  onRejectFeedbackChange,
+  onAcceptFeedbackChange,
+  yesInputMode = false,
+  noInputMode = false,
+  editablePrefix,
+  onEditablePrefixChange,
+  hasBackendSuggestions,
+  showEnableAutoModeOption = false,
+  enableAutoModeDescription = WORKFLOW_HINT_TEXT,
+}) {
+  let options = [];
+  if (yesInputMode)
+    options.push({
+      type: "input",
+      label: "Yes",
+      value: "yes",
+      placeholder: "and tell Claude what to do next",
+      onChange: onAcceptFeedbackChange,
+      allowEmptySubmitToCancel: true,
+    });
+  else
+    options.push({
+      label: "Yes",
+      value: "yes",
+    });
+  if (shouldShowAlwaysAllowOptions()) {
+    let hasNonPowerShellSuggestions =
+      suggestionsRow !== null &&
+      suggestionsRow.applies.some(
+        (update) =>
+          update.type === "addDirectories" ||
+          (update.type === "addRules" && update.rules.some((rule) => rule.toolName !== BASH_TOOL_NAME)),
+      );
+    if (
+      editablePrefix !== undefined &&
+      onEditablePrefixChange &&
+      !hasNonPowerShellSuggestions &&
+      (hasBackendSuggestions ?? suggestionsRow !== null)
+    )
+      options.push({
+        type: "input",
+        label: "Yes, and don\u2019t ask again for",
+        value: "yes-prefix-edited",
+        placeholder: "command prefix (e.g., npm run *)",
+        initialValue: editablePrefix,
+        onChange: onEditablePrefixChange,
+        allowEmptySubmitToCancel: true,
+        showLabelWithValue: true,
+        labelValueSeparator: ": ",
+        resetCursorOnUpdate: true,
+      });
+    else if (suggestionsRow !== null)
+      options.push({
+        label: suggestionsRow.node,
+        value: "yes-apply-suggestions",
+      });
+  }
+  if (showEnableAutoModeOption)
+    options.push({
+      label: AUTO_MODE_ROW_LABELS.workflow,
+      description: enableAutoModeDescription,
+      value: "yes-enable-auto-mode",
+    });
+  if (noInputMode)
+    options.push({
+      type: "input",
+      label: "No",
+      value: "no",
+      placeholder: "and tell Claude what to do differently",
+      onChange: onRejectFeedbackChange,
+      allowEmptySubmitToCancel: true,
+    });
+  else
+    options.push({
+      label: "No",
+      value: "no",
+    });
+  return options;
+}
+//@ chunk-czq1j3j2.js:1349407-1349434 sole-consumer
+var bashRuleLabelPredicate = (rule) => ruleMatchesTool(rule, BASH_TOOL_NAME, stripBashRedirections);
+//@ chunk-czq1j3j2.js:1349434-1349538 sole-consumer
+/**
+ * 把 Bash 权限建议解析为同意选项行（只显示特定更新类型，标签按 Bash 规则渲染并去掉重定向）。
+ */
+function parseBashConsentSuggestions(suggestions, options) {
+  return parseConsentSuggestions(suggestions, {
+    displayedTypes: CONSENT_UPDATE_TYPES,
+    labelPredicate: bashRuleLabelPredicate,
+    renderLabel: (suggestion) =>
+      parseSuggestionRows(suggestion, BASH_TOOL_NAME, stripBashRedirections, options),
+  });
+}
+//@ chunk-czq1j3j2.js:1349538-1350190 sole-consumer
+/**
+ * Bash 权限选项：允许一次；"Yes, and don't ask again for <前缀/命令>"（应用建议规则或编辑后的前缀）；可选开启 auto 模式；拒绝（可附反馈）。
+ */
+function buildAllowResult(choice, payload, selectedRow, extra = {}) {
+  switch (choice) {
+    case "yes":
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+        ...(extra.feedback && {
+          feedback: extra.feedback,
+        }),
+      };
+    case "yes-apply-suggestions": {
+      if (selectedRow === null || !isConsentRow(selectedRow))
+        return {
+          behavior: "allow",
+          updatedInput: payload.input,
+        };
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+        permissionUpdates: selectedRow.applies,
+      };
+    }
+    case "yes-prefix-edited": {
+      let prefixRow = directoryRow(extra.editablePrefixSeed, extra.editablePrefix, BASH_TOOL_NAME);
+      if (prefixRow === null)
+        return {
+          behavior: "allow",
+          updatedInput: payload.input,
+        };
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+        permissionUpdates: prefixRow.applies,
+      };
+    }
+    case "yes-enable-auto-mode":
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+      };
+    case "no":
+      return {
+        behavior: "deny",
+        ...(extra.feedback && {
+          feedback: extra.feedback,
+        }),
+      };
+  }
+}
+//@ chunk-czq1j3j2.js:1350190-1355706 fingerprint (2.1.88 match: BashPermissionRequestInner, 0.375)
 /**
  * Bash 权限对话框主体：显示命令（可编辑前缀）、说明、复合命令子结果、沙箱信息与规则解释；选项来自 bashToolUseOptions，反馈模式由 useShellPermissionFeedback 管理；accept/reject 时调用 onAllow/onReject 并可持久化规则。
  */
@@ -157,7 +313,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     logSubmitted,
     logEscape,
     hintNode,
-  } = useShellPermissionFeedback({
+  } = PermissionPrompt({
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
@@ -297,7 +453,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
           let trimmedPrefix = acceptFeedback.trim();
           logSubmitted("accept", trimmedPrefix);
           answer(
-            bashToolUseOptions("yes", payload, suggestionsRow, {
+            buildAllowResult("yes", payload, suggestionsRow, {
               feedback: trimmedPrefix || undefined,
             }),
           );
@@ -307,7 +463,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
           let trimmedDescription = rejectFeedback.trim();
           logSubmitted("reject", trimmedDescription);
           answer(
-            bashToolUseOptions("no", payload, suggestionsRow, {
+            buildAllowResult("no", payload, suggestionsRow, {
               feedback: trimmedDescription || undefined,
             }),
           );
@@ -315,7 +471,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
         }
         if (prev === "yes-prefix-edited") {
           answer(
-            bashToolUseOptions("yes-prefix-edited", payload, suggestionsRow, {
+            buildAllowResult("yes-prefix-edited", payload, suggestionsRow, {
               editablePrefix,
               editablePrefixSeed: hasUserEditedPrefix.current,
             }),
@@ -324,10 +480,10 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
         }
         if (prev === "yes-enable-auto-mode") {
           enableAutoMode(!offered ? "bash_permission_prompt_upsell" : "workflow_permission_prompt");
-          answer(bashToolUseOptions("yes", payload, suggestionsRow));
+          answer(buildAllowResult("yes", payload, suggestionsRow));
           return;
         }
-        answer(bashToolUseOptions(prev, payload, suggestionsRow));
+        answer(buildAllowResult(prev, payload, suggestionsRow));
       },
       [
         answer,
@@ -439,6 +595,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
               toolType: "command",
               rowBudget: toolPermissionContext.isCut || hideIndexes ? MAX_EXPLANATION_LINES : undefined,
               rowColumns: toolPermissionContext.isCut ? toolPermissionContext.reasonColumns : undefined,
+              framed: toolPermissionContext.isFitted,
             }),
             destructiveWarning_0 &&
               jsxProd_default(Box, {
@@ -505,7 +662,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     }),
   });
 }
-//@ chunk-pw933apk.js:17859-18119 fingerprint (2.1.88 match: BashPermissionRequest, 0.311)
+//@ chunk-pc3qckdx.js:19147-19407 fingerprint (2.1.88 match: BashPermissionRequest, 0.312)
 /**
  * /tasks 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -3,35 +3,37 @@
  *
  * 2.1.316 新增：页面文本清洗（控制字符、截断）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-99h01h55.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-chhd9p2w.js (11)
+ * attribution: placement 10, layout 1
  */
 import { QUOTE_HOMOGLYPHS, SINGLE_QUOTE_RUNS } from "../../tools/ArtifactTool/artifactUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-99h01h55.js:1732-1800 placement
+//@ chunk-chhd9p2w.js:1765-1833 placement
 /**
  * 显示文本用的小写标签正则（`[a-z][a-z_-]{0,31}`）与掩码器。
  */
 var SAFE_LABEL_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_LABEL_RE;
-deferInit("chunk-99h01h55.js:1732", () => {
+deferInit("chunk-chhd9p2w.js:1765", () => {
   SAFE_LABEL_TEXT = "[a-z][a-z_-]{0,31}";
   SAFE_LABEL_RE = new RegExp("^[a-z][a-z_-]{0,31}$");
 });
-//@ chunk-99h01h55.js:1800-1851 placement
+//@ chunk-chhd9p2w.js:1833-1884 placement
 /**
  * 导出函数 `isMeaningfulFlag`：参数 e，返回 e !== void 0 && e !== null && e !== !1。
  */
 function isMeaningfulFlag(flag) {
   return flag !== undefined && flag !== null && flag !== false;
 }
-//@ chunk-99h01h55.js:1851-1886 placement
+//@ chunk-chhd9p2w.js:1884-1904 layout
+var MARKREADS = "markReads";
+//@ chunk-chhd9p2w.js:1904-1939 placement
 var LIVE_DOC = "live-doc";
 var INDEX_HTML = "index.html";
-//@ chunk-99h01h55.js:1886-2133 placement
+//@ chunk-chhd9p2w.js:1939-2186 placement
 /**
  * 文本清洗用的常量与正则：长度上限、安全标识正则、不可见/默认忽略字符类、省略号类字符、需转义的单字符判定。
  */
@@ -43,7 +45,7 @@ var INVISIBLE_LOOKALIKES;
 var IGNORABLE_CLASS;
 var ELLIPSIS_CHARS;
 var ESCAPE_CHAR_RE;
-deferInit("chunk-99h01h55.js:1886", () => {
+deferInit("chunk-chhd9p2w.js:1939", () => {
   MAX_SANITIZED_TEXT = 128;
   MAX_LISTED_MCP_SERVERS = 32;
   SAFE_ID_RE = /^[A-Za-z0-9_.-]{1,128}$/;
@@ -53,7 +55,7 @@ deferInit("chunk-99h01h55.js:1886", () => {
   ELLIPSIS_CHARS = "\u2026\u22EF\uFE19";
   ESCAPE_CHAR_RE = new RegExp(`^(?:[<>\\\\${ELLIPSIS_CHARS}]|[${IGNORABLE_CLASS}]|[^ \\P{Z}]|\\p{C})$`, "u");
 });
-//@ chunk-99h01h55.js:2133-2249 placement
+//@ chunk-chhd9p2w.js:2186-2302 placement
 /**
  * 生成判断空格是否需要遮蔽的函数：字符串首尾的空格和连续空格中的后一个返回 true。
  */
@@ -66,7 +68,7 @@ function makeEdgeSpaceMasker(text) {
     return mask;
   };
 }
-//@ chunk-99h01h55.js:2249-2317 placement
+//@ chunk-chhd9p2w.js:2302-2370 placement
 function displaySafetyMasker(text) {
   let edgeSpaceMasker = makeEdgeSpaceMasker(text);
   let index = -1;
@@ -75,7 +77,7 @@ function displaySafetyMasker(text) {
     return edgeSpaceMasker(char, index) || ESCAPE_CHAR_RE.test(char);
   };
 }
-//@ chunk-99h01h55.js:2317-3699 placement
+//@ chunk-chhd9p2w.js:2370-3752 placement
 /**
  * 显示文本安全检查用的一组正则：可打印字符、首尾字符约束、双向控制符、组合字符堆叠、需剥离字符、"host:" 前缀及其同形冒号/RTL 变体、阿拉伯格式字符、需转义字符等。
  */
@@ -95,7 +97,7 @@ var ARABIC_FORMAT_RE;
 var COLON_LOOKALIKE_RE;
 var ESCAPE_NEEDED_RE;
 var DISPLAY_UNSAFE_RE;
-deferInit("chunk-99h01h55.js:2317", () => {
+deferInit("chunk-chhd9p2w.js:2370", () => {
   PRINTABLE_TEXT_RE = /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Cf} ]+$/u;
   WELL_FORMED_EDGES_RE = new RegExp(
     `^(?![${IGNORABLE_CLASS}])[\\p{L}\\p{N}\\p{P}\\p{S}](?:.*[^ ${IGNORABLE_CLASS}\\p{M}])?\\p{M}*$`,
@@ -123,7 +125,7 @@ deferInit("chunk-99h01h55.js:2317", () => {
   );
   DISPLAY_UNSAFE_RE = new RegExp(`^\\p{M}+|[^ \\P{Z}]|[\\p{C}\\p{Cn}]|${ESCAPE_NEEDED_RE.source}`, "gu");
 });
-//@ chunk-99h01h55.js:3699-3844 placement
+//@ chunk-chhd9p2w.js:3752-3897 placement
 /**
  * 判断文本（分解与兼容规范化后去掉忽略字符）是否看起来像主机名标签。
  */
@@ -139,7 +141,7 @@ function looksLikeHostLabel(serverName) {
     )
   );
 }
-//@ chunk-99h01h55.js:3844-3918 placement
+//@ chunk-chhd9p2w.js:3897-3971 placement
 function hasHostLikePrefix(text, prefix) {
   return (
     HOST_PREFIX_RE.test(text) ||
@@ -148,7 +150,7 @@ function hasHostLikePrefix(text, prefix) {
     LEADING_HOST_RE.test(text)
   );
 }
-//@ chunk-99h01h55.js:3918-4051 placement
+//@ chunk-chhd9p2w.js:3971-4104 placement
 /**
  * 转义单个字符：引号与反斜杠加反斜杠，其他字符转成 \\uXXXX。
  */
@@ -164,9 +166,9 @@ export {
   LIVE_DOC,
   INDEX_HTML,
   SAFE_LABEL_RE,
+  isMeaningfulFlag,
   MAX_SANITIZED_TEXT,
   MAX_LISTED_MCP_SERVERS,
-  isMeaningfulFlag,
   SAFE_LABEL_TEXT,
   MAX_NAME_LENGTH,
   PRINTABLE_TEXT_RE,
@@ -182,4 +184,5 @@ export {
   SAFE_ID_RE,
   ESCAPE_CHAR_RE,
   makeEdgeSpaceMasker,
+  MARKREADS,
 };

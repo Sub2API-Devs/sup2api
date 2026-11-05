@@ -3,9 +3,9 @@
  *
  * /sandbox 设置对话框：模式（auto-allow/regular/disabled）、配置、依赖、覆盖标签页。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/sandbox/SandboxSettings.tsx
- * pieces: chunk-55w3ydvj.js (3)
+ * pieces: chunk-y07105e8.js (3)
  * attribution: affinity 1, fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -29,11 +29,11 @@ import { StatusRow } from "../Settings/Status.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { LearnMoreLink } from "../LearnMoreLink.js";
 
-//@ chunk-55w3ydvj.js:25340-25385 affinity
+//@ chunk-y07105e8.js:26515-26560 affinity
 function isAutoAllowSetting(option) {
   return option.value === "auto-allow";
 }
-//@ chunk-55w3ydvj.js:25385-28869 fingerprint (2.1.88 match: SandboxSettings, 0.678)
+//@ chunk-y07105e8.js:26560-30044 fingerprint (2.1.88 match: SandboxSettings, 0.678)
 function SandboxSettings(props) {
   let $ = useMemoCache(36);
   let { onComplete, depCheck } = props;
@@ -350,7 +350,7 @@ function SandboxSettings(props) {
   } else pane = $[35];
   return pane;
 }
-//@ chunk-55w3ydvj.js:28869-30440 fingerprint (2.1.88 match: SandboxModeTab, 0.633)
+//@ chunk-y07105e8.js:30044-31615 fingerprint (2.1.88 match: SandboxModeTab, 0.633)
 function SandboxModeTab(props) {
   let $ = useMemoCache(24);
   let { showSocketWarning, options, currentMode, noSandboxHint, onSelect, onComplete } = props;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。为远程读取文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q2swdab7.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s0hesbce.js (4)
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -42,12 +42,12 @@ import { policyLoadFailureRefusesPluginHooks } from "./runPluginHook.js";
 import {
   applyPermissionRulesToPermissionContext,
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
 } from "../../utils/permissions/permissions.js";
 import { READ_PATH_PROBE } from "../../utils/permissions/filesystem.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-q2swdab7.js:804-1124 placement
+//@ chunk-s0hesbce.js:804-1145 placement
 /**
  * 远程读文件（ReadFileForRemote）的工具名、大小上限与三个 schema（输入、带权限上下文、结果）。
  */
@@ -74,10 +74,11 @@ var remoteReadResultSchema = DoctorLazy(() =>
       contents: stringSchema().refine(isWithinSizeLimit),
       truncated: booleanSchema().optional(),
       encoding: literal("base64").optional(),
+      lossy: booleanSchema().optional(),
     }).optional(),
   }),
 );
-//@ chunk-q2swdab7.js:1124-1746 placement
+//@ chunk-s0hesbce.js:1145-1767 placement
 /**
  * 远程调用"读文件"：用启动时权限上下文合并当前策略/用户/项目设置的拒绝与询问规则，在这些规则与工作目录限制下读取文件（有大小上限），返回文本或"read denied"。
  */
@@ -122,7 +123,7 @@ async function serveReadFileForRemote(input, signal, context) {
     },
   };
 }
-//@ chunk-q2swdab7.js:1746-2323 placement
+//@ chunk-s0hesbce.js:1767-2344 placement
 /**
  * 构造远程读文件所用的权限上下文：从各来源设置文件重新读取规则（只取 deny/ask），若对读探针存在拒绝或询问规则则返回 undefined（不允许远程读）。
  */
@@ -151,7 +152,7 @@ function remoteReadPermissionContext(launchContext) {
       announce: false,
     },
   );
-  return getDenyRuleForTool(context, READ_PATH_PROBE) || getAskRuleForTool(context, READ_PATH_PROBE)
+  return getDenyRuleForTool(context, READ_PATH_PROBE) || findAskRuleForTool(context, READ_PATH_PROBE)
     ? undefined
     : {
         ...context,
@@ -160,7 +161,7 @@ function remoteReadPermissionContext(launchContext) {
         ),
       };
 }
-//@ chunk-q2swdab7.js:2323-2388 placement
+//@ chunk-s0hesbce.js:2344-2409 placement
 /**
  * 判断文本长度与其 JSON 字节数是否都在远程读上限内。
  */

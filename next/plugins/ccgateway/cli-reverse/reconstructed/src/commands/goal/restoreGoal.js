@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。恢复会话时从转写还原 /goal 目标与 Stop hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nhtqnamp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bw0zh6fd.js (1)
  * attribution: placement 1
  */
 import { findActiveGoalCondition, getGoalBlockedReason, logGoalCleared, getValueFromInput } from "./goal.js";
@@ -14,7 +14,7 @@ import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { getSessionId, getTotalOutputTokens } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-nhtqnamp.js:385-1085 placement
+//@ chunk-bw0zh6fd.js:385-1085 placement
 /**
  * 恢复会话时从转写还原 /goal 目标与 Stop hook。
  */

@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：压缩中提示行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (9)
  * attribution: placement 9
  */
 import {
+  init_react_production,
   createContext,
   useContext,
   useLayoutEffect,
   useEffect,
-  init_react_production,
 } from "../../vendor/react/cjs/react.production.js";
 import { topBlockingDialog } from "../screens/replDialogState.js";
 import { activityManager } from "../utils/activityManager.js";
@@ -27,30 +27,35 @@ import { Box } from "../ink/components/Text.js";
 import { SpinnerColumn } from "./Spinner/SpinnerColumn.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:150636-150652 placement
+//@ chunk-hnxhr3bs.js:154309-154313 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:154309", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:154956-154972 placement
 var COMPACTING_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:150636", () => {
+deferInit("chunk-hnxhr3bs.js:154956", () => {
   COMPACTING_CONTEXT = createContext(null);
 });
-//@ chunk-ag5x7vhf.js:150652-150675 placement
+//@ chunk-hnxhr3bs.js:154972-154995 placement
 function returnTrue() {
   return true;
 }
-//@ chunk-ag5x7vhf.js:150675-150698 placement
+//@ chunk-hnxhr3bs.js:154995-155018 placement
 function returnFalse() {
   return false;
 }
-//@ chunk-ag5x7vhf.js:150698-150733 placement
+//@ chunk-hnxhr3bs.js:155018-155053 placement
 function hasTopBlockingDialog(state) {
   return topBlockingDialog(state) !== null;
 }
-//@ chunk-ag5x7vhf.js:150733-150784 placement
+//@ chunk-hnxhr3bs.js:155053-155104 placement
 function endCompactingActivity() {
   activityManager.endCLIActivity("compacting-line");
 }
-//@ chunk-ag5x7vhf.js:150784-150817 placement
+//@ chunk-hnxhr3bs.js:155104-155137 placement
 var COMPACTING_TEXT = "Compacting conversation";
-//@ chunk-ag5x7vhf.js:150817-151029 placement
+//@ chunk-hnxhr3bs.js:155137-155349 placement
 function useIsViewedAgentCompacting() {
   let $ = useMemoCache(2);
   let compactingContext = useContext(COMPACTING_CONTEXT);
@@ -58,24 +63,24 @@ function useIsViewedAgentCompacting() {
   let selector;
   if ($[0] !== compactingContext) {
     selector = (agentStatuses) => {
-      let _ = compactingContext === null ? undefined : agentStatuses[compactingContext.agentId];
-      return _?.isCompacting === true && _.retryStatus === null;
+      let status = compactingContext === null ? undefined : agentStatuses[compactingContext.agentId];
+      return status?.isCompacting === true && status.retryStatus === null;
     };
     $[0] = compactingContext;
     $[1] = selector;
   } else selector = $[1];
   return useStoreSelector(compactingContext === null ? null : statusSlot, selector) === true;
 }
-//@ chunk-ag5x7vhf.js:151029-151687 placement
+//@ chunk-hnxhr3bs.js:155349-156007 placement
 function CompactingLine() {
   let $ = useMemoCache(10);
   let compactingContext = useContext(COMPACTING_CONTEXT);
   let { overrideMessage, compactingHintText } = useSpinnerStatus(compactingContext?.agentId);
   let liveRowMounted = compactingContext?.liveRowMounted;
-  let _;
+  let mountedEffect;
   let mountEffect;
   if ($[0] !== liveRowMounted) {
-    _ = () => {
+    mountedEffect = () => {
       if (liveRowMounted === undefined) {
         return;
       }
@@ -86,13 +91,13 @@ function CompactingLine() {
     };
     mountEffect = [liveRowMounted];
     $[0] = liveRowMounted;
-    $[1] = _;
+    $[1] = mountedEffect;
     $[2] = mountEffect;
   } else {
-    _ = $[1];
+    mountedEffect = $[1];
     mountEffect = $[2];
   }
-  useLayoutEffect(_, mountEffect);
+  useLayoutEffect(mountedEffect, mountEffect);
   let dialogSelector = useDialogSelector(hasTopBlockingDialog);
   let dialogEffect;
   let dialogDeps;
@@ -138,9 +143,4 @@ function CompactingLine() {
   } else spinnerBox = $[9];
   return spinnerBox;
 }
-//@ chunk-ag5x7vhf.js:151687-151691 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:151687", () => {
-  init_react_production();
-});
 export { useIsViewedAgentCompacting, CompactingLine };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：remote_tools_announce 处理与工作目录同步判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (7)
  * attribution: placement 7
  */
 import { userInfo, homedir } from "os";
@@ -15,17 +15,22 @@ import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logError } from "../../utils/log.js";
-import { isEnvTruthy, getClaudeConfigDir } from "../../utils/envUtils.js";
+import { isEnvTruthy } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:618438-618479 placement
+//@ chunk-0yw3taqg.js:660516-660557 placement
 var REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS; // deferred: uses GIT_CREDENTIAL_ENTRYPOINTS (../remoteIO/workerAuth.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:618438", () => {
+deferInit("chunk-0yw3taqg.js:660516", () => {
   REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS = new Set([...GIT_CREDENTIAL_ENTRYPOINTS, "remote_mobile"]);
 });
-//@ chunk-tyg7f3ek.js:618479-618834 placement
+//@ chunk-0yw3taqg.js:660557-660935 placement
 function admitRemoteToolsAnnounce(session) {
-  if (!session.sdkUrl || !session.remoteSessionId || session.environmentKind !== undefined)
+  if (
+    !session.sdkUrl ||
+    !session.remoteSessionId ||
+    (session.environmentKind !== undefined && !session.grantedRunnerChild)
+  )
     return {
       admitted: false,
       reason: "not_managed_cloud_worker",
@@ -49,7 +54,7 @@ function admitRemoteToolsAnnounce(session) {
     admitted: true,
   };
 }
-//@ chunk-tyg7f3ek.js:618834-619613 placement
+//@ chunk-0yw3taqg.js:660935-661714 placement
 /**
  * 处理 remote_tools_announce：仅托管云 worker 准入，转发到会话通道工具服务。
  */
@@ -103,7 +108,7 @@ function createRemoteToolsAnnounceHandler(deps, options) {
     }
   };
 }
-//@ chunk-tyg7f3ek.js:619704-619761 placement
+//@ chunk-0yw3taqg.js:661805-661862 placement (2.1.88 match: findValidClaudeAlias, 0.751)
 function safeHomedir() {
   try {
     return userInfo().homedir;
@@ -111,12 +116,12 @@ function safeHomedir() {
     return homedir();
   }
 }
-//@ chunk-tyg7f3ek.js:619761-619863 placement (2.1.88 match: getProjectDirsUpToHome, 0.875)
+//@ chunk-0yw3taqg.js:661862-661964 placement (2.1.88 match: getProjectDirsUpToHome, 0.875)
 function getProjectDirsUpToHome(subdir, cwd) {
   let homeDir = subdir.HOME !== undefined && isAbsolute(subdir.HOME) ? subdir.HOME : cwd();
   return join(homeDir, ".claude").normalize("NFC");
 }
-//@ chunk-tyg7f3ek.js:619863-620512 placement
+//@ chunk-0yw3taqg.js:661964-662613 placement
 function decideWorkerDirSync(host) {
   if (host.admittedAs === null)
     return {
@@ -163,7 +168,7 @@ function decideWorkerDirSync(host) {
     takes: "everything",
   };
 }
-//@ chunk-tyg7f3ek.js:620512-620538 placement
+//@ chunk-0yw3taqg.js:662613-662639 placement
 function configDirForSync() {
   return getClaudeConfigDir();
 }

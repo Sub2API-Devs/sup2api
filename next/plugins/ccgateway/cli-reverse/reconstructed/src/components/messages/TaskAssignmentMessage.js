@@ -3,9 +3,9 @@
  *
  * 任务分配消息（"Task #N assigned by …"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/TaskAssignmentMessage.tsx
- * pieces: chunk-ah34pb7m.js (5), chunk-aqdf5t3e.js (1)
+ * pieces: chunk-tsrpnscb.js (1), chunk-wjygkcr4.js (5)
  * attribution: fingerprint 3, placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -32,11 +32,11 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-aqdf5t3e.js:29576-29636 fingerprint (2.1.88 match: getTaskAssignmentSummary, 0.446)
+//@ chunk-tsrpnscb.js:29671-29731 fingerprint (2.1.88 match: getTaskAssignmentSummary, 0.446)
 function getTaskAssignmentSummary(state, assignment, slug, taskId) {
   if (state.supervisors.get(slug) === assignment) assignment.taskId = taskId;
 }
-//@ chunk-ah34pb7m.js:83471-84268 fingerprint (2.1.88 match: TaskAssignmentDisplay, 0.488)
+//@ chunk-wjygkcr4.js:87454-88251 fingerprint (2.1.88 match: TaskAssignmentDisplay, 0.488)
 function TaskAssignmentDisplay(props) {
   let $ = useMemoCache(16);
   let { assignment, senderName } = props;
@@ -110,7 +110,7 @@ function TaskAssignmentDisplay(props) {
   } else boxElement = $[15];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:84268-84356 fingerprint (2.1.88 match: tryRenderTaskAssignmentMessage, 0.717)
+//@ chunk-wjygkcr4.js:88251-88339 fingerprint (2.1.88 match: tryRenderTaskAssignmentMessage, 0.717)
 function tryRenderTaskAssignmentMessage(content, senderName) {
   let assignment = isTaskAssignment(content);
   if (assignment)
@@ -120,7 +120,7 @@ function tryRenderTaskAssignmentMessage(content, senderName) {
     });
   return null;
 }
-//@ chunk-ah34pb7m.js:86535-86798 placement
+//@ chunk-wjygkcr4.js:88339-88602 placement
 function renderTeammateTerminated(content, key) {
   let frameForDisplay = parseFrameForDisplay(TeammateTerminatedMessageSchema(), content);
   if (!frameForDisplay) return null;
@@ -139,7 +139,7 @@ function renderTeammateTerminated(content, key) {
     }),
   });
 }
-//@ chunk-ah34pb7m.js:86798-86857 placement
+//@ chunk-wjygkcr4.js:88602-88661 placement
 function renderTaskRelatedMessage(content, displayName) {
   return (
     tryRenderPlanApprovalMessage(content, displayName) ??
@@ -148,7 +148,7 @@ function renderTaskRelatedMessage(content, displayName) {
     renderTeammateTerminated(content, displayName)
   );
 }
-//@ chunk-ah34pb7m.js:86857-87716 placement
+//@ chunk-wjygkcr4.js:88661-89520 placement
 /**
  * 任务分配消息（@队友、任务编号与主题）。
  */
@@ -237,4 +237,4 @@ function TaskAssignmentMessage(props) {
   } else rowElement = $[17];
   return rowElement;
 }
-export { renderTaskRelatedMessage, TaskAssignmentMessage, getTaskAssignmentSummary };
+export { getTaskAssignmentSummary, renderTaskRelatedMessage, TaskAssignmentMessage };

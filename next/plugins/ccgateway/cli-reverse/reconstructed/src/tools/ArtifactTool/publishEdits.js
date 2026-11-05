@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 发布的 edits（查找替换）应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (14), chunk-y9np9srf.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rh10xf8e.js (20), chunk-xzmy9dn4.js (14)
  * attribution: placement 34
  */
 import { lstat } from "fs/promises";
@@ -16,7 +16,7 @@ import { env } from "../../utils/env.js";
 import { detectLineEndingsForString as detectLineEndingsForString_2 } from "../../utils/fileRead.js";
 import { detectLineEndingsForString, runWithFileWriteContext } from "../../utils/file.js";
 import { jsonParse } from "../../utils/slowOperations.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { expandPathOrNull } from "../../utils/path.js";
@@ -64,13 +64,13 @@ import {
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y9np9srf.js:410-439 placement
+//@ chunk-rh10xf8e.js:410-439 placement
 var MODEL_FACING_MESSAGE_KEY = "modelFacingMessage";
-//@ chunk-y9np9srf.js:439-475 placement
+//@ chunk-rh10xf8e.js:439-475 placement
 function coercedNumberSchema(inner = numberSchema()) {
   return preprocess(coerceNumberString, inner);
 }
-//@ chunk-y9np9srf.js:475-620 placement
+//@ chunk-rh10xf8e.js:475-620 placement
 function coerceNumberString(offset) {
   if (typeof offset === "string") {
     let trimmed = offset.trim();
@@ -81,9 +81,9 @@ function coerceNumberString(offset) {
   }
   return offset;
 }
-//@ chunk-y9np9srf.js:620-631 placement
+//@ chunk-rh10xf8e.js:620-631 placement
 var MAX_PUBLISH_EDITS = 64;
-//@ chunk-y9np9srf.js:631-1006 placement
+//@ chunk-rh10xf8e.js:631-1006 placement
 function applyFindReplace(text, edits) {
   let current = text;
   for (let j = 0; j < edits.length; j++) {
@@ -119,7 +119,7 @@ function applyFindReplace(text, edits) {
     content: current,
   };
 }
-//@ chunk-y9np9srf.js:1006-1046 placement
+//@ chunk-rh10xf8e.js:1006-1046 placement
 /**
  * 发布 edits 的上限：总字符、工作量与出现次数扫描上限。
  */
@@ -127,11 +127,11 @@ var PUBLISH_EDIT_LIMITS = MAX_PUBLISH_EDITS;
 var MAX_TOTAL_EDIT_CHARS = 65536;
 var MAX_EDIT_WORK_CHARS = 268435456;
 var MAX_OCCURRENCE_SCAN = 100;
-//@ chunk-y9np9srf.js:1046-1109 placement
+//@ chunk-rh10xf8e.js:1046-1109 placement
 function isPublishEditsEnabled() {
   return env.CLAUDE_CODE_ARTIFACT_PUBLISH_EDITS ?? true;
 }
-//@ chunk-y9np9srf.js:1109-2266 placement
+//@ chunk-rh10xf8e.js:1109-2266 placement
 function publishEditsDescription(options) {
   let lead = options.core
     ? "publish: small changes Claude makes to the file at `file_path` in this same call, instead of editing the file with Edit and publishing after."
@@ -146,7 +146,7 @@ function publishEditsDescription(options) {
       : ` Not allowed with ${excluded.length === 1 ? excluded[0] : `${excluded.slice(0, -1).join(", ")} or ${excluded.at(-1)}`}.`;
   return `${lead}${surfaces}${excludedNote} Each old_str is text copied exactly from the file as it now stands and must occur in it exactly once; new_str takes its place (empty deletes it). The edits apply in order, all or none: the file is published with them and then saved with them on disk, so it stays the source for later changes; on a miss nothing is changed or published, and the result says which edit failed and why.`;
 }
-//@ chunk-y9np9srf.js:2266-3621 placement
+//@ chunk-rh10xf8e.js:2266-3621 placement
 /**
  * 发布 edits 的字段说明与三处「下次小改动可直接用 edits」的提示文案。
  */
@@ -158,7 +158,7 @@ var PUBLISH_EDITS_AFTER_PUBLISH_HINT =
   "The files you sent are still on disk. For the next small change to this file, send it as `edits` on a publish of the same file_path (old_str/new_str pairs copied exactly from the file as it now stands): that one call changes the file and what is published together, with no Read and no Edit. To change several files, or to rewrite most of the page, Edit the files and publish them in the same response; if an Edit reports that it did not apply, correct it and publish again. If the file's text is no longer in this conversation, Read it first.";
 var PUBLISH_EDITS_AFTER_EDITS_HINT =
   "Once that file has these edits too, the next small change to it can go as `edits` on a publish of the same file_path (old_str/new_str pairs copied exactly from the file as it then stands). To change several files, or to rewrite most of the page, Edit the files and publish them in the same response; if an Edit reports that it did not apply, correct it and publish again. If the file's text is no longer in this conversation, Read it first.";
-//@ chunk-y9np9srf.js:3621-3871 placement
+//@ chunk-rh10xf8e.js:3621-3871 placement
 function validateEdits(edits) {
   let totalChars = 0;
   for (let j = 0; j < edits.length; j++) {
@@ -181,7 +181,7 @@ function validateEdits(edits) {
   }
   return;
 }
-//@ chunk-y9np9srf.js:3871-4560 placement
+//@ chunk-rh10xf8e.js:3871-4560 placement
 /**
  * 把 publish 的 edits（old_str/new_str）应用到文件：必须唯一出现、大小与工作量受限，返回新内容或失败原因。
  */
@@ -253,7 +253,7 @@ function applyPublishEdits(text, edits, options = {}) {
       }
     : result;
 }
-//@ chunk-y9np9srf.js:4560-4651 placement
+//@ chunk-rh10xf8e.js:4560-4651 placement
 /**
  * 统计子串出现次数，最多数到上限为止。
  */
@@ -267,7 +267,7 @@ function countOccurrencesCapped(text, find) {
     count++;
   return count;
 }
-//@ chunk-y9np9srf.js:4651-4701 placement
+//@ chunk-rh10xf8e.js:4651-4701 placement
 /**
  * 文本能否解析为 JSON。
  */
@@ -279,7 +279,7 @@ function isValidJsonText(text) {
     return false;
   }
 }
-//@ chunk-y9np9srf.js:4701-5977 placement
+//@ chunk-rh10xf8e.js:4701-5977 placement
 function describeEditFailure(failure, edits, pathLabel) {
   switch (failure.reason) {
     case "empty_old_str":
@@ -300,14 +300,14 @@ function describeEditFailure(failure, edits, pathLabel) {
       return "after these edits the file would no longer be valid JSON, which the page that reads it needs; correct the edit that breaks it (a missing comma, quote or bracket) and send this publish again with all of its edits";
   }
 }
-//@ chunk-y9np9srf.js:5977-6045 placement
+//@ chunk-rh10xf8e.js:5977-6045 placement
 /**
  * 编辑失败原因是否为「找不到」或「有多处匹配」。
  */
 function isNotFoundOrAmbiguousEdit(failure) {
   return failure.reason === "not_found" || failure.reason === "ambiguous";
 }
-//@ chunk-y9np9srf.js:6045-6435 placement
+//@ chunk-rh10xf8e.js:6045-6435 placement
 function editsFailedMessage(failure, edits, content, budget) {
   let lead = `No edits were applied and nothing was published: ${describeEditFailure(failure, edits.length, content.length)}.`;
   if (!isNotFoundOrAmbiguousEdit(failure)) return lead;
@@ -317,14 +317,14 @@ ${content}`;
   if (text.length <= budget) return text;
   return `${lead} The file is too long to show here: Read the file at file_path, copy old_str from it exactly and send the publish again.`;
 }
-//@ chunk-y9np9srf.js:6435-6482 placement
+//@ chunk-rh10xf8e.js:6435-6482 placement
 function editsBaseKey(path) {
   return `\x00edits-base\x00${path}`;
 }
-//@ chunk-y9np9srf.js:6482-6727 placement
+//@ chunk-rh10xf8e.js:6482-6727 placement
 var EDIT_PERMISSION_ASK_TEXT =
   "Applying `edits` changes the file at file_path, and an Edit permission check requires approval here: nothing was published and the file is unchanged. Retry the publish so it can be asked, or Edit the file and publish it without edits.";
-//@ chunk-y9np9srf.js:6727-7994 placement
+//@ chunk-rh10xf8e.js:6727-7994 placement
 function editsWrittenNote(editsApplied, unitHint, editsNotWritten) {
   let what = unitHint === "page" ? "the published page" : "what was published";
   if (editsNotWritten === undefined)
@@ -337,21 +337,21 @@ function editsWrittenNote(editsApplied, unitHint, editsNotWritten) {
     return `${index}: writing it back failed, and the file may be partly written. Read it before anything else, restore it to the published text (${what}, ${part ? "the edit" : "the edits"} included), and only then publish it again; publishing it as it is could put damaged content ${unitHint === "page" ? "on the page" : "in the artifact"}.`;
   return `${index} (${editsNotWritten === "changed_during_publish" ? "it changed on disk while the publish ran, so it was left as it is" : editsNotWritten === "not_writable" ? "it could not be opened for writing (read-only), so it was left as it is" : "it has other names on disk (a hard link), so it was left as it is"}). Apply the same ${part ? "edit" : "edits"} to that file with Edit before you publish it again${editsNotWritten === "hard_linked" ? ", and publish it without `edits` while it has other names" : ""}; publishing it as it is would revert ${part ? "it" : "them"}.`;
 }
-//@ chunk-y9np9srf.js:7994-8234 placement
+//@ chunk-rh10xf8e.js:7994-8234 placement
 function encodeLikeOriginal(sample, text) {
   if (sample[0] === 255 && sample[1] === 254)
     return Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, "utf16le")]);
   let hasBom = sample[0] === 239 && sample[1] === 187 && sample[2] === 191;
   return Buffer.concat([...(hasBom ? [Buffer.from([239, 187, 191])] : []), Buffer.from(text, "utf8")]);
 }
-//@ chunk-8wvtd8sr.js:313449-313768 placement
+//@ chunk-xzmy9dn4.js:315720-316039 placement
 /**
  * 同一响应中先前的 Edit/Write 未生效时拒绝发布的说明：未发布、已有 Artifact 不变，先处理该修改再重新发布。
  */
 function sameTurnEditFailedMessage(failedSameTurnEdit) {
   return `The Edit or Write of ${failedSameTurnEdit} sent earlier in the same response as this publish did not apply (its own result says why), so nothing was published and any existing artifact is unchanged. Settle that change first (correct it, or leave the file as it is if the change was declined), then publish again.`;
 }
-//@ chunk-8wvtd8sr.js:313768-314231 placement
+//@ chunk-xzmy9dn4.js:316039-316502 placement
 /**
  * 找出同一回复中先于本次发布、写同一文件且失败的 Edit/Write 调用对应的路径（之后成功的 Write 会覆盖），没有返回 null。
  */
@@ -363,7 +363,7 @@ function findFailedSameTurnEdit(context, paths) {
     for (let block of message.message.content) {
       if (
         block.type !== "tool_use" ||
-        (block.name !== FILE_EDIT_TOOL_NAME && block.name !== FILE_WRITE_TOOL_NAME) ||
+        (block.name !== EDIT && block.name !== FILE_WRITE_TOOL_NAME) ||
         !isPlainObject(block.input)
       )
         continue;
@@ -375,7 +375,7 @@ function findFailedSameTurnEdit(context, paths) {
     }
   return paths.find((path) => failedByPath.get(path) === true) ?? null;
 }
-//@ chunk-8wvtd8sr.js:352268-352363 placement
+//@ chunk-xzmy9dn4.js:354540-354635 placement
 /**
  * 在拒绝消息后追加写说明，并给出遥测类别（默认 write_denied）。
  */
@@ -389,7 +389,7 @@ function denyWithWriteNote(decision, sad = "write_denied") {
     sad,
   };
 }
-//@ chunk-8wvtd8sr.js:352363-354927 placement
+//@ chunk-xzmy9dn4.js:354635-357199 placement
 async function checkPublishEditPermission(filePath, toolPermissionContext, context, memoryPaths) {
   let shownPath = encodeControlChars(filePath);
   let denyRuleForTool = getDenyRuleForTool(toolPermissionContext, FileEditTool);
@@ -513,7 +513,7 @@ async function checkPublishEditPermission(filePath, toolPermissionContext, conte
     );
   return fileEditPermissionOutcome;
 }
-//@ chunk-8wvtd8sr.js:355436-355640 placement
+//@ chunk-xzmy9dn4.js:357708-357911 placement
 /**
  * 判断发布内嵌 edits 的询问能否交给自动模式分类器处理（安全检查可批准、工作目录类，或模型支持）。
  */
@@ -526,7 +526,7 @@ function editAskClassifierRoutable(reason, toolPermissionContext, context) {
   let mainLoopModel = getMainLoopModel(context);
   return classifyEditsEnabled(mainLoopModel) || shouldClassifyEdits(mainLoopModel);
 }
-//@ chunk-8wvtd8sr.js:355640-355854 placement
+//@ chunk-xzmy9dn4.js:357911-358124 placement
 /**
  * 判断在自动模式下对该文件的 Edit 是否会无需用户查看就放行（用于决定内嵌 edits 是否需要询问）。
  */
@@ -550,7 +550,7 @@ function editWouldBeUnseen(filePath, toolPermissionContext, context) {
     getFileEditPermissionOutcome(tool, toolPermissionContext, context).kind === "unseen"
   );
 }
-//@ chunk-8wvtd8sr.js:355854-356206 placement
+//@ chunk-xzmy9dn4.js:358124-358476 placement
 /**
  * 判断是否有会作用于该文件 Edit/Write 的 PreToolUse hook（含会话 hook 与 hooks 模块），用于决定发布内嵌 edits 时是否需要走 hook。
  */
@@ -580,17 +580,17 @@ function hasEditPreToolHook(filePath, context) {
     hooksModuleMayCover(context, [FileEditTool.name, FILE_WRITE_TOOL_NAME])
   );
 }
-//@ chunk-8wvtd8sr.js:356238-356320 placement
+//@ chunk-xzmy9dn4.js:358508-358590 placement
 /**
  * 两类 errno：目标已消失（ELOOP/ENXIO/EISDIR）与不可写（EACCES/EPERM/EROFS）。
  */
 var GONE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NOT_WRITABLE_ERRNOS;
-deferInit("chunk-8wvtd8sr.js:356238", () => {
+deferInit("chunk-xzmy9dn4.js:358508", () => {
   GONE_ERRNOS = new Set(["ELOOP", "ENXIO", "EISDIR"]);
   NOT_WRITABLE_ERRNOS = new Set(["EACCES", "EPERM", "EROFS"]);
 });
-//@ chunk-8wvtd8sr.js:356320-357363 placement
+//@ chunk-xzmy9dn4.js:358590-359633 placement
 /**
  * 把 edits 结果写回本地源文件：以读写方式打开，核对大小、inode 身份与内容哈希未变（否则 changed_during_publish），拒绝多硬链接，原地覆写并截断、fsync，返回 {kind, mtimeMs?}。
  */
@@ -665,7 +665,7 @@ async function writeBackEditedFile(request) {
     }
   });
 }
-//@ chunk-8wvtd8sr.js:357363-357542 placement
+//@ chunk-xzmy9dn4.js:359633-359812 placement
 /**
  * 为发布内嵌 edits 写回的文件记录文件历史检查点（失败只记调试日志）。
  */
@@ -681,7 +681,7 @@ async function trackEditHistory(toolUseContext, filePath, uuid) {
     );
   });
 }
-//@ chunk-8wvtd8sr.js:357542-357769 placement
+//@ chunk-xzmy9dn4.js:359812-360039 placement
 /**
  * 写回文件后更新 readFileState（新内容与时间戳，保留部分视图标记）。
  */
@@ -700,7 +700,7 @@ function refreshReadFileState(toolUseContext, filePath, content, timestamp) {
     }),
   });
 }
-//@ chunk-8wvtd8sr.js:357769-358086 placement
+//@ chunk-xzmy9dn4.js:360039-360356 placement
 /**
  * 发布内嵌 edits 改了文件后通知 LSP：清除该文件已送达/待送达的诊断，发送 change 与 save 通知，并记录文件修改。
  */
@@ -722,14 +722,14 @@ function notifyLspOfEdit(toolUseContext, filePath, oldContent, newContent) {
   }
   lintMemoryWrite(filePath, oldContent, newContent);
 }
-//@ chunk-8wvtd8sr.js:358086-358165 placement
+//@ chunk-xzmy9dn4.js:360356-360435 placement
 /**
  * 工具是否属于 remote-devices 且不是 sdk 类型。
  */
 function isRemoteDeviceMcpTool(tool) {
   return tool.mcpInfo?.serverName === REMOTE_DEVICES && tool.mcpInfo.serverType !== "sdk";
 }
-//@ chunk-8wvtd8sr.js:358165-358250 placement
+//@ chunk-xzmy9dn4.js:360435-360520 placement
 /**
  * 可发布编辑模块对外暴露的注入槽（垫片、live 编辑、房间、处理器、提示词、quickstart 说明）。
  */
@@ -740,7 +740,7 @@ var artifactHandlersModuleSlot;
 var handlersPromptModule;
 var canonicalHandlerTargetModule;
 var quickstartNotesModule;
-deferInit("chunk-8wvtd8sr.js:358165", () => {
+deferInit("chunk-xzmy9dn4.js:360435", () => {
   publishShimModule = null;
   liveEditGateModule = null;
   artifactRoomsModule = null;
@@ -751,13 +751,10 @@ deferInit("chunk-8wvtd8sr.js:358165", () => {
 });
 export {
   editAskClassifierRoutable,
-  coerceNumberString,
-  MODEL_FACING_MESSAGE_KEY,
-  coercedNumberSchema,
-  PUBLISH_EDITS_AFTER_EDITS_HINT,
-  PUBLISH_EDITS_AFTER_PUBLISH_HINT,
-  publishShimModule,
+  MAX_PUBLISH_EDITS,
+  applyFindReplace,
   artifactRoomsModule,
+  publishShimModule,
   validateEdits,
   editsFailedMessage,
   artifactHandlersModuleSlot,
@@ -781,11 +778,14 @@ export {
   editWouldBeUnseen,
   canonicalHandlerTargetModule,
   quickstartNotesModule,
-  MAX_PUBLISH_EDITS,
-  applyFindReplace,
+  coercedNumberSchema,
+  coerceNumberString,
+  MODEL_FACING_MESSAGE_KEY,
+  PUBLISH_EDITS_INLINE_HINT,
   EDIT_FIELD_DESCRIPTIONS,
   NEW_STR_FIELD_DESCRIPTION,
   publishEditsDescription,
   isPublishEditsEnabled,
-  PUBLISH_EDITS_INLINE_HINT,
+  PUBLISH_EDITS_AFTER_EDITS_HINT,
+  PUBLISH_EDITS_AFTER_PUBLISH_HINT,
 };

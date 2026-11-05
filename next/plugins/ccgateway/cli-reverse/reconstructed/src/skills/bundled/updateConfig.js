@@ -3,10 +3,10 @@
  *
  * update-config 内置 skill：settings 文件位置、钩子构造说明与 settings JSON Schema。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/updateConfig.ts
- * pieces: chunk-hantmvxa.js (4), chunk-tyg7f3ek.js (1)
- * attribution: sole-consumer 2, affinity 1, fingerprint 2
+ * pieces: chunk-0yw3taqg.js (1), chunk-ne2890fx.js (4)
+ * attribution: fingerprint 2, sole-consumer 2, affinity 1
  */
 import { artifactPathPrefix } from "../../services/artifacts/artifactMount.js";
 import { registerBundledSkill } from "../bundledSkills.js";
@@ -17,7 +17,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { settleHeldInboundOnShutdown } from "../../utils/crossSessionInbound/inboundMode.js";
 import { sweepQueueAtTeardown } from "../../cli/print/wakeRouter.js";
 
-//@ chunk-hantmvxa.js:201166-208936 sole-consumer
+//@ chunk-ne2890fx.js:201348-209135 sole-consumer
 /**
  * update-config skill 文档：各 settings 文件位置与作用域选择说明。
  */
@@ -105,7 +105,7 @@ Plugin syntax: \`plugin-name@source\` where source is \`claude-code-marketplace\
 
 ### Other Settings
 - \`language\`: Preferred response language (e.g., "japanese")
-- \`cleanupPeriodDays\`: Days to keep transcripts before automatic cleanup (default: 30; minimum 1)
+- \`cleanupPeriodDays\`: Days to keep transcripts on this computer before automatic cleanup (default: 30; minimum 1)
 - \`respectGitignore\`: Whether to respect .gitignore (default: true)
 - \`spinnerTipsEnabled\`: Show tips in spinner
 - \`timeFormat\`: Clock format for times shown in the UI: "auto" (default), "12-hour", "24-hour", "24-hour-utc", or a strftime pattern such as "%H:%M"
@@ -272,7 +272,7 @@ echo '{"systemMessage": "Session complete!"}'
 }
 \`\`\`
 `;
-//@ chunk-hantmvxa.js:208936-213278 sole-consumer
+//@ chunk-ne2890fx.js:209135-213477 sole-consumer
 /**
  * update-config skill 的「构造钩子（含验证）」章节，按当前 hooks schema 生成。
  */
@@ -316,7 +316,7 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 7. **Handoff.** ${configMenuPath ? `Tell the user the hook is live (or needs \`${configMenuPath}\`/restart per the watcher caveat). Point them at \`${configMenuPath}\` to review, edit, or disable it later.` : "Tell the user the hook is live (or needs a new session per the watcher caveat), and that they can review, edit, or disable it later in the settings file you wrote."} The UI only shows "Ran N hooks" if a hook errors or is slow \u2014 silent success is invisible by design.
 `;
 }
-//@ chunk-hantmvxa.js:213278-217472 affinity
+//@ chunk-ne2890fx.js:213477-217671 affinity
 /**
  * update-config skill 的完整提示词正文（修改 settings.json 的流程与注意事项）。
  */
@@ -459,7 +459,7 @@ If a hook isn't running:
 6. **Use --debug** - Run \`claude --debug\` to see hook execution logs
 `;
 }
-//@ chunk-hantmvxa.js:217472-218912 fingerprint (2.1.88 match: registerUpdateConfigSkill, 0.811)
+//@ chunk-ne2890fx.js:217671-219111 fingerprint (2.1.88 match: registerUpdateConfigSkill, 0.811)
 /**
  * 注册 update-config 内置 skill：注入 settings 文件位置说明、钩子构造与验证说明以及由 zod 生成的 settings JSON Schema；参数以 [hooks-only] 开头时只给钩子部分。
  */
@@ -531,7 +531,7 @@ ${args}`;
     },
   });
 }
-//@ chunk-tyg7f3ek.js:626872-626933 fingerprint (2.1.88 match: generateSettingsSchema, 0.437)
+//@ chunk-0yw3taqg.js:668981-669042 fingerprint (2.1.88 match: generateSettingsSchema, 0.437)
 async function drainQueuedMessages(io, messageQueue) {
   await settleHeldInboundOnShutdown();
   sweepQueueAtTeardown({

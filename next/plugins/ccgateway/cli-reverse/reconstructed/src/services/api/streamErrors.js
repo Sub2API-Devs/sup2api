@@ -3,26 +3,26 @@
  *
  * 流错误类（无响应、无事件、截断、格式错误）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gr2vfhah.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k1t1w9mg.js (8)
  * attribution: placement 8
  */
 import { findInCauseChain } from "../../utils/errors.js";
 
-//@ chunk-gr2vfhah.js:657-672 placement
+//@ chunk-k1t1w9mg.js:1964-1979 placement
 /**
  * 流错误重试窗口上限 10 分钟；取升级后或首次重试窗口。
  */
 var MAX_RETRY_WINDOW_MS = 600000;
-//@ chunk-gr2vfhah.js:672-739 placement
+//@ chunk-k1t1w9mg.js:1979-2046 placement
 /**
  * 导出函数 `retryWindowFor`：参数 e，返回 e.escalated ? e.retryWindowMs : e.firstWindowMs。
  */
 function retryWindowFor(deadline) {
   return deadline.escalated ? deadline.retryWindowMs : deadline.firstWindowMs;
 }
-//@ chunk-gr2vfhah.js:739-946 placement
+//@ chunk-k1t1w9mg.js:2046-2253 placement
 class StreamNoResponseError extends Error {
   deadline;
   sleptMs;
@@ -34,7 +34,7 @@ class StreamNoResponseError extends Error {
     this.name = "StreamNoResponseError";
   }
 }
-//@ chunk-gr2vfhah.js:946-1029 placement
+//@ chunk-k1t1w9mg.js:2253-2336 placement
 /**
  * 导出函数 `findStreamNoResponseError`：参数 e，返回 t instanceof StreamNoResponseError ? t : void 0。
  */
@@ -42,14 +42,14 @@ function findStreamNoResponseError(error) {
   let inCauseChain = findInCauseChain(error, (cause) => cause instanceof StreamNoResponseError);
   return inCauseChain instanceof StreamNoResponseError ? inCauseChain : undefined;
 }
-//@ chunk-gr2vfhah.js:11749-11871 placement
+//@ chunk-k1t1w9mg.js:13353-13475 placement
 class StreamNoEventsError extends Error {
   constructor() {
     super("Stream ended without receiving any events");
     this.name = "StreamNoEventsError";
   }
 }
-//@ chunk-gr2vfhah.js:11871-12130 placement
+//@ chunk-k1t1w9mg.js:13475-13734 placement
 class StreamMalformedEventError extends Error {
   blockState;
   constructor(blockState) {
@@ -60,7 +60,7 @@ class StreamMalformedEventError extends Error {
     if (blockState === "unreadable") this.message = "Stream event unreadable";
   }
 }
-//@ chunk-gr2vfhah.js:12130-12280 placement
+//@ chunk-k1t1w9mg.js:13734-13884 placement
 class StreamTruncatedError extends Error {
   code = "StreamTruncated";
   constructor() {
@@ -68,7 +68,7 @@ class StreamTruncatedError extends Error {
     this.name = "StreamTruncatedError";
   }
 }
-//@ chunk-gr2vfhah.js:12280-12659 placement
+//@ chunk-k1t1w9mg.js:13884-14263 placement
 function classifyStreamError({
   connDetails,
   isStaleConnection,

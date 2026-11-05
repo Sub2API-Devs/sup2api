@@ -1,32 +1,32 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/emitted-connection.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (13)
+ * pieces: chunk-qg41pqt6.js (13)
  * attribution: esm-fingerprint 9, esm-layout 4
  */
 import { createServer as createServer_2 } from "http";
 
-//@ chunk-fq0cr76a.js:643133-643180 esm-fingerprint
+//@ chunk-qg41pqt6.js:643627-643674 esm-fingerprint
 function runsOnBun() {
   return typeof globalThis.Bun !== "undefined";
 }
-//@ chunk-fq0cr76a.js:643180-643187 esm-layout
+//@ chunk-qg41pqt6.js:643674-643681 esm-layout
 var probeOverride;
-//@ chunk-fq0cr76a.js:643187-643251 esm-fingerprint
+//@ chunk-qg41pqt6.js:643681-643745 esm-fingerprint
 function servesEmittedConnections() {
   return probeOverride?.() ?? createServer_2().listenerCount("connection") > 0;
 }
-//@ chunk-fq0cr76a.js:643251-643283 esm-layout
+//@ chunk-qg41pqt6.js:643745-643777 esm-layout
 function bunVersionString() {
   return "Bun 1.4.4";
 }
-//@ chunk-fq0cr76a.js:643283-643390 esm-fingerprint
+//@ chunk-qg41pqt6.js:643777-643884 esm-fingerprint
 function assertTlsTerminationSupported() {
   if (servesEmittedConnections()) return;
   throw Error(`tlsTerminate needs Node, or Bun 1.4 or later (this is ${bunVersionString()})`);
 }
-//@ chunk-fq0cr76a.js:643390-644021 esm-fingerprint
+//@ chunk-qg41pqt6.js:643884-644515 esm-fingerprint
 function keepFlushedHeaderBatches(sock) {
   let parser = sock.parser;
   if (typeof parser !== "object" || parser === null) return;
@@ -68,11 +68,11 @@ function keepFlushedHeaderBatches(sock) {
     return messageComplete.apply(this, args);
   };
 }
-//@ chunk-fq0cr76a.js:644021-644075 esm-fingerprint
+//@ chunk-qg41pqt6.js:644515-644569 esm-fingerprint
 function writeHeadsAsLatin1(sock) {
   if (runsOnBun()) sock.setDefaultEncoding("latin1");
 }
-//@ chunk-fq0cr76a.js:644075-644129 esm-fingerprint
+//@ chunk-qg41pqt6.js:644569-644623 esm-fingerprint
 function createByteBudget(limit) {
   return {
     limit,
@@ -80,7 +80,7 @@ function createByteBudget(limit) {
     waiters: new Set(),
   };
 }
-//@ chunk-fq0cr76a.js:644129-644249 esm-fingerprint
+//@ chunk-qg41pqt6.js:644623-644743 esm-fingerprint
 function adjustByteBudget(budget, delta) {
   budget.used += delta;
   if (delta >= 0 || budget.waiters.size === 0) return;
@@ -88,7 +88,7 @@ function adjustByteBudget(budget, delta) {
   budget.waiters.clear();
   for (let wake of woken) wake();
 }
-//@ chunk-fq0cr76a.js:644249-644513 esm-fingerprint
+//@ chunk-qg41pqt6.js:644743-645007 esm-fingerprint
 function gateSocketOnBufferedBody(req, cap, budget) {
   let socket = req.socket;
   let counted = 0;
@@ -109,13 +109,13 @@ function gateSocketOnBufferedBody(req, cap, budget) {
   req.once("close", release);
   socket.once("close", release);
 }
-//@ chunk-fq0cr76a.js:644513-644532 esm-layout
+//@ chunk-qg41pqt6.js:645007-645026 esm-layout
 var endsGracefully = new WeakSet();
-//@ chunk-fq0cr76a.js:644532-644557 esm-layout
+//@ chunk-qg41pqt6.js:645026-645051 esm-layout
 function markEndsGracefully(socket) {
   endsGracefully.add(socket);
 }
-//@ chunk-fq0cr76a.js:644557-644729 esm-fingerprint
+//@ chunk-qg41pqt6.js:645051-645223 esm-fingerprint
 /**
  * 启动 GrowthBook 周期刷新，退出时清理。
  */

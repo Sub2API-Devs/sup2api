@@ -3,9 +3,9 @@
  *
  * 后台任务路径约束（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (2), chunk-8nfjhq0y.js (17)
  * attribution: placement 19
  */
 import { win32 } from "path";
@@ -28,10 +28,10 @@ import { isENOENT } from "../errors.js";
 import { isPathWithinCaseAware } from "../pathPrefix.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
-import { getPlatform as getPlatform_2 } from "../platform.js";
+import { getPlatform } from "../platform.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:425824-425942 placement
+//@ chunk-8nfjhq0y.js:19908-20027 placement
 function toWin32Backslashes(inputPath) {
   let matches = /^[\\/]{2}/.test(inputPath);
   return (
@@ -39,7 +39,7 @@ function toWin32Backslashes(inputPath) {
     (matches ? inputPath.replace(/^[\\/]{2,}/, "") : inputPath).replace(/[\\/]+/g, "\\")
   );
 }
-//@ chunk-s61vbvea.js:425942-426147 placement
+//@ chunk-8nfjhq0y.js:20027-20231 placement
 function refuseContainmentSpelling(path, reason, surfaced) {
   logForDebugging(`bg-containment: refusing ${reason} spelling for containment: ${path}`, {
     level: "warn",
@@ -57,7 +57,7 @@ function refuseContainmentSpelling(path, reason, surfaced) {
         surfaced,
       };
 }
-//@ chunk-s61vbvea.js:426147-426332 placement
+//@ chunk-8nfjhq0y.js:20231-20416 placement
 function stripWin32LongPathPrefix(deepestExistingAncestor) {
   if (!isDeviceNamespacePath(deepestExistingAncestor)) return deepestExistingAncestor;
   let match = /^[\\/]{2}\?[\\/]([A-Za-z]:[\\/].*)$/.exec(deepestExistingAncestor);
@@ -66,9 +66,9 @@ function stripWin32LongPathPrefix(deepestExistingAncestor) {
   if (match_2) return "\\\\" + match_2[1];
   return null;
 }
-//@ chunk-s61vbvea.js:426332-426357 placement
+//@ chunk-8nfjhq0y.js:20416-20441 placement
 var TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE = /[. ](?=[\\/]|$)/;
-//@ chunk-s61vbvea.js:426357-427357 placement
+//@ chunk-8nfjhq0y.js:20441-21438 placement
 function classifyContainmentPath(inputPath, platform = "linux") {
   if (hasDotSegment(inputPath)) return refuseContainmentSpelling(identity(inputPath), "dot-segment");
   let lexicalPath = identity(inputPath);
@@ -142,18 +142,18 @@ function classifyContainmentPath(inputPath, platform = "linux") {
     skipped: false,
   };
 }
-//@ chunk-s61vbvea.js:427357-428047 placement
+//@ chunk-8nfjhq0y.js:21438-22123 placement
 function resolveContainmentTarget(inputPath, platform = "linux") {
   let firstResult;
   let currentPath = inputPath;
   try {
-    for (let j = 0; j < 8; j++) {
+    for (let idx = 0; idx < 8; idx++) {
       let result = classifyContainmentPath(currentPath, platform);
       firstResult ??= result;
       if (result.skipped)
-        return j === 0 ? result : refuseContainmentSpelling(firstResult.lexical, "resolves-to-network");
+        return idx === 0 ? result : refuseContainmentSpelling(firstResult.lexical, "resolves-to-network");
       if (result.canonical === null)
-        return j === 0
+        return idx === 0
           ? result
           : {
               ...result,
@@ -202,7 +202,7 @@ function resolveContainmentTarget(inputPath, platform = "linux") {
     currentPath !== inputPath ? currentPath : undefined,
   );
 }
-//@ chunk-s61vbvea.js:428047-428595 placement
+//@ chunk-8nfjhq0y.js:22123-22664 placement
 /**
  * 后台任务路径约束：比较目标与根的字面/规范拼写，网络路径与本地根不能互相包含（记日志），Windows 下还比较长文件名展开结果。返回 true 表示越界。
  */
@@ -236,13 +236,13 @@ function isOutsideContainment(target, root) {
     isWithinByLongNames(target.canonical, root.canonical)
   );
 }
-//@ chunk-s61vbvea.js:428595-428630 placement
+//@ chunk-8nfjhq0y.js:22664-22698 placement
 function isPathWithinRegisteredCaseAware(childPath, parentPath) {
   return isPathWithinCaseAware(childPath, parentPath, true);
 }
-//@ chunk-s61vbvea.js:428630-428640 placement
+//@ chunk-8nfjhq0y.js:22698-22708 placement
 var MAX_LONG_NAME_EXPANSION_CACHE = 64;
-//@ chunk-s61vbvea.js:428640-428934 placement
+//@ chunk-8nfjhq0y.js:22708-23002 placement
 class LongNameExpansionCache {
   expansionByRootCanonical = new Map();
   expand(rootCanonical) {
@@ -259,18 +259,18 @@ class LongNameExpansionCache {
     this.expansionByRootCanonical.clear();
   }
 }
-//@ chunk-s61vbvea.js:428934-428959 placement
+//@ chunk-8nfjhq0y.js:23002-23027 placement
 var longNameExpansionCacheSlot; // deferred: uses LongNameExpansionCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:428934", () => {
+deferInit("chunk-8nfjhq0y.js:23002", () => {
   longNameExpansionCacheSlot = new HostScoped(() => new LongNameExpansionCache());
 });
-//@ chunk-s61vbvea.js:428959-428996 placement
+//@ chunk-8nfjhq0y.js:23027-23064 placement
 function getLongNameExpansionCache() {
   return longNameExpansionCacheSlot.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:428996-429127 placement
+//@ chunk-8nfjhq0y.js:23064-23197 placement
 function isWithinByLongNames(path, canonical) {
-  if (getPlatform_2() !== "windows") return false;
+  if (getPlatform() !== "windows") return false;
   let expanded = expandWin32ExistingLongNames(path);
   let otherExpanded = getLongNameExpansionCache().expand(canonical);
   if (expanded === path && otherExpanded === canonical) return false;
@@ -279,11 +279,11 @@ function isWithinByLongNames(path, canonical) {
     identity(toWin32Backslashes(otherExpanded)),
   );
 }
-//@ chunk-s61vbvea.js:429127-429162 placement
+//@ chunk-8nfjhq0y.js:23197-23232 placement
 function isSameIndexedPath(firstPath, secondPath) {
   return isPathWithinCaseAware(firstPath, secondPath, true);
 }
-//@ chunk-s61vbvea.js:429162-429318 placement
+//@ chunk-8nfjhq0y.js:23232-23388 placement
 /**
  * 判断两条路径包含关系记录是否相同：任一无效时为 false，跳过的比较字面形式，否则比较规范形式。
  */
@@ -294,18 +294,18 @@ function isSameContainmentPath(containmentTarget, otherTarget) {
     return isPathWithinLexicalOnly(containmentTarget.lexical, otherTarget.lexical);
   return isPathWithinLexicalOnly(containmentTarget.canonical, otherTarget.canonical);
 }
-//@ chunk-s61vbvea.js:429318-429353 placement
+//@ chunk-8nfjhq0y.js:23388-23423 placement
 function isPathWithinLexicalOnly(childPath, parentPath) {
   return isPathWithinCaseAware(childPath, parentPath, false);
 }
-//@ chunk-s61vbvea.js:429353-429406 placement
+//@ chunk-8nfjhq0y.js:23423-23476 placement
 /**
  * hasUnresolvedCanonicalPath：记录既没有规范路径也未被跳过。
  */
 function hasUnresolvedCanonicalPath(target) {
   return target.canonical === null && !target.skipped;
 }
-//@ chunk-s61vbvea.js:429406-429461 placement
+//@ chunk-7jxyna5q.js:350187-350242 placement
 /**
  * isCanonicalUnderRoot：规范路径位于根之下。
  */
@@ -316,7 +316,7 @@ function isCanonicalUnderRoot(canonicalPath, canonicalRoot) {
     isPathWithinCaseAware(canonicalPath, canonicalRoot, true)
   );
 }
-//@ chunk-s61vbvea.js:429461-429611 placement
+//@ chunk-7jxyna5q.js:350242-350392 placement
 /**
  * 路径与登记的写法只有大小写不同时，返回提示改写成登记写法的说明，否则空串。
  */
@@ -326,10 +326,10 @@ function describeCaseOnlyMismatch(canonicalPath, canonicalRoot, registeredSpelli
     : "";
 }
 export {
+  isSameContainmentPath,
+  isOutsideContainment,
   resolveContainmentTarget,
   hasUnresolvedCanonicalPath,
-  isOutsideContainment,
-  isSameContainmentPath,
   describeCaseOnlyMismatch,
   isCanonicalUnderRoot,
   toWin32Backslashes,

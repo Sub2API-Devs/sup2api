@@ -3,15 +3,15 @@
  *
  * 懒加载 @ant/computer-use-input 原生输入模块。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/inputLoader.ts
- * pieces: chunk-hrs3dad1.js (1)
+ * pieces: chunk-p57a7983.js (1)
  * attribution: fingerprint 1
  */
 import { getComputerUseSession } from "./session.js";
 import { unsupportedModule } from "../../../vendor/unresolved-cjs/index.js";
 
-//@ chunk-hrs3dad1.js:5672-5858 fingerprint (2.1.88 match: requireComputerUseInput, 0.855)
+//@ chunk-p57a7983.js:5896-6082 fingerprint (2.1.88 match: requireComputerUseInput, 0.855)
 /**
  * 懒加载 @ant/computer-use-input 原生模块（缓存在 ComputerUseSession），平台不支持时抛错。
  */

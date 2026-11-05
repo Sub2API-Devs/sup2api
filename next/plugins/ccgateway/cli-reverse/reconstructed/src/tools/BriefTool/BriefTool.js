@@ -3,10 +3,10 @@
  *
  * SendUserMessage（别名 Brief）工具：给用户发送可见消息与附件，Brief 授权开关 isBriefEntitled
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/BriefTool.ts
- * pieces: chunk-kxyd0g16.js (3), chunk-tvzx5sxd.js (6)
- * attribution: fingerprint 2, layout 2, affinity 1, facade-exports 4
+ * pieces: chunk-8erkng7v.js (6), chunk-fmnbrxwy.js (3)
+ * attribution: affinity 1, facade-exports 4, layout 2, fingerprint 2
  */
 import { env } from "../../utils/env.js";
 import {
@@ -50,9 +50,9 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tvzx5sxd.js:381-394 affinity
+//@ chunk-8erkng7v.js:381-394 affinity
 var BRIEF_GATE_REFRESH_MS = 300000;
-//@ chunk-tvzx5sxd.js:394-467 facade-exports (2.1.88 match: isBriefEntitled, 1)
+//@ chunk-8erkng7v.js:394-467 facade-exports (2.1.88 match: isBriefEntitled, 1)
 /**
  * Brief 授权：CLAUDE_CODE_BRIEF 环境变量或 GrowthBook tengu_kairos_brief（默认 false，5 分钟刷新）。
  */
@@ -62,22 +62,22 @@ function isBriefEntitled() {
     getFeatureValue_CACHED_WITH_REFRESH("tengu_kairos_brief", false, BRIEF_GATE_REFRESH_MS)
   );
 }
-//@ chunk-tvzx5sxd.js:467-560 facade-exports
+//@ chunk-8erkng7v.js:467-560 facade-exports
 function shouldToolsListOptInToBrief(toolNames) {
   if (!toolNames.includes(BRIEF_TOOL_NAME) && !toolNames.includes(LEGACY_BRIEF_TOOL_NAME)) return false;
   if (isPewterOwlTool()) return false;
   return isBriefEntitled();
 }
-//@ chunk-tvzx5sxd.js:560-600 facade-exports
+//@ chunk-8erkng7v.js:560-600 facade-exports
 function isBriefEnabled() {
   return (getUserMsgOptIn() && isBriefEntitled()) || isPewterOwlBrief();
 }
-//@ chunk-tvzx5sxd.js:600-982 layout
+//@ chunk-8erkng7v.js:600-982 layout
 /**
  * brief 模式提醒：普通助手文本对用户隐藏，只有 SendUserMessage 能送达，要求本回合用它发实质回复。
  */
 var BRIEF_MODE_REPLY_REMINDER = `In brief mode, plain assistant text is hidden from the user \u2014 only ${BRIEF_TOOL_NAME} reaches them. Call it now with your substantive reply for this turn. Do not mention this reminder; the message should read as if you wrote it unprompted, addressing only what the user actually asked. If you genuinely have nothing useful to tell the user, you may end the turn without calling it.`;
-//@ chunk-tvzx5sxd.js:982-1088 facade-exports
+//@ chunk-8erkng7v.js:982-1088 facade-exports
 function getBriefEnforceText() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_kairos_brief_stop_hook_text",
@@ -87,7 +87,7 @@ function getBriefEnforceText() {
     ? featureValue_CACHED_MAY_BE_STALE
     : BRIEF_MODE_REPLY_REMINDER;
 }
-//@ chunk-kxyd0g16.js:29472-30470 fingerprint (2.1.88 match: inputSchema, 0.62)
+//@ chunk-fmnbrxwy.js:43393-44391 fingerprint (2.1.88 match: inputSchema, 0.621)
 /**
  * Brief 输入 schema：已上传文件对象、带附件与 status 的完整版、只有 message 的精简版。
  */
@@ -95,7 +95,7 @@ var preUploadedFileSchema; // deferred: uses DoctorLazy (../../cli/handlers/util
 var MESSAGE_FIELD_DESCRIPTION;
 var briefInputSchemaWithAttachments;
 var briefInputSchemaMessageOnly;
-deferInit("chunk-kxyd0g16.js:29472", () => {
+deferInit("chunk-fmnbrxwy.js:43393", () => {
   preUploadedFileSchema = DoctorLazy(() =>
     zodStrictObject({
       file_uuid: stringSchema(),
@@ -127,17 +127,17 @@ deferInit("chunk-kxyd0g16.js:29472", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:30470-30537 layout
+//@ chunk-fmnbrxwy.js:44391-44458 layout
 function getAttachmentsIfEnabled(input) {
   return isBriefEnabled() && "attachments" in input ? input.attachments : undefined;
 }
-//@ chunk-kxyd0g16.js:30537-33507 fingerprint (2.1.88 match: BriefTool, 0.489)
+//@ chunk-fmnbrxwy.js:44458-47428 fingerprint (2.1.88 match: BriefTool, 0.492)
 /**
  * SendUserMessage 工具（别名 Brief，briefStandalone，只读可并发）。isEnabled：fH()（Brief 可用：用户开通 tengu_kairos_brief/CLAUDE_CODE_BRIEF 等）或 Mqe()（CLAUDE_CODE_PEWTER_OWL_TOOL 或 pewter_owl_tool 开关）。fH() 为真时输入含 attachments（本地路径或已上传 file_uuid）与 status（normal/proactive），否则只有 message。call：记录 tengu_brief_send；有附件时先做路径校验（restricted、工作目录外读取限制），再按上传通道上传；结果文本说明附件是否送达（本地渲染时提示只在桌面可见，失败时 is_error）。 Brief 输出 schema：message、attachments（路径、大小、是否图片、file_uuid、上传错误、缩放信息）、sentAt、rendered_locally。
  */
 var briefOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var BriefTool;
-deferInit("chunk-kxyd0g16.js:30537", () => {
+deferInit("chunk-fmnbrxwy.js:44458", () => {
   briefOutputSchema = DoctorLazy(() =>
     objectSchema({
       message: stringSchema().describe("The message"),
@@ -315,4 +315,4 @@ Tell the user the ${plural(filtered.length, "attachment was", "attachments were"
     },
   });
 });
-export { BriefTool, isBriefEnabled, isBriefEntitled, getBriefEnforceText, shouldToolsListOptInToBrief };
+export { isBriefEnabled, BriefTool, isBriefEntitled, getBriefEnforceText, shouldToolsListOptInToBrief };

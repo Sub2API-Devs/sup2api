@@ -3,9 +3,9 @@
  *
  * 后台 agent 完成/失败通知消息（带状态颜色）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserAgentNotificationMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -14,7 +14,7 @@ import { parseUpdates, renderResourceUpdateRow } from "./UserResourceUpdateMessa
 import { Box } from "../../ink/components/Text.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-ah34pb7m.js:118642-119088 fingerprint (2.1.88 match: UserAgentNotificationMessage, 0.623)
+//@ chunk-wjygkcr4.js:120334-120780 fingerprint (2.1.88 match: UserAgentNotificationMessage, 0.623)
 function UserAgentNotificationMessage(props) {
   let $ = useMemoCache(12);
   let { addMargin, param } = props;
@@ -26,11 +26,11 @@ function UserAgentNotificationMessage(props) {
   let resultElement;
   if ($[0] !== addMargin || $[1] !== text) {
     resultElement = EARLY_RETURN_SENTINEL;
-    E: {
+    N: {
       let updates = parseUpdates(text);
       if (updates.length === 0) {
         resultElement = null;
-        break E;
+        break N;
       }
       containerComponent = Box;
       flexDirection = "column";

@@ -3,10 +3,10 @@
  *
  * 模型配置：由内置 model-catalog（chunk-v9tcvh08 的 uio）生成每个模型在各提供商（firstParty/bedrock/vertex/foundry/anthropicAws/anthropicGoogleCloud/mantle/gateway）的 id 表，以及 1M 上下文、图片尺寸等常量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/configs.ts
- * pieces: chunk-aepeg2w5.js (14), chunk-v9tcvh08.js (1)
- * attribution: placement 12, layout 1, fingerprint 2
+ * pieces: chunk-5m8x0kb6.js (1), chunk-exfmq47h.js (14)
+ * attribution: fingerprint 2, placement 12, layout 1
  */
 import { PROVIDER_KEYS, catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import {
@@ -39,7 +39,7 @@ import { getAPIProvider } from "./providers.js";
 import { isContextBetaRefused } from "../betas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v9tcvh08.js:27281-28064 fingerprint (2.1.88 match: ALL_MODEL_CONFIGS, 0.424)
+//@ chunk-5m8x0kb6.js:27315-28099 fingerprint (2.1.88 match: ALL_MODEL_CONFIGS, 0.424)
 /**
  * 按模型代号的模型配置表（haiku35 … sonnet46/5、opus40 … 5.5、fable5/5.1 等，外加 mythos 的多提供者 id）。
  */
@@ -65,7 +65,7 @@ var CLAUDE_MYTHOS_5_CONFIG;
 var OPUS_FALLBACK_ORDER;
 var FIRST_PARTY_MODEL_IDS;
 var MODEL_KEY_BY_FIRST_PARTY_ID;
-deferInit("chunk-v9tcvh08.js:27281", () => {
+deferInit("chunk-5m8x0kb6.js:27315", () => {
   MODEL_CONFIGS = PROVIDER_KEYS(catalogEntriesByFirstPartyId.haiku35);
   CLAUDE_HAIKU_4_5_CONFIG = PROVIDER_KEYS(catalogEntriesByFirstPartyId.haiku45);
   CLAUDE_3_5_SONNET_CONFIG = PROVIDER_KEYS(catalogEntriesByFirstPartyId.sonnet35);
@@ -104,7 +104,7 @@ deferInit("chunk-v9tcvh08.js:27281", () => {
     Object.entries(catalogEntriesByFirstPartyId).map(([key, value]) => [value.firstParty, key]),
   );
 });
-//@ chunk-aepeg2w5.js:472270-472358 placement
+//@ chunk-exfmq47h.js:483668-483756 placement
 /**
  * 模型的上下文窗口（覆盖、1M）。
  */
@@ -114,7 +114,7 @@ function getContextWindow(model, betas) {
   if (isOver1mThreshold(model, betas)) return SECONDARY_CONTEXT_WINDOW;
   return getModelContextWindow(model, betas);
 }
-//@ chunk-aepeg2w5.js:472358-472534 placement
+//@ chunk-exfmq47h.js:483756-483932 placement
 function getMinWindowWithoutOptIn(model) {
   let stripped = strip1mSuffix(model);
   return Math.min(
@@ -132,7 +132,7 @@ function getMinWindowWithoutOptIn(model) {
     }),
   );
 }
-//@ chunk-aepeg2w5.js:472534-472662 placement
+//@ chunk-exfmq47h.js:483932-484060 placement
 /**
  * 返回目录条目允许的最大上下文窗口（需 beta 才能长上下文的取基础窗口）。
  */
@@ -143,7 +143,7 @@ function getMaxContextWindowForEntry(entry) {
     ? context.window
     : (context.maximum_window ?? context.window);
 }
-//@ chunk-aepeg2w5.js:472662-472876 placement
+//@ chunk-exfmq47h.js:484060-484274 placement
 /**
  * 计算模型的上下文窗口信息：声明值、无需选用时的值与实际采信值（受 1M 禁用影响）。
  */
@@ -167,7 +167,7 @@ function getContextWindowInfo(model, canonical = getCanonicalName(model)) {
     believed: is1mContextDisabled() ? Math.min(min, DEFAULT_CONTEXT_WINDOW) : min,
   };
 }
-//@ chunk-aepeg2w5.js:472876-472972 placement
+//@ chunk-exfmq47h.js:484274-484370 placement
 /**
  * 计算可信上下文窗口：取目录窗口与已知窗口中的较大者。
  */
@@ -176,14 +176,14 @@ function believedContextWindow(model, canonical, servedWindow) {
   let catalogWindow = catalogContext(canonical)?.window ?? CONTEXT_WINDOW_THRESHOLD;
   return Math.max(legacyNo1mWindow(model) ?? 0, believed > catalogWindow ? believed : 0);
 }
-//@ chunk-aepeg2w5.js:472972-473024 placement
+//@ chunk-exfmq47h.js:484370-484422 placement
 /**
  * 判断可信上下文窗口是否达到 1M。
  */
 function isContextWindow1m(model, canonical) {
   return (getContextWindowInfo(model, canonical)?.believed ?? 0) >= 1e6;
 }
-//@ chunk-aepeg2w5.js:473024-473148 placement
+//@ chunk-exfmq47h.js:484422-484546 placement
 function getNoCompactMaxContextTokens() {
   if (isEnvTruthy(process.env.DISABLE_COMPACT)) {
     let CLAUDE_CODE_MAX_CONTEXT_TOKENS = env.CLAUDE_CODE_MAX_CONTEXT_TOKENS;
@@ -192,7 +192,7 @@ function getNoCompactMaxContextTokens() {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:473148-473206 placement
+//@ chunk-exfmq47h.js:484546-484604 placement
 /**
  * 是否超出默认窗口需要 1M。
  */
@@ -203,7 +203,7 @@ function isOver1mThreshold(model, betas) {
     getModelContextWindow(model, betas) > SECONDARY_CONTEXT_WINDOW
   );
 }
-//@ chunk-aepeg2w5.js:473206-473401 placement
+//@ chunk-exfmq47h.js:484604-484799 placement
 function getModelContextWindow(model, betas) {
   if (uses1mContext(model, betas)) {
     let context = catalogContext(getCanonicalName(strip1mSuffix(model)));
@@ -220,7 +220,7 @@ function getModelContextWindow(model, betas) {
     ? Math.min(baseContextWindow, getMinWindowWithoutOptIn(model))
     : baseContextWindow;
 }
-//@ chunk-aepeg2w5.js:473401-473623 placement
+//@ chunk-exfmq47h.js:484799-485021 placement
 function getBaseContextWindow(model) {
   let contextWindowInfo = getContextWindowInfo(model);
   if (contextWindowInfo !== undefined)
@@ -238,14 +238,14 @@ function getBaseContextWindow(model) {
     return CLAUDE_CODE_MAX_CONTEXT_TOKENS;
   return CONTEXT_WINDOW_THRESHOLD;
 }
-//@ chunk-aepeg2w5.js:473623-473651 placement
+//@ chunk-exfmq47h.js:485021-485049 placement
 /**
  * 取上下文档用的客户端数据缓存。
  */
 function cachedClientDataForContext() {
   return getCachedClientDataForContextWindow();
 }
-//@ chunk-aepeg2w5.js:473651-473743 placement
+//@ chunk-exfmq47h.js:485049-485141 placement
 /**
  * 取自动压缩窗口缓存（仅第一方后端）。
  */
@@ -253,12 +253,12 @@ function autoCompactWindowsCache() {
   if (getAPIProvider() !== "firstParty") return null;
   return getGlobalConfig().autoCompactWindowsCache ?? null;
 }
-//@ chunk-aepeg2w5.js:473743-473754 layout
+//@ chunk-exfmq47h.js:485141-485152 layout
 /**
  * 1e6。
  */
 var ONE_MILLION_TOKENS = 1e6;
-//@ chunk-aepeg2w5.js:473754-474021 fingerprint (2.1.88 match: CLAUDE_SONNET_4_6_CONFIG, 0.301)
+//@ chunk-exfmq47h.js:485152-485419 fingerprint (2.1.88 match: CLAUDE_SONNET_4_6_CONFIG, 0.318)
 /**
  * claude-sonnet-4-6（非 1M 变体）时读客户端数据 kelp_forest_sonnet 作为上下文窗口覆盖（200k 到 1M 之间）。旧版名 CLAUDE_SONNET_4_6_CONFIG 为错配。
  */
@@ -280,18 +280,19 @@ function getSonnet46ContextWindowOverride(model) {
 }
 export {
   getContextWindow,
-  FIRST_PARTY_MODEL_IDS,
-  OPUS_FALLBACK_ORDER,
-  MODEL_KEY_BY_FIRST_PARTY_ID,
-  isContextWindow1m,
   getSonnet46ContextWindowOverride,
   CLAUDE_FABLE_5_CONFIG,
-  CLAUDE_MYTHOS_5_CONFIG,
-  CLAUDE_FABLE_5_1_CONFIG,
+  MODEL_KEY_BY_FIRST_PARTY_ID,
+  CLAUDE_OPUS_5_5_CONFIG,
+  FIRST_PARTY_MODEL_IDS,
   isOver1mThreshold,
   cachedClientDataForContext,
   autoCompactWindowsCache,
   getContextWindowInfo,
   believedContextWindow,
   getMaxContextWindowForEntry,
+  OPUS_FALLBACK_ORDER,
+  isContextWindow1m,
+  CLAUDE_FABLE_5_1_CONFIG,
+  CLAUDE_MYTHOS_5_CONFIG,
 };

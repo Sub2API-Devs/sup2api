@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：任务文件可读性检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pf54t43m.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yd5j3nzk.js (3)
  * attribution: placement 3
  */
 import { isUtf8 } from "buffer";
@@ -24,7 +24,7 @@ import { holdsWholeToolReadRule, attachableFileAt } from "./taskFileUpload.js";
 import { isCredentialPath } from "../../utils/permissions/sensitivePaths.js";
 import { readValidatedFileWithin } from "../../utils/claudeInChrome/fileUpload.js";
 
-//@ chunk-pf54t43m.js:12478-12627 placement
+//@ chunk-yd5j3nzk.js:13659-13808 placement
 /**
  * 任务文件读取的上限、拒绝码与输入输出 schema。
  */
@@ -47,7 +47,7 @@ var READ_OUTPUT_SCHEMA = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-pf54t43m.js:12627-12811 placement
+//@ chunk-yd5j3nzk.js:13808-13992 placement
 /**
  * 读取任务文件：校验路径，返回 read 或 not read 及原因。
  */
@@ -68,7 +68,7 @@ async function readTaskFileTool(input, sessionCtx, host, permissionCtx) {
         : readResult,
   };
 }
-//@ chunk-pf54t43m.js:12811-13101 placement
+//@ chunk-yd5j3nzk.js:13992-14282 placement
 async function checkTaskFileReadable(requestedPath, sessionCtx, host, permissionCtx) {
   if (permissionCtx !== undefined && holdsWholeToolReadRule(permissionCtx)) return "refused";
   let attachedPath = await attachableFileAt(requestedPath, sessionCtx, host, permissionCtx);

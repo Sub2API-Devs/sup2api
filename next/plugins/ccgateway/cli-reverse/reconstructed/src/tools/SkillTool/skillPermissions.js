@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Skill 工具的权限检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
+ * attribution: placement 12, layout 1
  */
 import {
   skillMatchesPermissionRule,
@@ -35,7 +35,7 @@ import { SYNCED_SKILL_PREFIXES, hasSyncedSkillPrefix } from "../../skills/synced
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import { SKILL, normalizedSkillToolName, skillAlternateNames } from "./skillToolNames.js";
 import { getSessionSkillAllowlist } from "../../bootstrap/state.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import {
   isBuiltinSkillGated,
   isBundledSkillsDisabled,
@@ -44,7 +44,7 @@ import {
 import { getDenyRuleForTool, getContentRulesMapForToolName } from "../../utils/permissions/permissions.js";
 import { urlPatternToRegex as urlPatternToRegex_2 } from "../../utils/stringUtils.js";
 
-//@ chunk-e6aww6q8.js:3253818-3254026 placement
+//@ chunk-5xgkngpb.js:3338448-3338656 placement
 /**
  * 判断 Skill 权限规则是否匹配某技能：按普通名称（名称、别名、未限定名等）与打包名称（带插件前缀的需满足命名空间条件）逐一比对。
  */
@@ -64,7 +64,14 @@ function matchesSkillRule(ruleContent, skillName, command) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:3254026-3254106 placement
+//@ chunk-5xgkngpb.js:3338656-3338750 layout
+function matchesSkillRuleOrBaseName(ruleContent, skillName, candidateCommands, ruleBaseName) {
+  return (
+    (ruleContent.startsWith("/") ? ruleContent.substring(1) : ruleContent) === ruleBaseName ||
+    candidateCommands.some((candidate) => matchesSkillRule(ruleContent, skillName, candidate))
+  );
+}
+//@ chunk-5xgkngpb.js:3338750-3338830 placement
 /**
  * 判断技能名是否匹配任一条技能规则。
  */
@@ -72,7 +79,7 @@ function skillAllowedByRules(ruleContent, skillName, command) {
   let { ordinary, packaging } = skillRuleNames(skillName, command, true);
   return matchesWildcardSkillRule(ruleContent, ordinary, packaging, command);
 }
-//@ chunk-e6aww6q8.js:3254106-3254268 placement
+//@ chunk-5xgkngpb.js:3338830-3338992 placement
 function matchesWildcardSkillRule(ruleContent, ordinary, packaging, command) {
   let match = SKILL_RULE_PREFIX_RE.exec(ruleContent);
   if (match === null) return false;
@@ -83,12 +90,12 @@ function matchesWildcardSkillRule(ruleContent, ordinary, packaging, command) {
       packaging.some((name) => matchWildcard(trimmed, name)))
   );
 }
-//@ chunk-e6aww6q8.js:3254268-3254298 placement
+//@ chunk-5xgkngpb.js:3338992-3339022 placement
 /**
  * 解析 “skill:” 前缀的技能规则内容。
  */
 var SKILL_RULE_PREFIX_RE = /^\s*skill\s*:(.*)$/s;
-//@ chunk-e6aww6q8.js:3254298-3254701 placement
+//@ chunk-5xgkngpb.js:3339022-3339425 placement
 /**
  * 列出技能用于权限规则匹配的名称：普通名称（规则名、全名、命令名、别名、未限定名、旧别名、拒绝匹配名、目录名）与打包名称。
  */
@@ -116,7 +123,7 @@ function skillRuleNames(skillName, command, packagingOnly = false) {
     packaging: skillAliasesForList(command),
   };
 }
-//@ chunk-e6aww6q8.js:3254701-3255028 placement
+//@ chunk-5xgkngpb.js:3339425-3339753 placement
 /**
  * 判断允许规则对保留命名空间技能的匹配结果：allow、no-match，或因非持有者/命名空间边界而被暂缓。
  */
@@ -141,7 +148,7 @@ function reservedSkillRuleMatch(ruleContent, skillName, command) {
   if (!any) return "no-match";
   return any_2 ? "held-back-nonholder" : "held-back-boundary";
 }
-//@ chunk-e6aww6q8.js:3255028-3255864 placement
+//@ chunk-5xgkngpb.js:3339753-3340589 placement
 function describeSyncedSkillRuleScope(rule, skillName, state) {
   let { prefix } = parseSkillPermissionRule(rule);
   let lower = prefix?.toLowerCase();
@@ -164,7 +171,7 @@ function describeSyncedSkillRuleScope(rule, skillName, state) {
           : `${scopeNote} Add Skill(${skillName}) to allow ${skillName} without asking.`;
   }
 }
-//@ chunk-e6aww6q8.js:3255864-3256285 placement
+//@ chunk-5xgkngpb.js:3340589-3341010 placement
 /**
  * 技能不能由 Skill 工具调用时给模型的提示：请用户自己运行，或在协调模式下说明协调者与 worker 都不能调用。
  */
@@ -175,7 +182,7 @@ function notInvocableHint(commandName, isWorker = false) {
     ? `It cannot be invoked via the ${SKILL} tool in this session, by the coordinator or by workers \u2014 the user can run /${commandName} by typing it themselves.`
     : `It cannot be invoked via the ${SKILL} tool in this session, by the coordinator or by workers \u2014 tell the user /${commandName} is not available here.`;
 }
-//@ chunk-e6aww6q8.js:3256285-3258572 placement
+//@ chunk-5xgkngpb.js:3341010-3343303 placement
 /**
  * Skill 工具权限检查：技能未加载、禁止模型调用等情况。
  */
@@ -216,7 +223,7 @@ function checkSkillPermission(command, options) {
     };
   let skillOverrideState = getSkillOverrideState(command);
   if (skillOverrideState === "off" || (skillOverrideState === "user-invocable-only" && !userTypedThisTurn)) {
-    let context = getInitialSettings_2();
+    let context = getInitialSettings();
     let isBundledGated = isBuiltinSkillGated(command, context);
     let skillOverrideAll = resolveSkillOverrideAll(command);
     let alsoOverridden = skillOverrideAll === "user-invocable-only" || skillOverrideAll === "off";
@@ -281,21 +288,21 @@ function checkSkillPermission(command, options) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3258572-3258636 placement
+//@ chunk-5xgkngpb.js:3343303-3343367 placement
 /**
  * 把技能名转成 “/name” 形式的匹配正则（前后要是词边界）。
  */
 function slashSkillRuleRegex(commandName) {
   return new RegExp(`(?<!\\S)/${urlPatternToRegex_2(commandName)}(?=$|\\s)`);
 }
-//@ chunk-e6aww6q8.js:3258636-3258722 placement
+//@ chunk-5xgkngpb.js:3343367-3343453 placement
 /**
  * 判断给定位置前后是否为词边界（空白或首尾）。
  */
 function isWordBoundaryAt(text, start, end) {
   return (start === 0 || /\s/.test(text[start - 1])) && (end === text.length || /\s/.test(text[end]));
 }
-//@ chunk-e6aww6q8.js:3258722-3258765 placement
+//@ chunk-5xgkngpb.js:3343453-3343496 placement
 /**
  * 判断技能来源不可信（不是受信来源）。
  */
@@ -303,9 +310,9 @@ function isUntrustedSkillSource(source) {
   return source !== undefined && !isTrustedSkillSource(source);
 }
 export {
-  checkSkillPermission,
   slashSkillRuleRegex,
-  matchesSkillRule,
+  checkSkillPermission,
+  matchesSkillRuleOrBaseName,
   skillAllowedByRules,
   reservedSkillRuleMatch,
   describeSyncedSkillRuleScope,

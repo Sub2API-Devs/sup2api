@@ -3,9 +3,9 @@
  *
  * 为 Grep/Glob 生成排除插件缓存中孤儿版本目录的 glob。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/orphanedPluginFilter.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 1, placement 3
  */
 import { normalize, dirname, isAbsolute, relative, sep } from "path";
@@ -17,7 +17,7 @@ import { isENOENT } from "../errors.js";
 import { ripGrep_2, ripgrepStorageOverride } from "../ripgrep.js";
 import { ORPHAN_MARKER_FILE } from "./cacheUtils.js";
 
-//@ chunk-e6aww6q8.js:1435631-1436326 fingerprint (2.1.88 match: getGlobExclusionsForPluginCache, 0.908)
+//@ chunk-5xgkngpb.js:1435211-1435906 fingerprint (2.1.88 match: getGlobExclusionsForPluginCache, 0.908)
 /**
  * 为 Grep/Glob 生成排除插件缓存里孤儿版本目录的 glob（避免搜到已废弃的旧版本）。
  */
@@ -60,21 +60,21 @@ async function getGlobExclusionsForPluginCache(searchPath, target) {
     return pluginRegistry.orphanedVersionGlobExclusions;
   }
 }
-//@ chunk-e6aww6q8.js:1436326-1436381 placement
+//@ chunk-5xgkngpb.js:1435906-1435961 placement
 /**
  * clearOrphanedGlobExclusions：清空孤儿版本 glob 排除缓存。
  */
 function clearOrphanedGlobExclusions() {
   getPluginRegistry().orphanedVersionGlobExclusions = null;
 }
-//@ chunk-e6aww6q8.js:1436381-1436490 placement
+//@ chunk-5xgkngpb.js:1435961-1436070 placement
 function pathsOverlap(a, b) {
   let na = normalizeGlobPath(a);
   let nb = normalizeGlobPath(b);
   return na === nb || na === sep || nb === sep || na.startsWith(nb + sep) || nb.startsWith(na + sep);
 }
-//@ chunk-e6aww6q8.js:1436490-1436520 placement
+//@ chunk-5xgkngpb.js:1436070-1436100 placement
 function normalizeGlobPath(globPath) {
   return normalize(globPath);
 }
-export { getGlobExclusionsForPluginCache, clearOrphanedGlobExclusions };
+export { clearOrphanedGlobExclusions, getGlobExclusionsForPluginCache };

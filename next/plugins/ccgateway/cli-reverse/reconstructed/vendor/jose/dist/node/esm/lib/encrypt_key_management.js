@@ -1,15 +1,15 @@
 /**
  * jose/dist/node/esm/lib/encrypt_key_management.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 3, esm-fingerprint 1
  */
 import { keyToJWK_default, init_encrypt_key_management } from "../../../browser/runtime/key_to_jwk.js";
 import { __esm } from "../../../../../../runtime/bun-runtime.js";
 import { checkKeyTypeInit } from "./check_key_type.js";
 import { ecdhAllowed, generateEpk, deriveKey } from "../../../browser/runtime/ecdhes.js";
-import { JOSENotSupported } from "../../../webapi/lib/content_encryption.js";
+import { JOSENotSupported_3 } from "../../../webapi/lib/content_encryption.js";
 import { bitLength } from "./cek.js";
 import { encode } from "../../../browser/runtime/base64url.js";
 import { aesGcmKwEncrypt } from "../../../browser/runtime/jwk_to_key.js";
@@ -18,15 +18,15 @@ import { encrypt_2 } from "../../../browser/runtime/rsaes.js";
 import { encrypt } from "../../../browser/runtime/pbes2kw.js";
 import { wrap_2 } from "../../../browser/lib/aesgcmkw.js";
 
-//@ chunk-2tyrgda4.js:31259-31293 esm-layout
+//@ chunk-pd6th42n.js:31259-31293 esm-layout
 async function exportJWK(ephemeralKey) {
   return keyToJWK_default(ephemeralKey);
 }
-//@ chunk-2tyrgda4.js:31293-31315 esm-layout
+//@ chunk-pd6th42n.js:31293-31315 esm-layout
 var init_encrypt_key_management_2 = __esm(() => {
   init_encrypt_key_management();
 });
-//@ chunk-2tyrgda4.js:31315-32529 esm-fingerprint
+//@ chunk-pd6th42n.js:31315-32529 esm-fingerprint
 async function encryptKeyManagement(alg, enc, key, providedCek, providedParameters = {}) {
   let encryptedKey;
   let parameters;
@@ -41,7 +41,7 @@ async function encryptKeyManagement(alg, enc, key, providedCek, providedParamete
     case "ECDH-ES+A192KW":
     case "ECDH-ES+A256KW": {
       if (!ecdhAllowed(key))
-        throw new JOSENotSupported(
+        throw new JOSENotSupported_3(
           "ECDH with the provided key is not allowed or not supported by your javascript runtime",
         );
       let { apu, apv } = providedParameters;
@@ -108,7 +108,7 @@ async function encryptKeyManagement(alg, enc, key, providedCek, providedParamete
       break;
     }
     default:
-      throw new JOSENotSupported('Invalid or unsupported "alg" (JWE Algorithm) header value');
+      throw new JOSENotSupported_3('Invalid or unsupported "alg" (JWE Algorithm) header value');
   }
   return {
     cek,

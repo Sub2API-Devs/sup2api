@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。skill 权限选项。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (13)
  * attribution: placement 13
  */
 import { init_react_production, useContext } from "../../../../vendor/react/cjs/react.production.js";
@@ -24,12 +24,12 @@ import { permissionTitleRef } from "../PermissionRequestTitle.js";
 import { DialogStoreContext } from "../../../state/dialogQueue.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1406026-1406030 placement
+//@ chunk-czq1j3j2.js:1442478-1442482 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1406026", () => {
+deferInit("chunk-czq1j3j2.js:1442478", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1406030-1406562 placement
+//@ chunk-czq1j3j2.js:1445107-1445639 placement
 /**
  * 把 Skill 权限选项转换为结果：yes、精确规则、前缀规则、no（带反馈）。
  */
@@ -76,7 +76,7 @@ function skillChoiceToResult(choice, payload, rows, feedback) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1406562-1406742 placement
+//@ chunk-czq1j3j2.js:1445639-1445819 placement
 /**
  * 从技能调用文本中提取命令前缀（第一个空格前，去掉 /），不含通配或冒号时才返回。
  */
@@ -92,7 +92,7 @@ function getSkillCommandPrefix(skill) {
     return null;
   return prefix;
 }
-//@ chunk-18hwfzwa.js:1406742-1407254 placement
+//@ chunk-czq1j3j2.js:1445819-1446331 placement
 /**
  * 生成 "不再询问该技能" 的 localSettings 规则建议行。
  */
@@ -144,7 +144,7 @@ function buildSkillExactRule(payload, originalCwd) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:1407254-1407830 placement
+//@ chunk-czq1j3j2.js:1446331-1446907 placement
 /**
  * 生成 "不再询问 前缀:* 命令" 的 localSettings 规则建议行。
  */
@@ -199,9 +199,9 @@ function buildSkillPrefixRule(payload, originalCwd) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:1407830-1407841 placement
+//@ chunk-czq1j3j2.js:1446907-1446918 placement
 var HIDDEN_EXACT_RULE_LABEL = "";
-//@ chunk-18hwfzwa.js:1407841-1408328 placement
+//@ chunk-czq1j3j2.js:1446918-1447405 placement
 /**
  * 从 ask 结果解析要显示的技能名、版本规则、是否无技能、调用名（名称不可安全显示时置空）。
  */
@@ -235,7 +235,7 @@ function resolveSkillDisplay(payload) {
         : getCalledAsLabel(payload.input.skill, skillName),
   };
 }
-//@ chunk-18hwfzwa.js:1408328-1408473 placement
+//@ chunk-czq1j3j2.js:1447405-1447550 placement
 function getCalledAsLabel(skill, skillName) {
   if (typeof skill !== "string") return null;
   let trimmed = skill.trim();
@@ -243,15 +243,15 @@ function getCalledAsLabel(skill, skillName) {
   if (normalizedSkill === skillName) return;
   return plainDisplay(normalizedSkill)?.display ?? null;
 }
-//@ chunk-18hwfzwa.js:1408473-1408534 placement
+//@ chunk-czq1j3j2.js:1447550-1447611 placement
 var TERMINAL_TOO_SHORT_HINT = "Make the terminal taller to approve.";
 var CUT_OFFER_HINT = "";
 var UNREAD_OFFER_HINT = "";
-//@ chunk-18hwfzwa.js:1408534-1408558 placement
+//@ chunk-czq1j3j2.js:1447611-1447635 placement
 var SURVEY_QUESTION_LINE_CHARS = 20;
 var NARROW_COLUMNS_WITH_HINTS = 28;
 var NARROW_COLUMN_INSET = 4;
-//@ chunk-18hwfzwa.js:1408558-1408763 placement
+//@ chunk-czq1j3j2.js:1447635-1447840 placement
 /**
  * 技能权限选项的常量：未读提示开关、显示上限与各种技能询问结果的遥测键。
  */
@@ -263,7 +263,7 @@ var SKILL_ASK_REVEAL_KEYS = {
   held: "skill-ask-version-answer-held",
   bare: "skill-ask-settled-without-version-answer",
 };
-//@ chunk-18hwfzwa.js:1408763-1408975 placement
+//@ chunk-czq1j3j2.js:1447840-1448052 placement
 /**
  * 返回当前对话框在对话框存储中的技能询问展开记忆（无对话框上下文时为 undefined）。
  */
@@ -288,9 +288,9 @@ function useSkillAskRevealMemory() {
   } else revealApi = $[2];
   return revealApi;
 }
-//@ chunk-18hwfzwa.js:1408975-1409005 placement
+//@ chunk-czq1j3j2.js:1448052-1448082 placement
 var SKILL_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1408975", () => {
+deferInit("chunk-czq1j3j2.js:1448052", () => {
   SKILL_RULE_UPDATE_TYPES = new Set(["addRules"]);
 });
 export {

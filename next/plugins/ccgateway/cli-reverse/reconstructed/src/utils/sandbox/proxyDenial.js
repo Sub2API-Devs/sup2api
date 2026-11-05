@@ -3,9 +3,9 @@
  *
  * 沙箱代理拒绝解析（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0hrnrhfq.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwqspacd.js (23)
  * attribution: placement 23
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -18,7 +18,7 @@ import { findProxyError } from "../proxy.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0hrnrhfq.js:482-656 placement
+//@ chunk-pwqspacd.js:481-655 placement
 /**
  * 代理拒绝响应解析用的常量：读取正文的字节上限、截断保留长度、原因与代码的显示长度上限，以及 JSON 错误体的宽松 schema。
  */
@@ -27,7 +27,7 @@ var TRUNCATE_MARGIN;
 var MAX_REASON_LENGTH;
 var MAX_CODE_LENGTH;
 var ERROR_BODY_SCHEMA;
-deferInit("chunk-0hrnrhfq.js:482", () => {
+deferInit("chunk-pwqspacd.js:481", () => {
   MAX_BODY_BYTES = 8192;
   TRUNCATE_MARGIN = 512;
   MAX_REASON_LENGTH = 200;
@@ -47,7 +47,7 @@ deferInit("chunk-0hrnrhfq.js:482", () => {
     }),
   );
 });
-//@ chunk-0hrnrhfq.js:656-754 placement
+//@ chunk-pwqspacd.js:655-753 placement
 /**
  * proxyDenialResult：构造代理拒绝结果。
  */
@@ -60,14 +60,14 @@ function proxyDenialResult(headers, body, sanitizeLine) {
     requestId: getSafeRequestId(headers, sanitizeLine),
   };
 }
-//@ chunk-0hrnrhfq.js:754-843 placement
+//@ chunk-pwqspacd.js:753-842 placement
 function proxyErrorMessage(headers, fallbackReason) {
   let proxyError = headers?.["x-proxy-error"];
   return typeof proxyError === "string"
     ? toDisplayReason(truncateBodyForDenial(proxyError), fallbackReason, MAX_CODE_LENGTH)
     : undefined;
 }
-//@ chunk-0hrnrhfq.js:843-967 placement
+//@ chunk-pwqspacd.js:842-966 placement
 function getSafeRequestId(requestId, sanitize) {
   let headerValue = requestId?.["x-request-id"];
   return typeof headerValue === "string" &&
@@ -76,7 +76,7 @@ function getSafeRequestId(requestId, sanitize) {
     ? headerValue
     : undefined;
 }
-//@ chunk-0hrnrhfq.js:967-1172 placement
+//@ chunk-pwqspacd.js:966-1171 placement
 function getMediaType(headers) {
   let contentType = headers?.["content-type"];
   if (typeof contentType !== "string") return "";
@@ -85,12 +85,12 @@ function getMediaType(headers) {
     .replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, "")
     .replace(/[A-Z]/g, (char) => char.toLowerCase());
 }
-//@ chunk-0hrnrhfq.js:1172-1206 placement
+//@ chunk-pwqspacd.js:1171-1205 placement
 var EMPTY_DENIAL = {
   reason: undefined,
   code: undefined,
 };
-//@ chunk-0hrnrhfq.js:1206-1585 placement
+//@ chunk-pwqspacd.js:1205-1584 placement
 /**
  * 解析代理拒绝响应正文：按内容类型处理 JSON（截断或含替换字符时放弃）、纯文本（作为原因）或已解析的对象，返回 reason 与 code。
  */
@@ -110,7 +110,7 @@ function parseDenialBody(mediaType, body, redact) {
   if (body !== null && typeof body === "object") return readDenialFields(body, redact);
   return EMPTY_DENIAL;
 }
-//@ chunk-0hrnrhfq.js:1585-1855 placement
+//@ chunk-pwqspacd.js:1584-1854 placement
 function readDenialFields(body, sanitize) {
   let parsed = ERROR_BODY_SCHEMA().safeParse(body);
   if (!parsed.success) return EMPTY_DENIAL;
@@ -127,21 +127,21 @@ function readDenialFields(body, sanitize) {
     code: typeof error === "string" && isSnakeCaseReasonCode(error) ? error : undefined,
   };
 }
-//@ chunk-0hrnrhfq.js:1855-1959 placement
+//@ chunk-pwqspacd.js:1854-1957 placement
 function toDisplayReason({ text, truncated }, sanitize, maxLength) {
   let sanitized = sanitize(text);
   let clipped = truncated ? truncateToLength(sanitized, sanitized.length - TRUNCATE_MARGIN) : sanitized;
   let name = printableName(clipped, maxLength);
   return name === "" ? undefined : name;
 }
-//@ chunk-0hrnrhfq.js:1959-2015 placement
+//@ chunk-pwqspacd.js:1957-2012 placement
 function truncateBodyForDenial(body) {
   return {
     text: truncateToLength(body, MAX_BODY_BYTES),
     truncated: body.length > MAX_BODY_BYTES,
   };
 }
-//@ chunk-0hrnrhfq.js:2015-2297 placement
+//@ chunk-pwqspacd.js:2012-2294 placement
 function decodeBodyPrefix(body) {
   let bytes;
   if (body instanceof ArrayBuffer) bytes = new Uint8Array(body);
@@ -154,7 +154,7 @@ function decodeBodyPrefix(body) {
     truncated: isTruncated,
   };
 }
-//@ chunk-0hrnrhfq.js:2297-2452 placement
+//@ chunk-pwqspacd.js:2294-2449 placement
 /**
  * 在字节数组的给定截断点向前查找 UTF-8 字符边界：若截断点落在多字节字符中间，返回该字符起始位置。
  */
@@ -170,10 +170,10 @@ function findUtf8Boundary(bytes, end) {
   let sequenceLength = leadByte >= 240 ? 4 : leadByte >= 224 ? 3 : leadByte >= 192 ? 2 : 1;
   return continuationBytes + 1 < sequenceLength ? index : end;
 }
-//@ chunk-0hrnrhfq.js:2452-2492 placement
+//@ chunk-pwqspacd.js:2449-2489 placement
 var X_PROXY_ERROR = "x-proxy-error";
 var X_DENY_REASON = "x-deny-reason";
-//@ chunk-0hrnrhfq.js:2492-2588 placement
+//@ chunk-pwqspacd.js:2489-2585 placement
 /**
  * isAllowlistBlockedResponse：403 且为白名单阻断。
  */
@@ -183,7 +183,7 @@ function isAllowlistBlockedResponse(status, headers) {
     (headers?.[X_PROXY_ERROR] === "blocked-by-allowlist" || headers?.[X_DENY_REASON] === "host_not_allowed")
   );
 }
-//@ chunk-0hrnrhfq.js:2588-2665 placement
+//@ chunk-pwqspacd.js:2585-2662 placement
 /**
  * isBlockedByProxyAllowlist：响应显示被代理白名单阻断。
  */
@@ -191,18 +191,18 @@ function isBlockedByProxyAllowlist(error) {
   let proxyError = findProxyError(error);
   return proxyError !== undefined && isAllowlistBlockedResponse(proxyError.connectStatus, proxyError.headers);
 }
-//@ chunk-0hrnrhfq.js:2665-2900 placement
+//@ chunk-pwqspacd.js:2662-2897 placement
 function parseProxyDenial(status, denial) {
   if (status !== 403) return;
   if (denial.mediaType === "text/plain" && neverDenied(denial.reason)) return "proxy_denied";
   if (denial.code !== "content_scan_blocked") return;
   return denial.reason?.endsWith("(fail closed)") ? "content_scan_transient" : "content_scan_permanent";
 }
-//@ chunk-0hrnrhfq.js:2900-2923 placement
+//@ chunk-pwqspacd.js:2897-2920 placement
 function neverDenied(reason) {
   return false;
 }
-//@ chunk-0hrnrhfq.js:2923-3116 placement
+//@ chunk-pwqspacd.js:2920-3113 placement
 /**
  * 对 403 响应解析沙箱代理拒绝原因并记调试日志，返回拒绝类型。
  */
@@ -214,7 +214,7 @@ function logProxyDenial({ status, headers, data, redact, label }) {
     logForDebugging(`${label}: sandbox proxy denied, ${proxyDenial} (${result.reason ?? "no reason"})`);
   return proxyDenial;
 }
-//@ chunk-0hrnrhfq.js:3116-3529 placement
+//@ chunk-pwqspacd.js:3113-3526 placement
 var ARTIFACT_PROXY_DENIAL_TEXTS = {
   content_scan_transient:
     "artifact content fetch blocked: the sandbox proxy's content scan was unavailable (HTTP 403). This is transient; retry.",
@@ -223,26 +223,26 @@ var ARTIFACT_PROXY_DENIAL_TEXTS = {
   proxy_denied:
     "artifact content fetch blocked by the sandbox proxy's policy (HTTP 403); retrying will not help.",
 };
-//@ chunk-0hrnrhfq.js:3529-3596 placement
+//@ chunk-pwqspacd.js:3526-3593 placement
 /**
  * isClientErrorStatus：4xx 但排除 408/429。
  */
 function isClientErrorStatus(status) {
   return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
-//@ chunk-0hrnrhfq.js:3596-3688 placement
+//@ chunk-pwqspacd.js:3593-3685 placement
 function headerValueMatching(headers, headerName, pattern) {
   let value = headers?.[headerName];
   return typeof value === "string" && value.length <= 64 && pattern.test(value) ? value : undefined;
 }
-//@ chunk-0hrnrhfq.js:3688-3734 placement
+//@ chunk-pwqspacd.js:3685-3731 placement
 /**
  * proxyErrorCode：取 x-proxy-error 码。
  */
 function proxyErrorCode(headers) {
   return headerValueMatching(headers, X_PROXY_ERROR, /^[a-z0-9_-]+$/);
 }
-//@ chunk-0hrnrhfq.js:3734-3779 placement
+//@ chunk-pwqspacd.js:3731-3776 placement
 /**
  * proxyDenyReason：取 x-deny-reason。
  */
@@ -250,13 +250,13 @@ function proxyDenyReason(headers) {
   return headerValueMatching(headers, X_DENY_REASON, /^[a-z0-9_]+$/);
 }
 export {
-  logProxyDenial,
-  isAllowlistBlockedResponse,
   isBlockedByProxyAllowlist,
+  isAllowlistBlockedResponse,
   proxyDenialResult,
   proxyDenyReason,
+  isClientErrorStatus,
+  logProxyDenial,
   proxyErrorCode,
   ARTIFACT_PROXY_DENIAL_TEXTS,
-  isClientErrorStatus,
   parseProxyDenial,
 };

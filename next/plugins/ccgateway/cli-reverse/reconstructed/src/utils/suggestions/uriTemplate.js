@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增。URI 模板解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { firstLineOf } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:540532-540536 placement
+//@ chunk-czq1j3j2.js:547966-547970 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:540532", () => {
+deferInit("chunk-czq1j3j2.js:547966", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:540536-540745 placement
+//@ chunk-czq1j3j2.js:561222-561431 placement
 /**
  * 解析补全结果为 {replacement, partial}，格式不对时为 null。
  */
@@ -36,12 +36,12 @@ function parseCompletionResult(metadata) {
     };
   return null;
 }
-//@ chunk-18hwfzwa.js:540745-540811 placement
+//@ chunk-czq1j3j2.js:561431-561497 placement
 function literalPrefixBeforeBrace(uriTemplate) {
   let index = uriTemplate.indexOf("{");
   return index === -1 ? uriTemplate : uriTemplate.slice(0, index);
 }
-//@ chunk-18hwfzwa.js:540811-541052 placement
+//@ chunk-czq1j3j2.js:561497-561738 placement
 /**
  * 判断当前补全位置是否在两个模板变量之间的字面量处。
  */
@@ -57,7 +57,7 @@ function isBetweenTemplateVars(match) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:541052-541465 placement
+//@ chunk-czq1j3j2.js:561738-562151 placement
 /**
  * 把 URI 模板解析为字面量与变量片段（去掉运算符与修饰符）。
  */
@@ -97,7 +97,7 @@ function parseUriTemplate(uriTemplate) {
     });
   return segments;
 }
-//@ chunk-18hwfzwa.js:541465-542032 placement
+//@ chunk-czq1j3j2.js:562151-562718 placement
 /**
  * 把输入与模板逐段匹配，返回已解析参数与正在输入的参数（名字、值、起始位置）。
  */
@@ -140,7 +140,7 @@ function matchUriTemplate(template, value) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:542032-542332 placement
+//@ chunk-czq1j3j2.js:562718-563018 placement
 /**
  * 在多个模板中选出匹配最好的（已解析参数最多、值起始最靠后、变量最多）。
  */
@@ -167,7 +167,7 @@ function bestTemplateMatch(query, templates) {
   }
   return best;
 }
-//@ chunk-18hwfzwa.js:542332-542676 placement
+//@ chunk-czq1j3j2.js:563018-563362 placement
 /**
  * 把补全值填入当前参数位置，并补上紧随其后的字面量。
  */

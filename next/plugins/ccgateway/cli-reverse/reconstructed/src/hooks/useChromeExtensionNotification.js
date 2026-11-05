@@ -3,9 +3,9 @@
  *
  * Chrome 扩展相关通知（只剩小片段）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useChromeExtensionNotification.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { cancelQuotaAutoResume } from "../services/quotaAutoResume/quotaAutoResume.js";
@@ -14,7 +14,7 @@ import {
   AUTO_CONTINUE_CANCELLED_TEXT,
 } from "../components/rateLimit/quotaAutoResume.js";
 
-//@ chunk-18hwfzwa.js:465224-465321 fingerprint (2.1.88 match: _temp, 0.576)
+//@ chunk-czq1j3j2.js:491289-491386 fingerprint (2.1.88 match: _temp, 0.576)
 function cancelQuotaAutoResumeWithNotice(addNotification, gesture) {
   cancelQuotaAutoResume(gesture);
   addNotification({

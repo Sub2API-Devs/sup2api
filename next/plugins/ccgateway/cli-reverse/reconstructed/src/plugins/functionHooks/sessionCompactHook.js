@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：session.compact 事件钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import { randomUUID } from "crypto";
@@ -20,7 +20,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1538522-1538936 placement
+//@ chunk-5xgkngpb.js:1603964-1604378 placement
 /**
  * 把插件可见的会话行还原为内部消息：助手行生成文本与 tool_use，用户行生成 tool_result 与文本。
  */
@@ -61,7 +61,7 @@ function pluginRowToMessage(row) {
     content: hasNoResults ? row.text : [...mapped, ...textBlocks],
   });
 }
-//@ chunk-e6aww6q8.js:1538936-1539024 placement
+//@ chunk-5xgkngpb.js:1604378-1604466 placement
 /**
  * 构造插件行
  */
@@ -72,7 +72,7 @@ var pluginRow = (row) =>
     toolUses: row.toolUses,
     toolResults: row.toolResults,
   });
-//@ chunk-e6aww6q8.js:1539024-1539091 placement
+//@ chunk-5xgkngpb.js:1604466-1604533 placement
 /**
  * 附上工具结果与句柄
  */
@@ -81,7 +81,7 @@ var withToolResults = (pluginMessage, resultsById, handle) => ({
   toolUses: pluginMessage.toolUses.map(attachToolResults(resultsById)),
   handle,
 });
-//@ chunk-e6aww6q8.js:1539091-1539676 placement
+//@ chunk-5xgkngpb.js:1604533-1605118 placement
 /**
  * session.compact 的行映射器：rowsOf 把消息转为插件行并记住每行对应的原消息组，messagesOf 把插件返回的行还原（未改动的行用原消息）。
  */
@@ -136,7 +136,7 @@ function createCompactRowMapper() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1539676-1539856 placement
+//@ chunk-5xgkngpb.js:1605118-1605298 placement
 var compactResult = (made, messages) => ({
   messages,
   ...(made.tokensBefore !== undefined && {
@@ -149,7 +149,7 @@ var compactResult = (made, messages) => ({
     usage: made.usage,
   }),
 });
-//@ chunk-e6aww6q8.js:1539856-1540150 placement
+//@ chunk-5xgkngpb.js:1605298-1605592 placement
 /**
  * session.compact 链底的核心处理器：用指令执行压缩，跳过则返回 skip，否则记录结果并返回行。
  */
@@ -175,7 +175,7 @@ var createCompactCore = (compact, compactRowMapper, stepRecorder) => ({
     return compactResult(made, messages);
   },
 });
-//@ chunk-e6aww6q8.js:1540150-1540238 placement
+//@ chunk-5xgkngpb.js:1605592-1605680 placement
 /**
  * session.compact 核心步骤
  */
@@ -187,15 +187,15 @@ var compactCoreStep = (
   record: made.record,
   result,
 });
-//@ chunk-e6aww6q8.js:1540238-1540357 placement
+//@ chunk-5xgkngpb.js:1605680-1605799 placement
 var sameRows = (messages, rows) =>
   messages.length === rows.length &&
   messages.every((message, index) => {
     let row = rows[index];
     return row !== undefined && message.handle === row.handle && pluginRow(message) === pluginRow(row);
   });
-//@ chunk-e6aww6q8.js:1540395-1540565 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
-var getTokenCountFromUsage_2 = (usage) => ({
+//@ chunk-5xgkngpb.js:1605837-1606007 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
+var getTokenCountFromUsage_4 = (usage) => ({
   ...usage,
   uuid: randomUUID(),
   message: {
@@ -209,20 +209,20 @@ var getTokenCountFromUsage_2 = (usage) => ({
     },
   },
 });
-//@ chunk-e6aww6q8.js:1540603-1540674 placement
+//@ chunk-5xgkngpb.js:1606045-1606116 placement
 /**
  * 助手行换新 uuid
  */
 var reuuidAssistantRows = (messages) =>
   messages.map((message) =>
     message.type === "assistant"
-      ? getTokenCountFromUsage_2(message)
+      ? getTokenCountFromUsage_4(message)
       : {
           ...message,
           uuid: randomUUID(),
         },
   );
-//@ chunk-e6aww6q8.js:1540674-1540788 placement
+//@ chunk-5xgkngpb.js:1606116-1606230 placement
 var replacedCompactResult = (result, compactRowMapper, record) => ({
   kind: "replaced",
   messages: reuuidAssistantRows(
@@ -231,7 +231,7 @@ var replacedCompactResult = (result, compactRowMapper, record) => ({
   record,
   result,
 });
-//@ chunk-e6aww6q8.js:1540788-1540825 placement
+//@ chunk-5xgkngpb.js:1606230-1606267 placement
 /**
  * 跳过压缩
  */
@@ -239,7 +239,7 @@ var skippedCompact = (fields) => ({
   kind: "skipped",
   ...fields,
 });
-//@ chunk-e6aww6q8.js:1540825-1541723 placement
+//@ chunk-5xgkngpb.js:1606267-1607170 placement
 /**
  * 运行 session.compact 钩子链并记录核心是否执行。
  */
@@ -297,22 +297,22 @@ async function dispatchSessionCompactHooks(request) {
   );
   return replacedCompactResult(result, compactRowMapper, lastStep?.made.made.record);
 }
-//@ chunk-e6aww6q8.js:1541723-1541784 placement
+//@ chunk-5xgkngpb.js:1607170-1607231 placement
 /**
  * 保留下层的行 uuid
  */
 var keptRowUuids = (messages) =>
   messages.filter((message) => toPluginMessage(message) !== undefined).map((message) => message.uuid);
-//@ chunk-e6aww6q8.js:1541784-1541814 placement
+//@ chunk-5xgkngpb.js:1607231-1607261 placement
 /**
  * session.compact 站点规则
  */
 var SESSION_COMPACT_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1541784", () => {
+deferInit("chunk-5xgkngpb.js:1607231", () => {
   SESSION_COMPACT_RULES = UI_ENV_SITE_RULES["session.compact"];
 });
-//@ chunk-e6aww6q8.js:1541814-1542130 placement (2.1.88 match: getTokenCountFromUsage, 1)
-function getTokenCountFromUsage_3(usage) {
+//@ chunk-5xgkngpb.js:1607261-1607577 placement (2.1.88 match: getTokenCountFromUsage, 1)
+function getTokenCountFromUsage_5(usage) {
   return usage === undefined ||
     (usage.input_tokens === 0 &&
       usage.output_tokens === 0 &&
@@ -327,9 +327,9 @@ function getTokenCountFromUsage_3(usage) {
       };
 }
 export {
-  SESSION_COMPACT_RULES,
-  keptRowUuids,
-  getTokenCountFromUsage_3,
+  getTokenCountFromUsage_5,
   dispatchSessionCompactHooks,
   reuuidAssistantRows,
+  SESSION_COMPACT_RULES,
+  keptRowUuids,
 };

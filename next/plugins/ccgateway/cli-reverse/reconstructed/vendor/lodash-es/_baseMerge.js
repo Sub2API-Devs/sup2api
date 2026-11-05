@@ -1,8 +1,8 @@
 /**
  * lodash-es/_baseMerge.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-dcmhvw5a.js (1)
+ * pieces: chunk-z20c443b.js (1)
  * attribution: placement 1
  */
 import { baseEachAlias } from "./_inlinedHelpers.js";
@@ -20,7 +20,7 @@ beginDeferredInits("vendor/lodash-es/_mergeWithFamily.js");
 // This module is the first evaluated of an import cycle of 3 modules closed by ./_mergeWithFamily.js (in the hooks worker thread);
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("worker:vendor/lodash-es/_mergeWithFamily.js");
-//@ chunk-dcmhvw5a.js:143313-143493 placement
+//@ chunk-z20c443b.js:143459-143640 placement
 function baseMerge(object, source, srcIndex, customizer, stack) {
   if (object === source) return;
   baseEachAlias(

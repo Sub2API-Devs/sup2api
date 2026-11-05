@@ -1,8 +1,8 @@
 /**
  * zod/v4/classic/deferredOptional.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-dcmhvw5a.js (2)
+ * pieces: chunk-z20c443b.js (2)
  * attribution: placement 2
  */
 import { $ZodType } from "../core/schemas.js";
@@ -12,14 +12,14 @@ import { processSchema } from "../core/to-json-schema.js";
 import { defineLazy, cleanRegex } from "../core/util.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:201422-202068 placement
+//@ chunk-z20c443b.js:195548-196194 placement
 /**
  * 延迟可选的 zod 类型。
  */
 var ZodDeferredOptional; // deferred: uses ZodType (./schemas.js) of its import cycle while loading; runs once the cycle is complete
 var zodDeferredOptionalInner;
 var createDeferredOptional;
-deferInit("chunk-dcmhvw5a.js:201422", () => {
+deferInit("chunk-z20c443b.js:195548", () => {
   ZodDeferredOptional = $ZodType;
   zodDeferredOptionalInner = ZodType;
   createDeferredOptional = $constructor("ZodDeferredOptional", (schema, def) => {
@@ -52,7 +52,7 @@ deferInit("chunk-dcmhvw5a.js:201422", () => {
     schema.unwrap = def.getter;
   });
 });
-//@ chunk-dcmhvw5a.js:202068-202545 placement
+//@ chunk-z20c443b.js:196194-196671 placement
 /**
  * 创建延迟可选 schema（惰性 getter）。
  */

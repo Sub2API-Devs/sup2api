@@ -3,9 +3,9 @@
  *
  * BYOC 运行 git 子进程（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t3sg9e26.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rzkdv0c6.js (3)
  * attribution: placement 3
  */
 import { spawn } from "child_process";
@@ -44,12 +44,12 @@ import { createTimeoutSignal } from "./repoSources.js";
 import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t3sg9e26.js:27339-27377 placement
+//@ chunk-rzkdv0c6.js:27340-27378 placement
 var WATCHDOG_SUBCOMMAND_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-t3sg9e26.js:27339", () => {
+deferInit("chunk-rzkdv0c6.js:27340", () => {
   WATCHDOG_SUBCOMMAND_SET = new Set(["fetch", "ls-remote"]);
 });
-//@ chunk-t3sg9e26.js:27377-27501 placement
+//@ chunk-rzkdv0c6.js:27378-27502 placement
 function gitSubcommandOf(argv) {
   for (let j = 0; j < argv.length; j++) {
     if (argv[j] === "-c" || argv[j] === "--git-dir" || argv[j] === "-C") {
@@ -60,7 +60,7 @@ function gitSubcommandOf(argv) {
   }
   return;
 }
-//@ chunk-t3sg9e26.js:27501-32452 placement
+//@ chunk-rzkdv0c6.js:27502-32456 placement
 /**
  * 运行 git 子进程（代理、进度超时、无数据检测）
  */

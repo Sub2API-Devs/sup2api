@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ONBOARDING.md 指南工具 schema 与说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -21,8 +21,8 @@ import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { SHAREONBOARDINGGUIDE, SHARE_ONBOARDING_GUIDE_PROMPT } from "../ShareOnboardingGuideTool/prompt.js";
 import {
   isTeamOnboardingShareEnabled,
-  deleteOnboardingGuide,
   listOnboardingGuides,
+  deleteOnboardingShare,
   updateOnboardingGuide,
   createOnboardingGuide,
 } from "../../commands/team-onboarding/api.js";
@@ -31,7 +31,7 @@ import { getOriginalCwd } from "../../bootstrap/state.js";
 import { isENOENT } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:7974-11180 placement
+//@ chunk-fmnbrxwy.js:14614-18399 placement
 /**
  * OnboardingGuide 工具的输入 schema（mode 与目标 guide）、输出 schema（status/share_url/short_code/message）、guide 文件名与 64 KiB 大小上限，以及工具定义本身。
  */
@@ -40,19 +40,19 @@ var onboardingGuideOutputSchema;
 var ONBOARDING_MD;
 var MAX_ONBOARDING_GUIDE_BYTES;
 var onboardingGuideTool;
-deferInit("chunk-kxyd0g16.js:7974", () => {
+deferInit("chunk-fmnbrxwy.js:14614", () => {
   OnboardingGuideSchema = DoctorLazy(() =>
     zodStrictObject({
       mode: _enum(["check", "update", "create", "delete"])
         .default("check")
         .describe(
-          "'check' (default): if ONBOARDING.md is present locally, uploads it to the most-recent guide (creates one if none exist); otherwise reports the existing link without uploading. 'update': upload to a specific guide by short_code. 'create': always make a new link. 'delete': remove a guide.",
+          "'check' (default): if ONBOARDING.md is present locally, uploads it to the most-recent guide (creates one if none exist); otherwise reports the existing link without uploading. 'update': upload to a specific guide by short_code. 'create': always make a new link. 'delete': remove the guide named by short_code; with no short_code, nothing is deleted and the user's guides are listed.",
         ),
       short_code: stringSchema()
         .regex(/^[A-Za-z0-9_-]{1,64}$/)
         .optional()
         .describe(
-          "Short code of a specific guide to target (returned by a previous call). Honored by check, update, and delete \u2014 skips the org-wide lookup and targets this guide directly.",
+          "Short code of one guide, from an earlier call's result. Required by delete. With check or update, targets that guide instead of the most recently updated one.",
         ),
     }),
   );
@@ -93,12 +93,14 @@ deferInit("chunk-kxyd0g16.js:7974", () => {
       return SHARE_ONBOARDING_GUIDE_PROMPT;
     },
     toAutoClassifierInput(input) {
-      return `share onboarding guide (mode: ${input.mode ?? "check"})`;
+      let shortCode = input.short_code ? `, short_code: ${input.short_code}` : "";
+      return `share onboarding guide (mode: ${input.mode ?? "check"}${shortCode})`;
     },
     isDestructive(input) {
       return input.mode === "delete";
     },
     renderToolUseMessage(input) {
+      if (input.mode === "delete" && input.short_code) return `delete ${input.short_code}`;
       return input.mode && input.mode !== "check" ? input.mode : null;
     },
     create({ credentials }) {
@@ -106,13 +108,26 @@ deferInit("chunk-kxyd0g16.js:7974", () => {
         async call({ mode = "check", short_code: shortCode }) {
           if (mode === "delete")
             try {
-              let guideCode = shortCode ?? (await latestOnboardingGuide(credentials))?.short_code;
-              if (!guideCode) return unavailableResult("No guide found for this org to delete.");
-              await deleteOnboardingGuide(guideCode, credentials);
+              if (!shortCode) {
+                let rule = await listOnboardingGuides(credentials);
+                if (rule.length === 0) return unavailableResult("The user has no guides to delete.");
+                let joined = rule
+                  .map(
+                    (excludedCommand) =>
+                      `${excludedCommand.short_code} (updated ${excludedCommand.updated_at})`,
+                  )
+                  .join(", ");
+                return unavailableResult(
+                  `Nothing was deleted. Ask the user which guide to delete, then call again with its short_code. The user's guides: ${joined}.`,
+                );
+              }
               return {
                 data: {
                   status: "deleted",
-                  message: `Guide ${guideCode} deleted.`,
+                  message:
+                    (await deleteOnboardingShare(shortCode, credentials)) === "already_gone"
+                      ? `The server found no guide ${shortCode} in this organization: it was already deleted, or the code is wrong. Call delete with no short_code to list the user's guides.`
+                      : `Guide ${shortCode} deleted.`,
                 },
               };
             } catch (error) {
@@ -201,7 +216,7 @@ deferInit("chunk-kxyd0g16.js:7974", () => {
     },
   });
 });
-//@ chunk-kxyd0g16.js:11180-11297 placement
+//@ chunk-fmnbrxwy.js:18399-18516 placement
 /**
  * 取最近更新的入门指南。
  */
@@ -210,7 +225,7 @@ async function latestOnboardingGuide(credentials) {
   if (guides.length === 0) return;
   return guides.reduce((acc, guide) => (acc.updated_at > guide.updated_at ? acc : guide));
 }
-//@ chunk-kxyd0g16.js:11297-11581 placement
+//@ chunk-fmnbrxwy.js:18516-18800 placement
 /**
  * 构造入门指南分享结果：状态、分享链接、短码与给模型的结束语。
  */

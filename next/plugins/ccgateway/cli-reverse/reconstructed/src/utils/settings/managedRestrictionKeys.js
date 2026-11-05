@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管设置中各限制性键及其归一化方式；按路径设置嵌套值（复制路径上的对象）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (12)
  * attribution: placement 12
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -23,12 +23,13 @@ import {
 } from "../permissions/autoModeRulesPrompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:189885-193818 placement
+//@ chunk-z20c443b.js:188829-192784 placement
 /**
  * 托管设置中各限制性键及其归一化方式。
  */
 var MANAGED_RESTRICTION_KEYS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:189885", () => {
+var EMPTY_SET_CACHE;
+deferInit("chunk-z20c443b.js:188829", () => {
   MANAGED_RESTRICTION_KEYS = DoctorLazy(() => [
     {
       path: ["allowManagedPermissionRulesOnly"],
@@ -316,15 +317,16 @@ deferInit("chunk-dcmhvw5a.js:189885", () => {
       restrictive: false,
     },
   ]);
+  EMPTY_SET_CACHE = DoctorLazy(() => new Set([]));
 });
-//@ chunk-dcmhvw5a.js:193818-193864 placement
+//@ chunk-z20c443b.js:192784-192830 placement
 /**
  * asArray：标量转数组。
  */
 function asArray(restrictive) {
   return Array.isArray(restrictive) ? restrictive : [restrictive];
 }
-//@ chunk-dcmhvw5a.js:193864-193961 placement
+//@ chunk-z20c443b.js:192830-192927 placement
 /**
  * 按路径取嵌套值。
  */
@@ -336,7 +338,7 @@ function getAtPath(root, parts) {
   }
   return current;
 }
-//@ chunk-dcmhvw5a.js:193961-194204 placement
+//@ chunk-z20c443b.js:192927-193170 placement
 /**
  * 按路径设置嵌套值（复制路径上的对象）。
  */
@@ -362,7 +364,7 @@ function setAtPath(root, parts, value) {
     delete chain[j - 1][parts[j - 1]];
   }
 }
-//@ chunk-dcmhvw5a.js:194204-194286 placement
+//@ chunk-z20c443b.js:193170-193252 placement
 /**
  * 取限制键的归一化值。
  */
@@ -370,11 +372,11 @@ function restrictionValue(key, doc) {
   let atPath = getAtPath(doc, key.path);
   return key.normalize === undefined ? atPath : key.normalize(atPath);
 }
-//@ chunk-dcmhvw5a.js:194286-194569 placement
+//@ chunk-z20c443b.js:193252-193535 placement
 var SEC_DEFAULT_PLUGIN_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SEC_DEFAULT_PLUGIN_IDS;
 var RESTRICTION_KEYS;
-deferInit("chunk-dcmhvw5a.js:194286", () => {
+deferInit("chunk-z20c443b.js:193252", () => {
   SEC_DEFAULT_PLUGIN_ID = `${SEC_DEFAULT_PLUGIN_NAME}@builtin`;
   SEC_DEFAULT_PLUGIN_IDS = ["sec-default@builtin"];
   RESTRICTION_KEYS = Object.freeze({
@@ -383,21 +385,21 @@ deferInit("chunk-dcmhvw5a.js:194286", () => {
     setAside: Object.freeze(["allowModsToOverrideDenyRules"]),
   });
 });
-//@ chunk-dcmhvw5a.js:194569-194601 placement
+//@ chunk-z20c443b.js:193535-193567 placement
 /**
  * 是否存在托管设置。
  */
 function hasManagedSettings() {
   return coworkSessionIfAny() ?? isCoworkEntrypoint();
 }
-//@ chunk-dcmhvw5a.js:194601-194634 placement
+//@ chunk-z20c443b.js:193567-193600 placement
 /**
  * hasManagedOrCoworkSurface：有托管设置或 Cowork 界面。
  */
 function hasManagedOrCoworkSurface() {
   return hasManagedSettings() || isCcsCoworkSurface();
 }
-//@ chunk-dcmhvw5a.js:194634-194707 placement
+//@ chunk-z20c443b.js:193600-193673 placement
 function coworkSessionIfAny() {
   try {
     return getSessionEntrypoint() === undefined ? undefined : isCoworkSession();
@@ -406,7 +408,7 @@ function coworkSessionIfAny() {
     return;
   }
 }
-//@ chunk-dcmhvw5a.js:194707-194900 placement
+//@ chunk-z20c443b.js:193673-193866 placement
 function policyModOptions(doc) {
   let atPath = getAtPath(doc, ["pluginConfigs", SEC_DEFAULT_PLUGIN_ID, "options"]);
   let picked = {};
@@ -422,7 +424,7 @@ function policyModOptions(doc) {
       }
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:194900-195099 placement
+//@ chunk-z20c443b.js:193866-194065 placement
 /**
  * 从设置中抽取限制性设置（管理钩子、禁用钩子等）与策略插件选项，非空时标记为合并方式的托管来源。
  */
@@ -441,7 +443,7 @@ function extractRestrictionSettings(doc) {
       }
     : {};
 }
-//@ chunk-dcmhvw5a.js:195099-195295 placement (2.1.88 match: GIT_MERGE_RE, 0.429)
+//@ chunk-z20c443b.js:194065-194261 placement (2.1.88 match: GIT_MERGE_RE, 0.431)
 /**
  * （旧版名配错，切分错误）把来源设置中特定路径的值合并进目标设置，并标记 managedSourcesBehavior=merge。
  */
@@ -461,15 +463,15 @@ function mergeManagedSettingsPaths(coworkCloudHolds, baseSettings) {
 }
 export {
   hasManagedSettings,
-  hasManagedOrCoworkSurface,
-  extractRestrictionSettings,
+  RESTRICTION_KEYS,
+  SEC_DEFAULT_PLUGIN_ID,
   MANAGED_RESTRICTION_KEYS,
   asArray,
   restrictionValue,
-  RESTRICTION_KEYS,
-  SEC_DEFAULT_PLUGIN_ID,
-  setAtPath,
   getAtPath,
+  setAtPath,
+  hasManagedOrCoworkSurface,
+  extractRestrictionSettings,
   mergeManagedSettingsPaths,
   SEC_DEFAULT_PLUGIN_IDS,
   policyModOptions,

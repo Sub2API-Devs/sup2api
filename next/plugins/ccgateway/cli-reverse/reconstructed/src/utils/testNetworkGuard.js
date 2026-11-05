@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：测试运行时出网守卫。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (19)
  * attribution: placement 19
  */
 import ws from "ws";
@@ -14,19 +14,19 @@ import { isLoopbackHost } from "./localhost.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:160292-160370 placement
+//@ chunk-7kayq7nc.js:159541-159619 placement
 class TestEgressBlockedError extends Error {
   name = "TestEgressBlockedError";
   code = "TestEgressBlocked";
 }
-//@ chunk-bwbq4xvm.js:160370-160400 placement
+//@ chunk-7kayq7nc.js:159619-159649 placement
 var originalGlobalFetch; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ORIGINAL_WEBSOCKET;
-deferInit("chunk-bwbq4xvm.js:160370", () => {
+deferInit("chunk-7kayq7nc.js:159619", () => {
   originalGlobalFetch = globalThis.fetch;
   ORIGINAL_WEBSOCKET = ws;
 });
-//@ chunk-bwbq4xvm.js:160400-160565 placement
+//@ chunk-7kayq7nc.js:159649-159814 placement
 function requestMethodAndUrl(input, init) {
   if (input instanceof Request)
     return {
@@ -38,16 +38,16 @@ function requestMethodAndUrl(input, init) {
     url: String(input),
   };
 }
-//@ chunk-bwbq4xvm.js:160565-160638 placement
+//@ chunk-7kayq7nc.js:159814-159887 placement
 function isTestRealNetworkAllowed() {
   return isEnvTruthy(process.env.CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK);
 }
-//@ chunk-bwbq4xvm.js:160638-160746 placement
+//@ chunk-7kayq7nc.js:159887-159995 placement
 function formatLiveTestRequestWarning(request, testRuntime) {
   return `[CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK] live request from a test runtime: ${request} ${testRuntime}
 `;
 }
-//@ chunk-bwbq4xvm.js:160746-160863 placement
+//@ chunk-7kayq7nc.js:159995-160112 placement
 /**
  * 测试运行时出网判定：回环地址 loopback；设了 CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK 为 opted-in；否则 refused。
  */
@@ -61,14 +61,14 @@ function classifyTestEgress(url) {
   if (isLoopback) return "loopback";
   return isTestRealNetworkAllowed() ? "opted-in" : "refused";
 }
-//@ chunk-bwbq4xvm.js:160863-161119 placement
+//@ chunk-7kayq7nc.js:160112-160368 placement
 function formatBlockedTestRequest(method, url) {
   return (
     `Blocked under test: ${method} ${url} \u2014 test runtimes must not reach the network. ` +
     "Run the file via `bun run test:file -- <path>` with this request mocked, or set CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 for an intentional live probe."
   );
 }
-//@ chunk-bwbq4xvm.js:161119-161322 placement
+//@ chunk-7kayq7nc.js:160368-160571 placement
 /**
  * axios 请求拦截器：测试运行时拒绝非回环请求（含重定向），opted-in 时在 stderr 告警。
  */
@@ -85,7 +85,7 @@ function axiosTestEgressInterceptor(options) {
       throw new TestEgressBlockedError(formatBlockedTestRequest(handler, uri));
   }
 }
-//@ chunk-bwbq4xvm.js:161322-161605 placement
+//@ chunk-7kayq7nc.js:160571-160854 placement
 function guardAxiosRedirects(options, handler) {
   let beforeRedirect = options.beforeRedirect;
   options.beforeRedirect = (target, response) => {
@@ -105,7 +105,7 @@ function guardAxiosRedirects(options, handler) {
   };
   return options;
 }
-//@ chunk-bwbq4xvm.js:161660-161748 placement
+//@ chunk-7kayq7nc.js:160909-160997 placement
 function hasAxiosProxyInterceptor() {
   return (
     axios_default.interceptors.request.handlers?.some(
@@ -113,15 +113,15 @@ function hasAxiosProxyInterceptor() {
     ) ?? false
   );
 }
-//@ chunk-bwbq4xvm.js:161748-161771 placement
+//@ chunk-7kayq7nc.js:160997-161020 placement
 function isTestRuntime() {
   return false;
 }
-//@ chunk-bwbq4xvm.js:161771-161793 placement
+//@ chunk-7kayq7nc.js:161020-161042 placement
 function noteExternalHttpUse() {
   return;
 }
-//@ chunk-bwbq4xvm.js:161793-161962 placement
+//@ chunk-7kayq7nc.js:161042-161211 placement
 function guardTestFetch(fetchImpl, method, init) {
   if (fetchImpl !== originalGlobalFetch || !isTestRuntime()) return;
   switch (classifyTestEgress(init)) {
@@ -134,13 +134,13 @@ function guardTestFetch(fetchImpl, method, init) {
       throw new TestEgressBlockedError(formatBlockedTestRequest(method, init));
   }
 }
-//@ chunk-bwbq4xvm.js:161962-162071 placement
+//@ chunk-7kayq7nc.js:161211-161320 placement
 function guardTestFetchRedirect(fetchImpl, method, init) {
   if (fetchImpl !== originalGlobalFetch || !isTestRuntime()) return;
   if (init.redirected && classifyTestEgress(init.url) === "refused")
     throw new TestEgressBlockedError(formatBlockedTestRequest(method, init.url));
 }
-//@ chunk-bwbq4xvm.js:162071-162169 placement
+//@ chunk-7kayq7nc.js:161320-161418 placement
 function guardBunFetchSession(tlsFetchSession, session, init) {
   if (!isBunFetchSession(tlsFetchSession)) return;
   try {
@@ -150,13 +150,13 @@ function guardBunFetchSession(tlsFetchSession, session, init) {
     throw error;
   }
 }
-//@ chunk-bwbq4xvm.js:162169-162264 placement
+//@ chunk-7kayq7nc.js:161418-161513 placement
 function isBunFetchSession(value) {
   return typeof Bun !== "undefined" && Bun.FetchSession !== undefined && value instanceof Bun.FetchSession;
 }
-//@ chunk-bwbq4xvm.js:162264-162271 placement
+//@ chunk-7kayq7nc.js:161513-161520 placement
 var onTestEgressBlocked;
-//@ chunk-bwbq4xvm.js:162271-162474 placement
+//@ chunk-7kayq7nc.js:161520-161723 placement
 function guardTestWebSocket(url, webSocketImpl) {
   if (!isTestRuntime() || (webSocketImpl !== undefined && webSocketImpl !== ORIGINAL_WEBSOCKET)) return;
   switch (classifyTestEgress(url)) {
@@ -172,7 +172,7 @@ function guardTestWebSocket(url, webSocketImpl) {
     }
   }
 }
-//@ chunk-bwbq4xvm.js:162474-162612 placement
+//@ chunk-7kayq7nc.js:161723-161861 placement
 /**
  * 包装 fetch：请求前后各做一次测试出网检查。
  */
@@ -187,13 +187,13 @@ async function testGuardedFetch(input, init, tlsSessionFetch) {
   return response;
 }
 export {
+  guardBunFetchSession,
   hasAxiosProxyInterceptor,
   axiosTestEgressInterceptor,
-  guardBunFetchSession,
   noteExternalHttpUse,
-  guardTestWebSocket,
   requestMethodAndUrl,
   guardTestFetch,
   guardTestFetchRedirect,
+  guardTestWebSocket,
   testGuardedFetch,
 };

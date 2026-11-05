@@ -3,14 +3,14 @@
  *
  * MCP skill 构建器注册表的取值（loadSkillsDir 注册 createSkillCommand/parseSkillFrontmatterFields）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/mcpSkillBuilders.ts
- * pieces: chunk-s61vbvea.js (1)
+ * pieces: chunk-7jxyna5q.js (1)
  * attribution: fingerprint 1
  */
 import { loaderSideHolder } from "../services/memorySync/syncFiles.js";
 
-//@ chunk-s61vbvea.js:90219-90368 fingerprint (2.1.88 match: getMCPSkillBuilders, 0.795)
+//@ chunk-7jxyna5q.js:89043-89192 fingerprint (2.1.88 match: getMCPSkillBuilders, 0.795)
 function getMCPSkillBuilders() {
   let loaderSide = loaderSideHolder.loaderSide;
   if (!loaderSide)

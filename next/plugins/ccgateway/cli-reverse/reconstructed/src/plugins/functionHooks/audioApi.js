@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：插件 $.audio.play/speak 接口（读取音频片段并播放）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (40)
  * attribution: placement 40
  */
 import { normalize, isAbsolute, join } from "path";
-import { mkdtemp, writeFile, rm as rm_2, readFile } from "fs/promises";
+import { mkdtemp, writeFile, rm, readFile } from "fs/promises";
 import { tmpdir as tmpdir_2 } from "os";
 import { spawn } from "child_process";
 import { HooksError } from "./hooksErrors.js";
@@ -23,12 +23,12 @@ import { forwardAbort } from "./dispatch/chain.js";
 import { createSerialQueue } from "./panes.js";
 import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
 import { getPlatform } from "../../utils/platform.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { MAX_KEPT_TEXT_CHARS } from "./sites/siteRules.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3731186-3731406 placement
+//@ chunk-5xgkngpb.js:3826920-3827140 placement
 function resolvePluginAssetPath(root, assetPath) {
   let normalized = normalize(assetPath);
   if (
@@ -42,12 +42,12 @@ function resolvePluginAssetPath(root, assetPath) {
     );
   return join(root, normalized);
 }
-//@ chunk-e6aww6q8.js:3731406-3731422 placement
+//@ chunk-5xgkngpb.js:3827140-3827156 placement
 /**
  * 26214400
  */
 var MAX_AUDIO_CLIP_BYTES = 26214400;
-//@ chunk-e6aww6q8.js:3731422-3731720 placement
+//@ chunk-5xgkngpb.js:3827156-3827454 placement
 async function resolveAudioAsset(request, assetPath, pluginName) {
   let root = request.root;
   let pluginAssetPath = resolvePluginAssetPath(root, assetPath);
@@ -63,7 +63,7 @@ async function resolveAudioAsset(request, assetPath, pluginName) {
   if (stat.size > MAX_AUDIO_CLIP_BYTES) throw fail(`the clip is over ${MAX_AUDIO_CLIP_BYTES} bytes`);
   return stat.real;
 }
-//@ chunk-e6aww6q8.js:3731720-3731991 placement
+//@ chunk-5xgkngpb.js:3827454-3827725 placement
 async function readBodyWithLimit(manualRedirect, maxBytes) {
   let reader = manualRedirect.body?.getReader();
   if (reader === undefined) return new Uint8Array();
@@ -81,7 +81,7 @@ async function readBodyWithLimit(manualRedirect, maxBytes) {
   }
   return Buffer.concat(chunks);
 }
-//@ chunk-e6aww6q8.js:3731991-3732233 placement
+//@ chunk-5xgkngpb.js:3827725-3827967 placement
 function audioExtensionForMime(mime) {
   switch (firstLineOf(mime, ";").trim().toLowerCase()) {
     case "audio/mpeg":
@@ -99,17 +99,17 @@ function audioExtensionForMime(mime) {
       return "audio";
   }
 }
-//@ chunk-e6aww6q8.js:3732233-3732247 placement
+//@ chunk-5xgkngpb.js:3827967-3827981 placement
 /**
  * 30000
  */
 var AUDIO_LOAD_TIMEOUT_MS = 30000;
-//@ chunk-e6aww6q8.js:3732374-3732389 placement
+//@ chunk-5xgkngpb.js:3828108-3828123 placement
 /**
  * 4194304
  */
 var MAX_AUDIO_FILE_BYTES = 4194304;
-//@ chunk-e6aww6q8.js:3739084-3739741 placement
+//@ chunk-5xgkngpb.js:3834818-3835475 placement
 async function fetchAudioClip(clip, ctx) {
   let { pluginName } = ctx;
   if (clip.url === undefined)
@@ -143,7 +143,7 @@ async function fetchAudioClip(clip, ctx) {
     throw new HooksError(`$.audio.play: could not fetch the clip: ${errorMessage(error)}`);
   }
 }
-//@ chunk-e6aww6q8.js:3739741-3740145 placement
+//@ chunk-5xgkngpb.js:3835475-3835879 placement
 /**
  * 准备要播放的音频文件：插件资源直接使用，否则把数据写入临时文件并返回清理函数。
  */
@@ -166,18 +166,18 @@ async function prepareAudioFile(request, pluginName) {
     file: filePath,
     what: `${filePath} (${audioClip.bytes.byteLength} bytes)`,
     cleanup: () =>
-      rm_2(dir, {
+      rm(dir, {
         recursive: true,
         force: true,
       }).catch(() => {}),
   };
 }
-//@ chunk-e6aww6q8.js:3740145-3740156 placement
+//@ chunk-5xgkngpb.js:3835879-3835890 placement
 /**
  * 80
  */
 var MAX_FORWARDED_OUTPUT_CHARS = 80;
-//@ chunk-e6aww6q8.js:3740156-3740339 placement
+//@ chunk-5xgkngpb.js:3835890-3836072 placement
 function describeAudioClip(clip) {
   let hasAsset = clip.asset === undefined;
   let hasUrl = clip.url === undefined;
@@ -190,13 +190,13 @@ function describeAudioClip(clip) {
         : clip.url
     : `asset ${clip.asset}`;
 }
-//@ chunk-e6aww6q8.js:3740339-3740420 placement
+//@ chunk-5xgkngpb.js:3836072-3836153 placement
 /**
  * loop/gain 描述
  */
 var audioOptionsText = (request) =>
   `${request.shouldLoop ? " loop" : ""}${request.gain === undefined ? "" : ` gain ${request.gain}`}`;
-//@ chunk-e6aww6q8.js:3740461-3740734 placement
+//@ chunk-5xgkngpb.js:3836194-3836467 placement
 function mimeForAudioFile(audioAsset) {
   switch (audioAsset.slice(audioAsset.lastIndexOf(".") + 1).toLowerCase()) {
     case "wav":
@@ -215,7 +215,7 @@ function mimeForAudioFile(audioAsset) {
       return "application/octet-stream";
   }
 }
-//@ chunk-e6aww6q8.js:3740734-3740783 placement
+//@ chunk-5xgkngpb.js:3836467-3836516 placement
 /**
  * 中止即 reject 的 Promise
  */
@@ -225,7 +225,7 @@ var abortedPromise = (signal) =>
       abort: resolve,
     });
   });
-//@ chunk-e6aww6q8.js:3740783-3740912 placement
+//@ chunk-5xgkngpb.js:3836516-3836645 placement
 function checkAudioUrlAllowed({ clip, pluginStorageId }, pluginName) {
   if (typeof clip.url === "string")
     checkPluginFetchUrl(
@@ -237,20 +237,20 @@ function checkAudioUrlAllowed({ clip, pluginStorageId }, pluginName) {
       "$.audio.play",
     );
 }
-//@ chunk-e6aww6q8.js:3740912-3740926 placement
+//@ chunk-5xgkngpb.js:3836645-3836659 placement
 /**
  * 默认音频宿主
  */
 var audioHostDefault; // deferred: uses createSerialQueue (./panes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3740912", () => {
+deferInit("chunk-5xgkngpb.js:3836645", () => {
   audioHostDefault = createSerialQueue();
 });
-//@ chunk-e6aww6q8.js:3740926-3740936 placement
+//@ chunk-5xgkngpb.js:3836659-3836669 placement
 /**
  * 4
  */
 var MAX_CONCURRENT_AUDIO = 4;
-//@ chunk-e6aww6q8.js:3740976-3741513 placement
+//@ chunk-5xgkngpb.js:3836709-3837253 placement
 var spawnAudioPlayer = ({ command, args, label, what, signal }) =>
   new Promise((resolve, reject) => {
     let child = spawn(command, args, {
@@ -282,17 +282,17 @@ var spawnAudioPlayer = ({ command, args, label, what, signal }) =>
       else reject(new HooksError(`${command} exited ${code ?? "by signal"}`));
     });
   });
-//@ chunk-e6aww6q8.js:3741513-3741536 placement
+//@ chunk-5xgkngpb.js:3837253-3837276 placement
 /**
  * globalThis
  */
 var globalThisRef = () => globalThis;
-//@ chunk-e6aww6q8.js:3741536-3741549 placement
+//@ chunk-5xgkngpb.js:3837276-3837289 placement
 /**
  * 2500
  */
 var AUDIO_START_GRACE_MS = 2500;
-//@ chunk-e6aww6q8.js:3741549-3741830 placement
+//@ chunk-5xgkngpb.js:3837289-3837570 placement
 async function waitForVoices(synth) {
   let voices = synth.getVoices();
   if (voices.length > 0 || synth.addEventListener === undefined) return voices;
@@ -307,7 +307,7 @@ async function waitForVoices(synth) {
   });
   return synth.getVoices();
 }
-//@ chunk-e6aww6q8.js:3741830-3743208 placement
+//@ chunk-5xgkngpb.js:3837570-3838952 placement
 /**
  * 读取音频片段来源（插件目录内资源或 base64 数据）。
  */
@@ -393,7 +393,7 @@ async function readAudioClipSource(AudioCtor, { request, pluginName, signal }) {
     audio.play().catch((error) => fail(`<audio>.play() rejected: ${errorMessage(error)}`));
   });
 }
-//@ chunk-e6aww6q8.js:3743208-3743533 placement
+//@ chunk-5xgkngpb.js:3838952-3839277 placement
 /**
  * 用 macOS afplay 播放音频（可设音量），支持中止并清理临时文件。
  */
@@ -416,7 +416,7 @@ async function playWithAfplay({ request, pluginName, signal }) {
     await cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:3743533-3743797 placement
+//@ chunk-5xgkngpb.js:3839277-3839541 placement
 function playAudioClip(request, pluginName, signal) {
   let { Audio } = globalThisRef();
   if (typeof Audio === "function")
@@ -434,12 +434,12 @@ function playAudioClip(request, pluginName, signal) {
   logForDebugging(`$.audio.play (${pluginName}): no audio player on ${getPlatform()}; not played`);
   return Promise.resolve();
 }
-//@ chunk-e6aww6q8.js:3743797-3745096 placement
+//@ chunk-5xgkngpb.js:3839541-3840840 placement
 /**
  * 校验 $.audio.play 的片段参数：只能是 { asset }、{ url } 或 { base64 } 之一。
  */
 function validateAudioClip(args) {
-  if (!isPlainObject_5(args) || !isPlainObject_5(args.clip))
+  if (!isPlainObject_6(args) || !isPlainObject_6(args.clip))
     throw new HooksError("$.audio.play: clip must be { asset }, { url } or { base64, mime }");
   let clip = args.clip;
   let filtered = ["asset", "url", "base64"].filter((key) => clip[key] !== undefined);
@@ -474,7 +474,7 @@ function validateAudioClip(args) {
   )
     throw new HooksError(`$.audio.play: options.gain must be a number from 0 to ${MAX_CONCURRENT_AUDIO}`);
 }
-//@ chunk-e6aww6q8.js:3745096-3745213 placement
+//@ chunk-5xgkngpb.js:3840840-3840957 placement
 function createAudioOverrides() {
   let valueSlot = createValueSlot();
   let valueSlot_2 = createValueSlot();
@@ -485,15 +485,15 @@ function createAudioOverrides() {
     speakerOverride: valueSlot_2.get,
   };
 }
-//@ chunk-e6aww6q8.js:3745213-3745227 placement
+//@ chunk-5xgkngpb.js:3840957-3840971 placement
 /**
  * 音频覆盖配置
  */
 var audioOverrides; // deferred: uses createAudioOverrides of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3745213", () => {
+deferInit("chunk-5xgkngpb.js:3840957", () => {
   audioOverrides = createAudioOverrides();
 });
-//@ chunk-e6aww6q8.js:3745227-3745342 placement
+//@ chunk-5xgkngpb.js:3840971-3841086 placement
 function playValidatedClip(request, pluginName, signal) {
   try {
     validateAudioClip(request);
@@ -503,17 +503,17 @@ function playValidatedClip(request, pluginName, signal) {
   }
   return (audioOverrides.playerOverride() ?? playAudioClip)(request, pluginName, signal);
 }
-//@ chunk-e6aww6q8.js:3745342-3745355 placement
+//@ chunk-5xgkngpb.js:3841086-3841099 placement
 /**
  * "--"
  */
 var STDIN_DASH = "--";
-//@ chunk-e6aww6q8.js:3745355-3745511 placement
+//@ chunk-5xgkngpb.js:3841099-3841255 placement
 function describeSpeechError(event) {
   let error = event?.error ?? "error";
   return `speechSynthesis failed the utterance: ${error}${error === "not-allowed" ? " (the page has had no user gesture yet)" : ""}`;
 }
-//@ chunk-e6aww6q8.js:3745511-3746409 placement
+//@ chunk-5xgkngpb.js:3841255-3842158 placement
 /**
  * 插件 $.audio.speak：用系统语音朗读文本，找不到指定语音时警告。
  */
@@ -567,7 +567,7 @@ async function audioSpeakForPlugin({ synth, Utterance }, { request, pluginName, 
     }
   });
 }
-//@ chunk-e6aww6q8.js:3746409-3746667 placement
+//@ chunk-5xgkngpb.js:3842158-3842416 placement
 async function speakWithSay(request, pluginName, signal) {
   await spawnAudioPlayer({
     command: "say",
@@ -581,7 +581,7 @@ async function speakWithSay(request, pluginName, signal) {
     via: "system",
   };
 }
-//@ chunk-e6aww6q8.js:3746667-3747037 placement
+//@ chunk-5xgkngpb.js:3842416-3842786 placement
 /**
  * 用语音合成朗读文本（有 speechSynthesis 时），否则交给后备实现。
  */
@@ -605,7 +605,7 @@ function speakText(request, pluginName, signal) {
   });
   return Promise.reject(new HooksError(`$.audio.speak: no speech synthesizer on ${getPlatform()}`));
 }
-//@ chunk-e6aww6q8.js:3747037-3747106 placement
+//@ chunk-5xgkngpb.js:3842786-3842854 placement
 /**
  * 截断朗读文本
  */
@@ -617,18 +617,18 @@ function clampSpeakText(request) {
         text: truncateToLength(request.text, MAX_KEPT_TEXT_CHARS),
       };
 }
-//@ chunk-e6aww6q8.js:3747106-3747417 placement
+//@ chunk-5xgkngpb.js:3842854-3843165 placement
 /**
  * 校验 $.audio.speak 参数：text 必须是非空字符串，其余选项类型正确。
  */
 function checkSpeakArgs(args) {
-  if (!isPlainObject_5(args)) throw new HooksError("$.audio.speak: text must be a non-empty string");
+  if (!isPlainObject_6(args)) throw new HooksError("$.audio.speak: text must be a non-empty string");
   if (typeof args.text !== "string" || args.text.trim() === "")
     throw new HooksError("$.audio.speak: text must be a non-empty string");
   if (args.voice !== undefined && typeof args.voice !== "string")
     throw new HooksError("$.audio.speak: voice must be a string when given");
 }
-//@ chunk-e6aww6q8.js:3747417-3747571 placement
+//@ chunk-5xgkngpb.js:3843165-3843319 placement
 /**
  * $.audio.speak 实现：校验参数，串行执行朗读（可被覆盖的朗读器，默认系统语音）。
  */
@@ -645,17 +645,17 @@ function audioSpeakOp(args, plugin, signal) {
     return secondPlugin(secondSignal, plugin, signal);
   });
 }
-//@ chunk-e6aww6q8.js:3747571-3747586 placement
+//@ chunk-5xgkngpb.js:3843319-3843334 placement
 /**
  * 600000
  */
 var MAX_LOOP_AUDIO_MS = 600000;
-//@ chunk-e6aww6q8.js:3747586-3747596 placement
+//@ chunk-5xgkngpb.js:3843334-3843344 placement
 /**
  * 4
  */
 var MAX_AUDIO_PER_PLUGIN = 4;
-//@ chunk-e6aww6q8.js:3747596-3747686 placement
+//@ chunk-5xgkngpb.js:3843344-3843434 placement
 /**
  * 合并中止信号与超时
  */
@@ -663,7 +663,7 @@ function withTimeoutSignal(signal, ms) {
   let timeout = AbortSignal.timeout(ms);
   return signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
 }
-//@ chunk-e6aww6q8.js:3747686-3748037 placement
+//@ chunk-5xgkngpb.js:3843434-3843785 placement
 /**
  * $.audio.play 宿主：每插件同时最多 4 个播放，循环播放有总时长上限。
  */
@@ -688,4 +688,4 @@ function createAudioPlayer(loopMs = MAX_LOOP_AUDIO_MS) {
     },
   };
 }
-export { MAX_AUDIO_FILE_BYTES, audioSpeakOp, createAudioPlayer };
+export { audioSpeakOp, MAX_AUDIO_FILE_BYTES, createAudioPlayer };

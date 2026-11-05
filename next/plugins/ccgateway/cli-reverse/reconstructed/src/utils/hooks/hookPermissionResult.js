@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：钩子权限结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { getRuleBehaviorDescription } from "../permissions/PermissionResult.js";
 import { getCloudDeferUnsupportedMessage, getPreToolHookBlockingMessage } from "../hooks.js";
 
-//@ chunk-e6aww6q8.js:921230-922063 placement
+//@ chunk-5xgkngpb.js:931731-932564 placement
 function resolveHookPermissionResult(remoteCall, hookName, result) {
   let defaultMessage = `Hook ${hookName} ${getRuleBehaviorDescription("deny")} this tool`;
   let denyMessage;
@@ -62,7 +62,7 @@ function resolveHookPermissionResult(remoteCall, hookName, result) {
       },
     };
 }
-//@ chunk-e6aww6q8.js:922063-922105 placement
+//@ chunk-5xgkngpb.js:932564-932606 placement
 /**
  * 记录最严格的钩子答复（用于权限判定）。
  */

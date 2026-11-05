@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/bedrock-sdk/core/error.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-bwbq4xvm.js (3), chunk-fq0cr76a.js (3)
+ * pieces: chunk-7kayq7nc.js (3), chunk-qg41pqt6.js (3)
  * attribution: cjs-fingerprint 6
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -46,7 +46,7 @@ import { require_symbols } from "../../../@bufbuild/protobuf/dist/commonjs/codeg
 import { require_scalar_2 } from "../../../@bufbuild/protobuf/dist/commonjs/codegenv2/scalar.js";
 import { emptyModule } from "../../../unresolved-cjs/index.js";
 
-//@ chunk-bwbq4xvm.js:85148-85668 cjs-fingerprint
+//@ chunk-7kayq7nc.js:85234-85754 cjs-fingerprint
 var require_error = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
@@ -79,7 +79,7 @@ var require_error = __commonJS(function (cjsExports) {
   });
   __exportStar(require_SemanticAttributes(), cjsExports);
 });
-//@ chunk-bwbq4xvm.js:98021-98541 cjs-fingerprint
+//@ chunk-7kayq7nc.js:98115-98635 cjs-fingerprint
 var require_error_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
@@ -112,7 +112,7 @@ var require_error_2 = __commonJS(function (cjsExports) {
   });
   __exportStar(require_SemanticResourceAttributes(), cjsExports);
 });
-//@ chunk-bwbq4xvm.js:115465-116034 cjs-fingerprint
+//@ chunk-7kayq7nc.js:115559-116128 cjs-fingerprint
 var require_error_3 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
@@ -149,7 +149,7 @@ var require_error_3 = __commonJS(function (cjsExports) {
   __exportStar(require_stable_metrics(), cjsExports);
   __exportStar(require_stable_events(), cjsExports);
 });
-//@ chunk-fq0cr76a.js:440563-441299 cjs-fingerprint
+//@ chunk-qg41pqt6.js:441133-441869 cjs-fingerprint
 var require_error_4 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
@@ -200,7 +200,7 @@ var require_error_4 = __commonJS(function (cjsExports) {
   __exportStar(require_wrappers_pb(), cjsExports);
   __exportStar(require_plugin_pb(), cjsExports);
 });
-//@ chunk-fq0cr76a.js:448705-449273 cjs-fingerprint
+//@ chunk-qg41pqt6.js:449279-449847 cjs-fingerprint
 var require_error_5 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
@@ -237,7 +237,7 @@ var require_error_5 = __commonJS(function (cjsExports) {
   __exportStar(require_text_format(), cjsExports);
   __exportStar(require_size_delimited(), cjsExports);
 });
-//@ chunk-fq0cr76a.js:519671-520301 cjs-fingerprint
+//@ chunk-qg41pqt6.js:520245-520875 cjs-fingerprint
 var require_error_6 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话记录文件定位
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dmh8arxx.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wdd04e0j.js (7)
  * attribution: placement 7
  */
 import { lstat, realpath, readdir } from "fs/promises";
@@ -24,7 +24,7 @@ import { getFileKind } from "./fileKind.js";
 import { logForDebugging } from "./debug.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 
-//@ chunk-dmh8arxx.js:3727-3825 placement
+//@ chunk-wdd04e0j.js:4063-4161 placement
 var TRANSCRIPT_LOCATE_TIMEOUT_MS = 4000;
 var MAX_TRANSCRIPT_CANDIDATES = 16;
 var ELSEWHERE_RESULT = {
@@ -37,7 +37,7 @@ var NOWHERE_WITH_RECORD_RESULT = {
   kind: "nowhere",
   hasOwnSessionRecord: true,
 };
-//@ chunk-dmh8arxx.js:3825-3983 placement
+//@ chunk-wdd04e0j.js:4161-4319 placement
 async function pathKindExists(path, kind) {
   return lstat(path).then(
     (stats) => ((kind === "file" ? stats.isFile() : stats.isDirectory()) ? true : undefined),
@@ -47,16 +47,16 @@ async function pathKindExists(path, kind) {
     },
   );
 }
-//@ chunk-dmh8arxx.js:3983-4016 placement
+//@ chunk-wdd04e0j.js:4319-4352 placement
 function isFilePath(path) {
   return pathKindExists(path, "file");
 }
-//@ chunk-dmh8arxx.js:4016-4083 placement
+//@ chunk-wdd04e0j.js:4352-4419 placement
 async function isFileUnderExistingDir(path) {
   let parentKind = await pathKindExists(dirname(path), "dir");
   return parentKind === true ? isFilePath(path) : parentKind;
 }
-//@ chunk-dmh8arxx.js:4083-5065 placement
+//@ chunk-wdd04e0j.js:4419-5401 placement
 /**
  * 查找会话记录文件位置（本地或 v5 存储），返回未知原因或路径。
  */
@@ -131,7 +131,7 @@ async function locateSessionTranscript(sessionId, storage, cap = TRANSCRIPT_LOCA
     };
   }
 }
-//@ chunk-dmh8arxx.js:5065-5293 placement
+//@ chunk-wdd04e0j.js:5401-5629 placement
 async function findTranscriptPathSafe(storage, root, infraSessionId, cap) {
   try {
     return await findTranscriptPath(storage, root, infraSessionId, cap);
@@ -148,7 +148,7 @@ async function findTranscriptPathSafe(storage, root, infraSessionId, cap) {
     };
   }
 }
-//@ chunk-dmh8arxx.js:5293-6635 placement
+//@ chunk-wdd04e0j.js:5629-6971 placement
 async function findTranscriptPath(storage, root, infraSessionId, cap) {
   let transcriptLocation = await resolveTranscriptLocation(root, infraSessionId, storage);
   if (transcriptLocation.v5 === undefined) {

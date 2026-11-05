@@ -1,15 +1,15 @@
 /**
  * @opentelemetry/core/build/src/baggage/utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/core@2.7.1
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_api } from "../../../../api/build/src/index.js";
 import { require_constants_2 } from "./constants.js";
 
-//@ chunk-bwbq4xvm.js:54458-55712 cjs-fingerprint
+//@ chunk-7kayq7nc.js:54544-55798 cjs-fingerprint
 var require_utils = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

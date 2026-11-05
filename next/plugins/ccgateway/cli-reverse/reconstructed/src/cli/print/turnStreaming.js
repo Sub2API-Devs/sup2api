@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：headless 轮次的首字计时、MessageDisplay 钩子与消息列表增量更新
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (20), chunk-e6aww6q8.js (1)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1), chunk-nh1pvp1m.js (21)
+ * attribution: placement 21, layout 1
  */
 import { randomUUID } from "crypto";
 import { open } from "fs/promises";
@@ -39,6 +39,7 @@ import {
 } from "../../services/orgMemory/promptIndex.js";
 import { isClassicEventAdmitted } from "../../plugins/functionHooks/toolCallHooks.js";
 import { claudeMdAccessTrackerSlot } from "../../utils/instructionFileAccess.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { upsertMessageByUuid, getContentText } from "../../utils/messages.js";
 import { eventCallersWrapper2 } from "../../plugins/functionHooks/eventCatalog.js";
 import { isHumanOrUnset } from "../../utils/messageProvenance.js";
@@ -53,7 +54,7 @@ import {
 } from "../../utils/sessionStorage.js";
 import { getSessionId } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:3422713-3423077 placement
+//@ chunk-5xgkngpb.js:3511303-3511667 placement
 /**
  * 执行 MessageDisplay 钩子（316 新增）：输入 turn_id/message_id/index/final/delta，强制同步、关闭逐次遥测；钩子可返回 displayContent 替换屏幕显示。
  */
@@ -88,22 +89,22 @@ async function* executeMessageDisplayHooks(
     credentials,
   });
 }
-//@ chunk-0sfjpx19.js:79975-80163 placement (2.1.88 match: countToolCallsSince, 1)
-function collectReadNotificationsToolUseIds(messages, sinceUuid) {
-  if (!isRealAssistantReply(messages)) return false;
-  let { content } = messages.message;
+//@ chunk-nh1pvp1m.js:72734-72922 placement
+function collectReadNotificationsToolUseIds(message, acceptedToolNames) {
+  if (!isRealAssistantReply(message)) return false;
+  let { content } = message.message;
   if (typeof content === "string") return hasNonWhitespace(content);
   return content.some(
-    (block) =>
-      (block.type === "text" && hasNonWhitespace(block.text)) ||
-      (block.type === "tool_use" && sinceUuid?.has(block.name) === true),
+    (contentBlock) =>
+      (contentBlock.type === "text" && hasNonWhitespace(contentBlock.text)) ||
+      (contentBlock.type === "tool_use" && acceptedToolNames?.has(contentBlock.name) === true),
   );
 }
-//@ chunk-0sfjpx19.js:80163-80243 placement
+//@ chunk-nh1pvp1m.js:72922-73002 placement
 function isToolUseBlockType(type) {
   return type === "tool_use" || type === "server_tool_use" || type === "mcp_tool_use";
 }
-//@ chunk-0sfjpx19.js:80243-83013 placement
+//@ chunk-nh1pvp1m.js:73002-75764 placement
 /**
  * 记录查询链首段文本到达时间（tengu_turn_first_text），区分用户等待。
  */
@@ -271,7 +272,7 @@ function createFirstTextTimer({
     },
   };
 }
-//@ chunk-0sfjpx19.js:83013-83330 placement
+//@ chunk-nh1pvp1m.js:75764-76081 placement
 /**
  * 为一轮无头查询开始计时：生成查询链 id，创建首段文本计时器，并订阅会话的"等待用户决定"状态以暂停计时；dispose 时取消订阅。
  */
@@ -297,12 +298,12 @@ function startTurnTiming({ toolUseContext, sessionState }) {
     },
   };
 }
-//@ chunk-0sfjpx19.js:83367-83400 placement
+//@ chunk-nh1pvp1m.js:76118-76151 placement
 var HOOK_MESSAGE_RATE_PER_SEC = 10;
 var HOOK_MESSAGE_MAX_PER_SEC = 1000 / HOOK_MESSAGE_RATE_PER_SEC;
 var MAX_CONCURRENT_HOOK_MESSAGES = 3;
 var HOOK_MESSAGE_TIMEOUT_MS = 1e4;
-//@ chunk-0sfjpx19.js:83400-86729 placement
+//@ chunk-nh1pvp1m.js:76151-79479 placement
 /**
  * 把钩子附件（非阻塞错误、取消等）转换为 SDK 输出消息。
  */
@@ -541,7 +542,7 @@ function collectHookAttachmentMessages({
     },
   };
 }
-//@ chunk-0sfjpx19.js:86729-87619 placement
+//@ chunk-nh1pvp1m.js:79479-80369 placement
 /**
  * 去掉助手文本中的记忆标签（tengu_cc_memory_tag_stripped）。
  */
@@ -585,7 +586,7 @@ function stripMemoryTags(tracker, message, surface) {
     });
   }
 }
-//@ chunk-0sfjpx19.js:87619-87926 placement
+//@ chunk-nh1pvp1m.js:80369-80676 placement
 /**
  * 清理 displayedMessageContent：只保留仍存在于消息列表中的助手消息 id 对应的条目，无变化时返回原状态。
  */
@@ -604,7 +605,7 @@ function pruneDisplayedContent(conversation, snapshot) {
     displayedMessageContent: kept,
   };
 }
-//@ chunk-0sfjpx19.js:87926-88741 placement
+//@ chunk-nh1pvp1m.js:80676-81492 placement
 /**
  * 对完成的消息运行 MessageDisplay 钩子，失败时输出原消息。
  */
@@ -673,9 +674,10 @@ async function runMessageDisplayHook(session, message, turnId, sessionHooks, sig
     },
   };
 }
-//@ chunk-0sfjpx19.js:88741-88752 placement
+//@ chunk-nh1pvp1m.js:81492-81509 placement
 var MAX_PROGRESS_ROWS_REPLACED = 200;
-//@ chunk-0sfjpx19.js:88752-89280 placement
+var COMPLETED_PROGRESS_ROWS_MIN = 50;
+//@ chunk-nh1pvp1m.js:81509-82037 placement
 function applyMessageListAppend(patch, commit) {
   switch (patch.type) {
     case "append":
@@ -728,7 +730,7 @@ function applyMessageListAppend(patch, commit) {
       return;
   }
 }
-//@ chunk-0sfjpx19.js:89280-90278 placement
+//@ chunk-nh1pvp1m.js:82037-83209 placement
 /**
  * 按 append/replace-all/remove-by-uuid 等操作更新消息列表。
  */
@@ -757,16 +759,28 @@ function applyMessageListEdit(messages, patch) {
       return sliced;
     }
     case "replace-last-ephemeral-progress": {
-      let max = Math.max(0, messages.length - MAX_PROGRESS_ROWS_REPLACED);
+      let searchFloor =
+        codeModeAccepted() && patch.message.data.type === "repl_tool_call"
+          ? 0
+          : Math.max(0, messages.length - MAX_PROGRESS_ROWS_REPLACED);
       let data = patch.message.data;
-      for (let j = messages.length - 1; j >= max; j--) {
+      for (let j = messages.length - 1; j >= searchFloor; j--) {
         let row = messages[j];
         if (row?.type !== "progress") break;
         let rowData = row.data;
-        if (row.parentToolUseID === patch.message.parentToolUseID && rowData.type === data.type)
+        if (
+          row.parentToolUseID === patch.message.parentToolUseID &&
+          rowData.type === data.type &&
+          (!codeModeAccepted() ||
+            rowData.type !== "repl_tool_call" ||
+            data.type !== "repl_tool_call" ||
+            rowData.toolUseId === data.toolUseId)
+        )
           return messages.with(j, patch.message);
       }
-      return [...messages, patch.message];
+      return codeModeAccepted()
+        ? [...dropCompletedProgressRow(messages, patch.message), patch.message]
+        : [...messages, patch.message];
     }
     case "append-or-move-by-uuid":
       return upsertMessageByUuid(messages, patch.message);
@@ -776,7 +790,28 @@ function applyMessageListEdit(messages, patch) {
       return patch.updater(messages);
   }
 }
-//@ chunk-0sfjpx19.js:90315-90814 placement
+//@ chunk-nh1pvp1m.js:83209-83543 layout
+function dropCompletedProgressRow(messages, message) {
+  if (message.data.type !== "repl_tool_call") return messages;
+  let completedCount = 0;
+  let lastCompletedIndex = -1;
+  let max = Math.max(0, messages.length - MAX_PROGRESS_ROWS_REPLACED);
+  for (let j = messages.length - 1; j >= max; j--) {
+    let row = messages[j];
+    if (row?.type !== "progress") break;
+    let rowData = row.data;
+    if (
+      row.parentToolUseID === message.parentToolUseID &&
+      rowData.type === "repl_tool_call" &&
+      (rowData.phase === "complete" || rowData.phase === "error")
+    ) {
+      completedCount++;
+      lastCompletedIndex = j;
+    }
+  }
+  return completedCount < COMPLETED_PROGRESS_ROWS_MIN ? messages : messages.toSpliced(lastCompletedIndex, 1);
+}
+//@ chunk-nh1pvp1m.js:83580-84079 placement
 function describeDroppedNotes(deliver) {
   let resolved = Promise.resolve();
   let generation = 0;
@@ -820,7 +855,7 @@ function describeDroppedNotes(deliver) {
     },
   };
 }
-//@ chunk-0sfjpx19.js:90814-90910 placement
+//@ chunk-nh1pvp1m.js:84079-84175 placement
 /**
  * 创建回合流桥接：包装 describeDroppedNotes 提供 begin/enqueue/settled/sever。
  */
@@ -833,7 +868,7 @@ function createTurnStreamBridge(deliver) {
     sever: droppedNotes.sever,
   };
 }
-//@ chunk-0sfjpx19.js:90910-91367 placement
+//@ chunk-nh1pvp1m.js:84175-84632 placement
 function buildTurnStartEvent(turnStart) {
   let { newMessages, input, signal, abort } = turnStart;
   let last = newMessages.findLast((newMessage) => newMessage.type === "user" && !newMessage.isMeta);
@@ -863,7 +898,7 @@ function buildTurnStartEvent(turnStart) {
   resolvePromptEntryWaiters(newMessages);
   return turnEvents;
 }
-//@ chunk-0sfjpx19.js:91367-91596 placement
+//@ chunk-nh1pvp1m.js:84632-84861 placement
 function abortTurnSignal(messageQueue, signal) {
   submitMarks.prune(messageQueue.getCommandQueue());
   return new Promise((resolve) => {
@@ -884,17 +919,17 @@ function abortTurnSignal(messageQueue, signal) {
     );
   });
 }
-//@ chunk-0sfjpx19.js:91596-91655 placement
+//@ chunk-nh1pvp1m.js:86562-86621 placement
 /**
  * 安装远程出站抑制器：按当前会话 id 判断是否抑制远程出站。
  */
 function installRemoteEgressSuppressor() {
   bridgeHostState().remoteEgressSuppressed = () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId()));
 }
-//@ chunk-0sfjpx19.js:91691-91738 placement
+//@ chunk-nh1pvp1m.js:86657-86704 placement
 var MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES = 8388608;
 var ARTIFACT_COMMENT_MONITOR_NAME = '"artifact-comment-monitor"';
-//@ chunk-0sfjpx19.js:91738-91827 placement
+//@ chunk-nh1pvp1m.js:86704-86793 placement
 /**
  * 取会话轻量 transcript 的文件大小（文件不存在返回 undefined）。
  */
@@ -908,7 +943,7 @@ async function transcriptFileSize(sessionId) {
         size,
       };
 }
-//@ chunk-0sfjpx19.js:91827-91945 placement
+//@ chunk-nh1pvp1m.js:86793-86911 placement
 async function fileSizeOrUndefined(transcriptPathForSession) {
   try {
     let handle = await open(transcriptPathForSession, "r");
@@ -922,20 +957,20 @@ async function fileSizeOrUndefined(transcriptPathForSession) {
   }
 }
 export {
-  describeDroppedNotes,
-  MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES,
-  ARTIFACT_COMMENT_MONITOR_NAME,
-  applyMessageListAppend,
-  applyMessageListEdit,
-  pruneDisplayedContent,
   installRemoteEgressSuppressor,
   transcriptFileSize,
   createTurnStreamBridge,
   abortTurnSignal,
+  applyMessageListEdit,
+  applyMessageListAppend,
   startTurnTiming,
   buildTurnStartEvent,
   runMessageDisplayHook,
   collectReadNotificationsToolUseIds,
+  pruneDisplayedContent,
   collectHookAttachmentMessages,
   createFirstTextTimer,
+  describeDroppedNotes,
+  MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES,
+  ARTIFACT_COMMENT_MONITOR_NAME,
 };

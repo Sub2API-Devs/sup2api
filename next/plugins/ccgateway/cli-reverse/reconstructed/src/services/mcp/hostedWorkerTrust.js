@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管 worker 信任。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0er4bhms.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6n66vx3h.js (2)
  * attribution: placement 2
  */
 import { isDeepStrictEqual } from "util";
@@ -15,7 +15,7 @@ import { sessionHostKind } from "../../utils/telemetry/memorySummary.js";
 import { getTLSFetchOptions } from "../../utils/mtls.js";
 import { proxyAwareFetch } from "../../upstreamproxy/proxyFetch.js";
 
-//@ chunk-0er4bhms.js:378-468 placement
+//@ chunk-6n66vx3h.js:378-468 placement
 /**
  * 托管 worker 的专用 fetch 是否启用（环境变量或 tengu_reactive_quilt）。
  */
@@ -25,7 +25,7 @@ function isHostedWorkerFetchEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_reactive_quilt", false)
   );
 }
-//@ chunk-0er4bhms.js:468-1042 placement
+//@ chunk-6n66vx3h.js:468-1042 placement
 /**
  * 托管 worker 中 MCP 请求的 fetch：TLS 设置与当前一致时走主机专用通道；否则只保留与当前 CA 列表的交集，交集为空时拒绝发送并提示重连。
  */

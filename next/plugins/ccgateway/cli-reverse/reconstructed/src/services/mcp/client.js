@@ -3,18 +3,17 @@
  *
  * 并入已有模块：MCP 客户端
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/client.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-23fm9f0d.js (1), chunk-3pdgd98q.js (3), chunk-5bdzenzx.js (1), chunk-7zr1t9gr.js (4), chunk-8t8n4kdh.js (214), chunk-cyj440je.js (5), chunk-e6aww6q8.js (21), chunk-mdk8a5r0.js (1), chunk-qsdkv90t.js (2), chunk-z1n5m6nf.js (80)
- * attribution: fingerprint 35, placement 76, layout 177, callgraph-fingerprint 3, sole-consumer 37, affinity 2, file-local 3
+ * pieces: chunk-0cf4tfjz.js (1), chunk-4wmswyss.js (4), chunk-5xgkngpb.js (21), chunk-br8c6c8g.js (2), chunk-czq1j3j2.js (1), chunk-dh16zjm4.js (1), chunk-eeh1dqm6.js (3), chunk-fmy4vc7c.js (5), chunk-h44h5gdv.js (79), chunk-sywnjtqb.js (216)
+ * attribution: fingerprint 21, placement 273, layout 35, callgraph-fingerprint 2, callgraph-witnessed 1, file-local 1
  */
 import { createHash, randomUUID } from "crypto";
-import { join, dirname } from "path";
+import { dirname } from "path";
 import { pathToFileURL } from "url";
 import { Readable } from "stream";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  isENOENT,
   sanitizedFeatureErrorCodeForTelemetry,
   errorMessage,
   getErrnoCode,
@@ -42,7 +41,6 @@ import {
   getIsNonInteractiveSession,
   isPrintInputClosed,
   isSingleShotPrintSession,
-  isSessionPersistenceDisabled,
 } from "../../bootstrap/state.js";
 import { CLAUDE_ARTIFACTS, REMOTE_DEVICES, officeBridgeListingState } from "./firstPartyServerIds.js";
 import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
@@ -50,7 +48,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
 } from "../analytics/growthbook.js";
-import { findServersByName, normalizeNameForMCP } from "./normalization.js";
+import { findServersByName, CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import {
   firstLineOf,
@@ -98,7 +96,7 @@ import {
   sanitizeCallMark,
   INTERRUPTED_CALL_NOTICE,
   describeUnansweredCall,
-  MCP_ANSWER_STREAM_ENDED,
+  QUESTION_UNANSWERED_CODE,
   ANSWER_STREAM_GRACE_MS_2,
   MCP_CALL_UNANSWERED,
   CALL_OUTCOME_UNKNOWN_NOTICE,
@@ -128,18 +126,9 @@ import {
   fromEnumOpt,
   fromNumber,
 } from "../analytics/safeMetadata.js";
-import { logMCPDebug, logError, logMCPError, keepsMCPDebug } from "../../utils/log.js";
-import {
-  emptyCleanupResult,
-  getCutoffDate,
-  unlinkIfOld,
-  isCleanupQuietFsErrno,
-} from "../../utils/cleanup.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
-import { getFsImplementation } from "../../utils/fsOperations.js";
-import { logForDebugging } from "../../utils/debug.js";
+import { logMCPDebug, logMCPError, keepsMCPDebug, logError } from "../../utils/log.js";
 import { isDiscoveryCacheOn, isDiscoveryCacheUsable, isUnresolved } from "./mcpAccountKey.js";
-import { decorateMcpTools, dynamicServerConnectorId } from "./mcpToolDecoration.js";
+import { decorateMcpTools, withDisplayName, dynamicServerConnectorId } from "./mcpToolDecoration.js";
 import { identityId, identityId2 } from "../../types/ids.js";
 import {
   SdkHttpError,
@@ -148,7 +137,7 @@ import {
   SdkError,
   ProtocolErrorCode,
   isJSONRPCRequest,
-  isJSONRPCErrorResponse,
+  isJSONRPCErrorResponse as isJSONRPCErrorResponse_2,
   isInitializeMessage,
   isInitializedNotification,
   createFetchWithInit,
@@ -156,10 +145,10 @@ import {
   OAuthError,
 } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 import {
-  isListAuthError,
-  isClaudeAiBearerRejectedError,
   isListAuthError_2,
   isClaudeAiBearerRejectedError_2,
+  isListAuthError,
+  isClaudeAiBearerRejectedError,
 } from "./listAuthError.js";
 import {
   IssuerEchoCrossOriginError,
@@ -184,26 +173,35 @@ import {
   clearMcpOAuthStubIfTokenless,
 } from "./auth.js";
 import {
-  HttpBodyOverflowError,
+  HttpBodyOverflowError_2,
   createBoundedFetch,
   BoundedStdioClientTransport,
-  StdoutOverflowError,
+  StdoutOverflowError_2,
   MCP_BODY_LIMIT,
-  STOPPED_READING_NOTE,
+  STOPPED_READING_NOTE_2,
 } from "./boundedTransports.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 import {
   readNeedsAuthCache,
+  getConnectionCache,
   needsAuthCacheSpace,
   needsAuthCachePath,
   clearAuthCacheRead,
-  getConnectionCache,
   memoizeWithExternalCache,
   AUTH_MESSAGES,
   memoizeWithLRU,
   hasLapsedCcrSignIn,
   mcpAuthToolsFor,
 } from "./needsAuthCache.js";
+import {
+  isCcrHostedConfig,
+  isWithdrawnBuiltinPluginServer,
+  withdrawnBuiltinPluginServerError,
+  isMcpServerBlockedAtConnectTime,
+  isMcpServerDisabled,
+  isMcpDialBlockedByPolicy,
+  getAllMcpConfigs,
+} from "./config.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { getFileReader } from "../../utils/fileStore.js";
@@ -294,6 +292,8 @@ import {
   stringSchema,
   literal,
   array,
+  record,
+  unknown,
   looseObject,
   union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -325,9 +325,9 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 import { isFirstPartyProvider, shouldPropagateTraceContext } from "../../utils/model/providers.js";
 import { getMCPUserAgent } from "../../utils/http.js";
 import {
-  SUPPORTED_IMAGE_TYPES_2,
+  SUPPORTED_IMAGE_TYPES_4,
   sniffImageMediaType,
-  SUPPORTED_IMAGE_TYPES_3,
+  SUPPORTED_IMAGE_TYPES_2,
 } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import {
   getActiveSpanId,
@@ -338,6 +338,7 @@ import {
 } from "../../utils/telemetry/sessionTracing.js";
 import {
   requestTimeoutForBody,
+  proxyFillsListing,
   fileReferenceToolToFill,
   wrapFileReferenceTool,
   filledCallRequestMeta,
@@ -347,6 +348,7 @@ import {
   withheldFileReferenceErrorForLog,
 } from "./fileReference/wrapFileReferenceTool.js";
 import { pluginToolStagingRoot } from "../../utils/tempDir.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { getAnnouncedDirectories } from "../../utils/announcedDirectories.js";
 import { AjvJsonSchemaValidator } from "../../../vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs";
 import {
@@ -359,11 +361,11 @@ import {
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   getCachedDiscoverResult,
-  isStatelessClaudeAiProxy,
-  answerGetStreamLocally,
-  getCachedInitializeResult,
+  isStatelessClaudeAiProxy_2,
+  answerGetStreamLocally_2,
+  getCachedInitializeResult_2,
   getLocalDiscoverAnswer,
-  answerHandshakeLocally,
+  answerHandshakeLocally_2,
   trackCallInProgress,
   incrementCallsInProgress,
   decrementCallsInProgress,
@@ -385,26 +387,6 @@ import {
 } from "./serverDiscover.js";
 import { isStdioConfig, isClaudeAiProxyServer } from "./builtinServerNames.js";
 import {
-  ListToolsResultSchema,
-  JSONRPCMessageSchema,
-  ListResourcesResultSchema,
-  ListResourceTemplatesResultSchema,
-  ListPromptsResultSchema,
-  ElicitRequestURLParamsSchema,
-  ImplementationSchema,
-  ServerCapabilitiesSchema,
-  ToolSchema,
-  PromptSchema,
-  ResourceSchema,
-  ResourceTemplateSchema,
-  CompatibilityCallToolResultSchema,
-  CLIENT_CAPABILITIES_META_KEY,
-  ResultSchema,
-  ElicitRequestParamsSchema,
-  InitializeResultSchema,
-  SUPPORTED_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS_2,
-} from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
-import {
   setAheadPage,
   takeAheadPage,
   armAheadExpiry,
@@ -425,25 +407,39 @@ import { redactUrlSecrets } from "../../utils/urlRedaction.js";
 import { getWebSocketTLSOptions } from "../../utils/mtls.js";
 import { getWebSocketProxyUrl, getProxyFetchOptions } from "../../utils/proxy.js";
 import { WebSocketTransport } from "../../utils/mcpWebSocketTransport.js";
+import {
+  JSONRPCMessageSchema as JSONRPCMessageSchema_2,
+  ListResourcesResultSchema,
+  ListResourceTemplatesResultSchema,
+  ListPromptsResultSchema,
+  ElicitRequestURLParamsSchema as ElicitRequestURLParamsSchema_2,
+  ListToolsResultSchema,
+  ToolSchema as ToolSchema_2,
+  ImplementationSchema as ImplementationSchema_2,
+  ServerCapabilitiesSchema as ServerCapabilitiesSchema_2,
+  PromptSchema as PromptSchema_2,
+  ResourceSchema as ResourceSchema_2,
+  ResourceTemplateSchema as ResourceTemplateSchema_2,
+  CompatibilityCallToolResultSchema as CompatibilityCallToolResultSchema_2,
+  ResultSchema,
+  ElicitRequestParamsSchema,
+  InitializeResultSchema,
+} from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
 import { redactUrlsInText } from "../../utils/redaction/urlRedaction.js";
 import { hostedWorkerFetch } from "./hostedWorkerTrust.js";
 import { issuerKey_3 } from "./xaaIdpLogin.js";
 import { getRequestTimingStore } from "../tools/toolExecution.js";
-import {
-  isCcrHostedConfig,
-  isWithdrawnBuiltinPluginServer,
-  withdrawnBuiltinPluginServerError,
-  isMcpServerBlockedAtConnectTime,
-  isMcpServerDisabled,
-  isMcpDialBlockedByPolicy,
-  getAllMcpConfigs,
-} from "./config.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { isClaudeInChromeMCPServer } from "../../utils/claudeInChrome/common.js";
 import { BLOCKED_BY_POLICY_REASON, DISABLED_IN_MCP_REASON } from "./redactMcpErrors.js";
 import { assertProgramLaunchAllowed } from "../../utils/disklessSession.js";
-import { shouldUseMcpAllowlistEnv, agentProxyEnv, subprocessEnv } from "../../utils/subprocessEnv.js";
-import { getDefaultEnvironment } from "../../../vendor/@modelcontextprotocol/client/dist/stdio.mjs";
+import {
+  shouldUseMcpAllowlistEnv,
+  agentProxyEnv,
+  subprocessEnv,
+  dropEmptyBedrockBearer,
+} from "../../utils/subprocessEnv.js";
+import { getDefaultEnvironment_2 } from "../../../vendor/@modelcontextprotocol/client/dist/stdio.mjs";
 import { runWithPluginWriteScope } from "../../utils/plugins/pluginScopedWrite.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 import { isMcpServerBackingToolHook, releaseMcpToolCgroup } from "../../utils/hooks/mcpToolHookCgroup.js";
@@ -471,6 +467,7 @@ import {
 import {
   installModernResultBackfill,
   shouldPauseForQuestions,
+  isProbeAllowed,
   installQuestionPause,
 } from "./resultNormalization.js";
 import { registerChildMemory } from "../../utils/telemetry/memorySummary.js";
@@ -487,6 +484,15 @@ import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
 import { SSL_CERT_ERROR_CODES, sanitizableErrorCode } from "../api/errorUtils.js";
 import { protocolVersionLiteral } from "../../../vendor/@modelcontextprotocol/core/dist/schemas-DscsoNZN.mjs";
 import { scrubErrorText } from "../../utils/accessibility/screenReader.js";
+import {
+  postedEndpointErrorText,
+  classifyMcpErrorSourceCategory,
+  CCR_NEEDS_APPROVAL_CODE,
+  isTruncatedBodyError,
+  McpToolResultNotReadError,
+  isMalformedAfterAuthChallenge,
+  McpResponseSchemaError,
+} from "./mcpResultErrors.js";
 import { registrationStatusFields } from "./registrationStatus.js";
 import { primeDiscoveryCacheFlag, MCP_URL_ELICITATION_DIALOG } from "./elicitationDialogs.js";
 import {
@@ -498,14 +504,6 @@ import { mcpGateError, reservedAddressRefusalText } from "./mcpToggleMessages.js
 import { isSameConnectedClient, listToolsWithMemo, settleToolListingMemo } from "./toolSchemaValidation.js";
 import { judgeGate } from "../analytics/growthbookGates.js";
 import { boundDial } from "./dialFailureLatch.js";
-import {
-  classifyMcpErrorSourceCategory,
-  CCR_NEEDS_APPROVAL_CODE,
-  isTruncatedBodyError,
-  McpToolResultNotReadError,
-  isMalformedAfterAuthChallenge,
-  McpResponseSchemaError,
-} from "./mcpResultErrors.js";
 import { hasChannelCapability } from "./channelNotification.js";
 import { toolUiMeta, describeHiddenMcpTool } from "./toolNameLimits.js";
 import { requiresConnectorGrant, connectorServerId, recordClaudeAiMcpConnected } from "./claudeai.js";
@@ -516,6 +514,7 @@ import {
   isServerIdentityActive,
   isLegacyKeyRefused,
   isLegacyKeyOwnedElsewhere,
+  enforcesGrants,
 } from "./serverIdentity.js";
 import { MCPTool } from "../../tools/MCPTool/MCPTool.js";
 import {
@@ -537,6 +536,7 @@ import { applyBlockedToolPolicy } from "./blockedServers.js";
 import { judgeToolSchemaSendability } from "./toolSchemaSendability.js";
 import { joinDescription } from "../../remote/tools/inputSchemaFlatten.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
+import { countByAlias } from "../../../vendor/lodash-es/countBy.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import {
   isMemoryToolServer,
@@ -555,6 +555,7 @@ import {
   isRemoteTransport,
   registerConfiguredMcpServers,
 } from "./mcpStandardKeys.js";
+import { serverProvenanceOf } from "../api/toolProvenance.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import {
   createChromePermissionHandler,
@@ -615,7 +616,7 @@ import { wrapHoldAware } from "../../plugins/functionHooks/inputHold.js";
 import { resolveSdkUrl } from "../../cli/transports/sdkUrlValidation.js";
 import { ANTHROPIC_FILEINPUTS } from "../mcpServe/fileInputs.js";
 import { recordPluginActivity } from "../../utils/pluginActivity.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logChromeToolsAdded } from "../../utils/claudeInChrome/telemetry.js";
 import { listAllPages_2, listToolsModern } from "./listPagination.js";
 import { getMcpInfoFromConnection } from "./types.js";
@@ -627,7 +628,7 @@ import { clearKeychainCache } from "../../utils/secureStorage/macOsKeychainHelpe
 import { applyMcpServerConfig } from "../../components/mcp/MCPListPanel.js";
 import { ListMcpResourcesTool } from "../../tools/ListMcpResourcesTool/ListMcpResourcesTool.js";
 import { ReadMcpResourceTool } from "../../tools/ReadMcpResourceTool/ReadMcpResourceTool.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { listDirectoryResourceTool } from "./skillDirectoryResource.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { isIneligibleClaudeAiProxy } from "./claudeAiEligibility.js";
@@ -643,12 +644,20 @@ import {
 } from "../../utils/mcpOutputStorage.js";
 import {
   toolResultStoreOrNull,
+  noteResult,
   persistToolResult,
   toolResultsDir,
   isPersistError,
 } from "../../utils/toolResultStorage.js";
-import { addToHistory_2 } from "../../history.js";
+import { addToHistory_2, addToHistory } from "../../history.js";
 import { maybeResizeAndDownsampleImageBlock, createImageMetadataText } from "../../utils/imageResizer.js";
+import {
+  unreadOutcome,
+  attachmentNoteFor,
+  textResultToolUseId,
+  noteGmailAttachmentNotRead,
+  noteGmailAttachmentShown,
+} from "./googleConnectorAttachments.js";
 import {
   stripTextBlockMeta,
   mcpContentNeedsTruncation,
@@ -659,12 +668,17 @@ import {
 import { notRecordedLength } from "../../utils/telemetry/accountMemoryRedaction.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
-  runElicitationHooks_2,
-  runElicitationResultHooks_2,
-  handleElicitationRequest_2,
   runElicitationHooks,
   runElicitationResultHooks,
+  handleElicitationRequest,
+  runElicitationHooks_2,
+  runElicitationResultHooks_2,
 } from "./elicitationHandler.js";
+import { hasMcpInboundDoor } from "./mcpInboundDoor.js";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  SUPPORTED_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS_2,
+} from "../../../vendor/@modelcontextprotocol/core/dist/schemas-lGLjBX8n.cjs";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { shortTaskLabel } from "./mcpTaskCapability.js";
 import { detectCodeIndexingFromMcpServerName } from "../../utils/codeIndexing.js";
@@ -672,18 +686,18 @@ import { SdkControlClientTransport } from "./SdkControlTransport.js";
 import {
   McpError,
   ErrorCode,
-  isJSONRPCErrorResponse as isJSONRPCErrorResponse_2,
-  JSONRPCMessageSchema as JSONRPCMessageSchema_2,
+  isJSONRPCErrorResponse,
+  JSONRPCMessageSchema,
   ListRootsRequestSchema,
   ElicitRequestSchema,
-  ElicitRequestURLParamsSchema as ElicitRequestURLParamsSchema_2,
-  ImplementationSchema as ImplementationSchema_2,
-  ServerCapabilitiesSchema as ServerCapabilitiesSchema_2,
-  ToolSchema as ToolSchema_2,
-  PromptSchema as PromptSchema_2,
-  ResourceSchema as ResourceSchema_2,
-  ResourceTemplateSchema as ResourceTemplateSchema_2,
-  CompatibilityCallToolResultSchema as CompatibilityCallToolResultSchema_2,
+  ElicitRequestURLParamsSchema,
+  ImplementationSchema,
+  ServerCapabilitiesSchema,
+  ToolSchema,
+  PromptSchema,
+  ResourceSchema,
+  ResourceTemplateSchema,
+  CompatibilityCallToolResultSchema,
   CallToolResultSchema,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import {
@@ -691,17 +705,17 @@ import {
   StreamableHTTPClientTransport,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js";
 import {
-  HttpBodyOverflowError_2,
+  HttpBodyOverflowError,
   boundedFetch,
-  isStatelessClaudeAiProxy_2,
-  answerGetStreamLocally_2,
+  isStatelessClaudeAiProxy,
+  answerGetStreamLocally,
   BoundedStdioTransport,
-  getCachedInitializeResult_2,
+  getCachedInitializeResult,
   cachedDiscoverOutcome,
-  answerHandshakeLocally_2,
-  StdoutOverflowError_2,
+  answerHandshakeLocally,
+  StdoutOverflowError,
   HTTP_BODY_LIMITS,
-  STOPPED_READING_NOTE_2,
+  STOPPED_READING_NOTE,
   netModule,
 } from "./transportGuards.js";
 import {
@@ -725,7 +739,7 @@ import {
 import {
   primeEnsureConnectedClient,
   clearDiscoveryForServer_2,
-  clearServerCache_4,
+  clearServerCache_3,
   detachAndCloseConnection_2,
   isLegacyProtocolEra,
   hasLiveConnection_2,
@@ -740,17 +754,17 @@ import {
   mergeRequestHeaders_2,
   wrapFetchWithCcrSessionAuth_2,
   wrapFetchWithCliOwnedBearer_2,
-  createClaudeAiProxyFetch_2,
+  createClaudeAiProxyFetch,
   isAuthFailure_2,
   handleRemoteConnectAuthError_2,
-  handleRemoteAuthFailure_2,
+  handleRemoteAuthFailure,
   logMcpConnectionOtelEvent_2,
 } from "./connectAuth.js";
 import {
   SSEClientTransport,
   SseError,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/sse.js";
-import { getDefaultEnvironment_2 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
+import { getDefaultEnvironment } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
 import { Client } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/index.js";
 import { UnauthorizedError } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js";
 import { validateHostManifest_2, logManifestOutcomeV1 } from "./sdkManifest.js";
@@ -763,7 +777,7 @@ import {
 } from "../../tasks/LocalAgentTask/agentMetaFiles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:715-954 fingerprint (2.1.88 match: McpAuthError, 0.526)
+//@ chunk-fmy4vc7c.js:825-1064 fingerprint (2.1.88 match: McpAuthError, 0.526)
 /**
  * McpAuthError：MCP 认证错误（带服务器名）。
  */
@@ -781,12 +795,12 @@ class McpAuthError extends Error {
     this.serverName = serverName;
   }
 }
-//@ chunk-cyj440je.js:954-1049 layout
+//@ chunk-fmy4vc7c.js:1064-1159 layout
 /**
  * McpToolFileInputRejectedError：MCP 工具文件输入被拒绝。
  */
 let McpToolFileInputRejectedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:954", () => {
+deferInit("chunk-fmy4vc7c.js:1064", () => {
   McpToolFileInputRejectedError = class McpToolFileInputRejectedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -797,12 +811,12 @@ deferInit("chunk-cyj440je.js:954", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:1049-1697 fingerprint (2.1.88 match: McpSessionExpiredError, 0.409)
+//@ chunk-fmy4vc7c.js:1159-1807 fingerprint (2.1.88 match: McpSessionExpiredError, 0.409)
 /**
  * McpSessionExpiredError：HTTP 会话过期（404）或连接关闭时抛出，expiryKind 区分原因。
  */
 let McpSessionExpiredError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:1049", () => {
+deferInit("chunk-fmy4vc7c.js:1159", () => {
   McpSessionExpiredError = class McpSessionExpiredError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -831,12 +845,12 @@ deferInit("chunk-cyj440je.js:1049", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:1697-2321 layout
+//@ chunk-fmy4vc7c.js:1807-2432 layout
 /**
  * McpCredentialStoreUnavailableError：凭证存储读不了（如 macOS 钥匙串锁定）时抛出，消息给出处理办法。
  */
 let McpCredentialStoreUnavailableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:1697", () => {
+deferInit("chunk-fmy4vc7c.js:1807", () => {
   McpCredentialStoreUnavailableError = class McpCredentialStoreUnavailableError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -857,12 +871,12 @@ deferInit("chunk-cyj440je.js:1697", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:2321-2427 fingerprint (2.1.88 match: McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.82)
+//@ chunk-fmy4vc7c.js:2432-2538 fingerprint (2.1.88 match: McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.82)
 /**
  * MCP 工具调用失败的错误类（name 为 McpToolCallError），在通用错误基础上携带服务器返回的 `_meta`（mcpMeta），供遥测与结果展示。
  */
 let McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:2321", () => {
+deferInit("chunk-fmy4vc7c.js:2432", () => {
   McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS = class McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -874,7 +888,7 @@ deferInit("chunk-cyj440je.js:2321", () => {
     }
   };
 });
-//@ chunk-3pdgd98q.js:226-303 fingerprint (2.1.88 match: getConnectionTimeoutMs, 1)
+//@ chunk-eeh1dqm6.js:226-303 fingerprint (2.1.88 match: getConnectionTimeoutMs, 1)
 /**
  * MCP 连接超时：env `MCP_TIMEOUT`（>0，上限 2^31-1）否则默认 30000ms。
  */
@@ -882,7 +896,7 @@ function getConnectionTimeoutMs() {
   let MCP_TIMEOUT = env.MCP_TIMEOUT;
   return MCP_TIMEOUT && MCP_TIMEOUT > 0 ? Math.min(MCP_TIMEOUT, 2147483647) : 30000;
 }
-//@ chunk-3pdgd98q.js:303-391 placement
+//@ chunk-eeh1dqm6.js:303-391 placement
 /**
  * 连接超时（MCP_CONNECT_TIMEOUT_MS，默认 5000）。
  */
@@ -892,40 +906,40 @@ function getConnectTimeoutMs() {
     ? Math.min(MCP_CONNECT_TIMEOUT_MS, 2147483647)
     : 5000;
 }
-//@ chunk-3pdgd98q.js:391-421 placement
+//@ chunk-eeh1dqm6.js:391-421 placement
 /**
  * 短暂重试间隔（500 毫秒）。
  */
 var TRANSPORT_FALLBACK_TIMEOUT_MS = 2000;
 var REMOTE_CONNECT_TIMEOUT_MS = 8000;
 var SHORT_RETRY_MS = 500;
-//@ chunk-7zr1t9gr.js:302-360 placement
+//@ chunk-4wmswyss.js:302-360 placement
 /**
  * MCP 服务器不被允许时的错误文案。
  */
 var MCP_SERVER_NOT_ALLOWED_MESSAGE = "Error POSTing to endpoint: MCP server not allowed";
-//@ chunk-7zr1t9gr.js:667-722 placement
+//@ chunk-4wmswyss.js:667-722 placement
 /**
  * 取 artifacts 的 MCP 客户端。
  */
 function artifactsMcpClient() {
   return (getMcpClientsFromAccessor() ?? []).find((client) => client.name === CLAUDE_ARTIFACTS);
 }
-//@ chunk-7zr1t9gr.js:722-780 placement
+//@ chunk-4wmswyss.js:722-780 placement
 /**
  * 取“该行未被服务”的记录。
  */
 function getMcpEntryRowNotServed() {
   return hasLiveState() ? getLiveState().mcpEntryRowNotServed : null;
 }
-//@ chunk-7zr1t9gr.js:780-813 placement
+//@ chunk-4wmswyss.js:780-813 placement
 /**
  * 判断某行是否正是未服务的记录。
  */
 function isEntryRowNotServed(entryRow) {
   return getMcpEntryRowNotServed() === entryRow;
 }
-//@ chunk-e6aww6q8.js:2145813-2145923 placement
+//@ chunk-5xgkngpb.js:2199195-2199305 placement
 /**
  * 判断 MCP 输出截断时是否使用子代理提示（环境变量覆盖优先，否则看开关）。
  */
@@ -935,7 +949,7 @@ function useSubagentTruncationPrompt() {
     ? MCP_TRUNCATION_PROMPT_OVERRIDE !== "legacy"
     : getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_subagent_prompt", false);
 }
-//@ chunk-e6aww6q8.js:3289283-3289667 fingerprint (2.1.88 match: ensureConnectedClient, 0.344)
+//@ chunk-5xgkngpb.js:3375076-3375460 fingerprint (2.1.88 match: ensureConnectedClient, 0.345)
 /**
  * ensureConnectedClient：按名字找客户端并确认已连接，找不到列出可用服务器名报错。
  */
@@ -958,7 +972,7 @@ function ensureConnectedClient_2(clients, serverName) {
     );
   return client;
 }
-//@ chunk-e6aww6q8.js:3806756-3806859 placement
+//@ chunk-5xgkngpb.js:3903909-3904012 placement
 /**
  * 判断 MCP 配置的 URL 是否为空（未配置）。
  */
@@ -968,7 +982,7 @@ function isUnconfiguredUrl(serverRef) {
     (!serverRef.configError && "url" in serverRef && serverRef.url.trim() === "")
   );
 }
-//@ chunk-e6aww6q8.js:3806859-3807903 placement
+//@ chunk-5xgkngpb.js:3904012-3905109 placement
 /**
  * 生成 MCP 服务器配置的规范化 JSON 指纹：去掉来源/缓存/资格等元字段，stdio 补默认 type 与 args，URL 查询参数排序，对象键排序，未配置的 URL 标记 unconfigured。
  */
@@ -998,6 +1012,7 @@ function canonicalMcpConfigKey(config) {
   delete canonical.eligible;
   delete canonical.ineligibleReason;
   delete canonical.enterpriseManaged;
+  if (canonical.type !== "claudeai-proxy") delete canonical.displayName;
   if (canonical.type === "stdio" || (canonical.type === undefined && "command" in canonical)) {
     canonical.type = "stdio";
     canonical.args = canonical.args ?? [];
@@ -1032,23 +1047,23 @@ function canonicalMcpConfigKey(config) {
     return value;
   });
 }
-//@ chunk-e6aww6q8.js:3807903-3807980 placement
+//@ chunk-5xgkngpb.js:3905109-3905186 placement
 /**
  * 配置内容的 SHA-256 前 16 位（缓存键）。
  */
 function configHash(config) {
   return createHash("sha256").update(canonicalMcpConfigKey(config)).digest("hex").slice(0, 16);
 }
-//@ chunk-e6aww6q8.js:3807980-3808019 placement
+//@ chunk-5xgkngpb.js:3905186-3905225 placement
 /**
  * 服务器缓存键（名字 + 配置哈希）。
  */
 function serverCacheKey(serverName, config) {
   return `${serverName}-${configHash(config)}`;
 }
-//@ chunk-e6aww6q8.js:3808134-3808155 placement
+//@ chunk-5xgkngpb.js:3905340-3905361 placement
 var CU_DESKTOP_BINARY_NAME = "cu-desktop";
-//@ chunk-e6aww6q8.js:3808155-3808308 placement
+//@ chunk-5xgkngpb.js:3905361-3905515 placement
 /**
  * 托管桌面会话的 computer-use 接入：mcpConfig {"computer-use": stdio /opt/cu-desktop/cu-desktop mcp, scope dynamic}，并把只读动作加入允许列表。
  */
@@ -1067,29 +1082,29 @@ function getHostedDesktopComputerUseConfig() {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3808308-3808421 placement (2.1.88 match: getServerCommandArray, 1)
+//@ chunk-5xgkngpb.js:3905515-3905628 placement (2.1.88 match: getServerCommandArray, 1)
 function isDesktopComputerUseCommand(config) {
   return (
     (config.type === undefined || config.type === "stdio") &&
     [config.command, ...(config.args ?? [])].some((arg) => arg?.includes(CU_DESKTOP_BINARY_NAME))
   );
 }
-//@ chunk-e6aww6q8.js:3874164-3874197 placement
+//@ chunk-5xgkngpb.js:3972916-3972949 placement
 /**
  * 取可安全记录进日志的服务器源地址。
  */
 function loggingSafeOrigin(serverConfig) {
   return safeOrigin(getLoggingSafeMcpBaseUrl(serverConfig));
 }
-//@ chunk-e6aww6q8.js:3874197-3874221 placement
+//@ chunk-5xgkngpb.js:3972949-3972973 placement
 /**
  * 按宿主保存的回合调度器映射。
  */
 var turnsByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3874197", () => {
+deferInit("chunk-5xgkngpb.js:3972949", () => {
   turnsByHost = new HostScoped(() => ({}));
 });
-//@ chunk-e6aww6q8.js:3874221-3874328 placement
+//@ chunk-5xgkngpb.js:3972973-3973080 placement
 /**
  * 在当前回合调度器中映射执行（没有调度器时直接映射）。
  */
@@ -1097,7 +1112,7 @@ async function mapInTurns(items, mapper) {
   let { turns } = turnsByHost.of(getRootSession().host);
   return turns === undefined ? items.map((item) => mapper(item)) : turns.mapInTurns(items, mapper);
 }
-//@ chunk-e6aww6q8.js:3874328-3874407 placement
+//@ chunk-5xgkngpb.js:3973080-3973159 placement
 /**
  * 工具描述的最大长度（环境变量可覆盖）。
  */
@@ -1107,13 +1122,13 @@ function maxDescriptionLength(forLoadedDescription = false) {
     (forLoadedDescription ? MAX_STRUCTURED_RESULT_CHARS : MAX_CALL_MARK_CHARS)
   );
 }
-//@ chunk-e6aww6q8.js:3874407-3874856 placement
+//@ chunk-5xgkngpb.js:3973159-3973608 placement
 /**
  * 检测工具描述中工具调用 XML 的标记：invoke 标签与常见 HTML 标签名（不视为参数名）。
  */
 var INVOKE_TAG_MARKERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COMMON_HTML_TAGS;
-deferInit("chunk-e6aww6q8.js:3874407", () => {
+deferInit("chunk-5xgkngpb.js:3973159", () => {
   INVOKE_TAG_MARKERS = [
     "<invoke>",
     "<invoke ",
@@ -1170,7 +1185,7 @@ deferInit("chunk-e6aww6q8.js:3874407", () => {
     "video",
   ]);
 });
-//@ chunk-e6aww6q8.js:3874856-3875447 placement
+//@ chunk-5xgkngpb.js:3973608-3974199 placement
 /**
  * 检查 MCP 工具描述与参数描述中是否含工具调用式 XML：invoke 标签，或以参数名为标签名的标记。
  */
@@ -1203,7 +1218,7 @@ function detectToolCallXml(tool, maxDescChars) {
       return "param";
   return;
 }
-//@ chunk-e6aww6q8.js:3875447-3875943 placement
+//@ chunk-5xgkngpb.js:3974199-3974698 placement
 /**
  * 统计并上报 MCP 服务器工具描述与说明中含工具调用式 XML 的情况。
  */
@@ -1235,19 +1250,19 @@ async function logToolCallXmlInDescriptions(tools, name, loggable, serverBaseUrl
     }),
   });
 }
-//@ chunk-e6aww6q8.js:3875943-3875971 placement
+//@ chunk-5xgkngpb.js:3974698-3974726 placement
 /**
  * 类似标签名的最大长度（256）。
  */
 var INVOKE_CLOSE_TAG = "</invoke>";
 var MAX_URL_LIKE_TAG_CHARS = 256;
-//@ chunk-e6aww6q8.js:3875971-3876067 placement
+//@ chunk-5xgkngpb.js:3974726-3974822 placement
 function mcpToolInputToAutoClassifierInput_2(input, toolName) {
   return (
     input.length >= toolName.length && input.slice(-toolName.length).toLowerCase() === toolName.toLowerCase()
   );
 }
-//@ chunk-e6aww6q8.js:3876067-3876972 placement
+//@ chunk-5xgkngpb.js:3974822-3975730 placement
 /**
  * 去掉 MCP 工具参数末尾多余的 invoke 结束标签。
  */
@@ -1308,7 +1323,7 @@ function stripTrailingInvokeSuffix(
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:3876972-3877861 placement
+//@ chunk-5xgkngpb.js:3975730-3976621 placement
 /**
  * 工具输入缺少必填参数时收集诊断：必填数、缺失数、已有键数、最长字符串长度，以及字符串值里是否残留 </parameter>、</invoke> 或参数名闭合标签之类伪标签碎片。
  */
@@ -1363,41 +1378,18 @@ function describeMissingRequiredArgs(input, schema) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4340451-4340529 fingerprint (2.1.88 match: getMcpAuthCache, 1)
+//@ chunk-5xgkngpb.js:4447022-4447100 fingerprint (2.1.88 match: getMcpAuthCache, 1)
 function getMcpAuthCache(value) {
   return typeof value === "string" ? value : Buffer.from(value).toString("utf-8");
 }
-//@ chunk-23fm9f0d.js:17344-17604 fingerprint (2.1.88 match: getMcpAuthCachePath, 0.644)
-/**
- * getMcpAuthCachePath：needs-auth 缓存文件路径（<配置目录>/mcp-needs-auth-cache.json）。
- */
-async function getMcpAuthCachePath() {
-  let result = emptyCleanupResult();
-  let cutoffDate = getCutoffDate();
-  if (cutoffDate === null) return result;
-  let cachePath = join(getClaudeConfigDir(), "mcp-needs-auth-cache.json");
-  try {
-    if (await unlinkIfOld(cachePath, cutoffDate, getFsImplementation(), result)) result.messages++;
-  } catch (error) {
-    if (!isENOENT(error)) {
-      result.errors++;
-      if (isCleanupQuietFsErrno(error))
-        logForDebugging(`cleanup mcp-auth-cache failed: ${error.code}`, {
-          level: "error",
-        });
-      else logError(error);
-    }
-  }
-  return result;
-}
-//@ chunk-qsdkv90t.js:302-371 placement
+//@ chunk-br8c6c8g.js:303-372 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-qsdkv90t.js:371-1385 placement
+//@ chunk-br8c6c8g.js:372-1387 placement
 async function refreshMcpServerTools(client, setServerTools, storageV5) {
   let cacheKey = serverCacheKey(client.name, client.config);
   let {
@@ -1456,14 +1448,14 @@ async function refreshMcpServerTools(client, setServerTools, storageV5) {
     previousToolsPromise,
   };
 }
-//@ chunk-mdk8a5r0.js:284-480 fingerprint (2.1.88 match: setupSdkMcpClients, 0.425)
+//@ chunk-0cf4tfjz.js:284-480 fingerprint (2.1.88 match: setupSdkMcpClients, 0.425)
 /**
  * 用于吞掉异常的特殊 Symbol。
  */
 var EMPTY_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CLAUDE_CODE_SERVER_INFO;
 var SWALLOW_SYMBOL;
-deferInit("chunk-mdk8a5r0.js:284", () => {
+deferInit("chunk-0cf4tfjz.js:284", () => {
   EMPTY_CAPABILITIES = Object.freeze({});
   CLAUDE_CODE_SERVER_INFO = Object.freeze({
     name: "claude-code",
@@ -1473,34 +1465,34 @@ deferInit("chunk-mdk8a5r0.js:284", () => {
   });
   SWALLOW_SYMBOL = Symbol("swallow");
 });
-//@ chunk-8t8n4kdh.js:45888-45917 placement
+//@ chunk-sywnjtqb.js:45908-45937 placement
 /**
  * 取客户端的服务器 id。
  */
 function clientServerId(server) {
   return identityId(server);
 }
-//@ chunk-8t8n4kdh.js:45917-45945 placement
+//@ chunk-sywnjtqb.js:45937-45965 placement
 /**
  * 取客户端对应的 SDK 客户端（包装 oa）。
  */
 function clientOf(client) {
   return identityId2(client);
 }
-//@ chunk-8t8n4kdh.js:45945-46119 placement
+//@ chunk-sywnjtqb.js:45965-46139 placement
 var mcpTaskPersistenceModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var mcpTasksModule;
 var mcpTaskDriveModule;
 var workerWakesModule;
 var mcpAutoBackgroundModule;
-deferInit("chunk-8t8n4kdh.js:45945", () => {
+deferInit("chunk-sywnjtqb.js:45965", () => {
   mcpTaskPersistenceModule = require("./mcpTaskPersistence.js");
   mcpTasksModule = require("./buildSep2663EndingNotice.lazy.js");
   mcpTaskDriveModule = require("./mcpTaskDrive.js");
   workerWakesModule = require("./workerWakes.js");
   mcpAutoBackgroundModule = require("./callMcpToolWithAutoBackground.lazy.js");
 });
-//@ chunk-8t8n4kdh.js:46119-46250 placement
+//@ chunk-sywnjtqb.js:46139-46270 placement
 function isSseOpenFailure(error) {
   return (
     error instanceof SdkHttpError &&
@@ -1508,7 +1500,7 @@ function isSseOpenFailure(error) {
       error.message.includes("Failed to open SSE stream"))
   );
 }
-//@ chunk-8t8n4kdh.js:46250-46515 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-sywnjtqb.js:46270-46535 placement (2.1.88 match: isConnectionError, 1)
 /**
  * MCP Streamable HTTP：错误是否表示会话失效需要重新初始化（McpSessionExpiredError、非 SSE 打开失败的 404、特定 400 消息）。与 bridge 无关。
  */
@@ -1522,42 +1514,42 @@ function isMcpSessionExpiredError(err) {
     /Server not initialized|No valid session ID|Mcp-Session-Id header is required/i.test(err.message)
   );
 }
-//@ chunk-8t8n4kdh.js:46515-46593 placement
+//@ chunk-sywnjtqb.js:46535-46613 placement
 function truncateServerInstructions(instructions, serverName, maxLength = maxDescriptionLength()) {
   if (!instructions) return instructions;
-  return truncateDescription(instructions, "Server instructions", serverName, maxLength);
+  return truncateDescription_2(instructions, "Server instructions", serverName, maxLength);
 }
-//@ chunk-8t8n4kdh.js:46593-46747 placement
-function truncateDescription(description, label, serverName, maxLength = maxDescriptionLength()) {
+//@ chunk-sywnjtqb.js:46613-46766 placement
+function truncateDescription_2(description, label, serverName, maxLength = maxDescriptionLength()) {
   if (description.length <= maxLength) return description;
   if (serverName !== undefined)
     logMCPDebug(serverName, `${label} truncated from ${description.length} to ${maxLength} chars`);
   return truncateToLength(description, maxLength) + "\u2026 [truncated]";
 }
-//@ chunk-8t8n4kdh.js:46747-46925 placement
+//@ chunk-sywnjtqb.js:46766-46944 placement
 /**
  * 匹配 “Error POSTing to endpoint (HTTP xxx)” 的正则。
  */
-var TRANSIENT_NETWORK_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TRANSIENT_NETWORK_ERROR_CODES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TRANSIENT_ERROR_CODES;
 var POST_HTTP_STATUS_RE;
-deferInit("chunk-8t8n4kdh.js:46747", () => {
-  TRANSIENT_NETWORK_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
+deferInit("chunk-sywnjtqb.js:46766", () => {
+  TRANSIENT_NETWORK_ERROR_CODES_2 = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
   TRANSIENT_ERROR_CODES = new Set([
-    ...TRANSIENT_NETWORK_ERROR_CODES,
+    ...TRANSIENT_NETWORK_ERROR_CODES_2,
     "ConnectionRefused",
     "ConnectionClosed",
   ]);
   POST_HTTP_STATUS_RE = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
 });
-//@ chunk-8t8n4kdh.js:46925-46983 placement
+//@ chunk-sywnjtqb.js:46944-47002 placement
 /**
  * 判断数值是否为合法 HTTP 状态码。
  */
 function isValidHttpStatus(status) {
   return typeof status === "number" && status >= 100 && status <= 599;
 }
-//@ chunk-8t8n4kdh.js:46983-47437 placement
+//@ chunk-sywnjtqb.js:47002-47456 placement
 function isTransientMcpError(error) {
   if (error.name === "AbortError") return true;
   let code = "code" in error ? error.code : undefined;
@@ -1573,27 +1565,27 @@ function isTransientMcpError(error) {
   if (typeof code === "string" && TRANSIENT_ERROR_CODES.has(code)) return true;
   let message = error.message;
   return (
-    TRANSIENT_NETWORK_ERROR_CODES.some((fragment) => message.includes(fragment)) ||
+    TRANSIENT_NETWORK_ERROR_CODES_2.some((fragment) => message.includes(fragment)) ||
     message.includes("Body Timeout Error") ||
     /\bterminated\b/.test(message) ||
     message.includes("SSE stream disconnected") ||
     message.includes("Failed to reconnect SSE stream")
   );
 }
-//@ chunk-8t8n4kdh.js:47437-47472 placement
+//@ chunk-sywnjtqb.js:47456-47491 placement
 /**
  * 分页请求之间的退避序列（250/500/1000 毫秒）。
  */
 var DEFAULT_TOOL_TIMEOUT_MS = 1e8;
 var MAX_LIST_PAGES = 20;
 var LIST_PAGE_DELAYS_MS = [250, 500, 1000];
-//@ chunk-8t8n4kdh.js:47472-48154 placement
+//@ chunk-sywnjtqb.js:47491-48173 placement
 function isRetryableListError(error) {
-  if (isListAuthError(error)) return false;
+  if (isListAuthError_2(error)) return false;
   if (error instanceof IssuerEchoCrossOriginError) return false;
-  if (isClaudeAiBearerRejectedError(error)) return false;
+  if (isClaudeAiBearerRejectedError_2(error)) return false;
   if (error instanceof DOMException && error.name === "TimeoutError") return false;
-  if (error instanceof HttpBodyOverflowError) return false;
+  if (error instanceof HttpBodyOverflowError_2) return false;
   if (error instanceof SdkHttpError && error.status >= 400 && error.status < 500) return false;
   if (
     error instanceof Error &&
@@ -1617,7 +1609,7 @@ function isRetryableListError(error) {
     );
   return true;
 }
-//@ chunk-8t8n4kdh.js:48154-48306 placement
+//@ chunk-sywnjtqb.js:48173-48325 placement
 function isTimeoutError(error) {
   return (
     (error instanceof DOMException && error.name === "TimeoutError") ||
@@ -1625,66 +1617,66 @@ function isTimeoutError(error) {
     (error instanceof ProtocolError && error.code === -32001)
   );
 }
-//@ chunk-8t8n4kdh.js:48306-48365 placement
+//@ chunk-sywnjtqb.js:48325-48384 placement
 function hasNoTransport(client) {
   return "transport" in client && client.transport === undefined;
 }
-//@ chunk-8t8n4kdh.js:53597-53735 fingerprint (2.1.88 match: getMcpToolTimeoutMs, 1)
+//@ chunk-sywnjtqb.js:53607-53745 placement (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * getMcpToolTimeoutMs：工具调用总超时：配置 timeout（≥1000）> MCP_TOOL_TIMEOUT > 默认约 27.8 小时，夹在 [1000, 上限]。
  */
-function getMcpToolTimeoutMs(config) {
+function getMcpToolTimeoutMs_3(config) {
   let timeoutMs =
     (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT ??
     DEFAULT_TOOL_TIMEOUT_MS;
   return Math.min(Math.max(timeoutMs, 1000), MAX_TIMER_DELAY_MS);
 }
-//@ chunk-8t8n4kdh.js:53735-53799 layout
-var REMOTE_TOOL_IDLE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var STDIO_TOOL_IDLE_TIMEOUT_MS;
-var NO_IDLE_TIMEOUT_TRANSPORTS;
-deferInit("chunk-8t8n4kdh.js:53735", () => {
-  REMOTE_TOOL_IDLE_TIMEOUT_MS = 300000;
-  STDIO_TOOL_IDLE_TIMEOUT_MS = 1800000;
-  NO_IDLE_TIMEOUT_TRANSPORTS = new Set(["sse-ide", "ws-ide", "sdk"]);
+//@ chunk-sywnjtqb.js:53745-53809 placement
+var REMOTE_TOOL_IDLE_TIMEOUT_MS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDIO_TOOL_IDLE_TIMEOUT_MS_2;
+var NO_IDLE_TIMEOUT_TRANSPORTS_2;
+deferInit("chunk-sywnjtqb.js:53745", () => {
+  REMOTE_TOOL_IDLE_TIMEOUT_MS_2 = 300000;
+  STDIO_TOOL_IDLE_TIMEOUT_MS_2 = 1800000;
+  NO_IDLE_TIMEOUT_TRANSPORTS_2 = new Set(["sse-ide", "ws-ide", "sdk"]);
 });
-//@ chunk-8t8n4kdh.js:53799-54036 layout
+//@ chunk-sywnjtqb.js:53809-54046 placement
 /**
  * getMcpToolIdleTimeoutMs：工具调用空闲超时（无响应也无进度）：CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT 或 stdio 30 分钟/远程 5 分钟，sse-ide/ws-ide/sdk 不设；不小于配置 timeout，不超过总超时。
  */
-function getMcpToolIdleTimeoutMs(config) {
+function getMcpToolIdleTimeoutMs_2(config) {
   let transportType = config?.type ?? "stdio";
-  if (NO_IDLE_TIMEOUT_TRANSPORTS.has(transportType)) return 0;
+  if (NO_IDLE_TIMEOUT_TRANSPORTS_2.has(transportType)) return 0;
   let idleTimeoutMs =
     env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ??
-    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS : REMOTE_TOOL_IDLE_TIMEOUT_MS);
+    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS_2 : REMOTE_TOOL_IDLE_TIMEOUT_MS_2);
   if (idleTimeoutMs <= 0) return 0;
   let timeout = config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : 0;
-  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs(config));
+  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs_3(config));
 }
-//@ chunk-8t8n4kdh.js:54036-54078 layout
+//@ chunk-sywnjtqb.js:54046-54088 placement
 /**
  * 懒加载 needs-auth 缓存模块。
  */
 var needsAuthCacheModule = () => require("../../utils/claudeInChrome/toolRendering.js");
-//@ chunk-8t8n4kdh.js:54078-54244 layout
+//@ chunk-sywnjtqb.js:54088-54254 placement
 /**
  * needs-auth 缓存常量与懒加载模块：缓存版本 v2、TTL 15 分钟（默认）/4 小时（claude.ai 代理与插件远程）/90 秒（有 refresh token）、时钟偏差容忍 1 分钟。
  */
-var artifactPermissionRulesModule = () => require("../../tools/ArtifactTool/COUNTERPARTS.lazy.js");
+var artifactPermissionRulesModule = () => require("../../tools/ArtifactTool/artifactPermissionRules.js");
 var artifactsMcpLaptopModule = () => require("../artifacts/artifactsMcpLaptop.js");
 var claudeDocsWakeModule = () => require("../../tools/ArtifactTool/docsCreateWake.js");
-var AUTH_CACHE_VERSION = "v2";
-var NEEDS_AUTH_CACHE_TTL_MS = 900000;
-var NEEDS_AUTH_CACHE_LONG_TTL_MS = 14400000;
-var NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS = 90000;
-var AUTH_CACHE_CLOCK_SKEW_MS = 60000;
-//@ chunk-8t8n4kdh.js:54244-54769 layout
+var AUTH_CACHE_VERSION_2 = "v2";
+var NEEDS_AUTH_CACHE_TTL_MS_2 = 900000;
+var NEEDS_AUTH_CACHE_LONG_TTL_MS_2 = 14400000;
+var NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 = 90000;
+var AUTH_CACHE_CLOCK_SKEW_MS_2 = 60000;
+//@ chunk-sywnjtqb.js:54254-54854 placement
 /**
  * isMcpAuthCached：needs-auth 缓存命中：claude.ai 代理按 id、插件 stdio 按配置哈希；TTL 默认 15 分钟，claude.ai 代理与插件远程服务器 4 小时，有 refresh token 时 90 秒。
  */
-async function isMcpAuthCached(serverName, config, storageV5) {
+async function isMcpAuthCached_2(serverName, config, storageV5) {
   let cacheEntry = (await readNeedsAuthCache(storageV5))[serverName];
   if (!cacheEntry) return false;
   if (config.type === "claudeai-proxy" && cacheEntry.id !== config.id) return false;
@@ -1707,12 +1699,15 @@ async function isMcpAuthCached(serverName, config, storageV5) {
     (config.pluginSource !== undefined &&
       (config.type === "http" || config.type === "sse") &&
       !usesNonOAuthAuth(config));
-  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS : NEEDS_AUTH_CACHE_TTL_MS);
+  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS_2 : NEEDS_AUTH_CACHE_TTL_MS_2);
   let ageMs = Date.now() - cacheEntry.timestamp;
-  return ageMs > -AUTH_CACHE_CLOCK_SKEW_MS && ageMs < ttlMs;
+  let isFresh = ageMs > -AUTH_CACHE_CLOCK_SKEW_MS_2 && ageMs < ttlMs;
+  let lapsedCcrSignInKey = isFresh && isCcrHostedConfig(config) ? cacheEntry.lapsedCcrSignInKey : undefined;
+  getConnectionCache().restoreLapsed(lapsedCcrSignInKey, serverCacheKey(serverName, config));
+  return isFresh;
 }
-//@ chunk-8t8n4kdh.js:54769-54943 layout
-async function writeAuthCacheV5(storage, cache) {
+//@ chunk-sywnjtqb.js:54854-55028 placement
+async function writeAuthCacheV5_2(storage, cache) {
   let writeResult = await storage.write(needsAuthCacheSpace(), jsonStringify(cache), {
     publishDiscipline: "inPlace",
   });
@@ -1720,11 +1715,11 @@ async function writeAuthCacheV5(storage, cache) {
     logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(writeResult.error)}`);
   return writeResult.ok;
 }
-//@ chunk-8t8n4kdh.js:54943-55253 callgraph-fingerprint (2.1.88 match: setMcpAuthCacheEntry, 0.268)
+//@ chunk-sywnjtqb.js:55028-55369 placement
 /**
  * setMcpAuthCacheEntry：写 needs-auth 缓存条目 {timestamp, id?, ttlMs?}（v5 存储或 mcp-needs-auth-cache.json），串行写链。
  */
-function setMcpAuthCacheEntry(serverName, serverId, ttlMs, storageV5) {
+function isMcpAuthCached_3(serverName, serverId, cacheKey, storageV5, cacheKey_2) {
   let cliOwnedState = getCliOwnedState();
   cliOwnedState.authCacheWriteChain = cliOwnedState.authCacheWriteChain
     .then(async () => {
@@ -1734,27 +1729,30 @@ function setMcpAuthCacheEntry(serverName, serverId, ttlMs, storageV5) {
         ...(serverId && {
           id: serverId,
         }),
-        ...(ttlMs !== undefined && {
-          ttlMs,
+        ...(cacheKey !== undefined && {
+          ttlMs: cacheKey,
+        }),
+        ...(cacheKey_2 && {
+          lapsedCcrSignInKey: cacheKey_2,
         }),
       };
       if (isStorageV5Enabled() && storageV5 !== undefined) {
-        if (!(await writeAuthCacheV5(storageV5, cache))) return;
+        if (!(await writeAuthCacheV5_2(storageV5, cache))) return;
       } else {
         let fileReader = getFileReader();
-        let cachePath = needsAuthCachePath();
-        await fileReader.mkdir(dirname(cachePath));
-        await fileReader.write(cachePath, jsonStringify(cache));
+        let writeEntry = needsAuthCachePath();
+        await fileReader.mkdir(dirname(writeEntry));
+        await fileReader.write(writeEntry, jsonStringify(cache));
       }
       clearAuthCacheRead();
     })
     .catch(() => {});
 }
-//@ chunk-8t8n4kdh.js:55253-55505 layout
+//@ chunk-sywnjtqb.js:55369-55621 placement
 /**
  * clearMcpAuthCacheEntry：删除 needs-auth 缓存条目。
  */
-function clearMcpAuthCacheEntry(name, storageV5) {
+function clearMcpAuthCacheEntry_2(name, storageV5) {
   let cliOwnedState = getCliOwnedState();
   let writePromise = cliOwnedState.authCacheWriteChain
     .then(async () => {
@@ -1762,7 +1760,7 @@ function clearMcpAuthCacheEntry(name, storageV5) {
       if (!(name in cache)) return;
       delete cache[name];
       if (isStorageV5Enabled() && storageV5 !== undefined) {
-        if (!(await writeAuthCacheV5(storageV5, cache))) return;
+        if (!(await writeAuthCacheV5_2(storageV5, cache))) return;
       } else await getFileReader().write(needsAuthCachePath(), jsonStringify(cache));
       clearAuthCacheRead();
     })
@@ -1770,11 +1768,11 @@ function clearMcpAuthCacheEntry(name, storageV5) {
   cliOwnedState.authCacheWriteChain = writePromise;
   return writePromise;
 }
-//@ chunk-8t8n4kdh.js:55505-55748 layout
+//@ chunk-sywnjtqb.js:55621-55864 placement
 /**
  * clearMcpDiscoveryCaches：清空连接、工具、提示词、资源、资源模板的记忆化缓存（保留指定键）。
  */
-function clearMcpDiscoveryCaches(preservedKeys = new Set(), notifyIdentityChange = true) {
+function clearMcpDiscoveryCaches_2(preservedKeys = new Set(), notifyIdentityChange = true) {
   if (!isDiscoveryCacheOn()) return;
   if (notifyIdentityChange) noteIdentityChanged();
   bumpIdentityEpoch();
@@ -1789,25 +1787,25 @@ function clearMcpDiscoveryCaches(preservedKeys = new Set(), notifyIdentityChange
   retainKeys(fetchResourcesForClient.cache);
   retainKeys(fetchResourceTemplatesForClient.cache);
 }
-//@ chunk-8t8n4kdh.js:55748-55855 fingerprint (2.1.88 match: mcpBaseUrlAnalytics, 0.65)
+//@ chunk-sywnjtqb.js:55864-55971 placement
 /**
  * mcpBaseUrlAnalytics：遥测字段 mcpServerBaseUrl 与 mcpServerKeyHash。
  */
-function mcpBaseUrlAnalytics_2(serverRef, name) {
-  let url = loggingSafeOrigin(serverRef);
+function mcpServerKeyHashEntry(serverName, name) {
+  let extra = loggingSafeOrigin(serverName);
   let serverFields = name
     ? {
         mcpServerKeyHash: toolNameForTelemetry(name),
       }
     : {};
-  if (url)
+  if (extra)
     return {
-      mcpServerBaseUrl: url,
+      mcpServerBaseUrl: extra,
       ...serverFields,
     };
   return serverFields;
 }
-//@ chunk-8t8n4kdh.js:55855-56314 layout
+//@ chunk-sywnjtqb.js:55971-56430 placement
 /**
  * logMcpConnectionOtelEvent：发出 mcp_server_connection OTel 事件（状态、传输、作用域、耗时、插件信息、错误码）。
  */
@@ -1839,11 +1837,11 @@ function logMcpConnectionOtelEvent(serverName, serverRef, result) {
     }),
   });
 }
-//@ chunk-8t8n4kdh.js:56314-56960 fingerprint (2.1.88 match: handleRemoteAuthFailure, 0.726)
+//@ chunk-sywnjtqb.js:56430-57106 placement
 /**
  * handleRemoteAuthFailure：远程服务器需要认证：记录 tengu_mcp_server_needs_auth，写 needs-auth 缓存，清理发现缓存，返回 needs-auth 连接。
  */
-async function handleRemoteAuthFailure(
+async function connectWithRetry(
   name,
   serverRef,
   transportType,
@@ -1865,7 +1863,7 @@ async function handleRemoteAuthFailure(
     ...(isZodError && {
       cause: lit("discovery_schema"),
     }),
-    ...mcpBaseUrlAnalytics_2(serverRef, name),
+    ...mcpServerKeyHashEntry(serverRef, name),
   });
   logMCPDebug(
     name,
@@ -1882,11 +1880,12 @@ async function handleRemoteAuthFailure(
     (serverRef.type === "http" || serverRef.type === "sse") &&
     (await hasStoredRefreshToken(name, serverRef));
   if (roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch))
-    setMcpAuthCacheEntry(
+    isMcpAuthCached_3(
       name,
       serverRef.type === "claudeai-proxy" ? serverRef.id : undefined,
-      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS : undefined,
+      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 : undefined,
       storageV5,
+      getConnectionCache().lapsedSignInKey(serverCacheKey(name, serverRef)),
     );
   await purgeDiscoveryCacheOnAuthFailure(name, serverRef, roundEpoch);
   logFeatureSad("mcp_connect", "mcp_connect_needs_auth");
@@ -1897,7 +1896,7 @@ async function handleRemoteAuthFailure(
     error: error_2,
   };
 }
-//@ chunk-8t8n4kdh.js:56960-57192 layout
+//@ chunk-sywnjtqb.js:57106-57339 placement
 async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch) {
   let identityCurrent = roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch);
   if (isDiscoveryCacheUsable())
@@ -1908,7 +1907,7 @@ async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoc
         "Discovery cache 401/403 purge skipped: identity changed since this connect round started (the current entry belongs to the new principal)",
       );
 }
-//@ chunk-8t8n4kdh.js:57192-57597 layout
+//@ chunk-sywnjtqb.js:57339-57744 placement
 var AUTH_REJECTION_SEVERITY = {
   AUTH_HEADER_REJECTED: {
     severity: "bad",
@@ -1927,7 +1926,7 @@ var AUTH_REJECTION_SEVERITY = {
     featureErrorCode: "mcp_connect_first_party_auth_rejected",
   },
 };
-//@ chunk-8t8n4kdh.js:57597-58361 layout
+//@ chunk-sywnjtqb.js:57744-58508 placement
 /**
  * failWithAuthRejection：记录连接失败遥测并返回带错误码（AUTH_HEADER_REJECTED 等）的 failed 连接。
  */
@@ -1953,7 +1952,7 @@ function failWithAuthRejection({
     toolsListAhead: negotiation.toolsListAhead,
     toolsListAheadListed: negotiation.toolsListAheadListed,
     toolsListAheadFlagSource: negotiation.toolsListAheadFlagSource,
-    ...mcpBaseUrlAnalytics_2(serverRef, serverName),
+    ...mcpServerKeyHashEntry(serverRef, serverName),
     ...buildPluginSourceFields(serverRef),
   });
   let { severity, featureErrorCode } = AUTH_REJECTION_SEVERITY[errorCode];
@@ -1971,7 +1970,7 @@ function failWithAuthRejection({
     errorCode,
   };
 }
-//@ chunk-8t8n4kdh.js:58361-59946 layout
+//@ chunk-sywnjtqb.js:58508-60093 placement
 /**
  * failFirstPartyAuthRejected：一方服务器拒绝 claude.ai 登录/Design 凭证时生成具体提示（/login、/design-login）。
  */
@@ -2020,7 +2019,7 @@ function failFirstPartyAuthRejected(credentialKind, name, serverRef, transportTy
     negotiation,
   });
 }
-//@ chunk-8t8n4kdh.js:59946-60026 layout
+//@ chunk-sywnjtqb.js:60093-60173 placement
 function isAuthFailure(error, statusCode, sawAuthChallenge) {
   return (
     error instanceof UnauthorizedError_2 ||
@@ -2029,7 +2028,7 @@ function isAuthFailure(error, statusCode, sawAuthChallenge) {
     statusCode === 403
   );
 }
-//@ chunk-8t8n4kdh.js:60026-61695 layout
+//@ chunk-sywnjtqb.js:60173-61839 placement
 /**
  * handleRemoteConnectAuthError：SSE/HTTP 连接认证失败分类：配置的 Authorization 头被拒、headersHelper 头被拒、CLI 自有令牌被拒、一方登录被拒，或交给 OAuth 刷新/needs-auth。
  */
@@ -2119,7 +2118,7 @@ async function handleRemoteConnectAuthError({
     authProvider,
     isRefreshPath401,
     needsAuth: () =>
-      handleRemoteAuthFailure(
+      connectWithRetry(
         serverName,
         serverRef,
         transportType,
@@ -2134,7 +2133,7 @@ async function handleRemoteConnectAuthError({
     await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
     return rejectedTokenResult;
   }
-  return handleRemoteAuthFailure(
+  return connectWithRetry(
     serverName,
     serverRef,
     transportType,
@@ -2145,7 +2144,7 @@ async function handleRemoteConnectAuthError({
     storageV5,
   );
 }
-//@ chunk-8t8n4kdh.js:61695-62288 layout
+//@ chunk-sywnjtqb.js:61839-62407 placement
 /**
  * wrapFetchWithCcrSessionAuth：CCR 代理请求补会话令牌、会话头、拨号工具 ID（X-CCR-Dial-Tool-Use-Id），并记录 CCR ticket。
  */
@@ -2169,7 +2168,6 @@ function wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, connectionKey) {
       if (handshakeKind === "handshake" || (handshakeKind === "listing" && dialOptions.withListings))
         headers.set(X_CCR_DIAL_TOOL_USE_ID, dialOptions.toolUseId);
     }
-    getConnectionCache().attachCcrTicket(url, headers);
     let redirect = init?.redirect === "error" ? "error" : "manual";
     let response = await fetchFn(url, {
       ...init,
@@ -2177,7 +2175,7 @@ function wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, connectionKey) {
       redirect,
     });
     let connectionCache = getConnectionCache();
-    connectionCache.noteCcrTicket(url, headers, response);
+    connectionCache.noteHostDraining(url, response);
     if (
       connectionKey !== undefined &&
       (response.status === 401 || connectionCache.lapsedCcrSignIns.has(connectionKey)) &&
@@ -2187,7 +2185,7 @@ function wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, connectionKey) {
     return response;
   };
 }
-//@ chunk-8t8n4kdh.js:62288-62545 layout
+//@ chunk-sywnjtqb.js:62407-62664 placement
 /**
  * classifyHandshakeRequest：POST 体方法为 initialize/notifications/initialized 返回 handshake，tools/list 返回 listing。
  */
@@ -2199,10 +2197,10 @@ function classifyHandshakeRequest(init) {
   if (method === "initialize" || method === "notifications/initialized") return "handshake";
   return method === "tools/list" ? "listing" : undefined;
 }
-//@ chunk-8t8n4kdh.js:62545-62610 layout
+//@ chunk-sywnjtqb.js:62664-62729 placement
 var X_CCR_DIAL_TOOL_USE_ID = "X-CCR-Dial-Tool-Use-Id";
 var TOOL_USE_ID_PATTERN = /^toolu_[A-Za-z0-9_-]{1,64}$/;
-//@ chunk-8t8n4kdh.js:62610-63560 layout
+//@ chunk-sywnjtqb.js:62729-63679 placement
 /**
  * wrapFetchWithCliOwnedBearer：给 CLI 自有服务器的请求附加会话 bearer（被扣留时不发请求）。
  */
@@ -2273,7 +2271,7 @@ function wrapFetchWithCliOwnedBearer(fetchFn, config) {
     return retryResult.response;
   };
 }
-//@ chunk-8t8n4kdh.js:63560-63822 layout
+//@ chunk-sywnjtqb.js:63679-63941 placement
 /**
  * ClaudeAiProxyBearerRejectedError：claude.ai 代理拒绝会话令牌（可能缺连接器作用域），错误码 CLAUDEAI_BEARER_REJECTED。
  */
@@ -2287,11 +2285,11 @@ class ClaudeAiProxyBearerRejectedError extends Error {
     this.name = "ClaudeAiProxyBearerRejectedError";
   }
 }
-//@ chunk-8t8n4kdh.js:63822-65001 fingerprint (2.1.88 match: createClaudeAiProxyFetch, 0.634)
+//@ chunk-sywnjtqb.js:63941-65118 placement
 /**
  * createClaudeAiProxyFetch：claude.ai 代理 fetch：附加 OAuth 访问令牌，401 时刷新令牌重试一次，仍被拒抛 ClaudeAiProxyBearerRejectedError。
  */
-function createClaudeAiProxyFetch(fetchFn, credentials) {
+function withProxyBearerRefresh(fetchFn, credentials) {
   fetchFn = stripRedirectLocation(fetchFn);
   return async (url, init) => {
     let doRequest = async () => {
@@ -2343,11 +2341,11 @@ function createClaudeAiProxyFetch(fetchFn, credentials) {
       });
       return response;
     }
-    let tokenChanged = await handleOAuth401Error(sentToken, credentials).catch(() => false);
+    let proxyCode = await handleOAuth401Error(sentToken, credentials).catch(() => false);
     logEvent("tengu_mcp_claudeai_proxy_401", {
-      tokenChanged,
+      tokenChanged: proxyCode,
     });
-    if (!tokenChanged) {
+    if (!proxyCode) {
       let now =
         isStorageV5Enabled() && credentials !== undefined
           ? await readFreshOAuthAccessToken(credentials)
@@ -2360,7 +2358,7 @@ function createClaudeAiProxyFetch(fetchFn, credentials) {
     return normalizeErrorResponse(response_2);
   };
 }
-//@ chunk-8t8n4kdh.js:65001-65513 sole-consumer
+//@ chunk-sywnjtqb.js:65118-65630 placement
 /**
  * expandFirstPartyDesignScopes：Design 连接器需要时为 claude.ai 登录追加 user:design:read/write 作用域。
  */
@@ -2395,7 +2393,7 @@ async function expandFirstPartyDesignScopes(url, credentials) {
     bearer: tokens.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
   };
 }
-//@ chunk-8t8n4kdh.js:65513-65742 sole-consumer
+//@ chunk-sywnjtqb.js:65630-65859 placement
 /**
  * readNeedsConsentBit：Design 服务器响应体为 {error:"needs_consent", consent} 时返回 consent 位。
  */
@@ -2412,7 +2410,7 @@ async function readNeedsConsentBit(response) {
   let consent = body.consent;
   return notice.isConsentBit(consent) ? consent : null;
 }
-//@ chunk-8t8n4kdh.js:65742-65879 sole-consumer
+//@ chunk-sywnjtqb.js:65859-65996 placement
 function noteDesignProjectId(designSession, isDesignServer, name, payload) {
   if (!isDesignServer || !MEMBERSHIP_METHODS.has(name)) return;
   let projectId = payload.project_id;
@@ -2423,12 +2421,12 @@ function noteDesignProjectId(designSession, isDesignServer, name, payload) {
     markRecardProject(designSession, projectId);
   }
 }
-//@ chunk-8t8n4kdh.js:65879-65944 sole-consumer
+//@ chunk-sywnjtqb.js:65996-66061 placement
 var DESIGN_WRITE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8t8n4kdh.js:65879", () => {
+deferInit("chunk-sywnjtqb.js:65996", () => {
   DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
 });
-//@ chunk-8t8n4kdh.js:65944-66471 sole-consumer
+//@ chunk-sywnjtqb.js:66061-66588 placement
 /**
  * gateDesignWriteWithoutPlanToken：Design 写工具缺 plan_token 时拒绝（只允许原生 Claude Design 工具无令牌写）。
  */
@@ -2447,9 +2445,9 @@ function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, input) 
     },
   };
 }
-//@ chunk-8t8n4kdh.js:66471-66533 sole-consumer
+//@ chunk-sywnjtqb.js:66588-66650 placement
 var DESIGN_PLAN_TOOLS; // deferred: uses DESIGN_WRITE_TOOLS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:66471", () => {
+deferInit("chunk-sywnjtqb.js:66588", () => {
   DESIGN_PLAN_TOOLS = new Set([
     ...DESIGN_WRITE_TOOLS,
     "finalize_plan",
@@ -2457,11 +2455,11 @@ deferInit("chunk-8t8n4kdh.js:66471", () => {
     ...MEMBERSHIP_METHODS,
   ]);
 });
-//@ chunk-8t8n4kdh.js:66533-66570 sole-consumer
+//@ chunk-sywnjtqb.js:66650-66687 placement
 function isDesignGatedTool(isFirstPartyDesignServer, name) {
   return isFirstPartyDesignServer && DESIGN_PLAN_TOOLS.has(name);
 }
-//@ chunk-8t8n4kdh.js:66570-66862 sole-consumer
+//@ chunk-sywnjtqb.js:66687-66979 placement
 /**
  * askDesignConsent：生成 Design 同意请求的权限结果（ask，附 __consentNonce，仅本地显示，不可被分类器批准）。
  */
@@ -2482,7 +2480,7 @@ function askDesignConsent(message, input, __consentNonce) {
     },
   };
 }
-//@ chunk-8t8n4kdh.js:66862-66936 sole-consumer
+//@ chunk-sywnjtqb.js:66979-67053 placement
 function isDesignServerConfig(config) {
   return (
     (config.type === "sse" || config.type === "http") &&
@@ -2490,7 +2488,7 @@ function isDesignServerConfig(config) {
     !configHasAuthorizationHeader(config)
   );
 }
-//@ chunk-8t8n4kdh.js:66936-67090 sole-consumer
+//@ chunk-sywnjtqb.js:67053-67207 placement
 /**
  * canAskDesignConsent：交互会话且不在 bypass 模式时可以弹 Design 同意请求。
  */
@@ -2502,7 +2500,7 @@ function canAskDesignConsent(tool) {
     !(toolPermissionContext.mode === "plan" && toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-8t8n4kdh.js:67090-67262 sole-consumer
+//@ chunk-sywnjtqb.js:67207-67379 placement
 /**
  * canPromptForPermission：非 bypass/dontAsk 且未要求避免权限提示。
  */
@@ -2515,9 +2513,9 @@ function canPromptForPermission(tool) {
     !toolPermissionContext.shouldAvoidPermissionPrompts
   );
 }
-//@ chunk-8t8n4kdh.js:67262-67273 sole-consumer
+//@ chunk-sywnjtqb.js:67379-67390 placement
 var MAX_DESIGN_CONSENT_ASKS = 100;
-//@ chunk-8t8n4kdh.js:67273-67545 sole-consumer
+//@ chunk-sywnjtqb.js:67390-67662 placement
 /**
  * rememberDesignConsentAsk：按 toolUseId 记录待确认的 consent 位与 nonce（最多 100 条）。
  */
@@ -2539,7 +2537,7 @@ function rememberDesignConsentAsk(toolUseId, consentBit, askReachesUser) {
   }
   return nonce;
 }
-//@ chunk-8t8n4kdh.js:67545-67755 sole-consumer
+//@ chunk-sywnjtqb.js:67662-67872 placement
 /**
  * takeDesignConsentAsk：取出并删除 toolUseId 对应的同意记录，nonce 必须一致。
  */
@@ -2554,7 +2552,7 @@ function takeDesignConsentAsk(toolUseId, nonce) {
     askReachesUser: ask.askReachesUser,
   };
 }
-//@ chunk-8t8n4kdh.js:67755-68588 sole-consumer
+//@ chunk-sywnjtqb.js:67872-68705 placement
 /**
  * wrapCallWithDesignConsent：Design 工具调用遇 needs_consent 时：已批准的位直接提交同意并重试，否则提示用户重试或运行 /design consent。
  */
@@ -2589,7 +2587,7 @@ function wrapCallWithDesignConsent(callTool, options) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:68588-69493 sole-consumer
+//@ chunk-sywnjtqb.js:68705-69599 placement
 /**
  * wrapFetchWithFirstPartyAuth：一方 MCP 服务器请求附加 claude.ai 登录 bearer，记录最后使用的凭证类型。
  */
@@ -2656,7 +2654,7 @@ function wrapFetchWithFirstPartyAuth(fetchFn, credentials, bearerTracker) {
     return retryAttempt.response;
   };
 }
-//@ chunk-8t8n4kdh.js:69493-69716 sole-consumer
+//@ chunk-sywnjtqb.js:69599-69822 placement
 /**
  * mergeRequestHeaders：合并请求头，固定 User-Agent 与 Accept-Encoding: identity。
  */
@@ -2671,27 +2669,27 @@ function mergeRequestHeaders(headers, baseHeaders, extraHeaders) {
   headers_2.set("Accept", "text/event-stream");
   return headers_2;
 }
-//@ chunk-8t8n4kdh.js:69784-69897 sole-consumer
-function normalizeImageMimeType(mimeType) {
+//@ chunk-sywnjtqb.js:69890-70003 placement
+function normalizeImageMimeType_2(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
-  return SUPPORTED_IMAGE_TYPES_2.has(lower === "image/jpg" ? "image/jpeg" : lower);
+  return SUPPORTED_IMAGE_TYPES_4.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
-//@ chunk-8t8n4kdh.js:69897-69936 sole-consumer
+//@ chunk-sywnjtqb.js:70003-70042 placement
 /**
  * 工具调用超时的下限（60 秒）。
  */
 var RETRYABLE_HTTP_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MIN_TOOL_TIMEOUT_MS;
-deferInit("chunk-8t8n4kdh.js:69897", () => {
+deferInit("chunk-sywnjtqb.js:70003", () => {
   RETRYABLE_HTTP_STATUSES = new Set([500, 502, 504]);
   MIN_TOOL_TIMEOUT_MS = 60000;
 });
-//@ chunk-8t8n4kdh.js:69936-70082 sole-consumer (2.1.88 match: getMcpToolTimeoutMs, 1)
+//@ chunk-sywnjtqb.js:70042-70188 placement (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * MCP 工具调用总超时：配置 timeout（≥1000ms 才算）优先，其次 env `MCP_TOOL_TIMEOUT`，再夹在下限与上限之间；都没有用默认值。（v2）
  */
-function getMcpToolTimeoutMs_2(config) {
+function getMcpToolTimeoutMs_4(config) {
   let timeoutMs =
     (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT;
@@ -2699,16 +2697,16 @@ function getMcpToolTimeoutMs_2(config) {
     ? Math.min(Math.max(timeoutMs, MIN_TOOL_TIMEOUT_MS), MAX_TIMER_DELAY_MS)
     : MIN_TOOL_TIMEOUT_MS;
 }
-//@ chunk-8t8n4kdh.js:70082-70125 affinity
+//@ chunk-sywnjtqb.js:70188-70231 placement
 /**
  * MCP 普通请求超时：取工具超时与连接超时（MCP_TIMEOUT）两者的较大值。（v2）
  */
-function getMcpRequestTimeoutMs(config) {
-  return Math.max(getMcpToolTimeoutMs_2(config), getConnectionTimeoutMs());
+function getMcpRequestTimeoutMs_2(config) {
+  return Math.max(getMcpToolTimeoutMs_4(config), getConnectionTimeoutMs());
 }
-//@ chunk-8t8n4kdh.js:70125-70170 fingerprint (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
-var MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
-//@ chunk-8t8n4kdh.js:70170-70248 layout
+//@ chunk-sywnjtqb.js:70231-70276 placement (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
+var MCP_STREAMABLE_HTTP_ACCEPT_2 = "application/json, text/event-stream";
+//@ chunk-sywnjtqb.js:70276-70354 placement
 function wrapFetchNoop(fetchWithInit) {
   return async (url, init) => {
     try {
@@ -2718,16 +2716,16 @@ function wrapFetchNoop(fetchWithInit) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:70248-70806 fingerprint (2.1.88 match: wrapFetchWithTimeout, 0.76)
+//@ chunk-sywnjtqb.js:70354-70912 placement (2.1.88 match: wrapFetchWithTimeout, 0.761)
 /**
  * wrapFetchWithTimeout：非 GET 请求加超时（按服务器配置），补 Accept: application/json, text/event-stream 与 traceparent。
  */
-function wrapFetchWithTimeout(fetchFn, config) {
-  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs(config);
+function wrapFetchWithTimeout_2(fetchFn, config) {
+  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs_2(config);
   return async (url, init) => {
     if ((init?.method ?? "GET").toUpperCase() === "GET") return fetchFn(url, init);
     let headers = new Headers(init?.headers);
-    if (!headers.has("accept")) headers.set("accept", MCP_STREAMABLE_HTTP_ACCEPT);
+    if (!headers.has("accept")) headers.set("accept", MCP_STREAMABLE_HTTP_ACCEPT_2);
     if (shouldPropagateTraceContext()) {
       let activeSpanId = getActiveSpanId();
       if (activeSpanId && !headers.has("traceparent")) headers.set("traceparent", activeSpanId);
@@ -2745,7 +2743,7 @@ function wrapFetchWithTimeout(fetchFn, config) {
         ...init,
         headers,
         signal,
-        ...(getMcpToolTimeoutMs_2(config) > 300000 && {
+        ...(getMcpToolTimeoutMs_4(config) > 300000 && {
           timeout: false,
         }),
       });
@@ -2754,45 +2752,45 @@ function wrapFetchWithTimeout(fetchFn, config) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:70806-70865 fingerprint (2.1.88 match: getMcpServerConnectionBatchSize, 1)
+//@ chunk-sywnjtqb.js:70912-70971 placement (2.1.88 match: getMcpServerConnectionBatchSize, 1)
 /**
  * 本地 MCP 服务器（stdio/sdk）并发连接批大小：env `MCP_SERVER_CONNECTION_BATCH_SIZE`，默认 3。（v2）
  */
-function getMcpServerConnectionBatchSize() {
+function getMcpServerConnectionBatchSize_2() {
   return env.MCP_SERVER_CONNECTION_BATCH_SIZE ?? 3;
 }
-//@ chunk-8t8n4kdh.js:70865-70932 fingerprint (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
+//@ chunk-sywnjtqb.js:70971-71038 placement (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
 /**
  * 远程 MCP 服务器并发连接批大小：env `MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE`，默认 20。（v2）
  */
-function getRemoteMcpServerConnectionBatchSize() {
+function getRemoteMcpServerConnectionBatchSize_2() {
   return env.MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE ?? 20;
 }
-//@ chunk-8t8n4kdh.js:70932-70995 fingerprint (2.1.88 match: isLocalMcpServer, 1)
+//@ chunk-sywnjtqb.js:71038-71101 placement (2.1.88 match: isLocalMcpServer, 1)
 /**
  * 判断是否本地服务器：未写 type、stdio 或 sdk。决定连接批次与是否自动重连。（v2）
  */
-function isLocalMcpServer(config) {
+function isLocalMcpServer_2(config) {
   return !config.type || config.type === "stdio" || config.type === "sdk";
 }
-//@ chunk-8t8n4kdh.js:70995-71055 fingerprint (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
-var ALLOWED_IDE_TOOLS = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
-//@ chunk-8t8n4kdh.js:71055-71120 layout (2.1.88 match: isIncludedMcpTool, 1)
-function isIncludedMcpTool_2(tool) {
-  return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS.includes(tool);
+//@ chunk-sywnjtqb.js:71101-71161 placement (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
+var ALLOWED_IDE_TOOLS_2 = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
+//@ chunk-sywnjtqb.js:71161-71226 placement (2.1.88 match: isIncludedMcpTool, 1)
+function isIncludedMcpTool_3(tool) {
+  return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS_2.includes(tool);
 }
-//@ chunk-8t8n4kdh.js:71120-71153 layout
-function isIdeServer(serverRef) {
-  return isIncludedMcpTool_2(serverRef.name);
+//@ chunk-sywnjtqb.js:71226-71259 placement
+function isIdeServer_2(serverRef) {
+  return isIncludedMcpTool_3(serverRef.name);
 }
-//@ chunk-8t8n4kdh.js:71153-71191 layout
+//@ chunk-sywnjtqb.js:71259-71297 placement
 /**
  * 判断服务器地址是否命中某开关的主机列表。
  */
 function featureHostListMatches(gateFeature, serverRef) {
   return matchesHostList(getFeatureValue_CACHED_MAY_BE_STALE(gateFeature, []), serverRef);
 }
-//@ chunk-8t8n4kdh.js:71191-71577 layout
+//@ chunk-sywnjtqb.js:71297-71683 placement
 /**
  * 判断 MCP 服务器地址的主机（或 CCR 代理目标主机）是否匹配主机列表（支持 * 与子域）。
  */
@@ -2810,41 +2808,41 @@ function matchesHostList(hosts, serverRef) {
     return flattened.some((host) => host === lower || host.endsWith(`.${lower}`));
   });
 }
-//@ chunk-8t8n4kdh.js:71577-71656 layout
+//@ chunk-sywnjtqb.js:71683-71762 placement
 /**
  * 该服务器是否在 elicitation 拒绝名单里。
  */
 function isElicitationDenylisted(serverRef) {
   return featureHostListMatches("tengu_mcp_legacy_url_elicitation_server_denylist", serverRef);
 }
-//@ chunk-8t8n4kdh.js:71656-71723 layout
-function shouldNormalizeRootCombinators(config) {
+//@ chunk-sywnjtqb.js:71762-71829 placement
+function shouldNormalizeRootCombinators_2(config) {
   return featureHostListMatches("tengu_mcp_normalize_root_combinators", config);
 }
-//@ chunk-8t8n4kdh.js:71723-71789 layout
-function shouldDropInvalidToolSchemas(config) {
+//@ chunk-sywnjtqb.js:71829-71895 placement
+function shouldDropInvalidToolSchemas_2(config) {
   return featureHostListMatches("tengu_mcp_drop_invalid_tool_schemas", config);
 }
-//@ chunk-8t8n4kdh.js:71789-71903 layout
+//@ chunk-sywnjtqb.js:71895-72009 placement
 /**
  * 测试专用：设置是否保留过期的重新认证条目（非测试调用时抛错）。
  */
-function setHoldStaleReauthEntryForTest(enabled) {
+function setHoldStaleReauthEntryForTest_2(enabled) {
   if (enabled) throw Error("setHoldStaleReauthEntryForTest is test-only");
   getCliOwnedState().holdStaleReauthEntryForTest = enabled;
 }
-//@ chunk-8t8n4kdh.js:71903-71951 layout
+//@ chunk-sywnjtqb.js:72009-72057 placement
 /**
  * 测试用：设置重新认证决策的接收器。
  */
 function setReauthDecisionSinkForTest(reauthDecisionSinkForTest) {
   getCliOwnedState().reauthDecisionSinkForTest = reauthDecisionSinkForTest;
 }
-//@ chunk-8t8n4kdh.js:71951-72261 layout
+//@ chunk-sywnjtqb.js:72057-72367 placement
 /**
  * getMcpRoots（v2 副本）。
  */
-function getMcpRoots(includeStagingRoot = false) {
+function getMcpRoots_2(includeStagingRoot = false) {
   let extraRoots = [];
   if (includeStagingRoot)
     try {
@@ -2872,35 +2870,35 @@ function getMcpRoots(includeStagingRoot = false) {
     roots,
   };
 }
-//@ chunk-8t8n4kdh.js:72261-72291 layout
-var ROOTLESS_PLUGIN_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8t8n4kdh.js:72261", () => {
-  ROOTLESS_PLUGIN_NAMES = new Set(["documents"]);
+//@ chunk-sywnjtqb.js:72367-72397 placement
+var ROOTLESS_PLUGIN_NAMES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sywnjtqb.js:72367", () => {
+  ROOTLESS_PLUGIN_NAMES_2 = new Set(["documents"]);
 });
-//@ chunk-8t8n4kdh.js:72291-72435 layout
-function isDocumentsPluginServer(serverRef) {
+//@ chunk-sywnjtqb.js:72397-72541 placement
+function isDocumentsPluginServer_2(serverRef) {
   if (getPlatform() === "windows") return false;
   if (!serverRef.pluginSource) return false;
   try {
-    return ROOTLESS_PLUGIN_NAMES.has(parsePluginIdentifier(serverRef.pluginSource).name.toLowerCase());
+    return ROOTLESS_PLUGIN_NAMES_2.has(parsePluginIdentifier(serverRef.pluginSource).name.toLowerCase());
   } catch {
     return false;
   }
 }
-//@ chunk-8t8n4kdh.js:72435-72572 layout
-function notifyRootsListChanged() {
+//@ chunk-sywnjtqb.js:72541-72678 placement
+function notifyRootsListChanged_2() {
   for (let liveClient of getConnectionCache().liveClients)
     liveClient.sendRootsListChanged().catch((error) => {
       logForDebugging(`MCP: failed to send roots/list_changed: ${describeErrorBrief(error)}`);
     });
 }
-//@ chunk-8t8n4kdh.js:72572-73027 layout
+//@ chunk-sywnjtqb.js:72678-73133 placement
 /**
  * MCP SDK 错误码集合与可识别的 JSON Schema 草案地址集合。
  */
 var MCP_SDK_ERROR_CODES; // deferred: uses OAuthErrorCode (../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
 var KNOWN_JSON_SCHEMA_DIALECTS;
-deferInit("chunk-8t8n4kdh.js:72572", () => {
+deferInit("chunk-sywnjtqb.js:72678", () => {
   MCP_SDK_ERROR_CODES = new Set(Object.values(SdkErrorCode));
   KNOWN_JSON_SCHEMA_DIALECTS = new Set([
     "http://json-schema.org/draft-04/schema",
@@ -2915,7 +2913,7 @@ deferInit("chunk-8t8n4kdh.js:72572", () => {
     "https://json-schema.org/schema",
   ]);
 });
-//@ chunk-8t8n4kdh.js:73027-73216 layout
+//@ chunk-sywnjtqb.js:73133-73322 placement
 /**
  * JSON Schema 校验器包装：工具 schema 的 $schema 是已知草案（draft-04/06/07/2019-09）时先去掉该字段再交给内层校验器，避免因方言声明报错。
  */
@@ -2930,7 +2928,7 @@ class LegacyDialectToleratingValidator {
     return this.inner.getValidator(schema);
   }
 }
-//@ chunk-8t8n4kdh.js:73216-73692 layout
+//@ chunk-sywnjtqb.js:73322-73798 placement
 /**
  * 常见连接错误码对应的人类可读提示。
  */
@@ -2943,12 +2941,12 @@ var CONNECTION_ERROR_HINTS_2 = [
   ["ESRCH", "Process not found - stdio server process terminated"],
   ["spawn", "Failed to spawn process - check command and permissions"],
 ];
-//@ chunk-8t8n4kdh.js:73692-73704 layout
+//@ chunk-sywnjtqb.js:73798-73810 placement
 /**
  * stdio 探测的默认超时（3000 毫秒）。
  */
 var DEFAULT_STDIO_PROBE_TIMEOUT_MS = 3000;
-//@ chunk-8t8n4kdh.js:73704-73825 layout
+//@ chunk-sywnjtqb.js:73810-73931 placement
 /**
  * 测试专用：设置 stdio 探测超时（非测试调用时抛错）。
  */
@@ -2956,28 +2954,28 @@ function setStdioProbeTimeoutMsForTest(timeoutMs) {
   if (timeoutMs !== undefined) throw Error("setStdioProbeTimeoutMsForTest is test-only");
   getCliOwnedState().stdioProbeTimeoutMsForTest = timeoutMs;
 }
-//@ chunk-8t8n4kdh.js:73825-73882 layout
+//@ chunk-sywnjtqb.js:73931-73988 placement
 function getStdioProbeTimeoutMs() {
   return getCliOwnedState().stdioProbeTimeoutMsForTest ?? DEFAULT_STDIO_PROBE_TIMEOUT_MS;
 }
-//@ chunk-8t8n4kdh.js:73882-73960 layout
+//@ chunk-sywnjtqb.js:73988-74066 placement
 /**
  * 默认握手超时（5000 毫秒）。
  */
 var REMOTE_PROBE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_HANDSHAKE_TIMEOUT_MS;
 var NEGOTIABLE_TRANSPORTS;
-deferInit("chunk-8t8n4kdh.js:73882", () => {
+deferInit("chunk-sywnjtqb.js:73988", () => {
   REMOTE_PROBE_TIMEOUT_MS = 5000;
   DEFAULT_HANDSHAKE_TIMEOUT_MS = 5000;
   NEGOTIABLE_TRANSPORTS = new Set(["http", "claudeai-proxy", "ccr-proxy", "stdio"]);
 });
-//@ chunk-8t8n4kdh.js:73960-74026 layout
+//@ chunk-sywnjtqb.js:74066-74132 placement
 function getHandshakeTimeoutMs(probeReserveMs = DEFAULT_HANDSHAKE_TIMEOUT_MS) {
   let connectionTimeoutMs = getConnectionTimeoutMs();
   return Math.max(connectionTimeoutMs - probeReserveMs, Math.floor(connectionTimeoutMs / 3));
 }
-//@ chunk-8t8n4kdh.js:74026-74364 layout
+//@ chunk-sywnjtqb.js:74132-74470 placement
 /**
  * classifyTransportKind：in-process/ccr-toolport/ccr-proxy/http/sse/ws/ide/claudeai-proxy/sdk-control/stdio。
  */
@@ -3002,7 +3000,7 @@ function classifyTransportKind(type, { inProcess, ccrProxy, ccrToolport }) {
       return "stdio";
   }
 }
-//@ chunk-8t8n4kdh.js:74364-74598 layout
+//@ chunk-sywnjtqb.js:74470-74705 placement
 function rewriteInitializeCapabilities(client, serverRef, stripTasks) {
   let originalSend = client.send.bind(client);
   client.send = (message, requestOptions) => {
@@ -3028,21 +3026,21 @@ function rewriteInitializeCapabilities(client, serverRef, stripTasks) {
     return originalSend(message, requestOptions);
   };
 }
-//@ chunk-8t8n4kdh.js:74598-74666 layout
+//@ chunk-sywnjtqb.js:74705-74773 placement
 /**
  * isNegotiationDenylisted：服务器主机在 tengu_mcp_negotiation_server_denylist 中。
  */
 function isNegotiationDenylisted(serverRef) {
   return featureHostListMatches("tengu_mcp_negotiation_server_denylist", serverRef);
 }
-//@ chunk-8t8n4kdh.js:74666-74729 layout
+//@ chunk-sywnjtqb.js:74773-74836 placement
 /**
  * isListenDenylisted：服务器主机在 tengu_mcp_listen_server_denylist 中（不发 subscriptions/listen）。
  */
 function isListenDenylisted(serverRef) {
   return featureHostListMatches("tengu_mcp_listen_server_denylist", serverRef);
 }
-//@ chunk-8t8n4kdh.js:74729-74828 layout
+//@ chunk-sywnjtqb.js:74836-74935 placement
 /**
  * 按 tengu_tender_truffle 名单判断服务器是否命中。
  */
@@ -3056,7 +3054,7 @@ function tenderTruffleMatch(serverRef) {
     source,
   };
 }
-//@ chunk-8t8n4kdh.js:74828-76257 layout
+//@ chunk-sywnjtqb.js:74935-76364 placement
 /**
  * resolveVersionNegotiation：决定协议版本协商模式。MCP_PROTOCOL_NEGOTIATION=legacy|auto 优先；否则按传输查 GrowthBook tengu_mcp_protocol_negotiation_http/_claudeai/_stdio/_ccr（默认 true → auto），sse/ws/ide/进程内/sdk 一律 legacy；命中 tengu_mcp_negotiation_server_denylist 也回 legacy。auto 带探测超时（远程 5 秒，stdio 可测试覆盖，均不超过连接超时的 1/3）。
  */
@@ -3166,7 +3164,7 @@ function resolveVersionNegotiation(transportKind, config, denylisted) {
   }
   return modeChoice;
 }
-//@ chunk-8t8n4kdh.js:76257-76655 layout
+//@ chunk-sywnjtqb.js:76364-76762 placement
 /**
  * Java MCP SDK 拒绝 elicitation 能力的错误识别：错误正则、错误体 schema、读取上限与给用户的修复提示。
  */
@@ -3174,7 +3172,7 @@ var JAVA_ELICITATION_REJECT_REGEX; // deferred: uses DoctorLazy (../../cli/handl
 var javaErrorBodySchema;
 var MAX_JAVA_ERROR_BODY;
 var JAVA_SDK_ELICITATION_HINT;
-deferInit("chunk-8t8n4kdh.js:76257", () => {
+deferInit("chunk-sywnjtqb.js:76364", () => {
   JAVA_ELICITATION_REJECT_REGEX =
     /Unrecognized field \\?"(?:form|url)\\?" \(class [\w.$]*ClientCapabilities\$Elicitation\)/;
   javaErrorBodySchema = DoctorLazy(() =>
@@ -3190,7 +3188,7 @@ deferInit("chunk-8t8n4kdh.js:76257", () => {
   MAX_JAVA_ERROR_BODY = 262144;
   JAVA_SDK_ELICITATION_HINT = `This server (Java MCP SDK 0.17.0 or older) rejected Claude Code's elicitation capability. Set "bareElicitationCapability": true for it, or upgrade to Java MCP SDK 0.17.1+ (Spring AI 1.0.7+ or 1.1.6+).`;
 });
-//@ chunk-8t8n4kdh.js:76655-76895 layout
+//@ chunk-sywnjtqb.js:76762-77002 placement
 function isJavaSdkElicitationRejection(error, serverRef, transport) {
   let usesModernProtocol =
     transport instanceof StreamableHTTPClientTransport_2 && transport.protocolVersion !== undefined;
@@ -3206,7 +3204,7 @@ function isJavaSdkElicitationRejection(error, serverRef, transport) {
     }).elicitation?.url !== undefined
   );
 }
-//@ chunk-8t8n4kdh.js:76895-77101 layout
+//@ chunk-sywnjtqb.js:77002-77208 placement
 function isJavaSdkStackTraceBody(text) {
   if (typeof text !== "string" || text.length > MAX_JAVA_ERROR_BODY) return false;
   let parseResult = javaErrorBodySchema().safeParse(safeParseJSON(text, false));
@@ -3217,20 +3215,20 @@ function isJavaSdkStackTraceBody(text) {
     )
   );
 }
-//@ chunk-8t8n4kdh.js:77101-77281 layout
+//@ chunk-sywnjtqb.js:77208-77388 placement
 function isNonJsonRpcClientError(error) {
   if (!(error instanceof SdkHttpError)) return false;
   let status = error.status;
   if (!(status >= 400 && status < 500) || status === 401 || status === 403 || status === 429) return false;
   let text = error.data.text;
   if (typeof text !== "string") return true;
-  return !isJsonRpcErrorBody(text);
+  return !isJsonRpcErrorBody_2(text);
 }
-//@ chunk-8t8n4kdh.js:77281-77469 layout
-function isJsonRpcErrorBody(text) {
+//@ chunk-sywnjtqb.js:77388-77576 placement
+function isJsonRpcErrorBody_2(text) {
   let found = text.split(/\r?\n/).find((line) => line.startsWith("data:"));
   let payload = safeParseJSON(found === undefined ? text : found.slice(5), false);
-  return isJSONRPCErrorResponse(
+  return isJSONRPCErrorResponse_2(
     typeof payload === "object" && payload !== null && "id" in payload && payload.id === null
       ? {
           ...payload,
@@ -3239,7 +3237,7 @@ function isJsonRpcErrorBody(text) {
       : payload,
   );
 }
-//@ chunk-8t8n4kdh.js:77469-77794 layout
+//@ chunk-sywnjtqb.js:77576-77901 placement
 /**
  * getListingDiscoverPrior：claudeai-proxy（非 stateless）的 discover 先验：discoverSupport=legacy → legacy；supported 且开关 all → 用 /v1/mcp_servers 投影的 DiscoverResult 作为 modern 先验，省去线上 server/discover。
  */
@@ -3261,7 +3259,7 @@ function getListingDiscoverPrior(serverRef) {
         discover: cachedDiscoverResult,
       };
 }
-//@ chunk-8t8n4kdh.js:77794-77905 layout
+//@ chunk-sywnjtqb.js:77901-78012 placement
 /**
  * burnDiscoverPrior：基于先验的连接被拒后，本进程内不再使用该先验；legacy 先验同时删除持久判定。
  */
@@ -3272,7 +3270,7 @@ function burnDiscoverPrior(serverRef, kind, storageV5) {
     if (kind === "legacy") forgetDiscoverVerdict(serverRef, storageV5);
   }
 }
-//@ chunk-8t8n4kdh.js:77905-78171 layout
+//@ chunk-sywnjtqb.js:78012-78278 placement
 /**
  * getRememberedLegacyPrior：可记键的服务器若判定表记为 legacy peer，返回 {kind:'legacy'} 先验。
  */
@@ -3292,14 +3290,14 @@ async function getRememberedLegacyPrior(config, storageV5) {
       }
     : undefined;
 }
-//@ chunk-8t8n4kdh.js:78171-78228 placement (2.1.88 match: initializeAgentMemorySnapshots, 0.502)
+//@ chunk-sywnjtqb.js:78278-78335 placement (2.1.88 match: initializeAgentMemorySnapshots, 0.502)
 /**
  * MCP initialize / tools/list 方法判定（MCP 客户端代码，切分误归）。
  */
 function isSessionHandshakeMethod(agents) {
   return agents === "initialize" || agents === "tools/list";
 }
-//@ chunk-8t8n4kdh.js:78228-78420 placement
+//@ chunk-sywnjtqb.js:78335-78527 placement
 /**
  * MCP JSON-RPC 错误码分类（rpc_era / rpc_session）。
  */
@@ -3316,7 +3314,7 @@ function classifyMcpRpcErrorCode(code, method) {
     return "rpc_session";
   return;
 }
-//@ chunk-8t8n4kdh.js:78420-78579 placement
+//@ chunk-sywnjtqb.js:78527-78686 placement
 /**
  * MCP 连接错误分类（ProtocolError / SdkHttpError）。
  */
@@ -3331,7 +3329,7 @@ function classifyMcpConnectError(error, method) {
   }
   return;
 }
-//@ chunk-8t8n4kdh.js:78579-78775 sole-consumer
+//@ chunk-sywnjtqb.js:78686-78882 placement
 /**
  * HTTP 400 且响应体是 JSON-RPC 错误码 UnsupportedProtocolVersion / MissingRequiredClientCapability 时为真；握手分类用来判断"协议代际不符"。
  */
@@ -3344,7 +3342,7 @@ function isUnsupportedVersionHttp400(error) {
     errorCode === ProtocolErrorCode.MissingRequiredClientCapability
   );
 }
-//@ chunk-8t8n4kdh.js:78775-78931 sole-consumer
+//@ chunk-sywnjtqb.js:78882-79038 placement
 /**
  * makeConnectTimeoutError（v2 副本）。
  */
@@ -3359,19 +3357,19 @@ function makeConnectTimeoutError_2(message) {
     });
   return error;
 }
-//@ chunk-8t8n4kdh.js:78931-79035 sole-consumer (2.1.88 match: getServerCommandArray, 0.781)
+//@ chunk-sywnjtqb.js:79038-79142 placement (2.1.88 match: getServerCommandArray, 0.781)
 /**
  * 插件来源的 stdio 服务器连接失败时，按服务器签名在认证/失败缓存文件里写一条带时间戳的记录（经 authCacheWriteChain 串行化写入），下次可跳过。
  */
 function recordPluginStdioServerFailure(serverName, config, storageV5) {
   if ((config.type === "stdio" || config.type === undefined) && config.pluginSource !== undefined)
-    setMcpAuthCacheEntry(serverName, configHash(config), undefined, storageV5);
+    isMcpAuthCached_3(serverName, configHash(config), undefined, storageV5);
 }
-//@ chunk-8t8n4kdh.js:79035-79874 sole-consumer
+//@ chunk-sywnjtqb.js:79142-79980 placement
 /**
  * 包装传输 send：initialize 请求发出后立刻预发 tools/list（超时取 2×连接超时与上限的较小者），减少一次往返；出错时撤销包装，结果记入连接统计 sentAhead。
  */
-async function pipelineEarlyToolsList(client, transport, connectionTimeoutMs, aheadState, windowed) {
+async function pipelineEarlyToolsList(client, transport, connectionTimeoutMs, aheadState, windowed, server) {
   let send = transport.send;
   let initializePromise;
   let toolsListPromise;
@@ -3383,7 +3381,7 @@ async function pipelineEarlyToolsList(client, transport, connectionTimeoutMs, ah
       {
         method: "tools/list",
       },
-      ListToolsResultSchema,
+      server,
       {
         timeout: Math.min(2 * getConnectionTimeoutMs(), MAX_TIMER_DELAY_MS),
         signal: pageController.signal,
@@ -3442,19 +3440,19 @@ async function pipelineEarlyToolsList(client, transport, connectionTimeoutMs, ah
     armRequestTimeout(toolsListPromise, pageController);
   armAheadExpiry(aheadState);
 }
-//@ chunk-8t8n4kdh.js:79874-79910 sole-consumer
+//@ chunk-sywnjtqb.js:79980-80016 placement
 /**
  * 2×连接超时不超过该服务器的有效工具超时时才允许预发 tools/list。
  */
 function hasBudgetForEarlyToolsList(config) {
-  return 2 * getConnectionTimeoutMs() <= getMcpRequestTimeoutMs(config);
+  return 2 * getConnectionTimeoutMs() <= getMcpRequestTimeoutMs_2(config);
 }
-//@ chunk-8t8n4kdh.js:80092-80104 sole-consumer
+//@ chunk-sywnjtqb.js:80198-80210 placement
 /**
  * 记录消息流结果前的固定延迟（2000 毫秒）。
  */
 var INITIALIZED_EVENT_DELAY_MS = 2000;
-//@ chunk-8t8n4kdh.js:80104-80486 sole-consumer
+//@ chunk-sywnjtqb.js:80210-80592 placement
 /**
  * 在 initialized 通知应答后的固定延迟时记录消息流结果事件。
  */
@@ -3479,12 +3477,12 @@ function scheduleMessageStreamOutcomeLog(client, name, traceState, events) {
     events,
   ).unref?.();
 }
-//@ chunk-8t8n4kdh.js:80486-119566 sole-consumer
+//@ chunk-sywnjtqb.js:80592-120383 placement
 /**
  * connectToServer（v2）：按 name+config 记忆化的连接入口。建传输（sse/sse-ide/ws-ide/ws/http/claudeai-proxy/进程内 Chrome/stdio），组装 fetch 包装（超时、OAuth、头、一方登录、CCR 认证、discover -32601 侦测、握手计时）；按 resolveVersionNegotiation 决定 auto（先 server/discover 再按结果 modern 或 legacy initialize）或 legacy；处理 listing 先验、记住的 legacy 判定、stateless 代理本地应答、探测超时/拒绝后的重启与回退、HTTP→SSE 回退；成功后注册 roots/list、elicitation、onclose/onerror 清理与 list_changed 订阅，失败分类为 failed/needs-auth。
  */
 var connectToServer; // deferred: uses memoizeWithExternalCache (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:80486", () => {
+deferInit("chunk-sywnjtqb.js:80592", () => {
   connectToServer = memoizeWithExternalCache(
     async (name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions) => {
       primeEnsureConnected();
@@ -3556,6 +3554,8 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
       let sseTransportFactory;
       let retriedWithoutElicitation = false;
       let probeFallbackReason;
+      let options = false;
+      let connectionState = false;
       let discoverPrior;
       let discoverSource;
       let discoverSourceEnum;
@@ -3622,7 +3622,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
         if (useFirstPartyAuth)
           logEvent("tengu_mcp_first_party_auto_auth", {
             transportType: fromEnum(serverRef.type),
-            ...mcpBaseUrlAnalytics_2(serverRef, name),
+            ...mcpServerKeyHashEntry(serverRef, name),
           });
         let firstPartyBearerState = {};
         if (serverRef.type === "sse") {
@@ -3635,7 +3635,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           let sseProxyOptions = await mcpProxyFetchOptions(serverRef.url);
           let fetchFn = createBoundedFetch(wrapFetchNoop(createFetchWithInit(undefined, sseProxyOptions)));
           if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
-          fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
+          fetchFn = wrapFetchWithTimeout_2(fetchFn, serverRef);
           if (useFirstPartyAuth)
             fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, firstPartyBearerState);
           let sseTransportOptions = {
@@ -3701,7 +3701,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             proxy: getWebSocketProxyUrl(serverRef.url),
             tls: webSocketTLSOptions || undefined,
           });
-          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
+          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
         } else if (serverRef.type === "ws") {
           recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
           logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
@@ -3730,7 +3730,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             proxy: getWebSocketProxyUrl(serverRef.url),
             tls: webSocketTLSOptions || undefined,
           });
-          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
+          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
         } else if (serverRef.type === "http") {
           recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
           if (keepsMCPDebug()) {
@@ -3766,7 +3766,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             },
           );
           if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
-          fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
+          fetchFn = wrapFetchWithTimeout_2(fetchFn, serverRef);
           if (useFirstPartyAuth)
             fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, firstPartyBearerState);
           if (isCcrInjectedUrl)
@@ -3819,7 +3819,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 url: redactUrlSecrets(serverRef.url),
                 headers,
                 hasAuthProvider: !!authProvider_2,
-                timeoutMs: getMcpRequestTimeoutMs(serverRef),
+                timeoutMs: getMcpRequestTimeoutMs_2(serverRef),
               })}`,
             );
           }
@@ -3883,12 +3883,12 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           let proxyFetchOptions = getProxyFetchOptions({
             url: proxyUrl,
           });
-          let claudeAiProxyFetch = createClaudeAiProxyFetch(
+          let proxyClient = withProxyBearerRefresh(
             createBoundedFetch(createFetchWithInit(undefined, proxyFetchOptions)),
             credentials,
           );
           let streamDisabled = isSereneTeapotEnabled();
-          let answeredLocally = streamDisabled || isStatelessClaudeAiProxy(serverRef);
+          let answeredLocally = streamDisabled || isStatelessClaudeAiProxy_2(serverRef);
           if (answeredLocally)
             logMCPDebug(
               name,
@@ -3900,15 +3900,15 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             mcpUrl: proxyUrl,
             keepAliveDisabled: proxyFetchOptions.keepalive === false,
             getAnsweredLocally: answeredLocally,
-            statelessGated: isStatelessClaudeAiProxy(serverRef),
+            statelessGated: isStatelessClaudeAiProxy_2(serverRef),
           });
           handshakeTrace = handshakeTrace_2;
           let proxyTransportOptions = {
             fetch: wrapFetchWithHandshakeTrace(
               wrapFetchDetectDiscoverMethodNotFound(
                 answeredLocally
-                  ? answerGetStreamLocally(wrapFetchWithTimeout(claudeAiProxyFetch, serverRef), proxyUrl)
-                  : wrapFetchWithTimeout(claudeAiProxyFetch, serverRef),
+                  ? answerGetStreamLocally_2(wrapFetchWithTimeout_2(proxyClient, serverRef), proxyUrl)
+                  : wrapFetchWithTimeout_2(proxyClient, serverRef),
                 () => {
                   discoverMethodNotFound = true;
                 },
@@ -3970,7 +3970,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
             baseEnv: shouldUseMcpAllowlistEnv()
               ? {
-                  ...getDefaultEnvironment(),
+                  ...getDefaultEnvironment_2(),
                   ...agentProxyEnv(),
                 }
               : {
@@ -4006,6 +4006,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             }),
           };
           checkPluginBunOptions(serverRef.pluginSource, stdioEnv, envWithoutChromeFlags);
+          dropEmptyBedrockBearer(stdioEnv);
           stdioTransportOptions = {
             command,
             args,
@@ -4067,10 +4068,10 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
                   README_URL: "https://code.claude.com/docs/en/overview",
-                  VERSION: "2.1.316",
+                  VERSION: "2.1.318",
                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                   HOOKS_WORKER_URL:
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
@@ -4110,7 +4111,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           );
           clientInstance.setRequestHandler("roots/list", async () => {
             logMCPDebug(name, "Received ListRoots request from server");
-            return getMcpRoots(isDocumentsPluginServer(serverRef));
+            return getMcpRoots_2(isDocumentsPluginServer_2(serverRef));
           });
           if (restrictRemoteHost)
             getCliOwnedState().clientTasksDeclaredBeforeServerList.set(clientInstance, capabilities);
@@ -4136,9 +4137,9 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
           }
         }
-        let cachedInitialize = getCachedInitializeResult(serverRef);
+        let cachedInitialize = getCachedInitializeResult_2(serverRef);
         let discoverAnswer = getLocalDiscoverAnswer(serverRef);
-        if (isStatelessClaudeAiProxy(serverRef)) {
+        if (isStatelessClaudeAiProxy_2(serverRef)) {
           logMCPDebug(
             name,
             cachedInitialize
@@ -4152,7 +4153,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
                 : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
             );
-          answerHandshakeLocally(transport_2, cachedInitialize, discoverAnswer);
+          answerHandshakeLocally_2(transport_2, cachedInitialize, discoverAnswer);
         }
         guardTransportSend(
           {
@@ -4167,7 +4168,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             (error instanceof Error && error.name === "UnauthorizedError") ||
             (error instanceof ZodError && authProvider?.sawAuthChallenge === true) ||
             error instanceof IssuerEchoCrossOriginError ||
-            (serverRef.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error)) ||
+            (serverRef.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error)) ||
             status === 401 ||
             status === 403
           );
@@ -4180,7 +4181,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 : discoverPrior.kind === "modern"
                   ? "listing_body"
                   : "listing_legacy"
-              : isStatelessClaudeAiProxy(serverRef) &&
+              : isStatelessClaudeAiProxy_2(serverRef) &&
                   (discoverAnswer !== undefined || cachedInitialize !== undefined)
                 ? "stateless_local"
                 : "wire",
@@ -4288,6 +4289,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                         getConnectionTimeoutMs(),
                         toolsListAhead,
                         toolsListFirstRequested,
+                        isHTTPConfig(serverRef),
                       )
                     : client.connect(transport, {
                         timeout:
@@ -4385,6 +4387,13 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               stdioTransportOptions !== undefined &&
               error instanceof ProtocolError &&
               !isJavaSdkElicitationRejection(error, serverRef, transport);
+            let timedOut =
+              discoverPrior !== undefined &&
+              usedRememberedLegacy &&
+              stdioTransportOptions !== undefined &&
+              !connectBudgetExpired &&
+              error instanceof SdkError &&
+              error.code === SdkErrorCode.ConnectionClosed;
             let retryNegotiation = {
               mode: "legacy",
             };
@@ -4458,7 +4467,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                   priorSource: discoverSourceEnum,
                   reason: fromEnum(failureKind),
                   transportType: fromEnum(serverRef.type ?? "stdio"),
-                  ...mcpBaseUrlAnalytics_2(serverRef, name),
+                  ...mcpServerKeyHashEntry(serverRef, name),
                 });
               } else
                 logMCPDebug(
@@ -4477,35 +4486,43 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 closedAfterProbeTimeout ||
                 protocolErrorAfterProbeTimeout ||
                 discoverTimedOut ||
-                transportClosed) &&
+                transportClosed ||
+                timedOut) &&
               (serverRef.type === "stdio" || !serverRef.type) &&
               stdioTransportOptions !== undefined &&
               !stdioOverflow
             ) {
               logMCPDebug(
                 name,
-                protocolErrorAfterProbeTimeout && error instanceof ProtocolError
-                  ? `stdio server rejected initialize with JSON-RPC error ${error.code} (${truncateToLength(describeConnectError(error, serverRef), 200)}) after the version negotiation probe timed out (likely a slow-starting server that read the stale probe first), and a second server/discover on the same process ${_anthropicRediscoverError === undefined ? "was not attempted (the error named only protocol versions this client lacks)" : `got no usable answer (${truncateToLength(describeConnectError(_anthropicRediscoverError, serverRef), 200)})`}; restarting it once without the probe, within the remaining connect budget`
-                  : closedAfterProbeTimeout
-                    ? "stdio server exited during initialize after the version negotiation probe timed out (likely a slow-starting server that exits on requests before initialize); restarting it once without the probe, within the remaining connect budget"
-                    : discoverTimedOut
-                      ? `stdio server negotiated ${client.getNegotiatedProtocolVersion()} and acknowledged subscriptions/listen, then did not answer a follow-up server/discover within ${negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs()}ms (a server that stops reading requests while it holds the listen, as mark3labs/mcp-go 1.x before 1.1.1 does); restarting it once with the legacy handshake, which sends no listen, within the remaining connect budget`
-                      : transportClosed
-                        ? `stdio server acknowledged subscriptions/listen and then exited before answering a follow-up server/discover (${truncateToLength(describeConnectError(error, serverRef), 200)}); restarting it once with the legacy handshake, which sends no server/discover and no listen, within the remaining connect budget`
-                        : "version negotiation probe closed the stdio server (rmcp-class pre-init hard close); respawning pinned legacy",
+                timedOut
+                  ? "stdio server remembered as a legacy peer exited during initialize, with no probe sent; restarting it once, again without the probe, within the remaining connect budget"
+                  : protocolErrorAfterProbeTimeout && error instanceof ProtocolError
+                    ? `stdio server rejected initialize with JSON-RPC error ${error.code} (${truncateToLength(describeConnectError(error, serverRef), 200)}) after the version negotiation probe timed out (likely a slow-starting server that read the stale probe first), and a second server/discover on the same process ${_anthropicRediscoverError === undefined ? "was not attempted (the error named only protocol versions this client lacks)" : `got no usable answer (${truncateToLength(describeConnectError(_anthropicRediscoverError, serverRef), 200)})`}; restarting it once without the probe, within the remaining connect budget`
+                    : closedAfterProbeTimeout
+                      ? "stdio server exited during initialize after the version negotiation probe timed out (likely a slow-starting server that exits on requests before initialize); restarting it once without the probe, within the remaining connect budget"
+                      : discoverTimedOut
+                        ? `stdio server negotiated ${client.getNegotiatedProtocolVersion()} and acknowledged subscriptions/listen, then did not answer a follow-up server/discover within ${negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs()}ms (a server that stops reading requests while it holds the listen, as mark3labs/mcp-go 1.x before 1.1.1 does); restarting it once with the legacy handshake, which sends no listen, within the remaining connect budget`
+                        : transportClosed
+                          ? `stdio server acknowledged subscriptions/listen and then exited before answering a follow-up server/discover (${truncateToLength(describeConnectError(error, serverRef), 200)}); restarting it once with the legacy handshake, which sends no server/discover and no listen, within the remaining connect budget`
+                          : "version negotiation probe closed the stdio server (rmcp-class pre-init hard close); respawning pinned legacy",
               );
-              probeFallbackReason = unsupportedVersionAfterProbe
-                ? lit("era_locked_after_probe_timeout")
-                : protocolErrorAfterProbeTimeout
-                  ? lit("rejected_after_probe_timeout")
-                  : closedAfterProbeTimeout
-                    ? lit("closed_after_probe_timeout")
-                    : discoverTimedOut
-                      ? lit("stalled_after_listen")
-                      : transportClosed
-                        ? lit("closed_after_listen")
-                        : lit("closed");
+              probeFallbackReason = timedOut
+                ? lit("closed_on_remembered_dial")
+                : unsupportedVersionAfterProbe
+                  ? lit("era_locked_after_probe_timeout")
+                  : protocolErrorAfterProbeTimeout
+                    ? lit("rejected_after_probe_timeout")
+                    : closedAfterProbeTimeout
+                      ? lit("closed_after_probe_timeout")
+                      : discoverTimedOut
+                        ? lit("stalled_after_listen")
+                        : transportClosed
+                          ? lit("closed_after_listen")
+                          : lit("closed");
               await transport.close().catch(() => {});
+              options = eraNegotiationFailed || closedAfterProbeTimeout;
+              connectionState =
+                transport instanceof BoundedStdioClientTransport && transport.answeredProbeLate;
               transport_2 = restartStdioTransport(
                 stdioTransportOptions,
                 "stderr of the stdio server before restarting it",
@@ -4520,7 +4537,8 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               probeFallbackReason = probeTimedOutError ? lit("probe_timeout") : lit("probe_failed");
               await transport.close().catch(() => {});
               transport_2 = modernTransportFactory();
-              if (isStatelessClaudeAiProxy(serverRef)) answerHandshakeLocally(transport_2, cachedInitialize);
+              if (isStatelessClaudeAiProxy_2(serverRef))
+                answerHandshakeLocally_2(transport_2, cachedInitialize);
             } else if (
               !isAuthError(error) &&
               isJavaSdkElicitationRejection(error, serverRef, transport) &&
@@ -4578,12 +4596,12 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 }),
               ]);
             } catch (error_2) {
-              let timedOut = retryTimedOut;
+              let timedOut_2 = retryTimedOut;
               let isAuthFailureResult = isAuthError(error_2);
               if (
                 !retriedWithoutElicitation &&
                 !isAuthFailureResult &&
-                !timedOut &&
+                !timedOut_2 &&
                 makeFreshTransport !== undefined &&
                 isJavaSdkElicitationRejection(error_2, serverRef, retryTransport)
               ) {
@@ -4617,6 +4635,10 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                   );
                   return;
                 } catch (error_2) {
+                  if (timedOut) {
+                    forgetDiscoverVerdict(serverRef, storageV5);
+                    throw error;
+                  }
                   if (probeTimedOutError && !connectBudgetExpired && !isAuthError(error_2)) {
                     logMCPDebug(
                       name,
@@ -4627,7 +4649,9 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                   throw error_2;
                 }
               }
-              if (probeTimedOutError && !isAuthFailureResult && !timedOut) {
+              if (timedOut) forgetDiscoverVerdict(serverRef, storageV5);
+              if (timedOut || rememberedLegacyRejected) throw error;
+              if (probeTimedOutError && !isAuthFailureResult && !timedOut_2) {
                 let retryErrorText = truncateToLength(describeConnectError(error_2, serverRef), 200);
                 logMCPDebug(
                   name,
@@ -4642,7 +4666,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               if (
                 wireReprobe &&
                 !isAuthFailureResult &&
-                !timedOut &&
+                !timedOut_2 &&
                 error_2 instanceof SdkError &&
                 (error_2.code === SdkErrorCode.EraNegotiationFailed || probeTimeoutAfterRetry)
               ) {
@@ -4879,10 +4903,10 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               name,
               `claude.ai proxy connection failed after ${failureDurationMs}ms: ${describeConnectError(connectError, serverRef)}`,
             );
-            if (!isClaudeAiBearerRejectedError(connectError))
+            if (!isClaudeAiBearerRejectedError_2(connectError))
               logMCPError(name, rethrowRedactedConnectError(connectError, serverRef));
             let proxyStatus = connectError instanceof SdkHttpError ? connectError.status : connectError.code;
-            if (isClaudeAiBearerRejectedError(connectError)) {
+            if (isClaudeAiBearerRejectedError_2(connectError)) {
               markConnectEnded(handshakeTrace);
               logEvent("tengu_mcp_server_connection_failed", {
                 processUptimeAtConnectStartMs,
@@ -4896,7 +4920,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
                 negotiationDenylisted: negotiation_2.negotiationDenylisted,
                 discoverSource: negotiation_2.discoverSource,
                 listingPriorBurned: negotiation_2.listingPriorBurned,
-                ...mcpBaseUrlAnalytics_2(serverRef, name),
+                ...mcpServerKeyHashEntry(serverRef, name),
                 ...buildPluginSourceFields(serverRef),
               });
               logFeatureSad("mcp_connect", "mcp_connect_claudeai_bearer_rejected");
@@ -4923,7 +4947,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               return failedResult;
             }
             if (proxyStatus === 401 || proxyStatus === 403)
-              return handleRemoteAuthFailure(
+              return connectWithRetry(
                 name,
                 serverRef,
                 "claudeai-proxy",
@@ -4988,6 +5012,10 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
         let onerror = client.onerror;
         let onclose = client.onclose;
         let maxConsecutiveErrors = 3;
+        let probeStart =
+          serverRef.type === "http" &&
+          isCcrMcpPath(serverRef.url) &&
+          getFeatureValue_CACHED_MAY_BE_STALE("tengu_snug_mist_enabled", false);
         let transportErrorState = {
           consecutiveErrors: 0,
           activeCallWatchdogs: new Set(),
@@ -5042,7 +5070,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             priorSource: discoverSourceEnum,
             reason: fromEnum(reason),
             transportType: fromEnum(serverRef.type ?? "stdio"),
-            ...mcpBaseUrlAnalytics_2(serverRef, name),
+            ...mcpServerKeyHashEntry(serverRef, name),
           });
           setTimeout(schedulePriorDiscardClose, 0);
         };
@@ -5117,7 +5145,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             return;
           }
           if (error instanceof FirstPartyDesignNeedsConsentError) return;
-          if (transportType === "stdio" && error instanceof StdoutOverflowError) {
+          if (transportType === "stdio" && error instanceof StdoutOverflowError_2) {
             logMCPError(name, error.message);
             sawTransportError = true;
             closeTransport("stdout overflow");
@@ -5126,7 +5154,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           }
           if (
             (transportType === "http" || transportType === "claudeai-proxy") &&
-            error instanceof HttpBodyOverflowError
+            error instanceof HttpBodyOverflowError_2
           ) {
             logMCPError(
               name,
@@ -5140,7 +5168,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               transportType === "sse-ide" ||
               transportType === "http" ||
               transportType === "claudeai-proxy") &&
-            error.message.includes(STOPPED_READING_NOTE)
+            error.message.includes(STOPPED_READING_NOTE_2)
           ) {
             logMCPError(name, error.message);
             sawTransportError = true;
@@ -5205,7 +5233,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
               return;
             }
             if (isTransientMcpError(error)) {
-              transportErrorState.consecutiveErrors++;
+              transportErrorState.consecutiveErrors += probeStart ? 0 : 1;
               armWatchdogs();
               logMCPDebug(
                 name,
@@ -5287,14 +5315,14 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             if (transportErrorState.consecutiveErrors !== 0) transportErrorState.consecutiveErrors = 0;
             if (
               isCcrToolport &&
-              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse_2(message)) &&
               message.id !== undefined
             )
               for (let activeCallWatchdog of transportErrorState.activeCallWatchdogs)
                 activeCallWatchdog.requestAnswered?.(message.id);
             if (
               trackHandshakeMethods &&
-              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse_2(message)) &&
               message.id !== undefined
             ) {
               let pendingMethod = pendingMethodsById.get(message.id);
@@ -5320,7 +5348,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
             } else if (
               pendingPriorRpcEra &&
               client.transport !== undefined &&
-              isJSONRPCErrorResponse(message) &&
+              isJSONRPCErrorResponse_2(message) &&
               message.id !== undefined &&
               classifyMcpRpcErrorCode(message.error.code, "") === "rpc_era"
             ) {
@@ -5480,18 +5508,18 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           forgetDiscoverVerdict(serverRef, storageV5);
         let probeTimedOut =
           transport_2 instanceof BoundedStdioClientTransport && transport_2._anthropicProbeTimedOut === true;
-        let answeredProbeLate =
-          transport_2 instanceof BoundedStdioClientTransport && transport_2.answeredProbeLate;
+        let probeAnsweredLate =
+          connectionState ||
+          (transport_2 instanceof BoundedStdioClientTransport && transport_2.answeredProbeLate);
         if (
           discoverVerdictKey !== undefined &&
           !(serverRef.type === "claudeai-proxy" && serverRef.stateless === true) &&
           discoverSource === "wire" &&
-          (discoverMethodNotFound || probeTimedOut) &&
-          probeFallbackReason === undefined &&
+          (options || ((discoverMethodNotFound || probeTimedOut) && probeFallbackReason === undefined)) &&
           client.getProtocolEra() === "legacy" &&
           !getCliOwnedState().burnedListingDiscoverPriors.has(discoverVerdictKey)
         ) {
-          if (answeredProbeLate) {
+          if (probeAnsweredLate) {
             logMCPDebug(
               name,
               "stdio server answered the server/discover probe after its bound, so it was only slow to start and speaks the new protocol; not remembering it as a legacy peer",
@@ -5544,7 +5572,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           httpCount: serverStats?.httpCount,
           sseIdeCount: serverStats?.sseIdeCount,
           wsIdeCount: serverStats?.wsIdeCount,
-          ...mcpBaseUrlAnalytics_2(serverRef, name),
+          ...mcpServerKeyHashEntry(serverRef, name),
         });
         if (toolsListAheadState !== undefined && !getCliOwnedState().toolsListAhead.has(client))
           armToolsListAhead(
@@ -5716,7 +5744,7 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           scope: fromEnum(serverRef.scope),
           isPlugin: serverRef.pluginSource !== undefined,
           ...buildPluginSourceFields(serverRef),
-          ...mcpBaseUrlAnalytics_2(serverRef, name),
+          ...mcpServerKeyHashEntry(serverRef, name),
         });
         logMCPDebug(
           name,
@@ -5772,6 +5800,10 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
           config: serverRef,
           error: errorDetail,
           errorCode: failureCode,
+          notForwardedMessage:
+            "url" in serverRef && issuerKey_3(serverRef.url)
+              ? redactMcpErrorDetail(name, serverRef, postedEndpointErrorText(error) ?? "") || undefined
+              : undefined,
           ...(proxyConnectStatus !== undefined && {
             proxyConnectStatus,
           }),
@@ -5795,14 +5827,14 @@ deferInit("chunk-8t8n4kdh.js:80486", () => {
       ),
   );
 });
-//@ chunk-8t8n4kdh.js:119566-119630 sole-consumer
+//@ chunk-sywnjtqb.js:120383-120447 placement
 /**
  * 按 http 传输决定协议时代（modern/legacy）。
  */
 function eraResolver() {
   return resolveVersionNegotiation("http").mode === "auto" ? "modern" : "legacy";
 }
-//@ chunk-8t8n4kdh.js:119630-119683 sole-consumer
+//@ chunk-sywnjtqb.js:120447-120500 placement
 /**
  * 初始化客户端侧的解析器（发现缓存开关、身份与账号来源）。
  */
@@ -5812,7 +5844,7 @@ function primeClientResolvers() {
   if (hasAccountResolver()) return;
   setAccountResolver(oauthAccountIdentity);
 }
-//@ chunk-8t8n4kdh.js:119683-119720 sole-consumer
+//@ chunk-sywnjtqb.js:120500-120538 placement
 /**
  * 注册 ensureConnectedClient 实现（一次）。
  */
@@ -5820,7 +5852,7 @@ function primeEnsureConnected() {
   if (getEnsureConnectedClient()) return;
   setEnsureConnectedClient(ensureConnectedClient);
 }
-//@ chunk-8t8n4kdh.js:119720-119816 sole-consumer
+//@ chunk-sywnjtqb.js:120538-120634 placement
 /**
  * 发出“缓存行被采纳”信号。
  */
@@ -5831,7 +5863,7 @@ function emitCachedAdopt(name, config) {
     logMCPDebug(name, `cached-row adopt subscriber threw: ${errorMessage(error)}`);
   }
 }
-//@ chunk-8t8n4kdh.js:119816-120052 sole-consumer
+//@ chunk-sywnjtqb.js:120634-120870 placement
 function recordCachedDialFailure(failure, ownStrike) {
   if (ownStrike) logFeatureSad("mcp_discovery_cache", "lazy_dial_failed");
   getConnectionCache().settledCachedDialFailures.set(serverCacheKey(failure.name, failure.config), {
@@ -5844,7 +5876,7 @@ function recordCachedDialFailure(failure, ownStrike) {
     logMCPDebug(failure.name, `cached-row dial-failed subscriber threw: ${errorMessage(error)}`);
   }
 }
-//@ chunk-8t8n4kdh.js:120052-120148 sole-consumer
+//@ chunk-sywnjtqb.js:120870-120966 placement
 /**
  * 取出并删除某服务器已结算的缓存拨号失败记录。
  */
@@ -5855,7 +5887,7 @@ function takeSettledCachedDialFailure(name, config) {
   settledCachedDialFailures.delete(cacheKey);
   return failure;
 }
-//@ chunk-8t8n4kdh.js:120148-120242 sole-consumer
+//@ chunk-sywnjtqb.js:120966-121060 placement
 /**
  * 缓存失败是否已被清理（测试用判断）。
  */
@@ -5863,7 +5895,7 @@ async function hasClearedCachedFailure(name, config) {
   let cachedConnection = connectToServer.cache?.get?.(serverCacheKey(name, config));
   return cachedConnection !== undefined && (await clearMcpAuthCache(cachedConnection)) === undefined;
 }
-//@ chunk-8t8n4kdh.js:120242-120496 sole-consumer
+//@ chunk-sywnjtqb.js:121060-121314 placement
 function refuseCachedRow(name, config, reason) {
   let cacheKey = serverCacheKey(name, config);
   if (getConnectionCache().refusedCachedRows.has(cacheKey)) return;
@@ -5884,7 +5916,7 @@ function refuseCachedRow(name, config, reason) {
     false,
   );
 }
-//@ chunk-8t8n4kdh.js:120496-120663 sole-consumer
+//@ chunk-sywnjtqb.js:121314-121481 placement
 /**
  * 判断服务器是否有已连接且没有正在后台刷新的连接。
  */
@@ -5895,7 +5927,7 @@ async function hasLiveConnection(name, config) {
   if ((await clearMcpAuthCache(pendingConnection))?.type !== "connected") return false;
   return !getCliOwnedState().swrRefreshDialsInFlight.has(pendingConnection);
 }
-//@ chunk-8t8n4kdh.js:120663-120858 affinity
+//@ chunk-sywnjtqb.js:121481-121676 placement
 /**
  * 服务时清除失败的连接记忆（已连接或未结算的保留）。
  */
@@ -5908,7 +5940,7 @@ async function evictStaleFailedConnectMemoForServe(name, config) {
   if (getConnectionCache().connections.get(cacheKey) === pendingConnection)
     getConnectionCache().connections.delete(cacheKey);
 }
-//@ chunk-8t8n4kdh.js:120858-120914 file-local
+//@ chunk-sywnjtqb.js:121676-121732 placement
 async function clearMcpAuthCache(connectionPromise) {
   return withDeadline(
     connectionPromise.catch(() => {
@@ -5917,7 +5949,7 @@ async function clearMcpAuthCache(connectionPromise) {
     0,
   );
 }
-//@ chunk-8t8n4kdh.js:120914-120999 layout
+//@ chunk-sywnjtqb.js:121732-121817 placement
 /**
  * 清理某服务器缓存中的失败连接。
  */
@@ -5925,7 +5957,7 @@ async function clearCachedFailureFor(name, config) {
   let cachedConnection = connectToServer.cache?.get?.(serverCacheKey(name, config));
   return cachedConnection === undefined ? undefined : clearMcpAuthCache(cachedConnection);
 }
-//@ chunk-8t8n4kdh.js:120999-121160 layout
+//@ chunk-sywnjtqb.js:121817-121978 placement
 function clearConnectionCaches(cacheKey) {
   getConnectionCache().connections.delete(cacheKey);
   getConnectionCache().toolLists.delete(cacheKey);
@@ -5933,7 +5965,7 @@ function clearConnectionCaches(cacheKey) {
   getConnectionCache().resourceTemplateLists.delete(cacheKey);
   getConnectionCache().commandLists.delete(cacheKey);
 }
-//@ chunk-8t8n4kdh.js:121160-121539 layout
+//@ chunk-sywnjtqb.js:121978-122357 placement
 /**
  * 清除服务器的连接缓存：有活动调用时保留连接，否则关闭已连接的客户端并删除记忆。
  */
@@ -5961,7 +5993,7 @@ async function clearServerCache(name, config, options) {
   }
   clearConnectionCaches(cacheKey);
 }
-//@ chunk-8t8n4kdh.js:121539-121746 layout
+//@ chunk-sywnjtqb.js:122357-122564 placement
 /**
  * 解除连接的 onclose 并关闭连接，必要时清理对应的连接记忆。
  */
@@ -5981,7 +6013,7 @@ function detachAndCloseConnection(connection) {
   }
   return connection.cleanup().catch(() => {});
 }
-//@ chunk-8t8n4kdh.js:121746-121941 layout
+//@ chunk-sywnjtqb.js:122564-122759 placement
 /**
  * 在后台丢弃服务器连接：标记为被取代，删除记忆，结算后关闭已连接的客户端。
  */
@@ -6001,7 +6033,7 @@ function disposeServerConnectionDetached(name, config, expectedConnection) {
       () => {},
     );
 }
-//@ chunk-8t8n4kdh.js:121941-121984 layout
+//@ chunk-sywnjtqb.js:122759-122802 placement
 /**
  * 清理服务器缓存并删除发现缓存。
  */
@@ -6009,7 +6041,7 @@ async function clearDiscoveryForServer(name, config) {
   primeClientResolvers();
   await deleteDiscoveryCache(name, config);
 }
-//@ chunk-8t8n4kdh.js:121984-122252 layout
+//@ chunk-sywnjtqb.js:122802-123070 placement
 /**
  * 丢弃已结束且未连接的连接记忆，返回是否删除。
  */
@@ -6028,7 +6060,7 @@ async function discardMemoizedConnectResult(name, config) {
   getConnectionCache().connections.delete(cacheKey);
   return true;
 }
-//@ chunk-8t8n4kdh.js:122252-122359 layout
+//@ chunk-sywnjtqb.js:123070-123177 placement
 /**
  * 清除服务器的资源与资源模板列表缓存。
  */
@@ -6037,7 +6069,7 @@ function invalidateMcpResourceListCaches(server) {
   getConnectionCache().resourceLists.delete(cacheKey);
   getConnectionCache().resourceTemplateLists.delete(cacheKey);
 }
-//@ chunk-8t8n4kdh.js:122359-122466 layout
+//@ chunk-sywnjtqb.js:123177-123284 placement
 /**
  * 注册 MCP elicitation/create 请求处理器。
  */
@@ -6048,7 +6080,7 @@ function onMcpElicitRequest(server, onElicit) {
     }),
   );
 }
-//@ chunk-8t8n4kdh.js:122466-122588 layout
+//@ chunk-sywnjtqb.js:123284-123406 placement
 /**
  * 注册 elicitation 完成通知处理器。
  */
@@ -6057,7 +6089,7 @@ function onMcpElicitationComplete(server, onComplete) {
     onComplete(notification.params.elicitationId),
   );
 }
-//@ chunk-8t8n4kdh.js:122588-122761 layout
+//@ chunk-sywnjtqb.js:123406-123579 placement
 /**
  * 注册工具列表变化通知处理器（处理器注册前已收到的变化会补发一次）。
  */
@@ -6072,7 +6104,7 @@ function onMcpToolListChanged(server, refetch) {
   if (markHandlerRegistered(client) && !isClientWithoutTransport(server))
     listChangedRefetcher(BEFORE_HANDLER);
 }
-//@ chunk-8t8n4kdh.js:122761-122887 layout
+//@ chunk-sywnjtqb.js:123579-123705 placement
 /**
  * 注册提示词列表变化通知处理器。
  */
@@ -6084,7 +6116,7 @@ function onMcpPromptListChanged(server, refetch) {
     createListChangedRefetcher(server, refetch),
   );
 }
-//@ chunk-8t8n4kdh.js:122887-123017 layout
+//@ chunk-sywnjtqb.js:123705-123835 placement
 /**
  * 注册资源列表变化通知处理器。
  */
@@ -6096,7 +6128,7 @@ function onMcpResourceListChanged(server, refetch) {
     createListChangedRefetcher(server, refetch),
   );
 }
-//@ chunk-8t8n4kdh.js:123017-123503 layout
+//@ chunk-sywnjtqb.js:123835-124321 placement
 /**
  * 为 MCP 连接注册自定义通知处理器（新版协议连接不支持未请求的自定义通知，跳过并警告）。
  */
@@ -6127,7 +6159,7 @@ function onMcpNotification(server, schema, handler) {
       }),
   );
 }
-//@ chunk-8t8n4kdh.js:123503-125148 layout
+//@ chunk-sywnjtqb.js:124321-126042 placement
 /**
  * 确保某 MCP 服务器已连接再用：SDK 服务器直接返回；被撤回的内置插件服务器、托管策略阻止、已禁用的服务器报错；否则拨号（可带 toolUseId），按超时/中止等待结果，needs-auth 与失败分别抛带来源分类的错误。
  */
@@ -6192,7 +6224,7 @@ async function ensureConnectedClient(server, options) {
     if (connection.type === "needs-auth")
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          AUTH_MESSAGES.dialNeedsAuth(server.name),
+          AUTH_MESSAGES.dialNeedsAuth(server.name, server.config),
           "MCP server needs authentication",
         ),
         {
@@ -6217,6 +6249,7 @@ async function ensureConnectedClient(server, options) {
           }),
         ),
         mcpDialCode: errorCode,
+        mcpDialNotForwarded: connection.type === "failed" ? connection.notForwardedMessage : undefined,
       },
     );
   }
@@ -6226,7 +6259,7 @@ async function ensureConnectedClient(server, options) {
   }
   return connection;
 }
-//@ chunk-8t8n4kdh.js:125148-125228 layout
+//@ chunk-sywnjtqb.js:126042-126122 placement
 /**
  * 判断缓存条目是否已被新拨号取代。
  */
@@ -6235,14 +6268,14 @@ function isSupersededCacheEntry(cacheEntry, name, config) {
   if (!cache?.get) return false;
   return cache.get(serverCacheKey(name, config)) !== cacheEntry;
 }
-//@ chunk-8t8n4kdh.js:125228-125278 layout
+//@ chunk-sywnjtqb.js:126122-126172 placement
 /**
  * 判断该次拨号是否已被取代。
  */
 function isSupersededDial(dial) {
   return getCliOwnedState().supersededDials.has(dial);
 }
-//@ chunk-8t8n4kdh.js:125278-125684 layout
+//@ chunk-sywnjtqb.js:126172-126578 placement
 /**
  * 缓存首次拨号结束后的处理（每个结果只运行一次）：身份变化或被取代时关闭，连接成功或需认证时记录，失败时删除记忆并上报。
  */
@@ -6267,14 +6300,14 @@ function runCachedFirstDialArms(result, dial, epochAtDial) {
   if (result.type === "failed")
     recordCachedDialFailure(result, !getCliOwnedState().swrRefreshDialsInFlight.has(dial));
 }
-//@ chunk-8t8n4kdh.js:125684-125722 layout
+//@ chunk-sywnjtqb.js:126578-126616 placement
 /**
  * 判断两个配置的指纹是否相同。
  */
 function sameConfigHash(configA, configB) {
   return configHash(configA) === configHash(configB);
 }
-//@ chunk-8t8n4kdh.js:125722-126790 layout
+//@ chunk-sywnjtqb.js:126616-127684 placement
 /**
  * 可上报的 MCP 连接错误码白名单（OAuth 错误、连接/认证/配置错误、SDK 错误等）。
  */
@@ -6327,7 +6360,7 @@ var KNOWN_CONNECT_ERROR_CODES = [
   "CLIENT_HTTP_FAILED_TO_OPEN_STREAM",
   "CLIENT_HTTP_FAILED_TO_TERMINATE_SESSION",
 ];
-//@ chunk-8t8n4kdh.js:126790-126959 layout
+//@ chunk-sywnjtqb.js:127684-127853 placement
 /**
  * 把连接错误码收敛为可上报值：数字码、白名单码或 other。
  */
@@ -6338,12 +6371,12 @@ function sanitizeConnectErrorCodeForTelemetry(code) {
   if (found !== undefined) return fromEnum(found);
   return sanitizableErrorCode(code) ?? lit("other");
 }
-//@ chunk-8t8n4kdh.js:126959-127364 layout
+//@ chunk-sywnjtqb.js:127853-128258 placement
 /**
  * MCP 列表请求失败的错误码到原因名的映射。
  */
 var LIST_FAILURE_REASONS; // deferred: uses OAuthErrorCode (../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:126959", () => {
+deferInit("chunk-sywnjtqb.js:127853", () => {
   LIST_FAILURE_REASONS = {
     [SdkErrorCode.ConnectionClosed]: "connection_closed",
     [SdkErrorCode.RequestTimeout]: "request_timeout",
@@ -6358,7 +6391,7 @@ deferInit("chunk-8t8n4kdh.js:126959", () => {
     [ProtocolErrorCode.InternalError]: "internal_error",
   };
 });
-//@ chunk-8t8n4kdh.js:127364-127547 layout
+//@ chunk-sywnjtqb.js:128258-128441 placement
 /**
  * 把 MCP 工具输入转换为自动模式分类器的输入文本（key=value，空输入时用工具名）。
  */
@@ -6373,7 +6406,7 @@ function mcpToolInputToAutoClassifierInput(input, name) {
     })
     .join(" ");
 }
-//@ chunk-8t8n4kdh.js:127547-127690 layout
+//@ chunk-sywnjtqb.js:128441-128584 placement
 function beginDroppedToolsRound(connection) {
   let droppedToolsSeqByConnection = getCliOwnedState().droppedToolsSeqByConnection;
   let sequence = droppedToolsSeqByConnection.get(connection) ?? {
@@ -6387,21 +6420,21 @@ function beginDroppedToolsRound(connection) {
     state: sequence,
   };
 }
-//@ chunk-8t8n4kdh.js:127690-127747 layout
+//@ chunk-sywnjtqb.js:128584-128641 placement
 /**
  * 取服务器的 tools/list 错误记录。
  */
 function getToolsListError(toolsResult) {
   return getCliOwnedState().toolsListErrorByResult.get(toolsResult);
 }
-//@ chunk-8t8n4kdh.js:127747-127802 layout
+//@ chunk-sywnjtqb.js:128641-128696 placement
 /**
  * 取服务器的发现阶段请求错误。
  */
 function getDiscoveryFetchError(templatesResult) {
   return getCliOwnedState().discoveryFetchErrors.get(templatesResult);
 }
-//@ chunk-8t8n4kdh.js:127802-127862 layout
+//@ chunk-sywnjtqb.js:128696-128756 placement
 /**
  * 当前身份令牌（未解析时 undefined）。
  */
@@ -6410,7 +6443,7 @@ function currentIdentityToken() {
   let target = getMcpIdentitySnapshot();
   return isUnresolved(target) ? undefined : target.token;
 }
-//@ chunk-8t8n4kdh.js:127862-127994 layout
+//@ chunk-sywnjtqb.js:128756-128888 placement
 /**
  * 首次时记录 MCP 身份基线。
  */
@@ -6421,7 +6454,7 @@ function seedMcpIdentityCheck() {
   let identityToken = currentIdentityToken();
   if (identityToken !== undefined) cliOwnedState.identityBaseline = identityToken;
 }
-//@ chunk-8t8n4kdh.js:127994-128204 layout
+//@ chunk-sywnjtqb.js:128888-129098 placement
 /**
  * 判断 MCP 身份自上次检查以来是否变化，并更新基线。
  */
@@ -6440,7 +6473,7 @@ function mcpIdentityChangedSinceLastCheck() {
   cliOwnedState.identityBaseline = identityToken;
   return true;
 }
-//@ chunk-8t8n4kdh.js:128204-128317 layout
+//@ chunk-sywnjtqb.js:129098-129211 placement
 /**
  * 记录原始工具列表与拉取时间，供发现缓存写回。
  */
@@ -6450,7 +6483,7 @@ function recordRawToolsForResult(result, rawTools) {
   cliOwnedState.rawToolsByResult.set(result, rawTools);
   cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
-//@ chunk-8t8n4kdh.js:128317-128433 layout
+//@ chunk-sywnjtqb.js:129211-129327 placement
 /**
  * 记录原始命令列表与拉取时间，供发现缓存写回。
  */
@@ -6460,7 +6493,7 @@ function recordRawCommandsForResult(result, rawCommands) {
   cliOwnedState.rawCommandsByResult.set(result, rawCommands);
   cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
-//@ chunk-8t8n4kdh.js:128433-128550 layout
+//@ chunk-sywnjtqb.js:129327-129444 placement
 /**
  * 记录原始资源列表与拉取时间，供发现缓存写回。
  */
@@ -6470,14 +6503,14 @@ function recordRawResourcesForResult(result, rawResources) {
   cliOwnedState.rawResourcesByResult.set(result, rawResources);
   cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
-//@ chunk-8t8n4kdh.js:128550-128602 layout
+//@ chunk-sywnjtqb.js:129444-129496 placement
 /**
  * 记录服务器的发现阶段请求错误。
  */
 function setDiscoveryFetchError(result, error) {
   getCliOwnedState().discoveryFetchErrors.set(result, error);
 }
-//@ chunk-8t8n4kdh.js:128602-128755 layout
+//@ chunk-sywnjtqb.js:129496-129649 placement
 /**
  * 发现缓存命中但服务器具备频道能力时，改为未命中。
  */
@@ -6491,7 +6524,7 @@ function applyCapabilityServeTimeMiss(probe) {
     };
   return probe;
 }
-//@ chunk-8t8n4kdh.js:128755-130342 layout
+//@ chunk-sywnjtqb.js:129649-131236 placement
 /**
  * 把一次发现回合拿到的原始工具/命令/资源/模板写入发现缓存：已写过或身份纪元已变时跳过；写入后清掉暂存；瞬时失败时放回暂存以便重试，终止性失败返回 false。
  */
@@ -6567,7 +6600,7 @@ async function persistRawDiscoveryIfComplete(connection, round) {
   }
   return true;
 }
-//@ chunk-8t8n4kdh.js:130342-130600 layout
+//@ chunk-sywnjtqb.js:131236-131494 placement
 /**
  * 身份未变化时把刷新得到的工具列表合并写入发现缓存。
  */
@@ -6584,7 +6617,7 @@ async function persistRefreshedToolsIfPresent(server, toolsResult, options) {
     fetchedAt,
   });
 }
-//@ chunk-8t8n4kdh.js:130600-130985 layout
+//@ chunk-sywnjtqb.js:131494-131879 placement
 /**
  * 把实时连接得到的列表写入发现缓存：需要时拉取资源模板，写入前确认连接未变且服务器未被禁用或拦截。
  */
@@ -6617,7 +6650,7 @@ async function persistLiveListing(connection, listing) {
     logMCPDebug(connection.name, `Discovery cache write-through skipped: ${errorMessage(error)}`);
   }
 }
-//@ chunk-8t8n4kdh.js:130985-131278 layout
+//@ chunk-sywnjtqb.js:131879-132172 placement
 /**
  * isDiscoveryCacheMissRecoverable：发现缓存未命中原因是否需要重写缓存（absent/expired/corrupt 等为 true）。
  */
@@ -6641,7 +6674,7 @@ function isDiscoveryCacheMissRecoverable(probe) {
       return probe.reason;
   }
 }
-//@ chunk-8t8n4kdh.js:131278-131805 layout
+//@ chunk-sywnjtqb.js:132172-132699 placement
 /**
  * discoverySourceLabel：发现缓存查询结果到遥测标签（live、miss_expired、miss_corrupt 等）。
  */
@@ -6676,7 +6709,7 @@ function discoverySourceLabel(probe) {
       return probe.reason;
   }
 }
-//@ chunk-8t8n4kdh.js:131805-131929 layout
+//@ chunk-sywnjtqb.js:132699-132823 placement
 function getMaxResultSizeCharsMeta(tool) {
   let maxResultSizeChars = tool._meta?.["anthropic/maxResultSizeChars"];
   return typeof maxResultSizeChars === "number" &&
@@ -6685,7 +6718,7 @@ function getMaxResultSizeCharsMeta(tool) {
     ? maxResultSizeChars
     : undefined;
 }
-//@ chunk-8t8n4kdh.js:131929-136285 fingerprint (2.1.88 match: fetchToolsForClient, 0.385)
+//@ chunk-sywnjtqb.js:132823-137499 placement
 /**
  * buildMcpTool：把一个 MCP 工具定义包装成 CLI Tool：名字 mcp__<server>__<tool>（SDK 可去前缀）；描述按 CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH（默认 4096，经 ToolSearch 加载时 16384）截断；注解映射 isReadOnly/isDestructive/isOpenWorld/isConcurrencySafe；_meta 支持 anthropic/maxResultSizeChars、searchHint、alwaysLoad、requiresUserInteraction；checkPermissions 默认 passthrough 并建议写 localSettings allow 规则。
  */
@@ -6699,6 +6732,7 @@ function buildMcpTool({
   standardKey,
   denyKey,
   legacyGrantRefused = false,
+  toolNameShared = false,
   legacyGrantRebindable = false,
   serverAlwaysLoad,
   serverDefersAllTools = false,
@@ -6715,6 +6749,8 @@ function buildMcpTool({
   displayName,
   serverId,
   serverIdStamp,
+  serverProvenance,
+  serverUrl,
   iconUrl,
   serverInfoName,
   role,
@@ -6726,15 +6762,15 @@ function buildMcpTool({
   let maxResultSizeCharsMeta = getMaxResultSizeCharsMeta(listed);
   let hasMaxResultSizeCap = maxResultSizeCharsMeta !== undefined;
   let requiresUserInteraction = listed._meta?.["anthropic/requiresUserInteraction"] === true;
-  let toolsToProcess = toolUiMeta(listed._meta);
+  let announcements = toolUiMeta(listed._meta);
   let descriptionText = promptOverrides?.tools?.[listed.name] ?? listed.description ?? "";
-  let truncatedDescription = truncateDescription(
+  let truncatedDescription = truncateDescription_2(
     descriptionText,
     `Tool "${listed.name}" description`,
     serverName,
     maxDescriptionLength_2,
   );
-  let truncatedLoadedDescription = truncateDescription(
+  let truncatedLoadedDescription = truncateDescription_2(
     descriptionText,
     `Tool "${listed.name}" description`,
     serverName,
@@ -6746,13 +6782,14 @@ function buildMcpTool({
       ? listed._meta["anthropic/searchHint"]
       : undefined);
   let callWithOverlapSlots = withOverlapSlots(serverName, listed.name, call);
-  let fullyQualifiedName = requiresConnectorGrant(serverName, {
+  let refuses = requiresConnectorGrant(serverName, {
     scope,
     pluginSource,
   });
-  let requiresConnectorGrant_2 = fullyQualifiedName || legacyGrantRefused;
+  let requiresConnectorGrant_2 = refuses || legacyGrantRefused || toolNameShared;
   let canRebindLegacyGrant =
     legacyGrantRefused &&
+    !toolNameShared &&
     legacyGrantRebindable &&
     !requiresUserInteraction &&
     effectiveMaxPermission !== "ask" &&
@@ -6762,7 +6799,8 @@ function buildMcpTool({
   let suppressesAllowRules =
     requiresConnectorGrant_2 || isDesignGatedTool(isFirstPartyDesignServer, listed.name);
   let ignoresWholeToolAllowRule = () =>
-    fullyQualifiedName ||
+    refuses ||
+    toolNameShared ||
     (legacyGrantRefused &&
       !ownsLegacyKey({
         serverName,
@@ -6782,9 +6820,11 @@ function buildMcpTool({
   if (requiresConnectorGrant_2)
     logMCPDebug(
       serverName,
-      fullyQualifiedName
+      refuses
         ? "Allow rules do not apply: this server's name starts like a claude.ai connector's. To use allow rules, the server needs another name, and the rules must use that name."
-        : "Allow rules do not apply: another MCP server already uses this name, or the name could not be recorded in the config file. Give this server a different name and write the rules for that name, or reconnect if the config file was busy.",
+        : legacyGrantRefused
+          ? "Allow rules do not apply: another MCP server already uses this name, or the name could not be recorded in the config file. Give this server a different name and write the rules for that name, or reconnect if the config file was busy."
+          : `Allow rules do not apply to "${listed.name}": another tool of this server gets the same name in Claude Code. To use allow rules, the server must rename one of them.`,
     );
   return {
     ...MCPTool,
@@ -6807,6 +6847,12 @@ function buildMcpTool({
       ...(serverIdStamp !== undefined && {
         serverIdStamp,
       }),
+      ...(serverProvenance !== undefined && {
+        serverProvenance,
+      }),
+      ...(serverUrl !== undefined && {
+        serverUrl,
+      }),
       iconUrl,
       serverInfoName,
       ...(cliOwned && {
@@ -6817,6 +6863,9 @@ function buildMcpTool({
       }),
       ...(legacyGrantRefused && {
         legacyGrantRefused,
+      }),
+      ...(toolNameShared && {
+        toolNameShared,
       }),
       ...(canRebindLegacyGrant && {
         legacyGrantRebindable,
@@ -6838,8 +6887,8 @@ function buildMcpTool({
       execution: listed.execution,
       role,
       effectiveMaxPermission,
-      ...(toolsToProcess && {
-        uiMeta: toolsToProcess,
+      ...(announcements && {
+        uiMeta: announcements,
       }),
       ...(describeHiddenMcpTool(listed._meta, serverName, listed.name) && {
         hiddenFromModel: true,
@@ -6971,7 +7020,7 @@ function buildMcpTool({
     ...overrides,
   };
 }
-//@ chunk-8t8n4kdh.js:136285-136568 layout
+//@ chunk-sywnjtqb.js:137499-137782 placement
 /**
  * buildCachedClientTools：用发现缓存条目构造 type=cached 的客户端与工具（不连线）。
  */
@@ -7002,7 +7051,7 @@ async function buildCachedClientTools({ name, config, capabilities, serverInfo, 
     ),
   };
 }
-//@ chunk-8t8n4kdh.js:136568-154333 layout
+//@ chunk-sywnjtqb.js:137782-155610 placement
 /**
  * buildMcpToolsForClient：处理 tools/list 结果：校验/修正 inputSchema、数量上限、toolPermissions 与工具策略、IDE 工具白名单、角色等，逐个 buildMcpTool，并记录降级与 tengu_mcp_tools_listed 遥测。
  */
@@ -7015,9 +7064,9 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
   ).flat();
   listedTools = [];
   let loggableOrigin = loggingSafeOrigin(client.config);
-  let baseAnalytics = mcpBaseUrlAnalytics_2(client.config, client.name);
+  let baseAnalytics = mcpServerKeyHashEntry(client.config, client.name);
   let mcpServerName = mcpNameForAnalytics_GATE_EVALUATED(
-    normalizeNameForMCP(client.name),
+    CLAUDEAI_SERVER_PREFIX(client.name),
     isMcpServerLoggableInAnalytics(client.name, client.config),
   );
   let truncatedCount = originalCount - sanitizedTools.length;
@@ -7059,8 +7108,8 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
         },
       );
   }
-  let normalizeEnabled = shouldNormalizeRootCombinators(client.config);
-  let apiValidateEnabled = shouldDropInvalidToolSchemas(client.config);
+  let normalizeEnabled = shouldNormalizeRootCombinators_2(client.config);
+  let apiValidateEnabled = shouldDropInvalidToolSchemas_2(client.config);
   let normalizedCount = 0;
   let normalizeGatedCount = 0;
   let unsupportedCount = 0;
@@ -7095,7 +7144,7 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
       else invalidPropKeyCount++;
       if (
         effectiveToolPermissions?.[tool.name] !== "blocked" &&
-        isIncludedMcpTool_2(
+        isIncludedMcpTool_3(
           CLAUDE_AGENT_SDK_MCP_NO_PREFIX ? tool.name : buildMcpToolName(client.name, tool.name),
         )
       )
@@ -7128,6 +7177,9 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
       : [tool];
   });
   let keptTools = uniqByExport(judgedTools.flat(), "name");
+  let schema = countByAlias(uniqByExport(sanitizedTools, "name"), (tool) =>
+    buildMcpToolName(client.name, tool.name),
+  );
   if (listingState.seq > listingState.state.applied) {
     listingState.state.applied = listingState.seq;
     client.droppedTools = uniqByExport(droppedTools, "toolName");
@@ -7228,7 +7280,7 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
     maxLoadedDescriptionLength,
     pluginTelemetry,
     cliOwned,
-    displayName: "displayName" in client.config ? client.config.displayName : undefined,
+    displayName: withDisplayName(client.config),
     standardKey: isStandardKeyActive()
       ? getServerIdentityKey(client.name, client.config, cliOwned === true)
       : undefined,
@@ -7255,15 +7307,17 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
     denyKey: isStandardKeyActive() ? isRemoteTransport(client.config) : undefined,
     serverId: connectorServerId(client.config),
     serverIdStamp: dynamicServerConnectorId(client.name, client.config),
+    ...serverProvenanceOf(client),
     iconUrl: "iconUrl" in client.config ? client.config.iconUrl : undefined,
     serverInfoName: stripIgnorables(client.serverInfo?.name ?? "") || undefined,
     role: "role" in client.config ? client.config.role : undefined,
   };
   let isClaudeInChrome = isClaudeInChromeMCPServer(client.name);
   let isDocsConnector = isDocsConnectorServer(client);
+  let entries = proxyFillsListing(sanitizedTools);
   let filtered = (
     await mapInTurns(toolsForBuild, (listedTool) => {
-      let fullyQualifiedName = buildMcpToolName(client.name, listedTool.name);
+      let mcpToolName = buildMcpToolName(client.name, listedTool.name);
       let hasResultSizeAnnotation = getMaxResultSizeCharsMeta(listedTool) !== undefined;
       let overrides = {
         ...(isClaudeInChrome &&
@@ -7325,6 +7379,7 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
         accountMemory: isMemoryServerConnection(client, listedTool.name),
         accountMemoryServer: memoryServer,
         effectiveMaxPermission: effectiveToolPermissions?.[listedTool.name],
+        toolNameShared: enforcesGrants() && (schema[mcpToolName] ?? 0) > 1,
         listed: listedTool,
         overrides,
         async call(args, context, canUseTool, parentMessage, onProgress, callOptions) {
@@ -7448,7 +7503,7 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                       ? {
                           canUseTool,
                           tool,
-                          fullyQualifiedName,
+                          fullyQualifiedName: mcpToolName,
                           toolUseContext: context,
                           parentMessage,
                         }
@@ -7550,7 +7605,7 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                       signal,
                       performOAuthFlow: performMCPOAuthFlow_2,
                       reconnect: (name, config) =>
-                        reconnectMcpServerImpl_2(name, config, context.storageV5, context.credentials),
+                        proxyRequest(name, config, context.storageV5, context.credentials),
                       discard: (name, config) => clearServerCache(name, config),
                       isPermitted: (name, config) =>
                         !isMcpServerDisabled(name) && !isMcpDialBlockedByPolicy(name, config),
@@ -8013,7 +8068,7 @@ ${taskFilesPromptNote}`;
             ).structuredContent,
         );
       {
-        let refToolName = fileReferenceToolToFill(client, listedTool.name);
+        let refToolName = fileReferenceToolToFill(client, listedTool.name, entries);
         if (refToolName !== undefined)
           wrapFileReferenceTool(
             tool,
@@ -8088,7 +8143,7 @@ ${taskFilesPromptNote}`;
       };
       return tool;
     })
-  ).filter(isIdeServer);
+  ).filter(isIdeServer_2);
   let mapped = keptTools.map(
     (tool) => (promptOverrides?.tools?.[tool.name] ?? tool.description ?? "").length,
   );
@@ -8097,15 +8152,15 @@ ${taskFilesPromptNote}`;
     transportType: fromEnum(client.config.type ?? "stdio"),
     listDurationMs: Date.now() - startedAtMs,
     toolCount: filtered.length,
-    alwaysLoadCount: count(filtered, (tool) => tool.alwaysLoad === true),
+    alwaysLoadCount: countWhere(filtered, (tool) => tool.alwaysLoad === true),
     descriptionTotalLength: reduced,
     descriptionMaxLength: mapped.reduce((acc, length) => Math.max(acc, length), 0),
     descriptionMeanLength: mapped.length ? Math.round(reduced / mapped.length) : 0,
-    descriptionOverLimitCount: count(mapped, (length) => length > maxDescriptionLength),
+    descriptionOverLimitCount: countWhere(mapped, (length) => length > maxDescriptionLength),
     discoverySource: fromEnum(discoverySource),
     ...baseAnalytics,
     mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-      normalizeNameForMCP(client.name),
+      CLAUDEAI_SERVER_PREFIX(client.name),
       isMcpServerLoggableInAnalytics(client.name, client.config),
     ),
   });
@@ -8130,7 +8185,7 @@ ${taskFilesPromptNote}`;
   }
   return filtered;
 }
-//@ chunk-8t8n4kdh.js:154333-154603 layout
+//@ chunk-sywnjtqb.js:155610-155880 placement
 async function awaitToolsListAhead(client, aheadPage) {
   let settledPage = await aheadPage.page.then(
     (result) => ({
@@ -8151,12 +8206,12 @@ async function awaitToolsListAhead(client, aheadPage) {
   );
   return listingState === "live" ? aheadPage : undefined;
 }
-//@ chunk-8t8n4kdh.js:154603-156653 layout
+//@ chunk-sywnjtqb.js:155880-157928 placement
 /**
  * fetchToolsForClient：按 name+config 记忆化的 tools/list（modern 协议走 listTools 聚合，legacy 翻页），结果交给 buildMcpToolsForClient；401/403 时标记 needs-auth。
  */
 var fetchToolsForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:154603", () => {
+deferInit("chunk-sywnjtqb.js:155880", () => {
   fetchToolsForClient = memoizeWithLRU(
     async (client, storageV5, rawOnly) => {
       if (client.type !== "connected") return [];
@@ -8178,7 +8233,7 @@ deferInit("chunk-8t8n4kdh.js:154603", () => {
             client.name,
             client.config,
             "tools/list",
-            ListToolsResultSchema,
+            isHTTPConfig(client.config),
             (page) => page.tools,
             page,
             (page) => noteFirstPageMark(sdkClient, page),
@@ -8204,8 +8259,8 @@ deferInit("chunk-8t8n4kdh.js:154603", () => {
           return rawTools;
         }
         let memoResult = listToolsWithMemo(client, initialTools, epochAtStart, droppedToolsRound, () => ({
-          normalizeEnabled: shouldNormalizeRootCombinators(client.config),
-          apiValidateEnabled: shouldDropInvalidToolSchemas(client.config),
+          normalizeEnabled: shouldNormalizeRootCombinators_2(client.config),
+          apiValidateEnabled: shouldDropInvalidToolSchemas_2(client.config),
         }));
         if (memoResult?.reuse !== undefined) {
           recordRawToolsForResult(memoResult.reuse, initialTools);
@@ -8225,24 +8280,24 @@ deferInit("chunk-8t8n4kdh.js:154603", () => {
           client.config,
           describeConnectError(error, client.config),
         );
-        if (client.config.type === "claudeai-proxy" && isListAuthError(error)) {
+        if (client.config.type === "claudeai-proxy" && isListAuthError_2(error)) {
           logEvent("tengu_mcp_server_needs_auth", {
             transportType: lit("claudeai-proxy"),
             cause: lit("discovery_tools_list"),
-            ...mcpBaseUrlAnalytics_2(client.config, client.name),
+            ...mcpServerKeyHashEntry(client.config, client.name),
           });
           if (isCurrentIdentityEpoch(epochAtStart))
-            setMcpAuthCacheEntry(client.name, client.config.id, undefined, storageV5);
+            isMcpAuthCached_3(client.name, client.config.id, undefined, storageV5);
           logFeatureSad("mcp_list_tools", "mcp_list_tools_needs_auth");
           logMCPDebug(client.name, "tools/list 401/403 on claude.ai proxy \u2014 flagging needs-auth");
           client.discoveryAuthFailure = true;
           getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
           return [];
         }
-        if (isListAuthError(error) && hasLapsedCcrSignIn(client.name, client.config))
+        if (isListAuthError_2(error) && hasLapsedCcrSignIn(client.name, client.config))
           client.discoveryAuthFailure = true;
         let isBearerRejected =
-          client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
+          client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error);
         let failureMetric = isBearerRejected
           ? "mcp_list_tools_claudeai_bearer_rejected"
           : (error instanceof ProtocolError || error instanceof SdkError) && !(error instanceof SdkHttpError)
@@ -8257,13 +8312,13 @@ deferInit("chunk-8t8n4kdh.js:154603", () => {
         let emptyTools = [];
         getCliOwnedState().toolsListErrorByResult.set(emptyTools, errorDetail);
         if (!isBearerRejected) {
-          let serverFields = mcpBaseUrlAnalytics_2(client.config, client.name);
+          let serverFields = mcpServerKeyHashEntry(client.config, client.name);
           logEvent("tengu_mcp_degraded", {
             reason: lit("tools_list_failed"),
             transportType: fromEnum(client.config.type ?? "stdio"),
             ...serverFields,
             mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-              normalizeNameForMCP(client.name),
+              CLAUDEAI_SERVER_PREFIX(client.name),
               isMcpServerLoggableInAnalytics(client.name, client.config),
             ),
           });
@@ -8276,14 +8331,14 @@ deferInit("chunk-8t8n4kdh.js:154603", () => {
     () => getConnectionCache().toolLists,
   );
 });
-//@ chunk-8t8n4kdh.js:156653-157236 layout
+//@ chunk-sywnjtqb.js:157928-158511 placement
 /**
  * reportListFailure：列表请求失败的指标分类（needs_auth、bearer_rejected、MCP 错误码、timeout、failed）与 tengu_mcp_degraded 遥测。
  */
 function reportListFailure(client, error, metricName, logMetric, degradedReason, listKind) {
   let errorDetail = describeConnectError(error, client.config);
-  let needsAuth = client.config.type === "claudeai-proxy" && isListAuthError(error);
-  let isBearerRejected = client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
+  let needsAuth = client.config.type === "claudeai-proxy" && isListAuthError_2(error);
+  let isBearerRejected = client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error);
   if (isBearerRejected) client.discoveryBearerRejected = true;
   let failureMetric = needsAuth
     ? `${metricName}_needs_auth`
@@ -8303,20 +8358,20 @@ function reportListFailure(client, error, metricName, logMetric, degradedReason,
     logEvent("tengu_mcp_degraded", {
       reason: degradedReason,
       transportType: fromEnum(client.config.type ?? "stdio"),
-      ...mcpBaseUrlAnalytics_2(client.config, client.name),
+      ...mcpServerKeyHashEntry(client.config, client.name),
       mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-        normalizeNameForMCP(client.name),
+        CLAUDEAI_SERVER_PREFIX(client.name),
         isMcpServerLoggableInAnalytics(client.name, client.config),
       ),
     });
 }
-//@ chunk-8t8n4kdh.js:157236-158475 fingerprint (2.1.88 match: fetchResourcesForClient, 0.347)
+//@ chunk-sywnjtqb.js:158511-159750 placement
 /**
  * fetchResourcesForClient / fetchResourceTemplatesForClient：记忆化 resources/list 与 resources/templates/list，MethodNotFound 视为空。
  */
 var fetchResourcesForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
 var fetchResourceTemplatesForClient;
-deferInit("chunk-8t8n4kdh.js:157236", () => {
+deferInit("chunk-sywnjtqb.js:158511", () => {
   fetchResourcesForClient = memoizeWithLRU(
     async (client) => {
       if (client.type !== "connected") return [];
@@ -8398,7 +8453,7 @@ deferInit("chunk-8t8n4kdh.js:157236", () => {
     () => getConnectionCache().resourceTemplateLists,
   );
 });
-//@ chunk-8t8n4kdh.js:158475-158646 layout
+//@ chunk-sywnjtqb.js:159750-159921 placement
 /**
  * fetchResourceTemplatesForClients：对尚无模板记录的已连接客户端并发拉资源模板。
  */
@@ -8416,7 +8471,7 @@ function fetchResourceTemplatesForClients(clients, alreadyFetched) {
   }
   return Promise.all(pending);
 }
-//@ chunk-8t8n4kdh.js:158646-159096 layout
+//@ chunk-sywnjtqb.js:159921-160371 placement
 /**
  * completeResourceTemplateArgument：调用 completion/complete（ref/resource）补全资源模板参数。
  */
@@ -8450,12 +8505,12 @@ async function completeResourceTemplateArgument(client, uri, argumentName, argum
     return [];
   }
 }
-//@ chunk-8t8n4kdh.js:159096-159657 layout
+//@ chunk-sywnjtqb.js:160371-160932 placement
 /**
  * fetchCommandsForClient：记忆化 prompts/list 并转成斜杠命令。
  */
 var fetchCommandsForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:159096", () => {
+deferInit("chunk-sywnjtqb.js:160371", () => {
   fetchCommandsForClient = memoizeWithLRU(
     async (client) => {
       if (client.type !== "connected") return [];
@@ -8498,7 +8553,7 @@ deferInit("chunk-8t8n4kdh.js:159096", () => {
     () => getConnectionCache().commandLists,
   );
 });
-//@ chunk-8t8n4kdh.js:159657-161446 fingerprint (2.1.88 match: fetchCommandsForClient, 0.539)
+//@ chunk-sywnjtqb.js:160932-162717 placement
 /**
  * buildMcpPromptCommands：MCP 提示词转为 prompt 命令 mcp__<server>__<prompt>（显示为 server:prompt (MCP)），执行时按空格切参数、检查必填、getPrompt 并转换内容。
  */
@@ -8510,14 +8565,14 @@ function buildMcpPromptCommands(client, prompts) {
     logMCPError(client.name, listingTruncatedNote("prompts", droppedCount, prompts.length));
   let config = client.config;
   let isDesignServer = (config.type === "http" || config.type === "sse") && isDesignMcpUrl(config.url);
-  let promptsToProcess = officialPluginPromptOverrides(client.config);
-  let commands = flattened.map((prompt) => {
-    let values = Object.values(prompt.arguments ?? {});
-    let argNames = values.map((k) => k.name);
-    let descriptionOverride = promptsToProcess?.prompts?.[prompt.name] ?? prompt.description;
+  let unmatchedPromptCount = officialPluginPromptOverrides(client.config);
+  let commands = flattened.map((prompts) => {
+    let values = Object.values(prompts.arguments ?? {});
+    let mapped = values.map((prompt) => prompt.name);
+    let descriptionOverride = unmatchedPromptCount?.prompts?.[prompts.name] ?? prompts.description;
     return {
       type: "prompt",
-      name: "mcp__" + normalizeNameForMCP(client.name) + "__" + prompt.name,
+      name: "mcp__" + CLAUDEAI_SERVER_PREFIX(client.name) + "__" + prompts.name,
       description: descriptionOverride ?? "",
       hasUserSpecifiedDescription: !!descriptionOverride,
       contentLength: 0,
@@ -8527,12 +8582,12 @@ function buildMcpPromptCommands(client, prompts) {
       mcpInfo: getMcpInfoFromConnection(client),
       progressMessage: "running",
       userFacingName() {
-        return isDesignServer ? prompt.name : `${client.name}:${prompt.name} (MCP)`;
+        return isDesignServer ? prompts.name : `${client.name}:${prompts.name} (MCP)`;
       },
       aliases: isDesignServer
-        ? [`${client.name}:${prompt.name}`, `${client.name}:${prompt.name} (MCP)`]
+        ? [`${client.name}:${prompts.name}`, `${client.name}:${prompts.name} (MCP)`]
         : undefined,
-      argNames,
+      argNames: mapped,
       source: "mcp",
       async getPromptForCommand(args, context) {
         let trimmed = args.trim();
@@ -8540,43 +8595,48 @@ function buildMcpPromptCommands(client, prompts) {
         let desktopRefusal = hostedDesktopRefusal_2(client);
         if (desktopRefusal) throw desktopRefusal;
         try {
-          let mapped = values
+          let mapped_2 = values
             .filter((argument, index) => argument.required && argValues[index] === undefined)
             .map((argument) => argument.name);
-          if (mapped.length > 0)
+          if (mapped_2.length > 0)
             throw Error(
-              `Missing required ${plural(mapped.length, "argument")}: ${mapped.join(", ")}. Usage: /mcp__${normalizeNameForMCP(client.name)}__${prompt.name} ${argNames.join(" ")}`,
+              `Missing required ${plural(mapped_2.length, "argument")}: ${mapped_2.join(", ")}. Usage: /mcp__${CLAUDEAI_SERVER_PREFIX(client.name)}__${prompts.name} ${mapped.join(" ")}`,
             );
           let connectedClient = await ensureConnectedClient(client, {
             signal: context.abortController.signal,
             context: "MCP prompt command",
           });
-          let result = await clientOf(connectedClient.client).getPrompt({
-            name: prompt.name,
-            arguments: zipOperationFields(argNames, argValues),
+          let prompt = await clientOf(connectedClient.client).getPrompt({
+            name: prompts.name,
+            arguments: zipOperationFields(mapped, argValues),
           });
-          let imageBuffer = imageLimitsForModel(context.options.mainLoopModel);
-          let transformed = await Promise.all(
-            result.messages.map((message) =>
-              transformResultContent(message.content, connectedClient.name, imageBuffer, context.storageV5),
+          let promptResult = imageLimitsForModel(context.options.mainLoopModel);
+          let results = await Promise.all(
+            prompt.messages.map((message) =>
+              transformResultContent_2(
+                message.content,
+                connectedClient.name,
+                promptResult,
+                context.storageV5,
+              ),
             ),
           );
           logFeatureOk("mcp_get_prompt");
-          recordToolUsed(buildMcpToolName(client.name, prompt.name));
-          return transformed.flat();
+          recordToolUsed(buildMcpToolName(client.name, prompts.name));
+          return results.flat();
         } catch (error) {
           if (!isAbortError(error))
-            if (client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error)) {
+            if (client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error)) {
               logFeatureSad("mcp_get_prompt", "mcp_get_prompt_claudeai_bearer_rejected");
               logMCPDebug(
                 client.name,
-                `Error running command '${prompt.name}': ${describeConnectError(error, client.config)}`,
+                `Error running command '${prompts.name}': ${describeConnectError(error, client.config)}`,
               );
             } else {
               logFeatureBad("mcp_get_prompt", "mcp_get_prompt_failed");
               logMCPError(
                 client.name,
-                `Error running command '${prompt.name}': ${describeConnectError(error, client.config)}`,
+                `Error running command '${prompts.name}': ${describeConnectError(error, client.config)}`,
               );
             }
           throw error;
@@ -8591,15 +8651,15 @@ function buildMcpPromptCommands(client, prompts) {
     ),
   );
 }
-//@ chunk-8t8n4kdh.js:161446-161608 layout
+//@ chunk-sywnjtqb.js:162717-162879 placement
 /**
  * callIdeTool：直接调用 IDE MCP 工具并返回 content。
  */
-async function callIdeTool(toolName, args, client) {
+async function callIdeTool_2(tool, args, client) {
   return (
     await callMCPTool({
       client,
-      tool: toolName,
+      tool,
       args,
       signal: createAbortController().signal,
       imageLimits: IMAGE_LIMITS,
@@ -8609,11 +8669,11 @@ async function callIdeTool(toolName, args, client) {
     })
   ).content;
 }
-//@ chunk-8t8n4kdh.js:161608-161866 layout
+//@ chunk-sywnjtqb.js:162879-163137 placement
 /**
  * identityChangedReconnectResult：账号身份在重连过程中变化时的 failed 结果（errorCode IDENTITY_CHANGED）。
  */
-function identityChangedReconnectResult(name, config) {
+function identityChangedReconnectResult_2(name, config) {
   logFeatureSad("mcp_reconnect", "mcp_reconnect_identity_changed");
   return {
     client: {
@@ -8627,27 +8687,27 @@ function identityChangedReconnectResult(name, config) {
     commands: [],
   };
 }
-//@ chunk-8t8n4kdh.js:161866-162003 layout
+//@ chunk-sywnjtqb.js:163137-163275 placement
 /**
  * reconnectMcpServer：必要时先清 OAuth 发现状态，再调用 reconnectMcpServerImpl。
  */
-async function reconnectMcpServer(name, config, storageV5, credentials) {
-  if (!isDiscoveryCacheUsable()) return reconnectMcpServerImpl_2(name, config, storageV5, credentials);
+async function reconnectMcpServer_2(name, config, storageV5, credentials) {
+  if (!isDiscoveryCacheUsable()) return proxyRequest(name, config, storageV5, credentials);
   let epochAtStart = identityEpoch();
   await flushDiscoveryCache(clearDiscoveryForServer(name, config));
   if (isRemoteMcpTransport(config) && identityEpoch() !== epochAtStart)
-    return identityChangedReconnectResult(name, config);
-  return reconnectMcpServerImpl_2(name, config, storageV5, credentials);
+    return identityChangedReconnectResult_2(name, config);
+  return proxyRequest(name, config, storageV5, credentials);
 }
-//@ chunk-8t8n4kdh.js:162003-163934 fingerprint (2.1.88 match: reconnectMcpServerImpl, 0.346)
+//@ chunk-sywnjtqb.js:163275-165202 placement
 /**
  * reconnectMcpServerImpl：清缓存后重新 connectToServer 并拉取工具/命令/资源；needs-auth 时清缓存再试一次；身份变化返回 IDENTITY_CHANGED。
  */
-async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, options = {}) {
+async function proxyRequest(name, config, storageV5, credentials, options = {}) {
   let epochAtStart = identityEpoch();
   let isRemote = isRemoteMcpTransport(config);
   let identityChanged = () => isRemote && identityEpoch() !== epochAtStart;
-  let identityChangedResult = () => identityChangedReconnectResult(name, config);
+  let identityChangedResult = () => identityChangedReconnectResult_2(name, config);
   try {
     clearKeychainCache();
     let keepOptions = options.keepConnectionInUse ? {} : undefined;
@@ -8677,7 +8737,7 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
         commands: [],
       });
     }
-    if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry(name, storageV5);
+    if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(name, storageV5);
     if (config.type === "http" || config.type === "sse") await clearMcpOAuthStubIfTokenless_2(name, config);
     clearDiscoveryPathMemo(name);
     let grantLeg;
@@ -8686,12 +8746,12 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
       await detachAndCloseConnection(connection);
       return identityChangedResult();
     }
-    let supportsResources = !!connection.capabilities?.resources;
-    let [tools, mcpCommands, mcpSkills, resources] = await Promise.all([
+    let discoveryBearer = !!connection.capabilities?.resources;
+    let [toolsForClient, commandsForClient, hasResources, tools] = await Promise.all([
       fetchToolsForClient(connection, storageV5),
       fetchCommandsForClient(connection),
       Promise.resolve([]),
-      supportsResources ? fetchResourcesForClient(connection) : Promise.resolve([]),
+      discoveryBearer ? fetchResourcesForClient(connection) : Promise.resolve([]),
     ]);
     if (identityChanged()) {
       await detachAndCloseConnection(connection);
@@ -8710,34 +8770,34 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
       };
     }
     if (config.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
-      clearMcpAuthCacheEntry(name, storageV5);
+      clearMcpAuthCacheEntry_2(name, storageV5);
     if (config.type === "claudeai-proxy" && !connection.toolsListError && !connection.discoveryBearerRejected)
       recordClaudeAiMcpConnected(name, storageV5);
     persistLiveListing(connection, {
-      tools,
-      commands: mcpCommands,
-      resources,
+      tools: toolsForClient,
+      commands: commandsForClient,
+      resources: tools,
       identityEpoch: epochAtStart,
       grantLeg,
     });
-    let commands = [...mcpCommands, ...mcpSkills];
-    let resourceTools = [];
-    if (supportsResources) {
+    let commands = [...commandsForClient, ...hasResources];
+    let allCommands = [];
+    if (discoveryBearer) {
       if (
-        ![ListMcpResourcesTool, ReadMcpResourceTool].some((tool) =>
-          tools.some((t) => toolMatchesName(t, tool.name)),
+        ![ListMcpResourcesTool, ReadMcpResourceTool].some((builtinCommands) =>
+          toolsForClient.some((builtin) => matchesToolName(builtin, builtinCommands.name)),
         )
       )
-        resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+        allCommands.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
     }
     if (connection.discoveryBearerRejected) logFeatureSad("mcp_reconnect", "mcp_reconnect_bearer_rejected");
     else if (connection.toolsListError) logFeatureSad("mcp_reconnect", "mcp_reconnect_tools_list_failed");
     else logFeatureOk("mcp_reconnect");
     return applyMcpServerConfig(config, {
       client: connection,
-      tools: [...tools, ...resourceTools],
+      tools: [...toolsForClient, ...allCommands],
       commands,
-      resources: resources.length > 0 ? resources : undefined,
+      resources: tools.length > 0 ? tools : undefined,
       resourceTemplates: [],
       ...(keepOptions?.connection !== undefined &&
         connection === keepOptions.connection && {
@@ -8758,17 +8818,17 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
     };
   }
 }
-//@ chunk-8t8n4kdh.js:163934-163989 layout (2.1.88 match: processBatched, 1)
-async function processBatched_2(items, concurrency, processor) {
+//@ chunk-sywnjtqb.js:165202-165257 placement (2.1.88 match: processBatched, 1)
+async function processBatched_3(items, concurrency, processor) {
   await pMap(items, processor, {
     concurrency,
   });
 }
-//@ chunk-8t8n4kdh.js:163989-164254 layout
+//@ chunk-sywnjtqb.js:165257-165522 placement
 /**
  * countUnsettledByDeadline：等待一组 promise 到期限，返回仍未完成的个数。
  */
-async function countUnsettledByDeadline(promises, timeoutMs) {
+async function countUnsettledByDeadline_2(promises, timeoutMs) {
   if (promises.length === 0) return 0;
   let timer;
   let promise = new Promise((resolve) => {
@@ -8786,16 +8846,16 @@ async function countUnsettledByDeadline(promises, timeoutMs) {
         ]),
       ),
     );
-    return count(results, (outcome) => outcome === "deadline");
+    return countWhere(results, (outcome) => outcome === "deadline");
   } finally {
     clearTimeout(timer);
   }
 }
-//@ chunk-8t8n4kdh.js:164254-171714 fingerprint (2.1.88 match: getMcpToolsCommandsAndResources, 0.46)
+//@ chunk-sywnjtqb.js:165522-173073 placement
 /**
  * getMcpToolsCommandsAndResources：批量连接所有服务器（本地按 MCP_SERVER_CONNECTION_BATCH_SIZE 默认 3、远程按 MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE 默认 20 并发），逐个检查禁用、策略、needs-auth 缓存、插件失败缓存与发现缓存（fresh/stale 直接出结果，stale 后台刷新），再连接并拉取工具/命令/资源，结果通过回调逐个上报。
  */
-async function getMcpToolsCommandsAndResources_2(
+async function callToolWithTimers(
   onConnectionAttempt,
   mcpConfigs,
   storageV5,
@@ -8816,30 +8876,30 @@ async function getMcpToolsCommandsAndResources_2(
   };
   primeClientResolvers();
   let resourceToolsAdded = false;
-  let allConfigEntries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
+  let entries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
   let enabledEntries = [];
-  for (let entry of allConfigEntries)
-    if (isMcpServerDisabled(entry[0]))
+  for (let disabled of entries)
+    if (isMcpServerDisabled(disabled[0]))
       emitResult({
         client: {
-          name: entry[0],
+          name: disabled[0],
           type: "disabled",
-          config: entry[1],
+          config: disabled[1],
         },
         tools: [],
         commands: [],
       });
-    else enabledEntries.push(entry);
+    else enabledEntries.push(disabled);
   registerConfiguredMcpServers(Object.fromEntries(enabledEntries));
   let totalServers = enabledEntries.length;
-  let stdioCount = count(enabledEntries, ([name, config]) => config.type === "stdio");
-  let sseCount = count(enabledEntries, ([name, config]) => config.type === "sse");
-  let httpCount = count(enabledEntries, ([name, config]) => config.type === "http");
-  let sseIdeCount = count(enabledEntries, ([name, config]) => config.type === "sse-ide");
-  let wsIdeCount = count(enabledEntries, ([name, config]) => config.type === "ws-ide");
-  let localServers = enabledEntries.filter(([name, config]) => isLocalMcpServer(config));
-  let remoteServers = enabledEntries.filter(([name, config]) => !isLocalMcpServer(config));
-  let serverStats = {
+  let stdioCount = countWhere(enabledEntries, ([name, config]) => config.type === "stdio");
+  let sseCount = countWhere(enabledEntries, ([name, config]) => config.type === "sse");
+  let httpCount = countWhere(enabledEntries, ([name, config]) => config.type === "http");
+  let sseIdeCount = countWhere(enabledEntries, ([name, config]) => config.type === "sse-ide");
+  let wsIdeCount = countWhere(enabledEntries, ([name, config]) => config.type === "ws-ide");
+  let filtered = enabledEntries.filter(([name, config]) => isLocalMcpServer_2(config));
+  let filtered_2 = enabledEntries.filter(([name, config]) => !isLocalMcpServer_2(config));
+  let counts = {
     totalServers,
     stdioCount,
     sseCount,
@@ -8895,7 +8955,7 @@ async function getMcpToolsCommandsAndResources_2(
       if (
         (config.type === "claudeai-proxy" || config.type === "http" || config.type === "sse") &&
         !isCliOwnedConfig(config) &&
-        ((await isMcpAuthCached(serverName, config, storageV5)) ||
+        ((await isMcpAuthCached_2(serverName, config, storageV5)) ||
           ((config.type === "http" || config.type === "sse") &&
             shouldTryTokenless(
               serverName,
@@ -8924,7 +8984,7 @@ async function getMcpToolsCommandsAndResources_2(
       if (
         (config.type === "stdio" || config.type === undefined) &&
         config.pluginSource !== undefined &&
-        (await isMcpAuthCached(serverName, config, storageV5))
+        (await isMcpAuthCached_2(serverName, config, storageV5))
       ) {
         emitResult({
           client: {
@@ -8998,7 +9058,7 @@ async function getMcpToolsCommandsAndResources_2(
           source: lit(cacheProbe.kind === "fresh" ? "cache_fresh" : "cache_stale"),
           transportType: fromEnum(config.type ?? "stdio"),
           entryAgeMs: ageMs,
-          ...mcpBaseUrlAnalytics_2(config, serverName),
+          ...mcpServerKeyHashEntry(config, serverName),
         });
         logFeatureOk("mcp_discovery_cache");
         getConnectionCache().settledCachedDialFailures.delete(serverCacheKey(serverName, config));
@@ -9060,7 +9120,7 @@ async function getMcpToolsCommandsAndResources_2(
             };
             let dialSettled = false;
             try {
-              refreshDial = connectToServer(serverName, config, serverStats, storageV5, credentials);
+              refreshDial = connectToServer(serverName, config, counts, storageV5, credentials);
               getCliOwnedState().swrRefreshDialsInFlight.add(refreshDial);
               refreshDial.then(
                 () => {
@@ -9170,7 +9230,7 @@ async function getMcpToolsCommandsAndResources_2(
       let dial = connectToServer(
         serverName,
         config,
-        serverStats,
+        counts,
         storageV5,
         credentials,
         undefined,
@@ -9182,7 +9242,7 @@ async function getMcpToolsCommandsAndResources_2(
         logEvent("tengu_mcp_discovery_source", {
           source: lit(discoverySourceLabel(cacheProbe)),
           transportType: fromEnum(config.type ?? "stdio"),
-          ...mcpBaseUrlAnalytics_2(config, serverName),
+          ...mcpServerKeyHashEntry(config, serverName),
         });
       if (isSupersededDial(dial)) return;
       if (identityChangedForRemote(config)) {
@@ -9201,14 +9261,14 @@ async function getMcpToolsCommandsAndResources_2(
         return;
       }
       connection.discoveryBearerRejected = undefined;
-      if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry(serverName, storageV5);
+      if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, storageV5);
       if (config.type === "http" || config.type === "sse")
         await clearMcpOAuthStubIfTokenless_2(serverName, config);
       pendingTasks.push(
         (async () => {
           let published = false;
           try {
-            let supportsResources = !!connection.capabilities?.resources;
+            let connectionPromise = !!connection.capabilities?.resources;
             clearDiscoveryPathMemo(serverName);
             let grantLeg = await cacheGrantLeg(serverName, config);
             if (isDiscoveryCacheOn() && (isSupersededDial(dial) || identityChangedForRemote(config))) {
@@ -9229,14 +9289,14 @@ async function getMcpToolsCommandsAndResources_2(
                   isSameOriginAsCcr(config.url) &&
                   !isDiscoveryCacheEligible(config));
             let results_2 = Promise.all([
-              supportsResources && !skipResources ? fetchResourcesForClient(connection) : Promise.resolve([]),
-              supportsResources && isCacheableServer(connection.config)
+              connectionPromise && !skipResources ? fetchResourcesForClient(connection) : Promise.resolve([]),
+              connectionPromise && isCacheableServer(connection.config)
                 ? fetchResourceTemplatesForClient(connection)
                 : Promise.resolve([]),
             ]);
             let parallelResources =
               streamResources === true &&
-              supportsResources &&
+              connectionPromise &&
               (config.type === "http" || config.type === "sse") &&
               !isDiscoveryCacheOn();
             if (parallelResources) results_2.catch(() => {});
@@ -9282,7 +9342,7 @@ async function getMcpToolsCommandsAndResources_2(
               return;
             }
             if (config.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
-              clearMcpAuthCacheEntry(serverName, storageV5);
+              clearMcpAuthCacheEntry_2(serverName, storageV5);
             if (
               config.type === "claudeai-proxy" &&
               !connection.toolsListError &&
@@ -9292,7 +9352,7 @@ async function getMcpToolsCommandsAndResources_2(
             let commands_2 = [...commands, ...extraCommands];
             let publishConnection = (resources) => {
               let templatesResult = [];
-              if (supportsResources && !resourceToolsAdded) {
+              if (connectionPromise && !resourceToolsAdded) {
                 resourceToolsAdded = true;
                 templatesResult.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
               }
@@ -9311,7 +9371,7 @@ async function getMcpToolsCommandsAndResources_2(
               published = true;
             }
             let [resources, templatesResult] = resourceResults ?? (await results_2);
-            if (!supportsResources) recordRawResourcesForResult(resources, []);
+            if (!connectionPromise) recordRawResourcesForResult(resources, []);
             let templates =
               getDiscoveryFetchError(templatesResult) === undefined ? templatesResult : undefined;
             let persistPromise =
@@ -9367,16 +9427,16 @@ async function getMcpToolsCommandsAndResources_2(
     }
   };
   await Promise.all([
-    processBatched_2(localServers, getMcpServerConnectionBatchSize(), connectOne),
-    processBatched_2(remoteServers, getRemoteMcpServerConnectionBatchSize(), connectOne),
+    processBatched_3(filtered, getMcpServerConnectionBatchSize_2(), connectOne),
+    processBatched_3(filtered_2, getRemoteMcpServerConnectionBatchSize_2(), connectOne),
   ]);
   await Promise.all(pendingTasks);
 }
-//@ chunk-8t8n4kdh.js:171714-172380 fingerprint (2.1.88 match: prefetchAllMcpResources, 1)
+//@ chunk-sywnjtqb.js:173073-173737 placement (2.1.88 match: prefetchAllMcpResources, 1)
 /**
  * prefetchAllMcpResources：非交互模式下一次性连接全部服务器并收集 clients/tools/commands。
  */
-function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
+function prefetchAllMcpResources_2(mcpConfigs, storageV5, credentials) {
   return new Promise((resolve) => {
     let pendingCount = 0;
     let settledCount = 0;
@@ -9412,7 +9472,7 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
         commands,
       });
     };
-    getMcpToolsCommandsAndResources_2(
+    callToolWithTimers(
       (error) => {
         clients.push(error.client);
         tools.push(...error.tools);
@@ -9435,11 +9495,18 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
       });
   });
 }
-//@ chunk-8t8n4kdh.js:172380-173380 fingerprint (2.1.88 match: transformResultContent, 0.81)
+//@ chunk-sywnjtqb.js:173737-174743 placement (2.1.88 match: transformResultContent, 0.81)
 /**
  * transformResultContent：把 MCP 内容块转成 API 内容：text、image（压缩/尺寸限制）、audio、resource（文本或 blob 落盘）、resource_link。
  */
-async function transformResultContent(resultContent, serverName, imageBuffer, storageV5, keepMeta = false) {
+async function transformResultContent_2(
+  resultContent,
+  serverName,
+  limits,
+  storageV5,
+  keepMeta = false,
+  callback,
+) {
   switch (resultContent.type) {
     case "text": {
       let textBlock = {
@@ -9454,7 +9521,7 @@ async function transformResultContent(resultContent, serverName, imageBuffer, st
     }
     case "audio": {
       let audioData = resultContent;
-      return await persistBlobToTextBlock_2(
+      return await transformBlobResult(
         Buffer.from(audioData.data, "base64"),
         audioData.mimeType,
         serverName,
@@ -9463,15 +9530,15 @@ async function transformResultContent(resultContent, serverName, imageBuffer, st
       );
     }
     case "image": {
-      if (normalizeImageMimeType(resultContent.mimeType))
-        return await contentContainsImages(
+      if (normalizeImageMimeType_2(resultContent.mimeType))
+        return await saveImageResult(
           Buffer.from(String(resultContent.data), "base64"),
           resultContent.mimeType,
           serverName,
-          imageBuffer,
+          limits,
           storageV5,
         );
-      return await persistBlobToTextBlock_2(
+      return await transformBlobResult(
         Buffer.from(String(resultContent.data), "base64"),
         resultContent.mimeType,
         serverName,
@@ -9490,13 +9557,14 @@ async function transformResultContent(resultContent, serverName, imageBuffer, st
           },
         ];
       else if ("blob" in resource)
-        if (normalizeImageMimeType(resource.mimeType)) {
-          let imageBuffer_2 = await contentContainsImages(
+        if (normalizeImageMimeType_2(resource.mimeType)) {
+          let saved = await saveImageResult(
             Buffer.from(resource.blob, "base64"),
             resource.mimeType,
             serverName,
-            imageBuffer,
+            limits,
             storageV5,
+            callback,
           );
           let content = [];
           if (prefix)
@@ -9504,18 +9572,19 @@ async function transformResultContent(resultContent, serverName, imageBuffer, st
               type: "text",
               text: prefix,
             });
-          content.push(...imageBuffer_2);
+          content.push(...saved);
           return content;
         } else {
           let imageBuffer = Buffer.from(resource.blob, "base64");
           let storedMcpContent = toStoredMcpContent(imageBuffer, resource.mimeType, serverName);
           if (storedMcpContent) return [storedMcpContent];
-          return await persistBlobToTextBlock_2(
+          return await transformBlobResult(
             imageBuffer,
             resource.mimeType,
             serverName,
             prefix,
             storageV5,
+            callback,
           );
         }
       return [];
@@ -9535,15 +9604,15 @@ async function transformResultContent(resultContent, serverName, imageBuffer, st
       return [];
   }
 }
-//@ chunk-8t8n4kdh.js:173380-173476 layout
+//@ chunk-sywnjtqb.js:174743-174839 placement
 /**
  * 生成二进制内容落盘的随机文件名。
  */
 function blobFileName(serverName) {
-  return `mcp-${normalizeNameForMCP(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `mcp-${CLAUDEAI_SERVER_PREFIX(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-//@ chunk-8t8n4kdh.js:173476-174068 file-local
-async function contentContainsImages(data, mimeType, serverName, limits, storageV5) {
+//@ chunk-sywnjtqb.js:174839-175621 placement
+async function saveImageResult(data, mimeType, serverName, limits, storageV5, bytes) {
   if (toolResultStoreOrNull() === undefined && addToHistory_2()) {
     logFeatureSad("mcp_image_result_file", "persistence_off");
     let { block } = await maybeResizeAndDownsampleImageBlock({
@@ -9551,6 +9620,7 @@ async function contentContainsImages(data, mimeType, serverName, limits, storage
       mediaType: mimeType,
       limits,
     });
+    bytes?.(block.type === "image" ? "shown" : unreadOutcome(), data.length);
     return [block];
   }
   let [{ block: imageBlock, dimensions }, persistResult] = await Promise.all([
@@ -9565,8 +9635,8 @@ async function contentContainsImages(data, mimeType, serverName, limits, storage
       blobFileName(serverName),
       undefined,
       storageV5,
-    ).catch((block) => {
-      logError(block);
+    ).catch((error) => {
+      logError(error);
       return {
         error: "not saved",
       };
@@ -9574,15 +9644,18 @@ async function contentContainsImages(data, mimeType, serverName, limits, storage
   ]);
   if ("error" in persistResult) {
     logFeatureSad("mcp_image_result_file", "not_saved");
+    bytes?.(imageBlock.type === "image" ? "shown" : unreadOutcome(), data.length);
     return [imageBlock];
   }
   logFeatureOk("mcp_image_result_file");
-  let blockInfo = (imageBlock.type === "image"
+  let shrinker = toolResultStoreOrNull();
+  let blockInfo = (imageBlock.type === "image" && shrinker?.wantsPictureShrunk?.(data) !== true
     ? null
-    : await toolResultStoreOrNull()?.readPicture?.(persistResult.filepath, data)) ?? {
+    : await shrinker?.readPicture?.(persistResult.filepath, data)) ?? {
     block: imageBlock,
     dimensions,
   };
+  bytes?.(blockInfo.block.type === "image" ? "shown" : "saved", data.length);
   let imageMetadataText = createImageMetadataText(blockInfo.dimensions ?? {}, persistResult.filepath);
   return imageMetadataText === null
     ? [blockInfo.block]
@@ -9594,13 +9667,23 @@ async function contentContainsImages(data, mimeType, serverName, limits, storage
         },
       ];
 }
-//@ chunk-8t8n4kdh.js:174129-174452 fingerprint (2.1.88 match: persistBlobToTextBlock, 0.744)
+//@ chunk-sywnjtqb.js:175682-176092 placement
 /**
  * persistBlobToTextBlock：二进制资源落盘后返回说明文本块。
  */
-async function persistBlobToTextBlock_2(bytes, mimeType, serverName, sourceDescription, storageV5) {
-  let result = await persistBinaryContent(bytes, mimeType, blobFileName(serverName), undefined, storageV5);
-  if ("error" in result) {
+async function transformBlobResult(bytes, mimeType, serverName, mime, storageV5, callback) {
+  let saved = await persistBinaryContent(
+    bytes,
+    mimeType,
+    blobFileName(serverName),
+    undefined,
+    storageV5,
+  ).catch((error) => {
+    callback?.(unreadOutcome(), bytes.length);
+    throw error;
+  });
+  if ("error" in saved) {
+    callback?.(unreadOutcome(), bytes.length);
     if (toolResultStoreOrNull() !== undefined)
       return [
         {
@@ -9611,55 +9694,56 @@ async function persistBlobToTextBlock_2(bytes, mimeType, serverName, sourceDescr
     return [
       {
         type: "text",
-        text: `${sourceDescription}Binary content (${mimeType || "unknown type"}, ${bytes.length} bytes) could not be saved to disk: ${result.error}`,
+        text: `${mime}Binary content (${mimeType || "unknown type"}, ${bytes.length} bytes) could not be saved to disk: ${saved.error}`,
       },
     ];
   }
+  callback?.("saved", bytes.length);
   return [
     {
       type: "text",
-      text: getBinaryBlobSavedMessage(result.filepath, mimeType, result.size, sourceDescription),
+      text: getBinaryBlobSavedMessage(saved.filepath, mimeType, saved.size, mime),
     },
   ];
 }
-//@ chunk-8t8n4kdh.js:174452-174771 fingerprint (2.1.88 match: inferCompactSchema, 1)
+//@ chunk-sywnjtqb.js:176092-176411 placement (2.1.88 match: inferCompactSchema, 1)
 /**
  * inferCompactSchema：从 JSON 值推断紧凑的结构描述（深度 2），用于大结果说明。
  */
-function inferCompactSchema(value, depth = 2) {
+function inferCompactSchema_2(value, depth = 2) {
   if (value === null) return "null";
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
-    return `[${inferCompactSchema(value[0], depth - 1)}]`;
+    return `[${inferCompactSchema_2(value[0], depth - 1)}]`;
   }
   if (typeof value === "object") {
     if (depth <= 0) return "{...}";
     let props = Object.entries(value)
       .slice(0, 10)
-      .map(([k, v]) => `${k}: ${inferCompactSchema(v, depth - 1)}`);
+      .map(([k, v]) => `${k}: ${inferCompactSchema_2(v, depth - 1)}`);
     let suffix = Object.keys(value).length > 10 ? ", ..." : "";
     return `{${props.join(", ")}${suffix}}`;
   }
   return typeof value;
 }
-//@ chunk-8t8n4kdh.js:174771-174915 layout
-async function transformContentArray(content, serverName, imageBuffer, storageV5) {
+//@ chunk-sywnjtqb.js:176411-176559 placement
+async function transformContentArray_2(content, serverName, limits, storageV5, callback) {
   let blocks = (
     await Promise.all(
-      content.map((block) => transformResultContent(block, serverName, imageBuffer, storageV5, true)),
+      content.map((block) => transformResultContent_2(block, serverName, limits, storageV5, true, callback)),
     )
   ).flat();
   return {
     content: blocks,
     type: "contentArray",
-    schema: inferCompactSchema(stripTextBlockMeta(blocks)),
+    schema: inferCompactSchema_2(stripTextBlockMeta(blocks)),
   };
 }
-//@ chunk-8t8n4kdh.js:174915-175928 fingerprint (2.1.88 match: transformMCPResult, 0.902)
+//@ chunk-sywnjtqb.js:176559-177581 placement (2.1.88 match: transformMCPResult, 0.902)
 /**
  * transformMCPResult：把 callTool 结果分为 toolResult / structuredContent / contentArray 三类并转换内容。
  */
-async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
+async function transformMCPResult_2(result, tool, name, limits, storageV5, callback) {
   if (result && typeof result === "object") {
     if ("toolResult" in result)
       return {
@@ -9669,13 +9753,13 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
     if ("structuredContent" in result && result.structuredContent !== undefined) {
       if ("content" in result && Array.isArray(result.content)) {
         let contentResult = await contentOverStructuredResult(result.content, (blocks) =>
-          transformContentArray(blocks, name, imageBuffer, storageV5),
+          transformContentArray_2(blocks, name, limits, storageV5),
         );
         if (contentResult !== undefined) return contentResult;
       }
       let base64Text = base64URLEncode(result.structuredContent);
       let text = base64Text ?? jsonStringify(result.structuredContent);
-      let schema = base64Text === undefined ? inferCompactSchema(result.structuredContent) : undefined;
+      let schema = base64Text === undefined ? inferCompactSchema_2(result.structuredContent) : undefined;
       if ("content" in result && Array.isArray(result.content)) {
         let filtered = result.content.filter(
           (block) => block && typeof block === "object" && "type" in block && block.type !== "text",
@@ -9683,7 +9767,7 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
         if (filtered.length > 0) {
           let transformedContent = (
             await Promise.all(
-              filtered.map((item) => transformResultContent(item, name, imageBuffer, storageV5, true)),
+              filtered.map((item) => transformResultContent_2(item, name, limits, storageV5, true)),
             )
           ).flat();
           if (transformedContent.length > 0) {
@@ -9697,7 +9781,7 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
             return {
               content: contentWithText,
               type: "contentArray",
-              schema: inferCompactSchema(stripTextBlockMeta(contentWithText)),
+              schema: inferCompactSchema_2(stripTextBlockMeta(contentWithText)),
             };
           }
         }
@@ -9709,7 +9793,7 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
       };
     }
     if ("content" in result && Array.isArray(result.content))
-      return transformContentArray(result.content, name, imageBuffer, storageV5);
+      return transformContentArray_2(result.content, name, limits, storageV5, callback);
   }
   let errorMessage = `MCP server "${name}" tool "${tool}": unexpected response format`;
   logMCPError(name, errorMessage);
@@ -9723,24 +9807,26 @@ async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
     },
   );
 }
-//@ chunk-8t8n4kdh.js:175928-176037 layout (2.1.88 match: isMedia, 1)
-function isMedia(block) {
+//@ chunk-sywnjtqb.js:177581-177690 placement (2.1.88 match: isMedia, 1)
+function isMedia_2(block) {
   if (!block || typeof block === "string") return false;
   return block.some((block) => block.type === "image" || block.type === "document");
 }
-//@ chunk-8t8n4kdh.js:176037-178083 fingerprint (2.1.88 match: processMCPResult, 0.755)
+//@ chunk-sywnjtqb.js:177690-179902 placement
 /**
  * processMCPResult：处理工具结果：超过 MCP 输出上限时（ENABLE_MCP_LARGE_OUTPUT_FILES 未关闭且不含图片）把全文写入 tool-results 文件并返回 getLargeOutputInstructions 说明，否则截断；记录 tengu_mcp_large_result_handled。
  */
-async function processMCPResult(
+async function transformResult(
   result,
   tool,
   name,
-  imageLimits,
+  limits,
   hasResultSizeAnnotation,
   storageV5,
   credentials,
   resultNotForModel,
+  serverName,
+  toolName,
 ) {
   if (
     resultNotForModel &&
@@ -9751,12 +9837,18 @@ async function processMCPResult(
     Array.isArray(result.content)
   )
     return result.content;
-  let transformed = await transformMCPResult(result, tool, name, imageLimits, storageV5);
+  let transformed = await transformMCPResult_2(result, tool, name, limits, storageV5, serverName);
   let { type, schema } = transformed;
   let content = dropExtraDocumentBlocks(transformed.content);
   if (name === "ide") return content;
-  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia(content))) return content;
-  if (!(await mcpContentNeedsTruncation(content, credentials))) return content;
+  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia_2(content))) {
+    noteResult(toolName, "kept_in_conversation", content);
+    return content;
+  }
+  if (!(await mcpContentNeedsTruncation(content, credentials))) {
+    noteResult(toolName, "kept_in_conversation", content);
+    return content;
+  }
   let sizeEstimateTokens = getContentSizeEstimate(content);
   if (env.ENABLE_MCP_LARGE_OUTPUT_FILES === false) {
     logEvent("tengu_mcp_large_result_handled", {
@@ -9764,10 +9856,11 @@ async function processMCPResult(
       reason: lit("env_disabled"),
       sizeEstimateTokens,
     });
+    noteResult(toolName, "cut_not_saved", content);
     return await truncateMcpContentIfNeeded(content, credentials);
   }
   if (!content) return content;
-  if (isMedia(content)) {
+  if (isMedia_2(content)) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("contains_images"),
@@ -9775,8 +9868,8 @@ async function processMCPResult(
     });
     return await truncateMcpContentIfNeeded(content, credentials);
   }
-  let timestamp = Date.now();
-  let persistId = `mcp-${normalizeNameForMCP(name)}-${normalizeNameForMCP(tool)}-${timestamp}`;
+  let now = Date.now();
+  let resultId = `mcp-${CLAUDEAI_SERVER_PREFIX(name)}-${CLAUDEAI_SERVER_PREFIX(tool)}-${now}`;
   let contentWithoutMeta = stripTextBlockMeta(content);
   let canUnwrapSingleton =
     useSubagentTruncationPrompt() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_singleton_unwrap", true);
@@ -9808,7 +9901,7 @@ async function processMCPResult(
       maxLen: maxLineLength,
     };
   }
-  let persistResult = await persistToolResult(textForFile, persistId, toolResultsDir(), storageV5);
+  let persistResult = await persistToolResult(textForFile, resultId, toolResultsDir(), storageV5);
   if (isPersistError(persistResult)) {
     if (toolResultStoreOrNull() !== undefined) {
       logEvent("tengu_mcp_large_result_handled", {
@@ -9816,15 +9909,17 @@ async function processMCPResult(
         reason: lit("not_stored"),
         sizeEstimateTokens,
       });
+      noteResult(toolName, "cut_not_saved", content);
       return await truncateMcpContent(content);
     }
-    let contentLength = textForFile.length;
+    let keptCount = textForFile.length;
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("persist_failed"),
       sizeEstimateTokens,
     });
-    return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${persistResult.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
+    noteResult(toolName, "save_failed", content);
+    return `Error: result (${keptCount.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${persistResult.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
   }
   logEvent("tengu_mcp_large_result_handled", {
     outcome: lit("persisted"),
@@ -9836,6 +9931,7 @@ async function processMCPResult(
     blockCount,
     persistedAs: fromEnum(persistedFormat),
   });
+  noteResult(toolName, "saved_as_text", content);
   let formatDescription =
     text !== undefined ? getFormatDescription("toolResult") : getFormatDescription(type, schema);
   return getLargeOutputInstructions(
@@ -9847,11 +9943,11 @@ async function processMCPResult(
     persistResult.truncatedAtBytes,
   );
 }
-//@ chunk-8t8n4kdh.js:178083-178255 layout
+//@ chunk-sywnjtqb.js:179902-180074 placement
 /**
  * 从 -32042（URL elicitation required）错误的 data.elicitations 中取出通过 schema 校验的 elicitation 列表，格式不对返回空数组。
  */
-function parseUrlElicitationRequiredError(error) {
+function parseUrlElicitationRequiredError_2(error) {
   let errorData = error.data;
   return (
     errorData != null &&
@@ -9860,13 +9956,13 @@ function parseUrlElicitationRequiredError(error) {
     Array.isArray(errorData.elicitations)
       ? errorData.elicitations
       : []
-  ).filter((elicitation) => ElicitRequestURLParamsSchema.safeParse(elicitation).success);
+  ).filter((elicitation) => ElicitRequestURLParamsSchema_2.safeParse(elicitation).success);
 }
-//@ chunk-8t8n4kdh.js:178255-178526 layout
+//@ chunk-sywnjtqb.js:180074-180345 placement
 /**
  * 把工具调用失败归类为认证问题：401、Unauthorized、OAuth 形状错误、带 headersHelper 的 403、或有待定 step-up scope 的 403 才算；有 step-up scope 且不是真 401 时返回 step_up，否则 credential_rejected，不是认证问题返回 undefined。
  */
-function classifyToolCallAuthError({
+function classifyToolCallAuthError_2({
   errorCode,
   message,
   isUnauthorizedError,
@@ -9887,7 +9983,7 @@ function classifyToolCallAuthError({
     ? "step_up"
     : "credential_rejected";
 }
-//@ chunk-8t8n4kdh.js:178526-178751 layout
+//@ chunk-sywnjtqb.js:180345-180570 placement
 function isNeedsApprovalOrExpiredSession(error) {
   if (isRefusedByCcrProxy(error)) return true;
   if (!(error instanceof Error) || !("code" in error)) return false;
@@ -9897,7 +9993,7 @@ function isNeedsApprovalOrExpiredSession(error) {
   }
   return error.code === -32000 && isApprovalMismatchMessage(error.message);
 }
-//@ chunk-8t8n4kdh.js:178751-183698 layout
+//@ chunk-sywnjtqb.js:180570-185513 placement
 /**
  * 带重试的 MCP 工具调用外层：可选 OTel span；CCR 代理返回 -32003 needs_approval 时弹事后审批卡（Chrome 域被 deny 规则覆盖则直接拒绝，编辑过参数的批准不重放），批准后重试；遇 URL elicitation 要求时处理后重试。
  */
@@ -10124,7 +10220,7 @@ async function callMCPToolWithUrlElicitationRetry({
       }
       if (hostedDesktopRefusal_2(clientConnection) !== undefined) throw error;
       if (idx - (retriedApproval ? 1 : 0) >= 3) throw error;
-      let urlElicitationRequiredError = parseUrlElicitationRequiredError(error);
+      let urlElicitationRequiredError = parseUrlElicitationRequiredError_2(error);
       let serverName = clientConnection.name;
       if (urlElicitationRequiredError.length === 0) {
         logMCPDebug(serverName, `Tool '${tool}' returned -32042 but no valid elicitations in error data`);
@@ -10136,7 +10232,7 @@ async function callMCPToolWithUrlElicitationRetry({
       );
       for (let elicitation of urlElicitationRequiredError) {
         let { elicitationId } = elicitation;
-        let hookResult = await runElicitationHooks_2(serverName, elicitation, signal);
+        let hookResult = await runElicitationHooks(serverName, elicitation, signal);
         if (hookResult) {
           logMCPDebug(
             serverName,
@@ -10172,7 +10268,7 @@ async function callMCPToolWithUrlElicitationRetry({
         } finally {
           onAwaitingUserInput?.(false);
         }
-        let userResult = await runElicitationResultHooks_2(serverName, result, signal, "url", elicitationId);
+        let userResult = await runElicitationResultHooks(serverName, result, signal, "url", elicitationId);
         if (userResult.action !== "accept") {
           logMCPDebug(
             serverName,
@@ -10190,8 +10286,8 @@ async function callMCPToolWithUrlElicitationRetry({
       }
     }
 }
-//@ chunk-8t8n4kdh.js:183698-184226 layout
-function toolErrorResultText(result, serverName, redactErrorForLog) {
+//@ chunk-sywnjtqb.js:185513-186041 placement
+function toolErrorResultText_2(result, serverName, redactErrorForLog) {
   if (!result.isError) return;
   let errorText = "Unknown error";
   if (Array.isArray(result.content) && result.content.length > 0) {
@@ -10222,22 +10318,41 @@ function toolErrorResultText(result, serverName, redactErrorForLog) {
       : undefined,
   );
 }
-//@ chunk-8t8n4kdh.js:184226-184403 layout
+//@ chunk-sywnjtqb.js:186041-186171 layout
+var CALL_TOOL_RESULT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-sywnjtqb.js:186041", () => {
+  CALL_TOOL_RESULT_SCHEMA = DoctorLazy(() =>
+    ListToolsResultSchema.extend({
+      tools: array(
+        ToolSchema_2.extend({
+          inputSchema: ToolSchema_2.shape.inputSchema.extend({
+            properties: record(stringSchema(), unknown()).optional(),
+          }),
+        }),
+      ),
+    }),
+  );
+});
+//@ chunk-sywnjtqb.js:186171-186224 layout (2.1.88 match: isHTTPConfig, 1)
+function isHTTPConfig(config) {
+  return config.type === "http" && hasMcpInboundDoor() ? CALL_TOOL_RESULT_SCHEMA() : ListToolsResultSchema;
+}
+//@ chunk-sywnjtqb.js:186224-186401 placement
 /**
  * 构造 SEP-2663（MCP Tasks）所需的 schema 绑定对象：implementation、serverCapabilities、tool、prompt、resource、resourceTemplate 与 contentBlock 的 zod schema，交给 SDK 的任务支持使用。（v2）
  */
-function buildSep2663TaskBinding() {
+function buildSep2663TaskBinding_2() {
   return {
-    implementation: ImplementationSchema,
-    serverCapabilities: ServerCapabilitiesSchema,
-    tool: ToolSchema,
-    prompt: PromptSchema,
-    resource: ResourceSchema,
-    resourceTemplate: ResourceTemplateSchema,
-    contentBlock: CompatibilityCallToolResultSchema.options[0].shape.content.unwrap().element,
+    implementation: ImplementationSchema_2,
+    serverCapabilities: ServerCapabilitiesSchema_2,
+    tool: ToolSchema_2,
+    prompt: PromptSchema_2,
+    resource: ResourceSchema_2,
+    resourceTemplate: ResourceTemplateSchema_2,
+    contentBlock: CompatibilityCallToolResultSchema_2.options[0].shape.content.unwrap().element,
   };
 }
-//@ chunk-8t8n4kdh.js:184403-184494 layout
+//@ chunk-sywnjtqb.js:186401-186492 placement
 /**
  * 绕过缓存执行 tools/list。
  */
@@ -10253,7 +10368,7 @@ function listToolsBypassCache(connection, options) {
     },
   );
 }
-//@ chunk-8t8n4kdh.js:184494-184574 layout
+//@ chunk-sywnjtqb.js:186492-186572 placement
 /**
  * 绕过缓存读取资源。
  */
@@ -10268,7 +10383,7 @@ function readResourceBypassCache(connection, uri, options) {
     },
   );
 }
-//@ chunk-8t8n4kdh.js:184574-184707 layout
+//@ chunk-sywnjtqb.js:186572-186705 placement
 /**
  * 调用工具 `tools/call` 的底层封装：协议时代为 modern 时在 `_meta` 里附上客户端任务能力声明，legacy 原样调用。（v2）
  */
@@ -10286,7 +10401,7 @@ function invokeToolRaw(connection, params, options) {
       : params;
   return sdkClient.callTool(callParams, options);
 }
-//@ chunk-8t8n4kdh.js:184707-184738 layout
+//@ chunk-sywnjtqb.js:186705-186736 placement
 /**
  * 任务请求的附加选项（allowTask）。
  */
@@ -10294,7 +10409,7 @@ var TASK_REQUEST_TIMEOUT_MS = 60000;
 var TASK_REQUEST_OPTIONS = {
   allowTask: true,
 };
-//@ chunk-8t8n4kdh.js:184738-184900 layout
+//@ chunk-sywnjtqb.js:186736-186898 placement
 function withDeclaredClientTasks(client, params) {
   let declaredTasks = getCliOwnedState().clientTasksDeclaredBeforeServerList.get(client);
   let _meta = params._meta;
@@ -10308,13 +10423,13 @@ function withDeclaredClientTasks(client, params) {
         },
       };
 }
-//@ chunk-8t8n4kdh.js:184900-184992 layout
+//@ chunk-sywnjtqb.js:186898-186990 placement
 /**
  * 任务 id schema（1–1024 字符、无控制字符）。
  */
 var taskResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var taskIdSchema;
-deferInit("chunk-8t8n4kdh.js:184900", () => {
+deferInit("chunk-sywnjtqb.js:186898", () => {
   taskResultSchema = DoctorLazy(() =>
     looseObject({
       resultType: literal("task"),
@@ -10327,7 +10442,7 @@ deferInit("chunk-8t8n4kdh.js:184900", () => {
       .regex(/^\P{Cc}+$/u),
   );
 });
-//@ chunk-8t8n4kdh.js:184992-185307 layout
+//@ chunk-sywnjtqb.js:186990-187305 placement
 /**
  * 为 MCP 任务（Tasks）构造请求通道：request 发任意方法（带签名头与超时），resolveInputRequest 把任务中途的输入请求（elicitation 等）交给对话框处理。（v2）
  */
@@ -10362,22 +10477,22 @@ function createSep2663TaskBinding(connection, { taskId, requestDialog }) {
       }),
   };
 }
-//@ chunk-8t8n4kdh.js:185307-185360 layout
+//@ chunk-sywnjtqb.js:187305-187358 placement
 /**
  * 任务中途输入请求的 schema。
  */
 var taskInputRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:185307", () => {
+deferInit("chunk-sywnjtqb.js:187305", () => {
   taskInputRequestSchema = DoctorLazy(() =>
     union([
       ElicitRequestParamsSchema,
-      ElicitRequestURLParamsSchema.omit({
+      ElicitRequestURLParamsSchema_2.omit({
         elicitationId: true,
       }),
     ]),
   );
 });
-//@ chunk-8t8n4kdh.js:185360-186410 layout
+//@ chunk-sywnjtqb.js:187358-188408 placement
 /**
  * 处理 MCP 任务的输入请求：elicitation/create 校验参数后在交互会话中弹对话框（URL 模式被关闭或非交互时取消任务），roots/list 返回根目录，其它方法不支持。
  */
@@ -10412,7 +10527,7 @@ async function resolveTaskInputRequest({
         return;
       }
       if (requestDialog && !getIsNonInteractiveSession())
-        return handleElicitationRequest_2({
+        return handleElicitationRequest({
           connected,
           params: parseResult.data,
           signal,
@@ -10428,7 +10543,7 @@ async function resolveTaskInputRequest({
       );
     }
     case "roots/list":
-      return getMcpRoots(isDocumentsPluginServer(connected.config));
+      return getMcpRoots_2(isDocumentsPluginServer_2(connected.config));
     default:
       logMCPDebug(
         serverName,
@@ -10437,7 +10552,7 @@ async function resolveTaskInputRequest({
       return;
   }
 }
-//@ chunk-8t8n4kdh.js:186410-202078 layout
+//@ chunk-sywnjtqb.js:188408-204263 placement
 /**
  * 发 tools/call 并监护整次调用：总超时、空闲超时（进度通知或 elicitation 关闭会重置）、传输断开 90 秒后判定响应丢失、答复流提前结束；modern 服务器支持任务化（转后台或轮询）；认证失败时触发重新认证并按需重试，结果交给 processMCPResult。
  */
@@ -10504,7 +10619,7 @@ async function callMCPTool({
   try {
     incrementCallsInProgress(transportErrorState);
     logMCPDebug(serverName, `Calling MCP tool: ${tool}`);
-    let resolvedIdleTimeoutMs = idleTimeoutMs ?? getMcpToolIdleTimeoutMs(config);
+    let resolvedIdleTimeoutMs = idleTimeoutMs ?? getMcpToolIdleTimeoutMs_2(config);
     let lastActivityAt = now;
     let rejectIdle;
     let promise = new Promise((resolve, reject) => {
@@ -10538,7 +10653,7 @@ async function callMCPTool({
               ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                   describeUnansweredCall(serverName, tool),
                   "MCP answer stream ended mid-call",
-                  MCP_ANSWER_STREAM_ENDED,
+                  QUESTION_UNANSWERED_CODE,
                 )
               : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                   `MCP server "${serverName}": the answer stream for tool "${tool}" ended with no answer`,
@@ -10601,7 +10716,7 @@ async function callMCPTool({
         );
       }
     }, 30000);
-    let callTimeoutMs = getMcpToolTimeoutMs(config);
+    let callTimeoutMs = getMcpToolTimeoutMs_3(config);
     let callTimeoutTimer;
     let rejectTimeout;
     let promise_2 = new Promise((resolve, reject) => {
@@ -10642,10 +10757,13 @@ async function callMCPTool({
     };
     armCallTimeout(callTimeoutMs, callTimeoutMs);
     let pauseForQuestions = shouldPauseForQuestions(config, callTimeoutMs);
-    if (pauseForQuestions)
+    let callWatchdog = isProbeAllowed(config);
+    if (pauseForQuestions || callWatchdog > 0)
       installQuestionPause(watchdog, {
         inFlight: transportErrorState?.activeCallWatchdogs,
         timeoutMs: callTimeoutMs,
+        pauses: pauseForQuestions,
+        questionBoundMs: callWatchdog,
         armTimeout: armCallTimeout,
         timedOut: promise_2,
       });
@@ -10709,7 +10827,10 @@ async function callMCPTool({
         },
         {
           ...taskRequestOptions,
-          signal: pauseForQuestions ? AbortSignal.any([signal, abortController.signal]) : signal,
+          signal:
+            pauseForQuestions || callWatchdog > 0
+              ? AbortSignal.any([signal, abortController.signal])
+              : signal,
           timeout: pauseForQuestions ? MAX_TIMER_DELAY_MS : callTimeoutMs,
           onprogress: (progressEvent) => {
             watchdog.armedAt = 0;
@@ -10914,7 +11035,7 @@ async function callMCPTool({
       });
       if (outcome.status === "completed") {
         logMCPDebug(serverName, `Task ${task.taskId} completed`);
-        return CompatibilityCallToolResultSchema.parse(outcome.result);
+        return CompatibilityCallToolResultSchema_2.parse(outcome.result);
       }
       let message = mcpTaskPersistenceModule.boundMcpStatusMessage(outcome.error.message) ?? "";
       logMCPDebug(
@@ -10944,7 +11065,7 @@ async function callMCPTool({
       noteHearthDegraded(serverName, undefined);
       return placeholder;
     }
-    toolErrorResultText(callResult, serverName, redactErrorForLog);
+    toolErrorResultText_2(callResult, serverName, redactErrorForLog);
     let elapsedMs = Date.now() - now;
     let elapsedText =
       elapsedMs < 1000
@@ -10960,7 +11081,7 @@ async function callMCPTool({
         source: lit("mcp"),
         success: true,
       });
-    let content = await processMCPResult(
+    let content = await transformResult(
       callResult,
       tool,
       serverName,
@@ -10969,6 +11090,8 @@ async function callMCPTool({
       storageV5,
       credentials,
       resultNotForModel,
+      attachmentNoteFor(client, tool),
+      textResultToolUseId(client, tool, toolUseId, callResult),
     );
     noteHearthDegraded(serverName, undefined);
     return {
@@ -11013,7 +11136,7 @@ async function callMCPTool({
       let pendingStepUpScope = getCliOwnedState().clientAuthProviders.get(
         clientOf(client_2),
       )?.pendingStepUpScope;
-      let authKind = classifyToolCallAuthError({
+      let authKind = classifyToolCallAuthError_2({
         errorCode,
         message: error.message,
         isUnauthorizedError: error instanceof UnauthorizedError_2,
@@ -11187,17 +11310,17 @@ async function callMCPTool({
             ? `Tool call returned 403 insufficient_scope (scope: ${redactSensitiveUrlParams("scope", pendingStepUpScope ?? "")})`
             : "Tool call returned 401 Unauthorized - token may have expired",
         );
-        let analytics = mcpBaseUrlAnalytics_2(config, serverName);
+        let analytics = mcpServerKeyHashEntry(config, serverName);
         let loggable = isMcpServerLoggableInAnalytics(serverName, config);
         logEvent("tengu_mcp_tool_call_auth_error", {
           errorCode: fromNumber(errorCode ?? (authKind === "step_up" ? 403 : 401)),
           transportType: fromEnum(config.type ?? "stdio"),
           authErrorKind: fromEnum(authErrorKind),
           ...analytics,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), loggable),
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(CLAUDEAI_SERVER_PREFIX(serverName), loggable),
           mcpToolName: loggableMcpToolName(
-            normalizeNameForMCP(serverName),
-            normalizeNameForMCP(tool),
+            CLAUDEAI_SERVER_PREFIX(serverName),
+            CLAUDEAI_SERVER_PREFIX(tool),
             loggable,
           ),
         });
@@ -11213,7 +11336,7 @@ async function callMCPTool({
                 ? AUTH_MESSAGES.helperRejected(serverName)
                 : headerRejected
                   ? AUTH_MESSAGES.headerRejected(serverName)
-                  : AUTH_MESSAGES.signInAgain(serverName),
+                  : AUTH_MESSAGES.signInAgain(serverName, config),
           authErrorKind,
           getCliOwnedState().clientFirstPartyBearers.get(clientOf(client_2))?.last,
           authErrorKind === "insufficient_scope" ? pendingStepUpScope : undefined,
@@ -11227,15 +11350,21 @@ async function callMCPTool({
             error.code === -32000 &&
             error.message.includes("Connection closed"))) &&
         (config.type === "http" || config.type === "claudeai-proxy");
-      if (error instanceof HttpBodyOverflowError)
+      if (error instanceof HttpBodyOverflowError_2) {
+        noteGmailAttachmentNotRead(client, tool, "too_large");
+        noteGmailAttachmentShown(client, tool, "http body overflow");
         throw new McpToolResultNotReadError(serverName, tool, {
           kind: "too_large",
           capBytes: MCP_BODY_LIMIT,
         });
-      if (connectionClosed && isTruncatedBodyError(transportErrorState?.closeReason))
+      }
+      if (connectionClosed && isTruncatedBodyError(transportErrorState?.closeReason)) {
+        noteGmailAttachmentNotRead(client, tool, "connection_closed");
+        noteGmailAttachmentShown(client, tool, transportErrorState?.closeReason);
         throw new McpToolResultNotReadError(serverName, tool, {
           kind: "connection_closed",
         });
+      }
       let states = [...sentRequests.values()];
       if (connectionClosed && states.length > 0) {
         logMCPDebug(
@@ -11284,18 +11413,18 @@ async function callMCPTool({
           serverName,
           `MCP session expired during tool call (${sessionExpired ? "stale session" : "connection closed"}), clearing connection cache for re-initialization`,
         );
-        let analytics = mcpBaseUrlAnalytics_2(config, serverName);
+        let analytics = mcpServerKeyHashEntry(config, serverName);
         let loggable = isMcpServerLoggableInAnalytics(serverName, config);
         let mcpToolName = loggableMcpToolName(
-          normalizeNameForMCP(serverName),
-          normalizeNameForMCP(tool),
+          CLAUDEAI_SERVER_PREFIX(serverName),
+          CLAUDEAI_SERVER_PREFIX(tool),
           loggable,
         );
         logEvent("tengu_mcp_session_expired", {
           errorCode: errorCode !== undefined ? fromNumber(errorCode) : undefined,
           transportType: fromEnum(config.type ?? "stdio"),
           ...analytics,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), loggable),
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(CLAUDEAI_SERVER_PREFIX(serverName), loggable),
           mcpToolName,
         });
         await clearServerCache(serverName, config);
@@ -11339,12 +11468,12 @@ async function callMCPTool({
     decrementCallsInProgress(transportErrorState);
   }
 }
-//@ chunk-8t8n4kdh.js:202078-202174 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-sywnjtqb.js:204263-204359 placement
 function getFirstToolUseId(message) {
   if (message.message.content[0]?.type !== "tool_use") return;
   return message.message.content[0].id;
 }
-//@ chunk-8t8n4kdh.js:202174-203150 layout
+//@ chunk-sywnjtqb.js:204359-205335 placement
 /**
  * 校验 SDK 宿主提供的 MCP 清单：initializeResult 不合法或协议版本不支持时放弃清单改走控制通道握手；tools/list 结果不合法同样放弃；分页的 tools/list 只回放 initialize。
  */
@@ -11387,18 +11516,18 @@ function validateHostManifest(serverName, manifest) {
   }
   return manifest;
 }
-//@ chunk-8t8n4kdh.js:203150-203225 layout
+//@ chunk-sywnjtqb.js:205335-205410 placement
 /**
  * 校验对象是否是合法的 JSON-RPC 结果。
  */
 function isJsonRpcResult(result) {
-  return JSONRPCMessageSchema.safeParse({
+  return JSONRPCMessageSchema_2.safeParse({
     jsonrpc: "2.0",
     id: 0,
     result,
   }).success;
 }
-//@ chunk-8t8n4kdh.js:203225-203562 layout
+//@ chunk-sywnjtqb.js:205410-205747 placement
 /**
  * 记录 SDK 宿主 MCP 清单的结果：重放成功或失败，以及协议版本不符、声明了客户端能力、结果格式不对等情况。
  */
@@ -11419,7 +11548,7 @@ function logManifestOutcome(manifestOutcome, ok) {
       return;
   }
 }
-//@ chunk-8t8n4kdh.js:203562-205634 layout
+//@ chunk-sywnjtqb.js:205747-207814 placement
 /**
  * 连接 SDK 宿主注册的进程内 MCP 服务器：每个建控制通道传输与客户端（sdk-control 协商），带连接超时；成功则拉取工具，失败标记 failed；有资源能力时补上资源列表/读取工具。
  */
@@ -11449,10 +11578,10 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION ?? "unknown",
@@ -11546,7 +11675,7 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
   if (clients.some((client) => client.type === "connected" && !!client.capabilities?.resources)) {
     if (
       ![ListMcpResourcesTool, ReadMcpResourceTool].some((resourceTool) =>
-        tools.some((tool) => toolMatchesName(tool, resourceTool.name)),
+        tools.some((tool) => matchesToolName(tool, resourceTool.name)),
       )
     )
       tools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
@@ -11557,11 +11686,11 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
     commands,
   };
 }
-//@ chunk-8t8n4kdh.js:205634-205823 fingerprint (2.1.88 match: clearServerCache, 0.581)
+//@ chunk-sywnjtqb.js:207814-208003 placement
 /**
  * clearServerCache：断开并清除某服务器的连接与所有记忆化列表缓存。
  */
-async function clearServerCache_3(clients) {
+async function closeAllClients(clients) {
   await Promise.all(
     clients.map(async (client) => {
       if (client.type !== "connected") return;
@@ -11575,7 +11704,7 @@ async function clearServerCache_3(clients) {
     }),
   );
 }
-//@ chunk-z1n5m6nf.js:41559-41859 callgraph-fingerprint (2.1.88 match: isMcpSessionExpiredError, 0.543)
+//@ chunk-h44h5gdv.js:42981-43281 callgraph-fingerprint (2.1.88 match: isMcpSessionExpiredError, 0.544)
 /**
  * isMcpSessionExpiredError：HTTP 404 + JSON-RPC -32001 一类"会话不存在"错误判定，触发重新建立会话。
  */
@@ -11590,45 +11719,45 @@ function isMcpSessionExpiredError_2(error) {
     /Server not initialized|No valid session ID|Mcp-Session-Id header is required/i.test(error.message)
   );
 }
-//@ chunk-z1n5m6nf.js:41859-41937 layout
+//@ chunk-h44h5gdv.js:43281-43359 layout
 /**
  * 截断服务器 instructions（超过上限按描述截断规则处理，标注 `Server instructions`）；空值原样返回。（v1）
  */
 function truncateServerInstructions_2(instructions, serverName, maxLength = maxDescriptionLength()) {
   if (!instructions) return instructions;
-  return truncateDescription_2(instructions, "Server instructions", serverName, maxLength);
+  return truncateDescription(instructions, "Server instructions", serverName, maxLength);
 }
-//@ chunk-z1n5m6nf.js:41937-42091 layout
-function truncateDescription_2(description, label, serverName, maxLength = maxDescriptionLength()) {
+//@ chunk-h44h5gdv.js:43359-43512 layout
+function truncateDescription(description, label, serverName, maxLength = maxDescriptionLength()) {
   if (description.length <= maxLength) return description;
   if (serverName !== undefined)
     logMCPDebug(serverName, `${label} truncated from ${description.length} to ${maxLength} chars`);
   return truncateToLength(description, maxLength) + "\u2026 [truncated]";
 }
-//@ chunk-z1n5m6nf.js:42091-42269 layout
+//@ chunk-h44h5gdv.js:43512-43690 layout
 /**
  * 匹配 HTTP 状态错误的正则（旧客户端副本）。
  */
-var TRANSIENT_NETWORK_ERROR_CODES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TRANSIENT_NETWORK_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TRANSIENT_ERROR_CODES_V1;
 var POST_HTTP_STATUS_RE_V1;
-deferInit("chunk-z1n5m6nf.js:42091", () => {
-  TRANSIENT_NETWORK_ERROR_CODES_2 = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
+deferInit("chunk-h44h5gdv.js:43512", () => {
+  TRANSIENT_NETWORK_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
   TRANSIENT_ERROR_CODES_V1 = new Set([
-    ...TRANSIENT_NETWORK_ERROR_CODES_2,
+    ...TRANSIENT_NETWORK_ERROR_CODES,
     "ConnectionRefused",
     "ConnectionClosed",
   ]);
   POST_HTTP_STATUS_RE_V1 = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
 });
-//@ chunk-z1n5m6nf.js:42269-42327 layout
+//@ chunk-h44h5gdv.js:43690-43748 layout
 /**
  * 判断数值是否为合法 HTTP 状态码（旧副本）。
  */
 function isValidHttpStatusV1(status) {
   return typeof status === "number" && status >= 100 && status <= 599;
 }
-//@ chunk-z1n5m6nf.js:42327-42781 layout
+//@ chunk-h44h5gdv.js:43748-44202 layout
 /**
  * isTransientMcpError：AbortError、瞬时网络错误码或 5xx 视为可重试。
  */
@@ -11647,29 +11776,29 @@ function isTransientMcpError_2(msg) {
   if (typeof code === "string" && TRANSIENT_ERROR_CODES_V1.has(code)) return true;
   let message = msg.message;
   return (
-    TRANSIENT_NETWORK_ERROR_CODES_2.some((fragment) => message.includes(fragment)) ||
+    TRANSIENT_NETWORK_ERROR_CODES.some((fragment) => message.includes(fragment)) ||
     message.includes("Body Timeout Error") ||
     /\bterminated\b/.test(message) ||
     message.includes("SSE stream disconnected") ||
     message.includes("Failed to reconnect SSE stream")
   );
 }
-//@ chunk-z1n5m6nf.js:42781-42816 layout
+//@ chunk-h44h5gdv.js:44202-44237 layout
 /**
  * 分页退避序列（旧副本）。
  */
 var DEFAULT_TOOL_TIMEOUT_MS_V1 = 1e8;
 var MAX_LIST_PAGES_V1 = 20;
 var LIST_PAGE_DELAYS_MS_V1 = [250, 500, 1000];
-//@ chunk-z1n5m6nf.js:42816-43219 layout
+//@ chunk-h44h5gdv.js:44237-44640 layout
 /**
  * 判断旧客户端的列表错误是否可重试。
  */
 function isRetryableListErrorV1(error) {
-  if (isListAuthError_2(error)) return false;
-  if (isClaudeAiBearerRejectedError_2(error)) return false;
+  if (isListAuthError(error)) return false;
+  if (isClaudeAiBearerRejectedError(error)) return false;
   if (error instanceof DOMException && error.name === "TimeoutError") return false;
-  if (error instanceof HttpBodyOverflowError_2) return false;
+  if (error instanceof HttpBodyOverflowError) return false;
   if (
     error instanceof Error &&
     !(error instanceof McpError) &&
@@ -11688,7 +11817,7 @@ function isRetryableListErrorV1(error) {
     );
   return true;
 }
-//@ chunk-z1n5m6nf.js:43219-43929 layout
+//@ chunk-h44h5gdv.js:44640-45350 layout
 async function listAllPages(connection, name, config, method, requestOptions, extractItems) {
   let hasLoggedError = false;
   for (let j = 0; ; j++) {
@@ -11751,7 +11880,7 @@ async function listAllPages(connection, name, config, method, requestOptions, ex
     }
   }
 }
-//@ chunk-z1n5m6nf.js:43929-44031 layout
+//@ chunk-h44h5gdv.js:45350-45452 layout
 function logListPagination(method, pageCount, itemCount, outcome) {
   logEvent("tengu_mcp_list_paginated", {
     method: fromEnum(method),
@@ -11760,62 +11889,62 @@ function logListPagination(method, pageCount, itemCount, outcome) {
     outcome: fromEnum(outcome),
   });
 }
-//@ chunk-z1n5m6nf.js:44031-44169 layout (2.1.88 match: getMcpToolTimeoutMs, 1)
+//@ chunk-h44h5gdv.js:45452-45590 fingerprint (2.1.88 match: getMcpToolTimeoutMs, 1)
 /**
  * MCP 工具调用总超时（v1 副本）：配置 timeout ≥1000 优先，其次 MCP_TOOL_TIMEOUT，再默认值，夹在 1000ms 与上限之间。
  */
-function getMcpToolTimeoutMs_3(config) {
+function getMcpToolTimeoutMs(config) {
   let timeoutMs =
     (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT ??
     DEFAULT_TOOL_TIMEOUT_MS_V1;
   return Math.min(Math.max(timeoutMs, 1000), MAX_TIMER_DELAY_MS);
 }
-//@ chunk-z1n5m6nf.js:44169-44233 layout
-var REMOTE_TOOL_IDLE_TIMEOUT_MS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var STDIO_TOOL_IDLE_TIMEOUT_MS_2;
-var NO_IDLE_TIMEOUT_TRANSPORTS_2;
-deferInit("chunk-z1n5m6nf.js:44169", () => {
-  REMOTE_TOOL_IDLE_TIMEOUT_MS_2 = 300000;
-  STDIO_TOOL_IDLE_TIMEOUT_MS_2 = 1800000;
-  NO_IDLE_TIMEOUT_TRANSPORTS_2 = new Set(["sse-ide", "ws-ide", "sdk"]);
+//@ chunk-h44h5gdv.js:45590-45654 layout
+var REMOTE_TOOL_IDLE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDIO_TOOL_IDLE_TIMEOUT_MS;
+var NO_IDLE_TIMEOUT_TRANSPORTS;
+deferInit("chunk-h44h5gdv.js:45590", () => {
+  REMOTE_TOOL_IDLE_TIMEOUT_MS = 300000;
+  STDIO_TOOL_IDLE_TIMEOUT_MS = 1800000;
+  NO_IDLE_TIMEOUT_TRANSPORTS = new Set(["sse-ide", "ws-ide", "sdk"]);
 });
-//@ chunk-z1n5m6nf.js:44233-44470 layout
+//@ chunk-h44h5gdv.js:45654-45891 layout
 /**
  * getMcpToolIdleTimeoutMs（v1 副本）。
  */
-function getMcpToolIdleTimeoutMs_2(config) {
+function getMcpToolIdleTimeoutMs(config) {
   let transportType = config?.type ?? "stdio";
-  if (NO_IDLE_TIMEOUT_TRANSPORTS_2.has(transportType)) return 0;
+  if (NO_IDLE_TIMEOUT_TRANSPORTS.has(transportType)) return 0;
   let idleTimeoutMs =
     env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ??
-    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS_2 : REMOTE_TOOL_IDLE_TIMEOUT_MS_2);
+    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS : REMOTE_TOOL_IDLE_TIMEOUT_MS);
   if (idleTimeoutMs <= 0) return 0;
   let timeout = config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : 0;
-  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs_3(config));
+  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs(config));
 }
-//@ chunk-z1n5m6nf.js:44470-44512 layout
+//@ chunk-h44h5gdv.js:45891-45933 layout
 /**
  * 懒加载 needs-auth 缓存模块（旧副本）。
  */
 var needsAuthCacheModuleV1 = () => require("../../utils/claudeInChrome/toolRendering.js");
-//@ chunk-z1n5m6nf.js:44512-44678 layout
+//@ chunk-h44h5gdv.js:45933-46099 layout
 /**
  * needs-auth 缓存常量与懒加载模块（v1 副本）：TTL 15 分钟 / 4 小时 / 90 秒、时钟偏差 1 分钟。
  */
-var artifactPermissionRulesModuleV1 = () => require("../../tools/ArtifactTool/COUNTERPARTS.lazy.js");
+var artifactPermissionRulesModuleV1 = () => require("../../tools/ArtifactTool/artifactPermissionRules.js");
 var artifactsMcpLaptopModuleV1 = () => require("../artifacts/artifactsMcpLaptop.js");
 var claudeDocsWakeModuleV1 = () => require("../../tools/ArtifactTool/docsCreateWake.js");
-var AUTH_CACHE_VERSION_2 = "v1";
-var NEEDS_AUTH_CACHE_TTL_MS_2 = 900000;
-var NEEDS_AUTH_CACHE_LONG_TTL_MS_2 = 14400000;
-var NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 = 90000;
-var AUTH_CACHE_CLOCK_SKEW_MS_2 = 60000;
-//@ chunk-z1n5m6nf.js:44678-45203 layout
+var AUTH_CACHE_VERSION = "v1";
+var NEEDS_AUTH_CACHE_TTL_MS = 900000;
+var NEEDS_AUTH_CACHE_LONG_TTL_MS = 14400000;
+var NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS = 90000;
+var AUTH_CACHE_CLOCK_SKEW_MS = 60000;
+//@ chunk-h44h5gdv.js:46099-46699 layout
 /**
  * isMcpAuthCached（v1 副本）。
  */
-async function isMcpAuthCached_2(serverName, config, storage) {
+async function isMcpAuthCached(serverName, config, storage) {
   let cacheEntry = (await readNeedsAuthCache(storage))[serverName];
   if (!cacheEntry) return false;
   if (config.type === "claudeai-proxy" && cacheEntry.id !== config.id) return false;
@@ -11838,12 +11967,15 @@ async function isMcpAuthCached_2(serverName, config, storage) {
     (config.pluginSource !== undefined &&
       (config.type === "http" || config.type === "sse") &&
       !usesNonOAuthAuth(config));
-  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS_2 : NEEDS_AUTH_CACHE_TTL_MS_2);
+  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS : NEEDS_AUTH_CACHE_TTL_MS);
   let ageMs = Date.now() - cacheEntry.timestamp;
-  return ageMs > -AUTH_CACHE_CLOCK_SKEW_MS_2 && ageMs < ttlMs;
+  let isFresh = ageMs > -AUTH_CACHE_CLOCK_SKEW_MS && ageMs < ttlMs;
+  let lapsedCcrSignInKey = isFresh && isCcrHostedConfig(config) ? cacheEntry.lapsedCcrSignInKey : undefined;
+  getConnectionCache().restoreLapsed(lapsedCcrSignInKey, serverCacheKey(serverName, config));
+  return isFresh;
 }
-//@ chunk-z1n5m6nf.js:45203-45377 layout
-async function writeAuthCacheV5_2(storage, cache) {
+//@ chunk-h44h5gdv.js:46699-46873 layout
+async function writeAuthCacheV5(storage, cache) {
   let writeResult = await storage.write(needsAuthCacheSpace(), jsonStringify(cache), {
     publishDiscipline: "inPlace",
   });
@@ -11851,8 +11983,8 @@ async function writeAuthCacheV5_2(storage, cache) {
     logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(writeResult.error)}`);
   return writeResult.ok;
 }
-//@ chunk-z1n5m6nf.js:45377-45687 file-local
-function isMcpAuthCached_3(serverId, id, ttlMs, storage) {
+//@ chunk-h44h5gdv.js:46873-47214 callgraph-witnessed (2.1.88 match: setMcpAuthCacheEntry, 0.215)
+function setMcpAuthCacheEntry(serverId, id, state, storage, storageArg) {
   let cliOwnedState = getCliOwnedState();
   cliOwnedState.authCacheWriteChain = cliOwnedState.authCacheWriteChain
     .then(async () => {
@@ -11862,12 +11994,15 @@ function isMcpAuthCached_3(serverId, id, ttlMs, storage) {
         ...(id && {
           id,
         }),
-        ...(ttlMs !== undefined && {
-          ttlMs,
+        ...(state !== undefined && {
+          ttlMs: state,
+        }),
+        ...(storageArg && {
+          lapsedCcrSignInKey: storageArg,
         }),
       };
       if (isStorageV5Enabled() && storage !== undefined) {
-        if (!(await writeAuthCacheV5_2(storage, cache))) return;
+        if (!(await writeAuthCacheV5(storage, cache))) return;
       } else {
         let fileReader = getFileReader();
         let cachePath = needsAuthCachePath();
@@ -11878,11 +12013,11 @@ function isMcpAuthCached_3(serverId, id, ttlMs, storage) {
     })
     .catch(() => {});
 }
-//@ chunk-z1n5m6nf.js:45687-45939 placement
+//@ chunk-h44h5gdv.js:47214-47466 placement
 /**
  * clearMcpAuthCacheEntry（v1 副本）。
  */
-function clearMcpAuthCacheEntry_2(serverName, storage) {
+function clearMcpAuthCacheEntry(serverName, storage) {
   let cliOwnedState = getCliOwnedState();
   let writePromise = cliOwnedState.authCacheWriteChain
     .then(async () => {
@@ -11890,7 +12025,7 @@ function clearMcpAuthCacheEntry_2(serverName, storage) {
       if (!(serverName in cache)) return;
       delete cache[serverName];
       if (isStorageV5Enabled() && storage !== undefined) {
-        if (!(await writeAuthCacheV5_2(storage, cache))) return;
+        if (!(await writeAuthCacheV5(storage, cache))) return;
       } else await getFileReader().write(needsAuthCachePath(), jsonStringify(cache));
       clearAuthCacheRead();
     })
@@ -11898,11 +12033,11 @@ function clearMcpAuthCacheEntry_2(serverName, storage) {
   cliOwnedState.authCacheWriteChain = writePromise;
   return writePromise;
 }
-//@ chunk-z1n5m6nf.js:45939-46182 placement
+//@ chunk-h44h5gdv.js:47466-47709 placement
 /**
  * clearMcpDiscoveryCaches（v1 副本）。
  */
-function clearMcpDiscoveryCaches_2(preservedKeys = new Set(), notifyIdentityChange = true) {
+function clearMcpDiscoveryCaches(preservedKeys = new Set(), notifyIdentityChange = true) {
   if (!isDiscoveryCacheOn()) return;
   if (notifyIdentityChange) noteIdentityChanged();
   bumpIdentityEpoch();
@@ -11917,7 +12052,7 @@ function clearMcpDiscoveryCaches_2(preservedKeys = new Set(), notifyIdentityChan
   retainKeys(fetchResourcesForClient_2.cache);
   retainKeys(fetchResourceTemplatesForClient_2.cache);
 }
-//@ chunk-z1n5m6nf.js:46182-46289 placement
+//@ chunk-h44h5gdv.js:47709-47816 placement (2.1.88 match: mcpBaseUrlAnalytics, 0.65)
 function mcpBaseUrlAnalytics(url, serverName) {
   let origin = loggingSafeOrigin(url);
   let serverFields = serverName
@@ -11932,19 +12067,19 @@ function mcpBaseUrlAnalytics(url, serverName) {
     };
   return serverFields;
 }
-//@ chunk-z1n5m6nf.js:59674-59787 placement
-function normalizeImageMimeType_2(mimeType) {
+//@ chunk-h44h5gdv.js:61207-61320 placement
+function normalizeImageMimeType(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
-  return SUPPORTED_IMAGE_TYPES_3.has(lower === "image/jpg" ? "image/jpeg" : lower);
+  return SUPPORTED_IMAGE_TYPES_2.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
-//@ chunk-z1n5m6nf.js:59787-59800 placement
+//@ chunk-h44h5gdv.js:61320-61333 placement
 /**
  * 工具调用超时下限（旧副本）。
  */
 var MIN_TOOL_TIMEOUT_MS_V1 = 60000;
-//@ chunk-z1n5m6nf.js:59800-59946 placement (2.1.88 match: getMcpToolTimeoutMs, 1)
-function getMcpToolTimeoutMs_4(config) {
+//@ chunk-h44h5gdv.js:61333-61479 placement (2.1.88 match: getMcpToolTimeoutMs, 1)
+function getMcpToolTimeoutMs_2(config) {
   let timeoutMs =
     (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT;
@@ -11952,13 +12087,13 @@ function getMcpToolTimeoutMs_4(config) {
     ? Math.min(Math.max(timeoutMs, MIN_TOOL_TIMEOUT_MS_V1), MAX_TIMER_DELAY_MS)
     : MIN_TOOL_TIMEOUT_MS_V1;
 }
-//@ chunk-z1n5m6nf.js:59946-59989 placement
-function getMcpRequestTimeoutMs_2(config) {
-  return Math.max(getMcpToolTimeoutMs_4(config), getConnectionTimeoutMs());
+//@ chunk-h44h5gdv.js:61479-61522 placement
+function getMcpRequestTimeoutMs(config) {
+  return Math.max(getMcpToolTimeoutMs_2(config), getConnectionTimeoutMs());
 }
-//@ chunk-z1n5m6nf.js:59989-60034 placement (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
-var MCP_STREAMABLE_HTTP_ACCEPT_2 = "application/json, text/event-stream";
-//@ chunk-z1n5m6nf.js:60034-60112 placement
+//@ chunk-h44h5gdv.js:61522-61567 placement (2.1.88 match: MCP_STREAMABLE_HTTP_ACCEPT, 1)
+var MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
+//@ chunk-h44h5gdv.js:61567-61645 placement
 /**
  * 包装 fetch：出错时抛脱敏错误。
  */
@@ -11971,16 +12106,16 @@ function wrapFetchRethrowRedacted(fetchWithDefaults) {
     }
   };
 }
-//@ chunk-z1n5m6nf.js:60112-60670 placement (2.1.88 match: wrapFetchWithTimeout, 0.76)
+//@ chunk-h44h5gdv.js:61645-62203 placement (2.1.88 match: wrapFetchWithTimeout, 0.761)
 /**
  * wrapFetchWithTimeout（v1 副本）。
  */
-function wrapFetchWithTimeout_2(baseFetch, config) {
-  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs_2(config);
+function wrapFetchWithTimeout(baseFetch, config) {
+  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs(config);
   return async (url, init) => {
     if ((init?.method ?? "GET").toUpperCase() === "GET") return baseFetch(url, init);
     let headers = new Headers(init?.headers);
-    if (!headers.has("accept")) headers.set("accept", MCP_STREAMABLE_HTTP_ACCEPT_2);
+    if (!headers.has("accept")) headers.set("accept", MCP_STREAMABLE_HTTP_ACCEPT);
     if (shouldPropagateTraceContext()) {
       let activeSpanId = getActiveSpanId();
       if (activeSpanId && !headers.has("traceparent")) headers.set("traceparent", activeSpanId);
@@ -11998,7 +12133,7 @@ function wrapFetchWithTimeout_2(baseFetch, config) {
         ...init,
         headers,
         signal,
-        ...(getMcpToolTimeoutMs_4(config) > 300000 && {
+        ...(getMcpToolTimeoutMs_2(config) > 300000 && {
           timeout: false,
         }),
       });
@@ -12007,29 +12142,29 @@ function wrapFetchWithTimeout_2(baseFetch, config) {
     }
   };
 }
-//@ chunk-z1n5m6nf.js:60670-60729 placement (2.1.88 match: getMcpServerConnectionBatchSize, 1)
-function getMcpServerConnectionBatchSize_2() {
+//@ chunk-h44h5gdv.js:62203-62262 placement (2.1.88 match: getMcpServerConnectionBatchSize, 1)
+function getMcpServerConnectionBatchSize() {
   return env.MCP_SERVER_CONNECTION_BATCH_SIZE ?? 3;
 }
-//@ chunk-z1n5m6nf.js:60729-60796 placement (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
-function getRemoteMcpServerConnectionBatchSize_2() {
+//@ chunk-h44h5gdv.js:62262-62329 placement (2.1.88 match: getRemoteMcpServerConnectionBatchSize, 1)
+function getRemoteMcpServerConnectionBatchSize() {
   return env.MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE ?? 20;
 }
-//@ chunk-z1n5m6nf.js:60796-60859 placement (2.1.88 match: isLocalMcpServer, 1)
-function isLocalMcpServer_2(config) {
+//@ chunk-h44h5gdv.js:62329-62392 placement (2.1.88 match: isLocalMcpServer, 1)
+function isLocalMcpServer(config) {
   return !config.type || config.type === "stdio" || config.type === "sdk";
 }
-//@ chunk-z1n5m6nf.js:60859-60919 placement (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
-var ALLOWED_IDE_TOOLS_2 = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
-//@ chunk-z1n5m6nf.js:60919-60984 placement (2.1.88 match: isIncludedMcpTool, 1)
-function isIncludedMcpTool_3(tool) {
-  return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS_2.includes(tool);
+//@ chunk-h44h5gdv.js:62392-62452 placement (2.1.88 match: ALLOWED_IDE_TOOLS, 1)
+var ALLOWED_IDE_TOOLS = ["mcp__ide__executeCode", "mcp__ide__getDiagnostics"];
+//@ chunk-h44h5gdv.js:62452-62517 placement (2.1.88 match: isIncludedMcpTool, 1)
+function isIncludedMcpTool_2(tool) {
+  return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS.includes(tool);
 }
-//@ chunk-z1n5m6nf.js:60984-61017 placement
-function isIdeServer_2(serverRef) {
-  return isIncludedMcpTool_3(serverRef.name);
+//@ chunk-h44h5gdv.js:62517-62550 placement
+function isIdeServer(serverRef) {
+  return isIncludedMcpTool_2(serverRef.name);
 }
-//@ chunk-z1n5m6nf.js:61017-61352 placement (2.1.88 match: getServerUrl, 0.793)
+//@ chunk-h44h5gdv.js:62550-62885 placement (2.1.88 match: getServerUrl, 0.793)
 function isServerHostInGateList(gateFeature, serverRef) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(gateFeature, []);
   if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
@@ -12047,34 +12182,34 @@ function isServerHostInGateList(gateFeature, serverRef) {
     return false;
   }
 }
-//@ chunk-z1n5m6nf.js:61352-61419 placement
-function shouldNormalizeRootCombinators_2(serverRef) {
+//@ chunk-h44h5gdv.js:62885-62952 placement
+function shouldNormalizeRootCombinators(serverRef) {
   return isServerHostInGateList("tengu_mcp_normalize_root_combinators", serverRef);
 }
-//@ chunk-z1n5m6nf.js:61419-61485 placement
-function shouldDropInvalidToolSchemas_2(serverRef) {
+//@ chunk-h44h5gdv.js:62952-63018 placement
+function shouldDropInvalidToolSchemas(serverRef) {
   return isServerHostInGateList("tengu_mcp_drop_invalid_tool_schemas", serverRef);
 }
-//@ chunk-z1n5m6nf.js:61485-61599 placement
+//@ chunk-h44h5gdv.js:63018-63132 placement
 /**
  * 测试专用：设置是否保留过期的重新认证条目（v1 副本）。
  */
-function setHoldStaleReauthEntryForTest_2(enabled) {
+function setHoldStaleReauthEntryForTest(enabled) {
   if (enabled) throw Error("setHoldStaleReauthEntryForTest is test-only");
   getCliOwnedState().holdStaleReauthEntryForTest = enabled;
 }
-//@ chunk-z1n5m6nf.js:61599-61647 placement
+//@ chunk-h44h5gdv.js:63132-63180 placement
 /**
  * 测试用：设置重新认证决策接收器（旧副本）。
  */
 function setReauthDecisionSinkForTestV1(reauthDecisionSinkForTest) {
   getCliOwnedState().reauthDecisionSinkForTest = reauthDecisionSinkForTest;
 }
-//@ chunk-z1n5m6nf.js:61647-61957 placement
+//@ chunk-h44h5gdv.js:63180-63490 placement
 /**
  * getMcpRoots：roots/list 响应：项目根（或会话目录）、额外工作目录与可选 staging 根，转成去重的 file:// URI。
  */
-function getMcpRoots_2(includeStagingRoot = false) {
+function getMcpRoots(includeStagingRoot = false) {
   let extraRoots = [];
   if (includeStagingRoot)
     try {
@@ -12102,29 +12237,29 @@ function getMcpRoots_2(includeStagingRoot = false) {
     roots,
   };
 }
-//@ chunk-z1n5m6nf.js:61957-61987 placement
-var ROOTLESS_PLUGIN_NAMES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z1n5m6nf.js:61957", () => {
-  ROOTLESS_PLUGIN_NAMES_2 = new Set(["documents"]);
+//@ chunk-h44h5gdv.js:63490-63520 placement
+var ROOTLESS_PLUGIN_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h44h5gdv.js:63490", () => {
+  ROOTLESS_PLUGIN_NAMES = new Set(["documents"]);
 });
-//@ chunk-z1n5m6nf.js:61987-62131 placement
-function isDocumentsPluginServer_2(serverRef) {
+//@ chunk-h44h5gdv.js:63520-63664 placement
+function isDocumentsPluginServer(serverRef) {
   if (getPlatform() === "windows") return false;
   if (!serverRef.pluginSource) return false;
   try {
-    return ROOTLESS_PLUGIN_NAMES_2.has(parsePluginIdentifier(serverRef.pluginSource).name.toLowerCase());
+    return ROOTLESS_PLUGIN_NAMES.has(parsePluginIdentifier(serverRef.pluginSource).name.toLowerCase());
   } catch {
     return false;
   }
 }
-//@ chunk-z1n5m6nf.js:62131-62268 placement
-function notifyRootsListChanged_2() {
+//@ chunk-h44h5gdv.js:63664-63801 placement
+function notifyRootsListChanged() {
   for (let liveClient of getConnectionCache().liveClients)
     liveClient.sendRootsListChanged().catch((error) => {
       logForDebugging(`MCP: failed to send roots/list_changed: ${describeErrorBrief(error)}`);
     });
 }
-//@ chunk-z1n5m6nf.js:62268-62777 placement
+//@ chunk-h44h5gdv.js:63801-64310 placement
 var CONNECTION_ERROR_HINTS = [
   ["ECONNRESET", "Connection reset - server may have crashed or restarted"],
   ["ETIMEDOUT", "Connection timeout - network issue or server unresponsive"],
@@ -12135,20 +12270,20 @@ var CONNECTION_ERROR_HINTS = [
   ["spawn", "Failed to spawn process - check command and permissions"],
 ];
 var POST_ERROR_PREFIX = "Error POSTing to endpoint: ";
-//@ chunk-z1n5m6nf.js:62777-62983 placement
+//@ chunk-h44h5gdv.js:64310-64516 placement
 function isNonJsonRpc4xxPostError(error) {
   if (!(error instanceof StreamableHTTPError)) return false;
   let code = error.code ?? 0;
   if (!(code >= 400 && code < 500) || code === 401 || code === 403 || code === 429) return false;
   let index = error.message.indexOf(POST_ERROR_PREFIX);
   if (index === -1) return true;
-  return !isJsonRpcErrorBody_2(error.message.slice(index + POST_ERROR_PREFIX.length));
+  return !isJsonRpcErrorBody(error.message.slice(index + POST_ERROR_PREFIX.length));
 }
-//@ chunk-z1n5m6nf.js:62983-63171 placement
-function isJsonRpcErrorBody_2(body) {
+//@ chunk-h44h5gdv.js:64516-64704 placement
+function isJsonRpcErrorBody(body) {
   let found = body.split(/\r?\n/).find((line) => line.startsWith("data:"));
   let payload = safeParseJSON(found === undefined ? body : found.slice(5), false);
-  return isJSONRPCErrorResponse_2(
+  return isJSONRPCErrorResponse(
     typeof payload === "object" && payload !== null && "id" in payload && payload.id === null
       ? {
           ...payload,
@@ -12157,12 +12292,12 @@ function isJsonRpcErrorBody_2(body) {
       : payload,
   );
 }
-//@ chunk-z1n5m6nf.js:63171-63183 placement
+//@ chunk-h44h5gdv.js:64704-64716 placement
 /**
  * 探测超时上限（5000 毫秒）。
  */
 var PROBE_TIMEOUT_CAP_MS = 5000;
-//@ chunk-z1n5m6nf.js:63183-63339 placement
+//@ chunk-h44h5gdv.js:64716-64872 placement
 /**
  * makeConnectTimeoutError：连接超时错误，开关 tengu_mcp_connect_timeout_retry 打开时带 code CONNECT_TIMEOUT 以便重试。
  */
@@ -12177,17 +12312,17 @@ function makeConnectTimeoutError(message) {
     });
   return error;
 }
-//@ chunk-z1n5m6nf.js:63339-63443 layout (2.1.88 match: getServerCommandArray, 0.781)
+//@ chunk-h44h5gdv.js:64872-64976 layout (2.1.88 match: getServerCommandArray, 0.781)
 function getServerCommandArray(serverId, config, storage) {
   if ((config.type === "stdio" || config.type === undefined) && config.pluginSource !== undefined)
-    isMcpAuthCached_3(serverId, configHash(config), undefined, storage);
+    setMcpAuthCacheEntry(serverId, configHash(config), undefined, storage);
 }
-//@ chunk-z1n5m6nf.js:63443-85309 fingerprint (2.1.88 match: connectToServer, 0.606)
+//@ chunk-h44h5gdv.js:64976-86955 fingerprint (2.1.88 match: connectToServer, 0.605)
 /**
  * connectToServer（v1）：同 v2 的连接入口，但客户端为旧 SDK（只有 initialize 握手，server/discover 只在 stateless claude.ai 代理本地应答中出现）。
  */
 var connectToServer_2; // deferred: uses memoizeWithExternalCache (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z1n5m6nf.js:63443", () => {
+deferInit("chunk-h44h5gdv.js:64976", () => {
   connectToServer_2 = memoizeWithExternalCache(
     async (name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions) => {
       primeEnsureConnectedClient();
@@ -12302,7 +12437,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             wrapFetchRethrowRedacted(createFetchWithDefaults(undefined, sseProxyOptions)),
           );
           if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection(fetchFn, authProvider_2);
-          fetchFn = wrapFetchWithTimeout_2(fetchFn, serverRef);
+          fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
           if (useFirstPartyAuth)
             fetchFn = wrapFetchWithFirstPartyAuth_2(fetchFn, credentials, firstPartyBearerState);
           let transportOptions = {
@@ -12366,7 +12501,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             proxy: getWebSocketProxyUrl(serverRef.url),
             tls: tlsOptions || undefined,
           });
-          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
+          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
         } else if (serverRef.type === "ws") {
           recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
           logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
@@ -12395,7 +12530,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             proxy: getWebSocketProxyUrl(serverRef.url),
             tls: webSocketTLSOptions || undefined,
           });
-          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
+          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
         } else if (serverRef.type === "http") {
           recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
           if (keepsMCPDebug()) {
@@ -12432,7 +12567,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
           );
           if (authProvider_2)
             wsHeadersForLogging = wrapFetchWithStepUpDetection(wsHeadersForLogging, authProvider_2);
-          wsHeadersForLogging = wrapFetchWithTimeout_2(wsHeadersForLogging, serverRef);
+          wsHeadersForLogging = wrapFetchWithTimeout(wsHeadersForLogging, serverRef);
           if (useFirstPartyAuth)
             wsHeadersForLogging = wrapFetchWithFirstPartyAuth_2(
               wsHeadersForLogging,
@@ -12481,7 +12616,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
                 url: redactUrlSecrets(serverRef.url),
                 headers: headersForLogging,
                 hasAuthProvider: !!authProvider_2,
-                timeoutMs: getMcpRequestTimeoutMs_2(serverRef),
+                timeoutMs: getMcpRequestTimeoutMs(serverRef),
               })}`,
             );
           }
@@ -12540,12 +12675,12 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
           let fetchWithAuth = getProxyFetchOptions({
             url: proxyUrl,
           });
-          let claudeAiProxyFetch = createClaudeAiProxyFetch_2(
+          let claudeAiProxyFetch = createClaudeAiProxyFetch(
             boundedFetch(createFetchWithDefaults(undefined, fetchWithAuth)),
             credentials,
           );
           let proxyOptions = isSereneTeapotEnabled();
-          let answeredLocally = proxyOptions || isStatelessClaudeAiProxy_2(serverRef);
+          let answeredLocally = proxyOptions || isStatelessClaudeAiProxy(serverRef);
           if (answeredLocally)
             logMCPDebug(
               name,
@@ -12555,8 +12690,8 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             );
           let transportOptions = {
             fetch: answeredLocally
-              ? answerGetStreamLocally_2(wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef), proxyUrl)
-              : wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef),
+              ? answerGetStreamLocally(wrapFetchWithTimeout(claudeAiProxyFetch, serverRef), proxyUrl)
+              : wrapFetchWithTimeout(claudeAiProxyFetch, serverRef),
             requestInit: {
               ...fetchWithAuth,
               headers: {
@@ -12606,7 +12741,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
             baseEnv: shouldUseMcpAllowlistEnv()
               ? {
-                  ...getDefaultEnvironment_2(),
+                  ...getDefaultEnvironment(),
                   ...agentProxyEnv(),
                 }
               : {
@@ -12642,6 +12777,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             }),
           };
           checkPluginBunOptions(serverRef.pluginSource, stdioEnv, envWithoutChromeFlags);
+          dropEmptyBedrockBearer(stdioEnv);
           serverTransport = new BoundedStdioTransport({
             command,
             args,
@@ -12678,10 +12814,10 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
                   README_URL: "https://code.claude.com/docs/en/overview",
-                  VERSION: "2.1.316",
+                  VERSION: "2.1.318",
                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                   HOOKS_WORKER_URL:
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
@@ -12703,7 +12839,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
           );
           client.setRequestHandler(ListRootsRequestSchema, async () => {
             logMCPDebug(name, "Received ListRoots request from server");
-            return getMcpRoots_2(isDocumentsPluginServer_2(serverRef));
+            return getMcpRoots(isDocumentsPluginServer(serverRef));
           });
           return client;
         };
@@ -12727,9 +12863,9 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
           }
         }
-        let cachedInitialize = getCachedInitializeResult_2(serverRef);
+        let cachedInitialize = getCachedInitializeResult(serverRef);
         let discoverAnswer = cachedDiscoverOutcome(serverRef);
-        if (isStatelessClaudeAiProxy_2(serverRef)) {
+        if (isStatelessClaudeAiProxy(serverRef)) {
           logMCPDebug(
             name,
             cachedInitialize
@@ -12743,7 +12879,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
                 ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
                 : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
             );
-          answerHandshakeLocally_2(serverTransport, cachedInitialize, discoverAnswer);
+          answerHandshakeLocally(serverTransport, cachedInitialize, discoverAnswer);
         }
         guardTransportSend(
           {
@@ -12941,10 +13077,10 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
               name,
               `claude.ai proxy connection failed after ${elapsed}ms: ${describeConnectError(error, serverRef)}`,
             );
-            if (!isClaudeAiBearerRejectedError_2(error))
+            if (!isClaudeAiBearerRejectedError(error))
               logMCPError(name, rethrowRedactedConnectError(error, serverRef));
             let errorCode = error.code;
-            if (isClaudeAiBearerRejectedError_2(error)) {
+            if (isClaudeAiBearerRejectedError(error)) {
               logEvent("tengu_mcp_server_connection_failed", {
                 transportType: lit("claudeai-proxy"),
                 errorCode: lit("CLAUDEAI_BEARER_REJECTED"),
@@ -12976,7 +13112,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
               return failedResult;
             }
             if (errorCode === 401 || errorCode === 403)
-              return handleRemoteAuthFailure_2(
+              return handleRemoteAuthFailure(
                 name,
                 serverRef,
                 "claudeai-proxy",
@@ -13061,7 +13197,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
             return;
           }
           if (msg instanceof FirstPartyDesignNeedsConsentError) return;
-          if (transportType === "stdio" && msg instanceof StdoutOverflowError_2) {
+          if (transportType === "stdio" && msg instanceof StdoutOverflowError) {
             logMCPError(name, msg.message);
             sawTransportError = true;
             closeTransportAndRejectPending("stdout overflow");
@@ -13070,7 +13206,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
           }
           if (
             (transportType === "http" || transportType === "claudeai-proxy") &&
-            msg instanceof HttpBodyOverflowError_2
+            msg instanceof HttpBodyOverflowError
           ) {
             logMCPError(
               name,
@@ -13084,7 +13220,7 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
               transportType === "sse-ide" ||
               transportType === "http" ||
               transportType === "claudeai-proxy") &&
-            msg.message.includes(STOPPED_READING_NOTE_2)
+            msg.message.includes(STOPPED_READING_NOTE)
           ) {
             logMCPError(name, msg.message);
             sawTransportError = true;
@@ -13489,6 +13625,10 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
           config: serverRef,
           error: errorDetail,
           errorCode: failureCode,
+          notForwardedMessage:
+            "url" in serverRef && issuerKey_3(serverRef.url)
+              ? redactMcpErrorDetail(name, serverRef, postedEndpointErrorText(error) ?? "") || undefined
+              : undefined,
           ...(proxyConnectStatus !== undefined && {
             proxyConnectStatus,
           }),
@@ -13512,11 +13652,11 @@ deferInit("chunk-z1n5m6nf.js:63443", () => {
       ),
   );
 });
-//@ chunk-z1n5m6nf.js:123802-123964 callgraph-fingerprint (2.1.88 match: callIdeRpc, 0.394)
+//@ chunk-h44h5gdv.js:125916-126078 callgraph-fingerprint (2.1.88 match: callIdeRpc, 0.395)
 /**
  * callIdeTool（v1 副本）。
  */
-async function callIdeTool_2(toolName, args, client) {
+async function callIdeTool(toolName, args, client) {
   return (
     await callMCPTool_2({
       client,
@@ -13530,11 +13670,11 @@ async function callIdeTool_2(toolName, args, client) {
     })
   ).content;
 }
-//@ chunk-z1n5m6nf.js:123964-124222 layout
+//@ chunk-h44h5gdv.js:126078-126336 layout
 /**
  * identityChangedReconnectResult（v1 副本）。
  */
-function identityChangedReconnectResult_2(name, config) {
+function identityChangedReconnectResult(name, config) {
   logFeatureSad("mcp_reconnect", "mcp_reconnect_identity_changed");
   return {
     client: {
@@ -13548,19 +13688,19 @@ function identityChangedReconnectResult_2(name, config) {
     commands: [],
   };
 }
-//@ chunk-z1n5m6nf.js:124222-124359 layout
+//@ chunk-h44h5gdv.js:126336-126474 layout
 /**
  * 重连 MCP 服务器（v1）：需要时先等待账号身份就绪，远程服务器在等待期间账号变化则返回 IDENTITY_CHANGED 结果，否则调用 reconnectMcpServerImpl。
  */
-async function reconnectMcpServer_2(serverName, serverRef, credentials, storageV5) {
+async function reconnectMcpServer(serverName, serverRef, credentials, storageV5) {
   if (!isDiscoveryCacheUsable()) return reconnectMcpServerImpl(serverName, serverRef, credentials, storageV5);
   let epochAtStart = identityEpoch();
   await flushDiscoveryCache(clearDiscoveryForServer_2(serverName, serverRef));
   if (isRemoteMcpTransport(serverRef) && identityEpoch() !== epochAtStart)
-    return identityChangedReconnectResult_2(serverName, serverRef);
+    return identityChangedReconnectResult(serverName, serverRef);
   return reconnectMcpServerImpl(serverName, serverRef, credentials, storageV5);
 }
-//@ chunk-z1n5m6nf.js:124359-126278 layout
+//@ chunk-h44h5gdv.js:126474-128393 fingerprint (2.1.88 match: reconnectMcpServerImpl, 0.347)
 /**
  * reconnectMcpServerImpl（v1 副本）。
  */
@@ -13568,13 +13708,13 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
   let epochAtStart = identityEpoch();
   let isRemote = isRemoteMcpTransport(serverRef);
   let identityChanged = () => isRemote && identityEpoch() !== epochAtStart;
-  let identityChangedResult = () => identityChangedReconnectResult_2(serverName, serverRef);
+  let identityChangedResult = () => identityChangedReconnectResult(serverName, serverRef);
   try {
     clearKeychainCache();
     let keepOptions = options.keepConnectionInUse ? {} : undefined;
     await (keepOptions === undefined
-      ? clearServerCache_4(serverName, serverRef)
-      : clearServerCache_4(serverName, serverRef, keepOptions));
+      ? clearServerCache_3(serverName, serverRef)
+      : clearServerCache_3(serverName, serverRef, keepOptions));
     if (identityChanged()) return identityChangedResult();
     let dial = connectToServer_2(serverName, serverRef, undefined, credentials, storageV5);
     let connection = await dial;
@@ -13598,7 +13738,7 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
         commands: [],
       });
     }
-    if (serverRef.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, credentials);
+    if (serverRef.type !== "claudeai-proxy") clearMcpAuthCacheEntry(serverName, credentials);
     if (serverRef.type === "http" || serverRef.type === "sse")
       await clearMcpOAuthStubIfTokenless(serverName, serverRef);
     clearDiscoveryPathMemo(serverName);
@@ -13609,7 +13749,7 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
       return identityChangedResult();
     }
     let hasResources = !!connection.capabilities?.resources;
-    let [tools, commandsForClient, extraCommands, resources] = await Promise.all([
+    let [tools, mcpCommands, extraCommands, resources] = await Promise.all([
       listMcpTools(connection, credentials),
       fetchCommandsForClient_2(connection),
       Promise.resolve([]),
@@ -13632,7 +13772,7 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
       };
     }
     if (serverRef.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
-      clearMcpAuthCacheEntry_2(serverName, credentials);
+      clearMcpAuthCacheEntry(serverName, credentials);
     if (
       serverRef.type === "claudeai-proxy" &&
       !connection.toolsListError &&
@@ -13641,17 +13781,17 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
       recordClaudeAiMcpConnected(serverName, credentials);
     persistLiveListing_2(connection, {
       tools,
-      commands: commandsForClient,
+      commands: mcpCommands,
       resources,
       identityEpoch: epochAtStart,
       grantLeg,
     });
-    let commands = [...commandsForClient, ...extraCommands];
+    let commands = [...mcpCommands, ...extraCommands];
     let resourceTools = [];
     if (hasResources) {
       if (
         ![ListMcpResourcesTool, ReadMcpResourceTool].some((tool) =>
-          tools.some((t) => toolMatchesName(t, tool.name)),
+          tools.some((t) => matchesToolName(t, tool.name)),
         )
       )
         resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
@@ -13684,17 +13824,17 @@ async function reconnectMcpServerImpl(serverName, serverRef, credentials, storag
     };
   }
 }
-//@ chunk-z1n5m6nf.js:126278-126333 layout (2.1.88 match: processBatched, 1)
-async function processBatched_3(items, concurrency, processor) {
+//@ chunk-h44h5gdv.js:128393-128448 layout (2.1.88 match: processBatched, 1)
+async function processBatched_2(items, concurrency, processor) {
   await pMap(items, processor, {
     concurrency,
   });
 }
-//@ chunk-z1n5m6nf.js:126333-126598 layout
+//@ chunk-h44h5gdv.js:128448-128713 layout
 /**
  * countUnsettledByDeadline（v1 副本）。
  */
-async function countUnsettledByDeadline_2(promises, timeoutMs) {
+async function countUnsettledByDeadline(promises, timeoutMs) {
   if (promises.length === 0) return 0;
   let timer;
   let promise = new Promise((resolve) => {
@@ -13712,12 +13852,12 @@ async function countUnsettledByDeadline_2(promises, timeoutMs) {
         ]),
       ),
     );
-    return count(results, (outcome) => outcome === "deadline");
+    return countWhere(results, (outcome) => outcome === "deadline");
   } finally {
     clearTimeout(timer);
   }
 }
-//@ chunk-z1n5m6nf.js:126598-134003 layout
+//@ chunk-h44h5gdv.js:128713-136122 fingerprint (2.1.88 match: getMcpToolsCommandsAndResources, 0.46)
 /**
  * getMcpToolsCommandsAndResources（v1 副本）。
  */
@@ -13742,9 +13882,9 @@ async function getMcpToolsCommandsAndResources(
   };
   isLegacyProtocolEra();
   let resourceToolsAdded = false;
-  let entries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
+  let allConfigEntries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
   let enabledEntries = [];
-  for (let entry of entries)
+  for (let entry of allConfigEntries)
     if (isMcpServerDisabled(entry[0]))
       publishServerResult({
         client: {
@@ -13758,13 +13898,13 @@ async function getMcpToolsCommandsAndResources(
     else enabledEntries.push(entry);
   registerConfiguredMcpServers(Object.fromEntries(enabledEntries));
   let totalServers = enabledEntries.length;
-  let stdioCount = count(enabledEntries, ([name, config]) => config.type === "stdio");
-  let sseCount = count(enabledEntries, ([name, config]) => config.type === "sse");
-  let httpCount = count(enabledEntries, ([name, config]) => config.type === "http");
-  let sseIdeCount = count(enabledEntries, ([name, config]) => config.type === "sse-ide");
-  let wsIdeCount = count(enabledEntries, ([name, config]) => config.type === "ws-ide");
-  let filtered = enabledEntries.filter(([name, config]) => isLocalMcpServer_2(config));
-  let filtered_2 = enabledEntries.filter(([name, config]) => !isLocalMcpServer_2(config));
+  let stdioCount = countWhere(enabledEntries, ([name, config]) => config.type === "stdio");
+  let sseCount = countWhere(enabledEntries, ([name, config]) => config.type === "sse");
+  let httpCount = countWhere(enabledEntries, ([name, config]) => config.type === "http");
+  let sseIdeCount = countWhere(enabledEntries, ([name, config]) => config.type === "sse-ide");
+  let wsIdeCount = countWhere(enabledEntries, ([name, config]) => config.type === "ws-ide");
+  let localServers = enabledEntries.filter(([name, config]) => isLocalMcpServer(config));
+  let remoteServers = enabledEntries.filter(([name, config]) => !isLocalMcpServer(config));
   let transportCounts = {
     totalServers,
     stdioCount,
@@ -13774,7 +13914,7 @@ async function getMcpToolsCommandsAndResources(
     wsIdeCount,
   };
   let pendingDiscoveryTasks = [];
-  let processor = async ([serverName, config]) => {
+  let processServer = async ([serverName, config]) => {
     try {
       if (isCleanupStarted()) {
         logMCPDebug(serverName, "Skipping connection (Claude Code is shutting down)");
@@ -13821,7 +13961,7 @@ async function getMcpToolsCommandsAndResources(
       if (
         (config.type === "claudeai-proxy" || config.type === "http" || config.type === "sse") &&
         !isCliOwnedConfig(config) &&
-        ((await isMcpAuthCached_2(serverName, config, storageV5)) ||
+        ((await isMcpAuthCached(serverName, config, storageV5)) ||
           ((config.type === "http" || config.type === "sse") &&
             shouldTryTokenless(
               serverName,
@@ -13850,7 +13990,7 @@ async function getMcpToolsCommandsAndResources(
       if (
         (config.type === "stdio" || config.type === undefined) &&
         config.pluginSource !== undefined &&
-        (await isMcpAuthCached_2(serverName, config, storageV5))
+        (await isMcpAuthCached(serverName, config, storageV5))
       ) {
         publishServerResult({
           client: {
@@ -14127,7 +14267,7 @@ async function getMcpToolsCommandsAndResources(
         return;
       }
       connection.discoveryBearerRejected = undefined;
-      if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, storageV5);
+      if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry(serverName, storageV5);
       if (config.type === "http" || config.type === "sse")
         await clearMcpOAuthStubIfTokenless(serverName, config);
       pendingDiscoveryTasks.push(
@@ -14210,7 +14350,7 @@ async function getMcpToolsCommandsAndResources(
               return;
             }
             if (config.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
-              clearMcpAuthCacheEntry_2(serverName, storageV5);
+              clearMcpAuthCacheEntry(serverName, storageV5);
             if (
               config.type === "claudeai-proxy" &&
               !connection.toolsListError &&
@@ -14295,16 +14435,16 @@ async function getMcpToolsCommandsAndResources(
     }
   };
   await Promise.all([
-    processBatched_3(filtered, getMcpServerConnectionBatchSize_2(), processor),
-    processBatched_3(filtered_2, getRemoteMcpServerConnectionBatchSize_2(), processor),
+    processBatched_2(localServers, getMcpServerConnectionBatchSize(), processServer),
+    processBatched_2(remoteServers, getRemoteMcpServerConnectionBatchSize(), processServer),
   ]);
   await Promise.all(pendingDiscoveryTasks);
 }
-//@ chunk-z1n5m6nf.js:134003-134665 layout (2.1.88 match: prefetchAllMcpResources, 1)
+//@ chunk-h44h5gdv.js:136122-136784 fingerprint (2.1.88 match: prefetchAllMcpResources, 1)
 /**
  * prefetchAllMcpResources（v1 副本）。
  */
-function prefetchAllMcpResources_2(mcpConfigs, storageV5, credentials) {
+function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
   return new Promise((resolve) => {
     let pendingCount = 0;
     let settledCount = 0;
@@ -14363,11 +14503,18 @@ function prefetchAllMcpResources_2(mcpConfigs, storageV5, credentials) {
       });
   });
 }
-//@ chunk-z1n5m6nf.js:134665-135665 layout (2.1.88 match: transformResultContent, 0.81)
+//@ chunk-h44h5gdv.js:136784-137790 fingerprint (2.1.88 match: transformResultContent, 0.81)
 /**
  * transformResultContent（v1 副本）。
  */
-async function transformResultContent_2(resultContent, serverName, imageBuffer, storageV5, keepMeta = false) {
+async function transformResultContent(
+  resultContent,
+  serverName,
+  imageLimits,
+  storageV5,
+  keepMeta = false,
+  block,
+) {
   switch (resultContent.type) {
     case "text": {
       let textBlock = {
@@ -14391,12 +14538,12 @@ async function transformResultContent_2(resultContent, serverName, imageBuffer, 
       );
     }
     case "image": {
-      if (normalizeImageMimeType_2(resultContent.mimeType))
+      if (normalizeImageMimeType(resultContent.mimeType))
         return await imageResultBlocks(
           Buffer.from(String(resultContent.data), "base64"),
           resultContent.mimeType,
           serverName,
-          imageBuffer,
+          imageLimits,
           storageV5,
         );
       return await persistBlobToTextBlock(
@@ -14418,13 +14565,14 @@ async function transformResultContent_2(resultContent, serverName, imageBuffer, 
           },
         ];
       else if ("blob" in resource)
-        if (normalizeImageMimeType_2(resource.mimeType)) {
-          let imageBuffer_2 = await imageResultBlocks(
+        if (normalizeImageMimeType(resource.mimeType)) {
+          let text_2 = await imageResultBlocks(
             Buffer.from(resource.blob, "base64"),
             resource.mimeType,
             serverName,
-            imageBuffer,
+            imageLimits,
             storageV5,
+            block,
           );
           let content = [];
           if (prefix)
@@ -14432,13 +14580,20 @@ async function transformResultContent_2(resultContent, serverName, imageBuffer, 
               type: "text",
               text: prefix,
             });
-          content.push(...imageBuffer_2);
+          content.push(...text_2);
           return content;
         } else {
           let imageBuffer = Buffer.from(resource.blob, "base64");
           let storedMcpContent = toStoredMcpContent(imageBuffer, resource.mimeType, serverName);
           if (storedMcpContent) return [storedMcpContent];
-          return await persistBlobToTextBlock(imageBuffer, resource.mimeType, serverName, prefix, storageV5);
+          return await persistBlobToTextBlock(
+            imageBuffer,
+            resource.mimeType,
+            serverName,
+            prefix,
+            storageV5,
+            block,
+          );
         }
       return [];
     }
@@ -14457,18 +14612,18 @@ async function transformResultContent_2(resultContent, serverName, imageBuffer, 
       return [];
   }
 }
-//@ chunk-z1n5m6nf.js:135665-135761 layout
+//@ chunk-h44h5gdv.js:137790-137886 layout
 /**
  * 生成二进制内容的随机文件名（旧副本）。
  */
 function blobFileNameV1(serverName) {
-  return `mcp-${normalizeNameForMCP(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `mcp-${CLAUDEAI_SERVER_PREFIX(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-//@ chunk-z1n5m6nf.js:135761-136353 layout
+//@ chunk-h44h5gdv.js:137886-138665 file-local
 /**
  * MCP 图片结果的处理：缩放/降采样图片块，同时把原图保存成文件；保存成功时附一段带尺寸和文件路径的说明文本，历史持久化关闭或保存失败时只返回图片块。
  */
-async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits, storageV5) {
+async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits, storageV5, blob) {
   if (toolResultStoreOrNull() === undefined && addToHistory()) {
     logFeatureSad("mcp_image_result_file", "persistence_off");
     let { block } = await maybeResizeAndDownsampleImageBlock({
@@ -14476,6 +14631,7 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
       mediaType,
       limits: imageLimits,
     });
+    blob?.(block.type === "image" ? "shown" : unreadOutcome(), base64Data.length);
     return [block];
   }
   let [{ block: imageBlock, dimensions }, saved] = await Promise.all([
@@ -14490,8 +14646,8 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
       blobFileNameV1(serverName),
       undefined,
       storageV5,
-    ).catch((error) => {
-      logError(error);
+    ).catch((block) => {
+      logError(block);
       return {
         error: "not saved",
       };
@@ -14499,15 +14655,18 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
   ]);
   if ("error" in saved) {
     logFeatureSad("mcp_image_result_file", "not_saved");
+    blob?.(imageBlock.type === "image" ? "shown" : unreadOutcome(), base64Data.length);
     return [imageBlock];
   }
   logFeatureOk("mcp_image_result_file");
-  let imageInfo = (imageBlock.type === "image"
+  let persisted = toolResultStoreOrNull();
+  let imageInfo = (imageBlock.type === "image" && persisted?.wantsPictureShrunk?.(base64Data) !== true
     ? null
-    : await toolResultStoreOrNull()?.readPicture?.(saved.filepath, base64Data)) ?? {
+    : await persisted?.readPicture?.(saved.filepath, base64Data)) ?? {
     block: imageBlock,
     dimensions,
   };
+  blob?.(imageInfo.block.type === "image" ? "shown" : "saved", base64Data.length);
   let imageMetadataText = createImageMetadataText(imageInfo.dimensions ?? {}, saved.filepath);
   return imageMetadataText === null
     ? [imageInfo.block]
@@ -14519,20 +14678,20 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
         },
       ];
 }
-//@ chunk-z1n5m6nf.js:136353-136414 layout (2.1.88 match: addToHistory, 1)
-function addToHistory() {
-  return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
-}
-//@ chunk-z1n5m6nf.js:136414-136737 layout
-async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, storageV5) {
+//@ chunk-h44h5gdv.js:138726-139136 fingerprint (2.1.88 match: persistBlobToTextBlock, 0.687)
+async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, storageV5, resource) {
   let persistResult = await persistBinaryContent(
     data,
     mimeType,
     blobFileNameV1(serverName),
     undefined,
     storageV5,
-  );
+  ).catch((error) => {
+    resource?.(unreadOutcome(), data.length);
+    throw error;
+  });
   if ("error" in persistResult) {
+    resource?.(unreadOutcome(), data.length);
     if (toolResultStoreOrNull() !== undefined)
       return [
         {
@@ -14547,6 +14706,7 @@ async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, st
       },
     ];
   }
+  resource?.("saved", data.length);
   return [
     {
       type: "text",
@@ -14554,44 +14714,44 @@ async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, st
     },
   ];
 }
-//@ chunk-z1n5m6nf.js:136737-137056 layout (2.1.88 match: inferCompactSchema, 1)
+//@ chunk-h44h5gdv.js:139136-139455 fingerprint (2.1.88 match: inferCompactSchema, 1)
 /**
  * inferCompactSchema（v1 副本）。
  */
-function inferCompactSchema_2(value, depth = 2) {
+function inferCompactSchema(value, depth = 2) {
   if (value === null) return "null";
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
-    return `[${inferCompactSchema_2(value[0], depth - 1)}]`;
+    return `[${inferCompactSchema(value[0], depth - 1)}]`;
   }
   if (typeof value === "object") {
     if (depth <= 0) return "{...}";
     let props = Object.entries(value)
       .slice(0, 10)
-      .map(([k, v]) => `${k}: ${inferCompactSchema_2(v, depth - 1)}`);
+      .map(([k, v]) => `${k}: ${inferCompactSchema(v, depth - 1)}`);
     let suffix = Object.keys(value).length > 10 ? ", ..." : "";
     return `{${props.join(", ")}${suffix}}`;
   }
   return typeof value;
 }
-//@ chunk-z1n5m6nf.js:137056-137200 layout
-async function transformContentArray_2(content, serverName, imageBuffer, storageV5) {
+//@ chunk-h44h5gdv.js:139455-139603 layout
+async function transformContentArray(content, serverName, contents, storageV5, context) {
   let blocks = (
     await Promise.all(
-      content.map((block) => transformResultContent_2(block, serverName, imageBuffer, storageV5, true)),
+      content.map((block) => transformResultContent(block, serverName, contents, storageV5, true, context)),
     )
   ).flat();
   return {
     content: blocks,
     type: "contentArray",
-    schema: inferCompactSchema_2(stripTextBlockMeta(blocks)),
+    schema: inferCompactSchema(stripTextBlockMeta(blocks)),
   };
 }
-//@ chunk-z1n5m6nf.js:137200-138213 layout (2.1.88 match: transformMCPResult, 0.902)
+//@ chunk-h44h5gdv.js:139603-140620 fingerprint (2.1.88 match: transformMCPResult, 0.902)
 /**
  * transformMCPResult（v1 副本）。
  */
-async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) {
+async function transformMCPResult(result, tool, name, value, storageV5, context) {
   if (result && typeof result === "object") {
     if ("toolResult" in result)
       return {
@@ -14601,13 +14761,13 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
     if ("structuredContent" in result && result.structuredContent !== undefined) {
       if ("content" in result && Array.isArray(result.content)) {
         let contentResult = await contentOverStructuredResult(result.content, (blocks) =>
-          transformContentArray_2(blocks, name, imageBuffer, storageV5),
+          transformContentArray(blocks, name, value, storageV5),
         );
         if (contentResult !== undefined) return contentResult;
       }
       let base64Text = base64URLEncode(result.structuredContent);
       let text = base64Text ?? jsonStringify(result.structuredContent);
-      let schema = base64Text === undefined ? inferCompactSchema_2(result.structuredContent) : undefined;
+      let schema = base64Text === undefined ? inferCompactSchema(result.structuredContent) : undefined;
       if ("content" in result && Array.isArray(result.content)) {
         let filtered = result.content.filter(
           (block) => block && typeof block === "object" && "type" in block && block.type !== "text",
@@ -14615,7 +14775,7 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
         if (filtered.length > 0) {
           let transformedContent = (
             await Promise.all(
-              filtered.map((item) => transformResultContent_2(item, name, imageBuffer, storageV5, true)),
+              filtered.map((item) => transformResultContent(item, name, value, storageV5, true)),
             )
           ).flat();
           if (transformedContent.length > 0) {
@@ -14629,7 +14789,7 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
             return {
               content: contentWithText,
               type: "contentArray",
-              schema: inferCompactSchema_2(stripTextBlockMeta(contentWithText)),
+              schema: inferCompactSchema(stripTextBlockMeta(contentWithText)),
             };
           }
         }
@@ -14641,7 +14801,7 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
       };
     }
     if ("content" in result && Array.isArray(result.content))
-      return transformContentArray_2(result.content, name, imageBuffer, storageV5);
+      return transformContentArray(result.content, name, value, storageV5, context);
   }
   let errorMessage = `MCP server "${name}" tool "${tool}": unexpected response format`;
   logMCPError(name, errorMessage);
@@ -14655,16 +14815,16 @@ async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) 
     },
   );
 }
-//@ chunk-z1n5m6nf.js:138213-138322 layout (2.1.88 match: isMedia, 1)
-function isMedia_2(block) {
+//@ chunk-h44h5gdv.js:140620-140729 layout (2.1.88 match: isMedia, 1)
+function isMedia(block) {
   if (!block || typeof block === "string") return false;
   return block.some((block) => block.type === "image" || block.type === "document");
 }
-//@ chunk-z1n5m6nf.js:138322-140352 layout (2.1.88 match: processMCPResult, 0.755)
+//@ chunk-h44h5gdv.js:140729-142927 fingerprint (2.1.88 match: processMCPResult, 0.694)
 /**
  * processMCPResult（v1 副本）。
  */
-async function processMCPResult_2(
+async function processMCPResult(
   result,
   tool,
   name,
@@ -14673,6 +14833,8 @@ async function processMCPResult_2(
   storageV5,
   credentials,
   resultNotForModel,
+  input,
+  input_2,
 ) {
   if (
     resultNotForModel &&
@@ -14683,12 +14845,18 @@ async function processMCPResult_2(
     Array.isArray(result.content)
   )
     return result.content;
-  let transformed = await transformMCPResult_2(result, tool, name, imageLimits, storageV5);
+  let transformed = await transformMCPResult(result, tool, name, imageLimits, storageV5, input);
   let { type, schema } = transformed;
   let content = dropExtraDocumentBlocks(transformed.content);
   if (name === "ide") return content;
-  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia_2(content))) return content;
-  if (!(await mcpContentNeedsTruncation(content, credentials))) return content;
+  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia(content))) {
+    noteResult(input_2, "kept_in_conversation", content);
+    return content;
+  }
+  if (!(await mcpContentNeedsTruncation(content, credentials))) {
+    noteResult(input_2, "kept_in_conversation", content);
+    return content;
+  }
   let sizeEstimateTokens = getContentSizeEstimate(content);
   if (env.ENABLE_MCP_LARGE_OUTPUT_FILES === false) {
     logEvent("tengu_mcp_large_result_handled", {
@@ -14696,10 +14864,11 @@ async function processMCPResult_2(
       reason: lit("env_disabled"),
       sizeEstimateTokens,
     });
+    noteResult(input_2, "cut_not_saved", content);
     return await truncateMcpContentIfNeeded(content, credentials);
   }
   if (!content) return content;
-  if (isMedia_2(content)) {
+  if (isMedia(content)) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("contains_images"),
@@ -14708,7 +14877,7 @@ async function processMCPResult_2(
     return await truncateMcpContentIfNeeded(content, credentials);
   }
   let timestamp = Date.now();
-  let persistId = `mcp-${normalizeNameForMCP(name)}-${normalizeNameForMCP(tool)}-${timestamp}`;
+  let persistId = `mcp-${CLAUDEAI_SERVER_PREFIX(name)}-${CLAUDEAI_SERVER_PREFIX(tool)}-${timestamp}`;
   let contentWithoutMeta = stripTextBlockMeta(content);
   let canUnwrapSingleton =
     useSubagentTruncationPrompt() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_singleton_unwrap", true);
@@ -14748,6 +14917,7 @@ async function processMCPResult_2(
         reason: lit("not_stored"),
         sizeEstimateTokens,
       });
+      noteResult(input_2, "cut_not_saved", content);
       return await truncateMcpContent(content);
     }
     let contentLength = textForFile.length;
@@ -14756,6 +14926,7 @@ async function processMCPResult_2(
       reason: lit("persist_failed"),
       sizeEstimateTokens,
     });
+    noteResult(input_2, "save_failed", content);
     return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${persistResult.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
   }
   logEvent("tengu_mcp_large_result_handled", {
@@ -14768,6 +14939,7 @@ async function processMCPResult_2(
     blockCount,
     persistedAs: fromEnum(persistedFormat),
   });
+  noteResult(input_2, "saved_as_text", content);
   let formatDescription =
     text !== undefined ? getFormatDescription("toolResult") : getFormatDescription(type, schema);
   return getLargeOutputInstructions(
@@ -14779,11 +14951,11 @@ async function processMCPResult_2(
     persistResult.truncatedAtBytes,
   );
 }
-//@ chunk-z1n5m6nf.js:140352-140524 layout
+//@ chunk-h44h5gdv.js:142927-143099 layout
 /**
  * parseUrlElicitationRequiredError：从工具调用错误 data 中取 elicitations 数组（URL elicitation required）。
  */
-function parseUrlElicitationRequiredError_2(error) {
+function parseUrlElicitationRequiredError(error) {
   let errorData = error.data;
   return (
     errorData != null &&
@@ -14792,13 +14964,13 @@ function parseUrlElicitationRequiredError_2(error) {
     Array.isArray(errorData.elicitations)
       ? errorData.elicitations
       : []
-  ).filter((elicitation) => ElicitRequestURLParamsSchema_2.safeParse(elicitation).success);
+  ).filter((elicitation) => ElicitRequestURLParamsSchema.safeParse(elicitation).success);
 }
-//@ chunk-z1n5m6nf.js:140524-140795 layout
+//@ chunk-h44h5gdv.js:143099-143370 layout
 /**
  * classifyToolCallAuthError：把工具调用认证错误分为 step_up（insufficient_scope）或 credential_rejected。
  */
-function classifyToolCallAuthError_2({
+function classifyToolCallAuthError({
   errorCode,
   message,
   isUnauthorizedError,
@@ -14819,7 +14991,7 @@ function classifyToolCallAuthError_2({
     ? "step_up"
     : "credential_rejected";
 }
-//@ chunk-z1n5m6nf.js:140795-141020 layout
+//@ chunk-h44h5gdv.js:143370-143595 layout
 function isNeedsApprovalOrExpiredSessionV1(error) {
   if (isRefusedByCcrProxy(error)) return true;
   if (!(error instanceof Error) || !("code" in error)) return false;
@@ -14829,7 +15001,7 @@ function isNeedsApprovalOrExpiredSessionV1(error) {
   }
   return error.code === -32000 && isApprovalMismatchMessage(error.message);
 }
-//@ chunk-z1n5m6nf.js:141020-145793 fingerprint (2.1.88 match: callMCPToolWithUrlElicitationRetry, 0.408)
+//@ chunk-h44h5gdv.js:143595-148380 fingerprint (2.1.88 match: callMCPToolWithUrlElicitationRetry, 0.41)
 /**
  * callMCPToolWithUrlElicitationRetry：调用工具，遇 URL elicitation required 错误时逐个处理 elicitation（打开 URL、等待完成）后重试。
  */
@@ -15050,7 +15222,7 @@ async function callMCPToolWithUrlElicitationRetry_2({
       }
       if (hostedDesktopRefusal_2(clientConnection) !== undefined) throw error;
       if (attempt - (didNeedsApprovalRetry ? 1 : 0) >= 3) throw error;
-      let urlElicitationRequiredError = parseUrlElicitationRequiredError_2(error);
+      let urlElicitationRequiredError = parseUrlElicitationRequiredError(error);
       let serverName = clientConnection.name;
       if (urlElicitationRequiredError.length === 0) {
         logMCPDebug(serverName, `Tool '${tool}' returned -32042 but no valid elicitations in error data`);
@@ -15062,7 +15234,7 @@ async function callMCPToolWithUrlElicitationRetry_2({
       );
       for (let elicitation of urlElicitationRequiredError) {
         let { elicitationId } = elicitation;
-        let hookResponse = await runElicitationHooks(serverName, elicitation, signal);
+        let hookResponse = await runElicitationHooks_2(serverName, elicitation, signal);
         if (hookResponse) {
           logMCPDebug(
             serverName,
@@ -15098,7 +15270,7 @@ async function callMCPToolWithUrlElicitationRetry_2({
         } finally {
           onAwaitingUserInput?.(false);
         }
-        let finalResult = await runElicitationResultHooks(serverName, result, signal, "url", elicitationId);
+        let finalResult = await runElicitationResultHooks_2(serverName, result, signal, "url", elicitationId);
         if (finalResult.action !== "accept") {
           logMCPDebug(
             serverName,
@@ -15116,8 +15288,8 @@ async function callMCPToolWithUrlElicitationRetry_2({
       }
     }
 }
-//@ chunk-z1n5m6nf.js:145793-146321 layout
-function toolErrorResultText_2(result, serverName, formatForLog) {
+//@ chunk-h44h5gdv.js:148380-148908 layout
+function toolErrorResultText(result, serverName, formatForLog) {
   if (!result.isError) return;
   let errorText = "Unknown error";
   if (Array.isArray(result.content) && result.content.length > 0) {
@@ -15148,29 +15320,29 @@ function toolErrorResultText_2(result, serverName, formatForLog) {
       : undefined,
   );
 }
-//@ chunk-z1n5m6nf.js:146321-146498 layout
+//@ chunk-h44h5gdv.js:148908-149085 layout
 /**
  * buildSep2663TaskBinding：SEP-2663 任务绑定（implementation、serverCapabilities 与 tool/prompt/resource 回调）。
  */
-function buildSep2663TaskBinding_2() {
+function buildSep2663TaskBinding() {
   return {
-    implementation: ImplementationSchema_2,
-    serverCapabilities: ServerCapabilitiesSchema_2,
-    tool: ToolSchema_2,
-    prompt: PromptSchema_2,
-    resource: ResourceSchema_2,
-    resourceTemplate: ResourceTemplateSchema_2,
-    contentBlock: CompatibilityCallToolResultSchema_2.options[0].shape.content.unwrap().element,
+    implementation: ImplementationSchema,
+    serverCapabilities: ServerCapabilitiesSchema,
+    tool: ToolSchema,
+    prompt: PromptSchema,
+    resource: ResourceSchema,
+    resourceTemplate: ResourceTemplateSchema,
+    contentBlock: CompatibilityCallToolResultSchema.options[0].shape.content.unwrap().element,
   };
 }
-//@ chunk-z1n5m6nf.js:146498-146548 layout
+//@ chunk-h44h5gdv.js:149085-149135 layout
 /**
  * 调用旧客户端的 listTools。
  */
 function listToolsV1(client, requestOptions) {
   return identityId2(client).listTools(undefined, requestOptions);
 }
-//@ chunk-z1n5m6nf.js:146548-146604 layout
+//@ chunk-h44h5gdv.js:149135-149191 layout
 /**
  * 调用旧客户端的 readResource。
  */
@@ -15182,14 +15354,14 @@ function readResourceV1(client, uri, requestOptions) {
     requestOptions,
   );
 }
-//@ chunk-z1n5m6nf.js:146604-146657 layout
+//@ chunk-h44h5gdv.js:149191-149244 layout
 /**
  * 调用旧客户端的 callTool。
  */
 function callToolV1(client, params, requestOptions) {
   return identityId2(client).callTool(params, undefined, requestOptions);
 }
-//@ chunk-z1n5m6nf.js:146657-155462 fingerprint (2.1.88 match: callMCPTool, 0.37)
+//@ chunk-h44h5gdv.js:149244-158180 fingerprint (2.1.88 match: callMCPTool, 0.369)
 /**
  * callMCPTool：真正发出 tools/call：总超时与空闲超时看门狗、进度上报、401/会话过期时刷新凭证/重连后重试一次、step-up 重新授权、错误分类与遥测，返回处理后的内容。
  */
@@ -15241,7 +15413,7 @@ async function callMCPTool_2({
   let started = transportErrorState?.toolCallSends?.started;
   try {
     logMCPDebug(clientName, `Calling MCP tool: ${tool}`);
-    let idleTimeout = idleTimeoutMs ?? getMcpToolIdleTimeoutMs_2(config);
+    let idleTimeout = idleTimeoutMs ?? getMcpToolIdleTimeoutMs(config);
     let lastActivityAt = toolStartTime;
     let rejectWatchdog;
     let promise = new Promise((resolve, reject) => {
@@ -15290,7 +15462,7 @@ async function callMCPTool_2({
         );
       }
     }, 30000);
-    let mcpToolTimeoutMs = getMcpToolTimeoutMs_3(config);
+    let mcpToolTimeoutMs = getMcpToolTimeoutMs(config);
     let timeoutTimer;
     let timeoutPromise = new Promise((resolve, reject) => {
       timeoutTimer = setTimeout(
@@ -15357,7 +15529,7 @@ async function callMCPTool_2({
       cleanupTimers();
       externalMark?.();
     });
-    toolErrorResultText_2(result, clientName, formatErrorForLog);
+    toolErrorResultText(result, clientName, formatErrorForLog);
     let elapsedMs = Date.now() - toolStartTime;
     let elapsedLabel =
       elapsedMs < 1000
@@ -15373,7 +15545,7 @@ async function callMCPTool_2({
         source: lit("mcp"),
         success: true,
       });
-    let content = await processMCPResult_2(
+    let content = await processMCPResult(
       result,
       tool,
       clientName,
@@ -15382,6 +15554,8 @@ async function callMCPTool_2({
       storageV5,
       credentials,
       resultNotForModel,
+      attachmentNoteFor(client, tool),
+      textResultToolUseId(client, tool, toolUseId, result),
     );
     noteHearthDegraded(clientName, undefined);
     return {
@@ -15413,7 +15587,7 @@ async function callMCPTool_2({
       let pendingStepUpScope = getCliOwnedState().clientAuthProviders.get(
         identityId2(client_2),
       )?.pendingStepUpScope;
-      let authErrorKind = classifyToolCallAuthError_2({
+      let authErrorKind = classifyToolCallAuthError({
         errorCode,
         message: error.message,
         isUnauthorizedError: error instanceof UnauthorizedError,
@@ -15495,7 +15669,7 @@ async function callMCPTool_2({
             sdkClient.onclose = undefined;
             let reauthEpoch = epochAtStart;
             promise = (async () => {
-              await clearServerCache_4(clientName, config);
+              await clearServerCache_3(clientName, config);
               return connectToServer_2(clientName, config, undefined, undefined, credentials);
             })();
             let reauthEntry = {
@@ -15529,7 +15703,7 @@ async function callMCPTool_2({
             newConnection.type === "connected" &&
             (isMcpServerDisabled(clientName) || isMcpServerBlockedAtConnectTime(clientName, config))
           )
-            await clearServerCache_4(clientName, config);
+            await clearServerCache_3(clientName, config);
           else if (newConnection.type === "connected")
             return callMCPTool_2({
               client: newConnection,
@@ -15566,7 +15740,7 @@ async function callMCPTool_2({
         }
       }
       if (authErrorKind === "credential_rejected" && isSessionExpired) {
-        await clearServerCache_4(clientName, config);
+        await clearServerCache_3(clientName, config);
         logMCPDebug(
           clientName,
           `Tool '${tool}' rejected the session credential (${errorCode ?? 401}); failing the call and clearing the connection for a fresh retry later`,
@@ -15601,10 +15775,10 @@ async function callMCPTool_2({
           transportType: fromEnum(config.type ?? "stdio"),
           authErrorKind: fromEnum(authErrorKind_2),
           ...serverFields,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(clientName), loggable),
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(CLAUDEAI_SERVER_PREFIX(clientName), loggable),
           mcpToolName: loggableMcpToolName(
-            normalizeNameForMCP(clientName),
-            normalizeNameForMCP(tool),
+            CLAUDEAI_SERVER_PREFIX(clientName),
+            CLAUDEAI_SERVER_PREFIX(tool),
             loggable,
           ),
         });
@@ -15620,7 +15794,7 @@ async function callMCPTool_2({
                 ? AUTH_MESSAGES.helperRejected(clientName)
                 : hasAuthHeader
                   ? AUTH_MESSAGES.headerRejected(clientName)
-                  : AUTH_MESSAGES.signInAgain(clientName),
+                  : AUTH_MESSAGES.signInAgain(clientName, config),
           authErrorKind_2,
           getCliOwnedState().clientFirstPartyBearers.get(identityId2(client_2))?.last,
           authErrorKind_2 === "insufficient_scope" ? pendingStepUpScope : undefined,
@@ -15633,15 +15807,21 @@ async function callMCPTool_2({
         error.code === -32000 &&
         error.message.includes("Connection closed") &&
         (config.type === "http" || config.type === "claudeai-proxy");
-      if (error instanceof HttpBodyOverflowError_2)
+      if (error instanceof HttpBodyOverflowError) {
+        noteGmailAttachmentNotRead(client, tool, "too_large");
+        noteGmailAttachmentShown(client, tool, "http body overflow");
         throw new McpToolResultNotReadError(clientName, tool, {
           kind: "too_large",
           capBytes: HTTP_BODY_LIMITS,
         });
-      if (isClosedBeforeAnswer && isTruncatedBodyError(transportErrorState?.closeReason))
+      }
+      if (isClosedBeforeAnswer && isTruncatedBodyError(transportErrorState?.closeReason)) {
+        noteGmailAttachmentNotRead(client, tool, "connection_closed");
+        noteGmailAttachmentShown(client, tool, transportErrorState?.closeReason);
         throw new McpToolResultNotReadError(clientName, tool, {
           kind: "connection_closed",
         });
+      }
       if (isSessionExpired_2 || isClosedBeforeAnswer) {
         logMCPDebug(
           clientName,
@@ -15650,18 +15830,18 @@ async function callMCPTool_2({
         let serverFields = mcpBaseUrlAnalytics(config, clientName);
         let loggable = isMcpServerLoggableInAnalytics(clientName, config);
         let mcpToolName = loggableMcpToolName(
-          normalizeNameForMCP(clientName),
-          normalizeNameForMCP(tool),
+          CLAUDEAI_SERVER_PREFIX(clientName),
+          CLAUDEAI_SERVER_PREFIX(tool),
           loggable,
         );
         logEvent("tengu_mcp_session_expired", {
           errorCode: errorCode !== undefined ? fromNumber(errorCode) : undefined,
           transportType: fromEnum(config.type ?? "stdio"),
           ...serverFields,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(clientName), loggable),
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(CLAUDEAI_SERVER_PREFIX(clientName), loggable),
           mcpToolName,
         });
-        await clearServerCache_4(clientName, config);
+        await clearServerCache_3(clientName, config);
         let callRanNothing = didCallRunNothing(
           transportErrorState?.toolCallSends,
           started,
@@ -15697,14 +15877,14 @@ async function callMCPTool_2({
     if (progressTimer !== undefined) clearInterval(progressTimer);
   }
 }
-//@ chunk-z1n5m6nf.js:156945-158868 placement
+//@ chunk-h44h5gdv.js:159663-161586 placement
 async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, storageV5) {
   let clients = [];
   let tools = [];
   let commands = [];
   primeEnsureConnectedClient();
-  let settled = await Promise.allSettled(
-    Object.entries(sdkConfigs).map(async ([key, value]) => {
+  let results = await Promise.allSettled(
+    Object.entries(sdkConfigs).map(async ([key, config]) => {
       let transport = new SdkControlClientTransport(
         key,
         sendMcpMessage,
@@ -15724,10 +15904,10 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION ?? "unknown",
@@ -15757,18 +15937,18 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
             `SDK MCP server "${key}" connection timed out after ${getConnectionTimeoutMs()}ms`,
           );
         }
-        let serverCapabilities = client.getServerCapabilities();
+        let capabilities = client.getServerCapabilities();
         let instructions = client.getInstructions();
         let instructions_2 = truncateServerInstructions_2(instructions, key);
         let connection = {
           type: "connected",
           serverInfo: client.getServerVersion(),
           name: key,
-          capabilities: serverCapabilities || {},
+          capabilities: capabilities || {},
           instructions: instructions_2,
           client: identityId(client),
           config: {
-            ...value,
+            ...config,
             scope: "dynamic",
           },
           cleanup: async () => {
@@ -15778,7 +15958,7 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
         let cacheKey = serverCacheKey(connection.name, connection.config);
         getConnectionCache().toolLists.delete(cacheKey);
         let tools = [];
-        if (serverCapabilities?.tools) {
+        if (capabilities?.tools) {
           let listed = await listMcpTools(connection, storageV5);
           tools.push(...listed);
         }
@@ -15799,7 +15979,7 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
             type: "failed",
             name: key,
             config: {
-              ...value,
+              ...config,
               scope: "user",
             },
           },
@@ -15809,7 +15989,7 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
       }
     }),
   );
-  for (let outcome of settled)
+  for (let outcome of results)
     if (outcome.status === "fulfilled") {
       clients.push(outcome.value.client);
       tools.push(...outcome.value.tools);
@@ -15818,7 +15998,7 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
   if (clients.some((client) => client.type === "connected" && !!client.capabilities?.resources)) {
     if (
       ![ListMcpResourcesTool, ReadMcpResourceTool].some((resourceTool) =>
-        tools.some((tool) => toolMatchesName(tool, resourceTool.name)),
+        tools.some((tool) => matchesToolName(tool, resourceTool.name)),
       )
     )
       tools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
@@ -15829,7 +16009,7 @@ async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, stora
     commands,
   };
 }
-//@ chunk-z1n5m6nf.js:158868-159057 placement
+//@ chunk-h44h5gdv.js:161586-161775 placement (2.1.88 match: clearServerCache, 0.581)
 async function clearServerCache_2(clients) {
   await Promise.all(
     clients.map(async (client) => {
@@ -15844,7 +16024,7 @@ async function clearServerCache_2(clients) {
     }),
   );
 }
-//@ chunk-18hwfzwa.js:682582-682744 fingerprint (2.1.88 match: processBatched, 1)
+//@ chunk-czq1j3j2.js:703312-703474 fingerprint (2.1.88 match: processBatched, 1)
 async function processBatched(sessionSubagentsDir, timeWindow) {
   let transcripts = await listSubagentTranscripts(sessionSubagentsDir, timeWindow);
   let agentMetas = await pMap(
@@ -15856,57 +16036,47 @@ async function processBatched(sessionSubagentsDir, timeWindow) {
   );
   return buildAgentTree(agentMetas.filter((agentMeta) => agentMeta !== null));
 }
-//@ chunk-5bdzenzx.js:16639-16696 fingerprint (2.1.88 match: isIncludedMcpTool, 1)
+//@ chunk-dh16zjm4.js:17820-17877 fingerprint (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool(tool) {
   return !tool.name?.startsWith("mcp__ide__");
 }
 export {
-  isDesktopComputerUseCommand,
-  serverCacheKey,
-  processBatched,
+  isEntryRowNotServed,
   refreshMcpServerTools,
+  serverCacheKey,
   getMcpEntryRowNotServed,
   TRANSPORT_FALLBACK_TIMEOUT_MS,
   getConnectTimeoutMs,
   McpAuthError,
   McpSessionExpiredError,
+  artifactsMcpClient,
+  SWALLOW_SYMBOL,
+  getConnectionTimeoutMs,
+  REMOTE_CONNECT_TIMEOUT_MS,
+  SHORT_RETRY_MS,
+  useSubagentTruncationPrompt,
+  McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  MCP_SERVER_NOT_ALLOWED_MESSAGE,
+  isDesktopComputerUseCommand,
+  isIncludedMcpTool,
+  maxDescriptionLength,
+  describeMissingRequiredArgs,
+  configHash,
+  getMcpAuthCache,
+  McpToolFileInputRejectedError,
   loggingSafeOrigin,
   McpCredentialStoreUnavailableError,
   getHostedDesktopComputerUseConfig,
-  configHash,
-  getMcpAuthCachePath,
-  McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  getConnectionTimeoutMs,
-  isIncludedMcpTool,
-  MCP_SERVER_NOT_ALLOWED_MESSAGE,
-  artifactsMcpClient,
-  hasNoTransport,
-  isTimeoutError,
-  MAX_LIST_PAGES,
-  LIST_PAGE_DELAYS_MS,
-  isRetryableListError,
-  ensureConnectedClient_2,
-  mapInTurns,
-  isEntryRowNotServed,
-  useSubagentTruncationPrompt,
-  describeMissingRequiredArgs,
-  canonicalMcpConfigKey,
-  maxDescriptionLength,
-  getMcpAuthCache,
-  McpToolFileInputRejectedError,
-  SWALLOW_SYMBOL,
-  REMOTE_CONNECT_TIMEOUT_MS,
-  SHORT_RETRY_MS,
-  EMPTY_CAPABILITIES,
-  CLAUDE_CODE_SERVER_INFO,
+  processBatched,
   mcpBaseUrlAnalytics,
-  isMcpAuthCached_3,
-  NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2,
+  setMcpAuthCacheEntry,
+  NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS,
   connectToServer_2,
-  truncateDescription_2,
-  shouldNormalizeRootCombinators_2,
-  shouldDropInvalidToolSchemas_2,
-  isIncludedMcpTool_3,
+  truncateDescription,
+  mapInTurns,
+  shouldNormalizeRootCombinators,
+  shouldDropInvalidToolSchemas,
+  isIncludedMcpTool_2,
   logToolCallXmlInDescriptions,
   needsAuthCacheModuleV1,
   callMCPTool_2,
@@ -15916,34 +16086,43 @@ export {
   artifactPermissionRulesModuleV1,
   claudeDocsWakeModuleV1,
   stripTrailingInvokeSuffix,
-  isIdeServer_2,
+  isIdeServer,
   listAllPages,
-  transformResultContent_2,
+  transformResultContent,
+  canonicalMcpConfigKey,
+  hasNoTransport,
+  isTimeoutError,
+  MAX_LIST_PAGES,
+  LIST_PAGE_DELAYS_MS,
+  isRetryableListError,
+  EMPTY_CAPABILITIES,
+  CLAUDE_CODE_SERVER_INFO,
+  ensureConnectedClient_2,
   ClaudeAiProxyBearerRejectedError,
   DESIGN_WRITE_TOOLS,
   JAVA_SDK_ELICITATION_HINT,
   LegacyDialectToleratingValidator,
-  AUTH_CACHE_VERSION,
+  AUTH_CACHE_VERSION_2,
   applyCapabilityServeTimeMiss,
   sameConfigHash,
-  countUnsettledByDeadline,
+  countUnsettledByDeadline_2,
   askDesignConsent,
   mergeRequestHeaders,
   burnDiscoverPrior,
-  callIdeTool,
+  callIdeTool_2,
   callMCPTool,
   callMCPToolWithUrlElicitationRetry,
   truncateServerInstructions,
   canPromptForPermission,
-  classifyToolCallAuthError,
-  clearServerCache_3,
+  classifyToolCallAuthError_2,
+  closeAllClients,
   clearServerCache,
   completeResourceTemplateArgument,
   buildMcpTool,
   connectToServer,
   canAskDesignConsent,
   wrapFetchWithCcrSessionAuth,
-  createClaudeAiProxyFetch,
+  withProxyBearerRefresh,
   wrapFetchWithCliOwnedBearer,
   wrapFetchWithFirstPartyAuth,
   createSep2663TaskBinding,
@@ -15951,57 +16130,57 @@ export {
   detachAndCloseConnection,
   discardMemoizedConnectResult,
   discoverySourceLabel,
-  buildSep2663TaskBinding,
+  buildSep2663TaskBinding_2,
   disposeServerConnectionDetached,
   clearDiscoveryForServer,
   logMcpConnectionOtelEvent,
   ensureConnectedClient,
   primeClientResolvers,
-  clearMcpDiscoveryCaches,
+  clearMcpDiscoveryCaches_2,
   evictStaleFailedConnectMemoForServe,
-  parseUrlElicitationRequiredError,
+  parseUrlElicitationRequiredError_2,
   fetchCommandsForClient,
   fetchResourceTemplatesForClient,
   fetchResourcesForClient,
   fetchToolsForClient,
-  getMcpRequestTimeoutMs,
+  getMcpRequestTimeoutMs_2,
   getDiscoveryFetchError,
   getListingDiscoverPrior,
-  getMcpToolTimeoutMs_2,
-  getMcpServerConnectionBatchSize,
-  getMcpToolIdleTimeoutMs,
-  getMcpToolTimeoutMs,
-  getMcpToolsCommandsAndResources_2,
+  getMcpToolTimeoutMs_4,
+  getMcpServerConnectionBatchSize_2,
+  getMcpToolIdleTimeoutMs_2,
+  getMcpToolTimeoutMs_3,
+  callToolWithTimers,
   resolveVersionNegotiation,
   getRememberedLegacyPrior,
-  getRemoteMcpServerConnectionBatchSize,
-  getMcpRoots,
+  getRemoteMcpServerConnectionBatchSize_2,
+  getMcpRoots_2,
   getToolsListError,
   isUnsupportedVersionHttp400,
   hasLiveConnection,
   hasClearedCachedFailure,
   buildMcpPromptCommands,
   buildMcpToolsForClient,
-  identityChangedReconnectResult,
-  inferCompactSchema,
+  identityChangedReconnectResult_2,
+  inferCompactSchema_2,
   invalidateMcpResourceListCaches,
   invokeToolRaw,
   isDiscoveryCacheMissRecoverable,
   isSupersededDial,
   isDesignServerConfig,
-  isLocalMcpServer,
-  isMcpAuthCached,
+  isLocalMcpServer_2,
+  isMcpAuthCached_2,
   isListenDenylisted,
   isNegotiationDenylisted,
   isMcpSessionExpiredError,
-  shouldDropInvalidToolSchemas,
-  shouldNormalizeRootCombinators,
+  shouldDropInvalidToolSchemas_2,
+  shouldNormalizeRootCombinators_2,
   isTransientMcpError,
   listToolsBypassCache,
   classifyMcpConnectError,
   mcpIdentityChangedSinceLastCheck,
   mcpToolInputToAutoClassifierInput,
-  notifyRootsListChanged,
+  notifyRootsListChanged_2,
   onMcpElicitRequest,
   onMcpElicitationComplete,
   onMcpNotification,
@@ -16013,71 +16192,71 @@ export {
   persistLiveListing,
   persistRawDiscoveryIfComplete,
   persistRefreshedToolsIfPresent,
-  prefetchAllMcpResources,
-  processMCPResult,
+  prefetchAllMcpResources_2,
+  transformResult,
   readResourceBypassCache,
-  reconnectMcpServer,
-  reconnectMcpServerImpl_2,
+  reconnectMcpServer_2,
+  proxyRequest,
   setDiscoveryFetchError,
   rememberDesignConsentAsk,
   recordRawCommandsForResult,
   recordRawResourcesForResult,
   recordRawToolsForResult,
   fetchResourceTemplatesForClients,
-  clearMcpAuthCacheEntry,
+  clearMcpAuthCacheEntry_2,
   classifyTransportKind,
   runCachedFirstDialArms,
   sanitizeConnectErrorCodeForTelemetry,
   seedMcpIdentityCheck,
-  isDocumentsPluginServer,
-  setHoldStaleReauthEntryForTest,
+  isDocumentsPluginServer_2,
+  setHoldStaleReauthEntryForTest_2,
   setReauthDecisionSinkForTest,
   setStdioProbeTimeoutMsForTest,
   setupSdkMcpClients,
   isDesignGatedTool,
   takeDesignConsentAsk,
   takeSettledCachedDialFailure,
-  transformMCPResult,
-  transformResultContent,
+  transformMCPResult_2,
+  transformResultContent_2,
   wrapCallWithDesignConsent,
   noteDesignProjectId,
-  wrapFetchWithTimeout,
-  AUTH_CACHE_VERSION_2,
-  countUnsettledByDeadline_2,
-  callIdeTool_2,
+  wrapFetchWithTimeout_2,
+  AUTH_CACHE_VERSION,
+  countUnsettledByDeadline,
+  callIdeTool,
   truncateServerInstructions_2,
-  classifyToolCallAuthError_2,
+  classifyToolCallAuthError,
   clearServerCache_2,
-  buildSep2663TaskBinding_2,
-  clearMcpDiscoveryCaches_2,
-  parseUrlElicitationRequiredError_2,
-  getMcpRequestTimeoutMs_2,
-  getMcpToolTimeoutMs_4,
-  getMcpServerConnectionBatchSize_2,
-  getMcpToolIdleTimeoutMs_2,
-  getMcpToolTimeoutMs_3,
+  buildSep2663TaskBinding,
+  clearMcpDiscoveryCaches,
+  parseUrlElicitationRequiredError,
+  getMcpRequestTimeoutMs,
+  getMcpToolTimeoutMs_2,
+  getMcpServerConnectionBatchSize,
+  getMcpToolIdleTimeoutMs,
+  getMcpToolTimeoutMs,
   getMcpToolsCommandsAndResources,
-  getRemoteMcpServerConnectionBatchSize_2,
-  getMcpRoots_2,
-  identityChangedReconnectResult_2,
-  inferCompactSchema_2,
+  getRemoteMcpServerConnectionBatchSize,
+  getMcpRoots,
+  identityChangedReconnectResult,
+  inferCompactSchema,
   callToolV1,
-  isLocalMcpServer_2,
-  isMcpAuthCached_2,
+  isLocalMcpServer,
+  isMcpAuthCached,
   isMcpSessionExpiredError_2,
   isTransientMcpError_2,
   listToolsV1,
-  notifyRootsListChanged_2,
-  prefetchAllMcpResources_2,
-  processMCPResult_2,
+  notifyRootsListChanged,
+  prefetchAllMcpResources,
+  processMCPResult,
   readResourceV1,
-  reconnectMcpServer_2,
+  reconnectMcpServer,
   reconnectMcpServerImpl,
-  clearMcpAuthCacheEntry_2,
-  isDocumentsPluginServer_2,
-  setHoldStaleReauthEntryForTest_2,
+  clearMcpAuthCacheEntry,
+  isDocumentsPluginServer,
+  setHoldStaleReauthEntryForTest,
   setReauthDecisionSinkForTestV1,
   connectAllMcpServers,
-  transformMCPResult_2,
-  wrapFetchWithTimeout_2,
+  transformMCPResult,
+  wrapFetchWithTimeout,
 };

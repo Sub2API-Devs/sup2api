@@ -1,7 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{nn}from"./chunk-6ysndsgz.js";import{_}from"./chunk-cgr0tezp.js";import{O,ne}from"./chunk-m41h77x8.js";import{_t}from"./chunk-bbtre4r8.js";import{Ss}from"./chunk-1rckdhfn.js";import{qnt}from"./chunk-s61vbvea.js";function bZ(t){try{qnt(nn().BASE_API_URL,t)}catch{return"egress_blocked"}if(Ss("zdr"))return"egress_blocked";return _t()?"essential_traffic":void 0}import{basename as g}from"path";var l=100,f=900,a=300;function Voe(t){return _(t).replace(/[^\x20-\x7e]/g,(n)=>`\\u${n.charCodeAt(0).toString(16).padStart(4,"0")}`)}function XFr(t){let n=Voe(t);if(n.length<=a)return n;let e=[...t],r=e.length,o=5;while(r>0){if(o+=Voe(e[r-1]).length-2,o>a)break;r--}return Voe(`...${e.slice(r).join("")}`)}function aKs(t){let n=[],e=0;for(let{path:o,name:s,size:c}of t){let i=`${XFr(o)}${g(o)===s?"":`, the file ${XFr(s)}`} (${c} bytes)`;if(e+=i.length+2,e>f)break;n.push(i)}let r=t.length-n.length;return`Attaches ${t.length} ${O(t.length,"file")}: ${n.join("; ")}${r>0?`; and ${r} more`:""}`}function lKs(t){if(t==="")return;let n=t.slice(1).split("/").map((e)=>e.replaceAll("~1","/").replaceAll("~0","~")).map((e,r)=>r===0?e:/^\d+$/.test(e)?`[${e}]`:`.${e}`).join("");return SZ(n)}function SZ(t){return Voe(t.length>l?`${ne(t,l)}...`:t)}
-export{bZ,Voe,XFr,aKs,lKs,SZ};

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：API 额度购买（含 3DS 验证与发票轮询）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
@@ -24,7 +24,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1620626-1620680 placement
+//@ chunk-5xgkngpb.js:1688326-1688381 placement
 /**
  * 导出函数 `isExpectedBillingError`。
  */
@@ -34,7 +34,7 @@ var isExpectedBillingError = (error) =>
     (apiError) => verificationErrorMessage(apiError) !== null || !isAxiosError(apiError),
   );
 var DEFAULT_MONTHLY_SPEND_LIMIT = 2000;
-//@ chunk-e6aww6q8.js:1620680-1621376 placement
+//@ chunk-5xgkngpb.js:1688381-1689078 placement
 /**
  * 为组织开启超额计费。
  */
@@ -82,7 +82,7 @@ async function enableOverageBilling(credentials) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1621376-1622117 placement
+//@ chunk-5xgkngpb.js:1689078-1689820 placement
 /**
  * 更新组织的超额支出上限。
  */
@@ -135,7 +135,7 @@ async function updateOverageSpendLimit(spendLimitCents, currency, credentials) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1622117-1622791 placement
+//@ chunk-5xgkngpb.js:1689820-1690495 placement
 /**
  * 更新组织的自动充值设置。
  */
@@ -194,7 +194,7 @@ async function updateAutoReloadSettings(
     };
   }
 }
-//@ chunk-e6aww6q8.js:1622791-1623481 placement
+//@ chunk-5xgkngpb.js:1690495-1691186 placement
 /**
  * 获取组织预付额度余额。
  */
@@ -234,7 +234,7 @@ async function fetchPrepaidBalance(credentials) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1623481-1623694 placement
+//@ chunk-5xgkngpb.js:1691186-1691399 placement
 function buildMockCreditOptions(creditOptions) {
   return creditOptions.map(([creditMinorUnits, discountPercent], index) => {
     let rounded = Math.round((creditMinorUnits * discountPercent) / 100);
@@ -248,13 +248,13 @@ function buildMockCreditOptions(creditOptions) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1623694-1623968 placement
+//@ chunk-5xgkngpb.js:1691399-1691673 placement
 /**
  * 计费接口的模拟数据：预付额度套餐的四档金额与默认/折扣两组 mock 套餐。
  */
 var mapped_3; // deferred: uses buildMockCreditOptions of its import cycle while loading; runs once the cycle is complete
 var MOCK_CREDIT_BUNDLES;
-deferInit("chunk-e6aww6q8.js:1623694", () => {
+deferInit("chunk-5xgkngpb.js:1691399", () => {
   mapped_3 = [2500, 5000, 7500, 15000].map((creditMinorUnits) => ({
     id: "",
     credit_minor_units: creditMinorUnits,
@@ -277,7 +277,7 @@ deferInit("chunk-e6aww6q8.js:1623694", () => {
     ]),
   };
 });
-//@ chunk-e6aww6q8.js:1623968-1624727 placement
+//@ chunk-5xgkngpb.js:1691673-1692433 placement
 /**
  * 获取预付额度套餐列表。
  */
@@ -318,7 +318,7 @@ async function fetchPrepaidBundles(credentials) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1624727-1625041 placement
+//@ chunk-5xgkngpb.js:1692433-1692747 placement
 /**
  * 获取组织的支付方式（测试替身存在时直接返回其值）。
  */
@@ -335,7 +335,7 @@ async function fetchPaymentMethod(credentials) {
     return response.data ?? null;
   });
 }
-//@ chunk-e6aww6q8.js:1625041-1626081 placement
+//@ chunk-5xgkngpb.js:1692747-1693787 placement
 /**
  * 购买 API 额度，处理 3DS 验证、待付发票轮询等状态。
  */
@@ -393,7 +393,7 @@ async function purchaseApiCredits(purchaseRequest, credentials) {
     return response.data;
   });
 }
-//@ chunk-e6aww6q8.js:1626081-1626955 placement
+//@ chunk-5xgkngpb.js:1693787-1694661 placement
 /**
  * 预览购买额度的税费。
  */
@@ -448,7 +448,7 @@ async function previewPurchaseTax(amountCents, currency, stripeProductId, creden
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1626955-1627336 placement
+//@ chunk-5xgkngpb.js:1694661-1695042 placement
 /**
  * 查询预付额度购买的状态（测试替身下模拟两次后变为 paid）。
  */
@@ -471,15 +471,15 @@ async function fetchPrepaidPurchaseStatus(purchaseId, credentials) {
   return response.data;
 }
 export {
+  updateOverageSpendLimit,
   fetchPrepaidBalance,
+  enableOverageBilling,
+  previewPurchaseTax,
+  fetchPrepaidPurchaseStatus,
   fetchPaymentMethod,
   fetchPrepaidBundles,
   mapped_3,
-  enableOverageBilling,
   updateAutoReloadSettings,
   purchaseApiCredits,
-  updateOverageSpendLimit,
-  previewPurchaseTax,
-  fetchPrepaidPurchaseStatus,
   DEFAULT_MONTHLY_SPEND_LIMIT,
 };

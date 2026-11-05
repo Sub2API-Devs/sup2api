@@ -3,9 +3,9 @@
  *
  * prompt 型钩子：用小模型按 JSON {ok, reason, impossible} 判断条件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/execPromptHook.ts
- * pieces: chunk-e6aww6q8.js (7)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: sole-consumer 2, fingerprint 1, layout 1, placement 3
  */
 import { randomUUID } from "crypto";
@@ -15,7 +15,7 @@ import {
   nonBlockingHookErrorResult,
   hookResponseSchema,
 } from "./hookHelpers.js";
-import { getContentText, createUserMessage, extractTextContent_2 } from "../messages.js";
+import { getContentText, createUserMessage, extractTextContent_2, SYNTHETIC_MODEL } from "../messages.js";
 import { substituteArguments } from "../argumentSubstitution.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../debug.js";
 import { getSmallFastModel } from "../model/smallFastModel.js";
@@ -35,7 +35,6 @@ import { truncateWithCount } from "../stringUtils.js";
 import { promptEndingFields } from "../../entrypoints/sdk/coreSchemas.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { errorMessage } from "../errors.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { totalTokensOf } from "../messages/usageAndStopReason.js";
 import { roughTokenCountEstimationForContent } from "../../services/tokenEstimation.js";
 import { jsonStringify } from "../slowOperations.js";
@@ -43,16 +42,16 @@ import { has1mSuffix_2, modelHasNative1MContext } from "../model/contextWindow1m
 import { CONTEXT_WINDOW_THRESHOLD } from "../model/model.js";
 import { groupByApiRound } from "../../services/compact/compact.js";
 
-//@ chunk-e6aww6q8.js:3385228-3385240 sole-consumer
+//@ chunk-5xgkngpb.js:3473406-3473418 sole-consumer
 var MAX_REPEATED_PROMPT_CHARS = 500;
-//@ chunk-e6aww6q8.js:3385240-3385340 sole-consumer
+//@ chunk-5xgkngpb.js:3473418-3473518 sole-consumer
 function transcriptMentions(messages, needle) {
   return (messages ?? []).some(
     (message) =>
       message.type === "user" && indexOfKmp(getContentText(message.message.content) ?? "", needle, 0) !== -1,
   );
 }
-//@ chunk-e6aww6q8.js:3385340-3390612 fingerprint (2.1.88 match: execPromptHook, 0.669)
+//@ chunk-5xgkngpb.js:3473518-3478815 fingerprint (2.1.88 match: execPromptHook, 0.667)
 /**
  * 执行 prompt 钩子：把提示词（Stop 系事件包装成停止条件判断）连同对话历史发给小模型，要求 JSON {ok, reason, impossible}；ok=false 阻断（非 Stop 事件默认结束回合，continueOnBlock 可改），impossible 只对 Stop 有效；默认 30s 超时，提示过长时减半历史重试。
  */
@@ -134,6 +133,7 @@ Always include a "reason" field.`;
             hasAppendSystemPrompt: false,
             agents: [],
             querySource: "hook_prompt",
+            sendSideQueryBeta: true,
             promptTooLongIsHandled: true,
             mcpTools: [],
             agentId: toolUseContext.agentId,
@@ -296,9 +296,9 @@ Always include a "reason" field.`;
     });
   }
 }
-//@ chunk-e6aww6q8.js:3390612-3390624 layout
+//@ chunk-5xgkngpb.js:3478815-3478827 layout
 var PROMPT_TOO_LONG_RETRY_RATIO = 0.5;
-//@ chunk-e6aww6q8.js:3390624-3390805 placement (2.1.88 match: getTokenUsage, 0.835)
+//@ chunk-5xgkngpb.js:3478827-3479008 placement (2.1.88 match: getTokenUsage, 0.834)
 function getTokenUsage_2(message) {
   for (let idx = message.length - 1; idx >= 0; idx--) {
     let message_2 = message[idx];
@@ -312,7 +312,7 @@ function getTokenUsage_2(message) {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:3390805-3390941 placement
+//@ chunk-5xgkngpb.js:3479008-3479144 placement
 function estimateMessagesTokens(messages) {
   let total = 0;
   for (let message of messages)
@@ -322,7 +322,7 @@ function estimateMessagesTokens(messages) {
         : jsonStringify(message).length / 4;
   return Math.ceil(total);
 }
-//@ chunk-e6aww6q8.js:3390941-3391747 placement
+//@ chunk-5xgkngpb.js:3479144-3479954 placement
 /**
  * Stop 钩子提示评估时截断过长的转录。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。存储的登录是否被拒用（例如设置了 helper 或 base URL）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gkzv6xmy.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrw4a49n.js (5)
  * attribution: placement 5
  */
 import { isDiskless, isOauthTokenFromBgSnapshot } from "../../bootstrap/state.js";
@@ -38,7 +38,7 @@ import {
 import { logError } from "../log.js";
 import { raceWithAbortSignal } from "../sleep.js";
 
-//@ chunk-gkzv6xmy.js:608-1405 placement
+//@ chunk-xrw4a49n.js:608-1405 placement
 /**
  * 存储的登录是否被拒用（例如设置了 helper 或 base URL）。
  */
@@ -100,7 +100,7 @@ function isStoredLoginRefused(baseUrlOverrideValue, settling = false, includeFil
     return fallback;
   }
 }
-//@ chunk-gkzv6xmy.js:1405-1549 placement
+//@ chunk-xrw4a49n.js:1405-1549 placement
 function storedLoginRefusalReason() {
   try {
     return helperTierOf(getPolicySlots().machine) === null ? (getRemoteHelperGap() ?? "admin") : "admin";
@@ -109,7 +109,7 @@ function storedLoginRefusalReason() {
     return "admin";
   }
 }
-//@ chunk-gkzv6xmy.js:1549-1664 placement
+//@ chunk-xrw4a49n.js:1549-1664 placement
 async function awaitStoredLoginSettle(signal) {
   try {
     await raceWithAbortSignal(settleRemotePolicy(), signal, () => Error("Stored login settle aborted"));
@@ -117,7 +117,7 @@ async function awaitStoredLoginSettle(signal) {
     if (!signal.aborted) throw error;
   }
 }
-//@ chunk-gkzv6xmy.js:1664-1885 placement
+//@ chunk-xrw4a49n.js:1664-1885 placement
 async function settleStoredLoginRefusal(context) {
   try {
     let baseUrl = context?.url ?? (context?.isFilesDial ? getOauthConfig().BASE_API_URL : undefined);
@@ -131,11 +131,11 @@ async function settleStoredLoginRefusal(context) {
     logError(Error("Stored login settle failed"));
   }
 }
-//@ chunk-gkzv6xmy.js:1885-1996 placement
+//@ chunk-xrw4a49n.js:1885-1996 placement
 function baseUrlOverride(envObject, includeFilesDial) {
   return (
     getEnvCaseInsensitive(envObject, "ANTHROPIC_BASE_URL")?.trim() ||
     (includeFilesDial ? getEnvCaseInsensitive(envObject, "CLAUDE_CODE_API_BASE_URL")?.trim() : undefined)
   );
 }
-export { settleStoredLoginRefusal, isStoredLoginRefused, storedLoginRefusalReason };
+export { storedLoginRefusalReason, settleStoredLoginRefusal, isStoredLoginRefused };

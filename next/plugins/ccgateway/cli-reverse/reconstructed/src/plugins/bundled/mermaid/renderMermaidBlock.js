@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：替换回复中的 mermaid 代码块为字符图
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (11)
  * attribution: placement 11
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -22,7 +22,7 @@ import {
 import { logFeatureOk, logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-yb0ajcmt.js:3857-3942 placement (2.1.88 match: timing, 0.363)
+//@ chunk-q80fh8vc.js:4165-4250 placement (2.1.88 match: timing, 0.362)
 var timingManifest = __commonJS(function (requireFn, moduleObject) {
   moduleObject.exports = {
     scan: {
@@ -32,13 +32,13 @@ var timingManifest = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-yb0ajcmt.js:27065-27085 placement
+//@ chunk-q80fh8vc.js:27375-27395 placement
 /**
  * 20000
  */
 var MAX_MERMAID_SOURCE_CHARS = 20000;
 var MIN_PLOT_WIDTH = 300;
-//@ chunk-yb0ajcmt.js:27085-27369 placement
+//@ chunk-q80fh8vc.js:27395-27679 placement
 /**
  * 解析 mermaid 源（时序图或流程图）并绘制为字符图；过长或失败返回 undefined。
  */
@@ -64,7 +64,7 @@ function renderMermaidSource(source, columns, onThrow) {
     return;
   }
 }
-//@ chunk-yb0ajcmt.js:27369-27468 placement
+//@ chunk-q80fh8vc.js:27679-27778 placement
 /**
  * 代码围栏开始
  */
@@ -73,7 +73,7 @@ var FENCE_CLOSE_RE = /^ {0,3}(`{3,}|~{3,})[ \t\r]*$/;
 var BACKTICKS_RE = /`+/g;
 var MIN_SOURCE_LINES = 2;
 var MAX_RENDER_MS = 60000;
-//@ chunk-yb0ajcmt.js:27468-28410 placement
+//@ chunk-q80fh8vc.js:27778-28720 placement
 /**
  * 扫描回复文本里的 ```mermaid 代码块，能画的替换成框线字符图，记录 drawn/kept/fell_back 遥测。
  */
@@ -83,8 +83,8 @@ function renderMermaidFencesInText(text, columns, record) {
   let out = [];
   let open;
   let totalChars = text.length;
-  for (let k = 0; k < lines.length; k++) {
-    let line = lines[k] ?? "";
+  for (let idx = 0; idx < lines.length; idx++) {
+    let line = lines[idx] ?? "";
     out.push(line);
     if (!open) {
       let match = FENCE_OPEN_RE.exec(line);
@@ -95,7 +95,7 @@ function renderMermaidFencesInText(text, columns, record) {
               indent,
               marker,
               info: info.trim(),
-              line: k,
+              line: idx,
             }
           : undefined;
       continue;
@@ -108,7 +108,7 @@ function renderMermaidFencesInText(text, columns, record) {
     let isThrew = false;
     let rendered = renderMermaidSource(
       lines
-        .slice(fence.line + 1, k)
+        .slice(fence.line + 1, idx)
         .map((line) => (line.startsWith(fence.indent) ? line.slice(fence.indent.length) : line)).join(`
 `),
       columns - MIN_SOURCE_LINES - fence.indent.length,
@@ -129,7 +129,7 @@ function renderMermaidFencesInText(text, columns, record) {
       ...rendered.lines.map((line) => fence.indent + line),
       fence.indent + tickFence,
     ];
-    let lines_2 = out.slice(fence.line - k - 1);
+    let lines_2 = out.slice(fence.line - idx - 1);
     let growth = totalLineChars(newLines) - totalLineChars(lines_2);
     if (growth > 0 && totalChars + growth > MAX_RENDER_MS) {
       record?.("kept");
@@ -143,20 +143,20 @@ function renderMermaidFencesInText(text, columns, record) {
   return out.join(`
 `);
 }
-//@ chunk-yb0ajcmt.js:28410-28464 placement
+//@ chunk-q80fh8vc.js:28720-28774 placement
 /**
  * 行字符总数
  */
 function totalLineChars(lines) {
   return lines.reduce((acc, line) => acc + line.length + 1, 0);
 }
-//@ chunk-yb0ajcmt.js:28464-28526 placement
+//@ chunk-q80fh8vc.js:28774-28836 placement
 /**
  * ```mermaid 围栏
  */
 var MERMAID_FENCE_RE = /^ {0,3}(?:`{3,}|~{3,})[ \t]*mermaid[ \t\r]*$/im;
 var MIN_VIEWPORT_WIDTH = 80;
-//@ chunk-yb0ajcmt.js:28526-28867 placement
+//@ chunk-q80fh8vc.js:28836-29177 placement
 /**
  * 通过 ui.render 钩子拦截终端里的 AssistantMessage，按视口宽度缓存并替换 mermaid 块。
  */
@@ -191,14 +191,14 @@ ${payload.props.text}`;
     },
   );
 }
-//@ chunk-yb0ajcmt.js:28867-28891 placement
+//@ chunk-q80fh8vc.js:29177-29201 placement
 /**
  * 注册 mermaid 渲染钩子
  */
 function registerMermaidPlugin(on) {
   registerMermaidRenderHook(on, {});
 }
-//@ chunk-yb0ajcmt.js:28891-29138 placement
+//@ chunk-q80fh8vc.js:29201-29448 placement
 /**
  * mermaid 插件定义：注册钩子并记录 drawn/kept/threw 遥测（每种只记一次）。
  */
@@ -222,7 +222,7 @@ var createMermaidPlugin = (host) => ({
     });
   },
 });
-//@ chunk-yb0ajcmt.js:29138-29240 placement
+//@ chunk-q80fh8vc.js:29448-29550 placement
 /**
  * 内置插件 cc-plugin-mermaid 定义（GrowthBook tengu_mermaid_mod 控制可用性）。
  */

@@ -3,9 +3,9 @@
  *
  * /theme 实现：主题选择与自定义主题
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/theme/theme.tsx
- * pieces: chunk-3s4dbk22.js (2)
+ * pieces: chunk-fx2xa8vr.js (2)
  * attribution: fingerprint 1, callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -20,10 +20,10 @@ import { errorMessage } from "../../utils/errors.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { GlobalSearchDialog } from "../../components/GlobalSearchDialog.js";
 import { getSafeModeExitHint } from "../../utils/envUtils.js";
-import { Pane } from "../../components/design-system/Pane.js";
 import { ThemePicker } from "../../components/ThemePicker.js";
+import { Pane } from "../../components/design-system/Pane.js";
 
-//@ chunk-3s4dbk22.js:23515-27511 fingerprint (2.1.88 match: ThemePickerCommand, 0.344)
+//@ chunk-fx2xa8vr.js:24691-28696 fingerprint (2.1.88 match: ThemePickerCommand, 0.312)
 function ThemePickerCommand(props) {
   let $ = useMemoCache(50);
   let { onDone } = props;
@@ -350,15 +350,16 @@ function ThemePickerCommand(props) {
   } else onCancel = $[44];
   let pane;
   if ($[45] !== onThemeSelect || $[46] !== onCustomTheme || $[47] !== helpText || $[48] !== onCancel) {
+    let children = jsxProd_default(ThemePicker, {
+      isTitledByHost: false,
+      onThemeSelect,
+      onCustomTheme,
+      helpText,
+      onCancel,
+    });
     pane = jsxProd_default(Pane, {
       color: "permission",
-      children: jsxProd_default(ThemePicker, {
-        onThemeSelect,
-        onCustomTheme,
-        helpText,
-        onCancel,
-        skipExitHandling: true,
-      }),
+      children,
     });
     $[45] = onThemeSelect;
     $[46] = onCustomTheme;
@@ -368,7 +369,7 @@ function ThemePickerCommand(props) {
   } else pane = $[49];
   return pane;
 }
-//@ chunk-3s4dbk22.js:27511-27549 callgraph-fingerprint (2.1.88 match: call, 1)
+//@ chunk-fx2xa8vr.js:28696-28734 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /theme 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -1,8 +1,8 @@
 /**
  * graceful-fs/graceful-fs.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: graceful-fs@4.2.11
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_polyfills } from "./polyfills.js";
 import { require_legacy_streams } from "./legacy-streams.js";
 import { require_clone } from "./clone.js";
 
-//@ chunk-bmbhxpfm.js:6170-11354 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:6170-11354 cjs-fingerprint
 var require_graceful_fs = __commonJS(function (cjsExports, cjsModule) {
   var fs = importMetaRequire("fs");
   var polyfills = require_polyfills();

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：MCP 跨应用访问（XAA）补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/xaa.ts
- * pieces: chunk-1kaj6e83.js (11), chunk-6vnxsn99.js (1), chunk-hjesqqfw.js (1), chunk-n1aavqzh.js (7)
+ * pieces: chunk-01kgd7xg.js (1), chunk-aw801t9e.js (1), chunk-ft6a2kja.js (11), chunk-ghww1f0b.js (7)
  * attribution: fingerprint 9, layout 4, callgraph-witnessed 1, placement 6
  */
 import { resolve } from "path";
@@ -33,7 +33,7 @@ import { exchangeIdTokenForJag } from "../../../vendor/@modelcontextprotocol/cli
 import { CALLER_GONE_SIGNAL } from "../../entrypoints/mcp.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:72542-72708 fingerprint (2.1.88 match: normalizeUrl, 0.683)
+//@ chunk-01kgd7xg.js:73909-74075 fingerprint (2.1.88 match: normalizeUrl, 0.684)
 /**
  * toSafeFileUrl：本地路径转 file:// URL，拒绝 UNC、设备路径与带主机名的结果。
  */
@@ -54,13 +54,13 @@ function toSafeFileUrl(url) {
     return null;
   }
 }
-//@ chunk-n1aavqzh.js:1813-2020 callgraph-witnessed (2.1.88 match: JWT_BEARER_GRANT, 0.385)
+//@ chunk-ghww1f0b.js:1884-2091 callgraph-witnessed (2.1.88 match: JWT_BEARER_GRANT, 0.386)
 var XAA_REQUEST_TIMEOUT_MS_2 = 30000;
 var TOKEN_EXCHANGE_GRANT_2 = "urn:ietf:params:oauth:grant-type:token-exchange";
 var JWT_BEARER_GRANT_2 = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 var ID_JAG_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id-jag";
 var ID_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id_token";
-//@ chunk-n1aavqzh.js:2020-2184 placement
+//@ chunk-ghww1f0b.js:2091-2255 placement
 /**
  * makeXaaFetch（v2 副本）。
  */
@@ -77,12 +77,12 @@ function makeXaaFetch_2(abortSignal) {
     }).catch((error) => rethrowRedactedFetchError(error, input));
   };
 }
-//@ chunk-n1aavqzh.js:2184-2196 placement
+//@ chunk-ghww1f0b.js:2255-2267 placement
 var defaultXaaFetch_2; // deferred: uses makeXaaFetch_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n1aavqzh.js:2184", () => {
+deferInit("chunk-ghww1f0b.js:2255", () => {
   defaultXaaFetch_2 = makeXaaFetch_2();
 });
-//@ chunk-n1aavqzh.js:2196-2290 placement
+//@ chunk-ghww1f0b.js:2267-2361 placement
 function normalizeUrl_2(url) {
   try {
     return new URL(url).href.replace(/\/$/, "");
@@ -90,7 +90,7 @@ function normalizeUrl_2(url) {
     return url.replace(/\/$/, "");
   }
 }
-//@ chunk-n1aavqzh.js:2290-2418 placement (2.1.88 match: XaaTokenExchangeError, 1)
+//@ chunk-ghww1f0b.js:2361-2489 placement (2.1.88 match: XaaTokenExchangeError, 1)
 class XaaTokenExchangeError_2 extends Error {
   shouldClearIdToken;
   constructor(message, shouldClearIdToken) {
@@ -99,23 +99,23 @@ class XaaTokenExchangeError_2 extends Error {
     this.shouldClearIdToken = shouldClearIdToken;
   }
 }
-//@ chunk-n1aavqzh.js:2418-2520 placement
+//@ chunk-ghww1f0b.js:2489-2591 placement
 var SENSITIVE_TOKEN_FIELD_PATTERN_2 =
   /"(access_token|refresh_token|id_token|assertion|subject_token|client_secret)"\s*:\s*"[^"]*"/g;
-//@ chunk-n1aavqzh.js:2520-2611 placement (2.1.88 match: redactTokens, 1)
+//@ chunk-ghww1f0b.js:2591-2682 placement (2.1.88 match: redactTokens, 1)
 function redactTokens_2(raw) {
   return (typeof raw === "string" ? raw : jsonStringify(raw)).replace(
     SENSITIVE_TOKEN_FIELD_PATTERN_2,
     (match, k) => `"${k}":"[REDACTED]"`,
   );
 }
-//@ chunk-1kaj6e83.js:1766-1973 fingerprint (2.1.88 match: ID_JAG_TOKEN_TYPE, 0.408)
+//@ chunk-ft6a2kja.js:1837-2044 fingerprint (2.1.88 match: ID_JAG_TOKEN_TYPE, 0.408)
 var XAA_REQUEST_TIMEOUT_MS = 30000;
 var TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
 var JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 var ID_JAG_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:id-jag";
 var ID_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:id_token";
-//@ chunk-1kaj6e83.js:1973-2137 layout
+//@ chunk-ft6a2kja.js:2044-2208 layout
 /**
  * makeXaaFetch：带 30 秒超时、可选中止信号与代理设置的 fetch。
  */
@@ -132,12 +132,12 @@ function makeXaaFetch(abortSignal) {
     }).catch((error) => rethrowRedactedFetchError(error, input));
   };
 }
-//@ chunk-1kaj6e83.js:2137-2149 layout
+//@ chunk-ft6a2kja.js:2208-2220 layout
 var defaultXaaFetch; // deferred: uses makeXaaFetch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1kaj6e83.js:2137", () => {
+deferInit("chunk-ft6a2kja.js:2208", () => {
   defaultXaaFetch = makeXaaFetch();
 });
-//@ chunk-1kaj6e83.js:2149-2243 layout
+//@ chunk-ft6a2kja.js:2220-2314 layout
 function normalizeUrl(url) {
   try {
     return new URL(url).href.replace(/\/$/, "");
@@ -145,7 +145,7 @@ function normalizeUrl(url) {
     return url.replace(/\/$/, "");
   }
 }
-//@ chunk-1kaj6e83.js:2243-2371 fingerprint (2.1.88 match: XaaTokenExchangeError, 1)
+//@ chunk-ft6a2kja.js:2314-2442 fingerprint (2.1.88 match: XaaTokenExchangeError, 1)
 class XaaTokenExchangeError extends Error {
   shouldClearIdToken;
   constructor(message, shouldClearIdToken) {
@@ -154,17 +154,17 @@ class XaaTokenExchangeError extends Error {
     this.shouldClearIdToken = shouldClearIdToken;
   }
 }
-//@ chunk-1kaj6e83.js:2371-2473 layout
+//@ chunk-ft6a2kja.js:2442-2544 layout
 var SENSITIVE_TOKEN_FIELD_PATTERN =
   /"(access_token|refresh_token|id_token|assertion|subject_token|client_secret)"\s*:\s*"[^"]*"/g;
-//@ chunk-1kaj6e83.js:2473-2564 fingerprint (2.1.88 match: redactTokens, 1)
+//@ chunk-ft6a2kja.js:2544-2635 fingerprint (2.1.88 match: redactTokens, 1)
 function redactTokens(raw) {
   return (typeof raw === "string" ? raw : jsonStringify(raw)).replace(
     SENSITIVE_TOKEN_FIELD_PATTERN,
     (match, k) => `"${k}":"[REDACTED]"`,
   );
 }
-//@ chunk-1kaj6e83.js:2843-3457 fingerprint (2.1.88 match: discoverProtectedResource, 0.828)
+//@ chunk-ft6a2kja.js:2914-3528 fingerprint (2.1.88 match: discoverProtectedResource, 0.828)
 /**
  * discoverProtectedResource：拉取 PRM，要求 resource 与服务器 URL 一致且有 authorization_servers。
  */
@@ -194,7 +194,7 @@ async function discoverProtectedResource(serverUrl, opts) {
     authorization_servers: prm.authorization_servers,
   };
 }
-//@ chunk-1kaj6e83.js:3457-4349 fingerprint (2.1.88 match: discoverAuthorizationServer, 0.817)
+//@ chunk-ft6a2kja.js:3528-4420 fingerprint (2.1.88 match: discoverAuthorizationServer, 0.817)
 /**
  * discoverAuthorizationServer：拉取授权服务器元数据，校验 issuer 一致、token_endpoint 为 https。
  */
@@ -227,7 +227,7 @@ async function discoverAuthorizationServer(asUrl, opts) {
     token_endpoint_auth_methods_supported: meta.token_endpoint_auth_methods_supported,
   };
 }
-//@ chunk-1kaj6e83.js:5464-6452 fingerprint (2.1.88 match: exchangeJwtAuthGrant, 0.989)
+//@ chunk-ft6a2kja.js:5535-6523 fingerprint (2.1.88 match: exchangeJwtAuthGrant, 0.989)
 /**
  * exchangeJwtAuthGrant：RFC 7523 jwt-bearer grant，client_secret_basic 或 _post，响应按 JwtBearerResponseSchema 校验。
  */
@@ -276,7 +276,7 @@ async function exchangeJwtAuthGrant(opts) {
     throw Error(`XAA: jwt-bearer response did not match expected shape: ${redactTokens(rawTokens)}`);
   return tokensParsed.data;
 }
-//@ chunk-1kaj6e83.js:6452-8424 fingerprint (2.1.88 match: performCrossAppAccess, 0.894)
+//@ chunk-ft6a2kja.js:6523-8495 fingerprint (2.1.88 match: performCrossAppAccess, 0.894)
 /**
  * performCrossAppAccess（XAA）：RFC 9728 发现受保护资源 → 选择支持 jwt-bearer 的授权服务器（可固定）→ 在 IdP 用 id_token 做 token exchange 得 ID-JAG → 在授权服务器用 jwt-bearer 换 access_token。
  */
@@ -365,7 +365,7 @@ async function performCrossAppAccess_2(serverUrl, config, serverName = "xaa", ab
     authorizationServerUrl: asMeta.issuer,
   };
 }
-//@ chunk-hjesqqfw.js:13845-13941 fingerprint (2.1.88 match: makeXaaFetch, 0.648)
+//@ chunk-aw801t9e.js:14175-14271 fingerprint (2.1.88 match: makeXaaFetch, 0.647)
 /**
  * 把请求 extra 中的 CALLERGONE 中止信号并入给定信号。
  */
@@ -374,6 +374,7 @@ function combineWithCallerGoneSignal(signal, authInfo) {
   return callerSignal instanceof AbortSignal ? AbortSignal.any([signal, callerSignal]) : signal;
 }
 export {
+  toSafeFileUrl,
   defaultXaaFetch_2,
   TOKEN_EXCHANGE_GRANT_2,
   ID_JAG_TOKEN_TYPE_2,
@@ -390,6 +391,5 @@ export {
   JWT_BEARER_GRANT_2,
   makeXaaFetch_2,
   performCrossAppAccess_2,
-  toSafeFileUrl,
   combineWithCallerGoneSignal,
 };

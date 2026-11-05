@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：构建 /config 界面的全部设置行（主题、编辑模式、模型、通知、自动更新等）及其读写处理；合并全局配置与设置，得到 /config 界面显示的各项当前值。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-snd3g4y1.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xmfcjh5p.js (24)
  * attribution: placement 24
  */
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
@@ -30,7 +30,7 @@ import {
   getDialogExpiry,
   getModelProposedGoalsSettingParsed,
   getSecuritySensitiveSettingWithSources,
-  getInitialSettings_2,
+  getInitialSettings,
   updateSettingsForSource,
 } from "../../utils/settings/settings.js";
 import {
@@ -114,8 +114,8 @@ import {
 } from "../../services/analytics/violinGates.js";
 import { isHomeSettingsForwardConsent, saveHomeSettingsMode } from "../../utils/teleport/homeSettingsMode.js";
 import { neverTrue } from "../../utils/permissions/sensitivePaths.js";
-import { BARE_SUBSCRIPT_NAME_BUILTINS_2 } from "../../utils/bash/ast.js";
 import {
+  fallback,
   UNATTENDED_CONSENT_LABELS,
   isUnattendedServingAccepted,
   unattendedServingForbiddenText,
@@ -182,13 +182,13 @@ import { emitCredentialChange } from "../../utils/auth/credentialEpoch.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-snd3g4y1.js:2948-3032 placement
+//@ chunk-xmfcjh5p.js:3049-3133 placement
 function themeSettingLabel(themeSetting) {
   return isCustomizationDisabled("themes") && Boolean(parseCustomThemeRef(themeSetting))
     ? `${themeSetting} (disabled in safe mode)`
     : themeSetting;
 }
-//@ chunk-snd3g4y1.js:3032-3195 placement
+//@ chunk-xmfcjh5p.js:3133-3296 placement
 /**
  * /config 中的主题设置行（托管枚举，自定义主题提示用 /theme）。
  */
@@ -201,11 +201,11 @@ var themeSettingRow = (state) => ({
   optionsHint: "For custom themes, use /theme.",
   onChange: state.setTheme,
 });
-//@ chunk-snd3g4y1.js:3195-3229 placement
+//@ chunk-xmfcjh5p.js:3296-3330 placement
 function configRowLabel(row, state) {
   return isSettingsMovedToConfig() ? state : row;
 }
-//@ chunk-snd3g4y1.js:3229-3391 placement
+//@ chunk-xmfcjh5p.js:3330-3492 placement
 /**
  * 通知渠道设置值的简短显示名（bell、iterm2+bell、none）。
  */
@@ -221,16 +221,16 @@ function notificationChannelLabel(channel) {
       return channel;
   }
 }
-//@ chunk-snd3g4y1.js:3391-3487 placement
+//@ chunk-xmfcjh5p.js:3492-3588 placement
 var ASK_QUESTION_TIMEOUT_OPTIONS; // deferred: uses POLICY_HELPER_ON_FAILURE (../../utils/settings/types.js) of its import cycle while loading; runs once the cycle is complete
 var DIALOG_EXPIRY_OPTIONS;
 var GENERIC_TIMEOUT_OPTIONS;
-deferInit("chunk-snd3g4y1.js:3391", () => {
+deferInit("chunk-xmfcjh5p.js:3492", () => {
   ASK_QUESTION_TIMEOUT_OPTIONS = ["never", "60s", "5m", "10m"];
   DIALOG_EXPIRY_OPTIONS = ["default", "60s", "5m", "10m", "never"];
   GENERIC_TIMEOUT_OPTIONS = ["default", ...POLICY_HELPER_ON_FAILURE];
 });
-//@ chunk-snd3g4y1.js:3487-3671 placement
+//@ chunk-xmfcjh5p.js:3588-3772 placement
 /**
  * 收集需要转发给远程会话的设置值（提问超时、对话框过期、跨会话入站、模型提议目标、Artifact 开关）。
  */
@@ -244,16 +244,16 @@ function remoteForwardedSettings() {
     enableArtifact: resolveArtifactEnableSetting().enabled,
   };
 }
-//@ chunk-snd3g4y1.js:3671-3723 placement
+//@ chunk-xmfcjh5p.js:3772-3825 placement
 function effectiveSettingSourceValue(key) {
   return getSecuritySensitiveSettingWithSources(key).find((source) => isSettingSourceEnabled(source.source));
 }
-//@ chunk-snd3g4y1.js:3723-3796 placement (2.1.88 match: _temp5, 1)
+//@ chunk-xmfcjh5p.js:3825-3898 placement (2.1.88 match: _temp5, 1)
 function isSettingSetOutsideUserSettings(a_0) {
   let source = effectiveSettingSourceValue(a_0)?.source;
   return source !== undefined && source !== "userSettings";
 }
-//@ chunk-snd3g4y1.js:3796-4052 placement
+//@ chunk-xmfcjh5p.js:3898-4154 placement
 function isSessionScopedSetting(id) {
   return (
     id === "model" ||
@@ -269,13 +269,13 @@ function isSessionScopedSetting(id) {
     id === "defaultView"
   );
 }
-//@ chunk-snd3g4y1.js:4052-5114 placement
+//@ chunk-xmfcjh5p.js:4154-5216 placement
 /**
  * 合并全局配置与设置，得到 /config 界面显示的各项当前值。
  */
 function getEffectiveConfigValues() {
   let globalConfig = getGlobalConfig();
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   return {
     ...globalConfig,
     theme: initialSettings.theme ?? settingOrDefault(globalConfig, "theme"),
@@ -308,11 +308,11 @@ function getEffectiveConfigValues() {
       initialSettings.agentPushNotifEnabled ?? settingOrDefault(globalConfig, "agentPushNotifEnabled"),
   };
 }
-//@ chunk-snd3g4y1.js:5114-5156 placement
+//@ chunk-xmfcjh5p.js:5216-5258 placement
 function settingOrDefault(globalConfig, key) {
   return validateConfigValue(key, globalConfig[key]) ?? DEFAULT_GLOBAL_CONFIG[key];
 }
-//@ chunk-snd3g4y1.js:5156-5270 placement
+//@ chunk-xmfcjh5p.js:5258-5372 placement
 function selectableModelOptions() {
   let fableAvailable = isFableAvailable();
   return [
@@ -326,9 +326,9 @@ function selectableModelOptions() {
     ),
   ];
 }
-//@ chunk-snd3g4y1.js:5270-5341 placement
+//@ chunk-xmfcjh5p.js:5372-5443 placement
 var COUNTRY_TO_LANGUAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-snd3g4y1.js:5270", () => {
+deferInit("chunk-xmfcjh5p.js:5372", () => {
   COUNTRY_TO_LANGUAGE = new Map([
     ["jp", "ja"],
     ["kr", "ko"],
@@ -336,7 +336,7 @@ deferInit("chunk-snd3g4y1.js:5270", () => {
     ["tw", "zh-Hant"],
   ]);
 });
-//@ chunk-snd3g4y1.js:5341-5623 placement (2.1.88 match: capitalize, 1)
+//@ chunk-xmfcjh5p.js:5443-5725 placement (2.1.88 match: capitalize, 1)
 function capitalize(str) {
   let trimmed = sanitizeTelemetryString(str).trim();
   if (!trimmed || trimmed.toLowerCase() === "default") return "default";
@@ -353,7 +353,7 @@ function capitalize(str) {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
-//@ chunk-snd3g4y1.js:5623-5751 placement
+//@ chunk-xmfcjh5p.js:5725-5853 placement
 /**
  * 空操作函数及全部为空操作的配置写入器（只读场景使用）。
  */
@@ -368,29 +368,29 @@ var NOOP_CONFIG_WRITERS = {
     toggle: noop,
   },
 };
-//@ chunk-snd3g4y1.js:5751-5829 placement
+//@ chunk-xmfcjh5p.js:5853-5931 placement
 function orgMemoryWritesRowSeen(entry) {
   uiSignals.orgMemoryWritesRowSeen ||= entry;
   return uiSignals.orgMemoryWritesRowSeen;
 }
-//@ chunk-snd3g4y1.js:5829-5903 placement
+//@ chunk-xmfcjh5p.js:5931-6005 placement
 function orgMemoryReadRowSeen(entry) {
   uiSignals.orgMemoryReadRowSeen ||= entry;
   return uiSignals.orgMemoryReadRowSeen;
 }
-//@ chunk-snd3g4y1.js:5903-5987 placement
+//@ chunk-xmfcjh5p.js:6005-6089 placement
 function remoteHomeSettingsRowSeen(entry) {
   uiSignals.remoteHomeSettingsRowSeen ||= entry;
   return uiSignals.remoteHomeSettingsRowSeen;
 }
-//@ chunk-snd3g4y1.js:5987-6011 placement
+//@ chunk-xmfcjh5p.js:6089-6113 placement
 /**
  * 恒返回 false 的占位判断（config 设置页的一个构建期开关）。
  */
 function alwaysFalse() {
   return false;
 }
-//@ chunk-snd3g4y1.js:6011-6302 placement
+//@ chunk-xmfcjh5p.js:6113-6404 placement
 /**
  * 转发设置到云会话失败的提示（版本不支持 / 未对用户开启），以及保存配置文件失败的提示。
  */
@@ -400,7 +400,7 @@ var FORWARD_SETTINGS_ERRORS = {
   flag_off: "Could not turn this on: forwarding settings to cloud sessions is not enabled for you right now",
 };
 var CONFIG_SAVE_FAILED = "Could not save this to the config file, so nothing changed.";
-//@ chunk-snd3g4y1.js:6302-31522 placement
+//@ chunk-xmfcjh5p.js:6404-31629 placement
 /**
  * 构建 /config 界面的全部设置行（主题、编辑模式、模型、通知、自动更新等）及其读写处理。
  */
@@ -899,7 +899,7 @@ function buildConfigRows(shorthandRows) {
         ]
       : []),
     ...[],
-    ...(BARE_SUBSCRIPT_NAME_BUILTINS_2(remoteToolServingOn)
+    ...(fallback(remoteToolServingOn)
       ? [
           {
             id: "unattendedServing",
@@ -2295,7 +2295,7 @@ function buildConfigRows(shorthandRows) {
     },
   };
 }
-//@ chunk-snd3g4y1.js:31522-31652 placement
+//@ chunk-xmfcjh5p.js:31629-31759 placement
 function modelSwitchPolicyLabel(switchModelsOnFlag) {
   if (switchModelsOnFlag !== undefined)
     return switchModelsOnFlag
@@ -2305,25 +2305,25 @@ function modelSwitchPolicyLabel(switchModelsOnFlag) {
     ? FALLBACK_PREFERENCE_LABELS.notAskedYet
     : FALLBACK_PREFERENCE_LABELS.switchAutomatically;
 }
-//@ chunk-snd3g4y1.js:31652-31740 placement
+//@ chunk-xmfcjh5p.js:31759-31847 placement
 function autoUpdatesSwitchMode() {
   if (hasGrowthBookOverride(TENGU_JAZZY_GOBLET))
     return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JAZZY_GOBLET, false) === true;
   if (!isGrowthBookEnabled()) return false;
   return getAllGrowthBookFeatures()[TENGU_JAZZY_GOBLET] === true;
 }
-//@ chunk-snd3g4y1.js:31740-31790 placement
+//@ chunk-xmfcjh5p.js:31847-31897 placement
 function updateChannelLabel(autoUpdatesChannel) {
   return autoUpdatesChannel === "rc" ? "slow" : (autoUpdatesChannel ?? "latest");
 }
 export {
+  notificationChannelLabel,
   getEffectiveConfigValues,
   remoteForwardedSettings,
   alwaysFalse,
   buildConfigRows,
   FORWARD_SETTINGS_ERRORS,
   CONFIG_SAVE_FAILED,
-  notificationChannelLabel,
-  NOOP_CONFIG_WRITERS,
   themeSettingRow,
+  NOOP_CONFIG_WRITERS,
 };

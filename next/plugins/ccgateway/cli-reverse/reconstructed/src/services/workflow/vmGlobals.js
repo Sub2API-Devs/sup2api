@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：沙箱 VM 全局对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (3)
  * attribution: placement 3
  */
 import "vm";
@@ -18,7 +18,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { CLONE_DEPTH_THRESHOLD } from "../../utils/structuredCloneLimits.js";
 import { sanitizeAndLogError } from "../../components/Feedback.js";
 
-//@ chunk-41w44bgm.js:22524-22583 placement
+//@ chunk-kd2wbncj.js:14789-14848 placement
 /**
  * 把 VM 全局函数包成带拒绝告警的版本。
  */
@@ -27,7 +27,7 @@ function wrapVmGlobal(context) {
   let vmRejectionWatcher = createVmRejectionWatcher(context, SWALLOWED_REJECTION_WARNING);
   return (fn) => vmRejectionWatcher(wrapper(fn));
 }
-//@ chunk-41w44bgm.js:22605-23538 placement
+//@ chunk-kd2wbncj.js:14870-15799 placement
 /**
  * 把 VM 上下文中的同步全局（log/phase/setTimeout/clearTimeout、console 各方法、budget 的 spent/remaining）用封装函数 n 包一层并以 VM 内冻结对象替换；缺少任一项时抛错。
  */
@@ -72,7 +72,7 @@ function sealSyncGlobalsInVM(context, wrapCallable) {
     vmBudget(hostBudget.total, wrapCallable(hostBudget.spent), wrapCallable(hostBudget.remaining)),
   );
 }
-//@ chunk-41w44bgm.js:23538-24305 placement
+//@ chunk-kd2wbncj.js:15799-16566 placement
 /**
  * 为工作流 VM 创建 console 对象：把参数格式化成字符串（对象经 sanitize 后 JSON 化，超长数组给提示），error/warn 加前缀，经回调输出。
  */

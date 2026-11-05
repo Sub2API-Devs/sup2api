@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：队友进程环境变量与模型参数转发
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cne5hsvz.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5j7d17eb.js (6), chunk-pgmbxgj8.js (4)
  * attribution: placement 10
  */
 import { caCertEnvVars, caCertEnvVarList } from "../settings/managedSettingsKeys.js";
@@ -31,9 +31,9 @@ import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTel
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cne5hsvz.js:14913-16602 placement
+//@ chunk-pgmbxgj8.js:2079-3846 placement
 var FORWARDED_TEAMMATE_ENV; // deferred: uses CA_CERT_ENV_VARS_2 (../settings/managedSettingsKeys.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cne5hsvz.js:14913", () => {
+deferInit("chunk-pgmbxgj8.js:2079", () => {
   FORWARDED_TEAMMATE_ENV = [
     "CLAUDE_CODE_USE_BEDROCK",
     "CLAUDE_CODE_USE_VERTEX",
@@ -72,6 +72,8 @@ deferInit("chunk-cne5hsvz.js:14913", () => {
     "CLAUDE_CODE_DISABLE_PROACTIVITY",
     "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
     "CLAUDE_CODE_DISABLE_WEB_FETCH",
+    "CLAUDE_CODE_DISABLE_MCP_TASKS",
+    "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES",
     "CLAUDE_CODE_DISABLE_ULTRATHINK",
     "DISABLE_COMPACT",
     "CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG",
@@ -99,11 +101,11 @@ deferInit("chunk-cne5hsvz.js:14913", () => {
     "DO_NOT_TRACK",
   ];
 });
-//@ chunk-cne5hsvz.js:16602-16629 placement
+//@ chunk-pgmbxgj8.js:3846-3874 placement
 function teammateEnvArgs() {
   return withHostOwnedEnv(buildTeammateEnv);
 }
-//@ chunk-cne5hsvz.js:16629-17597 placement
+//@ chunk-pgmbxgj8.js:3874-4840 placement
 function buildTeammateEnv() {
   let pairs = ["CLAUDECODE=1", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"];
   let { sessionListId } = swarmHostState().taskList;
@@ -135,17 +137,17 @@ function buildTeammateEnv() {
   pairs.push("CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS=");
   return pairs.join(" ");
 }
-//@ chunk-cne5hsvz.js:17597-17663 placement
+//@ chunk-pgmbxgj8.js:4840-4908 placement
 function envAssignment(flag, value) {
   return isAcceptableModelArg(value)
     ? `${flag} ${shellQuoteArgs([value])}`
     : `${flag}=${shellQuoteArgs([value])}`;
 }
-//@ chunk-cne5hsvz.js:17663-17692 placement
+//@ chunk-5j7d17eb.js:15242-15271 placement
 function resolveInheritedModel(agent) {
   return agent ?? getMainLoopModel();
 }
-//@ chunk-cne5hsvz.js:17692-17950 placement
+//@ chunk-5j7d17eb.js:15271-15529 placement
 function resolveTeammateModel(model, agent) {
   if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) model = undefined;
   if (model === "inherit") return resolveInheritedModel(agent);
@@ -162,7 +164,7 @@ function resolveTeammateModel(model, agent) {
   }
   return resolveInheritedModel(agent);
 }
-//@ chunk-cne5hsvz.js:17950-18009 placement
+//@ chunk-5j7d17eb.js:15529-15588 placement
 /**
  * 队友模型：显式模型可解析则用之，否则取默认子代理模型。
  */
@@ -171,7 +173,7 @@ function fallbackModelForTeammate(model, agent) {
   logTeammateModelNotAllowed(model, steppedDown !== null);
   return steppedDown ?? resolveAgentModelDisplay(agent);
 }
-//@ chunk-cne5hsvz.js:18009-18115 placement (2.1.88 match: resolveAgentModelDisplay, 1)
+//@ chunk-5j7d17eb.js:15588-15694 placement (2.1.88 match: resolveAgentModelDisplay, 1)
 /**
  * 默认队友模型：默认子代理模型不是 inherit 且有效时用之，否则回退。
  */
@@ -184,7 +186,7 @@ function resolveAgentModelDisplay(agent) {
   }
   return resolveInheritedModel(agent);
 }
-//@ chunk-cne5hsvz.js:18115-18877 placement
+//@ chunk-5j7d17eb.js:15759-16521 placement
 function teammateModelFlags(model, mainLoopModel, modelSource = "tool") {
   if (env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) model = undefined;
   let teammateModel = resolveTeammateModel(model, mainLoopModel);
@@ -227,7 +229,7 @@ function teammateModelFlags(model, mainLoopModel, modelSource = "tool") {
   else logFeatureOk("subagent_model_resolve", telemetryFields);
   return teammateModel;
 }
-//@ chunk-cne5hsvz.js:18877-19054 placement
+//@ chunk-5j7d17eb.js:16521-16698 placement
 function logTeammateModelNotAllowed(model, steppedDown) {
   logForDebugging(
     `Teammate model "${model}" is not in the availableModels allowlist; using the ${steppedDown ? "newest allowed model in its family" : "leader's model"} instead`,

@@ -1,13 +1,13 @@
 /**
  * fast-xml-parser/lib/fxp.cjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fast-xml-parser@5.5.8..5.5.9
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-edce4vxq.js:26640-73699 cjs-fingerprint
+//@ chunk-3p78mpxm.js:26640-73699 cjs-fingerprint
 var require_fxp = __commonJS(function (cjsExports, cjsModule) {
   (() => {
     var __webpack_require__ = {

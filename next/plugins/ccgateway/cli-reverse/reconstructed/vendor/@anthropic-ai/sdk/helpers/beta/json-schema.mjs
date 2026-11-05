@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/helpers/beta/json-schema.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (1)
+ * pieces: chunk-m6wtswwx.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-2cw52qnf.js:512-796 esm-fingerprint
+//@ chunk-m6wtswwx.js:512-796 esm-fingerprint
 function betaTool(options) {
   if (options.inputSchema.type !== "object")
     throw Error(

@@ -1,14 +1,14 @@
 /**
  * @anthropic-ai/sdk/internal/qs/utils.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (4)
+ * pieces: chunk-vn3g7zt8.js (4)
  * attribution: esm-fingerprint 3, esm-layout 1
  */
 import { RFC1738 } from "./formats.mjs";
 import { isArray } from "../utils/values.mjs";
 
-//@ chunk-hwmsct5x.js:19193-19407 esm-fingerprint
+//@ chunk-vn3g7zt8.js:19561-19775 esm-fingerprint
 var has = (obj, key) => {
   has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty);
   return has(obj, key);
@@ -18,7 +18,7 @@ var hex_table = (() => {
   for (let i = 0; i < 256; ++i) array.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
   return array;
 })();
-//@ chunk-hwmsct5x.js:19407-20285 esm-fingerprint
+//@ chunk-vn3g7zt8.js:19775-20653 esm-fingerprint
 var limit = 1024;
 var encode = (str, _defaultEncoder, charset, _kind, format) => {
   if (str.length === 0) return str;
@@ -73,12 +73,12 @@ var encode = (str, _defaultEncoder, charset, _kind, format) => {
   }
   return out;
 };
-//@ chunk-hwmsct5x.js:20285-20411 esm-fingerprint
+//@ chunk-vn3g7zt8.js:20653-20779 esm-fingerprint
 function isBufferLike(obj) {
   if (!obj || typeof obj !== "object") return false;
   return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
 }
-//@ chunk-hwmsct5x.js:20411-20512 esm-layout
+//@ chunk-vn3g7zt8.js:20779-20880 esm-layout
 function maybe_map(val, fn) {
   if (isArray(val)) {
     let mapped = [];

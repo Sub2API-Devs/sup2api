@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：队友结束消息（完成/失败/中断、摘要、结果）；队友私信/最后消息显示等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (12)
  * attribution: placement 12
  */
 import {
@@ -26,39 +26,39 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import {
-  init_react_production,
-  useContext,
-  createContext,
-} from "../../../vendor/react/cjs/react.production.js";
-import { artifactRoomViewNotificationHeader } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
-import { expandContextSignal } from "./expandContext.js";
-import { useSessionOrUndefined } from "../../context/session.js";
-import { detachedCallSlots } from "../../services/tools/detachedToolCalls.js";
-import { extractTag } from "../../utils/messages.js";
-import {
+  artifactRoomViewNotificationHeader,
   TOOL_USE_ID,
   SUMMARY,
   MONITOR_EVENT_QUOTED_PREFIX,
   EVENT,
   MONITOR_EVENT_PREFIX,
 } from "../../constants/xml.js";
+import {
+  useContext,
+  init_react_production,
+  createContext,
+} from "../../../vendor/react/cjs/react.production.js";
+import { expandContextSignal } from "./expandContext.js";
+import { useSessionOrUndefined } from "../../context/session.js";
+import { detachedCallSlots } from "../../services/tools/detachedToolCalls.js";
+import { extractTag } from "../../utils/messages.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { escapeControlChars, truncateWithCount } from "../../utils/stringUtils.js";
 import { unescapeHtmlEntities } from "../../utils/confusables.js";
 import { ToolResultInline } from "./AssistantToolUseMessage.js";
-import { processQueuedCommands_3 } from "../../utils/queuedCommandDisplay.js";
+import { processQueuedCommands_2 } from "../../utils/queuedCommandDisplay.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:95673-95736 placement
+//@ chunk-wjygkcr4.js:97482-97545 placement
 function truncateFrameField(value) {
   let capped = capFrameFieldForDisplay(value);
   return capped === value.trim() ? capped : `${capped}\u2026`;
 }
-//@ chunk-ah34pb7m.js:95736-97547 placement
+//@ chunk-wjygkcr4.js:97545-99354 placement
 /**
  * 队友结束消息（完成/失败/中断、摘要、结果）。
  */
@@ -224,21 +224,11 @@ function TeammateResultMessage(props) {
   } else content = $[38];
   return content;
 }
-//@ chunk-ah34pb7m.js:97547-97551 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:97547", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:97551-97593 placement
+//@ chunk-wjygkcr4.js:99358-99400 placement
 function isArtifactRoomViewNotification(text) {
   return text.startsWith(artifactRoomViewNotificationHeader());
 }
-//@ chunk-ah34pb7m.js:97593-97597 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:97593", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:97597-98468 placement
+//@ chunk-wjygkcr4.js:99404-100275 placement
 /**
  * 队友私信/最后消息显示。
  */
@@ -319,37 +309,37 @@ function TeammateDmMessage(props) {
   } else toolResultInlineElement = $[14];
   return toolResultInlineElement;
 }
-//@ chunk-ah34pb7m.js:98468-98472 placement
+//@ chunk-wjygkcr4.js:100275-100279 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:98468", () => {
+deferInit("chunk-wjygkcr4.js:100275", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:98472-98476 placement
+//@ chunk-wjygkcr4.js:100279-100283 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:98472", () => {
+deferInit("chunk-wjygkcr4.js:100279", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:98476-98504 placement
+//@ chunk-wjygkcr4.js:100283-100311 placement
 /**
  * 导出值：同一声明里的多个绑定：monitorEventCache（monitor 事件解析缓存）；monitorEventCacheStore（monitor 事件缓存的 hook 槽）。
  */
 var monitorEventCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var monitorEventCacheStore;
-deferInit("chunk-ah34pb7m.js:98476", () => {
+deferInit("chunk-wjygkcr4.js:100283", () => {
   monitorEventCache = new Map();
   monitorEventCacheStore = createContext(monitorEventCache);
 });
-//@ chunk-ah34pb7m.js:98504-98541 placement (2.1.88 match: SEP_WIDTH, 1)
+//@ chunk-wjygkcr4.js:100311-100348 placement (2.1.88 match: SEP_WIDTH, 1)
 var MONITOR_FIELD_MAX_LENGTH = 500;
 var MONITOR_BODY_MAX_LENGTH = 4000;
 var MONITOR_DESCRIPTION_MIN_WIDTH = 12;
 var MONITOR_HEADLINE_SEPARATOR = " \xB7 ";
-//@ chunk-ah34pb7m.js:98541-98978 placement
+//@ chunk-wjygkcr4.js:100348-100785 placement
 /**
  * 从文本中解析队友结果标签块。
  */
 function parseTeammateResultBlock(text, origin) {
-  let processed = processQueuedCommands_3(text, origin);
+  let processed = processQueuedCommands_2(text, origin);
   let summaryTag = processed === null ? null : extractTag(processed, SUMMARY);
   if (processed === null || summaryTag === null || summaryTag.includes("<")) return null;
   let summaryText = unescapeHtmlEntities(summaryTag);
@@ -378,7 +368,7 @@ function parseTeammateResultBlock(text, origin) {
     body: stripFrameControlChars(truncateWithCount(trimmed, MONITOR_BODY_MAX_LENGTH)),
   };
 }
-//@ chunk-ah34pb7m.js:98978-99135 placement
+//@ chunk-wjygkcr4.js:100785-100942 placement
 /**
  * 按可用宽度截断 monitor 事件的标题与描述；剩余宽度不够时不显示描述。
  */
@@ -394,6 +384,16 @@ function fitMonitorEventText({ headline, description }, width) {
         : null,
   };
 }
+//@ chunk-wjygkcr4.js:109061-109065 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:109061", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:109065-109069 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:109065", () => {
+  init_react_production();
+});
 export {
   monitorEventCache,
   monitorEventCacheStore,

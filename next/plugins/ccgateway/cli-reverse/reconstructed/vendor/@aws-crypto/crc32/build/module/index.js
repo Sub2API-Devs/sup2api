@@ -1,14 +1,14 @@
 /**
  * @aws-crypto/crc32/build/module/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/crc32@5.2.0
- * pieces: chunk-3cddmtk7.js (2)
+ * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-fingerprint 2
  */
 import { __values } from "../../../../tslib/tslib.es6.mjs";
 import { fromArrayBuffer } from "../../../util/build/module/numToUint8.js";
 
-//@ chunk-3cddmtk7.js:1424-1835 esm-fingerprint
+//@ chunk-ayc8mk37.js:1424-1835 esm-fingerprint
 var Crc32 = (function () {
   function Crc32() {
     this.checksum = 4294967295;
@@ -39,7 +39,7 @@ var Crc32 = (function () {
   };
   return Crc32;
 })();
-//@ chunk-3cddmtk7.js:1835-4598 esm-fingerprint
+//@ chunk-ayc8mk37.js:1835-4598 esm-fingerprint
 var a_lookUpTable = [
   0, 1996959894, 3993919788, 2567524794, 124634137, 1886057615, 3915621685, 2657392035, 249268274, 2044508324,
   3772115230, 2547177864, 162941995, 2125561021, 3887607047, 2428444049, 498536548, 1789927666, 4089016648,

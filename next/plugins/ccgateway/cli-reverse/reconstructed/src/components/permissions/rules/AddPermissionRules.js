@@ -3,9 +3,9 @@
  *
  * 添加权限规则：选择保存位置（本地项目/项目/用户设置）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/AddPermissionRules.tsx
- * pieces: chunk-p2qwpk2k.js (3)
+ * pieces: chunk-h5wy8vq5.js (3)
  * attribution: fingerprint 3
  */
 import {
@@ -13,7 +13,7 @@ import {
   jsxProd_default,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../../ink/components/Text.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { PermissionRuleDescription } from "./PermissionRuleDescription.js";
 import { getRelativeSettingsFilePathForSource } from "../../../utils/settings/settings.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -31,7 +31,7 @@ import { plural } from "../../../utils/stringUtils.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
-//@ chunk-p2qwpk2k.js:22240-22363 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-h5wy8vq5.js:23359-23482 fingerprint (2.1.88 match: _temp, 1)
 function renderRuleListItem(ruleValue) {
   return jsxProd_default_2(
     Box,
@@ -40,17 +40,17 @@ function renderRuleListItem(ruleValue) {
       children: [
         jsxProd_default(Text, {
           bold: true,
-          children: formatPermissionRule(ruleValue),
+          children: permissionRuleValueFromString(ruleValue),
         }),
         jsxProd_default(PermissionRuleDescription, {
           ruleValue,
         }),
       ],
     },
-    formatPermissionRule(ruleValue),
+    permissionRuleValueFromString(ruleValue),
   );
 }
-//@ chunk-p2qwpk2k.js:22363-22727 fingerprint (2.1.88 match: optionForPermissionSaveDestination, 1)
+//@ chunk-h5wy8vq5.js:23482-23846 fingerprint (2.1.88 match: optionForPermissionSaveDestination, 1)
 function optionForPermissionSaveDestination(saveDestination) {
   switch (saveDestination) {
     case "localSettings":
@@ -73,7 +73,7 @@ function optionForPermissionSaveDestination(saveDestination) {
       };
   }
 }
-//@ chunk-p2qwpk2k.js:22727-24428 fingerprint (2.1.88 match: AddPermissionRules, 0.948)
+//@ chunk-h5wy8vq5.js:23846-25547 fingerprint (2.1.88 match: AddPermissionRules, 0.948)
 function AddPermissionRules(props) {
   let $ = useMemoCache(27);
   let { onAddRules, onCancel, ruleValues, ruleBehavior, initialContext, setToolPermissionContext } = props;

@@ -3,9 +3,9 @@
  *
  * 记录 GitHub 仓库 → 本地检出路径映射（全局配置），用于 teleport 等找到本地仓库
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/githubRepoPathMapping.ts
- * pieces: chunk-md1x7k3r.js (5)
+ * pieces: chunk-rac70nh6.js (5)
  * attribution: fingerprint 3, file-local 2
  */
 import { realpath } from "fs/promises";
@@ -18,7 +18,7 @@ import { getGlobalConfig, saveGlobalConfig } from "./config.js";
 import { pathExists } from "./fsSafety/atomicWriteStaging.js";
 import { getRemoteUrlForDir } from "./git/gitFilesystem.js";
 
-//@ chunk-md1x7k3r.js:493-997 fingerprint (2.1.88 match: updateGithubRepoPathMapping, 0.935)
+//@ chunk-rac70nh6.js:493-997 fingerprint (2.1.88 match: updateGithubRepoPathMapping, 0.935)
 async function updateGithubRepoPathMapping(storageV5) {
   try {
     let repo = await detectCurrentRepository();
@@ -57,18 +57,18 @@ async function updateGithubRepoPathMapping(storageV5) {
     logForDebugging(`Error updating repo path mapping: ${error}`);
   }
 }
-//@ chunk-md1x7k3r.js:997-1076 fingerprint (2.1.88 match: getKnownPathsForRepo, 1)
+//@ chunk-rac70nh6.js:997-1076 fingerprint (2.1.88 match: getKnownPathsForRepo, 1)
 function getKnownPathsForRepo(repo) {
   let config = getGlobalConfig();
   let repoKey = repo.toLowerCase();
   return config.githubRepoPaths?.[repoKey] ?? [];
 }
-//@ chunk-md1x7k3r.js:1076-1162 file-local
+//@ chunk-rac70nh6.js:1076-1162 file-local
 async function filterExistingPaths(paths) {
   let results = await Promise.all(paths.map(pathExists));
   return paths.filter((path, i) => results[i]);
 }
-//@ chunk-md1x7k3r.js:1162-1309 file-local
+//@ chunk-rac70nh6.js:1162-1309 file-local
 async function validateRepoAtPath(path, expectedRepo) {
   try {
     let remoteUrl = await getRemoteUrlForDir(path);
@@ -80,7 +80,7 @@ async function validateRepoAtPath(path, expectedRepo) {
     return false;
   }
 }
-//@ chunk-md1x7k3r.js:1309-1598 fingerprint (2.1.88 match: removePathFromRepo, 1)
+//@ chunk-rac70nh6.js:1309-1598 fingerprint (2.1.88 match: removePathFromRepo, 1)
 function removePathFromRepo(repo, pathToRemove, storageV5) {
   let config = getGlobalConfig();
   let repoKey = repo.toLowerCase();
@@ -102,9 +102,9 @@ function removePathFromRepo(repo, pathToRemove, storageV5) {
   logForDebugging(`Removed ${pathToRemove} from tracked paths for repo ${repoKey}`);
 }
 export {
+  updateGithubRepoPathMapping,
   getKnownPathsForRepo,
   filterExistingPaths,
-  updateGithubRepoPathMapping,
   validateRepoAtPath,
   removePathFromRepo,
 };

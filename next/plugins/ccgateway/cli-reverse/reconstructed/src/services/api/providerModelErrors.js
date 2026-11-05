@@ -3,16 +3,16 @@
  *
  * Bedrock/Vertex/Mantle 错误分类（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (4)
  * attribution: placement 4
  */
 import { isAwsCredentialsProviderError, isAwsCredentialError } from "../../utils/aws.js";
 import { isClientVersionRejected } from "./errors.js";
 import { isAzureDeploymentNotFound } from "./withRetry.js";
 
-//@ chunk-s61vbvea.js:515236-515803 placement
+//@ chunk-7jxyna5q.js:432339-432906 placement
 /**
  * Bedrock 鉴权/模型访问错误的名称与消息特征表，用于把 403/400 归类为 refused 或 denied。
  */
@@ -32,7 +32,7 @@ var ON_DEMAND_THROUGHPUT_TEXT = "on-demand throughput";
 var INVOKE_MODEL_DENIED_RE = /is not authorized to perform: bedrock:InvokeModel/i;
 var NOT_SERVABLE_IN_REGION_TEXT = "is not servable in region";
 var VPCSC_RESTRICTED_TEXT = "model does not serve requests restricted by vpcsc";
-//@ chunk-s61vbvea.js:515803-516024 placement
+//@ chunk-7jxyna5q.js:432906-433127 placement
 function readProviderErrorFacts(error) {
   let err = error;
   let status = typeof err?.status === "number" ? err.status : undefined;
@@ -49,7 +49,7 @@ function readProviderErrorFacts(error) {
     errorType: errorText,
   };
 }
-//@ chunk-s61vbvea.js:516024-516193 placement
+//@ chunk-7jxyna5q.js:433127-433296 placement (2.1.88 match: injectBridgeFault, 0.742)
 function isBedrockAuthError(error, providerErrorFacts) {
   let name = String(error?.name ?? "");
   return (
@@ -63,7 +63,7 @@ function isBedrockAuthError(error, providerErrorFacts) {
     )
   );
 }
-//@ chunk-s61vbvea.js:516193-516936 placement
+//@ chunk-7jxyna5q.js:433296-434039 placement
 /**
  * Bedrock/Mantle 凭据、令牌过期、时钟偏差等错误的分类与提示
  */

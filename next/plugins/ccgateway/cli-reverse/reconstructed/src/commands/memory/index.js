@@ -3,12 +3,12 @@
  *
  * /memory 命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/memory/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1695654-1695801 fingerprint (2.1.88 match: memory, 0.496)
+//@ chunk-5xgkngpb.js:1771024-1771171 fingerprint (2.1.88 match: memory, 0.497)
 /**
  * /memory 命令对象（local-jsx）；描述：Edit CLAUDE.md files and memory settings；实现 chunk-c55mbvfz.js 的 Qi。
  */
@@ -19,5 +19,5 @@ var memoryCommandDefinition = {
   thinClientDispatch: "control-request",
   ...false,
 };
-var memoryCommand = memoryCommandDefinition;
-export { memoryCommand };
+var memoryCommandAlias = memoryCommandDefinition;
+export { memoryCommandAlias };

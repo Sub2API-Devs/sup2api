@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/chrome 对话框的响应（扩展检测与权限页）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vbhf914m.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-754s1fbp.js (2)
  * attribution: placement 2
  */
 import { HTTPS_CLAUDE_AI_CHROME } from "./chrome.js";
@@ -21,10 +21,10 @@ import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vbhf914m.js:382-472 placement
+//@ chunk-754s1fbp.js:382-472 placement
 var CHROME_PERMISSIONS_URL; // deferred: uses HTTPS_CLAUDE_AI_CHROME (./chrome.js) of its import cycle while loading; runs once the cycle is complete
 var CHROME_CONSENT_URLS;
-deferInit("chunk-vbhf914m.js:382", () => {
+deferInit("chunk-754s1fbp.js:382", () => {
   CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
   CHROME_CONSENT_URLS = {
     install: HTTPS_CLAUDE_AI_CHROME,
@@ -32,7 +32,7 @@ deferInit("chunk-vbhf914m.js:382", () => {
     permissions: CHROME_PERMISSIONS_URL,
   };
 });
-//@ chunk-vbhf914m.js:472-993 placement
+//@ chunk-754s1fbp.js:472-993 placement
 /**
  * /chrome 对话框的响应（扩展检测与权限页）。
  */

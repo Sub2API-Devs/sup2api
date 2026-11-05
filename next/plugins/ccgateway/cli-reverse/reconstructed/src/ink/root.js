@@ -3,9 +3,9 @@
  *
  * Ink 实例表与 render/createRoot；退出时排空 stdin、关闭钩子；部分声明误归（sandbox-runtime 路径）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/root.ts
- * pieces: chunk-x6v6jz2y.js (6)
+ * pieces: chunk-emhzq435.js (6)
  * attribution: sole-consumer 2, affinity 1, fingerprint 2, layout 1
  */
 import { Stream } from "stream";
@@ -14,19 +14,19 @@ import { cleanupTerminalModes_2 } from "../utils/gracefulShutdown.js";
 import { Ink } from "./ink.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-x6v6jz2y.js:3042-3095 sole-consumer
+//@ chunk-emhzq435.js:2980-3033 sole-consumer
 /**
  * 优雅退出时调用当前 stdout 对应 Ink 实例的 drainStdin()。
  */
 function drainStdinForShutdown() {
   getSecondRootError().get(process.stdout)?.drainStdin();
 }
-//@ chunk-x6v6jz2y.js:3095-3142 affinity
+//@ chunk-emhzq435.js:3033-3080 affinity
 var inkShutdownHooks = {
   cleanupTerminalModes: cleanupTerminalModes_2,
   drainStdin: drainStdinForShutdown,
 };
-//@ chunk-x6v6jz2y.js:3142-3666 fingerprint (2.1.88 match: renderSync, 0.69)
+//@ chunk-emhzq435.js:3080-3604 fingerprint (2.1.88 match: renderSync, 0.69)
 /**
  * renderSync：按 stdout 取或建 Ink 实例并渲染，返回 {rerender, unmount, waitUntilExit, cleanup}。renderAsync：等前一个独立渲染完成后再渲染，并记录首帧距进程启动的毫秒数。
  */
@@ -60,7 +60,7 @@ var renderAsync = async (node, options) => {
   return instance;
 };
 var wrappedRender = renderAsync;
-//@ chunk-x6v6jz2y.js:3666-3901 layout
+//@ chunk-emhzq435.js:3604-3839 layout
 /**
  * 异步创建 React 根（等待挂起的独立渲染），返回 {render, unmount, waitUntilExit}。
  */
@@ -75,7 +75,7 @@ async function createRootAsync(options = {}) {
     waitUntilExit: () => root.waitUntilExit(),
   };
 }
-//@ chunk-x6v6jz2y.js:3901-4305 fingerprint (2.1.88 match: createRoot, 0.461)
+//@ chunk-emhzq435.js:3839-4243 fingerprint (2.1.88 match: createRoot, 0.46)
 /**
  * 创建 Ink 实例并登记到实例表：kind=react 登记为该 stdout 的主实例，否则登记为命令式 Tree 根；首次调用时注册优雅退出钩子。
  */
@@ -110,7 +110,7 @@ function createRoot_2(
   else instances.treeRoots.set(stdout, instance);
   return instance;
 }
-//@ chunk-x6v6jz2y.js:4305-4461 sole-consumer
+//@ chunk-emhzq435.js:4243-4399 sole-consumer
 var getOptions = (options = {}) => {
   if (options instanceof Stream)
     return {

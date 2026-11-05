@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：全局配置（~/.claude.json）存储：缓存、mtime、读取许可、经存储后端重载、写入；在缓存记录中找到与入口、模型、组织匹配且未过期的一条等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (15)
  * attribution: placement 15
  */
 import {
@@ -22,7 +22,7 @@ import { onProcessRootHost } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:64835-64934 placement (2.1.88 match: pluginDataDirPath, 1)
+//@ chunk-exfmq47h.js:65313-65412 placement (2.1.88 match: pluginDataDirPath, 1)
 /**
  * 是否为 {data, at:number} 形状的值（名字配错，见 lead 建议）。
  */
@@ -35,7 +35,7 @@ function isTimestampedValue(pluginId) {
     typeof pluginId.at === "number"
   );
 }
-//@ chunk-aepeg2w5.js:64934-65148 placement
+//@ chunk-exfmq47h.js:65412-65626 placement
 /**
  * 在带时间戳的记录集中写入一项，并保留同前缀的最近若干项（按时间倒序，总数有上限）。
  */
@@ -52,14 +52,14 @@ function withTimestampedEntry(clientDataCacheSlots, cacheKey, entry) {
       : [];
   return Object.fromEntries([[cacheKey, entry], ...keptEntries]);
 }
-//@ chunk-aepeg2w5.js:65148-65192 placement
+//@ chunk-exfmq47h.js:65626-65670 placement
 /**
  * 读取带时间戳记录里的 data（不是时间戳值时返回 null）。
  */
 function readTimestampedData(clientDataCacheSlots, cacheKey) {
   return readTimestampedEntry(clientDataCacheSlots, cacheKey)?.data ?? null;
 }
-//@ chunk-aepeg2w5.js:65192-65304 placement
+//@ chunk-exfmq47h.js:65670-65782 placement
 /**
  * 读取带时间戳记录集中的一项数据（不是时间戳值时返回 null）。
  */
@@ -72,7 +72,7 @@ function readTimestampedEntry(clientDataCacheSlots, cacheKey) {
       }
     : null;
 }
-//@ chunk-aepeg2w5.js:65304-65626 placement
+//@ chunk-exfmq47h.js:65782-66104 placement
 /**
  * 在缓存记录中找到与入口、模型、组织匹配且未过期的一条。
  */
@@ -99,7 +99,7 @@ function findMatchingUsageSnapshot(clientDataCacheSlots, query) {
         data: bestMatch.data ?? null,
       };
 }
-//@ chunk-aepeg2w5.js:65626-71013 placement
+//@ chunk-exfmq47h.js:66104-72102 placement
 /**
  * 全局配置（~/.claude.json）存储：缓存、mtime、读取许可、经存储后端重载、写入。
  */
@@ -108,6 +108,13 @@ class GlobalConfigStore {
     config: null,
     mtime: 0,
   };
+  configCreateRefused = false;
+  droppedSaveNoticeShown = false;
+  createRefusedThisProcess = false;
+  doubtsNoFile = false;
+  queuedReadFoundNoFile = false;
+  lookedAgainForMissingFile = false;
+  fallbackReadFoundNoFile = false;
   lastReadFileStats = null;
   installed = createSignal();
   cacheHits = 0;
@@ -127,12 +134,15 @@ class GlobalConfigStore {
   freshnessSubscription = undefined;
   fileWatchFallback = true;
   unhandedWritesInMemory = false;
+  startupParseErrorBackupPath = undefined;
+  unparseableFileLeftAlone = false;
   loadedVersion = undefined;
   landedWriteCount = 0;
   freshnessResubscribed = false;
   insideParseErrorTelemetry = false;
   parseErrorLogged = false;
   lastGetConfigOutcome = "parsed";
+  fullDiskSaveCode = undefined;
   trustAccepted = false;
   localSettingsGitTracked = undefined;
   projectPathForConfig = null;
@@ -258,6 +268,14 @@ class GlobalConfigStore {
     this.reloadThroughStoragePromise = null;
     this.fileWatchFallback = true;
     this.unhandedWritesInMemory = false;
+    this.startupParseErrorBackupPath = undefined;
+    this.unparseableFileLeftAlone = false;
+    this.lookedAgainForMissingFile = false;
+  }
+  claimSecondLookForMissingFile() {
+    let lookedAgain = !this.lookedAgainForMissingFile;
+    this.lookedAgainForMissingFile = true;
+    return lookedAgain;
   }
   beginPendingWrite() {
     this.pendingWrites++;
@@ -295,6 +313,12 @@ class GlobalConfigStore {
   }
   setUnhandedWritesInMemory(unhandedWritesInMemory) {
     this.unhandedWritesInMemory = unhandedWritesInMemory;
+  }
+  setStartupParseErrorBackupPath(startupParseErrorBackupPath) {
+    this.startupParseErrorBackupPath = startupParseErrorBackupPath;
+  }
+  leaveUnparseableFileAlone() {
+    this.unparseableFileLeftAlone = true;
   }
   setLoadedVersion(loadedVersion) {
     this.loadedVersion = loadedVersion;
@@ -391,34 +415,34 @@ class GlobalConfigStore {
     for (let field of fields) delete this.testProjectConfig[field];
   }
 }
-//@ chunk-aepeg2w5.js:71013-71060 placement
+//@ chunk-exfmq47h.js:72148-72195 placement
 var textDecoder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:71013", () => {
+deferInit("chunk-exfmq47h.js:72148", () => {
   textDecoder = new TextDecoder("utf-8", {
     ignoreBOM: true,
   });
 });
-//@ chunk-aepeg2w5.js:71060-71115 placement
+//@ chunk-exfmq47h.js:72195-72250 placement
 /**
  * 与自动上传相关的开关键（remoteControlAtStartup、autoUploadSessions）。
  */
 var AUTO_UPLOAD_FLAG_KEYS = ["remoteControlAtStartup", "autoUploadSessions"];
-//@ chunk-aepeg2w5.js:71115-71153 placement
+//@ chunk-exfmq47h.js:72250-72288 placement
 /**
  * 判断键是否为自动上传相关开关。
  */
 function isAutoUploadFlagKey(key) {
   return AUTO_UPLOAD_FLAG_KEYS.includes(key);
 }
-//@ chunk-aepeg2w5.js:71153-71179 placement
+//@ chunk-exfmq47h.js:72288-72314 placement
 /**
  * 已记录过“忽略无效配置值”的键集合。
  */
 var ignoredConfigKeysLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:71153", () => {
+deferInit("chunk-exfmq47h.js:72288", () => {
   ignoredConfigKeysLogged = new HostScoped(() => new Set());
 });
-//@ chunk-aepeg2w5.js:71179-71258 placement
+//@ chunk-exfmq47h.js:72314-72393 placement
 /**
  * 校验全局配置字段值，无效时记录忽略。
  */
@@ -428,7 +452,7 @@ function validateConfigValue(key, value) {
   noteIgnoredGlobalConfigValue(key, configField !== undefined);
   return configField;
 }
-//@ chunk-aepeg2w5.js:71258-71341 placement
+//@ chunk-exfmq47h.js:72393-72476 placement
 /**
  * 判断配置值对该字段是否有效（无效时记录一次）。
  */
@@ -438,7 +462,7 @@ function isValidGlobalConfigValue(key, value) {
   noteIgnoredGlobalConfigValue(key, configField !== undefined);
   return configField ?? false;
 }
-//@ chunk-aepeg2w5.js:71341-71462 placement
+//@ chunk-exfmq47h.js:72476-72597 placement
 /**
  * 判断 ~/.claude.json 中某个设置的值对该设置是否无效。
  */
@@ -447,7 +471,7 @@ function isInvalidGlobalConfigValue(key, value) {
   let parseResult = getSettingsFieldSchema(key).safeParse(value);
   return !parseResult.success || (parseResult.data === undefined && typeof value !== "string");
 }
-//@ chunk-aepeg2w5.js:71462-71543 placement
+//@ chunk-exfmq47h.js:72597-72678 placement
 /**
  * 用对应的设置字段 schema 解析配置值。
  */
@@ -455,7 +479,7 @@ function parseConfigField(key, value) {
   let parseResult = getSettingsFieldSchema(key).safeParse(value);
   return parseResult.success ? (parseResult.data ?? undefined) : undefined;
 }
-//@ chunk-aepeg2w5.js:71543-71810 placement
+//@ chunk-exfmq47h.js:72678-72945 placement
 function noteIgnoredGlobalConfigValue(key, value) {
   let seenKeys = onProcessRootHost(ignoredConfigKeysLogged);
   if (value) {
@@ -470,15 +494,15 @@ function noteIgnoredGlobalConfigValue(key, value) {
   );
 }
 export {
-  GlobalConfigStore,
-  isValidGlobalConfigValue,
-  textDecoder,
-  isTimestampedValue,
-  readTimestampedData,
-  readTimestampedEntry,
-  findMatchingUsageSnapshot,
-  withTimestampedEntry,
   validateConfigValue,
   isInvalidGlobalConfigValue,
   isAutoUploadFlagKey,
+  isTimestampedValue,
+  withTimestampedEntry,
+  isValidGlobalConfigValue,
+  GlobalConfigStore,
+  textDecoder,
+  readTimestampedData,
+  readTimestampedEntry,
+  findMatchingUsageSnapshot,
 };

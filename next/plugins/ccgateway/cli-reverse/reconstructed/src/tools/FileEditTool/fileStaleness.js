@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：文件读后被改动的检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { refuseSymlinkWrite } from "../../utils/fsSafety/pathRevalidation.js";
@@ -14,12 +14,12 @@ import { matchesContentDigest, stripBom as stripBom_2 } from "../../utils/remote
 import { SymlinkWriteRefusedError } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { getErrnoCode } from "../../utils/errors.js";
 
-//@ chunk-e6aww6q8.js:1400523-1400540 placement
+//@ chunk-5xgkngpb.js:1399994-1400011 placement
 /**
  * 比较磁盘内容时读取文件的大小上限（64 MiB）。
  */
 var MAX_STALENESS_COMPARE_BYTES = 67108864;
-//@ chunk-e6aww6q8.js:1400540-1400928 placement
+//@ chunk-5xgkngpb.js:1400011-1400399 placement
 /**
  * 当前磁盘内容与读取基线比较（match/mismatch/absent）。
  */

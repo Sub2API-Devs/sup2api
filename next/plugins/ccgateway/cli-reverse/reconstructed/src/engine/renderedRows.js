@@ -3,12 +3,11 @@
  *
  * 2.1.316 新增：查询引擎的渲染行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1nk4j4sn.js (12), chunk-3xb70ww4.js (1)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8fb5jme0.js (12), chunk-aka0gnqq.js (2)
+ * attribution: placement 13, affinity 1
  */
-import { KEYLESS_BLOCK_TYPES } from "../services/api/claude.js";
 import { __export } from "../../runtime/bun-runtime.js";
 import {
   TYPED_BLOCK_SCHEMA,
@@ -40,7 +39,7 @@ import {
   COMMAND_ROW_TAGS,
   DELIVERY_ATTACHMENT_TYPES,
   appendInputOf,
-  classifyMessageAuthor,
+  appendOriginOf,
   appendedRow,
   callAppended,
   doorOf,
@@ -48,17 +47,25 @@ import {
   lastTextOf,
   pluginAppended,
   rowsAppendedTo,
-  countToolCallsSince,
+  toolNameOf,
   userDoorOf,
 } from "./rowDoors.js";
 import { SESSION_APPEND_EVENT } from "../plugins/functionHooks/sessionHooks.js";
-import { getToolUseIdOfMessage } from "../tools/utils.js";
+import { answeredToolUseId } from "../tools/utils.js";
 import { appendCoreOf } from "./sessionAppend.js";
 import { matcherDoors } from "../plugins/functionHooks/sites/uiSites.js";
 import { safeDeepEqual } from "../plugins/functionHooks/apiDispatch.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3xb70ww4.js:2932-3238 placement
+//@ chunk-aka0gnqq.js:2887-2932 affinity
+/**
+ * text/image/document：contentBlockStableKeys 不为这几类生成键。旧版名 isMedia 为错配。
+ */
+var KEYLESS_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aka0gnqq.js:2887", () => {
+  KEYLESS_BLOCK_TYPES = new Set(["text", "image", "document"]);
+});
+//@ chunk-aka0gnqq.js:2932-3238 placement
 /**
  * 为内容块生成稳定键：tool_use:<id>、tool_result:<tool_use_id>，其他块 type#序号；被忽略类型返回 undefined。
  */
@@ -74,14 +81,14 @@ function contentBlockStableKeys(blocks) {
     return `${block.type}#${count}`;
   });
 }
-//@ chunk-1nk4j4sn.js:12078-12087 placement
+//@ chunk-8fb5jme0.js:13226-13235 placement
 /**
  * 导出值：renderedRowsCache（空对象缓存）。
  */
 var renderedRowsCache = {};
-//@ chunk-1nk4j4sn.js:12087-13277 placement
+//@ chunk-8fb5jme0.js:13235-14425 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1nk4j4sn.js:12087", () => {
+deferInit("chunk-8fb5jme0.js:13235", () => {
   __export(renderedRowsCache, {
     BLOCK_SCHEMA: () => TYPED_BLOCK_SCHEMA,
     BOUNDARY_SUFFIX: () => BOUNDARY_SUFFIX,
@@ -96,12 +103,12 @@ deferInit("chunk-1nk4j4sn.js:12087", () => {
     anchorKeysOf: () => contentBlockStableKeys,
     answeredBlockOf: () => answeredBlockOf,
     answeredPickOf: () => toolResultBlock,
-    answeredToolUseId: () => getToolUseIdOfMessage,
+    answeredToolUseId: () => answeredToolUseId,
     appendContentOf: () => messageToTextBlocks,
     appendCoreOf: () => appendCoreOf,
     appendInputOf: () => appendInputOf,
     appendMessageOf: () => summarizeMessageForExport,
-    appendOriginOf: () => classifyMessageAuthor,
+    appendOriginOf: () => appendOriginOf,
     appendedRow: () => appendedRow,
     appendedTo: () => refuseSessionAppend,
     assistantContentOf: () => assistantContentOf,
@@ -111,7 +118,7 @@ deferInit("chunk-1nk4j4sn.js:12087", () => {
     default: () => renderedRowsCache,
     doorOf: () => doorOf,
     doorsHeldTo: () => matcherDoors,
-    filledRow: () => mergeMessageInPlace,
+    filledRow: () => filledRow,
     isAppendable: () => isAppendable,
     isRewritableAttachment: () => isTextOnlyAppend,
     lastTextOf: () => lastTextOf,
@@ -130,7 +137,7 @@ deferInit("chunk-1nk4j4sn.js:12087", () => {
     rowWithContent: () => rowWithContent,
     rowsAppendedTo: () => rowsAppendedTo,
     systemTextOf: () => systemMessageText,
-    toolNameOf: () => countToolCallsSince,
+    toolNameOf: () => toolNameOf,
     toolResultContentOf: () => reconcileAppendContent,
     toolResultPickOf: () => parseAppendedToolResult,
     unboundReasonOf: () => describeAppendRefusal,
@@ -138,7 +145,7 @@ deferInit("chunk-1nk4j4sn.js:12087", () => {
     userDoorOf: () => userDoorOf,
   });
 });
-//@ chunk-1nk4j4sn.js:13277-13375 placement
+//@ chunk-8fb5jme0.js:14425-14523 placement
 var renderedRowOf = (row, rendered) => ({
   ...row,
   rendered,
@@ -146,7 +153,7 @@ var renderedRowOf = (row, rendered) => ({
     renderedInHumanTurn: rendered,
   }),
 });
-//@ chunk-1nk4j4sn.js:13375-13516 placement
+//@ chunk-8fb5jme0.js:14523-14664 placement
 var assistantContentOf = (content, parts) =>
   parts.flatMap((part) => {
     if (part.kind === "text")
@@ -160,7 +167,7 @@ var assistantContentOf = (content, parts) =>
     let block = content[part.index];
     return block === undefined ? [] : [block];
   });
-//@ chunk-1nk4j4sn.js:13516-13622 placement
+//@ chunk-8fb5jme0.js:14664-14770 placement
 function renderingOf(texts, isSingleString) {
   let [first] = texts;
   return {
@@ -173,7 +180,7 @@ function renderingOf(texts, isSingleString) {
           })),
   };
 }
-//@ chunk-1nk4j4sn.js:13622-13840 placement
+//@ chunk-8fb5jme0.js:14770-14988 placement
 function renderingWithTexts(contents, texts) {
   let mapped = contents.map((content) => contentTextParts(content).length);
   if (texts.length !== mapped.reduce((acc, count) => acc + count, 0))
@@ -186,7 +193,7 @@ function renderingWithTexts(contents, texts) {
     return renderingOf(texts_2, typeof content_.content === "string");
   });
 }
-//@ chunk-1nk4j4sn.js:13840-14052 placement
+//@ chunk-8fb5jme0.js:14988-15200 placement
 function answeredBlockOf(block, part) {
   if (part.kind !== "tool-result" || block.type !== "tool_result") return block;
   let { is_error: isError, ...withoutError } = block;
@@ -200,9 +207,9 @@ function answeredBlockOf(block, part) {
       }),
   };
 }
-//@ chunk-1nk4j4sn.js:14052-14091 placement
+//@ chunk-8fb5jme0.js:15200-15239 placement
 var pickTextOf = (part, fallback) => (part?.kind === "text" ? part.text : fallback);
-//@ chunk-1nk4j4sn.js:14091-14350 placement
+//@ chunk-8fb5jme0.js:15239-15498 placement
 function userContentOf(fallback, parts) {
   let [first] = parts;
   let isSingleText = parts.length === 1 && first?.kind !== "tool-result";
@@ -225,7 +232,7 @@ function userContentOf(fallback, parts) {
         return block === undefined ? [] : [answeredBlockOf(block, part)];
       });
 }
-//@ chunk-1nk4j4sn.js:14350-14430 placement
+//@ chunk-8fb5jme0.js:15498-15578 placement
 var withRewrittenContent = (message, content) =>
   safeDeepEqual(content, message.message.content)
     ? message
@@ -236,7 +243,7 @@ var withRewrittenContent = (message, content) =>
           content,
         },
       };
-//@ chunk-1nk4j4sn.js:14430-14869 placement
+//@ chunk-8fb5jme0.js:15578-16017 placement
 function rowWithContent(row, message) {
   let appended = normalizeAppendedToolResult(messageToTextBlocks(row), parseTypedBlocks(message.content));
   switch (row.type) {
@@ -267,11 +274,11 @@ function rowWithContent(row, message) {
     }
   }
 }
-//@ chunk-1nk4j4sn.js:14869-15092 placement (2.1.88 match: extractErrorDetail, 1)
+//@ chunk-8fb5jme0.js:16017-16240 placement (2.1.88 match: extractErrorDetail, 1)
 /**
  * 用新消息内容覆盖旧消息（同类型时只换 content），返回旧对象。与 bridge 无关。
  */
-function mergeMessageInPlace(target, source) {
+function filledRow(target, source) {
   let sameKind =
     (target.type === "assistant" && source.type === "assistant") ||
     (target.type === "user" && source.type === "user");
@@ -284,7 +291,8 @@ function mergeMessageInPlace(target, source) {
 }
 export {
   rowWithContent,
-  mergeMessageInPlace,
+  filledRow,
+  KEYLESS_BLOCK_TYPES,
   contentBlockStableKeys,
   answeredBlockOf,
   assistantContentOf,

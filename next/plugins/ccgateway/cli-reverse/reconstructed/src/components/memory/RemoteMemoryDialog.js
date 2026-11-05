@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程连接下的只读 /memory 对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c55mbvfz.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dzt5bmy4.js (11)
  * attribution: placement 10, sole-consumer 1
  */
 import {
@@ -51,11 +51,11 @@ import { getMemoryFilesCached } from "../../utils/claudemd.js";
 import { getNonMemoryInstructionFiles } from "../../context.js";
 import { MemoryCommand } from "../../commands/memory/memory.js";
 
-//@ chunk-c55mbvfz.js:15731-15735 placement
+//@ chunk-dzt5bmy4.js:16923-16927 placement
 init_react_production();
-//@ chunk-c55mbvfz.js:15776-15780 placement
+//@ chunk-dzt5bmy4.js:16968-16972 placement
 init_react_production();
-//@ chunk-c55mbvfz.js:15780-15853 placement (2.1.88 match: _temp2, 1)
+//@ chunk-dzt5bmy4.js:16972-17045 placement (2.1.88 match: _temp2, 1)
 function renderPathLine(line, i_1) {
   return jsxProd_default(
     Text,
@@ -66,7 +66,7 @@ function renderPathLine(line, i_1) {
     i_1,
   );
 }
-//@ chunk-c55mbvfz.js:15853-16049 placement
+//@ chunk-dzt5bmy4.js:17045-17241 placement
 var REMOTE_MEMORY_MAX_BYTES = 65536;
 var remoteContextUsageSchema = DoctorLazy(() =>
   objectSchema({
@@ -87,7 +87,7 @@ var remoteFileReadSchema = DoctorLazy(() =>
     truncated: booleanSchema().optional().catch(undefined),
   }),
 );
-//@ chunk-c55mbvfz.js:16049-16509 placement
+//@ chunk-dzt5bmy4.js:17241-17701 placement
 async function fetchRemoteContextUsage(remoteCaps, signal) {
   try {
     let thinClientReply = parseThinClientReply(
@@ -131,7 +131,7 @@ async function fetchRemoteContextUsage(remoteCaps, signal) {
     };
   }
 }
-//@ chunk-c55mbvfz.js:16509-16984 placement
+//@ chunk-dzt5bmy4.js:17701-18176 placement
 async function readRemoteFile(remote, path, signal) {
   try {
     let thinClientReply = parseThinClientReply(
@@ -168,7 +168,7 @@ async function readRemoteFile(remote, path, signal) {
     };
   }
 }
-//@ chunk-c55mbvfz.js:17111-17445 sole-consumer
+//@ chunk-dzt5bmy4.js:18303-18637 sole-consumer
 /**
  * 远程 /memory 对话框中记忆文件的说明：从本机启动时发送的用户文件应在本机编辑，云会话自身的文件无法从这里打开。
  */
@@ -177,7 +177,7 @@ function remoteMemoryFileNote(userMemoryOrigin, filePath) {
     ? `User files were sent from ${shortHostname()} at launch \u2014 edit ${filePath === undefined ? "them under ~/.claude" : SYNC_KEYS(filePath)} there; changes apply to the next cloud session, or when this machine re-attaches.`
     : "This file is in the cloud session's own ~/.claude (not from this machine) and can't be opened from here.";
 }
-//@ chunk-c55mbvfz.js:17445-19637 placement
+//@ chunk-dzt5bmy4.js:18637-20829 placement
 /**
  * 远程（云会话/Remote Control）连接下的 /memory 只读对话框：列出并查看云端会话读到的记忆文件。
  */
@@ -354,7 +354,7 @@ function RemoteMemoryDialog(props) {
   } else mainDialog = $[30];
   return mainDialog;
 }
-//@ chunk-c55mbvfz.js:19637-20667 placement
+//@ chunk-dzt5bmy4.js:20829-21859 placement
 function RemoteMemoryFileList(props) {
   let $ = useMemoCache(14);
   let { filesRead, onPick, userMemoryOrigin } = props;
@@ -430,7 +430,7 @@ function RemoteMemoryFileList(props) {
   } else listElement = $[13];
   return listElement;
 }
-//@ chunk-c55mbvfz.js:20667-21749 placement
+//@ chunk-dzt5bmy4.js:21859-22941 placement
 function RemoteMemoryFileView(props) {
   let $ = useMemoCache(18);
   let { read } = props;
@@ -521,7 +521,7 @@ function RemoteMemoryFileView(props) {
   } else bodyElement = $[17];
   return bodyElement;
 }
-//@ chunk-c55mbvfz.js:43674-44206 placement
+//@ chunk-dzt5bmy4.js:44870-45402 placement
 /**
  * /memory 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

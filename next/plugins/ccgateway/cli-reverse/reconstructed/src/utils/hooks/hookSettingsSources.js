@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子设置来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { isDeepStrictEqual } from "util";
@@ -15,7 +15,7 @@ import { isSettingSourceEnabled } from "../settings/constants.js";
 import { getSessionIngressAuthToken } from "../sessionIngressAuth.js";
 import { getSettingsForSource } from "../settings/settings.js";
 
-//@ chunk-e6aww6q8.js:824401-824577 placement
+//@ chunk-5xgkngpb.js:836017-836193 placement
 function sessionAccessTokenEnvForHooks(hookEnv) {
   if (
     !hookEnv ||
@@ -32,7 +32,7 @@ function sessionAccessTokenEnvForHooks(hookEnv) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:824577-824732 placement
+//@ chunk-5xgkngpb.js:836193-836348 placement
 function isFlagSettingsSyncHook(hook, hookEvent) {
   return (
     hook.type === "command" &&

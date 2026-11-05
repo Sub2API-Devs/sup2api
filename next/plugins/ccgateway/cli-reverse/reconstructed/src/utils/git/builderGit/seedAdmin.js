@@ -3,26 +3,26 @@
  *
  * builderGit：seed-admin 私有 git 目录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (4)
  * attribution: placement 4
  */
 import { join, isAbsolute } from "path";
 import { lstat, rm, mkdir, mkdtemp, realpath } from "fs/promises";
 import { SEED_ADMIN_REFUSALS } from "./gitDirShape.js";
-import { isPathInside as isPathInside_2, HOME_ENV_VARS } from "../../permissions/protectedEnvAndGitPaths.js";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
+import { isPathInside, HOME_ENV_VARS } from "../../permissions/protectedEnvAndGitPaths.js";
+import { getPlatform } from "../../platform.js";
 import { getFileIdentity_2 } from "./gitDirIdentity.js";
 import { stageSeedAdmin, procStartTag, isSkippableCopyError } from "./repoCopy.js";
 import { errorMessage, getErrnoCode } from "../../errors.js";
-import { getClaudeConfigDir } from "../../envUtils.js";
+import { getClaudeConfigDir } from "../../markdownConfigLoader.js";
 import { findEnvChangedBySettings } from "../../permissions/protectedSettingsPaths.js";
 import { logForDebugging } from "../../debug.js";
 import { outermostRepoAncestor } from "./sandboxReach.js";
 import { buildGitEnvForReach } from "./gitEnv.js";
 
-//@ chunk-s61vbvea.js:240144-241039 placement
+//@ chunk-fepf8jp6.js:34358-35248 placement
 async function prepareSeedAdmin(treeInfo, gitEnvForReach) {
   let seedAdminRoot = await resolveSeedAdminRoot();
   if ("unusable" in seedAdminRoot)
@@ -35,9 +35,9 @@ async function prepareSeedAdmin(treeInfo, gitEnvForReach) {
   if (
     [root, join(configHome, "seed-admin")].some(
       (candidateRoot) =>
-        isPathInside_2(treeInfo.workTree, candidateRoot) ||
-        isPathInside_2(treeInfo.enclosingTree, candidateRoot) ||
-        isPathInside_2(treeInfo.gitDir, candidateRoot),
+        isPathInside(treeInfo.workTree, candidateRoot) ||
+        isPathInside(treeInfo.enclosingTree, candidateRoot) ||
+        isPathInside(treeInfo.gitDir, candidateRoot),
     )
   )
     return {
@@ -52,7 +52,7 @@ async function prepareSeedAdmin(treeInfo, gitEnvForReach) {
       existing.isFile() &&
       existing.size === 0 &&
       existing.nlink === 1 &&
-      (getPlatform_2() === "windows" || existing.uid === process.getuid?.())
+      (getPlatform() === "windows" || existing.uid === process.getuid?.())
     )
       await rm(root);
     await mkdir(root, {
@@ -91,7 +91,7 @@ async function prepareSeedAdmin(treeInfo, gitEnvForReach) {
         };
   }
 }
-//@ chunk-s61vbvea.js:241039-241243 placement
+//@ chunk-fepf8jp6.js:35248-35450 placement
 async function resolveSeedAdminRoot() {
   let claudeConfigDir = getClaudeConfigDir();
   if (!isAbsolute(claudeConfigDir))
@@ -107,15 +107,15 @@ async function resolveSeedAdminRoot() {
     root: join(await realpath(claudeConfigDir).catch(() => claudeConfigDir), "seed-admin"),
   };
 }
-//@ chunk-s61vbvea.js:241243-241358 placement
+//@ chunk-fepf8jp6.js:35450-35565 placement
 function isPrivateOwnedDir(stats) {
   return (
     stats.isDirectory() &&
-    (getPlatform_2() === "windows" ||
+    (getPlatform() === "windows" ||
       ((stats.uid === process.getuid?.() || stats.uid === 0) && (stats.mode & 18) === 0))
   );
 }
-//@ chunk-s61vbvea.js:241358-242152 placement
+//@ chunk-fepf8jp6.js:35565-36356 placement
 async function sweepSeedAdmin() {
   let totals = {
     removed: 0,

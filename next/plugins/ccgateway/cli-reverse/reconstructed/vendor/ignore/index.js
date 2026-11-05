@@ -1,13 +1,13 @@
 /**
  * ignore/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ignore@7.0.5
- * pieces: chunk-82kqcve8.js (1)
+ * pieces: chunk-a2q0x549.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-82kqcve8.js:4002-8454 cjs-fingerprint
+//@ chunk-a2q0x549.js:4125-8577 cjs-fingerprint
 var require_ignore = __commonJS(function (cjsExports, cjsModule) {
   function makeArray(subject) {
     return Array.isArray(subject) ? subject : [subject];

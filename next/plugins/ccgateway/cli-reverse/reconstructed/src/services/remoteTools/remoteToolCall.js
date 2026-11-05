@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：执行一次远程工具调用：发送、等待（重连保持）、结果解析、遥测与中断处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dtv8x2hx.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yvhjwwtt.js (32)
  * attribution: placement 32
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -131,7 +131,7 @@ import {
   UNSAFE_PATH_REASON_TEXT,
 } from "./windowsPathSafety.js";
 import { toDisplayPath } from "../../utils/displayPath.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { runWithoutTelemetry } from "../../tools/BashTool/dangerousRemoval.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 import { isCompactBoundaryMessage } from "../projects/threadRows.js";
@@ -152,7 +152,7 @@ import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logRemoteTools } from "./remoteToolsDebug.js";
 import { isAskOnMutationTool } from "../../utils/permissions/permissions.js";
 
-//@ chunk-dtv8x2hx.js:24606-24866 placement
+//@ chunk-yvhjwwtt.js:25843-26103 placement
 function collectAskRules(decision) {
   let decisionReason = decision.decisionReason;
   return [
@@ -167,7 +167,7 @@ function collectAskRules(decision) {
       : []),
   ];
 }
-//@ chunk-dtv8x2hx.js:24866-24939 placement
+//@ chunk-yvhjwwtt.js:26103-26176 placement
 function isViolinWaistOn() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_waist", false) === true;
@@ -175,9 +175,9 @@ function isViolinWaistOn() {
     return false;
   }
 }
-//@ chunk-dtv8x2hx.js:24939-24952 placement
+//@ chunk-yvhjwwtt.js:26176-26189 placement
 var DEFAULT_RECONNECT_HOLD_MS = 90000;
-//@ chunk-dtv8x2hx.js:24952-25982 placement
+//@ chunk-yvhjwwtt.js:26189-27219 placement
 /**
  * 宿主断线时按 reconnect_hold 等待其回来，超时放弃。
  */
@@ -248,13 +248,13 @@ async function holdForReconnect({ tool, host, call: card, signal, onStatus, hold
     return;
   }
 }
-//@ chunk-dtv8x2hx.js:25982-26023 placement
+//@ chunk-yvhjwwtt.js:27219-27260 placement
 var VERSION_COMPARISON_LABELS = {
   [-1]: "older",
   0: "same",
   1: "newer",
 };
-//@ chunk-dtv8x2hx.js:26023-29905 placement
+//@ chunk-yvhjwwtt.js:27260-31142 placement
 /**
  * 记录远程调用结果遥测（completed/completed_no_envelope/错误、决定者来源、耗时）。
  */
@@ -325,10 +325,10 @@ function logRemoteToolCallOutcome(tool, host, entry, result, card, toolUseContex
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         } === "undefined"
@@ -337,10 +337,10 @@ function logRemoteToolCallOutcome(tool, host, entry, result, card, toolUseContex
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -382,7 +382,7 @@ function logRemoteToolCallOutcome(tool, host, entry, result, card, toolUseContex
   });
   classifyCompletion(outcomeLabel);
 }
-//@ chunk-dtv8x2hx.js:29905-30277 placement
+//@ chunk-yvhjwwtt.js:31142-31514 placement
 function classifyCompletion(label) {
   switch (
     label === "completed" || label === "completed_error"
@@ -408,7 +408,7 @@ function classifyCompletion(label) {
       return;
   }
 }
-//@ chunk-dtv8x2hx.js:30277-30663 placement
+//@ chunk-yvhjwwtt.js:31514-31900 placement
 function logRemoteToolForward(tool, host, entry, toolUseId, verdict) {
   logEvent("tengu_remote_tool_forward", {
     tool: analyticsToolName(tool),
@@ -425,7 +425,7 @@ function logRemoteToolForward(tool, host, entry, toolUseId, verdict) {
   });
   classifyCompletion("rejected_in_session");
 }
-//@ chunk-dtv8x2hx.js:30663-30814 placement
+//@ chunk-yvhjwwtt.js:31900-32051 placement
 function logRemoteForward(tool, entry, label, toolUseId) {
   logEvent("tengu_remote_tool_forward", {
     tool: analyticsToolName(tool),
@@ -437,13 +437,13 @@ function logRemoteForward(tool, entry, label, toolUseId) {
   });
   classifyCompletion(label);
 }
-//@ chunk-dtv8x2hx.js:30814-30884 placement
+//@ chunk-yvhjwwtt.js:32051-32121 placement
 function compareSemverOrDefaultUnknown(claudeCodeVersion, thisVersion) {
   return isSemverString(claudeCodeVersion) && isSemverString(thisVersion)
     ? VERSION_COMPARISON_LABELS[compareVersions(splitOnDash(claudeCodeVersion), splitOnDash(thisVersion))]
     : "unknown";
 }
-//@ chunk-dtv8x2hx.js:30884-31066 placement
+//@ chunk-yvhjwwtt.js:32121-32303 placement
 function buildTimingFields(leg, timing) {
   return timing === undefined
     ? {}
@@ -455,13 +455,13 @@ function buildTimingFields(leg, timing) {
         [`${leg}_posts`]: timing.posts,
       };
 }
-//@ chunk-dtv8x2hx.js:31066-31128 placement
+//@ chunk-yvhjwwtt.js:32303-32365 placement
 function analyticsToolName(tool) {
   return tool.isMcp === true
     ? sanitizeToolNameForAnalytics("mcp__tool")
     : sanitizeToolNameForAnalytics(tool.name);
 }
-//@ chunk-dtv8x2hx.js:31128-31202 placement
+//@ chunk-yvhjwwtt.js:32365-32439 placement
 function isViolinCornerOn() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_corner", false) === true;
@@ -469,7 +469,7 @@ function isViolinCornerOn() {
     return false;
   }
 }
-//@ chunk-dtv8x2hx.js:31202-31342 placement
+//@ chunk-yvhjwwtt.js:32439-32579 placement
 /**
  * 远程调用里 ask 相关的限额与默认值（保留的 ask 数、截止余量、并发上限、座席等待、提示截断等）。
  */
@@ -482,19 +482,19 @@ var MAX_PROMPT_TEXT_CHARS = 256;
 var MAX_STANDING_ASK_DEADLINE_MS = 1e4;
 var regExp = new RegExp(`[${withConfusables("<")}]`, "gu");
 var regExp_2 = new RegExp(`[${withConfusables(">")}]`, "gu");
-//@ chunk-dtv8x2hx.js:31342-31438 placement
+//@ chunk-yvhjwwtt.js:32579-32675 placement
 function escapeForPrompt(text) {
   return redactSecrets(
     replaceControlChars(text.normalize("NFKC")).replace(regExp, "&lt;").replace(regExp_2, "&gt;").trim(),
   );
 }
-//@ chunk-dtv8x2hx.js:31438-31501 placement
+//@ chunk-yvhjwwtt.js:32675-32737 placement
 function promptSafeTruncated(text) {
   return escapeForPrompt(
     truncateToLength(redactSecrets(replaceControlChars(text.normalize("NFKC"))), MAX_LINE_CHARS),
   );
 }
-//@ chunk-dtv8x2hx.js:31501-32654 placement
+//@ chunk-yvhjwwtt.js:32737-33890 placement
 /**
  * 等待远端 ask 的回答（max_ask_ms 超时后提示）。
  */
@@ -584,7 +584,7 @@ async function waitForAskAnswer({
     });
   }
 }
-//@ chunk-dtv8x2hx.js:32654-33567 placement
+//@ chunk-yvhjwwtt.js:33890-34803 placement
 function describeAskSeat(result, card, { tool, route, rawInput, toolUseContext }) {
   if (route.host.transport.kind !== "session") return;
   try {
@@ -624,7 +624,7 @@ function describeAskSeat(result, card, { tool, route, rawInput, toolUseContext }
     );
   }
 }
-//@ chunk-dtv8x2hx.js:33567-33804 placement
+//@ chunk-yvhjwwtt.js:34803-35038 placement
 function primaryInputPath(rawInput) {
   let found = ["command", "file_path", "path", "notebook_path"]
     .map((key) => rawInput[key])
@@ -633,7 +633,7 @@ function primaryInputPath(rawInput) {
     ? "its input as sent"
     : `"${truncateToLength(escapeForPrompt(truncateToLength(found, 480)).replace(/[`"]/g, " ").replace(/\s+/g, " ").trim(), 120)}"`;
 }
-//@ chunk-dtv8x2hx.js:33804-34004 placement
+//@ chunk-yvhjwwtt.js:35038-35238 placement
 var INTERRUPTED_FORWARD = {
   outcome: {
     kind: "error",
@@ -649,7 +649,7 @@ var UNEXPECTED_FORWARD_ERROR = {
     message: "unexpected error while forwarding",
   },
 };
-//@ chunk-dtv8x2hx.js:34004-36883 placement
+//@ chunk-yvhjwwtt.js:35238-38118 placement
 /**
  * 描述投递失败（交付未知、宿主重启、中断）。
  */
@@ -846,7 +846,7 @@ async function describeDeliveryFailure(context, parked, runWithPendingAsk) {
       return fail("unreachable", restartNoticeFor(noticeArgs, parked), "unknown", reconcile, unknownOpen);
   }
 }
-//@ chunk-dtv8x2hx.js:36883-38086 placement
+//@ chunk-yvhjwwtt.js:38118-39321 placement
 async function toolResultForInterruption(context, parked, wire, askId, reconcile) {
   let { tool, host, toolUseContext } = context;
   let callId = context.call.callId;
@@ -943,7 +943,7 @@ async function toolResultForInterruption(context, parked, wire, askId, reconcile
     reconcile,
   };
 }
-//@ chunk-dtv8x2hx.js:38086-39430 placement
+//@ chunk-yvhjwwtt.js:39321-40665 placement
 async function resolveEarlyCheck(context) {
   let syncInfo;
   let readBaselineSent = false;
@@ -1052,7 +1052,7 @@ async function resolveEarlyCheck(context) {
     },
   };
 }
-//@ chunk-dtv8x2hx.js:39430-57316 placement
+//@ chunk-yvhjwwtt.js:40665-58573 placement
 /**
  * 远程工具调用主流程：权限、早期检查、发送、等待、重连、结果与遥测（约 18 KB）。
  */
@@ -1214,22 +1214,24 @@ async function runRemoteToolCall({
   let checkPermission = async (parsedInput, requestBytes) => {
     let refusal = checkUnsafeSpelling([beforeInput, parsedInput]);
     if (refusal !== undefined) return refusal;
-    let flattened = uniq([beforeInput, ...spellingVariants(parsedInput), parsedInput]).flatMap(
-      (parsedInput) => [
-        {
-          parsedInput,
-          machineDir: undefined,
-        },
-        ...(shellDir?.kind === "in_announced_dir"
-          ? [
-              {
-                parsedInput,
-                machineDir: shellDir.dir,
-              },
-            ]
-          : []),
-      ],
-    );
+    let flattened = normalizeCaseForComparison_2([
+      beforeInput,
+      ...spellingVariants(parsedInput),
+      parsedInput,
+    ]).flatMap((parsedInput) => [
+      {
+        parsedInput,
+        machineDir: undefined,
+      },
+      ...(shellDir?.kind === "in_announced_dir"
+        ? [
+            {
+              parsedInput,
+              machineDir: shellDir.dir,
+            },
+          ]
+        : []),
+    ]);
     let verdict = {
       kind: "proceed",
     };
@@ -2276,7 +2278,7 @@ async function runRemoteToolCall({
       }
     : askHandling;
 }
-//@ chunk-dtv8x2hx.js:57316-61083 placement
+//@ chunk-yvhjwwtt.js:58573-62340 placement
 async function collectRemoteResult({
   transported,
   host,
@@ -2555,7 +2557,7 @@ async function collectRemoteResult({
       };
   }
 }
-//@ chunk-dtv8x2hx.js:61083-61320 placement
+//@ chunk-yvhjwwtt.js:62340-62577 placement
 function waitWhileAsking(card, askId, afterMs, waitForAnswer) {
   let abortController = new AbortController();
   let resolveEnded;
@@ -2583,7 +2585,7 @@ function waitWhileAsking(card, askId, afterMs, waitForAnswer) {
     },
   );
 }
-//@ chunk-dtv8x2hx.js:61320-61662 placement
+//@ chunk-yvhjwwtt.js:62577-62919 placement
 function describeNoAnswer(host, host_2, ended, afterMs) {
   return {
     approval: ended === "no_answer" ? "no_answer" : "withdrawn",
@@ -2611,7 +2613,7 @@ function describeNoAnswer(host, host_2, ended, afterMs) {
           },
   };
 }
-//@ chunk-dtv8x2hx.js:61662-61883 placement
+//@ chunk-yvhjwwtt.js:62919-63140 placement
 function describeClassifierRefusal(failure, approval) {
   if (isUnverifiedRefusal(failure))
     return approval?.byClassifier ? "classifier_refused" : "unverified_refusal";
@@ -2619,7 +2621,7 @@ function describeClassifierRefusal(failure, approval) {
     return approval !== undefined ? "approval_write_unresolved" : "write_unresolved";
   return failure.kind;
 }
-//@ chunk-dtv8x2hx.js:61883-62138 placement
+//@ chunk-yvhjwwtt.js:63140-63395 placement
 function describeWithdrawnAsk(decision, name, host) {
   let suffix = ` ${name} was not contacted.`;
   let trimmed = decision.message.endsWith(suffix)
@@ -2632,7 +2634,7 @@ function describeWithdrawnAsk(decision, name, host) {
     host,
   };
 }
-//@ chunk-dtv8x2hx.js:62138-62317 placement
+//@ chunk-yvhjwwtt.js:63395-63574 placement
 function wirePermissionState(toolUseContext, name) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   let mode =
@@ -2644,14 +2646,14 @@ function wirePermissionState(toolUseContext, name) {
     isBypassAvailable: toolPermissionContext.isBypassPermissionsModeAvailable,
   };
 }
-//@ chunk-dtv8x2hx.js:62317-62404 placement
+//@ chunk-yvhjwwtt.js:63574-63661 placement
 function noteDirSyncAnswer(host, transported) {
   if (transported.kind === "result" && transported.dirSync !== undefined)
     try {
       heardSyncAnswer(host, transported.dirSync);
     } catch {}
 }
-//@ chunk-dtv8x2hx.js:62404-62603 placement
+//@ chunk-yvhjwwtt.js:63661-63860 placement
 function remoteToolNames(tool, host) {
   if (tool.isMcp !== true)
     return {
@@ -2667,4 +2669,4 @@ function remoteToolNames(tool, host) {
         ask: mapped.localName,
       };
 }
-export { collectAskRules, logRemoteToolForward, waitForAskAnswer, logRemoteForward, primaryInputPath };
+export { logRemoteToolForward, waitForAskAnswer, collectAskRules, logRemoteForward, primaryInputPath };

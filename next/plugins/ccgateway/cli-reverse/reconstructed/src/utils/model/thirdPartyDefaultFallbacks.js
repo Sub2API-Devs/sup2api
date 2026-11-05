@@ -3,20 +3,21 @@
  *
  * 2.1.316 新增。第三方提供商（Bedrock/Vertex/Mantle）默认模型不可用时探测并回退到可用模型，记 tengu_*_default_fallback。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4r745zza.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jbqrzg01.js (14)
+ * attribution: sole-consumer 1, placement 13
  */
-import { buildProviderTierDefaults } from "./agent.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { catalogDefaultKeyForFamily } from "./classifierModel.js";
 import {
+  tierConfig,
   collectUnpinnedTiers,
   enforcedAllowlistLeavesOut,
   predecessorsInTier,
   STARTUP_PROBE_DEADLINE_MS,
   seedEnvDefaultForUserPin,
 } from "./stalePins.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { isModelRemappedOrRetired, isModelDeprecated } from "./deprecation.js";
 import { getModelStrings } from "./modelStrings.js";
@@ -43,14 +44,26 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { supportsAutoModeIfActive } from "./modelAccessCheck.js";
 
-//@ chunk-4r745zza.js:768-1458 placement
+//@ chunk-jbqrzg01.js:639-768 sole-consumer (2.1.88 match: aliasMatchesParentTier, 1)
+/**
+ * 用当前提供商 catalog 别名的 sonnet/opus/haiku 键构造档位默认表（srt），任一缺失返回 undefined。
+ */
+function buildProviderTierDefaults(family) {
+  let sonnetKey = catalogDefaultKeyForFamily("sonnet", family);
+  let opusKey = catalogDefaultKeyForFamily("opus", family);
+  let haikuKey = catalogDefaultKeyForFamily("haiku", family);
+  return sonnetKey === undefined || opusKey === undefined || haikuKey === undefined
+    ? undefined
+    : tierConfig(opusKey, sonnetKey, haikuKey);
+}
+//@ chunk-jbqrzg01.js:768-1458 placement
 /**
  * 按管理员固定调整
  */
 function steerAdminPins(provider) {
   let tierConfig = buildProviderTierDefaults(provider);
   if (tierConfig === undefined) return;
-  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let modelOverrides = getInitialSettings().modelOverrides;
   for (let tier of collectUnpinnedTiers(tierConfig, modelOverrides)) {
     let { documentTarget, fromDocument } = tierConfig[tier.tier];
     let id = documentTarget?.modelId ?? catalogEntriesByFirstPartyId[tier.defaultKey][provider];
@@ -90,7 +103,7 @@ function steerAdminPins(provider) {
     registerFallbackLadder(provider, tier.tier, tier.envVar, rungs);
   }
 }
-//@ chunk-4r745zza.js:1458-1524 placement
+//@ chunk-jbqrzg01.js:1458-1524 placement
 function defaultModelWithMarketingName(key, id) {
   let firstParty = catalogEntriesByFirstPartyId[key].firstParty;
   return {
@@ -98,14 +111,14 @@ function defaultModelWithMarketingName(key, id) {
     name: getMarketingNameForModel(firstParty) ?? firstParty,
   };
 }
-//@ chunk-4r745zza.js:1524-1589 placement
+//@ chunk-jbqrzg01.js:1524-1589 placement
 var TIER_LABELS = {
   fable: "Fable",
   sonnet: "Sonnet",
   opus: "Opus",
   haiku: "Haiku",
 };
-//@ chunk-4r745zza.js:1589-1808 placement
+//@ chunk-jbqrzg01.js:1589-1808 placement
 async function withProbeDeadline(label, promise, deadlineMs = STARTUP_PROBE_DEADLINE_MS) {
   let timer;
   try {
@@ -128,7 +141,7 @@ async function withProbeDeadline(label, promise, deadlineMs = STARTUP_PROBE_DEAD
     clearTimeout(timer);
   }
 }
-//@ chunk-4r745zza.js:1808-1971 placement (2.1.88 match: createFallbackStorage, 0.51)
+//@ chunk-jbqrzg01.js:1808-1971 placement (2.1.88 match: createFallbackStorage, 0.51)
 /**
  * 在总时限内依次探测某提供者的回退默认值与文档默认值（第二次用剩余时间），返回两者结果；属于第三方提供者默认模型探测，误归 secureStorage（旧版名 createFallbackStorage 错配）。
  */
@@ -145,7 +158,7 @@ async function probeProviderDefaults(
     remaining > 0 ? await withProbeDeadline(`${provider}-document-default`, documentProbe(), remaining) : [];
   return [availability, documents];
 }
-//@ chunk-4r745zza.js:1971-2385 placement
+//@ chunk-jbqrzg01.js:1971-2385 placement
 /**
  * 默认模型环境变量是否由用户设置
  */
@@ -163,7 +176,7 @@ function isDefaultModelEnvUserSet(envVar) {
       return false;
   }
 }
-//@ chunk-4r745zza.js:2385-2610 placement
+//@ chunk-jbqrzg01.js:2385-2610 placement
 /**
  * 设置默认模型环境变量
  */
@@ -181,14 +194,14 @@ function setDefaultModelEnv(envVar, value) {
   recordProbedDefault(envVar, value);
   recordSeededDefault(envVar, value);
 }
-//@ chunk-4r745zza.js:2610-2754 placement
+//@ chunk-jbqrzg01.js:2610-2754 placement
 function captureAdmin3PSteeringSnapshot() {
   setAdmin3PSteeringSnapshot({
     sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL !== undefined && !userConfiguredDefault("sonnet"),
     opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL !== undefined && !userConfiguredDefault("opus"),
   });
 }
-//@ chunk-4r745zza.js:2754-3442 placement
+//@ chunk-jbqrzg01.js:2754-3442 placement
 /**
  * 第三方提供商（Bedrock/Vertex/Mantle）默认模型不可用时探测并回退到可用模型，记 tengu_*_default_fallback。
  */
@@ -251,7 +264,7 @@ async function apply3PDefaultFallbacks(options) {
       };
   }
 }
-//@ chunk-4r745zza.js:3442-3812 placement
+//@ chunk-jbqrzg01.js:3442-3812 placement
 /**
  * 记录文档默认回退
  */
@@ -271,7 +284,7 @@ function recordDocumentFallbacks(candidates, provider) {
   }
   return lines;
 }
-//@ chunk-4r745zza.js:3812-5007 placement
+//@ chunk-jbqrzg01.js:3812-5007 placement
 /**
  * 应用 Bedrock 默认回退
  */
@@ -315,7 +328,7 @@ async function applyBedrockFallbacks(baselineModel) {
   lines.push(...recordDocumentFallbacks(documentFallbacks, "bedrock"));
   return lines;
 }
-//@ chunk-4r745zza.js:5007-6185 placement
+//@ chunk-jbqrzg01.js:5007-6185 placement
 /**
  * 应用 Vertex 默认回退
  */
@@ -359,7 +372,7 @@ async function applyVertexFallbacks(baselineModel) {
   lines.push(...recordDocumentFallbacks(documentFallbacks, "vertex"));
   return lines;
 }
-//@ chunk-4r745zza.js:6185-7417 placement
+//@ chunk-jbqrzg01.js:6185-7417 placement
 /**
  * 应用 Mantle 默认回退
  */
@@ -429,4 +442,4 @@ async function applyMantleFallbacks(userPinned) {
     mantleOverride,
   };
 }
-export { TIER_LABELS, apply3PDefaultFallbacks, withProbeDeadline, captureAdmin3PSteeringSnapshot };
+export { apply3PDefaultFallbacks, withProbeDeadline, TIER_LABELS, captureAdmin3PSteeringSnapshot };

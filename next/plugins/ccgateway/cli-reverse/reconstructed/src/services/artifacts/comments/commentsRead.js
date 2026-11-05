@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取 artifact 评论（含重试与错误分类）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (11)
  * attribution: placement 11
  */
 import { errorMessage, NO_USER_CREDENTIAL_TEXT, ORG_SERVICE_KEY_READ_TEXT } from "./commentReply.js";
@@ -22,11 +22,11 @@ import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { sleep } from "../../../utils/sleep.js";
 import { AbortError } from "../../../utils/errors.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.js";
-import { fetchArtifactBootWithProbe } from "../boot.js";
+import { fetchBoot } from "../boot.js";
 import { getShareEntry, typeLockedFor, mayBeShared, triState } from "../shareEntries.js";
 import { LIVE_DOC, isMeaningfulFlag } from "../textSanitize.js";
 
-//@ chunk-b0a246e7.js:18315-18765 placement
+//@ chunk-78ymyfsy.js:18348-18798 placement
 function classifyCommentsReadError(response, featureName) {
   if (response.status === 403 && errorMessage(response.data).includes(NO_USER_CREDENTIAL_TEXT)) {
     logFeatureSad(featureName, "service_key_credential");
@@ -59,13 +59,13 @@ function classifyCommentsReadError(response, featureName) {
     }),
   };
 }
-//@ chunk-b0a246e7.js:18765-18800 placement
+//@ chunk-78ymyfsy.js:18798-18833 placement
 var READ_RETRY_JITTER_MS = {
   min: 300,
   max: 800,
 };
 var MAX_READ_RETRY_WAIT_MS = 120000;
-//@ chunk-b0a246e7.js:18800-18929 placement
+//@ chunk-78ymyfsy.js:18833-18962 placement
 function getRetryAfterCap(status, headerValue) {
   if (status !== 429 && status !== 503) return;
   let retryAfterMs = parseRetryAfterMs(typeof headerValue === "string" ? headerValue : undefined);
@@ -73,12 +73,12 @@ function getRetryAfterCap(status, headerValue) {
     ? undefined
     : Math.min(retryAfterMs, MAX_READ_RETRY_WAIT_MS);
 }
-//@ chunk-b0a246e7.js:18929-19006 placement
+//@ chunk-78ymyfsy.js:18962-19039 placement
 function readRetryJitter() {
   let { min, max } = READ_RETRY_JITTER_MS;
   return min + Math.floor(Math.random() * (max - min + 1));
 }
-//@ chunk-b0a246e7.js:19006-20935 placement
+//@ chunk-78ymyfsy.js:19039-20968 placement
 async function fetchComments(slug, signal, featureName, credentials, withNames) {
   let authContext = await commentsAuthContext(credentials);
   let startTime = performance.now();
@@ -230,13 +230,13 @@ async function fetchComments(slug, signal, featureName, credentials, withNames) 
     result: classified,
   };
 }
-//@ chunk-b0a246e7.js:20935-21017 placement
+//@ chunk-78ymyfsy.js:20968-21050 placement
 function viewerFromResponse(payload) {
   return typeof payload === "object" && payload !== null && "viewer" in payload ? payload.viewer : undefined;
 }
-//@ chunk-b0a246e7.js:21017-21028 placement
+//@ chunk-78ymyfsy.js:21050-21061 placement
 var MAX_COMMENT_THREADS = 64;
-//@ chunk-b0a246e7.js:21028-21249 placement
+//@ chunk-78ymyfsy.js:21061-21282 placement
 function parseCommentAnchorNames(payload) {
   if (!isPlainObject(payload) || !isPlainObject(payload.names)) return;
   let names = [];
@@ -249,7 +249,7 @@ function parseCommentAnchorNames(payload) {
   }
   return names.length > 0 ? Object.fromEntries(names) : undefined;
 }
-//@ chunk-b0a246e7.js:21249-21492 placement
+//@ chunk-78ymyfsy.js:21282-21525 placement
 function commentsUnavailable(status, extra = {}) {
   return {
     err: `comments are not available on this artifact right now (the comments service answered HTTP ${status})`,
@@ -263,7 +263,7 @@ function commentsUnavailable(status, extra = {}) {
     }),
   };
 }
-//@ chunk-b0a246e7.js:21492-21759 placement
+//@ chunk-78ymyfsy.js:21525-21792 placement
 async function fetchCommentsWithRetry(slug, signal, featureName, credentials, withNames) {
   let comments = await fetchComments(slug, signal, featureName, credentials, withNames);
   if (comments.kind === "done") return comments.result;
@@ -276,7 +276,7 @@ async function fetchCommentsWithRetry(slug, signal, featureName, credentials, wi
   }
   return comments_2.fail();
 }
-//@ chunk-b0a246e7.js:21759-23031 placement
+//@ chunk-78ymyfsy.js:21792-23064 placement
 /**
  * 读取 artifact 的评论线程（tengu_onyx_sluice 开关），处理中继/直连、重试与权限探测。
  */
@@ -298,52 +298,50 @@ async function readArtifactComments(
   let isExternal = false;
   let error;
   if (!skipBootProbe) {
-    let artifactBootWithProbe = await fetchArtifactBootWithProbe(artifactId, featureName, signal, {
+    let boot = await fetchBoot(artifactId, featureName, signal, {
       credentials,
       probeToolUseId,
     });
-    if (artifactBootWithProbe.err !== null) {
+    if (boot.err !== null) {
       let retryable =
-        artifactBootWithProbe.errorCode === "boot_request_error" ||
-        (artifactBootWithProbe.errorCode === "boot_relay_error" &&
-          artifactBootWithProbe.status === undefined) ||
-        (artifactBootWithProbe.status !== undefined &&
-          (artifactBootWithProbe.status >= 500 || artifactBootWithProbe.status === 429));
+        boot.errorCode === "boot_request_error" ||
+        (boot.errorCode === "boot_relay_error" && boot.status === undefined) ||
+        (boot.status !== undefined && (boot.status >= 500 || boot.status === 429));
       return {
-        err: artifactBootWithProbe.err,
+        err: boot.err,
         ...(retryable && {
           retryable: true,
         }),
       };
     }
-    if (artifactBootWithProbe.assetToken === undefined)
+    if (boot.assetToken === undefined)
       return {
         err: "comments are not readable on a public artifact serve",
       };
-    isExternal = artifactBootWithProbe.data.mode === "external";
+    isExternal = boot.data.mode === "external";
     let shareEntry = getShareEntry(artifactId.slug);
     let ready =
-      (Array.isArray(artifactBootWithProbe.data.docs) && artifactBootWithProbe.data.docs.length > 0) ||
+      (Array.isArray(boot.data.docs) && boot.data.docs.length > 0) ||
       (shareEntry?.livePaths?.length ?? 0) > 0;
     if (
-      artifactBootWithProbe.data.artifactKind !== LIVE_DOC &&
+      boot.data.artifactKind !== LIVE_DOC &&
       shareEntry?.artifactKind !== LIVE_DOC &&
-      artifactBootWithProbe.data.headSeq === undefined &&
+      boot.data.headSeq === undefined &&
       !ready
     )
-      version = artifactBootWithProbe.ver;
+      version = boot.ver;
     error =
-      artifactBootWithProbe.data.authoredByOthers === true ||
+      boot.data.authoredByOthers === true ||
       shareEntry?.authoredByOthers === true ||
-      isMeaningfulFlag(artifactBootWithProbe.data.outsidersMayHaveWritten) ||
+      isMeaningfulFlag(boot.data.outsidersMayHaveWritten) ||
       shareEntry?.outsidersMayHaveWritten === true ||
-      artifactBootWithProbe.data.perm?.role !== "owner" ||
-      artifactBootWithProbe.data.cowritten === true ||
+      boot.data.perm?.role !== "owner" ||
+      boot.data.cowritten === true ||
       shareEntry?.cowritten === true ||
-      typeLockedFor(artifactId.slug, artifactBootWithProbe.data.type) ||
+      typeLockedFor(artifactId.slug, boot.data.type) ||
       mayBeShared(
-        artifactBootWithProbe.data.perm?.role === "owner",
-        triState(artifactBootWithProbe.data.outsideWriter),
+        boot.data.perm?.role === "owner",
+        triState(boot.data.outsideWriter),
         shareEntry?.outsideWriter,
       ) ||
       version === undefined;
@@ -370,4 +368,4 @@ async function readArtifactComments(
       }
     : commentsWithRetry;
 }
-export { MAX_COMMENT_THREADS, readArtifactComments };
+export { readArtifactComments, MAX_COMMENT_THREADS };

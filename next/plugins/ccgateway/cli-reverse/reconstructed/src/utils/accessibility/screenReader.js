@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：屏幕阅读器模式状态（启用来源、方向键导航、播报队列与保持）；项目设置中有 axScreenReader 但未生效时的提示等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vd0bcd16.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-018s34f2.js (33)
  * attribution: placement 33
  */
 import { homedir } from "os";
@@ -35,7 +35,7 @@ import { stripControlChars } from "../settings/writeQueues.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vd0bcd16.js:654-1333 placement
+//@ chunk-018s34f2.js:655-1334 placement
 /**
  * 遮盖错误文本中的 URL、邮箱、密钥、路径等再做哈希。
  */
@@ -56,12 +56,12 @@ function scrubErrorText(text) {
     .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<ip>")
     .replace(/\b\d{4,}\b/g, "<num>");
 }
-//@ chunk-vd0bcd16.js:1333-1344 placement
+//@ chunk-018s34f2.js:1334-1345 placement
 /**
  * 清理后错误栈保留的字符数（4000）。
  */
 var MAX_SCRUBBED_STACK_CHARS = 4000;
-//@ chunk-vd0bcd16.js:1344-1840 placement
+//@ chunk-018s34f2.js:1345-1841 placement
 /**
  * 提取错误栈的前几帧（区分内部/外部）。
  */
@@ -93,7 +93,7 @@ function topStackFrames(stackText, maxNames = 5) {
     topFrame,
   };
 }
-//@ chunk-vd0bcd16.js:1840-1908 placement
+//@ chunk-018s34f2.js:1841-1909 placement
 /**
  * 安全地把值转成字符串，失败返回占位文本。
  */
@@ -104,7 +104,7 @@ function safeToString(value) {
     return "[unstringifiable]";
   }
 }
-//@ chunk-vd0bcd16.js:1908-2625 placement
+//@ chunk-018s34f2.js:1909-2626 placement
 /**
  * 生成错误遥测字段（消息哈希、错误码、构造器名、栈）。
  */
@@ -160,16 +160,16 @@ function errorTelemetryFields(error) {
     return {};
   }
 }
-//@ chunk-vd0bcd16.js:2691-2722 placement
+//@ chunk-018s34f2.js:2692-2723 placement
 var TENGU_AX_SCREEN_READER = "tengu_ax_screen_reader";
-//@ chunk-vd0bcd16.js:2722-2773 placement
+//@ chunk-018s34f2.js:2723-2774 placement
 /**
  * 替换屏幕阅读器模式里“远程门”的读取器。
  */
 function swapRemoteGateReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   return getScreenReaderMode().swapRemoteGateReader(getFeatureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-vd0bcd16.js:2773-4061 placement
+//@ chunk-018s34f2.js:2774-4063 placement
 /**
  * 屏幕阅读器模式状态（启用来源、方向键导航、播报队列与保持）。
  */
@@ -274,45 +274,45 @@ class ScreenReaderMode {
     this.#s = 0;
   }
 }
-//@ chunk-vd0bcd16.js:4061-4084 placement
+//@ chunk-018s34f2.js:4063-4086 placement
 /**
  * 按宿主隔离的屏幕阅读器模式状态。
  */
 var screenReaderModeByHost; // deferred: uses ScreenReaderMode of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vd0bcd16.js:4061", () => {
+deferInit("chunk-018s34f2.js:4063", () => {
   screenReaderModeByHost = new HostScoped(() => new ScreenReaderMode());
 });
-//@ chunk-vd0bcd16.js:4084-4119 placement
+//@ chunk-018s34f2.js:4086-4121 placement
 /**
  * 取出当前宿主的屏幕阅读器模式状态。
  */
 function getScreenReaderMode() {
   return screenReaderModeByHost.of(getRootSession().host);
 }
-//@ chunk-vd0bcd16.js:4119-4149 placement
+//@ chunk-018s34f2.js:4121-4151 placement
 var TENGU_AX_SR_ARROW_NAV = "tengu_ax_sr_arrow_nav";
-//@ chunk-vd0bcd16.js:4149-4195 placement
+//@ chunk-018s34f2.js:4151-4197 placement
 /**
  * 屏幕阅读器方向键导航是否启用。
  */
 function isArrowNavEnabled() {
   return getScreenReaderMode().isArrowNavEnabled();
 }
-//@ chunk-vd0bcd16.js:4195-4246 placement
+//@ chunk-018s34f2.js:4197-4248 placement
 /**
  * 屏幕阅读器模式下是否启用建议导航。
  */
 function isSuggestionNavEnabled() {
   return getScreenReaderMode().isSuggestionNavEnabled();
 }
-//@ chunk-vd0bcd16.js:4246-4283 placement
+//@ chunk-018s34f2.js:4248-4285 placement
 /**
  * 是否处于屏幕阅读器模式。
  */
 function isScreenReaderMode() {
   return getScreenReaderMode().isEnabled();
 }
-//@ chunk-vd0bcd16.js:4283-4437 placement
+//@ chunk-018s34f2.js:4285-4439 placement
 /**
  * 读屏模式开启时的状态文本（含启用来源）。
  */
@@ -326,7 +326,7 @@ function screenReaderStatusLine() {
   }
   return null;
 }
-//@ chunk-vd0bcd16.js:4437-5282 placement
+//@ chunk-018s34f2.js:4439-5285 placement
 /**
  * 项目设置中有 axScreenReader 但未生效时的提示。
  */
@@ -365,7 +365,7 @@ function screenReaderSettingHint() {
   }
   return null;
 }
-//@ chunk-vd0bcd16.js:5282-5407 placement
+//@ chunk-018s34f2.js:5285-5410 placement
 /**
  * 启动时输出读屏模式状态或设置提示。
  */
@@ -384,27 +384,27 @@ function announceScreenReaderMode(isStartup, announce) {
   }
   return null;
 }
-//@ chunk-vd0bcd16.js:5407-5427 placement
+//@ chunk-018s34f2.js:5410-5430 placement
 /**
  * 读屏启动静默期的默认值（3 秒）。
  */
 var DEFAULT_AX_STARTUP_QUIET_MS = 3000;
 var MAX_AX_STARTUP_QUIET_MS = 600000;
-//@ chunk-vd0bcd16.js:5427-5480 placement
+//@ chunk-018s34f2.js:5430-5483 placement
 /**
  * 记录一次播报已写入的时间。
  */
 function markAnnouncementWritten() {
   getScreenReaderMode().markAnnouncementWritten(Date.now());
 }
-//@ chunk-vd0bcd16.js:5480-5517 placement
+//@ chunk-018s34f2.js:5483-5520 placement
 /**
  * 结束读屏启动静默期。
  */
 function endStartupQuiet() {
   getScreenReaderMode().endStartupQuiet();
 }
-//@ chunk-vd0bcd16.js:5517-5680 placement
+//@ chunk-018s34f2.js:5520-5683 placement
 /**
  * 读屏启动静默期剩余毫秒数。
  */
@@ -421,27 +421,27 @@ function startupQuietRemainingMs() {
   }
   return 0;
 }
-//@ chunk-vd0bcd16.js:5680-5695 placement
+//@ chunk-018s34f2.js:5683-5698 placement
 /**
  * 读屏预停放的默认时长（0）。
  */
 var DEFAULT_AX_PREPARK_MS = 0;
 var MAX_AX_PREPARK_MS = 5000;
-//@ chunk-vd0bcd16.js:5695-5755 placement
+//@ chunk-018s34f2.js:5698-5758 placement
 /**
  * 读屏预停放时长（受环境变量与上限约束）。
  */
 function getAxPreparkMs() {
   return Math.min(env.CLAUDE_AX_PREPARK_MS ?? DEFAULT_AX_PREPARK_MS, MAX_AX_PREPARK_MS);
 }
-//@ chunk-vd0bcd16.js:5755-5819 placement
+//@ chunk-018s34f2.js:5758-5822 placement
 /**
  * 是否重写被保持的播报（环境变量控制）。
  */
 function rewriteHeldAnnouncement() {
   return env.CLAUDE_AX_REWRITE_HELD_ANNOUNCEMENT ?? false;
 }
-//@ chunk-vd0bcd16.js:5819-5898 placement (2.1.88 match: getToolsForDefaultPreset, 0.54)
+//@ chunk-018s34f2.js:5822-5900 placement (2.1.88 match: getToolsForDefaultPreset, 0.54)
 /**
  * （旧版名 getToolsForDefaultPreset 是错配）屏幕阅读器模式开启时返回子进程环境 {CLAUDE_AX_SCREEN_READER:"1"}，否则空对象。
  */
@@ -452,7 +452,7 @@ function getScreenReaderEnv() {
     };
   return {};
 }
-//@ chunk-vd0bcd16.js:5898-6032 placement
+//@ chunk-018s34f2.js:5900-6034 placement
 /**
  * 读屏模式的遥测字段。
  */
@@ -467,19 +467,19 @@ function screenReaderTelemetryFields() {
   }
   return {};
 }
-//@ chunk-vd0bcd16.js:6032-6041 placement
+//@ chunk-018s34f2.js:6034-6043 placement
 /**
  * 播报队列最多保留的条数（16）。
  */
 var MAX_ANNOUNCEMENT_QUEUE = 16;
-//@ chunk-vd0bcd16.js:6041-6096 placement
+//@ chunk-018s34f2.js:6043-6098 placement
 /**
  * 加入一条屏幕阅读器播报。
  */
 function announce(text, options) {
   getScreenReaderMode().queueAnnouncement(text, options?.hold === true);
 }
-//@ chunk-vd0bcd16.js:6096-6205 placement
+//@ chunk-018s34f2.js:6098-6207 placement
 /**
  * 有播报保持请求时返回保持时长。
  */
@@ -488,28 +488,28 @@ function takeAnnouncementHoldMs() {
     return Math.min(env.CLAUDE_AX_ANNOUNCEMENT_HOLD_MS ?? 1000, 1e4);
   return 0;
 }
-//@ chunk-vd0bcd16.js:6205-6249 placement
+//@ chunk-018s34f2.js:6207-6251 placement
 /**
  * 开始一段播报保持（给定毫秒）。
  */
 function startAnnouncementHold(holdMs) {
   getScreenReaderMode().startHold(Date.now() + holdMs);
 }
-//@ chunk-vd0bcd16.js:6249-6278 placement
+//@ chunk-018s34f2.js:6251-6280 placement
 /**
  * 结束播报保持。
  */
 function endAnnouncementHold() {
   getScreenReaderMode().endHold();
 }
-//@ chunk-vd0bcd16.js:6278-6327 placement
+//@ chunk-018s34f2.js:6280-6329 placement
 /**
  * 当前是否处于播报保持。
  */
 function isAnnouncementHoldActive() {
   return getScreenReaderMode().holdActive(Date.now());
 }
-//@ chunk-vd0bcd16.js:6327-6374 placement
+//@ chunk-018s34f2.js:6329-6376 placement
 /**
  * 取出播报队列里的全部播报。
  */
@@ -517,23 +517,23 @@ function drainAnnouncements() {
   return getScreenReaderMode().drainAnnouncements();
 }
 export {
-  isScreenReaderMode,
-  screenReaderTelemetryFields,
-  scrubErrorText,
   errorTelemetryFields,
-  getScreenReaderEnv,
-  announce,
-  isSuggestionNavEnabled,
-  endAnnouncementHold,
-  announceScreenReaderMode,
-  swapRemoteGateReader,
+  scrubErrorText,
+  screenReaderTelemetryFields,
+  isScreenReaderMode,
   endStartupQuiet,
   rewriteHeldAnnouncement,
+  endAnnouncementHold,
   startupQuietRemainingMs,
   isAnnouncementHoldActive,
   drainAnnouncements,
   takeAnnouncementHoldMs,
   getAxPreparkMs,
   startAnnouncementHold,
+  announce,
+  getScreenReaderEnv,
+  announceScreenReaderMode,
+  isSuggestionNavEnabled,
+  swapRemoteGateReader,
   isArrowNavEnabled,
 };

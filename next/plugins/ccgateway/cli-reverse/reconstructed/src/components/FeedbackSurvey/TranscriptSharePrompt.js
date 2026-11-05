@@ -3,9 +3,9 @@
  *
  * 调查后询问是否分享会话记录的提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/TranscriptSharePrompt.tsx
- * pieces: chunk-18hwfzwa.js (8)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 2, fingerprint 1, layout 4, callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -37,11 +37,11 @@ import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { Button } from "../../ink/components/ErrorBoundary.js";
 import { USER_MESSAGE_BACKGROUND } from "../CustomSelect/selectTypeahead.js";
 
-//@ chunk-18hwfzwa.js:994730-994775 placement
+//@ chunk-czq1j3j2.js:1028765-1028810 placement
 function isShareAnswerKey(key) {
   return isTranscriptShareKey(key.toLowerCase());
 }
-//@ chunk-18hwfzwa.js:994775-995118 placement
+//@ chunk-czq1j3j2.js:1028810-1029153 placement
 /**
  * 记录分享询问的文案常量：问题、数据使用说明链接、y/n/d 按键、按键到结果的映射、选项列表与按键判断函数。
  */
@@ -71,7 +71,7 @@ var TRANSCRIPT_SHARE_OPTIONS = [
   },
 ];
 var isTranscriptShareKey = (lowerCase) => TRANSCRIPT_SHARE_KEYS.includes(lowerCase);
-//@ chunk-18hwfzwa.js:1084597-1084763 fingerprint (2.1.88 match: inputToResponse, 0.505)
+//@ chunk-czq1j3j2.js:1118628-1118794 fingerprint (2.1.88 match: inputToResponse, 0.505)
 var WEB_SETUP_RESPONSES = {
   1: "accepted",
   2: "dismissed",
@@ -91,15 +91,15 @@ var WEB_SETUP_OPTIONS = [
     label: "Don't ask again",
   },
 ];
-//@ chunk-18hwfzwa.js:1084763-1084811 layout
+//@ chunk-czq1j3j2.js:1118794-1118842 layout
 function isAnswerDigit(key) {
   return key === "1" || key === "2" || key === "3";
 }
-//@ chunk-18hwfzwa.js:1084811-1084889 layout
+//@ chunk-czq1j3j2.js:1118842-1118920 layout
 function webSetupPromptStatus(state) {
   return state.status === "pending" || state.status === "shown" ? state.status : null;
 }
-//@ chunk-18hwfzwa.js:1084889-1085165 layout
+//@ chunk-czq1j3j2.js:1118920-1119196 layout
 /**
  * 按宿主状态决定是否显示"运行 /web-setup"询问，显示时渲染 _Ce。
  */
@@ -131,7 +131,7 @@ function WebSetupPromptGate(props) {
   } else prompt = $[5];
   return prompt;
 }
-//@ chunk-18hwfzwa.js:1085165-1086769 layout
+//@ chunk-czq1j3j2.js:1119196-1120801 layout
 /**
  * "运行 /web-setup" 询问的状态与计时：输入框为空且非加载时延迟显示，记录展示/忽略/回答，选 1 时调用 onRunWebSetup。
  */
@@ -274,7 +274,7 @@ function WebSetupPrompt(props) {
   } else promptElement = $[33];
   return promptElement;
 }
-//@ chunk-18hwfzwa.js:1086769-1087735 callgraph-fingerprint (2.1.88 match: TranscriptSharePrompt, 0.411)
+//@ chunk-czq1j3j2.js:1120801-1121767 callgraph-fingerprint (2.1.88 match: TranscriptSharePrompt, 0.411)
 function TranscriptSharePrompt(props) {
   let $ = useMemoCache(10);
   let { inputValue, onAnswer, onDismiss } = props;

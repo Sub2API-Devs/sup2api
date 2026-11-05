@@ -3,9 +3,9 @@
  *
  * Chrome 原生消息宿主（--chrome-native-host）：stdio 长度前缀协议与浏览器扩展通信，并通过本地 socket 把工具请求/响应在 MCP 客户端与扩展间转发。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/chromeNativeHost.ts
- * pieces: chunk-ncz9bgnh.js (11)
+ * pieces: chunk-08zxrh96.js (11)
  * attribution: fingerprint 6, layout 4, placement 1
  */
 import { appendFile, unlink, mkdir, chmod, readdir, rmdir } from "fs/promises";
@@ -21,7 +21,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { getSecureSocketPath, getSocketDir } from "./common.js";
 
-//@ chunk-ncz9bgnh.js:1393-1438 fingerprint (2.1.88 match: VERSION, 1)
+//@ chunk-08zxrh96.js:1476-1521 fingerprint (2.1.88 match: VERSION, 1)
 /**
  * Chrome 原生消息宿主常量：版本 1.0.0、单条消息上限 1MB、计算机名最长 64、scutil 超时 2s；日志文件为空（只写 stderr）。
  */
@@ -30,7 +30,7 @@ var MAX_MESSAGE_SIZE = 1048576;
 var MAX_COMPUTER_NAME_LENGTH = 64;
 var COMPUTER_NAME_TIMEOUT_MS = 2000;
 var LOG_FILE = undefined;
-//@ chunk-ncz9bgnh.js:1438-1644 fingerprint (2.1.88 match: log, 1)
+//@ chunk-08zxrh96.js:1521-1727 fingerprint (2.1.88 match: log, 1)
 /**
  * 原生宿主日志：写 stderr，配置了日志文件时追加带时间戳的行。
  */
@@ -44,12 +44,12 @@ function log(message, ...args) {
   }
   console.error(`[Claude Chrome Native Host] ${message}`, ...args);
 }
-//@ chunk-ncz9bgnh.js:1644-1650 layout
+//@ chunk-08zxrh96.js:1727-1733 layout
 /**
  * 计算机名查询的缓存 Promise。
  */
 var computerNamePromise;
-//@ chunk-ncz9bgnh.js:1650-1813 layout
+//@ chunk-08zxrh96.js:1733-1896 layout
 /**
  * 取本机显示名（带缓存），失败回退 os.hostname()；用于 status_response.computer_name。
  */
@@ -68,7 +68,7 @@ async function getComputerName() {
     return;
   }
 }
-//@ chunk-ncz9bgnh.js:1813-1920 layout
+//@ chunk-08zxrh96.js:1896-2002 layout
 /**
  * 清洗计算机名：去控制字符、去 .local 后缀、截断到 64。
  */
@@ -80,7 +80,7 @@ function sanitizeComputerName(hostName) {
     .trim();
   return trimmed ? truncateToLength(trimmed, MAX_COMPUTER_NAME_LENGTH) : undefined;
 }
-//@ chunk-ncz9bgnh.js:1920-2167 layout
+//@ chunk-08zxrh96.js:2002-2249 layout
 /**
  * 按平台查计算机名：macOS 用 scutil --get ComputerName，Windows 读 COMPUTERNAME，其他用 hostname。
  */
@@ -100,7 +100,7 @@ async function lookupComputerName() {
       return sanitizeComputerName(hostname());
   }
 }
-//@ chunk-ncz9bgnh.js:2167-2304 fingerprint (2.1.88 match: sendChromeMessage, 1)
+//@ chunk-08zxrh96.js:2249-2386 fingerprint (2.1.88 match: sendChromeMessage, 1)
 /**
  * 按 Chrome native messaging 协议写 stdout：4 字节小端长度 + UTF-8 JSON。
  */
@@ -111,7 +111,7 @@ function sendChromeMessage(message) {
   process.stdout.write(lengthBuffer);
   process.stdout.write(jsonBytes);
 }
-//@ chunk-ncz9bgnh.js:2304-2517 fingerprint (2.1.88 match: runChromeNativeHost, 0.779)
+//@ chunk-08zxrh96.js:2386-2599 fingerprint (2.1.88 match: runChromeNativeHost, 0.778)
 /**
  * `claude --chrome-native-host` 入口：启动 ChromeNativeHost 的 socket 服务，循环读 Chrome 发来的消息并处理，stdin 关闭后停止。
  */
@@ -129,7 +129,7 @@ async function runChromeNativeHost() {
     await host.stop();
   });
 }
-//@ chunk-ncz9bgnh.js:2517-2560 placement (2.1.88 match: inputSchema, 0.673)
+//@ chunk-08zxrh96.js:2599-2642 placement (2.1.88 match: inputSchema, 0.673)
 /**
  * 带 type 字段的 passthrough 对象 schema（Chrome native host 消息用）。
  */
@@ -138,7 +138,7 @@ var inputSchema = DoctorLazy(() =>
     type: create_2(),
   }).passthrough(),
 );
-//@ chunk-ncz9bgnh.js:2560-6297 fingerprint (2.1.88 match: ChromeNativeHost, 0.984)
+//@ chunk-08zxrh96.js:2642-6379 fingerprint (2.1.88 match: ChromeNativeHost, 0.984)
 /**
  * Chrome 原生消息宿主：在 /tmp/claude-mcp-browser-bridge-<user>/<pid>.sock（Windows 为命名管道）监听 MCP 客户端连接，清理过期 socket，权限 0700/0600。处理 Chrome 消息 ping/get_status/tool_response/notification（后两者转发给所有 MCP 客户端）；把 MCP 客户端发来的长度前缀 JSON 转成 tool_request 发给 Chrome，并通报 mcp_connected/mcp_disconnected。
  */
@@ -371,7 +371,7 @@ class ChromeNativeHost {
     });
   }
 }
-//@ chunk-ncz9bgnh.js:6297-7428 fingerprint (2.1.88 match: ChromeMessageReader, 1)
+//@ chunk-08zxrh96.js:6379-7510 fingerprint (2.1.88 match: ChromeMessageReader, 1)
 /**
  * 从 stdin 读 Chrome native messaging 帧（4 字节小端长度 + JSON），长度为 0 或超过 1MB 视为结束。
  */

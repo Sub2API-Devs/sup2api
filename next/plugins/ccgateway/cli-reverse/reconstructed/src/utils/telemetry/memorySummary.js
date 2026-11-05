@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：客户端事件上传队列（紧急、重试、关闭交接）；内存归因统计（子进程、页面大小、上报）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (37)
  * attribution: placement 37
  */
 import { readFile } from "fs/promises";
@@ -27,16 +27,16 @@ import { printableName } from "../printableName.js";
 import { normalizeUuidOrNull } from "../agentId.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:759038-759085 placement
+//@ chunk-exfmq47h.js:779726-779773 placement
 /**
  * 注册内存归因器。
  */
 function registerMemoryAttributor(name, attributor) {
   memoryAttribution().registerAttributor(name, attributor);
 }
-//@ chunk-aepeg2w5.js:759085-759133 placement
+//@ chunk-exfmq47h.js:779773-779821 placement
 var CHILD_MEMORY_KINDS = ["bash_shell", "mcp_stdio", "lsp", "other"];
-//@ chunk-aepeg2w5.js:759133-761627 placement
+//@ chunk-exfmq47h.js:779821-782315 placement
 /**
  * 内存归因统计（子进程、页面大小、上报）。
  */
@@ -152,16 +152,16 @@ class MemoryAttribution {
     this.childRegisteredCount = 0;
   }
 }
-//@ chunk-aepeg2w5.js:761627-761652 placement
+//@ chunk-exfmq47h.js:782315-782340 placement
 var memoryAttributionByHost; // deferred: uses MemoryAttribution of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:761627", () => {
+deferInit("chunk-exfmq47h.js:782315", () => {
   memoryAttributionByHost = new HostScoped(() => new MemoryAttribution());
 });
-//@ chunk-aepeg2w5.js:761652-761689 placement
+//@ chunk-exfmq47h.js:782340-782377 placement
 function memoryAttribution() {
   return memoryAttributionByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:761689-761789 placement
+//@ chunk-exfmq47h.js:782377-782477 placement
 /**
  * 登记子进程内存。
  */
@@ -170,7 +170,7 @@ function registerChildMemory(kind, pid) {
   if (!Number.isFinite(pid) || pid <= 0) return;
   memoryAttribution().registerChild(kind, pid);
 }
-//@ chunk-aepeg2w5.js:761789-761853 placement
+//@ chunk-exfmq47h.js:782477-782541 placement
 /**
  * 标记子进程已退出，不再计入内存归因。
  */
@@ -178,18 +178,18 @@ function markChildProcessDead(pid) {
   let entry = memoryAttribution().childProcesses.get(pid);
   if (entry) entry.dead = true;
 }
-//@ chunk-aepeg2w5.js:761853-761898 placement
+//@ chunk-exfmq47h.js:782541-782586 placement
 function sampleChildMemoryPeaks() {
   return memoryAttribution().sampleChildPeaks();
 }
-//@ chunk-aepeg2w5.js:761898-761941 placement
+//@ chunk-exfmq47h.js:782586-782629 placement
 /**
  * 安装退出时的内存汇总。
  */
 function installMemoryExitSummary(getMemoryPeaks) {
   memoryAttribution().installExitSummary(getMemoryPeaks);
 }
-//@ chunk-aepeg2w5.js:761941-762097 placement
+//@ chunk-exfmq47h.js:782629-782785 placement
 /**
  * 会话宿主类型（工具容器、租户、远程）。
  */
@@ -200,28 +200,28 @@ function sessionHostKind() {
     ? "hosted_worker"
     : "none";
 }
-//@ chunk-aepeg2w5.js:762162-762206 placement
+//@ chunk-exfmq47h.js:782850-782894 placement
 var DEFAULT_STALL_MS = 60000;
 var STALL_SIZE_BASE_BYTES = 8388608;
 var STALL_BYTES_PER_SECOND = 32768;
 var UPLOAD_CHUNK_BYTES = 262144;
-//@ chunk-aepeg2w5.js:762206-762284 placement
+//@ chunk-exfmq47h.js:782894-782972 placement
 function stallFloorMs(size, stallMs) {
   let min = Math.min(size, STALL_SIZE_BASE_BYTES);
   return Math.max(stallMs, Math.ceil((min / STALL_BYTES_PER_SECOND) * 1000));
 }
-//@ chunk-aepeg2w5.js:762284-762341 placement
+//@ chunk-exfmq47h.js:782972-783029 placement
 function maxAllowedStallMs(size, stallMs) {
   return Math.max(stallMs, Math.ceil((size / STALL_BYTES_PER_SECOND) * 1000));
 }
-//@ chunk-aepeg2w5.js:762341-762383 placement
+//@ chunk-exfmq47h.js:783029-783071 placement
 /**
  * zod 版本是否兼容（>= 1.4.0）。
  */
 function isZodVersionCompatible() {
   return semverGt("1.4.4", "1.4.0");
 }
-//@ chunk-aepeg2w5.js:762383-762505 placement
+//@ chunk-exfmq47h.js:783071-783193 placement
 class UploadStalledError extends Error {
   waitedMs;
   constructor(waitedMs) {
@@ -230,7 +230,7 @@ class UploadStalledError extends Error {
     this.name = "UploadStalledError";
   }
 }
-//@ chunk-aepeg2w5.js:762505-762741 placement
+//@ chunk-exfmq47h.js:783193-783429 placement
 /**
  * 上传停滞计时器（touch/relax/clear）。
  */
@@ -258,7 +258,7 @@ function createStallTimer(abortController, timeoutMs) {
     fired: () => fired,
   };
 }
-//@ chunk-aepeg2w5.js:762741-762850 placement
+//@ chunk-exfmq47h.js:783429-783538 placement
 function* chunkWithProgress(buffer, onProgress) {
   for (let offset = 0; offset < buffer.length; offset += UPLOAD_CHUNK_BYTES) {
     onProgress(offset);
@@ -266,11 +266,11 @@ function* chunkWithProgress(buffer, onProgress) {
   }
   onProgress(buffer.length);
 }
-//@ chunk-aepeg2w5.js:762850-762905 placement
+//@ chunk-exfmq47h.js:783538-783593 placement
 function uploadBufferWithProgress(buffer, options = {}) {
   return withStallTimeout(buffer.length, (onProgress) => chunkWithProgress(buffer, onProgress), options);
 }
-//@ chunk-aepeg2w5.js:762905-762956 placement
+//@ chunk-exfmq47h.js:783593-783644 placement
 /**
  * 以停滞超时上传流式请求体。
  */
@@ -281,7 +281,7 @@ function uploadStreamWithProgress(slices, contentLength, options = {}) {
     options,
   );
 }
-//@ chunk-aepeg2w5.js:762956-763038 placement
+//@ chunk-exfmq47h.js:783644-783726 placement
 async function* streamChunksWithProgress(slices, onProgress) {
   let bytesHanded = 0;
   onProgress(bytesHanded);
@@ -291,7 +291,7 @@ async function* streamChunksWithProgress(slices, onProgress) {
     onProgress(bytesHanded);
   }
 }
-//@ chunk-aepeg2w5.js:763038-763516 placement
+//@ chunk-exfmq47h.js:783726-784204 placement
 /**
  * 带停滞超时的请求。
  */
@@ -330,14 +330,14 @@ function withStallTimeout(contentLength, toChunks, options) {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:763551-763584 placement
+//@ chunk-exfmq47h.js:784239-784272 placement
 /**
  * 插件目录 API 路径。
  */
 var PLUGIN_DIRECTORY_API_PATH = "/api/directory/plugins";
-//@ chunk-aepeg2w5.js:778099-778111 placement
+//@ chunk-exfmq47h.js:798859-798871 placement
 var consoleProfileBearerProvider = null;
-//@ chunk-aepeg2w5.js:778111-778150 placement
+//@ chunk-exfmq47h.js:798871-798910 placement
 /**
  * 设置 console profile bearer 提供者并返回旧值。
  */
@@ -346,26 +346,26 @@ function setConsoleProfileBearerProvider(provider) {
   consoleProfileBearerProvider = provider;
   return previous;
 }
-//@ chunk-aepeg2w5.js:778150-778174 placement
+//@ chunk-exfmq47h.js:798910-798934 placement
 function getConsoleProfileBearerProvider() {
   return consoleProfileBearerProvider;
 }
-//@ chunk-aepeg2w5.js:778174-778186 placement
+//@ chunk-exfmq47h.js:798934-798946 placement
 var trustedDeviceProbe = null;
-//@ chunk-aepeg2w5.js:778186-778224 placement
+//@ chunk-exfmq47h.js:798946-798984 placement
 function setTrustedDeviceProbe(isConsoleProfileSessionsCredential) {
   let previous = trustedDeviceProbe;
   trustedDeviceProbe = isConsoleProfileSessionsCredential;
   return previous;
 }
-//@ chunk-aepeg2w5.js:778224-778258 placement
+//@ chunk-exfmq47h.js:798984-799018 placement
 /**
  * 是否已通过可信设备校验。
  */
 function isTrustedDeviceAttested() {
   return trustedDeviceProbe?.() === true;
 }
-//@ chunk-aepeg2w5.js:778258-778461 placement
+//@ chunk-exfmq47h.js:799018-799221 placement
 /**
  * 安全调用事件回调。
  */
@@ -381,7 +381,7 @@ function safeEmit(emit, event, label) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:778628-778675 placement
+//@ chunk-exfmq47h.js:799388-799435 placement
 /**
  * 中断远程会话的控制事件。
  */
@@ -389,7 +389,7 @@ var INTERRUPT_REMOTE_EVENT = {
   subtype: "interrupt",
   cancel_queued: true,
 };
-//@ chunk-aepeg2w5.js:778675-778772 placement
+//@ chunk-exfmq47h.js:799435-799532 placement
 /**
  * 取系统事件里的权限模式。
  */
@@ -397,18 +397,18 @@ function permissionModeOfSystemEvent(event) {
   if (event.type !== "system" || !("permissionMode" in event)) return;
   return parsePermissionMode(event.permissionMode);
 }
-//@ chunk-aepeg2w5.js:778772-778822 placement
+//@ chunk-exfmq47h.js:799532-799582 placement
 var KNOWN_WORKER_STATES = ["bridge", "anthropic_cloud", "byoc", "snap"];
-//@ chunk-aepeg2w5.js:778822-778865 placement
+//@ chunk-exfmq47h.js:799582-799625 placement
 /**
  * 是否为已知工作者状态。
  */
 function isKnownWorkerState(environmentKind) {
   return KNOWN_WORKER_STATES.some((state) => state === environmentKind);
 }
-//@ chunk-aepeg2w5.js:778865-778879 placement
+//@ chunk-exfmq47h.js:799625-799639 placement
 var SESSION_INIT_ERROR_GRACE_MS = 120000;
-//@ chunk-aepeg2w5.js:778879-779188 placement
+//@ chunk-exfmq47h.js:799639-799948 placement
 /**
  * 描述会话初始化错误。
  */
@@ -422,7 +422,7 @@ function describeInitError(lastInitError) {
   );
   return found ? `the cloud environment failed to start (${found})` : "the cloud environment failed to start";
 }
-//@ chunk-aepeg2w5.js:779188-779645 placement
+//@ chunk-exfmq47h.js:799948-800405 placement
 /**
  * 会话错误摘要。
  */
@@ -443,7 +443,7 @@ function sessionErrorSummary(session, options) {
   if (session.status === "failed") return "the cloud environment could not be provisioned";
   return;
 }
-//@ chunk-aepeg2w5.js:779645-781069 placement
+//@ chunk-exfmq47h.js:800405-801865 placement
 /**
  * 描述云会话状态（归档、需要操作等）。
  */
@@ -455,6 +455,9 @@ function describeCloudSession(session, options = {}) {
     id: session.id,
     title: session.title || null,
     session_status: status,
+    ...(session.status === "paused" && {
+      paused: true,
+    }),
     environment_id: session.environment_id,
     environment_kind: session.environment_kind,
     created_at: session.created_at,
@@ -505,29 +508,29 @@ function describeCloudSession(session, options = {}) {
   };
 }
 export {
-  safeEmit,
-  sessionHostKind,
-  isTrustedDeviceAttested,
-  KNOWN_WORKER_STATES,
-  describeCloudSession,
-  setTrustedDeviceProbe,
-  getConsoleProfileBearerProvider,
-  UPLOAD_CHUNK_BYTES,
-  permissionModeOfSystemEvent,
-  registerChildMemory,
-  registerMemoryAttributor,
-  INTERRUPT_REMOTE_EVENT,
   sampleChildMemoryPeaks,
-  installMemoryExitSummary,
-  setConsoleProfileBearerProvider,
-  isKnownWorkerState,
+  UPLOAD_CHUNK_BYTES,
   isZodVersionCompatible,
   uploadStreamWithProgress,
   UploadStalledError,
   createStallTimer,
+  KNOWN_WORKER_STATES,
+  describeCloudSession,
+  setTrustedDeviceProbe,
+  getConsoleProfileBearerProvider,
+  registerMemoryAttributor,
+  registerChildMemory,
+  sessionHostKind,
+  INTERRUPT_REMOTE_EVENT,
+  isKnownWorkerState,
+  permissionModeOfSystemEvent,
   PLUGIN_DIRECTORY_API_PATH,
+  installMemoryExitSummary,
+  isTrustedDeviceAttested,
+  safeEmit,
   DEFAULT_STALL_MS,
   uploadBufferWithProgress,
   maxAllowedStallMs,
   markChildProcessDead,
+  setConsoleProfileBearerProvider,
 };

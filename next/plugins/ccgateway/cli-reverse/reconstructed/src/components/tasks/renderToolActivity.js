@@ -3,9 +3,9 @@
  *
  * 渲染 agent 最近的工具活动摘要。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/renderToolActivity.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { findToolByName, safeParseToolInput } from "../../Tool.js";
@@ -14,7 +14,7 @@ import { renderToolUseMessageFor } from "../messages/toolUseRenderers.js";
 import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:686691-687040 fingerprint (2.1.88 match: renderToolActivity, 0.567)
+//@ chunk-czq1j3j2.js:707421-707771 fingerprint (2.1.88 match: renderToolActivity, 0.568)
 function renderToolActivity(activity, tools, theme, activeAgents) {
   let tool = findToolByName(tools, activity.toolName);
   if (!tool) return activity.toolName;

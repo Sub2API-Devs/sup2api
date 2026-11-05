@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能提及附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -13,13 +13,14 @@ import { findInlinePasteRanges, getInlinePasteTexts } from "../../history.js";
 import { isWordBoundaryAt, checkSkillPermission } from "../../tools/SkillTool/skillPermissions.js";
 import { buildCommandLookup } from "../../commands.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { count, uniq } from "../collections.js";
+import { countWhere } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, array, unknown, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3258765-3259010 placement
+//@ chunk-5xgkngpb.js:3343496-3343741 placement
 /**
  * 找出文本中 /技能名 提及的位置范围（去掉末尾的点）。
  */
@@ -40,14 +41,14 @@ function findSlashMentionRanges(text) {
   }
   return ranges;
 }
-//@ chunk-e6aww6q8.js:3259010-3259061 placement
+//@ chunk-5xgkngpb.js:3343741-3343792 placement
 /**
  * 读取 tengu_humble_emerson 开关，决定是否为用户提及的技能生成附件。
  */
 function isSkillMentionAttachmentEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humble_emerson", true);
 }
-//@ chunk-e6aww6q8.js:3259061-3260010 placement
+//@ chunk-5xgkngpb.js:3343792-3344746 placement
 /**
  * 为用户提及的技能生成附件，处理禁止模型调用的技能。
  */
@@ -104,14 +105,14 @@ function buildSkillMentionAttachments(text, commands, options) {
   if (mentions.size > 0)
     logFeatureOk("skill_mention_note", {
       count: mentions.size,
-      user_only_count: count([...mentions.values()], (mention) => mention.userOnly),
+      user_only_count: countWhere([...mentions.values()], (mention) => mention.userOnly),
     });
   return [...mentions.values()].map(({ skillName }) => ({
     type: "skill_mention",
     skillName,
   }));
 }
-//@ chunk-e6aww6q8.js:3260010-3260141 placement
+//@ chunk-5xgkngpb.js:3344746-3344877 placement
 function isRangeCovered(start, end, inlinePasteRanges) {
   let coveredUpTo = start;
   for (let [rangeStart, rangeEnd] of [...inlinePasteRanges].sort(
@@ -123,7 +124,7 @@ function isRangeCovered(start, end, inlinePasteRanges) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3260141-3260457 placement
+//@ chunk-5xgkngpb.js:3344877-3345193 placement
 /**
  * 更新权限上下文中的命令级禁止规则：replace 模式用给定列表加本轮禁用工具，union 模式与现有规则合并（剔除路径例外规则）；无变化时返回原状态。
  */
@@ -132,7 +133,10 @@ function setCommandDenyRules(setToolPermissionContext, rules, mode = "replace") 
     let command = prevContext.alwaysDenyRules.command;
     let nextCommandRules =
       mode === "union"
-        ? uniq([...(command ?? []), ...rules.filter((rule) => !PATH_RULE_CARVE_OUT_RE.test(rule))])
+        ? normalizeCaseForComparison_2([
+            ...(command ?? []),
+            ...rules.filter((rule) => !PATH_RULE_CARVE_OUT_RE.test(rule)),
+          ])
         : [...rules, ...(prevContext.turnDisallowedTools ?? [])];
     if (
       (command?.length ?? 0) === nextCommandRules.length &&
@@ -148,13 +152,13 @@ function setCommandDenyRules(setToolPermissionContext, rules, mode = "replace") 
     };
   });
 }
-//@ chunk-e6aww6q8.js:3260457-3260568 placement
+//@ chunk-5xgkngpb.js:3345193-3345304 placement
 /**
  * 禁用工具列表 schema 与 MCP 工具名 schema。
  */
 var disallowedToolsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var mcpToolNameSchema;
-deferInit("chunk-e6aww6q8.js:3260457", () => {
+deferInit("chunk-5xgkngpb.js:3345193", () => {
   disallowedToolsSchema = DoctorLazy(() =>
     objectSchema({
       disallowed_tools: array(unknown()),
@@ -169,10 +173,10 @@ deferInit("chunk-e6aww6q8.js:3260457", () => {
   );
 });
 export {
-  setCommandDenyRules,
-  findSlashMentionRanges,
   disallowedToolsSchema,
   mcpToolNameSchema,
   isSkillMentionAttachmentEnabled,
   buildSkillMentionAttachments,
+  setCommandDenyRules,
+  findSlashMentionRanges,
 };

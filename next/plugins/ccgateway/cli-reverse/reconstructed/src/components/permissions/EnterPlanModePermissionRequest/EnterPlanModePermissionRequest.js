@@ -3,15 +3,15 @@
  *
  * 进入计划模式确认："Claude wants to enter plan mode…"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/EnterPlanModePermissionRequest/EnterPlanModePermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (3)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: callgraph-fingerprint 1, layout 1, fingerprint 1
  */
 import { isConsentRow, modeSwitchRow } from "../consentRows.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -29,11 +29,11 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 
-//@ chunk-18hwfzwa.js:1344087-1344141 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1366392-1366446 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode_3(s) {
   return s.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:1344141-1344327 layout
+//@ chunk-czq1j3j2.js:1366446-1366632 layout
 function enterPlanChoiceToResult(choice, selectedRow) {
   switch (choice) {
     case "yes": {
@@ -53,25 +53,25 @@ function enterPlanChoiceToResult(choice, selectedRow) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1344327-1346542 fingerprint (2.1.88 match: EnterPlanModePermissionRequest, 0.487)
+//@ chunk-czq1j3j2.js:1366632-1368847 fingerprint (2.1.88 match: EnterPlanModePermissionRequest, 0.487)
 /**
  * 进入计划模式确认：说明计划模式会做什么，允许/拒绝并记录 tengu_plan_enter。
  */
 function EnterPlanModePermissionRequest(props) {
   let $ = useMemoCache(27);
   let { payload, answer, wouldTakeAnswer } = props;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let refuseInput;
-  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+  if ($[0] !== isRecentInput || $[1] !== noteRefused || $[2] !== refusedWithin) {
     refuseInput = function shouldRefuseInput() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[0] = inputRefusalWindow;
+    $[0] = isRecentInput;
     $[1] = noteRefused;
     $[2] = refusedWithin;
     $[3] = refuseInput;
@@ -89,14 +89,14 @@ function EnterPlanModePermissionRequest(props) {
   let onChangeHandler;
   if (
     $[5] !== answer ||
-    $[6] !== inputRefusalWindow ||
+    $[6] !== isRecentInput ||
     $[7] !== noteRefused ||
     $[8] !== refusedWithin ||
     $[9] !== toolPermissionContextMode ||
     $[10] !== wouldTakeAnswer
   ) {
     onChangeHandler = (value) => {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -112,7 +112,7 @@ function EnterPlanModePermissionRequest(props) {
       answer(enterPlanChoiceToResult(value, planModeRow));
     };
     $[5] = answer;
-    $[6] = inputRefusalWindow;
+    $[6] = isRecentInput;
     $[7] = noteRefused;
     $[8] = refusedWithin;
     $[9] = toolPermissionContextMode;

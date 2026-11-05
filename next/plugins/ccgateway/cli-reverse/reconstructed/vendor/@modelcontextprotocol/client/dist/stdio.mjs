@@ -1,25 +1,25 @@
 /**
  * @modelcontextprotocol/client/dist/stdio.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/client@2.0.0
- * pieces: chunk-8t8n4kdh.js (4)
+ * pieces: chunk-sywnjtqb.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import Ro from "process";
+import Lo from "process";
 import { PassThrough } from "stream";
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../../../cross-spawn/index.js";
 import { ReadBuffer, SdkError, SdkErrorCode, serializeMessage } from "./src-D_zzAWoS.mjs";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:16826-16845 esm-layout
+//@ chunk-sywnjtqb.js:18247-18266 esm-layout
 var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8t8n4kdh.js:16826", () => {
+deferInit("chunk-sywnjtqb.js:18247", () => {
   import_cross_spawn = __toESM(require_cross_spawn(), 1);
 });
-//@ chunk-8t8n4kdh.js:16907-17140 esm-fingerprint
+//@ chunk-sywnjtqb.js:18328-18561 esm-fingerprint
 var DEFAULT_INHERITED_ENV_VARS =
-  Ro.platform === "win32"
+  Lo.platform === "win32"
     ? [
         "APPDATA",
         "HOMEDRIVE",
@@ -35,18 +35,18 @@ var DEFAULT_INHERITED_ENV_VARS =
         "PROGRAMFILES",
       ]
     : ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"];
-//@ chunk-8t8n4kdh.js:17140-17266 esm-fingerprint
-function getDefaultEnvironment() {
+//@ chunk-sywnjtqb.js:18561-18687 esm-fingerprint
+function getDefaultEnvironment_2() {
   let env = {};
   for (let key of DEFAULT_INHERITED_ENV_VARS) {
-    let value = Ro.env[key];
+    let value = Lo.env[key];
     if (value === undefined) continue;
     if (value.startsWith("()")) continue;
     env[key] = value;
   }
   return env;
 }
-//@ chunk-8t8n4kdh.js:17266-19845 esm-fingerprint
+//@ chunk-sywnjtqb.js:18687-21266 esm-fingerprint
 var StdioClientTransport = class {
   _process;
   _readBuffer;
@@ -70,12 +70,12 @@ var StdioClientTransport = class {
     return new Promise((resolve, reject) => {
       this._process = import_cross_spawn.default(this._serverParams.command, this._serverParams.args ?? [], {
         env: {
-          ...getDefaultEnvironment(),
+          ...getDefaultEnvironment_2(),
           ...this._serverParams.env,
         },
         stdio: ["pipe", "pipe", this._serverParams.stderr ?? "inherit"],
         shell: false,
-        windowsHide: Ro.platform === "win32",
+        windowsHide: Lo.platform === "win32",
         cwd: this._serverParams.cwd,
       });
       this._process.on("error", (error) => {
@@ -188,4 +188,4 @@ var StdioClientTransport = class {
     });
   }
 };
-export { getDefaultEnvironment, StdioClientTransport };
+export { getDefaultEnvironment_2, StdioClientTransport };

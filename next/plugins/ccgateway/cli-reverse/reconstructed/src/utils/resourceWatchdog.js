@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：资源看门狗
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (22)
  * attribution: placement 22
  */
 import { statfs } from "fs/promises";
@@ -31,7 +31,7 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { isChildSession } from "./sessionShape.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3296441-3296613 placement
+//@ chunk-5xgkngpb.js:3381501-3381673 placement
 var TENGU_CCR_DISK_WATCHDOG = "tengu_ccr_disk_watchdog";
 var TENGU_CCR_MEMORY_WATCHDOG = "tengu_ccr_memory_watchdog";
 var RESOURCE_WATCHDOG_PID = "resource-watchdog.pid";
@@ -43,7 +43,7 @@ var WATCHDOG_CHECK_INTERVAL_MS = 0.05;
 var DISK_WATCHDOG_KILL_THRESHOLD_BYTES = 1.25;
 var DISK_WATCHDOG_WARN_THRESHOLD_BYTES = 1048576;
 var MEMORY_WATCHDOG_TARGET_LIMIT_BYTES = 1024 * DISK_WATCHDOG_WARN_THRESHOLD_BYTES;
-//@ chunk-e6aww6q8.js:3296613-3296871 placement
+//@ chunk-5xgkngpb.js:3381673-3381931 placement
 class ResourceWatchdogState {
   timer = undefined;
   lockPath = undefined;
@@ -67,16 +67,16 @@ class ResourceWatchdogState {
   diskReadStuck = false;
   lateDiskReading = undefined;
 }
-//@ chunk-e6aww6q8.js:3296871-3296898 placement
+//@ chunk-5xgkngpb.js:3381931-3381958 placement
 var watchdogStateSlot; // deferred: uses ResourceWatchdogState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3296871", () => {
+deferInit("chunk-5xgkngpb.js:3381931", () => {
   watchdogStateSlot = new HostScoped(() => new ResourceWatchdogState());
 });
-//@ chunk-e6aww6q8.js:3296898-3296937 placement
+//@ chunk-5xgkngpb.js:3381958-3381997 placement
 function watchdogState() {
   return watchdogStateSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:3296937-3297202 placement
+//@ chunk-5xgkngpb.js:3381997-3382262 placement
 function memoryPressureTransition(state, usedFraction) {
   let level;
   if (usedFraction >= MEMORY_WATCHDOG_THRESHOLD_BYTES) {
@@ -97,7 +97,7 @@ function memoryPressureTransition(state, usedFraction) {
   }
   return level;
 }
-//@ chunk-e6aww6q8.js:3297202-3297304 placement
+//@ chunk-5xgkngpb.js:3382262-3382364 placement
 function checkFreeThreshold(freeState, freeBytes, lowGib) {
   let thresholdBytes = lowGib * MEMORY_WATCHDOG_TARGET_LIMIT_BYTES;
   if (freeBytes < thresholdBytes) {
@@ -108,7 +108,7 @@ function checkFreeThreshold(freeState, freeBytes, lowGib) {
   if (freeBytes >= thresholdBytes * DISK_WATCHDOG_KILL_THRESHOLD_BYTES) rearmWatchdog(freeState);
   return false;
 }
-//@ chunk-e6aww6q8.js:3297304-3297680 placement
+//@ chunk-5xgkngpb.js:3382364-3382740 placement
 /**
  * 由 statfs 结果计算磁盘使用比例、可用与总量（MB）、块使用百分比，有 inode 信息时取两者较大的使用比例。
  */
@@ -132,7 +132,7 @@ function diskUsageFromStatfs(stats) {
   }
   return usage;
 }
-//@ chunk-e6aww6q8.js:3297680-3298066 placement
+//@ chunk-5xgkngpb.js:3382740-3383126 placement
 /**
  * 带截止时间读取磁盘使用情况；超时则标记读取卡住，不再发起新读取，直到那次读取返回后记下迟到的结果。
  */
@@ -162,7 +162,7 @@ async function readDiskUsage(rootPath) {
   }
   return settled?.reading;
 }
-//@ chunk-e6aww6q8.js:3298066-3298157 placement
+//@ chunk-5xgkngpb.js:3383126-3383217 placement
 /**
  * hasWatchdogObservation：是否已观测到磁盘或内存紧张。
  */
@@ -170,7 +170,7 @@ function hasWatchdogObservation() {
   let state = watchdogState();
   return state.diskFree.status !== undefined || state.memoryFree.status !== undefined;
 }
-//@ chunk-e6aww6q8.js:3298157-3298486 placement
+//@ chunk-5xgkngpb.js:3383217-3383546 placement
 /**
  * 磁盘或内存不足时生成 critical_system_reminder 附件；已告知过且消息里仍有同样提醒的不重复。
  */
@@ -199,7 +199,7 @@ function lowResourceReminders(normalizedMessages) {
     ];
   });
 }
-//@ chunk-e6aww6q8.js:3298486-3300595 placement
+//@ chunk-5xgkngpb.js:3383546-3385666 placement
 /**
  * 资源看门狗：定期检查磁盘空间，持锁运行并记录遥测。
  */
@@ -306,13 +306,13 @@ async function runResourceWatchdog(rootPath) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:3300595-3300652 placement
+//@ chunk-5xgkngpb.js:3385666-3385723 placement
 function runWatchdogOnce() {
   try {
     runResourceWatchdog(getFsImplementation().cwd()).catch(() => {});
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3300652-3300729 placement
+//@ chunk-5xgkngpb.js:3385723-3385800 placement
 /**
  * startWatchdogSafe：启动看门狗（失败只记日志）。
  */
@@ -323,7 +323,7 @@ function startWatchdogSafe() {
     if (shouldReportWatchdog()) logFeatureBad("ccr_disk_watchdog", "boot_error");
   }
 }
-//@ chunk-e6aww6q8.js:3300729-3300932 placement
+//@ chunk-5xgkngpb.js:3385800-3386003 placement
 function startResourceWatchdog() {
   let { diskLowGib, memoryLowGib } = lowResourceThresholds();
   if (!isWatchdogTelemetryEnabled() && diskLowGib === 0 && memoryLowGib === 0) return;
@@ -333,7 +333,7 @@ function startResourceWatchdog() {
   state.timer.unref?.();
   if (shouldReportWatchdog()) logFeatureOk("ccr_disk_watchdog");
 }
-//@ chunk-e6aww6q8.js:3300932-3301060 placement
+//@ chunk-5xgkngpb.js:3386003-3386131 placement
 function processStartTime(pid) {
   try {
     let file = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -342,7 +342,7 @@ function processStartTime(pid) {
     return "";
   }
 }
-//@ chunk-e6aww6q8.js:3301060-3301168 placement
+//@ chunk-5xgkngpb.js:3386131-3386239 placement
 function isLockHolderAlive(pid, expectedStartTime) {
   try {
     process.kill(pid, 0);
@@ -353,7 +353,7 @@ function isLockHolderAlive(pid, expectedStartTime) {
   let startTime = processStartTime(pid);
   return startTime === "" || startTime === expectedStartTime;
 }
-//@ chunk-e6aww6q8.js:3301168-3302052 placement
+//@ chunk-5xgkngpb.js:3386239-3387126 placement
 function acquireDiskWatchdogLock(state) {
   let lockPath = `${env.CLAUDE_CODE_DIAGNOSTICS_FILE}.disk-watchdog.pid`;
   if (env.CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY)
@@ -423,7 +423,7 @@ function acquireDiskWatchdogLock(state) {
   }
   return "error";
 }
-//@ chunk-e6aww6q8.js:3302052-3302188 placement
+//@ chunk-5xgkngpb.js:3387126-3387262 placement
 function releaseWatchdogLock(state) {
   if (state.lockPath === undefined) return;
   try {
@@ -432,22 +432,22 @@ function releaseWatchdogLock(state) {
   } catch {}
   state.lockPath = undefined;
 }
-//@ chunk-e6aww6q8.js:3302188-3302241 placement
+//@ chunk-5xgkngpb.js:3387262-3387315 placement
 function rearmWatchdog(freeState) {
   freeState.armed = true;
   freeState.status = undefined;
   freeState.told = false;
 }
-//@ chunk-e6aww6q8.js:3302241-3302368 placement
+//@ chunk-5xgkngpb.js:3387315-3387442 placement
 function isWatchdogTelemetryEnabled() {
   if (env.CLAUDECODE) return false;
   return env.CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY || Boolean(env.CLAUDE_CODE_DIAGNOSTICS_FILE);
 }
-//@ chunk-e6aww6q8.js:3302368-3302470 placement
+//@ chunk-5xgkngpb.js:3387442-3387544 placement
 function shouldReportWatchdog() {
   return env.CLAUDE_CODE_ENVIRONMENT_KIND !== "byoc" || env.CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY;
 }
-//@ chunk-e6aww6q8.js:3302470-3302627 placement
+//@ chunk-5xgkngpb.js:3387544-3387701 placement
 function lowResourceThresholds() {
   return isChildSession()
     ? {
@@ -459,4 +459,4 @@ function lowResourceThresholds() {
         memoryLowGib: env.CLAUDE_CODE_WARN_MEMORY_FREE_GIB ?? 0,
       };
 }
-export { startWatchdogSafe, hasWatchdogObservation, lowResourceReminders };
+export { hasWatchdogObservation, lowResourceReminders, startWatchdogSafe };

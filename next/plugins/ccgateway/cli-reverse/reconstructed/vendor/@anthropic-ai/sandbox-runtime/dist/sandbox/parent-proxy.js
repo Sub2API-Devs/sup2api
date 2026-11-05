@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/parent-proxy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-078pp0rm.js (19)
+ * pieces: chunk-70ac3q96.js (19)
  * attribution: esm-fingerprint 18, esm-layout 1
  */
 import { URL as x } from "url";
@@ -11,7 +11,7 @@ import { connect as connect_2 } from "tls";
 import { logForDebugging } from "../utils/debug.js";
 import { addRange, ipFamily, addressInSet, mappedIPv4 } from "./address.js";
 
-//@ chunk-078pp0rm.js:2133-2291 esm-fingerprint
+//@ chunk-70ac3q96.js:2133-2291 esm-fingerprint
 var CONNECT_TIMEOUT_MS = 30000;
 var HOP_BY_HOP = new Set([
   "connection",
@@ -24,7 +24,7 @@ var HOP_BY_HOP = new Set([
   "transfer-encoding",
   "upgrade",
 ]);
-//@ chunk-078pp0rm.js:2291-2891 esm-fingerprint
+//@ chunk-70ac3q96.js:2291-2891 esm-fingerprint
 function resolveParentProxy(cfg) {
   let http = cfg?.http ?? process.env.HTTP_PROXY ?? process.env.http_proxy ?? undefined;
   let https = cfg?.https ?? process.env.HTTPS_PROXY ?? process.env.https_proxy ?? http;
@@ -54,7 +54,7 @@ function resolveParentProxy(cfg) {
     noProxy: parseNoProxy(noProxyRaw),
   };
 }
-//@ chunk-078pp0rm.js:2891-3321 esm-fingerprint
+//@ chunk-70ac3q96.js:2891-3321 esm-fingerprint
 function parseNoProxy(raw) {
   let rules = {
     all: false,
@@ -84,7 +84,7 @@ function parseNoProxy(raw) {
   }
   return rules;
 }
-//@ chunk-078pp0rm.js:3321-3627 esm-fingerprint
+//@ chunk-70ac3q96.js:3321-3627 esm-fingerprint
 function shouldBypassParentProxy(resolved, host) {
   let h = stripBrackets(host.toLowerCase().replace(/\.$/, ""));
   if (h === "localhost" || ipFamily(h)) return true;
@@ -96,12 +96,12 @@ function shouldBypassParentProxy(resolved, host) {
     } else if (h === v || h.endsWith("." + v)) return true;
   return false;
 }
-//@ chunk-078pp0rm.js:3627-3704 esm-fingerprint
+//@ chunk-70ac3q96.js:3627-3704 esm-fingerprint
 function selectParentProxyUrl(resolved, opts) {
   if (opts.isHttps) return resolved.httpsUrl ?? resolved.httpUrl;
   return resolved.httpUrl;
 }
-//@ chunk-078pp0rm.js:3704-4882 esm-fingerprint
+//@ chunk-70ac3q96.js:3704-4882 esm-fingerprint
 function openConnectTunnel(opts) {
   let { destHost, destPort } = opts;
   let bare = stripBrackets(destHost);
@@ -166,7 +166,7 @@ Host: ${authority}\r
     });
   });
 }
-//@ chunk-078pp0rm.js:4882-5153 esm-fingerprint
+//@ chunk-70ac3q96.js:4882-5153 esm-fingerprint
 function connectViaParentProxy(proxyUrl, destHost, destPort) {
   let proxyHost = stripBrackets(proxyUrl.hostname);
   let proxyPort = Number(proxyUrl.port) || (proxyUrl.protocol === "https:" ? 443 : 80);
@@ -190,7 +190,7 @@ function connectViaParentProxy(proxyUrl, destHost, destPort) {
         : connect(proxyPort, proxyHost),
   });
 }
-//@ chunk-078pp0rm.js:5153-5429 esm-fingerprint
+//@ chunk-70ac3q96.js:5153-5429 esm-fingerprint
 function proxyAuthHeader(proxyUrl) {
   if (!proxyUrl.username && !proxyUrl.password) return;
   try {
@@ -201,7 +201,7 @@ function proxyAuthHeader(proxyUrl) {
     return `Basic ${Buffer.from(creds).toString("base64")}`;
   }
 }
-//@ chunk-078pp0rm.js:5429-5821 esm-fingerprint
+//@ chunk-70ac3q96.js:5429-5821 esm-fingerprint
 function relayResponseHead(res, upstreamRes, headers = stripHopByHop(upstreamRes.headers)) {
   try {
     res.writeHead(upstreamRes.statusCode ?? 502, headers);
@@ -226,7 +226,7 @@ function relayResponseHead(res, upstreamRes, headers = stripHopByHop(upstreamRes
     return false;
   }
 }
-//@ chunk-078pp0rm.js:5821-5992 esm-fingerprint
+//@ chunk-70ac3q96.js:5821-5992 esm-fingerprint
 function onUpstreamError(upstream, fail) {
   let answer;
   upstream.once("response", (res) => {
@@ -240,7 +240,7 @@ function onUpstreamError(upstream, fail) {
     fail(err);
   });
 }
-//@ chunk-078pp0rm.js:5992-6271 esm-fingerprint
+//@ chunk-70ac3q96.js:5992-6271 esm-fingerprint
 function stripHopByHop(h, { folded = false } = {}) {
   let norm = (name) => {
     let lower = name.trim().toLowerCase();
@@ -256,11 +256,11 @@ function stripHopByHop(h, { folded = false } = {}) {
   }
   return out;
 }
-//@ chunk-078pp0rm.js:6271-6345 esm-fingerprint
+//@ chunk-70ac3q96.js:6271-6345 esm-fingerprint
 function stripBrackets(host) {
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
-//@ chunk-078pp0rm.js:6345-6487 esm-fingerprint
+//@ chunk-70ac3q96.js:6345-6487 esm-fingerprint
 function redactUrl(u) {
   if (!u) return "-";
   if (!u.username && !u.password) return u.href;
@@ -269,11 +269,11 @@ function redactUrl(u) {
   c.password = "***";
   return c.href;
 }
-//@ chunk-078pp0rm.js:6487-6546 esm-fingerprint
+//@ chunk-70ac3q96.js:6487-6546 esm-fingerprint
 function redactUserinfo(raw) {
   return raw.replace(/\/\/[^@/]*@/, "//***:***@");
 }
-//@ chunk-078pp0rm.js:6546-6683 esm-fingerprint
+//@ chunk-70ac3q96.js:6546-6683 esm-fingerprint
 function isValidHost(h) {
   if (!h || h.length > 255) return false;
   let bare = stripBrackets(h);
@@ -281,7 +281,7 @@ function isValidHost(h) {
   if (isIP(bare)) return true;
   return /^[A-Za-z0-9._-]+$/.test(bare);
 }
-//@ chunk-078pp0rm.js:6683-6833 esm-fingerprint
+//@ chunk-70ac3q96.js:6683-6833 esm-fingerprint
 function canonicalizeHost(h) {
   try {
     let bare = stripBrackets(h);
@@ -292,12 +292,12 @@ function canonicalizeHost(h) {
     return;
   }
 }
-//@ chunk-078pp0rm.js:6833-6906 esm-layout
+//@ chunk-70ac3q96.js:6833-6906 esm-layout
 function formatAuthority(host, port, defaultPort) {
   let bracketed = isIP(host) === 6 ? `[${host}]` : host;
   return port === defaultPort ? bracketed : `${bracketed}:${port}`;
 }
-//@ chunk-078pp0rm.js:6906-7129 esm-fingerprint
+//@ chunk-70ac3q96.js:6906-7129 esm-fingerprint
 async function directRequestOptions(host, port, lookup, tls) {
   let address = host;
   if (lookup && !isIP(host)) {
@@ -317,7 +317,7 @@ async function directRequestOptions(host, port, lookup, tls) {
     agent: false,
   };
 }
-//@ chunk-078pp0rm.js:7129-7450 esm-fingerprint
+//@ chunk-70ac3q96.js:7129-7450 esm-fingerprint
 function dialDirect(host, port, lookup, timeoutMs = CONNECT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     let s_2 = connect({

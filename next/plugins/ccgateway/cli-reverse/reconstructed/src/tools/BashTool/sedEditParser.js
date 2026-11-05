@@ -3,15 +3,15 @@
  *
  * 取出 sed -i 的编辑表达式；本模块混入了第三方 turndown 的 commonmark 规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/sedEditParser.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { getCommandArgv } from "../../utils/bash/commands.js";
 import { MULTIPLE_INPLACE_MARKER } from "./sedValidation.js";
 
-//@ chunk-e6aww6q8.js:1059048-1059563 callgraph-fingerprint (2.1.88 match: parseSedEditCommand, 0.304)
+//@ chunk-5xgkngpb.js:1054299-1054814 callgraph-fingerprint (2.1.88 match: parseSedEditCommand, 0.304)
 /**
  * 从 sed -i 命令中取出编辑表达式（-e/--expression 或第一个非选项参数）；没有 -i 返回 null，多个 -i 返回 __SED_MULTIPLE_I_FLAGS__。
  */

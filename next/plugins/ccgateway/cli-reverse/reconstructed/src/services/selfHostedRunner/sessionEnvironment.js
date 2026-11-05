@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 合成会话子进程环境（继承、服务器下发与 runner 强制变量的合并）与 agent_files 校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (8)
  * attribution: placement 8
  */
 import { join } from "path";
@@ -24,7 +24,7 @@ import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 import { writeSessionFileAtomically } from "./hostConfigSnapshot.js";
 import { GITHUB_HOST } from "../../utils/git/githubUrl.js";
 
-//@ chunk-hm0ce8vc.js:35698-36432 placement
+//@ chunk-asf5gh8x.js:37623-38357 placement
 /**
  * 合并继承环境、服务器环境与 runner 强制变量；丢弃与强制变量同名变体或非法值并回调 onDropped。
  */
@@ -65,14 +65,14 @@ function mergeSessionEnv({ inheritedEnv, serverEnv, enforcedEnv, onDropped }) {
   }
   return Object.fromEntries(merged);
 }
-//@ chunk-hm0ce8vc.js:36432-36524 placement
+//@ chunk-asf5gh8x.js:38357-38449 placement
 /**
  * NFKD 去掉组合符后大写，用于判断变量名是否为强制变量的变体。
  */
 function foldEnvNameForComparison(name) {
   return name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().toUpperCase();
 }
-//@ chunk-hm0ce8vc.js:36553-36633 placement
+//@ chunk-asf5gh8x.js:38478-38558 placement
 /**
  * agent_files 校验用常量：条目数上限、单个内容上限、--agents 文件写入超时，以及 agent 名模式与文件名。
  */
@@ -81,7 +81,7 @@ var REMOTE_AGENTS_JSON = "remote-agents.json";
 var MAX_AGENT_FILES = 64;
 var MAX_AGENT_FILE_BYTES = 1048576;
 var AGENTS_FILE_WRITE_TIMEOUT_MS = 1e4;
-//@ chunk-hm0ce8vc.js:36633-37395 placement
+//@ chunk-asf5gh8x.js:38558-39320 placement
 /**
  * 校验服务器下发的 agent_files：数组、条目数、名字格式、内容大小、重名。
  */
@@ -118,7 +118,7 @@ function validateAgentFiles(agentFiles) {
     seenNames.add(name);
   }
 }
-//@ chunk-hm0ce8vc.js:37395-37843 placement
+//@ chunk-asf5gh8x.js:39320-39768 placement
 /**
  * 把 agent_files 与服务器 --agents 参数合成会话的 --agents 值。
  */
@@ -150,7 +150,7 @@ function buildAgentsArgFromFiles(agentFiles, serverAgentsArg) {
     );
   return agentsJson;
 }
-//@ chunk-hm0ce8vc.js:37843-39183 placement
+//@ chunk-asf5gh8x.js:39768-41108 placement
 /**
  * 解析单个 agent 文件的 frontmatter，确认它定义的是同名 agent。
  */
@@ -226,7 +226,7 @@ function parseAgentFileEntry(name, content) {
     }),
   };
 }
-//@ chunk-hm0ce8vc.js:39183-39874 placement
+//@ chunk-asf5gh8x.js:41108-41799 placement
 /**
  * 把合成的 agents 定义写入会话配置目录（remote-agents.json）。
  */
@@ -268,6 +268,6 @@ async function writeSessionAgentsFile(options) {
     () => "deliver_failed",
   );
 }
-//@ chunk-hm0ce8vc.js:39874-39893 placement
+//@ chunk-asf5gh8x.js:41799-41818 placement
 var GITHUB_API_HOST = `api.${GITHUB_HOST}`;
 export { writeSessionAgentsFile, mergeSessionEnv };

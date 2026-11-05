@@ -3,13 +3,15 @@
  *
  * 2.1.316 新增：plugin eval 中由代理扮演 MCP 服务器的"模拟应答者"提示词与结果解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (9)
  * attribution: placement 9
  */
 import { asSystemPrompt } from "../../../utils/systemPromptType.js";
 import { mainAgentContext } from "../../../utils/agentContext.js";
+import { recordToolUsed } from "../../compact/keptTools.js";
+import { UNREADABLE_TOOLS_USED_BEFORE_SUMMARY } from "../../../bootstrap/stateSlices.js";
 import { queryHaiku, queryHaikuWithFallback } from "../../api/claude.js";
 import { extractTextContent_2 } from "../../../utils/messages.js";
 import { isSyntheticModelApiErrorMessage } from "../../../bootstrap/sessionSlices.js";
@@ -20,7 +22,7 @@ import { getTotalCostUSD } from "../../../bootstrap/state.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
-//@ chunk-qchp9vrd.js:16809-16871 placement
+//@ chunk-af1hzzme.js:18140-18202 placement
 /**
  * 回显参数的最大字符数（16384）。
  */
@@ -30,7 +32,7 @@ var MOCK_OUTPUT_MAX_CHARS = 49152;
 var MOCK_HISTORY_MAX_CHARS = 240000;
 var MOCK_ABORT_PREFIX = "ABORT:";
 var MOCK_ERROR_PREFIX = "ERROR:";
-//@ chunk-qchp9vrd.js:16871-17508 placement (2.1.88 match: getCommandPrefixImpl, 0.304)
+//@ chunk-af1hzzme.js:18202-18849 placement (2.1.88 match: getCommandPrefixImpl, 0.305)
 /**
  * 插件评测的模拟应答：用 Haiku/默认模型按 responder 提示生成文本并计费（切分误归）。
  */
@@ -61,6 +63,7 @@ async function runMockResponderQuery({
       agentContext: mainAgentContext(),
       credentials,
     };
+    recordToolUsed(UNREADABLE_TOOLS_USED_BEFORE_SUMMARY);
     let prefix = model
       ? await queryHaiku({
           systemPrompt: preCheckResult,
@@ -90,7 +93,7 @@ async function runMockResponderQuery({
     return logMockResponderFailure("exception", errorMessage(error), currentCostUsd() - startCostUsd);
   }
 }
-//@ chunk-qchp9vrd.js:17508-17683 placement
+//@ chunk-af1hzzme.js:18849-19024 placement
 function logMockResponderFailure(failureKind, detail, costUsd) {
   logForDebugging(`plugin eval: agent mock responder ${failureKind}: ${detail}`, {
     level: "warn",
@@ -101,7 +104,7 @@ function logMockResponderFailure(failureKind, detail, costUsd) {
     costUsd,
   };
 }
-//@ chunk-qchp9vrd.js:17683-17729 placement
+//@ chunk-af1hzzme.js:19024-19070 placement
 /**
  * 取当前累计花费（出错返回 0）。
  */
@@ -112,7 +115,7 @@ function currentCostUsd() {
     return 0;
   }
 }
-//@ chunk-qchp9vrd.js:17729-18904 placement
+//@ chunk-af1hzzme.js:19070-20245 placement
 /**
  * 生成让代理扮演指定 MCP 服务器的系统提示词（含返回工具错误、abort_when 条件的约定）。
  */
@@ -130,7 +133,7 @@ ${text.trim()}`);
 
 `);
 }
-//@ chunk-qchp9vrd.js:18904-19384 placement
+//@ chunk-af1hzzme.js:20245-20725 placement
 /**
  * 列出本次运行早先的模拟调用作为上下文（超量时省略较早的）。
  */
@@ -160,7 +163,7 @@ ${truncateWithOmittedNote(jsonStringify(input, null, 2) ?? "null", MAX_ARGS_ECHO
 
 `);
 }
-//@ chunk-qchp9vrd.js:19384-19663 placement
+//@ chunk-af1hzzme.js:20725-21004 placement
 /**
  * 解析应答者回复：普通结果、工具错误或 abort（满足 abort_when）。
  */
@@ -187,13 +190,13 @@ function parseMockResponderReply(reply, abortWhenDeclared) {
     text: reply,
   };
 }
-//@ chunk-qchp9vrd.js:19663-19759 placement
+//@ chunk-af1hzzme.js:21004-21099 placement
 function truncateWithOmittedNote(text, maxChars) {
   return text.length > maxChars
     ? `${truncateToLength(text, maxChars)}\u2026 [${text.length - maxChars} more characters omitted]`
     : text;
 }
-//@ chunk-qchp9vrd.js:19759-19805 placement
+//@ chunk-af1hzzme.js:21099-21145 placement
 /**
  * 判断字符串非空。
  */

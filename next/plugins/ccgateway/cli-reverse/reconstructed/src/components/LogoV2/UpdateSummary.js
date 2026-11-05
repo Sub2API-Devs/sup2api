@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：启动时汇总版本更新说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (14)
  * attribution: placement 14
  */
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getForcedFirstLaunch, isNewerClawdEntranceVersion } from "./AnimatedClawd.js";
 import {
@@ -30,33 +31,38 @@ import { useNoticeImpressionEnabled, CondensedLogo } from "./CondensedLogo.js";
 import { isSessionRestored } from "../../utils/sessionRestore.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getTeammateAgentId } from "../../bootstrap/state.js";
-import { useState, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { env } from "../../utils/env.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Box, Text, Link } from "../../ink/components/Text.js";
+import { SlashIndentBox } from "./NoticeIndent.js";
+import { Text, Link } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:65318-65583 placement
+//@ chunk-hnxhr3bs.js:61185-61189 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:61185", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:64870-65135 placement
 var BUGFIX_PATTERN =
   /^(fix(ed|es)?|resolve[ds]?|correct(ed|s)?|prevent(ed|s)?|(\S+\s+){0,2}no longer|revert(ed|s)?|bug fix(es)?)\b/;
 var FEATURE_PREFIX_RE =
   /^(add(ed|s)?|new|introduce[ds]?|support(ed|s)?|launch(ed|es)?|ship(ped|s)?|enable[ds]?)\b/;
 var BRACKET_PREFIX_RE = /^\[[^\]]+\]\s*/;
 var NAMESPACE_PREFIX_RE = /^[a-z0-9 /._`-]{1,40}:\s*/;
-//@ chunk-ag5x7vhf.js:65583-65697 placement
+//@ chunk-hnxhr3bs.js:65135-65249 placement
 function classifyReleaseNote(note) {
   if (BUGFIX_PATTERN.test(note) || note.includes("regression")) return "bugFix";
   if (FEATURE_PREFIX_RE.test(note)) return "feature";
   return "other";
 }
-//@ chunk-ag5x7vhf.js:65697-65755 placement
+//@ chunk-hnxhr3bs.js:65249-65307 placement
 var BUGFIX_ROLLUP_RE = /^(various )?bug ?fixes\b.*\bimprovements$/;
 var CLASSIFY_MAX_CHARS = 500;
-//@ chunk-ag5x7vhf.js:65755-65925 placement
+//@ chunk-hnxhr3bs.js:65307-65477 placement
 function classifyReleaseNoteEntry(note) {
   let note_2 = note.slice(0, CLASSIFY_MAX_CHARS).trim().toLowerCase();
   if (BUGFIX_ROLLUP_RE.test(note_2)) return "bugFixRollup";
@@ -64,7 +70,7 @@ function classifyReleaseNoteEntry(note) {
   if (kind !== "other") return kind;
   return classifyReleaseNote(note_2.replace(BRACKET_PREFIX_RE, "").replace(NAMESPACE_PREFIX_RE, ""));
 }
-//@ chunk-ag5x7vhf.js:65925-66386 placement
+//@ chunk-hnxhr3bs.js:65477-65938 placement
 function summarizeReleaseNotes({ entries }) {
   let notes = releaseNoteStrings(entries);
   if (notes.length === 0) return null;
@@ -95,20 +101,20 @@ function summarizeReleaseNotes({ entries }) {
   if (parts.length === 0) return "Updated to latest.";
   return `Updated to latest. Got ${formatListWithAnd(parts)}.`;
 }
-//@ chunk-ag5x7vhf.js:66386-66531 placement (2.1.88 match: formatListWithAnd, 0.812)
+//@ chunk-hnxhr3bs.js:65938-66083 placement (2.1.88 match: formatListWithAnd, 0.811)
 function formatListWithAnd(parts) {
   if (parts.length <= 1) return parts.join("");
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
   return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
-//@ chunk-ag5x7vhf.js:66531-66657 placement
+//@ chunk-hnxhr3bs.js:66083-66209 placement
 function releaseNoteStrings(entries) {
   if (!Array.isArray(entries)) return [];
   let out = [];
   for (let note of entries) if (typeof note === "string" && note.trim() !== "") out.push(note);
   return out;
 }
-//@ chunk-ag5x7vhf.js:66657-67455 placement
+//@ chunk-hnxhr3bs.js:66209-67007 placement
 /**
  * 启动时汇总自上次看过以来的版本更新说明（feature/bugFix 计数），用于"Updated to latest"提示。
  */
@@ -117,10 +123,10 @@ function computeStartupUpdateSummary(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -149,7 +155,7 @@ function computeStartupUpdateSummary(
     return null;
   }
 }
-//@ chunk-ag5x7vhf.js:67455-67621 placement
+//@ chunk-hnxhr3bs.js:67007-67173 placement
 function getStartupUpdateSummary() {
   if (uiSignals.startupUpdateSummary === undefined) {
     let startupUpdateSummary = computeStartupUpdateSummary();
@@ -158,7 +164,7 @@ function getStartupUpdateSummary() {
   }
   return uiSignals.startupUpdateSummary;
 }
-//@ chunk-ag5x7vhf.js:67621-68202 placement
+//@ chunk-hnxhr3bs.js:67173-67754 placement
 function markReleaseNotesSeen(config) {
   if (!isNewerClawdEntranceVersion(config.lastReleaseNotesSeen)) {
     return config;
@@ -169,21 +175,21 @@ function markReleaseNotesSeen(config) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   };
 }
-//@ chunk-ag5x7vhf.js:68202-69046 placement
+//@ chunk-hnxhr3bs.js:67754-68602 placement
 /**
  * 启动时显示精简 Logo 与"本次更新摘要 + changelog 链接"；后台/队友会话或非首屏时不显示，并在显示后标记已看过发行说明。
  */
 function StartupUpdateSummary(props) {
-  let $ = useMemoCache(17);
+  let $ = useMemoCache(18);
   let { hideLogo } = props;
   let hide = hideLogo === undefined ? false : hideLogo;
   let { storageV5 } = useTheme_2();
@@ -239,15 +245,15 @@ function StartupUpdateSummary(props) {
     $[11] = logo;
   } else logo = $[11];
   let summaryBox;
-  if ($[12] !== summary) {
+  if ($[12] !== hide || $[13] !== summary) {
     summaryBox =
       summary &&
-      jsxProd_default_2(Box, {
-        paddingLeft: 2,
-        flexDirection: "column",
+      jsxProd_default_2(SlashIndentBox, {
         children: [
           jsxProd_default(Text, {
-            bold: true,
+            bold: !hide,
+            dimColor: hide,
+            italic: hide,
             children: summary,
           }),
           jsxProd_default_2(Text, {
@@ -262,33 +268,29 @@ function StartupUpdateSummary(props) {
           }),
         ],
       });
-    $[12] = summary;
-    $[13] = summaryBox;
-  } else summaryBox = $[13];
+    $[12] = hide;
+    $[13] = summary;
+    $[14] = summaryBox;
+  } else summaryBox = $[14];
   let content;
-  if ($[14] !== logo || $[15] !== summaryBox) {
+  if ($[15] !== logo || $[16] !== summaryBox) {
     content = jsxProd_default_2(Fragment, {
       children: [logo, summaryBox, false],
     });
-    $[14] = logo;
-    $[15] = summaryBox;
-    $[16] = content;
-  } else content = $[16];
+    $[15] = logo;
+    $[16] = summaryBox;
+    $[17] = content;
+  } else content = $[17];
   return content;
 }
-//@ chunk-ag5x7vhf.js:69046-69050 placement
+//@ chunk-hnxhr3bs.js:68602-68606 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:69046", () => {
+deferInit("chunk-hnxhr3bs.js:68602", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:69050-69054 placement
+//@ chunk-hnxhr3bs.js:68606-68610 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:69050", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:69054-69058 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:69054", () => {
+deferInit("chunk-hnxhr3bs.js:68606", () => {
   init_react_production();
 });
 export { StartupUpdateSummary };

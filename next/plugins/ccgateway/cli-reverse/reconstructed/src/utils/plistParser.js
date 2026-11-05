@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：plist XML 解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sasp5j43.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0qx87na8.js (10)
  * attribution: placement 10
  */
 
-//@ chunk-sasp5j43.js:191-253 placement
+//@ chunk-0qx87na8.js:191-253 placement
 /**
  * isPlainObjectPlist：普通对象判断（plist 解析）。
  */
 function isPlainObjectPlist(value) {
   return typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-sasp5j43.js:253-274 placement
+//@ chunk-0qx87na8.js:253-274 placement
 var PLIST_TAG_NAME_PATTERN = /^\/?[\w:.-]+/;
-//@ chunk-sasp5j43.js:274-791 placement
+//@ chunk-0qx87na8.js:274-791 placement
 function* tokenizePlistXml(xml) {
   let length = xml.length;
   let pos = 0;
@@ -55,7 +55,7 @@ function* tokenizePlistXml(xml) {
     pos = index + 1;
   }
 }
-//@ chunk-sasp5j43.js:791-940 placement
+//@ chunk-0qx87na8.js:791-940 placement
 /**
  * 极简 plist XML 解析器入口：只接受 <plist> 根，支持 dict/array/string/integer/real/true/false/date/data。
  */
@@ -68,12 +68,12 @@ function parsePlistXml(xml) {
   let plistValue = parsePlistValue(tokens, firstTag);
   return nextPlistTag(tokens)?.[1] === "/plist" ? plistValue : undefined;
 }
-//@ chunk-sasp5j43.js:940-1037 placement (2.1.88 match: returnValue, 1)
+//@ chunk-0qx87na8.js:940-1037 placement (2.1.88 match: returnValue, 1)
 function nextPlistTag(as) {
   for (let e = as.next(); !e.done; e = as.next()) if (e.value[1] !== undefined) return e.value;
   return;
 }
-//@ chunk-sasp5j43.js:1037-1210 placement (2.1.88 match: returnValue, 1)
+//@ chunk-0qx87na8.js:1037-1210 placement (2.1.88 match: returnValue, 1)
 function readPlistText(tokens, openTag) {
   if (openTag[2] === "/") return "";
   let text = "";
@@ -85,7 +85,7 @@ function readPlistText(tokens, openTag) {
   }
   return;
 }
-//@ chunk-sasp5j43.js:1210-1762 placement
+//@ chunk-0qx87na8.js:1210-1762 placement
 function parsePlistValue(tokens, tag) {
   let isClosing = tag[2] === "/";
   switch (tag[1]) {
@@ -122,7 +122,7 @@ function parsePlistValue(tokens, tag) {
       return;
   }
 }
-//@ chunk-sasp5j43.js:1762-1890 placement
+//@ chunk-0qx87na8.js:1762-1890 placement
 function parsePlistArray(tokens) {
   let items = [];
   for (;;) {
@@ -134,7 +134,7 @@ function parsePlistArray(tokens) {
     items.push(plistValue);
   }
 }
-//@ chunk-sasp5j43.js:1890-2099 placement
+//@ chunk-0qx87na8.js:1890-2099 placement
 function parsePlistDict(tokens) {
   let dict = Object.create(null);
   for (;;) {
@@ -150,7 +150,7 @@ function parsePlistDict(tokens) {
     dict[plistText] = plistValue;
   }
 }
-//@ chunk-sasp5j43.js:2099-2446 placement
+//@ chunk-0qx87na8.js:2099-2446 placement
 function decodeXmlEntities(text) {
   if (!text.includes("&")) return text;
   return text.replace(/&(lt|gt|amp|quot|apos|#x[0-9a-fA-F]+|#\d+);/g, (wholeMatch, entityName) => {

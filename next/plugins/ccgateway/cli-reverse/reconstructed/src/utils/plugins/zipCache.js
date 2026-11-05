@@ -3,17 +3,17 @@
  *
  * 插件 zip 缓存模式（CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE）：zip 缓存目录、会话解压临时目录、目录打包与解压。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/zipCache.ts
- * pieces: chunk-e6aww6q8.js (28)
- * attribution: fingerprint 10, layout 6, placement 12
+ * pieces: chunk-5xgkngpb.js (29)
+ * attribution: fingerprint 10, layout 7, placement 12
  */
 import { join, dirname, sep } from "path";
-import { rm as rm_2, readdir, stat, lstat, readFile, writeFile, chmod, open, mkdir } from "fs/promises";
+import { rm, readdir, stat, lstat, readFile, writeFile, chmod, open, mkdir } from "fs/promises";
 import { randomBytes } from "crypto";
 import { constants } from "fs";
 import { env } from "../env.js";
-import { getZipCacheDirOverride } from "./pluginDirectories.js";
+import { expandTildeWithHome } from "../networkPaths.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { logForDebugging } from "../debug.js";
 import { HostScoped } from "../hostScoped.js";
@@ -32,14 +32,23 @@ import { findPluginRootInExtracted } from "./commandSource.js";
 import { containsGitDirectory } from "./fileIdentity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:608388-608444 fingerprint (2.1.88 match: isPluginZipCacheEnabled, 1)
+//@ chunk-5xgkngpb.js:618472-618529 fingerprint (2.1.88 match: isPluginZipCacheEnabled, 1)
 /**
  * 是否启用插件 zip 缓存（CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE）：插件以 .zip 存于 CLAUDE_CODE_PLUGIN_CACHE_DIR，会话启动时解压到临时目录。
  */
 function isPluginZipCacheEnabled() {
   return env.CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE;
 }
-//@ chunk-e6aww6q8.js:608534-608653 fingerprint (2.1.88 match: getZipCacheKnownMarketplacesPath, 1)
+//@ chunk-5xgkngpb.js:618529-618620 layout (2.1.88 match: getPluginsDirectory, 1)
+/**
+ * zip 缓存模式时返回 CLAUDE_CODE_PLUGIN_CACHE_DIR（zip 缓存根），否则 undefined。
+ */
+function getZipCacheDirOverride() {
+  if (!isPluginZipCacheEnabled()) return;
+  let envOverride = env.CLAUDE_CODE_PLUGIN_CACHE_DIR;
+  return envOverride ? expandTildeWithHome(envOverride) : undefined;
+}
+//@ chunk-5xgkngpb.js:618620-618739 fingerprint (2.1.88 match: getZipCacheKnownMarketplacesPath, 1)
 /**
  * zip 缓存模式下的 known_marketplaces.json 路径（未启用时抛错）。
  */
@@ -48,7 +57,7 @@ function getZipCacheKnownMarketplacesPath() {
   if (!cachePath) throw Error("Plugin zip cache is not enabled");
   return join(cachePath, "known_marketplaces.json");
 }
-//@ chunk-e6aww6q8.js:608653-608761 fingerprint (2.1.88 match: getZipCacheMarketplacesDir, 1)
+//@ chunk-5xgkngpb.js:618739-618847 fingerprint (2.1.88 match: getZipCacheMarketplacesDir, 1)
 /**
  * zip 缓存模式下的 marketplaces 目录。
  */
@@ -57,7 +66,7 @@ function getZipCacheMarketplacesDir() {
   if (!cachePath) throw Error("Plugin zip cache is not enabled");
   return join(cachePath, "marketplaces");
 }
-//@ chunk-e6aww6q8.js:608761-608864 fingerprint (2.1.88 match: getZipCachePluginsDir, 1)
+//@ chunk-5xgkngpb.js:618847-618950 fingerprint (2.1.88 match: getZipCachePluginsDir, 1)
 /**
  * zip 缓存模式下的 plugins 目录。
  */
@@ -66,9 +75,9 @@ function getZipCachePluginsDir() {
   if (!cachePath) throw Error("Plugin zip cache is not enabled");
   return join(cachePath, "plugins");
 }
-//@ chunk-e6aww6q8.js:608864-608878 layout
+//@ chunk-5xgkngpb.js:618950-618964 layout
 var CLI_TEMP_SUBDIR = "cli";
-//@ chunk-e6aww6q8.js:608878-609642 fingerprint (2.1.88 match: cleanupSessionPluginCache, 0.455)
+//@ chunk-5xgkngpb.js:618964-619728 fingerprint (2.1.88 match: cleanupSessionPluginCache, 0.455)
 /**
  * 会话结束时删除本会话的插件解压临时目录。
  */
@@ -104,7 +113,7 @@ class cleanupSessionPluginCache {
     newState.cleanupHandle = registerCleanup(async () => {
       if (newState.path)
         try {
-          await rm_2(newState.path, {
+          await rm(newState.path, {
             recursive: true,
             force: true,
           });
@@ -126,23 +135,23 @@ class cleanupSessionPluginCache {
     this.keyOf = () => CLI_TEMP_SUBDIR;
   }
 }
-//@ chunk-e6aww6q8.js:609642-609669 layout
+//@ chunk-5xgkngpb.js:619728-619755 layout
 var sessionPluginCacheByHost; // deferred: uses cleanupSessionPluginCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:609642", () => {
+deferInit("chunk-5xgkngpb.js:619728", () => {
   sessionPluginCacheByHost = new HostScoped(() => new cleanupSessionPluginCache());
 });
-//@ chunk-e6aww6q8.js:609669-609708 layout
+//@ chunk-5xgkngpb.js:619755-619794 layout
 function getSessionPluginCacheEntry() {
   return sessionPluginCacheByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:609708-609758 layout
+//@ chunk-5xgkngpb.js:619794-619844 layout
 /**
  * 当前宿主会话缓存里的 zip 解压记录表。
  */
 function getZipExtractionState() {
   return getSessionPluginCacheEntry().current().extractions;
 }
-//@ chunk-e6aww6q8.js:609758-610040 fingerprint (2.1.88 match: getSessionPluginCachePath, 0.949)
+//@ chunk-5xgkngpb.js:619844-620126 fingerprint (2.1.88 match: getSessionPluginCachePath, 0.949)
 /**
  * 取（必要时创建）本会话的插件解压临时目录 claude-plugin-session-<随机>，每个宿主一个。
  */
@@ -162,7 +171,7 @@ async function getSessionPluginCachePath() {
     })();
   return entry.promise;
 }
-//@ chunk-e6aww6q8.js:610040-610106 layout
+//@ chunk-5xgkngpb.js:620126-620192 layout
 /**
  * 已存在的会话插件缓存路径（未创建为 null）。
  */
@@ -170,7 +179,7 @@ function getExistingSessionPluginCachePath() {
   let sessionPluginCacheEntry = getSessionPluginCacheEntry();
   return sessionPluginCacheEntry.existing(sessionPluginCacheEntry.key())?.path ?? null;
 }
-//@ chunk-e6aww6q8.js:610106-610169 layout
+//@ chunk-5xgkngpb.js:620192-620255 layout
 /**
  * 创建父目录后原子写文件。
  */
@@ -178,7 +187,7 @@ async function writeFileEnsuringDir(filePath, data) {
   await getFsImplementation().mkdir(dirname(filePath));
   await writeFileAtomic_2(filePath, data);
 }
-//@ chunk-e6aww6q8.js:610169-610381 fingerprint (2.1.88 match: createZipFromDirectory, 0.867)
+//@ chunk-5xgkngpb.js:620255-620467 fingerprint (2.1.88 match: createZipFromDirectory, 0.867)
 /**
  * 把目录打成 zip（跳过 .git 与符号链接环，保留文件权限位）。
  */
@@ -194,7 +203,7 @@ async function createZipFromDirectory(sourceDir) {
   );
   return zipData;
 }
-//@ chunk-e6aww6q8.js:610381-610959 fingerprint (2.1.88 match: collectFilesForZip, 1)
+//@ chunk-5xgkngpb.js:620467-621045 fingerprint (2.1.88 match: collectFilesForZip, 1)
 async function collectFilesForZip(baseDir, relativePath, files, visited) {
   let currentDir = relativePath ? join(baseDir, relativePath) : baseDir;
   let entries;
@@ -245,7 +254,7 @@ async function collectFilesForZip(baseDir, relativePath, files, visited) {
       }
   }
 }
-//@ chunk-e6aww6q8.js:611035-611425 fingerprint (2.1.88 match: extractZipToDirectory, 0.814)
+//@ chunk-5xgkngpb.js:621121-621511 fingerprint (2.1.88 match: extractZipToDirectory, 0.814)
 /**
  * 解压 zip 到目录（含路径安全校验与权限位恢复）。
  */
@@ -270,7 +279,7 @@ async function extractZipToDirectory(zipPath, targetDir, options) {
   logForDebugging(`Extracted ZIP to ${targetDir}: ${Object.keys(files).length} entries`);
   return writtenPaths;
 }
-//@ chunk-e6aww6q8.js:611425-611593 placement
+//@ chunk-5xgkngpb.js:621511-621679 placement
 async function publishDirectoryAsZip(sourceDir, zipPath) {
   let zipFromDirectory = await createZipFromDirectory(sourceDir);
   await writeFileEnsuringDir(zipPath, zipFromDirectory);
@@ -283,25 +292,25 @@ async function publishDirectoryAsZip(sourceDir, zipPath) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:611687-611762 fingerprint (2.1.88 match: isMarketplaceSourceSupportedByZipCache, 1)
+//@ chunk-5xgkngpb.js:621773-621848 fingerprint (2.1.88 match: isMarketplaceSourceSupportedByZipCache, 1)
 /**
  * zip 缓存模式支持的市场来源：github、git、url、settings。
  */
 function isMarketplaceSourceSupportedByZipCache(source) {
   return ["github", "git", "url", "settings"].includes(source.source);
 }
-//@ chunk-e6aww6q8.js:612828-612846 placement
+//@ chunk-5xgkngpb.js:622914-622932 placement
 var MAX_ZIP_ENTRY_SPILL_BYTES = 536870912;
-//@ chunk-e6aww6q8.js:612846-612951 placement
+//@ chunk-5xgkngpb.js:622932-623037 placement
 function makeTempZipPath() {
   return join(tmpdir(), `claude-plugin-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
 }
-//@ chunk-e6aww6q8.js:612951-612985 placement
+//@ chunk-5xgkngpb.js:623037-623071 placement
 var MAX_ZIP_ENTRIES = 256;
 var MAX_ZIP_PATH_SEGMENTS = 16;
 var MAX_ZIP_PATH_LENGTH = 128;
 var MAX_ZIP_FILE_MODE = 32;
-//@ chunk-e6aww6q8.js:612985-613279 placement
+//@ chunk-5xgkngpb.js:623071-623365 placement
 async function stripGroupOtherWrite(filePath, mode, isDirectory) {
   if ((mode & 18) === 0) return true;
   let handle = await open(
@@ -320,7 +329,7 @@ async function stripGroupOtherWrite(filePath, mode, isDirectory) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:613279-613483 placement
+//@ chunk-5xgkngpb.js:623365-623569 placement
 class ModeMasker {
   inFlight = 0;
   peak = 0;
@@ -337,16 +346,16 @@ class ModeMasker {
     });
   }
 }
-//@ chunk-e6aww6q8.js:613483-613515 placement
+//@ chunk-5xgkngpb.js:623569-623601 placement
 var modeMasker; // deferred: uses ModeMasker of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:613483", () => {
+deferInit("chunk-5xgkngpb.js:623569", () => {
   modeMasker = new HostScoped(() => new ModeMasker(MAX_ZIP_PATH_LENGTH));
 });
-//@ chunk-e6aww6q8.js:613515-613545 placement
+//@ chunk-5xgkngpb.js:623601-623631 placement
 function currentModeMasker() {
   return onProcessRootHost(modeMasker);
 }
-//@ chunk-e6aww6q8.js:613545-614489 placement
+//@ chunk-5xgkngpb.js:623631-624581 placement
 /**
  * 检查压缩包条目（过大、被篡改、符号链接、保留名）。
  */
@@ -424,7 +433,7 @@ async function checkZipEntry(rootDir, maxBytes = MAX_ZIP_ENTRY_SPILL_BYTES) {
   await checkDir(rootDir);
   return failure ?? "ok";
 }
-//@ chunk-e6aww6q8.js:614489-614665 placement
+//@ chunk-5xgkngpb.js:624581-624757 placement
 async function chmodTreeOwnerOnly(dirPath) {
   await chmod(dirPath, 448);
   for (let nameBuffer of await readdir(dirPath, {
@@ -434,10 +443,10 @@ async function chmodTreeOwnerOnly(dirPath) {
     if ((await lstat(buffer)).isDirectory()) await chmodTreeOwnerOnly(buffer);
   }
 }
-//@ chunk-e6aww6q8.js:614665-614880 placement
+//@ chunk-5xgkngpb.js:624757-624972 placement
 async function removeTreeForcing(dirPath) {
   try {
-    await rm_2(dirPath, {
+    await rm(dirPath, {
       recursive: true,
       force: true,
     });
@@ -446,13 +455,13 @@ async function removeTreeForcing(dirPath) {
     if ((errnoCode !== "EACCES" && errnoCode !== "EPERM") || !(await lstat(dirPath)).isDirectory())
       throw error;
     await chmodTreeOwnerOnly(Buffer.from(dirPath));
-    await rm_2(dirPath, {
+    await rm(dirPath, {
       recursive: true,
       force: true,
     });
   }
 }
-//@ chunk-e6aww6q8.js:614880-615725 placement
+//@ chunk-5xgkngpb.js:624972-625817 placement
 /**
  * 解压插件缓存压缩包。
  */
@@ -517,12 +526,13 @@ export {
   extractZipToDirectory,
   getZipExtractionState,
   getSessionPluginCachePath,
-  makeTempZipPath,
-  unzipPluginCache,
   getZipCacheKnownMarketplacesPath,
   writeFileEnsuringDir,
+  getZipCacheDirOverride,
   getZipCacheMarketplacesDir,
   getZipCachePluginsDir,
   isMarketplaceSourceSupportedByZipCache,
+  makeTempZipPath,
+  unzipPluginCache,
   getExistingSessionPluginCachePath,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：cowork 远程设备密钥在安全存储中的加载、生成、迁移与清除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x58vpmpd.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dk1d903v.js (18)
  * attribution: placement 18
  */
 import { generateKeyPairSync, createPrivateKey, createPublicKey, sign } from "crypto";
@@ -30,12 +30,12 @@ import {
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x58vpmpd.js:4016-4216 placement
+//@ chunk-dk1d903v.js:4017-4217 placement
 var fileDeviceKeyStore; // deferred: uses fileDeviceKeyBackend (../utils/secureStorage/deviceKeyStore.js) of its import cycle while loading; runs once the cycle is complete
 var keychainDeviceKeyStore;
 var DISKLESS_DEVICE_KEY_STORE;
 var deviceKeyStoreOverride;
-deferInit("chunk-x58vpmpd.js:4016", () => {
+deferInit("chunk-dk1d903v.js:4017", () => {
   fileDeviceKeyStore = fileDeviceKeyBackend(getDeviceKeysFilePath);
   keychainDeviceKeyStore = createDeviceKeyKeychainStore(getDeviceKeysFilePath);
   DISKLESS_DEVICE_KEY_STORE = {
@@ -47,26 +47,26 @@ deferInit("chunk-x58vpmpd.js:4016", () => {
     },
   };
 });
-//@ chunk-x58vpmpd.js:4216-4270 placement
+//@ chunk-dk1d903v.js:4217-4271 placement
 function deviceKeyStoreForHost() {
   if (deviceKeyStoreOverride) return deviceKeyStoreOverride;
   if (isDiskless()) return DISKLESS_DEVICE_KEY_STORE;
   return fileDeviceKeyStore;
 }
-//@ chunk-x58vpmpd.js:4270-4293 placement
+//@ chunk-dk1d903v.js:4271-4294 placement
 function deviceKeyStore() {
   return DEVICE_KEY_STORE;
 }
-//@ chunk-x58vpmpd.js:4293-4326 placement
+//@ chunk-dk1d903v.js:4294-4327 placement
 var legacyKeyMigrationSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x58vpmpd.js:4293", () => {
+deferInit("chunk-dk1d903v.js:4294", () => {
   legacyKeyMigrationSeen = identity(new Set(), (seen) => seen.clear());
 });
-//@ chunk-x58vpmpd.js:4326-4388 placement
+//@ chunk-dk1d903v.js:4327-4389 placement
 function isInMemoryDeviceKeyStore(options) {
   return options?.inMemory === true || (getPlatform_2() === "windows" && isWindowsCredManBackendEnabled());
 }
-//@ chunk-x58vpmpd.js:4388-5470 placement
+//@ chunk-dk1d903v.js:4389-5471 placement
 /**
  * 设备密钥存储：在安全存储（钥匙串）中加载、生成、迁移 cowork 远程设备密钥。
  */
@@ -131,7 +131,7 @@ var DEVICE_KEY_STORE = {
     return deviceKeyInfo(accountUuid, saved, savedKey, options);
   },
 };
-//@ chunk-x58vpmpd.js:5470-5857 placement
+//@ chunk-dk1d903v.js:5471-5858 placement
 function loadOrCreateDeviceKey(accountUuid, record) {
   let store = deviceKeyStoreForHost();
   return store.withWriteLock(async () => {
@@ -166,7 +166,7 @@ function loadOrCreateDeviceKey(accountUuid, record) {
     );
   });
 }
-//@ chunk-x58vpmpd.js:5857-6108 placement
+//@ chunk-dk1d903v.js:5858-6109 placement
 async function saveDeviceKeyRecord(accountUuid, record, options) {
   await getSecureStorage().mutate((storage) => {
     if (storage.coworkRemoteDevice?.[accountUuid]) return storage;
@@ -186,7 +186,7 @@ async function saveDeviceKeyRecord(accountUuid, record, options) {
     }
   );
 }
-//@ chunk-x58vpmpd.js:6108-6798 placement
+//@ chunk-dk1d903v.js:6109-6799 placement
 async function readDeviceKeyRecord(accountUuid, options, mode) {
   let legacyStored = (await getSecureStorage().readAsync(options))?.coworkRemoteDevice?.[accountUuid];
   if (isInMemoryDeviceKeyStore(options)) {
@@ -241,7 +241,7 @@ async function readDeviceKeyRecord(accountUuid, options, mode) {
     stored: legacyStored,
   };
 }
-//@ chunk-x58vpmpd.js:6798-7174 placement
+//@ chunk-dk1d903v.js:6799-7175 placement
 function assertKeychainAvailable(readState) {
   if (readState === NO_KEYCHAIN) {
     logFeatureSad("device_key_store", "no_keychain");
@@ -258,7 +258,7 @@ function assertKeychainAvailable(readState) {
     "key_store_unreadable",
   );
 }
-//@ chunk-x58vpmpd.js:7174-7729 placement
+//@ chunk-dk1d903v.js:7175-7730 placement
 async function loadDeviceKey(accountUuid, options) {
   if (options?.inMemory !== true) {
     let snapshot = await deviceKeyStoreForHost().read();
@@ -296,7 +296,7 @@ async function loadDeviceKey(accountUuid, options) {
   }
   return;
 }
-//@ chunk-x58vpmpd.js:7729-8371 placement
+//@ chunk-dk1d903v.js:7730-8372 placement
 async function createDeviceKey(accountUuid, record, options) {
   let outcome;
   let store = deviceKeyStoreForHost();
@@ -336,14 +336,14 @@ async function createDeviceKey(accountUuid, record, options) {
   if (outcome === "item") await clearDevicePrivateKey(accountUuid, record.privateKeyPkcs8B64, options);
   return outcome;
 }
-//@ chunk-x58vpmpd.js:8371-8510 placement
+//@ chunk-dk1d903v.js:8372-8511 placement
 function keepDeviceKeyInLegacyStore(accountUuid, reason) {
   legacyKeyMigrationSeen.add(accountUuid);
   logForDebugging(`[deviceKey] device key stays in the credentials store for now (${reason})`);
   logFeatureSad("device_key_store", reason);
   return "legacy";
 }
-//@ chunk-x58vpmpd.js:8510-8948 placement
+//@ chunk-dk1d903v.js:8511-8949 placement
 async function clearDevicePrivateKey(accountUuid, privateKeyPkcs8B64, options) {
   let removed = false;
   try {
@@ -372,7 +372,7 @@ async function clearDevicePrivateKey(accountUuid, privateKeyPkcs8B64, options) {
   }
   keepDeviceKeyInLegacyStore(accountUuid, "legacy_delete_failed");
 }
-//@ chunk-x58vpmpd.js:8948-9159 placement
+//@ chunk-dk1d903v.js:8949-9160 placement
 function parseDeviceKeyPrivateKey(deviceKey) {
   try {
     let privateKey = createPrivateKey({
@@ -388,7 +388,7 @@ function parseDeviceKeyPrivateKey(deviceKey) {
     return;
   }
 }
-//@ chunk-x58vpmpd.js:9159-9538 placement
+//@ chunk-dk1d903v.js:9160-9539 placement
 function deviceKeyInfo(accountUuid, { location, stored }, privateKey, options) {
   return {
     rowPk: stored.rowPk,
@@ -434,7 +434,7 @@ function deviceKeyInfo(accountUuid, { location, stored }, privateKey, options) {
       ),
   };
 }
-//@ chunk-x58vpmpd.js:9538-10366 placement
+//@ chunk-dk1d903v.js:9539-10367 placement
 async function migrateLegacyDeviceKey(accountUuid, { location, stored }, transform, options) {
   if (location === "legacy") {
     await getSecureStorage().mutate((storage) => {
@@ -487,7 +487,7 @@ async function migrateLegacyDeviceKey(accountUuid, { location, stored }, transfo
       );
   });
 }
-//@ chunk-x58vpmpd.js:10366-10413 placement
+//@ chunk-dk1d903v.js:10367-10414 placement
 function migrateLegacyDeviceKeyNoop(accountUuid, held, options) {
   return migrateLegacyDeviceKey(
     accountUuid,

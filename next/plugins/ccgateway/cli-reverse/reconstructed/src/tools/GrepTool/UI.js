@@ -3,10 +3,10 @@
  *
  * Grep/Glob 结果摘要渲染（Found N files/lines/matches）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (4), chunk-e6aww6q8.js (1), chunk-nc07tp5s.js (1)
- * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (4), chunk-xm6m8ykh.js (1)
+ * attribution: fingerprint 3, placement 2, callgraph-witnessed 1
  */
 import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import {
@@ -24,7 +24,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
-//@ chunk-e6aww6q8.js:1439687-1439832 fingerprint (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-5xgkngpb.js:1439677-1439822 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 /**
  * Glob/Grep 调用渲染：pattern 与 path（非 verbose 时显示相对路径）。
  */
@@ -34,7 +34,7 @@ function renderToolUseMessage({ pattern, path }, { verbose }) {
   if (path) parts.push(`path: "${verbose ? path : getDisplayPath(path)}"`);
   return parts.join(", ");
 }
-//@ chunk-nc07tp5s.js:8904-9222 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.42)
+//@ chunk-xm6m8ykh.js:9337-9655 callgraph-witnessed (2.1.88 match: renderToolUseErrorMessage, 0.421)
 function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (!verbose && toolDenialKind !== "permission-rule" && typeof result === "string") {
     if (result.includes(FILE_NOT_FOUND_CWD_NOTE))
@@ -57,14 +57,14 @@ function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:16266-16347 placement (2.1.88 match: renderToolUseErrorMessage, 0.767)
+//@ chunk-wjygkcr4.js:16549-16630 placement (2.1.88 match: renderToolUseErrorMessage, 0.767)
 /**
  * 特定错误结果在非 verbose 非转录模式下的简化渲染。
  */
 function renderToolUseErrorMessage_4(result, { verbose, isTranscriptMode }) {
   return !verbose && !isTranscriptMode && result === GET_TASK_REPEAT_TEXT ? jsxProd_default(Text, {}) : null;
 }
-//@ chunk-ah34pb7m.js:16347-16813 placement
+//@ chunk-wjygkcr4.js:16630-17096 placement
 /**
  * 渲染后台任务输出结果（仍在运行等）。
  */
@@ -99,7 +99,7 @@ function renderTaskOutputResult(result, progressMessages, { verbose, isTranscrip
     }),
   });
 }
-//@ chunk-ah34pb7m.js:16813-18026 fingerprint (2.1.88 match: SearchResultSummary, 0.639)
+//@ chunk-wjygkcr4.js:17096-18309 fingerprint (2.1.88 match: SearchResultSummary, 0.621)
 function SearchResultSummary(props) {
   let $ = useMemoCache(26);
   let { count, countLabel, secondaryCount, secondaryLabel, content, verbose } = props;
@@ -215,7 +215,7 @@ function SearchResultSummary(props) {
   } else t6 = $[25];
   return t6;
 }
-//@ chunk-ah34pb7m.js:18368-18778 fingerprint (2.1.88 match: renderToolResultMessage, 1)
+//@ chunk-wjygkcr4.js:18651-19061 fingerprint (2.1.88 match: renderToolResultMessage, 1)
 /**
  * Grep 结果渲染：content 模式显示行数，count 模式显示匹配数与文件数，否则显示文件数。
  */
@@ -250,9 +250,9 @@ function renderToolResultMessage_3(
   });
 }
 export {
+  renderToolUseMessage,
   renderToolResultMessage_3,
   renderTaskOutputResult,
   renderToolUseErrorMessage_4,
-  renderToolUseMessage,
   renderToolUseErrorMessage,
 };

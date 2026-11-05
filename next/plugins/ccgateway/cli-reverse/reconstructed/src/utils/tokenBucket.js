@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。创建令牌桶限流器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7y5e5tys.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-13ssh9m2.js (2)
  * attribution: placement 2
  */
-//@ chunk-7y5e5tys.js:191-211 placement
+//@ chunk-13ssh9m2.js:191-211 placement
 var BUCKET_CAPACITY = 10;
 var TOKEN_REFILL_MS = 2000;
-//@ chunk-7y5e5tys.js:211-473 placement
+//@ chunk-13ssh9m2.js:211-473 placement
 /**
  * 创建令牌桶限流器。
  */

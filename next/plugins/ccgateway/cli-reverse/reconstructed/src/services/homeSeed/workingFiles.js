@@ -3,10 +3,10 @@
  *
  * 云会话工作文件（CLAUDE.md、rules、output-styles）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axmbhcjg.js (16), chunk-wgxf9vhj.js (8)
- * attribution: placement 23, layout 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ch5peek9.js (8), chunk-vb7ng9fr.js (17)
+ * attribution: placement 23, layout 2
  */
 import { posix, sep, isAbsolute, join, relative } from "path";
 import { lstat as lstat_2, realpath, open } from "fs/promises";
@@ -15,7 +15,6 @@ import { hasWindowsUnsafeSegment } from "../../utils/windowsPathNames.js";
 import { nfcLowerNfc } from "../../utils/teleport/remoteTaskLabels.js";
 import { isWellFormedString, firstLineOf } from "../../utils/stringUtils.js";
 import { MAX_WORKING_FILE_BYTES as MAX_WORKING_FILE_BYTES_2 } from "../syncedFiles/syncedFileSyncer.js";
-import { readJSONLFile } from "../../utils/json.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { hasBackslash } from "../../utils/pathClassification.js";
 import { readOnlyNoFollowFlags } from "../../utils/platformTargets.js";
@@ -24,7 +23,7 @@ import { lexMarkdown } from "../../utils/claudemd.js";
 import { hasUnvettedInclude, escapeAtSigns, isBackslashEscaped } from "../../utils/claudemdIncludes.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wgxf9vhj.js:367-840 placement
+//@ chunk-ch5peek9.js:367-840 placement
 /**
  * 匹配以组合符号开头的正则。
  */
@@ -44,7 +43,7 @@ var SETTINGS_JSON;
 var MARKDOWN_EXTENSION;
 var UNSAFE_NAME_CHARS_RE;
 var LEADING_COMBINING_MARK_RE;
-deferInit("chunk-wgxf9vhj.js:367", () => {
+deferInit("chunk-ch5peek9.js:367", () => {
   dir = posix.dirname(joined_5);
   WORKING_FILES_ROOT = "/mnt/user-data/working";
   joined = posix.join(WORKING_FILES_ROOT, joined_5);
@@ -63,7 +62,7 @@ deferInit("chunk-wgxf9vhj.js:367", () => {
     /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800\u{1D159}\u2024-\u2026\u2044\u2215\u2216\u2236\u2571\u2572\u27CB\u27CD\u29F5\u29F8\u29F9\u02D0\u05C3\u0589\uA789\uFE13\uFE52\uFE55\uFE68\uFF0E\uFF0F\uFF1A\uFF3C\uFF61\u3002]|(?!\u0020)\p{Zs}/u;
   LEADING_COMBINING_MARK_RE = /^\p{M}/u;
 });
-//@ chunk-wgxf9vhj.js:840-1046 placement
+//@ chunk-ch5peek9.js:840-1046 placement
 function isValidWorkingFileName(name) {
   return (
     name !== "" &&
@@ -79,28 +78,28 @@ function isValidWorkingFileName(name) {
     !name.endsWith(".tmp")
   );
 }
-//@ chunk-wgxf9vhj.js:1046-1100 placement
+//@ chunk-ch5peek9.js:1046-1100 placement
 /**
  * 判断路径是否以 .md 结尾。
  */
 function isMarkdownPath(path) {
   return path.length > MARKDOWN_EXTENSION.length && path.endsWith(MARKDOWN_EXTENSION);
 }
-//@ chunk-wgxf9vhj.js:1100-1130 placement
+//@ chunk-ch5peek9.js:1100-1130 placement
 /**
  * 规范化路径（NFC、小写、再 NFC）。
  */
 function normalizedPath(cwd) {
   return nfcLowerNfc(cwd);
 }
-//@ chunk-wgxf9vhj.js:1130-1161 placement
+//@ chunk-ch5peek9.js:1130-1161 placement
 /**
  * 判断规范化后的路径是否为 markdown。
  */
 function isNormalizedMarkdownPath(path) {
   return isMarkdownPath(normalizedPath(path));
 }
-//@ chunk-wgxf9vhj.js:1161-1488 placement
+//@ chunk-ch5peek9.js:1161-1488 placement
 function classifyWorkingFile(path) {
   if (path.length > MAX_WORKING_PATH_LENGTH || !isWellFormedString(path) || path.normalize("NFC") !== path)
     return null;
@@ -114,14 +113,14 @@ function classifyWorkingFile(path) {
   if (dest.length > MAX_WORKING_PATH_DEPTH) return null;
   return inputPath === RULES ? "rule" : inputPath === OUTPUT_STYLES ? "output_style" : null;
 }
-//@ chunk-wgxf9vhj.js:1488-1525 placement
+//@ chunk-ch5peek9.js:1488-1525 placement
 /**
  * 判断路径是否属于可同步的工作文件。
  */
 function isWorkingFilePath(path) {
   return classifyWorkingFile(path) !== null;
 }
-//@ chunk-wgxf9vhj.js:1525-1598 placement
+//@ chunk-ch5peek9.js:1525-1598 placement
 /**
  * 把路径解析成工作文件目的地（不可分类返回 null）。
  */
@@ -134,7 +133,7 @@ function workingFileDestination(path) {
         kind: dest,
       };
 }
-//@ chunk-axmbhcjg.js:1940-2111 placement
+//@ chunk-vb7ng9fr.js:1974-2145 placement
 function getWorkingFileSkipReason(dirent, maxBytes = MAX_WORKING_FILE_BYTES_2) {
   if (dirent.isSymbolicLink()) return "symlink";
   if (!dirent.isFile()) return "not_regular_file";
@@ -142,14 +141,25 @@ function getWorkingFileSkipReason(dirent, maxBytes = MAX_WORKING_FILE_BYTES_2) {
   if (dirent.size > maxBytes) return "too_large";
   return null;
 }
-//@ chunk-axmbhcjg.js:2111-2182 placement
+//@ chunk-vb7ng9fr.js:2145-2216 placement
 /**
  * 判断相对路径是否越出根目录（空、..、绝对路径）。
  */
 function isOutsideRoot(rel) {
   return rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
 }
-//@ chunk-axmbhcjg.js:2332-2728 placement
+//@ chunk-vb7ng9fr.js:2216-2366 layout (2.1.88 match: readJSONLFile, 1)
+async function readJSONLFile(fileHandle, size) {
+  let buf = Buffer.allocUnsafe(size);
+  let totalRead = 0;
+  while (totalRead < size) {
+    let { bytesRead } = await fileHandle.read(buf, totalRead, size - totalRead, totalRead);
+    if (bytesRead === 0) break;
+    totalRead += bytesRead;
+  }
+  return buf.subarray(0, totalRead);
+}
+//@ chunk-vb7ng9fr.js:2366-2762 placement
 /**
  * 读取已打开的工作文件内容与元数据；读到的字节少于 stat 给出的大小时视为文件已变更并跳过。
  */
@@ -177,7 +187,7 @@ async function readWorkingFileContent(path, state, content) {
     ctimeMs: Number(state.ctimeNs) / 1e6,
   };
 }
-//@ chunk-axmbhcjg.js:2728-3524 placement
+//@ chunk-vb7ng9fr.js:2762-3558 placement
 /**
  * 安全读取工作文件：拒绝符号链接、非常规文件、硬链接、过大、不可读、真实路径在根外以及打开前后变更的文件；返回内容或跳过原因。
  */
@@ -263,7 +273,7 @@ async function readWorkingFile(
     };
   }
 }
-//@ chunk-axmbhcjg.js:3524-3728 placement
+//@ chunk-vb7ng9fr.js:3558-3762 placement
 async function readWorkingFileFromDir(dirHandle, content, maxBytes) {
   let handle = await dirHandle.open(content, readOnlyNoFollowFlags());
   try {
@@ -284,12 +294,12 @@ async function readWorkingFileFromDir(dirHandle, content, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-axmbhcjg.js:3728-3773 placement
+//@ chunk-vb7ng9fr.js:3762-3807 placement
 /**
  * 匹配 @ 引用的正则（前置空白/方括号，后接非空白）。
  */
 var AT_REFERENCE_RE = /(^|[\s\][])@(?=((?:[^\s\\]|\\ )+))/g;
-//@ chunk-axmbhcjg.js:3773-3926 placement
+//@ chunk-vb7ng9fr.js:3807-3960 placement
 function escapeUnvettedIncludes(body, isAllowed = allowAllIncludes, collector) {
   let text = body.replace(
     /\r\n?/g,
@@ -307,12 +317,12 @@ function escapeUnvettedIncludes(body, isAllowed = allowAllIncludes, collector) {
   let escaped = rebuildWithEscapes(text, lexMarkdown(text), escapeAtSignsOutsideFences, isAllowed_2);
   return hasUnvettedInclude(escaped, isAllowed) ? escapeAtSigns(escaped) : escaped;
 }
-//@ chunk-axmbhcjg.js:3926-3940 placement
+//@ chunk-vb7ng9fr.js:3960-3974 placement
 /**
  * 恒假的 include 允许判断（默认不放行任何 include）。
  */
 var allowAllIncludes = () => false;
-//@ chunk-axmbhcjg.js:3940-4223 placement
+//@ chunk-vb7ng9fr.js:3974-4257 placement
 function escapeTokenIncludes(token, isAllowed) {
   if (token.type === "code" || token.type === "codespan" || token.type === "escape") return token.raw;
   if (token.type === "html") return escapeHtmlCommentIncludes(token.raw, isAllowed);
@@ -322,7 +332,7 @@ function escapeTokenIncludes(token, isAllowed) {
   let escaped = rebuildWithEscapes(token.raw, children, (token) => token, isAllowed);
   return token.type === "text" ? escapeUnvettedAtRefs(escaped, isAllowed) : escaped;
 }
-//@ chunk-axmbhcjg.js:4223-4399 placement
+//@ chunk-vb7ng9fr.js:4257-4433 placement
 function rebuildWithEscapes(text, tokens, escapePlain, isAllowed) {
   let out = "";
   let cursor = 0;
@@ -334,7 +344,7 @@ function rebuildWithEscapes(text, tokens, escapePlain, isAllowed) {
   }
   return out + escapePlain(text.slice(cursor));
 }
-//@ chunk-axmbhcjg.js:4399-4467 placement
+//@ chunk-vb7ng9fr.js:4433-4501 placement
 /**
  * 把未受审查的 @ 引用在文本中转义。
  */
@@ -343,14 +353,14 @@ function escapeUnvettedAtRefs(text, isAllowed) {
     isAllowed(referenceSpelling(refBody)) ? whole : `${atSign}\\@`,
   );
 }
-//@ chunk-axmbhcjg.js:4467-4521 placement
+//@ chunk-vb7ng9fr.js:4501-4555 placement
 /**
  * 取 @ 引用名（首行、去掉转义空格）。
  */
 function referenceSpelling(path) {
   return firstLineOf(path, "#").replaceAll("\\ ", " ");
 }
-//@ chunk-axmbhcjg.js:4521-5082 placement
+//@ chunk-vb7ng9fr.js:4555-5116 placement
 /**
  * 在 HTML 注释残余文本中找出未审查的 @ 引用，并在原文对应位置前加反斜杠转义。
  */
@@ -387,7 +397,7 @@ function escapeHtmlCommentIncludes(text, isAllowed) {
     })
     .reduceRight((current, insertAt) => `${current.slice(0, insertAt)}\\${current.slice(insertAt)}`, text);
 }
-//@ chunk-axmbhcjg.js:5082-5338 layout
+//@ chunk-vb7ng9fr.js:5116-5372 layout
 function escapeAtSignsOutsideFences(text) {
   let inFence = null;
   return text
@@ -413,13 +423,13 @@ function escapeAtSignsOutsideFences(text) {
     }).join(`
 `);
 }
-//@ chunk-axmbhcjg.js:5338-5433 placement
+//@ chunk-vb7ng9fr.js:5372-5467 placement
 function escapeStandaloneAtSigns(text) {
   return text.replace(/@/g, (char, offset) =>
     isBackslashEscaped(text, offset) || /[\p{L}\p{N}]/u.test(text[offset - 1] ?? "") ? char : "\\@",
   );
 }
-//@ chunk-axmbhcjg.js:5433-5490 placement
+//@ chunk-vb7ng9fr.js:5467-5524 placement
 function hasMarkdownLinks(body) {
   return Object.keys(lexMarkdown(body).links).length > 0;
 }
@@ -427,20 +437,20 @@ export {
   SETTINGS_JSON,
   CLAUDE_MD,
   RULES,
+  MAX_WORKING_PATH_CHARS,
+  MAX_WORKING_PATH_LENGTH,
+  workingFileDestination,
+  classifyWorkingFile,
+  OUTPUT_STYLES,
+  isWorkingFilePath,
+  MAX_WORKING_FILE_BYTES,
+  joined,
+  normalizedPath,
+  MAX_WORKING_FILE_TOTAL_BYTES,
   referenceSpelling,
   allowAllIncludes,
   AT_REFERENCE_RE,
-  OUTPUT_STYLES,
-  classifyWorkingFile,
-  workingFileDestination,
-  normalizedPath,
-  MAX_WORKING_FILE_BYTES,
   hasMarkdownLinks,
   escapeUnvettedIncludes,
   readWorkingFile,
-  MAX_WORKING_PATH_CHARS,
-  MAX_WORKING_FILE_TOTAL_BYTES,
-  joined,
-  isWorkingFilePath,
-  MAX_WORKING_PATH_LENGTH,
 };

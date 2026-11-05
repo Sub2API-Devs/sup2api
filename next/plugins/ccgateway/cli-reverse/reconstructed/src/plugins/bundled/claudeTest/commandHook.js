@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Test 的 command.run 钩子（/claude-test 命令）与面板刷新循环
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (71)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (71)
  * attribution: placement 71
  */
 import { claudeTestState, RUN_ID_RE, isPlainObjectNonArray } from "./appFacts.js";
@@ -89,7 +89,7 @@ import { HostScoped } from "../../../utils/hostScoped.js";
 import { getRootSession } from "../../../bootstrap/state.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:88412-92023 placement
+//@ chunk-mhn0amzz.js:89653-93264 placement
 /**
  * 注册 command.run 钩子处理 /claude-test：检查可用性、确保自有代理、打开面板并启动运行（约 3.6 KB）。
  */
@@ -431,7 +431,7 @@ function registerClaudeTestCommand(on) {
     },
   );
 }
-//@ chunk-ae5g0zb5.js:92023-92176 placement
+//@ chunk-mhn0amzz.js:93264-93417 placement
 /**
  * 面板开关开启时打开 Claude Test 窗格（记录 placed 承诺），重置面板状态、探测能否画图并决定是否打开浏览器。
  */
@@ -455,21 +455,21 @@ function openClaudeTestPane(ctx) {
   } catch {}
   return false;
 }
-//@ chunk-ae5g0zb5.js:92176-92197 placement
+//@ chunk-mhn0amzz.js:93417-93438 placement
 /**
  * isRemote 标记对象
  */
 var REMOTE_STATE = {
   isRemote: false,
 };
-//@ chunk-ae5g0zb5.js:92197-92242 placement
+//@ chunk-mhn0amzz.js:93438-93483 placement
 /**
  * 记录窗格打开时间
  */
 function setPaneOpenedAt(claudeTestPane) {
   claudeTestState.paneOpenedAt = claudeTestPane ? Date.now() : 0;
 }
-//@ chunk-ae5g0zb5.js:92242-92323 placement
+//@ chunk-mhn0amzz.js:93483-93564 placement
 /**
  * 取出窗格打开时间并清零，判断是否在有效窗口内。
  */
@@ -478,7 +478,7 @@ function consumePaneOpenedRecently() {
   claudeTestState.paneOpenedAt = 0;
   return paneOpenedAt > 0 && Date.now() - paneOpenedAt <= PANEL_OPEN_FRESH_MS;
 }
-//@ chunk-ae5g0zb5.js:92323-92720 placement
+//@ chunk-mhn0amzz.js:93564-93961 placement
 /**
  * /claude-test 命令输出收尾：必要时打开窗格、预判项目并等待窗格放置/画图探测，返回命令文本加画图提示。
  */
@@ -511,7 +511,7 @@ async function finishCommandOutput(ctx, mark, paneOpened, remainingMs) {
         : PANEL_OPEN_RULE;
   return mark.came + panelRule;
 }
-//@ chunk-ae5g0zb5.js:92720-92861 placement
+//@ chunk-mhn0amzz.js:93961-94102 placement
 /**
  * 文本色调名到 Text 样式属性的映射。
  */
@@ -535,7 +535,7 @@ var TONE_STYLES = {
     color: "claude",
   },
 };
-//@ chunk-ae5g0zb5.js:92861-92979 placement
+//@ chunk-mhn0amzz.js:94102-94220 placement
 /**
  * 把带色调的文本片段渲染成 Text 元素。
  */
@@ -548,7 +548,7 @@ function renderToneSpans(ctx, payload, spans) {
     }),
   );
 }
-//@ chunk-ae5g0zb5.js:92979-93670 placement
+//@ chunk-mhn0amzz.js:94220-94911 placement
 function renderStatusLine(ctx, payload, line, width) {
   let { Box, Text } = ctx.ui.resolve(payload);
   switch (line.kind) {
@@ -610,12 +610,12 @@ function renderStatusLine(ctx, payload, line, width) {
       return line;
   }
 }
-//@ chunk-ae5g0zb5.js:93670-93722 placement
+//@ chunk-mhn0amzz.js:94911-94963 placement
 /**
  * 内联图片能力与是否在此打开
  */
 var INLINE_IMAGE_CAPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:93670", () => {
+deferInit("chunk-mhn0amzz.js:94911", () => {
   INLINE_IMAGE_CAPS = {
     glyphs: supportsInlineImages({
       platform: "linux",
@@ -623,7 +623,7 @@ deferInit("chunk-ae5g0zb5.js:93670", () => {
     opensHere: true,
   };
 });
-//@ chunk-ae5g0zb5.js:93722-94191 placement
+//@ chunk-mhn0amzz.js:94963-95432 placement
 async function shouldOpenBrowser(ctx) {
   try {
     let [term, termProgram, noOpen, ci, sshConnection, sshTty, sshClient, display, waylandDisplay] =
@@ -657,12 +657,12 @@ async function shouldOpenBrowser(ctx) {
     );
   } catch {}
 }
-//@ chunk-ae5g0zb5.js:94191-94313 placement
+//@ chunk-mhn0amzz.js:95432-95554 placement
 /**
  * 窗格刷新循环状态（打开/命令时间、代数、运行者、报告链接等）。
  */
 var paneState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:94191", () => {
+deferInit("chunk-mhn0amzz.js:95432", () => {
   paneState = {
     openedAt: 0,
     commandAt: 0,
@@ -675,7 +675,7 @@ deferInit("chunk-ae5g0zb5.js:94191", () => {
     report: null,
   };
 });
-//@ chunk-ae5g0zb5.js:94313-94426 placement
+//@ chunk-mhn0amzz.js:95554-95667 placement
 /**
  * 运行结束且报告属于本次运行时返回报告链接。
  */
@@ -688,7 +688,7 @@ function getFinishedReportHref(facts) {
     ? report.href
     : null;
 }
-//@ chunk-ae5g0zb5.js:94426-94653 placement
+//@ chunk-mhn0amzz.js:95667-95894 placement
 /**
  * 运行结束后取一次报告链接（代数不变才写入）。
  */
@@ -710,7 +710,7 @@ async function fetchReportHref(dir, facts, generation) {
       };
   } catch {}
 }
-//@ chunk-ae5g0zb5.js:94653-94722 placement
+//@ chunk-mhn0amzz.js:95894-95963 placement
 /**
  * 探测图键名
  */
@@ -722,7 +722,7 @@ var PROBE_IMAGE = {
 };
 var PICTURE_PROBE_WAIT_MS = 2500;
 var PICTURE_ASK_TIMEOUT_MS = 5000;
-//@ chunk-ae5g0zb5.js:94722-94827 placement
+//@ chunk-mhn0amzz.js:95963-96068 placement
 /**
  * 画图被拒的原因是否为“只支持 alt 文本”（且已等待足够久）。
  */
@@ -733,13 +733,13 @@ function isAltTextRefusal(deny) {
     Date.now() - pictureAskState.firstAskedAt >= PICTURE_ASK_MIN_GAP_MS
   );
 }
-//@ chunk-ae5g0zb5.js:94827-94904 placement
+//@ chunk-mhn0amzz.js:96068-96145 placement
 /**
  * claude-test 询问「能否在这里画图」的最小间隔 1 秒，避免同一轮里反复弹问；同一声明还带着询问状态对象。
  */
 var PICTURE_ASK_MIN_GAP_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var pictureAskState;
-deferInit("chunk-ae5g0zb5.js:94827", () => {
+deferInit("chunk-mhn0amzz.js:96068", () => {
   PICTURE_ASK_MIN_GAP_MS = 1000;
   pictureAskState = {
     isAsking: false,
@@ -749,7 +749,7 @@ deferInit("chunk-ae5g0zb5.js:94827", () => {
     waiters: new Set(),
   };
 });
-//@ chunk-ae5g0zb5.js:94904-94977 placement
+//@ chunk-mhn0amzz.js:96145-96218 placement
 /**
  * 把“能否画图”的询问标记为结束并叫醒所有等待者。
  */
@@ -758,7 +758,7 @@ function settlePictureAsk() {
   for (let waiter of pictureAskState.waiters) waiter();
   pictureAskState.waiters.clear();
 }
-//@ chunk-ae5g0zb5.js:94977-95329 placement
+//@ chunk-mhn0amzz.js:96218-96570 placement
 /**
  * 开始探测终端能否显示图片：触发重绘、稍后发送探测图，超时则放弃。
  */
@@ -786,7 +786,7 @@ function probePictureSupport(ctx) {
     settlePictureAsk();
   }
 }
-//@ chunk-ae5g0zb5.js:95329-95667 placement
+//@ chunk-mhn0amzz.js:96570-96908 placement
 /**
  * 发送探测图片并据结果设置 canDrawPictures，未决时重试 n 次。
  */
@@ -819,7 +819,7 @@ function sendPictureProbe(ctx, attemptsLeft) {
     })
     .catch(() => settlePictureAsk());
 }
-//@ chunk-ae5g0zb5.js:95667-95844 placement
+//@ chunk-mhn0amzz.js:96908-97085 placement
 /**
  * 等待画图探测结束（最多 n 毫秒）。
  */
@@ -838,14 +838,14 @@ function waitForPictureProbe(ctx, timeoutMs) {
     }
   });
 }
-//@ chunk-ae5g0zb5.js:95844-95863 placement
+//@ chunk-mhn0amzz.js:97085-97104 placement
 /**
  * 2
  */
 var PANE_PAD_LEFT = 2;
 var PANE_PAD_RIGHT = 1;
 var PANE_PAD_BOTTOM = 1;
-//@ chunk-ae5g0zb5.js:95863-95944 placement
+//@ chunk-mhn0amzz.js:97104-97185 placement
 /**
  * 画图能力未知时 500ms 后重试绘制结论截图。
  */
@@ -853,7 +853,7 @@ function retryVerdictPicture(ctx) {
   if (helperRuntimeState.canDrawPictures !== null) return;
   ctx.clock.after(500, () => blitVerdictPicture(ctx, 5));
 }
-//@ chunk-ae5g0zb5.js:95944-96306 placement
+//@ chunk-mhn0amzz.js:97185-97547 placement
 /**
  * 把结论截图画到窗格，据结果更新是否能画图，失败重试。
  */
@@ -880,7 +880,7 @@ function blitVerdictPicture(ctx, attemptsLeft) {
       return;
     });
 }
-//@ chunk-ae5g0zb5.js:96306-96938 placement
+//@ chunk-mhn0amzz.js:97547-98179 placement
 /**
  * 新一次命令时重置窗格与运行状态，并启动 250ms 刷新循环（每 4 拍完整刷新一次）。
  */
@@ -932,13 +932,13 @@ function resetPaneForCommand(ctx) {
   };
   tickClaudeTestPane(ctx);
 }
-//@ chunk-ae5g0zb5.js:96938-96958 placement
+//@ chunk-mhn0amzz.js:98179-98199 placement
 /**
  * 5000
  */
 var PANE_TICK_STALE_MS = 5000;
 var PANE_COMMAND_STALE_MS = 5000;
-//@ chunk-ae5g0zb5.js:96958-98343 placement
+//@ chunk-mhn0amzz.js:98199-99584 placement
 /**
  * 面板刷新：读取运行目录、更新视图、面板关闭超时后停止。
  */
@@ -1046,17 +1046,25 @@ ${runFolderFacts.runRel}`,
     runQuietly(() => ctx.ui.invalidate("ui.render"));
   }
 }
-//@ chunk-ae5g0zb5.js:98343-98486 placement
+//@ chunk-mhn0amzz.js:99584-99727 placement
 /**
  * 面板向会话提问的答案键与超时。
  */
-var APP_UP_ANSWER_KEY = `${HELPER_TOOL_PREFIX}${CLAUDE_TEST_APP_UP}`;
-var CONFIRM_RUN_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_confirm_run`;
-var MORE_TESTS_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_more_tests`;
-var START_APP_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_start_app`;
-var APP_START_TIMEOUT_MS_2 = 300000;
-var APP_START_AHEAD_TIMEOUT_MS = 60000;
-//@ chunk-ae5g0zb5.js:98486-98696 placement
+var APP_UP_ANSWER_KEY; // deferred: uses HELPER_TOOL_PREFIX (./constants.js) of its import cycle while loading; runs once the cycle is complete
+var CONFIRM_RUN_ANSWER_KEY;
+var MORE_TESTS_ANSWER_KEY;
+var START_APP_ANSWER_KEY;
+var APP_START_TIMEOUT_MS_2;
+var APP_START_AHEAD_TIMEOUT_MS;
+deferInit("chunk-mhn0amzz.js:99584", () => {
+  APP_UP_ANSWER_KEY = `${HELPER_TOOL_PREFIX}${CLAUDE_TEST_APP_UP}`;
+  CONFIRM_RUN_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_confirm_run`;
+  MORE_TESTS_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_more_tests`;
+  START_APP_ANSWER_KEY = `${HELPER_TOOL_PREFIX}claude_test_start_app`;
+  APP_START_TIMEOUT_MS_2 = 300000;
+  APP_START_AHEAD_TIMEOUT_MS = 60000;
+});
+//@ chunk-mhn0amzz.js:99727-99937 placement
 /**
  * 工具答案（对象、字符串或单个 text 块）解析为普通对象，否则 null。
  */
@@ -1072,7 +1080,7 @@ function parseAnswerObject(value) {
     return null;
   }
 }
-//@ chunk-ae5g0zb5.js:98696-98954 placement
+//@ chunk-mhn0amzz.js:99937-100195 placement
 /**
  * 记录“启动应用”问题的回答：start 时标记应用正在启动并记住项目。
  */
@@ -1092,7 +1100,7 @@ function noteStartAppAnswer(project, result) {
   helperRuntimeState.rememberedStart = project;
   return true;
 }
-//@ chunk-ae5g0zb5.js:98954-99416 placement
+//@ chunk-mhn0amzz.js:100195-100657 placement
 /**
  * 应用未运行但允许启动时，提前标记为启动中。
  */
@@ -1132,7 +1140,7 @@ function noteAppDownWithStartAllowed(project, answerText) {
   helperRuntimeState.rememberedStart = project;
   return true;
 }
-//@ chunk-ae5g0zb5.js:99416-99689 placement
+//@ chunk-mhn0amzz.js:100657-100930 placement
 /**
  * 应用探测结果：不允许启动时忘记记住的项目；撤销猜测的启动状态。
  */
@@ -1156,7 +1164,7 @@ function noteAppProbeResult(project, answerText) {
   helperRuntimeState.appStarting = null;
   return true;
 }
-//@ chunk-ae5g0zb5.js:99689-99890 placement
+//@ chunk-mhn0amzz.js:100930-101131 placement
 /**
  * 应用启动结束（或端口被占）时清除启动中状态。
  */
@@ -1170,12 +1178,12 @@ function noteAppStartEnded(project, result, hasWait = false) {
   helperRuntimeState.appStarting = null;
   return true;
 }
-//@ chunk-ae5g0zb5.js:99890-99905 placement
+//@ chunk-mhn0amzz.js:101131-101146 placement
 /**
  * 3600000
  */
 var EARLY_PHASE_WINDOW_MS = 3600000;
-//@ chunk-ae5g0zb5.js:99905-100087 placement
+//@ chunk-mhn0amzz.js:101146-101328 placement
 /**
  * 面板早期阶段是否仍在进行（时间窗内且运行未结束/未停止）。
  */
@@ -1191,31 +1199,31 @@ function isEarlyPhaseActive(now = Date.now()) {
     facts?.halt === undefined
   );
 }
-//@ chunk-ae5g0zb5.js:100087-100150 placement
+//@ chunk-mhn0amzz.js:101328-101391 placement
 /**
  * 带 fix 参数、非重跑且尚未开始运行时，标记为“正在修复”。
  */
 function shouldShowFixing(typedArgs, facts) {
   return hasFixFlag(typedArgs) && facts.isFixRerun !== true && facts.run === null;
 }
-//@ chunk-ae5g0zb5.js:100150-100232 placement
+//@ chunk-mhn0amzz.js:101391-101473 placement
 /**
  * 判断命令参数里是否带 --ci。
  */
 function hasCiFlag(typedArgs) {
   return typeof typedArgs === "string" && typedArgs.trim().split(/\s+/).includes("--ci");
 }
-//@ chunk-ae5g0zb5.js:100232-100314 placement
+//@ chunk-mhn0amzz.js:101473-101555 placement
 /**
  * 匹配 Claude Test 运行代理的 task 名，以及“仍在进行”的 task 状态集合。
  */
-var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_2; // deferred: uses CLAUDE_TEST_RUNNER (./constants.js) of its import cycle while loading; runs once the cycle is complete
 var ACTIVE_TASK_STATUSES;
-deferInit("chunk-ae5g0zb5.js:100232", () => {
+deferInit("chunk-mhn0amzz.js:101473", () => {
   regExp_2 = new RegExp(`^${CLAUDE_TEST_RUNNER}(-\\d+)?$`);
   ACTIVE_TASK_STATUSES = new Set(["pending", "running", "waiting"]);
 });
-//@ chunk-ae5g0zb5.js:100314-100719 placement
+//@ chunk-mhn0amzz.js:101555-101960 placement
 /**
  * 根据后台任务状态判断运行被停止（stopped）或因应用未运行而阻塞（blocked）。
  */
@@ -1240,15 +1248,15 @@ function detectRunHalt(runFolderFacts, agents, runners, typedArgs) {
     return "blocked";
   return;
 }
-//@ chunk-ae5g0zb5.js:100719-100734 placement
+//@ chunk-mhn0amzz.js:101960-101975 placement
 /**
  * 记录哪些项目的运行处于“已停止”。
  */
 var stoppedProjects; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:100719", () => {
+deferInit("chunk-mhn0amzz.js:101960", () => {
   stoppedProjects = new Set();
 });
-//@ chunk-ae5g0zb5.js:100734-100893 placement
+//@ chunk-mhn0amzz.js:101975-102134 placement
 /**
  * 记住或清除某项目的停止状态。
  */
@@ -1258,14 +1266,14 @@ function rememberRunHalt(project, runHalt, runFinished, hasActiveRunner = false)
   if (runHalt !== undefined || runFinished || project === null) return runHalt;
   return stoppedProjects.has(project) ? "stopped" : undefined;
 }
-//@ chunk-ae5g0zb5.js:100893-100974 placement
+//@ chunk-mhn0amzz.js:102134-102215 placement
 /**
  * 参数里是否有 fix
  */
 function hasFixFlag(args) {
   return typeof args === "string" && args.trim().split(/\s+/).includes("fix");
 }
-//@ chunk-ae5g0zb5.js:100974-101084 placement
+//@ chunk-mhn0amzz.js:102215-102325 placement
 /**
  * 应用启动中且未超时。
  */
@@ -1279,7 +1287,7 @@ function isAppStartPending(dir, commandAt, now) {
       (appStarting.isAhead === true ? APP_START_AHEAD_TIMEOUT_MS : APP_START_TIMEOUT_MS_2)
   );
 }
-//@ chunk-ae5g0zb5.js:101084-101226 placement
+//@ chunk-mhn0amzz.js:102325-102467 placement
 /**
  * 答案中的文本片段（字符串或 text 块）。
  */
@@ -1294,7 +1302,7 @@ function answerTextParts(value) {
         )
       : [];
 }
-//@ chunk-ae5g0zb5.js:101226-101363 placement
+//@ chunk-mhn0amzz.js:102467-102604 placement
 /**
  * 记录用户确认运行。
  */
@@ -1311,7 +1319,7 @@ function noteRunConfirmed(project, result) {
   };
   return true;
 }
-//@ chunk-ae5g0zb5.js:101363-101592 placement
+//@ chunk-mhn0amzz.js:102604-102833 placement
 /**
  * 记录“更多测试”问题被拒绝或回答。
  */
@@ -1330,12 +1338,12 @@ function noteMoreTestsDeclined(project, result) {
   };
   return true;
 }
-//@ chunk-ae5g0zb5.js:101592-101656 placement
+//@ chunk-mhn0amzz.js:102833-102897 placement
 /**
  * 反问提示正则
  */
 var ASK_PROMPT_RE = /\bAsk (?:with AskUserQuestion|as the run skill says)\b/;
-//@ chunk-ae5g0zb5.js:101656-101809 placement
+//@ chunk-mhn0amzz.js:102897-103050 placement
 /**
  * 文本回答匹配拒绝时记录“更多测试”被拒。
  */
@@ -1348,7 +1356,7 @@ function noteMoreTestsDeclinedByText(project, text) {
   };
   return true;
 }
-//@ chunk-ae5g0zb5.js:101809-101922 placement
+//@ chunk-mhn0amzz.js:103050-103163 placement
 /**
  * 当前运行是否已拒绝“更多测试”。
  */
@@ -1361,7 +1369,7 @@ function isMoreTestsDeclined(dir, runRel) {
     moreDeclined.runRel === runRel
   );
 }
-//@ chunk-ae5g0zb5.js:101922-102034 placement
+//@ chunk-mhn0amzz.js:103163-103275 placement
 /**
  * 运行已确认但尚未开始。
  */
@@ -1375,7 +1383,7 @@ function isRunAcceptedPending(facts, dir, openedAt) {
     facts.isLaterRun !== true
   );
 }
-//@ chunk-ae5g0zb5.js:102034-102203 placement
+//@ chunk-mhn0amzz.js:103275-103444 placement
 /**
  * 把端口健康检查结果写入早期状态。
  */
@@ -1391,12 +1399,12 @@ function notePortHealth(project, result) {
   };
   return true;
 }
-//@ chunk-ae5g0zb5.js:102203-102214 placement
+//@ chunk-mhn0amzz.js:103444-103455 placement
 /**
  * 10000
  */
 var EARLY_CHECK_STALE_MS = 1e4;
-//@ chunk-ae5g0zb5.js:102214-102555 placement
+//@ chunk-mhn0amzz.js:103455-103796 placement
 /**
  * 早期阶段的应用名（按目录缓存 package.json 名称）与应用状态。
  */
@@ -1424,7 +1432,7 @@ async function resolveEarlyAppInfo(ctx, dir) {
     app: isOtherProject || isCheckStale ? null : app,
   };
 }
-//@ chunk-ae5g0zb5.js:102555-102895 placement
+//@ chunk-mhn0amzz.js:103796-104136 placement
 /**
  * 跟踪预判的项目与权限回答，回答到达后更新应用状态并刷新窗格。
  */
@@ -1458,7 +1466,7 @@ function trackProjectGuess(ctx, guess) {
     }
   });
 }
-//@ chunk-ae5g0zb5.js:102895-103412 placement
+//@ chunk-mhn0amzz.js:104136-104653 placement
 async function describeRunPhase(ctx) {
   let facts = helperRuntimeState.facts;
   if (facts !== null && facts.run !== null)
@@ -1480,7 +1488,7 @@ async function describeRunPhase(ctx) {
     isPreparing: any,
   };
 }
-//@ chunk-ae5g0zb5.js:103412-103623 placement
+//@ chunk-mhn0amzz.js:104653-104864 placement
 /**
  * 从命令文本开头取出加载标记，返回对应的加载记录（未过期）与剩余文本。
  */
@@ -1498,14 +1506,14 @@ function takeLoadMark(text) {
       }
     : undefined;
 }
-//@ chunk-ae5g0zb5.js:103623-103706 placement
+//@ chunk-mhn0amzz.js:104864-104947 placement
 /**
  * 检查当前工具列表里是否存在浏览器助手提供的工具前缀。
  */
 async function hasHelperTool(ctx) {
   return (await ctx.tool.list()).some((tool) => tool.name.startsWith(HELPER_TOOL_PREFIX));
 }
-//@ chunk-ae5g0zb5.js:103706-103868 placement
+//@ chunk-mhn0amzz.js:104947-105109 placement
 /**
  * 浏览器助手可启动时把当前会话加入需要助手的集合。
  */
@@ -1519,7 +1527,7 @@ async function markSessionWantsHelper(ctx) {
   claudeTestState.wantedSessions.add(sessionId);
   return true;
 }
-//@ chunk-ae5g0zb5.js:103868-104225 placement
+//@ chunk-mhn0amzz.js:105109-105466 placement
 async function checkLoginWatch(ctx) {
   if (!(await ctx.session.surfaces()).includes("terminal")) {
     claudeTestState.report?.("no_terminal");
@@ -1542,7 +1550,7 @@ async function checkLoginWatch(ctx) {
   }
   return;
 }
-//@ chunk-ae5g0zb5.js:104225-105061 placement
+//@ chunk-mhn0amzz.js:105466-106302 placement
 async function describeHelperListing(ctx, remainingMs) {
   let { watchLogin, takeOut } = claudeTestState;
   if (watchLogin === undefined || takeOut === undefined) return LOGIN_CHECK_FAILED_TEXT;
@@ -1588,7 +1596,7 @@ async function describeHelperListing(ctx, remainingMs) {
   claudeTestState.report?.("listed");
   return;
 }
-//@ chunk-ae5g0zb5.js:105061-105271 placement
+//@ chunk-mhn0amzz.js:106302-106512 placement
 /**
  * 助手状态对应的提示文本（watching 时无提示）。
  */
@@ -1610,7 +1618,7 @@ function describeHelperState_2(watchLogin, takeOut) {
       return LOGIN_CHECK_FAILED_TEXT;
   }
 }
-//@ chunk-ae5g0zb5.js:105271-105585 placement
+//@ chunk-mhn0amzz.js:106512-106827 placement
 async function describeAvailability(ctx) {
   try {
     let connection = await ctx.mcp.connect(BROWSER);
@@ -1635,7 +1643,7 @@ async function describeAvailability(ctx) {
     return REPORT_MISSING_TEXT;
   }
 }
-//@ chunk-ae5g0zb5.js:105585-105616 placement
+//@ chunk-mhn0amzz.js:106827-106858 placement
 /**
  * 吞掉异常地执行
  */
@@ -1644,7 +1652,7 @@ function runQuietly(fn) {
     fn();
   } catch {}
 }
-//@ chunk-ae5g0zb5.js:105616-105680 placement
+//@ chunk-mhn0amzz.js:106858-106922 placement
 /**
  * 非 root 的 uid
  */
@@ -1652,12 +1660,12 @@ function isNonRootUser() {
   let uid = process.getuid?.();
   return uid !== undefined && uid !== 0;
 }
-//@ chunk-ae5g0zb5.js:105680-105720 placement (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
+//@ chunk-mhn0amzz.js:106922-106962 placement (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
 var SUPPORTED_PLATFORMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:105680", () => {
+deferInit("chunk-mhn0amzz.js:106922", () => {
   SUPPORTED_PLATFORMS = new Set(["linux", "macos", "wsl"]);
 });
-//@ chunk-ae5g0zb5.js:105720-105862 placement
+//@ chunk-mhn0amzz.js:106962-107104 placement
 /**
  * Claude Test 是否可用：非 bare、合规无 HIPAA/ZDR、平台支持且开关开启。
  */
@@ -1674,33 +1682,33 @@ function isClaudeTestAvailable() {
     claudeTestGateApi.isOn()
   );
 }
-//@ chunk-ae5g0zb5.js:105862-105925 placement
+//@ chunk-mhn0amzz.js:107104-107167 placement
 /**
  * HostScoped 的助手标记状态
  */
 var claudeTestMarkSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:105862", () => {
+deferInit("chunk-mhn0amzz.js:107104", () => {
   claudeTestMarkSlot = new HostScoped(() => ({
     mark: undefined,
     reload: undefined,
     outcome: undefined,
   }));
 });
-//@ chunk-ae5g0zb5.js:105925-105962 placement
+//@ chunk-mhn0amzz.js:107167-107204 placement
 /**
  * 取当前宿主的助手标记状态
  */
 function claudeTestMarkState() {
   return claudeTestMarkSlot.of(getRootSession().host);
 }
-//@ chunk-ae5g0zb5.js:105962-105983 placement
+//@ chunk-mhn0amzz.js:107204-107225 placement
 var CLAUDE_TEST_3 = "claude-test";
-//@ chunk-ae5g0zb5.js:105983-106044 placement
+//@ chunk-mhn0amzz.js:107225-107286 placement
 var regExp_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:105983", () => {
+deferInit("chunk-mhn0amzz.js:107225", () => {
   regExp_3 = new RegExp(`^${CLAUDE_TEST_3}@[A-Za-z0-9][A-Za-z0-9._-]{0,39}$`);
 });
-//@ chunk-ae5g0zb5.js:106044-106214 placement
+//@ chunk-mhn0amzz.js:107286-107456 placement
 /**
  * 在命令列表中找到 Claude Test 插件的来源仓库。
  */

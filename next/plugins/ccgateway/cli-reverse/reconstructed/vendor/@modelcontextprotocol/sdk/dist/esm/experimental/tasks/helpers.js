@@ -1,12 +1,12 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-zykv69v4.js (2)
+ * pieces: chunk-efaj9q04.js (2)
  * attribution: esm-fingerprint 2
  */
 
-//@ chunk-zykv69v4.js:28190-28439 esm-fingerprint
+//@ chunk-efaj9q04.js:28193-28442 esm-fingerprint
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) throw Error(`${entityName} does not support task creation (required for ${method})`);
   switch (method) {
@@ -18,7 +18,7 @@ function assertToolsCallTaskCapability(requests, method, entityName) {
       break;
   }
 }
-//@ chunk-zykv69v4.js:28439-28875 esm-fingerprint
+//@ chunk-efaj9q04.js:28442-28878 esm-fingerprint
 function assertClientRequestTaskCapability(requests, method, entityName) {
   if (!requests) throw Error(`${entityName} does not support task creation (required for ${method})`);
   switch (method) {

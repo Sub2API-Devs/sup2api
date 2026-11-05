@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：/share 命令注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-myrezy36.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ktjdp0n0.js (1)
  * attribution: placement 1
  */
 import { callLegacyFeedbackDialog } from "../feedback/feedback.js";
 
-//@ chunk-myrezy36.js:13976-14048 placement
+//@ chunk-ktjdp0n0.js:15292-15364 placement
 /**
  * /bug 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -3,9 +3,9 @@
  *
  * 读取本机设备沙箱快照（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (6)
  * attribution: placement 6
  */
 import { SandboxManager, getEffectiveFilesystemPolicy } from "../../utils/sandbox/sandbox-adapter.js";
@@ -18,7 +18,7 @@ import {
   sandboxSettingsChain,
 } from "../../utils/sandbox/sandboxSettingsSources.js";
 
-//@ chunk-s61vbvea.js:535191-535471 placement
+//@ chunk-7jxyna5q.js:452297-452577 placement
 function classifyDeviceSandboxPosture(snapshot, { requireStarted }) {
   let unavailableReason = sandboxUnavailableReason(snapshot);
   if (unavailableReason !== undefined)
@@ -45,7 +45,7 @@ function classifyDeviceSandboxPosture(snapshot, { requireStarted }) {
         reason: weaknessReason,
       };
 }
-//@ chunk-s61vbvea.js:535471-535714 placement
+//@ chunk-7jxyna5q.js:452577-452820 placement
 /**
  * 根据设备沙箱快照判断本机能否安全地提供远程工具：未启用时区分 unavailable/failed_to_start/unsupported，文件系统策略非 strict 或 scrub 模式为 unconfined，其他返回 undefined。
  */
@@ -57,7 +57,7 @@ function sandboxUnavailableReason(snapshot) {
   if (snapshot.filesystemPolicy !== "strict" || snapshot.scrubMode) return "sandbox_unconfined";
   return;
 }
-//@ chunk-s61vbvea.js:535714-535983 placement
+//@ chunk-7jxyna5q.js:452820-453089 placement
 function sandboxWeaknessReason(config) {
   if (config.weakensIsolation || config.ripgrepOverridden) return "sandbox_weakened";
   if (config.allowsUnixSockets) return "sandbox_allows_unix_sockets";
@@ -65,7 +65,7 @@ function sandboxWeaknessReason(config) {
   if (config.injectsCredentials) return "sandbox_injects_credentials";
   return;
 }
-//@ chunk-s61vbvea.js:535983-536737 placement
+//@ chunk-7jxyna5q.js:453089-453843 placement
 function readDeviceSandboxSnapshot() {
   let sandboxingEnabled = SandboxManager.isSandboxingEnabled();
   let sandbox = SandboxManager.getConfig();
@@ -105,13 +105,13 @@ function readDeviceSandboxSnapshot() {
     }),
   };
 }
-//@ chunk-s61vbvea.js:536737-536856 placement
+//@ chunk-7jxyna5q.js:453843-453962 placement
 async function warmDeviceSandbox() {
   if (!SandboxManager.isSandboxingEnabled()) return;
   await SandboxManager.initialize();
   await SandboxManager.waitForNetworkInitialization();
 }
-//@ chunk-s61vbvea.js:536856-537057 placement
+//@ chunk-7jxyna5q.js:453962-454163 placement
 async function ensureDeviceSandboxPosture() {
   let unavailableReason = sandboxUnavailableReason(readDeviceSandboxSnapshot());
   if (unavailableReason !== undefined)

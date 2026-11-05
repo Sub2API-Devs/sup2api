@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：消息增量规范化的保留输出校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (18)
  * attribution: placement 18
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -16,10 +16,10 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:122149-122271 placement
+//@ chunk-hnxhr3bs.js:126340-126462 placement
 var NORMALIZER_CHECK_FAILED_EVENT = "tengu_normalizer_retained_output_check_failed";
 var RETAINED_OUTPUT_FAILED_TEXT = "IncrementalNormalizer: retained output failed its reuse check";
-//@ chunk-ag5x7vhf.js:122271-122369 placement
+//@ chunk-hnxhr3bs.js:126462-126560 placement
 var VALUE_KINDS = [
   "hole",
   "undefined",
@@ -32,7 +32,7 @@ var VALUE_KINDS = [
   "symbol",
   "function",
 ];
-//@ chunk-ag5x7vhf.js:122369-122527 placement
+//@ chunk-hnxhr3bs.js:126560-126718 placement
 /**
  * 增量规范化器诊断用的常量：值类型标签、运行时长分档、扫描上限与 32 位上限。
  */
@@ -40,7 +40,7 @@ var VALUE_KIND_LABELS; // deferred: uses VALUE_KINDS of its import cycle while l
 var UPTIME_BUCKETS;
 var MAX_CORRUPTION_SCAN;
 var UINT32_MAX;
-deferInit("chunk-ag5x7vhf.js:122369", () => {
+deferInit("chunk-hnxhr3bs.js:126560", () => {
   VALUE_KIND_LABELS = [...VALUE_KINDS, "object", "array", "n_a"];
   UPTIME_BUCKETS = [
     [60, "lt_1m"],
@@ -53,7 +53,7 @@ deferInit("chunk-ag5x7vhf.js:122369", () => {
   MAX_CORRUPTION_SCAN = 50000;
   UINT32_MAX = 4294967295;
 });
-//@ chunk-ag5x7vhf.js:122527-122862 placement
+//@ chunk-hnxhr3bs.js:126718-127053 placement
 function valueKindAt(output, index) {
   let value = output[index];
   switch (typeof value) {
@@ -75,7 +75,7 @@ function valueKindAt(output, index) {
       return "function";
   }
 }
-//@ chunk-ag5x7vhf.js:122862-122964 placement
+//@ chunk-hnxhr3bs.js:127053-127155 placement
 function findFirstNonObject(output, start, end) {
   for (let index = start; index < end; index++) {
     let value = output[index];
@@ -83,7 +83,7 @@ function findFirstNonObject(output, start, end) {
   }
   return -1;
 }
-//@ chunk-ag5x7vhf.js:122964-123887 placement
+//@ chunk-hnxhr3bs.js:127155-128078 placement
 /**
  * IncrementalNormalizer 的保留输出校验：检查复用的规范化结果是否仍与输入一致，不一致时记录详情并重建。
  */
@@ -206,14 +206,14 @@ class RetainedOutputChecker {
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(message);
   }
 }
-//@ chunk-ag5x7vhf.js:123887-123988 placement
+//@ chunk-hnxhr3bs.js:128078-128179 placement
 /**
  * 增量规范化缓存损坏后从输入重建时的说明，以及描述失败/检测失败两种变体。
  */
 var CACHE_REBUILT_NOTE = `${RETAINED_OUTPUT_FAILED_TEXT} and is rebuilt from the input`;
 var REBUILT_DESCRIBE_FAILED = `${CACHE_REBUILT_NOTE} (describe_failed)`;
 var REBUILT_DETECT_FAILED = `${CACHE_REBUILT_NOTE} (detect_failed)`;
-//@ chunk-ag5x7vhf.js:123988-124059 placement
+//@ chunk-hnxhr3bs.js:128179-128250 placement
 function safeDescribeCacheCorruption(describe) {
   try {
     return describeCacheCorruption(describe(), "x64", process.uptime());
@@ -221,7 +221,7 @@ function safeDescribeCacheCorruption(describe) {
     return;
   }
 }
-//@ chunk-ag5x7vhf.js:124059-125146 placement
+//@ chunk-hnxhr3bs.js:128250-129337 placement
 /**
  * 描述增量规范化缓存的损坏情况：类型（簿记链/起点异常、对象重复、长度增减等）、所在区域（头/中/尾）、位置、长度、损坏数量与跨度、是否混合类型、复用的头尾长度、前后输入长度、架构与运行时长分档。
  */
@@ -310,14 +310,14 @@ function describeCacheCorruption(
     uptime: UPTIME_BUCKETS.find(([threshold]) => uptimeMs < threshold)?.[1] ?? "gte_24h",
   };
 }
-//@ chunk-ag5x7vhf.js:125146-125735 placement
+//@ chunk-hnxhr3bs.js:129337-129926 placement
 /**
  * 把增量规范化器损坏诊断格式化为一行文本（类型、区域、位置、长度、损坏数量与跨度等）。
  */
 function formatCorruptionReport(report) {
   return `${CACHE_REBUILT_NOTE} (kind=${report.kind} extra_slot=${report.extraSlot} region=${report.region} index=${report.index} index_from_end=${report.indexFromEnd} output_length=${report.outputLength} expected_output_length=${report.expectedOutputLength} corrupt_count=${report.corruptCount} corrupt_span=${report.corruptSpan} mixed_kinds=${report.mixedKinds ? "yes" : "no"} scan_capped=${report.scanCapped ? "yes" : "no"} reused_head_length=${report.reusedHeadLength} reused_tail_length=${report.reusedTailLength} previous_input_length=${report.previousInputLength} input_length=${report.inputLength} checks=${report.checks} site=${report.site} arch=${report.arch} uptime=${report.uptime})`;
 }
-//@ chunk-ag5x7vhf.js:125735-126255 placement
+//@ chunk-hnxhr3bs.js:129926-130446 placement
 /**
  * 把增量规范化器损坏诊断转为打点事件属性。
  */
@@ -344,7 +344,7 @@ function toCorruptionEventProps(report) {
     uptime: fromEnum(report.uptime),
   };
 }
-//@ chunk-ag5x7vhf.js:126255-126498 placement
+//@ chunk-hnxhr3bs.js:130446-130689 placement
 function findBadStartIndex(starts, firstIndex, tailLength, lastIndex, outputLength) {
   let firstStart = starts[firstIndex];
   if (
@@ -365,7 +365,7 @@ function findBadStartIndex(starts, firstIndex, tailLength, lastIndex, outputLeng
   }
   return starts[lastIndex] === outputLength ? -1 : lastIndex;
 }
-//@ chunk-ag5x7vhf.js:126498-126640 placement
+//@ chunk-hnxhr3bs.js:130689-130831 placement
 function findBadBooleanIndex(chains, firstIndex, tailLength, lastIndex) {
   if (typeof chains[firstIndex] !== "boolean") return firstIndex;
   if (tailLength <= 0) return -1;
@@ -373,24 +373,24 @@ function findBadBooleanIndex(chains, firstIndex, tailLength, lastIndex) {
     if (typeof chains[index] !== "boolean") return index;
   return -1;
 }
-//@ chunk-ag5x7vhf.js:126640-126688 placement
+//@ chunk-hnxhr3bs.js:130831-130879 placement
 function integerOr(checks, fallback) {
   return Number.isInteger(checks) ? checks : fallback;
 }
-//@ chunk-ag5x7vhf.js:126688-126750 placement
+//@ chunk-hnxhr3bs.js:130879-130941 placement
 function boundedIntOr(value, fallback, max) {
   return Number.isInteger(value) && value >= 0 && value <= max ? value : fallback;
 }
-//@ chunk-ag5x7vhf.js:126750-126823 placement
+//@ chunk-hnxhr3bs.js:130941-131014 placement
 function objectIntField(object, key, fallback) {
   let value = object[key];
   return value !== undefined && Number.isInteger(value) ? value : fallback;
 }
-//@ chunk-ag5x7vhf.js:126823-126870 placement
+//@ chunk-hnxhr3bs.js:131014-131061 placement
 function boundedObjectInt(object, key, fallback, max) {
   return boundedIntOr(objectIntField(object, key, -1), fallback, max);
 }
-//@ chunk-ag5x7vhf.js:126870-126968 placement
+//@ chunk-hnxhr3bs.js:131061-131159 placement
 function valueKindOrFallback(output, index) {
   let kind = valueKindAt(output, index);
   if (kind !== undefined) return kind;

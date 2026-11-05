@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：engine.create 钩子折叠，构建每个插件可见的 $ 接口对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import { HooksError } from "./hooksErrors.js";
@@ -34,7 +34,7 @@ import {
 } from "./hooksModuleLoader.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4053473-4053647 placement
+//@ chunk-5xgkngpb.js:4159319-4159493 placement
 /**
  * 生成"插件: engine.create failed (原因)"错误（去掉原因里重复的插件名前缀）。
  */
@@ -47,29 +47,29 @@ function engineCreateFailedError(name, failure) {
       (reasonText === undefined ? "" : ` (${reasonText})`),
   );
 }
-//@ chunk-e6aww6q8.js:4053647-4053662 placement
+//@ chunk-5xgkngpb.js:4159493-4159508 placement
 /**
  * 原样返回
  */
 var identityValue = (value) => value;
-//@ chunk-e6aww6q8.js:4053662-4053677 placement
+//@ chunk-5xgkngpb.js:4159508-4159523 placement
 /**
  * 原样返回
  */
 var identityResult = (value) => value;
-//@ chunk-e6aww6q8.js:4053677-4053738 placement
+//@ chunk-5xgkngpb.js:4159523-4159584 placement
 /**
  * 数组逐项相等
  */
 var sameArray = (methods, methods_2) =>
   methods.length === methods_2.length && methods.every((method, index) => method === methods_2[index]);
-//@ chunk-e6aww6q8.js:4053738-4053837 placement
+//@ chunk-5xgkngpb.js:4159584-4159683 placement
 /**
  * 接口签名相同
  */
 var sameInterfaceSignature = (a, b) =>
   a.owner === b.owner && sameArray(a.methods, b.methods) && sameArray(a.withheldBy ?? [], b.withheldBy ?? []);
-//@ chunk-e6aww6q8.js:4053837-4054082 placement
+//@ chunk-5xgkngpb.js:4159683-4159928 placement
 function markWithheld(table, crashedWithholders, unloadedNames) {
   let merged = Object.assign(Object.create(null), table);
   for (let withholder of unloadedNames)
@@ -83,7 +83,7 @@ function markWithheld(table, crashedWithholders, unloadedNames) {
     }
   return merged;
 }
-//@ chunk-e6aww6q8.js:4054082-4054171 placement
+//@ chunk-5xgkngpb.js:4159928-4160017 placement
 /**
  * 去掉已卸载者的扣留
  */
@@ -91,7 +91,7 @@ var dropUnloadedWithholders = (table, liveNames) =>
   import_mapValues(table, (value) =>
     dropWithholders(value, new Set((value.withheldBy ?? []).filter((name) => !liveNames.includes(name)))),
   );
-//@ chunk-e6aww6q8.js:4054171-4054399 placement
+//@ chunk-5xgkngpb.js:4160017-4160245 placement
 /**
  * hooks worker 在操作中死亡时丢弃待提交项并记录，返回 true。
  */
@@ -107,9 +107,9 @@ function abandonIfWorkerDied(state, modules, stage) {
   for (let loadedModule of modules) loadedModule.discard();
   return true;
 }
-//@ chunk-e6aww6q8.js:4054399-4054713 placement
+//@ chunk-5xgkngpb.js:4160245-4160559 placement
 var UNCALLED_NEXT_REFUSALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4054399", () => {
+deferInit("chunk-5xgkngpb.js:4160245", () => {
   UNCALLED_NEXT_REFUSALS = Object.freeze({
     uncalled:
       "answered with no next(e) call that reached the engine, which withholds every noun added beneath it",
@@ -117,10 +117,10 @@ deferInit("chunk-e6aww6q8.js:4054399", () => {
     pending: "answered before its next(e) settled, which withholds every noun added beneath it",
   });
 });
-//@ chunk-e6aww6q8.js:4054713-4054829 placement
+//@ chunk-5xgkngpb.js:4160559-4160675 placement
 var PROTO_NOUN_REFUSAL =
   "engine.create added $.__proto__; that name cannot be a noun (a step that copies $ by assignment loses it)";
-//@ chunk-e6aww6q8.js:4054829-4054985 placement
+//@ chunk-5xgkngpb.js:4160675-4160831 placement
 function dropProtoNoun(loaded, nouns) {
   if (!Object.hasOwn(nouns, PROTO_KEY)) return nouns;
   let joined = [PROTO_NOUN_REFUSAL, loaded.name, loaded.environmentId].join(" ");
@@ -130,10 +130,10 @@ function dropProtoNoun(loaded, nouns) {
   }
   return filterEntriesToNullProto(nouns, () => true);
 }
-//@ chunk-e6aww6q8.js:4054985-4055124 placement
+//@ chunk-5xgkngpb.js:4160831-4160970 placement
 var USER_TIER_FOLD_NOTE =
   "; it runs in the user tier (no managed source vouches for the copy it loaded from), where a plugin adds nouns and withholds none";
-//@ chunk-e6aww6q8.js:4055124-4056993 placement
+//@ chunk-5xgkngpb.js:4160970-4162844 placement
 /**
  * 折叠多个插件的 engine.create 结果，处理插件新增或扣留的 $ 名称冲突。
  */
@@ -224,7 +224,7 @@ function foldEngineCreateHooks(options) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4056993-4057563 placement
+//@ chunk-5xgkngpb.js:4162844-4163414 placement
 function reportEngineFoldResult(result) {
   let { table, suppressed, hooking, built } = result;
   let mapped = Object.entries(table)
@@ -239,7 +239,7 @@ function reportEngineFoldResult(result) {
     `engine.create: ${mapped.length === 0 ? "no plugin-provided interfaces" : mapped.join("; ")}${mapped_2.length === 0 ? "" : `; ${mapped_2.join("; ")}`}; $ built for ${built.map((line) => line.name).join(",") || "nobody"}`,
   );
 }
-//@ chunk-e6aww6q8.js:4057563-4057862 placement
+//@ chunk-5xgkngpb.js:4163414-4163713 placement
 function warnMissingWithholders(carried, newTable, liveNames) {
   for (let [key, value] of Object.entries(carried ?? {})) {
     let entry = Object.hasOwn(newTable, key) ? newTable[key] : undefined;
@@ -253,7 +253,7 @@ function warnMissingWithholders(carried, newTable, liveNames) {
         );
   }
 }
-//@ chunk-e6aww6q8.js:4057862-4061998 placement
+//@ chunk-5xgkngpb.js:4163713-4167852 placement
 /**
  * 在 engine.create 钩子链上构建插件可见的 $ 对象；失败时说明哪个插件的哪一步出错。
  */
@@ -517,12 +517,12 @@ async function buildEngineApi(ctx, modules, options = {}) {
     ctx.state.stagedBefore = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:4061998-4062042 placement
+//@ chunk-5xgkngpb.js:4167852-4167896 placement
 /**
  * engine.create / plugin.register
  */
 var REFOLD_EVENTS = ["engine.create", "plugin.register"];
-//@ chunk-e6aww6q8.js:4062042-4062142 placement
+//@ chunk-5xgkngpb.js:4167896-4167996 placement
 /**
  * 若模块（实时或扫描）监听 engine.create 或 plugin.register，返回该事件名（意味着需要整组重新折叠）。
  */
@@ -532,7 +532,7 @@ var findReloadTriggerEvent = ({ live, scans }) =>
       live?.hooks(event) === true ||
       scans.some((scan) => scan.hooks.some((hook) => matchesEventPattern(hook, event))),
   );
-//@ chunk-e6aww6q8.js:4062142-4062208 placement
+//@ chunk-5xgkngpb.js:4167996-4168062 placement
 /**
  * 部分重折叠的提示
  */

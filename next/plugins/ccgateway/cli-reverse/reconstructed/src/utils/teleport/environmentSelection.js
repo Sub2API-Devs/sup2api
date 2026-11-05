@@ -3,29 +3,29 @@
  *
  * 计算云端会话可用环境与当前选择。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/environmentSelection.ts
- * pieces: chunk-f25sswmp.js (9)
+ * pieces: chunk-vr5v4gzz.js (9)
  * attribution: placement 7, layout 1, fingerprint 1
  */
 import { getEnabledSettingSources } from "../settings/constants.js";
 import { getSettingsForSource } from "../settings/settings.js";
 
-//@ chunk-f25sswmp.js:14776-14828 placement
+//@ chunk-vr5v4gzz.js:15426-15478 placement
 function isSelfHostedPoolEnv(environment) {
   return environment?.kind === "self_hosted_pool";
 }
-//@ chunk-f25sswmp.js:14828-14905 placement
+//@ chunk-vr5v4gzz.js:15478-15555 placement
 function isSelfHostedPool(selection) {
   return selection.kind === "self_hosted_pool" ? selection.pool_id : selection.environment_id;
 }
-//@ chunk-f25sswmp.js:14905-14964 placement
+//@ chunk-vr5v4gzz.js:15555-15613 placement
 function isCcpoolId(value) {
   return value !== undefined && value.startsWith("ccpool_");
 }
-//@ chunk-f25sswmp.js:14964-15013 placement
+//@ chunk-vr5v4gzz.js:15613-15662 placement
 var CLOUD_ENVIRONMENT_KINDS = ["anthropic_cloud", "bridge", "snap", "ccs"];
-//@ chunk-f25sswmp.js:15013-15220 placement
+//@ chunk-vr5v4gzz.js:15662-15869 placement
 function selfHostedEnvironmentKind(environment) {
   let nonEmpty = (nonEmpty) => nonEmpty !== undefined && nonEmpty !== null && nonEmpty !== "";
   if (nonEmpty(environment.self_hosted_runner_pool_id)) return "pool";
@@ -33,23 +33,23 @@ function selfHostedEnvironmentKind(environment) {
   if (!nonEmpty(environmentKind) || CLOUD_ENVIRONMENT_KINDS.includes(environmentKind)) return null;
   return environmentKind === "byoc" ? "byoc" : "unlisted_kind";
 }
-//@ chunk-f25sswmp.js:15220-15257 placement
+//@ chunk-vr5v4gzz.js:15869-15906 placement
 /**
  * 是否自托管环境。
  */
 function isSelfHostedEnvironment(environment) {
   return selfHostedEnvironmentKind(environment) !== null;
 }
-//@ chunk-f25sswmp.js:15257-15292 placement
+//@ chunk-vr5v4gzz.js:15906-15941 placement
 /**
  * 按谓词查找第一个匹配项。
  */
 function findFirst(list, predicate) {
   return list.find(predicate);
 }
-//@ chunk-f25sswmp.js:15292-15348 layout (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
+//@ chunk-vr5v4gzz.js:15941-15997 layout (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
-//@ chunk-f25sswmp.js:15348-15653 fingerprint (2.1.88 match: getEnvironmentSelectionInfo, 0.447)
+//@ chunk-vr5v4gzz.js:15997-16300 fingerprint (2.1.88 match: getEnvironmentSelectionInfo, 0.447)
 /**
  * 计算可用云环境与当前选择。
  */
@@ -80,11 +80,11 @@ function getEnvironmentSelectionInfo() {
   };
 }
 export {
-  isSelfHostedPoolEnv,
-  isSelfHostedPool,
-  getEnvironmentSelectionInfo,
   isCcpoolId,
+  getEnvironmentSelectionInfo,
   findFirst,
   selfHostedEnvironmentKind,
+  isSelfHostedPoolEnv,
+  isSelfHostedPool,
   isSelfHostedEnvironment,
 };

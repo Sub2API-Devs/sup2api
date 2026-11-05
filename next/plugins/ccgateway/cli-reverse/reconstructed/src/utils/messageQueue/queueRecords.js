@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：消息队列记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { isPromptHookObserved } from "../telemetry/sessionTracing.js";
@@ -18,7 +18,7 @@ import { logError } from "../log.js";
 import { registerCleanup, isCleanupStarted } from "../cleanupRegistry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:548224-548377 placement
+//@ chunk-5xgkngpb.js:554977-555130 placement
 /**
  * 队列记录的文本：提交过的取提交文本，否则在不被钩子观察时取原值。
  */
@@ -28,12 +28,12 @@ function queueRecordText(record) {
   let plainContent = typeof contentValue === "string" && !isScreeningPendingEntry(record) && !hookObserved;
   return promptSubmitted?.text ?? (plainContent ? contentValue : undefined);
 }
-//@ chunk-e6aww6q8.js:548377-548410 placement
+//@ chunk-5xgkngpb.js:555130-555163 placement
 var currentQueueRecordChain; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:548377", () => {
+deferInit("chunk-5xgkngpb.js:555130", () => {
   currentQueueRecordChain = identity_2(subscribe(), (store) => store.set(null));
 });
-//@ chunk-e6aww6q8.js:548410-548489 placement
+//@ chunk-5xgkngpb.js:555163-555242 placement
 /**
  * 登记队列记录链并在完成（成功或失败）后自动清除。
  */
@@ -44,17 +44,17 @@ function trackQueueRecordChain(chain) {
   currentQueueRecordChain.set(chain);
   chain.then(clearIfCurrent, clearIfCurrent);
 }
-//@ chunk-e6aww6q8.js:548489-548523 placement
+//@ chunk-5xgkngpb.js:555242-555276 placement
 /**
  * 宿主隔离的队列记录文本构造器存储。
  */
 var queueRecordTextBuilder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:548489", () => {
+deferInit("chunk-5xgkngpb.js:555242", () => {
   queueRecordTextBuilder = identity_2(subscribe(), (store) => store.set(null));
 });
-//@ chunk-e6aww6q8.js:548523-548536 placement
+//@ chunk-5xgkngpb.js:555276-555289 placement
 var RECORD_VISIBILITY_TTL_MS = 1000;
-//@ chunk-e6aww6q8.js:548536-548676 placement
+//@ chunk-5xgkngpb.js:555289-555429 placement
 function logQueueRecordError(error) {
   try {
     if (isAbortError(error)) {
@@ -66,7 +66,7 @@ function logQueueRecordError(error) {
     logForDebugging("A queue record failed with an unreadable error");
   }
 }
-//@ chunk-e6aww6q8.js:548676-549847 placement
+//@ chunk-5xgkngpb.js:555429-556603 placement
 /**
  * 创建队列记录写入器：需经钩子改写的记录按序等待（最多 1 秒），之后按原顺序写出。
  */

@@ -3,13 +3,13 @@
  *
  * policyHelper 执行与重试（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (44)
  * attribution: placement 44
  */
 import { win32, posix } from "path";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import {
   PROGRAM_FILES_DIR,
   WINDOWS_POWERSHELL_DIR,
@@ -55,7 +55,7 @@ import { validatePayloadAndLog } from "./helperPayload.js";
 import { serializeSettingsErrors } from "../../fileStateCache.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:21656-22068 placement
+//@ chunk-5fn9rb8r.js:21915-22327 placement
 /**
  * POWERSHELL_NOT_FOUND_MESSAGE：找不到 PowerShell 的说明；PS_MODULE_PATH_ENV：PowerShell 模块路径环境变量（同一声明共 2 个绑定）。
  */
@@ -66,33 +66,37 @@ var CLAUDE_CODE_POLICY_HELPER_PS1_PATH = "CLAUDE_CODE_POLICY_HELPER_PS1_PATH";
 var POWERSHELL_NOT_FOUND_MESSAGE = `$env:PSModulePath = $env:${CLAUDE_CODE_POLICY_HELPER_PSMODULEPATH}; `;
 var PS_MODULE_PATH_ENV =
   "if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {} }; ";
-//@ chunk-q8cqcff6.js:22068-22186 placement
+//@ chunk-5fn9rb8r.js:22327-22445 placement
 function wrapPowerShellCommand(script) {
   return `${POWERSHELL_NOT_FOUND_MESSAGE}${PS_MODULE_PATH_ENV}$LASTEXITCODE = 0; try { ${script} } catch { Write-Error $_; exit 1 }; exit $LASTEXITCODE`;
 }
-//@ chunk-q8cqcff6.js:22186-22268 placement
+//@ chunk-5fn9rb8r.js:22445-22527 placement
 var POLICY_HELPER_PS1_INVOKE; // deferred: uses wrapPowerShellCommand of its import cycle while loading; runs once the cycle is complete
 var UTF8_OUTPUT_ENCODING_SETUP;
-deferInit("chunk-q8cqcff6.js:22186", () => {
+deferInit("chunk-5fn9rb8r.js:22445", () => {
   POLICY_HELPER_PS1_INVOKE = wrapPowerShellCommand(`& ($env:${CLAUDE_CODE_POLICY_HELPER_PS1_PATH})`);
   UTF8_OUTPUT_ENCODING_SETUP = wrapPowerShellCommand("Invoke-Expression (@($input) -join [char]10)");
 });
-//@ chunk-q8cqcff6.js:22268-22403 placement
+//@ chunk-5fn9rb8r.js:22527-22662 placement
 function psModulePath(dir) {
-  return uniq([
+  return normalizeCaseForComparison_2([
     `${dir}\\Modules`,
     `${PROGRAM_FILES_DIR}\\PowerShell\\Modules`,
     `${PROGRAM_FILES_DIR}\\WindowsPowerShell\\Modules`,
     `${WINDOWS_POWERSHELL_DIR}\\Modules`,
   ]).join(";");
 }
-//@ chunk-q8cqcff6.js:22403-22465 placement
+//@ chunk-5fn9rb8r.js:22662-22724 placement
 function helperTrustedPathsJoin(dir) {
-  return uniq([dir, SYSTEM32_DIR, WINDOWS_ROOT_DIR, `${SYSTEM32_DIR}\\Wbem`, WINDOWS_POWERSHELL_DIR]).join(
-    ";",
-  );
+  return normalizeCaseForComparison_2([
+    dir,
+    SYSTEM32_DIR,
+    WINDOWS_ROOT_DIR,
+    `${SYSTEM32_DIR}\\Wbem`,
+    WINDOWS_POWERSHELL_DIR,
+  ]).join(";");
 }
-//@ chunk-q8cqcff6.js:22465-23093 placement
+//@ chunk-5fn9rb8r.js:22724-23352 placement
 /**
  * policyHelper 解释器环境清理用的常量：安全 PATHEXT、.NET 注入前缀、pwsh 与 sh 要删除的变量和前缀、安全 POSIX PATH。
  */
@@ -102,7 +106,7 @@ var PWSH_STRIPPED_ENV;
 var SH_STRIPPED_ENV_PREFIXES;
 var SH_STRIPPED_ENV;
 var SAFE_POSIX_PATH;
-deferInit("chunk-q8cqcff6.js:22465", () => {
+deferInit("chunk-5fn9rb8r.js:22724", () => {
   SAFE_PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
   DOTNET_ENV_PREFIXES = ["DOTNET_", "COMPLUS_", "COR_", "CORECLR_", "APPDOMAIN_MANAGER_"];
   PWSH_STRIPPED_ENV = new Set([
@@ -147,14 +151,14 @@ deferInit("chunk-q8cqcff6.js:22465", () => {
   ]);
   SAFE_POSIX_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 });
-//@ chunk-q8cqcff6.js:23093-23209 placement
+//@ chunk-5fn9rb8r.js:23352-23468 placement
 function deleteEnvMatching(env, stripped, prefixes, normalize) {
   for (let key of Object.keys(env)) {
     let name = normalize(key);
     if (stripped.has(name) || prefixes.some((prefix) => name.startsWith(prefix))) delete env[key];
   }
 }
-//@ chunk-q8cqcff6.js:23209-23562 placement
+//@ chunk-5fn9rb8r.js:23468-23821 placement
 /**
  * 按路由的解释器调整 policyHelper 环境：sh 删除危险变量并固定 PATH 与 LC_ALL；pwsh 删除 .NET 注入变量，设置模块路径、PATH、PATHEXT、COMSPEC、TERM 与 ps1 路径。
  */
@@ -184,11 +188,11 @@ function interpreterEnv(env, plan) {
     }
   }
 }
-//@ chunk-q8cqcff6.js:23562-23623 placement
+//@ chunk-5fn9rb8r.js:23821-23882 placement
 function helperCwdFor(plan) {
   return getPlatform() === "windows" ? win32.dirname(plan.file) : "/";
 }
-//@ chunk-q8cqcff6.js:23623-24010 placement
+//@ chunk-5fn9rb8r.js:23882-24269 placement
 /**
  * 生成 policyHelper 的启动计划：内联脚本用 /bin/sh -s 或 PowerShell 执行；路径型在 Windows 上的 .ps1 经 PowerShell 运行，否则直接执行该文件；无路径无脚本报 bad_path。
  */
@@ -226,7 +230,7 @@ function helperLaunchPlan(config) {
     ps1Path: path,
   });
 }
-//@ chunk-q8cqcff6.js:24010-24148 placement
+//@ chunk-5fn9rb8r.js:24269-24407 placement
 function pwshPlan(extra) {
   let planSlug = getPlanSlug_2();
   if (planSlug === null)
@@ -242,7 +246,7 @@ function pwshPlan(extra) {
     },
   };
 }
-//@ chunk-q8cqcff6.js:24148-24423 placement
+//@ chunk-5fn9rb8r.js:24407-24682 placement
 async function checkHelperFile(plan, timeoutMs, cache) {
   if (plan.routedInterpreter !== undefined) return null;
   let stats;
@@ -254,7 +258,7 @@ async function checkHelperFile(plan, timeoutMs, cache) {
   if (stats === undefined) return statTimeoutMessage(plan.file, timeoutMs);
   return stats.isFile() ? null : `path is not a regular file: ${plan.file}`;
 }
-//@ chunk-q8cqcff6.js:24423-24539 placement
+//@ chunk-5fn9rb8r.js:24682-24798 placement
 function statCached(file, cache) {
   let promise = cache.get(file);
   if (promise === undefined) {
@@ -265,11 +269,11 @@ function statCached(file, cache) {
   }
   return promise;
 }
-//@ chunk-q8cqcff6.js:24539-24613 placement
+//@ chunk-5fn9rb8r.js:24798-24872 placement
 function statTimeoutMessage(file, timeoutMs) {
   return `cannot stat path (timed out after ${timeoutMs} ms): ${file}`;
 }
-//@ chunk-q8cqcff6.js:24613-29058 placement
+//@ chunk-5fn9rb8r.js:24872-29317 placement
 /**
  * policyHelper 子进程需清除的凭据类环境变量表
  */
@@ -278,7 +282,7 @@ var CREDENTIAL_SCRUB_ENV_VARS;
 var CREDENTIAL_SCRUB_ENV_VARS_LOWER;
 var CREDENTIAL_SCRUB_ENV_NAMES;
 var CREDENTIAL_SCRUB_EXTRA_ENV_VARS;
-deferInit("chunk-q8cqcff6.js:24613", () => {
+deferInit("chunk-5fn9rb8r.js:24872", () => {
   CREDENTIAL_SCRUB_ENV_VARS_2 = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_CODE_OAUTH_TOKEN",
@@ -495,7 +499,7 @@ deferInit("chunk-q8cqcff6.js:24613", () => {
   CREDENTIAL_SCRUB_EXTRA_ENV_VARS =
     /^(?:CARGO_REGISTRIES_[A-Z0-9_]+_INDEX|POETRY_REPOSITORIES_[A-Z0-9_]+_URL|NPM_CONFIG_@[^:]+:REGISTRY)$/i;
 });
-//@ chunk-q8cqcff6.js:29058-29165 placement
+//@ chunk-5fn9rb8r.js:29317-29424 placement
 /**
  * 判断环境变量是否为包索引地址类变量（含 INPUT_ 前缀形式）。
  */
@@ -506,7 +510,7 @@ function isPackageIndexEnv(name) {
     .replace(/^INPUT_/, "");
   return CREDENTIAL_SCRUB_ENV_NAMES.has(replaced) || CREDENTIAL_SCRUB_EXTRA_ENV_VARS.test(replaced);
 }
-//@ chunk-q8cqcff6.js:29165-29247 placement
+//@ chunk-5fn9rb8r.js:29424-29506 placement
 function packageIndexEnvAlias(name) {
   return PACKAGE_INDEX_ENV_VARS_2[
     name
@@ -515,7 +519,7 @@ function packageIndexEnvAlias(name) {
       .replace(/^INPUT_/, "")
   ];
 }
-//@ chunk-q8cqcff6.js:29247-29489 placement
+//@ chunk-5fn9rb8r.js:29506-29748 placement
 /**
  * PACKAGE_INDEX_ENV_VARS：包索引环境变量的别名表。
  */
@@ -530,16 +534,16 @@ var HTTP_INDEX_INVALID = "http://index.invalid/";
 var PACKAGE_INDEX_ENV_VARS = {
   UV_DEFAULT_INDEX: ["UV_INDEX_URL"],
 };
-//@ chunk-q8cqcff6.js:29489-29557 placement
+//@ chunk-5fn9rb8r.js:29748-29816 placement
 /**
  * hasAnyIndexEnv：是否设置了任一索引环境变量。
  */
 function hasAnyIndexEnv(env, name) {
   return [name, ...(PACKAGE_INDEX_ENV_VARS[name] ?? [])].some((name) => (env[name] ?? "") !== "");
 }
-//@ chunk-q8cqcff6.js:29557-29591 placement
+//@ chunk-5fn9rb8r.js:29816-29850 placement
 var URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
-//@ chunk-q8cqcff6.js:29591-30034 placement
+//@ chunk-5fn9rb8r.js:29850-30293 placement
 /**
  * 去掉 URL 中的用户名密码（或令牌型用户名），查询串含凭证时清除查询与片段；无法解析时按正则去掉 userinfo。
  */
@@ -580,7 +584,7 @@ function stripUrlCredentials(text) {
     stripped,
   };
 }
-//@ chunk-q8cqcff6.js:30034-30098 placement
+//@ chunk-5fn9rb8r.js:30293-30357 placement
 function decodeUriComponentSafe(search) {
   try {
     return decodeURIComponent(search);
@@ -588,7 +592,7 @@ function decodeUriComponentSafe(search) {
     return search;
   }
 }
-//@ chunk-q8cqcff6.js:30098-30820 placement
+//@ chunk-5fn9rb8r.js:30357-31079 placement
 /**
  * 清洗包索引类环境变量的值：按分隔符逐段去除 URL 凭证，含凭证无法清理的段替换为无效占位（GOPROXY 改为 off 并截断后续），返回新值与是否截断/去除过。
  */
@@ -644,14 +648,14 @@ function sanitizeIndexUrlEnv(name, value) {
     stripped,
   };
 }
-//@ chunk-q8cqcff6.js:30820-30859 placement
+//@ chunk-5fn9rb8r.js:31079-31118 placement
 /**
  * sanitizedIndexEnvs：清洗后的索引环境变量。
  */
 function sanitizedIndexEnvs(env) {
   return sanitizeIndexEnvs(env).respelled;
 }
-//@ chunk-q8cqcff6.js:30859-31065 placement
+//@ chunk-5fn9rb8r.js:31118-31324 placement
 /**
  * 清洗整个环境中的凭证：包索引地址去凭证，JVM 选项删除含凭证的参数，返回改写值与丢失凭证的变量名。
  */
@@ -668,7 +672,7 @@ function sanitizeEnvCredentials(env) {
   }
   return result;
 }
-//@ chunk-q8cqcff6.js:31065-31406 placement
+//@ chunk-5fn9rb8r.js:31324-31665 placement
 /**
  * 对所有包索引类环境变量做凭证清洗，记录改写后的值与丢失凭证的变量；被截断时补一个只含源地址的回退变量（若原本未设置）。
  */
@@ -698,7 +702,7 @@ function sanitizeIndexEnvs(env) {
     lostCredential: lost,
   };
 }
-//@ chunk-q8cqcff6.js:31406-31780 placement
+//@ chunk-5fn9rb8r.js:31665-32039 placement
 /**
  * 为被截断的包索引变量构造回退变量：取值中第一个 URL 的源地址，失败时用无效占位。
  */
@@ -722,7 +726,7 @@ function indexFallbackEnv(name, value) {
     value: origin,
   };
 }
-//@ chunk-q8cqcff6.js:31780-31900 placement
+//@ chunk-5fn9rb8r.js:32039-32159 placement
 /**
  * 列出开启子进程环境清理时要删除的变量名（含 INPUT_ 与 npm 小写形式）。
  */
@@ -736,7 +740,7 @@ function scrubbedEnvNames() {
       ])
     : [];
 }
-//@ chunk-q8cqcff6.js:31900-32017 placement
+//@ chunk-5fn9rb8r.js:32159-32276 placement
 /**
  * 初始化子进程环境清理开关（显式开启，或在 GitHub Actions 中且未显式关闭）。
  */
@@ -746,35 +750,35 @@ function initEnvScrubFlag() {
     isEnvTruthy(envClaudeCodeSubprocessEnvScrub) ||
     (isEnvTruthy(process.env.GITHUB_ACTIONS) && !isFalsyEnvValue(envClaudeCodeSubprocessEnvScrub));
 }
-//@ chunk-q8cqcff6.js:32017-32024 placement
+//@ chunk-5fn9rb8r.js:32276-32283 placement
 /**
  * sanitizedEnvCache：清洗后环境的缓存。
  */
 var sanitizedEnvCache;
-//@ chunk-q8cqcff6.js:32024-32049 placement
+//@ chunk-5fn9rb8r.js:32283-32308 placement
 /**
  * clearSanitizedEnvCache：清空清洗环境缓存。
  */
 function clearSanitizedEnvCache() {
   sanitizedEnvCache = undefined;
 }
-//@ chunk-q8cqcff6.js:32049-32130 placement
+//@ chunk-5fn9rb8r.js:32308-32389 placement
 function isFalsyEnvValue(value) {
   return value !== undefined && /^(?:0|false|no|off)$/i.test(String(value).trim());
 }
-//@ chunk-q8cqcff6.js:32130-32248 placement (2.1.88 match: isEnvTruthy, 1)
+//@ chunk-5fn9rb8r.js:32389-32507 placement (2.1.88 match: isEnvTruthy, 1)
 function isEnvTruthy(envVar) {
   let value = envVar === undefined ? undefined : String(envVar).trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
-//@ chunk-q8cqcff6.js:32248-32750 placement
+//@ chunk-5fn9rb8r.js:32507-33009 placement
 /**
  * CREDENTIAL_SCRUB_VARS_WITH_INPUT：凭证变量及其 INPUT_ 前缀形式。
  */
 var flattened; // deferred: uses CREDENTIAL_SCRUB_ENV_VARS_2 of its import cycle while loading; runs once the cycle is complete
 var CREDENTIAL_SCRUB_VARS_WITH_INPUT;
 var flattened_2;
-deferInit("chunk-q8cqcff6.js:32248", () => {
+deferInit("chunk-5fn9rb8r.js:32507", () => {
   flattened = CREDENTIAL_SCRUB_ENV_VARS_2.flatMap((name) => [name, `INPUT_${name}`]);
   CREDENTIAL_SCRUB_VARS_WITH_INPUT = [
     "ANTHROPIC_API_KEY",
@@ -795,18 +799,18 @@ deferInit("chunk-q8cqcff6.js:32248", () => {
   ];
   flattened_2 = CREDENTIAL_SCRUB_VARS_WITH_INPUT.flatMap((name) => [name, `INPUT_${name}`]);
 });
-//@ chunk-q8cqcff6.js:32750-32807 placement
+//@ chunk-5fn9rb8r.js:33009-33066 placement
 /**
  * envVarToUpperSnake：变量名转大写下划线。
  */
 function envVarToUpperSnake(name) {
   return name.toUpperCase().replace(/-/g, "_");
 }
-//@ chunk-q8cqcff6.js:85680-85706 placement
+//@ chunk-5fn9rb8r.js:85943-85969 placement
 var HELPER_BACKOFF_BASE_MS = 500;
 var HELPER_BACKOFF_FLOOR_MS = 250;
 var HELPER_BACKOFF_CAP_MS = 4000;
-//@ chunk-q8cqcff6.js:85706-85926 placement
+//@ chunk-5fn9rb8r.js:85969-86189 placement
 function isRetryableHelperFailure(code) {
   switch (code) {
     case "exit_nonzero":
@@ -822,16 +826,16 @@ function isRetryableHelperFailure(code) {
       return false;
   }
 }
-//@ chunk-q8cqcff6.js:85926-85938 placement
+//@ chunk-5fn9rb8r.js:86189-86201 placement
 var MAX_HELPER_OUTPUT_CHARS = 2048;
-//@ chunk-q8cqcff6.js:85938-86101 placement
+//@ chunk-5fn9rb8r.js:86201-86363 placement
 function truncateHelperOutput(error) {
   let text = stripControlChars(error);
   if (text.length <= MAX_HELPER_OUTPUT_CHARS) return text;
   let truncated = truncateToLength(text, MAX_HELPER_OUTPUT_CHARS);
   return `${truncated}\u2026 (+${text.length - truncated.length} chars not shown; the full output is in the debug log)`;
 }
-//@ chunk-q8cqcff6.js:86101-86596 placement
+//@ chunk-5fn9rb8r.js:86363-86858 placement
 async function runPolicyHelperWithRetry(config, refresh, armed, alive) {
   let retries = refresh ? config.retries : undefined;
   let maxRetries =
@@ -868,7 +872,7 @@ async function runPolicyHelperWithRetry(config, refresh, armed, alive) {
     if (!alive()) return failure;
   }
 }
-//@ chunk-q8cqcff6.js:86596-89059 placement
+//@ chunk-5fn9rb8r.js:86858-89324 placement
 /**
  * 执行一次 policyHelper（校验路径、取输出、解析信封）
  */
@@ -923,10 +927,10 @@ async function runPolicyHelperOnce(config, refresh, armed) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -1003,14 +1007,14 @@ async function runPolicyHelperOnce(config, refresh, armed) {
     warnings,
   };
 }
-//@ chunk-q8cqcff6.js:89059-89112 placement
+//@ chunk-5fn9rb8r.js:89324-89377 placement
 /**
  * helperPlatformFamily：helper 平台归类（win32/posix）。
  */
 function helperPlatformFamily() {
   return getPlatform() === "windows" ? "win32" : "posix";
 }
-//@ chunk-q8cqcff6.js:89112-89347 placement
+//@ chunk-5fn9rb8r.js:89377-89612 placement
 function validateHelperConfig(config, platform, usesScript, remote) {
   if (config.script == null && config.interpreter == null)
     return validatePolicyHelperPath(config.path, platform, usesScript, remote);
@@ -1018,7 +1022,7 @@ function validateHelperConfig(config, platform, usesScript, remote) {
   if (config.path != null) return PATH_OR_SCRIPT_MESSAGE;
   return validateInlineHelper(config, platform === "win32" ? "windows" : "linux");
 }
-//@ chunk-q8cqcff6.js:89347-90356 placement
+//@ chunk-5fn9rb8r.js:89612-90621 placement
 function validatePolicyHelperPath(path, platform, usesScript, remote) {
   let pathModule = platform === "win32" ? win32 : posix;
   if (typeof path !== "string") return "path must be a string";
@@ -1048,21 +1052,21 @@ function validatePolicyHelperPath(path, platform, usesScript, remote) {
   return null;
 }
 export {
-  flattened,
-  sanitizeIndexUrlEnv,
-  HTTP_INDEX_INVALID,
-  sanitizeEnvCredentials,
   CREDENTIAL_SCRUB_VARS_WITH_INPUT,
   envVarToUpperSnake,
+  sanitizeEnvCredentials,
   clearSanitizedEnvCache,
   initEnvScrubFlag,
   flattened_2,
   scrubbedEnvNames,
   isPackageIndexEnv,
+  sanitizeIndexUrlEnv,
   indexFallbackEnv,
   hasAnyIndexEnv,
+  flattened,
   sanitizedEnvCache,
   CREDENTIAL_SCRUB_ENV_VARS_LOWER,
+  HTTP_INDEX_INVALID,
   PACKAGE_INDEX_ENV_VARS_2,
   PACKAGE_INDEX_ENV_VARS,
   runPolicyHelperWithRetry,

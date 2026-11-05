@@ -3,10 +3,10 @@
  *
  * 斜杠命令补全：模糊匹配、别名、输入中间的命令补全、来源徽标
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/commandSuggestions.ts
- * pieces: chunk-18hwfzwa.js (18), chunk-dcmhvw5a.js (2)
- * attribution: sole-consumer 1, fingerprint 8, layout 8, file-local 2, placement 1
+ * pieces: chunk-1kk50rk6.js (1), chunk-czq1j3j2.js (18), chunk-z20c443b.js (2)
+ * attribution: fingerprint 8, placement 4, layout 7, file-local 2
  */
 import { Fuse } from "../../../vendor/fuse.js/dist/fuse.mjs";
 import { syncedSkillUnqualifiedAlias } from "../commandPredicates.js";
@@ -31,13 +31,13 @@ import { getSkillUsageScore } from "./skillUsageTracking.js";
 import { parseCompletionResult } from "./uriTemplate.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:42752-42775 placement
+//@ chunk-z20c443b.js:42764-42787 placement
 /**
  * 命令名分隔符正则与「描述命中」分桶值（10）。
  */
 var COMMAND_NAME_SEPARATORS = /[:_-]/g;
 var DESCRIPTION_HIT_BUCKET = 10;
-//@ chunk-dcmhvw5a.js:42775-44768 fingerprint (2.1.88 match: getCommandFuse, 0.637)
+//@ chunk-z20c443b.js:42787-44780 fingerprint (2.1.88 match: getCommandFuse, 0.637)
 class getCommandFuse {
   items;
   fuse;
@@ -173,7 +173,19 @@ class getCommandFuse {
     return mapped.map(({ candidate }) => candidate);
   }
 }
-//@ chunk-18hwfzwa.js:553737-554166 sole-consumer
+//@ chunk-1kk50rk6.js:119951-120079 fingerprint (2.1.88 match: isCommandMetadata, 1)
+function isCommandMetadata(content, toolName) {
+  return content.find(
+    (metadata) =>
+      typeof metadata === "object" &&
+      metadata !== null &&
+      "type" in metadata &&
+      metadata.type === "tool_use" &&
+      "name" in metadata &&
+      metadata.name === toolName,
+  );
+}
+//@ chunk-czq1j3j2.js:574423-574852 placement
 function getCommandFuseIndex(cache, commands, namespaced) {
   if (cache.commandMatcherIndex?.commands !== commands) {
     let buildFuse = (useNamespaced) =>
@@ -202,8 +214,8 @@ function getCommandFuseIndex(cache, commands, namespaced) {
   }
   return namespaced ? cache.commandMatcherIndex.namespaced : cache.commandMatcherIndex.plain;
 }
-//@ chunk-18hwfzwa.js:554166-554268 fingerprint (2.1.88 match: isCommandMetadata, 1)
-function isCommandMetadata(metadata) {
+//@ chunk-czq1j3j2.js:574852-574954 placement (2.1.88 match: isCommandMetadata, 1)
+function isCommandMetadata_2(metadata) {
   return (
     typeof metadata === "object" &&
     metadata !== null &&
@@ -212,12 +224,12 @@ function isCommandMetadata(metadata) {
     "type" in metadata
   );
 }
-//@ chunk-18hwfzwa.js:554268-554335 layout
+//@ chunk-czq1j3j2.js:574954-575021 placement
 var MID_INPUT_EXCLUDED_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:554268", () => {
+deferInit("chunk-czq1j3j2.js:574954", () => {
   MID_INPUT_EXCLUDED_COMMANDS = new Set([...DIR_ARG_COMMANDS, "resume", "plugin", "plugins", "marketplace"]);
 });
-//@ chunk-18hwfzwa.js:554335-554732 fingerprint (2.1.88 match: findMidInputSlashCommand, 1)
+//@ chunk-czq1j3j2.js:575021-575418 fingerprint (2.1.88 match: findMidInputSlashCommand, 1)
 /**
  * 在光标附近找输入中间的 /命令 token，供中途补全。
  */
@@ -239,13 +251,13 @@ function findMidInputSlashCommand(input, cursorOffset) {
     partialCommand: fullCommand,
   };
 }
-//@ chunk-18hwfzwa.js:554732-555078 layout
+//@ chunk-czq1j3j2.js:575418-575764 layout
 function getFilteredCommandSuggestions(session, query, commands) {
   if (!query) return [];
   let lower = query.toLowerCase();
   let hasLongerMatch = false;
   let filtered = generateCommandSuggestions(session, "/" + query, commands).filter((suggestion) => {
-    if (!isCommandMetadata(suggestion.metadata)) return false;
+    if (!isCommandMetadata_2(suggestion.metadata)) return false;
     let lower_2 = suggestion.metadata.name.toLowerCase();
     let names = [
       lower_2,
@@ -258,17 +270,17 @@ function getFilteredCommandSuggestions(session, query, commands) {
   });
   return hasLongerMatch ? filtered : [];
 }
-//@ chunk-18hwfzwa.js:555078-555129 layout
+//@ chunk-czq1j3j2.js:575764-575815 layout
 function getCommandSuggestionsForQuery(session, partialCommand, commands) {
   return partialCommand
     ? getFilteredCommandSuggestions(session, partialCommand, commands)
     : generateCommandSuggestions(session, "/", commands);
 }
-//@ chunk-18hwfzwa.js:555129-555374 fingerprint (2.1.88 match: getBestCommandMatch, 1)
+//@ chunk-czq1j3j2.js:575815-576060 fingerprint (2.1.88 match: getBestCommandMatch, 1)
 function getBestCommandMatch(partialCommand, commands) {
   let query = commands.toLowerCase();
   for (let suggestion of partialCommand) {
-    if (!isCommandMetadata(suggestion.metadata)) continue;
+    if (!isCommandMetadata_2(suggestion.metadata)) continue;
     for (let name of [suggestion.metadata.name, getCommandName(suggestion.metadata)])
       if (name.length > query.length && name.toLowerCase().startsWith(query))
         return {
@@ -278,7 +290,7 @@ function getBestCommandMatch(partialCommand, commands) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:555374-555536 file-local
+//@ chunk-czq1j3j2.js:576060-576222 file-local
 function findMatchedAlias(query, aliases) {
   let alias = syncedSkillUnqualifiedAlias(query);
   if (alias === undefined || !aliases) return alias;
@@ -287,13 +299,13 @@ function findMatchedAlias(query, aliases) {
     ? undefined
     : alias;
 }
-//@ chunk-18hwfzwa.js:555536-555816 layout
+//@ chunk-czq1j3j2.js:576222-576502 layout
 /**
  * 应用中途命令补全：用选中命令名替换 token 并补空格，返回新输入与光标位置。
  */
 function applyMidInputCommandSuggestion(suggestion, input, cursorOffset) {
   let midInputSlashCommand = findMidInputSlashCommand(input, cursorOffset);
-  if (!midInputSlashCommand || !isCommandMetadata(suggestion.metadata)) return null;
+  if (!midInputSlashCommand || !isCommandMetadata_2(suggestion.metadata)) return null;
   let sliced = input.slice(midInputSlashCommand.startPos + midInputSlashCommand.token.length);
   let replacement = `/${findMatchedAlias(suggestion.metadata, midInputSlashCommand.token.slice(1)) ?? suggestion.metadata.name}`;
   let space = sliced.startsWith(" ") ? "" : " ";
@@ -302,7 +314,7 @@ function applyMidInputCommandSuggestion(suggestion, input, cursorOffset) {
     cursorOffset: midInputSlashCommand.startPos + replacement.length + 1,
   };
 }
-//@ chunk-18hwfzwa.js:555816-555985 layout
+//@ chunk-czq1j3j2.js:576502-576671 layout
 function getMidInputCommandCompletion({ session, commands, row, input, cursorOffset }) {
   let midInputSlashCommand = findMidInputSlashCommand(input, cursorOffset);
   return midInputSlashCommand !== null &&
@@ -312,18 +324,18 @@ function getMidInputCommandCompletion({ session, commands, row, input, cursorOff
     ? applyMidInputCommandSuggestion(row, input, cursorOffset)
     : null;
 }
-//@ chunk-18hwfzwa.js:555985-556036 layout
+//@ chunk-czq1j3j2.js:576671-576722 layout
 function isValidCommandToken(token) {
   return !/[^a-zA-Z0-9.:\-_]/.test(token);
 }
-//@ chunk-18hwfzwa.js:556036-556150 file-local
+//@ chunk-czq1j3j2.js:576722-576836 file-local
 function isCommandInput(input) {
   if (!input.startsWith("/")) return false;
   let index = input.indexOf(" ");
   let name = index === -1 ? input.slice(1) : input.slice(1, index);
   return isValidCommandToken(name);
 }
-//@ chunk-18hwfzwa.js:556150-556349 fingerprint (2.1.88 match: getCommandId, 1)
+//@ chunk-czq1j3j2.js:576836-577035 fingerprint (2.1.88 match: getCommandId, 1)
 function getCommandId(cmd) {
   let commandName = cmd.name;
   if (cmd.type === "prompt") {
@@ -333,13 +345,13 @@ function getCommandId(cmd) {
   }
   return `${commandName}:${cmd.type}`;
 }
-//@ chunk-18hwfzwa.js:556349-556374 layout
-function nonPromptSourceBadge(session, name) {
+//@ chunk-czq1j3j2.js:577035-577060 layout
+function nonPromptSourceBadge(session, command) {
   return;
 }
-//@ chunk-18hwfzwa.js:556374-556683 layout
+//@ chunk-czq1j3j2.js:577060-577364 layout
 function getCommandSourceBadge(session, command, vouchedIds) {
-  if (command.type !== "prompt") return nonPromptSourceBadge(session, command.name);
+  if (command.type !== "prompt") return nonPromptSourceBadge(session, command);
   switch (isBuiltinCommandSource(command)) {
     case "project":
       return "project";
@@ -354,7 +366,7 @@ function getCommandSourceBadge(session, command, vouchedIds) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:556683-557215 fingerprint (2.1.88 match: createCommandSuggestionItem, 0.733)
+//@ chunk-czq1j3j2.js:577364-577896 fingerprint (2.1.88 match: createCommandSuggestionItem, 0.733)
 function createCommandSuggestionItem(session, command, showSource, vouchedIds, matchedAlias, query) {
   let commandName = getCommandName(command);
   let aliasText = matchedAlias && matchedAlias !== commandName ? ` (${matchedAlias})` : "";
@@ -387,7 +399,7 @@ function createCommandSuggestionItem(session, command, showSource, vouchedIds, m
     }),
   };
 }
-//@ chunk-18hwfzwa.js:557215-558864 fingerprint (2.1.88 match: generateCommandSuggestions, 0.704)
+//@ chunk-czq1j3j2.js:577896-579545 fingerprint (2.1.88 match: generateCommandSuggestions, 0.704)
 /**
  * 根据输入生成斜杠命令补全候选（模糊匹配命令名与别名，隐藏命令除外）。
  */
@@ -469,7 +481,7 @@ function generateCommandSuggestions(session, input, commands) {
   }
   return withMeta;
 }
-//@ chunk-18hwfzwa.js:559688-560361 fingerprint (2.1.88 match: applyCommandSuggestion, 0.315)
+//@ chunk-czq1j3j2.js:580369-581042 fingerprint (2.1.88 match: applyCommandSuggestion, 0.315)
 function applyCommandSuggestion({
   suggestion,
   shouldExecute,
@@ -499,7 +511,7 @@ function applyCommandSuggestion({
     commandName = suggestion;
     commandObj = shouldExecute ? getCommand(commandName, commands) : undefined;
   } else {
-    if (!isCommandMetadata(suggestion.metadata)) return null;
+    if (!isCommandMetadata_2(suggestion.metadata)) return null;
     let alias = suggestion.matchedAlias ?? findMatchedAlias(suggestion.metadata, suggestion.query);
     commandName =
       alias && findCommand(alias, commands) === suggestion.metadata ? alias : suggestion.metadata.name;
@@ -522,8 +534,9 @@ function applyCommandSuggestion({
   };
 }
 export {
-  COMMAND_NAME_SEPARATORS,
   isCommandMetadata,
+  COMMAND_NAME_SEPARATORS,
+  isCommandMetadata_2,
   isCommandInput,
   findMidInputSlashCommand,
   getFilteredCommandSuggestions,

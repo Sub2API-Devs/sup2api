@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 公告与提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-twq47pff.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9x09krra.js (4)
  * attribution: placement 4
  */
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
@@ -21,12 +21,12 @@ import {
   MAX_RENDERED_SETTINGS_BYTES,
   renderSidecarPlan,
 } from "./homeSidecar.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { classifyRowError } from "./destination.js";
 
-//@ chunk-twq47pff.js:16188-16402 placement
+//@ chunk-9x09krra.js:17333-17547 placement
 var HOLD_MAX_MS = 300000;
 var VERDICT_WAIT_MAX_MS = 60000;
 var REQUEST_ATTEMPTS = 3;
@@ -41,7 +41,7 @@ var INITIAL_ANNOUNCEMENT = {
   beforeFirstCommand: true,
   ordinal: 0.5,
 };
-//@ chunk-twq47pff.js:16402-16466 placement
+//@ chunk-9x09krra.js:17547-17611 placement
 /**
  * 调用 enabledNow 判断是否当下启用（出错视为否）。
  */
@@ -52,7 +52,7 @@ function isEnabledNow(host) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:16466-16560 placement
+//@ chunk-9x09krra.js:17611-17705 placement
 /**
  * 微任务里调用回调，出错时记诊断（不带 PII）。
  */
@@ -66,7 +66,7 @@ function runGuarded(fn, arg, eventName) {
     }
   });
 }
-//@ chunk-twq47pff.js:16560-32742 placement
+//@ chunk-9x09krra.js:17705-33905 placement
 /**
  * home seed 应用过程的用户提示状态机（外来文件替换、恢复提示、询问等）。
  */
@@ -360,10 +360,14 @@ function createHomeSeedAnnouncer(options, deps) {
       return;
     }
     try {
-      deps.afterApply(applyReport, {
-        beforeFirstAsk,
-        applied: summarizeApplied(mergedPlan, applyReport),
-      });
+      deps.afterApply(
+        applyReport,
+        {
+          beforeFirstAsk,
+          applied: summarizeApplied(mergedPlan, applyReport),
+        },
+        false,
+      );
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_after_apply_threw", {});
     }
@@ -387,7 +391,9 @@ function createHomeSeedAnnouncer(options, deps) {
     let askRules = filterRules(permissions?.ask);
     let parsedPermissions = permissionsSchema().safeParse(settings?.permissions);
     let countRules = (ruleKind) =>
-      parsedPermissions.success ? uniq(toStringArray(parsedPermissions.data[ruleKind])).length : 0;
+      parsedPermissions.success
+        ? normalizeCaseForComparison_2(toStringArray(parsedPermissions.data[ruleKind])).length
+        : 0;
     let dropped = Math.max(0, countRules("deny") + countRules("ask") - denyRules.length - askRules.length);
     return {
       deny: denyRules,
@@ -789,7 +795,7 @@ function createHomeSeedAnnouncer(options, deps) {
       applied: summarizeApplied(planWithRestrictions, applyReport),
     };
     try {
-      deps.afterApply(applyReport, appliedEvents);
+      deps.afterApply(applyReport, appliedEvents, appliedBeforeFirstAsk && !deps.epochGt1);
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_after_apply_threw", {});
     }
@@ -929,7 +935,7 @@ function createHomeSeedAnnouncer(options, deps) {
   }
   async function readRowWithRetry(key) {
     let requestRetryDelayMs = deps.limits.requestRetryDelayMs;
-    for (let idx = 1; ; idx++) {
+    for (let j = 1; ; j++) {
       if (deaf || stopped)
         return {
           kind: "deaf",
@@ -946,7 +952,7 @@ function createHomeSeedAnnouncer(options, deps) {
           kind: "not_found",
         };
       let failureKind = classifyRowError(row);
-      if (failureKind !== "transport" || idx >= deps.limits.requestAttempts) {
+      if (failureKind !== "transport" || j >= deps.limits.requestAttempts) {
         logForDiagnosticsNoPII("warn", "home_seed_lane_request_failed", {
           outcome: failureKind,
           kind: row.errorKind,
@@ -963,7 +969,7 @@ function createHomeSeedAnnouncer(options, deps) {
   async function writeReadyRowWithRetry(row) {
     let requestRetryDelayMs = deps.limits.requestRetryDelayMs;
     let sawConflict = false;
-    for (let idx = 1; ; idx++) {
+    for (let j = 1; ; j++) {
       if (deaf || stopped) return false;
       let putResult = await deps.putRow(joined_6, row, readyEtag);
       if (putResult.kind === "ok") {
@@ -979,7 +985,7 @@ function createHomeSeedAnnouncer(options, deps) {
       }
       if (
         !(putResult.kind === "error" && classifyRowError(putResult) === "transport") ||
-        idx >= deps.limits.requestAttempts
+        j >= deps.limits.requestAttempts
       ) {
         logForDiagnosticsNoPII("warn", "home_seed_ready_put_failed", {
           kind: putResult.kind,

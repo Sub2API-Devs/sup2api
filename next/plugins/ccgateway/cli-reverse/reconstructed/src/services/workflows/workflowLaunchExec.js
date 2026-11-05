@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流启动执行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3sew516d.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4ez8b86k.js (1)
  * attribution: placement 1
  */
 import { workflowLaunchHandoffs } from "./workflowLaunchResume.js";
@@ -13,7 +13,7 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { runRemoteWorkflow } from "./remoteWorkflow.js";
 import { settlePendingAsyncHooks } from "../../utils/hooks/AsyncHookRegistry.js";
 
-//@ chunk-3sew516d.js:12909-13795 placement
+//@ chunk-4ez8b86k.js:14113-14999 placement
 /**
  * /workflow-launch-exec 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

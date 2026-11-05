@@ -1,13 +1,13 @@
 /**
  * @grpc/grpc-js/build/src/compression-algorithms.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-pwh5dx3n.js:185569-185806 cjs-fingerprint
+//@ chunk-3k21nfa0.js:185569-185806 cjs-fingerprint
 var require_compression_algorithms = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

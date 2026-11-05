@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：--agents 标志加载会话代理与追加子代理提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (5)
+ * attribution: placement 4, layout 1
  */
 import { resolve } from "path";
 import { readFile } from "fs/promises";
@@ -23,10 +23,11 @@ import { safeParseJSON } from "../../utils/json.js";
 import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { setMainThreadAgentType } from "../../bootstrap/state.js";
+import { env } from "../../utils/env.js";
 import { excludeWebFetchAgent } from "../../tools/WebFetchTool/harnessNotes.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 
-//@ chunk-3wek6r2k.js:14860-15714 placement
+//@ chunk-hjswk319.js:15441-16291 placement
 /**
  * 启动时加载 agent 定义（--agents JSON、agent 设置、安全模式下忽略自定义 agent），并在工具加载后应用协调者过滤。
  */
@@ -85,7 +86,14 @@ async function loadAgentsForSession({
     deferredCommandsPromise: deferCommands ? commands : undefined,
   };
 }
-//@ chunk-3wek6r2k.js:15773-16025 placement
+//@ chunk-hjswk319.js:16291-16350 layout
+/**
+ * 是否同步安装插件（传入值存在且 CLAUDE_CODE_SYNC_PLUGIN_INSTALL）。
+ */
+function shouldSyncPluginInstall(isNonInteractiveSession) {
+  return isNonInteractiveSession && env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
+}
+//@ chunk-hjswk319.js:16350-16602 placement
 function findSelectedAgent(agents, setting) {
   if (!setting) return;
   let candidates = excludeWebFetchAgent(agents);
@@ -98,11 +106,11 @@ function findSelectedAgent(agents, setting) {
     );
   return found;
 }
-//@ chunk-3wek6r2k.js:16097-16179 placement
+//@ chunk-hjswk319.js:16674-16756 placement
 function enableAppendSubagentPrompt(appendSubagentSystemPrompt, env = process.env) {
   if (appendSubagentSystemPrompt) env.CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT = "1";
 }
-//@ chunk-3wek6r2k.js:16179-16735 placement
+//@ chunk-hjswk319.js:16756-17312 placement
 async function readAppendSubagentPrompt(options) {
   if (!options.appendSubagentSystemPromptFile)
     return {
@@ -133,4 +141,10 @@ async function readAppendSubagentPrompt(options) {
     };
   }
 }
-export { readAppendSubagentPrompt, enableAppendSubagentPrompt, loadAgentsForSession, findSelectedAgent };
+export {
+  readAppendSubagentPrompt,
+  enableAppendSubagentPrompt,
+  shouldSyncPluginInstall,
+  loadAgentsForSession,
+  findSelectedAgent,
+};

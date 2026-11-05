@@ -3,25 +3,25 @@
  *
  * 2.1.316 新增。组织必须配置的检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m8rdsjv5.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9fd91z25.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-m8rdsjv5.js:191-219 placement
+//@ chunk-9fd91z25.js:191-219 placement
 /**
  * 视为组织级套餐的取值（team、enterprise）。
  */
 var ORG_CONFIG_PLANS = ["team", "enterprise"];
-//@ chunk-m8rdsjv5.js:219-277 placement
+//@ chunk-9fd91z25.js:219-277 placement
 /**
  * 该字符串是否属于组织级套餐。
  */
 function isOrgConfigPlan(tier) {
   return typeof tier === "string" && ORG_CONFIG_PLANS.includes(tier);
 }
-//@ chunk-m8rdsjv5.js:277-431 placement
+//@ chunk-9fd91z25.js:277-432 placement
 /**
  * 组织要求必须提供配置时的默认标记。
  */
@@ -36,7 +36,7 @@ var DEFAULT_ORG_CONFIG_REQUIRED_FLAG = {
   exemptReasons: [],
   refuseNotEntitled: false,
 };
-//@ chunk-m8rdsjv5.js:431-994 placement
+//@ chunk-9fd91z25.js:432-995 placement
 /**
  * 托管配置结果原因归类（fetched/refused/intermediary/unavailable/client/not_attempted）。
  */
@@ -68,8 +68,8 @@ function classifyManagedConfigOutcome(reason) {
   }
 }
 export {
-  DEFAULT_ORG_CONFIG_REQUIRED_FLAG,
   TENGU_ORG_CONFIG_REQUIRED,
+  DEFAULT_ORG_CONFIG_REQUIRED_FLAG,
   isOrgConfigPlan,
   classifyManagedConfigOutcome,
 };

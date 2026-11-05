@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：tool.call 事件钩子接入工具执行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (41)
  * attribution: placement 41
  */
 import { randomUUID } from "crypto";
@@ -41,14 +41,14 @@ import { HooksError } from "./hooksErrors.js";
 import { errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:35060-35071 placement
+//@ chunk-5xgkngpb.js:37648-37659 placement
 /**
  * 空对象
  */
 var emptyToolHooksFirst = {};
-//@ chunk-e6aww6q8.js:35071-35305 placement
+//@ chunk-5xgkngpb.js:37659-37893 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:35071", () => {
+deferInit("chunk-5xgkngpb.js:37659", () => {
   __export(emptyToolHooksFirst, {
     closeCall: () => forgetOpenCall,
     default: () => emptyToolHooksFirst,
@@ -63,14 +63,14 @@ deferInit("chunk-e6aww6q8.js:35071", () => {
     withheldResult: () => withheldResultText,
   });
 });
-//@ chunk-e6aww6q8.js:35305-35315 placement
+//@ chunk-5xgkngpb.js:37893-37903 placement
 /**
  * 空对象
  */
 var emptyToolHooksSecond = {};
-//@ chunk-e6aww6q8.js:35315-35487 placement
+//@ chunk-5xgkngpb.js:37903-38075 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:35315", () => {
+deferInit("chunk-5xgkngpb.js:37903", () => {
   __export(emptyToolHooksSecond, {
     default: () => emptyToolHooksSecond,
     forgetRegisteredTools: () => forgetMcpServerFor,
@@ -81,14 +81,14 @@ deferInit("chunk-e6aww6q8.js:35315", () => {
     unchangedRegistration: () => registeredMcpToolName,
   });
 });
-//@ chunk-e6aww6q8.js:35487-35498 placement
+//@ chunk-5xgkngpb.js:38075-38086 placement
 /**
  * 空对象
  */
 var emptyToolHooksThird = {};
-//@ chunk-e6aww6q8.js:35498-35788 placement
+//@ chunk-5xgkngpb.js:38086-38376 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:35498", () => {
+deferInit("chunk-5xgkngpb.js:38086", () => {
   __export(emptyToolHooksThird, {
     KEPT_MOST: () => MAX_TRACKED_INSTRUCTION_PATHS,
     PATH_MARK: () => PATH,
@@ -107,27 +107,27 @@ deferInit("chunk-e6aww6q8.js:35498", () => {
     withheldTolds: () => withheldInstructionStateSlot,
   });
 });
-//@ chunk-e6aww6q8.js:35788-35835 placement
+//@ chunk-5xgkngpb.js:38376-38423 placement
 /**
  * 经典钩子事件（非 PreToolUse）
  */
 var isClassicHookEvent = (event) => event !== "PreToolUse" && HOOK_EVENTS_2.includes(event);
-//@ chunk-e6aww6q8.js:35835-35875 placement
+//@ chunk-5xgkngpb.js:38423-38463 placement
 /**
  * 经典钩子有钩子
  */
 var isClassicHooked = (event) => isClassicHookEvent(event) && hasModuleHookingSite(`classic.${event}`);
-//@ chunk-e6aww6q8.js:35875-35903 placement
+//@ chunk-5xgkngpb.js:38463-38491 placement
 /**
  * classic.<event>
  */
 var classicSiteName = (event) => `classic.${event}`;
-//@ chunk-e6aww6q8.js:35903-35934 placement
+//@ chunk-5xgkngpb.js:38491-38522 placement
 /**
  * 是否有 classic.<event> 站
  */
 var hasClassicHookSite = (event) => hasModuleHookingSite(`classic.${event}`);
-//@ chunk-e6aww6q8.js:35934-36020 placement
+//@ chunk-5xgkngpb.js:38522-38608 placement
 /**
  * 有模块监听该经典事件
  */
@@ -135,12 +135,12 @@ var isClassicEventAdmitted = (event) =>
   getPluginRegistry().loadedModules.some(
     (loadedModule) => isModuleAdmitted(loadedModule) && loadedModule.patterns.includes(`classic.${event}`),
   );
-//@ chunk-e6aww6q8.js:36020-36045 placement
+//@ chunk-5xgkngpb.js:38608-38633 placement
 /**
  * 插件提示表
  */
 var pluginNotices = () => getPluginRegistry().notices;
-//@ chunk-e6aww6q8.js:36045-36204 placement
+//@ chunk-5xgkngpb.js:38633-38792 placement
 /**
  * 设置或清除某键的插件提示（内容未变则不更新）。
  */
@@ -154,7 +154,7 @@ var setPluginNotice = (toolUseId, notice) => {
     return next;
   });
 };
-//@ chunk-e6aww6q8.js:36204-36288 placement
+//@ chunk-5xgkngpb.js:38792-38876 placement
 /**
  * 忘掉打开的调用
  */
@@ -163,7 +163,7 @@ function forgetOpenCall(toolUseId) {
   getPluginRegistry().withheldCalls.delete(toolUseId);
   setPluginNotice(toolUseId, undefined);
 }
-//@ chunk-e6aww6q8.js:36288-36458 placement
+//@ chunk-5xgkngpb.js:38876-39046 placement
 /**
  * 释放一个对被扣留结果的观察者，返回期间是否有新的扣留记录。
  */
@@ -178,7 +178,7 @@ function releaseWithheldWatch(toolUseId, seenNotes) {
     });
   return watch !== undefined && watch.notes > seenNotes;
 }
-//@ chunk-e6aww6q8.js:36458-36727 placement
+//@ chunk-5xgkngpb.js:39046-39315 placement
 /**
  * PostToolUse 被扣留时记录：增加观察计数，标记开放调用为已扣留。
  */
@@ -196,7 +196,7 @@ function noteWithheldPostToolUse(hookInput) {
     });
   if (isOpen) withheldCalls.add(toolUseId);
 }
-//@ chunk-e6aww6q8.js:36727-36938 placement
+//@ chunk-5xgkngpb.js:39315-39526 placement
 /**
  * 校验插件可以操作的 tool_use_id：调用必须开放且由该插件的 $.tool.call 发起。
  */
@@ -208,19 +208,19 @@ function checkToolCallOwner(toolUseId, plugin) {
     ? undefined
     : "the call is another plugin's $.tool.call run";
 }
-//@ chunk-e6aww6q8.js:36938-36979 placement
+//@ chunk-5xgkngpb.js:39526-39567 placement
 /**
  * 记录打开的调用
  */
 var setOpenCall = (toolUseID, hookOrigin) => {
   getPluginRegistry().openCalls.set(toolUseID, hookOrigin);
 };
-//@ chunk-e6aww6q8.js:36979-37021 placement
+//@ chunk-5xgkngpb.js:39567-39609 placement
 /**
  * 忘掉扣留的调用
  */
 var forgetWithheldCall = (toolUseId) => getPluginRegistry().withheldCalls.delete(toolUseId);
-//@ chunk-e6aww6q8.js:37021-37151 placement
+//@ chunk-5xgkngpb.js:39609-39739 placement
 /**
  * 登记一个被扣留结果的观察者，返回当前记录数。
  */
@@ -236,12 +236,12 @@ function watchWithheldResults(toolUseId) {
   });
   return watch.notes;
 }
-//@ chunk-e6aww6q8.js:37151-37217 placement
+//@ chunk-5xgkngpb.js:39739-39805 placement
 /**
  * 结果被扣留说明
  */
 var withheldResultText = (name) => `${name} ran, and a plugin withheld its result: ${CHECKER_NO_ANSWER}`;
-//@ chunk-e6aww6q8.js:3752385-3752537 placement
+//@ chunk-5xgkngpb.js:3848140-3848292 placement
 function createToolDescriptionCache() {
   let weakMap = new WeakMap();
   return {
@@ -261,42 +261,42 @@ function createToolDescriptionCache() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3752537-3752551 placement
+//@ chunk-5xgkngpb.js:3848292-3848306 placement
 /**
  * 工具描述缓存
  */
 var toolDescriptionCache; // deferred: uses createToolDescriptionCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3752537", () => {
+deferInit("chunk-5xgkngpb.js:3848292", () => {
   toolDescriptionCache = createToolDescriptionCache();
 });
-//@ chunk-e6aww6q8.js:3752551-3752563 placement
+//@ chunk-5xgkngpb.js:3848306-3848318 placement
 /**
  * 300
  */
 var TOOL_DESCRIBE_SETTLE_MS = 300;
-//@ chunk-e6aww6q8.js:3752563-3752582 placement
+//@ chunk-5xgkngpb.js:3848318-3848337 placement
 var forget; // deferred: uses toolDescriptionCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3752563", () => {
+deferInit("chunk-5xgkngpb.js:3848318", () => {
   forget = toolDescriptionCache.forget;
 });
-//@ chunk-e6aww6q8.js:3752582-3752593 placement
+//@ chunk-5xgkngpb.js:3848337-3848348 placement
 /**
  * 20
  */
 var DEFAULT_MAX_SUBAGENTS = 20;
-//@ chunk-e6aww6q8.js:3752593-3752659 placement
+//@ chunk-5xgkngpb.js:3848348-3848414 placement
 /**
  * 并发子代理上限
  */
 function maxConcurrentSubagents() {
   return env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS ?? DEFAULT_MAX_SUBAGENTS;
 }
-//@ chunk-e6aww6q8.js:3752659-3752677 placement
+//@ chunk-5xgkngpb.js:3848414-3848432 placement
 /**
  * 并发子代理上限
  */
 var maxSubagents = () => maxConcurrentSubagents();
-//@ chunk-e6aww6q8.js:3752677-3752743 placement
+//@ chunk-5xgkngpb.js:3848432-3848498 placement
 /**
  * 子代理调用者信息
  */
@@ -309,14 +309,14 @@ var subagentCaller = (agentId, resolvedModel) =>
         agentId,
         resolvedModel,
       };
-//@ chunk-e6aww6q8.js:3752743-3752767 placement
+//@ chunk-5xgkngpb.js:3848498-3848522 placement
 /**
  * {type:"direct"}
  */
 var DIRECT_CALLER = {
   type: "direct",
 };
-//@ chunk-e6aww6q8.js:3752767-3752813 placement
+//@ chunk-5xgkngpb.js:3848522-3848568 placement
 /**
  * 工具结果带 isError
  */
@@ -325,13 +325,13 @@ var errorToolResult = (result, text) => ({
   text,
   isError: true,
 });
-//@ chunk-e6aww6q8.js:3752813-3752876 placement
+//@ chunk-5xgkngpb.js:3848568-3848631 placement
 /**
  * 插件构造的工具调用 id 前缀 toolu_plugin_；带这个前缀的 tool_use 视为插件发起。
  */
 var TOOLU_PLUGIN_2 = "toolu_plugin_";
 var TOOLU_PLUGIN = (toolUseId) => toolUseId.startsWith("toolu_plugin_");
-//@ chunk-e6aww6q8.js:3752914-3753012 placement
+//@ chunk-5xgkngpb.js:3848669-3848767 placement
 /**
  * 构造插件 tool_use 块
  */
@@ -342,7 +342,7 @@ var pluginToolUse = (name, input) => ({
   input,
   caller: DIRECT_CALLER,
 });
-//@ chunk-e6aww6q8.js:3753012-3753125 placement
+//@ chunk-5xgkngpb.js:3848767-3848880 placement
 /**
  * 取异步启动的 Agent 工具结果中的代理 id。
  */
@@ -353,7 +353,7 @@ function launchedAgentId(name, result) {
     ? agentId
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3753125-3753245 placement
+//@ chunk-5xgkngpb.js:3848880-3849000 placement
 /**
  * 构造插件发起工具调用的上下文：带上钩子来源、调用插件与是否服务模型。
  */
@@ -365,7 +365,7 @@ var pluginToolContext = (session, abortController, caller) => ({
     hookServesModel: true,
   }),
 });
-//@ chunk-e6aww6q8.js:3753245-3753398 placement
+//@ chunk-5xgkngpb.js:3849000-3849153 placement
 /**
  * 取消息列表中最后一条有文本的助手消息文本。
  */
@@ -378,13 +378,13 @@ function lastAssistantText(messages) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:3753398-3753484 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-5xgkngpb.js:3849153-3849239 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function unwrapUserMessage(data) {
   if ("type" in data) return;
   let { message } = data;
   return message.type === "user" ? message : undefined;
 }
-//@ chunk-e6aww6q8.js:3753484-3753574 placement
+//@ chunk-5xgkngpb.js:3849239-3849329 placement
 /**
  * 包装成 HooksError
  */
@@ -392,20 +392,20 @@ function rethrowHooksError(pluginName, error, what) {
   if (error instanceof HooksError) throw error;
   throw new HooksError(`${pluginName}: ${what} failed: ${errorMessage(error)}`);
 }
-//@ chunk-e6aww6q8.js:3753574-3753607 placement
+//@ chunk-5xgkngpb.js:3849329-3849362 placement
 /**
  * 扣留结果标记
  */
 var WITHHELD_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3753574", () => {
+deferInit("chunk-5xgkngpb.js:3849329", () => {
   WITHHELD_RESULT = Symbol("withheldResult");
 });
-//@ chunk-e6aww6q8.js:3753607-3753641 placement
+//@ chunk-5xgkngpb.js:3849362-3849396 placement
 /**
  * 是否被扣留
  */
 var isWithheldResult = (update) => Object.hasOwn(update, WITHHELD_RESULT);
-//@ chunk-e6aww6q8.js:3753641-3753706 placement
+//@ chunk-5xgkngpb.js:3849396-3849461 placement
 /**
  * 标记扣留
  */
@@ -417,15 +417,8 @@ function markWithheldResult(message) {
 }
 export {
   hasClassicHookSite,
-  isClassicEventAdmitted,
   maxConcurrentSubagents,
-  emptyToolHooksFirst,
-  isClassicHookEvent,
-  isClassicHooked,
-  emptyToolHooksThird,
-  forgetOpenCall,
-  forgetWithheldCall,
-  setOpenCall,
+  TOOLU_PLUGIN,
   classicSiteName,
   noteWithheldPostToolUse,
   pluginToolContext,
@@ -439,14 +432,21 @@ export {
   toolDescriptionCache,
   TOOL_DESCRIBE_SETTLE_MS,
   emptyToolHooksSecond,
-  TOOLU_PLUGIN,
-  maxSubagents,
-  lastAssistantText,
-  markWithheldResult,
+  isClassicHooked,
+  isClassicEventAdmitted,
   checkToolCallOwner,
   setPluginNotice,
+  maxSubagents,
+  lastAssistantText,
+  forgetOpenCall,
+  forgetWithheldCall,
+  setOpenCall,
+  markWithheldResult,
   forget,
+  emptyToolHooksFirst,
+  isClassicHookEvent,
   watchWithheldResults,
   releaseWithheldWatch,
   withheldResultText,
+  emptyToolHooksThird,
 };

@@ -1,13 +1,13 @@
 /**
  * @anthropic-ai/sdk/internal/utils/async-queue.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-layout 1
  */
 import { __classPrivateFieldGet, __classPrivateFieldSet } from "../tslib.mjs";
 
-//@ chunk-hwmsct5x.js:59815-60695 esm-layout
+//@ chunk-vn3g7zt8.js:60186-61066 esm-layout
 var _AsyncQueue_items;
 var _AsyncQueue_waiters;
 var _AsyncQueue_closed;

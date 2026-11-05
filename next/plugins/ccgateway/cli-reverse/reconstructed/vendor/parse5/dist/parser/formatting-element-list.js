@@ -1,23 +1,23 @@
 /**
  * parse5/dist/parser/formatting-element-list.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (4)
+ * pieces: chunk-p9ac6cnb.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 
-//@ chunk-6ja29j2n.js:122132-122138 esm-layout
+//@ chunk-p9ac6cnb.js:122132-122138 esm-layout
 var EntryType;
-//@ chunk-6ja29j2n.js:122138-122212 esm-fingerprint
+//@ chunk-p9ac6cnb.js:122138-122212 esm-fingerprint
 (function (EntryType) {
   EntryType[(EntryType.Marker = 0)] = "Marker";
   EntryType[(EntryType.Element = 1)] = "Element";
 })(EntryType || (EntryType = {}));
-//@ chunk-6ja29j2n.js:122212-122235 esm-fingerprint
+//@ chunk-p9ac6cnb.js:122212-122235 esm-fingerprint
 var MARKER = {
   type: EntryType.Marker,
 };
-//@ chunk-6ja29j2n.js:122235-123774 esm-fingerprint
+//@ chunk-p9ac6cnb.js:122235-123774 esm-fingerprint
 class FormattingElementList {
   constructor(treeAdapter) {
     this.treeAdapter = treeAdapter;

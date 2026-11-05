@@ -1,12 +1,12 @@
 /**
  * lodash-es/_deburrLetter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-8nhse09v.js (5)
+ * pieces: chunk-47b8txen.js (5)
  * attribution: affinity 1, esm-layout 3, esm-fingerprint 1
  */
 
-//@ chunk-8nhse09v.js:337-441 affinity
+//@ chunk-47b8txen.js:337-441 affinity
 function baseReduce(array, iteratee, accumulator, initAccum) {
   var index = -1;
   var length = array == null ? 0 : array.length;
@@ -14,17 +14,17 @@ function baseReduce(array, iteratee, accumulator, initAccum) {
   while (++index < length) accumulator = iteratee(accumulator, array[index], index, array);
   return accumulator;
 }
-//@ chunk-8nhse09v.js:441-449 esm-layout
+//@ chunk-47b8txen.js:441-449 esm-layout
 var import_baseReduce = baseReduce;
-//@ chunk-8nhse09v.js:449-510 esm-layout
+//@ chunk-47b8txen.js:449-510 esm-layout
 function basePropertyOf(object) {
   return function (key) {
     return object == null ? undefined : object[key];
   };
 }
-//@ chunk-8nhse09v.js:510-518 esm-layout
+//@ chunk-47b8txen.js:510-518 esm-layout
 var import_baseProperty = basePropertyOf;
-//@ chunk-8nhse09v.js:518-2893 esm-fingerprint
+//@ chunk-47b8txen.js:518-2893 esm-fingerprint
 var deburredLetters = {
   "\xC0": "A",
   "\xC1": "A",

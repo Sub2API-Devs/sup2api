@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：/mcp 状态输出：列出服务器连接状态与错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3re05e6m.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dernsrpy.js (15)
  * attribution: placement 15
  */
-import { mcpInfoFromString, getMcpPrefix } from "../../services/mcp/mcpStringUtils.js";
+import { mcpInfoFromString, getMcpPrefix, isToolFromMcpServer } from "../../services/mcp/mcpStringUtils.js";
 import { isArtifacts404Failure, isUnconfiguredFailure } from "../../services/mcp/redactMcpErrors.js";
 import { COMMON_INFO_ARGS_ALIAS, COMMON_HELP_ARGS } from "../../constants/xml.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
@@ -17,8 +17,9 @@ import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { ToolHostRegistry } from "../../remote/tools/toolHostRegistry.js";
 import { refreshRemoteToolTargets, remoteToolsContext } from "../../remote/tools/sessionEventTransport.js";
 import { sleep } from "../../utils/sleep.js";
+import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { isVsCodeTopSession } from "../../utils/sessionShape.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   isMcpConnectivityIssue,
   isUnhiddenFailedServer,
@@ -43,6 +44,9 @@ import { reconnectTargets, reconnectAllServers } from "../../services/mcp/MCPCon
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { normalizeServerNameShort, normalizeMcpServerName } from "../../services/api/deferredToolsState.js";
 import { isSafeCliArg } from "../../utils/worktreeResumeHint.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { filterToolsByDenyRules } from "../../utils/permissions/filterToolsByDenyRules.js";
+import { warnMcpToolNameTooLong } from "../../services/mcp/toolNameLimits.js";
 import { plural } from "../../utils/stringUtils.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
@@ -51,7 +55,7 @@ import { errorMessage, WireSafeControlError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 
-//@ chunk-3re05e6m.js:12321-12871 placement
+//@ chunk-dernsrpy.js:13498-14048 placement
 /**
  * 汇总挂接主机（remote 类型）上透传的 MCP 服务器：按主机+服务器名计数工具，并记录每台主机读不懂的工具数。
  */
@@ -92,12 +96,12 @@ function collectAttachedMcpServers(hosts) {
     rejectedCounts: mcpInfoByHost,
   };
 }
-//@ chunk-3re05e6m.js:12871-12958 placement
+//@ chunk-dernsrpy.js:14048-14135 placement
 function hostConnectionStatus(host) {
   if (host.protocol.kind === "incompatible") return "incompatible";
   return host.status;
 }
-//@ chunk-3re05e6m.js:12958-13268 placement
+//@ chunk-dernsrpy.js:14135-14445 placement
 /**
  * /mcp 状态的连接状态标签、用法说明与等待时长。
  */
@@ -112,7 +116,7 @@ var MCP_STATUS_LABELS = {
 };
 var MCP_USAGE = "Usage: /mcp [reconnect|enable|disable [<server>|all]]. With no server name, applies to all.";
 var REMOTE_REFRESH_WAIT_MS = 2500;
-//@ chunk-3re05e6m.js:13268-19334 placement
+//@ chunk-dernsrpy.js:14445-20518 placement
 /**
  * /mcp 的非面板（内联）版本：无参数时汇总服务器状态（云会话先刷新远程主机），help 打印用法；reconnect/enable/disable [<server>|all] 执行对应操作并返回结果文字，处理禁用、连接中、待批准、需认证等各种状态。
  */
@@ -131,7 +135,14 @@ async function mcpInlineCommand(args, context) {
         sleep(REMOTE_REFRESH_WAIT_MS, context.abortController.signal),
       ]);
       if (!isBridgeOrTransport(context.session))
-        return textResult(formatCloudMcpStatus(clients, context.getMcp().tools, hostRegistry));
+        return textResult(
+          formatCloudMcpStatus(
+            clients,
+            context.getMcp().tools,
+            getToolPermissionContext(context),
+            hostRegistry,
+          ),
+        );
     }
     if (clients.length === 0)
       return textResult(
@@ -142,12 +153,12 @@ async function mcpInlineCommand(args, context) {
 ${MCP_USAGE}`
         }`,
       );
-    let connectedCount = count(clients, (client) => client.type === "connected");
-    let cachedCount = count(clients, (client) => client.type === "cached");
-    let pendingCount = count(clients, (client) => client.type === "pending");
-    let unconfiguredCount = count(clients, isUnconfiguredFailure);
-    let connectivityIssueCount = count(clients, isMcpConnectivityIssue);
-    let disabledCount = count(clients, (client) => client.type === "disabled");
+    let connectedCount = countWhere(clients, (client) => client.type === "connected");
+    let cachedCount = countWhere(clients, (client) => client.type === "cached");
+    let pendingCount = countWhere(clients, (client) => client.type === "pending");
+    let unconfiguredCount = countWhere(clients, isUnconfiguredFailure);
+    let connectivityIssueCount = countWhere(clients, isMcpConnectivityIssue);
+    let disabledCount = countWhere(clients, (client) => client.type === "disabled");
     let otherCount =
       clients.length - connectedCount - cachedCount - pendingCount - disabledCount - unconfiguredCount;
     return textResult(
@@ -225,8 +236,8 @@ ${MCP_USAGE}`),
     let reconnectList = reconnectPlan ? reconnectPlan.targets : targets;
     let outOfBandNote = reconnectPlan ? reconnectPlan.outOfBandNote : null;
     if (reconnectList.length === 0) {
-      let disabledTargetCount = count(targets, (client) => client.type === "disabled");
-      let unconfiguredTargetCount = count(
+      let disabledTargetCount = countWhere(targets, (client) => client.type === "disabled");
+      let unconfiguredTargetCount = countWhere(
         targets,
         (client) => isUnconfiguredFailure(client) && !isDisabledHandle(client.name),
       );
@@ -307,7 +318,7 @@ ${MCP_USAGE}`),
       let disabledRows = describeDisabledServers(targets, enabling, isDisabledHandle);
       if (disabledRows !== null) {
         let unhiddenFailedCount = enabling
-          ? count(targets, (client) => isUnhiddenFailedServer(client, isDisabledHandle))
+          ? countWhere(targets, (client) => isUnhiddenFailedServer(client, isDisabledHandle))
           : 0;
         return textResult(
           unhiddenFailedCount > 0
@@ -317,7 +328,7 @@ ${MCP_USAGE}`),
       }
     }
     if (enabling) {
-      let failingCount = count(targets, isMcpConnectivityIssue);
+      let failingCount = countWhere(targets, isMcpConnectivityIssue);
       if (failingCount > 0)
         return textResult(
           serverName === "all"
@@ -338,9 +349,9 @@ ${MCP_USAGE}`),
   let disabledSummary =
     serverName === "all" ? describeDisabledServers(targets, enabling, isDisabledHandle) : null;
   let settled = await Promise.allSettled(filtered.map((client) => toggleHandle(client.name)));
-  let fulfilledCount = count(settled, (result) => result.status === "fulfilled");
+  let fulfilledCount = countWhere(settled, (result) => result.status === "fulfilled");
   let reconnectedCount = enabling
-    ? count(settled, (result) => result.status === "fulfilled" && result.value.type === "connected")
+    ? countWhere(settled, (result) => result.status === "fulfilled" && result.value.type === "connected")
     : fulfilledCount;
   let verb = enabling ? "Enabled" : "Disabled";
   let summaryLine =
@@ -389,45 +400,52 @@ ${MCP_USAGE}`),
       ),
   );
 }
-//@ chunk-3re05e6m.js:19334-19361 placement
+//@ chunk-dernsrpy.js:20518-20545 placement
 function redactServerName(serverName) {
   return normalizeServerNameShort(serverName);
 }
-//@ chunk-3re05e6m.js:19361-19434 placement
+//@ chunk-dernsrpy.js:20545-20618 placement
 function cliHintOrPlain(prefix, hint, fallback) {
   let text = `${prefix}${hint}`;
   return isSafeCliArg(fallback) && [...text].length <= 1024 ? text : prefix;
 }
-//@ chunk-3re05e6m.js:19434-19469 placement
+//@ chunk-dernsrpy.js:20618-20653 placement
 function vscodeHintOrTerminal(name, terminalHint = "") {
   return isVsCodeTopSession() ? terminalHint : name;
 }
-//@ chunk-3re05e6m.js:19469-19511 placement
+//@ chunk-dernsrpy.js:20653-20695 placement
 function textResult(value) {
   return {
     type: "text",
     value,
   };
 }
-//@ chunk-3re05e6m.js:19511-20468 placement
+//@ chunk-dernsrpy.js:20695-21692 placement
 /**
  * 云会话的 MCP 状态文本：本会话服务器（状态、传输类型、工具数），以及每台挂接机器上透传的服务器与读不懂的工具数说明。
  */
-function formatCloudMcpStatus(clients, tools, hostRegistry) {
+function formatCloudMcpStatus(clients, tools, toolPermissionContext, hostRegistry) {
   let { servers, rejectedCounts } = collectAttachedMcpServers(hostRegistry.hosts());
-  let hostNames = uniq([...servers.map((server) => server.hostName), ...rejectedCounts.keys()]);
-  let headerLine =
+  let hostNames = normalizeCaseForComparison_2([
+    ...servers.map((server) => server.hostName),
+    ...rejectedCounts.keys(),
+  ]);
+  let allowedTools = filterToolsByDenyRules(warnMcpToolNameTooLong(tools), toolPermissionContext);
+  let clientLines =
     clients.length === 0
       ? ["  (none configured)"]
       : [...clients]
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((client) => {
             let mcpPrefix = getMcpPrefix(client.name);
-            let toolCount = count(tools, (tool) => tool.name.startsWith(mcpPrefix));
+            let count = countWhere(tools, (tool) => isToolFromMcpServer(tool, client.name, mcpPrefix));
+            let allowedCount = countWhere(allowedTools, (tool) =>
+              isToolFromMcpServer(tool, client.name, mcpPrefix),
+            );
             let statusText = isUnconfiguredFailure(client)
               ? "not configured"
               : MCP_STATUS_LABELS[connectionTypeOf(client)];
-            return `  ${padToColumn(redactServerName(client.name))}  ${padToColumn(statusText)}  ${client.config.type ?? "stdio"}${toolCountSuffix(toolCount)}`;
+            return `  ${padToColumn(redactServerName(client.name))}  ${padToColumn(statusText)}  ${client.config.type ?? "stdio"}${toolCountSuffix(count, allowedCount)}`;
           });
   let mapped = hostNames.map((hostName) => {
     let filtered = servers.filter((server) => server.hostName === hostName);
@@ -451,29 +469,33 @@ function formatCloudMcpStatus(clients, tools, hostRegistry) {
 Servers on ${hostNames.map(redactServerName).join(", ")} are managed there \u2014 run \`/mcp\` in a local terminal on that machine. A server that's failed or disabled there won't appear here, and its transport type isn't reported to the cloud session.`
       : "";
   return (
-    ["This cloud session's MCP servers:", ...headerLine, ...mapped].join(`
+    ["This cloud session's MCP servers:", ...clientLines, ...mapped].join(`
 `) + hostLines
   );
 }
-//@ chunk-3re05e6m.js:20468-20564 placement
+//@ chunk-dernsrpy.js:21692-21788 placement
 var HOST_STATUS_LABELS = {
   online: "connected",
   offline: "unreachable",
   incompatible: "unreachable (version mismatch)",
 };
-//@ chunk-3re05e6m.js:20564-20663 placement
+//@ chunk-dernsrpy.js:21788-21887 placement
 function formatRemoteServerRow(server) {
   return `  ${padToColumn(redactServerName(server.serverName))}  ${padToColumn(HOST_STATUS_LABELS[server.hostStatus])}  via ${REMOTE_DEVICES}${toolCountSuffix(server.toolCount)}`;
 }
-//@ chunk-3re05e6m.js:20663-20719 placement
+//@ chunk-dernsrpy.js:21887-21943 placement
 function padToColumn(text) {
   return text + " ".repeat(Math.max(0, 28 - bunStringWidth(text)));
 }
-//@ chunk-3re05e6m.js:20719-20775 placement
-function toolCountSuffix(count) {
-  return count > 0 ? ` \xB7 ${count} ${plural(count, "tool")}` : "";
+//@ chunk-dernsrpy.js:21943-22064 placement
+function toolCountSuffix(count, availableCount = count) {
+  if (count === 0) return "";
+  let toolCount = `${count} ${plural(count, "tool")}`;
+  return availableCount === count
+    ? ` \xB7 ${toolCount}`
+    : ` \xB7 ${availableCount} of ${toolCount} available`;
 }
-//@ chunk-3re05e6m.js:20775-21267 placement
+//@ chunk-dernsrpy.js:22064-22556 placement
 /**
  * 生成 /mcp 操作失败的提示（远程连接时隐藏细节），区分终端与菜单入口。
  */
@@ -495,7 +517,7 @@ function formatMcpActionFailure(action, serverName, error, options) {
     `Couldn't ${action} "${redactServerName(serverName)}" \u2014 ${normalizeMcpServerName(detail)}.${vscodeHintOrTerminal(" Run `/mcp` in the terminal to check.", " Open MCP servers from the command menu.")}`,
   );
 }
-//@ chunk-3re05e6m.js:21267-21381 placement
+//@ chunk-dernsrpy.js:22556-22670 placement
 function notConnectedRetryHint(serverName) {
   return `${serverName} ${serverName === 1 ? "isn't" : "aren't"} connected \u2014 reply \`/mcp reconnect all\` here to retry.`;
 }

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。识别会话开场新建的空 artifact，并预取其类型的 SKILL.md 与参考页，内联到首轮提示里。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2r828m87.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gyjp76b4.js (25)
  * attribution: placement 25
  */
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -14,7 +14,7 @@ import {
   artifactViewerUrlFor,
   scrubArtifactEnvelopeTags,
 } from "../../tools/ArtifactTool/artifactUrls.js";
-import { getDenyRules, getAskRules, toolMatchesRule } from "../../utils/permissions/permissions.js";
+import { deniedBashRules, askedBashRules, toolMatchesRule } from "../../utils/permissions/permissions.js";
 import {
   parseArtifactUrl,
   ARTIFACT_TOOL_NAME,
@@ -51,26 +51,26 @@ import {
 import { artifactReplToolInPool } from "../../tools/ArtifactTool/promptText.js";
 import { buildSpellingNoteForText } from "./artifactPromptText.js";
 import { errorMessage } from "../../utils/errors.js";
-import { webfetchReadFile, getFetchErrorText } from "./webfetchRead.js";
+import { readArtifactContent, modelFacingReadErr } from "./webfetchRead.js";
 
-//@ chunk-2r828m87.js:952-986 placement
+//@ chunk-gyjp76b4.js:952-986 placement
 function jsonSweepLine(threadList, maxChars) {
   return jsonStringify(sweepResultLineField(threadList, maxChars));
 }
-//@ chunk-2r828m87.js:986-997 placement
+//@ chunk-gyjp76b4.js:986-997 placement
 var PREFETCH_CONTENT_TIMEOUT_MS = 3000;
-//@ chunk-2r828m87.js:997-1232 placement
+//@ chunk-gyjp76b4.js:997-1232 placement
 function promptlessWithholdReason(toolByName, toolPermissionContext) {
   let effectiveMaxPermission = toolByName.mcpInfo?.effectiveMaxPermission;
   if (effectiveMaxPermission !== undefined && effectiveMaxPermission !== "allow") return "permission_ceiling";
   if (toolByName.requiresUserInteraction?.()) return "requires_interaction";
-  return [...getDenyRules(toolPermissionContext), ...getAskRules(toolPermissionContext)].some((rule) =>
+  return [...deniedBashRules(toolPermissionContext), ...askedBashRules(toolPermissionContext)].some((rule) =>
     toolMatchesRule(toolPermissionContext, toolByName, rule),
   )
     ? "rule"
     : undefined;
 }
-//@ chunk-2r828m87.js:1232-1492 placement
+//@ chunk-gyjp76b4.js:1232-1492 placement
 /**
  * 识别开场提示中新建 artifact 地址的正则
  */
@@ -78,7 +78,7 @@ var ARTIFACT_OPENING_RE =
   /^The user just created a new, empty (?:[^\n<]{1,80}? )?artifact at (https?:\/\/\S+) and has it open beside this conversation/;
 var ARTIFACT_OPENING_URL_RE = /artifact at (https?:\/\/\S+) and has it open beside this conversation/g;
 var SYSTEM_REMINDER_BLOCK_RE = /<system-reminder>([\s\S]*?)<\/system-reminder>/g;
-//@ chunk-2r828m87.js:1492-1858 placement
+//@ chunk-gyjp76b4.js:1492-1858 placement
 function openingReminderTexts(messages, regex) {
   let out = [];
   for (let message of messages) {
@@ -100,9 +100,9 @@ function openingReminderTexts(messages, regex) {
   }
   return out;
 }
-//@ chunk-2r828m87.js:1858-1902 placement
+//@ chunk-gyjp76b4.js:1858-1902 placement
 var ARTIFACT_CREATED_PREFIX = "The user just created a new, empty ";
-//@ chunk-2r828m87.js:1902-2162 placement
+//@ chunk-gyjp76b4.js:1902-2162 placement
 /**
  * 开场提示中是否有多个或可疑的 artifact 地址
  */
@@ -118,14 +118,14 @@ function hasAmbiguousArtifactOpening(text) {
   }
   return new Set([...text.matchAll(ARTIFACT_OPENING_URL_RE)].map((match) => match[1])).size > 1;
 }
-//@ chunk-2r828m87.js:2162-2277 placement
+//@ chunk-gyjp76b4.js:2162-2277 placement
 function reminderTextsIn(text, regex) {
   if (!regex(text) || hasAmbiguousArtifactOpening(text)) return [];
   return [...text.matchAll(SYSTEM_REMINDER_BLOCK_RE)]
     .map((match) => (match[1] ?? "").trim())
     .filter((text) => text !== "");
 }
-//@ chunk-2r828m87.js:2277-2592 placement
+//@ chunk-gyjp76b4.js:2277-2592 placement
 function recognizeArtifactOpening(texts) {
   if (
     new Set(texts.flatMap((text) => [...text.matchAll(ARTIFACT_OPENING_URL_RE)].map((match) => match[1])))
@@ -150,23 +150,23 @@ function recognizeArtifactOpening(texts) {
         blankArtifact: found,
       };
 }
-//@ chunk-2r828m87.js:2592-2845 placement
+//@ chunk-gyjp76b4.js:2592-2845 placement
 /**
  * 预取说明文件的前言
  */
 var OPENING_INSTRUCTIONS_PREAMBLE =
   "The artifact named in this session's opening context carries an instructions file; it is below, read ahead for you. The artifact's own content was not read: read it as the opening context asks; that read's result will repeat these instructions.";
-//@ chunk-2r828m87.js:2845-2906 placement
+//@ chunk-gyjp76b4.js:2845-2906 placement
 function openingFilesConsented(context, files) {
   return !hasAutoReactNoticePending(files.slug) && copySourceConsented(context, files, "files", "land");
 }
-//@ chunk-2r828m87.js:2906-2947 placement
+//@ chunk-gyjp76b4.js:2906-2947 placement
 function openingAttestedReadConsented(context, read) {
   return !hasAutoReactNoticePending(read) && attestedReadConsented(context, read);
 }
-//@ chunk-2r828m87.js:2947-2980 placement
+//@ chunk-gyjp76b4.js:2947-2980 placement
 var ARTIFACT_TYPE_REFERENCE = "artifact-type/reference/";
-//@ chunk-2r828m87.js:2980-5845 placement
+//@ chunk-gyjp76b4.js:2980-5845 placement
 /**
  * 预取开场 artifact 的说明文件与参考页
  */
@@ -388,12 +388,12 @@ ${line}`,
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-2r828m87.js:5845-6094 placement
+//@ chunk-gyjp76b4.js:5845-6094 placement
 /**
  * 读取 artifact 类型的 SKILL.md 说明
  */
 async function readTypeInstructions(artifact, signal, credentials) {
-  let file = await webfetchReadFile(
+  let file = await readArtifactContent(
     {
       ...artifact,
       file: TYPE_INSTRUCTIONS_FILE,
@@ -404,13 +404,13 @@ async function readTypeInstructions(artifact, signal, credentials) {
   );
   if (file.err !== null) {
     logForDebugging(
-      `[artifactOpeningPrefetch] type files of ${artifact.slug} not saved: the whole SKILL.md was not read (${getFetchErrorText(file)})`,
+      `[artifactOpeningPrefetch] type files of ${artifact.slug} not saved: the whole SKILL.md was not read (${modelFacingReadErr(file)})`,
     );
     return null;
   }
   return scrubArtifactEnvelopeTags(file.html);
 }
-//@ chunk-2r828m87.js:6094-6898 placement
+//@ chunk-gyjp76b4.js:6094-6898 placement
 /**
  * 识别会话开场新建的空 artifact，并预取其类型的 SKILL.md 与参考页，内联到首轮提示里。
  */
@@ -451,7 +451,7 @@ ${result.manifest}`,
     );
   return null;
 }
-//@ chunk-2r828m87.js:6898-7295 placement
+//@ chunk-gyjp76b4.js:6898-7295 placement
 /**
  * 列出类型参考页（需文件同意）
  */
@@ -484,7 +484,7 @@ async function listTypeReferencePages(blankArtifact, signal, listSignal, credent
       .sort(),
   };
 }
-//@ chunk-2r828m87.js:7295-7627 placement
+//@ chunk-gyjp76b4.js:7295-7627 placement
 function artifactCallSpelling(spelling) {
   return {
     readFile: spelling
@@ -498,9 +498,9 @@ function artifactCallSpelling(spelling) {
     readArtifact: (slug) => `Artifact action "read", url "${slug}"`,
   };
 }
-//@ chunk-2r828m87.js:7627-7637 placement
+//@ chunk-gyjp76b4.js:7627-7637 placement
 var MAX_PAGE_LIST_CHARS = MAX_REFERENCE_PAGES;
-//@ chunk-2r828m87.js:7637-8232 placement
+//@ chunk-gyjp76b4.js:7637-8232 placement
 /**
  * 参考页清单文字
  */
@@ -521,18 +521,18 @@ function referencePagesNote(artifact, pages, pageList) {
   ].join(`
 `);
 }
-//@ chunk-2r828m87.js:8232-8306 placement
+//@ chunk-gyjp76b4.js:8232-8306 placement
 function hasUnloadedArtifactData(context, data) {
   let toolByName = findToolByName(context.options.tools ?? [], ARTIFACT_DATA_TOOL_NAME);
   return toolByName !== undefined && !data(toolByName);
 }
-//@ chunk-2r828m87.js:8306-8477 placement
+//@ chunk-gyjp76b4.js:8306-8477 placement
 /**
  * ArtifactData 已加载时的提示
  */
 var ARTIFACT_DATA_LOADED_HINT =
   "ArtifactData is loaded in this session: read the canvas (ArtifactData list / get on this url) in that same first message rather than searching for the tool first.";
-//@ chunk-2r828m87.js:8477-8851 placement
+//@ chunk-gyjp76b4.js:8477-8851 placement
 /**
  * 预取结果说明文字
  */
@@ -559,7 +559,7 @@ function openingPrefetchSummary(artifact, typed, signal, credentials) {
   ].join(`
 `);
 }
-//@ chunk-2r828m87.js:8851-9023 placement
+//@ chunk-gyjp76b4.js:8851-9023 placement
 /**
  * 提示把 Bash 与 artifact 读取并行发出
  */
@@ -570,7 +570,7 @@ function parallelReadInstruction(artifact, signal, credentials) {
   ].join(`
 `);
 }
-//@ chunk-2r828m87.js:9023-9033 placement
+//@ chunk-gyjp76b4.js:9023-9033 placement
 var MAX_OPENING_BLOCK_CHARS = 128;
 export {
   openingAttestedReadConsented,

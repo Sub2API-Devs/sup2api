@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/pbe.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -19,7 +19,7 @@ import { require_rc2 } from "./rc2.js";
 import { require_rsa } from "./rsa.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:139209-152921 cjs-fingerprint
+//@ chunk-qg41pqt6.js:139222-152959 cjs-fingerprint
 var require_pbe = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_aes();
@@ -483,7 +483,7 @@ var require_pbe = __commonJS(function (cjsExports, cjsModule) {
     return rval;
   };
   pki.pbe.generatePkcs12Key = function (password, salt, id, iter, n, md) {
-    var j;
+    var j_2;
     var l;
     if (typeof md === "undefined" || md === null) {
       if (!("sha1" in forge.md)) throw Error('"sha1" hash algorithm unavailable.');
@@ -523,7 +523,7 @@ var require_pbe = __commonJS(function (cjsExports, cjsModule) {
       for (l = 0; l < v; l++) B.putByte(buf.at(l % u));
       var k = Math.ceil(s / v) + Math.ceil(p / v);
       var Inew = new forge.util.ByteBuffer();
-      for (j = 0; j < k; j++) {
+      for (j_2 = 0; j_2 < k; j_2++) {
         var chunk = new forge.util.ByteBuffer(I.getBytes(v));
         var x = 511;
         for (l = B.length() - 1; l >= 0; l--) {

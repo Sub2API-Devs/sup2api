@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：生成"队列是否忙"判断函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2jaaccg7.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wzw7szp3.js (3)
  * attribution: placement 3
  */
 import { isMainAgentCommand } from "./messageQueueManager.js";
 import { needsDirectDelivery } from "./messageProvenance.js";
 
-//@ chunk-2jaaccg7.js:264-606 placement
+//@ chunk-wzw7szp3.js:336-678 placement
 /**
  * 生成"队列是否忙"判断函数。
  */
@@ -30,7 +30,7 @@ function createQueueBusyCheck(messageQueue, getTranscript, signal) {
       : transcript;
   };
 }
-//@ chunk-2jaaccg7.js:606-696 placement
+//@ chunk-wzw7szp3.js:678-768 placement
 function isPendingBusyCommand(command, transcript) {
   return (
     isBusyCommand(command) &&
@@ -38,7 +38,7 @@ function isPendingBusyCommand(command, transcript) {
       transcript.findLast((message) => message.uuid === command.uuid) === undefined)
   );
 }
-//@ chunk-2jaaccg7.js:696-973 placement
+//@ chunk-wzw7szp3.js:768-1045 placement
 function isBusyCommand(command) {
   if (!isMainAgentCommand(command)) return false;
   switch (command.mode) {

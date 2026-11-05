@@ -3,12 +3,11 @@
  *
  * 工具搜索（延迟加载）判定：模式 tst/tst-auto/standard（ENABLE_TOOL_SEARCH）、模型/部署支持、自动阈值（上下文 10%）、不可延迟内建列表、deferred_tools_delta 附件生成与历史扫描、已发现工具提取；混入 Chrome 提示词片段与若干 fingerprint-shared 克隆
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolSearch.ts
- * pieces: chunk-4121qate.js (1), chunk-5jgfyd2q.js (5), chunk-e6aww6q8.js (22), chunk-mp7v59a0.js (17)
- * attribution: fingerprint 12, layout 19, placement 2, file-local 3, facade-exports 8, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (22), chunk-png42f8p.js (18), chunk-tacvwrx2.js (5)
+ * attribution: fingerprint 10, placement 2, layout 21, file-local 3, facade-exports 8, callgraph-fingerprint 1
  */
-import { pickAlias } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { parseIntLoose, isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";
 import {
@@ -32,11 +31,12 @@ import {
 } from "../bootstrap/state.js";
 import { getCachedClientData } from "./config.js";
 import { isFoamySpringEnabled } from "../services/analytics/growthbookGates.js";
+import { includesAnyIgnoreCase } from "./toolErrors.js";
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { env } from "./env.js";
-import { stringArray as stringArray_2, count, uniq } from "./collections.js";
+import { regExp_11, parseRemovedToolCauses } from "../services/mcp/mcpToolRemovalReasons.js";
+import { stringArray as stringArray_2, countWhere } from "./collections.js";
 import { RETIRED_TOOL_NAMES } from "../tools/retiredTools.js";
-import { parseRemovedToolCauses } from "../services/mcp/mcpToolRemovalReasons.js";
 import { getContextWindow } from "./model/configs.js";
 import { betaHeaderValues, getMergedBetas, getToolSearchBeta } from "./betas.js";
 import { HostScoped } from "./hostScoped.js";
@@ -48,7 +48,7 @@ import {
   formatDeferredToolLine,
 } from "../tools/ToolSearchTool/prompt.js";
 import { countToolDefinitionTokens, TOOL_DEFINITION_TOKEN_OVERHEAD } from "./analyzeContext.js";
-import { toolMatchesName } from "../Tool.js";
+import { matchesToolName } from "../Tool.js";
 import { jsonStringify } from "./slowOperations.js";
 import { toolInputJsonSchema } from "../plugins/functionHooks/types/builtinToolSchemas.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";
@@ -63,45 +63,36 @@ import {
   normalizeToolReference,
   normalizeMcpServerName,
 } from "../services/api/deferredToolsState.js";
-import { identityValue as identityValue_2 } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { hideCodeModeOnlyTools } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { compareStringsGrouped } from "./stringUtils.js";
 import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { identityMap } from "../remote/tools/protocolConstants.js";
 import { countByAlias } from "../../vendor/lodash-es/countBy.js";
 import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { awaitArtifactRosterSafe } from "../services/artifacts/rosterWait.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:282328-282438 fingerprint (2.1.88 match: isToolResultBlockWithContent, 1)
-function toSlimTranscriptMessage(obj) {
-  let { message, agentId } = obj;
-  return {
-    message: pickAlias(message, ["type", "content"]),
-    ...(agentId !== undefined && {
-      agentId,
-    }),
-  };
-}
-//@ chunk-5jgfyd2q.js:191-283 fingerprint (2.1.88 match: isToolReferenceBlock, 1)
+//@ chunk-tacvwrx2.js:191-283 fingerprint (2.1.88 match: isToolReferenceBlock, 1)
 /**
  * 判断内容块是 tool_reference。
  */
 function isToolReferenceBlock(obj) {
   return typeof obj === "object" && obj !== null && "type" in obj && obj.type === "tool_reference";
 }
-//@ chunk-5jgfyd2q.js:283-319 layout
+//@ chunk-tacvwrx2.js:283-319 layout
 function joinWithNewline(a, b) {
   return `${a}
 ${b}`;
 }
-//@ chunk-5jgfyd2q.js:319-397 fingerprint (2.1.88 match: isToolReferenceWithName, 1)
+//@ chunk-tacvwrx2.js:319-397 layout (2.1.88 match: isToolReferenceWithName, 1)
 /**
  * 判断内容块是带字符串 tool_name 的 tool_reference。
  */
 function isToolReferenceWithName(obj) {
   return isToolReferenceBlock(obj) && "tool_name" in obj && typeof obj.tool_name === "string";
 }
-//@ chunk-5jgfyd2q.js:397-527 layout (2.1.88 match: isToolResultBlockWithContent, 1)
+//@ chunk-tacvwrx2.js:397-527 layout (2.1.88 match: isToolResultBlockWithContent, 1)
 function isToolResultBlockWithContent(obj) {
   return (
     typeof obj === "object" &&
@@ -112,7 +103,7 @@ function isToolResultBlockWithContent(obj) {
     Array.isArray(obj.content)
   );
 }
-//@ chunk-5jgfyd2q.js:527-1081 placement
+//@ chunk-tacvwrx2.js:527-1081 placement
 /**
  * 收集历史里所有 tool_reference（tool_result 内）与 surfacedOnWire 的宣告名，返回 [{toolUseId, toolName}]。
  */
@@ -148,7 +139,7 @@ function collectToolReferences(tools, opts) {
   }
   return refs;
 }
-//@ chunk-mp7v59a0.js:6956-7177 fingerprint (2.1.88 match: parseAutoPercentage, 1)
+//@ chunk-png42f8p.js:6960-7181 fingerprint (2.1.88 match: parseAutoPercentage, 1)
 function parseAutoPercentage(value) {
   if (!value.startsWith("auto:")) return null;
   let percentStr = value.slice(5);
@@ -159,12 +150,12 @@ function parseAutoPercentage(value) {
   }
   return Math.max(0, Math.min(100, percent));
 }
-//@ chunk-mp7v59a0.js:7177-7247 fingerprint (2.1.88 match: isAutoToolSearchMode, 1)
+//@ chunk-png42f8p.js:7181-7251 fingerprint (2.1.88 match: isAutoToolSearchMode, 1)
 function isAutoToolSearchMode(value) {
   if (!value) return false;
   return value === "auto" || value.startsWith("auto:");
 }
-//@ chunk-mp7v59a0.js:7247-7495 fingerprint (2.1.88 match: getToolSearchMode, 0.928)
+//@ chunk-png42f8p.js:7251-7499 fingerprint (2.1.88 match: getToolSearchMode, 0.928)
 /**
  * getToolSearchMode：实验 beta 关闭或 HIPAA（且非 force）→ standard；force → tst；ENABLE_TOOL_SEARCH 为 auto:0 → tst、auto:100 → standard、auto/auto:N → tst-auto、真值 → tst、假值 → standard；未设置默认 tst。
  */
@@ -180,7 +171,7 @@ function getToolSearchMode() {
   if (isEnvDefinedFalsy(value)) return "standard";
   return "tst";
 }
-//@ chunk-mp7v59a0.js:7495-7665 callgraph-fingerprint (2.1.88 match: DEFAULT_UNSUPPORTED_MODEL_PATTERNS, 0.177)
+//@ chunk-png42f8p.js:7499-7669 callgraph-fingerprint (2.1.88 match: DEFAULT_UNSUPPORTED_MODEL_PATTERNS, 0.177)
 var DEFAULT_UNSUPPORTED_MODEL_PATTERNS = [
   "claude-3-opus",
   "claude-3-sonnet",
@@ -194,7 +185,7 @@ var VERTEX_TOOL_SEARCH_MIN_VERSIONS = [
   ["sonnet", [4, 5]],
   ["haiku", [4, 5]],
 ];
-//@ chunk-mp7v59a0.js:7665-7841 layout
+//@ chunk-png42f8p.js:7669-7845 layout
 /**
  * Vertex 上不支持工具搜索 beta 的模型：claude-3 系列，或 opus/sonnet/haiku 低于 4.5。
  */
@@ -207,7 +198,7 @@ function isVertexModelWithoutToolSearch(canonicalName) {
     !isModelVersionAtLeast(model, VERTEX_TOOL_SEARCH_MIN_VERSIONS)
   );
 }
-//@ chunk-mp7v59a0.js:7841-7956 fingerprint (2.1.88 match: getUnsupportedToolReferencePatterns, 1)
+//@ chunk-png42f8p.js:7845-7960 fingerprint (2.1.88 match: getUnsupportedToolReferencePatterns, 1)
 function getUnsupportedToolReferencePatterns() {
   try {
     let patterns = getFeatureValue_CACHED_MAY_BE_STALE("tengu_tool_search_unsupported_models", null);
@@ -215,9 +206,9 @@ function getUnsupportedToolReferencePatterns() {
   } catch {}
   return DEFAULT_UNSUPPORTED_MODEL_PATTERNS;
 }
-//@ chunk-mp7v59a0.js:7956-7965 layout
+//@ chunk-png42f8p.js:7960-7969 layout
 var EMPTY_NON_DEFERRABLE = [];
-//@ chunk-mp7v59a0.js:7965-8226 layout
+//@ chunk-png42f8p.js:7969-8230 layout
 function pickValueForMainLoopModel(featureValue_CACHED_MAY_BE_STALE) {
   if (
     featureValue_CACHED_MAY_BE_STALE === null ||
@@ -235,7 +226,7 @@ function pickValueForMainLoopModel(featureValue_CACHED_MAY_BE_STALE) {
   }
   return names["*"];
 }
-//@ chunk-mp7v59a0.js:8226-8535 layout
+//@ chunk-png42f8p.js:8230-8539 layout
 /**
  * 不可延迟的内建工具名：GrowthBook tengu_non_deferrable_builtins（可按模型名分键）与托管设置 non_deferrable_builtins 的并集。
  */
@@ -259,32 +250,32 @@ function getNonDeferrableBuiltins() {
   if (names.size === 0) return EMPTY_NON_DEFERRABLE;
   return [...names];
 }
-//@ chunk-mp7v59a0.js:8535-8587 layout
+//@ chunk-png42f8p.js:8539-8591 layout
 /**
  * GrowthBook tengu_shiny_stardust（默认 false）：为真时 ReportFindings、Workflow、ShareOnboardingGuide 也按延迟工具处理。
  */
 function isDeferSpecialToolsEnabled() {
   return getFeatureValue_SESSION_PINNED("tengu_shiny_stardust", false);
 }
-//@ chunk-mp7v59a0.js:8587-8616 layout
+//@ chunk-png42f8p.js:8591-8620 layout
 var TENGU_DRIFTING_HERON = "tengu_drifting_heron";
-//@ chunk-mp7v59a0.js:8616-8652 layout
+//@ chunk-png42f8p.js:8620-8656 layout
 /**
  * GrowthBook tengu_drifting_heron（默认 true）；关闭时 PushNotification 在条件满足时不延迟。
  */
 function isPushNotificationDeferrable() {
   return getFeatureValue_SESSION_PINNED(TENGU_DRIFTING_HERON, true) !== false;
 }
-//@ chunk-mp7v59a0.js:8652-8679 layout
+//@ chunk-png42f8p.js:8656-8683 layout
 var TENGU_FANCY_MILNER = "tengu_fancy_milner";
-//@ chunk-mp7v59a0.js:8679-8721 layout
+//@ chunk-png42f8p.js:8683-8725 layout
 /**
  * pf() 且 GrowthBook tengu_fancy_milner（默认 true）：启用"按值定义"跟踪，ToolSearch 能识别已内联的工具并提示"直接调用"。
  */
 function isToolDefinedByValueEnabled() {
   return isFoamySpringEnabled() && getFeatureValue_SESSION_PINNED(TENGU_FANCY_MILNER, true) !== false;
 }
-//@ chunk-mp7v59a0.js:8721-8829 file-local
+//@ chunk-png42f8p.js:8725-8833 file-local
 /**
  * 模型是否支持 tool_reference 块：名字不含 tengu_tool_search_unsupported_models（默认 claude-3 系列）中的任一模式。
  */
@@ -294,7 +285,17 @@ function modelSupportsToolReference(model) {
   for (let pattern of unsupportedPatterns) if (normalizedModel.includes(pattern.toLowerCase())) return false;
   return true;
 }
-//@ chunk-mp7v59a0.js:8829-8908 layout
+//@ chunk-png42f8p.js:8833-8959 layout
+function supportsToolReferenceOrPelican(model) {
+  if (modelSupportsToolReference(model)) return true;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_swift_pelican", null);
+  return (
+    getAPIProvider() === "firstParty" &&
+    Array.isArray(featureValue_CACHED_MAY_BE_STALE) &&
+    includesAnyIgnoreCase(model, featureValue_CACHED_MAY_BE_STALE)
+  );
+}
+//@ chunk-png42f8p.js:8959-9038 layout
 /**
  * GrowthBook tengu_tranquil_starlight 开启时，把提示词里的 Chrome 核心工具 select 查询追加 browser_batch。
  */
@@ -304,7 +305,7 @@ function maybeAddBrowserBatchToChromeSelect(chromeSystemPrompt) {
     ? prompt
     : chromeSystemPrompt;
 }
-//@ chunk-mp7v59a0.js:8908-9262 fingerprint (2.1.88 match: isToolSearchEnabledOptimistic, 0.823)
+//@ chunk-png42f8p.js:9038-9392 fingerprint (2.1.88 match: isToolSearchEnabledOptimistic, 0.823)
 /**
  * isToolSearchEnabledOptimistic：模式不是 standard 即为真（只记一次调试日志）。决定 getAllBaseTools 是否注册 ToolSearch。316 删掉了旧版"自定义 ANTHROPIC_BASE_URL 时关闭"的分支。
  */
@@ -323,7 +324,7 @@ function isToolSearchEnabledOptimistic() {
     );
   return true;
 }
-//@ chunk-e6aww6q8.js:1639966-1641577 fingerprint (2.1.88 match: getDeferredToolsDelta, 0.383)
+//@ chunk-5xgkngpb.js:1708706-1710898 fingerprint (2.1.88 match: getDeferredToolsDelta, 0.362)
 /**
  * 扫描历史消息里的 deferred_tools_delta 附件，重建已宣告、按块露出、断开撤回、线上隐藏、定义撤回、已列出、上次 pending/needsAuth/failed 等集合，供 getDeferredToolsDelta 与 ToolSearch 使用。
  */
@@ -333,6 +334,8 @@ function scanDeferredToolsDeltaHistory(messages, { loaded, byNameAnnouncements, 
   let retractedAsDisconnected = new Set();
   let wireHiddenStanding = new Set();
   let definitionRetracted = new Set();
+  let failedWhileListed = new Set();
+  let nameByToolUse = new Map();
   let listed = new Set();
   let lastPending = [];
   let lastNeedsAuth = [];
@@ -341,6 +344,24 @@ function scanDeferredToolsDeltaHistory(messages, { loaded, byNameAnnouncements, 
   let deltaCount = 0;
   let attachmentTypesSeen = new Set();
   for (let msg of messages) {
+    if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
+      for (let block of msg.message.content)
+        if (block.type === "tool_use") nameByToolUse.set(block.id, block.name);
+    }
+    if (msg.type === "user" && Array.isArray(msg.message?.content))
+      for (let block of msg.message.content) {
+        if (block.type !== "tool_result" || block.is_error !== true) continue;
+        let contentBlock = Array.isArray(block.content) ? block.content[0] : block.content;
+        let text =
+          typeof contentBlock === "string"
+            ? contentBlock
+            : contentBlock?.type === "text"
+              ? contentBlock.text
+              : "";
+        let failedName = regExp_11.exec(text)?.[1];
+        if (failedName !== undefined && nameByToolUse.get(block.tool_use_id) === failedName)
+          failedWhileListed.add(failedName);
+      }
     if (msg.type !== "attachment") continue;
     attachmentCount++;
     attachmentTypesSeen.add(msg.attachment.type);
@@ -380,6 +401,7 @@ function scanDeferredToolsDeltaHistory(messages, { loaded, byNameAnnouncements, 
     for (let retracted of parseRemovedToolCauses(msg.attachment.retractedTools))
       definitionRetracted.add(retracted.name);
     for (let toolName of stringArray_2(msg.attachment.restoredNames)) definitionRetracted.delete(toolName);
+    for (let toolName of stringArray_2(msg.attachment.runsAgainNames)) failedWhileListed.delete(toolName);
     if (toolAdditionOnly !== undefined && !toolAdditionOnly.nameOnlyAnnouncements.has(msg.uuid))
       for (let toolName of stringArray_2(msg.attachment.surfacedNames)) surfacedWithBlocks.add(toolName);
   }
@@ -389,6 +411,7 @@ function scanDeferredToolsDeltaHistory(messages, { loaded, byNameAnnouncements, 
     retractedAsDisconnected,
     wireHiddenStanding,
     definitionRetracted,
+    failedWhileListed,
     listed,
     lastPending,
     lastNeedsAuth,
@@ -398,7 +421,7 @@ function scanDeferredToolsDeltaHistory(messages, { loaded, byNameAnnouncements, 
     attachmentTypesSeen,
   };
 }
-//@ chunk-e6aww6q8.js:2388424-2388503 placement
+//@ chunk-5xgkngpb.js:2443824-2443903 placement
 /**
  * 自定义 base URL 且未显式开启时，工具搜索默认锁定为关。
  */
@@ -410,9 +433,9 @@ function isToolSearchLockedOffByDefault() {
     !isFirstPartyAnthropicBaseUrl()
   );
 }
-//@ chunk-e6aww6q8.js:2388503-2388514 layout
+//@ chunk-5xgkngpb.js:2443903-2443914 layout
 var DEFAULT_AUTO_TOOL_SEARCH_PERCENTAGE = 10;
-//@ chunk-e6aww6q8.js:2388514-2388653 fingerprint (2.1.88 match: getAutoToolSearchPercentage, 1)
+//@ chunk-5xgkngpb.js:2443914-2444053 fingerprint (2.1.88 match: getAutoToolSearchPercentage, 1)
 function getAutoToolSearchPercentage() {
   let value = process.env.ENABLE_TOOL_SEARCH;
   if (!value) return DEFAULT_AUTO_TOOL_SEARCH_PERCENTAGE;
@@ -421,19 +444,19 @@ function getAutoToolSearchPercentage() {
   if (parsed !== null) return parsed;
   return DEFAULT_AUTO_TOOL_SEARCH_PERCENTAGE;
 }
-//@ chunk-e6aww6q8.js:2388653-2388665 layout
+//@ chunk-5xgkngpb.js:2444053-2444065 layout
 var CHARS_PER_TOKEN = 2.5;
-//@ chunk-e6aww6q8.js:2388665-2388739 file-local
+//@ chunk-5xgkngpb.js:2444065-2444139 file-local
 function getAutoToolSearchTokenThreshold(model) {
   let contextWindow = getContextWindow(model, betaHeaderValues(getMergedBetas(model)));
   let percentage = getAutoToolSearchPercentage() / 100;
   return Math.floor(contextWindow * percentage);
 }
-//@ chunk-e6aww6q8.js:2388739-2388785 file-local
+//@ chunk-5xgkngpb.js:2444139-2444185 file-local
 function getAutoToolSearchCharThreshold(model) {
   return Math.floor(getAutoToolSearchTokenThreshold(model) * CHARS_PER_TOKEN);
 }
-//@ chunk-e6aww6q8.js:2388785-2388882 layout
+//@ chunk-5xgkngpb.js:2444185-2444282 layout
 class DeferredTokenCountCache {
   counts = new Map();
   lookup(a) {
@@ -443,12 +466,12 @@ class DeferredTokenCountCache {
     this.counts.set(b, c);
   }
 }
-//@ chunk-e6aww6q8.js:2388882-2388909 layout
+//@ chunk-5xgkngpb.js:2444282-2444309 layout
 var deferredTokenCountCacheByHost; // deferred: uses DeferredTokenCountCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2388882", () => {
+deferInit("chunk-5xgkngpb.js:2444282", () => {
   deferredTokenCountCacheByHost = new HostScoped(() => new DeferredTokenCountCache());
 });
-//@ chunk-e6aww6q8.js:2388909-2389102 layout
+//@ chunk-5xgkngpb.js:2444309-2444506 layout
 /**
  * 按延迟工具名列表（按 host 分开缓存）缓存延迟工具定义的 token 数。
  */
@@ -463,7 +486,7 @@ function getDeferredToolTokenCountCached(tools, getToolPermissionContext, agents
   b.remember(joined, d);
   return d;
 }
-//@ chunk-e6aww6q8.js:2389102-2389278 layout
+//@ chunk-5xgkngpb.js:2444506-2444682 layout
 async function countDeferredToolTokens(deferredTools, getToolPermissionContext, agents, model, credentials) {
   if (deferredTools.length === 0) return 0;
   try {
@@ -483,14 +506,14 @@ async function countDeferredToolTokens(deferredTools, getToolPermissionContext, 
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2389278-2389323 facade-exports
+//@ chunk-5xgkngpb.js:2444682-2444727 facade-exports
 /**
  * 工具列表里是否有 ToolSearch。
  */
 function isToolSearchToolAvailable(tools) {
-  return tools.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME));
+  return tools.some((tool) => matchesToolName(tool, TOOL_SEARCH_TOOL_NAME));
 }
-//@ chunk-e6aww6q8.js:2389323-2389673 fingerprint (2.1.88 match: calculateDeferredToolDescriptionChars, 1)
+//@ chunk-5xgkngpb.js:2444727-2445077 fingerprint (2.1.88 match: calculateDeferredToolDescriptionChars, 1)
 /**
  * 估算延迟工具定义的字符数：名字 + prompt 文本 + 输入 JSON schema 长度之和。
  */
@@ -517,12 +540,12 @@ async function calculateDeferredToolDescriptionChars(tools, getToolPermissionCon
     )
   ).reduce((total, size) => total + size, 0);
 }
-//@ chunk-e6aww6q8.js:2389673-2389993 layout
+//@ chunk-5xgkngpb.js:2445077-2445397 layout
 /**
  * 返回工具搜索不可用的原因码，可用时 undefined：model_unsupported、vertex_model_unsupported、foundry_deployment_unsupported、no_tools_in_request、not_registered、mcp_search_unavailable。
  */
 function getToolSearchUnavailableReason(model, tools) {
-  if (!modelSupportsToolReference(model)) return "model_unsupported";
+  if (!supportsToolReferenceOrPelican(model)) return "model_unsupported";
   if (isVertexModelWithoutToolSearch(getCanonicalName(model))) return "vertex_model_unsupported";
   if (
     !foundrySupportsCapability(model, "tool_search_server") ||
@@ -534,7 +557,7 @@ function getToolSearchUnavailableReason(model, tools) {
   if (!isToolSearchEnabledOptimistic()) return "not_registered";
   return "mcp_search_unavailable";
 }
-//@ chunk-e6aww6q8.js:2389993-2390067 facade-exports
+//@ chunk-5xgkngpb.js:2445397-2445471 facade-exports
 /**
  * ToolSearch 工具被过滤掉（例如 disallowedTools）且端点未拒绝过：此时改用 tool_addition 方式（不靠 ToolSearch 也按需追加工具定义）。
  */
@@ -544,14 +567,14 @@ function toolSearchToolFilteredOut(model, tools, requestState) {
     !toolSearchRejectedOn(requestState, model)
   );
 }
-//@ chunk-e6aww6q8.js:2390067-2390110 facade-exports
+//@ chunk-5xgkngpb.js:2445471-2445514 facade-exports
 /**
  * 工具搜索因模型/部署/工具池原因不可用。
  */
 function isToolSearchPrecluded(model, tools) {
   return getToolSearchUnavailableReason(model, tools) !== undefined;
 }
-//@ chunk-e6aww6q8.js:2390110-2390181 facade-exports
+//@ chunk-5xgkngpb.js:2445514-2445585 facade-exports
 /**
  * 从已声明工具名判断本对话的工具搜索锁：声明过 ToolSearch → true；声明过工具但没有 ToolSearch 且 rGt() → false（保持关闭）；否则未定。
  */
@@ -559,7 +582,7 @@ function toolSearchDeclaredIn(declaredToolNames) {
   if (declaredToolNames?.has(TOOL_SEARCH_TOOL_NAME)) return true;
   return declaredToolNames?.size && isToolSearchLockedOffByDefault() ? false : undefined;
 }
-//@ chunk-e6aww6q8.js:2390181-2390280 facade-exports
+//@ chunk-5xgkngpb.js:2445585-2445684 facade-exports
 /**
  * 端点在本进程里是否拒绝过工具搜索（Lp 记录的拒绝，或尚未决定声明工具时按 beta 记录判断）。
  */
@@ -571,7 +594,7 @@ function toolSearchRejectedOn(requestState, model) {
       [...getRefusedBetasForModel(toProviderWireModelId(model))].includes(toolSearchBeta))
   );
 }
-//@ chunk-e6aww6q8.js:2390280-2392265 facade-exports (2.1.88 match: isToolSearchEnabled, 0.724)
+//@ chunk-5xgkngpb.js:2445684-2447678 facade-exports (2.1.88 match: isToolSearchEnabled, 0.724)
 /**
  * isToolSearchEnabled（请求级）：先看不可用原因（模型/Vertex/Foundry 不支持、没有工具、未注册、ToolSearch 被禁用），再看本对话是否已"无 ToolSearch 运行过"（保持关闭直到压缩/清空）、端点是否拒绝过；然后按模式：tst 开、standard 关、tst-auto 比较延迟工具 token 数与上下文窗口百分比阈值。每次决策记 tengu_tool_search_mode_decision。
  */
@@ -585,7 +608,7 @@ async function isToolSearchEnabled(
   recordedToolDescriptions,
   requestState,
 ) {
-  let mcpToolCount = count(tools, (t) => t.isMcp);
+  let mcpToolCount = countWhere(tools, (t) => t.isMcp);
   function logModeDecision(enabled, mode, reason, extraProps) {
     logEvent("tengu_tool_search_mode_decision", {
       enabled,
@@ -682,7 +705,7 @@ async function isToolSearchEnabled(
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2392265-2393097 facade-exports (2.1.88 match: extractDiscoveredToolNames, 0.715)
+//@ chunk-5xgkngpb.js:2447678-2448509 facade-exports (2.1.88 match: extractDiscoveredToolNames, 0.715)
 /**
  * extractDiscoveredToolNames：从历史里收集已发现的延迟工具名：压缩边界携带的 preCompactDiscoveredTools、deferred_tools_delta 的 surfacedNames、tool_result 里的 tool_reference 块。
  */
@@ -729,7 +752,7 @@ function extractDiscoveredToolNames(messages, options) {
     );
   return discoveredTools;
 }
-//@ chunk-e6aww6q8.js:2393097-2397299 facade-exports
+//@ chunk-5xgkngpb.js:2448509-2452872 facade-exports
 /**
  * getDeferredToolsDelta：比较当前工具池的延迟工具与历史 deferred_tools_delta 附件，生成新附件（addedNames/addedLines、removedNames、wireHiddenNames、readdedNames、pending/needsAuth/failed MCP 服务器、retractedTools、restoredNames、surfacedNames、loadedNames），无变化返回 null；记 tengu_deferred_tools_pool_change。
  */
@@ -755,6 +778,7 @@ function getDeferredToolsDelta(
     retractedAsDisconnected,
     wireHiddenStanding,
     definitionRetracted,
+    failedWhileListed,
     listed,
     lastPending,
     lastNeedsAuth,
@@ -783,10 +807,13 @@ function getDeferredToolsDelta(
   let resurfacedTools = toolSearchAbsent
     ? filtered.filter((tool) => !unlistedNameSet.has(tool.name) && !surfacedWithBlocks.has(tool.name))
     : [];
-  let unwrapAttempt = identityValue_2(tools);
+  let unwrapAttempt = hideCodeModeOnlyTools(tools);
   let currentToolNames =
     unwrapAttempt === tools ? allToolNames : new Set(unwrapAttempt.map((tool) => tool.name));
   let filtered_4 = [...definitionRetracted].filter(
+    (toolName) => currentToolNames.has(toolName) && !toolNames.has(toolName),
+  );
+  let filtered_5 = [...failedWhileListed].filter(
     (toolName) => currentToolNames.has(toolName) && !toolNames.has(toolName),
   );
   let goneNames = [];
@@ -852,7 +879,7 @@ function getDeferredToolsDelta(
       ? lastPending.filter((server) => !pendingMcpServers.includes(server))
       : [];
   let listlessSet = new Set([...filtered_3, ...resurfacedTools]);
-  let filtered_5 = filtered.filter(
+  let filtered_6 = filtered.filter(
     (tool) =>
       announced.has(tool.name) &&
       !listlessSet.has(tool) &&
@@ -895,10 +922,13 @@ function getDeferredToolsDelta(
     !failedChanged &&
     retractedTools.length === 0 &&
     filtered_4.length === 0 &&
+    filtered_5.length === 0 &&
     resurfacedTools.length === 0;
   if (saidNothing && pendingUnmentionedCount === 0) return null;
   let addableTools = [...filtered_3, ...resurfacedTools];
-  let addedNames = uniq([...filtered_2, ...addableTools, ...filtered_5].map((tool) => tool.name));
+  let addedNames = normalizeCaseForComparison_2(
+    [...filtered_2, ...addableTools, ...filtered_6].map((tool) => tool.name),
+  );
   let surfacedNames = toolSearchAbsent
     ? addableTools.map((tool) => tool.name)
     : filtered_2
@@ -918,7 +948,7 @@ function getDeferredToolsDelta(
     removedCount: removedNames.length,
     ...identityMap(countByAlias([...departureCauses.values()]), (count, cause) => `departed_${cause}`),
     retractionHoldEnabled: holdWhileConnecting,
-    returnedAfterHoldCount: filtered_5.length,
+    returnedAfterHoldCount: filtered_6.length,
     wireHiddenCount: wireHiddenNames.length,
     pendingChanged,
     pendingCount: pendingNames.length,
@@ -933,6 +963,7 @@ function getDeferredToolsDelta(
     lastFailedCount: lastFailed.length,
     retractedCount: retractedTools.length,
     restoredCount: filtered_4.length,
+    runsAgainCount: filtered_5.length,
     ...identityMap(revocations?.causeCounts ?? {}, (count, cause) => `keptDeparted_${cause}`),
     priorAnnouncedCount: announced.size,
     toolSearchAbsent,
@@ -944,7 +975,7 @@ function getDeferredToolsDelta(
     attachmentTypesSeen: fromEnumArr([...attachmentTypesSeen]),
   });
   if (saidNothing) return null;
-  let filtered_6 = addableTools.map((tool) => tool.name).filter((name) => loadedRefs.has(name));
+  let filtered_7 = addableTools.map((tool) => tool.name).filter((name) => loadedRefs.has(name));
   return {
     addedNames: addedNames.sort(),
     addedLines: addableTools
@@ -953,7 +984,7 @@ function getDeferredToolsDelta(
       .sort(),
     removedNames: removedNames.sort(),
     wireHiddenNames: wireHiddenNames.sort(),
-    readdedNames: [...mapped, ...filtered_5.map((tool) => tool.name)].sort(),
+    readdedNames: [...mapped, ...filtered_6.map((tool) => tool.name)].sort(),
     ...(pendingMcpServers !== undefined && {
       pendingMcpServers: pendingNames,
     }),
@@ -969,18 +1000,21 @@ function getDeferredToolsDelta(
     ...(filtered_4.length > 0 && {
       restoredNames: filtered_4.sort(),
     }),
+    ...(filtered_5.length > 0 && {
+      runsAgainNames: filtered_5.sort(),
+    }),
     ...(surfacedNames.length > 0 && {
       surfacedNames: surfacedNames.sort(),
     }),
     ...(toolSearchAbsent && {
       toolSearchAbsent: true,
     }),
-    ...(filtered_6.length > 0 && {
-      loadedNames: filtered_6.sort(),
+    ...(filtered_7.length > 0 && {
+      loadedNames: filtered_7.sort(),
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2397299-2397728 fingerprint (2.1.88 match: checkAutoThreshold, 1)
+//@ chunk-5xgkngpb.js:2452872-2453301 fingerprint (2.1.88 match: checkAutoThreshold, 1)
 /**
  * checkAutoThreshold：tst-auto 模式下比较延迟工具的 token 数（按 API 计数缓存）与 getAutoToolSearchTokenThreshold；计数失败时退回字符数估算（chars/2.5）。
  */
@@ -1021,29 +1055,29 @@ async function checkAutoThreshold(tools, getToolPermissionContext, agents, model
   };
 }
 export {
-  joinWithNewline,
-  isToolReferenceBlock,
-  isToolSearchEnabledOptimistic,
-  isToolSearchToolAvailable,
-  isToolSearchPrecluded,
-  toolSearchRejectedOn,
-  extractDiscoveredToolNames,
-  getNonDeferrableBuiltins,
   isToolSearchEnabled,
   toolSearchToolFilteredOut,
   isToolDefinedByValueEnabled,
+  getNonDeferrableBuiltins,
+  extractDiscoveredToolNames,
   collectToolReferences,
   isToolResultBlockWithContent,
   isToolReferenceWithName,
-  isDeferSpecialToolsEnabled,
-  isPushNotificationDeferrable,
-  toSlimTranscriptMessage,
-  modelSupportsToolReference,
+  joinWithNewline,
+  isToolSearchToolAvailable,
+  isToolReferenceBlock,
+  isToolSearchEnabledOptimistic,
+  supportsToolReferenceOrPelican,
   isVertexModelWithoutToolSearch,
+  isToolSearchPrecluded,
+  toolSearchRejectedOn,
+  isToolSearchLockedOffByDefault,
   getToolSearchMode,
   toolSearchDeclaredIn,
   getDeferredToolsDelta,
   maybeAddBrowserBatchToChromeSelect,
+  isDeferSpecialToolsEnabled,
+  isPushNotificationDeferrable,
+  modelSupportsToolReference,
   scanDeferredToolsDeltaHistory,
-  isToolSearchLockedOffByDefault,
 };

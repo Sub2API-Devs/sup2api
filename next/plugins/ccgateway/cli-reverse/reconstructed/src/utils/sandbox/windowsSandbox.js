@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 沙箱（srt-win）：开关、一次性安装提示、文件夹 ACL 授权给沙箱组、deny 列表写入与校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fq0cr76a.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qg41pqt6.js (52)
  * attribution: placement 52
  */
 import { win32 } from "path";
@@ -28,7 +28,10 @@ import {
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../debug.js";
-import { stripExtendedPathPrefix } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
+import {
+  stripExtendedPathPrefix,
+  containsGlobCharsWin,
+} from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
 import { isUncOrDevicePath } from "../pathClassification.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
@@ -40,10 +43,10 @@ import { normalizeGitPathArg } from "../permissions/filesystem.js";
 import { arraysEqualByIndex, isSameArray } from "../findExecutable.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:858597-858672 placement
+//@ chunk-qg41pqt6.js:860292-860367 placement
 var REGEX_TOKEN_OR_CLASS_RE = /\\.|\[(?:\\.|[^\]\\])*\]/gs;
 var LITERAL_REGEX_RE = /^(?:\\.|[^\\.*+?^$()[\]{}|])*$/s;
-//@ chunk-fq0cr76a.js:858672-858838 placement
+//@ chunk-qg41pqt6.js:860367-860533 placement
 /**
  * 修正正则中的字符类：无法编译的方括号片段转义为字面量。
  */
@@ -58,9 +61,9 @@ function escapeInvalidCharClasses(pattern) {
     }
   });
 }
-//@ chunk-fq0cr76a.js:858838-858886 placement
+//@ chunk-qg41pqt6.js:860533-860581 placement
 var windowsSandboxToggleState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:858838", () => {
+deferInit("chunk-qg41pqt6.js:860533", () => {
   windowsSandboxToggleState = identity_2(
     {
       hasBeenOn: false,
@@ -70,7 +73,7 @@ deferInit("chunk-fq0cr76a.js:858838", () => {
     },
   );
 });
-//@ chunk-fq0cr76a.js:858886-859049 placement
+//@ chunk-qg41pqt6.js:860581-860744 placement
 /**
  * Windows 沙箱开关（CLAUDE_CODE_NANKEEN_KESTREL / tengu_nankeen_kestrel）。
  */
@@ -84,16 +87,16 @@ function isWindowsSandboxEnabled() {
   windowsSandboxToggleState.hasBeenOn ||= featureValue_CACHED_MAY_BE_STALE;
   return featureValue_CACHED_MAY_BE_STALE;
 }
-//@ chunk-fq0cr76a.js:859049-859084 placement
+//@ chunk-qg41pqt6.js:860744-860779 placement
 /**
  * hasWindowsSandboxBeenOn：Windows 沙箱是否曾启用。
  */
 function hasWindowsSandboxBeenOn() {
   return windowsSandboxToggleState.hasBeenOn;
 }
-//@ chunk-fq0cr76a.js:859084-859112 placement
+//@ chunk-qg41pqt6.js:860779-860807 placement
 var CLAUDECODESANDBOX = "ClaudeCodeSandbox";
-//@ chunk-fq0cr76a.js:859112-859172 placement
+//@ chunk-qg41pqt6.js:860807-860867 placement
 /**
  * rgRunner：用 Bun 直接执行脚本的启动信息。
  */
@@ -103,21 +106,21 @@ function rgRunner() {
     prependArgs: [SRT_WIN_DISPATCH_ARG1],
   };
 }
-//@ chunk-fq0cr76a.js:859172-859369 placement
+//@ chunk-qg41pqt6.js:860867-861064 placement
 function formatProfileForgetHint() {
   return `To take it back, close every Claude Code session and run "${process.execPath}" ${SRT_WIN_DISPATCH_ARG1} profile forget in a terminal; sandboxed commands then read nothing in your user profile.`;
 }
-//@ chunk-fq0cr76a.js:859369-859514 placement
+//@ chunk-qg41pqt6.js:861064-861209 placement
 var SECLOGON_ACCESS_DENIED_RE =
   /(CreateProcessWithLogonW\([^)\n]{0,256}\): .{0,512}?\(0x80070005\)) \u2014 ensure the Secondary Logon service \(seclogon\) is running\./;
-//@ chunk-fq0cr76a.js:859514-859547 placement
+//@ chunk-qg41pqt6.js:861209-861242 placement
 /**
  * isSeclogonAccessDenied：seclogon 访问被拒。
  */
 function isSeclogonAccessDenied(message) {
   return SECLOGON_ACCESS_DENIED_RE.test(message);
 }
-//@ chunk-fq0cr76a.js:859547-862760 placement
+//@ chunk-qg41pqt6.js:861242-864455 placement
 /**
  * 生成 Windows 沙箱不可用时的补救说明（/sandbox install、管理员信任 CA 等，约 3 KB）。
  */
@@ -178,14 +181,14 @@ function describeWindowsSandboxRemedy(message, options) {
     : `Its owner or an administrator can: in PowerShell or Command Prompt (not Git Bash, which rewrites /grant), run icacls "${process.execPath}" /grant sandbox-runtime-users:RX (then restart Claude Code). Otherwise use`;
   return `${reason}, and Claude Code ${options?.programPermissionAdded === false ? "could not give" : "did not try to give"} the sandbox-runtime-users group read and execute permission on that file. ${howTo} a copy of Claude Code on a local disk where every user can run it, such as under Program Files. (Details: ${trimmed})`;
 }
-//@ chunk-fq0cr76a.js:862821-862915 placement
+//@ chunk-qg41pqt6.js:864516-864610 placement
 var MAX_ACL_BYTES = 131072;
 var MAX_ACL_ENTRIES_BYTES = 262144;
 var MAX_ACL_CHOWN_ATTEMPTS = 6;
 var NATIVE_TOOL_STEPS = ["open_to_read", "open_to_write", "final_path", "read", "write"];
-//@ chunk-fq0cr76a.js:862915-863085 placement
+//@ chunk-qg41pqt6.js:864610-864780 placement
 let WindowsFolderSecurityError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:862915", () => {
+deferInit("chunk-qg41pqt6.js:864610", () => {
   WindowsFolderSecurityError = class WindowsFolderSecurityError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -198,9 +201,9 @@ deferInit("chunk-fq0cr76a.js:862915", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:863085-863206 placement
+//@ chunk-qg41pqt6.js:864780-864901 placement
 let PathLeadsElsewhereError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:863085", () => {
+deferInit("chunk-qg41pqt6.js:864780", () => {
   PathLeadsElsewhereError = class PathLeadsElsewhereError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -211,10 +214,10 @@ deferInit("chunk-fq0cr76a.js:863085", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:863206-863258 placement
+//@ chunk-qg41pqt6.js:864901-864953 placement
 var nativeToolErrorSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var nativeToolErrorPayload;
-deferInit("chunk-fq0cr76a.js:863206", () => {
+deferInit("chunk-qg41pqt6.js:864901", () => {
   nativeToolErrorSchema = DoctorLazy(() =>
     objectSchema({
       step: _enum(NATIVE_TOOL_STEPS),
@@ -222,7 +225,7 @@ deferInit("chunk-fq0cr76a.js:863206", () => {
     }),
   );
 });
-//@ chunk-fq0cr76a.js:863258-863642 placement
+//@ chunk-qg41pqt6.js:864953-865337 placement
 function getWindowsFolderSecurity() {
   if (getPlatform() !== "windows") return null;
   if (nativeToolErrorPayload === undefined) {
@@ -236,7 +239,7 @@ function getWindowsFolderSecurity() {
   }
   return nativeToolErrorPayload;
 }
-//@ chunk-fq0cr76a.js:863642-864073 placement
+//@ chunk-qg41pqt6.js:865337-865768 placement
 function toExtendedLengthPath(windowsFolderSecurity) {
   return {
     open(path, flags) {
@@ -265,7 +268,7 @@ function toExtendedLengthPath(windowsFolderSecurity) {
     },
   };
 }
-//@ chunk-fq0cr76a.js:864073-864193 placement
+//@ chunk-qg41pqt6.js:865768-865888 placement
 function withFolderSecurityError(run) {
   try {
     return run();
@@ -274,20 +277,20 @@ function withFolderSecurityError(run) {
     throw parsed === undefined ? error : new WindowsFolderSecurityError(parsed.step, parsed.windowsError);
   }
 }
-//@ chunk-fq0cr76a.js:864193-864256 placement
+//@ chunk-qg41pqt6.js:865888-865951 placement
 function lowerAscii(finalPath) {
   return finalPath.replace(/[A-Z]/g, (char) => char.toLowerCase());
 }
-//@ chunk-fq0cr76a.js:864256-864299 placement
+//@ chunk-qg41pqt6.js:865951-865994 placement
 function isOutOfUint32Range(value) {
   return value <= 0n || value > 0xffffffffn;
 }
-//@ chunk-fq0cr76a.js:864367-864404 placement
+//@ chunk-qg41pqt6.js:866062-866099 placement
 /**
  * USER_SID_RE：Windows 用户 SID 格式。
  */
 var USER_SID_RE = /^S-1-5-21-\d+-\d+-\d+-\d+$/;
-//@ chunk-fq0cr76a.js:864404-865519 placement
+//@ chunk-qg41pqt6.js:866099-867214 placement
 /**
  * 让沙箱组能读取 Claude Code 可执行文件（应用包内无法修改时说明）。
  */
@@ -353,7 +356,7 @@ async function grantExecutableReadToSandboxGroup({ exePath, previous, getUserSta
     return;
   }
 }
-//@ chunk-fq0cr76a.js:865519-866237 placement
+//@ chunk-qg41pqt6.js:867214-867932 placement
 /**
  * MAX_PARENT_FOLDERS：向上查找父目录的上限；ACE_INHERIT_ONLY_MASK：仅继承 ACE 掩码；MAX_ACL_OPERATIONS：ACL 操作上限（同一声明共 15 个绑定）。
  */
@@ -387,7 +390,7 @@ var homeSandboxGroupAceSpec = {
     "in the sandbox, Node 20 and older releases of Node 22 may fail with EPERM, and in Git Bash mkdir -p with a full path may fail",
   codePrefix: "home_",
 };
-//@ chunk-fq0cr76a.js:866237-868346 placement
+//@ chunk-qg41pqt6.js:867932-870062 placement
 /**
  * 给项目/主目录的上级文件夹添加沙箱组的进入/读属性权限（可用环境变量关闭）。
  */
@@ -488,7 +491,7 @@ async function grantParentFoldersToSandboxGroup({ project, home, configHomes, ge
     logParentFolderGrant("unexpected_error", errorMessage(error));
   }
 }
-//@ chunk-fq0cr76a.js:868346-868567 placement
+//@ chunk-qg41pqt6.js:870062-870283 placement
 function listIntermediateDirs(left, right) {
   if (![left, right].every(isDriveAbsolutePath)) return [];
   let [leftResolved, rightResolved] = resolveWin32Pair(left, right);
@@ -504,11 +507,11 @@ function listIntermediateDirs(left, right) {
     win32.join(leftResolved, ...relativeSegments.slice(0, index)),
   );
 }
-//@ chunk-fq0cr76a.js:868567-868618 placement
+//@ chunk-qg41pqt6.js:870283-870334 placement
 function isDriveAbsolutePath(path) {
   return /^[A-Za-z]:[\\/]/.test(stripExtendedPathPrefix(path));
 }
-//@ chunk-fq0cr76a.js:868618-868826 placement
+//@ chunk-qg41pqt6.js:870334-870542 placement
 function describeUnresolvableFullName(path) {
   if (!isDriveAbsolutePath(path)) return path;
   let { real, code } = realpathNativeLongSync(path);
@@ -518,18 +521,18 @@ function describeUnresolvableFullName(path) {
     );
   return real ?? path;
 }
-//@ chunk-fq0cr76a.js:868826-868887 placement
+//@ chunk-qg41pqt6.js:870542-870603 placement
 function resolveWin32Pair(left, right) {
   return [win32.resolve(stripExtendedPathPrefix(left)), win32.resolve(stripExtendedPathPrefix(right))];
 }
-//@ chunk-fq0cr76a.js:868887-869001 placement
+//@ chunk-qg41pqt6.js:870603-870717 placement
 function getRelativeSegments(from, to) {
   let relativePath = win32.relative(from, to);
   return relativePath.split(win32.sep)[0] === ".." || win32.isAbsolute(relativePath)
     ? undefined
     : relativePath.split(win32.sep);
 }
-//@ chunk-fq0cr76a.js:869001-869802 placement
+//@ chunk-qg41pqt6.js:870717-871523 placement
 function parseAclEntries(buffer, sid, mask) {
   let uInt16LE = buffer.readUInt16LE(2);
   let uInt32LE = buffer.readUInt32LE(16);
@@ -538,7 +541,7 @@ function parseAclEntries(buffer, sid, mask) {
   let uInt16LE_2 = buffer.readUInt16LE(uInt32LE + 4);
   let offset = uInt32LE + ACE_INHERIT_FLAG_BYTE;
   let inheritOnlyOffset;
-  for (let j = 0; j < uInt16LE_2; j++) {
+  for (let aceIndex = 0; aceIndex < uInt16LE_2; aceIndex++) {
     let uInt8 = buffer.readUInt8(offset);
     let uInt8_2 = buffer.readUInt8(offset + 1);
     let uInt16LE = buffer.readUInt16LE(offset + 2);
@@ -577,19 +580,19 @@ function parseAclEntries(buffer, sid, mask) {
   buffer_2.writeUInt16LE(uInt16LE_2 + 1, MAX_ACL_SID_LENGTH + 4);
   return buffer_2;
 }
-//@ chunk-fq0cr76a.js:869802-869925 placement
+//@ chunk-qg41pqt6.js:871523-871646 placement
 function isFontWriteConsistent({ before, written, after }) {
   return (
     decodeFont(written).equals(decodeFont(after)) &&
     ((before.readUInt16LE(2) ^ after.readUInt16LE(2)) & (ACE_ACCESS_ALLOWED_TYPE | ACE_HEADER_SIZE)) === 0
   );
 }
-//@ chunk-fq0cr76a.js:869925-870008 placement (2.1.88 match: decodeFont, 0.816)
+//@ chunk-qg41pqt6.js:871646-871729 placement (2.1.88 match: decodeFont, 0.817)
 function decodeFont(buffer) {
   let cp = buffer.readUInt32LE(16);
   return buffer.subarray(cp, cp + buffer.readUInt16LE(cp + 2));
 }
-//@ chunk-fq0cr76a.js:870008-870232 placement
+//@ chunk-qg41pqt6.js:871729-871953 placement
 function encodeSidBuffer(groupSid) {
   let [revision, authority, ...subAuthorities] = groupSid.split("-").slice(1).map(Number);
   let buffer = Buffer.alloc(8 + 4 * subAuthorities.length);
@@ -599,7 +602,7 @@ function encodeSidBuffer(groupSid) {
   for (let [index, value] of subAuthorities.entries()) buffer.writeUInt32LE(value, 8 + 4 * index);
   return buffer;
 }
-//@ chunk-fq0cr76a.js:870232-870383 placement
+//@ chunk-qg41pqt6.js:871953-872104 placement
 function logParentFolderGrant(code, detail) {
   logForDebugging(
     `[sandbox] no folder gets an entry for the sandbox group (${detail}); ${SANDBOX_GROUP_INHERIT_RIGHTS}`,
@@ -609,7 +612,7 @@ function logParentFolderGrant(code, detail) {
   );
   logFeatureSad("sandbox_windows_parent_folder_grant", code);
 }
-//@ chunk-fq0cr76a.js:870383-871971 placement
+//@ chunk-qg41pqt6.js:872104-873692 placement
 function ensureSandboxGroupEntry(security, path, sid, spec) {
   try {
     let state = describeAclListState(security, path, sid, spec.mask, MAX_ACL_BYTES);
@@ -667,7 +670,7 @@ function ensureSandboxGroupEntry(security, path, sid, spec) {
     return `${spec.codePrefix}unexpected_error`;
   }
 }
-//@ chunk-fq0cr76a.js:871971-872386 placement
+//@ chunk-qg41pqt6.js:873692-874107 placement
 function describeAclListState(security, path, sid, mask, flags) {
   let handle = security.open(path, flags);
   try {
@@ -699,7 +702,7 @@ function describeAclListState(security, path, sid, mask, flags) {
   }
   return describeAclListState(security, path, sid, mask, flags | MAX_ACL_ENTRIES_BYTES);
 }
-//@ chunk-fq0cr76a.js:872386-872775 placement
+//@ chunk-qg41pqt6.js:874107-874496 placement
 /**
  * USER_SID_PATTERN：Windows 用户 SID 正则；WINDOWS_SANDBOX_FAILURES：Windows 沙箱准备失败原因枚举；sandboxDenyState：原生 deny 状态（同一声明共 3 个绑定）。
  */
@@ -707,7 +710,7 @@ var USER_SID_PATTERN_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js
 var USER_SID_PATTERN;
 var WINDOWS_SANDBOX_FAILURES;
 var sandboxDenyState;
-deferInit("chunk-fq0cr76a.js:872386", () => {
+deferInit("chunk-qg41pqt6.js:874107", () => {
   USER_SID_PATTERN_2 = /^S-1-5-21-\d+-\d+-\d+-\d+$/;
   USER_SID_PATTERN = [
     "bad_request",
@@ -748,7 +751,7 @@ deferInit("chunk-fq0cr76a.js:872386", () => {
     denyWrite: new Map(),
   };
 });
-//@ chunk-fq0cr76a.js:872775-873377 placement
+//@ chunk-qg41pqt6.js:874496-875098 placement
 function getSandboxUserStatus() {
   let subcommand =
     getPlatform() === "windows" && typeof Bun !== "undefined"
@@ -772,7 +775,7 @@ function getSandboxUserStatus() {
     return jsonParse(result.stdout);
   };
 }
-//@ chunk-fq0cr76a.js:873377-873731 placement
+//@ chunk-qg41pqt6.js:875098-875452 placement
 function describeLocalConnectionsOff(message, sentIds) {
   let { data: parsed } = WINDOWS_SANDBOX_FAILURES().safeParse(message);
   if (parsed === undefined) return;
@@ -791,18 +794,21 @@ function describeLocalConnectionsOff(message, sentIds) {
       }
     : undefined;
 }
-//@ chunk-fq0cr76a.js:873731-874155 placement
-function splitDenyLists(lists, configured, expand) {
+//@ chunk-qg41pqt6.js:875452-875866 placement
+function splitDenyLists(denies, installedConfiguredDenies, denySinglePath) {
   return ["denyRead", "denyWrite"]
     .flatMap((listName) =>
-      lists[listName].map((spelling) => ({
+      denies[listName].map((spelling) => ({
         list: listName,
         spelling,
       })),
     )
-    .filter(({ spelling }) => !configured.has(spelling) && !/[*?[\]{}]/.test(spelling))
+    .filter(
+      ({ spelling }) =>
+        !installedConfiguredDenies.has(spelling) && !containsGlobCharsWin(stripExtendedPathPrefix(spelling)),
+    )
     .flatMap(({ list, spelling }) => {
-      let [first, ...rest] = expand(spelling);
+      let [first, ...rest] = denySinglePath(spelling);
       return first === undefined || rest.length > 0
         ? []
         : [
@@ -821,7 +827,7 @@ function splitDenyLists(lists, configured, expand) {
       refuse: list === "denyRead" ? "read" : "write",
     }));
 }
-//@ chunk-fq0cr76a.js:874155-874357 placement
+//@ chunk-qg41pqt6.js:875866-876068 placement
 function collectDenyPaths(entries, pathFor) {
   let mapped = entries.map((entry) => [entry.list, entry.spelling, pathFor(entry)]);
   return {
@@ -833,7 +839,7 @@ function collectDenyPaths(entries, pathFor) {
     ),
   };
 }
-//@ chunk-fq0cr76a.js:874357-874614 placement
+//@ chunk-qg41pqt6.js:876068-876325 placement
 function describeDeniesNotRenewed(reason, atStart, detail = "") {
   logForDebugging(
     `[sandbox] Windows: Bun's sub-command did not write the deny entries (${reason}${detail}); ${atStart ? "srt-win writes them all" : "they were not renewed before this command"}`,
@@ -846,7 +852,7 @@ function describeDeniesNotRenewed(reason, atStart, detail = "") {
   });
   return sandboxDenyState;
 }
-//@ chunk-fq0cr76a.js:874614-875681 placement
+//@ chunk-qg41pqt6.js:876325-877391 placement
 /**
  * 用 Bun 子命令写入 Windows deny 条目并核对（账号异常、回答不可读）。
  */
@@ -905,7 +911,7 @@ async function writeWindowsDenyEntries({ lists, configured, grantRoots, user, at
     return describeDeniesNotRenewed("threw", atStart, `: ${errorMessage(error)}`);
   }
 }
-//@ chunk-fq0cr76a.js:875681-875802 placement
+//@ chunk-qg41pqt6.js:877391-877512 placement
 /**
  * 判断 Windows 原生拒绝列表是否全部已应用（每个条目都有结果，或被回调认可为可忽略）。
  */
@@ -917,14 +923,14 @@ function areNativeDeniesComplete(state, unregistered = () => false) {
     )
   );
 }
-//@ chunk-fq0cr76a.js:875802-875885 placement
+//@ chunk-qg41pqt6.js:877512-877595 placement
 /**
  * hasAnyDeniedPath：是否有启用中的读/写拒绝。
  */
 function hasAnyDeniedPath(state) {
   return [...state.denyRead.values(), ...state.denyWrite.values()].some((applied) => applied);
 }
-//@ chunk-fq0cr76a.js:875885-876008 placement
+//@ chunk-qg41pqt6.js:877595-877718 placement
 /**
  * 合并原生拒绝状态：保留仍在配置中的条目，新结果覆盖旧结果。
  */
@@ -934,7 +940,7 @@ function mergeNativeDenyState(now, next, filesystem) {
     denyWrite: mergeDenyMap(now.denyWrite, next.denyWrite, filesystem.denyWrite),
   };
 }
-//@ chunk-fq0cr76a.js:876008-876128 placement
+//@ chunk-qg41pqt6.js:877718-877838 placement
 function mergeDenyMap(now, next, allowed) {
   let allowedSet = new Set(allowed);
   return new Map(
@@ -943,7 +949,7 @@ function mergeDenyMap(now, next, allowed) {
     ),
   );
 }
-//@ chunk-fq0cr76a.js:876128-876273 placement
+//@ chunk-qg41pqt6.js:877838-877983 placement
 /**
  * 从配置中去掉已由原生拒绝成功应用的读/写拒绝条目。
  */
@@ -954,7 +960,7 @@ function dropAppliedNativeDenies(filesystem, state) {
     denyWrite: filesystem.denyWrite.filter((path) => state.denyWrite.get(path) !== true),
   };
 }
-//@ chunk-fq0cr76a.js:876335-876439 placement
+//@ chunk-qg41pqt6.js:878045-878149 placement
 /**
  * 整理 git 的 home 与配置目录（只取绝对路径并规范化）。
  */
@@ -964,7 +970,7 @@ function getGitHomeInfo(home, configHomes) {
     configHomes: configHomes.filter(win32.isAbsolute).map(normalizeGitPathArg),
   };
 }
-//@ chunk-fq0cr76a.js:876439-876539 placement
+//@ chunk-qg41pqt6.js:878149-878249 placement
 /**
  * 判断路径是否位于 git 的 home 或任一配置目录之下。
  */
@@ -975,34 +981,35 @@ function isUnderGitHome(path, { home, configHomes }) {
     configHomes.some((configHome) => isSameArray(normalized, configHome))
   );
 }
-//@ chunk-fq0cr76a.js:876539-876888 placement
+//@ chunk-qg41pqt6.js:878249-878598 placement
 var HOME_AS_CWD_NOTE =
   "Claude Code's working folder is your home folder, a folder that contains it, or Claude Code's config folder. The Windows sandbox doesn't start there, because sandboxed commands from other sessions could then reach your settings and credentials. Start a new session in a project folder, or move this one there (`/cd <folder>` in a terminal)";
-//@ chunk-fq0cr76a.js:876888-876912 placement
+//@ chunk-qg41pqt6.js:878598-878622 placement
 /**
  * WindowsSandboxError：Windows 沙箱错误类。
  */
 class WindowsSandboxError_2 extends Error {}
 export {
-  rgRunner,
   CLAUDECODESANDBOX,
-  formatProfileForgetHint,
-  grantExecutableReadToSandboxGroup,
+  rgRunner,
   describeWindowsSandboxRemedy,
   isWindowsSandboxEnabled,
+  hasWindowsSandboxBeenOn,
   getGitHomeInfo,
   isUnderGitHome,
   isSeclogonAccessDenied,
   WindowsSandboxError_2,
   HOME_AS_CWD_NOTE,
   grantParentFoldersToSandboxGroup,
+  grantExecutableReadToSandboxGroup,
   getSandboxUserStatus,
   writeWindowsDenyEntries,
   mergeNativeDenyState,
   hasAnyDeniedPath,
   dropAppliedNativeDenies,
+  splitDenyLists,
   areNativeDeniesComplete,
-  hasWindowsSandboxBeenOn,
   USER_SID_RE,
+  formatProfileForgetHint,
   escapeInvalidCharClasses,
 };

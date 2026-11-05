@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。恢复工作流启动：校验事件、下载与校验包、启动并记录结果，失败重试有上限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n2x174m4.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-er9x2g41.js (21)
  * attribution: placement 21
  */
 import { createHash, timingSafeEqual, randomUUID } from "crypto";
@@ -28,7 +28,7 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/feature
 import { env } from "../../utils/env.js";
 import { isReviewSession } from "../../utils/sessionAccessToken.js";
 
-//@ chunk-n2x174m4.js:743-878 placement
+//@ chunk-er9x2g41.js:743-878 placement
 /**
  * 工作流启动恢复用的包大小上限、文件存储前缀与对象名正则。
  */
@@ -37,7 +37,7 @@ var MAX_BUNDLE_BYTES = 4194304;
 var WORKFLOW_FILESTORE_PREFIX = "/.workflow/";
 var WORKFLOW_LAUNCH_DIGEST_ENV = "CLAUDE_CODE_WORKFLOW_LAUNCH_SHA256";
 var FILESTORE_OBJECT_REGEX = /^(?!\.+$)[A-Za-z0-9._-]{1,128}$/;
-//@ chunk-n2x174m4.js:878-1805 placement
+//@ chunk-er9x2g41.js:878-1805 placement
 /**
  * 校验启动事件字段
  */
@@ -78,18 +78,18 @@ function validateLaunchEvent(event) {
     },
   };
 }
-//@ chunk-n2x174m4.js:1805-1917 placement
+//@ chunk-er9x2g41.js:1805-1917 placement
 function digestMatches(buf, expectedHex) {
   let actual = createHash("sha256").update(buf).digest();
   let buffer = Buffer.from(expectedHex, "hex");
   return buffer.length === actual.length && timingSafeEqual(actual, buffer);
 }
-//@ chunk-n2x174m4.js:1917-1925 placement
+//@ chunk-er9x2g41.js:1917-1925 placement
 /**
  * 工作流包的格式版本常量。
  */
 var WORKFLOW_BUNDLE_VERSION = 1;
-//@ chunk-n2x174m4.js:1925-2715 placement
+//@ chunk-er9x2g41.js:1925-2715 placement
 /**
  * 解析工作流包帧
  */
@@ -140,7 +140,7 @@ function parseWorkflowBundle(buf) {
     argsJson: argsFrame.buf.toString("utf8"),
   };
 }
-//@ chunk-n2x174m4.js:2715-2793 placement
+//@ chunk-er9x2g41.js:2715-2793 placement
 function createWorkflowLaunchState(restoredRecord = null) {
   return {
     ledger: new Map(),
@@ -148,7 +148,7 @@ function createWorkflowLaunchState(restoredRecord = null) {
     restoredRecord,
   };
 }
-//@ chunk-n2x174m4.js:2793-2988 placement
+//@ chunk-er9x2g41.js:2793-2988 placement
 /**
  * 工作流启动记录 schema
  */
@@ -161,7 +161,7 @@ var launchRecordSchema = DoctorLazy(() =>
     settled: booleanSchema(),
   }),
 );
-//@ chunk-n2x174m4.js:2988-3378 placement
+//@ chunk-er9x2g41.js:2988-3378 placement
 function readWorkflowLaunchRecord(raw) {
   let parsed = launchRecordSchema().safeParse(raw);
   if (!parsed.success) return null;
@@ -178,7 +178,7 @@ function readWorkflowLaunchRecord(raw) {
     settled: parsed.data.settled,
   };
 }
-//@ chunk-n2x174m4.js:3378-3494 placement
+//@ chunk-er9x2g41.js:3378-3494 placement
 class WorkflowLaunchHandoffs {
   slots = new Map();
   stash(key, handoff) {
@@ -190,13 +190,13 @@ class WorkflowLaunchHandoffs {
     return handoff;
   }
 }
-//@ chunk-n2x174m4.js:3494-3527 placement
+//@ chunk-er9x2g41.js:3494-3527 placement
 /**
  * 记录写回时等待 flush 的默认超时。
  */
 var workflowLaunchHandoffs = new HostScoped(() => new WorkflowLaunchHandoffs());
 var DEFAULT_RECORD_FLUSH_TIMEOUT_MS = 5000;
-//@ chunk-n2x174m4.js:3527-3652 placement
+//@ chunk-er9x2g41.js:3527-3652 placement
 async function flushLaunchRecord(record) {
   return (
     (await withDeadline(
@@ -207,13 +207,13 @@ async function flushLaunchRecord(record) {
     )) === true
   );
 }
-//@ chunk-n2x174m4.js:3652-3678 placement
+//@ chunk-er9x2g41.js:3652-3678 placement
 /**
  * 启动失败的退避延迟序列与最长尝试延迟。
  */
 var LAUNCH_RETRY_BACKOFF_MS = [1000, 3000];
 var MAX_LAUNCH_ATTEMPT_DELAY_MS = 1e4;
-//@ chunk-n2x174m4.js:3678-3912 placement
+//@ chunk-er9x2g41.js:3678-3912 placement
 /**
  * 发出 workflow_launch_result 事件
  */
@@ -229,7 +229,7 @@ function postLaunchResultEvent(host, artifactLine, options) {
   if (options.artifactSha256 !== undefined) event.artifact_sha256 = options.artifactSha256;
   host.postEvent(event);
 }
-//@ chunk-n2x174m4.js:3912-4045 placement
+//@ chunk-er9x2g41.js:3912-4045 placement
 function reportLaunchFailure(host, layer, message, options) {
   postLaunchResultEvent(host, remoteWorkflowErrorLine(layer, message), options);
   logForDiagnosticsNoPII("warn", "workflow_launch_failed", {
@@ -240,7 +240,7 @@ function reportLaunchFailure(host, layer, message, options) {
     layer: fromEnum(layer),
   });
 }
-//@ chunk-n2x174m4.js:4045-4105 placement
+//@ chunk-er9x2g41.js:4045-4105 placement
 /**
  * 上报工作流启动失败（事件 + 功能降级日志）。
  */
@@ -248,7 +248,7 @@ function reportWorkflowLaunchFailure(host, layer, message, options) {
   reportLaunchFailure(host, layer, message, options);
   logFeatureBad("workflow_event_launch", layer);
 }
-//@ chunk-n2x174m4.js:4105-4215 placement
+//@ chunk-er9x2g41.js:4105-4215 placement
 function settleLaunchFailedFinal(session, uuid, layer, message, options) {
   reportWorkflowLaunchFailure(session, layer, message, options);
   session.state.ledger.set(uuid, {
@@ -257,7 +257,7 @@ function settleLaunchFailedFinal(session, uuid, layer, message, options) {
   });
   session.ackProcessed(uuid);
 }
-//@ chunk-n2x174m4.js:4215-4396 placement
+//@ chunk-er9x2g41.js:4215-4396 placement
 /**
  * 启动失败定案
  */
@@ -275,7 +275,7 @@ async function settleLaunchFailed(session, record, layer, message, options) {
   reportWorkflowLaunchFailure(session, layer, message, options);
   session.ackProcessed(eventUuid);
 }
-//@ chunk-n2x174m4.js:4396-6626 placement
+//@ chunk-er9x2g41.js:4396-6626 placement
 /**
  * 下载、校验并启动工作流包
  */
@@ -397,7 +397,7 @@ async function attemptWorkflowLaunch(session, entry, pointer, options, restoredR
     attempt: attempts,
   });
 }
-//@ chunk-n2x174m4.js:6626-6928 placement
+//@ chunk-er9x2g41.js:6626-6928 placement
 /**
  * 重试用尽定案
  */
@@ -418,7 +418,7 @@ function settleAttemptsSpent(session, record) {
   });
   logFeatureSad("workflow_event_launch", "attempts_spent");
 }
-//@ chunk-n2x174m4.js:6928-8171 placement
+//@ chunk-er9x2g41.js:6928-8171 placement
 async function handleWorkflowLaunchEvent(event, session) {
   let uuid = typeof event.uuid === "string" ? event.uuid : undefined;
   if (!uuid) {
@@ -504,7 +504,7 @@ async function handleWorkflowLaunchEvent(event, session) {
   session.state.firstLaunch = ledgerEntry;
   await attemptWorkflowLaunch(session, ledgerEntry, pointer, options, matchingRecord);
 }
-//@ chunk-n2x174m4.js:8171-9487 placement
+//@ chunk-er9x2g41.js:8171-9487 placement
 /**
  * 恢复工作流启动：校验事件、下载与校验包、启动并记录结果，失败重试有上限。
  */

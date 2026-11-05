@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Remote Control 桥接宿主侧状态（入站/宿主两组状态机常量）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s7k22nbx.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ye9b0w2w.js (8)
  * attribution: placement 8
  */
 import { createMutex } from "../utils/promiseQueue.js";
@@ -13,7 +13,7 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s7k22nbx.js:297-1519 placement
+//@ chunk-ye9b0w2w.js:298-1520 placement
 class BridgeInboundState {
   filterPolicy = undefined;
   dropNotifier = undefined;
@@ -61,7 +61,7 @@ class BridgeInboundState {
     this.reportedCloudWorkerCodes.clear();
   }
 }
-//@ chunk-s7k22nbx.js:1519-2045 placement
+//@ chunk-ye9b0w2w.js:1520-2046 placement
 /**
  * Remote Control 跨会话消息宿主状态容器：出站对端/投递、订阅器启停、实时 socket、身份解析、待同意回复、恢复游标等字段，单例 antproto。
  */
@@ -91,7 +91,7 @@ class PeerMessagingHostState {
   lastArmedSendAtMs = null;
   onReceiveStateChanged = null;
 }
-//@ chunk-s7k22nbx.js:2045-2212 placement
+//@ chunk-ye9b0w2w.js:2046-2213 placement
 class InboundReadReceiptsState {
   held = new Map();
   settled = [];
@@ -104,7 +104,7 @@ class InboundReadReceiptsState {
     this.sessionId = undefined;
   }
 }
-//@ chunk-s7k22nbx.js:2212-2399 placement
+//@ chunk-ye9b0w2w.js:2213-2400 placement
 class RepoCheckoutsState {
   checkouts = null;
   baseRefs = null;
@@ -117,7 +117,7 @@ class RepoCheckoutsState {
     this.lastEmittedBranches = {};
   }
 }
-//@ chunk-s7k22nbx.js:2399-3863 placement
+//@ chunk-ye9b0w2w.js:2400-3865 placement
 class BridgeHostState {
   attestation = new BridgeInboundState();
   replHandle = null;
@@ -176,22 +176,22 @@ class BridgeHostState {
   repoCheckouts = new RepoCheckoutsState();
   inboundReadReceipts = new InboundReadReceiptsState();
 }
-//@ chunk-s7k22nbx.js:3863-3888 placement
+//@ chunk-ye9b0w2w.js:3865-3890 placement
 /**
  * 按会话宿主缓存的 BridgeHostState（桥接宿主侧状态机，包含 attestation、已读回执等）。
  */
 var BRIDGE_HOST_STATE_SLOT; // deferred: uses BridgeHostState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s7k22nbx.js:3863", () => {
+deferInit("chunk-ye9b0w2w.js:3865", () => {
   BRIDGE_HOST_STATE_SLOT = new HostScoped(() => new BridgeHostState());
 });
-//@ chunk-s7k22nbx.js:3888-3926 placement
+//@ chunk-ye9b0w2w.js:3890-3928 placement
 /**
  * 取当前根会话宿主的 BridgeHostState；桥接层 90 多处调用它读写 attestation/回执/占位记录等状态。
  */
 function bridgeHostState() {
   return BRIDGE_HOST_STATE_SLOT.of(getRootSession().host);
 }
-//@ chunk-s7k22nbx.js:3926-4004 placement (2.1.88 match: toCompatSessionId, 1)
+//@ chunk-ye9b0w2w.js:3928-4006 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * cse_xxx → session_xxx（其它原样）。
  */

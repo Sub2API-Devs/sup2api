@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/sdk/resources/beta/organization/api-keys.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
 import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { Page } from "../../../core/pagination.mjs";
 
-//@ chunk-hwmsct5x.js:119155-119462 esm-fingerprint
+//@ chunk-vn3g7zt8.js:119535-119842 esm-fingerprint
 class APIKeys extends APIResource {
   retrieve(apiKeyID, options) {
     return this._client.get(parseUrl_2`/v1/organizations/api_keys/${apiKeyID}?beta=true`, options);

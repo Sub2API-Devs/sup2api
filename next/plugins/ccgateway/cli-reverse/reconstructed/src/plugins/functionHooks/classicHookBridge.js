@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把传统 settings 钩子事件桥接为 classic.<HookEvent> 函数钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (29)
  * attribution: placement 27, affinity 1, sole-consumer 1
  */
 import { import_reject, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -16,11 +16,11 @@ import { classicSiteName, noteWithheldPostToolUse } from "./toolCallHooks.js";
 import { awaitHooksRespawnUnlessSessionEnd, hookMembersFor, hookOriginFromStack } from "./hookDispatch.js";
 import { reportChainFailure } from "./dispatch/chain.js";
 import { classicSite } from "./sites/siteRules.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { stableStringifySafe } from "../../utils/hooks/hookSerialization.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 
-//@ chunk-e6aww6q8.js:37217-37325 placement
+//@ chunk-5xgkngpb.js:39805-39913 placement
 function stripNonAllowInterrupt(decision) {
   if (decision.behavior === "allow") return decision;
   let { interrupt, ...rest } = decision;
@@ -31,7 +31,7 @@ function stripNonAllowInterrupt(decision) {
       }
     : rest;
 }
-//@ chunk-e6aww6q8.js:37325-38105 placement
+//@ chunk-5xgkngpb.js:39913-40693 placement
 /**
  * 把一次钩子执行结果转成统一的聚合字段（block、preventContinuation、additionalContext、permissionDecision、decision、updatedToolOutput 等）。
  */
@@ -60,14 +60,14 @@ function toHookAggregateFields(hookResult, hookEvent) {
     displayContent: hookResult.displayContent,
   };
 }
-//@ chunk-e6aww6q8.js:38105-38139 placement
+//@ chunk-5xgkngpb.js:40693-40727 placement
 var omitUndefined = (value) => import_reject(value, (entry) => entry === undefined);
-//@ chunk-e6aww6q8.js:38139-38175 placement
+//@ chunk-5xgkngpb.js:40727-40763 placement
 var emptyHookAggregate = () => ({
   result: {},
   yields: [],
 });
-//@ chunk-e6aww6q8.js:38761-38887 affinity
+//@ chunk-5xgkngpb.js:41349-41475 affinity
 /**
  * 消费钩子结果流并逐个合并，返回 {result, yields}。
  */
@@ -83,13 +83,13 @@ async function aggregateHookResults(results, hookEvent) {
     };
   return aggregate;
 }
-//@ chunk-e6aww6q8.js:38887-39007 placement
+//@ chunk-5xgkngpb.js:41475-41595 placement
 var isBlockingAggregate = (result) =>
   result.block !== undefined ||
   result.preventContinuation === true ||
   result.permissionDecision === "deny" ||
   result.decision?.behavior === "deny";
-//@ chunk-e6aww6q8.js:39007-39148 placement
+//@ chunk-5xgkngpb.js:41595-41736 placement
 var mergeIntoBelowAggregate = (below, above) => ({
   ...mergeHookAggregates_2(below, omitUndefined(above)),
   ...omitUndefined(
@@ -102,13 +102,13 @@ var mergeIntoBelowAggregate = (below, above) => ({
     ]),
   ),
 });
-//@ chunk-e6aww6q8.js:39148-39273 placement
+//@ chunk-5xgkngpb.js:41736-41861 placement
 function blockReasonOf(result) {
   return result.block === undefined && result.permissionDecision === "deny"
     ? (result.permissionDecisionReason ?? "Blocked by hook")
     : result.block;
 }
-//@ chunk-e6aww6q8.js:39452-39825 sole-consumer
+//@ chunk-5xgkngpb.js:42040-42413 sole-consumer
 /**
  * 从经典钩子结果中取出权限相关字段（决定、原因、decision）。
  */
@@ -124,7 +124,7 @@ function permissionFieldsOf(result) {
   if (updatedInput !== undefined) fields.updatedInput = updatedInput;
   return fields;
 }
-//@ chunk-e6aww6q8.js:39825-39992 placement
+//@ chunk-5xgkngpb.js:42413-42580 placement
 var PASSTHROUGH_HOOK_FIELDS = [
   "updatedToolOutput",
   "updatedMCPToolOutput",
@@ -136,7 +136,7 @@ var PASSTHROUGH_HOOK_FIELDS = [
   "retry",
   "displayContent",
 ];
-//@ chunk-e6aww6q8.js:39992-40436 placement
+//@ chunk-5xgkngpb.js:42580-43024 placement
 /**
  * 把经典钩子的结果转换为钩子运行器的 yield 形状（阻断错误、权限字段等）。
  */
@@ -160,7 +160,7 @@ function toClassicYield(result, results, command) {
       });
   return fields;
 }
-//@ chunk-e6aww6q8.js:40436-40589 placement
+//@ chunk-5xgkngpb.js:43024-43177 placement
 var createClassicCoreHandler = (runClassicHooks, onManaged) => ({
   name: "core",
   isCore: true,
@@ -176,9 +176,9 @@ var createClassicCoreHandler = (runClassicHooks, onManaged) => ({
     return result.result;
   },
 });
-//@ chunk-e6aww6q8.js:40589-40606 placement
+//@ chunk-5xgkngpb.js:43177-43194 placement
 var MANAGED = "managed";
-//@ chunk-e6aww6q8.js:40606-40795 placement
+//@ chunk-5xgkngpb.js:43194-43383 placement
 var createManagedClassicHandler = (runClassicHooks, onManaged) => ({
   name: MANAGED,
   isManaged: true,
@@ -196,7 +196,7 @@ var createManagedClassicHandler = (runClassicHooks, onManaged) => ({
       : mergeIntoBelowAggregate(managed.result, await result(input));
   },
 });
-//@ chunk-e6aww6q8.js:40795-41085 placement
+//@ chunk-5xgkngpb.js:43383-43675 placement
 /**
  * 把 settings 钩子结果放进函数钩子链：托管钩子在最前、插件 classic.<事件> 钩子居中、普通 settings 钩子在底部；钩子进程重启时等待后重试。
  */
@@ -228,21 +228,21 @@ function runClassicHookChain(options) {
           origin: hookOriginFromStack(origin),
         }))();
 }
-//@ chunk-e6aww6q8.js:41085-41202 placement
+//@ chunk-5xgkngpb.js:43675-43792 placement
 var expandPermissionFields = (fields) =>
-  uniq(
+  normalizeCaseForComparison_2(
     fields.flatMap((field) => {
       let names = ["permissionDecision", "permissionDecisionReason"];
       return names.includes(field) ? names : [field];
     }),
   );
-//@ chunk-e6aww6q8.js:41202-41260 placement
+//@ chunk-5xgkngpb.js:43792-43850 placement
 /**
  * 合并托管与核心的钩子结果
  */
 var mergeHookAggregates = (aggregate) =>
   mergeHookAggregates_2(aggregate.managed?.result ?? {}, aggregate.core?.result ?? {});
-//@ chunk-e6aww6q8.js:41260-41942 placement
+//@ chunk-5xgkngpb.js:43850-44532 placement
 function bridgeClassicHookResult(reason, event) {
   let isPreModelSwitch = event === "PreModelSwitch";
   switch (reason) {
@@ -273,7 +273,7 @@ function bridgeClassicHookResult(reason, event) {
       return [];
   }
 }
-//@ chunk-e6aww6q8.js:41942-42329 placement
+//@ chunk-5xgkngpb.js:44532-44928 placement
 /**
  * 比较经典钩子结果与托管/核心 yield 的差异，列出不一致的字段。
  */
@@ -281,7 +281,7 @@ function diffClassicYields(input, aggregate, info) {
   let yields = [...(aggregate.managed?.yields ?? []), ...(aggregate.core?.yields ?? [])];
   let before = input;
   let after = mergeHookAggregates(aggregate);
-  let fields = uniq([...Object.keys(before), ...Object.keys(after)]).filter(
+  let fields = normalizeCaseForComparison_2([...Object.keys(before), ...Object.keys(after)]).filter(
     (key) => stableStringifySafe(before[key]) !== stableStringifySafe(after[key]),
   );
   if (fields.length === 0) return yields;
@@ -292,7 +292,7 @@ function diffClassicYields(input, aggregate, info) {
   let classicYield = toClassicYield(pickAlias(input, expandPermissionFields(fields)), yields, info.command);
   return Object.keys(classicYield).length === 0 ? filtered : [...filtered, classicYield];
 }
-//@ chunk-e6aww6q8.js:42329-42640 placement
+//@ chunk-5xgkngpb.js:44928-45239 placement
 /**
  * classic 事件的生成器入口：运行钩子链后，按插件钩子对结果的改写产出最终的 yield 序列（PostToolUse 时可被扣留）。
  */
@@ -329,7 +329,7 @@ async function* runClassicEventThroughHooks({
     },
   );
 }
-//@ chunk-e6aww6q8.js:42640-42702 placement
+//@ chunk-5xgkngpb.js:45239-45301 placement
 /**
  * 被阻断的结果
  */
@@ -339,7 +339,7 @@ var blockedResult = (command, output) => ({
   output,
   blocked: true,
 });
-//@ chunk-e6aww6q8.js:42702-42788 placement
+//@ chunk-5xgkngpb.js:45301-45387 placement
 /**
  * 输出按行拆分
  */
@@ -355,7 +355,7 @@ function splitOutputLines(output) {
       .at(-1) ?? ""
   );
 }
-//@ chunk-e6aww6q8.js:42788-42898 placement
+//@ chunk-5xgkngpb.js:45387-45497 placement
 /**
  * 从成功且未被扣留的钩子输出中取第一个非空 worktree 路径。
  */
@@ -365,7 +365,7 @@ function firstWorktreePathOutput(results) {
     .map((result) => splitOutputLines(result.output))
     .find((lines) => lines.length > 0);
 }
-//@ chunk-e6aww6q8.js:42898-43025 placement
+//@ chunk-5xgkngpb.js:45497-45624 placement
 function summarizeOutsideReplResults(results, event) {
   let found = results.find((result) => result.blocked);
   let isWorktreeCreate = event === "WorktreeCreate";
@@ -374,7 +374,7 @@ function summarizeOutsideReplResults(results, event) {
     worktreePath: isWorktreeCreate ? firstWorktreePathOutput(results) : undefined,
   });
 }
-//@ chunk-e6aww6q8.js:43025-43300 placement
+//@ chunk-5xgkngpb.js:45624-45899 placement
 var createOutsideReplHandler = (config, options, collect) => ({
   name: options.managedHooksOnly === true ? MANAGED : "core",
   ...(options.managedHooksOnly === true
@@ -395,7 +395,7 @@ var createOutsideReplHandler = (config, options, collect) => ({
       : mergeIntoBelowAggregate(summary, await next(input));
   },
 });
-//@ chunk-e6aww6q8.js:43300-43362 placement
+//@ chunk-5xgkngpb.js:45899-45961 placement
 /**
  * 成功结果
  */
@@ -405,7 +405,7 @@ var succeededResult = (command, output) => ({
   output,
   blocked: false,
 });
-//@ chunk-e6aww6q8.js:43362-43671 placement
+//@ chunk-5xgkngpb.js:45961-46270 placement
 /**
  * 在 REPL 之外运行经典钩子时调和各结果（阻断与 WorktreeCreate 路径一致性）。
  */
@@ -426,7 +426,7 @@ function reconcileOutsideReplResults(results, aggregate, info) {
     ...(worktreePath === undefined ? [] : [succeededResult(info.command, worktreePath)]),
   ];
 }
-//@ chunk-e6aww6q8.js:43671-44052 placement
+//@ chunk-5xgkngpb.js:46270-46651 placement
 /**
  * 非 REPL 场景（如 WorktreeCreate）下运行函数钩子链：托管与普通 settings 钩子分别在两端，最后把钩子改写的阻断/worktree 路径合并回结果列表。
  */
@@ -479,7 +479,7 @@ async function runOutsideReplHookChain(options) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:44052-44154 placement
+//@ chunk-5xgkngpb.js:46651-46753 placement
 /**
  * 在钩子成员列表前后加上可选的首/尾处理器。
  */
@@ -491,10 +491,10 @@ function withChainEnds(head, middle, tail) {
 }
 export {
   omitUndefined,
-  runClassicHookChain,
+  withChainEnds,
   MANAGED,
   firstWorktreePathOutput,
   runClassicEventThroughHooks,
   runOutsideReplHookChain,
-  withChainEnds,
+  runClassicHookChain,
 };

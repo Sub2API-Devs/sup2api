@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。解析 hearth 工作者绑定（项目线程回复的 MCP 挂载信息），校验 id、服务名与地址来源。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9wab212f.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0rb4hcqt.js (4)
  * attribution: placement 4
  */
 import {
@@ -15,13 +15,13 @@ import {
   HEARTH_TOOL_NAMES,
 } from "../services/mcp/ccrMetaMcp.js";
 import { logForDebugging } from "../utils/debug.js";
-import { originIfValid } from "../services/mcp/ccrMcpUrls.js";
+import { originIfValid, originOfUrl } from "../services/mcp/ccrMcpUrls.js";
 import { parseMetaMcpTools } from "./metaMcpTools.js";
 import { validateBridgeId } from "./sessionIdCompat.js";
 
-//@ chunk-9wab212f.js:384-417 placement
+//@ chunk-0rb4hcqt.js:388-421 placement
 var HEARTH_BINDING_CHANGED_HINT = "hearth_binding_changed";
-//@ chunk-9wab212f.js:417-1942 placement
+//@ chunk-0rb4hcqt.js:421-1944 placement
 /**
  * 解析 hearth 工作者绑定（项目线程回复的 MCP 挂载信息），校验 id、服务名与地址来源。
  */
@@ -91,7 +91,7 @@ function decodeHearthWorkerBinding(record, options) {
     };
   }
   if (
-    url.origin !== origin ||
+    originOfUrl(url) !== origin ||
     url.pathname !== hearthMcpPath(options.sessionId) ||
     url.search !== "" ||
     url.hash !== "" ||
@@ -125,9 +125,9 @@ function decodeHearthWorkerBinding(record, options) {
     },
   };
 }
-//@ chunk-9wab212f.js:1942-1988 placement
+//@ chunk-0rb4hcqt.js:1944-1990 placement
 var HEARTH_SESSION_URL_PATTERN = /^(.*)\/v1\/code\/sessions\/([^/?#]+)$/;
-//@ chunk-9wab212f.js:1988-2150 placement
+//@ chunk-0rb4hcqt.js:1990-2152 placement
 function parseBridgeSdkUrl(sdkUrl) {
   if (!sdkUrl) return null;
   let match = HEARTH_SESSION_URL_PATTERN.exec(sdkUrl);

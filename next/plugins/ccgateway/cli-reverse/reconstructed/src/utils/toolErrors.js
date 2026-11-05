@@ -3,9 +3,9 @@
  *
  * 工具错误格式化：zod 输入校验错误、Exit code/stderr/stdout 片段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolErrors.ts
- * pieces: chunk-aepeg2w5.js (9), chunk-e6aww6q8.js (5)
+ * pieces: chunk-5xgkngpb.js (5), chunk-exfmq47h.js (9)
  * attribution: placement 10, fingerprint 3, file-local 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -17,21 +17,21 @@ import { MODEL_FACING_MESSAGE_KEY } from "../tools/ArtifactTool/publishEdits.js"
 import { truncateWithCount, plural } from "./stringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:50738-50779 placement
+//@ chunk-exfmq47h.js:51198-51239 placement
 /**
  * 等待中且未结束。
  */
 var isPendingNotOver = (state) => !state.isOver && state.isPending === true;
-//@ chunk-aepeg2w5.js:50779-50861 placement
+//@ chunk-exfmq47h.js:51239-51321 placement
 var createPendingFlagState = () => ({
   isPending: undefined,
   hasHeld: false,
   isOver: false,
   over: Promise.withResolvers(),
 });
-//@ chunk-aepeg2w5.js:51173-51223 placement
+//@ chunk-exfmq47h.js:51649-51699 placement
 var doctorHintSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:51173", () => {
+deferInit("chunk-exfmq47h.js:51649", () => {
   doctorHintSchema = DoctorLazy(() =>
     objectSchema({
       root: stringSchema(),
@@ -39,18 +39,18 @@ deferInit("chunk-aepeg2w5.js:51173", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:51223-51256 placement
+//@ chunk-exfmq47h.js:51699-51732 placement
 async function noToolErrorText(context) {
   return null;
 }
-//@ chunk-aepeg2w5.js:51256-51283 placement
+//@ chunk-exfmq47h.js:51732-51759 placement
 var doctorTextSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:51256", () => {
+deferInit("chunk-exfmq47h.js:51732", () => {
   doctorTextSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-aepeg2w5.js:51283-51303 placement
+//@ chunk-exfmq47h.js:51759-51779 placement
 var VERSIONED_MODEL_RE = /^[a-z]+-\d/;
-//@ chunk-aepeg2w5.js:51303-51440 placement
+//@ chunk-exfmq47h.js:51779-51916 placement
 /**
  * 不区分大小写判断文本是否包含任一非空关键字。
  */
@@ -60,10 +60,10 @@ function includesAnyIgnoreCase(haystack, needles) {
     if (typeof needle === "string" && needle.length > 0 && lower.includes(needle.toLowerCase())) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:51477-51548 placement
+//@ chunk-exfmq47h.js:51953-52024 placement
 var MAX_ERROR_TEXT_CHARS = 1024;
 var TRUNCATION_MARKER_RE = /\n\n\.\.\. \[(\d+) characters truncated\] \.\.\.\n\n/g;
-//@ chunk-aepeg2w5.js:51548-51611 fingerprint (2.1.88 match: formatError, 0.792)
+//@ chunk-exfmq47h.js:52024-52087 fingerprint (2.1.88 match: formatError, 0.787)
 function formatError(error) {
   return `
 
@@ -71,10 +71,10 @@ function formatError(error) {
 
 `;
 }
-//@ chunk-e6aww6q8.js:998058-998077 placement
+//@ chunk-5xgkngpb.js:1011823-1011842 placement
 var MAX_ZOD_ERROR_PARTS = 20;
 var MAX_ZOD_MESSAGE_CHARS = 500;
-//@ chunk-e6aww6q8.js:998077-998547 placement
+//@ chunk-5xgkngpb.js:1011842-1012311 placement
 /**
  * 把工具执行错误转成给模型的文本：中断错误用中断提示；普通错误拼接各部分输出（为空时说明无输出），按错误自带的字符上限做中间截断，并附截断说明。
  */
@@ -107,7 +107,7 @@ function formatToolErrorMessage(error) {
 ${truncationNote}`
     : truncated;
 }
-//@ chunk-e6aww6q8.js:998547-998799 fingerprint (2.1.88 match: getErrorParts, 1)
+//@ chunk-5xgkngpb.js:1012311-1012563 fingerprint (2.1.88 match: getErrorParts, 1)
 /**
  * 从工具错误中提取展示片段：Exit code、stderr、stdout。
  */
@@ -124,7 +124,7 @@ function getErrorParts(error) {
   if ("stdout" in error && typeof error.stdout === "string") parts.push(error.stdout);
   return parts;
 }
-//@ chunk-e6aww6q8.js:998799-998972 file-local
+//@ chunk-5xgkngpb.js:1012563-1012736 file-local
 function formatValidationPath(path) {
   if (path.length === 0) return "";
   return path.reduce((acc, segment, index) => {
@@ -133,7 +133,7 @@ function formatValidationPath(path) {
     return index === 0 ? segmentStr : `${String(acc)}.${segmentStr}`;
   }, "");
 }
-//@ chunk-e6aww6q8.js:998972-1000528 fingerprint (2.1.88 match: formatZodValidationError, 0.792)
+//@ chunk-5xgkngpb.js:1012736-1014301 fingerprint (2.1.88 match: formatZodValidationError, 0.792)
 /**
  * 把工具输入的 zod 校验错误格式化为给模型看的文字（缺参数、类型不符、多余参数）。
  */
@@ -208,13 +208,13 @@ ${errorParts.join(`
 }
 export {
   includesAnyIgnoreCase,
-  isPendingNotOver,
+  formatToolErrorMessage,
+  formatZodValidationError,
   getErrorParts,
+  isPendingNotOver,
   MAX_ERROR_TEXT_CHARS,
   TRUNCATION_MARKER_RE,
   formatError,
-  VERSIONED_MODEL_RE,
   createPendingFlagState,
-  formatToolErrorMessage,
-  formatZodValidationError,
+  VERSIONED_MODEL_RE,
 };

@@ -3,12 +3,13 @@
  *
  * 状态提示定义：同时存在两种认证方式、JetBrains 插件等启动提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/statusNoticeDefinitions.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-ag5x7vhf.js (33)
- * attribution: fingerprint 2, placement 32
+ * pieces: chunk-czq1j3j2.js (1), chunk-hnxhr3bs.js (34)
+ * attribution: placement 32, layout 1, fingerprint 1, file-local 1
  */
 import { relative, sep } from "path";
+import { init_react_production, useContext, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -22,6 +23,15 @@ import { StatusRow } from "../components/Settings/Status.js";
 import { hasPolicySettings } from "./plugins/managedPluginSeating.js";
 import { Box, Text, Link } from "../ink/components/Text.js";
 import { capitalize, plural } from "./stringUtils.js";
+import { isBridgeOffByAnOptInAlone, isBridgeEnabled } from "../bridge/bridgeEntitlement.js";
+import { getRemoteControlAtStartup, getRemoteControlPolicyVerdict } from "../bridge/bridgeGates.js";
+import {
+  remoteControlUnavailableNotice,
+  getForesightState,
+  refusalNotice,
+  codeModeResumeNotice,
+} from "./foresightStatus.js";
+import { isCodeModeEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getCwdOrNull } from "./cwd.js";
 import {
   getLargeMemoryFiles,
@@ -55,16 +65,23 @@ import { ModelSourceNotice, InfoNotice, oauthExpiryWarning } from "../components
 import { messagingSocketServerSlot, messagingSocketUnavailableReason } from "./messagingSocket/setup.js";
 import { formatModelRestrictedNotice, displayModelName } from "./model/validateModel.js";
 import { MODEL_WINDOW_DOCS_URL, MODEL_CONFIG_DOCS_URL } from "../services/compact/unknownModelNotice.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { hasComplianceTaint, POLICY_LIMITED_NOTICE } from "../services/policyLimits/complianceTaints.js";
 import { getRemoteSettingsLoadState, describeFetchFailure } from "../services/cloudSessions/eligibility.js";
 import { getPolicyNotice } from "../services/policyLimits/cacheStamp.js";
+import {
+  PROMO_CREDIT_USAGE,
+  shouldShowPromoUsageNotice,
+  PromoCreditRemainingNotice,
+  PROMO_CREDIT_NOTICE_ID,
+  shouldShowPromoCreditNotice,
+  PromoCreditNotice,
+  SubscriptionSwitchNotice,
+} from "../components/LogoV2/PromoNotices.js";
 import { isDebugMode, isDebugToStdErr, getDebugLogPath } from "./debug.js";
 import { env } from "./env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { isBridgeEnabled } from "../bridge/bridgeEntitlement.js";
 import { isPolicyLimitsCacheLoaded } from "../services/policyLimits/policyEvidence.js";
-import { getRemoteControlPolicyVerdict } from "../bridge/bridgeGates.js";
 import { getGlobalConfig, saveGlobalConfig } from "./config.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useNoticeImpression, useNoticeImpressionEnabled } from "../components/LogoV2/CondensedLogo.js";
@@ -102,12 +119,6 @@ import {
 import { shouldShowFotw, FeatureOfTheWeekNotice } from "../components/LogoV2/FeatureOfTheWeekNudge.js";
 import { StartupAnnouncementNotice } from "../components/LogoV2/StartupAnnouncement.js";
 import {
-  PROMO_CREDIT_NOTICE_ID,
-  shouldShowPromoCreditNotice,
-  PromoCreditNotice,
-  SubscriptionSwitchNotice,
-} from "../components/LogoV2/PromoNotices.js";
-import {
   CC_CE_MIGRATE_MAX_IMPRESSIONS_LIMIT,
   CC_CE_MIGRATE_MAX_IMPRESSIONS,
 } from "./subscriptionNoticeIds.js";
@@ -129,24 +140,38 @@ import {
 } from "../components/LogoV2/FullscreenDownsell.js";
 import { createRoot } from "../ink.js";
 import { announcementState } from "../services/announcements/announcementState.js";
-import { init_react_production, useContext, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { appStoreContext } from "../state/AppState.js";
 import { useTerminalViewport } from "../ink/components/Input.js";
 import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { markSecurityWarningsSeen } from "./permissions/securityWarnings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:96305-96352 placement
+//@ chunk-hnxhr3bs.js:94169-94173 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:94169", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:94173-94177 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:94173", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:98746-98750 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:98746", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:99886-99933 placement
 function oauthExpiryWarningText() {
   return logFeatureOk("oauth_expiry_warning");
 }
-//@ chunk-ag5x7vhf.js:96352-96426 placement
+//@ chunk-hnxhr3bs.js:99933-100007 placement
 function logPowerupDiscoveryShown() {
   return logEvent("tengu_powerup_discovery_shown", {
     arm: fromEnum("banner"),
   });
 }
-//@ chunk-ag5x7vhf.js:96426-96973 placement
+//@ chunk-hnxhr3bs.js:100007-100824 placement
 /**
  * 提示优先级表与安全模式提示定义（安全模式时禁用全部自定义）。
  */
@@ -188,18 +213,50 @@ var SAFE_MODE_NOTICE = {
       ],
     }),
 };
-var EXTRA_WARNING_NOTICES = [];
-//@ chunk-ag5x7vhf.js:96973-97006 placement
+var EXTRA_WARNING_NOTICES = [
+  {
+    id: "code-mode-opt-in",
+    tier: "warning",
+    type: "warning",
+    isActive: () => codeModeStatusNotice() !== undefined,
+    render: () =>
+      jsxProd_default(StatusRow, {
+        status: "warning",
+        children: codeModeStatusNotice(),
+      }),
+  },
+  {
+    id: "code-mode-remote-control",
+    tier: "warning",
+    type: "warning",
+    isActive: () => isBridgeOffByAnOptInAlone() && getRemoteControlAtStartup(),
+    render: () =>
+      jsxProd_default(StatusRow, {
+        status: "warning",
+        children: remoteControlUnavailableNotice(),
+      }),
+  },
+];
+//@ chunk-hnxhr3bs.js:100824-100935 layout
+function codeModeStatusNotice() {
+  {
+    let codeModeState = getForesightState();
+    if (codeModeState.state === "refused") return refusalNotice(codeModeState.why);
+    if (codeModeState.state === "on" && isCodeModeEnabled()) return codeModeResumeNotice();
+  }
+  return;
+}
+//@ chunk-hnxhr3bs.js:100935-100968 placement
 function displayPathOf(file) {
   return toDisplayPath(file.path);
 }
-//@ chunk-ag5x7vhf.js:97006-97115 placement
+//@ chunk-hnxhr3bs.js:100968-101077 placement
 function toDisplayPath(path) {
   let cwdOrNull = getCwdOrNull();
   let relativePath = cwdOrNull !== null && path.startsWith(cwdOrNull) ? relative(cwdOrNull, path) : path;
   return relativePath === ".." || relativePath.startsWith(`..${sep}`) ? path : relativePath;
 }
-//@ chunk-ag5x7vhf.js:97115-105242 placement
+//@ chunk-hnxhr3bs.js:101077-109360 placement
 /**
  * 内存文件过大/超总量的提示：列出最大的指令文件及各自字符数。
  */
@@ -653,7 +710,9 @@ var SECURITY_WARNINGS_NOTICE = {
   isActive: (ctx) => ctx.securityWarnings.length > 0,
   render: (ctx) =>
     jsxProd_default(Fragment, {
-      children: uniq(ctx.securityWarnings.map((securityWarning) => securityWarning.text)).map((text) =>
+      children: normalizeCaseForComparison_2(
+        ctx.securityWarnings.map((securityWarning) => securityWarning.text),
+      ).map((text) =>
         jsxProd_default(
           StatusRow,
           {
@@ -748,7 +807,19 @@ var MONITORING_NOTICE = {
     });
   },
 };
-var DEBUG_MODE_NOTICE = {
+var promoCreditNotice = {
+  id: PROMO_CREDIT_USAGE,
+  tier: "warning",
+  type: "info",
+  promo: false,
+  isActive: (ctx) => shouldShowPromoUsageNotice(ctx.session, ctx.isLaunchPromptPending()),
+  render: () =>
+    jsxProd_default(StatusRow, {
+      status: "info",
+      children: jsxProd_default(PromoCreditRemainingNotice, {}),
+    }),
+};
+var debugModeNotice = {
   id: "debug-mode",
   tier: "info",
   type: "info",
@@ -758,7 +829,7 @@ var DEBUG_MODE_NOTICE = {
       children: ["Debug mode enabled \xB7 logging to", " ", isDebugToStdErr() ? "stderr" : getDebugLogPath()],
     }),
 };
-var TMUX_SESSION_NOTICE = {
+var tmuxSessionNotice = {
   id: "tmux-session",
   tier: "info",
   type: "info",
@@ -778,7 +849,7 @@ var TMUX_SESSION_NOTICE = {
 };
 var REMOTE_CONTROL_AUTO_ON = "remote-control-auto-on";
 var REMOTE_CONTROL_AUTO_ON_MAX_SEEN = 3;
-//@ chunk-ag5x7vhf.js:105242-105456 placement
+//@ chunk-hnxhr3bs.js:109360-109574 placement
 function shouldShowRemoteControlAutoOnNotice(ctx) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_harbor_notice", true)) return false;
   if (!ctx.replBridgeAutoOnByDefault) return false;
@@ -789,7 +860,7 @@ function shouldShowRemoteControlAutoOnNotice(ctx) {
     (getGlobalConfig().seenNotifications?.[REMOTE_CONTROL_AUTO_ON] ?? 0) < REMOTE_CONTROL_AUTO_ON_MAX_SEEN
   );
 }
-//@ chunk-ag5x7vhf.js:105456-105590 placement
+//@ chunk-hnxhr3bs.js:109574-109708 placement
 function markRemoteControlAutoOnSeen(storageV5) {
   saveGlobalConfig((config) => {
     let seenNotifications = config.seenNotifications ?? {};
@@ -804,7 +875,7 @@ function markRemoteControlAutoOnSeen(storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:105693-106018 placement
+//@ chunk-hnxhr3bs.js:109811-110136 placement
 /**
  * 登录即将过期时显示的状态行：剩余天数与 /login 续期提示。
  */
@@ -815,11 +886,11 @@ function OAuthExpiryStatusRow() {
   let early;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     early = EARLY_RETURN_SENTINEL;
-    k: {
+    I: {
       let expiry = oauthExpiryWarning();
       if (!expiry) {
         early = null;
-        break k;
+        break I;
       }
       row = jsxProd_default_2(StatusRow, {
         status: "warning",
@@ -844,7 +915,7 @@ function OAuthExpiryStatusRow() {
   if (early !== EARLY_RETURN_SENTINEL) return early;
   return row;
 }
-//@ chunk-ag5x7vhf.js:106018-106161 fingerprint (2.1.88 match: jetbrainsPluginNotice, 0.336)
+//@ chunk-hnxhr3bs.js:110136-110279 fingerprint (2.1.88 match: jetbrainsPluginNotice, 0.335)
 var jetbrainsPluginNotice = {
   id: REMOTE_CONTROL_AUTO_ON,
   tier: "info",
@@ -856,7 +927,7 @@ var jetbrainsPluginNotice = {
       ctx,
     }),
 };
-//@ chunk-ag5x7vhf.js:106161-106973 placement
+//@ chunk-hnxhr3bs.js:110279-111091 placement
 /**
  * 远程控制默认开启提示：说明可在手机/桌面应用或 claude.ai 查看进度和回复会话，要只留在本终端可运行 /remote-control；挂载时记一次已看到。
  */
@@ -931,15 +1002,15 @@ function RemoteControlAutoOnNotice(props) {
   } else content = $[9];
   return content;
 }
-//@ chunk-ag5x7vhf.js:106973-107086 placement
-var POWERUP_DISCOVERY_NOTICE = {
+//@ chunk-hnxhr3bs.js:111091-111204 file-local
+var largeAgentDescriptionsNotice = {
   id: "powerup-discovery",
   tier: "info",
   type: "info",
   isActive: () => getOnboardingShownThisSession() && resolvePowerupDiscoveryArm() === "banner",
   render: () => jsxProd_default(PowerupDiscoveryNotice, {}),
 };
-//@ chunk-ag5x7vhf.js:107086-107214 placement
+//@ chunk-hnxhr3bs.js:111204-111332 placement
 function PowerupDiscoveryNotice() {
   let $ = useMemoCache(1);
   useNoticeImpression("powerup-discovery", logPowerupDiscoveryShown);
@@ -952,26 +1023,26 @@ function PowerupDiscoveryNotice() {
   } else element = $[0];
   return element;
 }
-//@ chunk-ag5x7vhf.js:107214-109962 placement
+//@ chunk-hnxhr3bs.js:111332-114083 placement
 /**
  * 紧急提示、频道、提示缓存关闭等一组 info/warning 状态提示定义。
  */
 var EMERGENCY_TIP_NOTICE; // deferred: uses NOTICE_PRIORITIES of its import cycle while loading; runs once the cycle is complete
 var CHANNELS_NOTICE;
 var PROMPT_CACHING_DISABLED_NOTICE;
-var AUTO_MODE_DEFAULT_NOTICE;
-var COMPANY_ANNOUNCEMENT_NOTICE;
-var SAVED_MODEL_SUCCESSOR_NOTICE;
-var STARTUP_ANNOUNCEMENT_NOTICE;
-var PROMO_CREDIT_NOTICE;
-var FEATURE_OF_THE_WEEK_NOTICE;
-var CC_CE_MIGRATE_NOTICE;
-var API_CREDIT_LINK_NOTICE;
-var GUEST_PASSES_NOTICE;
+var autoModeDefaultNotice;
+var companyAnnouncementNotice;
+var modelSuccessorNotice;
+var startupAnnouncementNotice;
+var promoCreditAnnouncement;
+var featureOfTheWeekNotice;
+var ceMigrateNotice;
+var apiCreditLinkNotice;
+var guestPassesNotice;
 var FULLSCREEN_DOWNSELL_NOTICE;
-var SUBSCRIPTION_SWITCH_NOTICE;
+var subscriptionSwitchNotice;
 var ALL_STATUS_NOTICES;
-deferInit("chunk-ag5x7vhf.js:107214", () => {
+deferInit("chunk-hnxhr3bs.js:111332", () => {
   EMERGENCY_TIP_NOTICE = {
     id: "emergency-tip",
     tier: "warning",
@@ -1007,7 +1078,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
       });
     },
   };
-  AUTO_MODE_DEFAULT_NOTICE = {
+  autoModeDefaultNotice = {
     id: AUTO_MODE_DEFAULT,
     tier: "announcement",
     type: "info",
@@ -1017,7 +1088,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: () => shouldShowAutoDefaultNotice("auto"),
     render: () => jsxProd_default(AutoModeDefaultNotice, {}),
   };
-  COMPANY_ANNOUNCEMENT_NOTICE = {
+  companyAnnouncementNotice = {
     id: "company-announcement",
     tier: "announcement",
     type: "info",
@@ -1026,7 +1097,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: () => hasCompanyAnnouncements(),
     render: () => jsxProd_default(CompanyAnnouncementNotice, {}),
   };
-  SAVED_MODEL_SUCCESSOR_NOTICE = {
+  modelSuccessorNotice = {
     id: SAVED_MODEL_SUCCESSOR,
     tier: "announcement",
     type: "info",
@@ -1045,7 +1116,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     },
     render: () => jsxProd_default(ModelSuccessorNotice, {}),
   };
-  STARTUP_ANNOUNCEMENT_NOTICE = {
+  startupAnnouncementNotice = {
     id: "startup-announcement",
     tier: "announcement",
     type: "info",
@@ -1057,7 +1128,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     showAccentBar: () => pickStartupAnnouncement_2(false)?.accentBar !== false,
     render: () => jsxProd_default(StartupAnnouncementNotice, {}),
   };
-  PROMO_CREDIT_NOTICE = {
+  promoCreditAnnouncement = {
     id: PROMO_CREDIT_NOTICE_ID,
     tier: "announcement",
     type: "info",
@@ -1066,7 +1137,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: (ctx) => shouldShowPromoCreditNotice(ctx.session),
     render: () => jsxProd_default(PromoCreditNotice, {}),
   };
-  FEATURE_OF_THE_WEEK_NOTICE = {
+  featureOfTheWeekNotice = {
     id: "fotw-nudge",
     tier: "announcement",
     type: "info",
@@ -1075,7 +1146,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: () => shouldShowFotw(),
     render: () => jsxProd_default(FeatureOfTheWeekNotice, {}),
   };
-  CC_CE_MIGRATE_NOTICE = {
+  ceMigrateNotice = {
     id: "cc-ce-migrate",
     tier: "announcement",
     type: "info",
@@ -1085,7 +1156,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: () => shouldShowCeMigrateNotice(),
     render: () => jsxProd_default(CeMigrateNotice, {}),
   };
-  API_CREDIT_LINK_NOTICE = {
+  apiCreditLinkNotice = {
     id: API_CREDIT_LINK,
     tier: "announcement",
     type: "info",
@@ -1104,7 +1175,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
       !env.CLAUDE_BRIDGE_REATTACH_SESSION,
     render: () => jsxProd_default(ApiCreditLinkNotice, {}),
   };
-  GUEST_PASSES_NOTICE = {
+  guestPassesNotice = {
     id: "guest-passes",
     tier: "announcement",
     type: "info",
@@ -1125,7 +1196,7 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     isActive: () => env.CLAUDE_CODE_TUI_JUST_SWITCHED === undefined && isFullscreenDownsellActive(),
     render: () => jsxProd_default(FullscreenDownsellNotice, {}),
   };
-  SUBSCRIPTION_SWITCH_NOTICE = {
+  subscriptionSwitchNotice = {
     id: "subscription-switch",
     tier: "announcement",
     type: "info",
@@ -1165,29 +1236,30 @@ deferInit("chunk-ag5x7vhf.js:107214", () => {
     REMOTE_MANAGED_SETTINGS_FAILED_NOTICE,
     HIPAA_COMPLIANCE_NOTICE,
     MONITORING_NOTICE,
-    DEBUG_MODE_NOTICE,
-    TMUX_SESSION_NOTICE,
+    promoCreditNotice,
+    debugModeNotice,
+    tmuxSessionNotice,
     createRoot,
-    AUTO_MODE_DEFAULT_NOTICE,
+    autoModeDefaultNotice,
     jetbrainsPluginNotice,
-    POWERUP_DISCOVERY_NOTICE,
-    COMPANY_ANNOUNCEMENT_NOTICE,
-    STARTUP_ANNOUNCEMENT_NOTICE,
-    SAVED_MODEL_SUCCESSOR_NOTICE,
-    PROMO_CREDIT_NOTICE,
-    FEATURE_OF_THE_WEEK_NOTICE,
-    CC_CE_MIGRATE_NOTICE,
-    API_CREDIT_LINK_NOTICE,
-    GUEST_PASSES_NOTICE,
-    SUBSCRIPTION_SWITCH_NOTICE,
+    largeAgentDescriptionsNotice,
+    companyAnnouncementNotice,
+    startupAnnouncementNotice,
+    modelSuccessorNotice,
+    promoCreditAnnouncement,
+    featureOfTheWeekNotice,
+    ceMigrateNotice,
+    apiCreditLinkNotice,
+    guestPassesNotice,
+    subscriptionSwitchNotice,
     FULLSCREEN_DOWNSELL_NOTICE,
   ];
 });
-//@ chunk-ag5x7vhf.js:109962-110014 placement
+//@ chunk-hnxhr3bs.js:114083-114135 placement
 function activeStatusNotices(ctx) {
   return ALL_STATUS_NOTICES.filter((notice) => notice.isActive(ctx));
 }
-//@ chunk-ag5x7vhf.js:110014-110217 placement
+//@ chunk-hnxhr3bs.js:114135-114338 placement
 function promptCachingDisabledVars() {
   return [
     "DISABLE_PROMPT_CACHING",
@@ -1197,7 +1269,7 @@ function promptCachingDisabledVars() {
     "DISABLE_PROMPT_CACHING_FABLE",
   ].filter((envVar) => isEnvTruthy(process.env[envVar]));
 }
-//@ chunk-ag5x7vhf.js:110217-110310 placement
+//@ chunk-hnxhr3bs.js:114338-114431 placement
 function isNoticeTierShown(tier, enabledTiers) {
   switch (tier) {
     case "error":
@@ -1207,9 +1279,9 @@ function isNoticeTierShown(tier, enabledTiers) {
       return true;
   }
 }
-//@ chunk-ag5x7vhf.js:110310-110373 placement
+//@ chunk-hnxhr3bs.js:114431-114494 placement
 var INFO_NOTICE_ORDER = ["debug-mode", "model-source", "channels", "tmux-session"];
-//@ chunk-ag5x7vhf.js:110373-110587 placement
+//@ chunk-hnxhr3bs.js:114494-114708 placement
 function noticeSortKey(notice) {
   if (notice.tier === "announcement") {
     let priority = notice.priority ?? 0;
@@ -1221,7 +1293,7 @@ function noticeSortKey(notice) {
   let index = INFO_NOTICE_ORDER.indexOf(notice.id);
   return [3, index === -1 ? INFO_NOTICE_ORDER.length : index];
 }
-//@ chunk-ag5x7vhf.js:110587-111275 placement
+//@ chunk-hnxhr3bs.js:114708-115396 placement
 /**
  * 决定状态区公告位：首次选择时跳过 heldOut 的公告并锁定获胜者；之后始终显示同一公告（除非已释放），并修正溢出计数。
  */
@@ -1268,15 +1340,15 @@ function resolveAnnouncementSlot(candidates, tierVisibility, fallbackGovernance)
     slotOverflowCount: Math.max(0, overflow - (isStillListed ? 1 : 0)),
   };
 }
-//@ chunk-ag5x7vhf.js:111275-111320 placement
+//@ chunk-hnxhr3bs.js:115396-115441 placement
 function selectStatusNotices(notices, tierVisibility, governance) {
   return selectNotices(dropHeldOutNotices(notices, null), tierVisibility, governance);
 }
-//@ chunk-ag5x7vhf.js:111320-111392 placement
+//@ chunk-hnxhr3bs.js:115441-115513 placement
 function dropHeldOutNotices(notices, heldNotice) {
   return notices.filter((notice) => notice.heldOut === undefined || notice.id === heldNotice?.id);
 }
-//@ chunk-ag5x7vhf.js:111392-111905 placement
+//@ chunk-hnxhr3bs.js:115513-116026 placement
 function selectNotices(notices, tierVisibility, { suppressPromos }) {
   let filtered = notices.filter(
     (notice) => isNoticeTierShown(notice.tier, tierVisibility) && !(notice.promo === true && suppressPromos),
@@ -1307,12 +1379,12 @@ function selectNotices(notices, tierVisibility, { suppressPromos }) {
     ant,
   };
 }
-//@ chunk-ag5x7vhf.js:111905-111909 placement
+//@ chunk-hnxhr3bs.js:116026-116030 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:111905", () => {
+deferInit("chunk-hnxhr3bs.js:116026", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:111909-112284 placement
+//@ chunk-hnxhr3bs.js:116030-116405 placement
 /**
  * 不可见的触发组件：在可见视口中且有需要认证的 MCP 服务器时，触发认证提示检查。
  */
@@ -1360,16 +1432,11 @@ function McpAuthNoticeTrigger(props) {
   } else element = $[8];
   return element;
 }
-//@ chunk-ag5x7vhf.js:112284-112288 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:112284", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:112288-112344 placement
+//@ chunk-hnxhr3bs.js:116409-116465 placement
 function seenKeysOf(row) {
   return row.seenKey === undefined ? [] : [row.seenKey];
 }
-//@ chunk-ag5x7vhf.js:112344-112777 placement
+//@ chunk-hnxhr3bs.js:116465-116898 placement
 /**
  * 不可见的跟踪组件：提示行出现在可见视口时记录已展示，未展示时订阅帧刷新直到记录成功。
  */
@@ -1424,38 +1491,31 @@ function NoticeVisibilityTracker(props) {
   } else element = $[8];
   return element;
 }
-//@ chunk-ag5x7vhf.js:112777-112841 placement
+//@ chunk-hnxhr3bs.js:116898-116962 placement
 function markSecurityWarningsIfVisible(isVisible, seenKeys, storageV5) {
   let visible = isVisible();
   if (visible === true) markSecurityWarningsSeen(seenKeys, storageV5);
   return visible !== null;
 }
-//@ chunk-ag5x7vhf.js:112841-112856 placement
+//@ chunk-hnxhr3bs.js:116962-116977 placement
 function noopMountEffect() {}
-//@ chunk-ag5x7vhf.js:112856-112894 placement
+//@ chunk-hnxhr3bs.js:116977-117015 placement
 function selectSetupIssues(ctx) {
   return ctx.setupIssues;
 }
-//@ chunk-ag5x7vhf.js:117948-117952 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:117948", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:117952-117956 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:117952", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:312870-312946 fingerprint (2.1.88 match: getActiveNotices, 0.424)
-function getActiveNotices(toolUseContext, guard) {
+//@ chunk-czq1j3j2.js:322462-322587 placement
+function buildNotices(toolUseContext, guard, verifiedSlackTurn = false) {
   return {
     ...toolUseContext,
     isMidTurn: guard.isActive,
     dispatchedOverBridge: true,
+    ...(verifiedSlackTurn && {
+      submissionVerifiedSlackHumanTurn: true,
+    }),
   };
 }
 export {
-  getActiveNotices,
+  buildNotices,
   noopMountEffect,
   selectSetupIssues,
   resolveAnnouncementSlot,

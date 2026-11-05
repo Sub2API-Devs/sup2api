@@ -1,13 +1,13 @@
 /**
  * @smithy/middleware-stack/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/middleware-stack@4.2.0..4.2.14
- * pieces: chunk-ke7ft91e.js (1)
+ * pieces: chunk-x53tzdyc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-ke7ft91e.js:307-3961 cjs-fingerprint
+//@ chunk-x53tzdyc.js:307-3961 cjs-fingerprint
 var require_middleware_stack = __commonJS(function (cjsExports) {
   var getAllAliases = (name, aliases) => {
     let _aliases = [];

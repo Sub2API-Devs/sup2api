@@ -3,12 +3,12 @@
  *
  * 记忆提取代理的提示（现有记忆清单、可用命令、写法规范）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/extractMemories/prompts.ts
- * pieces: chunk-82kqcve8.js (2), chunk-xr4xc2mq.js (1)
+ * pieces: chunk-70rvh5wm.js (1), chunk-a2q0x549.js (2)
  * attribution: fingerprint 2, callgraph-witnessed 1
  */
-import { join, sep } from "path";
+import { join as join_2, sep as sep_2 } from "path";
 import {
   MEMORY_FRONTMATTER_EXAMPLE_2,
   MEMORY_TYPES,
@@ -35,15 +35,15 @@ import { CITING_MEMORIES_SECTION } from "../../memdir/memoryPromptSections.js";
 import { isBashAvailable } from "../../utils/shell/shellToolUtils.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:113708-114321 fingerprint (2.1.88 match: buildExtractAutoOnlyPrompt, 0.47)
+//@ chunk-a2q0x549.js:111151-111764 fingerprint (2.1.88 match: buildExtractAutoOnlyPrompt, 0.47)
 /**
  * 团队记忆的附加规则（当前为空）。
  */
@@ -51,7 +51,7 @@ var MEMORY_FRONTMATTER_EXAMPLE_TEXT; // deferred: uses MEMORY_FRONTMATTER_EXAMPL
 var MEMORY_FILE_SIZE_GUIDE;
 var MEMORY_MAINTENANCE_RULES;
 var TEAM_MEMORY_RULES;
-deferInit("chunk-82kqcve8.js:113708", () => {
+deferInit("chunk-a2q0x549.js:111151", () => {
   MEMORY_FRONTMATTER_EXAMPLE_TEXT = MEMORY_FRONTMATTER_EXAMPLE_2(MEMORY_TYPES);
   MEMORY_FILE_SIZE_GUIDE = `Keep each memory file under ${formatFileSize(MEMORY_FILE_RECALL_BYTES)} including frontmatter (recall shows only the first ${formatFileSize(MEMORY_FILE_RECALL_BYTES)}) and the description to one specific line; when a file outgrows that, split or summarize it rather than continuing it in a second file.`;
   MEMORY_MAINTENANCE_RULES = [
@@ -62,17 +62,17 @@ deferInit("chunk-82kqcve8.js:113708", () => {
   ];
   TEAM_MEMORY_RULES = [];
 });
-//@ chunk-82kqcve8.js:135953-141711 callgraph-witnessed (2.1.88 match: buildExtractCombinedPrompt, 0.132)
+//@ chunk-a2q0x549.js:134022-139782 callgraph-witnessed (2.1.88 match: buildExtractCombinedPrompt, 0.132)
 /**
  * 提取代理的组合提示（个人 + 团队记忆目录）。
  */
 function buildExtractCombinedPrompt(memoryDirs, readOnlyDirs, extraSections, autoDir = false) {
   let memoryDirNfc = getMemoryDirNfc();
-  let dirPath = (mount) => (join(memoryDirNfc, mount) + sep).normalize("NFC");
+  let dirPath = (mount) => (join_2(memoryDirNfc, mount) + sep_2).normalize("NFC");
   let indexPathOf = (dirEntry) => {
     let indexPrefix = memoryIndexDirPrefix(dirEntry.promptIndex);
     return indexPrefix
-      ? join(memoryDirNfc, dirEntry.mount, indexPrefix).normalize("NFC")
+      ? join_2(memoryDirNfc, dirEntry.mount, indexPrefix).normalize("NFC")
       : dirPath(dirEntry.mount);
   };
   let mapped = memoryDirs.map(indexPathOf);
@@ -100,7 +100,8 @@ These directories already exist \u2014 write to them directly with the Write too
   let dirPhrase = isSingle
     ? `\`${firstDir}\``
     : `the appropriate team directory (${mapped.map((path) => `\`${path}\``).join(" or ")})`;
-  let indexPathFor = (dirEntry) => join(memoryDirNfc, dirEntry.mount, indexNameOf(dirEntry)).normalize("NFC");
+  let indexPathFor = (dirEntry) =>
+    join_2(memoryDirNfc, dirEntry.mount, indexNameOf(dirEntry)).normalize("NFC");
   let indexPhrase = isSingle
     ? indexPathFor(memoryDirs[0])
     : `the index file in that same directory (${memoryDirs.map((dirEntry) => `\`${indexPathFor(dirEntry)}\``).join(", ")})`;
@@ -139,7 +140,7 @@ These directories already exist \u2014 write to them directly with the Write too
       skillsDirs.find((skillsDir) => firstLineOf(skillsDir, "/") === "channel") ?? skillsDirs[0];
     if (skillsDir === undefined) continue;
     skillPaths.push(
-      join(memoryDirNfc, dirEntry.mount, ...skillsDir.split("/"), "<skill-name>", "SKILL.md").normalize(
+      join_2(memoryDirNfc, dirEntry.mount, ...skillsDir.split("/"), "<skill-name>", "SKILL.md").normalize(
         "NFC",
       ),
     );
@@ -202,7 +203,7 @@ These directories already exist \u2014 write to them directly with the Write too
   ].join(`
 `);
 }
-//@ chunk-xr4xc2mq.js:11072-13452 fingerprint (2.1.88 match: opener, 0.643)
+//@ chunk-70rvh5wm.js:11560-13940 fingerprint (2.1.88 match: opener, 0.643)
 /**
  * 生成记忆提取代理的提示：现有记忆文件清单、可用的只读命令、如何新建/更新/删除记忆。
  */
@@ -230,8 +231,8 @@ ${writtenPaths}
 Check this list before writing \u2014 update an existing file rather than creating a duplicate.`
       : "";
   let scopeNote = hasScopeGuidance ? "scope guidance, " : "";
-  let toolsLine = `Available tools: ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${shellToolName} (${readOnlyExamples}), and ${FILE_EDIT_TOOL_NAME}/${FILE_WRITE_TOOL_NAME} for paths inside the memory directory only, and ${shellToolName} ${rmCommand} of .md files inside the memory directory only (outside protected subdirectories like .git or agents${hasBash ? "; rm takes no flags except -f" : ""}). All other tools \u2014 MCP, Agent, write-capable ${shellToolName}, etc \u2014 will be denied.`;
-  let strategyLine = `You have a limited turn budget. ${FILE_EDIT_TOOL_NAME} requires a prior ${FILE_READ_TOOL_NAME} of the same file, so the efficient strategy is: turn 1 \u2014 issue all ${FILE_READ_TOOL_NAME} calls in parallel for every file you might update; turn 2 \u2014 issue all ${FILE_WRITE_TOOL_NAME}/${FILE_EDIT_TOOL_NAME} calls in parallel. Do not interleave reads and writes across multiple turns.`;
+  let toolsLine = `Available tools: ${READ}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${shellToolName} (${readOnlyExamples}), and ${EDIT}/${FILE_WRITE_TOOL_NAME} for paths inside the memory directory only, and ${shellToolName} ${rmCommand} of .md files inside the memory directory only (outside protected subdirectories like .git or agents${hasBash ? "; rm takes no flags except -f" : ""}). All other tools \u2014 MCP, Agent, write-capable ${shellToolName}, etc \u2014 will be denied.`;
+  let strategyLine = `You have a limited turn budget. ${EDIT} requires a prior ${READ} of the same file, so the efficient strategy is: turn 1 \u2014 issue all ${READ} calls in parallel for every file you might update; turn 2 \u2014 issue all ${FILE_WRITE_TOOL_NAME}/${EDIT} calls in parallel. Do not interleave reads and writes across multiple turns.`;
   return [
     `You are now acting as the memory extraction subagent. Analyze the most recent ~${newMessageCount} messages above and use them to update your persistent memory systems.`,
     "",
@@ -265,9 +266,9 @@ Check this list before writing \u2014 update an existing file rather than creati
 }
 export {
   buildExtractMemoriesPrompt,
+  buildExtractCombinedPrompt,
   MEMORY_FRONTMATTER_EXAMPLE_TEXT,
   MEMORY_FILE_SIZE_GUIDE,
   TEAM_MEMORY_RULES,
   MEMORY_MAINTENANCE_RULES,
-  buildExtractCombinedPrompt,
 };

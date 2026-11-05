@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：封存（sealed）插件的识别与限制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (17)
  * attribution: placement 17
  */
 import { readdir, lstat, open } from "fs/promises";
@@ -42,24 +42,24 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { filterEntriesToNullProto } from "../../utils/hooks/functionHookMatchers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:758786-758824 placement
+//@ chunk-5xgkngpb.js:769383-769421 placement
 /**
  * 密封插件 hooks.json schema
  */
 var sealedHooksSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:758786", () => {
+deferInit("chunk-5xgkngpb.js:769383", () => {
   sealedHooksSchema = DoctorLazy(() =>
     objectSchema({
       modules: tuple([stringSchema()]),
     }),
   );
 });
-//@ chunk-e6aww6q8.js:758824-758863 placement
+//@ chunk-5xgkngpb.js:769421-769460 placement
 /**
  * 计算摘要时跳过的名字
  */
 var SEALED_SKIP_NAMES; // deferred: uses PLUGIN_LINK_FILE (../../utils/plugins/pluginLinks.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:758824", () => {
+deferInit("chunk-5xgkngpb.js:769421", () => {
   SEALED_SKIP_NAMES = new Set([
     ".git",
     PLUGIN_LINK_FILE,
@@ -68,17 +68,17 @@ deferInit("chunk-e6aww6q8.js:758824", () => {
     ORPHAN_MARKER_FILE,
   ]);
 });
-//@ chunk-e6aww6q8.js:758946-758959 placement
+//@ chunk-5xgkngpb.js:769543-769556 placement
 /**
  * 4096
  */
 var MAX_SEALED_FILES = 4096;
-//@ chunk-e6aww6q8.js:758959-758983 placement
+//@ chunk-5xgkngpb.js:769556-769580 placement
 /**
  * 密封插件校验错误
  */
 class SealedPluginError extends Error {}
-//@ chunk-e6aww6q8.js:758983-759488 placement
+//@ chunk-5xgkngpb.js:769580-770085 placement
 /**
  * 列出插件目录下全部常规文件（跳过 .git 等元数据），拒绝非 UTF-8 名、非常规文件与过多文件。
  */
@@ -105,24 +105,24 @@ async function listSealedFiles(root) {
   }
   return files;
 }
-//@ chunk-e6aww6q8.js:759488-759504 placement
+//@ chunk-5xgkngpb.js:770085-770101 placement
 /**
  * 33554432
  */
 var MAX_SEALED_BYTES = 33554432;
-//@ chunk-e6aww6q8.js:759623-759686 placement
+//@ chunk-5xgkngpb.js:770220-770283 placement
 /**
  * 需要一致的清单字段
  */
 var SEALED_MANIFEST_FIELDS = ["name", "version", "dependencies", "userConfig", "hooks"];
-//@ chunk-e6aww6q8.js:759686-759712 placement
+//@ chunk-5xgkngpb.js:770283-770309 placement
 var HOOKS_HOOKS_JSON = "hooks/hooks.json";
-//@ chunk-e6aww6q8.js:759712-759748 placement
+//@ chunk-5xgkngpb.js:770309-770345 placement
 /**
  * .claude-plugin/plugin.json
  */
 var PLUGIN_MANIFEST_PATH = ".claude-plugin/plugin.json";
-//@ chunk-e6aww6q8.js:759748-760471 placement
+//@ chunk-5xgkngpb.js:770345-771068 placement
 /**
  * 校验密封插件：plugin.json 与 hooks.json 存在且与加载器读到的一致，名字与 id 匹配、不冒充内置插件，hooks 模块路径一致。
  */
@@ -149,7 +149,7 @@ function checkSealedManifest(plugin, modulePath, texts) {
     ? undefined
     : "its hooks module is not the one the loader read";
 }
-//@ chunk-e6aww6q8.js:760622-761136 placement
+//@ chunk-5xgkngpb.js:771219-771733 placement
 /**
  * 不跟随链接地读取文件，校验读取前后未变化且不超大。
  */
@@ -173,7 +173,7 @@ async function readSealedFile(root, relativePath) {
   if (content.length !== stats.size) throw new SealedPluginError(`${relativePath} changed while it was read`);
   return content;
 }
-//@ chunk-e6aww6q8.js:761136-761234 placement
+//@ chunk-5xgkngpb.js:771733-771831 placement
 /**
  * 密封摘要对象
  */
@@ -182,7 +182,7 @@ var sealedDigest = (digest, texts, files) => ({
   texts,
   holdsNodeModules: files.some((relativePath) => relativePath.startsWith("node_modules/")),
 });
-//@ chunk-e6aww6q8.js:761234-761688 placement
+//@ chunk-5xgkngpb.js:771831-772285 placement
 /**
  * 计算插件目录的 sha256 摘要（按文件名排序，包含名字与长度），同时收集代码与清单文本。
  */
@@ -217,7 +217,7 @@ async function digestPluginFolder(root) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:761688-762005 placement
+//@ chunk-5xgkngpb.js:772285-772602 placement
 /**
  * 验证组织下发的密封插件：目录摘要必须在允许列表中且清单检查通过，返回文件文本或拒绝原因。
  */
@@ -237,13 +237,13 @@ async function verifySealedPlugin(plugin, modulePath, managedPluginDigests) {
         refused: manifestProblem,
       };
 }
-//@ chunk-e6aww6q8.js:762005-762042 placement
+//@ chunk-5xgkngpb.js:772602-772639 placement
 /**
  * 追加密封插件 id
  */
 var withSealedPlugin = (pluginId, vouchedPolicyPluginIds) =>
   new Set([...(vouchedPolicyPluginIds ?? []), pluginId]);
-//@ chunk-e6aww6q8.js:762042-762453 placement
+//@ chunk-5xgkngpb.js:772639-773050 placement
 /**
  * 若插件属于组织签名列表，验证后返回其密封文本；否则按普通插件处理返回 undefined。
  */
@@ -274,7 +274,7 @@ async function readSealedPluginTexts(loaderContext, plugin, modulePath) {
   logFeatureOk("plugin_sealed_read");
   return digest.texts;
 }
-//@ chunk-e6aww6q8.js:762453-762563 placement (2.1.88 match: buildMcpUserConfig, 0.767)
+//@ chunk-5xgkngpb.js:773050-773160 placement (2.1.88 match: buildMcpUserConfig, 0.767)
 var pickNonSensitiveOptions = (plugin, serverName) =>
   filterEntriesToNullProto(plugin, (key, optionName) => {
     let userConfig = serverName.manifest.userConfig ?? {};

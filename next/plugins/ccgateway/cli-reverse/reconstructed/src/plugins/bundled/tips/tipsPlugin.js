@@ -3,14 +3,13 @@
  *
  * 2.1.316 新增：把 Spinner 提示（tips）做成内置函数钩子插件（tengu_tips_mod）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0j11jfmy.js (27)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9mcfw5p8.js (28)
+ * attribution: placement 27, layout 1
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import { CC_PLUGIN_TIPS, loadTipRegistryModule, tipSeatSlots } from "../../../services/tips/orgTips.js";
-import { cleanMessagesForLogging_2 } from "../../../utils/sessionStorage.js";
 import { loadCustomTips, excludesDefaultTips } from "../../../services/tips/spinnerTipsOverride.js";
 import { isFirstPartyApiBackend } from "../../../utils/model/providers.js";
 import { getSessionsSinceTipShown } from "../../../services/tips/tipHistory.js";
@@ -23,7 +22,7 @@ import { getRootSession } from "../../../bootstrap/state.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-0j11jfmy.js:3637-3811 placement
+//@ chunk-9mcfw5p8.js:3944-4118 placement
 /**
  * tips 插件扫描清单。
  */
@@ -40,12 +39,12 @@ var TIPS_MANIFEST = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-0j11jfmy.js:3811-3820 placement
+//@ chunk-9mcfw5p8.js:4118-4127 placement
 /**
  * 空对象
  */
 var EMPTY_HOOKS_TIPS = {};
-//@ chunk-0j11jfmy.js:3820-4021 placement
+//@ chunk-9mcfw5p8.js:4127-4328 placement
 __export(EMPTY_HOOKS_TIPS, {
   PLUGIN_DESCRIPTION: () => TIPS_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_TIPS,
@@ -58,16 +57,16 @@ __export(EMPTY_HOOKS_TIPS, {
   sourcedTipOf: () => toTipRecord,
   tipHostOf: () => spinnerTipHost,
 });
-//@ chunk-0j11jfmy.js:4021-4030 placement
+//@ chunk-9mcfw5p8.js:4328-4337 placement
 /**
  * 钩子模块占位
  */
 var TIPS_HOOK_MODULE = {};
-//@ chunk-0j11jfmy.js:4030-4366 placement
+//@ chunk-9mcfw5p8.js:4337-4673 placement
 __export(TIPS_HOOK_MODULE, {
   COMMAND_CHECK_THREW_MESSAGE: () => ERR_ADVERTISED_COMMAND,
   CONTENT_THREW_MESSAGE: () => ERR_TIP_CONTENT,
-  INTERNAL_USER_TYPE: () => cleanMessagesForLogging_2,
+  INTERNAL_USER_TYPE: () => ANT,
   PICK_FAILED_MESSAGE: () => ERR_SPINNER_TIP,
   RELEVANCE_THREW_MESSAGE: () => ERR_IS_RELEVANT,
   contentSafe: () => loadTipContent,
@@ -81,7 +80,7 @@ __export(TIPS_HOOK_MODULE, {
   selectLongestUnshown: () => pickLeastRecentTip,
   showNextTip: () => showSpinnerTip,
 });
-//@ chunk-0j11jfmy.js:4366-4804 placement
+//@ chunk-9mcfw5p8.js:4673-5111 placement
 var toTipRecord = (tip, context) => ({
   id: tip.id,
   cooldownSessions: tip.cooldownSessions,
@@ -106,7 +105,7 @@ var toTipRecord = (tip, context) => ({
       storageV5: context.storageV5,
     }),
 });
-//@ chunk-0j11jfmy.js:4804-5654 placement
+//@ chunk-9mcfw5p8.js:5111-5960 placement
 /**
  * 在 session.start 注册 Spinner 提示（CLAUDE_CODE_FORCE_TIP_ID 强制显示）。
  */
@@ -157,7 +156,7 @@ function registerSpinnerTips(session, hooks) {
     },
   };
 }
-//@ chunk-0j11jfmy.js:5654-5742 placement
+//@ chunk-9mcfw5p8.js:5960-6048 placement
 /**
  * 旋转提示的宿主接口
  */
@@ -171,7 +170,7 @@ function spinnerTipHost() {
     },
   };
 }
-//@ chunk-0j11jfmy.js:5742-5796 placement
+//@ chunk-9mcfw5p8.js:6048-6102 placement
 /**
  * 包一层 register
  */
@@ -180,40 +179,42 @@ var tipsHooksModule = (host) => ({
     host.registerHooks(on, spinnerTipHost());
   },
 });
-//@ chunk-0j11jfmy.js:5796-5805 placement
+//@ chunk-9mcfw5p8.js:6102-6111 placement
 /**
  * 默认关闭
  */
 var TIPS_DEFAULT_OFF = false;
-//@ chunk-0j11jfmy.js:5805-5838 placement
+//@ chunk-9mcfw5p8.js:6111-6144 placement
 /**
  * tengu_tips_mod 开关
  */
 var isTipsModOn = () => getFeatureValue_SESSION_PINNED("tengu_tips_mod", TIPS_DEFAULT_OFF);
-//@ chunk-0j11jfmy.js:5838-5977 placement
+//@ chunk-9mcfw5p8.js:6144-6283 placement
 var TIPS_DESCRIPTION =
   "Spinner tips as a plugin: the tip line under the spinner while Claude works, picked once a turn from the tips that fit the session";
-//@ chunk-0j11jfmy.js:5977-6019 placement
+//@ chunk-9mcfw5p8.js:6283-6325 placement
 /**
  * 广告命令检查抛错
  */
 var ERR_ADVERTISED_COMMAND = "tip advertisedCommand check threw";
-//@ chunk-0j11jfmy.js:6019-6045 placement
+//@ chunk-9mcfw5p8.js:6325-6351 placement
 /**
  * 提示内容抛错
  */
 var ERR_TIP_CONTENT = "tip content threw";
-//@ chunk-0j11jfmy.js:6057-6084 placement
+//@ chunk-9mcfw5p8.js:6351-6363 layout
+var ANT = "ant";
+//@ chunk-9mcfw5p8.js:6363-6390 placement
 /**
  * 旋转提示失败
  */
 var ERR_SPINNER_TIP = "spinner tip failed";
-//@ chunk-0j11jfmy.js:6084-6113 placement
+//@ chunk-9mcfw5p8.js:6390-6419 placement
 /**
  * isRelevant 抛错
  */
 var ERR_IS_RELEVANT = "tip isRelevant threw";
-//@ chunk-0j11jfmy.js:6113-6217 placement
+//@ chunk-9mcfw5p8.js:6419-6523 placement
 /**
  * 读取提示内容，失败时标记并上报。
  */
@@ -226,7 +227,7 @@ async function loadTipContent(session, tip) {
     return "";
   }
 }
-//@ chunk-0j11jfmy.js:6217-6350 placement
+//@ chunk-9mcfw5p8.js:6523-6656 placement
 /**
  * 提示是否适用（广告的命令可用且 isRelevant 为真），失败视为不适用。
  */
@@ -240,7 +241,7 @@ async function isTipRelevant(host, tip) {
     return false;
   }
 }
-//@ chunk-0j11jfmy.js:6350-6523 placement
+//@ chunk-9mcfw5p8.js:6656-6829 placement
 /**
  * 提示引用的命令是否可用。
  */
@@ -254,19 +255,19 @@ async function isAdvertisedCommandOffered(host, tip) {
     return false;
   }
 }
-//@ chunk-0j11jfmy.js:6523-6703 placement
+//@ chunk-9mcfw5p8.js:6829-7009 placement
 /**
  * 读取提示开关与（内部用户）强制提示 id。
  */
 async function readTipSettings(host) {
   let settings = await host.settings();
-  let forcedId = (await host.userType()) === cleanMessagesForLogging_2 ? await host.forcedTipId() : undefined;
+  let forcedId = (await host.userType()) === ANT ? await host.forcedTipId() : undefined;
   return {
     isEnabled: settings.spinnerTipsEnabled !== false,
     forcedId: forcedId === undefined || forcedId === "" ? undefined : forcedId,
   };
 }
-//@ chunk-0j11jfmy.js:6703-7293 placement
+//@ chunk-9mcfw5p8.js:7009-7599 placement
 async function pickSpinnerTip(host, forcedId) {
   let candidates = await host.candidates();
   let forced = forcedId === undefined ? undefined : candidates.find((tip) => tip.id === forcedId);
@@ -287,7 +288,7 @@ async function pickSpinnerTip(host, forcedId) {
     ...filtered,
   ];
 }
-//@ chunk-0j11jfmy.js:7293-7512 placement
+//@ chunk-9mcfw5p8.js:7599-7818 placement
 /**
  * 选最久未显示的提示（相同时按优先级）。
  */
@@ -302,7 +303,7 @@ function pickLeastRecentTip(host, tips) {
       a.sessions === b.sessions ? (b.tip.priority ?? 0) - (a.tip.priority ?? 0) : b.sessions - a.sessions,
     )[0]?.tip;
 }
-//@ chunk-0j11jfmy.js:7512-7576 placement
+//@ chunk-9mcfw5p8.js:7818-7882 placement
 /**
  * 选本回合提示
  */
@@ -310,7 +311,7 @@ var pickTurnTip = async (host, tipSettings) =>
   tipSettings.isEnabled
     ? pickLeastRecentTip(host, await pickSpinnerTip(host, tipSettings.forcedId))
     : undefined;
-//@ chunk-0j11jfmy.js:7576-7789 placement
+//@ chunk-9mcfw5p8.js:7882-8095 placement
 /**
  * 选择并显示本回合的旋转提示，记录已显示。
  */
@@ -332,7 +333,7 @@ async function showSpinnerTip(spinner, ctx) {
     spinner.report(error, ERR_SPINNER_TIP);
   }
 }
-//@ chunk-0j11jfmy.js:7789-8033 placement
+//@ chunk-9mcfw5p8.js:8095-8339 placement
 /**
  * 注册 session.start 钩子：交互式会话安装提示选择器。
  */
@@ -350,14 +351,14 @@ function registerTipsHooks(register, plugin) {
     return proceed(turn);
   });
 }
-//@ chunk-0j11jfmy.js:8033-8059 placement
+//@ chunk-9mcfw5p8.js:8339-8365 placement
 /**
  * 注册提示钩子
  */
 function registerTipsHooksOnce(register) {
   registerTipsHooks(register, undefined);
 }
-//@ chunk-0j11jfmy.js:8059-8158 placement
+//@ chunk-9mcfw5p8.js:8365-8464 placement
 /**
  * 注册 tips 内置插件
  */

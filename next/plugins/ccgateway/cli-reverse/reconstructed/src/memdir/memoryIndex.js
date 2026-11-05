@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记忆索引的补建与维护
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10), chunk-vp5gef34.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10), chunk-kbw92gv8.js (12)
  * attribution: placement 21, affinity 1
  */
 import { sep, basename, join, resolve } from "path";
@@ -41,7 +41,8 @@ import { createAbortController } from "../utils/abortController.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
 import { memoizeWithLRU, retainCacheKey, memoizeWithTTLAsync } from "../utils/memoize.js";
-import { count, uniq } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import {
   DEFAULT_SYNC_OPTIONS,
   scanStoreFiles,
@@ -61,7 +62,7 @@ import { readOnlyNoFollowFlags } from "../utils/platformTargets.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1311938-1312110 placement
+//@ chunk-5xgkngpb.js:1311084-1311256 placement
 function pickMemorySizeBasis({ rawSizeBytes, surfaceCap, splicedSizeBytes, spliceCap, spliceActive }) {
   return surfaceCap !== undefined &&
     (!spliceActive || rawSizeBytes / surfaceCap >= splicedSizeBytes / spliceCap)
@@ -74,7 +75,7 @@ function pickMemorySizeBasis({ rawSizeBytes, surfaceCap, splicedSizeBytes, splic
         byteCap: spliceCap,
       };
 }
-//@ chunk-e6aww6q8.js:1312110-1312600 placement
+//@ chunk-5xgkngpb.js:1311256-1311746 placement
 /**
  * 计算记忆文件（字节、行数）中离上限最近的维度，占比低于阈值返回 null，否则给出超限与否及大小/上限/目标的可读描述。
  */
@@ -103,7 +104,7 @@ function memoryLimitPressure(indexSize) {
   );
   return frac < MEMORY_SIZE_WARN_RATIO ? null : worstDimension;
 }
-//@ chunk-e6aww6q8.js:1312600-1313208 placement
+//@ chunk-5xgkngpb.js:1311746-1312354 placement
 /**
  * 记忆索引超过读取上限时的提示：超出部分每次加载都会被丢弃。
  */
@@ -115,14 +116,14 @@ function checkMemoryIndexReadLimit(readLimitInfo) {
     overCap: pressure.over,
   };
 }
-//@ chunk-e6aww6q8.js:1313208-1313357 placement
+//@ chunk-5xgkngpb.js:1312354-1312503 placement
 var MAX_INDEX_LINE_CHARS; // deferred: uses MEMORY_INDEX_FILENAME (./memdir.js) of its import cycle while loading; runs once the cycle is complete
 var BACKFILL_MAX_LINES;
 var BACKFILL_MAX_BYTES;
 var UNSAFE_INDEX_NAME_REGEX;
 var UNWRITABLE_ERRNOS;
 var backfillState;
-deferInit("chunk-e6aww6q8.js:1313208", () => {
+deferInit("chunk-5xgkngpb.js:1312354", () => {
   MAX_INDEX_LINE_CHARS = 150;
   BACKFILL_MAX_LINES = Math.floor(MAX_ENTRYPOINT_LINES * MEMORY_SIZE_SOFT_RATIO);
   BACKFILL_MAX_BYTES = Math.floor(MAX_ENTRYPOINT_BYTES * MEMORY_SIZE_SOFT_RATIO);
@@ -130,7 +131,7 @@ deferInit("chunk-e6aww6q8.js:1313208", () => {
   UNWRITABLE_ERRNOS = new Set(["EROFS", "EACCES", "EPERM"]);
   backfillState = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:1313357-1313614 placement
+//@ chunk-5xgkngpb.js:1312503-1312760 placement
 function memoryIndexLine(entry) {
   let text = entry.filename.split(sep).join("/");
   if (UNSAFE_INDEX_NAME_REGEX.test(text) || singleLineMemoryText(text) !== text) return null;
@@ -142,7 +143,7 @@ function memoryIndexLine(entry) {
   if (trimmed === "" || descriptionBudget <= 1) return linkLine;
   return `${linkLine} \u2014 ${sanitizeMemoryText(truncateAtWord(trimmed, descriptionBudget))}`;
 }
-//@ chunk-e6aww6q8.js:1313614-1313798 placement
+//@ chunk-5xgkngpb.js:1312760-1312944 placement
 function buildMemoryIndexContent(entries) {
   let content = "";
   let lineCount = 0;
@@ -167,7 +168,7 @@ function buildMemoryIndexContent(entries) {
     skippedCount,
   };
 }
-//@ chunk-e6aww6q8.js:1313798-1314118 placement
+//@ chunk-5xgkngpb.js:1312944-1313264 placement
 /**
  * 判断记忆目录是否需要补建索引：已有索引、有候选 .md 文件或子目录，或没有可索引内容。
  */
@@ -192,7 +193,7 @@ async function memoryIndexBackfillState(memoryDir) {
     ? "candidates"
     : "none";
 }
-//@ chunk-e6aww6q8.js:1314118-1315117 placement
+//@ chunk-5xgkngpb.js:1313264-1314263 placement
 /**
  * 写入记忆索引补建结果：先写临时文件再改名，不可写时就地写。
  */
@@ -249,7 +250,7 @@ async function writeMemoryIndexBackfill(memoryDir, content) {
     await unlink(tempPath).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:1315117-1315563 placement
+//@ chunk-5xgkngpb.js:1314263-1314709 placement
 /**
  * 用 wx 独占方式创建记忆索引文件并写入；已存在返回 exists，只读/权限错误返回 unwritable；写入失败时删掉自己刚创建的文件。
  */
@@ -283,7 +284,7 @@ async function writeMemoryIndexExclusive(memoryDir, content) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:1315563-1316725 placement
+//@ chunk-5xgkngpb.js:1314709-1315871 placement
 /**
  * 补建记忆索引：扫描记忆目录中索引缺少的条目并写回，记录遥测。
  */
@@ -370,7 +371,7 @@ async function backfillMemoryIndex(memoryDir, onNothing, onExists) {
     return false;
   }
 }
-//@ chunk-vp5gef34.js:1162-3668 placement
+//@ chunk-kbw92gv8.js:1274-3780 placement
 /**
  * 波特词干化：辅音/元音判定与各个步骤。注意 trimTrailingDoubleL（原 stemWord）只是第 5 步后的双辅音 l 去重，porterStemWord（原 measureWord）才是主流程，memoizedStemWord 是它的 5 万条 LRU 包装。
  */
@@ -394,7 +395,7 @@ var porterStemWord;
 var memoizedStemWord;
 var stemAlias;
 var stemWithOptions;
-deferInit("chunk-vp5gef34.js:1162", () => {
+deferInit("chunk-kbw92gv8.js:1274", () => {
   porterStemmer = (char) => char === "a" || char === "e" || char === "i" || char === "o" || char === "u";
   isConsonantAt = (word, index) => {
     let char = word[index];
@@ -561,7 +562,7 @@ deferInit("chunk-vp5gef34.js:1162", () => {
   stemAlias = retainCacheKey(memoizedStemWord.cache);
   stemWithOptions = (text) => (text.length <= 2 ? text : memoizedStemWord(text));
 });
-//@ chunk-vp5gef34.js:3668-7390 placement
+//@ chunk-kbw92gv8.js:3780-7502 placement
 /**
  * 记忆索引的分词流程：按 Unicode 字母/数字切分、拆驼峰与数字、技术词改写（c++→cpp 等）、CJK 边界、去所有格与停用词，再按选项做词干化与复合词拆分。
  */
@@ -593,7 +594,7 @@ var tokenizeForSearch;
 var tokenizeStrict;
 var tokenizeDualStem;
 var tokenizeNoCompounds;
-deferInit("chunk-vp5gef34.js:3668", () => {
+deferInit("chunk-kbw92gv8.js:3780", () => {
   tokenizeForIndex = /[\p{L}\p{M}\p{N}]+/gu;
   isUpperAscii = (char) => char >= "A" && char <= "Z";
   isLowerAscii = (char) => char >= "a" && char <= "z";
@@ -602,19 +603,19 @@ deferInit("chunk-vp5gef34.js:3668", () => {
   splitCamelAndDigits = (text) => {
     let parts = [];
     let partStart = 0;
-    for (let idx = 1; idx < text.length; idx++) {
-      let prevChar = text[idx - 1] ?? "";
-      let char = text[idx] ?? "";
-      let nextChar = text[idx + 1] ?? "";
-      let isTrailingS = nextChar === "s" && idx + 2 === text.length;
+    for (let j = 1; j < text.length; j++) {
+      let prevChar = text[j - 1] ?? "";
+      let char = text[j] ?? "";
+      let nextChar = text[j + 1] ?? "";
+      let isTrailingS = nextChar === "s" && j + 2 === text.length;
       if (
         ((isLowerAscii(prevChar) || isDigitAscii(prevChar)) && isUpperAscii(char)) ||
         (isUpperAscii(prevChar) && isUpperAscii(char) && isLowerAscii(nextChar) && !isTrailingS) ||
         (isAlnumAscii(prevChar) && isDigitAscii(char)) ||
         (isDigitAscii(prevChar) && isAlnumAscii(char))
       ) {
-        parts.push(text.slice(partStart, idx));
-        partStart = idx;
+        parts.push(text.slice(partStart, j));
+        partStart = j;
       }
     }
     parts.push(text.slice(partStart));
@@ -714,11 +715,11 @@ deferInit("chunk-vp5gef34.js:3668", () => {
   };
   tokenizeWord = (chars) => {
     let words = [];
-    for (let idx = 0; idx < chars.length; idx++) {
-      let char = chars[idx];
+    for (let j = 0; j < chars.length; j++) {
+      let char = chars[j];
       if (!CJK_CHAR_TEST.test(char) || [...char].length !== 1) continue;
-      let prevChar = idx > 0 ? chars[idx - 1] : undefined;
-      let nextChar = idx + 1 < chars.length ? chars[idx + 1] : undefined;
+      let prevChar = j > 0 ? chars[j - 1] : undefined;
+      let nextChar = j + 1 < chars.length ? chars[j + 1] : undefined;
       let word =
         prevChar !== undefined && !CJK_CHAR_TEST.test(prevChar) && [...normalizeForIndex(prevChar)].length > 1
           ? prevChar + char
@@ -818,7 +819,7 @@ deferInit("chunk-vp5gef34.js:3668", () => {
       compounds: false,
     });
 });
-//@ chunk-vp5gef34.js:7390-8573 placement
+//@ chunk-kbw92gv8.js:7502-8685 placement
 /**
  * 把记忆文件拆成索引字段：文件名、frontmatter、各级标题、正文（含代码块跳过），并给出各字段文本。
  */
@@ -906,7 +907,7 @@ var extractMemoryFieldsFromFile = (filePath, text) => {
     },
   };
 };
-//@ chunk-vp5gef34.js:8573-12080 placement
+//@ chunk-kbw92gv8.js:8685-12192 placement
 /**
  * 倒排索引的增删查：每词一篇 posting（docIds/offsets/positions 三个 Uint32Array），字段编号表与 posting 二分查找。SMALL_DELETION_THRESHOLD=16 决定删文档时逐个标未验证还是重建词表。
  */
@@ -934,7 +935,7 @@ var documentIdForPath;
 var SMALL_DELETION_THRESHOLD;
 var dropDocuments;
 var emptyIndexSnapshot;
-deferInit("chunk-vp5gef34.js:8573", () => {
+deferInit("chunk-kbw92gv8.js:8685", () => {
   buildInvertedIndex = extractMemoryFields.length;
   FIELD_INDEX = Object.fromEntries(
     extractMemoryFields.map((extractMemoryField, fieldIndex) => [extractMemoryField, fieldIndex]),
@@ -1045,7 +1046,7 @@ deferInit("chunk-vp5gef34.js:8573", () => {
     let fieldLengths = Object.fromEntries(
       extractMemoryFields.map((extractMemoryField) => [
         extractMemoryField,
-        count(doc.fields[extractMemoryField], (token) => token !== ""),
+        countWhere(doc.fields[extractMemoryField], (token) => token !== ""),
       ]),
     );
     for (let extractMemoryField of extractMemoryFields) {
@@ -1101,9 +1102,9 @@ deferInit("chunk-vp5gef34.js:8573", () => {
       let removedBytes = startOffset - writeOffset;
       posting.positions.copyWithin(writeOffset, startOffset, endOffset);
       posting.docIds[writeIndex] = docId;
-      for (let idx = 0; idx < buildInvertedIndex; idx++)
-        posting.offsets[buildInvertedIndex * writeIndex + idx] =
-          posting.offsets[buildInvertedIndex * readIndex + idx] - removedBytes;
+      for (let j = 0; j < buildInvertedIndex; j++)
+        posting.offsets[buildInvertedIndex * writeIndex + j] =
+          posting.offsets[buildInvertedIndex * readIndex + j] - removedBytes;
       writeOffset += endOffset - startOffset;
       writeIndex++;
     }
@@ -1142,7 +1143,7 @@ deferInit("chunk-vp5gef34.js:8573", () => {
     ),
   });
 });
-//@ chunk-vp5gef34.js:12080-15423 placement
+//@ chunk-kbw92gv8.js:12192-15535 placement
 /**
  * BM25 打分：字段权重（filename/frontmatter 3、headings 2.5、body 1）、长度归一化与短语/邻近加成；其中 bm25Idf 是 log((N-df+0.5)/(df+0.5))，fieldLengthBoost 才是 k1 加权。
  */
@@ -1193,7 +1194,7 @@ var idfForTerm = (query) => {
           .filter((phrase) => phrase.length > 1 && phrase.every((term) => term.length > 1))
       : [];
   return {
-    terms: uniq(tokenizeDualStem(query)),
+    terms: normalizeCaseForComparison_2(tokenizeDualStem(query)),
     phrases,
     boostPhrases: [],
   };
@@ -1300,7 +1301,7 @@ var bestSpanForTerm = (index, docId, phraseTerms) => {
 };
 var mergeSpans = (exactTerms, conceptualKeywords) => {
   let flattened = exactTerms.flatMap((entry) => parseQueryTerms(entry));
-  let terms = uniq([
+  let terms = normalizeCaseForComparison_2([
     ...exactTerms.flatMap((entry) => tokenizeDualStem(entry)),
     ...conceptualKeywords.flatMap((keyword) => tokenizeDualStem(keyword)),
   ]);
@@ -1388,7 +1389,7 @@ var searchIndex = (index, query, limit, options = bm25Search) => {
     .sort((hitA, hitB) => hitB.score - hitA.score || (hitA.path < hitB.path ? -1 : 1))
     .slice(0, limit);
 };
-//@ chunk-vp5gef34.js:19463-21378 affinity
+//@ chunk-kbw92gv8.js:19575-21490 affinity
 /**
  * 记忆 BM25 索引与磁盘同步：An 比较扫描结果找出需重建与需删除的文档；yt 扫描目录、确认失踪文件确实不存在后删除，读入新增/变化的 .md 并更新哈希，返回增删改与跳过的统计。
  */
@@ -1527,7 +1528,7 @@ var syncMemoryIndex = async (index, rootDir, scanOptions = DEFAULT_SYNC_OPTIONS,
     scanCompleted: !aborted,
   };
 };
-//@ chunk-vp5gef34.js:21378-21544 placement
+//@ chunk-kbw92gv8.js:21490-21656 placement
 var logRecallIndexSad = async (event, extra = {}) => {
   let { logFeatureSad } = await import("../services/analytics/featureTelemetry.js").catch(() => ({
     logFeatureSad: undefined,
@@ -1537,7 +1538,7 @@ var logRecallIndexSad = async (event, extra = {}) => {
     ...extra,
   });
 };
-//@ chunk-vp5gef34.js:21662-26032 placement
+//@ chunk-kbw92gv8.js:21774-26144 placement
 /**
  * BM25 索引文件（.bm25-index.json）的读写：序列化成紧凑数组、解析回内存结构，超过 64 MiB 视为超大并重建。
  */
@@ -1555,7 +1556,7 @@ var readIndexFileRaw;
 var tryParseIndex;
 var loadIndexFromDisk;
 var readCachedIndex;
-deferInit("chunk-vp5gef34.js:21662", () => {
+deferInit("chunk-kbw92gv8.js:21774", () => {
   deserializeIndex = 10;
   serializeIndex = (index) => {
     let sorted = [...index.docs.keys()].sort((docIdA, docIdB) => docIdA - docIdB);
@@ -1624,10 +1625,10 @@ deferInit("chunk-vp5gef34.js:21662", () => {
         let positions = fieldPositions[fieldIndex];
         positions.length = 0;
         let position = -1;
-        for (let idx = 0; idx < mapped[fieldIndex]; idx++) {
+        for (let j = 0; j < mapped[fieldIndex]; j++) {
           let typedArray = toTypedArray(posting, offset++);
           position = position < 0 ? typedArray : position + typedArray;
-          if ((idx > 0 && typedArray === 0) || position > MAX_DOC_ID)
+          if ((j > 0 && typedArray === 0) || position > MAX_DOC_ID)
             throw Error("malformed posting positions");
           positions.push(position);
         }
@@ -1831,7 +1832,7 @@ deferInit("chunk-vp5gef34.js:21662", () => {
     }
   };
 });
-//@ chunk-vp5gef34.js:26032-27170 placement
+//@ chunk-kbw92gv8.js:26144-27282 placement
 /**
  * 记忆索引的打开/建立入口：读取已有索引并同步目录，扫描未完成时退回空索引。
  */
@@ -1903,7 +1904,7 @@ var ensureMemoryIndex = async (store, query, limit = 5, options = bm25Search) =>
     })
     .slice(0, limit);
 };
-//@ chunk-vp5gef34.js:27170-29264 placement
+//@ chunk-kbw92gv8.js:27282-29376 placement
 /**
  * 目录到索引的增量同步：比对大小/mtime 找新增与改动、删除已消失文件、抽取短语与加权短语、统计各项计数。
  */
@@ -1925,7 +1926,7 @@ var syncIndexFromDirectory;
 var indexFileIfChanged;
 var syncResult;
 var indexCacheKey;
-deferInit("chunk-vp5gef34.js:27170", () => {
+deferInit("chunk-kbw92gv8.js:27282", () => {
   syncMemoryIndex_2 = Symbol("transient-realpath-failure");
   indexDidChange = (lastSync) =>
     lastSync.added > 0 || lastSync.updated > 0 || lastSync.removed > 0 || lastSync.rehashedUnchanged > 0;
@@ -1933,8 +1934,8 @@ deferInit("chunk-vp5gef34.js:27170", () => {
     let allPhrases = [...queryTerms.boostPhrases, ...queryTerms.phrases];
     let seenPhrases = new Set();
     let uniquePhrases = [];
-    for (let idx = allPhrases.length - 1; idx >= 0; idx--) {
-      let phrase = allPhrases[idx];
+    for (let j = allPhrases.length - 1; j >= 0; j--) {
+      let phrase = allPhrases[j];
       let joined = phrase.join(" ");
       if (!seenPhrases.has(joined)) {
         seenPhrases.add(joined);
@@ -1996,12 +1997,8 @@ ${phraseMatches(query.slice(tailStart), false)}`;
       if (termSet.has(term) && !selectedTerms.has(term) && shouldIncludeTerm(term)) selectedTerms.add(term);
     }
     let size_2 = selectedTerms.size;
-    for (
-      let idx = orderedTerms.length - 1;
-      idx >= 0 && selectedTerms.size < size_2 + MAX_PHRASE_TERMS;
-      idx--
-    ) {
-      let term = orderedTerms[idx];
+    for (let j = orderedTerms.length - 1; j >= 0 && selectedTerms.size < size_2 + MAX_PHRASE_TERMS; j--) {
+      let term = orderedTerms[j];
       if (termSet.has(term) && !selectedTerms.has(term) && shouldIncludeTerm(term)) selectedTerms.add(term);
     }
     let sorted = terms
@@ -2078,7 +2075,7 @@ ${phraseMatches(query.slice(tailStart), false)}`;
   });
   indexCacheKey = (dir, persist) => `${persist ? "persist" : "no-persist"}:${dir}`;
 });
-//@ chunk-vp5gef34.js:29264-29751 placement
+//@ chunk-kbw92gv8.js:29376-29863 placement
 /**
  * 记忆索引的打开缓存：按目录与存储空间缓存打开的索引（带 TTL），扫描完成后持久化，并支持释放当前缓存项。
  */
@@ -2117,7 +2114,7 @@ class MemoryIndexCache {
     if (this.open.cache.get(cacheKey) === pending) this.open.cache.delete(cacheKey);
   }
 }
-//@ chunk-vp5gef34.js:29751-32197 placement
+//@ chunk-kbw92gv8.js:29863-32309 placement
 /**
  * 按会话根缓存记忆索引：打开、按路径取、释放过期实例；扫描不完整时释放并重建。
  */
@@ -2125,7 +2122,7 @@ var searchMemoryIndex; // deferred: uses SessionRootSlot (../bootstrap/sessionSl
 var withMemoryIndex;
 var memoryIndexFor;
 var releaseMemoryIndex;
-deferInit("chunk-vp5gef34.js:29751", () => {
+deferInit("chunk-kbw92gv8.js:29863", () => {
   searchMemoryIndex = new SessionRootSlot(() => new MemoryIndexCache());
   withMemoryIndex = async (slot, dir, exclusions, excludeLog, isRecallVisible, persist) => {
     let pending = slot.open(dir, exclusions, excludeLog, isRecallVisible, persist);
@@ -2178,7 +2175,7 @@ deferInit("chunk-vp5gef34.js:29751", () => {
     let buildStats = (sync, ranked = [], queryTermCount = 0) => {
       let topScore = ranked[0]?.score ?? 0;
       let relevanceFloor = getRelevanceFloor();
-      let belowFloorCount = count(ranked, (hit) => hit.score < relevanceFloor);
+      let belowFloorCount = countWhere(ranked, (hit) => hit.score < relevanceFloor);
       return {
         docCount: store.index.docs.size,
         termCount: store.index.terms.size,

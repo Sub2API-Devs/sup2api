@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ToolSearch 模式判定与 Claude in Chrome 工具的延迟加载提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mp7v59a0.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-png42f8p.js (9)
  * attribution: placement 9
  */
 import { isHipaaOrg, areExperimentalBetasDisabled } from "./betas.js";
@@ -15,9 +15,9 @@ import { isEnvTruthy, parseIntLoose, isEnvDefinedFalsy } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mp7v59a0.js:613-627 placement
+//@ chunk-png42f8p.js:617-631 placement
 var TOOL_SEARCH_FORCE_VALUE = "force";
-//@ chunk-mp7v59a0.js:627-949 placement
+//@ chunk-png42f8p.js:631-953 placement
 /**
  * isToolSearchForceOverride：HIPAA 或非 firstParty 时为假；ENABLE_TOOL_SEARCH（含管理员层环境）为 "force"，或托管策略 hostToolSearchEnv 为 force 且未关闭实验 beta、未用 auto:≥100/假值阻止时为真。
  */
@@ -37,7 +37,7 @@ function isToolSearchForceOverride() {
     return false;
   }
 }
-//@ chunk-mp7v59a0.js:949-1047 placement (2.1.88 match: isAutoToolSearchMode, 0.787)
+//@ chunk-png42f8p.js:953-1051 placement (2.1.88 match: isAutoToolSearchMode, 0.787)
 function isToolSearchEnvBlockingForce(value) {
   if (value.startsWith("auto:")) {
     let intLoose = parseIntLoose(value.slice(5));
@@ -45,30 +45,30 @@ function isToolSearchEnvBlockingForce(value) {
   }
   return isEnvDefinedFalsy(value);
 }
-//@ chunk-mp7v59a0.js:1047-1082 placement
+//@ chunk-png42f8p.js:1051-1086 placement
 /**
  * 实验 beta 关闭或 HIPAA 下（且非 force）工具搜索整体关闭；同时不发 DeferredToolPlaceholder。
  */
 function isToolSearchDisabledByBetas() {
   return areExperimentalBetasDisabled() && !isToolSearchForceOverride();
 }
-//@ chunk-mp7v59a0.js:1082-1390 placement
+//@ chunk-png42f8p.js:1086-1394 placement
 var CHROME_SELECT_QUERY_WITH_BATCH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mp7v59a0.js:1082", () => {
+deferInit("chunk-png42f8p.js:1086", () => {
   CHROME_SELECT_QUERY_WITH_BATCH =
     'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"'.replace(
       /"$/,
       ',mcp__claude-in-chrome__browser_batch"',
     );
 });
-//@ chunk-mp7v59a0.js:1390-1671 placement
+//@ chunk-png42f8p.js:1394-1675 placement
 function addBrowserBatchToChromeSelect(prompt) {
   return prompt.replace(
     'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"',
     CHROME_SELECT_QUERY_WITH_BATCH,
   );
 }
-//@ chunk-mp7v59a0.js:1671-6643 placement
+//@ chunk-png42f8p.js:1675-6647 placement
 /**
  * Claude in Chrome 浏览器自动化的提示词（含先用 ToolSearch 加载 mcp__claude-in-chrome__* 工具）。
  */
@@ -141,14 +141,14 @@ Start a browser task whose tools are not yet loaded with a single call loading t
 ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"
 
 ${CHROME_TASK_TOOLS_HINT} Only issue a second ToolSearch if the task later needs a tool you did not anticipate.`;
-//@ chunk-mp7v59a0.js:6643-6672 placement
+//@ chunk-png42f8p.js:6647-6676 placement
 /**
  * Claude in Chrome 的系统提示词片段：工具搜索开启时带"一次 ToolSearch 批量加载"段落。
  */
 function getChromeSystemPrompt(enabled) {
   return enabled ? CHROME_PROMPT_WITH_TOOL_SEARCH : CHROME_PROMPT_WITHOUT_TOOL_SEARCH;
 }
-//@ chunk-mp7v59a0.js:6672-6956 placement
+//@ chunk-png42f8p.js:6676-6960 placement
 function isModelVersionAtLeast(model, minVersions) {
   let match = /^claude-([a-z]+)-(\d+(?:-\d+)*)$/.exec(model);
   let versionParts = match?.[1];
@@ -164,10 +164,10 @@ function isModelVersionAtLeast(model, minVersions) {
   return true;
 }
 export {
+  CHROME_TOOL_SEARCH_REMINDER,
+  isModelVersionAtLeast,
   isToolSearchDisabledByBetas,
   isToolSearchForceOverride,
-  isModelVersionAtLeast,
   addBrowserBatchToChromeSelect,
-  CHROME_TOOL_SEARCH_REMINDER,
   getChromeSystemPrompt,
 };

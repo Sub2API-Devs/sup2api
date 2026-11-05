@@ -3,9 +3,9 @@
  *
  * MCP 服务器批准对话框的风险说明文案与文档链接。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MCPServerDialogCopy.tsx
- * pieces: chunk-20skp6hd.js (1)
+ * pieces: chunk-ezx72dpn.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -16,7 +16,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../ink/components/Text.js";
 
-//@ chunk-20skp6hd.js:1144-1427 fingerprint (2.1.88 match: MCPServerDialogCopy, 0.356)
+//@ chunk-ezx72dpn.js:1145-1428 fingerprint (2.1.88 match: MCPServerDialogCopy, 0.356)
 function MCPServerDialogCopy() {
   let $ = useMemoCache(1);
   let t0;

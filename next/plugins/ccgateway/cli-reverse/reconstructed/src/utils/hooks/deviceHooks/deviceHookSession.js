@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备钩子会话与远程工具通告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (16)
  * attribution: placement 16
  */
 import { realpath } from "fs/promises";
@@ -53,7 +53,7 @@ import { logError } from "../../log.js";
 import { findGitRootUncached } from "../../git.js";
 import { DeviceHooksRegistration, UNREGISTER_TIMEOUT_MS } from "./cloudRegistration.js";
 import { deviceHooksPolicyEligibility, collectDeviceHookSources } from "./eligibility.js";
-import { getClaudeConfigDir } from "../../envUtils.js";
+import { getClaudeConfigDir } from "../../markdownConfigLoader.js";
 import { newDeviceInstanceId, shortHostname, parseDeviceHookId } from "../deviceHookId.js";
 import { getSettingsFilePathForSource } from "../../settings/settings.js";
 import {
@@ -80,21 +80,23 @@ import {
   numberSchema,
   array,
   stringSchema,
+  unknown,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  interfaceFitOf,
+  leftStateFor,
+  MACHINE_PRESENCE_STATES,
+  STILL_HERE,
+} from "../../../remote/tools/protocolConstants.js";
 import { AbortError, errorMessage } from "../../errors.js";
 import { primeUnattendedServingConsent } from "../../../services/remoteTools/unattendedConsentStore.js";
 import { parseThinClientReply } from "../../../cli/thinClient.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { fullJitterBackoffMs, withDeadline } from "../../sleep.js";
-import {
-  leftStateFor,
-  MACHINE_PRESENCE_STATES,
-  STILL_HERE,
-} from "../../../remote/tools/protocolConstants.js";
 import { onceExport } from "../../../../vendor/lodash-es/once.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:130516-132398 placement
+//@ chunk-4z1ntdgk.js:143263-145145 placement
 /**
  * 创建设备钩子会话：接收远程转发的钩子请求，在本机执行并回复结果。
  */
@@ -223,7 +225,7 @@ function createDeviceHookSession({
   logForDebugging("[deviceHooks] device hook session created for this attach");
   return forwardedHookHandler;
 }
-//@ chunk-mthxbav8.js:132398-132583 placement
+//@ chunk-4z1ntdgk.js:145145-145330 placement
 var DEVICE_HOOK_SERVICER_DEFAULTS = {
   stageVerifiedBytes: "always",
   unmarkedStartFolder: "private",
@@ -233,7 +235,7 @@ var DEVICE_HOOK_SERVICER_DEFAULTS = {
   runWithUntranslatedPaths: false,
   timeoutFailsClosed: false,
 };
-//@ chunk-mthxbav8.js:132583-136798 placement
+//@ chunk-4z1ntdgk.js:145330-149545 placement
 /**
  * 创建远程工具通告发送器，按会话状态通告/撤回本机钩子与工具。
  */
@@ -448,7 +450,7 @@ function createRemoteToolsSender({
     servicerDefaults: DEVICE_HOOK_SERVICER_DEFAULTS,
   });
 }
-//@ chunk-mthxbav8.js:136798-137468 placement
+//@ chunk-4z1ntdgk.js:149545-150215 placement
 function isQuietOutcome(outcome) {
   switch (outcome) {
     case "answered":
@@ -490,9 +492,9 @@ function isQuietOutcome(outcome) {
       return outcome;
   }
 }
-//@ chunk-mthxbav8.js:137468-137567 placement (2.1.88 match: SETTING_SOURCES, 1)
+//@ chunk-4z1ntdgk.js:150215-150314 placement (2.1.88 match: SETTING_SOURCES, 1)
 var SETTING_SOURCE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mthxbav8.js:137468", () => {
+deferInit("chunk-4z1ntdgk.js:150215", () => {
   SETTING_SOURCE_SET = new Set([
     "userSettings",
     "localSettings",
@@ -501,7 +503,7 @@ deferInit("chunk-mthxbav8.js:137468", () => {
     "policySettings",
   ]);
 });
-//@ chunk-mthxbav8.js:137567-139389 placement
+//@ chunk-4z1ntdgk.js:150314-152136 placement
 /**
  * 启动设备钩子转发：组合会话与发送器，并按服务静音状态切换。
  */
@@ -608,7 +610,7 @@ function startDeviceHookForwarding(options) {
     },
   };
 }
-//@ chunk-mthxbav8.js:139426-139992 placement
+//@ chunk-4z1ntdgk.js:152173-152790 placement
 /**
  * 远程工具通告的响应 schema、超时、未验证发送者标记与失败原因列表。
  */
@@ -616,7 +618,7 @@ var announceResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/
 var UNVERIFIED_SENDER;
 var UNVERIFIED_SENDER_2;
 var ANNOUNCE_FAILURE_REASONS;
-deferInit("chunk-mthxbav8.js:139426", () => {
+deferInit("chunk-4z1ntdgk.js:152173", () => {
   announceResponseSchema = DoctorLazy(() =>
     looseObject({
       status: _enum(["announced", "withdrawn"]),
@@ -626,6 +628,7 @@ deferInit("chunk-mthxbav8.js:139426", () => {
       ignored_tools: array(stringSchema()).optional().catch(undefined),
       passthrough_adopted: numberSchema().int().nonnegative().optional().catch(undefined),
       worker_capabilities: array(stringSchema()).optional().catch(undefined),
+      tool_host_interface: unknown().optional().transform(interfaceFitOf),
     }),
   );
   UNVERIFIED_SENDER = 15000;
@@ -639,7 +642,7 @@ deferInit("chunk-mthxbav8.js:139426", () => {
     "unreadable_ack",
   ];
 });
-//@ chunk-mthxbav8.js:139992-140581 placement
+//@ chunk-4z1ntdgk.js:152790-153379 placement
 function classifyAnnounceError(error) {
   if (error instanceof ControlRequestNotDeliveredError)
     return {
@@ -681,7 +684,7 @@ function classifyAnnounceError(error) {
     reason: message,
   };
 }
-//@ chunk-mthxbav8.js:140581-141993 placement
+//@ chunk-4z1ntdgk.js:153379-154872 placement
 async function announceRemoteTools(send, body, options = {}) {
   primeUnattendedServingConsent();
   let abortController = new AbortController();
@@ -772,6 +775,9 @@ async function announceRemoteTools(send, body, options = {}) {
       ...(thinClientReply.worker_capabilities !== undefined && {
         workerCapabilities: thinClientReply.worker_capabilities,
       }),
+      ...(thinClientReply.tool_host_interface.kind !== "none" && {
+        sessionInterface: thinClientReply.tool_host_interface,
+      }),
     });
   } catch (error) {
     return runTelemetry(
@@ -779,7 +785,7 @@ async function announceRemoteTools(send, body, options = {}) {
     );
   }
 }
-//@ chunk-mthxbav8.js:141993-142325 placement
+//@ chunk-4z1ntdgk.js:154872-155204 placement
 function remoteToolsAnnounceRequest(body) {
   return {
     subtype: "remote_tools_announce",
@@ -797,15 +803,15 @@ function remoteToolsAnnounceRequest(body) {
     plumbing: [...body.plumbing],
   };
 }
-//@ chunk-mthxbav8.js:142325-142391 placement
+//@ chunk-4z1ntdgk.js:155204-155270 placement
 function sanitizeShortReason(reason) {
   return reason.slice(0, 200).replace(/[^\x20-\x7e]/g, "?");
 }
-//@ chunk-mthxbav8.js:142391-142419 placement
+//@ chunk-4z1ntdgk.js:155270-155298 placement
 var ANNOUNCE_BACKOFF_MAX_ATTEMPTS = 4;
 var ANNOUNCE_BACKOFF_BASE_MS = 2000;
 var MAX_ANNOUNCE_CHARS = 1048576;
-//@ chunk-mthxbav8.js:142419-142555 placement
+//@ chunk-4z1ntdgk.js:155298-155434 placement
 function trimAnnounceBody(body) {
   if (
     body.passthrough.length === 0 ||
@@ -823,12 +829,12 @@ function trimAnnounceBody(body) {
     trimmed: true,
   };
 }
-//@ chunk-mthxbav8.js:142555-142612 placement
+//@ chunk-4z1ntdgk.js:155434-155491 placement
 function dropPassthroughAdopted(result) {
   let { passthroughAdopted, ...rest } = result;
   return rest;
 }
-//@ chunk-mthxbav8.js:142612-142684 placement
+//@ chunk-4z1ntdgk.js:155491-155563 placement
 var ANNOUNCE_MIN_GAP_MS = 60000;
 var MAX_ANNOUNCE_ATTEMPTS = 6;
 var ANNOUNCE_ATTEMPT_WINDOW_MS = 3600000;
@@ -838,7 +844,7 @@ var MAX_RETRY_ATTEMPTS = 6;
 var RETRY_MIN_GAP_MS = 60000;
 var DEFAULT_ANNOUNCE_TIMEOUT_MS = 5000;
 var START_TIMEOUT_MS = 1500;
-//@ chunk-mthxbav8.js:142684-148048 placement
+//@ chunk-4z1ntdgk.js:155563-160931 placement
 /**
  * 带退避重试的远程工具通告循环。
  */
@@ -1231,4 +1237,4 @@ function createAnnounceLoop(options) {
   };
   return loop;
 }
-export { startDeviceHookForwarding, UNVERIFIED_SENDER_2, ANNOUNCE_FAILURE_REASONS, createAnnounceLoop };
+export { ANNOUNCE_FAILURE_REASONS, UNVERIFIED_SENDER_2, createAnnounceLoop, startDeviceHookForwarding };

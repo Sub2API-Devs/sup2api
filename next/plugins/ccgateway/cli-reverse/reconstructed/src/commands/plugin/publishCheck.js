@@ -3,9 +3,9 @@
  *
  * 插件发布前检查与发布步骤说明（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xkt86s08.js (51)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-731a2452.js (51)
  * attribution: placement 51
  */
 import { join, dirname, resolve } from "path";
@@ -60,7 +60,7 @@ import {
 } from "../../services/plugins/publish/validationCopy.js";
 import { plural } from "../../utils/stringUtils.js";
 import { MAX_CARD_FILES } from "../../components/permissions/FolderAccessPermissionRequest.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { getOriginalCwd, ensureToolResultsDir, writeToolResultFile } from "../../utils/toolResultStorage.js";
 import { safeIdentifierOrUndefined } from "../../utils/safeIdentifier.js";
@@ -69,14 +69,14 @@ import { hasReadDenyRuleForPath, hasReadDenyRuleInForce } from "../../utils/perm
 import { getAuthUnavailableReason } from "../../utils/auth/authUnavailableReason.js";
 import { getCwd } from "../../utils/cwd.js";
 
-//@ chunk-xkt86s08.js:13501-13510 placement
+//@ chunk-731a2452.js:14649-14658 placement
 var PUBLISH_CHECK_MODULE_EXPORTS = {};
-//@ chunk-xkt86s08.js:13510-13545 placement
+//@ chunk-731a2452.js:14658-14693 placement
 __export(PUBLISH_CHECK_MODULE_EXPORTS, {
   check: () => checkPublishPermission,
   default: () => PUBLISH_CHECK_MODULE_EXPORTS,
 });
-//@ chunk-xkt86s08.js:13577-13639 placement
+//@ chunk-731a2452.js:14725-14787 placement
 var organizationProfileSchema = DoctorLazy(() =>
   objectSchema({
     organization: objectSchema({
@@ -85,9 +85,9 @@ var organizationProfileSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-xkt86s08.js:13639-13651 placement
+//@ chunk-731a2452.js:14787-14799 placement
 var PROFILE_FETCH_TIMEOUT_MS = 5000;
-//@ chunk-xkt86s08.js:13651-13955 placement
+//@ chunk-731a2452.js:14799-15103 placement
 /**
  * 有 profile 权限时请求 /api/oauth/profile，组织 uuid 与给定值相同则返回组织名，否则 undefined（带超时与外部中止信号）。
  */
@@ -106,7 +106,7 @@ async function fetchOrganizationNameIfMatches(id, organizationId) {
   ).data;
   return parsed?.organization.uuid === id ? parsed.organization.name : undefined;
 }
-//@ chunk-xkt86s08.js:13955-14032 placement
+//@ chunk-731a2452.js:15103-15180 placement
 async function addOrganizationName(organization, context) {
   return organization.name !== undefined
     ? organization
@@ -115,7 +115,7 @@ async function addOrganizationName(organization, context) {
         name: await fetchOrganizationNameIfMatches(organization.id, context),
       };
 }
-//@ chunk-xkt86s08.js:14032-14206 placement
+//@ chunk-731a2452.js:15180-15354 placement
 async function checkPublishSubmissions(organization, context) {
   let organization_2 = await ensureOrganization(organization);
   if (organization_2 === undefined) return refusalResult(organization ?? organizationAvailability());
@@ -128,7 +128,7 @@ async function checkPublishSubmissions(organization, context) {
     ? addOrganizationName(organization_2, context)
     : stoppedOrResult(request, mySubmissions, "nothing");
 }
-//@ chunk-xkt86s08.js:14206-14282 placement
+//@ chunk-731a2452.js:15354-15430 placement
 function manifestDraftWrite(plan) {
   return plan.draft !== undefined
     ? {
@@ -137,17 +137,17 @@ function manifestDraftWrite(plan) {
       }
     : undefined;
 }
-//@ chunk-xkt86s08.js:14282-14304 placement
+//@ chunk-731a2452.js:15430-15452 placement
 var manifestDraftWriteLines = (plan) => manifestWriteLines(manifestDraftWrite(plan));
-//@ chunk-xkt86s08.js:14304-14352 placement
+//@ chunk-731a2452.js:15452-15500 placement
 var fileListingLine = (ctx) =>
   `${printableOrEmpty(ctx.path, MAX_PUBLISH_PATH_CHARS)} (${formatFileSize(ctx.bytes)})`;
-//@ chunk-xkt86s08.js:14352-14399 placement
+//@ chunk-731a2452.js:15500-15547 placement
 var leftOutFileLines = (ctx) => staysOnMachineLines(ctx.plan.listing.leftOut.length);
-//@ chunk-xkt86s08.js:14399-14471 placement
+//@ chunk-731a2452.js:15547-15619 placement
 var organizationLabel = (ctx) =>
   printableName(ctx.organization.name ?? `organization ${ctx.organization.id}`);
-//@ chunk-xkt86s08.js:14471-14953 placement
+//@ chunk-731a2452.js:15619-16101 placement
 var PUBLISH_STEPS_TEXT = (ctx) => [
   "First uploads it to your own shelf on claude.ai (My Uploads); whether it is scanned there depends on your organization",
   `Then submits it to ${organizationLabel(ctx)} for an administrator's review; where the organization publishes without review, it is published at once`,
@@ -158,19 +158,19 @@ var PUBLISH_STEPS_TEXT = (ctx) => [
     .filter((value) => value === "replace")
     .map(() => "Replaces the plugin of this name on your shelf, if any"),
 ];
-//@ chunk-xkt86s08.js:14953-15090 placement
+//@ chunk-731a2452.js:16101-16238 placement
 var listSensitiveSentFiles = (ctx) =>
   ctx.plan.listing.files
     .filter((file) => MCP_CONFIG_FILES.includes(file.path))
     .map((file) => `Sends ${file.path}: keys and tokens written in it go with it`);
-//@ chunk-xkt86s08.js:15090-15200 placement
+//@ chunk-731a2452.js:16238-16348 placement
 var WITHHELD_ENTRIES_NOTE =
   "Entries stay behind that are neither named nor counted here: this session's rules deny reading them.";
-//@ chunk-xkt86s08.js:15200-15230 placement
+//@ chunk-731a2452.js:16348-16378 placement
 var withheldNoteLines = (ctx) => (ctx.withheld ? [WITHHELD_ENTRIES_NOTE] : []);
-//@ chunk-xkt86s08.js:15230-15261 placement
+//@ chunk-731a2452.js:16378-16409 placement
 var publishWarningLines = (ctx) => [...listSensitiveSentFiles(ctx), ...withheldNoteLines(ctx)];
-//@ chunk-xkt86s08.js:15261-15537 placement
+//@ chunk-731a2452.js:16409-16685 placement
 var buildPublishCard = (ctx) => ({
   question: `Publish ${pluginNameLine(ctx.plan.manifest)} to ${organizationLabel(ctx)}?`,
   lines: [
@@ -184,9 +184,9 @@ var buildPublishCard = (ctx) => ({
   ],
   values: ctx.plan.listing.files.map(fileListingLine),
 });
-//@ chunk-xkt86s08.js:15537-15547 placement
+//@ chunk-731a2452.js:16685-16695 placement
 var MAX_CARD_QUESTION_CHARS = 48;
-//@ chunk-xkt86s08.js:15547-15729 placement
+//@ chunk-731a2452.js:16695-16877 placement
 function capFileListForCard(paths, limit) {
   let filtered = paths.slice(0, MAX_CARD_FILES).filter(
     (entry, path) =>
@@ -200,16 +200,16 @@ function capFileListForCard(paths, limit) {
     ? filtered
     : filtered.concat(`and ${omittedCount} more ${plural(omittedCount, "file")} not named here`);
 }
-//@ chunk-xkt86s08.js:15729-15802 placement
+//@ chunk-731a2452.js:16877-16950 placement
 var publishCardLines = (ctx, locationPrefix) => [
   buildPublishCard(ctx).question,
   `Organization: ${organizationLabel(ctx)}`,
   ...buildPublishCard(ctx).lines,
   ...locationPrefix,
 ];
-//@ chunk-xkt86s08.js:15802-15814 placement
+//@ chunk-731a2452.js:16950-16962 placement
 var CARD_WIDTH_RESERVE = 1800;
-//@ chunk-xkt86s08.js:15814-15900 placement
+//@ chunk-731a2452.js:16962-17048 placement
 function publishReviewCard(ctx, locationPrefix) {
   let lines = publishCardLines(ctx, locationPrefix);
   return lines.concat(
@@ -221,38 +221,38 @@ function publishReviewCard(ctx, locationPrefix) {
     ),
   );
 }
-//@ chunk-xkt86s08.js:15900-16100 placement
+//@ chunk-731a2452.js:17048-17248 placement
 function describeFullListLocation(prefix, ctx) {
   let where = ctx.withheld
     ? "Every file, and what stays behind that is named, is listed in"
     : "Every file, and what stays behind, is listed in";
   return [prefix ?? ""].filter(Boolean).map((path) => `${where} ${path}`);
 }
-//@ chunk-xkt86s08.js:16100-16148 placement
+//@ chunk-731a2452.js:17248-17296 placement
 var refusalDecision = (reason) => ({
   type: "other",
   reason: reason.join(`
 `),
 });
-//@ chunk-xkt86s08.js:16148-16159 placement
+//@ chunk-731a2452.js:17296-17307 placement
 var MAX_LIST_PATH_CHARS = 1e5;
-//@ chunk-xkt86s08.js:16159-16285 placement
+//@ chunk-731a2452.js:17307-17433 placement
 function capPathsByLength(paths) {
   let sliced = paths.slice(0, MAX_PUBLISH_LIST_ITEMS);
   return sliced.slice(
     0,
-    count(
+    countWhere(
       sliced.reduce((acc, entry) => acc.concat((acc.at(-1) ?? 0) + entry.path.length), []),
       (total) => total <= MAX_LIST_PATH_CHARS,
     ),
   );
 }
-//@ chunk-xkt86s08.js:16285-16339 placement
+//@ chunk-731a2452.js:17433-17487 placement
 var capListingPaths = (listing) => ({
   files: capPathsByLength(listing.files),
   stays: capPathsByLength(listing.leftOut),
 });
-//@ chunk-xkt86s08.js:16339-16471 placement
+//@ chunk-731a2452.js:17487-17619 placement
 function countUnnamedEntries(listing, shown) {
   let omittedFiles = listing.files.length - shown.files.length;
   let omittedLeftOut = listing.leftOut.length - shown.stays.length;
@@ -263,7 +263,7 @@ function countUnnamedEntries(listing, shown) {
         stays: omittedLeftOut,
       };
 }
-//@ chunk-xkt86s08.js:16471-16756 placement
+//@ chunk-731a2452.js:17619-17904 placement
 var FILE_KIND_DESCRIPTIONS = Object.freeze({
   link: "a link, not followed",
   "hard-link": "shares what it holds with another name on this disk",
@@ -274,23 +274,23 @@ var FILE_KIND_DESCRIPTIONS = Object.freeze({
   special: "not a file",
   backslash: "a backslash in its name",
 });
-//@ chunk-xkt86s08.js:16756-16816 placement
+//@ chunk-731a2452.js:17904-17964 placement
 var leftOutLine = (ctx) =>
   "stays here: " +
   printableOrEmpty(ctx.path, MAX_PUBLISH_PATH_CHARS) +
   ` (${FILE_KIND_DESCRIPTIONS[ctx.why]})`;
-//@ chunk-xkt86s08.js:16816-16895 placement
+//@ chunk-731a2452.js:17964-18043 placement
 var fullListingLines = (ctx) => [
   ...ctx.plan.listing.files.map(fileListingLine),
   ...ctx.plan.listing.leftOut.map(leftOutLine),
 ];
-//@ chunk-xkt86s08.js:16895-16926 placement
+//@ chunk-731a2452.js:18043-18074 placement
 var listingWithNotes = (ctx) => [...fullListingLines(ctx), ...withheldNoteLines(ctx)];
-//@ chunk-xkt86s08.js:16926-16960 placement
+//@ chunk-731a2452.js:18074-18108 placement
 var renderListingText = (ctx) => `${listingWithNotes(ctx).join(`
 `)}
 `;
-//@ chunk-xkt86s08.js:16960-17634 placement
+//@ chunk-731a2452.js:18108-18782 placement
 /**
  * 构造发布请求的结构化摘要（供审批/展示）：请求摘要哈希、标题、组织、插件名与版本、目录、模式、步骤、警告、写入项、发送文件（路径/字节/sha256/是否可执行）、留下的条目及原因、完整清单文件的哈希与路径、未列出的数量。
  */
@@ -332,10 +332,10 @@ var buildPublishSummary = (publishCtx, listPath, shown) => ({
   },
   unnamed: countUnnamedEntries(publishCtx.plan.listing, shown),
 });
-//@ chunk-xkt86s08.js:17634-17675 placement
+//@ chunk-731a2452.js:18782-18823 placement
 var publishSummary = (publishCtx, listPath) =>
   buildPublishSummary(publishCtx, listPath, capListingPaths(publishCtx.plan.listing));
-//@ chunk-xkt86s08.js:17675-17885 placement
+//@ chunk-731a2452.js:18823-19033 placement
 function buildPublishPromptInput(ctx, locationPrefix) {
   let summary = publishSummary(ctx, locationPrefix);
   return {
@@ -350,7 +350,7 @@ function buildPublishPromptInput(ctx, locationPrefix) {
     question: summary,
   };
 }
-//@ chunk-xkt86s08.js:17885-18056 placement
+//@ chunk-731a2452.js:19033-19204 placement
 /**
  * 生成发布的 ask 权限决定：问题文案、updatedInput（目录、目的地、描述、replace、展示行）、不允许"始终允许"规则，附带决定原因。
  */
@@ -365,20 +365,20 @@ function buildPublishAskDecision(ctx, ctx_2) {
     decisionReason: refusalDecision(card),
   };
 }
-//@ chunk-xkt86s08.js:18056-18132 placement
+//@ chunk-731a2452.js:19204-19280 placement
 function refusalFromUnreadable(error, toolContext) {
   let explanation = explainUnreadable(error, toolContext);
   return publishRefusalDenial(explanation.refusal.kind, explanation.refusal.details);
 }
-//@ chunk-xkt86s08.js:18132-18233 placement
+//@ chunk-731a2452.js:19280-19381 placement
 var cannotPromptForPublish = (toolContext, agentId) =>
   agentId !== undefined ||
   toolContext.shouldAvoidPermissionPrompts === true ||
   toolContext.servedCall === true ||
   toolContext.mode === "dontAsk";
-//@ chunk-xkt86s08.js:18276-18287 placement
+//@ chunk-731a2452.js:19424-19435 placement
 var TOOL_RESULT_FILE_MODE = 384;
-//@ chunk-xkt86s08.js:18287-18533 placement
+//@ chunk-731a2452.js:19435-19681 placement
 /**
  * 把完整的发布文件清单写到会话工具结果目录下的 publish-<toolUseId>.txt；toolUseId 不是普通标识时放弃，返回文件路径或 undefined。
  */
@@ -399,9 +399,9 @@ async function writePublishListFile(toolUseId, ctx, toolContext) {
       },
     );
 }
-//@ chunk-xkt86s08.js:18533-18543 placement
+//@ chunk-731a2452.js:19681-19691 placement
 var SHA_PREFIX_TRIM = 16;
-//@ chunk-xkt86s08.js:18543-18675 placement
+//@ chunk-731a2452.js:19691-19823 placement
 function rememberPublishRequest(toolUseId, publishRequestDigest, toolContext) {
   let map = sessionScopedMapsSlot.of(toolContext.session);
   map.set(toolUseId, publishRequestDigest);
@@ -409,7 +409,7 @@ function rememberPublishRequest(toolUseId, publishRequestDigest, toolContext) {
     .slice(0, Math.max(0, map.size - SHA_PREFIX_TRIM))
     .forEach((key) => map.delete(key));
 }
-//@ chunk-xkt86s08.js:18675-18802 placement
+//@ chunk-731a2452.js:19823-19950 placement
 var buildPublishRequestDigest = (publishCtx, updatedInput) => ({
   digest: publishRequestHash(publishCtx),
   question: hashPublishInput(updatedInput.question),
@@ -418,10 +418,10 @@ var buildPublishRequestDigest = (publishCtx, updatedInput) => ({
   card: buildPublishCard(publishCtx),
   everything: fullListingLines(publishCtx),
 });
-//@ chunk-xkt86s08.js:18802-18865 placement
+//@ chunk-731a2452.js:19950-20013 placement
 var abortedRefusal = (options) =>
   options.signal.aborted ? refusalResult("stopped", [PUBLISH_STOPPED_TEXT.nothing]) : undefined;
-//@ chunk-xkt86s08.js:18893-18991 placement
+//@ chunk-731a2452.js:20041-20139 placement
 var isReadDeniedPath = (permissions, path, toolContext) =>
   [path, join(path, "within")].some((candidate) =>
     hasReadDenyRuleForPath(
@@ -430,7 +430,7 @@ var isReadDeniedPath = (permissions, path, toolContext) =>
       permissions.map((root) => join(root, candidate)),
     ),
   );
-//@ chunk-xkt86s08.js:18991-19117 placement
+//@ chunk-731a2452.js:20139-20265 placement
 var withLeftOutEntries = (ctx, extra) => ({
   ...ctx,
   plan: {
@@ -442,7 +442,7 @@ var withLeftOutEntries = (ctx, extra) => ({
   },
   withheld: extra.length < ctx.plan.listing.leftOut.length,
 });
-//@ chunk-xkt86s08.js:19117-19232 placement
+//@ chunk-731a2452.js:20265-20380 placement
 function filterLeftOutByReadRules(ctx, permissions, toolContext) {
   let grantAll = !hasReadDenyRuleInForce(toolContext.permissions());
   return withLeftOutEntries(
@@ -452,13 +452,13 @@ function filterLeftOutByReadRules(ctx, permissions, toolContext) {
     ),
   );
 }
-//@ chunk-xkt86s08.js:19232-19311 placement
+//@ chunk-731a2452.js:20380-20459 placement
 function writeDeniedRefusal(roots, prepared, context) {
   return prepared.draft !== undefined && hasPublishDenyRule(roots, context)
     ? refusalResult("write-denied")
     : undefined;
 }
-//@ chunk-xkt86s08.js:19311-19861 placement
+//@ chunk-731a2452.js:20459-21009 placement
 /**
  * 发布插件工具的权限检查流程：功能开关/不能提示时直接返回；确认组织；检查读规则；准备发布目录与清单；检查读拒绝；写出完整清单文件并返回 ask 决定（同时记下请求摘要供后续核对）。
  */

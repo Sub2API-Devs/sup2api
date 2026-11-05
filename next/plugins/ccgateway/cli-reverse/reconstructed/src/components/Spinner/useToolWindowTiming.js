@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。工具运行窗口阶段计时（tool-running/recovering…）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3mec1atf.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hzenv5c0.js (6)
  * attribution: placement 6
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-3mec1atf.js:5903-5907 placement
+//@ chunk-hzenv5c0.js:5910-5914 placement
 init_react_production();
-//@ chunk-3mec1atf.js:5907-6008 placement
+//@ chunk-hzenv5c0.js:5914-6015 placement
 function createToolWindowTimingState() {
   return {
     toolWindowStart: null,
@@ -21,7 +21,7 @@ function createToolWindowTimingState() {
     wasThinking: false,
   };
 }
-//@ chunk-3mec1atf.js:6008-6460 placement
+//@ chunk-hzenv5c0.js:6015-6467 placement
 /**
  * 根据当前帧（是否有活动工具、thinking 状态、当前时间）推进工具运行窗口与 thinking 爆发的起止时间，返回新状态。
  */
@@ -46,7 +46,7 @@ function advanceToolWindowTiming(timing, state) {
     wasThinking: state.isThinking,
   };
 }
-//@ chunk-3mec1atf.js:6460-7190 placement
+//@ chunk-hzenv5c0.js:6467-7197 placement
 function toolWindowPhase(timing, state) {
   if (state.showToolCallTimer && state.hasActiveTools && timing.toolWindowStart !== null) {
     let elapsedMs = state.now - timing.toolWindowStart;
@@ -89,13 +89,13 @@ function toolWindowPhase(timing, state) {
     kind: "none",
   };
 }
-//@ chunk-3mec1atf.js:7190-7367 placement
+//@ chunk-hzenv5c0.js:7197-7374 placement
 function thinkingBurstIntensity(timing, state) {
   if (state.hasActiveTools) return 0;
   if (!state.isThinking || timing.thinkingBurstStart === null) return 0;
   let intensity = state.now - timing.thinkingBurstStart;
   return Math.min(Math.max((intensity - 1e4) / 1e4, 0), 1);
 }
-//@ chunk-3mec1atf.js:7367-7371 placement
+//@ chunk-hzenv5c0.js:7374-7378 placement
 init_react_production();
 export { createToolWindowTimingState, advanceToolWindowTiming, toolWindowPhase, thinkingBurstIntensity };

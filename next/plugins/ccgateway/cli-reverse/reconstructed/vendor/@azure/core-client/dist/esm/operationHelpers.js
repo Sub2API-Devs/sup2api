@@ -1,13 +1,13 @@
 /**
  * @azure/core-client/dist/esm/operationHelpers.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (5)
+ * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
 import { state_2 } from "../commonjs/state-cjs.js";
 
-//@ chunk-mrx6y2r5.js:68828-69300 esm-fingerprint
+//@ chunk-b5df2wx1.js:68828-69300 esm-fingerprint
 function getOperationArgumentValueFromParameter(operationArguments, parameter, fallbackObject) {
   let { parameterPath, mapper: parameterMapper } = parameter;
   let value;
@@ -46,7 +46,7 @@ function getOperationArgumentValueFromParameter(operationArguments, parameter, f
   }
   return value;
 }
-//@ chunk-mrx6y2r5.js:69300-69471 esm-fingerprint
+//@ chunk-b5df2wx1.js:69300-69471 esm-fingerprint
 function getPropertyFromParameterPath(parent, parameterPath) {
   let result = {
     propertyFound: false,
@@ -63,13 +63,13 @@ function getPropertyFromParameterPath(parent, parameterPath) {
   }
   return result;
 }
-//@ chunk-mrx6y2r5.js:69471-69528 esm-fingerprint
+//@ chunk-b5df2wx1.js:69471-69528 esm-fingerprint
 var originalRequestSymbol = Symbol.for("@azure/core-client original request");
-//@ chunk-mrx6y2r5.js:69528-69558 esm-layout
+//@ chunk-b5df2wx1.js:69528-69558 esm-layout
 function hasOriginalRequest(request) {
   return originalRequestSymbol in request;
 }
-//@ chunk-mrx6y2r5.js:69558-69687 esm-fingerprint
+//@ chunk-b5df2wx1.js:69558-69687 esm-fingerprint
 function getOperationRequestInfo(request) {
   if (hasOriginalRequest(request)) return getOperationRequestInfo(request[originalRequestSymbol]);
   let info = state_2.operationRequestMap.get(request);

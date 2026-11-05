@@ -1,14 +1,14 @@
 /**
  * @opentelemetry/core/build/src/platform/node/environment.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/core@2.7.1
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../../runtime/bun-runtime.js";
 import { require_api } from "../../../../../api/build/src/index.js";
 
-//@ chunk-bwbq4xvm.js:58636-59559 cjs-fingerprint
+//@ chunk-7kayq7nc.js:58722-59645 cjs-fingerprint
 var require_environment = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

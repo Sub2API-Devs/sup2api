@@ -3,10 +3,10 @@
  *
  * 路径解析（允许缺失、WSL）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aat7wt0p.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-za46rn2f.js (19)
+ * attribution: placement 18, layout 1
  */
 import { isAbsolute, resolve, dirname, parse, join, relative } from "path";
 import { readlinkSync } from "fs";
@@ -15,12 +15,14 @@ import {
   realpathNativeLongSync,
   isNetworkOrDevicePath,
   captureSyncResult,
+  isUncOrDeviceSpelling,
 } from "./fsJunctions.js";
 import { hasDotSegment_2, hasDotSegment, isDosDevicePath } from "./pathClassification.js";
 import { wslLocalhostParts, isNetworkRelatedPath } from "./networkPaths.js";
 import { pathTraversesUntrustedLink } from "./settings/settings.js";
+import { realpathCacheEntry } from "./permissions/protectedDirs.js";
 
-//@ chunk-aat7wt0p.js:14220-14548 placement
+//@ chunk-za46rn2f.js:14220-14548 placement
 function realpathAllowMissing(inputPath, { allowLocalWsl = false } = {}) {
   let isLocalWslAllowed = (candidatePath) => allowLocalWsl && neverAllowsLocalWsl(candidatePath);
   if (isLocalWslAllowed(inputPath)) return false;
@@ -44,23 +46,23 @@ function realpathAllowMissing(inputPath, { allowLocalWsl = false } = {}) {
     current = parent;
   }
 }
-//@ chunk-aat7wt0p.js:14548-14573 placement
+//@ chunk-za46rn2f.js:14548-14573 placement
 /**
  * neverAllowsLocalWsl：编译期开关 stub：永远不认为本地 WSL 路径可信。
  */
 function neverAllowsLocalWsl(candidatePath) {
   return false;
 }
-//@ chunk-aat7wt0p.js:14573-14598 placement
+//@ chunk-za46rn2f.js:14573-14598 placement
 /**
  * passThroughPath：恒等函数，用于跨平台路径预处理。
  */
 function passThroughPath(inputPath) {
   return inputPath;
 }
-//@ chunk-aat7wt0p.js:14598-14630 placement
+//@ chunk-za46rn2f.js:14598-14630 placement
 var WSL_MOUNT_PATTERN = /^\/mnt\/[a-z](?:\/|$)/i;
-//@ chunk-aat7wt0p.js:14630-14841 placement (2.1.88 match: chordToDisplayString, 1)
+//@ chunk-za46rn2f.js:14630-14841 placement (2.1.88 match: chordToDisplayString, 1)
 function toWindowsPathFromWsl(inputPath, windowsRoot, distroDir = "") {
   if (!inputPath.startsWith("/") || WSL_MOUNT_PATTERN.test(inputPath) || hasDotSegment_2(inputPath, "linux"))
     return;
@@ -74,14 +76,14 @@ function toWindowsPathFromWsl(inputPath, windowsRoot, distroDir = "") {
     ? undefined
     : windowsRoot.replace(/[\\/]+$/, "") + relativePath.replace(/\//g, "\\");
 }
-//@ chunk-aat7wt0p.js:14841-14884 placement
+//@ chunk-za46rn2f.js:14841-14884 placement
 /**
  * toWslPathNoop：WSL 路径转换的禁用版 stub，恒返回 undefined。
  */
 function toWslPathNoop(inputPath, { exactDots = false } = {}) {
   return;
 }
-//@ chunk-aat7wt0p.js:14884-15188 placement
+//@ chunk-za46rn2f.js:14884-15188 placement
 function toWslPath(inputPath, { exactDots = false } = {}) {
   let strippedPath = stripWin32DevicePrefix(inputPath);
   if (exactDots ? hasDotSegment_2(strippedPath, "win32") : hasDotSegment(strippedPath)) return;
@@ -92,14 +94,14 @@ function toWslPath(inputPath, { exactDots = false } = {}) {
   let wslPath = match ? `/mnt/${match[1].toLowerCase()}/${replaced_2}` : `/${replaced_2}`;
   return isUntrustedLinkPath(wslPath) ? undefined : wslPath;
 }
-//@ chunk-aat7wt0p.js:15188-15226 placement
+//@ chunk-za46rn2f.js:15188-15226 placement
 /**
  * isTrustedLocalWindowsPath：路径不在可疑拼写中即视为可信本地路径（Windows 分支）。
  */
 function isTrustedLocalWindowsPath(pluginsDirectory) {
   return isUntrustedLinkPath(pluginsDirectory) && !neverAllowsLocalWsl(pluginsDirectory);
 }
-//@ chunk-aat7wt0p.js:15226-15283 placement
+//@ chunk-za46rn2f.js:15226-15283 placement
 /**
  * isUntrustedLinkPath：去掉 Win32 设备前缀后判断是否为交接点/网络/设备路径。
  */
@@ -109,7 +111,7 @@ function isUntrustedLinkPath(inputPath) {
     isNetworkOrDevicePath(strippedPath) || isNetworkRelatedPath(strippedPath) || isDosDevicePath(strippedPath)
   );
 }
-//@ chunk-aat7wt0p.js:15283-15447 placement
+//@ chunk-za46rn2f.js:15283-15447 placement
 /**
  * 判断路径是否经过不可信链接（非绝对路径视为是）。
  */
@@ -127,7 +129,7 @@ function traversesUntrustedLink(inputPath, { allowLocalWsl = false, eisdirIsFold
     },
   );
 }
-//@ chunk-aat7wt0p.js:15447-15519 placement
+//@ chunk-za46rn2f.js:15447-15519 placement
 /**
  * pathTraversesFromTrustedRoot：以给定根为可信起点检查剩余路径成分是否经过不可信链接。
  */
@@ -137,7 +139,7 @@ function pathTraversesFromTrustedRoot(rootPath, restPath) {
     trustedRoot: rootPath,
   });
 }
-//@ chunk-aat7wt0p.js:15519-15967 placement
+//@ chunk-za46rn2f.js:15519-15967 placement
 function resolvePathChain(linkPath, baseDir = dirname(linkPath)) {
   let readResult = captureSyncResult(() => readlinkSync(linkPath));
   if (readResult.value === undefined) return readResult.code !== "ENOENT" && readResult.code !== "EINVAL";
@@ -172,7 +174,7 @@ function resolvePathChain(linkPath, baseDir = dirname(linkPath)) {
     baseOptions,
   );
 }
-//@ chunk-aat7wt0p.js:15967-16024 placement
+//@ chunk-za46rn2f.js:15967-16024 placement
 /**
  * traversesOrResolvesUntrustedLink：直接路径或（Windows 本地路径）resolve 后任一经过不可信链接即为真。
  */
@@ -182,48 +184,54 @@ function traversesOrResolvesUntrustedLink(inputPath, options = {}) {
     (hasDotSegment(inputPath) && traversesUntrustedLink(resolve(inputPath), options))
   );
 }
-//@ chunk-aat7wt0p.js:16024-16034 placement
+//@ chunk-za46rn2f.js:16024-16034 placement
 /**
  * MAX_UNTRUSTED_PATH_DEPTH：路径成分遍历的深度上限（导出，供调用方复用）。
  */
 var MAX_UNTRUSTED_PATH_DEPTH = 40;
-//@ chunk-aat7wt0p.js:16034-16086 placement
+//@ chunk-za46rn2f.js:16034-16086 layout
+function isRealPathNonUnc(root) {
+  let realPath = realpathCacheEntry(root);
+  return realPath !== null && !isUncOrDeviceSpelling(realPath);
+}
+//@ chunk-za46rn2f.js:16086-16138 placement
 /**
  * splitPathSegments：按 / 切分路径成分并丢弃空段。
  */
 function splitPathSegments(inputPath) {
   return inputPath.split(/\/+/).filter(Boolean);
 }
-//@ chunk-aat7wt0p.js:16086-16129 placement
+//@ chunk-za46rn2f.js:16138-16181 placement
 /**
  * isUntrustedLinkPathStrict：与 isUntrustedLinkPath 相同但可选参数为假时仍判可疑。
  */
 function isUntrustedLinkPathStrict(inputPath, allowLocalWsl) {
   return isUntrustedLinkPath(inputPath) && !(allowLocalWsl && neverAllowsLocalWsl(inputPath));
 }
-//@ chunk-aat7wt0p.js:16129-16182 placement
+//@ chunk-za46rn2f.js:16181-16234 placement
 function isParentDirSegment(segment) {
   return segment === ".." || /^\.\.[\\/]/.test(segment);
 }
-//@ chunk-aat7wt0p.js:16182-16206 placement
+//@ chunk-za46rn2f.js:16234-16258 placement
 function alwaysFalse(inputPath) {
   return false;
 }
 export {
-  realpathAllowMissing,
-  isTrustedLocalWindowsPath,
-  isUntrustedLinkPath,
   traversesOrResolvesUntrustedLink,
+  isUntrustedLinkPath,
+  toWslPathNoop,
+  toWindowsPathFromWsl,
+  neverAllowsLocalWsl,
+  toWslPath,
   resolvePathChain,
-  traversesUntrustedLink,
+  realpathAllowMissing,
   isUntrustedLinkPathStrict,
   MAX_UNTRUSTED_PATH_DEPTH,
   alwaysFalse,
   splitPathSegments,
-  passThroughPath,
+  isTrustedLocalWindowsPath,
+  traversesUntrustedLink,
   pathTraversesFromTrustedRoot,
-  toWslPath,
-  toWslPathNoop,
-  toWindowsPathFromWsl,
-  neverAllowsLocalWsl,
+  passThroughPath,
+  isRealPathNonUnc,
 };

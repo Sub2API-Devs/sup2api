@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记录 Anthropic 遥测导出失败次数与最后错误；包装导出器：失败只记录，不影响调用方。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (7)
  * attribution: placement 7
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -15,28 +15,28 @@ import { require_core } from "../../../vendor/@opentelemetry/core/build/src/inde
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:659129-659148 placement
+//@ chunk-exfmq47h.js:671735-671754 placement
 var otelSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:659129", () => {
+deferInit("chunk-exfmq47h.js:671735", () => {
   otelSdkModule = __toESM(require_error_3(), 1);
 });
-//@ chunk-aepeg2w5.js:659185-659210 placement
+//@ chunk-exfmq47h.js:671791-671816 placement
 function isDisklessHost() {
   return isDiskless();
 }
-//@ chunk-aepeg2w5.js:659210-659254 placement
+//@ chunk-exfmq47h.js:671816-671860 placement
 var EXPORT_ENVIRONMENTS = ["dry_run", "test_mode", "production"];
-//@ chunk-aepeg2w5.js:659254-659272 placement
+//@ chunk-exfmq47h.js:671860-671878 placement
 var otelSdkLogsModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:659254", () => {
+deferInit("chunk-exfmq47h.js:671860", () => {
   otelSdkLogsModule = __toESM(require_core(), 1);
 });
-//@ chunk-aepeg2w5.js:659272-659303 placement
+//@ chunk-exfmq47h.js:671878-671909 placement
 /**
  * Anthropic 遥测导出器：环境列表（dry_run/test_mode/production）、失败计数包装与日志前缀。
  */
 var TELEMETRY_LOG_PREFIX = "[Anthropic telemetry]";
-//@ chunk-aepeg2w5.js:659303-659792 placement
+//@ chunk-exfmq47h.js:671909-672398 placement
 /**
  * 记录 Anthropic 遥测导出失败次数与最后错误。
  */
@@ -64,7 +64,7 @@ class ExportFailureCounter {
     );
   }
 }
-//@ chunk-aepeg2w5.js:659792-660137 placement
+//@ chunk-exfmq47h.js:672398-672743 placement
 /**
  * 包装导出器：失败只记录，不影响调用方。
  */
@@ -92,9 +92,9 @@ function wrapExporterFailures(exporter, summary) {
   return exporter;
 }
 export {
-  TELEMETRY_LOG_PREFIX,
   EXPORT_ENVIRONMENTS,
   isDisklessHost,
+  TELEMETRY_LOG_PREFIX,
   ExportFailureCounter,
   otelSdkModule,
   wrapExporterFailures,

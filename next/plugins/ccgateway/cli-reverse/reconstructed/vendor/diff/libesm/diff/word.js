@@ -1,8 +1,8 @@
 /**
  * diff/libesm/diff/word.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: diff@9.0.0
- * pieces: chunk-7vb8p3zb.js (5)
+ * pieces: chunk-9dtasr5y.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
 import { Diff } from "../../libcjs/diff/base.js";
@@ -20,11 +20,11 @@ import {
   maximumOverlap,
 } from "../../libcjs/util/string.js";
 
-//@ chunk-7vb8p3zb.js:4740-4907 esm-fingerprint
+//@ chunk-9dtasr5y.js:4740-4907 esm-fingerprint
 var extendedWordChars =
   "a-zA-Z0-9_\\u{AD}\\u{C0}-\\u{D6}\\u{D8}-\\u{F6}\\u{F8}-\\u{2C6}\\u{2C8}-\\u{2D7}\\u{2DE}-\\u{2FF}\\u{1E00}-\\u{1EFF}";
 var tokenizeIncludingWhitespace = new RegExp(`[${extendedWordChars}]+|\\s+|[^${extendedWordChars}]`, "ug");
-//@ chunk-7vb8p3zb.js:4907-5764 esm-fingerprint
+//@ chunk-9dtasr5y.js:4907-5764 esm-fingerprint
 class WordDiff extends Diff {
   equals(left, right, options) {
     if (options.ignoreCase) {
@@ -84,9 +84,9 @@ class WordDiff extends Diff {
     return changes;
   }
 }
-//@ chunk-7vb8p3zb.js:5764-5776 esm-layout
+//@ chunk-9dtasr5y.js:5764-5776 esm-layout
 var wordDiff = new WordDiff();
-//@ chunk-7vb8p3zb.js:5776-6496 esm-fingerprint
+//@ chunk-9dtasr5y.js:5776-6496 esm-fingerprint
 function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep, segmenter) {
   if (deletion && insertion) {
     let [oldWsPrefix, oldWsSuffix] = leadingAndTrailingWs(deletion.value, segmenter);
@@ -137,7 +137,7 @@ function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep
     deletion.value = stripPrefixOnce(deletion.value, overlap);
   }
 }
-//@ chunk-7vb8p3zb.js:6496-6614 esm-fingerprint
+//@ chunk-9dtasr5y.js:6496-6614 esm-fingerprint
 class WordsWithSpaceDiff extends Diff {
   tokenize(value) {
     let regex = new RegExp(`(\\r?\\n)|[${extendedWordChars}]+|[^\\S\\n\\r]+|[^${extendedWordChars}]`, "ug");

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：查询引擎的提示提及链。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a53esm6j.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2wd29ps2.js (6)
  * attribution: placement 6
  */
 import { __export } from "../../runtime/bun-runtime.js";
@@ -14,20 +14,20 @@ import { UNHOOKED_MENTION_RESULT } from "../plugins/functionHooks/promptMentionR
 import { createEventCallersRef } from "../plugins/functionHooks/eventCatalog.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-a53esm6j.js:11880-11889 placement
+//@ chunk-2wd29ps2.js:13028-13037 placement
 /**
  * 导出值：mentionChainCache（空对象缓存）。
  */
 var mentionChainCache = {};
-//@ chunk-a53esm6j.js:11889-11966 placement
+//@ chunk-2wd29ps2.js:13037-13114 placement
 __export(mentionChainCache, {
   CONTEXT_DROPPED_NOTE: () => CONTEXT_DROPPED_NOTE,
   default: () => mentionChainCache,
   runPromptMentionChain: () => runPromptMentionChain,
 });
-//@ chunk-a53esm6j.js:11966-12015 placement
+//@ chunk-2wd29ps2.js:13114-13163 placement
 var CONTEXT_DROPPED_NOTE = "; the context beside the deny is dropped";
-//@ chunk-a53esm6j.js:12015-12107 placement
+//@ chunk-2wd29ps2.js:13163-13255 placement
 function coreMentionHook(read) {
   let cached;
   return {
@@ -40,13 +40,13 @@ function coreMentionHook(read) {
     },
   };
 }
-//@ chunk-a53esm6j.js:12107-12226 placement
+//@ chunk-2wd29ps2.js:13255-13374 placement
 var mentionVerdict = (result) => ({
   isKept: result.deny === undefined && result.type !== null,
   isDenied: result.deny !== undefined,
   context: result.deny === undefined ? (result.context ?? []) : [],
 });
-//@ chunk-a53esm6j.js:12226-12652 placement
+//@ chunk-2wd29ps2.js:13374-13800 placement
 async function runPromptMentionChain(context) {
   let { raised, signalOf, skipping, read } = context;
   let hookedBy = pluginsMatchingEvent("prompt.mention", raised, skipping);

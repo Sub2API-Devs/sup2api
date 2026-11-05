@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作树登记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 13
  */
 import { parse, sep, normalize, dirname, join, isAbsolute, basename } from "path";
@@ -42,20 +42,20 @@ import { isOnForeignMount } from "../networkPaths.js";
 import { removeWorktreeSafely, worktreeRemovalText } from "../git/worktreeRemoval.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3574892-3574912 placement
+//@ chunk-5xgkngpb.js:3670151-3670171 placement
 var micromatch; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3574892", () => {
+deferInit("chunk-5xgkngpb.js:3670151", () => {
   micromatch = __toESM(require_ignore(), 1);
 });
-//@ chunk-e6aww6q8.js:3575265-3575301 placement
+//@ chunk-5xgkngpb.js:3670524-3670560 placement
 function installRepoDetectionGuards() {
   setRepoDetectionGuards({
     trustProbe: checkHasTrustDialogAccepted,
   });
 }
-//@ chunk-e6aww6q8.js:3575301-3575389 placement
+//@ chunk-5xgkngpb.js:3670560-3670648 placement
 var GIT_PROGRESS_LINE_RE = /^(?:remote: )?[^:'"]+:\s+\d{1,3}% \(\d+\/\d+\)(?:,[\p{L}\p{N}\p{M} .,|/]*)?$/u;
-//@ chunk-e6aww6q8.js:3575389-3575616 placement
+//@ chunk-5xgkngpb.js:3670648-3670875 placement
 function stripProgressLines(text) {
   let lines = [];
   for (let line of text.split(/\r?\n/)) {
@@ -74,22 +74,22 @@ function stripProgressLines(text) {
     )
     .trim();
 }
-//@ chunk-e6aww6q8.js:3575616-3575640 placement
+//@ chunk-5xgkngpb.js:3670875-3670899 placement
 /**
  * 外部构建恒 false 的「在别处创建」判断。
  */
 function isWorktreeMadeElsewhereStub() {
   return false;
 }
-//@ chunk-e6aww6q8.js:3575827-3575912 placement
+//@ chunk-5xgkngpb.js:3671086-3671171 placement
 function normalizeDriveLetter(value) {
   return getPlatform() === "windows"
     ? value.replace(/^[A-Za-z]:/, (driveLetter) => driveLetter.toLowerCase())
     : value;
 }
-//@ chunk-e6aww6q8.js:3575912-3575923 placement
+//@ chunk-5xgkngpb.js:3671171-3671182 placement
 var MAX_LINK_HOPS = 40;
-//@ chunk-e6aww6q8.js:3575923-3577026 placement
+//@ chunk-5xgkngpb.js:3671182-3672288 placement
 /**
  * 逐段解析路径中的符号链接（限制跳转次数），处理 .. 与 Windows 规范化，得到真实路径；无法解析时返回 unresolvable。
  */
@@ -178,7 +178,7 @@ async function resolvePathThroughLinks(targetPath, rootPath) {
     resolved,
   };
 }
-//@ chunk-e6aww6q8.js:3577026-3577478 placement
+//@ chunk-5xgkngpb.js:3672288-3672740 placement
 /**
  * 移除工作树后注销其在仓库中的登记，仓库不一致时保留登记并记录原因。
  */
@@ -218,7 +218,7 @@ async function deregisterRemovedWorktree(root, gitDir, worktreePath, forceTwice)
           reason: dropResult.reason,
         };
 }
-//@ chunk-e6aww6q8.js:3577478-3578384 placement
+//@ chunk-5xgkngpb.js:3672740-3673646 placement
 async function vetWorktreeRegistration(root) {
   let root_2 = root;
   let vetted = await vetWorktree(root, {
@@ -275,7 +275,7 @@ async function vetWorktreeRegistration(root) {
     real,
   };
 }
-//@ chunk-e6aww6q8.js:3578384-3579236 placement
+//@ chunk-5xgkngpb.js:3673646-3674498 placement
 /**
  * 在运行 git 前确认仓库的 git 目录与公共目录仍是先前固定的那个（比较 dev/ino 或 realpath），否则拒绝运行。
  */
@@ -327,7 +327,7 @@ async function verifyPinnedGitDir(pinned, gitDirsOrPlaceholder) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3579236-3583865 placement
+//@ chunk-5xgkngpb.js:3674498-3679141 placement
 /**
  * 清理与校验 worktree 登记（Windows 设备路径、. 与 .. 组件等）。
  */
@@ -574,9 +574,9 @@ async function pruneWorktreeRegistrations(a, b, options = {}) {
         stderr: forceResult.stderr,
       };
 }
-//@ chunk-e6aww6q8.js:3583865-3583881 placement
+//@ chunk-5xgkngpb.js:3679141-3679157 placement
 var partialCloneFetchCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3583865", () => {
+deferInit("chunk-5xgkngpb.js:3679141", () => {
   partialCloneFetchCache = new Map();
 });
 export {

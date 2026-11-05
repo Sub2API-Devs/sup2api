@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。列出云会话启动的后台命令（claude daemon remote-control stop-shell 可停止）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hkmynrbn.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nefh4pze.js (17)
  * attribution: placement 17
  */
 import { join } from "path";
@@ -29,7 +29,7 @@ import { servedCallsDir } from "../servedCallLog.js";
 import { toJsonLine, jsonParseRaw } from "../../../utils/slowOperations.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage, getErrnoCode } from "../../../utils/errors.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { sleep } from "../../../utils/sleep.js";
 import { formatDurationCoarse } from "../../../utils/format.js";
 import { isProcessRunning } from "../../../utils/genericProcessUtils.js";
@@ -39,7 +39,7 @@ import { truncateWithEllipsis } from "../../../utils/printableName.js";
 import { cleanForDisplay } from "../../../utils/stringUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-hkmynrbn.js:752-1202 placement
+//@ chunk-nefh4pze.js:754-1204 placement
 /**
  * 后台 shell 记录：id/日志文件名正则、字段长度上限（命令 80、调用者 64）、日志尾部 8192 字节、最多列 256 个日志、最多展示 32 条，以及记录 schema。
  */
@@ -52,7 +52,7 @@ var MAX_LOG_FILES;
 var MAX_LISTED_SHELLS;
 var STOP_POLL_INTERVAL_MS;
 var servedBackgroundShellSchema;
-deferInit("chunk-hkmynrbn.js:752", () => {
+deferInit("chunk-nefh4pze.js:754", () => {
   SERVED_BACKGROUND_SHELL_ID = /^[A-Za-z0-9]{1,64}$/;
   BACKGROUND_LOG_FILE_RE = /^background-[A-Za-z0-9]{1,64}\.jsonl$/;
   MAX_COMMAND_CHARS = 80;
@@ -77,7 +77,7 @@ deferInit("chunk-hkmynrbn.js:752", () => {
     }),
   );
 });
-//@ chunk-hkmynrbn.js:1202-1664 placement
+//@ chunk-nefh4pze.js:1204-1666 placement
 async function fileServedBackgroundShell(shell) {
   if (!SERVED_BACKGROUND_SHELL_ID.test(shell.id)) return;
   try {
@@ -108,16 +108,16 @@ async function fileServedBackgroundShell(shell) {
     });
   }
 }
-//@ chunk-hkmynrbn.js:1664-1714 placement
+//@ chunk-nefh4pze.js:1666-1716 placement
 async function retireServedBackgroundShell(shell) {
   await deleteFileQuietly(backgroundStopPath(shell));
   await deleteFileQuietly(backgroundLogPath(shell));
 }
-//@ chunk-hkmynrbn.js:1714-1745 placement
+//@ chunk-nefh4pze.js:1716-1747 placement
 function takeServedBackgroundStopRequest(shell) {
   return deleteFileQuietly(backgroundStopPath(shell));
 }
-//@ chunk-hkmynrbn.js:1745-2118 placement
+//@ chunk-nefh4pze.js:1747-2120 placement
 async function readServedBackgroundShells() {
   let shells = [];
   try {
@@ -137,7 +137,7 @@ async function readServedBackgroundShells() {
       left.id.localeCompare(right.id),
   );
 }
-//@ chunk-hkmynrbn.js:2118-2534 placement
+//@ chunk-nefh4pze.js:2120-2536 placement
 async function lookUpServedBackgroundShell(id) {
   if (!SERVED_BACKGROUND_SHELL_ID.test(id)) return;
   try {
@@ -164,14 +164,14 @@ async function lookUpServedBackgroundShell(id) {
   } catch {}
   return;
 }
-//@ chunk-hkmynrbn.js:2534-2618 placement
+//@ chunk-nefh4pze.js:2536-2620 placement
 async function servedBackgroundShellsIn(folders) {
-  return count(
+  return countWhere(
     await readServedBackgroundShells(),
     (shell) => !shell.ownerGone && folders.includes(shell.folder),
   );
 }
-//@ chunk-hkmynrbn.js:2618-2917 placement
+//@ chunk-nefh4pze.js:2620-2919 placement
 async function stopServedBackgroundShell(id, timeoutMs = 1e4) {
   let fileReader = getFileReader();
   try {
@@ -194,7 +194,7 @@ async function stopServedBackgroundShell(id, timeoutMs = 1e4) {
   }
   return (await deleteFileQuietly(backgroundStopPath(id))) ? "unanswered" : "pending";
 }
-//@ chunk-hkmynrbn.js:2917-3507 placement
+//@ chunk-nefh4pze.js:2919-3509 placement
 /**
  * 列出云会话启动的后台命令（claude daemon remote-control stop-shell 可停止）。
  */
@@ -218,15 +218,15 @@ function servedBackgroundShellLines(shells, { now, stopHint }) {
   if (stopHint) lines.push("  stop one: claude daemon remote-control stop-shell <id>");
   return lines;
 }
-//@ chunk-hkmynrbn.js:3507-3560 placement
+//@ chunk-nefh4pze.js:3509-3562 placement
 function backgroundLogPath(id) {
   return join(servedCallsDir(), `background-${id}.jsonl`);
 }
-//@ chunk-hkmynrbn.js:3560-3618 placement
+//@ chunk-nefh4pze.js:3562-3620 placement
 function backgroundStopPath(id) {
   return join(servedCallsDir(), `background-${id}.stop.jsonl`);
 }
-//@ chunk-hkmynrbn.js:3618-3699 placement
+//@ chunk-nefh4pze.js:3620-3701 placement
 async function isOwnerAlive(ownerPid, ownerStart) {
   return (
     ownerPid !== undefined &&
@@ -234,7 +234,7 @@ async function isOwnerAlive(ownerPid, ownerStart) {
     (ownerStart === undefined || (await provenSameProcessAsync(ownerPid, ownerStart)) !== false)
   );
 }
-//@ chunk-hkmynrbn.js:3699-3982 placement
+//@ chunk-nefh4pze.js:3701-3984 placement
 /**
  * 核对后台命令记录的所有者与进程是否仍在
  */
@@ -256,14 +256,14 @@ async function isServedShellAlive(record) {
     return getErrnoCode(error) === "ESRCH";
   }
 }
-//@ chunk-hkmynrbn.js:3982-4049 placement
+//@ chunk-nefh4pze.js:3984-4051 placement
 async function isOwnerGone(pid, startTime) {
   return (
     isProcessProvablyGone(pid) ||
     (startTime !== undefined && (await provenSameProcessAsync(pid, startTime)) === false)
   );
 }
-//@ chunk-hkmynrbn.js:4049-4116 placement
+//@ chunk-nefh4pze.js:4051-4119 placement
 async function ownPidDomainId() {
   try {
     return `${await ownPidDomain()} ${ownPidSpace()}`;
@@ -271,7 +271,7 @@ async function ownPidDomainId() {
     return;
   }
 }
-//@ chunk-hkmynrbn.js:4116-4187 placement
+//@ chunk-nefh4pze.js:4119-4190 placement
 async function deleteFileQuietly(path) {
   try {
     await getFileReader().delete(path);
@@ -280,7 +280,7 @@ async function deleteFileQuietly(path) {
     return false;
   }
 }
-//@ chunk-hkmynrbn.js:4187-4222 placement
+//@ chunk-nefh4pze.js:4190-4226 placement
 function clipShellField(text, maxChars) {
   return truncateWithEllipsis(cleanForDisplay(text), maxChars);
 }

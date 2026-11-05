@@ -3,12 +3,12 @@
  *
  * 远程托管设置同意记录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (20)
  * attribution: placement 20
  */
-import { join, resolve } from "path";
+import { join as join_2, resolve } from "path";
 import { open, unlink, lstat } from "fs/promises";
 import { constants } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -20,7 +20,7 @@ import {
   record,
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
@@ -42,12 +42,12 @@ import {
   getMockRemoteSettingsFixturePath,
 } from "./remoteSettingsCache.js";
 import { readRemoteSettingsSyncStamp } from "./syncCacheState.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { SETTINGS_FILENAME, HELPER_CONSENT_STATE_ID } from "./remoteSettingsState.js";
 import { signatureFileFor, signatureIatFileFor } from "../../utils/settings/policyCertificates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:157150-157407 placement
+//@ chunk-a2q0x549.js:155233-155490 placement
 /**
  * 远程托管设置同意记录文件的常量与 schema：文件名、格式版本、记录条数上限、刷新窗口、文件大小上限，以及单条/整文件/更高版本三种 schema。
  */
@@ -60,7 +60,7 @@ var MAX_CONSENT_FILE_BYTES;
 var consentRecordSchema;
 var consentRecordsFileSchema;
 var newerConsentVersionSchema;
-deferInit("chunk-82kqcve8.js:157150", () => {
+deferInit("chunk-a2q0x549.js:155233", () => {
   REMOTE_SETTINGS_CONSENT_FILE = "remote-settings-consent.json";
   REMOTE_SETTINGS_CONSENT = "remote-settings-consent";
   CONSENT_RECORDS_VERSION = 1;
@@ -86,14 +86,14 @@ deferInit("chunk-82kqcve8.js:157150", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:157407-157441 placement
+//@ chunk-a2q0x549.js:155490-155524 placement
 /**
  * 返回配置目录下的同意记录文件路径。
  */
 function consentRecordsPath() {
-  return join(getClaudeConfigDir(), REMOTE_SETTINGS_CONSENT_FILE);
+  return join_2(getClaudeConfigDir(), REMOTE_SETTINGS_CONSENT_FILE);
 }
-//@ chunk-82kqcve8.js:157441-157509 placement
+//@ chunk-a2q0x549.js:155524-155592 placement
 /**
  * 读不出同意记录时的保守状态：空记录表、版本未知，标记 unreadable。
  */
@@ -104,14 +104,14 @@ function unreadableConsentState() {
     unreadable: true,
   };
 }
-//@ chunk-82kqcve8.js:157509-157625 placement
+//@ chunk-a2q0x549.js:155592-155708 placement
 function consentFileTooLarge() {
   logForDebugging(
     `Remote settings: Consent records file exceeds ${MAX_CONSENT_FILE_BYTES} bytes; treating it as unreadable`,
   );
   return unreadableConsentState();
 }
-//@ chunk-82kqcve8.js:157625-158709 placement
+//@ chunk-a2q0x549.js:155708-156792 placement
 async function readConsentRecords(storageV5) {
   let text;
   if (isStorageV5Enabled() && storageV5 !== undefined) {
@@ -196,7 +196,7 @@ async function readConsentRecords(storageV5) {
     };
   }
 }
-//@ chunk-82kqcve8.js:158709-158868 placement
+//@ chunk-a2q0x549.js:156792-156951 placement
 /**
  * 组织同意记录中的危险设置哈希（账号须一致）。
  */
@@ -206,7 +206,7 @@ async function readDangerousSettingsHash(consentIdentity, storageV5) {
   if (!record || record.accountUuid !== consentIdentity.accountUuid) return null;
   return record.dangerousSettingsHash;
 }
-//@ chunk-82kqcve8.js:158868-159814 placement
+//@ chunk-a2q0x549.js:156951-157902 placement
 async function writeConsentRecords(identity, settings, storageV5) {
   try {
     let { records, newerVersion, unreadable } = await readConsentRecords(storageV5);
@@ -261,14 +261,14 @@ async function writeConsentRecords(identity, settings, storageV5) {
     logForDebugging(`Remote settings: Failed to record org consent - ${errorMessage(error)}`);
   }
 }
-//@ chunk-82kqcve8.js:159907-159987 placement
+//@ chunk-a2q0x549.js:157995-158075 placement
 /**
  * 进程级的远程设置同步时间状态：落盘时间与最近一次收到响应体的时间（HostScoped 可重置）。
  */
 var SYNC_STAMP_SUFFIX; // deferred: uses resetSyncState of its import cycle while loading; runs once the cycle is complete
 var MAX_SYNC_STAMP_BYTES;
 var remoteSettingsSyncState;
-deferInit("chunk-82kqcve8.js:159907", () => {
+deferInit("chunk-a2q0x549.js:157995", () => {
   SYNC_STAMP_SUFFIX = ".synced-at";
   MAX_SYNC_STAMP_BYTES = 32;
   remoteSettingsSyncState = identity_2(
@@ -279,26 +279,26 @@ deferInit("chunk-82kqcve8.js:159907", () => {
     resetSyncState,
   );
 });
-//@ chunk-82kqcve8.js:159987-160048 placement
+//@ chunk-a2q0x549.js:158075-158136 placement
 function resetSyncState(remoteSettingsSyncState) {
   remoteSettingsSyncState.syncedAtMs = undefined;
   remoteSettingsSyncState.bodyReceivedAtMs = undefined;
 }
-//@ chunk-82kqcve8.js:160048-160086 placement
+//@ chunk-a2q0x549.js:158136-158174 placement
 /**
  * 记录最近一次收到远程设置响应体的时间。
  */
 function noteBodyReceivedAt(bodyReceivedAtMs) {
   remoteSettingsSyncState.bodyReceivedAtMs = bodyReceivedAtMs;
 }
-//@ chunk-82kqcve8.js:160086-160119 placement
+//@ chunk-a2q0x549.js:158174-158207 placement
 /**
  * 设置文件旁的时间戳文件路径（<settings>.synced-at）。
  */
 function syncStampPath(settingsPath = getSettingsPath()) {
   return settingsPath + SYNC_STAMP_SUFFIX;
 }
-//@ chunk-82kqcve8.js:160119-160562 placement
+//@ chunk-a2q0x549.js:158207-158650 placement
 async function stampRemoteSettingsSync(nowMs = Date.now()) {
   if (isSyncStampUnavailable()) return;
   let path = syncStampPath();
@@ -327,7 +327,7 @@ async function stampRemoteSettingsSync(nowMs = Date.now()) {
     );
   }
 }
-//@ chunk-82kqcve8.js:160562-160707 placement
+//@ chunk-a2q0x549.js:158650-158795 placement
 /**
  * 删除远程设置同步戳。
  */
@@ -341,7 +341,7 @@ async function removeSyncStamp() {
       logForDebugging(`Remote settings: could not remove the sync stamp (${errorMessage(error)})`);
   }
 }
-//@ chunk-82kqcve8.js:160707-160824 placement
+//@ chunk-a2q0x549.js:158795-158912 placement
 /**
  * 读同步戳并计算距今时长。
  */
@@ -352,7 +352,7 @@ async function readSyncAge(nowMs = Date.now()) {
   remoteSettingsSyncState.syncedAtMs = remoteSettingsSyncStamp;
   return elapsedMs(remoteSettingsSyncStamp, nowMs);
 }
-//@ chunk-82kqcve8.js:160824-161068 placement
+//@ chunk-a2q0x549.js:158912-159156 placement
 /**
  * 远程设置年龄（同步戳、文件修改时间或接收时间）。
  */
@@ -369,7 +369,7 @@ async function settingsAgeMs(preferBody, knownAgeMs, nowMs = Date.now()) {
   } catch {}
   return preferBody ? bodyAgeMs : undefined;
 }
-//@ chunk-82kqcve8.js:161068-161161 placement
+//@ chunk-a2q0x549.js:159156-159249 placement
 /**
  * 远程设置的「年龄」（距上次同步落盘的毫秒数），不可知时 undefined。
  */
@@ -377,11 +377,11 @@ function remoteSettingsAgeMs(nowMs = Date.now()) {
   if (remoteSettingsSyncState.syncedAtMs === undefined || isSyncStampUnavailable()) return;
   return elapsedMs(remoteSettingsSyncState.syncedAtMs, nowMs);
 }
-//@ chunk-82kqcve8.js:161161-161192 placement
+//@ chunk-a2q0x549.js:159249-159281 placement
 function isSyncStampUnavailable() {
   return hostSessionSkipsSharedCache() || isDiskless();
 }
-//@ chunk-82kqcve8.js:161192-161260 placement
+//@ chunk-a2q0x549.js:159281-159349 placement
 /**
  * 计算 now - then 的毫秒差，非法或为负返回 undefined。
  */
@@ -389,7 +389,7 @@ function elapsedMs(sinceMs, nowMs) {
   let ageMs = nowMs - sinceMs;
   return Number.isFinite(ageMs) && ageMs >= 0 ? ageMs : undefined;
 }
-//@ chunk-82kqcve8.js:161594-161672 placement
+//@ chunk-a2q0x549.js:159683-159761 placement
 async function isSymlinkPath(path) {
   try {
     return (await lstat(path)).isSymbolicLink();
@@ -397,15 +397,15 @@ async function isSymlinkPath(path) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:161672-161884 placement
+//@ chunk-a2q0x549.js:159761-159973 placement
 function getSettingsWatchPaths(settingsDirs) {
-  let bodyPaths = uniq([
+  let bodyPaths = normalizeCaseForComparison_2([
     ...settingsDirs.map((dir) => resolve(dir, SETTINGS_FILENAME)),
     resolve(getSettingsPath()),
   ]);
   let mockRemoteSettingsFixturePath = getMockRemoteSettingsFixturePath();
   return {
-    bodies: uniq([
+    bodies: normalizeCaseForComparison_2([
       ...bodyPaths,
       ...(mockRemoteSettingsFixturePath !== undefined ? [resolve(mockRemoteSettingsFixturePath)] : []),
     ]),
@@ -425,6 +425,7 @@ function getSettingsWatchPaths(settingsDirs) {
 export {
   getSettingsWatchPaths,
   REMOTE_SETTINGS_CONSENT_FILE,
+  syncStampPath,
   writeConsentRecords,
   stampRemoteSettingsSync,
   readSyncAge,
@@ -432,7 +433,6 @@ export {
   noteBodyReceivedAt,
   removeSyncStamp,
   readDangerousSettingsHash,
-  syncStampPath,
   isSymlinkPath,
   MAX_SYNC_STAMP_BYTES,
   remoteSettingsAgeMs,

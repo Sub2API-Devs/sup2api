@@ -3,18 +3,18 @@
  *
  * 包管理器安装（brew/winget/mise 等）的更新提示命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PackageManagerAutoUpdater.tsx
- * pieces: chunk-tzghj6zv.js (7)
+ * pieces: chunk-18rrbwq1.js (7)
  * attribution: placement 6, fingerprint 1
  */
 import { join } from "path";
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { HostScoped } from "../utils/hostScoped.js";
 
-//@ chunk-tzghj6zv.js:37733-37737 placement
+//@ chunk-18rrbwq1.js:31071-31075 placement
 init_react_production();
-//@ chunk-tzghj6zv.js:37796-38184 placement
+//@ chunk-18rrbwq1.js:37801-38189 placement
 /**
  * 进程内的少量会话状态：包管理器更新上次失败时间与最新版本、fast 图标提示是否已显示、记忆选择器上次路径。
  */
@@ -36,16 +36,16 @@ class UpdaterSessionState {
     this.memorySelectorLastPath = memorySelectorLastPath;
   }
 }
-//@ chunk-tzghj6zv.js:38184-38210 placement
+//@ chunk-18rrbwq1.js:38189-38215 placement
 /**
  * 导出值：packageManagerAutoUpdaterSlot（包管理器自动更新器槽）；位于「包管理器安装（brew/winget/mise 等）的更新提示命令」模块。
  */
 var packageManagerAutoUpdaterSlot = new HostScoped(() => new UpdaterSessionState());
-//@ chunk-tzghj6zv.js:38210-38254 placement
+//@ chunk-18rrbwq1.js:38215-38259 placement
 function selectAutoUpdaterResult(state) {
   return state.autoUpdaterResult;
 }
-//@ chunk-tzghj6zv.js:38254-38359 placement
+//@ chunk-18rrbwq1.js:38259-38364 placement
 /**
  * 自动更新结果是 install_failed 时把它清掉，返回新状态；否则原样返回。
  */
@@ -57,7 +57,7 @@ function clearFailedAutoUpdaterResult(state) {
       }
     : state;
 }
-//@ chunk-tzghj6zv.js:38359-38669 placement
+//@ chunk-18rrbwq1.js:38364-38674 placement
 /**
  * 返回包管理器的升级命令 argv：homebrew 用 brew upgrade --cask，winget 用 LOCALAPPDATA 下的 winget.exe 静默升级 Anthropic.ClaudeCode；其他返回 null。
  */
@@ -81,7 +81,7 @@ function getPackageManagerUpgradeCommand(packageManager, pkgName) {
       return null;
   }
 }
-//@ chunk-tzghj6zv.js:38669-38943 fingerprint (2.1.88 match: PackageManagerAutoUpdater, 0.442)
+//@ chunk-18rrbwq1.js:38674-38948 fingerprint (2.1.88 match: PackageManagerAutoUpdater, 0.44)
 function PackageManagerAutoUpdater_2(packageManager, pkgName) {
   switch (packageManager) {
     case "homebrew":
@@ -97,8 +97,8 @@ function PackageManagerAutoUpdater_2(packageManager, pkgName) {
   }
 }
 export {
-  packageManagerAutoUpdaterSlot,
   selectAutoUpdaterResult,
+  packageManagerAutoUpdaterSlot,
   clearFailedAutoUpdaterResult,
   getPackageManagerUpgradeCommand,
   PackageManagerAutoUpdater_2,

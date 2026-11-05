@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-3kpg9vdk.js (1)
+ * pieces: chunk-1qcqrr73.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -15,7 +15,7 @@ import {
   isJSONRPCErrorResponse,
 } from "../types.js";
 
-//@ chunk-3kpg9vdk.js:250-11789 esm-fingerprint
+//@ chunk-1qcqrr73.js:250-11789 esm-fingerprint
 class WebStandardStreamableHTTPServerTransport {
   constructor(options = {}) {
     this._started = false;

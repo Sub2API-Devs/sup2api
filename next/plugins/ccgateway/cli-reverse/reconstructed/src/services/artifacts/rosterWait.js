@@ -3,9 +3,9 @@
  *
  * Artifact 名册等待（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rsfhsjj6.js (10), chunk-s61vbvea.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (4), chunk-j1a63p6d.js (10)
  * attribution: placement 14
  */
 import { toolMatchesAnyName } from "../tools/permissionCheckGuard.js";
@@ -28,18 +28,18 @@ import { getStoredOAuthTokenExpiresAt } from "../../utils/auth.js";
 import { isOAuthTokenExpired } from "../oauth/client.js";
 import { resolveContract } from "./contract.js";
 
-//@ chunk-s61vbvea.js:377847-377899 placement
+//@ chunk-7jxyna5q.js:302242-302294 placement
 function artifactFamilyModule() {
   return require("./rosterWait.js");
 }
-//@ chunk-s61vbvea.js:377899-377931 placement
+//@ chunk-7jxyna5q.js:302294-302326 placement
 /**
  * 导出函数 `isArtifactFamilyTool`：参数 e，返回 toolMatchesAnyName(e, ARTIFACT_FAMILY_TOOL_NAMES)。
  */
 function isArtifactFamilyTool(tool) {
   return toolMatchesAnyName(tool, ARTIFACT_FAMILY_TOOL_NAMES);
 }
-//@ chunk-s61vbvea.js:377931-378098 placement
+//@ chunk-7jxyna5q.js:302326-302493 placement
 /**
  * 工具列表包含 Artifact 工具时，等待 Artifact 能力名册就绪以便冻结 schema；出错只记录。
  */
@@ -52,7 +52,7 @@ async function awaitArtifactRosterSafe(tools) {
     logError(withTelemetryMessage(toError(error), "Artifact roster wait failed"));
   }
 }
-//@ chunk-s61vbvea.js:378098-378309 placement
+//@ chunk-7jxyna5q.js:302493-302704 placement
 /**
  * 查询 Artifact 能力名册是否已就绪（不可用时视为就绪）；查询失败记调试日志并返回 false。
  */
@@ -67,15 +67,15 @@ async function isArtifactRosterSettled(roster) {
     return false;
   }
 }
-//@ chunk-rsfhsjj6.js:473-512 placement
+//@ chunk-j1a63p6d.js:473-512 placement
 var ROSTER_COLD_AWAIT_MS = 1500;
 var ROSTER_REFRESH_TTL_MS = 86400000;
 var ROSTER_DENIED_TTL_MS = 14400000;
-//@ chunk-rsfhsjj6.js:512-549 placement
+//@ chunk-j1a63p6d.js:512-549 placement
 function artifactRosterIdentityKnown() {
   return rosterAccountKey() !== undefined;
 }
-//@ chunk-rsfhsjj6.js:549-725 placement
+//@ chunk-j1a63p6d.js:549-725 placement
 function knownArtifactCapabilities() {
   let roster = currentRoster();
   if (roster !== undefined)
@@ -88,11 +88,11 @@ function knownArtifactCapabilities() {
     source: rosterAccountKey() === undefined ? "cold_no_identity" : "cold",
   };
 }
-//@ chunk-rsfhsjj6.js:725-775 placement
+//@ chunk-j1a63p6d.js:725-775 placement
 function artifactRosterCold() {
   return knownArtifactCapabilities().capabilities === undefined;
 }
-//@ chunk-rsfhsjj6.js:775-1333 placement
+//@ chunk-j1a63p6d.js:775-1333 placement
 /**
  * 冻结 schema 前等待 artifact 能力名单。
  */
@@ -132,7 +132,7 @@ function awaitArtifactRosterForSchemaFreeze(waitMs = ROSTER_COLD_AWAIT_MS) {
     });
   return liveState.rosterWait;
 }
-//@ chunk-rsfhsjj6.js:1333-1667 placement
+//@ chunk-j1a63p6d.js:1333-1667 placement
 async function artifactRosterSettled(waitMs) {
   let deadline = Date.now() + waitMs;
   for (;;) {
@@ -155,14 +155,14 @@ async function artifactRosterSettled(waitMs) {
     if (getLiveState().rosterHeard === rosterHeard) return true;
   }
 }
-//@ chunk-rsfhsjj6.js:1667-1768 placement
+//@ chunk-j1a63p6d.js:1667-1768 placement
 function artifactRosterFresh(now = Date.now()) {
   let cachedRoster = readCachedRoster();
   if (cachedRoster === undefined) return false;
   let age = now - cachedRoster.fetchedAt;
   return age >= 0 && age < ROSTER_REFRESH_TTL_MS;
 }
-//@ chunk-rsfhsjj6.js:1768-1919 placement
+//@ chunk-j1a63p6d.js:1768-1919 placement
 function artifactRosterFetchDeferred(now = Date.now()) {
   let rosterDenied = readRosterDenied();
   if (rosterDenied === undefined) return false;
@@ -174,7 +174,7 @@ function artifactRosterFetchDeferred(now = Date.now()) {
     !isOAuthTokenExpired(rosterDenied.tokenExpiresAt, now)
   );
 }
-//@ chunk-rsfhsjj6.js:1919-2002 placement
+//@ chunk-j1a63p6d.js:1919-2002 placement
 function refreshArtifactRoster(options) {
   let liveState = getLiveState();
   let promise;
@@ -183,7 +183,7 @@ function refreshArtifactRoster(options) {
   });
   return refreshRosterUnchecked(liveState, options, promise);
 }
-//@ chunk-rsfhsjj6.js:2002-2781 placement
+//@ chunk-j1a63p6d.js:2002-2781 placement
 /**
  * 刷新 artifact 能力名单并记遥测
  */
@@ -248,9 +248,9 @@ async function refreshRosterUnchecked(session, options, epoch) {
 }
 export {
   awaitArtifactRosterSafe,
-  knownArtifactCapabilities,
   isArtifactFamilyTool,
   isArtifactRosterSettled,
+  knownArtifactCapabilities,
   refreshArtifactRoster,
   ROSTER_COLD_AWAIT_MS,
   ROSTER_DENIED_TTL_MS,

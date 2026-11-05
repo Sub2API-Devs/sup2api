@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：全屏输出回放写入器：记录上一帧，支持同步更新与重放策略。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (9)
  * attribution: placement 9
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -29,12 +29,12 @@ import { init_react_production, createContext } from "../../vendor/react/cjs/rea
 import { serializeScreenRow } from "./output.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:11164-11179 placement
+//@ chunk-hnxhr3bs.js:10011-10026 placement
 /**
  * 空函数，用作“没有输出回放句柄”时的占位。
  */
 function noop_3() {}
-//@ chunk-ag5x7vhf.js:11179-11423 placement
+//@ chunk-hnxhr3bs.js:10026-10270 placement
 /**
  * 持有当前输出回放句柄：attach 时替换并转发其订阅事件，返回解除函数；subscribe 订阅句柄变化通知。
  */
@@ -59,7 +59,7 @@ class ReplayHandleSlot {
     this.#t = node ? node.subscribe(this.#o.emit) : noop_3;
   }
 }
-//@ chunk-ag5x7vhf.js:11423-11472 placement
+//@ chunk-hnxhr3bs.js:10270-10319 placement
 /**
  * 全屏输出回放用的 ANSI 常量：复位、擦到行尾、每批回放行数 100、原生历史行上限 1 万，以及顶部/底部装饰占用行数 4。
  */
@@ -68,7 +68,7 @@ var CLEAR_TO_EOL = "\x1B[K";
 var HISTORY_PUMP_BATCH = 100;
 var MAX_NATIVE_HISTORY_ROWS = 1e4;
 var CHROME_ROWS = 4;
-//@ chunk-ag5x7vhf.js:11472-17834 placement
+//@ chunk-hnxhr3bs.js:10319-16681 placement
 /**
  * 全屏模式的输出回放写入器：记录上一帧，支持同步更新、挂起/恢复与"replay/adjust"重放策略。
  */
@@ -356,8 +356,8 @@ class ScreenReplayWriter {
     this.buf += cursorPosition(row + 1, 1) + ERASE_LINE;
   }
   writeOverlayLines(top, lines) {
-    for (let k = 0; k < lines.length; k++)
-      this.buf += cursorPosition(top + k + 1, 1) + lines[k] + ANSI_RESET + CLEAR_TO_EOL;
+    for (let i = 0; i < lines.length; i++)
+      this.buf += cursorPosition(top + i + 1, 1) + lines[i] + ANSI_RESET + CLEAR_TO_EOL;
   }
   commitImmediate() {
     if (this.buf.length === 0) return;
@@ -388,19 +388,19 @@ class ScreenReplayWriter {
     };
   }
 }
-//@ chunk-ag5x7vhf.js:17834-17851 placement (2.1.88 match: RESET, 1)
+//@ chunk-hnxhr3bs.js:16681-16698 placement (2.1.88 match: RESET, 1)
 var RESET = "\x1B[0m";
-//@ chunk-ag5x7vhf.js:18348-18352 placement
+//@ chunk-hnxhr3bs.js:17195-17199 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:18348", () => {
+deferInit("chunk-hnxhr3bs.js:17195", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:18352-18368 placement
+//@ chunk-hnxhr3bs.js:17199-17215 placement
 var ScrollAnchorContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:18352", () => {
+deferInit("chunk-hnxhr3bs.js:17199", () => {
   ScrollAnchorContext = createContext(null);
 });
-//@ chunk-ag5x7vhf.js:21878-22079 placement
+//@ chunk-hnxhr3bs.js:20725-20926 placement
 /**
  * 把某个节点缓存布局覆盖的屏幕行逐行序列化（裁到屏幕高度内）；节点没有布局时返回空数组。
  */
@@ -414,17 +414,17 @@ function serializeNodeScreenRows(screen, stylePool, node) {
     rows.push(serializeScreenRow(screen.screen, stylePool, max));
   return rows;
 }
-//@ chunk-ag5x7vhf.js:22079-22083 placement
+//@ chunk-hnxhr3bs.js:20926-20930 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:22079", () => {
+deferInit("chunk-hnxhr3bs.js:20926", () => {
   init_react_production();
 });
 export {
-  ReplayHandleSlot,
-  CHROME_ROWS,
   ScrollAnchorContext,
-  ScreenReplayWriter,
-  serializeNodeScreenRows,
   RESET,
   MAX_NATIVE_HISTORY_ROWS,
+  ReplayHandleSlot,
+  CHROME_ROWS,
+  ScreenReplayWriter,
+  serializeNodeScreenRows,
 };

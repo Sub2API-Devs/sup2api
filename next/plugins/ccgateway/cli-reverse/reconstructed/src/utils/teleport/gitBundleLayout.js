@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：上传前检查检出布局（git 根位置、gitlink、不写的文件模式、伪造/别名路径）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gjx0rh1b.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sfy2wa1e.js (9)
  * attribution: placement 9
  */
 import { lstat } from "fs/promises";
@@ -22,7 +22,7 @@ import { GIT_SAFE_GLOBAL_ARGS, IGNORE_SUBMODULES_DIRTY_FLAG } from "../git/gitSa
 import { GIT_READ_CONFIG_ARGS, GIT_LIST_ENV } from "../git/builderGit/gitEnv.js";
 import { splitIndexOffArgs, indexFileEnv } from "../git/builderGit/repoCopy.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { isSensitiveNameOrVariant } from "../permissions/sensitivePaths.js";
 import {
   isCaseFoldingFileSystem,
@@ -33,7 +33,7 @@ import { isNotPlainDirectory, lstatOrAbsent } from "./wipStash.js";
 import { getErrnoCode } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gjx0rh1b.js:109556-110296 placement
+//@ chunk-sfy2wa1e.js:109657-110397 placement
 /**
  * git 根位置不安全时的拒绝文案（家目录、文件系统根、根含配置等）。
  */
@@ -46,7 +46,7 @@ var GIT_ROOT_REFUSALS = {
     "Not uploading this working tree: this checkout\u2019s git root holds (or sits inside) Claude Code\u2019s own configuration directory. Start from a project folder that is its own repository.",
 };
 var GIT_PROBE_MAX_BUFFER = 268435456;
-//@ chunk-gjx0rh1b.js:110296-111116 placement
+//@ chunk-sfy2wa1e.js:110397-111217 placement
 async function checkGitRootLocation(cwd, signal, opts) {
   let gitRoot = findGitRoot(cwd ?? getCwd());
   if (!gitRoot)
@@ -121,11 +121,11 @@ async function checkGitRootLocation(cwd, signal, opts) {
     ...unusualModes,
   };
 }
-//@ chunk-gjx0rh1b.js:111116-111410 placement
+//@ chunk-sfy2wa1e.js:111217-111511 placement
 function summarizeStatusEntries(nameStatusZ, nameStatusZ_2, gitRoot) {
   let pathsWhere = (entries, test) =>
     entries.filter(({ status, path }) => test(status) && path !== "").map(({ path }) => path);
-  let allPaths = uniq([
+  let allPaths = normalizeCaseForComparison_2([
     ...pathsWhere(nameStatusZ, (status) => status !== "D"),
     ...pathsWhere(nameStatusZ_2, (status) => status !== "D"),
   ]);
@@ -134,13 +134,13 @@ function summarizeStatusEntries(nameStatusZ, nameStatusZ_2, gitRoot) {
     gitRoot,
     paths: allPaths,
     added: new Set(pathsWhere(nameStatusZ_2, (status) => status === "A")),
-    deleted: uniq([
+    deleted: normalizeCaseForComparison_2([
       ...pathsWhere(nameStatusZ, (status) => status === "D"),
       ...pathsWhere(nameStatusZ_2, (status) => status === "D"),
     ]).filter((path) => !pathSet.has(path)),
   };
 }
-//@ chunk-gjx0rh1b.js:111410-111537 placement
+//@ chunk-sfy2wa1e.js:111511-111638 placement
 function parseNameStatusZ(stdout) {
   let parts = stdout.split("\x00");
   return Array.from(
@@ -153,16 +153,16 @@ function parseNameStatusZ(stdout) {
     }),
   );
 }
-//@ chunk-gjx0rh1b.js:111537-111597 placement
+//@ chunk-sfy2wa1e.js:111638-111698 placement
 var ORDINARY_FILE_MODE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var INDEX_MODE_TYPE_MASK;
 var GITLINK_MODE;
-deferInit("chunk-gjx0rh1b.js:111537", () => {
+deferInit("chunk-sfy2wa1e.js:111638", () => {
   ORDINARY_FILE_MODE_SET = new Set([33188, 33261, 40960, 57344]);
   INDEX_MODE_TYPE_MASK = 61440;
   GITLINK_MODE = 57344;
 });
-//@ chunk-gjx0rh1b.js:111597-111869 placement
+//@ chunk-sfy2wa1e.js:111698-111970 placement
 function classifyIndexMode(line) {
   let match = /^([0-7]{1,11}) [0-9a-f]+ \d\t(.*)$/s.exec(line);
   if (match === null)
@@ -182,7 +182,7 @@ function classifyIndexMode(line) {
         path,
       };
 }
-//@ chunk-gjx0rh1b.js:111869-112214 placement
+//@ chunk-sfy2wa1e.js:111970-112315 placement
 async function listUnusualIndexModes(cwd, signal, opts) {
   let result = await listGitRefs(
     cwd,
@@ -202,13 +202,14 @@ async function listUnusualIndexModes(cwd, signal, opts) {
     .split("\x00")
     .filter((record) => record !== "")
     .map(classifyIndexMode);
-  let pathsOfKind = (kind) => uniq(mapped.filter((entry) => entry.kind === kind).map(({ path }) => path));
+  let pathsOfKind = (kind) =>
+    normalizeCaseForComparison_2(mapped.filter((entry) => entry.kind === kind).map(({ path }) => path));
   return {
     gitlinks: pathsOfKind("gitlink"),
     unwrittenModes: pathsOfKind("unwritten_mode"),
   };
 }
-//@ chunk-gjx0rh1b.js:112214-112780 placement
+//@ chunk-sfy2wa1e.js:112315-112881 placement
 async function classifyPathIdentity(root, paths, added, extraSensitive, deleted = []) {
   let isSensitive = (path) => isSensitiveNameOrVariant(path) || extraSensitive?.(path) === true;
   let caseFold = await isCaseFoldingFileSystem(root);
@@ -257,7 +258,7 @@ async function classifyPathIdentity(root, paths, added, extraSensitive, deleted 
     .filter((finding) => finding !== null)
     .sort((left, right) => left.path.localeCompare(right.path));
 }
-//@ chunk-gjx0rh1b.js:112780-113077 placement
+//@ chunk-sfy2wa1e.js:112881-113178 placement
 async function describeUnexaminedPath(root, path) {
   if (path.includes("\uFFFD")) return "unexamined";
   let stats = await lstatOrAbsent(root, path);

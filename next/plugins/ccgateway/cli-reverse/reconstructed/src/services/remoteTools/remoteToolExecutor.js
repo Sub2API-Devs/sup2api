@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具的执行器：本地 canUseTool 与远端判定的协作、自动模式分类器、进程重启后接管
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dtv8x2hx.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yvhjwwtt.js (36)
  * attribution: placement 36
  */
 import { isDeepStrictEqual } from "util";
@@ -18,7 +18,7 @@ import {
 import {
   withdrawnAskDecision,
   buildHostAllowRules,
-  getToolNameForPermissionCheck,
+  getToolNameForPermissionCheck as getToolNameForPermissionCheck_2,
   REMOTE_TOOL_HOST,
   handleRemoteBackgroundCommand,
   STATUS_NOTIFICATION_TIMEOUT_MS,
@@ -43,7 +43,6 @@ import {
   CANCEL_MESSAGE,
   createUserMessage,
   createProgressMessage,
-  createCancelledToolResultBlock,
   withMemoryCorrectionHint,
   TOOL_CALL_ENDED_FOR_DELIVERY,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
@@ -82,6 +81,7 @@ import { isAutoModeCapableHost } from "./callProgress.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum, fromEnumOpt, lit } from "../analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
+import { isCcrSessionLimited, getSessionId } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
 import { fallbackUsageDelta } from "../api/withRetry.js";
 import { calculateCostFromTokenCounts } from "../../utils/modelCost.js";
@@ -92,11 +92,10 @@ import {
   formatActionForClassifier,
   classifyYoloAction,
 } from "../../utils/permissions/yoloClassifier.js";
-import { toolMatchesName, getToolRemoteExecution } from "../../Tool.js";
+import { matchesToolName, getToolRemoteExecution } from "../../Tool.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { pinSessionId } from "../../utils/sessionStorage.js";
-import { getSessionId } from "../../bootstrap/state.js";
 import { logRemoteForward, primaryInputPath } from "./remoteToolCall.js";
 import { RemoteCallLedger } from "./callOutcome.js";
 import {
@@ -114,13 +113,14 @@ import {
 import { Stream } from "../../utils/stream.js";
 import { emitToolHeartbeat, getCancelMessage } from "../tools/toolExecution.js";
 import { SERVED_OUTCOME_TABLE, isRanOutcome } from "../../remote/tools/protocolConstants.js";
-import { processToolResultBlock, getOriginalCwd } from "../../utils/toolResultStorage.js";
+import { persistLargeToolResult, getOriginalCwd } from "../../utils/toolResultStorage.js";
+import { createCancelledToolResultBlock } from "../PromptSuggestion/speculation.js";
 import { contentToText, sanitizeForPrompt } from "./resultConversion.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { supportsBackgroundShells } from "./backgroundCommands.js";
 import { SANDBOX_OVERRIDE_INPUT_KEYS } from "../../utils/sandbox/sandboxDefaultPolicy.js";
 
-//@ chunk-dtv8x2hx.js:81407-86035 placement
+//@ chunk-yvhjwwtt.js:74031-78658 placement
 /**
  * 生成远程调用的审批函数：结合本地 canUseTool、宿主允许规则与推测执行（约 4.6 KB）。
  */
@@ -414,7 +414,7 @@ function createRemoteApprover({
     };
   };
 }
-//@ chunk-dtv8x2hx.js:86035-86119 placement
+//@ chunk-yvhjwwtt.js:78658-78742 placement
 /**
  * 判断该权限模式是否算「已授权」：自动分类器生效或 bypassPermissions（plan 需开关）。
  */
@@ -422,7 +422,7 @@ function modeAllowsClassifierBypass(mode) {
   if (mode === "plan" && !isPlanClassifierArmOn()) return false;
   return isAutoClassifierActive(mode) || mode === "bypassPermissions";
 }
-//@ chunk-dtv8x2hx.js:86119-86403 placement
+//@ chunk-yvhjwwtt.js:78742-79026 placement
 function hostRulesContext(request, honourAllow) {
   let hostRules = request.hostRules;
   if (hostRules === undefined) return;
@@ -439,7 +439,7 @@ function hostRulesContext(request, honourAllow) {
       }
     : undefined;
 }
-//@ chunk-dtv8x2hx.js:86403-90201 placement
+//@ chunk-yvhjwwtt.js:79026-82849 placement
 /**
  * 自动模式下用分类器判定远程调用（不适用时 no_verdict）。
  */
@@ -464,7 +464,7 @@ async function classifyRemoteCall({
     };
   }
   if (
-    getToolNameForPermissionCheck(tool) &&
+    getToolNameForPermissionCheck_2(tool) &&
     (HOST_CONTEXT_META_FIELD in request.input || HOST_TOOL_INPUT_FIELD in request.input)
   ) {
     speculation?.abandon("not_eligible");
@@ -616,6 +616,7 @@ async function classifyRemoteCall({
         message: buildYoloRejectionMessage(classifierResult.reason, {
           autoModeConsentFlow: isAutoModeConsentFlowEnabled(toolUseContext.agentId),
           blockedHelp: autoModeBlockedHelp(toolUseContext.agentId),
+          ccrSessionLimited: isCcrSessionLimited(),
         }),
         denialKind: "automode-blocked",
       };
@@ -702,7 +703,7 @@ async function classifyRemoteCall({
     if (speculationState !== undefined && !usedSpeculation) speculation?.discard();
   }
 }
-//@ chunk-dtv8x2hx.js:90201-90408 placement
+//@ chunk-yvhjwwtt.js:82849-83056 placement
 function speculationFields(speculated, speculationState, discardReason) {
   if (!speculated) return {};
   return speculationState === undefined
@@ -717,7 +718,7 @@ function speculationFields(speculated, speculationState, discardReason) {
         speculative_ready_ms: speculationState.readyMs,
       };
 }
-//@ chunk-dtv8x2hx.js:90408-91083 placement
+//@ chunk-yvhjwwtt.js:83056-83731 placement
 /**
  * 汇总分类器用量字段（各阶段 token、缓存、耗时、费用），用于遥测。
  */
@@ -740,7 +741,7 @@ function classifierUsageFields(classification) {
         : undefined,
   };
 }
-//@ chunk-dtv8x2hx.js:91083-91477 placement
+//@ chunk-yvhjwwtt.js:83731-84125 placement
 function logSpeculationUsage({ reason, early, stepReportsTheDrop, toolUseContext, toolUseId }) {
   let context = {
     reason,
@@ -766,7 +767,7 @@ function logSpeculationUsage({ reason, early, stepReportsTheDrop, toolUseContext
     })
     .catch(() => {});
 }
-//@ chunk-dtv8x2hx.js:91477-91889 placement
+//@ chunk-yvhjwwtt.js:84125-84537 placement
 function logRemoteToolClassifier({ reason, early, toolUseContext, toolUseId }, cause, extraFields) {
   logEvent("tengu_remote_tool_classifier", {
     decision: fromEnum("no_verdict"),
@@ -783,16 +784,16 @@ function logRemoteToolClassifier({ reason, early, toolUseContext, toolUseId }, c
     ...extraFields,
   });
 }
-//@ chunk-dtv8x2hx.js:91889-92009 placement
+//@ chunk-yvhjwwtt.js:84537-84658 placement
 function shouldClassifyRemotely(tool, host, toolUseContext, mode) {
   return (
     modeAllowsClassifierBypass(mode) &&
     (mode !== "plan" || isAutoModeCapableHost(host)) &&
-    (PATH_SENSITIVE_TOOLS.has(tool.name) || getToolNameForPermissionCheck(tool)) &&
+    (PATH_SENSITIVE_TOOLS.has(tool.name) || getToolNameForPermissionCheck_2(tool)) &&
     !isAskOnMutationTool(tool.name, toolUseContext.getProactivityLevel())
   );
 }
-//@ chunk-dtv8x2hx.js:92009-92294 placement
+//@ chunk-yvhjwwtt.js:84658-84943 placement
 function classifierTranscript(tool, toolUseContext) {
   let isSubagentLoop = isModelDrivenSession(toolUseContext.agentId);
   let prepared = prependInheritedVerifiedTurns(
@@ -804,12 +805,12 @@ function classifierTranscript(tool, toolUseContext) {
     messages: [...prepared.messages, ...(toolUseContext.sameTurnToolUses ?? [])],
     isSubagentLoop,
     inheritedPrefix: prepared.inheritedPrefix,
-    registry: toolUseContext.options.tools.some((tool_2) => toolMatchesName(tool_2, tool.name))
+    registry: toolUseContext.options.tools.some((tool_2) => matchesToolName(tool_2, tool.name))
       ? toolUseContext.options.tools
       : [...toolUseContext.options.tools, tool],
   };
 }
-//@ chunk-dtv8x2hx.js:92294-92399 placement
+//@ chunk-yvhjwwtt.js:84943-85048 placement
 function classifierCacheKey(request, honourAllow, commitTurn) {
   let hostCtx = hostRulesContext(request, honourAllow);
   return {
@@ -821,7 +822,7 @@ function classifierCacheKey(request, honourAllow, commitTurn) {
     }),
   };
 }
-//@ chunk-dtv8x2hx.js:92399-92482 placement
+//@ chunk-yvhjwwtt.js:85048-85131 placement
 /**
  * 以当前分类器缓存键重置分类器缓存（实际不等待任何工作）。
  */
@@ -833,9 +834,9 @@ function resetClassifierCache(toolUseContext, request, honourAllow, commitTurn) 
     classifierCacheKey(request, honourAllow, commitTurn),
   );
 }
-//@ chunk-dtv8x2hx.js:92482-92495 placement
+//@ chunk-yvhjwwtt.js:85131-85144 placement
 var ASK_LEAD_STALE_MS = 60000;
-//@ chunk-dtv8x2hx.js:92495-93653 placement
+//@ chunk-yvhjwwtt.js:85144-86302 placement
 /**
  * 说明调用在另一台机器上运行及该机器 Claude Code 给出的 ask 原因。
  */
@@ -856,7 +857,7 @@ function formatRemoteAskReason({
   );
   let hostReason = `runs on ${request.host.name} (another machine, not this one) in ${request.spelledDirectory}; that machine's Claude Code gave this reason for asking (its words, unverified): "${reasonText}"`;
   let command = request.input.command;
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck(tool);
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
   let action = formatActionForClassifier(
     tool.name,
     rememberHostContext(
@@ -921,7 +922,7 @@ ${command}`,
     ),
   };
 }
-//@ chunk-dtv8x2hx.js:93653-94325 placement
+//@ chunk-yvhjwwtt.js:86302-86974 placement
 /**
  * 为远程工具调用提前启动自动模式判定：记得该机器与工具上次的询问时，在真正调用前推测性地运行分类器；放弃时清理记忆并记推测使用情况。
  */
@@ -970,7 +971,7 @@ function createEarlyCheckRunner({ tool, host, toolUseContext, toolUseId, honourH
     },
   });
 }
-//@ chunk-dtv8x2hx.js:94325-94656 placement
+//@ chunk-yvhjwwtt.js:86974-87305 placement
 function describeAskChange(speculation, askRequest, tool, toolUseContext, toolPermissionContext) {
   if (!isDeepStrictEqual(speculation.predicted.input, askRequest.input)) return "input_changed";
   if (!isDeepStrictEqual(speculation.predicted, askRequest)) return "ask_changed";
@@ -985,16 +986,16 @@ function describeAskChange(speculation, askRequest, tool, toolUseContext, toolPe
     return "context_changed";
   return speculation.leadMs > ASK_LEAD_STALE_MS ? "stale" : undefined;
 }
-//@ chunk-dtv8x2hx.js:94656-94726 placement
+//@ chunk-yvhjwwtt.js:87305-87375 placement
 /**
  * 判断两个数组是否逐项相等（用于检测上下文是否变化）。
  */
 function sameSequence(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
-//@ chunk-dtv8x2hx.js:94726-94737 placement
+//@ chunk-yvhjwwtt.js:87375-87386 placement
 var MAX_ASK_REASON_CHARS = 300;
-//@ chunk-dtv8x2hx.js:94737-94934 placement
+//@ chunk-yvhjwwtt.js:87386-87583 placement
 function usesPermissionPromptTool(decision) {
   let text = decision.message.trim();
   for (let prefix of [REJECT_MESSAGE_WITH_REASON_PREFIX, SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX])
@@ -1003,7 +1004,7 @@ function usesPermissionPromptTool(decision) {
     ? trimmedOrUndefined(text)
     : undefined;
 }
-//@ chunk-dtv8x2hx.js:94934-94992 placement
+//@ chunk-yvhjwwtt.js:87583-87641 placement
 /**
  * 去掉字符串首尾空白，空串返回 undefined。
  */
@@ -1011,9 +1012,9 @@ function trimmedOrUndefined(text) {
   let trimmed = text?.trim() ?? "";
   return trimmed === "" ? undefined : trimmed;
 }
-//@ chunk-dtv8x2hx.js:94992-95024 placement
+//@ chunk-yvhjwwtt.js:87641-87673 placement
 var USER_DENIED_PERMISSION_MESSAGE = "User denied permission";
-//@ chunk-dtv8x2hx.js:95024-97896 placement
+//@ chunk-yvhjwwtt.js:87673-90545 placement
 /**
  * 远程工具执行生成器：错误路由、重启后接管未完成调用、产出结果消息。
  */
@@ -1213,14 +1214,14 @@ async function* executeRemoteToolUse({
     };
   }
 }
-//@ chunk-dtv8x2hx.js:97896-97962 placement
+//@ chunk-yvhjwwtt.js:90545-90611 placement
 /**
  * 判断错误结果是否属于本会话拒绝（需要上报权限拒绝）。
  */
 function isSessionDenialOutcome(outcome) {
   return outcome.kind === "error" && SERVED_OUTCOME_TABLE[outcome.code].sessionDenial;
 }
-//@ chunk-dtv8x2hx.js:97962-98365 placement
+//@ chunk-yvhjwwtt.js:90611-91014 placement
 /**
  * 由远程调用结果构造工具结果用户消息，含拒绝类型与来源助手消息 uuid。
  */
@@ -1232,7 +1233,7 @@ async function buildRemoteToolResultMessage({
   toolUseContext,
   now,
 }) {
-  let content = await processToolResultBlock(
+  let content = await persistLargeToolResult(
     buildRemoteToolResultBlock(tool, origin, toolUseId),
     tool,
     getOriginalCwd(toolUseContext.session),
@@ -1255,7 +1256,7 @@ async function buildRemoteToolResultMessage({
     now,
   });
 }
-//@ chunk-dtv8x2hx.js:98365-99193 placement
+//@ chunk-yvhjwwtt.js:91014-91842 placement
 function toolResultForCancel({ outcome, toolUseId, assistantMessage, signal, now }) {
   switch (outcome.code) {
     case "cancelled": {
@@ -1320,12 +1321,12 @@ function toolResultForCancel({ outcome, toolUseId, assistantMessage, signal, now
     }
   }
 }
-//@ chunk-dtv8x2hx.js:99193-99294 placement
+//@ chunk-yvhjwwtt.js:91842-91943 placement
 function denialKindOf_2(outcome) {
   let { denialKind } = SERVED_OUTCOME_TABLE[outcome.code];
   return outcome.code === "rejected_in_session" ? (outcome.denialKind ?? denialKind) : denialKind;
 }
-//@ chunk-dtv8x2hx.js:99294-99375 placement
+//@ chunk-yvhjwwtt.js:91943-92024 placement
 /**
  * 把处置结果映射成拒绝类型。
  */
@@ -1333,7 +1334,7 @@ function denialKindOf(disposition) {
   if (disposition === undefined || disposition === "unrecognized") return;
   return SERVED_OUTCOME_TABLE[disposition].denialKind;
 }
-//@ chunk-dtv8x2hx.js:99375-100245 placement
+//@ chunk-yvhjwwtt.js:92024-92894 placement
 async function handleRemoteCancel({
   tool,
   route,
@@ -1408,14 +1409,14 @@ ${remoteResultText(remoteOrigin)}`,
     };
   }
 }
-//@ chunk-dtv8x2hx.js:100245-100273 placement
+//@ chunk-yvhjwwtt.js:92894-92922 placement
 /**
  * 取远程结果的展示文本（对外导出的入口）。
  */
 function remoteResultTextOf(origin) {
   return remoteResultText(origin);
 }
-//@ chunk-dtv8x2hx.js:100273-100361 placement
+//@ chunk-yvhjwwtt.js:92922-93010 placement
 /**
  * 已运行且有信封时取内容文本，否则生成带说明的远程结果文本。
  */
@@ -1424,9 +1425,9 @@ function remoteResultText(outcome) {
     ? contentToText(outcome.content)
     : remoteResultText_2(outcome, MAX_REMOTE_RESULT_CHARS);
 }
-//@ chunk-dtv8x2hx.js:100361-100373 placement
+//@ chunk-yvhjwwtt.js:93010-93022 placement
 var MAX_REMOTE_RESULT_CHARS = 2000;
-//@ chunk-dtv8x2hx.js:100373-100492 placement
+//@ chunk-yvhjwwtt.js:93022-93141 placement
 function cancelMessage(outcome, signal) {
   switch (outcome.code) {
     case "cancelled":
@@ -1437,7 +1438,7 @@ function cancelMessage(outcome, signal) {
       return outcome.message;
   }
 }
-//@ chunk-dtv8x2hx.js:100492-100548 placement
+//@ chunk-yvhjwwtt.js:93141-93197 placement
 /**
  * 把中断原因转成工具结果文案（回合中断或调用已结束）。
  */
@@ -1446,7 +1447,7 @@ function abortReasonToToolMessage(signal) {
     ? TOOL_CALL_ENDED_FOR_DELIVERY
     : INTERRUPT_MESSAGE_FOR_TOOL_USE;
 }
-//@ chunk-dtv8x2hx.js:100548-101255 placement
+//@ chunk-yvhjwwtt.js:93197-93904 placement
 function describeReconnectResult(result, outcome) {
   let { name: hostName, working_dir: workingDir } = outcome.host;
   let mapped = (outcome.notes ?? []).map((note) => sanitizeForPrompt(note, MAX_REMOTE_RESULT_CHARS));
@@ -1498,7 +1499,7 @@ function describeReconnectResult(result, outcome) {
         ...fields,
       };
 }
-//@ chunk-dtv8x2hx.js:101255-101423 placement
+//@ chunk-yvhjwwtt.js:93904-94072 placement
 function inputChangedByApproval(updatedInput, request, tool) {
   let target = updatedInput[HOST_TOOL_INPUT_FIELD];
   let targetChanged =
@@ -1510,7 +1511,7 @@ function inputChangedByApproval(updatedInput, request, tool) {
   );
   return targetChanged || any;
 }
-//@ chunk-dtv8x2hx.js:101423-101593 placement
+//@ chunk-yvhjwwtt.js:94072-94242 placement
 function isRunInBackground(tool, server) {
   let toolRemoteExecution = getToolRemoteExecution(tool);
   let refusedFields = toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : [];

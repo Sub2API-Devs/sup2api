@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：Retry-After 头解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 
-//@ chunk-e6aww6q8.js:225873-225908 placement
+//@ chunk-5xgkngpb.js:226439-226474 placement
 var X_CC_RETRY_AFTER_TOO_LONG = "x-cc-retry-after-too-long";
-//@ chunk-e6aww6q8.js:225908-226167 placement
+//@ chunk-5xgkngpb.js:226474-226733 placement
 function parseRetryAfterMs(headers, now = Date.now()) {
   let retryAfterMs = parseFloat(headers.get("retry-after-ms") ?? "");
   if (!Number.isNaN(retryAfterMs) && retryAfterMs !== 0) return retryAfterMs;
@@ -23,7 +23,7 @@ function parseRetryAfterMs(headers, now = Date.now()) {
   let timestamp = Date.parse(retryAfter);
   return Number.isNaN(timestamp) ? undefined : timestamp - now;
 }
-//@ chunk-e6aww6q8.js:226167-226617 placement
+//@ chunk-5xgkngpb.js:226733-227183 placement
 /**
  * 429/529 响应的 Retry-After 超过可等待时长时，改写响应头：x-should-retry=false 并写入 X_CC_RETRY_AFTER_TOO_LONG（毫秒），让 SDK 不再自行重试。
  */
@@ -52,7 +52,7 @@ function markRetryAfterTooLong(response, maxWaitMs) {
   });
   return response_2;
 }
-//@ chunk-e6aww6q8.js:226617-226807 placement
+//@ chunk-5xgkngpb.js:227183-227373 placement
 function retryAfterTooLongMs(error) {
   if (
     !(error instanceof APIError) ||
@@ -63,13 +63,13 @@ function retryAfterTooLongMs(error) {
   let seconds = parseFloat(error.headers.get(X_CC_RETRY_AFTER_TOO_LONG) ?? "");
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
-//@ chunk-e6aww6q8.js:226807-226911 placement
+//@ chunk-5xgkngpb.js:227373-227477 placement
 function stripRetryAfterTooLongHeader(error) {
   let headers = new Headers(error.headers);
   headers.delete(X_CC_RETRY_AFTER_TOO_LONG);
   return APIError.generate(error.status, error.error, undefined, headers);
 }
-//@ chunk-e6aww6q8.js:226911-227039 placement
+//@ chunk-5xgkngpb.js:227477-227605 placement
 function retryAfterBucket(tooLong) {
   if (tooLong <= 1e4) return "le_10s";
   if (tooLong <= 60000) return "le_1m";
@@ -77,10 +77,10 @@ function retryAfterBucket(tooLong) {
   return tooLong <= 3600000 ? "le_1h" : "gt_1h";
 }
 export {
+  parseRetryAfterMs,
   retryAfterTooLongMs,
   retryAfterBucket,
   X_CC_RETRY_AFTER_TOO_LONG,
   stripRetryAfterTooLongHeader,
-  parseRetryAfterMs,
   markRetryAfterTooLong,
 };

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：深链横幅。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/banner.ts
- * pieces: chunk-47mye09a.js (5)
+ * pieces: chunk-pjbnxxq2.js (5)
  * attribution: placement 1, fingerprint 2, callgraph-fingerprint 1, file-local 1
  */
 import { join, sep } from "path";
@@ -15,13 +15,13 @@ import { formatRelativeTimeAgo, formatNumber } from "../format.js";
 import { getGitDir } from "../git.js";
 import { getCommonDir } from "../git/gitFilesystem.js";
 
-//@ chunk-47mye09a.js:3555-3580 placement
+//@ chunk-pjbnxxq2.js:3557-3582 placement
 /**
  * 仓库最近 fetch 超过多久算过期（7 天）。
  */
 var REPO_FETCH_STALE_MS = 604800000;
 var LONG_PREFILL_CHARS = 1000;
-//@ chunk-47mye09a.js:3580-4181 fingerprint (2.1.88 match: buildDeepLinkBanner, 1)
+//@ chunk-pjbnxxq2.js:3582-4183 fingerprint (2.1.88 match: buildDeepLinkBanner, 1)
 /**
  * 深链接会话的警示横幅：说明由外部深链接打开、所在目录；带 repo 时显示最近 fetch 时间（超期提示 CLAUDE.md 可能过期）；带预填 prompt 时提醒用户回车前检查（长 prompt 提示滚动查看）。
  */
@@ -43,7 +43,7 @@ function buildDeepLinkBanner(info) {
   return lines.join(`
 `);
 }
-//@ chunk-47mye09a.js:4181-4382 fingerprint (2.1.88 match: readLastFetchTime, 1)
+//@ chunk-pjbnxxq2.js:4183-4385 fingerprint (2.1.88 match: readLastFetchTime, 1)
 /**
  * 读 .git/FETCH_HEAD（及 common dir）的修改时间，取较新者作为最近 fetch 时间。
  */
@@ -58,7 +58,7 @@ async function readLastFetchTime(cwd) {
   if (worktreeFetch && commonFetch) return worktreeFetch > commonFetch ? worktreeFetch : commonFetch;
   return worktreeFetch ?? commonFetch;
 }
-//@ chunk-47mye09a.js:4382-4453 callgraph-fingerprint (2.1.88 match: mtimeOrUndefined, 1)
+//@ chunk-pjbnxxq2.js:4385-4456 callgraph-fingerprint (2.1.88 match: mtimeOrUndefined, 1)
 /**
  * stat 取 mtime，失败返回 undefined。
  */
@@ -70,7 +70,7 @@ async function mtimeOrUndefined(p) {
     return;
   }
 }
-//@ chunk-47mye09a.js:4453-4554 file-local
+//@ chunk-pjbnxxq2.js:4456-4557 file-local
 /**
  * 把家目录前缀替换成 ~。
  */

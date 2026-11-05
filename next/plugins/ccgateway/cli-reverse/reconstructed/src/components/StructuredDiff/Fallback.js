@@ -3,9 +3,9 @@
  *
  * 纯 JS 的 diff 渲染：行配对、词级 diff（diffAddedWord/diffRemovedWord）、行号与换行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StructuredDiff/Fallback.tsx
- * pieces: chunk-887tgx6t.js (9)
+ * pieces: chunk-e50jywsa.js (9)
  * attribution: file-last-pair 1, layout 1, fingerprint 7
  */
 import {
@@ -21,7 +21,7 @@ import { wrapText } from "../../ink/wrap-text.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { NoSelect } from "../../ink/components/Input.js";
 
-//@ chunk-887tgx6t.js:741-785 file-last-pair
+//@ chunk-e50jywsa.js:741-785 file-last-pair
 function renderText(node, i) {
   return jsxProd_default(
     Box,
@@ -31,9 +31,9 @@ function renderText(node, i) {
     i,
   );
 }
-//@ chunk-887tgx6t.js:785-796 layout
+//@ chunk-e50jywsa.js:785-796 layout
 var DIM_ALPHA = 0.4;
-//@ chunk-887tgx6t.js:796-1192 fingerprint (2.1.88 match: StructuredDiffFallback, 1)
+//@ chunk-e50jywsa.js:796-1192 fingerprint (2.1.88 match: StructuredDiffFallback, 1)
 function StructuredDiffFallback(props) {
   let $ = useMemoCache(10);
   let { patch, dim, width } = props;
@@ -67,7 +67,7 @@ function StructuredDiffFallback(props) {
   } else t3 = $[9];
   return t3;
 }
-//@ chunk-887tgx6t.js:1192-1389 fingerprint (2.1.88 match: transformLinesToObjects, 0.933)
+//@ chunk-e50jywsa.js:1192-1389 fingerprint (2.1.88 match: transformLinesToObjects, 0.933)
 function transformLinesToObjects(lines) {
   return lines.map((code) => {
     let type = code.startsWith("+") ? "add" : code.startsWith("-") ? "remove" : "nochange";
@@ -81,19 +81,19 @@ function transformLinesToObjects(lines) {
     };
   });
 }
-//@ chunk-887tgx6t.js:1389-1929 fingerprint (2.1.88 match: processAdjacentLines, 1)
+//@ chunk-e50jywsa.js:1389-1929 fingerprint (2.1.88 match: processAdjacentLines, 1)
 function processAdjacentLines(lineObjects) {
   let processedLines = [];
-  let i = 0;
-  while (i < lineObjects.length) {
-    let current = lineObjects[i];
+  let i_2 = 0;
+  while (i_2 < lineObjects.length) {
+    let current = lineObjects[i_2];
     if (!current) {
-      i++;
+      i_2++;
       continue;
     }
     if (current.type === "remove") {
       let removeLines = [current];
-      let j = i + 1;
+      let j = i_2 + 1;
       while (j < lineObjects.length && lineObjects[j]?.type === "remove") {
         let line = lineObjects[j];
         if (line) removeLines.push(line);
@@ -119,25 +119,25 @@ function processAdjacentLines(lineObjects) {
         }
         processedLines.push(...removeLines.filter(Boolean));
         processedLines.push(...addLines.filter(Boolean));
-        i = j;
+        i_2 = j;
       } else {
         processedLines.push(current);
-        i++;
+        i_2++;
       }
     } else {
       processedLines.push(current);
-      i++;
+      i_2++;
     }
   }
   return processedLines;
 }
-//@ chunk-887tgx6t.js:1929-1978 fingerprint (2.1.88 match: calculateWordDiffs, 1)
+//@ chunk-e50jywsa.js:1929-1978 fingerprint (2.1.88 match: calculateWordDiffs, 1)
 function calculateWordDiffs(oldText, newText) {
   return diffWordsWithSpace(oldText, newText, {
     ignoreCase: false,
   });
 }
-//@ chunk-887tgx6t.js:1978-3595 fingerprint (2.1.88 match: generateWordDiffElements, 0.948)
+//@ chunk-e50jywsa.js:1978-3520 fingerprint (2.1.88 match: generateWordDiffElements, 0.871)
 function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
   let { type, i, wordDiff, matchedLine, originalCode } = item;
   if (!wordDiff || !matchedLine) return null;
@@ -220,8 +220,7 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
   }
   return wrappedLines.map(({ content, contentWidth }, lineIndex) => {
     let key = `${type}-${i}-${lineIndex}`;
-    let lineBgColor =
-      type === "add" ? (dim ? "diffAddedDimmed" : "diffAdded") : dim ? "diffRemovedDimmed" : "diffRemoved";
+    let lineBgColor = type === "add" ? "diffAdded" : "diffRemoved";
     let lineNum = lineIndex === 0 ? i : undefined;
     let lineNumStr =
       (lineNum !== undefined ? lineNum.toString().padStart(maxWidth) : " ".repeat(maxWidth)) + " ";
@@ -238,14 +237,12 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
             children: jsxProd_default_2(Text, {
               color: overrideTheme ? "text" : undefined,
               backgroundColor: lineBgColor,
-              dimColor: dim,
               children: [lineNumStr, diffPrefix],
             }),
           }),
           jsxProd_default(Text, {
             color: overrideTheme ? "text" : undefined,
             backgroundColor: lineBgColor,
-            dimColor: dim,
             children: content,
           }),
           lineSuffix
@@ -258,7 +255,6 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
             "aria-hidden": true,
             color: overrideTheme ? "text" : undefined,
             backgroundColor: lineBgColor,
-            dimColor: dim,
             children: " ".repeat(padding),
           }),
         ],
@@ -267,7 +263,7 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
     );
   });
 }
-//@ chunk-887tgx6t.js:3595-4741 fingerprint (2.1.88 match: formatDiff, 0.931)
+//@ chunk-e50jywsa.js:3520-4666 fingerprint (2.1.88 match: formatDiff, 0.931)
 function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
   let safeWidth = Math.max(1, Math.floor(width));
   let lineObjects = transformLinesToObjects(lines);
@@ -351,9 +347,9 @@ function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
     });
   });
 }
-//@ chunk-887tgx6t.js:4741-5314 fingerprint (2.1.88 match: numberDiffLines, 0.952)
+//@ chunk-e50jywsa.js:4666-5239 fingerprint (2.1.88 match: numberDiffLines, 0.952)
 function numberDiffLines(diff, startLine) {
-  let i = startLine;
+  let i_2 = startLine;
   let result = [];
   let queue = [...diff];
   while (queue.length > 0) {
@@ -362,7 +358,7 @@ function numberDiffLines(diff, startLine) {
     let line = {
       code,
       type,
-      i,
+      i: i_2,
       originalCode,
       truncatedChars,
       wordDiff,
@@ -370,24 +366,24 @@ function numberDiffLines(diff, startLine) {
     };
     switch (type) {
       case "nochange":
-        i++;
+        i_2++;
         result.push(line);
         break;
       case "add":
-        i++;
+        i_2++;
         result.push(line);
         break;
       case "remove": {
         result.push(line);
         let numRemoved = 0;
         while (queue[0]?.type === "remove") {
-          i++;
+          i_2++;
           let current = queue.shift();
           let { code, type, originalCode, truncatedChars, wordDiff, matchedLine } = current;
           let line = {
             code,
             type,
-            i,
+            i: i_2,
             originalCode,
             truncatedChars,
             wordDiff,
@@ -396,7 +392,7 @@ function numberDiffLines(diff, startLine) {
           result.push(line);
           numRemoved++;
         }
-        i -= numRemoved;
+        i_2 -= numRemoved;
         break;
       }
     }

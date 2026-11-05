@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Google Vertex AI 设置向导
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y6fv30yg.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3qyfks39.js (11)
  * attribution: placement 11
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -33,7 +33,7 @@ import {
   DEFAULT_3P_HAIKU_KEY,
   DEFAULT_3P_FABLE_KEY,
 } from "../../utils/model/model.js";
-import { ToolsStep } from "../agents/new-agent-creation/wizard-steps/ToolsStep.js";
+import { ModelStep } from "../agents/new-agent-creation/wizard-steps/ModelStep.js";
 import { PromptStep } from "../agents/new-agent-creation/wizard-steps/PromptStep.js";
 import { VertexProjectStep, VertexModelPinsStep } from "./vertexCredentials.js";
 import { TypeStep } from "../agents/new-agent-creation/wizard-steps/TypeStep.js";
@@ -41,7 +41,7 @@ import { LocationStep } from "../agents/new-agent-creation/wizard-steps/Location
 import { WizardProvider } from "../wizard/WizardProvider.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y6fv30yg.js:1434-1525 placement
+//@ chunk-3qyfks39.js:1434-1525 placement
 var VERTEX_WIZARD_STEPS_2 = {
   AUTH_METHOD: 0,
   SERVICE_ACCOUNT: 1,
@@ -51,16 +51,16 @@ var VERTEX_WIZARD_STEPS_2 = {
   PIN_MODELS: 5,
   CONFIRM: 6,
 };
-//@ chunk-y6fv30yg.js:2554-2558 placement
+//@ chunk-3qyfks39.js:2554-2558 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y6fv30yg.js:2554", () => {
+deferInit("chunk-3qyfks39.js:2554", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:2558-2594 placement
+//@ chunk-3qyfks39.js:2558-2594 placement
 function hasProjectSelection(entry) {
   return entry[1] !== undefined;
 }
-//@ chunk-y6fv30yg.js:2594-2697 placement
+//@ chunk-3qyfks39.js:2594-2697 placement
 function renderEnvAssignment(entry) {
   let [name, value] = entry;
   return jsxProd_default_2(
@@ -79,7 +79,7 @@ function renderEnvAssignment(entry) {
     name,
   );
 }
-//@ chunk-y6fv30yg.js:2697-3522 placement
+//@ chunk-3qyfks39.js:2697-3522 placement
 /**
  * 由 Vertex 向导数据生成要写入设置的 env：开启 CLAUDE_CODE_USE_VERTEX 并清掉其他提供方开关，写项目 ID、区域、服务账号密钥文件与固定的 Sonnet/Opus/Fable/Haiku 模型。
  */
@@ -108,7 +108,7 @@ function buildVertexEnvSettings(wizardData) {
   if (wizardData.pinHaiku) envOverrides.ANTHROPIC_DEFAULT_HAIKU_MODEL = wizardData.pinHaiku;
   return envOverrides;
 }
-//@ chunk-y6fv30yg.js:3522-5539 placement (2.1.88 match: ConfirmStep, 0.161)
+//@ chunk-3qyfks39.js:3522-5539 placement (2.1.88 match: ConfirmStep, 0.161)
 function ConfirmStep(props) {
   let $ = useMemoCache(30);
   let { onComplete } = props;
@@ -266,7 +266,7 @@ function ConfirmStep(props) {
   } else layoutElement = $[29];
   return layoutElement;
 }
-//@ chunk-y6fv30yg.js:5539-5644 placement
+//@ chunk-3qyfks39.js:5539-5644 placement
 function defaultVertexModels() {
   return {
     sonnet: catalogEntriesByFirstPartyId[DEFAULT_3P_SONNET_KEY].vertex,
@@ -275,18 +275,18 @@ function defaultVertexModels() {
     fable: catalogEntriesByFirstPartyId[DEFAULT_3P_FABLE_KEY].vertex,
   };
 }
-//@ chunk-y6fv30yg.js:5644-5805 placement
+//@ chunk-3qyfks39.js:5644-5805 placement
 function knownVertexModelIds(query) {
   let ids = new Set();
   for (let entry of Object.values(catalogEntriesByFirstPartyId))
     if (entry.vertex !== null && entry.vertex.toLowerCase().includes(query)) ids.add(entry.vertex);
   return [...ids].sort().reverse();
 }
-//@ chunk-y6fv30yg.js:19411-19426 placement
+//@ chunk-3qyfks39.js:19411-19426 placement
 function noopWizardEffect() {}
-//@ chunk-y6fv30yg.js:19426-19456 placement
+//@ chunk-3qyfks39.js:19426-19456 placement
 var VERTEX_WIZARD_STEPS = [
-  ToolsStep,
+  ModelStep,
   PromptStep,
   VertexProjectStep,
   TypeStep,
@@ -294,7 +294,7 @@ var VERTEX_WIZARD_STEPS = [
   VertexModelPinsStep,
   ConfirmStep,
 ];
-//@ chunk-y6fv30yg.js:19456-19849 placement
+//@ chunk-3qyfks39.js:19456-19830 placement
 function VertexSetupWizard(props) {
   let $ = useMemoCache(7);
   let { onComplete, onCancel, exitOnCtrlCD } = props;
@@ -321,7 +321,6 @@ function VertexSetupWizard(props) {
       onCancel,
       exitOnCtrlCD,
       title: "Set up Google Vertex AI",
-      showStepCounter: false,
     });
     $[3] = exitOnCtrlCD;
     $[4] = onCancel;

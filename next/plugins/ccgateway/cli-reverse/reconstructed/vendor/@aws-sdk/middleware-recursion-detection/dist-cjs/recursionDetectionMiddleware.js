@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/middleware-recursion-detection/dist-cjs/recursionDetectionMiddleware.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/middleware-recursion-detection@3.936.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_invoke_store } from "../../../@aws/lambda-invoke-store/dist-cjs/invoke-store.js";
 import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:4337-4991 cjs-fingerprint
+//@ chunk-3p78mpxm.js:4337-4991 cjs-fingerprint
 var require_recursionDetectionMiddleware = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：swarm 宿主状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c1qgdbhd.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-19yyx8q2.js (14)
  * attribution: placement 14
  */
 import { createHash } from "crypto";
@@ -16,9 +16,9 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-c1qgdbhd.js:404-415 placement
+//@ chunk-19yyx8q2.js:404-415 placement
 var MAILBOX_LEDGER_LIMIT = 2048;
-//@ chunk-c1qgdbhd.js:415-927 placement
+//@ chunk-19yyx8q2.js:415-927 placement
 /**
  * 记录邮箱写入的消息 id 账本，供去重与回执。
  */
@@ -59,13 +59,13 @@ class MailboxWriteLedger {
     if (ledger.size === 0) this.#e.delete(inboxPath);
   }
 }
-//@ chunk-c1qgdbhd.js:927-1003 placement
+//@ chunk-19yyx8q2.js:927-1003 placement
 function evictOldestLedgerEntry(ledger) {
   if (ledger.size <= MAILBOX_LEDGER_LIMIT) return;
   let [oldestId] = ledger.keys();
   if (oldestId !== undefined) ledger.delete(oldestId);
 }
-//@ chunk-c1qgdbhd.js:1003-1139 placement
+//@ chunk-19yyx8q2.js:1003-1139 placement
 function mailboxMessageHash(message) {
   return createHash("sha256")
     .update(
@@ -80,7 +80,7 @@ function mailboxMessageHash(message) {
     )
     .digest("hex");
 }
-//@ chunk-c1qgdbhd.js:1139-1834 placement
+//@ chunk-19yyx8q2.js:1139-1834 placement
 /**
  * 入站对端状态：当前模式、持有/释放回调、回执发送等。
  */
@@ -115,7 +115,7 @@ class InboundPeerState {
     this.unsubscribeAvailabilityRefresh = null;
   }
 }
-//@ chunk-c1qgdbhd.js:1834-1953 placement
+//@ chunk-19yyx8q2.js:1834-1953 placement
 class ReceiptsState {
   outstandingSends = [];
   awaitingTerminal = [];
@@ -124,14 +124,14 @@ class ReceiptsState {
     this.awaitingTerminal.length = 0;
   }
 }
-//@ chunk-c1qgdbhd.js:1953-1997 placement
+//@ chunk-19yyx8q2.js:1953-1997 placement
 class OutboundPacerState {
   pacer = null;
   reset() {
     this.pacer = null;
   }
 }
-//@ chunk-c1qgdbhd.js:1997-2188 placement
+//@ chunk-19yyx8q2.js:1997-2188 placement
 class IngressState {
   ownUdsHopToken = undefined;
   ownBridgePeerAddressResolver = undefined;
@@ -142,7 +142,7 @@ class IngressState {
     this.messageDropped.clear();
   }
 }
-//@ chunk-c1qgdbhd.js:2188-2348 placement
+//@ chunk-19yyx8q2.js:2188-2348 placement
 class SwarmPermissionsState {
   pending = new Map();
   pendingSandbox = new Map();
@@ -153,13 +153,13 @@ class SwarmPermissionsState {
     this.pendingPlanApproval = null;
   }
 }
-//@ chunk-c1qgdbhd.js:2348-2422 placement
+//@ chunk-19yyx8q2.js:2348-2422 placement
 class MailboxState {
   reportedDroppedEntries = new Set();
   pendingPrunes = new Map();
   ledger = new MailboxWriteLedger();
 }
-//@ chunk-c1qgdbhd.js:2422-2659 placement
+//@ chunk-19yyx8q2.js:2422-2659 placement
 class TaskListState {
   updated = createSignal();
   locks = createKeyedQueue();
@@ -174,7 +174,7 @@ class TaskListState {
     } catch {}
   }
 }
-//@ chunk-c1qgdbhd.js:2659-2777 placement
+//@ chunk-19yyx8q2.js:2659-2777 placement
 /**
  * 每个会话宿主一份的 swarm 状态集合：入站对端、回执、出站节奏、入口、权限中继、mailbox 与任务列表，供 HostScoped 单例使用。
  */
@@ -187,12 +187,12 @@ class SwarmHostState {
   mailbox = new MailboxState();
   taskList = new TaskListState();
 }
-//@ chunk-c1qgdbhd.js:2777-2800 placement
+//@ chunk-19yyx8q2.js:2777-2800 placement
 var swarmHostStateByHost; // deferred: uses SwarmHostState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c1qgdbhd.js:2777", () => {
+deferInit("chunk-19yyx8q2.js:2777", () => {
   swarmHostStateByHost = new HostScoped(() => new SwarmHostState());
 });
-//@ chunk-c1qgdbhd.js:2800-2836 placement
+//@ chunk-19yyx8q2.js:2800-2836 placement
 /**
  * 取当前宿主的 swarm 状态。
  */

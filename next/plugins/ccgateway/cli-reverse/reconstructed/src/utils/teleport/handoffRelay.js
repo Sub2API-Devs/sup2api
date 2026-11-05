@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：teleport 交接中继。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z6qazjbc.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b392dec4.js (6)
  * attribution: placement 6
  */
 import {
@@ -26,7 +26,7 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { normalizeUuidOrNull } from "../agentId.js";
 
-//@ chunk-z6qazjbc.js:11969-12620 placement
+//@ chunk-b392dec4.js:13117-13768 placement
 function planRelayFromHandoff({
   relayMarker,
   carried,
@@ -80,12 +80,12 @@ function planRelayFromHandoff({
     },
   };
 }
-//@ chunk-z6qazjbc.js:12620-12658 placement
+//@ chunk-b392dec4.js:13768-13806 placement
 function beginMarkerLineWrite() {
   oweRelayThinkingStrip();
   noteHandoffMarkerStep("write_begun");
 }
-//@ chunk-z6qazjbc.js:12658-13175 placement
+//@ chunk-b392dec4.js:13806-14323 placement
 function armRelayFromStoredHandoff(marker, liveMessages, handoffKind) {
   let teleportRelayEnvConfig = getTeleportRelayEnvConfig();
   if (!teleportRelayEnvConfig || !isRelayBootVerdictOpen()) {
@@ -120,7 +120,7 @@ function armRelayFromStoredHandoff(marker, liveMessages, handoffKind) {
   });
   noteHandoffMarkerStep("verdict_logged");
 }
-//@ chunk-z6qazjbc.js:13175-13522 placement
+//@ chunk-b392dec4.js:14323-14670 placement
 function noteHandoffMarkerFate(handoffKind, turnOutcome) {
   let step = takeHandoffMarkerStep();
   let { status } = getTeleportCacheState();
@@ -141,7 +141,7 @@ function noteHandoffMarkerFate(handoffKind, turnOutcome) {
     turn_outcome: turnOutcome,
   });
 }
-//@ chunk-z6qazjbc.js:13522-13697 placement
+//@ chunk-b392dec4.js:14670-14845 placement
 function logRelayArmRefused(code, reason, handoffKind) {
   logFeatureSad("upgrade_teleport_cache", code);
   recordTeleportArmVerdict({
@@ -152,7 +152,7 @@ function logRelayArmRefused(code, reason, handoffKind) {
   noteHandoffMarkerStep("verdict_logged");
   logForDebugging(`relay not armed from the handed-off turn: ${reason}`);
 }
-//@ chunk-z6qazjbc.js:13697-14230 placement
+//@ chunk-b392dec4.js:14845-15378 placement
 /**
  * 校验交接标记行：必须有独立 uuid 且内容可解析。
  */

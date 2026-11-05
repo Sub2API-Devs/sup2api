@@ -3,9 +3,9 @@
  *
  * /export：把会话复制到剪贴板或导出到文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ExportDialog.tsx
- * pieces: chunk-am3vy82s.js (3)
+ * pieces: chunk-vew675sq.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -31,22 +31,21 @@ import { Box, Text } from "../ink/components/Text.js";
 import { TextInput } from "./TextInput.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-am3vy82s.js:18832-18870 sole-consumer
+//@ chunk-vew675sq.js:20260-20298 sole-consumer
 function selectOriginalCwd(state) {
   return state.originalCwd;
 }
-//@ chunk-am3vy82s.js:18870-18900 affinity
+//@ chunk-vew675sq.js:20298-20328 affinity
 function selectCwd(state) {
   return state.cwd;
 }
-//@ chunk-am3vy82s.js:18900-21471 fingerprint (2.1.88 match: ExportDialog, 0.776)
+//@ chunk-vew675sq.js:20328-22858 fingerprint (2.1.88 match: ExportDialog, 0.777)
 /**
  * /export：选择复制到剪贴板或导出到文件（默认文件名带时间），完成后显示结果。
  */
 function ExportDialog(props) {
   let $ = useMemoCache(32);
   let { content, defaultFilename, onDone } = props;
-  let [, setSelectedOption] = useState(null);
   let [filename, setFilename] = useState(defaultFilename);
   let [cursorOffset, setCursorOffset] = useState(defaultFilename.length);
   let [showFilenameInput, setShowFilenameInput] = useState(false);
@@ -57,7 +56,6 @@ function ExportDialog(props) {
   if ($[0] === MEMO_CACHE_SENTINEL) {
     resetSelectionCached = () => {
       setShowFilenameInput(false);
-      setSelectedOption(null);
     };
     $[0] = resetSelectionCached;
   } else resetSelectionCached = $[0];
@@ -73,10 +71,7 @@ function ExportDialog(props) {
           success: true,
           message: "Conversation copied to clipboard",
         });
-      } else if (value === "file") {
-        setSelectedOption("file");
-        setShowFilenameInput(true);
-      }
+      } else if (value === "file") setShowFilenameInput(true);
     };
     $[1] = content;
     $[2] = onDone;

@@ -3,14 +3,14 @@
  *
  * 所用模型即将弃用时的高优先级警告通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useDeprecationWarningNotification.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { getDeprecationStatusLine } from "../../utils/model/deprecation.js";
 
-//@ chunk-18hwfzwa.js:1758852-1759190 fingerprint (2.1.88 match: useDeprecationWarningNotification, 0.754)
+//@ chunk-czq1j3j2.js:1806113-1806451 fingerprint (2.1.88 match: useDeprecationWarningNotification, 0.753)
 var useDeprecationWarningNotification = {
   id: "model-deprecation-warning",
   deps: (noticeState) => [

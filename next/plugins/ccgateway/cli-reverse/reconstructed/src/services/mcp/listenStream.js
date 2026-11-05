@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP list_changed 监听流的重开与重新拉取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (7)
  * attribution: placement 7
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -22,7 +22,7 @@ import { sleep } from "../../utils/sleep.js";
 import { getConnectionTimeoutMs } from "./client.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:49905-50091 placement
+//@ chunk-sywnjtqb.js:49917-50103 placement
 /**
  * 停摆配置的 schema（windowMax、parkDelayMinutes）。
  */
@@ -34,7 +34,7 @@ var DEFAULT_WINDOW_MAX;
 var DEFAULT_PARK_DELAY_MS;
 var MIN_PARK_SLEEP_MS;
 var parkConfigSchema;
-deferInit("chunk-8t8n4kdh.js:49905", () => {
+deferInit("chunk-sywnjtqb.js:49917", () => {
   LISTEN_REOPEN_DELAYS_MS = [1000, 2000, 4000];
   REOPEN_BACKOFF_RESET_MS = 1e4;
   LISTEN_RETRY_SLEEP_MS = 5000;
@@ -49,7 +49,7 @@ deferInit("chunk-8t8n4kdh.js:49905", () => {
     }),
   );
 });
-//@ chunk-8t8n4kdh.js:50091-50181 placement
+//@ chunk-sywnjtqb.js:50103-50193 placement
 /**
  * 记录某服务器某类列表变化的重新拉取处理器。
  */
@@ -59,7 +59,7 @@ function recordListChangedRefetcher(client, kind, refetch) {
   handlers[kind] = refetch;
   listChangedRefetchHandlers.set(client, handlers);
 }
-//@ chunk-8t8n4kdh.js:50181-50526 placement
+//@ chunk-sywnjtqb.js:50193-50538 placement
 /**
  * 监听流重新打开后，按服务器声明补拉工具、提示词与资源列表。
  */
@@ -79,7 +79,7 @@ function refetchAfterReopen(client, serverName, config, filter) {
     });
   }
 }
-//@ chunk-8t8n4kdh.js:50526-50924 placement
+//@ chunk-sywnjtqb.js:50538-50936 placement
 function ensureListenSubscription(client, serverName, config, autoSubscription, discoverSource) {
   let subscription = autoSubscription ?? client.autoOpenedSubscription;
   if (subscription === undefined && client.getProtocolEra?.() !== "modern") return;
@@ -95,7 +95,7 @@ function ensureListenSubscription(client, serverName, config, autoSubscription, 
     );
   });
 }
-//@ chunk-8t8n4kdh.js:50924-52450 placement
+//@ chunk-sywnjtqb.js:50936-52460 placement
 /**
  * 维护 subscriptions/listen 监听流：流被远端关闭时按退避重开并在重开后补拉列表；短时间内重开过多则按 GrowthBook 配置暂停一段时间；优雅关闭时等待部署宽限期后再试，重试用尽则放弃。
  */
@@ -179,7 +179,7 @@ async function maintainListenSubscription(client, serverName, config, subscripti
     delayIndex = reopenResult.delayIndex + 1;
   }
 }
-//@ chunk-8t8n4kdh.js:52450-52699 placement
+//@ chunk-sywnjtqb.js:52460-52709 placement
 function listChangedCapabilities(client) {
   let serverCapabilities = client.getServerCapabilities();
   let flags = {
@@ -195,7 +195,7 @@ function listChangedCapabilities(client) {
   };
   return Object.keys(flags).length === 0 ? undefined : flags;
 }
-//@ chunk-8t8n4kdh.js:52699-53597 placement
+//@ chunk-sywnjtqb.js:52709-53607 placement
 async function reopenListenSubscription(client, serverName, config, delayIndex, trigger, discoverSource) {
   let capabilities = listChangedCapabilities(client);
   if (capabilities === undefined) return;

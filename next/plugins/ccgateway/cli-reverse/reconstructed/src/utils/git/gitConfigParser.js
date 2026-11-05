@@ -3,9 +3,9 @@
  *
  * 轻量 git config 文本解析（section/subsection/key 取值）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git/gitConfigParser.ts
- * pieces: chunk-8y336ebc.js (8), chunk-t0gq9gyw.js (17)
+ * pieces: chunk-85eyj5gy.js (17), chunk-a04tk21p.js (8)
  * attribution: placement 24, fingerprint 1
  */
 import { open } from "fs/promises";
@@ -15,14 +15,14 @@ import { isUsableGitEntry, REPO_UNREADABLE_RESULT, REPO_NEGATIVE_RESULT } from "
 import { readPositionIsUnsafe } from "./gitFilesystem.js";
 import { isPathAbsent } from "../errors.js";
 
-//@ chunk-t0gq9gyw.js:66474-66516 placement
+//@ chunk-85eyj5gy.js:67281-67323 placement
 /**
  * 是否含 NUL 字节。
  */
 function hasNulByte(text) {
   return text.includes("\x00");
 }
-//@ chunk-t0gq9gyw.js:66516-66597 placement
+//@ chunk-85eyj5gy.js:67323-67404 placement
 /**
  * 异步读取 git 配置中的某个值；文件不可读返回 null。
  */
@@ -30,7 +30,7 @@ async function readGitConfigValueAsync(cwd, section, subsection, key) {
   let gitConfigFile = await readGitConfigFile(cwd);
   return gitConfigFile.ok ? firstGitConfigValue(gitConfigFile.text, section, subsection, key) : null;
 }
-//@ chunk-t0gq9gyw.js:66597-67078 placement
+//@ chunk-85eyj5gy.js:67404-67885 placement
 /**
  * 读取 .git/config（大小上限、NUL 检查）。
  */
@@ -76,7 +76,7 @@ async function readGitConfigFile(cwd) {
     };
   }
 }
-//@ chunk-t0gq9gyw.js:67078-67146 placement
+//@ chunk-85eyj5gy.js:67885-67953 placement
 /**
  * 返回 git 配置中指定节/键的第一个值。
  */
@@ -84,23 +84,23 @@ function firstGitConfigValue(text, section, subsection, key) {
   for (let value of iterGitConfigValues(text, section, subsection, key)) return value;
   return null;
 }
-//@ chunk-t0gq9gyw.js:67146-67191 placement
+//@ chunk-85eyj5gy.js:67953-67998 placement
 /**
  * 返回 git 配置中指定节/键的全部值。
  */
 function allGitConfigValues(config, section, subsection, key) {
   return [...iterGitConfigValues(config, section, subsection, key)];
 }
-//@ chunk-t0gq9gyw.js:67191-67243 placement (2.1.88 match: _temp, 1)
+//@ chunk-85eyj5gy.js:67998-68050 placement (2.1.88 match: _temp, 1)
 /**
  * 同上，但把无值项的默认值按 "true" 处理。
  */
 function allGitConfigValuesTrue(config, section, subsection, key) {
   return [...iterGitConfigValues(config, section, subsection, key, "true")];
 }
-//@ chunk-t0gq9gyw.js:67243-67292 placement
+//@ chunk-85eyj5gy.js:68050-68099 placement
 var BARE_VALUE_LINE_RE = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:[#;].*)?$/;
-//@ chunk-t0gq9gyw.js:67292-67626 placement
+//@ chunk-85eyj5gy.js:68099-68433 placement
 /**
  * 遍历 git 配置中指定节/键的值。
  */
@@ -124,7 +124,7 @@ function* iterGitConfigValues(config, section, subsection, key, bareValue) {
       yield bareValue;
   }
 }
-//@ chunk-t0gq9gyw.js:67626-68091 placement
+//@ chunk-85eyj5gy.js:68433-68898 placement
 /**
  * 解析 git 配置的节与条目。
  */
@@ -157,9 +157,9 @@ function parseGitConfigSections(contents) {
     files,
   };
 }
-//@ chunk-t0gq9gyw.js:68091-68139 placement
+//@ chunk-85eyj5gy.js:68898-68946 placement
 var INCLUDEIF_SECTION_RE = /^\[includeif[ \t]*"(?:[^"\\]|\\.)*"\]/i;
-//@ chunk-t0gq9gyw.js:68139-68408 placement
+//@ chunk-85eyj5gy.js:68946-69215 placement
 function parseKeyValue(line) {
   let i = 0;
   while (i < line.length && isConfigNameChar(line[i])) i++;
@@ -175,7 +175,7 @@ function parseKeyValue(line) {
     value,
   };
 }
-//@ chunk-t0gq9gyw.js:68408-68800 placement
+//@ chunk-85eyj5gy.js:69215-69607 placement
 /**
  * 解析 git 配置值（引号、转义、注释）。
  */
@@ -230,13 +230,13 @@ function parseGitConfigValue(line, start) {
   if (!inQuote) result = trimTrailingWhitespace(result);
   return result;
 }
-//@ chunk-t0gq9gyw.js:68800-68895 placement
+//@ chunk-85eyj5gy.js:69607-69702 placement
 function trimTrailingWhitespace(s) {
   let end = s.length;
   while (end > 0 && (s[end - 1] === " " || s[end - 1] === "\t")) end--;
   return s.slice(0, end);
 }
-//@ chunk-t0gq9gyw.js:68895-68980 placement
+//@ chunk-85eyj5gy.js:69702-69787 placement
 function isConfigSection(line, sectionLower, subsection) {
   let gitConfigSectionHeader = parseGitConfigSectionHeader(line);
   return (
@@ -245,7 +245,7 @@ function isConfigSection(line, sectionLower, subsection) {
     gitConfigSectionHeader.subsection === subsection
   );
 }
-//@ chunk-t0gq9gyw.js:68980-69534 placement
+//@ chunk-85eyj5gy.js:69787-70341 placement
 /**
  * 解析 git 配置节头。
  */
@@ -292,7 +292,7 @@ function parseGitConfigSectionHeader(line) {
     subsection,
   };
 }
-//@ chunk-t0gq9gyw.js:69534-69612 placement
+//@ chunk-85eyj5gy.js:70341-70419 placement
 function isConfigNameChar(char) {
   return (
     (char >= "a" && char <= "z") ||
@@ -301,7 +301,7 @@ function isConfigNameChar(char) {
     char === "-"
   );
 }
-//@ chunk-t0gq9gyw.js:80083-80246 fingerprint (2.1.88 match: parseGitConfigValue, 0.794)
+//@ chunk-85eyj5gy.js:80934-81097 fingerprint (2.1.88 match: parseGitConfigValue, 0.794)
 /**
  * 轻量解析 git config 文本，按 section/subsection/key 取值（处理引号与转义）。
  */
@@ -316,7 +316,7 @@ function parseGitConfigValue_2(cwd) {
     return isPathAbsent(error) ? REPO_NEGATIVE_RESULT : REPO_UNREADABLE_RESULT;
   }
 }
-//@ chunk-8y336ebc.js:191-358 placement
+//@ chunk-a04tk21p.js:191-358 placement
 function gitConfigEntries(text, { maxLines = 2000 } = {}) {
   let urls = [];
   parseGitConfig(
@@ -339,13 +339,13 @@ function gitConfigEntries(text, { maxLines = 2000 } = {}) {
   );
   return urls;
 }
-//@ chunk-8y336ebc.js:358-498 placement
+//@ chunk-a04tk21p.js:358-498 placement
 function isRemoteSection({ name, quoted }) {
   if (quoted) return name === "remote" || name.startsWith("remote.");
   let index = name.indexOf(".");
   return index !== -1 && name.slice(0, index) === "remote";
 }
-//@ chunk-8y336ebc.js:498-1220 placement
+//@ chunk-a04tk21p.js:498-1220 placement
 /**
  * 逐行解析 git config 文本（节、子节、键值、续行、引号转义），以回调输出条目。
  */
@@ -358,12 +358,12 @@ function parseGitConfig(text, handlers, { maxLines = 2000, keepsBlanksAsWritten 
   };
   let lineIndex = 0;
   while (lineIndex < lines.length) {
-    let line = lines[lineIndex] ?? "";
+    let text = lines[lineIndex] ?? "";
     lineIndex++;
-    let openIndex = parseValue(line, 0);
+    let openIndex = matchesSectionHeader(text, 0);
     let headerFailed = false;
-    while (line[openIndex] === "[") {
-      let sectionName = readSectionName(line, openIndex);
+    while (text[openIndex] === "[") {
+      let sectionName = readSectionName(text, openIndex);
       if (sectionName === null) {
         reportMalformed();
         headerFailed = true;
@@ -372,28 +372,28 @@ function parseGitConfig(text, handlers, { maxLines = 2000, keepsBlanksAsWritten 
       let { end, ...section } = sectionName;
       currentSection = section;
       handlers.header?.(currentSection);
-      openIndex = parseValue(line, end);
+      openIndex = matchesSectionHeader(text, end);
     }
     if (headerFailed) continue;
-    let firstChar = line[openIndex];
+    let firstChar = text[openIndex];
     if (firstChar === undefined || firstChar === "#" || firstChar === ";") continue;
     if (!isAsciiLetter(firstChar)) {
       reportMalformed();
       continue;
     }
     let keyStart = openIndex;
-    while (openIndex < line.length && isConfigNameCharQuick(line[openIndex] ?? "")) openIndex++;
-    let lower = line.slice(keyStart, openIndex).toLowerCase();
-    while (openIndex < line.length && (line[openIndex] === " " || line[openIndex] === "\t")) openIndex++;
-    if (openIndex >= line.length) {
+    while (openIndex < text.length && isConfigNameCharQuick(text[openIndex] ?? "")) openIndex++;
+    let lower = text.slice(keyStart, openIndex).toLowerCase();
+    while (openIndex < text.length && (text[openIndex] === " " || text[openIndex] === "\t")) openIndex++;
+    if (openIndex >= text.length) {
       handlers.entry?.(currentSection, lower, undefined);
       continue;
     }
-    if (line[openIndex] !== "=") {
+    if (text[openIndex] !== "=") {
       reportMalformed();
       continue;
     }
-    let configValue = readConfigValue(line, openIndex + 1, lines, lineIndex, keepsBlanksAsWritten);
+    let configValue = readConfigValue(text, openIndex + 1, lines, lineIndex, keepsBlanksAsWritten);
     lineIndex = configValue.nextLineIndex;
     if (configValue.value === null) {
       reportMalformed();
@@ -402,50 +402,50 @@ function parseGitConfig(text, handlers, { maxLines = 2000, keepsBlanksAsWritten 
     handlers.entry?.(currentSection, lower, configValue.value);
   }
 }
-//@ chunk-8y336ebc.js:1220-1729 placement
-function readSectionName(line, openIndex) {
-  let start = openIndex + 1;
-  let nameStart = start;
-  while (start < line.length) {
-    let char = line[start];
+//@ chunk-a04tk21p.js:1220-1729 placement
+function readSectionName(text, openIndex) {
+  let index = openIndex + 1;
+  let nameStart = index;
+  while (index < text.length) {
+    let char = text[index];
     if (char === undefined || !(isConfigNameCharQuick(char) || char === ".")) break;
-    start++;
+    index++;
   }
-  let sliced = line.slice(nameStart, start);
-  if (line[start] === "]") {
+  let sliced = text.slice(nameStart, index);
+  if (text[index] === "]") {
     if (sliced === "") return null;
     return {
       name: sliced.toLowerCase(),
       quoted: false,
-      end: start + 1,
+      end: index + 1,
     };
   }
-  if (line[start] !== " " && line[start] !== "\t" && line[start] !== "\r") return null;
-  start = parseValue(line, start);
-  if (line[start] !== '"') return null;
-  start++;
+  if (text[index] !== " " && text[index] !== "\t" && text[index] !== "\r") return null;
+  index = matchesSectionHeader(text, index);
+  if (text[index] !== '"') return null;
+  index++;
   let subsection = "";
   while (true) {
-    if (start >= line.length) return null;
-    let char = line[start];
+    if (index >= text.length) return null;
+    let char = text[index];
     if (char === "\\") {
-      subsection += line[start + 1] ?? "";
-      start += 2;
+      subsection += text[index + 1] ?? "";
+      index += 2;
       continue;
     }
-    start++;
+    index++;
     if (char === '"') break;
     subsection += char ?? "";
   }
-  if (line[start] !== "]") return null;
+  if (text[index] !== "]") return null;
   return {
     name: sliced.toLowerCase(),
     quoted: true,
     subsection,
-    end: start + 1,
+    end: index + 1,
   };
 }
-//@ chunk-8y336ebc.js:1729-2390 placement
+//@ chunk-a04tk21p.js:1729-2390 placement
 function readConfigValue(line, start, lines, nextLineIndex, keepsBlanksAsWritten) {
   let currentLine = line;
   let lineIndex = nextLineIndex;
@@ -525,28 +525,28 @@ function readConfigValue(line, start, lines, nextLineIndex, keepsBlanksAsWritten
     nextLineIndex: lineIndex,
   };
 }
-//@ chunk-8y336ebc.js:2390-2476 placement
-function parseValue(line, start) {
-  while (start < line.length && (line[start] === " " || line[start] === "\t" || line[start] === "\r"))
-    start++;
-  return start;
+//@ chunk-a04tk21p.js:2390-2476 placement
+function matchesSectionHeader(text, index) {
+  while (index < text.length && (text[index] === " " || text[index] === "\t" || text[index] === "\r"))
+    index++;
+  return index;
 }
-//@ chunk-8y336ebc.js:2476-2528 placement
+//@ chunk-a04tk21p.js:2476-2528 placement
 function isAsciiLetter(char) {
   return (char >= "a" && char <= "z") || (char >= "A" && char <= "Z");
 }
-//@ chunk-8y336ebc.js:2528-2579 placement
+//@ chunk-a04tk21p.js:2528-2579 placement
 function isConfigNameCharQuick(char) {
   return isAsciiLetter(char) || (char >= "0" && char <= "9") || char === "-";
 }
 export {
   hasNulByte,
-  gitConfigEntries,
+  parseGitConfigSections,
   readGitConfigValueAsync,
   parseGitConfigValue_2,
   firstGitConfigValue,
-  parseGitConfigSections,
   parseGitConfig,
   allGitConfigValues,
   allGitConfigValuesTrue,
+  gitConfigEntries,
 };

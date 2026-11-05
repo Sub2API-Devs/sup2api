@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。官方插件提示词覆盖。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1dth5azr.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6f7qd6s.js (6)
  * attribution: placement 6
  */
 import { identityId2 } from "../../types/ids.js";
@@ -21,7 +21,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { parsePluginServerName } from "../../utils/plugins/lspPluginIntegration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1dth5azr.js:1004-1093 placement
+//@ chunk-n6f7qd6s.js:1005-1094 placement
 /**
  * 判断客户端是否存在但没有 transport。
  */
@@ -29,13 +29,13 @@ function isClientWithoutTransport(connection) {
   let client = identityId2(connection.client);
   return client != null && "transport" in client && client.transport === undefined;
 }
-//@ chunk-1dth5azr.js:1093-1397 placement
+//@ chunk-n6f7qd6s.js:1094-1398 placement
 /**
  * 官方插件提示词覆盖的 schema：服务器说明（含按服务器）、工具描述、搜索提示、参数描述、提示词与技能。
  */
 var promptOverridesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var promptOverrideMapSchema;
-deferInit("chunk-1dth5azr.js:1093", () => {
+deferInit("chunk-n6f7qd6s.js:1094", () => {
   promptOverridesSchema = DoctorLazy(() =>
     objectSchema({
       server_instructions: stringSchema().optional(),
@@ -49,7 +49,7 @@ deferInit("chunk-1dth5azr.js:1093", () => {
   );
   promptOverrideMapSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-1dth5azr.js:1397-2190 placement
+//@ chunk-n6f7qd6s.js:1398-2191 placement
 function officialPluginPromptOverrides(serverConfig) {
   if (!serverConfig.pluginSource) return;
   let { name: pluginName, marketplace } = parsePluginIdentifier(serverConfig.pluginSource);
@@ -90,7 +90,7 @@ function officialPluginPromptOverrides(serverConfig) {
     skills: nullProtoCopy(overrides.skills),
   };
 }
-//@ chunk-1dth5azr.js:2190-2277 placement
+//@ chunk-n6f7qd6s.js:2191-2278 placement
 /**
  * 把对象复制成无原型对象（未提供时 undefined）。
  */
@@ -99,7 +99,7 @@ function nullProtoCopy(record) {
   let copy = Object.create(null);
   return Object.assign(copy, record);
 }
-//@ chunk-1dth5azr.js:2277-2438 placement
+//@ chunk-n6f7qd6s.js:2278-2439 placement
 /**
  * 取服务器说明的覆盖文本（按服务器名优先，否则用通用覆盖）。
  */
@@ -113,7 +113,7 @@ function serverInstructionsOverride(overrides, name) {
   }
   return overrides.server_instructions;
 }
-//@ chunk-1dth5azr.js:2438-2665 placement
+//@ chunk-n6f7qd6s.js:2439-2666 placement
 /**
  * 用覆盖文本替换输入 schema 中对应参数的描述。
  */

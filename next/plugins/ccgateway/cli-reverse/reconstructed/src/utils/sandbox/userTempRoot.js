@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：沙箱相关的按用户私有临时根目录（bash-edit-diff 等），校验属主与权限
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fq0cr76a.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qg41pqt6.js (11)
  * attribution: placement 11
  */
 import { lstat, mkdir, realpath } from "fs/promises";
@@ -14,29 +14,29 @@ import { isENOENT } from "../errors.js";
 import { getClaudeTempDirRealpath } from "../tempDirRealpaths.js";
 import { getPlatform } from "../platform.js";
 
-//@ chunk-fq0cr76a.js:638753-638760 placement
+//@ chunk-qg41pqt6.js:639238-639245 placement
 var userTempRoot;
-//@ chunk-fq0cr76a.js:638760-638782 placement
+//@ chunk-qg41pqt6.js:639245-639267 placement
 /**
  * setUserTempRoot：设置用户临时根目录。
  */
 function setUserTempRoot(root) {
   userTempRoot ??= root;
 }
-//@ chunk-fq0cr76a.js:638782-638805 placement
+//@ chunk-qg41pqt6.js:639267-639290 placement
 /**
  * neverTempRoot：恒 false 占位。
  */
 function neverTempRoot() {
   return false;
 }
-//@ chunk-fq0cr76a.js:638805-638889 placement
+//@ chunk-qg41pqt6.js:639290-639374 placement
 function wrapEvalOrTrue(command) {
   return `'eval' '${command.replaceAll("'", "'\\''")}' 2>/dev/null || 'true'`;
 }
-//@ chunk-fq0cr76a.js:638889-638907 placement
+//@ chunk-qg41pqt6.js:639374-639392 placement
 var SL_GATE = "sl-gate";
-//@ chunk-fq0cr76a.js:639119-639302 placement
+//@ chunk-qg41pqt6.js:639604-639787 placement
 /**
  * 检查目录存在且属于当前用户、权限私有，否则返回 null。
  */
@@ -53,14 +53,14 @@ async function statOwnedPrivateDir(path) {
   let uid = process.getuid?.();
   return stats.isDirectory() && (uid === undefined || stats.uid === BigInt(uid)) ? stats : null;
 }
-//@ chunk-fq0cr76a.js:639302-639362 placement
+//@ chunk-qg41pqt6.js:639787-639847 placement
 var BASH_EDIT_DIFF = "bash-edit-diff";
 var BASH_EDIT_DIFF_DIR_RE = /^[0-9a-f-]+-\d+-[0-9a-f]{16}$/;
-//@ chunk-fq0cr76a.js:639362-639397 placement
+//@ chunk-qg41pqt6.js:639847-639882 placement
 function getBashEditDiffDir() {
   return join(getClaudeTempDirRealpath(), BASH_EDIT_DIFF);
 }
-//@ chunk-fq0cr76a.js:639397-639680 placement
+//@ chunk-qg41pqt6.js:639882-640165 placement
 async function ensurePrivateTempRoot() {
   let bashEditDiffDir = getBashEditDiffDir();
   await mkdir(bashEditDiffDir, {
@@ -84,11 +84,11 @@ async function ensurePrivateTempRoot() {
       }
     : null;
 }
-//@ chunk-fq0cr76a.js:639680-639733 placement
+//@ chunk-qg41pqt6.js:640165-640218 placement
 async function getPrivateTempRoot() {
   return (await ensurePrivateTempRoot())?.root ?? null;
 }
-//@ chunk-fq0cr76a.js:639733-639914 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-qg41pqt6.js:640218-640399 placement (2.1.88 match: getFileIdentity, 0.795)
 async function getFileIdentity(path, identity) {
   let bashEditDiffDir = getBashEditDiffDir();
   let rootStats = await statOwnedPrivateDir(bashEditDiffDir);

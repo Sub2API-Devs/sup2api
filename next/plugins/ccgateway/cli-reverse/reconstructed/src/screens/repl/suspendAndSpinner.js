@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。挂起与加载动画。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -23,16 +23,31 @@ import { isWorking } from "../../services/artifacts/artifactPresence.js";
 import { hasActiveAgentTasks } from "../../tasks/taskStatus.js";
 import { waitingFor, subscribeWaiting } from "../../services/artifacts/presenceSocket.js";
 import { logError } from "../../utils/log.js";
-import { getRipgrepStatus } from "../../utils/ripgrep.js";
+import { getRipgrepStatus_2 } from "../../utils/ripgrep.js";
 import { sessionHooksRegistrySlot } from "../../utils/model/modelSwitchHooks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1739793-1739797 placement
+//@ chunk-czq1j3j2.js:1755556-1755560 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1739793", () => {
+deferInit("chunk-czq1j3j2.js:1755556", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1739797-1740165 placement
+//@ chunk-czq1j3j2.js:1755646-1755650 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1755646", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1757414-1757418 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1757414", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1786171-1786175 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1786171", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1786175-1786543 placement
 function useSuspendResume() {
   let { internal_eventEmitter } = useStdin();
   let [count, setCount] = useState(0);
@@ -55,12 +70,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
   }, [internal_eventEmitter]);
   return count;
 }
-//@ chunk-18hwfzwa.js:1740165-1740169 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1740165", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1740169-1740549 placement
+//@ chunk-czq1j3j2.js:1786547-1786927 placement
 /**
  * 后台会话中同步工作状态（旋转模式、压缩、子任务、等待）。
  */
@@ -88,7 +98,7 @@ function useBackgroundStatusSync() {
     sync();
     let cleanups = [
       spinnerStore.subscribe(sync),
-      getRipgrepStatus(session, sync),
+      getRipgrepStatus_2(session, sync),
       subscribeWaiting(session, sync),
       appStoreDirect.subscribe(sync),
     ];
@@ -98,12 +108,7 @@ function useBackgroundStatusSync() {
     };
   }, [session, appStoreDirect, spinnerStore]);
 }
-//@ chunk-18hwfzwa.js:1740549-1740553 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1740549", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1740553-1740766 placement
+//@ chunk-czq1j3j2.js:1786931-1787144 placement
 /**
  * 挂载期间替换相关实例的注册表，卸载时恢复。
  */
@@ -122,9 +127,4 @@ function useRegistryOverride(session) {
     };
   }, [session, appStateSession, sessionHooksRegistry]);
 }
-//@ chunk-18hwfzwa.js:1740766-1740770 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1740766", () => {
-  init_react_production();
-});
 export { useRegistryOverride, useBackgroundStatusSync, useSuspendResume };

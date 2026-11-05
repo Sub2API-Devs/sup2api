@@ -3,9 +3,9 @@
  *
  * `claude mcp xaa` CLI 子命令：管理 XAA（SEP-990）IdP 连接
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/mcp/xaaIdpCommand.ts
- * pieces: chunk-4vq0yytw.js (2)
+ * pieces: chunk-yzwxxgws.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { cliError, cliOk } from "../../cli/exit.js";
@@ -16,11 +16,11 @@ import { updateSettingsForSource } from "../../utils/settings/settings.js";
 import { errorMessage } from "../../utils/errors.js";
 import { createHyperlink } from "../../utils/hyperlink.js";
 
-//@ chunk-4vq0yytw.js:16442-16516 affinity
+//@ chunk-yzwxxgws.js:18188-18262 affinity
 function mcpXaaIdpModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpXaaIdpLoginModule();
 }
-//@ chunk-4vq0yytw.js:16516-20902 fingerprint (2.1.88 match: registerMcpXaaIdpCommand, 0.928)
+//@ chunk-yzwxxgws.js:18262-22648 fingerprint (2.1.88 match: registerMcpXaaIdpCommand, 0.928)
 function registerMcpXaaIdpCommand(mcp, command) {
   let xaaIdp = mcp.command("xaa").description("Manage the XAA (SEP-990) IdP connection");
   xaaIdp

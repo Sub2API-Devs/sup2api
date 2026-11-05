@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mermaid 时序图解析与绘制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (15)
  * attribution: placement 15
  */
 import {
@@ -21,7 +21,7 @@ import { createBoxCanvas, drawCanvasBox, drawCanvasText } from "./boxCanvas.js";
 import { gridToLines } from "./flowchartLayout.js";
 import { EDGE_LABEL_OFFSET } from "./flowchartRender.js";
 
-//@ chunk-yb0ajcmt.js:21060-21687 placement
+//@ chunk-q80fh8vc.js:21368-21997 placement
 /**
  * 在字符画布上绘制 mermaid 时序图（参与者、消息箭头、note、frame）。
  */
@@ -84,7 +84,7 @@ function drawSequenceDiagram(diagram, columns) {
   });
   return gridToLines(boxCanvas);
 }
-//@ chunk-yb0ajcmt.js:21687-22457 placement
+//@ chunk-q80fh8vc.js:21997-22767 placement
 function drawSequenceStep(boxCanvas, step, layout, row) {
   switch (step.kind) {
     case "frame": {
@@ -189,7 +189,7 @@ function drawSequenceStep(boxCanvas, step, layout, row) {
     }
   }
 }
-//@ chunk-yb0ajcmt.js:22457-22597 placement
+//@ chunk-q80fh8vc.js:22767-22907 placement
 /**
  * 时序图箭头头部字符。
  */
@@ -205,7 +205,7 @@ function arrowHead(head, isRightward, lineChar) {
       return lineChar;
   }
 }
-//@ chunk-yb0ajcmt.js:22597-22738 placement
+//@ chunk-q80fh8vc.js:22907-23048 placement
 /**
  * 时序图一步占用的行数。
  */
@@ -219,14 +219,14 @@ function stepHeight(step) {
       return step.text.length + (step.from === step.to ? 3 : 2);
   }
 }
-//@ chunk-yb0ajcmt.js:22738-22794 placement
+//@ chunk-q80fh8vc.js:23048-23104 placement
 /**
  * 最宽的字符串
  */
 function widest(texts) {
   return texts.reduce((acc, text) => (textDisplayWidth(text) > textDisplayWidth(acc) ? text : acc), "");
 }
-//@ chunk-yb0ajcmt.js:22794-23077 placement
+//@ chunk-q80fh8vc.js:23104-23387 placement
 /**
  * 注释框的位置与大小。
  */
@@ -248,7 +248,7 @@ function noteBox(step, layout, row) {
     height: step.text.length + 2,
   };
 }
-//@ chunk-yb0ajcmt.js:23077-24088 placement
+//@ chunk-q80fh8vc.js:23387-24398 placement
 function measureSequenceDiagram(diagram) {
   let mapped = diagram.participants.map((participant) => textDisplayWidth(widest(participant)) + 4);
   let spacing = {
@@ -300,7 +300,7 @@ function measureSequenceDiagram(diagram) {
     width: Math.max(max + max_2, ...flattened.map((box) => box.x + max_2 + box.width)),
   };
 }
-//@ chunk-yb0ajcmt.js:24088-24250 placement
+//@ chunk-q80fh8vc.js:24398-24560 placement
 /**
  * 为参与者间隙或两侧预留宽度。
  */
@@ -309,7 +309,7 @@ function reserveGap(spacing, gapIndex, width) {
   else if (gapIndex >= spacing.gaps.length) spacing.rightRoom = Math.max(spacing.rightRoom, width);
   else spacing.gaps[gapIndex] = Math.max(spacing.gaps[gapIndex] ?? 0, width + 1);
 }
-//@ chunk-yb0ajcmt.js:24250-24361 placement
+//@ chunk-q80fh8vc.js:24560-24671 placement
 /**
  * 跨多个参与者的内容不够宽时加宽最后一个间隙。
  */
@@ -317,7 +317,7 @@ function widenGapsForSpan(spacing, from, to, width) {
   let reduced = spacing.gaps.slice(from, to).reduce((acc, gap) => acc + gap, 0);
   spacing.gaps[to - 1] = (spacing.gaps[to - 1] ?? 0) + Math.max(0, width - reduced);
 }
-//@ chunk-yb0ajcmt.js:24361-24814 placement
+//@ chunk-q80fh8vc.js:24671-25124 placement
 /**
  * mermaid 时序图解析：Ct 是消息箭头写法表（写法 → 线型 + 箭头形状）；Dt 是 participant/actor 行正则；He 是 " as " 关键字；Rt/Ot/We/_t/Lt 是注记、激活/停用、分组、else/and/option、方向标记的正则；Nt/It 是参与方与步骤数上限（50/400）。
  */
@@ -340,7 +340,7 @@ var SEQUENCE_ACTIVATION_RE = /^(?:else|and|option)(?:\s|$)/;
 var SEQUENCE_DIRECTION_RE = /[<>:]/;
 var MAX_SEQUENCE_TITLE_CHARS = 50;
 var MAX_SEQUENCE_STEPS = 400;
-//@ chunk-yb0ajcmt.js:24814-25243 placement
+//@ chunk-q80fh8vc.js:25124-25553 placement
 /**
  * 解析 mermaid sequenceDiagram 源码为参与者与步骤列表，超出规模限制返回 undefined。
  */
@@ -377,7 +377,7 @@ function parseSequenceDiagram(lines) {
     steps,
   };
 }
-//@ chunk-yb0ajcmt.js:25243-26080 placement
+//@ chunk-q80fh8vc.js:25553-26390 placement
 function parseSequenceLine(diagram, line) {
   if (line === "autonumber") {
     diagram.isNumbered = true;
@@ -427,7 +427,7 @@ function parseSequenceLine(diagram, line) {
   }
   return parseSequenceMessage(diagram, line);
 }
-//@ chunk-yb0ajcmt.js:26080-26488 placement
+//@ chunk-q80fh8vc.js:26390-26798 placement
 function parseSequenceMessage(diagram, line) {
   let index = line.indexOf(":");
   let head = index < 0 ? "" : line.slice(0, index);
@@ -457,7 +457,7 @@ function parseSequenceMessage(diagram, line) {
   });
   return true;
 }
-//@ chunk-yb0ajcmt.js:26488-26658 placement
+//@ chunk-q80fh8vc.js:26798-26968 placement
 /**
  * 取或登记参与者，返回下标（非法名返回 -1）。
  */
@@ -470,7 +470,7 @@ function participantIndex(diagram, id, labelLines) {
   diagram.participants.push(labelLines ?? parseLabelLines(trimmed));
   return diagram.ids.length - 1;
 }
-//@ chunk-yb0ajcmt.js:26658-27065 placement
+//@ chunk-q80fh8vc.js:26968-27375 placement
 function splitMermaidStatements(source) {
   let statements = [];
   for (let line of source.split(`

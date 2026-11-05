@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/resources/build/src/detectors/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_EnvDetector } from "./EnvDetector.js";
 import { require_platform_6 } from "./platform/index.js";
 import { require_NoopDetector } from "./NoopDetector.js";
 
-//@ chunk-bwbq4xvm.js:147804-148632 cjs-fingerprint
+//@ chunk-7kayq7nc.js:147906-148734 cjs-fingerprint
 var require_detectors = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

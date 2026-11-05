@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/DocumentType.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_Node } from "./Node.js";
 import { require_Leaf } from "./Leaf.js";
 import { require_ChildNode } from "./ChildNode.js";
 
-//@ chunk-vwj6ccer.js:120094-120707 cjs-fingerprint
+//@ chunk-w04z664w.js:120094-120707 cjs-fingerprint
 var require_DocumentType = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = DocumentType;
   var Node = require_Node();

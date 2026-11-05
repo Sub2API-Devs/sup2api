@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。设备工具通知的发射器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n3mhm88b.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8qeh2a6v.js (3)
  * attribution: placement 3
  */
 import { createSignal } from "../../utils/signal.js";
@@ -13,7 +13,7 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-n3mhm88b.js:298-516 placement
+//@ chunk-8qeh2a6v.js:298-516 placement
 /**
  * 无订阅者时缓存最后事件的发射器
  */
@@ -46,14 +46,14 @@ function createBufferedEmitter() {
     },
   };
 }
-//@ chunk-n3mhm88b.js:516-559 placement
+//@ chunk-8qeh2a6v.js:516-559 placement
 var deviceToolNotices; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var DEVICE_MCP_NOT_NOW_NOTICE_KEY;
-deferInit("chunk-n3mhm88b.js:516", () => {
+deferInit("chunk-8qeh2a6v.js:516", () => {
   deviceToolNotices = new SessionRootSlot(createBufferedEmitter);
   DEVICE_MCP_NOT_NOW_NOTICE_KEY = "device-mcp-not-now";
 });
-//@ chunk-n3mhm88b.js:559-641 placement
+//@ chunk-8qeh2a6v.js:559-641 placement
 /**
  * 设备工具通知的发射器。
  */
@@ -63,4 +63,4 @@ function deviceToolNoticesTo(host) {
     deviceToolNotices.of(host).emit(key, message);
   };
 }
-export { deviceToolNotices, DEVICE_MCP_NOT_NOW_NOTICE_KEY, deviceToolNoticesTo };
+export { DEVICE_MCP_NOT_NOW_NOTICE_KEY, deviceToolNotices, deviceToolNoticesTo };

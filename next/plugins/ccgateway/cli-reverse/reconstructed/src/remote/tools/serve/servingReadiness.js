@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程工具服务就绪闸：等待插件 hook、托管设置、策略限制与首次开关拉取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t28c2dsj.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1rt6ktyk.js (5)
  * attribution: placement 5
  */
 import { getHooksConfigFromSnapshot } from "../../../utils/hooks/hooksConfigSnapshot.js";
@@ -22,9 +22,9 @@ import { waitForInitialize } from "../../../utils/startupFlagWait.js";
 import { initializeGrowthBook } from "../../../services/analytics/growthbook.js";
 import { logForDebugging } from "../../../utils/debug.js";
 
-//@ chunk-t28c2dsj.js:522-533 placement
+//@ chunk-1rt6ktyk.js:522-533 placement
 var FIRST_FLAG_FETCH_WAIT_MS = 3000;
-//@ chunk-t28c2dsj.js:533-665 placement
+//@ chunk-1rt6ktyk.js:533-665 placement
 /**
  * 远程工具服务就绪闸：等待插件 hook、托管设置、策略限制与首次开关拉取。
  */
@@ -43,7 +43,7 @@ function createServingReadiness(options = {}) {
       })),
   };
 }
-//@ chunk-t28c2dsj.js:665-1252 placement
+//@ chunk-1rt6ktyk.js:665-1252 placement
 /**
  * 并行等待插件 hook、远程托管设置、策略限制、首次开关拉取
  */
@@ -73,7 +73,7 @@ async function awaitServingReadiness(budgetMs) {
     `[remote-tools] ready to judge calls after ${Math.round(performance.now() - startTime)}ms: waited ${pluginHookMs}ms for plugin hooks, ${managedSettingsMs}ms for remote managed settings, ${policyLimitsMs}ms for policy limits, ${flagFetchMs}ms for the first flag fetch (${flagFetchLanded ? "landed" : "not heard in time"})`,
   );
 }
-//@ chunk-t28c2dsj.js:1252-1456 placement
+//@ chunk-1rt6ktyk.js:1252-1456 placement
 /**
  * 计时等待一个前置步骤，失败继续
  */
@@ -89,7 +89,7 @@ async function timedWait(label, wait) {
   }
   return Math.round(performance.now() - startTime);
 }
-//@ chunk-t28c2dsj.js:1456-1673 placement
+//@ chunk-1rt6ktyk.js:1456-1673 placement
 /**
  * 服务调用缺少插件下发的 hook 时报错
  */

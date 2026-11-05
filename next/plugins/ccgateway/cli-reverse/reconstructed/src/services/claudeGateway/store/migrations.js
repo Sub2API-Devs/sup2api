@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：网关 Postgres 存储迁移
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { gatewayLog } from "../../gateway/gatewayBanner.js";
 
-//@ chunk-1ny7cxrt.js:1509074-1514980 placement
+//@ chunk-1hnjmk23.js:1425722-1431885 placement
 /**
  * 获取 Postgres advisory 锁后执行网关存储迁移。
  */
@@ -143,6 +143,14 @@ async function runGatewayMigrations(pool) {
                 cents         DOUBLE PRECISION NOT NULL DEFAULT 0,
                 updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (rbac_group_id, period)
+              )`;
+              break;
+            case 8:
+              await tx`CREATE TABLE principal_groups (
+                day        TEXT NOT NULL,  -- YYYY-MM-DD
+                principal  TEXT NOT NULL,
+                groups     JSONB NOT NULL,
+                PRIMARY KEY (day, principal)
               )`;
               break;
             default:

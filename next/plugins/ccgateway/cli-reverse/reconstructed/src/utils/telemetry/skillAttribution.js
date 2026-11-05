@@ -3,9 +3,9 @@
  *
  * 技能归因（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-csq9ftr9.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n0gp41wj.js (7)
  * attribution: placement 7
  */
 import {
@@ -20,15 +20,15 @@ import { parseJsonRegistryFile, normalizeRegistryKey } from "../plugins/localMar
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-csq9ftr9.js:3713-3767 placement
+//@ chunk-n0gp41wj.js:3713-3767 placement
 var SKILL_ID_RE = /^skill_(?:staging_|local_)?[A-Za-z0-9]{1,64}$/;
-//@ chunk-csq9ftr9.js:3767-3798 placement
+//@ chunk-n0gp41wj.js:3767-3798 placement
 function isValidSkillId(skillId) {
   return SKILL_ID_RE.test(skillId);
 }
-//@ chunk-csq9ftr9.js:3798-3815 placement
+//@ chunk-n0gp41wj.js:3798-3815 placement
 var SKILL_ID = "skill_id";
-//@ chunk-csq9ftr9.js:3815-3983 placement
+//@ chunk-n0gp41wj.js:3815-3983 placement
 /**
  * 合法的 skillId/pluginId 归属。
  */
@@ -39,11 +39,11 @@ function buildSkillAttribution(skillId, backingPluginId) {
     attribution.pluginId = backingPluginId;
   return attribution.skillId === undefined && attribution.pluginId === undefined ? undefined : attribution;
 }
-//@ chunk-csq9ftr9.js:3983-4116 placement
+//@ chunk-n0gp41wj.js:3983-4116 placement
 var SkillAttributionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_ATTRIBUTION_BYTES;
 var noop;
-deferInit("chunk-csq9ftr9.js:3983", () => {
+deferInit("chunk-n0gp41wj.js:3983", () => {
   SkillAttributionSchema = DoctorLazy(() =>
     objectSchema({
       [SKILL_ID]: stringSchema().regex(SKILL_ID_RE).optional().catch(undefined),
@@ -55,7 +55,7 @@ deferInit("chunk-csq9ftr9.js:3983", () => {
     return;
   };
 });
-//@ chunk-csq9ftr9.js:4116-4269 placement
+//@ chunk-n0gp41wj.js:4116-4269 placement
 function isSkillAttributionEnabled() {
   let CLAUDE_CODE_SKILL_ATTRIBUTION = env.CLAUDE_CODE_SKILL_ATTRIBUTION;
   if (CLAUDE_CODE_SKILL_ATTRIBUTION === undefined) return noop;
@@ -67,7 +67,7 @@ function isSkillAttributionEnabled() {
   );
   return (registry) => jsonRegistryFile.get(normalizeRegistryKey(registry));
 }
-//@ chunk-csq9ftr9.js:4269-4620 placement
+//@ chunk-n0gp41wj.js:4269-4620 placement
 /**
  * 校验 CLAUDE_CODE_SKILL_ATTRIBUTION 条目。
  */
@@ -88,4 +88,4 @@ function parseSkillAttribution(entry) {
   }
   return skillAttribution;
 }
-export { isValidSkillId, isSkillAttributionEnabled, buildSkillAttribution };
+export { isSkillAttributionEnabled, buildSkillAttribution, isValidSkillId };

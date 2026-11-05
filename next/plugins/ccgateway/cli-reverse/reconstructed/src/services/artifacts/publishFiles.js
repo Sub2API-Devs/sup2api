@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布附属文件校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (4)
  * attribution: placement 4
  */
 import {
@@ -26,7 +26,7 @@ import { publishArtifactPage } from "./publishArtifact.js";
 import { withPublishInFlight } from "./ownPublishes.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:72694-74424 placement
+//@ chunk-51jy8ztq.js:74946-76676 placement
 /**
  * 校验 artifact 支撑文件（可服务的 content-type、无 ESC/NUL 字节、XML 不含 DTD、非 UTF-16 等）。
  */
@@ -93,7 +93,7 @@ function validateSupportingFiles(files, kindLabel = "supporting file") {
   }
   return null;
 }
-//@ chunk-06y4szbn.js:74424-75106 placement
+//@ chunk-51jy8ztq.js:76676-77358 placement
 async function publishArtifact(html, options) {
   let artifactPublishStubDir = getArtifactPublishStubDir();
   if (artifactPublishStubDir !== null) {
@@ -144,16 +144,16 @@ async function publishArtifact(html, options) {
       }
     : result;
 }
-//@ chunk-06y4szbn.js:75106-75141 placement
+//@ chunk-51jy8ztq.js:77358-77393 placement
 /**
  * 标记“发送前即被拒”错误的 Symbol。
  */
 var REFUSED_BEFORE_SEND; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-06y4szbn.js:75106", () => {
+deferInit("chunk-51jy8ztq.js:77358", () => {
   REFUSED_BEFORE_SEND = Symbol("refusedBeforeSend");
 });
-//@ chunk-06y4szbn.js:75141-75207 placement
+//@ chunk-51jy8ztq.js:77393-77459 placement
 function refusedBeforeSend(error) {
   return error instanceof Error && Reflect.get(error, REFUSED_BEFORE_SEND) === true;
 }
-export { validateSupportingFiles, publishArtifact, refusedBeforeSend };
+export { publishArtifact, refusedBeforeSend, validateSupportingFiles };

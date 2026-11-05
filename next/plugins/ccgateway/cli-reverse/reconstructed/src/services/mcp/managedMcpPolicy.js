@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：判断托管 MCP 设置键是否由该文档设定；逐段解析路径（生成器，询问 realpath/junction）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (14)
- * attribution: placement 13, sole-consumer 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (15)
+ * attribution: placement 13, layout 1, sole-consumer 1
  */
 import { basename, join, resolve, dirname } from "path";
 import { realpathSync, accessSync, constants, realpath } from "fs";
@@ -24,19 +24,19 @@ import {
   OPAQUE_LINK_TEXT,
 } from "../../utils/fsOperations.js";
 import { toUncLongPath } from "../../utils/windowsUncPaths.js";
-import { isPosixPlatform } from "../../utils/tmuxSocket.js";
 import { isUntouchableSpelling, isWslUncPath } from "../../utils/networkPaths.js";
 import { getErrnoCode } from "../../utils/errors.js";
+import { getPlatform } from "../../utils/platform.js";
 import { writabilityFromError } from "../../utils/settings/managedPath.js";
 
-//@ chunk-dcmhvw5a.js:423061-423187 placement
+//@ chunk-z20c443b.js:421524-421650 placement
 function getAllowedMcpServersFromTiers({ slot, adminTiers }) {
   return (
     slot?.allowedMcpServers ??
     adminTiers.find((adminTier) => adminTier.allowedMcpServers !== undefined)?.allowedMcpServers
   );
 }
-//@ chunk-dcmhvw5a.js:423187-423254 placement
+//@ chunk-z20c443b.js:421650-421717 placement
 /**
  * 列出该文档里存在但不由该文档托管的 MCP 设置键。
  */
@@ -45,7 +45,7 @@ function unmanagedPolicyKeys(settings, policy) {
     (key) => settings[key] !== undefined && !isManagedMcpKeySet(key, settings, policy),
   );
 }
-//@ chunk-dcmhvw5a.js:423254-424162 placement
+//@ chunk-z20c443b.js:421717-422625 placement
 /**
  * 判断托管 MCP 设置键是否由该文档设定。
  */
@@ -88,7 +88,7 @@ function isManagedMcpKeySet(key, settings, context) {
     }
   }
 }
-//@ chunk-dcmhvw5a.js:424446-424881 placement
+//@ chunk-z20c443b.js:422909-423344 placement
 /**
  * 描述经过链接到达的路径（外部/无法确认）。
  */
@@ -111,7 +111,7 @@ function describeLinkedPath(link) {
     "Suggested fix: Ask your administrator to replace the link with the file or folder it points to.",
   ];
 }
-//@ chunk-dcmhvw5a.js:424881-425042 placement
+//@ chunk-z20c443b.js:423344-423505 placement
 /**
  * 同步执行路径解析步骤生成器（逐步执行文件系统询问）。
  */
@@ -131,7 +131,7 @@ function resolvePathStepsSync(folder, segments, knownReal, linkCache, statCache)
   }
   return step.value;
 }
-//@ chunk-dcmhvw5a.js:425042-425211 placement
+//@ chunk-z20c443b.js:423505-423674 placement
 /**
  * 异步执行路径解析步骤生成器（逐步执行文件系统询问）。
  */
@@ -151,7 +151,7 @@ async function resolvePathStepsAsync(folder, segments, knownReal, linkCache) {
   }
   return step.value;
 }
-//@ chunk-dcmhvw5a.js:425211-425298 placement
+//@ chunk-z20c443b.js:423674-423761 placement
 /**
  * 检查 UNC 交接点时使用的保守选项。
  */
@@ -160,7 +160,7 @@ var UNC_JUNCTION_OPTIONS = {
   surfaceNetworkRaw: true,
   literalLinkText: "opaque",
 };
-//@ chunk-dcmhvw5a.js:425298-425563 placement
+//@ chunk-z20c443b.js:423761-424026 placement
 function answerPathAskSync(fsImplementation, { ask, path }, statCache) {
   switch (ask) {
     case "isLink": {
@@ -181,7 +181,7 @@ function answerPathAskSync(fsImplementation, { ask, path }, statCache) {
       return true;
   }
 }
-//@ chunk-dcmhvw5a.js:425563-425799 placement
+//@ chunk-z20c443b.js:424026-424262 placement
 async function answerPathAskAsync(fsImplementation, { ask, path }) {
   switch (ask) {
     case "isLink":
@@ -195,7 +195,7 @@ async function answerPathAskAsync(fsImplementation, { ask, path }) {
       return true;
   }
 }
-//@ chunk-dcmhvw5a.js:425799-426432 placement
+//@ chunk-z20c443b.js:424262-424895 placement
 /**
  * 逐段解析路径（生成器，询问 realpath/junction）。
  */
@@ -254,7 +254,7 @@ function* resolvePathSteps(folder, segments, knownReal, linkCache) {
     targetWritable,
   };
 }
-//@ chunk-dcmhvw5a.js:426432-426536 placement
+//@ chunk-z20c443b.js:424895-424999 placement
 function* askIsLink(path, linkCache) {
   let isLink = linkCache?.get(path);
   if (isLink === undefined) {
@@ -267,7 +267,7 @@ function* askIsLink(path, linkCache) {
   }
   return isLink;
 }
-//@ chunk-dcmhvw5a.js:426536-426871 placement
+//@ chunk-z20c443b.js:424999-425334 placement
 /**
  * 解析网络路径或 junction。
  */
@@ -300,7 +300,16 @@ function* resolveNetworkJunction(path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "gone" : "unverified";
   }
 }
-//@ chunk-dcmhvw5a.js:426947-427191 placement
+//@ chunk-z20c443b.js:425334-425410 layout (2.1.88 match: execTmux, 1)
+function isPosixPlatform() {
+  try {
+    let state = getPlatform();
+    return state !== "windows" && state !== "wsl";
+  } catch {
+    return false;
+  }
+}
+//@ chunk-z20c443b.js:425410-425654 placement
 function* isPathOrParentWritable(resolved) {
   try {
     if (typeof resolved === "string" || !("real" in resolved) || !isPosixPlatform()) return "unknown";
@@ -313,7 +322,7 @@ function* isPathOrParentWritable(resolved) {
     return "unknown";
   }
 }
-//@ chunk-dcmhvw5a.js:427191-427275 sole-consumer
+//@ chunk-z20c443b.js:425654-425738 sole-consumer
 /**
  * probeWritabilityAsync：异步探测路径可写。
  */
@@ -329,9 +338,9 @@ function* probeWritabilityAsync(path) {
   }
 }
 export {
-  getAllowedMcpServersFromTiers,
-  resolvePathStepsSync,
-  describeLinkedPath,
-  unmanagedPolicyKeys,
   resolvePathStepsAsync,
+  getAllowedMcpServersFromTiers,
+  describeLinkedPath,
+  resolvePathStepsSync,
+  unmanagedPolicyKeys,
 };

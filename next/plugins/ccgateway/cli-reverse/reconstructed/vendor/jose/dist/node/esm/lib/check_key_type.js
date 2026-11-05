@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/esm/lib/check_key_type.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../runtime/bun-runtime.js";
@@ -20,14 +20,14 @@ import {
 } from "../../../browser/runtime/is_key_like.js";
 import { keyTypeError } from "./invalid_key_input.js";
 
-//@ chunk-2tyrgda4.js:17250-17284 esm-layout
+//@ chunk-pd6th42n.js:17250-17284 esm-layout
 var init_check_key_type = __esm(() => {
   init_content_encryption();
   init_import();
   init_content_encryption_2();
   noopClaims();
 });
-//@ chunk-2tyrgda4.js:17284-18405 esm-fingerprint
+//@ chunk-pd6th42n.js:17284-18405 esm-fingerprint
 var symmetricTypeCheck = (alg, key) => {
   if (key instanceof Uint8Array) return;
   if (!isKeyLike(key)) throw TypeError(keyTypeError(alg, key, ...keyObjectTypes, "Uint8Array"));
@@ -65,10 +65,10 @@ var checkKeyType = (alg, key, usage) => {
   else asymmetricTypeCheck(alg, key, usage);
 };
 var checkKeyTypeInit;
-//@ chunk-2tyrgda4.js:18405-18435 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:18405-18435 esm-layout (moved: shares a binding it assigns)
 var init_encrypt = __esm(() => {
   noopInit();
   init_is_key_like();
   checkKeyTypeInit = checkKeyType;
 });
-export { checkKeyTypeInit, init_check_key_type, init_encrypt };
+export { init_check_key_type, init_encrypt, checkKeyTypeInit };

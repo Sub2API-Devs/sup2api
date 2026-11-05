@@ -1,14 +1,14 @@
 /**
  * semver/functions/clean.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parse } from "./parse.js";
 
-//@ chunk-bwbq4xvm.js:10407-10538 cjs-fingerprint
+//@ chunk-7kayq7nc.js:10481-10612 cjs-fingerprint
 var require_clean = __commonJS(function (cjsExports, cjsModule) {
   var parse = require_parse();
   var clean = (version, options) => {

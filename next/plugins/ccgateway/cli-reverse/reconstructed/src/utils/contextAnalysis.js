@@ -3,9 +3,9 @@
  *
  * 上下文构成分析：把规整后的 API 消息按人类/助手/工具请求/工具结果/附件/重复读文件分类计 token，并转成遥测指标。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/contextAnalysis.ts
- * pieces: chunk-e6aww6q8.js (5)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: fingerprint 3, layout 1, file-local 1
  */
 import { normalizeMessagesForAPI } from "./messages.js";
@@ -15,10 +15,10 @@ import { roughTokenCountEstimation, roughTokenCountEstimationForBlock } from "..
 import { jsonStringify } from "./slowOperations.js";
 import { SKILL_2 } from "../tools/SkillTool/skillToolNames.js";
 import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 
-//@ chunk-e6aww6q8.js:1653817-1654688 fingerprint (2.1.88 match: analyzeContext, 0.907)
+//@ chunk-5xgkngpb.js:1728132-1729003 fingerprint (2.1.88 match: analyzeContext, 0.904)
 /**
  * 按消息类型统计 token：附件计数、规整为 API 消息后逐块分类（人类/助手/本地命令输出/工具请求/工具结果/其他），并计算重复读同一文件的浪费。
  */
@@ -73,7 +73,7 @@ function analyzeContext(messages) {
   });
   return stats;
 }
-//@ chunk-e6aww6q8.js:1654688-1656109 fingerprint (2.1.88 match: processBlock, 0.882)
+//@ chunk-5xgkngpb.js:1729003-1730424 fingerprint (2.1.88 match: processBlock, 0.878)
 /**
  * 单个内容块计 token 并归入统计桶；Read 工具记录文件路径用于重复读统计。
  */
@@ -105,7 +105,7 @@ function processBlock(block, message, stats, toolIds, readToolPaths, fileReads) 
         increment(stats.toolRequests, key, tokens);
         toolIds.set(block.id, key);
         if (
-          key === FILE_READ_TOOL_NAME &&
+          key === READ &&
           "input" in block &&
           block.input &&
           typeof block.input === "object" &&
@@ -121,7 +121,7 @@ function processBlock(block, message, stats, toolIds, readToolPaths, fileReads) 
       if ("tool_use_id" in block) {
         let toolName = toolIds.get(block.tool_use_id) || "unknown";
         increment(stats.toolResults, toolName, tokens);
-        if (toolName === FILE_READ_TOOL_NAME) {
+        if (toolName === READ) {
           let path = readToolPaths.get(block.tool_use_id);
           if (path) {
             let current = fileReads.get(path) || {
@@ -160,26 +160,26 @@ function processBlock(block, message, stats, toolIds, readToolPaths, fileReads) 
       break;
   }
 }
-//@ chunk-e6aww6q8.js:1656109-1656217 layout (2.1.88 match: isMedia, 0.815)
+//@ chunk-5xgkngpb.js:1730424-1730532 layout (2.1.88 match: isMedia, 0.814)
 /**
  * image/document 且 source.type=base64。
  */
 function isBase64MediaBlock(block) {
   return (
-    isPlainObject_5(block) &&
+    isPlainObject_6(block) &&
     (block.type === "image" || block.type === "document") &&
-    isPlainObject_5(block.source) &&
+    isPlainObject_6(block.source) &&
     block.source.type === "base64"
   );
 }
-//@ chunk-e6aww6q8.js:1656217-1656262 file-local
+//@ chunk-5xgkngpb.js:1730532-1730577 file-local
 /**
  * Map 计数累加。
  */
 function increment(map, key, value) {
   map.set(key, (map.get(key) || 0) + value);
 }
-//@ chunk-e6aww6q8.js:1656262-1657467 fingerprint (2.1.88 match: tokenStatsToStatsigMetrics, 1)
+//@ chunk-5xgkngpb.js:1730577-1731782 fingerprint (2.1.88 match: tokenStatsToStatsigMetrics, 1)
 /**
  * 把上下文统计转成遥测指标（各类 token、百分比、按工具细分）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。未提交反馈草稿的提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (13)
  * attribution: placement 13
  */
 import {
@@ -65,23 +65,28 @@ import { getMainLoopModel } from "../../utils/model/model.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:981168-981172 placement
+//@ chunk-czq1j3j2.js:954999-955003 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:981168", () => {
+deferInit("chunk-czq1j3j2.js:954999", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:981172-981176 placement
+//@ chunk-czq1j3j2.js:955223-955227 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:981172", () => {
+deferInit("chunk-czq1j3j2.js:955223", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:981176-981186 placement
+//@ chunk-czq1j3j2.js:955732-955736 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:955732", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1015207-1015217 placement
 var MAX_DRAFT_TURN_OFF_DECLINES = 2;
-//@ chunk-18hwfzwa.js:981186-981257 placement
+//@ chunk-czq1j3j2.js:1015217-1015288 placement
 function shouldShowTurnOffPrompt() {
   return (getGlobalConfig().feedbackDraftsTurnOffPromptDeclines ?? 0) < MAX_DRAFT_TURN_OFF_DECLINES;
 }
-//@ chunk-18hwfzwa.js:981257-981374 placement
+//@ chunk-czq1j3j2.js:1015288-1015405 placement
 function recordDraftTurnOffDecline(storageV5) {
   saveGlobalConfig(
     (config) => ({
@@ -91,7 +96,7 @@ function recordDraftTurnOffDecline(storageV5) {
     storageV5,
   );
 }
-//@ chunk-18hwfzwa.js:981374-981743 placement
+//@ chunk-czq1j3j2.js:1015405-1015774 placement
 function feedbackDraftPreviewLines(text, columns, preview = false) {
   if (text.trim() === "") return "Details empty.";
   let lines = text.split(`
@@ -107,7 +112,7 @@ function feedbackDraftPreviewLines(text, columns, preview = false) {
   ].join(`
 `);
 }
-//@ chunk-18hwfzwa.js:981743-982035 placement
+//@ chunk-czq1j3j2.js:1015774-1016066 placement
 function truncateToWrappedLines(text, width, maxRows) {
   let kept = [];
   let usedRows = 0;
@@ -130,7 +135,7 @@ function truncateToWrappedLines(text, width, maxRows) {
   }
   return text;
 }
-//@ chunk-18hwfzwa.js:982035-982718 placement
+//@ chunk-czq1j3j2.js:1016066-1016749 placement
 function WrappedTextBox(props) {
   let $ = useMemoCache(8);
   let { value, bold, dim, columns, maxRows, preview } = props;
@@ -188,7 +193,7 @@ function WrappedTextBox(props) {
   } else box = $[7];
   return box;
 }
-//@ chunk-18hwfzwa.js:982718-982833 placement
+//@ chunk-czq1j3j2.js:1016749-1016864 placement
 var FEEDBACK_KIND_LABELS = {
   bug: "Bug report",
   idea: "Product feedback",
@@ -197,7 +202,7 @@ var FEEDBACK_KIND_LABELS = {
 var SENT_STATUS_RESET_MS = 1500;
 var NOTICE_SHOW_DELAY_MS = 1000;
 var OFF_CONFIRM_RESET_MS = 5000;
-//@ chunk-18hwfzwa.js:982833-988714 placement
+//@ chunk-czq1j3j2.js:1016864-1022746 placement
 /**
  * FeedbackDraftNotice：提示存在未提交的反馈草稿并允许继续或丢弃。
  */
@@ -668,12 +673,7 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
     }),
   });
 }
-//@ chunk-18hwfzwa.js:988714-988718 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:988714", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:988718-988783 placement
+//@ chunk-czq1j3j2.js:1022750-1022815 placement
 function buildEffortLevelTelemetry(level) {
   let effortLevelIfSupported = getEffortLevelIfSupported(getMainLoopModel(), level);
   return effortLevelIfSupported
@@ -682,7 +682,7 @@ function buildEffortLevelTelemetry(level) {
       }
     : {};
 }
-//@ chunk-18hwfzwa.js:988783-988815 placement
+//@ chunk-czq1j3j2.js:1022815-1022847 placement
 function getCurrentEffortLevelTelemetry() {
   return buildEffortLevelTelemetry(useQueuedMessageText());
 }

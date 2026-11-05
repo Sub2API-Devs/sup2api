@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：结合 availableModels 与强制策略解析可用模型；模型强制策略状态（active/inactive/refused）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (24)
  * attribution: placement 24
  */
 import {
@@ -75,7 +75,7 @@ import { getProviderState } from "./providerCaches.js";
 import { BEDROCK_REGION_PREFIXES } from "./bedrock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:444410-444950 placement
+//@ chunk-exfmq47h.js:455801-456341 placement
 /**
  * 被限制模型的同族默认。
  */
@@ -119,7 +119,7 @@ function familyDefaultFor(model) {
     );
   return listedModel;
 }
-//@ chunk-aepeg2w5.js:444950-445402 placement
+//@ chunk-exfmq47h.js:456341-456793 placement
 /**
  * 托管 availableModels 中的模型族。
  */
@@ -154,7 +154,7 @@ function availableModelsFamilies() {
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:445402-445451 placement
+//@ chunk-exfmq47h.js:456793-456842 placement
 /**
  * isBlockedByManagedModelPolicy 的安全包装（异常按受限处理）。
  */
@@ -165,7 +165,7 @@ function isBlockedByManagedModelPolicySafe(model) {
     return true;
   }
 }
-//@ chunk-aepeg2w5.js:445451-445500 placement
+//@ chunk-exfmq47h.js:456842-456891 placement
 /**
  * isModelDeniedByManagedSettings 的安全包装（异常按拒绝处理）。
  */
@@ -176,7 +176,7 @@ function isModelDeniedByManagedSafe(model) {
     return true;
   }
 }
-//@ chunk-aepeg2w5.js:445500-445549 placement
+//@ chunk-exfmq47h.js:456891-456940 placement
 /**
  * 同上，但异常按未拒绝处理。
  */
@@ -187,7 +187,7 @@ function isModelDeniedByManagedFalse(model) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:445549-445602 placement
+//@ chunk-exfmq47h.js:456940-456993 placement
 /**
  * 判断模型是否在权益允许范围内。
  */
@@ -195,7 +195,7 @@ function isModelEntitled(model) {
   let modelEntitlementDenySet = getModelEntitlementDenySet();
   return !(modelEntitlementDenySet.size > 0 && isModelDenied(model, modelEntitlementDenySet));
 }
-//@ chunk-aepeg2w5.js:445602-445939 placement
+//@ chunk-exfmq47h.js:456993-457330 placement
 function getEnvDefaultModel() {
   let initialEnvDefaultModel = getInitialEnvDefaultModel();
   let candidate = initialEnvDefaultModel === undefined ? env.ANTHROPIC_DEFAULT_MODEL : initialEnvDefaultModel;
@@ -213,11 +213,11 @@ function getEnvDefaultModel() {
   if (isUnavailableModel(candidate)) return null;
   return candidate;
 }
-//@ chunk-aepeg2w5.js:445939-445999 placement
+//@ chunk-exfmq47h.js:457330-457390 placement
 function isEnvDefaultModelGoverning() {
   return getUserSpecifiedModelSetting() == null && resolveDefaultMainLoopModelSetting().attribution === "env";
 }
-//@ chunk-aepeg2w5.js:445999-446390 placement
+//@ chunk-exfmq47h.js:457390-457781 placement
 /**
  * 环境决定的默认模型设置。
  */
@@ -256,7 +256,7 @@ function envDefaultModel_2() {
     envFamily: "sonnet",
   };
 }
-//@ chunk-aepeg2w5.js:446390-450425 placement
+//@ chunk-exfmq47h.js:457781-461819 placement
 /**
  * 结合 availableModels 与强制策略解析可用模型。
  */
@@ -504,7 +504,7 @@ function resolveAvailableModels(model, envFamily, concreteBaseline) {
   if (firstSkipped !== undefined) return firstSkipped.adopt();
   return steered !== null ? adoptEntry(steered) : null;
 }
-//@ chunk-aepeg2w5.js:450425-450565 placement (2.1.88 match: getFastModeModel, 0.455)
+//@ chunk-exfmq47h.js:461819-461959 placement (2.1.88 match: getFastModeModel, 0.455)
 /**
  * 判断别名解析出的模型是否应加 [1m]：旧模型或非 claude- 前缀按规则；opus 在第一方时看 isOpus1mMergeEnabled。旧版名 getFastModeModel 为错配，应归 utils/model/model.ts。
  */
@@ -514,7 +514,7 @@ function eligible1mSuffixTarget(model, options) {
   if (!canonical.startsWith("claude-")) return true;
   return canonical.includes("opus") && usesFirstPartyModelIds() ? isOpus1mMergeEnabled() : true;
 }
-//@ chunk-aepeg2w5.js:450565-450738 placement (2.1.88 match: modelMatchesVersionPrefix, 0.776)
+//@ chunk-exfmq47h.js:461959-462132 placement (2.1.88 match: modelMatchesVersionPrefix, 0.777)
 /**
  * 去掉 [1m] 后的规范名是否为不支持 1M 合并的旧模型（3.x、opus-4-0/4-1/4-5、haiku-4-5）。
  */
@@ -528,7 +528,7 @@ function isKnownNon1mTarget(model, entry) {
     trimmed_2 !== trimmed && entry?.overridesMap === undefined && isLegacyNo1mModel(getCanonicalName(trimmed))
   );
 }
-//@ chunk-aepeg2w5.js:450738-450923 placement (2.1.88 match: aliasMatchesParentTier, 0.756)
+//@ chunk-exfmq47h.js:462132-462317 placement (2.1.88 match: aliasMatchesParentTier, 0.756)
 /**
  * [族, ANTHROPIC_DEFAULT_*_MODEL 值, 序号, 内置默认取值函数]（haiku/sonnet/opus）。
  */
@@ -539,14 +539,14 @@ function getTierEnvTable(modelStrings) {
     ["opus", env.ANTHROPIC_DEFAULT_OPUS_MODEL, 2, () => getDefaultOpusBuiltin(modelStrings)],
   ];
 }
-//@ chunk-aepeg2w5.js:450923-450975 placement
+//@ chunk-exfmq47h.js:462317-462369 placement
 /**
  * 取已提示过的模型强制策略消息集合。
  */
 function warnedEnforcementMessages() {
   return getProviderState().warnedEnforcementMessages;
 }
-//@ chunk-aepeg2w5.js:450975-453361 placement
+//@ chunk-exfmq47h.js:462369-464755 placement
 /**
  * 模型强制策略状态（active/inactive/refused）。
  */
@@ -651,7 +651,7 @@ function getModelEnforcementState() {
     };
   }
 }
-//@ chunk-aepeg2w5.js:453361-453647 placement
+//@ chunk-exfmq47h.js:464755-465041 placement
 function isModelAllowedUnderActiveEnforcement(model) {
   let modelEnforcementState = getModelEnforcementState();
   if (modelEnforcementState.state === "refused") return false;
@@ -671,7 +671,7 @@ function isModelAllowedUnderActiveEnforcement(model) {
     ) || aliasExpansionPermitted(trimmed, options)
   );
 }
-//@ chunk-aepeg2w5.js:453647-453724 placement
+//@ chunk-exfmq47h.js:465041-465118 placement
 function isModelAdmittedByAvailableModels(model) {
   return (
     isModelAllowedUnderActiveEnforcement(model) ??
@@ -681,21 +681,21 @@ function isModelAdmittedByAvailableModels(model) {
       isExemptDefaultResolvingPick(model))
   );
 }
-//@ chunk-aepeg2w5.js:453724-453773 placement
+//@ chunk-exfmq47h.js:465118-465167 placement
 function isPermittedByOrgModelPolicy(model) {
   return (
     (isModelAllowedUnderActiveEnforcement(model) ?? isModelAllowed(model)) &&
     !isModelDenied(model, getModelEntitlementDenySet())
   );
 }
-//@ chunk-aepeg2w5.js:453773-453844 placement
+//@ chunk-exfmq47h.js:465167-465238 placement
 function isDefaultMainLoopModel(model) {
   return (
     strip1mSuffix(parseUserSpecifiedModel(model)).toLowerCase() ===
     strip1mSuffix(getDefaultMainLoopModel()).toLowerCase()
   );
 }
-//@ chunk-aepeg2w5.js:453844-453964 placement
+//@ chunk-exfmq47h.js:465238-465358 placement
 function isExemptDefaultResolvingPick(model) {
   let lower = strip1mSuffix(model.trim().toLowerCase());
   if (isModeDependentModelSetting(lower)) return false;
@@ -703,7 +703,7 @@ function isExemptDefaultResolvingPick(model) {
   if (lower === "best") return false;
   return isDefaultMainLoopModel(model);
 }
-//@ chunk-aepeg2w5.js:453964-454094 placement
+//@ chunk-exfmq47h.js:465358-465488 placement
 function isWindowSilentDefaultPick(model) {
   if (!isExemptDefaultResolvingPick(model)) return false;
   let lower = model.trim().toLowerCase();
@@ -712,7 +712,7 @@ function isWindowSilentDefaultPick(model) {
     (isModelKeyAlias(lower) && lower === strip1mSuffix(lower))
   );
 }
-//@ chunk-aepeg2w5.js:454094-454270 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
+//@ chunk-exfmq47h.js:465488-465664 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 别名展开成内置默认模型（小写）；旧 Opus 4/4.1 在重映射时展开成最新 Opus。
  */
@@ -725,12 +725,12 @@ function resolveModelAliasEnvFree(alias) {
     return getDefaultOpusBuiltin(getRawModelStrings()).toLowerCase();
   return null;
 }
-//@ chunk-aepeg2w5.js:454270-454338 placement
+//@ chunk-exfmq47h.js:465664-465732 placement
 var regExp_29; // deferred: uses BEDROCK_REGION_PREFIXES (./bedrock.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:454270", () => {
+deferInit("chunk-exfmq47h.js:465664", () => {
   regExp_29 = new RegExp(`^((${BEDROCK_REGION_PREFIXES.join("|")})\\.)?(anthropic\\.|claude-)`);
 });
-//@ chunk-aepeg2w5.js:454338-454481 placement
+//@ chunk-exfmq47h.js:465732-465875 placement
 function isOpaqueModelId(modelId) {
   let lower = modelId.toLowerCase();
   if (regExp_29.test(lower)) return true;
@@ -740,14 +740,15 @@ function isOpaqueModelId(modelId) {
 }
 export {
   isExemptDefaultResolvingPick,
+  isModelAllowedUnderActiveEnforcement,
+  isWindowSilentDefaultPick,
+  isModelAdmittedByAvailableModels,
   isEnvDefaultModelGoverning,
   isKnownNon1mTarget,
   getModelEnforcementState,
   isModelDeniedByManagedFalse,
-  isPermittedByOrgModelPolicy,
-  isModelAllowedUnderActiveEnforcement,
   getEnvDefaultModel,
-  isWindowSilentDefaultPick,
+  isPermittedByOrgModelPolicy,
   resolveModelAliasEnvFree,
   isModelDeniedByManagedSafe,
   isBlockedByManagedModelPolicySafe,
@@ -757,5 +758,4 @@ export {
   familyDefaultFor,
   envDefaultModel_2,
   isModelEntitled,
-  isModelAdmittedByAvailableModels,
 };

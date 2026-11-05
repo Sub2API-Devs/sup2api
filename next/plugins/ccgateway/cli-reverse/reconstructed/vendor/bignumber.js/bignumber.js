@@ -1,13 +1,13 @@
 /**
  * bignumber.js/bignumber.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: bignumber.js@9.1.2..9.3.1
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-na3pph4p.js:18271-37695 cjs-fingerprint
+//@ chunk-e8d3a8an.js:18271-37695 cjs-fingerprint
 var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
   (function (globalObject) {
     var BigNumber;
@@ -28,7 +28,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
       var div;
       var convertBase;
       var parseNumeric;
-      var P_2 = (BigNumber.prototype = {
+      var P = (BigNumber.prototype = {
         constructor: BigNumber,
         toString: null,
         valueOf: null,
@@ -411,7 +411,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           var e;
           var k;
           var r;
-          var x;
+          var x_2;
           var xc;
           var y;
           var i = str.indexOf(".");
@@ -422,9 +422,9 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
             POW_PRECISION = 0;
             str = str.replace(".", "");
             y = new BigNumber(baseIn);
-            x = y.pow(str.length - i);
+            x_2 = y.pow(str.length - i);
             POW_PRECISION = k;
-            y.c = toBaseOut(toFixedPoint(coeffToString(x.c), x.e, "0"), 10, baseOut, decimal);
+            y.c = toBaseOut(toFixedPoint(coeffToString(x_2.c), x_2.e, "0"), 10, baseOut, decimal);
             y.e = y.c.length;
           }
           xc = toBaseOut(
@@ -438,13 +438,13 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           if (!xc[0]) return alphabet.charAt(0);
           if (i < 0) --e;
           else {
-            x.c = xc;
-            x.e = e;
-            x.s = sign;
-            x = div(x, y, dp, rm, baseOut);
-            xc = x.c;
-            r = x.r;
-            e = x.e;
+            x_2.c = xc;
+            x_2.e = e;
+            x_2.s = sign;
+            x_2 = div(x_2, y, dp, rm, baseOut);
+            xc = x_2.c;
+            r = x_2.r;
+            e = x_2.e;
           }
           roundingIndex = e + dp + 1;
           i = xc[roundingIndex];
@@ -452,10 +452,10 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           r = r || roundingIndex < 0 || xc[roundingIndex + 1] != null;
           r =
             rm < 4
-              ? (i != null || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2))
+              ? (i != null || r) && (rm == 0 || rm == (x_2.s < 0 ? 3 : 2))
               : i > k ||
                 (i == k &&
-                  (rm == 4 || r || (rm == 6 && xc[roundingIndex - 1] & 1) || rm == (x.s < 0 ? 8 : 7)));
+                  (rm == 4 || r || (rm == 6 && xc[roundingIndex - 1] & 1) || rm == (x_2.s < 0 ? 8 : 7)));
           if (roundingIndex < 1 || !xc[0])
             str = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
           else {
@@ -477,25 +477,25 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         };
       })();
       div = (function () {
-        function multiply(x, k, base) {
+        function multiply(x_2, k, base) {
           var temp;
           var temp_2;
           var xlo;
           var xhi;
           var carry = 0;
-          var i = x.length;
+          var i = x_2.length;
           var klo = k % SQRT_BASE;
           var khi = (k / SQRT_BASE) | 0;
-          for (x = x.slice(); i--;) {
-            xlo = x[i] % SQRT_BASE;
-            xhi = (x[i] / SQRT_BASE) | 0;
+          for (x_2 = x_2.slice(); i--;) {
+            xlo = x_2[i] % SQRT_BASE;
+            xhi = (x_2[i] / SQRT_BASE) | 0;
             temp = khi * xlo + xhi * klo;
             temp_2 = klo * xlo + (temp % SQRT_BASE) * SQRT_BASE + carry;
             carry = ((temp_2 / base) | 0) + ((temp / SQRT_BASE) | 0) + khi * xhi;
-            x[i] = temp_2 % base;
+            x_2[i] = temp_2 % base;
           }
-          if (carry) x = [carry].concat(x);
-          return x;
+          if (carry) x_2 = [carry].concat(x_2);
+          return x_2;
         }
         function compare(a, b, aL, bL) {
           var i;
@@ -518,7 +518,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           }
           for (; !a[0] && a.length > 1; a.splice(0, 1));
         }
-        return function (x, y, dp, rm, base) {
+        return function (x_2, y, dp, rm, base) {
           var cmp;
           var e;
           var i;
@@ -536,12 +536,12 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           var yc0;
           var yL;
           var yz;
-          var s = x.s == y.s ? 1 : -1;
-          var xc = x.c;
+          var s = x_2.s == y.s ? 1 : -1;
+          var xc = x_2.c;
           var yc = y.c;
           if (!xc || !xc[0] || !yc || !yc[0])
             return new BigNumber(
-              !x.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc)
+              !x_2.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc)
                 ? NaN
                 : (xc && xc[0] == 0) || !yc
                   ? s * 0
@@ -549,11 +549,11 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
             );
           q = new BigNumber(s);
           qc = q.c = [];
-          e = x.e - y.e;
+          e = x_2.e - y.e;
           s = dp + e + 1;
           if (!base) {
             base = BASE;
-            e = bitFloor(x.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
+            e = bitFloor(x_2.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
             s = (s / LOG_BASE) | 0;
           }
           for (i = 0; yc[i] == (xc[i] || 0); i++);
@@ -708,7 +708,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         var dotBefore = /^\.([^.]+)$/;
         var isInfinityOrNaN = /^-?(Infinity|NaN)$/;
         var whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
-        return function (x, str, isNum, b_2) {
+        return function (x, str, isNum, b) {
           var base;
           var s = isNum ? str : str.replace(whitespaceOrPlus, "");
           if (isInfinityOrNaN.test(s)) x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
@@ -716,16 +716,16 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
             if (!isNum) {
               s = s.replace(basePrefix, function (m, p1, p2) {
                 base = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
-                return !b_2 || b_2 == base ? p1 : m;
+                return !b || b == base ? p1 : m;
               });
-              if (b_2) {
-                base = b_2;
+              if (b) {
+                base = b;
                 s = s.replace(dotAfter, "$1").replace(dotBefore, "0.$1");
               }
               if (str != s) return new BigNumber(s, base);
             }
             if (BigNumber.DEBUG)
-              throw Error(bignumberError + "Not a" + (b_2 ? " base " + b_2 : "") + " number: " + str);
+              throw Error(bignumberError + "Not a" + (b ? " base " + b : "") + " number: " + str);
             x.s = null;
           }
           x.c = x.e = null;
@@ -828,15 +828,15 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         str = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(str, e) : toFixedPoint(str, e, "0");
         return n.s < 0 ? "-" + str : str;
       }
-      P_2.absoluteValue = P_2.abs = function () {
+      P.absoluteValue = P.abs = function () {
         var x = new BigNumber(this);
         if (x.s < 0) x.s = 1;
         return x;
       };
-      P_2.comparedTo = function (y, b) {
+      P.comparedTo = function (y, b) {
         return compare(this, new BigNumber(y, b));
       };
-      P_2.decimalPlaces = P_2.dp = function (dp, rm) {
+      P.decimalPlaces = P.dp = function (dp, rm) {
         var coefficient;
         var n;
         var v;
@@ -853,13 +853,13 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         if (n < 0) n = 0;
         return n;
       };
-      P_2.dividedBy = P_2.div = function (y, b) {
+      P.dividedBy = P.div = function (y, b) {
         return div(this, new BigNumber(y, b), DECIMAL_PLACES, ROUNDING_MODE);
       };
-      P_2.dividedToIntegerBy = P_2.idiv = function (y, b) {
+      P.dividedToIntegerBy = P.idiv = function (y, b) {
         return div(this, new BigNumber(y, b), 0, 1);
       };
-      P_2.exponentiatedBy = P_2.pow = function (n, m_2) {
+      P.exponentiatedBy = P.pow = function (n, m_2) {
         var half;
         var isModExp;
         var i;
@@ -935,46 +935,46 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         if (nIsNeg) y = ONE.div(y);
         return m_2 ? y.mod(m_2) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
       };
-      P_2.integerValue = function (rm) {
+      P.integerValue = function (rm) {
         var n = new BigNumber(this);
         if (rm == null) rm = ROUNDING_MODE;
         else intCheck(rm, 0, 8);
         return round(n, n.e + 1, rm);
       };
-      P_2.isEqualTo = P_2.eq = function (y, b) {
+      P.isEqualTo = P.eq = function (y, b) {
         return compare(this, new BigNumber(y, b)) === 0;
       };
-      P_2.isFinite = function () {
+      P.isFinite = function () {
         return !!this.c;
       };
-      P_2.isGreaterThan = P_2.gt = function (y, b) {
+      P.isGreaterThan = P.gt = function (y, b) {
         return compare(this, new BigNumber(y, b)) > 0;
       };
-      P_2.isGreaterThanOrEqualTo = P_2.gte = function (y, b) {
+      P.isGreaterThanOrEqualTo = P.gte = function (y, b) {
         return (b = compare(this, new BigNumber(y, b))) === 1 || b === 0;
       };
-      P_2.isInteger = function () {
+      P.isInteger = function () {
         return !!this.c && bitFloor(this.e / LOG_BASE) > this.c.length - 2;
       };
-      P_2.isLessThan = P_2.lt = function (y, b) {
+      P.isLessThan = P.lt = function (y, b) {
         return compare(this, new BigNumber(y, b)) < 0;
       };
-      P_2.isLessThanOrEqualTo = P_2.lte = function (y, b) {
+      P.isLessThanOrEqualTo = P.lte = function (y, b) {
         return (b = compare(this, new BigNumber(y, b))) === -1 || b === 0;
       };
-      P_2.isNaN = function () {
+      P.isNaN = function () {
         return !this.s;
       };
-      P_2.isNegative = function () {
+      P.isNegative = function () {
         return this.s < 0;
       };
-      P_2.isPositive = function () {
+      P.isPositive = function () {
         return this.s > 0;
       };
-      P_2.isZero = function () {
+      P.isZero = function () {
         return !!this.c && this.c[0] == 0;
       };
-      P_2.minus = function (y_2, b) {
+      P.minus = function (y_2, b) {
         var i;
         var j;
         var t;
@@ -1044,7 +1044,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         }
         return normalise(y_2, xc, ye);
       };
-      P_2.modulo = P_2.mod = function (y_2, b) {
+      P.modulo = P.mod = function (y_2, b) {
         var q;
         var s;
         var x = this;
@@ -1062,7 +1062,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         if (!y_2.c[0] && MODULO_MODE == 1) y_2.s = x.s;
         return y_2;
       };
-      P_2.multipliedBy = P_2.times = function (y_2, b_2) {
+      P.multipliedBy = P.times = function (y_2, b) {
         var carry;
         var e;
         var i;
@@ -1080,7 +1080,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         var sqrtBase;
         var x = this;
         var xc = x.c;
-        var yc = (y_2 = new BigNumber(y_2, b_2)).c;
+        var yc = (y_2 = new BigNumber(y_2, b)).c;
         if (!xc || !yc || !xc[0] || !yc[0]) {
           if (!x.s || !y_2.s || (xc && !xc[0] && !yc) || (yc && !yc[0] && !xc)) y_2.c = y_2.e = y_2.s = null;
           else {
@@ -1126,12 +1126,12 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         else zc.splice(0, 1);
         return normalise(y_2, zc, e);
       };
-      P_2.negated = function () {
+      P.negated = function () {
         var x = new BigNumber(this);
         x.s = -x.s || null;
         return x;
       };
-      P_2.plus = function (y_2, b) {
+      P.plus = function (y_2, b) {
         var t;
         var x = this;
         var a = x.s;
@@ -1183,7 +1183,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         }
         return normalise(y_2, xc, ye);
       };
-      P_2.precision = P_2.sd = function (sd, rm) {
+      P.precision = P.sd = function (sd, rm) {
         var coefficient;
         var n;
         var v;
@@ -1204,11 +1204,11 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         if (sd && x.e + 1 > n) n = x.e + 1;
         return n;
       };
-      P_2.shiftedBy = function (k) {
+      P.shiftedBy = function (k) {
         intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
         return this.times("1e" + k);
       };
-      P_2.squareRoot = P_2.sqrt = function () {
+      P.squareRoot = P.sqrt = function () {
         var m_2;
         var n;
         var r;
@@ -1265,23 +1265,23 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         }
         return round(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m_2);
       };
-      P_2.toExponential = function (dp, rm) {
+      P.toExponential = function (dp, rm) {
         if (dp != null) {
           intCheck(dp, 0, MAX);
           dp++;
         }
         return format(this, dp, rm, 1);
       };
-      P_2.toFixed = function (dp, rm) {
+      P.toFixed = function (dp, rm) {
         if (dp != null) {
           intCheck(dp, 0, MAX);
           dp = dp + this.e + 1;
         }
         return format(this, dp, rm);
       };
-      P_2.toFormat = function (dp, rm, format) {
+      P.toFormat = function (dp, rm, format) {
         var str;
-        var x = this;
+        var x_2 = this;
         if (format == null) {
           if (dp != null && rm && typeof rm == "object") {
             format = rm;
@@ -1292,8 +1292,8 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           } else format = FORMAT;
         } else if (typeof format != "object")
           throw Error(bignumberError + "Argument not an object: " + format);
-        str = x.toFixed(dp, rm);
-        if (x.c) {
+        str = x_2.toFixed(dp, rm);
+        if (x_2.c) {
           var i;
           var arr = str.split(".");
           var g1 = +format.groupSize;
@@ -1301,7 +1301,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
           var groupSeparator = format.groupSeparator || "";
           var intPart = arr[0];
           var fractionPart = arr[1];
-          var isNeg = x.s < 0;
+          var isNeg = x_2.s < 0;
           var intDigits = isNeg ? intPart.slice(1) : intPart;
           var len = intDigits.length;
           if (g2) {
@@ -1330,7 +1330,7 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         }
         return (format.prefix || "") + str + (format.suffix || "");
       };
-      P_2.toFraction = function (md) {
+      P.toFraction = function (md) {
         var d_2;
         var d0;
         var d1;
@@ -1343,8 +1343,8 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         var q;
         var r;
         var s;
-        var x = this;
-        var xc = x.c;
+        var thisBigNumber = this;
+        var xc = thisBigNumber.c;
         if (md != null) {
           n = new BigNumber(md);
           if ((!n.isInteger() && (n.c || n.s !== 1)) || n.lt(ONE))
@@ -1355,12 +1355,12 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
                 valueOf(n),
             );
         }
-        if (!xc) return new BigNumber(x);
+        if (!xc) return new BigNumber(thisBigNumber);
         d_2 = new BigNumber(ONE);
         n1 = d0 = new BigNumber(ONE);
         d1 = n0 = new BigNumber(ONE);
         s = coeffToString(xc);
-        e = d_2.e = s.length - x.e - 1;
+        e = d_2.e = s.length - thisBigNumber.e - 1;
         d_2.c[0] = POWS_TEN[(exp = e % LOG_BASE) < 0 ? LOG_BASE + exp : exp];
         md = !md || n.comparedTo(d_2) > 0 ? (e > 0 ? d_2 : n1) : n;
         exp = MAX_EXP;
@@ -1381,26 +1381,26 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         d2 = div(md.minus(d0), d1, 0, 1);
         n0 = n0.plus(d2.times(n1));
         d0 = d0.plus(d2.times(d1));
-        n0.s = n1.s = x.s;
+        n0.s = n1.s = thisBigNumber.s;
         e = e * 2;
         r =
           div(n1, d1, e, ROUNDING_MODE)
-            .minus(x)
+            .minus(thisBigNumber)
             .abs()
-            .comparedTo(div(n0, d0, e, ROUNDING_MODE).minus(x).abs()) < 1
+            .comparedTo(div(n0, d0, e, ROUNDING_MODE).minus(thisBigNumber).abs()) < 1
             ? [n1, d1]
             : [n0, d0];
         MAX_EXP = exp;
         return r;
       };
-      P_2.toNumber = function () {
+      P.toNumber = function () {
         return +valueOf(this);
       };
-      P_2.toPrecision = function (sd, rm) {
+      P.toPrecision = function (sd, rm) {
         if (sd != null) intCheck(sd, 1, MAX);
         return format(this, sd, rm, 2);
       };
-      P_2.toString = function (b) {
+      P.toString = function (b) {
         var str;
         var n = this;
         var s = n.s;
@@ -1427,10 +1427,10 @@ var require_bignumber = __commonJS(function (cjsExports, cjsModule) {
         }
         return str;
       };
-      P_2.valueOf = P_2.toJSON = function () {
+      P.valueOf = P.toJSON = function () {
         return valueOf(this);
       };
-      P_2._isBigNumber = true;
+      P._isBigNumber = true;
       if (configObject != null) BigNumber.set(configObject);
       return BigNumber;
     }

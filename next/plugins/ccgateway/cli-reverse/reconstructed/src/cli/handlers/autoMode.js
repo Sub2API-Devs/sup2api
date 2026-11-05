@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：auto 模式相关的 CLI 处理（默认规则、配置展示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/autoMode.ts
- * pieces: chunk-2a8yx6fc.js (2), chunk-aepeg2w5.js (1), chunk-t2bgh7t8.js (13)
- * attribution: placement 11, fingerprint 3, layout 1, sole-consumer 1
+ * pieces: chunk-exfmq47h.js (1), chunk-fmakjjce.js (13), chunk-fta1hp2w.js (2)
+ * attribution: fingerprint 2, placement 11, layout 1, sole-consumer 2
  */
 import { stripVTControlCharacters } from "util";
 import { ANSI_ESCAPE_RE } from "../../utils/concurrentSessions.js";
@@ -60,7 +60,7 @@ import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { sideQueryWithCounter } from "../../utils/sideQuery.js";
 
-//@ chunk-aepeg2w5.js:851418-851673 fingerprint (2.1.88 match: formatRulesForCritique, 0.557)
+//@ chunk-exfmq47h.js:873753-874008 fingerprint (2.1.88 match: formatRulesForCritique, 0.557)
 function formatRulesForCritique_2(status) {
   if (status.code !== 0) return;
   let changedCount = 0;
@@ -78,7 +78,7 @@ function formatRulesForCritique_2(status) {
     untrackedFileCount: untrackedCount,
   };
 }
-//@ chunk-2a8yx6fc.js:11310-11389 placement
+//@ chunk-fta1hp2w.js:11376-11455 placement
 /**
  * 取规则标签：冒号或方括号之前的部分（去尾部空白），用于 --label 过滤。
  */
@@ -86,11 +86,11 @@ function ruleLabelOf(rule) {
   let separatorIndex = rule.search(/[:[]/);
   return (separatorIndex === -1 ? rule : rule.slice(0, separatorIndex)).trimEnd();
 }
-//@ chunk-2a8yx6fc.js:11389-11595 fingerprint (2.1.88 match: autoModeConfigHandler, 0.842)
+//@ chunk-fta1hp2w.js:11455-11661 sole-consumer (2.1.88 match: autoModeConfigHandler, 0.842)
 /**
  * 合并用户 autoMode 设置与内置默认规则（allow/soft_deny/hard_deny/environment 四段）。
  */
-function autoModeConfigHandler_2(autoModeConfig) {
+function autoModeConfigHandler_3(autoModeConfig) {
   let config = getDefaultExternalAutoModeRules();
   let identity = (rule) => rule;
   return {
@@ -100,7 +100,7 @@ function autoModeConfigHandler_2(autoModeConfig) {
     environment: expandDefaultsPlaceholder(autoModeConfig?.environment, config.environment, identity),
   };
 }
-//@ chunk-t2bgh7t8.js:15206-15307 placement (2.1.88 match: renderAndRun, 1)
+//@ chunk-fmakjjce.js:16397-16498 placement (2.1.88 match: renderAndRun, 1)
 async function renderAndRun(root, element) {
   root.render(
     jsxProd_default(RenderOnceAndExit, {
@@ -111,17 +111,17 @@ async function renderAndRun(root, element) {
   );
   await root.waitUntilExit();
 }
-//@ chunk-t2bgh7t8.js:15307-15398 placement
+//@ chunk-fmakjjce.js:16498-16589 placement
 async function runAutoModeDefaults(root, filter) {
   let defaultExternalAutoModeRules = getDefaultExternalAutoModeRules();
   await renderAndRun(
     root,
-    filter ? autoModeConfigHandler_3(defaultExternalAutoModeRules, filter) : defaultExternalAutoModeRules,
+    filter ? autoModeConfigHandler_2(defaultExternalAutoModeRules, filter) : defaultExternalAutoModeRules,
   );
   await logFeatureOkAsync("cli_auto_mode_defaults");
 }
-//@ chunk-t2bgh7t8.js:15398-15684 placement (2.1.88 match: autoModeConfigHandler, 0.842)
-function autoModeConfigHandler_3(defaultExternalAutoModeRules, filterArg) {
+//@ chunk-fmakjjce.js:16589-16875 placement (2.1.88 match: autoModeConfigHandler, 0.842)
+function autoModeConfigHandler_2(defaultExternalAutoModeRules, filterArg) {
   let normalizeLabel = (label) =>
     label
       .replace(/\*/g, "")
@@ -137,15 +137,15 @@ function autoModeConfigHandler_3(defaultExternalAutoModeRules, filterArg) {
     environment: defaultExternalAutoModeRules.environment.filter(matches),
   };
 }
-//@ chunk-t2bgh7t8.js:15684-15759 placement
+//@ chunk-fmakjjce.js:16875-16950 placement
 /**
  * claude auto-mode config：输出生效的 autoMode 配置（用户设置覆盖默认值）为 JSON。
  */
 async function autoModeConfigHandler(root) {
-  await renderAndRun(root, autoModeConfigHandler_2(getAutoModeConfig()));
+  await renderAndRun(root, autoModeConfigHandler_3(getAutoModeConfig()));
   await logFeatureOkAsync("cli_auto_mode_config");
 }
-//@ chunk-t2bgh7t8.js:15759-17898 placement
+//@ chunk-fmakjjce.js:16950-19089 placement
 /**
  * claude auto-mode reset：从用户设置文件删除 autoMode 段。
  */
@@ -238,14 +238,14 @@ Run \`claude auto-mode config\` to see the effective rules.
 `);
   noteOtherAutoModeSources();
 }
-//@ chunk-t2bgh7t8.js:17898-18073 placement
+//@ chunk-fmakjjce.js:19089-19264 placement
 function describeAutoModeSectionKeys(autoMode) {
   if (!isPlainObject(autoMode)) return ["autoMode (unrecognized value)"];
   return Object.entries(autoMode).map(([key, value]) =>
     Array.isArray(value) ? `${key} (${value.length} ${plural(value.length, "entry", "entries")})` : key,
   );
 }
-//@ chunk-t2bgh7t8.js:18073-18219 placement
+//@ chunk-fmakjjce.js:19264-19410 placement
 function countDuplicates(values) {
   let counts = new Map();
   for (let value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -253,15 +253,15 @@ function countDuplicates(values) {
     count > 1 ? `${value} (${pluralCount(count, "entry", "entries")})` : value,
   );
 }
-//@ chunk-t2bgh7t8.js:18219-18249 placement
+//@ chunk-fmakjjce.js:19410-19440 placement
 function stripAnsiAndTrim(text) {
   return replaceControlChars(stripVTControlCharacters(text));
 }
-//@ chunk-t2bgh7t8.js:18249-18292 placement
+//@ chunk-fmakjjce.js:19440-19483 placement
 function pluralCount(count, singular, pluralForm) {
   return `${count} ${plural(count, singular, pluralForm)}`;
 }
-//@ chunk-t2bgh7t8.js:18292-18524 placement
+//@ chunk-fmakjjce.js:19483-19715 placement
 function noteOtherAutoModeSources() {
   for (let sourceName of AUTO_MODE_TRUSTED_SOURCES) {
     if (sourceName === "userSettings") continue;
@@ -272,7 +272,7 @@ function noteOtherAutoModeSources() {
     }
   }
 }
-//@ chunk-t2bgh7t8.js:18524-19793 layout
+//@ chunk-fmakjjce.js:19715-20984 layout
 var CRITIQUE_SYSTEM_PROMPT = `You are an expert reviewer of auto mode classifier rules for Claude Code.
 
 Claude Code has an "auto mode" that uses an AI classifier to decide whether tool calls should be auto-approved or require user confirmation. Users can write custom rules in four categories:
@@ -291,7 +291,7 @@ For each rule, evaluate:
 4. **Actionability**: Is the rule specific enough for the classifier to act on?
 
 Be concise and constructive. Only comment on rules that could be improved. If all rules look good, say so.`;
-//@ chunk-t2bgh7t8.js:19793-21319 fingerprint (2.1.88 match: autoModeCritiqueHandler, 0.525)
+//@ chunk-fmakjjce.js:20984-22510 fingerprint (2.1.88 match: autoModeCritiqueHandler, 0.525)
 /**
  * claude auto-mode critique：把用户的 autoMode 规则发给模型点评（CRITIQUE_SYSTEM_PROMPT）。
  */
@@ -383,7 +383,7 @@ Please critique these custom rules.`,
   await root.waitUntilExit();
   await logFeatureOkAsync("cli_auto_mode_critique");
 }
-//@ chunk-t2bgh7t8.js:21319-21667 sole-consumer
+//@ chunk-fmakjjce.js:22510-22858 sole-consumer
 function formatRulesForCritique(sectionName, customRules, defaultRules) {
   let filtered = customRules.filter((rule) => rule !== DEFAULTS_PLACEHOLDER);
   if (filtered.length === 0) return "";
@@ -418,8 +418,8 @@ function formatRulesForCritique(sectionName, customRules, defaultRules) {
   );
 }
 export {
-  ruleLabelOf,
   formatRulesForCritique_2,
+  ruleLabelOf,
   autoModeConfigHandler,
   autoModeCritiqueHandler,
   runAutoModeDefaults,

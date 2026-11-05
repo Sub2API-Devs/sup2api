@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：插件来源解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vbctfrwr.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8qpn2q62.js (2)
  * attribution: placement 2
  */
-import { isLocalMarketplaceSource } from "./reconciler.js";
+import { isLocalMarketplaceSource } from "./schemas.js";
 import {
   getPluginByIdCacheOnly,
   loadKnownMarketplacesSafe,
@@ -19,7 +19,7 @@ import { parsePluginIdentifier } from "./pluginIdentifier.js";
 import { isLocalMarketplaceEntry } from "./pluginDirectories.js";
 import { resolvePluginEntryPath, entryResolutionError } from "./localMarketplacePaths.js";
 
-//@ chunk-vbctfrwr.js:319-483 placement
+//@ chunk-8qpn2q62.js:319-483 placement
 function unresolvedForLocalMarketplace(source) {
   return source !== undefined && isLocalMarketplaceSource(source)
     ? {
@@ -30,7 +30,7 @@ function unresolvedForLocalMarketplace(source) {
         kind: "copy",
       };
 }
-//@ chunk-vbctfrwr.js:483-942 placement
+//@ chunk-8qpn2q62.js:483-942 placement
 /**
  * 根据缓存的市场条目判断插件来源：本地市场内的相对路径插件解析成目录路径；其他来源返回 copy； 本地市场条目解析失败时返回 unresolved 与原因。
  */

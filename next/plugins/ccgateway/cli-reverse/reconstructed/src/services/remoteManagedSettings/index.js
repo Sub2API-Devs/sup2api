@@ -3,10 +3,10 @@
  *
  * 远程托管设置：端点 /api/claude_code/settings（网关模式 /managed/settings），ETag/checksum 缓存到 remote-settings.json，启动时等待与后台刷新，校验后作为 policySettings 的 remote 层。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/index.ts
- * pieces: chunk-4pc1m5n9.js (34)
- * attribution: placement 13, fingerprint 5, layout 5, file-local 1, sole-consumer 7, callgraph-fingerprint 1, affinity 1, callgraph-witnessed 1
+ * pieces: chunk-a28agxjs.js (35)
+ * attribution: placement 13, fingerprint 5, layout 9, file-local 1, sole-consumer 5, callgraph-fingerprint 1, callgraph-witnessed 1
  */
 import { readFile } from "fs/promises";
 import { createHash } from "crypto";
@@ -71,8 +71,8 @@ import {
   isClaudeAISubscriber,
   getAnthropicApiKeyFingerprint,
   isProfileRemoteSettingsCredential,
-  hasAnthropicApiKeyAuth_2,
   getClaudeAIOAuthTokenOriginAsync,
+  getAnthropicApiKeyWithSourceSafe,
   injectedOAuthTokenRecovery,
   checkAndRefreshOAuthTokenIfNeededWithOutcome,
   handleOAuth401Error,
@@ -125,7 +125,7 @@ import {
 } from "./remoteSettingsCache.js";
 import { claimedCredential, envDriftDetected } from "../../entrypoints/warmSpare/claimCredentials.js";
 import { apiKeyForHost } from "../analytics/telemetryCredentialGuard.js";
-import { getEmail } from "../../utils/user.js";
+import { getEmailAsync } from "../../utils/user.js";
 import { HTTP_LOOPBACK, hostOf } from "../gateway/internalNetworks.js";
 import { gatewayJwtSubject } from "../../utils/telemetry/gatewayIdentityAttributes.js";
 import {
@@ -187,9 +187,9 @@ import {
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4pc1m5n9.js:2393-2436 placement
+//@ chunk-a28agxjs.js:2400-2443 placement
 var TENGU_MANAGED_CONFIG_PREFETCH_OFF = "tengu_managed_config_prefetch_off";
-//@ chunk-4pc1m5n9.js:2436-2588 placement
+//@ chunk-a28agxjs.js:2443-2595 placement
 /**
  * 是否预取托管配置（环境变量、第一方、开关）。
  */
@@ -203,7 +203,7 @@ function isManagedConfigPrefetchEnabled() {
     return false;
   return !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MANAGED_CONFIG_PREFETCH_OFF, false);
 }
-//@ chunk-4pc1m5n9.js:2588-3702 placement
+//@ chunk-a28agxjs.js:2595-3711 placement
 function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, fetchedAs, cachePath }) {
   let organizationUuid = fetchedAs?.organizationUuid;
   if (
@@ -274,7 +274,7 @@ function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, f
     return true;
   };
 }
-//@ chunk-4pc1m5n9.js:3702-4092 placement
+//@ chunk-a28agxjs.js:3711-4101 placement
 /**
  * 校验远程设置签名缓存并上报可信来源。
  */
@@ -301,7 +301,7 @@ function logTrustedSource({ jws, settings, cachePath, pinnedOrgs }) {
     logFeatureSad("remote_managed_settings_trusted_source", "error");
   }
 }
-//@ chunk-4pc1m5n9.js:6198-6493 placement
+//@ chunk-a28agxjs.js:6207-6502 placement
 function remoteSettingsCredentialKey() {
   if (getGatewayAuth()) return "gateway";
   let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
@@ -325,7 +325,7 @@ function remoteSettingsCredentialKey() {
     ]),
   );
 }
-//@ chunk-4pc1m5n9.js:6493-6684 placement (2.1.88 match: getClientSurface, 0.785)
+//@ chunk-a28agxjs.js:6502-6693 placement (2.1.88 match: getClientSurface, 0.785)
 function getClientSurface() {
   let userAgent = getUserAgent({
     ownEntrypoint: true,
@@ -339,7 +339,7 @@ function getClientSurface() {
         `, ${DESKTOP_3P_ENTRYPOINT}` +
         userAgent.slice(index + entrypointSuffix.length);
 }
-//@ chunk-4pc1m5n9.js:6684-6812 fingerprint (2.1.88 match: getRemoteManagedSettingsEndpoint, 0.739)
+//@ chunk-a28agxjs.js:6693-6821 fingerprint (2.1.88 match: getRemoteManagedSettingsEndpoint, 0.74)
 /**
  * 远程托管设置端点：网关模式为 <gateway>/managed/settings，否则 <BASE_API_URL>/api/claude_code/settings。
  */
@@ -348,12 +348,12 @@ function getRemoteManagedSettingsEndpoint() {
   if (gatewayAuth) return `${gatewayAuth.url}/managed/settings`;
   return `${getOauthConfig().BASE_API_URL}/api/claude_code/settings`;
 }
-//@ chunk-4pc1m5n9.js:6812-6895 layout
+//@ chunk-a28agxjs.js:6821-6904 layout
 function sanitizeRemoteSettings(settings) {
   if (!settings) return settings;
   return parsePolicyObjectTolerant(settings, "remote managed settings").settings ?? {};
 }
-//@ chunk-4pc1m5n9.js:6895-7486 layout
+//@ chunk-a28agxjs.js:6904-7495 layout
 function ruleRemoteSettingsPayload(payload, source) {
   let stripped = stripReservedKeys(payload);
   let policyObjectTolerant = parsePolicyObjectTolerant(stripped, source);
@@ -387,14 +387,14 @@ function ruleRemoteSettingsPayload(payload, source) {
     salvagedSettings: restoreSalvagedRemoteSettings(restored, policyObjectTolerant),
   };
 }
-//@ chunk-4pc1m5n9.js:7486-7576 file-local
+//@ chunk-a28agxjs.js:7495-7585 file-local
 function sortKeysDeep(obj) {
   let keys = Object.keys(obj);
   return (
     keys.length > 0 && keys.every((key) => RETENTION_POLICY_KEYS.some((allowedKey) => allowedKey === key))
   );
 }
-//@ chunk-4pc1m5n9.js:7576-7828 sole-consumer
+//@ chunk-a28agxjs.js:7585-7837 sole-consumer
 function restoreSubstitutedRemoteKeys(settings, original, ruling) {
   let filtered = [
     ...RETENTION_POLICY_KEYS.filter((key) => key in original && !(key in settings)),
@@ -408,17 +408,17 @@ function restoreSubstitutedRemoteKeys(settings, original, ruling) {
     ...Object.fromEntries(filtered.map((key) => [key, original[key]])),
   };
 }
-//@ chunk-4pc1m5n9.js:7828-7912 sole-consumer
+//@ chunk-a28agxjs.js:7837-7921 sole-consumer
 function sanitizeRemoteSettingsKeepingSubstitutes(payload) {
   let ruling = parsePolicyObjectTolerant(payload, "remote managed settings");
   return restoreSubstitutedRemoteKeys(ruling.settings ?? {}, payload, ruling);
 }
-//@ chunk-4pc1m5n9.js:7912-8010 sole-consumer
+//@ chunk-a28agxjs.js:7921-8019 sole-consumer
 function restoreSalvagedRemoteSettings(original, ruling) {
   let salvaged = ruling.errors.length > 0 ? (ruling.settings ?? {}) : undefined;
   return salvaged === undefined ? undefined : restoreSubstitutedRemoteKeys(salvaged, original, ruling);
 }
-//@ chunk-4pc1m5n9.js:8010-8688 sole-consumer
+//@ chunk-a28agxjs.js:8019-8697 sole-consumer
 async function fetchRemoteSettingsMockOrNull(options) {
   let mockRemoteSettingsValue = getMockRemoteSettingsValue();
   if (mockRemoteSettingsValue === undefined) return null;
@@ -434,7 +434,7 @@ async function fetchRemoteSettingsMockOrNull(options) {
       success: true,
       settings: {},
       checksum: undefined,
-      consentIdentity: await hasAnthropicApiKeyAuth_2(options),
+      consentIdentity: await hasAnthropicApiKeyAuth(options),
     };
   try {
     let mockRemoteSettingsFixturePath = getMockRemoteSettingsFixturePath();
@@ -456,7 +456,7 @@ async function fetchRemoteSettingsMockOrNull(options) {
       success: true,
       ...ruled,
       checksum: "mock",
-      consentIdentity: await hasAnthropicApiKeyAuth_2(options),
+      consentIdentity: await hasAnthropicApiKeyAuth(options),
     };
   } catch {
     return {
@@ -467,7 +467,7 @@ async function fetchRemoteSettingsMockOrNull(options) {
     };
   }
 }
-//@ chunk-4pc1m5n9.js:9352-12031 callgraph-fingerprint (2.1.88 match: getRemoteSettingsAuthHeaders, 0.275)
+//@ chunk-a28agxjs.js:9361-12040 callgraph-fingerprint (2.1.88 match: getRemoteSettingsAuthHeaders, 0.275)
 async function getRemoteSettingsAuthHeaders(credentials, options) {
   if (hasManagedSettings()) {
     let credential = claimedCredential();
@@ -588,7 +588,7 @@ async function getRemoteSettingsAuthHeaders(credentials, options) {
           authType: "profile",
           accessToken: token,
           profileBearer: true,
-          consentIdentity: getEmail(),
+          consentIdentity: getEmailAsync(),
         };
       }
     } catch (error) {
@@ -624,14 +624,14 @@ async function getRemoteSettingsAuthHeaders(credentials, options) {
     authType: "none",
   };
 }
-//@ chunk-4pc1m5n9.js:12031-12088 placement
+//@ chunk-a28agxjs.js:12040-12097 placement
 /**
  * 把 consentIdentityOf 的结果简化为同意身份对象。
  */
 async function consentIdentityAsync(credentials) {
   return (await consentIdentityOf(credentials)).consentIdentity;
 }
-//@ chunk-4pc1m5n9.js:12088-12383 placement
+//@ chunk-a28agxjs.js:12097-12392 placement
 async function consentIdentityOf(credentials) {
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
   let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
@@ -655,16 +655,16 @@ async function consentIdentityOf(credentials) {
       : undefined,
   };
 }
-//@ chunk-4pc1m5n9.js:12619-12650 placement
+//@ chunk-a28agxjs.js:12628-12659 placement
 var GATEWAY = "gateway:";
 var HYBRID = "hybrid:";
-//@ chunk-4pc1m5n9.js:12650-12678 placement
+//@ chunk-a28agxjs.js:12659-12687 placement
 async function hybridConsentIdentity(credentials) {
   return;
 }
-//@ chunk-4pc1m5n9.js:12678-12689 placement
+//@ chunk-a28agxjs.js:12687-12698 placement
 var MAX_GATEWAY_ACCOUNT_ID_CHARS = 256;
-//@ chunk-4pc1m5n9.js:12689-12991 placement
+//@ chunk-a28agxjs.js:12698-13000 placement
 function computeChecksumFromSettings(auth, fingerprint) {
   if (!isGatewayAuthPinned(auth) || !fingerprint || fingerprint === HTTP_LOOPBACK) return;
   let parsedUrl;
@@ -684,21 +684,40 @@ function computeChecksumFromSettings(auth, fingerprint) {
         : subject,
   };
 }
-//@ chunk-4pc1m5n9.js:12991-13047 placement
+//@ chunk-a28agxjs.js:13000-13056 placement
 /**
  * 读取某网关地址对应主机的信任状态。
  */
 async function gatewayTrustFor(gatewayAuth, credentials) {
   return readGatewayTrust(hostOf(new URL(gatewayAuth.url)), credentials);
 }
-//@ chunk-4pc1m5n9.js:13220-13566 sole-consumer
+//@ chunk-a28agxjs.js:13056-13229 layout (2.1.88 match: hasAnthropicApiKeyAuth, 1)
+async function hasAnthropicApiKeyAuth(options) {
+  let gatewayAuth = getGatewayAuth();
+  if (gatewayAuth)
+    return computeChecksumFromSettings(
+      gatewayAuth,
+      await gatewayTrustFor(gatewayAuth, options).catch(() => {
+        return;
+      }),
+    );
+  if (
+    getAnthropicApiKeyWithSourceSafe({
+      skipRetrievingKeyFromApiKeyHelper: true,
+    }).key === null &&
+    isProfileRemoteSettingsCredential()
+  )
+    return getEmailAsync();
+  return consentIdentityAsync(options);
+}
+//@ chunk-a28agxjs.js:13229-13575 layout
 /**
  * 同意身份与拉取身份一致时写同意记录。
  */
 async function recordConsentIfSameIdentity(consentIdentity, settings, storageV5, credentials) {
   if (!consentIdentity) return;
   let currentIdentity = consentIdentity.organizationUuid.startsWith(GATEWAY)
-    ? await hasAnthropicApiKeyAuth_2(credentials)
+    ? await hasAnthropicApiKeyAuth(credentials)
     : consentIdentity.organizationUuid.startsWith(HYBRID)
       ? await hybridConsentIdentity(credentials)
       : getStoredOauthAccountInfo();
@@ -713,18 +732,18 @@ async function recordConsentIfSameIdentity(consentIdentity, settings, storageV5,
   }
   await writeConsentRecords(consentIdentity, settings, storageV5);
 }
-//@ chunk-4pc1m5n9.js:13566-13760 sole-consumer
+//@ chunk-a28agxjs.js:13575-13769 layout
 function wasResetDuringFetch(syncCacheResetEpoch) {
   if (getSyncCacheResetEpoch() === syncCacheResetEpoch) return false;
   logForDebugging("Remote settings: Cache was reset (login/logout) during this fetch; discarding its result");
   logFeatureSad("remote_managed_settings_pull", "reset_during_fetch");
   return true;
 }
-//@ chunk-4pc1m5n9.js:13760-13849 affinity
+//@ chunk-a28agxjs.js:13769-13858 layout
 function formatRemoteSettingsErrorKind(failure) {
   return failure.httpStatus !== undefined ? `${failure.errorKind}/${failure.httpStatus}` : failure.errorKind;
 }
-//@ chunk-4pc1m5n9.js:13849-14681 fingerprint (2.1.88 match: fetchWithRetry, 0.314)
+//@ chunk-a28agxjs.js:13858-14690 fingerprint (2.1.88 match: fetchWithRetry, 0.314)
 async function fetchWithRetry(etag, options) {
   let remoteSettingsMockOrNull = await fetchRemoteSettingsMockOrNull(options.credentials);
   if (remoteSettingsMockOrNull) return remoteSettingsMockOrNull;
@@ -780,12 +799,12 @@ async function fetchWithRetry(etag, options) {
   }
   return lastResult;
 }
-//@ chunk-4pc1m5n9.js:14681-14699 layout
+//@ chunk-a28agxjs.js:14690-14708 layout
 var now; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4pc1m5n9.js:14681", () => {
+deferInit("chunk-a28agxjs.js:14690", () => {
   now = Date.now();
 });
-//@ chunk-4pc1m5n9.js:14699-15794 layout
+//@ chunk-a28agxjs.js:14708-15803 layout
 function classifyRemoteSettingsFailure(failure) {
   let errorCode = (() => {
     switch (failure.errorKind) {
@@ -839,7 +858,7 @@ function classifyRemoteSettingsFailure(failure) {
     noResponse: failure.noResponse,
   });
 }
-//@ chunk-4pc1m5n9.js:15794-21412 fingerprint (2.1.88 match: fetchRemoteManagedSettings, 0.355)
+//@ chunk-a28agxjs.js:15803-21421 fingerprint (2.1.88 match: fetchRemoteManagedSettings, 0.355)
 /**
  * 单次请求远程设置端点（OAuth Bearer 或 API key），区分 200/204/304/404 与失败类型，带重试。
  */
@@ -1201,17 +1220,17 @@ async function fetchRemoteManagedSettings(etag, isRetry = false, credentials, si
     }
   }
 }
-//@ chunk-4pc1m5n9.js:21412-21497 layout
+//@ chunk-a28agxjs.js:21421-21506 layout
 /**
  * 哨兵值：保存远程设置时保留已存的签名/语句，不被这次结果覆盖。
  */
 var KEEP_STORED_STATEMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BODY_JUST_RECEIVED;
-deferInit("chunk-4pc1m5n9.js:21412", () => {
+deferInit("chunk-a28agxjs.js:21421", () => {
   KEEP_STORED_STATEMENT = Symbol("keep the stored statement");
   BODY_JUST_RECEIVED = Symbol("the server sent the body now");
 });
-//@ chunk-4pc1m5n9.js:21497-22630 fingerprint (2.1.88 match: saveSettings, 0.338)
+//@ chunk-a28agxjs.js:21506-22640 fingerprint (2.1.88 match: saveSettings, 0.338)
 /**
  * 把远程设置写入缓存（storage 后端或 <配置目录>/remote-settings.json）。
  */
@@ -1277,7 +1296,7 @@ async function saveSettings(settings, storageV5, signature, hybridOrgUuid, bodyR
     logForDebugging(`Remote settings: Failed to save helper consent - ${errorMessage(error)}`);
   }
 }
-//@ chunk-4pc1m5n9.js:23311-33728 callgraph-witnessed (2.1.88 match: fetchAndLoadRemoteManagedSettings, 0.072)
+//@ chunk-a28agxjs.js:23321-33778 callgraph-witnessed (2.1.88 match: fetchAndLoadRemoteManagedSettings, 0.072)
 /**
  * 获取远程托管设置：不符合条件返回 ineligible；CLAUDE_CODE_REMOTE_SETTINGS_PATH 覆盖文件或受限子进程直接用本地快照；否则带缓存 checksum 请求端点（304 沿用缓存），校验签名/组织后写入 remote-settings.json 缓存并作为 policy 的 remote 层。
  */
@@ -1549,6 +1568,9 @@ async function fetchAndLoadRemoteManagedSettings(options) {
         ...(fetched.noResponse === true && {
           noResponse: true,
         }),
+        ...(fetched.errno !== undefined && {
+          errno: fetched.errno,
+        }),
         ...(stampedServerErrorType(fetched) !== undefined && {
           serverErrorType: stampedServerErrorType(fetched),
           ...(fetched.serverErrorCode !== undefined && {
@@ -1665,7 +1687,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
               settings: consentedBaseline,
             };
       let code = sanitizeRemoteSettings(nextSettings);
-      let result = await checkManagedSettingsSecurity(
+      let securityOutcome = await checkManagedSettingsSecurity(
         consentBaseline,
         code,
         options.showSecurityDialog,
@@ -1684,8 +1706,8 @@ async function fetchAndLoadRemoteManagedSettings(options) {
           fetchSucceeded: false,
           resolution: "reset",
         };
-      if (!handleSecurityCheckResult(result)) {
-        if (result === "superseded") {
+      if (!handleSecurityCheckResult(securityOutcome)) {
+        if (securityOutcome === "superseded") {
           logForDebugging(
             "Remote settings: A newer fetch took over the pending consent review; leaving the decision to it",
           );
@@ -1695,7 +1717,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
             resolution: "consent_superseded",
           };
         }
-        if (result === "deferred_no_consent_surface") {
+        if (securityOutcome === "deferred_no_consent_surface") {
           let isDeferred = hasDeclaredNoConsentSurface();
           if (isDeferred) {
             logForDebugging(
@@ -1723,7 +1745,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
       }
       setSessionCache(nextSettings, {
         verified: true,
-        consentDeferred: result === "deferred_non_interactive",
+        consentDeferred: securityOutcome === "deferred_non_interactive",
       });
       if (!alreadyVerified) {
         await reapplyEnvAfterSettings();
@@ -1734,7 +1756,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
             resolution: "reset",
           };
       }
-      switch (result) {
+      switch (securityOutcome) {
         case "approved":
         case "first_party_silent":
         case "no_check_needed":
@@ -1879,7 +1901,7 @@ async function fetchAndLoadRemoteManagedSettings(options) {
     };
   }
 }
-//@ chunk-4pc1m5n9.js:37968-38041 fingerprint (2.1.88 match: loadRemoteManagedSettings, 1)
+//@ chunk-a28agxjs.js:38028-38101 fingerprint (2.1.88 match: loadRemoteManagedSettings, 1)
 function loadRemoteManagedSettings_2() {
   try {
     markPolicySettingsNotified();
@@ -1888,7 +1910,7 @@ function loadRemoteManagedSettings_2() {
     logError(error);
   }
 }
-//@ chunk-4pc1m5n9.js:38041-38764 sole-consumer
+//@ chunk-a28agxjs.js:38101-38824 sole-consumer
 /**
  * 远程设置变化后重新应用环境、代理、证书与 mTLS。
  */
@@ -1935,9 +1957,6 @@ async function reapplyEnvAfterSettings() {
   }
 }
 export {
-  computeChecksumFromSettings,
-  gatewayTrustFor,
-  consentIdentityAsync,
   getRemoteManagedSettingsEndpoint,
   remoteSettingsCredentialKey,
   fetchRemoteManagedSettings,

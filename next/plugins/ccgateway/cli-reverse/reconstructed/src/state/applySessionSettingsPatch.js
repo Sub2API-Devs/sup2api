@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：应用会话设置补丁
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cdj2k0y0.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9xs31xrj.js (1)
  * attribution: placement 1
  */
 import { isDeepStrictEqual } from "util";
 import { readAutoCompactWindowSetting } from "../services/compact/autoCompactWindow.js";
 
-//@ chunk-cdj2k0y0.js:269-1172 placement
+//@ chunk-9xs31xrj.js:269-1172 placement
 /**
  * 把会话设置补丁写入 AppState：逐项处理 cacheBreakerPhrase、autoCompactWindow、briefTranscript、isBriefOnly、slackTagConnected、fastMode 与 model（同时更新会话主循环模型），值未变化时保持原对象。
  */

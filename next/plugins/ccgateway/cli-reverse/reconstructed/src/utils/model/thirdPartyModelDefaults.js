@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：环境变量是否为探测写入的值；用户自己配置的第三方默认模型等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (10)
  * attribution: placement 10
  */
 import { isClaudeAISubscriber } from "../auth.js";
@@ -14,11 +14,11 @@ import { isFirstPartyAnthropicBaseUrl } from "./providers.js";
 import { is1mContextDisabled } from "./contextWindow1m.js";
 import { isExtraUsageEnabled } from "./check1mAccess.js";
 
-//@ chunk-aepeg2w5.js:418830-418891 placement
+//@ chunk-exfmq47h.js:430221-430282 placement
 function probesThirdPartyDefaults() {
   return isClaudeAISubscriber() && (!!env.ANTHROPIC_UNIX_SOCKET || isFirstPartyAnthropicBaseUrl());
 }
-//@ chunk-aepeg2w5.js:418891-418951 placement
+//@ chunk-exfmq47h.js:430282-430342 placement
 /**
  * 是否探测第三方默认模型。
  */
@@ -27,7 +27,7 @@ function shouldProbeThirdPartyDefaults() {
   if (probesThirdPartyDefaults()) return isExtraUsageEnabled();
   return true;
 }
-//@ chunk-aepeg2w5.js:418951-419011 placement
+//@ chunk-exfmq47h.js:430342-430402 placement
 /**
  * 是否探测第三方默认模型（另一路径）。
  */
@@ -36,12 +36,12 @@ function shouldProbeThirdPartyDefaultsAlt() {
   if (probesThirdPartyDefaults()) return isExtraUsageEnabled();
   return true;
 }
-//@ chunk-aepeg2w5.js:419011-419062 placement
+//@ chunk-exfmq47h.js:430402-430453 placement
 /**
  * 探测写入的默认模型族名列表（Fable/Haiku/Mythos/Opus/Sonnet）。
  */
 var DEFAULT_MODEL_FAMILY_NAMES = ["Fable", "Haiku", "Mythos", "Opus", "Sonnet"];
-//@ chunk-aepeg2w5.js:419062-419258 placement
+//@ chunk-exfmq47h.js:430453-430649 placement
 /**
  * 判断值是否为探测写入的默认模型值（可带数字后缀）。
  */
@@ -53,7 +53,7 @@ function isProbeWrittenValue(value) {
     return sliced !== "" && sliced === sliced.trim() && Number.isFinite(Number(sliced));
   });
 }
-//@ chunk-aepeg2w5.js:419258-419303 placement
+//@ chunk-exfmq47h.js:430649-430694 placement
 /**
  * 取第一个词。
  */
@@ -61,7 +61,7 @@ function firstWord(value) {
   let [word] = value.split(" ");
   return word;
 }
-//@ chunk-aepeg2w5.js:419303-419604 placement
+//@ chunk-exfmq47h.js:430694-430995 placement
 /**
  * 记录探测写入的默认模型环境变量。
  */
@@ -73,7 +73,7 @@ function recordProbedDefault(envVar, value) {
   else if (envVar === "ANTHROPIC_DEFAULT_HAIKU_MODEL")
     env.set("CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT", value);
 }
-//@ chunk-aepeg2w5.js:419604-419799 placement
+//@ chunk-exfmq47h.js:430995-431190 placement
 /**
  * 记录探测写入的第三方 Sonnet/Opus 默认值到环境变量。
  */
@@ -81,7 +81,7 @@ function recordSeededDefault(envVar, value) {
   if (envVar === "ANTHROPIC_DEFAULT_SONNET_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_SONNET_DEFAULT", value);
   else if (envVar === "ANTHROPIC_DEFAULT_OPUS_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_OPUS_DEFAULT", value);
 }
-//@ chunk-aepeg2w5.js:419799-420157 placement
+//@ chunk-exfmq47h.js:431190-431548 placement
 /**
  * 环境变量是否为探测写入的值。
  */
@@ -101,7 +101,7 @@ function isProbedDefault(envVar) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:420157-420461 placement
+//@ chunk-exfmq47h.js:431548-431852 placement
 /**
  * 用户自己配置的第三方默认模型。
  */
@@ -117,11 +117,11 @@ function userConfiguredDefault(tierForEnvVar) {
 export {
   isProbeWrittenValue,
   firstWord,
+  isProbedDefault,
+  userConfiguredDefault,
   shouldProbeThirdPartyDefaults,
   shouldProbeThirdPartyDefaultsAlt,
-  userConfiguredDefault,
   recordProbedDefault,
-  recordSeededDefault,
   DEFAULT_MODEL_FAMILY_NAMES,
-  isProbedDefault,
+  recordSeededDefault,
 };

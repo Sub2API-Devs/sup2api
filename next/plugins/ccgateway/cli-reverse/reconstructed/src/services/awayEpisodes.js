@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：用户离开期间的事件段记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-21z2m00n.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gcmgcxyg.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-21z2m00n.js:191-1057 placement
+//@ chunk-gcmgcxyg.js:191-1057 placement
 /**
  * 跟踪"用户离开"期间告诉过模型的远程主机：told 记录某会话下被告知离开的主机；takeReturn 在主机回来时取出一次返回提示（离开时长），并在离开记录被丢弃时同步清理。
  */

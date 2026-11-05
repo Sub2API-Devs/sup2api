@@ -3,28 +3,27 @@
  *
  * 并入旧版已有路径：vim 操作符。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/operators.ts
- * pieces: chunk-530hfzwb.js (58)
+ * pieces: chunk-880p06ha.js (58)
  * attribution: fingerprint 16, layout 32, file-local 1, affinity 2, placement 7
  */
 import { resolveMotion, CHAR_MOTIONS } from "./types.js";
 import { isLinewiseMotion, isInclusiveMotion } from "./motions.js";
 import {
-  truncateStartToWidth,
+  displayColumnToOffset,
   getCursorDisplayColumn,
   Cursor,
-  wrapText,
+  firstNonBlankOffset,
   isWhitespaceChar,
 } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 import { isImagePlaceholder } from "../commands.js";
-import { firstGrapheme, lastGrapheme, getGraphemeSegmenter } from "../utils/intl.js";
+import { firstGrapheme, lastGrapheme, countGraphemes, getGraphemeSegmenter } from "../utils/intl.js";
 import { countCharInString } from "../utils/stringUtils.js";
-import { countGraphemes } from "../ink/output.js";
 import { getSecuritySensitiveSetting } from "../utils/settings/settings.js";
 
-//@ chunk-530hfzwb.js:4643-5841 fingerprint (2.1.88 match: executeLineOp, 0.678)
+//@ chunk-880p06ha.js:4644-5842 fingerprint (2.1.88 match: executeLineOp, 0.667)
 /**
  * 操作符 + 移动（如 dw、c$、yj、dgj）：整行移动（j k G gg）按行处理；移动没动且不是包含式移动时只做空操作的副作用（c 进插入、y 清寄存器）；否则用 getOperatorRange 算范围（cw 特例、w 跨行截断、整行化判断）后应用操作并记录可重复的修改。
  */
@@ -48,7 +47,7 @@ function executeOperatorMotion(op, motion, count, ctx) {
         lineStartAt,
       );
       let lineEndOffset = index === -1 ? ctx.text.length : index;
-      let clampedOffset = truncateStartToWidth(
+      let clampedOffset = displayColumnToOffset(
         ctx.text,
         lineStartAt,
         lineEndOffset,
@@ -119,7 +118,7 @@ function executeOperatorMotion(op, motion, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:5841-6069 fingerprint (2.1.88 match: executeOperatorFind, 0.948)
+//@ chunk-880p06ha.js:5842-6070 fingerprint (2.1.88 match: executeOperatorFind, 0.944)
 /**
  * 操作符 + 查找（如 dfx、ct)）：找到目标字符后对包含式范围应用操作，并记住这次查找供 ; , 重复。
  */
@@ -138,7 +137,7 @@ function executeOperatorFind(op, findType, char, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6069-6362 fingerprint (2.1.88 match: executeOperatorTextObj, 0.718)
+//@ chunk-880p06ha.js:6070-6363 fingerprint (2.1.88 match: executeOperatorTextObj, 0.701)
 /**
  * 操作符 + 文本对象（如 diw、ca"、yi(）：用 findTextObject 求范围后应用；yi( 这类内容从换行开始时光标落到下一行。
  */
@@ -164,7 +163,7 @@ function executeOperatorTextObj(op, scope, objType, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6362-6714 fingerprint (2.1.88 match: executeOperatorMotion, 0.593)
+//@ chunk-880p06ha.js:6363-6715 fingerprint (2.1.88 match: executeOperatorMotion, 0.559)
 /**
  * 双写操作符（dd、cc、yy、S、Y）：对从当前行起的 count 行做整行操作；count>1 但光标后已没有换行时不执行。
  */
@@ -203,7 +202,7 @@ function executeLineOp(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6714-6960 fingerprint (2.1.88 match: executeX, 0.853)
+//@ chunk-880p06ha.js:6715-6961 fingerprint (2.1.88 match: executeX, 0.838)
 /**
  * x：删除光标处 count 个字符（不跨行），存入寄存器。
  */
@@ -222,7 +221,7 @@ function executeX(count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:6960-7158 layout
+//@ chunk-880p06ha.js:6961-7159 layout
 /**
  * s：删除 count 个字符并进入插入模式。
  */
@@ -239,7 +238,7 @@ function executeSubstitute(count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:7158-7421 fingerprint (2.1.88 match: executeReplace, 0.952)
+//@ chunk-880p06ha.js:7159-7422 fingerprint (2.1.88 match: executeReplace, 0.948)
 /**
  * r{char}：把光标起 count 个字素替换为该字符（遇到行尾则不执行）。
  */
@@ -265,7 +264,7 @@ function executeReplace(char, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:7421-7809 fingerprint (2.1.88 match: executeToggleCase, 0.769)
+//@ chunk-880p06ha.js:7422-7810 fingerprint (2.1.88 match: executeToggleCase, 0.755)
 /**
  * ~：切换光标起 count 个字素的大小写（NFC 规范化），光标后移。
  */
@@ -299,7 +298,7 @@ function executeToggleCase(count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:7809-8060 layout
+//@ chunk-880p06ha.js:7810-8061 layout
 /**
  * J：把当前行与后面 max(count,2)-1 行合并。
  */
@@ -320,7 +319,7 @@ function executeJoinLines(count, ctx) {
   let min = Math.min(Math.max(count, 2) - 1, lines.length - lineIndex - 1);
   executeJoin(lines, lineIndex, min, ctx);
 }
-//@ chunk-530hfzwb.js:8060-8398 fingerprint (2.1.88 match: executeJoin, 0.763)
+//@ chunk-880p06ha.js:8061-8399 fingerprint (2.1.88 match: executeJoin, 0.739)
 /**
  * 合并行：去掉后续行行首空白，必要时补一个空格（下一行以 ) 开头或上一段以空白结尾时不补），光标停在最后一个连接点。
  */
@@ -351,7 +350,7 @@ function executeJoin(lines, lineIndex, joinCount, ctx) {
     count: joinCount + 1,
   });
 }
-//@ chunk-530hfzwb.js:8398-9239 fingerprint (2.1.88 match: executePaste, 0.554)
+//@ chunk-880p06ha.js:8399-9241 fingerprint (2.1.88 match: executePaste, 0.568)
 /**
  * p/P：按寄存器是否整行分两种：整行内容插到当前行下/上方并把光标放到首个非空字符；字符内容插到光标后/前，光标停在插入内容最后一个字素。
  */
@@ -385,7 +384,7 @@ function executePaste(after, count, ctx) {
 `);
     let lineStartOffset = getLineStartOffset(newLines, insertLine);
     let firstLineCursor = Cursor.fromText(contentLines[0] ?? "", ctx.cursor.measuredText.columns);
-    let firstNonBlank = firstNonBlankOffset(firstLineCursor);
+    let firstNonBlank = firstNonBlankOffset_2(firstLineCursor);
     ctx.setText(newText, {
       previous: {
         value: text,
@@ -424,7 +423,7 @@ function executePaste(after, count, ctx) {
     ctx.setOffset(lastGr);
   }
 }
-//@ chunk-530hfzwb.js:9239-9506 fingerprint (2.1.88 match: executeIndent, 0.834)
+//@ chunk-880p06ha.js:9241-9508 fingerprint (2.1.88 match: executeIndent, 0.819)
 /**
  * >> / <<：给当前行起 count 行加/减两个空格缩进（减时也去掉一个 tab 或最多两个空白）。
  */
@@ -437,7 +436,7 @@ function executeIndent(dir, count, ctx) {
   indentLines(lines, from, from + linesToAffect - 1, dir);
   let newText = lines.join(`
 `);
-  let firstLineWidth = wrapText(lines[from] ?? "");
+  let firstLineWidth = firstNonBlankOffset(lines[from] ?? "");
   ctx.setText(newText);
   ctx.setOffset(getLineStartOffset(lines, from) + firstLineWidth);
   ctx.recordChange({
@@ -446,7 +445,7 @@ function executeIndent(dir, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:9506-9778 fingerprint (2.1.88 match: executeOpenLine, 0.808)
+//@ chunk-880p06ha.js:9508-9780 fingerprint (2.1.88 match: executeOpenLine, 0.807)
 /**
  * o/O：在当前行下/上方插入空行并进入插入模式。
  */
@@ -472,11 +471,11 @@ function executeOpenLine(direction, ctx) {
     direction,
   });
 }
-//@ chunk-530hfzwb.js:9778-9829 layout
+//@ chunk-880p06ha.js:9780-9831 layout
 function recordRepeatableChange(ctx, change) {
   if (change.op !== "yank") ctx.recordChange(change);
 }
-//@ chunk-530hfzwb.js:9829-9956 layout
+//@ chunk-880p06ha.js:9831-9958 layout
 function advanceCharsInLine(ctx, count) {
   let cursor = ctx.cursor;
   for (let i = 0; i < count && !cursor.isAtEnd(); i++) {
@@ -490,14 +489,14 @@ function advanceCharsInLine(ctx, count) {
   }
   return cursor.offset;
 }
-//@ chunk-530hfzwb.js:9956-10019 file-local
+//@ chunk-880p06ha.js:9958-10021 file-local
 function getLineStartOffset(lines, lineIndex) {
   return (
     lines.slice(0, lineIndex).join(`
 `).length + (lineIndex > 0 ? 1 : 0)
   );
 }
-//@ chunk-530hfzwb.js:10019-11262 fingerprint (2.1.88 match: getOperatorRange, 0.852)
+//@ chunk-880p06ha.js:10021-11264 fingerprint (2.1.88 match: getOperatorRange, 0.852)
 /**
  * 操作符 + 移动的范围计算（vim 兼容细节）：cw 当作 ce；dw/yw 不越过行尾；包含式移动（e E $ %）把终点含进去；跨行删除且前面只有空白时整行化。最后把起止点推出占位符（图片/粘贴占位）之外。
  */
@@ -588,14 +587,14 @@ function getOperatorRange(cursor, target, motion, op, count) {
     linewise,
   };
 }
-//@ chunk-530hfzwb.js:11262-11371 layout
+//@ chunk-880p06ha.js:11264-11373 layout
 function clampWordMotionToLineEnd(cursor, motion, count, targetOffset) {
   let motion_2 = resolveMotion(motion, cursor, count - 1);
   let offset = motion_2.endOfLogicalLine().offset;
   if (targetOffset <= offset) return targetOffset;
   return offset > motion_2.offset ? offset : offset + 1;
 }
-//@ chunk-530hfzwb.js:11371-11567 layout
+//@ chunk-880p06ha.js:11373-11569 layout
 function getFindRange(cursor, target, _findType) {
   let max = Math.max(cursor.offset, target.offset);
   let from = cursor.snapOutOfPlaceholder(Math.min(cursor.offset, target.offset), "start");
@@ -605,7 +604,7 @@ function getFindRange(cursor, target, _findType) {
     to,
   };
 }
-//@ chunk-530hfzwb.js:11567-11918 fingerprint (2.1.88 match: applyOperator, 0.962)
+//@ chunk-880p06ha.js:11569-11920 fingerprint (2.1.88 match: applyOperator, 0.962)
 /**
  * 对字符范围应用操作：内容写寄存器（整行时补换行）；yank 只移动光标；delete 删除并修正光标；change 删除后进入插入模式。
  */
@@ -632,7 +631,7 @@ function applyOperator(op, from, to, ctx, linewise = false) {
     ctx.enterInsert(from);
   }
 }
-//@ chunk-530hfzwb.js:11918-12095 layout
+//@ chunk-880p06ha.js:11920-12099 layout
 /**
  * 普通模式光标不能停在行尾换行符上或文本末尾之后：退回到前一个字素。
  */
@@ -655,7 +654,7 @@ function clampCursorOffset(text, offset) {
     return Math.max(0, text.length - (lastGrapheme(text).length || 1));
   return offset;
 }
-//@ chunk-530hfzwb.js:12095-12258 layout
+//@ chunk-880p06ha.js:12099-12262 layout
 function snapToPlaceholderEnd(cursor, offset, lineStart) {
   let placeholder = placeholderAt(cursor, offset);
   let currentOffset = offset;
@@ -668,17 +667,17 @@ function snapToPlaceholderEnd(cursor, offset, lineStart) {
   while ((placeholder = placeholderAt(cursor, end))) end = placeholder.end;
   return end;
 }
-//@ chunk-530hfzwb.js:12258-12349 layout
+//@ chunk-880p06ha.js:12262-12353 layout
 function placeholderAt(cursor, offset) {
   let snappedOffset = cursor.snapOutOfPlaceholder(offset, "start");
   return cursor.placeholderStartingAt(snappedOffset);
 }
-//@ chunk-530hfzwb.js:12349-12439 layout
+//@ chunk-880p06ha.js:12353-12443 layout
 function clampOffsetOutsidePlaceholder(cursor, offset, text = cursor.text) {
   let clampedOffset = clampCursorOffset(text, offset);
   return cursor.snapOutOfPlaceholder(clampedOffset, "start") === clampedOffset ? clampedOffset : offset;
 }
-//@ chunk-530hfzwb.js:12439-12999 layout
+//@ chunk-880p06ha.js:12443-13003 layout
 /**
  * gj/gk 的屏幕行移动：按折行后的行计算目标位置并保持目标列（wantedColumn）；返回 {offset, column, rowsRunOut}。
  */
@@ -700,7 +699,7 @@ function computeScreenLineMove(motion, count, ctx) {
     };
   let cursorDisplayColumn = getCursorDisplayColumn(cursor, ctx.wantedColumn);
   let rowEndOffset = targetRow.startOffset + targetRow.text.length;
-  let clampedOffset = truncateStartToWidth(
+  let clampedOffset = displayColumnToOffset(
     cursor.text,
     targetRow.startOffset,
     rowEndOffset,
@@ -717,7 +716,7 @@ function computeScreenLineMove(motion, count, ctx) {
     rowsRunOut,
   };
 }
-//@ chunk-530hfzwb.js:12999-13083 layout
+//@ chunk-880p06ha.js:13003-13087 layout
 function getLineStartAt(text, offset) {
   if (offset === 0) return 0;
   let index = text.lastIndexOf(
@@ -727,7 +726,7 @@ function getLineStartAt(text, offset) {
   );
   return index === -1 ? 0 : index + 1;
 }
-//@ chunk-530hfzwb.js:13083-13165 layout
+//@ chunk-880p06ha.js:13087-13169 layout
 /**
  * 可视模式记录跨度：整行时为行数，否则为字素数（供 . 重复同样大小的可视操作）。
  */
@@ -745,7 +744,7 @@ function measureSpan(text, countLines) {
   }
   return countGraphemes(text);
 }
-//@ chunk-530hfzwb.js:13165-13449 fingerprint (2.1.88 match: getOperatorRangeForFind, 0.907)
+//@ chunk-880p06ha.js:13169-13453 fingerprint (2.1.88 match: getOperatorRangeForFind, 0.907)
 /**
  * 用记录的跨度从当前光标重建可视范围（. 重复可视操作时用）。
  */
@@ -780,7 +779,7 @@ function getRepeatVisualRange(cursor, target, _findType) {
     to: endOffset,
   };
 }
-//@ chunk-530hfzwb.js:13449-13676 layout (2.1.88 match: getOperatorRangeForFind, 0.907)
+//@ chunk-880p06ha.js:13453-13680 layout (2.1.88 match: getOperatorRangeForFind, 0.907)
 /**
  * 可视选区范围：字符可视为 [min, max+1)，整行可视扩到首行行首至末行换行之后。
  */
@@ -805,7 +804,7 @@ function getVisualRange(cursor, target, _findType) {
     to,
   };
 }
-//@ chunk-530hfzwb.js:13676-13936 layout
+//@ chunk-880p06ha.js:13680-13940 layout
 function indentLines(lines, from, to, direction) {
   for (let line = from; line <= to; line++) {
     let lineText = lines[line] ?? "";
@@ -820,7 +819,7 @@ function indentLines(lines, from, to, direction) {
     }
   }
 }
-//@ chunk-530hfzwb.js:13936-14267 layout
+//@ chunk-880p06ha.js:13940-14271 layout
 function executeVisualJoin(anchor, ctx, linewise) {
   let min = Math.min(anchor, ctx.cursor.offset);
   let max = Math.max(anchor, ctx.cursor.offset);
@@ -849,13 +848,13 @@ function executeVisualJoin(anchor, ctx, linewise) {
   let max_2 = Math.max(1, Math.min(lineSpan - 1, lines.length - lineIndex - 1));
   executeJoin(lines, lineIndex, max_2, ctx);
 }
-//@ chunk-530hfzwb.js:14267-14363 layout
+//@ chunk-880p06ha.js:14271-14367 layout
 function executeJoinIfNotLastLine(count, ctx) {
   let lines = ctx.text.split(`
 `);
   if (getLineIndexAt(ctx.cursor.text, ctx.cursor.offset) < lines.length - 1) executeJoinLines(count, ctx);
 }
-//@ chunk-530hfzwb.js:14363-14684 layout
+//@ chunk-880p06ha.js:14367-14688 layout
 function executeVisualIndent(direction, count, anchor, ctx) {
   let min = Math.min(anchor, ctx.cursor.offset);
   let max = Math.max(anchor, ctx.cursor.offset);
@@ -877,7 +876,7 @@ function executeVisualIndent(direction, count, anchor, ctx) {
   for (let k = 0; k < count; k++) indentLines(lines, fromLine, toLine, direction);
   let joined = lines.join(`
 `);
-  let firstLineWidth = wrapText(lines[fromLine] ?? "");
+  let firstLineWidth = firstNonBlankOffset(lines[fromLine] ?? "");
   ctx.setText(joined);
   ctx.setOffset(getLineStartOffset(lines, fromLine) + firstLineWidth);
   ctx.recordChange({
@@ -887,7 +886,7 @@ function executeVisualIndent(direction, count, anchor, ctx) {
     lines: toLine - fromLine + 1,
   });
 }
-//@ chunk-530hfzwb.js:14684-14899 layout
+//@ chunk-880p06ha.js:14688-14903 layout
 function repeatVisualIndent(direction, count, lines, ctx) {
   let text = ctx.text;
   let lines_2 = text.split(`
@@ -901,11 +900,11 @@ function repeatVisualIndent(direction, count, lines, ctx) {
   for (let k = 0; k < count; k++) indentLines(lines_2, fromLine, min, direction);
   let joined = lines_2.join(`
 `);
-  let firstLineWidth = wrapText(lines_2[fromLine] ?? "");
+  let firstLineWidth = firstNonBlankOffset(lines_2[fromLine] ?? "");
   ctx.setText(joined);
   ctx.setOffset(getLineStartOffset(lines_2, fromLine) + firstLineWidth);
 }
-//@ chunk-530hfzwb.js:14899-15594 layout
+//@ chunk-880p06ha.js:14903-15598 layout
 /**
  * 对可视选区应用操作：整行 c 留一个空行进插入；整行 d 删除整行并把光标放到下一行首个非空；其他走 applyOperator。
  */
@@ -976,7 +975,7 @@ function applyVisualOperator(op, from, to, ctx, linewise, selectionEndsLine = fa
   }
   applyOperator(op, from, to, ctx, linewise);
 }
-//@ chunk-530hfzwb.js:15594-15738 layout
+//@ chunk-880p06ha.js:15598-15742 layout
 function executeVisualOperator(op, anchor, ctx, linewise) {
   let { from, to } = getVisualRange(anchor, ctx, linewise);
   let span = measureSpan(ctx.text.slice(from, to), linewise);
@@ -988,13 +987,13 @@ function executeVisualOperator(op, anchor, ctx, linewise) {
     linewise,
   });
 }
-//@ chunk-530hfzwb.js:15738-15839 layout
+//@ chunk-880p06ha.js:15742-15843 layout
 function repeatVisualOperator(op, span, linewise, ctx) {
   let { from, to } = getRepeatVisualRange(ctx, span, linewise);
   if (from === to && !(linewise && ctx.text.length > 0)) return;
   applyVisualOperator(op, from, to, ctx, linewise);
 }
-//@ chunk-530hfzwb.js:15839-16091 layout
+//@ chunk-880p06ha.js:15843-16095 layout
 function repeatVisualChange(span, linewise, ctx) {
   let { from, to } = getRepeatVisualRange(ctx, span, linewise);
   if (from === to && !linewise) return;
@@ -1020,7 +1019,7 @@ function repeatVisualChange(span, linewise, ctx) {
   ctx.setText(ctx.text.slice(0, from) + tailText);
   ctx.enterInsert(from);
 }
-//@ chunk-530hfzwb.js:16091-16284 layout
+//@ chunk-880p06ha.js:16095-16288 layout
 function replaceRangeWithChar(char, from, to, ctx) {
   let sliced = ctx.text.slice(from, to);
   let replacement = "";
@@ -1037,7 +1036,7 @@ function replaceRangeWithChar(char, from, to, ctx) {
   ctx.setText(newText);
   ctx.setOffset(clampOffsetOutsidePlaceholder(cursor, from, newText));
 }
-//@ chunk-530hfzwb.js:16284-16434 layout
+//@ chunk-880p06ha.js:16288-16438 layout
 function executeVisualReplace(char, anchor, ctx, linewise) {
   let { from, to } = getVisualRange(anchor, ctx, linewise);
   let span = measureSpan(ctx.text.slice(from, to), linewise);
@@ -1049,13 +1048,13 @@ function executeVisualReplace(char, anchor, ctx, linewise) {
     linewise,
   });
 }
-//@ chunk-530hfzwb.js:16434-16510 layout
+//@ chunk-880p06ha.js:16438-16514 layout
 function repeatVisualReplace(char, span, linewise, ctx) {
   let { from, to } = getRepeatVisualRange(ctx, span, linewise);
   if (from === to) return;
   replaceRangeWithChar(char, from, to, ctx);
 }
-//@ chunk-530hfzwb.js:16510-16819 layout
+//@ chunk-880p06ha.js:16514-16823 layout
 function changeRangeCase(caseOp, from, to, ctx) {
   let sliced = ctx.text.slice(from, to);
   let replacement = "";
@@ -1068,7 +1067,7 @@ function changeRangeCase(caseOp, from, to, ctx) {
   ctx.setText(newText);
   ctx.setOffset(clampOffsetOutsidePlaceholder(cursor, from, newText));
 }
-//@ chunk-530hfzwb.js:16819-16968 layout
+//@ chunk-880p06ha.js:16823-16972 layout
 function executeVisualCase(caseOp, anchor, ctx, linewise) {
   let { from, to } = getVisualRange(anchor, ctx, linewise);
   let span = measureSpan(ctx.text.slice(from, to), linewise);
@@ -1080,13 +1079,13 @@ function executeVisualCase(caseOp, anchor, ctx, linewise) {
     linewise,
   });
 }
-//@ chunk-530hfzwb.js:16968-17044 layout
+//@ chunk-880p06ha.js:16972-17048 layout
 function repeatVisualCase(caseOp, span, linewise, ctx) {
   let { from, to } = getRepeatVisualRange(ctx, span, linewise);
   if (from === to) return;
   changeRangeCase(caseOp, from, to, ctx);
 }
-//@ chunk-530hfzwb.js:17044-17376 layout
+//@ chunk-880p06ha.js:17048-17380 layout
 function executeVisualPaste(anchor, ctx, linewise) {
   let register = ctx.getRegister();
   if (!register) return;
@@ -1115,7 +1114,7 @@ function executeVisualPaste(anchor, ctx, linewise) {
     linewise,
   });
 }
-//@ chunk-530hfzwb.js:17376-17530 layout
+//@ chunk-880p06ha.js:17380-17534 layout
 function repeatVisualPaste(
   content,
   registerLinewise,
@@ -1139,7 +1138,7 @@ function repeatVisualPaste(
     false,
   );
 }
-//@ chunk-530hfzwb.js:17530-18034 layout
+//@ chunk-880p06ha.js:17534-18039 layout
 /**
  * 可视粘贴：用寄存器内容替换选区，原选区内容进寄存器；处理整行/字符寄存器与整行/字符选区的四种组合。
  */
@@ -1177,7 +1176,7 @@ function replaceRangeWithRegister(content, registerLinewise, from, to, ctx, line
   ctx.setText(newText);
   if (linewise || registerLinewise) {
     let cursor = Cursor.fromText(newText, ctx.cursor.measuredText.columns, insertOffset);
-    let firstNonBlank = firstNonBlankOffset(cursor);
+    let firstNonBlank = firstNonBlankOffset_2(cursor);
     ctx.setOffset(cursor.placeholderStartingAt(firstNonBlank) ? insertOffset : firstNonBlank);
   } else if (
     replacement.includes(`
@@ -1189,7 +1188,7 @@ function replaceRangeWithRegister(content, registerLinewise, from, to, ctx, line
     ctx.setOffset(Math.max(from, from + replacement.length - (lastChar.length || 1)));
   }
 }
-//@ chunk-530hfzwb.js:18034-18245 fingerprint (2.1.88 match: executeOperatorG, 0.768)
+//@ chunk-880p06ha.js:18039-18250 fingerprint (2.1.88 match: executeOperatorG, 0.751)
 /**
  * 操作符 + G（如 dG、d3G）：整行操作到最后一行或第 count 行。
  */
@@ -1200,7 +1199,7 @@ function executeOperatorG(op, count, ctx) {
     getLineIndexAt(ctx.text, ctx.cursor.offset),
     getLineIndexAt(ctx.text, target.offset),
     ctx,
-    Math.min(ctx.cursor.offset, firstNonBlankOffset(target)),
+    Math.min(ctx.cursor.offset, firstNonBlankOffset_2(target)),
   );
   recordRepeatableChange(ctx, {
     type: "operator",
@@ -1209,7 +1208,7 @@ function executeOperatorG(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:18245-18458 fingerprint (2.1.88 match: executeOperatorGg, 0.767)
+//@ chunk-880p06ha.js:18250-18463 fingerprint (2.1.88 match: executeOperatorGg, 0.75)
 /**
  * 操作符 + gg（如 dgg）：整行操作到第一行或第 count 行。
  */
@@ -1220,7 +1219,7 @@ function executeOperatorGg(op, count, ctx) {
     getLineIndexAt(ctx.text, ctx.cursor.offset),
     getLineIndexAt(ctx.text, target.offset),
     ctx,
-    Math.min(ctx.cursor.offset, firstNonBlankOffset(target)),
+    Math.min(ctx.cursor.offset, firstNonBlankOffset_2(target)),
   );
   recordRepeatableChange(ctx, {
     type: "operator",
@@ -1229,7 +1228,7 @@ function executeOperatorGg(op, count, ctx) {
     count,
   });
 }
-//@ chunk-530hfzwb.js:18458-19048 affinity (2.1.88 match: applyOperator, 0.753)
+//@ chunk-880p06ha.js:18463-19053 affinity (2.1.88 match: applyOperator, 0.754)
 /**
  * 按行号范围做整行操作：整行内容写寄存器；yank 只移光标；delete 删行后光标到相应行首个非空；change 留一个空行进入插入模式。
  */
@@ -1277,7 +1276,7 @@ function applyLinewiseOperator(op, fromLine, toLine, ctx, cursorOffset) {
     ctx.enterInsert(lineStartOffset);
   }
 }
-//@ chunk-530hfzwb.js:19048-19092 affinity
+//@ chunk-880p06ha.js:19053-19097 affinity
 function getLineIndexAt(text, offset) {
   return countCharInString(
     text.slice(0, offset),
@@ -1285,28 +1284,28 @@ function getLineIndexAt(text, offset) {
 `,
   );
 }
-//@ chunk-530hfzwb.js:19200-19346 placement
+//@ chunk-880p06ha.js:19205-19351 placement
 function firstNonBlankOffsetSafe(cursor, allowLineStart) {
-  let firstNonBlank = wrapText(cursor.text);
+  let firstNonBlank = firstNonBlankOffset(cursor.text);
   if (cursor.placeholderStartingAt(firstNonBlank) === null) return firstNonBlank;
   if (firstNonBlank > 0 || allowLineStart) return 0;
   let endOffset = clampCursorOffset(cursor.text, cursor.text.length);
   return snapOffsetOutOfPlaceholder(cursor, endOffset);
 }
-//@ chunk-530hfzwb.js:19346-19493 placement
+//@ chunk-880p06ha.js:19351-19498 placement
 function snapOffsetOutOfPlaceholder(cursor, offset) {
   let startOffset = cursor.snapOutOfPlaceholder(offset, "start");
   if (startOffset === offset) return offset;
   let endOffset = cursor.snapOutOfPlaceholder(offset, "end");
   return isImagePlaceholder(cursor.text.slice(startOffset, endOffset)) ? endOffset : startOffset;
 }
-//@ chunk-530hfzwb.js:19493-19605 placement
-function firstNonBlankOffset(cursor) {
+//@ chunk-880p06ha.js:19498-19610 placement
+function firstNonBlankOffset_2(cursor) {
   let offset = cursor.startOfLogicalLine().offset;
   let offset_2 = cursor.endOfLogicalLine().offset;
-  return offset + wrapText(cursor.text.slice(offset, offset_2));
+  return offset + firstNonBlankOffset(cursor.text.slice(offset, offset_2));
 }
-//@ chunk-530hfzwb.js:19605-19699 placement
+//@ chunk-880p06ha.js:19610-19704 placement
 function selectionReachesTrailingNewline(anchor, ctx, linewise) {
   return (
     linewise &&
@@ -1315,9 +1314,9 @@ function selectionReachesTrailingNewline(anchor, ctx, linewise) {
     Math.max(anchor, ctx.cursor.offset) >= ctx.text.length
   );
 }
-//@ chunk-530hfzwb.js:19699-19711 placement
+//@ chunk-880p06ha.js:19704-19716 placement
 var VIM_ESCAPE_REMAP_TIMEOUT_MS = 1000;
-//@ chunk-530hfzwb.js:19711-19939 placement
+//@ chunk-880p06ha.js:19716-19944 placement
 /**
  * 读取 vimInsertModeRemaps 设置：只接受映射到 <Esc> 的两字符可见序列（如 jk、jj）。
  */
@@ -1331,14 +1330,11 @@ function parseInsertModeEscapeRemaps(remaps) {
   }
   return escapeRemaps;
 }
-//@ chunk-530hfzwb.js:19939-19998 placement
+//@ chunk-880p06ha.js:19944-20003 placement
 function getInsertModeEscapeRemaps() {
   return parseInsertModeEscapeRemaps(getSecuritySensitiveSetting("vimInsertModeRemaps")[0] ?? {});
 }
 export {
-  getInsertModeEscapeRemaps,
-  clampCursorOffset,
-  clampOffsetOutsidePlaceholder,
   snapToPlaceholderEnd,
   executeX,
   executeSubstitute,
@@ -1360,6 +1356,7 @@ export {
   repeatVisualIndent,
   repeatVisualChange,
   executePaste,
+  getInsertModeEscapeRemaps,
   VIM_ESCAPE_REMAP_TIMEOUT_MS,
   executeVisualOperator,
   executeVisualReplace,
@@ -1368,5 +1365,7 @@ export {
   executeVisualJoin,
   executeVisualIndent,
   executeJoinLines,
+  clampOffsetOutsidePlaceholder,
   computeScreenLineMove,
+  clampCursorOffset,
 };

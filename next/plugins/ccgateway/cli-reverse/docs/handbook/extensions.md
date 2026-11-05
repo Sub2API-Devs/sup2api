@@ -1,8 +1,10 @@
 # 扩展子系统手册：MCP、插件、Skills、Hooks、LSP、Chrome / Computer Use、深链接
 
 > 领域 `extensions`（154 个重组模块，约 2,750 个声明，1.49 MB），负责人 dom-extensions。
-> 对象：官方 Claude Code **2.1.316**（linux-x64）。一切结论取自 `original/`，2.1.88 对照取自 `references/claude-code-analysis/src`。
-> 阅读源码：`reconstructed/src/<重组路径>.js`；单个声明 `node tools/q.mjs show <chunk-xxx.js#压缩名>`。下文"声明 id"一律形如 `chunk-xxx.js#压缩名`；Hooks/Skills 两节里只写 `#压缩名` 而没写 chunk 时指 `chunk-e6aww6q8.js`。
+> 对象：官方 Claude Code **2.1.318**（linux-x64）。
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
+> 一切结论取自 `original/`，2.1.88 对照取自 `references/claude-code-analysis/src`。
+> 阅读源码：`reconstructed/src/<重组路径>.js`；单个声明 `node tools/q.mjs show <chunk-xxx.js#压缩名>`。下文"声明 id"一律形如 `chunk-xxx.js#压缩名`；Hooks/Skills 两节里只写 `#压缩名` 而没写 chunk 时指 `chunk-5xgkngpb.js`。
 > 函数名是命名表合并后的最终名（门面原名 facade > 语义名 semantic > 旧版名 reference > 自动名）。命名见 `naming/semantic-extensions.jsonl`，声明说明见 `naming/docs-extensions.jsonl`，模块一句话说明见 `naming/modules-extensions.json`。
 
 ## 0. 概述
@@ -57,13 +59,13 @@ REPL ─── useManageMCPConnections
 | 模块 | 职责 | 关键入口 |
 |---|---|---|
 | services/mcp/config.ts | 配置读取、解析、合并、去重、策略、add/remove、启用禁用 | `getMcpConfigsByScope`、`parseMcpConfig`、`getClaudeCodeMcpConfigs`、`getAllMcpConfigs`、`isMcpServerAllowedByPolicy`、`isMcpServerBlockedAtConnectTime`、`addMcpConfig`、`removeMcpConfig` |
-| services/mcp/client.ts | 连接、协商、工具/提示词/资源、工具调用与结果 | `connectToServer`（v2 为 `chunk-8t8n4kdh.js#Wt`，写作时在 `_unattributed/`，现也在本文件）、`getMcpToolsCommandsAndResources`、`fetchToolsForClient`、`buildMcpTool`、`buildMcpPromptCommands`、`callMCPTool`、`processMCPResult`、`reconnectMcpServerImpl` |
+| services/mcp/client.ts | 连接、协商、工具/提示词/资源、工具调用与结果 | `connectToServer`（v2 为 `chunk-sywnjtqb.js#Kt`，写作时在 `_unattributed/`，现也在本文件）、`getMcpToolsCommandsAndResources`、`fetchToolsForClient`、`buildMcpTool`、`buildMcpPromptCommands`、`callMCPTool`、`processMCPResult`、`reconnectMcpServerImpl` |
 | services/mcp/auth.ts | OAuth（`ClaudeAuthProvider`）、元数据发现、issuer 回显、主流程、XAA 认证、令牌撤销 | `performMCPOAuthFlow`、`performMCPXaaAuth`、`ClaudeAuthProvider`、`fetchAuthServerMetadata` |
 | services/mcp/xaa.ts / xaaIdpLogin.ts | 企业 IdP 的 Cross-App Access | `performCrossAppAccess`、`acquireIdpIdToken` |
 | services/mcp/oauthPort.ts | 回调端口与 redirect URI | `findAvailablePort`、`buildRedirectUri` |
 | services/mcp/claudeai.ts | claude.ai 组织连接器 | `fetchClaudeAIMcpConfigsIfEligible` |
 | services/mcp/useManageMCPConnections.ts / MCPConnectionManager.tsx | REPL 连接生命周期 | `useManageMCPConnections`、`MCPConnectionManager` |
-| services/mcp/types.ts（写作时另有一段在 `_unattributed/` 的 `chunk-dcmhvw5a` part-012，现已并入本文件） | 作用域/传输枚举、配置 schema | `ConfigScopeSchema`、`McpServerConfigSchema` 族、`isValidMcpServerConfig` |
+| services/mcp/types.ts（写作时另有一段在 `_unattributed/` 的 `chunk-z20c443b` part-012，现已并入本文件） | 作用域/传输枚举、配置 schema | `ConfigScopeSchema`、`McpServerConfigSchema` 族、`isValidMcpServerConfig` |
 | services/mcp/utils.ts | 过期客户端剔除、作用域标签、.mcp.json 审批状态 | `excludeStalePluginClients`、`getProjectMcpServerStatus`、`resolveProjectMcpServerApproval` |
 | services/mcp/mcpStringUtils.ts / normalization.ts | 名字构造与解析、权限规则匹配 | `buildMcpToolName`、`mcpInfoFromString`、`normalizeNameForMCP`、`getToolNameForPermissionCheck` |
 | services/mcp/elicitationHandler.ts、utils/mcp/* | elicitation 处理与表单校验 | `registerElicitationHandler`、`validateElicitationInputAsync`、`parseNaturalLanguageDateTime` |
@@ -107,29 +109,29 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 
 | 模块 | 职责 | 关键入口 |
 |---|---|---|
-| `schemas/hooks.ts` | 钩子配置 zod schema | `buildHookSchemas`（`chunk-dcmhvw5a.js#D_`）、`HookCommandSchema`/`HookMatcherSchema`/`HooksSchema`（`chunk-dcmhvw5a.js#Zxi` 语句） |
-| `types/hooks.ts`（不在本领域，被大量引用） | 钩子 JSON 输出 schema | `syncHookResponseSchema`（`chunk-s61vbvea.js#qD` 语句，`hookJSONOutputSchema`（压缩名 Qfe）= async ∪ sync） |
-| `entrypoints/sdk/coreSchemas.ts`（不在本领域） | `HOOK_EVENTS` 事件名数组 | `chunk-dcmhvw5a.js#yc` |
+| `schemas/hooks.ts` | 钩子配置 zod schema | `buildHookSchemas`（`chunk-z20c443b.js#yy`）、`HookCommandSchema`/`HookMatcherSchema`/`HooksSchema`（`chunk-z20c443b.js#g4i` 语句） |
+| `types/hooks.ts`（不在本领域，被大量引用） | 钩子 JSON 输出 schema | `syncHookResponseSchema`（`chunk-7jxyna5q.js#oC` 语句，`hookJSONOutputSchema`（压缩名 Qfe）= async ∪ sync） |
+| `entrypoints/sdk/coreSchemas.ts`（不在本领域） | `HOOK_EVENTS` 事件名数组 | `chunk-z20c443b.js#bc` |
 | `utils/hooks.ts` | 钩子执行核心（92 个需文档的声明） | `executeHooks_2`（`#eIr`）、`executeHooksOutsideREPL`（`#cN`）、`getMatchingHooks`（`#LPn`）、`execCommandHook`（`#MU`）、`processHookJSONOutput`（`#roe`）、各事件 `execute…Hooks`（如 `executePreToolHooks`、`executeStopHooks`） |
 | `utils/hooks/execPromptHook.ts` | prompt 型钩子 | `execPromptHook`（`#TAn`） |
 | `utils/hooks/execAgentHook.ts` | agent 型钩子 | `execAgentHook`（`#hnt`） |
 | `utils/hooks/execHttpHook.ts` | http 型钩子 | `execHttpHook`（`#PJn`）、`interpolateEnvVars`（`#MMr`） |
 | `utils/hooks/ssrfGuard.ts` | http 钩子 SSRF 防护 | `ssrfGuardedLookup`（`#qAn`）、`isBlockedAddress`（`#cGt`） |
 | `utils/hooks/AsyncHookRegistry.ts` | 后台 async 钩子 | `registerPendingAsyncHook`（`#EUt`）、`checkForAsyncHookResponses`（`#oxo`） |
-| `utils/hooks/hookEvents.ts` | SDK 进度/响应事件、时间常量 | `startHookProgressInterval`（`#rhe`）、`TOOL_HOOK_EXECUTION_TIMEOUT_MS`（`chunk-63641kq7.js#Yf`） |
-| `utils/hooks/hookHelpers.ts` | prompt/agent 共用 schema | `hookResponseSchema`（`chunk-e6aww6q8.js#Jne` 语句）、`createStructuredOutputTool`（`#pAn`） |
-| `utils/hooks/hooksConfigSnapshot.ts` | 启动快照与策略 | `getHooksFromAllowedSources`（`chunk-2jdf5m4m.js#r`）、`shouldAllowManagedHooksOnly`（`#Ate`） |
-| `utils/hooks/hooksConfigManager.ts` | /hooks 界面元数据 | `getHookEventMetadata`（`chunk-409rw9nn.js#QHt`） |
-| `utils/hooks/hooksSettings.ts` | 显示文本、来源文案、相等判断 | `getHookDisplayText`（`chunk-s61vbvea.js#rx`）、`isHookEqual`（`chunk-f9asxqh1.js#frr`）、`getAllHooks`（`chunk-s61vbvea.js#ZZs`） |
-| `utils/hooks/sessionHooks.ts` | 会话钩子注册表 | `SessionHooksRegistry`（`chunk-f9asxqh1.js#ae`） |
-| `utils/hooks/registerSkillHooks.ts` / `registerFrontmatterHooks.ts` | skill / agent frontmatter 钩子注册 | `registerSkillHooks`（`chunk-3g0djq3w.js#St`）、`registerFrontmatterHooks`（`chunk-ahpsetyz.js#xBs`） |
-| `utils/hooks/fileChangedWatcher.ts` | CwdChanged/FileChanged 监听 | `onCwdChangedForHooks`（`chunk-e6aww6q8.js#csr`） |
+| `utils/hooks/hookEvents.ts` | SDK 进度/响应事件、时间常量 | `startHookProgressInterval`（`#rhe`）、`TOOL_HOOK_EXECUTION_TIMEOUT_MS`（`chunk-jd53r7dh.js#tu`） |
+| `utils/hooks/hookHelpers.ts` | prompt/agent 共用 schema | `hookResponseSchema`（`chunk-5xgkngpb.js#Jre` 语句）、`createStructuredOutputTool`（`#FIn`） |
+| `utils/hooks/hooksConfigSnapshot.ts` | 启动快照与策略 | `getHooksFromAllowedSources`（`chunk-ybq8sbnv.js#r`）、`shouldAllowManagedHooksOnly`（`#woe`） |
+| `utils/hooks/hooksConfigManager.ts` | /hooks 界面元数据 | `getHookEventMetadata`（`chunk-g4mtt8nt.js#xjt`） |
+| `utils/hooks/hooksSettings.ts` | 显示文本、来源文案、相等判断 | `getHookDisplayText`（`chunk-7jxyna5q.js#XI`）、`isHookEqual`（`chunk-q1gbn2mn.js#dhr`）、`getAllHooks`（`chunk-7jxyna5q.js#VSi`） |
+| `utils/hooks/sessionHooks.ts` | 会话钩子注册表 | `SessionHooksRegistry`（`chunk-q1gbn2mn.js#_e`） |
+| `utils/hooks/registerSkillHooks.ts` / `registerFrontmatterHooks.ts` | skill / agent frontmatter 钩子注册 | `registerSkillHooks`（`chunk-g88zyy4n.js#wt`）、`registerFrontmatterHooks`（`chunk-w4s3ryq5.js#z7s`） |
+| `utils/hooks/fileChangedWatcher.ts` | CwdChanged/FileChanged 监听 | `onCwdChangedForHooks`（`chunk-5xgkngpb.js#Yur`） |
 | `utils/hooks/postSamplingHooks.ts` | 内部采样后钩子 | `executePostSamplingHooks` |
 | `skills/loadSkillsDir.ts` | Skill 发现与加载 | `getSkillDirCommands`（`#VRr`）、`loadSkillsFromSkillsDir`（`#yN`）、`parseSkillFrontmatterFields`（`#_Ce`）、`discoverSkillDirsForPaths`（`#Zzo`）、`activateConditionalSkillsForPaths`（`#evn`） |
-| `skills/loadSkillsDir.ts` | 命令对象构造（写作时在 `_unattributed/` 的 `chunk-e6aww6q8` part-424，现已归入 loadSkillsDir.ts） | `createSkillCommand`（`#phn`）、`parseSkillFileToCommand`（`#QKr`） |
-| `skills/bundledSkills.ts` / `skills/bundled/*` | 内置 skill | `registerBundledSkill`（`chunk-yjaa68dq.js#ol`）、`initBundledSkills`（`chunk-hantmvxa.js#ALe`） |
-| `utils/skills/skillChangeDetector.ts` | skill 热重载 | `getWatchablePaths`（`chunk-2njac0sx.js#me`）、`createSkillChangeDetector`（`#Re`，unattributed） |
-| `utils/frontmatterParser.ts` | YAML frontmatter | `parseFrontmatter`（`chunk-82kqcve8.js#sd`） |
+| `skills/loadSkillsDir.ts` | 命令对象构造（写作时在 `_unattributed/` 的 `chunk-5xgkngpb` part-424，现已归入 loadSkillsDir.ts） | `createSkillCommand`（`#cAn`）、`parseSkillFileToCommand`（`#seo`） |
+| `skills/bundledSkills.ts` / `skills/bundled/*` | 内置 skill | `registerBundledSkill`（`chunk-xc4g26h5.js#Sl`）、`initBundledSkills`（`chunk-ne2890fx.js#SFe`） |
+| `utils/skills/skillChangeDetector.ts` | skill 热重载 | `getWatchablePaths`（`chunk-3n0n2sf6.js#ge`）、`createSkillChangeDetector`（`#Fe`，unattributed） |
+| `utils/frontmatterParser.ts` | YAML frontmatter | `parseFrontmatter`（`chunk-a2q0x549.js#Rd`） |
 | `utils/markdownConfigLoader.ts` | 配置子目录 markdown 加载 | `loadMarkdownFilesForSubdir`（`#jEo`）、`loadMarkdownFiles`（`#B0`） |
 | `outputStyles/loadOutputStylesDir.ts` | 输出风格加载 | `getOutputStyleDirStyles`（`#VEo`） |
 
@@ -137,25 +139,25 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 
 | 模块 | 职责 | 关键声明 |
 |---|---|---|
-| `services/lsp/config.ts` | 从已启用插件收集 LSP 服务器配置 | `getAllLspServers` (`chunk-e6aww6q8.js#r2n`) |
-| `services/lsp/LSPClient.ts` | 子进程 + vscode-jsonrpc 连接 | `createLSPClient` (`chunk-t4ksmxzx.js#Pa`)、`LSPServerCrashError` (`#Bn`) |
-| `services/lsp/LSPServerInstance.ts` | 单服务器状态机、initialize、重试 | `createLSPServerInstance` (`chunk-e6aww6q8.js#a2n`) |
+| `services/lsp/config.ts` | 从已启用插件收集 LSP 服务器配置 | `getAllLspServers` (`chunk-5xgkngpb.js#u9n`) |
+| `services/lsp/LSPClient.ts` | 子进程 + vscode-jsonrpc 连接 | `createLSPClient` (`chunk-mvgr3jmb.js#Pa`)、`LSPServerCrashError` (`#Bn`) |
+| `services/lsp/LSPServerInstance.ts` | 单服务器状态机、initialize、重试 | `createLSPServerInstance` (`chunk-5xgkngpb.js#p9n`) |
 | `services/lsp/LSPServerManager.ts` | 多服务器路由、文档同步 | `createLSPServerManager` (`#l2n`) |
 | `services/lsp/manager.ts` | 全局单例的生命周期 | `createLspManagerSingleton` (`#bTs`)，单例 `lspManagerSingleton` (`#_F`，unattributed) |
 | `services/lsp/passiveFeedback.ts` | publishDiagnostics → 登记表 | `registerLSPNotificationHandlers` (`#d2n`)、`formatDiagnosticsForAttachment` (`#kTs`) |
 | `services/lsp/LSPDiagnosticRegistry.ts` | 诊断去重、截断、跨轮记忆 | 类 `LSPDiagnosticRegistry` (`#gDt`)、`lspDiagnosticRegistryByRoot` (`#jG`) |
-| `utils/claudeInChrome/common.ts` | 名字常量、浏览器表、socket 路径、打开 URL | `CHROMIUM_BROWSERS`/`openInChrome`/`getSecureSocketPath` (`chunk-axj4swpp.js`)、`CLAUDE_IN_CHROME_MCP_SERVER_NAME` (`chunk-srrcw01s.js#Ma`) |
-| `utils/claudeInChrome/setup.ts` | 启用判定、接入、原生宿主清单 | `shouldEnableClaudeInChrome` (`chunk-s61vbvea.js#Ivt`)、`setupClaudeInChrome` (`#Ynt`)、`installChromeNativeHostManifest` (`#FH`) |
+| `utils/claudeInChrome/common.ts` | 名字常量、浏览器表、socket 路径、打开 URL | `CHROMIUM_BROWSERS`/`openInChrome`/`getSecureSocketPath` (`chunk-bb2bsp6f.js`)、`CLAUDE_IN_CHROME_MCP_SERVER_NAME` (`chunk-mdeejm2h.js#qa`) |
+| `utils/claudeInChrome/setup.ts` | 启用判定、接入、原生宿主清单 | `shouldEnableClaudeInChrome` (`chunk-7jxyna5q.js#TPt`)、`setupClaudeInChrome` (`#gdt`)、`installChromeNativeHostManifest` (`#hM`) |
 | `utils/claudeInChrome/setupPortable.ts` | 扫描浏览器配置目录找扩展 | `detectExtensionInstallationPortable` (`#DH`) |
-| `utils/claudeInChrome/chromeNativeHost.ts` | `--chrome-native-host` 进程 | `ChromeNativeHost` (`chunk-ncz9bgnh.js#S`)、`ChromeMessageReader` (`#R`) |
-| `utils/claudeInChrome/mcpServer.ts` | `--claude-in-chrome-mcp` 进程 | `runClaudeInChromeMcpServer` (`chunk-ztt2k9pv.js#Xe`)、`createChromeContext` (`#j`) |
-| `utils/claudeInChrome/toolRendering.tsx` | 终端里的工具显示 | `renderChromeToolUseMessage` (`chunk-3k33hyyp.js#c`)、`getClaudeInChromeMCPToolOverrides` (`#d`) |
-| `utils/computerUse/*` | computer-use 的会话状态、run loop、ESC、执行器辅助、回合清理 | `cleanupComputerUseAfterTurn` (`chunk-ha3km179.js#en`)、`drainRunLoop` (`#zJe`)、`typeViaClipboard` (`chunk-hrs3dad1.js#Q`) |
-| `utils/deepLink/parseDeepLink.ts` | 解析 `claude-cli://` | `parseDeepLink` (`chunk-8gzm4s8j.js#lDs`) |
-| `utils/deepLink/protocolHandler.ts` | `--handle-uri` 处理 | `handleDeepLinkUri` (`chunk-bh9w80kx.js#ae`) |
-| `utils/deepLink/registerProtocol.ts` | 各平台协议注册 | `ensureDeepLinkProtocolRegistered` (`chunk-fb29jded.js#lCs`) |
-| `utils/deepLink/terminalLauncher.ts` | 终端检测与启动 | `launchInTerminal` (`chunk-bh9w80kx.js#y`) |
-| `utils/deepLink/banner.ts` | 深链接会话横幅 | `buildDeepLinkBanner` (`chunk-47mye09a.js#CRs`) |
+| `utils/claudeInChrome/chromeNativeHost.ts` | `--chrome-native-host` 进程 | `ChromeNativeHost` (`chunk-08zxrh96.js#S`)、`ChromeMessageReader` (`#R`) |
+| `utils/claudeInChrome/mcpServer.ts` | `--claude-in-chrome-mcp` 进程 | `runClaudeInChromeMcpServer` (`chunk-drr3hy76.js#Xe`)、`createChromeContext` (`#Y`) |
+| `utils/claudeInChrome/toolRendering.tsx` | 终端里的工具显示 | `renderChromeToolUseMessage` (`chunk-vnst8cd9.js#c`)、`getClaudeInChromeMCPToolOverrides` (`#d`) |
+| `utils/computerUse/*` | computer-use 的会话状态、run loop、ESC、执行器辅助、回合清理 | `cleanupComputerUseAfterTurn` (`chunk-w3ch4xq2.js#rn`)、`drainRunLoop` (`#qnt`)、`typeViaClipboard` (`chunk-p57a7983.js#Q`) |
+| `utils/deepLink/parseDeepLink.ts` | 解析 `claude-cli://` | `parseDeepLink` (`chunk-6xpnm08k.js#hYs`) |
+| `utils/deepLink/protocolHandler.ts` | `--handle-uri` 处理 | `handleDeepLinkUri` (`chunk-r63rf7sw.js#ae`) |
+| `utils/deepLink/registerProtocol.ts` | 各平台协议注册 | `ensureDeepLinkProtocolRegistered` (`chunk-f8a5a0kt.js#rGs`) |
+| `utils/deepLink/terminalLauncher.ts` | 终端检测与启动 | `launchInTerminal` (`chunk-r63rf7sw.js#y`) |
+| `utils/deepLink/banner.ts` | 深链接会话横幅 | `buildDeepLinkBanner` (`chunk-pjbnxxq2.js#kzs`) |
 
 2.1.88 的 `utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/gates.ts`、`utils/computerUse/mcpServer.ts`、`utils/computerUse/wrapper.tsx` 在 316 里几乎全是误归的代码（见第 7 节；后续重切已把这些声明移走，阅读树中已无这五个文件）。
 
@@ -163,15 +165,15 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 
 ### 2.0 两代客户端
 
-- `chunk-asne9cp8.js`（写作时未归属，一个很小的分发模块；现 `services/mcp/runtimeTripwire.ts`）导出 `mcpClientModule()` 等访问器：`mcpSdkGeneration()`（`chunk-5br6r47d.js#rD`）决定"MCP SDK 代际"，然后 `require` 对应代际的整套模块：
-  - **v2**：`chunk-8t8n4kdh.js`（客户端）、`chunk-n1aavqzh.js`（auth/xaa）、`chunk-qy28ss7z.js`（XAA IdP 登录）、`chunk-n8fn2df7.js`（elicitation）、`chunk-mzh22y2k.js`（任务监视）…；底层 SDK 是 `chunk-r1g76qsy.js` 的新版 `Client`（`cLo`），支持 `server/discover`、`subscriptions/listen`、协议版本 `2026-07-28`。
-  - **v1**：`chunk-z1n5m6nf.js`、`chunk-1kaj6e83.js`、`chunk-8y02x996.js`、`chunk-bma111ke.js`…；底层 SDK 是旧版 `Client`（`chunk-z1n5m6nf.js#Bt`），只有 `initialize` 握手（最高 `2025-11-25`，`chunk-dg4taswx.js#LPe`）。
+- `chunk-9hx1mne2.js`（写作时未归属，一个很小的分发模块；现 `services/mcp/runtimeTripwire.ts`）导出 `mcpClientModule()` 等访问器：`mcpSdkGeneration()`（`chunk-4x7ersf7.js#zL`）决定"MCP SDK 代际"，然后 `require` 对应代际的整套模块：
+  - **v2**：`chunk-sywnjtqb.js`（客户端）、`chunk-ghww1f0b.js`（auth/xaa）、`chunk-ebh35d1r.js`（XAA IdP 登录）、`chunk-0sfbgcrn.js`（elicitation）、`chunk-q4ggn8bm.js`（任务监视）…；底层 SDK 是 `chunk-qq5knpkd.js` 的新版 `Client`（`cLo`），支持 `server/discover`、`subscriptions/listen`、协议版本 `2026-07-28`。
+  - **v1**：`chunk-h44h5gdv.js`、`chunk-ft6a2kja.js`、`chunk-5rg2vws1.js`、`chunk-h4qtft3t.js`…；底层 SDK 是旧版 `Client`（`chunk-h44h5gdv.js#jt`），只有 `initialize` 握手（最高 `2025-11-25`，`chunk-57n2efg5.js#uLe`）。
 - 选择规则（`mcpSdkGeneration`）：`MCP_SDK_GENERATION`=`v1`/`v2` 优先；否则 GrowthBook `tengu_brindle_causeway`（默认 `true` → **v2**）；结果锁存并记 `tengu_mcp_sdk_generation`。加载后用 `MCP_TREE_ID` 自检（不符抛 tripwire）。
 - 因此 `services/mcp/client.ts`、`auth.ts`、`xaa.ts`、`xaaIdpLogin.ts`、`elicitationHandler.ts` 在阅读树中都有两份几乎相同的代码；文档里"（v1 副本）"指旧代。**线上默认路径是 v2**，下面流程以 v2 为准。
 
 ### 2.1 配置来源与作用域
 
-作用域枚举 `ConfigScopeSchema`（`chunk-dcmhvw5a.js#VIn`）：`local / user / project / dynamic / enterprise / claudeai / managed / agent`（2.1.88 没有 `agent`）。`enterprise`、`managed` 是"管理员作用域"（`isManagedConfigScope`）。
+作用域枚举 `ConfigScopeSchema`（`chunk-z20c443b.js#HBn`）：`local / user / project / dynamic / enterprise / claudeai / managed / agent`（2.1.88 没有 `agent`）。`enterprise`、`managed` 是"管理员作用域"（`isManagedConfigScope`）。
 
 | 作用域 | 来源 | 读取函数 |
 |---|---|---|
@@ -185,12 +187,12 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | claudeai | claude.ai 组织连接器（`claudeai-proxy` 类型，名字 `claude.ai <显示名>`） | `fetchClaudeAIMcpConfigsIfEligible` |
 | agent | 代理 frontmatter 的 `mcpServers` 内联定义 | `extractAgentMcpServers` |
 
-服务器类型（`McpServerConfigSchema`，`chunk-dcmhvw5a.js#qIn` 语句，压缩名 Hne）：`stdio`（缺省）、`sse`、`sse-ide`、`ws-ide`、`http`（接受 `streamable-http` 并转成 http）、`ws`、`sdk`、`claudeai-proxy`。`sdk/sse-ide/ws-ide` 只能由宿主注册（原记名 isHostOnlyTransport；待核实：当前阅读树无此名，对应判定未重新定位），`claudeai-proxy` 只能来自 claude.ai 或 dynamic。
+服务器类型（`McpServerConfigSchema`，`chunk-z20c443b.js#NBn` 语句，压缩名 Hne）：`stdio`（缺省）、`sse`、`sse-ide`、`ws-ide`、`http`（接受 `streamable-http` 并转成 http）、`ws`、`sdk`、`claudeai-proxy`。`sdk/sse-ide/ws-ide` 只能由宿主注册（原记名 isHostOnlyTransport；待核实：当前阅读树无此名，对应判定未重新定位），`claudeai-proxy` 只能来自 claude.ai 或 dynamic。
 共有字段：`timeout`、`alwaysLoad`、`role`（"comms"）；stdio 另有 `command/args/env/bareElicitationCapability`；http/sse 另有 `headers/headersHelper/oauth{clientId,callbackPort,authServerMetadataUrl,scopes,xaa}/request_timeout_ms（折成 timeout，上限 300000）/tools[{name,permission_policy}]/discoveryCache/toolPermissions{tool: allow|ask|blocked}`；claudeai-proxy 另有 `id/displayName/iconUrl/stateless/cachedInitResponse/discoverSupport(supported|legacy|unknown)/cachedDiscoverResponse/eligible/ineligibleReason/enterpriseManaged`。
 
-#### 解析（`parseMcpConfig`，`chunk-e6aww6q8.js#rVe`）
+#### 解析（`parseMcpConfig`，`chunk-5xgkngpb.js#K6e`）
 1. 顶层必须是 `{mcpServers}`；写成 `servers` 给专门提示。
-2. 保留名（`isBuiltinMcpServerName`，`chunk-aepeg2w5.js#Sge`：Object.prototype 名、`claude-code-remote`、`webagent`、Slack 等内部服务器名）直接跳过。
+2. 保留名（`isBuiltinMcpServerName`，`chunk-exfmq47h.js#tee`：Object.prototype 名、`claude-code-remote`、`webagent`、Slack 等内部服务器名）直接跳过。
 3. 未知 type、非 dynamic 的 sdk/claudeai-proxy 报错跳过；有 url 无 type 给"加 type"提示。
 4. 展开 `${VAR}`（`expandServerConfigEnvVars`；企业作用域在受控环境下展开），缺失变量与"url 展开为空"变成警告/`configError`；首尾空白给警告。
 5. 返回 `{config, errors, asWrittenEntries}`，错误带 `mcpErrorMetadata{scope, serverName, severity, skipReason}`。
@@ -213,11 +215,11 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 #### 组织策略
 - `deniedMcpServers` / `allowedMcpServers`（设置项，含管理员层合并；`allowManagedMcpServersOnly` 时只看管理员层，`getMcpAllowlistPolicy`）。条目三种：`{serverName}`、`{serverCommand:[...]}`、`{serverUrl:"<URL 通配模式，如 https://*.example.com/*>"}`。
 - 316 新增：策略条目里的 `${VAR}` 会展开（`expandPolicyCommandPart`、`expandPolicyUrlPattern`），并检测"不安全展开"（值注入通配、改变 URL 结构、点段）——白名单失败关闭、黑名单不受影响；凭证类变量按空值匹配并告警。
-- 连接时再判一次 `isMcpServerBlockedAtConnectTime`（`chunk-e6aww6q8.js#Pw`）：浏览器扩展开关 `allow_claude_browser_extension`、HIPAA、桌面入口、保留地址、账号记忆路由、claude.ai 代理 admit/hold/refuse、dynamic/agent/claudeai 作用域的策略。
+- 连接时再判一次 `isMcpServerBlockedAtConnectTime`（`chunk-5xgkngpb.js#kE`）：浏览器扩展开关 `allow_claude_browser_extension`、HIPAA、桌面入口、保留地址、账号记忆路由、claude.ai 代理 admit/hold/refuse、dynamic/agent/claudeai 作用域的策略。
 
-### 2.2 连接与握手（v2 `connectToServer`，`chunk-8t8n4kdh.js#Wt`）
+### 2.2 连接与握手（v2 `connectToServer`，`chunk-sywnjtqb.js#Kt`）
 
-调用链：`useManageMCPConnections` → `getMcpToolsCommandsAndResources`（`chunk-8t8n4kdh.js#zd`）→ 对每个服务器：禁用 → 策略 → needs-auth 缓存（`isMcpAuthCached`）→ 插件 stdio 失败缓存 → 发现缓存（`mcp-discovery-cache`，fresh/stale 直接出结果，stale 后台刷新）→ `connectToServer` → `fetchToolsForClient`/`fetchCommandsForClient`/`fetchResourcesForClient`。并发：本地（stdio/sdk）`MCP_SERVER_CONNECTION_BATCH_SIZE` 默认 3，远程 `MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE` 默认 20（`processBatched`）。
+调用链：`useManageMCPConnections` → `getMcpToolsCommandsAndResources`（`chunk-sywnjtqb.js#Ud`）→ 对每个服务器：禁用 → 策略 → needs-auth 缓存（`isMcpAuthCached`）→ 插件 stdio 失败缓存 → 发现缓存（`mcp-discovery-cache`，fresh/stale 直接出结果，stale 后台刷新）→ `connectToServer` → `fetchToolsForClient`/`fetchCommandsForClient`/`fetchResourcesForClient`。并发：本地（stdio/sdk）`MCP_SERVER_CONNECTION_BATCH_SIZE` 默认 3，远程 `MCP_REMOTE_SERVER_CONNECTION_BATCH_SIZE` 默认 20（`processBatched`）。
 
 `connectToServer(name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions)`，按 name+config 记忆化：
 1. 配置检查：`configError` 或 URL 非法 → `failed`（`INVALID_CONFIG` / `UNCONFIGURED`）。
@@ -230,7 +232,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
    - Claude in Chrome（stdio 名为 chrome 且允许）：进程内服务器 + `createLinkedTransportPair`。
    - `stdio`：`StdioClientTransport` 子类（`Ht`，stdout 缓冲上限 16 MiB），环境注入 `CLAUDE_PROJECT_DIR`、`CLAUDE_CODE_SESSION_ID`、`CLAUDECODE=1`，可走 `CLAUDE_CODE_SHELL_PREFIX`。
    - `sdk` 不在这里处理（print.ts / SDK 控制通道，`SdkControlClientTransport`）。
-3. **版本协商模式**（`resolveVersionNegotiation`，`chunk-8t8n4kdh.js#wr`）：
+3. **版本协商模式**（`resolveVersionNegotiation`，`chunk-sywnjtqb.js#Pr`）：
    - `MCP_PROTOCOL_NEGOTIATION=legacy|auto` 优先（auto 只对 http/claudeai-proxy/ccr-proxy/stdio 生效）；
    - 否则按传输：http → `tengu_mcp_protocol_negotiation_http`，claudeai-proxy → `_claudeai`，stdio → `_stdio`，ccr-proxy → `_ccr`（都默认 true = auto）；sse/ws/ide/进程内/sdk 一律 legacy；
    - 主机命中 `tengu_mcp_negotiation_server_denylist` → legacy；
@@ -239,7 +241,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
    - `getListingDiscoverPrior`：claudeai-proxy（非 stateless）由 `/v1/mcp_servers` 返回的 `discover_support` / `cached_discover_response` 投影（开关 `tengu_mcp_discover_projection_prior` = off/legacy_only/all）；
    - `getRememberedLegacyPrior`：本机持久化的"legacy peer"判定（见下）。
    有先验时 `client.connect(transport, {prior})`；modern 先验连上后再发 `subscriptions/listen`（`tengu_mcp_listen_server_denylist` 可关）。
-5. **线上握手（无先验的 auto）**：SDK `Client` 的 `connect` → `_connectNegotiated` → `$c`（`chunk-r1g76qsy.js`）：
+5. **线上握手（无先验的 auto）**：SDK `Client` 的 `connect` → `_connectNegotiated` → `$c`（`chunk-qq5knpkd.js`）：
    - 先发 `{"jsonrpc":"2.0","method":"server/discover","params":{"_meta":{protocolVersion:"2026-07-28", clientInfo, clientCapabilities}}}`；
    - 结果分类（`oh`/`sh`/`zc`）：返回 DiscoverResult 且 `supportedVersions` 含 2026-07-28 → **modern**（不发 initialize，能力取自 discover 结果）；JSON-RPC `-32601`（方法不存在）、`-32001/-32020/-32021`、id 不匹配、格式错误、流结束、HTTP 错误体不是 JSON-RPC → **legacy**；`-32022` 带支持版本 → 纠正后重试一次；stdio 关闭/超时 → legacy（stdio 用一次性"兄弟进程"探测，不污染真实进程）；远程超时/网络错 → 错误。
    - legacy → 立即在同一连接发标准 `initialize`（协议版本取 ≤2025 的最高版）+ `notifications/initialized`；若 initialize 被拒且之前探测超时，再试一次 `server/discover`（`_discoverAfterRejectedInitialize`）。
@@ -254,19 +256,19 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 8. 成功后：注册 `roots/list`（`getMcpRoots`：项目根、额外目录、可选 staging 根）、初始化期间的 `elicitation/create` 一律 cancel（之后由 `registerElicitationHandler` 接管）、IDE 连接发 `ide_connected`、onerror/onclose 计数与清理、`liveClients` 登记、`roots/list_changed`；记录 `tengu_mcp_server_connection_succeeded`（含 `discoverSource`、`protocolEra`、`negotiatedProtocolVersion`、`probeFellBack`、握手耗时 `discoverRequestMs/initializeRequestMs`、`statelessGated`、`keepAliveDisabled`）。
 9. 失败分类：`handleRemoteConnectAuthError`（配置的 Authorization 头被拒 `AUTH_HEADER_REJECTED`、headersHelper 头被拒、CLI 自有令牌、一方登录 `FIRST_PARTY_AUTH_REJECTED`、否则 OAuth 刷新或 `needs-auth`）、`CLAUDEAI_BEARER_REJECTED`、超时 `CONNECT_TIMEOUT`（`tengu_mcp_connect_timeout_retry`）、HTTP→SSE 回退（`tengu_mcp_legacy_sse_fallback`）；记录 `tengu_mcp_server_connection_failed`。
 
-v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商与 discover 判定，只在 stateless 代理的本地应答里出现 `server/discover`（`answerHandshakeLocally` v1 副本 `chunk-z1n5m6nf.js#No`）。
+v1 `connectToServer`（`chunk-h44h5gdv.js#Ke`）结构相同，但没有协商与 discover 判定，只在 stateless 代理的本地应答里出现 `server/discover`（`answerHandshakeLocally` v1 副本 `chunk-h44h5gdv.js#xo`）。
 
 #### 连接对象状态
 `type`：`connected`、`failed`（`error`、`errorCode`、可选 `displayDetail`/`proxyConnectStatus`）、`needs-auth`、`pending`（`reconnectAttempt`、`maxReconnectAttempts`）、`disabled`、`cached`（来自发现缓存，未连线；2.1.88 无）。connected 对象含 `client`、`capabilities`、`serverInfo`、`instructions`、`config`、`cleanup`、`protocolEra`、`transportErrorState` 等。
 
 #### 重连
-- `useManageMCPConnections`：远程传输 onclose → 自动重连最多 5 次，退避 1 s 起、上限 30 s（`ANSWER_STREAM_GRACE_MS` = 5（`chunk-dg4taswx.js#yfi` 语句内，落位 `services/mcp/mcpCallConstants.js`，在 `useManageMCPConnections` 里用作 `maxReconnectAttempts`）、`retryDelayMs`（`chunk-dg4taswx.js#cCt`））；首次连接瞬时错误重试 3 次；失败后通知 "open /mcp to reconnect"。stdio/sdk 不自动重连。
+- `useManageMCPConnections`：远程传输 onclose → 自动重连最多 5 次，退避 1 s 起、上限 30 s（`ANSWER_STREAM_GRACE_MS` = 5（`chunk-57n2efg5.js#ODi` 语句内，落位 `services/mcp/mcpCallConstants.js`，在 `useManageMCPConnections` 里用作 `maxReconnectAttempts`）、`retryDelayMs`（`chunk-57n2efg5.js#wDt`））；首次连接瞬时错误重试 3 次；失败后通知 "open /mcp to reconnect"。stdio/sdk 不自动重连。
 - `reconnectMcpServerImpl`：清缓存 → `connectToServer` → 拉列表；needs-auth 时清缓存再试一次；账号变化返回 `IDENTITY_CHANGED`。
 
 ### 2.3 工具 / 提示词 / 资源映射
 
 - 工具名：`buildMcpToolName(server, tool)` = `mcp__<normalizeNameForMCP(server)>__<normalizeNameForMCP(tool)>`；规范化把非 `[a-zA-Z0-9_-]` 换成 `_`，`claude.ai ` 前缀的再折叠下划线。`CLAUDE_AGENT_SDK_MCP_NO_PREFIX` 让 SDK 服务器不加前缀。解析 `mcpInfoFromString`（工具名部分可含 `__`）。
-- `buildMcpTool`（`chunk-8t8n4kdh.js#Ys`）字段：
+- `buildMcpTool`（`chunk-sywnjtqb.js#Ks`）字段：
   - `mcpInfo{serverName, scope, pluginSource, serverType, toolName, title, displayName, serverId, iconUrl, role, effectiveMaxPermission, …}`、`isMcp: true`；
   - 描述：配置覆盖 > 工具 description，按 `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`（默认 4096；经 ToolSearch 加载时 16384）截断加 `… [truncated]`（2.1.88 固定 2048）；
   - 注解：`readOnlyHint` → `isReadOnly`/`isConcurrencySafe`、`destructiveHint` → `isDestructive`、`openWorldHint` → `isOpenWorld`、`title` → 显示名；
@@ -278,14 +280,14 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
 - 提示词：`fetchCommandsForClient` → `buildMcpPromptCommands`：每个 prompt 变成 `type:"prompt"` 命令 `mcp__<server>__<prompt>`（显示 `server:prompt (MCP)`），参数按空格位置传入，检查必填，`getPrompt` 后经 `transformResultContent` 转换。
 - 资源：`fetchResourcesForClient`（resources/list）与 `fetchResourceTemplatesForClient`（resources/templates/list），有资源的服务器会额外带上 ListMcpResources/ReadMcpResource 工具（`uF, fF, H5`）；`completeResourceTemplateArgument` 调用 `completion/complete`。
 - 列表拉取：legacy 用 `listAllPages`（`nextCursor` 翻页，防重复游标与页数上限，记录 `tengu_mcp_list_paginated`）；modern 用 SDK `listTools` 聚合（结果缺 `resultType/ttlMs/cacheScope` 时 `installModernResultBackfill` 补默认值）。list_changed 通知触发刷新（`tengu_mcp_list_changed`）。
-- **延迟加载**：`isDeferredTool`（`chunk-3h9nvmn3.js#T`）对所有 `isMcp` 工具返回 true；`alwaysLoad === !0` 的不延迟（`chunk-3h9nvmn3.js#Nqe`）。即默认 MCP 工具只以名字出现，由 ToolSearch 按需加载完整 schema（ToolSearch 模式由 `ENABLE_TOOL_SEARCH` 控制，见 tools 领域）。经 ToolSearch 加载的工具用更长的描述上限。
-- **工具调用**（`callMCPTool`，v1 `chunk-z1n5m6nf.js#xt`）：`tools/call`，总超时 `getMcpToolTimeoutMs`（配置 timeout ≥1000 > `MCP_TOOL_TIMEOUT` > 默认 1e8 ms ≈ 27.8 小时）与空闲超时 `getMcpToolIdleTimeoutMs`（`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`，默认 stdio 30 分钟、远程 5 分钟，sse-ide/ws-ide/sdk 不设；进度通知会重置）；401/会话过期时刷新凭证或重连后重试一次；insufficient_scope 走 step-up（`runStepUpReauth`，开关 `tengu_mcp_step_up_auth_dialog`）；URL elicitation required 错误由 `callMCPToolWithUrlElicitationRetry` 处理后重试。
+- **延迟加载**：`isDeferredTool`（`chunk-3a9s57ey.js#l`）对所有 `isMcp` 工具返回 true；`alwaysLoad === !0` 的不延迟（`chunk-3a9s57ey.js#C8e`）。即默认 MCP 工具只以名字出现，由 ToolSearch 按需加载完整 schema（ToolSearch 模式由 `ENABLE_TOOL_SEARCH` 控制，见 tools 领域）。经 ToolSearch 加载的工具用更长的描述上限。
+- **工具调用**（`callMCPTool`，v1 `chunk-h44h5gdv.js#$t`）：`tools/call`，总超时 `getMcpToolTimeoutMs`（配置 timeout ≥1000 > `MCP_TOOL_TIMEOUT` > 默认 1e8 ms ≈ 27.8 小时）与空闲超时 `getMcpToolIdleTimeoutMs`（`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`，默认 stdio 30 分钟、远程 5 分钟，sse-ide/ws-ide/sdk 不设；进度通知会重置）；401/会话过期时刷新凭证或重连后重试一次；insufficient_scope 走 step-up（`runStepUpReauth`，开关 `tengu_mcp_step_up_auth_dialog`）；URL elicitation required 错误由 `callMCPToolWithUrlElicitationRetry` 处理后重试。
 - 结果：`processMCPResult` → `transformMCPResult`（toolResult / structuredContent / contentArray）→ `transformResultContent`（text、image 压缩、audio、resource 文本或 blob 落盘、resource_link）。超过 MCP 输出上限（`getMaxMcpOutputTokens`：`MAX_MCP_OUTPUT_TOKENS` > GrowthBook `tengu_velvet_ibis.mcp_tool` > 25000；判定 `mcpContentNeedsTruncation` 粗估 ≤0.5× 不截、>4× 必截、中间用 API 计数）时：`ENABLE_MCP_LARGE_OUTPUT_FILES` 未关且不含图片 → 全文写入 tool-results 文件，返回 `getLargeOutputInstructions` 说明（按 JSON / 长行 / 多行给 jq、python 切片或 Read offset/limit 读法，建议用子代理完整读取）；否则截断（`truncateMcpContent`，图片按 1600 token 估算并尝试压缩）。二进制内容 `persistBinaryContent` 按 MIME 扩展名落盘。
 
 ### 2.4 OAuth
 
-- 令牌存储：安全存储（钥匙串/凭证文件）`mcpOAuth[getServerKey(name, config)]`，键 = `<name>|sha256({type,url,headers}) 前 16 位`（`chunk-cyj440je.js#zi`）；client secret 在 `mcpOAuthClientConfig[<key>]`；XAA IdP 令牌在 `mcpXaaIdp[<issuerKey>]`、IdP client secret 在 `mcpXaaIdpConfig[<issuerKey>]`。
-- `ClaudeAuthProvider`（v2 `chunk-n1aavqzh.js#vdn`）：`clientMetadata`（client_name `Claude Code (<server>)`、grant_types authorization_code+refresh_token、token_endpoint_auth_method none、scope 取元数据）；`clientMetadataUrl`（CIMD，默认 `https://claude.ai/oauth/claude-code-client-metadata`，`MCP_OAUTH_CLIENT_METADATA_URL` 可改；redirect 不是本机 /callback 时退回 DCR）；`tokens()`（XAA 静默换令牌、step-up 时不发 refresh token、本会话被拒的令牌不再发）；`refreshAuthorization`（并发刷新协调）；`saveDiscoveryState` 等。
+- 令牌存储：安全存储（钥匙串/凭证文件）`mcpOAuth[getServerKey(name, config)]`，键 = `<name>|sha256({type,url,headers}) 前 16 位`（`chunk-fmy4vc7c.js#da`）；client secret 在 `mcpOAuthClientConfig[<key>]`；XAA IdP 令牌在 `mcpXaaIdp[<issuerKey>]`、IdP client secret 在 `mcpXaaIdpConfig[<issuerKey>]`。
+- `ClaudeAuthProvider`（v2 `chunk-ghww1f0b.js#Y_n`）：`clientMetadata`（client_name `Claude Code (<server>)`、grant_types authorization_code+refresh_token、token_endpoint_auth_method none、scope 取元数据）；`clientMetadataUrl`（CIMD，默认 `https://claude.ai/oauth/claude-code-client-metadata`，`MCP_OAUTH_CLIENT_METADATA_URL` 可改；redirect 不是本机 /callback 时退回 DCR）；`tokens()`（XAA 静默换令牌、step-up 时不发 refresh token、本会话被拒的令牌不再发）；`refreshAuthorization`（并发刷新协调）；`saveDiscoveryState` 等。
 - 主流程 `performMCPOAuthFlow`：XAA 分支 → 否则选端口（配置 `oauth.callbackPort` > 已注册端口 > `findAvailablePort`：`MCP_OAUTH_CALLBACK_PORT` > 随机（Windows 39152–49151，其他 49152–65535，最多 100 次）> 3118）→ 清旧令牌（保留客户端注册）→ 在 127.0.0.1 起回调服务器（只处理 /callback）→ SDK `auth()` 发现元数据（`fetchAuthServerMetadata`：配置的 `authServerMetadataUrl` 必须 https）、注册、PKCE、打开浏览器 → 回调换令牌；v2 回调校验 `iss`（RFC 9207，`evaluateIssuerEchoPolicy`，`tengu_mcp_issuer_strict_echo` 决定 enforce/observe）。遥测 `tengu_mcp_oauth_flow_start/success/error/failure`、`tengu_mcp_oauth_refresh_*`。
 - needs-auth 缓存：`<配置目录>/mcp-needs-auth-cache.json`（或 v5 存储），条目 `{timestamp, id?, ttlMs?}`；TTL 15 分钟 / 4 小时（claude.ai 代理、插件远程）/ 90 秒（有 refresh token）。命中时直接显示 needs-auth 不连线。
 - 一方服务器（Anthropic 域名 `/v1/design/`、`/v1/claude/test/` 等，`isFirstPartyMcpUrl`）用 claude.ai 登录令牌（`wrapFetchWithFirstPartyAuth`）；Design 连接器还有 plan_token 与同意（needs_consent）门控。
@@ -295,7 +297,7 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
 
 - `registerElicitationHandler`：`elicitation/create` 请求 → 控制器（`TBt`）：先 `runElicitationHooks`（Elicitation hook 可直接给出 action/content 或阻断为 decline）→ 无结果时经 `requestDialog` 弹表单/URL 对话框 → `runElicitationResultHooks`（可改写或阻断）→ 回复；`notifications/elicitation/complete` 通知标记 URL 模式完成。
 - 表单字段：`getZodSchema` 把原始 schema（string+format email/uri/date/date-time、number/integer 范围、boolean、enum/oneOf 单选、array+items 多选）转 zod；`validateElicitationInputAsync` 对日期字段支持自然语言（`parseNaturalLanguageDateTime`，用小模型，`querySource: mcp_datetime_parse`）。
-- 客户端能力：elicitation 声明 form 与 url；Java MCP SDK ≤0.17.0 不认 url 能力时提示设置 `bareElicitationCapability: true`（`chunk-8t8n4kdh.js#qn`）。GrowthBook `tengu_mcp_legacy_url_elicitation_server_denylist` 控制老式 URL elicitation。
+- 客户端能力：elicitation 声明 form 与 url；Java MCP SDK ≤0.17.0 不认 url 能力时提示设置 `bareElicitationCapability: true`（`chunk-sywnjtqb.js#Gn`）。GrowthBook `tengu_mcp_legacy_url_elicitation_server_denylist` 控制老式 URL elicitation。
 
 ### 2.6 Channel（服务器主动推送）
 
@@ -327,7 +329,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 插件系统负责：市场（marketplace）登记与缓存 → 插件安装到版本化缓存并记在 `installed_plugins.json` → 按 settings 的 `enabledPlugins` 启用 → 启动/刷新时把插件目录里的命令、技能、代理、hooks、输出样式、主题、MCP/LSP 服务器、监视器（monitors）等组件注入运行时。
 
 - 上游调用者：启动流程（`performStartupChecks`、`installPluginsForHeadless`）、`/plugin` 界面（`commands/plugin/*`）、`claude plugin …` CLI（`cli/handlers/plugins.ts` → `services/plugins/pluginCliCommands.ts`）、`/reload-plugins`（`refreshActivePlugins`）、技能/命令加载、MCP 配置合并（`services/mcp/config` 调 `getPluginMcpServers`）、LSP 管理器（`getPluginLspServers`）、Bash 工具 PATH（`getEnabledPluginBinPaths`）。
-- 下游依赖：settings 读写（`getSettingsForSource`、`getEnabledSettingSources`（`chunk-5hsd6qen.js#Po`））、安全存储（`getSecureStorage`，keychain/credential-manager/凭据文件）、git 执行、HTTP（axios 实例）、zod、存储后端 V5（`isStorageV5Enabled`）。
+- 下游依赖：settings 读写（`getSettingsForSource`、`getEnabledSettingSources`（`chunk-sq9ffh11.js#jo`））、安全存储（`getSecureStorage`，keychain/credential-manager/凭据文件）、git 执行、HTTP（axios 实例）、zod、存储后端 V5（`isStorageV5Enabled`）。
 
 ### 3.2 标识与目录布局
 
@@ -347,7 +349,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 
 1. 输入解析：`utils/plugins/parseMarketplaceInput.ts · parseMarketplaceInput`（git@…#ref、https（.git→git，.json→url，github.com→github）、owner/repo、本地目录/文件、npm）。
 2. 添加：`marketplaceManager.ts · addMarketplaceSource` → `assertMarketplaceNameAddable`、`checkExistingNameDifferentSource`/`checkDeclaredMarketplaceCollision`/`checkCloneFolderCollision` → `loadAndCacheMarketplace` → `updateKnownMarketplaces`（`proper-lockfile` + 进程内队列）→ 可选 `saveMarketplaceToSettings`（写 `extraKnownMarketplaces`）。
-3. 获取：`loadAndCacheMarketplace` 先 `isSourceAllowedByPolicy`（chunk-f3qhjfah `lf`，真名，见建议）；github/git → `cacheMarketplaceFromGit`（`gitClone` depth 1、sparse-checkout、禁交互、`CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS` 默认 120 s；GitHub 按 `isGitHubSshLikelyConfigured` 决定 SSH/HTTPS 顺序，`orderGithubTransports`，两次都失败合并错误）；url → `cacheMarketplaceFromUrl`（headers + headersHelper 命令输出的头）；npm、file、directory、settings（settings.json 内联市场，reconciler 写合成 marketplace.json）。解析用 `getPluginMarketplaceSchemaFor`（`applyMarketplacePluginRoot` 先改写裸来源名）。
+3. 获取：`loadAndCacheMarketplace` 先 `isSourceAllowedByPolicy`（chunk-5s0qaz1x `lf`，真名，见建议）；github/git → `cacheMarketplaceFromGit`（`gitClone` depth 1、sparse-checkout、禁交互、`CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS` 默认 120 s；GitHub 按 `isGitHubSshLikelyConfigured` 决定 SSH/HTTPS 顺序，`orderGithubTransports`，两次都失败合并错误）；url → `cacheMarketplaceFromUrl`（headers + headersHelper 命令输出的头）；npm、file、directory、settings（settings.json 内联市场，reconciler 写合成 marketplace.json）。解析用 `getPluginMarketplaceSchemaFor`（`applyMarketplacePluginRoot` 先改写裸来源名）。
 4. 官方市场：`officialMarketplaceStartupCheck.ts · checkAndInstallOfficialMarketplace`（`CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`、策略、重试退避，遥测 `tengu_official_marketplace_auto_install`）→ 优先 `officialMarketplaceGcs.ts · fetchOfficialMarketplaceFromGcs`（`https://downloads.claude.ai/claude-code-releases/plugins/claude-plugins-official/latest` 指针 + zip），失败回退 git（`tengu_plugin_official_mkt_git_fallback`）。
 5. 刷新：`refreshMarketplaceDeduped`（全局 `marketplaceRefreshesInFlight` 去重）→ `refreshMarketplace`；`refreshAllMarketplaces` 跳过种子与 settings 市场。自动更新：`pluginAutoupdate.ts · autoUpdateMarketplacesAndPluginsInBackground`（`isMarketplaceAutoUpdate`：条目 autoUpdate > claudeai/pluginDirectory 默认开 > 官方名默认开，`knowledge-work-plugins`、`first-party-plugins` 除外；`tengu_plugin_autoupdate_pass`）。
 6. 对账：`reconciler.ts · reconcileMarketplaces`（`diffMarketplaces` 比较 `getDeclaredMarketplaces` 与 known_marketplaces）；交互模式由 `PluginInstallationManager.ts · performBackgroundPluginInstallations` 触发，headless 由 `installPluginsForHeadless`。
@@ -370,7 +372,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 
 #### 3.3.3 启用/禁用
 
-- 设置键 `enabledPlugins: { "<id>": true | false | string[] }`（数组也视为启用，`mO`），在 user/project/local/policy/flag 设置与 `--add-dir` 目录设置中合并；优先级 local > project > user（`SCOPE_PRECEDENCE`），托管 false 不可覆盖（`isPluginEnabled`，`chunk-dcmhvw5a.js#hJt`）。未设置时看 `manifest.defaultEnabled`（默认 true）。
+- 设置键 `enabledPlugins: { "<id>": true | false | string[] }`（数组也视为启用，`mO`），在 user/project/local/policy/flag 设置与 `--add-dir` 目录设置中合并；优先级 local > project > user（`SCOPE_PRECEDENCE`），托管 false 不可覆盖（`isPluginEnabled`，`chunk-z20c443b.js#nsn`）。未设置时看 `manifest.defaultEnabled`（默认 true）。
 - `setPluginEnabledOp(pluginId, enabled, scope)`：托管锁定、被启用插件依赖时禁止禁用（`requiredDependencyMessage`）、组织要求的插件（`listRequiredPlugins`）不可禁用；`enablePluginOp`/`disablePluginOp` 是薄包装。
 
 #### 3.3.4 加载
@@ -383,7 +385,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
       │    └ loadPluginFromMarketplaceEntry / loadCachedMarketplacePlugin → finishMarketplacePluginLoad
       │         └ createPluginFromPath(pluginPath, pluginSource, enabled, …)
       ├ loadSessionOnlyPlugins(--plugin-dir/--plugin-url；marketplace=inline)
-      ├ claude.ai 同步目录（marketplace=synced）、skills-dir 插件（chunk-e6aww6q8 part-571 W2r）
+      ├ claude.ai 同步目录（marketplace=synced）、skills-dir 插件（chunk-5xgkngpb part-571 W2r）
       ├ getBuiltinPlugins()
       ├ mergePluginSources（托管 > 会话 > 市场，去重）
       └ verifyAndDemote（依赖不满足 → 降级禁用，dependency-unsatisfied）
@@ -411,7 +413,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 - 替换：`substitutePluginVariables`（`${CLAUDE_PLUGIN_ROOT}`、`${CLAUDE_PROJECT_DIR}`、`${CLAUDE_PLUGIN_DATA}`）、`substituteUserConfigVariables`（`${user_config.KEY}`，缺失抛错）、`substituteUserConfigInContent`（技能/代理正文中敏感值不替换）。
 - CLI：`claude plugin configure <plugin> [--values-stdin]`、`install --config key=value`。
 
-#### 3.3.7 CLI 子命令（`chunk-y5m1jrzk` 命令元数据表）
+#### 3.3.7 CLI 子命令（`chunk-6g88e2yt` 命令元数据表）
 
 `plugin init <name>`（别名 new，脚手架到 ~/.claude/skills/<name>/）、`validate <path> [--strict --json]`、`tag [path]`、`list`、`test [dir]`（earlyAccess hooksModules）、`details <name>`（组件清单与 token 开销）、`marketplace add <source> | list | remove <name> | update [name]`、`install <plugin>`（别名 i，`-s/--scope`、`--config`）、`uninstall <plugin>`（别名 remove/rm）、`prune`（别名 autoremove）、`enable <plugin>`、`disable [plugin]`（`--all`）、`update <plugin>`、`configure <plugin>`、`eval [target]` 与 `eval init [name]`。命令别名 `plugins`。
 
@@ -443,7 +445,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 
 ## 4. Hooks
 
-### 4.1 事件清单（`HOOK_EVENTS`，`chunk-dcmhvw5a.js#yc`，共 33 个）
+### 4.1 事件清单（`HOOK_EVENTS`，`chunk-z20c443b.js#bc`，共 33 个）
 
 | 事件 | matcher 字段（`getHookEventMetadata`） | 316 相对 2.1.88 |
 |---|---|---|
@@ -485,9 +487,9 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 
 ### 4.2 配置来源与合并
 
-钩子匹配器列表由 `SO`（`chunk-e6aww6q8.js#SO`，unattributed）→ `g4`/`f`（`chunk-7a5rgqvc.js`，unattributed）汇总，顺序：
+钩子匹配器列表由 `SO`（`chunk-5xgkngpb.js#eP`，unattributed）→ `g4`/`f`（`chunk-e698sy23.js`，unattributed）汇总，顺序：
 
-1. **启动快照**（`getHooksConfigFromSnapshot()`（`chunk-2jdf5m4m.js#X2`）= `getHooksFromAllowedSources` 的缓存）：合并后的 settings `hooks`（user/project/local/flag/policy）。policy `disableAllHooks` → 空；policy `allowManagedHooksOnly` 或只允许插件定制（`isRestrictedToPluginOnly("hooks")`）→ 只取 policy 钩子；用户层 `disableAllHooks` 视受信层情况处理。
+1. **启动快照**（`getHooksConfigFromSnapshot()`（`chunk-ybq8sbnv.js#t1`）= `getHooksFromAllowedSources` 的缓存）：合并后的 settings `hooks`（user/project/local/flag/policy）。policy `disableAllHooks` → 空；policy `allowManagedHooksOnly` 或只允许插件定制（`isRestrictedToPluginOnly("hooks")`）→ 只取 policy 钩子；用户层 `disableAllHooks` 视受信层情况处理。
 2. **设备钩子**（`getPluginSettingsHooks(event)`）与**主线程代理钩子**（`getMainThreadAgentHooks()`，代理 frontmatter 注册的，managedOnly 时略过）。
 3. **注册钩子**（`getRegisteredHooks()`，`bootstrap/state`）：插件 `hooks/hooks.json`（带 pluginRoot/pluginId）、SDK `hooks` 回调（callback）、内部 callback。policy `disableAllHooks` 时只保留非插件、非设备的回调。
 4. **会话钩子**（`SessionHooksRegistry`）：skill frontmatter（`registerSkillHooks`，带 skillRoot，`once` 成功后移除）、agent frontmatter（`registerFrontmatterHooks`，子代理里 Stop 改成 SubagentStop）、`/goal` 等运行时注册、function 钩子（`addFunctionHook`，默认 5s 超时，回调参数是消息列表）。
@@ -505,13 +507,13 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 - SessionStart/Setup 不支持 http 钩子。
 - SessionStart 的 startup/resume 来源中，项目设置里的 command 钩子被强制改为 async（`executeHooks` 里 `isStartupOrResume`）。
 
-### 4.4 钩子类型（`buildHookSchemas`，`chunk-dcmhvw5a.js#D_`）
+### 4.4 钩子类型（`buildHookSchemas`，`chunk-z20c443b.js#yy`）
 
 | type | 字段 | 执行 |
 |---|---|---|
 | `command` | command、**args**（exec 形式，无 shell）、if、shell（bash/powershell）、timeout、**onFailure**（continue/block）、statusMessage、once、async、asyncRewake、**rewakeMessage**、**rewakeSummary**（@internal）、**cloud**（device/skip，@internal） | `execCommandHook`（`#MU`） |
 | `prompt` | prompt（`$ARGUMENTS` 占位）、if、timeout、model、**continueOnBlock**、statusMessage、once | `execPromptHook`（`#TAn`） |
-| **`mcp_tool`** | server、tool、input（字符串支持 `${tool_input.file_path}` 插值）、if、timeout、statusMessage、once | `runMcpToolHook`（`chunk-e6aww6q8.js#Snt`） |
+| **`mcp_tool`** | server、tool、input（字符串支持 `${tool_input.file_path}` 插值）、if、timeout、statusMessage、once | `runMcpToolHook`（`chunk-5xgkngpb.js#Cqe`） |
 | `http` | url、if、timeout、**onFailure**、headers、allowedEnvVars、statusMessage、once、**cloud** | `execHttpHook`（`#PJn`） |
 | `agent` | prompt、if、timeout（默认 60s）、model、statusMessage、once | `execAgentHook`（`#hnt`） |
 
@@ -525,19 +527,19 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 2. 云端服务调用（served call）准备环境 `buildServedCallHookEnv`（`#OOr`）；mods 的 owed 列表 / whichCopyAsk 先等待。
 3. `getMatchingHooks` → 过滤（served call 下 prompt/agent 不跑）。
 4. 只有 callback 钩子时走快路径（不发进度消息）；否则发 `hook_progress` 消息、开 OTel span，按 `bAn(...)` 并行执行（有并发槽位 `SAn`，PermissionRequest 的 agent 钩子不占槽），总超时 `_nt(...)`。
-5. 每个钩子按类型分发；结果经 `summarizeHookFailures`（`chunk-e6aww6q8.js#QBt`）/ `refuseUnfinishedPreToolHook`（`#Vxn`，PreToolUse 钩子超时/失败即拒绝调用，除非 `onFailure: continue`）处理后逐条产出。
+5. 每个钩子按类型分发；结果经 `summarizeHookFailures`（`chunk-5xgkngpb.js#qGt`）/ `refuseUnfinishedPreToolHook`（`#ULn`，PreToolUse 钩子超时/失败即拒绝调用，除非 `onFailure: continue`）处理后逐条产出。
 6. 汇总权限：deny > defer > ask > allow。产出 `{permissionBehavior, hookPermissionDecisionReason, updatedInput, rewriterKind, permissionDisplay}` 等。
 7. 遥测：`tengu_run_hook`、`tengu_repl_hook_finished`（含注入字符数）、`tengu_hook_plugin_injected/finished`、OTel `hook_execution_start/complete`。
 
 `executeHooksOutsideREPL`（`#cN`）用于没有对话上下文的事件（SessionEnd、Notification、PreCompact、PostCompact、ConfigChange、CwdChanged、FileChanged、InstructionsLoaded、StopFailure、Elicitation*、WorktreeCreate/Remove、DirectoryAdded），返回 `{command, succeeded, output, blocked, watchPaths, systemMessage}`；prompt/agent 钩子在这里返回 “not yet supported outside REPL”。
 
-`executeHooks`（`chunk-e6aww6q8.js#JI`，`utils/hooks.ts`；门面导出名）是 REPL 内的分派层：有 mods function-hook 链（`classic.<Event>`）时走 `runFunctionHookChain`（`chunk-e6aww6q8.js#ZOr`）链，否则直接 `executeHooks_2`（`chunk-e6aww6q8.js#eIr`）；子代理里只透传权限相关字段（`keptForObservationContext`，`chunk-e6aww6q8.js#Kzr`）。
+`executeHooks`（`chunk-5xgkngpb.js#AM`，`utils/hooks.ts`；门面导出名）是 REPL 内的分派层：有 mods function-hook 链（`classic.<Event>`）时走 `runFunctionHookChain`（`chunk-5xgkngpb.js#VBr`）链，否则直接 `executeHooks_2`（`chunk-5xgkngpb.js#YBr`）；子代理里只透传权限相关字段（`keptForObservationContext`，`chunk-5xgkngpb.js#Z7r`）。
 
 command 钩子细节（`execCommandHook`）：
 
 - 启动：`args` 存在 → `spawn(command, args)`（exec 形式，`${CLAUDE_PROJECT_DIR}`、`${CLAUDE_PLUGIN_ROOT}`、`${CLAUDE_PLUGIN_DATA}`、`${user_config.*}` 逐元素替换）；shell=powershell → pwsh/powershell（找不到报错），追加 exit 2 透传与“只输出字符串无结论”检测；默认 bash（Windows 用 Git Bash，找不到报错）。`CLAUDE_CODE_SHELL_PREFIX` 包装命令。
 - 插件钩子在 shell 形式里引用 `${user_config.*}` 直接拒绝（防二次 shell 解析）；非插件钩子引用 `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PLUGIN_DATA}` 报错；skill 钩子只有 `CLAUDE_PLUGIN_ROOT`（指向 skill 目录）。
-- 环境变量：继承进程 env（组织钩子用干净的 env，剔除个人插件的 `$.env.set` 和仓库设置的 env），加 `CLAUDECODE=1`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_CHILD_SESSION`=`1`、`CLAUDE_CODE_SESSION_ATTENDED`、`CLAUDE_PID`、`CLAUDE_EFFORT`、`TRACEPARENT`（`claudeSubprocessEnv`，`chunk-s61vbvea.js#Gnt`）、`CLAUDE_PROJECT_DIR`、`COLUMNS`/`LINES`、`CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA`、`CLAUDE_PLUGIN_OPTION_<KEY>`，官方插件可得 `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`（`getPluginHookCredentialEnv`，`chunk-e6aww6q8.js#qOr`，受 `tengu_amber_lattice` 的 `plugins` 名单门控），SessionStart/Setup/CwdChanged/FileChanged 加 `CLAUDE_ENV_FILE`。
+- 环境变量：继承进程 env（组织钩子用干净的 env，剔除个人插件的 `$.env.set` 和仓库设置的 env），加 `CLAUDECODE=1`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_CHILD_SESSION`=`1`、`CLAUDE_CODE_SESSION_ATTENDED`、`CLAUDE_PID`、`CLAUDE_EFFORT`、`TRACEPARENT`（`claudeSubprocessEnv`，`chunk-7jxyna5q.js#udt`）、`CLAUDE_PROJECT_DIR`、`COLUMNS`/`LINES`、`CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA`、`CLAUDE_PLUGIN_OPTION_<KEY>`，官方插件可得 `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`（`getPluginHookCredentialEnv`，`chunk-5xgkngpb.js#BBr`，受 `tengu_amber_lattice` 的 `plugins` 名单门控），SessionStart/Setup/CwdChanged/FileChanged 加 `CLAUDE_ENV_FILE`。
 - stdin：写入一行 JSON（`createBaseHookInput` 的公共字段 + 事件字段），然后关闭。
 - 超时：`hook.timeout` 秒，否则 `TOOL_HOOK_EXECUTION_TIMEOUT_MS = 600000`（UserPromptSubmit 30s）。
 - 退出后 `waitForStdioQuiet`（`#s$t`）等 stdout/stderr 安静 500ms、最多 10s；stdio 未正常结束且输出不是惰性 JSON 时拒绝采信（`checkIncompleteCapture`）。
@@ -632,7 +634,7 @@ prompt/agent 钩子协议：模型返回 `{ok, reason, impossible?}`（`hookResp
 
 条件 skill：frontmatter 有 `paths`（gitignore 语法，去掉尾部 `/**`）时先存入 `conditionalSkills`，`activateConditionalSkillsForPaths`（`#evn`）在被触及文件命中时激活。
 
-热重载：`createSkillChangeDetector`（`chunk-2njac0sx.js#Re`）用 chokidar 监听 `getWatchablePaths` 列出的 skills/commands/agents 目录（depth 2，只看 .md，忽略 .git），按用户交互活跃度切换轮询间隔；变化去抖后先跑 ConfigChange 钩子（source=skills，可阻断），再 `clearSkillCaches` 并通知重载。SessionStart 钩子返回 `reloadSkills: true` 也会重扫。
+热重载：`createSkillChangeDetector`（`chunk-3n0n2sf6.js#Fe`）用 chokidar 监听 `getWatchablePaths` 列出的 skills/commands/agents 目录（depth 2，只看 .md，忽略 .git），按用户交互活跃度切换轮询间隔；变化去抖后先跑 ConfigChange 钩子（source=skills，可阻断），再 `clearSkillCaches` 并通知重载。SessionStart 钩子返回 `reloadSkills: true` 也会重扫。
 
 ### 5.2 frontmatter 字段（`parseSkillFrontmatterFields`，`#_Ce`；`createSkillCommand`，`#phn`）
 
@@ -661,7 +663,7 @@ prompt/agent 钩子协议：模型返回 `{ok, reason, impossible?}`（`hookResp
 | `metadata` | 任意对象（316 新增） |
 | `experimental` 中的 `cachettl` | 缓存 TTL（`parseExperimentalCacheTtl`） |
 
-frontmatter 解析（`parseFrontmatter`，`chunk-82kqcve8.js#sd`）：`---` 块用 YAML 解析；untrusted 来源拒绝超过 65536 字节、过深或含锚点的块；`quoteLossyValues` 模式给会丢信息的值加引号并报告 rewriteHazard。
+frontmatter 解析（`parseFrontmatter`，`chunk-a2q0x549.js#Rd`）：`---` 块用 YAML 解析；untrusted 来源拒绝超过 65536 字节、过深或含锚点的块；`quoteLossyValues` 模式给会丢信息的值加引号并报告 rewriteHazard。
 
 ### 5.3 命令对象与调用
 
@@ -671,7 +673,7 @@ frontmatter 解析（`parseFrontmatter`，`chunk-82kqcve8.js#sd`）：`---` 块�
 
 SkillTool（tools 领域）调用命令：inline 时把提示词注入当前对话，`context: fork` 时起子代理；skill 的 hooks 在调用时经 `registerSkillHooks` 注册为会话钩子。MCP 服务器提供的 skill 通过 `getMCPSkillBuilders`（loadSkillsDir 在模块初始化时注册 `{createSkillCommand, parseSkillFrontmatterFields}`）构造。
 
-### 5.4 内置（bundled）skill（`initBundledSkills`，`chunk-hantmvxa.js#ALe`）
+### 5.4 内置（bundled）skill（`initBundledSkills`，`chunk-ne2890fx.js#SFe`）
 
 `CLAUDE_CODE_ENTRYPOINT=local-agent` 时只注册 design（非 hub 模式）及 artifact 系列。否则注册：
 
@@ -723,7 +725,7 @@ SkillTool（tools 领域）调用命令：inline 时把提示词注入当前对�
 ### 6.1 配置来源
 
 - 316 中 LSP 服务器**只来自插件**：`services/lsp/config.ts · getAllLspServers(storageV5, credentials)` 先调用 `loadAllPlugins`，再对每个已启用插件调用 `utils/plugins/lspPluginIntegration.ts · getPluginLspServers`（插件的 `lspServers` 字段，或插件目录里的 LSP 配置文件），把结果合并成 `{服务器名: 配置}`。任何一个插件加载失败，返回值里的 `loadFailed` 就是 true。
-- 配置 schema 是 `utils/plugins/schemas.ts · LspServerConfigSchema`（`chunk-dcmhvw5a.js`，由 plugins 分支命名）。从 zod 描述读出的字段：
+- 配置 schema 是 `utils/plugins/schemas.ts · LspServerConfigSchema`（`chunk-z20c443b.js`，由 plugins 分支命名）。从 zod 描述读出的字段：
 
 | 字段 | 说明 |
 |---|---|
@@ -766,7 +768,7 @@ prepareSession / 启动
   1. 受 `restartOnCrash` 与 `crashRecoveryCount > maxRestarts` 约束，超限时只记一次 `lsp_server_max_crash_recovery`。
   2. `LSPClient.start(command, args, {env, cwd, pluginId})`：在工具 cgroup（`toolCgroupClass:"lsp"`）里 spawn，`stdio` 全管道，`windowsHide`；按插件 id 合成环境变量。stderr 逐行进调试日志。
   3. 注册 `workspace/configuration`（用 `getConfigSection` 从 `settings` 按点号路径取值），忽略 `client/registerCapability` / `client/unregisterCapability`（只记日志）。
-  4. `initialize`：`processId`、`clientInfo {name:"Claude Code", version:"2.1.316"}`、`initializationOptions`、`workspaceFolders`/`rootPath`/`rootUri`，能力声明：
+  4. `initialize`：`processId`、`clientInfo {name:"Claude Code", version:"2.1.318"}`、`initializationOptions`、`workspaceFolders`/`rootPath`/`rootUri`，能力声明：
      - `workspace.configuration = (settings != null)`、`workspaceFolders: !1`、`didChangeWatchedFiles`（不动态注册）；
      - `textDocument` 下 `synchronization` 的 `didSave`、`publishDiagnostics`（relatedInformation、tagSupport [1,2]、codeDescriptionSupport）、`hover`（markdown/plaintext）、`definition`（linkSupport）、`references`、`documentSymbol`（层级）、`callHierarchy`；
      - `general: { positionEncodings: ["utf-16"] }`。
@@ -795,7 +797,7 @@ prepareSession / 启动
 
 ### 6.4 与 LSPTool 的关系
 
-- `tools/LSPTool/LSPTool.ts`（`chunk-kxyd0g16.js#zt`）的 `isEnabled()` 是 `hasLspEverConnected()`：至少有一个服务器曾经进入非 error 状态，工具才会出现。工具 `shouldDefer` 为 true、只读、可并发，请求经 `getLspServerManager().sendRequest(filePath, method, params)` 转发。
+- `tools/LSPTool/LSPTool.ts`（`chunk-fmnbrxwy.js#Qt`）的 `isEnabled()` 是 `hasLspEverConnected()`：至少有一个服务器曾经进入非 error 状态，工具才会出现。工具 `shouldDefer` 为 true、只读、可并发，请求经 `getLspServerManager().sendRequest(filePath, method, params)` 转发。
 - 状态展示：`hooks/notifs/useLspInitializationNotification.tsx` 读 `getInitializationStatus()`。
 
 ### 6.5 开关与环境变量
@@ -813,12 +815,12 @@ prepareSession / 启动
 ### 7.1 三个进程角色
 
 1. **主会话**：判定是否启用，把内置 MCP 服务器 `claude-in-chrome` 加进动态 MCP 配置，并注入 Chrome 系统提示片段。
-2. **`claude --claude-in-chrome-mcp`**：内置的 stdio MCP 服务器，由主会话作为 MCP 子进程启动（`cli.js` 在 `process.argv[2]` 上做快路径分派）。它实例化 `@ant/claude-for-chrome-mcp`（`chunk-3ewc7v9f.js`，导出 `createClaudeForChromeMcpServer`、`BROWSER_TOOLS`、`BridgeClient` 等，属第三方/内部包）。
+2. **`claude --claude-in-chrome-mcp`**：内置的 stdio MCP 服务器，由主会话作为 MCP 子进程启动（`cli.js` 在 `process.argv[2]` 上做快路径分派）。它实例化 `@ant/claude-for-chrome-mcp`（`chunk-akxtr9vf.js`，导出 `createClaudeForChromeMcpServer`、`BROWSER_TOOLS`、`BridgeClient` 等，属第三方/内部包）。
 3. **`claude --chrome-native-host`**：浏览器扩展通过 native messaging 拉起的进程，在本地 socket 上把 MCP 服务器与扩展连起来。
 
 服务器到扩展有两条链路：本地原生宿主 socket（`socketPath`/`getSocketPaths`），以及云端 WebSocket 桥 `wss://bridge.claudeusercontent.com`（staging 与本地 `ws://localhost:8765` 由 `USE_STAGING_OAUTH`/`USE_LOCAL_OAUTH`/`LOCAL_BRIDGE` 切换）。
 
-### 7.2 启用判定与接入（主会话，`cli/startup/prepareSession.ts` · `prepareSession` 内，`chunk-3wek6r2k.js#KSo`；写作时为 _new/prepareSession.ts）
+### 7.2 启用判定与接入（主会话，`cli/startup/prepareSession.ts` · `prepareSession` 内，`chunk-hjswk319.js#QLo`；写作时为 _new/prepareSession.ts）
 
 ```
 isClaudeInChromeAllowed()  = 组织策略 allow_claude_browser_extension            [#ox]
@@ -843,7 +845,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
 - 会话处于 bypass 权限时，`env` 里放 `CLAUDE_CHROME_PERMISSION_MODE=skip_all_permission_checks`。
 - 设了 `CLAUDE_CODE_CHROME_LATE_MCP_SERVER` 且是远程会话时，不安装原生宿主。
 - 自动启用：`shouldAutoEnableClaudeInChrome` = 组织允许 + 基本资格（`hasBaseChromeOfferEligibility`）+ 有扩展证据（缓存的 `cachedChromeExtensionInstalled` 或已配对设备）+ GrowthBook `tengu_chrome_auto_enable`。
-- 安装推荐：`shouldOfferChromeInstallUpsell`（unattributed `chunk-hantmvxa.js#Nt`，GrowthBook `tengu_chrome_install_upsell`）→ `runChromeInstallSetup`（`#Ot`）。
+- 安装推荐：`shouldOfferChromeInstallUpsell`（unattributed `chunk-ne2890fx.js#$t`，GrowthBook `tengu_chrome_install_upsell`）→ `runChromeInstallSetup`（`#Ot`）。
 
 ### 7.3 原生宿主安装
 
@@ -893,7 +895,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
    - `trackEvent`：只放行白名单字段（`SAFE_BRIDGE_STRING_KEYS`）。
 4. `createClaudeForChromeMcpServer(ctx)`，接到 `StdioServerTransport`。stdin 结束时退出。
 
-- 工具清单来自 `chunk-srrcw01s.js`：`javascript_tool`、`read_page`、`find`、`form_input`、`computer`、`browser_batch`、`navigate`、`resize_window`、`gif_creator`、`upload_image`、`get_page_text`、`tabs_context_mcp`、`tabs_create_mcp`、`tabs_close_mcp`、`read_console_messages`、`read_network_requests`、`shortcuts_list`、`shortcuts_execute`、`file_upload`、`switch_browser`、`list_connected_browsers`、`select_browser`。
+- 工具清单来自 `chunk-mdeejm2h.js`：`javascript_tool`、`read_page`、`find`、`form_input`、`computer`、`browser_batch`、`navigate`、`resize_window`、`gif_creator`、`upload_image`、`get_page_text`、`tabs_context_mcp`、`tabs_create_mcp`、`tabs_close_mcp`、`read_console_messages`、`read_network_requests`、`shortcuts_list`、`shortcuts_execute`、`file_upload`、`switch_browser`、`list_connected_browsers`、`select_browser`。
   - 其中 `file_upload`、`browser_batch` 在部分会话里受限，附带专门的拒绝文案。
   - 工具名前缀是 `mcp__claude-in-chrome__`。
   - 终端显示：`Claude in Chrome[<tool>]`，带 `[View Tab]` 超链接 `https://clau.de/chrome/tab/<tabId>`。
@@ -912,13 +914,13 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
   - 2.1.88 的 `cli.tsx` 有 `feature('CHICAGO_MCP') && argv[2]==='--computer-use-mcp'`；316 的 `cli.js` 只剩 `--claude-in-chrome-mcp`、`--chrome-native-host`、`--eval-mock-server` 三个快路径。
   - 原文件位置（`utils/computerUse/mcpServer.ts`、`gates.ts` 的 `getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`）在 316 中匹配到的都是无关代码。
   - linux 构建中 `requireComputerUseSwift()` 和 `createCliExecutor()` 都直接抛 "macOS-only"。
-  - `@ant/computer-use-swift` 的 CommonJS 包裹（`chunk-ha3km179.js` 里的 `Cl`，读 `COMPUTER_USE_SWIFT_NODE_PATH` 或 `prebuilds/computer_use.node`）在本构建中第一句就抛错。
+  - `@ant/computer-use-swift` 的 CommonJS 包裹（`chunk-w3ch4xq2.js` 里的 `Cl`，读 `COMPUTER_USE_SWIFT_NODE_PATH` 或 `prebuilds/computer_use.node`）在本构建中第一句就抛错。
 - **托管桌面路径（316 新增）**：
-  - `shouldWireHostedDesktopComputerUse`（unattributed `chunk-j51xvqzq.js#wDs`）的条件：`isHostedDesktopSession`（`CLAUDE_CODE_REMOTE && CLAUDE_CODE_HOSTED_DESKTOP`），非 HIPAA 组织，且 GrowthBook `tengu_dapper_acorn` 为真。
-  - 满足时 prepareSession 合入 `getHostedDesktopComputerUseConfig()`（`chunk-e6aww6q8.js#qVs`）：`{"computer-use": stdio /opt/cu-desktop/cu-desktop mcp, scope dynamic}`，只读动作（screenshot、zoom、cursor_position、wait）加入 allow 规则。
+  - `shouldWireHostedDesktopComputerUse`（unattributed `chunk-n251ajcn.js#DYs`）的条件：`isHostedDesktopSession`（`CLAUDE_CODE_REMOTE && CLAUDE_CODE_HOSTED_DESKTOP`），非 HIPAA 组织，且 GrowthBook `tengu_dapper_acorn` 为真。
+  - 满足时 prepareSession 合入 `getHostedDesktopComputerUseConfig()`（`chunk-5xgkngpb.js#Cai`）：`{"computer-use": stdio /opt/cu-desktop/cu-desktop mcp, scope dynamic}`，只读动作（screenshot、zoom、cursor_position、wait）加入 allow 规则。
   - `services/mcp/config.ts` 中，用户自己配置的、指向 cu-desktop 的服务器会被跳过，并提示 "Claude Code registers the desktop itself"。
-  - 工具名清单 `CU_TOOL_NAMES`（`chunk-dcmhvw5a.js#C_r`）在 2.1.88 的基础上新增 `app_*`（app_click、app_type、app_screenshot…）、`teach_*`、`request_full_control`/`release_full_control`、`computer_batch`、`list_apps` 等。
-- **会话状态**：`ComputerUseSession`（unattributed `chunk-hwmsct5x.js#mf`，按宿主各一份，通过 `getComputerUseSession()` 取得），字段有 `binding`、`currentToolUseContext`、`callsInFlight`、`unregisterLockCleanup`、`activeThisTurn`、`runLoopPump`/`runLoopPumpRetainCount`、`escHotkeyRegistered`、`frozenCoordinateMode`、`hostAdapter`、`swiftModule`、`inputModule`。
+  - 工具名清单 `CU_TOOL_NAMES`（`chunk-z20c443b.js#fIr`）在 2.1.88 的基础上新增 `app_*`（app_click、app_type、app_screenshot…）、`teach_*`、`request_full_control`/`release_full_control`、`computer_batch`、`list_apps` 等。
+- **会话状态**：`ComputerUseSession`（unattributed `chunk-vn3g7zt8.js#Bf`，按宿主各一份，通过 `getComputerUseSession()` 取得），字段有 `binding`、`currentToolUseContext`、`callsInFlight`、`unregisterLockCleanup`、`activeThisTurn`、`runLoopPump`/`runLoopPumpRetainCount`、`escHotkeyRegistered`、`frozenCoordinateMode`、`hostAdapter`、`swiftModule`、`inputModule`。
 - **run loop**：`drainRunLoop(fn, 30s)` 对泵做引用计数，每 1 ms 调一次 Swift `_drainMainRunLoop`；原生调用超时时抛 `computer-use native call exceeded …ms`。
 - **ESC**：
   - `unregisterEscHotkey` 注销 Swift 热键并释放泵；
@@ -927,12 +929,12 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
 - **回合结束**：`cleanupComputerUseAfterTurn`（被 `query.ts`、`query/stopHooks.ts` 调用）
   1. 先恢复本回合隐藏的应用，最多等 5 s，超时上报 `computeruse_turn_cleanup/unhide_timeout`；
   2. 本回合用过 computer-use 时，再注销 ESC 热键，并产出 `os_notification`："Claude is done using your computer"（类型 `computer_use_exit`）。
-- **执行器辅助**（`chunk-hrs3dad1.js`，供 macOS 构建使用）：
+- **执行器辅助**（`chunk-p57a7983.js`，供 macOS 构建使用）：
   - `typeViaClipboard`：pbpaste 备份 → pbcopy → 回读校验 → Cmd+V → 恢复原剪贴板；
   - `animatedMove`：ease-out cubic、60 fps、最长 0.5 s；
   - `withModifiers`：按住修饰键执行操作，结束后释放；
   - `MOVE_SETTLE_MS = 50`。
-- 渲染：`getBuiltinMcpRenderOverride`（`chunk-ah34pb7m.js#u1`）按 MCP 工具的 `builtinRenderFamily`（`claude-in-chrome` / `computer-use`）选用内置渲染；computer-use 的结果摘要见 `RESULT_SUMMARY`（Captured、Clicked、Typed…）。
+- 渲染：`getBuiltinMcpRenderOverride`（`chunk-wjygkcr4.js#T$`）按 MCP 工具的 `builtinRenderFamily`（`claude-in-chrome` / `computer-use`）选用内置渲染；computer-use 的结果摘要见 `RESULT_SUMMARY`（Captured、Clicked、Typed…）。
 
 ## 9. 深链接 `claude-cli://`
 
@@ -950,7 +952,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
 ### 9.2 处理流程
 
 ```
-OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
+OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-nhaxap13）
   → handleDeepLinkUri(uri)                                         [#ae]
       parseDeepLink → open: resolveCwd（cwd；否则按 repo 在已知本地克隆中找；否则家目录）
                             + readLastFetchTime（.git/FETCH_HEAD 的 mtime）
@@ -1002,7 +1004,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - **存储后端 V5**：几乎所有缓存/记录读写都有 `storageV5` 分支（作用域化存储、符号链接拒绝、`.links_materialized`），由 `tengu_hover_rest` 开关控制；旧版无此概念。
 - **安全加固**：manifest/组件路径的符号链接逃逸检查（`assertManifestContained`、`reportIfPathEscapes`）、archive URL 拒绝回环/元数据地址、来源脱敏（`redactMarketplaceSource`）、官方名防仿冒扩展（逐词拼接检测）。
 - **CLI**：新增 `init`、`tag`、`test`、`details`、`prune`、`configure`、`eval`、`validate --strict/--json`；旧版只有 install/uninstall/enable/disable/update/list/validate/marketplace。
-- `utils/plugins/gitAvailability.ts`（2.1.88 路径）在 316 不再是独立模块（git 可用性检测并入 `isGitUsable`（`chunk-e6aww6q8.js#ffn`，`utils/plugins/pluginManifestRead.ts`）/全局 `gitAvailable`；写作时在 chunk-e6aww6q8 part-104）。
+- `utils/plugins/gitAvailability.ts`（2.1.88 路径）在 316 不再是独立模块（git 可用性检测并入 `isGitUsable`（`chunk-5xgkngpb.js#Uit`，`utils/plugins/pluginManifestRead.ts`）/全局 `gitAvailable`；写作时在 chunk-5xgkngpb part-104）。
 
 ### 10.3 Hooks / Skills
 
@@ -1019,9 +1021,9 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 
 | 项 | 2.1.88 | 316 | 证据 |
 |---|---|---|---|
-| LSP 诊断登记表 | 模块级 Map + 导出函数 | 类 `LSPDiagnosticRegistry`，按会话根各一份（WeakMap） | `chunk-e6aww6q8.js#gDt`、`#jG`、`#yDt…#Kfn` |
+| LSP 诊断登记表 | 模块级 Map + 导出函数 | 类 `LSPDiagnosticRegistry`，按会话根各一份（WeakMap） | `chunk-5xgkngpb.js#b$t`、`#tq`、`#yDt…#Kfn` |
 | LSP 管理器 | 模块级变量 + 导出函数 | 工厂 `createLspManagerSingleton()` 返回对象，单例 `lspManagerSingleton` 再解构导出；新增 `hasEverConnected` 与代次号 | `#bTs`、`#_F` |
-| LSPTool 启用条件 | 当前已连接 | 曾经连接过（`hasLspEverConnected`） | `chunk-kxyd0g16.js#zt` |
+| LSPTool 启用条件 | 当前已连接 | 曾经连接过（`hasLspEverConnected`） | `chunk-fmnbrxwy.js#Qt` |
 | `restartOnCrash` | 未实现，配置了会告警 | 已实现：为 false 时崩溃后拒绝重启 | `#a2n` |
 | `workspace/configuration` | 不声明、不支持 | 按 `settings` 应答，并声明 `configuration` 能力 | `#a2n`、`#pTs` |
 | 文档版本、didClose | 版本恒为 1；有显式 closeFile 发 didClose，没有淘汰 | 版本递增；超过 50 个已打开文档时按 LRU 发 didClose；丢弃陈旧版本的诊断 | `#l2n`、`#d2n` |
@@ -1029,59 +1031,59 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 | 按服务器关闭诊断注入 | 无 | `diagnostics` 设为 false | `#d2n`、schema |
 | LSP 进程隔离 | 普通 spawn | 工具 cgroup `lsp`，能判断是否被内存上限杀掉 | `#Pa`、`#Bn` |
 | 远程会话延后 LSP | 无 | `tengu_moonlit_panda` | `#UFo` |
-| 原生宿主 status | 只有 `native_host_version` | 增加 `computer_name` | `chunk-ncz9bgnh.js#S` |
-| 原生宿主清单 origin | 生产 ID；ant 构建另加 dev/ant ID | 只有生产 ID | `#FH`、`chunk-s61vbvea.js#OH` |
-| Chrome 启用条件 | 本地开关 | 组织策略 `allow_claude_browser_extension` + OAuth 作用域检查 + 远程宿主托管 + 自动启用 + 安装推荐 | `#Ivt`、`#eqo`、`chunk-hantmvxa.js#Nt` |
-| Chrome MCP 服务器 | 直接启动 | 启动前检查组织策略、bearer 门控、账户不一致检测、配对设备与 tab group 环境变量、多组织提示 | `chunk-ztt2k9pv.js#Xe`、`#j` |
-| Chrome 工具 | 旧版 ChromeToolName 列 17 个（含 update_plan） | 工具名表 22 个：新增 `browser_batch`、`file_upload`、`switch_browser`、`list_connected_browsers`、`select_browser`、`tabs_close_mcp`；渲染仍保留 update_plan 分支 | `chunk-srrcw01s.js`、旧版 toolRendering.tsx 第 15 行 |
-| computer-use | CLI 本机 MCP（`--computer-use-mcp`，CHICAGO_MCP） | 公版里没有 CLI 入口；新增托管桌面 cu-desktop，工具集扩充 | `cli.js` 快路径、`chunk-e6aww6q8.js#qVs`、`chunk-dcmhvw5a.js#C_r` |
-| 深链接动作 | 只有 `open` | 新增 `install-plugin`；cwd 校验加强（UNC、`..`、网络链接） | `chunk-8gzm4s8j.js` |
-| 深链接参数 | `--prefill`、`--deep-link-repo`（明文） | 改用 base64url 的 `--prefill-b64`、`--deep-link-cwd-b64`；拼进 shell 的字符有白名单 | `chunk-bh9w80kx.js#p`、`#f` |
+| 原生宿主 status | 只有 `native_host_version` | 增加 `computer_name` | `chunk-08zxrh96.js#S` |
+| 原生宿主清单 origin | 生产 ID；ant 构建另加 dev/ant ID | 只有生产 ID | `#FH`、`chunk-7jxyna5q.js#cM` |
+| Chrome 启用条件 | 本地开关 | 组织策略 `allow_claude_browser_extension` + OAuth 作用域检查 + 远程宿主托管 + 自动启用 + 安装推荐 | `#Ivt`、`#eqo`、`chunk-ne2890fx.js#$t` |
+| Chrome MCP 服务器 | 直接启动 | 启动前检查组织策略、bearer 门控、账户不一致检测、配对设备与 tab group 环境变量、多组织提示 | `chunk-drr3hy76.js#Xe`、`#Y` |
+| Chrome 工具 | 旧版 ChromeToolName 列 17 个（含 update_plan） | 工具名表 22 个：新增 `browser_batch`、`file_upload`、`switch_browser`、`list_connected_browsers`、`select_browser`、`tabs_close_mcp`；渲染仍保留 update_plan 分支 | `chunk-mdeejm2h.js`、旧版 toolRendering.tsx 第 15 行 |
+| computer-use | CLI 本机 MCP（`--computer-use-mcp`，CHICAGO_MCP） | 公版里没有 CLI 入口；新增托管桌面 cu-desktop，工具集扩充 | `cli.js` 快路径、`chunk-5xgkngpb.js#Cai`、`chunk-z20c443b.js#fIr` |
+| 深链接动作 | 只有 `open` | 新增 `install-plugin`；cwd 校验加强（UNC、`..`、网络链接） | `chunk-6xpnm08k.js` |
+| 深链接参数 | `--prefill`、`--deep-link-repo`（明文） | 改用 base64url 的 `--prefill-b64`、`--deep-link-cwd-b64`；拼进 shell 的字符有白名单 | `chunk-r63rf7sw.js#p`、`#f` |
 | 协议注册失败标记 | 文件 | 文件，或 storageV5 的 state 键 | `#lCs` |
 
 ## 11. 未解之处
 
 ### 11.1 MCP
 
-- `chunk-r1g76qsy.js#Ra`（`McpResponseCache`）：被切进 channelNotification.ts，实为 SDK 内部响应缓存，按 `ttlMs/cacheScope` 使用的完整策略未追。
-- `chunk-0qyh5wah.js#Z4n` 发现缓存（加密封存、admission purge、strike-threshold）细节未逐行核实；文件路径 `<配置目录>/mcp-discovery-cache/`。
-- `chunk-8t8n4kdh.js#yc`/`Cc`（subscriptions/listen 重开与 park 调参，`tengu_mcp_listen_reopen_park_tuning`）未细读。
-- `chunk-z1n5m6nf.js#xt`（`callMCPTool_2`）只读了主干，v2 对应实现 `callMCPTool`（`chunk-8t8n4kdh.js#Jn`，约 15.6 KB；写作时在 `_unattributed/`，现在 `services/mcp/client.ts`），未逐行比较两代差异。
-- `chunk-aepeg2w5.js#PV` 官方 MCP 注册表 / directory BFF 的可见性规则（`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`）未细看。
-- 第 3 节 stdio 探测"兄弟进程"（`chunk-r1g76qsy.js#Sh`）在 316 v2 客户端里是否实际启用：CLI 的 stdio 传输 `Ht` 继承 SDK 基类，`_dispose` 存在于 chunk-8t8n4kdh 的 `jr` 类上，按 `readStdioServerParams`（`chunk-r1g76qsy.js#fh`）判定应启用，但未运行验证。
+- `chunk-qq5knpkd.js#$a`（`McpResponseCache`）：被切进 channelNotification.ts，实为 SDK 内部响应缓存，按 `ttlMs/cacheScope` 使用的完整策略未追。
+- `chunk-kbr8ch1e.js#Wer` 发现缓存（加密封存、admission purge、strike-threshold）细节未逐行核实；文件路径 `<配置目录>/mcp-discovery-cache/`。
+- `chunk-sywnjtqb.js#hc`/`Cc`（subscriptions/listen 重开与 park 调参，`tengu_mcp_listen_reopen_park_tuning`）未细读。
+- `chunk-h44h5gdv.js#$t`（`callMCPTool_2`）只读了主干，v2 对应实现 `callMCPTool`（`chunk-sywnjtqb.js#no`，约 15.6 KB；写作时在 `_unattributed/`，现在 `services/mcp/client.ts`），未逐行比较两代差异。
+- `chunk-exfmq47h.js#RV` 官方 MCP 注册表 / directory BFF 的可见性规则（`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`）未细看。
+- 第 3 节 stdio 探测"兄弟进程"（`chunk-qq5knpkd.js#Rh`）在 316 v2 客户端里是否实际启用：CLI 的 stdio 传输 `Ht` 继承 SDK 基类，`_dispose` 存在于 chunk-sywnjtqb 的 `jr` 类上，按 `readStdioServerParams`（`chunk-qq5knpkd.js#bh`）判定应启用，但未运行验证。
 
 ### 11.2 插件
 
-- `chunk-e6aww6q8.js#zKn`（loadCachedMarketplacePlugin）与 `#KKn`（finishMarketplacePluginLoad）参数众多，仅给了函数名，参数语义未逐一确认。
-- `chunk-pp50kewz.js#Ut`（finishReplaceSwitch，22 KB）只读了开头，--replace 的设置迁移细节未完整梳理。
-- `chunk-e6aww6q8.js#kX`（loadPluginHooks）里 hooks 模块“wake/rollout flag”状态机（`hooksModulesSwitchRead`、`hookModulesAwaitTrust`）未完全理清，相关小函数名置信度 0.45–0.55。
-- `chunk-s61vbvea.js#Ont`/`chunk-s61vbvea.js#QA`（被归到 reconciler.ts）是环境变量危险名单（DYLD_/LD_ 等），用途应属沙箱/hooks 环境清洗，未追到调用方。
+- `chunk-5xgkngpb.js#Q3n`（loadCachedMarketplacePlugin）与 `#Z3n`（finishMarketplacePluginLoad）参数众多，仅给了函数名，参数语义未逐一确认。
+- `chunk-md9fmgw9.js#Mt`（finishReplaceSwitch，22 KB）只读了开头，--replace 的设置迁移细节未完整梳理。
+- `chunk-5xgkngpb.js#aQ`（loadPluginHooks）里 hooks 模块“wake/rollout flag”状态机（`hooksModulesSwitchRead`、`hookModulesAwaitTrust`）未完全理清，相关小函数名置信度 0.45–0.55。
+- `chunk-fepf8jp6.js#Mct`/`chunk-fepf8jp6.js#vr`（被归到 reconciler.ts）是环境变量危险名单（DYLD_/LD_ 等），用途应属沙箱/hooks 环境清洗，未追到调用方。
 - 存储后端 V5（`tengu_hover_rest`）的存储接口实现（`read/write/update/deleteScope/ensureScope/statMeta`）写作时位于 _unattributed，未分析（place-rest 后的具体位置未重新定位）。
 
 ### 11.3 Hooks / Skills
 
-- `chunk-e6aww6q8.js#Snt`（mcp_tool 钩子执行，unattributed）未细读：`input` 插值规则与结果映射只从 schema 描述得知。
-- `chunk-e6aww6q8.js#Hge`（钩子不运行原因判定，含 owed/holds）与 mods（`Gb()`）体系属于另一子系统，未展开。
-- `chunk-e6aww6q8.js#Tqs`（旧名 hasHookForEvent）实际是按代理钩子调整权限模式，归属与命名存疑。
-- `chunk-dcmhvw5a.js#Zxi` 语句中的常量 24576 用途未确认（未命名）。
+- `chunk-5xgkngpb.js#Cqe`（mcp_tool 钩子执行，unattributed）未细读：`input` 插值规则与结果映射只从 schema 描述得知。
+- `chunk-5xgkngpb.js#S_e`（钩子不运行原因判定，含 owed/holds）与 mods（`Gb()`）体系属于另一子系统，未展开。
+- `chunk-5xgkngpb.js#sli`（旧名 hasHookForEvent）实际是按代理钩子调整权限模式，归属与命名存疑。
+- `chunk-z20c443b.js#g4i` 语句中的常量 24576 用途未确认（未命名）。
 - frontmatter `fallback`、`background` 字段的消费方未追踪。
-- `chunk-e6aww6q8.js#rPn`（getSessionEndHookTimeoutMs）等 SessionEnd 预算函数中 `jnt`（组织 SessionEnd 超时）与 `AQ(...)` 的含义只部分读懂。
+- `chunk-5xgkngpb.js#tNn`（getSessionEndHookTimeoutMs）等 SessionEnd 预算函数中组织 SessionEnd 超时（`getManagedSessionEndTimeoutMs`，`chunk-5xgkngpb.js#pst`，316 时叫 jnt）与 `withHostEnvRestored(...)` 的含义只部分读懂。
 
 ### 11.4 LSP / Chrome / Computer Use / 深链接
 
-- `chunk-bss4k1z9.js#Jr`（旧版名 registerEscHotkey）实际是 UI 主题函数，ESC 热键的**注册**代码没有找到（可能只在 darwin 构建里）。
-- `chunk-aepeg2w5.js#zos`（旧版名 initializationState）是 `return null` 后跟一段不可达代码，用途不明。
+- `chunk-775n2x67.js#Jr`（旧版名 registerEscHotkey）实际是 UI 主题函数，ESC 热键的**注册**代码没有找到（可能只在 darwin 构建里）。
+- `chunk-exfmq47h.js#qEs`（旧版名 initializationState）是 `return null` 后跟一段不可达代码，用途不明。
 - macOS 构建里 `createCliExecutor` 和 Swift 加载的真实实现在本 ELF 中看不到；第 4 节的执行器辅助函数在 linux 构建中没有调用方。
-- `chunk-dcmhvw5a.js#C_r` 里的 `Vxi = ["region","duration"]`（暂未命名）与 `HOSTED_DESKTOP_ONLY_MESSAGE` 的使用方写作时在 `_unattributed`，语义只有推断（`HOSTED_DESKTOP_ONLY_MESSAGE` 现在 `utils/computerUse/toolRendering.ts`）。
-- `chunk-dxdtyerk.js#V`：带某种终端特性的终端集合（含 JetBrains IDE），具体是哪种特性没有确认。
-- `@ant/claude-for-chrome-mcp`（`chunk-3ewc7v9f.js` 等）没有读，桥协议与工具实现不在本组范围。
+- `chunk-z20c443b.js#fIr` 里的 `Vxi = ["region","duration"]`（暂未命名）与 `HOSTED_DESKTOP_ONLY_MESSAGE` 的使用方写作时在 `_unattributed`，语义只有推断（`HOSTED_DESKTOP_ONLY_MESSAGE` 现在 `utils/computerUse/toolRendering.ts`）。
+- `chunk-edrpfa7j.js#H`：带某种终端特性的终端集合（含 JetBrains IDE），具体是哪种特性没有确认。
+- `@ant/claude-for-chrome-mcp`（`chunk-akxtr9vf.js` 等）没有读，桥协议与工具实现不在本组范围。
 
 切分与匹配的修正建议不放在本手册，见 `docs/process/domain-extensions.md`。
 
 ## 12. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 2134 处引用：名字 1409/1416（另 7 个只在 2.1.88 中存在），路径 179/187（另 8 个只在 2.1.88 中存在），字面量 319/320（另 1 个只在 2.1.88 中存在），声明id 210/210，路径·函数 1/1；占位符与含空格的说明性文字 300 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/wrapper.tsx`、`Bdn`、`TBt`、`isPathSafe`、`bypass_permissions_disabled`、`textDocument/publishDiagnostics`、`true/false`、`getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`、`utils/plugins/gitAvailability.ts`、`permissionBehaviorSchema`、`--computer-use-mcp`
+- 共检查 2137 处引用：名字 1409/1417（另 8 个只在 2.1.88 中存在），路径 183/188（另 5 个只在 2.1.88 中存在），字面量 318/319（另 1 个只在 2.1.88 中存在），声明id 212/212，路径·函数 1/1；占位符与含空格的说明性文字 300 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`normalizeNameForMCP`、`utils/computerUse/appNames.ts`、`Bdn`、`TBt`、`isPathSafe`、`bypass_permissions_disabled`、`textDocument/publishDiagnostics`、`true/false`、`getChicagoEnabled`、`appNames.ts`、`utils/plugins/gitAvailability.ts`、`permissionBehaviorSchema`、`--computer-use-mcp`
 - 未通过：0 处。

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。终端模式（备用屏、鼠标、焦点等）切换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-24t3dkzb.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xd1cb3xs.js (13)
  * attribution: placement 13
  */
 import { StdinContext } from "./components/StdinContext.js";
@@ -33,35 +33,35 @@ import {
 import { ERASE_SCREEN, CURSOR_HOME } from "./termio/csi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-24t3dkzb.js:8756-8766 placement
+//@ chunk-xd1cb3xs.js:8686-8696 placement
 var StdinContextAlias; // deferred: uses StdinContext (./components/StdinContext.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-24t3dkzb.js:8756", () => {
+deferInit("chunk-xd1cb3xs.js:8686", () => {
   StdinContextAlias = StdinContext;
 });
-//@ chunk-24t3dkzb.js:8766-8770 placement
+//@ chunk-xd1cb3xs.js:8696-8700 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-24t3dkzb.js:8766", () => {
+deferInit("chunk-xd1cb3xs.js:8696", () => {
   init_react_production();
 });
-//@ chunk-24t3dkzb.js:8770-8786 placement
+//@ chunk-xd1cb3xs.js:8700-8716 placement
 var TerminalSizeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-24t3dkzb.js:8770", () => {
+deferInit("chunk-xd1cb3xs.js:8700", () => {
   TerminalSizeContext = createContext(null);
 });
-//@ chunk-24t3dkzb.js:8786-8790 placement
+//@ chunk-xd1cb3xs.js:8716-8720 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-24t3dkzb.js:8786", () => {
+deferInit("chunk-xd1cb3xs.js:8716", () => {
   init_react_production();
 });
-//@ chunk-24t3dkzb.js:8790-8881 placement
+//@ chunk-xd1cb3xs.js:8720-8811 placement
 function setSurfaceColorsSequence({ background, foreground }) {
   return osc(OSC.SET_BG_COLOR, background) + osc(OSC.SET_FG_COLOR, foreground);
 }
-//@ chunk-24t3dkzb.js:8881-8945 placement
+//@ chunk-xd1cb3xs.js:8811-8875 placement
 function resetSurfaceColorsSequence() {
   return osc(OSC.RESET_BG_COLOR) + osc(OSC.RESET_FG_COLOR);
 }
-//@ chunk-24t3dkzb.js:8945-9074 placement
+//@ chunk-xd1cb3xs.js:8875-9004 placement
 var MODE_LAYER = {
   bracketedPaste: 0,
   themeReports: 0,
@@ -73,7 +73,7 @@ var MODE_LAYER = {
   surface: 3,
   focusEvents: 4,
 };
-//@ chunk-24t3dkzb.js:9074-9536 placement
+//@ chunk-xd1cb3xs.js:9004-9466 placement
 /**
  * 终端模式 → {on, off} 序列：括号粘贴 2004、主题报告 2031、焦点事件 1004、像素鼠标 1016、扩展键（kitty 键盘 + modifyOtherKeys）、备用屏 1049（附清屏）、备用屏专用键模式。
  */
@@ -133,7 +133,7 @@ function modeEntry(mode) {
       };
   }
 }
-//@ chunk-24t3dkzb.js:9536-11357 placement
+//@ chunk-xd1cb3xs.js:9466-11287 placement
 /**
  * 终端模式管理：按设置顺序记录已开的模式（鼠标、表面颜色、括号粘贴、焦点、扩展键、备用屏…），set/reset 返回要写的序列；suspend/resume 在挂起或交出终端时成组关闭/恢复（可保留一个）；reassertKeys/reassertFrom 在终端可能丢失状态时重发；resetAll 退出时全部关闭（逆序）。
  */
@@ -241,24 +241,24 @@ class TerminalModes {
     return this.entries.splice(index, 1)[0].off;
   }
 }
-//@ chunk-24t3dkzb.js:11357-11375 placement
+//@ chunk-xd1cb3xs.js:11287-11305 placement
 var TerminalModesContext; // deferred: uses TerminalModes of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-24t3dkzb.js:11357", () => {
+deferInit("chunk-xd1cb3xs.js:11287", () => {
   TerminalModesContext = createContext(new TerminalModes());
 });
-//@ chunk-24t3dkzb.js:11375-11420 placement
+//@ chunk-xd1cb3xs.js:11305-11350 placement
 // deferred: uses TerminalModesContext of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-24t3dkzb.js:11375", () => {
+deferInit("chunk-xd1cb3xs.js:11305", () => {
   TerminalModesContext.displayName = "InternalTerminalModesContext";
 });
-//@ chunk-24t3dkzb.js:11420-11430 placement
+//@ chunk-xd1cb3xs.js:11350-11360 placement
 var TerminalModesContextAlias; // deferred: uses TerminalModesContext of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-24t3dkzb.js:11420", () => {
+deferInit("chunk-xd1cb3xs.js:11350", () => {
   TerminalModesContextAlias = TerminalModesContext;
 });
-//@ chunk-24t3dkzb.js:11430-11434 placement
+//@ chunk-xd1cb3xs.js:11360-11364 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-24t3dkzb.js:11430", () => {
+deferInit("chunk-xd1cb3xs.js:11360", () => {
   init_react_production();
 });
-export { TerminalSizeContext, StdinContextAlias, TerminalModesContextAlias, TerminalModes };
+export { TerminalSizeContext, StdinContextAlias, TerminalModes, TerminalModesContextAlias };

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：权限卡片定义：各工具（Bash、文件、WebFetch、Monitor、PowerShell、Skill、PublishPlugin、ExitPlanMode 等）的卡片 kind 与载荷构造。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s4bxxzsw.js (58)
- * attribution: placement 57, sole-consumer 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g4tsxwy3.js (59)
+ * attribution: placement 57, layout 2
  */
 import { fileURLToPath } from "url";
 import { isAbsolute, relative, posix, basename } from "path";
@@ -34,7 +34,6 @@ import {
 } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { toSafeFileUrl } from "../../services/mcp/xaa.js";
 import { tildify, expandPath } from "../../utils/path.js";
-import { STRING_FORMATS } from "../../utils/mcp/elicitationValidation.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { isRebindableLegacyGrant } from "../../services/mcp/mcpStandardKeys.js";
 import { shouldShowAlwaysAllowOptions } from "../../utils/permissions/permissionsLoader.js";
@@ -68,7 +67,7 @@ import {
 import { BOUNDED_READ_MAX } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { isENOENT } from "../../utils/errors.js";
 import { getPlanFilePath, notePlanFileForgotten, getPlan } from "../../utils/plans.js";
-import { getTokenCountFromUsage } from "../../utils/messages/usageAndStopReason.js";
+import { getTokenCountFromUsage_2 } from "../../utils/messages/usageAndStopReason.js";
 import {
   indentedPrintableName,
   staysOnMachineLines,
@@ -101,12 +100,12 @@ import { createLazySignal } from "../../utils/signal.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s4bxxzsw.js:4589-4877 placement
+//@ chunk-g4tsxwy3.js:4765-5053 placement
 /**
  * 权限卡片注册项（qo 定义 kind + payload/result schema）：AskUserQuestion、Bash、Browser、EnterPlanMode、File、Monitor、PowerShell、Skill、WebFetch、PublishPlugin、ExitPlanMode v2 等。
  */
 var ASK_USER_QUESTION_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:4589", () => {
+deferInit("chunk-g4tsxwy3.js:4765", () => {
   ASK_USER_QUESTION_PERMISSION_CARD = withHideWhile({
     kind: "permission_ask_user_question",
     payload: DoctorLazy(() =>
@@ -128,13 +127,13 @@ deferInit("chunk-s4bxxzsw.js:4589", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:4877-4913 placement
+//@ chunk-g4tsxwy3.js:5053-5089 placement
 function isNotAskUserQuestionCard(kind) {
   return kind !== ASK_USER_QUESTION_PERMISSION_CARD.kind;
 }
-//@ chunk-s4bxxzsw.js:4913-5211 placement
+//@ chunk-g4tsxwy3.js:5089-5387 placement
 var BASH_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:4913", () => {
+deferInit("chunk-g4tsxwy3.js:5089", () => {
   BASH_PERMISSION_CARD = withHideWhile({
     kind: "permission_bash",
     payload: DoctorLazy(() =>
@@ -157,7 +156,7 @@ deferInit("chunk-s4bxxzsw.js:4913", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:5211-6333 placement
+//@ chunk-g4tsxwy3.js:5387-6509 placement
 /**
  * 解释为什么已允许的操作仍要询问：auto 模式不可用的原因（组织关闭、托管设置、设置文件 disableAutoMode、模型不支持、fast 模式、不可用）。
  */
@@ -186,9 +185,9 @@ function describeAutoModeGrantBlock(grantNotice, display) {
       return `${leadIn} auto mode isn't available in this session. Restart Claude Code to check again.`;
   }
 }
-//@ chunk-s4bxxzsw.js:6333-6612 placement
+//@ chunk-g4tsxwy3.js:6509-6788 placement
 var BROWSER_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:6333", () => {
+deferInit("chunk-g4tsxwy3.js:6509", () => {
   BROWSER_PERMISSION_CARD = withHideWhile({
     kind: "permission_browser",
     payload: DoctorLazy(() =>
@@ -210,9 +209,9 @@ deferInit("chunk-s4bxxzsw.js:6333", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:6612-6879 placement
+//@ chunk-g4tsxwy3.js:6788-7055 placement
 var ENTER_PLAN_MODE_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:6612", () => {
+deferInit("chunk-g4tsxwy3.js:6788", () => {
   ENTER_PLAN_MODE_PERMISSION_CARD = withHideWhile({
     kind: "permission_enter_plan_mode",
     payload: DoctorLazy(() =>
@@ -233,10 +232,10 @@ deferInit("chunk-s4bxxzsw.js:6612", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:6951-7038 placement
+//@ chunk-g4tsxwy3.js:7127-7214 placement
 var MARKDOWN_LINK_RE = /\[([^[\]\n]*)\]\(([^()\s]*)\)/g;
 var isAuthedLinkText = (toolUseID) => typeof toolUseID === "string" && toolUseID.startsWith(CONFIRM);
-//@ chunk-s4bxxzsw.js:7038-7223 placement
+//@ chunk-g4tsxwy3.js:7214-7399 placement
 /**
  * 把问题文本拆成标题（第一行）与正文行列表。
  */
@@ -256,7 +255,7 @@ function splitQuestionTitleBody(text) {
     body: text_2 === "" ? [] : parseFileLinkSegments(text_2),
   };
 }
-//@ chunk-s4bxxzsw.js:7223-7605 placement
+//@ chunk-g4tsxwy3.js:7399-7781 placement
 /**
  * 把文本中的 markdown file:/// 链接拆成 text 与 fileLink 片段（只接受绝对路径的安全文件 URL）。
  */
@@ -296,7 +295,7 @@ function parseFileLinkSegments(text) {
     });
   return segments;
 }
-//@ chunk-s4bxxzsw.js:7605-7715 placement
+//@ chunk-g4tsxwy3.js:7781-7891 placement
 function fileUrlToAbsolutePath(value) {
   if (!/^file:\/\/\//i.test(value)) return null;
   try {
@@ -306,7 +305,12 @@ function fileUrlToAbsolutePath(value) {
     return null;
   }
 }
-//@ chunk-s4bxxzsw.js:7745-8009 sole-consumer (2.1.88 match: hasStringFormat, 0.863)
+//@ chunk-g4tsxwy3.js:7891-7921 layout
+var DATE_TIME_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-g4tsxwy3.js:7891", () => {
+  DATE_TIME_TYPES = new Set(["date-time"]);
+});
+//@ chunk-g4tsxwy3.js:7921-8185 layout (2.1.88 match: hasStringFormat, 0.864)
 /**
  * getParamFormatHints：工具 inputJSONSchema 中 format=date-time 的参数表，供权限 UI 提示。
  */
@@ -317,14 +321,14 @@ function getParamFormatHints(schema) {
   for (let [key, value] of Object.entries(properties)) {
     if (value === null || typeof value !== "object" || !("format" in value)) continue;
     let format = value.format;
-    if (typeof format === "string" && STRING_FORMATS.has(format)) {
+    if (typeof format === "string" && DATE_TIME_TYPES.has(format)) {
       hint ??= {};
       hint[key] = format;
     }
   }
   return hint;
 }
-//@ chunk-s4bxxzsw.js:8009-10003 placement
+//@ chunk-g4tsxwy3.js:8185-10179 placement
 /**
  * buildPermissionPromptPayload：把一次权限请求整理成发给宿主/桥接 UI 的载荷（显示名、渲染后的输入、卡片、always-allow 可用性、MCP 标记等）。归属疑为权限/桥接（见 lead 建议）。
  */
@@ -422,7 +426,7 @@ function buildPermissionPromptPayload(request) {
     }),
   };
 }
-//@ chunk-s4bxxzsw.js:10003-10637 placement
+//@ chunk-g4tsxwy3.js:10179-10813 placement
 function permissionRequestOrigin(context) {
   if (context.forRemoteExecution === true)
     return {
@@ -467,7 +471,7 @@ function permissionRequestOrigin(context) {
     };
   return;
 }
-//@ chunk-s4bxxzsw.js:10637-11137 placement
+//@ chunk-g4tsxwy3.js:10813-11313 placement
 /**
  * 构造 Chrome 权限卡片载荷：host/url（缺省从 input.url 解析）、域名是否已允许、auto 模式不可用提示、动词短语。
  */
@@ -505,7 +509,7 @@ function buildChromePermissionPayload(request) {
     verbPhrase: describeBrowserToolAction(request.tool.name, request.input),
   };
 }
-//@ chunk-s4bxxzsw.js:11137-11582 placement
+//@ chunk-g4tsxwy3.js:11313-11758 placement
 /**
  * 读取 auto 模式不可用原因并转换为 {cause, files, startup, model} 结构供提示文案使用。
  */
@@ -543,7 +547,7 @@ function getAutoModeGrantBlockCause() {
       };
   }
 }
-//@ chunk-s4bxxzsw.js:11582-11712 placement
+//@ chunk-g4tsxwy3.js:11758-11888 placement
 /**
  * 构建 WebFetch 权限卡片数据：在通用载荷上附加目标 URL 的主机名。
  */
@@ -562,7 +566,7 @@ function buildWebFetchPermissionPayload(request) {
     hostname,
   };
 }
-//@ chunk-s4bxxzsw.js:11712-11999 placement
+//@ chunk-g4tsxwy3.js:11888-12174 placement
 /**
  * 构建 AskUserQuestion 权限卡片数据：问题列表、来源元数据，以及是否为引擎强制确认。
  */
@@ -582,7 +586,7 @@ function buildAskUserQuestionPayload(request) {
     isEngineConfirm,
   };
 }
-//@ chunk-s4bxxzsw.js:11999-12099 placement
+//@ chunk-g4tsxwy3.js:12174-12274 placement
 function serializeMcpArgsDisplay(input) {
   if (!("args" in input) || input.args === undefined) return;
   return serializeApprovalPayload(input.args, {
@@ -590,7 +594,7 @@ function serializeMcpArgsDisplay(input) {
     maxUnits: MAX_PAYLOAD_UNITS,
   });
 }
-//@ chunk-s4bxxzsw.js:12099-12810 placement
+//@ chunk-g4tsxwy3.js:12274-12983 placement
 /**
  * 构造 Monitor 权限卡片载荷：命令、MCP 服务器/工具/参数、WebSocket url 与子协议（不可显示的标记 withheld）、轮询间隔与描述。
  */
@@ -643,20 +647,20 @@ function buildMonitorPermissionPayload(request) {
     monitorDescription,
   };
 }
-//@ chunk-s4bxxzsw.js:12810-12895 placement
+//@ chunk-g4tsxwy3.js:12983-13067 placement
 function sanitizeCardText(stringField, fallback) {
   let trimmed = replaceLineBreaks(renderableText(truncateToLength(stringField, MAX_RAW_DISPLAY_CHARS)))
     .replace(/\s+/g, " ")
     .trim();
   return isCleanText(trimmed) ? trimmed : fallback;
 }
-//@ chunk-s4bxxzsw.js:12895-13010 placement
+//@ chunk-g4tsxwy3.js:13067-13182 placement
 function readStringField(record, key) {
   if (record === null || typeof record !== "object" || !(key in record)) return;
   let value = record[key];
   return typeof value === "string" ? value : undefined;
 }
-//@ chunk-s4bxxzsw.js:13010-13069 placement
+//@ chunk-g4tsxwy3.js:13182-13241 placement
 /**
  * 函数 normalizeUrlHref（URL 规范化，失败原样返回）。
  */
@@ -667,7 +671,7 @@ function normalizeUrlHref(url) {
     return url;
   }
 }
-//@ chunk-s4bxxzsw.js:13069-13672 placement
+//@ chunk-g4tsxwy3.js:13241-13844 placement
 /**
  * 构造 Workflow 权限卡片载荷：脚本（runId 时取渲染文本）、脚本是否被伪造为非字符串、工作流名、参数。
  */
@@ -702,7 +706,7 @@ function buildWorkflowPermissionPayload(request) {
     args,
   };
 }
-//@ chunk-s4bxxzsw.js:13672-14492 placement
+//@ chunk-g4tsxwy3.js:13844-14664 placement
 /**
  * 构造 Artifact 权限卡片载荷：文件路径、标题与选项（过滤并安全化）、文件内容预览（网络路径/过大/不存在/读错误给出占位）。
  */
@@ -753,7 +757,7 @@ function buildArtifactPermissionPayload(request) {
     contentWithheld: notPreviewed,
   };
 }
-//@ chunk-s4bxxzsw.js:14492-14995 placement
+//@ chunk-g4tsxwy3.js:14664-15167 placement
 /**
  * 构造 Skill 权限卡片载荷：技能名（input.skill 或元数据命令名）、描述、转发的 MCP 技能名。
  */
@@ -786,7 +790,7 @@ function buildSkillPermissionPayload(request) {
     }),
   };
 }
-//@ chunk-s4bxxzsw.js:14995-15256 placement
+//@ chunk-g4tsxwy3.js:15167-15428 placement
 /**
  * 构建 PowerShell 权限卡片数据：清理不可打印字符后的命令（有长度上限）与渲染的工具消息。
  */
@@ -806,7 +810,7 @@ function buildPowerShellPermissionPayload(request) {
     command,
   };
 }
-//@ chunk-s4bxxzsw.js:15256-15627 placement
+//@ chunk-g4tsxwy3.js:15428-15799 placement
 /**
  * 构造 ExitPlanMode 权限卡片载荷：当前计划、计划文件路径、本条助手消息的 token 用量。
  */
@@ -819,7 +823,7 @@ function buildExitPlanModePermissionPayload(request) {
     request.assistantMessage.isUnmetered === true ? undefined : request.assistantMessage.message.usage;
   let usage_2;
   if (usage && typeof usage.input_tokens === "number") {
-    let tokenCountFromUsage = getTokenCountFromUsage(usage);
+    let tokenCountFromUsage = getTokenCountFromUsage_2(usage);
     usage_2 = {
       input_tokens: tokenCountFromUsage.input_tokens,
       cache_creation_input_tokens: tokenCountFromUsage.cache_creation_input_tokens,
@@ -833,7 +837,7 @@ function buildExitPlanModePermissionPayload(request) {
     usage: usage_2,
   };
 }
-//@ chunk-s4bxxzsw.js:15627-15952 placement
+//@ chunk-g4tsxwy3.js:15799-16124 placement
 /**
  * 构造 Bash 权限卡片载荷：命令（过长置空、去不可打印字符）、分类器状态、已有允许规则描述。
  */
@@ -855,7 +859,7 @@ function buildBashPermissionPayload(request) {
     existingAllowDescriptions: [],
   };
 }
-//@ chunk-s4bxxzsw.js:15952-16238 placement
+//@ chunk-g4tsxwy3.js:16124-16410 placement
 var buildPublishPluginCard = (question) => ({
   question: indentedPrintableName(question.title),
   lines: [
@@ -872,7 +876,7 @@ var buildPublishPluginCard = (question) => ({
     .concat(moreFilesNote(question.unnamed?.files ?? 0, "file"))
     .map(indentedPrintableName),
 });
-//@ chunk-s4bxxzsw.js:16238-16429 placement
+//@ chunk-g4tsxwy3.js:16410-16601 placement
 /**
  * 构建发布插件权限卡片数据：卡片内容与全部条目（优先取会话缓存，否则从输入问题解析）。
  */
@@ -885,16 +889,16 @@ function buildPublishPluginPayload(request) {
     everything: stashedQuestion?.everything ?? (question ? manifestEntryLines(question) : []),
   };
 }
-//@ chunk-s4bxxzsw.js:16429-16439 placement
+//@ chunk-g4tsxwy3.js:16601-16611 placement
 /**
  * 导出值：MAX_CARD_ACTIONS（6：权限卡动作上限）。
  */
 var MAX_CARD_ACTIONS = 6;
-//@ chunk-s4bxxzsw.js:16439-16450 placement
+//@ chunk-g4tsxwy3.js:16611-16622 placement
 var CHROME_ROWS = 14;
-//@ chunk-s4bxxzsw.js:16450-16736 placement
+//@ chunk-g4tsxwy3.js:16622-16908 placement
 var PUBLISH_PLUGIN_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:16450", () => {
+deferInit("chunk-g4tsxwy3.js:16622", () => {
   PUBLISH_PLUGIN_PERMISSION_CARD = withHideWhile({
     kind: "permission_publish_plugin",
     payload: DoctorLazy(() =>
@@ -916,17 +920,17 @@ deferInit("chunk-s4bxxzsw.js:16450", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:16736-16747 placement
+//@ chunk-g4tsxwy3.js:16908-16919 placement
 var LIST_CHROME_ROWS = 10;
-//@ chunk-s4bxxzsw.js:16747-16758 placement
+//@ chunk-g4tsxwy3.js:16919-16930 placement
 var LIST_GUTTER = 10;
-//@ chunk-s4bxxzsw.js:16758-16768 placement
+//@ chunk-g4tsxwy3.js:16930-16940 placement
 var MIN_LIST_ROWS = 5;
-//@ chunk-s4bxxzsw.js:16768-16846 placement
+//@ chunk-g4tsxwy3.js:16940-17018 placement
 var PUBLISH_WAITING_MESSAGE = "Claude Code is waiting for your answer before it publishes a plugin";
-//@ chunk-s4bxxzsw.js:16846-17129 placement
+//@ chunk-g4tsxwy3.js:17018-17301 placement
 var EXIT_PLAN_MODE_V2_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:16846", () => {
+deferInit("chunk-g4tsxwy3.js:17018", () => {
   EXIT_PLAN_MODE_V2_PERMISSION_CARD = withHideWhile({
     kind: "permission_exit_plan_mode_v2",
     payload: DoctorLazy(() =>
@@ -948,9 +952,9 @@ deferInit("chunk-s4bxxzsw.js:16846", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:17129-17426 placement
+//@ chunk-g4tsxwy3.js:17301-17598 placement
 var FILE_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:17129", () => {
+deferInit("chunk-g4tsxwy3.js:17301", () => {
   FILE_PERMISSION_CARD = withHideWhile({
     kind: "permission_file",
     payload: DoctorLazy(() =>
@@ -973,7 +977,7 @@ deferInit("chunk-s4bxxzsw.js:17129", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:17486-17865 placement
+//@ chunk-g4tsxwy3.js:17658-18037 placement
 var OUTSIDE_READS_TITLE = "Read outside the working directories";
 var OUTSIDE_READ_TITLE = "Allow this read outside the working directories?";
 var OUTSIDE_READ_ACTIONS = ["allow", "block", "ask_again", "allow_once"];
@@ -983,7 +987,7 @@ var OUTSIDE_READ_ACTION_LABELS = {
   ask_again: "No, and ask again next time",
   allow_once: "Yes, but ask again next time",
 };
-//@ chunk-s4bxxzsw.js:17865-18623 placement
+//@ chunk-g4tsxwy3.js:18037-18795 placement
 /**
  * 工作目录外读取对话框的说明文字，按沙箱是否能隔离 home 目录给出不同提示。
  */
@@ -996,9 +1000,9 @@ function getOutsideReadsExplainer(explainer) {
     " To undo, remove permissions.blockReadsOutsideWorkingDirectories from your user settings; file tools follow next session, sandboxed commands at once."
   );
 }
-//@ chunk-s4bxxzsw.js:18623-18824 placement
+//@ chunk-g4tsxwy3.js:18795-18996 placement
 var AUTO_MODE_OUTSIDE_READS_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:18623", () => {
+deferInit("chunk-g4tsxwy3.js:18795", () => {
   AUTO_MODE_OUTSIDE_READS_DIALOG = withHideWhile({
     kind: "auto_mode_outside_reads",
     payload: DoctorLazy(() =>
@@ -1020,7 +1024,7 @@ deferInit("chunk-s4bxxzsw.js:18623", () => {
     default: "ask_again",
   });
 });
-//@ chunk-s4bxxzsw.js:18824-18983 placement
+//@ chunk-g4tsxwy3.js:18996-19155 placement
 /**
  * 构建"读取工作区外文件"对话框数据：标题、问题、说明（区分沙箱隔离）与选项。
  */
@@ -1037,9 +1041,9 @@ function buildOutsideReadsDialog({ toolName, path, sandboxFenced }) {
     })),
   };
 }
-//@ chunk-s4bxxzsw.js:18983-18997 placement
+//@ chunk-g4tsxwy3.js:19155-19169 placement
 var MAX_CARD_INPUT_CHARS = 200000;
-//@ chunk-s4bxxzsw.js:18997-19099 placement
+//@ chunk-g4tsxwy3.js:19169-19271 placement
 /**
  * 判断工具是否为文件类工具（编辑、写入、Notebook、Glob、Grep、读取）。
  */
@@ -1056,7 +1060,7 @@ function isFileTool(tool) {
       return false;
   }
 }
-//@ chunk-s4bxxzsw.js:19099-19177 placement
+//@ chunk-g4tsxwy3.js:19271-19349 placement
 /**
  * 函数 isAutoDenyKind（这几类默认拒绝）。
  */
@@ -1070,7 +1074,7 @@ function isAutoDenyKind(tool) {
       return false;
   }
 }
-//@ chunk-s4bxxzsw.js:19177-19332 placement
+//@ chunk-g4tsxwy3.js:19349-19504 placement
 /**
  * 调用工具的 getPath 获取输入中的路径，非空字符串时返回，出错返回 null。
  */
@@ -1084,7 +1088,7 @@ function getToolInputPath(tool, input) {
     return null;
   }
 }
-//@ chunk-s4bxxzsw.js:19332-19577 placement
+//@ chunk-g4tsxwy3.js:19504-19749 placement
 function resolveSymlinkTarget(filePath, blocked, blockedPath) {
   if (blocked)
     return {
@@ -1114,15 +1118,15 @@ function resolveSymlinkTarget(filePath, blocked, blockedPath) {
     };
   }
 }
-//@ chunk-s4bxxzsw.js:19577-19620 placement
+//@ chunk-g4tsxwy3.js:19749-19792 placement
 function safeRelativeDisplay(filePath, suspicious) {
   return stripInvisibleChars(suspicious ? filePath : relative(getCwd(), filePath));
 }
-//@ chunk-s4bxxzsw.js:19620-19671 placement
+//@ chunk-g4tsxwy3.js:19792-19843 placement
 function basenameOrPath(filePath, suspicious) {
   return stripInvisibleChars(suspicious ? posix.basename(filePath) : basename(filePath));
 }
-//@ chunk-s4bxxzsw.js:19671-24519 placement
+//@ chunk-g4tsxwy3.js:19843-24691 placement
 /**
  * 为 Edit/Write/NotebookEdit 等文件工具构造权限卡片：标题、文件名问题、diff 或占位说明；内容过大、含可疑字符、网络路径、远程不可读时标记 contentWithheld（仅一次性批准）。
  */
@@ -1384,7 +1388,7 @@ async function buildFileToolPermissionCard(request) {
     },
   };
 }
-//@ chunk-s4bxxzsw.js:24519-25254 placement
+//@ chunk-g4tsxwy3.js:24691-25426 placement
 async function buildFilePermissionDescriptor(request) {
   let permissionPromptPayload = buildPermissionPromptPayload(request);
   let tool = request.tool;
@@ -1428,7 +1432,7 @@ async function buildFilePermissionDescriptor(request) {
     }),
   };
 }
-//@ chunk-s4bxxzsw.js:25254-25605 placement
+//@ chunk-g4tsxwy3.js:25426-25777 placement
 /**
  * 按工具类型返回权限卡片遥测用的补全类型与语言：编辑为 str_replace_single、写入为 write_file_single、Notebook 按单元类型取 markdown/python，其他为 tool_use_single。
  */
@@ -1453,9 +1457,9 @@ function getCompletionTypeForTool(tool, notebook, toolInputPath) {
     language_name: languageForFilePath(toolInputPath),
   };
 }
-//@ chunk-s4bxxzsw.js:25605-25884 placement
+//@ chunk-g4tsxwy3.js:25777-26056 placement
 var MONITOR_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:25605", () => {
+deferInit("chunk-g4tsxwy3.js:25777", () => {
   MONITOR_PERMISSION_CARD = withHideWhile({
     kind: "permission_monitor",
     payload: DoctorLazy(() =>
@@ -1477,9 +1481,9 @@ deferInit("chunk-s4bxxzsw.js:25605", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:25884-26163 placement
+//@ chunk-g4tsxwy3.js:26056-26335 placement
 var POWERSHELL_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:25884", () => {
+deferInit("chunk-g4tsxwy3.js:26056", () => {
   POWERSHELL_PERMISSION_CARD = withHideWhile({
     kind: "permission_powershell",
     payload: DoctorLazy(() =>
@@ -1501,9 +1505,9 @@ deferInit("chunk-s4bxxzsw.js:25884", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:26163-26435 placement
+//@ chunk-g4tsxwy3.js:26335-26607 placement
 var SKILL_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:26163", () => {
+deferInit("chunk-g4tsxwy3.js:26335", () => {
   SKILL_PERMISSION_CARD = withHideWhile({
     kind: "permission_skill",
     payload: DoctorLazy(() =>
@@ -1525,9 +1529,9 @@ deferInit("chunk-s4bxxzsw.js:26163", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:26435-26713 placement
+//@ chunk-g4tsxwy3.js:26607-26885 placement
 var WEBFETCH_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:26435", () => {
+deferInit("chunk-g4tsxwy3.js:26607", () => {
   WEBFETCH_PERMISSION_CARD = withHideWhile({
     kind: "permission_webfetch",
     payload: DoctorLazy(() =>
@@ -1549,23 +1553,28 @@ deferInit("chunk-s4bxxzsw.js:26435", () => {
     },
   });
 });
-//@ chunk-s4bxxzsw.js:26713-26748 placement
+//@ chunk-g4tsxwy3.js:26885-26920 placement
 var autoDenyPresenceSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s4bxxzsw.js:26713", () => {
+deferInit("chunk-g4tsxwy3.js:26885", () => {
   autoDenyPresenceSignal = createLazySignal(() => uiSignals.autoDenyPresence);
 });
 export {
   MAX_CARD_ACTIONS,
+  permissionRequestOrigin,
   buildPermissionPromptPayload,
   BROWSER_PERMISSION_CARD,
   isFileTool,
   getToolInputPath,
   buildFilePermissionDescriptor,
-  isAutoDenyKind,
   FILE_PERMISSION_CARD,
+  getCompletionTypeForTool,
   BASH_PERMISSION_CARD,
   buildBashPermissionPayload,
   isNotAskUserQuestionCard,
+  autoDenyPresenceSignal,
+  OUTSIDE_READ_ACTION_LABELS,
+  normalizeUrlHref,
+  isAutoDenyKind,
   ASK_USER_QUESTION_PERMISSION_CARD,
   POWERSHELL_PERMISSION_CARD,
   WEBFETCH_PERMISSION_CARD,
@@ -1575,14 +1584,9 @@ export {
   EXIT_PLAN_MODE_V2_PERMISSION_CARD,
   PUBLISH_PLUGIN_PERMISSION_CARD,
   PUBLISH_WAITING_MESSAGE,
-  normalizeUrlHref,
   splitQuestionTitleBody,
   describeAutoModeGrantBlock,
-  OUTSIDE_READ_ACTION_LABELS,
   getOutsideReadsExplainer,
-  permissionRequestOrigin,
-  getCompletionTypeForTool,
-  autoDenyPresenceSignal,
   CHROME_ROWS,
   LIST_CHROME_ROWS,
   LIST_GUTTER,

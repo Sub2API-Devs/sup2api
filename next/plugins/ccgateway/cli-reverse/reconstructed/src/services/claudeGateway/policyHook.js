@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关策略钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (3)
  * attribution: placement 3
  */
 import { gatewayJsonLog, gatewayLog } from "../gateway/gatewayBanner.js";
@@ -14,13 +14,13 @@ import { fetchWithTimeout } from "./network.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-1ny7cxrt.js:1455483-1455537 placement
+//@ chunk-1hnjmk23.js:1478411-1478465 placement
 /**
  * 策略拒绝原因的最大字符数（500），超出截断加省略号。
  */
 var DEFAULT_POLICY_BLOCK_REASON = "blocked by your organization's policy";
 var MAX_POLICY_REASON_CHARS = 500;
-//@ chunk-1ny7cxrt.js:1455537-1455700 placement
+//@ chunk-1hnjmk23.js:1478465-1478628 placement
 /**
  * 清理策略 webhook 返回的拒绝原因（去控制字符、限长），空时用默认文案。
  */
@@ -32,7 +32,7 @@ function sanitizePolicyReason(reason) {
     ? list.slice(0, MAX_POLICY_REASON_CHARS).join("") + "\u2026"
     : trimmed;
 }
-//@ chunk-1ny7cxrt.js:1455700-1457320 placement
+//@ chunk-1hnjmk23.js:1478628-1480248 placement
 /**
  * CRI 策略 webhook：把请求路径/查询/头/正文 POST 给 webhook，block=true 时返回 400 policy_blocked；webhook 出错时按 fail_closed 拒绝或放行，并记录 policy.blocked/skipped。
  */

@@ -3,9 +3,9 @@
  *
  * OAuthService：登录流程编排（verifier、本地回调或手动粘贴码、打开浏览器、换令牌、清理）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/oauth/index.ts
- * pieces: chunk-b8krr1px.js (1)
+ * pieces: chunk-ehpqy72x.js (1)
  * attribution: fingerprint 1
  */
 import {
@@ -32,7 +32,7 @@ import { logEvent } from "../analytics/index.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logAuthEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
 
-//@ chunk-b8krr1px.js:5448-8992 fingerprint (2.1.88 match: OAuthService, 0.65)
+//@ chunk-ehpqy72x.js:5446-8990 fingerprint (2.1.88 match: OAuthService, 0.65)
 /**
  * OAuth 登录服务：生成 code verifier，启动本地回调监听（失败时可退回手动粘贴授权码），打开浏览器授权，换取令牌后清理监听器。
  */

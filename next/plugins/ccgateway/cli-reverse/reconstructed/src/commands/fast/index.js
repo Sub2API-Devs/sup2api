@@ -3,15 +3,15 @@
  *
  * /fast 命令对象（[on|off]，一方 API 且未禁用快速模式时可见）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/fast/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { defaultOpusLabel, isFastModeEnabled } from "../../utils/fastMode.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:2027306-2027748 fingerprint (2.1.88 match: fast, 0.634)
+//@ chunk-5xgkngpb.js:2083123-2083565 fingerprint (2.1.88 match: fast, 0.634)
 /**
  * /fast 命令对象（local-jsx）；描述：{return`Toggle fast mode (${U4()})`}；isHidden: {return!ys()}；实现 chunk-sfatdaes.js 的 Fji。
  */
@@ -45,5 +45,5 @@ var fastNonInteractiveCommand = {
   },
   load: () => import("./call.lazy.js"),
 };
-var fastCommand = fastCommandDefinition;
-export { fastCommand, fastNonInteractiveCommand };
+var versionCommand = fastCommandDefinition;
+export { versionCommand, fastNonInteractiveCommand };

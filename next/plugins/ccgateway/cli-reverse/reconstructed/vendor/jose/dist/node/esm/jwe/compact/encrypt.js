@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/esm/jwe/compact/encrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../../runtime/bun-runtime.js";
@@ -17,9 +17,9 @@ import { init_encrypt_2, FlattenedEncrypt } from "../flattened/encrypt.js";
 import { init_base64url } from "../../../../browser/runtime/base64url.js";
 import { init_options_2 } from "../../../../webapi/lib/options.js";
 
-//@ chunk-2tyrgda4.js:36110-36117 esm-layout
+//@ chunk-pd6th42n.js:36110-36117 esm-layout
 var jweEncryptInit;
-//@ chunk-2tyrgda4.js:36117-36188 esm-layout
+//@ chunk-pd6th42n.js:36117-36188 esm-layout
 var init_encrypt_3 = __esm(() => {
   init_content_encryption();
   init_aesgcmkw();
@@ -32,7 +32,7 @@ var init_encrypt_3 = __esm(() => {
   init_options_2();
   jweEncryptInit = Symbol();
 });
-//@ chunk-2tyrgda4.js:36188-36693 esm-fingerprint
+//@ chunk-pd6th42n.js:36188-36693 esm-fingerprint
 class CompactEncrypt {
   constructor(plaintext) {
     this._flattened = new FlattenedEncrypt(plaintext);

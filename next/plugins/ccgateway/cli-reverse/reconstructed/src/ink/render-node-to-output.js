@@ -3,9 +3,9 @@
  *
  * 并入已有模块：节点渲染到输出的补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-node-to-output.ts
- * pieces: chunk-bzr73sfg.js (49)
+ * pieces: chunk-2avr6cej.js (49)
  * attribution: fingerprint 11, placement 8, layout 18, file-local 1, sole-consumer 10, shared-adjacent 1
  */
 import { walkTabbable } from "./focus.js";
@@ -37,14 +37,14 @@ import { intersectClip, isClipRedundant } from "./output.js";
 import { applyBackgroundColor } from "../utils/theme.js";
 import { ELLIPSIS } from "./styles.js";
 
-//@ chunk-bzr73sfg.js:182062-182131 fingerprint (2.1.88 match: wrapWithSoftWrap, 0.607)
+//@ chunk-2avr6cej.js:181811-181880 fingerprint (2.1.88 match: wrapWithSoftWrap, 0.609)
 /**
  * textWrap 是否是折行类（wrap、wrap-trim、wrap-stream），而不是截断类。
  */
 function isSoftWrapMode(textWrap) {
   return textWrap === "wrap" || textWrap === "wrap-trim" || textWrap === "wrap-stream";
 }
-//@ chunk-bzr73sfg.js:193777-193818 placement
+//@ chunk-2avr6cej.js:193423-193464 placement
 /**
  * 按文档顺序收集子树里所有可 Tab 聚焦的元素。
  */
@@ -53,13 +53,13 @@ function collectTabbable(root) {
   walkTabbable(root, result);
   return result;
 }
-//@ chunk-bzr73sfg.js:292494-292609 placement
+//@ chunk-2avr6cej.js:292075-292190 placement
 function hasAbsoluteAncestor(node) {
   for (let parentNode = node.parentNode; parentNode !== undefined; parentNode = parentNode.parentNode)
     if (parentNode.style.position === "absolute") return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:292609-292898 placement
+//@ chunk-2avr6cej.js:292190-292479 placement
 function makeAbsoluteRect(node, rect, parentX, parentY) {
   let yogaNode = node.parentNode?.yogaNode;
   let withinParent =
@@ -81,7 +81,7 @@ function makeAbsoluteRect(node, rect, parentX, parentY) {
     escapes: node.paintsPastRect === true,
   };
 }
-//@ chunk-bzr73sfg.js:292898-293138 placement
+//@ chunk-2avr6cej.js:292479-292719 placement
 /**
  * 一次渲染遍历的共享状态：是否有覆盖层、布局是否移动、滚动提示（DECSTBM）、待继续排水的滚动节点、跟随滚动信息、绝对定位矩形（上一帧/本帧）、片段映射与原始 ANSI 背景改写缓存。
  */
@@ -99,7 +99,7 @@ function createRenderState() {
     rawBgRewriteCache: new WeakMap(),
   };
 }
-//@ chunk-bzr73sfg.js:293138-293335 placement
+//@ chunk-2avr6cej.js:292719-292916 placement
 function resetRenderState(state) {
   state.overlayActive = false;
   state.layoutShifted = false;
@@ -110,7 +110,7 @@ function resetRenderState(state) {
   state.absoluteRectsPrev = state.absoluteRectsCur;
   state.absoluteRectsCur = [];
 }
-//@ chunk-bzr73sfg.js:293335-293523 placement
+//@ chunk-2avr6cej.js:292916-293104 placement
 /**
  * 上一帧越出父框的绝对定位矩形本帧没再出现、却被本帧的 blit 覆盖到了（可能拷回旧图像），需要下一帧整树重画。
  */
@@ -129,20 +129,20 @@ function hasStaleAbsolutePaint(state, output) {
       output.blitsOver(previousRect),
   );
 }
-//@ chunk-bzr73sfg.js:293523-293616 layout
+//@ chunk-2avr6cej.js:293104-293197 layout
 function isDescendantOfNode(node, ancestor) {
   for (let parentNode = node.parentNode; parentNode !== undefined; parentNode = parentNode.parentNode)
     if (parentNode === ancestor) return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:293616-293652 layout
+//@ chunk-2avr6cej.js:293197-293233 layout
 var PROPORTIONAL_DRAIN_MIN = 4;
 var ADAPTIVE_INSTANT_MAX = 5;
 var ADAPTIVE_SLOW_MAX = 12;
 var ADAPTIVE_STEP_MEDIUM = 2;
 var ADAPTIVE_STEP_LARGE = 3;
 var ADAPTIVE_BACKLOG_MAX = 30;
-//@ chunk-bzr73sfg.js:293652-293906 fingerprint (2.1.88 match: drainAdaptive, 1)
+//@ chunk-2avr6cej.js:293233-293487 fingerprint (2.1.88 match: drainAdaptive, 1)
 /**
  * 自适应滚动排水：待滚量 ≤5 一次滚完，<12 每帧 2 行，否则每帧 3 行；超过 30 的积压直接跳过；单帧不超过视口高-1，剩余写回 pendingScrollDelta。
  */
@@ -168,7 +168,7 @@ function drainAdaptive(node, pending, innerHeight) {
   node.pendingScrollDelta = rem > 0 ? sign * rem : undefined;
   return applied;
 }
-//@ chunk-bzr73sfg.js:293906-294089 layout (2.1.88 match: drainAdaptive, 1)
+//@ chunk-2avr6cej.js:293487-293670 layout (2.1.88 match: drainAdaptive, 1)
 /**
  * 比例滚动排水：每帧滚动待滚量的 3/4（至少 4 行，不超过视口高-1），剩余写回 pendingScrollDelta。由设置 useAdaptiveDrain 选择用哪种。
  */
@@ -184,17 +184,17 @@ function drainProportional(node, pending, innerHeight) {
   node.pendingScrollDelta = pending - applied;
   return applied;
 }
-//@ chunk-bzr73sfg.js:294089-294114 layout
+//@ chunk-2avr6cej.js:293670-293695 layout
 var OSC = "\x1B]";
 var BEL = "\x07";
-//@ chunk-bzr73sfg.js:294114-294174 fingerprint (2.1.88 match: wrapWithOsc8Link, 1)
+//@ chunk-2avr6cej.js:293695-293755 fingerprint (2.1.88 match: wrapWithOsc8Link, 1)
 /**
  * 用 OSC 8 把文本包成超链接。
  */
 function wrapWithOsc8Link(text, url) {
   return `${OSC}8;;${url}${BEL}${text}${OSC}8;;${BEL}`;
 }
-//@ chunk-bzr73sfg.js:294174-294480 layout
+//@ chunk-2avr6cej.js:293755-294061 layout
 /**
  * 为压平的文本段建“字符下标 → 段号”表（复用 state 里的 Uint32Array），折行后据此给每个字符还原样式。
  */
@@ -212,7 +212,7 @@ function buildCharToSegmentIndex(state, segments) {
   }
   return map;
 }
-//@ chunk-bzr73sfg.js:294480-295548 fingerprint (2.1.88 match: applyStylesToWrappedText, 0.78)
+//@ chunk-2avr6cej.js:294061-295129 fingerprint (2.1.88 match: applyStylesToWrappedText, 0.78)
 /**
  * 把折行后的纯文本重新套上样式与超链接：按“字符→段号”表在原文本中同步推进（跳过折行吞掉的空白与 \r\n），段号变化时切出一段套 applyTextStyles，文本内自带的 ANSI 序列原样保留。
  */
@@ -308,7 +308,7 @@ function applyStylesToWrappedText(
   return resultLines.join(`
 `);
 }
-//@ chunk-bzr73sfg.js:295548-295672 layout
+//@ chunk-2avr6cej.js:295129-295253 layout
 function mapAnsiSequenceEnds(text) {
   let ends = new Map();
   let offset = 0;
@@ -319,13 +319,13 @@ function mapAnsiSequenceEnds(text) {
   }
   return ends;
 }
-//@ chunk-bzr73sfg.js:295672-295766 file-local
+//@ chunk-2avr6cej.js:295253-295347 file-local
 function skipWhitespaceTo(originalPlain, charIndex, needle) {
   let scanIndex = charIndex;
   while (scanIndex < originalPlain.length && /\s/.test(originalPlain[scanIndex])) scanIndex++;
   return originalPlain.startsWith(needle, scanIndex) ? scanIndex : charIndex;
 }
-//@ chunk-bzr73sfg.js:295766-296245 layout
+//@ chunk-2avr6cej.js:295347-295826 layout
 /**
  * 折行并记录每行的软换行种类（HardBreak 原有换行 / Continuation 折出来的续行 / ContinuationElidedSep 续行吞掉了行首空格），复制选中文本时据此拼回原行；wrap-stream 丢掉最后一行（流式输出的未完成行）。
  */
@@ -373,7 +373,7 @@ function wrapWithSoftWrap(text, maxWidth, textWrap) {
     softWrap,
   };
 }
-//@ chunk-bzr73sfg.js:296245-296431 layout
+//@ chunk-2avr6cej.js:295826-296012 layout
 /**
  * 折行；若行数与 yoga 计算的高度不一致，改用测量时实际给出的宽度（getOfferedWidth）重折，保证与布局一致。
  */
@@ -383,7 +383,7 @@ function wrapForYogaNode(text, maxWidth, textWrap, yogaNode) {
   let maxWidth_2 = yogaNode.getOfferedWidth(maxWidth, yogaNode.getComputedHeight());
   return maxWidth_2 === maxWidth ? result : wrapWithSoftWrap(text, maxWidth_2, textWrap);
 }
-//@ chunk-bzr73sfg.js:296431-296572 layout
+//@ chunk-2avr6cej.js:296012-296153 layout
 function joinSegmentTexts(segments) {
   let texts = segments.map((segment) => segment.text);
   let normalized = needsTextNormalization(texts);
@@ -391,7 +391,7 @@ function joinSegmentTexts(segments) {
   for (let [index, segment] of segments.entries()) segment.text = normalized[index] ?? "";
   return normalized.join("");
 }
-//@ chunk-bzr73sfg.js:296572-296761 fingerprint (2.1.88 match: applyPaddingToText, 0.915)
+//@ chunk-2avr6cej.js:296153-296342 fingerprint (2.1.88 match: applyPaddingToText, 0.915)
 /**
  * 按 ink-text 首个子节点的 yoga 偏移给文本加上顶部空行与左缩进（同时在软换行表前补 HardBreak）。
  */
@@ -407,7 +407,7 @@ function applyPaddingToText(node, text, softWrap) {
   }
   return text;
 }
-//@ chunk-bzr73sfg.js:296761-296937 layout
+//@ chunk-2avr6cej.js:296342-296518 layout
 /**
  * 把排好样式的文本写进 Output（有 textDirection 时走 writeDirected），并记录是否画出了自身矩形（paintsPastRect）。
  */
@@ -418,7 +418,7 @@ function writeTextNode(node, output, x, y, width, height, text, softWrap, maxWid
   else output.writeDirected(x, y, text, softWrap, textDirection, maxWidth);
   node.paintsPastRect = paintsPastHeight(text, y, height) || paintsPastWidth(output, text, x, width);
 }
-//@ chunk-bzr73sfg.js:296937-297037 layout
+//@ chunk-2avr6cej.js:296518-296618 layout
 /**
  * 写 ink-raw-ansi：有继承背景色时先把原始 ANSI 里的背景重写（带缓存），记录 paintsPastRect。
  */
@@ -430,7 +430,7 @@ function writeRawAnsiNode(node, output, state, x, y, width, height, rawText, bac
   );
   node.paintsPastRect = paintsPastHeight(rawText, y, height) || paintsPastWidth(output, rawText, x, width);
 }
-//@ chunk-bzr73sfg.js:297037-297167 layout
+//@ chunk-2avr6cej.js:296618-296748 layout
 function paintsPastWidth(output, text, x, width) {
   let floored = Math.floor(width);
   for (let line of text.split(`
@@ -438,7 +438,7 @@ function paintsPastWidth(output, text, x, width) {
     if ((regExp_2.test(line) ? output.paintedWidth(line, x) : bunStringWidth(line)) > floored) return true;
   return false;
 }
-//@ chunk-bzr73sfg.js:297167-297298 layout
+//@ chunk-2avr6cej.js:296748-296879 layout
 function paintsPastHeight(text, y, height) {
   let lineCount = text === "" ? 0 : 1;
   for (
@@ -454,7 +454,7 @@ function paintsPastHeight(text, y, height) {
     lineCount++;
   return Math.floor(y) + lineCount > Math.ceil(y + height);
 }
-//@ chunk-bzr73sfg.js:297298-304543 fingerprint (2.1.88 match: renderNodeToOutput, 0.712)
+//@ chunk-2avr6cej.js:296879-304124 fingerprint (2.1.88 match: renderNodeToOutput, 0.712)
 /**
  * 渲染一个 DOM 节点到 Output（每帧从根递归）：display:none 时清掉旧区域；未脏且位置尺寸背景都不变时直接从上一帧 blit（再补拷越界的绝对定位子孙）；否则清旧区域、处理 pendingClears，按类型绘制——ink-raw-ansi 原样写；ink-text 压平→按 textWrap 折行/截断→套样式与 OSC 8→写入；ink-box 处理 noSelect、overflow 裁剪、overflow:scroll（滚动锚点、粘底、排水、DECSTBM 滚动提示 + 只重画新露出的行）、背景/opaque、子节点、边框。最后记 cachedLayout 供下一帧比较与命中测试。
  */
@@ -1003,7 +1003,7 @@ function renderNodeToOutput(
     node.dirty = false;
   }
 }
-//@ chunk-bzr73sfg.js:304543-306340 layout
+//@ chunk-2avr6cej.js:304124-305921 layout
 /**
  * 计算滚动容器本帧的 scrollTop：先处理 scrollAnchor（start/center/end/nearest）；stickyScroll 或在底部时跟随内容增长；按 useAdaptiveDrain 选择排水算法消耗 pendingScrollDelta（超出 clamp 范围时放慢）；夹到合法范围；scrollTop 变化时给 state.followScroll 记下差值（选区跟随用）。
  */
@@ -1102,7 +1102,7 @@ function resolveScrollTop(
   node.scrollTopRendered = max_3;
   return max_3;
 }
-//@ chunk-bzr73sfg.js:306340-306762 layout
+//@ chunk-2avr6cej.js:305921-306343 layout
 /**
  * 给有 backgroundColor 或 opaque 的 box 在边框内填空格（带背景色）；opaque 还会清掉该区域的 noSelect。
  */
@@ -1133,7 +1133,7 @@ function fillBoxBackground(node, yogaNode, output, x, y, width, height) {
     output.write(x + computedBorder, y + computedBorder_3, joined);
   }
 }
-//@ chunk-bzr73sfg.js:306762-307160 layout
+//@ chunk-2avr6cej.js:306343-306741 layout
 /**
  * 是否有绝对定位子节点隐藏或位置尺寸变了（则兄弟不能从上一帧 blit）。
  */
@@ -1160,7 +1160,7 @@ function absoluteChildMoved(node, x, y) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:307160-308018 layout
+//@ chunk-2avr6cej.js:306741-307599 layout
 /**
  * 找出被后面兄弟“越界绘制”的变化区域覆盖到的前面兄弟（它们不能 blit，需要重画）。
  */
@@ -1208,7 +1208,7 @@ function collectSiblingsUnderEscapingChange(node, x, y) {
   }
   return result;
 }
-//@ chunk-bzr73sfg.js:308018-308233 layout
+//@ chunk-2avr6cej.js:307599-307814 layout
 function addOverlappingSiblings(siblings, beforeIndex, rect, result) {
   for (let idx = 0; idx < beforeIndex; idx++) {
     let sibling = siblings[idx];
@@ -1227,7 +1227,7 @@ function addOverlappingSiblings(siblings, beforeIndex, rect, result) {
   }
   return result;
 }
-//@ chunk-bzr73sfg.js:308233-309501 fingerprint (2.1.88 match: renderChildren, 0.724)
+//@ chunk-2avr6cej.js:307814-309082 fingerprint (2.1.88 match: renderChildren, 0.724)
 /**
  * 渲染子节点：决定每个子节点能否用上一帧 blit（前面有脏的非裁剪兄弟、绝对定位子节点移动、被越界兄弟覆盖等情况不能），统计子节点是否越出父框、互相重叠、画出自身矩形，返回是否有越界子孙。
  */
@@ -1336,7 +1336,7 @@ function renderChildren(
     isDegenerateBorderBox(node, width, height);
   return hasOverflowChild;
 }
-//@ chunk-bzr73sfg.js:309501-310867 sole-consumer
+//@ chunk-2avr6cej.js:309082-310448 sole-consumer
 /**
  * 父节点有 pendingClears 时，找出仍可安全 blit 的子节点（不与被清区域、越界兄弟重叠的未脏子节点）。
  */
@@ -1429,7 +1429,7 @@ function findBlittableChildren(node, x, y, pendingClears) {
   }
   return result;
 }
-//@ chunk-bzr73sfg.js:310867-310990 sole-consumer
+//@ chunk-2avr6cej.js:310448-310571 sole-consumer
 function rowSpan(rect) {
   let floored = Math.floor(rect.y);
   if (rect.height > 0)
@@ -1442,7 +1442,7 @@ function rowSpan(rect) {
     bottom: floored + 1,
   };
 }
-//@ chunk-bzr73sfg.js:311083-311290 sole-consumer
+//@ chunk-2avr6cej.js:310664-310871 sole-consumer
 function overlapsBounds(childElem, offsetX, offsetY, minX, minY, maxX, maxY) {
   let yogaNode = childElem.yogaNode;
   if (yogaNode === undefined || yogaNode.getDisplay() === 1) return false;
@@ -1455,7 +1455,7 @@ function overlapsBounds(childElem, offsetX, offsetY, minX, minY, maxX, maxY) {
     minY < childY + yogaNode.getComputedHeight()
   );
 }
-//@ chunk-bzr73sfg.js:311290-311387 sole-consumer (2.1.88 match: unionRect, 1)
+//@ chunk-2avr6cej.js:310871-310968 sole-consumer (2.1.88 match: unionRect, 1)
 function rectContains(inner, outer) {
   return (
     inner.x >= outer.x &&
@@ -1464,7 +1464,7 @@ function rectContains(inner, outer) {
     inner.y + inner.height <= outer.y + outer.height
   );
 }
-//@ chunk-bzr73sfg.js:311387-311507 sole-consumer
+//@ chunk-2avr6cej.js:310968-311088 sole-consumer
 function overlapsAbsoluteRects(node, state) {
   let cachedLayout = node.cachedLayout;
   if (cachedLayout === undefined) return false;
@@ -1473,7 +1473,7 @@ function overlapsAbsoluteRects(node, state) {
     anyRectOverlaps(state.absoluteRectsCur, cachedLayout)
   );
 }
-//@ chunk-bzr73sfg.js:311507-311681 sole-consumer (2.1.88 match: unionRect, 0.777)
+//@ chunk-2avr6cej.js:311088-311262 sole-consumer (2.1.88 match: unionRect, 0.778)
 function anyRectOverlaps(rects, rect) {
   for (let rect_2 of rects) {
     let slack = rect_2.width > 0 && rect_2.height > 0 ? 0 : 1;
@@ -1488,7 +1488,7 @@ function anyRectOverlaps(rects, rect) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:311681-312056 sole-consumer
+//@ chunk-2avr6cej.js:311262-311637 sole-consumer
 /**
  * overflow hidden/scroll 的 box 的裁剪矩形（边框内侧），两个方向都不裁剪时返回 undefined。
  */
@@ -1505,7 +1505,7 @@ function getOverflowClip(node, yogaNode, x, y) {
     y2: clipsY ? y + yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3) : undefined,
   };
 }
-//@ chunk-bzr73sfg.js:312056-312306 sole-consumer (2.1.88 match: intersectClip, 0.813)
+//@ chunk-2avr6cej.js:311637-311887 sole-consumer (2.1.88 match: intersectClip, 0.813)
 /**
  * 维护 {now, before, grew}：本帧与上一帧各自的累积裁剪区，grew 表示裁剪区比上一帧大（之前被裁掉的部分需要重画，不能 blit）。
  */
@@ -1531,7 +1531,7 @@ function advanceClips(clips, clip, prevClip) {
     grew: !isClipRedundant(next, before),
   };
 }
-//@ chunk-bzr73sfg.js:312306-312543 sole-consumer
+//@ chunk-2avr6cej.js:311887-312124 sole-consumer
 function clipBlocksBlit(node, cachedLayout, clips) {
   if (cachedLayout.unpainted) return true;
   return (
@@ -1547,7 +1547,7 @@ function clipBlocksBlit(node, cachedLayout, clips) {
       }))
   );
 }
-//@ chunk-bzr73sfg.js:312543-312644 sole-consumer
+//@ chunk-2avr6cej.js:312124-312225 sole-consumer
 function clipsAllowScrollBlit(clips, cached, rect) {
   return (
     cached?.unpainted !== true &&
@@ -1555,7 +1555,7 @@ function clipsAllowScrollBlit(clips, cached, rect) {
       (isClipRedundant(undefined, clips.before, cached) && isClipRedundant(undefined, clips.now, rect)))
   );
 }
-//@ chunk-bzr73sfg.js:312644-312804 fingerprint (2.1.88 match: clipsBothAxes, 1)
+//@ chunk-2avr6cej.js:312225-312385 fingerprint (2.1.88 match: clipsBothAxes, 1)
 /**
  * 节点在 X、Y 两个方向都裁剪（overflow hidden/scroll）。
  */
@@ -1566,7 +1566,7 @@ function clipsBothAxes(node) {
     (overflowX === "hidden" || overflowX === "scroll") && (overflowY === "hidden" || overflowY === "scroll")
   );
 }
-//@ chunk-bzr73sfg.js:312804-313103 fingerprint (2.1.88 match: siblingSharesY, 1)
+//@ chunk-2avr6cej.js:312385-312684 fingerprint (2.1.88 match: siblingSharesY, 1)
 /**
  * 零高度节点是否与相邻兄弟同一行（这种节点只更新缓存位置，不绘制）。
  */
@@ -1588,7 +1588,7 @@ function siblingSharesY(node, yogaNode) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:313103-313827 fingerprint (2.1.88 match: blitEscapingAbsoluteDescendants, 0.684)
+//@ chunk-2avr6cej.js:312684-313408 fingerprint (2.1.88 match: blitEscapingAbsoluteDescendants, 0.684)
 /**
  * 节点整体 blit 后，再把越出它矩形的绝对定位子孙（及越界子孙）也从上一帧拷过来，并登记绝对定位矩形。
  */
@@ -1635,7 +1635,7 @@ function blitEscapingAbsoluteDescendants(parentNode, output, state, prevScreen, 
     if (descendantNode.hasAbsoluteDescendant || childEscapes) pushChildren(descendantNode, childEscapes);
   }
 }
-//@ chunk-bzr73sfg.js:313827-314142 fingerprint (2.1.88 match: renderScrolledChildren, 0.842)
+//@ chunk-2avr6cej.js:313408-313723 fingerprint (2.1.88 match: renderScrolledChildren, 0.842)
 /**
  * 渲染滚动容器的内容子节点：完全在 [top,bottom) 可见范围外的跳过（并丢弃其缓存）；有子节点变脏后，后续子节点不再 blit。
  */
@@ -1677,7 +1677,7 @@ function renderScrolledChildren(
     if (wasDirty) seenDirtyChild = true;
   }
 }
-//@ chunk-bzr73sfg.js:314142-314361 shared-adjacent (2.1.88 match: dropSubtreeCache, 0.809)
+//@ chunk-2avr6cej.js:313723-313942 shared-adjacent (2.1.88 match: dropSubtreeCache, 0.809)
 /**
  * 清掉子树所有节点的 cachedLayout（下一帧不能 blit、命中测试也找不到）。
  */
@@ -1693,7 +1693,7 @@ function dropSubtreeCache(node) {
     }
   }
 }
-//@ chunk-bzr73sfg.js:315335-315555 placement
+//@ chunk-2avr6cej.js:314916-315136 placement
 function rewriteRawAnsiBackground(state, node, text, color) {
   let generation = levelGeneration();
   let cached = state.rawBgRewriteCache.get(node);
@@ -1708,7 +1708,7 @@ function rewriteRawAnsiBackground(state, node, text, color) {
   });
   return rewritten;
 }
-//@ chunk-bzr73sfg.js:315555-316137 placement
+//@ chunk-2avr6cej.js:315136-315718 placement
 /**
  * 截断带样式的文本到给定显示宽度（按段落总宽计算保留头尾），只给 daemon 预览/渲染用。
  */
@@ -1758,10 +1758,10 @@ function truncateStyledText(text, maxWidth, segments, charSegments, position) {
 }
 export {
   isSoftWrapMode,
-  createRenderState,
-  dropSubtreeCache,
   collectTabbable,
+  dropSubtreeCache,
   renderNodeToOutput,
+  createRenderState,
   resetRenderState,
   hasStaleAbsolutePaint,
 };

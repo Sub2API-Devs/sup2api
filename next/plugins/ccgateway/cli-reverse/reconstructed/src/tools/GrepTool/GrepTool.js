@@ -3,15 +3,15 @@
  *
  * Grep 工具：ripgrep 正则搜索，三种输出模式、head_limit/offset 分页（混有插件打包扫描的误归声明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/GrepTool.ts
- * pieces: chunk-e6aww6q8.js (15)
- * attribution: placement 9, fingerprint 5, affinity 1
+ * pieces: chunk-5xgkngpb.js (16)
+ * attribution: placement 10, fingerprint 5, affinity 1
  */
 import { basename, sep } from "path";
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_picomatch_2 } from "../../../vendor/picomatch/index.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { GREP_TOOL_NAME, getDescription } from "./prompt.js";
 import { coerceBooleanString, booleanishSchema } from "../../utils/spellcheck.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -34,7 +34,7 @@ import {
   hostFieldNotForwardedMessage,
 } from "../../bridge/deviceRegistration.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
-import { getToolUseSummary_4 } from "../GlobTool/UI.js";
+import { getToolUseSummary_3 } from "../GlobTool/UI.js";
 import { parsedToolInputOrNull, rejectNullBytes } from "../../utils/filePathValidation.js";
 import { remoteRoutingCandidate } from "../../utils/remoteTools/toolHostRouting.js";
 import { isRemoteOnlyCheck } from "../../utils/permissions/checkRegistry.js";
@@ -52,6 +52,7 @@ import {
   checkReadPermissionForTool,
   getFileReadIgnorePatterns,
   mayBeGuardedFileSyncCopy,
+  normalizeCaseForComparison_2,
   matchingRuleForInput,
   mayEscapeExclusionGlobs,
   denyFoldVariantPaths,
@@ -68,6 +69,7 @@ import {
   getRipgrepDisplayRoot,
   ripGrep_2,
   assertDenyGlobsUnchanged,
+  RipgrepTimeoutError,
   splitNulDelimitedOutput,
   getAlternateRootSpellings,
 } from "../../utils/ripgrep.js";
@@ -80,19 +82,21 @@ import {
 import { procFdPath } from "../../utils/fsSafety/pathRevalidation.js";
 import { INHERITED_FD_PATH } from "../../utils/execFileNoThrow.js";
 import { createAbortableStream } from "../../utils/readFileInRange.js";
-import { uniq } from "../../utils/collections.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1445523-1445543 placement
+//@ chunk-5xgkngpb.js:1439500-1439677 placement
+var SEARCH_INCOMPLETE_NOTE =
+  "The search stopped before it finished, most likely at its time limit, so these results are incomplete: more matches may exist. Search a more specific path or pattern.";
+//@ chunk-5xgkngpb.js:1445764-1445784 placement
 /**
  * 按需加载的 ripgrep 模块（interopRequireDefault 包装后取 default）。
  */
 var interopRequireDefault; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1445523", () => {
+deferInit("chunk-5xgkngpb.js:1445764", () => {
   interopRequireDefault = __toESM(require_picomatch_2(), 1);
 });
-//@ chunk-e6aww6q8.js:1445605-1445676 placement
+//@ chunk-5xgkngpb.js:1445846-1445917 placement
 /**
  * Grep 的布尔简写选项到 output_mode 的映射（-l → files_with_matches、-c → count）。
  */
@@ -100,12 +104,12 @@ var GREP_BOOLEAN_SHORTHANDS = [
   ["-l", "flag_l", "files_with_matches"],
   ["-c", "flag_c", "count"],
 ];
-//@ chunk-e6aww6q8.js:1445676-1446577 placement
+//@ chunk-5xgkngpb.js:1445917-1446818 placement
 /**
  * 把 Grep 工具输入中的 file_path 别名映射为 path。
  */
 function normalizeGrepInputAliases(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
+  if (!isPlainObject_6(rawInput)) return null;
   let normalizedInput = {
     ...rawInput,
   };
@@ -150,7 +154,7 @@ function normalizeGrepInputAliases(rawInput) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:1446577-1449071 fingerprint (2.1.88 match: inputSchema, 0.841)
+//@ chunk-5xgkngpb.js:1446818-1449312 fingerprint (2.1.88 match: inputSchema, 0.841)
 /**
  * Grep 输入 schema（pattern/path/glob/output_mode/-B/-A/-C/context/-n/-i/-o/type/head_limit/offset/multiline）、VCS 目录排除列表、默认 head_limit 250。
  */
@@ -158,7 +162,7 @@ var grepInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) o
 var grepInputSchemaRef;
 var VCS_DIRECTORIES_TO_EXCLUDE;
 var DEFAULT_HEAD_LIMIT;
-deferInit("chunk-e6aww6q8.js:1446577", () => {
+deferInit("chunk-5xgkngpb.js:1446818", () => {
   grepInputSchema = DoctorLazy(() =>
     zodStrictObject({
       pattern: stringSchema().describe("The regular expression pattern to search for in file contents"),
@@ -211,7 +215,7 @@ deferInit("chunk-e6aww6q8.js:1446577", () => {
   VCS_DIRECTORIES_TO_EXCLUDE = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
   DEFAULT_HEAD_LIMIT = 250;
 });
-//@ chunk-e6aww6q8.js:1449071-1449232 fingerprint (2.1.88 match: applyHeadLimit, 1)
+//@ chunk-5xgkngpb.js:1449312-1449473 fingerprint (2.1.88 match: applyHeadLimit, 1)
 /**
  * 按 offset/limit 截取结果（limit 为 0 表示不限，未给时 250），返回是否实际截断。
  */
@@ -229,7 +233,7 @@ function applyHeadLimit(items, limit, offset = 0) {
     appliedLimit: wasTruncated ? effectiveLimit : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1449232-1449343 fingerprint (2.1.88 match: formatLimitInfo, 1)
+//@ chunk-5xgkngpb.js:1449473-1449584 fingerprint (2.1.88 match: formatLimitInfo, 1)
 /**
  * 把实际 limit/offset 格式化为 "limit: N, offset: M"。
  */
@@ -239,13 +243,13 @@ function formatLimitInfo(appliedLimit, appliedOffset) {
   if (appliedOffset) parts.push(`offset: ${appliedOffset}`);
   return parts.join(", ");
 }
-//@ chunk-e6aww6q8.js:1449343-1452555 fingerprint (2.1.88 match: GrepTool, 0.619)
+//@ chunk-5xgkngpb.js:1449584-1452877 fingerprint (2.1.88 match: GrepTool, 0.62)
 /**
  * Grep 工具定义（name "Grep"）。只读、可并发、maxResultSizeChars 20000；ripgrep 正则搜索，三种 output_mode，head_limit 默认 250、offset 分页；validateInput 查空字节与 head_limit/offset 为非负整数。
  */
 var grepOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var GrepTool;
-deferInit("chunk-e6aww6q8.js:1449343", () => {
+deferInit("chunk-5xgkngpb.js:1449584", () => {
   grepOutputSchema = DoctorLazy(() =>
     objectSchema({
       mode: _enum(["content", "files_with_matches", "count"]).optional(),
@@ -258,6 +262,7 @@ deferInit("chunk-e6aww6q8.js:1449343", () => {
       totalLines: numberSchema().optional(),
       appliedLimit: numberSchema().optional(),
       appliedOffset: numberSchema().optional(),
+      timedOut: booleanSchema().optional(),
     }),
   );
   GrepTool = buildTool({
@@ -275,9 +280,9 @@ deferInit("chunk-e6aww6q8.js:1449343", () => {
     userFacingName() {
       return "Search";
     },
-    getToolUseSummary: getToolUseSummary_4,
+    getToolUseSummary: getToolUseSummary_3,
     getActivityDescription(input) {
-      let summary = getToolUseSummary_4(input);
+      let summary = getToolUseSummary_3(input);
       return summary ? `Searching for ${summary}` : "Searching";
     },
     get inputSchema() {
@@ -320,25 +325,25 @@ deferInit("chunk-e6aww6q8.js:1449343", () => {
       };
     },
     ruleContentField: "path",
-    getPath({ path }) {
-      if (isRemoteOnlyCheck(GREP_TOOL_NAME)) return path ?? "";
-      return path ? expandPath(path) : getCwd();
+    getPath({ path: input }) {
+      if (isRemoteOnlyCheck(GREP_TOOL_NAME)) return input ?? "";
+      return input ? expandPath(input) : getCwd();
     },
-    async preparePermissionMatcher({ pattern }) {
-      return (rulePattern) => matchWildcardPattern(rulePattern, pattern);
+    async preparePermissionMatcher({ pattern: options }) {
+      return (toolUseID) => matchWildcardPattern(toolUseID, options);
     },
-    async prompt({ model, leanPrompt, leanRewrite }) {
-      return getDescription(model, leanPrompt, leanRewrite);
+    async prompt({ model: input, leanPrompt: callOptions, leanRewrite: path }) {
+      return getDescription(input, callOptions, path);
     },
     renderToolUseMessage,
-    extractSearchText({ mode, content, filenames }) {
-      if (mode === "content" && content) return content;
-      return filenames.join(`
+    extractSearchText({ mode: input, content: callOptions, filenames: path }) {
+      if (input === "content" && callOptions) return callOptions;
+      return path.join(`
 `);
     },
     mapToolResultToToolResultBlockParam(
       {
-        mode = "files_with_matches",
+        mode: input = "files_with_matches",
         numFiles,
         filenames,
         content,
@@ -348,15 +353,21 @@ deferInit("chunk-e6aww6q8.js:1449343", () => {
         totalLines,
         appliedLimit,
         appliedOffset,
+        timedOut,
       },
       toolUseID,
     ) {
-      if (mode === "content") {
+      let timeoutNote = timedOut
+        ? `${SEARCH_INCOMPLETE_NOTE}
+
+`
+        : "";
+      if (input === "content") {
         let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
         let resultContent =
           content ||
           (appliedOffset && (totalLines ?? 0) > 0 ? "No entries at this offset" : "No matches found");
-        let finalContent = limitInfo
+        let contentText = limitInfo
           ? `${resultContent}
 
 [Showing results with pagination = ${limitInfo}]`
@@ -364,21 +375,21 @@ deferInit("chunk-e6aww6q8.js:1449343", () => {
         return {
           tool_use_id: toolUseID,
           type: "tool_result",
-          content: finalContent,
+          content: timeoutNote + contentText,
         };
       }
-      if (mode === "count") {
+      if (input === "count") {
         let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
         let matchCount = numMatches ?? 0;
         let files = numFiles ?? 0;
-        let contentText = content || (matchCount > 0 ? "No entries at this offset" : "No matches found");
-        let summary = `
+        let countText = content || (matchCount > 0 ? "No entries at this offset" : "No matches found");
+        let summaryLine = `
 
 Found ${matchCount} total ${matchCount === 1 ? "occurrence" : "occurrences"} across ${files} ${files === 1 ? "file" : "files"}.${limitInfo ? ` with pagination = ${limitInfo}` : ""}`;
         return {
           tool_use_id: toolUseID,
           type: "tool_result",
-          content: contentText + summary,
+          content: timeoutNote + countText + summaryLine,
         };
       }
       let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
@@ -387,17 +398,18 @@ Found ${matchCount} total ${matchCount === 1 ? "occurrence" : "occurrences"} acr
           tool_use_id: toolUseID,
           type: "tool_result",
           content:
-            appliedOffset && (totalFiles ?? 0) > 0
+            timeoutNote +
+            (appliedOffset && (totalFiles ?? 0) > 0
               ? `No entries at this offset. [Showing results with pagination = ${limitInfo}]`
-              : "No files found",
+              : "No files found"),
         };
-      let result = `Found ${numFiles} ${plural(numFiles, "file")}${limitInfo ? ` ${limitInfo}` : ""}
+      let fileListText = `Found ${numFiles} ${plural(numFiles, "file")}${limitInfo ? ` ${limitInfo}` : ""}
 ${filenames.join(`
 `)}`;
       return {
         tool_use_id: toolUseID,
         type: "tool_result",
-        content: result,
+        content: timeoutNote + fileListText,
       };
     },
     create(toolContext) {
@@ -457,7 +469,7 @@ ${filenames.join(`
     },
   });
 });
-//@ chunk-e6aww6q8.js:1452555-1452836 placement
+//@ chunk-5xgkngpb.js:1452877-1453158 placement
 /**
  * 校验 Grep 的搜索路径存在（受保护路径或权限检查路径变化时跳过）；不存在时抛出带当前目录与"你是不是指…"建议的遥测安全错误。
  */
@@ -481,12 +493,12 @@ async function assertGrepPathExists(path, permittedPaths, checkContext) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:1453023-1453038 affinity
+//@ chunk-5xgkngpb.js:1453345-1453360 affinity
 /**
  * 表示“不适用”的 undefined 常量，用于空结果的 appliedLimit/appliedOffset。
  */
 var NOT_APPLICABLE = undefined;
-//@ chunk-e6aww6q8.js:1453038-1453463 fingerprint (2.1.88 match: outputSchema, 0.764)
+//@ chunk-5xgkngpb.js:1453360-1453785 fingerprint (2.1.88 match: outputSchema, 0.765)
 /**
  * 搜索目标不可打开时按 output_mode 返回空结果。
  */
@@ -528,7 +540,7 @@ function emptyGrepResult(input) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:1453463-1458523 placement
+//@ chunk-5xgkngpb.js:1453785-1459115 placement
 /**
  * Grep 工具的执行主体：按参数组装 ripgrep 参数（隐藏文件、排除 VCS 目录、列宽、多行、大小写、输出模式、上下文、类型与 glob、读取 deny 规则与忽略模式），任务输出文件改为单独绑定读取；运行 ripgrep 后按输出模式整理结果、做分页与权限过滤。
  */
@@ -604,6 +616,7 @@ async function runGrep(
     addGlob(globPattern);
   }
   let rgLines;
+  let timedOut = false;
   let taskOutput = isTaskOutputFilePath(canonical) ? await bindTaskOutputForRead(canonical) : undefined;
   let taskOutputNeedsStdin =
     taskOutput !== undefined && taskOutput.ioPath !== procFdPath(taskOutput.handle.fd);
@@ -654,18 +667,36 @@ async function runGrep(
     else {
       didRunRipgrep = true;
       let markExternalTiming = timing?.mark("external");
-      rgLines = await ripGrep_2(rgArgs, searchPathArg, signal, {
+      let result = await ripGrep_2(rgArgs, searchPathArg, signal, {
         rawLines: true,
         rejectOnInputError: true,
         searchOtherAppsData: true,
         cwd: searchTarget.spawnCwd,
+        spawnDirFd: searchTarget.spawnDirFd,
         stdin,
         inheritFd,
         beforeSpawn: () => {
           searchTarget.recheckBeforeSpawn();
           assertDenyGlobsUnchanged(readIgnorePatterns, searchTarget, denyGlobs);
         },
-      }).finally(markExternalTiming);
+      })
+        .then(
+          (lines) => ({
+            lines,
+            timedOut: false,
+          }),
+          (error) => {
+            if (error instanceof RipgrepTimeoutError && error.partialResults.length > 0)
+              return {
+                lines: error.partialResults,
+                timedOut: true,
+              };
+            throw error;
+          },
+        )
+        .finally(markExternalTiming);
+      rgLines = result.lines;
+      timedOut = result.timedOut;
     }
   } finally {
     await taskOutput?.close();
@@ -696,7 +727,7 @@ async function runGrep(
     if (!searchTarget.isDirectory) {
       let permissions = context_2.permissions();
       if (
-        uniq([
+        normalizeCaseForComparison_2([
           searchTarget.canonical,
           searchTarget.lexical,
           ...getPathsForPermissionCheck(searchTarget.lexical),
@@ -704,9 +735,11 @@ async function runGrep(
       )
         rgLines = [];
     } else {
-      let allowedRoots = uniq([searchTarget.canonical, searchTarget.lexical, searchTarget.target]).map(
-        (dirPath) => (dirPath.endsWith(sep) ? dirPath : dirPath + sep),
-      );
+      let allowedRoots = normalizeCaseForComparison_2([
+        searchTarget.canonical,
+        searchTarget.lexical,
+        searchTarget.target,
+      ]).map((dirPath) => (dirPath.endsWith(sep) ? dirPath : dirPath + sep));
       let resultPathsByLine = new Map();
       let escapedPaths = new Set();
       let unjudgedLines = new Set();
@@ -768,6 +801,9 @@ async function runGrep(
         ...(offset > 0 && {
           appliedOffset: offset,
         }),
+        ...(timedOut && {
+          timedOut,
+        }),
       },
     };
   }
@@ -809,6 +845,9 @@ async function runGrep(
         ...(offset > 0 && {
           appliedOffset: offset,
         }),
+        ...(timedOut && {
+          timedOut,
+        }),
       },
     };
   }
@@ -838,10 +877,13 @@ async function runGrep(
       ...(offset > 0 && {
         appliedOffset: offset,
       }),
+      ...(timedOut && {
+        timedOut,
+      }),
     },
   };
 }
-//@ chunk-e6aww6q8.js:1458523-1458885 placement
+//@ chunk-5xgkngpb.js:1459115-1459477 placement
 /**
  * 把 ripgrep 输出的路径前缀（目标或规范路径）换回用户看到的词法路径，处理相对输出与 ":"/NUL 分隔。
  */
@@ -857,7 +899,7 @@ function toDisplayPath(rgLine, searchTarget) {
   }
   return rgLine;
 }
-//@ chunk-e6aww6q8.js:1458885-1459178 placement
+//@ chunk-5xgkngpb.js:1459477-1459770 placement
 function extractResultPath(rgLine, outputMode, allowedRoots) {
   let pathPart;
   if (outputMode === "content") {
@@ -872,7 +914,7 @@ function extractResultPath(rgLine, outputMode, allowedRoots) {
   let normalizedPath = sep === "\\" ? pathPart.replaceAll("/", "\\") : pathPart;
   return allowedRoots.some((root) => normalizedPath.startsWith(root)) ? [normalizedPath] : null;
 }
-//@ chunk-e6aww6q8.js:1459178-1460512 placement
+//@ chunk-5xgkngpb.js:1459770-1461111 placement
 /**
  * 把 ripgrep --json 输出转成"路径\0行号:内容"形式的行：处理 begin/end（二进制文件只报一行提示）、上下文分隔 --、仅匹配模式按子匹配拆行、过长行用省略标记替代。
  */
@@ -965,7 +1007,7 @@ function formatRgJsonLines(lines, options) {
   for (let fileLine of fileLines) out.push(fileLine);
   return out;
 }
-//@ chunk-e6aww6q8.js:1460512-1460606 placement
+//@ chunk-5xgkngpb.js:1461111-1461205 placement
 /**
  * 统计缓冲区前 N 个字节里的换行数，用于计算行号。
  */
@@ -975,4 +1017,4 @@ function countNewlinesBefore(buffer, endOffset) {
     if (buffer[idx] === 10) newlineCount++;
   return newlineCount;
 }
-export { GrepTool, assertGrepPathExists, emptyGrepResult, runGrep };
+export { GrepTool, SEARCH_INCOMPLETE_NOTE, assertGrepPathExists, emptyGrepResult, runGrep };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：函数钩子在宿主侧的桥接：classic.* 钩子适配、ui.resolve 应答校验、next.to 路由与 ui.render/press/input/select 处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1tz177x8.js (2), chunk-4121qate.js (1), chunk-pwe88xvs.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7n3ata3a.js (44), chunk-f284hj51.js (2), chunk-j8f885h1.js (1)
  * attribution: placement 47
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -73,31 +73,31 @@ import { viewportInfo } from "./surfaceBinding.js";
 import { buildPluginAppendRow } from "./api/sessionAppend.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:180389-180428 placement (2.1.88 match: withModifiers, 1)
+//@ chunk-j8f885h1.js:161564-161603 placement (2.1.88 match: withModifiers, 1)
 /**
  * （误归 computerUse）按 "press"+两个参数用分隔符拼键。
  */
 var withModifiers = (plugin, handle) => ["press", plugin, handle].join(KEY_SEPARATOR);
-//@ chunk-pwe88xvs.js:688-720 placement
+//@ chunk-7n3ata3a.js:688-720 placement
 /**
  * 各 UI 元素构造器
  */
 var UI_ELEMENT_BUILDERS = () =>
   import_mapValues(UI_ELEMENT_TYPES, (type, builders) => elementBuildersFor(builders));
-//@ chunk-pwe88xvs.js:720-748 placement
+//@ chunk-7n3ata3a.js:720-748 placement
 var CLASSIC_POSTTOOLUSE = "classic.PostToolUse";
-//@ chunk-pwe88xvs.js:748-825 placement
+//@ chunk-7n3ata3a.js:748-825 placement
 /**
  * 无法交给检查钩子的说明
  */
 var HOOK_NOT_GIVEN_TEXT = "this could not be given to a hook that checks it, so it was not done";
-//@ chunk-pwe88xvs.js:825-918 placement
+//@ chunk-7n3ata3a.js:825-918 placement
 /**
  * 工具未运行的说明
  */
 var TOOL_INPUT_NOT_GIVEN =
   "this tool input could not be given to a hook that checks it, so the tool was not run";
-//@ chunk-pwe88xvs.js:918-1199 placement
+//@ chunk-7n3ata3a.js:918-1199 placement
 function buildClassicDenyResult(hookEvent, input) {
   let denyByEvent = {
     "classic.PreToolUse": {
@@ -120,14 +120,14 @@ function buildClassicDenyResult(hookEvent, input) {
     ? secondInput?.(secondHookEvent ? TOOL_INPUT_NOT_GIVEN : HOOK_NOT_GIVEN_TEXT)
     : denyByEvent[hookEvent];
 }
-//@ chunk-pwe88xvs.js:1199-1271 placement
+//@ chunk-7n3ata3a.js:1199-1271 placement
 /**
  * 检查钩子未能交回答案
  */
 var CHECKER_NO_ANSWER = "a hook that checks this result could not hand back its answer";
-//@ chunk-pwe88xvs.js:1271-1383 placement
+//@ chunk-7n3ata3a.js:1271-1383 placement
 var ALWAYS_WITHHELD_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pwe88xvs.js:1271", () => {
+deferInit("chunk-7n3ata3a.js:1271", () => {
   ALWAYS_WITHHELD_EVENTS = new Set([
     "tool.check",
     "agent.offer",
@@ -136,7 +136,7 @@ deferInit("chunk-pwe88xvs.js:1271", () => {
     "classic.PermissionRequest",
   ]);
 });
-//@ chunk-pwe88xvs.js:1383-1589 placement
+//@ chunk-7n3ata3a.js:1383-1589 placement
 /**
  * 无法交给检查钩子时的扣留策略：PostToolUse 只记录；检查类事件以拒绝作答；tool.call 拒绝并扣留结果。
  */
@@ -164,7 +164,7 @@ function classicWithholding(hookEvent, input) {
         answer: classicDenyResult,
       };
 }
-//@ chunk-pwe88xvs.js:1589-1680 placement
+//@ chunk-7n3ata3a.js:1589-1680 placement
 /**
  * ui.input/select/press
  */
@@ -173,7 +173,7 @@ function uiEventKind(event) {
   let hasValue = "value" in event;
   return hasKind ? "ui.input" : hasValue ? "ui.select" : "ui.press";
 }
-//@ chunk-pwe88xvs.js:1680-1846 placement
+//@ chunk-7n3ata3a.js:1680-1846 placement
 function answeringEventFor(bridgeState, environmentId) {
   let live = bridgeState.answering.getStore();
   return live !== undefined &&
@@ -183,7 +183,7 @@ function answeringEventFor(bridgeState, environmentId) {
     ? live.event
     : undefined;
 }
-//@ chunk-pwe88xvs.js:1846-1939 placement
+//@ chunk-7n3ata3a.js:1846-1939 placement
 /**
  * 实时事件信封
  */
@@ -194,7 +194,7 @@ var liveEventEnvelope = (sent, environmentId, secondSent) => ({
   environmentId,
   sent,
 });
-//@ chunk-pwe88xvs.js:1939-2607 placement
+//@ chunk-7n3ata3a.js:1939-2607 placement
 function cloneAnswer(bridgeState, environmentId) {
   let weakMap = new WeakMap();
   let weakSet = new WeakSet();
@@ -246,12 +246,12 @@ function cloneAnswer(bridgeState, environmentId) {
     }
   };
 }
-//@ chunk-pwe88xvs.js:2607-2708 placement
+//@ chunk-7n3ata3a.js:2607-2708 placement
 function servingCallers(bridgeState) {
   let serving = bridgeState.serving.getStore();
   return serving !== undefined && bridgeState.servingLive.has(serving.callId) ? serving.callers : [];
 }
-//@ chunk-pwe88xvs.js:2708-3246 placement
+//@ chunk-7n3ata3a.js:2708-3246 placement
 function checkResolveAnswer(bridgeState, environment, answer) {
   let { result, resolver } = answer;
   if (isUntrustedObject(result))
@@ -280,7 +280,7 @@ function checkResolveAnswer(bridgeState, environment, answer) {
   }
   return copies;
 }
-//@ chunk-pwe88xvs.js:3294-3516 placement
+//@ chunk-7n3ata3a.js:3294-3516 placement
 var createBridgeState = (hostOps, hostStreamOps, stamp) => ({
   environments: new Map(),
   loading: new Map(),
@@ -296,7 +296,7 @@ var createBridgeState = (hostOps, hostStreamOps, stamp) => ({
   resolving: new Map(),
   stamp,
 });
-//@ chunk-pwe88xvs.js:3516-3675 placement
+//@ chunk-7n3ata3a.js:3516-3675 placement
 function argumentForEnvironment({ environment, name, event, e }) {
   try {
     return environment.argumentFor(e);
@@ -306,7 +306,7 @@ function argumentForEnvironment({ environment, name, event, e }) {
     );
   }
 }
-//@ chunk-pwe88xvs.js:3675-3770 placement
+//@ chunk-7n3ata3a.js:3675-3770 placement
 /**
  * 按对象缓存参数
  */
@@ -323,12 +323,12 @@ function memoizedArgument(options) {
     return cached;
   };
 }
-//@ chunk-pwe88xvs.js:3770-3798 placement
+//@ chunk-7n3ata3a.js:3770-3798 placement
 /**
  * e\0t 组合键
  */
 var keyOfPair = (a, b) => `${a}\x00${b}`;
-//@ chunk-pwe88xvs.js:3798-4035 placement
+//@ chunk-7n3ata3a.js:3798-4035 placement
 /**
  * 一次渲染后，删除不再出现在新元素树中的按键句柄。
  */
@@ -342,13 +342,13 @@ function dropStalePresses(bridgeState, environmentId, handles) {
       if (secondSecondHandle.name === plugin) kept.add(keyOfPair(secondHandle, handle));
   for (let secondKept of taking) if (!kept.has(secondKept)) bridgeState.presses.delete(secondKept);
 }
-//@ chunk-pwe88xvs.js:4035-4149 placement
+//@ chunk-7n3ata3a.js:4035-4149 placement
 function requireEnvironment(bridgeState, environmentId) {
   let entry = bridgeState.environments.get(environmentId);
   if (entry === undefined) throw new HooksError(`environment ${environmentId} is not loaded`);
   return entry;
 }
-//@ chunk-pwe88xvs.js:4149-4243 placement
+//@ chunk-7n3ata3a.js:4149-4243 placement
 /**
  * 取环境的分发注册
  */
@@ -356,7 +356,7 @@ function registrationForEnv(bridgeState, environmentId) {
   let frame = bridgeState.framing.getStore();
   return frame?.environmentId === environmentId ? frame.registration : undefined;
 }
-//@ chunk-pwe88xvs.js:4243-4323 placement
+//@ chunk-7n3ata3a.js:4243-4323 placement
 /**
  * 转发 generator
  */
@@ -365,7 +365,7 @@ var forwardedGenerator = (generator, run) =>
     next: () => run(() => generator.next()),
     return: () => run(() => generator.return(undefined)),
   });
-//@ chunk-pwe88xvs.js:4323-4857 placement
+//@ chunk-7n3ata3a.js:4323-4857 placement
 function checkNextToTarget(handle, to, { event, raised, leftOut }) {
   let { environment, name, nextTo, scan } = handle;
   for (let tier of to) {
@@ -391,7 +391,7 @@ function checkNextToTarget(handle, to, { event, raised, leftOut }) {
       );
   }
 }
-//@ chunk-pwe88xvs.js:4857-5120 placement
+//@ chunk-7n3ata3a.js:4857-5120 placement
 function collectUiTree(bridgeState, request, collector) {
   let { environmentId, name } = request;
   let list = checkElementList(request.result, name);
@@ -411,7 +411,7 @@ function collectUiTree(bridgeState, request, collector) {
       })
     : list;
 }
-//@ chunk-pwe88xvs.js:5120-5197 placement
+//@ chunk-7n3ata3a.js:5120-5197 placement
 /**
  * 附上经典钩子的扣留标记
  */
@@ -419,7 +419,7 @@ function withClassicWithholding(hookEvent, input, error) {
   let withholding = hasWeakSetTag(error) ? classicWithholding(hookEvent, input) : undefined;
   return withholding === undefined ? error : tagWeak(error, withholding);
 }
-//@ chunk-pwe88xvs.js:5197-6796 placement
+//@ chunk-7n3ata3a.js:5197-6796 placement
 function dispatchUiHandler(bridgeState, params, hook) {
   let { environmentId, event, resolver, leftOut, ended, caughtAnswered, endedReached, withheld } = params;
   let { environment, name, tier, isPersons, answersForEngine } = requireEnvironment(
@@ -532,17 +532,17 @@ function dispatchUiHandler(bridgeState, params, hook) {
     run: (e, ctx) => (ended === undefined ? runHandler(run, e, ctx) : runAfterEnded(ended, e, ctx)),
   };
 }
-//@ chunk-pwe88xvs.js:6796-6906 placement
+//@ chunk-7n3ata3a.js:6796-6906 placement
 function pressSentFor(bridgeState, environmentId) {
   let live = bridgeState.answering.getStore();
   return live?.event === "ui.press" && live.environmentId === environmentId ? live.sent : undefined;
 }
-//@ chunk-pwe88xvs.js:6906-7011 placement
+//@ chunk-7n3ata3a.js:6906-7011 placement
 function servingCallId(bridgeState) {
   let serving = bridgeState.serving.getStore();
   return serving !== undefined && bridgeState.servingLive.has(serving.callId) ? serving.callId : undefined;
 }
-//@ chunk-pwe88xvs.js:7011-7150 placement
+//@ chunk-7n3ata3a.js:7011-7150 placement
 /**
  * 构造环境发起宿主操作时的帧：环境 id、分发 id、注册序号、服务中的调用、根事件与按键。
  */
@@ -554,7 +554,7 @@ var opFrameFor = (bridgeState, environmentId) => ({
   rootEvent: answeringEventFor(bridgeState, environmentId),
   pressing: pressSentFor(bridgeState, environmentId),
 });
-//@ chunk-pwe88xvs.js:7150-7254 placement
+//@ chunk-7n3ata3a.js:7150-7254 placement
 /**
  * 为某环境生成宿主操作调用函数（非时钟类操作在预算外执行）。
  */
@@ -568,7 +568,7 @@ var createHostOpCaller = (bridgeState, environmentId) => (op, args, signal) => {
     });
   return isClockMethod(op) ? call() : outsideBudget(call);
 };
-//@ chunk-pwe88xvs.js:7254-7568 placement
+//@ chunk-7n3ata3a.js:7254-7568 placement
 /**
  * 为某环境生成流式宿主操作调用函数：可被放弃时中止，结束前不计入钩子预算。
  */
@@ -597,7 +597,7 @@ var createHostStreamCaller = (bridgeState, environmentId) => (op, args, signal) 
     abortController.abort(new HooksError(`${op}: the stream was let go`)),
   );
 };
-//@ chunk-pwe88xvs.js:7568-7774 placement
+//@ chunk-7n3ata3a.js:7568-7774 placement
 function environmentCatches(bridgeState, { event, leftOut }, [environmentId, registration]) {
   let { environment, name } = requireEnvironment(bridgeState, environmentId);
   return environment.activation.registrations.catches(
@@ -611,7 +611,7 @@ function environmentCatches(bridgeState, { event, leftOut }, [environmentId, reg
     leftOut?.find((result) => result.environmentId === environmentId)?.registrations,
   );
 }
-//@ chunk-pwe88xvs.js:7774-8110 placement
+//@ chunk-7n3ata3a.js:7774-8110 placement
 /**
  * 为一个 UI 组件运行 ui.resolve 钩子链（各环境依次），底部返回核心元素表。
  */
@@ -641,14 +641,14 @@ function resolveUiTables(bridgeState, options) {
     },
   });
 }
-//@ chunk-pwe88xvs.js:8110-8138 placement
+//@ chunk-7n3ata3a.js:8110-8138 placement
 /**
  * 删除键
  */
 var deleteFromMap = (map, key) => {
   map.delete(key);
 };
-//@ chunk-pwe88xvs.js:8138-8223 placement
+//@ chunk-7n3ata3a.js:8138-8223 placement
 /**
  * session.start 事件
  */
@@ -657,7 +657,7 @@ var SESSION_START_EVENT = () => ({
   isLive: true,
   answersUntil: Number.POSITIVE_INFINITY,
 });
-//@ chunk-pwe88xvs.js:8223-8864 placement
+//@ chunk-7n3ata3a.js:8223-8864 placement
 function readValueField(bridgeState, params) {
   let { environmentId, event, leftOut } = params;
   let { environment, name, tier } = requireEnvironment(bridgeState, environmentId);
@@ -711,7 +711,7 @@ function readValueField(bridgeState, params) {
     };
   });
 }
-//@ chunk-pwe88xvs.js:8864-9212 placement
+//@ chunk-7n3ata3a.js:8864-9212 placement
 /**
  * 为一跳构造钩子链参数：各环境的处理器、宿主 next 与中止信号。
  */
@@ -738,7 +738,7 @@ function buildHopChainArgs(bridgeState, { request, hostNext, signal }) {
     floors: request.floors,
   };
 }
-//@ chunk-pwe88xvs.js:9212-12722 placement
+//@ chunk-7n3ata3a.js:9212-12689 placement
 /**
  * 建立钩子运行环境与宿主操作的桥（ui.render、session.start、ui.press/input/select 句柄，约 3.5 KB）。
  */
@@ -830,7 +830,6 @@ function createHookHostBridge({
   let withinSteps = (id, generator) =>
     forwardedGenerator(generator, (fn) => dispatching.run(id, () => answering.run(undefined, fn)));
   return {
-    currentDispatch: () => dispatching.getStore(),
     opFailureOf: (value) =>
       Array.from(environments.values(), (entry) => entry.environment.opFailureOf(value)).find(
         (failure) => failure !== undefined,
@@ -985,7 +984,7 @@ function createHookHostBridge({
     },
   };
 }
-//@ chunk-pwe88xvs.js:12722-12794 placement
+//@ chunk-7n3ata3a.js:12689-12761 placement
 /**
  * 拒绝全部挂起
  */
@@ -993,7 +992,7 @@ function rejectAllPending(map, reason) {
   for (let pending of map.values()) pending.reject(new HooksError(reason));
   map.clear();
 }
-//@ chunk-pwe88xvs.js:12794-12847 placement
+//@ chunk-7n3ata3a.js:12761-12814 placement
 /**
  * 取出并删除挂起项
  */
@@ -1002,35 +1001,35 @@ function takePending(map, key) {
   map.delete(key);
   return value;
 }
-//@ chunk-pwe88xvs.js:12847-12857 placement
+//@ chunk-7n3ata3a.js:12814-12824 placement
 /**
  * 与 worker 共享的 marks 数组里「最新分发序号」的槽位；宿主用它判断已应答的是不是当前这次分发。
  */
 var MARKS_NEWEST_DISPATCH_SLOT = 0;
-//@ chunk-pwe88xvs.js:12857-12867 placement
+//@ chunk-7n3ata3a.js:12824-12834 placement
 /**
  * marks 共享数组的槽位数（3 个槽：最新分发序号、已应答分发序号、已应答次数）。
  */
 var MARKS_SLOT_COUNT = 3;
-//@ chunk-pwe88xvs.js:12867-12877 placement
+//@ chunk-7n3ata3a.js:12834-12844 placement
 /**
  * marks 共享数组里「已应答次数」的槽位。
  */
 var MARKS_ANSWERS_SENT_SLOT = 2;
-//@ chunk-pwe88xvs.js:12877-12887 placement
+//@ chunk-7n3ata3a.js:12844-12854 placement
 /**
  * marks 共享数组里「已应答的分发序号」的槽位。
  */
 var MARKS_ANSWERED_DISPATCH_SLOT = 1;
-//@ chunk-1tz177x8.js:37817-37920 placement (2.1.88 match: isComputerUseLock, 0.575)
+//@ chunk-f284hj51.js:38970-39073 placement
 /**
  * （误归 computerUse）会话目标：字符串原样返回，对象取 sessionId 或 agentId。
  */
-function sessionTargetId(value) {
-  if (typeof value === "string" || value === undefined) return value;
-  return "sessionId" in value ? value.sessionId : value.agentId;
+function sessionTargetId(target) {
+  if (typeof target === "string" || target === undefined) return target;
+  return "sessionId" in target ? target.sessionId : target.agentId;
 }
-//@ chunk-1tz177x8.js:37920-38481 placement
+//@ chunk-f284hj51.js:39073-39634 placement
 /**
  * （误归 computerUse）插件宿主动作补默认值：command.run/prompt.fill/prompt.suggest/prompt.submit/session.send 补 origin={kind:"plugin",name} 等字段。
  */
@@ -1094,8 +1093,6 @@ function normalizePluginHostAction(payload, pluginName, handler) {
   }
 }
 export {
-  normalizePluginHostAction,
-  withModifiers,
   CHECKER_NO_ANSWER,
   MARKS_SLOT_COUNT,
   takePending,
@@ -1105,4 +1102,6 @@ export {
   MARKS_ANSWERS_SENT_SLOT,
   MARKS_NEWEST_DISPATCH_SLOT,
   classicWithholding,
+  normalizePluginHostAction,
+  withModifiers,
 };

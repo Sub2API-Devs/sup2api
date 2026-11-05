@@ -1,14 +1,14 @@
 /**
  * @smithy/core/dist-cjs/submodules/serde/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-wjd9n4jx.js (1)
+ * pieces: chunk-1fkvp0h1.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_v4 } from "../../../index.js";
 
-//@ chunk-wjd9n4jx.js:22651-35068 cjs-require-graph
+//@ chunk-1fkvp0h1.js:22651-35068 cjs-require-graph
 var require_serde = __commonJS(function (cjsExports) {
   var v4 = require_v4();
   var copyDocumentWithTransform = (source, input, offset = (input) => input) => source;
@@ -209,7 +209,7 @@ var require_serde = __commonJS(function (cjsExports) {
     if (typeof value !== "string") throw TypeError("RFC-3339 date-times must be expressed as strings");
     let match = RFC3339.exec(value);
     if (!match) throw TypeError("Invalid RFC-3339 date-time value");
-    let [__2, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds] = match;
+    let [_, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds] = match;
     let year = strictParseShort(stripLeadingZeroes(yearStr));
     let month = parseDateValue(monthStr, "month", 1, 12);
     let day = parseDateValue(dayStr, "day", 1, 31);
@@ -228,7 +228,7 @@ var require_serde = __commonJS(function (cjsExports) {
     if (typeof value !== "string") throw TypeError("RFC-3339 date-times must be expressed as strings");
     let match = RFC3339_WITH_OFFSET$1.exec(value);
     if (!match) throw TypeError("Invalid RFC-3339 date-time value");
-    let [__2, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, offsetStr] = match;
+    let [_, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, offsetStr] = match;
     let year = strictParseShort(stripLeadingZeroes(yearStr));
     let month = parseDateValue(monthStr, "month", 1, 12);
     let day = parseDateValue(dayStr, "day", 1, 31);
@@ -255,7 +255,7 @@ var require_serde = __commonJS(function (cjsExports) {
     if (typeof value !== "string") throw TypeError("RFC-7231 date-times must be expressed as strings");
     let match = IMF_FIXDATE$1.exec(value);
     if (match) {
-      let [__2, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
+      let [_, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
       return buildDate(
         strictParseShort(stripLeadingZeroes(yearStr)),
         parseMonthByShortName(monthStr),
@@ -270,7 +270,7 @@ var require_serde = __commonJS(function (cjsExports) {
     }
     match = RFC_850_DATE$1.exec(value);
     if (match) {
-      let [__2, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
+      let [_, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
       return adjustRfc850Year(
         buildDate(
           parseTwoDigitYear(yearStr),
@@ -287,7 +287,7 @@ var require_serde = __commonJS(function (cjsExports) {
     }
     match = ASC_TIME$1.exec(value);
     if (match) {
-      let [__2, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, yearStr] = match;
+      let [_, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, yearStr] = match;
       return buildDate(
         strictParseShort(stripLeadingZeroes(yearStr)),
         parseMonthByShortName(monthStr),

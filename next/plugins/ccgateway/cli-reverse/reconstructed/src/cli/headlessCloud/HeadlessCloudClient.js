@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头 --cloud 客户端主体：出站消息队列与账本、控制请求中继、启动看门狗、按原因退出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (28)
  * attribution: placement 28
  */
 import { randomUUID } from "crypto";
@@ -66,7 +66,7 @@ import {
 } from "../../remote/controlRequestErrors.js";
 import { errorMessage, AbortError } from "../../utils/errors.js";
 import { parseThinClientReply } from "../thinClient.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import {
   isControlShapedMessage,
@@ -81,6 +81,7 @@ import {
   formatUndeliveredAnswerNotice,
   RemoteSessionManager,
 } from "../../remote/RemoteSessionManager.js";
+import { STARTUP_WATCHDOG_MS, CloudStreamFilter } from "./streamFilter.js";
 import { StructuredIO } from "../structuredIO.js";
 import { HostPermissionBridge } from "./hostPermissions.js";
 import {
@@ -105,7 +106,6 @@ import {
 } from "../startupFailureResult.js";
 import { hashSessionAddress } from "../../utils/sessionUrl.js";
 import { toInfraSessionId } from "../../bridge/sessionIdCompat.js";
-import { CloudStreamFilter } from "./streamFilter.js";
 import { buildSyncStatusFromRemote, noop_3, formatSyncStatusLine } from "./syncStatus.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { markSessionRead, updateSessionTitle } from "../../utils/teleport/api.js";
@@ -117,14 +117,15 @@ import { REMOTE_TOOLS_CONSENT_TEXT } from "../../remote/tools/consentText.js";
 import { getRemoteSessionUrl } from "../../constants/product.js";
 import { parsePermissionMode } from "../../types/permissions.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fe6rs39h.js:61774-61809 placement
+//@ chunk-keyy05re.js:61652-61687 placement
 var CLOUD_CLIENT_TIMEOUTS = 60000;
 var STALL_LINE_FRESHNESS_MS = 1000;
 var STALL_LINE_MAX_WIDTH = 75;
 var STALL_LINE_MAX_CHARS = 2048;
-//@ chunk-fe6rs39h.js:61809-66045 placement
+//@ chunk-keyy05re.js:61687-65922 placement
 /**
  * 等待云会话启动的监控：长时间未就绪时提示（tengu_remote_headless_client_bootstrap_stalled），跟踪压缩与标题。
  */
@@ -362,16 +363,16 @@ class BootstrapWatchdog {
     this.ports.emit(cloudInformationalMessage(this.ports.stampedSessionId(), level, clean, notice));
   }
 }
-//@ chunk-fe6rs39h.js:66082-66141 placement
+//@ chunk-keyy05re.js:65959-66018 placement
 function scheduleTimer(clock, promise, onTimeout) {
   return withDeadline(promise, onTimeout, (resolve, timeoutMs) => clock.setTimeout(resolve, timeoutMs));
 }
-//@ chunk-fe6rs39h.js:66141-66240 placement
+//@ chunk-keyy05re.js:66018-66117 placement
 var HOST_SLEEP_NOTICE; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RECEIPT_ORDER_TIMEOUT_MS;
 var MAX_CANCELLED_IDS_ECHOED;
 var thinClientInterruptReplySchema;
-deferInit("chunk-fe6rs39h.js:66141", () => {
+deferInit("chunk-keyy05re.js:66018", () => {
   HOST_SLEEP_NOTICE = "host_sleep_notice";
   RECEIPT_ORDER_TIMEOUT_MS = 3000;
   MAX_CANCELLED_IDS_ECHOED = 256;
@@ -381,7 +382,7 @@ deferInit("chunk-fe6rs39h.js:66141", () => {
     }),
   );
 });
-//@ chunk-fe6rs39h.js:66240-72711 placement
+//@ chunk-keyy05re.js:66117-72588 placement
 /**
  * 转发宿主的 control_request 到云会话并回传响应；处理 interrupt、取消排队消息、收据顺序。
  */
@@ -664,7 +665,7 @@ class ControlRequestRelay {
   announceSweptByWorker(reply) {
     let cancelled =
       parseThinClientReply("interrupt", thinClientInterruptReplySchema(), reply ?? {})?.cancelled ?? [];
-    let sliced = uniq(cancelled)
+    let sliced = normalizeCaseForComparison_2(cancelled)
       .filter((uuid) => normalizeUuidOrNull(uuid) !== null && !this.announcedCancelled.has(uuid))
       .slice(0, MAX_CANCELLED_IDS_ECHOED);
     sliced.forEach((uuid) => {
@@ -716,9 +717,9 @@ class ControlRequestRelay {
     });
   }
 }
-//@ chunk-fe6rs39h.js:72711-72726 placement
+//@ chunk-keyy05re.js:72588-72603 placement
 function noopCallback() {}
-//@ chunk-fe6rs39h.js:72726-73036 placement
+//@ chunk-keyy05re.js:72603-72913 placement
 function normalizeInterruptRequest(pendingInterrupt, request) {
   if (request.subtype !== "interrupt") return request;
   let isCancelQueued =
@@ -740,7 +741,7 @@ function normalizeInterruptRequest(pendingInterrupt, request) {
       }
     : normalized;
 }
-//@ chunk-fe6rs39h.js:73078-76477 placement
+//@ chunk-keyy05re.js:72955-76354 placement
 /**
  * 发往云会话的用户消息账本：queued → posting → delivered/seeded/withdrawn，带上限与重放。
  */
@@ -988,14 +989,14 @@ class OutboundMessageLedger {
     return [...this.entries].find(([, entry]) => predicate(entry)) ?? null;
   }
 }
-//@ chunk-fe6rs39h.js:76477-76749 placement
+//@ chunk-keyy05re.js:76354-76626 placement
 var NOT_DELIVERED_MESSAGE = "Your message was not delivered to the cloud session";
 var SEND_ACK_TIMEOUT_MS = 60000;
 var CLIENT_CLOSED_BEFORE_COMPLETE = "the cloud client closed before this request completed";
 var MALFORMED_CONTENT_BLOCKS_TEXT =
   "every content block must be an object, and a text block must carry string text";
 var CLIENT_CLOSED_BEFORE_CONFIRMED = "the cloud client closed before the send was confirmed";
-//@ chunk-fe6rs39h.js:76749-88163 placement
+//@ chunk-keyy05re.js:76626-88040 placement
 /**
  * 用户消息发送队列：顺序投递到云会话、断线后重投、关闭时给未确认的消息回错误。
  */
@@ -1600,9 +1601,9 @@ class OutboundMessageQueue {
     });
   }
 }
-//@ chunk-fe6rs39h.js:88163-88178 placement
+//@ chunk-keyy05re.js:88040-88055 placement
 function noopPromiseHandler() {}
-//@ chunk-fe6rs39h.js:88178-88316 placement
+//@ chunk-keyy05re.js:88055-88193 placement
 function getProgressStreamability(event) {
   if (event.kind === "bash") return "streams";
   let message = {
@@ -1612,7 +1613,7 @@ function getProgressStreamability(event) {
   };
   return isControlCommandLike(message) ? "never" : isControlShapedMessage(message) ? "unreliable" : "streams";
 }
-//@ chunk-fe6rs39h.js:88316-88593 placement
+//@ chunk-keyy05re.js:88193-88470 placement
 function describeForwardFailure(error) {
   if (error instanceof ControlRequestTimeoutError)
     return `the cloud session did not answer ${error.subtype} in time; it may still apply it`;
@@ -1623,9 +1624,8 @@ function describeForwardFailure(error) {
   }
   return sanitizeCloudText(subtype);
 }
-//@ chunk-fe6rs39h.js:88593-88855 placement
+//@ chunk-keyy05re.js:88470-88722 placement
 var MAX_OUTBOX_ENTRIES = 100;
-var STARTUP_WATCHDOG_MS = 120000;
 var MAX_STARTUP_WAIT_MS = 300000;
 var RETRY_DELAYS_MS = [400, 1200];
 var CONTROL_TIMEOUT_MS = 5000;
@@ -1647,9 +1647,9 @@ var REAL_CLOCK = {
     return () => clearTimeout(timer);
   },
 };
-//@ chunk-fe6rs39h.js:88855-88879 placement
+//@ chunk-keyy05re.js:88722-88746 placement
 class ClientClosedError extends Error {}
-//@ chunk-fe6rs39h.js:88879-88923 placement
+//@ chunk-keyy05re.js:88746-88790 placement
 /**
  * 启动无头云会话客户端并返回 done Promise（由 cloudPrint 与 openBareCloudSession 调用）。
  */
@@ -1658,7 +1658,7 @@ function runHeadlessCloudClient(options) {
     done: new HeadlessCloudClient(options).done,
   };
 }
-//@ chunk-fe6rs39h.js:88923-118745 placement
+//@ chunk-keyy05re.js:88790-118605 placement
 /**
  * 无头 --cloud 客户端主体：连接云会话、转发宿主 stdin 的 stream-json、处理控制请求/对话/权限、空闲释放与退出码。
  */
@@ -3023,15 +3023,15 @@ class HeadlessCloudClient {
     this.resolveDone(exitInfo);
   }
 }
-//@ chunk-fe6rs39h.js:118745-118773 placement
+//@ chunk-keyy05re.js:118605-118633 placement
 var CONNECTION_EXPIRED = "connection expired";
-//@ chunk-fe6rs39h.js:118773-118910 placement
+//@ chunk-keyy05re.js:118633-118769 placement
 function sessionNoLongerUsesComputer(sessionId, detail) {
   let suffix =
     detail === undefined || detail === "" ? "" : ` (${sanitizeCloudText(truncateToLength(detail, 64))})`;
   return `Cloud session ${sessionId} no longer uses this computer${suffix}; stopping.`;
 }
-//@ chunk-fe6rs39h.js:118910-119007 placement
+//@ chunk-keyy05re.js:118769-118866 placement
 async function* forwardUntilAbort(source, onAbort) {
   try {
     for await (let value of source) yield value;
@@ -3040,13 +3040,13 @@ async function* forwardUntilAbort(source, onAbort) {
     onAbort();
   }
 }
-//@ chunk-fe6rs39h.js:119007-119178 placement
+//@ chunk-keyy05re.js:118866-119037 placement
 function openingControlRequest(openResult, declaredKinds) {
   if (openResult.entry === "create")
     return openResult.initialPrompt === undefined && declaredKinds.length > 0 ? "declare_dialog_kinds" : null;
   return openResult.workerAwaitsAnswer === true ? "rearm_parked_prompt" : null;
 }
-//@ chunk-fe6rs39h.js:119178-119288 placement (2.1.88 match: isHTTPConfig, 1)
+//@ chunk-keyy05re.js:119037-119147 placement (2.1.88 match: isHTTPConfig, 1)
 function isRetryableHttpFailure(config) {
   return (
     config.outcome === "failed" &&
@@ -3054,7 +3054,7 @@ function isRetryableHttpFailure(config) {
     (config.status >= 500 || config.status === 429 || config.status === 408)
   );
 }
-//@ chunk-fe6rs39h.js:119288-119963 placement
+//@ chunk-keyy05re.js:119147-119822 placement
 function exitForReason(reason, failure, context) {
   let fallback = context ?? cloudDisconnectReason(undefined);
   switch (reason) {
@@ -3112,26 +3112,26 @@ function exitForReason(reason, failure, context) {
       };
   }
 }
-//@ chunk-fe6rs39h.js:119963-120032 placement
+//@ chunk-keyy05re.js:119822-119891 placement
 function openSessionErrorMessage(failure) {
   return clipCloudText(failure ?? "") || "Unable to open the cloud session";
 }
-//@ chunk-fe6rs39h.js:120032-120153 placement
+//@ chunk-keyy05re.js:119891-120012 placement
 function controlRequestSubtype(frame) {
   let request = "request" in frame ? frame.request : undefined;
   return typeof request === "object" && request !== null && "subtype" in request
     ? request.subtype
     : undefined;
 }
-//@ chunk-fe6rs39h.js:120153-120323 placement
+//@ chunk-keyy05re.js:120012-120182 placement
 function notAppliedCounts(entries) {
   return {
-    not_applied_lost: count(entries, ({ kind }) => kind === "lost"),
-    not_applied_kept: count(entries, ({ kind }) => kind === "kept"),
-    not_applied_preference: count(entries, ({ kind }) => kind === "preference"),
+    not_applied_lost: countWhere(entries, ({ kind }) => kind === "lost"),
+    not_applied_kept: countWhere(entries, ({ kind }) => kind === "kept"),
+    not_applied_preference: countWhere(entries, ({ kind }) => kind === "preference"),
   };
 }
-//@ chunk-fe6rs39h.js:120323-120577 placement
+//@ chunk-keyy05re.js:120182-120436 placement
 var DIR_SYNC_OFF_REASONS = [
   "not_seeded",
   "not_opted_in",
@@ -3147,7 +3147,7 @@ var DIR_SYNC_OFF_REASONS = [
   "no_container_origin",
   "folder_too_large",
 ];
-//@ chunk-fe6rs39h.js:120577-120657 placement
+//@ chunk-keyy05re.js:120436-120516 placement
 function directorySyncReasonLabel(reason) {
   if (reason === undefined) return;
   return fromEnumOpt(DIR_SYNC_OFF_REASONS.find((limitReason) => limitReason === reason)) ?? lit("engine");

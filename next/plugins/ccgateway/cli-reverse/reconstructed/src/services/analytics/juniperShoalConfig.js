@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：读取 juniper_shoal 配置（每 N 回合、最大名字数）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (10)
  * attribution: placement 10
  */
 
-//@ chunk-aepeg2w5.js:74889-74937 placement
+//@ chunk-exfmq47h.js:76024-76072 placement
 /**
  * juniper_shoal 配置读取器插槽：注册读取函数并提供各子配置（工具搜索提醒、参数严格性、空输入修复、搜索抓取规则、schema 描述修复）的取值函数。
  */
@@ -19,13 +19,13 @@ class ConfigReaderSlot {
     this.reader = reader;
   }
 }
-//@ chunk-aepeg2w5.js:74937-74951 placement
+//@ chunk-exfmq47h.js:76072-76086 placement
 var configReaderSlot = new ConfigReaderSlot();
-//@ chunk-aepeg2w5.js:74951-74981 placement
+//@ chunk-exfmq47h.js:76086-76116 placement
 function registerJuniperShoalReader(reader) {
   configReaderSlot.register(reader);
 }
-//@ chunk-aepeg2w5.js:74981-75126 placement
+//@ chunk-exfmq47h.js:76116-76261 placement
 /**
  * juniper_shoal 默认参数与默认配置对象。
  */
@@ -38,7 +38,7 @@ var DEFAULT_JUNIPER_SHOAL_CONFIG = Object.freeze({
   toolSearchFetchRule: false,
   schemaDescFixes: false,
 });
-//@ chunk-aepeg2w5.js:75126-75812 placement
+//@ chunk-exfmq47h.js:76261-76947 placement
 /**
  * 读取 juniper_shoal 配置（每 N 回合、最大名字数）。
  */
@@ -81,35 +81,35 @@ function getJuniperShoalConfig() {
     schemaDescFixes: config.thistle_skein === true,
   });
 }
-//@ chunk-aepeg2w5.js:75812-75858 placement
+//@ chunk-exfmq47h.js:76947-76993 placement
 /**
  * 导出函数 `toolSearchReminderConfig`：返回 getJuniperShoalConfig().toolSearchReminder。
  */
 function toolSearchReminderConfig() {
   return getJuniperShoalConfig().toolSearchReminder;
 }
-//@ chunk-aepeg2w5.js:75858-75905 placement
+//@ chunk-exfmq47h.js:76993-77040 placement
 /**
  * 导出函数 `toolParamStrictnessConfig`：返回 getJuniperShoalConfig().toolParamStrictness。
  */
 function toolParamStrictnessConfig() {
   return getJuniperShoalConfig().toolParamStrictness;
 }
-//@ chunk-aepeg2w5.js:75905-75949 placement
+//@ chunk-exfmq47h.js:77040-77084 placement
 /**
  * 导出函数 `emptyInputRepairConfig`：返回 getJuniperShoalConfig().emptyInputRepair。
  */
 function emptyInputRepairConfig() {
   return getJuniperShoalConfig().emptyInputRepair;
 }
-//@ chunk-aepeg2w5.js:75949-75996 placement
+//@ chunk-exfmq47h.js:77084-77131 placement
 /**
  * 导出函数 `toolSearchFetchRuleConfig`：返回 getJuniperShoalConfig().toolSearchFetchRule。
  */
 function toolSearchFetchRuleConfig() {
   return getJuniperShoalConfig().toolSearchFetchRule;
 }
-//@ chunk-aepeg2w5.js:75996-76039 placement
+//@ chunk-exfmq47h.js:77131-77174 placement
 /**
  * 导出函数 `schemaDescFixesConfig`：返回 getJuniperShoalConfig().schemaDescFixes; } export { ITi, Hh, MTi, $as, OTi, Nas }。
  */
@@ -118,9 +118,9 @@ function schemaDescFixesConfig() {
 }
 export {
   toolParamStrictnessConfig,
-  registerJuniperShoalReader,
+  toolSearchReminderConfig,
   toolSearchFetchRuleConfig,
   schemaDescFixesConfig,
   emptyInputRepairConfig,
-  toolSearchReminderConfig,
+  registerJuniperShoalReader,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：查询引擎的附件应答。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6mt8vha1.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r7pr5hxc.js (9)
  * attribution: placement 9
  */
 import { __export } from "../../runtime/bun-runtime.js";
@@ -19,12 +19,12 @@ import { answerOf, pendingOf, settle, resolve } from "../plugins/functionHooks/p
 import { attachmentText } from "../utils/messages.js";
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
 
-//@ chunk-6mt8vha1.js:11923-11932 placement
+//@ chunk-r7pr5hxc.js:13071-13080 placement
 /**
  * 导出值：attachmentAnswerCache（空对象缓存）。
  */
 var attachmentAnswerCache = {};
-//@ chunk-6mt8vha1.js:11932-12133 placement
+//@ chunk-r7pr5hxc.js:13080-13281 placement
 __export(attachmentAnswerCache, {
   answerAuthorOf: () => answerAuthorOf,
   askedAnswer: () => askedAnswer,
@@ -36,12 +36,12 @@ __export(attachmentAnswerCache, {
   envelopeOf: () => envelopeOf,
   resolveAttachments: () => resolveAttachments,
 });
-//@ chunk-6mt8vha1.js:12133-12224 placement
+//@ chunk-r7pr5hxc.js:13281-13372 placement
 function answerAuthorOf(trace, text) {
   let answeringStep = findAnsweringStep(trace, "text", text);
   return answeringStep === undefined ? "a hook" : `${answeringStep.plugin} (${answeringStep.tier})`;
 }
-//@ chunk-6mt8vha1.js:12224-12344 placement
+//@ chunk-r7pr5hxc.js:13372-13492 placement
 function attachmentAnswerOf(result, text) {
   let text_2 = result.text;
   if (text_2 === null)
@@ -57,7 +57,7 @@ function attachmentAnswerOf(result, text) {
         text: text_2,
       };
 }
-//@ chunk-6mt8vha1.js:12344-12411 placement
+//@ chunk-r7pr5hxc.js:13492-13559 placement
 var envelopeOf = (attachment, text, agentId) => ({
   text,
   origin: classifyHookAttachmentSource(attachment),
@@ -65,7 +65,7 @@ var envelopeOf = (attachment, text, agentId) => ({
     agentId,
   }),
 });
-//@ chunk-6mt8vha1.js:12411-13019 placement
+//@ chunk-r7pr5hxc.js:13559-14167 placement
 function attachmentInputOf(message, text, agentId) {
   let { attachment } = message;
   let envelope = envelopeOf(attachment, text, agentId);
@@ -122,13 +122,13 @@ function attachmentInputOf(message, text, agentId) {
       };
   }
 }
-//@ chunk-6mt8vha1.js:13019-13159 placement
+//@ chunk-r7pr5hxc.js:14167-14307 placement
 function changeDescribed(answer, text) {
   return answer.kind === "left-out"
     ? `left it out (${text.length} characters)`
     : `rewrote it (${text.length} -> ${answer.text.length} characters)`;
 }
-//@ chunk-6mt8vha1.js:13159-13623 placement
+//@ chunk-r7pr5hxc.js:14307-14771 placement
 async function askedAnswer(input) {
   let { message, text, bottom, agentId } = input;
   let attachmentType = message.attachment.type;
@@ -161,7 +161,7 @@ async function askedAnswer(input) {
     };
   }
 }
-//@ chunk-6mt8vha1.js:13623-14038 placement
+//@ chunk-r7pr5hxc.js:14771-15186 placement
 async function resolveAttachments(messages, bottom, agentId) {
   let pendingResolutions = [];
   let shortcut = canShortcutAppend("prompt.attachment");

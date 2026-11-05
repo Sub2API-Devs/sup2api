@@ -3,13 +3,13 @@
  *
  * /hooks 第一级：选择 hook 事件（显示各事件 hook 数）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/SelectEventMode.tsx
- * pieces: chunk-bajxb7bf.js (1)
+ * pieces: chunk-5tpnqyt5.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { plural } from "../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -17,7 +17,7 @@ import { useEnterEscape } from "./cloudHooks.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-bajxb7bf.js:40776-41839 fingerprint (2.1.88 match: SelectEventMode, 0.324)
+//@ chunk-5tpnqyt5.js:42271-43334 fingerprint (2.1.88 match: SelectEventMode, 0.324)
 function SelectEventMode(props) {
   let $ = useMemoCache(22);
   let { hookEventMetadata, hooksByEvent, onSelectEvent, onCancel } = props;
@@ -34,7 +34,7 @@ function SelectEventMode(props) {
       $[4] = hooksByEvent;
       $[5] = hasHooks;
     } else hasHooks = $[5];
-    withHooks = count(entries, hasHooks);
+    withHooks = countWhere(entries, hasHooks);
     $[0] = hookEventMetadata;
     $[1] = hooksByEvent;
     $[2] = entries;

@@ -3,23 +3,28 @@
  *
  * 2.1.316 新增：按终止原因分类回合结束（完成、中止、错误等）；回合结束后更新目标状态（达成、重试、暂停）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2), chunk-w3ch4xq2.js (19)
+ * attribution: placement 20, layout 1
  */
-import { isObserverAgentTask } from "../tasks/LocalAgentTask/LocalAgentTask.js";
-import { isActiveAgentTask, isRunningShellTask } from "../tasks/taskStatus.js";
-import { enqueueHookTaskNotification } from "../utils/hooks/hookMessages.js";
-import { GOAL_CHECKIN_ORIGIN, isGoalCheckinNotification } from "../utils/messageQueueManager.js";
+import { getVouchedPolicyTierSettings } from "../utils/settings/settings.js";
+import { logError } from "../utils/log.js";
+import { toError } from "../utils/errors.js";
 import {
+  getLaunchReplyGatePolicyOutcome,
   getReplyGatePolicy,
   getSessionId,
   getSdkOAuthTokenRefreshCallback,
   getIsNonInteractiveSession,
 } from "../bootstrap/state.js";
+import { isObserverAgentTask } from "../tasks/LocalAgentTask/LocalAgentTask.js";
+import { isActiveAgentTask, isRunningShellTask, hasAwaitableAgentTasks } from "../tasks/taskStatus.js";
+import { enqueueHookTaskNotification } from "../utils/hooks/hookMessages.js";
+import { GOAL_CHECKIN_ORIGIN, isGoalCheckinNotification } from "../utils/messageQueueManager.js";
+import { isCoordinatorMode_2 } from "../coordinator/coordinatorMode.js";
+import { willHideCodeModeOnlyTools } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { enqueueTaskNotification } from "../utils/task/taskNotifications.js";
-import { logError } from "../utils/log.js";
 import { logGoalCleared } from "../commands/goal/goal.js";
 import { logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { createAttachmentMessage as createAttachmentMessage_3 } from "../utils/attachments.js";
@@ -51,9 +56,40 @@ import { isColorCommandForceHidden } from "../commands/color/index.js";
 import { MEDIA_TOO_LARGE_HINT, COULD_NOT_COMPACT } from "../services/compact/compactErrors.js";
 import { MAX_FAILURE_DETAIL_CHARS } from "../services/compact/reactiveCompact.js";
 import { hasToolResultError } from "../services/tools/mcpResultMeta.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 
-//@ chunk-ha3km179.js:99181-99315 placement (2.1.88 match: isPanelAgentTask, 0.77)
+//@ chunk-5xgkngpb.js:3373594-3373699 placement
+/**
+ * 从钩子配置里取 disableReplyCheck（只有当托管设置才能关掉回复检查）。
+ */
+function getDisableReplyCheck() {
+  try {
+    for (let { disableReplyCheck } of getVouchedPolicyTierSettings())
+      if (disableReplyCheck !== undefined) return disableReplyCheck;
+  } catch (error) {
+    logError(toError(error));
+  }
+  return false;
+}
+//@ chunk-5xgkngpb.js:3373699-3373852 placement
+/**
+ * 取回复闸门策略
+ */
+function replyGatePolicy() {
+  let launchAccepted = getLaunchReplyGatePolicyOutcome() === "accepted";
+  let launchPolicyOff = launchAccepted && getDisableReplyCheck();
+  return {
+    policy: launchPolicyOff ? undefined : getReplyGatePolicy(),
+    launchPolicyLabel:
+      launchAccepted && !launchPolicyOff
+        ? {
+            from_launch_env: true,
+          }
+        : undefined,
+    isLaunchPolicyOff: launchPolicyOff,
+  };
+}
+//@ chunk-w3ch4xq2.js:109319-109453 placement (2.1.88 match: isPanelAgentTask, 0.771)
 /**
  * 列出需要在后台面板显示的任务：活动代理类任务或运行中的 shell，排除观察者与 main-session。
  */
@@ -65,7 +101,7 @@ function getVisibleBackgroundTasks(tasks) {
       (isActiveAgentTask(task) || isRunningShellTask(task)),
   );
 }
-//@ chunk-ha3km179.js:99315-99418 placement
+//@ chunk-w3ch4xq2.js:109453-109556 placement
 function createQueueDelivery(messageQueue) {
   return {
     deliver: (message) => {
@@ -78,16 +114,25 @@ function createQueueDelivery(messageQueue) {
     hasQueued: (predicate) => messageQueue.peek(predicate) !== undefined,
   };
 }
-//@ chunk-ha3km179.js:99418-99445 placement
-/**
- * 取回复闸门策略
- */
-function replyGatePolicy() {
-  return getReplyGatePolicy();
+//@ chunk-w3ch4xq2.js:109556-109742 layout
+function policyContext(replyGatePolicyValue, ctx) {
+  return {
+    kind: "policy",
+    policy: replyGatePolicyValue,
+    ...(replyGatePolicyValue.skipWhileWorkerOut === true && {
+      coordinatorMode: isCoordinatorMode_2(),
+      workerStillRunning: hasAwaitableAgentTasks(ctx.taskRegistry.all()),
+    }),
+    ...(willHideCodeModeOnlyTools(ctx.options.tools)
+      ? {
+          replMode: true,
+        }
+      : {}),
+  };
 }
-//@ chunk-ha3km179.js:99445-99474 placement
+//@ chunk-w3ch4xq2.js:109742-109771 placement
 var STOP_HOOK_BLOCK_CAP = "stop-hook-block-cap";
-//@ chunk-ha3km179.js:99474-99597 placement
+//@ chunk-w3ch4xq2.js:109771-109894 placement
 function notifyStopHookCap(text) {
   try {
     enqueueTaskNotification({
@@ -102,7 +147,7 @@ function notifyStopHookCap(text) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:99597-100076 placement
+//@ chunk-w3ch4xq2.js:109894-110373 placement
 /**
  * 因错误清空目标时的原因分类：认证失败、磁盘满、需要组织验证、余额不足、上下文超限、模型不可用，各自带 label 与 cleared_* 错误码；同组 Hf 是提示文本上限 80。
  */
@@ -133,7 +178,7 @@ var GOAL_CLEAR_REASONS_2 = {
   },
 };
 var GOAL_CLEAR_REASONS = 80;
-//@ chunk-ha3km179.js:100076-100468 placement
+//@ chunk-w3ch4xq2.js:110373-110765 placement
 /**
  * 因错误清除目标并移除 Stop hook。
  */
@@ -155,7 +200,7 @@ function* clearGoalOnError(activeGoal, toolUseContext, cause) {
     "warning",
   );
 }
-//@ chunk-ha3km179.js:100468-101739 placement
+//@ chunk-w3ch4xq2.js:110765-112036 placement
 /**
  * 目标检查失败后的重试退避 1/5/15 分钟与抖动比例 0.2；同一声明还包括失败原因到提示文案的映射和最多重试次数。
  */
@@ -184,7 +229,7 @@ var GOAL_ERROR_TEXT = {
   usage_limit: "Goal paused \xB7 usage limit reached \xB7 send a message after it resets to continue",
   usage_limit_waiting: "Goal paused \xB7 usage limit reached \xB7 continues automatically when it resets",
 };
-//@ chunk-ha3km179.js:101739-103388 placement
+//@ chunk-w3ch4xq2.js:112036-113685 placement
 /**
  * 回合结束后更新目标状态（达成、重试、暂停）。
  */
@@ -284,7 +329,7 @@ function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, terminal
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:103388-105125 placement
+//@ chunk-w3ch4xq2.js:113685-115422 placement
 /**
  * 按终止原因分类回合结束（完成、中止、错误等）。
  */
@@ -409,7 +454,7 @@ function classifyTurnEnd(terminal) {
       }
   }
 }
-//@ chunk-ha3km179.js:105125-105402 placement
+//@ chunk-w3ch4xq2.js:115422-115699 placement
 function goalCheckInterruption(goalPass) {
   switch (goalPass) {
     case "error":
@@ -436,7 +481,7 @@ function goalCheckInterruption(goalPass) {
       };
   }
 }
-//@ chunk-ha3km179.js:105402-105656 placement
+//@ chunk-w3ch4xq2.js:115699-115953 placement
 function logGoalInterruption(terminal, turnEnd, action, retries) {
   logEvent("tengu_goal_interruption", {
     interruption: fromEnum(turnEnd.kind),
@@ -448,7 +493,7 @@ function logGoalInterruption(terminal, turnEnd, action, retries) {
     retries,
   });
 }
-//@ chunk-ha3km179.js:105656-106005 placement
+//@ chunk-w3ch4xq2.js:115953-116303 placement
 /**
  * 中止回合的终止信息与提示行。
  */
@@ -487,7 +532,7 @@ function abortedTurnRows(inPlaceOfFirstRequest, options) {
     };
   }
 }
-//@ chunk-ha3km179.js:106005-106407 placement
+//@ chunk-w3ch4xq2.js:116303-116705 placement
 /**
  * 连续压缩失败时通知用户。
  */
@@ -524,12 +569,12 @@ function notifyCompactFailure_2({ outcome, querySource, agentId, isInterrupted }
     return;
   }
 }
-//@ chunk-ha3km179.js:106407-106429 placement
+//@ chunk-w3ch4xq2.js:116705-116727 placement
 /**
  * "try /compact"
  */
 var COMPACT_HINT = "try /compact";
-//@ chunk-ha3km179.js:106429-106490 placement
+//@ chunk-w3ch4xq2.js:116727-116788 placement
 /**
  * 压缩失败的系统提示
  */
@@ -539,7 +584,7 @@ function notifyCompactFailure(compactFailure) {
     "warning",
   );
 }
-//@ chunk-ha3km179.js:106490-106876 placement
+//@ chunk-w3ch4xq2.js:116788-117174 placement
 /**
  * 工具请求结束回合但有失败兄弟调用时追加提示（tengu_cozy_fern）。
  */
@@ -580,7 +625,7 @@ function nudgeAfterToolEndTurn({
     return;
   }
 }
-//@ chunk-ha3km179.js:106876-107170 placement
+//@ chunk-w3ch4xq2.js:117174-117468 placement
 function applyDisallowedTools(commands, joinedDisallowedTools, options) {
   try {
     let flattened = commands.flatMap((command) =>
@@ -589,7 +634,7 @@ function applyDisallowedTools(commands, joinedDisallowedTools, options) {
         : [],
     );
     if (flattened.length === 0 || joinedDisallowedTools === undefined) return options.tools;
-    joinedDisallowedTools(uniq(flattened.flat()));
+    joinedDisallowedTools(normalizeCaseForComparison_2(flattened.flat()));
     return options.refreshTools?.() ?? options.tools;
   } catch (error) {
     logError(error);
@@ -597,13 +642,17 @@ function applyDisallowedTools(commands, joinedDisallowedTools, options) {
     return options.tools;
   }
 }
-//@ chunk-ha3km179.js:107170-107203 placement
+//@ chunk-w3ch4xq2.js:117468-117501 placement
 /**
  * 开关名
  */
 var TENGU_MODULAR_SEAL_2 = "tengu_modular_seal";
 var TENGU_MODULAR_SEAL = 2;
 export {
+  getDisableReplyCheck,
+  replyGatePolicy,
+  TENGU_MODULAR_SEAL,
+  TENGU_MODULAR_SEAL_2,
   updateGoalAfterTurn,
   createQueueDelivery,
   abortedTurnRows,
@@ -611,8 +660,6 @@ export {
   notifyStopHookCap,
   nudgeAfterToolEndTurn,
   applyDisallowedTools,
-  replyGatePolicy,
+  policyContext,
   getVisibleBackgroundTasks,
-  TENGU_MODULAR_SEAL,
-  TENGU_MODULAR_SEAL_2,
 };

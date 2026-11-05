@@ -1,9 +1,9 @@
 /**
  * unresolved-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: unresolved-cjs (unresolved)
- * pieces: chunk-a3vzsfpr.js (1), chunk-edce4vxq.js (3), chunk-fq0cr76a.js (2), chunk-h6b7mazd.js (1), chunk-hrs3dad1.js (1), chunk-m4p5zn6n.js (2), chunk-pwh5dx3n.js (1), chunk-zxbmtfmw.js (1)
- * attribution: cjs-unmatched 12
+ * pieces: chunk-3p78mpxm.js (3), chunk-7ycvgepx.js (1), chunk-p57a7983.js (1), chunk-qg41pqt6.js (2), chunk-sz26a4x2.js (1), chunk-t889g22j.js (2), chunk-ww9agm6g.js (1)
+ * attribution: cjs-unmatched 11
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { cliBoxesData } from "../cli-boxes/boxes.json.js";
@@ -35,9 +35,8 @@ import { require_tls } from "../node-forge/lib/tls.js";
 import { require_util } from "../node-forge/lib/util.js";
 import { require_util_buffer_from } from "../@smithy/util-buffer-from/dist-cjs/index.js";
 import { require_util_utf8 } from "../@smithy/util-utf8/dist-cjs/index.js";
-import { require_long } from "../long/umd/index.js";
 
-//@ chunk-m4p5zn6n.js:3688-3917 cjs-unmatched
+//@ chunk-t889g22j.js:3688-3917 cjs-unmatched
 var require_pathKey = __commonJS(function (moduleExports, moduleObj) {
   var pathName = (options = {}) => {
     let env = options.env || process.env;
@@ -51,7 +50,7 @@ var require_pathKey = __commonJS(function (moduleExports, moduleObj) {
   moduleObj.exports = pathName;
   moduleObj.exports.default = pathName;
 });
-//@ chunk-m4p5zn6n.js:6576-7096 cjs-unmatched
+//@ chunk-t889g22j.js:6575-7095 cjs-unmatched
 var mergeStreamModule = __commonJS(function (moduleExports, moduleObj) {
   var { PassThrough } = importMetaRequire("stream");
   moduleObj.exports = function () {
@@ -89,7 +88,7 @@ var mergeStreamModule = __commonJS(function (moduleExports, moduleObj) {
     }
   };
 });
-//@ chunk-h6b7mazd.js:8103-8181 cjs-unmatched
+//@ chunk-ww9agm6g.js:8103-8181 cjs-unmatched
 var isNaNFallbackModule = __commonJS(function (moduleExports, moduleObj) {
   moduleObj.exports =
     Number.isNaN ||
@@ -97,13 +96,13 @@ var isNaNFallbackModule = __commonJS(function (moduleExports, moduleObj) {
       return value !== value;
     };
 });
-//@ chunk-zxbmtfmw.js:1413-1479 cjs-unmatched
+//@ chunk-sz26a4x2.js:1413-1479 cjs-unmatched
 var cliBoxesModule = __commonJS(function (moduleExports, moduleObj) {
   var boxes = cliBoxesData();
   moduleObj.exports = boxes;
   moduleObj.exports.default = boxes;
 });
-//@ chunk-fq0cr76a.js:295373-295542 cjs-unmatched
+//@ chunk-qg41pqt6.js:295921-296090 cjs-unmatched
 var forgeModule_2 = __commonJS(function (moduleExports, moduleObj) {
   moduleObj.exports = require_forge();
   require_aes();
@@ -132,13 +131,13 @@ var forgeModule_2 = __commonJS(function (moduleExports, moduleObj) {
   require_tls();
   require_util();
 });
-//@ chunk-fq0cr76a.js:519597-519671 cjs-unmatched
+//@ chunk-qg41pqt6.js:520171-520245 cjs-unmatched
 var emptyModule = __commonJS(function (moduleExports) {
   Object.defineProperty(moduleExports, "__esModule", {
     value: true,
   });
 });
-//@ chunk-a3vzsfpr.js:299-819 cjs-unmatched
+//@ chunk-7ycvgepx.js:299-819 cjs-unmatched
 var configResolverModule = __commonJS(function (moduleExports) {
   var booleanSelector = (source, key, selectorType) => {
     if (!(key in source)) return;
@@ -161,7 +160,7 @@ var configResolverModule = __commonJS(function (moduleExports) {
   moduleExports.booleanSelector = booleanSelector;
   moduleExports.numberSelector = numberSelector;
 });
-//@ chunk-edce4vxq.js:12143-12632 cjs-unmatched
+//@ chunk-3p78mpxm.js:12143-12632 cjs-unmatched
 var calculateBodyLengthModule = __commonJS(function (moduleExports) {
   var textEncoder = typeof TextEncoder == "function" ? new TextEncoder() : null;
   var calculateBodyLength = (body) => {
@@ -181,7 +180,7 @@ var calculateBodyLengthModule = __commonJS(function (moduleExports) {
   };
   moduleExports.calculateBodyLength = calculateBodyLength;
 });
-//@ chunk-edce4vxq.js:135599-136250 cjs-unmatched
+//@ chunk-3p78mpxm.js:135599-136250 cjs-unmatched
 var hashModule = __commonJS(function (moduleExports) {
   var fromString = require_util_buffer_from();
   var utf8 = require_util_utf8();
@@ -217,7 +216,7 @@ var hashModule = __commonJS(function (moduleExports) {
   }
   moduleExports.Hash = Hash;
 });
-//@ chunk-edce4vxq.js:136250-136783 cjs-unmatched
+//@ chunk-3p78mpxm.js:136250-136783 cjs-unmatched
 var bodyLengthNodeModule = __commonJS(function (moduleExports) {
   var fs = importMetaRequire("fs");
   var calculateBodyLength = (body) => {
@@ -234,42 +233,23 @@ var bodyLengthNodeModule = __commonJS(function (moduleExports) {
   };
   moduleExports.calculateBodyLength = calculateBodyLength;
 });
-//@ chunk-hrs3dad1.js:4804-4874 cjs-unmatched
+//@ chunk-p57a7983.js:5028-5098 cjs-unmatched
 var unsupportedModule = __commonJS(function (moduleExports, moduleObj) {
   var path = importMetaRequire("path");
   moduleObj.exports = {
     isSupported: false,
   };
 });
-//@ chunk-pwh5dx3n.js:78091-78403 cjs-unmatched
-var require_inquire = __commonJS(function (exports, module) {
-  module.exports = inquire;
-  function inquire(moduleName) {
-    try {
-      var mod =
-        moduleName === "long"
-          ? require_long()
-          : moduleName === "buffer"
-            ? importMetaRequire("buffer")
-            : moduleName === "fs"
-              ? importMetaRequire("fs")
-              : eval("quire".replace(/^/, "re"))(moduleName);
-      if (mod && (mod.length || Object.keys(mod).length)) return mod;
-    } catch (error) {}
-    return null;
-  }
-});
 export {
-  hashModule,
-  bodyLengthNodeModule,
-  configResolverModule,
-  emptyModule,
   cliBoxesModule,
   calculateBodyLengthModule,
-  forgeModule_2,
-  isNaNFallbackModule,
+  hashModule,
+  bodyLengthNodeModule,
+  emptyModule,
+  configResolverModule,
   unsupportedModule,
+  forgeModule_2,
   require_pathKey,
   mergeStreamModule,
-  require_inquire,
+  isNaNFallbackModule,
 };

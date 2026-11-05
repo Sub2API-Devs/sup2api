@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：流事件合并（减少下行帧数）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w1p9g89k.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-57e9qj14.js (17)
  * attribution: placement 17
  */
 import { jsonStringifyRaw } from "../../utils/slowOperations.js";
@@ -15,17 +15,17 @@ import { DoctorLazy } from "../handlers/util.js";
 import { zodStrictObject, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w1p9g89k.js:375-400 placement
+//@ chunk-57e9qj14.js:375-400 placement
 /**
  * 单帧字节上限 61440 与可用预算 61440-4096（为头留余量）。
  */
 var MAX_FRAME_BYTES = 61440;
 var FRAME_BUDGET_BYTES = MAX_FRAME_BYTES - 4096;
-//@ chunk-w1p9g89k.js:400-448 placement
+//@ chunk-57e9qj14.js:400-448 placement
 function _(chunk) {
   return Buffer.byteLength(jsonStringifyRaw(chunk)) - 2;
 }
-//@ chunk-w1p9g89k.js:448-678 placement
+//@ chunk-57e9qj14.js:448-678 placement
 function canMergeIntoRun(run, event, event_2, deltaType, index) {
   return (
     run.firstEvent.index === event_2.index &&
@@ -36,7 +36,7 @@ function canMergeIntoRun(run, event, event_2, deltaType, index) {
     run.bytes + index <= FRAME_BUDGET_BYTES
   );
 }
-//@ chunk-w1p9g89k.js:678-1219 placement
+//@ chunk-57e9qj14.js:678-1219 placement
 /**
  * 判断流事件是否为可合并的 content_block_delta（文本、input_json 等），返回事件、增量类型和增量片段；否则返回 null。
  */
@@ -73,7 +73,7 @@ function extractMergeableDelta(event) {
       return null;
   }
 }
-//@ chunk-w1p9g89k.js:1219-1632 placement
+//@ chunk-57e9qj14.js:1219-1632 placement
 /**
  * 把累积的同类增量合成一个流事件；只有一个时直接返回原事件。
  */
@@ -112,7 +112,7 @@ function buildMergedStreamEvent(run) {
     },
   };
 }
-//@ chunk-w1p9g89k.js:1632-2130 placement
+//@ chunk-57e9qj14.js:1632-2130 placement
 /**
  * 合并相邻且可合并的 stream_event 增量（text/input_json/thinking，同 index、同父工具、同 message id，单段不超过字节上限）为一个事件，减少下行帧数；其他事件原样保留。
  */
@@ -154,7 +154,7 @@ function coalesceStreamEvents(events) {
   if (run !== null) merged.push(buildMergedStreamEvent(run));
   return merged;
 }
-//@ chunk-w1p9g89k.js:2130-2438 placement
+//@ chunk-57e9qj14.js:2130-2438 placement
 /**
  * 在事件列表中按与 coalesceStreamEvents 相同的规则，找出给定 uuid 所在合并段的第一个事件 uuid（找不到返回原 uuid）。
  */
@@ -183,14 +183,14 @@ function findCoalescedRunHead(events, uuid) {
   }
   return headUuid?.first.uuid ?? uuid;
 }
-//@ chunk-w1p9g89k.js:2438-2860 placement
+//@ chunk-57e9qj14.js:2438-2860 placement
 /**
  * 交互式控制请求子类型集合（中断、停止任务、改权限模式、改模型等），这些请求不参与合并。
  */
 var INTERACTIVE_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PERMISSION_PROMPT_SUBTYPES;
 var SESSION_SETTING_SUBTYPES;
-deferInit("chunk-w1p9g89k.js:2438", () => {
+deferInit("chunk-57e9qj14.js:2438", () => {
   INTERACTIVE_CONTROL_SUBTYPES = new Set([
     "interrupt",
     "stop_task",
@@ -214,7 +214,7 @@ deferInit("chunk-w1p9g89k.js:2438", () => {
   PERMISSION_PROMPT_SUBTYPES = new Set(["can_use_tool", "request_user_dialog", "elicitation"]);
   SESSION_SETTING_SUBTYPES = new Set(["set_model", "set_permission_mode", "set_max_thinking_tokens"]);
 });
-//@ chunk-w1p9g89k.js:2860-2923 placement
+//@ chunk-57e9qj14.js:2860-2923 placement
 /**
  * 判断控制请求能否合并转发：是交互类子类型且不是会话设置类。
  */
@@ -223,14 +223,14 @@ function isCoalescableControlRequest(request) {
     isInteractiveControlSubtype(request.request) && !SESSION_SETTING_SUBTYPES.has(request.request.subtype)
   );
 }
-//@ chunk-w1p9g89k.js:2923-2945 placement
+//@ chunk-57e9qj14.js:2923-2945 placement
 /**
  * 把最后交互时间标记为刚刚（收到交互式控制请求时）。
  */
 function noteInteractiveInput() {
   updateLastInteractionTime(true);
 }
-//@ chunk-w1p9g89k.js:2945-3138 placement
+//@ chunk-57e9qj14.js:2945-3138 placement
 function isUserInitiatedInboundEvent(event, uuid) {
   switch (event.type) {
     case "user":
@@ -243,25 +243,25 @@ function isUserInitiatedInboundEvent(event, uuid) {
       return false;
   }
 }
-//@ chunk-w1p9g89k.js:3138-3221 placement
+//@ chunk-57e9qj14.js:3138-3221 placement
 function isInteractiveControlSubtype(request) {
   let subtype = request?.subtype;
   return typeof subtype === "string" && INTERACTIVE_CONTROL_SUBTYPES.has(subtype) && request?.by !== "app";
 }
-//@ chunk-w1p9g89k.js:3221-3269 placement
+//@ chunk-57e9qj14.js:3221-3269 placement
 /**
  * 判断控制请求子类型是否属于权限提示（决定是否即时回执）。
  */
 function isPermissionPromptSubtype(request) {
   return PERMISSION_PROMPT_SUBTYPES.has(request.request.subtype);
 }
-//@ chunk-w1p9g89k.js:3269-3384 placement
+//@ chunk-57e9qj14.js:3269-3384 placement
 /**
  * x-ccr-session-writers 头的 schema：writers（仅所有者/非仅所有者）与声明时间。
  */
 var X_CCR_SESSION_WRITERS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var sessionWritersSchema;
-deferInit("chunk-w1p9g89k.js:3269", () => {
+deferInit("chunk-57e9qj14.js:3269", () => {
   X_CCR_SESSION_WRITERS = "x-ccr-session-writers";
   sessionWritersSchema = DoctorLazy(() =>
     zodStrictObject({
@@ -270,7 +270,7 @@ deferInit("chunk-w1p9g89k.js:3269", () => {
     }),
   );
 });
-//@ chunk-w1p9g89k.js:3384-3746 placement
+//@ chunk-57e9qj14.js:3384-3746 placement
 /**
  * 解析 x-ccr-session-writers 头（分号分隔键值，v=1），返回 owner_account_only / not_owner_only；格式不符或有重复键时返回 undefined。
  */
@@ -295,14 +295,14 @@ function parseSessionWritersHeader(header) {
       return;
   }
 }
-//@ chunk-w1p9g89k.js:3746-3794 placement
+//@ chunk-57e9qj14.js:3746-3794 placement
 /**
  * 判断写者声明是否为 "owner_account_only"（会话仅所有者可写）。
  */
 function isOwnerAccountOnlyWriters(writers) {
   return writers === "owner_account_only";
 }
-//@ chunk-w1p9g89k.js:3794-4139 placement
+//@ chunk-57e9qj14.js:3794-4139 placement
 /**
  * 判断入站帧能否以"会话仅所有者可写"为依据放行：缺少帧时间戳、帧过旧、写者状态未知/非仅所有者、声明过旧时返回拒绝原因，否则 undefined。
  */
@@ -322,16 +322,16 @@ function checkSessionWritersFreshness({
   return ageMs >= 0 && ageMs <= maxStatementAgeMs ? undefined : "session_writers_stale";
 }
 export {
-  MAX_FRAME_BYTES,
-  findCoalescedRunHead,
-  coalesceStreamEvents,
-  isCoalescableControlRequest,
   isPermissionPromptSubtype,
   isUserInitiatedInboundEvent,
   noteInteractiveInput,
   isOwnerAccountOnlyWriters,
-  checkSessionWritersFreshness,
   X_CCR_SESSION_WRITERS,
-  parseSessionWritersHeader,
   sessionWritersSchema,
+  isCoalescableControlRequest,
+  coalesceStreamEvents,
+  MAX_FRAME_BYTES,
+  findCoalescedRunHead,
+  parseSessionWritersHeader,
+  checkSessionWritersFreshness,
 };

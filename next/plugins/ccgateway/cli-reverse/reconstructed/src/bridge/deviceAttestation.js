@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备签名状态枚举规范化、接受级别比较与服务端强制配置解析，未签名活动的用户提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1qpz7qcd.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ck4jrdtf.js (17)
  * attribution: placement 17
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -17,7 +17,7 @@ import { errorMessage } from "../utils/errors.js";
 import { attestationLogPrefix } from "./attestationGate.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1qpz7qcd.js:26413-26712 placement
+//@ chunk-ck4jrdtf.js:26916-27215 placement
 var DEVICE_ATTESTATION_STATUS_NAMES = [
   "UNSPECIFIED",
   "ABSENT",
@@ -40,7 +40,7 @@ var BASE_DEVICE_ATTESTATION_STATUS_NAMES = [
   "INVALID",
   "UNCHECKED",
 ];
-//@ chunk-1qpz7qcd.js:26712-27109 placement
+//@ chunk-ck4jrdtf.js:27215-27612 placement
 /**
  * 把数字枚举/小写字符串形式的 device_attestation_status 规范成大写枚举名（未知值→UNSPECIFIED）。
  */
@@ -57,25 +57,25 @@ function normalizeAttestationStatus(deviceAttestationStatus) {
     : deviceAttestationStatus;
   return DEVICE_ATTESTATION_STATUS_NAMES.find((name) => name === statusTail) ?? "UNSPECIFIED";
 }
-//@ chunk-1qpz7qcd.js:27109-27173 placement
+//@ chunk-ck4jrdtf.js:27612-27676 placement
 var ATTESTATION_LEVEL_ORDER = ["VERIFIED", "VERIFIED_KEYLESS_DEVICE", "VERIFIED_BY_GATE"];
-//@ chunk-1qpz7qcd.js:27173-27229 placement
+//@ chunk-ck4jrdtf.js:27676-27732 placement
 function weakerAttestationLevel(acceptLevel, acceptLevel_2) {
   return ATTESTATION_LEVEL_ORDER.indexOf(acceptLevel) <= ATTESTATION_LEVEL_ORDER.indexOf(acceptLevel_2)
     ? acceptLevel
     : acceptLevel_2;
 }
-//@ chunk-1qpz7qcd.js:27229-27342 placement
+//@ chunk-ck4jrdtf.js:27732-27845 placement
 function meetsAttestationLevel(status, requiredLevel) {
   if (status === "SERVICE_VOUCHED") return true;
   let index = ATTESTATION_LEVEL_ORDER.findIndex((level) => level === status);
   return index !== -1 && index <= ATTESTATION_LEVEL_ORDER.indexOf(requiredLevel);
 }
-//@ chunk-1qpz7qcd.js:27342-27549 placement
+//@ chunk-ck4jrdtf.js:27845-28052 placement
 var DEFAULT_ATTESTATION_POLICY; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var UNVERIFIED_ATTESTATION_STATUSES;
 var attestationEnforceConfigSchema;
-deferInit("chunk-1qpz7qcd.js:27342", () => {
+deferInit("chunk-ck4jrdtf.js:27845", () => {
   DEFAULT_ATTESTATION_POLICY = {
     enforce: false,
     acceptLevel: "VERIFIED",
@@ -89,7 +89,7 @@ deferInit("chunk-1qpz7qcd.js:27342", () => {
     }),
   );
 });
-//@ chunk-1qpz7qcd.js:27549-28114 placement
+//@ chunk-ck4jrdtf.js:28052-28617 placement
 /**
  * 解析服务端下发的签名强制配置（accept_level/accept_statuses）；格式错误时只告警一次并保守回落到 VERIFIED。
  */
@@ -118,7 +118,7 @@ function parseAttestationEnforceConfig(config) {
     acceptStatuses: new Set(parsed.success ? parsed.data.accept_statuses : []),
   };
 }
-//@ chunk-1qpz7qcd.js:28114-28413 placement
+//@ chunk-ck4jrdtf.js:28617-28916 placement
 function reportAttestationHeaderUnreadable(fault) {
   try {
     let reportedCloudWorkerCodes = bridgeHostState().attestation.reportedCloudWorkerCodes;
@@ -137,31 +137,31 @@ function reportAttestationHeaderUnreadable(fault) {
     });
   }
 }
-//@ chunk-1qpz7qcd.js:28413-28461 placement
+//@ chunk-ck4jrdtf.js:28916-28964 placement
 function setAttestationFilterPolicy(filterPolicy) {
   bridgeHostState().attestation.filterPolicy = filterPolicy;
 }
-//@ chunk-1qpz7qcd.js:28461-28509 placement
+//@ chunk-ck4jrdtf.js:28964-29012 placement
 function setDropNotifier(dropNotifier) {
   bridgeHostState().attestation.dropNotifier = dropNotifier;
 }
-//@ chunk-1qpz7qcd.js:28509-28592 placement
+//@ chunk-ck4jrdtf.js:29012-29095 placement
 function clearDropNotifier(attestationDropNotifier) {
   let attestation = bridgeHostState().attestation;
   if (attestation.dropNotifier === attestationDropNotifier) attestation.dropNotifier = undefined;
 }
-//@ chunk-1qpz7qcd.js:28592-28644 placement
+//@ chunk-ck4jrdtf.js:29095-29147 placement
 function setSenderDropWriter(senderDropWriter) {
   bridgeHostState().attestation.senderDropWriter = senderDropWriter;
 }
-//@ chunk-1qpz7qcd.js:28644-28735 placement
+//@ chunk-ck4jrdtf.js:29147-29238 placement
 function clearSenderDropWriter(writer) {
   let attestation = bridgeHostState().attestation;
   if (attestation.senderDropWriter === writer) attestation.senderDropWriter = undefined;
 }
-//@ chunk-1qpz7qcd.js:28735-28767 placement
+//@ chunk-ck4jrdtf.js:29238-29270 placement
 var REMOTE_IO_WARNING_PREFIX = "[remote-io] warning: ";
-//@ chunk-1qpz7qcd.js:28767-29479 placement
+//@ chunk-ck4jrdtf.js:29270-29982 placement
 function describeUnsignedEvent({ status, payloadType, subtype, isCloud }) {
   let unsupportedAppHint = isCloud
     ? "The app that sent it doesn't sign its activity. Use an app that does."
@@ -187,7 +187,7 @@ function describeUnsignedEvent({ status, payloadType, subtype, isCloud }) {
                 : undefined,
   };
 }
-//@ chunk-1qpz7qcd.js:29479-29815 placement
+//@ chunk-ck4jrdtf.js:29982-30318 placement
 /**
  * 生成"远端活动缺少有效设备签名被忽略"的用户提示，突发时只提示一次。
  */
@@ -198,25 +198,25 @@ function formatUnsignedEventWarning(notice) {
   let { what, hint } = describeUnsignedEvent(notice);
   return `${subject} ignored a ${what} that arrived without a valid device signature (attestation: ${notice.status}).${hint ? ` ${hint}` : ""}`;
 }
-//@ chunk-1qpz7qcd.js:29815-29975 placement
+//@ chunk-ck4jrdtf.js:30318-30478 placement
 function formatUnsignedEventNotice(notice) {
   let { what, hint } = describeUnsignedEvent(notice);
   return `This ${what} arrived without a valid device signature (attestation: ${notice.status}) and was ignored.${hint ? ` ${hint}` : ""}`;
 }
 export {
   normalizeAttestationStatus,
+  setAttestationFilterPolicy,
+  meetsAttestationLevel,
+  REMOTE_IO_WARNING_PREFIX,
+  formatUnsignedEventWarning,
+  formatUnsignedEventNotice,
+  setSenderDropWriter,
+  setDropNotifier,
+  reportAttestationHeaderUnreadable,
+  clearSenderDropWriter,
+  clearDropNotifier,
+  describeUnsignedEvent,
   DEFAULT_ATTESTATION_POLICY,
   parseAttestationEnforceConfig,
   weakerAttestationLevel,
-  setAttestationFilterPolicy,
-  setDropNotifier,
-  formatUnsignedEventWarning,
-  describeUnsignedEvent,
-  formatUnsignedEventNotice,
-  meetsAttestationLevel,
-  clearSenderDropWriter,
-  setSenderDropWriter,
-  REMOTE_IO_WARNING_PREFIX,
-  reportAttestationHeaderUnreadable,
-  clearDropNotifier,
 };

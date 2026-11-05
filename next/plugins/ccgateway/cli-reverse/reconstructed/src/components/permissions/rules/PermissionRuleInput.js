@@ -3,9 +3,9 @@
  *
  * 权限规则输入框（新增规则）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/PermissionRuleInput.tsx
- * pieces: chunk-p2qwpk2k.js (2)
+ * pieces: chunk-h5wy8vq5.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
@@ -13,7 +13,7 @@ import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../keybindings/useKeybinding.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
-import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
+import { normalizeRuleString } from "../../../utils/permissions/legacyWildcardRules.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -22,16 +22,16 @@ import { Byline } from "../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { Newline } from "../../../ink/components/Input.js";
 import { Text, Box } from "../../../ink/components/Text.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { WebFetchTool } from "../../../tools/WebFetchTool/WebFetchTool.js";
 import { BashTool } from "../../../tools/BashTool/BashTool.js";
 import { TextInput } from "../../TextInput.js";
 import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
-//@ chunk-p2qwpk2k.js:24428-24432 placement
+//@ chunk-h5wy8vq5.js:25547-25551 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:24432-25922 fingerprint (2.1.88 match: PermissionRuleInput, 0.585)
+//@ chunk-h5wy8vq5.js:25551-27043 fingerprint (2.1.88 match: PermissionRuleInput, 0.585)
 function PermissionRuleInput(props) {
   let $ = useMemoCache(18);
   let { onCancel, onSubmit, ruleBehavior } = props;
@@ -54,7 +54,7 @@ function PermissionRuleInput(props) {
       if (trimmedValue.length === 0) {
         return;
       }
-      let ruleValue = permissionRuleValueFromString(trimmedValue);
+      let ruleValue = normalizeRuleString(trimmedValue, ruleBehavior);
       onSubmit(ruleValue, ruleBehavior);
     };
     $[1] = onSubmit;
@@ -89,7 +89,7 @@ function PermissionRuleInput(props) {
   if ($[6] === MEMO_CACHE_SENTINEL) {
     t5 = jsxProd_default(Text, {
       bold: true,
-      children: formatPermissionRule({
+      children: permissionRuleValueFromString({
         toolName: WebFetchTool.name,
       }),
     });
@@ -115,7 +115,7 @@ function PermissionRuleInput(props) {
         t6,
         jsxProd_default(Text, {
           bold: true,
-          children: formatPermissionRule({
+          children: permissionRuleValueFromString({
             toolName: BashTool.name,
             ruleContent: "ls *",
           }),

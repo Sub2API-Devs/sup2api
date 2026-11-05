@@ -1,8 +1,8 @@
 /**
  * openid-client/lib/helpers/issuer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_weak_cache } from "./weak_cache.js";
 import { require_process_response } from "./process_response.js";
 import { require_request } from "./request.js";
 
-//@ chunk-1ny7cxrt.js:37631-38946 cjs-fingerprint
+//@ chunk-1hnjmk23.js:38000-39315 cjs-fingerprint
 var require_issuer_2 = __commonJS(function (cjsExports, cjsModule) {
   var objectHash = require_object_hash();
   var LRU = require_lru_cache();

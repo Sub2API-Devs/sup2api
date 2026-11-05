@@ -1,8 +1,8 @@
 /**
  * axios/lib/adapters/http.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: axios@1.15.2
- * pieces: chunk-h6b7mazd.js (5)
+ * pieces: chunk-ww9agm6g.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
 import util from "util";
@@ -46,7 +46,7 @@ import {
 import { AxiosError$1, utils$1, buildURL, transitionalDefaults } from "../../dist/esm/axios.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-h6b7mazd.js:74586-75310 esm-fingerprint
+//@ chunk-ww9agm6g.js:74586-75310 esm-fingerprint
 class Http2Sessions {
   constructor() {
     this.sessions = Object.create(null);
@@ -116,17 +116,17 @@ class Http2Sessions {
     return session;
   }
 }
-//@ chunk-h6b7mazd.js:75310-75324 esm-layout
+//@ chunk-ww9agm6g.js:75310-75324 esm-layout
 var http2Sessions; // deferred: uses Http2Sessions of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-h6b7mazd.js:75310", () => {
+deferInit("chunk-ww9agm6g.js:75310", () => {
   http2Sessions = new Http2Sessions();
 });
-//@ chunk-h6b7mazd.js:75324-75453 esm-fingerprint
+//@ chunk-ww9agm6g.js:75324-75453 esm-fingerprint
 function dispatchBeforeRedirect(options, responseDetails) {
   if (options.beforeRedirects.proxy) options.beforeRedirects.proxy(options);
   if (options.beforeRedirects.config) options.beforeRedirects.config(options, responseDetails);
 }
-//@ chunk-h6b7mazd.js:75453-76161 esm-fingerprint
+//@ chunk-ww9agm6g.js:75453-76161 esm-fingerprint
 function setProxy(options, configProxy, location) {
   let proxy = configProxy;
   if (!proxy && proxy !== false) {
@@ -160,14 +160,14 @@ function setProxy(options, configProxy, location) {
     setProxy(redirectOptions, configProxy, redirectOptions.href);
   };
 }
-//@ chunk-h6b7mazd.js:76161-85236 esm-fingerprint
+//@ chunk-ww9agm6g.js:76161-85236 esm-fingerprint
 var isHttpAdapterSupported; // deferred: uses toJSONObject (../../dist/esm/axios.js) of its import cycle while loading; runs once the cycle is complete
 var wrapAsync;
 var resolveFamily;
 var buildAddressEntry;
 var http2Transport;
 var http_default;
-deferInit("chunk-h6b7mazd.js:76161", () => {
+deferInit("chunk-ww9agm6g.js:76161", () => {
   isHttpAdapterSupported = typeof process !== "undefined" && utils$1.kindOf(process) === "process";
   wrapAsync = (asyncExecutor) =>
     new Promise((resolve, reject) => {

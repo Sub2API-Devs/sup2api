@@ -3,10 +3,10 @@
  *
  * 协作记忆上下文（laptop/ccr）收集与附件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (64)
- * attribution: placement 64
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (66)
+ * attribution: placement 64, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { stringSchema, objectSchema, record, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -31,8 +31,11 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { accountMemoryServerState } from "./accountMemoryServer.js";
 import { currentMcpClients } from "../compact/idleToolResultClearing.js";
 import { getMemoryToggledOff, getSessionId } from "../../bootstrap/state.js";
-import { setAccountMemoryRedaction, countToolCallsSince } from "../../utils/messages/accountMemory.js";
-import { uniq } from "../../utils/collections.js";
+import {
+  setAccountMemoryRedaction,
+  needsToolsOnlyMemoryContext,
+} from "../../utils/messages/accountMemory.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { recordPhase, getRecordedPhase } from "../../utils/startupTiming.js";
 import { logError } from "../../utils/log.js";
 import { classifyQuerySource } from "../api/requestHeaders.js";
@@ -46,15 +49,15 @@ import { normalizeMemoryText } from "../../memdir/memdir.js";
 import { collectMemoryReadPaths, findStaleReads, formatMemoryUpdates } from "./memoryUpdates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:68451-68463 placement
+//@ chunk-7jxyna5q.js:67581-67593 placement
 var memoryEmergencyOffHook = null;
-//@ chunk-s61vbvea.js:68463-68490 placement
+//@ chunk-7jxyna5q.js:67593-67620 placement
 function nullRepoReadEpoch(host) {
   return null;
 }
-//@ chunk-s61vbvea.js:68490-68515 placement
+//@ chunk-7jxyna5q.js:67620-67645 placement
 var MEMORY_CONTEXT_PATH = "/memory_context";
-//@ chunk-s61vbvea.js:68515-68580 placement
+//@ chunk-7jxyna5q.js:67645-67710 placement
 /**
  * 记忆上下文等待常量：最长等待 900 s、上次检查窗口 60 s、默认等待 2 s、首次 5 s、滞后请求 10 s。
  */
@@ -64,7 +67,7 @@ var LAST_CHECK_WINDOW_MS = 60000;
 var DEFAULT_WAIT_MS = 2000;
 var FIRST_WAIT_MS = 5000;
 var LATE_WAIT_MS = 1e4;
-//@ chunk-s61vbvea.js:68580-68637 placement
+//@ chunk-7jxyna5q.js:67710-67767 placement
 /**
  * 记忆上下文的版本与大小限额：版本 TTL 1 小时、内容 256 KB、响应 1 MB、文件版本表 4096 项。
  */
@@ -73,13 +76,13 @@ var MAX_CONTENT_CHARS = 262144;
 var MAX_RESPONSE_BYTES_MEMCTX = 4 * MAX_CONTENT_CHARS + 1024;
 var MAX_FILE_VERSION_ENTRIES = 4096;
 var MAX_TOTAL_RESPONSE_BYTES = MAX_RESPONSE_BYTES_MEMCTX + 4 * MAX_FILE_VERSION_ENTRIES;
-//@ chunk-s61vbvea.js:68637-68959 placement
+//@ chunk-7jxyna5q.js:67767-68089 placement
 /**
  * 记忆上下文版本号与服务端响应的 schema（版本、内容、各文件版本、指引、变体、轮后指令）。
  */
 var memoryContextVersionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var memoryContextResponseSchema;
-deferInit("chunk-s61vbvea.js:68637", () => {
+deferInit("chunk-7jxyna5q.js:67767", () => {
   memoryContextVersionSchema = DoctorLazy(() => stringSchema().regex(/^[A-Za-z0-9._:+/=-]{1,256}$/));
   memoryContextResponseSchema = DoctorLazy(() =>
     objectSchema({
@@ -92,7 +95,7 @@ deferInit("chunk-s61vbvea.js:68637", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:68959-69020 placement
+//@ chunk-7jxyna5q.js:68089-68150 placement
 function logFeatureOutcome(feature, withOutcome, outcome, extra) {
   if (withOutcome)
     logFeatureOk(feature, {
@@ -101,12 +104,12 @@ function logFeatureOutcome(feature, withOutcome, outcome, extra) {
     });
   else logFeatureOk(feature);
 }
-//@ chunk-s61vbvea.js:69020-69531 placement
+//@ chunk-7jxyna5q.js:68150-68661 placement
 /**
  * 每会话的协作记忆上下文状态：回答记录、列表、在途请求、持有内容、显示过的文本、失败计数、已发布/撤回版本等。
  */
 var memoryContextState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:69020", () => {
+deferInit("chunk-7jxyna5q.js:68150", () => {
   memoryContextState = new HostScoped(() => ({
     answeredForSession: undefined,
     answeredUnderRepoRead: undefined,
@@ -137,11 +140,11 @@ deferInit("chunk-s61vbvea.js:69020", () => {
     withdrawnVersions: new Set(),
   }));
 });
-//@ chunk-s61vbvea.js:69531-69585 placement
+//@ chunk-7jxyna5q.js:68661-68715 placement
 function isMemoryContextViaCcr() {
   return isMemoryContextHost() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_misty_anchor", false);
 }
-//@ chunk-s61vbvea.js:69585-69703 placement
+//@ chunk-7jxyna5q.js:68715-68833 placement
 function isMemoryContextHost() {
   let sessionEntrypoint = getSessionEntrypoint();
   let flagOn =
@@ -149,11 +152,11 @@ function isMemoryContextHost() {
     (sessionEntrypoint === undefined || ENTRYPOINT_KIND_SET.has(sessionEntrypoint));
   return Boolean((isCoworkSession() || flagOn) && hasRemoteSdkUrl());
 }
-//@ chunk-s61vbvea.js:69703-69732 placement
+//@ chunk-7jxyna5q.js:68833-68862 placement (2.1.88 match: useFrustrationDetection, 0.39)
 function memorySyncPolicyState() {
   return "closed";
 }
-//@ chunk-s61vbvea.js:69732-69883 placement
+//@ chunk-7jxyna5q.js:68862-69013 placement
 /**
  * 记忆同步的策略状态：策略不可得时按 HIPAA 与缓存情况为 denied/pending，未下发为 pending，否则按 allow_memory_sync 为 open/denied。
  */
@@ -164,7 +167,7 @@ function getMemorySyncPolicyState() {
   } else if (isPolicyVerdictAbsent()) return "pending";
   return isPolicyAllowed("allow_memory_sync") ? "open" : "denied";
 }
-//@ chunk-s61vbvea.js:69883-70086 placement
+//@ chunk-7jxyna5q.js:69013-69216 placement
 function reportGateState(state, gate) {
   if (gate === "open" || gate === "closed") {
     state.gateReported = undefined;
@@ -178,21 +181,21 @@ function reportGateState(state, gate) {
     );
   }
 }
-//@ chunk-s61vbvea.js:70086-70116 placement
+//@ chunk-7jxyna5q.js:69216-69246 placement
 /**
  * 导出函数 `memorySyncPolicyClosedStub`：返回 "closed"。
  */
 function memorySyncPolicyClosedStub() {
   return "closed";
 }
-//@ chunk-s61vbvea.js:70116-70140 placement
+//@ chunk-7jxyna5q.js:69246-69270 placement
 /**
  * 导出函数 `alwaysFalseMemCtx`：返回 !1。
  */
 function alwaysFalseMemCtx() {
   return false;
 }
-//@ chunk-s61vbvea.js:70140-70540 placement
+//@ chunk-7jxyna5q.js:69270-69670 placement
 function coworkMemoryContextMode(host, latestCoworkMemoryVersion, force = false) {
   let leg = memoryContextLeg();
   let state = memoryContextState.of(host);
@@ -226,17 +229,15 @@ function coworkMemoryContextMode(host, latestCoworkMemoryVersion, force = false)
     ...fallback,
   };
 }
-//@ chunk-s61vbvea.js:70540-71014 placement
-function withdrawCoworkMemoryContext(host, messages) {
-  let lastMemoryContextAttachment = findLastMemoryContextAttachment(messages);
+//@ chunk-7jxyna5q.js:69670-70094 placement
+function withdrawCoworkMemoryContext(host, normalizedMessages) {
+  let lastMemoryContextAttachment = findLastMemoryContextAttachment(normalizedMessages);
   if (lastMemoryContextAttachment === null || lastMemoryContextAttachment.content === null) return [];
   let state = memoryContextState.of(host);
   let policy = memorySyncPolicyState();
   let leg = memoryContextLeg(policy);
-  let extra =
-    (lastMemoryContextAttachment.version !== null &&
-      state.withdrawnVersions.has(lastMemoryContextAttachment.version)) ||
-    state.held?.content === null;
+  let attachment = withdrawalAttachmentFor(host, state, leg, lastMemoryContextAttachment, normalizedMessages);
+  let extra = attachment !== undefined || state.held?.content === null;
   if (!extra) {
     if (leg === undefined && hasRemoteSdkUrl()) return [];
     extra =
@@ -245,21 +246,27 @@ function withdrawCoworkMemoryContext(host, messages) {
         : policy !== "pending" && state.held !== undefined;
     if (!extra && state.held === undefined && state.inflight !== undefined) return [];
   }
-  let attachment = extra ? buildWithdrawalAttachment(leg) : getStaleMemoryContextAttachment(host, messages);
-  if (attachment === undefined) return [];
+  if (!extra) return [];
   logForDiagnosticsNoPII("info", "cowork_memory_context_withdrawn_from_spawned_loop", {
     leg: leg ?? (hasRemoteSdkUrl() ? "ccr" : "laptop"),
   });
-  return [attachment];
+  return [attachment ?? buildWithdrawalAttachment(leg)];
 }
-//@ chunk-s61vbvea.js:71014-71289 placement
+//@ chunk-7jxyna5q.js:70094-70147 placement
 /**
  * 记忆上下文已被撤回或已被替代时返回过期附件；笔记本端且需要时返回锚点附件。
  */
-function getStaleMemoryContextAttachment(host, messages) {
-  let state = memoryContextState.of(host);
-  let leg = memoryContextLeg();
-  let lastMemoryContextAttachment = findLastMemoryContextAttachment(messages);
+function getStaleMemoryContextAttachment(host, leg) {
+  return withdrawalAttachmentFor(
+    host,
+    memoryContextState.of(host),
+    memoryContextLeg(),
+    findLastMemoryContextAttachment(leg),
+    leg,
+  );
+}
+//@ chunk-7jxyna5q.js:70147-70397 layout
+function withdrawalAttachmentFor(host, state, leg, lastMemoryContextAttachment, messages) {
   if (
     lastMemoryContextAttachment !== null &&
     lastMemoryContextAttachment.content !== null &&
@@ -272,7 +279,7 @@ function getStaleMemoryContextAttachment(host, messages) {
     return buildWithdrawalAttachment(leg);
   return leg === "laptop" && hasStaleListAttachment(host, state, messages) ? emptyMemoryContext() : undefined;
 }
-//@ chunk-s61vbvea.js:71289-71401 placement
+//@ chunk-7jxyna5q.js:70397-70509 placement
 function buildWithdrawalAttachment(leg) {
   return leg === "ccr" || (leg === undefined && hasRemoteSdkUrl())
     ? {
@@ -282,7 +289,7 @@ function buildWithdrawalAttachment(leg) {
       }
     : emptyMemoryContext();
 }
-//@ chunk-s61vbvea.js:71401-71538 placement
+//@ chunk-7jxyna5q.js:70509-70646 placement
 /**
  * 笔记本端有内容时构造只带版本的锚点附件。
  */
@@ -296,7 +303,7 @@ function buildAnchorAttachment(context) {
       }
     : undefined;
 }
-//@ chunk-s61vbvea.js:71538-71821 placement
+//@ chunk-7jxyna5q.js:70646-70929 placement
 /**
  * 笔记本端版本匹配时构造带指引与内容的记忆上下文附件，并登记为已展示。
  */
@@ -318,7 +325,7 @@ function buildLaptopMemoryAttachment(host, version) {
     leg: "laptop",
   };
 }
-//@ chunk-s61vbvea.js:71821-71874 placement
+//@ chunk-7jxyna5q.js:70929-70982 placement
 /**
  * 导出函数 `memoryModeForSession`：参数 e，返回 accountMemoryServerState(currentMcpClients(e), WZn(e.session.host))。
  */
@@ -328,28 +335,28 @@ function memoryModeForSession(toolUseContext) {
     subagentMemoryMode(toolUseContext.session.host),
   );
 }
-//@ chunk-s61vbvea.js:71874-71919 placement
+//@ chunk-7jxyna5q.js:70982-71027 placement
 /**
  * 导出函数 `subagentMemoryMode`：参数 e，返回 memoryContextState.of(e).subagentMode。
  */
 function subagentMemoryMode(host) {
   return memoryContextState.of(host).subagentMode;
 }
-//@ chunk-s61vbvea.js:71919-71995 placement
+//@ chunk-7jxyna5q.js:71027-71103 placement
 function memoryContextLeg(policy = memorySyncPolicyState()) {
   if (isMemoryContextViaCcr()) return "ccr";
   if (policy === "open") return "laptop";
   return;
 }
-//@ chunk-s61vbvea.js:71995-72045 placement
+//@ chunk-7jxyna5q.js:71103-71153 placement
 function isMemoryToggledOff(leg) {
   return getMemoryToggledOff() && (leg === "laptop" || !isCoworkSession());
 }
-//@ chunk-s61vbvea.js:72045-72111 placement
+//@ chunk-7jxyna5q.js:71153-71219 placement
 function isLaptopEmergencyOff(leg) {
   return leg === "laptop" && memoryEmergencyOffHook?.emergencyOffStands() === true;
 }
-//@ chunk-s61vbvea.js:72111-72294 placement
+//@ chunk-7jxyna5q.js:71219-71402 placement
 function isMemoryContextOff() {
   if (isMemoryContextViaCcr()) return isMemoryToggledOff("ccr");
   switch (memorySyncPolicyState()) {
@@ -364,12 +371,12 @@ function isMemoryContextOff() {
       return false;
   }
 }
-//@ chunk-s61vbvea.js:72294-72302 placement
+//@ chunk-7jxyna5q.js:71402-71410 placement
 // deferred: uses setAccountMemoryRedaction (../../utils/messages/accountMemory.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:72294", () => {
+deferInit("chunk-7jxyna5q.js:71402", () => {
   setAccountMemoryRedaction(isMemoryContextOff);
 });
-//@ chunk-s61vbvea.js:72302-72360 placement
+//@ chunk-7jxyna5q.js:71410-71468 placement
 /**
  * 导出函数 `resetMemoryContextForSession`：参数 e。
  */
@@ -379,7 +386,7 @@ function resetMemoryContextForSession(host) {
   withdrawServedVersions(state);
   resetMemoryContextState(state);
 }
-//@ chunk-s61vbvea.js:72360-72657 placement
+//@ chunk-7jxyna5q.js:71468-71765 placement
 function buildAccountMemoryRecallAttachment(host, messages) {
   let flattened = messages.flatMap((row) => {
     if (row.type !== "attachment") return [];
@@ -392,9 +399,9 @@ function buildAccountMemoryRecallAttachment(host, messages) {
       : [];
   });
   let state = memoryContextState.of(host);
-  return uniq([...state.shown, ...state.shownRecall, ...flattened]);
+  return normalizeCaseForComparison_2([...state.shown, ...state.shownRecall, ...flattened]);
 }
-//@ chunk-s61vbvea.js:72657-72877 placement
+//@ chunk-7jxyna5q.js:71765-71985 placement
 /**
  * 收集消息中非笔记本端的记忆上下文内容，与账号记忆召回内容一起去重返回。
  */
@@ -407,9 +414,9 @@ function collectMemoryContextTexts(host, messages) {
       ? [row.attachment.content]
       : [],
   );
-  return uniq([...buildAccountMemoryRecallAttachment(host, messages), ...flattened]);
+  return normalizeCaseForComparison_2([...buildAccountMemoryRecallAttachment(host, messages), ...flattened]);
 }
-//@ chunk-s61vbvea.js:72877-72988 placement
+//@ chunk-7jxyna5q.js:71985-72096 placement
 function getHeldContext(host, state, leg) {
   return leg === "laptop" &&
     state.held?.stop !== true &&
@@ -417,11 +424,11 @@ function getHeldContext(host, state, leg) {
     ? undefined
     : state.held;
 }
-//@ chunk-s61vbvea.js:72988-73049 placement
+//@ chunk-7jxyna5q.js:72096-72157 placement
 function isRepoReadProofStale(host, state) {
   return state.answeredWithRepoReadProof && isRepoReadStale(host, state);
 }
-//@ chunk-s61vbvea.js:73049-73139 placement
+//@ chunk-7jxyna5q.js:72157-72247 placement
 function emptyMemoryContext() {
   return {
     type: "cowork_memory_context",
@@ -430,7 +437,7 @@ function emptyMemoryContext() {
     leg: "laptop",
   };
 }
-//@ chunk-s61vbvea.js:73139-73243 placement
+//@ chunk-7jxyna5q.js:72247-72351 placement
 function isListStale(host, state, version) {
   return (
     typeof version === "string" &&
@@ -438,7 +445,7 @@ function isListStale(host, state, version) {
     state.lists.get(version) !== nullRepoReadEpoch(host)?.repoReadEpoch(host)
   );
 }
-//@ chunk-s61vbvea.js:73243-73524 placement
+//@ chunk-7jxyna5q.js:72351-72632 placement
 function hasStaleListAttachment(host, state, messages) {
   if (state.lists.size === 0) return false;
   for (let j = messages.length - 1; j >= 0; j--) {
@@ -454,19 +461,23 @@ function hasStaleListAttachment(host, state, messages) {
   }
   return false;
 }
-//@ chunk-s61vbvea.js:73524-73632 placement
+//@ chunk-7jxyna5q.js:72632-72740 placement
 function isRepoReadStale(host, state) {
   return (
     state.answeredUnderRepoRead !== undefined &&
     state.answeredUnderRepoRead !== nullRepoReadEpoch(host)?.repoReadEpoch(host)
   );
 }
-//@ chunk-s61vbvea.js:73632-73729 placement
+//@ chunk-7jxyna5q.js:72740-72789 layout
+function markServedVersion(host, version) {
+  memoryContextState.of(host).servedVersions.add(version);
+}
+//@ chunk-7jxyna5q.js:72789-72886 placement
 function withdrawServedVersions(state) {
   for (let servedVersion of state.servedVersions) state.withdrawnVersions.add(servedVersion);
   state.servedVersions.clear();
 }
-//@ chunk-s61vbvea.js:73729-74041 placement
+//@ chunk-7jxyna5q.js:72886-73198 placement
 /**
  * 重置记忆上下文状态：纪元加一，按需标记需撤回，清空持有内容、检查与进行中的请求等。
  */
@@ -486,7 +497,7 @@ function resetMemoryContextState(state) {
   state.answeredUnderRepoRead = undefined;
   state.answeredWithRepoReadProof = false;
 }
-//@ chunk-s61vbvea.js:74041-74145 placement
+//@ chunk-7jxyna5q.js:73198-73302 placement
 function withdrawMemoryContext(host, state, lastMemoryContextAttachment, lastAttachment, options) {
   withdrawServedVersions(state);
   resetMemoryContextState(state);
@@ -503,7 +514,7 @@ function withdrawMemoryContext(host, state, lastMemoryContextAttachment, lastAtt
     options,
   );
 }
-//@ chunk-s61vbvea.js:74145-74218 placement
+//@ chunk-7jxyna5q.js:73302-73375 placement
 /**
  * 导出函数 `maybeKickMemoryContextFetch`：参数 e, n = {}, r。
  */
@@ -512,7 +523,7 @@ function maybeKickMemoryContextFetch(session, options = {}, observer) {
   if (leg !== undefined && !isMemoryToggledOff(leg))
     kickMemoryContextFetch(session.host, leg, options, observer);
 }
-//@ chunk-s61vbvea.js:74218-74293 placement
+//@ chunk-7jxyna5q.js:73375-73450 placement
 /**
  * 导出函数 `refreshMemoryContextForCcr`：参数 e，返回 !1; return (kickMemoryContextFetch(e.host, "ccr", {}), !0)。
  */
@@ -521,11 +532,11 @@ function refreshMemoryContextForCcr(rootSession) {
   kickMemoryContextFetch(rootSession.host, "ccr", {});
   return true;
 }
-//@ chunk-s61vbvea.js:74293-74553 placement
+//@ chunk-7jxyna5q.js:73450-73729 placement
 /**
  * 刷新记忆上下文：持有内容但功能已关时撤回并重置；否则在没有持有与进行中请求时发起获取。
  */
-function refreshMemoryContext(session, options = {}) {
+function refreshMemoryContext(session, options = {}, signal) {
   let state = memoryContextState.of(session.host);
   if ((state.held !== undefined || state.inflight !== undefined) && !isMemoryContextViaCcr()) {
     withdrawServedVersions(state);
@@ -533,13 +544,18 @@ function refreshMemoryContext(session, options = {}) {
     return;
   }
   let afterWarmup = () => {
-    if (state.held === undefined && state.lastCheck === undefined && state.inflight === undefined)
+    if (
+      signal?.aborted !== true &&
+      state.held === undefined &&
+      state.lastCheck === undefined &&
+      state.inflight === undefined
+    )
       maybeKickMemoryContextFetch(session, options);
   };
   if (state.inflight === undefined) afterWarmup();
   else state.inflight.then(afterWarmup, afterWarmup).catch(() => {});
 }
-//@ chunk-s61vbvea.js:74553-74830 placement
+//@ chunk-7jxyna5q.js:73729-74006 placement
 function kickMemoryContextFetch(host, leg, options, observer) {
   let startTime = performance.now();
   let request = requestMemoryContextOnce(host, leg, options);
@@ -558,7 +574,7 @@ function kickMemoryContextFetch(host, leg, options, observer) {
     })
     .catch(() => {});
 }
-//@ chunk-s61vbvea.js:74830-74899 placement
+//@ chunk-7jxyna5q.js:74006-74075 placement
 /**
  * 导出函数 `kickTurnEndCheckMemCtx`：参数 e, n = {}。
  */
@@ -566,7 +582,7 @@ function kickTurnEndCheckMemCtx(session, options = {}) {
   let leg = memoryContextLeg();
   if (leg !== undefined && !isMemoryToggledOff(leg)) kickTurnEndCheck(session.host, leg, options);
 }
-//@ chunk-s61vbvea.js:74899-75733 placement
+//@ chunk-7jxyna5q.js:74075-74909 placement
 function fetchTurnEndMemoryContext(session) {
   if (!isMemoryContextViaCcr() || isMemoryToggledOff("ccr")) return;
   let { host } = session;
@@ -616,7 +632,7 @@ function fetchTurnEndMemoryContext(session) {
     })
     .catch(() => {});
 }
-//@ chunk-s61vbvea.js:75733-75957 placement
+//@ chunk-7jxyna5q.js:74909-75133 placement
 /**
  * 本轮助手调用了记忆写入类工具且需要时，记录记忆写入截断的时间。
  */
@@ -635,7 +651,7 @@ function markMemoryWriteCut(host, messages) {
   )
     memoryContextState.of(host).memoryWriteCutAt = performance.now();
 }
-//@ chunk-s61vbvea.js:75957-76175 placement
+//@ chunk-7jxyna5q.js:75133-75351 placement
 /**
  * CCR 端在本轮中途收集记忆上下文附件（有持有内容且功能开启时）。
  */
@@ -657,7 +673,7 @@ function collectCcrMemoryAttachments(host, normalizedMessages) {
     });
   return memoryContextAttachments;
 }
-//@ chunk-s61vbvea.js:76175-76290 placement
+//@ chunk-7jxyna5q.js:75351-75466 placement
 function isCheckBeforeWriteCut(state) {
   return (
     state.lastCheck !== undefined &&
@@ -665,7 +681,7 @@ function isCheckBeforeWriteCut(state) {
     state.lastCheck.monotonic <= state.memoryWriteCutAt
   );
 }
-//@ chunk-s61vbvea.js:76290-76442 placement
+//@ chunk-7jxyna5q.js:75466-75618 placement
 function getMemoryContextWindowMs() {
   let windowMs = 0;
   try {
@@ -676,7 +692,7 @@ function getMemoryContextWindowMs() {
   }
   return typeof windowMs === "number" ? Math.min(windowMs, MAX_WAIT_SECONDS) * 1000 : 0;
 }
-//@ chunk-s61vbvea.js:76442-76533 placement
+//@ chunk-7jxyna5q.js:75618-75709 placement
 function withinCheckWindow(lastCheck, memoryContextWindowMs) {
   let ageMs = Date.now() - lastCheck.wall;
   return (
@@ -685,14 +701,14 @@ function withinCheckWindow(lastCheck, memoryContextWindowMs) {
     performance.now() - lastCheck.monotonic < memoryContextWindowMs
   );
 }
-//@ chunk-s61vbvea.js:76533-76608 placement
+//@ chunk-7jxyna5q.js:75709-75784 placement
 function checkMemoryContextAtTurnEnd(host, state, leg) {
   if (leg === "laptop" && state.held?.stop !== true && isRepoReadProofStale(host, state)) {
     withdrawServedVersions(state);
     resetMemoryContextState(state);
   }
 }
-//@ chunk-s61vbvea.js:76608-76938 placement
+//@ chunk-7jxyna5q.js:75784-76114 placement
 /**
  * 在轮次结束时发起记忆上下文检查：接管 CCR 的轮末请求，返回是否已回答、是否加入进行中请求等状态。
  */
@@ -716,11 +732,11 @@ function kickTurnEndCheck(host, leg, options) {
   state.kicked = result.answered === undefined ? undefined : result;
   return result;
 }
-//@ chunk-s61vbvea.js:76938-76980 placement
+//@ chunk-7jxyna5q.js:76114-76156 placement
 function toolListProvider(toolUseContext) {
   return () => toolUseContext.options?.tools;
 }
-//@ chunk-s61vbvea.js:76980-79571 placement
+//@ chunk-7jxyna5q.js:76156-78851 placement
 /**
  * 按 laptop/ccr 两种场景收集协作记忆上下文并生成附件
  */
@@ -863,15 +879,20 @@ function collectCoworkMemoryContext(messages, toolUseContext, querySource) {
       : DEFAULT_WAIT_MS;
   let startTime = performance.now();
   let mustRequest = false;
-  let answerChain = answered.then(() => {
+  let joinedEndedUnanswered = false;
+  let answerPromise = answered.then(() => {
     if (gate.epoch !== epoch) return;
     mustRequest = leg === "ccr" && gate.held?.stop !== true && isCheckBeforeWriteCut(gate);
-    return mustRequest || (leg === "laptop" && sentFor !== undefined && sentFor !== getSessionId())
+    joinedEndedUnanswered =
+      leg === "ccr" && joined && gate.held === undefined && gate.lastCheck === undefined;
+    return mustRequest ||
+      joinedEndedUnanswered ||
+      (leg === "laptop" && sentFor !== undefined && sentFor !== getSessionId())
       ? requestMemoryContextOnce(toolUseContext.session.host, leg, toolUseContext)
       : undefined;
   });
   let waitPromise = raceWithAbortSignal(
-    answerChain.then(() => true),
+    answerPromise.then(() => true),
     toolUseContext.abortController.signal,
     () => new AbortError(),
   );
@@ -891,6 +912,9 @@ function collectCoworkMemoryContext(messages, toolUseContext, querySource) {
         ...(mustRequest && {
           second_check: true,
         }),
+        ...(joinedEndedUnanswered && {
+          joined_ended_unanswered: true,
+        }),
         ...(writeStopped && {
           route_stopped: true,
         }),
@@ -906,7 +930,7 @@ function collectCoworkMemoryContext(messages, toolUseContext, querySource) {
     () => buildAttachments(false),
   );
 }
-//@ chunk-s61vbvea.js:79571-79753 placement
+//@ chunk-7jxyna5q.js:78851-79033 placement
 function findLastMemoryContextAttachment(messages) {
   for (let j = messages.length - 1; j >= 0; j--) {
     let row = messages[j];
@@ -919,7 +943,7 @@ function findLastMemoryContextAttachment(messages) {
   }
   return null;
 }
-//@ chunk-s61vbvea.js:79892-80457 placement
+//@ chunk-7jxyna5q.js:79172-79737 placement
 /**
  * 根据持有的记忆上下文生成附件：有内容且版本与上次不同则附上（含引导与过期提示）；内容被清空时附撤回；仅工具模式时附 toolsOnly。
  */
@@ -957,7 +981,7 @@ function buildMemoryContextAttachments(host, state, held, lastAttachment, messag
         ...extra,
       },
     ];
-  return isMemoryContextOff() && countToolCallsSince(messages, state.placeTool)
+  return isMemoryContextOff() && needsToolsOnlyMemoryContext(messages, state.placeTool)
     ? [
         {
           type: "cowork_memory_context",
@@ -969,7 +993,7 @@ function buildMemoryContextAttachments(host, state, held, lastAttachment, messag
       ]
     : [];
 }
-//@ chunk-s61vbvea.js:80457-80918 placement
+//@ chunk-7jxyna5q.js:79737-80198 placement
 /**
  * 发起记忆上下文请求（复用在途请求）：laptop 侧紧急关闭时锁定为停止；冷却期内不请求；结束时清除在途标记。
  */
@@ -1004,7 +1028,7 @@ function requestMemoryContextOnce(host, leg, requestContext, toolUseContext, ski
   state.inflightFor = getSessionId();
   return request;
 }
-//@ chunk-s61vbvea.js:80918-81065 placement
+//@ chunk-7jxyna5q.js:80198-80345 placement
 async function requestMemoryContextWithRetry(host, leg, requestContext, toolUseContext) {
   let state = memoryContextState.of(host);
   let { epoch } = state;
@@ -1015,7 +1039,7 @@ async function requestMemoryContextWithRetry(host, leg, requestContext, toolUseC
   if (retryState.again && state.epoch === epoch && memoryContextLeg() === leg && !isMemoryToggledOff(leg))
     await requestMemoryContext(host, leg, requestContext, toolUseContext);
 }
-//@ chunk-s61vbvea.js:81065-83633 placement
+//@ chunk-7jxyna5q.js:80345-82947 placement
 async function requestMemoryContext(host, leg, { credentials, storageV5 }, requestContext, signal) {
   let gate = memoryContextState.of(host);
   let version = gate.held?.version;
@@ -1100,12 +1124,12 @@ async function requestMemoryContext(host, leg, { credentials, storageV5 }, reque
           logFeatureBad(featureName, "malformed");
           return;
         }
-        let content = normalizeMemoryText(parsed.data.content);
+        let normalizedText = normalizeMemoryText(parsed.data.content);
         gate.servedVersions.add(parsed.data.version);
         gate.withdrawnVersions.delete(parsed.data.version);
         gate.held = {
           version: parsed.data.version,
-          content,
+          content: normalizedText,
           versions: parsed.data.versions,
           ...false,
           ...false,
@@ -1113,6 +1137,7 @@ async function requestMemoryContext(host, leg, { credentials, storageV5 }, reque
             postTurnInstruction: normalizeMemoryText(parsed.data.post_turn_instruction),
           }),
         };
+        noteShownText(host, (gate.held.guidance ?? "") + normalizedText);
         outcome = "answered";
         gate.lastCheck = lastCheck;
         logForDiagnosticsNoPII("info", "cowork_memory_context_fetched", {
@@ -1191,21 +1216,21 @@ async function requestMemoryContext(host, leg, { credentials, storageV5 }, reque
       gate.lastGetUnanswered = outcome !== "answered";
   }
 }
-//@ chunk-s61vbvea.js:83633-83680 placement
+//@ chunk-7jxyna5q.js:82947-82994 placement
 /**
  * 导出函数 `heldMemoryVersions`：参数 e，返回 memoryContextState.of(e).held?.versions。
  */
 function heldMemoryVersions(host) {
   return memoryContextState.of(host).held?.versions;
 }
-//@ chunk-s61vbvea.js:83680-83738 placement
+//@ chunk-7jxyna5q.js:82994-83052 placement
 /**
  * 导出函数 `heldPostTurnInstruction`：参数 e，返回 memoryContextState.of(e).held?.postTurnInstruction。
  */
 function heldPostTurnInstruction(host) {
   return memoryContextState.of(host).held?.postTurnInstruction;
 }
-//@ chunk-s61vbvea.js:83738-83984 placement
+//@ chunk-7jxyna5q.js:83052-83298 placement
 /**
  * 把本次读取到的文件版本合并到持有的记忆上下文版本表（版本表未变时）。
  */
@@ -1229,7 +1254,7 @@ function mergeReadVersions(host, expectedVersions, messages) {
     },
   };
 }
-//@ chunk-s61vbvea.js:83984-84109 placement
+//@ chunk-7jxyna5q.js:83298-83423 placement
 /**
  * 生成读取已过期的提示文字，出错时记录诊断并返回空串。
  */
@@ -1244,28 +1269,29 @@ function buildStaleReadNotice(host, messages, findStaleCarriedReads = findStaleR
 }
 export {
   collectMemoryContextTexts,
-  memoryModeForSession,
-  getStaleMemoryContextAttachment,
-  coworkMemoryContextMode,
-  buildAnchorAttachment,
-  buildLaptopMemoryAttachment,
-  memorySyncPolicyClosedStub,
+  markServedVersion,
   kickTurnEndCheckMemCtx,
+  fetchTurnEndMemoryContext,
+  markMemoryWriteCut,
+  withdrawCoworkMemoryContext,
+  collectCcrMemoryAttachments,
   buildAccountMemoryRecallAttachment,
-  refreshMemoryContextForCcr,
-  refreshMemoryContext,
-  maybeKickMemoryContextFetch,
-  collectCoworkMemoryContext,
   subagentMemoryMode,
+  memoryModeForSession,
   heldMemoryVersions,
   buildStaleReadNotice,
   heldPostTurnInstruction,
   mergeReadVersions,
-  resetMemoryContextForSession,
-  alwaysFalseMemCtx,
-  withdrawCoworkMemoryContext,
-  collectCcrMemoryAttachments,
+  memorySyncPolicyClosedStub,
   getMemorySyncPolicyState,
-  fetchTurnEndMemoryContext,
-  markMemoryWriteCut,
+  resetMemoryContextForSession,
+  refreshMemoryContextForCcr,
+  refreshMemoryContext,
+  maybeKickMemoryContextFetch,
+  getStaleMemoryContextAttachment,
+  coworkMemoryContextMode,
+  buildAnchorAttachment,
+  buildLaptopMemoryAttachment,
+  collectCoworkMemoryContext,
+  alwaysFalseMemCtx,
 };

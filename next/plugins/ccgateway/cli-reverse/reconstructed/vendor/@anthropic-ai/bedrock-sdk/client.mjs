@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/bedrock-sdk/client.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (5)
+ * pieces: chunk-b8zxeazh.js (5)
  * attribution: esm-fingerprint 5
  */
 import { BaseAnthropic } from "../sdk/client.mjs";
@@ -14,12 +14,12 @@ import { tryParseJson } from "./AWS_restJson1.mjs";
 import { is_buffer } from "./internal/qs/utils.js";
 import { formatter } from "./internal/utils/path.mjs";
 import { getAuthHeaders } from "./core/auth.js";
-import { buildHeaders_2 } from "./internal/headers.mjs";
+import { buildHeaders } from "./internal/headers.mjs";
 import { eventStreamToSSEResponse } from "./core/streaming.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 
-//@ chunk-h87x8cg3.js:10925-11322 esm-fingerprint
+//@ chunk-b8zxeazh.js:10925-11322 esm-fingerprint
 var __classPrivateFieldGet = function (receiver, state, kind, f) {
   if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
@@ -31,7 +31,7 @@ var _AnthropicBedrock_adaptRequest;
 var _AnthropicBedrock_adaptResponse;
 var DEFAULT_VERSION = "bedrock-2023-05-31";
 var MODEL_ENDPOINTS = new Set(["/v1/complete", "/v1/messages", "/v1/messages?beta=true"]);
-//@ chunk-h87x8cg3.js:11322-12463 esm-fingerprint
+//@ chunk-b8zxeazh.js:11322-12463 esm-fingerprint
 class AnthropicBedrock extends BaseAnthropic {
   constructor({
     awsRegion = readEnv_2("AWS_REGION") ?? "us-east-1",
@@ -98,7 +98,7 @@ class AnthropicBedrock extends BaseAnthropic {
     ];
   }
 }
-//@ chunk-h87x8cg3.js:12463-13829 esm-fingerprint
+//@ chunk-b8zxeazh.js:12463-13829 esm-fingerprint
 _AnthropicBedrock_instances = new WeakSet();
 _AnthropicBedrock_adaptRequest = async function (request, options) {
   let url = new URL(request.url);
@@ -151,7 +151,7 @@ _AnthropicBedrock_adaptRequest = async function (request, options) {
       providerChainResolver: this.providerChainResolver,
       logger: loggerFor(this),
     });
-    adapted.headers = buildHeaders_2([adapted.headers, authHeaders]).values;
+    adapted.headers = buildHeaders([adapted.headers, authHeaders]).values;
   }
   return adapted;
 };
@@ -160,14 +160,14 @@ _AnthropicBedrock_adaptResponse = function (response) {
     return eventStreamToSSEResponse(response);
   return response;
 };
-//@ chunk-h87x8cg3.js:13829-13908 esm-fingerprint
+//@ chunk-b8zxeazh.js:13829-13908 esm-fingerprint
 function makeMessagesResource(client) {
   let resource = new Messages_2(client);
   delete resource.batches;
   delete resource.countTokens;
   return resource;
 }
-//@ chunk-h87x8cg3.js:13908-14028 esm-fingerprint
+//@ chunk-b8zxeazh.js:13908-14028 esm-fingerprint
 function makeBetaResource(client) {
   let resource = new Beta(client);
   delete resource.promptCaching;

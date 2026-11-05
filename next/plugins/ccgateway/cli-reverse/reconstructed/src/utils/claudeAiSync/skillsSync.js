@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：claude.ai 技能同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (73)
- * attribution: placement 73
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (74)
+ * attribution: placement 73, layout 1
  */
-import { rm as rm_2, open, writeFile, lutimes, lstat } from "fs/promises";
+import { rm, open, writeFile, lutimes, lstat } from "fs/promises";
 import { join, sep } from "path";
 import { randomUUID } from "crypto";
 import {
@@ -29,7 +29,7 @@ import {
   skillRootsUnder,
   refreshSyncVeto,
 } from "../../services/plugins/accountSync/syncedPluginHooks.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import {
   getSkillsSyncVetoed,
   setAccountSkillsSyncEnabled,
@@ -51,8 +51,8 @@ import { invalidateCommandNames } from "../settings/commandSyncNames.js";
 import { isRestrictedToPluginOnly } from "../settings/pluginOnlyPolicy.js";
 import { isCustomizationDisabled } from "../settings/customizationDisabled.js";
 import { isSettingSourceEnabled } from "../settings/constants.js";
-import { isSessionRefsSyncEnabled } from "./sessionRefsGate.js";
 import { remoteToolsState } from "../../remote/tools/callResults.js";
+import { isSessionRefsSyncEnabled } from "./sessionRefsGate.js";
 import { logError } from "../log.js";
 import { stripSyncedSkillPrefix } from "../../skills/syncedSkills.js";
 import { sessionHostKind } from "../telemetry/memorySummary.js";
@@ -63,28 +63,28 @@ import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { runPluginsSyncRound } from "./pluginsSync.js";
 import { sessionSkillManifestSlot } from "../../services/plugins/accountSync/sessionSkillManifest.js";
 
-//@ chunk-e6aww6q8.js:638363-638418 placement
+//@ chunk-5xgkngpb.js:648729-648784 placement
 /**
  * 删除某同步技能目录。
  */
 async function removeSyncedSkillDir(dirName, root) {
-  await rm_2(bucketDirPath(dirName, root), {
+  await rm(bucketDirPath(dirName, root), {
     force: true,
   });
 }
-//@ chunk-e6aww6q8.js:638418-638434 placement
+//@ chunk-5xgkngpb.js:648784-648800 placement
 /**
  * 读取同步技能文件时的大小上限（4 MiB）。
  */
 var MAX_SYNCED_SKILL_BYTES = 4194304;
-//@ chunk-e6aww6q8.js:638434-638516 placement
+//@ chunk-5xgkngpb.js:648800-648882 placement
 /**
  * 只保留数组里的字符串项。
  */
 function stringArray(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : undefined;
 }
-//@ chunk-e6aww6q8.js:638516-638694 placement
+//@ chunk-5xgkngpb.js:648882-649060 placement
 /**
  * 合并清单行：先放额外行，再放旧行中未被移除的，最后用新行覆盖（按键去重）。
  */
@@ -95,7 +95,7 @@ function mergeManifestRows(validRows, previousRows, keyOf, removedIds, validRows
   for (let row of validRows) byKey.set(keyOf(row), row);
   return Array.from(byKey.values());
 }
-//@ chunk-e6aww6q8.js:638694-638832 placement
+//@ chunk-5xgkngpb.js:649060-649198 placement
 /**
  * 合并过期目录列表：加上新的、去掉已处理的，结果为空时返回 undefined。
  */
@@ -105,7 +105,7 @@ function mergeStaleDirs(previousDirs, manifestDirs, removedDirs) {
   for (let dirName of removedDirs) merged.delete(dirName);
   return merged.size > 0 ? Array.from(merged) : undefined;
 }
-//@ chunk-e6aww6q8.js:638832-638962 placement
+//@ chunk-5xgkngpb.js:649198-649328 placement
 /**
  * 用 schema 逐条解析数组，只保留解析成功的项。
  */
@@ -118,7 +118,7 @@ function parseValidRows(schema, rows) {
   }
   return valid;
 }
-//@ chunk-e6aww6q8.js:638962-639137 placement
+//@ chunk-5xgkngpb.js:649328-649503 placement
 /**
  * 用新行替换同键旧行，并报告是否有行的归属（等价判断不通过）发生变化。
  */
@@ -135,7 +135,7 @@ function replaceRowsWithAttribution(rows, carryover, keyOf, sameMarketplace) {
     attributionMoved,
   };
 }
-//@ chunk-e6aww6q8.js:639137-639243 placement
+//@ chunk-5xgkngpb.js:649503-649609 placement
 /**
  * 返回去掉指定键后的对象副本。
  */
@@ -145,7 +145,7 @@ function omitKeys_2(object, keys) {
   for (let [key, value] of Object.entries(object ?? {})) if (!keySet.has(key)) result[key] = value;
   return result;
 }
-//@ chunk-e6aww6q8.js:639243-639429 placement
+//@ chunk-5xgkngpb.js:649609-649795 placement
 /**
  * 读取同步清单文件内容（有大小限制）；非 ENOENT 失败时记诊断（超大归为 parse_or_size）并返回 null。
  */
@@ -162,7 +162,7 @@ async function readManifestText(root, path) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:639429-639641 placement
+//@ chunk-5xgkngpb.js:649795-650007 placement
 /**
  * 解析清单 JSON 并按 schema 校验，失败时记诊断（parse_or_size / not_an_object）并返回 null。
  */
@@ -187,12 +187,12 @@ function parseManifestJson(manifestText, schema, fallback) {
   }
   return parseResult.data;
 }
-//@ chunk-e6aww6q8.js:640031-640046 placement
+//@ chunk-5xgkngpb.js:650397-650412 placement
 /**
  * 同步复用的最长时间（10 分钟）。
  */
 var MAX_SYNC_REUSE_AGE_MS = 600000;
-//@ chunk-e6aww6q8.js:640046-640134 placement
+//@ chunk-5xgkngpb.js:650412-650500 placement
 /**
  * 从环境变量取同步复用窗口（正整数才生效）。
  */
@@ -202,28 +202,28 @@ function syncReuseWithinMs() {
     ? CLAUDE_CODE_SYNC_REUSE_WITHIN_MS
     : undefined;
 }
-//@ chunk-e6aww6q8.js:640134-640168 placement
+//@ chunk-5xgkngpb.js:650500-650534 placement
 /**
  * 同步技能“最后一轮完成”标记文件路径。
  */
 function lastCompleteRoundPath(root) {
   return join(root, LAST_COMPLETE_ROUND_FILE);
 }
-//@ chunk-e6aww6q8.js:640168-640232 placement
+//@ chunk-5xgkngpb.js:650534-650598 placement
 /**
  * 形如 UUID 的字符形式（复用标记里的令牌）。
  */
 var UUID_LIKE_RE = /^[0-9a-f-]{36}$/;
 var SAFE_LISTED_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 var MAX_REUSE_STAMP_BYTES = 1024;
-//@ chunk-e6aww6q8.js:640232-640292 placement
+//@ chunk-5xgkngpb.js:650598-650658 placement
 /**
  * 把复用标记序列化成 “令牌 列表”。
  */
 function serializeReuseStamp(stamp) {
   return `${stamp.token} ${stamp.listedFor.join(",")}`;
 }
-//@ chunk-e6aww6q8.js:640292-640538 placement
+//@ chunk-5xgkngpb.js:650658-650904 placement
 /**
  * 读取同步复用标记文件：内容为"令牌 列表"，令牌格式不符返回 null。
  */
@@ -242,7 +242,7 @@ async function readReuseStamp(root) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:640538-641150 placement
+//@ chunk-5xgkngpb.js:650904-651516 placement
 /**
  * 写入或续期同步复用标记：已有令牌时把当前项加入列表（文件存在则只更新时间）；否则生成新令牌重建文件。失败时记诊断返回 null。
  */
@@ -278,14 +278,14 @@ async function writeReuseStamp(root, kind, reusable, listedName) {
       listedFor: SAFE_LISTED_NAME_RE.test(listedName) ? [listedName] : [],
     };
     let content = serializeReuseStamp(fresh);
-    await rm_2(stampPath, {
+    await rm(stampPath, {
       force: true,
     });
     await writeFile(stampPath, content, {
       flag: "wx",
     }).catch(async (error) => {
       if (getErrnoCode(error) !== "EEXIST") throw error;
-      await rm_2(stampPath, {
+      await rm(stampPath, {
         force: true,
       });
       await writeFile(stampPath, content, {
@@ -300,7 +300,7 @@ async function writeReuseStamp(root, kind, reusable, listedName) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:641150-641230 placement
+//@ chunk-5xgkngpb.js:651516-651596 placement
 /**
  * 需要写入复用标记时写入，否则删除。
  */
@@ -309,18 +309,18 @@ async function writeOrClearReuseStamp(root, kind, reusable, unused, listedName) 
   await takeReuseStamp(root);
   return null;
 }
-//@ chunk-e6aww6q8.js:641230-641323 placement
+//@ chunk-5xgkngpb.js:651596-651689 placement
 /**
  * 读取并删除复用标记，返回原内容。
  */
 async function takeReuseStamp(root) {
   let reuseStamp = await readReuseStamp(root);
-  await rm_2(lastCompleteRoundPath(root), {
+  await rm(lastCompleteRoundPath(root), {
     force: true,
   }).catch(() => {});
   return reuseStamp;
 }
-//@ chunk-e6aww6q8.js:641323-641598 placement
+//@ chunk-5xgkngpb.js:651689-651964 placement
 /**
  * 根据复用标记文件的修改时间判断是否在复用窗口内，返回 {reuse, ageMs, withinMs}。
  */
@@ -353,7 +353,7 @@ async function checkReuseWindow(root, withinMs, now = Date.now()) {
     withinMs,
   };
 }
-//@ chunk-e6aww6q8.js:641639-641721 placement
+//@ chunk-5xgkngpb.js:652005-652087 placement
 /**
  * 清理同步技能 hook 时使用的标签与遥测事件名。
  */
@@ -362,14 +362,14 @@ var SKILLS_SYNC_HOOK_LABELS = {
   hooksOf: "synced skills",
   event: "skills_sync_hooks_removed",
 };
-//@ chunk-e6aww6q8.js:641721-641754 placement
+//@ chunk-5xgkngpb.js:652087-652120 placement
 /**
  * 清理已同步技能的 hook（同步被关闭时）。
  */
 function removeSyncedSkillHooksFor(removal) {
   removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, syncedSkillRoots(), removal);
 }
-//@ chunk-e6aww6q8.js:641754-641964 placement
+//@ chunk-5xgkngpb.js:652120-652330 placement
 /**
  * 清理不再被列出或技能文件已不存在的已同步技能目录记录。
  */
@@ -383,21 +383,21 @@ async function pruneGoneSkillDirs({ bucketRoot, listedDirs, removalTriedDirs, is
       goneDirs.add(root);
   removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, goneDirs, "skill_gone");
 }
-//@ chunk-e6aww6q8.js:641964-642004 placement
+//@ chunk-5xgkngpb.js:652330-652370 placement
 /**
  * 已同步技能根目录列表。
  */
 function syncedSkillRoots() {
   return skillRootsUnder(join(getClaudeConfigDir(), SKILLS_SYNC_DIR_2));
 }
-//@ chunk-e6aww6q8.js:642004-642152 placement
+//@ chunk-5xgkngpb.js:652370-652518 placement
 var SKILLS_SYNC_SETTING = {
   settingKey: "syncClaudeAiSkills",
   policyKey: "allow_account_skills_sync",
   flagName: "tengu_claudeai_skills_sync_enabled",
   isTierInPlay: () => isSkillsCustomizationAllowed(),
 };
-//@ chunk-e6aww6q8.js:642152-642207 placement
+//@ chunk-5xgkngpb.js:652518-652573 placement
 /**
  * 更新账号级技能同步开关并返回是否启用。
  */
@@ -407,7 +407,7 @@ function refreshAccountSkillsSyncFlag() {
   setAccountSkillsSyncEnabled(enabled);
   return enabled;
 }
-//@ chunk-e6aww6q8.js:642207-642270 placement
+//@ chunk-5xgkngpb.js:652573-652636 placement
 /**
  * 按设置是否可靠更新“技能同步被否决”状态。
  */
@@ -416,7 +416,7 @@ function refreshSkillsSyncVeto() {
   setSkillsSyncVetoed(vetoed);
   if (vetoed && isAccountSkillsSyncDenied()) removeSyncedSkillHooksFor("sync_off");
 }
-//@ chunk-e6aww6q8.js:642270-642307 placement
+//@ chunk-5xgkngpb.js:652636-652673 placement
 /**
  * 刷新否决状态后返回。
  */
@@ -425,14 +425,14 @@ function refreshVetoAndRead() {
   refreshSkillsSyncVeto();
   return getSkillsSyncVetoed();
 }
-//@ chunk-e6aww6q8.js:642307-642394 placement
+//@ chunk-5xgkngpb.js:652673-652760 placement
 /**
  * 环境变量或会话引用同步是否开启。
  */
 function isSkillsSyncEnvOn() {
   return env.CLAUDE_CODE_SYNC_SKILLS || env.CLAUDE_CODE_SYNC_SESSION_REFS || isFirstPartyClaudeAiSession();
 }
-//@ chunk-e6aww6q8.js:642394-642464 placement
+//@ chunk-5xgkngpb.js:652760-652830 placement
 /**
  * 技能定制是否被允许（未被限制为插件、未禁用、用户设置可用）。
  */
@@ -443,35 +443,35 @@ function isSkillsCustomizationAllowed() {
     isSettingSourceEnabled("userSettings")
   );
 }
-//@ chunk-e6aww6q8.js:642464-642494 placement
+//@ chunk-5xgkngpb.js:652830-652860 placement
 /**
  * 读取技能同步设置。
  */
 function readSkillsSyncSetting() {
   return isSyncEligibleHere(SKILLS_SYNC_SETTING);
 }
-//@ chunk-e6aww6q8.js:642494-642524 placement
+//@ chunk-5xgkngpb.js:652860-652890 placement
 /**
  * 读取技能同步设置（另一入口）。
  */
 function readSkillsSyncSettingAlt() {
   return isPolicyUnresolved(SKILLS_SYNC_SETTING);
 }
-//@ chunk-e6aww6q8.js:642524-642554 placement
+//@ chunk-5xgkngpb.js:652890-652920 placement
 /**
  * 账号是否具备技能同步资格。
  */
 function isAccountSkillsSyncEligible() {
   return isAccountSyncEligible(SKILLS_SYNC_SETTING);
 }
-//@ chunk-e6aww6q8.js:642554-642584 placement
+//@ chunk-5xgkngpb.js:652920-652950 placement
 /**
  * 账号级技能同步是否被拒绝。
  */
 function isAccountSkillsSyncDenied() {
   return isAccountSyncDenied(SKILLS_SYNC_SETTING);
 }
-//@ chunk-e6aww6q8.js:642584-642638 placement
+//@ chunk-5xgkngpb.js:652950-653004 placement
 /**
  * 技能同步是否生效（未被否决且环境或账号开启）。
  */
@@ -479,21 +479,25 @@ function isSkillsSyncActive(session) {
   if (getSkillsSyncVetoed()) return false;
   return isSessionRefsSkillsSyncOn(session) || getAccountSkillsSyncEnabled();
 }
-//@ chunk-e6aww6q8.js:642638-642695 placement
+//@ chunk-5xgkngpb.js:653004-653060 layout
+function isSkillsSyncForced(session) {
+  return isSkillsSyncActive(session) || (remoteToolsState().catalogAlone && !getSkillsSyncVetoed());
+}
+//@ chunk-5xgkngpb.js:653060-653117 placement
 /**
  * 环境变量或会话引用同步是否开启。
  */
 function isSessionRefsSkillsSyncOn(session) {
   return !!env.CLAUDE_CODE_SYNC_SKILLS || isSessionRefsSyncEnabled(session);
 }
-//@ chunk-e6aww6q8.js:642695-642732 placement
+//@ chunk-5xgkngpb.js:653117-653154 placement
 /**
  * 同步开启且未被否决。
  */
 function isSkillsSyncLive(session) {
   return isSessionRefsSkillsSyncOn(session) && !getSkillsSyncVetoed();
 }
-//@ chunk-e6aww6q8.js:642732-642850 placement
+//@ chunk-5xgkngpb.js:653154-653272 placement
 /**
  * 登记一个待完成的下载（Promise 与开始时间），返回其 resolve 函数。
  */
@@ -509,7 +513,7 @@ function registerPendingDownload(skillName, start) {
   });
   return resolve;
 }
-//@ chunk-e6aww6q8.js:642850-643065 placement
+//@ chunk-5xgkngpb.js:653272-653487 placement
 /**
  * 触发某技能挂起的下载（只触发一次）并返回其完成 Promise；没有挂起下载时直接成功。
  */
@@ -532,14 +536,14 @@ function startPendingDownload(skillName) {
   }
   return entry.promise;
 }
-//@ chunk-e6aww6q8.js:643065-643134 placement
+//@ chunk-5xgkngpb.js:653487-653556 placement
 /**
  * 说明某技能在本会话被关闭。
  */
 function skillSwitchedOffText(skillName) {
   return `Skill ${skillName} is switched off for this session.`;
 }
-//@ chunk-e6aww6q8.js:643134-643213 placement
+//@ chunk-5xgkngpb.js:653556-653635 placement
 /**
  * 返回已列出的远程技能提示文本。
  */
@@ -547,21 +551,21 @@ function listedSkillText(skillName) {
   let entry = remoteToolsState().listedSkills.get(skillName);
   return entry?.command ? entry.text : undefined;
 }
-//@ chunk-e6aww6q8.js:643213-643281 placement
+//@ chunk-5xgkngpb.js:653635-653703 placement
 /**
  * 该技能是否正在下载。
  */
 function isSkillDownloadPending(skillName) {
   return remoteToolsState().pendingDownloads.get(skillName)?.start !== undefined;
 }
-//@ chunk-e6aww6q8.js:643281-643333 placement
+//@ chunk-5xgkngpb.js:653703-653755 placement
 /**
  * 该技能是否有待完成的下载。
  */
 function hasPendingSkillDownload(skillName) {
   return remoteToolsState().pendingDownloads.has(skillName);
 }
-//@ chunk-e6aww6q8.js:643333-643385 placement
+//@ chunk-5xgkngpb.js:653755-653807 placement
 /**
  * 登记技能的占位命令（按去掉同步前缀的名字）。
  */
@@ -571,14 +575,14 @@ function registerSkillPlaceholder(deferredSyncedSkillCommand) {
     deferredSyncedSkillCommand,
   );
 }
-//@ chunk-e6aww6q8.js:643385-643429 placement
+//@ chunk-5xgkngpb.js:653807-653851 placement
 /**
  * 移除技能的占位命令。
  */
 function unregisterSkillPlaceholder(skillName) {
   remoteToolsState().placeholders.delete(skillName);
 }
-//@ chunk-e6aww6q8.js:643429-643597 placement
+//@ chunk-5xgkngpb.js:653851-654019 placement
 /**
  * 命令是否为同步技能的占位命令（与登记的占位同一对象或同一提示生成函数）。
  */
@@ -592,7 +596,7 @@ function isSyncedSkillPlaceholder(placeholder) {
         tracked.getPromptForCommand === placeholder.getPromptForCommand))
   );
 }
-//@ chunk-e6aww6q8.js:643597-643802 placement
+//@ chunk-5xgkngpb.js:654019-654224 placement
 /**
  * 从占位、已列出技能与挂起下载中去掉不在给定集合里的项，返回删除数。
  */
@@ -608,7 +612,7 @@ function pruneSyncedSkillState(liveNames) {
   for (let key of pendingDownloads.keys()) if (!liveNames.has(key)) pendingDownloads.delete(key);
   return removed;
 }
-//@ chunk-e6aww6q8.js:643802-644014 placement
+//@ chunk-5xgkngpb.js:654224-654436 placement
 /**
  * 列出同步技能命令：占位命令（排除已被替换的）加上已列出技能的命令。
  */
@@ -620,7 +624,7 @@ function getSyncedSkillCommands() {
     ...Array.from(listedSkills.values()).flatMap((entry) => (entry.command ? [entry.command] : [])),
   ];
 }
-//@ chunk-e6aww6q8.js:644014-644108 placement
+//@ chunk-5xgkngpb.js:654436-654530 placement
 /**
  * 技能已列出、没有命令且被扣留。
  */
@@ -628,7 +632,7 @@ function isWithheldSkill(skillName) {
   let entry = remoteToolsState().listedSkills.get(skillName);
   return entry !== undefined && !entry.command && entry.withheld === true;
 }
-//@ chunk-e6aww6q8.js:644108-644192 placement
+//@ chunk-5xgkngpb.js:654530-654614 placement
 /**
  * 被扣留技能的占位命令列表。
  */
@@ -637,7 +641,7 @@ function withheldSkillPlaceholders() {
     isWithheldSkill(name) ? [placeholder] : [],
   );
 }
-//@ chunk-e6aww6q8.js:644192-644312 placement
+//@ chunk-5xgkngpb.js:654614-654734 placement
 /**
  * 技能是否以插件形式同步：满足前置条件、未被否决、开启了插件同步且其他条件成立。
  */
@@ -652,7 +656,7 @@ function isSkillsAsPluginsActive(session) {
     isSkillsCustomizationAllowed()
   );
 }
-//@ chunk-e6aww6q8.js:644312-644416 placement
+//@ chunk-5xgkngpb.js:654734-654838 placement
 /**
  * 托管 worker 或已转换技能列表询问时，在技能以插件形式同步的前提下是否转换技能列表询问。
  */
@@ -663,7 +667,7 @@ function shouldConvertSkillsListAsks(session) {
     isSkillsAsPluginsActive(session)
   );
 }
-//@ chunk-e6aww6q8.js:644416-644791 placement
+//@ chunk-5xgkngpb.js:654838-655213 placement
 /**
  * 本地非远程会话中异步判定是否把技能列表请求转为插件形式，结果锁定到会话状态（同时只有一个判定在途）。
  */
@@ -692,7 +696,7 @@ function primeSkillsListAskConversion(session, listAsks) {
     });
   featureValues.convertedSkillsSkillsListPin = pinPromise;
 }
-//@ chunk-e6aww6q8.js:644791-644991 placement
+//@ chunk-5xgkngpb.js:655213-655413 placement
 function isConvertedSkillsAsPlugins(session) {
   let featureValues = SESSION_FEATURE_VALUES_SLOT.of(session);
   featureValues.convertedSkillsAsPlugins ??=
@@ -702,14 +706,14 @@ function isConvertedSkillsAsPlugins(session) {
     (Boolean(env.CLAUDE_CODE_SYNC_PLUGINS) || getAccountPluginsSyncEnabled());
   return featureValues.convertedSkillsAsPlugins;
 }
-//@ chunk-e6aww6q8.js:644991-645056 placement
+//@ chunk-5xgkngpb.js:655413-655478 placement
 /**
  * 技能转成插件时使用的列表固定标记。
  */
 function convertedSkillsListPin(session) {
   return SESSION_FEATURE_VALUES_SLOT.peek(session)?.convertedSkillsSkillsListPin;
 }
-//@ chunk-e6aww6q8.js:645056-645129 placement
+//@ chunk-5xgkngpb.js:655478-655551 placement
 /**
  * 宿主类型是否为 hosted worker，或本地且非远程/协作。
  */
@@ -717,7 +721,7 @@ function isHostedWorkerOrLocal() {
   let hostKind = sessionHostKind();
   return hostKind === "hosted_worker" || (hostKind === "none" && !isRemoteOrCowork());
 }
-//@ chunk-e6aww6q8.js:645129-645300 placement
+//@ chunk-5xgkngpb.js:655551-655722 placement
 /**
  * 按键合并两组行：已有行若在新行中有同键项则经合并函数合成，再与新行一起按键去重。
  */
@@ -737,7 +741,7 @@ function mergeRowsByKey(sessionRows, accountRows, keyOf, carryMarketplaceInfo) {
     keyOf,
   );
 }
-//@ chunk-e6aww6q8.js:645300-646136 placement
+//@ chunk-5xgkngpb.js:655722-656561 placement
 /**
  * 对比远端列表与本地清单，计算要下载的项（新增或名称/版本/更新时间变化）、要删除的项、沿用项与在用目录；名字非法或目录名冲突时记诊断并沿用旧行。
  */
@@ -798,12 +802,12 @@ function planSyncDownloads(
     carryoverOwningLiveDir,
   };
 }
-//@ chunk-e6aww6q8.js:646136-646146 placement
+//@ chunk-5xgkngpb.js:656561-656571 placement
 /**
  * 延迟重列的最大轮数（6）。
  */
 var MAX_DEFERRED_RELIST_ROUNDS = 6;
-//@ chunk-e6aww6q8.js:646146-646200 placement
+//@ chunk-5xgkngpb.js:656571-656625 placement
 /**
  * 插件同步是否生效（未被否决且环境或账号开启）。
  */
@@ -811,35 +815,35 @@ function isPluginsSyncActive(session) {
   if (getPluginsSyncVetoed()) return false;
   return isPluginsSyncEnvOn(session) || getAccountPluginsSyncEnabled();
 }
-//@ chunk-e6aww6q8.js:646200-646257 placement
+//@ chunk-5xgkngpb.js:656625-656682 placement
 /**
  * 环境变量或会话引用同步是否开启。
  */
 function isPluginsSyncEnvOn(session) {
   return env.CLAUDE_CODE_SYNC_PLUGINS || isSessionRefsSyncEnabled(session);
 }
-//@ chunk-e6aww6q8.js:646257-646294 placement
+//@ chunk-5xgkngpb.js:656682-656719 placement
 /**
  * 插件同步是否活着（开启且未被否决）。
  */
 function isPluginsSyncLive(session) {
   return isPluginsSyncEnvOn(session) && !getPluginsSyncVetoed();
 }
-//@ chunk-e6aww6q8.js:646294-646369 placement
+//@ chunk-5xgkngpb.js:656719-656794 placement
 /**
  * 插件安装超时（环境变量，默认 30 秒）。
  */
 function pluginInstallTimeoutMs() {
   return env.CLAUDE_CODE_SYNC_PLUGINS_INSTALL_TIMEOUT_MS ?? 30000;
 }
-//@ chunk-e6aww6q8.js:646369-646438 placement
+//@ chunk-5xgkngpb.js:656794-656863 placement
 /**
  * 插件 MCP 启动超时（环境变量，默认 10 秒）。
  */
 function pluginMcpTimeoutMs() {
   return env.CLAUDE_CODE_SYNC_PLUGINS_MCP_TIMEOUT_MS ?? 1e4;
 }
-//@ chunk-e6aww6q8.js:646438-646511 placement
+//@ chunk-5xgkngpb.js:656863-656936 placement
 /**
  * 启动首轮插件同步（只触发一次）并返回其 Promise。
  */
@@ -848,7 +852,7 @@ function startFirstPluginsSync(session, credentials) {
     startup: true,
   });
 }
-//@ chunk-e6aww6q8.js:646511-646622 placement
+//@ chunk-5xgkngpb.js:656936-657047 placement
 /**
  * 启动时触发首轮插件同步（只触发一次），返回其 Promise。
  */
@@ -858,7 +862,7 @@ function runFirstPluginsSync(session, credentials) {
   });
   return session.pluginsSync.firstSyncPromise;
 }
-//@ chunk-e6aww6q8.js:646622-646788 placement
+//@ chunk-5xgkngpb.js:657047-657213 placement
 /**
  * CCR 非交互会话在开启 CLAUDE_CODE_CCR_EARLY_PLUGINS_SYNC 时提前开始插件同步。
  */
@@ -875,7 +879,7 @@ function startEarlyPluginsSync(session, credentials, vetoCondition) {
   startFirstPluginsSync(session, credentials);
   return true;
 }
-//@ chunk-e6aww6q8.js:646788-647017 placement
+//@ chunk-5xgkngpb.js:657213-657442 placement
 /**
  * 取消延迟重列表与在途请求，排在上一轮之后重新跑一轮插件同步。
  */
@@ -888,7 +892,7 @@ function rerunPluginsSync(session, credentials) {
     .finally(() => cancelDeferredRelist(session));
   return session.pluginsSync.firstSyncPromise;
 }
-//@ chunk-e6aww6q8.js:647017-647187 placement
+//@ chunk-5xgkngpb.js:657442-657612 placement
 function scheduleDeferredRelist(session, credentials) {
   let pluginsSync = session.pluginsSync;
   cancelDeferredRelist(session);
@@ -903,7 +907,7 @@ function scheduleDeferredRelist(session, credentials) {
   );
   pluginsSync.deferredRelist.unref?.();
 }
-//@ chunk-e6aww6q8.js:647187-647235 placement
+//@ chunk-5xgkngpb.js:657612-657660 placement
 /**
  * 已同步插件目录排序后拼成一行的键。
  */
@@ -911,14 +915,14 @@ function syncedPluginDirsKey() {
   return getSyncedPluginDirs().toSorted().join(`
 `);
 }
-//@ chunk-e6aww6q8.js:647235-647301 placement
+//@ chunk-5xgkngpb.js:657660-657726 placement
 /**
  * 上轮完整列表里是否还有待删除项。
  */
 function hasRemovalOwed(pluginsSync) {
   return (pluginsSync.lastCompleteList?.removalOwed.size ?? 0) > 0;
 }
-//@ chunk-e6aww6q8.js:647301-647417 placement
+//@ chunk-5xgkngpb.js:657726-657842 placement
 function cancelDeferredRelist(session) {
   let pluginsSync = session.pluginsSync;
   if (pluginsSync.deferredRelist !== null) {
@@ -926,7 +930,7 @@ function cancelDeferredRelist(session) {
     pluginsSync.deferredRelist = null;
   }
 }
-//@ chunk-e6aww6q8.js:647417-647465 placement
+//@ chunk-5xgkngpb.js:657842-657890 placement
 /**
  * 插件同步记录的错误列表。
  */
@@ -934,8 +938,6 @@ function pluginsSyncErrors(session) {
   return session.pluginsSync.syncErrors;
 }
 export {
-  getSyncedSkillCommands,
-  refreshVetoAndRead,
   isSkillsSyncActive,
   isPluginsSyncActive,
   startFirstPluginsSync,
@@ -948,22 +950,13 @@ export {
   rerunPluginsSync,
   refreshSkillsSyncVeto,
   pluginsSyncErrors,
-  startEarlyPluginsSync,
-  refreshAccountSkillsSyncFlag,
-  primeSkillsListAskConversion,
+  isSkillsAsPluginsActive,
+  isSkillsSyncEnvOn,
+  getSyncedSkillCommands,
   removeSyncedSkillDir,
-  withheldSkillPlaceholders,
-  isWithheldSkill,
-  startPendingDownload,
-  listedSkillText,
-  isSyncedSkillPlaceholder,
-  isSkillDownloadPending,
-  removeSyncedSkillHooksFor,
-  hasPendingSkillDownload,
   readManifestText,
   parseManifestJson,
   parseValidRows,
-  skillSwitchedOffText,
   stringArray,
   omitKeys_2,
   mergeManifestRows,
@@ -972,7 +965,6 @@ export {
   planSyncDownloads,
   readReuseStamp,
   syncedPluginDirsKey,
-  isSkillsAsPluginsActive,
   checkReuseWindow,
   syncReuseWithinMs,
   scheduleDeferredRelist,
@@ -982,8 +974,17 @@ export {
   writeOrClearReuseStamp,
   hasRemovalOwed,
   lastCompleteRoundPath,
-  isSkillsSyncEnvOn,
+  refreshVetoAndRead,
+  isSkillsSyncForced,
+  isSyncedSkillPlaceholder,
+  hasPendingSkillDownload,
+  startPendingDownload,
+  skillSwitchedOffText,
   MAX_SYNCED_SKILL_BYTES,
+  removeSyncedSkillHooksFor,
+  startEarlyPluginsSync,
+  refreshAccountSkillsSyncFlag,
+  primeSkillsListAskConversion,
   isSessionRefsSkillsSyncOn,
   readSkillsSyncSettingAlt,
   isAccountSkillsSyncDenied,
@@ -995,4 +996,8 @@ export {
   registerPendingDownload,
   unregisterSkillPlaceholder,
   pruneGoneSkillDirs,
+  withheldSkillPlaceholders,
+  isWithheldSkill,
+  listedSkillText,
+  isSkillDownloadPending,
 };

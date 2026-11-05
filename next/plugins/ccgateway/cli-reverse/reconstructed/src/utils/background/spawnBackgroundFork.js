@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。派生后台分叉会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (19)
  * attribution: placement 19
  */
 import { randomUUID } from "crypto";
@@ -35,8 +35,11 @@ import {
   getCurrentSessionAiTitle,
   getCurrentSessionAgentColor,
 } from "../sessionStorage.js";
+import { isAccepted } from "../codeMode/accepted.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { codeModeBackgroundNotice } from "../foresightStatus.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { commandQueueManager, isPassiveMainAgentCommand } from "../messageQueueManager.js";
+import { getProcessQueue, isPassiveMainThreadCommand } from "../messageQueueManager.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import {
   getReplConfigArgv,
@@ -68,7 +71,7 @@ import {
   setCurrentWorktreeSession,
 } from "../worktree.js";
 import { isLinkedWorktree, findCanonicalGitRoot, findGitRoot } from "../git.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { getQueuedCommandAttachments } from "../attachments.js";
 import { imageLimitsForModel } from "../attachmentMedia.js";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../debug.js";
@@ -130,7 +133,7 @@ import { isAgentsFleetEnabled } from "../fleetGates.js";
 import { isAdoptEnabled, backgroundWorkSummary } from "../../tasks/backgroundTaskLabels.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppStateSession, useAppState } from "../../state/AppState.js";
-import { useSetVoiceState } from "../../context/voice.js";
+import { useTaskFramework } from "../../context/voice.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useCommandQueueOrDefault } from "../../context/QueuedMessageContext.js";
 import { useRef, useEffect, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -144,20 +147,20 @@ import { Text } from "../../ink/components/Text.js";
 import { isLocalCommandMarkup } from "../messages/localCommandTags.js";
 import { COMMAND_MESSAGE, BASH_STDOUT, BASH_STDERR } from "../../constants/xml.js";
 import { isAgentColorName } from "../../tools/AgentTool/agentColorManager.js";
-import { allWorkingDirectories_2 } from "../permissions/filesystem.js";
+import { additionalWorkingDirectoriesOf } from "../permissions/filesystem.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:63939-64004 placement
+//@ chunk-czq1j3j2.js:64483-64548 placement
 function selectToolPermissionContextAlwaysDenyRules(appState) {
   return appState.toolPermissionContext.alwaysDenyRules;
 }
-//@ chunk-18hwfzwa.js:64004-64037 placement
-function selectTasks_4(appState) {
+//@ chunk-czq1j3j2.js:64548-64581 placement
+function selectTasks_5(appState) {
   return appState.tasks;
 }
-//@ chunk-18hwfzwa.js:64037-64599 placement
+//@ chunk-czq1j3j2.js:64581-65197 placement
 /**
  * 生成后台会话名时的超时时间。
  */
@@ -179,6 +182,12 @@ var call = async (onDone, context, args) => {
     );
     return null;
   }
+  if (isAccepted() && isCodeModeEnabled()) {
+    onDone(codeModeBackgroundNotice(), {
+      display: "system",
+    });
+    return null;
+  }
   let trimmed = (args ?? "").trim();
   let backgroundSeed = deriveBackgroundSeed(context.messages, trimmed);
   if (backgroundSeed === null) {
@@ -195,7 +204,7 @@ var call = async (onDone, context, args) => {
 };
 var SESSION_NAME_TIMEOUT_MS = 3000;
 var COORDINATOR_FORK_REFUSAL = "Forking is not available in coordinator sessions. Use /branch instead.";
-//@ chunk-18hwfzwa.js:64599-71221 placement
+//@ chunk-czq1j3j2.js:65197-71887 placement
 /**
  * 派生后台分叉会话：从当前会话（或指定叶节点）复制转录、起名，并在新的后台会话中继续；协调者模式与分叉点丢失时拒绝。
  */
@@ -213,13 +222,20 @@ async function spawnBackgroundFork(
 ) {
   let queuedCommands = options?.keepParent
     ? []
-    : (options?.handoffRecord?.revivals ?? pendingResumeNotices(commandQueueManager()));
+    : (options?.handoffRecord?.revivals ?? pendingResumeNotices(getProcessQueue()));
   if (options?.keepParent && isCoordinatorMode_2())
     return {
       ok: false,
       error: COORDINATOR_FORK_REFUSAL,
       queued: false,
       reason: "coordinator_mode",
+    };
+  if (isAccepted() && isCodeModeEnabled())
+    return {
+      ok: false,
+      error: codeModeBackgroundNotice(),
+      queued: false,
+      reason: "repl_mode",
     };
   let resumeAtLeaf = options?.keepParent ? options.resumeAtLeaf : undefined;
   let forkPointIndex =
@@ -288,7 +304,7 @@ async function spawnBackgroundFork(
       : null;
   })();
   let to = relocation?.to;
-  let bgIsolationNone = getInitialSettings_2().worktree?.bgIsolation === "none";
+  let bgIsolationNone = getInitialSettings().worktree?.bgIsolation === "none";
   let editsIn = (() => {
     if (!options?.keepParent || relocation !== null) return;
     if (findGitRoot(getOriginalCwd()) === null) return;
@@ -565,7 +581,7 @@ async function spawnBackgroundFork(
     editsIn,
   };
 }
-//@ chunk-18hwfzwa.js:71221-71427 placement
+//@ chunk-czq1j3j2.js:71887-72093 placement
 async function appendContinuedInRecord(currentSessionFile, sessionId, continuedSessionId, storageV5) {
   let sessionId_2 = normalizeUuidOrNull(sessionId);
   let continuedInSessionId = normalizeUuidOrNull(continuedSessionId);
@@ -583,7 +599,7 @@ async function appendContinuedInRecord(currentSessionFile, sessionId, continuedS
     });
   });
 }
-//@ chunk-18hwfzwa.js:71427-72536 placement
+//@ chunk-czq1j3j2.js:72093-73202 placement
 async function snapshotParentTranscript(
   currentSessionFile,
   jobShortId,
@@ -664,7 +680,7 @@ async function snapshotParentTranscript(
   }
   return snapshotPath;
 }
-//@ chunk-18hwfzwa.js:72536-72705 placement
+//@ chunk-czq1j3j2.js:73202-73371 placement
 async function removeSnapshotJobDir(jobShortId, storageV5) {
   if (storageV5 !== undefined && isValidKeySegment(jobShortId)) {
     await storageV5
@@ -680,7 +696,7 @@ async function removeSnapshotJobDir(jobShortId, storageV5) {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-18hwfzwa.js:72705-73174 placement
+//@ chunk-czq1j3j2.js:73371-73840 placement
 async function queueRescueRow(options) {
   let { sessionFile, forkSessionId, jobDir, prev, forkArgs, storageV5 } = options;
   let forkSessionFile = join(dirname(sessionFile), `${forkSessionId}.jsonl`);
@@ -714,7 +730,7 @@ async function queueRescueRow(options) {
       },
     );
 }
-//@ chunk-18hwfzwa.js:73174-73543 placement
+//@ chunk-czq1j3j2.js:73840-74209 placement
 /**
  * 把会话记录复制到救援会话的存储键下，失败时清理目标。
  */
@@ -739,7 +755,7 @@ async function copyTranscriptForRescue(sessionFile, targetFile, storageV5) {
   }
   await copyFile(sessionFile, targetFile);
 }
-//@ chunk-18hwfzwa.js:73543-73685 placement (2.1.88 match: getPaneBackendExecutor, 0.689)
+//@ chunk-czq1j3j2.js:74209-74351 placement (2.1.88 match: getPaneBackendExecutor, 0.689)
 /**
  * 删除一个文件：若路径映射到存储后端则删后端键，否则 rm -f。与 pane 后端无关。
  */
@@ -753,7 +769,7 @@ async function deleteFileOrStoreEntry(filePath, storageV5) {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-18hwfzwa.js:73685-73839 placement
+//@ chunk-czq1j3j2.js:74351-74505 placement
 async function writeAdoptHandoff(jobShortId, payload, storageV5) {
   let jobDir = getJobDir(jobShortId);
   let storage = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
@@ -771,7 +787,7 @@ async function writeAdoptHandoff(jobShortId, payload, storageV5) {
     storage,
   );
 }
-//@ chunk-18hwfzwa.js:73839-74205 placement
+//@ chunk-czq1j3j2.js:74505-74871 placement
 /**
  * 生成 Artifact 评论监视器未能转到后台会话时的提示。
  */
@@ -788,7 +804,7 @@ ${artifactRepliesStopNotice(result.adopted.adopted_frame_live)}`
       : "";
   return lostNote + adoptedNote;
 }
-//@ chunk-18hwfzwa.js:74205-75541 placement
+//@ chunk-czq1j3j2.js:74871-76206 placement
 async function forkSessionToBackground(options) {
   let handoffRecord = takeHandoffRecord(options.messages, options.queue);
   let adoptable = await serializeAdoptable(options.tasks, options.queue);
@@ -870,8 +886,9 @@ async function forkSessionToBackground(options) {
     frameLiveLost: options.exitsAfterward ? frameLiveCount : 0,
   };
 }
-//@ chunk-18hwfzwa.js:75541-75608 placement
+//@ chunk-czq1j3j2.js:76206-76296 placement
 function canBackgroundSession(messages) {
+  if (isAccepted() && isCodeModeEnabled()) return false;
   return (
     isAgentsFleetEnabled() &&
     !isBgSession() &&
@@ -880,13 +897,13 @@ function canBackgroundSession(messages) {
     deriveBackgroundSeed(messages, "") !== null
   );
 }
-//@ chunk-18hwfzwa.js:75608-77358 placement
+//@ chunk-czq1j3j2.js:76296-78048 placement
 function BackgroundAndExit(props) {
   let $ = useMemoCache(11);
   let { messages, isMidTurn, responseStreaming } = props;
   let appStoreDirect = useAppStoreDirect();
-  let setVoiceState = useSetVoiceState();
-  let { storageV5, credentials } = useTheme_2();
+  let storageV5 = useTaskFramework();
+  let { storageV5: storageV5_2, credentials } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let startedRef = useRef(false);
   let onEffect;
@@ -897,9 +914,9 @@ function BackgroundAndExit(props) {
     $[2] !== messages ||
     $[3] !== commandQueueOrDefault ||
     $[4] !== responseStreaming ||
-    $[5] !== storageV5 ||
+    $[5] !== storageV5_2 ||
     $[6] !== appStoreDirect ||
-    $[7] !== setVoiceState
+    $[7] !== storageV5
   ) {
     onEffect = () => {
       if (startedRef.current) {
@@ -941,9 +958,9 @@ function BackgroundAndExit(props) {
           alwaysAllowRules: context.toolPermissionContext.alwaysAllowRules,
           alwaysDenyRules: context.toolPermissionContext.alwaysDenyRules,
           tasks: context.tasks,
-          taskRegistry: setVoiceState,
+          taskRegistry: storageV5,
           queue: commandQueueOrDefault,
-          storageV5,
+          storageV5: storageV5_2,
           credentials,
         });
         if (result.ok) {
@@ -954,7 +971,7 @@ function BackgroundAndExit(props) {
 ${summary.summary} couldn't be moved and ${summary.count === 1 ? "was" : "were"} stopped.`
               : "";
           let carriedNote = describeCarriedTasks(workflowAgents);
-          placeholderJobNameScore(storageV5, true);
+          placeholderJobNameScore(storageV5_2, true);
           await gracefulShutdown(0, "prompt_input_exit", {
             suppressResumeHint: true,
             finalMessage:
@@ -979,8 +996,8 @@ ${carriedNote}`
       isMidTurn,
       responseStreaming,
       appStoreDirect,
-      setVoiceState,
       storageV5,
+      storageV5_2,
       credentials,
       commandQueueOrDefault,
     ];
@@ -989,9 +1006,9 @@ ${carriedNote}`
     $[2] = messages;
     $[3] = commandQueueOrDefault;
     $[4] = responseStreaming;
-    $[5] = storageV5;
+    $[5] = storageV5_2;
     $[6] = appStoreDirect;
-    $[7] = setVoiceState;
+    $[7] = storageV5;
     $[8] = onEffect;
     $[9] = deps;
   } else {
@@ -1009,7 +1026,7 @@ ${carriedNote}`
   } else label = $[10];
   return label;
 }
-//@ chunk-18hwfzwa.js:77358-78019 placement
+//@ chunk-czq1j3j2.js:78048-78707 placement
 function deriveBackgroundSeed(messages, fallbackIntent, defaultIntent = "(backgrounded)") {
   let intent = fallbackIntent;
   let sawUserTurn = false;
@@ -1053,7 +1070,7 @@ function deriveBackgroundSeed(messages, fallbackIntent, defaultIntent = "(backgr
     detail: assistantDetail,
   };
 }
-//@ chunk-18hwfzwa.js:78019-82204 placement
+//@ chunk-czq1j3j2.js:78707-82894 placement
 /**
  * /background 与退出时“移到后台”的完整流程组件：确认、生成种子名、调用 spawnBackgroundFork 把当前对话 fork 成后台作业，处理拒绝(tengu_background_declined)与失败提示。
  */
@@ -1064,11 +1081,11 @@ function BackgroundForkFlow(props) {
   let appState = useAppState(selectSessionEffort);
   let appState_2 = useAppState(getPermissionModeCycle);
   let appState_3 = useAppState(promptProactivityLevel);
-  let appState_4 = useAppState(allWorkingDirectories_2);
+  let appState_4 = useAppState(additionalWorkingDirectoriesOf);
   let appState_5 = useAppState(getAlwaysAllowRules);
   let appState_6 = useAppState(selectToolPermissionContextAlwaysDenyRules);
-  let tasks = useAppState(selectTasks_4);
-  let setVoiceState = useSetVoiceState();
+  let tasks = useAppState(selectTasks_5);
+  let seedInfo = useTaskFramework();
   let { storageV5, credentials } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let summary;
@@ -1153,7 +1170,7 @@ function BackgroundForkFlow(props) {
     $[28] !== seed ||
     $[29] !== appState ||
     $[30] !== storageV5 ||
-    $[31] !== setVoiceState ||
+    $[31] !== seedInfo ||
     $[32] !== tasks ||
     $[33] !== workflowAgents_2
   ) {
@@ -1175,7 +1192,7 @@ function BackgroundForkFlow(props) {
           alwaysAllowRules: appState_5,
           alwaysDenyRules: appState_6,
           tasks,
-          taskRegistry: setVoiceState,
+          taskRegistry: seedInfo,
           queue: commandQueueOrDefault,
           storageV5,
           credentials,
@@ -1230,7 +1247,7 @@ function BackgroundForkFlow(props) {
     $[28] = seed;
     $[29] = appState;
     $[30] = storageV5;
-    $[31] = setVoiceState;
+    $[31] = seedInfo;
     $[32] = tasks;
     $[33] = workflowAgents_2;
     $[34] = onEffect;
@@ -1254,7 +1271,7 @@ function BackgroundForkFlow(props) {
     $[49] !== seed ||
     $[50] !== appState ||
     $[51] !== storageV5 ||
-    $[52] !== setVoiceState ||
+    $[52] !== seedInfo ||
     $[53] !== tasks
   ) {
     deps = [
@@ -1272,7 +1289,7 @@ function BackgroundForkFlow(props) {
       prompt,
       messages,
       tasks,
-      setVoiceState,
+      seedInfo,
       storageV5,
       credentials,
       commandQueueOrDefault,
@@ -1295,7 +1312,7 @@ function BackgroundForkFlow(props) {
     $[49] = seed;
     $[50] = appState;
     $[51] = storageV5;
-    $[52] = setVoiceState;
+    $[52] = seedInfo;
     $[53] = tasks;
     $[54] = deps;
   } else deps = $[54];
@@ -1398,29 +1415,29 @@ function BackgroundForkFlow(props) {
   } else dialog = $[80];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:82204-82267 placement
+//@ chunk-czq1j3j2.js:82894-82957 placement
 function takeHandoffRecord(messages, queue) {
   return {
     revivals: pendingResumeNotices(queue),
     cronCarryNote: buildCronCarryAttachment(messages),
   };
 }
-//@ chunk-18hwfzwa.js:82267-82354 placement
+//@ chunk-czq1j3j2.js:82957-83044 placement
 /**
  * 取出命令队列里带 userResumeNotice 标记的待恢复项。
  */
 function pendingResumeNotices(commandQueueManager) {
   return commandQueueManager
     .getCommandQueue()
-    .filter((command) => command.userResumeNotice === true && isPassiveMainAgentCommand(command));
+    .filter((command) => command.userResumeNotice === true && isPassiveMainThreadCommand(command));
 }
 export {
-  takeHandoffRecord,
+  COORDINATOR_FORK_REFUSAL,
   deriveBackgroundSeed,
   spawnBackgroundFork,
+  takeHandoffRecord,
   BackgroundAndExit,
   canBackgroundSession,
-  COORDINATOR_FORK_REFUSAL,
   call,
   forkSessionToBackground,
   queueRescueRow,

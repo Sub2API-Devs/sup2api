@@ -3,9 +3,9 @@
  *
  * 提示建议退避与提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a6fbv34e.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e9t8sw6e.js (11)
  * attribution: placement 11
  */
 import { logError } from "../../utils/log.js";
@@ -15,7 +15,7 @@ import { env } from "../../utils/env.js";
 import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-a6fbv34e.js:410-466 placement
+//@ chunk-e9t8sw6e.js:410-466 placement
 /**
  * 恒返回 false 的占位判断：若为 true 表示提示建议由插件/其他路径负责，cli 侧不再执行（logSuggestionSuppressed 记 plugin_owns）。
  */
@@ -27,7 +27,7 @@ function isSuggestionOwnedByPlugin() {
     return false;
   }
 }
-//@ chunk-a6fbv34e.js:466-598 placement
+//@ chunk-e9t8sw6e.js:466-598 placement
 /**
  * 提示建议退避的常量：连续未使用阈值、已展示提示的标记值、退避期间每隔多少轮才给一次、首次启动后的最短时间与退避提示文案。
  */
@@ -44,7 +44,7 @@ var BACK_OFF_NOTICE_PARTS = [
     dim: true,
   },
 ];
-//@ chunk-a6fbv34e.js:598-794 placement
+//@ chunk-e9t8sw6e.js:598-794 placement
 /**
  * 提示建议是否处于退避：连续未使用达阈值、未被环境变量强制开启、且首次启动已超过两周。
  */
@@ -56,7 +56,7 @@ function isSuggestionBackOffActive() {
   if (Date.now() - Date.parse(globalConfig.firstStartTime ?? "1970-01-01") < MIN_INSTALL_AGE_MS) return false;
   return true;
 }
-//@ chunk-a6fbv34e.js:794-945 placement
+//@ chunk-e9t8sw6e.js:794-945 placement
 /**
  * 记录一次提示建议是否被使用：使用则清零并结束退避，否则累计连续未使用次数，达阈值时写入全局配置。
  */
@@ -73,7 +73,7 @@ function recordSuggestionOutcome(used, storageV5, promptSuggestion) {
     saveGlobalConfig(setUnusedStreakToThreshold, storageV5);
   }
 }
-//@ chunk-a6fbv34e.js:945-993 placement
+//@ chunk-e9t8sw6e.js:945-993 placement
 /**
  * 用户在 /config 里重新打开提示建议时调用：清零连续未使用计数，并以 via_config_toggle=true 结束退避（走可靠写入与结束事件）。
  */
@@ -81,7 +81,7 @@ function endBackOffFromConfigToggle(storageV5, promptSuggestionRun) {
   if (promptSuggestionRun) promptSuggestionRun.unusedInARow = 0;
   endSuggestionBackOff(storageV5, true);
 }
-//@ chunk-a6fbv34e.js:993-1143 placement
+//@ chunk-e9t8sw6e.js:993-1143 placement
 function logPromptSuggestionBackOff(storageV5) {
   if (!isBackOffNoticeUnclaimed(getGlobalConfig()) || !isSuggestionBackOffActive()) return false;
   saveGlobalConfig(
@@ -97,7 +97,7 @@ function logPromptSuggestionBackOff(storageV5) {
   logFeatureOk("prompt_suggestion_back_off_notice");
   return true;
 }
-//@ chunk-a6fbv34e.js:1143-1490 placement
+//@ chunk-e9t8sw6e.js:1143-1490 placement
 /**
  * 结束提示建议退避：清零连续未使用计数，若原本处于退避则可靠写入并上报结束事件。
  */
@@ -123,7 +123,7 @@ function endSuggestionBackOff(storageV5, viaConfigToggle) {
       }),
     );
 }
-//@ chunk-a6fbv34e.js:1490-1560 placement
+//@ chunk-e9t8sw6e.js:1490-1560 placement
 function clearUnusedStreak(config) {
   return getUnusedStreak(config) === 0
     ? config
@@ -132,7 +132,7 @@ function clearUnusedStreak(config) {
         promptSuggestionUnusedStreak: 0,
       };
 }
-//@ chunk-a6fbv34e.js:1560-1629 placement
+//@ chunk-e9t8sw6e.js:1560-1629 placement
 function setUnusedStreakToThreshold(config) {
   return getUnusedStreak(config) >= UNUSED_STREAK_THRESHOLD
     ? config
@@ -141,12 +141,12 @@ function setUnusedStreakToThreshold(config) {
         promptSuggestionUnusedStreak: UNUSED_STREAK_THRESHOLD,
       };
 }
-//@ chunk-a6fbv34e.js:1629-1673 placement
+//@ chunk-e9t8sw6e.js:1629-1673 placement
 function isBackOffNoticeUnclaimed(config) {
   let unusedStreak = getUnusedStreak(config);
   return unusedStreak >= UNUSED_STREAK_THRESHOLD && unusedStreak !== NOTICE_CLAIMED_STREAK;
 }
-//@ chunk-a6fbv34e.js:1673-1775 placement
+//@ chunk-e9t8sw6e.js:1673-1775 placement
 function getUnusedStreak(config) {
   let promptSuggestionUnusedStreak = config.promptSuggestionUnusedStreak;
   return typeof promptSuggestionUnusedStreak === "number" && Number.isFinite(promptSuggestionUnusedStreak)

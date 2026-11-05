@@ -3,9 +3,9 @@
  *
  * 轮询进程内存，越过 high/critical 阈值时记录 tengu_memory_threshold_crossed。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useMemoryUsage.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -14,7 +14,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-18hwfzwa.js:782963-783029 affinity
+//@ chunk-czq1j3j2.js:815582-815648 affinity
 var MEMORY_HIGH_HEAP_BYTES = 1610612736;
 var MEMORY_CRITICAL_HEAP_BYTES = 2684354560;
 var MEMORY_LEVEL_RANK = {
@@ -22,7 +22,7 @@ var MEMORY_LEVEL_RANK = {
   high: 1,
   critical: 2,
 };
-//@ chunk-18hwfzwa.js:783029-783611 fingerprint (2.1.88 match: useMemoryUsage, 0.634)
+//@ chunk-czq1j3j2.js:815648-816230 fingerprint (2.1.88 match: useMemoryUsage, 0.634)
 function useMemoryUsage(level = "high", active = true) {
   let [memoryUsage, setMemoryUsage] = useState(null);
   let statusRef = useRef("normal");

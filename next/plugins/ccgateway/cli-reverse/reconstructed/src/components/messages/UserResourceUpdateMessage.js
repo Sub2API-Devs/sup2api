@@ -3,13 +3,11 @@
  *
  * MCP 资源更新/轮询通知的显示（格式化 URI）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserResourceUpdateMessage.tsx
- * pieces: chunk-ah34pb7m.js (3), chunk-sycgf9xs.js (1)
- * attribution: fingerprint 3, file-last-pair 1
+ * pieces: chunk-2avr6cej.js (1), chunk-wjygkcr4.js (3)
+ * attribution: fingerprint 3, affinity 1
  */
-import { sep } from "path";
-import { formatUri_2, getBaseName, homeDirectory } from "../../utils/errorStackSanitize.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -17,17 +15,10 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { REFRESH_GLYPH } from "../../constants/figures.js";
 
-//@ chunk-sycgf9xs.js:1336-1535 file-last-pair
-function UserResourceUpdateMessage(t0) {
-  let resourceUri = t0;
-  if (resourceUri.startsWith("file://")) resourceUri = resourceUri.slice(7);
-  if (formatUri_2(resourceUri)) return getBaseName(resourceUri);
-  if (resourceUri.startsWith("/snapshot/")) resourceUri = resourceUri.slice(10);
-  let homeDir = homeDirectory();
-  if (homeDir && resourceUri.startsWith(homeDir + sep)) resourceUri = "~" + resourceUri.slice(homeDir.length);
-  return resourceUri;
-}
-//@ chunk-ah34pb7m.js:117725-118030 fingerprint (2.1.88 match: _temp, 0.644)
+//@ chunk-2avr6cej.js:226788-226849 fingerprint (2.1.88 match: formatUri, 1)
+var stripFileUrlPrefix = (file) => file?.replace(`file://${process.cwd()}/`, "");
+var MAX_ERROR_LENGTH = 200;
+//@ chunk-wjygkcr4.js:119417-119722 fingerprint (2.1.88 match: _temp, 0.644)
 /**
  * MCP 资源/轮询更新的一行：服务器名、格式化后的 URI（或目标）与原因。
  */
@@ -63,7 +54,7 @@ function renderResourceUpdateRow(update, i) {
     i,
   );
 }
-//@ chunk-ah34pb7m.js:118030-118489 fingerprint (2.1.88 match: parseUpdates, 1)
+//@ chunk-wjygkcr4.js:119722-120181 fingerprint (2.1.88 match: parseUpdates, 1)
 function parseUpdates(text) {
   let updates = [];
   let resourceRegex =
@@ -87,7 +78,7 @@ function parseUpdates(text) {
     });
   return updates;
 }
-//@ chunk-ah34pb7m.js:118489-118642 fingerprint (2.1.88 match: formatUri, 1)
+//@ chunk-wjygkcr4.js:120181-120334 affinity (2.1.88 match: formatUri, 1)
 function formatUri(uri) {
   if (uri.startsWith("file://")) {
     let path = uri.slice(7);
@@ -97,4 +88,4 @@ function formatUri(uri) {
   if (uri.length > 40) return uri.slice(0, 39) + "\u2026";
   return uri;
 }
-export { parseUpdates, renderResourceUpdateRow, UserResourceUpdateMessage };
+export { MAX_ERROR_LENGTH, stripFileUrlPrefix, parseUpdates, renderResourceUpdateRow };

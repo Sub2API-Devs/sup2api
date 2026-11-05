@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：迁移：把 userSettings.model 里的 claude-fable-5 改为 fable 别名（保留 [1m]）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: placement 1
  */
 import { isFirstPartyApiBackend } from "../utils/model/providers.js";
@@ -16,7 +16,7 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-cjydagjy.js:8852-9439 placement
+//@ chunk-h61dq9nz.js:9029-9616 placement
 /**
  * 迁移：把 userSettings.model 里的 claude-fable-5 改为 fable 别名（保留 [1m]）。
  */

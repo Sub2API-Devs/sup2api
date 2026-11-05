@@ -3,9 +3,9 @@
  *
  * 虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/VirtualMessageList.tsx
- * pieces: chunk-ag5x7vhf.js (33)
+ * pieces: chunk-hnxhr3bs.js (33)
  * attribution: placement 17, layout 3, file-local 2, fingerprint 4, sole-consumer 7
  */
 import {
@@ -50,11 +50,11 @@ import { useScrollChrome } from "./FullscreenLayout.js";
 import { sanitizeEventKey } from "../services/api/errors.js";
 import { plural } from "../utils/stringUtils.js";
 
-//@ chunk-ag5x7vhf.js:158361-158417 placement
+//@ chunk-hnxhr3bs.js:162661-162717 placement
 function useHandleValue(scrollViewport, select) {
   return useSyncExternalStore(scrollViewport.subscribe, () => select(scrollViewport.handle));
 }
-//@ chunk-ag5x7vhf.js:158417-158487 placement
+//@ chunk-hnxhr3bs.js:162717-162787 placement
 /**
  * 函数 bumpClawdPoseRun（姿态运行计数 +1）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。
  */
@@ -66,13 +66,13 @@ function bumpClawdPoseRun() {
   });
   return runs;
 }
-//@ chunk-ag5x7vhf.js:158487-158544 placement
+//@ chunk-hnxhr3bs.js:162787-162844 placement
 /**
  * 导出值：releaseKeptPoseIfStale（运行号过期时清除保留姿态）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。
  */
 var releaseKeptPoseIfStale = (runs) =>
   runs !== undefined && runs > getClawdPoseState().takenAfter ? clearKeptClawdPose() : undefined;
-//@ chunk-ag5x7vhf.js:158544-158647 placement
+//@ chunk-hnxhr3bs.js:162844-162947 placement
 function clearKeptPoseOnSelection(source) {
   return getClawdPoseState().kept !== undefined &&
     source.hasTextSelection() &&
@@ -80,7 +80,7 @@ function clearKeptPoseOnSelection(source) {
     ? clearKeptClawdPose()
     : undefined;
 }
-//@ chunk-ag5x7vhf.js:158647-158854 placement
+//@ chunk-hnxhr3bs.js:162947-163154 placement
 function isSelectionWithinViewport(selection, viewport) {
   let inViewport = (row) => row !== undefined && viewport.first <= row && row <= viewport.last;
   let anchorInViewport = selection.virtualAnchorRow !== undefined || inViewport(selection.anchor?.row);
@@ -89,7 +89,7 @@ function isSelectionWithinViewport(selection, viewport) {
     viewport.node !== null && selection.scope?.node === viewport.node && anchorInViewport && focusInViewport
   );
 }
-//@ chunk-ag5x7vhf.js:158854-159075 placement
+//@ chunk-hnxhr3bs.js:163154-163375 placement
 function getAbsoluteTop(element) {
   let top = 0;
   let node = element;
@@ -101,7 +101,7 @@ function getAbsoluteTop(element) {
   }
   return top;
 }
-//@ chunk-ag5x7vhf.js:159075-159213 placement
+//@ chunk-hnxhr3bs.js:163375-163513 placement
 function getNodeRowRange(requestId, element) {
   let absoluteTop = getAbsoluteTop(element);
   let height = element.yogaNode?.getComputedHeight() ?? 0;
@@ -114,11 +114,11 @@ function getNodeRowRange(requestId, element) {
         last: absoluteTop + height - 1,
       };
 }
-//@ chunk-ag5x7vhf.js:159213-159284 placement
+//@ chunk-hnxhr3bs.js:163513-163584 placement
 var requestIdForSelection = (selectionRowRange, ranges) =>
   ranges.find((range) => range.first <= selectionRowRange.first && selectionRowRange.last <= range.last)
     ?.requestId;
-//@ chunk-ag5x7vhf.js:159284-159462 placement
+//@ chunk-hnxhr3bs.js:163584-163762 placement
 function getSelectionRowRange(selection) {
   if (selection.anchor === null || selection.focus === null) return;
   let rows = [
@@ -130,7 +130,7 @@ function getSelectionRowRange(selection) {
     last: Math.max(...rows),
   };
 }
-//@ chunk-ag5x7vhf.js:159462-159576 placement
+//@ chunk-hnxhr3bs.js:163762-163876 placement
 function getSelectedRowsInViewport(selectionInfo) {
   let selectionRowRange = getSelectionRowRange(selectionInfo.selection);
   if (selectionRowRange === undefined) return;
@@ -138,13 +138,13 @@ function getSelectedRowsInViewport(selectionInfo) {
     ? requestIdForSelection(selectionRowRange, selectionInfo.rows())
     : undefined;
 }
-//@ chunk-ag5x7vhf.js:159576-159688 placement
+//@ chunk-hnxhr3bs.js:163876-163988 placement
 var getViewportRange = (handle) => ({
   node: handle.getDomElement(),
   first: handle.getViewportTop(),
   last: handle.getViewportTop() + handle.getViewportHeight() - 1,
 });
-//@ chunk-ag5x7vhf.js:159688-159856 placement
+//@ chunk-hnxhr3bs.js:163988-164156 placement
 function getSelectionCopyPayload(selectionInfo) {
   if (selectionInfo.source === undefined) return;
   let text = selectionInfo.source.hasTextSelection() ? selectionInfo.source.getSelectedText() : "";
@@ -152,7 +152,7 @@ function getSelectionCopyPayload(selectionInfo) {
     ? undefined
     : selectionValue(text, selectionInfo.rowHolding(selectionInfo.source.selection));
 }
-//@ chunk-ag5x7vhf.js:159856-159937 placement
+//@ chunk-hnxhr3bs.js:164156-164237 placement
 /**
  * 函数 selectionPayloadForAltScreen（alt-screen 下的选区载荷）；位于「虚拟滚动消息列表：按测量高度只渲染视口内的项，支持搜索高亮跳转、置顶用户提示跟踪」模块。
  */
@@ -161,9 +161,9 @@ function selectionPayloadForAltScreen(selectionInfo) {
     ? (getSelectionCopyPayload(selectionInfo) ?? getClawdPoseState().kept)
     : undefined;
 }
-//@ chunk-ag5x7vhf.js:159937-159975 placement
+//@ chunk-hnxhr3bs.js:164237-164275 placement
 var subscribeAll = (unsubscribes) => () => unsubscribes.forEach((unsubscribe) => unsubscribe?.());
-//@ chunk-ag5x7vhf.js:159975-160072 placement
+//@ chunk-hnxhr3bs.js:164275-164372 placement
 function keepSelectionPayload(selectionInfo) {
   let selectionCopyPayload = getSelectionCopyPayload(selectionInfo);
   if (selectionCopyPayload === undefined) return;
@@ -173,7 +173,7 @@ function keepSelectionPayload(selectionInfo) {
     takenAfter: getClawdPoseState().runs,
   });
 }
-//@ chunk-ag5x7vhf.js:160072-160222 placement
+//@ chunk-hnxhr3bs.js:164372-164522 placement
 /**
  * 订阅选区收起/变化事件（收起时同步、变化时清除保留的姿态），返回合并的取消订阅函数。
  */
@@ -190,12 +190,12 @@ function subscribeToSelectionEvents(selectionInfo) {
         ],
   );
 }
-//@ chunk-ag5x7vhf.js:160222-160254 layout
+//@ chunk-hnxhr3bs.js:164522-164554 layout
 var SCROLL_OFFSET_ADJUST = 3;
 var REVEAL_DEBOUNCE_MS = 250;
 var LANDED_STALE_MS = 2000;
 var REVEAL_TIMEOUT_MS = 3000;
-//@ chunk-ag5x7vhf.js:160254-160341 file-local
+//@ chunk-hnxhr3bs.js:164554-164641 file-local
 function defaultExtractSearchText(weakMap, msg) {
   let cached = weakMap.get(msg);
   if (cached !== undefined) return cached;
@@ -203,7 +203,7 @@ function defaultExtractSearchText(weakMap, msg) {
   weakMap.set(msg, lowered);
   return lowered;
 }
-//@ chunk-ag5x7vhf.js:160341-160435 layout
+//@ chunk-hnxhr3bs.js:164641-164735 layout
 function createSearchTextCache() {
   let weakMap = new WeakMap();
   return {
@@ -211,9 +211,9 @@ function createSearchTextCache() {
     extractSearchText: (msg) => defaultExtractSearchText(weakMap, msg),
   };
 }
-//@ chunk-ag5x7vhf.js:160435-160446 layout
+//@ chunk-hnxhr3bs.js:164735-164746 layout
 var STICKY_PROMPT_MAX_CHARS = 500;
-//@ chunk-ag5x7vhf.js:160446-160559 file-local
+//@ chunk-hnxhr3bs.js:164746-164859 file-local
 function stickyPromptText(promptText, msg) {
   if (msg === undefined) return null;
   let cached = promptText.get(msg);
@@ -222,7 +222,7 @@ function stickyPromptText(promptText, msg) {
   promptText.set(msg, result);
   return result;
 }
-//@ chunk-ag5x7vhf.js:160559-160996 fingerprint (2.1.88 match: computeStickyPromptText, 0.933)
+//@ chunk-hnxhr3bs.js:164859-165297 fingerprint (2.1.88 match: computeStickyPromptText, 0.933)
 function computeStickyPromptText(msg) {
   let raw = null;
   if (msg.type === "user") {
@@ -242,7 +242,7 @@ function computeStickyPromptText(msg) {
   if (t.startsWith("<") || t === "") return null;
   return t;
 }
-//@ chunk-ag5x7vhf.js:160996-161474 fingerprint (2.1.88 match: VirtualItem, 0.854)
+//@ chunk-hnxhr3bs.js:165297-165775 fingerprint (2.1.88 match: VirtualItem, 0.854)
 function VirtualItem({
   itemKey,
   msg,
@@ -275,7 +275,7 @@ function VirtualItem({
     }),
   });
 }
-//@ chunk-ag5x7vhf.js:161474-172316 fingerprint (2.1.88 match: VirtualMessageList, 0.833)
+//@ chunk-hnxhr3bs.js:165775-176618 fingerprint (2.1.88 match: VirtualMessageList, 0.833)
 /**
  * 虚拟滚动消息列表：useVirtualScroll 计算可见区间，只挂载视口内的 VirtualItem；支持搜索索引（warmSearchIndex/setSearchQuery）、高亮跳转与 StickyTracker 置顶提示。
  */
@@ -897,7 +897,7 @@ function VirtualMessageList({
               let itemElement = getItemElement(cellIsBlank);
               let range =
                 itemElement && hasStringUuid(msg)
-                  ? getNodeRowRange(countToolCallsSince_3(msg), itemElement)
+                  ? getNodeRowRange(getStableMessageKey(msg), itemElement)
                   : undefined;
               return range ? [range] : [];
             });
@@ -1044,14 +1044,14 @@ function VirtualMessageList({
     ],
   });
 }
-//@ chunk-ag5x7vhf.js:172316-172392 sole-consumer
+//@ chunk-hnxhr3bs.js:176618-176694 sole-consumer
 function scrollToElement(handle, node, computedTop) {
   let topMargin = leadingTopMargin(node);
   handle.scrollTo(computedTop + topMargin);
   handle.scrollToElement(node, topMargin);
   raiseScrollHeight(handle);
 }
-//@ chunk-ag5x7vhf.js:172392-172537 sole-consumer (2.1.88 match: dropSubtreeCache, 0.771)
+//@ chunk-hnxhr3bs.js:176694-176839 sole-consumer (2.1.88 match: dropSubtreeCache, 0.771)
 function leadingTopMargin(node) {
   let margin = 0;
   let child = node.childNodes[0];
@@ -1061,7 +1061,7 @@ function leadingTopMargin(node) {
   }
   return margin;
 }
-//@ chunk-ag5x7vhf.js:172537-172708 sole-consumer
+//@ chunk-hnxhr3bs.js:176839-177010 sole-consumer
 function findStreamingMessageIndex(messages, streamingToolUseIDs) {
   let index = messages.findIndex(
     (message) => message !== undefined && isMessageStreaming(message, streamingToolUseIDs),
@@ -1074,8 +1074,8 @@ function findStreamingMessageIndex(messages, streamingToolUseIDs) {
       message.uuid.slice(0, UUID_PREFIX_LENGTH) === streamingToolUseIDs.slice(0, UUID_PREFIX_LENGTH),
   );
 }
-//@ chunk-ag5x7vhf.js:172708-172936 sole-consumer (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_3(msg) {
+//@ chunk-hnxhr3bs.js:177010-177238 sole-consumer
+function getStableMessageKey(msg) {
   let firstBlock = msg.type === "assistant" || msg.type === "user" ? msg.message.content[0] : undefined;
   if (typeof firstBlock !== "object") return msg.uuid;
   switch (firstBlock.type) {
@@ -1087,7 +1087,7 @@ function countToolCallsSince_3(msg) {
       return msg.uuid;
   }
 }
-//@ chunk-ag5x7vhf.js:173244-173538 sole-consumer
+//@ chunk-hnxhr3bs.js:177546-177840 sole-consumer
 function reportMessageHole(host, index, messages, neighborsNote) {
   if (!claimOnceStore.of(host).claim("vml-message-hole")) return;
   let describeMessage = (message) =>
@@ -1097,13 +1097,13 @@ function reportMessageHole(host, index, messages, neighborsNote) {
     `undefined at messages[${index}] (len=${messages.length} ${neighborsNote} neighbors=[${describeMessage(messages[index - 1])},${describeMessage(messages[index + 1])}])`;
   logError(new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(errorText));
 }
-//@ chunk-ag5x7vhf.js:173538-173726 sole-consumer
+//@ chunk-hnxhr3bs.js:177840-178028 sole-consumer
 function reportItemKeysDesync(host, keysLength, messagesLength, range) {
   if (!claimOnceStore.of(host).claim("vml-keys-desync")) return;
   let errorText = `VirtualMessageList: itemKeys/messages length desync (keys=${keysLength} messages=${messagesLength} range=[${range[0]},${range[1]}))`;
   logError(new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(errorText));
 }
-//@ chunk-ag5x7vhf.js:173726-173905 sole-consumer
+//@ chunk-hnxhr3bs.js:178028-178207 sole-consumer
 function LayoutSubscriber(props) {
   let $ = useMemoCache(4);
   let { onLayout } = props;
@@ -1124,7 +1124,7 @@ function LayoutSubscriber(props) {
   useEffect(subscribeEffect, subscribeDeps);
   return null;
 }
-//@ chunk-ag5x7vhf.js:173905-175325 fingerprint (2.1.88 match: StickyTracker, 0.777)
+//@ chunk-hnxhr3bs.js:178207-179627 fingerprint (2.1.88 match: StickyTracker, 0.777)
 function StickyTracker({
   messages,
   start,
@@ -1237,7 +1237,7 @@ function StickyTracker({
   });
   return null;
 }
-//@ chunk-ag5x7vhf.js:175824-176529 placement
+//@ chunk-hnxhr3bs.js:180126-180831 placement
 /**
  * 增量计算消息列表的 React key：复用前缀缓存，重复 key 加 #N 后缀并只上报一次重复。
  */
@@ -1286,9 +1286,9 @@ function computeItemKeys(messages, getKey, cache, describe = (message) => saniti
   return cache.keys;
 }
 export {
+  bumpClawdPoseRun,
+  releaseKeptPoseIfStale,
   VirtualMessageList,
   selectionPayloadForAltScreen,
   subscribeToSelectionEvents,
-  bumpClawdPoseRun,
-  releaseKeptPoseIfStale,
 };

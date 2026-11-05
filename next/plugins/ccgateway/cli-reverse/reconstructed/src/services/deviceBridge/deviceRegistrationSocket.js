@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。设备注册 WebSocket：向设备桥公告本机工具、心跳、重连与争用退避。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksxq075c.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ad8gs4gj.js (30)
  * attribution: placement 30
  */
 import { hostname } from "os";
@@ -82,10 +82,10 @@ import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { NOT_HELD_LEASE } from "../remoteTools/lease.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ksxq075c.js:1585-9343 placement
+//@ chunk-ad8gs4gj.js:1619-9377 placement
 /**
  * 设备注册会话：心跳、重连、争用退避
  */
@@ -481,7 +481,7 @@ class DeviceRegistrationSession {
     }
   }
 }
-//@ chunk-ksxq075c.js:9343-9955 placement
+//@ chunk-ad8gs4gj.js:9377-9989 placement
 /**
  * 设备工具注册表（按组设置、去重）
  */
@@ -522,7 +522,7 @@ function createDeviceToolRegistry() {
     subscribe: signal.subscribe,
   };
 }
-//@ chunk-ksxq075c.js:9955-10251 placement
+//@ chunk-ad8gs4gj.js:9989-10285 placement
 /**
  * 按名字去重工具并记录丢弃
  */
@@ -547,7 +547,7 @@ function dedupeToolsByName(toolGroups) {
     hash: bunHashOf(jsonStringify(mapped)),
   };
 }
-//@ chunk-ksxq075c.js:10251-10351 placement
+//@ chunk-ad8gs4gj.js:10285-10385 placement
 /**
  * 设备桥接 RPC 的常量：状态值、JSON-RPC 内部错误码、令牌截止符号、合成初始化 id、最大消息大小。
  */
@@ -557,7 +557,7 @@ var JSONRPC_INTERNAL_ERROR;
 var TOKEN_DEADLINE_SYMBOL;
 var SYNTHETIC_INIT_ID;
 var MAX_BRIDGE_MESSAGE_BYTES;
-deferInit("chunk-ksxq075c.js:10251", () => {
+deferInit("chunk-ad8gs4gj.js:10285", () => {
   RPC_STATE_IDLE = 0;
   WS_OPEN = 1;
   JSONRPC_INTERNAL_ERROR = -32603;
@@ -565,7 +565,7 @@ deferInit("chunk-ksxq075c.js:10251", () => {
   SYNTHETIC_INIT_ID = "__synthetic_init__";
   MAX_BRIDGE_MESSAGE_BYTES = 33554432;
 });
-//@ chunk-ksxq075c.js:10351-10473 placement
+//@ chunk-ad8gs4gj.js:10385-10507 placement
 function openBridgeWebSocket(url) {
   let socket = new globalThis.WebSocket(url, {
     proxy: getWebSocketProxyUrl(url),
@@ -574,7 +574,7 @@ function openBridgeWebSocket(url) {
   socket.binaryType = "arraybuffer";
   return socket;
 }
-//@ chunk-ksxq075c.js:10473-16507 placement
+//@ chunk-ad8gs4gj.js:10507-16541 placement
 /**
  * 设备桥 WebSocket 传输
  */
@@ -952,7 +952,7 @@ class DeviceBridgeTransport {
     });
   };
 }
-//@ chunk-ksxq075c.js:16507-16679 placement
+//@ chunk-ad8gs4gj.js:16541-16713 placement
 /**
  * MCP initialize 请求
  */
@@ -971,16 +971,16 @@ function buildInitializeRequest() {
     },
   };
 }
-//@ chunk-ksxq075c.js:16679-16753 placement (2.1.88 match: _temp, 1)
+//@ chunk-ad8gs4gj.js:16713-16787 placement (2.1.88 match: _temp, 1)
 /**
  * 判断响应是否针对合成 initialize 请求。
  */
 function isSyntheticInitResponse(r) {
   return "id" in r && r.id === SYNTHETIC_INIT_ID && ("result" in r || "error" in r);
 }
-//@ chunk-ksxq075c.js:16753-16862 placement
+//@ chunk-ad8gs4gj.js:16787-16896 placement
 var JSONRPC_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ksxq075c.js:16753", () => {
+deferInit("chunk-ad8gs4gj.js:16787", () => {
   JSONRPC_RESPONSE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       jsonrpc: literal("2.0"),
@@ -991,7 +991,7 @@ deferInit("chunk-ksxq075c.js:16753", () => {
     }),
   );
 });
-//@ chunk-ksxq075c.js:16862-16935 placement
+//@ chunk-ad8gs4gj.js:16896-16969 placement
 /**
  * 解析 JSON-RPC 响应里的 id（解析失败返回 undefined）。
  */
@@ -999,7 +999,7 @@ function getJsonRpcResponseId(frame) {
   let parsed = JSONRPC_RESPONSE_SCHEMA().safeParse(frame);
   return parsed.success ? parsed.data.id : undefined;
 }
-//@ chunk-ksxq075c.js:16935-17375 placement
+//@ chunk-ad8gs4gj.js:16969-17409 placement
 /**
  * 解码 WebSocket 帧并限制大小
  */
@@ -1038,7 +1038,7 @@ function decodeSocketFrame(data) {
     kind: "unsupported",
   };
 }
-//@ chunk-ksxq075c.js:17375-17568 placement
+//@ chunk-ad8gs4gj.js:17409-17602 placement
 /**
  * 服务组只读视图
  */
@@ -1054,7 +1054,7 @@ function servingGroupView(kit) {
     deps: kit.deps,
   };
 }
-//@ chunk-ksxq075c.js:17568-17913 placement
+//@ chunk-ad8gs4gj.js:17602-17947 placement
 /**
  * 原生与透传工具定义视图
  */
@@ -1081,7 +1081,7 @@ function deviceToolDefinitions(registry) {
     },
   };
 }
-//@ chunk-ksxq075c.js:17913-18131 placement
+//@ chunk-ad8gs4gj.js:17947-18165 placement
 /**
  * 原生设备工具的公告
  */
@@ -1099,7 +1099,7 @@ function toNativeToolAnnouncement(tool) {
         },
       ];
 }
-//@ chunk-ksxq075c.js:18131-18390 placement
+//@ chunk-ad8gs4gj.js:18165-18424 placement
 /**
  * 透传工具的公告
  */
@@ -1123,7 +1123,7 @@ function toPassthroughToolAnnouncement(tool) {
     },
   ];
 }
-//@ chunk-ksxq075c.js:18390-18635 placement
+//@ chunk-ad8gs4gj.js:18424-18669 placement
 /**
  * 挑出工具注解字段
  */
@@ -1144,7 +1144,7 @@ function pickToolAnnotations({ title, readOnlyHint, destructiveHint, openWorldHi
   };
   return Object.keys(picked).length > 0 ? picked : undefined;
 }
-//@ chunk-ksxq075c.js:18635-18955 placement
+//@ chunk-ad8gs4gj.js:18669-18989 placement
 /**
  * 从 _meta 取工具提示
  */
@@ -1169,7 +1169,7 @@ function toolHintsFromMeta(meta) {
   };
   return Object.keys(hints).length > 0 ? hints : undefined;
 }
-//@ chunk-ksxq075c.js:18955-20076 placement
+//@ chunk-ad8gs4gj.js:18989-20110 placement
 /**
  * 构建信息对象（版本、时间、git sha 等），用于上报。
  */
@@ -1182,10 +1182,10 @@ var buildInfo =
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   } !== "undefined"
@@ -1193,15 +1193,15 @@ var buildInfo =
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
     : "unknown";
-//@ chunk-ksxq075c.js:20076-20159 placement
+//@ chunk-ad8gs4gj.js:20110-20193 placement
 /**
  * 生成设备名：主机名加会话 id 后缀。
  */
@@ -1210,11 +1210,11 @@ function deviceNameForSession(device, sessionId) {
   let sessionSlug = slugifyName(sessionIdBody(sessionId).slice(-SESSION_SLUG_CHARS), SESSION_SLUG_CHARS);
   return sessionSlug ? `${deviceSlug}-cc-${sessionSlug}` : deviceSlug;
 }
-//@ chunk-ksxq075c.js:20159-20283 placement
+//@ chunk-ad8gs4gj.js:20193-20317 placement
 function getDeviceBridgePath(baseUrl, orgUuid, accountUuid, deviceKey) {
   return `${baseUrl}/devices/${encodeURIComponent(orgUuid)}_${encodeURIComponent(accountUuid)}/${encodeURIComponent(deviceKey)}/bridge`;
 }
-//@ chunk-ksxq075c.js:20283-20539 placement
+//@ chunk-ad8gs4gj.js:20317-20573 placement
 /**
  * WebSocket 地址是否与 API 同源
  */
@@ -1236,7 +1236,7 @@ function isSameOriginWsUrl(urlA, urlB) {
     (parsedA.protocol === "wss:" || (parsedA.protocol === "ws:" && isLoopback))
   );
 }
-//@ chunk-ksxq075c.js:20539-20717 placement
+//@ chunk-ad8gs4gj.js:20573-20751 placement
 /**
  * 设备桥地址（环境变量或按 OAuth 环境）
  */
@@ -1251,7 +1251,7 @@ function getDeviceBridgeUrl() {
       return;
   }
 }
-//@ chunk-ksxq075c.js:20717-24949 placement
+//@ chunk-ad8gs4gj.js:20751-24984 placement
 /**
  * 启动设备注册：通过 WebSocket 设备桥公告本机工具、心跳与重连。
  */
@@ -1546,7 +1546,7 @@ function startDeviceRegistration(options) {
         : servingKitRef.current.kit.heldServedCall(call),
   };
 }
-//@ chunk-ksxq075c.js:24949-26363 placement
+//@ chunk-ad8gs4gj.js:24984-26398 placement
 /**
  * 建立设备桥连接
  */
@@ -1640,7 +1640,7 @@ async function openDeviceBridge({
       })()),
   };
 }
-//@ chunk-ksxq075c.js:26363-26652 placement
+//@ chunk-ad8gs4gj.js:26398-26687 placement
 /**
  * 传输事件转键
  */
@@ -1659,7 +1659,7 @@ function describeTransportEvent(event) {
       return;
   }
 }
-//@ chunk-ksxq075c.js:26652-27389 placement
+//@ chunk-ad8gs4gj.js:26687-27424 placement
 /**
  * 记录设备桥传输事件遥测
  */
@@ -1704,7 +1704,7 @@ function logTransportEvent(event) {
       return;
   }
 }
-//@ chunk-ksxq075c.js:27389-28025 placement
+//@ chunk-ad8gs4gj.js:27424-28060 placement
 /**
  * 记录设备桥存活事件遥测
  */
@@ -1741,7 +1741,7 @@ function logLivenessEvent(event) {
       return;
   }
 }
-//@ chunk-ksxq075c.js:28025-28304 placement
+//@ chunk-ad8gs4gj.js:28060-28339 placement
 /**
  * 加载远程工具与透传服务组
  */
@@ -1763,7 +1763,7 @@ async function loadServingGroupProviders(offReason) {
     }
   return [];
 }
-//@ chunk-ksxq075c.js:28304-28458 placement
+//@ chunk-ad8gs4gj.js:28339-28493 placement
 /**
  * 依次执行并收集清理函数
  */
@@ -1786,7 +1786,7 @@ function runCleanups(cleanups, context) {
       }
     });
 }
-//@ chunk-ksxq075c.js:28458-28844 placement
+//@ chunk-ad8gs4gj.js:28493-28879 placement
 /**
  * 连接帧公告的工具
  */
@@ -1802,7 +1802,7 @@ function announcedToolsForConnect(registry) {
     tool_count: definitions.length,
     serves_bash: mapped.includes(BASH_TOOL_NAME),
     serves_powershell: mapped.includes(POWERSHELL_TOOL_NAME),
-    mcp_tool_count: count(mapped, (toolName) => toolName.includes("__")),
+    mcp_tool_count: countWhere(mapped, (toolName) => toolName.includes("__")),
   });
   return definitions;
 }

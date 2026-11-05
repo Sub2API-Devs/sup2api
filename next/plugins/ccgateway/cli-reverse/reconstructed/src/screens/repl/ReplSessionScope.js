@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。REPL 会话作用域（控制器生命周期）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
  * attribution: placement 11
  */
 import { randomUUID } from "crypto";
@@ -37,7 +37,7 @@ import {
   provisionContentReplacementState,
   reconstructContentReplacementState,
 } from "../../utils/toolResultStorage.js";
-import { runningTurnRegistry, extractReadFilesFromMessages } from "../../utils/queryHelpers.js";
+import { runningTurnRegistry, restoreRemoteFileState } from "../../utils/queryHelpers.js";
 import {
   waitForAgentTranscriptFlush,
   normalizeAgentMessagesForApi,
@@ -91,7 +91,7 @@ import { todoToolsEnabled } from "../../utils/sessionKind.js";
 import { arraysEqual } from "../../utils/collections.js";
 import { logError } from "../../utils/log.js";
 import { getUserMsgOptIn, isWorkspaceRestricted, setReplBridgeActive } from "../../bootstrap/state.js";
-import { alwaysFalseFlag } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { getManagedFilePath } from "../../utils/settings/managedPath.js";
 import { managedFolderCondition } from "../../plugins/functionHooks/sites/promptContextSites.js";
@@ -125,12 +125,12 @@ import { mcpServerStatusSnapshots } from "../../services/mcp/config.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:186519-186606 placement
+//@ chunk-czq1j3j2.js:191316-191403 placement
 function activeToolNames(tools, allowed) {
   if (allowed === null) return tools;
   return tools.filter((tool) => allowed.has(tool.name) || REMOTE_SAFE_COMMANDS.has(tool));
 }
-//@ chunk-18hwfzwa.js:186606-186742 placement
+//@ chunk-czq1j3j2.js:191403-191539 placement
 var SESSION_SCOPE_DEFAULTS = [
   "commands",
   "dynamicMcpConfig",
@@ -140,11 +140,11 @@ var SESSION_SCOPE_DEFAULTS = [
   "mainThreadAgentDefinition",
   "combinedInitialTools",
 ];
-//@ chunk-18hwfzwa.js:186742-186808 placement (2.1.88 match: useMainLoopModel, 1)
+//@ chunk-czq1j3j2.js:191539-191605 placement (2.1.88 match: useMainLoopModel, 1)
 function selectMainLoopModels(state) {
   return [state.mainLoopModel, state.mainLoopModelForSession];
 }
-//@ chunk-18hwfzwa.js:186808-201323 placement
+//@ chunk-czq1j3j2.js:191605-206121 placement
 /**
  * REPL 会话作用域：持有 readFileState、会话环境变量、工具状态、MCP 初始客户端、对话框传输、API key 校验、插件状态 toast 等会话级单例。
  */
@@ -588,7 +588,7 @@ class ReplSessionScope {
       todoTools,
       isWorkspaceRestricted(),
       policyVerdictRebuildKey(),
-      alwaysFalseFlag(),
+      isCodeModeEnabled(),
     );
   }
   refreshOnNextMicrotask = () => {
@@ -848,10 +848,10 @@ class ReplSessionScope {
     }
     return this.verdicts;
   }
-  mergeReadFileStateFrom(messages, cwd) {
+  mergeReadFileStateFrom(from, into) {
     this.readFileState = mergeFileStateCaches(
       this.readFileState,
-      extractReadFilesFromMessages(messages, cwd, READ_FILE_STATE_CACHE_SIZE),
+      restoreRemoteFileState(from, into, READ_FILE_STATE_CACHE_SIZE),
     );
   }
   reseatIsolationLatch(latch) {
@@ -873,7 +873,7 @@ class ReplSessionScope {
     });
   }
 }
-//@ chunk-18hwfzwa.js:201323-201457 placement
+//@ chunk-czq1j3j2.js:206121-206255 placement
 function hasAnyOf(primitiveToolGrant, other) {
   if (primitiveToolGrant === other) return true;
   if (primitiveToolGrant === undefined || other === undefined || primitiveToolGrant.size !== other.size)
@@ -881,7 +881,7 @@ function hasAnyOf(primitiveToolGrant, other) {
   for (let item of primitiveToolGrant) if (!other.has(item)) return false;
   return true;
 }
-//@ chunk-18hwfzwa.js:201457-202036 placement
+//@ chunk-czq1j3j2.js:206255-206834 placement
 function assembleSessionTools(key, other) {
   return (
     key.toolPermissionContext === other.toolPermissionContext &&
@@ -899,11 +899,11 @@ function assembleSessionTools(key, other) {
     key.waitForMcpServersDeclared === other.waitForMcpServersDeclared
   );
 }
-//@ chunk-18hwfzwa.js:202036-202061 placement
+//@ chunk-czq1j3j2.js:206834-206859 placement
 function alwaysFalseSessionScope(state) {
   return false;
 }
-//@ chunk-18hwfzwa.js:202061-202241 placement
+//@ chunk-czq1j3j2.js:206859-207039 placement
 /**
  * 记住上一次参数与结果，参数逐个相同时直接返回缓存结果。
  */
@@ -924,7 +924,7 @@ function memoizeLast(fn) {
     return result;
   };
 }
-//@ chunk-18hwfzwa.js:202241-202607 placement
+//@ chunk-czq1j3j2.js:207039-207406 placement
 function runWithQueryParams({ store, scope, readPendingQueryParams }) {
   return createQueryEngine({
     run: query,
@@ -940,12 +940,12 @@ function runWithQueryParams({ store, scope, readPendingQueryParams }) {
     hostOwnsModel: true,
   });
 }
-//@ chunk-18hwfzwa.js:202607-202611 placement
+//@ chunk-czq1j3j2.js:207406-207410 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:202607", () => {
+deferInit("chunk-czq1j3j2.js:207406", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:202611-202646 placement
+//@ chunk-czq1j3j2.js:207410-207445 placement
 var REMOUNT_SETTLE_MS = 5000;
 var BRIDGE_RETRY_DELAYS_MS = [2000, 8000, 30000];
-export { ReplSessionScope, runWithQueryParams, REMOUNT_SETTLE_MS, BRIDGE_RETRY_DELAYS_MS };
+export { REMOUNT_SETTLE_MS, BRIDGE_RETRY_DELAYS_MS, ReplSessionScope, runWithQueryParams };

@@ -3,15 +3,15 @@
  *
  * 写共享记忆前的密钥检查，命中即拒绝写入。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/teamMemorySync/teamMemSecretGuard.ts
- * pieces: chunk-a477qqne.js (1)
+ * pieces: chunk-b3a6nm9h.js (1)
  * attribution: fingerprint 1
  */
 import { scanSecretsInVariants } from "../memoryStore/memoryKeys.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-a477qqne.js:26963-27326 fingerprint (2.1.88 match: checkTeamMemSecrets, 0.518)
+//@ chunk-b3a6nm9h.js:27001-27364 fingerprint (2.1.88 match: checkTeamMemSecrets, 0.518)
 /**
  * 写团队/共享记忆前检查密钥，命中则拒绝（reason=secret），提示记忆存储不是放凭证的地方。
  */
@@ -21,7 +21,7 @@ function checkTeamMemSecrets(content) {
   return {
     outcome: "refused",
     reason: "secret",
-    message: `Content contains potential secrets (${uniq(matches.map((match) => match.label)).join(", ")}) and cannot be written to memory. Memory stores are never a place for credentials, and project stores are shared with every collaborator. Remove the sensitive content and try again.`,
+    message: `Content contains potential secrets (${normalizeCaseForComparison_2(matches.map((match) => match.label)).join(", ")}) and cannot be written to memory. Memory stores are never a place for credentials, and project stores are shared with every collaborator. Remove the sensitive content and try again.`,
   };
 }
 export { checkTeamMemSecrets };

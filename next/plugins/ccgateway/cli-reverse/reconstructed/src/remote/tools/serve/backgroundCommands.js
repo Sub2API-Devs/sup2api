@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：服务端后台命令登记与拒绝信封
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (11)
+ * attribution: placement 10, layout 1
  */
 import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
@@ -37,10 +37,11 @@ import {
   takeServedBackgroundStopRequest,
 } from "./servedBackgroundShells.js";
 import { registerCleanup } from "../../../utils/cleanupRegistry.js";
+import { REQUEST_REAUTHORED } from "../reauthoredRequest.js";
 import { clipText } from "../protocolSchemas.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 
-//@ chunk-tr0s0d0k.js:2841-3024 placement
+//@ chunk-6d2p9h2d.js:3045-3228 placement
 function readServedBackgroundOverride() {
   try {
     let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -57,7 +58,7 @@ function readServedBackgroundOverride() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:3024-3096 placement
+//@ chunk-6d2p9h2d.js:3228-3300 placement
 function isServedNeckEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_neck", false) === true;
@@ -65,7 +66,7 @@ function isServedNeckEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:3096-3180 placement
+//@ chunk-6d2p9h2d.js:3300-3384 placement
 function isServedFrogEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_frog", true) !== false;
@@ -74,7 +75,7 @@ function isServedFrogEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:3180-3252 placement
+//@ chunk-6d2p9h2d.js:3384-3456 placement
 function isServedNutEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_nut", false) === true;
@@ -82,7 +83,7 @@ function isServedNutEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:3289-3321 placement
+//@ chunk-6d2p9h2d.js:3493-3525 placement
 /**
  * 远程工具服务端后台命令的限额：最多跟踪 4 条运行中的命令、16 条历史、输出尾部上限 8192 字节、停止轮询间隔 1 s。
  */
@@ -90,7 +91,7 @@ var SERVED_BACKGROUND_LIMITS = 4;
 var MAX_TRACKED_BACKGROUND_COMMANDS = 16;
 var MAX_BACKGROUND_OUTPUT_TAIL_BYTES = 8192;
 var BACKGROUND_STOP_POLL_MS = 1000;
-//@ chunk-tr0s0d0k.js:3321-5826 placement
+//@ chunk-6d2p9h2d.js:3525-6033 placement
 /**
  * 远程工具服务端的后台命令表：登记/停止被云会话调用的后台 shell 命令，处理时间上限与所有权。
  */
@@ -293,17 +294,21 @@ class ServedBackgroundCommands {
     return startedInfo;
   }
 }
-//@ chunk-tr0s0d0k.js:5826-5891 placement
+//@ chunk-6d2p9h2d.js:6033-6098 placement
 function pollServedBackgroundStop(taskId, onStop) {
   takeServedBackgroundStopRequest(taskId).then((requested) => {
     if (requested) onStop("stopped_by_person");
   });
 }
-//@ chunk-tr0s0d0k.js:5891-5986 placement
-function sessionModeFromStamp(facts) {
-  return facts.arrivedOver === "session" && facts.modeStamp === "present" ? facts.sessionMode : undefined;
+//@ chunk-6d2p9h2d.js:6098-6144 layout
+function isMarkedMode(modeStamp) {
+  return modeStamp === "present" || modeStamp === REQUEST_REAUTHORED;
 }
-//@ chunk-tr0s0d0k.js:5986-6083 placement
+//@ chunk-6d2p9h2d.js:6144-6232 placement
+function sessionModeFromStamp(facts) {
+  return facts.arrivedOver === "session" && isMarkedMode(facts.modeStamp) ? facts.sessionMode : undefined;
+}
+//@ chunk-6d2p9h2d.js:6232-6329 placement
 function createNoteSet() {
   let notes = new Map();
   return {
@@ -313,7 +318,7 @@ function createNoteSet() {
     lines: () => [...notes.values()],
   };
 }
-//@ chunk-tr0s0d0k.js:6083-6396 placement
+//@ chunk-6d2p9h2d.js:6329-6642 placement
 function refusedEnvelope(target, facts, code, message, options = {}) {
   let clippedMessage = clipText(message);
   return {
@@ -346,13 +351,14 @@ function refusedEnvelope(target, facts, code, message, options = {}) {
   };
 }
 export {
+  ServedBackgroundCommands,
+  readServedBackgroundOverride,
+  isServedNutEnabled,
+  isServedNeckEnabled,
+  isServedFrogEnabled,
   refusedEnvelope,
   createNoteSet,
   sessionModeFromStamp,
-  isServedNutEnabled,
   SERVED_BACKGROUND_LIMITS,
-  ServedBackgroundCommands,
-  readServedBackgroundOverride,
-  isServedNeckEnabled,
-  isServedFrogEnabled,
+  isMarkedMode,
 };

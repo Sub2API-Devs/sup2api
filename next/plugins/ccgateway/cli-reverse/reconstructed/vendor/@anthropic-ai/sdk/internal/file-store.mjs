@@ -1,18 +1,18 @@
 /**
  * @anthropic-ai/sdk/internal/file-store.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (17)
+ * pieces: chunk-m6wtswwx.js (17)
  * attribution: esm-fingerprint 15, esm-layout 2
  */
-import * as hat from "fs";
-import * as zp from "path";
-import * as BRt from "crypto";
+import * as Jpt from "fs";
+import * as Nm from "path";
+import * as pHt from "crypto";
 import { encodeUTF8 } from "./utils/bytes.mjs";
 
-//@ chunk-2cw52qnf.js:6954-7426 esm-fingerprint
-var fsp = hat.promises;
-var C_2 = hat.constants;
+//@ chunk-m6wtswwx.js:6954-7426 esm-fingerprint
+var fsp = Jpt.promises;
+var C_2 = Jpt.constants;
 var OWNER_ONLY_DIR_MODE = 448;
 var OWNER_ONLY_FILE_MODE = 384;
 var OWNER_ONLY_EXEC_MODE = 448;
@@ -35,11 +35,11 @@ var FileStoreError = (() => {
   FileStoreError.MOVE_DESTINATION_EXISTS = "already exists";
   return FileStoreError;
 })();
-//@ chunk-2cw52qnf.js:7426-7496 esm-fingerprint
+//@ chunk-m6wtswwx.js:7426-7496 esm-fingerprint
 function isPathLegal(p) {
   return p.startsWith("/") && !p.split("/").includes("..");
 }
-//@ chunk-2cw52qnf.js:7496-10714 esm-fingerprint
+//@ chunk-m6wtswwx.js:7496-10714 esm-fingerprint
 var FileStore = (() => {
   class FileStore {
     constructor(root, removedOnDispose, utf8Only = false) {
@@ -61,7 +61,7 @@ var FileStore = (() => {
         if (e.code !== "ENOENT") throw e;
         removedOnDispose = true;
       }
-      return new FileStore(zp.resolve(root), removedOnDispose, opts?.utf8 ?? false);
+      return new FileStore(Nm.resolve(root), removedOnDispose, opts?.utf8 ?? false);
     }
     async createRoot() {
       await makeDirAndAncestors(this.rootPath);
@@ -86,7 +86,7 @@ var FileStore = (() => {
       let dest = this.resolveUnderRoot(relPath);
       let payload = typeof data === "string" ? encodeUTF8(data) : data;
       this.requireUtf8(relPath, payload);
-      await makeDirsBelowRoot(this.rootPath, zp.dirname(dest));
+      await makeDirsBelowRoot(this.rootPath, Nm.dirname(dest));
       await replaceViaTemp(dest, payload, opts?.executable ?? false);
     }
     async get(relPath) {
@@ -139,7 +139,7 @@ var FileStore = (() => {
       }
       if (st.isSymbolicLink()) throw new FileStoreError(FileStoreError.IS_A_SYMLINK, relPath);
       if (!st.isFile()) throw new FileStoreError(FileStoreError.NOT_A_FILE, relPath);
-      let rel = zp.relative(this.rootPath, dest).split(zp.sep).join("/");
+      let rel = Nm.relative(this.rootPath, dest).split(Nm.sep).join("/");
       return this.hashViaCache(rel, dest, _internals.nowNs());
     }
     async move(src, dst) {
@@ -153,7 +153,7 @@ var FileStore = (() => {
         )
       )
         throw new FileStoreError(FileStoreError.MOVE_DESTINATION_EXISTS, dst);
-      await makeDirsBelowRoot(this.rootPath, zp.dirname(d));
+      await makeDirsBelowRoot(this.rootPath, Nm.dirname(d));
       await fsp.rename(s, d);
     }
     async remove(relPath) {
@@ -183,9 +183,9 @@ var FileStore = (() => {
     resolveUnderRoot(relPath) {
       let norm = relPath.replace(/\\/g, "/").replace(/^\/+/, "");
       let parts = norm.split("/").filter((p) => p !== "" && p !== ".");
-      if (zp.posix.isAbsolute(norm) || parts.includes(".."))
+      if (Nm.posix.isAbsolute(norm) || parts.includes(".."))
         throw new FileStoreError(FileStoreError.ESCAPES_ROOT, relPath);
-      return parts.length === 0 ? this.rootPath : zp.join(this.rootPath, ...parts);
+      return parts.length === 0 ? this.rootPath : Nm.join(this.rootPath, ...parts);
     }
     requireUtf8(relPath, data) {
       if (!this.decoder) return;
@@ -231,11 +231,11 @@ var FileStore = (() => {
   FileStore.isPathLegal = isPathLegal;
   return FileStore;
 })();
-//@ chunk-2cw52qnf.js:10714-10742 esm-layout
+//@ chunk-m6wtswwx.js:10714-10742 esm-layout
 function platformSupported() {
   return O_NOFOLLOW !== 0;
 }
-//@ chunk-2cw52qnf.js:10742-11028 esm-fingerprint
+//@ chunk-m6wtswwx.js:10742-11028 esm-fingerprint
 async function makeDirAndAncestors(dir) {
   let missing = [];
   let current = dir;
@@ -248,7 +248,7 @@ async function makeDirAndAncestors(dir) {
       if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "ELOOP") throw e;
     }
     missing.push(current);
-    let parent = zp.dirname(current);
+    let parent = Nm.dirname(current);
     if (parent === current) break;
     current = parent;
   }
@@ -261,13 +261,13 @@ async function makeDirAndAncestors(dir) {
       if (e.code !== "EEXIST") throw e;
     }
 }
-//@ chunk-2cw52qnf.js:11028-11215 esm-fingerprint
+//@ chunk-m6wtswwx.js:11028-11215 esm-fingerprint
 async function makeDirsBelowRoot(root, dir) {
-  let below = zp.relative(root, dir);
+  let below = Nm.relative(root, dir);
   if (below === "") return;
   let current = root;
-  for (let part of below.split(zp.sep)) {
-    current = zp.join(current, part);
+  for (let part of below.split(Nm.sep)) {
+    current = Nm.join(current, part);
     try {
       await fsp.mkdir(current, {
         mode: OWNER_ONLY_DIR_MODE,
@@ -277,10 +277,10 @@ async function makeDirsBelowRoot(root, dir) {
     }
   }
 }
-//@ chunk-2cw52qnf.js:11215-11537 esm-fingerprint
+//@ chunk-m6wtswwx.js:11215-11537 esm-fingerprint
 async function replaceViaTemp(dest, data, isExecutable) {
   let mode = isExecutable ? OWNER_ONLY_EXEC_MODE : OWNER_ONLY_FILE_MODE;
-  let tmp = zp.join(zp.dirname(dest), `.fs-${BRt.randomBytes(8).toString("hex")}.tmp`);
+  let tmp = Nm.join(Nm.dirname(dest), `.fs-${pHt.randomBytes(8).toString("hex")}.tmp`);
   let handle;
   try {
     handle = await fsp.open(tmp, C_2.O_WRONLY | C_2.O_CREAT | C_2.O_EXCL | O_NOFOLLOW, mode);
@@ -294,7 +294,7 @@ async function replaceViaTemp(dest, data, isExecutable) {
     throw err;
   }
 }
-//@ chunk-2cw52qnf.js:11537-11812 esm-fingerprint
+//@ chunk-m6wtswwx.js:11537-11812 esm-fingerprint
 async function openRegularFile(relPath, dest) {
   let handle;
   try {
@@ -312,10 +312,10 @@ async function openRegularFile(relPath, dest) {
   }
   return handle;
 }
-//@ chunk-2cw52qnf.js:11812-12064 esm-fingerprint
+//@ chunk-m6wtswwx.js:11812-12064 esm-fingerprint
 async function hashFile(full) {
-  let digest = BRt.createHash("sha256");
-  let handle = await openRegularFile(zp.basename(full), full);
+  let digest = pHt.createHash("sha256");
+  let handle = await openRegularFile(Nm.basename(full), full);
   let buf = new Uint8Array(1048576);
   try {
     for (;;) {
@@ -328,19 +328,19 @@ async function hashFile(full) {
   }
   return digest.digest("hex");
 }
-//@ chunk-2cw52qnf.js:12064-12231 esm-fingerprint
+//@ chunk-m6wtswwx.js:12064-12231 esm-fingerprint
 async function filenamesInDir(root, under, base) {
   if (!(await requireDir(under, base))) return [];
   let out = [];
   await walk(base, (full, entry) => {
-    if (entry.isFile()) out.push([zp.relative(root, full).split(zp.sep).join("/"), full]);
+    if (entry.isFile()) out.push([Nm.relative(root, full).split(Nm.sep).join("/"), full]);
   });
   out.sort();
   return out;
 }
-//@ chunk-2cw52qnf.js:12231-12597 esm-fingerprint
+//@ chunk-m6wtswwx.js:12231-12597 esm-fingerprint
 async function symlinksInDir(root, under, base) {
-  let relOf = (full) => zp.relative(root, full).split(zp.sep).join("/");
+  let relOf = (full) => Nm.relative(root, full).split(Nm.sep).join("/");
   let st;
   try {
     st = await fsp.lstat(base, {
@@ -359,7 +359,7 @@ async function symlinksInDir(root, under, base) {
   });
   return out;
 }
-//@ chunk-2cw52qnf.js:12597-12793 esm-fingerprint
+//@ chunk-m6wtswwx.js:12597-12793 esm-fingerprint
 async function requireDir(under, base) {
   let st;
   try {
@@ -374,7 +374,7 @@ async function requireDir(under, base) {
   if (!st.isDirectory()) throw new FileStoreError(FileStoreError.NOT_A_DIRECTORY, under);
   return true;
 }
-//@ chunk-2cw52qnf.js:12793-13048 esm-fingerprint
+//@ chunk-m6wtswwx.js:12793-13048 esm-fingerprint
 async function walk(base, visit) {
   let stack = [base];
   while (stack.length) {
@@ -389,23 +389,23 @@ async function walk(base, visit) {
       throw e;
     }
     for (let entry of entries) {
-      let full = zp.join(dir, entry.name);
+      let full = Nm.join(dir, entry.name);
       visit(full, entry);
       if (entry.isDirectory() && !entry.isSymbolicLink()) stack.push(full);
     }
   }
 }
-//@ chunk-2cw52qnf.js:13048-13134 esm-fingerprint
+//@ chunk-m6wtswwx.js:13048-13134 esm-fingerprint
 function unchangedSinceHashed(cached, st) {
   return st.mtimeNs === cached.mtimeNs && st.ctimeNs === cached.ctimeNs && st.size === cached.size;
 }
-//@ chunk-2cw52qnf.js:13134-13227 esm-fingerprint
+//@ chunk-m6wtswwx.js:13134-13227 esm-fingerprint
 function oldEnoughToCache(st, walkStartNs) {
   return (
     (st.mtimeNs > st.ctimeNs ? st.mtimeNs : st.ctimeNs) < walkStartNs - _internals.timestampTrustMarginNs
   );
 }
-//@ chunk-2cw52qnf.js:13227-13356 esm-layout
+//@ chunk-m6wtswwx.js:13227-13356 esm-layout
 var TIMESTAMP_TRUST_MARGIN_NS = 2000000000n;
 var _internals = {
   hashFile,
@@ -414,7 +414,7 @@ var _internals = {
 };
 var FileStore_default = FileStore;
 var asyncDispose = Symbol.asyncDispose;
-//@ chunk-2cw52qnf.js:13356-13458 esm-fingerprint
+//@ chunk-m6wtswwx.js:13356-13458 esm-fingerprint
 if (asyncDispose)
   Object.defineProperty(FileStore.prototype, asyncDispose, {
     value: FileStore.prototype.dispose,

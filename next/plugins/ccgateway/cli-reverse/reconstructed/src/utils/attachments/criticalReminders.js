@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：关键系统提醒附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { serverHasAnyTool } from "../../services/mcp/ccrMetaMcp.js";
@@ -13,7 +13,7 @@ import { isVirtualConversationMessage } from "../../bootstrap/sessionSlices.js";
 import { getToolEndsTurnKind } from "../../services/tools/mcpResultMeta.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:3287189-3288241 placement
+//@ chunk-5xgkngpb.js:3372527-3373594 placement
 /**
  * 生成关键系统提醒附件，跳过排队命令与工具结果之后的位置。
  */

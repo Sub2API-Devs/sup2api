@@ -3,12 +3,13 @@
  *
  * 队友 inbox 轮询：读取未读消息（队友消息、权限请求/回复、计划审批、关停），按角色投递到会话或回调。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useInboxPoller.ts
- * pieces: chunk-18hwfzwa.js (6)
- * attribution: fingerprint 2, layout 2, placement 2
+ * pieces: chunk-czq1j3j2.js (6)
+ * attribution: placement 2, fingerprint 2, layout 2
  */
 import { randomUUID } from "crypto";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { isTeamLead, hasNonLeadTeammate, isTeammate, isPlanModeRequired } from "../utils/teammate.js";
 import { conversationSnapshot, InboxVerdictCache } from "../utils/inboxClassification.js";
 import { INVALID_TOOL_NAME_TEXT } from "../components/permissions/consentRows.js";
@@ -19,21 +20,21 @@ import {
 import { logForDebugging } from "../utils/debug.js";
 import { stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
-import { env } from "../utils/env.js";
 import { logEvent } from "../services/analytics/index.js";
+import { env } from "../utils/env.js";
 import { logError } from "../utils/log.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import {
   errorMessage,
   toError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../utils/errors.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { useState, useEffect, init_react_production } from "../../vendor/react/cjs/react.production.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { plural } from "../utils/stringUtils.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { dedupeMailboxMessages } from "../utils/swarm/teammateMessageRepair.js";
 import {
   getInboxPath,
@@ -88,6 +89,7 @@ import {
 } from "../utils/permissions/approvalPayloadSerialization.js";
 import { getModeBaseBehavior } from "../utils/permissions/PermissionMode.js";
 import { isClassifierSideCallRetired } from "../utils/permissions/serverClassifier/flags.js";
+import { isNetworkSandboxRestricted } from "../tools/BashTool/sandboxNetwork.js";
 import { classifySandboxNetworkHost } from "../utils/permissions/sandboxNetworkClassifier.js";
 import { askSandboxNetworkFromWorker } from "../screens/repl/SandboxNetworkPrompts.js";
 import { applyValidatedPermissionUpdate } from "../utils/permissions/PermissionUpdate.js";
@@ -97,6 +99,7 @@ import {
   teammateModeAfterPlan,
 } from "../tools/ExitPlanModeTool/planPreconditions.js";
 import { hasLeftProactivityBaseline } from "../utils/permissions/permissions.js";
+import { resolveTeamName } from "../tools/AgentTool/AgentTool.js";
 import { ensureBackendsRegistered, getBackendByType } from "../utils/swarm/backends/registry.js";
 import { isInsideTmux } from "../utils/swarm/backends/detection.js";
 import { killTeammate } from "../components/teams/TeamsDialog.js";
@@ -114,7 +117,12 @@ import {
 } from "./useSwarmPermissionPoller.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1670156-1670399 fingerprint (2.1.88 match: getAgentNameToPoll, 0.644)
+//@ chunk-czq1j3j2.js:1713038-1713042 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1713038", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1716193-1716436 fingerprint (2.1.88 match: getAgentNameToPoll, 0.644)
 function getAgentNameToPoll(identity, store) {
   switch (identity.kind) {
     case "in-process":
@@ -131,14 +139,14 @@ function getAgentNameToPoll(identity, store) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1670399-1670424 layout
+//@ chunk-czq1j3j2.js:1716436-1716461 layout
 var INBOX_POLL_DEBOUNCE_MS; // deferred: uses conversationSnapshot (../utils/inboxClassification.js) of its import cycle while loading; runs once the cycle is complete
 var emptyConversationSnapshot;
-deferInit("chunk-18hwfzwa.js:1670399", () => {
+deferInit("chunk-czq1j3j2.js:1716436", () => {
   INBOX_POLL_DEBOUNCE_MS = 1000;
   emptyConversationSnapshot = conversationSnapshot([]);
 });
-//@ chunk-18hwfzwa.js:1670424-1670708 layout
+//@ chunk-czq1j3j2.js:1716461-1716745 layout
 /**
  * 为 inbox 中引用的未知工具名生成最小工具桩（名字、显示名、只能渲染无参数的调用），MCP 工具名带 "(MCP)" 后缀。
  */
@@ -156,7 +164,7 @@ function createUnknownToolStub(toolName) {
     isMcp,
   };
 }
-//@ chunk-18hwfzwa.js:1670708-1686214 fingerprint (2.1.88 match: useInboxPoller, 0.503)
+//@ chunk-czq1j3j2.js:1716745-1732342 fingerprint (2.1.88 match: useInboxPoller, 0.504)
 /**
  * 队友 inbox 轮询器：定期读取未读消息，区分队友消息、权限请求与回复、计划审批（只接受 team-lead）、关停请求，投递到会话或对应回调并标记已读。
  */
@@ -165,16 +173,16 @@ class useInboxPoller {
   #t;
   #o = false;
   #n = 0;
-  #s = null;
   #r = null;
-  #c = 0;
+  #s = null;
+  #l = 0;
   #i = false;
   #a;
-  #l = new InboxVerdictCache();
+  #c = new InboxVerdictCache();
   #d = new Set();
-  #m = new Set();
+  #u = new Set();
   #p = new Map();
-  #u = 0;
+  #m = 0;
   #f = false;
   constructor(deps, props) {
     this.#e = deps;
@@ -184,7 +192,7 @@ class useInboxPoller {
     if (this.#o) return;
     this.#o = true;
     this.#a = this.#e.store.getState().toolPermissionContext;
-    this.#s = this.#e.store.subscribe(this.#S);
+    this.#r = this.#e.store.subscribe(this.#S);
     this.#x();
     this.#h();
     this.#g();
@@ -193,8 +201,8 @@ class useInboxPoller {
     if (!this.#o) return;
     this.#o = false;
     this.#n++;
-    this.#s?.();
-    this.#s = null;
+    this.#r?.();
+    this.#r = null;
     this.#b();
     this.#i = false;
   }
@@ -216,33 +224,33 @@ class useInboxPoller {
     let { toolPermissionContext } = this.#e.store.getState();
     if (toolPermissionContext !== this.#a) {
       this.#a = toolPermissionContext;
-      this.#l.clear();
+      this.#c.clear();
     }
     this.#h();
   };
   #h() {
     let canPoll = this.#t.enabled && !!getAgentNameToPoll(this.#e.identity, this.#e.store.getState());
-    if (canPoll && this.#r === null) this.#y();
-    else if (!canPoll && this.#r !== null) this.#b();
+    if (canPoll && this.#s === null) this.#y();
+    else if (!canPoll && this.#s !== null) this.#b();
   }
   #y() {
-    let generation = ++this.#c;
+    let generation = ++this.#l;
     let tick = () => {
-      this.#r = this.#e.setTimeout(() => {
-        if (generation !== this.#c) return;
+      this.#s = this.#e.setTimeout(() => {
+        if (generation !== this.#l) return;
         try {
           this.#v();
         } finally {
-          if (generation === this.#c) tick();
+          if (generation === this.#l) tick();
         }
       }, INBOX_POLL_DEBOUNCE_MS);
     };
     tick();
   }
   #b() {
-    this.#c++;
-    this.#r?.();
-    this.#r = null;
+    this.#l++;
+    this.#s?.();
+    this.#s = null;
   }
   #g() {
     if (!this.#t.enabled) return;
@@ -271,12 +279,12 @@ class useInboxPoller {
     let { enabled, isLoading, visibleDialogKind, onSubmitMessage, requestDialog } = this.#t;
     if (!enabled) return;
     let snapshot = this.#n;
-    let appState = store.getState();
-    let agentNameToPoll = getAgentNameToPoll(deps.identity, appState);
+    let state = store.getState();
+    let agentNameToPoll = getAgentNameToPoll(deps.identity, state);
     if (!agentNameToPoll) return;
     let unreadMessages = await deps.readUnreadMessages(
       agentNameToPoll,
-      appState.teamContext?.teamName,
+      state.teamContext?.teamName,
       storageV5,
     );
     if (snapshot !== this.#n) return;
@@ -287,9 +295,9 @@ class useInboxPoller {
     logForDebugging(`[InboxPoller] Found ${unreadMessages.length} unread message(s)`);
     let provenanceByText = dedupeMailboxMessages(
       unreadMessages,
-      getInboxPath(agentNameToPoll, appState.teamContext?.teamName),
+      getInboxPath(agentNameToPoll, state.teamContext?.teamName),
       {
-        roster: appState.teamContext?.teammates,
+        roster: state.teamContext?.teammates,
         isPaneTeammate: deps.identity.kind === "teammate",
       },
     );
@@ -348,7 +356,7 @@ class useInboxPoller {
           continue;
         }
         let permissionMode = approvalResponse.permissionMode ?? "default";
-        let modeResult = applyStartupPermissionMode(permissionMode, appState.toolPermissionContext, setState);
+        let modeResult = applyStartupPermissionMode(permissionMode, state.toolPermissionContext, setState);
         if (!modeResult.ok) {
           logForDebugging(
             `[InboxPoller] Refusing inherited mode ${permissionMode} from plan approval: ${modeResult.error}; exiting plan mode to default`,
@@ -356,26 +364,26 @@ class useInboxPoller {
               level: "warn",
             },
           );
-          applyStartupPermissionMode("default", appState.toolPermissionContext, setState);
+          applyStartupPermissionMode("default", state.toolPermissionContext, setState);
         }
         await syncTeammateMode(
           modeResult.ok ? modeResult.mode : "default",
-          appState.teamContext?.teamName,
+          state.teamContext?.teamName,
           storageV5,
         );
         logForDebugging(
           `[InboxPoller] Plan approved by team lead, exited plan mode to ${modeResult.ok ? modeResult.mode : "default"}`,
         );
       }
-    let generation = ++this.#u;
-    let state;
+    let generation = ++this.#m;
+    let state_2;
     let nextState = () =>
-      (state ??= new Promise((resolve) => {
+      (state_2 ??= new Promise((resolve) => {
         this.#p.set(generation, resolve);
       }));
     let onTick = () => {
       deps
-        .markMessagesAsRead(agentNameToPoll, appState.teamContext?.teamName, unreadMessages, storageV5)
+        .markMessagesAsRead(agentNameToPoll, state.teamContext?.teamName, unreadMessages, storageV5)
         .catch((error) => {
           logError(error);
           return false;
@@ -411,7 +419,7 @@ class useInboxPoller {
     let modeSetRequests = [];
     let leftover = [];
     for (let message of unreadMessages) {
-      if (this.#m.has(messageIdentityKey(message))) continue;
+      if (this.#u.has(messageIdentityKey(message))) continue;
       if (isForged(message)) {
         leftover.push(message);
         continue;
@@ -464,9 +472,9 @@ class useInboxPoller {
           );
       } else leftover.push(message);
     }
-    if (permissionRequests.length > 0 && isTeamLead(appState.teamContext)) {
+    if (permissionRequests.length > 0 && isTeamLead(state.teamContext)) {
       logForDebugging(`[InboxPoller] Found ${permissionRequests.length} permission request(s)`);
-      let teamName = appState.teamContext?.teamName;
+      let teamName = state.teamContext?.teamName;
       let items;
       for (let message of permissionRequests) {
         let request_ = isPermissionRequest(message.text);
@@ -514,7 +522,7 @@ class useInboxPoller {
               type: "subagent",
               agentName: hostLabel,
             },
-            toolPermissionContext: appState.toolPermissionContext,
+            toolPermissionContext: state.toolPermissionContext,
           });
         } catch (error) {
           logError(error);
@@ -667,10 +675,10 @@ class useInboxPoller {
         }
       }
     }
-    if (sandboxRequests.length > 0 && isTeamLead(appState.teamContext)) {
+    if (sandboxRequests.length > 0 && isTeamLead(state.teamContext)) {
       logForDebugging(`[InboxPoller] Found ${sandboxRequests.length} sandbox permission request(s)`);
-      let teamName = appState.teamContext?.teamName;
-      let props = this.#l;
+      let teamName = state.teamContext?.teamName;
+      let props = this.#c;
       async function runSandboxRequests(host) {
         let toolPermissionContext = store.getState().toolPermissionContext;
         let modeBaseBehavior = getModeBaseBehavior(
@@ -691,6 +699,11 @@ class useInboxPoller {
             };
           case "classify":
             if (isClassifierSideCallRetired("forwarded_sandbox_host"))
+              return {
+                resolved: false,
+                mode,
+              };
+            if (isNetworkSandboxRestricted(mode))
               return {
                 resolved: false,
                 mode,
@@ -890,9 +903,9 @@ class useInboxPoller {
         }
       }
     }
-    if (modeSetRequests.length > 0 && isTeamLead(appState.teamContext)) {
+    if (modeSetRequests.length > 0 && isTeamLead(state.teamContext)) {
       logForDebugging(`[InboxPoller] Found ${modeSetRequests.length} plan approval request(s)`);
-      let teamName = appState.teamContext?.teamName;
+      let teamName = state.teamContext?.teamName;
       for (let message of modeSetRequests) {
         let request = isPlanApprovalRequest(message.text);
         if (!request) continue;
@@ -946,12 +959,16 @@ class useInboxPoller {
       logForDebugging(`[InboxPoller] Found ${shutdownRequests.length} shutdown request(s)`);
       for (let message of shutdownRequests) leftover.push(message);
     }
-    if (shutdownApprovals.length > 0 && isTeamLead(appState.teamContext)) {
+    if (shutdownApprovals.length > 0 && isTeamLead(state.teamContext)) {
       logForDebugging(`[InboxPoller] Found ${shutdownApprovals.length} shutdown approval(s)`);
       for (let message of shutdownApprovals) {
         let approval = isShutdownApproved(message.text);
         if (!approval) continue;
-        let tmuxPaneId = Object.values(appState.teamContext?.teammates ?? {}).find(
+        if (await resolveTeamName(approval.from, message, state, storageV5)) {
+          leftover.push(message);
+          continue;
+        }
+        let tmuxPaneId = Object.values(state.teamContext?.teammates ?? {}).find(
           (backend) => backend.name === approval.from,
         )?.tmuxPaneId;
         if (approval.paneId && approval.backendType && approval.paneId === tmuxPaneId)
@@ -972,14 +989,14 @@ class useInboxPoller {
               );
             }
           })();
-        await killTeammate(approval.from, appState, setState, storageV5);
+        await killTeammate(approval.from, state, setState, storageV5);
         leftover.push(message);
       }
     }
     let mapped = leftover.map((message) => messageIdentityKey(message));
-    for (let key of mapped) this.#m.add(key);
+    for (let key of mapped) this.#u.add(key);
     let markSeen = () => {
-      for (let key of mapped) this.#m.delete(key);
+      for (let key of mapped) this.#u.delete(key);
     };
     nextState().then(markSeen);
     let passedThrough;
@@ -1002,7 +1019,7 @@ class useInboxPoller {
       return;
     }
     let text = formatTeammateMessages(passedThrough, {
-      recipientIsLead: isTeamLead(appState.teamContext),
+      recipientIsLead: isTeamLead(state.teamContext),
     });
     let cleanup = () => {
       setState((prev) => ({
@@ -1076,7 +1093,7 @@ class useInboxPoller {
     } else logForDebugging("[InboxPoller] Submission rejected, keeping messages queued");
   }
 }
-//@ chunk-18hwfzwa.js:1688080-1688778 placement
+//@ chunk-czq1j3j2.js:1734384-1735082 placement
 /**
  * React hook：创建队友 inbox 轮询器（读未读消息、标记已读、写邮箱、处理权限/沙箱回复），挂载时启动、卸载时停止，并把 enabled/isLoading/对话框/提交回调等输入同步给它。
  */
@@ -1122,9 +1139,4 @@ function useInboxPollerHook(props) {
     });
   }, [initial, enabled, isLoading, visibleDialogKind, onSubmitMessage, requestDialog]);
 }
-//@ chunk-18hwfzwa.js:1688778-1688782 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1688778", () => {
-  init_react_production();
-});
 export { useInboxPollerHook };

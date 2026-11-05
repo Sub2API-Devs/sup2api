@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/wire/size-delimited.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_to_binary } from "../../cjs/to-binary.js";
 import { require_binary_encoding } from "./binary-encoding.js";
 import { require_from_binary } from "../from-binary.js";
 
-//@ chunk-fq0cr76a.js:446147-448705 cjs-fingerprint
+//@ chunk-qg41pqt6.js:446717-449279 cjs-fingerprint
 var require_size_delimited = __commonJS(function (cjsExports) {
   var __asyncValues =
     (cjsExports && cjsExports.__asyncValues) ||
@@ -59,7 +59,7 @@ var require_size_delimited = __commonJS(function (cjsExports) {
       if (!Symbol.asyncIterator) throw TypeError("Symbol.asyncIterator is not defined.");
       var g = generator.apply(thisArg, _arguments || []);
       var i;
-      var q_2 = [];
+      var q = [];
       i = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype);
       verb("next");
       verb("throw");
@@ -77,7 +77,7 @@ var require_size_delimited = __commonJS(function (cjsExports) {
         if (g[n]) {
           i[n] = function (v) {
             return new Promise(function (a, b) {
-              if (!(q_2.push([n, v, a, b]) > 1)) resume(n, v);
+              if (!(q.push([n, v, a, b]) > 1)) resume(n, v);
             });
           };
           if (f) i[n] = f(i[n]);
@@ -87,12 +87,12 @@ var require_size_delimited = __commonJS(function (cjsExports) {
         try {
           step(g[n](v));
         } catch (e) {
-          settle(q_2[0][3], e);
+          settle(q[0][3], e);
         }
       }
       function step(r) {
         if (r.value instanceof __await) Promise.resolve(r.value.v).then(fulfill, reject);
-        else settle(q_2[0][2], r);
+        else settle(q[0][2], r);
       }
       function fulfill(value) {
         resume("next", value);
@@ -102,8 +102,8 @@ var require_size_delimited = __commonJS(function (cjsExports) {
       }
       function settle(f, v) {
         f(v);
-        q_2.shift();
-        if (q_2.length) resume(q_2[0][0], q_2[0][1]);
+        q.shift();
+        if (q.length) resume(q[0][0], q[0][1]);
       }
     };
   Object.defineProperty(cjsExports, "__esModule", {

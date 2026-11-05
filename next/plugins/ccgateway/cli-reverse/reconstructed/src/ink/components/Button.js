@@ -3,9 +3,9 @@
  *
  * <Button>：可聚焦、可点击、回车/空格触发的按钮组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/Button.tsx
- * pieces: chunk-x6v6jz2y.js (1)
+ * pieces: chunk-emhzq435.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -16,7 +16,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "./Box.js";
 
-//@ chunk-x6v6jz2y.js:17573-19217 fingerprint (2.1.88 match: Button, 0.772)
+//@ chunk-emhzq435.js:17509-19153 fingerprint (2.1.88 match: Button, 0.772)
 /**
  * <Button>：可聚焦的 Box；回车或空格触发 onAction 并短暂（100ms）进入 active 态；点击触发 onAction，但窗口激活点击与挂载后 mountSettleMs（默认 300ms）内的点击当误触丢弃；children 可为 (state)=>节点 拿到 focused/hovered/active。
  */

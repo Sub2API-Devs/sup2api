@@ -3,10 +3,10 @@
  *
  * SSE 传输：从 CCR 读取事件流（活性超时、重连、worker 能力声明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/transports/SSETransport.ts
- * pieces: chunk-fp6aqx1j.js (22), chunk-jbbd2121.js (5), chunk-wn385gmf.js (1)
- * attribution: placement 18, fingerprint 4, layout 2, sole-consumer 3, affinity 1
+ * pieces: chunk-n0aeaafb.js (5), chunk-qyz2x025.js (22), chunk-z68qgrbt.js (1)
+ * attribution: sole-consumer 3, fingerprint 4, affinity 1, placement 18, layout 2
  */
 import { toError, errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
@@ -25,16 +25,19 @@ import {
 } from "../../utils/http.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 import { getProxyFetchOptions } from "../../utils/proxy.js";
+import { ccrHasLeftSharedPool, mayComeFromOneBadMachine } from "../../utils/mtls.js";
+import { logServerStatus, retirePoolAfterNoAnswer } from "../../upstreamproxy/ccrPoolRetire.js";
 import { readRequestIdSource, isNonOriginSource } from "../../services/api/requestIdSource.js";
 import { X_CCR_SESSION_WRITERS, parseSessionWritersHeader } from "./streamEventCoalescing.js";
 import { recordPhase } from "../../utils/startupTiming.js";
 import { countJsonMembers, sliceTopLevelValues } from "../../utils/jsonScan.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { backoffDelayMs, sleep } from "../../utils/sleep.js";
+import { RELAY_TIMEOUT_MS } from "../../utils/eventLoopStallDetector.js";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wn385gmf.js:25653-25747 fingerprint (2.1.88 match: STREAM_DECODE_OPTS, 0.518)
+//@ chunk-z68qgrbt.js:6817-6910 fingerprint (2.1.88 match: STREAM_DECODE_OPTS, 0.519)
 function STREAM_DECODE_OPTS_2(message) {
   return function (...args) {
     try {
@@ -44,11 +47,11 @@ function STREAM_DECODE_OPTS_2(message) {
     }
   };
 }
-//@ chunk-jbbd2121.js:191-209 sole-consumer
+//@ chunk-n0aeaafb.js:191-209 sole-consumer
 var STREAM_DECODE_OPTS = {
   stream: true,
 };
-//@ chunk-jbbd2121.js:209-346 sole-consumer
+//@ chunk-n0aeaafb.js:209-346 sole-consumer
 function lineBreakLengthAt(text, index) {
   let code = text.charCodeAt(index);
   if (code === 10) return 1;
@@ -58,7 +61,7 @@ function lineBreakLengthAt(text, index) {
   }
   return 0;
 }
-//@ chunk-jbbd2121.js:346-577 sole-consumer
+//@ chunk-n0aeaafb.js:346-577 sole-consumer
 function findFrameDelimiter(text, from) {
   let index = from;
   while (index < text.length) {
@@ -81,7 +84,7 @@ function findFrameDelimiter(text, from) {
   }
   return null;
 }
-//@ chunk-jbbd2121.js:577-937 fingerprint (2.1.88 match: parseSSEFrames, 0.756)
+//@ chunk-n0aeaafb.js:577-937 fingerprint (2.1.88 match: parseSSEFrames, 0.757)
 /**
  * 解析一段 SSE 帧文本为 {event,data,id}；全是注释时返回 null。
  */
@@ -117,7 +120,7 @@ function parseSSEFrames(buffer) {
   }
   return frame.data || isComment ? frame : null;
 }
-//@ chunk-jbbd2121.js:937-2142 affinity
+//@ chunk-n0aeaafb.js:937-2142 affinity
 /**
  * SSE 增量解析缓冲：累积文本块，按空行切帧并逐帧派发。
  */
@@ -208,12 +211,12 @@ class SSEFrameBuffer {
     return this.pending.length === 1 ? this.pending[0] : this.pending.join("");
   }
 }
-//@ chunk-fp6aqx1j.js:142330-142344 placement
+//@ chunk-qyz2x025.js:149462-149476 placement
 /**
  * SSE 连接的建连超时 30000ms。
  */
 var SSE_CONNECT_TIMEOUT_MS = 30000;
-//@ chunk-fp6aqx1j.js:142344-142426 placement
+//@ chunk-qyz2x025.js:149476-149558 placement
 var SSE_FRAME_STALL_MS = 50;
 var SSE_MAX_PENDING_CHARS = 16384;
 var SSE_FRAME_STALL_MIN_MS = 500;
@@ -224,7 +227,7 @@ var SSE_MAX_BUFFERED_CHARS = 3;
 var SSE_TELEMETRY_MS_CAP = 3600000;
 var SSE_TELEMETRY_KIB_CAP = 1048576;
 var SSE_TELEMETRY_COUNT_CAP = 1e6;
-//@ chunk-fp6aqx1j.js:142426-145297 placement
+//@ chunk-qyz2x025.js:149558-152429 placement
 /**
  * 解码 SSE 帧并按时钟分发，检测停滞。
  */
@@ -397,7 +400,7 @@ class SSEFrameReader {
     logError(frame);
   }
 }
-//@ chunk-fp6aqx1j.js:145297-145476 placement
+//@ chunk-qyz2x025.js:152429-152608 placement
 function createReadWatch(startedAt, lastCpuMicros, { reads, bytes, before }) {
   return {
     reads,
@@ -414,38 +417,38 @@ function createReadWatch(startedAt, lastCpuMicros, { reads, bytes, before }) {
     maxGapOffsetBytes: 0,
   };
 }
-//@ chunk-fp6aqx1j.js:145476-145523 placement
+//@ chunk-qyz2x025.js:152608-152655 placement
 function isClientEventFrame(frame) {
   return frame.event === "client_event";
 }
-//@ chunk-fp6aqx1j.js:145523-145606 placement
+//@ chunk-qyz2x025.js:152655-152738 placement
 function clampTelemetryNumber(value, max) {
   return Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 0), max) : 0;
 }
-//@ chunk-fp6aqx1j.js:145606-145655 placement
+//@ chunk-qyz2x025.js:152738-152787 placement
 function logSseFrameStall(fields) {
   logForDiagnosticsNoPII("warn", "cli_sse_frame_stall", fields);
 }
-//@ chunk-fp6aqx1j.js:145655-145717 placement
+//@ chunk-qyz2x025.js:152787-152849 placement
 function processCpuMicros() {
   let usage = process.cpuUsage();
   return usage.user + usage.system;
 }
-//@ chunk-fp6aqx1j.js:145717-145793 placement
+//@ chunk-qyz2x025.js:152849-152925 placement
 function setUnrefTimer(fn, delayMs) {
   let timer = setTimeout(fn, delayMs);
   timer.unref();
   return () => clearTimeout(timer);
 }
-//@ chunk-fp6aqx1j.js:145793-145855 placement
+//@ chunk-qyz2x025.js:152925-152987 placement
 var REAL_SSE_CLOCK = {
   nowMs: () => performance.now(),
   cpuMicros: processCpuMicros,
   setTimer: setUnrefTimer,
 };
-//@ chunk-fp6aqx1j.js:145855-146071 placement
+//@ chunk-qyz2x025.js:152987-153203 placement
 var CONTENT_TYPE_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fp6aqx1j.js:145855", () => {
+deferInit("chunk-qyz2x025.js:152987", () => {
   CONTENT_TYPE_KINDS = new Map([
     ["", "none"],
     ["text/event-stream", "event-stream"],
@@ -457,7 +460,7 @@ deferInit("chunk-fp6aqx1j.js:145855", () => {
     ["text/xml", "xml"],
   ]);
 });
-//@ chunk-fp6aqx1j.js:146071-146190 placement
+//@ chunk-qyz2x025.js:153203-153322 placement
 /**
  * 把 Content-Type 头（去参数、取第一项、小写）归类为 none/event-stream/html/json/text/xml/other，用于 SSE 连接失败诊断。
  */
@@ -467,7 +470,7 @@ function classifyContentType(header) {
     .toLowerCase();
   return CONTENT_TYPE_KINDS.get(lower) ?? (lower.endsWith("+json") ? "json" : "other");
 }
-//@ chunk-fp6aqx1j.js:146190-146651 placement
+//@ chunk-qyz2x025.js:153322-153783 placement
 /**
  * worker 能力与 attestation 版本常量，以及签名等级与状态由弱到强的排序表（用于比较 meetsLevel）。
  */
@@ -479,7 +482,7 @@ var WORKER_SOCKET_PAD_1;
 var X_CCR_ATTESTATION_POLICY;
 var ATTESTATION_LEVEL_RANK;
 var ATTESTATION_STATUS_RANK;
-deferInit("chunk-fp6aqx1j.js:146190", () => {
+deferInit("chunk-qyz2x025.js:153322", () => {
   WORKER_CAPABILITIES = "worker_capabilities";
   ATTESTATION_FLOOR_1 = "attestation-floor/1";
   ATTESTATION_FLOOR_VERSION = "2";
@@ -500,7 +503,7 @@ deferInit("chunk-fp6aqx1j.js:146190", () => {
     ["unspecified", "UNSPECIFIED"],
   ]);
 });
-//@ chunk-fp6aqx1j.js:146651-147368 placement
+//@ chunk-qyz2x025.js:153783-154500 placement
 function parseAttestationPolicy(header) {
   if (header === null)
     return {
@@ -547,7 +550,7 @@ function parseAttestationPolicy(header) {
     fault: level === undefined || unknown ? "policy_partial" : undefined,
   };
 }
-//@ chunk-fp6aqx1j.js:147368-147811 placement
+//@ chunk-qyz2x025.js:154500-154971 placement
 /**
  * SSETransport 的时间与重试常量：重连退避 1s–30s、保活间隔默认 15s（上限 60s）、活性超时宽限、长轮询 25s、POST 最多 10 次（0.5–8s 退避）、永久失败状态码 401/403/404。
  */
@@ -557,6 +560,7 @@ var CLOCK_SKEW_TOLERANCE_MS;
 var DEFAULT_KEEPALIVE_INTERVAL_SECONDS;
 var MAX_KEEPALIVE_INTERVAL_SECONDS;
 var LIVENESS_TIMEOUT_GRACE_MS;
+var DEFAULT_LIVENESS_FRAME_WAIT_MS;
 var dOMException;
 var dOMException_2;
 var RECENT_LIVENESS_WINDOW_GRACE_MS;
@@ -574,14 +578,15 @@ var EVENT_STREAM_CONTENT_TYPE_RE;
 var POST_MAX_ATTEMPTS;
 var POST_RETRY_BASE_DELAY_MS;
 var POST_RETRY_MAX_DELAY_MS;
-deferInit("chunk-fp6aqx1j.js:147368", () => {
+deferInit("chunk-qyz2x025.js:154500", () => {
   RECONNECT_BASE_DELAY_MS = 1000;
   RECONNECT_MAX_DELAY_MS = 30000;
   CLOCK_SKEW_TOLERANCE_MS = 60000;
   DEFAULT_KEEPALIVE_INTERVAL_SECONDS = 15;
   MAX_KEEPALIVE_INTERVAL_SECONDS = 60;
   LIVENESS_TIMEOUT_GRACE_MS = 30000;
-  dOMException = new DOMException("no frame within the liveness timeout", "AbortError");
+  DEFAULT_LIVENESS_FRAME_WAIT_MS = 20;
+  dOMException = new DOMException("no frame within the liveness timeout, or the process slept", "AbortError");
   dOMException_2 = new DOMException("the connection is renewed", "AbortError");
   RECENT_LIVENESS_WINDOW_GRACE_MS = 15000;
   KEEPALIVE_TOLERANCE_MULTIPLIER = 3;
@@ -599,11 +604,11 @@ deferInit("chunk-fp6aqx1j.js:147368", () => {
   POST_RETRY_BASE_DELAY_MS = 500;
   POST_RETRY_MAX_DELAY_MS = 8000;
 });
-//@ chunk-fp6aqx1j.js:147811-147834 placement
+//@ chunk-qyz2x025.js:154971-154994 placement
 function acceptAnyHttpStatus() {
   return true;
 }
-//@ chunk-fp6aqx1j.js:147834-148053 placement
+//@ chunk-qyz2x025.js:154994-155213 placement
 var SESSION_EVENT_TYPES_WITH_EVENT_TYPE; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var eventTypeEnvelopeSchema;
 var HEARTBEAT_PROBE;
@@ -611,7 +616,7 @@ var OWNER_PRESENT;
 var CHECKPOINT_REQUEST;
 var EVENT_ID_FIELDS;
 var QUOTED_EVENT_ID_RE;
-deferInit("chunk-fp6aqx1j.js:147834", () => {
+deferInit("chunk-qyz2x025.js:154994", () => {
   SESSION_EVENT_TYPES_WITH_EVENT_TYPE = new Set(["workflow_launch", "queued_notification", "session_notice"]);
   eventTypeEnvelopeSchema = DoctorLazy(() =>
     objectSchema({
@@ -624,12 +629,12 @@ deferInit("chunk-fp6aqx1j.js:147834", () => {
   EVENT_ID_FIELDS = new Set(["event_id"]);
   QUOTED_EVENT_ID_RE = /^"([\w-]{1,128})"$/;
 });
-//@ chunk-fp6aqx1j.js:148053-172030 fingerprint (2.1.88 match: SSETransport, 0.512)
+//@ chunk-qyz2x025.js:155213-181669 fingerprint (2.1.88 match: SSETransport, 0.48)
 /**
  * SSETransport：从 CCR 会话流读取 SSE 帧（自动重连、Last-Event-ID），写入走 POST 到同一路径（去掉 /stream）。
  */
 let SSETransport; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fp6aqx1j.js:148053", () => {
+deferInit("chunk-qyz2x025.js:155213", () => {
   SSETransport = class SSETransport {
     url;
     state = "idle";
@@ -647,6 +652,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
     mostMembersInAFrame;
     lighterFrame;
     streamOpener;
+    leavesPoolAfterServerError;
     onFrameRefused;
     onHeartbeatProbe;
     onOwnerPresent;
@@ -669,7 +675,10 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
     connectErrorsSeen = new Set();
     livenessTimer = null;
     lastLivenessEvidenceAtMs = 0;
+    lastLivenessEvidenceMonotonicMs = 0;
     lastFrameReadAtMs = 0;
+    stopListeningForSleep;
+    frameWaitTimer = null;
     sseKeepaliveMaxIntervalSeconds;
     requireStreamEvidence;
     onUnexpectedContentType;
@@ -684,6 +693,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
     sequenceNumAtOpen = 0;
     requestStartedAtMs = 0;
     quietRedial = false;
+    redialsOnNewSocket = false;
     nonOriginPolicy;
     nonOriginStreak = null;
     postUrl;
@@ -712,6 +722,8 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         mostMembersInAFrame,
         lighterFrame,
         streamOpener,
+        leavesPoolAfterServerError,
+        onProcessSlept,
       } = {},
     ) {
       this.url = sseUrl;
@@ -729,6 +741,8 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
       this.mostMembersInAFrame = mostMembersInAFrame;
       this.lighterFrame = lighterFrame;
       this.streamOpener = streamOpener;
+      this.leavesPoolAfterServerError = leavesPoolAfterServerError;
+      this.stopListeningForSleep = onProcessSlept?.(this.onSleepNotice);
       if (initialSequenceNum !== undefined && initialSequenceNum > 0)
         this.lastSequenceNum = initialSequenceNum;
       if (deferDelivery)
@@ -784,9 +798,12 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
       this.requestStartedAtMs = performance.now();
       let quietRedial = this.quietRedial;
       this.quietRedial = false;
-      let intervalSec = clampReconnectDelay(Math.floor(Number(this.sseKeepaliveMaxIntervalSeconds?.())));
+      let redialsOnNewSocket = this.redialsOnNewSocket;
+      let maxIntervalSeconds = clampReconnectDelay(
+        Math.floor(Number(this.sseKeepaliveMaxIntervalSeconds?.())),
+      );
       this.advertisedMaxIntervalSeconds =
-        intervalSec > DEFAULT_KEEPALIVE_INTERVAL_SECONDS ? intervalSec : undefined;
+        maxIntervalSeconds > DEFAULT_KEEPALIVE_INTERVAL_SECONDS ? maxIntervalSeconds : undefined;
       this.echoedIntervalSeconds = undefined;
       this.bodyBytesThisConnection = 0;
       this.longPollEchoedSeconds = undefined;
@@ -844,6 +861,9 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
             ...getProxyFetchOptions({
               url: url.href,
             }),
+            ...((redialsOnNewSocket || (this.leavesPoolAfterServerError?.() && ccrHasLeftSharedPool())) && {
+              keepalive: false,
+            }),
           });
         let response;
         try {
@@ -864,6 +884,8 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         }
         if (timedOut) throw Error("the connect deadline fired as the response arrived");
         if (!response.ok) {
+          if (mayComeFromOneBadMachine(response.status) && this.leavesPoolAfterServerError?.())
+            logServerStatus(response.status);
           let source =
             response.status === 403
               ? readRequestIdSource((header) => response.headers.get(header))
@@ -1050,7 +1072,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
             }),
           }),
         });
-        if (this.reconnectAttempts === 0 && !quietRedial)
+        if (!this.hasEverConnected && this.reconnectAttempts === 0)
           recordPhase("sse_connect_ms", connectMs, now - performance.timeOrigin);
         if (this.reconnectAttempts > 0) {
           let downtimeSeconds = this.reconnectStartTime
@@ -1068,6 +1090,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         let hasEverConnected = this.hasEverConnected;
         this.hasEverConnected = true;
         this.state = "connected";
+        this.redialsOnNewSocket = false;
         if (this.streamOpener?.restartsBackoffAtOpen() ?? true) this.reconnectAttempts = 0;
         this.reconnectStartTime = null;
         this.resetLivenessTimer();
@@ -1094,6 +1117,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
           logForDiagnosticsNoPII("error", "cli_sse_connect_timeout", {
             timeout_ms: min,
           });
+          if (!this.streamOpener && this.leavesPoolAfterServerError?.()) retirePoolAfterNoAnswer();
           this.connectErrorsSeen.add("connect_timeout");
           this.diagConnectFailure(`no response in ${min / 1000}s`, now);
           this.handleConnectionError();
@@ -1409,14 +1433,15 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         dedupeAuthHeaders(this.headers, headers);
       }
       this.clearLivenessTimer();
-      if (reason === "renewal" && this.abortController !== null) {
+      if (reason !== "long_poll" && this.abortController !== null) {
         this.endedForRenewal.add(this.abortController);
-        this.abortController.abort(dOMException_2);
+        this.abortController.abort(reason === "renewal" ? dOMException_2 : dOMException);
       }
       this.abortController = null;
       if (this.streamOpener?.restartsBackoffAtEnd()) this.reconnectAttempts = 0;
       this.state = "reconnecting";
       this.quietRedial = reason === "long_poll";
+      this.redialsOnNewSocket = reason === "sleep";
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
         this.connect();
@@ -1559,8 +1584,76 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         this.connect();
       }, retryDelay);
     }
+    reopenAfterSleep(delayMs, reason) {
+      if (this.state !== "connected") return false;
+      if (this.frameWaitTimer) {
+        clearTimeout(this.frameWaitTimer);
+        this.frameWaitTimer = null;
+      }
+      try {
+        this.reopenAtOnce("sleep");
+      } catch (error) {
+        logForDebugging(
+          `SSETransport: Could not reconnect at once after a pause or sleep, so leaving it to the liveness timeout: ${errorMessage(error)}`,
+          {
+            level: "error",
+          },
+        );
+        return false;
+      }
+      logForDebugging(
+        `SSETransport: Reconnecting now with no backoff: the process was probably paused or asleep (the ${reason === "liveness_timer" ? "liveness timer" : "stall detector"} ran at least ${Math.round(delayMs / 1000)}s late)`,
+      );
+      logForDiagnosticsNoPII("warn", "cli_sse_reopened_after_sleep", {
+        late_ms: Math.round(delayMs),
+        seen_by: reason,
+      });
+      this.onDiagnostic?.(
+        `SSE: reconnecting at once: the process was probably paused or asleep (a check ran at least ${Math.round(delayMs / 1000)}s late)`,
+        "warn",
+        "sse_reopened_after_sleep",
+      );
+      return true;
+    }
+    onSleepNotice = (state) => {
+      if (this.state !== "connected" || this.frameWaitTimer !== null) return;
+      if (this.silentForMs() < state) {
+        logForDebugging(
+          `SSETransport: Keeping the stream after a pause or stall of at least ${Math.round(state / 1000)}s: it has connected or delivered a frame since then`,
+        );
+        return;
+      }
+      this.frameWaitTimer = setTimeout(
+        this.onFrameWaitEnd,
+        DEFAULT_LIVENESS_FRAME_WAIT_MS,
+        this.lastLivenessEvidenceMonotonicMs,
+        state,
+      );
+    };
+    onFrameWaitEnd = (lastEvidence, frameWaitTimer) => {
+      this.frameWaitTimer = null;
+      if (this.lastLivenessEvidenceMonotonicMs !== lastEvidence) {
+        logForDebugging(
+          `SSETransport: Keeping the stream after a pause or stall of at least ${Math.round(frameWaitTimer / 1000)}s: it connected or delivered a frame within ${DEFAULT_LIVENESS_FRAME_WAIT_MS} ms of the notice`,
+        );
+        return;
+      }
+      this.reopenAfterSleep(frameWaitTimer, "stall_detector");
+    };
+    silentForMs() {
+      return Math.max(
+        Date.now() - this.lastLivenessEvidenceAtMs,
+        performance.now() - this.lastLivenessEvidenceMonotonicMs,
+      );
+    }
     onLivenessTimeout = () => {
       this.livenessTimer = null;
+      let silentMs = this.silentForMs() - this.livenessTimeoutMs();
+      if (
+        (silentMs > RELAY_TIMEOUT_MS || this.frameWaitTimer !== null) &&
+        this.reopenAfterSleep(silentMs, "liveness_timer")
+      )
+        return;
       logForDebugging("SSETransport: Liveness timeout, reconnecting", {
         level: "error",
       });
@@ -1610,6 +1703,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
     }
     resetLivenessTimer() {
       this.lastLivenessEvidenceAtMs = Date.now();
+      this.lastLivenessEvidenceMonotonicMs = performance.now();
       this.clearLivenessTimer();
       this.livenessTimer = setTimeout(this.onLivenessTimeout, this.livenessTimeoutMs());
     }
@@ -1790,6 +1884,11 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
         this.reconnectTimer = null;
       }
       this.clearLivenessTimer();
+      this.stopListeningForSleep?.();
+      if (this.frameWaitTimer) {
+        clearTimeout(this.frameWaitTimer);
+        this.frameWaitTimer = null;
+      }
       this.state = "closing";
       this.nonOriginStreak = null;
       this.held = null;
@@ -1802,7 +1901,7 @@ deferInit("chunk-fp6aqx1j.js:148053", () => {
     }
   };
 });
-//@ chunk-fp6aqx1j.js:172030-172149 layout
+//@ chunk-qyz2x025.js:181669-181788 layout
 function dedupeAuthHeaders(headers, authHeaders) {
   if (authHeaders.Cookie) delete headers.Authorization;
   if (authHeaders.Authorization) {
@@ -1810,17 +1909,17 @@ function dedupeAuthHeaders(headers, authHeaders) {
     delete headers["X-Organization-Uuid"];
   }
 }
-//@ chunk-fp6aqx1j.js:172149-172199 layout
+//@ chunk-qyz2x025.js:181788-181838 layout
 function clampReconnectDelay(value) {
   return Math.min(Math.max(value, DEFAULT_KEEPALIVE_INTERVAL_SECONDS), MAX_KEEPALIVE_INTERVAL_SECONDS);
 }
-//@ chunk-fp6aqx1j.js:172199-172309 fingerprint (2.1.88 match: convertSSEUrlToPostUrl, 1)
+//@ chunk-qyz2x025.js:181838-181948 fingerprint (2.1.88 match: convertSSEUrlToPostUrl, 1)
 function convertSSEUrlToPostUrl(sseUrl) {
   let pathname = sseUrl.pathname;
   if (pathname.endsWith("/stream")) pathname = pathname.slice(0, -7);
   return `${sseUrl.protocol}//${sseUrl.host}${pathname}`;
 }
-//@ chunk-fp6aqx1j.js:172309-172333 placement
+//@ chunk-qyz2x025.js:181948-181972 placement
 /**
  * SSE 长轮询超时 180000ms 与短轮询超时 90000ms。
  */
@@ -1828,11 +1927,7 @@ var LONG_POLL_TIMEOUT_MS = 180000;
 var SHORT_POLL_TIMEOUT_MS = 90000;
 export {
   SSEFrameBuffer,
-  SSE_CONNECT_TIMEOUT_MS,
-  LONG_POLL_TIMEOUT_MS,
   SSETransport,
-  SHORT_POLL_TIMEOUT_MS,
-  STREAM_DECODE_OPTS_2,
   dOMException,
   dOMException_2,
   WORKER_CAPABILITIES,
@@ -1841,4 +1936,8 @@ export {
   X_CCR_ATTESTATION_POLICY,
   SESSION_EVENT_TYPES_WITH_EVENT_TYPE,
   ATTESTATION_FLOOR_VERSION,
+  LONG_POLL_TIMEOUT_MS,
+  SSE_CONNECT_TIMEOUT_MS,
+  SHORT_POLL_TIMEOUT_MS,
+  STREAM_DECODE_OPTS_2,
 };

@@ -1,13 +1,13 @@
 /**
  * pngjs/lib/sync-reader.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-spjgqa4y.js:45541-46188 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:45541-46188 cjs-fingerprint
 var require_sync_reader = __commonJS(function (cjsExports, cjsModule) {
   var SyncReader = (cjsModule.exports = function (buffer) {
     this._buffer = buffer;

@@ -1,0 +1,11 @@
+{"file":"chunk-n51jggtb.js","key":"@164911","name":"importHook","source":"semantic","confidence":0.85,"note":"ck318-1 A1: runInVm 的 import 钩子参数，只用于 runInContext 选项；与 @164822 的实体钩子区分"}
+{"file":"chunk-n51jggtb.js","key":"@192545","name":"request","source":"semantic","confidence":0.85,"note":"ck318-1 A2: ha 收到的是 {dispatchCtx, replToolUseID, parentMessage, input} 请求对象，不是单个上下文"}
+{"file":"chunk-czq1j3j2.js","key":"@275502","name":"workerWaitGivenUp","source":"semantic","confidence":0.85,"note":"ck318-1 B3: 放弃等待 worker 的闸门，超时后置真并被 pp/发送路径提前返回"}
+{"file":"chunk-czq1j3j2.js","key":"@275511","name":"heldWhileWaiting","source":"semantic","confidence":0.85,"note":"ck318-1 B3: 等 worker 期间消息被扣住的标志，放弃分支与发送失败处置真"}
+{"file":"chunk-5xgkngpb.js","key":"@2633258","name":"baseMap","source":"vendor","confidence":0.9,"note":"ck318-1 B5: lodash _baseMap（baseEach 遍历 + isArrayLike 建数组），现名 mapArray 是另一个 lodash 函数"}
+{"file":"chunk-5xgkngpb.js","key":"@2633374","name":"baseSortBy","source":"vendor","confidence":0.9,"note":"ck318-1 B5: lodash _baseSortBy（sort 后回填 .value）"}
+{"file":"chunk-5xgkngpb.js","key":"@4867843","name":"backgroundTimeoutMs","source":"semantic","confidence":0.85,"note":"ck318-1 #30: Moo(S) 返回的是超时毫秒数，用于 setTimeout 与 deadlineAt"}
+{"file":"chunk-w3ch4xq2.js","key":"@68373","name":"toolDefinitions","source":"semantic","confidence":0.85,"note":"ck318-1 #47: ctor 参数直接赋给 this.toolDefinitions"}
+{"file":"chunk-w3ch4xq2.js","key":"@68375","name":"canUseTool","source":"semantic","confidence":0.85,"note":"ck318-1 #48: ctor 参数直接赋给 this.canUseTool"}
+{"file":"chunk-vafj8wka.js","key":"@15734","name":"innerCallCannotQueue","source":"semantic","confidence":0.8,"note":"ck318-1 #60: 内层调用且 canQueueInput 为假；318 里已真正被读取，不再是未用占位"}
+{"file":"chunk-vxsfen55.js","key":"@39626","name":"promptUuid","source":"semantic","confidence":0.9,"note":"ck318-1 #84: 存入 pending.promptUuid，供 BGs 比对"}

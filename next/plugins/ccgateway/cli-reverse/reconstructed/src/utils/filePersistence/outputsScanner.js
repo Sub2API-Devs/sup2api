@@ -3,10 +3,10 @@
  *
  * 扫描输出目录中修改过的 .md 文件；环境类型（byoc/anthropic_cloud）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/filePersistence/outputsScanner.ts
- * pieces: chunk-23fm9f0d.js (2), chunk-82kqcve8.js (1)
- * attribution: affinity 1, fingerprint 2
+ * pieces: chunk-a2q0x549.js (1), chunk-pc3x100t.js (2)
+ * attribution: fingerprint 2, affinity 1
  */
 import { join } from "path";
 import { env } from "../env.js";
@@ -19,7 +19,7 @@ import {
   parseFrontmatter,
 } from "../frontmatterParser.js";
 
-//@ chunk-82kqcve8.js:178237-178347 fingerprint (2.1.88 match: getEnvironmentKind, 1)
+//@ chunk-a2q0x549.js:176405-176515 fingerprint (2.1.88 match: getEnvironmentKind, 1)
 /**
  * 读取 CLAUDE_CODE_ENVIRONMENT_KIND，只接受 byoc 或 anthropic_cloud。
  */
@@ -28,9 +28,9 @@ function getEnvironmentKind() {
   if (kind === "byoc" || kind === "anthropic_cloud") return kind;
   return null;
 }
-//@ chunk-23fm9f0d.js:36356-36380 affinity
+//@ chunk-pc3x100t.js:36631-36655 affinity
 var SKILL_PROPOSAL = "skill-proposal";
-//@ chunk-23fm9f0d.js:36380-36895 fingerprint (2.1.88 match: findModifiedFiles, 0.349)
+//@ chunk-pc3x100t.js:36655-37170 fingerprint (2.1.88 match: findModifiedFiles, 0.349)
 /**
  * 扫描输出目录中修改过的 .md 文件（跳过符号链接，统计错误数）。
  */

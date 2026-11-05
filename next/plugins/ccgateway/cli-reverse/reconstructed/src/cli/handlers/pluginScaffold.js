@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：`claude plugin` 脚手架：生成插件目录、manifest、示例技能/命令与 bun 脚本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-12wyw8h8.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h30gsc89.js (14)
  * attribution: placement 14
  */
 import { join, resolve, relative, sep, dirname } from "path";
@@ -22,13 +22,13 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 
-//@ chunk-12wyw8h8.js:26282-26413 placement
+//@ chunk-h30gsc89.js:23153-23284 placement
 /**
  * 插件清单 schema 地址与插件脚手架支持的组件类型。
  */
 var PLUGIN_SCHEMA_URL = "https://anthropic.com/claude-code/plugin.schema.json";
 var PLUGIN_COMPONENT_KINDS = ["skills", "agents", "hooks", "mcp", "lsp", "output-style", "channel"];
-//@ chunk-12wyw8h8.js:26413-26881 placement
+//@ chunk-h30gsc89.js:23284-23752 placement
 function pluginNameProblem(name) {
   let parsed = PluginManifestSchema().shape.name.safeParse(name);
   if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
@@ -40,7 +40,7 @@ function pluginNameProblem(name) {
   if (reserved?.severity === "error") return reserved.message;
   return null;
 }
-//@ chunk-12wyw8h8.js:26881-28004 placement
+//@ chunk-h30gsc89.js:23752-24875 placement
 function pluginManifestTemplate(options) {
   let { name, description, author } = options;
   let components = options.with ?? [];
@@ -129,7 +129,7 @@ function pluginManifestTemplate(options) {
 `;
   return files;
 }
-//@ chunk-12wyw8h8.js:28004-28600 placement
+//@ chunk-h30gsc89.js:24875-25471 placement
 /**
  * `claude plugin` 脚手架：生成插件目录、manifest、示例技能/命令与 bun 脚本模板。
  */
@@ -175,7 +175,7 @@ async function scaffoldPlugin(dir, files, options) {
     skipped,
   };
 }
-//@ chunk-12wyw8h8.js:28600-28931 placement
+//@ chunk-h30gsc89.js:25471-25802 placement
 /**
  * 生成插件技能 SKILL.md 模板。
  */
@@ -192,7 +192,7 @@ description: TODO \u2014 describe WHEN Claude should use this. Include trigger p
 TODO: what this skill does, and the steps Claude should take.
 `;
 }
-//@ chunk-12wyw8h8.js:28931-29111 placement
+//@ chunk-h30gsc89.js:25802-25982 placement
 function agentTemplate() {
   return `---
 name: example
@@ -205,7 +205,7 @@ tools:
 TODO: system prompt for the subagent.
 `;
 }
-//@ chunk-12wyw8h8.js:29111-29271 placement
+//@ chunk-h30gsc89.js:25982-26142 placement
 function hooksJsonTemplate() {
   return (
     jsonStringify(
@@ -230,7 +230,7 @@ function hooksJsonTemplate() {
 `
   );
 }
-//@ chunk-12wyw8h8.js:29271-29635 placement
+//@ chunk-h30gsc89.js:26142-26506 placement
 /**
  * 生成 SessionStart 钩子处理脚本模板。
  */
@@ -244,7 +244,7 @@ const event = JSON.parse(input)
 process.stdout.write(JSON.stringify({}))
 `;
 }
-//@ chunk-12wyw8h8.js:29635-29813 placement
+//@ chunk-h30gsc89.js:26506-26684 placement
 function mcpJsonTemplate() {
   return (
     jsonStringify(
@@ -267,7 +267,7 @@ function mcpJsonTemplate() {
 `
   );
 }
-//@ chunk-12wyw8h8.js:29813-29954 placement
+//@ chunk-h30gsc89.js:26684-26825 placement
 function lspJsonTemplate() {
   return (
     jsonStringify(
@@ -287,7 +287,7 @@ function lspJsonTemplate() {
 `
   );
 }
-//@ chunk-12wyw8h8.js:29954-30314 placement
+//@ chunk-h30gsc89.js:26825-27185 placement
 /**
  * 生成插件输出样式模板。
  */
@@ -304,7 +304,7 @@ style is active. With force-for-plugin: true, the style applies automatically
 when this plugin is enabled.
 `;
 }
-//@ chunk-12wyw8h8.js:30314-30463 placement
+//@ chunk-h30gsc89.js:27185-27334 placement
 function channelMcpJsonTemplate(name) {
   return (
     jsonStringify(
@@ -323,7 +323,7 @@ function channelMcpJsonTemplate(name) {
 `
   );
 }
-//@ chunk-12wyw8h8.js:30463-30670 placement
+//@ chunk-h30gsc89.js:27334-27541 placement
 function channelPackageJsonTemplate(name) {
   return (
     jsonStringify(
@@ -345,7 +345,7 @@ function channelPackageJsonTemplate(name) {
 `
   );
 }
-//@ chunk-12wyw8h8.js:30670-32781 placement
+//@ chunk-h30gsc89.js:27541-29652 placement
 /**
  * 生成 channel 插件的 bun server.ts 示例源码（MCP 服务器骨架），name 用于服务名。
  */

@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：remote-control 入口的设置校验、禁用诊断、启动前检查与不支持参数提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4wmk8g5n.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mq1acyeg.js (9)
  * attribution: placement 9
  */
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "./remoteControlPolicy.js";
 
-//@ chunk-4wmk8g5n.js:3700-3714 placement
+//@ chunk-mq1acyeg.js:4035-4049 placement
 var SETTINGS_VALID_SENTINEL = {};
 var BRIDGE_NOT_DISABLED_SENTINEL = {};
-//@ chunk-4wmk8g5n.js:3714-4129 placement
+//@ chunk-mq1acyeg.js:4049-4463 placement
 async function assertRemoteControlSettingsValid() {
   let { exitWithError } = await import("../utils/process.js");
-  let { getSettingsWithErrors } = await import("../utils/settings/settings.lazy.js");
+  let { getSettingsWithErrors } = await import("../utils/settings/settings.js");
   if (getSettingsWithErrors().settings.disableRemoteControl === true)
     exitWithError(`Error: ${REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE}`);
   let [{ hasStoredOAuthToken }, { BRIDGE_LOGIN_ERROR: loginErrorMessage }, { getBridgeAuthDebugInfo }] =
@@ -28,7 +28,7 @@ async function assertRemoteControlSettingsValid() {
   if (!hasStoredOAuthToken()) exitWithError(loginErrorMessage + getBridgeAuthDebugInfo());
   return SETTINGS_VALID_SENTINEL;
 }
-//@ chunk-4wmk8g5n.js:4129-4795 placement
+//@ chunk-mq1acyeg.js:4463-5129 placement
 async function diagnoseBridgeDisabled(settingsSentinel) {
   let {
     getBridgeDisabledDiagnosis,
@@ -60,7 +60,7 @@ async function diagnoseBridgeDisabled(settingsSentinel) {
   }
   return BRIDGE_NOT_DISABLED_SENTINEL;
 }
-//@ chunk-4wmk8g5n.js:4795-4997 placement
+//@ chunk-mq1acyeg.js:5129-5331 placement
 async function logRemoteControlEntryBad(reason) {
   let [{ logFeatureBadAsync }, { flushAnalyticsBeforeExit }] = await Promise.all([
     import("../services/analytics/featureTelemetry.js"),
@@ -69,7 +69,7 @@ async function logRemoteControlEntryBad(reason) {
   await logFeatureBadAsync("remote_control_entry", reason);
   await flushAnalyticsBeforeExit();
 }
-//@ chunk-4wmk8g5n.js:4997-6116 placement
+//@ chunk-mq1acyeg.js:5331-6450 placement
 /**
  * 远程控制启动前检查：可信设备、自动登记提示、策略限制等。
  */
@@ -130,13 +130,13 @@ async function preflightRemoteControl(diagnoseSentinel, args, storageV5, credent
   }
   await bridgeMain(args, storageV5, credentials);
 }
-//@ chunk-4wmk8g5n.js:6116-6186 placement
+//@ chunk-mq1acyeg.js:6450-6520 placement
 async function runRemoteControlCli(args, storageV5, credentials) {
   let settingsSentinel = await assertRemoteControlSettingsValid();
   let diagnoseSentinel = await diagnoseBridgeDisabled(settingsSentinel);
   await preflightRemoteControl(diagnoseSentinel, args, storageV5, credentials);
 }
-//@ chunk-4wmk8g5n.js:6186-6857 placement
+//@ chunk-mq1acyeg.js:6520-7191 placement
 var REMOTE_CONTROL_ALLOWED_FLAGS = new Map([
   ["verbose", () => true],
   ["debug", () => true],
@@ -167,13 +167,13 @@ var REMOTE_CONTROL_ALLOWED_FLAGS = new Map([
   ["enableAutoMode", () => true],
   ["bare", () => true],
 ]);
-//@ chunk-4wmk8g5n.js:6857-6941 placement
+//@ chunk-mq1acyeg.js:7191-7275 placement
 function filterUnsupportedFlags(flags) {
   return flags
     .filter(({ key, value }) => !REMOTE_CONTROL_ALLOWED_FLAGS.get(key)?.(value))
     .map(({ flag }) => flag);
 }
-//@ chunk-4wmk8g5n.js:6941-7439 placement
+//@ chunk-mq1acyeg.js:7275-7773 placement
 function unsupportedFlagsMessage(flags) {
   let joined = flags.map((flag) => `\`${flag}\``).join(", ");
   let [pronounObject, pronounVerb] = flags.length === 1 ? ["it", "is"] : ["them", "are"];

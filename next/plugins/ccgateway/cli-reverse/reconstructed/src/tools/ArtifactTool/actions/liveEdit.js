@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：实时编辑动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (1)
  * attribution: placement 1
  */
 import {
@@ -25,7 +25,7 @@ import { plural } from "../../../utils/stringUtils.js";
 import { carriesAnyDecisionPin } from "../permissions/consentStamps.js";
 import { liveEditSourceSchema } from "../../../services/artifacts/publishSource.js";
 
-//@ chunk-8wvtd8sr.js:127228-129561 placement
+//@ chunk-xzmy9dn4.js:128085-130418 placement
 /**
  * live-edit 动作：Ds 为可选的 live-edit 实现模块（本构建可能为 null）；Ju 为动作处理器（权限、校验、分类器输入、描述、摘要、调用），Qu 为结果渲染。
  */

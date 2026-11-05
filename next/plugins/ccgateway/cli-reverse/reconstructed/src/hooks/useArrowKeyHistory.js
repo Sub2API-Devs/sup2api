@@ -3,9 +3,9 @@
  *
  * 上下箭头浏览 prompt 历史：分批加载历史、按模式（bash/prompt）过滤、首次使用时提示 Ctrl+R 搜索。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useArrowKeyHistory.tsx
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: affinity 1, fingerprint 2, layout 2
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -32,9 +32,9 @@ import { ConfigurableShortcutHint } from "../components/ConfigurableShortcutHint
 import { NOTIFICATION_TIMEOUT_MS } from "../components/PromptInput/Notifications.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:858877-858888 affinity
+//@ chunk-czq1j3j2.js:891760-891771 affinity
 var HISTORY_BATCH_SIZE = 10;
-//@ chunk-18hwfzwa.js:858888-859366 fingerprint (2.1.88 match: loadHistoryEntries, 0.663)
+//@ chunk-czq1j3j2.js:891771-892249 fingerprint (2.1.88 match: loadHistoryEntries, 0.663)
 class HistoryLoader {
   #e = null;
   #t = 0;
@@ -78,12 +78,12 @@ class HistoryLoader {
     }
   }
 }
-//@ chunk-18hwfzwa.js:859366-859393 layout
+//@ chunk-czq1j3j2.js:892249-892276 layout
 var historyLoaderByHost; // deferred: uses HistoryLoader of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:859366", () => {
+deferInit("chunk-czq1j3j2.js:892249", () => {
   historyLoaderByHost = new HostScoped(() => new HistoryLoader());
 });
-//@ chunk-18hwfzwa.js:859393-859603 layout
+//@ chunk-czq1j3j2.js:892276-892486 layout
 function findHistoryOverlapIndex(history, nextHistory) {
   if (nextHistory.length === 0) return 0;
   for (let idx = 0; idx < history.length; idx++) {
@@ -98,7 +98,7 @@ function findHistoryOverlapIndex(history, nextHistory) {
   }
   return -1;
 }
-//@ chunk-18hwfzwa.js:859603-864032 fingerprint (2.1.88 match: useArrowKeyHistory, 0.743)
+//@ chunk-czq1j3j2.js:892486-896916 fingerprint (2.1.88 match: useArrowKeyHistory, 0.743)
 /**
  * 上下箭头历史：按批（10 条）从历史文件加载，按 bash/prompt 模式过滤，记住当前草稿以便回到底部；第一次使用时弹出 "ctrl+r to search history" 提示；返回 onHistoryUp/Down/Reset。
  */

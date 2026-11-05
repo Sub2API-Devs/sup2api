@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：中断回复的评估与续写提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (6)
  * attribution: placement 6
  */
 import { isUnparsedInputMarker } from "../../utils/json.js";
 import { X_CC_TENDER_QUILT_LIMIT, FALLBACK_HEADER_VALUE_LIMIT } from "./refusalFallbackHeaders.js";
 
-//@ chunk-hwmsct5x.js:237248-237491 placement
+//@ chunk-vn3g7zt8.js:240801-241044 placement (2.1.88 match: DEFAULT_INSTRUCTIONS, 0.696)
 function trimToSentenceEnd(text) {
   let rawText = text;
   if (rawText.length > 0 && !/[.!?\u2026\u3002\uFF01\uFF1F'")\]]$/.test(rawText)) {
@@ -26,7 +26,7 @@ function trimToSentenceEnd(text) {
   }
   return rawText.trimEnd();
 }
-//@ chunk-hwmsct5x.js:237491-238053 placement
+//@ chunk-vn3g7zt8.js:241044-241606 placement
 /**
  * 评估被中断回复的已产出内容（文本长度、是否卡在 tool_use 输入中），决定能否续写。
  */
@@ -75,18 +75,18 @@ function assessPartialResponse(assistantMessages) {
     salvageText: tail,
   };
 }
-//@ chunk-hwmsct5x.js:238053-238169 placement
+//@ chunk-vn3g7zt8.js:241606-241722 placement
 function tailForContinuation(text) {
   if (text.length <= FALLBACK_HEADER_VALUE_LIMIT) return text;
   let sliced = text.slice(-FALLBACK_HEADER_VALUE_LIMIT);
   let code = sliced.charCodeAt(0);
   return code >= 56320 && code <= 57343 ? sliced.slice(1) : sliced;
 }
-//@ chunk-hwmsct5x.js:238169-238211 placement
+//@ chunk-vn3g7zt8.js:241722-241764 placement
 function joinPartialResponse(head, tail, exact) {
   return exact ? head + tail : stitchContinuation(head, tail);
 }
-//@ chunk-hwmsct5x.js:238211-238557 placement
+//@ chunk-vn3g7zt8.js:241764-242110 placement
 function stitchContinuation(previous, next) {
   let tail = tailForContinuation(previous);
   let replaced = next.trimStart().replace(/^\u2026\s*/, "");
@@ -105,7 +105,7 @@ function stitchContinuation(previous, next) {
     out = " ";
   return `${previous}${out}${remainder}`;
 }
-//@ chunk-hwmsct5x.js:238557-239172 placement
+//@ chunk-vn3g7zt8.js:242110-242725 placement
 /**
  * 生成"上一次回复被中断，请从此处继续"的续写提示，把已产出文本包在 <partial-response> 中。
  */

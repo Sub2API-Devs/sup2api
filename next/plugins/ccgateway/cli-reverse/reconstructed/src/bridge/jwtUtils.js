@@ -3,9 +3,9 @@
  *
  * JWT 解码与按会话的 token 刷新调度器（到期前刷新、失败重试、代际防竞态）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/jwtUtils.ts
- * pieces: chunk-aepeg2w5.js (7)
+ * pieces: chunk-exfmq47h.js (7)
  * attribution: file-local 1, fingerprint 3, layout 3
  */
 import { jsonParse } from "../utils/slowOperations.js";
@@ -14,14 +14,14 @@ import { errorMessage } from "../utils/errors.js";
 import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-aepeg2w5.js:275640-275783 file-local
+//@ chunk-exfmq47h.js:285241-285384 file-local
 function formatDuration(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
   let m = Math.floor(ms / 60000);
   let rounded = Math.round((ms % 60000) / 1000);
   return rounded > 0 ? `${m}m ${rounded}s` : `${m}m`;
 }
-//@ chunk-aepeg2w5.js:275783-275974 fingerprint (2.1.88 match: decodeJwtPayload, 1)
+//@ chunk-exfmq47h.js:285384-285575 fingerprint (2.1.88 match: decodeJwtPayload, 1)
 /**
  * 解码 JWT payload（兼容 sk-ant-si- 前缀），失败返回 null。
  */
@@ -34,7 +34,7 @@ function decodeJwtPayload(token) {
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:275974-276141 layout
+//@ chunk-exfmq47h.js:285575-285742 layout
 /**
  * token 的 aud 是否是 claude-gateway。
  */
@@ -43,7 +43,7 @@ function isGatewayToken(token) {
   let aud = payload !== null && typeof payload === "object" && "aud" in payload ? payload.aud : undefined;
   return aud === "claude-gateway" || (Array.isArray(aud) && aud.includes("claude-gateway"));
 }
-//@ chunk-aepeg2w5.js:276141-276276 layout
+//@ chunk-exfmq47h.js:285742-285877 layout
 /**
  * 从 JWT 负载取 session_id。
  */
@@ -56,7 +56,7 @@ function getJwtSessionId(token) {
     ? payload.session_id
     : undefined;
 }
-//@ chunk-aepeg2w5.js:276276-276397 fingerprint (2.1.88 match: decodeJwtExpiry, 1)
+//@ chunk-exfmq47h.js:285877-285998 fingerprint (2.1.88 match: decodeJwtExpiry, 1)
 /**
  * 从 JWT 负载取 exp（秒），无法解析返回 null。
  */
@@ -66,7 +66,7 @@ function decodeJwtExpiry(token) {
     return payload.exp;
   return null;
 }
-//@ chunk-aepeg2w5.js:276397-276436 layout
+//@ chunk-exfmq47h.js:285998-286037 layout
 /**
  * 刷新调度默认值：提前 5 分钟、后续刷新间隔 30 分钟、最多失败 3 次、失败重试 60 秒。
  */
@@ -74,7 +74,7 @@ var DEFAULT_REFRESH_BUFFER_MS = 300000;
 var FOLLOWUP_REFRESH_MS = 1800000;
 var DEFAULT_MAX_FAILURES = 3;
 var RETRY_DELAY_MS = 60000;
-//@ chunk-aepeg2w5.js:276436-279315 fingerprint (2.1.88 match: createTokenRefreshScheduler, 0.831)
+//@ chunk-exfmq47h.js:286037-288938 fingerprint (2.1.88 match: createTokenRefreshScheduler, 0.834)
 /**
  * 按 sessionId 调度 token 刷新：schedule（解 JWT exp，提前 buffer 刷新，可自适应 20%）、scheduleFromExpiresIn、refreshNow、cancel、cancelAll；
  * 刷新时取新 OAuth token 调 onRefresh，失败按次数重试，耗尽调 onExhausted；每次调度递增代号，过期回调直接丢弃。

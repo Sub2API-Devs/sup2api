@@ -3,9 +3,9 @@
  *
  * 用户图片回显 "[Image #N]"（可点击）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserImageMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import {
 import { Link, Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:87716-88531 fingerprint (2.1.88 match: UserImageMessage, 0.769)
+//@ chunk-wjygkcr4.js:89520-90335 fingerprint (2.1.88 match: UserImageMessage, 0.769)
 function UserImageMessage(props) {
   let $ = useMemoCache(15);
   let { imageId, addMargin, startsUserTurn } = props;

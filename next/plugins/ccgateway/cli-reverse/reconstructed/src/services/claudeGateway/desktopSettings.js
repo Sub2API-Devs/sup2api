@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关下发给 Claude Desktop 的设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (12)
  * attribution: placement 12
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import {
   gatewayValidationModule,
 } from "../../../vendor/private-unresolved/index.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isPlainObject as isPlainObject_3 } from "../../utils/isPlainObject.js";
 import { gatewayLog } from "../gateway/gatewayBanner.js";
 import { similarNames } from "../../utils/settings/managedEnvKeys.js";
@@ -24,24 +24,24 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1378065-1378111 placement
+//@ chunk-1hnjmk23.js:1379896-1379942 placement
 /**
  * 懒加载的 desktop 设置校验模块（findingBlocksServing 等）。
  */
 var desktopSettingsModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var bootstrapConfigModule;
 var desktopSettingsChecksModule;
-deferInit("chunk-1ny7cxrt.js:1378065", () => {
+deferInit("chunk-1hnjmk23.js:1379896", () => {
   desktopSettingsModule = __toESM(configSchemaBarrel(), 1);
   bootstrapConfigModule = __toESM(bootstrapIntakeModule(), 1);
   desktopSettingsChecksModule = __toESM(gatewayValidationModule(), 1);
 });
-//@ chunk-1ny7cxrt.js:1378111-1378227 placement
+//@ chunk-1hnjmk23.js:1379942-1380058 placement
 /**
  * 会让 Desktop 会话在设备外运行的可下发键。
  */
 var OFF_DEVICE_DESKTOP_KEYS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1ny7cxrt.js:1378111", () => {
+deferInit("chunk-1hnjmk23.js:1379942", () => {
   OFF_DEVICE_DESKTOP_KEYS = DoctorLazy(() =>
     GATEWAY_SERVABLE_KEYS().filter((key) => {
       let executionTarget = desktopSettingsModule.getFieldMeta(key).support.executionTarget;
@@ -49,23 +49,23 @@ deferInit("chunk-1ny7cxrt.js:1378111", () => {
     }),
   );
 });
-//@ chunk-1ny7cxrt.js:1378227-1378577 placement
+//@ chunk-1hnjmk23.js:1380058-1380408 placement
 /**
  * 网关不下发设备外执行设置的错误说明。
  */
 function offDeviceKeyError(key) {
   return `${key}: this gateway does not serve settings that run Claude Desktop sessions off the device (such as a self-hosted session host), because they make Claude Desktop ignore the gateway as its inference provider and stop applying its on-device settings (disabledBuiltinTools and coworkEgressAllowedHosts among them); remove the key`;
 }
-//@ chunk-1ny7cxrt.js:1378577-1378702 placement
+//@ chunk-1hnjmk23.js:1380408-1380533 placement
 /**
  * 两个字符串数组去重合并（任一不是字符串数组时 undefined）。
  */
 function unionStringLists(disabledBuiltinTools, disabledBuiltinTools_2) {
   let isStringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === "string");
   if (!isStringArray(disabledBuiltinTools) || !isStringArray(disabledBuiltinTools_2)) return;
-  return uniq([...disabledBuiltinTools, ...disabledBuiltinTools_2]);
+  return normalizeCaseForComparison_2([...disabledBuiltinTools, ...disabledBuiltinTools_2]);
 }
-//@ chunk-1ny7cxrt.js:1378702-1379128 placement
+//@ chunk-1hnjmk23.js:1380533-1380959 placement
 /**
  * 合并 Desktop 覆盖层的 disabledBuiltinTools 与 builtinToolPolicy（非 allow 的基础策略优先）。
  */
@@ -87,7 +87,7 @@ function mergeDesktopToolPolicy(desktop, desktop_2) {
   }
   return merged;
 }
-//@ chunk-1ny7cxrt.js:1379128-1379771 placement
+//@ chunk-1hnjmk23.js:1380959-1381602 placement
 /**
  * 检查由 sandbox.network.allowedDomains 派生的 coworkEgressAllowedHosts 并警告。
  */
@@ -112,7 +112,7 @@ function checkCoworkEgressHosts(settings, key) {
     );
   });
 }
-//@ chunk-1ny7cxrt.js:1379771-1379853 placement
+//@ chunk-1hnjmk23.js:1381602-1381688 placement
 /**
  * 用相似名匹配找出网关可下发的设置键（拼写近似时返回规范键）。
  */
@@ -121,7 +121,7 @@ function findGatewayServableKey(key) {
   let [closest] = similarNames(normalizeKey(key), servableKeys.map(normalizeKey), 1);
   return servableKeys.find((candidateKey) => normalizeKey(candidateKey) === closest);
 }
-//@ chunk-1ny7cxrt.js:1379853-1380199 placement
+//@ chunk-1hnjmk23.js:1381688-1382035 placement
 /**
  * 键是否只属于引导配置（不是设置字段）。
  */
@@ -139,7 +139,7 @@ function isBootstrapOnlyKey(key, value, origin, excludedKeys) {
   );
   return Object.keys(config).length === 0 && sentKeys.length === 1 && sentKeys[0] === key;
 }
-//@ chunk-1ny7cxrt.js:1380199-1382933 placement
+//@ chunk-1hnjmk23.js:1382035-1384770 placement
 function parseDesktopSettingsOverlay(desktop, label, publicUrl, baseOverlay, gatewayKeys) {
   if (!isPlainObject_3(desktop))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -236,7 +236,7 @@ ${filtered.map((entry) => `  ${entry.msg}`).join(`
     ...configRecord,
   };
 }
-//@ chunk-1ny7cxrt.js:1382933-1383021 placement
+//@ chunk-1hnjmk23.js:1384770-1384858 placement
 /**
  * 判断对象上某键是否有非空值（非 undefined、null、空串）。
  */
@@ -245,13 +245,13 @@ function hasMeaningfulValue(source, key) {
   let value = source[key];
   return value !== undefined && value !== null && value !== "";
 }
-//@ chunk-1ny7cxrt.js:1383021-1383147 placement
+//@ chunk-1hnjmk23.js:1384858-1384984 placement
 /**
  * 网关可下发的设置键与其中 Desktop 可用的键。
  */
 var GATEWAY_SERVABLE_KEYS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var DESKTOP_SERVABLE_KEYS;
-deferInit("chunk-1ny7cxrt.js:1383021", () => {
+deferInit("chunk-1hnjmk23.js:1384858", () => {
   GATEWAY_SERVABLE_KEYS = DoctorLazy(() =>
     desktopSettingsModule.gatewayServableKeys({
       includeInternal: false,
@@ -262,7 +262,7 @@ deferInit("chunk-1ny7cxrt.js:1383021", () => {
     return GATEWAY_SERVABLE_KEYS().filter((key) => !offDeviceSet.has(key));
   });
 });
-//@ chunk-1ny7cxrt.js:1385972-1386128 placement
+//@ chunk-1hnjmk23.js:1387809-1387965 placement
 /**
  * 按路径读取字符串数组。
  */

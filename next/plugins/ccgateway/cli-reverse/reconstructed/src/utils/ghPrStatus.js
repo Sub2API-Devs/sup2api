@@ -3,9 +3,9 @@
  *
  * 查询当前分支 PR 状态（GitHub REST/GraphQL：PR、reviewDecision、check runs、fork parent），供页脚显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ghPrStatus.ts
- * pieces: chunk-s61vbvea.js (51)
+ * pieces: chunk-7jxyna5q.js (51)
  * attribution: placement 36, layout 13, fingerprint 2
  */
 import { join } from "path";
@@ -34,7 +34,7 @@ import {
   booleanSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse, jsonStringify } from "./slowOperations.js";
-import { MAX_REPO_URL_CHARS, regExp_2 as regExp_2_2, regExp as regExp_18 } from "./detectRepository.js";
+import { MAX_REPO_URL_CHARS, regExp_2 as regExp_2_2, regExp as regExp_16 } from "./detectRepository.js";
 import { isEssentialTrafficOnly } from "./privacyLevel.js";
 import { getGitHostKind } from "./gitHosts.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
@@ -50,7 +50,7 @@ import { claudeCodeUserAgent } from "./http.js";
 import { getProxyFetchOptions } from "./proxy.js";
 import { sanitizeErrorName, sanitizeErrnoForTelemetry, errorMessage } from "./errors.js";
 import { limitConcurrency } from "./concurrencyLimit.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { writeFileAtomic } from "./atomicPublishWrite.js";
@@ -59,10 +59,10 @@ import { GIT_SAFE_GLOBAL_ARGS } from "./git/gitSafeEnv.js";
 import { externalHttp } from "../services/http/externalHttp.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:550055-550122 placement
+//@ chunk-7jxyna5q.js:467397-467464 placement
 var GLAB_TIMEOUT_MS = 2500;
 var GLAB_UNAUTHENTICATED_RE = /^\s*\S+ has not been authenticated with glab\s*$/m;
-//@ chunk-s61vbvea.js:550122-550362 placement
+//@ chunk-7jxyna5q.js:467464-467704 placement
 class GlabProbeState {
   glabOnPath;
   unauthenticatedHosts = new Set();
@@ -77,12 +77,12 @@ class GlabProbeState {
     this.okEmitted = true;
   }
 }
-//@ chunk-s61vbvea.js:550362-550387 placement
+//@ chunk-7jxyna5q.js:467704-467729 placement
 var glabProbeRegistry; // deferred: uses GlabProbeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:550362", () => {
+deferInit("chunk-7jxyna5q.js:467704", () => {
   glabProbeRegistry = new HostScoped(() => new GlabProbeState());
 });
-//@ chunk-s61vbvea.js:550387-550572 placement
+//@ chunk-7jxyna5q.js:467729-467914 placement
 function repoOwnerFromRemote() {
   try {
     let canonicalGitRoot = findCanonicalGitRoot(getCwd());
@@ -97,9 +97,9 @@ function repoOwnerFromRemote() {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:550572-550721 placement
+//@ chunk-7jxyna5q.js:467914-468063 placement
 var GitlabMrSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:550572", () => {
+deferInit("chunk-7jxyna5q.js:467914", () => {
   GitlabMrSchema = DoctorLazy(() =>
     objectSchema({
       iid: numberSchema().int().min(1).max(Number.MAX_SAFE_INTEGER),
@@ -110,7 +110,7 @@ deferInit("chunk-s61vbvea.js:550572", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:550721-550767 placement
+//@ chunk-7jxyna5q.js:468063-468109 placement
 function tryParseJson(stdout) {
   try {
     return jsonParse(stdout);
@@ -118,7 +118,7 @@ function tryParseJson(stdout) {
     return;
   }
 }
-//@ chunk-s61vbvea.js:550767-550875 placement
+//@ chunk-7jxyna5q.js:468109-468217 placement
 function hasErrorObject(value) {
   return (
     typeof value === "object" &&
@@ -128,18 +128,18 @@ function hasErrorObject(value) {
     value.error !== null
   );
 }
-//@ chunk-s61vbvea.js:550875-550980 placement
+//@ chunk-7jxyna5q.js:468217-468322 placement
 function isMrUrlForIid(webUrl, iid) {
   if (webUrl.length > MAX_REPO_URL_CHARS || !regExp_2_2.test(webUrl)) return false;
   return Number(webUrl.slice(webUrl.lastIndexOf("/") + 1)) === iid;
 }
-//@ chunk-s61vbvea.js:550980-551090 placement
+//@ chunk-7jxyna5q.js:468322-468432 placement
 function mrBadgeState(state, isDraft, detailedMergeStatus) {
   if (state !== "opened") return null;
   if (isDraft) return "draft";
   return detailedMergeStatus === "mergeable" ? "approved" : "pending";
 }
-//@ chunk-s61vbvea.js:551090-551202 placement
+//@ chunk-7jxyna5q.js:468432-468544 placement
 function reportGlabFailure(code) {
   logFeatureBad("gitlab_mr_badge", code);
   logForDebugging(`glab MR badge poll failed: ${code}`, {
@@ -147,7 +147,7 @@ function reportGlabFailure(code) {
   });
   return "fetch-failed";
 }
-//@ chunk-s61vbvea.js:551202-552187 placement
+//@ chunk-7jxyna5q.js:468544-469529 placement
 /**
  * 用 gh/glab 查询当前分支 PR 状态
  */
@@ -200,9 +200,9 @@ async function fetchPrStatus(host) {
     kind: "mr",
   };
 }
-//@ chunk-s61vbvea.js:552187-552254 placement
+//@ chunk-7jxyna5q.js:469529-469596 placement
 var PR_URL_RE = /^https:\/\/([\w.-]+)\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)\b/;
-//@ chunk-s61vbvea.js:552254-552368 placement
+//@ chunk-7jxyna5q.js:469596-469710 placement
 /**
  * 解析 PR URL（主机、所有者、仓库、编号）。
  */
@@ -217,9 +217,9 @@ function parsePrUrl(text) {
     num: Number(match[4]),
   };
 }
-//@ chunk-s61vbvea.js:552368-552381 placement
+//@ chunk-7jxyna5q.js:469710-469723 placement
 var RATE_LIMIT_BACKOFF_MS = 60000;
-//@ chunk-s61vbvea.js:552381-553785 placement
+//@ chunk-7jxyna5q.js:469723-471127 placement
 class PrStatusFetcher {
   #e = createSignal();
   bump = {
@@ -295,19 +295,19 @@ class PrStatusFetcher {
     this.prStatusByUrl.cache.clear();
   }
 }
-//@ chunk-s61vbvea.js:553785-553810 placement
+//@ chunk-7jxyna5q.js:471127-471152 placement
 var prStatusFetcherRegistry; // deferred: uses PrStatusFetcher of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:553785", () => {
+deferInit("chunk-7jxyna5q.js:471127", () => {
   prStatusFetcherRegistry = new HostScoped(() => new PrStatusFetcher());
 });
-//@ chunk-s61vbvea.js:553810-553847 placement
+//@ chunk-7jxyna5q.js:471152-471189 placement
 /**
  * 取当前宿主的 PR 状态获取器。
  */
 function currentPrStatusFetcher() {
   return prStatusFetcherRegistry.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:553847-553977 placement
+//@ chunk-7jxyna5q.js:471189-471319 placement
 /**
  * PR 状态不可用时的提示。
  */
@@ -319,9 +319,9 @@ function prStatusHint(hint) {
       return "install gh for PR status";
   }
 }
-//@ chunk-s61vbvea.js:553977-553989 layout
+//@ chunk-7jxyna5q.js:471319-471331 layout
 var GH_REQUEST_TIMEOUT_MS = 5000;
-//@ chunk-s61vbvea.js:553989-554142 fingerprint (2.1.88 match: deriveReviewState, 1)
+//@ chunk-7jxyna5q.js:471331-471484 fingerprint (2.1.88 match: deriveReviewState, 1)
 function deriveReviewState(isDraft, reviewDecision) {
   if (isDraft) return "draft";
   switch (reviewDecision) {
@@ -333,20 +333,20 @@ function deriveReviewState(isDraft, reviewDecision) {
       return "pending";
   }
 }
-//@ chunk-s61vbvea.js:554142-554291 layout
+//@ chunk-7jxyna5q.js:471484-471633 layout
 async function getPrStatus(host) {
   if (!(await getIsGit())) return null;
   let [branch, defaultBranch] = await Promise.all([getBranch(), getDefaultBranch()]);
   if (branch === defaultBranch) return null;
   return (await (() => fetchPrStatusForBranch(branch))()) ?? (await fetchPrStatus(host));
 }
-//@ chunk-s61vbvea.js:554291-554523 layout
+//@ chunk-7jxyna5q.js:471633-471865 layout
 var PR_STATUS_CACHE_TTL_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PR_STATUS_API_VERSION;
 var REDIRECT_STATUS_CODES;
 var prSummarySchema;
 var prReviewDecisionSchema;
-deferInit("chunk-s61vbvea.js:554291", () => {
+deferInit("chunk-7jxyna5q.js:471633", () => {
   PR_STATUS_CACHE_TTL_MS = 300000;
   PR_STATUS_API_VERSION = "2022-11-28";
   REDIRECT_STATUS_CODES = new Set([301, 302, 307, 308]);
@@ -371,7 +371,7 @@ deferInit("chunk-s61vbvea.js:554291", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:554523-557132 layout
+//@ chunk-7jxyna5q.js:471865-474477 layout
 /**
  * 查询当前分支对应 PR 的状态（GitHub REST + GraphQL reviewDecision、check runs），用于页脚 PR 状态；主分支或仅必要流量时不查。
  */
@@ -528,7 +528,7 @@ async function fetchPrStatusForBranch(branch) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:557132-557701 layout
+//@ chunk-7jxyna5q.js:474477-475046 layout
 async function fetchPrReviewDecision(repoRef, token, number) {
   let graphqlUrl = githubGraphqlUrl(repoRef.host);
   let body = jsonStringify({
@@ -563,12 +563,12 @@ async function fetchPrReviewDecision(repoRef, token, number) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:557701-557759 layout
+//@ chunk-7jxyna5q.js:475046-475104 layout
 async function getOriginRepo() {
   let remoteUrl = await getRemoteUrl();
   return remoteUrl ? parseGitHubRemote(remoteUrl) : null;
 }
-//@ chunk-s61vbvea.js:557759-557962 layout
+//@ chunk-7jxyna5q.js:475104-475307 layout
 /**
  * 把 git remote URL 解析为 {host, owner, repo}（拒绝 IP 主机）。
  */
@@ -585,9 +585,9 @@ function parseGitHubRemote(remoteUrl) {
     repo: parts[2],
   };
 }
-//@ chunk-s61vbvea.js:557962-558038 layout
+//@ chunk-7jxyna5q.js:475307-475383 layout
 var prForkParentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:557962", () => {
+deferInit("chunk-7jxyna5q.js:475307", () => {
   prForkParentSchema = DoctorLazy(() =>
     create({
       parent: create({
@@ -599,7 +599,7 @@ deferInit("chunk-s61vbvea.js:557962", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:558038-558372 layout
+//@ chunk-7jxyna5q.js:475383-475717 layout
 async function resolveBaseRepo(originRepo, token) {
   let originKey = `${originRepo.host}/${originRepo.owner}/${originRepo.repo}`;
   let baseRepoCache = currentPrStatusFetcher().baseRepoCache;
@@ -621,7 +621,7 @@ async function resolveBaseRepo(originRepo, token) {
     }),
   });
 }
-//@ chunk-s61vbvea.js:558372-558547 layout
+//@ chunk-7jxyna5q.js:475717-475892 layout
 async function getUpstreamRemoteUrl() {
   let { stdout, code } = await execFileNoThrow("git", ["config", "--get", "remote.upstream.url"], {
     timeout: 2000,
@@ -629,7 +629,7 @@ async function getUpstreamRemoteUrl() {
   });
   return code === 0 && stdout.trim() ? stdout.trim() : null;
 }
-//@ chunk-s61vbvea.js:558547-558998 layout
+//@ chunk-7jxyna5q.js:475892-476343 layout
 async function fetchRepoParent(originRepo, token) {
   let repoUrl = `${githubApiBase(originRepo.host)}/repos/${originRepo.owner}/${originRepo.repo}`;
   try {
@@ -660,7 +660,7 @@ async function fetchRepoParent(originRepo, token) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:558998-559267 layout
+//@ chunk-7jxyna5q.js:476343-476612 layout
 function getPrStatusColor(prStatus) {
   switch (prStatus.state) {
     case "MERGED":
@@ -675,7 +675,7 @@ function getPrStatusColor(prStatus) {
     }
   }
 }
-//@ chunk-s61vbvea.js:559267-559611 layout
+//@ chunk-7jxyna5q.js:476612-476956 layout
 function summarizeCheckRuns(statusCheckRollup) {
   let passedCount = 0;
   let failedCount = 0;
@@ -700,7 +700,7 @@ function summarizeCheckRuns(statusCheckRollup) {
     pending: pendingCount,
   };
 }
-//@ chunk-s61vbvea.js:559611-560217 fingerprint (2.1.88 match: fetchPrStatus, 0.483)
+//@ chunk-7jxyna5q.js:476956-477562 fingerprint (2.1.88 match: fetchPrStatus, 0.482)
 async function fetchPrStatus_2(prUrl) {
   let { stdout, code } = await execFileNoThrow(
     "gh",
@@ -744,7 +744,7 @@ async function fetchPrStatus_2(prUrl) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:560217-560321 placement
+//@ chunk-7jxyna5q.js:477562-477666 placement
 /**
  * 按 URL 查 PR 状态（仅必要流量时不查）。
  */
@@ -754,7 +754,7 @@ function fetchPrStatusByUrl(prUrl) {
     .prStatusByUrl(prUrl)
     .catch(() => null);
 }
-//@ chunk-s61vbvea.js:560321-560535 placement
+//@ chunk-7jxyna5q.js:477666-477880 placement
 function expandPrUrlTemplate(template, pattern) {
   if (!pattern) return template;
   let prUrl = parsePrUrl(template);
@@ -766,7 +766,7 @@ function expandPrUrlTemplate(template, pattern) {
     .replaceAll("{number}", String(prUrl.num))
     .replaceAll("{url}", template);
 }
-//@ chunk-s61vbvea.js:560535-560582 placement
+//@ chunk-7jxyna5q.js:477880-477927 placement
 /**
  * 有模板时把 PR URL 中的占位符展开，否则原样返回。
  */
@@ -774,13 +774,13 @@ function expandPrUrlIfTemplate(template, pattern) {
   if (pattern) return expandPrUrlTemplate(template, pattern);
   return template;
 }
-//@ chunk-s61vbvea.js:560582-561144 placement
+//@ chunk-7jxyna5q.js:477927-478489 placement
 /**
  * GraphQL PR 响应 schema 与字段列表。
  */
 var GraphqlPrSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PR_GRAPHQL_FIELDS;
-deferInit("chunk-s61vbvea.js:560582", () => {
+deferInit("chunk-7jxyna5q.js:477927", () => {
   GraphqlPrSchema = DoctorLazy(() => {
     let stateCountsSchema = create_15(
       create({
@@ -830,7 +830,7 @@ deferInit("chunk-s61vbvea.js:560582", () => {
     "count",
   ];
 });
-//@ chunk-s61vbvea.js:561144-561655 placement
+//@ chunk-7jxyna5q.js:478489-479000 placement
 function summarizeChecks(checkRunCountsByState, statusContextCountsByState) {
   let passedCount = 0;
   let failedCount = 0;
@@ -879,7 +879,7 @@ function summarizeChecks(checkRunCountsByState, statusContextCountsByState) {
     pending: pendingCount,
   };
 }
-//@ chunk-s61vbvea.js:561655-562119 placement
+//@ chunk-7jxyna5q.js:479000-479464 placement
 function prStateLabel(node) {
   let statusCheckRollup = node.commits.nodes[0]?.commit.statusCheckRollup ?? null;
   return {
@@ -907,11 +907,11 @@ function prStateLabel(node) {
     deletions: node.deletions,
   };
 }
-//@ chunk-s61vbvea.js:562119-562186 placement (2.1.88 match: cost, 0.391)
+//@ chunk-7jxyna5q.js:479464-479531 placement (2.1.88 match: cost, 0.391)
 function cost(repositoryNode) {
   return repositoryNode !== null && typeof repositoryNode === "object" && !("cost" in repositoryNode);
 }
-//@ chunk-s61vbvea.js:562186-562297 placement
+//@ chunk-7jxyna5q.js:479531-479642 placement
 function groupByKey(items, keyOf) {
   let groups = new Map();
   for (let item of items) {
@@ -922,7 +922,7 @@ function groupByKey(items, keyOf) {
   }
   return groups;
 }
-//@ chunk-s61vbvea.js:562297-562642 placement
+//@ chunk-7jxyna5q.js:479642-479987 placement
 /**
  * PR GraphQL 片段与批量查询参数。
  */
@@ -943,11 +943,11 @@ var GRAPHQL_TIMEOUT_MS = 15000;
 var MAX_RESPONSE_BYTES = 200000;
 var RATE_LIMIT_BACKOFF = "30s";
 var RATE_LIMIT_RE = /rate limit/i;
-//@ chunk-s61vbvea.js:562642-562694 placement
+//@ chunk-7jxyna5q.js:479987-480039 placement
 function isGhApiBackedOff() {
   return Date.now() < currentPrStatusFetcher().ghBackoffUntil;
 }
-//@ chunk-s61vbvea.js:562694-565418 placement
+//@ chunk-7jxyna5q.js:480039-482765 placement
 async function buildPrStatusQuery(prUrls) {
   let statuses = new Map();
   let unbatched = [];
@@ -1078,14 +1078,14 @@ query { rateLimit{cost remaining resetAt} ${mapped.join(" ")} }`;
     unbatched,
   };
 }
-//@ chunk-s61vbvea.js:565418-565498 placement
+//@ chunk-7jxyna5q.js:482765-482845 placement
 var prStatusCachePath; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PR_STATUS_CACHE_STORAGE;
-deferInit("chunk-s61vbvea.js:565418", () => {
+deferInit("chunk-7jxyna5q.js:482765", () => {
   prStatusCachePath = () => join(getClaudeConfigDir(), "gh-pr-status-cache.json");
   PR_STATUS_CACHE_STORAGE = STORAGE_SPACES.state("gh-pr-status-cache");
 });
-//@ chunk-s61vbvea.js:565498-565868 placement
+//@ chunk-7jxyna5q.js:482845-483215 placement
 function persistPrStatusCache(statuses, storageV5) {
   let payload = {};
   for (let [prUrl, prStatus] of statuses) if (prStatus) payload[prUrl] = prStatus;
@@ -1106,9 +1106,9 @@ function persistPrStatusCache(statuses, storageV5) {
       });
   return writeFileAtomic(prStatusCachePath(), body).catch(() => {});
 }
-//@ chunk-s61vbvea.js:565868-566109 placement
+//@ chunk-7jxyna5q.js:483215-483456 placement
 var CachedPrStatusSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:565868", () => {
+deferInit("chunk-7jxyna5q.js:483215", () => {
   CachedPrStatusSchema = DoctorLazy(() =>
     create({
       number: create_3(),
@@ -1125,7 +1125,7 @@ deferInit("chunk-s61vbvea.js:565868", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:566109-566408 placement
+//@ chunk-7jxyna5q.js:483456-483755 placement
 function parsePrStatusCache(text) {
   let statuses = new Map();
   let parsed;
@@ -1144,7 +1144,7 @@ function parsePrStatusCache(text) {
   if (droppedCount > 0) logForDebugging(`loadPrStatusCache: dropped ${droppedCount} malformed cache entries`);
   return statuses;
 }
-//@ chunk-s61vbvea.js:566408-566825 placement
+//@ chunk-7jxyna5q.js:483755-484172 placement
 async function loadPrStatusCache(storageV5) {
   if (storageV5) {
     let readResult;
@@ -1176,11 +1176,11 @@ async function loadPrStatusCache(storageV5) {
     return new Map();
   }
 }
-//@ chunk-s61vbvea.js:566825-566918 placement
+//@ chunk-7jxyna5q.js:484172-484265 placement
 var GERRIT_HOST_RE = /^([a-z0-9-]+)\.googlesource\.com\//;
 var GERRIT_CHANGE_ID_RE = /^Change-Id:\s*(I[0-9a-f]{40})\s*$/gm;
 var GERRIT_QUERY_TIMEOUT_MS = 4000;
-//@ chunk-s61vbvea.js:566918-567893 placement
+//@ chunk-7jxyna5q.js:484265-485240 placement
 async function findGerritReview() {
   if (isEssentialTrafficOnly() || !isWorkspacePersistedTrusted(getCwd())) return null;
   let canonicalGitRoot = findCanonicalGitRoot(getCwd());
@@ -1226,7 +1226,7 @@ async function findGerritReview() {
     : undefined;
   if (!change || typeof change._number !== "number") return null;
   let changeUrl = `https://${reviewHost}/c/${change.project}/+/${change._number}`;
-  return regExp_18.test(changeUrl)
+  return regExp_16.test(changeUrl)
     ? {
         url: changeUrl,
         project: change.project,
@@ -1238,12 +1238,12 @@ export {
   expandPrUrlIfTemplate,
   currentPrStatusFetcher,
   prStatusHint,
+  parsePrUrl,
   getPrStatus,
+  findGerritReview,
   getPrStatusColor,
   buildPrStatusQuery,
   fetchPrStatusByUrl,
   loadPrStatusCache,
   persistPrStatusCache,
-  findGerritReview,
-  parsePrUrl,
 };

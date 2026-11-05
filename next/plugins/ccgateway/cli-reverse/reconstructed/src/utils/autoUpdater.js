@@ -3,10 +3,10 @@
  *
  * 并入已有模块：自动更新
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/autoUpdater.ts
- * pieces: chunk-6zvphrsz.js (61), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (1)
- * attribution: placement 30, fingerprint 12, layout 18, callgraph-witnessed 1, affinity 1, sole-consumer 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (2), chunk-wzyv38y8.js (61)
+ * attribution: fingerprint 12, affinity 2, placement 30, layout 18, callgraph-witnessed 1, sole-consumer 1
  */
 import { open, writeFile, stat, access, readdir, unlink, copyFile, rm, rename } from "fs/promises";
 import { constants } from "fs";
@@ -14,7 +14,7 @@ import { join, dirname, basename } from "path";
 import { homedir } from "os";
 import { randomBytes } from "crypto";
 import { isEssentialTrafficOnly } from "./privacyLevel.js";
-import { regExp_11, parsePrUrl_2, linkPrToSession } from "../tools/shared/gitOperationTracking.js";
+import { regExp_10, parsePrUrl_2, linkPrToSession } from "../tools/shared/gitOperationTracking.js";
 import { execFileNoThrow, execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { jsonParse, jsonStringify, isStandaloneExecutable } from "./slowOperations.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
@@ -41,7 +41,7 @@ import {
   sanitizeErrnoForTelemetry,
 } from "./errors.js";
 import { getDynamicConfig_BLOCKS_ON_INIT } from "../services/analytics/growthbook.js";
-import { lt_2, semverGt, semverLt, semverGte } from "./semver.js";
+import { lt as lt_2, semverGt, semverLt, semverGte } from "./semver.js";
 import { emitExitMessage, gracefulShutdown, gracefulShutdownSync } from "./gracefulShutdown.js";
 import { cliError } from "../cli/exit.js";
 import { logError } from "./log.js";
@@ -55,8 +55,8 @@ import { HostScoped } from "./hostScoped.js";
 import { logEvent } from "../services/analytics/index.js";
 import { sanitizeVersion, platformOrOther } from "../services/analytics/metadata.js";
 import { escapeControlChars } from "./resultError.js";
-import { getInitialSettings_2, getSettingsForSource } from "./settings/settings.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getInitialSettings, getSettingsForSource } from "./settings/settings.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { getFsImplementation } from "./fsOperations.js";
@@ -79,10 +79,12 @@ import {
 } from "./shellConfig.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:583010-583413 fingerprint (2.1.88 match: getNpmDistTags, 0.347)
+//@ chunk-7jxyna5q.js:500362-500374 affinity
+var UPDATE_CHECK_INTERVAL_MS = 5000;
+//@ chunk-7jxyna5q.js:500374-500775 fingerprint (2.1.88 match: getNpmDistTags, 0.346)
 async function getNpmDistTags(sessionId, prArg, prRepository) {
   if (isEssentialTrafficOnly()) return false;
-  if (prRepository !== undefined && !regExp_11.test(prRepository)) return false;
+  if (prRepository !== undefined && !regExp_10.test(prRepository)) return false;
   let prNumber =
     prArg && !prArg.startsWith("-") && !/^[a-z][a-z0-9+.-]*:\/\//i.test(prArg) ? prArg : undefined;
   let args = [
@@ -94,7 +96,7 @@ async function getNpmDistTags(sessionId, prArg, prRepository) {
     "url",
   ];
   let { code, stdout } = await execFileNoThrow("gh", args, {
-    timeout: 5000,
+    timeout: UPDATE_CHECK_INTERVAL_MS,
     preserveOutputOnError: false,
     useCwd: true,
   });
@@ -106,7 +108,7 @@ async function getNpmDistTags(sessionId, prArg, prRepository) {
   await linkPrToSession(parsed, sessionId);
   return true;
 }
-//@ chunk-e6aww6q8.js:4149527-4149656 fingerprint (2.1.88 match: releaseLock, 0.566)
+//@ chunk-5xgkngpb.js:4255587-4255716 fingerprint (2.1.88 match: releaseLock, 0.566)
 async function releaseLock_2(path) {
   let handle = await open(path, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
@@ -117,56 +119,56 @@ async function releaseLock_2(path) {
     await handle.close();
   }
 }
-//@ chunk-6zvphrsz.js:1282-1299 placement
+//@ chunk-wzyv38y8.js:1348-1365 placement
 /**
  * semver 模块的包装导入（用于版本比较）。
  */
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6zvphrsz.js:1282", () => {
+deferInit("chunk-wzyv38y8.js:1348", () => {
   semverModule = __toESM(require_semver_3(), 1);
 });
-//@ chunk-6zvphrsz.js:1579-1641 placement
+//@ chunk-wzyv38y8.js:1645-1707 placement
 /**
  * 若正在安装则等待其完成，否则直接返回。
  */
 function awaitInstallOver(hold) {
   return pendingWithoutStart(hold) ? hold.over.promise : Promise.resolve();
 }
-//@ chunk-6zvphrsz.js:1641-1653 placement
+//@ chunk-wzyv38y8.js:1707-1719 placement
 /**
  * 安装前要求用户闲置的时长（2 秒）。
  */
 var INSTALL_QUIET_WINDOW_MS = 2000;
-//@ chunk-6zvphrsz.js:1653-1696 placement
+//@ chunk-wzyv38y8.js:1719-1762 placement
 /**
  * 距上次用户交互还需静默的毫秒数。
  */
 var remainingQuietWindowMs = () =>
   Math.max(INSTALL_QUIET_WINDOW_MS - (Date.now() - getLastInteractionTime()), 0);
-//@ chunk-6zvphrsz.js:1696-1720 placement
+//@ chunk-wzyv38y8.js:1762-1786 placement
 /**
  * 是否还需等待静默窗口。
  */
 var shouldWaitForQuiet = () => remainingQuietWindowMs() > 0 || isForegroundBusy();
-//@ chunk-6zvphrsz.js:1720-1732 placement
+//@ chunk-wzyv38y8.js:1786-1798 placement
 /**
  * 等待静默时的最小轮询间隔（1 秒）。
  */
 var QUIET_POLL_MS = 1000;
-//@ chunk-6zvphrsz.js:1732-1770 placement
+//@ chunk-wzyv38y8.js:1798-1836 placement
 /**
  * 静默等待的轮询延迟。
  */
 var quietPollDelayMs = () =>
   isForegroundBusy() ? Math.max(remainingQuietWindowMs(), QUIET_POLL_MS) : remainingQuietWindowMs();
-//@ chunk-6zvphrsz.js:1770-1815 placement
+//@ chunk-wzyv38y8.js:1836-1881 placement
 /**
  * 等到静默窗口结束再继续。
  */
 async function waitForQuietWindow() {
   while (shouldWaitForQuiet()) await sleep(quietPollDelayMs());
 }
-//@ chunk-6zvphrsz.js:1815-1982 placement
+//@ chunk-wzyv38y8.js:1881-2048 placement
 async function shutDownAfterRefusal(refuser) {
   await waitForQuietWindow();
   if (isTerminalShutdown()) return;
@@ -178,24 +180,24 @@ async function shutDownAfterRefusal(refuser) {
   );
   refuser.hard();
 }
-//@ chunk-6zvphrsz.js:1982-2040 placement
+//@ chunk-wzyv38y8.js:2048-2106 placement
 /**
  * 会话持有安装权时执行回调，否则走关停流程。
  */
 function refuserOrRun(hold, run, refuser) {
   return hold.hasHeld && !getIsNonInteractiveSession() ? void shutDownAfterRefusal(refuser) : run();
 }
-//@ chunk-6zvphrsz.js:2040-2054 placement
+//@ chunk-wzyv38y8.js:2106-2120 placement
 /**
  * 原样返回输入（占位辅助）。
  */
 var identityFn = (value) => value;
-//@ chunk-6zvphrsz.js:2054-2063 placement
+//@ chunk-wzyv38y8.js:2120-2129 placement
 /**
  * 安装锁编号（1）。
  */
 var FAILED_VERSION_EXIT_CODE = 1;
-//@ chunk-6zvphrsz.js:2063-2292 placement
+//@ chunk-wzyv38y8.js:2129-2358 placement
 /**
  * 带超时与指数退避抖动的重试。
  */
@@ -213,20 +215,20 @@ async function retryWithTimeout(attemptFn, options) {
     }
   throw lastError;
 }
-//@ chunk-6zvphrsz.js:6186-6244 placement
+//@ chunk-wzyv38y8.js:6252-6310 placement
 /**
  * 官方发布包的下载地址。
  */
 var RELEASES_BASE_URL = "https://downloads.claude.ai/claude-code-releases";
-//@ chunk-6zvphrsz.js:6244-6266 placement
+//@ chunk-wzyv38y8.js:6310-6332 placement
 /**
  * 应用更新失败的错误类型（ClaudeError 子类）。
  */
 let UpdateApplyError; // deferred: uses ClaudeError (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6zvphrsz.js:6244", () => {
+deferInit("chunk-wzyv38y8.js:6310", () => {
   UpdateApplyError = class UpdateApplyError extends ClaudeError {};
 });
-//@ chunk-6zvphrsz.js:6266-6513 placement
+//@ chunk-wzyv38y8.js:6332-6579 placement
 /**
  * 更新应用失败原因到错误键。
  */
@@ -242,7 +244,7 @@ function updateApplyErrorKey(failureHint) {
       return null;
   }
 }
-//@ chunk-6zvphrsz.js:6513-7753 placement
+//@ chunk-wzyv38y8.js:6579-7819 placement
 /**
  * 启动时按 tengu_version_config 检查最低版本，过低时提示并退出。
  */
@@ -260,10 +262,10 @@ async function enforceMinimumVersion() {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -275,10 +277,10 @@ async function enforceMinimumVersion() {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -301,7 +303,7 @@ async function enforceMinimumVersion() {
     logError(error);
   }
 }
-//@ chunk-6zvphrsz.js:7753-8499 placement
+//@ chunk-wzyv38y8.js:7819-8565 placement
 /**
  * 版本低于最低要求时打印说明并退出。
  */
@@ -311,10 +313,10 @@ function exitBelowMinVersion(minVersion) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -344,7 +346,7 @@ ${message}
     }
   gracefulShutdownSync(FAILED_VERSION_EXIT_CODE);
 }
-//@ chunk-6zvphrsz.js:8499-8765 fingerprint (2.1.88 match: assertMinVersion, 0.615)
+//@ chunk-wzyv38y8.js:8565-8831 fingerprint (2.1.88 match: assertMinVersion, 0.615)
 function assertMinVersion(currentVersion, minVersion) {
   return `It looks like your version of Claude Code (${currentVersion}) needs an update.
 A newer version (${minVersion} or higher) is required to continue.
@@ -354,33 +356,33 @@ To update, please run:
 
 This will ensure you have access to the latest features and improvements.`;
 }
-//@ chunk-6zvphrsz.js:8765-8779 layout
+//@ chunk-wzyv38y8.js:8831-8845 layout
 var AUTO_UPDATE_CHECK_THROTTLE_MS = 300000;
-//@ chunk-6zvphrsz.js:8779-8868 layout
+//@ chunk-wzyv38y8.js:8845-8934 layout
 class AutoUpdaterState {
   lastAutoUpdateCheckAt = 0;
   updateRestoreFailure = null;
   mintedPreservedInodes = new Set();
 }
-//@ chunk-6zvphrsz.js:8868-8893 layout
+//@ chunk-wzyv38y8.js:8934-8959 layout
 var autoUpdaterSlot; // deferred: uses AutoUpdaterState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6zvphrsz.js:8868", () => {
+deferInit("chunk-wzyv38y8.js:8934", () => {
   autoUpdaterSlot = new HostScoped(() => new AutoUpdaterState());
 });
-//@ chunk-6zvphrsz.js:8893-8930 layout
+//@ chunk-wzyv38y8.js:8959-8996 layout
 function getAutoUpdaterState() {
   return autoUpdaterSlot.of(getRootSession().host);
 }
-//@ chunk-6zvphrsz.js:8930-8941 layout
+//@ chunk-wzyv38y8.js:8996-9007 layout
 var STARTUP_GRACE_MS = 1e4;
-//@ chunk-6zvphrsz.js:8941-9000 layout
+//@ chunk-wzyv38y8.js:9007-9066 layout
 /**
  * 距启动 10 秒宽限期还剩多少毫秒。
  */
 function remainingStartupGraceMs() {
   return Math.max(0, STARTUP_GRACE_MS - process.uptime() * 1000);
 }
-//@ chunk-6zvphrsz.js:9000-9216 layout
+//@ chunk-wzyv38y8.js:9066-9282 layout
 /**
  * 自动更新检查节流：5 分钟内已检查过则跳过。
  */
@@ -396,14 +398,14 @@ function isAutoUpdateCheckThrottled() {
   autoUpdaterState.lastAutoUpdateCheckAt = now;
   return false;
 }
-//@ chunk-6zvphrsz.js:9216-9268 layout
+//@ chunk-wzyv38y8.js:9282-9334 layout
 /**
  * getMaxVersion：GrowthBook 下发的版本上限（外部用户 external 字段）。
  */
 async function getMaxVersion() {
   return (await resolveMaxVersionConfig()).maxVersion;
 }
-//@ chunk-6zvphrsz.js:9268-9600 layout
+//@ chunk-wzyv38y8.js:9334-9666 layout
 /**
  * 读取 GrowthBook tengu_max_version_config：版本上限与强制降级开关。
  */
@@ -425,7 +427,7 @@ async function resolveMaxVersionConfig() {
     forceDowngradeEnabled: maxVersionConfig.external_force_downgrade === true,
   };
 }
-//@ chunk-6zvphrsz.js:9600-9904 layout
+//@ chunk-wzyv38y8.js:9666-9970 layout
 /**
  * 强制降级是否生效：当前版本高于上限时才降。
  */
@@ -443,14 +445,14 @@ function isForceDowngradeActive(currentVersion, maxVersion, updaterKind) {
   );
   return false;
 }
-//@ chunk-6zvphrsz.js:9904-9969 fingerprint (2.1.88 match: getMaxVersionMessage, 0.469)
+//@ chunk-wzyv38y8.js:9970-10035 fingerprint (2.1.88 match: getMaxVersionMessage, 0.469)
 /**
  * 版本上限的提示文案（external_message）。
  */
 async function getMaxVersionMessage() {
   return (await getMaxVersionConfig()).external_message || undefined;
 }
-//@ chunk-6zvphrsz.js:9969-10065 fingerprint (2.1.88 match: getMaxVersionConfig, 1)
+//@ chunk-wzyv38y8.js:10035-10131 fingerprint (2.1.88 match: getMaxVersionConfig, 1)
 async function getMaxVersionConfig() {
   try {
     return await getDynamicConfig_BLOCKS_ON_INIT("tengu_max_version_config", {});
@@ -459,7 +461,7 @@ async function getMaxVersionConfig() {
     return {};
   }
 }
-//@ chunk-6zvphrsz.js:10065-10942 layout
+//@ chunk-wzyv38y8.js:10131-11008 layout
 /**
  * 返回跳过某目标版本的原因（低于 minimumVersion、高于上限等），无则 null。
  */
@@ -473,7 +475,7 @@ function getVersionSkipReason(targetVersion) {
     );
     return null;
   }
-  let minimumVersion = getInitialSettings_2()?.minimumVersion;
+  let minimumVersion = getInitialSettings()?.minimumVersion;
   if (minimumVersion) {
     let version = semverModule.parse(minimumVersion)?.version;
     if (!version)
@@ -501,7 +503,7 @@ function getVersionSkipReason(targetVersion) {
   }
   return null;
 }
-//@ chunk-6zvphrsz.js:10942-11027 fingerprint (2.1.88 match: shouldSkipVersion, 0.806)
+//@ chunk-wzyv38y8.js:11008-11093 fingerprint (2.1.88 match: shouldSkipVersion, 0.806)
 /**
  * shouldSkipVersion：目标版本应跳过时记日志并返回 true。
  */
@@ -510,17 +512,17 @@ function shouldSkipVersion(targetVersion) {
   if (versionSkipReason) logForDebugging(`Skipping update to ${targetVersion}: ${versionSkipReason}`);
   return versionSkipReason !== null;
 }
-//@ chunk-6zvphrsz.js:11027-11040 layout
+//@ chunk-wzyv38y8.js:11093-11106 layout
 var LOCK_TIMEOUT_MS = 300000;
-//@ chunk-6zvphrsz.js:11040-11084 fingerprint (2.1.88 match: getLockFilePath, 1)
+//@ chunk-wzyv38y8.js:11106-11150 fingerprint (2.1.88 match: getLockFilePath, 1)
 function getLockFilePath() {
   return join(getClaudeConfigDir(), ".update.lock");
 }
-//@ chunk-6zvphrsz.js:11084-11129 layout
+//@ chunk-wzyv38y8.js:11150-11195 layout
 function getUpdateLockStateKey() {
   return STORAGE_SPACES.state("update-lock");
 }
-//@ chunk-6zvphrsz.js:11129-11940 layout
+//@ chunk-wzyv38y8.js:11195-12006 layout
 async function acquireStorageUpdateLock(storage) {
   let updateLockStateKey = getUpdateLockStateKey();
   let statResult = await storage.statMeta(updateLockStateKey);
@@ -561,7 +563,7 @@ async function acquireStorageUpdateLock(storage) {
   });
   return false;
 }
-//@ chunk-6zvphrsz.js:11940-12644 fingerprint (2.1.88 match: acquireLock, 0.726)
+//@ chunk-wzyv38y8.js:12006-12710 fingerprint (2.1.88 match: acquireLock, 0.726)
 /**
  * acquireLock：~/.claude/.update.lock（或 v5 存储），5 分钟内的锁视为有效。
  */
@@ -618,7 +620,7 @@ async function acquireLock(storage) {
     return false;
   }
 }
-//@ chunk-6zvphrsz.js:12644-13233 layout
+//@ chunk-wzyv38y8.js:12710-13299 layout
 async function releaseLock(storage) {
   if (isStorageV5Enabled() && storage) {
     let readResult = await storage.read([getUpdateLockStateKey()]);
@@ -655,7 +657,7 @@ async function releaseLock(storage) {
     });
   }
 }
-//@ chunk-6zvphrsz.js:13233-13486 layout
+//@ chunk-wzyv38y8.js:13299-13552 layout
 function getGlobalPackageManager() {
   let replaced = process.execPath.replace(/\\/g, "/");
   let replaced_2 = (env.BUN_INSTALL ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
@@ -666,7 +668,7 @@ function getGlobalPackageManager() {
     return "bun";
   return env.isRunningWithBun() && !isStandaloneExecutable() ? "bun" : "npm";
 }
-//@ chunk-6zvphrsz.js:13486-13851 fingerprint (2.1.88 match: getInstallationPrefix, 0.788)
+//@ chunk-wzyv38y8.js:13552-13917 fingerprint (2.1.88 match: getInstallationPrefix, 0.788)
 async function getInstallationPrefix() {
   let isBun = getGlobalPackageManager() === "bun";
   let prefixResult = null;
@@ -691,7 +693,7 @@ async function getInstallationPrefix() {
   }
   return prefixResult.stdout.trim() || null;
 }
-//@ chunk-6zvphrsz.js:13851-14652 layout
+//@ chunk-wzyv38y8.js:13917-14718 layout
 async function getGlobalInstallPaths() {
   let installationPrefix = await getInstallationPrefix();
   if (!installationPrefix) return null;
@@ -712,10 +714,10 @@ async function getGlobalInstallPaths() {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.PACKAGE_URL,
@@ -729,7 +731,7 @@ async function getGlobalInstallPaths() {
     imagePath: binPath,
   };
 }
-//@ chunk-6zvphrsz.js:14652-15738 layout
+//@ chunk-wzyv38y8.js:14718-15804 layout
 async function verifyInstalledVersion(expectedVersion) {
   let now = Date.now();
   let globalInstallPaths = await getGlobalInstallPaths();
@@ -754,10 +756,10 @@ async function verifyInstalledVersion(expectedVersion) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -788,7 +790,7 @@ ${runResult.stderr}`.includes(NATIVE_BINARY_MISSING_TEXT);
     durationMs: Date.now() - now,
   };
 }
-//@ chunk-6zvphrsz.js:15738-16063 fingerprint (2.1.88 match: checkGlobalInstallPermissions, 1)
+//@ chunk-wzyv38y8.js:15804-16129 fingerprint (2.1.88 match: checkGlobalInstallPermissions, 1)
 /**
  * 检查 npm 全局前缀是否可写。
  */
@@ -823,7 +825,7 @@ async function checkGlobalInstallPermissions() {
     };
   }
 }
-//@ chunk-6zvphrsz.js:16063-17635 fingerprint (2.1.88 match: getLatestVersion, 0.498)
+//@ chunk-wzyv38y8.js:16129-17701 fingerprint (2.1.88 match: getLatestVersion, 0.498)
 /**
  * getLatestVersion：npm view @anthropic-ai/claude-code@stable|latest version。
  */
@@ -838,10 +840,10 @@ async function getLatestVersion(channel) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.PACKAGE_URL
@@ -889,13 +891,13 @@ async function getLatestVersion(channel) {
   logFeatureOk("update_check");
   return trimmed || null;
 }
-//@ chunk-6zvphrsz.js:17635-17652 placement
+//@ chunk-wzyv38y8.js:17701-17718 placement
 /**
  * 从 GCS 拉版本时的超时（5 秒）。
  */
 var GCS_FETCH_TIMEOUT_MS = 5000;
 var GCS_FETCH_ATTEMPTS = 3;
-//@ chunk-6zvphrsz.js:17652-18404 placement
+//@ chunk-wzyv38y8.js:17718-18470 placement
 /**
  * 从 GCS 获取指定通道的版本号（重试、校验 semver）。
  */
@@ -943,7 +945,7 @@ async function fetchGcsVersion(channel) {
     return null;
   }
 }
-//@ chunk-6zvphrsz.js:18404-19086 placement
+//@ chunk-wzyv38y8.js:18470-19152 placement
 async function getLatestVersionFromGcs(channel) {
   if (isEssentialTrafficOnly()) return null;
   try {
@@ -972,7 +974,7 @@ async function getLatestVersionFromGcs(channel) {
     return null;
   }
 }
-//@ chunk-6zvphrsz.js:19086-19165 placement
+//@ chunk-wzyv38y8.js:19152-19231 placement
 /**
  * 依次从 GCS 与回退源取最新版本。
  */
@@ -983,14 +985,14 @@ async function latestVersionFromSources(channel, channel_2) {
   ]);
   return latestVersionFromGcs ?? gcsVersion;
 }
-//@ chunk-6zvphrsz.js:19165-19213 placement
+//@ chunk-wzyv38y8.js:19231-19279 placement
 /**
  * 读取“更新恢复失败”的记录。
  */
 function getUpdateRestoreFailure() {
   return getAutoUpdaterState().updateRestoreFailure;
 }
-//@ chunk-6zvphrsz.js:19213-19537 placement
+//@ chunk-wzyv38y8.js:19279-19603 placement
 /**
  * 更新恢复失败记录：原路径已恢复则清除，否则重新定位保留副本。
  */
@@ -1006,7 +1008,7 @@ async function refreshRestoreFailure(state) {
       preservedPath: await locatePreservedCopy(state, state.updateRestoreFailure.preservedPath),
     };
 }
-//@ chunk-6zvphrsz.js:19537-19593 placement
+//@ chunk-wzyv38y8.js:19603-19659 placement
 /**
  * 判断路径是否存在。
  */
@@ -1016,7 +1018,7 @@ function pathExists(path) {
     () => false,
   );
 }
-//@ chunk-6zvphrsz.js:19593-19666 placement
+//@ chunk-wzyv38y8.js:19659-19732 placement
 /**
  * 返回 npm 全局安装目录的候选路径。
  */
@@ -1024,7 +1026,7 @@ function npmGlobalPrefixes() {
   let prefixRoot = join(dirname(process.execPath), "..", "..");
   return [join(prefixRoot, ".."), prefixRoot];
 }
-//@ chunk-6zvphrsz.js:19861-19983 placement
+//@ chunk-wzyv38y8.js:19927-20049 placement
 async function isMintedPreservedFile(state, path) {
   let inode = await stat(path, {
     bigint: true,
@@ -1034,7 +1036,7 @@ async function isMintedPreservedFile(state, path) {
   );
   return inode !== 0n && state.mintedPreservedInodes.has(inode);
 }
-//@ chunk-6zvphrsz.js:19983-20147 placement
+//@ chunk-wzyv38y8.js:20049-20213 placement
 async function locatePreservedCopy(state, path) {
   if (await isMintedPreservedFile(state, path)) return path;
   let fileName = basename(path);
@@ -1045,7 +1047,7 @@ async function locatePreservedCopy(state, path) {
   for (let candidate of flattened) if (await isMintedPreservedFile(state, candidate)) return candidate;
   return null;
 }
-//@ chunk-6zvphrsz.js:20147-20623 placement
+//@ chunk-wzyv38y8.js:20213-20689 placement
 /**
  * 通过临时文件原子恢复可执行文件（失败回退复制）。
  */
@@ -1079,7 +1081,7 @@ async function restoreBinaryAtomically(sourcePath, targetPath) {
     throw error;
   }
 }
-//@ chunk-6zvphrsz.js:20623-21559 placement
+//@ chunk-wzyv38y8.js:20689-21625 placement
 /**
  * 找到本次保存的最新 .old.<时间戳> 可执行文件。
  */
@@ -1137,7 +1139,7 @@ async function newestPreservedOldBinary(state, retiredDirs) {
     );
   }
 }
-//@ chunk-6zvphrsz.js:21559-30009 callgraph-witnessed (2.1.88 match: installGlobalPackage, 0.255)
+//@ chunk-wzyv38y8.js:21625-30075 callgraph-witnessed (2.1.88 match: installGlobalPackage, 0.255)
 /**
  * installGlobalPackage：持锁后用 npm（或 bun）全局安装指定版本，校验安装结果，失败分类上报。
  */
@@ -1155,10 +1157,10 @@ async function installGlobalPackage(targetVersion, storage) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -1183,10 +1185,10 @@ async function installGlobalPackage(targetVersion, storage) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -1213,10 +1215,10 @@ To fix this issue:
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.PACKAGE_URL
@@ -1225,10 +1227,10 @@ To fix this issue:
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.PACKAGE_URL;
@@ -1534,7 +1536,7 @@ To fix this issue:
     await releaseLock(storage);
   }
 }
-//@ chunk-6zvphrsz.js:30009-30271 fingerprint (2.1.88 match: removeClaudeAliasesFromShellConfigs, 1)
+//@ chunk-wzyv38y8.js:30075-30337 fingerprint (2.1.88 match: removeClaudeAliasesFromShellConfigs, 1)
 async function removeClaudeAliasesFromShellConfigs() {
   let configMap = getShellConfigPaths();
   for (let [, configFile] of Object.entries(configMap))
@@ -1552,7 +1554,7 @@ async function removeClaudeAliasesFromShellConfigs() {
       });
     }
 }
-//@ chunk-6zvphrsz.js:30271-31249 affinity
+//@ chunk-wzyv38y8.js:30337-31315 affinity
 function classifyNpmInstallError(output) {
   if (/\b(EACCES|EPERM|permission denied)\b/i.test(output)) return "eacces_eperm";
   if (/postinstall\] Native package "[^"]*" not found/.test(output)) return "native_package_missing";
@@ -1580,30 +1582,30 @@ function classifyNpmInstallError(output) {
   if (hasWarnings && !hasErrors) return "warning_only";
   return "unknown";
 }
-//@ chunk-6zvphrsz.js:31249-31383 sole-consumer
+//@ chunk-wzyv38y8.js:31315-31449 sole-consumer
 function extractNpmErrorCode(output) {
   let code = /\bnpm (?:ERR!|error) code\s+([A-Z][A-Z0-9_]{1,29})(?![A-Za-z0-9_])/.exec(output)?.[1];
   return code === undefined ? undefined : fromSanitizer_SANITIZER_OUTPUT_ONLY(code);
 }
 export {
-  npmGlobalPrefixes,
-  enforceMinimumVersion,
+  isAutoUpdateCheckThrottled,
+  getLatestVersion,
   resolveMaxVersionConfig,
   isForceDowngradeActive,
   shouldSkipVersion,
-  releaseLock_2,
-  checkGlobalInstallPermissions,
-  latestVersionFromSources,
-  getLatestVersion,
-  getVersionSkipReason,
   installGlobalPackage,
   getUpdateRestoreFailure,
   updateApplyErrorKey,
-  getNpmDistTags,
-  isAutoUpdateCheckThrottled,
   getMaxVersion,
   getMaxVersionMessage,
+  latestVersionFromSources,
   fetchGcsVersion,
   remainingStartupGraceMs,
+  releaseLock_2,
+  getNpmDistTags,
+  enforceMinimumVersion,
+  npmGlobalPrefixes,
+  getVersionSkipReason,
   retryWithTimeout,
+  checkGlobalInstallPermissions,
 };

@@ -3,15 +3,15 @@
  *
  * statusline-setup 内建代理：配置状态栏命令（Read/Edit，sonnet）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/statuslineSetup.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: sole-consumer 1, fingerprint 1
  */
 import { getPlatform } from "../../../utils/platform.js";
 import { getGitBashPathCached } from "../../../utils/windowsPaths.js";
 
-//@ chunk-e6aww6q8.js:2338270-2338653 sole-consumer
+//@ chunk-5xgkngpb.js:2393682-2394065 sole-consumer
 /**
  * Windows 且使用 Git Bash 时，返回 statusline 命令中路径写法的补充说明。
  */
@@ -24,7 +24,7 @@ function windowsStatuslinePathNote() {
    backslashes as escape characters and the path will not resolve.
 `;
 }
-//@ chunk-e6aww6q8.js:2338653-2351964 fingerprint (2.1.88 match: STATUSLINE_SETUP_AGENT, 1)
+//@ chunk-5xgkngpb.js:2394065-2407376 fingerprint (2.1.88 match: STATUSLINE_SETUP_AGENT, 1)
 /**
  * statusline-setup 内建代理：工具 Read/Edit，model sonnet，color orange。
  */

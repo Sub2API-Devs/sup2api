@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：用户 id 格式与 IDE 名称白名单等校验器；元数据字段校验器与键映射表（会话 id 等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (21)
  * attribution: placement 21
  */
 import { randomBytes, randomInt } from "crypto";
 import { promisify } from "util";
-import { gzip, gzipSync } from "zlib";
+import { gzip } from "zlib";
 import {
   isUuid,
   regexValidator,
@@ -39,7 +39,7 @@ import { GrowthbookExperimentEvent } from "../../types/generated/events_mono/gro
 import { AUTH_SURFACE_NAMES } from "./authOutcomeTelemetry.js";
 import { decodeTaggedUuid } from "../mcp/serverIdentity.js";
 import { LANGUAGE_NAMES, CEDAR_DISPLAY_NAMES } from "../../utils/cliHighlight.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -48,11 +48,11 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:745825-746041 placement (2.1.88 match: shouldShowDevBar, 0.425)
+//@ chunk-exfmq47h.js:761094-761310 placement (2.1.88 match: shouldShowDevBar, 0.426)
 var EXPERIMENT_ID_PATTERN; // deferred: uses isBoolean (./metadataSanitizers.js) of its import cycle while loading; runs once the cycle is complete
 var isVariationId;
 var EXPERIMENT_EVENT_FIELDS;
-deferInit("chunk-aepeg2w5.js:745825", () => {
+deferInit("chunk-exfmq47h.js:761094", () => {
   EXPERIMENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
   isVariationId = (variationId) =>
     typeof variationId === "number" &&
@@ -67,11 +67,11 @@ deferInit("chunk-aepeg2w5.js:745825", () => {
     environment: oneOfValidator("production", "staging", "development"),
   };
 });
-//@ chunk-aepeg2w5.js:746041-746072 placement
+//@ chunk-exfmq47h.js:761310-761341 placement
 function sanitizeExperimentEventFields(fields) {
   return sanitizeFields(fields, EXPERIMENT_EVENT_FIELDS);
 }
-//@ chunk-aepeg2w5.js:746072-746388 placement
+//@ chunk-exfmq47h.js:761341-761657 placement
 /**
  * 从事件元数据里挑出数值型指标字段（按事件名的允许表）。
  */
@@ -97,7 +97,7 @@ function pickNumericMetrics(fields, eventName) {
     }
   return metrics;
 }
-//@ chunk-aepeg2w5.js:746388-746586 placement
+//@ chunk-exfmq47h.js:761657-761855 placement
 /**
  * base64 JSON 中只保留数值指标后重新编码。
  */
@@ -111,7 +111,7 @@ function filterNumericMetrics(additionalMetadata, eventName) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:746586-746966 placement
+//@ chunk-exfmq47h.js:761855-762235 placement
 /**
  * 导出前清洗事件 JSON（安全事件跳过、附加元数据过滤）。
  */
@@ -138,7 +138,7 @@ function sanitizeEventForExport(eventType, eventData) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:746966-747445 placement
+//@ chunk-exfmq47h.js:762235-762714 placement
 /**
  * 按隐私级别过滤要上报的事件批次。
  */
@@ -173,7 +173,7 @@ function filterEventsForPrivacy(events) {
   }
   return kept;
 }
-//@ chunk-aepeg2w5.js:747445-748448 placement
+//@ chunk-exfmq47h.js:762714-763717 placement
 /**
  * 元数据字段校验器与键映射表（会话 id 等）。
  */
@@ -182,7 +182,7 @@ var IS_BOOLEAN_FIELD;
 var REMOTE_CONTROL_LANE_FIELD;
 var PROJECTS_SESSION_FIELD;
 var COMMON_EVENT_FIELD_VALIDATORS;
-deferInit("chunk-aepeg2w5.js:747445", () => {
+deferInit("chunk-exfmq47h.js:762714", () => {
   isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
   IS_BOOLEAN_FIELD = anyOfValidators(isBoolean, oneOfValidator("true", "false"));
   REMOTE_CONTROL_LANE_FIELD = oneOfValidator(...AUTH_SURFACE_NAMES);
@@ -225,14 +225,14 @@ deferInit("chunk-aepeg2w5.js:747445", () => {
     version_base: regexValidator(SEMVER_PLAIN_RE),
   };
 });
-//@ chunk-aepeg2w5.js:748448-748480 placement
+//@ chunk-exfmq47h.js:763717-763749 placement
 /**
  * 导出函数 `sanitizeCommonFields`：参数 e，返回 sanitizeFields(e, Vz)。
  */
 function sanitizeCommonFields(allData) {
   return sanitizeFields(allData, COMMON_EVENT_FIELD_VALIDATORS);
 }
-//@ chunk-aepeg2w5.js:748480-750766 placement
+//@ chunk-exfmq47h.js:763749-766035 placement
 /**
  * 用户 id 格式与 IDE 名称白名单等校验器。
  */
@@ -244,7 +244,7 @@ var TERMINAL_NAME_VALIDATOR;
 var PLATFORM_VALIDATOR;
 var validateCommonField;
 var sanitizeFieldValue;
-deferInit("chunk-aepeg2w5.js:748480", () => {
+deferInit("chunk-exfmq47h.js:763749", () => {
   USER_ID_PATTERN = /^user(_(local|staging))?_01[1-9A-HJ-NP-Za-km-z]{22}$/;
   isValidUserId = (userId) =>
     typeof userId === "string" && USER_ID_PATTERN.test(userId) && decodeTaggedUuid(userId) !== undefined;
@@ -371,7 +371,7 @@ deferInit("chunk-aepeg2w5.js:748480", () => {
       "user_reject",
       "unknown",
     ),
-    tool_name: oneOfValidator(FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME),
+    tool_name: oneOfValidator(EDIT, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME),
     language: TERMINAL_NAME_VALIDATOR,
     query_source: oneOfValidator("main", "subagent", "auxiliary"),
     effort: oneOfValidator("low", "medium", "high", "xhigh", "max"),
@@ -385,7 +385,7 @@ deferInit("chunk-aepeg2w5.js:748480", () => {
     "mcp_tool.name": PLATFORM_VALIDATOR,
   };
 });
-//@ chunk-aepeg2w5.js:750766-750911 placement
+//@ chunk-exfmq47h.js:766035-766180 placement
 /**
  * 按校验器表过滤字段，不合格的值替换为占位。
  */
@@ -398,18 +398,18 @@ function sanitizeByValidators(fields, validators) {
   }
   return result;
 }
-//@ chunk-aepeg2w5.js:750911-750929 placement
+//@ chunk-exfmq47h.js:766180-766198 placement
 var nodeGzipModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:750911", () => {
+deferInit("chunk-exfmq47h.js:766180", () => {
   nodeGzipModule = __toESM(require_core(), 1);
 });
-//@ chunk-aepeg2w5.js:751236-751256 placement
+//@ chunk-exfmq47h.js:766490-766510 placement
 /**
  * 导出常量或表 `lastWatermark`：值为 null, Nis = 257。
  */
 var lastWatermark = null;
 var WATERMARK_BITS = 257;
-//@ chunk-aepeg2w5.js:751256-751336 placement
+//@ chunk-exfmq47h.js:766510-766590 placement
 /**
  * 在文本末尾附加由空格/制表符编码的水印。
  */
@@ -421,7 +421,7 @@ function appendWatermark(text) {
     Array.from(randomBytes(randomInt(WATERMARK_BITS)), (bit) => (bit & 1 ? " " : "\t")).join("")
   );
 }
-//@ chunk-aepeg2w5.js:751336-751557 placement
+//@ chunk-exfmq47h.js:766590-766811 placement
 /**
  * 在请求体缓冲后追加水印。
  */
@@ -435,26 +435,26 @@ function appendWatermarkBuffer(body, maxBytes) {
   output.write(watermark, body.length);
   return output;
 }
-//@ chunk-aepeg2w5.js:751557-751571 placement
+//@ chunk-exfmq47h.js:766811-766825 placement
 var gzipAsync; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:751557", () => {
+deferInit("chunk-exfmq47h.js:766811", () => {
   gzipAsync = promisify(gzip);
 });
-//@ chunk-aepeg2w5.js:751571-751600 placement
+//@ chunk-exfmq47h.js:766825-766854 placement
 /**
  * 导出函数 `gzipBody`：参数 e，返回 _x(e)。
  */
 function gzipBody(body) {
   return gzipAsync(body);
 }
-//@ chunk-aepeg2w5.js:751600-751634 placement
+//@ chunk-exfmq47h.js:766854-766888 placement
 /**
  * 导出函数 `gzipWatermarkedBody`：参数 e，返回 _x(appendWatermark(e))。
  */
 function gzipWatermarkedBody(json) {
   return gzipAsync(appendWatermark(json));
 }
-//@ chunk-aepeg2w5.js:751634-751673 placement
+//@ chunk-exfmq47h.js:766888-766927 placement
 /**
  * 导出函数 `swapWatermark`：参数 e，返回 ((Jl = e), n)。
  */
@@ -463,7 +463,7 @@ function swapWatermark(text) {
   lastWatermark = text;
   return watermark;
 }
-//@ chunk-aepeg2w5.js:751673-751899 placement
+//@ chunk-exfmq47h.js:766927-767248 placement
 /**
  * 按配置决定遥测请求体是否 gzip（附水印）。
  */
@@ -473,19 +473,23 @@ function gzipTelemetryBody({ url, payload, storageV5 }) {
   if (typeof payloadText !== "string") return null;
   let watermark = lastWatermark(url, payloadText, storageV5);
   if (watermark === undefined || !watermark.gzip) return null;
+  let gzipped = Bun.gzipSync(appendWatermark(payloadText), {
+    level: 1,
+    library: "libdeflate",
+  });
   return {
-    body: gzipSync(appendWatermark(payloadText)),
+    body: Buffer.from(gzipped.buffer, gzipped.byteOffset, gzipped.byteLength),
     headers: {
       "Content-Encoding": "gzip",
     },
   };
 }
-//@ chunk-aepeg2w5.js:751931-751944 placement
+//@ chunk-exfmq47h.js:767280-767293 placement
 /**
  * 导出常量或表 `MAX_NORMALIZED_TEXT_CHARS`：值为 2048。
  */
 var MAX_NORMALIZED_TEXT_CHARS = 2048;
-//@ chunk-aepeg2w5.js:751944-751986 placement
+//@ chunk-exfmq47h.js:767293-767335 placement
 /**
  * 导出函数 `truncateNormalizedText`：参数 e，返回 normalizeFullWidthSpace(e.slice(0, $is)); } export { Tki, K6e, filterEventsForPrivacy, _r, gzipTelemetryBody, …。
  */
@@ -493,21 +497,21 @@ function truncateNormalizedText(text) {
   return normalizeFullWidthSpace(text.slice(0, MAX_NORMALIZED_TEXT_CHARS));
 }
 export {
-  sanitizeCommonFields,
   truncateNormalizedText,
   filterEventsForPrivacy,
   nodeGzipModule,
   gzipTelemetryBody,
   sanitizeExperimentEventFields,
   pickNumericMetrics,
+  MAX_NORMALIZED_TEXT_CHARS,
+  appendWatermark,
   sanitizeByValidators,
   validateCommonField,
   sanitizeFieldValue,
-  appendWatermark,
-  appendWatermarkBuffer,
   WATERMARK_BITS,
+  sanitizeCommonFields,
+  appendWatermarkBuffer,
   swapWatermark,
   gzipBody,
   gzipWatermarkedBody,
-  MAX_NORMALIZED_TEXT_CHARS,
 };

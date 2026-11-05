@@ -1,17 +1,17 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/policies/formDataPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (5)
+ * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-fingerprint 5
  */
 import { isNodeLike } from "../util/checkEnvironment.js";
 import { createHttpHeaders } from "../pipelineRequest.js";
 import { stringToUint8Array } from "../util/concat.js";
 
-//@ chunk-mrx6y2r5.js:48001-48025 esm-fingerprint
+//@ chunk-b5df2wx1.js:48001-48025 esm-fingerprint
 var formDataPolicyName = "formDataPolicy";
-//@ chunk-mrx6y2r5.js:48025-48143 esm-fingerprint
+//@ chunk-b5df2wx1.js:48025-48143 esm-fingerprint
 function formDataToFormDataMap(formData) {
   var _a;
   let formDataMap = {};
@@ -21,7 +21,7 @@ function formDataToFormDataMap(formData) {
   }
   return formDataMap;
 }
-//@ chunk-mrx6y2r5.js:48143-48477 esm-fingerprint
+//@ chunk-b5df2wx1.js:48143-48477 esm-fingerprint
 function formDataPolicy() {
   return {
     name: formDataPolicyName,
@@ -41,7 +41,7 @@ function formDataPolicy() {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:48477-48661 esm-fingerprint
+//@ chunk-b5df2wx1.js:48477-48661 esm-fingerprint
 function getFormDataString(formData) {
   let urlSearchParams = new URLSearchParams();
   for (let [key, value] of Object.entries(formData))
@@ -49,7 +49,7 @@ function getFormDataString(formData) {
     else urlSearchParams.append(key, value.toString());
   return urlSearchParams.toString();
 }
-//@ chunk-mrx6y2r5.js:48661-49396 esm-fingerprint
+//@ chunk-b5df2wx1.js:48661-49396 esm-fingerprint
 async function prepareFormData(formData, request) {
   let contentType = request.headers.get("Content-Type");
   if (contentType && !contentType.startsWith("multipart/form-data")) return;

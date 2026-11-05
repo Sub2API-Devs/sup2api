@@ -3,9 +3,9 @@
  *
  * 并入已有模块：内置 remember 技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/remember.ts
- * pieces: chunk-hantmvxa.js (2)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: placement 1, callgraph-fingerprint 1
  */
 import { canUseTeamMemory } from "../../memdir/teamMemPaths.js";
@@ -19,7 +19,7 @@ import {
 import { registerBundledSkill } from "../bundledSkills.js";
 import { isAutoMemoryEnabled } from "../../memdir/paths.js";
 
-//@ chunk-hantmvxa.js:183126-183176 placement
+//@ chunk-ne2890fx.js:183307-183357 placement
 /**
  * 按记忆功能是否开启选择 memory-types 技能内容。
  */
@@ -28,7 +28,7 @@ function MEMORY_TYPES_SKILL_CONTENT() {
     ? MEMORY_TYPES_SECTION_TEAM
     : MEMORY_TYPES_SECTION_PRIVATE;
 }
-//@ chunk-hantmvxa.js:183176-183579 callgraph-fingerprint (2.1.88 match: registerRememberSkill, 0.398)
+//@ chunk-ne2890fx.js:183357-183760 callgraph-fingerprint (2.1.88 match: registerRememberSkill, 0.398)
 /**
  * 注册 memory-types 内置 skill（记忆类型分类参考，供写记忆前查阅），记忆功能门控；旧版匹配为 registerRememberSkill。
  */

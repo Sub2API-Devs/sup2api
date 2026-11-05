@@ -3,9 +3,9 @@
  *
  * /usage 无头实现（旧 /cost）：会话花费、计划用量与限额贡献项
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/cost/cost.ts
- * pieces: chunk-9689amr8.js (6)
+ * pieces: chunk-z03ry4rj.js (6)
  * attribution: sole-consumer 5, callgraph-fingerprint 1
  */
 import { UsageReportSchema } from "../../entrypoints/sdk/coreSchemas.js";
@@ -28,7 +28,7 @@ import { formatCurrency } from "../../services/api/referral.js";
 import { formatResetTime } from "../../utils/format.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-9689amr8.js:12675-12929 sole-consumer
+//@ chunk-z03ry4rj.js:13823-14077 sole-consumer
 /**
  * 格式化 /cost 中的使用行为统计（近 24 小时与近 7 天），无数据时返回 null。
  */
@@ -50,9 +50,9 @@ function formatBehaviors(behaviors) {
   ].join(`
 `);
 }
-//@ chunk-9689amr8.js:12929-12972 sole-consumer
+//@ chunk-z03ry4rj.js:14077-14120 sole-consumer
 var _ = "What's contributing to your usage?";
-//@ chunk-9689amr8.js:12972-13258 sole-consumer
+//@ chunk-z03ry4rj.js:14120-14406 sole-consumer
 function usageReportFromData(data) {
   let rateLimits = data.rate_limits;
   let parsed = UsageReportSchema().safeParse({
@@ -73,7 +73,7 @@ function usageReportFromData(data) {
   }
   return parsed.data;
 }
-//@ chunk-9689amr8.js:13258-14587 callgraph-fingerprint (2.1.88 match: call, 0.272)
+//@ chunk-z03ry4rj.js:14406-15735 callgraph-fingerprint (2.1.88 match: call, 0.273)
 /**
  * /usage（旧 /cost）无头实现：订阅用户显示当前在用订阅额度还是超额、模型分组用量和近 24h/7d 使用分布；网关用户显示花费上限与重置时间；其他显示本会话总花费。
  */
@@ -171,7 +171,7 @@ Spend limit: ${Math.round(overage.utilization * 100)}% used \xB7 resets ${format
   };
 };
 var MAX_LISTED_ITEMS = 8;
-//@ chunk-9689amr8.js:14587-15105 sole-consumer
+//@ chunk-z03ry4rj.js:15735-16253 sole-consumer
 /**
  * 格式化一个时间段（24h/7d）的使用分布：请求数、会话数、推荐项百分比，以及最常用的技能、子代理、插件、MCP 服务器。
  */
@@ -196,7 +196,7 @@ function formatUsagePeriod(label, period) {
   ].join(`
 `);
 }
-//@ chunk-9689amr8.js:15105-15281 sole-consumer
+//@ chunk-z03ry4rj.js:16253-16429 sole-consumer
 function formatTopList(title, items, formatItem) {
   if (items.length === 0) return null;
   let joined = items

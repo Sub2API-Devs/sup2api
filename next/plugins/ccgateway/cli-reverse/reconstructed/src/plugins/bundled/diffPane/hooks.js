@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板钩子常量与输出上限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (36)
  * attribution: placement 36
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -253,11 +253,11 @@ import { todoProgressOf } from "../../../tasks/RemoteAgentTask/RemoteAgentTask.j
 import { untrackedFiles } from "../../../utils/git.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:5483-5493 placement
+//@ chunk-c7hntn0y.js:5847-5857 placement
 var diffPaneHooks = {};
-//@ chunk-wyqg6m3h.js:5493-11112 placement
+//@ chunk-c7hntn0y.js:5857-11476 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:5493", () => {
+deferInit("chunk-c7hntn0y.js:5857", () => {
   __export(diffPaneHooks, {
     ASK_CUT_NOTE: () => ASK_CUT_NOTE,
     AUTO_OPEN_MIN_COLUMNS: () => AUTO_OPEN_MIN_COLUMNS,
@@ -527,78 +527,78 @@ deferInit("chunk-wyqg6m3h.js:5493", () => {
     wrappedLines: () => wrappedLines,
   });
 });
-//@ chunk-wyqg6m3h.js:11112-11145 placement
+//@ chunk-c7hntn0y.js:11476-11509 placement
 var availabilityFlag = () => "tengu_quiet_dolphin";
-//@ chunk-wyqg6m3h.js:11145-11179 placement
+//@ chunk-c7hntn0y.js:11509-11543 placement
 var arrayOf = (value) => (Array.isArray(value) ? value : []);
-//@ chunk-wyqg6m3h.js:11179-11190 placement
+//@ chunk-c7hntn0y.js:11543-11554 placement
 var AUTO_OPEN_MIN_COLUMNS = 144;
-//@ chunk-wyqg6m3h.js:11190-11200 placement
+//@ chunk-c7hntn0y.js:11554-11564 placement
 var DIALOG_PATH_RESERVE = 23;
-//@ chunk-wyqg6m3h.js:11200-11211 placement
+//@ chunk-c7hntn0y.js:11564-11575 placement
 var OPEN_MIN_COLUMNS = 110;
-//@ chunk-wyqg6m3h.js:11211-11220 placement
+//@ chunk-c7hntn0y.js:11575-11584 placement
 var PANE_RIGHT_PAD_COLUMNS = 1;
-//@ chunk-wyqg6m3h.js:11220-11229 placement
+//@ chunk-c7hntn0y.js:11584-11593 placement
 var PATH_FLOOR = 8;
-//@ chunk-wyqg6m3h.js:11229-11239 placement
+//@ chunk-c7hntn0y.js:11593-11603 placement
 var STAT_CELLS = 12;
-//@ chunk-wyqg6m3h.js:11239-11250 placement
+//@ chunk-c7hntn0y.js:11603-11614 placement
 var WIDEST_BUCKET_COLUMNS = 200;
-//@ chunk-wyqg6m3h.js:11250-11260 placement
+//@ chunk-c7hntn0y.js:11614-11624 placement
 var DIALOG_PATH_FLOOR = 20;
-//@ chunk-wyqg6m3h.js:11260-11275 placement
+//@ chunk-c7hntn0y.js:11624-11639 placement
 var HOST_OUTPUT_CAP_BYTES = 4194304;
-//@ chunk-wyqg6m3h.js:11275-11286 placement
+//@ chunk-c7hntn0y.js:11639-11650 placement
 var MAX_DIFF_BYTES = 1e6;
-//@ chunk-wyqg6m3h.js:11286-11296 placement
+//@ chunk-c7hntn0y.js:11650-11660 placement
 var MAX_FILES = 50;
-//@ chunk-wyqg6m3h.js:11296-11307 placement
+//@ chunk-c7hntn0y.js:11660-11671 placement
 var MAX_FILES_FOR_DETAILS = 500;
-//@ chunk-wyqg6m3h.js:11307-11318 placement
+//@ chunk-c7hntn0y.js:11671-11682 placement
 var MAX_LINES_PER_FILE = 400;
-//@ chunk-wyqg6m3h.js:11318-11329 placement
+//@ chunk-c7hntn0y.js:11682-11693 placement
 var MAX_LISTED_DIRECTORIES = 512;
-//@ chunk-wyqg6m3h.js:11329-11342 placement
+//@ chunk-c7hntn0y.js:11693-11706 placement
 var MAX_PATHSPEC_CHARS = 12000;
-//@ chunk-wyqg6m3h.js:11342-11353 placement
+//@ chunk-c7hntn0y.js:11706-11717 placement
 var MAX_UNTRACKED_PROBES = 500;
-//@ chunk-wyqg6m3h.js:11353-11362 placement
+//@ chunk-c7hntn0y.js:11717-11726 placement
 var MAX_VISIBLE_FILES = 5;
-//@ chunk-wyqg6m3h.js:11362-11371 placement
+//@ chunk-c7hntn0y.js:11726-11735 placement
 var GUTTER_CHROME = 3;
-//@ chunk-wyqg6m3h.js:11371-11380 placement
+//@ chunk-c7hntn0y.js:11735-11744 placement
 var MAX_SUMMARY_ROWS = 8;
-//@ chunk-wyqg6m3h.js:11380-11390 placement
+//@ chunk-c7hntn0y.js:11744-11754 placement
 var PRE_SESSION_BODY_CAP = 20;
-//@ chunk-wyqg6m3h.js:11390-11399 placement
+//@ chunk-c7hntn0y.js:11754-11763 placement
 var SCROLL_MARGIN_ROWS = 8;
-//@ chunk-wyqg6m3h.js:11399-11408 placement
+//@ chunk-c7hntn0y.js:11763-11772 placement
 var WHEEL_ROWS = 3;
-//@ chunk-wyqg6m3h.js:11408-11421 placement
+//@ chunk-c7hntn0y.js:11772-11785 placement
 var PROMPT_CONTEXT_MAX_CHARS = 32000;
-//@ chunk-wyqg6m3h.js:11421-11433 placement
+//@ chunk-c7hntn0y.js:11785-11797 placement
 var GIT_TIMEOUT_MS = 5000;
-//@ chunk-wyqg6m3h.js:11433-11445 placement
+//@ chunk-c7hntn0y.js:11797-11809 placement
 var HEAD_POLL_MS = 2000;
-//@ chunk-wyqg6m3h.js:11445-11456 placement
+//@ chunk-c7hntn0y.js:11809-11820 placement
 var REDRAW_COALESCE_MS = 100;
-//@ chunk-wyqg6m3h.js:11456-11467 placement
+//@ chunk-c7hntn0y.js:11820-11831 placement
 var REFRESH_DEBOUNCE_MS = 150;
-//@ chunk-wyqg6m3h.js:11467-11480 placement
+//@ chunk-c7hntn0y.js:11831-11844 placement
 var SLOW_REFRESH_REST_MAX_MS = 30000;
-//@ chunk-wyqg6m3h.js:11480-11493 placement
+//@ chunk-c7hntn0y.js:11844-11857 placement
 var TIMED_OUT_REST_MAX_MS = 60000;
-//@ chunk-wyqg6m3h.js:11493-11504 placement
+//@ chunk-c7hntn0y.js:11857-11868 placement
 var TIMED_OUT_REST_MS = 1e4;
-//@ chunk-wyqg6m3h.js:11504-11514 placement
+//@ chunk-c7hntn0y.js:11868-11878 placement
 var TODO_BAR_CELLS = 20;
-//@ chunk-wyqg6m3h.js:11514-11524 placement
+//@ chunk-c7hntn0y.js:11878-11888 placement
 var TODO_BAR_RESERVE = 12;
 export {
-  arrayOf,
   availabilityFlag,
   diffPaneHooks,
+  arrayOf,
   MAX_LINES_PER_FILE,
   HOST_OUTPUT_CAP_BYTES,
   MAX_DIFF_BYTES,

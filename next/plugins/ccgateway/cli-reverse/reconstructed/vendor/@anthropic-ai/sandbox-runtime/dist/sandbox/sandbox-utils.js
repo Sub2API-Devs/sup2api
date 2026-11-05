@@ -1,9 +1,9 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (8), chunk-r0ads4ty.js (52), chunk-vp5gef34.js (1)
- * attribution: affinity 6, esm-fingerprint 37, esm-layout 18
+ * pieces: chunk-getdj2mr.js (52), chunk-kbw92gv8.js (1), chunk-qg41pqt6.js (8)
+ * attribution: esm-fingerprint 37, esm-layout 18, affinity 6
  */
 import "path";
 import * as pathModule_2 from "path";
@@ -28,11 +28,11 @@ import {
 import { isENOENT } from "../../../../../src/utils/errors.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-r0ads4ty.js:3804-3856 esm-fingerprint
+//@ chunk-getdj2mr.js:3804-3856 esm-fingerprint
 function denyGlobRegex(normalizedGlob) {
   return globToRegex(normalizedGlob).slice(0, -1) + "(/.*)?$";
 }
-//@ chunk-r0ads4ty.js:3856-4006 esm-fingerprint
+//@ chunk-getdj2mr.js:3856-4006 esm-fingerprint
 var DANGEROUS_FILES = [
   ".gitconfig",
   ".gitmodules",
@@ -45,29 +45,29 @@ var DANGEROUS_FILES = [
   ".mcp.json",
 ];
 var DANGEROUS_DIRECTORIES = [".git", ".vscode", ".idea"];
-//@ chunk-r0ads4ty.js:4006-4095 esm-fingerprint
+//@ chunk-getdj2mr.js:4006-4095 esm-fingerprint
 function getDangerousDirectories() {
   return [...DANGEROUS_DIRECTORIES.filter((d) => d !== ".git"), ".claude/commands", ".claude/agents"];
 }
-//@ chunk-r0ads4ty.js:4095-4134 esm-layout
+//@ chunk-getdj2mr.js:4095-4134 esm-layout
 function normalizeCaseForComparison(pathStr) {
   return pathStr.toLowerCase();
 }
-//@ chunk-r0ads4ty.js:4134-4197 esm-layout
+//@ chunk-getdj2mr.js:4134-4197 esm-layout
 function isAtOrUnder(p, dir) {
   return p === dir || p.startsWith(dir === "/" ? "/" : dir + "/");
 }
-//@ chunk-r0ads4ty.js:4197-4237 esm-layout
+//@ chunk-getdj2mr.js:4197-4237 esm-layout
 function coversChildPath(p, dir) {
   return p !== dir && isAtOrUnder(p, dir);
 }
-//@ chunk-r0ads4ty.js:4237-4350 esm-fingerprint
+//@ chunk-getdj2mr.js:4237-4350 esm-fingerprint
 function* properAncestors(absolutePath) {
   for (let slash = absolutePath.lastIndexOf("/"); slash > 0; slash = absolutePath.lastIndexOf("/", slash - 1))
     yield absolutePath.slice(0, slash);
   if (absolutePath !== "/") yield "/";
 }
-//@ chunk-r0ads4ty.js:4350-4421 esm-layout
+//@ chunk-getdj2mr.js:4350-4421 esm-layout
 function pathSpellingVariants(candidatePath) {
   try {
     let resolved = realPathOf(candidatePath);
@@ -75,13 +75,13 @@ function pathSpellingVariants(candidatePath) {
   } catch {}
   return [candidatePath];
 }
-//@ chunk-r0ads4ty.js:4421-4522 esm-fingerprint
+//@ chunk-getdj2mr.js:4421-4522 esm-fingerprint
 function nameLocation(p, canonicalOf) {
   if (p === "/") return p;
   let parent = canonicalOf(pathModule_2.dirname(p));
   return `${parent === "/" ? "" : parent}/${pathModule_2.basename(p)}`;
 }
-//@ chunk-r0ads4ty.js:4522-4576 esm-fingerprint
+//@ chunk-getdj2mr.js:4522-4576 esm-fingerprint
 function workingDirectory() {
   try {
     return process.cwd();
@@ -89,12 +89,12 @@ function workingDirectory() {
     return;
   }
 }
-//@ chunk-r0ads4ty.js:4576-4674 esm-fingerprint
+//@ chunk-getdj2mr.js:4576-4674 esm-fingerprint
 function isAbsenceErrno(err) {
   let code = err?.code;
   return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP" || code === "ENAMETOOLONG";
 }
-//@ chunk-r0ads4ty.js:4674-4763 esm-layout
+//@ chunk-getdj2mr.js:4674-4763 esm-layout
 function containsGlobChars(pathPattern) {
   return (
     pathPattern.includes("*") ||
@@ -103,15 +103,15 @@ function containsGlobChars(pathPattern) {
     pathPattern.includes("]")
   );
 }
-//@ chunk-r0ads4ty.js:4763-4819 esm-layout
+//@ chunk-getdj2mr.js:4763-4819 esm-layout
 function containsGlobCharsWin(p) {
   return p.includes("*") || p.includes("?");
 }
-//@ chunk-r0ads4ty.js:4819-4872 esm-fingerprint
+//@ chunk-getdj2mr.js:4819-4872 esm-fingerprint
 function containsGlobCharsForPlatform(p) {
   return getPlatform() === "windows" ? containsGlobCharsWin(p) : containsGlobChars(p);
 }
-//@ chunk-r0ads4ty.js:4872-5121 esm-layout
+//@ chunk-getdj2mr.js:4872-5121 esm-layout
 function markedLiteralPath(entry) {
   let candidate = entry;
   if (
@@ -126,22 +126,22 @@ function markedLiteralPath(entry) {
     );
   return candidate.path;
 }
-//@ chunk-r0ads4ty.js:5121-5243 esm-fingerprint
+//@ chunk-getdj2mr.js:5121-5243 esm-fingerprint
 function stripExtendedPathPrefix(p) {
   if (/^\\\\\?\\unc\\/i.test(p)) return "\\\\" + p.slice(8);
   if (p.startsWith("\\\\?\\")) return p.slice(4);
   return p;
 }
-//@ chunk-r0ads4ty.js:5243-5337 esm-fingerprint
+//@ chunk-getdj2mr.js:5243-5337 esm-fingerprint
 function isUncPath(p) {
   let ns = pathModule_2.win32.toNamespacedPath(p);
   return /^[\\/]{2}[?.][\\/]unc[\\/]/i.test(ns);
 }
-//@ chunk-r0ads4ty.js:5337-5388 esm-fingerprint
+//@ chunk-getdj2mr.js:5337-5388 esm-fingerprint
 function removeTrailingGlobSuffix(pathPattern) {
   return pathPattern.replace(/\/\*\*$/, "") || "/";
 }
-//@ chunk-r0ads4ty.js:5388-5901 esm-fingerprint
+//@ chunk-getdj2mr.js:5388-5901 esm-fingerprint
 function isSymlinkOutsideBoundary(originalPath, resolvedPath) {
   let normalizedOriginal = pathModule_2.normalize(originalPath);
   let normalizedResolved = pathModule_2.normalize(resolvedPath);
@@ -169,13 +169,13 @@ function isSymlinkOutsideBoundary(originalPath, resolvedPath) {
     return true;
   return false;
 }
-//@ chunk-r0ads4ty.js:5901-5992 esm-fingerprint
+//@ chunk-getdj2mr.js:5901-5992 esm-fingerprint
 function expandTilde(p) {
   if (p === "~") return homedir();
   if (p.startsWith("~/")) return homedir() + p.slice(1);
   return p;
 }
-//@ chunk-r0ads4ty.js:5992-6165 esm-fingerprint
+//@ chunk-getdj2mr.js:5992-6165 esm-fingerprint
 function expandWindowsEnvRefs(input) {
   let home = homedir();
   let drive = /^[A-Za-z]:/.test(home) ? home.slice(0, 2) : "";
@@ -185,11 +185,11 @@ function expandWindowsEnvRefs(input) {
     .replace(/%HOMEDRIVE%/gi, drive)
     .replace(/%HOMEPATH%/gi, homePath);
 }
-//@ chunk-r0ads4ty.js:6165-6239 esm-fingerprint
+//@ chunk-getdj2mr.js:6165-6239 esm-fingerprint
 function collapseInteriorSpellings(pathPattern) {
   return pathPattern.replace(/\/{2,}/g, "/").replace(/\/\.(?=\/)/g, "");
 }
-//@ chunk-r0ads4ty.js:6239-6453 esm-fingerprint
+//@ chunk-getdj2mr.js:6239-6453 esm-fingerprint
 function warnIfParentRefUnfolded(normalizedPath) {
   if (getPlatform() !== "windows" && /(?:^|\/)\.\.(?:\/|$)/.test(normalizedPath))
     logForDebugging(
@@ -200,7 +200,7 @@ function warnIfParentRefUnfolded(normalizedPath) {
     );
   return normalizedPath;
 }
-//@ chunk-r0ads4ty.js:6453-7151 esm-fingerprint
+//@ chunk-getdj2mr.js:6453-7151 esm-fingerprint
 function normalizePathForSandbox(pathPattern, opts) {
   let isGlobSpelling = (p) => !opts?.literal && containsGlobCharsForPlatform(p);
   if (getPlatform() === "windows") {
@@ -240,7 +240,7 @@ function normalizePathForSandbox(pathPattern, opts) {
   } catch {}
   return warnIfParentRefUnfolded(normalizedPath);
 }
-//@ chunk-r0ads4ty.js:7151-7322 esm-fingerprint
+//@ chunk-getdj2mr.js:7151-7322 esm-fingerprint
 var SANDBOX_OWN_WRITE_PATHS = [
   "/dev/stdout",
   "/dev/stderr",
@@ -252,7 +252,7 @@ var SANDBOX_OWN_WRITE_PATHS = [
   "/private/tmp/claude",
 ];
 var HOME_CONVENIENCE_WRITE_DIRS = [".npm/_logs", ".claude/debug"];
-//@ chunk-r0ads4ty.js:7322-7448 esm-fingerprint
+//@ chunk-getdj2mr.js:7322-7448 esm-fingerprint
 function getDefaultWritePaths(readRules) {
   let home = homedir();
   let keptDirs =
@@ -261,7 +261,7 @@ function getDefaultWritePaths(readRules) {
       : homeDirsNotReadDenied(home, readRules.denyRead, readRules.allowRead);
   return [...SANDBOX_OWN_WRITE_PATHS, ...keptDirs.map((rel) => pathModule_2.join(home, rel))];
 }
-//@ chunk-r0ads4ty.js:7448-7780 esm-fingerprint
+//@ chunk-getdj2mr.js:7448-7780 esm-fingerprint
 function homeDirsNotReadDenied(home, denyRead, allowRead = []) {
   let homes = [
     ...new Set([
@@ -292,7 +292,7 @@ function homeDirsNotReadDenied(home, denyRead, allowRead = []) {
     );
   });
 }
-//@ chunk-r0ads4ty.js:7780-7989 esm-fingerprint
+//@ chunk-getdj2mr.js:7780-7989 esm-fingerprint
 function readRuleCovers(entry) {
   if (typeof entry !== "string") {
     let rule = normalizePathForSandbox(markedLiteralPath(entry), {
@@ -310,7 +310,7 @@ function readRuleCovers(entry) {
   });
   return (p) => isAtOrUnder(p, rule);
 }
-//@ chunk-r0ads4ty.js:7989-8144 esm-fingerprint
+//@ chunk-getdj2mr.js:7989-8144 esm-fingerprint
 function compiledDenyGlob(normalizedGlob) {
   let regex = compiledDenyGlobs.get(normalizedGlob);
   if (regex === undefined) {
@@ -329,12 +329,12 @@ function compiledDenyGlob(normalizedGlob) {
   }
   return regex;
 }
-//@ chunk-r0ads4ty.js:8144-8387 esm-layout
+//@ chunk-getdj2mr.js:8144-8387 esm-layout
 var compiledDenyGlobs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var compiledDenyGlobChars;
 var MAX_COMPILED_DENY_GLOB_CHARS;
 var CA_TRUST_VARS;
-deferInit("chunk-r0ads4ty.js:8144", () => {
+deferInit("chunk-getdj2mr.js:8144", () => {
   compiledDenyGlobs = new Map();
   compiledDenyGlobChars = 0;
   MAX_COMPILED_DENY_GLOB_CHARS = 1048576;
@@ -352,7 +352,7 @@ deferInit("chunk-r0ads4ty.js:8144", () => {
     "NIX_SSL_CERT_FILE",
   ];
 });
-//@ chunk-r0ads4ty.js:8387-10384 esm-fingerprint
+//@ chunk-getdj2mr.js:8387-10384 esm-fingerprint
 function generateProxyEnvVars(
   httpProxyPort,
   socksProxyPort,
@@ -437,13 +437,13 @@ function generateProxyEnvVars(
   }
   return envVars;
 }
-//@ chunk-r0ads4ty.js:10384-10971 esm-layout
+//@ chunk-getdj2mr.js:10384-10971 esm-layout
 function sshConnectScript(proxyPort, basic, nc = "/usr/bin/nc") {
   return `LC_ALL=C; no() { printf "sandbox proxy: %s\\n" "$*" >&2; exit 1; }; case $1 in ""|*[!A-Za-z0-9._:-]*) no bad host;; *:*) set -- "[$1]" "$2";; esac; case $2 in ""|*[!0-9]*) no bad port;; esac; exec 3<&0; { printf "CONNECT %s HTTP/1.1\\r\\nHost: %s\\r\\nProxy-Authorization: Basic ${basic}\\r\\n\\r\\n" "$1:$2" "$1:$2"; exec /bin/cat <&3; } | ${nc} 127.0.0.1 ${proxyPort} | { read -r v why; while read -r v; do case $v in ""|?) break;; esac; done; case $why in "200 "*) exec /bin/cat;; esac; why=\${why%?}; no "$1:$2: \${why:-no answer}"; } & exec >&-; wait $!`;
 }
-//@ chunk-r0ads4ty.js:10971-10980 esm-layout
+//@ chunk-getdj2mr.js:10971-10980 esm-layout
 var SAFE_DIRECTORY_WILDCARD_THRESHOLD = 8;
-//@ chunk-r0ads4ty.js:10980-11702 esm-fingerprint
+//@ chunk-getdj2mr.js:10980-11702 esm-fingerprint
 function buildGitConfigEnv(opts) {
   if (opts.baseEnv?.GIT_CONFIG_COUNT === "0") return {};
   let parsed = Number.parseInt(opts.baseEnv?.GIT_CONFIG_COUNT ?? "", 10);
@@ -481,7 +481,7 @@ function buildGitConfigEnv(opts) {
   out.GIT_CONFIG_COUNT = String(configIndex);
   return out;
 }
-//@ chunk-r0ads4ty.js:11702-11894 esm-fingerprint
+//@ chunk-getdj2mr.js:11702-11894 esm-fingerprint
 function buildPosixGitSafeDirEnv(opts) {
   let baseEnv = {
     GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT,
@@ -493,53 +493,53 @@ function buildPosixGitSafeDirEnv(opts) {
     baseEnv,
   });
 }
-//@ chunk-r0ads4ty.js:11894-11906 esm-layout
+//@ chunk-getdj2mr.js:11894-11906 esm-layout
 var SANDBOXED_COMMAND_KEY_LENGTH = 100;
-//@ chunk-r0ads4ty.js:11906-11937 esm-layout
+//@ chunk-getdj2mr.js:11906-11937 esm-layout
 function orDefault(command, commandId) {
   return !commandId ? command : commandId;
 }
-//@ chunk-r0ads4ty.js:11937-12015 esm-fingerprint
+//@ chunk-getdj2mr.js:11937-12015 esm-fingerprint
 function encodeSandboxedCommand(command) {
   let truncatedCommand = command.slice(0, SANDBOXED_COMMAND_KEY_LENGTH);
   return Buffer.from(truncatedCommand).toString("base64");
 }
-//@ chunk-r0ads4ty.js:12015-12079 esm-fingerprint
+//@ chunk-getdj2mr.js:12015-12079 esm-fingerprint
 function decodeSandboxedCommand(encodedCommand) {
   return Buffer.from(encodedCommand, "base64").toString("utf8");
 }
-//@ chunk-r0ads4ty.js:12079-12136 esm-fingerprint
+//@ chunk-getdj2mr.js:12079-12136 esm-fingerprint
 var PROXY_AUTH_USER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_PROXY_USERNAME_BYTES;
 var MAX_ENCODED_COMMAND_BYTES;
-deferInit("chunk-r0ads4ty.js:12079", () => {
+deferInit("chunk-getdj2mr.js:12079", () => {
   PROXY_AUTH_USER = "srt";
   MAX_PROXY_USERNAME_BYTES = 255;
   MAX_ENCODED_COMMAND_BYTES = MAX_PROXY_USERNAME_BYTES - Buffer.byteLength(`${PROXY_AUTH_USER}.`);
 });
-//@ chunk-r0ads4ty.js:12136-12226 esm-layout
+//@ chunk-getdj2mr.js:12136-12226 esm-layout
 function proxyUsernameFor(encodedCommand) {
   if (!encodedCommand) return PROXY_AUTH_USER;
   let user = `${PROXY_AUTH_USER}.${encodedCommand}`;
   return Buffer.byteLength(user) <= MAX_PROXY_USERNAME_BYTES ? user : PROXY_AUTH_USER;
 }
-//@ chunk-r0ads4ty.js:12226-12357 esm-fingerprint
+//@ chunk-getdj2mr.js:12226-12357 esm-fingerprint
 function encodedCommandFromProxyUser(username) {
   if (!username || !username.startsWith(`${PROXY_AUTH_USER}.`)) return;
   let suffix = username.slice(PROXY_AUTH_USER.length + 1);
   if (!suffix || Buffer.byteLength(suffix) > MAX_ENCODED_COMMAND_BYTES) return;
   return suffix;
 }
-//@ chunk-r0ads4ty.js:12357-12422 esm-fingerprint
+//@ chunk-getdj2mr.js:12357-12422 esm-fingerprint
 function finish(steps) {
   for (;;) {
     let step = steps.next();
     if (step.done) return step.value;
   }
 }
-//@ chunk-r0ads4ty.js:12422-12432 esm-layout
+//@ chunk-getdj2mr.js:12422-12432 esm-layout
 var TURN_MS = 10;
-//@ chunk-r0ads4ty.js:12432-12684 esm-fingerprint
+//@ chunk-getdj2mr.js:12432-12684 esm-fingerprint
 async function finishInTurns(steps, signal) {
   signal?.throwIfAborted();
   let since = performance.now();
@@ -552,11 +552,11 @@ async function finishInTurns(steps, signal) {
     since = performance.now();
   }
 }
-//@ chunk-r0ads4ty.js:12684-12728 esm-layout
+//@ chunk-getdj2mr.js:12684-12728 esm-layout
 function expandGlobPattern(globPath, opts = {}) {
   return walkGlobPattern(globPath, opts).matches;
 }
-//@ chunk-r0ads4ty.js:12728-14314 esm-fingerprint
+//@ chunk-getdj2mr.js:12728-14314 esm-fingerprint
 function globPositions(normalizedPattern, flags) {
   let regex = new RegExp(globToRegex(normalizedPattern), flags);
   let directoryForm = removeTrailingGlobSuffix(normalizedPattern);
@@ -676,25 +676,25 @@ function globPositions(normalizedPattern, flags) {
     matchesDirectoryForm: (positions, name) => endsAt(positions, name, true),
   };
 }
-//@ chunk-r0ads4ty.js:14314-14429 esm-fingerprint
+//@ chunk-getdj2mr.js:14314-14429 esm-fingerprint
 function globPatternBaseDir(normalizedPattern) {
   let staticPrefix = normalizedPattern.split(/[*?[\]]/)[0];
   if (!staticPrefix) return "";
   return staticPrefix.endsWith("/") ? staticPrefix.slice(0, -1) : pathModule_2.posix.dirname(staticPrefix);
 }
-//@ chunk-r0ads4ty.js:14429-14468 esm-layout
+//@ chunk-getdj2mr.js:14429-14468 esm-layout
 function globBaseDirIsRoot(baseDir) {
   return baseDir === "" || baseDir === "/";
 }
-//@ chunk-r0ads4ty.js:14468-14493 esm-layout
+//@ chunk-getdj2mr.js:14468-14493 esm-layout
 function toForwardSlashes(s) {
   return s;
 }
-//@ chunk-r0ads4ty.js:14493-14534 esm-layout
+//@ chunk-getdj2mr.js:14493-14534 esm-layout
 function walkGlobPattern(globPath, opts = {}) {
   return finish(walkGlobPatternSteps(globPath, opts));
 }
-//@ chunk-r0ads4ty.js:14534-18917 esm-fingerprint
+//@ chunk-getdj2mr.js:14534-18917 esm-fingerprint
 function* walkGlobPatternSteps(globPath, opts = {}) {
   let walk = {
     baseLocation: "",
@@ -966,12 +966,12 @@ function* walkGlobPatternSteps(globPath, opts = {}) {
   }
   return walk;
 }
-//@ chunk-fq0cr76a.js:857514-857561 affinity
+//@ chunk-qg41pqt6.js:859209-859256 affinity
 var GLOBSTAR_SLASH_PLACEHOLDER = "(.*/)?";
 var MAX_GLOB_DEPTH = 3;
 var MAX_GLOB_LENGTH = 4096;
 var UNCLOSED_SET_REGEX = /\[[^\]]*\*/;
-//@ chunk-fq0cr76a.js:857561-857651 affinity
+//@ chunk-qg41pqt6.js:859256-859346 affinity
 function compileDenyGlob(globPattern) {
   if (globPattern.length > MAX_GLOB_LENGTH)
     return {
@@ -983,7 +983,7 @@ function compileDenyGlob(globPattern) {
     collapseGlobstarSlashes(globToRegex(globPattern)),
   );
 }
-//@ chunk-fq0cr76a.js:857651-858025 esm-fingerprint
+//@ chunk-qg41pqt6.js:859346-859720 esm-fingerprint
 function canonicalGlobSource(source) {
   if (source.length > MAX_GLOB_LENGTH)
     return {
@@ -1004,12 +1004,12 @@ function canonicalGlobSource(source) {
     escapeInvalidCharClasses(collapseGlobstarSlashes(source_2)),
   );
 }
-//@ chunk-fq0cr76a.js:858025-858091 esm-fingerprint
+//@ chunk-qg41pqt6.js:859720-859786 esm-fingerprint
 function directoryCoverRegex(globBaseDirectory) {
   let pattern = `^${globBaseDirectory === "/" ? "" : urlPatternToRegex(globBaseDirectory)}(/.*)?$`;
   return compileRegexVariants(pattern, pattern);
 }
-//@ chunk-fq0cr76a.js:858091-858254 affinity
+//@ chunk-qg41pqt6.js:859786-859949 affinity
 function readRuleMatcher(source, exactSource, directorySource) {
   try {
     let translation = compileRegexVariants(exactSource, directorySource);
@@ -1028,7 +1028,7 @@ function readRuleMatcher(source, exactSource, directorySource) {
     };
   }
 }
-//@ chunk-fq0cr76a.js:858254-858359 affinity
+//@ chunk-qg41pqt6.js:859949-860054 affinity
 function compileRegexVariants(anyCaseSource, exactSource) {
   return {
     anyCase: new RegExp(anyCaseSource, "is"),
@@ -1036,11 +1036,11 @@ function compileRegexVariants(anyCaseSource, exactSource) {
     exactly: new RegExp(exactSource, "is"),
   };
 }
-//@ chunk-fq0cr76a.js:858359-858419 affinity
+//@ chunk-qg41pqt6.js:860054-860114 affinity
 function collapseGlobstarSlashes(source) {
   return source.replace(/(?:\(\.\*\/\)\?){2,}/g, GLOBSTAR_SLASH_PLACEHOLDER);
 }
-//@ chunk-fq0cr76a.js:858419-858597 affinity
+//@ chunk-qg41pqt6.js:860114-860292 affinity
 function globComplexity(pathPattern) {
   let replaced = pathPattern.replace(/\.\*\$$/, "$");
   let replaced_2 = replaced.replaceAll(`/${GLOBSTAR_SLASH_PLACEHOLDER}`, "/");
@@ -1053,7 +1053,7 @@ function globComplexity(pathPattern) {
     MAX_GLOB_DEPTH
   );
 }
-//@ chunk-vp5gef34.js:15549-19463 esm-fingerprint
+//@ chunk-kbw92gv8.js:15661-19575 esm-fingerprint
 var TRANSIENT_READ_FAILURE_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var isTransientReadError;
 var isPermissionError;
@@ -1069,7 +1069,7 @@ var textEncoder;
 var hashContent;
 var isExcludedPath;
 var scanStoreFiles;
-deferInit("chunk-vp5gef34.js:15549", () => {
+deferInit("chunk-kbw92gv8.js:15661", () => {
   TRANSIENT_READ_FAILURE_2 = Symbol("transient-read-failure");
   isTransientReadError = (error) => {
     let code = error?.code;
@@ -1179,8 +1179,8 @@ deferInit("chunk-vp5gef34.js:15549", () => {
     let bytes = textEncoder.encode(text);
     let hashHigh = -2078137563;
     let hashLow = -873292572;
-    for (let idx = 0; idx < bytes.length; idx++) {
-      hashHigh ^= bytes[idx];
+    for (let j = 0; j < bytes.length; j++) {
+      hashHigh ^= bytes[j];
       let chunkLow = hashHigh & 65535;
       let chunkHigh = hashHigh >>> 16;
       let chunkHighMul = hashLow & 65535;
@@ -1304,18 +1304,9 @@ deferInit("chunk-vp5gef34.js:15549", () => {
   };
 });
 export {
+  containsGlobCharsForPlatform,
   getDefaultWritePaths,
-  expandTilde,
-  stripExtendedPathPrefix,
-  expandWindowsEnvRefs,
-  containsGlobChars,
   removeTrailingGlobSuffix,
-  compileDenyGlob,
-  canonicalGlobSource,
-  directoryCoverRegex,
-  containsGlobCharsWin,
-  isSymlinkOutsideBoundary,
-  expandGlobPattern,
   DEFAULT_SYNC_OPTIONS,
   scanStoreFiles,
   classifyReadError,
@@ -1328,34 +1319,43 @@ export {
   existsAsRegularFile,
   hashContent,
   readAndVerifyStoreEntry,
+  stripExtendedPathPrefix,
+  containsGlobChars,
+  compileDenyGlob,
+  canonicalGlobSource,
+  directoryCoverRegex,
+  expandWindowsEnvRefs,
+  containsGlobCharsWin,
+  isSymlinkOutsideBoundary,
+  expandGlobPattern,
   generateProxyEnvVars,
-  markedLiteralPath,
-  isUncPath,
-  toForwardSlashes,
-  collapseInteriorSpellings,
-  isAbsenceErrno,
-  containsGlobCharsForPlatform,
-  normalizePathForSandbox,
-  encodeSandboxedCommand,
-  SANDBOXED_COMMAND_KEY_LENGTH,
-  encodedCommandFromProxyUser,
-  PROXY_AUTH_USER,
-  decodeSandboxedCommand,
-  orDefault,
-  walkGlobPatternSteps,
-  finish,
-  workingDirectory,
-  finishInTurns,
-  globPatternBaseDir,
-  globBaseDirIsRoot,
+  expandTilde,
   isAtOrUnder,
   DANGEROUS_FILES,
   getDangerousDirectories,
   normalizeCaseForComparison,
+  isAbsenceErrno,
+  workingDirectory,
   nameLocation,
   coversChildPath,
+  normalizePathForSandbox,
   properAncestors,
+  encodeSandboxedCommand,
+  orDefault,
   buildPosixGitSafeDirEnv,
+  markedLiteralPath,
+  isUncPath,
+  toForwardSlashes,
+  collapseInteriorSpellings,
+  SANDBOXED_COMMAND_KEY_LENGTH,
+  encodedCommandFromProxyUser,
+  PROXY_AUTH_USER,
+  decodeSandboxedCommand,
+  walkGlobPatternSteps,
+  finish,
+  finishInTurns,
+  globPatternBaseDir,
+  globBaseDirIsRoot,
   pathSpellingVariants,
   denyGlobRegex,
   MAX_ENCODED_COMMAND_BYTES,

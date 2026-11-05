@@ -3,9 +3,9 @@
  *
  * Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/Clawd.tsx
- * pieces: chunk-8jypjjdf.js (11)
+ * pieces: chunk-tvbhy3tn.js (11)
  * attribution: placement 4, callgraph-fingerprint 1, layout 4, fingerprint 2
  */
 import { identity } from "../../utils/identity.js";
@@ -21,15 +21,15 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8jypjjdf.js:11218-11254 placement
+//@ chunk-tvbhy3tn.js:11220-11256 placement
 /**
  * 导出值：clawdPoseStore（Clawd 姿态 store）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
 var clawdPoseStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8jypjjdf.js:11218", () => {
+deferInit("chunk-tvbhy3tn.js:11220", () => {
   clawdPoseStore = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-8jypjjdf.js:11254-11311 placement
+//@ chunk-tvbhy3tn.js:11256-11313 placement
 /**
  * 读取 Clawd 吉祥物姿态的全局状态（保留的姿态、取用时间、运行次数）。
  */
@@ -39,7 +39,7 @@ var getClawdPoseState = () =>
     takenAfter: 0,
     runs: 0,
   };
-//@ chunk-8jypjjdf.js:11311-11355 placement
+//@ chunk-tvbhy3tn.js:11313-11357 placement
 /**
  * 清除保留的 Clawd 姿态。
  */
@@ -48,7 +48,7 @@ var clearKeptClawdPose = () =>
     ...getClawdPoseState(),
     kept: undefined,
   });
-//@ chunk-8jypjjdf.js:11355-14769 callgraph-fingerprint (2.1.88 match: APPLE_EYES, 0.203)
+//@ chunk-tvbhy3tn.js:11357-14771 callgraph-fingerprint (2.1.88 match: APPLE_EYES, 0.203)
 /**
  * Clawd 字符画的部件表：姿态 → {eyes, arms, feet}；手臂、眼睛、脚、眼睛单行、转身视角各自的方块字符（转身帧带背景着色区间 from/to）。
  */
@@ -374,25 +374,25 @@ var CLAWD_TURN_GLYPHS = {
     },
   ],
 };
-//@ chunk-8jypjjdf.js:14769-14820 layout
+//@ chunk-tvbhy3tn.js:14771-14822 layout
 /**
  * 函数 normalizePose（字符串姿态名转定义）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
 function normalizePose(pose) {
   return typeof pose === "string" ? CLAWD_POSES[pose] : pose;
 }
-//@ chunk-8jypjjdf.js:14820-14877 layout
+//@ chunk-tvbhy3tn.js:14822-14879 layout
 /**
  * 函数 isPoseSpec（非字符串且带 facing）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
 function isPoseSpec(poseSpec) {
   return typeof poseSpec !== "string" && "facing" in poseSpec;
 }
-//@ chunk-8jypjjdf.js:14877-14929 placement (2.1.88 match: chalkForChart, 1)
-function chalkForChart() {
+//@ chunk-tvbhy3tn.js:14879-14931 placement
+function notAppleTerminal() {
   return env.terminal !== "Apple_Terminal";
 }
-//@ chunk-8jypjjdf.js:14929-17028 fingerprint (2.1.88 match: Clawd, 0.367)
+//@ chunk-tvbhy3tn.js:14931-17030 fingerprint (2.1.88 match: Clawd, 0.367)
 function Clawd(t0) {
   let $ = useMemoCache(47);
   let props;
@@ -410,7 +410,7 @@ function Clawd(t0) {
   if (isPoseSpec(poseName)) {
     let frame;
     if ($[2] !== bodyColor || $[3] !== poseName) {
-      frame = chalkForChart()
+      frame = notAppleTerminal()
         ? jsxProd_default(ClawdTurnFrame, {
             facing: poseName.facing,
             color: bodyColor,
@@ -432,7 +432,7 @@ function Clawd(t0) {
     $[6] = poseSpec;
   } else poseSpec = $[6];
   let poseValue = poseSpec;
-  if (!chalkForChart()) {
+  if (!notAppleTerminal()) {
     let smallFrame;
     if ($[7] !== bodyColor || $[8] !== poseValue.eyes) {
       smallFrame = jsxProd_default(AppleTerminalClawd, {
@@ -596,7 +596,7 @@ function Clawd(t0) {
   } else clawd = $[46];
   return clawd;
 }
-//@ chunk-8jypjjdf.js:17028-17380 layout
+//@ chunk-tvbhy3tn.js:17030-17382 layout
 /**
  * 把一串字符按 paint(列,行) 给出的颜色分段（相邻同色合并，空格沿用前一段颜色）渲染成 Text 列表；on=lid 时前景背景对调。
  */
@@ -624,7 +624,7 @@ function renderPaintedGlyphs({ glyphs, column, row, paint, on }) {
     ),
   );
 }
-//@ chunk-8jypjjdf.js:17380-17829 layout
+//@ chunk-tvbhy3tn.js:17382-17831 layout
 /**
  * 渲染 Clawd 转身视角帧：每行的 from..to 区间加 clawd_background 背景色。
  */
@@ -674,7 +674,7 @@ function ClawdTurnFrame(props) {
   } else frame = $[6];
   return frame;
 }
-//@ chunk-8jypjjdf.js:17829-18653 fingerprint (2.1.88 match: AppleTerminalClawd, 0.558)
+//@ chunk-tvbhy3tn.js:17831-18655 fingerprint (2.1.88 match: AppleTerminalClawd, 0.558)
 function AppleTerminalClawd(props) {
   let $ = useMemoCache(19);
   let { eyes, color } = props;
@@ -758,9 +758,9 @@ function AppleTerminalClawd(props) {
 export {
   clearKeptClawdPose,
   Clawd,
+  notAppleTerminal,
   isPoseSpec,
   normalizePose,
-  chalkForChart,
   getClawdPoseState,
   clawdPoseStore,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件/skill 搜索与推荐工具。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zw5xhxkf.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vj5dz3jp.js (41)
  * attribution: placement 41
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -33,7 +33,7 @@ import {
   isPluginsSyncVetoed,
   isSyncRefusal,
 } from "../../services/plugins/accountSync/syncedPluginHooks.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isTaggedMarketplaceId } from "../../utils/plugins/syncedItems.js";
 import { isAbortError, errorMessage, AbortError } from "../../utils/errors.js";
 import { isSessionRefsSyncEnabled } from "../../utils/claudeAiSync/sessionRefsGate.js";
@@ -59,9 +59,9 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { envSessionKind } from "../../utils/sessionShape.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 
-//@ chunk-zw5xhxkf.js:5270-5474 placement
+//@ chunk-vj5dz3jp.js:5465-5669 placement
 var pluginSearchRowSchema = DoctorLazy(() =>
   looseObject({
     id: stringSchema(),
@@ -78,19 +78,19 @@ var pluginSearchResponseSchema = DoctorLazy(() =>
     results: array(pluginSearchRowSchema()),
   }),
 );
-//@ chunk-zw5xhxkf.js:5474-5567 placement
+//@ chunk-vj5dz3jp.js:5669-5762 placement
 class PluginSkillSearchUnavailableError extends Error {
   constructor(message) {
     super(message);
     this.name = "PluginSkillSearchUnavailableError";
   }
 }
-//@ chunk-zw5xhxkf.js:5567-5732 placement
+//@ chunk-vj5dz3jp.js:5762-5927 placement
 var PLUGIN_SEARCH_TIMEOUT_MS = 15000;
 var PLUGIN_SEARCH_PATH = "/api/oauth/organizations/:orgUUID/plugins/search";
 var SKILL_SEARCH_PATH = "/api/oauth/organizations/:orgUUID/skills/search";
 var PLUGINS_API_PATH = "/api/oauth/organizations/:orgUUID/plugins/";
-//@ chunk-zw5xhxkf.js:5732-6334 placement
+//@ chunk-vj5dz3jp.js:5927-6529 placement
 /**
  * 插件/技能搜索前的检查：组织策略 allow_plugin_skill_search 不允许时按原因记埋点并抛 PluginSkillSearchUnavailableError；需要 user:plugins scope 而会话没有时降级为空（返回 skip）。
  */
@@ -121,7 +121,7 @@ async function checkPluginSearchAllowed(feature, needsPluginsScope, session, cli
   }
   return "send";
 }
-//@ chunk-zw5xhxkf.js:6334-7335 placement
+//@ chunk-vj5dz3jp.js:6529-7530 placement
 async function searchPluginsOrSkills(path, keywords, session, client) {
   let feature = path === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search";
   if ((await checkPluginSearchAllowed(feature, path === PLUGIN_SEARCH_PATH, session, client)) === "skip")
@@ -173,9 +173,9 @@ async function searchPluginsOrSkills(path, keywords, session, client) {
   logFeatureOk(path === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search");
   return parsed.data.results;
 }
-//@ chunk-zw5xhxkf.js:7335-8335 placement
+//@ chunk-vj5dz3jp.js:7530-8530 placement
 async function fetchPluginDetails(pluginIds, session, client) {
-  let filtered = uniq(pluginIds).filter(isTaggedMarketplaceId);
+  let filtered = normalizeCaseForComparison_2(pluginIds).filter(isTaggedMarketplaceId);
   if (filtered.length === 0)
     return {
       found: [],
@@ -246,28 +246,28 @@ async function fetchPluginDetails(pluginIds, session, client) {
     skippedNoScope: false,
   };
 }
-//@ chunk-zw5xhxkf.js:8335-8377 placement
+//@ chunk-vj5dz3jp.js:8530-8573 placement
 /**
  * 在插件目录里按关键词搜索（run 实现）。
  */
 async function searchPluginsCatalog(keywords, signal, credentials) {
   return searchPluginsOrSkills(PLUGIN_SEARCH_PATH, keywords, signal, credentials);
 }
-//@ chunk-zw5xhxkf.js:8377-8419 placement
+//@ chunk-vj5dz3jp.js:8573-8615 placement
 /**
  * 在技能目录里按关键词搜索。
  */
 async function searchSkillsCatalog(keywords, signal, credentials) {
   return searchPluginsOrSkills(SKILL_SEARCH_PATH, keywords, signal, credentials);
 }
-//@ chunk-zw5xhxkf.js:8419-8561 placement
+//@ chunk-vj5dz3jp.js:8615-8757 placement
 function logSearchFetchFailed(kind, error) {
   logForDebugging(`[plugin-skill-search] ${kind} failed: ${errorMessage(error)}`, {
     level: "error",
   });
   logFeatureBad(kind === "plugin" ? "plugin_search" : "skill_search", "fetch_failed");
 }
-//@ chunk-zw5xhxkf.js:8561-8789 placement
+//@ chunk-vj5dz3jp.js:8757-8985 placement
 async function readPluginManifest(session, signal, feature) {
   if (!isSessionRefsSyncEnabled(session)) return null;
   if (isPluginsSyncVetoed()) return [];
@@ -282,7 +282,7 @@ async function readPluginManifest(session, signal, feature) {
   }
   return manifestResult.plugins;
 }
-//@ chunk-zw5xhxkf.js:8789-8926 placement
+//@ chunk-vj5dz3jp.js:8985-9122 placement
 var keywordsSchema = DoctorLazy(() =>
   array(stringSchema().min(1).max(64))
     .min(1)
@@ -294,7 +294,7 @@ var listResultSchema = DoctorLazy(() =>
     results: array(pluginSearchRowSchema()),
   }),
 );
-//@ chunk-zw5xhxkf.js:8926-8996 placement
+//@ chunk-vj5dz3jp.js:9122-9192 placement
 /**
  * 把工具结果序列化成 tool_result 内容块（JSON）。
  */
@@ -305,21 +305,21 @@ function jsonResultBlock(result, toolUseId) {
     content: jsonStringify(result),
   };
 }
-//@ chunk-zw5xhxkf.js:8996-9044 placement
+//@ chunk-vj5dz3jp.js:9192-9240 placement
 /**
  * 把输入里的关键词数组渲染成逗号分隔文本。
  */
 function renderKeywords(input) {
   return (input.keywords ?? []).join(", ");
 }
-//@ chunk-zw5xhxkf.js:9044-9085 placement
+//@ chunk-vj5dz3jp.js:9240-9281 placement
 /**
  * 渲染 contextLabel，缺省空串。
  */
 function renderContextLabel(input) {
   return input.contextLabel ?? "";
 }
-//@ chunk-zw5xhxkf.js:9085-9208 placement
+//@ chunk-vj5dz3jp.js:9281-9404 placement
 var listInputSchema = DoctorLazy(() =>
   zodStrictObject({
     keywords: array(stringSchema().min(1).max(64))
@@ -328,7 +328,7 @@ var listInputSchema = DoctorLazy(() =>
       .describe("Optional filter; omit to list everything."),
   }),
 );
-//@ chunk-zw5xhxkf.js:9208-9295 placement
+//@ chunk-vj5dz3jp.js:9404-9491 placement
 /**
  * 判断名称或描述是否包含任意关键词（忽略大小写）。
  */
@@ -336,7 +336,7 @@ function matchesAnyKeyword(text, keywords) {
   let lower = text.toLowerCase();
   return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
 }
-//@ chunk-zw5xhxkf.js:9295-9410 placement
+//@ chunk-vj5dz3jp.js:9491-9606 placement
 function filterByKeywords(rows, keywords) {
   if (!keywords?.length) return rows;
   return rows.filter(
@@ -345,7 +345,7 @@ function filterByKeywords(rows, keywords) {
       (row.description ? matchesAnyKeyword(row.description, keywords) : false),
   );
 }
-//@ chunk-zw5xhxkf.js:9410-10045 placement
+//@ chunk-vj5dz3jp.js:9606-10241 placement
 /**
  * 构造"列出插件/技能"只读工具（可按关键词过滤，延迟加载）：调用 fetch 获取目录，按需记录目录行，返回 {results}。
  */
@@ -384,7 +384,7 @@ function buildCatalogListTool(spec) {
     renderToolUseMessage: renderKeywords,
   });
 }
-//@ chunk-zw5xhxkf.js:10045-12452 placement
+//@ chunk-vj5dz3jp.js:10241-12648 placement
 /**
  * ListPlugins 工具：列出用户 claude.ai 账号启用的插件（非本地安装）。
  */
@@ -485,7 +485,7 @@ var SuggestPluginInstallTool = buildCatalogListTool({
     };
   },
 });
-//@ chunk-zw5xhxkf.js:12452-15519 placement
+//@ chunk-vj5dz3jp.js:12648-15715 placement
 /**
  * 建议来源字段（user_asked/proactive）。
  */
@@ -547,14 +547,14 @@ var CARD_RENDERED_NOTE =
 var NO_CARD_NOTE =
   "No card was rendered: none of the suggested pluginIds could be verified as plugins in the user's claude.ai catalog. Pass pluginId values exactly as SearchPlugins returns them and never guess ids; if you have no SearchPlugins result to draw from, call SearchPlugins first or continue without a card. Do not mention this to the user.";
 var HOST_MAY_NOT_DRAW_CARD_NOTE = `The user's app may not draw this card. So when the call returns something to suggest, also name it in one short sentence, such as "I've suggested the Acme plugin.", and say nothing more about it. This overrides any line above about not describing it in text.`;
-//@ chunk-zw5xhxkf.js:15519-15551 placement
+//@ chunk-vj5dz3jp.js:15715-15747 placement
 /**
  * 是否处于 CCS 租户且非远端协作（决定是否附加 CCS 说明）。
  */
 function isCcsTenantOnly() {
   return isCcsTenant() && !isCcsRemoteCowork();
 }
-//@ chunk-zw5xhxkf.js:15551-16173 placement
+//@ chunk-vj5dz3jp.js:15747-16369 placement
 /**
  * 插件推荐卡片后的附注：卡片是否渲染、被丢弃的未知 id、属于技能的 id（改用 SuggestSkills）、暂时无法检查而未列出的 id。
  */
@@ -576,13 +576,13 @@ function suggestCardNote(counts) {
     );
   return notes.join(" ");
 }
-//@ chunk-zw5xhxkf.js:16173-16192 placement
+//@ chunk-vj5dz3jp.js:16369-16388 placement
 /**
  * 建议卡片里插件名的最大字符数（256）。
  */
 var MAX_SUGGESTED_PLUGIN_NAME_CHARS = 256;
 var MAX_SUGGESTED_PLUGIN_DESCRIPTION_CHARS = 1024;
-//@ chunk-zw5xhxkf.js:16192-16711 placement
+//@ chunk-vj5dz3jp.js:16388-16905 placement
 /**
  * 把模型建议的插件 id 转成推荐卡片：查目录得到显示名与描述（截断），丢弃未知/技能/不可安装/未核验的 id 并计数，返回卡片数据与给模型的说明。
  */
@@ -624,7 +624,7 @@ function buildSuggestCard(input, cache, uncheckedIds = new Set()) {
     counts,
   };
 }
-//@ chunk-zw5xhxkf.js:16711-17840 placement
+//@ chunk-vj5dz3jp.js:16905-18034 placement
 var renderPluginSuggestCard = buildTool({
   name: SUGGESTPLUGININSTALL,
   searchHint: "render a plugin install card",
@@ -701,33 +701,33 @@ ${HOST_MAY_NOT_DRAW_CARD_NOTE}`
   renderToolUseMessage: renderContextLabel,
 });
 var TENGU_SADDLE_LANTERN = "tengu_saddle_lantern";
-//@ chunk-zw5xhxkf.js:17840-17891 placement
+//@ chunk-vj5dz3jp.js:18034-18085 placement
 /**
  * 惰性加载特性开关模块（require("./chunk-6df1d6re.js")）。
  */
 function featureFlagsModule() {
   return require("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
 }
-//@ chunk-zw5xhxkf.js:17891-17969 placement
+//@ chunk-vj5dz3jp.js:18085-18163 placement
 /**
  * 读取建议功能灰度开关值（tengu_saddle_lantern）。
  */
 function suggestRolloutFlag() {
   return featureFlagsModule().getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_SADDLE_LANTERN, false);
 }
-//@ chunk-zw5xhxkf.js:17969-18023 placement
+//@ chunk-vj5dz3jp.js:18163-18217 placement
 var TENGU_GENTLE_FROST = "tengu_gentle_frost";
 var TENGU_SORTED_TRUFFLE = "tengu_sorted_truffle";
-//@ chunk-zw5xhxkf.js:18023-18086 placement
+//@ chunk-vj5dz3jp.js:18217-18280 placement
 /**
  * 读取 tengu_sorted_truffle：建议结果是否按相关性排序。
  */
 function isSortedSuggestionEnabled() {
   return featureFlagsModule().getFeatureValue_SESSION_PINNED(TENGU_SORTED_TRUFFLE, true);
 }
-//@ chunk-zw5xhxkf.js:18086-18119 placement
+//@ chunk-vj5dz3jp.js:18280-18313 placement
 var TENGU_SEQUENTIAL_SUMMIT = "tengu_sequential_summit";
-//@ chunk-zw5xhxkf.js:18119-18203 placement
+//@ chunk-vj5dz3jp.js:18313-18397 placement
 /**
  * 当前会话是否启用建议搜索：会话类型满足，或 CCS 远端协作且开关打开，且不在聊天/Teams 场景。
  */
@@ -739,7 +739,7 @@ function isSuggestionSearchEnabled() {
     !isChatOrTeams()
   );
 }
-//@ chunk-zw5xhxkf.js:18203-18271 placement
+//@ chunk-vj5dz3jp.js:18397-18465 placement
 /**
  * 建议工具是否预加载（ue() 且 tengu_gentle_frost 打开）。
  */
@@ -749,14 +749,14 @@ function isSuggestionToolLoadedUpFront() {
     featureFlagsModule().getFeatureValue_SESSION_PINNED(TENGU_GENTLE_FROST, false)
   );
 }
-//@ chunk-zw5xhxkf.js:18271-18303 placement
+//@ chunk-vj5dz3jp.js:18465-18497 placement
 /**
  * 建议灰度是否打开（ue() 且设置值）。
  */
 function isSuggestionRolloutEnabled() {
   return isSuggestionSearchEnabled() && readSuggestRolloutSetting();
 }
-//@ chunk-zw5xhxkf.js:18303-18396 placement
+//@ chunk-vj5dz3jp.js:18497-18590 placement
 /**
  * 读取并缓存建议灰度设置。
  */
@@ -765,7 +765,7 @@ function readSuggestRolloutSetting() {
   sessionFeatureValues.suggestRolloutEnabled ??= suggestRolloutFlag().value;
   return sessionFeatureValues.suggestRolloutEnabled;
 }
-//@ chunk-zw5xhxkf.js:18396-18569 placement
+//@ chunk-vj5dz3jp.js:18590-18763 placement
 function isSuggestRolloutEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.suggestRolloutEnabled === undefined) {
@@ -775,9 +775,9 @@ function isSuggestRolloutEnabled() {
   }
   return sessionFeatureValues.suggestRolloutEnabled;
 }
-//@ chunk-zw5xhxkf.js:18569-18577 placement
+//@ chunk-vj5dz3jp.js:18763-18771 placement
 _registerSuggestRolloutPinReader(isSuggestRolloutEnabled);
-//@ chunk-zw5xhxkf.js:18577-20975 placement
+//@ chunk-vj5dz3jp.js:18771-21169 placement
 /**
  * SuggestSkills 的结果 schema（列表结果加 trigger）。
  */
@@ -858,7 +858,7 @@ ${HOST_MAY_NOT_DRAW_CARD_NOTE}`
   mapToolResultToToolResultBlockParam: jsonResultBlock,
   renderToolUseMessage: renderKeywords,
 });
-//@ chunk-zw5xhxkf.js:20975-21009 placement
+//@ chunk-vj5dz3jp.js:21169-21203 placement
 /**
  * SuggestSkills 的输入 schema。
  */
@@ -867,7 +867,7 @@ var suggestSkillsInputSchema = DoctorLazy(() =>
     keywords: keywordsSchema(),
   }),
 );
-//@ chunk-zw5xhxkf.js:21009-22074 placement
+//@ chunk-vj5dz3jp.js:21203-22268 placement
 function makeCatalogSearchTool(spec) {
   return buildTool({
     name: spec.name,
@@ -891,7 +891,7 @@ function makeCatalogSearchTool(spec) {
       let upFrontPrompt = spec.upFrontPrompt;
       return upFrontPrompt !== undefined &&
         spec.loadedUpFront?.() &&
-        tools.some((tool) => toolMatchesName(tool, upFrontPrompt.requiresTool))
+        tools.some((tool) => matchesToolName(tool, upFrontPrompt.requiresTool))
         ? upFrontPrompt.text
         : spec.prompt;
     },
@@ -936,7 +936,7 @@ function makeCatalogSearchTool(spec) {
     renderToolUseMessage: renderKeywords,
   });
 }
-//@ chunk-zw5xhxkf.js:22074-24501 placement
+//@ chunk-vj5dz3jp.js:22268-24696 placement
 /**
  * 搜索提示词里的示例（“use the deploy plugin” → keywords）。
  */
@@ -989,7 +989,7 @@ Examples:
 
 Returns a ranked list with id, name, description, and whether the skill is enabled. When results fit and SuggestSkills is among your tools, call it to render the add card; otherwise relay the relevant results in text instead. If nothing relevant, proceed without mentioning that you searched.`,
 });
-//@ chunk-zw5xhxkf.js:24501-24569 placement
+//@ chunk-vj5dz3jp.js:24696-24764 placement
 /**
  * 插件/技能发现相关工具的安全工具名列表与工具对象列表。
  */

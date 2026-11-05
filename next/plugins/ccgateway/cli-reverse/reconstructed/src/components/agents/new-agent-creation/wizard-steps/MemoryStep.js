@@ -3,9 +3,9 @@
  *
  * 向导记忆步骤；实际内容为 gcloud 项目选择（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/MemoryStep.tsx
- * pieces: chunk-y6fv30yg.js (1)
+ * pieces: chunk-3qyfks39.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
@@ -33,7 +33,7 @@ import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
 import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 
-//@ chunk-y6fv30yg.js:11359-14249 callgraph-fingerprint (2.1.88 match: MemoryStep, 0.315)
+//@ chunk-3qyfks39.js:11359-14249 callgraph-fingerprint (2.1.88 match: MemoryStep, 0.314)
 function MemoryStep(props) {
   let $ = useMemoCache(48);
   let { projectsPromise } = props;

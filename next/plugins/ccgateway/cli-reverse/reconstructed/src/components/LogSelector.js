@@ -3,14 +3,13 @@
  *
  * 会话选择器（/resume 列表）：搜索、按项目/全部项目切换、按标签与 PR/分支分组、worktree 检测、片段预览。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogSelector.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-52dd7zdd.js (1), chunk-63641kq7.js (1), chunk-b79vwm1h.js (13)
- * attribution: fingerprint 10, file-local 1, layout 4, callgraph-fingerprint 1
+ * pieces: chunk-4j4pn0rx.js (1), chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (1), chunk-y1bp9wp9.js (13)
+ * attribution: fingerprint 9, file-local 1, layout 4, callgraph-fingerprint 1, sole-consumer 1
  */
 import { sep, basename } from "path";
-import { DoctorLazy } from "../cli/handlers/util.js";
-import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { sortLogs } from "../types/logs.js";
 import {
   useRef,
   useEffect,
@@ -59,11 +58,10 @@ import { TextInput } from "./TextInput.js";
 import { TreeSelect } from "./ui/TreeSelect.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
-import { renderCompactSummaryText } from "./CompactSummary.js";
+import { stripModelOnlySummarySuffix } from "./CompactSummary.js";
 import { renderPluginPromptColon } from "../utils/messages/pluginPrompts.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-52dd7zdd.js:457-534 fingerprint (2.1.88 match: _temp7, 0.578)
+//@ chunk-4j4pn0rx.js:457-534 fingerprint (2.1.88 match: _temp7, 0.578)
 function createLogSinkRef() {
   let sink = {
     log() {},
@@ -76,17 +74,21 @@ function createLogSinkRef() {
     get: () => sink,
   };
 }
-//@ chunk-63641kq7.js:5273-5307 fingerprint (2.1.88 match: _temp2, 0.643)
-var LogSelectorOptionsSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-63641kq7.js:5273", () => {
-  LogSelectorOptionsSchema = DoctorLazy(() =>
-    objectSchema({
-      customTitle: stringSchema(),
-    }),
-  );
-});
-//@ chunk-18hwfzwa.js:485439-485686 fingerprint (2.1.88 match: getUniqueTags, 0.489)
-function getUniqueTags(logs, tag, onConflict) {
+//@ chunk-5xgkngpb.js:551752-551974 fingerprint (2.1.88 match: groupLogsBySessionId, 1)
+function latestLogPerSession(filteredLogs) {
+  let groups = new Map();
+  for (let log of filteredLogs) {
+    if (!log.sessionId) continue;
+    let existing = groups.get(log.sessionId);
+    if (!existing || log.modified.getTime() > existing.modified.getTime()) groups.set(log.sessionId, log);
+  }
+  return sortLogs([...groups.values()]).map((log, value) => ({
+    ...log,
+    value,
+  }));
+}
+//@ chunk-czq1j3j2.js:511915-512162 fingerprint (2.1.88 match: getUniqueTags, 0.487)
+function useRedrawnValues(logs, tag, onConflict) {
   let seenRef = useRef(new Map());
   useEffect(() => {
     let conflicts = [];
@@ -99,19 +101,19 @@ function getUniqueTags(logs, tag, onConflict) {
     if (conflicts.length > 0) onConflict(conflicts);
   }, [logs, tag, onConflict]);
 }
-//@ chunk-b79vwm1h.js:7428-7495 file-local
+//@ chunk-y1bp9wp9.js:7193-7260 file-local
 function normalizeAndTruncateToWidth(text, maxWidth) {
   let normalized = text.replace(/\s+/g, " ").trim();
   return truncateToWidth(normalized, maxWidth);
 }
-//@ chunk-b79vwm1h.js:7495-7541 layout
+//@ chunk-y1bp9wp9.js:7260-7306 layout
 var LOG_MIN_LINES = 2;
 var LOG_MAX_LINES = 4;
 var LOG_REFRESH_MS = 2000;
 var LOG_TAIL_MS = 1000;
 var LOG_MAX_BYTES = 50000;
 var LOG_DIM_RATIO = 0.3;
-//@ chunk-b79vwm1h.js:7541-7612 layout
+//@ chunk-y1bp9wp9.js:7306-7377 layout
 var LOG_SHORTCUT_FORMAT = {
   format: {
     modCase: "title",
@@ -121,18 +123,18 @@ var LOG_SHORTCUT_FORMAT = {
 var LOG_STALE_MS = 60000;
 var LOG_MAX_ENTRIES = 50;
 var LOG_RETRY_COUNT = 5;
-//@ chunk-b79vwm1h.js:7612-7686 fingerprint (2.1.88 match: formatSnippet, 1)
+//@ chunk-y1bp9wp9.js:7377-7451 fingerprint (2.1.88 match: formatSnippet, 1)
 function formatSnippet({ before, match, after }, highlightColor) {
   return sequential.dim(before) + highlightColor(match) + sequential.dim(after);
 }
-//@ chunk-b79vwm1h.js:7686-7827 layout
+//@ chunk-y1bp9wp9.js:7451-7592 layout
 function formatPrUrlsInQuery(searchQuery) {
   return searchQuery.replace(new RegExp(PR_URL_RE_2.source + '[^,\\s"]*', "g"), (url) => {
     let prUrl = parsePrUrl_2(url);
     return prUrl ? `PR #${prUrl.prNumber} ${prUrl.prRepository}` : url;
   });
 }
-//@ chunk-b79vwm1h.js:7827-8165 fingerprint (2.1.88 match: extractSnippet, 1)
+//@ chunk-y1bp9wp9.js:7592-7930 fingerprint (2.1.88 match: extractSnippet, 1)
 function extractSnippet(text, query, contextChars) {
   let matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
   if (matchIndex === -1) return null;
@@ -148,7 +150,7 @@ function extractSnippet(text, query, contextChars) {
     after: afterRaw.replace(/\s+/g, " ").trimEnd() + (snippetEnd < text.length ? "\u2026" : ""),
   };
 }
-//@ chunk-b79vwm1h.js:8165-8496 fingerprint (2.1.88 match: buildLogLabel, 0.948)
+//@ chunk-y1bp9wp9.js:7930-8261 fingerprint (2.1.88 match: buildLogLabel, 0.948)
 function buildLogLabel(log, maxLabelWidth, options) {
   let { isGroupHeader = false, isChild = false, forkCount = 0 } = options || {};
   let prefixWidth = isGroupHeader && forkCount > 0 ? LOG_MIN_LINES : isChild ? LOG_MAX_LINES : 0;
@@ -165,7 +167,7 @@ function buildLogLabel(log, maxLabelWidth, options) {
     maxLabelWidth - prefixWidth - sidechainSuffix.length - forkSuffix.length - bunStringWidth(artifactSuffix);
   return `${normalizeAndTruncateToWidth(getLogDisplayTitle(log), maxSummaryWidth)}${sidechainSuffix}${forkSuffix}${artifactSuffix}`;
 }
-//@ chunk-b79vwm1h.js:8496-8641 fingerprint (2.1.88 match: buildLogMetadata, 1)
+//@ chunk-y1bp9wp9.js:8261-8406 fingerprint (2.1.88 match: buildLogMetadata, 1)
 function buildLogMetadata(log, options) {
   let { isChild = false, showProjectPath = false } = options || {};
   let childPadding = isChild ? "    " : "";
@@ -173,7 +175,7 @@ function buildLogMetadata(log, options) {
   let projectSuffix = showProjectPath && log.projectPath ? ` \xB7 ${log.projectPath}` : "";
   return childPadding + baseMetadata + projectSuffix;
 }
-//@ chunk-b79vwm1h.js:8641-18667 fingerprint (2.1.88 match: LogSelector, 0.634)
+//@ chunk-y1bp9wp9.js:8406-18349 fingerprint (2.1.88 match: LogSelector, 0.631)
 /**
  * 会话选择器：显示会话列表（标题、时间、消息数、分支/PR、标签），支持搜索（tengu_session_search_toggled）、所有项目切换、按 sessionId 分组、worktree 检测与预览。
  */
@@ -197,14 +199,14 @@ function LogSelector({
   let scrollViewportSize = useScrollViewportSize(useTerminalSize());
   let width = forceWidth === undefined ? scrollViewportSize.columns : forceWidth;
   let globalExitKeybindings = useGlobalExitKeybindings(onCancel);
-  let ee = false;
+  let unused = false;
   let emptyProps = stableEmptyObject(false);
   let shortcutFormat = LOG_SHORTCUT_FORMAT;
   let allProjectsAction = "show all projects";
   let rowHeight = 2;
   let isTerminalFocused = useTerminalFocus();
   let terminalSize = useClock();
-  let Te = false;
+  let unused_2 = false;
   let isTerminalFocused_2 = useResolvedTheme();
   let highlightColor = useMemo(
     () => (text) => applyColor(text, isTerminalFocused_2.warning),
@@ -387,9 +389,8 @@ function LogSelector({
     let sessionGroups = groupLogsBySessionId(filteredLogs_2);
     return Array.from(sessionGroups.entries()).map(([sessionId, groupLogs]) => {
       let latestLog = groupLogs[0];
-      let indexInFiltered = filteredLogs_2.indexOf(latestLog);
-      let snippet = snippets.get(latestLog);
-      let snippetStr = snippet ? formatSnippet(snippet, highlightColor) : null;
+      let snippet_0 = snippets.get(latestLog);
+      let snippetStr = snippet_0 ? formatSnippet(snippet_0, highlightColor) : null;
       if (groupLogs.length === 1) {
         let metadata = buildLogMetadata(latestLog, {
           showProjectPath: showAllProjects,
@@ -398,7 +399,6 @@ function LogSelector({
           id: `log:${sessionId}:0`,
           value: {
             log: latestLog,
-            indexInFiltered,
           },
           label: buildLogLabel(latestLog, maxLabelWidth),
           description: snippetStr
@@ -410,7 +410,6 @@ function LogSelector({
       }
       let forkCount = groupLogs.length - 1;
       let children = groupLogs.slice(1).map((log, index) => {
-        let childIndexInFiltered = filteredLogs_2.indexOf(log);
         let childSnippet = snippets.get(log);
         let childSnippetStr = childSnippet ? formatSnippet(childSnippet, highlightColor) : null;
         let childMetadata = buildLogMetadata(log, {
@@ -421,7 +420,6 @@ function LogSelector({
           id: `log:${sessionId}:${index + 1}`,
           value: {
             log,
-            indexInFiltered: childIndexInFiltered,
           },
           label: buildLogLabel(log, maxLabelWidth, {
             isChild: true,
@@ -440,7 +438,6 @@ function LogSelector({
         id: `group:${sessionId}`,
         value: {
           log: latestLog,
-          indexInFiltered,
         },
         label: buildLogLabel(latestLog, maxLabelWidth, {
           isGroupHeader: true,
@@ -942,7 +939,7 @@ function LogSelector({
     }),
   });
 }
-//@ chunk-b79vwm1h.js:18667-18971 layout
+//@ chunk-y1bp9wp9.js:18349-18653 layout
 /**
  * 会话恢复面板：显示“Resume session”标题与附加说明，下方放子内容。
  */
@@ -974,14 +971,14 @@ function ResumeSessionPane(props) {
   } else pane = $[4];
   return pane;
 }
-//@ chunk-b79vwm1h.js:18971-19421 callgraph-fingerprint (2.1.88 match: extractSearchableText, 0.465)
+//@ chunk-y1bp9wp9.js:18653-19104 callgraph-fingerprint (2.1.88 match: extractSearchableText, 0.466)
 function extractSearchableText(message) {
   if (message.type !== "user" && message.type !== "assistant") return "";
   let content = "message" in message ? message.message?.content : undefined;
   if (!content) return "";
   let modelOnlyText = message.type === "user" && message.isCompactSummary ? message.modelOnlyText : undefined;
   if (typeof content === "string")
-    return renderCompactSummaryText(
+    return stripModelOnlySummarySuffix(
       renderPluginPromptColon(content, message.type === "user" ? message.pluginPrompt : undefined),
       modelOnlyText,
     );
@@ -990,14 +987,14 @@ function extractSearchableText(message) {
       .map((block) => {
         if (typeof block === "string") return block;
         if ("text" in block && typeof block.text === "string")
-          return renderCompactSummaryText(block.text, modelOnlyText);
+          return stripModelOnlySummarySuffix(block.text, modelOnlyText);
         return "";
       })
       .filter(Boolean)
       .join(" ");
   return "";
 }
-//@ chunk-b79vwm1h.js:19421-19785 fingerprint (2.1.88 match: buildSearchableText, 0.887)
+//@ chunk-y1bp9wp9.js:19104-19468 fingerprint (2.1.88 match: buildSearchableText, 0.887)
 function buildSearchableText(log) {
   let messageText = (
     log.messages.length <= LOG_REFRESH_MS
@@ -1011,7 +1008,7 @@ function buildSearchableText(log) {
     `${[log.customTitle, log.aiTitle, log.summary, log.firstPromptShown ?? log.firstPrompt, log.gitBranch, log.tag, log.prNumber ? `PR #${log.prNumber}` : undefined, log.prRepository].filter(Boolean).join(" ")} ${messageText}`.trim();
   return fullText.length > LOG_MAX_BYTES ? fullText.slice(0, LOG_MAX_BYTES) : fullText;
 }
-//@ chunk-b79vwm1h.js:19785-19999 fingerprint (2.1.88 match: groupLogsBySessionId, 1)
+//@ chunk-y1bp9wp9.js:19468-19682 sole-consumer (2.1.88 match: groupLogsBySessionId, 1)
 function groupLogsBySessionId(filteredLogs) {
   let groups = new Map();
   for (let log of filteredLogs) {
@@ -1027,4 +1024,4 @@ function groupLogsBySessionId(filteredLogs) {
   );
   return groups;
 }
-export { getUniqueTags, LogSelector, createLogSinkRef, LogSelectorOptionsSchema };
+export { latestLogPerSession, LogSelector, createLogSinkRef, useRedrawnValues };

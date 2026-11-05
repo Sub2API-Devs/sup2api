@@ -3,10 +3,10 @@
  *
  * hook 汇总附件的字段校验与合并（hookCount、hookInfos、hookErrors、stopReason 等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/collapseHookSummaries.ts
- * pieces: chunk-ag5x7vhf.js (2), chunk-e6aww6q8.js (10)
- * attribution: fingerprint 2, placement 10
+ * pieces: chunk-5xgkngpb.js (10), chunk-hnxhr3bs.js (2)
+ * attribution: placement 10, fingerprint 2
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
@@ -15,10 +15,10 @@ import {
   numberSchema,
   booleanSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:329597-329917 placement
+//@ chunk-5xgkngpb.js:331113-331433 placement
 /**
  * hookInfos 数组项的校验 schema。
  */
@@ -29,7 +29,7 @@ var hookLabelSchema;
 var hookCountSchema;
 var totalDurationSchema;
 var preventedContinuationSchema;
-deferInit("chunk-e6aww6q8.js:329597", () => {
+deferInit("chunk-5xgkngpb.js:331113", () => {
   HOOK_SUMMARY_FIELDS = [
     "hookCount",
     "hookInfos",
@@ -53,7 +53,7 @@ deferInit("chunk-e6aww6q8.js:329597", () => {
   totalDurationSchema = DoctorLazy(() => numberSchema());
   preventedContinuationSchema = DoctorLazy(() => booleanSchema());
 });
-//@ chunk-e6aww6q8.js:329917-330797 placement (2.1.88 match: collapseHookSummaries, 0.799)
+//@ chunk-5xgkngpb.js:331433-332313 placement (2.1.88 match: collapseHookSummaries, 0.799)
 /**
  * 校验 hook 汇总附件字段（hookCount、hookInfos、hookErrors、stopReason 等），丢弃非法值后重建对象。
  */
@@ -100,19 +100,19 @@ function normalizeHookSummary(messages) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:330797-330861 placement
+//@ chunk-5xgkngpb.js:332313-332377 placement
 function getValidHookLabel(value) {
   return matchesSchema(value.hookLabel, hookLabelSchema()) ? value.hookLabel : undefined;
 }
-//@ chunk-e6aww6q8.js:330861-330897 placement
+//@ chunk-5xgkngpb.js:332377-332413 placement
 function getValidStringArray(value) {
   return filterValidArrayItems(value, hookErrorSchema());
 }
-//@ chunk-e6aww6q8.js:330897-330944 placement
+//@ chunk-5xgkngpb.js:332413-332460 placement
 function matchesSchema(value, schema) {
   return schema.safeParse(value).success;
 }
-//@ chunk-e6aww6q8.js:330944-331389 placement (2.1.88 match: collapseHookSummaries, 0.762)
+//@ chunk-5xgkngpb.js:332460-332905 placement (2.1.88 match: collapseHookSummaries, 0.763)
 function collapseHookSummaries_2(messages) {
   let {
     hookCount,
@@ -140,24 +140,24 @@ function collapseHookSummaries_2(messages) {
     (totalDurationMs === undefined || isFiniteNumber_2(totalDurationMs))
   );
 }
-//@ chunk-e6aww6q8.js:331389-331547 placement
+//@ chunk-5xgkngpb.js:332905-333063 placement
 function isHookInfo(value) {
   return (
-    isPlainObject_5(value) &&
+    isPlainObject_6(value) &&
     typeof value.command === "string" &&
     (value.promptText === undefined || typeof value.promptText === "string") &&
     (value.durationMs === undefined || isFiniteNumber_2(value.durationMs))
   );
 }
-//@ chunk-e6aww6q8.js:331547-331590 placement
+//@ chunk-5xgkngpb.js:333063-333106 placement
 function isString(value) {
   return typeof value === "string";
 }
-//@ chunk-e6aww6q8.js:331590-331653 placement
+//@ chunk-5xgkngpb.js:333106-333169 placement
 function isFiniteNumber_2(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
-//@ chunk-e6aww6q8.js:331653-331756 placement
+//@ chunk-5xgkngpb.js:333169-333272 placement
 /**
  * 非数组返回空数组；否则只保留通过 schema 校验的元素（全部合法时原样返回）。
  */
@@ -167,11 +167,11 @@ function filterValidArrayItems(items, schema) {
   let isValid = (item) => matchesSchema(item, schema);
   return list.every(isValid) ? list : list.filter(isValid);
 }
-//@ chunk-ag5x7vhf.js:119609-119699 fingerprint (2.1.88 match: isLabeledHookSummary, 0.773)
+//@ chunk-hnxhr3bs.js:123800-123890 fingerprint (2.1.88 match: isLabeledHookSummary, 0.773)
 function isLabeledHookSummary(msg) {
   return msg.type === "system" && msg.subtype === "stop_hook_summary" && getValidHookLabel(msg) !== undefined;
 }
-//@ chunk-ag5x7vhf.js:119699-120290 fingerprint (2.1.88 match: collapseHookSummaries, 0.853)
+//@ chunk-hnxhr3bs.js:123890-124481 fingerprint (2.1.88 match: collapseHookSummaries, 0.853)
 function collapseHookSummaries(messages) {
   let result = [];
   let i = 0;
@@ -209,9 +209,9 @@ function collapseHookSummaries(messages) {
 }
 export {
   getValidHookLabel,
-  collapseHookSummaries,
-  getValidStringArray,
-  normalizeHookSummary,
   isFiniteNumber_2,
+  normalizeHookSummary,
   HOOK_SUMMARY_FIELDS,
+  getValidStringArray,
+  collapseHookSummaries,
 };

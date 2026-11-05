@@ -3,10 +3,10 @@
  *
  * 把 Ink 节点离屏渲染为 ANSI 字符串，或渲染一次后退出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/staticRender.tsx
- * pieces: chunk-h6f3feta.js (6)
- * attribution: placement 3, callgraph-fingerprint 1, layout 1, fingerprint 1
+ * pieces: chunk-0b83n7d5.js (5)
+ * attribution: placement 3, callgraph-fingerprint 1, fingerprint 1
  */
 import { PassThrough } from "stream";
 import {
@@ -24,22 +24,22 @@ import { render } from "../ink/hooks/useTerminalHooks.js";
 import { TerminalWriteProvider } from "../ink/useTerminalNotification.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-h6f3feta.js:416-420 placement
+//@ chunk-0b83n7d5.js:417-421 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h6f3feta.js:416", () => {
+deferInit("chunk-0b83n7d5.js:417", () => {
   init_react_production();
 });
-//@ chunk-h6f3feta.js:457-471 placement
+//@ chunk-0b83n7d5.js:458-472 placement
 function noopElement() {}
-//@ chunk-h6f3feta.js:471-486 placement
+//@ chunk-0b83n7d5.js:472-487 placement
 /**
  * 离屏渲染用的存储上下文（storageV5 槽）。
  */
 var staticRenderStorageSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h6f3feta.js:471", () => {
+deferInit("chunk-0b83n7d5.js:472", () => {
   staticRenderStorageSlot = createContext(false);
 });
-//@ chunk-h6f3feta.js:486-740 callgraph-fingerprint (2.1.88 match: RenderOnceAndExit, 1)
+//@ chunk-0b83n7d5.js:487-742 callgraph-fingerprint (2.1.88 match: RenderOnceAndExit, 1)
 function RenderOnceAndExit(props) {
   let $ = useMemoCache(5);
   let { children } = props;
@@ -70,19 +70,7 @@ function RenderOnceAndExit(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-h6f3feta.js:740-816 layout (2.1.88 match: renderAndRun, 1)
-/**
- * 在 Ink 根上渲染元素并等待退出（子命令用的简化版 renderAndRun）。
- */
-async function renderAndRun(root, element) {
-  root.render(
-    jsxProd_default(RenderOnceAndExit, {
-      children: element,
-    }),
-  );
-  await root.waitUntilExit();
-}
-//@ chunk-h6f3feta.js:816-1126 fingerprint (2.1.88 match: renderToAnsiString, 0.915)
+//@ chunk-0b83n7d5.js:818-1128 fingerprint (2.1.88 match: renderToAnsiString, 0.915)
 /**
  * 把 React/Ink 节点离屏渲染为 ANSI 字符串（导出、截图用）。
  */
@@ -118,4 +106,4 @@ async function renderToAnsiString(node, { columns, storageV5 }) {
   ).waitUntilExit();
   return output;
 }
-export { renderToAnsiString, staticRenderStorageSlot, RenderOnceAndExit, renderAndRun };
+export { RenderOnceAndExit, renderToAnsiString, staticRenderStorageSlot };

@@ -1,15 +1,15 @@
 /**
  * qrcode/lib/core/mode.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_version_check } from "./version-check.js";
 import { require_regex } from "./regex.js";
 
-//@ chunk-spjgqa4y.js:8825-9968 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:8825-9968 cjs-fingerprint
 var require_mode = __commonJS(function (cjsExports) {
   var VersionCheck = require_version_check();
   var Regex = require_regex();

@@ -3,20 +3,19 @@
  *
  * 外部命令只读白名单（git/gh/docker/rg 的 safeFlags 与附加危险检查）、flag 校验 validateFlags、~ 展开与 Windows UNC 路径检测；本段混入大量 URL/remote 解析等误归代码。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/readOnlyCommandValidation.ts
- * pieces: chunk-2a8yx6fc.js (1), chunk-82kqcve8.js (22)
- * attribution: fingerprint 7, layout 15, file-local 1
+ * pieces: chunk-a2q0x549.js (22)
+ * attribution: fingerprint 6, layout 15, file-local 1
  */
 import { containsAnyPlaceholder, startsWithAnyPlaceholder } from "../bash/ast.js";
 import { firstLineOf } from "../stringUtils.js";
 import { getPlatform } from "../platform.js";
 import { isUncOrDevicePath } from "../pathClassification.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { isValidRemotePathSegment } from "../../services/autoModeSetup/homeRepoScan.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:196286-196948 fingerprint (2.1.88 match: GIT_LOG_DISPLAY_FLAGS, 0.352)
+//@ chunk-a2q0x549.js:194455-195117 fingerprint (2.1.88 match: GIT_LOG_DISPLAY_FLAGS, 0.352)
 /**
  * git 只读子命令共用的 flag 白名单片段（flag → 参数类型 none/string/number）。另含 %G / %(signature) 格式占位正则：会触发 gpg 验签（执行外部程序），所以格式串里出现即视为危险。
  */
@@ -68,16 +67,16 @@ var GIT_AUTHOR_FILTER_FLAGS = {
   "--grep": "string",
 };
 var GIT_SIGNATURE_FORMAT_PATTERN = /%[-+ ]?G|%\(\*?signature/;
-//@ chunk-82kqcve8.js:196948-196994 layout
+//@ chunk-a2q0x549.js:195117-195163 layout
 function mentionsSignature(text) {
   return text.includes("signature");
 }
-//@ chunk-82kqcve8.js:196994-197069 layout
+//@ chunk-a2q0x549.js:195163-195238 layout
 var BUILTIN_PRETTY_FORMATS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:196994", () => {
+deferInit("chunk-a2q0x549.js:195163", () => {
   BUILTIN_PRETTY_FORMATS = new Set(["oneline", "short", "medium", "full", "fuller", "email", "raw"]);
 });
-//@ chunk-82kqcve8.js:197069-197210 layout
+//@ chunk-a2q0x549.js:195238-195379 layout
 /**
  * --format/--pretty 的值不是内置格式名（oneline/short/…）即视为自定义格式（含 %、format:、tformat:）。
  */
@@ -87,7 +86,7 @@ function isCustomPrettyFormat(formatArg) {
   if (formatArg.startsWith("format:") || formatArg.startsWith("tformat:")) return false;
   return !BUILTIN_PRETTY_FORMATS.has(formatArg);
 }
-//@ chunk-82kqcve8.js:197210-197581 layout
+//@ chunk-a2q0x549.js:195379-195750 layout
 /**
  * git 参数里 --format/--pretty/--sort/--group 的值含 ~ 展开、占位符、签名格式或自定义 pretty 格式时返回 true。
  */
@@ -112,12 +111,12 @@ function hasDangerousGitFormatArg(args) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:197581-208126 fingerprint (2.1.88 match: GIT_READ_ONLY_COMMANDS, 0.995)
+//@ chunk-a2q0x549.js:195750-206295 fingerprint (2.1.88 match: GIT_READ_ONLY_COMMANDS, 0.995)
 /**
  * git 只读子命令白名单（git diff/log/show/status/blame/ls-files/rev-parse/branch/tag/worktree list 等 24 项）：每项 safeFlags + 可选 additionalCommandIsDangerousCallback（拦格式串、写操作参数）。
  */
 var GIT_READ_ONLY_COMMANDS; // deferred: uses GIT_REF_SELECTION_FLAGS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:197581", () => {
+deferInit("chunk-a2q0x549.js:195750", () => {
   GIT_READ_ONLY_COMMANDS = {
     "git diff": {
       safeFlags: {
@@ -769,13 +768,13 @@ deferInit("chunk-82kqcve8.js:197581", () => {
     },
   };
 });
-//@ chunk-82kqcve8.js:208126-208178 layout
+//@ chunk-a2q0x549.js:206295-206347 layout
 function hasTildeArg(args) {
   return args.some((arg) => arg.includes("~"));
 }
-//@ chunk-82kqcve8.js:208178-208199 layout
+//@ chunk-a2q0x549.js:206347-206368 layout
 var TILDE_EXPANSION_PATTERN = /(?:^|[=:])~/;
-//@ chunk-82kqcve8.js:208199-208280 layout
+//@ chunk-a2q0x549.js:206368-206449 layout
 /**
  * 参数里有会被 shell 展开的 ~（开头或 = / : 之后，或 ~ 与 { 同现）时返回 true。
  */
@@ -784,13 +783,13 @@ function hasTildeExpansion(values) {
     (value) => TILDE_EXPANSION_PATTERN.test(value) || (value.includes("~") && value.includes("{")),
   );
 }
-//@ chunk-82kqcve8.js:208280-208300 layout
+//@ chunk-a2q0x549.js:206449-206469 layout
 var TILDE_USER_PATTERN = /^~(?!\/|$)/;
-//@ chunk-82kqcve8.js:208300-208334 file-local
+//@ chunk-a2q0x549.js:206469-206503 file-local
 function isTildeUserPath(pathOrCommand) {
   return TILDE_USER_PATTERN.test(pathOrCommand);
 }
-//@ chunk-82kqcve8.js:208334-208696 layout (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-a2q0x549.js:206503-206865 layout (2.1.88 match: ghIsDangerousCallback, 1)
 /**
  * gh 只读命令的附加危险检查：参数含 ~、占位符、URL（://）、@ 或两个以上 '/'（可能指向其他主机/仓库）时视为危险。
  */
@@ -813,14 +812,14 @@ function ghIsDangerousCallback(_rawCommand, args) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:208696-215177 fingerprint (2.1.88 match: GH_READ_ONLY_COMMANDS, 0.97)
+//@ chunk-a2q0x549.js:206865-213346 fingerprint (2.1.88 match: GH_READ_ONLY_COMMANDS, 0.97)
 /**
  * gh 只读子命令白名单（pr/issue/repo/run/release/workflow/label/search 的 view/list/status 等）。
  */
 var GH_READ_ONLY_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DOCKER_DANGEROUS_FLAGS;
 var DOCKER_DANGEROUS_SHORT_FLAG_CHARS;
-deferInit("chunk-82kqcve8.js:208696", () => {
+deferInit("chunk-a2q0x549.js:206865", () => {
   GH_READ_ONLY_COMMANDS = {
     "gh pr view": {
       safeFlags: {
@@ -1207,7 +1206,7 @@ deferInit("chunk-82kqcve8.js:208696", () => {
     DOCKER_DANGEROUS_FLAGS.filter((flag) => flag.length === 2).map((flag) => flag[1]),
   );
 });
-//@ chunk-82kqcve8.js:215177-215424 layout
+//@ chunk-a2q0x549.js:213346-213593 layout
 /**
  * docker 参数含改连接目标/配置的 flag（-H/--host/--context/--config/--tls*\/--url/…，含组合短 flag）时返回 true。
  */
@@ -1229,7 +1228,7 @@ function hasDockerDangerousFlag(args) {
     return false;
   });
 }
-//@ chunk-82kqcve8.js:215424-217047 fingerprint (2.1.88 match: RIPGREP_READ_ONLY_COMMANDS, 0.876)
+//@ chunk-a2q0x549.js:213593-215216 fingerprint (2.1.88 match: RIPGREP_READ_ONLY_COMMANDS, 0.876)
 /**
  * docker logs/inspect 与 rg 的只读 flag 白名单：每个 flag 标注值类型；docker 另有回调拦截改连接目标的 flag、~ 展开与危险参数。
  */
@@ -1330,7 +1329,7 @@ var RIPGREP_READ_ONLY_COMMANDS = {
 var DOCKER_BARE_READ_ONLY_COMMANDS = ["docker ps", "docker images"];
 var FLAG_WITH_INLINE_VALUE_PATTERN = /^--?[A-Za-z0-9][\w-]*=/;
 var WINDOWS_NT_DEVICE_PREFIX_PATTERN = /(?:^|[^A-Za-z0-9_])[\\/]\?\?(?:[\\/]|$)/;
-//@ chunk-82kqcve8.js:217047-218015 layout
+//@ chunk-a2q0x549.js:215216-216184 layout
 /**
  * 仅 Windows：检测会触发 SMB/WebDAV 外连的 UNC 形式（\\server、//server、混合斜杠、@SSL@端口、DavWWWRoot、IPv4/IPv6 主机、\??\ 前缀）；isArgument 时还剥掉 flag 前缀与 `--x=` 再查。
  */
@@ -1376,18 +1375,18 @@ function containsVulnerableUncPath(pathOrCommand, allowFlagForms = false) {
     return true;
   return false;
 }
-//@ chunk-82kqcve8.js:218015-218040 layout
+//@ chunk-a2q0x549.js:216184-216209 layout
 var FLAG_PATTERN = /^-[a-zA-Z0-9_-]/;
-//@ chunk-82kqcve8.js:218040-218105 layout
+//@ chunk-a2q0x549.js:216209-216274 layout
 /**
  * token 是否形如 flag：以 - 开头、长度大于 1 且符合 flag 正则。
  */
 function isFlagToken(token) {
   return token.startsWith("-") && token.length > 1 && FLAG_PATTERN.test(token);
 }
-//@ chunk-82kqcve8.js:218105-218134 layout
+//@ chunk-a2q0x549.js:216274-216303 layout
 var TENGU_AMBER_THIMBLE = "tengu_amber_thimble";
-//@ chunk-82kqcve8.js:218134-218339 fingerprint (2.1.88 match: validateFlagArgument, 1)
+//@ chunk-a2q0x549.js:216303-216508 fingerprint (2.1.88 match: validateFlagArgument, 1)
 /**
  * 校验 flag 参数值是否符合类型：none 无值、number 纯数字、string 任意、char 单字符、{} / EOF 字面量。
  */
@@ -1409,10 +1408,10 @@ function validateFlagArgument(value, argType) {
       return false;
   }
 }
-//@ chunk-82kqcve8.js:218339-218382 layout
+//@ chunk-a2q0x549.js:216508-216551 layout
 var URL_SCHEME_SEPARATOR_PATTERN = /:[\\/]{2}/;
 var TENGU_JAUNTY_HONEY = "tengu_jaunty_honey";
-//@ chunk-82kqcve8.js:218382-219856 fingerprint (2.1.88 match: validateFlags, 0.839)
+//@ chunk-a2q0x549.js:216551-218025 fingerprint (2.1.88 match: validateFlags, 0.839)
 /**
  * 按白名单逐个校验 token：未知 flag、需值却缺值、值以 - 开头、值类型不符一律 false；支持 `--`、组合短 flag（全为 none 型）、grep/rg 的 -A3 粘连数字、git 的 -<数字>、xargs 目标命令；Windows 上 git 参数含 :// 或占位符且 tengu_jaunty_honey 开时直接拒绝；tengu_amber_thimble 放宽 flag 识别。
  */
@@ -1494,8 +1493,8 @@ function validateFlags(tokens, startIndex, config, options) {
           }
         }
         if (flag.startsWith("-") && !flag.startsWith("--") && flag.length > 2) {
-          for (let j_2 = 1; j_2 < flag.length; j_2++) {
-            let singleFlag = "-" + flag[j_2];
+          for (let token = 1; token < flag.length; token++) {
+            let singleFlag = "-" + flag[token];
             let flagType = config.safeFlags[singleFlag];
             if (!flagType) return false;
             if (flagType !== "none") return false;
@@ -1530,28 +1529,8 @@ function validateFlags(tokens, startIndex, config, options) {
   }
   return true;
 }
-//@ chunk-2a8yx6fc.js:24598-24834 fingerprint (2.1.88 match: ghIsDangerousCallback, 1)
-/**
- * 从 git remote URL（scheme:// 或 scp 风格 host:path）取主机名，单字母主机（Windows 盘符）排除，主机名不合法返回 undefined。属于 auto mode 环境采集的 repo 信息，误归只读校验（旧版名 ghIsDangerousCallback 错配）。
- */
-function getRemoteHost(path) {
-  let index = path.indexOf("://");
-  let host;
-  if (index !== -1) {
-    let sliced = path.slice(index + 3);
-    let index_2 = sliced.indexOf("/");
-    host = index_2 > 0 ? sliced.slice(0, index_2) : undefined;
-  } else {
-    let index = path.indexOf(":");
-    host = index > 0 ? path.slice(0, index) : undefined;
-    if (host !== undefined && host.length === 1) host = undefined;
-  }
-  return host !== undefined && isValidRemotePathSegment(host) ? host : undefined;
-}
 export {
   containsVulnerableUncPath,
-  getRemoteHost,
-  isTildeUserPath,
   GIT_READ_ONLY_COMMANDS,
   hasTildeArg,
   isFlagToken,
@@ -1562,5 +1541,6 @@ export {
   validateFlags,
   DOCKER_BARE_READ_ONLY_COMMANDS,
   hasDockerDangerousFlag,
+  isTildeUserPath,
   DOCKER_DANGEROUS_FLAGS,
 };

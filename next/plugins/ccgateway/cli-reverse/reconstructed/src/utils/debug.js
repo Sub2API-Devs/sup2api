@@ -3,10 +3,10 @@
  *
  * 调试日志：--debug/-d、--debug=过滤、--debug-file、--debug-to-stderr，写 <配置目录>/debug/<session>.txt 并维护 latest 链接。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/debug.ts
- * pieces: chunk-2f906bwf.js (1), chunk-cgr0tezp.js (36), chunk-e6aww6q8.js (1), chunk-qchp9vrd.js (1)
- * attribution: fingerprint 3, placement 1, sole-consumer 6, affinity 1, layout 10, facade-exports 17, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-6hadbefe.js (36), chunk-af1hzzme.js (1), chunk-b9mhcvry.js (1)
+ * attribution: callgraph-witnessed 1, placement 1, sole-consumer 6, affinity 1, fingerprint 3, layout 10, facade-exports 17
  */
 import { resolve, join, dirname, isAbsolute } from "path";
 import { stat, rename, unlink, mkdir, appendFile, symlink } from "fs/promises";
@@ -17,7 +17,7 @@ import { isWindowsDevicePath } from "./windowsUncPaths.js";
 import { PathSpace, escapeControlChars, toUnicodeEscapes } from "./resultError.js";
 import { cliArgvReader } from "./cliArgvReader.js";
 import { parseDebugFilterCached, registerCleanup } from "./cleanupRegistry.js";
-import { isEnvTruthy, getClaudeConfigDir, getClaudeConfigDirOrNull } from "./envUtils.js";
+import { isEnvTruthy, getClaudeConfigDirOrNull } from "./envUtils.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
 import { jsonStringify, shouldLogDebugCategory } from "./slowOperations.js";
@@ -27,18 +27,19 @@ import { getFsImplementation } from "./fsOperations.js";
 import { createBufferedWriter } from "./bufferedWriter.js";
 import { HostScoped } from "./hostScoped.js";
 import { onProcessRootHost, getSessionId, isDiskless } from "../bootstrap/state.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { writeToStderr, getStderrDroppedTotal } from "./process.js";
 import { renderAttachment } from "./messages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:14410-14556 placement
+//@ chunk-6hadbefe.js:1947-2093 placement
 /**
  * 运行环境是否提供 async_hooks（决定是否能用 AsyncLocalStorage）。
  */
 var ASYNC_HOOKS_MODULE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var asyncHooksAvailable;
 var backendStorageContext;
-deferInit("chunk-cgr0tezp.js:14410", () => {
+deferInit("chunk-6hadbefe.js:1947", () => {
   ASYNC_HOOKS_MODULE = globalThis.process?.getBuiltinModule?.("async_hooks");
   asyncHooksAvailable = ASYNC_HOOKS_MODULE !== undefined;
   backendStorageContext = ASYNC_HOOKS_MODULE
@@ -50,11 +51,11 @@ deferInit("chunk-cgr0tezp.js:14410", () => {
         },
       };
 });
-//@ chunk-cgr0tezp.js:77194-77351 sole-consumer
+//@ chunk-6hadbefe.js:30257-30415 sole-consumer
 /**
  * 调试日志轮转的大小上限（10 MiB）。
  */
-var LOG_LEVEL_ORDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LOG_LEVEL_ORDER; // deferred: uses INVISIBLE_CHAR_CLASSES (./sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var UNSAFE_LOG_CHARS;
 var MAX_DEBUG_LOG_BYTES;
 var MAX_DEBUG_BACKLOG_BYTES;
@@ -63,7 +64,7 @@ var MAX_DEBUG_LINE_BYTES;
 var DEBUG_SYNC_DRAIN_SUSPECT_MS;
 var DEBUG_SYNC_DRAIN_DEADLINE_MS;
 var DEBUG_STUCK_DEFAULT;
-deferInit("chunk-cgr0tezp.js:77194", () => {
+deferInit("chunk-6hadbefe.js:30257", () => {
   LOG_LEVEL_ORDER = {
     verbose: 0,
     debug: 1,
@@ -80,26 +81,26 @@ deferInit("chunk-cgr0tezp.js:77194", () => {
   DEBUG_SYNC_DRAIN_DEADLINE_MS = 100;
   DEBUG_STUCK_DEFAULT = bindAsyncResource((fn) => fn());
 });
-//@ chunk-cgr0tezp.js:77351-77393 sole-consumer
+//@ chunk-6hadbefe.js:30415-30457 sole-consumer
 /**
  * 判断字符串是否为合法的日志级别。
  */
 function isValidLogLevel(level) {
   return Object.hasOwn(LOG_LEVEL_ORDER, level);
 }
-//@ chunk-cgr0tezp.js:77393-77432 sole-consumer
+//@ chunk-6hadbefe.js:30457-30496 sole-consumer
 /**
  * 解析日志文件路径（Windows 设备路径返回 null）。
  */
 function resolveLogPathOrNull(path) {
   return isWindowsDevicePath(path) ? null : resolve(path);
 }
-//@ chunk-cgr0tezp.js:77432-77447 sole-consumer
+//@ chunk-6hadbefe.js:30496-30511 sole-consumer
 /**
  * 吞掉错误的空回调（用于 catch）。
  */
 function noopLogError() {}
-//@ chunk-cgr0tezp.js:77447-77477 sole-consumer
+//@ chunk-6hadbefe.js:30511-30541 sole-consumer
 /**
  * 调试日志目的地的初始状态（v5 存储、无本地文件）。
  */
@@ -107,14 +108,14 @@ var DEFAULT_DEBUG_SINK_STATE = {
   arm: "v5",
   target: null,
 };
-//@ chunk-cgr0tezp.js:77477-77531 sole-consumer
+//@ chunk-6hadbefe.js:30541-30595 sole-consumer
 /**
  * 按当前积压位置标记是否卡住。
  */
 function markBacklogStuck(backlogState, counter) {
   backlogState.stuck = backlogState.appendSince === counter ? "yes" : "no";
 }
-//@ chunk-cgr0tezp.js:77531-77568 affinity
+//@ chunk-6hadbefe.js:30595-30632 affinity
 /**
  * 空的日志上下文（无会话 id、非后端写入）。
  */
@@ -122,7 +123,7 @@ var EMPTY_LOG_CONTEXT = {
   sessionId: "",
   fromBackend: false,
 };
-//@ chunk-cgr0tezp.js:77568-77873 fingerprint (2.1.88 match: getDebugLogPath, 0.414)
+//@ chunk-6hadbefe.js:30632-30933 fingerprint (2.1.88 match: getDebugLogPath, 0.413)
 /**
  * 计算调试日志目标：默认 <配置目录>/debug/<sessionId>.txt（storage v5 时写存储），--debug-file 为原始文件并可轮换、更新 latest 链接。
  */
@@ -143,28 +144,28 @@ function resolveDebugLogTarget(context, configHomeDir, overrideDir, replacementD
     pointLatest: arm === "raw" && targetPath !== defaultPath,
   };
 }
-//@ chunk-cgr0tezp.js:77873-77923 layout
+//@ chunk-6hadbefe.js:30933-30983 layout
 /**
  * 把路径包装成用户命名的路径空间。
  */
 function userNamedPathSpace(path) {
   return PathSpace.userNamed(isAbsolute(path) ? path : resolve(path));
 }
-//@ chunk-cgr0tezp.js:77923-77991 layout
+//@ chunk-6hadbefe.js:30983-31051 layout
 /**
  * 判断重命名失败是否为 ENOENT 遥测失败。
  */
 function isENOENTTelemetryFailure(error) {
   return error.code === "Failed" && error.telemetryCode === "ENOENT";
 }
-//@ chunk-cgr0tezp.js:77991-78029 layout
+//@ chunk-6hadbefe.js:31051-31089 layout
 /**
  * 有 async_hooks 时保留存储 v5 参数，否则返回 undefined。
  */
 function storageV5IfAsyncHooks(storageV5, available = asyncHooksAvailable) {
   return available ? storageV5 : undefined;
 }
-//@ chunk-cgr0tezp.js:78029-78303 layout
+//@ chunk-6hadbefe.js:31089-31363 layout
 async function appendDebugToStore(storageV5, sessionId, data, markLatest) {
   let logKey = {
     namespace: "log",
@@ -193,7 +194,7 @@ async function appendDebugToStore(storageV5, sessionId, data, markLatest) {
     ? "refused"
     : "dropped";
 }
-//@ chunk-cgr0tezp.js:78303-89982 layout
+//@ chunk-6hadbefe.js:31363-43032 layout
 /**
  * 调试日志器：从 argv/env 读取 --debug、-d、--debug=filter、--debug-to-stderr/-d2e、--debug-file、DEBUG/DEBUG_SDK、CLAUDE_CODE_DEBUG_LOG_LEVEL、CLAUDE_CODE_DEBUG_LOGS_DIR；行格式 `<ISO时间> [LEVEL] 消息`，消息经脱敏（redactSecrets），默认路径 <配置目录>/debug/<sessionId>.txt。
  */
@@ -255,14 +256,14 @@ class DebugLogger {
     this.filter = found ? parseDebugFilterCached(found.substring(8)) : null;
     this.toStderr = effectiveArgv.includes("--debug-to-stderr") || effectiveArgv.includes("-d2e");
     let debugFilePath = null;
-    for (let j = 0; j < effectiveArgv.length; j++) {
-      let arg = effectiveArgv[j];
+    for (let idx = 0; idx < effectiveArgv.length; idx++) {
+      let arg = effectiveArgv[idx];
       if (arg.startsWith("--debug-file=")) {
         debugFilePath = resolveLogPathOrNull(arg.substring(13));
         break;
       }
-      if (arg === "--debug-file" && j + 1 < effectiveArgv.length) {
-        debugFilePath = resolveLogPathOrNull(effectiveArgv[j + 1]);
+      if (arg === "--debug-file" && idx + 1 < effectiveArgv.length) {
+        debugFilePath = resolveLogPathOrNull(effectiveArgv[idx + 1]);
         break;
       }
     }
@@ -831,7 +832,7 @@ class DebugLogger {
     } catch {}
   }
 }
-//@ chunk-cgr0tezp.js:89982-90167 layout
+//@ chunk-6hadbefe.js:43032-43217 layout
 class DebugLoggerConfig {
   instance = undefined;
   init = {};
@@ -850,22 +851,22 @@ class DebugLoggerConfig {
     this.limits = limits;
   }
 }
-//@ chunk-cgr0tezp.js:90167-90192 layout
+//@ chunk-6hadbefe.js:43217-43242 layout
 /**
  * 按进程根保存的调试日志器配置。
  */
 var debugLoggerConfigByRoot; // deferred: uses DebugLoggerConfig of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cgr0tezp.js:90167", () => {
+deferInit("chunk-6hadbefe.js:43217", () => {
   debugLoggerConfigByRoot = new HostScoped(() => new DebugLoggerConfig());
 });
-//@ chunk-cgr0tezp.js:90192-90220 layout
+//@ chunk-6hadbefe.js:43242-43270 layout
 /**
  * 取出调试日志器配置（进程根作用域）。
  */
 function getDebugLoggerConfig() {
   return onProcessRootHost(debugLoggerConfigByRoot);
 }
-//@ chunk-cgr0tezp.js:90220-90700 layout
+//@ chunk-6hadbefe.js:43270-43750 layout
 function createDebugLogger(debugLoggerConfig, config) {
   return new DebugLogger({
     argv: process.argv,
@@ -897,7 +898,7 @@ function createDebugLogger(debugLoggerConfig, config) {
     limits: () => debugLoggerConfig.limits,
   });
 }
-//@ chunk-cgr0tezp.js:90700-91055 facade-exports
+//@ chunk-6hadbefe.js:43750-44105 facade-exports
 function initDefaultDebugLog(options) {
   let debugLoggerConfig = getDebugLoggerConfig();
   debugLoggerConfig.setInit({
@@ -916,7 +917,7 @@ function initDefaultDebugLog(options) {
       "Sync exit drain off for this process: debug lines still queued at exit are dropped, so this log may end short",
     );
 }
-//@ chunk-cgr0tezp.js:91055-91144 layout
+//@ chunk-6hadbefe.js:44105-44194 layout
 /**
  * 取（必要时创建）当前宿主的 DebugLogger 单例。
  */
@@ -928,35 +929,35 @@ function getDebugLogger() {
   debugLoggerConfig.setInstance(debugLogger);
   return debugLogger;
 }
-//@ chunk-cgr0tezp.js:91144-91179 facade-exports
+//@ chunk-6hadbefe.js:44194-44229 facade-exports
 function getMinDebugLogLevel() {
   return getDebugLogger().minLevel;
 }
-//@ chunk-cgr0tezp.js:91179-91220 facade-exports
+//@ chunk-6hadbefe.js:44229-44270 facade-exports
 function debugLogTakesLevel(level) {
   return getDebugLogger().takesLevel(level);
 }
-//@ chunk-cgr0tezp.js:91220-91259 facade-exports
+//@ chunk-6hadbefe.js:44270-44309 facade-exports
 function isDebugMode() {
   return getDebugLogger().isDebugMode();
 }
-//@ chunk-cgr0tezp.js:91259-91303 facade-exports
+//@ chunk-6hadbefe.js:44309-44353 facade-exports
 function mayWriteDebugLog() {
   return getDebugLogger().mayWrite("debug");
 }
-//@ chunk-cgr0tezp.js:91303-91337 facade-exports
+//@ chunk-6hadbefe.js:44353-44388 facade-exports
 function isDebugToStdErr() {
   return getDebugLogger().toStderr;
 }
-//@ chunk-cgr0tezp.js:91337-91372 facade-exports
+//@ chunk-6hadbefe.js:44388-44423 facade-exports
 function getDebugFilePath() {
   return getDebugLogger().filePath;
 }
-//@ chunk-cgr0tezp.js:91372-91419 facade-exports
+//@ chunk-6hadbefe.js:44423-44470 facade-exports
 function enableDebugLogging() {
   return getDebugLogger().enableDebugLogging();
 }
-//@ chunk-cgr0tezp.js:91419-91513 facade-exports
+//@ chunk-6hadbefe.js:44470-44564 facade-exports
 function resetDebugCaches() {
   let debugLoggerConfig = getDebugLoggerConfig();
   let instance = debugLoggerConfig.instance;
@@ -965,19 +966,19 @@ function resetDebugCaches() {
   debugLoggerConfig.setInstance(debugLogger);
   debugLogger.succeed(instance);
 }
-//@ chunk-cgr0tezp.js:91513-91554 facade-exports
+//@ chunk-6hadbefe.js:44564-44605 facade-exports
 function setHasFormattedOutput(hasFormattedOutput) {
   getDebugLogger().hasFormattedOutput = hasFormattedOutput;
 }
-//@ chunk-cgr0tezp.js:91554-91599 facade-exports
+//@ chunk-6hadbefe.js:44605-44650 facade-exports
 function getHasFormattedOutput() {
   return getDebugLogger().hasFormattedOutput;
 }
-//@ chunk-cgr0tezp.js:91599-91649 facade-exports (2.1.88 match: flushAsciicastRecorder, 0.627)
+//@ chunk-6hadbefe.js:44650-44700 facade-exports (2.1.88 match: flushAsciicastRecorder, 0.626)
 async function flushDebugLogs() {
   await getDebugLoggerConfig().instance?.flush();
 }
-//@ chunk-cgr0tezp.js:91649-91775 facade-exports
+//@ chunk-6hadbefe.js:44700-44826 facade-exports
 function droppedDebugOutputTotals() {
   return isDiskless()
     ? {}
@@ -986,10 +987,7 @@ function droppedDebugOutputTotals() {
         debug_file_dropped_total: getDebugLoggerConfig().instance?.droppedLineTotal() ?? 0,
       };
 }
-//@ chunk-cgr0tezp.js:91775-91820 facade-exports (2.1.88 match: fetchTeamMemory, 0.597)
-/**
- * 写一行调试日志（默认 debug 级）到 DebugLogger：只有调试模式或 ant 构建才落盘，目标为 --debug-file 或 <配置目录>/debug/<sessionId>.txt，--debug-to-stderr 时写 stderr；按 --debug=过滤串筛分类。全局 3800+ 处调用。
- */
+//@ chunk-6hadbefe.js:44826-44871 facade-exports (2.1.88 match: fetchTeamMemory, 0.597)
 function logForDebugging(
   message,
   options = {
@@ -998,19 +996,19 @@ function logForDebugging(
 ) {
   getDebugLogger().log(message, options);
 }
-//@ chunk-cgr0tezp.js:91820-91855 facade-exports
+//@ chunk-6hadbefe.js:44871-44906 facade-exports
 function getDebugLogPath() {
   return getDebugLogger().logPath();
 }
-//@ chunk-cgr0tezp.js:91855-91906 facade-exports
+//@ chunk-6hadbefe.js:44906-44957 facade-exports
 function isDefaultDebugLogPath(debugLogPath, sessionId) {
   return debugLogPath === getDebugLogger().defaultLogPath(sessionId);
 }
-//@ chunk-cgr0tezp.js:91906-91931 facade-exports
+//@ chunk-6hadbefe.js:44957-44982 facade-exports
 function logAntError(message, options) {
   return;
 }
-//@ chunk-e6aww6q8.js:3373785-3374007 callgraph-witnessed (2.1.88 match: logForDebugging, 0.147)
+//@ chunk-5xgkngpb.js:3461530-3461752 callgraph-witnessed (2.1.88 match: logForDebugging, 0.148)
 /**
  * 把附件对象包成 type:'attachment' 消息（uuid、时间戳；queued_command/poll_events 沿用原时间戳）。旧版名 logForDebugging 为错配。
  */
@@ -1032,14 +1030,14 @@ function createAttachmentMessage_2(
     ...rendered,
   };
 }
-//@ chunk-2f906bwf.js:292-330 fingerprint (2.1.88 match: LEVEL_ORDER, 0.871)
+//@ chunk-b9mhcvry.js:292-330 fingerprint (2.1.88 match: LEVEL_ORDER, 0.87)
 var LEVEL_ORDER = {
   debug: 0,
   info: 1,
   warn: 2,
   error: 3,
 };
-//@ chunk-qchp9vrd.js:196768-196814 fingerprint (2.1.88 match: updateLatestDebugLogSymlink, 1)
+//@ chunk-af1hzzme.js:198164-198210 fingerprint (2.1.88 match: updateLatestDebugLogSymlink, 1)
 /**
  * 更新 latest 符号链接时的最大尝试次数（256）。
  */
@@ -1049,26 +1047,26 @@ var MAX_DEBUG_LOG_ROTATE_BYTES = 2097152;
 var MAX_DEBUG_LOG_TOTAL_BYTES = 33554432;
 export {
   logForDebugging,
+  getMinDebugLogLevel,
   createAttachmentMessage_2,
-  logAntError,
-  isDebugToStdErr,
+  mayWriteDebugLog,
   setHasFormattedOutput,
+  logAntError,
+  droppedDebugOutputTotals,
+  isDebugToStdErr,
   initDefaultDebugLog,
   isDebugMode,
-  getDebugLogPath,
-  getMinDebugLogLevel,
-  LEVEL_ORDER,
-  debugLogTakesLevel,
-  mayWriteDebugLog,
   getHasFormattedOutput,
+  debugLogTakesLevel,
   flushDebugLogs,
-  droppedDebugOutputTotals,
-  enableDebugLogging,
-  isDefaultDebugLogPath,
+  getDebugLogPath,
   MAX_DEBUG_LATEST_LINK_ATTEMPTS,
   MAX_DEBUG_LOG_ROTATE_BYTES,
   LATEST_DEBUG_LOG_LINK,
   MAX_DEBUG_LOG_TOTAL_BYTES,
-  resetDebugCaches,
+  LEVEL_ORDER,
   getDebugFilePath,
+  enableDebugLogging,
+  isDefaultDebugLogPath,
+  resetDebugCaches,
 };

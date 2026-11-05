@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 上浏览器安装路径。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c1gz91xp.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ztzyr5gs.js (7)
  * attribution: placement 7
  */
 import { win32, dirname } from "path";
@@ -17,27 +17,27 @@ import { logForDebugging } from "../debug.js";
 import { withDeadline } from "../sleep.js";
 import { getErrnoCode } from "../errors.js";
 
-//@ chunk-c1gz91xp.js:484-561 placement
+//@ chunk-ztzyr5gs.js:484-561 placement
 /**
  * Windows 注册表里 App Paths 的键路径。
  */
 var WINDOWS_APP_PATHS_KEY = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths";
 var REG_QUERY_TIMEOUT_MS = 1e4;
 var APP_PATH_STAT_TIMEOUT_MS = 5000;
-//@ chunk-c1gz91xp.js:561-710 placement
+//@ chunk-ztzyr5gs.js:561-710 placement
 function windowsAppsDir() {
   if (!env.LOCALAPPDATA) return;
   let replaced = env.LOCALAPPDATA.replace(/[\\/]+$/, "");
   return win32.normalize(`${replaced}\\Microsoft\\WindowsApps\\`).toLowerCase();
 }
-//@ chunk-c1gz91xp.js:710-773 placement
+//@ chunk-ztzyr5gs.js:710-773 placement
 /**
  * 返回 Windows 系统根目录（SYSTEMROOT 等）。
  */
 function systemRootDir() {
   return env.SYSTEMROOT || env.SystemRoot || "C:\\Windows";
 }
-//@ chunk-c1gz91xp.js:773-992 placement
+//@ chunk-ztzyr5gs.js:773-992 placement
 function parseRegDefaultValue(stdout) {
   for (let line of stdout.split(/\r?\n/)) {
     let match = line.match(/^\s+.+?\s+REG_(?:EXPAND_)?SZ\s+(.+)$/i);
@@ -50,7 +50,7 @@ function parseRegDefaultValue(stdout) {
   }
   return null;
 }
-//@ chunk-c1gz91xp.js:992-1170 placement
+//@ chunk-ztzyr5gs.js:992-1170 placement
 function expandWindowsEnvVars(regDefaultValue, env = process.env) {
   let envByLowerKey = new Map();
   for (let [key, value] of Object.entries(env))
@@ -60,7 +60,7 @@ function expandWindowsEnvVars(regDefaultValue, env = process.env) {
     (fallbackValue, varName) => envByLowerKey.get(varName.toLowerCase()) ?? fallbackValue,
   );
 }
-//@ chunk-c1gz91xp.js:1170-2474 placement
+//@ chunk-ztzyr5gs.js:1170-2474 placement
 /**
  * 通过 reg.exe 查询 HKCU/HKLM 的 App Paths 注册表项解析可执行文件路径：展开 %VAR%，要求完整路径且在时限内确认存在、不是目录（WindowsApps 下 stat 异常也接受）。
  */
@@ -135,7 +135,7 @@ async function resolveAppPathFromRegistry(exeName, statTimeoutMs = APP_PATH_STAT
   }
   return null;
 }
-//@ chunk-c1gz91xp.js:2474-2860 placement
+//@ chunk-ztzyr5gs.js:2474-2860 placement
 /**
  * 以分离方式启动 Windows 程序（工作目录为程序所在目录、不隐藏窗口、不等待）；spawn 成功返回 true，失败记录错误码并返回 false。
  */

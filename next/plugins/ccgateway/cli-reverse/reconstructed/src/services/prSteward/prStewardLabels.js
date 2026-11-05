@@ -3,32 +3,32 @@
  *
  * 2.1.316 新增：PR steward 标签。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0vsn4gz2.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-80jrzczc.js (4)
  * attribution: placement 4
  */
 import { getFeatureValue_SESSION_PINNED } from "../analytics/growthbook.js";
 
-//@ chunk-0vsn4gz2.js:227-344 placement
+//@ chunk-80jrzczc.js:227-344 placement
 var PR_STEWARD_LABELS = {
   watching: "claude-pr-steward-watching",
   working: "claude-pr-steward-is-working",
 };
 var PR_STEWARD_OWNS_BINDING = "pr_steward_owns_binding";
-//@ chunk-0vsn4gz2.js:344-397 placement
+//@ chunk-80jrzczc.js:344-397 placement
 /**
  * 读会话固定开关 tengu_federated_flask。
  */
 function isFederatedFlaskOn() {
   return getFeatureValue_SESSION_PINNED("tengu_federated_flask", false);
 }
-//@ chunk-0vsn4gz2.js:397-505 placement
+//@ chunk-80jrzczc.js:397-505 placement
 function findPrStewardLabels(labels) {
   let values = Object.values(PR_STEWARD_LABELS);
   return labels.map((label) => label.name).filter((labelName) => values.includes(labelName.toLowerCase()));
 }
-//@ chunk-0vsn4gz2.js:505-2615 placement
+//@ chunk-80jrzczc.js:505-2615 placement
 /**
  * 生成系统提示的 "## PR Steward" 段落：说明 watching/working 两个标签的含义，推送或盯 PR 前先查标签，以及"交给 Steward/只改一处/接管"三种处理方式；云会话中不让模型自己移除标签。特性关闭时返回空串。
  */

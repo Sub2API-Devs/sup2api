@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。自托管 runner 诊断命令与提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqpr1420.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kr40ydn7.js (3)
  * attribution: placement 3
  */
 import { spawnSync } from "child_process";
@@ -24,7 +24,7 @@ import { env } from "../../utils/env.js";
 import { logFeatureBadAsync, logFeatureOkAsync } from "../../services/analytics/featureTelemetry.js";
 import { exitAfterAnalyticsFlush } from "../exit.js";
 
-//@ chunk-aqpr1420.js:4744-28027 placement
+//@ chunk-kr40ydn7.js:5141-28424 placement
 /**
  * 自托管 runner 诊断提示词：指导模型检查 runner 环境（网络、认证、目录、服务状态）并给出修复建议。
  */
@@ -186,7 +186,7 @@ When you can't fix it, or the operator asks to escalate:
 
 **Never auto-upload customer logs.** The operator reviews and sends.`;
 }
-//@ chunk-aqpr1420.js:28027-28565 placement
+//@ chunk-kr40ydn7.js:28424-28962 placement
 /**
  * self-hosted runner doctor 命令：受限工具集列表与该向导的系统提示词（逐项询问症状、按 8 类诊断推进）。
  */
@@ -210,7 +210,7 @@ var joined = [
 ].join(",");
 var SELF_HOSTED_RUNNER_DOCTOR_PROMPT =
   "Start the self-hosted runner doctor wizard. Greet me, then ask me to describe the symptom or pick from the 8 diagnostic categories. Work through it one step at a time.";
-//@ chunk-aqpr1420.js:28565-30548 placement
+//@ chunk-kr40ydn7.js:28962-30945 placement
 /**
  * selfHostedRunnerDoctorMain：自托管 runner 诊断命令入口，收集环境信息后用诊断提示词运行模型。
  */

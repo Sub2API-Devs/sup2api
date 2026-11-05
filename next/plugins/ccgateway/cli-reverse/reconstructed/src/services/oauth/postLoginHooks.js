@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关托管设置加载失败原因说明；网关登录后重启 Claude Code（后台会话不能自重启）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrmtstb0.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s4h0q5es.js (24)
  * attribution: placement 24
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -14,6 +14,7 @@ import { selectionAccountKey } from "../orgMemory/selection.js";
 import {
   getGatewayAuth,
   resetCostState,
+  getStickyBetas,
   getIsRemoteMode,
   getGatewayRefreshInFlight,
   getForkRestrictedLaunchConfig,
@@ -30,11 +31,15 @@ import {
   clearRemoteManagedSettingsCache,
 } from "../remoteManagedSettings/loader.js";
 import { showStandaloneSecurityDialog } from "../../components/ManagedSettingsSecurityDialog/showStandaloneSecurityDialog.js";
+import { isAccepted } from "../../utils/codeMode/accepted.js";
+import { signedInRestartNotice, signedInEndingNotice } from "../../utils/foresightStatus.js";
 import { hasPolicyDiverged } from "../../utils/settings/policySnapshot.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { resetProviderBoundCaches } from "../../utils/model/resetProviderCaches.js";
 import { applyConfigEnvironmentVariables } from "../../utils/managedEnvApply.js";
 import { relatchTenguSandboxGbConfig } from "../../utils/sandbox/sandbox-adapter.js";
+import { forgetBeta } from "../../bootstrap/stateSlices.js";
+import { BETA_CCR_TOOL_PROVENANCE } from "../../utils/betas.js";
 import { refreshPolicyLimits, POLICY_LIMITS_COLD_AWAIT_MS } from "../policyLimits/PolicyLimitsClient.js";
 import { shouldRefreshArtifactRoster } from "../artifacts/artifactToolGates.js";
 import { refreshArtifactRoster } from "../artifacts/rosterWait.js";
@@ -107,18 +112,14 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 import { ConsoleOAuthFlow } from "../../components/ConsoleOAuthFlow.js";
 import { PANE_PADDING_X, PANE_PADDING } from "../../components/design-system/Pane.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrmtstb0.js:2293-2297 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrmtstb0.js:2293", () => {
-  init_react_production();
-});
-//@ chunk-vrmtstb0.js:2297-2323 placement
+//@ chunk-s4h0q5es.js:2380-2384 placement
+init_react_production();
+//@ chunk-s4h0q5es.js:2384-2410 placement
 function runOrgMemoryAuthBoundary() {
   onOrgMemoryAuthCompletion(selectionAccountKey());
 }
-//@ chunk-vrmtstb0.js:2323-4584 placement
+//@ chunk-s4h0q5es.js:2410-4826 placement
 async function runPostLoginHooks(session, session_2, options) {
   session.onChangeAPIKey();
   if (!session_2)
@@ -163,6 +164,10 @@ async function runPostLoginHooks(session, session_2, options) {
           gatewayAuth,
           formatGatewayPinMismatchError(gatewayLabelText, settingsOutcome.failure.gatewayPinMismatch),
         );
+      if (isAccepted()) {
+        await restartAfterGatewayLogin(session, signedInRestartNotice(), signedInEndingNotice);
+        return POST_LOGIN_SHUTDOWN_STATE;
+      }
       if (!settingsOutcome.fetchSucceeded || hasPolicyDiverged()) {
         let failure = settingsOutcome.fetchSucceeded ? undefined : settingsOutcome.failure;
         await restartAfterGatewayLogin(
@@ -179,8 +184,12 @@ async function runPostLoginHooks(session, session_2, options) {
     } finally {
       if (!isTerminalShutdown()) consentHold.release?.();
     }
+  } else if (isAccepted() && !require("../../utils/codeModeOptIn.js").isSignedInAsWhenModeKept()) {
+    await restartAfterGatewayLogin(session, signedInRestartNotice(), signedInEndingNotice);
+    return POST_LOGIN_SHUTDOWN_STATE;
   } else refreshRemoteManagedSettings(showStandaloneSecurityDialog, session.storageV5, session.credentials);
   resetCostState();
+  forgetBeta(getStickyBetas(), BETA_CCR_TOOL_PROVENANCE);
   let policyLimitsRefresh = refreshPolicyLimits().catch(() => {});
   policyLimitsRefresh
     .then(() => {
@@ -268,19 +277,19 @@ async function runPostLoginHooks(session, session_2, options) {
     relaunching: false,
   };
 }
-//@ chunk-vrmtstb0.js:4584-4594 placement
+//@ chunk-s4h0q5es.js:4826-4836 placement
 /**
  * 指纹展示保留的字符数（16）。
  */
 var FINGERPRINT_PREFIX_CHARS = 16;
-//@ chunk-vrmtstb0.js:4594-4640 placement
+//@ chunk-s4h0q5es.js:4836-4882 placement
 /**
  * 截短指纹用于展示。
  */
 function shortFingerprint(fingerprint) {
   return `${fingerprint.slice(0, FINGERPRINT_PREFIX_CHARS)}\u2026`;
 }
-//@ chunk-vrmtstb0.js:4640-4734 placement
+//@ chunk-s4h0q5es.js:4882-4976 placement
 /**
  * 取网关的主机名（无效时用 "gateway"）。
  */
@@ -291,7 +300,7 @@ function gatewayLabel(gatewayAuth) {
     return gatewayAuth?.url ?? "gateway";
   }
 }
-//@ chunk-vrmtstb0.js:4734-4798 placement
+//@ chunk-s4h0q5es.js:4976-5040 placement
 /**
  * 终端关闭时的统一收尾状态。
  */
@@ -300,7 +309,7 @@ var POST_LOGIN_SHUTDOWN_STATE = {
   accountSwitched: false,
   relaunching: true,
 };
-//@ chunk-vrmtstb0.js:4798-5306 placement
+//@ chunk-s4h0q5es.js:5040-5548 placement
 /**
  * 网关登录失败后的收尾（清除凭据、恢复会话）。
  */
@@ -333,7 +342,7 @@ This session is ending so that nothing from that gateway stays half-applied. Sta
     gatewayLoginError: failureText,
   };
 }
-//@ chunk-vrmtstb0.js:5306-5871 placement
+//@ chunk-s4h0q5es.js:5548-6113 placement
 function formatGatewayPinMismatchError(gatewayLabel, gatewayPinMismatch) {
   let certificateText =
     gatewayPinMismatch?.presentedFingerprint && gatewayPinMismatch.pinnedFingerprint
@@ -341,7 +350,7 @@ function formatGatewayPinMismatchError(gatewayLabel, gatewayPinMismatch) {
       : "a different TLS certificate from the one you trusted";
   return `Cloud gateway sign-in was not completed: on the first request after sign-in, ${gatewayLabel} presented ${certificateText}. No gateway credentials were kept. Usually this means the gateway runs several nodes behind one address that serve different certificates (they must all serve the same one), or something on the network path is intercepting TLS.`;
 }
-//@ chunk-vrmtstb0.js:5871-7369 placement
+//@ chunk-s4h0q5es.js:6113-7611 placement
 /**
  * 网关托管设置加载失败原因说明。
  */
@@ -383,7 +392,7 @@ function describeGatewaySettingsError(error, signedIn) {
       return "something unexpected went wrong (details with --debug)";
   }
 }
-//@ chunk-vrmtstb0.js:7369-7712 placement
+//@ chunk-s4h0q5es.js:7611-7954 placement
 /**
  * 网关登录后设置加载失败的提示。
  */
@@ -398,7 +407,7 @@ function gatewaySettingsErrorMessage(gatewayLabel, failure, signedIn) {
     ? `Signed in to Cloud gateway ${gatewayLabel}`
     : `Your organization's managed settings on Cloud gateway ${gatewayLabel} changed`;
 }
-//@ chunk-vrmtstb0.js:7712-7979 placement
+//@ chunk-s4h0q5es.js:7954-8221 placement
 function formatGatewayRestartNotice(
   gatewayLabel,
   failure,
@@ -411,7 +420,7 @@ function formatGatewayRestartNotice(
     ? `${message}. Restarting Claude Code to retry${ellipsis}`
     : `${message}. Restarting Claude Code to apply ${signedIn ? "your organization's managed settings" : "them"}${ellipsis}`;
 }
-//@ chunk-vrmtstb0.js:7979-8323 placement
+//@ chunk-s4h0q5es.js:8221-8565 placement
 function formatGatewayExitNotice(
   gatewayLabel,
   failure,
@@ -421,7 +430,7 @@ function formatGatewayExitNotice(
 ) {
   return `${gatewaySettingsErrorMessage(gatewayLabel, failure, signedIn)}. ${failure ? "Claude Code has to restart to retry" : `Claude Code has to restart to apply ${signedIn ? "your organization's managed settings" : "them"}`}, and ${reason}, so this session is ending instead. Your sign-in is saved: start claude again the same way${transcriptSaved ? " (add --continue to return to this conversation)" : ""}.`;
 }
-//@ chunk-vrmtstb0.js:8323-9046 placement
+//@ chunk-s4h0q5es.js:8565-9285 placement
 /**
  * 网关登录后重启 Claude Code（后台会话不能自重启）。
  */
@@ -470,7 +479,7 @@ ${notice}
     return shutdownWith(`it could not restart itself (${errorMessage(error)})`);
   }
 }
-//@ chunk-vrmtstb0.js:9046-9588 placement
+//@ chunk-s4h0q5es.js:9285-9827 placement
 function loginCompletion(context, onDone, outcome, { envTokenWasSet = false, envWarningOnce } = {}) {
   if (outcome.gatewayLoginError !== undefined || outcome.relaunching) return [outcome.gatewayLoginError];
   let availability = onDone ? undefined : getLoginAvailability();
@@ -502,7 +511,7 @@ function loginCompletion(context, onDone, outcome, { envTokenWasSet = false, env
     autoContinue,
   ];
 }
-//@ chunk-vrmtstb0.js:9588-9776 placement (2.1.88 match: launchAndDone, 0.376)
+//@ chunk-s4h0q5es.js:9827-10015 placement (2.1.88 match: launchAndDone, 0.376)
 function loginAutoContinueOptions(session, outcome) {
   if (outcome.accountSwitched || outcome.relaunching) return;
   let lastAssistantMessage = getLastAssistantMessage(session.messages);
@@ -513,27 +522,27 @@ function loginAutoContinueOptions(session, outcome) {
     };
   return;
 }
-//@ chunk-vrmtstb0.js:9776-9946 placement
+//@ chunk-s4h0q5es.js:10015-10185 placement
 var OLD_TOKEN_ENV_WARNING =
   "but if that variable is set in your shell profile or a Claude Code settings file, new `claude` sessions will keep using the old token until you remove it there.";
-//@ chunk-vrmtstb0.js:9946-10037 placement
+//@ chunk-s4h0q5es.js:10185-10276 placement
 function getLoginConsentHandoffMessage() {
   return "Signed in. Review your organization's managed settings to continue.";
 }
-//@ chunk-vrmtstb0.js:10037-10228 placement
+//@ chunk-s4h0q5es.js:10276-10467 placement
 function getLoginStartingMessage() {
   return env.CLAUDE_CODE_OAUTH_TOKEN
     ? `Warning: CLAUDE_CODE_OAUTH_TOKEN is set in your environment. This session will switch to your new credentials after logging in, ${OLD_TOKEN_ENV_WARNING}`
     : undefined;
 }
-//@ chunk-vrmtstb0.js:10228-10367 placement
+//@ chunk-s4h0q5es.js:10467-10606 placement
 var LOGIN_SUCCESS_ENV_OVERRIDE_WARNING = `Note: CLAUDE_CODE_OAUTH_TOKEN was set in your environment when /login started. This session will use your new credentials, ${OLD_TOKEN_ENV_WARNING}`;
-//@ chunk-vrmtstb0.js:10367-10480 placement
+//@ chunk-s4h0q5es.js:10606-10719 placement
 function envTokenWarningRoute(input) {
   if (!input.envTokenWasSet || input.gatewayActive) return "none";
   return input.willAutoQuery ? "out-of-band" : "inline";
 }
-//@ chunk-vrmtstb0.js:10480-10652 placement (2.1.88 match: call, 0.512)
+//@ chunk-s4h0q5es.js:10719-10891 placement (2.1.88 match: call, 0.512)
 function buildLoginDoneMessage(onDone, context) {
   if (!onDone) return "Login interrupted";
   let message = context.bridgeDisconnected
@@ -545,7 +554,7 @@ function buildLoginDoneMessage(onDone, context) {
 ${LOGIN_SUCCESS_ENV_OVERRIDE_WARNING}`
     : message;
 }
-//@ chunk-vrmtstb0.js:10652-11396 placement
+//@ chunk-s4h0q5es.js:10891-11635 placement
 async function call(onDone, context) {
   if (getAPIProvider() === "firstParty" && isBareModeAuthRestricted()) {
     onDone(
@@ -601,7 +610,7 @@ async function call(onDone, context) {
     onHybridSignIn: undefined,
   });
 }
-//@ chunk-vrmtstb0.js:11396-13635 placement (2.1.88 match: Login, 0.296)
+//@ chunk-s4h0q5es.js:11635-13878 placement (2.1.88 match: Login, 0.296)
 function Login(props) {
   let $ = useMemoCache(38);
   let mainLoopModel = useMainLoopModel();

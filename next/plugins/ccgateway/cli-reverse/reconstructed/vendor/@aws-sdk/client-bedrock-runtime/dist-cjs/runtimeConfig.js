@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-bedrock-runtime/dist-cjs/runtimeConfig.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
- * pieces: chunk-3cddmtk7.js (1)
+ * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -28,7 +28,7 @@ import {
 } from "../../../@smithy/core/dist-cjs/submodules/event-streams/index.js";
 import { fromEnvSigningName, fromSsoClient } from "../../token-providers/dist-cjs/index.js";
 
-//@ chunk-3cddmtk7.js:24302-26372 esm-layout
+//@ chunk-ayc8mk37.js:24302-26372 esm-layout
 var import_client_3 = __toESM(require_client());
 var import_node_config_provider_2 = __toESM(require_node_config_provider_2());
 var import_client_4 = __toESM(require_client());

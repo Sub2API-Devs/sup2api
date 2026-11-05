@@ -3,23 +3,23 @@
  *
  * 加载用户/项目/插件工作流（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rmpsted2.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-40b7pajj.js (17)
  * attribution: placement 17
  */
 import { join } from "path";
 import { getFsImplementation, isDuplicatePath } from "../../utils/fsOperations.js";
+import { findSymlinkEscape } from "../../utils/plugins/pluginPathContainment.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { readSmallFileChecked, checkSmallFileReadable } from "../../utils/readSmallFile.js";
 import { MAX_SCRIPT_FILE_BYTES, normalizeCrLf } from "./scriptFile.js";
-import { logForDebugging } from "../../utils/debug.js";
 import { parseWorkflowScript, isValidWorkflowScript } from "../workflows/workflowScriptMeta.js";
 import { getPluginRegistry, clearPluginWorkflows } from "../../utils/plugins/pluginLoadState.js";
 import { loadAllPluginsCacheOnly } from "../../utils/plugins/pluginLoader.js";
 import { pluginErrorText } from "../../types/plugin.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
-import { getProjectDirsUpToHome } from "../../utils/markdownConfigLoader.js";
+import { getClaudeConfigDir, getProjectDirsUpToHome } from "../../utils/markdownConfigLoader.js";
 import { isSyscallError } from "../../utils/errors.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "../../utils/pagedRead.js";
 import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
@@ -29,8 +29,8 @@ import { bundledSkillsGateKey } from "../../skills/bundledSkillsGate.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
 import { getBundledWorkflows } from "../workflows/bundledWorkflows.js";
 
-//@ chunk-rmpsted2.js:872-1139 placement
-async function readWorkflowDir(workflowsPath, pluginName, plugin, pluginManifest, seenPaths) {
+//@ chunk-40b7pajj.js:875-1296 placement
+async function readWorkflowDir(workflowsPath, pluginName, plugin, pluginManifest, seenPaths, entriesAnchor) {
   let fsImplementation = getFsImplementation();
   let entries;
   try {
@@ -43,6 +43,19 @@ async function readWorkflowDir(workflowsPath, pluginName, plugin, pluginManifest
       entries.map(async (entry) => {
         if (!(entry.isFile() || entry.isSymbolicLink())) return null;
         if (!entry.name.endsWith(".js")) return null;
+        let entryInfo =
+          entriesAnchor === undefined
+            ? undefined
+            : await findSymlinkEscape(entriesAnchor, workflowsPath, entry.name);
+        if (entryInfo !== undefined) {
+          logForDebugging(
+            `Plugin ${pluginName}: did not read the workflow ${join(workflowsPath, entry.name)}: ${entryInfo}`,
+            {
+              level: "error",
+            },
+          );
+          return null;
+        }
         return readPluginWorkflowFile(
           join(workflowsPath, entry.name),
           pluginName,
@@ -54,7 +67,7 @@ async function readWorkflowDir(workflowsPath, pluginName, plugin, pluginManifest
     )
   ).filter((workflow) => workflow !== null);
 }
-//@ chunk-rmpsted2.js:1139-1774 placement
+//@ chunk-40b7pajj.js:1296-1931 placement
 async function readPluginWorkflowFile(filePath, pluginName, plugin, pluginManifest, seenPaths) {
   let fsImplementation = getFsImplementation();
   if (isDuplicatePath(fsImplementation, filePath, seenPaths)) return null;
@@ -101,7 +114,7 @@ async function readPluginWorkflowFile(filePath, pluginName, plugin, pluginManife
     return null;
   }
 }
-//@ chunk-rmpsted2.js:1774-3092 placement
+//@ chunk-40b7pajj.js:1931-3281 placement
 function loadPluginWorkflows(storageV5) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.workflows ??= (async () => {
@@ -121,6 +134,7 @@ function loadPluginWorkflows(storageV5) {
             plugin.source,
             plugin.manifest,
             seenPaths,
+            plugin.entriesAnchor,
           );
           workflows.push(...workflowDir);
           if (workflowDir.length > 0)
@@ -144,6 +158,7 @@ function loadPluginWorkflows(storageV5) {
                 plugin.source,
                 plugin.manifest,
                 seenPaths,
+                plugin.entriesAnchor,
               );
               workflows.push(...workflowDir);
               if (workflowDir.length > 0)
@@ -182,7 +197,7 @@ function loadPluginWorkflows(storageV5) {
   })();
   return pluginRegistry.workflows;
 }
-//@ chunk-rmpsted2.js:3120-3321 placement
+//@ chunk-40b7pajj.js:3309-3510 placement
 function canOverrideWorkflow(incoming, existing) {
   if (!existing || isValidWorkflowScript(incoming.script)) return true;
   logForDebugging(
@@ -193,7 +208,7 @@ function canOverrideWorkflow(incoming, existing) {
   );
   return false;
 }
-//@ chunk-rmpsted2.js:3321-3435 placement
+//@ chunk-40b7pajj.js:3510-3624 placement
 function dedupeWorkflowsByName(pluginWorkflows) {
   let byName = new Map();
   for (let workflow of pluginWorkflows) {
@@ -202,14 +217,14 @@ function dedupeWorkflowsByName(pluginWorkflows) {
   }
   return [...byName.values()];
 }
-//@ chunk-rmpsted2.js:3463-3505 placement
+//@ chunk-40b7pajj.js:3652-3694 placement
 /**
  * 配置目录下的用户工作流目录。
  */
 function userWorkflowsDir() {
   return join(getClaudeConfigDir(), "workflows");
 }
-//@ chunk-rmpsted2.js:3505-3690 placement
+//@ chunk-40b7pajj.js:3694-3879 placement
 async function walkProjectWorkflowDirs(cwd, stats) {
   try {
     return await getProjectDirsUpToHome("workflows", cwd);
@@ -224,7 +239,7 @@ async function walkProjectWorkflowDirs(cwd, stats) {
     throw error;
   }
 }
-//@ chunk-rmpsted2.js:3690-4792 placement
+//@ chunk-40b7pajj.js:3879-4981 placement
 async function loadUserWorkflows(dirPath, source, stats, storageV5) {
   if (storageV5 !== undefined && source === "userSettings")
     return loadWorkflowsDir(storageV5, dirPath, stats);
@@ -296,7 +311,7 @@ async function loadUserWorkflows(dirPath, source, stats, storageV5) {
     )
   ).filter((workflow) => workflow !== null);
 }
-//@ chunk-rmpsted2.js:4792-6287 placement
+//@ chunk-40b7pajj.js:4981-6476 placement
 async function loadWorkflowsDir(storage, dirPath, stats) {
   let candidates = [];
   switch (
@@ -403,7 +418,7 @@ async function loadWorkflowsDir(storage, dirPath, stats) {
     )
   ).filter((workflow) => workflow !== null);
 }
-//@ chunk-rmpsted2.js:6287-7480 placement
+//@ chunk-40b7pajj.js:6476-7669 placement
 async function discoverProjectWorkflows(cwd, storageV5) {
   let userDir = userWorkflowsDir();
   let stats = {
@@ -466,18 +481,18 @@ async function discoverProjectWorkflows(cwd, storageV5) {
     });
   return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
-//@ chunk-rmpsted2.js:7480-7586 placement
+//@ chunk-40b7pajj.js:7669-7775 placement
 var REMOTE_WORKFLOW_ENV = "CLAUDE_REMOTE_WORKFLOW_SCRIPT";
 var CLAUDE_REMOTE_WORKFLOW_ARGS = "CLAUDE_REMOTE_WORKFLOW_ARGS";
 var CLAUDE_WORKFLOW_NAME_ONLY = "CLAUDE_WORKFLOW_NAME_ONLY";
-//@ chunk-rmpsted2.js:7586-7636 placement
+//@ chunk-40b7pajj.js:7775-7825 placement
 /**
  * 读环境变量 CLAUDE_WORKFLOW_NAME_ONLY。
  */
 function workflowNameOnlyEnv() {
   return env.CLAUDE_WORKFLOW_NAME_ONLY;
 }
-//@ chunk-rmpsted2.js:7636-7725 placement
+//@ chunk-40b7pajj.js:7825-7914 placement
 /**
  * 按 host 与配置键缓存全部工作流。
  */
@@ -488,7 +503,7 @@ function allWorkflowsForHost(cwd, storageV5) {
     () => loadAllWorkflows(cwd, storageV5),
   );
 }
-//@ chunk-rmpsted2.js:7725-8087 placement
+//@ chunk-40b7pajj.js:7914-8276 placement
 /**
  * 汇总可用工作流：内置 + 插件（同名后者覆盖、不可解析的不覆盖）+ 项目目录工作流，按优先级去重；禁用自定义或只允许命名内置时只返回内置。
  */
@@ -513,21 +528,21 @@ async function loadAllWorkflows(cwd, storageV5) {
     ...overridingProjects,
   ];
 }
-//@ chunk-rmpsted2.js:8087-8144 placement
+//@ chunk-40b7pajj.js:8276-8333 placement
 /**
  * 过滤出可被覆盖的工作流。
  */
 function overridableWorkflows(workflows, byName) {
   return workflows.filter((workflow) => canOverrideWorkflow(workflow, byName.get(workflow.name)));
 }
-//@ chunk-rmpsted2.js:8144-8215 placement
+//@ chunk-40b7pajj.js:8333-8404 placement
 /**
  * 按名字查找工作流。
  */
 async function findWorkflowByName(name, cwd, storageV5) {
   return (await allWorkflowsForHost(cwd, storageV5)).find((workflow) => workflow.name === name);
 }
-//@ chunk-rmpsted2.js:8215-8262 placement
+//@ chunk-40b7pajj.js:8404-8451 placement
 /**
  * 清空工作流缓存与插件工作流。
  */
@@ -536,12 +551,12 @@ function clearAllWorkflows() {
   clearPluginWorkflows();
 }
 export {
-  workflowNameOnlyEnv,
-  findWorkflowByName,
   allWorkflowsForHost,
-  userWorkflowsDir,
-  clearAllWorkflows,
   REMOTE_WORKFLOW_ENV,
   CLAUDE_REMOTE_WORKFLOW_ARGS,
+  workflowNameOnlyEnv,
+  findWorkflowByName,
   CLAUDE_WORKFLOW_NAME_ONLY,
+  userWorkflowsDir,
+  clearAllWorkflows,
 };

@@ -3,9 +3,9 @@
  *
  * 已有模块；g2 补充 MCP 内容保存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpOutputStorage.ts
- * pieces: chunk-bhxaz9j0.js (20), chunk-e6aww6q8.js (4)
+ * pieces: chunk-1jwzj2da.js (1), chunk-5xgkngpb.js (4), chunk-qwkyjqpg.js (19)
  * attribution: placement 17, fingerprint 6, layout 1
  */
 import { dirname, join } from "path";
@@ -17,7 +17,7 @@ import {
   writeToolResultFile,
   toolResultsKey,
 } from "./toolResultStorage.js";
-import { uniq, count } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { firstLineOf } from "./stringUtils.js";
 import { MAX_PERSIST_BYTES as MAX_PERSIST_BYTES_2, MAX_PDF_PAGES_PER_READ } from "./mediaLimits.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -27,15 +27,21 @@ import { toError } from "./errors.js";
 import { logForDebugging } from "./debug.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 import { formatFileSize } from "./format.js";
+import { countWhere } from "./collections.js";
 import { getDefaultFileReadingLimits } from "../tools/FileReadTool/limits.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
 import { useSubagentTruncationPrompt } from "../services/mcp/client.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
 import { getPlatform } from "./platform.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bhxaz9j0.js:1161-1247 placement
+//@ chunk-1jwzj2da.js:3534-3543 placement
+/**
+ * 行提示文本的最大字符数。
+ */
+var MAX_LINE_HINT_CHARS = 64;
+//@ chunk-qwkyjqpg.js:639-725 placement
 /**
  * 默认的工具结果存盘目录结构（无盘时为空）。
  */
@@ -50,7 +56,7 @@ function defaultToolResultsStorage() {
     paths: [],
   };
 }
-//@ chunk-bhxaz9j0.js:1247-1367 placement
+//@ chunk-qwkyjqpg.js:725-845 placement
 /**
  * 把保存的文件路径及其目录记录到集合中（去重）。
  */
@@ -60,7 +66,7 @@ function recordSavedFilePath(savedFiles, filePath) {
   if (!savedFiles.dirs.includes(dir)) savedFiles.dirs.push(dir);
   if (!savedFiles.paths.includes(filePath)) savedFiles.paths.push(filePath);
 }
-//@ chunk-bhxaz9j0.js:1367-1433 placement
+//@ chunk-qwkyjqpg.js:845-911 placement
 /**
  * 从已保存文件集合中移除某路径。
  */
@@ -68,7 +74,7 @@ function forgetSavedFilePath(savedFiles, filePath) {
   if (!savedFiles) return;
   savedFiles.paths = savedFiles.paths.filter((path) => path !== filePath);
 }
-//@ chunk-bhxaz9j0.js:1433-1560 placement
+//@ chunk-qwkyjqpg.js:911-1038 placement
 /**
  * 把新保存的文件并入状态的 webFetchSavedFiles；无变化时直接用原状态，否则按需经更新函数提交。
  */
@@ -83,7 +89,7 @@ function withWebFetchSavedFiles(context, runGuard, isAsync, continueWith) {
         };
   return isAsync ? nextContext : continueWith(nextContext);
 }
-//@ chunk-bhxaz9j0.js:1560-1766 placement
+//@ chunk-qwkyjqpg.js:1038-1244 placement
 function mergeSavedFiles(webFetchSavedFiles, added) {
   if (!added) return webFetchSavedFiles;
   if (
@@ -93,23 +99,23 @@ function mergeSavedFiles(webFetchSavedFiles, added) {
   )
     return webFetchSavedFiles;
   return {
-    dirs: uniq([...(webFetchSavedFiles?.dirs ?? []), ...added.dirs]),
-    paths: uniq([...(webFetchSavedFiles?.paths ?? []), ...added.paths]),
+    dirs: normalizeCaseForComparison_2([...(webFetchSavedFiles?.dirs ?? []), ...added.dirs]),
+    paths: normalizeCaseForComparison_2([...(webFetchSavedFiles?.paths ?? []), ...added.paths]),
   };
 }
-//@ chunk-bhxaz9j0.js:1821-1848 placement
+//@ chunk-qwkyjqpg.js:1299-1326 placement
 var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bhxaz9j0.js:1821", () => {
+deferInit("chunk-qwkyjqpg.js:1299", () => {
   buffer = Buffer.from("%PDF-");
 });
-//@ chunk-bhxaz9j0.js:1848-1904 placement
+//@ chunk-qwkyjqpg.js:1326-1382 placement
 /**
  * 判断缓冲区是否以给定魔数开头。
  */
 function hasBufferPrefix(data) {
   return data.subarray(0, buffer.length).equals(buffer);
 }
-//@ chunk-bhxaz9j0.js:1904-2035 placement
+//@ chunk-qwkyjqpg.js:1382-1513 placement
 /**
  * 取 MIME 类型的主体部分（去掉参数），格式合法且不超过 100 字符时返回，否则 undefined。
  */
@@ -118,7 +124,7 @@ function normalizeMimeType(rawMimeType) {
   let trimmed = firstLineOf(rawMimeType, ";").trim();
   return trimmed.length <= 100 && /^[\w.+-]+\/[\w.+-]+$/.test(trimmed) ? trimmed : undefined;
 }
-//@ chunk-bhxaz9j0.js:2035-3447 fingerprint (2.1.88 match: extensionForMimeType, 0.77)
+//@ chunk-qwkyjqpg.js:1513-2925 fingerprint (2.1.88 match: extensionForMimeType, 0.769)
 /**
  * extensionForMimeType：MIME 类型到文件扩展名（pdf/json/csv/docx/png/…），未知为 bin。
  */
@@ -198,9 +204,9 @@ function extensionForMimeType(mimeType) {
       return "bin";
   }
 }
-//@ chunk-bhxaz9j0.js:3447-3459 placement
+//@ chunk-qwkyjqpg.js:2925-2937 placement
 var MAX_PERSIST_BYTES = MAX_PERSIST_BYTES_2;
-//@ chunk-bhxaz9j0.js:3459-4258 placement
+//@ chunk-qwkyjqpg.js:2937-3736 placement
 /**
  * persistBinaryContent：把 MCP 返回的二进制内容按扩展名写入 tool-results 目录（或会话存储），超过持久化上限返回错误；记录 tengu_binary_content_persisted。
  */
@@ -271,7 +277,7 @@ async function persistBinaryContent(bytes, mimeType, persistId, savedFiles, stor
     ext,
   };
 }
-//@ chunk-bhxaz9j0.js:4450-4856 fingerprint (2.1.88 match: persistBinaryContent, 0.608)
+//@ chunk-qwkyjqpg.js:3928-4334 fingerprint (2.1.88 match: persistBinaryContent, 0.607)
 /**
  * persistBinaryContentViaStorage：经存储抽象（v5 storage）写二进制文件的分支。
  */
@@ -304,14 +310,14 @@ async function persistBinaryContentViaStorage(storage, resultsDir, bytes, mimeTy
     ext,
   };
 }
-//@ chunk-bhxaz9j0.js:4856-4952 fingerprint (2.1.88 match: getBinaryBlobSavedMessage, 1)
+//@ chunk-qwkyjqpg.js:4334-4430 fingerprint (2.1.88 match: getBinaryBlobSavedMessage, 1)
 /**
  * getBinaryBlobSavedMessage：生成"Binary content (类型, 大小) saved to 路径"说明文本。
  */
 function getBinaryBlobSavedMessage(filepath, mimeType, size, sourceDescription) {
   return `${sourceDescription}Binary content (${mimeType || "unknown type"}, ${formatFileSize(size)}) saved to ${filepath}`;
 }
-//@ chunk-bhxaz9j0.js:4952-5278 placement
+//@ chunk-qwkyjqpg.js:4430-4756 placement
 function toStoredMcpContent(imageBuffer, mimeType, serverName) {
   let resultStore = toolResultStoreOrNull();
   if (
@@ -337,18 +343,19 @@ function toStoredMcpContent(imageBuffer, mimeType, serverName) {
     },
   };
 }
-//@ chunk-bhxaz9j0.js:5278-5457 placement
+//@ chunk-qwkyjqpg.js:4756-4935 placement
 function pdfTooLargeNotice(byteLength) {
   return `[This PDF (${formatFileSize(byteLength)}) cannot be shown whole in this session. Read it again with the pages parameter, for example pages: "1-5", at most ${MAX_PDF_PAGES_PER_READ} pages per call.]`;
 }
-//@ chunk-bhxaz9j0.js:5457-5533 placement
+//@ chunk-qwkyjqpg.js:4935-5011 placement
 var EXTRA_PDF_OMITTED_TEXT = "[Another PDF in this result was left out: only the first is shown.]";
-//@ chunk-bhxaz9j0.js:5533-5729 placement
+//@ chunk-qwkyjqpg.js:5011-5207 placement
 /**
  * 内容中有多个 document 块时只保留第一个，其余替换为说明文字。
  */
 function dropExtraDocumentBlocks(content) {
-  if (!Array.isArray(content) || count(content, (block) => block.type === "document") < 2) return content;
+  if (!Array.isArray(content) || countWhere(content, (block) => block.type === "document") < 2)
+    return content;
   let seenDocument = false;
   return content.map((block) => {
     if (block.type !== "document" || !seenDocument) {
@@ -361,24 +368,19 @@ function dropExtraDocumentBlocks(content) {
     };
   });
 }
-//@ chunk-bhxaz9j0.js:5729-5859 placement
+//@ chunk-qwkyjqpg.js:5207-5337 placement
 /**
  * 二进制内容未能保存时的说明文字（类型与大小）。
  */
 function binaryNotSavedNotice(mimeType, byteLength) {
   return `[Binary content (${normalizeMimeType(mimeType) ?? "application/octet-stream"}, ${formatFileSize(byteLength)}) was not kept: it could not be saved.]`;
 }
-//@ chunk-bhxaz9j0.js:5859-5936 placement
+//@ chunk-qwkyjqpg.js:5337-5414 placement
 /**
  * 截断部分未能保存时的说明文案。
  */
 var TRUNCATED_UNSAVED_TEXT = "[The portion truncated above was not kept: it could not be saved.]";
-//@ chunk-bhxaz9j0.js:5936-5945 placement
-/**
- * 行提示文本的最大字符数。
- */
-var MAX_LINE_HINT_CHARS = 64;
-//@ chunk-e6aww6q8.js:2145923-2146125 fingerprint (2.1.88 match: getFormatDescription, 1)
+//@ chunk-5xgkngpb.js:2199305-2199507 fingerprint (2.1.88 match: getFormatDescription, 1)
 /**
  * getFormatDescription：toolResult → Plain text；structuredContent/contentArray → JSON（可带 schema 描述）。
  */
@@ -392,7 +394,7 @@ function getFormatDescription(type, schema) {
       return schema ? `JSON array with schema: ${schema}` : "JSON array";
   }
 }
-//@ chunk-e6aww6q8.js:2146125-2149462 layout
+//@ chunk-5xgkngpb.js:2199507-2202848 layout
 /**
  * getLargeOutputInstructions：大结果已落盘时给模型的说明：结果长度/行数、保存路径与格式；按 JSON、长行、多行三种情况建议 jq / python 切片 / Read offset+limit，并建议在子代理中完整读取后摘要。
  */
@@ -423,12 +425,12 @@ Note: the output exceeded the persist byte limit; the saved file contains only t
     if (lineStats === undefined) {
       searchAdvice = `Use jq to make structured queries (find a value, filter by field).
 `;
-      chunkingNote = `- Note: this file is JSON, so a long value (or the whole file) is a single line. ${FILE_READ_TOOL_NAME}'s offset/limit cannot split a line, so reading in chunks works only if every line is short. If a shell tool is available, ${jqProbeHint}.
+      chunkingNote = `- Note: this file is JSON, so a long value (or the whole file) is a single line. ${READ}'s offset/limit cannot split a line, so reading in chunks works only if every line is short. If a shell tool is available, ${jqProbeHint}.
 `;
     } else if (!linesChunkable) {
       searchAdvice = `Search within the file for specific content, and use jq if the content is JSON.
 `;
-      chunkingNote = `- Note: this file's lines are too long for ${FILE_READ_TOOL_NAME}'s offset/limit chunking. If a shell tool is available, slice by character range (e.g. python read()[A:B], dd, or cut -c) instead.
+      chunkingNote = `- Note: this file's lines are too long for ${READ}'s offset/limit chunking. If a shell tool is available, slice by character range (e.g. python read()[A:B], dd, or cut -c) instead.
 `;
     } else {
       searchAdvice = `Use offset and limit parameters to read specific portions of the file, search within it for specific content, and jq to make structured queries.
@@ -450,7 +452,7 @@ Note: the output exceeded the persist byte limit; the saved file contains only t
   if (lineStats === undefined) {
     searchAdviceAlternate = `- For targeted queries (find a value, filter by field): use jq on the file directly.
 `;
-    readAdvice = `${jqProbeHint} \u2014 ${FILE_READ_TOOL_NAME}'s line-based offset/limit will not chunk this file.`;
+    readAdvice = `${jqProbeHint} \u2014 ${READ}'s line-based offset/limit will not chunk this file.`;
     subagentInstruction = `${rawOutputPath} is ${formatDescription}; probe the structure with jq (type/length/keys), then extract and read the content in full with jq or python, then summarize and quote any key findings verbatim.`;
   } else if (!linesChunkable) {
     let spanChars = floored.toLocaleString();
@@ -475,7 +477,7 @@ Note: the output exceeded the persist byte limit; the saved file contains only t
     truncationNote
   );
 }
-//@ chunk-e6aww6q8.js:2149462-2150478 fingerprint (2.1.88 match: getLargeOutputInstructions, 0.787)
+//@ chunk-5xgkngpb.js:2202848-2203864 fingerprint (2.1.88 match: getLargeOutputInstructions, 0.787)
 /**
  * getReadEntireFileRequirements：要求模型分块读完整个文件、遇截断缩小块、说明读了多少、读不了就停止重试。
  */
@@ -495,7 +497,7 @@ function getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, noShel
 `
   );
 }
-//@ chunk-e6aww6q8.js:2150478-2150802 fingerprint (2.1.88 match: isBinaryContentType, 1)
+//@ chunk-5xgkngpb.js:2203864-2204188 fingerprint (2.1.88 match: isBinaryContentType, 1)
 /**
  * isBinaryContentType：text/*、JSON、XML、JS、表单编码之外的 content-type 视为二进制。
  */
@@ -510,22 +512,22 @@ function isBinaryContentType(contentType) {
   return true;
 }
 export {
-  extensionForMimeType,
-  persistBinaryContent,
+  withWebFetchSavedFiles,
   defaultToolResultsStorage,
   toStoredMcpContent,
+  persistBinaryContent,
   binaryNotSavedNotice,
   getBinaryBlobSavedMessage,
   dropExtraDocumentBlocks,
   getFormatDescription,
   getLargeOutputInstructions,
-  withWebFetchSavedFiles,
+  MAX_LINE_HINT_CHARS,
+  extensionForMimeType,
   recordSavedFilePath,
   isBinaryContentType,
+  hasBufferPrefix,
   normalizeMimeType,
-  MAX_LINE_HINT_CHARS,
   MAX_PERSIST_BYTES,
   TRUNCATED_UNSAVED_TEXT,
   forgetSavedFilePath,
-  hasBufferPrefix,
 };

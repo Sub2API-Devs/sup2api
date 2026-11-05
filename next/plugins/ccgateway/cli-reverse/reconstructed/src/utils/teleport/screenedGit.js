@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：受审查的 git
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (23)
  * attribution: placement 23
  */
 import { join, basename, dirname, isAbsolute } from "path";
@@ -47,11 +47,11 @@ import { DEV_NULL } from "../git/gitIndexReader.js";
 import { GIT_ALLOW_PROTOCOL_VALUE } from "../git/gitSafeEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1915792-1915836 placement
+//@ chunk-fepf8jp6.js:86915-86958 placement
 function gitBinaryErrorForHostShape(hostShape) {
   return new GitBinaryError("operation");
 }
-//@ chunk-e6aww6q8.js:1915836-1915966 placement
+//@ chunk-fepf8jp6.js:86958-87086 placement
 function gitBinaryErrorForHost(hostInfo) {
   let host = hostInfo[0] ?? "";
   let cache = gitVersionCacheByHost.of(getRootSession().host);
@@ -61,20 +61,20 @@ function gitBinaryErrorForHost(hostInfo) {
   cache.set(host, error);
   return error;
 }
-//@ chunk-e6aww6q8.js:1915966-1916059 placement
+//@ chunk-fepf8jp6.js:87086-87174 placement
 function buildScreenedGitEnv(settings, preservedEnv = preservedGitEnv()) {
   return settings === undefined || settings === IN_TREE_SETTINGS_UNREADABLE
     ? buildGitEnv(settings, undefined, preservedEnv)
     : buildGitEnvForReach(settings, gitBinaryErrorForHost(settings).screenMemo, preservedEnv);
 }
-//@ chunk-e6aww6q8.js:1916059-1916120 placement
+//@ chunk-fepf8jp6.js:87174-87234 placement
 function describeGitBinaryFile(settings) {
   return {
     file: locateScreenedGitBinary(settings),
     startsOutside: settings !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1916120-1916746 placement
+//@ chunk-fepf8jp6.js:87234-87848 placement
 /**
  * 定位受审查的 git 可执行文件并上报其可写范围结论。
  */
@@ -122,7 +122,7 @@ function locateScreenedGitBinary(settings) {
   }
   return unreachableGitPath(settings);
 }
-//@ chunk-e6aww6q8.js:1916746-1917352 placement
+//@ chunk-fepf8jp6.js:87848-88446 placement
 async function checkGitVersionForScreening(opts, opts_2) {
   let { dir, env, signal, startsInProject = false } = opts_2;
   let startsOutside = !startsInProject;
@@ -174,7 +174,7 @@ async function checkGitVersionForScreening(opts, opts_2) {
   }
   return unreachable;
 }
-//@ chunk-e6aww6q8.js:1917352-1917499 placement
+//@ chunk-fepf8jp6.js:88446-88592 placement
 var SCREENED_GIT_FLAGS = {
   only_inside_reach: false,
   reach_unplaced: false,
@@ -184,14 +184,14 @@ var SCREENED_GIT_FLAGS = {
   old_git: false,
   did_not_run_from_outside: false,
 };
-//@ chunk-e6aww6q8.js:1917499-1917571 placement
+//@ chunk-fepf8jp6.js:88592-88662 placement
 function logScreenedGitReach(reach) {
   logEvent("tengu_dir_sync_git_not_on_start_path", {
     ...SCREENED_GIT_FLAGS,
     ...reach,
   });
 }
-//@ chunk-e6aww6q8.js:1917571-1920015 placement
+//@ chunk-fepf8jp6.js:88662-91104 placement
 /**
  * 运行受审查的 git：确认可写范围后才执行。
  */
@@ -217,7 +217,7 @@ function runScreenedGit({ cause, tree, found, volumes, homeCheckout }) {
       return `git reads made before a cloud session starts (such as which remote this checkout uses, or which pushed commit to start from) were skipped here${treeText} this time: what a bound cloud session can write could not be worked out from this checkout\u2019s git layout, or there is no usable git on the PATH to read it with (the \xABcould not work out\xBB line above, at debug level, says which)`;
   }
 }
-//@ chunk-e6aww6q8.js:1920015-1920335 placement
+//@ chunk-fepf8jp6.js:91104-91421 placement
 /**
  * 返回一个不存在的 git 路径，用于在不能运行 git 时让调用失败。
  */
@@ -237,11 +237,11 @@ function unreachableGitPath(settings) {
     "git-not-on-the-PATH-this-process-was-started-with.exe",
   );
 }
-//@ chunk-e6aww6q8.js:1920335-1920405 placement
+//@ chunk-fepf8jp6.js:91421-91490 placement
 function gitProbeCacheKey({ file, startsOutside }, dir) {
   return `${file}\x00${dir}\x00${startsOutside}`;
 }
-//@ chunk-e6aww6q8.js:1920405-1920742 placement
+//@ chunk-fepf8jp6.js:91490-91823 placement
 /**
  * 按宿主缓存一次性探测的 git 版本，失败时清缓存。
  */
@@ -269,11 +269,11 @@ function cachedGitVersionProbe(hostInfo, host) {
   cache.set(host, probePromise);
   return probePromise;
 }
-//@ chunk-e6aww6q8.js:1920742-1920790 placement
+//@ chunk-fepf8jp6.js:91823-91867 placement
 function screenedGitPreservedEnv(preservedEnv = preservedGitEnv()) {
   return gitConfigLocationEnv(buildScreenedGitEnv(undefined, preservedEnv));
 }
-//@ chunk-e6aww6q8.js:1920790-1920925 placement
+//@ chunk-fepf8jp6.js:91867-91996 placement
 function screenedGitEnv(settings, extra, baseEnv) {
   let preservedEnv = baseEnv ?? preservedGitEnv();
   let env = buildScreenedGitEnv(extra, preservedEnv);
@@ -294,12 +294,12 @@ function screenedGitEnv(settings, extra, baseEnv) {
     ...UNSET_REFERENCE_BACKEND_ENV,
   };
 }
-//@ chunk-e6aww6q8.js:1920925-1920957 placement
+//@ chunk-fepf8jp6.js:91996-92028 placement
 var REACH_UNPLACED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1920925", () => {
+deferInit("chunk-fepf8jp6.js:91996", () => {
   REACH_UNPLACED = Symbol("reach unplaced");
 });
-//@ chunk-e6aww6q8.js:1920957-1921434 placement
+//@ chunk-fepf8jp6.js:92028-92501 placement
 /**
  * 读取启动目录的 git 布局（含链接工作树），计算云会话可写范围并上报 tengu_cloud_launch_git_layout_read 事件。
  */
@@ -335,13 +335,13 @@ async function readLaunchGitLayout(startDir, signal, startsInProject = false) {
   } catch {}
   return reach;
 }
-//@ chunk-e6aww6q8.js:1921434-1921575 placement
+//@ chunk-fepf8jp6.js:92501-92641 placement
 function layoutReadReason(layoutRead) {
   if (layoutRead.kind === "read") return;
   if (layoutRead.kind === "tampered") return layoutRead.misplaced;
   return layoutRead.why === "changed_under_hold" ? layoutRead.why : (layoutRead.why ?? layoutRead.cause);
 }
-//@ chunk-e6aww6q8.js:1921575-1922409 placement
+//@ chunk-fepf8jp6.js:92641-93464 placement
 /**
  * 根据 git 布局读取结果确定可信的可达范围。
  */
@@ -394,7 +394,7 @@ function vouchedReachForLayout(cwd, layoutRead) {
     commonDir,
   });
 }
-//@ chunk-e6aww6q8.js:1922409-1922843 placement
+//@ chunk-fepf8jp6.js:93464-93888 placement
 /**
  * 根据可达范围构造筛查后的 git 环境，范围无法确定时记录并降级。
  */
@@ -441,7 +441,7 @@ async function screenedGitEnvForReach(reach, extra, signal, startsInProject = fa
       env,
     });
 }
-//@ chunk-e6aww6q8.js:1922843-1923045 placement
+//@ chunk-fepf8jp6.js:93888-94085 placement
 function buildScreenedGitEnv_2(settings, extra) {
   let baseEnv = GIT_FAILURE_CLASSIFIERS(getPreSettingsEnv());
   if (extra === undefined)
@@ -461,17 +461,17 @@ function buildScreenedGitEnv_2(settings, extra) {
     GIT_CONFIG_SYSTEM: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1923045-1923124 placement
+//@ chunk-fepf8jp6.js:94085-94163 placement
 var SCREENED_GIT_SAFE_ENV = {
   GIT_ALLOW_PROTOCOL: GIT_ALLOW_PROTOCOL_VALUE,
   GIT_NO_LAZY_FETCH: "1",
   GIT_TERMINAL_PROMPT: "0",
 };
-//@ chunk-e6aww6q8.js:1923124-1923157 placement
+//@ chunk-fepf8jp6.js:94163-94193 placement
 function preservedGitEnv() {
   return pickPreservedEnv(getPreSettingsEnv());
 }
-//@ chunk-e6aww6q8.js:1923157-1923205 placement
+//@ chunk-fepf8jp6.js:94279-94322 placement
 var GIT_REF_READ_TIMEOUT_MS = 30000;
 var GIT_REF_LIST_TIMEOUT_MS = 1e4;
 var GIT_REF_PROBE_TIMEOUT_MS = 1e4;
@@ -479,7 +479,6 @@ var MAX_REMOTE_BRANCH_CANDIDATES = 8;
 var GIT_REF_MAX_BUFFER = 4194304;
 export {
   readLaunchGitLayout,
-  screenedGitEnvForReach,
   REACH_UNPLACED,
   buildScreenedGitEnv_2,
   describeGitBinaryFile,
@@ -489,4 +488,5 @@ export {
   GIT_REF_READ_TIMEOUT_MS,
   GIT_REF_PROBE_TIMEOUT_MS,
   MAX_REMOTE_BRANCH_CANDIDATES,
+  screenedGitEnvForReach,
 };

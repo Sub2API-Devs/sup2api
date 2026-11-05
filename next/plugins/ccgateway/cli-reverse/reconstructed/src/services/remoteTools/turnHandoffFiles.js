@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：轮次交接文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-648dqenp.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-srb6thx2.js (6)
+ * attribution: placement 4, layout 2
  */
 import { posix } from "path";
 import { open } from "fs/promises";
@@ -16,7 +16,6 @@ import {
   withBytesInTemporaryFile,
   notePlacedCopy,
 } from "../../utils/filePersistence/placeFilesByName.js";
-import { filesPlacedByNameRegistry } from "../../bootstrap/state.js";
 import { hasConflictingPlacedFile } from "../../utils/filePersistence/taskFileLookup.js";
 import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
 import {
@@ -24,6 +23,7 @@ import {
   PLACED_BY_NAME_LIMITS,
   loadFilesPlacedByName,
 } from "../../utils/filePersistence/placedByName.js";
+import { filesPlacedByNameRegistry } from "../../bootstrap/state.js";
 import { sanitizeErrnoForTelemetry, getErrnoCode } from "../../utils/errors.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { identityMap } from "../../remote/tools/protocolConstants.js";
@@ -42,14 +42,12 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { readHandleBounded } from "../../utils/fsSafety/boundOpen.js";
 
-//@ chunk-648dqenp.js:6159-6951 placement
+//@ chunk-srb6thx2.js:6556-6877 placement
 /**
  * 回合交接时，按文件名刷新先前放到 home 目录的文件：对名字被新文件占用的条目，读取上传目录里对应的新内容（校验哈希）原子替换，或在内容未变时移除，并记事件。
  */
 async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
-  let registry = filesPlacedByNameRegistry();
   if (!hasConflictingPlacedFile(files) || !isFilePersistenceEnabled()) return;
-  let startTime = performance.now();
   let byName = new Map();
   for (let { fileUuid, name } of files) {
     let normalizedName = nfc(name);
@@ -58,19 +56,47 @@ async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
       (byName.get(normalizedName) ?? new Map()).set(fileUuid.toLowerCase(), fileUuid),
     );
   }
+  await refreshPlacedNames(
+    byName.keys(),
+    (normalizedName, file) => {
+      let byUuid = byName.get(normalizedName);
+      if (byUuid === undefined || (byUuid.size === 1 && byUuid.has(file.fileUuid))) return;
+      let [newer] = byUuid.size === 1 && !file.ambiguous ? byUuid.values() : [];
+      return {
+        newer,
+      };
+    },
+    byteLimit,
+  );
+}
+//@ chunk-srb6thx2.js:6877-6984 layout
+async function dropDeletedUploads(deletedFileUuids) {
+  await refreshPlacedNames(
+    [...filesPlacedByNameRegistry().keys()],
+    (name, file) => (deletedFileUuids.has(file.fileUuid) ? {} : undefined),
+    0,
+    {
+      of_deleted_uploads: 1,
+    },
+  );
+}
+//@ chunk-srb6thx2.js:6984-7598 layout
+async function refreshPlacedNames(names, decideRefresh, byteLimit, extraFields = {}) {
+  let registry = filesPlacedByNameRegistry();
+  let startTime = performance.now();
   let outcomeCounts = {};
   let copiedBytes = 0;
   let lastErrorCode;
-  for (let [name, byUuid] of byName) {
+  for (let name of names) {
     let row = registry.get(name);
-    if (row === undefined || (byUuid.size === 1 && byUuid.has(row.fileUuid))) continue;
+    let refresh = row && decideRefresh(name, row);
+    if (row === undefined || refresh === undefined) continue;
     registry.delete(name);
-    let [fileUuid] = byUuid.size === 1 && !row.ambiguous ? byUuid.values() : [];
     let outcome;
     try {
-      let refresh = await refreshPlacedFile(name, row, fileUuid, byteLimit - copiedBytes);
-      outcome = refresh.outcome;
-      copiedBytes += refresh.bytes;
+      let refreshResult = await refreshPlacedFile(name, row, refresh.newer, byteLimit - copiedBytes);
+      outcome = refreshResult.outcome;
+      copiedBytes += refreshResult.bytes;
     } catch (error) {
       lastErrorCode = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
       outcome = "failed";
@@ -82,10 +108,11 @@ async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
   let fields = {
     duration_ms: Math.round(performance.now() - startTime),
     approx_copied_bytes: Number(copiedBytes.toPrecision(2)),
-    ...identityMap(outcomeCounts, (count, outcome) => `files_${outcome}`),
+    ...identityMap(outcomeCounts, (key, outcome) => `files_${outcome}`),
     ...(lastErrorCode !== undefined && {
       last_error_code: lastErrorCode,
     }),
+    ...extraFields,
   };
   logEvent("tengu_turn_handoff_files_by_name_refresh", fields);
   logForDiagnosticsNoPII(
@@ -94,7 +121,7 @@ async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
     fields,
   );
 }
-//@ chunk-648dqenp.js:6951-7697 placement
+//@ chunk-srb6thx2.js:7598-8344 placement
 /**
  * 刷新一个按名放到 home 目录的文件：校验行信息后读取上传目录中的新内容（哈希一致），经临时文件原子替换并记录；无新内容时移除旧文件。
  */
@@ -156,13 +183,13 @@ async function refreshPlacedFile(name, row, fileUuid, byteLimit) {
     throw error;
   }
 }
-//@ chunk-648dqenp.js:7697-7815 placement
+//@ chunk-srb6thx2.js:8344-8462 placement
 async function removeIfStillPlaced(row) {
   let fingerprint = await checkPlacedFileUnchanged(row);
   if (typeof fingerprint === "string") return fingerprint;
   return (await removeIfUnchanged(row.path, fingerprint)) ? undefined : "left_changed";
 }
-//@ chunk-648dqenp.js:7815-8336 placement
+//@ chunk-srb6thx2.js:8462-8983 placement
 /**
  * 检查之前放置的文件是否未被改动（同一 inode、mtime、大小与哈希一致），返回最新 stat 或 left_gone/left_changed。
  */
@@ -193,4 +220,4 @@ async function checkPlacedFileUnchanged(row) {
     await handle.close();
   }
 }
-export { refreshFilesPlacedByName };
+export { refreshFilesPlacedByName, dropDeletedUploads };

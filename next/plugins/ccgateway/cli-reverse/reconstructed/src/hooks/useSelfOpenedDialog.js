@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自打开对话框钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c4c7q360.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1d743z54.js (4)
  * attribution: placement 4
  */
 import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -13,20 +13,20 @@ import { hasEarlyInputField } from "../utils/earlyInput.js";
 import { INPUT_SETTLE_MS, RECENT_INPUT_GUARD_MS } from "./useRecentInputGuard.js";
 import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import { useInputRefusalWindow, useRefusalTracker } from "../components/CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker } from "../components/CustomSelect/selectTypeahead.js";
 import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { gracefulShutdownSync, gracefulShutdown } from "../utils/gracefulShutdown.js";
 
-//@ chunk-c4c7q360.js:459-463 placement
+//@ chunk-1d743z54.js:459-463 placement
 init_react_production();
-//@ chunk-c4c7q360.js:463-467 placement
+//@ chunk-1d743z54.js:463-467 placement
 init_react_production();
-//@ chunk-c4c7q360.js:467-515 placement
+//@ chunk-1d743z54.js:467-515 placement
 function useSelfOpenedDialogValue() {
   let [settleMs] = useState(() => (hasEarlyInputField() ? INPUT_SETTLE_MS : RECENT_INPUT_GUARD_MS));
   return settleMs;
 }
-//@ chunk-c4c7q360.js:515-1283 placement
+//@ chunk-1d743z54.js:515-1283 placement
 /**
  * 由 Claude 自行打开的对话框的状态钩子：打开后的宽限期内忽略误触，取消时回调，退出时若仍未回答则记为欠答。
  */
@@ -39,10 +39,10 @@ function useSelfOpenedDialog(onDone, { selfOpened, hasOpeningGrace = selfOpened,
   let timeout = useTimeout(hasOpeningGrace ? selfOpenedDialogValue : null);
   let isGraceOver = !hasOpeningGrace || timeout;
   let screenReaderOn = useIsScreenReaderEnabled() ? true : false;
-  let inputRefusalWindow = useInputRefusalWindow(selfOpenedDialogValue);
+  let isRecentInput = useRecentInputWithin(selfOpenedDialogValue);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   function refuseInput() {
-    if (hasOpeningGrace && (inputRefusalWindow() || refusedWithin(selfOpenedDialogValue))) {
+    if (hasOpeningGrace && (isRecentInput() || refusedWithin(selfOpenedDialogValue))) {
       noteRefused();
       return true;
     }

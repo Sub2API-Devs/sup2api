@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设计系统使用指南提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ez320trn.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1xrdahqv.js (25)
  * attribution: placement 25
  */
 import { logError } from "../../utils/log.js";
@@ -44,7 +44,7 @@ import { ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
 import { fileInlineEnvelope } from "./readArtifactForModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ez320trn.js:1016-1208 placement
+//@ chunk-1xrdahqv.js:1016-1208 placement
 /**
  * 设计系统指南相关常量：README 路径、读取上限（12000/7000/700 字符）与读取失败的三种原因文案。
  */
@@ -58,7 +58,7 @@ var READ_FAILURE_REASONS = {
   timeout: "reading it took too long",
   failed: "the read failed unexpectedly",
 };
-//@ chunk-ez320trn.js:1208-1576 placement
+//@ chunk-1xrdahqv.js:1208-1576 placement
 /**
  * 让一个 Promise 与截止信号赛跑：信号先触发时按原因（interrupted/timeout/failed）调用回退函数给出结果；Promise 失败时同样回退，只有 failed 才记录错误。
  */
@@ -89,7 +89,7 @@ function raceWithDeadline(promise, deadlineSignal, context, fallback) {
     );
   });
 }
-//@ chunk-ez320trn.js:1576-2189 placement
+//@ chunk-1xrdahqv.js:1576-2189 placement
 /**
  * 从账号的设计系统列表中挑默认项：没有列出任何系统或没有标默认时返回说明与代码（不要猜，让用户选），否则返回其 url 与来源（default/title）。
  */
@@ -115,7 +115,7 @@ function pickDefaultDesignSystem(systems, truncated) {
     },
   };
 }
-//@ chunk-ez320trn.js:2189-2382 placement
+//@ chunk-1xrdahqv.js:2189-2382 placement
 function listDesignSystemNames(systems) {
   let mapped = systems
     .slice(0, 3)
@@ -125,7 +125,7 @@ function listDesignSystemNames(systems) {
     );
   return systems.length > 3 ? `${mapped.join(", ")}, and ${systems.length - 3} more` : mapped.join(", ");
 }
-//@ chunk-ez320trn.js:2382-3426 placement
+//@ chunk-1xrdahqv.js:2382-3426 placement
 /**
  * 检查某设计系统 artifact 能否读取作为引导：必须是本会话 claude.ai 的 artifact 链接，文件/存储至少有一种可用且未被规则全挡；预热共享条目，排除其他组织与有待处理通知的情况；返回所有权与文件/存储各自是否可读。
  */
@@ -209,7 +209,7 @@ async function checkDesignSystemReadable(url, signal, context, storeEnabled, pip
     storeOk: storeEnabled && !storeRuled && hasDesignSystemReadConsent(parsed, owned, "store", context),
   };
 }
-//@ chunk-ez320trn.js:3426-3541 placement
+//@ chunk-1xrdahqv.js:3426-3541 placement
 /**
  * 判断能否读取设计系统 artifact 的文件：没有挂起的自动响应提示（或处于委派观察上下文）、未被规则拦截且已有读取同意。
  */
@@ -220,7 +220,7 @@ function canReadDesignSystemFiles(parsed, url, context, pipelineRan) {
     hasDesignSystemReadConsent(parsed, ownedByUser(getShareEntry(parsed.slug)), "files", context)
   );
 }
-//@ chunk-ez320trn.js:3541-4662 placement
+//@ chunk-1xrdahqv.js:3541-4662 placement
 /**
  * 读取默认设计系统的 README 作为引导文档：先检查可读性，再并行读取存储里的 README 与发布文件（project/README.md 或 README.md），选出可用文档；读取他人 artifact 时记录外部读取；返回 design_system 记录（含不可用原因）。
  */
@@ -303,7 +303,7 @@ async function readDesignSystemGuide(url, source, signal, context, storeEnabled,
     },
   };
 }
-//@ chunk-ez320trn.js:4662-4989 placement
+//@ chunk-1xrdahqv.js:4662-4989 placement
 /**
  * 设计系统读取不可用时的几种说明文字（单独读取、规则约束、只能用已发布 README、已迁到自有文件）。
  */
@@ -315,7 +315,7 @@ var MOVED_TO_FILES_RESULT = {
   why: "it moved to its own files, which this session does not serve",
   code: "nothing_read",
 };
-//@ chunk-ez320trn.js:4989-5211 placement
+//@ chunk-1xrdahqv.js:4989-5211 placement
 function isDesignSystemReadRuled(surface, parsed, url, context, pipelineRan) {
   return surface === "files"
     ? hasDesignSystemReadRule(parsed, url, "read_file", context, {
@@ -335,11 +335,11 @@ function isDesignSystemReadRuled(surface, parsed, url, context, pipelineRan) {
           fields: DS_META_DOC_FIELDS,
         });
 }
-//@ chunk-ez320trn.js:5211-5277 placement
+//@ chunk-1xrdahqv.js:5211-5277 placement
 function readState(enabled, ruled, ok) {
   return !enabled ? "off" : ruled ? "ruled" : ok ? "read" : "unconsented";
 }
-//@ chunk-ez320trn.js:5277-5982 placement
+//@ chunk-1xrdahqv.js:5277-5982 placement
 /**
  * 根据文件与存储的可读状态（off/read/unconsented/ruled）给出设计系统读不到的原因与代码。
  */
@@ -378,7 +378,7 @@ function describeDesignSystemUnreadable(filesState, storeState) {
         code: "nothing_read",
       };
 }
-//@ chunk-ez320trn.js:5982-6203 placement
+//@ chunk-1xrdahqv.js:5982-6203 placement
 var NEEDS_APPROVAL_HINT = `reading it here first needs the user's approval, which this call does not ask for \u2014 ${READ_SEPARATELY_HINT}`;
 var DS_META_DOC_FIELDS = {
   db_op: "get",
@@ -395,7 +395,7 @@ var README_READ_FIELDS = {
     doc_id: README_MD,
   },
 };
-//@ chunk-ez320trn.js:7526-7928 placement
+//@ chunk-1xrdahqv.js:7526-7928 placement
 /**
  * 在项目 README 与根 README 的读取结果中选择：有内容的优先项目级；两者都失败时合并失败原因；否则返回带说明的那个。
  */
@@ -408,9 +408,9 @@ function pickReadmeResult({ project, root }) {
     };
   return project.why !== undefined ? project : root;
 }
-//@ chunk-ez320trn.js:7928-8022 placement
+//@ chunk-1xrdahqv.js:7928-8022 placement
 var DESIGN_STORE_FAILURE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ez320trn.js:7928", () => {
+deferInit("chunk-1xrdahqv.js:7928", () => {
   DESIGN_STORE_FAILURE_CODES = new Set([
     "store_unavailable",
     "busy",
@@ -419,7 +419,7 @@ deferInit("chunk-ez320trn.js:7928", () => {
     "upstream_auth",
   ]);
 });
-//@ chunk-ez320trn.js:8022-8223 placement
+//@ chunk-1xrdahqv.js:8022-8223 placement
 function readDesignSystemDoc(parsed, collection, docId, scope, context) {
   return raceWithDeadline(
     readArtifactDb(
@@ -444,7 +444,7 @@ function readDesignSystemDoc(parsed, collection, docId, scope, context) {
     }),
   );
 }
-//@ chunk-ez320trn.js:8223-8992 placement
+//@ chunk-1xrdahqv.js:8223-8992 placement
 /**
  * 从设计系统的存储读取 meta 与 files/README.md：meta 读失败时给出原因（部分错误标记未核实），已迁移到文件时标 moved，README 为空或是文件形式时说明原因。
  */
@@ -489,18 +489,18 @@ async function readStoreReadme(parsed, signal, context) {
           : undefined,
   };
 }
-//@ chunk-ez320trn.js:8992-9097 placement
+//@ chunk-1xrdahqv.js:8992-9097 placement
 function isMovedMarker(text) {
   let movedTo = isPlainObject(text) ? text.movedTo : undefined;
   return isPlainObject(movedTo) && typeof movedTo.path === "string" && typeof movedTo.at === "string";
 }
-//@ chunk-ez320trn.js:9097-9214 placement
+//@ chunk-1xrdahqv.js:9097-9214 placement
 function getInlineDocText(readmeResult) {
   if (readmeResult.kind !== "ok") return;
   let projectDoc = readmeResult.docs[0]?.data.data;
   return typeof projectDoc === "string" && projectDoc.trim() !== "" ? projectDoc : undefined;
 }
-//@ chunk-ez320trn.js:9214-9349 placement
+//@ chunk-1xrdahqv.js:9214-9349 placement
 /**
  * 清洗设计系统指南文本中的信封标签，超过字符上限时截断并标记 clipped。
  */
@@ -520,7 +520,7 @@ function clipGuideText(path, text, maxChars) {
         chars,
       };
 }
-//@ chunk-ez320trn.js:9349-9494 placement
+//@ chunk-1xrdahqv.js:9349-9494 placement
 var GENERATED_SECTION_MARKERS = [
   `
 ## Consuming this system (generated`,
@@ -528,7 +528,7 @@ var GENERATED_SECTION_MARKERS = [
 ## Index (generated`,
 ];
 var CLIPPED_GUIDE_MARKER = "[\u2026authored guide clipped here; its generated tail follows\u2026]";
-//@ chunk-ez320trn.js:9494-9827 placement
+//@ chunk-1xrdahqv.js:9494-9827 placement
 /**
  * 把设计系统指南裁到长度上限：超长时保留开头的手写部分并接上末尾"自动生成"小节（中间放裁剪标记），找不到生成小节时直接截断。
  */
@@ -558,7 +558,7 @@ ${generatedSection}`),
     clipped: true,
   };
 }
-//@ chunk-ez320trn.js:9827-10947 placement
+//@ chunk-1xrdahqv.js:9827-10947 placement
 /**
  * 生成"其他卡片未附上，需要时如何读取"的说明，按数据存储方式与当前工具集给出读取方法。
  */
@@ -569,7 +569,7 @@ function describeOtherCards(filesState, storeState, otherCards) {
     ? `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_db" and `db_op`: "get"', () => `the ${ARTIFACT_DATA_TOOL_NAME} tool, action "get"`)}, \`url\`: ${jsonStringify(filesState)}, and a \`collection\` and \`doc_id\`: "api" and "tokens.md" (palette, type, fonts); "ds" and "tokens" (exact token values); "ds" and "meta" (the system's record). Where the README's index is shown, read a card it names by the collection and doc id the index gives.`
     : `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_file"', () => 'action "read"')}, \`url\`: ${jsonStringify(filesState)}, and a \`path\`: "api/tokens.md" (palette, type, fonts); "tokens.json" (exact token values); or, where the README's index is shown, a card it names, by its path there.`;
 }
-//@ chunk-ez320trn.js:10947-11095 placement
+//@ chunk-1xrdahqv.js:10947-11095 placement
 /**
  * 把文本截断到上限并清洗信封标签、方括号与多余空白，用作决策面中的括号内文本。
  */
@@ -583,7 +583,7 @@ function sanitizeBracketText(text, maxChars) {
       .trim() + (clipped ? " \u2026" : "")
   );
 }
-//@ chunk-ez320trn.js:11095-11349 placement
+//@ chunk-1xrdahqv.js:11095-11349 placement
 /**
  * 若记录里有带正文的 docs，返回一个把各 doc 的 text 清空的副本（用于存储/压缩）；否则 undefined。
  */
@@ -610,7 +610,7 @@ function stripDocTexts(designSystem) {
     ),
   };
 }
-//@ chunk-ez320trn.js:11349-12792 placement
+//@ chunk-1xrdahqv.js:11349-12792 placement
 /**
  * 把 design_system 记录渲染成附加到提示词里的文本：未找到默认或 README 时给出"未附加"及原因；否则写出系统链接、标题、用户/组织默认，附上（必要时裁剪的）README 正文与"不要再次获取"说明。
  */
@@ -672,19 +672,19 @@ ${fileInlineEnvelope(clipped.text + text)}`,
   };
 }
 export {
+  README_READ_FIELDS,
+  raceWithDeadline,
+  READ_FAILURE_REASONS,
+  clipGuideDoc,
+  READ_SEPARATELY_HINT,
   README_MD,
   PROJECT_README_MD,
+  stripDocTexts,
+  checkDesignSystemReadable,
+  canReadDesignSystemFiles,
   pickDefaultDesignSystem,
   readDesignSystemGuide,
   sanitizeBracketText,
   renderDesignSystemAttachment,
-  stripDocTexts,
-  raceWithDeadline,
-  READ_FAILURE_REASONS,
   clipGuideText,
-  checkDesignSystemReadable,
-  canReadDesignSystemFiles,
-  README_READ_FIELDS,
-  clipGuideDoc,
-  READ_SEPARATELY_HINT,
 };

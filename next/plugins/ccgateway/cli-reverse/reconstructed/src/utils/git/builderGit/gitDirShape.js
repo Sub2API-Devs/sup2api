@@ -3,9 +3,9 @@
  *
  * builderGit：git 目录结构检查（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (18)
  * attribution: placement 18
  */
 import { join, sep } from "path";
@@ -15,21 +15,21 @@ import { workTreeReplacedSinceRecorded } from "./gitConfigAudit.js";
 import { getErrnoCode, errorMessage } from "../../errors.js";
 import { birthTimeSalt } from "../../windowsPathNames.js";
 
-//@ chunk-s61vbvea.js:234296-234349 placement
+//@ chunk-fepf8jp6.js:28571-28624 placement
 /**
  * 判断 git 目录布局未被篡改（无 fault）。
  */
 async function isGitLayoutUntampered(layout, probes) {
   return (await gitLayoutFaultOf(layout, probes)) === null;
 }
-//@ chunk-s61vbvea.js:234349-234401 placement
+//@ chunk-fepf8jp6.js:28624-28676 placement
 /**
  * 取 git 目录布局检查的 fault 原因。
  */
 async function gitLayoutFaultOf(layout, probes) {
   return (await inspectGitDirShape(layout, probes)).fault;
 }
-//@ chunk-s61vbvea.js:234401-235968 placement
+//@ chunk-fepf8jp6.js:28676-30198 placement
 async function inspectGitDirShape(layout, probePaths, span = () => () => {}) {
   let counters = {
     "git-dir-look-objects": 0,
@@ -117,16 +117,16 @@ async function inspectGitDirShape(layout, probePaths, span = () => () => {}) {
     refEntries: counters["git-dir-look-refs"],
   };
 }
-//@ chunk-s61vbvea.js:235968-235981 placement
+//@ chunk-fepf8jp6.js:30198-30211 placement
 /**
  * 读取放置文件的字节上限。
  */
 var MAX_PLACEMENT_FILE_BYTES = 4096;
-//@ chunk-s61vbvea.js:235981-236024 placement
+//@ chunk-fepf8jp6.js:30211-30254 placement
 function hasReplacementChar(text) {
   return text.includes("\uFFFD");
 }
-//@ chunk-s61vbvea.js:236024-236746 placement
+//@ chunk-fepf8jp6.js:30254-30971 placement
 async function inspectObjectsDir(commonDir, countDir) {
   let scanDir = async (dirPath, allowDirs) => {
     let names = await readdir(dirPath).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
@@ -168,7 +168,7 @@ async function inspectObjectsDir(commonDir, countDir) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:236746-236989 placement
+//@ chunk-fepf8jp6.js:30971-31214 placement
 async function statFingerprint(paths) {
   let results = await Promise.all(
     paths.map((path) =>
@@ -182,7 +182,7 @@ async function statFingerprint(paths) {
   );
   return results.includes(null) ? null : results.join(" ");
 }
-//@ chunk-s61vbvea.js:236989-237354 placement
+//@ chunk-fepf8jp6.js:31214-31577 placement
 /**
  * objects、info、pack 与 alternates 文件的指纹。
  */
@@ -214,23 +214,23 @@ async function objectsDirFingerprint(commonDir) {
     httpAlternates,
   };
 }
-//@ chunk-s61vbvea.js:237354-237754 placement
+//@ chunk-fepf8jp6.js:31577-31977 placement
 var SEED_ADMIN_REFUSALS = {
   relative_config_home: "the configuration home (CLAUDE_CONFIG_DIR) is not an absolute path",
   settings_moved:
     "where your own settings are found (CLAUDE_CONFIG_DIR, the HOME it defaults from, or the cowork settings switch) changed after Claude Code started: set it in the shell, not a settings file, and restart",
   inside_tree: "~/.claude/seed-admin lies inside this working tree or its repository",
 };
-//@ chunk-s61vbvea.js:237754-237829 placement
+//@ chunk-fepf8jp6.js:31977-32052 placement
 /**
  * 判断配置项中是否有来自 reftable 后端的取值。
  */
 function hasReftableOrigin(entries, isOwnConfig) {
   return entries.some(({ value, origin }) => value === "reftable" && isOwnConfig(origin));
 }
-//@ chunk-s61vbvea.js:237829-237869 placement
+//@ chunk-fepf8jp6.js:32052-32092 placement
 var ALTERNATES_FILE_NAMES = ["alternates", "http-alternates"];
-//@ chunk-s61vbvea.js:237869-237992 placement
+//@ chunk-fepf8jp6.js:32092-32214 placement
 /**
  * reftable 或借用对象（alternates）的仓库布局。
  */
@@ -238,7 +238,7 @@ async function detectUnsupportedLayout(commonDir) {
   if ((await probeEntryKind(join(commonDir, "reftable"))) !== "absent") return "reftable";
   return (await hasAlternates(commonDir)) ? "borrowed_objects" : null;
 }
-//@ chunk-s61vbvea.js:237992-238259 placement
+//@ chunk-fepf8jp6.js:32214-32479 placement
 async function hasAlternates(commonDir) {
   return (
     await Promise.all(
@@ -251,7 +251,7 @@ async function hasAlternates(commonDir) {
     )
   ).some(Boolean);
 }
-//@ chunk-s61vbvea.js:238259-238476 placement
+//@ chunk-fepf8jp6.js:32479-32694 placement
 /**
  * git 仓库 refs/heads|tags|remotes 是否都为空或缺失。名字配错。
  */
@@ -263,14 +263,14 @@ async function areRefDirsEmpty(commonDir, projectRoot) {
         return (
           kind === "absent" ||
           kind === "file" ||
-          (kind === "directory" && (await normalizeSource_2(join(commonDir, "refs", refDir), projectRoot)))
+          (kind === "directory" && (await normalizeSource(join(commonDir, "refs", refDir), projectRoot)))
         );
       }),
     )
   ).every(Boolean);
 }
-//@ chunk-s61vbvea.js:238476-238713 placement (2.1.88 match: normalizeSource, 1)
-async function normalizeSource_2(source, projectRoot) {
+//@ chunk-fepf8jp6.js:32694-32931 placement (2.1.88 match: normalizeSource, 1)
+async function normalizeSource(source, projectRoot) {
   let entries = await listDirRawNames(source);
   if (entries === null) return false;
   projectRoot(entries.length);
@@ -281,13 +281,13 @@ async function normalizeSource_2(source, projectRoot) {
         return kind === "file" || (kind === "absent" && typeof entryPath === "string")
           ? true
           : kind === "directory"
-            ? normalizeSource_2(entryPath, projectRoot)
+            ? normalizeSource(entryPath, projectRoot)
             : false;
       }),
     )
   ).every(Boolean);
 }
-//@ chunk-s61vbvea.js:238713-239019 placement
+//@ chunk-fepf8jp6.js:32931-33236 placement
 /**
  * 列目录项（含非 UTF-8 名字时用 Buffer）。
  */
@@ -308,7 +308,7 @@ async function listDirRawNames(source) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:239019-239209 placement
+//@ chunk-fepf8jp6.js:33236-33425 placement
 async function probeEntryKind(filePath) {
   try {
     let stats = await lstat(filePath);
@@ -318,7 +318,7 @@ async function probeEntryKind(filePath) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
-//@ chunk-s61vbvea.js:239209-239490 placement
+//@ chunk-fepf8jp6.js:33425-33704 placement
 async function statDotGit(launchDir) {
   try {
     let stats = await lstat(join(launchDir, ".git"), {
@@ -346,14 +346,14 @@ async function statDotGit(launchDir) {
   }
 }
 export {
-  isGitLayoutUntampered,
-  detectUnsupportedLayout,
-  gitLayoutFaultOf,
-  MAX_PLACEMENT_FILE_BYTES,
   statDotGit,
+  detectUnsupportedLayout,
   objectsDirFingerprint,
   statFingerprint,
   hasReftableOrigin,
   SEED_ADMIN_REFUSALS,
   probeEntryKind,
+  isGitLayoutUntampered,
+  gitLayoutFaultOf,
+  MAX_PLACEMENT_FILE_BYTES,
 };

@@ -1,12 +1,12 @@
 /**
  * get-east-asian-width/lookup-data.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-east-asian-width@1.5.0..1.6.0
- * pieces: chunk-m4dvt8pp.js (2)
+ * pieces: chunk-ngeq6w7y.js (2)
  * attribution: esm-fingerprint 2
  */
 
-//@ chunk-m4dvt8pp.js:4012-4083 esm-fingerprint
+//@ chunk-ngeq6w7y.js:4012-4083 esm-fingerprint
 function isFullwidthCodePoint(codePoint) {
   return (
     codePoint === 12288 ||
@@ -14,7 +14,7 @@ function isFullwidthCodePoint(codePoint) {
     (codePoint >= 65504 && codePoint <= 65510)
   );
 }
-//@ chunk-m4dvt8pp.js:4083-6354 esm-fingerprint
+//@ chunk-ngeq6w7y.js:4083-6354 esm-fingerprint
 function isWideCodePoint(codePoint) {
   return (
     (codePoint >= 4352 && codePoint <= 4447) ||

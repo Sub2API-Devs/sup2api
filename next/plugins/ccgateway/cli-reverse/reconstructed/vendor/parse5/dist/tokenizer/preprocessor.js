@@ -1,8 +1,8 @@
 /**
  * parse5/dist/tokenizer/preprocessor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (2)
+ * pieces: chunk-p9ac6cnb.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import {
@@ -15,9 +15,9 @@ import {
 } from "../common/unicode.js";
 import { errors } from "../../lib/common/error-codes.js";
 
-//@ chunk-6ja29j2n.js:5754-5767 esm-layout
+//@ chunk-p9ac6cnb.js:5754-5767 esm-layout
 var DEFAULT_BUFFER_WATERLINE = 65536;
-//@ chunk-6ja29j2n.js:5767-8620 esm-fingerprint
+//@ chunk-p9ac6cnb.js:5767-8620 esm-fingerprint
 class Preprocessor {
   constructor(handler) {
     this.handler = handler;

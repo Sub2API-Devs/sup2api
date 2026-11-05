@@ -3,24 +3,25 @@
  *
  * 内置主题调色板：dark/light/dark-ansi/light-ansi/dark-daltonized/light-daltonized 六套，约 75 个颜色键；getTheme 与主题色到 ANSI 的转换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/theme.ts
- * pieces: chunk-g3xfp0ds.js (16)
- * attribution: placement 10, fingerprint 3, layout 3
+ * pieces: chunk-hhr6kfwg.js (15)
+ * attribution: placement 11, fingerprint 4
  */
 import { levelGeneration } from "../ink/colorize.js";
 import { sequential } from "./sequential.js";
-import { isDefaultFgColor, ANSI_COLOR_NAME_SET } from "../ink/terminalColorSupport.js";
+import { isDefaultFgColor } from "../ink/terminalColorSupport.js";
 import { firstLineOf } from "./stringUtils.js";
 import { colorize } from "../../vendor/es-toolkit/dist/server/colors/index.mjs";
 import { SETTING_FIELD_LABELS, CONFIG_SOURCE_LABELS } from "./config.js";
+import { isValidThemeColor } from "./ink.js";
 import { env } from "./env.js";
 import { Chalk } from "../../vendor/chalk/source/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-g3xfp0ds.js:5481-5491 placement
+//@ chunk-hhr6kfwg.js:5481-5491 placement
 var MAX_THEME_COLOR_CACHE = 256;
-//@ chunk-g3xfp0ds.js:5491-5819 placement
+//@ chunk-hhr6kfwg.js:5491-5819 placement
 /**
  * 主题颜色缓存（按代次与色彩级别）。
  */
@@ -44,12 +45,12 @@ class ThemeColorCache {
     return cached;
   }
 }
-//@ chunk-g3xfp0ds.js:5819-5831 placement
+//@ chunk-hhr6kfwg.js:5819-5831 placement
 var themeColorCache; // deferred: uses ThemeColorCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g3xfp0ds.js:5819", () => {
+deferInit("chunk-hhr6kfwg.js:5819", () => {
   themeColorCache = new ThemeColorCache();
 });
-//@ chunk-g3xfp0ds.js:5831-6027 placement
+//@ chunk-hhr6kfwg.js:5831-6027 placement
 class BackgroundSequenceCache {
   byColorAndLevel = new Map();
   sequenceFor(color) {
@@ -62,12 +63,12 @@ class BackgroundSequenceCache {
     return sequence;
   }
 }
-//@ chunk-g3xfp0ds.js:6027-6039 placement
+//@ chunk-hhr6kfwg.js:6027-6039 placement
 var backgroundSequenceCache; // deferred: uses BackgroundSequenceCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g3xfp0ds.js:6027", () => {
+deferInit("chunk-hhr6kfwg.js:6027", () => {
   backgroundSequenceCache = new BackgroundSequenceCache();
 });
-//@ chunk-g3xfp0ds.js:6039-6195 placement
+//@ chunk-hhr6kfwg.js:6039-6195 placement
 function applyBackgroundColor(text, color) {
   let sequence = backgroundSequenceCache.sequenceFor(color);
   if (sequence === "") return text;
@@ -84,35 +85,35 @@ ${sequence}`,
       )
   );
 }
-//@ chunk-g3xfp0ds.js:6195-6240 placement
+//@ chunk-hhr6kfwg.js:6195-6240 placement
 /**
  * 是否为浅色主题。
  */
 function isLightTheme(themeName) {
   return themeName.startsWith("light");
 }
-//@ chunk-g3xfp0ds.js:6240-6300 placement
+//@ chunk-hhr6kfwg.js:6240-6300 placement
 /**
  * 是否内置主题名。
  */
 function isBuiltinThemeName(name) {
   return typeof name === "string" && SETTING_FIELD_LABELS.includes(name);
 }
-//@ chunk-g3xfp0ds.js:6300-6342 placement
+//@ chunk-hhr6kfwg.js:6300-6342 placement
 /**
  * 是否为内置主题名。
  */
 function isBuiltinTheme(color) {
   return Object.hasOwn(DARK_THEME, color);
 }
-//@ chunk-g3xfp0ds.js:6342-6429 placement
+//@ chunk-hhr6kfwg.js:6342-6429 placement
 /**
  * 是否可选主题（内置或 custom: 前缀）。
  */
 function isSelectableThemeName(name) {
   return typeof name === "string" && (CONFIG_SOURCE_LABELS.includes(name) || name.startsWith("custom:"));
 }
-//@ chunk-g3xfp0ds.js:6429-20980 fingerprint (2.1.88 match: lightDaltonizedTheme, 0.647)
+//@ chunk-hhr6kfwg.js:6429-20980 fingerprint (2.1.88 match: lightDaltonizedTheme, 0.647)
 /**
  * 六套主题调色板（每套约 75 个颜色键：claude、permission、planMode、autoAccept、bashBorder、promptBorder、diffAdded/Removed(+Dimmed/Word)、success/error/warning、subtle/inactive、userMessageBackground、rainbow_*、*_FOR_SUBAGENTS_ONLY 等）。
  */
@@ -560,7 +561,7 @@ var DARK_DALTONIZED_THEME = {
   rainbow_indigo_shimmer: "rgb(195,180,230)",
   rainbow_violet_shimmer: "rgb(230,180,210)",
 };
-//@ chunk-g3xfp0ds.js:20980-21158 fingerprint (2.1.88 match: getTheme, 1)
+//@ chunk-hhr6kfwg.js:20980-21158 fingerprint (2.1.88 match: getTheme, 1)
 /**
  * 按主题名取调色板：light/light-ansi/dark-ansi/light-daltonized/dark-daltonized，其他（含 dark）返回 dark 调色板。
  */
@@ -580,19 +581,7 @@ function getTheme(themeName) {
       return DARK_THEME;
   }
 }
-//@ chunk-g3xfp0ds.js:21158-21443 layout (2.1.88 match: toInkColor, 1)
-/**
- * 颜色值是否合法：rgb(r,g,b)、#RGB/#RRGGBB、ansi256(n)、ansi:<名字>。
- */
-function isValidThemeColor(color) {
-  if (typeof color !== "string") return false;
-  if (/^rgb\(\s?\d{1,3},\s?\d{1,3},\s?\d{1,3}\s?\)$/.test(color)) return true;
-  if (/^#[0-9a-fA-F]{6}$/.test(color) || /^#[0-9a-fA-F]{3}$/.test(color)) return true;
-  if (/^ansi256\(\d{1,3}\)$/.test(color)) return true;
-  if (color.startsWith("ansi:")) return ANSI_COLOR_NAME_SET.has(color.slice(5));
-  return false;
-}
-//@ chunk-g3xfp0ds.js:21443-21567 layout
+//@ chunk-hhr6kfwg.js:21443-21567 placement
 function mergeThemeOverrides(theme, overrides) {
   if (!overrides) return theme;
   let merged = {
@@ -602,9 +591,9 @@ function mergeThemeOverrides(theme, overrides) {
     if (Object.hasOwn(theme, key) && isValidThemeColor(value)) merged[key] = value;
   return merged;
 }
-//@ chunk-g3xfp0ds.js:21567-21625 layout (2.1.88 match: chalkForChart, 1)
+//@ chunk-hhr6kfwg.js:21567-21625 fingerprint (2.1.88 match: chalkForChart, 1)
 var chalkForChart; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g3xfp0ds.js:21567", () => {
+deferInit("chunk-hhr6kfwg.js:21567", () => {
   chalkForChart =
     env.terminal === "Apple_Terminal"
       ? new Chalk({
@@ -612,7 +601,7 @@ deferInit("chunk-g3xfp0ds.js:21567", () => {
         })
       : sequential;
 });
-//@ chunk-g3xfp0ds.js:21625-21925 fingerprint (2.1.88 match: themeColorToAnsi, 0.797)
+//@ chunk-hhr6kfwg.js:21625-21925 fingerprint (2.1.88 match: themeColorToAnsi, 0.799)
 /**
  * 把主题色值转为 ANSI 转义（rgb → 真彩、ansi: → 16 色）。
  */
@@ -631,14 +620,13 @@ function themeColorToAnsi(themeColor) {
   return index > 0 ? probe.slice(0, index) : "\x1B[35m";
 }
 export {
-  isValidThemeColor,
-  themeColorToAnsi,
-  getTheme,
   isBuiltinThemeName,
+  getTheme,
   mergeThemeOverrides,
-  themeColorCache,
-  isSelectableThemeName,
-  isLightTheme,
   applyBackgroundColor,
   isBuiltinTheme,
+  isLightTheme,
+  isSelectableThemeName,
+  themeColorCache,
+  themeColorToAnsi,
 };

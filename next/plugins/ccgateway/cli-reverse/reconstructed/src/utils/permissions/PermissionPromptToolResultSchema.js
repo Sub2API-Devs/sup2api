@@ -3,9 +3,9 @@
  *
  * --permission-prompt-tool / SDK 宿主权限回复的 schema，以及把回复转成权限决定（应用 updatedPermissions、strict 宿主校验）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/PermissionPromptToolResultSchema.ts
- * pieces: chunk-6j594vm1.js (7)
+ * pieces: chunk-0fqk5atw.js (7)
  * attribution: placement 4, fingerprint 2, layout 1
  */
 import { env } from "../env.js";
@@ -48,12 +48,13 @@ import { logError } from "../log.js";
 import { getToolNameForPermissionCheck } from "../../services/mcp/mcpStringUtils.js";
 import { recordRemoteBrowserCardAnswers } from "./mcpRuleMatching.js";
 import { setAccountSetPermissionMode } from "./autoModeState.js";
+import { recordConnectorCardAllow, clearConnectorCardAllows } from "./connectorCardAllows.js";
 import { getGrantScopeField } from "../../services/pushNotifications/permissionPush.js";
 import { logForDebugging } from "../debug.js";
 import { turnAbortControllerOf } from "../abortController.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6j594vm1.js:2340-2658 placement
+//@ chunk-0fqk5atw.js:2729-3047 placement
 /**
  * 权限等待一段时间后发送通知。
  */
@@ -83,7 +84,7 @@ function schedulePermissionNotify(toolName, storageV5, credentials) {
   timer.unref();
   return () => clearTimeout(timer);
 }
-//@ chunk-6j594vm1.js:2658-3309 fingerprint (2.1.88 match: inputSchema, 0.504)
+//@ chunk-0fqk5atw.js:3047-3698 fingerprint (2.1.88 match: inputSchema, 0.504)
 /**
  * --permission-prompt-tool（SDK 宿主）协议：输入 {tool_name, input, tool_use_id?}；输出 allow {updatedInput?, updatedPermissions?, toolUseID?, decisionClassification?} 或 deny {message, interrupt?}；decisionClassification 为 user_temporary/user_permanent/user_reject。
  */
@@ -93,7 +94,7 @@ var allowResultSchema;
 var denyResultSchema;
 var permissionPromptResultSchemaRefusing;
 var permissionPromptResultSchemaCutting;
-deferInit("chunk-6j594vm1.js:2658", () => {
+deferInit("chunk-0fqk5atw.js:3047", () => {
   permissionPromptToolInputSchema = DoctorLazy(() =>
     objectSchema({
       tool_name: stringSchema().describe("The name of the tool requesting permission"),
@@ -128,12 +129,15 @@ deferInit("chunk-6j594vm1.js:2658", () => {
     union([allowResultSchema("cut"), denyResultSchema()]),
   );
 });
-//@ chunk-6j594vm1.js:3356-3465 placement
+//@ chunk-0fqk5atw.js:3745-3854 placement
 /**
  * 权限提示工具返回格式不对时的提示文字。
  */
-var PERMISSION_PROMPT_RESULT_FORMAT_HINT = `Expected {behavior: 'allow', updatedInput?: object} or {behavior: 'deny', message: string}. ${PERMISSION_UPDATES_LIMIT_MESSAGE}`;
-//@ chunk-6j594vm1.js:3465-3833 placement
+var PERMISSION_PROMPT_RESULT_FORMAT_HINT; // deferred: uses MAX_PERMISSION_ANSWER_UPDATES (./permissionAnswer.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0fqk5atw.js:3745", () => {
+  PERMISSION_PROMPT_RESULT_FORMAT_HINT = `Expected {behavior: 'allow', updatedInput?: object} or {behavior: 'deny', message: string}. ${PERMISSION_UPDATES_LIMIT_MESSAGE}`;
+});
+//@ chunk-0fqk5atw.js:3854-4222 placement
 /**
  * 计算"始终允许"规则建议。
  */
@@ -160,7 +164,7 @@ function alwaysAllowRulesFor(updates, tool, input, callContext, suppressSuggesti
     ? stripWholeToolGrantsForAsk(mode, tool, getToolPermissionContext(callContext))
     : mode;
 }
-//@ chunk-6j594vm1.js:3833-4269 placement
+//@ chunk-0fqk5atw.js:4222-4658 placement
 /**
  * 应用权限提示工具结果（launcher/allow/deny）。
  */
@@ -202,7 +206,7 @@ function applyPermissionPromptResult(
       });
   }
 }
-//@ chunk-6j594vm1.js:4269-4431 layout
+//@ chunk-0fqk5atw.js:4658-4820 layout
 function wrapSessionContextSetter(context, tool) {
   return {
     ...context,
@@ -213,7 +217,7 @@ function wrapSessionContextSetter(context, tool) {
       }),
   };
 }
-//@ chunk-6j594vm1.js:4431-5574 fingerprint (2.1.88 match: permissionPromptToolResultToPermissionDecision, 0.587)
+//@ chunk-0fqk5atw.js:4820-6122 fingerprint (2.1.88 match: permissionPromptToolResultToPermissionDecision, 0.516)
 /**
  * 把权限提示工具的回复转成权限决定：allow 时应用 updatedPermissions（launcher 宿主直接应用；strict 宿主校验改写后的输入不命中 deny 规则、不丢失收紧项，否则拒绝）；deny+interrupt 中止当前回合。decisionReason 为 permissionPromptTool。
  */
@@ -249,6 +253,7 @@ function permissionPromptToolResultToPermissionDecision(
           false,
           toolFilter,
         );
+        recordConnectorCardAllow(context, tool, applied);
         let updatedInput =
           result.updatedInput && Object.keys(result.updatedInput).length > 0
             ? result.updatedInput
@@ -261,7 +266,7 @@ function permissionPromptToolResultToPermissionDecision(
         };
       }
       case "strict": {
-        let admitted = admitCardAnswer(result.updatedInput, input, tool);
+        let admitted = admitCardAnswer(result.updatedInput, input, tool, hostPolicy.onAnswerNotAdmitted);
         let formMatch =
           admitted === undefined
             ? matchCardFormAnswer(hostPolicy, result.updatedInput, input, tool)
@@ -286,6 +291,7 @@ function permissionPromptToolResultToPermissionDecision(
           toolFilter,
         );
         if (lostTightenings > 0) return denyLostTightening(tool.name, result.toolUseID);
+        recordConnectorCardAllow(context, tool, applied);
         return {
           ...result,
           updatedInput: answerInput,
@@ -294,7 +300,14 @@ function permissionPromptToolResultToPermissionDecision(
         };
       }
     }
-  } else if (result.behavior === "deny" && result.interrupt) {
+  } else if (getToolPermissionContext(context).connectorCardAllows !== undefined)
+    context.setSessionToolPermissionContext((previousContext) =>
+      clearConnectorCardAllows(
+        previousContext,
+        result.interrupt ? undefined : getToolNameForPermissionCheck(tool),
+      ),
+    );
+  if (result.behavior === "deny" && result.interrupt) {
     logForDebugging(
       `SDK permission prompt deny+interrupt: tool=${promptTool.name} message=${result.message}`,
     );
